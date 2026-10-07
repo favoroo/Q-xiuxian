@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxv0c2jnk6lfv"
-path="res://.godot/imported/explosions.png-2de438ca96bdeafbed6f20897f207be3.ctex"
+uid="uid://b1re5qmw17ena"
+path="res://.godot/imported/icon_drone.png-6adf3ea5ad51b7ba7b3a2a15b225db4a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/explosions.png"
-dest_files=["res://.godot/imported/explosions.png-2de438ca96bdeafbed6f20897f207be3.ctex"]
+source_file="res://assets/art/icon_drone.png"
+dest_files=["res://.godot/imported/icon_drone.png-6adf3ea5ad51b7ba7b3a2a15b225db4a.ctex"]
 
 [params]
 

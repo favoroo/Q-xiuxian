@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://djstt17aqhint"
-path="res://.godot/imported/golem.png-f5f3933143ecce48d948ea513dc5928f.ctex"
+uid="uid://c481iodglpkii"
+path="res://.godot/imported/icon_pellets.png-3d06badd77c329b116a4eb455b93d008.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/golem.png"
-dest_files=["res://.godot/imported/golem.png-f5f3933143ecce48d948ea513dc5928f.ctex"]
+source_file="res://assets/art/icon_pellets.png"
+dest_files=["res://.godot/imported/icon_pellets.png-3d06badd77c329b116a4eb455b93d008.ctex"]
 
 [params]
 

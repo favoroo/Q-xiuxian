@@ -1,49 +1,86 @@
-[gd_scene load_steps=7 format=3 uid="uid://chud001"]
+[gd_scene load_steps=11 format=3 uid="uid://chud001"]
 
 [ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
-bg_color = Color(0.1, 0.12, 0.16, 0.6)
+bg_color = Color(0.09, 0.08, 0.11, 0.92)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_fill"]
-bg_color = Color(0.28, 0.78, 0.88, 0.95)
-border_width_bottom = 2
-border_color = Color(0.72, 0.95, 1, 1)
+bg_color = Color(1, 0.83, 0, 1)
+border_width_bottom = 3
+border_color = Color(0.04, 0.03, 0.06, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_bg"]
-bg_color = Color(0.12, 0.14, 0.18, 0.75)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.35, 0.32, 0.28, 0.85)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_block"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 14.0
+content_margin_bottom = 6.0
+bg_color = Color(0.902, 0, 0.0706, 1)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.03, 0.03, 0.04, 0.9)
+shadow_size = 0
+shadow_offset = Vector2(4, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_track"]
+bg_color = Color(0.06, 0.05, 0.08, 0.85)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
-bg_color = Color(0.28, 0.82, 0.45, 0.95)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
+bg_color = Color(0.96, 0.95, 0.92, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_level_badge"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(1, 0.83, 0, 1)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.03, 0.03, 0.04, 0.9)
+shadow_size = 0
+shadow_offset = Vector2(3, 3)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_time_block"]
+content_margin_left = 18.0
+content_margin_top = 4.0
+content_margin_right = 18.0
+content_margin_bottom = 4.0
+bg_color = Color(0.09, 0.08, 0.11, 0.96)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.902, 0, 0.0706, 1)
+shadow_size = 0
+shadow_offset = Vector2(4, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kills_chip"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.96, 0.95, 0.92, 1)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.03, 0.03, 0.04, 0.9)
+shadow_size = 0
+shadow_offset = Vector2(3, 3)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_shards_chip"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(1, 0.83, 0, 1)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.03, 0.03, 0.04, 0.9)
+shadow_size = 0
+shadow_offset = Vector2(3, 3)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_banner"]
-bg_color = Color(0.16, 0.18, 0.24, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.85, 0.72, 0.35, 0.95)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-content_margin_left = 20.0
+content_margin_left = 26.0
 content_margin_top = 8.0
-content_margin_right = 20.0
+content_margin_right = 26.0
 content_margin_bottom = 8.0
+bg_color = Color(0.902, 0, 0.0706, 0.96)
+skew = Vector2(0.14, 0)
+shadow_color = Color(0.03, 0.03, 0.04, 0.92)
+shadow_size = 0
+shadow_offset = Vector2(6, 6)
 
 [node name="GameHUD" type="Control"]
 layout_mode = 3
@@ -59,7 +96,7 @@ script = ExtResource("1_hud")
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 6.0
+offset_bottom = 10.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_exp_bg")
@@ -71,10 +108,10 @@ show_percentage = false
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 20.0
-offset_top = 14.0
-offset_right = -20.0
-offset_bottom = 54.0
+offset_left = 22.0
+offset_top = 20.0
+offset_right = -22.0
+offset_bottom = 62.0
 grow_horizontal = 2
 mouse_filter = 2
 
@@ -82,33 +119,51 @@ mouse_filter = 2
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 10
 
-[node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox"]
-custom_minimum_size = Vector2(180, 16)
+[node name="HPBlock" type="PanelContainer" parent="TopContainer/LeftBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_hp_block")
+
+[node name="HBox" type="HBoxContainer" parent="TopContainer/LeftBox/HPBlock"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="HPTitle" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 17
+text = "HP"
+
+[node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox"]
+custom_minimum_size = Vector2(130, 14)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
+theme_override_styles/background = SubResource("StyleBoxFlat_hp_track")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="HPLabel" type="Label" parent="TopContainer/LeftBox"]
+[node name="HPLabel" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
-theme_override_constants/outline_size = 4
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 14
-text = "120/120"
+text = "100/100"
 
-[node name="LevelLabel" type="Label" parent="TopContainer/LeftBox"]
+[node name="LevelBadge" type="PanelContainer" parent="TopContainer/LeftBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.88, 0.45, 1)
-theme_override_colors/font_outline_color = Color(0.12, 0.1, 0.08, 0.9)
-theme_override_constants/outline_size = 4
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_level_badge")
+
+[node name="LevelLabel" type="Label" parent="TopContainer/LeftBox/LevelBadge"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.05, 0.08, 1)
 theme_override_font_sizes/font_size = 14
-text = "【阶位 1】"
+text = "Lv.1"
 
 [node name="CenterBox" type="HBoxContainer" parent="TopContainer"]
 layout_mode = 2
@@ -116,63 +171,72 @@ size_flags_horizontal = 3
 mouse_filter = 2
 alignment = 1
 
-[node name="TimeLabel" type="Label" parent="TopContainer/CenterBox"]
+[node name="TimeBlock" type="PanelContainer" parent="TopContainer/CenterBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.98, 0.98, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.95)
-theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 22
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_time_block")
+
+[node name="TimeLabel" type="Label" parent="TopContainer/CenterBox/TimeBlock"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.92, 1)
+theme_override_font_sizes/font_size = 24
 text = "00:00"
 
 [node name="RightBox" type="HBoxContainer" parent="TopContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_constants/separation = 18
+theme_override_constants/separation = 12
 alignment = 2
 
-[node name="KillsLabel" type="Label" parent="TopContainer/RightBox"]
+[node name="KillsChip" type="PanelContainer" parent="TopContainer/RightBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
-theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 15
-text = "讨伐 0"
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_kills_chip")
 
-[node name="ShardsLabel" type="Label" parent="TopContainer/RightBox"]
+[node name="KillsLabel" type="Label" parent="TopContainer/RightBox/KillsChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
-theme_override_constants/outline_size = 4
+theme_override_colors/font_color = Color(0.06, 0.05, 0.08, 1)
 theme_override_font_sizes/font_size = 15
-text = "辉晶 0"
+text = "击倒 0"
+
+[node name="ShardsChip" type="PanelContainer" parent="TopContainer/RightBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_shards_chip")
+
+[node name="ShardsLabel" type="Label" parent="TopContainer/RightBox/ShardsChip"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.06, 0.05, 0.08, 1)
+theme_override_font_sizes/font_size = 15
+text = "硬币 0"
 
 [node name="WeaponsBar" type="HBoxContainer" parent="."]
 layout_mode = 0
-offset_left = 20.0
-offset_top = 48.0
-offset_right = 280.0
-offset_bottom = 82.0
+offset_left = 24.0
+offset_top = 72.0
+offset_right = 284.0
+offset_bottom = 108.0
 mouse_filter = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="Banner" type="PanelContainer" parent="."]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -200.0
-offset_top = 64.0
-offset_right = 200.0
-offset_bottom = 104.0
+offset_left = -220.0
+offset_top = 84.0
+offset_right = 220.0
+offset_bottom = 122.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_banner")
 
 [node name="BannerLabel" type="Label" parent="Banner"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.92, 0.72, 1)
-theme_override_font_sizes/font_size = 15
-text = "✦ 轮回试炼开启·晨曦圣庭 ✦"
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 17
+text = ""
 horizontal_alignment = 1
 vertical_alignment = 1

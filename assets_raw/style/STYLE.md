@@ -4,36 +4,38 @@
 
 ## 风格前缀 STYLE_PREFIX
 
-八方旅人HD-2D风格，16位精致明亮像素艺术，温暖阳光自然采光，色彩饱满通透，象牙白与翠绿色调，清晰轮廓
+逃脱者The Escapists风格Q版像素：大头小身约二头身比例，粗黑色描边，扁平明亮色块几乎无渐变，少量高光点缀，现代监狱题材，干净明快，正俯视45度视角
 
 ## 风格锚图 anchor
 
-- 路径：res://assets/art/hero.png
-- 说明：晨曦游侠主角设定图，明亮温润配色基准
+- 路径：res://assets_raw/style/anchor_escapists.png
+- 说明：用户钦定的《逃脱者2》实机截图（2026-10-07），Q版像素囚犯/狱警+监狱内景基准
 
 ## 全局画面约束
 
-- 光照方向：左上方 45° 温暖日光斜射
-- 色板倾向：象牙白、晨曦暖金、翡翠青绿、清澈天蓝，明亮通透
-- 剪影要求：角色/史莱姆/花妖/机兵剪影清晰，色彩对比鲜明，明亮地面上一眼可辨
-- 音乐风格：Octopath Traveler bright adventure orchestral, uplifting wooden flute, harp and energetic strings, Celtic folk touches, loop, instrumental only, no vocals
+- 光照方向：均匀环境光，无强烈定向阴影（扁平化）
+- 色板倾向：囚服橙、警服藏蓝、水泥灰、警示红、高亮黄、纯黑白描边；明快但对比强烈
+- 剪影要求：主角/狱警/警犬/防暴警察剪影清晰可辨，大头小身，粗描边；地面浅灰水泥色上一眼可辨
+- UI 风格（P5女神异闻录5）：红/黑/白/黄大色块扁平化，斜切平行四边形，硬投影，无圆角无渐变无辉光，加粗大字
+- 音乐风格：quirky stealthy electronic funk, playful tension, bouncy synth bass, retro game groove, loop, instrumental only, no vocals
 
 ## 角色设定图
 
 | 角色 | 设定图路径 | 备注 |
 |---|---|---|
-| 晨曦游侠 | res://assets/art/hero.png | 主角，浅色旅行风衣与天蓝领巾 |
-| 碧绿史莱姆 | res://assets/art/slime.png | 基础怪，清透翠绿 |
-| 黄金发条守卫 | res://assets/art/golem.png | 精英守卫，金白机兵 |
+| 越狱者（主角） | res://assets/art/pawn_blue.png | 橙色囚服囚犯，白衣条 |
+| 狱警 | res://assets/art/pawn_red.png | 基础小怪，藏蓝警服 |
+| 警犬 | res://assets/art/warrior_red.png | 快速怪，四腿狂奔 |
+| 防暴警察 | res://assets/art/warrior_purple.png | 精英，持盾黑甲 |
 
 ## 角色 → 语音音色 VOICES
 
 | 角色 | 音色/语气描述 |
 |---|---|
-| 星界引导者 | 清澈温和的年轻女性声音，从容宁静，语速中等，带有神圣回音感 |
+| 星界引导者 | 活泼俏皮的年轻女性声音，带一点狡黠的笑意，语速中快，元气满满 |
 
 ## 负面约束
 
 - 无文字、无水印、无签名
-- 拒绝暗黑阴森压抑、拒绝血腥脏污配色
+- 拒绝写实渲染、拒绝厚涂与柔和渐变光效、拒绝中世纪奇幻元素（盔甲/法杖/石砖城堡）
 - 图标类：主体居中饱满、不接触画面边缘、背景无投影

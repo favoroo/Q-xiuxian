@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bm6j776p6jnio"
-path="res://.godot/imported/hero.png-2cdc10d8b7d2552b32a3832009a73137.ctex"
+uid="uid://d4k118ypww8cd"
+path="res://.godot/imported/icon_wrench.png-c35a82586dccc27dad07c4e207f9cc4f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/hero.png"
-dest_files=["res://.godot/imported/hero.png-2cdc10d8b7d2552b32a3832009a73137.ctex"]
+source_file="res://assets/art/icon_wrench.png"
+dest_files=["res://.godot/imported/icon_wrench.png-c35a82586dccc27dad07c4e207f9cc4f.ctex"]
 
 [params]
 

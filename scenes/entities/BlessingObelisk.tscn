@@ -9,14 +9,14 @@
 radius = 85.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
-bg_color = Color(0.18, 0.22, 0.28, 0.65)
+bg_color = Color(0.06, 0.05, 0.08, 0.8)
 corner_radius_top_left = 3
 corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fill"]
-bg_color = Color(1, 0.88, 0.35, 0.95)
+bg_color = Color(1, 0.83, 0, 1)
 corner_radius_top_left = 3
 corner_radius_top_right = 3
 corner_radius_bottom_right = 3
@@ -37,7 +37,7 @@ position = Vector2(0, -18)
 texture = ExtResource("2_tex")
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
-color = Color(0.65, 0.96, 1, 1)
+color = Color(1, 0.3, 0.22, 1)
 energy = 1.25
 texture = ExtResource("3_light")
 texture_scale = 1.3

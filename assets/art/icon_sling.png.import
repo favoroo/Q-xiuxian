@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cp3ll5cgjd648"
-path="res://.godot/imported/icon_chalice.png-f4e2fd0bfe8992f2f0c1fe06d728b14b.ctex"
+uid="uid://dc5nvia0tf7o0"
+path="res://.godot/imported/icon_sling.png-3c84a53943362ebadbd99a686b2ab2d5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/icon_chalice.png"
-dest_files=["res://.godot/imported/icon_chalice.png-f4e2fd0bfe8992f2f0c1fe06d728b14b.ctex"]
+source_file="res://assets/art/icon_sling.png"
+dest_files=["res://.godot/imported/icon_sling.png-3c84a53943362ebadbd99a686b2ab2d5.ctex"]
 
 [params]
 

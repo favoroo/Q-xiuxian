@@ -7,15 +7,15 @@ var dust_particles: CPUParticles2D
 func _ready() -> void:
     GameManager.reset_run()
     GameManager.joystick = joystick
-    GameManager.announcement_triggered.emit("✦ 轮回试炼开启·晨曦圣庭 ✦")
+    GameManager.announcement_triggered.emit("✦ 越狱行动 · 放风时间开始 ✦")
     _setup_dust()
-    
-    if ResourceLoader.exists("res://assets/audio/bgm_sanctuary_dawn.mp3"):
-        var bgm = load("res://assets/audio/bgm_sanctuary_dawn.mp3")
+
+    if ResourceLoader.exists("res://assets/audio/bgm_prison_break.mp3"):
+        var bgm = load("res://assets/audio/bgm_prison_break.mp3")
         if bgm is AudioStreamMP3:
             bgm.loop = true
         AudioManager.play_bgm(bgm)
-        
+
     if ResourceLoader.exists("res://assets/audio/vo_guide_start.wav"):
         var vo = load("res://assets/audio/vo_guide_start.wav")
         AudioManager.play_voice(vo)
@@ -31,7 +31,7 @@ func _setup_dust() -> void:
     dust_particles.initial_velocity_max = 14.0
     dust_particles.scale_amount_min = 1.5
     dust_particles.scale_amount_max = 3.0
-    dust_particles.color = Color(0.9, 0.85, 0.72, 0.3)
+    dust_particles.color = Color(0.72, 0.72, 0.76, 0.22)
     $AtmosphereLayer.add_child(dust_particles)
 
 func _process(_delta: float) -> void:

@@ -4,7 +4,7 @@ extends Node2D
 enum WeaponType { RANGED, MELEE }
 
 @export var weapon_id: String = "staff"
-@export var weapon_name: String = "苍穹法杖"
+@export var weapon_name: String = "自制弹弓"
 @export var weapon_type: WeaponType = WeaponType.RANGED
 @export var base_damage: float = 24.0
 @export var attack_cooldown: float = 0.95

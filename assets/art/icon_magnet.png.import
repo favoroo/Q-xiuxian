@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dww71ykmfaykn"
-path="res://.godot/imported/warrior_blue.png-a8690544f6fce2153e99f458b2cd54eb.ctex"
+uid="uid://cwk4luv0opsts"
+path="res://.godot/imported/icon_magnet.png-922d5ae9fb0f5a837ac516d237b2ca15.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/warrior_blue.png"
-dest_files=["res://.godot/imported/warrior_blue.png-a8690544f6fce2153e99f458b2cd54eb.ctex"]
+source_file="res://assets/art/icon_magnet.png"
+dest_files=["res://.godot/imported/icon_magnet.png-922d5ae9fb0f5a837ac516d237b2ca15.ctex"]
 
 [params]
 

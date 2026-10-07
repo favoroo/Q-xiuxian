@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ds5lsikm2vq7i"
-path="res://.godot/imported/flower.png-e751e765382bbeda51c7523249d53af5.ctex"
+uid="uid://kqlax3w78ve"
+path="res://.godot/imported/icon_sneaker.png-126cc0cf51e64641f261a75078a38ef9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/flower.png"
-dest_files=["res://.godot/imported/flower.png-e751e765382bbeda51c7523249d53af5.ctex"]
+source_file="res://assets/art/icon_sneaker.png"
+dest_files=["res://.godot/imported/icon_sneaker.png-126cc0cf51e64641f261a75078a38ef9.ctex"]
 
 [params]
 

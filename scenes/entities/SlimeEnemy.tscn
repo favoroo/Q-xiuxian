@@ -33,7 +33,7 @@ texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 material = SubResource("ShaderMaterial_slime")
-scale = Vector2(0.52, 0.52)
+scale = Vector2(0.42, 0.42)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)

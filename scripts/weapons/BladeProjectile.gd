@@ -39,7 +39,7 @@ func _on_area_entered(area: Area2D) -> void:
             queue_free()
 
 func _trigger_radiance_burst(burst_pos: Vector2) -> void:
-    DamageNumber.spawn(get_parent(), burst_pos, 0, true, "耀斑爆发!")
+    DamageNumber.spawn(get_parent(), burst_pos, 0, true, "过载冲击!")
     GameManager.shake_camera(4.5, 0.15)
     AudioManager.play_sfx("orb_hit", 1.2)
     # Area damage nearby

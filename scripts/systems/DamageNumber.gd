@@ -14,19 +14,19 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
     var settings = LabelSettings.new()
     if custom_text != "":
         settings.font_size = 15
-        settings.font_color = Color(0.98, 0.92, 0.48)
+        settings.font_color = Color(0.55, 1.0, 0.65)
         settings.outline_size = 4
-        settings.outline_color = Color(0.24, 0.18, 0.12, 0.9)
+        settings.outline_color = Color(0.03, 0.03, 0.04, 0.95)
     elif is_crit:
-        settings.font_size = 18
-        settings.font_color = Color(1.0, 0.85, 0.25)
-        settings.outline_size = 4
-        settings.outline_color = Color(0.35, 0.18, 0.08, 0.95)
+        settings.font_size = 19
+        settings.font_color = Color(1.0, 0.83, 0.0)
+        settings.outline_size = 5
+        settings.outline_color = Color(0.03, 0.03, 0.04, 0.95)
     else:
         settings.font_size = 14
-        settings.font_color = Color(1.0, 0.99, 0.94)
-        settings.outline_size = 3
-        settings.outline_color = Color(0.2, 0.26, 0.32, 0.85)
+        settings.font_color = Color(0.96, 0.95, 0.92)
+        settings.outline_size = 4
+        settings.outline_color = Color(0.03, 0.03, 0.04, 0.92)
     
     label.label_settings = settings
     label.position = Vector2(-30.0, -12.0)
@@ -36,6 +36,6 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
     var tw = holder.create_tween()
     tw.set_parallel(true)
     tw.tween_property(holder, "global_position:y", holder.global_position.y - 28.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-    tw.tween_property(holder, "scale", Vector2(1.18, 1.18) if is_crit else Vector2(1.05, 1.05), 0.12)
+    tw.tween_property(holder, "scale", Vector2(1.28, 1.28) if is_crit else Vector2(1.06, 1.06), 0.12)
     tw.chain().tween_property(holder, "modulate:a", 0.0, 0.22)
     tw.chain().tween_callback(holder.queue_free)

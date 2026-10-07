@@ -28,8 +28,6 @@ func _ready() -> void:
 
 func _setup_sprite_frames() -> void:
     var base_tex = load("res://assets/art/pawn_blue.png") as Texture2D
-    if base_tex == null:
-        base_tex = load("res://assets/art/warrior_blue.png") as Texture2D
         
     var sf = SpriteFrames.new()
     # 1. Idle (Row 0, 6 frames)
@@ -57,7 +55,7 @@ func _setup_sprite_frames() -> void:
 
 func _init_default_weapons() -> void:
     # Start with 1 Floating Arcane Staff
-    add_floating_weapon("staff", FloatingWeapon.WeaponType.RANGED, "苍穹法杖")
+    add_floating_weapon("staff", FloatingWeapon.WeaponType.RANGED, "自制弹弓")
 
 func add_floating_weapon(w_id: String, w_type: int, w_name: String) -> void:
     var weapon = floating_weapon_scene.instantiate() as FloatingWeapon
@@ -74,11 +72,11 @@ func _recalculate_weapon_slots() -> void:
     if count == 0:
         return
         
-    var radius_x = 48.0
-    var radius_y = 32.0
+    var radius_x = 56.0
+    var radius_y = 40.0
     for i in range(count):
         var w = equipped_weapons[i]
-        var angle = float(i) * (TAU / float(count)) - (PI * 0.5)
+        var angle = float(i) * (TAU / float(count))
         w.slot_offset = Vector2(cos(angle) * radius_x, sin(angle) * radius_y)
 
 func get_equipped_weapons_data() -> Array[Dictionary]:
@@ -178,7 +176,7 @@ func increase_max_hp(amount: float, heal_amount: float) -> void:
     max_health += amount
     current_health = minf(max_health, current_health + heal_amount)
     GameManager.player_hp_changed.emit(current_health, max_health)
-    DamageNumber.spawn(get_parent(), global_position, int(heal_amount), false, "+" + str(int(heal_amount)) + " 治愈")
+    DamageNumber.spawn(get_parent(), global_position, int(heal_amount), false, "+" + str(int(heal_amount)) + " HP")
 
 func _on_pickup_area_area_entered(area: Area2D) -> void:
     if area.has_method("magnet_to"):
