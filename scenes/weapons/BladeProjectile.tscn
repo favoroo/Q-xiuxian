@@ -1,0 +1,27 @@
+[gd_scene load_steps=5 format=3 uid="uid://cblade001"]
+
+[ext_resource type="Script" path="res://scripts/weapons/BladeProjectile.gd" id="1_blade"]
+[ext_resource type="Texture2D" path="res://assets/art/blade.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="3_light"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_blade"]
+radius = 12.0
+
+[node name="BladeProjectile" type="Area2D"]
+collision_layer = 8
+collision_mask = 4
+script = ExtResource("1_blade")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_blade")
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+color = Color(0.48, 0.98, 0.78, 1)
+energy = 0.55
+texture = ExtResource("3_light")
+texture_scale = 0.45
+
+[connection signal="area_entered" from="." to="." method="_on_area_entered"]

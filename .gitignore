@@ -1,0 +1,10 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# media-gen 技能：API 密钥（勿提交）
+.agents/skills/media-gen/config/api.env
+
+# 本地 IDE / 工作区配置
+.qoder/
+.zcode/
