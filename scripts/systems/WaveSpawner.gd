@@ -62,5 +62,5 @@ func _spawn_elite(player: Node2D) -> void:
     golem.add_to_group("enemies")
     get_parent().add_child(golem)
     
-    GameManager.announcement_triggered.emit("【高能警报】黄金发条守卫降临！")
+    GameManager.announcement_triggered.emit("【警报】防暴警察进场了！")
     GameManager.shake_camera(5.0, 0.25)

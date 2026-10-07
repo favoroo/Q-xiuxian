@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Realms of Dawn"
+config/name="越狱幸存者"
 run/main_scene="res://scenes/main/Main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"

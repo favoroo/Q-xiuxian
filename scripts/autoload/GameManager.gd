@@ -84,10 +84,10 @@ func apply_upgrade(upgrade_id: String) -> void:
     match upgrade_id:
         "add_sword":
             if player and player.has_method("add_floating_weapon"):
-                player.add_floating_weapon("sword", 1, "圣银重剑")
+                player.add_floating_weapon("sword", 1, "铝制球棒")
         "add_staff":
             if player and player.has_method("add_floating_weapon"):
-                player.add_floating_weapon("staff", 0, "苍穹法杖")
+                player.add_floating_weapon("staff", 0, "自制弹弓")
         "blade_damage":
             blade_damage_mult += 0.35
         "blade_amount":

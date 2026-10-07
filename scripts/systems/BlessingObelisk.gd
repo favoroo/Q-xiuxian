@@ -43,7 +43,7 @@ func _trigger_blessing() -> void:
     charge_bar.visible = false
     AudioManager.play_sfx("obelisk_blessing")
     GameManager.shake_camera(7.0, 0.35)
-    GameManager.announcement_triggered.emit("✦ 晨曦涤罪：圣光脉冲涤荡全场 ✦")
+    GameManager.announcement_triggered.emit("⚠ 警报干扰：EMP 瘫痪全场狱警 ⚠")
     
     # Damage and knockback all enemies on screen
     var enemies = get_tree().get_nodes_in_group("enemies")
