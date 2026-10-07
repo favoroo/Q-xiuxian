@@ -1,0 +1,178 @@
+[gd_scene load_steps=7 format=3 uid="uid://chud001"]
+
+[ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
+bg_color = Color(0.1, 0.12, 0.16, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_fill"]
+bg_color = Color(0.28, 0.78, 0.88, 0.95)
+border_width_bottom = 2
+border_color = Color(0.72, 0.95, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_bg"]
+bg_color = Color(0.12, 0.14, 0.18, 0.75)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.32, 0.28, 0.85)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
+bg_color = Color(0.28, 0.82, 0.45, 0.95)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_banner"]
+bg_color = Color(0.16, 0.18, 0.24, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.85, 0.72, 0.35, 0.95)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 20.0
+content_margin_top = 8.0
+content_margin_right = 20.0
+content_margin_bottom = 8.0
+
+[node name="GameHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="ExpBar" type="ProgressBar" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 6.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_exp_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_exp_fill")
+max_value = 10.0
+show_percentage = false
+
+[node name="TopContainer" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 14.0
+offset_right = -20.0
+offset_bottom = 54.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="LeftBox" type="HBoxContainer" parent="TopContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox"]
+custom_minimum_size = Vector2(180, 16)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
+value = 100.0
+show_percentage = false
+
+[node name="HPLabel" type="Label" parent="TopContainer/LeftBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "120/120"
+
+[node name="LevelLabel" type="Label" parent="TopContainer/LeftBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.45, 1)
+theme_override_colors/font_outline_color = Color(0.12, 0.1, 0.08, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
+text = "【阶位 1】"
+
+[node name="CenterBox" type="HBoxContainer" parent="TopContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+alignment = 1
+
+[node name="TimeLabel" type="Label" parent="TopContainer/CenterBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.98, 0.98, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.95)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 22
+text = "00:00"
+
+[node name="RightBox" type="HBoxContainer" parent="TopContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 18
+alignment = 2
+
+[node name="KillsLabel" type="Label" parent="TopContainer/RightBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 15
+text = "讨伐 0"
+
+[node name="ShardsLabel" type="Label" parent="TopContainer/RightBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.1, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 15
+text = "辉晶 0"
+
+[node name="WeaponsBar" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 48.0
+offset_right = 280.0
+offset_bottom = 82.0
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Banner" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 64.0
+offset_right = 200.0
+offset_bottom = 104.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_banner")
+
+[node name="BannerLabel" type="Label" parent="Banner"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.92, 0.72, 1)
+theme_override_font_sizes/font_size = 15
+text = "✦ 轮回试炼开启·晨曦圣庭 ✦"
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://cfweapon001"]
+
+[ext_resource type="Script" path="res://scripts/weapons/FloatingWeapon.gd" id="1_fw"]
+[ext_resource type="Texture2D" path="res://assets/art/weapon_staff.png" id="2_staff"]
+[ext_resource type="Texture2D" path="res://assets/art/slash_effect.png" id="3_slash"]
+
+[node name="FloatingWeapon" type="Node2D"]
+script = ExtResource("1_fw")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.85, 0.85)
+texture = ExtResource("2_staff")
+
+[node name="MuzzlePoint" type="Marker2D" parent="Sprite2D"]
+position = Vector2(20, 0)
+
+[node name="SlashEffect" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(18, 0)
+texture = ExtResource("3_slash")

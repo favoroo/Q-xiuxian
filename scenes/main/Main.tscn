@@ -1,0 +1,92 @@
+[gd_scene load_steps=14 format=3 uid="uid://cmain001"]
+
+[ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
+[ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
+[ext_resource type="PackedScene" uid="uid://cobelisk001" path="res://scenes/entities/BlessingObelisk.tscn" id="3_ob"]
+[ext_resource type="PackedScene" uid="uid://cplayer001" path="res://scenes/entities/Player.tscn" id="4_player"]
+[ext_resource type="Script" path="res://scripts/systems/WaveSpawner.gd" id="5_spawner"]
+[ext_resource type="Shader" path="res://assets/shaders/vignette_soft.gdshader" id="6_vig"]
+[ext_resource type="Script" path="res://scripts/controllers/SmoothCamera.gd" id="7_cam"]
+[ext_resource type="PackedScene" uid="uid://cjoy001" path="res://scenes/ui/VirtualJoystick.tscn" id="8_joy"]
+[ext_resource type="PackedScene" uid="uid://chud001" path="res://scenes/ui/GameHUD.tscn" id="9_hud"]
+[ext_resource type="PackedScene" uid="uid://clvl001" path="res://scenes/ui/LevelUpDialog.tscn" id="10_lvl"]
+[ext_resource type="PackedScene" uid="uid://cgameover001" path="res://scenes/ui/GameOverDialog.tscn" id="11_go"]
+
+[sub_resource type="Environment" id="Environment_hd2d"]
+background_mode = 3
+glow_enabled = true
+glow_intensity = 0.35
+glow_strength = 0.75
+glow_bloom = 0.04
+glow_blend_mode = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
+shader = ExtResource("6_vig")
+shader_parameter/tint_color = Color(0.04, 0.06, 0.08, 0.08)
+shader_parameter/vignette_intensity = 0.38
+shader_parameter/vignette_opacity = 0.58
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_hd2d")
+
+[node name="MapLayer" type="Node2D" parent="."]
+
+[node name="GroundTiles" type="TextureRect" parent="MapLayer"]
+texture_repeat = 2
+offset_left = -2400.0
+offset_top = -2400.0
+offset_right = 2400.0
+offset_bottom = 2400.0
+mouse_filter = 2
+texture = ExtResource("2_tile")
+stretch_mode = 1
+
+[node name="ObeliskCenter" parent="MapLayer" instance=ExtResource("3_ob")]
+position = Vector2(0, -160)
+
+[node name="ObeliskEast" parent="MapLayer" instance=ExtResource("3_ob")]
+position = Vector2(460, -220)
+
+[node name="ObeliskWest" parent="MapLayer" instance=ExtResource("3_ob")]
+position = Vector2(-460, 220)
+
+[node name="EntitiesLayer" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="Player" parent="EntitiesLayer" instance=ExtResource("4_player")]
+
+[node name="WaveSpawner" type="Node2D" parent="EntitiesLayer"]
+script = ExtResource("5_spawner")
+
+[node name="AtmosphereLayer" type="Node2D" parent="."]
+z_index = 40
+
+[node name="SmoothCamera" type="Camera2D" parent="."]
+zoom = Vector2(1.2, 1.2)
+script = ExtResource("7_cam")
+
+[node name="PostProcessLayer" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="SoftVignette" type="ColorRect" parent="PostProcessLayer"]
+material = SubResource("ShaderMaterial_vignette")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="VirtualJoystick" parent="UILayer" instance=ExtResource("8_joy")]
+
+[node name="GameHUD" parent="UILayer" instance=ExtResource("9_hud")]
+
+[node name="LevelUpDialog" parent="UILayer" instance=ExtResource("10_lvl")]
+
+[node name="GameOverDialog" parent="UILayer" instance=ExtResource("11_go")]

@@ -1,0 +1,54 @@
+[gd_scene load_steps=8 format=3 uid="uid://cplayer001"]
+
+[ext_resource type="Script" path="res://scripts/entities/Player.gd" id="1_player"]
+[ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/art/shadow.png" id="3_shadow"]
+[ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="4_light"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_player"]
+shader = ExtResource("2_shader")
+shader_parameter/flash_color = Color(1, 0.98, 0.92, 1)
+shader_parameter/flash_modifier = 0.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 14.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_pickup"]
+radius = 96.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_player")
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 16)
+scale = Vector2(0.85, 0.85)
+texture = ExtResource("3_shadow")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+material = SubResource("ShaderMaterial_player")
+scale = Vector2(0.62, 0.62)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 4)
+shape = SubResource("CircleShape2D_body")
+
+[node name="PickupArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 16
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PickupArea"]
+shape = SubResource("CircleShape2D_pickup")
+
+[node name="WeaponHolder" type="Node2D" parent="."]
+
+[node name="SunOrbContainer" type="Node2D" parent="."]
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+color = Color(1, 0.94, 0.78, 1)
+energy = 0.42
+texture = ExtResource("4_light")
+texture_scale = 1.6
+
+[connection signal="area_entered" from="PickupArea" to="." method="_on_pickup_area_area_entered"]
