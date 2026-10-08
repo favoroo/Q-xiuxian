@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://csdayu4sdtc27"
-path="res://.godot/imported/splash_logo.png-45c97dce5d7f039ae76cd219f93228c2.ctex"
+uid="uid://b1p2dtca1qwm0"
+path="res://.godot/imported/weapon_ice_lotus.png-80357a50cee21d0f858eaa714157ac59.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/brand/splash_logo.png"
-dest_files=["res://.godot/imported/splash_logo.png-45c97dce5d7f039ae76cd219f93228c2.ctex"]
+source_file="res://assets/art/weapon_ice_lotus.png"
+dest_files=["res://.godot/imported/weapon_ice_lotus.png-80357a50cee21d0f858eaa714157ac59.ctex"]
 
 [params]
 

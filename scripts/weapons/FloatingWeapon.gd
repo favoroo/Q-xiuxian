@@ -88,8 +88,15 @@ func _process(delta: float) -> void:
 	cooldown_timer -= delta
 	bob_phase += delta * 3.5
 
-	# 1. 索敌（以玩家为圆心，覆盖人物四周而非仅槽位一侧）
-	current_target = _find_target()
+	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
+	if current_target == null or not is_instance_valid(current_target):
+		current_target = _find_target()
+	else:
+		var player = GameManager.player
+		if player != null:
+			var max_reach = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult * 1.2
+			if player.global_position.distance_to(current_target.global_position) > max_reach:
+				current_target = _find_target()
 
 	# 2. 动态轨道：有目标时沿轨道滑向目标方位（自动换位），无目标时回归基础槽位
 	if not is_attacking:
@@ -130,7 +137,8 @@ func _perform_attack() -> void:
 			_perform_burst_attack()
 
 func _final_damage() -> float:
-	return base_damage * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id)
+	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
+	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id)
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -161,16 +169,37 @@ func _perform_projectile_attack() -> void:
 		ftw.chain().tween_callback(func(): muzzle_flash.visible = false)
 	_flash_sprite(Color(1.35, 1.35, 1.35), 0.12)
 
-	var p = projectile_scene.instantiate() as BladeProjectile
-	p.global_position = muzzle_point.global_position
-	p.direction = aim_dir
-	p.damage = _final_damage()
-	p.pierce_left = pierce + GameManager.bonus_pierce
-	p.lifetime *= GameManager.attack_range_mult
-	p.spin = behavior != WeaponData.Behavior.PROJECTILE or pierce <= 1
-	get_tree().current_scene.add_child(p)
+	var p_count: int = maxi(1, int(def.get("projectile_count", 1)))
+	var p_spread: float = float(def.get("spread_angle", 0.2))
+	var p_bounce: int = int(def.get("bounce_count", 0))
+	var final_dmg: float = _final_damage()
 
-	AudioManager.play_sfx("blade_shoot")
+	for idx in range(p_count):
+		var p = projectile_scene.instantiate() as BladeProjectile
+		p.global_position = muzzle_point.global_position
+		var offset_ang := 0.0
+		if p_count > 1:
+			offset_ang = (float(idx) - float(p_count - 1) * 0.5) * p_spread
+		p.direction = aim_dir.rotated(offset_ang)
+		p.damage = final_dmg
+		p.pierce_left = pierce + GameManager.bonus_pierce
+		p.bounce_left = p_bounce
+		p.lifetime *= GameManager.attack_range_mult * GameManager.synergy_range_mult
+		p.spin = behavior != WeaponData.Behavior.PROJECTILE or pierce <= 1
+		if def.get("proc_burn", false):
+			p.proc_burn = true
+			p.burn_dps = final_dmg * float(def.get("burn_ratio", 0.4))
+			p.burn_dur = float(def.get("burn_dur", 3.0))
+		if float(def.get("proc_chill", 0.0)) > 0.0:
+			p.proc_chill = float(def.get("proc_chill", 0.35))
+			p.chill_dur = float(def.get("chill_dur", 2.0))
+		if def.get("proc_poison", false):
+			p.proc_poison = true
+			p.poison_dps = final_dmg * float(def.get("poison_ratio", 0.3))
+			p.poison_dur = float(def.get("poison_dur", 2.5))
+		get_tree().current_scene.add_child(p)
+
+	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id))
 
 func _perform_burst_attack() -> void:
 	is_attacking = true
@@ -209,8 +238,13 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 
 	var burst = burst_scene.instantiate()
 	burst.global_position = target_pos
-	burst.radius = burst_radius
-	burst.damage = _final_damage()
+	burst.radius = burst_radius * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var final_dmg := _final_damage()
+	burst.damage = final_dmg
+	if def.get("proc_burn", false):
+		burst.proc_burn = true
+		burst.burn_dps = final_dmg * float(def.get("burn_ratio", 0.5))
+		burst.burn_dur = float(def.get("burn_dur", 3.0))
 	get_tree().current_scene.add_child(burst)
 
 func _perform_melee_attack() -> void:
@@ -250,7 +284,7 @@ func _perform_melee_attack() -> void:
 		slash_sprite.visible = false
 	)
 
-	AudioManager.play_sfx("enemy_hit", 1.25)
+	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 1.15)
 
 	_deal_melee_damage(aim_dir)
 
@@ -272,12 +306,18 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
 			var dmg = _final_damage() * 1.35
-			var is_crit = randf() < GameManager.get_crit_rate()
+			var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 			if is_crit:
-				dmg *= GameManager.crit_mult
+				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
 				had_crit = true
 			var knock = (enemy.global_position - global_position).normalized() * 240.0
 			enemy.take_damage(dmg, knock, is_crit)
+			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
+				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
+			if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):
+				enemy.apply_chill(float(def.get("proc_chill", 0.35)), float(def.get("chill_dur", 2.5)))
+			if def.get("proc_poison", false) and enemy.has_method("apply_poison"):
+				enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
 			had_hit = true
 

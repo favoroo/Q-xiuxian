@@ -7,6 +7,7 @@ extends Control
 ## 即可与它们天然互斥，无需逐个检查。
 
 signal stats_requested
+signal settings_requested
 
 var _closing: bool = false
 var _update_btn: Button
@@ -74,7 +75,7 @@ func _build_ui() -> void:
 
 	var resume_btn := Button.new()
 	resume_btn.text = "继 续 游 戏"
-	resume_btn.custom_minimum_size = Vector2(0, 46)
+	resume_btn.custom_minimum_size = Vector2(0, 42)
 	resume_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(resume_btn, GameStyle.BLUE, GameStyle.YELLOW, 17, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
@@ -82,15 +83,23 @@ func _build_ui() -> void:
 
 	var stats_btn := Button.new()
 	stats_btn.text = "人 物 属 性"
-	stats_btn.custom_minimum_size = Vector2(0, 40)
+	stats_btn.custom_minimum_size = Vector2(0, 36)
 	stats_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
 	vbox.add_child(stats_btn)
 
+	var settings_btn := Button.new()
+	settings_btn.text = "游 戏 设 置"
+	settings_btn.custom_minimum_size = Vector2(0, 36)
+	settings_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(settings_btn, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	settings_btn.pressed.connect(_on_settings_pressed)
+	vbox.add_child(settings_btn)
+
 	var retry_btn := Button.new()
 	retry_btn.text = "重 新 开 始"
-	retry_btn.custom_minimum_size = Vector2(0, 40)
+	retry_btn.custom_minimum_size = Vector2(0, 36)
 	retry_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(retry_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
 	retry_btn.pressed.connect(_on_retry_pressed)
@@ -98,7 +107,7 @@ func _build_ui() -> void:
 
 	_update_btn = Button.new()
 	_update_btn.text = "检 查 更 新"
-	_update_btn.custom_minimum_size = Vector2(0, 40)
+	_update_btn.custom_minimum_size = Vector2(0, 36)
 	_update_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(_update_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
 	_update_btn.pressed.connect(_on_check_update_pressed)
@@ -106,17 +115,64 @@ func _build_ui() -> void:
 
 	var quit_btn := Button.new()
 	quit_btn.text = "退 出 游 戏"
-	quit_btn.custom_minimum_size = Vector2(0, 40)
+	quit_btn.custom_minimum_size = Vector2(0, 36)
 	quit_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(quit_btn, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	vbox.add_child(quit_btn)
+
+	# 快捷音量微调（与 SettingsManager 双向同步）
+	var vol_title := GameStyle.label(Label.new(), 12, GameStyle.GREY)
+	vol_title.text = "快 捷 音 量"
+	vol_title.custom_minimum_size = Vector2(0, 16)
+	vbox.add_child(vol_title)
+	_add_volume_row(vbox, "灵乐", &"BGM")
+	_add_volume_row(vbox, "音效", &"SFX")
 
 	_ver_label = Label.new()
 	_ver_label.text = "修仙幸存者 " + Version.APP_VERSION_NAME
 	_ver_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(_ver_label, 11, GameStyle.GREY)
 	vbox.add_child(_ver_label)
+
+func _add_volume_row(parent: VBoxContainer, title: String, bus: StringName) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+
+	var name_lbl := GameStyle.label(Label.new(), 13, GameStyle.PAPER_DIM)
+	name_lbl.text = title
+	name_lbl.custom_minimum_size = Vector2(48, 24)
+	row.add_child(name_lbl)
+
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 100.0
+	slider.step = 5.0
+	slider.value = AudioManager.get_bus_linear(bus) * 100.0
+	slider.custom_minimum_size = Vector2(150, 24)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.focus_mode = Control.FOCUS_ALL
+	var styles := GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.BLUE)
+	slider.add_theme_stylebox_override("slider", styles[0])
+	slider.add_theme_stylebox_override("grabber_area", styles[1])
+	row.add_child(slider)
+
+	var val_lbl := GameStyle.label(Label.new(), 13, GameStyle.YELLOW)
+	val_lbl.text = "%d%%" % int(slider.value)
+	val_lbl.custom_minimum_size = Vector2(46, 24)
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(val_lbl)
+
+	slider.value_changed.connect(func(v: float) -> void:
+		AudioManager.set_bus_linear(bus, v / 100.0)
+		val_lbl.text = "%d%%" % int(v)
+	)
+	SettingsManager.audio_volume_changed.connect(func(b: StringName, linear_val: float, _muted: bool) -> void:
+		if b == bus and is_instance_valid(slider) and not slider.has_focus():
+			slider.set_value_no_signal(linear_val * 100.0)
+			val_lbl.text = "%d%%" % int(round(linear_val * 100.0))
+	)
 
 func _on_check_update_pressed() -> void:
 	if not UpdateManager.pending_update.is_empty():
@@ -189,6 +245,11 @@ func _on_stats_pressed() -> void:
 	visible = false
 	_closing = false
 	stats_requested.emit()
+
+func _on_settings_pressed() -> void:
+	visible = false
+	_closing = false
+	settings_requested.emit()
 
 func _on_retry_pressed() -> void:
 	get_tree().paused = false

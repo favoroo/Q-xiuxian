@@ -9,7 +9,7 @@ extends RefCounted
 ##   non_drone_damage                           —— 非灵蝶法器伤害修正（负值为惩罚）
 ##   start_drones                               —— 开局自带灵蝶数
 ##   spirit_threshold_adj                       —— 御灵羁绊门槛下移
-## allowed_tags: 非空时商店只刷这些流派的法器；locked_upgrades: 锁死的加点项
+## allowed_tags: 非空时商店大幅偏向这些流派的法器，但仍有少量其他法器漏出；locked_upgrades: 锁死的加点项
 
 const DEFS: Dictionary = {
 	"jianchi": {
@@ -17,7 +17,7 @@ const DEFS: Dictionary = {
 		"epithet": "一人一剑，不问苍生",
 		"icon": "res://assets/art/weapon_sword.png",
 		"pros": ["剑系法器伤害 +60%", "暴击率 +15%"],
-		"cons": ["此生只执剑：商店不出其他流派法器"],
+		"cons": ["此生只执剑：商店以剑系法器为主，偶有他派漏出"],
 		"mods": {
 			"crit_rate": 0.15,
 			"tag_damage": {"sword": 0.6},

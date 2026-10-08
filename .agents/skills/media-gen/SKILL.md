@@ -65,7 +65,7 @@ $S/gen_music.sh -p "<STYLE.md 音乐风格> dungeon crawler loop, instrumental o
 | 生图（批量草稿/图标） | `gemini-3.1-flash-lite-image` | ~5s，1024² |
 | 语音（默认） | `gemini-3.8-flash-tts` | WAV 24kHz |
 | 语音（批量草稿） | `gemini-3.8-flash-lite-tts` | 更便宜 |
-| 音乐 | `lyria-3.5` | MP3 44.1kHz，单段约 2 分钟 |
+| 音乐 | `lyria-3.5` | MP3 44.1kHz，单段约 2 分钟。**只能写整段音乐，做不了短音效**：实测索要「0.15 秒点击音」仍返回 56 秒素材。音效请改用本项目的 `tools/bake_sfx.py`（离线合成，见 usage-guide.md 能力边界表） |
 | ~~sensenova-u1.5-lite~~ | 网关上游配置错误，**暂不可用**（修好后优先用于便宜批量生图） |
 | ~~gpt-image-*~~ | 通道无鉴权，不可用 |
 
@@ -75,7 +75,8 @@ $S/gen_music.sh -p "<STYLE.md 音乐风格> dungeon crawler loop, instrumental o
 - 生图**没有透明通道**：一律走 `--keyout` 品红管线
 - 响应里媒体位置不固定（`message.images` 或 content 内嵌 markdown），提取交给脚本
 - 模型偶发只回文本不出图：脚本已自动重试 2 次
-- 逐帧动画与 SFX 不是本技能能力，替代方案见 usage-guide.md 能力边界表
+- 逐帧动画与 SFX 不是本技能能力，替代方案见 usage-guide.md 能力边界表。
+  **短音效不要试图用 `gen_music.sh` 凑**（时长不受控，见 api-music.md 实测），走 `tools/bake_sfx.py` 本地烘焙
 - TTS 风格指令直接写进台词**会被朗读出来**（实测）——必须走 `--style`（脚本自动
   转成不朗读的方括号舞台指令），角色音色描述登记在 STYLE.md 的 VOICES 表
 

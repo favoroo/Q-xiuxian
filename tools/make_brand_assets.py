@@ -3,34 +3,28 @@
 
 输入（media-gen --keyout 产出的透明底概念图）：
   assets_raw/images/app_icon_concept.png       青衫小修士头像
-  assets_raw/images/splash_emblem_concept.png  法剑+太极 emblem
 
 输出（assets/brand/，随 APK 打包）：
-  app_icon.png                 512²   Godot 项目/桌面图标（不透明）
+  app_icon.png                 512²   Godot 项目/桌面图标 + Godot boot splash（不透明白底）
   launcher_192.png             192²   Android 传统 launcher 图标
-  adaptive_foreground_432.png  432²   自适应图标前景（主体缩进 66% 安全圆）
-  adaptive_background_432.png  432²   自适应图标背景（深青黑径向底）
-  splash_logo.png              1024²  启动画面（透明底 RGBA，无文字）
+  adaptive_foreground_432.png  432²   自适应图标前景（主体外接圆撑满 66% 安全圆）
+  adaptive_background_432.png  432²   自适应图标背景（纯白）
 
-底色链：图标底/启动底/游戏 clearColor 同族深青黑（项目 default_clear_color ≈ #090D17），
-splash 非主体区域 alpha=0，Godot boot splash 淡入全程与整屏底色无接缝。
+底色链：图标底 / Android 系统 splash 圆标底 / Godot boot splash 底全为纯白，
+启动全程（系统圆标 → boot splash → 进游戏）只出现一个视觉主体（白底修士头像），无切图感。
 """
 import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 
 ROOT = Path(__file__).resolve().parent.parent
 ICON_SRC = ROOT / "assets_raw/images/app_icon_concept.png"
-EMBLEM_SRC = ROOT / "assets_raw/images/splash_emblem_concept.png"
 OUT = ROOT / "assets/brand"
 
-BG_CENTER = (16, 26, 46)   # #101A2E 图标底中心
-BG_EDGE = (9, 13, 23)      # #090D17 图标底边缘 = 游戏 clearColor
 FG_SAFE_RATIO = 0.66       # adaptive icon 安全区（直径占比）
-SPLASH_CANVAS = 1024
-SPLASH_SUBJECT = 560       # splash 主体最长边
+WHITE = (255, 255, 255)    # 纯白底：无边框、无渐变、无暗角
 
 
 def fail(msg: str) -> None:
@@ -48,15 +42,9 @@ def load_trimmed(path: Path) -> Image.Image:
     return img.crop(bbox)
 
 
-def radial_background(size: int) -> Image.Image:
-    """深青黑径向渐变底：中心略亮，边缘落到游戏 clearColor。"""
-    y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-    d = np.sqrt((x - size / 2) ** 2 + (y - size / 2) ** 2) / (size / np.sqrt(2))
-    t = np.clip(d, 0, 1)[..., None]
-    center = np.array(BG_CENTER, dtype=np.float32)
-    edge = np.array(BG_EDGE, dtype=np.float32)
-    rgb = center * (1 - t) + edge * t
-    return Image.fromarray(rgb.astype(np.uint8))
+def solid_background(size: int) -> Image.Image:
+    """纯白底：无渐变、无暗角，避免任何边框感。"""
+    return Image.new("RGB", (size, size), WHITE)
 
 
 def fit(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
@@ -79,51 +67,24 @@ def enhance_subject(img: Image.Image) -> Image.Image:
     return rgb
 
 
-def add_bloom(img: Image.Image, threshold: int = 170, blur: int = 18) -> Image.Image:
-    """高光柔光：亮部高斯模糊后 screen 叠加（仅用于不透明底的图标）。"""
-    arr = np.asarray(img.convert("RGB")).astype(np.float32)
-    bright = np.clip(arr - threshold, 0, 255)
-    glow = Image.fromarray(bright.astype(np.uint8)).filter(ImageFilter.GaussianBlur(blur))
-    g = np.asarray(glow).astype(np.float32)
-    out = 255 - (255 - arr) * (255 - g) / 255
-    return Image.fromarray(out.astype(np.uint8))
-
-
-def add_vignette(img: Image.Image, strength: float = 0.18) -> Image.Image:
-    size = img.width
-    y, x = np.mgrid[0:size, 0:img.height].astype(np.float32)
-    d = np.sqrt((x - size / 2) ** 2 + (y - img.height / 2) ** 2) / (size / np.sqrt(2))
-    mask = (1 - strength * np.clip(d, 0, 1) ** 2)[..., None]
-    arr = np.asarray(img.convert("RGB")).astype(np.float32) * mask
-    return Image.fromarray(arr.astype(np.uint8))
-
-
 def make_icon_master() -> Image.Image:
     subject = enhance_subject(load_trimmed(ICON_SRC))
-    canvas = radial_background(1024).convert("RGBA")
-    subject = fit(subject, 880, 880)
+    canvas = solid_background(1024).convert("RGBA")
+    # 人物撑满画布：上下不留底色空白（用户要求图标下方无留白）
+    subject = fit(subject, 1024, 1024)
     paste_center(canvas, subject)
-    icon = add_bloom(canvas.convert("RGB"))
-    return add_vignette(icon)
+    return canvas
 
 
 def make_adaptive_foreground() -> Image.Image:
     subject = enhance_subject(load_trimmed(ICON_SRC))
     canvas = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
-    # 竖构图主体按外接圆对角线收进安全圆（0.94 余量），而非按边长适配
-    limit = 432 * FG_SAFE_RATIO / 2 * 0.94
+    # 竖构图主体按外接圆对角线撑满安全圆（无余量），减少圆标裁切时的四周/底部留白
+    limit = 432 * FG_SAFE_RATIO / 2
     diag = (subject.width ** 2 + subject.height ** 2) ** 0.5
     scale = limit * 2 / diag
     size = (round(subject.width * scale), round(subject.height * scale))
     paste_center(canvas, subject.resize(size, Image.LANCZOS))
-    return canvas
-
-
-def make_splash() -> Image.Image:
-    emblem = enhance_subject(load_trimmed(EMBLEM_SRC))
-    canvas = Image.new("RGBA", (SPLASH_CANVAS, SPLASH_CANVAS), (0, 0, 0, 0))
-    emblem = fit(emblem, SPLASH_SUBJECT, SPLASH_SUBJECT)
-    paste_center(canvas, emblem)
     return canvas
 
 
@@ -142,7 +103,7 @@ def check(path: Path, size: int, opaque: bool, safe_zone: bool = False) -> None:
         half = size / 2
         r = np.sqrt((xs - half) ** 2 + (ys - half) ** 2).max()
         limit = size * FG_SAFE_RATIO / 2
-        if r > limit:
+        if r > limit + 0.5:  # 0.5px 容差：主体按外接圆撑满安全圆时恰好贴边
             fail(f"{path.name} 主体超出安全圆：r={r:.0f} > {limit:.0f}")
     print(f"OK: {path.relative_to(ROOT)} ({size}²)")
 
@@ -154,14 +115,12 @@ def main() -> None:
     master.resize((512, 512), Image.LANCZOS).save(OUT / "app_icon.png")
     master.resize((192, 192), Image.LANCZOS).save(OUT / "launcher_192.png")
     make_adaptive_foreground().save(OUT / "adaptive_foreground_432.png")
-    radial_background(432).save(OUT / "adaptive_background_432.png")
-    make_splash().save(OUT / "splash_logo.png")
+    solid_background(432).save(OUT / "adaptive_background_432.png")
 
     check(OUT / "app_icon.png", 512, opaque=True)
     check(OUT / "launcher_192.png", 192, opaque=True)
     check(OUT / "adaptive_foreground_432.png", 432, opaque=False, safe_zone=True)
     check(OUT / "adaptive_background_432.png", 432, opaque=True)
-    check(OUT / "splash_logo.png", SPLASH_CANVAS, opaque=False)
     print("DONE: assets/brand/ 全部素材已生成并通过自检")
 
 

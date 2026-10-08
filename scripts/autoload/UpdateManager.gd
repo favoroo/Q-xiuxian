@@ -51,9 +51,29 @@ func _ready() -> void:
 
 	_init_dialog()
 
-var _toast_label: Label
+var _toast_canvas: CanvasLayer
+var _toast_band: CenterContainer
 var _toast_panel: PanelContainer
+var _toast_label: Label
 var _toast_tween: Tween
+
+## 浮层几何。宽度跟着文案算、横向由居中容器摆，滑移走 CanvasLayer.offset。
+## 三条各管一段，别再互相依赖：
+##  · x  —— CenterContainer（旧写法手拍 position.x = -160，把锚点当原点，整块推到屏外）
+##  · 宽 —— _fit_toast 量文案（旧写法固定 320，长一句失败原因被裁）
+##  · y  —— 画布偏移（旧写法 tween 节点 position，会把入树前算好的 offset_bottom 烘成脏值，
+##          实测浮层会从 y=36 掉到 y=197：容器按一个过期的巨大 min height 垂直居中了子节点。
+##          另记一笔：CanvasLayer.offset 只在绘制时生效，不折进子控件的 get_global_rect()，
+##          所以判据量的是「布局 rect + 层偏移」= 屏幕上那格，见 tests/toast_check.gd）
+const TOAST_FONT_SIZE: int = 13       # 与 _init_toast 里 GameStyle.label 的字号同源
+const TOAST_PAD_X: float = 16.0       # 与 MarginContainer 左右内边距同源
+const TOAST_PAD_Y: float = 6.0        # 与 MarginContainer 上下内边距同源
+const TOAST_MIN_W: float = 240.0      # 短句也留个体面宽度，不缩成一条签
+const TOAST_MAX_W: float = 620.0      # 长文案到此折行，不铺成通宽横幅
+const TOAST_MIN_H: float = 38.0
+const TOAST_EDGE_MARGIN: float = 12.0 # 屏边留白：文案再长也不贴屏沿
+const TOAST_TOP: float = 36.0         # 浮层顶缘（画布坐标）
+const TOAST_SLIDE: float = 16.0       # 入场/退场滑移量
 
 func _init_dialog() -> void:
 	# 顶层 CanvasLayer 保证弹窗覆盖在全部 UI 与操作之上
@@ -82,11 +102,21 @@ func _init_dialog() -> void:
 	)
 
 func _init_toast() -> void:
+	# 浮层单独一层：滑移只动这一层的 offset，不碰任何控件的锚点/偏移
+	_toast_canvas = CanvasLayer.new()
+	_toast_canvas.layer = 101
+	add_child(_toast_canvas)
+
+	# 顶部整幅宽的居中容器：横向位置由布局系统算，不再手拍 x
+	_toast_band = CenterContainer.new()
+	_toast_band.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_toast_band.offset_top = TOAST_TOP
+	_toast_band.offset_bottom = TOAST_TOP
+	_toast_band.grow_vertical = Control.GROW_DIRECTION_END
+	_toast_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	_toast_panel = PanelContainer.new()
 	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_toast_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_toast_panel.position = Vector2(-160, 48)
-	_toast_panel.custom_minimum_size = Vector2(320, 38)
 	var style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_BUTTON, Vector2(3, 4))
 	style.border_width_left = 2
 	style.border_width_top = 2
@@ -96,49 +126,86 @@ func _init_toast() -> void:
 	_toast_panel.add_theme_stylebox_override("panel", style)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 6)
-	margin.add_theme_constant_override("margin_bottom", 6)
+	margin.add_theme_constant_override("margin_left", int(TOAST_PAD_X))
+	margin.add_theme_constant_override("margin_right", int(TOAST_PAD_X))
+	margin.add_theme_constant_override("margin_top", int(TOAST_PAD_Y))
+	margin.add_theme_constant_override("margin_bottom", int(TOAST_PAD_Y))
 	_toast_panel.add_child(margin)
 
 	_toast_label = Label.new()
 	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast_label.text = ""
-	GameStyle.label(_toast_label, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	GameStyle.label(_toast_label, TOAST_FONT_SIZE, GameStyle.PAPER, 0, GameStyle.INK, true)
 	margin.add_child(_toast_label)
 
-	_toast_panel.visible = false
-	_toast_panel.modulate.a = 0.0
-	_dialog_canvas.add_child(_toast_panel)
+	_toast_band.add_child(_toast_panel)
+
+	_toast_band.visible = false
+	_toast_band.modulate.a = 0.0
+	_toast_canvas.add_child(_toast_band)
+
+## 量文案定宽度：一行放得下就贴着文案走，放不下才折到上限宽。
+## 只量**宽度**——高度交给 Label 自己（autowrap + 钉住内宽）：PanelContainer 的
+## custom_minimum_size 是地板不是天花板（容器恒取 max(自己, 子节点所需)），
+## 所以折几行都不会被裁。反过来若在这里按 get_string_size 猜行高就坏了 ——
+## 那个 API 传了 width 也只回一行高（判据 --selftest 反例②就是这么露出来的）。
+func _fit_toast(text: String) -> void:
+	var font: Font = _toast_label.get_theme_font("font")
+	var size: int = _toast_label.get_theme_font_size("font_size")
+	var style: StyleBoxFlat = _toast_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	# 描边也占宽度：只按内边距算会少 4 单位，620 的上限实得 624（判据 ③ 抓到过）
+	var chrome := Vector2(
+		TOAST_PAD_X * 2.0 + style.border_width_left + style.border_width_right,
+		TOAST_PAD_Y * 2.0 + style.border_width_top + style.border_width_bottom)
+	var screen_w: float = get_viewport().get_visible_rect().size.x
+	var cap: float = minf(TOAST_MAX_W, maxf(TOAST_MIN_W, screen_w - TOAST_EDGE_MARGIN * 2.0))
+	var text_w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var w: float = clampf(text_w + chrome.x, minf(TOAST_MIN_W, cap), cap)
+	# 钉住 Label 的折行宽 = 它实际拿到的内宽，容器才不会拿 0 宽去量高度
+	_toast_label.custom_minimum_size = Vector2(maxf(0.0, w - chrome.x), 0.0)
+	_toast_panel.custom_minimum_size = Vector2(w, maxf(TOAST_MIN_H, chrome.y))
 
 ## 展示全局轻提示浮层（Toast）
 func show_toast(text: String, accent_color: Color = GameStyle.YELLOW, duration: float = 2.2) -> void:
-	if _toast_panel == null or _toast_label == null:
+	if _toast_band == null or _toast_panel == null or _toast_label == null:
 		return
 	_toast_label.text = text
 	var style: StyleBoxFlat = _toast_panel.get_theme_stylebox("panel") as StyleBoxFlat
 	if style:
 		style.border_color = accent_color
 	_toast_label.add_theme_color_override("font_color", GameStyle.PAPER if accent_color != GameStyle.BAD else GameStyle.BAD)
+	_fit_toast(text)
 
 	if _toast_tween != null and _toast_tween.is_valid():
 		_toast_tween.kill()
 
-	_toast_panel.visible = true
-	_toast_panel.position = Vector2(-160, 36)
-	_toast_panel.modulate.a = 0.0
+	_toast_band.visible = true
+	_toast_band.modulate.a = 0.0
+	_toast_canvas.offset = Vector2.ZERO
 
 	_toast_tween = create_tween()
 	_toast_tween.set_parallel(true)
-	_toast_tween.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
-	_toast_tween.tween_property(_toast_panel, "position:y", 52.0, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_toast_tween.tween_property(_toast_band, "modulate:a", 1.0, 0.18)
+	_toast_tween.tween_property(_toast_canvas, "offset:y", TOAST_SLIDE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_toast_tween.chain().tween_interval(duration)
-	_toast_tween.chain().tween_property(_toast_panel, "modulate:a", 0.0, 0.2)
-	_toast_tween.tween_property(_toast_panel, "position:y", 36.0, 0.2)
+	_toast_tween.chain().tween_property(_toast_band, "modulate:a", 0.0, 0.2)
+	_toast_tween.tween_property(_toast_canvas, "offset:y", 0.0, 0.2)
 	_toast_tween.chain().tween_callback(func():
-		_toast_panel.visible = false
+		_toast_band.visible = false
 	)
+
+## 浮层当前占位、文案所需尺寸与屏幕可视尺寸
+## （供 tests/ToastCheck 量「在屏内 + 居中 + 装得下」，不参与任何逻辑）
+func toast_probe() -> Dictionary:
+	if _toast_panel == null or _toast_label == null or not is_instance_valid(_toast_panel):
+		return {}
+	return {
+		"rect": _toast_panel.get_global_rect(),
+		"label_min": _toast_label.get_combined_minimum_size(),
+		"offset": _toast_canvas.offset,
+		"screen": get_viewport().get_visible_rect().size,
+	}
 
 ## 主动弹出更新对话框
 func show_update_dialog(info: Dictionary) -> void:

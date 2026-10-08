@@ -4,6 +4,8 @@ extends Control
 ## P5 大色块风格开始界面：实底墨蓝 + 斜切色块装饰 + 黄色标题块。
 ## 点「开始游戏」后淡出，交给 StartWeaponSelect 选本命法器（paused 链不中断）。
 
+signal settings_requested
+
 var _title_block: PanelContainer
 var _sub_chip: Label
 var _buttons: Array[Button] = []
@@ -97,7 +99,7 @@ func _build_center() -> void:
     add_child(center)
 
     var vbox := VBoxContainer.new()
-    vbox.add_theme_constant_override("separation", 18)
+    vbox.add_theme_constant_override("separation", 14)
     vbox.alignment = BoxContainer.ALIGNMENT_CENTER
     center.add_child(vbox)
 
@@ -126,16 +128,18 @@ func _build_center() -> void:
     vbox.add_child(_sub_chip)
 
     var spacer := Control.new()
-    spacer.custom_minimum_size = Vector2(0, 26)
+    spacer.custom_minimum_size = Vector2(0, 16)
     vbox.add_child(spacer)
 
     # 按钮列
-    _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 58),
+    _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 56),
         GameStyle.BLUE, GameStyle.YELLOW, GameStyle.PAPER, _on_start_pressed))
-    _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 42),
+    _buttons.append(_make_button(vbox, "游 戏 设 置", 15, Vector2(220, 40),
+        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER_DIM, _on_settings_pressed))
+    _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 40),
         GameStyle.NAVY2, GameStyle.BLUE, GameStyle.PAPER_DIM, _on_update_pressed)
     _buttons.append(_update_btn)
-    _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 42),
+    _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 40),
         GameStyle.NAVY2, GameStyle.BAD, GameStyle.PAPER_DIM, _on_quit_pressed))
 
 func _make_button(parent: Control, text: String, font_size: int, min_size: Vector2,
@@ -261,6 +265,9 @@ func _cancel_reset_timer() -> void:
     if _update_reset_tween != null and _update_reset_tween.is_valid():
         _update_reset_tween.kill()
         _update_reset_tween = null
+
+func _on_settings_pressed() -> void:
+    settings_requested.emit()
 
 func _on_quit_pressed() -> void:
     get_tree().quit()

@@ -6,6 +6,12 @@
 |---|---|---|---|
 | `lyria-3.5` | `/v1/chat/completions` | MP3 192kbps 44.1kHz 立体声 | ~34s，单段约 2 分钟 |
 
+> **它是「写歌」模型，不是音效模型。** 实测（2026-10-08）提示词写
+> `[0:00 - 0:01] a single 0.15 second UI button click sound only, ... then silence`，
+> 仍返回 **56.1 秒 / 1.3 MB** 的连续素材，能量分布是「前段稀疏、16-32s 越演越响（RMS 0.25）」——
+> 模型把请求当成一首曲子来展开，短音效要的干脆瞬态做不出来，剪开头也只是淡入片段。
+> **短音效请走本地烘焙 `tools/bake_sfx.py`，不要调本接口。**
+
 ## 请求（通过 chat completions）
 
 ```bash
