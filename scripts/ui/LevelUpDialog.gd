@@ -1,6 +1,13 @@
 class_name LevelUpDialog
 extends Control
 
+## 升级卡片的宽度与左右内边距：卡内可用宽只从这两个数算出来
+const CARD_W := 262.0
+const CARD_PAD_X := 16.0
+
+static func _card_inner_w() -> float:
+	return CARD_W - CARD_PAD_X * 2.0
+
 @onready var main_vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleBand/TitleLabel
@@ -88,15 +95,15 @@ func _populate_cards() -> void:
 func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	# 外层垂直容器：上方卡片展示面板 + 下方独立两段式确认按钮
 	var col_box := VBoxContainer.new()
-	col_box.custom_minimum_size = Vector2(262.0, 0.0)
+	col_box.custom_minimum_size = Vector2(CARD_W, 0.0)
 	col_box.add_theme_constant_override("separation", 10)
 	col_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(262.0, 300.0)
+	card.custom_minimum_size = Vector2(CARD_W, 300.0)
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.pivot_offset = Vector2(131.0, 150.0)
+	card.pivot_offset = Vector2(CARD_W * 0.5, 150.0)
 
 	var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
 	var style_normal := StyleBoxFlat.new()
@@ -110,9 +117,9 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	style_normal.shadow_color = Color(0, 0, 0, 0.6)
 	style_normal.shadow_size = 0
 	style_normal.shadow_offset = Vector2(6, 6)
-	style_normal.content_margin_left = 16.0
+	style_normal.content_margin_left = CARD_PAD_X
 	style_normal.content_margin_top = 14.0
-	style_normal.content_margin_right = 16.0
+	style_normal.content_margin_right = CARD_PAD_X
 	style_normal.content_margin_bottom = 14.0
 	card.add_theme_stylebox_override("panel", style_normal)
 
@@ -182,13 +189,17 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	sep.add_theme_stylebox_override("separator", sep_style)
 	vbox.add_child(sep)
 
-	# 5. 描述富文本
+	# 5. 描述富文本（表里按语义写了 \n，这里再把「一行放不下的那一句」切成硬换行）
+	#   为什么自己切：AUTOWRAP_WORD 只认词间断点，一句不带空格的中文在它眼里是一个词 ——
+	#   真机上整行不折、压到邻卡上（见 GameStyle.wrap_cjk 头注）。BBCode 的状态跨行延续，
+	#   所以 wrap_bbcode 可以从中间下刀而不破坏 [color]/[b] 配对。
 	var r_desc := RichTextLabel.new()
 	r_desc.bbcode_enabled = true
-	r_desc.text = data["desc"]
+	r_desc.text = GameStyle.wrap_bbcode(String(data["desc"]), GameStyle.body_font(), 13, _card_inner_w())
 	r_desc.fit_content = true
 	r_desc.scroll_active = false
-	r_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
+	r_desc.custom_minimum_size = Vector2(_card_inner_w(), 0)
+	r_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	r_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	r_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	r_desc.add_theme_font_override("normal_font", GameStyle.body_font())

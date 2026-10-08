@@ -20,6 +20,10 @@ signal screen_damage_pulsed(color: Color, duration: float)
 signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
 
+## 打击感分级。顿帧/缩放冲击按档给，**震屏（创伤）只发给"值得看的节点"**：
+## 玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中。
+## 普通命中与普通小怪死亡一律不许走这里（高频事件会把创伤顶满，镜头就一直摇）——
+## 兜底见 GameBalance「打击感：镜头创伤」段与 SmoothCamera 的每秒预算。
 enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
@@ -48,6 +52,35 @@ var joystick = null
 var main_camera: Camera2D = null
 var wave_spawner: Node = null
 
+# 危险度（仿土豆兄弟 Danger 0~5）：通关当前最高档解锁下一档，落盘 user://progress.cfg
+var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
+var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
+const PROGRESS_PATH := "user://progress.cfg"
+
+func _ready() -> void:
+	_load_progress()
+
+func _load_progress() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(PROGRESS_PATH) == OK:
+		max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
+
+func _save_progress() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("progress", "max_danger", max_danger_unlocked)
+	cfg.save(PROGRESS_PATH)
+
+## 选择危险度：不允许选未解锁的档位
+func set_danger(d: int) -> void:
+	danger_level = clampi(d, 0, max_danger_unlocked)
+
+## 通关当前最高档 → 解锁下一档（打旧档不算数，防刷低档解锁）
+func _maybe_unlock_danger() -> void:
+	if danger_level >= max_danger_unlocked and max_danger_unlocked < GameBalance.DANGER_MAX:
+		max_danger_unlocked += 1
+		_save_progress()
+		announcement_triggered.emit("✦ 天道认可 · 危险度「%d」已解锁 ✦" % max_danger_unlocked)
+
 var kills: int = 0
 var game_time: float = 0.0
 var spirit_stones: int = 0
@@ -75,12 +108,25 @@ var dodge: float = 0.0        ## 身法：闪避概率（硬上限 DODGE_CAP）
 var lifesteal: float = 0.0    ## 噬元：命中回复 1 点气血的概率
 var luck: float = 0.0         ## 福缘：提升高稀有度悟道与商店亲和权重
 var harvest: float = 0.0      ## 灵韵：每波结束无偿获得等额灵石+修为，并自我复利
+var xp_gain_mult: float = 1.0 ## 悟性：修为获取倍率（只放大修为，不放大灵石）
+var knockback_mult: float = 1.0 ## 震退：法器击退力度倍率
+var elite_damage: float = 0.0 ## 斩将：对精英/Boss 的额外伤害加成
+var free_rerolls: int = 0     ## 通玄：每波免费重掷货架次数
+var element_damage: Dictionary = {}  ## 五行真解：{元素 tag(String): 伤害加成(float)}
 var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id（UpgradeData 过滤用）
 
 # 修士流派（角色）特性
 var cultivator_id: String = ""
 var thorns_pct: float = 0.0        ## 石岳反震：按敌方攻击力比例反弹
 var spirit_threshold_adj: int = 0  ## 符阵灵童：御灵羁绊门槛下移
+var dodge_cap_bonus: float = 0.0   ## 魅影：闪避硬上限上移（上限 = DODGE_CAP + 本值）
+var weapon_slots_override: int = 0 ## 独臂刀圣：上阵槽位上限覆盖（0 = 用 WeaponData.MAX_SLOTS）
+var enemy_count_mult: float = 1.0  ## 狂战蛮修：妖潮规模倍率（WaveSpawner 消费）
+var harvest_decay: float = 0.0     ## 狂战蛮修：每波灵韵流失点数
+var xp_require_mult: float = 1.0   ## 夺舍散人：升级修为需求倍率
+var item_price_mult: float = 1.0   ## 多宝道人：法宝价格乘区（叠加在商店价格系数之上）
+var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
+var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
 var bonus_pierce: int = 0           ## 符箓羁绊：弹丸额外穿透
@@ -105,9 +151,13 @@ var _hud_tick: float = 0.0  ## HUD 计时刷新节流：只走时间显示，事
 var shop_offers: Array = []
 var reroll_cost: int = 2
 var reroll_count: int = 0          ## 本波已重掷次数（费用递增，跨波重置）
+var reroll_free_left: int = 0      ## 本波剩余免费重掷次数（roll_shop(new_wave) 时按 free_rerolls 重置）
 var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如散修 8 折）
 var shop_tag_filter: Array = []    ## 非空时这些 tag 法器权重大幅提升，其余法器仍以低概率漏出（剑痴等流派偏好）
 var _no_main_tag_waves: int = 0    ## 连续未刷出主流派法器的波数（保底计数）
+
+## 已持有法宝（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
+var items: Array = []
 
 # 武器库存：上阵 = 悬浮法器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
@@ -144,10 +194,23 @@ func reset_run() -> void:
 	lifesteal = 0.0
 	luck = 0.0
 	harvest = 0.0
+	xp_gain_mult = 1.0
+	knockback_mult = 1.0
+	elite_damage = 0.0
+	free_rerolls = 0
+	element_damage = {}
 	locked_upgrades = []
 	cultivator_id = ""
 	thorns_pct = 0.0
 	spirit_threshold_adj = 0
+	dodge_cap_bonus = 0.0
+	weapon_slots_override = 0
+	enemy_count_mult = 1.0
+	harvest_decay = 0.0
+	xp_require_mult = 1.0
+	item_price_mult = 1.0
+	shop_slots_bonus = 0
+	_exp_chain = GameBalance.EXP_FIRST_LEVEL
 	bonus_pierce = 0
 	synergy_damage_mult = 1.0
 	synergy_range_mult = 1.0
@@ -169,9 +232,11 @@ func reset_run() -> void:
 	shop_offers = []
 	reroll_cost = 2
 	reroll_count = 0
+	reroll_free_left = 0
 	shop_price_mult = 1.0
 	shop_tag_filter = []
 	_no_main_tag_waves = 0
+	items = []
 	drones = []
 	stash = []
 	upgrade_history.clear()
@@ -196,14 +261,17 @@ func _process(delta: float) -> void:
 func add_experience(amount: int) -> void:
 	if is_game_over:
 		return
-	experience += amount
+	# 悟性只放大修为，灵石始终按原价入账（否则经济会双重受益）
+	experience += int(round(float(amount) * xp_gain_mult))
 	spirit_stones += amount
 	AudioManager.play_sfx("gem_pickup")
 
 	while experience >= experience_to_next:
 		experience -= experience_to_next
 		level += 1
-		experience_to_next = GameBalance.exp_to_next(experience_to_next)
+		_exp_chain = GameBalance.exp_to_next(_exp_chain)
+		# 夺舍散人这类需求倍率只折算判定值，链条本身保持原曲线（避免倍率逐层复利）
+		experience_to_next = maxi(1, int(round(float(_exp_chain) * xp_require_mult)))
 		AudioManager.play_sfx("level_up")
 		player_leveled_up.emit(level)
 
@@ -226,7 +294,27 @@ func register_kill(is_elite: bool = false) -> void:
 ## 这样「数值」和「卡片文案」同源，调参只改数据表一处（历史上二者分家，改一项要动两个文件）。
 func apply_upgrade(upgrade_id: String) -> void:
 	var def := UpgradeData.get_upgrade_def(upgrade_id)
-	var apply: Dictionary = def.get("apply", {})
+	_apply_stat_fields(def.get("apply", {}), upgrade_id)
+
+	var prev_count: int = int(upgrade_counts.get(upgrade_id, 0)) + 1
+	upgrade_counts[upgrade_id] = prev_count
+	upgrade_history.append({
+		"id": upgrade_id,
+		"title": def.get("title", upgrade_id),
+		"rarity": def.get("rarity", "common"),
+		"rarity_label": def.get("rarity_label", "凡品"),
+		"icon": def.get("icon", ""),
+		"desc": def.get("desc", ""),
+		"border_color": def.get("border_color", Color.WHITE),
+		"level": level,
+		"time": game_time,
+		"count": prev_count,
+	})
+	upgrade_applied.emit(upgrade_id)
+
+## 属性字段统一落地入口：悟道三选一（apply_upgrade）与法宝（add_item）共用同一条链路，
+## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露
+func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 	for key in apply.keys():
 		var v: float = float(apply[key])
 		match key:
@@ -249,7 +337,7 @@ func apply_upgrade(upgrade_id: String) -> void:
 			"crit_mult":
 				crit_mult += v
 			"dodge":
-				dodge = minf(dodge + v, DODGE_CAP)
+				dodge = minf(dodge + v, DODGE_CAP + dodge_cap_bonus)
 			"lifesteal":
 				lifesteal += v
 			"luck":
@@ -263,24 +351,26 @@ func apply_upgrade(upgrade_id: String) -> void:
 					player.increase_max_hp(v, float(apply.get("hp_heal", 0.0)))
 			"hp_heal":
 				pass  # 已随 max_hp 一起结算
+			"xp_gain_mult":
+				xp_gain_mult += v
+			"knockback_mult":
+				knockback_mult += v
+			"elite_damage":
+				elite_damage += v
+			"free_rerolls":
+				free_rerolls += int(v)
+			"shop_price_mul":
+				shop_price_mult *= v
+			"element_damage_all":
+				for e in WeaponData.ELEMENTS:
+					element_damage[e] = float(element_damage.get(e, 0.0)) + v
 			_:
-				push_warning("apply_upgrade: 未知加点字段 %s（来自 %s）" % [key, upgrade_id])
-
-	var prev_count: int = int(upgrade_counts.get(upgrade_id, 0)) + 1
-	upgrade_counts[upgrade_id] = prev_count
-	upgrade_history.append({
-		"id": upgrade_id,
-		"title": def.get("title", upgrade_id),
-		"rarity": def.get("rarity", "common"),
-		"rarity_label": def.get("rarity_label", "凡品"),
-		"icon": def.get("icon", ""),
-		"desc": def.get("desc", ""),
-		"border_color": def.get("border_color", Color.WHITE),
-		"level": level,
-		"time": game_time,
-		"count": prev_count,
-	})
-	upgrade_applied.emit(upgrade_id)
+				# element_damage_metal / _wood / _water / _fire / _earth：单元素加成
+				if key.begins_with("element_damage_") and key.trim_prefix("element_damage_") in WeaponData.ELEMENTS:
+					var elem: String = key.trim_prefix("element_damage_")
+					element_damage[elem] = float(element_damage.get(elem, 0.0)) + v
+				else:
+					push_warning("apply_stat_fields: 未知加点字段 %s（来自 %s）" % [key, source])
 
 ## 抽一次「三选一」。UpgradeData 是纯函数层、不读单例，所以这里负责把当前局面打包成 ctx 传过去。
 func roll_upgrades(count: int = 3) -> Array[Dictionary]:
@@ -326,6 +416,10 @@ func get_stat_breakdown() -> Dictionary:
 		"lifesteal_pct": (lifesteal + synergy_lifesteal) * 100.0,
 		"luck": luck,
 		"harvest": harvest,
+		"xp_gain_pct": (xp_gain_mult - 1.0) * 100.0,
+		"knockback_pct": (knockback_mult * synergy_knockback_mult - 1.0) * 100.0,
+		"elite_damage_pct": elite_damage * 100.0,
+		"free_rerolls": free_rerolls,
 	}
 
 func get_effective_armor() -> float:
@@ -335,7 +429,35 @@ func get_crit_rate() -> float:
 	return minf(crit_rate + synergy_crit_rate, CRIT_RATE_CAP)
 
 func get_effective_dodge() -> float:
-	return minf(dodge, DODGE_CAP)
+	return minf(dodge, DODGE_CAP + dodge_cap_bonus)
+
+## 上阵法器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
+func max_weapon_slots() -> int:
+	return weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
+
+## 五行真解：某件法器吃到的元素伤害乘区（按 WeaponData.element_of 取对应元素加成）
+func element_damage_mult(w_id: String) -> float:
+	if element_damage.is_empty():
+		return 1.0
+	return 1.0 + float(element_damage.get(WeaponData.element_of(w_id), 0.0))
+
+## 法器击退力度：玩家震退属性 × 厚土羁绊倍率
+func knockback_force(base: float) -> float:
+	return base * knockback_mult * synergy_knockback_mult
+
+## 法器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
+## source = 施力点（落雷点 / 法器自身 / 灵宝自身），enemy_pos = 受击敌人位置。
+## 玩家不在场（单测、局外预览）时把玩家位置退回施力点 = 纯径向旧行为，不会出 NaN。
+## 各法器只许经这一个出口拿方向，别再自己写 (enemy - source).normalized()。
+func knockback_vec(source: Vector2, enemy_pos: Vector2, base: float) -> Vector2:
+	var player_pos: Vector2 = source if player == null else player.global_position
+	return GameBalance.knock_dir(source, enemy_pos, player_pos) * knockback_force(base)
+
+## 斩将：对精英/Boss（is_elite 标记）的额外伤害乘区，普通妖兽不受影响
+func elite_damage_mult_for(enemy: Variant) -> float:
+	if elite_damage <= 0.0 or enemy == null:
+		return 1.0
+	return 1.0 + elite_damage if bool(enemy.get("is_elite")) else 1.0
 
 func get_player_stat_dict() -> Dictionary:
 	var cur_hp := 120.0
@@ -375,13 +497,62 @@ func try_lifesteal() -> void:
 		_lifesteal_procs += 1
 		player.heal(1.0, true)
 
-## 波间灵韵结算：无偿发放等额灵石+修为，随后灵韵自我复利（增长截止波次见常量区）
+## 波间灵韵结算：无偿发放等额灵石+修为；狂战蛮修的杀气让灵韵每波流失；随后灵韵自我复利（增长截止波次见常量区）
 func apply_harvest() -> void:
 	var gain := GameBalance.harvest_gain(harvest)
 	if gain > 0:
 		add_experience(gain)
 		announcement_triggered.emit("✦ 灵韵滋养 · 灵石与修为 +%d ✦" % gain)
+	if harvest_decay > 0.0:
+		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
+	# 回春葫芦等法宝的波末回血 hook
+	var heal_pct := item_hook_sum("wave_heal_pct")
+	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
+		player.heal(player.max_health * heal_pct)
+
+# ---------------- 法宝（被动道具） ----------------
+
+func has_item(item_id: String) -> bool:
+	return item_id in items
+
+## 购入法宝：属性走 _apply_stat_fields（与悟道同一条链路）；unique 法宝重复购买会被拒绝
+func add_item(item_id: String) -> bool:
+	var def := ItemData.get_def(item_id)
+	if def.is_empty():
+		return false
+	if bool(def.get("unique", false)) and has_item(item_id):
+		return false
+	items.append(item_id)
+	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
+	return true
+
+## 消耗一件法宝（替死傀儡这类一次性机制用），返回是否真的消耗了
+func consume_item(item_id: String) -> bool:
+	var i := items.find(item_id)
+	if i < 0:
+		return false
+	items.remove_at(i)
+	return true
+
+## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）
+func item_hook_sum(hook: String) -> float:
+	var total := 0.0
+	for item_id in items:
+		total += float(ItemData.get_def(item_id).get(hook, 0.0))
+	return total
+
+## 替死傀儡：致死一击时消耗它免死并回半血。Player.take_damage 在扣血归零后调用
+func try_revive() -> bool:
+	if not consume_item("tisi_kuilei"):
+		return false
+	if player != null and is_instance_valid(player):
+		player.current_health = player.max_health * 0.5
+		player.invulnerable_time = 2.0
+		player_hp_changed.emit(player.current_health, player.max_health)
+	announcement_triggered.emit("✦ 替死傀儡碎裂 · 死里逃生 ✦")
+	AudioManager.play_sfx("level_up", 1.0)
+	return true
 
 # ---------------- 武器系统 ----------------
 
@@ -400,11 +571,22 @@ func _apply_cultivator() -> void:
 	crit_rate += float(mods.get("crit_rate", 0.0))
 	armor += float(mods.get("armor", 0.0))
 	harvest += float(mods.get("harvest", 0.0))
+	dodge += float(mods.get("dodge", 0.0))
+	dodge_cap_bonus = float(mods.get("dodge_cap", 0.0))
 	move_speed_mult *= float(mods.get("speed_mult", 1.0))
 	weapon_damage_mult *= float(mods.get("damage_mult", 1.0))
+	attack_speed_mult = maxf(ATTACK_SPEED_FLOOR, attack_speed_mult * float(mods.get("haste_mult", 1.0)))
 	thorns_pct = float(mods.get("thorns", 0.0))
 	shop_price_mult = float(mods.get("shop_price", 1.0))
 	spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
+	weapon_slots_override = int(mods.get("weapon_slots_max", 0))
+	enemy_count_mult = float(mods.get("enemy_count_mult", 1.0))
+	harvest_decay = float(mods.get("harvest_decay", 0.0))
+	xp_require_mult = float(mods.get("xp_require_mult", 1.0))
+	item_price_mult = float(mods.get("item_price", 1.0))
+	shop_slots_bonus = int(mods.get("shop_slots", 0))
+	# 需求倍率只折算判定值，修为门槛链保持原曲线（避免倍率逐层复利）
+	experience_to_next = maxi(1, int(round(float(_exp_chain) * xp_require_mult)))
 	shop_tag_filter = def.get("allowed_tags", [])
 	locked_upgrades = def.get("locked_upgrades", [])
 	if player != null and is_instance_valid(player):
@@ -455,7 +637,7 @@ func add_weapon(w_id: String, star: int = 1) -> bool:
 	var def := WeaponData.get_def(w_id)
 	if def.is_empty():
 		return false
-	if slots_used() < WeaponData.MAX_SLOTS:
+	if slots_used() < max_weapon_slots():
 		if def.get("behavior", -1) == WeaponData.Behavior.DRONE:
 			drones.append({"id": w_id, "star": star})
 			if player != null and player.has_method("sync_drones"):
@@ -731,8 +913,8 @@ func sell_weapon(index: int) -> bool:
 func equip_from_stash(index: int) -> bool:
 	if index < 0 or index >= stash.size():
 		return false
-	if slots_used() >= WeaponData.MAX_SLOTS:
-		announcement_triggered.emit("上阵已满 6 件，先卸下一件法器")
+	if slots_used() >= max_weapon_slots():
+		announcement_triggered.emit("上阵已满 %d 件，先卸下一件法器" % max_weapon_slots())
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	var entry: Dictionary = stash[index]
@@ -803,10 +985,11 @@ func sell_stash(index: int) -> bool:
 func roll_shop(new_wave: bool = false) -> void:
 	if new_wave:
 		reroll_count = 0
+		reroll_free_left = free_rerolls
 	var wave := maxi(wave_number, 1)
 	var old := shop_offers
 	var new_offers: Array = []
-	for i in range(4):
+	for i in range(4 + shop_slots_bonus):
 		if i < old.size() and old[i].get("locked", false) and not old[i].get("sold", false):
 			new_offers.append(old[i])
 		else:
@@ -816,14 +999,25 @@ func roll_shop(new_wave: bool = false) -> void:
 	if new_wave:
 		_apply_main_tag_pity(wave)
 
-## 单个货架位：固定概率回气丹，否则按标签亲和权重抽法器（公式见 GameBalance）
+## 单个货架位：按概率分流 回气丹 / 法宝 / 法器（法器按标签亲和权重抽，公式见 GameBalance）
 func _gen_offer(wave: int) -> Dictionary:
-	if rng.randf() < GameBalance.POTION_CHANCE:
+	var roll := rng.randf()
+	if roll < GameBalance.POTION_CHANCE:
 		return {
 			"kind": "potion", "id": WeaponData.POTION_ID,
 			"price": GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, wave, shop_price_mult),
 			"sold": false, "locked": false,
 		}
+	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE:
+		var item_id := ItemData.pick_id(luck, wave, items, rng)
+		if item_id != "":
+			var idef := ItemData.get_def(item_id)
+			return {
+				"kind": "item", "id": item_id,
+				"price": GameBalance.item_price(int(idef.get("price", 20)), wave, shop_price_mult * item_price_mult),
+				"sold": false, "locked": false,
+			}
+		# 法宝池抽空（传说全购且余量未解锁）→ 本格落回法器
 	var w_id := _weighted_weapon_pick()
 	var base := int(WeaponData.get_def(w_id).get("price", 20))
 	return {
@@ -930,16 +1124,23 @@ func buy_offer(index: int) -> bool:
 	if offer.get("sold", false) or spirit_stones < int(offer.get("price", 0)):
 		return false
 	var ok := false
-	if offer.get("kind") == "potion":
-		if player != null and player.has_method("heal"):
-			player.heal(player.max_health * 0.5)
-			ok = true
-	else:
-		ok = add_weapon(offer.get("id", ""))
-		if not ok:
-			announcement_triggered.emit("上阵与背包都满了，先出售一些吧")
-			AudioManager.play_sfx("ui_error", 0.9)
-			return false
+	match String(offer.get("kind", "weapon")):
+		"potion":
+			if player != null and player.has_method("heal"):
+				player.heal(player.max_health * 0.5)
+				ok = true
+		"item":
+			ok = add_item(offer.get("id", ""))
+			if not ok:
+				announcement_triggered.emit("此法宝每局限购一件")
+				AudioManager.play_sfx("ui_error", 0.9)
+				return false
+		_:
+			ok = add_weapon(offer.get("id", ""))
+			if not ok:
+				announcement_triggered.emit("上阵与背包都满了，先出售一些吧")
+				AudioManager.play_sfx("ui_error", 0.9)
+				return false
 	if not ok:
 		return false
 	spirit_stones -= int(offer.get("price", 0))
@@ -949,10 +1150,14 @@ func buy_offer(index: int) -> bool:
 	return true
 
 func reroll_shop() -> bool:
-	if spirit_stones < reroll_cost:
-		return false
-	spirit_stones -= reroll_cost
-	reroll_count += 1
+	# 先消耗本波免费重掷次数（通玄令），用完后才付灵石
+	if reroll_free_left > 0:
+		reroll_free_left -= 1
+	else:
+		if spirit_stones < reroll_cost:
+			return false
+		spirit_stones -= reroll_cost
+		reroll_count += 1
 	roll_shop(false)
 	stats_updated.emit(kills, game_time, spirit_stones)
 	AudioManager.play_sfx("shop_reroll", 1.0)
@@ -966,22 +1171,22 @@ func confirm_shop() -> void:
 
 var _hitstop_token: int = 0
 
-## 创伤度叠加震屏
+## 创伤度叠加震屏（白名单入口，见 FeedbackTier 上方注释）
 func add_trauma(amount: float) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"screen_shake", true)):
+	if SettingsManager.shake_mult() <= 0.0:
 		return
 	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("add_trauma"):
 		main_camera.add_trauma(amount)
 
 ## 镜头缩放冲击
 func zoom_punch(scale_amount: float = 0.05, duration: float = 0.18) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"screen_shake", true)):
+	if SettingsManager.shake_mult() <= 0.0:
 		return
 	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("zoom_punch"):
 		main_camera.zoom_punch(scale_amount, duration)
 
 func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"screen_shake", true)):
+	if SettingsManager.shake_mult() <= 0.0:
 		return
 	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("shake"):
 		main_camera.shake(intensity, duration)
@@ -1029,6 +1234,8 @@ func trigger_game_over(victory: bool = false) -> void:
 	Engine.time_scale = 1.0
 	_hitstop_token += 1
 	is_game_over = true
+	if victory:
+		_maybe_unlock_danger()
 	game_over_triggered.emit(victory)
 
 ## 结算界面「继续无尽」：关闭结算并转入下一波商店

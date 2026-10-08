@@ -21,6 +21,21 @@ CHARS = {
     "disciple": {"tex": "pawn_red",       "h": 110, "base": 126},
     "wolf":     {"tex": "warrior_red",    "h": 96,  "base": 128},
     "puppet":   {"tex": "warrior_purple", "h": 124, "base": 128},
+    # 批二：9 名修士的独立形象（jianchi 沿用 pawn_blue，以下 8 套为新增）
+    "shiyue":    {"tex": "cultivator_shiyue",    "h": 128, "base": 130},
+    "fuzhen":    {"tex": "cultivator_fuzhen",    "h": 92,  "base": 126},
+    "jinsuanpan":{"tex": "cultivator_jinsuanpan","h": 112, "base": 126},
+    "meiying":   {"tex": "cultivator_meiying",   "h": 116, "base": 128},
+    "dubi":      {"tex": "cultivator_dubi",      "h": 126, "base": 130},
+    "kuangzhan": {"tex": "cultivator_kuangzhan", "h": 124, "base": 130},
+    "duoshe":    {"tex": "cultivator_duoshe",    "h": 110, "base": 126},
+    "duobao":    {"tex": "cultivator_duobao",    "h": 114, "base": 126},
+    # 批三：新妖种的独立形象
+    "fengqun":   {"tex": "monster_fengqun", "h": 56,  "base": 120},
+    "xueyong":   {"tex": "monster_xueyong", "h": 100, "base": 126},
+    "guyao":     {"tex": "monster_guyao",   "h": 96,  "base": 126},
+    "yingmei":   {"tex": "monster_yingmei", "h": 104, "base": 126},
+    "zhumu":     {"tex": "monster_zhumu",   "h": 110, "base": 130},
 }
 DIRS = ["s", "n", "e", "se", "ne"]
 CELL = 192

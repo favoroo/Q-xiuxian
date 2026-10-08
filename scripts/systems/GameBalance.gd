@@ -100,9 +100,39 @@ static func boss_hp(wave: int) -> float:
 static func boss_contact_damage(wave: int) -> float:
 	return ceilf(BOSS_CONTACT_BASE * enemy_dmg_mult(wave))
 
+# ---------------- 打击感：镜头创伤（震屏） ----------------
+## 震屏的唯一数学来源。口径（2026-10-08 用户口径：「一直摇不好，这效果要留给特殊场景」）：
+##   1) 普通命中 / 普通小怪死亡 **一律不发创伤**，打击感交给挤压形变 + 受击火花 + 跳字 + 顿帧；
+##   2) 创伤只发给「值得看的节点」：玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中；
+##   3) 即便将来有人拿高频事件乱调 add_trauma，「每秒预算 ÷ 每秒衰减」把最坏稳态创伤钉死在
+##      0.34（对应位移 ±1.4px）：镜头最多只剩一点轻颤，不会再整局猛摇。
+##      预算给的是上限而不是"刷着刷着就归零"，所以口径要盯稳态值，别只看预算比衰减小。
+
+const TRAUMA_DECAY := 2.2          ## 每秒衰减量：震停耗时 = 创伤 / 本值
+const TRAUMA_BUDGET := 0.75        ## 每秒最多可累加的创伤
+const SHAKE_EXPONENT := 2.0        ## 震幅 = 创伤^n：小震只轻颤，重震才猛晃
+
+## 最坏稳态创伤：调用方每秒把预算刷满时，镜头最终停在哪一格
+static func trauma_steady_state() -> float:
+	return minf(1.0, TRAUMA_BUDGET / TRAUMA_DECAY)
+
+## 本帧实际允许叠加的创伤：先按「每秒剩余预算」夹制，再夹非负。
+## 调用方负责记预算流水账（见 SmoothCamera），这里只做纯夹制，便于固定断言。
+static func trauma_grant(amount: float, budget_left: float) -> float:
+	return clampf(amount, 0.0, maxf(budget_left, 0.0))
+
+## 创伤 → 震幅系数（0~1），位移与滚转都乘它
+static func shake_amount(trauma: float) -> float:
+	return pow(clampf(trauma, 0.0, 1.0), SHAKE_EXPONENT)
+
+## 一次给定量能震多久（秒）：设置项文案与调参时的直观读数
+static func shake_duration(trauma: float) -> float:
+	return clampf(trauma, 0.0, 1.0) / TRAUMA_DECAY
+
 # ---------------- 商店定价 ----------------
 
 const WEAVE_WAVE_STEP := 2      ## 法器每波加价
+const ITEM_WAVE_STEP := 2       ## 法宝每波加价（与法器同一步调）
 const REROLL_BASE := 2
 const REROLL_WAVE_STEP := 1     ## 重掷价随波次上升
 const REROLL_COUNT_STEP := 2    ## 本波每重掷一次再涨
@@ -110,11 +140,31 @@ const REROLL_COUNT_STEP := 2    ## 本波每重掷一次再涨
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
 
+## 法宝（被动道具）定价：与法器同一公式，基准价来自 ItemData 按档位定
+static func item_price(base: int, wave: int, price_mult: float) -> int:
+	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
+
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + maxi(wave, 1)) * price_mult)
 
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return int(float(REROLL_BASE + maxi(wave, 1) * REROLL_WAVE_STEP + maxi(reroll_count, 0) * REROLL_COUNT_STEP) * price_mult)
+
+# ---------------- 危险度（通关解锁的难度梯度，仿土豆兄弟 Danger 0~5） ----------------
+
+const DANGER_MAX := 5
+const DANGER_HP_PER := 0.22     ## 每档妖兽气血 +22%
+const DANGER_DMG_PER := 0.12    ## 每档妖兽伤害 +12%
+const DANGER_COUNT_PER := 0.15  ## 每档妖潮规模 +15%
+
+static func danger_hp_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER
+
+static func danger_dmg_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_DMG_PER
+
+static func danger_count_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER
 
 # ---------------- 灵韵（波末无偿发放并自我复利）----------------
 
@@ -145,7 +195,8 @@ static func rarity_weights(luck: float) -> Dictionary:
 
 # ---------------- 货架抽取 ----------------
 
-const POTION_CHANCE := 0.22            ## 每个货架位出回气丹的概率
+const POTION_CHANCE := 0.15            ## 每个货架位出回气丹的概率
+const ITEM_CHANCE := 0.30              ## 每个货架位出法宝（被动道具）的概率
 const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和
 const TAG_AFFINITY_MULT := 2.5
 const LUCK_SHOP_PER_POINT := 0.01      ## 福缘对法器权重的加法系数
@@ -169,6 +220,25 @@ static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 
 static func shop_luck_mult(luck: float) -> float:
 	return 1.0 + maxf(0.0, luck) * LUCK_SHOP_PER_POINT
+
+# ---------------- 法宝（被动道具）档位权重 ----------------
+
+## 各档位最早出现的波次（下标 1~4 对应 tier 1~4，0 为占位）：高档法宝随波次解锁
+const ITEM_TIER_WAVES := [0, 1, 4, 9, 14]
+const ITEM_TIER_BASE := [0.0, 60.0, 30.0, 9.0, 1.0]   ## 无福缘时的档位基础权重
+
+## 法宝档位权重：返回长度 4 的数组（tier1~4）。福缘抬高高档权重（差额从凡品扣），
+## 未到解锁波次的档位权重清零；凡品有权重地板防归零
+static func item_tier_weights(luck: float, wave: int) -> Array:
+	var l := maxf(0.0, luck)
+	var w := [ITEM_TIER_BASE[1], ITEM_TIER_BASE[2], ITEM_TIER_BASE[3], ITEM_TIER_BASE[4]]
+	w[3] += l * 0.15
+	w[2] += l * 0.35
+	w[0] = maxf(10.0, w[0] - l * 0.5)
+	for i in range(4):
+		if maxi(wave, 1) < int(ITEM_TIER_WAVES[i + 1]):
+			w[i] = 0.0
+	return w
 
 ## 权重抽奖：给定等长权重表与 [0,1) 的 roll，返回命中下标；权重全 0 或表空返回 0。
 ## 用「累加到 target 之前」的判定而不是「减到 ≤0」，否则权重为 0 的项在 roll 恰好为 0 时会被选中。
@@ -209,6 +279,9 @@ static func upgrade_fields() -> Array:
 		"weapon_damage_mult", "attack_speed_mult_mul", "armor", "move_speed_mult",
 		"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
 		"dodge", "lifesteal", "luck", "harvest", "spirit_stones", "max_hp", "hp_heal",
+		"xp_gain_mult", "knockback_mult", "free_rerolls", "elite_damage", "shop_price_mul",
+		"element_damage_all", "element_damage_metal", "element_damage_wood",
+		"element_damage_water", "element_damage_fire", "element_damage_earth",
 	]
 
 # ---------------- 多武器智能索敌与分流分配 ----------------
@@ -367,4 +440,33 @@ static func stat_scaling_label(key: String) -> String:
 		"damage_bonus": return "法伤加成"
 		"range_bonus": return "范围加成"
 	return key
+
+# ---------------- 震退方向 ----------------
+
+const KNOCK_DIR_EPS := 0.0001   ## 方向退化为零向量的判定阈值（比的是长度平方）
+
+## 法器震退的单位方向：以「受击点 − 施力点」的径向为主，但绝不把敌人往玩家身上推。
+## 为什么要另算一支：BURST 类法器的落点是 GameBalance.assign_weapon_targets 按角度扇区分的，
+## 常常砸在离玩家两三百像素的另一侧敌人上 —— 纯径向就会把「落点与玩家之间」那圈敌人往玩家脸上拱
+## （用户 2026-10-08：镇岳印「震一下，把敌人一波一波推到我身边来」）。
+## 改法：径向带朝玩家的分量时把那一支投影掉 ⇒ 敌人侧身滑开；三点共线的纯对撞退化为直接外推。
+## 输出恒为单位向量，所以各法器的击退力度数值一个字都不改。纯函数：入参出参只用值类型。
+static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) -> Vector2:
+	var radial := enemy_pos - source
+	if radial.length_squared() < KNOCK_DIR_EPS:
+		radial = enemy_pos - player_pos          # 施力点压在敌人身上：改按远离玩家推
+	if radial.length_squared() < KNOCK_DIR_EPS:
+		return Vector2.ZERO                      # 敌人和玩家重合，没有方向可言
+	var dir := radial.normalized()
+	var away := enemy_pos - player_pos
+	if away.length_squared() < KNOCK_DIR_EPS:
+		return dir                               # 敌人正贴在玩家身上：维持径向
+	away = away.normalized()
+	var along: float = dir.dot(away)
+	if along >= 0.0:
+		return dir                               # 本来就朝外，径向原样保留
+	var out := dir - away * along                # 去掉「朝玩家」那一分量
+	if out.length_squared() < KNOCK_DIR_EPS:
+		return away                              # 纯对撞（玩家—敌人—落点共线）：直接外推
+	return out.normalized()
 

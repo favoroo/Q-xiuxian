@@ -28,8 +28,7 @@ func _ready() -> void:
 
 	_deal_damage.call_deferred()
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
-	GameManager.add_trauma(0.28)
-	GameManager.zoom_punch(0.025, 0.14)
+	# 震屏挪到 _deal_damage 里按战果发放：劈空的落雷不该让镜头跟着抖一下
 	AudioManager.play_sfx("obelisk_blessing", 0.55)
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
@@ -60,19 +59,42 @@ func _deal_damage() -> void:
 	var results = space_state.intersect_shape(query, 24)
 
 	var had_crit := false
+	var hits := 0
+	var kills := 0
+	var hit_elite := false
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
 			var is_crit: bool = GameManager.rng.randf() < GameManager.get_crit_rate()
 			var crit_m: float = GameManager.crit_mult + GameManager.synergy_crit_mult
-			var dmg: float = damage * (crit_m if is_crit else 1.0)
-			var knock: Vector2 = (enemy.global_position - global_position).normalized() * 200.0
+			var dmg: float = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
+			# 震退方向走统一出口：落雷点常在玩家外侧，纯径向会把落点内侧那圈敌人往玩家身上拱
+			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, 200.0)
+			# 灵药丛（SpiritHerb）也有 take_damage 但没有 dying/is_elite 字段，
+			# 所以一律走 get()：取不到就当 false，不许在这里炸一场落雷
+			var was_dying := bool(enemy.get("dying"))
 			enemy.take_damage(dmg, knock, is_crit)
 			if proc_burn and enemy.has_method("apply_burn"):
 				enemy.apply_burn(burn_dps, burn_dur)
 			GameManager.try_lifesteal()
+			hits += 1
+			if bool(enemy.get("dying")) and not was_dying:
+				kills += 1
+			if bool(enemy.get("is_elite")):
+				hit_elite = true
 			if is_crit:
 				had_crit = true
 	if had_crit:
 		GameManager.hit_stop(0.04, 0.06)
+	if hits == 0:
+		return
+	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
+	var trauma := 0.16
+	if kills >= 3:
+		trauma += 0.10
+	if hit_elite:
+		trauma += 0.14
+	GameManager.add_trauma(trauma)
+	if kills >= 3 or hit_elite:
+		GameManager.zoom_punch(0.025, 0.14)

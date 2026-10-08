@@ -12,6 +12,10 @@ extends Control
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/ConfirmButton
 
+## 货架卡片的宽度与内边距：文案折行的可用宽由这两个数算出来（同一份，别处不再抄）
+const OFFER_CARD_W := 196.0
+const OFFER_PAD_X := 12.0
+
 var _synergy_bar: HBoxContainer = null
 
 ## 当前点选的法器：{"pool": "equipped"/"stash", "index": int}
@@ -82,7 +86,10 @@ func _on_shop_opened() -> void:
 func refresh() -> void:
 	stones_label.text = "灵石 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波来犯之前 · 置办法器" % (GameManager.wave_number + 1)
-	reroll_btn.text = "重掷货架 (%d 灵石)" % GameManager.reroll_cost
+	if GameManager.reroll_free_left > 0:
+		reroll_btn.text = "免费重掷 (剩 %d 次)" % GameManager.reroll_free_left
+	else:
+		reroll_btn.text = "重掷货架 (%d 灵石)" % GameManager.reroll_cost
 	_refresh_synergy_bar()
 
 	for child in offers_container.get_children():
@@ -124,6 +131,12 @@ func _refresh_inventory() -> void:
 		var empty_budget: int = clampi(10 - summary.size() - GameManager.stash.size(), 0, 3)
 		for i in range(mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)):
 			owned_container.add_child(_create_empty_stash_slot())
+
+	# 已持有法宝（被动道具）陈列：小图标 + 悬浮查看说明，不参与点选操作
+	if not GameManager.items.is_empty():
+		owned_container.add_child(_create_items_divider())
+		for item_id in GameManager.items:
+			owned_container.add_child(_create_item_chip(item_id))
 
 	_refresh_action_bar()
 
@@ -209,6 +222,41 @@ func _create_stash_divider() -> Control:
 	GameStyle.label(lbl, 11, GameStyle.GREY)
 	return chip
 
+func _create_items_divider() -> Control:
+	var chip = PanelContainer.new()
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var lbl = Label.new()
+	lbl.text = "法宝 %d" % GameManager.items.size()
+	chip.add_child(lbl)
+	GameStyle.label(lbl, 11, GameStyle.GREY)
+	return chip
+
+## 已持有法宝的小徽记：按档位描边，悬浮显示名称与效果说明
+func _create_item_chip(item_id: String) -> Control:
+	var def := ItemData.get_def(item_id)
+	var chip = PanelContainer.new()
+	chip.custom_minimum_size = Vector2(40, 52)
+	chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	chip.tooltip_text = "%s（%s）\n%s" % [def.get("name", item_id), ItemData.tier_label(int(def.get("tier", 1))), def.get("desc", "")]
+	chip.add_theme_stylebox_override("panel",
+		GameStyle.outlined_panel(GameStyle.NAVY2, ItemData.tier_color(int(def.get("tier", 1))), 2, 0.0))
+	var icon_tex = TextureRect.new()
+	var icon_path: String = def.get("icon", "")
+	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
+		icon_tex.texture = load(icon_path)
+	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_tex.offset_left = 5
+	icon_tex.offset_top = 5
+	icon_tex.offset_right = -5
+	icon_tex.offset_bottom = -5
+	chip.add_child(icon_tex)
+	return chip
+
 func _create_empty_stash_slot() -> Control:
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(30, 52)
@@ -279,7 +327,7 @@ func _refresh_action_bar() -> void:
 	move_btn.focus_mode = Control.FOCUS_NONE
 	if in_stash:
 		move_btn.text = "上 阵"
-		move_btn.disabled = GameManager.slots_used() >= WeaponData.MAX_SLOTS
+		move_btn.disabled = GameManager.slots_used() >= GameManager.max_weapon_slots()
 		GameStyle.button(move_btn, GameStyle.GOOD if not move_btn.disabled else GameStyle.NAVY2, GameStyle.GOOD_DK, 14, GameStyle.INK_TEXT, 6.0)
 		move_btn.pressed.connect(func():
 			if GameManager.equip_from_stash(int(selected.get("index", -1))):
@@ -332,17 +380,35 @@ func _resolve_selected() -> Dictionary:
 # ---------------- 货架 ----------------
 
 func _create_offer_card(offer: Dictionary, index: int) -> Control:
-	var is_potion: bool = offer.get("kind") == "potion"
+	var kind: String = offer.get("kind", "weapon")
+	var is_potion: bool = kind == "potion"
+	var is_item: bool = kind == "item"
 	var def := {}
 	var title: String
 	var icon_path: String
 	var tag: String
 	var desc: String
+	var chip_color: Color = GameStyle.BLUE
+	var chip_text_color: Color = GameStyle.PAPER
+	var edge_color: Color = GameStyle.BLUE_DK
 	if is_potion:
 		title = "回气丹"
 		icon_path = "res://assets/art/icon_hp.png"
 		tag = "丹药"
 		desc = "服下立刻恢复五成气血"
+		chip_color = GameStyle.GOOD
+		chip_text_color = GameStyle.INK_TEXT
+		edge_color = GameStyle.YELLOW_DK
+	elif is_item:
+		def = ItemData.get_def(offer.get("id", ""))
+		var tier := int(def.get("tier", 1))
+		title = def.get("name", "?")
+		icon_path = def.get("icon", "")
+		tag = "%s·法宝" % ItemData.tier_label(tier)
+		desc = def.get("desc", "")
+		chip_color = ItemData.tier_color(tier)
+		chip_text_color = GameStyle.INK_TEXT
+		edge_color = ItemData.tier_color(tier).darkened(0.35)
 	else:
 			def = WeaponData.get_def(offer.get("id", ""))
 			title = WeaponData.star_text(1) + " " + def.get("name", "?")
@@ -369,7 +435,8 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 				desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
 
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(196.0, 268.0)
+	card.custom_minimum_size = Vector2(OFFER_CARD_W, 268.0)
+	var inner_w: float = OFFER_CARD_W - OFFER_PAD_X * 2.0
 	var style = StyleBoxFlat.new()
 	style.bg_color = GameStyle.NAVY
 	style.skew = Vector2(deg_to_rad(3.0), 0)
@@ -377,23 +444,23 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 	style.border_width_top = 2
 	style.border_width_right = 2
 	style.border_width_bottom = 5
-	style.border_color = GameStyle.YELLOW_DK if is_potion else GameStyle.BLUE_DK
+	style.border_color = edge_color
 	style.shadow_color = Color(0, 0, 0, 0.5)
 	style.shadow_size = 0
 	style.shadow_offset = Vector2(5, 5)
-	style.content_margin_left = 12.0
-	style.content_margin_top = 12.0
-	style.content_margin_right = 12.0
-	style.content_margin_bottom = 12.0
+	style.content_margin_left = OFFER_PAD_X
+	style.content_margin_top = 10.0
+	style.content_margin_right = OFFER_PAD_X
+	style.content_margin_bottom = 10.0
 	card.add_theme_stylebox_override("panel", style)
 
 	var vbox = VBoxContainer.new()
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 
 	var icon_box = PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(72, 72)
+	icon_box.custom_minimum_size = Vector2(62, 62)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0))
@@ -401,29 +468,37 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 	if ResourceLoader.exists(icon_path):
 		icon_tex.texture = load(icon_path)
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(58, 58)
+	icon_tex.custom_minimum_size = Vector2(50, 50)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 
 	var title_lbl = Label.new()
-	title_lbl.text = title
+	title_lbl.text = GameStyle.wrap_cjk(title, GameStyle.display_font(), 17, inner_w)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.custom_minimum_size = Vector2(inner_w, 0)
 	vbox.add_child(title_lbl)
 	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
 
+	var tag_txt := GameStyle.wrap_cjk(" " + tag + " ", GameStyle.body_font(), 11, inner_w - 6.0)
 	var tag_lbl = Label.new()
-	tag_lbl.text = " " + tag + " "
+	tag_lbl.text = tag_txt
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 贴着字走的色签：折行宽要钉成「最宽那一行」，不钉会被容器压成一个字一行
+	# （判据 LayoutCheck 在灵石阁上抓到的就是这一格：框 5×191、文案竖着排）
+	tag_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(tag_txt, GameStyle.body_font(), 11), 0)
+	tag_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tag_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE if not is_potion else GameStyle.GOOD))
+	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
 	vbox.add_child(tag_lbl)
-	GameStyle.label(tag_lbl, 11, GameStyle.PAPER if not is_potion else GameStyle.INK_TEXT)
+	GameStyle.label(tag_lbl, 11, chip_text_color)
 
+	# 描述：换行切进文本，不交给引擎折行（见 GameStyle.wrap_cjk 头注）
 	var desc_lbl = Label.new()
-	desc_lbl.text = desc
+	desc_lbl.text = GameStyle.wrap_cjk(desc, GameStyle.body_font(), 12, inner_w)
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	desc_lbl.custom_minimum_size = Vector2(inner_w, 0)
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
 	GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
@@ -440,11 +515,14 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 		btn.disabled = true
 	elif GameManager.spirit_stones < price:
 		btn.disabled = true
-	elif not is_potion and GameManager.slots_used() >= WeaponData.MAX_SLOTS \
+	elif is_item and bool(def.get("unique", false)) and GameManager.has_item(offer.get("id", "")):
+		btn.disabled = true
+		btn.text = "已 持 有"
+	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots() \
 			and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
 		btn.disabled = true
 		btn.text = "上阵背包已满"
-	elif not is_potion and GameManager.slots_used() >= WeaponData.MAX_SLOTS:
+	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots():
 		btn.text = "%d 灵石 · 入背包" % price
 	btn.pressed.connect(func():
 		if GameManager.buy_offer(index):

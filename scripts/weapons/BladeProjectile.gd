@@ -1,7 +1,23 @@
 class_name BladeProjectile
 extends Area2D
 
-## 法器弹丸：伤害由 FloatingWeapon 计算好后直接传入，支持穿透、弹射连锁与五行异常
+## 法器弹丸：伤害由 FloatingWeapon 计算好后直接传入，支持锁定追踪、穿透、弹射连锁与五行异常
+
+## 追踪转向速率（rad/s）。弹速 470 ÷ 3.6 ⇒ 最小转弯半径约 130px：看得见符在拐，但不是制导导弹。
+## 为什么要追踪（2026-10-08 用户口径：「火符比其他武器要弱很多」）：
+## 旧写法直线飞行、不预判不锁敌，弹丸飞 0.5 秒的时间里敌人已经横移七八十个像素，
+## 而判定只有 7px + 敌人受击圈 15px —— 离线仿真（弹速/判定/寿命全取运行时真值）给出
+## 200px 命中 33%、350px 以上只剩 11%、雷兽横切冲刺 0%。
+## 近战挥扫是当帧结算、环绕法宝是接触即伤，都没有这笔隐形税 —— 远程纸面 DPS 打不出来就是假的。
+## 留白的部分：400px 外打冲刺中的雷兽仍只有三成命中，高速怪的走位克制要保住。
+const HOMING_TURN_RATE := 3.6
+## 锁定目标中途暴毙后「另找最近的生气」的选择半径；只认弹头前方锥内的敌人，不许掉头 180° 追人
+const HOMING_ACQUIRE_RADIUS := 240.0
+const HOMING_ACQUIRE_AHEAD := 0.30        ## dot(弹向, 目标方位) 低于这个值就不算"在前方"
+const BOUNCE_SEARCH_RADIUS := 260.0       ## 弹射连锁的找下家半径（沿用历史值）
+## 仅判据用：整体缩放转向速率（tests/ProjectileProbe.tscn 的 `-- --no-homing` 置 0 退回旧直线弹），
+## 用来证明"命中率"这条断言真的有牙齿。运行时永远是 1.0。
+static var homing_scale: float = 1.0
 
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 470.0
@@ -10,6 +26,10 @@ var lifetime: float = 1.6
 var pierce_left: int = 1
 var bounce_left: int = 0
 var spin: bool = true
+## 这一发咬定的敌人：开火时由 FloatingWeapon 逐发分配（一次三发的法器各锁一个，不扎堆）
+var homing_target: Node2D = null
+## 还能"另找目标"几次：命中过一次就归零 —— 穿透的语义是"一条线穿过去"，不是"拐回来再穿一遍"
+var acquire_left: int = 1
 
 # 五行异常触发
 var proc_burn: bool = false
@@ -39,18 +59,44 @@ func _apply_elemental_tint() -> void:
 		modulate = Color(0.65, 1.3, 0.65)
 
 func _physics_process(delta: float) -> void:
+	_steer(delta)
 	position += direction * speed * delta
 	lifetime -= delta
 	if lifetime <= 0.0:
 		queue_free()
+
+## 每帧把弹向朝锁定目标拧过去，最多拧 HOMING_TURN_RATE × delta × homing_scale。
+## homing_scale 为 0（判据反例）时等价于旧行为：直线飞行、永不修正。
+func _steer(delta: float) -> void:
+	if homing_target != null and not is_instance_valid(homing_target):
+		homing_target = null
+	if homing_target == null:
+		if acquire_left <= 0:
+			return
+		acquire_left -= 1
+		homing_target = _nearest_other(null, true)
+		if homing_target == null:
+			return
+	var to_target: Vector2 = homing_target.global_position - global_position
+	if to_target.length_squared() < 1.0:
+		return
+	var max_turn: float = HOMING_TURN_RATE * homing_scale * delta
+	if max_turn <= 0.0:
+		return
+	var delta_ang: float = wrapf(to_target.angle() - direction.angle(), -PI, PI)
+	if absf(delta_ang) <= max_turn:
+		direction = to_target.normalized()
+	else:
+		direction = direction.rotated(signf(delta_ang) * max_turn)
+	rotation = direction.angle()
 
 func _on_area_entered(area: Area2D) -> void:
 	var enemy = area.get_parent()
 	if enemy and enemy.has_method("take_damage"):
 		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var actual_dmg = damage * (crit_m if is_crit else 1.0)
-		enemy.take_damage(actual_dmg, direction * 140.0, is_crit)
+		var actual_dmg = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
+		enemy.take_damage(actual_dmg, direction * GameManager.knockback_force(140.0), is_crit)
 		GameManager.try_lifesteal()
 
 		# 施加五行异常
@@ -62,16 +108,21 @@ func _on_area_entered(area: Area2D) -> void:
 			enemy.apply_poison(poison_dps, poison_dur)
 
 		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, direction, is_crit)
-		if is_crit:
-			GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-		else:
-			GameManager.add_trauma(0.06)
+		# 震屏/顿帧由被击一方 EnemyBase.take_damage 统一发放：
+		# 这里再加一份就是同一次命中计费两遍，也是镜头一直摇的直接原因之一
+
+		# 这一发已经吃到身上：不再回头咬同一个目标（穿透剩下的次数按直线贯穿排队站位的敌人）
+		homing_target = null
+		acquire_left = 0
 
 		# 弹射连锁：若有弹射次数，向最近另一敌人折射
 		if bounce_left > 0:
-			var next_enemy := _find_bounce_target(enemy)
+			var next_enemy := _nearest_other(enemy, false)
 			if next_enemy != null:
 				bounce_left -= 1
+				homing_target = next_enemy
+				# 弹射允许再丢一次目标时重找（连锁本来就是"就近找人"，不占穿透那一次额度）
+				acquire_left = 1
 				direction = (next_enemy.global_position - global_position).normalized()
 				rotation = direction.angle()
 				lifetime = 1.0
@@ -81,10 +132,11 @@ func _on_area_entered(area: Area2D) -> void:
 		if pierce_left <= 0:
 			queue_free()
 
-func _find_bounce_target(current_target: Node) -> Node2D:
+## 就近找一个敌人。ahead_only = 只认弹头前方锥内的（丢目标重录用），false = 全向（弹射连锁用，历史行为）
+func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = 260.0
+	shape.radius = HOMING_ACQUIRE_RADIUS if ahead_only else BOUNCE_SEARCH_RADIUS
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, global_position)
@@ -98,8 +150,14 @@ func _find_bounce_target(current_target: Node) -> Node2D:
 		var col = res.get("collider")
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var target = col.get_parent() as Node2D
-			if target == current_target or target.is_in_group("herbs"):
+			if exclude != null and target == exclude:
 				continue
+			if target.is_in_group("herbs"):
+				continue
+			if ahead_only:
+				var to_t: Vector2 = target.global_position - global_position
+				if to_t.length_squared() < 1.0 or direction.dot(to_t.normalized()) < HOMING_ACQUIRE_AHEAD:
+					continue
 			var d := global_position.distance_to(target.global_position)
 			if d < min_dist:
 				min_dist = d

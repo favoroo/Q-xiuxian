@@ -27,6 +27,13 @@ var leibeast_scene: PackedScene = preload("res://scenes/entities/LeiBeastEnemy.t
 var xiexiu_scene: PackedScene = preload("res://scenes/entities/XieXiuEnemy.tscn")
 var danbao_scene: PackedScene = preload("res://scenes/entities/DanBaoEnemy.tscn")
 var boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
+var fengqun_scene: PackedScene = preload("res://scenes/entities/FengQunEnemy.tscn")
+var xueyong_scene: PackedScene = preload("res://scenes/entities/XueYongEnemy.tscn")
+var guyao_scene: PackedScene = preload("res://scenes/entities/GuYaoEnemy.tscn")
+var yingmei_scene: PackedScene = preload("res://scenes/entities/YingMeiEnemy.tscn")
+var zhumu_scene: PackedScene = preload("res://scenes/entities/ZhuMuEnemy.tscn")
+var chilei_elite_scene: PackedScene = preload("res://scenes/entities/ChileiEliteEnemy.tscn")
+var jiansha_elite_scene: PackedScene = preload("res://scenes/entities/JianshaEliteEnemy.tscn")
 
 var _boss_ref: BossEnemy = null  ## 本波魔君引用（Boss 波超时锁关轮询用）
 var _overtime_noted: bool = false
@@ -176,11 +183,13 @@ func _on_shop_closed() -> void:
 	start_wave(wave_number + 1)
 
 func _spawn_regular(player: Node2D) -> void:
+	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每轮刷怪量
+	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
 	var enemy_count = get_tree().get_nodes_in_group("enemies").size()
-	if enemy_count >= max_enemies:
+	if enemy_count >= enemy_cap:
 		return
 
-	var count := GameBalance.spawn_batch(wave_number, GameManager.rng.randf())
+	var count := int(round(float(GameBalance.spawn_batch(wave_number, GameManager.rng.randf())) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
 	for i in range(count):
 		var angle := GameManager.rng.randf() * TAU
 		var spawn_dist := GameManager.rng.randf_range(380.0, 480.0)
@@ -193,40 +202,117 @@ func _spawn_regular(player: Node2D) -> void:
 		_scale_to_wave(enemy)
 		get_parent().add_child(enemy)
 
-## 怪物配比表：随波次引入新威胁（雷兽冲锋 → 邪修剑气 → 丹爆傀儡）
+## 怪物配比表：随波次引入新威胁（雷兽冲锋 → 丹爆傀儡）。
+## 邪修（放火球那颗）不再靠解锁波次登场 —— 第 1 波就有，占比按 MIX_XIEXIU_RAMP 爬坡，
+## 2026-10-08 用户指令：「这个放火球的敌人怎么要到七八波才出来？不一开始就应该有吗」。
+## 旧写法是「累计带 + 波次闸门」：闸门一开，邪修直接把 [0, 0.27) 整段吃掉 = 第 8 波突然
+## 27% 刷火球怪；而同一结构下雷兽在第 5~7 波也白捡了 42%（它上面那格是空的）。
+## 现在火球怪从第 1 波就占自己那一格，雷兽/花妖/史莱姆回到各自该有的份额。
+const MIX_DANBAO_EDGE := 0.12      ## 丹爆傀儡累计带上沿
+const MIX_DANBAO_WAVE := 12        ## 丹爆傀儡最早出现波次
+const MIX_XIEXIU_EDGE := 0.27      ## 邪修累计带上沿（第 8 波占满）
+const MIX_XIEXIU_START := 0.06     ## 邪修第 1 波的占比
+const MIX_XIEXIU_RAMP := 0.03      ## 邪修每波多刷 3%，到上沿为止
+const MIX_LEIBEAST_EDGE := 0.42    ## 雷兽累计带上沿
+const MIX_LEIBEAST_WAVE := 5       ## 雷兽最早出现波次
+const MIX_FLOWER_BASE := 0.42      ## 花妖带下沿
+const MIX_FLOWER_MIN_WAVE := 2     ## 花妖最早出现波次
+const MIX_FLOWER_SLOPE := 0.06     ## 花妖占比随波次增长
+const MIX_FLOWER_GROWTH := 0.25    ## 花妖占比基数
+const MIX_FLOWER_CAP := 0.6        ## 花妖增长封顶
+const MIX_FLOWER_STEP := 0.58      ## 花妖占比折算
+# 新敌种占的是史莱姆的保底份额（高 roll 段，roll ≥ 下沿才命中；越晚解锁越稀有）
+const MIX_FENGQUN_WAVE := 3        ## 蜂群精最早出现波次（廉价群怪，填充密度）
+const MIX_FENGQUN_LO := 0.78
+const MIX_XUEYONG_WAVE := 6        ## 血蛹（死亡分裂）
+const MIX_XUEYONG_LO := 0.86
+const MIX_YINGMEI_WAVE := 7        ## 影魅（闪现侧翼）
+const MIX_YINGMEI_LO := 0.91
+const MIX_GUYAO_WAVE := 9          ## 鼓妖（同伴加速光环）
+const MIX_GUYAO_LO := 0.95
+const MIX_ZHUMU_WAVE := 14         ## 蛛母（产卵孵化群怪）
+const MIX_ZHUMU_LO := 0.98
+
+## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线）
+static func xiexiu_edge(wave: int) -> float:
+	var w := maxi(wave, 1)
+	return minf(MIX_XIEXIU_EDGE, MIX_XIEXIU_START + MIX_XIEXIU_RAMP * float(w - 1))
+
+## 配比判定：纯函数（给定波次与 roll ∈ [0,1) 返回怪种 key），被闸门锁住的种把份额让给下一格
+## 低 roll 段是 丹爆/邪修/雷兽/花妖 的累计带；高 roll 段（≥0.78）由新敌种从史莱姆的保底份额里切走
+static func pick_scene_key(wave: int, roll: float) -> String:
+	var w := maxi(wave, 1)
+	if w >= MIX_DANBAO_WAVE and roll < MIX_DANBAO_EDGE:
+		return "danbao"
+	if roll < xiexiu_edge(w):
+		return "xiexiu"
+	if w >= MIX_LEIBEAST_WAVE and roll < MIX_LEIBEAST_EDGE:
+		return "leibeast"
+	if w >= MIX_FLOWER_MIN_WAVE and roll < MIX_FLOWER_BASE + minf(MIX_FLOWER_GROWTH + w * MIX_FLOWER_SLOPE, MIX_FLOWER_CAP) * MIX_FLOWER_STEP:
+		return "flower"
+	if w >= MIX_ZHUMU_WAVE and roll >= MIX_ZHUMU_LO:
+		return "zhumu"
+	if w >= MIX_GUYAO_WAVE and roll >= MIX_GUYAO_LO:
+		return "guyao"
+	if w >= MIX_YINGMEI_WAVE and roll >= MIX_YINGMEI_LO:
+		return "yingmei"
+	if w >= MIX_XUEYONG_WAVE and roll >= MIX_XUEYONG_LO:
+		return "xueyong"
+	if w >= MIX_FENGQUN_WAVE and roll >= MIX_FENGQUN_LO:
+		return "fengqun"
+	return "slime"
+
 func _pick_enemy_scene() -> PackedScene:
-	var roll := GameManager.rng.randf()
-	if wave_number >= 12 and roll < 0.12:
-		return danbao_scene
-	if wave_number >= 8 and roll < 0.27:
-		return xiexiu_scene
-	if wave_number >= 5 and roll < 0.42:
-		return leibeast_scene
-	if wave_number >= 2 and roll < 0.42 + minf(0.25 + wave_number * 0.06, 0.6) * 0.58:
-		return flower_scene
-	return slime_scene
+	match pick_scene_key(wave_number, GameManager.rng.randf()):
+		"danbao":
+			return danbao_scene
+		"xiexiu":
+			return xiexiu_scene
+		"leibeast":
+			return leibeast_scene
+		"flower":
+			return flower_scene
+		"zhumu":
+			return zhumu_scene
+		"guyao":
+			return guyao_scene
+		"yingmei":
+			return yingmei_scene
+		"xueyong":
+			return xueyong_scene
+		"fengqun":
+			return fengqun_scene
+		_:
+			return slime_scene
+
+## 精英池轮换：铁甲魔傀（坦克）→ 赤雷兽（突进）→ 剑煞邪修（三连剑气），依次登场
+var _elite_spawn_count: int = 0
 
 func _spawn_elite(player: Node2D) -> void:
 	var angle := GameManager.rng.randf() * TAU
 	var pos = player.global_position + Vector2(cos(angle), sin(angle)) * 420.0
 	pos = pos.clamp(Vector2.ONE * -(GameManager.MAP_HALF_EXTENT - 60.0), Vector2.ONE * (GameManager.MAP_HALF_EXTENT - 60.0))
-	var golem = golem_scene.instantiate() as EnemyBase
-	golem.global_position = pos
-	golem.add_to_group("enemies")
-	_scale_to_wave(golem)
-	get_parent().add_child(golem)
+	var pool: Array = [golem_scene, chilei_elite_scene, jiansha_elite_scene]
+	var scene: PackedScene = pool[_elite_spawn_count % pool.size()]
+	_elite_spawn_count += 1
+	var elite = scene.instantiate() as EnemyBase
+	elite.global_position = pos
+	elite.add_to_group("enemies")
+	_scale_to_wave(elite)
+	get_parent().add_child(elite)
 
-	GameManager.announcement_triggered.emit("⚠ 铁甲魔傀破阵而入！")
+	var titles := {golem_scene: "铁甲魔傀", chilei_elite_scene: "赤雷兽", jiansha_elite_scene: "剑煞邪修"}
+	GameManager.announcement_triggered.emit("⚠ %s破阵而入！" % titles.get(scene, "精英妖物"))
 	GameManager.shake_camera(5.0, 0.25)
 
-## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动
+## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻
 func _scale_to_wave(enemy: EnemyBase) -> void:
 	var variance: float = GameManager.rng.randf_range(
 		1.0 - GameBalance.ENEMY_STAT_VARIANCE,
 		1.0 + GameBalance.ENEMY_STAT_VARIANCE
 	)
-	enemy.max_hp = ceilf(enemy.max_hp * GameBalance.enemy_hp_mult(wave_number) * variance)
-	enemy.contact_damage = ceilf(enemy.contact_damage * GameBalance.enemy_dmg_mult(wave_number) * variance)
+	enemy.max_hp = ceilf(enemy.max_hp * GameBalance.enemy_hp_mult(wave_number) * variance * GameBalance.danger_hp_mult(GameManager.danger_level))
+	enemy.contact_damage = ceilf(enemy.contact_damage * GameBalance.enemy_dmg_mult(wave_number) * variance * GameBalance.danger_dmg_mult(GameManager.danger_level))
 
 ## 固定 Boss 关：血量/伤害按 GameBalance 波次公式注入，称号与演出随关卡推进
 func _spawn_boss(player: Node2D) -> void:
@@ -238,8 +324,8 @@ func _spawn_boss(player: Node2D) -> void:
 	boss.global_position = pos
 	boss.add_to_group("enemies")
 	boss.add_to_group("boss")
-	boss.max_hp = GameBalance.boss_hp(wave_number)
-	boss.contact_damage = GameBalance.boss_contact_damage(wave_number)
+	boss.max_hp = GameBalance.boss_hp(wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level)
+	boss.contact_damage = GameBalance.boss_contact_damage(wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
 	boss.attack_interval = GameBalance.BOSS_ATTACK_INTERVAL
 	boss.final_boss = wave_number >= GameManager.VICTORY_WAVE
 	boss.boss_title = _boss_title()

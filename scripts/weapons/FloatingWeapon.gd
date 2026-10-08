@@ -138,7 +138,7 @@ func _perform_attack() -> void:
 
 func _final_damage() -> float:
 	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id)
+	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id)
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -173,6 +173,12 @@ func _perform_projectile_attack() -> void:
 	var p_spread: float = float(def.get("spread_angle", 0.2))
 	var p_bounce: int = int(def.get("bounce_count", 0))
 	var final_dmg: float = _final_damage()
+	# 逐发锁定：一次三发的法器，每一发各咬一个最近的敌人。
+	# 旧写法三发全按同一个 aim_dir 扇形散开 ⇒ 只剩一个敌人时两边那两发飞过头顶（仿真：350px
+	# 处散布侧偏 70+px，而判定只有 7px + 受击圈 15px），群怪时又因为不追踪而大量空放。
+	# 现在"扇形疾射…贯穿群敌"按文案兑现：出膛照旧扇形错开，各自追上自己咬定的那一个；
+	# 场上只剩一个敌人时三发也统统归它 —— 单点爆发不再靠运气。
+	var volley: Array[Node2D] = _volley_targets(p_count)
 
 	for idx in range(p_count):
 		var p = projectile_scene.instantiate() as BladeProjectile
@@ -180,7 +186,15 @@ func _perform_projectile_attack() -> void:
 		var offset_ang := 0.0
 		if p_count > 1:
 			offset_ang = (float(idx) - float(p_count - 1) * 0.5) * p_spread
-		p.direction = aim_dir.rotated(offset_ang)
+		# 出膛方向：优先朝这一发自己咬定的敌人，再叠扇形错开角（没有第二目标时退回主目标方位）
+		var shot_dir: Vector2 = aim_dir
+		var locked: Node2D = volley[idx % volley.size()] if not volley.is_empty() else null
+		if locked != null:
+			var to_lock: Vector2 = locked.global_position - muzzle_point.global_position
+			if to_lock.length_squared() > 1.0:
+				shot_dir = to_lock.normalized()
+		p.homing_target = locked
+		p.direction = shot_dir.rotated(offset_ang)
 		p.damage = final_dmg
 		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
@@ -299,8 +313,6 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 	query.collide_with_areas = true
 	var results = space_state.intersect_shape(query, 24)
 
-	var had_hit := false
-	var had_crit := false
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
@@ -309,8 +321,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 			if is_crit:
 				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
-				had_crit = true
-			var knock = (enemy.global_position - global_position).normalized() * 240.0
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock = GameManager.knockback_vec(global_position, enemy.global_position, 240.0)
 			enemy.take_damage(dmg, knock, is_crit)
 			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
 				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
@@ -319,12 +331,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			if def.get("proc_poison", false) and enemy.has_method("apply_poison"):
 				enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
-			had_hit = true
-
-	if had_crit:
-		GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-	elif had_hit:
-		GameManager.add_trauma(0.12)
+	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
+	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
 
 func _find_target() -> Node2D:
 	var player = GameManager.player
@@ -354,3 +362,47 @@ func _find_target() -> Node2D:
 				min_dist = d
 				nearest = enemy
 	return nearest
+
+## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按离炮口的远近补齐。
+## 返回长度 = min(场上可用人手, n)，调用方按 idx % size 取用 ⇒ 怪少时多发自然归约到同一个敌人。
+## 纯索敌，不改任何数值：弹丸拿到目标后按 BladeProjectile.HOMING_TURN_RATE 自己拐过去。
+func _volley_targets(n: int) -> Array[Node2D]:
+	var out: Array[Node2D] = []
+	if n <= 0:
+		return out
+	if current_target != null and is_instance_valid(current_target):
+		out.append(current_target)
+	if n <= 1:
+		return out
+	var player = GameManager.player
+	if player == null:
+		return out
+	var space_state = get_world_2d().direct_space_state
+	var shape = CircleShape2D.new()
+	shape.radius = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var query = PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, player.global_position)
+	query.collision_mask = 4
+	query.collide_with_areas = true
+	var results = space_state.intersect_shape(query, 32)
+	var muzzle_pos: Vector2 = muzzle_point.global_position
+	var cands: Array[Node2D] = []
+	for res in results:
+		var col = res.get("collider")
+		if col == null or col.get_parent() == null:
+			continue
+		var e := col.get_parent() as Node2D
+		if e == null or not e.has_method("take_damage") or e.is_in_group("herbs"):
+			continue
+		if out.has(e):
+			continue
+		cands.append(e)
+	# 离炮口近的先被咬住：一次三发就是"点掉最近的三个"，而不是随便抽三个签
+	cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
+	for e in cands:
+		if out.size() >= n:
+			break
+		out.append(e)
+	return out

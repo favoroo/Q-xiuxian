@@ -40,7 +40,13 @@ func _ready() -> void:
 	_sync_pickup_radius()
 
 func _setup_sprite_frames() -> void:
-	var base_tex = load("res://assets/art/pawn_blue_8dir.png") as Texture2D
+	# 角色独立形象：按道统读 CultivatorData.sprite 的 8 方向图集，缺图回退默认青衫修士
+	var sheet_path := "res://assets/art/pawn_blue_8dir.png"
+	var cdef := CultivatorData.get_def(GameManager.cultivator_id)
+	var char_sprite := String(cdef.get("sprite", ""))
+	if char_sprite != "" and ResourceLoader.exists(char_sprite):
+		sheet_path = char_sprite
+	var base_tex = load(sheet_path) as Texture2D
 	var sf = SpriteFrames.new()
 	for dir in RunMotion.DIR_ROW:
 		var row: int = RunMotion.DIR_ROW[dir]
@@ -398,6 +404,9 @@ func take_damage(amount: float) -> void:
 	DamageNumber.spawn(get_parent(), global_position, int(reduced), false)
 
 	if current_health <= 0.0:
+		# 替死傀儡挡劫：消耗一件免死回半血，挡不了才真正倒下
+		if GameManager.try_revive():
+			return
 		GameManager.trigger_game_over(false)
 
 func increase_max_hp(amount: float, heal_amount: float) -> void:

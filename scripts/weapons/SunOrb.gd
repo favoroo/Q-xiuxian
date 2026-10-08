@@ -59,11 +59,11 @@ func _try_damage(area: Area2D) -> void:
 		var total_base := base_damage + stat_bonus
 		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(drone_id) * (crit_m if is_crit else 1.0)
+		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
 		var knock_force := 165.0
 		if drone_id == "hunyuan_zhong":
 			knock_force = 280.0
-		var knockback = (enemy.global_position - global_position).normalized() * knock_force
+		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)
 
 		if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):

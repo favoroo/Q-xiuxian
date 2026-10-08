@@ -84,6 +84,21 @@ func _run() -> void:
 			break
 	_check(bought, "购买一件商品")
 
+	# 法宝（被动道具）货架位：若本波刷出法宝，买一件验证被动生效链路
+	GameManager.add_spirit_stones(500)
+	var item_idx := -1
+	for i in range(GameManager.shop_offers.size()):
+		var offer: Dictionary = GameManager.shop_offers[i]
+		if offer.get("kind", "") == "item" and not offer.get("sold", false):
+			item_idx = i
+			break
+	if item_idx >= 0:
+		var item_id: String = GameManager.shop_offers[item_idx].get("id", "")
+		_check(GameManager.buy_offer(item_idx), "购买法宝 %s" % item_id)
+		_check(GameManager.has_item(item_id), "法宝已入持有列表（%s）" % item_id)
+	else:
+		print("[INFO] 本波货架未刷出法宝，跳过法宝购买验证")
+
 	# 6. 三合一合成 + 羁绊
 	GameManager.add_weapon("huoyan_fu")
 	GameManager.add_weapon("huoyan_fu")

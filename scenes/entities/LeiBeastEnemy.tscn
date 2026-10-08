@@ -26,6 +26,18 @@ contact_damage = 18.0
 exp_reward = 3
 spritesheet_path = "res://assets/art/warrior_red_8dir.png"
 charge_interval = 4.0
+charge_min_range = 120.0
+charge_max_range = 450.0
+charge_windup_time = 1.2
+charge_duration = 0.8
+charge_speed_mul = 3.2
+bite_range = 120.0
+bite_interval = 2.4
+bite_windup_time = 0.35
+bite_duration = 0.22
+bite_speed_mul = 2.6
+bite_hit_radius = 40.0
+bite_damage_mul = 1.0
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0, 16)

@@ -15,6 +15,8 @@ var _pages: Array[Control] = []
 var _audio_controls: Dictionary = {}
 # 开关控件映射: key -> Button
 var _toggle_controls: Dictionary = {}
+# 循环档位控件映射: key -> Button（文本由档位名驱动，不走开/关那套）
+var _cycle_controls: Dictionary = {}
 
 var _content_box: MarginContainer
 var _reset_tip_lbl: Label
@@ -295,14 +297,24 @@ func _build_display_page() -> Control:
 	vbox.add_child(tip)
 
 	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "在命中与暴击时展现跳动伤害数字与身法回避标识")
-	_add_toggle_row(vbox, "screen_shake", "屏幕震动", "神兵重击、雷劫天降与受创时的镜头震动与偏航效果")
+	# 震屏不给「开/关」两态：他想要的是"偶尔来一下"，所以按幅度分四档，人话命名、不暴露系数
+	_add_cycle_row(
+		vbox,
+		"shake_intensity",
+		"屏幕震动",
+		"只在诛精英、受创、天雷落劫等要紧时刻震一下；点按切换 关闭 / 轻 / 标准 / 强",
+		func() -> String: return "震屏 · %s" % SettingsManager.shake_level_label(),
+		func() -> bool: return SettingsManager.shake_mult() > 0.0,
+		func(): SettingsManager.set_val(&"display", &"shake_intensity", SettingsManager.shake_level_next())
+	)
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "法刃命中或强敌湮灭瞬间的时空凝滞微顿帧（提高击打顿挫感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "气血受损及濒死警戒时刻屏幕边缘的暗红收缩呼吸晕影")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "在界面左上方常驻呈现当前灵息运转刷新率 (FPS)")
 
 	return scroll
 
-func _add_toggle_row(parent: VBoxContainer, key: String, title: String, desc: String) -> void:
+## 通用行外壳：左「标题 + 说明」右控件的深蓝斜条，开关行与档位行共用同一份摆位
+func _add_row_shell(parent: VBoxContainer, title: String, desc: String) -> HBoxContainer:
 	var row := PanelContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var r_st := StyleBoxFlat.new()
@@ -335,6 +347,11 @@ func _add_toggle_row(parent: VBoxContainer, key: String, title: String, desc: St
 	GameStyle.label(d_lbl, 11, GameStyle.GREY)
 	title_vbox.add_child(d_lbl)
 
+	return hbox
+
+func _add_toggle_row(parent: VBoxContainer, key: String, title: String, desc: String) -> void:
+	var hbox := _add_row_shell(parent, title, desc)
+
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(96, 30)
 	btn.focus_mode = Control.FOCUS_NONE
@@ -359,6 +376,39 @@ func _update_toggle_btn_ui(key: String) -> void:
 		GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 	else:
 		btn.text = "已关闭  [关]"
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+
+## 多档循环行：点一下走下一档，文本直接写当前档位的人话名
+## level_text / is_on / on_press 由调用方给，控件本身不认识任何具体设置项
+func _add_cycle_row(parent: VBoxContainer, key: String, title: String, desc: String,
+		level_text: Callable, is_on: Callable, on_press: Callable) -> void:
+	var hbox := _add_row_shell(parent, title, desc)
+
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(132, 30)
+	btn.focus_mode = Control.FOCUS_NONE
+	hbox.add_child(btn)
+
+	_cycle_controls[key] = {
+		"btn": btn,
+		"level_text": level_text,
+		"is_on": is_on,
+	}
+	_update_cycle_btn_ui(key)
+
+	btn.pressed.connect(func():
+		on_press.call()
+	)
+
+func _update_cycle_btn_ui(key: String) -> void:
+	if not _cycle_controls.has(key):
+		return
+	var ctrl: Dictionary = _cycle_controls[key]
+	var btn: Button = ctrl["btn"]
+	btn.text = String((ctrl["level_text"] as Callable).call())
+	if bool((ctrl["is_on"] as Callable).call()):
+		GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, 5.0)
+	else:
 		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
 
 # ----------------- 分页 3：演化推衍（系统与拓展） -----------------
@@ -462,13 +512,17 @@ func _on_audio_volume_changed(bus: StringName, _linear_val: float, _muted: bool)
 
 func _on_setting_changed(section: StringName, key: StringName, _val: Variant) -> void:
 	if String(section) == "display":
+		# 两个控件都要刷：档位与旧的 screen_shake 总开关是同源的一对，改一个会连带动另一个
 		_update_toggle_btn_ui(String(key))
+		_update_cycle_btn_ui(String(key))
 
 func _refresh_all_ui() -> void:
 	for bus in [&"Master", &"BGM", &"SFX", &"Voice"]:
 		_update_audio_row_ui(bus)
 	for k in _toggle_controls.keys():
 		_update_toggle_btn_ui(k)
+	for k in _cycle_controls.keys():
+		_update_cycle_btn_ui(k)
 
 # ----------------- 弹窗开关控制 -----------------
 
