@@ -3,6 +3,11 @@ extends Control
 
 ## 人物属性详情面板：可在战斗中查看基础属性、战斗加成、持用法器、历史悟道加点
 ## 采用全屏暂停式弹窗，支持右上角返回、点击半透明遮罩背景或按 ESC 关闭
+##
+## 点按口径（2026-10-08）：属性行 / 法器格 / 备用法器 / 悟道条目全部可点，弹出 DetailTip 详解卡。
+## 原先只有 tooltip_text —— 触屏没有 hover，手机上永远不会出现，于是「这行数字什么意思」在真机上无处可查。
+## 卡里的读数一律现读 GameManager.get_stat_breakdown() 与 GameBalance / WeaponData 的同一批公式，
+## 规则文案在 StatInfoData（只写人话、不抄数字），本面板不做第二套结算。
 
 var _closing: bool = false
 
@@ -65,7 +70,7 @@ func _build_ui() -> void:
 
 	# 3. 仿 dudu-cocos 仙侠大面板
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(880, 560)
+	_panel.custom_minimum_size = Vector2(880, _fit_panel_height())
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
@@ -82,14 +87,14 @@ func _build_ui() -> void:
 	center.add_child(_panel)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	_panel.add_child(margin)
 
 	var root_vbox := VBoxContainer.new()
-	root_vbox.add_theme_constant_override("separation", 12)
+	root_vbox.add_theme_constant_override("separation", 8)
 	margin.add_child(root_vbox)
 
 	# 4. 顶部标题栏
@@ -126,6 +131,12 @@ func _build_ui() -> void:
 
 	root_vbox.add_child(top_bar)
 
+	# 一句提示把三个入口一起说完（每个区块各重复一遍就是噪音）
+	var hint_lbl := Label.new()
+	hint_lbl.text = "提示：点属性行、法器图标或悟道条目，可看它的算法与来源拆解。"
+	GameStyle.label(hint_lbl, 12, GameStyle.GREY)
+	root_vbox.add_child(hint_lbl)
+
 	# 5. 主体内容：左右分栏
 	var body_hbox := HBoxContainer.new()
 	body_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -145,14 +156,14 @@ func _build_left_stats_panel() -> Control:
 	left_panel.custom_minimum_size = Vector2(340, 0)
 	left_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
-	sb.content_margin_left = 14.0
-	sb.content_margin_top = 12.0
-	sb.content_margin_right = 14.0
-	sb.content_margin_bottom = 12.0
+	sb.content_margin_left = 12.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_right = 12.0
+	sb.content_margin_bottom = 8.0
 	left_panel.add_theme_stylebox_override("panel", sb)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 3)
 	left_panel.add_child(vbox)
 
 	var sec_title := Label.new()
@@ -160,7 +171,7 @@ func _build_left_stats_panel() -> Control:
 	GameStyle.label(sec_title, 15, GameStyle.YELLOW)
 	vbox.add_child(sec_title)
 
-	# 气血条
+	# 气血条（整行可点：与下面各属性行同一入口）
 	var hp_box := HBoxContainer.new()
 	hp_box.add_theme_constant_override("separation", 8)
 	var hp_title := Label.new()
@@ -173,7 +184,7 @@ func _build_left_stats_panel() -> Control:
 	_hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hp_bar.show_percentage = false
-	var bar_st = GameStyle.bar_styles(Color(0.04, 0.06, 0.1, 0.85), Color(0.95, 0.94, 0.89))
+	var bar_st := GameStyle.bar_styles(Color(0.04, 0.06, 0.1, 0.85), Color(0.95, 0.94, 0.89))
 	_hp_bar.add_theme_stylebox_override("background", bar_st[0])
 	_hp_bar.add_theme_stylebox_override("fill", bar_st[1])
 	hp_box.add_child(_hp_bar)
@@ -181,41 +192,42 @@ func _build_left_stats_panel() -> Control:
 	_hp_val_lbl = Label.new()
 	GameStyle.label(_hp_val_lbl, 13, GameStyle.PAPER)
 	hp_box.add_child(_hp_val_lbl)
-	vbox.add_child(hp_box)
+	vbox.add_child(_make_tip_row("hp", hp_box))
 
 	var sep1 := HSeparator.new()
 	sep1.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
 	vbox.add_child(sep1)
 
 	# 各项属性行
-	_regen_val_lbl = _add_stat_row(vbox, "气血回复", "+0.0 / 秒")
-	_armor_val_lbl = _add_stat_row(vbox, "护甲罡气", "0 点 (减伤 0.0%)")
-	_dodge_val_lbl = _add_stat_row(vbox, "流云身法", "0% 闪避")
-	_lifesteal_val_lbl = _add_stat_row(vbox, "噬元诀", "0% 概率")
-	_atk_val_lbl = _add_stat_row(vbox, "剑意法伤", "100% (+0%)")
-	_haste_val_lbl = _add_stat_row(vbox, "掐诀神速", "0% 冷却缩减")
-	_speed_val_lbl = _add_stat_row(vbox, "神行移速", "210 (+0%)")
-	_pickup_val_lbl = _add_stat_row(vbox, "摄灵范围", "96 (+0%)")
-	_range_val_lbl = _add_stat_row(vbox, "神识范围", "+0%")
-	_crit_val_lbl = _add_stat_row(vbox, "天命暴击", "5.0% 概率 (1.5× 伤害)")
-	_luck_val_lbl = _add_stat_row(vbox, "福缘", "0")
-	_harvest_val_lbl = _add_stat_row(vbox, "灵韵", "0 (波末 +0)")
+	_regen_val_lbl = _add_stat_row(vbox, "regen", "+0.0 / 秒")
+	_armor_val_lbl = _add_stat_row(vbox, "armor", "0 点 (减伤 0.0%)")
+	_dodge_val_lbl = _add_stat_row(vbox, "dodge", "0% 闪避")
+	_lifesteal_val_lbl = _add_stat_row(vbox, "lifesteal", "0% 概率")
+	_atk_val_lbl = _add_stat_row(vbox, "damage", "100% (+0%)")
+	_haste_val_lbl = _add_stat_row(vbox, "haste", "0% 冷却缩减")
+	_speed_val_lbl = _add_stat_row(vbox, "speed", "210 (+0%)")
+	_pickup_val_lbl = _add_stat_row(vbox, "pickup", "96 (+0%)")
+	_range_val_lbl = _add_stat_row(vbox, "range", "+0%")
+	_crit_val_lbl = _add_stat_row(vbox, "crit", "5.0% 概率 (1.5× 伤害)")
+	_luck_val_lbl = _add_stat_row(vbox, "luck", "0")
+	_harvest_val_lbl = _add_stat_row(vbox, "harvest", "0 (波末 +0)")
 
 	var sep2 := HSeparator.new()
 	sep2.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
 	vbox.add_child(sep2)
 
-	_kills_val_lbl = _add_stat_row(vbox, "累计诛妖", "0 妖")
-	_stones_val_lbl = _add_stat_row(vbox, "随身灵石", "0 颗")
+	_kills_val_lbl = _add_stat_row(vbox, "kills", "0 妖")
+	_stones_val_lbl = _add_stat_row(vbox, "stones", "0 颗")
 
 	return left_panel
 
-func _add_stat_row(parent: Container, label_text: String, default_val: String) -> Label:
+## 属性行：名字来自 StatInfoData（面板与详解卡共用同一份标题，改一处就两处一起变）
+func _add_stat_row(parent: Container, stat_id: String, default_val: String) -> Label:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
 
 	var l_name := Label.new()
-	l_name.text = label_text
+	l_name.text = StatInfoData.title(stat_id)
 	GameStyle.label(l_name, 13, GameStyle.PAPER_DIM)
 	hbox.add_child(l_name)
 
@@ -229,8 +241,49 @@ func _add_stat_row(parent: Container, label_text: String, default_val: String) -
 	GameStyle.label(l_val, 13, GameStyle.PAPER)
 	hbox.add_child(l_val)
 
-	parent.add_child(hbox)
+	parent.add_child(_make_tip_row(stat_id, hbox))
 	return l_val
+
+## 把一行内容包进可点的整行热区。
+## 为什么非要包一层 PanelContainer：Label 默认 MOUSE_FILTER_IGNORE，裸 HBoxContainer 的空隙
+## 又会把事件漏给背后的面板 —— 结果就是「只有那几个字能点，偏一个像素就没反应」，
+## 在触屏上这跟坏了一样。包一层并设成 STOP，整行全可点。
+func _make_tip_row(stat_id: String, content: Control) -> Control:
+	var row := PanelContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	var flat := StyleBoxFlat.new()
+	flat.draw_center = false
+	var on := StyleBoxFlat.new()
+	on.bg_color = Color(GameStyle.BLUE.r, GameStyle.BLUE.g, GameStyle.BLUE.b, 0.22)
+	row.add_theme_stylebox_override("panel", flat)
+	row.set_meta("sb_flat", flat)
+	row.set_meta("sb_on", on)
+	row.set_meta("tip_title", StatInfoData.title(stat_id))
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		if _is_tap(ev):
+			_open_stat_tip(stat_id, row)
+	)
+	row.add_child(content)
+	return row
+
+## 卡开着的那段时间，给触发它的那一行压一层蓝底：详情卡贴在旁边，「哪一行在讲这件事」
+## 必须跟卡片同生同灭。触屏没有 hover，靠悬停提示可点在这台设备上等于没有提示。
+func _highlight_while_open(anchor: Control, tip: DetailTip) -> void:
+	if anchor == null or tip == null or not anchor.has_meta("sb_on"):
+		return
+	var on: StyleBox = anchor.get_meta("sb_on")
+	var flat: StyleBox = anchor.get_meta("sb_flat")
+	anchor.add_theme_stylebox_override("panel", on)
+	tip.closed.connect(func() -> void:
+		if is_instance_valid(anchor):
+			anchor.add_theme_stylebox_override("panel", flat)
+	)
+
+## 触屏与鼠标统一的「点按」判定：只认鼠标左键松开。
+## 真机上 Godot 会把触摸再合成一份鼠标事件，两个分支都认就是一次点击走两遍
+## （与 LevelUpDialog 的卡片点击、本面板遮罩同一口径）。
+func _is_tap(ev: InputEvent) -> bool:
+	return ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed
 
 func _build_right_equipment_and_history_panel() -> Control:
 	var right_vbox := VBoxContainer.new()
@@ -332,6 +385,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
+		# 返回键先把详情卡收回去，再关面板：一次退出只退一层，不然按一次 ESC 连卡带面板一起没了
+		if DetailTip.close_all(self):
+			get_viewport().set_input_as_handled()
+			return
 		close()
 		get_viewport().set_input_as_handled()
 
@@ -339,6 +396,7 @@ func open() -> void:
 	if visible or GameManager.is_game_over:
 		return
 	_closing = false
+	_panel.custom_minimum_size.y = _fit_panel_height()
 	refresh()
 	visible = true
 	get_tree().paused = true
@@ -359,6 +417,8 @@ func close() -> void:
 	)
 
 func refresh() -> void:
+	# 每次刷新都会整批重建行与格子：浮层继续贴着旧坐标，就是贴在一片废墟上，先收掉
+	DetailTip.close_all(self)
 	var stats := GameManager.get_stat_breakdown()
 	var mins := int(GameManager.game_time / 60.0)
 	var secs := int(GameManager.game_time) % 60
@@ -438,12 +498,16 @@ func _refresh_weapons() -> void:
 	for i in range(WeaponData.MAX_SLOTS):
 		var slot := PanelContainer.new()
 		slot.custom_minimum_size = Vector2(44, 44)
-		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 空格也点得动：想知道「这一格为什么是空的」同样要有答案
+		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 
 		var filled := i < summary.size()
 		var border_col: Color = GameStyle.BLUE if filled else GameStyle.LINE
 		var bg_col: Color = GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.45)
-		slot.add_theme_stylebox_override("panel", GameStyle.outlined_panel(bg_col, border_col, 2, 0.0))
+		var sb_off := GameStyle.outlined_panel(bg_col, border_col, 2, 0.0)
+		slot.add_theme_stylebox_override("panel", sb_off)
+		slot.set_meta("sb_flat", sb_off)
+		slot.set_meta("sb_on", GameStyle.outlined_panel(bg_col, GameStyle.YELLOW, 2, 0.0))
 
 		if filled:
 			var w: Dictionary = summary[i]
@@ -478,7 +542,12 @@ func _refresh_weapons() -> void:
 			var tip := "%s (%d阶) [%s]" % [tag_name, w_star, w_tag]
 			if stat_bonus > 0.05:
 				tip += "\n属性转化增伤: +%.1f" % stat_bonus
+			tip += "\n点按看它的伤害算法"
 			slot.tooltip_text = tip
+			slot.gui_input.connect(func(ev: InputEvent) -> void:
+				if _is_tap(ev):
+					_open_weapon_tip(w, false, slot)
+			)
 		else:
 			var empty_dot := Label.new()
 			empty_dot.text = "·"
@@ -486,6 +555,10 @@ func _refresh_weapons() -> void:
 			empty_dot.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			GameStyle.label(empty_dot, 16, GameStyle.GREY)
 			slot.add_child(empty_dot)
+			slot.gui_input.connect(func(ev: InputEvent) -> void:
+				if _is_tap(ev):
+					_open_empty_slot_tip(i, slot)
+			)
 
 		_weapons_box.add_child(slot)
 
@@ -498,7 +571,8 @@ func _refresh_weapons() -> void:
 			var def: Dictionary = WeaponData.get_def(item.get("id", ""))
 			var s_slot := PanelContainer.new()
 			s_slot.custom_minimum_size = Vector2(36, 36)
-			s_slot.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0))
+			var s_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+			s_slot.add_theme_stylebox_override("panel", s_sb)
 
 			var s_icon_path: String = item.get("icon", def.get("icon", ""))
 			var s_tex := TextureRect.new()
@@ -509,6 +583,8 @@ func _refresh_weapons() -> void:
 			s_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			s_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			s_slot.add_child(s_tex)
+			s_slot.set_meta("sb_flat", s_sb)
+			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.YELLOW, 1, 0.0))
 
 			var s_star := int(item.get("star", 1))
 			var s_star_lbl := Label.new()
@@ -526,7 +602,16 @@ func _refresh_weapons() -> void:
 			s_slot.add_child(s_star_lbl)
 
 			var s_name: String = item.get("name", def.get("name", ""))
-			s_slot.tooltip_text = "%s (%d阶)" % [s_name, s_star]
+			if def.is_empty():
+				# 表里查不到的 id（老档或改过 id）：不弹一张空卡，只留原来的读数
+				s_slot.tooltip_text = "%s (%d阶)" % [s_name, s_star]
+			else:
+				s_slot.tooltip_text = "%s (%d阶)\n点按看它的伤害算法" % [s_name, s_star]
+				s_slot.mouse_filter = Control.MOUSE_FILTER_STOP
+				s_slot.gui_input.connect(func(ev: InputEvent) -> void:
+					if _is_tap(ev):
+						_open_weapon_tip(item, true, s_slot)
+				)
 			_stash_box.add_child(s_slot)
 
 func _refresh_history() -> void:
@@ -560,6 +645,18 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 	r_style.content_margin_right = 8.0
 	r_style.content_margin_bottom = 4.0
 	row.add_theme_stylebox_override("panel", r_style)
+	var r_on := r_style.duplicate() as StyleBoxFlat
+	r_on.bg_color = Color(0.16, 0.22, 0.36, 0.95)
+	r_on.border_width_left = 4
+	row.set_meta("sb_flat", r_style)
+	row.set_meta("sb_on", r_on)
+	# 整条可点：这里只显示了名字、稀有度和次数，「它到底加了多少、吃到第几层」在卡里
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		if _is_tap(ev):
+			_open_history_tip(item, idx, row)
+	)
+	row.tooltip_text = "点按看这一条的幅度与来源"
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
@@ -578,6 +675,7 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tex.custom_minimum_size = Vector2(24, 24)
 		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hbox.add_child(tex)
 
 	# 稀有度标签
@@ -603,6 +701,9 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 	# 占位
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 裸 Control 默认 STOP：不改成 IGNORE，名字与 Lv. 之间那一大段就是块隐形挡板，
+	# 整条只有左右两头点得动 —— 触屏上读起来跟「这行没接上」一模一样
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(sp)
 
 	# 获得等级
@@ -612,3 +713,335 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 	hbox.add_child(lvl_lbl)
 
 	return row
+
+# ============================ 点按详解 ============================
+
+## 面板最小高：原先写死 560，比 960×540 的视口还高 ⇒ 上下各被切走 10 单位，
+## 被切走的正好是最底下两行（累计诛妖 / 随身灵石）—— 而那两行如今是要点却点不到的地方。
+## 只夹「最小高」不够（容器仍会被内容顶开），所以配套的边距与行距一并收紧，
+## 由 tests/StatsTipCheck 逐档长宽比量 rect 钉死：面板与每一个可点件都必须整块在屏内。
+func _fit_panel_height() -> float:
+	var vp := get_viewport_rect().size
+	if vp.y <= 0.0:
+		return 520.0
+	return clampf(vp.y - 12.0, 380.0, 520.0)
+
+func _open_stat_tip(id: String, anchor: Control) -> void:
+	if not StatInfoData.has(id):
+		return
+	var tip := DetailTip.show_over(self, anchor, {
+		"title": StatInfoData.title(id),
+		"rows": _stat_tip_rows(id),
+		"body": StatInfoData.brief(id),
+		"notes": StatInfoData.rules(id),
+		"foot": _stat_tip_foot(id),
+	})
+	_highlight_while_open(anchor, tip)
+
+## 来源拆解：每一行都是现读 GameManager 的字段与 GameBalance 的公式，
+## 面板左侧那个数字与卡里的拆解必须同一次算出来，不许在卡里再写一遍结果。
+func _stat_tip_rows(id: String) -> Array:
+	var s := GameManager.get_stat_breakdown()
+	var rows: Array = []
+	match id:
+		"hp":
+			var mx: float = float(s.get("max_hp", 0.0))
+			var cur: float = float(s.get("current_hp", 0.0))
+			rows = [
+				["当前气血", "%d / %d" % [int(cur), int(mx)]],
+				["气血上限", "%.0f" % mx],
+				["已损", "%d 点" % int(mx - cur), GameStyle.BAD if cur < mx else GameStyle.GREY],
+				["每秒回复", "+%.1f" % float(s.get("hp_regen", 0.0)), _c(float(s.get("hp_regen", 0.0)))],
+				["道统", _cultivator_name()],
+			]
+		"regen":
+			var rate: float = float(s.get("hp_regen", 0.0))
+			var need: float = float(s.get("max_hp", 0.0)) - float(s.get("current_hp", 0.0))
+			rows = [
+				["每秒回复", "%.1f / 秒" % rate],
+				["悟道·法宝·道统", "%.1f" % GameManager.hp_regen, _c(GameManager.hp_regen)],
+				["流派羁绊", "+%.1f" % GameManager.synergy_hp_regen, _c(GameManager.synergy_hp_regen)],
+				["回满这一截需要", "%.1f 秒" % (need / rate) if rate > 0.0 and need > 0.0 else "—"],
+			]
+		"armor":
+			var arm: float = float(s.get("armor", 0.0))
+			var nxt: float = GameBalance.armor_reduction(arm + 1.0) * 100.0
+			rows = [
+				["护甲合计", "%.0f 点" % arm],
+				["悟道·法宝·道统", "%+.0f" % GameManager.armor, _c(GameManager.armor)],
+				["流派羁绊", "%+.0f" % GameManager.synergy_armor, _c(GameManager.synergy_armor)],
+				["当前减伤", "%.1f%%" % float(s.get("dmg_reduction_pct", 0.0)), GameStyle.GOOD],
+				["再加 1 点", "+%.1f%%" % (nxt - float(s.get("dmg_reduction_pct", 0.0))), GameStyle.GOOD],
+			]
+		"dodge":
+			var dg: float = float(s.get("dodge_pct", 0.0))
+			var cap: float = GameManager.DODGE_CAP * 100.0
+			rows = [
+				["闪避率", "%.0f%%" % dg, _c(dg)],
+				["悟道·法宝·道统", "%.0f%%" % (GameManager.dodge * 100.0), _c(GameManager.dodge)],
+				["硬上限", "%.0f%%" % cap, GameStyle.GREY],
+				["距上限", "%.0f%%" % maxf(0.0, cap - dg)],
+			]
+		"lifesteal":
+			rows = [
+				["触发概率", "%.0f%%" % float(s.get("lifesteal_pct", 0.0)), _c(float(s.get("lifesteal_pct", 0.0)))],
+				["悟道·法宝·道统", "%.0f%%" % (GameManager.lifesteal * 100.0), _c(GameManager.lifesteal)],
+				["流派羁绊", "%.0f%%" % (GameManager.synergy_lifesteal * 100.0), _c(GameManager.synergy_lifesteal)],
+				["每秒至多", "%d 次" % GameManager.LIFESTEAL_MAX_PER_SEC],
+				["每次生效", "回复 1 点气血"],
+			]
+		"damage":
+			rows = [
+				["总乘区", "%d%%" % int(float(s.get("damage_mult", 1.0)) * 100.0)],
+				["换算增伤", "%+.0f%%" % float(s.get("damage_bonus_pct", 0.0)), _c(float(s.get("damage_bonus_pct", 0.0)))],
+				["悟道·法宝·道统", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
+				["流派羁绊", _mul(GameManager.synergy_damage_mult), _c(GameManager.synergy_damage_mult - 1.0)],
+				["暴击另算", "%.0f%% 概率 ×%.2f" % [float(s.get("crit_rate_pct", 0.0)), float(s.get("crit_dmg_pct", 150.0)) / 100.0]],
+			]
+		"haste":
+			rows = [
+				["冷却缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
+				["实际施法间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
+				["悟道·法宝·道统", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
+				["流派羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
+				["间隔地板", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
+			]
+		"speed":
+			var eff: float = GameManager.move_speed_mult + GameManager.synergy_move_speed_mult
+			var spd: float = float(s.get("move_speed", 0.0))
+			rows = [
+				["实际移速", "%.0f" % spd],
+				["道统基础", "%.0f" % (spd / eff if eff > 0.01 else spd)],
+				["悟道·法宝·道统", "%+.0f%%" % ((GameManager.move_speed_mult - 1.0) * 100.0), _c(GameManager.move_speed_mult - 1.0)],
+				["流派羁绊", "%+.0f%%" % (GameManager.synergy_move_speed_mult * 100.0), _c(GameManager.synergy_move_speed_mult)],
+			]
+		"pickup":
+			var pkm: float = GameManager.pickup_range_mult
+			var rad: float = float(s.get("pickup_radius", 0.0))
+			rows = [
+				["拾取半径", "%.0f 像素" % rad],
+				["倍率", _mul(pkm), _c(pkm - 1.0)],
+				["基础半径", "%.0f 像素" % (rad / pkm if pkm > 0.01 else rad)],
+			]
+		"range":
+			rows = [
+				["攻击范围", "%+.0f%%" % float(s.get("attack_range_pct", 0.0)), _c(float(s.get("attack_range_pct", 0.0)))],
+				["悟道·法宝·道统", _mul(GameManager.attack_range_mult), _c(GameManager.attack_range_mult - 1.0)],
+				["流派羁绊", _mul(GameManager.synergy_range_mult), _c(GameManager.synergy_range_mult - 1.0)],
+			]
+		"crit":
+			var cmul: float = GameManager.crit_mult + GameManager.synergy_crit_mult
+			rows = [
+				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.YELLOW],
+				["悟道·法宝·道统", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],
+				["锐金羁绊", "+%.0f%%" % (GameManager.synergy_crit_rate * 100.0), _c(GameManager.synergy_crit_rate)],
+				["暴击倍率", "%.2f×" % cmul, _c(cmul - 1.5)],
+				["软上限", "%.0f%%" % (GameManager.CRIT_RATE_CAP * 100.0), GameStyle.GREY],
+			]
+		"luck":
+			var rw: Dictionary = GameBalance.rarity_weights(GameManager.luck)
+			rows = [
+				["福缘", "%.0f" % float(s.get("luck", 0.0)), _c(GameManager.luck)],
+				["仙品权重", "%.0f / %.0f" % [float(rw.get("epic", 0.0)), GameBalance.RARITY_TOTAL]],
+				["良品权重", "%.0f / %.0f" % [float(rw.get("rare", 0.0)), GameBalance.RARITY_TOTAL]],
+				["凡品权重", "%.0f / %.0f" % [float(rw.get("common", 0.0)), GameBalance.RARITY_TOTAL]],
+			]
+		"harvest":
+			var hv: float = float(s.get("harvest", 0.0))
+			var gain: int = GameBalance.harvest_gain(hv)
+			rows = [
+				["灵韵", "%.0f" % hv, _c(hv)],
+				["本波末发放", "+%d 灵石 / +%d 修为" % [gain, gain], GameStyle.YELLOW],
+				["每波复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
+				["增长截止", "第 %d 波（当前第 %d 波）" % [GameManager.HARVEST_GROWTH_WAVE_CAP, maxi(GameManager.wave_number, 1)]],
+			]
+		"kills":
+			var mins: float = maxf(GameManager.game_time, 1.0) / 60.0
+			rows = [
+				["本局诛妖", "%d 妖" % GameManager.kills],
+				["平均", "%.1f 妖/分钟" % (float(GameManager.kills) / mins)],
+			]
+		"stones":
+			rows = [
+				["随身灵石", "%d 枚" % GameManager.spirit_stones, GameStyle.YELLOW],
+				["下一波灵韵", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
+			]
+	return rows
+
+func _stat_tip_foot(id: String) -> String:
+	var src: Array[String] = StatInfoData.sources(id)
+	if src.is_empty():
+		return ""
+	return "可提升途径：" + "、".join(src)
+
+## 空法器位也要说得出话：不然点上去没反应，和坏了没区别
+func _open_empty_slot_tip(index: int, anchor: Control) -> void:
+	var tip := DetailTip.show_over(self, anchor, {
+		"title": "空法器位",
+		"rows": [
+			["上阵位", "第 %d 槽 / 共 %d 槽" % [index + 1, WeaponData.MAX_SLOTS]],
+			["当前上阵", "%d 件" % GameManager.get_weapons_summary().size()],
+			["纳戒仓库", "%d 件" % GameManager.stash.size()],
+		],
+		"body": "这一格还空着。法器按获得顺序自动补上阵法器位，不需要手动摆。",
+		"notes": [
+			"上阵 %d 格全满之后，新买的法器进纳戒仓库，只用于合成与出售。" % WeaponData.MAX_SLOTS,
+			"上阵法器的数量决定流派羁绊的档位，多一件就多一路加成。",
+		],
+		"foot": "波间在灵石阁买法器即可补上这一格。",
+	})
+	_highlight_while_open(anchor, tip)
+
+## 法器详情：单发伤害那一串乘区与 FloatingWeapon._final_damage() 逐字同一条公式，
+## 不在卡里另算一套「看起来差不多」的期望值。
+func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
+	var id: String = String(w.get("id", ""))
+	var def := WeaponData.get_def(id)
+	if def.is_empty():
+		return
+	var star := clampi(int(w.get("star", 1)), 1, WeaponData.MAX_STAR)
+	var base_dmg: float = float(def.get("damage", 0.0))
+	var star_mul: float = pow(WeaponData.STAR_DAMAGE_MULT, float(star - 1))
+	var bonus: float = GameManager.get_weapon_stat_bonus(id, star)
+	var gm_dmg: float = GameManager.weapon_damage_mult
+	var syn_dmg: float = GameManager.synergy_damage_mult
+	var cult_dmg: float = GameManager.cultivator_damage_mult(id)
+	var elem_dmg: float = GameManager.element_damage_mult(id)
+	var per_hit: float = (base_dmg * star_mul + bonus) * gm_dmg * syn_dmg * cult_dmg * elem_dmg
+	var cd: float = WeaponData.cooldown_for(id, star) * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
+
+	var rows: Array = [
+		["单发伤害", "%.1f" % per_hit, GameStyle.YELLOW],
+		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
+		["属性转化", "+%.1f" % bonus, _c(bonus)],
+		["全局法伤", _mul(gm_dmg), _c(gm_dmg - 1.0)],
+		["流派羁绊", _mul(syn_dmg), _c(syn_dmg - 1.0)],
+		["道统", _mul(cult_dmg), _c(cult_dmg - 1.0)],
+		["五行", _mul(elem_dmg), _c(elem_dmg - 1.0)],
+		["施法间隔", "%.2f 秒" % cd],
+		["射程", "%.0f" % float(def.get("range", 0.0))],
+	]
+	var feats := _weapon_feats(def)
+	if not feats.is_empty():
+		rows.append(["特性", feats])
+
+	var notes: Array[String] = [
+		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行，与真的打出去那一下是同一笔账；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
+			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
+		"属性转化：这件法器把受益属性折成固定伤害增量，每升一星折算效率再 +25%。",
+		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
+			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
+	]
+	if bool(w.get("is_drone", false)):
+		notes.append("灵蝶环绕周身、触敌即伤，同样占一格上阵法器位。")
+
+	# 持有数与售价压进脚注：这两条不是「它怎么打人」，占一行读数不如省下来给乘区链
+	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
+		GameManager.count_copies(id, star), WeaponData.sell_price(id, star)]
+	if from_stash:
+		foot += "\n在纳戒仓库里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
+
+	var tip := DetailTip.show_over(self, anchor, {
+		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
+		"chip": String(def.get("tag", "")),
+		"chip_color": GameStyle.YELLOW_DK if from_stash else GameStyle.BLUE_DK,
+		"rows": rows,
+		"body": String(def.get("desc", "")),
+		"notes": notes,
+		"foot": foot,
+	})
+	_highlight_while_open(anchor, tip)
+## 特性行：表里有哪个键就说哪句，缺的键不编
+func _weapon_feats(def: Dictionary) -> String:
+	var out: Array[String] = []
+	# 弹丸类法器从 2026-10-08 起带有限转向追踪（BladeProjectile.HOMING_TURN_RATE）：
+	# 触屏没有 hover，这条只能在详情里说清，否则玩家会以为"打不中是我操作的问题"
+	if int(def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
+		out.append("锁敌追击")
+	var pierce: int = int(def.get("pierce", 0))
+	if pierce > 0:
+		out.append("穿透 %d" % (pierce + GameManager.bonus_pierce))
+	var count: int = int(def.get("projectile_count", 1))
+	if count > 1:
+		out.append("一次 %d 段" % count)
+	var bounce: int = int(def.get("bounce_count", 0))
+	if bounce > 0:
+		out.append("弹射 %d 次" % bounce)
+	var arc: float = float(def.get("arc_scale", 1.0))
+	if arc > 1.001:
+		out.append("横扫 ×%s" % _num(arc))
+	if bool(def.get("proc_poison", false)):
+		out.append("附毒")
+	if bool(def.get("proc_burn", false)):
+		out.append("灼烧")
+	if float(def.get("proc_chill", 0.0)) > 0.0:
+		out.append("冰缓")
+	return "、".join(out)
+
+## 悟道条目详情：正文直接沿用 UpgradeData 的 desc（与三选一卡片同一份文案，不再抄第二遍）
+func _open_history_tip(item: Dictionary, idx: int, anchor: Control) -> void:
+	var id: String = String(item.get("id", ""))
+	var def := UpgradeData.get_upgrade_def(id)
+	var apply: Dictionary = def.get("apply", {})
+	var taken: int = int(item.get("count", 1))
+	var cap: int = int(def.get("max_stacks", 0))
+	var t: float = float(item.get("time", 0.0))
+
+	var rows: Array = []
+	for key in apply.keys():
+		var k := String(key)
+		var v := float(apply[key])
+		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
+	rows.append(["已领悟", "第 %d 次 / 上限 %d 次" % [taken, cap],
+		GameStyle.YELLOW if cap > 0 and taken >= cap else GameStyle.PAPER])
+	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
+	if cap > 0 and taken >= cap:
+		rows.append(["状态", "已叠满，不再出现在三选一", GameStyle.GREY])
+
+	var notes: Array[String] = [
+		"悟道三选一当场生效、不可撤销；同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
+		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
+	]
+	var stat_id := _stat_of_apply(apply)
+	var foot := "" if stat_id.is_empty() else "这一条落在左侧「%s」那一行，点它可以看来源拆解。" % StatInfoData.title(stat_id)
+
+	var tip := DetailTip.show_over(self, anchor, {
+		"title": String(item.get("title", "悟道")),
+		"chip": String(item.get("rarity_label", "凡品")),
+		"chip_color": item.get("border_color", GameStyle.BLUE_DK),
+		"rows": rows,
+		"body": String(item.get("desc", "")),
+		"notes": notes,
+		"foot": foot,
+	})
+	_highlight_while_open(anchor, tip)
+
+## 这条悟道影响面板上哪一行：走 StatInfoData 的反查表，不在面板里再写一份字段对照
+func _stat_of_apply(apply: Dictionary) -> String:
+	for key in apply.keys():
+		var sid: String = StatInfoData.stat_of_field(String(key))
+		if not sid.is_empty():
+			return sid
+	return ""
+
+func _cultivator_name() -> String:
+	var def := CultivatorData.get_def(GameManager.cultivator_id)
+	if def.is_empty():
+		return "未选道统"
+	return String(def.get("name", "未选道统"))
+
+## 语义色：正收益绿、负收益红、没动过灰
+func _c(v: float) -> Color:
+	if v > 0.0001:
+		return GameStyle.GOOD
+	if v < -0.0001:
+		return GameStyle.BAD
+	return GameStyle.GREY
+
+func _mul(v: float) -> String:
+	return "×%.2f" % v
+
+func _num(v: float) -> String:
+	if absf(v - roundf(v)) < 0.0001:
+		return "%d" % int(roundf(v))
+	return "%.2f" % v

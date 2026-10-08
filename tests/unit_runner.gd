@@ -15,6 +15,8 @@ func _ready() -> void:
 	_test_wave_scaling()
 	_test_boss_waves()
 	_test_spawn_shape()
+	_test_enemy_mix()
+	_test_enemy_bolt()
 	_test_pricing()
 	_test_harvest()
 	_test_rarity_weights()
@@ -28,7 +30,14 @@ func _ready() -> void:
 	_test_weapon_targeting()
 	_test_audio_wiring()
 	_test_settings_manager()
+	_test_screen_shake_budget()
 	_test_five_elements_system()
+	_test_ranged_focus_dps()
+	_test_new_stat_fields()
+	_test_item_system()
+	_test_cultivator_system()
+	_test_danger_system()
+	_test_knock_direction()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)
@@ -127,6 +136,65 @@ func _test_spawn_shape() -> void:
 	for i in range(200):
 		count_at_cap += GameBalance.spawn_batch(20, 0.0)
 	_c.check(count_at_cap > 200, "后期每轮必然多于 1 只")
+
+# ---------------- 怪物配比：谁在第几波出现、占多少 ----------------
+
+func _test_enemy_mix() -> void:
+	# 用户口径 2026-10-08：「这个放火球的敌人怎么要到七八波才出来？不一开始就应该有吗」
+	# 旧配比是「累计带 + 波次闸门」，闸门一开邪修直接吃掉整段（第 8 波突然 27%），
+	# 而闸门未开时下一格白捡（第 5~7 波雷兽 42%）。现在火球怪第 1 波就在场内、按占比爬坡。
+	_c.near(WaveSpawner.xiexiu_edge(1), 0.06, EPS, "邪修第 1 波占比 6%（一开始就有，但只是零星）")
+	_c.near(WaveSpawner.xiexiu_edge(8), WaveSpawner.MIX_XIEXIU_EDGE, EPS, "邪修第 8 波爬到上沿 27%")
+	_c.near(WaveSpawner.xiexiu_edge(20), WaveSpawner.MIX_XIEXIU_EDGE, EPS, "上沿封顶，后期不再无限涨")
+	var prev := 0.0
+	var monotonic := true
+	for w in range(1, 21):
+		var edge := WaveSpawner.xiexiu_edge(w)
+		if edge < prev - EPS:
+			monotonic = false
+		prev = edge
+	_c.check(monotonic, "邪修占比逐波不降（难度阶梯单调）")
+	_c.equals(WaveSpawner.pick_scene_key(1, 0.03), "xiexiu", "第 1 波 roll 落在邪修带内 → 邪修")
+	_c.equals(WaveSpawner.pick_scene_key(1, 0.06), "slime", "第 1 波邪修只占 6%，其余仍是史莱姆")
+	_c.equals(WaveSpawner.pick_scene_key(1, 0.5), "slime", "第 1 波仍不刷花妖（维持第 2 波解锁）")
+	_c.equals(WaveSpawner.pick_scene_key(5, 0.10), "xiexiu", "第 5 波邪修已占 18%，雷兽不再白捡那一段")
+	_c.equals(WaveSpawner.pick_scene_key(5, 0.30), "leibeast", "第 5 波雷兽带为 [0.18, 0.42)")
+	_c.equals(WaveSpawner.pick_scene_key(12, 0.05), "danbao", "第 12 波 roll<0.12 → 丹爆傀儡")
+	_c.equals(WaveSpawner.pick_scene_key(12, 0.20), "xiexiu", "第 12 波 [0.12, 0.27) → 邪修")
+	_c.equals(WaveSpawner.pick_scene_key(12, 0.35), "leibeast", "第 12 波 [0.27, 0.42) → 雷兽")
+	var seen := {}
+	for w in range(1, 25):
+		for i in range(100):
+			seen[WaveSpawner.pick_scene_key(w, float(i) / 100.0)] = true
+	_c.equals(seen.keys().size(), 10, "十种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
+
+	# 批三新敌种：高 roll 段从史莱姆的保底份额里切走，逐波解锁
+	_c.equals(WaveSpawner.pick_scene_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.80), "fengqun", "第 3 波蜂群精解锁")
+	_c.equals(WaveSpawner.pick_scene_key(6, 0.88), "xueyong", "第 6 波血蛹解锁（死亡分裂）")
+	_c.equals(WaveSpawner.pick_scene_key(7, 0.93), "yingmei", "第 7 波影魅解锁（闪现侧翼）")
+	_c.equals(WaveSpawner.pick_scene_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
+	_c.equals(WaveSpawner.pick_scene_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
+	_c.equals(WaveSpawner.pick_scene_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
+
+# ---------------- 敌方火球：外观 == 判定范围 ----------------
+
+func _test_enemy_bolt() -> void:
+	# 用户口径 2026-10-08：「火球怎么这么大…不要这种透明/虚化的效果，攻击范围多大就显示多大」
+	# 旧写法把 128px 的 light_radial 当 additive 外焰套在核心外面，糊开约 70~100px，
+	# 而判定半径只有 8px ⇒ 看到的威胁是真实的 4~8 倍。判据钉三件事：
+	# 判定半径只由 RADIUS × scale_factor 决定；碰撞与外观共用同一份 radius；不再长出辉光子节点。
+	var bolt := EnemyBolt.new()
+	_c.near(bolt.radius, EnemyBolt.RADIUS, EPS, "普通火球判定半径 = RADIUS 常数")
+	bolt.scale_factor = GameBalance.BOSS_BOLT_SCALE
+	add_child(bolt)
+	_c.near(bolt.radius, EnemyBolt.RADIUS * GameBalance.BOSS_BOLT_SCALE, EPS, "Boss 环弹按 scale_factor 同步放大")
+	var shape := bolt.get_child(0) as CollisionShape2D
+	_c.check(shape != null and shape.shape is CircleShape2D, "火球第一个子节点是碰撞体")
+	if shape != null and shape.shape is CircleShape2D:
+		_c.near((shape.shape as CircleShape2D).radius, bolt.radius, EPS, "判定圆半径 == 画出来的圆半径（同一份 radius）")
+	_c.equals(bolt.get_child_count(), 1, "火球没有外焰/尾迹辉光子节点（外观不会超出判定范围）")
+	bolt.free()
 
 # ---------------- 商店定价 ----------------
 
@@ -358,16 +426,20 @@ func _test_shop_determinism() -> void:
 	var first: Array = GameManager.shop_offers.duplicate(true)
 	_c.equals(GameManager.shop_offers.size(), 4, "货架固定 4 个位")
 	for offer in first:
-		_c.check(offer.get("kind", "") in ["weapon", "potion"], "货架项类型合法：%s" % str(offer.get("kind", "")))
+		_c.check(offer.get("kind", "") in ["weapon", "potion", "item"], "货架项类型合法：%s" % str(offer.get("kind", "")))
 		_c.check(int(offer.get("price", 0)) > 0, "货架项价格大于 0：%s" % str(offer.get("id", "")))
 
 	# 价格必须等于公式值，不能有第二套算法
 	for offer in first:
-		if offer.get("kind", "") == "weapon":
-			var base := int(WeaponData.get_def(offer["id"]).get("price", 20))
-			_c.equals(int(offer["price"]), GameBalance.weapon_price(base, 6, GameManager.shop_price_mult), "法器价与 GameBalance 一致（%s）" % offer["id"])
-		else:
-			_c.equals(int(offer["price"]), GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, 6, GameManager.shop_price_mult), "回气丹价与 GameBalance 一致")
+		match String(offer.get("kind", "")):
+			"weapon":
+				var base := int(WeaponData.get_def(offer["id"]).get("price", 20))
+				_c.equals(int(offer["price"]), GameBalance.weapon_price(base, 6, GameManager.shop_price_mult), "法器价与 GameBalance 一致（%s）" % offer["id"])
+			"item":
+				var ibase := int(ItemData.get_def(offer["id"]).get("price", 20))
+				_c.equals(int(offer["price"]), GameBalance.item_price(ibase, 6, GameManager.shop_price_mult), "法宝价与 GameBalance 一致（%s）" % offer["id"])
+			_:
+				_c.equals(int(offer["price"]), GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, 6, GameManager.shop_price_mult), "回气丹价与 GameBalance 一致")
 
 	GameManager.rng.seed = 1234567
 	GameManager.roll_shop(true)
@@ -586,6 +658,67 @@ func _test_settings_manager() -> void:
 	SettingsManager.set_val(&"display", &"damage_numbers", orig_dmg_num)
 	SettingsManager.set_val(&"display", &"screen_shake", orig_shake)
 
+# ---------------- 震屏：创伤预算与强度档位 ----------------
+
+## 判据的由来：镜头曾经整局在摇（普通命中与小怪死亡每次都发创伤，累加起来永远归不了零）。
+## 修完之后靠两条钉住：① 创伤只发给"值得看的节点"（口径写在 GameBalance 段注释里）；
+## ② 就算将来有人再拿高频事件乱发，每秒预算也把最坏震幅钉在轻颤级别。
+func _test_screen_shake_budget() -> void:
+	# 1. 纯函数层：预算夹制
+	_c.near(GameBalance.trauma_grant(0.09, 0.75), 0.09, EPS, "预算充足时全额发放")
+	_c.near(GameBalance.trauma_grant(0.90, 0.75), 0.75, EPS, "单笔被剩余预算夹住")
+	_c.near(GameBalance.trauma_grant(0.30, 0.0), 0.0, EPS, "预算耗尽则一分不给")
+	_c.near(GameBalance.trauma_grant(-0.2, 0.5), 0.0, EPS, "负数请求按 0 处理")
+	_c.near(GameBalance.shake_amount(0.5), 0.25, EPS, "创伤 0.5 → 震幅 0.25（平方关系）")
+	_c.near(GameBalance.shake_amount(0.2), 0.04, EPS, "创伤 0.2 → 震幅 0.04（小击只轻颤）")
+	_c.near(GameBalance.shake_amount(1.4), 1.0, EPS, "创伤越界夹到 1.0")
+	_c.near(GameBalance.shake_duration(0.7), 0.7 / GameBalance.TRAUMA_DECAY, EPS, "震停时长 = 创伤 / 衰减速率")
+
+	# 2. 尸潮模拟：每秒 20 次「小怪死亡」级别的 0.09，一秒内最多只能叠到预算
+	var left := GameBalance.TRAUMA_BUDGET
+	var got := 0.0
+	for i in range(20):
+		var grant := GameBalance.trauma_grant(0.09, left)
+		left -= grant
+		got += grant
+	_c.near(got, GameBalance.TRAUMA_BUDGET, 0.001, "高频击杀被夹到每秒 0.75 上限")
+	_c.near(left, 0.0, 0.001, "一秒的预算已被刷光")
+
+	# 3. 真相机：连打 3 秒（60 次/秒）也只能停在稳态轻颤，且停手后必定向零
+	var orig_level := SettingsManager.shake_level()
+	SettingsManager.set_val(&"display", &"shake_intensity", &"standard")
+	var cam := SmoothCamera.new()
+	add_child(cam)
+	for i in range(180):
+		cam.add_trauma(0.09)
+		cam._physics_process(1.0 / 60.0)
+	var steady := GameBalance.trauma_steady_state()
+	_c.check(cam.trauma <= steady + 0.05, "刷满 3 秒创伤仍不超过稳态值 %.2f" % steady)
+	_c.check(cam.offset.length() <= 1.6, "最坏稳态位移不超过 ±1.6px（不再整局猛摇）")
+	for i in range(40):
+		cam._physics_process(1.0 / 60.0)
+	_c.near(cam.trauma, 0.0, EPS, "停手 0.66 秒后创伤归零")
+	_c.near(cam.offset.length(), 0.0, EPS, "归零后相机不再偏移")
+	# 预算按秒回血：过了窗口就又是满的
+	for i in range(70):
+		cam._physics_process(1.0 / 60.0)
+	_c.near(cam.trauma_budget_left(), GameBalance.TRAUMA_BUDGET, EPS, "一秒窗口过后预算回满")
+	cam.queue_free()
+
+	# 4. 档位：关闭 / 轻 / 标准 / 强，且与历史布尔总开关同源
+	SettingsManager.set_val(&"display", &"shake_intensity", &"off")
+	_c.near(SettingsManager.shake_mult(), 0.0, EPS, "档位「关闭」= 完全不震")
+	_c.equals(bool(SettingsManager.get_val(&"display", &"screen_shake", true)), false, "关闭档位同步带动旧总开关")
+	SettingsManager.set_val(&"display", &"shake_intensity", &"heavy")
+	_c.near(SettingsManager.shake_mult(), 1.7, EPS, "档位「强」= 1.7 倍幅度")
+	_c.equals(SettingsManager.shake_level_label(), "强", "档位读数是人话不是系数")
+	_c.equals(SettingsManager.shake_level_next(), &"off", "「强」再点一次回到关闭")
+	SettingsManager.set_val(&"display", &"screen_shake", false)
+	_c.equals(SettingsManager.shake_level(), &"off", "直接关总开关时档位跟着变关闭")
+	SettingsManager.set_val(&"display", &"screen_shake", true)
+	_c.equals(SettingsManager.shake_level(), &"standard", "重新开启时落回有手感的默认档")
+	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
+
 # ---------------- 五行武器矩阵与属性转化 ----------------
 
 func _test_five_elements_system() -> void:
@@ -634,5 +767,398 @@ func _test_five_elements_system() -> void:
 	_c.near(GameManager.get_effective_armor(), 3.0, EPS, "有效护甲已计入厚土羁绊")
 	GameManager.reset_run()
 
+# ---------------- 批一新属性：悟性 / 震退 / 斩将 / 免费重掷 / 五行真解 ----------------
+
+func _test_new_stat_fields() -> void:
+	# 字段落地：apply 幅度确实写进对应属性
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"xp_gain_mult": 0.15, "knockback_mult": 0.35, "elite_damage": 0.25, "free_rerolls": 1.0}, "test")
+	_c.near(GameManager.xp_gain_mult, 1.15, EPS, "悟性 +15% 落地")
+	_c.near(GameManager.knockback_mult, 1.35, EPS, "震退 +35% 落地")
+	_c.near(GameManager.elite_damage, 0.25, EPS, "斩将 +25% 落地")
+	_c.equals(GameManager.free_rerolls, 1, "免费重掷 +1 落地")
+
+	# 悟性：只放大修为，灵石按原价入账（不双重受益）
+	GameManager.reset_run()
+	GameManager.xp_gain_mult = 1.5
+	GameManager.add_experience(4)   # 4×1.5=6，低于 10 的升级门槛，不触发升级扣减
+	_c.equals(GameManager.experience, 6, "悟性 1.5x：4 点来源 → 6 点修为")
+	_c.equals(GameManager.spirit_stones, 4, "灵石不受悟性放大")
+
+	# 五行真解：全元素加成摊到五行，单元素只加一格
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"element_damage_all": 0.06}, "test")
+	for e in WeaponData.ELEMENTS:
+		_c.near(float(GameManager.element_damage.get(e, 0.0)), 0.06, EPS, "element_damage_all 摊到【%s】" % e)
+	_c.near(GameManager.element_damage_mult("huoyan_fu"), 1.06, EPS, "火焰符吃到全元素 +6%")
+	_c.near(GameManager.element_damage_mult("qingyun_sword"), 1.06, EPS, "青云剑（金）也吃到 +6%")
+	GameManager._apply_stat_fields({"element_damage_fire": 0.12}, "test")
+	_c.near(GameManager.element_damage_mult("huoyan_fu"), 1.18, EPS, "离火单系再 +12% → 合计 1.18")
+	_c.near(GameManager.element_damage_mult("qingyun_sword"), 1.06, EPS, "金系不受离火加成")
+
+	# 震退：玩家属性 × 厚土羁绊同一条乘区
+	GameManager.reset_run()
+	GameManager.knockback_mult = 1.5
+	GameManager.synergy_knockback_mult = 1.25
+	_c.near(GameManager.knockback_force(100.0), 187.5, EPS, "震退 1.5 × 厚土 1.25 = 187.5")
+	GameManager.reset_run()
+	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "重置后击退回归基础值")
+
+	# 斩将：只认 is_elite 标记（精英与魔君都带），普通怪不受影响
+	GameManager.reset_run()
+	GameManager.elite_damage = 0.25
+	var elite_stub := EnemyBase.new()
+	elite_stub.is_elite = true
+	var grunt_stub := EnemyBase.new()
+	grunt_stub.is_elite = false
+	_c.near(GameManager.elite_damage_mult_for(elite_stub), 1.25, EPS, "精英吃到斩将 +25%")
+	_c.near(GameManager.elite_damage_mult_for(grunt_stub), 1.0, EPS, "普通怪不吃斩将")
+	elite_stub.free()
+	grunt_stub.free()
+	GameManager.reset_run()
+
+	# 免费重掷：先消耗次数，用完才付灵石；roll_shop(new_wave) 重置
+	GameManager.reset_run()
+	GameManager.free_rerolls = 2
+	GameManager.wave_number = 3
+	GameManager.spirit_stones = 100
+	GameManager.rng.seed = 555
+	GameManager.roll_shop(true)
+	_c.equals(GameManager.reroll_free_left, 2, "新一波货架重置免费重掷次数")
+	var stones_before := GameManager.spirit_stones
+	GameManager.reroll_shop()
+	_c.equals(GameManager.reroll_free_left, 1, "第一次重掷消耗免费次数")
+	_c.equals(GameManager.spirit_stones, stones_before, "免费重掷不扣灵石")
+	GameManager.reroll_shop()
+	GameManager.reroll_shop()
+	_c.equals(GameManager.reroll_free_left, 0, "免费次数用完")
+	_c.equals(GameManager.spirit_stones, stones_before - GameBalance.reroll_cost(3, 0, 1.0), "第三次重掷开始付灵石（按第 1 次付费价）")
+	GameManager.reset_run()
+
+# ---------------- 法宝（被动道具）系统 ----------------
+
+func _test_item_system() -> void:
+	# 数据表完整性：apply 键都在白名单内、档位合法、图标就位、定价为正
+	var fields: Array = GameBalance.upgrade_fields()
+	var bad_keys: Array = []
+	var bad_meta: Array = []
+	for item_id in ItemData.all_ids():
+		var def := ItemData.get_def(item_id)
+		for key in def.get("apply", {}).keys():
+			if not (key in fields):
+				bad_keys.append("%s.%s" % [item_id, key])
+		var tier := int(def.get("tier", 0))
+		if tier < 1 or tier > 4:
+			bad_meta.append("%s.tier=%d" % [item_id, tier])
+		if int(def.get("price", 0)) <= 0:
+			bad_meta.append("%s.price" % item_id)
+		var icon_path: String = def.get("icon", "")
+		if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
+			bad_meta.append("%s.icon" % item_id)
+	_c.check(bad_keys.is_empty(), "法宝 apply 字段都在白名单内（非法: %s）" % str(bad_keys))
+	_c.check(bad_meta.is_empty(), "法宝 档位/价格/图标 元数据齐全（异常: %s）" % str(bad_meta))
+
+	# 档位权重：第 1 波只有凡品，传说第 14 波才解锁；福缘抬高高档
+	var w1: Array = GameBalance.item_tier_weights(0.0, 1)
+	_c.check(float(w1[0]) > 0.0 and float(w1[1]) == 0.0 and float(w1[3]) == 0.0, "第 1 波只出凡品法宝")
+	var w15: Array = GameBalance.item_tier_weights(0.0, 15)
+	_c.check(float(w15[3]) > 0.0, "第 15 波传说法宝解锁")
+	var w_luck: Array = GameBalance.item_tier_weights(40.0, 15)
+	_c.check(float(w_luck[3]) > float(w15[3]), "福缘抬高传说权重")
+
+	# 抽取确定性 + unique 剔除
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31415
+	var pick_a := ItemData.pick_id(0.0, 15, [], rng)
+	rng.seed = 31415
+	_c.equals(ItemData.pick_id(0.0, 15, [], rng), pick_a, "同种子 → 同法宝")
+	_c.check(pick_a != "", "第 15 波池子非空")
+	var no_unique := true
+	rng.seed = 2718
+	for i in range(50):
+		if ItemData.pick_id(0.0, 15, ["tisi_kuilei"], rng) == "tisi_kuilei":
+			no_unique = false
+	_c.check(no_unique, "已持有的 unique 法宝不会再次上架")
+	# 池抽空（unique 已持有）时仍有非 unique 法宝可抽
+	_c.check(ItemData.pick_id(0.0, 15, ["tisi_kuilei"], null) != "", "仍有非 unique 法宝可抽")
+
+	# 购买落地：属性加成走与悟道同一条链路
+	GameManager.reset_run()
+	_c.check(GameManager.add_item("jubaopen"), "聚宝盆购买成功")
+	_c.near(GameManager.harvest, 6.0, EPS, "聚宝盆灵韵 +6 落地")
+	_c.check(GameManager.has_item("jubaopen"), "已持有列表登记")
+	# 取舍型：狂血丹 +伤害 -护甲
+	GameManager.add_item("kuangxue_dan")
+	_c.near(GameManager.weapon_damage_mult, 1.18, EPS, "狂血丹伤害 +18%")
+	_c.near(GameManager.armor, -2.0, EPS, "狂血丹护甲 -2（负面代偿）")
+	# unique 限购
+	_c.check(GameManager.add_item("tisi_kuilei"), "替死傀儡首购成功")
+	_c.check(not GameManager.add_item("tisi_kuilei"), "替死傀儡不可重复购买")
+	_c.equals(GameManager.items.count("tisi_kuilei"), 1, "unique 法宝仅持一件")
+
+	# 商店购买链路：item offer 扣灵石、生效、标记售出
+	GameManager.reset_run()
+	GameManager.wave_number = 5
+	GameManager.spirit_stones = 100
+	GameManager.shop_offers = [{
+		"kind": "item", "id": "mibao_luopan",
+		"price": GameBalance.item_price(int(ItemData.get_def("mibao_luopan").get("price", 12)), 5, 1.0),
+		"sold": false, "locked": false,
+	}]
+	var stones0 := GameManager.spirit_stones
+	_c.check(GameManager.buy_offer(0), "法宝货架位购买成功")
+	_c.near(GameManager.luck, 5.0, EPS, "觅宝罗盘福缘 +5 落地")
+	_c.check(GameManager.spirit_stones < stones0, "购买扣了灵石")
+	_c.check(bool(GameManager.shop_offers[0].get("sold", false)), "售出标记已打")
+
+	# 替死傀儡：致死时消耗并免死（UnitRunner 无玩家节点，验证消耗语义即可）
+	GameManager.reset_run()
+	_c.check(not GameManager.try_revive(), "没有傀儡时免死不触发")
+	GameManager.add_item("tisi_kuilei")
+	_c.check(GameManager.try_revive(), "傀儡挡下致死一击")
+	_c.check(not GameManager.has_item("tisi_kuilei"), "傀儡挡劫后消耗")
+	_c.check(not GameManager.try_revive(), "一次性：第二次致死不再免死")
+
+	# 回春葫芦 hook 求和（两件叠加）
+	GameManager.reset_run()
+	GameManager.add_item("huichun_hulu")
+	GameManager.add_item("huichun_hulu")
+	_c.near(GameManager.item_hook_sum("wave_heal_pct"), 0.30, EPS, "两件回春葫芦波末回血叠加到 30%")
+	GameManager.reset_run()
+
+	# 法宝定价与公式同源
+	_c.equals(GameBalance.item_price(45, 9, 1.0), 45 + 8 * 2, "仙品法宝第 9 波 +16")
+	_c.equals(GameBalance.item_price(45, 9, 0.8), int((45.0 + 16.0) * 0.8), "法宝价吃商店折扣")
 
 
+
+
+# ---------------- 修士流派（角色）系统：9 名修士与不对称代偿 ----------------
+
+func _test_cultivator_system() -> void:
+	# 数据表完整性：9 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 9, "修士扩充至 9 名")
+	var bad: Array = []
+	for cid in CultivatorData.all_ids():
+		var d := CultivatorData.get_def(cid)
+		for f in ["name", "epithet", "icon", "sprite", "pros", "cons", "mods"]:
+			if not d.has(f):
+				bad.append("%s.%s" % [cid, f])
+		if not ResourceLoader.exists(String(d.get("icon", ""))):
+			bad.append("%s.icon" % cid)
+		# 独立形象字段非空即可（图集生成中由 Player 回退 pawn_blue 兜底）
+		if String(d.get("sprite", "")).is_empty():
+			bad.append("%s.sprite" % cid)
+	_c.check(bad.is_empty(), "修士元数据齐全（缺: %s）" % str(bad))
+
+	# 魅影（Ghost 原型）：闪避上限抬到 90%，锁死罡气护体
+	GameManager.reset_run()
+	GameManager.cultivator_id = "meiying"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.dodge, 0.30, EPS, "魅影初始闪避 +30%")
+	GameManager.dodge = 1.0
+	_c.near(GameManager.get_effective_dodge(), 0.9, EPS, "魅影闪避上限 90%（其余人 60%）")
+	_c.check("armor_up" in GameManager.locked_upgrades, "魅影锁死罡气护体")
+
+	# 独臂刀圣（One Armed 原型）：上阵槽恒 1，伤害翻倍、施法更快
+	GameManager.reset_run()
+	GameManager.cultivator_id = "dubi"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.max_weapon_slots(), 1, "独臂刀圣上阵槽恒为 1")
+	_c.near(GameManager.weapon_damage_mult, 2.0, EPS, "独臂刀圣伤害 ×2.0")
+	_c.near(GameManager.attack_speed_mult, 0.7, EPS, "独臂刀圣施法间隔 ×0.7")
+
+	# 狂战蛮修（Loud 原型）：妖潮 +50%，灵韵每波流失 3 点再复利；流失下限为 0
+	GameManager.reset_run()
+	GameManager.cultivator_id = "kuangzhan"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.enemy_count_mult, 1.5, EPS, "狂战蛮修妖潮 +50%")
+	GameManager.harvest = 10.0
+	GameManager.wave_number = 2
+	GameManager.apply_harvest()
+	_c.near(GameManager.harvest, (10.0 - 3.0) * GameBalance.HARVEST_GROWTH, EPS, "灵韵先流失 3 点再复利")
+	GameManager.harvest = 1.0
+	GameManager.apply_harvest()
+	_c.check(GameManager.harvest >= 0.0, "灵韵流失不会扣成负数（负值会被复利放大）")
+
+	# 夺舍散人（Mutant 原型）：修为需求 ×0.6，且倍率不逐层复利
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duoshe"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.experience_to_next, int(round(GameBalance.EXP_FIRST_LEVEL * 0.6)), "夺舍散人首级门槛 10→6")
+	GameManager.add_experience(GameManager.experience_to_next)
+	_c.equals(GameManager.level, 2, "夺舍散人升到 2 级")
+	_c.equals(GameManager.experience_to_next, int(round(float(GameBalance.exp_to_next(GameBalance.EXP_FIRST_LEVEL)) * 0.6)), "第 2 级门槛 = 原链 ×0.6（不复利）")
+
+	# 多宝道人：货架 +1 格、法宝 75 折
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duobao"
+	GameManager._apply_cultivator()
+	GameManager.wave_number = 2
+	GameManager.rng.seed = 777
+	GameManager.roll_shop(true)
+	_c.equals(GameManager.shop_offers.size(), 5, "多宝道人货架 5 格")
+	_c.near(GameManager.item_price_mult, 0.75, EPS, "多宝道人法宝 75 折")
+
+	# 回归：常规修士不污染通用机制
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.max_weapon_slots(), WeaponData.MAX_SLOTS, "常规修士槽位 6")
+	_c.near(GameManager.enemy_count_mult, 1.0, EPS, "常规修士妖潮规模不变")
+	GameManager.dodge = 1.0
+	_c.near(GameManager.get_effective_dodge(), GameManager.DODGE_CAP, EPS, "常规修士闪避上限仍 60%")
+	GameManager.reset_run()
+
+# ---------------- 震退方向 ----------------
+
+## 法器震退的方向判据：以落点径向为主，但任何一次震退都不许带「朝玩家」的分量。
+## 现场（用户 2026-10-08）：番天镇岳印的落点是按角度扇区分给各法器的，常常砸在玩家外侧的敌人上，
+## 纯径向就把「落点与玩家之间」那一圈敌人一波一波拱到身上 —— 不崩不报错，只有真机挨打才发现。
+func _test_knock_direction() -> void:
+	var p := Vector2.ZERO
+	var src := Vector2(300.0, 0.0)                 # 落点：玩家正东 300 的敌人（正是分配位，不是最近位）
+	var e := Vector2(220.0, 0.0)                   # 夹在玩家与落点之间的那个敌人
+	var d := GameBalance.knock_dir(src, e, p)
+	_c.check(d.dot((e - p).normalized()) >= -EPS * 100.0, "共线对撞不往玩家身上推（得 %s）" % str(d))
+	_c.near(d.length(), 1.0, EPS * 100.0, "输出恒为单位向量（各法器击退力度数值不受影响）")
+	# 反例自证：旧写法此刻确实在往玩家推 ⇒ 上面那条判据不是空转
+	var old_dir := (e - src).normalized()
+	_c.check(old_dir.dot((e - p).normalized()) < 0.0, "反例成立：旧写法把落点内侧的敌人推向玩家")
+	# 落点外侧维持径向（大印外扩的爽感不许丢）
+	_c.check(GameBalance.knock_dir(src, Vector2(380.0, 0.0), p).is_equal_approx(Vector2.RIGHT), "落点外侧原样外炸")
+	# 以落点为心、震退半径 95 一整圈，逐个方位都不朝玩家
+	for i in range(12):
+		var q: Vector2 = src + Vector2(95.0, 0.0).rotated(TAU * float(i) / 12.0)
+		var dd := GameBalance.knock_dir(src, q, p)
+		_c.check(dd.dot((q - p).normalized()) >= -EPS * 100.0, "落点周围第 %d/12 方位不推向玩家" % (i + 1))
+	# 退化输入不许出 NaN / 零长度
+	_c.check(GameBalance.knock_dir(e, e, p).is_equal_approx(Vector2.RIGHT), "施力点压在敌人身上→按远离玩家推")
+	_c.check(GameBalance.knock_dir(src, p, p).is_equal_approx(Vector2.LEFT), "敌人正贴在玩家身上→维持径向")
+	# 玩家位置退回施力点（局外预览、单测）时，方向与纯径向逐位相同
+	_c.check(GameBalance.knock_dir(src, e, src).is_equal_approx(old_dir), "玩家位置退回施力点=旧行为")
+	# 调用点不许再自己抄径向：那等于把「往玩家身上推」写回去
+	for path in ["res://scripts/weapons/ThunderBurst.gd", "res://scripts/weapons/FloatingWeapon.gd", "res://scripts/weapons/SunOrb.gd", "res://scripts/systems/BlessingObelisk.gd"]:
+		var text := ""
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f != null:
+			text = f.get_as_text()
+		_c.check(not text.contains("(enemy.global_position - global_position).normalized()"), "%s 的震退方向走统一出口" % path)
+
+# ---------------- 危险度（Danger 0~5）：公式、解锁与落盘 ----------------
+
+func _test_danger_system() -> void:
+	# 公式钉线
+	_c.near(GameBalance.danger_hp_mult(0), 1.0, EPS, "危险度 0 血量不变")
+	_c.near(GameBalance.danger_hp_mult(5), 2.1, EPS, "危险度 5 血量 ×2.1")
+	_c.near(GameBalance.danger_dmg_mult(5), 1.6, EPS, "危险度 5 伤害 ×1.6")
+	_c.near(GameBalance.danger_count_mult(5), 1.75, EPS, "危险度 5 妖潮 ×1.75")
+	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(5), EPS, "超档夹到 5")
+	_c.near(GameBalance.danger_hp_mult(-1), 1.0, EPS, "负档夹到 0")
+
+	# 选择器不许越权选未解锁档
+	var orig_unlocked := GameManager.max_danger_unlocked
+	GameManager.max_danger_unlocked = 0
+	GameManager.danger_level = 0
+	GameManager.set_danger(3)
+	_c.equals(GameManager.danger_level, 0, "未解锁危险度 3 选不上")
+	GameManager.set_danger(0)
+	_c.equals(GameManager.danger_level, 0, "凡尘（0 档）总可选")
+
+	# 通关当前最高档 → 解锁下一档；打旧档不重复解锁
+	GameManager.reset_run()
+	GameManager.danger_level = 0
+	GameManager.trigger_game_over(true)
+	_c.equals(GameManager.max_danger_unlocked, 1, "通关凡尘解锁危险度 1")
+	GameManager.reset_run()
+	GameManager.trigger_game_over(true)
+	_c.equals(GameManager.max_danger_unlocked, 1, "重复通关同一档不再解锁")
+	GameManager.reset_run()
+	GameManager.danger_level = 1
+	GameManager.trigger_game_over(true)
+	_c.equals(GameManager.max_danger_unlocked, 2, "通关微澜解锁危险度 2")
+	GameManager.reset_run()
+	GameManager.trigger_game_over(false)
+	_c.equals(GameManager.max_danger_unlocked, 2, "战败不解锁")
+
+	# 落盘往返：改→存→改→读回
+	GameManager.max_danger_unlocked = 3
+	GameManager._save_progress()
+	GameManager.max_danger_unlocked = 0
+	GameManager._load_progress()
+	_c.equals(GameManager.max_danger_unlocked, 3, "危险度解锁落盘后可读回")
+
+	# 还原测试前的玩家进度，不弄脏真实存档
+	GameManager.max_danger_unlocked = orig_unlocked
+	GameManager._save_progress()
+	GameManager.danger_level = 0
+	GameManager.reset_run()
+
+# ---------------- 远程「点杀位」档：单发咬不住几个敌人的法器必须啃得动硬目标 ----------------
+
+## 背景（2026-10-08 用户口径：「一些远程且只能击中一个敌人的武器需要加强一下，火符比其他武器弱很多」）：
+## 近战弧扫与环绕法宝是当帧结算 / 接触即伤，天生没有"打不中"这笔税；弹丸过去直线飞行，
+## 远距对横移目标的实测命中率只有 11~33%（见 tests/ProjectileProbe.tscn）。
+## 追踪上线后纸面 DPS 才等于真 DPS，于是这里把两类档位的相对关系钉死：
+##   · 点杀位（单发最多结算 2 个敌人的弹丸）：单体 DPS 必须站上"非远程法器单体 DPS 中位数"；
+##   · 全体弹丸：单体 DPS 不得低于该中位的 0.8 倍。
+## 参照点是现算的，不做魔法数字 —— 以后近战/环绕改数值，这条下限跟着一起走。
+func _test_ranged_focus_dps() -> void:
+	var ranged: Array[String] = []
+	var others: Array[float] = []
+	for w_id in WeaponData.SHOP_POOL:
+		var def := WeaponData.get_def(w_id)
+		var dps := WeaponData.sustained_single_dps(w_id, 1)
+		if int(def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
+			ranged.append(w_id)
+		else:
+			others.append(dps)
+	others.sort()
+	var med: float = others[int(others.size() / 2)] if not others.is_empty() else 0.0
+
+	# 1. 尺子本身先自证：口径与运行时逐条对齐，估计算错这里就红
+	_c.equals(WeaponData.targets_per_shot("huoyan_fu"), 1, "火焰符单发只结算 1 敌（点杀位）")
+	_c.equals(WeaponData.targets_per_shot("gengjin_feijian"), 2, "庚金飞剑贯穿两敌")
+	_c.equals(WeaponData.targets_per_shot("wanmu_lingfu"), 3, "万木灵符 1 穿透 + 2 弹射 = 单发 3 敌")
+	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 9, "柳叶飞刀 3 发 × 3 穿透 = 单发 9 敌")
+	_c.equals(WeaponData.targets_per_shot("bajiao_fan"), 6, "近战横扫天生群体，不进点杀位")
+	# 火焰符 ★1：28 ÷ 0.85 = 32.94，灼烧 28×0.40=11.2 且冷却 0.85 < 3.0 ⇒ 常驻
+	_c.near(WeaponData.sustained_single_dps("huoyan_fu", 1), 28.0 / 0.85 + 28.0 * 0.40, 0.001,
+		"单体 DPS = 弹伤 + 常驻灼烧（与 BladeProjectile 的 burn_dps 同源）")
+	# 青云剑 ★1：30 × 1.35 ÷ 1.1（近战在 FloatingWeapon._deal_melee_damage 里的 ×1.35 加护）
+	_c.near(WeaponData.sustained_single_dps("qingyun_sword", 1), 30.0 * 1.35 / 1.1, 0.001,
+		"近战单体 DPS 含 ×1.35 加护")
+	# 玄冰飞针：三发齐射在"场上只剩一个敌人"时全部归它（追踪上线后的新口径）
+	_c.near(WeaponData.sustained_single_dps("xuanbing_feizhen", 1), 14.0 * 3 / 0.92, 0.001,
+		"多发弹丸对孤立目标按发数求和")
+	_c.check(WeaponData.sustained_single_dps("huoyan_fu", 3) > WeaponData.sustained_single_dps("huoyan_fu", 2),
+		"星级越高单体 DPS 越高（尺子跟 damage_for/cooldown_for 同向）")
+
+	# 2. 分类自洽：点杀位这一档不许空（空了就等于这条判据没人守着）
+	var focus: Array[String] = []
+	for w_id in ranged:
+		if WeaponData.is_focus_ranged(w_id):
+			focus.append(w_id)
+	_c.check(focus.size() >= 2, "点杀位远程法器至少两把（实得 %d 把：%s）" % [focus.size(), str(focus)])
+
+	# 3. 档位下限：点杀位 ≥ 中位，全体弹丸 ≥ 0.8 × 中位
+	var worst_focus: float = 1e9
+	for w_id in focus:
+		worst_focus = minf(worst_focus, WeaponData.sustained_single_dps(w_id, 1))
+	_c.check(worst_focus >= med,
+		"点杀位单体 DPS %.1f ≥ 非远程中位 %.1f（贴脸与环绕必须被啃硬目标的速度反超）" % [worst_focus, med])
+	var worst_ranged: float = 1e9
+	var worst_id: String = ""
+	for w_id in ranged:
+		var v := WeaponData.sustained_single_dps(w_id, 1)
+		if v < worst_ranged:
+			worst_ranged = v
+			worst_id = w_id
+	_c.check(worst_ranged >= med * 0.8,
+		"最弱弹丸【%s】单体 DPS %.1f ≥ 0.8×中位 %.1f" % [worst_id, worst_ranged, med * 0.8])
+
+	# 4. 群体档不许反过来吃掉单体档：弹丸单发结算的敌人越多，单价就该越便宜
+	_c.check(int(WeaponData.get_def("huoyan_fu").get("price", 0)) <= int(WeaponData.get_def("liuye_feidao").get("price", 0)),
+		"单发只咬 1 敌的火焰符不比单发咬 9 敌的柳叶飞刀贵")
+	_c.check(WeaponData.sustained_single_dps("huoyan_fu", 1) > WeaponData.sustained_single_dps("liuye_feidao", 1),
+		"火焰符对孤立目标的 DPS 高于群体弹丸（各档各有各的活）")

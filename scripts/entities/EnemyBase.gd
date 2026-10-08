@@ -9,11 +9,32 @@ extends CharacterBody2D
 @export var spritesheet_path: String = ""
 # 可选行为（0 = 关闭，场景按怪种配置）
 @export var preferred_range: float = 0.0   ## >0：远程怪，保持该距离环绕游走
-@export var bolt_interval: float = 0.0     ## >0：每隔 N 秒向玩家发射剑气
+@export var bolt_interval: float = 0.0     ## >0：每隔 N 秒向玩家发射火球
 @export var bolt_damage: float = 9.0
-@export var charge_interval: float = 0.0   ## >0：每隔 N 秒朝玩家突进
+@export var charge_interval: float = 0.0   ## >0：每隔 N 秒（含预警+冲刺的整周期）朝玩家长扑一次
+@export var charge_min_range: float = 120.0  ## 长扑需要的「跑道」下沿：比这更近不起手（旧写法写死 120² 在判定里）
+@export var charge_max_range: float = 450.0  ## 长扑上沿：远了不追扑（旧写法写死 450²）
+@export var charge_windup_time: float = 1.2  ## 站桩预警时长
+@export var charge_duration: float = 0.8     ## 冲刺时长（位移 = move_speed × charge_speed_mul × 它）
+@export var charge_speed_mul: float = 3.2    ## 冲刺倍速
+@export var bite_range: float = 0.0          ## >0：贴近短扑咬的触发上沿。建议与 charge_min_range 取同值 ⇒ 两带互补、中间不留空隙
+@export var bite_interval: float = 2.4       ## 短扑咬冷却（同样是整周期）
+@export var bite_windup_time: float = 0.35   ## 下蹲预告时长（方向在这一帧锁死，之后不追踪玩家，否则 0.35s 躲不开）
+@export var bite_duration: float = 0.22      ## 起跳时长（位移 ≈ 69px，只当"咬一口"的凑身，不当跑道冲刺）
+@export var bite_speed_mul: float = 2.6      ## 起跳倍速
+@export var bite_hit_radius: float = 40.0    ## 咬合判定半径（狼嘴够得到的距离）
+@export var bite_damage_mul: float = 1.0     ## 咬合伤害 = contact_damage × 它（与接触伤害同一条尺子，别另起一档）
 @export var explode_radius: float = 0.0    ## >0：贴近玩家 40px 后点燃 0.8s 引信自爆
 @export var heal_orb_drop: int = 0         ## >0：死亡掉「残丹」回血珠而非灵石
+@export var bolt_count: int = 1            ## 火球扇射数量（>1 时按 bolt_spread 扇形展开）
+@export var bolt_spread: float = 0.18      ## 扇射间隔角（弧度）
+@export var split_count: int = 0           ## >0：血蛹系——死亡时分裂出 N 只幼体（split_scene）
+@export var split_scene: PackedScene = null
+@export var buff_radius: float = 0.0       ## >0：鼓妖光环——范围内同伴获得移速加成
+@export var buff_speed_mult: float = 1.35  ## 光环加速倍率
+@export var spawn_minion_interval: float = 0.0  ## >0：蛛母系——每隔 N 秒产一只幼体（minion_scene）
+@export var minion_scene: PackedScene = null
+@export var teleport_interval: float = 0.0 ## >0：影魅系——每隔 N 秒闪现到玩家侧翼
 
 var current_hp: float = 60.0
 var knockback_velocity: Vector2 = Vector2.ZERO
@@ -26,8 +47,19 @@ var _charge_active: float = 0.0
 var _charge_dir: Vector2 = Vector2.ZERO
 var _charge_windup: float = -1.0   ## >=0 表示进入冲刺预警阶段
 var _charge_warning_line: Line2D = null  ## 冲刺预警线节点
+var _bite_timer: float = 0.0       ## 短扑咬冷却
+var _bite_windup: float = -1.0     ## >=0 表示下蹲预告中
+var _bite_active: float = 0.0      ## >0 表示起跳中
+var _bite_dir: Vector2 = Vector2.ZERO
+var _bite_warning_line: Line2D = null
+var _bite_hit: bool = false        ## 这一跳已经咬到（一次起跳只结算一口）
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
 var _no_drop: bool = false
+var _minion_timer: float = 0.0     ## 产卵计时
+var _teleport_timer: float = 0.0   ## 闪现计时
+var _buff_timer: float = 0.0       ## 光环脉冲计时（每 0.25s 刷新一次范围内同伴）
+var _aura_speed_mult: float = 1.0  ## 被鼓妖光环覆盖时的移速加成
+var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
 
 # 五行元素异常状态（灼烧/冰缓/剧毒）
 var burn_timer: float = 0.0
@@ -61,6 +93,14 @@ func _ready() -> void:
 	# 妖物出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
+
+	# 出生先等一个完整冷却才允许起手（与 BossEnemy 的开场缓冲同一条口径）。
+	# 旧初值是 0.0，而刷怪半径 380~480px 正好压在长扑带里 ⇒ 出屏第一帧就进预警，
+	# 玩家还没看清这只怪就先被扑。
+	_charge_timer = charge_interval
+	_bite_timer = bite_interval
+	_minion_timer = spawn_minion_interval
+	_teleport_timer = teleport_interval
 
 ## 同种敌人的帧集合逐字节相同，按「贴图路径|是否精英」缓存：
 ## 原先每只敌人在 _ready 里新建一套 SpriteFrames + 8 方向 ×6 帧 AtlasTexture，
@@ -158,6 +198,10 @@ func _physics_process(delta: float) -> void:
 			chill_slow = 0.0
 			if _fuse < 0.0:
 				anim_sprite.modulate = Color.WHITE
+	# 鼓妖光环：被覆盖期间加速，过期待遇自动失效
+	if _aura_speed_mult != 1.0 and Time.get_ticks_msec() > _aura_until_ms:
+		_aura_speed_mult = 1.0
+	eff_speed *= _aura_speed_mult
 
 	# 1. 击退速度指数衰减
 	if knockback_velocity.length_squared() > 10.0:
@@ -181,9 +225,17 @@ func _physics_process(delta: float) -> void:
 		elif dist <= preferred_range + 30.0:
 			target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
-	# 雷兽突进：冷却到 → 预警 1.2s → 冲刺 0.8s（距离约 307px）
-	if charge_interval > 0.0:
+	# 妖狼系的两套扑击（共用同一个移动出口 target_vel，靠 elif 链天然互斥）：
+	#   长扑 = 跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺
+	#   短咬 = 贴进 charge_min_range 以内 → 下蹲预告（方向当帧锁死、之后不追踪）→ 小幅跃击咬一口
+	# 旧版只有长扑，且触发带下沿写死 120px：贴着脸它整个技能就不出手，只剩毫无预告的
+	# 接触伤害一路蹭（2026-10-08 用户现场：「近距离一直追着我、远距离才扑」）。
+	# 两带以 charge_min_range 为界互补 ⇒ 任何距离都有一个看得见预告的威胁。
+	if charge_interval > 0.0 or bite_range > 0.0:
 		_charge_timer -= delta
+		_bite_timer -= delta
+		var min_sq: float = charge_min_range * charge_min_range
+		var max_sq: float = charge_max_range * charge_max_range
 		
 		# 预警阶段：原地不动，画预警线
 		if _charge_windup > 0.0:
@@ -191,18 +243,55 @@ func _physics_process(delta: float) -> void:
 			target_vel = Vector2.ZERO
 			_update_charge_warning(player)
 			if _charge_windup <= 0.0:
-				_start_charge(dir)
+				# 预警期间玩家贴进了「没跑道」的距离 ⇒ 就地转成短咬：它已经站桩预警了
+				# 1.2s、玩家看得很清楚，所以不再补一次下蹲预告，直接跳。
+				# 旧写法不复查距离，症状是「都贴脸了还往前冲 300px、从玩家身上碾过去」
+				if bite_range > 0.0 and dist_sq < min_sq:
+					_clear_charge_warning()
+					_launch_bite(dir)
+				else:
+					_start_charge(dir)
 		
 		# 冲刺阶段
 		elif _charge_active > 0.0:
 			_charge_active -= delta
-			target_vel = _charge_dir * move_speed * 3.2
+			target_vel = _charge_dir * move_speed * charge_speed_mul
 			_clear_charge_warning()
 		
-		# 空闲阶段：冷却到 → 进入预警
-		elif _charge_timer <= 0.0 and dist_sq > 14400.0 and dist_sq < 202500.0:
+		# 短咬：下蹲预告。方向在锁死那一帧定、之后不追踪玩家（0.35s 还追踪就躲不开了）
+		elif _bite_windup > 0.0:
+			_bite_windup -= delta
+			target_vel = Vector2.ZERO
+			if _bite_windup <= 0.0:
+				_launch_bite(_bite_dir)
+
+		# 短咬：起跳。一次起跳只结算一口，伤害与接触伤害同一把尺子（走玩家那套无敌帧，
+		# 所以贴着它被蹭到的那一下不会和这一口叠加）
+		elif _bite_active > 0.0:
+			_bite_active -= delta
+			target_vel = _bite_dir * move_speed * bite_speed_mul
+			if not _bite_hit and dist_sq < bite_hit_radius * bite_hit_radius:
+				_bite_hit = true
+				player.take_damage(contact_damage * bite_damage_mul)
+				# 不在这里再发一次反馈：player.take_damage 已经按「玩家受创」这个节点给过
+				# 大创伤 + 顿帧 + 红晕，两边都发就是同一下挨打震两回
+			if _bite_active <= 0.0:
+				_clear_bite_warning()
+
+		# 空闲：冷却到 + 跑道够 → 长扑预警
+		elif charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq:
 			_charge_timer = charge_interval
-			_charge_windup = 1.2  # 1.2 秒预警
+			_charge_windup = charge_windup_time
+
+		# 空闲：冷却到 + 玩家已贴进 bite_range → 短咬下蹲
+		# （bite_range 与 charge_min_range 取同值 ⇒ 两带互补，中间不留"谁都不出手"的缝）
+		elif bite_range > 0.0 and _bite_timer <= 0.0 and dist_sq > 16.0 and dist_sq <= bite_range * bite_range:
+			_bite_timer = bite_interval
+			_bite_windup = bite_windup_time
+			_bite_dir = dir
+			_show_bite_warning(dir)
+			play_squash(Vector2(1.24, 0.76), bite_windup_time)
+			AudioManager.play_sfx("sword_swing", 0.55, GameManager.rng.randf_range(0.92, 1.08))
 
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
 	if explode_radius > 0.0:
@@ -221,12 +310,34 @@ func _physics_process(delta: float) -> void:
 				_explode(player)
 				return
 
-	# 御剑邪修：保持距离的同时周期性发射剑气
+	# 御剑邪修：保持距离的同时周期性发射火球
 	if bolt_interval > 0.0 and _fuse < 0.0:
 		_bolt_timer -= delta
 		if _bolt_timer <= 0.0 and dist_sq < 396900.0:
 			_bolt_timer = bolt_interval
 			_fire_bolt(player)
+
+	# 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）
+	if spawn_minion_interval > 0.0 and minion_scene != null and _fuse < 0.0:
+		_minion_timer -= delta
+		if _minion_timer <= 0.0:
+			_minion_timer = spawn_minion_interval
+			if get_tree().get_nodes_in_group("enemies").size() < 45:
+				_spawn_minion()
+
+	# 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速
+	if buff_radius > 0.0:
+		_buff_timer -= delta
+		if _buff_timer <= 0.0:
+			_buff_timer = 0.25
+			_pulse_buff_aura()
+
+	# 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）
+	if teleport_interval > 0.0 and _fuse < 0.0:
+		_teleport_timer -= delta
+		if _teleport_timer <= 0.0:
+			_teleport_timer = teleport_interval
+			_teleport_near_player(player)
 
 	velocity = velocity.move_toward(target_vel, 900.0 * delta) + knockback_velocity
 	move_and_slide()
@@ -280,10 +391,13 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	# 1. 声音与跳字
 	if is_crit:
 		AudioManager.play_sfx("enemy_hit", 1.35, randf_range(1.16, 1.32))
-		GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
+		# 暴击给顿帧不给震屏：命中是本作最高频的事件，一旦发创伤，镜头整局都停不下来。
+		# 只有打在精英/首领身上的暴击才值得抖一下（低频，且是「打狠了」的读数）
+		GameManager.hit_stop(0.035, 0.08)
+		if is_elite:
+			GameManager.add_trauma(0.12)
 	else:
 		AudioManager.play_sfx("enemy_hit", 1.05 if not is_elite else 0.85)
-		GameManager.add_trauma(0.06)
 
 	DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
 
@@ -337,7 +451,7 @@ func _explode(player: Node2D) -> void:
 
 ## 开始冲刺（预警结束后调用）
 func _start_charge(dir: Vector2) -> void:
-	_charge_active = 0.8
+	_charge_active = charge_duration
 	_charge_dir = dir
 	play_squash(Vector2(0.78, 1.24), 0.2)
 	_clear_charge_warning()
@@ -350,10 +464,15 @@ func _update_charge_warning(player: Node2D) -> void:
 		_charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.6)
 		add_child(_charge_warning_line)
 	
-	# 更新端点：从自身到玩家
+	# 更新端点：画「真撞得到的那一段」，不是画到玩家身上。
+	# 旧写法线恒等于当前距离，玩家站在 450px 时线长 450、而冲刺只有 ~307px
+	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）
 	_charge_warning_line.clear_points()
 	_charge_warning_line.add_point(Vector2.ZERO)
 	var local_target: Vector2 = player.global_position - global_position
+	var reach: float = charge_duration * move_speed * charge_speed_mul
+	if local_target.length() > reach:
+		local_target = local_target.normalized() * reach
 	_charge_warning_line.add_point(local_target)
 	
 	# 闪烁效果：alpha 在 0.3~0.8 之间正弦波动
@@ -366,15 +485,100 @@ func _clear_charge_warning() -> void:
 		_charge_warning_line.queue_free()
 		_charge_warning_line = null
 
-## 发射剑气弹（御剑邪修）
+## 短咬起跳（下蹲预告结束、或长扑预警中被玩家贴掉跑道时调用）
+func _launch_bite(dir: Vector2) -> void:
+	_bite_active = bite_duration
+	_bite_dir = dir
+	_bite_hit = false
+	play_squash(Vector2(0.72, 1.3), 0.18)
+	AudioManager.play_sfx("sword_swing", 0.8, GameManager.rng.randf_range(0.92, 1.08))
+
+## 画短咬预告线：长度 = 这一跳真跳得出去的位移（bite_hit_radius 是终点附近的咬合半径，
+## 不另画圈 —— 判定就落在看得见这条线的落点上，"特效范围 = 判定范围"）
+func _show_bite_warning(dir: Vector2) -> void:
+	_clear_bite_warning()
+	if dir.length_squared() < 0.01:
+		return
+	_bite_warning_line = Line2D.new()
+	_bite_warning_line.width = 5.0
+	_bite_warning_line.default_color = Color(1.0, 0.72, 0.15, 0.8)
+	add_child(_bite_warning_line)
+	_bite_warning_line.add_point(Vector2.ZERO)
+	_bite_warning_line.add_point(dir * (bite_duration * move_speed * bite_speed_mul))
+
+## 清理短咬预告线（一次起跳只画一条，落点即结束）
+func _clear_bite_warning() -> void:
+	if _bite_warning_line != null:
+		_bite_warning_line.queue_free()
+		_bite_warning_line = null
+
+## 发射火球（御剑邪修；bolt_count>1 时按 bolt_spread 扇形展开，剑煞邪修三连击）
 func _fire_bolt(player: Node2D) -> void:
-	var bolt := EnemyBolt.new()
-	bolt.global_position = global_position
-	bolt.direction = (player.global_position - global_position).normalized()
-	bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
-	get_parent().add_child(bolt)
+	var base_dir: Vector2 = (player.global_position - global_position).normalized()
+	for i in range(maxi(1, bolt_count)):
+		var bolt := EnemyBolt.new()
+		bolt.global_position = global_position
+		var offset_ang := 0.0
+		if bolt_count > 1:
+			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
+		bolt.direction = base_dir.rotated(offset_ang)
+		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
+		get_parent().add_child(bolt)
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("blade_shoot", 0.6)
+
+## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
+func _pulse_buff_aura() -> void:
+	var radius_sq := buff_radius * buff_radius
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e == self or not (e is EnemyBase) or e.dying:
+			continue
+		if global_position.distance_squared_to(e.global_position) <= radius_sq:
+			e.receive_aura(buff_speed_mult, 400)
+
+## 被鼓妖光环覆盖：取最高倍率，过期待遇由 _physics_process 自动清除
+func receive_aura(mult: float, duration_ms: int) -> void:
+	if dying:
+		return
+	_aura_speed_mult = maxf(_aura_speed_mult, mult)
+	_aura_until_ms = Time.get_ticks_msec() + duration_ms
+
+## 蛛母产卵：幼体在自身周围落点，血量/伤害按当前波次同公式缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
+func _spawn_minion() -> void:
+	var m := minion_scene.instantiate() as EnemyBase
+	if m == null:
+		return
+	var angle := GameManager.rng.randf() * TAU
+	m.global_position = global_position + Vector2(cos(angle), sin(angle)) * 34.0
+	m.max_hp = ceilf(m.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number))
+	m.contact_damage = ceilf(m.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number))
+	m.add_to_group("enemies")
+	get_parent().call_deferred("add_child", m)
+	play_squash(Vector2(1.22, 0.78), 0.2)
+	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
+
+## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一簇火花当残影
+func _teleport_near_player(player: Node2D) -> void:
+	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, false)
+	var angle := GameManager.rng.randf() * TAU
+	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * 210.0
+	var lim: float = GameManager.MAP_HALF_EXTENT - 40.0
+	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	play_squash(Vector2(1.3, 0.7), 0.2)
+	AudioManager.play_sfx("dodge", 0.7, 0.8)
+
+## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前波次缩放；自爆/消散不触发）
+func _split_offspring() -> void:
+	for i in range(split_count):
+		var child := split_scene.instantiate() as EnemyBase
+		if child == null:
+			continue
+		var angle := TAU * float(i) / float(split_count) + GameManager.rng.randf() * 0.5
+		child.global_position = global_position + Vector2(cos(angle), sin(angle)) * 26.0
+		child.max_hp = ceilf(child.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number))
+		child.contact_damage = ceilf(child.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number))
+		child.add_to_group("enemies")
+		get_parent().call_deferred("add_child", child)
 
 ## 波次结束时的消散：不掉落、不计数
 func dissolve() -> void:
@@ -395,9 +599,14 @@ func _die() -> void:
 		return
 	dying = true
 	GameManager.register_kill(is_elite)
-	
+
+	# 血蛹系：临死分裂出幼体（自爆/波末消散不触发）
+	if split_count > 0 and split_scene != null and not _no_drop:
+		_split_offspring()
+
 	# 清理预警线（如果存在）
 	_clear_charge_warning()
+	_clear_bite_warning()
 
 	# 击杀视觉爆散与分级震屏
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite)
@@ -405,8 +614,8 @@ func _die() -> void:
 		GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		GameManager.add_trauma(0.09)
-		# 普通妖物死亡以前是完全静音的，而击杀是本作最高频的反馈事件
+		# 普通妖物死亡不再发创伤：尸潮里每秒十几二十次，叠起来镜头就永远摇个不停。
+		# 读数交给爆散环 + 死亡音（击杀是本作最高频的反馈事件，以前它甚至是静音的）
 		AudioManager.play_sfx("enemy_death", 0.85)
 
 	var gem_count = 1 if not is_elite else 5

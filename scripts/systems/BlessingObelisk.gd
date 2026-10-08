@@ -47,10 +47,13 @@ func _trigger_blessing() -> void:
     GameManager.announcement_triggered.emit("⚠ 聚灵阵成 · 灵气冲击震荡全场 ⚠")
     
     # Damage and knockback all enemies on screen
+    # 方向走 GameBalance.knock_dir（永不把敌人往玩家身上推）；界碑冲击不是玩家法器，
+    # 力度仍按裸 320 走，不吃玩家的震退属性。
     var enemies = get_tree().get_nodes_in_group("enemies")
+    var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
     for enemy in enemies:
         if is_instance_valid(enemy) and enemy.has_method("take_damage"):
-            var knock = (enemy.global_position - global_position).normalized() * 320.0
+            var knock = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * 320.0
             enemy.take_damage(85.0, knock, true)
             
     # Spawn gold gems

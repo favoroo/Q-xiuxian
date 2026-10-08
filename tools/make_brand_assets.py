@@ -8,10 +8,11 @@
   app_icon.png                 512²   Godot 项目/桌面图标 + Godot boot splash（不透明白底）
   launcher_192.png             192²   Android 传统 launcher 图标
   adaptive_foreground_432.png  432²   自适应图标前景（主体外接圆撑满 66% 安全圆）
-  adaptive_background_432.png  432²   自适应图标背景（纯白）
+  adaptive_background_432.png  432²   自适应图标背景（深青黑）
 
-底色链：图标底 / Android 系统 splash 圆标底 / Godot boot splash 底全为纯白，
-启动全程（系统圆标 → boot splash → 进游戏）只出现一个视觉主体（白底修士头像），无切图感。
+底色链：图标底 / Android 系统 splash 圆标底 / Godot boot splash 底全为深青黑（#090D17，
+与游戏 clearColor 同族），启动全程（系统圆标 → boot splash → 进游戏）只出现一个视觉主体
+（黑底修士头像），无切图感、无明暗跳变。
 """
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ ICON_SRC = ROOT / "assets_raw/images/app_icon_concept.png"
 OUT = ROOT / "assets/brand"
 
 FG_SAFE_RATIO = 0.66       # adaptive icon 安全区（直径占比）
-WHITE = (255, 255, 255)    # 纯白底：无边框、无渐变、无暗角
+BG = (9, 13, 23)           # #090D17 深青黑底 = 游戏 clearColor，无边框、无渐变、无暗角
 
 
 def fail(msg: str) -> None:
@@ -43,8 +44,8 @@ def load_trimmed(path: Path) -> Image.Image:
 
 
 def solid_background(size: int) -> Image.Image:
-    """纯白底：无渐变、无暗角，避免任何边框感。"""
-    return Image.new("RGB", (size, size), WHITE)
+    """深青黑纯色底：无渐变、无暗角，避免任何边框感。"""
+    return Image.new("RGB", (size, size), BG)
 
 
 def fit(img: Image.Image, max_w: int, max_h: int) -> Image.Image:

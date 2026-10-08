@@ -1,0 +1,50 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/EnemyBase.gd" id="1_enemy"]
+[ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/art/shadow.png" id="3_shadow"]
+[ext_resource type="PackedScene" path="res://scenes/entities/FengQunEnemy.tscn" id="4_fengqun"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_zhumu"]
+resource_local_to_scene = true
+shader = ExtResource("2_shader")
+shader_parameter/flash_color = Color(1, 1, 0.9, 1)
+shader_parameter/flash_modifier = 0.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 16.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 20.0
+
+[node name="ZhuMuEnemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_enemy")
+max_hp = 170.0
+move_speed = 70.0
+contact_damage = 16.0
+exp_reward = 4
+spritesheet_path = "res://assets/art/monster_zhumu_8dir.png"
+spawn_minion_interval = 3.5
+minion_scene = ExtResource("4_fengqun")
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 17)
+scale = Vector2(0.58, 0.58)
+texture = ExtResource("3_shadow")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+material = SubResource("ShaderMaterial_zhumu")
+scale = Vector2(0.56, 0.56)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 2)
+shape = SubResource("CircleShape2D_body")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CircleShape2D_hurt")

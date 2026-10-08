@@ -29,6 +29,7 @@ var _patterns: Array = [Pattern.RING, Pattern.SLAM, Pattern.SUMMON]
 var _minion_scenes: Array = [
 	preload("res://scenes/entities/SlimeEnemy.tscn"),
 	preload("res://scenes/entities/FlowerEnemy.tscn"),
+	preload("res://scenes/entities/FengQunEnemy.tscn"),
 ]
 
 ## 震地冲击预警圈：描边 + 半透明填充，alpha 由 Boss 每帧驱动闪烁
@@ -88,7 +89,7 @@ func _cast_next(player: Node2D) -> void:
 		Pattern.SUMMON:
 			_cast_summon(player)
 
-## 环弹齐射：短暂染红蓄力后向四周放出一圈大号剑气
+## 环弹齐射：短暂染红蓄力后向四周放出一圈大号火球（EnemyBolt，scale_factor 放大）
 func _cast_ring() -> void:
 	play_squash(Vector2(1.25, 0.78), 0.5)
 	var tw := create_tween()
@@ -131,8 +132,9 @@ func _resolve_slam(player: Node2D) -> void:
 	if dying:
 		return
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
-	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-	GameManager.shake_camera(6.0, 0.25)
+	# 震地 = 全场最该抖一下的时刻，但它自己就是一个事件：
+	# 旧的 feedback(MEDIUM) + shake_camera(6.0) 是同一次落地发两遍，合为一记 HEAVY
+	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	AudioManager.play_sfx("orb_hit", 1.2)
 	if player.global_position.distance_to(global_position) <= GameBalance.BOSS_SLAM_RADIUS:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT))
@@ -187,7 +189,7 @@ func _die() -> void:
 		_slam_ring.visible = false
 	GameManager.add_spirit_stones(GameBalance.BOSS_STONE_REWARD)
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	GameManager.shake_camera(9.0, 0.45)
+	# shake_camera(9.0) 与 HEAVY 是同一件事发两遍（创伤叠到 1.0 直接顶格），去掉重复的那份
 	AudioManager.play_sfx("enemy_death_elite", 0.75)
 	GameManager.announcement_triggered.emit("✦ %s · 已伏诛 ✦" % boss_title)
 	GameManager.boss_defeated.emit(boss_title)

@@ -10,8 +10,21 @@ var _title_block: PanelContainer
 var _sub_chip: Label
 var _buttons: Array[Button] = []
 var _decor_blocks: Array[Control] = []
+var _brackets: Array[Line2D] = []
 var _update_btn: Button
 var _update_reset_tween: Tween
+var _danger_buttons: Array[Button] = []
+const DANGER_NAMES := ["凡尘", "微澜", "惊涛", "炼狱", "无间", "天劫"]
+
+## 四角括号是「贴着屏角」的装饰：坐标必须跟着这一屏的实得尺寸走。
+## 旧写法把 960×540 拍死在点上 ⇒ 20:9 屏（可视宽 1202）那两只括号浮在屏幕中段，
+## 4:3 屏（可视高 720）下面两只落在半空。判据 LayoutCheck 逐档屏宽度量。
+const BRACKET_LEN := 56.0
+const BRACKET_INSET := 26.0
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_RESIZED and not _brackets.is_empty():
+        _layout_brackets()
 
 func _ready() -> void:
     visible = false
@@ -38,13 +51,14 @@ func _build_decor() -> void:
     decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(decor)
 
-    # 横向斜切深蓝带（横穿标题后方）
+    # 横向斜切深蓝带（横穿标题后方）：有意比屏宽，两头出血 ⇒ 判据放行这一格
     var band := PanelContainer.new()
     band.add_theme_stylebox_override("panel", GameStyle.panel(GameStyle.NAVY2, GameStyle.SLANT_BAND, Vector2.ZERO))
     band.set_anchors_preset(Control.PRESET_CENTER_TOP)
     band.custom_minimum_size = Vector2(1100, 150)
     band.position = Vector2(-550, 108)
     band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    band.set_meta("layout_bleed", true)
     decor.add_child(band)
     _decor_blocks.append(band)
 
@@ -67,30 +81,40 @@ func _build_decor() -> void:
     decor.add_child(bblk)
     _decor_blocks.append(bblk)
 
-    # 四角黄色括号（呼应灵田界碑语言）
-    var bracket_len := 56.0
-    var inset := 26.0
-    var corners := [
-        Vector2(inset, inset), Vector2(1, 1),
-        Vector2(960 - inset, inset), Vector2(-1, 1),
-        Vector2(960 - inset, 540 - inset), Vector2(-1, -1),
-        Vector2(inset, 540 - inset), Vector2(1, -1),
-    ]
-    for i in range(0, corners.size(), 2):
-        var origin: Vector2 = corners[i]
-        var sgn: Vector2 = corners[i + 1]
+    # 四角黄色括号（呼应灵田界碑语言）：坐标现读这一屏的实得尺寸。
+    # 旧写法把 960×540 拍死在点上 ⇒ 20:9 屏（可视宽 1202）右边两只浮在屏幕中段，
+    # 4:3 屏（可视高 720）下面两只落在半空。
+    for i in range(4):
         var bracket := Line2D.new()
-        bracket.points = PackedVector2Array([
-            origin + Vector2(-sgn.x * bracket_len, 0),
-            origin,
-            origin + Vector2(0, -sgn.y * bracket_len),
-        ])
         bracket.width = 6.0
         bracket.default_color = GameStyle.YELLOW
         bracket.joint_mode = Line2D.LINE_JOINT_ROUND
         bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
         bracket.end_cap_mode = Line2D.LINE_CAP_ROUND
         decor.add_child(bracket)
+        _brackets.append(bracket)
+    _layout_brackets()
+
+## 左上/右上/右下/左下各一只，开口朝屏心
+func _layout_brackets() -> void:
+    var w := size.x
+    var h := size.y
+    if w <= 0.0 or h <= 0.0:
+        return
+    var corners := [
+        Vector2(BRACKET_INSET, BRACKET_INSET), Vector2(1, 1),
+        Vector2(w - BRACKET_INSET, BRACKET_INSET), Vector2(-1, 1),
+        Vector2(w - BRACKET_INSET, h - BRACKET_INSET), Vector2(-1, -1),
+        Vector2(BRACKET_INSET, h - BRACKET_INSET), Vector2(1, -1),
+    ]
+    for i in range(_brackets.size()):
+        var origin: Vector2 = corners[i * 2]
+        var sgn: Vector2 = corners[i * 2 + 1]
+        _brackets[i].points = PackedVector2Array([
+            origin + Vector2(-sgn.x * BRACKET_LEN, 0),
+            origin,
+            origin + Vector2(0, -sgn.y * BRACKET_LEN),
+        ])
 
 func _build_center() -> void:
     var center := CenterContainer.new()
@@ -131,6 +155,9 @@ func _build_center() -> void:
     spacer.custom_minimum_size = Vector2(0, 16)
     vbox.add_child(spacer)
 
+    # 危险度选择：通关当前最高档解锁下一档（落盘持久化，见 GameManager）
+    _build_danger_row(vbox)
+
     # 按钮列
     _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 56),
         GameStyle.BLUE, GameStyle.YELLOW, GameStyle.PAPER, _on_start_pressed))
@@ -154,6 +181,49 @@ func _make_button(parent: Control, text: String, font_size: int, min_size: Vecto
     parent.add_child(btn)
     return btn
 
+## 危险度选择行：未解锁的档位灰显锁定，当前选中档黄底高亮
+func _build_danger_row(vbox: VBoxContainer) -> void:
+    var chip := Label.new()
+    chip.text = " 危 险 度 · 通 关 解 锁 "
+    chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
+    GameStyle.label(chip, 12, GameStyle.PAPER_DIM)
+    vbox.add_child(chip)
+
+    var row := HBoxContainer.new()
+    row.alignment = BoxContainer.ALIGNMENT_CENTER
+    row.add_theme_constant_override("separation", 8)
+    vbox.add_child(row)
+    _danger_buttons.clear()
+    for d in range(GameBalance.DANGER_MAX + 1):
+        var btn := Button.new()
+        btn.custom_minimum_size = Vector2(62, 32)
+        btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+        btn.focus_mode = Control.FOCUS_NONE
+        var dd := d
+        btn.pressed.connect(func(): _on_danger_pressed(dd))
+        row.add_child(btn)
+        _danger_buttons.append(btn)
+    _refresh_danger_row()
+
+func _refresh_danger_row() -> void:
+    for d in range(_danger_buttons.size()):
+        var btn := _danger_buttons[d]
+        var unlocked := d <= GameManager.max_danger_unlocked
+        btn.disabled = not unlocked
+        btn.text = DANGER_NAMES[d] if unlocked else "锁"
+        if d == GameManager.danger_level and unlocked:
+            GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+        elif unlocked:
+            GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 13, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
+        else:
+            GameStyle.button(btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, GameStyle.SLANT_BUTTON)
+
+func _on_danger_pressed(d: int) -> void:
+    GameManager.set_danger(d)
+    _refresh_danger_row()
+
 func _build_version_label() -> void:
     var ver := Label.new()
     ver.text = "修仙幸存者 " + Version.APP_VERSION_NAME
@@ -166,6 +236,7 @@ func _build_version_label() -> void:
 func open() -> void:
     visible = true
     modulate.a = 0.0
+    _refresh_danger_row()   # 通关回来后可能刚解锁新档位
     var tw := create_tween()
     tw.tween_property(self, "modulate:a", 1.0, 0.22)
 

@@ -17,8 +17,15 @@ signal stats_requested
 @onready var banner: PanelContainer = $Banner
 @onready var banner_label: Label = $Banner/BannerLabel
 
+## 顶栏原本留的左右边距与顶边距（安全区让位是在它们之上再加，不是替换）
+const BASE_EDGE_X := 22.0
+const BASE_TOP := 20.0
+## 让位上限：读数再大也不许被一个离谱的 safe area 推到屏心
+const SAFE_CAP := 140.0
+
 func _ready() -> void:
     banner.modulate.a = 0.0
+    _apply_safe_area()
     # 蓝白黄斜切色块（场景里未定样的两块在这里补）
     banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(5, 6)))
     $TopContainer/CenterBox/TimeBlock.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.INK, GameStyle.SLANT_BAND, Vector2(4, 5)))
@@ -46,13 +53,48 @@ func _ready() -> void:
     _on_weapons_updated(GameManager.get_weapons_summary())
     _build_top_buttons()
     _build_boss_bar()
-    # 羁绊徽记行：挂在左栏之下，只显示已激活的流派
+    # 羁绊徽记单独一排，摆在顶栏之下。
+    # 挂在顶栏里 = 左组要 755 宽 > 它在 960 屏上只分到的 389 ⇒ 整条顶栏被撑到 1125 宽、
+    # 两头各出屏 82（气血块少半截、「暂停」整个没了，用户 2026-10-08 说的「顶部的一些 UI
+    # 都显示到外面去了」就是这个）。判据 LayoutCheck 灌最宽读数样本量的就是这一格。
     _synergy_box = HBoxContainer.new()
     _synergy_box.add_theme_constant_override("separation", 6)
     _synergy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    $TopContainer/LeftBox.add_child(_synergy_box)
+    _synergy_box.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    _synergy_box.offset_left = BASE_EDGE_X
+    _synergy_box.offset_top = 66.0
+    _synergy_box.offset_right = -BASE_EDGE_X
+    _synergy_box.offset_bottom = 88.0
+    add_child(_synergy_box)
 
 var _synergy_box: HBoxContainer = null
+
+# ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
+
+## 顶栏整条往安全区里让：刘海会把最左那颗气血块与最右那颗暂停键吃掉一半 ——
+## 桌面预览里永远是整屏，只有真机看得见，所以这条算术做成纯函数交给判据喂假刘海。
+func _apply_safe_area() -> void:
+    var win := Rect2(Vector2(DisplayServer.window_get_position()), Vector2(DisplayServer.window_get_size()))
+    var safe := Rect2(DisplayServer.get_display_safe_area()).intersection(win)
+    var vp: Rect2 = get_viewport().get_visible_rect()
+    var scale: float = win.size.x / vp.size.x if vp.size.x > 0.0 else 1.0
+    var ins := safe_insets(safe, win, scale)
+    var top := $TopContainer
+    top.offset_left = BASE_EDGE_X + ins[0]
+    top.offset_top = BASE_TOP + ins[1]
+    top.offset_right = -BASE_EDGE_X - ins[2]
+
+## 纯算术：安全区与窗口都取**屏幕像素**、scale = 像素/设计单位。
+## 返回 [左, 上, 右] 三个让位量（设计单位，已夹到 0..SAFE_CAP）。
+## 窗口比安全区小时（桌面窗口化）交集就是窗口本身 ⇒ 三个 0，摆位不变。
+static func safe_insets(safe: Rect2, win: Rect2, scale: float) -> Array[float]:
+    var out: Array[float] = [0.0, 0.0, 0.0]
+    if scale <= 0.0 or safe.size.x <= 0.0 or win.size.x <= 0.0:
+        return out
+    out[0] = clampf((safe.position.x - win.position.x) / scale, 0.0, SAFE_CAP)
+    out[1] = clampf((safe.position.y - win.position.y) / scale, 0.0, SAFE_CAP)
+    out[2] = clampf((win.end.x - safe.end.x) / scale, 0.0, SAFE_CAP)
+    return out
 
 # ---------------- Boss 血条（固定 Boss 关专用，信号驱动上屏/收起） ----------------
 
@@ -70,8 +112,8 @@ func _build_boss_bar() -> void:
     _boss_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
     _boss_box.offset_left = -240.0
     _boss_box.offset_right = 240.0
-    _boss_box.offset_top = 130.0
-    _boss_box.offset_bottom = 168.0
+    _boss_box.offset_top = 140.0
+    _boss_box.offset_bottom = 178.0
     _boss_box.pivot_offset = Vector2(240.0, 19.0)
     add_child(_boss_box)
 

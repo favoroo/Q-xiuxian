@@ -85,6 +85,15 @@ const SCHEMA: Array[Dictionary] = [
 	},
 	{
 		"section": "display",
+		"key": "shake_intensity",
+		"title": "屏幕震动",
+		"desc": "只在诛精英、受创、天雷落劫等要紧时刻震一下；档位越高幅度越大",
+		"type": "cycle",
+		"default": &"standard",
+		"options": [&"off", &"light", &"standard", &"heavy"],
+	},
+	{
+		"section": "display",
 		"key": "hit_stop",
 		"title": "顿帧打击感",
 		"desc": "法刃切入与强敌湮灭瞬间的时空凝滞微顿",
@@ -122,6 +131,23 @@ const BUS_MUTE_MAP := {
 	&"SFX": "sfx_muted",
 	&"Voice": "voice_muted",
 }
+
+## 震屏档位表（关闭 / 轻 / 标准 / 强）：倍率同时乘在位移、滚转与缩放冲击上。
+## 与历史遗留的 screen_shake 布尔总开关严格同源（见 _sync_shake_pair），界面上只留一个控件。
+const SHAKE_LEVEL_ORDER: Array[StringName] = [&"off", &"light", &"standard", &"heavy"]
+const SHAKE_LEVEL_LABELS := {
+	"off": "关闭",
+	"light": "轻",
+	"standard": "标准",
+	"heavy": "强",
+}
+const SHAKE_LEVEL_MULT := {
+	"off": 0.0,
+	"light": 0.4,
+	"standard": 1.0,
+	"heavy": 1.7,
+}
+const SHAKE_DEFAULT_LEVEL := &"standard"
 
 ## 内存设置字典: section -> { key: value }
 var _settings: Dictionary = {}
@@ -184,8 +210,54 @@ func set_val(section: StringName, key: StringName, val: Variant, auto_save: bool
 			audio_volume_changed.emit(bus, get_bus_volume(bus), bool(val))
 			break
 
+	_sync_shake_pair(sec_str, key_str)
+
 	if auto_save:
 		_save_settings()
+
+# ----------------- 震屏便捷接口 -----------------
+
+## 当前震屏档位。ConfigFile 存取会把 StringName 变成 String，这里统一归一化
+func shake_level() -> StringName:
+	return StringName(str(get_val(&"display", &"shake_intensity", SHAKE_DEFAULT_LEVEL)))
+
+## 震屏幅度倍率：0 = 完全不震。总开关（screen_shake）关掉时档位再高也是 0
+func shake_mult() -> float:
+	if not bool(get_val(&"display", &"screen_shake", true)):
+		return 0.0
+	return float(SHAKE_LEVEL_MULT.get(str(shake_level()), 1.0))
+
+## 档位的人话名（设置界面与详解卡用）
+func shake_level_label() -> String:
+	return String(SHAKE_LEVEL_LABELS.get(str(shake_level()), "标准"))
+
+## 循环到下一档（关闭 → 轻 → 标准 → 强 → 关闭）
+func shake_level_next() -> StringName:
+	var i := SHAKE_LEVEL_ORDER.find(shake_level())
+	return SHAKE_LEVEL_ORDER[(i + 1) % SHAKE_LEVEL_ORDER.size()]
+
+## 档位与旧布尔总开关保持同源：老存档里只有 screen_shake，而界面只暴露一个循环控件，
+## 两者不同步就会出现「显示标准、实际不震」这类看不见对不上的读数
+func _sync_shake_pair(sec_str: String, key_str: String) -> void:
+	if sec_str != "display" or not _settings.has("display"):
+		return
+	if key_str != "screen_shake" and key_str != "shake_intensity":
+		return
+	var display: Dictionary = _settings["display"]
+	if key_str == "shake_intensity":
+		var should_be_on := shake_level() != &"off"
+		if bool(display.get("screen_shake", true)) != should_be_on:
+			display["screen_shake"] = should_be_on
+			setting_changed.emit(&"display", &"screen_shake", should_be_on)
+	else:
+		var enabled := bool(display.get("screen_shake", true))
+		var lv := shake_level()
+		if not enabled and lv != &"off":
+			display["shake_intensity"] = &"off"
+			setting_changed.emit(&"display", &"shake_intensity", &"off")
+		elif enabled and lv == &"off":
+			display["shake_intensity"] = SHAKE_DEFAULT_LEVEL
+			setting_changed.emit(&"display", &"shake_intensity", SHAKE_DEFAULT_LEVEL)
 
 # ----------------- 音频便捷接口 -----------------
 

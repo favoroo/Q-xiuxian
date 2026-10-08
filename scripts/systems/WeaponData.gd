@@ -32,9 +32,9 @@ const DEFS: Dictionary = {
 	"gengjin_feijian": {
 		"name": "庚金飞剑", "behavior": Behavior.PROJECTILE,
 		"sfx": "sword_swing",
-		"damage": 28.0, "cooldown": 1.05, "range": 460.0,
+		"damage": 38.0, "cooldown": 0.90, "range": 460.0,
 		"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
-		"desc": "飞剑凌空贯日，贯穿两敌；伤害受暴击伤害加成", "tag": "远程·剑系·金",
+		"desc": "飞剑锁敌追击、凌空贯日，贯穿两敌；伤害受暴击伤害加成", "tag": "远程·剑系·金",
 		"pierce": 2,
 		"tags": ["sword", "metal"],
 		"stat_scalings": {"crit_mult_bonus": 25.0},
@@ -44,7 +44,7 @@ const DEFS: Dictionary = {
 		"sfx": "talisman_throw",
 		"damage": 16.0, "cooldown": 1.15, "range": 440.0,
 		"price": 35, "icon": "res://assets/art/weapon_dagger.png",
-		"desc": "扇形疾射三把细小飞刀，贯穿群敌", "tag": "远程·符箓·金",
+		"desc": "扇形疾射三把细小飞刀，各锁一敌、贯穿群敌", "tag": "远程·符箓·金",
 		"pierce": 3, "projectile_count": 3, "spread_angle": 0.20,
 		"tags": ["talisman", "metal"],
 		"stat_scalings": {"crit_rate": 30.0},
@@ -64,9 +64,9 @@ const DEFS: Dictionary = {
 	"wanmu_lingfu": {
 		"name": "万木灵符", "behavior": Behavior.PROJECTILE,
 		"sfx": "talisman_throw",
-		"damage": 18.0, "cooldown": 1.0, "range": 420.0,
+		"damage": 26.0, "cooldown": 1.0, "range": 420.0,
 		"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
-		"desc": "青绿木符，击中后弹射连锁至邻近两名妖兽并叠毒", "tag": "远程·符箓·木",
+		"desc": "青绿木符追敌而去，击中后弹射连锁至邻近两名妖兽并叠毒", "tag": "远程·符箓·木",
 		"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 		"tags": ["talisman", "wood"],
 		"stat_scalings": {"hp_regen": 3.5},
@@ -97,7 +97,7 @@ const DEFS: Dictionary = {
 		"sfx": "talisman_throw",
 		"damage": 14.0, "cooldown": 0.92, "range": 430.0,
 		"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
-		"desc": "三枚玄冰飞针齐射，刺骨冰寒；伤害受移速与攻速加成", "tag": "远程·符箓·水",
+		"desc": "三枚玄冰飞针齐射，各追一敌，刺骨冰寒；伤害受移速与攻速加成", "tag": "远程·符箓·水",
 		"pierce": 1, "projectile_count": 3, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
 		"tags": ["talisman", "water"],
 		"stat_scalings": {"move_speed_bonus": 28.0},
@@ -117,9 +117,9 @@ const DEFS: Dictionary = {
 	"huoyan_fu": {
 		"name": "火焰符", "behavior": Behavior.PROJECTILE,
 		"sfx": "talisman_throw",
-		"damage": 20.0, "cooldown": 0.9, "range": 420.0,
+		"damage": 28.0, "cooldown": 0.85, "range": 420.0,
 		"price": 30, "icon": "res://assets/art/weapon_staff.png",
-		"desc": "掷出爆燃符箓，引燃目标；伤害受全局法伤加成", "tag": "远程·符箓·火",
+		"desc": "掷出爆燃符箓，符行追敌不放、命中引燃；伤害受全局法伤加成", "tag": "远程·符箓·火",
 		"pierce": 1, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 		"tags": ["talisman", "fire"],
 		"stat_scalings": {"damage_bonus": 20.0},
@@ -302,3 +302,49 @@ static func element_of(id: String) -> String:
 ## 该法器的开火音 key（缺省回落到通用的 blade_shoot，保证老调用不会哑）
 static func sfx_for(id: String) -> String:
 	return String(DEFS.get(id, {}).get("sfx", "blade_shoot"))
+
+## 弹丸从 2026-10-08 起带有限转向追踪（BladeProjectile.HOMING_TURN_RATE）：
+## 场上只剩一个敌人时，一次三发的法器每一发最终都归它 ⇒ 单体口径按发数求和才与运行时一致。
+## 下面两个纯函数是给"档位体检"当尺子用的（判据见 tests/unit_runner.gd::_test_ranged_focus_dps），
+## 口径：★star、不吃玩家属性/羁绊/暴击/危险度，只比较法器自身的设计强度。
+const FOCUS_RANGED_MAX_TARGETS := 2   ## 单发最多结算这么几个敌人的远程法器 = 「点杀位」
+
+## 单发（一次开火）最多能结算几个敌人。近战横扫 / 区域落雷 / 环绕接触天生打一片，按"群体"给档；
+## 弹丸按 发数 ×（穿透 + 弹射）计，穿透与弹射都各自吃一个独立敌人。
+static func targets_per_shot(id: String) -> int:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return 0
+	var behavior := int(def.get("behavior", Behavior.MELEE))
+	if behavior == Behavior.PROJECTILE:
+		var per_bullet := maxi(1, int(def.get("pierce", 1))) + maxi(0, int(def.get("bounce_count", 0)))
+		return maxi(1, int(def.get("projectile_count", 1))) * per_bullet
+	if behavior == Behavior.DRONE:
+		return 3      ## 环绕接触：同时贴身的一般是两三尊
+	return 6          ## 近战弧扫 / 落雷圆形：天生群体
+## 「点杀位」远程法器：弹丸类里单发最多只结算 FOCUS_RANGED_MAX_TARGETS 个敌人的那些。
+## 这一档必须在"啃硬目标"上赢过贴脸与环绕，否则就是纯下位（用户 2026-10-08 的火符投诉）。
+static func is_focus_ranged(id: String) -> bool:
+	var def: Dictionary = DEFS.get(id, {})
+	return int(def.get("behavior", -1)) == Behavior.PROJECTILE \
+		and targets_per_shot(id) <= FOCUS_RANGED_MAX_TARGETS
+
+## 对一个孤立敌人的持续 DPS（不含玩家加成）。灼烧/剧毒按"单次施加的常驻量"折算：
+## 冷却 < 异常时长 ⇒ 全程挂着（灼烧在 EnemyBase 里取 max 不叠层）；否则按占比折算。冰缓不加伤，不计。
+static func sustained_single_dps(id: String, star: int = 1) -> float:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return 0.0
+	var dmg := damage_for(id, star)
+	var cd := maxf(0.05, cooldown_for(id, star))
+	var per_hit: float = 1.0
+	if int(def.get("behavior", Behavior.MELEE)) == Behavior.MELEE:
+		per_hit = 1.35      # 近战在 FloatingWeapon._deal_melee_damage 里有 ×1.35 加护
+	elif int(def.get("behavior", Behavior.MELEE)) == Behavior.PROJECTILE:
+		per_hit = float(maxi(1, int(def.get("projectile_count", 1))))
+	var dps: float = dmg * per_hit / cd
+	if def.get("proc_burn", false):
+		dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 3.0)) / cd)
+	if def.get("proc_poison", false):
+		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
+	return dps

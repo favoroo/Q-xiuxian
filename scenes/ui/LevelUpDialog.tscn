@@ -4,9 +4,9 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 28.0
-content_margin_top = 24.0
+content_margin_top = 16.0
 content_margin_right = 28.0
-content_margin_bottom = 24.0
+content_margin_bottom = 16.0
 bg_color = Color(0.07, 0.1, 0.18, 0.97)
 skew = Vector2(0.052, 0)
 border_width_left = 2
@@ -73,7 +73,7 @@ theme_override_constants/margin_bottom = 20
 
 [node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 18
+theme_override_constants/separation = 14
 
 [node name="TitleBand" type="PanelContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2

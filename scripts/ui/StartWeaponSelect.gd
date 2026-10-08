@@ -3,6 +3,11 @@ extends Control
 
 ## 开局本命法器三选一：选择后才开始第一波
 
+## 卡片宽度与左右内边距：折行宽度由这两个数算出来，别在别处再抄一遍 136
+const CARD_W := 156.0
+const CARD_H := 310.0
+const CARD_PAD_X := 10.0
+
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleLabel
 @onready var sub_label: Label = $CenterContainer/Panel/MarginContainer/VBox/SubLabel
@@ -25,7 +30,7 @@ func show_select() -> void:
     for w_id in WeaponData.STARTER_IDS:
         var card = _create_card(w_id)
         cards_container.add_child(card)
-        card.pivot_offset = Vector2(78.0, 155.0)
+        card.pivot_offset = Vector2(CARD_W * 0.5, CARD_H * 0.5)
         card.scale = Vector2(0.72, 0.72)
         card.modulate.a = 0.0
         var ctw = card.create_tween()
@@ -39,10 +44,14 @@ func show_select() -> void:
     var tw = create_tween()
     tw.tween_property(self, "modulate:a", 1.0, 0.25)
 
+## 描述可用的那一条内宽：卡片宽减去左右内边距
+static func _desc_w() -> float:
+    return CARD_W - CARD_PAD_X * 2.0
+
 func _create_card(w_id: String) -> Control:
     var def := WeaponData.get_def(w_id)
     var card = PanelContainer.new()
-    card.custom_minimum_size = Vector2(156.0, 310.0)
+    card.custom_minimum_size = Vector2(CARD_W, CARD_H)
     card.mouse_filter = Control.MOUSE_FILTER_PASS
 
     var style = StyleBoxFlat.new()
@@ -56,9 +65,9 @@ func _create_card(w_id: String) -> Control:
     style.shadow_color = Color(0, 0, 0, 0.55)
     style.shadow_size = 0
     style.shadow_offset = Vector2(5, 5)
-    style.content_margin_left = 10.0
+    style.content_margin_left = CARD_PAD_X
     style.content_margin_top = 12.0
-    style.content_margin_right = 10.0
+    style.content_margin_right = CARD_PAD_X
     style.content_margin_bottom = 12.0
     card.add_theme_stylebox_override("panel", style)
 
@@ -99,11 +108,12 @@ func _create_card(w_id: String) -> Control:
     vbox.add_child(tag_lbl)
     GameStyle.label(tag_lbl, 11, GameStyle.INK_TEXT)
 
-    # 描述
+    # 描述（换行切进文本，不交给引擎折行：见 GameStyle.wrap_cjk 头注）
     var desc_lbl = Label.new()
-    desc_lbl.text = def.get("desc", "")
+    desc_lbl.text = GameStyle.wrap_cjk(def.get("desc", ""), GameStyle.body_font(), 12, _desc_w())
     desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+    desc_lbl.custom_minimum_size = Vector2(_desc_w(), 0)
+    desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
     vbox.add_child(desc_lbl)
     GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)

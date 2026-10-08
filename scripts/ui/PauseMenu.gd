@@ -73,51 +73,25 @@ func _build_ui() -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(spacer)
 
-	var resume_btn := Button.new()
-	resume_btn.text = "继 续 游 戏"
-	resume_btn.custom_minimum_size = Vector2(0, 42)
-	resume_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(resume_btn, GameStyle.BLUE, GameStyle.YELLOW, 17, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.BLUE, GameStyle.YELLOW, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
 	vbox.add_child(resume_btn)
 
-	var stats_btn := Button.new()
-	stats_btn.text = "人 物 属 性"
-	stats_btn.custom_minimum_size = Vector2(0, 36)
-	stats_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	# 六颗键分三排：整列排下去面板要 593 高 > 540 屏高，
+	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
+	var stats_btn := _mk_btn("人 物 属 性", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
-	vbox.add_child(stats_btn)
-
-	var settings_btn := Button.new()
-	settings_btn.text = "游 戏 设 置"
-	settings_btn.custom_minimum_size = Vector2(0, 36)
-	settings_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(settings_btn, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	var settings_btn := _mk_btn("游 戏 设 置", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	settings_btn.pressed.connect(_on_settings_pressed)
-	vbox.add_child(settings_btn)
+	_add_row(vbox, [stats_btn, settings_btn])
 
-	var retry_btn := Button.new()
-	retry_btn.text = "重 新 开 始"
-	retry_btn.custom_minimum_size = Vector2(0, 36)
-	retry_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(retry_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	var retry_btn := _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
 	retry_btn.pressed.connect(_on_retry_pressed)
-	vbox.add_child(retry_btn)
-
-	_update_btn = Button.new()
-	_update_btn.text = "检 查 更 新"
-	_update_btn.custom_minimum_size = Vector2(0, 36)
-	_update_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_update_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	_update_btn = _mk_btn("检 查 更 新", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
 	_update_btn.pressed.connect(_on_check_update_pressed)
-	vbox.add_child(_update_btn)
+	_add_row(vbox, [retry_btn, _update_btn])
 
-	var quit_btn := Button.new()
-	quit_btn.text = "退 出 游 戏"
-	quit_btn.custom_minimum_size = Vector2(0, 36)
-	quit_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(quit_btn, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
+	var quit_btn := _mk_btn("退 出 游 戏", 36, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	vbox.add_child(quit_btn)
 
@@ -134,6 +108,25 @@ func _build_ui() -> void:
 	_ver_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(_ver_label, 11, GameStyle.GREY)
 	vbox.add_child(_ver_label)
+
+func _mk_btn(text: String, h: float, bg: Color, hover_bg: Color, font_size: int,
+		font_col: Color, hover_font_col: Color = Color(0, 0, 0, 0)) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(0, h)
+	btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(btn, bg, hover_bg, font_size, font_col, 6.0, hover_font_col)
+	return btn
+
+## 一排两颗键：等分面板内宽，键高不变（触屏最小热区）
+func _add_row(parent: VBoxContainer, btns: Array) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for b in btns:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(b)
+	parent.add_child(row)
 
 func _add_volume_row(parent: VBoxContainer, title: String, bus: StringName) -> void:
 	var row := HBoxContainer.new()
