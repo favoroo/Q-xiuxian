@@ -6,6 +6,8 @@ extends Control
 ## 升级/商店/结算/开局选器弹窗打开时必然已 paused，故按"未暂停才可打开"
 ## 即可与它们天然互斥，无需逐个检查。
 
+signal stats_requested
+
 var _closing: bool = false
 var _update_btn: Button
 var _ver_label: Label
@@ -75,8 +77,16 @@ func _build_ui() -> void:
 	resume_btn.custom_minimum_size = Vector2(0, 46)
 	resume_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(resume_btn, GameStyle.BLUE, GameStyle.YELLOW, 17, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
-	resume_btn.pressed.connect(close)
+	resume_btn.pressed.connect(func(): close(true))
 	vbox.add_child(resume_btn)
+
+	var stats_btn := Button.new()
+	stats_btn.text = "人 物 属 性"
+	stats_btn.custom_minimum_size = Vector2(0, 40)
+	stats_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	stats_btn.pressed.connect(_on_stats_pressed)
+	vbox.add_child(stats_btn)
 
 	var retry_btn := Button.new()
 	retry_btn.text = "重 新 开 始"
@@ -160,7 +170,7 @@ func open() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.16)
 
-func close() -> void:
+func close(unpause: bool = true) -> void:
 	if _closing:
 		return
 	_closing = true
@@ -168,9 +178,15 @@ func close() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func():
 		visible = false
-		get_tree().paused = false
+		if unpause:
+			get_tree().paused = false
 		_closing = false
 	)
+
+func _on_stats_pressed() -> void:
+	visible = false
+	_closing = false
+	stats_requested.emit()
 
 func _on_retry_pressed() -> void:
 	get_tree().paused = false

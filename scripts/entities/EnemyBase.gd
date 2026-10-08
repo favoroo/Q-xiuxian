@@ -86,23 +86,32 @@ func _physics_process(delta: float) -> void:
 	else:
 		knockback_velocity = Vector2.ZERO
 
-	# 2. 追击玩家
-	var dir = (player.global_position - global_position).normalized()
-	velocity = dir * move_speed + knockback_velocity
+	# 2. 追击玩家（平滑加速度 + 贴身防旋转抽搐）
+	var to_player: Vector2 = player.global_position - global_position
+	var dist_sq: float = to_player.length_squared()
+	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
+
+	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切
+	var target_vel := dir * move_speed
+	velocity = velocity.move_toward(target_vel, 900.0 * delta) + knockback_velocity
 	move_and_slide()
 
 	# 界碑拦阻
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 3. Sprite 方向 & 动画（融合 juice_scale）
-	if dir.length_squared() > 0.0001:
-		var face: Array = RunMotion.facing(dir)
+	# 3. Sprite 方向 & 动画（带迟滞滤波 + 贴近锁定 + 移速步频自适应）
+	# 当怪物与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
+	if dist_sq > 324.0 and dir.length_squared() > 0.01:
+		var face: Array = RunMotion.facing_stable(dir, facing, anim_sprite.flip_h, 32.0)
 		if face[0] != "":
 			facing = face[0]
 			anim_sprite.flip_h = face[1]
 
 	var current_base := anim_base_scale * juice_scale
+	var current_speed := velocity.length()
+	var speed_ratio: float = (current_speed / move_speed) if move_speed > 0.0 else 1.0
+
 	if anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing):
 		var run_anim: String = "run_" + facing
 		if anim_sprite.animation != run_anim:
@@ -112,7 +121,7 @@ func _physics_process(delta: float) -> void:
 			anim_sprite.play(run_anim)
 			if keep_frame:
 				anim_sprite.set_frame_and_progress(prev_frame, prev_prog)
-		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta)
+		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio)
 	else:
 		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
 

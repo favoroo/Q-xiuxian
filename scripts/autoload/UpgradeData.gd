@@ -85,3 +85,12 @@ static func get_random_upgrades(count: int = 3) -> Array[Dictionary]:
 		u["border_color"] = RARITY_COLORS.get(u.get("rarity", "common"), Color.WHITE)
 		result.append(u)
 	return result
+
+static func get_upgrade_def(upgrade_id: String) -> Dictionary:
+	for u in UPGRADES:
+		if u.get("id", "") == upgrade_id:
+			var copy: Dictionary = u.duplicate()
+			copy["border_color"] = RARITY_COLORS.get(copy.get("rarity", "common"), Color.WHITE)
+			return copy
+	return {}
+

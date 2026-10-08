@@ -58,6 +58,10 @@ var reroll_cost: int = 2
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
 var stash: Array = []    # 背包，元素 {id: String, star: int}
 
+# 本局历史悟道加点记录
+var upgrade_history: Array[Dictionary] = []
+var upgrade_counts: Dictionary = {}
+
 func reset_run() -> void:
 	Engine.time_scale = 1.0
 	_hitstop_token += 1
@@ -81,6 +85,8 @@ func reset_run() -> void:
 	reroll_cost = 2
 	drones = []
 	stash = []
+	upgrade_history.clear()
+	upgrade_counts.clear()
 
 func _process(delta: float) -> void:
 	if not is_game_over and not get_tree().paused and player != null:
@@ -137,7 +143,51 @@ func apply_upgrade(upgrade_id: String) -> void:
 			spirit_stones += 12
 		"regen_up":
 			hp_regen += 1.2
+
+	var prev_count: int = int(upgrade_counts.get(upgrade_id, 0)) + 1
+	upgrade_counts[upgrade_id] = prev_count
+	var def := UpgradeData.get_upgrade_def(upgrade_id)
+	upgrade_history.append({
+		"id": upgrade_id,
+		"title": def.get("title", upgrade_id),
+		"rarity": def.get("rarity", "common"),
+		"rarity_label": def.get("rarity_label", "凡品"),
+		"icon": def.get("icon", ""),
+		"desc": def.get("desc", ""),
+		"border_color": def.get("border_color", Color.WHITE),
+		"level": level,
+		"time": game_time,
+		"count": prev_count,
+	})
 	upgrade_applied.emit(upgrade_id)
+
+func get_stat_breakdown() -> Dictionary:
+	var cur_hp: float = 120.0
+	var max_hp: float = 120.0
+	var base_spd: float = 210.0
+	if player != null and is_instance_valid(player):
+		cur_hp = float(player.current_health)
+		max_hp = float(player.max_health)
+		base_spd = float(player.base_speed)
+	var dmg_reduction: float = 1.0 - (1.0 / (1.0 + armor * 0.08))
+	var cdr_pct: float = (1.0 - attack_speed_mult) * 100.0
+	return {
+		"current_hp": cur_hp,
+		"max_hp": max_hp,
+		"hp_regen": hp_regen,
+		"armor": armor,
+		"dmg_reduction_pct": dmg_reduction * 100.0,
+		"damage_mult": weapon_damage_mult,
+		"damage_bonus_pct": (weapon_damage_mult - 1.0) * 100.0,
+		"attack_speed_mult": attack_speed_mult,
+		"cdr_pct": cdr_pct,
+		"move_speed": base_spd * move_speed_mult,
+		"move_speed_bonus_pct": (move_speed_mult - 1.0) * 100.0,
+		"pickup_radius": 96.0 * pickup_range_mult,
+		"pickup_bonus_pct": (pickup_range_mult - 1.0) * 100.0,
+		"crit_rate_pct": 25.0,
+		"crit_dmg_pct": 150.0,
+	}
 
 # ---------------- 武器系统 ----------------
 

@@ -1,8 +1,9 @@
 class_name GameHUD
 extends Control
 
-## 顶栏暂停按钮请求打开暂停菜单（由 Main 接线到 PauseMenu.open）
+## 顶栏暂停与属性按钮请求（由 Main 接线）
 signal pause_requested
+signal stats_requested
 
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
 @onready var hp_label: Label = $TopContainer/LeftBox/HPBlock/HBox/HPLabel
@@ -41,11 +42,20 @@ func _ready() -> void:
     _on_wave_changed(GameManager.wave_number)
 
     _on_weapons_updated(GameManager.get_weapons_summary())
-    _build_pause_button()
+    _build_top_buttons()
 
-## 顶栏右侧追加暂停按钮（触屏入口；键盘 ESC 由 PauseMenu 处理）。
-## HUD 根节点 mouse_filter=IGNORE 不影响子按钮自己的 STOP 接收点击。
-func _build_pause_button() -> void:
+## 顶栏右侧追加属性与暂停按钮（触屏入口）
+func _build_top_buttons() -> void:
+    var stats_btn := Button.new()
+    stats_btn.text = "属 性"
+    stats_btn.custom_minimum_size = Vector2(62, 0)
+    stats_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    stats_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+    stats_btn.focus_mode = Control.FOCUS_NONE
+    GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+    stats_btn.pressed.connect(func(): stats_requested.emit())
+    $TopContainer/RightBox.add_child(stats_btn)
+
     var pause_btn := Button.new()
     pause_btn.text = "暂 停"
     pause_btn.custom_minimum_size = Vector2(62, 0)
