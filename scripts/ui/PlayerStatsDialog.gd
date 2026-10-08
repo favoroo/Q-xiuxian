@@ -457,14 +457,17 @@ func _refresh_weapons() -> void:
 			slot.add_child(tex_rect)
 
 			var star_lbl := Label.new()
-			star_lbl.text = str(w.get("star", 1))
+			star_lbl.text = "★%d" % int(w.get("star", 1))
 			star_lbl.add_theme_font_override("font", GameStyle.body_font())
-			star_lbl.add_theme_font_size_override("font_size", 12)
+			star_lbl.add_theme_font_size_override("font_size", 11)
 			star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
+			star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
+			star_lbl.add_theme_constant_override("outline_size", 3)
 			star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 			star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(star_lbl)
 
 			var tag_name: String = w.get("name", "")
@@ -490,13 +493,33 @@ func _refresh_weapons() -> void:
 			s_slot.custom_minimum_size = Vector2(36, 36)
 			s_slot.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0))
 
+			var s_icon_path: String = item.get("icon", def.get("icon", ""))
 			var s_tex := TextureRect.new()
-			if def.has("icon") and ResourceLoader.exists(def["icon"]):
-				s_tex.texture = load(def["icon"])
+			if not s_icon_path.is_empty() and ResourceLoader.exists(s_icon_path):
+				s_tex.texture = load(s_icon_path)
 			s_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			s_tex.custom_minimum_size = Vector2(26, 26)
 			s_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			s_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			s_slot.add_child(s_tex)
+
+			var s_star := int(item.get("star", 1))
+			var s_star_lbl := Label.new()
+			s_star_lbl.text = "★%d" % s_star
+			s_star_lbl.add_theme_font_override("font", GameStyle.body_font())
+			s_star_lbl.add_theme_font_size_override("font_size", 10)
+			s_star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
+			s_star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
+			s_star_lbl.add_theme_constant_override("outline_size", 3)
+			s_star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			s_star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+			s_star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			s_star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			s_star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			s_slot.add_child(s_star_lbl)
+
+			var s_name: String = item.get("name", def.get("name", ""))
+			s_slot.tooltip_text = "%s (%d阶)" % [s_name, s_star]
 			_stash_box.add_child(s_slot)
 
 func _refresh_history() -> void:

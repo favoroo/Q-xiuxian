@@ -18,6 +18,7 @@ const APK_FILE_NAME: String = "q_xiuxian_update.apk"
 var pending_update: Dictionary = {}
 var is_checking: bool = false
 var is_downloading: bool = false
+var _last_check_manual: bool = false
 
 var _check_http: HTTPRequest
 var _download_http: HTTPRequest
@@ -48,7 +49,11 @@ func _ready() -> void:
 	_download_http.request_completed.connect(_on_download_request_completed)
 	add_child(_download_http)
 
-	call_deferred("_init_dialog")
+	_init_dialog()
+
+var _toast_label: Label
+var _toast_panel: PanelContainer
+var _toast_tween: Tween
 
 func _init_dialog() -> void:
 	# 顶层 CanvasLayer 保证弹窗覆盖在全部 UI 与操作之上
@@ -59,8 +64,80 @@ func _init_dialog() -> void:
 	_dialog_instance = UpdateDialogScript.new()
 	_dialog_canvas.add_child(_dialog_instance)
 
+	_init_toast()
+
 	update_available.connect(func(info: Dictionary):
+		_last_check_manual = false
 		show_update_dialog(info)
+	)
+	no_update_found.connect(func():
+		if _last_check_manual:
+			_last_check_manual = false
+			show_toast("✦ 当前已是最新版本 (%s) ✦" % Version.APP_VERSION_NAME, GameStyle.GOOD)
+	)
+	check_failed.connect(func(err_msg: String):
+		if _last_check_manual:
+			_last_check_manual = false
+			show_toast("检查更新失败（%s），请稍后重试" % err_msg, GameStyle.BAD)
+	)
+
+func _init_toast() -> void:
+	_toast_panel = PanelContainer.new()
+	_toast_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast_panel.position = Vector2(-160, 48)
+	_toast_panel.custom_minimum_size = Vector2(320, 38)
+	var style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_BUTTON, Vector2(3, 4))
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 4
+	style.border_color = GameStyle.YELLOW
+	_toast_panel.add_theme_stylebox_override("panel", style)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	_toast_panel.add_child(margin)
+
+	_toast_label = Label.new()
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.text = ""
+	GameStyle.label(_toast_label, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+	margin.add_child(_toast_label)
+
+	_toast_panel.visible = false
+	_toast_panel.modulate.a = 0.0
+	_dialog_canvas.add_child(_toast_panel)
+
+## 展示全局轻提示浮层（Toast）
+func show_toast(text: String, accent_color: Color = GameStyle.YELLOW, duration: float = 2.2) -> void:
+	if _toast_panel == null or _toast_label == null:
+		return
+	_toast_label.text = text
+	var style: StyleBoxFlat = _toast_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if style:
+		style.border_color = accent_color
+	_toast_label.add_theme_color_override("font_color", GameStyle.PAPER if accent_color != GameStyle.BAD else GameStyle.BAD)
+
+	if _toast_tween != null and _toast_tween.is_valid():
+		_toast_tween.kill()
+
+	_toast_panel.visible = true
+	_toast_panel.position = Vector2(-160, 36)
+	_toast_panel.modulate.a = 0.0
+
+	_toast_tween = create_tween()
+	_toast_tween.set_parallel(true)
+	_toast_tween.tween_property(_toast_panel, "modulate:a", 1.0, 0.18)
+	_toast_tween.tween_property(_toast_panel, "position:y", 52.0, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_toast_tween.chain().tween_interval(duration)
+	_toast_tween.chain().tween_property(_toast_panel, "modulate:a", 0.0, 0.2)
+	_toast_tween.tween_property(_toast_panel, "position:y", 36.0, 0.2)
+	_toast_tween.chain().tween_callback(func():
+		_toast_panel.visible = false
 	)
 
 ## 主动弹出更新对话框
@@ -120,10 +197,13 @@ func record_check_time() -> void:
 ## 执行更新检测
 func check_for_update(manual: bool = false) -> void:
 	if is_checking:
+		if manual:
+			_last_check_manual = true
 		return
 	if not manual and not should_run_startup_check():
 		return
 
+	_last_check_manual = manual
 	is_checking = true
 	_do_check_async()
 
@@ -148,7 +228,8 @@ func _do_check_async() -> void:
 
 	is_checking = false
 	if release_data == null:
-		check_failed.emit(last_err if not last_err.is_empty() else "无法连接到更新服务器")
+		var err_msg := last_err if not last_err.is_empty() else "无法连接到更新服务器"
+		check_failed.emit(err_msg)
 		return
 
 	record_check_time()

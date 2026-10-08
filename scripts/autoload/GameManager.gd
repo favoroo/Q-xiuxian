@@ -368,7 +368,13 @@ func add_weapon(w_id: String, star: int = 1) -> bool:
 	else:
 		if stash.size() >= WeaponData.MAX_STASH_SLOTS:
 			return false
-		stash.append({"id": w_id, "star": star})
+		stash.append({
+			"id": w_id,
+			"name": def.get("name", "?"),
+			"star": star,
+			"icon": def.get("icon", ""),
+			"tag": def.get("tag", ""),
+		})
 	notify_weapons_updated(get_weapons_summary())
 	return true
 
@@ -405,7 +411,14 @@ func merge_weapon(w_id: String, star: int, keep: Dictionary) -> bool:
 			need -= 1
 			continue
 		if is_keeper:
-			new_stash.append({"id": w_id, "star": star + 1})
+			var k_def := WeaponData.get_def(w_id)
+			new_stash.append({
+				"id": w_id,
+				"name": k_def.get("name", "?"),
+				"star": star + 1,
+				"icon": k_def.get("icon", ""),
+				"tag": k_def.get("tag", ""),
+			})
 		else:
 			new_stash.append(stash[j])
 	stash = new_stash
@@ -595,7 +608,15 @@ func unequip_to_stash(index: int) -> bool:
 		if node == null or not is_instance_valid(node):
 			return false
 		player.remove_weapon_instance(node)
-	stash.append({"id": item.get("id", ""), "star": int(item.get("star", 1))})
+	var u_id: String = item.get("id", "")
+	var u_def := WeaponData.get_def(u_id)
+	stash.append({
+		"id": u_id,
+		"name": item.get("name", u_def.get("name", "?")),
+		"star": int(item.get("star", 1)),
+		"icon": item.get("icon", u_def.get("icon", "")),
+		"tag": item.get("tag", u_def.get("tag", "")),
+	})
 	notify_weapons_updated(get_weapons_summary())
 	AudioManager.play_sfx("orb_hit", 0.8)
 	return true

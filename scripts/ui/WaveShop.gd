@@ -155,14 +155,21 @@ func _create_inv_slot(item: Dictionary, index: int, pool: String) -> Control:
 	btn.add_theme_stylebox_override("pressed", hover)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
+	var icon_path: String = item.get("icon", "")
+	if icon_path.is_empty():
+		icon_path = WeaponData.get_def(id).get("icon", "")
+
 	var icon_tex = TextureRect.new()
-	if item.has("icon") and ResourceLoader.exists(item["icon"]):
-		icon_tex.texture = load(item["icon"])
+	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
+		icon_tex.texture = load(icon_path)
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(42, 42)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon_tex.offset_left = 5
+	icon_tex.offset_top = 5
+	icon_tex.offset_right = -5
+	icon_tex.offset_bottom = -5
 	btn.add_child(icon_tex)
 
 	var star_lbl = Label.new()
@@ -173,8 +180,13 @@ func _create_inv_slot(item: Dictionary, index: int, pool: String) -> Control:
 	star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
 	star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
 	star_lbl.add_theme_constant_override("outline_size", 3)
-	star_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	star_lbl.position = Vector2(28, 34)
+	star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	star_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	star_lbl.offset_left = 2
+	star_lbl.offset_top = 2
+	star_lbl.offset_right = -3
+	star_lbl.offset_bottom = -2
 	btn.add_child(star_lbl)
 
 	btn.pressed.connect(func():
