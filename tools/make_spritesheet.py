@@ -77,20 +77,25 @@ def blobs(rgba, min_area=400, min_w=48, min_h=64):
                 comps.append((n, min(xs), min(ys), max(xs) + 1, max(ys) + 1))
     comps = [c for c in comps
              if c[0] >= min_area and (c[3] - c[1]) >= min_w and (c[4] - c[2]) >= min_h]
-    # 丢弃高瘦的垃圾块（参考图残留把多行主体粘连成的竖条）
-    if len(comps) > 1:
-        comps = [c for c in comps if (c[4] - c[2]) <= (c[3] - c[1]) * 1.5] or comps
+    # 丢弃跨行粘连的竖条：块高显著超过中位块高（参考图残留把多行主体粘连成竖条）
+    if len(comps) > 4:
+        med_h_all = sorted(c[4] - c[2] for c in comps)[len(comps) // 2]
+        filtered = [c for c in comps if (c[4] - c[2]) <= med_h_all * 1.8]
+        if filtered:
+            comps = filtered
     boxes = [(x0, y0, x1, y1) for _, x0, y0, x1, y1 in comps]
-    # 按质心 y 聚成 2 行
+    # 按质心 y 分行：排序后相邻质心间隙 > 中位块高一半即视为新行
+    # （间隙阈值取块高的比例，对任意行数的表都稳定；旧版按总跨度算阈值会把 4 行表并成 2 行）
     cys = [ (y0 + y1) / 2 for x0, y0, x1, y1 in boxes ]
+    med_h = sorted(y1 - y0 for x0, y0, x1, y1 in boxes)[len(boxes) // 2] if boxes else 1
     order = np.argsort(cys)
     rows, cur_row = [], [order[0]]
     for i in order[1:]:
-        if abs(cys[i] - np.mean([cys[j] for j in cur_row])) < (max(cys) - min(cys)) * 0.4:
-            cur_row.append(i)
-        else:
+        if cys[i] - cys[cur_row[-1]] > med_h * 0.55:
             rows.append(cur_row)
             cur_row = [i]
+        else:
+            cur_row.append(i)
     rows.append(cur_row)
     out = []
     for r in rows:

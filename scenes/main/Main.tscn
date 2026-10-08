@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=15 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -11,6 +11,9 @@
 [ext_resource type="PackedScene" uid="uid://chud001" path="res://scenes/ui/GameHUD.tscn" id="9_hud"]
 [ext_resource type="PackedScene" uid="uid://clvl001" path="res://scenes/ui/LevelUpDialog.tscn" id="10_lvl"]
 [ext_resource type="PackedScene" uid="uid://cgameover001" path="res://scenes/ui/GameOverDialog.tscn" id="11_go"]
+[ext_resource type="PackedScene" uid="uid://cselect001" path="res://scenes/ui/StartWeaponSelect.tscn" id="12_sel"]
+[ext_resource type="PackedScene" uid="uid://cshop001" path="res://scenes/ui/WaveShop.tscn" id="13_shop"]
+[ext_resource type="Script" path="res://scripts/ui/PauseMenu.gd" id="14_pause"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -86,3 +89,10 @@ layer = 10
 [node name="LevelUpDialog" parent="UILayer" instance=ExtResource("10_lvl")]
 
 [node name="GameOverDialog" parent="UILayer" instance=ExtResource("11_go")]
+
+[node name="StartWeaponSelect" parent="UILayer" instance=ExtResource("12_sel")]
+
+[node name="WaveShop" parent="UILayer" instance=ExtResource("13_shop")]
+
+[node name="PauseMenu" type="Control" parent="UILayer"]
+script = ExtResource("14_pause")

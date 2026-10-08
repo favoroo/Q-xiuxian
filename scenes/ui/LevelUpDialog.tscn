@@ -7,9 +7,14 @@ content_margin_left = 28.0
 content_margin_top = 24.0
 content_margin_right = 28.0
 content_margin_bottom = 24.0
-bg_color = Color(0.09, 0.08, 0.11, 0.97)
-skew = Vector2(0.035, 0)
-shadow_color = Color(0, 0, 0, 0.88)
+bg_color = Color(0.07, 0.1, 0.18, 0.97)
+skew = Vector2(0.052, 0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 6
+border_color = Color(0.165, 0.208, 0.314, 1)
+shadow_color = Color(0, 0, 0, 0.6)
 shadow_size = 0
 shadow_offset = Vector2(10, 10)
 
@@ -18,9 +23,11 @@ content_margin_left = 30.0
 content_margin_top = 6.0
 content_margin_right = 30.0
 content_margin_bottom = 6.0
-bg_color = Color(0.902, 0, 0.0706, 1)
+bg_color = Color(0.184, 0.49, 1, 1)
 skew = Vector2(0.14, 0)
-shadow_color = Color(1, 0.83, 0, 1)
+border_width_bottom = 5
+border_color = Color(0.07, 0.24, 0.6, 1)
+shadow_color = Color(1, 0.824, 0.302, 1)
 shadow_size = 0
 shadow_offset = Vector2(5, 5)
 
@@ -42,7 +49,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.02, 0.02, 0.03, 0.78)
+color = Color(0.02, 0.03, 0.06, 0.78)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -78,7 +85,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 24
-text = "升 级 ！"
+text = "悟 道 加 点"
 
 [node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2

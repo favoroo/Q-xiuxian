@@ -26,7 +26,7 @@ move_speed = 82.0
 contact_damage = 18.0
 is_elite = true
 exp_reward = 8
-spritesheet_path = "res://assets/art/warrior_purple.png"
+spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0, 22)
@@ -48,7 +48,7 @@ collision_mask = 8
 shape = SubResource("CircleShape2D_hurt")
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
-color = Color(0.85, 0.55, 1, 1)
+color = Color(0.4, 0.9, 1, 1)
 energy = 0.55
 texture = ExtResource("4_light")
 texture_scale = 1.2

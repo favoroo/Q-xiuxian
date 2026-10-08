@@ -1,123 +1,87 @@
 class_name UpgradeData
 extends RefCounted
 
+## 加点数据库：升级三选一只出属性，武器一律从波间商店获取
+
+const RARITY_COLORS := {
+	"common": Color(0.96, 0.95, 0.92),
+	"rare": Color(1.0, 0.83, 0.3),
+	"epic": Color(0.35, 0.75, 1.0),
+}
+
 const UPGRADES: Array[Dictionary] = [
-    {
-        "id": "add_sword",
-        "title": "铝制球棒",
-        "desc": "[center]在周身新增 [color=#7ce860][b]+1 根[/b][/color] 悬浮近战球棒\n• 自动抡击近身敌人，造成 [color=#ffd400][b]135%[/b][/color] 范围伤害\n• 附带 [color=#6fd6ff][b]强力击退[/b][/color] 效果[/center]",
-        "rarity": "rare",
-        "rarity_label": "稀有装备",
-        "border_color": Color(1, 0.83, 0, 1),
-        "tag": "新武器·近战",
-        "icon": "res://assets/art/icon_bat.png"
-    },
-    {
-        "id": "add_staff",
-        "title": "自制弹弓",
-        "desc": "[center]在周身新增 [color=#7ce860][b]+1 把[/b][/color] 悬浮远程弹弓\n• 独立索敌发射钢珠弹丸\n• 远距离压制狱警潮，射程 [color=#6fd6ff][b]420[/b][/color][/center]",
-        "rarity": "rare",
-        "rarity_label": "稀有装备",
-        "border_color": Color(1, 0.83, 0, 1),
-        "tag": "新武器·远程",
-        "icon": "res://assets/art/icon_sling.png"
-    },
-    {
-        "id": "blade_damage",
-        "title": "加重打击",
-        "desc": "[center]所有悬浮武器的基础伤害提升\n• 武器总伤害 [color=#ffd400][b]+35%[/b][/color]\n• 适用于全部弹弓与近战球棒[/center]",
-        "rarity": "common",
-        "rarity_label": "普通强化",
-        "border_color": Color(0.96, 0.95, 0.92, 1),
-        "tag": "全体武器强化",
-        "icon": "res://assets/art/icon_wrench.png"
-    },
-    {
-        "id": "blade_amount",
-        "title": "多重弹丸",
-        "desc": "[center]所有远程弹弓每次齐射数量增加\n• 发射弹丸数 [color=#7ce860][b]+1 枚[/b][/color]\n• 形成扇形密集弹幕覆盖[/center]",
-        "rarity": "rare",
-        "rarity_label": "稀有强化",
-        "border_color": Color(1, 0.83, 0, 1),
-        "tag": "弹道裂变",
-        "icon": "res://assets/art/icon_pellets.png"
-    },
-    {
-        "id": "blade_cooldown",
-        "title": "顺滑机油",
-        "desc": "[center]给武器关节上点油，攻击手感顺滑\n• 攻击冷却时间 [color=#6fd6ff][b]-22%[/b][/color]\n• 显著提升弹弓射速与球棒抡击频率[/center]",
-        "rarity": "common",
-        "rarity_label": "普通强化",
-        "border_color": Color(0.96, 0.95, 0.92, 1),
-        "tag": "疾速攻速",
-        "icon": "res://assets/art/icon_oil.png"
-    },
-    {
-        "id": "sun_orb_add",
-        "title": "增援无人机",
-        "desc": "[center]呼叫护体无人机环绕周身巡逻\n• 巡逻无人机数量 [color=#7ce860][b]+1 台[/b][/color]\n• 电击并撞飞贴身敌人[/center]",
-        "rarity": "rare",
-        "rarity_label": "稀有装备",
-        "border_color": Color(1, 0.83, 0, 1),
-        "tag": "环绕护卫",
-        "icon": "res://assets/art/icon_drone.png"
-    },
-    {
-        "id": "sun_orb_damage",
-        "title": "螺旋桨加固",
-        "desc": "[center]强化巡逻无人机的电击威力\n• 无人机碰撞伤害 [color=#ffd400][b]+45%[/b][/color]\n• 撞击冲击力提升 [color=#6fd6ff][b]+25%[/b][/color][/center]",
-        "rarity": "common",
-        "rarity_label": "普通强化",
-        "border_color": Color(0.96, 0.95, 0.92, 1),
-        "tag": "护卫强化",
-        "icon": "res://assets/art/icon_drone.png"
-    },
-    {
-        "id": "move_speed",
-        "title": "越狱跑鞋",
-        "desc": "[center]换上藏进囚服的轻便跑鞋\n• 基础移动速度 [color=#6fd6ff][b]+18%[/b][/color]\n• 更加从容地穿梭于狱警之间[/center]",
-        "rarity": "common",
-        "rarity_label": "普通特质",
-        "border_color": Color(0.96, 0.95, 0.92, 1),
-        "tag": "机动走位",
-        "icon": "res://assets/art/icon_sneaker.png"
-    },
-    {
-        "id": "max_hp",
-        "title": "冰镇汽水",
-        "desc": "[center]灌下一罐小卖部的冰镇汽水\n• 最大生命上限 [color=#7ce860][b]+30 点[/b][/color]\n• 立即恢复 [color=#7ce860][b]+40 点[/b][/color] 生命值[/center]",
-        "rarity": "rare",
-        "rarity_label": "稀有补给",
-        "border_color": Color(1, 0.83, 0, 1),
-        "tag": "生存续航",
-        "icon": "res://assets/art/icon_soda.png"
-    },
-    {
-        "id": "pickup_range",
-        "title": "磁力手套",
-        "desc": "[center]戴上从工坊顺来的磁力手套\n• 硬币磁吸范围 [color=#6fd6ff][b]+45%[/b][/color]\n• 远距离自动吸附散落的硬币[/center]",
-        "rarity": "common",
-        "rarity_label": "普通特质",
-        "border_color": Color(0.96, 0.95, 0.92, 1),
-        "tag": "采集效率",
-        "icon": "res://assets/art/icon_magnet.png"
-    },
-    {
-        "id": "synergy_radiance",
-        "title": "越狱大师计划",
-        "desc": "[center][color=#ff5a5a][b]【史诗级协同质变】[/b][/color]\n• 弹丸命中时有 [color=#ff5a5a][b]28% 概率[/b][/color] 触发过载冲击\n• 对周围狱警造成 [color=#ffd400][b]85%[/b][/color] 范围真实伤害[/center]",
-        "rarity": "epic",
-        "rarity_label": "史诗协同",
-        "border_color": Color(0.902, 0, 0.0706, 1),
-        "tag": "史诗协同",
-        "icon": "res://assets/art/icon_plan.png"
-    }
+	{
+		"id": "atk_up",
+		"title": "剑意淬锋",
+		"desc": "[center]所有法器伤害提升\n• 武器总伤害 [color=#ffd24d][b]+15%[/b][/color]\n• 剑符雷扇尽数受益[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/icon_atk.png"
+	},
+	{
+		"id": "haste_up",
+		"title": "法诀迅捷",
+		"desc": "[center]掐诀更快，施法更频\n• 施法间隔 [color=#6fd6ff][b]-12%[/b][/color]\n• 全部法器攻速提升[/center]",
+		"rarity": "rare",
+		"rarity_label": "良品",
+		"icon": "res://assets/art/icon_haste.png"
+	},
+	{
+		"id": "armor_up",
+		"title": "罡气护体",
+		"desc": "[center]周身凝聚护体罡气\n• 护甲 [color=#7ce860][b]+2[/b][/color]\n• 妖兽爪牙难以近身破防[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/icon_armor.png"
+	},
+	{
+		"id": "speed_up",
+		"title": "神行符",
+		"desc": "[center]脚踏神行符，身轻如燕\n• 移动速度 [color=#6fd6ff][b]+8%[/b][/color]\n• 从容穿梭妖潮之间[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/icon_boots.png"
+	},
+	{
+		"id": "hp_up",
+		"title": "淬体凝元",
+		"desc": "[center]淬炼肉身，气血充盈\n• 气血上限 [color=#7ce860][b]+25[/b][/color]\n• 立即恢复 [color=#7ce860][b]30[/b][/color] 点气血[/center]",
+		"rarity": "rare",
+		"rarity_label": "良品",
+		"icon": "res://assets/art/icon_hp.png"
+	},
+	{
+		"id": "pickup_up",
+		"title": "摄灵术",
+		"desc": "[center]袖里摄灵，隔空取物\n• 灵石拾取范围 [color=#6fd6ff][b]+40%[/b][/color]\n• 散落灵石自动入袖[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/icon_magnet.png"
+	},
+	{
+		"id": "coins_up",
+		"title": "灵石补给",
+		"desc": "[center]取出一小袋备用灵石\n• 立刻获得 [color=#ffd24d][b]12[/b][/color] 枚灵石\n• 留着去灵石阁置办法器[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/icon_coin.png"
+	},
+	{
+		"id": "regen_up",
+		"title": "灵愈心法",
+		"desc": "[center][color=#35bfff][b]【仙品心法】[/b][/color]\n• 每秒恢复 [color=#7ce860][b]1.2[/b][/color] 点气血\n• 灵气滋养，伤势缓慢愈合[/center]",
+		"rarity": "epic",
+		"rarity_label": "仙品",
+		"icon": "res://assets/art/icon_regen.png"
+	},
 ]
 
 static func get_random_upgrades(count: int = 3) -> Array[Dictionary]:
-    var pool = UPGRADES.duplicate()
-    pool.shuffle()
-    var result: Array[Dictionary] = []
-    for i in range(mini(count, pool.size())):
-        result.append(pool[i])
-    return result
+	var pool := UPGRADES.duplicate()
+	pool.shuffle()
+	var result: Array[Dictionary] = []
+	for i in range(mini(count, pool.size())):
+		var u: Dictionary = pool[i].duplicate()
+		u["border_color"] = RARITY_COLORS.get(u.get("rarity", "common"), Color.WHITE)
+		result.append(u)
+	return result

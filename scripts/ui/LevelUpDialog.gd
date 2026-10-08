@@ -9,12 +9,12 @@ var current_upgrades: Array[Dictionary] = []
 func _ready() -> void:
     visible = false
     process_mode = Node.PROCESS_MODE_ALWAYS
-    P5Style.label(title_label, 24, P5Style.WHITE, 0, P5Style.INK, true)
+    GameStyle.label(title_label, 24, GameStyle.PAPER, 0, GameStyle.INK, true)
     GameManager.player_leveled_up.connect(_on_level_up)
 
 func _on_level_up(level: int) -> void:
     current_upgrades = UpgradeData.get_random_upgrades(3)
-    title_label.text = "升 级 ！  Lv." + str(level)
+    title_label.text = "悟 道 加 点  ·  Lv." + str(level)
     _populate_cards()
 
     visible = true
@@ -37,15 +37,16 @@ func _create_card_node(data: Dictionary) -> Control:
     card.custom_minimum_size = Vector2(262.0, 340.0)
     card.mouse_filter = Control.MOUSE_FILTER_PASS
 
-    var rarity_col: Color = data.get("border_color", P5Style.WHITE)
+    var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
     var style_normal = StyleBoxFlat.new()
-    style_normal.bg_color = Color(P5Style.BLACK.r, P5Style.BLACK.g, P5Style.BLACK.b, 0.985)
+    style_normal.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
+    style_normal.skew = Vector2(deg_to_rad(3.0), 0.0)
     style_normal.border_width_left = 2
     style_normal.border_width_top = 2
     style_normal.border_width_right = 2
-    style_normal.border_width_bottom = 2
+    style_normal.border_width_bottom = 5
     style_normal.border_color = rarity_col
-    style_normal.shadow_color = Color(0, 0, 0, 0.85)
+    style_normal.shadow_color = Color(0, 0, 0, 0.6)
     style_normal.shadow_size = 0
     style_normal.shadow_offset = Vector2(6, 6)
     style_normal.content_margin_left = 16.0
@@ -58,16 +59,16 @@ func _create_card_node(data: Dictionary) -> Control:
     vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
     vbox.add_theme_constant_override("separation", 10)
 
-    # 1. 顶部稀有度斜切色带 + 类别标签
+    # 1. 顶部稀有度斜切色签
     var hbox_top = HBoxContainer.new()
     hbox_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
     var rarity_lbl = Label.new()
-    rarity_lbl.text = " " + data.get("rarity_label", "强化") + " "
+    rarity_lbl.text = " " + data.get("rarity_label", "凡品") + " "
     rarity_lbl.add_theme_font_size_override("font_size", 12)
-    var band_text_col: Color = P5Style.WHITE if rarity_col.get_luminance() < 0.45 else P5Style.BLACK
+    var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.PAPER
     rarity_lbl.add_theme_color_override("font_color", band_text_col)
-    var pill_style = P5Style.panel(rarity_col, 8.0, Vector2(2, 2), Color(0, 0, 0, 0.7))
+    var pill_style = GameStyle.block(rarity_col, GameStyle.SLANT_BAND, Vector2(2, 2))
     pill_style.content_margin_top = 2.0
     pill_style.content_margin_bottom = 2.0
     rarity_lbl.add_theme_stylebox_override("normal", pill_style)
@@ -79,18 +80,18 @@ func _create_card_node(data: Dictionary) -> Control:
     hbox_top.add_child(spacer)
 
     var tag_lbl = Label.new()
-    tag_lbl.text = data.get("tag", "特性")
+    tag_lbl.text = "加点"
     tag_lbl.add_theme_font_size_override("font_size", 12)
-    tag_lbl.add_theme_color_override("font_color", Color(0.62, 0.58, 0.68))
+    tag_lbl.add_theme_color_override("font_color", GameStyle.GREY)
     hbox_top.add_child(tag_lbl)
     vbox.add_child(hbox_top)
 
-    # 2. 中央图标（黑底白框）
+    # 2. 中央图标（墨底白框）
     var icon_box = PanelContainer.new()
     icon_box.custom_minimum_size = Vector2(72, 72)
     icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    icon_box.add_theme_stylebox_override("panel", P5Style.outlined_panel(P5Style.BLACK, Color(0.9, 0.88, 0.85), 2, 0.0))
+    icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.PAPER_DIM, 2, 0.0))
 
     var icon_tex = TextureRect.new()
     if data.has("icon") and ResourceLoader.exists(data["icon"]):
@@ -102,11 +103,11 @@ func _create_card_node(data: Dictionary) -> Control:
     icon_box.add_child(icon_tex)
     vbox.add_child(icon_box)
 
-    # 3. 名称（白色大字）
+    # 3. 名称（纸白大字）
     var title_lbl = Label.new()
     title_lbl.text = data["title"]
     title_lbl.add_theme_font_size_override("font_size", 19)
-    title_lbl.add_theme_color_override("font_color", P5Style.WHITE)
+    title_lbl.add_theme_color_override("font_color", GameStyle.PAPER)
     title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
     vbox.add_child(title_lbl)
@@ -129,19 +130,19 @@ func _create_card_node(data: Dictionary) -> Control:
     r_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
     r_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
     r_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    r_desc.add_theme_font_override("normal_font", P5Style.bold_font())
-    r_desc.add_theme_font_override("bold_font", P5Style.bold_font())
+    r_desc.add_theme_font_override("normal_font", GameStyle.body_font())
+    r_desc.add_theme_font_override("bold_font", GameStyle.body_font())
     r_desc.add_theme_font_size_override("normal_font_size", 13)
     r_desc.add_theme_font_size_override("bold_font_size", 13)
-    r_desc.add_theme_color_override("default_color", Color(0.88, 0.86, 0.9))
+    r_desc.add_theme_color_override("default_color", Color(0.85, 0.87, 0.94))
     vbox.add_child(r_desc)
 
-    # 6. 行动按钮（红底白字，悬停黄底黑字）
+    # 6. 行动按钮（蓝底白字，悬停黄底墨字）
     var btn = Button.new()
-    btn.text = "带 上 ！"
+    btn.text = "领 悟 ！"
     btn.custom_minimum_size = Vector2(0, 38)
     btn.mouse_filter = Control.MOUSE_FILTER_PASS
-    P5Style.button(btn, P5Style.RED, P5Style.YELLOW, 15, P5Style.WHITE, 8.0, P5Style.BLACK)
+    GameStyle.button(btn, GameStyle.BLUE, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 
     var up_id = data["id"]
     btn.pressed.connect(func(): _choose_upgrade(up_id))
@@ -160,8 +161,7 @@ func _create_card_node(data: Dictionary) -> Control:
         style_normal.border_width_left = 3
         style_normal.border_width_top = 3
         style_normal.border_width_right = 3
-        style_normal.border_width_bottom = 3
-        style_normal.border_color = P5Style.WHITE
+        style_normal.border_color = GameStyle.PAPER
     )
     card.mouse_exited.connect(func():
         var tw = card.create_tween()
@@ -169,7 +169,6 @@ func _create_card_node(data: Dictionary) -> Control:
         style_normal.border_width_left = 2
         style_normal.border_width_top = 2
         style_normal.border_width_right = 2
-        style_normal.border_width_bottom = 2
         style_normal.border_color = rarity_col
     )
 
