@@ -7,6 +7,8 @@ extends Control
 ## 即可与它们天然互斥，无需逐个检查。
 
 var _closing: bool = false
+var _update_btn: Button
+var _ver_label: Label
 
 func _ready() -> void:
 	visible = false
@@ -14,6 +16,9 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_ui()
+	UpdateManager.update_available.connect(_on_update_available)
+	UpdateManager.no_update_found.connect(_on_no_update_found)
+	UpdateManager.check_failed.connect(_on_check_failed)
 
 func _build_ui() -> void:
 	var dim := ColorRect.new()
@@ -81,6 +86,14 @@ func _build_ui() -> void:
 	retry_btn.pressed.connect(_on_retry_pressed)
 	vbox.add_child(retry_btn)
 
+	_update_btn = Button.new()
+	_update_btn.text = "检 查 更 新"
+	_update_btn.custom_minimum_size = Vector2(0, 40)
+	_update_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_update_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	_update_btn.pressed.connect(_on_check_update_pressed)
+	vbox.add_child(_update_btn)
+
 	var quit_btn := Button.new()
 	quit_btn.text = "退 出 游 戏"
 	quit_btn.custom_minimum_size = Vector2(0, 40)
@@ -88,6 +101,45 @@ func _build_ui() -> void:
 	GameStyle.button(quit_btn, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
 	quit_btn.pressed.connect(func(): get_tree().quit())
 	vbox.add_child(quit_btn)
+
+	_ver_label = Label.new()
+	_ver_label.text = "修仙幸存者 " + Version.APP_VERSION_NAME
+	_ver_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(_ver_label, 11, GameStyle.GREY)
+	vbox.add_child(_ver_label)
+
+func _on_check_update_pressed() -> void:
+	if UpdateManager.is_checking:
+		return
+	if not UpdateManager.pending_update.is_empty():
+		UpdateManager.show_update_dialog(UpdateManager.pending_update)
+		return
+	_update_btn.text = "正在检查更新..."
+	UpdateManager.check_for_update(true)
+
+func _on_update_available(info: Dictionary) -> void:
+	if is_instance_valid(_update_btn):
+		_update_btn.text = "发现新版 %s!" % info.get("tag_name", "")
+
+func _on_no_update_found() -> void:
+	if is_instance_valid(_update_btn):
+		_update_btn.text = "已是最新版本"
+		var tw := create_tween()
+		tw.tween_interval(2.5)
+		tw.tween_callback(func():
+			if is_instance_valid(_update_btn):
+				_update_btn.text = "检 查 更 新"
+		)
+
+func _on_check_failed(err_msg: String) -> void:
+	if is_instance_valid(_update_btn):
+		_update_btn.text = "检查失败，请重试"
+		var tw := create_tween()
+		tw.tween_interval(2.5)
+		tw.tween_callback(func():
+			if is_instance_valid(_update_btn):
+				_update_btn.text = "检 查 更 新"
+		)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel"):

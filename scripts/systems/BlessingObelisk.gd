@@ -42,7 +42,8 @@ func _trigger_blessing() -> void:
     is_triggered = true
     charge_bar.visible = false
     AudioManager.play_sfx("obelisk_blessing")
-    GameManager.shake_camera(7.0, 0.35)
+    GameManager.feedback(GameManager.FeedbackTier.HEAVY)
+    JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
     GameManager.announcement_triggered.emit("⚠ 聚灵阵成 · 灵气冲击震荡全场 ⚠")
     
     # Damage and knockback all enemies on screen

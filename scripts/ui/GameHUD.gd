@@ -33,6 +33,7 @@ func _ready() -> void:
 
     GameManager.player_hp_changed.connect(_on_hp_changed)
     GameManager.player_exp_changed.connect(_on_exp_changed)
+    GameManager.player_leveled_up.connect(_on_leveled_up)
     GameManager.stats_updated.connect(_on_stats_updated)
     GameManager.announcement_triggered.connect(show_announcement)
     GameManager.weapons_updated.connect(_on_weapons_updated)
@@ -58,8 +59,18 @@ func _build_pause_button() -> void:
 func _on_hp_changed(cur: float, max_v: float) -> void:
     hp_bar.max_value = max_v
     var tw = create_tween()
-    tw.tween_property(hp_bar, "value", cur, 0.15)
+    tw.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
     hp_label.text = str(int(cur)) + "/" + str(int(max_v))
+    var low := max_v > 0.0 and (cur / max_v) < 0.28
+    hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
+
+func _on_leveled_up(_lvl: int) -> void:
+    var badge := $TopContainer/LeftBox/LevelBadge
+    if badge != null:
+        badge.pivot_offset = badge.size * 0.5
+        badge.scale = Vector2(1.4, 1.4)
+        var tw := badge.create_tween()
+        tw.tween_property(badge, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
     exp_bar.max_value = target
@@ -70,7 +81,7 @@ func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
     kills_label.text = "斩妖 " + str(kills)
     shards_label.text = "灵石 " + str(stones)
-    var mins = int(g_time) / 60
+    var mins = int(g_time / 60.0)
     var secs = int(g_time) % 60
     time_label.text = "%02d:%02d" % [mins, secs]
 

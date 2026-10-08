@@ -1,0 +1,624 @@
+#!/usr/bin/env python3
+# 修仙幸存者 一键发布脚本（两阶段）：build（Godot CLI 导出+打包+SHA-256）/ publish（推送+双端 Release+验证+清理老附件）
+# 独立 prune 子命令：双端各保留最近 N 个版本的 APK 附件，防止超出 Gitee 配额
+# 仅用 Python 标准库，无第三方依赖。用法见 SKILL.md，或 python3 release.py --help
+
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+VERSION_GD = REPO_ROOT / 'scripts' / 'autoload' / 'Version.gd'
+PRESETS_CFG = REPO_ROOT / 'export_presets.cfg'
+BUILD_DIR = REPO_ROOT / 'build'
+META_FILE = BUILD_DIR / 'release-meta.json'
+
+GODOT_BIN = '/Applications/Godot.app/Contents/MacOS/Godot'
+KEYTOOL_BIN = '/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/keytool'
+
+GITHUB_OWNER, GITHUB_REPO = 'favoroo', 'Q-xiuxian'
+GITEE_OWNER, GITEE_REPO = 'favo9', 'q-xiuxian'
+GITHUB_API = f'https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}'
+GITEE_API = f'https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}'
+
+T0 = time.time()
+
+
+def log(msg: str) -> None:
+    print(f'[{time.time() - T0:7.1f}s] {msg}', flush=True)
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(f'✗ 错误: {msg}', file=sys.stderr, flush=True)
+    sys.exit(code)
+
+
+def run(cmd: list, **kw) -> subprocess.CompletedProcess:
+    kw.setdefault('cwd', REPO_ROOT)
+    kw.setdefault('capture_output', True)
+    kw.setdefault('text', True)
+    return subprocess.run(cmd, **kw)
+
+
+# ---------------------------------------------------------------- 通用 HTTP
+
+def http_json(url: str, method: str = 'GET', headers: dict = None,
+              data=None, timeout: int = 30):
+    """返回 (status, 解析后的JSON或None)。HTTPError 不抛出，返回错误码与响应体。"""
+    req = urllib.request.Request(url, method=method,
+                                 headers=headers or {}, data=data)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                body = r.read()
+                return r.status, (json.loads(body) if body else None)
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            try:
+                return e.code, (json.loads(body) if body else None)
+            except json.JSONDecodeError:
+                return e.code, None
+        except Exception as e:
+            if attempt == 2:
+                raise
+            time.sleep(1 + attempt)
+
+
+def multipart_body(fields: dict, file_field: str, filename: str,
+                   file_bytes: bytes) -> tuple:
+    """构造 multipart/form-data 请求体，返回 (body, content_type)。"""
+    boundary = uuid.uuid4().hex
+    parts = []
+    for k, v in fields.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"'
+            f'\r\n\r\n{v}\r\n'.encode())
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{file_field}"'
+        f'; filename="{filename}"\r\n'
+        f'Content-Type: application/octet-stream\r\n\r\n'.encode())
+    parts.append(file_bytes)
+    parts.append(f'\r\n--{boundary}--\r\n'.encode())
+    return b''.join(parts), f'multipart/form-data; boundary={boundary}'
+
+
+# ---------------------------------------------------------------- 令牌获取
+
+def git_credential_fill(host: str) -> str | None:
+    """从 git 凭据库取 host 的 password；取不到返回 None（禁止交互）。"""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='echo')
+    r = subprocess.run(['git', 'credential', 'fill'],
+                       input=f'protocol=https\nhost={host}\n\n',
+                       capture_output=True, text=True, env=env, timeout=15)
+    m = re.search(r'^password=(.+)$', r.stdout, re.M)
+    return m.group(1).strip() if m else None
+
+
+def get_github_token() -> str:
+    token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+    if token:
+        log('GitHub 令牌来源: 环境变量')
+        return token.strip()
+    token = git_credential_fill('github.com')
+    if token:
+        log('GitHub 令牌来源: git 凭据库')
+        return token
+    die('拿不到 GitHub 令牌。请: 1) export GITHUB_TOKEN=<PAT> 或 '
+        '2) git push 一次让凭据入库(osxkeychain)。')
+
+
+def get_gitee_token() -> str:
+    token = os.environ.get('GITEE_TOKEN')
+    if token:
+        log('Gitee 令牌来源: 环境变量')
+        return token.strip()
+    token = git_credential_fill('gitee.com')
+    if token:
+        log('Gitee 令牌来源: git 凭据库')
+        return token
+    die('拿不到 Gitee 令牌。请: 1) export GITEE_TOKEN=<私人令牌> 或 '
+        '2) git push 一次让凭据入库。')
+
+
+# ---------------------------------------------------------------- 版本解析与递增
+
+def read_project_versions() -> tuple[str, str]:
+    ver_gd = ''
+    if VERSION_GD.exists():
+        m = re.search(r'const\s+APP_VERSION\s*:\s*String\s*=\s*["\']([^"\']+)["\']', VERSION_GD.read_text())
+        if m:
+            ver_gd = m.group(1)
+
+    ver_cfg = ''
+    if PRESETS_CFG.exists():
+        m = re.search(r'version/name="([^"]+)"', PRESETS_CFG.read_text())
+        if m:
+            ver_cfg = m.group(1)
+
+    return ver_gd, ver_cfg
+
+
+def bump_version(ver: str) -> str:
+    """X.Y.Z -> X.Y.(Z+1)。patch 永远 +1，minor/major 不动。"""
+    parts = ver.split('.')
+    if len(parts) != 3:
+        die(f'版本号格式异常: {ver} (期望 X.Y.Z)')
+    try:
+        parts[2] = str(int(parts[2]) + 1)
+    except ValueError:
+        die(f'版本号 patch 段不是整数: {ver}')
+    return '.'.join(parts)
+
+
+def version_code_from_version(ver: str) -> int:
+    try:
+        parts = ver.split('.')
+        major = int(parts[0]) if len(parts) > 0 else 0
+        minor = int(parts[1]) if len(parts) > 1 else 0
+        patch = int(parts[2].split('-')[0]) if len(parts) > 2 else 0
+        code = major * 10000 + minor * 100 + patch
+        return code if code > 0 else 1
+    except Exception:
+        return 1
+
+
+def write_version_files(ver: str) -> None:
+    """写回 Version.gd 与 export_presets.cfg"""
+    ver_code = version_code_from_version(ver)
+    if VERSION_GD.exists():
+        text = VERSION_GD.read_text()
+        new_text = re.sub(
+            r'const\s+APP_VERSION\s*:\s*String\s*=\s*["\'][^"\']+["\']',
+            f'const APP_VERSION: String = "{ver}"',
+            text
+        )
+        VERSION_GD.write_text(new_text)
+        log(f'Version.gd APP_VERSION 已写回: {ver}')
+
+    if PRESETS_CFG.exists():
+        text = PRESETS_CFG.read_text()
+        text = re.sub(r'version/name="[^"]+"', f'version/name="{ver}"', text)
+        text = re.sub(r'version/code=\d+', f'version/code={ver_code}', text)
+        PRESETS_CFG.write_text(text)
+        log(f'export_presets.cfg version/name 已写回: {ver} (code={ver_code})')
+
+
+def cmd_bump(args) -> None:
+    """自动判断并递增版本号"""
+    ver_gd, ver_cfg = read_project_versions()
+    if ver_gd and ver_cfg and ver_gd != ver_cfg:
+        die(f'Version.gd ({ver_gd}) 与 export_presets.cfg ({ver_cfg}) 版本不一致，先手动对齐')
+    current = ver_gd or ver_cfg or '0.0.1'
+    tag = f'v{current}'
+
+    r = run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}'])
+    tag_exists = (r.returncode == 0)
+
+    if not tag_exists:
+        target = current
+        log(f'当前版本 {current} 的 tag {tag} 不存在 (预升未发布)，直接用 {target}')
+    else:
+        target = bump_version(current)
+        log(f'当前版本 {current} 的 tag {tag} 已存在，递增到 {target}')
+
+    if args.write and not tag_exists:
+        log(f'--write 指定但当前版本已是 {target}，文件无需改动')
+    elif args.write and tag_exists:
+        write_version_files(target)
+    elif not args.write and tag_exists:
+        log('--dry-run 模式(默认)，未写回文件；加 --write 写回 Version.gd 与 export_presets.cfg')
+
+    print(target)
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_meta(meta: dict) -> None:
+    META_FILE.parent.mkdir(exist_ok=True)
+    tmp = META_FILE.with_suffix('.tmp')
+    tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    os.replace(tmp, META_FILE)
+
+
+# ---------------------------------------------------------------- build 阶段
+
+def cmd_build(args) -> None:
+    ver_gd, ver_cfg = read_project_versions()
+    target_ver = args.version.lstrip('vV')
+    if ver_gd and ver_gd != target_ver:
+        die(f'Version.gd ({ver_gd}) 与 --version ({args.version}) 不一致')
+    if ver_cfg and ver_cfg != target_ver:
+        die(f'export_presets.cfg ({ver_cfg}) 与 --version ({args.version}) 不一致')
+
+    ver_code = version_code_from_version(target_ver)
+    log(f'版本校验通过: v{target_ver} (Android versionCode={ver_code})')
+
+    apk_name = f'q-xiuxian-v{target_ver}-arm64-v8a.apk'
+    BUILD_DIR.mkdir(exist_ok=True)
+    dst = BUILD_DIR / apk_name
+
+    detail = ''
+    try:
+        if not Path(GODOT_BIN).exists():
+            raise RuntimeError(f'Godot 执行程序不存在: {GODOT_BIN}')
+
+        log(f'开始调用 Godot 导出 Release APK ({apk_name})...')
+        env = dict(os.environ)
+        secret_file = REPO_ROOT / 'keystore' / 'secret.txt'
+        if secret_file.exists():
+            for line in secret_file.read_text().splitlines():
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    k, v = k.strip(), v.strip()
+                    if k == 'keystorePath':
+                        env['GODOT_ANDROID_KEYSTORE_RELEASE_PATH'] = str(REPO_ROOT / v)
+                    elif k == 'keystoreAlias':
+                        env['GODOT_ANDROID_KEYSTORE_RELEASE_USER'] = v
+                    elif k == 'keystorePassword':
+                        env['GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD'] = v
+
+        cmd = [
+            GODOT_BIN,
+            '--headless',
+            '--export-release',
+            'Android',
+            str(dst)
+        ]
+        r = run(cmd, env=env)
+        if r.returncode != 0:
+            detail = ((r.stderr or '') + '\n--- stdout ---\n' + (r.stdout or ''))[-3000:]
+            raise RuntimeError(f'Godot CLI 导出失败: {detail}')
+
+        if not dst.exists() or dst.stat().st_size == 0:
+            raise RuntimeError(f'未找到导出的 APK 文件或体积为 0: {dst}')
+
+        digest = sha256_file(dst)
+        meta = {
+            'status': 'success',
+            'version': target_ver,
+            'tag': f'v{target_ver}',
+            'apk_name': apk_name,
+            'apk_path': str(dst),
+            'sha256': digest,
+            'size': dst.stat().st_size,
+            'timestamp': int(time.time()),
+        }
+        write_meta(meta)
+        log(f'构建完成: {apk_name} ({dst.stat().st_size} 字节)')
+        log(f'SHA-256: {digest}')
+    except Exception as e:
+        detail = detail or str(e)
+        write_meta({'status': 'failed', 'version': target_ver, 'error': detail})
+        die(f'构建失败: {detail[:2000]}')
+
+
+# ---------------------------------------------------------------- publish 阶段
+
+def wait_for_build(target_ver: str, timeout: int) -> dict:
+    log(f'等待构建元数据 {META_FILE.name}（最长 {timeout}s）...')
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if META_FILE.exists():
+            try:
+                meta = json.loads(META_FILE.read_text())
+                if meta.get('status') == 'failed':
+                    die(f"构建阶段已失败: {meta.get('error', '')[:1500]}")
+                if meta.get('status') == 'success':
+                    if meta.get('version') != target_ver:
+                        die(f"元数据版本 {meta.get('version')} 与目标版本 {target_ver} 不一致")
+                    log(f"构建产物就绪: {meta['apk_path']}")
+                    return meta
+            except json.JSONDecodeError:
+                pass
+        time.sleep(2)
+    die(f'等待构建超时（{timeout}s）。检查 build 进程是否完成。')
+
+
+def preflight(tag: str, tokens: dict) -> None:
+    r = run(['git', 'status', '--porcelain'])
+    if r.stdout.strip():
+        lines = [ln for ln in r.stdout.strip().splitlines() if 'release-meta.json' not in ln and '.tmp' not in ln]
+        if lines:
+            die('工作树不干净，先提交全部改动再 publish:\n' + '\n'.join(lines[:10]))
+
+    r = run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}'])
+    if r.returncode == 0:
+        gh_id = gh_release_id_by_tag(tag, tokens['gh'])
+        gitee_id = gitee_release_id_by_tag(tag, tokens['gitee'])
+        if gh_id and gitee_id:
+            die(f'tag {tag} 已在双端发布过 Release(GitHub id={gh_id}, Gitee id={gitee_id})，'
+                f'禁止同版本覆盖发布。请先 `python3 release.py bump --write` 递增版本号。')
+        log(f'本地 tag {tag} 已存在，远端 Release 未发布完，将复用该 tag（重试场景）')
+    else:
+        log(f'创建本地 annotated tag: {tag}')
+        r = run(['git', 'tag', '-a', tag, '-m', f'Q-Xiuxian {tag}'])
+        if r.returncode != 0:
+            die(f'创建 tag 失败: {r.stderr}')
+
+
+def current_branch() -> str:
+    r = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+    return r.stdout.strip() or 'main'
+
+
+def git_push(remote: str, branch: str, tag: str) -> None:
+    r = run(['git', 'push', remote, branch, tag])
+    if r.returncode != 0:
+        if 'already exists' in r.stderr or 'up-to-date' in r.stderr:
+            log(f'git push {remote}: {branch} / {tag} 已同步，视为成功')
+            return
+        raise RuntimeError(f'git push {remote} 失败: {r.stderr[-500:]}')
+
+
+def push_both(branch: str, tag: str) -> None:
+    log('并行推送分支+标签到 origin(GitHub) / gitee(Gitee)...')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        futs = {ex.submit(git_push, rm, branch, tag): rm for rm in ('origin', 'gitee')}
+        for f in concurrent.futures.as_completed(futs):
+            f.result()
+            log(f'git push {futs[f]} 完成 ({branch} + {tag})')
+
+
+def gh_headers(token: str) -> dict:
+    return {
+        'Authorization': f'token {token}',
+        'User-Agent': 'q-xiuxian-release-script',
+        'Accept': 'application/vnd.github+json'
+    }
+
+
+def gh_release_id_by_tag(tag: str, token: str) -> int | None:
+    st, d = http_json(f'{GITHUB_API}/releases/tags/{tag}', headers=gh_headers(token))
+    return d['id'] if st == 200 and d else None
+
+
+def gitee_release_id_by_tag(tag: str, token: str) -> int | None:
+    url = f'{GITEE_API}/releases/tags/{tag}?{urllib.parse.urlencode({"access_token": token})}'
+    st, d = http_json(url)
+    return d['id'] if st == 200 and d else None
+
+
+def create_release(tag: str, name: str, notes: str, tokens: dict) -> dict:
+    gh_id = gh_release_id_by_tag(tag, tokens['gh'])
+    gitee_id = gitee_release_id_by_tag(tag, tokens['gitee'])
+    results = {}
+
+    def create_gh():
+        if gh_id:
+            results['gh'] = gh_id
+            log('GitHub Release 已存在，跳过创建（幂等复用）')
+            return
+        payload = json.dumps({
+            'tag_name': tag,
+            'name': name,
+            'body': notes,
+            'draft': False,
+            'prerelease': False
+        }).encode('utf-8')
+        st, d = http_json(f'{GITHUB_API}/releases', 'POST',
+                          headers={**gh_headers(tokens['gh']), 'Content-Type': 'application/json'},
+                          data=payload)
+        if st != 201 or not d:
+            raise RuntimeError(f'GitHub 创建 Release 失败({st}): {d}')
+        results['gh'] = d['id']
+        log(f'GitHub Release 创建成功 (id={d["id"]})')
+
+    def create_gitee():
+        if gitee_id:
+            results['gitee'] = gitee_id
+            log('Gitee Release 已存在，跳过创建（幂等复用）')
+            return
+        data = urllib.parse.urlencode({
+            'tag_name': tag,
+            'name': name,
+            'body': notes,
+            'prerelease': 'false',
+            'target_commitish': 'main'
+        }).encode('utf-8')
+        st, d = http_json(f'{GITEE_API}/releases', 'POST',
+                          headers={'Authorization': f"token {tokens['gitee']}",
+                                   'Content-Type': 'application/x-www-form-urlencoded'},
+                          data=data)
+        if st not in (200, 201) or not d:
+            raise RuntimeError(f'Gitee 创建 Release 失败({st}): {d}')
+        results['gitee'] = d['id']
+        log(f'Gitee Release 创建成功 (id={d["id"]})')
+
+    log('并行创建双端 Release...')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f1, f2 = ex.submit(create_gh), ex.submit(create_gitee)
+        f1.result()
+        f2.result()
+    return results
+
+
+def upload_apks(release_ids: dict, apk_path: Path, apk_name: str, tokens: dict) -> None:
+    file_bytes = apk_path.read_bytes()
+
+    def upload_gh():
+        st, d = http_json(
+            f'https://uploads.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}'
+            f'/releases/{release_ids["gh"]}/assets?'
+            f'{urllib.parse.urlencode({"name": apk_name})}',
+            'POST',
+            headers={**gh_headers(tokens['gh']), 'Content-Type': 'application/octet-stream'},
+            data=file_bytes, timeout=600)
+        if st != 201 or not d:
+            if st == 422:
+                log('GitHub 附件已存在，跳过重复上传')
+                return
+            raise RuntimeError(f'GitHub 上传 APK 失败({st}): {d}')
+        log(f"GitHub 上传完成: {d['name']} ({d['size']} 字节)")
+
+    def upload_gitee():
+        body, ctype = multipart_body({'name': apk_name}, 'file', apk_name, file_bytes)
+        st, d = http_json(
+            f'{GITEE_API}/releases/{release_ids["gitee"]}/attach_files',
+            'POST', headers={'Authorization': f"token {tokens['gitee']}",
+                             'Content-Type': ctype},
+            data=body, timeout=600)
+        if st not in (200, 201) or not d:
+            if st == 400 and 'already exists' in str(d):
+                log('Gitee 附件已存在，跳过重复上传')
+                return
+            raise RuntimeError(f'Gitee 上传 APK 失败({st}): {d}')
+        log(f"Gitee 上传完成: {apk_name}")
+
+    log(f'并行上传 APK ({apk_name}, {len(file_bytes)} 字节)...')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f1, f2 = ex.submit(upload_gh), ex.submit(upload_gitee)
+        f1.result()
+        f2.result()
+
+
+def verify_releases(tag: str, apk_name: str, tokens: dict) -> None:
+    log('开始发布后双端验证...')
+    st_gh, d_gh = http_json(f'{GITHUB_API}/releases/tags/{tag}', headers=gh_headers(tokens['gh']))
+    if st_gh != 200 or not d_gh:
+        die(f'GitHub 验证失败({st_gh})')
+    gh_assets = [a['name'] for a in d_gh.get('assets', [])]
+    if apk_name not in gh_assets:
+        die(f'GitHub Release 缺少附件 {apk_name}，现有: {gh_assets}')
+    log(f'✓ GitHub Release 校验通过: {d_gh.get("html_url")}')
+
+    st_gt, d_gt = http_json(f'{GITEE_API}/releases/tags/{tag}?access_token={tokens["gitee"]}')
+    if st_gt != 200 or not d_gt:
+        die(f'Gitee 验证失败({st_gt})')
+    gt_assets = [a['name'] for a in d_gt.get('assets', [])]
+    if apk_name not in gt_assets:
+        die(f'Gitee Release 缺少附件 {apk_name}，现有: {gt_assets}')
+    log(f'✓ Gitee Release 校验通过: {d_gt.get("html_url")}')
+
+
+def _ver_key(tag: str):
+    nums = re.findall(r'\d+', tag or '')
+    return tuple(int(n) for n in nums) or (0,)
+
+
+def prune_old_apks(keep: int, tokens: dict, dry_run: bool = False) -> None:
+    """双端只保留最近 keep 个版本的 APK 附件，防止超出 Gitee 配额。"""
+    log(f'检查并清理老版本 APK 附件（保留最近 {keep} 个版本）...')
+    st, rels = http_json(f'{GITEE_API}/releases?access_token={tokens["gitee"]}&per_page=100')
+    if st == 200 and isinstance(rels, list):
+        releases_with_apk = []
+        for r in rels:
+            assets = r.get('assets', [])
+            apk_assets = [a for a in assets if str(a.get('name', '')).endswith('.apk')]
+            if apk_assets:
+                releases_with_apk.append(r)
+        releases_with_apk.sort(key=lambda r: _ver_key(str(r.get('tag_name', ''))), reverse=True)
+
+        if len(releases_with_apk) > keep:
+            for old in releases_with_apk[keep:]:
+                rid = old['id']
+                st_att, atts = http_json(f'{GITEE_API}/releases/{rid}/attach_files?access_token={tokens["gitee"]}')
+                if st_att == 200 and isinstance(atts, list):
+                    for a in atts:
+                        if str(a.get('name', '')).endswith('.apk'):
+                            aid = a['id']
+                            log(f'{"[Dry-run] " if dry_run else ""}清理 Gitee 老附件: {old.get("tag_name")} / {a.get("name")}')
+                            if not dry_run:
+                                http_json(f'{GITEE_API}/releases/{rid}/attach_files/{aid}?access_token={tokens["gitee"]}',
+                                          method='DELETE')
+
+
+def cmd_publish(args) -> None:
+    target_ver = args.version.lstrip('vV')
+    tag = f'v{target_ver}'
+    rel_name = f'修仙幸存者 {tag}'
+
+    tokens = {
+        'gh': get_github_token(),
+        'gitee': get_gitee_token(),
+    }
+
+    if args.dry_run:
+        log('【Dry-Run】执行预检与令牌验证通过，不执行实际发布操作。')
+        return
+
+    meta = wait_for_build(target_ver, args.timeout)
+    apk_path = Path(meta['apk_path'])
+    apk_name = meta['apk_name']
+
+    preflight(tag, tokens)
+    branch = current_branch()
+    push_both(branch, tag)
+
+    notes = ''
+    if args.notes_file:
+        notes_p = Path(args.notes_file)
+        if notes_p.exists():
+            notes = notes_p.read_text(encoding='utf-8')
+    if not notes:
+        notes = f'## {rel_name}\n\n修仙幸存者发布版本 {tag}。\n\n**SHA-256**: `{meta["sha256"]}`'
+
+    rel_ids = create_release(tag, rel_name, notes, tokens)
+    upload_apks(rel_ids, apk_path, apk_name, tokens)
+    verify_releases(tag, apk_name, tokens)
+    prune_old_apks(args.keep, tokens, args.dry_run)
+
+    print('\n' + '=' * 60)
+    print(f'🎉 发布成功！{rel_name}')
+    print(f'• GitHub Release: https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/{tag}')
+    print(f'• Gitee Release:  https://gitee.com/{GITEE_OWNER}/{GITEE_REPO}/releases/tag/{tag}')
+    print(f'• APK 文件名:     {apk_name}')
+    print(f'• SHA-256:        {meta["sha256"]}')
+    print('=' * 60 + '\n')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='修仙幸存者 两阶段一键发布工具')
+    sub = parser.add_subparsers(dest='subcmd', required=True)
+
+    p_build = sub.add_parser('build', help='第一阶段：构建 Release APK 并写入元数据')
+    p_build.add_argument('--version', required=True, help='版本号，如 0.0.1')
+
+    p_pub = sub.add_parser('publish', help='第二阶段：推送代码并双端发布 Release')
+    p_pub.add_argument('--version', required=True, help='版本号，如 0.0.1')
+    p_pub.add_argument('--notes-file', help='Release 说明 Markdown 文件路径')
+    p_pub.add_argument('--timeout', type=int, default=900, help='等待构建元数据超时（秒）')
+    p_pub.add_argument('--keep', type=int, default=20, help='保留最近 N 个版本的 APK 附件')
+    p_pub.add_argument('--dry-run', action='store_true', help='预检与令牌测试，不做实际变更')
+
+    p_prune = sub.add_parser('prune', help='独立清理老版本 APK 附件')
+    p_prune.add_argument('--keep', type=int, default=20, help='保留最近 N 个版本')
+    p_prune.add_argument('--dry-run', action='store_true', help='仅打印待清理列表')
+
+    p_bump = sub.add_parser('bump', help='自动计算下一个版本号')
+    p_bump.add_argument('--write', action='store_true', help='写回 Version.gd 与 export_presets.cfg')
+    p_bump.add_argument('--dry-run', action='store_true', help='只打印，不动文件(默认)')
+
+    args = parser.parse_args()
+    if args.subcmd == 'build':
+        cmd_build(args)
+    elif args.subcmd == 'publish':
+        cmd_publish(args)
+    elif args.subcmd == 'prune':
+        tokens = {'gh': get_github_token(), 'gitee': get_gitee_token()}
+        prune_old_apks(args.keep, tokens, args.dry_run)
+    elif args.subcmd == 'bump':
+        cmd_bump(args)
+
+
+if __name__ == '__main__':
+    main()

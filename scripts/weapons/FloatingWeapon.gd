@@ -264,6 +264,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 	query.collide_with_areas = true
 	var results = space_state.intersect_shape(query, 24)
 
+	var had_hit := false
+	var had_crit := false
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
@@ -272,9 +274,15 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			var is_crit = randf() < 0.25
 			if is_crit:
 				dmg *= 1.5
+				had_crit = true
 			var knock = (enemy.global_position - global_position).normalized() * 240.0
 			enemy.take_damage(dmg, knock, is_crit)
-			GameManager.shake_camera(3.0, 0.1)
+			had_hit = true
+
+	if had_crit:
+		GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
+	elif had_hit:
+		GameManager.add_trauma(0.12)
 
 func _find_target() -> Node2D:
 	var player = GameManager.player

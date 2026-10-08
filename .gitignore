@@ -2,6 +2,11 @@
 .godot/
 /android/
 
+# 构建产物与密钥
+build/
+/keystore/
+keystore/secret.txt
+
 # media-gen 技能：API 密钥（勿提交）
 .agents/skills/media-gen/config/api.env
 
@@ -9,3 +14,4 @@
 .qoder/
 .zcode/
 .workbuddy/
+

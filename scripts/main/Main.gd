@@ -4,7 +4,10 @@ extends Node2D
 @onready var joystick: Control = $UILayer/VirtualJoystick
 @onready var weapon_select: Control = $UILayer/StartWeaponSelect
 @onready var pause_menu: PauseMenu = $UILayer/PauseMenu
+@onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var dust_particles: CPUParticles2D
+var _vignette_tween: Tween = null
+var _low_hp_phase: float = 0.0
 
 func _ready() -> void:
     GameManager.reset_run()
@@ -12,6 +15,7 @@ func _ready() -> void:
     _setup_dust()
     _setup_map_bounds()
     $UILayer/GameHUD.pause_requested.connect(pause_menu.open)
+    GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
 
     if ResourceLoader.exists("res://assets/audio/bgm_cultivation.mp3"):
         var bgm = load("res://assets/audio/bgm_cultivation.mp3")
@@ -22,6 +26,9 @@ func _ready() -> void:
     if ResourceLoader.exists("res://assets/audio/vo_guide_start.wav"):
         var vo = load("res://assets/audio/vo_guide_start.wav")
         AudioManager.play_voice(vo)
+
+    # 静默检查更新（带24小时节流）
+    UpdateManager.check_for_update(false)
 
     # 开局暂停：先选本命法器再开战
     weapon_select.show_select()
@@ -41,10 +48,40 @@ func _setup_dust() -> void:
     dust_particles.color = Color(0.75, 0.85, 0.9, 0.2)
     $AtmosphereLayer.add_child(dust_particles)
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
     if GameManager.player != null and is_instance_valid(GameManager.player):
         if dust_particles != null:
             dust_particles.global_position = GameManager.player.global_position
+
+        # 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
+        var p = GameManager.player
+        if p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28:
+            _low_hp_phase += delta * 4.5
+            var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
+            if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+                var mat = vignette_rect.material as ShaderMaterial
+                if _vignette_tween == null or not _vignette_tween.is_valid():
+                    mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
+                    mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
+
+func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
+    if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
+        return
+    var mat = vignette_rect.material as ShaderMaterial
+    if _vignette_tween != null and _vignette_tween.is_valid():
+        _vignette_tween.kill()
+    mat.set_shader_parameter("tint_color", tint)
+    mat.set_shader_parameter("vignette_opacity", 0.95)
+    _vignette_tween = create_tween()
+    _vignette_tween.tween_method(
+        func(alpha: float):
+            mat.set_shader_parameter("vignette_opacity", lerpf(0.5, 0.95, alpha)),
+        1.0, 0.0, dur
+    ).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    _vignette_tween.tween_callback(func():
+        mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
+        mat.set_shader_parameter("vignette_opacity", 0.5)
+    )
 
 ## 灵田界碑：可活动范围（GameManager.MAP_HALF_EXTENT）之外压暗，
 ## 边界描墨线 + 内侧蓝线 + 黄色四角括号，明示「这里就是地图边缘」

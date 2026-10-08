@@ -29,7 +29,7 @@ exp_reward = 8
 spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
 
 [node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 22)
+position = Vector2(0, 16)
 scale = Vector2(1.25, 1.25)
 texture = ExtResource("3_shadow")
 

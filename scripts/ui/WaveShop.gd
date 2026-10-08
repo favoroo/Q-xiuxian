@@ -45,7 +45,16 @@ func refresh() -> void:
 		child.queue_free()
 	var offers: Array = GameManager.shop_offers
 	for i in range(offers.size()):
-		offers_container.add_child(_create_offer_card(offers[i], i))
+		var c := _create_offer_card(offers[i], i)
+		offers_container.add_child(c)
+		c.pivot_offset = Vector2(98.0, 134.0)
+		c.scale = Vector2(0.82, 0.82)
+		c.modulate.a = 0.0
+		var ctw := c.create_tween()
+		ctw.tween_interval(float(i) * 0.045)
+		ctw.set_parallel(true)
+		ctw.tween_property(c, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		ctw.tween_property(c, "modulate:a", 1.0, 0.15)
 
 	_refresh_inventory()
 

@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="4_light"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_player"]
+resource_local_to_scene = true
 shader = ExtResource("2_shader")
 shader_parameter/flash_color = Color(1, 0.98, 0.92, 1)
 shader_parameter/flash_modifier = 0.0
