@@ -119,10 +119,12 @@ func _build_ui() -> void:
 	vbox.add_child(_ver_label)
 
 func _on_check_update_pressed() -> void:
-	if UpdateManager.is_checking:
-		return
 	if not UpdateManager.pending_update.is_empty():
 		UpdateManager.show_update_dialog(UpdateManager.pending_update)
+		return
+	if UpdateManager.is_checking:
+		_update_btn.text = "正在检查更新..."
+		UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.BLUE)
 		return
 	_update_btn.text = "正在检查更新..."
 	UpdateManager.check_for_update(true)

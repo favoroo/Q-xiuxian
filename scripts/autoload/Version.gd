@@ -3,7 +3,7 @@ extends Node
 ## 游戏版本定义与语义化版本比较工具
 ## 对应 dudu-cocos 的 core/version.ts
 
-const APP_VERSION: String = "0.0.3"
+const APP_VERSION: String = "0.0.4"
 const APP_VERSION_NAME: String = "v" + APP_VERSION
 
 const GITHUB_OWNER: String = "favoroo"

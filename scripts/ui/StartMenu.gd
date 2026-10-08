@@ -8,6 +8,8 @@ var _title_block: PanelContainer
 var _sub_chip: Label
 var _buttons: Array[Button] = []
 var _decor_blocks: Array[Control] = []
+var _update_btn: Button
+var _update_reset_tween: Tween
 
 func _ready() -> void:
     visible = false
@@ -17,6 +19,9 @@ func _ready() -> void:
     _build_decor()
     _build_center()
     _build_version_label()
+    UpdateManager.update_available.connect(_on_update_available)
+    UpdateManager.no_update_found.connect(_on_no_update_found)
+    UpdateManager.check_failed.connect(_on_check_failed)
 
 func _build_background() -> void:
     var bg := ColorRect.new()
@@ -127,8 +132,9 @@ func _build_center() -> void:
     # 按钮列
     _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 58),
         GameStyle.BLUE, GameStyle.YELLOW, GameStyle.PAPER, _on_start_pressed))
-    _buttons.append(_make_button(vbox, "检 查 更 新", 15, Vector2(220, 42),
-        GameStyle.NAVY2, GameStyle.BLUE, GameStyle.PAPER_DIM, _on_update_pressed))
+    _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 42),
+        GameStyle.NAVY2, GameStyle.BLUE, GameStyle.PAPER_DIM, _on_update_pressed)
+    _buttons.append(_update_btn)
     _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 42),
         GameStyle.NAVY2, GameStyle.BAD, GameStyle.PAPER_DIM, _on_quit_pressed))
 
@@ -205,7 +211,56 @@ func _on_start_pressed() -> void:
     )
 
 func _on_update_pressed() -> void:
+    if not is_instance_valid(_update_btn):
+        return
+    if not UpdateManager.pending_update.is_empty():
+        UpdateManager.show_update_dialog(UpdateManager.pending_update)
+        return
+    if UpdateManager.is_checking:
+        _cancel_reset_timer()
+        _update_btn.text = "正在检查更新..."
+        UpdateManager.check_for_update(true)
+        UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.BLUE)
+        return
+
+    _cancel_reset_timer()
+    _update_btn.text = "正在检查更新..."
     UpdateManager.check_for_update(true)
+
+func _on_update_available(info: Dictionary) -> void:
+    if not is_instance_valid(_update_btn):
+        return
+    _cancel_reset_timer()
+    _update_btn.text = "发现新版 %s!" % info.get("tag_name", "")
+
+func _on_no_update_found() -> void:
+    if not is_instance_valid(_update_btn):
+        return
+    _cancel_reset_timer()
+    _update_btn.text = "已是最新版本"
+    _update_reset_tween = create_tween()
+    _update_reset_tween.tween_interval(2.5)
+    _update_reset_tween.tween_callback(func():
+        if is_instance_valid(_update_btn):
+            _update_btn.text = "检 查 更 新"
+    )
+
+func _on_check_failed(_err_msg: String) -> void:
+    if not is_instance_valid(_update_btn):
+        return
+    _cancel_reset_timer()
+    _update_btn.text = "检查失败，请重试"
+    _update_reset_tween = create_tween()
+    _update_reset_tween.tween_interval(2.5)
+    _update_reset_tween.tween_callback(func():
+        if is_instance_valid(_update_btn):
+            _update_btn.text = "检 查 更 新"
+    )
+
+func _cancel_reset_timer() -> void:
+    if _update_reset_tween != null and _update_reset_tween.is_valid():
+        _update_reset_tween.kill()
+        _update_reset_tween = null
 
 func _on_quit_pressed() -> void:
     get_tree().quit()

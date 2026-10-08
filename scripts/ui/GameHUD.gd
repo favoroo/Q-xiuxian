@@ -153,15 +153,17 @@ func _on_weapons_updated(weapons: Array) -> void:
             slot.add_child(tex_rect)
 
             var star_lbl = Label.new()
-            star_lbl.text = str(w.get("star", 1))
+            star_lbl.text = "★%d" % int(w.get("star", 1))
             star_lbl.add_theme_font_override("font", GameStyle.body_font())
-            star_lbl.add_theme_font_size_override("font_size", 11)
+            star_lbl.add_theme_font_size_override("font_size", 10)
             star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
             star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
             star_lbl.add_theme_constant_override("outline_size", 3)
+            star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+            star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+            star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
             star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-            star_lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-            star_lbl.position = Vector2(22, 20)
             slot.add_child(star_lbl)
 
         weapons_bar.add_child(slot)
