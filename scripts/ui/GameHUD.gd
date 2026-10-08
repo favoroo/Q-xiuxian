@@ -43,6 +43,32 @@ func _ready() -> void:
 
     _on_weapons_updated(GameManager.get_weapons_summary())
     _build_top_buttons()
+    # 羁绊徽记行：挂在左栏之下，只显示已激活的流派
+    _synergy_box = HBoxContainer.new()
+    _synergy_box.add_theme_constant_override("separation", 6)
+    _synergy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    $TopContainer/LeftBox.add_child(_synergy_box)
+
+var _synergy_box: HBoxContainer = null
+
+func _refresh_synergy_badges() -> void:
+    if _synergy_box == null:
+        return
+    for child in _synergy_box.get_children():
+        child.queue_free()
+    for tag in GameManager.active_synergies.keys():
+        var data: Dictionary = GameManager.active_synergies[tag]
+        var lv := int(data.get("level", 0))
+        if lv <= 0:
+            continue
+        var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+        var chip := Label.new()
+        chip.text = " %s Lv.%d " % [info.get("name", tag), lv]
+        chip.tooltip_text = info.get("desc", "")
+        chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
+        GameStyle.label(chip, 11, GameStyle.PAPER)
+        chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _synergy_box.add_child(chip)
 
 ## 顶栏右侧追加属性与暂停按钮（触屏入口）
 func _build_top_buttons() -> void:
@@ -100,6 +126,7 @@ func _on_wave_changed(n: int) -> void:
     wave_label.get_parent().visible = n >= 1
 
 func _on_weapons_updated(weapons: Array) -> void:
+    _refresh_synergy_badges()
     for child in weapons_bar.get_children():
         child.queue_free()
 

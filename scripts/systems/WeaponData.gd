@@ -19,7 +19,8 @@ const DEFS: Dictionary = {
 		"name": "青云剑", "behavior": Behavior.MELEE,
 		"damage": 30.0, "cooldown": 1.1, "range": 150.0,
 		"price": 25, "icon": "res://assets/art/weapon_sword.png",
-		"desc": "近身挥斩，剑气凌厉", "tag": "近战",
+		"desc": "近身挥斩，剑气凌厉", "tag": "近战·剑系",
+		"tags": ["sword"],
 	},
 	"bajiao_fan": {
 		"name": "芭蕉扇", "behavior": Behavior.MELEE,
@@ -27,33 +28,67 @@ const DEFS: Dictionary = {
 		"price": 20, "icon": "res://assets/art/weapon_fan.png",
 		"desc": "扇出宽大罡风，范围极广", "tag": "近战·广域",
 		"arc_scale": 1.5,
+		"tags": ["wide"],
 	},
 	"huoyan_fu": {
 		"name": "火焰符", "behavior": Behavior.PROJECTILE,
 		"damage": 20.0, "cooldown": 0.9, "range": 420.0,
 		"price": 30, "icon": "res://assets/art/weapon_staff.png",
-		"desc": "掷出燃烧符箓，远程单体", "tag": "远程",
+		"desc": "掷出燃烧符箓，远程单体", "tag": "远程·符箓",
 		"pierce": 1,
+		"tags": ["talisman"],
 	},
 	"liuye_feidao": {
 		"name": "柳叶飞刀", "behavior": Behavior.PROJECTILE,
 		"damage": 16.0, "cooldown": 1.15, "range": 440.0,
 		"price": 35, "icon": "res://assets/art/weapon_dagger.png",
-		"desc": "细小飞刀，可贯穿三敌", "tag": "远程·穿透",
+		"desc": "细小飞刀，可贯穿三敌", "tag": "远程·符箓",
 		"pierce": 3,
+		"tags": ["talisman"],
 	},
 	"wulei_paizi": {
 		"name": "五雷法牌", "behavior": Behavior.BURST,
 		"damage": 35.0, "cooldown": 1.8, "range": 380.0,
 		"price": 45, "icon": "res://assets/art/weapon_thunder.png",
-		"desc": "引天雷轰击目标区域", "tag": "远程·范围",
+		"desc": "引天雷轰击目标区域", "tag": "远程·雷法",
 		"burst_radius": 80.0,
+		"tags": ["thunder"],
 	},
 	"lingdie": {
 		"name": "灵蝶", "behavior": Behavior.DRONE,
 		"damage": 15.0, "cooldown": 0.35, "range": 78.0,
 		"price": 40, "icon": "res://assets/art/sun_orb.png",
-		"desc": "灵蝶萦绕周身，触敌即伤", "tag": "环绕",
+		"desc": "灵蝶萦绕周身，触敌即伤", "tag": "环绕·御灵",
+		"tags": ["spirit"],
+	},
+}
+
+## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
+const SYNERGIES: Dictionary = {
+	"sword": {
+		"name": "剑系", "thresholds": [2, 4, 6],
+		"values": [0.15, 0.30, 0.50],
+		"desc": "攻击范围 +15/30/50%",
+	},
+	"talisman": {
+		"name": "符箓", "thresholds": [2, 4, 6],
+		"values": [1, 2, 3],
+		"desc": "弹丸穿透 +1/2/3",
+	},
+	"thunder": {
+		"name": "雷法", "thresholds": [2, 4, 6],
+		"values": [0.92, 0.85, 0.75],
+		"desc": "施法间隔 -8/15/25%",
+	},
+	"spirit": {
+		"name": "御灵", "thresholds": [2, 4, 6],
+		"values": [15, 30, 50],
+		"desc": "气血上限 +15/30/50",
+	},
+	"wide": {
+		"name": "广域", "thresholds": [2, 4, 6],
+		"values": [0.10, 0.20, 0.30],
+		"desc": "法器伤害 +10/20/30%",
 	},
 }
 
@@ -97,3 +132,6 @@ static func full_name(id: String, star: int) -> String:
 	if def.is_empty():
 		return "未知法器"
 	return "%s %s" % [star_text(star), def.get("name", "?")]
+
+static func tags_of(id: String) -> Array:
+	return DEFS.get(id, {}).get("tags", [])

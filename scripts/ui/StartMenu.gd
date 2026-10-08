@@ -195,9 +195,13 @@ func _on_start_pressed() -> void:
     tw.tween_property(self, "modulate:a", 0.0, 0.2)
     tw.tween_callback(func():
         visible = false
-        var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
-        if weapon_select != null:
-            weapon_select.show_select()
+        var cult_select := get_parent().get_node_or_null("CultivatorSelect")
+        if cult_select != null:
+            cult_select.show_select()
+        else:
+            var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
+            if weapon_select != null:
+                weapon_select.show_select()
     )
 
 func _on_update_pressed() -> void:

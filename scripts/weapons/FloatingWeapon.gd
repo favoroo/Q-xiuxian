@@ -120,7 +120,7 @@ func _process(delta: float) -> void:
 		_perform_attack()
 
 func _perform_attack() -> void:
-	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult
+	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
 	match behavior:
 		WeaponData.Behavior.MELEE:
 			_perform_melee_attack()
@@ -130,7 +130,7 @@ func _perform_attack() -> void:
 			_perform_burst_attack()
 
 func _final_damage() -> float:
-	return base_damage * GameManager.weapon_damage_mult
+	return base_damage * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id)
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -165,7 +165,8 @@ func _perform_projectile_attack() -> void:
 	p.global_position = muzzle_point.global_position
 	p.direction = aim_dir
 	p.damage = _final_damage()
-	p.pierce_left = pierce
+	p.pierce_left = pierce + GameManager.bonus_pierce
+	p.lifetime *= GameManager.attack_range_mult
 	p.spin = behavior != WeaponData.Behavior.PROJECTILE or pierce <= 1
 	get_tree().current_scene.add_child(p)
 
@@ -256,7 +257,7 @@ func _perform_melee_attack() -> void:
 func _deal_melee_damage(aim_dir: Vector2) -> void:
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = 75.0 * arc_scale
+	shape.radius = 75.0 * arc_scale * GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, global_position + aim_dir * 30.0)
@@ -271,12 +272,13 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
 			var dmg = _final_damage() * 1.35
-			var is_crit = randf() < 0.25
+			var is_crit = randf() < GameManager.get_crit_rate()
 			if is_crit:
-				dmg *= 1.5
+				dmg *= GameManager.crit_mult
 				had_crit = true
 			var knock = (enemy.global_position - global_position).normalized() * 240.0
 			enemy.take_damage(dmg, knock, is_crit)
+			GameManager.try_lifesteal()
 			had_hit = true
 
 	if had_crit:
@@ -290,7 +292,7 @@ func _find_target() -> Node2D:
 		return null
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = attack_range
+	shape.radius = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	# 以玩家为圆心索敌：武器会自行换位到目标一侧，四周的敌人都在打击范围内
@@ -305,6 +307,8 @@ func _find_target() -> Node2D:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
+			if enemy.is_in_group("herbs"):
+				continue  # 灵药丛可被波及摧毁，但不作为索敌目标
 			var d = player.global_position.distance_to(enemy.global_position)
 			if d < min_dist:
 				min_dist = d
