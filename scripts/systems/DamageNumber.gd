@@ -12,21 +12,22 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
     label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     
     var settings = LabelSettings.new()
+    settings.font = GameStyle.body_font()
     if custom_text != "":
         settings.font_size = 15
-        settings.font_color = Color(0.55, 1.0, 0.65)
+        settings.font_color = GameStyle.GOOD
         settings.outline_size = 4
-        settings.outline_color = Color(0.03, 0.03, 0.04, 0.95)
+        settings.outline_color = Color(0.02, 0.03, 0.06, 0.95)
     elif is_crit:
         settings.font_size = 19
-        settings.font_color = Color(1.0, 0.83, 0.0)
+        settings.font_color = GameStyle.YELLOW
         settings.outline_size = 5
-        settings.outline_color = Color(0.03, 0.03, 0.04, 0.95)
+        settings.outline_color = Color(0.02, 0.03, 0.06, 0.95)
     else:
         settings.font_size = 14
-        settings.font_color = Color(0.96, 0.95, 0.92)
+        settings.font_color = GameStyle.PAPER
         settings.outline_size = 4
-        settings.outline_color = Color(0.03, 0.03, 0.04, 0.92)
+        settings.outline_color = Color(0.02, 0.03, 0.06, 0.92)
     
     label.label_settings = settings
     label.position = Vector2(-30.0, -12.0)

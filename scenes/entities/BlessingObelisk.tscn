@@ -16,7 +16,7 @@ corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fill"]
-bg_color = Color(1, 0.83, 0, 1)
+bg_color = Color(0.35, 0.75, 1, 0.95)
 corner_radius_top_left = 3
 corner_radius_top_right = 3
 corner_radius_bottom_right = 3
@@ -28,8 +28,8 @@ script = ExtResource("1_ob")
 [node name="ChargeCircle" type="Node2D" parent="."]
 
 [node name="RingSprite" type="Sprite2D" parent="ChargeCircle"]
-modulate = Color(1, 0.92, 0.45, 0.55)
-scale = Vector2(1.35, 1.35)
+modulate = Color(0.55, 0.85, 1, 0.5)
+scale = Vector2(0.95, 0.95)
 texture = ExtResource("4_ring")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
@@ -37,7 +37,7 @@ position = Vector2(0, -18)
 texture = ExtResource("2_tex")
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
-color = Color(1, 0.3, 0.22, 1)
+color = Color(0.45, 0.85, 1, 1)
 energy = 1.25
 texture = ExtResource("3_light")
 texture_scale = 1.3

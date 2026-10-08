@@ -24,7 +24,7 @@ max_hp = 45.0
 move_speed = 138.0
 contact_damage = 10.0
 exp_reward = 2
-spritesheet_path = "res://assets/art/warrior_red.png"
+spritesheet_path = "res://assets/art/warrior_red_8dir.png"
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0, 15)

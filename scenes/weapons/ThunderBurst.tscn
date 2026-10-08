@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://cburst001"]
+
+[ext_resource type="Script" path="res://scripts/weapons/ThunderBurst.gd" id="1_burst"]
+[ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="2_light"]
+
+[node name="ThunderBurst" type="Node2D"]
+z_index = 20
+script = ExtResource("1_burst")
+
+[node name="FxSprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_light")
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+color = Color(0.55, 0.85, 1, 1)
+energy = 0.0
+texture = ExtResource("2_light")
+texture_scale = 1.6

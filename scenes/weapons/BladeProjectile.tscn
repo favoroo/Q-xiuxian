@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="3_light"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_blade"]
-radius = 12.0
+radius = 7.0
 
 [node name="BladeProjectile" type="Area2D"]
 collision_layer = 8
@@ -13,15 +13,16 @@ collision_mask = 4
 script = ExtResource("1_blade")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.45, 0.45)
 texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_blade")
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
-color = Color(0.48, 0.98, 0.78, 1)
-energy = 0.55
+color = Color(1, 0.75, 0.4, 1)
+energy = 0.5
 texture = ExtResource("3_light")
-texture_scale = 0.45
+texture_scale = 0.3
 
 [connection signal="area_entered" from="." to="." method="_on_area_entered"]

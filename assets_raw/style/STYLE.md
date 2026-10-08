@@ -4,38 +4,39 @@
 
 ## 风格前缀 STYLE_PREFIX
 
-逃脱者The Escapists风格Q版像素：大头小身约二头身比例，粗黑色描边，扁平明亮色块几乎无渐变，少量高光点缀，现代监狱题材，干净明快，正俯视45度视角
+中国修仙题材Q版像素风：大头小身约二头身比例，粗黑色描边，扁平明亮色块几乎无渐变，少量高光点缀，凡人修仙传式青衫道袍与法器符箓元素，灵田山门水墨意境，干净明快，正俯视45度视角
 
 ## 风格锚图 anchor
 
-- 路径：res://assets_raw/style/anchor_escapists.png
-- 说明：用户钦定的《逃脱者2》实机截图（2026-10-07），Q版像素囚犯/狱警+监狱内景基准
+- 路径：res://assets_raw/style/anchor_xianxia.jpg
+- 说明：AI 生成修仙风参考图（2026-10-07），Q版像素青衫修士+灵田山门+妖兽基准；后续素材仅取其画风，构图一律按提示词自行安排，严禁照搬参考图中的场景与UI元素
 
 ## 全局画面约束
 
 - 光照方向：均匀环境光，无强烈定向阴影（扁平化）
-- 色板倾向：囚服橙、警服藏蓝、水泥灰、警示红、高亮黄、纯黑白描边；明快但对比强烈
-- 剪影要求：主角/狱警/警犬/防暴警察剪影清晰可辨，大头小身，粗描边；地面浅灰水泥色上一眼可辨
-- UI 风格（P5女神异闻录5）：红/黑/白/黄大色块扁平化，斜切平行四边形，硬投影，无圆角无渐变无辉光，加粗大字
-- 音乐风格：quirky stealthy electronic funk, playful tension, bouncy synth bass, retro game groove, loop, instrumental only, no vocals
+- 色板倾向：道袍青蓝、云雾白、灵气青碧、灵石金黄、山岩灰绿、纯黑描边；清雅但对比强烈
+- 剪影要求：修士/黑衣修士/妖狼/魔傀剪影清晰可辨，大头小身，粗描边；青石板地面上一眼可辨
+- UI 风格（P5大色块扁平化的蓝白黄变体）：主蓝/纸白/墨黑大色块，黄色点缀，斜切平行四边形，硬投影与同色厚底边，无圆角无渐变无辉光，加粗大字
+- 音乐风格：mystical xianxia guzheng and bamboo flute over tense electronic beat, ethereal but driving, cultivation survival battle, loop, instrumental only, no vocals
 
 ## 角色设定图
 
 | 角色 | 设定图路径 | 备注 |
 |---|---|---|
-| 越狱者（主角） | res://assets/art/pawn_blue.png | 橙色囚服囚犯，白衣条 |
-| 狱警 | res://assets/art/pawn_red.png | 基础小怪，藏蓝警服 |
-| 警犬 | res://assets/art/warrior_red.png | 快速怪，四腿狂奔 |
-| 防暴警察 | res://assets/art/warrior_purple.png | 精英，持盾黑甲 |
+| 青衫修士（主角） | res://assets/art/pawn_blue.png | 青色道袍黑发青年，背负长剑 |
+| 黑煞门弟子 | res://assets/art/pawn_red.png | 基础小怪，黑衣红纹修士 |
+| 妖狼 | res://assets/art/warrior_red.png | 快速怪，青灰色四腿妖狼 |
+| 铁甲魔傀 | res://assets/art/warrior_purple.png | 精英，石甲傀儡守卫 |
 
 ## 角色 → 语音音色 VOICES
 
 | 角色 | 音色/语气描述 |
 |---|---|
-| 星界引导者 | 活泼俏皮的年轻女性声音，带一点狡黠的笑意，语速中快，元气满满 |
+| 引路人 | 沉稳温和的年轻男声，仙风道骨带一丝关切，语速平缓清晰 |
 
 ## 负面约束
 
 - 无文字、无水印、无签名
-- 拒绝写实渲染、拒绝厚涂与柔和渐变光效、拒绝中世纪奇幻元素（盔甲/法杖/石砖城堡）
+- 拒绝写实渲染、拒绝厚涂与柔和渐变光效、拒绝西方奇幻元素（盔甲骑士/西式城堡/魔杖）
+- 拒绝现代物品（枪械/汽车/电子设备）
 - 图标类：主体居中饱满、不接触画面边缘、背景无投影

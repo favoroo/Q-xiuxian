@@ -12,6 +12,7 @@ var acceleration: float = 750.0
 @onready var sprite: Sprite2D = $Sprite2D
 
 func _ready() -> void:
+    add_to_group("gems")
     # Gentle idle floating bobbing
     var tw = create_tween().set_loops()
     tw.tween_property(sprite, "position:y", -3.0, 0.45).set_trans(Tween.TRANS_SINE)
