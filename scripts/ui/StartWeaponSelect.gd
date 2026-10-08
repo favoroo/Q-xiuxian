@@ -16,21 +16,6 @@ func _ready() -> void:
     GameStyle.label(hint_label, 12, GameStyle.GREY)
     hint_label.text = "◆ 集齐三把同名同星法器，可在波间商店手动合成升星 ◆"
 
-    var ver_btn := Button.new()
-    ver_btn.text = "修仙幸存者 " + Version.APP_VERSION_NAME
-    ver_btn.flat = true
-    ver_btn.focus_mode = Control.FOCUS_NONE
-    ver_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-    ver_btn.position = Vector2(-160, -32)
-    ver_btn.add_theme_font_override("font", GameStyle.body_font())
-    ver_btn.add_theme_font_size_override("font_size", 11)
-    ver_btn.add_theme_color_override("font_color", GameStyle.GREY)
-    ver_btn.add_theme_color_override("font_hover_color", GameStyle.YELLOW)
-    ver_btn.pressed.connect(func():
-        UpdateManager.check_for_update(true)
-    )
-    add_child(ver_btn)
-
 func show_select() -> void:
     for child in cards_container.get_children():
         child.queue_free()

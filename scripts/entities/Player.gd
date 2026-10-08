@@ -198,8 +198,10 @@ func _physics_process(delta: float) -> void:
 
 	var target_speed := base_speed * GameManager.move_speed_mult
 	var target_velocity := dir * target_speed
-	var is_moving := dir.length_squared() > 0.04
-	var accel := 2200.0 if is_moving else 2800.0
+	var input_moving := dir.length_squared() > 0.03
+	var actual_speed_sq := velocity.length_squared()
+	var is_moving := input_moving or actual_speed_sq > 225.0 # 移速 > 15px/s 仍保持步态惯性
+	var accel := 2200.0 if input_moving else 2800.0
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
 
@@ -208,7 +210,7 @@ func _physics_process(delta: float) -> void:
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 	# 2. 奔跑步伐微尘
-	if is_moving and velocity.length_squared() > 1600.0:
+	if is_moving and actual_speed_sq > 1600.0:
 		dust_timer -= delta
 		if dust_timer <= 0.0:
 			dust_timer = 0.22
@@ -216,13 +218,19 @@ func _physics_process(delta: float) -> void:
 	else:
 		dust_timer = 0.0
 
-	# 3. Sprite 方向 & 动画（融合 juice_scale 挤压形变）
+	# 3. Sprite 方向 & 动画（带迟滞滤波 + 移速步频自适应 + 统一形变插值流）
 	var current_base := anim_base_scale * juice_scale
+	var current_speed := velocity.length()
+	var speed_ratio: float = (current_speed / target_speed) if target_speed > 0.0 else 1.0
+
 	if is_moving:
-		var face: Array = RunMotion.facing(dir)
+		# 使用带迟滞区间的 8 方向平滑算法，彻底消除摇杆临界角度导致的快速抽搐
+		var effective_dir := dir if input_moving else velocity.normalized()
+		var face: Array = RunMotion.facing_stable(effective_dir, facing, anim_sprite.flip_h, 29.0)
 		if face[0] != "":
 			facing = face[0]
 			anim_sprite.flip_h = face[1]
+
 		var run_anim: String = "run_" + facing
 		if anim_sprite.animation != run_anim:
 			var keep_frame: bool = anim_sprite.animation.begins_with("run_")
@@ -231,15 +239,15 @@ func _physics_process(delta: float) -> void:
 			anim_sprite.play(run_anim)
 			if keep_frame:
 				anim_sprite.set_frame_and_progress(prev_frame, prev_prog)
-		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta)
+
+		var lean_axis: float = absf(effective_dir.x)
+		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio)
 	else:
 		var idle_anim: String = "idle_" + facing
 		if anim_sprite.animation != idle_anim:
 			anim_sprite.play(idle_anim)
 		idle_bob_phase += delta * 2.2
-		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
-		var breath: float = sin(idle_bob_phase) * 0.01
-		anim_sprite.scale = Vector2(current_base.x * (1.0 - breath * 0.5), current_base.y * (1.0 + breath))
+		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase)
 
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)

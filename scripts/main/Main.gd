@@ -2,8 +2,9 @@ class_name MainLevel
 extends Node2D
 
 @onready var joystick: Control = $UILayer/VirtualJoystick
-@onready var weapon_select: Control = $UILayer/StartWeaponSelect
+@onready var start_menu: Control = $UILayer/StartMenu
 @onready var pause_menu: PauseMenu = $UILayer/PauseMenu
+@onready var stats_dialog: Control = $UILayer/PlayerStatsDialog
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var dust_particles: CPUParticles2D
 var _vignette_tween: Tween = null
@@ -15,6 +16,8 @@ func _ready() -> void:
     _setup_dust()
     _setup_map_bounds()
     $UILayer/GameHUD.pause_requested.connect(pause_menu.open)
+    $UILayer/GameHUD.stats_requested.connect(stats_dialog.open)
+    pause_menu.stats_requested.connect(stats_dialog.open)
     GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
 
     if ResourceLoader.exists("res://assets/audio/bgm_cultivation.mp3"):
@@ -23,15 +26,11 @@ func _ready() -> void:
             bgm.loop = true
         AudioManager.play_bgm(bgm)
 
-    if ResourceLoader.exists("res://assets/audio/vo_guide_start.wav"):
-        var vo = load("res://assets/audio/vo_guide_start.wav")
-        AudioManager.play_voice(vo)
-
     # 静默检查更新（带24小时节流）
     UpdateManager.check_for_update(false)
 
-    # 开局暂停：先选本命法器再开战
-    weapon_select.show_select()
+    # 开局暂停：先显示开始界面，点「开始游戏」后再选本命法器
+    start_menu.open()
     get_tree().paused = true
 
 func _setup_dust() -> void:

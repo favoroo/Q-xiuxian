@@ -6,11 +6,11 @@ extends Camera2D
 ## - 创伤平方衰减（shake = trauma^2）：小击轻颤、重击猛震、自动归零
 ## - 多频正弦连续采样（替代每帧 randf 白噪点抖动）+ 镜头旋转偏航（Roll）+ 缩放冲击（Zoom Punch）
 
-@export var follow_speed: float = 8.5
-@export var lookahead_factor: float = 0.065
+@export var follow_speed: float = 9.0
+@export var lookahead_factor: float = 0.055
 @export var trauma_decay: float = 1.45
-@export var max_offset: Vector2 = Vector2(14.0, 10.0)
-@export var max_roll: float = 0.045
+@export var max_offset: Vector2 = Vector2(12.0, 9.0)
+@export var max_roll: float = 0.018
 
 var trauma: float = 0.0
 var _t: float = 0.0
@@ -22,14 +22,15 @@ func _ready() -> void:
 	GameManager.main_camera = self
 	_base_zoom = zoom
 	ignore_rotation = false
+	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	var player = GameManager.player
 	if player != null and is_instance_valid(player):
 		var target_lookahead := Vector2.ZERO
 		if player is CharacterBody2D:
 			target_lookahead = (player as CharacterBody2D).velocity * lookahead_factor
-		var look_weight := 1.0 - exp(-5.0 * delta)
+		var look_weight := 1.0 - exp(-6.0 * delta)
 		_lookahead = _lookahead.lerp(target_lookahead, look_weight)
 
 		var target_pos: Vector2 = player.global_position + _lookahead
