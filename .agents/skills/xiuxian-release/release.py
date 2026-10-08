@@ -343,12 +343,14 @@ def preflight(tag: str, tokens: dict) -> None:
 
     r = run(['git', 'rev-parse', '--verify', f'refs/tags/{tag}'])
     if r.returncode == 0:
-        gh_id = gh_release_id_by_tag(tag, tokens['gh'])
-        gitee_id = gitee_release_id_by_tag(tag, tokens['gitee'])
-        if gh_id and gitee_id:
-            die(f'tag {tag} 已在双端发布过 Release(GitHub id={gh_id}, Gitee id={gitee_id})，'
+        st_gh, d_gh = http_json(f'{GITHUB_API}/releases/tags/{tag}', headers=gh_headers(tokens['gh']))
+        st_gt, d_gt = http_json(f'{GITEE_API}/releases/tags/{tag}?access_token={tokens["gitee"]}')
+        gh_apks = [a for a in (d_gh.get('assets', []) if st_gh == 200 and d_gh else []) if str(a.get('name', '')).endswith('.apk')]
+        gt_apks = [a for a in (d_gt.get('assets', []) if st_gt == 200 and d_gt else []) if str(a.get('name', '')).endswith('.apk')]
+        if gh_apks and gt_apks:
+            die(f'tag {tag} 已在双端完整发布过 Release 与 APK，'
                 f'禁止同版本覆盖发布。请先 `python3 release.py bump --write` 递增版本号。')
-        log(f'本地 tag {tag} 已存在，远端 Release 未发布完，将复用该 tag（重试场景）')
+        log(f'本地 tag {tag} 已存在，远端 Release/APK 尚未全部就绪，将复用该 tag（重试场景）')
     else:
         log(f'创建本地 annotated tag: {tag}')
         r = run(['git', 'tag', '-a', tag, '-m', f'Q-Xiuxian {tag}'])
@@ -456,6 +458,19 @@ def upload_apks(release_ids: dict, apk_path: Path, apk_name: str, tokens: dict) 
     file_bytes = apk_path.read_bytes()
 
     def upload_gh():
+        # 预先检查是否有旧同名附件
+        st_chk, d_rel = http_json(f'{GITHUB_API}/releases/{release_ids["gh"]}', headers=gh_headers(tokens['gh']))
+        if st_chk == 200 and d_rel:
+            for item in d_rel.get('assets', []):
+                if item.get('name') == apk_name:
+                    if item.get('size') == len(file_bytes):
+                        log(f'GitHub 附件已存在且体积一致 ({len(file_bytes)} 字节)，跳过上传')
+                        return
+                    else:
+                        log(f'GitHub 存在旧附件 ({item.get("size")} 字节)，正在删除替换...')
+                        http_json(f'{GITHUB_API}/releases/assets/{item["id"]}', method='DELETE', headers=gh_headers(tokens['gh']))
+                        break
+
         st, d = http_json(
             f'https://uploads.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}'
             f'/releases/{release_ids["gh"]}/assets?'
@@ -464,9 +479,6 @@ def upload_apks(release_ids: dict, apk_path: Path, apk_name: str, tokens: dict) 
             headers={**gh_headers(tokens['gh']), 'Content-Type': 'application/octet-stream'},
             data=file_bytes, timeout=600)
         if st != 201 or not d:
-            if st == 422:
-                log('GitHub 附件已存在，跳过重复上传')
-                return
             raise RuntimeError(f'GitHub 上传 APK 失败({st}): {d}')
         log(f"GitHub 上传完成: {d['name']} ({d['size']} 字节)")
 
