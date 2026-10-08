@@ -20,9 +20,15 @@ signal screen_damage_pulsed(color: Color, duration: float)
 
 enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
-const VICTORY_WAVE: int = 10
+const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
 const MAP_HALF_EXTENT: float = 1150.0
+
+## 属性上限（防数值失控）
+const DODGE_CAP: float = 0.6          ## 身法闪避硬上限
+const CRIT_RATE_CAP: float = 0.75     ## 暴击率软上限
+const LIFESTEAL_MAX_PER_SEC: int = 3  ## 噬元每秒最多触发次数（防高频武器无限续航）
+const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 灵韵复利增长截止波次
 
 var player: Node2D = null
 var joystick = null
@@ -47,12 +53,39 @@ var weapon_damage_mult: float = 1.0
 var attack_speed_mult: float = 1.0
 var move_speed_mult: float = 1.0
 var pickup_range_mult: float = 1.0
+var attack_range_mult: float = 1.0
 var armor: float = 0.0
 var hp_regen: float = 0.0
+var crit_rate: float = 0.05
+var crit_mult: float = 1.5
+var dodge: float = 0.0        ## 身法：闪避概率（硬上限 DODGE_CAP）
+var lifesteal: float = 0.0    ## 噬元：命中回复 1 点气血的概率
+var luck: float = 0.0         ## 福缘：提升高稀有度悟道与商店亲和权重
+var harvest: float = 0.0      ## 灵韵：每波结束无偿获得等额灵石+修为，并自我复利
+var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id（UpgradeData 过滤用）
+
+# 修士流派（角色）特性
+var cultivator_id: String = ""
+var thorns_pct: float = 0.0        ## 石岳反震：按敌方攻击力比例反弹
+var spirit_threshold_adj: int = 0  ## 符阵灵童：御灵羁绊门槛下移
+
+# 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
+var bonus_pierce: int = 0           ## 符箓羁绊：弹丸额外穿透
+var synergy_damage_mult: float = 1.0  ## 广域羁绊：额外伤害乘区
+var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
+var synergy_haste_mult: float = 1.0   ## 雷法羁绊：额外攻速乘区
+var synergy_max_hp_bonus: float = 0.0 ## 御灵羁绊：额外气血上限
+
+var _lifesteal_procs: int = 0
+var _lifesteal_window: float = 0.0
 
 # 商店
 var shop_offers: Array = []
 var reroll_cost: int = 2
+var reroll_count: int = 0          ## 本波已重掷次数（费用递增，跨波重置）
+var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如散修 8 折）
+var shop_tag_filter: Array = []    ## 非空时武器货架只出这些 tag（剑痴等流派限定）
+var _no_main_tag_waves: int = 0    ## 连续未刷出主流派法器的波数（保底计数）
 
 # 武器库存：上阵 = 悬浮法器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
@@ -79,10 +112,34 @@ func reset_run() -> void:
 	attack_speed_mult = 1.0
 	move_speed_mult = 1.0
 	pickup_range_mult = 1.0
+	attack_range_mult = 1.0
 	armor = 0.0
 	hp_regen = 0.0
+	crit_rate = 0.05
+	crit_mult = 1.5
+	dodge = 0.0
+	lifesteal = 0.0
+	luck = 0.0
+	harvest = 0.0
+	locked_upgrades = []
+	cultivator_id = ""
+	thorns_pct = 0.0
+	spirit_threshold_adj = 0
+	bonus_pierce = 0
+	synergy_damage_mult = 1.0
+	synergy_range_mult = 1.0
+	synergy_haste_mult = 1.0
+	synergy_max_hp_bonus = 0.0
+	active_synergies = {}
+	_applied_hp_bonus = 0.0
+	_lifesteal_procs = 0
+	_lifesteal_window = 0.0
 	shop_offers = []
 	reroll_cost = 2
+	reroll_count = 0
+	shop_price_mult = 1.0
+	shop_tag_filter = []
+	_no_main_tag_waves = 0
 	drones = []
 	stash = []
 	upgrade_history.clear()
@@ -91,6 +148,10 @@ func reset_run() -> void:
 func _process(delta: float) -> void:
 	if not is_game_over and not get_tree().paused and player != null:
 		game_time += delta
+		_lifesteal_window += delta
+		if _lifesteal_window >= 1.0:
+			_lifesteal_window = 0.0
+			_lifesteal_procs = 0
 		stats_updated.emit(kills, game_time, spirit_stones)
 
 # ---------------- 经验 / 灵石 ----------------
@@ -143,6 +204,20 @@ func apply_upgrade(upgrade_id: String) -> void:
 			spirit_stones += 12
 		"regen_up":
 			hp_regen += 1.2
+		"crit_up":
+			crit_rate = minf(crit_rate + 0.08, CRIT_RATE_CAP)
+		"critdmg_up":
+			crit_mult += 0.25
+		"dodge_up":
+			dodge = minf(dodge + 0.07, DODGE_CAP)
+		"lifesteal_up":
+			lifesteal += 0.04
+		"luck_up":
+			luck += 6.0
+		"harvest_up":
+			harvest += 8.0
+		"range_up":
+			attack_range_mult += 0.12
 
 	var prev_count: int = int(upgrade_counts.get(upgrade_id, 0)) + 1
 	upgrade_counts[upgrade_id] = prev_count
@@ -185,16 +260,90 @@ func get_stat_breakdown() -> Dictionary:
 		"move_speed_bonus_pct": (move_speed_mult - 1.0) * 100.0,
 		"pickup_radius": 96.0 * pickup_range_mult,
 		"pickup_bonus_pct": (pickup_range_mult - 1.0) * 100.0,
-		"crit_rate_pct": 25.0,
-		"crit_dmg_pct": 150.0,
+		"attack_range_pct": (attack_range_mult - 1.0) * 100.0,
+		"crit_rate_pct": get_crit_rate() * 100.0,
+		"crit_dmg_pct": crit_mult * 100.0,
+		"dodge_pct": get_effective_dodge() * 100.0,
+		"lifesteal_pct": lifesteal * 100.0,
+		"luck": luck,
+		"harvest": harvest,
 	}
+
+func get_crit_rate() -> float:
+	return minf(crit_rate, CRIT_RATE_CAP)
+
+func get_effective_dodge() -> float:
+	return minf(dodge, DODGE_CAP)
+
+## 命中时尝试噬元回血（每秒最多触发 LIFESTEAL_MAX_PER_SEC 次，防高频武器无限续航）
+func try_lifesteal() -> void:
+	if lifesteal <= 0.0 or player == null or not is_instance_valid(player):
+		return
+	if _lifesteal_procs >= LIFESTEAL_MAX_PER_SEC:
+		return
+	if randf() < lifesteal:
+		_lifesteal_procs += 1
+		player.heal(1.0, true)
+
+## 波间灵韵结算：无偿发放等额灵石+修为，随后灵韵自我复利（第 16 波起停止增长）
+func apply_harvest() -> void:
+	var gain := int(round(harvest))
+	if gain > 0:
+		add_experience(gain)
+		announcement_triggered.emit("✦ 灵韵滋养 · 灵石与修为 +%d ✦" % gain)
+	if wave_number < HARVEST_GROWTH_WAVE_CAP:
+		harvest *= 1.05
 
 # ---------------- 武器系统 ----------------
 
 func start_run(starter_id: String) -> void:
 	run_started = true
+	_apply_cultivator()
 	add_weapon(starter_id)
 	announcement_triggered.emit("✦ 灵田巡守 · 斩妖护山 ✦")
+
+## 开局应用修士流派的正负代偿
+func _apply_cultivator() -> void:
+	var def := CultivatorData.get_def(cultivator_id)
+	if def.is_empty():
+		return
+	var mods: Dictionary = def.get("mods", {})
+	crit_rate += float(mods.get("crit_rate", 0.0))
+	armor += float(mods.get("armor", 0.0))
+	harvest += float(mods.get("harvest", 0.0))
+	move_speed_mult *= float(mods.get("speed_mult", 1.0))
+	weapon_damage_mult *= float(mods.get("damage_mult", 1.0))
+	thorns_pct = float(mods.get("thorns", 0.0))
+	shop_price_mult = float(mods.get("shop_price", 1.0))
+	spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
+	shop_tag_filter = def.get("allowed_tags", [])
+	locked_upgrades = def.get("locked_upgrades", [])
+	if player != null and is_instance_valid(player):
+		var hp_mult := float(mods.get("hp_mult", 1.0))
+		if hp_mult != 1.0:
+			player.max_health *= hp_mult
+			player.current_health = player.max_health
+			player_hp_changed.emit(player.current_health, player.max_health)
+	var start_drones := int(mods.get("start_drones", 0))
+	for i in range(start_drones):
+		drones.append(1)
+	if start_drones > 0 and player != null and player.has_method("sync_drones"):
+		player.sync_drones()
+
+## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶惩罚）
+func cultivator_damage_mult(w_id: String) -> float:
+	var def := CultivatorData.get_def(cultivator_id)
+	if def.is_empty():
+		return 1.0
+	var mods: Dictionary = def.get("mods", {})
+	var m := 1.0
+	var tag_bonuses: Dictionary = mods.get("tag_damage", {})
+	for t in WeaponData.tags_of(w_id):
+		m *= 1.0 + float(tag_bonuses.get(t, 0.0))
+	var wdef := WeaponData.get_def(w_id)
+	if int(wdef.get("behavior", -1)) != WeaponData.Behavior.DRONE:
+		m *= 1.0 + float(mods.get("non_drone_damage", 0.0))
+	return m
 
 func slots_used() -> int:
 	var used := drones.size()
@@ -320,7 +469,64 @@ func get_weapons_summary() -> Array:
 	return list
 
 func notify_weapons_updated(weapons: Array) -> void:
+	recalc_synergies()
 	weapons_updated.emit(weapons)
+
+# ---------------- 流派羁绊 ----------------
+
+## 当前激活的羁绊：{tag: {"count": int, "level": int}}，level 0 = 未激活
+var active_synergies: Dictionary = {}
+
+var _applied_hp_bonus: float = 0.0  ## 御灵羁绊已应用到玩家的气血上限增量
+
+## 按上阵法器（含灵蝶）重算羁绊加成；换装/合成/出售后由 notify_weapons_updated 统一触发
+func recalc_synergies() -> void:
+	var counts := _tag_counts()
+	active_synergies.clear()
+	bonus_pierce = 0
+	synergy_damage_mult = 1.0
+	synergy_range_mult = 1.0
+	synergy_haste_mult = 1.0
+	var hp_bonus: float = 0.0
+	for tag in counts.keys():
+		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+		if info.is_empty():
+			continue
+		var n := int(counts[tag])
+		var syn_level := 0
+		var thresholds: Array = info.get("thresholds", [])
+		for i in range(thresholds.size()):
+			var th := int(thresholds[i])
+			if tag == "spirit":
+				th = maxi(1, th - spirit_threshold_adj)
+			if n >= th:
+				syn_level = i + 1
+		active_synergies[tag] = {"count": n, "level": syn_level}
+		if syn_level == 0:
+			continue
+		var v = info["values"][syn_level - 1]
+		match tag:
+			"sword":
+				synergy_range_mult += float(v)
+			"talisman":
+				bonus_pierce += int(v)
+			"thunder":
+				synergy_haste_mult *= float(v)
+			"spirit":
+				hp_bonus += float(v)
+			"wide":
+				synergy_damage_mult += float(v)
+	synergy_max_hp_bonus = hp_bonus
+	_apply_synergy_hp(hp_bonus)
+
+## 御灵羁绊直接增减气血上限（差值法，避免叠加误差）
+func _apply_synergy_hp(new_bonus: float) -> void:
+	var delta := new_bonus - _applied_hp_bonus
+	_applied_hp_bonus = new_bonus
+	if player != null and is_instance_valid(player) and delta != 0.0:
+		player.max_health += delta
+		player.current_health = clampf(player.current_health, 0.0, player.max_health)
+		player_hp_changed.emit(player.current_health, player.max_health)
 
 ## 按上阵 summary 下标出售（悬浮法器与灵蝶统一处理）
 func sell_weapon(index: int) -> bool:
@@ -409,23 +615,143 @@ func sell_stash(index: int) -> bool:
 
 # ---------------- 波间商店 ----------------
 
-func roll_shop() -> void:
-	shop_offers.clear()
+## 生成货架：new_wave=true 时重置重掷计数；锁定且未售出的商品原样保留
+func roll_shop(new_wave: bool = false) -> void:
+	if new_wave:
+		reroll_count = 0
 	var wave := maxi(wave_number, 1)
+	var old := shop_offers
+	var new_offers: Array = []
 	for i in range(4):
-		if randf() < 0.22:
-			shop_offers.append({
-				"kind": "potion", "id": WeaponData.POTION_ID,
-				"price": WeaponData.POTION_BASE_PRICE + wave, "sold": false,
-			})
+		if i < old.size() and old[i].get("locked", false) and not old[i].get("sold", false):
+			new_offers.append(old[i])
 		else:
-			var w_id: String = WeaponData.SHOP_POOL.pick_random()
-			shop_offers.append({
-				"kind": "weapon", "id": w_id,
-				"price": int(WeaponData.get_def(w_id).get("price", 20)) + (wave - 1) * 2,
-				"sold": false,
-			})
-	reroll_cost = 2 + wave
+			new_offers.append(_gen_offer(wave))
+	shop_offers = new_offers
+	reroll_cost = int((2 + wave + reroll_count * 2) * shop_price_mult)
+	if new_wave:
+		_apply_main_tag_pity(wave)
+
+## 单个货架位：22% 回气丹，否则按标签亲和权重抽法器
+func _gen_offer(wave: int) -> Dictionary:
+	if randf() < 0.22:
+		return {
+			"kind": "potion", "id": WeaponData.POTION_ID,
+			"price": int((WeaponData.POTION_BASE_PRICE + wave) * shop_price_mult),
+			"sold": false, "locked": false,
+		}
+	var w_id := _weighted_weapon_pick()
+	var base := int(WeaponData.get_def(w_id).get("price", 20))
+	return {
+		"kind": "weapon", "id": w_id,
+		"price": int((base + (wave - 1) * 2) * shop_price_mult),
+		"sold": false, "locked": false,
+	}
+
+## 标签亲和加权抽法器：持有 ≥2 件同 tag 法器时该 tag 权重 ×2.5；福缘每点 +1% 权重
+func _weighted_weapon_pick() -> String:
+	var pool: Array = WeaponData.SHOP_POOL
+	if not shop_tag_filter.is_empty():
+		var filtered: Array = []
+		for w_id in pool:
+			for t in WeaponData.tags_of(w_id):
+				if t in shop_tag_filter:
+					filtered.append(w_id)
+					break
+		if not filtered.is_empty():
+			pool = filtered
+	var counts := _tag_counts()
+	var total := 0.0
+	var weights: Array = []
+	for w_id in pool:
+		var w := 1.0
+		for t in WeaponData.tags_of(w_id):
+			if int(counts.get(t, 0)) >= 2:
+				w *= 2.5
+		w *= 1.0 + luck * 0.01
+		weights.append(w)
+		total += w
+	var r := randf() * total
+	for i in range(pool.size()):
+		r -= weights[i]
+		if r <= 0.0:
+			return pool[i]
+	return pool.back()
+
+## 上阵法器（含灵蝶）的 tag 计数——构筑方向判定的依据
+func _tag_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	if player != null and player.has_method("get_equipped_weapons_data"):
+		for w in player.get_equipped_weapons_data():
+			for t in WeaponData.tags_of(w.get("id", "")):
+				counts[t] = int(counts.get(t, 0)) + 1
+	for _s in drones:
+		for t in WeaponData.tags_of("lingdie"):
+			counts[t] = int(counts.get(t, 0)) + 1
+	return counts
+
+func get_tag_count(tag: String) -> int:
+	return int(_tag_counts().get(tag, 0))
+
+## 主流派：当前持有数最多且 ≥2 件的 tag
+func _main_tag() -> String:
+	var counts := _tag_counts()
+	var best_tag := ""
+	var best_n := 1
+	for t in counts.keys():
+		if int(counts[t]) > best_n:
+			best_n = int(counts[t])
+			best_tag = t
+	return best_tag
+
+## 保底：连续 2 波货架没出现主流派法器时，第 3 波强制塞入一件
+func _apply_main_tag_pity(wave: int) -> void:
+	var main := _main_tag()
+	if main == "":
+		_no_main_tag_waves = 0
+		return
+	var has_main := false
+	for offer in shop_offers:
+		if offer.get("kind") == "weapon" and main in WeaponData.tags_of(offer.get("id", "")):
+			has_main = true
+			break
+	if has_main:
+		_no_main_tag_waves = 0
+		return
+	_no_main_tag_waves += 1
+	if _no_main_tag_waves < 2:
+		return
+	# 找一个未锁定的法器位替换
+	var candidates: Array = []
+	for w_id in WeaponData.SHOP_POOL:
+		if main in WeaponData.tags_of(w_id):
+			candidates.append(w_id)
+	if candidates.is_empty():
+		return
+	for i in range(shop_offers.size()):
+		var offer: Dictionary = shop_offers[i]
+		if offer.get("locked", false) or offer.get("sold", false):
+			continue
+		if offer.get("kind") != "weapon":
+			continue
+		var w_id: String = candidates.pick_random()
+		var base := int(WeaponData.get_def(w_id).get("price", 20))
+		shop_offers[i] = {
+			"kind": "weapon", "id": w_id,
+			"price": int((base + (wave - 1) * 2) * shop_price_mult),
+			"sold": false, "locked": false,
+		}
+		break
+	_no_main_tag_waves = 0
+
+func toggle_lock(index: int) -> void:
+	if index < 0 or index >= shop_offers.size():
+		return
+	var offer: Dictionary = shop_offers[index]
+	if offer.get("sold", false):
+		return
+	offer["locked"] = not offer.get("locked", false)
+	AudioManager.play_sfx("orb_hit", 0.7)
 
 func buy_offer(index: int) -> bool:
 	if index < 0 or index >= shop_offers.size():
@@ -455,7 +781,8 @@ func reroll_shop() -> bool:
 	if spirit_stones < reroll_cost:
 		return false
 	spirit_stones -= reroll_cost
-	roll_shop()
+	reroll_count += 1
+	roll_shop(false)
 	stats_updated.emit(kills, game_time, spirit_stones)
 	AudioManager.play_sfx("orb_hit", 0.9)
 	return true

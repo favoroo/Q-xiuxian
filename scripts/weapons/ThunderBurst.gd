@@ -61,10 +61,11 @@ func _deal_damage() -> void:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			var is_crit = randf() < 0.3
-			var dmg = damage * (1.5 if is_crit else 1.0)
+			var is_crit = randf() < GameManager.get_crit_rate()
+			var dmg = damage * (GameManager.crit_mult if is_crit else 1.0)
 			var knock = (enemy.global_position - global_position).normalized() * 200.0
 			enemy.take_damage(dmg, knock, is_crit)
+			GameManager.try_lifesteal()
 			if is_crit:
 				had_crit = true
 	if had_crit:

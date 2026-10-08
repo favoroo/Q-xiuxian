@@ -49,9 +49,11 @@ func _try_damage(area: Area2D) -> void:
 		var id = enemy.get_instance_id()
 		if not hit_cooldowns.has(id):
 			hit_cooldowns[id] = hit_cooldown
-			var dmg = base_damage * GameManager.weapon_damage_mult
+			var is_crit = randf() < GameManager.get_crit_rate()
+			var dmg = base_damage * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult("lingdie") * (GameManager.crit_mult if is_crit else 1.0)
 			var knockback = (enemy.global_position - global_position).normalized() * 165.0
-			enemy.take_damage(dmg, knockback, false)
+			enemy.take_damage(dmg, knockback, is_crit)
+			GameManager.try_lifesteal()
 			_play_hit_pulse()
 			AudioManager.play_sfx("orb_hit", 1.0)
 

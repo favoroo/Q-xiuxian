@@ -12,6 +12,8 @@ extends Control
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/ConfirmButton
 
+var _synergy_bar: HBoxContainer = null
+
 ## 当前点选的法器：{"pool": "equipped"/"stash", "index": int}
 var selected: Dictionary = {}
 
@@ -26,6 +28,47 @@ func _ready() -> void:
 	GameManager.shop_opened.connect(_on_shop_opened)
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm)
+	# 羁绊总览行：插在顶栏之下
+	_synergy_bar = HBoxContainer.new()
+	_synergy_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	_synergy_bar.add_theme_constant_override("separation", 10)
+	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
+	vbox.add_child(_synergy_bar)
+	vbox.move_child(_synergy_bar, 1)
+
+## 羁绊总览：激活的流派显示金色等级徽记，未激活显示灰色进度
+func _refresh_synergy_bar() -> void:
+	if _synergy_bar == null:
+		return
+	for child in _synergy_bar.get_children():
+		child.queue_free()
+	var any := false
+	for tag in GameManager.active_synergies.keys():
+		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+		if info.is_empty():
+			continue
+		var data: Dictionary = GameManager.active_synergies[tag]
+		var n := int(data.get("count", 0))
+		var lv := int(data.get("level", 0))
+		var thresholds: Array = info.get("thresholds", [])
+		var next := "MAX"
+		for th in thresholds:
+			if n < int(th):
+				next = str(th)
+				break
+		var chip_lbl := Label.new()
+		if lv > 0:
+			chip_lbl.text = " %s Lv.%d " % [info.get("name", tag), lv]
+			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW))
+			GameStyle.label(chip_lbl, 12, GameStyle.INK_TEXT)
+		else:
+			chip_lbl.text = " %s %d/%s " % [info.get("name", tag), n, next]
+			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
+			GameStyle.label(chip_lbl, 12, GameStyle.PAPER_DIM)
+		chip_lbl.tooltip_text = info.get("desc", "")
+		_synergy_bar.add_child(chip_lbl)
+		any = true
+	_synergy_bar.visible = any
 
 func _on_shop_opened() -> void:
 	selected = {}
@@ -40,6 +83,7 @@ func refresh() -> void:
 	stones_label.text = "灵石 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波来犯之前 · 置办法器" % (GameManager.wave_number + 1)
 	reroll_btn.text = "重掷货架 (%d 灵石)" % GameManager.reroll_cost
+	_refresh_synergy_bar()
 
 	for child in offers_container.get_children():
 		child.queue_free()
@@ -290,6 +334,16 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 		title = WeaponData.star_text(1) + " " + def.get("name", "?")
 		icon_path = def.get("icon", "")
 		tag = def.get("tag", "")
+		# 羁绊进度：「符箓 3/4」提示离下一档还差几件
+		var wtags: Array = def.get("tags", [])
+		if not wtags.is_empty():
+			var n := GameManager.get_tag_count(wtags[0])
+			var next := "MAX"
+			for th in WeaponData.SYNERGIES.get(wtags[0], {}).get("thresholds", []):
+				if n < int(th):
+					next = str(th)
+					break
+			tag = "%s %d/%s" % [tag, n, next]
 		desc = def.get("desc", "")
 
 	var card = PanelContainer.new()
@@ -375,6 +429,22 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 			refresh()
 	)
 	vbox.add_child(btn)
+
+	# 锁定开关：锁定的商品波次结束后保留到下一波
+	if not sold:
+		var locked: bool = offer.get("locked", false)
+		var lock_btn = Button.new()
+		lock_btn.custom_minimum_size = Vector2(0, 26)
+		lock_btn.focus_mode = Control.FOCUS_NONE
+		lock_btn.text = "已锁定 · 留到下波" if locked else "锁 定"
+		GameStyle.button(lock_btn, GameStyle.YELLOW if locked else GameStyle.NAVY2,
+			GameStyle.YELLOW_DK if locked else GameStyle.LINE, 12,
+			GameStyle.INK_TEXT if locked else GameStyle.PAPER_DIM, 4.0)
+		lock_btn.pressed.connect(func():
+			GameManager.toggle_lock(index)
+			refresh()
+		)
+		vbox.add_child(lock_btn)
 	card.add_child(vbox)
 	return card
 

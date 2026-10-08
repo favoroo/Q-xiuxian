@@ -22,7 +22,12 @@ var _atk_val_lbl: Label
 var _haste_val_lbl: Label
 var _speed_val_lbl: Label
 var _pickup_val_lbl: Label
+var _range_val_lbl: Label
 var _crit_val_lbl: Label
+var _dodge_val_lbl: Label
+var _lifesteal_val_lbl: Label
+var _luck_val_lbl: Label
+var _harvest_val_lbl: Label
 var _kills_val_lbl: Label
 var _stones_val_lbl: Label
 
@@ -60,7 +65,7 @@ func _build_ui() -> void:
 
 	# 3. 仿 dudu-cocos 仙侠大面板
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(880, 480)
+	_panel.custom_minimum_size = Vector2(880, 560)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
@@ -185,11 +190,16 @@ func _build_left_stats_panel() -> Control:
 	# 各项属性行
 	_regen_val_lbl = _add_stat_row(vbox, "气血回复", "+0.0 / 秒")
 	_armor_val_lbl = _add_stat_row(vbox, "护甲罡气", "0 点 (减伤 0.0%)")
+	_dodge_val_lbl = _add_stat_row(vbox, "流云身法", "0% 闪避")
+	_lifesteal_val_lbl = _add_stat_row(vbox, "噬元诀", "0% 概率")
 	_atk_val_lbl = _add_stat_row(vbox, "剑意法伤", "100% (+0%)")
 	_haste_val_lbl = _add_stat_row(vbox, "掐诀神速", "0% 冷却缩减")
 	_speed_val_lbl = _add_stat_row(vbox, "神行移速", "210 (+0%)")
 	_pickup_val_lbl = _add_stat_row(vbox, "摄灵范围", "96 (+0%)")
-	_crit_val_lbl = _add_stat_row(vbox, "天命暴击", "25.0% 概率 (1.5× 伤害)")
+	_range_val_lbl = _add_stat_row(vbox, "神识范围", "+0%")
+	_crit_val_lbl = _add_stat_row(vbox, "天命暴击", "5.0% 概率 (1.5× 伤害)")
+	_luck_val_lbl = _add_stat_row(vbox, "福缘", "0")
+	_harvest_val_lbl = _add_stat_row(vbox, "灵韵", "0 (波末 +0)")
 
 	var sep2 := HSeparator.new()
 	sep2.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
@@ -387,6 +397,27 @@ func refresh() -> void:
 	_pickup_val_lbl.add_theme_color_override("font_color", GameStyle.BLUE if pk_bonus > 0.0 else GameStyle.PAPER)
 
 	_crit_val_lbl.text = "%.0f%% 概率 (%.1f× 伤害)" % [stats["crit_rate_pct"], stats["crit_dmg_pct"] / 100.0]
+	_crit_val_lbl.add_theme_color_override("font_color", GameStyle.YELLOW if stats["crit_rate_pct"] > 5.0 else GameStyle.PAPER)
+
+	var dodge_pct: float = stats["dodge_pct"]
+	_dodge_val_lbl.text = "%.0f%% 闪避" % dodge_pct
+	_dodge_val_lbl.add_theme_color_override("font_color", GameStyle.BLUE if dodge_pct > 0.0 else GameStyle.PAPER)
+
+	var ls_pct: float = stats["lifesteal_pct"]
+	_lifesteal_val_lbl.text = "%.0f%% 概率 (每秒至多 %d 次)" % [ls_pct, GameManager.LIFESTEAL_MAX_PER_SEC]
+	_lifesteal_val_lbl.add_theme_color_override("font_color", GameStyle.GOOD if ls_pct > 0.0 else GameStyle.PAPER)
+
+	var rng_bonus: float = stats["attack_range_pct"]
+	_range_val_lbl.text = "%s%.0f%%" % ["+" if rng_bonus >= 0 else "", rng_bonus]
+	_range_val_lbl.add_theme_color_override("font_color", GameStyle.BLUE if rng_bonus > 0.0 else GameStyle.PAPER)
+
+	var luck_v: float = stats["luck"]
+	_luck_val_lbl.text = "%.0f" % luck_v
+	_luck_val_lbl.add_theme_color_override("font_color", GameStyle.YELLOW if luck_v > 0.0 else GameStyle.PAPER)
+
+	var harvest_v: float = stats["harvest"]
+	_harvest_val_lbl.text = "%.0f (波末 +%d)" % [harvest_v, int(round(harvest_v))]
+	_harvest_val_lbl.add_theme_color_override("font_color", GameStyle.YELLOW if harvest_v > 0.0 else GameStyle.PAPER)
 
 	_kills_val_lbl.text = "%d 妖" % GameManager.kills
 	_stones_val_lbl.text = "%d 颗" % GameManager.spirit_stones

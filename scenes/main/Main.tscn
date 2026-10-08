@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=18 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -16,6 +16,7 @@
 [ext_resource type="Script" path="res://scripts/ui/PauseMenu.gd" id="14_pause"]
 [ext_resource type="PackedScene" path="res://scenes/ui/StartMenu.tscn" id="15_menu"]
 [ext_resource type="Script" path="res://scripts/ui/PlayerStatsDialog.gd" id="16_stats"]
+[ext_resource type="Script" path="res://scripts/ui/CultivatorSelect.gd" id="17_cult"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -93,6 +94,9 @@ layer = 10
 [node name="GameOverDialog" parent="UILayer" instance=ExtResource("11_go")]
 
 [node name="StartWeaponSelect" parent="UILayer" instance=ExtResource("12_sel")]
+
+[node name="CultivatorSelect" type="Control" parent="UILayer"]
+script = ExtResource("17_cult")
 
 [node name="StartMenu" parent="UILayer" instance=ExtResource("15_menu")]
 

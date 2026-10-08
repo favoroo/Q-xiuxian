@@ -161,11 +161,13 @@ func sync_drones() -> void:
 		if orb != null and i < target.size():
 			orb.setup(int(target[i]))
 
-func heal(amount: float) -> void:
+func heal(amount: float, quiet: bool = false) -> void:
 	if amount <= 0.0:
 		return
 	current_health = minf(max_health, current_health + amount)
 	GameManager.player_hp_changed.emit(current_health, max_health)
+	if quiet:
+		return
 	play_squash(Vector2(0.88, 1.16), 0.18)
 	DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+" + str(int(amount)))
 
@@ -257,7 +259,7 @@ func _process_sun_orbs(delta: float) -> void:
 	var count = sun_orb_container.get_child_count()
 	if count == 0:
 		return
-	var radius = 78.0
+	var radius = 78.0 * GameManager.attack_range_mult
 	for i in range(count):
 		var orb = sun_orb_container.get_child(i) as Node2D
 		var a = sun_orb_angle + float(i) * (TAU / float(count))
@@ -265,6 +267,12 @@ func _process_sun_orbs(delta: float) -> void:
 
 func take_damage(amount: float) -> void:
 	if invulnerable_time > 0.0 or GameManager.is_game_over:
+		return
+
+	# 流云身法：闪避成功不掉血、不消耗无敌帧
+	if randf() < GameManager.get_effective_dodge():
+		DamageNumber.spawn(get_parent(), global_position, 0, false, "身法回避")
+		AudioManager.play_sfx("orb_hit", 0.5)
 		return
 
 	var reduced := maxf(1.0, amount / (1.0 + GameManager.armor * 0.08))
