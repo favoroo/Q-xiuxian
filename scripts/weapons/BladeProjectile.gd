@@ -29,7 +29,12 @@ func _on_area_entered(area: Area2D) -> void:
     if enemy and enemy.has_method("take_damage"):
         var is_crit = randf() < 0.2
         var actual_dmg = damage * (1.5 if is_crit else 1.0)
-        enemy.take_damage(actual_dmg, direction * 120.0, is_crit)
+        enemy.take_damage(actual_dmg, direction * 140.0, is_crit)
+        JuiceEffect.spawn_hit_sparks(get_parent(), global_position, direction, is_crit)
+        if is_crit:
+            GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
+        else:
+            GameManager.add_trauma(0.06)
 
         pierce_left -= 1
         if pierce_left <= 0:

@@ -16,11 +16,37 @@ func _ready() -> void:
     GameStyle.label(hint_label, 12, GameStyle.GREY)
     hint_label.text = "◆ 集齐三把同名同星法器，可在波间商店手动合成升星 ◆"
 
+    var ver_btn := Button.new()
+    ver_btn.text = "修仙幸存者 " + Version.APP_VERSION_NAME
+    ver_btn.flat = true
+    ver_btn.focus_mode = Control.FOCUS_NONE
+    ver_btn.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+    ver_btn.position = Vector2(-160, -32)
+    ver_btn.add_theme_font_override("font", GameStyle.body_font())
+    ver_btn.add_theme_font_size_override("font_size", 11)
+    ver_btn.add_theme_color_override("font_color", GameStyle.GREY)
+    ver_btn.add_theme_color_override("font_hover_color", GameStyle.YELLOW)
+    ver_btn.pressed.connect(func():
+        UpdateManager.check_for_update(true)
+    )
+    add_child(ver_btn)
+
 func show_select() -> void:
     for child in cards_container.get_children():
         child.queue_free()
+    var idx := 0
     for w_id in WeaponData.STARTER_IDS:
-        cards_container.add_child(_create_card(w_id))
+        var card = _create_card(w_id)
+        cards_container.add_child(card)
+        card.pivot_offset = Vector2(110.0, 160.0)
+        card.scale = Vector2(0.72, 0.72)
+        card.modulate.a = 0.0
+        var ctw = card.create_tween()
+        ctw.tween_interval(float(idx) * 0.06)
+        ctw.set_parallel(true)
+        ctw.tween_property(card, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        ctw.tween_property(card, "modulate:a", 1.0, 0.18)
+        idx += 1
     visible = true
     modulate.a = 0.0
     var tw = create_tween()
@@ -108,12 +134,12 @@ func _create_card(w_id: String) -> Control:
 
     card.mouse_entered.connect(func():
         var tw = card.create_tween()
-        tw.tween_property(card, "position:y", -6.0, 0.1)
+        tw.tween_property(card, "scale", Vector2(1.04, 1.04), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
         style.border_color = GameStyle.BLUE_EDGE
     )
     card.mouse_exited.connect(func():
         var tw = card.create_tween()
-        tw.tween_property(card, "position:y", 0.0, 0.1)
+        tw.tween_property(card, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
         style.border_color = GameStyle.BLUE.darkened(0.3)
     )
     return card

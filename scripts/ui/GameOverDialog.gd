@@ -22,7 +22,7 @@ func _on_game_over(victory: bool) -> void:
     title_label.text = "渡 劫 成 功 ！" if victory else "道 消 身 殒"
     title_band.add_theme_stylebox_override("panel",
         GameStyle.block(GameStyle.BLUE if victory else GameStyle.BAD, GameStyle.SLANT_BAND, Vector2(4, 5)))
-    var mins = int(GameManager.game_time) / 60
+    var mins = int(GameManager.game_time / 60.0)
     var secs = int(GameManager.game_time) % 60
     stats_label.text = "镇守时长 %02d:%02d\n斩妖 %d 只\n最终境界 Lv.%d\n囊中灵石 %d 枚" % [
         mins, secs, GameManager.kills, GameManager.level, GameManager.spirit_stones

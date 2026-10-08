@@ -24,7 +24,9 @@ func _ready() -> void:
 	tw.chain().tween_callback(queue_free)
 
 	_deal_damage.call_deferred()
-	GameManager.shake_camera(4.0, 0.12)
+	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
+	GameManager.add_trauma(0.28)
+	GameManager.zoom_punch(0.025, 0.14)
 	AudioManager.play_sfx("obelisk_blessing", 0.55)
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
@@ -54,6 +56,7 @@ func _deal_damage() -> void:
 	query.collide_with_areas = true
 	var results = space_state.intersect_shape(query, 24)
 
+	var had_crit := false
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
@@ -62,3 +65,7 @@ func _deal_damage() -> void:
 			var dmg = damage * (1.5 if is_crit else 1.0)
 			var knock = (enemy.global_position - global_position).normalized() * 200.0
 			enemy.take_damage(dmg, knock, is_crit)
+			if is_crit:
+				had_crit = true
+	if had_crit:
+		GameManager.hit_stop(0.04, 0.06)

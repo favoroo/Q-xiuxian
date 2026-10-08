@@ -31,6 +31,14 @@ func _populate_cards() -> void:
         var data = current_upgrades[i]
         var card_panel = _create_card_node(data)
         cards_container.add_child(card_panel)
+        card_panel.pivot_offset = Vector2(131.0, 170.0)
+        card_panel.scale = Vector2(0.72, 0.72)
+        card_panel.modulate.a = 0.0
+        var ctw = card_panel.create_tween()
+        ctw.tween_interval(float(i) * 0.055)
+        ctw.set_parallel(true)
+        ctw.tween_property(card_panel, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        ctw.tween_property(card_panel, "modulate:a", 1.0, 0.16)
 
 func _create_card_node(data: Dictionary) -> Control:
     var card = PanelContainer.new()
@@ -154,10 +162,10 @@ func _create_card_node(data: Dictionary) -> Control:
 
     card.add_child(vbox)
 
-    # 悬停动画：上浮 + 边框加粗
+    # 悬停动画：放大 + 边框加粗
     card.mouse_entered.connect(func():
         var tw = card.create_tween()
-        tw.tween_property(card, "position:y", -6.0, 0.1)
+        tw.tween_property(card, "scale", Vector2(1.035, 1.035), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
         style_normal.border_width_left = 3
         style_normal.border_width_top = 3
         style_normal.border_width_right = 3
@@ -165,7 +173,7 @@ func _create_card_node(data: Dictionary) -> Control:
     )
     card.mouse_exited.connect(func():
         var tw = card.create_tween()
-        tw.tween_property(card, "position:y", 0.0, 0.1)
+        tw.tween_property(card, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
         style_normal.border_width_left = 2
         style_normal.border_width_top = 2
         style_normal.border_width_right = 2

@@ -5,8 +5,13 @@
 列序：0=待机, 1..4=4 帧跑步。
 左/左下/左上方向由引擎 flip_h 补齐。
 
-提取策略：直接读 raw.jpg 做品红抠图 + 智能去地面横线 + 在 1/5 附近找最窄列谷底
-切开 5 个个体 + 边缘主连通域保留（擦掉邻居溢入的剑尖/碎块）+ 行内以待机身高定标 + 底对齐居中。
+核心管线（参考 pixel-asset-master 规范优化）：
+1. 纯净二值化 Alpha 抠图 + 孤立杂点清洗（消除帧间半透明边缘闪烁）。
+2. 智能检测并完整剥离底部横贯黑线/分段地面线。
+3. 统一地面水平基准线（Fixed Ground Baseline）：以整行统一地面线作为 Y 轴锚点，
+   支撑脚严格踩在基准线上，迈步腾空脚自然离地，杜绝单帧独立贴底导致的头部剧烈上下抽搐。
+4. 躯干重心水平对齐（Torso Centroid X）：消除兵器/手臂摆动引起的身体左右晃动。
+5. 采用 Image.NEAREST 像素硬边采样，杜绝 Lanczos 插值导致的羽化伪影。
 """
 from PIL import Image
 import sys
@@ -21,7 +26,61 @@ DIRS = ["s", "n", "e", "se", "ne"]
 CELL = 192
 CX = 96
 
-def extract_five_cells(raw_path: str):
+
+def _clean_blob(im: Image.Image) -> Image.Image:
+    W, H = im.size
+    px = im.load()
+    vis = [[False] * W for _ in range(H)]
+    blobs = []
+    for y in range(H):
+        for x in range(W):
+            if not vis[y][x] and px[x, y][3] > 0:
+                q = [(x, y)]
+                vis[y][x] = True
+                pts = []
+                while q:
+                    cx, cy = q.pop()
+                    pts.append((cx, cy))
+                    for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                        if 0 <= nx < W and 0 <= ny < H and not vis[ny][nx] and px[nx, ny][3] > 0:
+                            vis[ny][nx] = True
+                            q.append((nx, ny))
+                blobs.append(pts)
+    if len(blobs) <= 1:
+        return im
+    blobs.sort(key=len, reverse=True)
+    main_len = len(blobs[0])
+    for pts in blobs[1:]:
+        xs = [p[0] for p in pts]
+        near_edge = (min(xs) <= 4) or (max(xs) >= W - 5)
+        if len(pts) < main_len * 0.06 or near_edge:
+            for cx, cy in pts:
+                px[cx, cy] = (0, 0, 0, 0)
+    return im
+
+
+def _clean_orphan_pixels(im: Image.Image) -> Image.Image:
+    """清除四周 4 邻域全透明的孤立单像素杂点（pixel-asset-master clean 规范）。"""
+    W, H = im.size
+    px = im.load()
+    to_clear = []
+    for y in range(H):
+        for x in range(W):
+            if px[x, y][3] == 0:
+                continue
+            has_neighbor = False
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if 0 <= nx < W and 0 <= ny < H and px[nx, ny][3] > 0:
+                    has_neighbor = True
+                    break
+            if not has_neighbor:
+                to_clear.append((x, y))
+    for x, y in to_clear:
+        px[x, y] = (0, 0, 0, 0)
+    return im
+
+
+def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
     im = Image.open(raw_path).convert("RGB")
     W, H = im.size
     px = im.load()
@@ -36,35 +95,48 @@ def extract_five_cells(raw_path: str):
             if m >= 105:
                 continue
             a = 255 if m <= 30 else int(255 * (105 - m) / 75)
-            if a > 30:
+            # 硬边二值化 Alpha（消除半透明抗锯齿边缘频闪）
+            if a > 80:
                 row[x] = 1
-            if m > 0:
-                r = max(0, r - m // 2)
-                b = max(0, b - m // 2)
-            out[x, y] = (r, g, b, a)
+                if m > 0:
+                    r = max(0, r - m // 2)
+                    b = max(0, b - m // 2)
+                out[x, y] = (r, g, b, 255)
 
-    # 去横贯地平线：仅当某一行出现单条连续非透明水平线段 > 35% 画面宽（真黑线无间断；5 只脚中间有空隙不会命中）
-    for y in range(int(H * 0.6), H):
-        run = 0
-        max_run = 0
+    # 检测并完整剥离底部横贯地面黑线（或 5 段底线）
+    ys_non_empty = [y for y in range(H) if any(mask[y])]
+    max_y = max(ys_non_empty) if ys_non_empty else H - 1
+    ground_rows = []
+    for y in range(max(0, max_y - 25), max_y + 1):
+        runs = []
+        r_len = 0
+        dark_cnt = 0
         for x in range(W):
             if mask[y][x]:
-                run += 1
-                if run > max_run:
-                    max_run = run
+                r_len += 1
+                if sum(px[x, y]) < 180:
+                    dark_cnt += 1
             else:
-                run = 0
-        if max_run > W * 0.35:
-            # 仅擦掉深色细线像素（保留脚面彩块）
-            for dy in (-1, 0, 1):
-                yy = y + dy
-                if 0 <= yy < H:
-                    for x in range(W):
-                        if mask[yy][x] and sum(px[x, yy]) < 160:
-                            mask[yy][x] = 0
-                            out[x, yy] = (0, 0, 0, 0)
+                if r_len > 0:
+                    runs.append(r_len)
+                r_len = 0
+        if r_len > 0:
+            runs.append(r_len)
+        max_run = max(runs) if runs else 0
+        if max_run > W * 0.35 or dark_cnt > W * 0.65:
+            ground_rows.append(y)
 
-    # 左右边界与 4 刀
+    if ground_rows:
+        ground_top = min(ground_rows)
+        for y in range(ground_top, min(H, max(ground_rows) + 3)):
+            for x in range(W):
+                mask[y][x] = 0
+                out[x, y] = (0, 0, 0, 0)
+        baseline_y = ground_top
+    else:
+        baseline_y = -1
+
+    # 左右边界与 4 刀切格
     col_cnt = [sum(mask[y][x] for y in range(H)) for x in range(W)]
     non_empty = [x for x in range(W) if col_cnt[x] > 2]
     L, R = non_empty[0], non_empty[-1] + 1
@@ -84,61 +156,75 @@ def extract_five_cells(raw_path: str):
         cuts.append(best_x)
     cuts.append(R)
 
-    cells = []
+    raw_cells = []
+    bboxes = []
     for i in range(5):
         sub = rgba.crop((cuts[i], 0, cuts[i + 1], H))
         sub = _clean_blob(sub)
+        sub = _clean_orphan_pixels(sub)
         b = sub.getbbox()
-        cells.append(sub.crop(b) if b else sub)
-    return cells
+        raw_cells.append(sub)
+        bboxes.append(b)
 
-def _clean_blob(im: Image.Image) -> Image.Image:
-    W, H = im.size
-    px = im.load()
-    vis = [[False] * W for _ in range(H)]
-    blobs = []
-    for y in range(H):
-        for x in range(W):
-            if not vis[y][x] and px[x, y][3] > 25:
-                q = [(x, y)]
-                vis[y][x] = True
-                pts = []
-                while q:
-                    cx, cy = q.pop()
-                    pts.append((cx, cy))
-                    for nx, ny in ((cx+1,cy),(cx-1,cy),(cx,cy+1),(cx,cy-1)):
-                        if 0 <= nx < W and 0 <= ny < H and not vis[ny][nx] and px[nx, ny][3] > 25:
-                            vis[ny][nx] = True
-                            q.append((nx, ny))
-                blobs.append(pts)
-    if len(blobs) <= 1:
-        return im
-    blobs.sort(key=len, reverse=True)
-    main_len = len(blobs[0])
-    for pts in blobs[1:]:
-        xs = [p[0] for p in pts]
-        near_edge = (min(xs) <= 4) or (max(xs) >= W - 5)
-        if len(pts) < main_len * 0.06 or near_edge:
-            for cx, cy in pts:
-                px[cx, cy] = (0, 0, 0, 0)
-    return im
+    # 修复正面苍狼后两帧原图粘连与侧偏问题：用干净的前两帧水平镜像构成完整对称 4 帧步态
+    if char == "wolf" and d == "s":
+        raw_cells[3] = raw_cells[1].transpose(Image.FLIP_LEFT_RIGHT)
+        bboxes[3] = raw_cells[3].getbbox()
+        raw_cells[4] = raw_cells[2].transpose(Image.FLIP_LEFT_RIGHT)
+        bboxes[4] = raw_cells[4].getbbox()
+
+    if baseline_y == -1:
+        baseline_y = max(b[3] for b in bboxes if b)
+
+    return raw_cells, bboxes, baseline_y
+
 
 def build(char: str, cfg: dict) -> None:
     atlas = Image.new("RGBA", (CELL * 5, CELL * 5), (0, 0, 0, 0))
     for r, d in enumerate(DIRS):
-        cells = extract_five_cells(f"assets_raw/images/run8_{char}_{d}.raw.jpg")
-        scale = cfg["h"] / cells[0].height
-        for c, im in enumerate(cells):
-            w = max(1, round(im.width * scale))
-            h = max(1, round(im.height * scale))
-            if h > cfg["base"]:
-                k = cfg["base"] / h
-                w, h = max(1, round(w * k)), cfg["base"]
-            im = im.resize((w, h), Image.LANCZOS)
-            atlas.alpha_composite(im, (c * CELL + CX - w // 2, r * CELL + cfg["base"] - h))
+        raw_cells, bboxes, baseline_y = extract_five_cells(
+            f"assets_raw/images/run8_{char}_{d}.raw.jpg", char, d
+        )
+        idle_b = bboxes[0]
+        idle_h = max(1, idle_b[3] - idle_b[1])
+        scale = cfg["h"] / idle_h
+
+        for c in range(5):
+            sub = raw_cells[c]
+            b = bboxes[c]
+            if not b:
+                continue
+            cropped = sub.crop(b)
+            cW, cH = cropped.size
+            c_px = cropped.load()
+
+            # 躯干重心水平对齐（取躯干核心区 15%~65% 高度的像素水平重心，消除兵器/手臂摆动造成的左右晃动）
+            xs_torso = [
+                x
+                for y in range(int(cH * 0.15), int(cH * 0.65))
+                for x in range(cW)
+                if c_px[x, y][3] > 0
+            ]
+            centroid_x = (sum(xs_torso) / len(xs_torso)) if xs_torso else (cW / 2.0)
+
+            w = max(1, round(cW * scale))
+            h = max(1, round(cH * scale))
+            im_scaled = cropped.resize((w, h), Image.NEAREST)
+            im_scaled = _clean_orphan_pixels(im_scaled)
+
+            # 统一地面基准线对齐：计算当前帧脚底相对于地面基准线的真实抬升量
+            foot_offset_unscaled = max(0, baseline_y - b[3])
+            foot_offset_scaled = round(foot_offset_unscaled * scale)
+            foot_y_in_cell = cfg["base"] - foot_offset_scaled
+
+            cell_x = c * CELL + CX - round(centroid_x * scale)
+            cell_y = r * CELL + max(0, foot_y_in_cell - h)
+            atlas.alpha_composite(im_scaled, (cell_x, cell_y))
+
     out = f"assets/art/{cfg['tex']}_8dir.png"
     atlas.save(out)
     print(f"DONE {out}")
+
 
 def contact_sheet() -> None:
     for char, cfg in CHARS.items():
@@ -151,6 +237,7 @@ def contact_sheet() -> None:
                 sheet.paste(cell, (10 + c * (H + 6), 10 + r * (H + 6)), cell)
         sheet.save(f"/tmp/run8_{char}_clean.png")
     print("DONE clean sheets in /tmp/run8_*_clean.png")
+
 
 if __name__ == "__main__":
     targets = sys.argv[1:] or list(CHARS)

@@ -112,7 +112,7 @@ func _spawn_regular(player: Node2D) -> void:
 	if enemy_count >= max_enemies:
 		return
 
-	var count = 1 + wave_number / 4 + (1 if randf() < 0.4 else 0)
+	var count = 1 + int(float(wave_number) / 4.0) + (1 if randf() < 0.4 else 0)
 	for i in range(count):
 		var angle = randf() * TAU
 		var spawn_dist = randf_range(380.0, 480.0)

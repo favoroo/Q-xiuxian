@@ -2,6 +2,7 @@ extends Node
 
 ## 全局状态中枢：经济（灵石）、属性加点、武器持有与合成、波次推进、商店货架
 
+@warning_ignore("unused_signal")
 signal player_hp_changed(current_hp: float, max_hp: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
 signal player_leveled_up(level: int)
@@ -10,9 +11,14 @@ signal game_over_triggered(victory: bool)
 signal upgrade_applied(upgrade_id: String)
 signal announcement_triggered(text: String)
 signal weapons_updated(weapons: Array)
+@warning_ignore("unused_signal")
 signal wave_changed(wave_number: int)
+@warning_ignore("unused_signal")
 signal shop_opened
 signal shop_closed
+signal screen_damage_pulsed(color: Color, duration: float)
+
+enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 10
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
@@ -53,6 +59,8 @@ var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
 var stash: Array = []    # 背包，元素 {id: String, star: int}
 
 func reset_run() -> void:
+	Engine.time_scale = 1.0
+	_hitstop_token += 1
 	kills = 0
 	game_time = 0.0
 	spirit_stones = 0
@@ -406,21 +414,64 @@ func confirm_shop() -> void:
 	get_tree().paused = false
 	shop_closed.emit()
 
-# ---------------- 流程 ----------------
+# ---------------- 流程与打击感系统 ----------------
+
+var _hitstop_token: int = 0
+
+## 创伤度叠加震屏
+func add_trauma(amount: float) -> void:
+	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("add_trauma"):
+		main_camera.add_trauma(amount)
+
+## 镜头缩放冲击
+func zoom_punch(scale_amount: float = 0.05, duration: float = 0.18) -> void:
+	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("zoom_punch"):
+		main_camera.zoom_punch(scale_amount, duration)
 
 func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
-	if main_camera and main_camera.has_method("shake"):
+	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("shake"):
 		main_camera.shake(intensity, duration)
 
-func trigger_hitstop(duration: float = 0.025) -> void:
-	Engine.time_scale = 0.15
-	get_tree().create_timer(duration * 0.15, true, false, true).timeout.connect(
-		func(): Engine.time_scale = 1.0
+## 真实时间顿帧（Hit-Stop / Freeze Frame），不受 Engine.time_scale 影响
+func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
+	_hitstop_token += 1
+	var token := _hitstop_token
+	Engine.time_scale = target_scale
+	get_tree().create_timer(duration, true, false, true).timeout.connect(func():
+		if _hitstop_token == token:
+			Engine.time_scale = 1.0
 	)
+
+## 兼容旧调用
+func trigger_hitstop(duration: float = 0.045) -> void:
+	hit_stop(duration)
+
+## game-feel 重要性分级反馈聚合接口（包含相机创伤、顿帧与镜头冲击）
+func feedback(tier: int) -> void:
+	match tier:
+		FeedbackTier.SMALL:
+			add_trauma(0.08)
+		FeedbackTier.MEDIUM:
+			add_trauma(0.18)
+			hit_stop(0.035, 0.08)
+		FeedbackTier.LARGE:
+			add_trauma(0.38)
+			hit_stop(0.065, 0.04)
+			zoom_punch(0.035, 0.15)
+		FeedbackTier.HEAVY:
+			add_trauma(0.70)
+			hit_stop(0.09, 0.02)
+			zoom_punch(0.06, 0.22)
+
+## 触发全屏受击红晕脉冲
+func pulse_damage_vignette(color: Color = Color(0.85, 0.12, 0.12, 0.65), duration: float = 0.22) -> void:
+	screen_damage_pulsed.emit(color, duration)
 
 func trigger_game_over(victory: bool = false) -> void:
 	if is_game_over:
 		return
+	Engine.time_scale = 1.0
+	_hitstop_token += 1
 	is_game_over = true
 	game_over_triggered.emit(victory)
 
