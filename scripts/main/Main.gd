@@ -5,10 +5,12 @@ extends Node2D
 @onready var start_menu: Control = $UILayer/StartMenu
 @onready var pause_menu: PauseMenu = $UILayer/PauseMenu
 @onready var stats_dialog: Control = $UILayer/PlayerStatsDialog
+@onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var dust_particles: CPUParticles2D
 var _vignette_tween: Tween = null
 var _low_hp_phase: float = 0.0
+var _settings_return_to_pause: bool = false
 
 func _ready() -> void:
     GameManager.reset_run()
@@ -18,13 +20,23 @@ func _ready() -> void:
     $UILayer/GameHUD.pause_requested.connect(pause_menu.open)
     $UILayer/GameHUD.stats_requested.connect(stats_dialog.open)
     pause_menu.stats_requested.connect(stats_dialog.open)
+    pause_menu.settings_requested.connect(func():
+        _settings_return_to_pause = true
+        settings_dialog.open()
+    )
+    if start_menu.has_signal("settings_requested"):
+        start_menu.settings_requested.connect(func():
+            _settings_return_to_pause = false
+            settings_dialog.open()
+        )
+    settings_dialog.closed.connect(func():
+        if _settings_return_to_pause:
+            pause_menu.open()
+    )
     GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
 
-    if ResourceLoader.exists("res://assets/audio/bgm_cultivation.mp3"):
-        var bgm = load("res://assets/audio/bgm_cultivation.mp3")
-        if bgm is AudioStreamMP3:
-            bgm.loop = true
-        AudioManager.play_bgm(bgm)
+    # BGM 交给 AudioManager 的状态机：素材没就位就什么都不播，不再在这里硬切某一条流
+    AudioManager.play_bgm_key("battle")
 
     # 静默检查更新（带24小时节流）
     UpdateManager.check_for_update(false)
@@ -32,6 +44,13 @@ func _ready() -> void:
     # 开局暂停：先显示开始界面，点「开始游戏」后再选本命法器
     start_menu.open()
     get_tree().paused = true
+
+func _exit_tree() -> void:
+    # 静态缓存（敌人共享帧集 / 跳字池 / 特效池与样式表）随场景释放，
+    # 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
+    EnemyBase.clear_frame_cache()
+    DamageNumber.clear_cache()
+    JuiceEffect.clear_cache()
 
 func _setup_dust() -> void:
     dust_particles = CPUParticles2D.new()
@@ -54,7 +73,7 @@ func _process(delta: float) -> void:
 
         # 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
         var p = GameManager.player
-        if p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28:
+        if bool(SettingsManager.get_val(&"display", &"screen_flash", true)) and p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28:
             _low_hp_phase += delta * 4.5
             var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
             if vignette_rect != null and vignette_rect.material is ShaderMaterial:
@@ -64,6 +83,8 @@ func _process(delta: float) -> void:
                     mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
+    if not bool(SettingsManager.get_val(&"display", &"screen_flash", true)):
+        return
     if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
         return
     var mat = vignette_rect.material as ShaderMaterial

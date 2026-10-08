@@ -265,8 +265,10 @@ func _refresh_action_bar() -> void:
 			keep["pool"] = "drone"
 			keep["index"] = int(item.get("drone_index", -1))
 		merge_btn.pressed.connect(func():
-			AudioManager.play_sfx("orb_hit", 0.9)
-			GameManager.merge_weapon(id, star, keep)
+			# 成功音由 GameManager.merge_weapon 统一播（merge_success）；
+			# 这里只补「按了但没合成」的反馈，不让它听起来像成功了
+			if not GameManager.merge_weapon(id, star, keep):
+				AudioManager.play_sfx("ui_error", 0.9)
 			selected = {}
 			refresh()
 		)
@@ -342,21 +344,29 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 		tag = "丹药"
 		desc = "服下立刻恢复五成气血"
 	else:
-		def = WeaponData.get_def(offer.get("id", ""))
-		title = WeaponData.star_text(1) + " " + def.get("name", "?")
-		icon_path = def.get("icon", "")
-		tag = def.get("tag", "")
-		# 羁绊进度：「符箓 3/4」提示离下一档还差几件
-		var wtags: Array = def.get("tags", [])
-		if not wtags.is_empty():
-			var n := GameManager.get_tag_count(wtags[0])
-			var next := "MAX"
-			for th in WeaponData.SYNERGIES.get(wtags[0], {}).get("thresholds", []):
-				if n < int(th):
-					next = str(th)
-					break
-			tag = "%s %d/%s" % [tag, n, next]
-		desc = def.get("desc", "")
+			def = WeaponData.get_def(offer.get("id", ""))
+			title = WeaponData.star_text(1) + " " + def.get("name", "?")
+			icon_path = def.get("icon", "")
+			tag = def.get("tag", "")
+			# 双维羁绊进度：「剑系 1/2 · 锐金 1/2」提示离下一档还差几件
+			var wtags: Array = def.get("tags", [])
+			var tag_parts: Array = []
+			for t in wtags:
+				var syn: Dictionary = WeaponData.SYNERGIES.get(t, {})
+				if not syn.is_empty():
+					var n := GameManager.get_tag_count(t)
+					var next := "MAX"
+					for th in syn.get("thresholds", []):
+						if n < int(th):
+							next = str(th)
+							break
+					tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
+			if not tag_parts.is_empty():
+				tag = " · ".join(tag_parts)
+			desc = def.get("desc", "")
+			var bonus_dmg := GameManager.get_weapon_stat_bonus(offer.get("id", ""), 1)
+			if bonus_dmg > 0.05:
+				desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
 
 	var card = PanelContainer.new()
 	card.custom_minimum_size = Vector2(196.0, 268.0)

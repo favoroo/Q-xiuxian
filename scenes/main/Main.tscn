@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=19 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/StartMenu.tscn" id="15_menu"]
 [ext_resource type="Script" path="res://scripts/ui/PlayerStatsDialog.gd" id="16_stats"]
 [ext_resource type="Script" path="res://scripts/ui/CultivatorSelect.gd" id="17_cult"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SettingsDialog.tscn" id="18_settings"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -107,4 +108,6 @@ script = ExtResource("14_pause")
 
 [node name="PlayerStatsDialog" type="Control" parent="UILayer"]
 script = ExtResource("16_stats")
+
+[node name="SettingsDialog" parent="UILayer" instance=ExtResource("18_settings")]
 

@@ -39,10 +39,13 @@ func _ready() -> void:
     GameManager.announcement_triggered.connect(show_announcement)
     GameManager.weapons_updated.connect(_on_weapons_updated)
     GameManager.wave_changed.connect(_on_wave_changed)
+    GameManager.boss_hp_changed.connect(_on_boss_hp_changed)
+    GameManager.boss_defeated.connect(_on_boss_defeated)
     _on_wave_changed(GameManager.wave_number)
 
     _on_weapons_updated(GameManager.get_weapons_summary())
     _build_top_buttons()
+    _build_boss_bar()
     # 羁绊徽记行：挂在左栏之下，只显示已激活的流派
     _synergy_box = HBoxContainer.new()
     _synergy_box.add_theme_constant_override("separation", 6)
@@ -50,6 +53,105 @@ func _ready() -> void:
     $TopContainer/LeftBox.add_child(_synergy_box)
 
 var _synergy_box: HBoxContainer = null
+
+# ---------------- Boss 血条（固定 Boss 关专用，信号驱动上屏/收起） ----------------
+
+var _boss_box: PanelContainer = null
+var _boss_title_label: Label = null
+var _boss_bar: ProgressBar = null
+var _boss_active: bool = false
+
+## 顶部居中血条：红斜切大色块 + 魔君名号，P5 剪纸风与顶栏一致
+func _build_boss_bar() -> void:
+    _boss_box = PanelContainer.new()
+    _boss_box.visible = false
+    _boss_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _boss_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BAD_DK, GameStyle.SLANT_BAND, Vector2(4, 5)))
+    _boss_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+    _boss_box.offset_left = -240.0
+    _boss_box.offset_right = 240.0
+    _boss_box.offset_top = 130.0
+    _boss_box.offset_bottom = 168.0
+    _boss_box.pivot_offset = Vector2(240.0, 19.0)
+    add_child(_boss_box)
+
+    var row := HBoxContainer.new()
+    row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_theme_constant_override("separation", 10)
+    _boss_box.add_child(row)
+
+    _boss_title_label = Label.new()
+    _boss_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    GameStyle.label(_boss_title_label, 15, GameStyle.PAPER)
+    row.add_child(_boss_title_label)
+
+    _boss_bar = ProgressBar.new()
+    _boss_bar.custom_minimum_size = Vector2(300, 16)
+    _boss_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    _boss_bar.show_percentage = false
+    _boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var styles: Array = GameStyle.bar_styles(Color(0.06, 0.04, 0.06, 0.9), GameStyle.BAD)
+    _boss_bar.add_theme_stylebox_override("background", styles[0])
+    _boss_bar.add_theme_stylebox_override("fill", styles[1])
+    row.add_child(_boss_bar)
+
+func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
+    if not _boss_active:
+        _boss_active = true
+        _boss_title_label.text = title
+        _boss_bar.max_value = max_v
+        _boss_bar.value = cur
+        _boss_box.modulate.a = 1.0
+        _boss_box.visible = true
+        # 登场弹跳：与 banner / 等级徽章同款 BACK 缓动
+        var tw := create_tween()
+        tw.tween_property(_boss_box, "scale", Vector2.ONE, 0.22)\
+            .from(Vector2(0.6, 0.6)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    elif absf(_boss_bar.value - cur) > 0.5:
+        var tw := create_tween()
+        tw.tween_property(_boss_bar, "value", cur, 0.15)
+
+func _on_boss_defeated(_title: String) -> void:
+    _boss_active = false
+    var tw := create_tween()
+    tw.tween_property(_boss_box, "modulate:a", 0.0, 0.3)
+    tw.tween_callback(func():
+        _boss_box.visible = false
+        _boss_box.modulate.a = 1.0)
+
+## 供冒烟测试与调试断言：血条当前是否上屏
+func is_boss_bar_visible() -> bool:
+    return _boss_box != null and _boss_box.visible
+
+var _fps_label: Label = null
+var _fps_timer: float = 0.0
+
+func _setup_fps_counter() -> void:
+    _fps_label = Label.new()
+    _fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    _fps_label.position = Vector2(16, 514)
+    GameStyle.label(_fps_label, 12, GameStyle.GREY)
+    _fps_label.text = "FPS: 60"
+    add_child(_fps_label)
+    _update_fps_visibility()
+    SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
+        if sec == &"display" and key == &"show_fps":
+            _update_fps_visibility()
+    )
+
+func _update_fps_visibility() -> void:
+    if _fps_label != null:
+        _fps_label.visible = bool(SettingsManager.get_val(&"display", &"show_fps", false))
+
+func _process(delta: float) -> void:
+    if _fps_label != null and _fps_label.visible:
+        _fps_timer += delta
+        if _fps_timer >= 0.25:
+            _fps_timer = 0.0
+            var fps := Engine.get_frames_per_second()
+            _fps_label.text = "FPS: %d" % fps
+            var fps_col := GameStyle.GOOD if fps >= 55 else (GameStyle.YELLOW if fps >= 35 else GameStyle.BAD)
+            _fps_label.add_theme_color_override("font_color", fps_col)
 
 func _refresh_synergy_badges() -> void:
     if _synergy_box == null:
@@ -65,7 +167,8 @@ func _refresh_synergy_badges() -> void:
         var chip := Label.new()
         chip.text = " %s Lv.%d " % [info.get("name", tag), lv]
         chip.tooltip_text = info.get("desc", "")
-        chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
+        var chip_color: Color = GameStyle.BLUE_DK if tag in WeaponData.ELEMENTS else GameStyle.YELLOW_DK
+        chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
         GameStyle.label(chip, 11, GameStyle.PAPER)
         chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
         _synergy_box.add_child(chip)

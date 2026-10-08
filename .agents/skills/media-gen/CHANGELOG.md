@@ -41,3 +41,18 @@
   SKILL.md 与 references 移除全部演示风格词（Q版卡通等）；
   演示素材（骑士锚图/药水/史莱姆/语音/BGM）归档至 `/tmp/media-test/demo_archive/`，
   manifest 对应行已清理。**画风未回填 STYLE.md 前禁止生成正式素材**
+
+## 2026-10-08 明确「音乐模型做不了短音效」并给出替代路径 (Qoder)
+
+- 实测取证：向 `lyria-3.5` 索要「`[0:00 - 0:01]` 只要 0.15 秒的一次 UI 点击音」，
+  返回 **56.1 秒 / 1.3 MB** 连续素材（8-12s 近乎静音，16-32s RMS 升到 0.25、峰值 0.98），
+  模型按「写一首曲子」理解提示词，剪开头得不到干脆瞬态 → 结论：**SFX 不走本技能**。
+- 文档落地三处：`api-music.md` 结论速查加实测警示块；`usage-guide.md` 能力边界表把 SFX 行改写成
+  「❌ + 实测证据 + 首选 bake_sfx.py / 备选 jsfxr·freesound·Kenney」，并新增「精确时长的音乐段落 ⚠️」一行；
+  `SKILL.md` 的模型选择表与已知陷阱各补一句「短音效走 `tools/bake_sfx.py`」。
+- 替代实现（本仓库自有一等公民，不属于本技能）：`tools/bake_sfx.py` 纯标准库离线合成
+  （振荡器+指数包络+RBJ 双二阶+白噪声，xorshift 固定种子可复现，tanh 软限幅 + 峰值归一
+  UI 0.20 / 战斗 0.30，裁尾静音），产 wav → `assets/audio/sfx/<key>_<n>.wav`，
+  并在脚本末尾打印可直接粘进 `AudioManager._load_audio_assets()` 的 `_register_sfx` 注册块。
+- 探针素材留在 `assets_raw/music/probe_sfx_click.mp3`（`assets_raw/*` 已被 export_presets 排除，不进 APK），
+  manifest 有两条对应记录；后续别再对着音效需求烧音乐配额。

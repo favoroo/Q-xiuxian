@@ -5,6 +5,9 @@ extends Node2D
 
 var radius: float = 80.0
 var damage: float = 35.0
+var proc_burn: bool = false
+var burn_dps: float = 0.0
+var burn_dur: float = 3.0
 
 @onready var fx_sprite: Sprite2D = $FxSprite
 @onready var light: PointLight2D = $PointLight2D
@@ -61,10 +64,13 @@ func _deal_damage() -> void:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			var is_crit = randf() < GameManager.get_crit_rate()
-			var dmg = damage * (GameManager.crit_mult if is_crit else 1.0)
-			var knock = (enemy.global_position - global_position).normalized() * 200.0
+			var is_crit: bool = GameManager.rng.randf() < GameManager.get_crit_rate()
+			var crit_m: float = GameManager.crit_mult + GameManager.synergy_crit_mult
+			var dmg: float = damage * (crit_m if is_crit else 1.0)
+			var knock: Vector2 = (enemy.global_position - global_position).normalized() * 200.0
 			enemy.take_damage(dmg, knock, is_crit)
+			if proc_burn and enemy.has_method("apply_burn"):
+				enemy.apply_burn(burn_dps, burn_dur)
 			GameManager.try_lifesteal()
 			if is_crit:
 				had_crit = true

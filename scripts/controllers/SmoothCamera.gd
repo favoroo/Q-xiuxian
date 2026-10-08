@@ -7,7 +7,7 @@ extends Camera2D
 ## - 多频正弦连续采样（替代每帧 randf 白噪点抖动）+ 镜头旋转偏航（Roll）+ 缩放冲击（Zoom Punch）
 
 @export var follow_speed: float = 9.0
-@export var lookahead_factor: float = 0.055
+@export var lookahead_factor: float = 0.04
 @export var trauma_decay: float = 1.45
 @export var max_offset: Vector2 = Vector2(12.0, 9.0)
 @export var max_roll: float = 0.018
@@ -56,6 +56,8 @@ func _shake_axis(seed_val: float, t: float) -> float:
 
 ## 叠加创伤值（0.0 ~ 1.0）：小命中 0.12，普通受击 0.35，暴击/重击 0.45，大招/首领 0.75
 func add_trauma(amount: float) -> void:
+	if not bool(SettingsManager.get_val(&"display", &"screen_shake", true)):
+		return
 	trauma = clampf(trauma + amount, 0.0, 1.0)
 
 ## 镜头瞬时缩放冲击（Zoom Punch），用于聚灵阵爆发、精英击杀、大招等高潮时刻

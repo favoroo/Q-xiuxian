@@ -1,21 +1,21 @@
 class_name EnemyBase
 extends CharacterBody2D
 
-@export var max_hp: float = 40.0
+@export var max_hp: float = 60.0
 @export var move_speed: float = 110.0
-@export var contact_damage: float = 8.0
+@export var contact_damage: float = 12.0
 @export var is_elite: bool = false
 @export var exp_reward: int = 1
 @export var spritesheet_path: String = ""
 # 可选行为（0 = 关闭，场景按怪种配置）
 @export var preferred_range: float = 0.0   ## >0：远程怪，保持该距离环绕游走
 @export var bolt_interval: float = 0.0     ## >0：每隔 N 秒向玩家发射剑气
-@export var bolt_damage: float = 6.0
+@export var bolt_damage: float = 9.0
 @export var charge_interval: float = 0.0   ## >0：每隔 N 秒朝玩家突进
 @export var explode_radius: float = 0.0    ## >0：贴近玩家 40px 后点燃 0.8s 引信自爆
 @export var heal_orb_drop: int = 0         ## >0：死亡掉「残丹」回血珠而非灵石
 
-var current_hp: float = 40.0
+var current_hp: float = 60.0
 var knockback_velocity: Vector2 = Vector2.ZERO
 var facing: String = "s"
 var anim_base_scale: Vector2 = Vector2.ONE
@@ -24,10 +24,23 @@ var _bolt_timer: float = 1.2
 var _charge_timer: float = 0.0
 var _charge_active: float = 0.0
 var _charge_dir: Vector2 = Vector2.ZERO
+var _charge_windup: float = -1.0   ## >=0 表示进入冲刺预警阶段
+var _charge_warning_line: Line2D = null  ## 冲刺预警线节点
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
 var _no_drop: bool = false
 
+# 五行元素异常状态（灼烧/冰缓/剧毒）
+var burn_timer: float = 0.0
+var burn_dps: float = 0.0
+var _burn_tick: float = 0.0
+var poison_timer: float = 0.0
+var poison_dps: float = 0.0
+var _poison_tick: float = 0.0
+var chill_timer: float = 0.0
+var chill_slow: float = 0.0
+
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var shadow_sprite: Sprite2D = get_node_or_null("Shadow") as Sprite2D
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
@@ -49,11 +62,36 @@ func _ready() -> void:
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
 
-func _setup_frames(path: String) -> void:
+## 同种敌人的帧集合逐字节相同，按「贴图路径|是否精英」缓存：
+## 原先每只敌人在 _ready 里新建一套 SpriteFrames + 8 方向 ×6 帧 AtlasTexture，
+## 是长局里最大的一块分配压力（比 instantiate/free 节点本身贵得多）。
+## 共享后 SpriteFrames 只读，节点级状态（scale/modulate/position/frame）互不影响。
+static var _frames_cache: Dictionary = {}
+
+## 释放共享帧缓存（退出时调用）。缓存是刻意常驻的，但不主动放开引用会被
+## Godot 报成 "resources still in use at exit"，让退出日志一片假警报。
+static func clear_frame_cache() -> void:
+	_frames_cache.clear()
+
+## 当前缓存的帧集合数量（调试/自动化验证用）
+static func cache_size() -> int:
+	return _frames_cache.size()
+
+static func _cell_tex(tex: Texture2D, col: int, row: int) -> AtlasTexture:
+	var at = AtlasTexture.new()
+	at.atlas = tex
+	at.region = Rect2(col * 192, row * 192, 192, 192)
+	return at
+
+## 取（或首次构建）某种怪共享的 SpriteFrames
+static func _shared_frames(path: String, elite: bool) -> SpriteFrames:
+	var key := "%s|%s" % [path, elite]
+	if _frames_cache.has(key):
+		return _frames_cache[key]
 	var tex = load(path) as Texture2D
 	if tex == null:
-		return
-	var sf = SpriteFrames.new()
+		return null
+	var sf := SpriteFrames.new()
 	for dir in RunMotion.DIR_ROW:
 		var row: int = RunMotion.DIR_ROW[dir]
 		sf.add_animation("idle_" + dir)
@@ -62,19 +100,19 @@ func _setup_frames(path: String) -> void:
 		sf.add_frame("idle_" + dir, _cell_tex(tex, 0, row))
 
 		sf.add_animation("run_" + dir)
-		sf.set_animation_speed("run_" + dir, 10.0 if not is_elite else 8.5)
+		sf.set_animation_speed("run_" + dir, 10.0 if not elite else 8.5)
 		sf.set_animation_loop("run_" + dir, true)
 		for c in range(1, 5):
 			sf.add_frame("run_" + dir, _cell_tex(tex, c, row))
+	_frames_cache[key] = sf
+	return sf
 
+func _setup_frames(path: String) -> void:
+	var sf := _shared_frames(path, is_elite)
+	if sf == null:
+		return
 	anim_sprite.sprite_frames = sf
 	anim_sprite.play("run_s")
-
-func _cell_tex(tex: Texture2D, col: int, row: int) -> AtlasTexture:
-	var at = AtlasTexture.new()
-	at.atlas = tex
-	at.region = Rect2(col * 192, row * 192, 192, 192)
-	return at
 
 ## 挤压与拉伸形变回弹（Squash & Stretch）
 func play_squash(target: Vector2, duration: float = 0.16) -> void:
@@ -93,6 +131,34 @@ func _physics_process(delta: float) -> void:
 	if player == null:
 		return
 
+	# 0. 五行元素异常状态结算（灼烧/剧毒/冰缓）
+	if burn_timer > 0.0:
+		burn_timer -= delta
+		_burn_tick += delta
+		if _burn_tick >= 0.5:
+			_burn_tick = 0.0
+			take_damage(maxf(1.0, burn_dps * 0.5 * GameManager.synergy_burn_mult), Vector2.ZERO, false)
+			if dying:
+				return
+	if poison_timer > 0.0:
+		poison_timer -= delta
+		_poison_tick += delta
+		if _poison_tick >= 0.5:
+			_poison_tick = 0.0
+			take_damage(maxf(1.0, poison_dps * 0.5), Vector2.ZERO, false)
+			if dying:
+				return
+	var eff_speed: float = move_speed
+	if chill_timer > 0.0:
+		chill_timer -= delta
+		eff_speed = move_speed * (1.0 - chill_slow)
+		if _fuse < 0.0:
+			anim_sprite.modulate = Color(0.68, 0.88, 1.05)
+		if chill_timer <= 0.0:
+			chill_slow = 0.0
+			if _fuse < 0.0:
+				anim_sprite.modulate = Color.WHITE
+
 	# 1. 击退速度指数衰减
 	if knockback_velocity.length_squared() > 10.0:
 		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * 14.0, 1.0))
@@ -105,27 +171,38 @@ func _physics_process(delta: float) -> void:
 	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
 
 	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切
-	var target_vel := dir * move_speed
+	var target_vel := dir * eff_speed
 
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
 	if preferred_range > 0.0:
 		var dist := sqrt(dist_sq)
 		if dist < preferred_range - 30.0:
-			target_vel = -dir * move_speed * 0.8
+			target_vel = -dir * eff_speed * 0.8
 		elif dist <= preferred_range + 30.0:
-			target_vel = Vector2(-dir.y, dir.x) * move_speed * 0.5
+			target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
-	# 雷兽突进：冷却一到就朝玩家猛冲 0.45s
+	# 雷兽突进：冷却到 → 预警 1.2s → 冲刺 0.8s（距离约 307px）
 	if charge_interval > 0.0:
 		_charge_timer -= delta
-		if _charge_active > 0.0:
+		
+		# 预警阶段：原地不动，画预警线
+		if _charge_windup > 0.0:
+			_charge_windup -= delta
+			target_vel = Vector2.ZERO
+			_update_charge_warning(player)
+			if _charge_windup <= 0.0:
+				_start_charge(dir)
+		
+		# 冲刺阶段
+		elif _charge_active > 0.0:
 			_charge_active -= delta
 			target_vel = _charge_dir * move_speed * 3.2
+			_clear_charge_warning()
+		
+		# 空闲阶段：冷却到 → 进入预警
 		elif _charge_timer <= 0.0 and dist_sq > 14400.0 and dist_sq < 202500.0:
 			_charge_timer = charge_interval
-			_charge_active = 0.45
-			_charge_dir = dir
-			play_squash(Vector2(0.78, 1.24), 0.2)
+			_charge_windup = 1.2  # 1.2 秒预警
 
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
 	if explode_radius > 0.0:
@@ -169,17 +246,17 @@ func _physics_process(delta: float) -> void:
 	var current_base := anim_base_scale * juice_scale
 	var current_speed := velocity.length()
 	var speed_ratio: float = (current_speed / move_speed) if move_speed > 0.0 else 1.0
+	# 实际位移足够才播跑步动画：远程怪环绕游走/贴身减速时不再原地空踏步（滑行悬浮感来源）
+	var is_moving := current_speed > maxf(20.0, move_speed * 0.2)
 
 	if anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing):
-		var run_anim: String = "run_" + facing
-		if anim_sprite.animation != run_anim:
-			var keep_frame: bool = anim_sprite.animation.begins_with("run_")
-			var prev_frame: int = anim_sprite.frame
-			var prev_prog: float = anim_sprite.frame_progress
-			anim_sprite.play(run_anim)
-			if keep_frame:
-				anim_sprite.set_frame_and_progress(prev_frame, prev_prog)
-		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio)
+		if is_moving:
+			var run_anim: String = "run_" + facing
+			RunMotion.select_anim(anim_sprite, run_anim, true)
+			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
+		else:
+			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, 0.0, shadow_sprite)
 	else:
 		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
 
@@ -198,7 +275,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	if dying:
 		return
 	current_hp -= amount
-	knockback_velocity = knockback * (0.55 if is_elite else 1.0)
+	knockback_velocity = knockback * (0.55 if is_elite else 1.0) * GameManager.synergy_knockback_mult
 
 	# 1. 声音与跳字
 	if is_crit:
@@ -225,24 +302,76 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	if current_hp <= 0.0:
 		_die()
 
+## 施加【离火灼烧】：按秒持续扣血，受离火羁绊增伤
+func apply_burn(dps: float, duration: float) -> void:
+	if dying:
+		return
+	burn_dps = maxf(burn_dps, dps)
+	burn_timer = maxf(burn_timer, duration)
+
+## 施加【玄水冰缓】：降低移动速度并附加冰蓝色温
+func apply_chill(slow_pct: float, duration: float) -> void:
+	if dying:
+		return
+	chill_slow = maxf(chill_slow, clampf(slow_pct, 0.1, 0.7))
+	chill_timer = maxf(chill_timer, duration)
+
+## 施加【青木剧毒】：持续毒素侵蚀
+func apply_poison(dps: float, duration: float) -> void:
+	if dying:
+		return
+	poison_dps = poison_dps + dps * 0.5
+	poison_timer = maxf(poison_timer, duration)
+
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
 func _explode(player: Node2D) -> void:
 	if dying:
 		return
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-	AudioManager.play_sfx("obelisk_blessing", 0.5)
+	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
 		player.take_damage(contact_damage * 2.0)
 	_no_drop = true
 	_die()
+
+## 开始冲刺（预警结束后调用）
+func _start_charge(dir: Vector2) -> void:
+	_charge_active = 0.8
+	_charge_dir = dir
+	play_squash(Vector2(0.78, 1.24), 0.2)
+	_clear_charge_warning()
+
+## 更新冲刺预警线（预警期间每帧调用）
+func _update_charge_warning(player: Node2D) -> void:
+	if _charge_warning_line == null:
+		_charge_warning_line = Line2D.new()
+		_charge_warning_line.width = 3.0
+		_charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.6)
+		add_child(_charge_warning_line)
+	
+	# 更新端点：从自身到玩家
+	_charge_warning_line.clear_points()
+	_charge_warning_line.add_point(Vector2.ZERO)
+	var local_target: Vector2 = player.global_position - global_position
+	_charge_warning_line.add_point(local_target)
+	
+	# 闪烁效果：alpha 在 0.3~0.8 之间正弦波动
+	var alpha: float = 0.55 + 0.25 * sin(_charge_windup * 12.0)
+	_charge_warning_line.default_color.a = alpha
+
+## 清理预警线
+func _clear_charge_warning() -> void:
+	if _charge_warning_line != null:
+		_charge_warning_line.queue_free()
+		_charge_warning_line = null
 
 ## 发射剑气弹（御剑邪修）
 func _fire_bolt(player: Node2D) -> void:
 	var bolt := EnemyBolt.new()
 	bolt.global_position = global_position
 	bolt.direction = (player.global_position - global_position).normalized()
-	bolt.damage = bolt_damage * (contact_damage / 8.0)  # 随波次缩放比例与接触伤害一致
+	bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
 	get_parent().add_child(bolt)
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("blade_shoot", 0.6)
@@ -266,14 +395,19 @@ func _die() -> void:
 		return
 	dying = true
 	GameManager.register_kill(is_elite)
+	
+	# 清理预警线（如果存在）
+	_clear_charge_warning()
 
 	# 击杀视觉爆散与分级震屏
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite)
 	if is_elite:
 		GameManager.feedback(GameManager.FeedbackTier.LARGE)
-		AudioManager.play_sfx("level_up", 1.05)
+		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
 		GameManager.add_trauma(0.09)
+		# 普通妖物死亡以前是完全静音的，而击杀是本作最高频的反馈事件
+		AudioManager.play_sfx("enemy_death", 0.85)
 
 	var gem_count = 1 if not is_elite else 5
 	if _no_drop:

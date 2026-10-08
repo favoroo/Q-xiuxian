@@ -47,6 +47,14 @@ description: 修仙幸存者游戏的 Git 提交存档、双平台推送与版�
 脚本：`.agents/skills/xiuxian-release/release.py`（纯 Python 标准库）。
 
 ```text
+⓪ 发布前门禁（三条 headless 全绿才允许进 ①，任一失败先修再发）:
+   G=/Applications/Godot.app/Contents/MacOS/Godot
+   $G --headless --path . res://tests/UnitRunner.tscn    # 数值单测
+   $G --headless --path . res://tests/PoolCheck.tscn     # 帧缓存 / 对象池
+   $G --headless --path . res://tests/SmokeRunner.tscn   # 全流程冒烟
+   —— 判据由 tests/check.gd 出：退出码 0 且末行 *_RESULT: ALL PASS。
+   —— 本轮动过 class_name 脚本或 assets/ 素材时，先跑一次 `$G --headless --path . --editor --quit`
+      让全局类名与新资源完成导入，否则会出现「素材没注册」的假失败。
 ① 自动算版本号并写回:  python3 .agents/skills/xiuxian-release/release.py bump --write
    —— 读 Version.gd → 查 tag → 不存在直接用当前版本(预升未发布);已存在则 +1 写回 Version.gd 与 export_presets.cfg
 ② 执行构建:           python3 .agents/skills/xiuxian-release/release.py build --version X.Y.Z

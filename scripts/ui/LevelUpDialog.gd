@@ -51,7 +51,7 @@ func _on_level_up(level: int) -> void:
 	_can_interact = false
 	_is_confirming = false
 
-	current_upgrades = UpgradeData.get_random_upgrades(3)
+	current_upgrades = GameManager.roll_upgrades(3)
 	title_label.text = "悟 道 加 点  ·  Lv." + str(level)
 	_update_hint_text()
 	_populate_cards()

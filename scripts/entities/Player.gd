@@ -7,6 +7,7 @@ var base_speed: float = 210.0
 var invulnerable_time: float = 0.0
 
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var shadow_sprite: Sprite2D = $Shadow
 @onready var sun_orb_container: Node2D = $SunOrbContainer
 @onready var weapon_holder: Node2D = $WeaponHolder
 @onready var pickup_area: Area2D = $PickupArea
@@ -33,6 +34,8 @@ func _ready() -> void:
 	GameManager.upgrade_applied.connect(_on_upgrade_applied)
 	_setup_sprite_frames()
 	anim_base_scale = anim_sprite.scale
+	# 浮游法器在 _process 里做轨道跟随（渲染帧率），父链开了物理插值会互相打架，关闭该分支插值
+	weapon_holder.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	sync_drones()
 	_sync_pickup_radius()
 
@@ -159,7 +162,10 @@ func sync_drones() -> void:
 	for i in range(sun_orb_container.get_child_count()):
 		var orb = sun_orb_container.get_child(i) as SunOrb
 		if orb != null and i < target.size():
-			orb.setup(int(target[i]))
+			var d_entry = target[i]
+			var d_id: String = GameManager._drone_id(d_entry)
+			var d_star: int = GameManager._drone_star(d_entry)
+			orb.setup(d_star, d_id)
 
 func heal(amount: float, quiet: bool = false) -> void:
 	if amount <= 0.0:
@@ -169,6 +175,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 	if quiet:
 		return
 	play_squash(Vector2(0.88, 1.16), 0.18)
+	AudioManager.play_sfx("heal", 0.9)
 	DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+" + str(int(amount)))
 
 # ---------------- 主循环 ----------------
@@ -183,9 +190,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		anim_sprite.modulate.a = 1.0
 
-	# 灵愈心法：持续回血
-	if GameManager.hp_regen > 0.0 and current_health < max_health:
-		current_health = minf(max_health, current_health + GameManager.hp_regen * delta)
+	# 灵愈心法 + 青木羁绊：持续回血
+	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
+	if total_regen > 0.0 and current_health < max_health:
+		current_health = minf(max_health, current_health + total_regen * delta)
 		regen_tick += delta
 		if regen_tick >= 0.5:
 			regen_tick = 0.0
@@ -198,11 +206,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 
-	var target_speed := base_speed * GameManager.move_speed_mult
+	var target_speed := base_speed * (GameManager.move_speed_mult + GameManager.synergy_move_speed_mult)
 	var target_velocity := dir * target_speed
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
-	var is_moving := input_moving or actual_speed_sq > 225.0 # 移速 > 15px/s 仍保持步态惯性
+	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
+	var stop_threshold := maxf(30.0, target_speed * 0.35)
+	var is_moving := input_moving or actual_speed_sq > stop_threshold * stop_threshold
 	var accel := 2200.0 if input_moving else 2800.0
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
@@ -234,25 +244,116 @@ func _physics_process(delta: float) -> void:
 			anim_sprite.flip_h = face[1]
 
 		var run_anim: String = "run_" + facing
-		if anim_sprite.animation != run_anim:
-			var keep_frame: bool = anim_sprite.animation.begins_with("run_")
-			var prev_frame: int = anim_sprite.frame
-			var prev_prog: float = anim_sprite.frame_progress
-			anim_sprite.play(run_anim)
-			if keep_frame:
-				anim_sprite.set_frame_and_progress(prev_frame, prev_prog)
+		RunMotion.select_anim(anim_sprite, run_anim, true)
 
 		var lean_axis: float = absf(effective_dir.x)
-		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio)
+		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 	else:
 		var idle_anim: String = "idle_" + facing
-		if anim_sprite.animation != idle_anim:
-			anim_sprite.play(idle_anim)
+		RunMotion.select_anim(anim_sprite, idle_anim, false)
 		idle_bob_phase += delta * 2.2
-		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase)
+		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)
+
+	# 5. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
+	_update_weapon_targets()
+
+func _update_weapon_targets() -> void:
+	equipped_cleanup()
+	var count = weapon_holder.get_child_count()
+	if count == 0:
+		return
+
+	var weapons: Array[FloatingWeapon] = []
+	var max_range: float = 0.0
+	for i in range(count):
+		var w = weapon_holder.get_child(i) as FloatingWeapon
+		if w != null and is_instance_valid(w):
+			weapons.append(w)
+			var w_range = w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+			if w_range > max_range:
+				max_range = w_range
+
+	if weapons.is_empty() or max_range <= 0.0:
+		return
+
+	var space_state = get_world_2d().direct_space_state
+	var shape = CircleShape2D.new()
+	shape.radius = max_range
+	var query = PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, global_position)
+	query.collision_mask = 4
+	query.collide_with_areas = true
+	var results = space_state.intersect_shape(query, 32)
+
+	var candidate_enemies: Array[Node2D] = []
+	var seen_ids := {}
+	for res in results:
+		var col = res.get("collider")
+		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
+			var enemy = col.get_parent() as Node2D
+			if not is_instance_valid(enemy) or enemy.is_in_group("herbs"):
+				continue
+			var eid := enemy.get_instance_id()
+			if seen_ids.has(eid):
+				continue
+			seen_ids[eid] = true
+			candidate_enemies.append(enemy)
+
+	# 按距玩家从近到远排序，保证贴身危急判定与同向优先级稳定
+	candidate_enemies.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
+	)
+
+	var weapons_info: Array[Dictionary] = []
+	for w in weapons:
+		var prev_id := 0
+		if w.current_target != null and is_instance_valid(w.current_target):
+			prev_id = w.current_target.get_instance_id()
+		var w_range := w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+		weapons_info.append({
+			"base_angle": w.base_angle,
+			"range": w_range,
+			"prev_id": prev_id,
+		})
+
+	var enemies_info: Array[Dictionary] = []
+	for e in candidate_enemies:
+		var offset := e.global_position - global_position
+		enemies_info.append({
+			"id": e.get_instance_id(),
+			"dist": offset.length(),
+			"angle": offset.angle(),
+		})
+
+	var assignments: Array = GameBalance.assign_weapon_targets(weapons_info, enemies_info)
+
+	# 按实际共享同一目标的法器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
+	var target_groups := {}
+	for i in range(weapons.size()):
+		var t_idx := int(assignments[i])
+		if t_idx >= 0:
+			if not target_groups.has(t_idx):
+				target_groups[t_idx] = []
+			target_groups[t_idx].append(i)
+
+	for i in range(weapons.size()):
+		var w := weapons[i]
+		var t_idx := int(assignments[i])
+		if t_idx >= 0 and t_idx < candidate_enemies.size():
+			var group: Array = target_groups[t_idx]
+			var group_size := group.size()
+			var pos_in_group := group.find(i)
+			w.spread_angle = (float(pos_in_group) - float(group_size - 1) * 0.5) * deg_to_rad(24.0)
+			if not w.is_attacking:
+				w.current_target = candidate_enemies[t_idx]
+		else:
+			w.spread_angle = 0.0
+			if not w.is_attacking:
+				w.current_target = null
 
 func _process_sun_orbs(delta: float) -> void:
 	sun_orb_angle += delta * 2.8
@@ -270,12 +371,12 @@ func take_damage(amount: float) -> void:
 		return
 
 	# 流云身法：闪避成功不掉血、不消耗无敌帧
-	if randf() < GameManager.get_effective_dodge():
+	if GameManager.rng.randf() < GameManager.get_effective_dodge():
 		DamageNumber.spawn(get_parent(), global_position, 0, false, "身法回避")
-		AudioManager.play_sfx("orb_hit", 0.5)
+		AudioManager.play_sfx("dodge", 1.0)
 		return
 
-	var reduced := maxf(1.0, amount / (1.0 + GameManager.armor * 0.08))
+	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
 	current_health = maxf(0.0, current_health - reduced)
 	invulnerable_time = 0.55
 	GameManager.player_hp_changed.emit(current_health, max_health)

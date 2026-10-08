@@ -20,14 +20,14 @@ radius = 15.0
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 50.0
+max_hp = 80.0
 move_speed = 115.0
-contact_damage = 8.0
+contact_damage = 13.0
 exp_reward = 3
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 preferred_range = 260.0
 bolt_interval = 2.5
-bolt_damage = 10.0
+bolt_damage = 15.0
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0, 14)

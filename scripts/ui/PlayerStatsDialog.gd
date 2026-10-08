@@ -470,8 +470,15 @@ func _refresh_weapons() -> void:
 			star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(star_lbl)
 
+			var w_id: String = w.get("id", "")
+			var w_star: int = int(w.get("star", 1))
 			var tag_name: String = w.get("name", "")
-			slot.tooltip_text = "%s (%d阶)" % [tag_name, int(w.get("star", 1))]
+			var w_tag: String = w.get("tag", "")
+			var stat_bonus: float = GameManager.get_weapon_stat_bonus(w_id, w_star)
+			var tip := "%s (%d阶) [%s]" % [tag_name, w_star, w_tag]
+			if stat_bonus > 0.05:
+				tip += "\n属性转化增伤: +%.1f" % stat_bonus
+			slot.tooltip_text = tip
 		else:
 			var empty_dot := Label.new()
 			empty_dot.text = "·"

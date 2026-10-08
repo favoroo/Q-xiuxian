@@ -132,3 +132,8 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
     btn.add_theme_color_override("font_color", font_color)
     btn.add_theme_color_override("font_hover_color", hover_color if hover_color.a > 0 else font_color)
     btn.add_theme_color_override("font_pressed_color", hover_color if hover_color.a > 0 else font_color)
+    # 样式入口即反馈入口：全项目按钮的点击音在这里统一挂，避免每个界面各写一遍。
+    # meta 标记防止同一按钮被重复刷新样式时挂出多重连接（一次点击响两声）。
+    if not btn.has_meta("sfx_wired"):
+        btn.set_meta("sfx_wired", true)
+        btn.pressed.connect(func() -> void: AudioManager.play_sfx("ui_click"))
