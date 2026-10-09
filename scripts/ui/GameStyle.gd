@@ -24,6 +24,7 @@ const GOOD_DK := Color("2f8f4c")
 const BAD := Color("ff5a5a")        # 危险/扣血
 const BAD_DK := Color("8f2020")
 const GREY := Color("8f9cbe")       # 暗部正文
+const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/绿/红都不撞）
 
 const SLANT_PLATE := 3.0
 const SLANT_BLOCK := 5.0
@@ -283,6 +284,44 @@ static func bar_styles(track: Color, fill: Color) -> Array:
 ## 色签 chip：小面积斜切更陡才读得出形状
 static func chip(face: Color) -> StyleBoxFlat:
     return block(face, SLANT_BAND, Vector2(2, 3))
+
+## 「元素」角标：贴武器图标右上角的纯色小方块（吃「元素伤害」属性加成的法器专用，
+## 判定走 WeaponData.elemental_scaling_coef）。
+## 为什么不用 chip()：斜切吃宽度、厚底边+错位投影在 10px 高的尺度上全是废高度
+## （2026-10-09 用户反馈「下面还有这么大的空间距」）——这里用零斜切/零边框/零投影的平色块。
+## 为什么包一层 Control：图标容器多为 PanelContainer，会把直接子节点【铺满整个容器】——
+## 直接给 Label 挂底色，色块会跟着拉满盖住整格图标（同日另一处踩坑）。
+## Control 不是容器、不重排自己的子节点，所以外壳吃满布局，角标本体靠锚点缩在右上角、只占文字大小。
+static func element_badge(font_size: int) -> Control:
+    var holder := Control.new()
+    holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    var sb := StyleBoxFlat.new()
+    sb.bg_color = ELEMENT
+    sb.skew = Vector2.ZERO
+    sb.shadow_color = Color(0, 0, 0, 0)
+    sb.content_margin_left = 2.0
+    sb.content_margin_right = 2.0
+    sb.content_margin_top = 0.0
+    sb.content_margin_bottom = 0.0
+
+    var lbl := Label.new()
+    lbl.text = "元素"
+    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lbl.add_theme_stylebox_override("normal", sb)
+    label(lbl, font_size, INK_TEXT)
+    holder.add_child(lbl)
+    # 锚点钉在 holder 右上角并留 1px 内缩；宽高取 Label 最小尺寸（含边距），不许被撑开
+    var ms := lbl.get_combined_minimum_size()
+    lbl.anchor_left = 1.0
+    lbl.anchor_right = 1.0
+    lbl.anchor_top = 0.0
+    lbl.anchor_bottom = 0.0
+    lbl.offset_right = -1.0
+    lbl.offset_left = -1.0 - ms.x
+    lbl.offset_top = 1.0
+    lbl.offset_bottom = 1.0 + ms.y
+    return holder
 
 static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
         outline_col: Color = INK, display: bool = false) -> Label:

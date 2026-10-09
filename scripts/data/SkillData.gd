@@ -20,7 +20,7 @@ const DEFS: Dictionary = {
 		"kind": Kind.DASH,
 		"cooldown": 8.0,
 		"duration": 0.16,     # 冲刺位移耗时（秒），期间无敌
-		"distance": 260.0,    # 冲刺距离（像素）
+		"distance": 150.0,    # 冲刺距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
 		"desc": "向当前方向瞬身突进，突进途中万法不侵。",
 	},
 	"gale": {
@@ -38,8 +38,8 @@ const DEFS: Dictionary = {
 		"kind": Kind.HASTE,
 		"cooldown": 16.0,
 		"duration": 5.0,
-		"power": 0.40,        # 施法间隔减免比例
-		"desc": "咒力催动法器：施法间隔缩短四成，持续五息。",
+		"power": 0.40,        # 攻击间隔缩减比例
+		"desc": "咒力催动法器：攻击间隔缩短四成，持续五息。",
 	},
 	"aegis": {
 		"name": "金光护体",
@@ -115,7 +115,7 @@ static func enhance_desc(skill_id: String, cid: String) -> String:
 			Kind.SPEED:
 				parts.append("移速加成 %d%%→%d%%" % [int(round(base)), int(round(final))])
 			Kind.HASTE:
-				parts.append("间隔减免 %d%%→%d%%" % [int(round(base)), int(round(final))])
+				parts.append("间隔缩减 %d%%→%d%%" % [int(round(base)), int(round(final))])
 			Kind.HEAL:
 				parts.append("回复量 %d%%→%d%%" % [int(round(base)), int(round(final))])
 	if mods.has("cooldown_mult"):

@@ -2,6 +2,7 @@ class_name Player
 extends CharacterBody2D
 
 const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
+const DASH_LANDING_SPEED_MUL: float = 1.35  ## 冲刺落地那帧的残留速度上限（× 常速）：只留一点前冲，不许拖出隐形滑行
 
 @export var max_health: float = 120.0
 var current_health: float = 120.0
@@ -14,6 +15,7 @@ var invulnerable_time: float = 0.0
 @onready var weapon_holder: Node2D = $WeaponHolder
 @onready var pickup_area: Area2D = $PickupArea
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
+@onready var skill_vfx: PlayerSkillVfx = $SkillVfx
 
 var sun_orb_angle: float = 0.0
 var idle_bob_phase: float = 0.0
@@ -291,30 +293,41 @@ func _do_dash(st: Dictionary) -> void:
 	invulnerable_time = maxf(invulnerable_time, _dash_time + 0.04)
 	play_squash(Vector2(1.3, 0.72), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
+	if skill_vfx != null:
+		skill_vfx.on_dash_start(_dash_dir, float(st["distance"]), _dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
 
 func _do_gale(st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
 	_skill_buffs["gale"] = float(st["duration"])
 	play_squash(Vector2(0.85, 1.2), 0.2)
+	if skill_vfx != null:
+		skill_vfx.on_gale_start(float(st["duration"]))
 	AudioManager.play_sfx("skill_buff", 1.0)
 
 func _do_haste(st: Dictionary) -> void:
 	GameManager.buff_attack_speed_mult = maxf(GameManager.ATTACK_SPEED_FLOOR, 1.0 - float(st["power"]))
 	_skill_buffs["haste"] = float(st["duration"])
 	play_squash(Vector2(1.12, 0.9), 0.18)
+	if skill_vfx != null:
+		skill_vfx.on_haste_start(float(st["duration"]))
 	AudioManager.play_sfx("skill_buff", 1.1)
 
 func _do_aegis(st: Dictionary) -> void:
-	invulnerable_time = maxf(invulnerable_time, float(st["duration"]))
+	var dur: float = float(st["duration"])
+	invulnerable_time = maxf(invulnerable_time, dur)
 	play_squash(Vector2(0.82, 1.22), 0.24)
 	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, true)
+	if skill_vfx != null:
+		skill_vfx.on_aegis_start(dur)
 	AudioManager.play_sfx("skill_aegis", 1.0)
 
 func _do_renewal(st: Dictionary) -> void:
 	heal(max_health * float(st["power"]), true)
 	play_squash(Vector2(0.88, 1.16), 0.18)
 	DamageNumber.spawn(get_parent(), global_position, int(max_health * float(st["power"])), false, "+" + str(int(max_health * float(st["power"]))) + " HP")
+	if skill_vfx != null:
+		skill_vfx.on_renewal_cast()
 	AudioManager.play_sfx("skill_heal", 1.0)
 
 # ---------------- 主循环 ----------------
@@ -331,9 +344,13 @@ func _physics_process(delta: float) -> void:
 
 	if invulnerable_time > 0.0:
 		invulnerable_time -= delta
-		anim_sprite.modulate.a = 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0
+		# 金光护体期间角色泛金光高亮，普通受击无敌维持半透明呼吸频闪
+		if skill_vfx != null and skill_vfx.aegis_active:
+			anim_sprite.modulate = Color(1.3, 1.25, 0.85, 0.95)
+		else:
+			anim_sprite.modulate = Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
 	else:
-		anim_sprite.modulate.a = 1.0
+		anim_sprite.modulate = Color.WHITE
 
 	# 灵愈心法 + 青木羁绊：持续回血
 	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
@@ -358,6 +375,12 @@ func _physics_process(delta: float) -> void:
 		_dash_time -= delta
 		target_velocity = _dash_dir * _dash_speed
 		velocity = target_velocity
+		if _dash_time <= 0.0:
+			# 落地即收速：不收回的话最后一帧的速度还是 distance/duration 的峰值
+			# （旧写法 260/0.16 = 1625 px/s），之后要 0.6~0.8s 才掉回常速 ⇒ 纸面 260 实际冲出去 830+
+			# （约 1.5 个屏高）。收速后位移与数据表同源，只留一点前冲余量。
+			velocity = _dash_dir * minf(velocity.length(), target_speed * DASH_LANDING_SPEED_MUL)
+			target_velocity = dir * target_speed
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
@@ -415,7 +438,11 @@ func _physics_process(delta: float) -> void:
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)
 
-	# 5. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
+	# 5. 随行神通（技能）角色身上动效更新
+	if skill_vfx != null:
+		skill_vfx.update_vfx(delta, is_moving, velocity)
+
+	# 6. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
 	_update_weapon_targets()
 
 func _update_weapon_targets() -> void:

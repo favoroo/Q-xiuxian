@@ -50,9 +50,9 @@ func _ready() -> void:
 		if light != null:
 			light.color = Color(0.8, 0.45, 1.0)
 			light.energy = 0.85
-		super._ready()
 		hit_stun_resist = 0.25
 		anim_sprite.modulate = _tint
+	super._ready()
 	# 登场即上屏：HUD 血条由此信号点亮
 	GameManager.boss_hp_changed.emit(current_hp, max_hp, boss_title)
 

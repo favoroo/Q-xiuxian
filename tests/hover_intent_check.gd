@@ -176,6 +176,30 @@ func _case_layer_scene() -> void:
 	_c.check(float(near["intent"]) < float(far["intent"]) - 0.8,
 		"B2 现场：两种走位的意图读数分得开（%+.2f vs %+.2f）" % [float(near["intent"]), float(far["intent"])])
 
+	# B3 图集朝向契约：pawn_red_8dir 的 e/ne 行必须面朝右侧、黑雾向左后拖尾（防止原图画反导致倒车漂移）
+	var tex := load("res://assets/art/pawn_red_8dir.png") as Texture2D
+	var img := tex.get_image() if tex != null else null
+	_c.check(img != null, "B3 图集：pawn_red_8dir.png 可正常读取像素")
+	if img != null:
+		for pair in [[2, "e"], [4, "ne"]]:
+			var r: int = pair[0]
+			var dname: String = pair[1]
+			var head_sum := 0.0
+			var head_cnt := 0
+			var mist_min_x := 192
+			for y in range(r * 192, r * 192 + 192):
+				var local_y := y - r * 192
+				for x in range(192):
+					if img.get_pixel(x, y).a > 0.1:
+						if local_y < 100:
+							head_sum += float(x)
+							head_cnt += 1
+						else:
+							mist_min_x = mini(mist_min_x, x)
+			var head_cx := (head_sum / float(head_cnt)) if head_cnt > 0 else 0.0
+			_c.check(head_cx > 80.0 and mist_min_x < 50,
+				"B3 图集 %s 行：人物面朝右（头胸重心 x=%.1f）、黑雾向左后拖尾（左探 x=%d）" % [dname, head_cx, mist_min_x])
+
 	_world.queue_free()
 
 ## 摆一只邪修到玩家正下方 dist 处（截图那个方位：bank≈0，全靠纵向通道）

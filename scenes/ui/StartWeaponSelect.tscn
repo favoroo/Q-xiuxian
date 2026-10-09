@@ -73,7 +73,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.788, 0.769, 0.706, 1)
 theme_override_font_sizes/font_size = 15
-text = "灵田妖潮将至，三器选其一，随你上阵斩妖"
+text = "灵田妖潮将至，五行法器与御灵灵蝶择其一，随你上阵斩妖"
 horizontal_alignment = 1
 
 [node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]

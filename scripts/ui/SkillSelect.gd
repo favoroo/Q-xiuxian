@@ -1,7 +1,7 @@
 class_name SkillSelect
 extends Control
 
-## 随行神通五选一：选完道统后进入，选定后转本命法器三选一
+## 随行神通五选一：选完道统后进入，选定后转本命法器六选一
 ## 道统契合判定与强化文案全部走 SkillData（is_enhanced_for_cultivator / enhance_desc），本地不抄数值
 
 ## 卡片宽度与左右内边距：折行宽度由这两个数算出来，别在别处再抄一遍

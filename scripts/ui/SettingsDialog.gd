@@ -176,7 +176,7 @@ func _build_audio_page() -> Control:
 
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
 	_add_audio_slider_row(vbox, &"BGM", "灵乐音量", "背景修仙律动音乐 (BGM)")
-	_add_audio_slider_row(vbox, &"SFX", "音效应量", "法术轰鸣、兵刃破空与诛妖音效 (SFX)")
+	_add_audio_slider_row(vbox, &"SFX", "音效音量", "法术轰鸣、兵刃破空与诛妖音效 (SFX)")
 	_add_audio_slider_row(vbox, &"Voice", "道音启示", "天道箴言、人物台词与提示语音 (Voice)")
 
 	return scroll

@@ -4,8 +4,11 @@ extends RefCounted
 ## 武器静态数据库：所有法器的数值/行为/价格/五行/属性受益唯一定义处
 ## 星级：集齐 3 把同名同星，在波间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
 ## 双标签系统：器类（剑系/符箓/雷法/御灵/广域）+ 五行（锐金/青木/玄水/离火/厚土）
-## 弹丸类（PROJECTILE）另带 bullet / bullet_spin 两个外观字段：打出去的东西按法器各自不同
-## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 == 屏上像素；缺 bullet 时回退 blade.png。
+## 弹丸类（PROJECTILE）另带 bullet / bullet_scale / bullet_spin 三个外观字段：打出去的东西按法器各自不同
+## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 × bullet_scale == 屏上像素；缺 bullet 时回退 blade.png。
+## bullet_scale 那把尺子（2026-10-09，用户口径：「飞行物太大了，其他几个也挺大」）：
+## 弹丸屏上长轴不许大过发射它的法器本体（本体 = 48×48 画布 × FloatingWeapon 的 0.55 ⇒ 26.4px）。
+## 符箓是块面状贴图、细长兵器是 40px 长条，按 1.0 出图全都在本体的 1.5 倍 ⇒ 满屏飞招牌。
 ## bullet_spin 2026-10-09 起才真正生效：以前代码按穿透数反推朝向（pierce<=1 就转），
 ## 结果表里明明写了"不转"的玄冰飞针，打出去仍在原地打圈。
 ##
@@ -50,14 +53,14 @@ const DEFS: Dictionary = {
 			"gengjin_feijian": {
 				"name": "庚金飞剑", "behavior": Behavior.PROJECTILE,
 				"sfx": "sword_swing",
-				"damage": 38.0, "cooldown": 0.86, "range": 460.0,
+				"damage": 38.0, "cooldown": 0.86, "range": 340.0,
 				"knockback": 185.0,
 				"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
 				# 2026-10-09 素材返工（旧图是弯的、且旧标定 (20,-14) 落在剑首那头上）：
 				# 新图为笔直双刃剑斜铺，tip 由 tools/fit_weapon_icon.py 实测打印后原样抄入。
 				"tip": Vector2(22, -16),
 				"desc": "飞剑锁敌追击，贯穿两敌；受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
-				"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_spin": false,
+				"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
 				"pierce": 2,
 				"tags": ["sword", "metal"],
 				"stat_scalings": {"ranged_damage": 1.0, "crit_mult_bonus": 30.0},
@@ -65,12 +68,12 @@ const DEFS: Dictionary = {
 			"liuye_feidao": {
 				"name": "柳叶飞刀", "behavior": Behavior.PROJECTILE,
 				"sfx": "talisman_throw",
-				"damage": 14.0, "cooldown": 1.15, "range": 440.0,
+				"damage": 14.0, "cooldown": 1.15, "range": 310.0,
 				"knockback": 110.0,
 				"price": 35, "icon": "res://assets/art/weapon_dagger.png",
 				"tip": Vector2(21, -24),
 				"desc": "扇形疾射三把细小飞刀，各锁一敌；受远程伤害与暴击率加成", "tag": "远程·符箓·金",
-				"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_spin": false,
+				"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.6, "bullet_spin": false,
 				"pierce": 3, "projectile_count": 3, "spread_angle": 0.20,
 				"tags": ["talisman", "metal"],
 				"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
@@ -92,12 +95,12 @@ const DEFS: Dictionary = {
 			"wanmu_lingfu": {
 				"name": "万木灵符", "behavior": Behavior.PROJECTILE,
 				"sfx": "talisman_throw",
-				"damage": 24.0, "cooldown": 1.0, "range": 420.0,
+				"damage": 24.0, "cooldown": 1.0, "range": 300.0,
 				"knockback": 140.0,
 				"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
 				"tip": Vector2(20, -18),
 				"desc": "青绿木符追敌弹射连锁并叠毒；受远程与元素伤害加成", "tag": "远程·符箓·木",
-				"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_spin": true,
+				"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 				"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 				"tags": ["talisman", "wood"],
 				"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.5},
@@ -129,12 +132,12 @@ const DEFS: Dictionary = {
 			"xuanbing_feizhen": {
 				"name": "玄冰飞针", "behavior": Behavior.PROJECTILE,
 				"sfx": "talisman_throw",
-				"damage": 13.0, "cooldown": 0.95, "range": 430.0,
+				"damage": 13.0, "cooldown": 0.95, "range": 310.0,
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
 				"tip": Vector2(-18, 12),
 				"desc": "三枚玄冰飞针齐射追敌，刺骨冰寒；受远程伤害与移速加成", "tag": "远程·符箓·水",
-				"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_spin": false,
+				"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.6, "bullet_spin": false,
 				"pierce": 1, "projectile_count": 3, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
 				"tags": ["talisman", "water"],
 				"stat_scalings": {"ranged_damage": 0.8, "move_speed_bonus": 28.0},
@@ -155,12 +158,12 @@ const DEFS: Dictionary = {
 			"huoyan_fu": {
 				"name": "火焰符", "behavior": Behavior.PROJECTILE,
 				"sfx": "talisman_throw",
-				"damage": 15.0, "cooldown": 0.80, "range": 420.0,
+				"damage": 15.0, "cooldown": 0.80, "range": 300.0,
 				"knockback": 155.0,
 				"price": 30, "icon": "res://assets/art/weapon_staff.png",
 				"tip": Vector2(6, -24),
 				"desc": "一次掷出两张爆燃符箓，追敌引燃；受元素与远程伤害加成", "tag": "远程·符箓·火",
-				"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_spin": true,
+				"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_scale": 0.5, "bullet_spin": true,
 				"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
 				"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 				"tags": ["talisman", "fire"],
@@ -181,7 +184,7 @@ const DEFS: Dictionary = {
 			"fentian_baodeng": {
 				"name": "焚天宝灯", "behavior": Behavior.BURST,
 				"sfx": "thunder_strike",
-				"damage": 30.0, "cooldown": 1.45, "range": 390.0,
+				"damage": 30.0, "cooldown": 1.45, "range": 300.0,
 				"knockback": 200.0,
 				"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
 				"tip": Vector2(22, 0), "upright": true,
@@ -196,7 +199,7 @@ const DEFS: Dictionary = {
 			"wulei_paizi": {
 				"name": "五雷法牌", "behavior": Behavior.BURST,
 				"sfx": "thunder_strike",
-				"damage": 42.0, "cooldown": 1.50, "range": 380.0,
+				"damage": 42.0, "cooldown": 1.50, "range": 290.0,
 				"knockback": 280.0,
 				"price": 45, "icon": "res://assets/art/weapon_thunder.png",
 				"tip": Vector2(22, 0), "upright": true,
@@ -208,7 +211,7 @@ const DEFS: Dictionary = {
 			"fantian_yin": {
 				"name": "番天镇岳印", "behavior": Behavior.BURST,
 				"sfx": "thunder_strike",
-				"damage": 46.0, "cooldown": 1.55, "range": 360.0,
+				"damage": 46.0, "cooldown": 1.55, "range": 280.0,
 				"knockback": 360.0,
 				"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
 				"tip": Vector2(20, 0), "upright": true,
@@ -247,7 +250,7 @@ const SYNERGIES: Dictionary = {
 	"thunder": {
 		"name": "雷法", "thresholds": [2, 4, 6],
 		"values": [0.92, 0.85, 0.75],
-		"desc": "施法间隔 -8/15/25%",
+		"desc": "攻击间隔 -8/15/25%",
 	},
 	"spirit": {
 		"name": "御灵", "thresholds": [2, 4, 6],
@@ -269,12 +272,12 @@ const SYNERGIES: Dictionary = {
 	"wood": {
 		"name": "青木", "thresholds": [2, 4, 6],
 		"values": [1.0, 2.0, 3.5],
-		"desc": "气血回复 +1/2/3.5/秒，生命吸取 +2/4/7%",
+		"desc": "气血回复 +1/2/3.5/秒，吸血 +2/4/7%",
 	},
 	"water": {
 		"name": "玄水", "thresholds": [2, 4, 6],
 		"values": [0.94, 0.88, 0.80],
-		"desc": "施法间隔 -6/12/20%，移动速度 +8/16/25%",
+		"desc": "攻击间隔 -6/12/20%，移动速度 +8/16/25%",
 	},
 	"fire": {
 		"name": "离火", "thresholds": [2, 4, 6],
@@ -288,8 +291,8 @@ const SYNERGIES: Dictionary = {
 	},
 }
 
-## 开局三选一（覆盖金木水火土五种代表性本命法器）
-const STARTER_IDS: Array = ["qingyun_sword", "wanmu_lingfu", "bajiao_fan", "huoyan_fu", "fantian_yin"]
+## 开局六选一：金木水火土五种代表性本命法器 + 御灵入门「灵蝶」
+const STARTER_IDS: Array = ["qingyun_sword", "wanmu_lingfu", "bajiao_fan", "huoyan_fu", "fantian_yin", "lingdie"]
 
 ## 商店武器池（全部 15 把法器）
 const SHOP_POOL: Array = [
@@ -408,7 +411,12 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
 	return dps
 
-## 仿土豆兄弟格式的属性加成说明文案：如 "受近战伤害(100%)、额外会心(40%)加成"
+## 该法器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。
+## 返回系数（0 = 不吃），供各界面挂角标与悟道加点提示共用。
+static func elemental_scaling_coef(id: String) -> float:
+	return float(get_def(id).get("stat_scalings", {}).get("elemental_damage", 0.0))
+
+## 仿土豆兄弟格式的属性加成说明文案：如 "受近战伤害(100%)、额外暴击率(40%)加成"
 static func scaling_desc(id: String) -> String:
 	var def := get_def(id)
 	var scalings: Dictionary = def.get("stat_scalings", {})

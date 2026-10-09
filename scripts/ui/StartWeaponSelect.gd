@@ -1,10 +1,10 @@
 class_name StartWeaponSelect
 extends Control
 
-## 开局本命法器三选一：选择后才开始第一波
+## 开局本命法器六选一：选择后才开始第一波
 
 ## 卡片宽度与左右内边距：折行宽度由这两个数算出来，别在别处再抄一遍 136
-const CARD_W := 156.0
+const CARD_W := 130.0
 const CARD_H := 310.0
 const CARD_PAD_X := 10.0
 
@@ -21,7 +21,7 @@ func _ready() -> void:
 	_setup_header_bar()
 	GameStyle.label(title_label, 30, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(sub_label, 14, GameStyle.PAPER_DIM)
-	sub_label.text = "灵田妖潮将至，五行法器择其一，随你上阵斩妖"
+	sub_label.text = "灵田妖潮将至，五行法器与御灵灵蝶择其一，随你上阵斩妖"
 	GameStyle.label(hint_label, 12, GameStyle.GREY)
 	hint_label.text = "◆ 五行相协、法器共鸣：集齐三把同名同星法器可在商店手动升星 ◆"
 
@@ -68,9 +68,9 @@ func show_select() -> void:
 	var cepi: String = String(cdef.get("epithet", ""))
 	var sname: String = String(SkillData.get_def(GameManager.pending_skill_id).get("name", ""))
 	if not cname.is_empty():
-		sub_label.text = "已入道统 · %s「%s」 · 神通「%s」 · 五行法器择其一" % [cname, cepi, sname]
+		sub_label.text = "已入道统 · %s「%s」 · 神通「%s」 · 五行法器与御灵灵蝶择其一" % [cname, cepi, sname]
 	else:
-		sub_label.text = "灵田妖潮将至，五行法器择其一，随你上阵斩妖"
+		sub_label.text = "灵田妖潮将至，五行法器与御灵灵蝶择其一，随你上阵斩妖"
 	for child in cards_container.get_children():
 		child.queue_free()
 	cards_container.add_theme_constant_override("separation", 10)
@@ -158,6 +158,9 @@ func _create_card(w_id: String) -> Control:
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(icon_tex)
+	# 吃「元素伤害」属性加成的法器挂橙红角标（与商店/属性面板同一口径）
+	if WeaponData.elemental_scaling_coef(w_id) > 0.0:
+		icon_box.add_child(GameStyle.element_badge(8))
 	vbox.add_child(icon_box)
 
 	# 名称 + 星

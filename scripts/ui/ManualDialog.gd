@@ -32,8 +32,8 @@ const SCALING_NAMES := {
 	"armor": "护甲",
 	"max_hp": "气血上限",
 	"move_speed_mult": "移动速度",
-	"attack_speed_mult": "施法速度",
-	"lifesteal": "噬元",
+	"attack_speed_mult": "攻击速度",
+	"lifesteal": "吸血",
 }
 
 const BEHAVIOR_NAMES := {
@@ -348,7 +348,7 @@ func _build_weapons_page(parent: Control) -> Control:
 	var box := _new_scroll_vbox(scroll)
 
 	box.add_child(_make_text_card("法器规则",
-		"法器只能在波间「灵石阁」购买：上阵 %d 槽，纳戒（背包）%d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、施法间隔 ×%s，最高 ★%d。\n点按任意法器卡查看射程、冷却与属性受益。" % [
+		"法器只能在波间「灵石阁」购买：上阵 %d 槽，纳戒（背包）%d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意法器卡查看射程、冷却与属性受益。" % [
 			WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
 			String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
 			WeaponData.MAX_STAR]))
@@ -382,6 +382,11 @@ func _build_weapons_page(parent: Control) -> Control:
 				String(def.get("icon", "")), String(def.get("name", wid)),
 				cls_name, GameStyle.PAPER_DIM,
 				func(anchor: Control): _open_weapon_tip(wid, anchor))
+			# 吃「元素伤害」属性加成的法器挂橙红角标（图鉴与商店/属性面板同一口径）
+			if WeaponData.elemental_scaling_coef(wid) > 0.0:
+				var icon_tex := card.get_meta("icon_tex") as TextureRect
+				if icon_tex != null:
+					icon_tex.get_parent().add_child(GameStyle.element_badge(8))
 			grid.add_child(card)
 	return scroll
 
@@ -398,7 +403,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	var rows: Array = [
 		["路数", String(BEHAVIOR_NAMES.get(def.get("behavior", 0), "近战")), chip_color],
 		["伤害", "%d" % int(def.get("damage", 0)), GameStyle.YELLOW],
-		["施法间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
+		["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
 		["射程/范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
 		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.YELLOW],
 	]

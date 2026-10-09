@@ -36,7 +36,9 @@ class HitPips:
 			draw_rect(rect.grow(1.0), edge_color, false, 1.0)
 
 const BASE_SCALE := Vector2(0.5, 0.5)
-const PIP_LIFT := 26.0        ## 读数离匣心的高度（在匣子上沿之外，不压住匣子本体）
+## 读数离匣心的高度：prop_chest.png 画布 128×124 铺满不透明像素，×0.5 后上沿在匣心上方 31px，
+## 这条要在它之上（量出来的，不是估的）—— 摆在 26 会正正压在匣盖上，等于没有。
+const PIP_LIFT := 40.0
 const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
 
