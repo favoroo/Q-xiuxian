@@ -1,7 +1,7 @@
 class_name UpgradeData
 extends RefCounted
 
-## 加点数据库：升级三选一只出属性，武器一律从波间商店获取
+## 加点数据库：波后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从波间商店获取
 ## 稀有度权重：凡品/良品/仙品基础 60/30/10，福缘每点 +1 仙品权重（从凡品中扣，见 GameBalance.rarity_weights）
 ## 每项设 max_stacks 上限，叠满后从池中剔除，防数值线性失控
 ##
@@ -29,6 +29,46 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity_label": "凡品",
 		"icon": "res://assets/art/icon_atk.png",
 		"max_stacks": 8,
+	},
+	{
+		"id": "melee_up",
+		"apply": {"melee_damage": 2.0},
+		"title": "近身剑势",
+		"desc": "[center]剑势凌厉，近身生威\n• 近战伤害 [color=#ffd24d][b]+2[/b][/color]\n• 挥斩与横扫威力大增[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/weapon_sword.png",
+		"max_stacks": 10,
+	},
+	{
+		"id": "ranged_up",
+		"apply": {"ranged_damage": 2.0},
+		"title": "御风神诀",
+		"desc": "[center]指凝剑诀，破空飞掷\n• 远程伤害 [color=#6fd6ff][b]+2[/b][/color]\n• 飞剑飞针更具杀机[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/weapon_gold_sword.png",
+		"max_stacks": 10,
+	},
+	{
+		"id": "elemental_up",
+		"apply": {"elemental_damage": 2.0},
+		"title": "五行真火",
+		"desc": "[center]引天地道法与真火\n• 元素伤害 [color=#ffd24d][b]+2[/b][/color]\n• 符箓雷法与灼烧更强[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/weapon_fire_lantern.png",
+		"max_stacks": 10,
+	},
+	{
+		"id": "engineering_up",
+		"apply": {"engineering_damage": 2.0},
+		"title": "神念御灵",
+		"desc": "[center]心意相通，以神驭器\n• 御灵伤害 [color=#7ce860][b]+2[/b][/color]\n• 环绕灵宝所向披靡[/center]",
+		"rarity": "common",
+		"rarity_label": "凡品",
+		"icon": "res://assets/art/weapon_earth_bell.png",
+		"max_stacks": 10,
 	},
 	{
 		"id": "haste_up",

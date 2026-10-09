@@ -17,29 +17,46 @@ from PIL import Image
 import sys
 
 CHARS = {
-    "player":   {"tex": "pawn_blue",      "h": 116, "base": 128},
-    "disciple": {"tex": "pawn_red",       "h": 110, "base": 126},
-    "wolf":     {"tex": "warrior_red",    "h": 96,  "base": 128},
-    "puppet":   {"tex": "warrior_purple", "h": 124, "base": 128},
+    # player 走 static 单姿势模式：御剑飞行无步态，每方向一张单图（fly_player_<dir>.raw.jpg），
+    # 程序复制满 5 列；浮沉/前倾等动感由 RunMotion.apply_hover 程序驱动（2026-10-09）
+    "player":   {"tex": "pawn_blue",      "h": 116, "base": 128, "src": "fly_player", "mode": "static"},
+    # 以下全部角色同日切换为 static 单姿势模式（fly_<char>_<dir>.raw.jpg）：
+    # 修士 8 名御物飞行（RunMotion.apply_hover），敌人按怪种 hover/slither（见各 .tscn 的 locomotion_mode）
+    "disciple": {"tex": "pawn_red",       "h": 110, "base": 126, "src": "fly_disciple", "mode": "static"},
+    "wolf":     {"tex": "warrior_red",    "h": 96,  "base": 128, "src": "fly_wolf", "mode": "static"},
+    "puppet":   {"tex": "warrior_purple", "h": 124, "base": 128, "src": "fly_puppet", "mode": "static"},
     # 批二：9 名修士的独立形象（jianchi 沿用 pawn_blue，以下 8 套为新增）
-    "shiyue":    {"tex": "cultivator_shiyue",    "h": 128, "base": 130},
-    "fuzhen":    {"tex": "cultivator_fuzhen",    "h": 92,  "base": 126},
-    "jinsuanpan":{"tex": "cultivator_jinsuanpan","h": 112, "base": 126},
-    "meiying":   {"tex": "cultivator_meiying",   "h": 116, "base": 128},
-    "dubi":      {"tex": "cultivator_dubi",      "h": 126, "base": 130},
-    "kuangzhan": {"tex": "cultivator_kuangzhan", "h": 124, "base": 130},
-    "duoshe":    {"tex": "cultivator_duoshe",    "h": 110, "base": 126},
-    "duobao":    {"tex": "cultivator_duobao",    "h": 114, "base": 126},
+    "shiyue":    {"tex": "cultivator_shiyue",    "h": 128, "base": 130, "src": "fly_shiyue", "mode": "static"},
+    "fuzhen":    {"tex": "cultivator_fuzhen",    "h": 92,  "base": 126, "src": "fly_fuzhen", "mode": "static"},
+    "jinsuanpan":{"tex": "cultivator_jinsuanpan","h": 112, "base": 126, "src": "fly_jinsuanpan", "mode": "static"},
+    "meiying":   {"tex": "cultivator_meiying",   "h": 116, "base": 128, "src": "fly_meiying", "mode": "static"},
+    "dubi":      {"tex": "cultivator_dubi",      "h": 126, "base": 130, "src": "fly_dubi", "mode": "static"},
+    "kuangzhan": {"tex": "cultivator_kuangzhan", "h": 124, "base": 130, "src": "fly_kuangzhan", "mode": "static"},
+    "duoshe":    {"tex": "cultivator_duoshe",    "h": 110, "base": 126, "src": "fly_duoshe", "mode": "static"},
+    "duobao":    {"tex": "cultivator_duobao",    "h": 114, "base": 126, "src": "fly_duobao", "mode": "static"},
     # 批三：新妖种的独立形象
-    "fengqun":   {"tex": "monster_fengqun", "h": 56,  "base": 120},
-    "xueyong":   {"tex": "monster_xueyong", "h": 100, "base": 126},
-    "guyao":     {"tex": "monster_guyao",   "h": 96,  "base": 126},
-    "yingmei":   {"tex": "monster_yingmei", "h": 104, "base": 126},
-    "zhumu":     {"tex": "monster_zhumu",   "h": 110, "base": 130},
+    "fengqun":   {"tex": "monster_fengqun", "h": 56,  "base": 120, "src": "fly_fengqun", "mode": "static"},
+    "xueyong":   {"tex": "monster_xueyong", "h": 100, "base": 126, "src": "fly_xueyong", "mode": "static"},
+    "guyao":     {"tex": "monster_guyao",   "h": 96,  "base": 126, "src": "fly_guyao", "mode": "static"},
+    "yingmei":   {"tex": "monster_yingmei", "h": 104, "base": 126, "src": "fly_yingmei", "mode": "static"},
+    "zhumu":     {"tex": "monster_zhumu",   "h": 110, "base": 130, "src": "fly_zhumu", "mode": "static"},
+    # 批四：共用图集拆分出的专属怪种（史莱姆/丹爆傀儡/花妖）
+    "slime":     {"tex": "monster_slime",   "h": 64,  "base": 130, "src": "fly_slime", "mode": "static"},
+    "danbao":    {"tex": "monster_danbao",  "h": 100, "base": 128, "src": "fly_danbao", "mode": "static"},
+    "flower":    {"tex": "monster_flower",  "h": 110, "base": 128, "src": "fly_flower", "mode": "static"},
 }
 DIRS = ["s", "n", "e", "se", "ne"]
 CELL = 192
 CX = 96
+
+# 【历史保留】两足角色步态镜像修复：仅 extract_five_cells（多帧步态管线）使用。
+# 2026-10-09 起全部角色已切 static 单姿势模式（extract_single_cell），本集合当前无实际作用，
+# 保留给将来可能回归的多帧步态管线。
+BIPED_MIRROR = {
+    "disciple", "puppet",
+    "shiyue", "fuzhen", "jinsuanpan", "meiying",
+    "dubi", "kuangzhan", "duoshe", "duobao",
+}
 
 
 def _clean_blob(im: Image.Image) -> Image.Image:
@@ -95,7 +112,8 @@ def _clean_orphan_pixels(im: Image.Image) -> Image.Image:
     return im
 
 
-def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
+def _keyout(raw_path: str):
+    """品红底抠图：硬边二值化 Alpha（消除半透明抗锯齿边缘频闪），返回 (RGBA, mask)。"""
     im = Image.open(raw_path).convert("RGB")
     W, H = im.size
     px = im.load()
@@ -110,13 +128,32 @@ def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
             if m >= 105:
                 continue
             a = 255 if m <= 30 else int(255 * (105 - m) / 75)
-            # 硬边二值化 Alpha（消除半透明抗锯齿边缘频闪）
             if a > 80:
                 row[x] = 1
                 if m > 0:
                     r = max(0, r - m // 2)
                     b = max(0, b - m // 2)
                 out[x, y] = (r, g, b, 255)
+    return rgba, mask, im
+
+
+def extract_single_cell(raw_path: str):
+    """static 单姿势模式：整图只有一个主体（御剑悬浮等无步态姿势），
+    抠出唯一主体后复制满 5 列，帧间零差异、动感全部交给程序驱动。"""
+    rgba, _mask, _im = _keyout(raw_path)
+    sub = _clean_blob(rgba)
+    sub = _clean_orphan_pixels(sub)
+    b = sub.getbbox()
+    if not b:
+        raise RuntimeError(f"static 原图抠不出主体: {raw_path}")
+    return [sub] * 5, [b] * 5, b[3]
+
+
+def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
+    rgba, mask, im = _keyout(raw_path)
+    W, H = im.size
+    px = im.load()
+    out = rgba.load()
 
     # 检测并完整剥离底部横贯地面黑线（或 5 段底线）
     ys_non_empty = [y for y in range(H) if any(mask[y])]
@@ -181,8 +218,9 @@ def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
         raw_cells.append(sub)
         bboxes.append(b)
 
-    # 修复正面苍狼后两帧原图粘连与侧偏问题：用干净的前两帧水平镜像构成完整对称 4 帧步态
-    if char == "wolf" and d == "s":
+    # 两足角色：用干净的前两帧水平镜像构成完整对称 4 帧步态
+    # （wolf 最初因正面原图后两帧粘连与侧偏引入此修复，后推广到全部两足角色）
+    if char in BIPED_MIRROR or (char == "wolf" and d == "s"):
         raw_cells[3] = raw_cells[1].transpose(Image.FLIP_LEFT_RIGHT)
         bboxes[3] = raw_cells[3].getbbox()
         raw_cells[4] = raw_cells[2].transpose(Image.FLIP_LEFT_RIGHT)
@@ -196,10 +234,13 @@ def extract_five_cells(raw_path: str, char: str = "", d: str = ""):
 
 def build(char: str, cfg: dict) -> None:
     atlas = Image.new("RGBA", (CELL * 5, CELL * 5), (0, 0, 0, 0))
+    src = cfg.get("src", f"run8_{char}")
     for r, d in enumerate(DIRS):
-        raw_cells, bboxes, baseline_y = extract_five_cells(
-            f"assets_raw/images/run8_{char}_{d}.raw.jpg", char, d
-        )
+        raw_path = f"assets_raw/images/{src}_{d}.raw.jpg"
+        if cfg.get("mode") == "static":
+            raw_cells, bboxes, baseline_y = extract_single_cell(raw_path)
+        else:
+            raw_cells, bboxes, baseline_y = extract_five_cells(raw_path, char, d)
         idle_b = bboxes[0]
         idle_h = max(1, idle_b[3] - idle_b[1])
         scale = cfg["h"] / idle_h

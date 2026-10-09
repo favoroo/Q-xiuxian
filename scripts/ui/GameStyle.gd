@@ -169,7 +169,7 @@ const CHIP_PAD := 6.0
 static func chip_pin_w(text: String, font: Font, font_size: int) -> float:
     return line_max_w(text, font, font_size) + CHIP_PAD
 
-## BBCode 版的硬换行：悟道三选一那种 `[center]…\n• 武器总伤害 [b]+15%[/b][/color]…` 的文案，
+## BBCode 版的硬换行：悟道候选那种 `[center]…\n• 武器总伤害 [b]+15%[/b][/color]…` 的文案，
 ## 标签零宽、可见字符才占宽，所以逐字走一遍、只在可见字符之间下刀。
 ## 标签状态是跨行延续的（RichTextLabel 不在换行处重置 [color]/[b]），所以从中间断开
 ## 不会漏闭合 —— 这也是为什么这里能切、而纯文本那套 `wrap_cjk` 不能直接拿来用。

@@ -5,6 +5,11 @@ extends Node2D
 
 var radius: float = 80.0
 var damage: float = 35.0
+var knockback_base: float = 200.0
+## 落点闪光色（由 FloatingWeapon 从 WeaponData.burst_tint 下发）：光环直径仍 == 判定直径，只换色相
+var tint: Color = Color(1.0, 0.95, 0.6)
+## 落点"砸下来的东西"（番天镇岳印 = 玄石大印）；空字符串 = 只留光环与光柱
+var icon_path: String = ""
 var proc_burn: bool = false
 var burn_dps: float = 0.0
 var burn_dur: float = 3.0
@@ -14,8 +19,10 @@ var burn_dur: float = 3.0
 
 func _ready() -> void:
 	fx_sprite.scale = Vector2.ONE * 0.2
-	fx_sprite.modulate = Color(1.0, 0.95, 0.6, 0.0)
+	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
+	light.color = tint
 	_spawn_sky_beam()
+	_spawn_impact_icon()
 
 	var tw = create_tween()
 	tw.set_parallel(true)
@@ -30,6 +37,20 @@ func _ready() -> void:
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	# 震屏挪到 _deal_damage 里按战果发放：劈空的落雷不该让镜头跟着抖一下
 	AudioManager.play_sfx("obelisk_blessing", 0.55)
+
+## 落点之物：把法器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
+func _spawn_impact_icon() -> void:
+	if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
+		return
+	var icon := Sprite2D.new()
+	icon.texture = load(icon_path)
+	var tex_size: float = maxf(1.0, float(icon.texture.get_width()))
+	icon.scale = Vector2.ONE * (radius * 1.4 / tex_size)
+	icon.z_index = 21
+	icon.modulate = Color(tint.r, tint.g, tint.b, 0.95)
+	add_child(icon)
+	var tw := create_tween()
+	tw.tween_property(icon, "modulate:a", 0.0, 0.34).set_delay(0.06)
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
 func _spawn_sky_beam() -> void:
@@ -70,8 +91,8 @@ func _deal_damage() -> void:
 			var crit_m: float = GameManager.crit_mult + GameManager.synergy_crit_mult
 			var dmg: float = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
 			# 震退方向走统一出口：落雷点常在玩家外侧，纯径向会把落点内侧那圈敌人往玩家身上拱
-			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, 200.0)
-			# 灵药丛（SpiritHerb）也有 take_damage 但没有 dying/is_elite 字段，
+			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)
+			# 藏宝匣（SpiritChest）也有 take_damage 但没有 dying/is_elite 字段，
 			# 所以一律走 get()：取不到就当 false，不许在这里炸一场落雷
 			var was_dying := bool(enemy.get("dying"))
 			enemy.take_damage(dmg, knock, is_crit)

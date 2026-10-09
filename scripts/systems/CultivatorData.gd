@@ -17,7 +17,8 @@ extends RefCounted
 ##   item_price                                 —— 法宝价格乘区（多宝道人：0.75）
 ##   shop_slots                                 —— 货架格数加成（多宝道人：+1）
 ## allowed_tags: 非空时商店大幅偏向这些流派的法器，但仍有少量其他法器漏出；locked_upgrades: 锁死的加点项
-## sprite: 角色独立 8 方向行走图（5 行 × 5 列，192px/格，行序见 RunMotion.DIR_ROW）；缺图回退 pawn_blue
+## sprite: 角色独立 8 方向行走图（5 行 × 5 列，192px/格，行序见 RunMotion.DIR_ROW）；缺图回退 pawn_blue_8dir
+## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
 
 const DEFS: Dictionary = {
 	"jianchi": {
@@ -25,6 +26,7 @@ const DEFS: Dictionary = {
 		"epithet": "一人一剑，不问苍生",
 		"icon": "res://assets/art/weapon_sword.png",
 		"sprite": "res://assets/art/pawn_blue_8dir.png",
+		"motion": "hover",
 		"pros": ["剑系法器伤害 +60%", "暴击率 +15%"],
 		"cons": ["此生只执剑：商店以剑系法器为主，偶有他派漏出"],
 		"mods": {
@@ -39,6 +41,7 @@ const DEFS: Dictionary = {
 		"epithet": "肉身成圣，岿然如山",
 		"icon": "res://assets/art/cultivator_shiyue_icon.png",
 		"sprite": "res://assets/art/cultivator_shiyue_8dir.png",
+		"motion": "hover",
 		"pros": ["气血上限 ×1.8", "护甲 +5", "受击反震等同敌方攻击力的伤害"],
 		"cons": ["无法领悟神行符（移速锁死）", "基础移速 -15%"],
 		"mods": {
@@ -55,6 +58,7 @@ const DEFS: Dictionary = {
 		"epithet": "御灵驱蝶，以众凌寡",
 		"icon": "res://assets/art/cultivator_fuzhen_icon.png",
 		"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
+		"motion": "hover",
 		"pros": ["开局自带 2 只灵蝶", "御灵羁绊门槛 -1"],
 		"cons": ["非灵蝶法器伤害 -30%"],
 		"mods": {
@@ -70,6 +74,7 @@ const DEFS: Dictionary = {
 		"epithet": "灵田生金，以利证道",
 		"icon": "res://assets/art/cultivator_jinsuanpan_icon.png",
 		"sprite": "res://assets/art/cultivator_jinsuanpan_8dir.png",
+		"motion": "hover",
 		"pros": ["灵韵 +16 起步（波末白得灵石）", "灵石阁全场八折"],
 		"cons": ["法器伤害 -25%", "气血上限 -25%"],
 		"mods": {
@@ -86,6 +91,7 @@ const DEFS: Dictionary = {
 		"epithet": "来无影，去无踪",
 		"icon": "res://assets/art/cultivator_meiying_icon.png",
 		"sprite": "res://assets/art/cultivator_meiying_8dir.png",
+		"motion": "hover",
 		"pros": ["闪避 +30%", "闪避上限由 60% 提升至 90%"],
 		"cons": ["气血上限 -35%", "肉身孱弱：无法领悟罡气护体"],
 		"mods": {
@@ -101,6 +107,7 @@ const DEFS: Dictionary = {
 		"epithet": "一臂一刀，足以开山",
 		"icon": "res://assets/art/cultivator_dubi_icon.png",
 		"sprite": "res://assets/art/cultivator_dubi_8dir.png",
+		"motion": "hover",
 		"pros": ["法器伤害 ×2.0", "施法间隔 -30%"],
 		"cons": ["此生只执一器：上阵法器槽恒为 1"],
 		"mods": {
@@ -116,6 +123,7 @@ const DEFS: Dictionary = {
 		"epithet": "妖越多，血越热",
 		"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
 		"sprite": "res://assets/art/cultivator_kuangzhan_8dir.png",
+		"motion": "hover",
 		"pros": ["法器伤害 +30%", "妖潮规模 +50%（更多击杀与掉落）"],
 		"cons": ["杀气冲田：灵韵每波流失 3 点"],
 		"mods": {
@@ -131,6 +139,7 @@ const DEFS: Dictionary = {
 		"epithet": "借壳修身，一日千里",
 		"icon": "res://assets/art/cultivator_duoshe_icon.png",
 		"sprite": "res://assets/art/cultivator_duoshe_8dir.png",
+		"motion": "hover",
 		"pros": ["升级所需修为 -40%（悟道一日千里）"],
 		"cons": ["臭名远扬：灵石阁物价 +50%"],
 		"mods": {
@@ -145,6 +154,7 @@ const DEFS: Dictionary = {
 		"epithet": "法宝傍身，琳琅满目",
 		"icon": "res://assets/art/cultivator_duobao_icon.png",
 		"sprite": "res://assets/art/cultivator_duobao_8dir.png",
+		"motion": "hover",
 		"pros": ["灵石阁货架 +1 格", "法宝价格 -25%"],
 		"cons": ["疏于炼器：法器伤害 -20%"],
 		"mods": {

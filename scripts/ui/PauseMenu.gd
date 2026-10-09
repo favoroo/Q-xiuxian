@@ -8,8 +8,12 @@ extends Control
 
 signal stats_requested
 signal settings_requested
+signal manual_requested
 
 var _closing: bool = false
+var _retry_armed: bool = false
+var _retry_btn: Button
+var _retry_reset_tween: Tween
 var _update_btn: Button
 var _ver_label: Label
 
@@ -81,19 +85,21 @@ func _build_ui() -> void:
 	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
 	var stats_btn := _mk_btn("人 物 属 性", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
-	var settings_btn := _mk_btn("游 戏 设 置", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
-	settings_btn.pressed.connect(_on_settings_pressed)
-	_add_row(vbox, [stats_btn, settings_btn])
+	var manual_btn := _mk_btn("教 程 手 册", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
+	manual_btn.pressed.connect(_on_manual_pressed)
+	_add_row(vbox, [stats_btn, manual_btn])
 
-	var retry_btn := _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
-	retry_btn.pressed.connect(_on_retry_pressed)
+	var settings_btn := _mk_btn("游 戏 设 置", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	settings_btn.pressed.connect(_on_settings_pressed)
 	_update_btn = _mk_btn("检 查 更 新", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
 	_update_btn.pressed.connect(_on_check_update_pressed)
-	_add_row(vbox, [retry_btn, _update_btn])
+	_add_row(vbox, [settings_btn, _update_btn])
 
+	_retry_btn = _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER)
+	_retry_btn.pressed.connect(_on_retry_pressed)
 	var quit_btn := _mk_btn("退 出 游 戏", 36, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
 	quit_btn.pressed.connect(func(): get_tree().quit())
-	vbox.add_child(quit_btn)
+	_add_row(vbox, [_retry_btn, quit_btn])
 
 	# 快捷音量微调（与 SettingsManager 双向同步）
 	var vol_title := GameStyle.label(Label.new(), 12, GameStyle.GREY)
@@ -215,6 +221,7 @@ func open() -> void:
 	if visible or GameManager.is_game_over:
 		return
 	_closing = false
+	_reset_retry_confirm()
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
@@ -225,6 +232,7 @@ func close(unpause: bool = true) -> void:
 	if _closing:
 		return
 	_closing = true
+	_reset_retry_confirm()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func():
@@ -237,14 +245,43 @@ func close(unpause: bool = true) -> void:
 func _on_stats_pressed() -> void:
 	visible = false
 	_closing = false
+	_reset_retry_confirm()
 	stats_requested.emit()
+
+func _on_manual_pressed() -> void:
+	visible = false
+	_closing = false
+	_reset_retry_confirm()
+	manual_requested.emit()
 
 func _on_settings_pressed() -> void:
 	visible = false
 	_closing = false
+	_reset_retry_confirm()
 	settings_requested.emit()
 
+func _reset_retry_confirm() -> void:
+	_retry_armed = false
+	if _retry_reset_tween != null and _retry_reset_tween.is_valid():
+		_retry_reset_tween.kill()
+		_retry_reset_tween = null
+	if is_instance_valid(_retry_btn):
+		_retry_btn.text = "重 新 开 始"
+		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER, 6.0)
+
 func _on_retry_pressed() -> void:
+	if not _retry_armed:
+		_retry_armed = true
+		if is_instance_valid(_retry_btn):
+			_retry_btn.text = "再点确认重开"
+			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.YELLOW, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+		if _retry_reset_tween != null and _retry_reset_tween.is_valid():
+			_retry_reset_tween.kill()
+		_retry_reset_tween = create_tween()
+		_retry_reset_tween.tween_interval(3.0)
+		_retry_reset_tween.tween_callback(_reset_retry_confirm)
+		return
+	_reset_retry_confirm()
 	get_tree().paused = false
 	GameManager.reset_run()
 	get_tree().reload_current_scene()

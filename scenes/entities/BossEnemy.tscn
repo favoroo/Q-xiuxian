@@ -21,12 +21,13 @@ radius = 40.0
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_boss")
-max_hp = 2800.0
+max_hp = 1000.0
 move_speed = 68.0
 contact_damage = 24.0
 is_elite = true
 exp_reward = 8
 spritesheet_path = "res://assets/art/warrior_red_8dir.png"
+locomotion_mode = "hover"
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0, 22)

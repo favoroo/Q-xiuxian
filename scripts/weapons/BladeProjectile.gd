@@ -22,12 +22,19 @@ static var homing_scale: float = 1.0
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 470.0
 var damage: float = 20.0
+var knockback_base: float = 140.0
 var lifetime: float = 1.6
 var pierce_left: int = 1
 var bounce_left: int = 0
 var spin: bool = true
 ## 这一发咬定的敌人：开火时由 FloatingWeapon 逐发分配（一次三发的法器各锁一个，不扎堆）
 var homing_target: Node2D = null
+## 弹丸外观按法器归位（2026-10-08 用户口径：「发出来一个不知道什么样的东西，火焰符就发出火」）：
+## 旧写法五把远程法器共用 BladeProjectile.tscn 里那张 blade.png（一张燃烧的符箓）——
+## 飞剑、飞刀、冰针打出去的全是火符。现在由 WeaponData 的 bullet / bullet_scale / bullet_spin 逐件指定。
+## 画布尺寸 == 屏上像素（Nearest、不缩放），贴图一律朝右，飞行时随 direction 转向。
+var bullet_texture: Texture2D = null
+var bullet_scale: float = 1.0
 ## 还能"另找目标"几次：命中过一次就归零 —— 穿透的语义是"一条线穿过去"，不是"拐回来再穿一遍"
 var acquire_left: int = 1
 
@@ -42,21 +49,37 @@ var poison_dps: float = 0.0
 var poison_dur: float = 2.5
 
 @onready var sprite: Sprite2D = $Sprite2D
+@onready var glow: PointLight2D = $PointLight2D
 
 func _ready() -> void:
 	rotation = direction.angle()
+	if bullet_texture != null:
+		sprite.texture = bullet_texture
+		sprite.scale = Vector2.ONE * bullet_scale
 	if spin:
 		var tw = create_tween().set_loops()
 		tw.tween_property(sprite, "rotation", TAU, 0.45).as_relative()
 	_apply_elemental_tint()
 
+## 异常色温：弹丸本体与它自带的那盏 PointLight2D 一起染色（场景里默认是暖橙，
+## 冰针顶着一盏暖灯看着就像打歪了）。只改色相，不改判定、不改尺寸。
 func _apply_elemental_tint() -> void:
+	var tint := Color.WHITE
 	if proc_burn:
-		modulate = Color(1.3, 0.75, 0.45)
+		tint = Color(1.3, 0.75, 0.45)
 	elif proc_chill > 0.0:
-		modulate = Color(0.65, 0.9, 1.3)
+		tint = Color(0.65, 0.9, 1.3)
 	elif proc_poison:
-		modulate = Color(0.65, 1.3, 0.65)
+		tint = Color(0.65, 1.3, 0.65)
+	if tint != Color.WHITE:
+		modulate = tint
+	if glow != null:
+		if proc_burn:
+			glow.color = Color(1.0, 0.6, 0.25)
+		elif proc_chill > 0.0:
+			glow.color = Color(0.55, 0.85, 1.0)
+		elif proc_poison:
+			glow.color = Color(0.55, 1.0, 0.6)
 
 func _physics_process(delta: float) -> void:
 	_steer(delta)
@@ -96,7 +119,10 @@ func _on_area_entered(area: Area2D) -> void:
 		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
 		var actual_dmg = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
-		enemy.take_damage(actual_dmg, direction * GameManager.knockback_force(140.0), is_crit)
+		var knock := GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)
+		if knock.length_squared() < 0.001:
+			knock = direction * GameManager.knockback_force(knockback_base)
+		enemy.take_damage(actual_dmg, knock, is_crit)
 		GameManager.try_lifesteal()
 
 		# 施加五行异常
@@ -152,7 +178,7 @@ func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 			var target = col.get_parent() as Node2D
 			if exclude != null and target == exclude:
 				continue
-			if target.is_in_group("herbs"):
+			if target.is_in_group("chests"):
 				continue
 			if ahead_only:
 				var to_t: Vector2 = target.global_position - global_position

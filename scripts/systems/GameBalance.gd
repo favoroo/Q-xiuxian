@@ -66,7 +66,7 @@ static func enemy_dmg_mult(wave: int) -> float:
 
 const ELITE_WAVES := [5, 15]             ## 精英波：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
-const BOSS_HP_BASE := 2800.0             ## Boss 基础气血（约为精英的 5 倍）
+const BOSS_HP_BASE := 1000.0             ## Boss 基础气血（约为精英的 5 倍）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
 const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量
@@ -179,7 +179,7 @@ static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> flo
 		return harvest * HARVEST_GROWTH
 	return harvest
 
-# ---------------- 悟道三选一的稀有度权重 ----------------
+# ---------------- 悟道候选的稀有度权重 ----------------
 
 const RARITY_EPIC_BASE := 10.0
 const RARITY_RARE := 30.0
@@ -280,6 +280,7 @@ static func upgrade_fields() -> Array:
 		"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
 		"dodge", "lifesteal", "luck", "harvest", "spirit_stones", "max_hp", "hp_heal",
 		"xp_gain_mult", "knockback_mult", "free_rerolls", "elite_damage", "shop_price_mul",
+		"melee_damage", "ranged_damage", "elemental_damage", "engineering_damage",
 		"element_damage_all", "element_damage_metal", "element_damage_wood",
 		"element_damage_water", "element_damage_fire", "element_damage_earth",
 	]
@@ -424,11 +425,23 @@ static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionar
 				val = maxf(0.0, float(player_stats.get("weapon_damage_mult", 1.0)) - 1.0)
 			"range_bonus":
 				val = maxf(0.0, float(player_stats.get("attack_range_mult", 1.0)) - 1.0)
+			"melee_damage":
+				val = maxf(0.0, float(player_stats.get("melee_damage", 0.0)))
+			"ranged_damage":
+				val = maxf(0.0, float(player_stats.get("ranged_damage", 0.0)))
+			"elemental_damage":
+				val = maxf(0.0, float(player_stats.get("elemental_damage", 0.0)))
+			"engineering_damage":
+				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
 		bonus += val * coef
 	return bonus * star_mult
 
 static func stat_scaling_label(key: String) -> String:
 	match key:
+		"melee_damage": return "近战伤害"
+		"ranged_damage": return "远程伤害"
+		"elemental_damage": return "元素伤害"
+		"engineering_damage": return "御灵伤害"
 		"armor": return "护甲"
 		"max_hp_bonus": return "额外气血"
 		"hp_regen": return "气血回复"
@@ -440,6 +453,34 @@ static func stat_scaling_label(key: String) -> String:
 		"damage_bonus": return "法伤加成"
 		"range_bonus": return "范围加成"
 	return key
+
+# ---------------- 五行异常状态（灼烧 / 剧毒）叠层与结算 ----------------
+
+const BURN_STACK_RATIO := 0.25         ## 多源灼烧叠层共鸣系数：已处于灼烧时，叠加新灼烧量的 25%
+const POISON_STACK_RATIO := 0.50       ## 剧毒叠层累加系数
+const BURN_ELEM_TICK_COEF := 0.40      ## 每点元素伤害对每次灼烧跳字（0.5s）的额外伤害加成
+const POISON_ELEM_TICK_COEF := 0.30    ## 每点元素伤害对每次剧毒跳字（0.5s）的额外伤害加成
+const DOT_TICK_INTERVAL := 0.50        ## DoT 跳字结算周期（秒）
+
+## 施加灼烧后的新 DPS：未灼烧时全额起算，已灼烧时在保留最高值基础上叠加 25% 共鸣伤害
+static func stack_burn_dps(current_dps: float, incoming_dps: float) -> float:
+	if current_dps <= 0.0:
+		return maxf(0.0, incoming_dps)
+	return maxf(current_dps, incoming_dps) + maxf(0.0, incoming_dps) * BURN_STACK_RATIO
+
+## 施加剧毒后的新 DPS：持续累加
+static func stack_poison_dps(current_dps: float, incoming_dps: float) -> float:
+	return maxf(0.0, current_dps) + maxf(0.0, incoming_dps) * POISON_STACK_RATIO
+
+## 单次灼烧跳字（每 0.5s）实际结算伤害：受元素伤害属性与离火羁绊倍率双重增幅
+static func burn_tick_damage(burn_dps: float, elemental_damage: float, synergy_burn_mult: float = 1.0) -> float:
+	var base_tick := maxf(0.0, burn_dps) * DOT_TICK_INTERVAL + maxf(0.0, elemental_damage) * BURN_ELEM_TICK_COEF
+	return maxf(1.0, base_tick * maxf(1.0, synergy_burn_mult))
+
+## 单次剧毒跳字（每 0.5s）实际结算伤害：受元素伤害属性增幅
+static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> float:
+	var base_tick := maxf(0.0, poison_dps) * DOT_TICK_INTERVAL + maxf(0.0, elemental_damage) * POISON_ELEM_TICK_COEF
+	return maxf(1.0, base_tick)
 
 # ---------------- 震退方向 ----------------
 

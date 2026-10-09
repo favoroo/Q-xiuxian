@@ -1,12 +1,14 @@
 class_name EnemyBase
 extends CharacterBody2D
 
-@export var max_hp: float = 60.0
+@export var max_hp: float = 18.0
 @export var move_speed: float = 110.0
 @export var contact_damage: float = 12.0
 @export var is_elite: bool = false
 @export var exp_reward: int = 1
 @export var spritesheet_path: String = ""
+# 移动方式：gait=步态腿帧（默认）/ hover=悬浮（单姿势图集 + apply_hover 浮沉前倾）/ slither=蠕动（apply_slither 行进波）
+@export var locomotion_mode: String = "gait"
 # 可选行为（0 = 关闭，场景按怪种配置）
 @export var preferred_range: float = 0.0   ## >0：远程怪，保持该距离环绕游走
 @export var bolt_interval: float = 0.0     ## >0：每隔 N 秒向玩家发射火球
@@ -38,6 +40,9 @@ extends CharacterBody2D
 
 var current_hp: float = 60.0
 var knockback_velocity: Vector2 = Vector2.ZERO
+var hit_stun_timer: float = 0.0   ## 受击定身硬直计时（期间暂停主动追击速度，仅随击退滑行）
+var hit_stun_resist: float = 1.0  ## 受击硬直倍率（小怪 1.0，精英 0.55，Boss 0.25）
+var _hit_jiggle_offset: Vector2 = Vector2.ZERO  ## 受击瞬间视觉微反冲偏移
 var facing: String = "s"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
@@ -175,19 +180,25 @@ func _physics_process(delta: float) -> void:
 	if burn_timer > 0.0:
 		burn_timer -= delta
 		_burn_tick += delta
-		if _burn_tick >= 0.5:
+		if _burn_tick >= GameBalance.DOT_TICK_INTERVAL:
 			_burn_tick = 0.0
-			take_damage(maxf(1.0, burn_dps * 0.5 * GameManager.synergy_burn_mult), Vector2.ZERO, false)
+			var b_dmg := GameBalance.burn_tick_damage(burn_dps, GameManager.elemental_damage, GameManager.synergy_burn_mult)
+			take_damage(b_dmg, Vector2.ZERO, false, true)
 			if dying:
 				return
+		if burn_timer <= 0.0:
+			burn_dps = 0.0
 	if poison_timer > 0.0:
 		poison_timer -= delta
 		_poison_tick += delta
-		if _poison_tick >= 0.5:
+		if _poison_tick >= GameBalance.DOT_TICK_INTERVAL:
 			_poison_tick = 0.0
-			take_damage(maxf(1.0, poison_dps * 0.5), Vector2.ZERO, false)
+			var p_dmg := GameBalance.poison_tick_damage(poison_dps, GameManager.elemental_damage)
+			take_damage(p_dmg, Vector2.ZERO, false, true)
 			if dying:
 				return
+		if poison_timer <= 0.0:
+			poison_dps = 0.0
 	var eff_speed: float = move_speed
 	if chill_timer > 0.0:
 		chill_timer -= delta
@@ -203,9 +214,15 @@ func _physics_process(delta: float) -> void:
 		_aura_speed_mult = 1.0
 	eff_speed *= _aura_speed_mult
 
-	# 1. 击退速度指数衰减
+	# 1. 击退速度指数衰减与受击硬直定身
+	var is_in_hit_stun := hit_stun_timer > 0.0
+	if is_in_hit_stun:
+		hit_stun_timer -= delta
+
+	# 硬直期间衰减略微平缓保留滑行手感，硬直结束后快速收尾
+	var decay_rate := 9.0 if is_in_hit_stun else 14.0
 	if knockback_velocity.length_squared() > 10.0:
-		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * 14.0, 1.0))
+		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * decay_rate, 1.0))
 	else:
 		knockback_velocity = Vector2.ZERO
 
@@ -214,11 +231,12 @@ func _physics_process(delta: float) -> void:
 	var dist_sq: float = to_player.length_squared()
 	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
 
-	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切
-	var target_vel := dir * eff_speed
+	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
+	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
+	var target_vel := Vector2.ZERO if is_in_hit_stun else (dir * eff_speed)
 
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
-	if preferred_range > 0.0:
+	if not is_in_hit_stun and preferred_range > 0.0:
 		var dist := sqrt(dist_sq)
 		if dist < preferred_range - 30.0:
 			target_vel = -dir * eff_speed * 0.8
@@ -339,12 +357,23 @@ func _physics_process(delta: float) -> void:
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
 
-	velocity = velocity.move_toward(target_vel, 900.0 * delta) + knockback_velocity
+	if is_in_hit_stun and _charge_active <= 0.0 and _bite_active <= 0.0:
+		velocity = knockback_velocity
+	else:
+		velocity = velocity.move_toward(target_vel, 900.0 * delta) + knockback_velocity
 	move_and_slide()
 
 	# 界碑拦阻
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+
+	# 受击视觉微反冲回弹（非自爆抖动期间生效）
+	if _hit_jiggle_offset.length_squared() > 0.01:
+		_hit_jiggle_offset = _hit_jiggle_offset.lerp(Vector2.ZERO, minf(delta * 24.0, 1.0))
+	else:
+		_hit_jiggle_offset = Vector2.ZERO
+	if _fuse < 0.0:
+		anim_sprite.position = _hit_jiggle_offset
 
 	# 3. Sprite 方向 & 动画（带迟滞滤波 + 贴近锁定 + 移速步频自适应）
 	# 当怪物与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
@@ -360,7 +389,15 @@ func _physics_process(delta: float) -> void:
 	# 实际位移足够才播跑步动画：远程怪环绕游走/贴身减速时不再原地空踏步（滑行悬浮感来源）
 	var is_moving := current_speed > maxf(20.0, move_speed * 0.2)
 
-	if anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing):
+	if locomotion_mode == "hover":
+		# 悬浮：不切腿帧（单姿势图集），浮沉/前倾由程序驱动
+		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+		RunMotion.apply_hover(anim_sprite, current_base, is_moving, dir if is_moving else Vector2.ZERO, delta, speed_ratio, shadow_sprite)
+	elif locomotion_mode == "slither":
+		# 蠕动：贴地行进波（scale 伸缩），无悬浮无前倾
+		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+		RunMotion.apply_slither(anim_sprite, current_base, is_moving, delta, speed_ratio, shadow_sprite)
+	elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing):
 		if is_moving:
 			var run_anim: String = "run_" + facing
 			RunMotion.select_anim(anim_sprite, run_anim, true)
@@ -382,28 +419,43 @@ func _physics_process(delta: float) -> void:
 			if GameManager.thorns_pct > 0.0 and collider.current_health < hp_before:
 				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
 
-func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> void:
+func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
 	current_hp -= amount
-	knockback_velocity = knockback * (0.55 if is_elite else 1.0) * GameManager.synergy_knockback_mult
+	var elite_scale: float = 0.55 if is_elite else 1.0
+	knockback_velocity = knockback * elite_scale * GameManager.synergy_knockback_mult
+
+	# 土豆兄弟风格受击硬直定身（hit-stun）：
+	# 受击瞬间暂停主动 AI 追击速度，由纯击退冲量主导位移；DoT tick 不触发硬直以保手感纯粹
+	if not from_dot:
+		var base_stun: float = 0.14 if is_crit else 0.075
+		hit_stun_timer = maxf(hit_stun_timer, base_stun * elite_scale * hit_stun_resist)
 
 	# 1. 声音与跳字
+	# DoT tick（灼烧/剧毒）每 0.5s × N 敌各播一声 enemy_hit 会糊成一片爆响，故 tick 走静音路径，只留跳字/视觉反馈。
 	if is_crit:
-		AudioManager.play_sfx("enemy_hit", 1.35, randf_range(1.16, 1.32))
+		if not from_dot:
+			AudioManager.play_sfx("enemy_hit", 1.35, randf_range(1.16, 1.32))
 		# 暴击给顿帧不给震屏：命中是本作最高频的事件，一旦发创伤，镜头整局都停不下来。
 		# 只有打在精英/首领身上的暴击才值得抖一下（低频，且是「打狠了」的读数）
 		GameManager.hit_stop(0.035, 0.08)
 		if is_elite:
 			GameManager.add_trauma(0.12)
-	else:
-		AudioManager.play_sfx("enemy_hit", 1.05 if not is_elite else 0.85)
+	elif not from_dot:
+		var pitch: float = randf_range(0.94, 1.08) if not is_elite else 0.85
+		AudioManager.play_sfx("enemy_hit", 1.05 if not is_elite else 0.85, pitch)
 
 	DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
 
-	# 2. 受击定向火花与挤压形变
+	# 2. 受击定向火花与定向挤压形变
 	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
-	play_squash(Vector2(1.36, 0.70) if is_crit else Vector2(1.24, 0.80), 0.16)
+	var squash_target := _calculate_hit_squash(knockback, is_crit)
+	play_squash(squash_target, 0.16)
+
+	# 受击微反冲视觉位移（Jiggle Recoil）：受击当帧精灵向击退方向微颤
+	if not from_dot and knockback.length_squared() > 10.0:
+		_hit_jiggle_offset = knockback.normalized() * (3.6 if is_crit else 2.2)
 
 	# 3. 闪白 Shader
 	if hit_flash_mat != null:
@@ -416,11 +468,24 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	if current_hp <= 0.0:
 		_die()
 
-## 施加【离火灼烧】：按秒持续扣血，受离火羁绊增伤
+## 根据受击方向计算定向挤压形变
+func _calculate_hit_squash(knockback: Vector2, is_crit: bool) -> Vector2:
+	if knockback.length_squared() < 10.0:
+		return Vector2(1.36, 0.70) if is_crit else Vector2(1.24, 0.80)
+	var k_norm := knockback.normalized()
+	if absf(k_norm.x) >= absf(k_norm.y):
+		# 水平冲击为主：水平压扁、竖直拉伸
+		return Vector2(0.68, 1.38) if is_crit else Vector2(0.76, 1.26)
+	else:
+		# 垂直冲击为主：竖直压扁、水平拉伸
+		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)
+
+## 施加【离火灼烧】：按秒持续扣血，受离火羁绊与元素伤害增伤，多源叠加共鸣
 func apply_burn(dps: float, duration: float) -> void:
 	if dying:
 		return
-	burn_dps = maxf(burn_dps, dps)
+	var active_dps: float = burn_dps if burn_timer > 0.0 else 0.0
+	burn_dps = GameBalance.stack_burn_dps(active_dps, dps)
 	burn_timer = maxf(burn_timer, duration)
 
 ## 施加【玄水冰缓】：降低移动速度并附加冰蓝色温
@@ -430,11 +495,12 @@ func apply_chill(slow_pct: float, duration: float) -> void:
 	chill_slow = maxf(chill_slow, clampf(slow_pct, 0.1, 0.7))
 	chill_timer = maxf(chill_timer, duration)
 
-## 施加【青木剧毒】：持续毒素侵蚀
+## 施加【青木剧毒】：持续毒素侵蚀，受元素伤害增伤
 func apply_poison(dps: float, duration: float) -> void:
 	if dying:
 		return
-	poison_dps = poison_dps + dps * 0.5
+	var active_dps: float = poison_dps if poison_timer > 0.0 else 0.0
+	poison_dps = GameBalance.stack_poison_dps(active_dps, dps)
 	poison_timer = maxf(poison_timer, duration)
 
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励

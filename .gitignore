@@ -10,6 +10,9 @@ keystore/secret.txt
 # media-gen 技能：API 密钥（勿提交）
 .agents/skills/media-gen/config/api.env
 
+# Agent 变更日志（仅本地，不随提交推送）
+CHANGELOG.md
+
 # 本地 IDE / 工作区配置
 .qoder/
 .zcode/

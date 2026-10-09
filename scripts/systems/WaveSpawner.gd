@@ -1,10 +1,10 @@
 class_name WaveSpawner
 extends Node2D
 
-## 波次状态机：WAITING(选法器) → FIGHT → CLEARING(清场吸附) → SHOP → 下一波
+## 波次状态机：WAITING(选法器) → FIGHT → CLEARING(清场吸附) → ALLOC(波后悟道，有待加点才插队) → SHOP → 下一波
 ## 第 20 波通关「渡劫成功」（双精英心魔劫）；可继续无尽
 
-enum Phase { WAITING, FIGHT, CLEARING, SHOP }
+enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
 @export var max_enemies: int = 55
 
@@ -41,6 +41,7 @@ var _overtime_noted: bool = false
 func _ready() -> void:
 	GameManager.wave_spawner = self
 	GameManager.shop_closed.connect(_on_shop_closed)
+	GameManager.alloc_finished.connect(_on_alloc_finished)
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -55,6 +56,8 @@ func _process(delta: float) -> void:
 			clear_timer -= delta
 			if clear_timer <= 0.0:
 				_open_shop()
+		Phase.ALLOC:
+			pass
 		Phase.SHOP:
 			pass
 
@@ -115,7 +118,7 @@ func start_wave(n: int) -> void:
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
 	phase = Phase.FIGHT
-	_spawn_herbs()
+	_spawn_chests()
 	if _is_boss_wave(n):
 		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 魔君压境 ✦" % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
@@ -129,20 +132,20 @@ func start_wave(n: int) -> void:
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 
-## 灵药丛：每波在竞技场随机位置刷 2~4 丛，诱导玩家为补给冒险走位
-func _spawn_herbs() -> void:
+## 藏宝匣：每波在竞技场随机位置刷 2~4 只，诱导玩家为补给冒险走位
+func _spawn_chests() -> void:
 	var player = GameManager.player
 	if player == null:
 		return
 	var count := mini(2 + int(wave_number / 6.0), 4)
 	var lim := GameManager.MAP_HALF_EXTENT - 160.0
 	for i in range(count):
-		var herb := SpiritHerb.new()
+		var chest := SpiritChest.new()
 		var pos := Vector2(GameManager.rng.randf_range(-lim, lim), GameManager.rng.randf_range(-lim, lim))
 		if pos.distance_to(player.global_position) < 150.0:
 			pos += Vector2(220.0, 0.0)
-		herb.global_position = pos
-		get_parent().add_child(herb)
+		chest.global_position = pos
+		get_parent().add_child(chest)
 
 func end_wave() -> void:
 	phase = Phase.CLEARING
@@ -163,16 +166,33 @@ func end_wave() -> void:
 				gem.magnet_to(player)
 
 func _open_shop() -> void:
-	phase = Phase.SHOP
 	if wave_number >= GameManager.VICTORY_WAVE and not GameManager.endless_mode:
+		phase = Phase.SHOP
 		GameManager.trigger_game_over(true)
 		return
-	_open_shop_inner()
+	_enter_wave_break()
 
 func open_shop() -> void:
 	## 结算界面「继续无尽」入口
 	if phase == Phase.SHOP:
-		_open_shop_inner()
+		_enter_wave_break()
+
+## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到灵石阁。
+## 战斗中的升级只攒点不弹面板（2026-10-09 用户指令：「在战斗过程中触发加点的体验不好」）。
+func _enter_wave_break() -> void:
+	if GameManager.has_pending_upgrades():
+		phase = Phase.ALLOC
+		GameManager.open_alloc_session()
+		return
+	phase = Phase.SHOP
+	_open_shop_inner()
+
+## 点数加完：接着开商店（alloc_finished 由 GameManager 发，UI 不直接指挥流程）
+func _on_alloc_finished() -> void:
+	if phase != Phase.ALLOC:
+		return
+	phase = Phase.SHOP
+	_open_shop_inner()
 
 func _open_shop_inner() -> void:
 	AudioManager.play_bgm_key("shop")
@@ -230,7 +250,7 @@ const MIX_YINGMEI_WAVE := 7        ## 影魅（闪现侧翼）
 const MIX_YINGMEI_LO := 0.91
 const MIX_GUYAO_WAVE := 9          ## 鼓妖（同伴加速光环）
 const MIX_GUYAO_LO := 0.95
-const MIX_ZHUMU_WAVE := 14         ## 蛛母（产卵孵化群怪）
+const MIX_ZHUMU_WAVE := 14         ## 百目妖（产卵孵化群怪，原蛛母换悬浮系怪种）
 const MIX_ZHUMU_LO := 0.98
 
 ## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线）

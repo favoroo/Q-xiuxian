@@ -98,6 +98,10 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	_card = PanelContainer.new()
 	_card.custom_minimum_size = Vector2(CARD_W, 0)
 	_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 卡体不是按钮（PanelContainer），摇杆认不出 ⇒ 自己登记：详解卡开着时点在卡上不该
+	# 顺手在卡底下长出摇杆把人挪走。上面那块整屏暗底 dim 反过来**不许**登记 —— 把它算进去
+	# 就是一整块全屏禁区，读详解期间完全不能走位。
+	_card.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var sb := GameStyle.outlined_panel(
 		Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.99),
 		GameStyle.BLUE, 2, GameStyle.SLANT_PLATE)

@@ -39,6 +39,10 @@ const FIELDS: Dictionary = {
 	"free_rerolls": {"name": "免费重掷", "unit": "times"},
 	"elite_damage": {"name": "对精英伤害", "unit": "pct"},
 	"shop_price_mul": {"name": "灵石阁物价", "unit": "pctmul"},
+	"melee_damage": {"name": "近战伤害", "unit": "pt"},
+	"ranged_damage": {"name": "远程伤害", "unit": "pt"},
+	"elemental_damage": {"name": "元素伤害", "unit": "pt"},
+	"engineering_damage": {"name": "御灵伤害", "unit": "pt"},
 	"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
 }
 
@@ -47,21 +51,44 @@ const ELEMENT_NAMES: Dictionary = {
 	"metal": "金", "wood": "木", "water": "水", "fire": "火", "earth": "土",
 }
 
+## 土豆兄弟式主要属性分组（核心战斗与经济属性）
+const PRIMARY_IDS: Array[String] = [
+	"hp", "regen", "lifesteal", "damage",
+	"melee_dmg", "ranged_dmg", "elemental_dmg", "engineering_dmg",
+	"haste", "crit", "range", "armor", "dodge", "speed", "luck", "harvest"
+]
+
+## 土豆兄弟式次要属性分组（辅助、特殊效果与统计）
+const SECONDARY_IDS: Array[String] = [
+	"pickup", "xp_gain", "shop_price", "bonus_pierce",
+	"elite_dmg", "knockback", "free_rerolls", "kills", "stones"
+]
+
 ## 面板每一行 → 它吃什么加点字段。空表 = 纯读数，不吃任何加成。
 const STAT_FIELDS: Dictionary = {
 	"hp": ["max_hp"],
 	"regen": ["hp_regen"],
-	"armor": ["armor"],
-	"dodge": ["dodge"],
 	"lifesteal": ["lifesteal"],
 	"damage": ["weapon_damage_mult"],
+	"melee_dmg": ["melee_damage"],
+	"ranged_dmg": ["ranged_damage"],
+	"elemental_dmg": ["elemental_damage"],
+	"engineering_dmg": ["engineering_damage"],
 	"haste": ["attack_speed_mult_mul"],
-	"speed": ["move_speed_mult"],
-	"pickup": ["pickup_range_mult"],
-	"range": ["attack_range_mult"],
 	"crit": ["crit_rate", "crit_mult"],
+	"range": ["attack_range_mult"],
+	"armor": ["armor"],
+	"dodge": ["dodge"],
+	"speed": ["move_speed_mult"],
 	"luck": ["luck"],
 	"harvest": ["harvest"],
+	"pickup": ["pickup_range_mult"],
+	"xp_gain": ["xp_gain_mult"],
+	"shop_price": ["shop_price_mul"],
+	"bonus_pierce": [],
+	"elite_dmg": ["elite_damage"],
+	"knockback": ["knockback_mult"],
+	"free_rerolls": ["free_rerolls"],
 	"kills": [],
 	"stones": ["spirit_stones"],
 }
@@ -73,14 +100,24 @@ const STAT_TITLES: Dictionary = {
 	"armor": "护甲罡气",
 	"dodge": "流云身法",
 	"lifesteal": "噬元诀",
-	"damage": "剑意法伤",
+	"damage": "法器伤害",
+	"melee_dmg": "近战伤害",
+	"ranged_dmg": "远程伤害",
+	"elemental_dmg": "元素伤害",
+	"engineering_dmg": "御灵伤害",
 	"haste": "掐诀神速",
 	"speed": "神行移速",
 	"pickup": "摄灵范围",
 	"range": "神识范围",
 	"crit": "天命暴击",
-	"luck": "福缘",
-	"harvest": "灵韵",
+	"luck": "气运福缘",
+	"harvest": "灵田灵韵",
+	"xp_gain": "修为获取",
+	"shop_price": "灵石阁物价",
+	"bonus_pierce": "法剑贯通",
+	"elite_dmg": "对精英伤害",
+	"knockback": "法器击退",
+	"free_rerolls": "免费重掷",
 	"kills": "累计诛妖",
 	"stones": "随身灵石",
 }
@@ -93,6 +130,10 @@ const BRIEF: Dictionary = {
 	"dodge": "身法缥缈难捉：整次攻击落空，一点血都不掉。",
 	"lifesteal": "命中时以概率从妖兽身上吸回 1 点气血。",
 	"damage": "所有法器伤害的总乘区，一件不漏。",
+	"melee_dmg": "加成所有挥斩与横扫类近战法器的基础伤害。",
+	"ranged_dmg": "加成所有飞射弹道类远程法器的基础伤害。",
+	"elemental_dmg": "加成符箓、雷法轰击以及灼烧与剧毒跳字伤害。",
+	"engineering_dmg": "加成所有环绕周身护体灵宝的基础伤害。",
 	"haste": "掐诀更快：缩短每件法器的施法间隔。",
 	"speed": "走位躲潮的根本：修士的移动速度。",
 	"pickup": "灵石与修为自动飞进袖子的半径。",
@@ -100,6 +141,12 @@ const BRIEF: Dictionary = {
 	"crit": "会心一击的概率与倍率，两个乘区相乘。",
 	"luck": "气运：抬高高稀有度悟道与高阶法宝的现身权重。",
 	"harvest": "灵田生金：每波结束无偿发放灵石与修为，并且自我复利。",
+	"xp_gain": "每颗修为光球提供的经验倍率加成。",
+	"shop_price": "波间灵石阁刷新与购买商品的物价折算。",
+	"bonus_pierce": "所有远程弹丸类法器的额外贯穿敌人次数。",
+	"elite_dmg": "对精英头目与魔君 Boss 的额外伤害加成乘区。",
+	"knockback": "击中妖兽时的击退距离与推力倍率。",
+	"free_rerolls": "每波灵石阁开始时可无偿重掷货架的次数。",
 	"kills": "本局击杀妖兽的总数，含精英与魔君。",
 	"stones": "本局货币：灵石阁买法器、法宝、重掷货架都花它。",
 }
@@ -155,6 +202,18 @@ static func rules(id: String) -> Array[String]:
 			out.append("面板 = 悟道/法宝/道统乘区 × 流派羁绊乘区，以 100% 为基准。")
 			out.append("暴击是另一个乘区，与这一条相乘，不互相打折。")
 			out.append("单件法器还能把别的属性折成伤害，点法器图标看它吃什么属性。")
+		"melee_dmg":
+			out.append("按点数直接增加所有挥砍横扫类近战法器的基础伤害。")
+			out.append("青云剑、赤焰刀、青木藤鞭、芭蕉扇等近战法器均直接享受本项加成。")
+		"ranged_dmg":
+			out.append("按点数直接增加所有飞剑飞针与飞射类远程法器的基础伤害。")
+			out.append("庚金飞剑、柳叶飞刀、玄冰飞针、万木灵符等远程法器直接享受本项加成。")
+		"elemental_dmg":
+			out.append("按点数直接增加符箓、雷法轰击以及异常状态的伤害。")
+			out.append("直接提升火焰符灼烧与万木符剧毒的每秒跳字伤害，离火与青木修士首选。")
+		"engineering_dmg":
+			out.append("按点数直接增加所有环绕护体灵宝的基础接触伤害。")
+			out.append("灵蝶、寒泉玉莲、混元古钟等灵宝均享受全额加成，符阵灵童核心流派。")
 		"haste":
 			out.append("间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
 			out.append("地板 = 间隔 ×%s：到地板后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
@@ -162,7 +221,7 @@ static func rules(id: String) -> Array[String]:
 		"speed":
 			out.append("实际移速 = 道统基础移速 × (1 + 悟道/法宝加成 + 羁绊加成)。")
 			out.append("道统的负面代偿直接乘在这一条上，所以读数可能是负的（如石岳·体修 -15%）。")
-			out.append("个别道统会锁死某条悟道（如石岳锁「神行符」），被锁的那条不再出现在三选一里。")
+			out.append("个别道统会锁死某条悟道（如石岳锁「神行符」），被锁的那条不再出现在候选里。")
 		"pickup":
 			out.append("半径 = 基础拾取半径 × 倍率，只管灵石与修为的吸附，不影响攻击距离。")
 			out.append("这条不够高时，灵石会留在地上等人走过去捡，站得远就捡得慢。")
@@ -183,6 +242,24 @@ static func rules(id: String) -> Array[String]:
 			out.append("每波自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
 			out.append("修为与灵石同源，所以灵韵高 = 升级快 = 悟道次数多。")
+		"xp_gain":
+			out.append("修为获取倍率：只放大吸收修为光球时的升级经验，不影响灵石获取。")
+			out.append("主要由良品悟道「悟性通明」与仙品法宝「悟剑石」提供。")
+		"shop_price":
+			out.append("灵石阁所有在售法器、法宝及重掷费用的全局价格折算比例。")
+			out.append("散修自带八折特权，法宝「折扣玉符」可进一步叠加折让。")
+		"bonus_pierce":
+			out.append("飞剑飞符穿透敌人数量的额外增量。")
+			out.append("符箓羁绊核心收益，可在群妖阵线中反复洞穿造成海量伤害。")
+		"elite_dmg":
+			out.append("对精英小头目与守关魔君的独立伤害乘区加成。")
+			out.append("悟道「斩将夺旗」与法宝「破甲锥」生效，不影响寻常小妖。")
+		"knockback":
+			out.append("法器震退妖兽的推力与距离加成倍率。")
+			out.append("厚土羁绊与法宝「雷引针」加在这条上，防高密度妖潮近身。")
+		"free_rerolls":
+			out.append("每波进入灵石阁时无需花费灵石即可免费重掷货架的次数。")
+			out.append("法宝「通玄令」提供，用完后重掷费用才开始按正常递增结算。")
 		"kills":
 			out.append("只是读数：不吃任何加成，也不参与结算公式。")
 			out.append("精英与魔君同样计入；它们多掉的灵石走另一条账。")

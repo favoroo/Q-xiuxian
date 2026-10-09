@@ -54,6 +54,9 @@ func _build_ui() -> void:
 	# 居中主面板（P5 斜切 + 厚底边描线）
 	_panel = PanelContainer.new()
 	_panel.custom_minimum_size = Vector2(460, 380)
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出，否则点面板空白处会在它底下长出摇杆
+	# （整屏 dim 仍不登记 —— 那等于一整块全屏禁区）。
+	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 10))
 	style.border_width_left = 2
 	style.border_width_top = 2

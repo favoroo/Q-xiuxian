@@ -16,9 +16,14 @@ signal wave_changed(wave_number: int)
 @warning_ignore("unused_signal")
 signal shop_opened
 signal shop_closed
+## 波后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
+signal alloc_opened
+signal alloc_finished
+signal pending_points_changed(pending: int)
 signal screen_damage_pulsed(color: Color, duration: float)
 signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
+signal achievements_unlocked(ach_ids: Array)
 
 ## 打击感分级。顿帧/缩放冲击按档给，**震屏（创伤）只发给"值得看的节点"**：
 ## 玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中。
@@ -28,7 +33,13 @@ enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
-const MAP_HALF_EXTENT: float = 1150.0
+const MAP_HALF_EXTENT: float = 680.0
+
+## 每次刷新给几个候选：悟道结算与灵石阁货架同一档（2026-10-09 用户指令「改成 5 个」）
+const UPGRADE_OFFER_COUNT: int = 5
+const SHOP_BASE_SLOTS: int = 5
+## 每回合悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣灵石
+const ALLOC_FREE_REROLLS: int = 1
 
 ## 属性上限（防数值失控）
 const DODGE_CAP: float = 0.6          ## 身法闪避硬上限
@@ -57,6 +68,28 @@ var danger_level: int = 0          ## 本局危险度（开始菜单选择，res
 var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
 const PROGRESS_PATH := "user://progress.cfg"
 
+# 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
+var unlocked_cultivators: Array = []   ## 已解锁修士 ID 列表
+var unlocked_items: Array = []         ## 已解锁法宝 ID 列表
+var unlocked_achievements: Array = []  ## 已达成的成就 ID 列表
+var career_stats: Dictionary = {
+	"total_runs": 0,
+	"total_wins": 0,
+	"total_kills": 0,
+	"best_wave": 0,
+	"best_kills": 0,
+	"total_stones": 0,
+	"total_time": 0.0,
+}
+var cultivator_best_danger: Dictionary = {}  ## 每位修士通关过的最高危险度 {cultivator_id: danger_int}
+var run_history: Array = []                  ## 最近 10 局历史战报列表
+var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
+
+# 单局峰值追踪（供成就判定）
+var peak_stones: int = 0
+var peak_dodge: float = 0.0
+var peak_harvest: float = 0.0
+
 func _ready() -> void:
 	_load_progress()
 
@@ -64,11 +97,94 @@ func _load_progress() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PROGRESS_PATH) == OK:
 		max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
+		
+		var cults = cfg.get_value("progress", "unlocked_cultivators", [])
+		if cults is Array and not cults.is_empty():
+			unlocked_cultivators = cults.duplicate()
+		else:
+			unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
+		
+		var itms = cfg.get_value("progress", "unlocked_items", [])
+		if itms is Array and not itms.is_empty():
+			unlocked_items = itms.duplicate()
+		else:
+			unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
+		
+		var achs = cfg.get_value("progress", "unlocked_achievements", [])
+		if achs is Array:
+			unlocked_achievements = achs.duplicate()
+		else:
+			unlocked_achievements = []
+		
+		career_stats["total_runs"] = int(cfg.get_value("stats", "total_runs", 0))
+		career_stats["total_wins"] = int(cfg.get_value("stats", "total_wins", 0))
+		career_stats["total_kills"] = int(cfg.get_value("stats", "total_kills", 0))
+		career_stats["best_wave"] = int(cfg.get_value("stats", "best_wave", 0))
+		career_stats["best_kills"] = int(cfg.get_value("stats", "best_kills", 0))
+		career_stats["total_stones"] = int(cfg.get_value("stats", "total_stones", 0))
+		career_stats["total_time"] = float(cfg.get_value("stats", "total_time", 0.0))
+		
+		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
+		if cbd is Dictionary:
+			cultivator_best_danger = cbd.duplicate()
+		else:
+			cultivator_best_danger = {}
+		
+		var hist = cfg.get_value("history", "recent_runs", [])
+		if hist is Array:
+			run_history = hist.duplicate()
+		else:
+			run_history = []
+	else:
+		# 首次启动：加载默认开放集合
+		unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
+		unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
+		unlocked_achievements = []
+		cultivator_best_danger = {}
+		run_history = []
+
+	# 确保初始集合必在（防止旧档或异常数据丢失基础内容）
+	for cid in AchievementData.DEFAULT_CULTIVATORS:
+		if not (cid in unlocked_cultivators):
+			unlocked_cultivators.append(cid)
+	for iid in AchievementData.DEFAULT_ITEMS:
+		if not (iid in unlocked_items):
+			unlocked_items.append(iid)
 
 func _save_progress() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("progress", "max_danger", max_danger_unlocked)
+	cfg.set_value("progress", "unlocked_cultivators", unlocked_cultivators)
+	cfg.set_value("progress", "unlocked_items", unlocked_items)
+	cfg.set_value("progress", "unlocked_achievements", unlocked_achievements)
+	
+	cfg.set_value("stats", "total_runs", int(career_stats.get("total_runs", 0)))
+	cfg.set_value("stats", "total_wins", int(career_stats.get("total_wins", 0)))
+	cfg.set_value("stats", "total_kills", int(career_stats.get("total_kills", 0)))
+	cfg.set_value("stats", "best_wave", int(career_stats.get("best_wave", 0)))
+	cfg.set_value("stats", "best_kills", int(career_stats.get("best_kills", 0)))
+	cfg.set_value("stats", "total_stones", int(career_stats.get("total_stones", 0)))
+	cfg.set_value("stats", "total_time", float(career_stats.get("total_time", 0.0)))
+	
+	cfg.set_value("records", "cultivator_best_danger", cultivator_best_danger)
+	cfg.set_value("history", "recent_runs", run_history)
 	cfg.save(PROGRESS_PATH)
+
+## 检查修士是否已解锁
+func is_cultivator_unlocked(cid: String) -> bool:
+	return cid in unlocked_cultivators
+
+## 检查法宝是否已解锁入池
+func is_item_unlocked(item_id: String) -> bool:
+	return item_id in unlocked_items
+
+## 检查成就是否已达成
+func is_achievement_unlocked(ach_id: String) -> bool:
+	return ach_id in unlocked_achievements
+
+## 查询某位修士已通关的最高危险度（未通关返回 -1）
+func get_cultivator_best_danger(cid: String) -> int:
+	return int(cultivator_best_danger.get(cid, -1))
 
 ## 选择危险度：不允许选未解锁的档位
 func set_danger(d: int) -> void:
@@ -78,7 +194,6 @@ func set_danger(d: int) -> void:
 func _maybe_unlock_danger() -> void:
 	if danger_level >= max_danger_unlocked and max_danger_unlocked < GameBalance.DANGER_MAX:
 		max_danger_unlocked += 1
-		_save_progress()
 		announcement_triggered.emit("✦ 天道认可 · 危险度「%d」已解锁 ✦" % max_danger_unlocked)
 
 var kills: int = 0
@@ -89,6 +204,9 @@ var experience: int = 0
 var experience_to_next: int = GameBalance.EXP_FIRST_LEVEL
 var is_game_over: bool = false
 
+## 待加点数：升几级攒几点，回合结束统一结算（战斗中不弹面板）
+var pending_upgrade_points: int = 0
+
 # 波次
 var wave_number: int = 0
 var endless_mode: bool = false
@@ -96,6 +214,10 @@ var run_started: bool = false
 
 # 玩家属性（加点系统）
 var weapon_damage_mult: float = 1.0
+var melee_damage: float = 0.0       ## 近战伤害：加成所有近战挥扫法器
+var ranged_damage: float = 0.0      ## 远程伤害：加成所有飞射弹道法器
+var elemental_damage: float = 0.0   ## 元素伤害：加成符箓、雷法及灼烧/剧毒跳字伤害
+var engineering_damage: float = 0.0 ## 御灵伤害：加成所有环绕护体灵宝
 var attack_speed_mult: float = 1.0
 var move_speed_mult: float = 1.0
 var pickup_range_mult: float = 1.0
@@ -156,6 +278,13 @@ var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如
 var shop_tag_filter: Array = []    ## 非空时这些 tag 法器权重大幅提升，其余法器仍以低概率漏出（剑痴等流派偏好）
 var _no_main_tag_waves: int = 0    ## 连续未刷出主流派法器的波数（保底计数）
 
+# 波后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣灵石，价格随波次与已刷次数上升）
+var alloc_offers: Array[Dictionary] = []
+var alloc_points_total: int = 0   ## 本次结算开局时攒下的点数（面板写「待加点 2/共 3」用）
+var alloc_reroll_cost: int = 2
+var alloc_reroll_count: int = 0
+var alloc_reroll_free_left: int = 0
+
 ## 已持有法宝（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
 
@@ -178,10 +307,15 @@ func reset_run() -> void:
 	experience = 0
 	experience_to_next = GameBalance.EXP_FIRST_LEVEL
 	is_game_over = false
+	pending_upgrade_points = 0
 	wave_number = 0
 	endless_mode = false
 	run_started = false
 	weapon_damage_mult = 1.0
+	melee_damage = 0.0
+	ranged_damage = 0.0
+	elemental_damage = 0.0
+	engineering_damage = 0.0
 	attack_speed_mult = 1.0
 	move_speed_mult = 1.0
 	pickup_range_mult = 1.0
@@ -236,11 +370,20 @@ func reset_run() -> void:
 	shop_price_mult = 1.0
 	shop_tag_filter = []
 	_no_main_tag_waves = 0
+	alloc_offers = []
+	alloc_points_total = 0
+	alloc_reroll_cost = 2
+	alloc_reroll_count = 0
+	alloc_reroll_free_left = 0
 	items = []
 	drones = []
 	stash = []
 	upgrade_history.clear()
 	upgrade_counts.clear()
+	last_run_new_achievements = []
+	peak_stones = 0
+	peak_dodge = 0.0
+	peak_harvest = 0.0
 
 func _process(delta: float) -> void:
 	if not is_game_over and not get_tree().paused and player != null:
@@ -273,6 +416,9 @@ func add_experience(amount: int) -> void:
 		# 夺舍散人这类需求倍率只折算判定值，链条本身保持原曲线（避免倍率逐层复利）
 		experience_to_next = maxi(1, int(round(float(_exp_chain) * xp_require_mult)))
 		AudioManager.play_sfx("level_up")
+		# 升级不再当场弹面板打断战斗：升 1 级攒 1 点，回合结束统一结算
+		pending_upgrade_points += 1
+		pending_points_changed.emit(pending_upgrade_points)
 		player_leveled_up.emit(level)
 
 	player_exp_changed.emit(experience, experience_to_next, level)
@@ -280,12 +426,16 @@ func add_experience(amount: int) -> void:
 
 func add_spirit_stones(amount: int) -> void:
 	spirit_stones += amount
+	if spirit_stones > peak_stones:
+		peak_stones = spirit_stones
 	stats_updated.emit(kills, game_time, spirit_stones)
 
 func register_kill(is_elite: bool = false) -> void:
 	kills += 1
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
+		if spirit_stones > peak_stones:
+			peak_stones = spirit_stones
 	stats_updated.emit(kills, game_time, spirit_stones)
 
 # ---------------- 属性加点 ----------------
@@ -312,7 +462,7 @@ func apply_upgrade(upgrade_id: String) -> void:
 	})
 	upgrade_applied.emit(upgrade_id)
 
-## 属性字段统一落地入口：悟道三选一（apply_upgrade）与法宝（add_item）共用同一条链路，
+## 属性字段统一落地入口：悟道加点（apply_upgrade）与法宝（add_item）共用同一条链路，
 ## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露
 func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 	for key in apply.keys():
@@ -320,6 +470,14 @@ func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 		match key:
 			"weapon_damage_mult":
 				weapon_damage_mult += v
+			"melee_damage":
+				melee_damage += v
+			"ranged_damage":
+				ranged_damage += v
+			"elemental_damage":
+				elemental_damage += v
+			"engineering_damage":
+				engineering_damage += v
 			"attack_speed_mult_mul":
 				attack_speed_mult = maxf(ATTACK_SPEED_FLOOR, attack_speed_mult * v)
 			"armor":
@@ -372,14 +530,101 @@ func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 				else:
 					push_warning("apply_stat_fields: 未知加点字段 %s（来自 %s）" % [key, source])
 
-## 抽一次「三选一」。UpgradeData 是纯函数层、不读单例，所以这里负责把当前局面打包成 ctx 传过去。
-func roll_upgrades(count: int = 3) -> Array[Dictionary]:
+## 抽一批悟道候选。UpgradeData 是纯函数层、不读单例，所以这里负责把当前局面打包成 ctx 传过去。
+## 默认一次给 UPGRADE_OFFER_COUNT（5）个：候选太少时「刷新」没意义（2026-10-09 用户指令）。
+func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 	return UpgradeData.get_random_upgrades(count, {
 		"luck": luck,
 		"locked_upgrades": locked_upgrades,
 		"counts": upgrade_counts,
 		"rng": rng,
 	})
+
+# ---------------- 波后悟道结算 ----------------
+
+## 有没有攒下的待加点（WaveSpawner 用它决定清场后先进悟道还是直接开商店）
+func has_pending_upgrades() -> bool:
+	return pending_upgrade_points > 0
+
+## 开一次回合结算会话：刷新额度按回合重置，并灌第一批候选。
+## 池子空了（所有悟道都叠满）就当没这次结算：点数作废并直接放行商店，别把玩家锁在一屏空白前。
+func open_alloc_session() -> void:
+	if pending_upgrade_points <= 0:
+		return
+	alloc_points_total = pending_upgrade_points
+	alloc_reroll_count = 0
+	alloc_reroll_free_left = ALLOC_FREE_REROLLS
+	alloc_reroll_cost = GameBalance.reroll_cost(wave_number, alloc_reroll_count, shop_price_mult)
+	roll_alloc_offers()
+	if alloc_offers.is_empty():
+		force_end_alloc("悟道已尽")
+		return
+	alloc_opened.emit()
+
+## 悟道池抽空时的兜底：剩点作废、面板收回、流程照走商店（判据里有「不许白罚」这条）
+func force_end_alloc(reason: String) -> void:
+	if pending_upgrade_points > 0:
+		announcement_triggered.emit("✦ %s · 剩余 %d 点作废 ✦" % [reason, pending_upgrade_points])
+	pending_upgrade_points = 0
+	alloc_offers = []
+	pending_points_changed.emit(0)
+	alloc_finished.emit()
+
+## 重灌一批候选（5 个）
+func roll_alloc_offers() -> void:
+	alloc_offers = roll_upgrades(UPGRADE_OFFER_COUNT)
+
+## 选下第 index 个候选：属性立刻落地、扣 1 点额度；还有剩点就换一批新候选接着加。
+## 点数清零时发 alloc_finished，由 WaveSpawner 接着开灵石阁（UI 不直接指挥流程）。
+func take_alloc_upgrade(index: int) -> bool:
+	if index < 0 or index >= alloc_offers.size():
+		return false
+	var uid: String = String(alloc_offers[index].get("id", ""))
+	if uid.is_empty():
+		return false
+	apply_upgrade(uid)
+	pending_upgrade_points = maxi(0, pending_upgrade_points - 1)
+	pending_points_changed.emit(pending_upgrade_points)
+	AudioManager.play_sfx("gem_pickup", 1.25)
+	if pending_upgrade_points > 0:
+		roll_alloc_offers()
+		if alloc_offers.is_empty():
+			# 池子在这一步被点空了：剩下的点不许把玩家扣在这一屏
+			force_end_alloc("悟道已尽")
+		return true
+	# 点数加完：收候选、放行商店
+	alloc_offers = []
+	alloc_finished.emit()
+	return true
+
+## 悟道刷新：先吃本回合免费额度，用完才按商店重掷同一条价格线扣灵石
+func reroll_alloc() -> bool:
+	if pending_upgrade_points <= 0:
+		return false
+	if alloc_reroll_free_left > 0:
+		alloc_reroll_free_left -= 1
+	else:
+		if spirit_stones < alloc_reroll_cost:
+			announcement_triggered.emit("灵石不够刷新悟道了")
+			AudioManager.play_sfx("ui_error", 0.9)
+			return false
+		spirit_stones -= alloc_reroll_cost
+		alloc_reroll_count += 1
+		alloc_reroll_cost = GameBalance.reroll_cost(wave_number, alloc_reroll_count, shop_price_mult)
+	roll_alloc_offers()
+	stats_updated.emit(kills, game_time, spirit_stones)
+	AudioManager.play_sfx("shop_reroll", 1.0)
+	return true
+
+## 刷新按钮文案：免费额度还在就说免费，用完报价（与灵石阁重掷同一口径）
+func alloc_reroll_label() -> String:
+	if alloc_reroll_free_left > 0:
+		return "免费刷新悟道 (剩 %d 次)" % alloc_reroll_free_left
+	return "刷新悟道 (%d 灵石)" % alloc_reroll_cost
+
+## 悟道刷新这一档要不要亮着（灵石不够且没有免费额度时按钮置灰，但保持可见）
+func can_reroll_alloc() -> bool:
+	return pending_upgrade_points > 0 and (alloc_reroll_free_left > 0 or spirit_stones >= alloc_reroll_cost)
 
 func get_stat_breakdown() -> Dictionary:
 	var cur_hp: float = 120.0
@@ -403,6 +648,10 @@ func get_stat_breakdown() -> Dictionary:
 		"dmg_reduction_pct": dmg_reduction * 100.0,
 		"damage_mult": eff_dmg,
 		"damage_bonus_pct": (eff_dmg - 1.0) * 100.0,
+		"melee_damage": melee_damage,
+		"ranged_damage": ranged_damage,
+		"elemental_damage": elemental_damage,
+		"engineering_damage": engineering_damage,
 		"attack_speed_mult": eff_haste,
 		"cdr_pct": cdr_pct,
 		"move_speed": base_spd * eff_move,
@@ -420,6 +669,8 @@ func get_stat_breakdown() -> Dictionary:
 		"knockback_pct": (knockback_mult * synergy_knockback_mult - 1.0) * 100.0,
 		"elite_damage_pct": elite_damage * 100.0,
 		"free_rerolls": free_rerolls,
+		"bonus_pierce": bonus_pierce,
+		"shop_price_pct": (shop_price_mult - 1.0) * 100.0,
 	}
 
 func get_effective_armor() -> float:
@@ -477,6 +728,10 @@ func get_player_stat_dict() -> Dictionary:
 		"move_speed_mult": move_speed_mult + synergy_move_speed_mult,
 		"weapon_damage_mult": weapon_damage_mult * synergy_damage_mult,
 		"attack_range_mult": attack_range_mult * synergy_range_mult,
+		"melee_damage": melee_damage,
+		"ranged_damage": ranged_damage,
+		"elemental_damage": elemental_damage,
+		"engineering_damage": engineering_damage,
 	}
 
 func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
@@ -590,6 +845,8 @@ func _apply_cultivator() -> void:
 	shop_tag_filter = def.get("allowed_tags", [])
 	locked_upgrades = def.get("locked_upgrades", [])
 	if player != null and is_instance_valid(player):
+		if player.has_method("_setup_sprite_frames"):
+			player._setup_sprite_frames()
 		var hp_mult := float(mods.get("hp_mult", 1.0))
 		if hp_mult != 1.0:
 			player.max_health *= hp_mult
@@ -989,7 +1246,7 @@ func roll_shop(new_wave: bool = false) -> void:
 	var wave := maxi(wave_number, 1)
 	var old := shop_offers
 	var new_offers: Array = []
-	for i in range(4 + shop_slots_bonus):
+	for i in range(SHOP_BASE_SLOTS + shop_slots_bonus):
 		if i < old.size() and old[i].get("locked", false) and not old[i].get("sold", false):
 			new_offers.append(old[i])
 		else:
@@ -1009,7 +1266,7 @@ func _gen_offer(wave: int) -> Dictionary:
 			"sold": false, "locked": false,
 		}
 	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE:
-		var item_id := ItemData.pick_id(luck, wave, items, rng)
+		var item_id := ItemData.pick_id(luck, wave, items, rng, unlocked_items)
 		if item_id != "":
 			var idef := ItemData.get_def(item_id)
 			return {
@@ -1236,7 +1493,69 @@ func trigger_game_over(victory: bool = false) -> void:
 	is_game_over = true
 	if victory:
 		_maybe_unlock_danger()
+	_record_run_and_check_achievements(victory)
 	game_over_triggered.emit(victory)
+
+## 结算时汇总生涯统计、记录战报、判定新成就解锁并统一落盘
+func _record_run_and_check_achievements(victory: bool) -> void:
+	var eff_wave := maxi(wave_number, VICTORY_WAVE if victory else 1)
+	var eff_stones := maxi(spirit_stones, peak_stones)
+	var eff_dodge := maxf(get_effective_dodge(), peak_dodge)
+	var eff_harvest := maxf(harvest, peak_harvest)
+
+	career_stats["total_runs"] = int(career_stats.get("total_runs", 0)) + 1
+	if victory:
+		career_stats["total_wins"] = int(career_stats.get("total_wins", 0)) + 1
+	career_stats["total_kills"] = int(career_stats.get("total_kills", 0)) + kills
+	career_stats["best_wave"] = maxi(int(career_stats.get("best_wave", 0)), eff_wave)
+	career_stats["best_kills"] = maxi(int(career_stats.get("best_kills", 0)), kills)
+	career_stats["total_stones"] = int(career_stats.get("total_stones", 0)) + spirit_stones
+	career_stats["total_time"] = float(career_stats.get("total_time", 0.0)) + game_time
+
+	if victory and not cultivator_id.is_empty():
+		var prev_d := int(cultivator_best_danger.get(cultivator_id, -1))
+		if danger_level > prev_d:
+			cultivator_best_danger[cultivator_id] = danger_level
+
+	var cid_rec := cultivator_id if not cultivator_id.is_empty() else "jianchi"
+	var entry := {
+		"cultivator_id": cid_rec,
+		"danger": danger_level,
+		"wave": eff_wave,
+		"kills": kills,
+		"level": level,
+		"victory": victory,
+		"time": game_time,
+	}
+	run_history.push_front(entry)
+	while run_history.size() > 10:
+		run_history.pop_back()
+
+	var run_ctx := {
+		"victory": victory,
+		"danger": danger_level,
+		"wave": eff_wave,
+		"level": level,
+		"kills": kills,
+		"max_stones": eff_stones,
+		"max_dodge": eff_dodge,
+		"max_harvest": eff_harvest,
+	}
+	var newly := AchievementData.evaluate_new_unlocks(run_ctx, career_stats, unlocked_achievements)
+	last_run_new_achievements = []
+	for aid in newly:
+		unlocked_achievements.append(aid)
+		last_run_new_achievements.append(aid)
+		var adef := AchievementData.get_def(aid)
+		var rtype := String(adef.get("reward_type", ""))
+		var rid := String(adef.get("reward_id", ""))
+		if rtype == "cultivator" and not rid.is_empty() and not (rid in unlocked_cultivators):
+			unlocked_cultivators.append(rid)
+		elif rtype == "item" and not rid.is_empty() and not (rid in unlocked_items):
+			unlocked_items.append(rid)
+	_save_progress()
+	if not last_run_new_achievements.is_empty():
+		achievements_unlocked.emit(last_run_new_achievements)
 
 ## 结算界面「继续无尽」：关闭结算并转入下一波商店
 func continue_endless() -> void:

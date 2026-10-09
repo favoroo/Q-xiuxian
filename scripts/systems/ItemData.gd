@@ -6,7 +6,7 @@ extends RefCounted
 ## 档位解锁波次与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
-## 与悟道三选一共用同一条属性链路——文案里的数值必须与 apply 同源一致。
+## 与悟道加点共用同一条属性链路——文案里的数值必须与 apply 同源一致。
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
 ##   wave_heal_pct —— 波末按气血上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本法宝免死并回半血（GameManager.try_revive）
@@ -136,12 +136,14 @@ static func tier_color(tier: int) -> Color:
 	return TIER_COLORS.get(clampi(tier, 1, 4), TIER_COLORS[1])
 
 ## 抽一件法宝上货架：按档位权重抽取（公式见 GameBalance.item_tier_weights），
-## 已持有的 unique 法宝从池中剔除；池空（传说全买光）返回 ""，调用方落回法器位
-static func pick_id(luck: float, wave: int, owned: Array, rng: RandomNumberGenerator) -> String:
+## 已持有的 unique 法宝从池中剔除；若传入 unlocked_items，则未解锁法宝不入池；池空返回 ""，调用方落回法器位
+static func pick_id(luck: float, wave: int, owned: Array, rng: RandomNumberGenerator, unlocked_items: Array = []) -> String:
 	var tier_w: Array = GameBalance.item_tier_weights(luck, wave)
 	var pool: Array = []
 	var weights: Array = []
 	for id in DEFS.keys():
+		if not unlocked_items.is_empty() and not (id in unlocked_items):
+			continue
 		var d: Dictionary = DEFS[id]
 		if bool(d.get("unique", false)) and id in owned:
 			continue
