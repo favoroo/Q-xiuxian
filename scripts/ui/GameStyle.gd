@@ -352,3 +352,102 @@ static func swipeable(node: Node) -> void:
         if c != null and not (c is BaseButton) and c.mouse_filter == Control.MOUSE_FILTER_STOP:
             c.mouse_filter = Control.MOUSE_FILTER_PASS
         swipeable(ch)
+
+## 按下→抬起之间允许划过的距离（内容单位），超过就不算点按。
+## 14 在 960 基准宽下约 1.5% 屏宽，真机约 10dp —— 与 Android 的 touch slop 同量级：
+## 手指按在原地轻微抖动仍算点，有意划动一定超得过。
+const TAP_SLACK := 14.0
+
+const _TAP_DOWN_META := "_gs_tap_down"
+const _TAP_SCROLL_META := "_gs_tap_scroll"
+## 本次手势里「划出去过」的最大距离：手指离按下点的最大距离，与列表被拖走的最大距离，取大的
+const _TAP_REACH_META := "_gs_tap_reach"
+
+## 挂一次「真点按」：按下与抬起都留在原地才算点，中途划出去（拖列表）就不触发。
+## 为什么必须显式做：滚动区里的卡片为了让手指拖得起列表，mouse_filter 已从 STOP 降成 PASS
+## （见 swipeable），于是「按下」那一拍同时被外层 ScrollContainer 拿去 latch 拖动滚动。
+## 而点按若只认「左键松开」这一枪（旧 PlayerStatsDialog._is_tap / ManualDialog 卡片），
+## 划完列表一松手照样算一次点击 —— 真机上就是「我本来想滑动，不小心就点按了」
+## （用户 2026-10-09：属性面板「悟道历程」列表）。
+## 尺子取「本次手势划出去过的最大距离」，手指与列表两个来源取大：
+## ① 只比按下点与抬起点会漏判 —— 列表跟着手指走，抬起点与按下点可以挨得很近；
+## ② 只比按下与抬起那一刻的列表读数会**误杀** —— 手指按在原地的微动（真机必然有）同样
+##    会把列表拖走几单位（2026-10-09 灵石阁陈列行实测：微动 4 单位 → 列表动了 4 → 旧尺子
+##    阈值 0.5 判成「被拖走过」⇒ 满仓时每一格都点不动）。
+## 所以中途的每一次 motion 都要记账，容差用同一个 TAP_SLACK：手指微动仍算点，有意划必超。
+## 都没按下过的松开不算点按 —— 按下在别处，这一枪不该由这块热区兑现。
+## 判据 tests/TapSwipeCheck.tscn 与 tests/ShopRowScrollCheck.tscn（真发按下-移动-抬起，
+## 逐处验「划动不弹、点按照弹」）。
+static func tap(node: Control, on_tap: Callable) -> void:
+    node.gui_input.connect(func(ev: InputEvent) -> void:
+        var mb := ev as InputEventMouseButton
+        if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+            if mb.pressed:
+                node.set_meta(_TAP_DOWN_META, mb.global_position)
+                node.set_meta(_TAP_SCROLL_META, _scroll_offset_above(node))
+                node.set_meta(_TAP_REACH_META, 0.0)
+                return
+            if not node.has_meta(_TAP_DOWN_META):
+                return                      # 没在本节点上按下过 → 这一枪不算点
+            var down: Vector2 = node.get_meta(_TAP_DOWN_META)
+            var scroll0: Vector2 = node.get_meta(_TAP_SCROLL_META, NO_SCROLL_ABOVE)
+            var reach: float = node.get_meta(_TAP_REACH_META, 0.0)
+            node.remove_meta(_TAP_DOWN_META)
+            node.remove_meta(_TAP_SCROLL_META)
+            node.remove_meta(_TAP_REACH_META)
+            reach = maxf(reach, down.distance_to(mb.global_position))
+            if scroll0 != NO_SCROLL_ABOVE:
+                reach = maxf(reach, scroll0.distance_to(_scroll_offset_above(node)))
+            if reach > TAP_SLACK:
+                return
+            on_tap.call()
+            return
+        var mm := ev as InputEventMouseMotion
+        if mm != null and node.has_meta(_TAP_DOWN_META):
+            var d0: Variant = node.get_meta(_TAP_DOWN_META)
+            var s0: Variant = node.get_meta(_TAP_SCROLL_META)
+            var r0: float = node.get_meta(_TAP_REACH_META, 0.0)
+            if d0 is Vector2:
+                r0 = maxf(r0, (d0 as Vector2).distance_to(mm.global_position))
+            if s0 is Vector2 and s0 != NO_SCROLL_ABOVE:
+                r0 = maxf(r0, (s0 as Vector2).distance_to(_scroll_offset_above(node)))
+            node.set_meta(_TAP_REACH_META, r0)
+    )
+
+## 「往上没有会滚的父级」的哨兵值：滚动位置永远 >= 0，负数不会与真读数撞
+const NO_SCROLL_ABOVE := Vector2(-1.0, -1.0)
+
+## 往上找第一个会滚的父容器，取它此刻的滚动位置（横滑列表读 scroll_horizontal、
+## 竖滑读 scroll_vertical；两头都能滚就一起带上）。没有滚动父级返回 NO_SCROLL_ABOVE。
+## 为什么两个轴都要：只盯竖滑的话，横滑那一排（灵石阁陈列行）划完一松手照样算点按 ——
+## 手指跟着内容走了 200 单位，抬起点与按下点的距离却被内容的位移抵消了一部分。
+static func _scroll_offset_above(node: Node) -> Vector2:
+    var p := node.get_parent()
+    while p != null:
+        var sc := p as ScrollContainer
+        if sc != null and (sc.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED \
+                or sc.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED):
+            return Vector2(float(sc.scroll_horizontal), float(sc.scroll_vertical))
+        p = p.get_parent()
+    return NO_SCROLL_ABOVE
+
+## 滚动条：引擎默认那根浅灰与深蓝面板不搭（真机上像系统控件，不像游戏界面），而且吃掉
+## 一整条竖向预算。统一成「轨道不画、滑块一根主蓝细条」：只有内容真摆不下时
+## 才露脸（ScrollContainer 的 AUTO 模式已经管「该不该露」，这里只管「露出来长什么样」）。
+## 谁在用：灵石阁的货架排与陈列行（WaveShop._ready）。其余滚动面板沿用默认，
+## 等谁再动那一屏时一并收口。
+static func scrollable(sc: ScrollContainer) -> void:
+    if sc == null:
+        return
+    _scroll_bar(sc.get_h_scroll_bar())
+    _scroll_bar(sc.get_v_scroll_bar())
+
+## 滚动条只能靠 modulate 调颜色：theme 的 scroll_background / scroll_grabber 那几张 stylebox，
+## 无论是 `bar.add_theme_stylebox_override()` 还是给 bar 挂一份 Theme，画出来都还是默认那根
+## 浅灰圆头（实测：节点上 get_theme_stylebox 读回来是我们要的色，屏幕上不动；同一节点
+## modulate=红 立刻变红 ⇒ 4.7 的 ScrollBar 绘制不吃这两条路）。灰 × 深蓝 = 一条压在面板底上
+## 的暗蓝细带：不抢视线，也不在满屏深蓝里跳出「网页滚动条」。
+static func _scroll_bar(bar: ScrollBar) -> void:
+    if bar == null:
+        return
+    bar.modulate = Color(0.34, 0.52, 0.92, 0.85)

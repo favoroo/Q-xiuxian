@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://callocprev01"]
+
+[ext_resource type="Script" path="res://tests/levelup_layout_preview.gd" id="1"]
+
+[node name="LevelUpLayoutPreview" type="Node"]
+script = ExtResource("1")

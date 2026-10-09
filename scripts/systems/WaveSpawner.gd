@@ -158,11 +158,13 @@ func end_wave() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
-	# 地上灵石/残丹全部吸附给玩家
+	# 地上灵石全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折灵石）
 	var player = GameManager.player
 	if player != null:
 		for gem in get_tree().get_nodes_in_group("gems"):
-			if gem.has_method("magnet_to"):
+			if gem is HealOrb:
+				(gem as HealOrb).settle_for_wave_end(player)
+			elif gem.has_method("magnet_to"):
 				gem.magnet_to(player)
 
 func _open_shop() -> void:

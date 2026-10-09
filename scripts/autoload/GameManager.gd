@@ -1296,8 +1296,9 @@ func _gen_offer(wave: int) -> Dictionary:
 		"sold": false, "locked": false,
 	}
 
-## 标签亲和+流派偏好软加权抽法器：持有 ≥2 件同 tag 法器时该 tag 权重 ×2.5；
-## 角色限定流派非空时，命中 tag 法器权重 ×BONUS，其余保留 LEAK 漏出；福缘每点 +1% 权重
+## 标签亲和+流派偏好软加权抽法器：持有 ≥2 件同 tag 法器时亲和倍率 ×2.5，
+## 多 tag 取其中最大者（不连乘，避免双 tag 武器被指数级放大）；角色限定流派非空时，
+## 命中 tag 法器权重 ×BONUS，其余保留 LEAK 漏出；福缘每点 +1% 权重
 func _weighted_weapon_pick() -> String:
 	var pool: Array = WeaponData.SHOP_POOL
 	var counts := _tag_counts()
@@ -1305,8 +1306,10 @@ func _weighted_weapon_pick() -> String:
 	var weights: Array = []
 	for w_id in pool:
 		var w := luck_mult
+		var best_aff := 1.0
 		for t in WeaponData.tags_of(w_id):
-			w *= GameBalance.tag_affinity_mult(int(counts.get(t, 0)))
+			best_aff = maxf(best_aff, GameBalance.tag_affinity_mult(int(counts.get(t, 0))))
+		w *= best_aff
 		w *= GameBalance.tag_filter_mult(WeaponData.tags_of(w_id), shop_tag_filter)
 		weights.append(w)
 	var idx := GameBalance.weighted_pick_index(weights, rng.randf())

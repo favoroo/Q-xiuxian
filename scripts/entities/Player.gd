@@ -1,6 +1,8 @@
 class_name Player
 extends CharacterBody2D
 
+const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
+
 @export var max_health: float = 120.0
 var current_health: float = 120.0
 var base_speed: float = 210.0
@@ -100,8 +102,18 @@ func _sync_pickup_radius() -> void:
 	var shape_node = $PickupArea/CollisionShape2D
 	if shape_node != null and shape_node.shape is CircleShape2D:
 		var c_shape = shape_node.shape.duplicate() as CircleShape2D
-		c_shape.radius = 96.0 * GameManager.pickup_range_mult
+		c_shape.radius = BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
 		shape_node.shape = c_shape
+
+## 当前拾取半径：真话只有 PickupArea 那一圈碰撞形状。
+## 满血待命的回复珠要问它（别抄常数），否则「圈内掉血自动飞来」会和热区不一致。
+func pickup_radius() -> float:
+	if pickup_area == null:
+		return BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
+	var shape_node: Node = pickup_area.get_node_or_null("CollisionShape2D")
+	if shape_node != null and shape_node.shape is CircleShape2D:
+		return (shape_node.shape as CircleShape2D).radius
+	return BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
 
 func _on_leveled_up(_lvl: int) -> void:
 	play_squash(Vector2(0.72, 1.38), 0.28)
@@ -193,13 +205,18 @@ func sync_drones() -> void:
 func heal(amount: float, quiet: bool = false) -> void:
 	if amount <= 0.0:
 		return
+	var before := current_health
 	current_health = minf(max_health, current_health + amount)
 	GameManager.player_hp_changed.emit(current_health, max_health)
+	# 只报真正回上来的那部分；顶满时一口没回，不发挤压/音效/+X（报了就是假账）
+	var gained := current_health - before
+	if gained <= 0.01:
+		return
 	if quiet:
 		return
 	play_squash(Vector2(0.88, 1.16), 0.18)
 	AudioManager.play_sfx("heal", 0.9)
-	DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+" + str(int(amount)))
+	DamageNumber.spawn(get_parent(), global_position, int(gained), false, "+" + str(int(gained)))
 
 # ---------------- 随行神通（技能） ----------------
 
@@ -554,10 +571,14 @@ func _process_sun_orbs(delta: float) -> void:
 	var in_combat: bool = bool(orbit_res.get("in_combat", false))
 	var target_radii: Array = orbit_res.get("radii", [])
 
-	var haste_factor: float = clampf(1.0 / maxf(0.25, GameManager.attack_speed_mult * GameManager.synergy_haste_mult), 1.0, 3.2)
-	var surge_mult: float = 1.30 if in_combat else 1.0
-	var star_mult: float = 1.0 + 0.10 * float(max_star - 1)
-	sun_orb_angle += delta * 4.8 * haste_factor * surge_mult * star_mult
+	var angular_speed: float = GameBalance.spirit_orbit_angular_speed(
+		GameBalance.SPIRIT_BASE_ANGULAR_SPEED,
+		GameManager.attack_speed_mult,
+		GameManager.synergy_haste_mult,
+		in_combat,
+		max_star
+	)
+	sun_orb_angle += delta * angular_speed
 
 	for i in range(count):
 		var orb := sun_orb_container.get_child(i) as SunOrb
@@ -615,6 +636,7 @@ func increase_max_hp(amount: float, heal_amount: float) -> void:
 	DamageNumber.spawn(get_parent(), global_position, int(heal_amount), false, "+" + str(int(heal_amount)) + " HP")
 
 func _on_pickup_area_area_entered(area: Area2D) -> void:
+	# 只认实现了 magnet_to 的掉落物（灵石）。残丹/回春葫芦故意不实现它：那颗要人贴上去才入口。
 	if area.has_method("magnet_to"):
 		area.magnet_to(self)
 	elif area.get_parent() and area.get_parent().has_method("magnet_to"):

@@ -99,10 +99,12 @@ func _ready() -> void:
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
 
-	# 出生缓冲：封顶 2.0 秒（仍然不是「出屏第一帧就扑」，玩家有 2 秒看清这只怪逼近）。
+	# 出生缓冲：封顶 1.0 秒（仍然不是「出屏第一帧就扑」，玩家有 1 秒看清这只怪逼近）。
 	# 旧写法直接取 charge_interval（4.0s），而狼移速 120px/s 从 380~480px 走到冲刺下沿
 	# （120px）只要 2.2~3.0s ⇒ 冷却就绪时狼已贴脸进短咬带，冲刺条件 dist>120px 永远不满足。
-	_charge_timer = minf(charge_interval, 2.0)
+	# 封顶 1.0s 而非 2.0s：v0.0.7 全局砍血后狼只有 45HP，2.0s+1.2s 预警=3.2s 站桩太长，
+	# 中等火力下狼在预警期间就被打死了，活不到冲刺出手那一下。
+	_charge_timer = minf(charge_interval, 1.0)
 	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval

@@ -188,6 +188,10 @@ func _create_card(s_id: String) -> Control:
 
 	card.add_child(vbox)
 
+	card.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
+			_choose(s_id)
+	)
 	card.mouse_entered.connect(func():
 		var tw = card.create_tween()
 		tw.tween_property(card, "scale", Vector2(1.04, 1.04), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

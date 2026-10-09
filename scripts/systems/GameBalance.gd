@@ -40,8 +40,8 @@ const SPAWN_INTERVAL_MIN := 0.30
 const SPAWN_INTERVAL_PER_WAVE := 0.055
 const SPAWN_BATCH_EVERY_WAVES := 4.0      ## 每多 4 波，一轮多刷 1 只
 const SPAWN_BATCH_BONUS_CHANCE := 0.4     ## 额外一只的概率
-const ENEMY_HP_PER_WAVE := 0.18
-const ENEMY_DMG_PER_WAVE := 0.10
+const ENEMY_HP_GROWTH := 1.15             ## 每波气血复利倍率（W5≈1.75 / W10≈3.52 / W15≈7.08 / W20≈14.23）
+const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
 
@@ -57,16 +57,16 @@ static func spawn_batch(wave: int, roll: float) -> int:
 	return 1 + int(float(maxi(wave, 1)) / SPAWN_BATCH_EVERY_WAVES) + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
 
 static func enemy_hp_mult(wave: int) -> float:
-	return 1.0 + float(maxi(wave, 1) - 1) * ENEMY_HP_PER_WAVE
+	return pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
 
 static func enemy_dmg_mult(wave: int) -> float:
-	return 1.0 + float(maxi(wave, 1) - 1) * ENEMY_DMG_PER_WAVE
+	return pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
 
 # ---------------- 精英 / Boss 波（固定关卡） ----------------
 
 const ELITE_WAVES := [5, 15]             ## 精英波：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
-const BOSS_HP_BASE := 1000.0             ## Boss 基础气血（约为精英的 5 倍）
+const BOSS_HP_BASE := 14000.0            ## Boss 基础气血（W10≈4.9万 / W20≈20万；成型 ~45s、极端 6 剑 ~10s）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
 const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量
@@ -178,6 +178,20 @@ static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> flo
 	if wave < growth_wave_cap:
 		return harvest * HARVEST_GROWTH
 	return harvest
+
+# ---------------- 残丹化灵（波末没贴上去吃掉的回复珠）----------------
+
+## 回不上的那截气血折成灵石：每点 0.8。钉在藏宝匣另一路上 —— 满口 18 点 ×0.8 ≈ 14，
+## 与「约四成掉 3 颗金灵石（各 5 修为/灵石）」同档，砸匣子两条路不等价也不悬殊。
+const HEAL_OVERFLOW_STONE_PER_HP := 0.8
+## 单颗封顶：气血上限越高、15% 口越大，不封顶就滚成巨款
+const HEAL_OVERFLOW_STONE_CAP := 15
+
+## 溢出气血 → 灵石数（0 溢出就是 0，负数按 0 收）
+static func heal_overflow_stones(overflow_hp: float) -> int:
+	if overflow_hp <= 0.0:
+		return 0
+	return clampi(int(round(overflow_hp * HEAL_OVERFLOW_STONE_PER_HP)), 0, HEAL_OVERFLOW_STONE_CAP)
 
 # ---------------- 悟道候选的稀有度权重 ----------------
 
@@ -518,6 +532,24 @@ const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24
 const SPIRIT_MAX_REACH := 135.0          ## 默认最大扑击外扩极限
 const SPIRIT_DANGER_DIST := 48.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
 const SPIRIT_SECTOR_HALF_ANGLE := 0.96   ## 扇区扑击半角（~55°，灵宝朝向前方扇区）
+const SPIRIT_BASE_ANGULAR_SPEED := 2.4   ## 基础默认旋转角速度（减小至平稳从容的 2.4 rad/s）
+
+## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
+## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）
+## synergy_haste_mult: GameManager.synergy_haste_mult（雷法/玄水羁绊加成）
+## in_combat: 战斗感知圈内有敌人时触发温和激战加速（1.18x）
+static func spirit_orbit_angular_speed(
+	base_speed: float = SPIRIT_BASE_ANGULAR_SPEED,
+	attack_speed_mult: float = 1.0,
+	synergy_haste_mult: float = 1.0,
+	in_combat: bool = false,
+	max_star: int = 1
+) -> float:
+	var eff_cd_mult: float = clampf(attack_speed_mult * synergy_haste_mult, 0.25, 1.5)
+	var haste_scale: float = 1.0 / eff_cd_mult
+	var combat_scale: float = 1.18 if in_combat else 1.0
+	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
+	return base_speed * haste_scale * combat_scale * star_scale
 
 ## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
 ## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）

@@ -17,9 +17,14 @@ extends Node
 ## 4) 近战弧光的月牙外缘 == 那一帧查询圆的半径（画多大==判多大）。
 ## 5) 弹丸转不转由表里的 bullet_spin 说了算（玄冰飞针写的是 false，旧代码按穿透数反推 ⇒ 在乱转）。
 ##
+## 2026-10-09 庚金飞剑二次返工补的第 6 条 —— 前 1)/2) 条抓不到用户第二次报的那个问题：
+## 旧 tip=(20,-14) 标的是【剑首】那头，代码照样自洽地把它转到瞄准轴上，于是判据全绿、
+## 画面里剑尖背着敌人、弹丸从剑柄冒出来。第 6 条量"tip 那头上是不是亮剑身"，见
+## _test_tip_matches_art()；换素材后 tip 必须用 tools/fit_weapon_icon.py 量，不许手打。
+##
 ## 运行: godot --headless --path . res://tests/WeaponAimCheck.tscn
 ##       godot --headless --path . res://tests/WeaponAimCheck.tscn -- --selftest
-##       # 反例：把飞剑的补偿角清零，第 1 条必须报红 —— 用来证明这条断言真的有牙齿
+##       # 反例：① 把飞剑的补偿角清零 ⇒ 第 1 条报红；② 把 tip 取反 ⇒ 第 6 条报红
 
 const DIRS_DEG := [0.0, 45.0, 90.0, 135.0, 180.0, -135.0, -90.0, -45.0]
 const TOL_DEG := 2.0        ## 剑尖指向与瞄准轴的允许误差
@@ -54,6 +59,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	_test_table()
+	_test_tip_matches_art()
 	await _test_facing()
 	await _test_projectile_bay()
 	await _test_melee_arc()
@@ -93,8 +99,66 @@ func _test_table() -> void:
 
 # ---------------- 朝向 / 出膛点 ----------------
 
-## 引擎真正画出来的剑尖在世界哪儿：贴图坐标系 tip → flip_v 纵向镜像 → 世界变换
-## （global_transform 已经带上了 Sprite2D 自己的 0.55 缩放，这里不许再乘一次）
+## 亮部质心沿 tip 轴的投影小于这个数就算"这张图没有单一亮轴"，不参与判定：
+## 三根冰针成簇、符箓是矩形，本来就没有"哪头是尖"可言，硬判只会误伤。
+const LUMA_MIN_PX := 1.0
+const ALPHA_MIN := 0.094        # 与 tools/fit_weapon_icon.py 的 ALPHA_CUT=24/255 同一把尺子
+
+## 标定值与贴图是否同源（2026-10-09 庚金飞剑返工补的洞）：
+## 上面那八方向断言只证明"代码按 tip 转得自洽"，而旧 tip=(20,-14) 标的其实是剑首那头 ——
+## 自洽地指反方向，判据全绿、玩家看到的是"剑尖背着敌人、弹丸从剑柄冒出来"。
+## 这条补的是"tip 那头上到底是不是亮剑身"：剑身是亮金/亮白，缠绳剑柄是暗色，
+## 于是按亮度加权的质心必然偏向剑尖那一侧。实测：新图 +3.8px、旧图 -1.4px（该红），
+## 青云剑 +0.9、柳叶 +3.2、赤焰 +6.7（不误伤），玄冰针 -0.5 落在无信号带里不判。
+func _test_tip_matches_art() -> void:
+	for def_id in WeaponData.SHOP_POOL:
+		var def := WeaponData.get_def(def_id)
+		if int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE:
+			continue
+		var label := "%s(%s)" % [String(def.get("name", "?")), def_id]
+		var icon := String(def.get("icon", ""))
+		_c.check(not icon.is_empty() and ResourceLoader.exists(icon),
+			"%s 图标取得到，标定量得动（%s）" % [label, icon])
+		var img := _icon_image(icon)
+		if img == null:
+			continue
+		if bool(def.get("upright", false)):
+			continue  # 重器本体不转，tip 只取长度，没有"哪头是尖"可判
+		var tip: Vector2 = def.get("tip", FloatingWeapon.FALLBACK_TIP)
+		var bias := _luma_bias_along(img, tip)
+		_c.check(bias > -LUMA_MIN_PX,
+			"%s tip 没标到暗色那头上（亮部质心沿 tip 轴 %+0.2fpx，剑身应在这侧）" % [label, bias])
+
+func _icon_image(icon: String) -> Image:
+	if icon.is_empty() or not ResourceLoader.exists(icon):
+		return null
+	var tex := load(icon) as Texture2D
+	return tex.get_image() if tex != null else null
+
+## 不透明质心（几何中点）与亮度加权质心之差，投影到 tip 轴上：正值 = 亮的那头就是标的那头
+func _luma_bias_along(img: Image, tip: Vector2) -> float:
+	var axis := tip.normalized()
+	var center := Vector2(img.get_width() * 0.5, img.get_height() * 0.5)
+	var geo := Vector2.ZERO
+	var lum := Vector2.ZERO
+	var geo_w := 0.0
+	var lum_w := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a <= ALPHA_MIN:
+				continue
+			var v := Vector2(x - center.x, y - center.y)
+			geo += v * c.a
+			geo_w += c.a
+			var l: float = c.r * 0.299 + c.g * 0.587 + c.b * 0.114
+			lum += v * l * c.a
+			lum_w += l * c.a
+	if geo_w <= 0.0 or lum_w <= 0.0:
+		return 0.0
+	return (lum / lum_w - geo / geo_w).dot(axis)
+
+
 func _drawn_tip(w: FloatingWeapon) -> Vector2:
 	var spr: Sprite2D = w.sprite
 	var tip: Vector2 = w.tip_local
@@ -242,7 +306,8 @@ func _test_melee_arc() -> void:
 
 # ---------------- 反例：证明第 1 条断言真的有牙齿 ----------------
 
-## 把飞剑的贴图补偿清零 = 退回 2026-10-09 之前的写法，同一套算法必须报红
+## 反例一：把飞剑的贴图补偿清零 = 退回 2026-10-09 之前的写法，同一套算法必须报红。
+## 反例二：把 tip 取反（= 标到剑首那头，庚金飞剑旧图就栽在这） ⇒ 亮部质心那条必须报红。
 func _run_selftest() -> void:
 	var w := _make("gengjin_feijian")
 	await get_tree().process_frame
@@ -251,7 +316,13 @@ func _run_selftest() -> void:
 	var fixed := _facing_err(w, aim)
 	w.sprite.rotation = 0.0      # 旧写法：贴图不补偿，本体转多少算多少
 	var broken := _facing_err(w, aim)
+	var def := WeaponData.get_def("gengjin_feijian")
+	var img := _icon_image(String(def.get("icon", "")))
+	var right := _luma_bias_along(img, def["tip"])
+	var flipped := _luma_bias_along(img, -Vector2(def["tip"]))
 	print("SELFTEST 补偿后偏差 %.2f°，清零补偿后偏差 %.2f°" % [fixed, broken])
-	var ok := fixed <= TOL_DEG and broken > TOL_DEG
-	print("WEAPONAIM_SELFTEST: %s" % ("PASS（关掉补偿就报红，断言有牙齿）" if ok else "FAIL（这条断言抓不住旧写法）"))
+	print("SELFTEST 亮部质心：按表 %+.2fpx，tip 取反 %+.2fpx（旧图实测 -1.4px 那一类）" % [right, flipped])
+	var ok := fixed <= TOL_DEG and broken > TOL_DEG \
+		and right > -LUMA_MIN_PX and flipped < -LUMA_MIN_PX
+	print("WEAPONAIM_SELFTEST: %s" % ("PASS（关掉补偿/把 tip 标到柄上，两条都报红）" if ok else "FAIL（抓不住旧写法）"))
 	get_tree().quit(0 if ok else 1)

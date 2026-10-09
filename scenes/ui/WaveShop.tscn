@@ -4,9 +4,9 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 28.0
-content_margin_top = 15.0
+content_margin_top = 10.0
 content_margin_right = 28.0
-content_margin_bottom = 15.0
+content_margin_bottom = 10.0
 bg_color = Color(0.07, 0.1, 0.18, 0.98)
 skew = Vector2(0.035, 0)
 border_width_left = 2
@@ -77,13 +77,13 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/Panel"]
 layout_mode = 2
 theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 6
+theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_bottom = 4
 
 [node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
 
 [node name="TopBar" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
@@ -145,20 +145,19 @@ size_flags_vertical = 3
 theme_override_constants/separation = 16
 alignment = 1
 
-[node name="OwnedLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox"]
+[node name="OwnedScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.561, 0.612, 0.745, 1)
-theme_override_font_sizes/font_size = 12
-text = "上阵与背包 · 点选法器后可：三合一合成升星（集齐三把同名同星）· 上阵卸下 · 出售换灵石"
-horizontal_alignment = 1
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
 
-[node name="OwnedContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
+[node name="OwnedContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox/OwnedScroll"]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/separation = 10
 alignment = 1
 
 [node name="ActionBar" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
-custom_minimum_size = Vector2(0, 38)
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 theme_override_constants/separation = 10
 
@@ -167,7 +166,7 @@ layout_mode = 2
 theme_override_constants/separation = 16
 
 [node name="RerollButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/BottomBar"]
-custom_minimum_size = Vector2(190, 42)
+custom_minimum_size = Vector2(176, 36)
 layout_mode = 2
 text = "重掷货架"
 
@@ -176,6 +175,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="ConfirmButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/BottomBar"]
-custom_minimum_size = Vector2(200, 46)
+custom_minimum_size = Vector2(184, 40)
 layout_mode = 2
 text = "出  战"

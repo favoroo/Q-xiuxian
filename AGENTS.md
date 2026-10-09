@@ -91,12 +91,17 @@ $G --headless --path . res://tests/SkillCheck.tscn        # 随行神通（技�
 $G --headless --path . res://tests/HoverIntentCheck.tscn  # 悬浮怪逼近/环绕/后撤可辨识
 $G --headless --path . res://tests/ManualHotzoneCheck.tscn # 图鉴整格可点（带 -- --selftest）
 $G --headless --path . res://tests/ScrollSwipeCheck.tscn  # 滚动列整列可手指拖动
+$G --headless --path . res://tests/TapSwipeCheck.tscn    # 划动不算点按（带 -- --selftest）
 $G --headless --path . res://tests/WeaponAimCheck.tscn    # 法器朝向/出膛点（带 -- --selftest）
+$G --headless --path . res://tests/HealOrbCheck.tscn      # 回复珠贴身才入口/满血不入口/波末溢出折灵石（带 -- --selftest）
+$G --headless --path . res://tests/ObeliskChargeReadoutCheck.tscn # 聚灵阵进度画在阵法上（带 -- --selftest）
+$G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与血量平衡仿真（带 -- --selftest）
+$G --headless --path . res://tests/ShopRowScrollCheck.tscn # 灵石阁陈列行横滑：处处可起手+每格滑得到+划动不误选（带 -- --selftest）
 ```
 
-非判据现场工具（要真实出声/出图，别加 `--headless`）：`AudioGallery` / `BoltPreview` / `BulletPreview` / `ShakeProbe` / `ObeliskSpentPreview`（界碑耗尽灰相出图对比）/ `WeaponAimPreview`（12 件法器 × 4 方向摆位出图）。
+非判据现场工具（要真实出声/出图，别加 `--headless`）：`AudioGallery` / `BoltPreview` / `BulletPreview` / `ShakeProbe` / `ObeliskSpentPreview`（界碑耗尽灰相出图对比）/ `ObeliskChargePreview`（界碑充能读数四档出图：碑脚走针环 + 碑身灌灵 + 碑顶百分比）/ `HealOrbTintPreview`（回复珠可入口 vs 满血待命两相并排出图）/ `WeaponAimPreview`（12 件法器 × 4 方向摆位出图）/ `LevelUpLayoutPreview`（悟道面板 20:9/16:9/4:3 三档出图，旁打印板离屏白与卡宽）/ `ShopRowScrollPreview`（灵石阁陈列行满仓横滑两相出图：滑到最左 / 划到底）。
 
-`LayoutCheck` 报红时看数字（headless 可跑）：`$G --headless --path . res://tests/LayoutBleedProbe.tscn` —— 逐档屏宽打印面板与每张卡**画出来**的边界（斜切/放大那圈布局盒量不到的量）。
+`LayoutCheck` 报红时看数字（headless 可跑）：`$G --headless --path . res://tests/LayoutBleedProbe.tscn` —— 逐档屏宽打印面板与每张卡**画出来**的边界（斜切/放大那圈布局盒量不到的量），并点名卡角是否被滚动区横向削掉、底栏按钮离面板画出来的边还剩多少白。
 
 ## 变更日志（每次改代码必读必写）
 
@@ -113,3 +118,5 @@ $G --headless --path . res://tests/WeaponAimCheck.tscn    # 法器朝向/出膛�
 7. **范围视觉与判定同源** — 画多大 == 判多大，别用辉光糊大。
 8. **APK 文件名写死 v0.0.1 是正常的** — 实际版本由 `Version.gd` + `release.py` 处理。
 9. **WebFetch 工具在本环境不可用** — 辅助小模型的 reasoning effort 配置冲突会导致调用报错；需要抓网页时改用 `curl`（访问 localhost 加 `--noproxy '*'`），再用 `python3` 解析 HTML。
+10. **滚动条改不动 stylebox，只吃 `modulate`** — Godot 4.7 的 `ScrollBar` 无视 `scroll_grabber` / `scroll_background`（节点 override 与 `bar.theme` 都不作数，读回来是我们要的色、画出来仍是默认浅灰）；统一长相走 `GameStyle.scrollable()`，里面只有 `bar.modulate` 说话算数。
+11. **滚动区里的槽位别用 `Button`** — `BaseButton` 自己 `accept_event()`，「按下」那一拍不冒泡 ⇒ 手指压在格子上划不动整排；要划得动就用 `PanelContainer + GameStyle.tap()`（灵石阁陈列行、属性面板同一口径）。

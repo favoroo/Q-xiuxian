@@ -75,6 +75,7 @@ func _ready() -> void:
 var _synergy_box: HBoxContainer = null
 var _pending_chip: PanelContainer = null
 var _pending_label: Label = null
+var _safe_insets: Array[float] = [0.0, 0.0, 0.0]
 
 # ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
 
@@ -85,11 +86,11 @@ func _apply_safe_area() -> void:
 	var safe := Rect2(DisplayServer.get_display_safe_area()).intersection(win)
 	var vp: Rect2 = get_viewport().get_visible_rect()
 	var scale: float = win.size.x / vp.size.x if vp.size.x > 0.0 else 1.0
-	var ins := safe_insets(safe, win, scale)
+	_safe_insets = safe_insets(safe, win, scale)
 	var top := $TopContainer
-	top.offset_left = BASE_EDGE_X + ins[0]
-	top.offset_top = BASE_TOP + ins[1]
-	top.offset_right = -BASE_EDGE_X - ins[2]
+	top.offset_left = BASE_EDGE_X + _safe_insets[0]
+	top.offset_top = BASE_TOP + _safe_insets[1]
+	top.offset_right = -BASE_EDGE_X - _safe_insets[2]
 
 ## 纯算术：安全区与窗口都取**屏幕像素**、scale = 像素/设计单位。
 ## 返回 [左, 上, 右] 三个让位量（设计单位，已夹到 0..SAFE_CAP）。
@@ -308,6 +309,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		if DetailTip.close_all(self):
 			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
+			if _skill_box != null and _skill_box.visible:
+				_trigger_skill_press()
+				get_viewport().set_input_as_handled()
 
 func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v
@@ -458,7 +465,7 @@ var _obelisk_bar: ProgressBar = null
 var _obelisk_box: VBoxContainer = null
 var _obelisk_active_ob: BlessingObelisk = null
 
-## 构建聚灵阵激活 UI：右侧按钮 + 充能条
+## 构建聚灵阵激活 UI：右侧按钮，充能条贴在键面上
 func _build_obelisk_ui() -> void:
 	_obelisk_box = VBoxContainer.new()
 	_obelisk_box.visible = false
@@ -482,8 +489,15 @@ func _build_obelisk_ui() -> void:
 	# 按住它不会在底下长出摇杆、也不会把人带出阵法范围。
 	_obelisk_box.add_child(_obelisk_btn)
 
+	## 充能条画在键面上（用户 2026-10-09：「这个进度条可以显示到按钮上面」）。
+	## 挂在键下面那条：一是把整块 UI 撑高一档，二是正好落在拇指根那一片，
+	## 按住的时候本来就看不见 —— 键面自己就是进度，才不用把视线挪开。
+	## 摆位三条约束：
+	##  ① mouse_filter 必须 IGNORE —— ProgressBar 默认 STOP，会在键底挖出一条按不动的死带。
+	##  ② 左右各内缩 8：键面是 6° 斜切的平行四边形，44 高上斜边横向偏移约 4.6，
+	##     贴着整宽画就会探到斜切之外。
+	##  ③ 上抬到压边之上：block() 的底边是 5px 同色压暗厚边，条压在厚边上就糊成一条边线。
 	_obelisk_bar = ProgressBar.new()
-	_obelisk_bar.custom_minimum_size = Vector2(110, 10)
 	_obelisk_bar.max_value = 1.0
 	_obelisk_bar.value = 0.0
 	_obelisk_bar.show_percentage = false
@@ -491,19 +505,36 @@ func _build_obelisk_ui() -> void:
 	var bar_styles: Array = GameStyle.bar_styles(Color(0.06, 0.05, 0.08, 0.8), Color(0.35, 0.75, 1, 0.95))
 	_obelisk_bar.add_theme_stylebox_override("background", bar_styles[0])
 	_obelisk_bar.add_theme_stylebox_override("fill", bar_styles[1])
-	_obelisk_box.add_child(_obelisk_bar)
+	_obelisk_btn.add_child(_obelisk_bar)
+	_obelisk_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_obelisk_bar.offset_left = 8.0
+	_obelisk_bar.offset_right = -8.0
+	_obelisk_bar.offset_top = -12.0
+	_obelisk_bar.offset_bottom = -6.0
 
-## 聚灵阵按钮输入处理：按下开始充能，松开结束充能
+## 聚灵阵按钮输入处理：按下开始充能，松开结束充能（支持鼠标与多点触控）
 func _on_obelisk_btn_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and _obelisk_active_ob != null:
-			_obelisk_active_ob.start_charge()
-			_obelisk_btn.text = "激活中..."
-			_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE_DK, 6.0, Vector2(3, 4)))
-		elif not event.pressed and _obelisk_active_ob != null:
-			_obelisk_active_ob.stop_charge()
-			_obelisk_btn.text = "聚 灵"
-			_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE, 6.0, Vector2(3, 4)))
+	var is_press := false
+	var is_release := false
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			is_press = true
+		else:
+			is_release = true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			is_press = true
+		else:
+			is_release = true
+
+	if is_press and _obelisk_active_ob != null:
+		_obelisk_active_ob.start_charge()
+		_obelisk_btn.text = "激活中..."
+		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE_DK, 6.0, Vector2(3, 4)))
+	elif is_release and _obelisk_active_ob != null:
+		_obelisk_active_ob.stop_charge()
+		_obelisk_btn.text = "聚 灵"
+		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE, 6.0, Vector2(3, 4)))
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
@@ -556,21 +587,38 @@ func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
 			_obelisk_active_ob = null
 		)
 
-# ---------------- 随行神通按钮（右下浮动，短按释放 / 长按看详解） ----------------
+# ---------------- 随行神通按钮（圆形半透明浮动，按下即放 + 冷却环反馈） ----------------
 
-const SKILL_BTN_SIZE := 64.0
-## 长按判定时长：超过它算「想看这是什么」，短按才是释放
-const SKILL_LONG_PRESS := 0.45
+const SKILL_BTN_SIZE := 76.0
+
+## 圆形冷却绘制遮罩：暗色半透明圆面 + 顺时针环形冷却进度弧
+class SkillCdOverlay extends Control:
+	var cd_ratio: float = 0.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	func _draw() -> void:
+		if cd_ratio <= 0.001:
+			return
+		var center := size * 0.5
+		var radius := minf(center.x, center.y)
+		# 半透明暗底圆
+		draw_circle(center, radius, Color(0.02, 0.04, 0.08, 0.70))
+		# 顺时针环形冷却弧：随剩余比例顺时针填满
+		var sweep := TAU * clampf(1.0 - cd_ratio, 0.0, 1.0)
+		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, Color(0.35, 0.75, 1.0, 0.95), 3.0, true)
 
 var _skill_box: Control = null
 var _skill_btn: Button = null
-var _skill_cd_mask: ColorRect = null
+var _skill_cd_ring: SkillCdOverlay = null
 var _skill_cd_label: Label = null
-var _skill_pressing: bool = false
-var _skill_press_t: float = 0.0
+var _skill_name_label: Label = null
 var _skill_was_ready: bool = false
+var _skill_shaking: bool = false
 
-## 构建技能按钮：符文大字键 + 顶部冷却遮罩 + 秒数。位置档位存 display.skill_btn_pos
+## 构建技能按钮：圆形半透明键 + 环形冷却遮罩 + 秒数 + 快捷键支持
 func _build_skill_button() -> void:
 	_skill_box = Control.new()
 	_skill_box.visible = false
@@ -583,18 +631,17 @@ func _build_skill_button() -> void:
 	_skill_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_skill_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_skill_btn, GameStyle.NAVY2, GameStyle.BLUE, 26, GameStyle.YELLOW, 6.0)
-	# gui_input 自管按下/松开（短按释放、长按详解）；按钮类控件摇杆自动认走，不会误长摇杆
+	_style_circle_skill_btn(_skill_btn)
+	# 支持多点触控与鼠标事件直通
 	_skill_btn.gui_input.connect(_on_skill_btn_input)
 	_skill_box.add_child(_skill_btn)
 
-	_skill_cd_mask = ColorRect.new()
-	_skill_cd_mask.color = Color(0.02, 0.03, 0.06, 0.74)
-	_skill_cd_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_skill_cd_mask.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_skill_cd_mask.visible = false
-	_skill_btn.add_child(_skill_cd_mask)
+	# 圆形冷却环与暗色遮罩
+	_skill_cd_ring = SkillCdOverlay.new()
+	_skill_cd_ring.visible = false
+	_skill_btn.add_child(_skill_cd_ring)
 
+	# 冷却秒数数字
 	_skill_cd_label = Label.new()
 	_skill_cd_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_cd_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -602,7 +649,17 @@ func _build_skill_button() -> void:
 	_skill_cd_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_skill_cd_label.visible = false
 	_skill_btn.add_child(_skill_cd_label)
-	GameStyle.label(_skill_cd_label, 20, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(_skill_cd_label, 22, GameStyle.PAPER, 2, GameStyle.INK, true)
+
+	# 底部微缩神通名（缩地/神行/疾风等，辅助符文识别）
+	_skill_name_label = Label.new()
+	_skill_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_skill_name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_skill_name_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_skill_name_label.offset_bottom = -7.0
+	_skill_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	GameStyle.label(_skill_name_label, 10, GameStyle.YELLOW_EDGE, 2, GameStyle.INK)
+	_skill_btn.add_child(_skill_name_label)
 
 	_apply_skill_btn_pos()
 	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
@@ -610,7 +667,63 @@ func _build_skill_button() -> void:
 			_apply_skill_btn_pos()
 	)
 
-## 位置三档位：右下（拇指区，默认）/ 右中 / 左下
+## 圆形半透明按钮样式配置：正圆 + 半透明墨蓝背景 + 亮蓝/道统流金外环
+func _style_circle_skill_btn(btn: Button) -> void:
+	var r := int(SKILL_BTN_SIZE * 0.5)
+	var is_enhanced := false
+	if not GameManager.active_skill_id.is_empty():
+		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
+	var border_col: Color = Color(1.0, 0.82, 0.30, 0.85) if is_enhanced else Color(0.28, 0.62, 1.0, 0.78)
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.05, 0.09, 0.18, 0.52)
+	normal.border_color = border_col
+	normal.border_width_left = 2
+	normal.border_width_top = 2
+	normal.border_width_right = 2
+	normal.border_width_bottom = 2
+	normal.corner_radius_top_left = r
+	normal.corner_radius_top_right = r
+	normal.corner_radius_bottom_right = r
+	normal.corner_radius_bottom_left = r
+
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(0.08, 0.14, 0.28, 0.65)
+	hover.border_color = border_col.lightened(0.2)
+	hover.border_width_left = 3
+	hover.border_width_top = 3
+	hover.border_width_right = 3
+	hover.border_width_bottom = 3
+	hover.corner_radius_top_left = r
+	hover.corner_radius_top_right = r
+	hover.corner_radius_bottom_right = r
+	hover.corner_radius_bottom_left = r
+
+	var pressed := StyleBoxFlat.new()
+	pressed.bg_color = Color(0.18, 0.49, 1.0, 0.72)
+	pressed.border_color = Color(1.0, 0.90, 0.40, 0.95)
+	pressed.border_width_left = 3
+	pressed.border_width_top = 3
+	pressed.border_width_right = 3
+	pressed.border_width_bottom = 3
+	pressed.corner_radius_top_left = r
+	pressed.corner_radius_top_right = r
+	pressed.corner_radius_bottom_right = r
+	pressed.corner_radius_bottom_left = r
+
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_font_override("font", GameStyle.display_font())
+	btn.add_theme_font_size_override("font_size", 28)
+	btn.add_theme_color_override("font_color", GameStyle.PAPER)
+	btn.add_theme_color_override("font_hover_color", GameStyle.YELLOW)
+	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)
+	btn.add_theme_constant_override("outline_size", 4)
+	btn.add_theme_color_override("font_outline_color", GameStyle.INK)
+
+## 位置三档位（脱离右下角贴边死角，移入屏幕黄金拇指区）
 func _apply_skill_btn_pos() -> void:
 	if _skill_box == null:
 		return
@@ -618,42 +731,106 @@ func _apply_skill_btn_pos() -> void:
 	match pos:
 		&"right_mid":
 			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-			_skill_box.offset_left = -SKILL_BTN_SIZE - 24.0
-			_skill_box.offset_right = -24.0
-			# 聚灵阵按钮占中心右侧 60..140 一段，技能键让到它下方
-			_skill_box.offset_top = 152.0
-			_skill_box.offset_bottom = 152.0 + SKILL_BTN_SIZE
+			_skill_box.offset_left = -SKILL_BTN_SIZE - 56.0
+			_skill_box.offset_right = -56.0
+			_skill_box.offset_top = 130.0
+			_skill_box.offset_bottom = 130.0 + SKILL_BTN_SIZE
 		&"left_bottom":
 			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-			_skill_box.offset_left = 24.0
-			_skill_box.offset_right = 24.0 + SKILL_BTN_SIZE
-			_skill_box.offset_top = -SKILL_BTN_SIZE - 28.0
-			_skill_box.offset_bottom = -28.0
+			_skill_box.offset_left = 68.0
+			_skill_box.offset_right = 68.0 + SKILL_BTN_SIZE
+			_skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
+			_skill_box.offset_bottom = -72.0
 		_:
+			# 默认右下黄金拇指区：内缩 68px、上抬 72px，握持手机时大拇指自然舒适点按
 			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-			_skill_box.offset_left = -SKILL_BTN_SIZE - 24.0
-			_skill_box.offset_right = -24.0
-			_skill_box.offset_top = -SKILL_BTN_SIZE - 28.0
-			_skill_box.offset_bottom = -28.0
+			_skill_box.offset_left = -SKILL_BTN_SIZE - 68.0
+			_skill_box.offset_right = -68.0
+			_skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
+			_skill_box.offset_bottom = -72.0
 
-## 短按释放 / 长按弹「这是什么」（Android 无 hover，详解走 DetailTip）
+var _last_skill_press_frame: int = -1
+
+## 全局输入拦截：支持触控第二根手指（左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		if _is_gameplay_active() and _is_point_on_skill_btn(event.position):
+			_trigger_skill_press()
+
+func _is_gameplay_active() -> bool:
+	if not visible or get_tree().paused:
+		return false
+	if not GameManager.run_started or GameManager.is_game_over:
+		return false
+	var spawner: Node = GameManager.wave_spawner
+	if spawner != null and int(spawner.get("phase")) != int(WaveSpawner.Phase.FIGHT):
+		return false
+	return true
+
+func _is_point_on_skill_btn(pos: Vector2) -> bool:
+	if _skill_btn == null or not is_instance_valid(_skill_btn) or not _skill_btn.is_visible_in_tree():
+		return false
+	var center := _skill_btn.global_position + _skill_btn.size * 0.5
+	# 圆形热区，半径外扩 8px 触控容错
+	var r := SKILL_BTN_SIZE * 0.5 + 8.0
+	return pos.distance_to(center) <= r
+
+## 输入处理：触屏与鼠标统一支持，按下即放（0 延迟），解决双指拉摇杆时技能不响应问题
 func _on_skill_btn_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_skill_pressing = true
-			_skill_press_t = 0.0
-		else:
-			if _skill_pressing and _skill_press_t < SKILL_LONG_PRESS:
-				_try_cast_skill()
-			_skill_pressing = false
+	var pressed := false
+	if event is InputEventScreenTouch:
+		pressed = event.pressed
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		pressed = event.pressed
 
-func _try_cast_skill() -> void:
+	if pressed:
+		_trigger_skill_press()
+
+## 触发技能释放（含成功弹性反馈与冷却震颤反馈）
+func _trigger_skill_press() -> void:
+	var cur_frame := Engine.get_process_frames()
+	if _last_skill_press_frame == cur_frame:
+		return
+	_last_skill_press_frame = cur_frame
+
 	var player = GameManager.player
+	var cast_success := false
 	if player != null and player.has_method("try_activate_skill"):
-		player.try_activate_skill()
+		cast_success = player.try_activate_skill()
 
-## 冷却与可见性轮询（沿用 FPS 计数同款轮询，不加新信号）；由 _process 每帧调
-func _poll_skill_button(delta: float) -> void:
+	if cast_success:
+		_play_skill_cast_fx()
+	else:
+		_play_skill_reject_fx()
+
+## 释放成功：弹性微缩放 + 脉冲反馈
+func _play_skill_cast_fx() -> void:
+	if _skill_btn == null:
+		return
+	_skill_btn.pivot_offset = Vector2(SKILL_BTN_SIZE * 0.5, SKILL_BTN_SIZE * 0.5)
+	var tw = create_tween()
+	tw.tween_property(_skill_btn, "scale", Vector2(0.86, 0.86), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_skill_btn, "scale", Vector2.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## 冷却中或无法释放：左右微抖 + 倒计时脉冲，明确给玩家反馈“在冷却中”，不再静默无反应
+func _play_skill_reject_fx() -> void:
+	if _skill_btn == null or _skill_shaking:
+		return
+	_skill_shaking = true
+	var orig_pos := _skill_btn.position
+	var tw = create_tween()
+	tw.tween_property(_skill_btn, "position:x", orig_pos.x - 5.0, 0.04)
+	tw.tween_property(_skill_btn, "position:x", orig_pos.x + 5.0, 0.04)
+	tw.tween_property(_skill_btn, "position:x", orig_pos.x, 0.04)
+	if _skill_cd_label != null and _skill_cd_label.visible:
+		_skill_cd_label.pivot_offset = _skill_cd_label.size * 0.5
+		tw.parallel().tween_property(_skill_cd_label, "scale", Vector2(1.25, 1.25), 0.06)
+		tw.tween_property(_skill_cd_label, "scale", Vector2.ONE, 0.08)
+	tw.tween_callback(func(): _skill_shaking = false)
+	AudioManager.play_sfx("ui_error", 0.7)
+
+## 冷却与可见性轮询（由 _process 每帧调）
+func _poll_skill_button(_delta: float) -> void:
 	if _skill_box == null:
 		return
 	var player = GameManager.player
@@ -664,63 +841,30 @@ func _poll_skill_button(delta: float) -> void:
 			_skill_was_ready = false
 			var def := SkillData.get_def(GameManager.active_skill_id)
 			_skill_btn.text = String(def.get("glyph", "?"))
+			var s_name: String = String(def.get("name", ""))
+			if _skill_name_label != null:
+				_skill_name_label.text = s_name.substr(0, 2)
+			_style_circle_skill_btn(_skill_btn)
 	if not show or player == null:
-		_skill_pressing = false
 		return
-
-	# 长按计时：到点弹详解，本次按下不再触发释放
-	if _skill_pressing:
-		_skill_press_t += delta
-		if _skill_press_t >= SKILL_LONG_PRESS:
-			_skill_pressing = false
-			_open_skill_tip()
 
 	var cd_left: float = player.skill_cd_left
 	var cd_total: float = maxf(0.01, player.skill_cd_total)
 	var on_cd := cd_left > 0.0
-	_skill_cd_mask.visible = on_cd
+	var ratio := clampf(cd_left / cd_total, 0.0, 1.0)
+
+	_skill_cd_ring.visible = on_cd
+	_skill_cd_ring.cd_ratio = ratio
+	_skill_cd_ring.queue_redraw()
+
 	_skill_cd_label.visible = on_cd
 	if on_cd:
-		# 遮罩从顶部按比例压下，秒数向上取整
-		_skill_cd_mask.anchor_bottom = clampf(cd_left / cd_total, 0.0, 1.0)
 		_skill_cd_label.text = str(int(ceil(cd_left)))
 		_skill_was_ready = false
 	elif not _skill_was_ready:
-		# 冷却转好：亮一下 + 轻弹，提醒可以再放
+		# 冷却转好：亮一下 + 弹性放大，提醒可以再放
 		_skill_was_ready = true
 		_skill_btn.pivot_offset = Vector2(SKILL_BTN_SIZE * 0.5, SKILL_BTN_SIZE * 0.5)
 		var tw = create_tween()
-		tw.tween_property(_skill_btn, "scale", Vector2(1.14, 1.14), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_skill_btn, "scale", Vector2(1.16, 1.16), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(_skill_btn, "scale", Vector2.ONE, 0.14)
-
-func _open_skill_tip() -> void:
-	var sid := GameManager.active_skill_id
-	var def := SkillData.get_def(sid)
-	if def.is_empty():
-		return
-	var st := SkillData.final_stats(sid, GameManager.cultivator_id)
-	var rows: Array = [["冷却", "%d 秒" % int(round(float(st["cooldown"])))]]
-	match int(st["kind"]):
-		SkillData.Kind.DASH:
-			rows.append(["冲刺距离", "%d 像素 · 途中无敌" % int(round(float(st["distance"])))])
-		SkillData.Kind.SPEED:
-			rows.append(["移速加成", "+%d%% · 持续 %.1f 秒" % [int(round(float(st["power"]) * 100.0)), float(st["duration"])]])
-		SkillData.Kind.HASTE:
-			rows.append(["施法间隔", "-%d%% · 持续 %.1f 秒" % [int(round(float(st["power"]) * 100.0)), float(st["duration"])]])
-		SkillData.Kind.IFRAME:
-			rows.append(["无敌时间", "%.1f 秒" % float(st["duration"])])
-		SkillData.Kind.HEAL:
-			rows.append(["回复量", "%d%% 最大气血" % int(round(float(st["power"]) * 100.0))])
-	var enhance := SkillData.enhance_desc(sid, GameManager.cultivator_id)
-	var notes: Array[String] = []
-	if not enhance.is_empty():
-		notes.append("✦ 道统契合：" + enhance)
-	DetailTip.show_over(self, _skill_btn, {
-		"title": String(def.get("name", "神通")),
-		"chip": "神通",
-		"chip_color": GameStyle.YELLOW,
-		"rows": rows,
-		"body": String(def.get("desc", "")),
-		"notes": notes,
-		"foot": "短按释放，冷却转好后可再次使用。",
-	})

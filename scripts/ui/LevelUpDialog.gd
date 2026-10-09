@@ -17,28 +17,50 @@ extends Control
 ## 上下出屏：选中卡放大 1.03，而卡片本来就撑满整行 ⇒ 上下各顶出 5 单位，压到信息条与
 ##   操作栏上。现在由 CardsPad 在这一行上下各留出 pop_gutter_y() 的放大余量。
 ## 两处都由判据现量（LayoutCheck 的 drawn_rect 认斜切、滚动区滑不动时不许顶出上下边界），不靠肉眼。
+##
+## 2026-10-09 用户真机图（第二轮）：「左右还是有点显示溢出了，左右间距可以小一点」。
+## 上一轮只把「布局盒」让开了，画出来那一圈还剩三处贴边，量屏边的尺全是绿的：
+## ① 面板两头离屏只有 PANEL_AIR_X=20 单位（真机 2048 宽上约 34px），配上深色底，
+##   看着就是被屏幕切了；
+## ② 卡片行的左右留白是 0 ⇒ ScrollContainer 会把最外侧两张卡**斜切画出来的那两个角剪掉**
+##   （卡#0 画出来 47.0 而滚动区左边界 53.4），卡角被削平成一条竖线；
+## ③ 面板是平行四边形：底边整体会比顶边左移一个 lean（=skew·h/2≈13.4），所以右下角那颗
+##   「确认领悟」离画出来的右边只剩 占位 - lean = 9.0 单位，压着边框线（顶栏反过来偏左）。
+## 现在按灵石阁那把尺子收口（与 WaveShop 同一口径）：`chrome_x()` 把 lean 算进占位、
+## `card_pad_x()` 给滚动区里的卡角留白、卡间缝与卡内边距按用户口径收窄，省下的宽换成 ① 的呼吸量。
+## 判据补两条尺：卡角不许被滚动区横向切掉、控件画出来那一圈离所属面板的画出来的边要留白。
 
 ## 旧 CARD_W 留作「宽屏上限」：判据的文案表按 card_inner_w() 现算，不直接读它
 const CARD_W := 262.0
-const CARD_PAD_X := 10.0
-const MIN_CARD_W := 118.0
-const CARD_GAP_MIN := 8.0
-const CARD_GAP_MAX := 18.0
+## 卡片左右内边距（stylebox content margin）：10→8，把宽还给文案
+const CARD_PAD_X := 8.0
+## 卡片设计下限：118→100。旧下限在窄屏上会把卡顶到min之上，面板于是**反过来吃掉 PANEL_AIR_X**
+## （720 宽时画出来的边只剩 15.6 而声明是 20）；放到 100 之后这一档不再触底，让位算术才算数。
+const MIN_CARD_W := 100.0
+## 卡间缝隙：用户口径「左右间距小一点」，18 的上限砍到 10（20:9 屏上 15→10）
+const CARD_GAP_MIN := 5.0
+const CARD_GAP_MAX := 10.0
 const CARD_MIN_H := 250.0
-## 面板左右固定占位：Panel 内容边距 12×2 + MarginContainer 8×2（与 .tscn 同源）
-const CHROME_X := 40.0
-## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 20（画出来的斜切角之外再留）
+## Panel stylebox 的左右内容边距（与 .tscn 的 StyleBoxFlat_panel.content_margin_left/right 同源）
+const PANEL_CONTENT_SIDE := 12.0
+## .tscn 里 MarginContainer 的左右边距初值，摆位时按 lean 现调（见 chrome_side）
+const CHROME_INNER_SIDE := 8.0
+## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 34（画出来的斜切角之外再留）
 const SCREEN_PAD_Y := 24.0
-const PANEL_AIR_X := 20.0
+const PANEL_AIR_X := 34.0
 const PANEL_MIN_H := 420.0
 ## 面板 stylebox 的斜切（弧度），与 LevelUpDialog.tscn 的 StyleBoxFlat_panel.skew 同源
 ## = GameStyle.SLANT_PLATE 3°。判据会核对两边没漂（改 .tscn 里的 skew 必须同步这里）。
 const PANEL_SKEW_RAD := 0.052
+## 卡片 stylebox 的斜切（弧度），与 _create_card_entry 里 style.skew = deg_to_rad(3.0) 同源
+const CARD_SKEW_RAD := 0.052
 ## 选中/未选中的缩放倍率：放大倍率同时决定这一行上下要留多少余量（pop_gutter_y）
 const SEL_SCALE := 1.03
 const DIM_SCALE := 0.97
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
+## 面板内容那一层：左右边距按「面板斜切从顶走到底挪的那一截」现调（见 chrome_x）
+@onready var content_margin: MarginContainer = $CenterContainer/Panel/MarginContainer
 @onready var card_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll
 @onready var cards_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad/CardsContainer
@@ -68,14 +90,33 @@ static func panel_h_for(screen_h: float) -> float:
 static func skew_x(h: float) -> float:
 	return absf(PANEL_SKEW_RAD) * h * 0.5
 
-## 卡片行可用的宽 = 屏幕宽 - 面板左右占位 - 面板两头画出来的斜切 - 两头呼吸量
+## 内容层单边占位 = Panel 内容边距 + MarginContainer 现调的那一份（取整，与节点逐单位一致）。
+## 平行四边形让底边整体比顶边多挪一个 skew_x(h)：右下角那颗按钮离**画出来的**右边
+## 只剩「占位 - skew_x」，所以这里按 lean 补一次（灵石阁 WaveShop.card_pad_x 同一口径）。
+static func chrome_side(h: float) -> float:
+	return PANEL_CONTENT_SIDE + ceilf(CHROME_INNER_SIDE + skew_x(h))
+
+static func chrome_x(h: float) -> float:
+	return chrome_side(h) * 2.0
+
+## 滚动区左右要留的白：卡片自己也是斜切的，画出来的两个角比布局盒左右各宽 |skew|·h/2，
+## 而 ScrollContainer 会 clip ⇒ 不留白最外侧两张卡的角被削平（用户看到的「卡边没了」）。
+## 卡高不超过滚动区高、滚动区高不超过面板高 ⇒ 按面板高算就是最坏情况。
+static func card_pad_x(h: float) -> float:
+	return ceilf(absf(CARD_SKEW_RAD) * h * 0.5) + 2.0
+
+## 面板布局盒里的内容宽 = 屏幕宽 - 面板占位 - 面板两头画出来的斜切 - 两头呼吸量
+static func panel_inner_w(screen: Vector2) -> float:
+	var h := panel_h_for(screen.y)
+	return maxf(0.0, screen.x - chrome_x(h) - (skew_x(h) + PANEL_AIR_X) * 2.0)
+
+## 卡片行可用的宽 = 内容宽 - 滚动区两头给卡角留的白
 static func avail_w(screen: Vector2) -> float:
-	var bleed: float = skew_x(panel_h_for(screen.y)) + PANEL_AIR_X
-	return maxf(0.0, screen.x - CHROME_X - bleed * 2.0)
+	return maxf(0.0, panel_inner_w(screen) - card_pad_x(panel_h_for(screen.y)) * 2.0)
 
 ## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
 static func gap_for(avail: float) -> float:
-	return clampf(avail * 0.014, CARD_GAP_MIN, CARD_GAP_MAX)
+	return clampf(avail * 0.010, CARD_GAP_MIN, CARD_GAP_MAX)
 
 ## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
 static func card_w_for(screen: Vector2, n: int) -> float:
@@ -89,8 +130,10 @@ static func card_inner_w(card_w: float) -> float:
 
 ## 这一档屏宽下整块面板的布局盒该占的宽（画出来还要再加两头斜切，判据按它核对留白）
 static func panel_w_for(screen: Vector2, n: int) -> float:
+	var h := panel_h_for(screen.y)
 	var avail := avail_w(screen)
-	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) + CHROME_X
+	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) \
+		+ card_pad_x(h) * 2.0 + chrome_x(h)
 
 ## 选中要放大 ⇒ 这一行上下各让出的余量。卡片最高不超过滚动区高，而滚动区高不超过面板高，
 ## 按 panel_h 上限算就是最坏情况：放大后画出来的高度正好落回滚动区内。
@@ -145,13 +188,23 @@ func _on_alloc_finished() -> void:
 func _layout_for_viewport() -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	var n: int = GameManager.UPGRADE_OFFER_COUNT
+	var h: float = panel_h_for(screen.y)
 	_card_w = card_w_for(screen, n)
-	panel.custom_minimum_size = Vector2(panel_w_for(screen, n), panel_h_for(screen.y))
+	panel.custom_minimum_size = Vector2(panel_w_for(screen, n), h)
 	cards_container.add_theme_constant_override("separation", int(gap_for(avail_w(screen))))
 	# 上下各让出放大余量：选中卡放大后仍在这行之内（判据 LayoutCheck 量这一点）
+	# 左右各让出卡角斜切量：不然滚动区把最外侧两张卡的角削平
 	var gutter := int(pop_gutter_y(screen.y))
+	var pad_x := int(card_pad_x(h))
 	cards_pad.add_theme_constant_override("margin_top", gutter)
 	cards_pad.add_theme_constant_override("margin_bottom", gutter)
+	cards_pad.add_theme_constant_override("margin_left", pad_x)
+	cards_pad.add_theme_constant_override("margin_right", pad_x)
+	# 内容层左右各再让 lean：面板是平行四边形，底边整体比顶边挪走 skew_x，
+	# 不补的话底栏那颗「确认领悟」离**画出来的**右边只剩 20 - lean ≈ 7 单位（顶栏反过来）。
+	var side := int(chrome_side(h) - PANEL_CONTENT_SIDE)
+	content_margin.add_theme_constant_override("margin_left", side)
+	content_margin.add_theme_constant_override("margin_right", side)
 
 # ---------------- 一屏候选 ----------------
 

@@ -45,20 +45,10 @@ func _run() -> void:
 	GameManager.cultivator_id = "jianchi"
 	GameManager.start_run("qingyun_sword")
 	GameManager.add_spirit_stones(500)
-	GameManager.roll_shop(true)
 	# 悟道结算面板要有内容可摆：先攒两点并开一次会话（候选 5 个），
 	# 后面每个屏宽都按 GameManager.alloc_offers 现建一版面板来量。
 	GameManager.pending_upgrade_points = 2
 	GameManager.open_alloc_session()
-	# 货架是随机的 ⇒ 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「凡品·法宝」。
-	# 这两枚正是「贴着字走的色签被引擎再折一次、多出一行孤字」的现场（框 29、字也要 29）。
-	if GameManager.shop_offers.size() >= 2:
-		GameManager.shop_offers[0] = {
-			"kind": "potion", "id": WeaponData.POTION_ID, "price": 11, "sold": false, "locked": false,
-		}
-		GameManager.shop_offers[1] = {
-			"kind": "item", "id": String(ItemData.all_ids()[0]), "price": 14, "sold": false, "locked": false,
-		}
 	for i in range(3):
 		GameManager.add_weapon("huoyan_fu")
 	_stress_shop()
@@ -159,22 +149,51 @@ func _stress_hud(hud: Control) -> void:
 ## ② 一半格子挂「锁定」按钮（比已售出多一行 26 高）；
 ## ③ 法宝与背包同屏 ⇒ 陈列行、提示行、操作条都占实位。
 ## 空载货架（回气丹两字说明）永远量不出这一屏 ⇒ 必须灌满再量。
-func _stress_shop() -> void:
+func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 	for i in range(5):
 		GameManager.apply_upgrade("melee_up")
 		GameManager.apply_upgrade("elemental_up")
-	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
+	# 货架是随机的 ⇒ 按格数重掷再钉最坏文案。格数越多卡越窄、说明折得越多行 ⇒
+	# 6 格（多宝道人 +1）才是竖向最坏情况，两档都要量。
+	GameManager.shop_slots_bonus = maxi(0, count - GameManager.SHOP_BASE_SLOTS)
+	GameManager.roll_shop(true)
+	# 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「凡品·法宝」。
+	# 这两枚正是「贴着字走的色签被引擎再折一次、多出一行孤字」的现场（框 29、字也要 29）。
 	var offers: Array = GameManager.shop_offers
+	if offers.size() >= 2:
+		offers[0] = {
+			"kind": "potion", "id": WeaponData.POTION_ID, "price": 11, "sold": false, "locked": false,
+		}
+		offers[1] = {
+			"kind": "item", "id": String(ItemData.all_ids()[0]), "price": 14, "sold": false, "locked": false,
+		}
+	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
 	for i in range(mini(long_ids.size(), maxi(offers.size() - 2, 0))):
 		offers[2 + i] = {
 			"kind": "weapon", "id": long_ids[i], "price": 41,
 			"sold": false, "locked": i % 2 == 0,
 		}
-	GameManager.add_item(String(ItemData.all_ids()[0]))
-	if ItemData.all_ids().size() > 1:
-		GameManager.add_item(String(ItemData.all_ids()[1]))
-	GameManager.add_weapon("qingyun_sword")
-	GameManager.unequip_to_stash(0)
+	GameManager.items.clear()
+	# 法宝全灌：陈列行的最坏情况不是「两件」而是「15 件」——满仓 6 上阵 + 9 背包 + 15 法宝
+	# = 30 格摆不平 ⇒ OwnedScroll 露一条 8 单位高的滑条，那 8 单位是从货架的竖向预算里扣的。
+	# 只灌两件就量不到这一档（2026-10-09 陈列行改横滑之后新增的开销）。
+	for id in ItemData.all_ids():
+		GameManager.add_item(String(id))
+	# 陈列行与操作条是这一屏另外两行「固定开销」：真机上背包会满、玩家一定会点选法器。
+	# 本判据不建 Player，而 add_weapon 没有 player 节点就进不了上阵栏 ⇒ 直接灌
+	# WaveShop._refresh_inventory 现读的那两份字段（stash / drones）。
+	GameManager.stash.clear()
+	for wid in ["qingyun_sword", "huoyan_fu", "chiyan_dao", "liuye_feidao", "wulei_paizi",
+			"gengjin_feijian", "bajiao_fan", "fantian_yin", "fentian_baodeng"]:
+		var wdef: Dictionary = WeaponData.get_def(wid)
+		if wdef.is_empty() or GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
+			continue
+		GameManager.stash.append({"id": wid, "name": wdef.get("name", "?"), "star": 1,
+			"icon": wdef.get("icon", ""), "tag": wdef.get("tag", "")})
+	GameManager.drones.clear()
+	for i in range(WeaponData.MAX_SLOTS):
+		GameManager.drones.append({"id": "lingdie", "star": 1})
+	GameManager.recalc_synergies()
 
 ## 每个板块：怎么建、怎么打开
 func _screens() -> Array[Dictionary]:
@@ -184,8 +203,11 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "道统选择", "path": "res://scripts/ui/CultivatorSelect.gd", "open": "show_select"},
 		{"tag": "本命法器", "path": "res://scenes/ui/StartWeaponSelect.tscn", "open": "show_select"},
 		{"tag": "波后悟道结算", "path": "res://scenes/ui/LevelUpDialog.tscn",
-			"open": "_on_alloc_opened", "select": 1},
-		{"tag": "灵石阁", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened"},
+			"open": "_on_alloc_opened", "select": 1, "edge_gap": EDGE_GAP},
+		{"tag": "灵石阁", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
+			"shop_select": true, "shelf_slots": GameManager.SHOP_BASE_SLOTS},
+		{"tag": "灵石阁·6格", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
+			"shop_select": true, "shelf_slots": GameManager.SHOP_BASE_SLOTS + 1},
 		{"tag": "属性面板", "path": "res://scripts/ui/PlayerStatsDialog.gd", "open": "open"},
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
 			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
@@ -203,6 +225,11 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 	node.visible = true
 	_holder.add_child(node)
 	await get_tree().process_frame
+	if spec.has("shelf_slots"):
+		# 换档货架要重掷 + 重钉最坏文案，再等一帧让容器按新格数排好
+		_stress_shop(int(spec["shelf_slots"]))
+		await get_tree().process_frame
+		await get_tree().process_frame
 	match String(spec["open"]):
 		"open":
 			node.open()
@@ -238,13 +265,28 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		await get_tree().create_timer(0.4).timeout
 		await get_tree().process_frame
 		await get_tree().process_frame
-	var bad := _walk(node, screen)
+	# 灵石阁的最坏情况不是「刚打开」，是点选了一件法器之后：操作条（32 + 缝隙 6）挤掉货架的高。
+	# 不量这一档，货架会在玩家第一次点卡时开始上下滑 —— 那正是用户 2026-10-09 报的那一格。
+	if spec.has("shop_select"):
+		node.selected = {"pool": "stash" if not GameManager.stash.is_empty() else "equipped",
+			"index": 0}
+		node._refresh_inventory()
+		await get_tree().create_timer(0.4).timeout
+		await get_tree().process_frame
+		await get_tree().process_frame
+	var bad := _walk(node, screen, float(spec.get("edge_gap", 0.0)))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
 	_c.check(bad.is_empty(), "%s · 屏宽 %d：无出屏、每行文字装得下（%d 处毛病）%s" % [
 		String(spec["tag"]), int(screen.x), bad.size(),
 		("" if bad.is_empty() else "\n      " + "\n      ".join(bad))])
 	node.queue_free()
+	if spec.has("shelf_slots"):
+		# 灌给灵石阁的满仓样本只属于这一屏：留着会让后面的属性面板量到「背包 9 件 + 上阵 3 只」
+		# 那一档，报出来的毛病不是它这一屏的账。
+		GameManager.stash.clear()
+		GameManager.drones.clear()
+		GameManager.recalc_synergies()
 	await get_tree().process_frame
 
 ## 用户报的那一格（2026-10-09 真机）：货架卡再长，「重掷 / 出战」这一排与顶栏标题必须整颗在屏内
@@ -260,11 +302,27 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 				or r.position.y < -EPS or r.end.y > screen.y + EPS:
 			bad.append("出口不在屏内 %s rect=%.0f,%.0f %.0fx%.0f 屏=%.0fx%.0f" % [
 				String(pair[0]), r.position.x, r.position.y, r.size.x, r.size.y, screen.x, screen.y])
-	# 货架装不下时靠竖滑，滑条必须看得见（看不见 = 玩家不知道下面还有卡）
+	# 货架不许上下滑（2026-10-09 用户：「尽量在一个界面下显示，不要去上下滑动，上下滑动体验
+	# 太差了这里」）。量「最高那张卡需要的高」vs「滚动区给的高」：卡高由内容决定，说明文案
+	# 一长就顶出这一屏。上一版靠竖滑兜底，代价是比一次价要滑一次屏 —— 那条路已被判据堵死。
 	var scroll: ScrollContainer = shop.offers_scroll
-	var content_h: float = shop.offers_container.size.y
-	if content_h > scroll.size.y + EPS and not scroll.get_v_scroll_bar().visible:
-		bad.append("货架高出滚动区 %.0f 却没露出滑条" % (content_h - scroll.size.y))
+	var need_h := 0.0
+	for card in shop.offers_container.get_children():
+		if card is Control:
+			need_h = maxf(need_h, (card as Control).get_combined_minimum_size().y)
+	if not shelf_fits(need_h, scroll.size.y):
+		bad.append("货架要上下滑：最高那张卡要 %.0f 高，滚动区只给 %.0f（差 %.0f）" % [
+			need_h, scroll.size.y, need_h - scroll.size.y])
+	# 陈列行（上阵 + 背包 + 法宝）：槽位先按件数压到下限，还摆不下就整排横滑
+	# （2026-10-09 用户真机：「装备太多了，可以左右滑动啊，不然很多装备都操作不了了」）。
+	# 这一条只钉「摆不平就得有得滑」；处处起手划得起来 + 滑到底看得见末格 + 摆得平不许露滑条
+	# 那三把尺要真发按下-移动-抬起才量得到，在 tests/ShopRowScrollCheck.tscn。
+	var owned_w: float = shop.owned_container.get_combined_minimum_size().x
+	var row_scroll: ScrollContainer = shop.owned_scroll
+	var row_avail: float = row_scroll.size.x
+	if owned_w > row_avail + EPS and row_scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
+		bad.append("陈列行横向摆不下（要 %.0f 宽，只给 %.0f）却没开横滑 ⇒ 右边那些装备点不到" % [
+			owned_w, row_avail])
 	# 滑得起来才算「全留 + 可滑到」：滚动区里的装饰性 STOP 会吃掉「按下」那一拍，
 	# 卡片盖多大面积就滑不动多大面积（真机现场见 ScrollSwipeCheck 头注）⇒ 除按钮外一律放行。
 	var stopped: Array[String] = []
@@ -292,36 +350,70 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 ## 横着出去才是毛病（名单的横向滚动已被禁用）。
 ## 但这一屏**滑不动**时（滚动条没东西可滑），上下顶出滚动区就是真顶出面板 ——
 ## 悟道那屏「选中的卡片上下溢出」是卡片撑满整行、选中又放大 1.03，量布局盒量不出来。
-func _walk(root: Control, screen: Vector2) -> Array[String]:
+##
+## ④⑤ 是 2026-10-09 第二轮补的（用户：「左右还是有点溢出了」，而 ①②③ 全绿）：
+## ④ 横向禁用滚动的滚动区自带 clip，会把里面控件**画出来的斜切角剪掉** —— 量屏边量不到，
+##    玩家看到的是「最外侧那张卡缺一条边」（角被削平成一条竖线）。
+## ⑤ 控件画出来那一圈与所属面板画出来的边之间要留白：面板是平行四边形，底边比顶边整体
+##    挪走一个 skew_x，所以右下角那颗按钮离边框只剩「占位 - 挪量」。悟道那屏改之前量出来 9.0，
+##    「确认领悟」压在边框线上；把 lean 算进占位之后 20.6。
+##    这条尺按屏点名（spec 里给 "edge_gap"）：先在悟道这一屏收口，另外几屏还没按 lean 调占位，
+##    一起开会把别人在途的改动一起报红。同一把尺的现量读数（屏宽 960 与 1204，下限 10）：
+##      属性面板 顶行 8.8 ｜ 修仙志 页签卡 9.1 ｜ 顶栏 HUD 3.3~4.6（时间块/悟道徽记/公告条）
+##      ｜ 道统选择 名号卡内 1.6~5.4
+##    谁再动那一屏，就把 "edge_gap" 加进它的 spec 一起收口。
+func _walk(root: Control, screen: Vector2, min_edge: float = 0.0) -> Array[String]:
 	var bad: Array[String] = []
-	var stack: Array = [[root, null]]
+	var stack: Array = [[root, null, null]]
 	while not stack.is_empty():
 		var top: Array = stack.pop_back()
 		var n: Control = top[0]
 		var scroll: ScrollContainer = top[1]
+		var skin: Control = top[2]
 		if not n.visible:
 			continue
 		var next_scroll: ScrollContainer = (n as ScrollContainer) if n is ScrollContainer else scroll
+		# 最外侧那层斜切面板才是这一屏的「框」；再往里一层 PanelContainer 是卡片/色签，
+		# 它的内容边距是卡内排版（悟道卡 8、色签 2），不归这条尺管 ⇒ 进卡就交还 null。
+		var is_frame: bool = n is PanelContainer and absf(skew_rad(n)) > 0.001
+		var next_skin: Control = null if (is_frame and skin != null) \
+				else (skin if skin != null else (n if is_frame else null))
 		var in_scroll := next_scroll != null and next_scroll != n
 		for c in n.get_children():
 			if c is Control:
-				stack.append([c, next_scroll])
+				stack.append([c, next_scroll, next_skin])
 		var r: Rect2 = n.get_global_rect()
 		if r.size.x > 0.0 and r.size.y > 0.0 and not n.has_meta("layout_bleed"):
 			var drawn := drawn_rect(r, skew_rad(n))
-			if not rect_on_screen(r, screen, in_scroll):
+			# 豁免「滑得动的方向」：竖滑区里越出屏底是设计（旧口径），横滑区里越出屏右同理 ——
+			# 灵石阁 6 格货架在 960 宽上摆不平，多出来那一格要横滑才看得到（滑不动却越界的那一档
+			# 由下面的 inside_h 抓）。除这一档外横向一律不豁免：名单的横向滚动是禁用的。
+			var off_h: bool = in_scroll and _can_slide_h(next_scroll)
+			if not rect_on_screen_axes(r, screen, in_scroll, off_h):
 				bad.append("出屏 %s %s rect=%.0f,%.0f %.0fx%.0f" % [
 					_path(n), n.get_class(), r.position.x, r.position.y, r.size.x, r.size.y])
-			elif not rect_on_screen(drawn, screen, in_scroll):
+			elif not rect_on_screen_axes(drawn, screen, in_scroll, off_h):
 				bad.append("画出来出屏 %s %s 布局盒=%.0f,%.0f %.0fx%.0f 斜切后=%.0f..%.0f x %.0f..%.0f" % [
 					_path(n), n.get_class(), r.position.x, r.position.y, r.size.x, r.size.y,
 					drawn.position.x, drawn.end.x, drawn.position.y, drawn.end.y])
+			elif in_scroll and not _can_slide_h(next_scroll) \
+					and not inside_h(next_scroll.get_global_rect(), drawn):
+				bad.append("画出来的角被滚动区横向切掉 %s %s 滚动区 x %.0f..%.0f 画出来 x %.1f..%.1f" % [
+					_path(n), n.get_class(), next_scroll.global_position.x,
+					next_scroll.global_position.x + next_scroll.size.x,
+					drawn.position.x, drawn.end.x])
 			elif in_scroll and not _can_slide_v(next_scroll) \
 					and not inside_v(next_scroll.get_global_rect(), drawn):
 				bad.append("顶出滚动区上下边界 %s %s 滚动区 y %.0f..%.0f 画出来 y %.0f..%.0f（%.0fx%.0f 格）" % [
 					_path(n), n.get_class(), next_scroll.global_position.y,
 					next_scroll.global_position.y + next_scroll.size.y,
 					drawn.position.y, drawn.end.y, r.size.x, r.size.y])
+			elif min_edge > 0.0 and skin != null:
+				var eg := edge_gap(drawn, skin)
+				if eg < min_edge:
+					bad.append("离面板画出来的边只剩 %.1f（下限 %.0f）%s %s 画出来 x %.1f..%.1f y %.0f..%.0f" % [
+						eg, min_edge, _path(n), n.get_class(),
+						drawn.position.x, drawn.end.x, drawn.position.y, drawn.end.y])
 		var probe := text_probe(n)
 		if not probe.is_empty():
 			if not text_fits(probe["widths"], probe["box"].x, probe["box"].y, probe["line_h"]):
@@ -358,6 +450,23 @@ static func _maxf(a: Array) -> float:
 
 # ---------------- 两条尺子（纯函数，selftest 直接喂反例） ----------------
 
+## 这一屏货架放得下吗：最高那张卡需要的高 ≤ 滚动区给的高（留 1 单位给取整）。
+## 数字来自 2026-10-09 那一屏：旧摆位（卡钉 268 死高 + 图标独占一行）最坏要 335，
+## 而滚动区只给 290 ⇒ 上下滑；新摆位（图标与名号同行、锁定压成色签行角键、固定行瘦身）
+## 最坏 256 / 给 288 ⇒ 一屏放完。
+static func shelf_fits(need_h: float, view_h: float) -> bool:
+	return need_h <= view_h + 1.0
+
+## 逐轴版「在不在屏内」：allow_off_vertical / allow_off_horizontal 各自豁免那一轴。
+## 只给落在滚动区里的控件用（滑得动的方向越界 = 滑一下就看到，不是毛病）。
+static func rect_on_screen_axes(rect: Rect2, screen: Vector2, allow_off_vertical: bool,
+		allow_off_horizontal: bool) -> bool:
+	if not allow_off_horizontal and (rect.position.x < -EPS or rect.end.x > screen.x + EPS):
+		return false
+	if not allow_off_vertical and (rect.position.y < -EPS or rect.end.y > screen.y + EPS):
+		return false
+	return true
+
 static func rect_on_screen(rect: Rect2, screen: Vector2, allow_off_vertical: bool = false) -> bool:
 	if rect.position.x < -EPS or rect.end.x > screen.x + EPS:
 		return false
@@ -375,10 +484,33 @@ static func drawn_rect(rect: Rect2, skew: float) -> Rect2:
 	return Rect2(rect.position.x - over, rect.position.y,
 		rect.size.x + over * 2.0, rect.size.y)
 
-## drawn 的上下是否整块落在 view 里（滚动区滑不动时用它管住上下顶出；
-## 横向不归它管 —— 卡片是斜切的，两个角本来要伸进面板那点占位里，屏内即可）
+## drawn 的上下是否整块落在 view 里（滚动区滑不动时用它管住上下顶出）
 static func inside_v(view: Rect2, drawn: Rect2, eps: float = 0.5) -> bool:
 	return drawn.position.y >= view.position.y - eps and drawn.end.y <= view.end.y + eps
+
+## drawn 的左右是否整块落在 view 里：横向滚动禁用时滚动区会 clip，画出来的角越界就是被削掉
+static func inside_h(view: Rect2, drawn: Rect2, eps: float = 0.5) -> bool:
+	return drawn.position.x >= view.position.x - eps and drawn.end.x <= view.end.x + eps
+
+## 横向滑得动吗：两个面板的滚动区都把横向设成 DISABLED，问引擎而不是抄枚举值
+static func _can_slide_h(sc: ScrollContainer) -> bool:
+	var bar: HScrollBar = sc.get_h_scroll_bar()
+	return bar != null and (bar.is_visible_in_tree() or bar.max_value > 0.0)
+
+## 控件画出来那一圈与「所属面板画出来的边」之间最小的那段白（负数 = 已经越过边框线）。
+## 面板左右边是斜的：x(y) = 布局边 - skew·(y - 面板中线)。控件最左的那个角在它自己的
+## 下沿、最右的那个角在它自己的上沿 ⇒ 各自拿同一高度上的那条边来比。
+static func edge_gap(drawn: Rect2, skin: Control) -> float:
+	return edge_gap_at(drawn, skin.get_global_rect(), skew_rad(skin))
+
+static func edge_gap_at(drawn: Rect2, pr: Rect2, sk: float) -> float:
+	var cy: float = pr.position.y + pr.size.y * 0.5
+	var left_at_bottom: float = pr.position.x - sk * (drawn.end.y - cy)
+	var right_at_top: float = pr.end.x - sk * (drawn.position.y - cy)
+	return minf(drawn.position.x - left_at_bottom, right_at_top - drawn.end.x)
+
+## 留白下限：面板边框线（2 单位）之外还要看得见一段底色，不然就是「压在边上」的观感
+const EDGE_GAP := 10.0
 
 ## 这一屏滑不滑得动：问引擎自己的滑条，别拿 get_combined_minimum_size() 猜 ——
 ## 竖向滚动模式为 AUTO 时它返回的 y 恒为 0（scroll_container.cpp 只给 DISABLED/MAXIMIZE_FIRST 算高）。
@@ -465,7 +597,17 @@ func _selftest() -> void:
 		"正例 名单里滑出屏底的那一行放行（竖着滑出去是设计）")
 	_c.check(not rect_on_screen(Rect2(20, 520, 1400, 300), screen, true),
 		"反例⑦ 名单里横向超出屏宽的那一行仍被拦住（横向滚动已被禁用）")
+	# 逐轴豁免：灵石阁 6 格货架在 960 宽上要横滑一格，那一格画出来就在屏右之外 ——
+	# 只有「滑得动」才许豁免，滑不动还是拦住（上面那条反例⑦是同一档的竖向对照）。
+	_c.check(rect_on_screen_axes(Rect2(880, 100, 148, 300), Vector2(960, 540), true, true),
+		"正例 货架横向滑得动：多出来那一格 x 尾 1028 > 960 放行")
+	_c.check(not rect_on_screen_axes(Rect2(880, 100, 148, 300), Vector2(960, 540), true, false),
+		"反例 横向滑不动（名单那一类）：同一格仍拦住")
+	_c.check(shelf_fits(256.0, 288.0), "正例 新摆位：最坏那张卡 256 高，滚动区给 288 ⇒ 一屏放完")
+	_c.check(not shelf_fits(335.0, 290.0),
+		"反例 旧摆位：卡要 335 而滚动区只给 290 ⇒ 货架要上下滑，拦住")
 	_check_bleed()
+	_check_gutters()
 	_check_safe_insets()
 
 ## 斜切与放大这两圈「布局盒量不到」的账（2026-10-09 用户真机：悟道面板两边溢出、
@@ -505,6 +647,37 @@ func _check_bleed() -> void:
 
 static func near_air(actual: float, want: float) -> bool:
 	return absf(actual - want) <= 1.0
+
+## 第二轮那两把尺（④ 滚动区削卡角、⑤ 贴住面板画出来的边）的反例/正例。
+## 数字就是用户真机那一屏量出来的：旧摆位卡#0 画出来 47.0 而滚动区左边界 53.4；
+## 旧占位下「确认领悟」离面板画出来的右边只剩 6.6。
+func _check_gutters() -> void:
+	var wide := Vector2(1204, 540)
+	var h: float = LevelUpDialog.panel_h_for(wide.y)
+	var scroll := Rect2(53.4, 116, 1097.2, 340)
+	_c.check(not inside_h(scroll, Rect2(47.0, 130.8, 218.0, 310.4)),
+		"反例11 旧摆位：最外侧卡画出来的角（47.0）越过滚动区左边界 53.4 被拦住")
+	var pad: float = LevelUpDialog.card_pad_x(h)
+	var new_left: float = (wide.x - LevelUpDialog.panel_w_for(wide,
+		GameManager.UPGRADE_OFFER_COUNT)) * 0.5 + LevelUpDialog.chrome_x(h) / 2.0 + pad
+	_c.check(inside_h(Rect2(new_left - pad, 116, pad * 2.0 + 900.0, 340),
+		Rect2(new_left, 130.8, 160.0, 310.4)),
+		"正例 滚动区两头留 %d 单位后卡角画出来 x %.1f 仍在滚动区内" % [int(pad), new_left - 8.1])
+	# 面板布局盒按旧占位（CHROME_BASE 40，不含 lean）摆：右下角那颗按钮会压上边框线
+	var old_panel := Rect2(33.4, 12, 1137.2, h)
+	var btn := Rect2(995.0, 484, 153.2, 44)
+	var old_gap := edge_gap_at(drawn_rect(btn, deg_to_rad(GameStyle.SLANT_BUTTON)), old_panel,
+		LevelUpDialog.PANEL_SKEW_RAD)
+	_c.check(old_gap < EDGE_GAP,
+		"反例12 旧占位：「确认领悟」画出来的右边离面板画出来的右边只剩 %.1f 被拦住" % old_gap)
+	var pw: float = LevelUpDialog.panel_w_for(wide, GameManager.UPGRADE_OFFER_COUNT)
+	var new_panel := Rect2((wide.x - pw) * 0.5, 12, pw, h)
+	var inner_r: float = new_panel.end.x - LevelUpDialog.chrome_x(h) / 2.0
+	var new_btn := Rect2(inner_r - 153.2, 484, 153.2, 44)
+	var new_gap := edge_gap_at(drawn_rect(new_btn, deg_to_rad(GameStyle.SLANT_BUTTON)), new_panel,
+		LevelUpDialog.PANEL_SKEW_RAD)
+	_c.check(new_gap >= EDGE_GAP,
+		"正例 占位算进 lean 后同一颗按钮留白 %.1f（≥ %.0f）" % [new_gap, EDGE_GAP])
 
 ## 刘海让位的算术：桌面窗口化时窗口 ⊊ 屏幕，交集就是窗口 ⇒ 三个 0，摆位不许动
 func _check_safe_insets() -> void:
