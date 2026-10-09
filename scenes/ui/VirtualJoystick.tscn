@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://cjoy001"]
 
-[ext_resource type="Script" path="res://scripts/controllers/VirtualJoystick.gd" id="1_joy"]
+[ext_resource type="Script" path="res://scripts/ui/VirtualJoystick.gd" id="1_joy"]
 [ext_resource type="Texture2D" path="res://assets/art/joy_base.png" id="2_base"]
 [ext_resource type="Texture2D" path="res://assets/art/joy_knob.png" id="3_knob"]
 

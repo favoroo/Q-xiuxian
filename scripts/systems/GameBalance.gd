@@ -404,6 +404,35 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 
 	return result
 
+# ---------------- 藏宝匣：可砸，但不算威胁 ----------------
+
+const CHEST_BREAK_HITS := 3   ## 藏宝匣挨几下砸开。只数"打到了几下"，与伤害数值无关
+
+## 纯函数：两段式分配 —— 先按原有规则把法器派给妖怪，剩下确实无事可做的法器再去砸匣子。
+## 为什么分两段而不是把匣子混进 enemies_info 一起排：匣子和妖怪在同一条成本函数里
+## 只比"角度 + 距离"，一个脚边的匣子会把法器从还没人管的妖怪身上拽走（匣子不会打你，会打你的妖会）。
+## 两段式保证：妖怪永远优先，匣子只吃闲着的法器与多出来的弹道。
+## enemies_info / chests_info 同构：{ "id": int, "dist": float, "angle": float }
+## 返回 Array[int]，下标落在 enemies_info ++ chests_info 这条拼接数组上（-1 = 无事可做）
+static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array, chests_info: Array) -> Array:
+	var result: Array = assign_weapon_targets(weapons_info, enemies_info)
+	if chests_info.is_empty():
+		return result
+	var idle_weapons: Array = []
+	var idle_slots: Array[int] = []
+	for w_idx in range(result.size()):
+		if int(result[w_idx]) < 0:
+			idle_weapons.append(weapons_info[w_idx])
+			idle_slots.append(w_idx)
+	if idle_weapons.is_empty():
+		return result
+	var chest_assign: Array = assign_weapon_targets(idle_weapons, chests_info)
+	for i in range(idle_slots.size()):
+		var c_idx := int(chest_assign[i])
+		if c_idx >= 0:
+			result[idle_slots[i]] = enemies_info.size() + c_idx
+	return result
+
 # ---------------- 武器属性受益折算（仿土豆兄弟属性加成） ----------------
 
 ## 纯函数：根据武器设定的 stat_scalings 与玩家当前属性状态，计算出附加在基础伤害上的数值增量

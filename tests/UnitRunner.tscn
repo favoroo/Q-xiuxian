@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://scu1fffhdrah" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/unit_runner.gd" id="1_unit"]
 

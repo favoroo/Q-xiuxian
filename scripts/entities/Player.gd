@@ -448,12 +448,20 @@ func _update_weapon_targets() -> void:
 	var results = space_state.intersect_shape(query, 32)
 
 	var candidate_enemies: Array[Node2D] = []
+	var candidate_chests: Array[Node2D] = []
 	var seen_ids := {}
 	for res in results:
 		var col = res.get("collider")
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent() as Node2D
-			if not is_instance_valid(enemy) or enemy.is_in_group("chests"):
+			if not is_instance_valid(enemy):
+				continue
+			var is_chest := enemy.is_in_group("chests")
+			# 匣子与妖怪共用 4 号层，同一圈查询两个都捞得到；匣子另册登记，只接闲着的法器
+			if is_chest and not candidate_chests.has(enemy):
+				candidate_chests.append(enemy)
+				continue
+			if enemy.is_in_group("herbs"):
 				continue
 			var eid := enemy.get_instance_id()
 			if seen_ids.has(eid):
@@ -463,6 +471,9 @@ func _update_weapon_targets() -> void:
 
 	# 按距玩家从近到远排序，保证贴身危急判定与同向优先级稳定
 	candidate_enemies.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
+	)
+	candidate_chests.sort_custom(func(a: Node2D, b: Node2D) -> bool:
 		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
 	)
 
@@ -487,7 +498,20 @@ func _update_weapon_targets() -> void:
 			"angle": offset.angle(),
 		})
 
-	var assignments: Array = GameBalance.assign_weapon_targets(weapons_info, enemies_info)
+	var chests_info: Array[Dictionary] = []
+	for c in candidate_chests:
+		var offset := c.global_position - global_position
+		chests_info.append({
+			"id": c.get_instance_id(),
+			"dist": offset.length(),
+			"angle": offset.angle(),
+		})
+
+	# 两段式：妖怪先分完，剩下无事可做的法器才去砸匣子（见 GameBalance.assign_targets_with_chests）
+	var assignments: Array = GameBalance.assign_targets_with_chests(weapons_info, enemies_info, chests_info)
+	var candidate_targets: Array[Node2D] = []
+	candidate_targets.append_array(candidate_enemies)
+	candidate_targets.append_array(candidate_chests)
 
 	# 按实际共享同一目标的法器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
 	var target_groups := {}
@@ -501,13 +525,13 @@ func _update_weapon_targets() -> void:
 	for i in range(weapons.size()):
 		var w := weapons[i]
 		var t_idx := int(assignments[i])
-		if t_idx >= 0 and t_idx < candidate_enemies.size():
+		if t_idx >= 0 and t_idx < candidate_targets.size():
 			var group: Array = target_groups[t_idx]
 			var group_size := group.size()
 			var pos_in_group := group.find(i)
 			w.spread_angle = (float(pos_in_group) - float(group_size - 1) * 0.5) * deg_to_rad(24.0)
 			if not w.is_attacking:
-				w.current_target = candidate_enemies[t_idx]
+				w.current_target = candidate_targets[t_idx]
 		else:
 			w.spread_angle = 0.0
 			if not w.is_attacking:

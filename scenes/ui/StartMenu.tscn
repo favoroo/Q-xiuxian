@@ -1,4 +1,4 @@
-[gd_scene format=3]
+[gd_scene uid="uid://d0a0ytng14d4r" format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/StartMenu.gd" id="1_menu"]
 

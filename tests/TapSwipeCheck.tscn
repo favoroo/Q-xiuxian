@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://bk3adnr7r53c2" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/tap_swipe_check.gd" id="1_tapswipe"]
 

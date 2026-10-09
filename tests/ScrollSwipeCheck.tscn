@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://cof6rvltbbymm" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/scroll_swipe_check.gd" id="1"]
 

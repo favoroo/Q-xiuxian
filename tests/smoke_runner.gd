@@ -184,7 +184,13 @@ func _run() -> void:
 		main.add_child(chest)
 		await get_tree().process_frame
 	var gems_before := get_tree().get_nodes_in_group("gems").size()
-	chest.take_damage(1.0, Vector2.ZERO, false)
+	chest.take_damage(99999.0, Vector2.ZERO, false)
+	await get_tree().process_frame
+	_check(is_instance_valid(chest) and get_tree().get_nodes_in_group("gems").size() == gems_before,
+		"藏宝匣一下砸不开（按几下计，见 GameBalance.CHEST_BREAK_HITS）")
+	for i in range(GameBalance.CHEST_BREAK_HITS - 1):
+		if is_instance_valid(chest):
+			chest.take_damage(1.0, Vector2.ZERO, false)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_check(get_tree().get_nodes_in_group("gems").size() > gems_before, "藏宝匣砸开后掉落补给")

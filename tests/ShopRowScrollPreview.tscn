@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://bj16i5w6bjf8" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/shop_row_scroll_preview.gd" id="1"]
 

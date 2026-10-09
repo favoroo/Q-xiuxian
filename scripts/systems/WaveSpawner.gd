@@ -158,6 +158,10 @@ func end_wave() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
+	# 没砸开的藏宝匣同一口径收走：每波重刷 2~4 只，不留档否则场地越打越满是箱子
+	for chest in get_tree().get_nodes_in_group("chests"):
+		if chest is SpiritChest:
+			(chest as SpiritChest).dissolve()
 	# 地上灵石全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折灵石）
 	var player = GameManager.player
 	if player != null:

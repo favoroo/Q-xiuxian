@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://danx2fpe0qfdi" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/hover_intent_check.gd" id="1_hover"]
 
