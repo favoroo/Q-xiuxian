@@ -28,7 +28,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_jianchi_icon.png",
 			"sprite": "res://assets/art/pawn_blue_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局标准单法器 · 商店专属偏向剑系法器",
+			"start_equip": "",
 			"pros": ["剑系法器伤害 +60%", "初始暴击率 +15%"],
 			"cons": ["此生只执剑：商店以剑系法器为主，偶有他派漏出"],
 			"mods": {
@@ -45,7 +45,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_shiyue_icon.png",
 			"sprite": "res://assets/art/cultivator_shiyue_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局标准单法器 · 肉身成圣（高血高甲带全额反震）",
+			"start_equip": "",
 			"pros": ["气血上限 ×1.8", "初始护甲 +5", "受击全额反震（100%敌方攻击力）"],
 			"cons": ["基础移速 -15%", "无法领悟神行符（移速加点锁死）"],
 			"mods": {
@@ -64,8 +64,8 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_fuzhen_icon.png",
 			"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局直接自带 2 只「御灵飞蝶」上阵护体协同作战",
-			"pros": ["开局额外携带 2 只灵蝶飞宠", "御灵羁绊激活门槛 -1（2只即达3灵绊）"],
+			"start_equip": "开局额外自带 2 只「灵蝶」（御灵法器）协同作战",
+			"pros": ["御灵羁绊激活门槛 -1（2件即激活3灵羁绊）"],
 			"cons": ["非灵蝶法器伤害 -30%"],
 			"mods": {
 				"start_drones": 2,
@@ -82,8 +82,8 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_jinsuanpan_icon.png",
 			"sprite": "res://assets/art/cultivator_jinsuanpan_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局直接自带 +16 点灵韵（每波波末白领丰厚灵石）",
-			"pros": ["初始灵韵 +16（开局即享利息）", "灵石阁全场商品永久八折（-20%）"],
+			"start_equip": "",
+			"pros": ["初始灵韵 +16（波末白领丰厚灵石）", "灵石阁全场商品永久八折（-20%）"],
 			"cons": ["全法器伤害 -25%", "气血上限 -25%"],
 			"mods": {
 				"harvest": 16.0,
@@ -101,7 +101,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_meiying_icon.png",
 			"sprite": "res://assets/art/cultivator_meiying_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局标准单法器 · 身法无双（闪避上限突破至90%）",
+			"start_equip": "",
 			"pros": ["初始闪避 +30%", "闪避上限由 60% 提升至 90%"],
 			"cons": ["气血上限 -35%", "肉身孱弱：无法领悟罡气护体（护甲锁死）"],
 			"mods": {
@@ -119,7 +119,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_dubi_icon.png",
 			"sprite": "res://assets/art/cultivator_dubi_8dir.png",
 			"motion": "hover",
-			"start_equip": "极限单槽位：上阵法器槽恒定为 1（不可带副武器）",
+			"start_equip": "",
 			"pros": ["全法器伤害 ×2.0（伤害翻倍）", "施法间隔 -30%（极速出刀）"],
 			"cons": ["此生只执一器：上阵法器槽恒为 1"],
 			"mods": {
@@ -137,7 +137,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
 			"sprite": "res://assets/art/cultivator_kuangzhan_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局标准单法器 · 妖潮规模永久 +50%（掉落暴增）",
+			"start_equip": "",
 			"pros": ["全法器伤害 +30%", "妖潮规模 +50%（更多击杀与灵石掉落）"],
 			"cons": ["杀气冲田：每波结束灵韵流失 3 点"],
 			"mods": {
@@ -155,7 +155,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_duoshe_icon.png",
 			"sprite": "res://assets/art/cultivator_duoshe_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局标准单法器 · 借壳修身（升级所需修为-40%）",
+			"start_equip": "",
 			"pros": ["升级所需修为 -40%（悟道加点一日千里）"],
 			"cons": ["臭名远扬：灵石阁全场物价 +50%"],
 			"mods": {
@@ -172,7 +172,7 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/cultivator_duobao_icon.png",
 			"sprite": "res://assets/art/cultivator_duobao_8dir.png",
 			"motion": "hover",
-			"start_equip": "开局特权：灵石阁货架永久额外 +1 格（初始 6 格货架）",
+			"start_equip": "",
 			"pros": ["灵石阁货架 +1 格（共 6 格）", "被动法宝价格永久 -25%"],
 			"cons": ["疏于炼器：全法器伤害 -20%"],
 			"mods": {
@@ -193,7 +193,7 @@ static func all_ids() -> Array:
 	return DEFS.keys()
 
 static func get_start_equip(id: String) -> String:
-	return String(get_def(id).get("start_equip", "开局标准单法器"))
+	return String(get_def(id).get("start_equip", ""))
 
 static func get_synergy_skill_id(id: String) -> String:
 	var s_mods: Dictionary = get_def(id).get("skill_mods", {})

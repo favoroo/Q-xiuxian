@@ -321,10 +321,7 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 		GameStyle.label(sub_lbl, 11, sub_color)
 		vbox.add_child(sub_lbl)
 
-	card.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-			on_press.call(card)
-	)
+	GameStyle.tap(card, func() -> void: on_press.call(card))
 	# 整格都是热区：图框那层 PanelContainer 默认 STOP，会把「点图片」这一枪截在半路 ——
 	# 真机上就成了点名字弹卡、点图没反应（用户 2026-10-09 反馈）。放在最后一步统一压子树。
 	GameStyle.hotzone(card)

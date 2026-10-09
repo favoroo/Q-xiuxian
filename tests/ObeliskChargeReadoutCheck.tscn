@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cobchgrdout01"]
+
+[ext_resource type="Script" path="res://tests/obelisk_charge_readout_check.gd" id="1"]
+
+[node name="ObeliskChargeReadoutCheck" type="Node"]
+script = ExtResource("1")

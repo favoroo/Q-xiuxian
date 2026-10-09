@@ -90,9 +90,9 @@ func _test_armor() -> void:
 
 func _test_wave_scaling() -> void:
 	_c.near(GameBalance.enemy_hp_mult(1), 1.0, EPS, "第 1 波血量倍率 1.0")
-	_c.near(GameBalance.enemy_hp_mult(10), 2.62, EPS, "第 10 波血量 ×2.62")
-	_c.near(GameBalance.enemy_hp_mult(20), 4.42, EPS, "第 20 波血量 ×4.42")
-	_c.near(GameBalance.enemy_dmg_mult(10), 1.90, EPS, "第 10 波接触伤害 ×1.90")
+	_c.near(GameBalance.enemy_hp_mult(10), pow(1.15, 9), EPS, "第 10 波血量复利 ×3.52")
+	_c.near(GameBalance.enemy_hp_mult(20), pow(1.15, 19), EPS, "第 20 波血量复利 ×14.23")
+	_c.near(GameBalance.enemy_dmg_mult(10), pow(1.06, 9), EPS, "第 10 波接触伤害复利 ×1.69")
 	_c.near(GameBalance.wave_duration(1), 22.0, EPS, "第 1 波时长 22s")
 	_c.near(GameBalance.wave_duration(20), 60.0, EPS, "第 20 波封顶 60s")
 	_c.near(GameBalance.wave_duration(99), 60.0, EPS, "无尽波次也封顶 60s")
@@ -120,9 +120,9 @@ func _test_boss_waves() -> void:
 	_c.check(GameBalance.is_elite_wave(21, true), "无尽 21 波恢复每 3 波精英")
 	_c.check(not GameBalance.is_elite_wave(30, true), "无尽 30 波是 Boss 不是精英")
 
-	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5 倍精英的差距
+	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距
 	_c.near(GameBalance.boss_hp(10) / GameBalance.boss_hp(1), GameBalance.enemy_hp_mult(10), EPS, "Boss 血量与敌人同一条成长曲线")
-	var golem_w10 := 200.0 * GameBalance.enemy_hp_mult(10)
+	var golem_w10 := 1000.0 * GameBalance.enemy_hp_mult(10)
 	_c.check(GameBalance.boss_hp(10) >= golem_w10 * 5.0 - EPS, "第 10 波 Boss 血量至少精英 5 倍 (%.0f vs %.0f)" % [GameBalance.boss_hp(10), golem_w10])
 	_c.check(GameBalance.boss_hp(20) > GameBalance.boss_hp(10), "第 20 波魔尊血更厚")
 	_c.check(GameBalance.boss_contact_damage(20) > GameBalance.boss_contact_damage(1), "Boss 接触伤害随波次成长")
@@ -1045,6 +1045,14 @@ func _test_item_system() -> void:
 	_c.equals(GameBalance.item_price(45, 9, 1.0), 45 + 8 * 2, "仙品法宝第 9 波 +16")
 	_c.equals(GameBalance.item_price(45, 9, 0.8), int((45.0 + 16.0) * 0.8), "法宝价吃商店折扣")
 
+	# 残丹化灵：回不上的那截气血折灵石（汇率与藏宝匣金灵石那一路同档，单颗封顶）
+	_c.equals(GameBalance.heal_overflow_stones(0.0), 0, "没溢出就不给钱")
+	_c.equals(GameBalance.heal_overflow_stones(-5.0), 0, "负数按 0 收")
+	_c.equals(GameBalance.heal_overflow_stones(18.0), 14, "满口 18 点溢出 → 14 灵石（≈3 颗金灵石）")
+	_c.equals(GameBalance.heal_overflow_stones(13.0), 10, "缺血 5 吃 18：溢出 13 → 10 灵石")
+	_c.equals(GameBalance.heal_overflow_stones(45.0), 15, "高气血上限的 45 点溢出仍封顶 15")
+	_c.check(GameBalance.HEAL_OVERFLOW_STONE_CAP <= 15, "折灵石单颗封顶不超过 15（不滚成巨款）")
+
 
 
 
@@ -1125,9 +1133,8 @@ func _test_cultivator_system() -> void:
 	_c.near(GameManager.get_effective_dodge(), GameManager.DODGE_CAP, EPS, "常规修士闪避上限仍 60%")
 
 	# 道统选择界面上下分层与开局装备验证
-	for cid in CultivatorData.all_ids():
-		var eq := CultivatorData.get_start_equip(cid)
-		_c.check(not eq.is_empty(), "修士 %s 配有明确开局装备/特权描述" % cid)
+	_c.check(not CultivatorData.get_start_equip("fuzhen").is_empty(), "符阵灵童明确说明开局额外自带装备")
+	_c.check(CultivatorData.get_start_equip("jianchi").is_empty(), "无额外装备的角色不标注开局装备")
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
@@ -1472,10 +1479,24 @@ func _test_spirit_orbit_dynamics() -> void:
 	_c.equals(bool(far_res.get("in_combat", true)), false, "超远距离敌人不触发战斗状态")
 	_c.near(float(far_res["radii"][0]), 58.0, EPS, "超远敌人下灵宝保持 58px")
 
-	# 6. 数据表三件御灵装备属性强化验证
+	# 6. 转速测试：默认基础巡航角速度减小至平稳的 2.4 rad/s，且随攻速加点等比放大
+	var base_spd := GameBalance.spirit_orbit_angular_speed(2.4, 1.0, 1.0, false, 1)
+	_c.near(base_spd, 2.4, EPS, "默认无加点非战斗旋转角速度为 2.4 rad/s（平稳巡航）")
+	var combat_spd := GameBalance.spirit_orbit_angular_speed(2.4, 1.0, 1.0, true, 1)
+	_c.near(combat_spd, 2.4 * 1.18, EPS, "临战微幅加速 1.18x（~2.83 rad/s）")
+	# 模拟技能加点 1 次 haste_up（施法间隔 ×0.88）
+	var haste1_spd := GameBalance.spirit_orbit_angular_speed(2.4, 0.88, 1.0, false, 1)
+	_c.near(haste1_spd, 2.4 * (1.0 / 0.88), EPS, "加点 1 次法诀迅捷攻速 +13.6%，转速等比提升")
+	_c.check(haste1_spd > base_spd, "攻速加点后御灵旋转速度切实增加")
+	# 模拟攻速堆叠（施法间隔 0.50）
+	var haste_high_spd := GameBalance.spirit_orbit_angular_speed(2.4, 0.50, 1.0, false, 1)
+	_c.near(haste_high_spd, 2.4 * 2.0, EPS, "攻速翻倍时御灵转速翻倍为 4.8 rad/s")
+
+	# 7. 数据表三件御灵装备属性强化验证
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
 		var sdef := WeaponData.get_def(sid)
 		_c.check(float(sdef.get("range", 0.0)) >= 120.0, "御灵法器 %s 射程强化至 >= 120px（当前 %.0f）" % [sid, float(sdef.get("range", 0.0))])
 		_c.check(float(sdef.get("damage", 0.0)) >= 24.0, "御灵法器 %s 基础伤害强化至 >= 24（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
 		_c.check(float(sdef.get("knockback", 0.0)) >= 160.0, "御灵法器 %s 击退强化至 >= 160（当前 %.0f）" % [sid, float(sdef.get("knockback", 0.0))])
+
 

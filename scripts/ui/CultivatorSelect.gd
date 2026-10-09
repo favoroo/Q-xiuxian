@@ -268,9 +268,11 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	var col_w := text_col_w(vis_w)
 
-	# (a) 开局装备与专属特权（黄色高亮）
-	var equip_text := "✦ " + CultivatorData.get_start_equip(cid)
-	mid_col.add_child(_make_info_row("开局装备", GameStyle.YELLOW_DK, GameStyle.YELLOW, [equip_text], GameStyle.YELLOW, col_w))
+	# (a) 开局装备（仅当角色确实额外携带初始装备时才展示，黄色高亮）
+	var raw_equip := CultivatorData.get_start_equip(cid)
+	if not raw_equip.is_empty():
+		var equip_text := "✦ " + raw_equip
+		mid_col.add_child(_make_info_row("开局装备", GameStyle.YELLOW_DK, GameStyle.YELLOW, [equip_text], GameStyle.YELLOW, col_w))
 
 	# (b) 独门天赋（绿色高亮）
 	var pros_lines: Array[String] = []

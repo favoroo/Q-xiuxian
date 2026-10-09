@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cshopprev01"]
+
+[ext_resource type="Script" path="res://tests/shop_layout_preview.gd" id="1"]
+
+[node name="ShopLayoutPreview" type="Node"]
+script = ExtResource("1")

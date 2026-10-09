@@ -118,6 +118,41 @@ func _run() -> void:
 	await get_tree().physics_frame
 	_c.check(player.try_activate_skill(), "冷却归零后可再次释放")
 
+	# ---- HUD 技能按钮交互判据：圆形半透明 + 触控双指响应 + 按下即放 ----
+	var hud: GameHUD = main.get_node_or_null("UILayer/GameHUD")
+	_c.check(hud != null, "HUD 节点存在")
+	await get_tree().process_frame
+	var skill_box: Control = hud.get("_skill_box")
+	var skill_btn: Button = hud.get("_skill_btn")
+	_c.check(skill_box != null and skill_btn != null, "HUD 技能按钮节点已构建")
+	_c.check(skill_box.visible, "战斗中技能按钮处于可见态")
+	_c.near(skill_btn.size.x, GameHUD.SKILL_BTN_SIZE, 1.0, "技能按钮尺寸符合规范 76px")
+
+	# 测试点按 HUD 按钮（鼠标模拟单点）触发释放
+	player.skill_cd_left = 0.0
+	var mouse_ev := InputEventMouseButton.new()
+	mouse_ev.button_index = MOUSE_BUTTON_LEFT
+	mouse_ev.pressed = true
+	mouse_ev.position = skill_btn.size * 0.5
+	hud._on_skill_btn_input(mouse_ev)
+	await get_tree().process_frame
+	_c.check(player.skill_cd_left > 0.0, "点击 HUD 按钮按下即放触发技能（冷却起转）")
+
+	# 测试第二根手指（触屏双指拉摇杆时 index = 1）触控直通
+	player.skill_cd_left = 0.0
+	var touch_ev := InputEventScreenTouch.new()
+	touch_ev.index = 1
+	touch_ev.pressed = true
+	touch_ev.position = skill_btn.global_position + skill_btn.size * 0.5
+	hud._input(touch_ev)
+	await get_tree().process_frame
+	_c.check(player.skill_cd_left > 0.0, "第二根手指触控直通触发技能（解决移动中点技能无反应）")
+
+	# 测试冷却中点击：产生抖动反馈
+	await get_tree().process_frame
+	hud._trigger_skill_press()
+	_c.check(bool(hud.get("_skill_shaking")), "冷却中点击触发震颤反馈")
+
 	# ---- reset_run 清零 ----
 	GameManager.reset_run()
 	_c.equals(GameManager.active_skill_id, "", "reset_run 清空本局技能")

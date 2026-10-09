@@ -7,7 +7,7 @@ extends Node
 ## 为什么立这条判据（三类毛病都不崩、不报错、只有真机看得见）：
 ##  ① 触屏没有 hover，tooltip_text 在手机上永远不会出现 —— 面板上 15 行属性、6 个法器格、
 ##     一整列悟道流水，点上去没反应就跟坏了一样。而「接线漏一条」是静默的：
-##     所以这里逐个热区真发一次左键松开，看有没有卡真的弹出来、卡上有没有内容。
+##     所以这里逐个热区真发一次「左键按下 + 抬起」，看有没有卡真的弹出来、卡上有没有内容。
 ##  ② 文案表与数据表会分家：新加一条悟道/法宝而 StatInfoData 的人话表没登记字段，
 ##     详情卡上就会露出 weapon_damage_mult 这种原始 key。
 ##  ③ 面板原先写死 880×560，比 960×540 的视口还高 ⇒ 上下各被切走 10 单位，
@@ -112,13 +112,14 @@ func _tap_box(box: Node, tag: String, area: Vector2) -> Array[String]:
 		errs.append_array(await _tap_and_read(ch as Control, "", area, "%s %d" % [tag, n]))
 	return errs
 
-## 真发一次「左键松开」，看链路的四件事：接没接线、有没有卡、卡上有没有内容、卡整块在不在屏内
+## 真发一次「左键按下 + 抬起」，看链路的四件事：接没接线、有没有卡、卡上有没有内容、卡整块在不在屏内
 func _tap_and_read(ctrl: Control, expect_title: String, area: Vector2, tag: String) -> Array[String]:
 	var errs: Array[String] = []
 	if ctrl.get_signal_connection_list("gui_input").is_empty():
 		errs.append("%s 没接点击（点了没反应）" % tag)
 		return errs
-	ctrl.emit_signal("gui_input", _tap_event())
+	ctrl.emit_signal("gui_input", _tap_event(true))
+	ctrl.emit_signal("gui_input", _tap_event(false))
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var tip := DetailTip.live(_dlg)
@@ -248,10 +249,16 @@ func _labels_of(node: Node) -> Array[Label]:
 		out.append_array(_labels_of(ch))
 	return out
 
-func _tap_event() -> InputEventMouseButton:
+## 一次点按的两拍：按下 + 抬起。GameStyle.tap 认的是完整一次点按（划动不算点），
+## 只喂松开会被判成「这一枪没在本热区按下过」而不弹卡 —— 这里必须两拍都发。
+func _tap_event(down: bool) -> InputEventMouseButton:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_LEFT
-	ev.pressed = false
+	ev.pressed = down
+	ev.global_position = Vector2(100, 100)
+	ev.position = ev.global_position
+	if down:
+		ev.button_mask = MOUSE_BUTTON_MASK_LEFT
 	return ev
 
 # ================================ 反例 ================================

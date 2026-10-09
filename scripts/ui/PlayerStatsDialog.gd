@@ -246,6 +246,9 @@ func _build_left_stats_panel() -> Control:
 	_hp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_hp_bar.show_percentage = false
+	# 纯显示件也要让开「按下」那一拍：ProgressBar 的 mouse_filter 默认是 STOP，它自己不处理
+	# 输入却照样把事件吃掉 → 气血值那一整行里最显眼的血条成了死点（点名字弹卡、点血条没反应）。
+	_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bar_st := GameStyle.bar_styles(Color(0.04, 0.06, 0.1, 0.85), GameStyle.GOOD)
 	_hp_bar.add_theme_stylebox_override("background", bar_st[0])
 	_hp_bar.add_theme_stylebox_override("fill", bar_st[1])
@@ -357,10 +360,7 @@ func _make_tip_row(stat_id: String, content: Control) -> Control:
 	row.set_meta("sb_flat", flat)
 	row.set_meta("sb_on", on)
 	row.set_meta("tip_title", StatInfoData.title(stat_id))
-	row.gui_input.connect(func(ev: InputEvent) -> void:
-		if _is_tap(ev):
-			_open_stat_tip(stat_id, row)
-	)
+	GameStyle.tap(row, func() -> void: _open_stat_tip(stat_id, row))
 	row.add_child(content)
 	return row
 
@@ -374,9 +374,6 @@ func _highlight_while_open(anchor: Control, tip: DetailTip) -> void:
 		if is_instance_valid(anchor):
 			anchor.add_theme_stylebox_override("panel", flat)
 	)
-
-func _is_tap(ev: InputEvent) -> bool:
-	return ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed
 
 func _build_right_equipment_and_history_panel() -> Control:
 	var right_vbox := VBoxContainer.new()
@@ -780,10 +777,7 @@ func _refresh_weapons() -> void:
 			star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(star_lbl)
 
-			slot.gui_input.connect(func(ev: InputEvent) -> void:
-				if _is_tap(ev):
-					_open_weapon_tip(w, false, slot)
-			)
+			GameStyle.tap(slot, func() -> void: _open_weapon_tip(w, false, slot))
 		else:
 			var empty_dot := Label.new()
 			empty_dot.text = "×" if locked else "·"
@@ -791,10 +785,7 @@ func _refresh_weapons() -> void:
 			empty_dot.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			GameStyle.label(empty_dot, 15, GameStyle.BAD if locked else GameStyle.GREY)
 			slot.add_child(empty_dot)
-			slot.gui_input.connect(func(ev: InputEvent) -> void:
-				if _is_tap(ev):
-					_open_empty_slot_tip(i, slot)
-			)
+			GameStyle.tap(slot, func() -> void: _open_empty_slot_tip(i, slot))
 
 		_weapons_box.add_child(slot)
 
@@ -839,10 +830,7 @@ func _refresh_weapons() -> void:
 
 			if not def.is_empty():
 				s_slot.mouse_filter = Control.MOUSE_FILTER_STOP
-				s_slot.gui_input.connect(func(ev: InputEvent) -> void:
-					if _is_tap(ev):
-						_open_weapon_tip(item, true, s_slot)
-				)
+				GameStyle.tap(s_slot, func() -> void: _open_weapon_tip(item, true, s_slot))
 			_stash_box.add_child(s_slot)
 
 ## 流派羁绊阶梯卡片：仿《土豆兄弟》样式，直接展示 (2/6) 进度与各级加成激活情况
@@ -945,10 +933,7 @@ func _create_synergy_card(tag: String) -> Control:
 		GameStyle.label(line_lbl, 11, line_col)
 		vbox.add_child(line_lbl)
 
-	card.gui_input.connect(func(ev: InputEvent) -> void:
-		if _is_tap(ev):
-			_open_synergy_tip(tag, card)
-	)
+	GameStyle.tap(card, func() -> void: _open_synergy_tip(tag, card))
 	return card
 
 func _open_synergy_tip(tag: String, anchor: Control) -> void:
@@ -1093,10 +1078,7 @@ func _create_item_badge(item_id: String, count: int) -> Control:
 	GameStyle.label(name_lbl, 12, GameStyle.PAPER)
 	hbox.add_child(name_lbl)
 
-	badge.gui_input.connect(func(ev: InputEvent) -> void:
-		if _is_tap(ev):
-			_open_item_tip(item_id, count, badge)
-	)
+	GameStyle.tap(badge, func() -> void: _open_item_tip(item_id, count, badge))
 	return badge
 
 func _open_item_tip(item_id: String, count: int, anchor: Control) -> void:
@@ -1153,10 +1135,7 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 	row.set_meta("sb_flat", r_style)
 	row.set_meta("sb_on", r_on)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.gui_input.connect(func(ev: InputEvent) -> void:
-		if _is_tap(ev):
-			_open_history_tip(item, idx, row)
-	)
+	GameStyle.tap(row, func() -> void: _open_history_tip(item, idx, row))
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
