@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=21 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -18,12 +18,15 @@
 [ext_resource type="Script" path="res://scripts/ui/PlayerStatsDialog.gd" id="16_stats"]
 [ext_resource type="Script" path="res://scripts/ui/CultivatorSelect.gd" id="17_cult"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SettingsDialog.tscn" id="18_settings"]
+[ext_resource type="Script" path="res://scripts/ui/CareerDialog.gd" id="19_career"]
+[ext_resource type="PackedScene" path="res://scenes/ui/ManualDialog.tscn" id="20_manual"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
 glow_enabled = false
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
+resource_local_to_scene = true
 shader = ExtResource("6_vig")
 shader_parameter/tint_color = Color(0, 0, 0, 0.1)
 shader_parameter/vignette_intensity = 0.36
@@ -110,4 +113,9 @@ script = ExtResource("14_pause")
 script = ExtResource("16_stats")
 
 [node name="SettingsDialog" parent="UILayer" instance=ExtResource("18_settings")]
+
+[node name="CareerDialog" type="Control" parent="UILayer"]
+script = ExtResource("19_career")
+
+[node name="ManualDialog" parent="UILayer" instance=ExtResource("20_manual")]
 

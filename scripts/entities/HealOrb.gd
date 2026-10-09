@@ -1,11 +1,11 @@
 class_name HealOrb
 extends Area2D
 
-## 残丹/回春果：可被摄灵术吸附的回复珠，飞抵玩家时恢复气血
+## 残丹/回春葫芦：可被摄灵术吸附的回复珠，飞抵玩家时恢复气血
 ## 纯代码构建，无需场景文件；加入 gems 组，波末清场一并吸附
 
 var heal_amount: float = 3.0
-var heal_pct: float = 0.0   ## >0 时按玩家气血上限百分比恢复（回春果用）
+var heal_pct: float = 0.0   ## >0 时按玩家气血上限百分比恢复（回春葫芦用）
 
 var target_player: Node2D = null
 var current_speed: float = -40.0
@@ -25,7 +25,7 @@ func _ready() -> void:
 	_sprite = Sprite2D.new()
 	_sprite.texture = load("res://assets/art/icon_hp.png")
 	_sprite.modulate = Color(0.65, 1.35, 0.7)
-	_sprite.scale = Vector2(0.5, 0.5)
+	_sprite.scale = Vector2(0.36, 0.36)
 	add_child(_sprite)
 
 	var shape := CollisionShape2D.new()

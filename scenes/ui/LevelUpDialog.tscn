@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://scripts/ui/LevelUpDialog.gd" id="1_lvl"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 28.0
-content_margin_top = 16.0
-content_margin_right = 28.0
-content_margin_bottom = 16.0
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
 bg_color = Color(0.07, 0.1, 0.18, 0.97)
 skew = Vector2(0.052, 0)
 border_width_left = 2
@@ -19,17 +19,27 @@ shadow_size = 0
 shadow_offset = Vector2(10, 10)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_title_band"]
-content_margin_left = 30.0
-content_margin_top = 6.0
-content_margin_right = 30.0
-content_margin_bottom = 6.0
+content_margin_left = 22.0
+content_margin_top = 5.0
+content_margin_right = 22.0
+content_margin_bottom = 5.0
 bg_color = Color(0.184, 0.49, 1, 1)
 skew = Vector2(0.14, 0)
 border_width_bottom = 5
 border_color = Color(0.07, 0.24, 0.6, 1)
-shadow_color = Color(1, 0.824, 0.302, 1)
-shadow_size = 0
-shadow_offset = Vector2(5, 5)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info_band"]
+content_margin_left = 14.0
+content_margin_top = 5.0
+content_margin_right = 14.0
+content_margin_bottom = 5.0
+bg_color = Color(0.04, 0.06, 0.11, 0.9)
+skew = Vector2(0.07, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 3
+border_color = Color(0.165, 0.208, 0.314, 1)
 
 [node name="LevelUpDialog" type="Control"]
 process_mode = 3
@@ -60,20 +70,20 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(900, 460)
+custom_minimum_size = Vector2(640, 420)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
 
 [node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel/MarginContainer"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 8
 
 [node name="TitleBand" type="PanelContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
@@ -84,11 +94,53 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 [node name="TitleLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/TitleBand"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 22
 text = "悟 道 加 点"
 
-[node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
+[node name="InfoBand" type="PanelContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_info_band")
+
+[node name="InfoLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/InfoBand"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.788, 0.769, 0.706, 1)
+theme_override_font_sizes/font_size = 13
+text = "回合结束统一加点"
+horizontal_alignment = 1
+
+[node name="CardScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 24
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox/CardScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
 alignment = 1
+
+[node name="ActionBar" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RerollButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
+custom_minimum_size = Vector2(186, 44)
+layout_mode = 2
+text = "刷新悟道"
+
+[node name="GateLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.788, 0.769, 0.706, 1)
+theme_override_font_sizes/font_size = 13
+text = "点中一张卡，再按右侧「确认领悟」"
+vertical_alignment = 1
+
+[node name="ConfirmButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
+custom_minimum_size = Vector2(148, 44)
+layout_mode = 2
+text = "确认领悟 ✦"

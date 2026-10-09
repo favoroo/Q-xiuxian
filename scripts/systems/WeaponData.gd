@@ -4,6 +4,8 @@ extends RefCounted
 ## 武器静态数据库：所有法器的数值/行为/价格/五行/属性受益唯一定义处
 ## 星级：集齐 3 把同名同星，在波间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
 ## 双标签系统：器类（剑系/符箓/雷法/御灵/广域）+ 五行（锐金/青木/玄水/离火/厚土）
+## 弹丸类（PROJECTILE）另带 bullet / bullet_spin 两个外观字段：打出去的东西按法器各自不同
+## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 == 屏上像素；缺 bullet 时回退 blade.png
 
 enum Behavior { MELEE, PROJECTILE, BURST, DRONE }
 
@@ -19,162 +21,185 @@ const CLASSES: Array[String] = ["sword", "talisman", "wide", "thunder", "spirit"
 const ELEMENTS: Array[String] = ["metal", "wood", "water", "fire", "earth"]
 
 const DEFS: Dictionary = {
-	# ==================== 金系 (Metal: 锋芒·暴击·破甲) ====================
-	"qingyun_sword": {
-		"name": "青云剑", "behavior": Behavior.MELEE,
-		"sfx": "sword_swing",
-		"damage": 30.0, "cooldown": 1.1, "range": 150.0,
-		"price": 25, "icon": "res://assets/art/weapon_sword.png",
-		"desc": "近身挥斩，剑气凌厉；伤害受暴击率加成", "tag": "近战·剑系·金",
-		"tags": ["sword", "metal"],
-		"stat_scalings": {"crit_rate": 40.0},
-	},
-	"gengjin_feijian": {
-		"name": "庚金飞剑", "behavior": Behavior.PROJECTILE,
-		"sfx": "sword_swing",
-		"damage": 38.0, "cooldown": 0.90, "range": 460.0,
-		"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
-		"desc": "飞剑锁敌追击、凌空贯日，贯穿两敌；伤害受暴击伤害加成", "tag": "远程·剑系·金",
-		"pierce": 2,
-		"tags": ["sword", "metal"],
-		"stat_scalings": {"crit_mult_bonus": 25.0},
-	},
-	"liuye_feidao": {
-		"name": "柳叶飞刀", "behavior": Behavior.PROJECTILE,
-		"sfx": "talisman_throw",
-		"damage": 16.0, "cooldown": 1.15, "range": 440.0,
-		"price": 35, "icon": "res://assets/art/weapon_dagger.png",
-		"desc": "扇形疾射三把细小飞刀，各锁一敌、贯穿群敌", "tag": "远程·符箓·金",
-		"pierce": 3, "projectile_count": 3, "spread_angle": 0.20,
-		"tags": ["talisman", "metal"],
-		"stat_scalings": {"crit_rate": 30.0},
-	},
+		# ==================== 金系 (Metal: 锋芒·暴击·破甲) ====================
+		"qingyun_sword": {
+			"name": "青云剑", "behavior": Behavior.MELEE,
+			"sfx": "sword_swing",
+			"damage": 33.0, "cooldown": 1.1, "range": 150.0,
+			"knockback": 240.0,
+			"price": 25, "icon": "res://assets/art/weapon_sword.png",
+			"desc": "近身挥斩，剑气凌厉；受近战伤害与暴击率加成", "tag": "近战·剑系·金",
+			"tags": ["sword", "metal"],
+			"stat_scalings": {"melee_damage": 1.0, "crit_rate": 40.0},
+		},
+		"gengjin_feijian": {
+			"name": "庚金飞剑", "behavior": Behavior.PROJECTILE,
+			"sfx": "sword_swing",
+			"damage": 42.0, "cooldown": 0.85, "range": 460.0,
+			"knockback": 185.0,
+			"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
+			"desc": "飞剑锁敌追击，贯穿两敌；受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
+			"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_spin": false,
+			"pierce": 2,
+			"tags": ["sword", "metal"],
+			"stat_scalings": {"ranged_damage": 1.0, "crit_mult_bonus": 30.0},
+		},
+		"liuye_feidao": {
+			"name": "柳叶飞刀", "behavior": Behavior.PROJECTILE,
+			"sfx": "talisman_throw",
+			"damage": 16.0, "cooldown": 1.15, "range": 440.0,
+			"knockback": 110.0,
+			"price": 35, "icon": "res://assets/art/weapon_dagger.png",
+			"desc": "扇形疾射三把细小飞刀，各锁一敌；受远程伤害与暴击率加成", "tag": "远程·符箓·金",
+			"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_spin": false,
+			"pierce": 3, "projectile_count": 3, "spread_angle": 0.20,
+			"tags": ["talisman", "metal"],
+			"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
+		},
 
-	# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
-	"qingmu_tengbian": {
-		"name": "青木藤鞭", "behavior": Behavior.MELEE,
-		"sfx": "fan_gust",
-		"damage": 24.0, "cooldown": 1.25, "range": 175.0,
-		"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
-		"desc": "苍翠灵藤大范围横扫，附带剧毒；伤害受气血回复加成", "tag": "近战·广域·木",
-		"arc_scale": 1.35, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
-		"tags": ["wide", "wood"],
-		"stat_scalings": {"hp_regen": 4.5},
-	},
-	"wanmu_lingfu": {
-		"name": "万木灵符", "behavior": Behavior.PROJECTILE,
-		"sfx": "talisman_throw",
-		"damage": 26.0, "cooldown": 1.0, "range": 420.0,
-		"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
-		"desc": "青绿木符追敌而去，击中后弹射连锁至邻近两名妖兽并叠毒", "tag": "远程·符箓·木",
-		"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
-		"tags": ["talisman", "wood"],
-		"stat_scalings": {"hp_regen": 3.5},
-	},
-	"lingdie": {
-		"name": "灵蝶", "behavior": Behavior.DRONE,
-		"sfx": "orb_hit",
-		"damage": 15.0, "cooldown": 0.35, "range": 78.0,
-		"price": 40, "icon": "res://assets/art/sun_orb.png",
-		"desc": "灵蝶萦绕周身，触敌即伤；伤害受吸血率加成", "tag": "环绕·御灵·木",
-		"tags": ["spirit", "wood"],
-		"stat_scalings": {"lifesteal": 100.0},
-	},
+		# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
+		"qingmu_tengbian": {
+			"name": "青木藤鞭", "behavior": Behavior.MELEE,
+			"sfx": "fan_gust",
+			"damage": 24.0, "cooldown": 1.25, "range": 175.0,
+			"knockback": 260.0,
+			"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
+			"desc": "苍翠灵藤大范围横扫，附带剧毒；受近战与元素伤害加成", "tag": "近战·广域·木",
+			"arc_scale": 1.35, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
+			"tags": ["wide", "wood"],
+			"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.6, "hp_regen": 4.5},
+		},
+		"wanmu_lingfu": {
+			"name": "万木灵符", "behavior": Behavior.PROJECTILE,
+			"sfx": "talisman_throw",
+			"damage": 26.0, "cooldown": 1.0, "range": 420.0,
+			"knockback": 140.0,
+			"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
+			"desc": "青绿木符追敌弹射连锁并叠毒；受远程与元素伤害加成", "tag": "远程·符箓·木",
+			"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_spin": true,
+			"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
+			"tags": ["talisman", "wood"],
+			"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.5},
+		},
+		"lingdie": {
+			"name": "灵蝶", "behavior": Behavior.DRONE,
+			"sfx": "orb_hit",
+			"damage": 20.0, "cooldown": 0.32, "range": 78.0,
+			"knockback": 135.0,
+			"price": 40, "icon": "res://assets/art/sun_orb.png",
+			"desc": "灵蝶萦绕周身，触敌即伤；受御灵伤害与吸血率加成", "tag": "环绕·御灵·木",
+			"tags": ["spirit", "wood"],
+			"stat_scalings": {"engineering_damage": 1.0, "lifesteal": 100.0},
+		},
 
-	# ==================== 水系 (Water: 极寒·缓速·迅捷) ====================
-	"bajiao_fan": {
-		"name": "芭蕉扇", "behavior": Behavior.MELEE,
-		"sfx": "fan_gust",
-		"damage": 22.0, "cooldown": 1.3, "range": 185.0,
-		"price": 20, "icon": "res://assets/art/weapon_fan.png",
-		"desc": "扇出宽大罡风，击退极远并冰缓敌人；伤害受移速加成", "tag": "近战·广域·水",
-		"arc_scale": 1.5, "proc_chill": 0.35, "chill_dur": 2.5,
-		"tags": ["wide", "water"],
-		"stat_scalings": {"move_speed_bonus": 25.0},
-	},
-	"xuanbing_feizhen": {
-		"name": "玄冰飞针", "behavior": Behavior.PROJECTILE,
-		"sfx": "talisman_throw",
-		"damage": 14.0, "cooldown": 0.92, "range": 430.0,
-		"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
-		"desc": "三枚玄冰飞针齐射，各追一敌，刺骨冰寒；伤害受移速与攻速加成", "tag": "远程·符箓·水",
-		"pierce": 1, "projectile_count": 3, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
-		"tags": ["talisman", "water"],
-		"stat_scalings": {"move_speed_bonus": 28.0},
-	},
-	"hanquan_yulian": {
-		"name": "寒泉玉莲", "behavior": Behavior.DRONE,
-		"sfx": "orb_hit",
-		"damage": 16.0, "cooldown": 0.40, "range": 82.0,
-		"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
-		"desc": "冰魄玉莲护体，触碰冰缓妖兽；伤害受冷却缩减加成", "tag": "环绕·御灵·水",
-		"proc_chill": 0.40, "chill_dur": 2.5,
-		"tags": ["spirit", "water"],
-		"stat_scalings": {"cdr_bonus": 30.0},
-	},
+		# ==================== 水系 (Water: 极寒·缓速·迅捷) ====================
+		"bajiao_fan": {
+			"name": "芭蕉扇", "behavior": Behavior.MELEE,
+			"sfx": "fan_gust",
+			"damage": 22.0, "cooldown": 1.3, "range": 185.0,
+			"knockback": 400.0,
+			"price": 20, "icon": "res://assets/art/weapon_fan.png",
+			"desc": "扇出宽大罡风，冰缓敌人；受近战伤害与移速加成", "tag": "近战·广域·水",
+			"arc_scale": 1.35, "proc_chill": 0.35, "chill_dur": 2.5,
+			"tags": ["wide", "water"],
+			"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
+		},
+		"xuanbing_feizhen": {
+			"name": "玄冰飞针", "behavior": Behavior.PROJECTILE,
+			"sfx": "talisman_throw",
+			"damage": 16.0, "cooldown": 0.90, "range": 430.0,
+			"knockback": 95.0,
+			"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
+			"desc": "三枚玄冰飞针齐射追敌，刺骨冰寒；受远程伤害与移速加成", "tag": "远程·符箓·水",
+			"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_spin": false,
+			"pierce": 1, "projectile_count": 3, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
+			"tags": ["talisman", "water"],
+			"stat_scalings": {"ranged_damage": 0.8, "move_speed_bonus": 28.0},
+		},
+		"hanquan_yulian": {
+			"name": "寒泉玉莲", "behavior": Behavior.DRONE,
+			"sfx": "orb_hit",
+			"damage": 22.0, "cooldown": 0.36, "range": 82.0,
+			"knockback": 160.0,
+			"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
+			"desc": "冰魄玉莲护体，触碰冰缓妖兽；受御灵伤害与攻速加成", "tag": "环绕·御灵·水",
+			"proc_chill": 0.40, "chill_dur": 2.5,
+			"tags": ["spirit", "water"],
+			"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
+		},
 
-	# ==================== 火系 (Fire: 烈焰·灼烧·爆裂) ====================
-	"huoyan_fu": {
-		"name": "火焰符", "behavior": Behavior.PROJECTILE,
-		"sfx": "talisman_throw",
-		"damage": 28.0, "cooldown": 0.85, "range": 420.0,
-		"price": 30, "icon": "res://assets/art/weapon_staff.png",
-		"desc": "掷出爆燃符箓，符行追敌不放、命中引燃；伤害受全局法伤加成", "tag": "远程·符箓·火",
-		"pierce": 1, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
-		"tags": ["talisman", "fire"],
-		"stat_scalings": {"damage_bonus": 20.0},
-	},
-	"chiyan_dao": {
-		"name": "赤焰斩马刀", "behavior": Behavior.MELEE,
-		"sfx": "sword_swing",
-		"damage": 34.0, "cooldown": 1.28, "range": 165.0,
-		"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
-		"desc": "大开大合烈火重刀，引燃身前群妖；伤害受范围加成", "tag": "近战·剑系·火",
-		"arc_scale": 1.25, "proc_burn": true, "burn_ratio": 0.45, "burn_dur": 3.0,
-		"tags": ["sword", "fire"],
-		"stat_scalings": {"range_bonus": 25.0},
-	},
-	"fentian_baodeng": {
-		"name": "焚天宝灯", "behavior": Behavior.BURST,
-		"sfx": "thunder_strike",
-		"damage": 36.0, "cooldown": 1.75, "range": 390.0,
-		"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
-		"desc": "引落离火天劫轰击区域，点燃火海并灼烧敌群", "tag": "远程·雷法·火",
-		"burst_radius": 85.0, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
-		"tags": ["thunder", "fire"],
-		"stat_scalings": {"damage_bonus": 25.0},
-	},
+		# ==================== 火系 (Fire: 烈焰·灼烧·爆裂) ====================
+		"huoyan_fu": {
+			"name": "火焰符", "behavior": Behavior.PROJECTILE,
+			"sfx": "talisman_throw",
+			"damage": 17.0, "cooldown": 0.80, "range": 420.0,
+			"knockback": 155.0,
+			"price": 30, "icon": "res://assets/art/weapon_staff.png",
+			"desc": "一次掷出两张爆燃符箓，追敌引燃；受元素与远程伤害加成", "tag": "远程·符箓·火",
+			"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_spin": true,
+			"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
+			"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
+			"tags": ["talisman", "fire"],
+			"stat_scalings": {"elemental_damage": 1.0, "ranged_damage": 0.6, "damage_bonus": 20.0},
+		},
+		"chiyan_dao": {
+			"name": "赤焰斩马刀", "behavior": Behavior.MELEE,
+			"sfx": "sword_swing",
+			"damage": 34.0, "cooldown": 1.28, "range": 165.0,
+			"knockback": 320.0,
+			"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
+			"desc": "大开大合烈火重刀，引燃身前群妖；受近战与元素伤害加成", "tag": "近战·剑系·火",
+			"arc_scale": 1.25, "proc_burn": true, "burn_ratio": 0.45, "burn_dur": 3.0,
+			"tags": ["sword", "fire"],
+			"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "range_bonus": 25.0},
+		},
+		"fentian_baodeng": {
+			"name": "焚天宝灯", "behavior": Behavior.BURST,
+			"sfx": "thunder_strike",
+			"damage": 36.0, "cooldown": 1.50, "range": 390.0,
+			"knockback": 200.0,
+			"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
+			"desc": "引落离火天劫轰击区域，点燃火海；受元素伤害极高加成", "tag": "远程·雷法·火",
+			"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
+			"proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
+			"tags": ["thunder", "fire"],
+			"stat_scalings": {"elemental_damage": 1.5, "damage_bonus": 25.0},
+		},
 
-	# ==================== 土系 (Earth: 厚重·护甲·震退) ====================
-	"wulei_paizi": {
-		"name": "五雷法牌", "behavior": Behavior.BURST,
-		"sfx": "thunder_strike",
-		"damage": 35.0, "cooldown": 1.8, "range": 380.0,
-		"price": 45, "icon": "res://assets/art/weapon_thunder.png",
-		"desc": "引天雷厚土之威轰击目标区域，大范围强击退", "tag": "远程·雷法·土",
-		"burst_radius": 80.0,
-		"tags": ["thunder", "earth"],
-		"stat_scalings": {"armor": 2.0},
-	},
-	"fantian_yin": {
-		"name": "番天镇岳印", "behavior": Behavior.BURST,
-		"sfx": "thunder_strike",
-		"damage": 38.0, "cooldown": 1.9, "range": 360.0,
-		"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
-		"desc": "番天玄石大印从天轰砸，受护甲极高加成！", "tag": "区域·广域·土",
-		"burst_radius": 95.0,
-		"tags": ["wide", "earth"],
-		"stat_scalings": {"armor": 3.5},
-	},
-	"hunyuan_zhong": {
-		"name": "混元古钟", "behavior": Behavior.DRONE,
-		"sfx": "orb_hit",
-		"damage": 18.0, "cooldown": 0.45, "range": 88.0,
-		"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
-		"desc": "混元古钟环绕周身，强力撞退敌群；伤害受气血上限加持", "tag": "环绕·御灵·土",
-		"tags": ["spirit", "earth"],
-		"stat_scalings": {"max_hp_bonus": 0.12},
-	},
+		# ==================== 土系 (Earth: 厚重·护甲·震退) ====================
+		"wulei_paizi": {
+			"name": "五雷法牌", "behavior": Behavior.BURST,
+			"sfx": "thunder_strike",
+			"damage": 38.0, "cooldown": 1.55, "range": 380.0,
+			"knockback": 280.0,
+			"price": 45, "icon": "res://assets/art/weapon_thunder.png",
+			"desc": "引天雷厚土轰击目标区域，大范围强击退；受元素伤害与护甲加成", "tag": "远程·雷法·土",
+			"burst_radius": 80.0, "burst_tint": Color(0.62, 0.86, 1.0),
+			"tags": ["thunder", "earth"],
+			"stat_scalings": {"elemental_damage": 1.2, "armor": 2.0},
+		},
+		"fantian_yin": {
+			"name": "番天镇岳印", "behavior": Behavior.BURST,
+			"sfx": "thunder_strike",
+			"damage": 42.0, "cooldown": 1.60, "range": 360.0,
+			"knockback": 360.0,
+			"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
+			"desc": "番天玄石大印从天轰砸，受元素伤害与护甲极高加成！", "tag": "区域·广域·土",
+			"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
+			"burst_icon": "res://assets/art/weapon_earth_seal.png",
+			"tags": ["wide", "earth"],
+			"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
+		},
+		"hunyuan_zhong": {
+			"name": "混元古钟", "behavior": Behavior.DRONE,
+			"sfx": "orb_hit",
+			"damage": 25.0, "cooldown": 0.40, "range": 88.0,
+			"knockback": 300.0,
+			"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
+			"desc": "混元古钟环绕周身，强力撞退敌群；受御灵伤害与气血加成", "tag": "环绕·御灵·土",
+			"tags": ["spirit", "earth"],
+			"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
+		},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
@@ -266,6 +291,12 @@ static func cooldown_for(id: String, star: int) -> float:
 		return 1.0
 	return float(def.get("cooldown", 1.0)) * pow(STAR_COOLDOWN_MULT, float(star - 1))
 
+static func knockback_for(id: String, fallback: float = 180.0) -> float:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return fallback
+	return float(def.get("knockback", fallback))
+
 static func sell_price(id: String, star: int) -> int:
 	var def: Dictionary = DEFS.get(id, {})
 	if def.is_empty():
@@ -348,3 +379,20 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 	if def.get("proc_poison", false):
 		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
 	return dps
+
+## 仿土豆兄弟格式的属性加成说明文案：如 "受近战伤害(100%)、额外会心(40%)加成"
+static func scaling_desc(id: String) -> String:
+	var def := get_def(id)
+	var scalings: Dictionary = def.get("stat_scalings", {})
+	if scalings.is_empty():
+		return "无额外属性加成"
+	var parts: Array[String] = []
+	for key in scalings.keys():
+		var label: String = GameBalance.stat_scaling_label(key)
+		var coef: float = float(scalings[key])
+		if key in ["melee_damage", "ranged_damage", "elemental_damage", "engineering_damage"]:
+			parts.append("%s(%d%%)" % [label, int(round(coef * 100.0))])
+		else:
+			parts.append("%s(%+.0f%%)" % [label, coef])
+	return "加成：" + "、".join(parts)
+

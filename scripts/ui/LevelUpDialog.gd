@@ -1,109 +1,185 @@
 class_name LevelUpDialog
 extends Control
 
-## 升级卡片的宽度与左右内边距：卡内可用宽只从这两个数算出来
+## 波后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
+## 回合结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
+## 2026-10-09 用户指令：「升级就会直接触发加点，在战斗过程中触发加点的体验不好 …
+##   改成每一回合结束后统一去加点 … 加点和商店物品要改成 5 个，技能加点也可以刷新一次」。
+##
+## 摆位口径：5 张卡不按死宽度摆，按 viewport 现算（下面那几个 *_for() 是纯函数，
+## 判据 LayoutCheck 用同一份算术量最窄那一档，别处不再抄数字）。
+## 纵向放不下交给 CardScroll 竖着滑 —— 全留 + 可滑到，不砍文案也不压字号。
+
+## 旧 CARD_W 留作「宽屏上限」：判据的文案表按 card_inner_w() 现算，不直接读它
 const CARD_W := 262.0
-const CARD_PAD_X := 16.0
+const CARD_PAD_X := 10.0
+const MIN_CARD_W := 118.0
+const CARD_GAP_MIN := 8.0
+const CARD_GAP_MAX := 18.0
+const CARD_MIN_H := 250.0
+## 面板左右固定占位：Panel 内容边距 16×2 + MarginContainer 12×2（与 .tscn 同源）
+const CHROME_X := 56.0
+## 面板与屏幕之间的呼吸量（合计 24，上下各 12）
+const SCREEN_PAD_Y := 24.0
+const PANEL_MIN_H := 420.0
 
-static func _card_inner_w() -> float:
-	return CARD_W - CARD_PAD_X * 2.0
-
-@onready var main_vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
-@onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardsContainer
+@onready var panel: PanelContainer = $CenterContainer/Panel
+@onready var card_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll
+@onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleBand/TitleLabel
+@onready var info_label: Label = $CenterContainer/Panel/MarginContainer/VBox/InfoBand/InfoLabel
+@onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/RerollButton
+@onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/ConfirmButton
+@onready var gate_label: Label = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/GateLabel
 
-var current_upgrades: Array[Dictionary] = []
 var selected_index: int = -1
 var _can_interact: bool = false
 var _is_confirming: bool = false
+var _card_w: float = CARD_W
 
 ## 保存每张卡片的组件引用以便切换选中/未选中视觉状态
 var _card_entries: Array[Dictionary] = []
-var _hint_label: Label
+
+# ---------------- 摆位算术（纯函数，判据共用同一份） ----------------
+
+## 卡片行可用的宽 = 屏幕宽 - 面板左右固定占位
+static func avail_w(screen_w: float) -> float:
+	return maxf(0.0, screen_w - CHROME_X)
+
+## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
+static func gap_for(avail: float) -> float:
+	return clampf(avail * 0.014, CARD_GAP_MIN, CARD_GAP_MAX)
+
+## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
+static func card_w_for(screen_w: float, n: int) -> float:
+	if n <= 0:
+		return CARD_W
+	var avail := avail_w(screen_w)
+	return clampf((avail - gap_for(avail) * float(n - 1)) / float(n), MIN_CARD_W, CARD_W)
+
+static func card_inner_w(card_w: float) -> float:
+	return card_w - CARD_PAD_X * 2.0
+
+## 这一档屏宽下整块面板该占的宽（判据按它核对「两头不许出屏」）
+static func panel_w_for(screen_w: float, n: int) -> float:
+	var avail := avail_w(screen_w)
+	return card_w_for(screen_w, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) + CHROME_X
 
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	GameStyle.label(title_label, 24, GameStyle.PAPER, 0, GameStyle.INK, true)
-	_build_hint_bar()
-	GameManager.player_leveled_up.connect(_on_level_up)
+	GameStyle.label(title_label, 22, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(info_label, 13, GameStyle.PAPER_DIM)
+	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
+	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER)
+	GameStyle.button(confirm_btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 16, GameStyle.INK_TEXT, 6.0)
+	reroll_btn.pressed.connect(_on_reroll)
+	confirm_btn.pressed.connect(_on_confirm_pick)
+	GameManager.alloc_opened.connect(_on_alloc_opened)
+	GameManager.alloc_finished.connect(_on_alloc_finished)
 
-func _build_hint_bar() -> void:
-	var hint_panel := PanelContainer.new()
-	hint_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.06, 0.11, 0.85)
-	sb.skew = Vector2(deg_to_rad(4.0), 0.0)
-	sb.border_width_left = 2
-	sb.border_width_right = 2
-	sb.border_color = GameStyle.LINE
-	sb.content_margin_left = 18.0
-	sb.content_margin_right = 18.0
-	sb.content_margin_top = 6.0
-	sb.content_margin_bottom = 6.0
-	hint_panel.add_theme_stylebox_override("panel", sb)
-
-	_hint_label = Label.new()
-	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	GameStyle.label(_hint_label, 13, GameStyle.PAPER_DIM)
-	hint_panel.add_child(_hint_label)
-	main_vbox.add_child(hint_panel)
-
-func _on_level_up(level: int) -> void:
-	# 1. 立即重置触屏摇杆状态，防止拖动摇杆升级时残留手指触发误触
+## 回合结束、有待加点：开面板并把这一屏的候选摆出来
+func _on_alloc_opened() -> void:
+	# 立即重置触屏摇杆状态，防止手指还压在摇杆上时误点卡片
 	if GameManager.joystick != null and GameManager.joystick.has_method("_stop_joystick"):
 		GameManager.joystick._stop_joystick()
 
-	selected_index = -1
 	_can_interact = false
 	_is_confirming = false
-
-	current_upgrades = GameManager.roll_upgrades(3)
-	title_label.text = "悟 道 加 点  ·  Lv." + str(level)
-	_update_hint_text()
-	_populate_cards()
-
+	_layout_for_viewport()
+	_refresh()
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
-	var tw = create_tween()
+	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.16)
 	# 入场防误触保护窗口：动画播放完后才允许交互
 	tw.tween_interval(0.14)
 	tw.tween_callback(func(): _can_interact = true)
+
+## 点数加完：收面板（灵石阁由 WaveSpawner 接手，不在这里指挥流程）
+func _on_alloc_finished() -> void:
+	if not visible:
+		return
+	_can_interact = false
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 0.0, 0.14)
+	tw.tween_callback(func(): visible = false)
+
+func _layout_for_viewport() -> void:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var n: int = GameManager.UPGRADE_OFFER_COUNT
+	_card_w = card_w_for(screen.x, n)
+	panel.custom_minimum_size = Vector2(
+		panel_w_for(screen.x, n), maxf(PANEL_MIN_H, screen.y - SCREEN_PAD_Y))
+	cards_container.add_theme_constant_override("separation", gap_for(avail_w(screen.x)))
+
+# ---------------- 一屏候选 ----------------
+
+func _refresh() -> void:
+	selected_index = -1
+	_populate_cards()
+	_refresh_bars()
+
+func _refresh_bars() -> void:
+	var pending: int = GameManager.pending_upgrade_points
+	var head: String = "第 %d 波已平" % maxi(GameManager.wave_number, 1)
+	if pending > 1:
+		head += " · 待加点 %d/%d" % [pending, GameManager.alloc_points_total]
+	elif pending == 1:
+		head += " · 待加点 1"
+	else:
+		head += " · 悟道已圆满"
+	title_label.text = "悟 道 加 点"
+	info_label.text = GameStyle.wrap_cjk(head, GameStyle.body_font(), 13,
+		maxf(120.0, get_viewport().get_visible_rect().size.x - 120.0))
+	reroll_btn.text = GameManager.alloc_reroll_label()
+	reroll_btn.disabled = not GameManager.can_reroll_alloc() or pending <= 0
+	_update_confirm_btn()
+	_update_gate_label()
+
+func _update_confirm_btn() -> void:
+	confirm_btn.text = "确认领悟 ✦"
+	confirm_btn.disabled = selected_index < 0 or not _can_interact or _is_confirming
+	confirm_btn.custom_minimum_size = Vector2(148, 44)
+
+## 底部这条读数把「选了哪一条」与「还剩几点」都摆在明面上（触屏无 hover，点了就得看得见）
+func _update_gate_label() -> void:
+	var pending: int = GameManager.pending_upgrade_points
+	var rest := "还剩 %d 点未加" % pending if pending > 0 else "点已加完 · 稍候进灵石阁"
+	if selected_index < 0 or selected_index >= GameManager.alloc_offers.size():
+		gate_label.text = "点中一张卡，再按右侧「确认领悟」 · %s" % rest
+		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
+	else:
+		gate_label.text = "已选【%s】 · %s" % [
+			GameManager.alloc_offers[selected_index].get("title", "?"), rest]
+		GameStyle.label(gate_label, 13, GameStyle.YELLOW)
 
 func _populate_cards() -> void:
 	for child in cards_container.get_children():
 		child.queue_free()
 	_card_entries.clear()
 
-	for i in range(current_upgrades.size()):
-		var data = current_upgrades[i]
+	for i in range(GameManager.alloc_offers.size()):
+		var data: Dictionary = GameManager.alloc_offers[i]
 		var entry := _create_card_entry(data, i)
 		_card_entries.append(entry)
 		var card_col: Control = entry["root"]
 		cards_container.add_child(card_col)
-		card_col.pivot_offset = Vector2(131.0, 195.0)
-		card_col.scale = Vector2(0.75, 0.75)
+		card_col.pivot_offset = Vector2(_card_w * 0.5, 150.0)
+		card_col.scale = Vector2(0.8, 0.8)
 		card_col.modulate.a = 0.0
-		var ctw = card_col.create_tween()
-		ctw.tween_interval(float(i) * 0.055)
+		var ctw := card_col.create_tween()
+		ctw.tween_interval(float(i) * 0.05)
 		ctw.set_parallel(true)
 		ctw.tween_property(card_col, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		ctw.tween_property(card_col, "modulate:a", 1.0, 0.16)
 
 func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
-	# 外层垂直容器：上方卡片展示面板 + 下方独立两段式确认按钮
-	var col_box := VBoxContainer.new()
-	col_box.custom_minimum_size = Vector2(CARD_W, 0.0)
-	col_box.add_theme_constant_override("separation", 10)
-	col_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(CARD_W, 300.0)
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(_card_w, CARD_MIN_H)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.pivot_offset = Vector2(CARD_W * 0.5, 150.0)
+	card.pivot_offset = Vector2(_card_w * 0.5, CARD_MIN_H * 0.5)
 
 	var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
 	var style_normal := StyleBoxFlat.new()
@@ -118,22 +194,23 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	style_normal.shadow_size = 0
 	style_normal.shadow_offset = Vector2(6, 6)
 	style_normal.content_margin_left = CARD_PAD_X
-	style_normal.content_margin_top = 14.0
+	style_normal.content_margin_top = 12.0
 	style_normal.content_margin_right = CARD_PAD_X
-	style_normal.content_margin_bottom = 14.0
+	style_normal.content_margin_bottom = 12.0
 	card.add_theme_stylebox_override("panel", style_normal)
 
+	var inner_w: float = card_inner_w(_card_w)
 	var vbox := VBoxContainer.new()
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 9)
+	vbox.add_theme_constant_override("separation", 8)
 
-	# 1. 顶部稀有度斜切色签 + 选中状态指示
+	# 1. 顶部稀有度色签 + 已修层数
 	var hbox_top := HBoxContainer.new()
 	hbox_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var rarity_lbl := Label.new()
 	rarity_lbl.text = " " + data.get("rarity_label", "凡品") + " "
-	GameStyle.label(rarity_lbl, 12, GameStyle.PAPER)
+	GameStyle.label(rarity_lbl, 11, GameStyle.PAPER)
 	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.PAPER
 	rarity_lbl.add_theme_color_override("font_color", band_text_col)
 	var pill_style := GameStyle.block(rarity_col, GameStyle.SLANT_BAND, Vector2(2, 2))
@@ -149,14 +226,14 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 
 	var state_badge := Label.new()
 	var count_already: int = int(GameManager.upgrade_counts.get(data.get("id", ""), 0))
-	state_badge.text = "已修 %d 层" % count_already if count_already > 0 else "点击选择"
-	GameStyle.label(state_badge, 12, GameStyle.GREY)
+	state_badge.text = "×%d" % count_already if count_already > 0 else ""
+	GameStyle.label(state_badge, 11, GameStyle.GREY)
 	hbox_top.add_child(state_badge)
 	vbox.add_child(hbox_top)
 
 	# 2. 中央图标（墨底白框）
 	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(68, 68)
+	icon_box.custom_minimum_size = Vector2(56, 56)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.PAPER_DIM, 2, 0.0)
@@ -166,19 +243,20 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	if data.has("icon") and ResourceLoader.exists(data["icon"]):
 		icon_tex.texture = load(data["icon"])
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(52, 52)
+	icon_tex.custom_minimum_size = Vector2(42, 42)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 
-	# 3. 名称（纸白大字）
+	# 3. 名称（纸白大字，窄卡上自己切硬换行）
 	var title_lbl := Label.new()
-	title_lbl.text = data["title"]
-	GameStyle.label(title_lbl, 19, GameStyle.PAPER)
+	title_lbl.text = GameStyle.wrap_cjk(String(data["title"]), GameStyle.display_font(), 17, inner_w)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_lbl.custom_minimum_size = Vector2(inner_w, 0)
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title_lbl)
+	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	# 4. 分隔线（稀有度色）
 	var sep := HSeparator.new()
@@ -195,10 +273,10 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	#   所以 wrap_bbcode 可以从中间下刀而不破坏 [color]/[b] 配对。
 	var r_desc := RichTextLabel.new()
 	r_desc.bbcode_enabled = true
-	r_desc.text = GameStyle.wrap_bbcode(String(data["desc"]), GameStyle.body_font(), 13, _card_inner_w())
+	r_desc.text = GameStyle.wrap_bbcode(String(data["desc"]), GameStyle.body_font(), 13, inner_w)
 	r_desc.fit_content = true
 	r_desc.scroll_active = false
-	r_desc.custom_minimum_size = Vector2(_card_inner_w(), 0)
+	r_desc.custom_minimum_size = Vector2(inner_w, 0)
 	r_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	r_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	r_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -210,142 +288,107 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	vbox.add_child(r_desc)
 
 	card.add_child(vbox)
-	col_box.add_child(card)
 
-	# 6. 卡片下方的独立两段式按钮（第1次点击：选择；第2次点击：确认领悟）
-	var btn := Button.new()
-	btn.text = "选  择"
-	btn.custom_minimum_size = Vector2(0, 44)
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.pivot_offset = Vector2(131.0, 22.0)
-	GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER, 6.0)
-	col_box.add_child(btn)
-
-	# 点击卡片本体：仅触发第1步「选中该卡片」，不直接加点，防止误触
+	# 点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认领悟」
 	card.gui_input.connect(func(event: InputEvent):
 		if not _can_interact or _is_confirming:
 			return
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-			_on_card_body_clicked(index)
-	)
-
-	# 点击卡片下方按钮：未选中时先选中；已选中时再次点击才确认加点
-	btn.pressed.connect(func():
-		if not _can_interact or _is_confirming:
-			return
-		_on_card_button_pressed(index)
+			_select_card(index)
 	)
 
 	return {
-		"root": col_box,
-		"card": card,
+		"root": card,
 		"style": style_normal,
 		"icon_panel_style": icon_panel_style,
 		"rarity_col": rarity_col,
 		"state_badge": state_badge,
 		"title_lbl": title_lbl,
-		"btn": btn,
-		"data": data,
 	}
 
-func _on_card_body_clicked(index: int) -> void:
-	if selected_index != index:
-		_select_card(index)
-
-func _on_card_button_pressed(index: int) -> void:
-	if selected_index != index:
-		# 第一次点击按钮：选中该卡片，按钮变为「确认领悟」
-		_select_card(index)
-	else:
-		# 第二次点击同一按钮：正式确认加点
-		var up_id: String = current_upgrades[index].get("id", "")
-		_confirm_upgrade(up_id)
-
+## 选中态：金框 + 标题转黄 + 徽记换成「已选 ✦」，未选中的退回「×层数」。
+## 底部 gate_label 同时把「已选【名字】+ 还剩几点」写在明面上。
 func _select_card(index: int) -> void:
+	if index < 0 or index >= GameManager.alloc_offers.size():
+		return
+	if selected_index == index:
+		return
 	selected_index = index
 	AudioManager.play_sfx("gem_pickup", 0.95)
-	_update_hint_text()
-
 	for i in range(_card_entries.size()):
 		var entry: Dictionary = _card_entries[i]
-		var card: PanelContainer = entry["card"]
+		var card: PanelContainer = entry["root"]
 		var style: StyleBoxFlat = entry["style"]
 		var icon_st: StyleBoxFlat = entry["icon_panel_style"]
 		var rarity_col: Color = entry["rarity_col"]
 		var badge: Label = entry["state_badge"]
 		var title_lbl: Label = entry["title_lbl"]
-		var btn: Button = entry["btn"]
-		var data: Dictionary = entry["data"]
 		var is_sel: bool = (i == selected_index)
+		var owned := int(GameManager.upgrade_counts.get(GameManager.alloc_offers[i].get("id", ""), 0))
 
 		var tw := card.create_tween()
 		tw.set_parallel(true)
-
 		if is_sel:
-			# 选中态：卡片微放大高亮、金框、按钮变为金色「确认领悟」
-			tw.tween_property(card, "scale", Vector2(1.035, 1.035), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tw.tween_property(card, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
+			tw.tween_property(card, "scale", Vector2(1.03, 1.03), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(card, "modulate", Color(1, 1, 1, 1), 0.12)
 			style.bg_color = Color(0.10, 0.15, 0.28, 0.99)
-			style.border_width_left = 3
-			style.border_width_top = 3
-			style.border_width_right = 3
-			style.border_width_bottom = 6
 			style.border_color = GameStyle.YELLOW
 			icon_st.border_color = GameStyle.YELLOW
 			title_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
-			badge.text = "✦ 已选中"
+			badge.text = "已选 ✦"
 			badge.add_theme_color_override("font_color", GameStyle.YELLOW)
-
-			btn.text = "确 认 领 悟 ✓"
-			GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 16, GameStyle.INK_TEXT, 6.0, GameStyle.INK_TEXT)
-			btn.scale = Vector2(0.92, 0.92)
-			var btw := btn.create_tween()
-			btw.tween_property(btn, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		else:
-			# 未选中态：轻微压暗退后，按钮重置为「选择」
 			tw.tween_property(card, "scale", Vector2(0.97, 0.97), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color(0.78, 0.80, 0.86, 0.78), 0.12)
 			style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.96)
-			style.border_width_left = 2
-			style.border_width_top = 2
-			style.border_width_right = 2
-			style.border_width_bottom = 5
 			style.border_color = rarity_col
 			icon_st.border_color = GameStyle.PAPER_DIM
 			title_lbl.add_theme_color_override("font_color", GameStyle.PAPER)
-			var count_already: int = int(GameManager.upgrade_counts.get(data.get("id", ""), 0))
-			badge.text = "已修 %d 层" % count_already if count_already > 0 else "点击选择"
+			badge.text = "×%d" % owned if owned > 0 else ""
 			badge.add_theme_color_override("font_color", GameStyle.GREY)
+	_update_confirm_btn()
+	_update_gate_label()
 
-			btn.text = "选  择"
-			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER, 6.0)
-			btn.scale = Vector2.ONE
-
-func _update_hint_text() -> void:
-	if _hint_label == null:
+## 刷新这一屏候选：第一次吃本回合免费额度，之后按货架重掷同一条价格线扣灵石。
+## 刷新只换候选、不动点数，所以刷新完要把选中态清掉（刚选的那张卡已经不在这屏了）。
+func _on_reroll() -> void:
+	if not _can_interact or _is_confirming:
 		return
-	if selected_index < 0 or selected_index >= current_upgrades.size():
-		_hint_label.text = "提示：请先点击下方按钮「选择」心仪法门，再次点击「确认领悟」即可生效（防误触）"
-		_hint_label.add_theme_color_override("font_color", GameStyle.PAPER_DIM)
-	else:
-		var sel_title: String = current_upgrades[selected_index].get("title", "")
-		_hint_label.text = "✦ 已选定【%s】 —— 请再次点击下方金色「确认领悟 ✓」按钮完成加点 ✦" % sel_title
-		_hint_label.add_theme_color_override("font_color", GameStyle.YELLOW)
+	if not GameManager.reroll_alloc():
+		return
+	selected_index = -1
+	_populate_cards()
+	_refresh_bars()
 
-func _confirm_upgrade(upgrade_id: String) -> void:
-	if _is_confirming:
+## 底部「确认领悟」：正式落地这一条悟道
+func _on_confirm_pick() -> void:
+	if not _can_interact or _is_confirming or selected_index < 0:
+		return
+	if GameManager.pending_upgrade_points <= 0:
 		return
 	_is_confirming = true
 	_can_interact = false
+	# take_alloc_upgrade 内部发属性、扣点数；点数清零时同步发 alloc_finished（灵石阁由波次状态机接手）
+	var ok := GameManager.take_alloc_upgrade(selected_index)
+	_is_confirming = false
+	if not ok:
+		AudioManager.play_sfx("ui_error", 0.9)
+		_can_interact = true
+		return
+	if GameManager.pending_upgrade_points <= 0:
+		return
+	_layout_for_viewport()
+	_refresh()
+	# 连点保护：新一屏候选先淡入，动画放完才放行手指
+	modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 1.0, 0.12)
+	tw.tween_interval(0.1)
+	tw.tween_callback(func(): _can_interact = true)
 
-	GameManager.apply_upgrade(upgrade_id)
-	AudioManager.play_sfx("gem_pickup", 1.25)
-
-	var tw = create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.12)
-	tw.tween_callback(func():
-		visible = false
-		get_tree().paused = false
-		_is_confirming = false
-	)
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		# 这一屏没有可退的浮层：点数没加完不许走（用户指令「必须加完才能出战」）
+		get_viewport().set_input_as_handled()

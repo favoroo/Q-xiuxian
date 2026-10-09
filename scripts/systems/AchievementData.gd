@@ -1,0 +1,199 @@
+class_name AchievementData
+extends RefCounted
+
+## 成就里程碑与局外解锁数据库（仿土豆兄弟纯成就解锁机制）
+## 全部 static 纯函数 —— 不读 autoload、不碰节点，保证单测可确定性断言。
+## 设计原则：
+##   1. 零局外数值膨胀：成就只解锁新修士（道统）与高阶法宝入池，不破坏局内难度平衡；
+##   2. 初始开放 4 名代表性修士 + 11 件基础法宝，其余 5 名进阶修士与 4 件高阶法宝通过里程碑解锁。
+
+## 危险度档位名号（D0 ~ D5）
+const DANGER_NAMES: Array[String] = ["凡尘", "微澜", "惊涛", "炼狱", "无间", "天劫"]
+
+## 初始默认解锁的 4 名修士
+const DEFAULT_CULTIVATORS: Array[String] = [
+	"jianchi",
+	"shiyue",
+	"fuzhen",
+	"jinsuanpan",
+]
+
+## 初始默认进入灵石阁货架池的 11 件法宝
+const DEFAULT_ITEMS: Array[String] = [
+	"jubaopen",
+	"mibao_luopan",
+	"qiankun_dai",
+	"jifeng_xue",
+	"zhekou_yufu",
+	"kuangxue_dan",
+	"guijia_fu",
+	"tongxuan_ling",
+	"leiyin_zhen",
+	"wujian_shi",
+	"huichun_hulu",
+]
+
+## 成就里程碑定义表（顺序即「修仙志」展示顺序）
+## reward_type: "cultivator"（解锁新道统） | "item"（解锁新法宝入池）
+const ACHIEVEMENTS: Array[Dictionary] = [
+	{
+		"id": "ach_cult_meiying",
+		"name": "踏雪无痕",
+		"cond_desc": "单局有效闪避达到 35%，或累计斩妖 500 只",
+		"reward_type": "cultivator",
+		"reward_id": "meiying",
+		"reward_name": "魅影·幽娘",
+		"icon": "res://assets/art/cultivator_meiying_icon.png",
+	},
+	{
+		"id": "ach_cult_kuangzhan",
+		"name": "百战喋血",
+		"cond_desc": "生涯累计斩妖达到 1500 只",
+		"reward_type": "cultivator",
+		"reward_id": "kuangzhan",
+		"reward_name": "狂战蛮修",
+		"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
+	},
+	{
+		"id": "ach_cult_duobao",
+		"name": "富甲一方",
+		"cond_desc": "单局囊中灵石达到 250 枚",
+		"reward_type": "cultivator",
+		"reward_id": "duobao",
+		"reward_name": "多宝道人",
+		"icon": "res://assets/art/cultivator_duobao_icon.png",
+	},
+	{
+		"id": "ach_cult_duoshe",
+		"name": "渡劫初成",
+		"cond_desc": "使用任意道统通关 1 次（完成第 20 波）",
+		"reward_type": "cultivator",
+		"reward_id": "duoshe",
+		"reward_name": "夺舍散人",
+		"icon": "res://assets/art/cultivator_duoshe_icon.png",
+	},
+	{
+		"id": "ach_cult_dubi",
+		"name": "孤峰问剑",
+		"cond_desc": "通关危险度「微澜」或更高档位",
+		"reward_type": "cultivator",
+		"reward_id": "dubi",
+		"reward_name": "独臂刀圣",
+		"icon": "res://assets/art/cultivator_dubi_icon.png",
+	},
+	{
+		"id": "ach_item_pojia",
+		"name": "斩将夺旗",
+		"cond_desc": "单局抵达第 15 波",
+		"reward_type": "item",
+		"reward_id": "pojia_zhui",
+		"reward_name": "破甲锥",
+		"icon": "res://assets/art/item_pojia_zhui.png",
+	},
+	{
+		"id": "ach_item_wuxing",
+		"name": "五行齐聚",
+		"cond_desc": "单局境界达到 Lv.15",
+		"reward_type": "item",
+		"reward_id": "wuxing_pei",
+		"reward_name": "五行佩",
+		"icon": "res://assets/art/item_wuxing_pei.png",
+	},
+	{
+		"id": "ach_item_hunyuan",
+		"name": "生财有道",
+		"cond_desc": "单局灵韵达到 30 点",
+		"reward_type": "item",
+		"reward_id": "hunyuan_zhu",
+		"reward_name": "混元珠",
+		"icon": "res://assets/art/item_hunyuan_zhu.png",
+	},
+	{
+		"id": "ach_item_kuilei",
+		"name": "九死一生",
+		"cond_desc": "累计修行 5 局，或任意通关 1 次",
+		"reward_type": "item",
+		"reward_id": "tisi_kuilei",
+		"reward_name": "替死傀儡",
+		"icon": "res://assets/art/item_tisi_kuilei.png",
+	},
+]
+
+static func danger_name(d: int) -> String:
+	return DANGER_NAMES[clampi(d, 0, DANGER_NAMES.size() - 1)]
+
+static func all_ids() -> Array[String]:
+	var out: Array[String] = []
+	for a in ACHIEVEMENTS:
+		out.append(String(a["id"]))
+	return out
+
+static func get_def(ach_id: String) -> Dictionary:
+	for a in ACHIEVEMENTS:
+		if a.get("id", "") == ach_id:
+			return a
+	return {}
+
+## 反查某名修士对应的解锁成就（初始默认解锁的修士返回空字典）
+static func cultivator_unlock_achievement(cid: String) -> Dictionary:
+	for a in ACHIEVEMENTS:
+		if a.get("reward_type", "") == "cultivator" and a.get("reward_id", "") == cid:
+			return a
+	return {}
+
+## 反查某件法宝对应的解锁成就（初始默认入池的法宝返回空字典）
+static func item_unlock_achievement(item_id: String) -> Dictionary:
+	for a in ACHIEVEMENTS:
+		if a.get("reward_type", "") == "item" and a.get("reward_id", "") == item_id:
+			return a
+	return {}
+
+## 判定单条成就在当前局与生涯累计下是否达成
+## run_ctx 字段：victory(bool), danger(int), wave(int), level(int), kills(int),
+##              max_stones(int), max_dodge(float), max_harvest(float)
+## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int)
+static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: Dictionary) -> bool:
+	var victory := bool(run_ctx.get("victory", false))
+	var danger := int(run_ctx.get("danger", 0))
+	var wave := int(run_ctx.get("wave", 0))
+	var level := int(run_ctx.get("level", 1))
+	var max_stones := int(run_ctx.get("max_stones", 0))
+	var max_dodge := float(run_ctx.get("max_dodge", 0.0))
+	var max_harvest := float(run_ctx.get("max_harvest", 0.0))
+
+	var total_runs := int(career_stats.get("total_runs", 0))
+	var total_wins := int(career_stats.get("total_wins", 0))
+	var total_kills := int(career_stats.get("total_kills", 0))
+	var best_wave := maxi(wave, int(career_stats.get("best_wave", 0)))
+
+	match ach_id:
+		"ach_cult_meiying":
+			return max_dodge >= 0.35 - 0.0001 or total_kills >= 500
+		"ach_cult_kuangzhan":
+			return total_kills >= 1500
+		"ach_cult_duobao":
+			return max_stones >= 250
+		"ach_cult_duoshe":
+			return victory or total_wins >= 1
+		"ach_cult_dubi":
+			return (victory and danger >= 1)
+		"ach_item_pojia":
+			return best_wave >= 15
+		"ach_item_wuxing":
+			return level >= 15
+		"ach_item_hunyuan":
+			return max_harvest >= 30.0 - 0.0001
+		"ach_item_kuilei":
+			return total_runs >= 5 or victory or total_wins >= 1
+	return false
+
+## 评估本局新达成的成就 ID 列表（已在 already_unlocked 中的不重复返回）
+static func evaluate_new_unlocks(run_ctx: Dictionary, career_stats: Dictionary, already_unlocked: Array) -> Array[String]:
+	var newly: Array[String] = []
+	for a in ACHIEVEMENTS:
+		var aid := String(a["id"])
+		if aid in already_unlocked:
+			continue
+		if is_condition_met(aid, run_ctx, career_stats):
+			newly.append(aid)
+	return newly

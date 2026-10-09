@@ -42,6 +42,10 @@ func _run() -> void:
 	GameManager.start_run("qingyun_sword")
 	GameManager.add_spirit_stones(500)
 	GameManager.roll_shop(true)
+	# 悟道结算面板要有内容可摆：先攒两点并开一次会话（候选 5 个），
+	# 后面每个屏宽都按 GameManager.alloc_offers 现建一版面板来量。
+	GameManager.pending_upgrade_points = 2
+	GameManager.open_alloc_session()
 	# 货架是随机的 ⇒ 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「凡品·法宝」。
 	# 这两枚正是「贴着字走的色签被引擎再折一次、多出一行孤字」的现场（框 29、字也要 29）。
 	if GameManager.shop_offers.size() >= 2:
@@ -85,13 +89,24 @@ func _check_all_table_texts() -> void:
 		var name_txt := GameStyle.wrap_cjk(String(def.get("name", "")), disp, 17, w_inner)
 		if GameStyle.line_max_w(name_txt, disp, 17) > w_inner + EPS:
 			bad.append("法器 %s 的名号切完仍超 %d 宽" % [id, int(w_inner)])
-	var l_inner: float = LevelUpDialog.CARD_W - LevelUpDialog.CARD_PAD_X * 2.0
+	var l_inner: float = LevelUpDialog.card_inner_w(
+		LevelUpDialog.card_w_for(float(WIDTHS.min()), GameManager.UPGRADE_OFFER_COUNT))
 	for up in UpgradeData.UPGRADES:
 		var utxt := GameStyle.wrap_bbcode(String(up.get("desc", "")), body, 13, l_inner)
 		for line in String(utxt).split("\n"):
 			if _plain_w(line, body, 13) > l_inner + EPS:
 				bad.append("悟道 %s 的一句超 %d 宽：「%s」" % [
 					String(up.get("id", "?")), int(l_inner), line])
+	# 货架卡比悟道卡更窄（5/6 格时按格数压宽），法器/法宝文案要连最窄那一档一起量
+	var s_inner: float = WaveShop.offer_card_w(GameManager.SHOP_BASE_SLOTS + 1) - WaveShop.OFFER_PAD_X * 2.0
+	for id in WeaponData.DEFS.keys():
+		var stxt := GameStyle.wrap_cjk(String(WeaponData.get_def(id).get("desc", "")), body, 12, s_inner)
+		if GameStyle.line_max_w(stxt, body, 12) > s_inner + EPS:
+			bad.append("法器 %s 的说明在 %d 宽货架卡里仍超宽" % [id, int(s_inner)])
+	for iid in ItemData.all_ids():
+		var itxt := GameStyle.wrap_cjk(String(ItemData.get_def(iid).get("desc", "")), body, 12, s_inner)
+		if GameStyle.line_max_w(itxt, body, 12) > s_inner + EPS:
+			bad.append("法宝 %s 的说明在 %d 宽货架卡里仍超宽" % [iid, int(s_inner)])
 	# 道统名单：列宽按最窄那一档屏算（960 是 canvas_items+expand 的下限）
 	var col_w := CultivatorSelect.text_col_w(960.0)
 	for cid in CultivatorData.all_ids():
@@ -134,12 +149,13 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "开始菜单", "path": "res://scenes/ui/StartMenu.tscn", "open": "open"},
 		{"tag": "道统选择", "path": "res://scripts/ui/CultivatorSelect.gd", "open": "show_select"},
 		{"tag": "本命法器", "path": "res://scenes/ui/StartWeaponSelect.tscn", "open": "show_select"},
-		{"tag": "升级三选一", "path": "res://scenes/ui/LevelUpDialog.tscn", "open": "_on_level_up"},
+		{"tag": "波后悟道结算", "path": "res://scenes/ui/LevelUpDialog.tscn", "open": "_on_alloc_opened"},
 		{"tag": "灵石阁", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened"},
 		{"tag": "属性面板", "path": "res://scripts/ui/PlayerStatsDialog.gd", "open": "open"},
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
-		{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
-		{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
+			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
+			{"tag": "修仙志", "path": "res://scripts/ui/CareerDialog.gd", "open": "open"},
+			{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
 	]
 
 func _check_screen(spec: Dictionary, screen: Vector2) -> void:
@@ -157,8 +173,8 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 			node.open()
 		"show_select":
 			node.show_select()
-		"_on_level_up":
-			node._on_level_up(3)
+		"_on_alloc_opened":
+			node._on_alloc_opened()
 		"_on_game_over":
 			node._on_game_over(false)
 		"_on_shop_opened":

@@ -4,6 +4,8 @@ extends Control
 ## 波间灵石阁：购买法器/回气丹、重掷货架；
 ## 上阵 + 背包统一点选后操作：三合一合成 / 上阵卸下 / 出售换灵石
 
+signal stats_requested
+
 @onready var stones_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/StonesChip/StonesLabel
 @onready var wave_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/WaveLabel
 @onready var offers_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersContainer
@@ -12,9 +14,23 @@ extends Control
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/ConfirmButton
 
-## 货架卡片的宽度与内边距：文案折行的可用宽由这两个数算出来（同一份，别处不再抄）
+## 货架卡片的宽度与内边距：按货架格数自适应计算，防止 5/6 格货架在 960 屏宽下横向出屏
 const OFFER_CARD_W := 196.0
 const OFFER_PAD_X := 12.0
+
+static func offer_card_w(count: int) -> float:
+	if count >= 6:
+		return 132.0
+	elif count == 5:
+		return 160.0
+	return OFFER_CARD_W
+
+static func offer_separation(count: int) -> int:
+	if count >= 6:
+		return 8
+	elif count == 5:
+		return 10
+	return 16
 
 var _synergy_bar: HBoxContainer = null
 
@@ -32,6 +48,17 @@ func _ready() -> void:
 	GameManager.shop_opened.connect(_on_shop_opened)
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm)
+
+	# 顶栏右侧添加「属性」按钮，方便随时查看主要/次要面板
+	var top_bar: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/TopBar
+	var stats_btn := Button.new()
+	stats_btn.text = "属 性"
+	stats_btn.custom_minimum_size = Vector2(72, 32)
+	stats_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	stats_btn.pressed.connect(func(): stats_requested.emit())
+	top_bar.add_child(stats_btn)
+
 	# 羁绊总览行：插在顶栏之下
 	_synergy_bar = HBoxContainer.new()
 	_synergy_bar.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -40,7 +67,7 @@ func _ready() -> void:
 	vbox.add_child(_synergy_bar)
 	vbox.move_child(_synergy_bar, 1)
 
-## 羁绊总览：激活的流派显示金色等级徽记，未激活显示灰色进度
+## 羁绊总览：激活的流派显示金色等级徽记，未激活显示灰色进度；支持点按查看详情卡
 func _refresh_synergy_bar() -> void:
 	if _synergy_bar == null:
 		return
@@ -61,6 +88,7 @@ func _refresh_synergy_bar() -> void:
 				next = str(th)
 				break
 		var chip_lbl := Label.new()
+		chip_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 		if lv > 0:
 			chip_lbl.text = " %s Lv.%d " % [info.get("name", tag), lv]
 			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW))
@@ -69,10 +97,46 @@ func _refresh_synergy_bar() -> void:
 			chip_lbl.text = " %s %d/%s " % [info.get("name", tag), n, next]
 			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 			GameStyle.label(chip_lbl, 12, GameStyle.PAPER_DIM)
-		chip_lbl.tooltip_text = info.get("desc", "")
+		chip_lbl.gui_input.connect(func(ev: InputEvent):
+			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
+				_open_shop_synergy_tip(tag, chip_lbl)
+		)
 		_synergy_bar.add_child(chip_lbl)
 		any = true
 	_synergy_bar.visible = any
+
+func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
+	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+	if info.is_empty():
+		return
+	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
+	var n: int = int(data.get("count", 0))
+	var lv: int = int(data.get("level", 0))
+	var th_list: Array = info.get("thresholds", [2, 4, 6])
+	var rows: Array = [
+		["当前持有", "%d 件法器" % n, GameStyle.YELLOW if n >= 2 else GameStyle.PAPER],
+		["激活档位", "Lv.%d" % lv if lv > 0 else "未激活 (需%d件)" % int(th_list[0]), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
+	]
+	var notes: Array[String] = [
+		"同标签法器上阵达到 2 / 4 / 6 件时激活阶梯加成。",
+		String(info.get("desc", "")),
+	]
+	DetailTip.show_over(self, anchor, {
+		"title": "%s羁绊" % info.get("name", tag),
+		"chip": "五行" if tag in WeaponData.ELEMENTS else "器类",
+		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
+		"rows": rows,
+		"body": "流派共鸣：持有越多同类法器，道法威能越强盛。",
+		"notes": notes,
+		"foot": "在波间灵石阁挑选同标签法器可继续提升阶位。",
+	})
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		if DetailTip.close_all(self):
+			get_viewport().set_input_as_handled()
 
 func _on_shop_opened() -> void:
 	selected = {}
@@ -95,10 +159,13 @@ func refresh() -> void:
 	for child in offers_container.get_children():
 		child.queue_free()
 	var offers: Array = GameManager.shop_offers
-	for i in range(offers.size()):
-		var c := _create_offer_card(offers[i], i)
+	var count := offers.size()
+	var card_w := offer_card_w(count)
+	offers_container.add_theme_constant_override("separation", offer_separation(count))
+	for i in range(count):
+		var c := _create_offer_card(offers[i], i, count)
 		offers_container.add_child(c)
-		c.pivot_offset = Vector2(98.0, 134.0)
+		c.pivot_offset = Vector2(card_w * 0.5, 134.0)
 		c.scale = Vector2(0.82, 0.82)
 		c.modulate.a = 0.0
 		var ctw := c.create_tween()
@@ -233,15 +300,16 @@ func _create_items_divider() -> Control:
 	GameStyle.label(lbl, 11, GameStyle.GREY)
 	return chip
 
-## 已持有法宝的小徽记：按档位描边，悬浮显示名称与效果说明
+## 已持有法宝的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
 func _create_item_chip(item_id: String) -> Control:
 	var def := ItemData.get_def(item_id)
 	var chip = PanelContainer.new()
 	chip.custom_minimum_size = Vector2(40, 52)
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
-	chip.tooltip_text = "%s（%s）\n%s" % [def.get("name", item_id), ItemData.tier_label(int(def.get("tier", 1))), def.get("desc", "")]
+	var tier_num: int = int(def.get("tier", 1))
+	var tier_col: Color = ItemData.tier_color(tier_num)
 	chip.add_theme_stylebox_override("panel",
-		GameStyle.outlined_panel(GameStyle.NAVY2, ItemData.tier_color(int(def.get("tier", 1))), 2, 0.0))
+		GameStyle.outlined_panel(GameStyle.NAVY2, tier_col, 2, 0.0))
 	var icon_tex = TextureRect.new()
 	var icon_path: String = def.get("icon", "")
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
@@ -255,7 +323,38 @@ func _create_item_chip(item_id: String) -> Control:
 	icon_tex.offset_right = -5
 	icon_tex.offset_bottom = -5
 	chip.add_child(icon_tex)
+
+	chip.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
+			_open_shop_item_tip(item_id, chip)
+	)
 	return chip
+
+func _open_shop_item_tip(item_id: String, anchor: Control) -> void:
+	var def := ItemData.get_def(item_id)
+	if def.is_empty():
+		return
+	var tier_num: int = int(def.get("tier", 1))
+	var tier_col: Color = ItemData.tier_color(tier_num)
+	var rows: Array = [
+		["品阶", ItemData.tier_label(tier_num), tier_col],
+		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.YELLOW],
+	]
+	var desc_lines: Array = String(def.get("desc", "")).split("\n")
+	var notes: Array[String] = []
+	for line in desc_lines:
+		var s := String(line).strip_edges()
+		if not s.is_empty():
+			notes.append(s)
+	DetailTip.show_over(self, anchor, {
+		"title": String(def.get("name", item_id)),
+		"chip": "法宝灵物",
+		"chip_color": tier_col,
+		"rows": rows,
+		"body": "本命法宝：被动生效，无需占用上阵槽位，整局战斗持续庇护。",
+		"notes": notes,
+		"foot": "在波间灵石阁可邂逅更多稀世奇珍。",
+	})
 
 func _create_empty_stash_slot() -> Control:
 	var slot = PanelContainer.new()
@@ -379,7 +478,8 @@ func _resolve_selected() -> Dictionary:
 
 # ---------------- 货架 ----------------
 
-func _create_offer_card(offer: Dictionary, index: int) -> Control:
+func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> Control:
+	var card_w := offer_card_w(total_count)
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
 	var is_item: bool = kind == "item"
@@ -410,33 +510,42 @@ func _create_offer_card(offer: Dictionary, index: int) -> Control:
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = ItemData.tier_color(tier).darkened(0.35)
 	else:
-			def = WeaponData.get_def(offer.get("id", ""))
-			title = WeaponData.star_text(1) + " " + def.get("name", "?")
-			icon_path = def.get("icon", "")
-			tag = def.get("tag", "")
-			# 双维羁绊进度：「剑系 1/2 · 锐金 1/2」提示离下一档还差几件
-			var wtags: Array = def.get("tags", [])
-			var tag_parts: Array = []
-			for t in wtags:
-				var syn: Dictionary = WeaponData.SYNERGIES.get(t, {})
-				if not syn.is_empty():
-					var n := GameManager.get_tag_count(t)
-					var next := "MAX"
-					for th in syn.get("thresholds", []):
-						if n < int(th):
-							next = str(th)
-							break
-					tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
-			if not tag_parts.is_empty():
-				tag = " · ".join(tag_parts)
-			desc = def.get("desc", "")
-			var bonus_dmg := GameManager.get_weapon_stat_bonus(offer.get("id", ""), 1)
-			if bonus_dmg > 0.05:
-				desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
+		var w_id: String = String(offer.get("id", ""))
+		def = WeaponData.get_def(w_id)
+		title = WeaponData.star_text(1) + " " + def.get("name", "?")
+		icon_path = def.get("icon", "")
+		tag = def.get("tag", "")
+		# 双维羁绊进度：「剑系 1/2 · 锐金 1/2」提示离下一档还差几件，若买下能激活则金色高亮
+		var wtags: Array = def.get("tags", [])
+		var tag_parts: Array = []
+		var will_activate := false
+		for t in wtags:
+			var syn: Dictionary = WeaponData.SYNERGIES.get(t, {})
+			if not syn.is_empty():
+				var n := GameManager.get_tag_count(t)
+				var next := "MAX"
+				var th_arr: Array = syn.get("thresholds", [])
+				for th in th_arr:
+					if n < int(th):
+						next = str(th)
+						if n + 1 == int(th):
+							will_activate = true
+						break
+				tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
+		if not tag_parts.is_empty():
+			tag = " · ".join(tag_parts)
+		if will_activate:
+			chip_color = GameStyle.YELLOW
+			chip_text_color = GameStyle.INK_TEXT
+			edge_color = GameStyle.YELLOW
+		desc = def.get("desc", "")
+		var bonus_dmg := GameManager.get_weapon_stat_bonus(w_id, 1)
+		if bonus_dmg > 0.05:
+			desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
 
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(OFFER_CARD_W, 268.0)
-	var inner_w: float = OFFER_CARD_W - OFFER_PAD_X * 2.0
+	card.custom_minimum_size = Vector2(card_w, 268.0)
+	var inner_w: float = card_w - OFFER_PAD_X * 2.0
 	var style = StyleBoxFlat.new()
 	style.bg_color = GameStyle.NAVY
 	style.skew = Vector2(deg_to_rad(3.0), 0)

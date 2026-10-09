@@ -10,11 +10,21 @@ func _check(cond: bool, label: String) -> void:
 	_c.check(cond, label)
 
 func _dismiss_dialogs() -> void:
+	while GameManager.has_pending_upgrades() and not GameManager.alloc_offers.is_empty():
+		GameManager.take_alloc_upgrade(0)
+	_hide_dialogs()
+
+## 只藏面板、不解点数：验证「升级只攒点不打断战斗」时不能顺手把点数花掉
+func _hide_dialogs() -> void:
 	for node_name in ["LevelUpDialog", "WaveShop", "PlayerStatsDialog", "PauseMenu", "SettingsDialog"]:
 		var n := get_node_or_null("/root/Main/UILayer/" + node_name)
 		if n != null and n.visible:
 			n.visible = false
 	get_tree().paused = false
+
+func _dlg_visible(node_name: String) -> bool:
+	var n := get_node_or_null("/root/Main/UILayer/" + node_name)
+	return n != null and n.visible
 
 ## 边等边清理弹窗（多级连升会连续弹出 LevelUpDialog 并反复暂停）
 func _wait_clean(seconds: float) -> void:
@@ -39,6 +49,9 @@ func _run() -> void:
 	get_tree().paused = false
 	_check(GameManager.run_started, "道统 fuzhen 开局")
 	_check(GameManager.drones.size() == 2, "符阵灵童自带 2 灵蝶 (实际 %d)" % GameManager.drones.size())
+	var p_frame: Texture2D = GameManager.player.anim_sprite.sprite_frames.get_frame_texture("idle_s", 0)
+	var p_atlas_path: String = (p_frame as AtlasTexture).atlas.resource_path if p_frame is AtlasTexture else ""
+	_check(p_atlas_path == "res://assets/art/cultivator_fuzhen_8dir.png", "选角后玩家外观切为符阵灵童图集 (实际 %s)" % p_atlas_path)
 
 	await get_tree().create_timer(2.0).timeout
 	_check(GameManager.wave_number == 1, "第 1 波已开启")
@@ -53,20 +66,60 @@ func _run() -> void:
 	_check(GameManager.dodge > 0.05, "身法闪避加点生效")
 	_check(GameManager.harvest >= 8.0, "灵韵加点生效")
 	var ups := GameManager.roll_upgrades(3)
-	_check(ups.size() == 3, "升级三选一抽取 (得 %d 项)" % ups.size())
+	_check(ups.size() == 3, "指定 3 项时仍只出 3 项 (得 %d 项)" % ups.size())
+	_check(GameManager.roll_upgrades().size() == GameManager.UPGRADE_OFFER_COUNT,
+		"默认一次给 %d 个候选" % GameManager.UPGRADE_OFFER_COUNT)
 
-	# 3. 强制触发一次升级弹窗路径（验证信号链不炸），随后关闭
+	# 3. 战斗途中升级：只攒点数，不暂停、不当场弹面板（2026-10-09 用户指令的正面判据）
 	GameManager.add_experience(50)
 	await get_tree().process_frame
-	_dismiss_dialogs()
+	_check(GameManager.level > 1, "修为到账升到 Lv.%d" % GameManager.level)
+	_check(GameManager.pending_upgrade_points > 0, "升级攒下待加点 %d 点" % GameManager.pending_upgrade_points)
+	_check(GameManager.has_pending_upgrades(), "has_pending_upgrades 与点数同步")
+	_check(not _dlg_visible("LevelUpDialog"), "战斗中悟道面板没有抢开")
+	_check(not get_tree().paused, "战斗中升级不再暂停游戏")
+	_hide_dialogs()
 
-	# 4. 结束本波 → 灵韵结算 → 商店
+	# 4. 回合结束 → 先清悟道点数 → 才轮到灵石阁（新流程的顺序就是这条判据要钉的东西）
 	var spawner: Node = GameManager.wave_spawner
 	var stones_before := GameManager.spirit_stones
+	var points_before: int = GameManager.pending_upgrade_points
 	spawner.end_wave()
-	await _wait_clean(2.0)
+	var waited := 0
+	while spawner.phase != WaveSpawner.Phase.ALLOC and waited < 40:
+		await get_tree().create_timer(0.1).timeout
+		waited += 1
+	_check(spawner.phase == WaveSpawner.Phase.ALLOC, "清场后先进悟道结算而不是商店（phase=%d）" % spawner.phase)
+	_check(_dlg_visible("LevelUpDialog"), "悟道面板已弹出")
+	_check(get_tree().paused, "悟道结算期间暂停")
+	_check(GameManager.alloc_offers.size() == GameManager.UPGRADE_OFFER_COUNT,
+		"悟道候选 %d 个 (实际 %d)" % [GameManager.UPGRADE_OFFER_COUNT, GameManager.alloc_offers.size()])
+	_check(GameManager.alloc_points_total == GameManager.pending_upgrade_points,
+		"面板记住这一回合攒了几点（%d 点，含灵韵结算那一级）" % GameManager.alloc_points_total)
+	_check(GameManager.alloc_points_total >= points_before, "清场前攒的点没被吞掉")
+	# 刷新：第一次吃免费额度、不扣灵石；用完才按货架同一档价格扣
+	var stones_pre_reroll := GameManager.spirit_stones
+	_check(GameManager.alloc_reroll_free_left == GameManager.ALLOC_FREE_REROLLS,
+		"开局带 %d 次免费刷新" % GameManager.ALLOC_FREE_REROLLS)
+	_check(GameManager.reroll_alloc(), "免费刷新悟道成功")
+	_check(GameManager.spirit_stones == stones_pre_reroll, "首次刷新不吃灵石")
+	_check(GameManager.alloc_reroll_free_left == 0, "免费额度已用掉")
+	_check(GameManager.alloc_reroll_cost == GameBalance.reroll_cost(
+		GameManager.wave_number, 0, GameManager.shop_price_mult),
+		"免费那一次不把报价抬上去（与货架同一口径：%d）" % GameManager.alloc_reroll_cost)
+	var paid_price := GameManager.alloc_reroll_cost
+	_check(GameManager.reroll_alloc(), "第二次刷新付灵石")
+	_check(GameManager.spirit_stones == stones_pre_reroll - paid_price,
+		"付费刷新扣 %d 灵石" % paid_price)
+	_check(GameManager.alloc_reroll_cost > paid_price,
+		"再刷一档涨价 %d→%d（同货架重掷曲线）" % [paid_price, GameManager.alloc_reroll_cost])
+	var lvl_before := GameManager.level
+	_dismiss_dialogs()
+	_check(GameManager.level == lvl_before, "加完点不再升级（点数与等级两条线不互串）")
+	_check(not GameManager.has_pending_upgrades(), "点数已加完")
+	_check(spawner.phase == WaveSpawner.Phase.SHOP, "加完点自动进灵石阁")
 	_check(GameManager.spirit_stones > stones_before, "灵韵波末结算发灵石 (+%d)" % (GameManager.spirit_stones - stones_before))
-	_check(GameManager.shop_offers.size() == 4, "商店 4 货架 (实际 %d)" % GameManager.shop_offers.size())
+	_check(GameManager.shop_offers.size() == GameManager.SHOP_BASE_SLOTS, "商店 %d 货架 (实际 %d)" % [GameManager.SHOP_BASE_SLOTS, GameManager.shop_offers.size()])
 	_dismiss_dialogs()
 
 	# 5. 商店护栏：锁定保留 / 购买 / reroll 递增
@@ -109,26 +162,32 @@ func _run() -> void:
 	_check(merged, "三合一合成成功")
 	_check(GameManager.active_synergies.has("talisman"), "羁绊表含符箓")
 
-	# 7. 跳到 13 波验证新敌种 + 灵药丛
+	# 7. 跳到 13 波验证新敌种 + 藏宝匣
 	GameManager.player.max_health = 99999.0
 	GameManager.player.current_health = 99999.0
 	spawner.start_wave(13)
+	await get_tree().process_frame
+	var chests := get_tree().get_nodes_in_group("chests").size()
+	_check(chests > 0, "藏宝匣已刷新 (%d)" % chests)
 	await _wait_clean(6.0)
-	var herbs := get_tree().get_nodes_in_group("herbs").size()
-	_check(herbs > 0, "灵药丛已刷新 (%d)" % herbs)
 	var kinds := {}
 	for e in get_tree().get_nodes_in_group("enemies"):
 		kinds[e.name.get_basename()] = true
 	print("[INFO] 13 波在场敌种: " + str(kinds.keys()))
 
-	# 8. 灵药丛摧毁掉落
-	var herb = get_tree().get_nodes_in_group("herbs")[0] if herbs > 0 else null
-	if herb != null:
-		var gems_before := get_tree().get_nodes_in_group("gems").size()
-		herb.take_damage(1.0, Vector2.ZERO, false)
+	# 8. 藏宝匣砸开掉落
+	var chest_list := get_tree().get_nodes_in_group("chests")
+	var chest: Node2D = chest_list[0] if not chest_list.is_empty() else null
+	if chest == null:
+		chest = SpiritChest.new()
+		chest.global_position = Vector2(100.0, 100.0)
+		main.add_child(chest)
 		await get_tree().process_frame
-		await get_tree().process_frame
-		_check(get_tree().get_nodes_in_group("gems").size() > gems_before, "灵药丛摧毁后掉落补给")
+	var gems_before := get_tree().get_nodes_in_group("gems").size()
+	chest.take_damage(1.0, Vector2.ZERO, false)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(get_tree().get_nodes_in_group("gems").size() > gems_before, "藏宝匣砸开后掉落补给")
 
 	# 8.5 固定 Boss 波：第 10 波魔君登场 → 血条上屏 → 击杀才开商店（超时锁关）
 	GameManager.is_game_over = false
@@ -148,7 +207,7 @@ func _run() -> void:
 		_check(GameManager.spirit_stones >= stones_before_boss + GameBalance.BOSS_STONE_REWARD,
 			"魔君掉落灵石奖励 (+%d)" % GameBalance.BOSS_STONE_REWARD)
 		_check(hud != null and not hud.is_boss_bar_visible(), "魔君伏诛后血条收起")
-	_check(GameManager.shop_offers.size() == 4, "Boss 波结算后商店照常开启")
+	_check(GameManager.shop_offers.size() == GameManager.SHOP_BASE_SLOTS, "Boss 波结算后商店照常开启")
 	_dismiss_dialogs()
 
 	# 9. 暂停菜单的音量控件：控件必须真的在、真的接总线（不可见的设置项等于没有设置项）

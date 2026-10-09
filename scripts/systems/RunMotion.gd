@@ -20,6 +20,12 @@ const SPEED_SCALE_MAX := 1.30  # 步频上限
 const SHADOW_SHRINK := 0.16    # 腾空时影子最大收缩比例
 const SHADOW_FADE := 0.22      # 腾空时影子最大变淡比例
 const HYSTERESIS_DEG := 29.0 # 8方向扇区切换迟滞阈值（大于 22.5° 边界角，彻底消除临界角度抖动）
+const HOVER_LIFT := 5.0      # 御剑悬浮基础高度（屏上像素，offset 按 base_scale 折算）
+const HOVER_BOB := 0.7       # 浮沉振幅（屏上像素）
+const HOVER_FREQ := 2.2      # 浮沉基频（Hz，移动时随速度略增）
+const HOVER_LEAN_DEG := 7.0  # 御剑移动前倾角（按移动方向水平分量缩放，竖直飞不前倾）
+const SLITHER_FREQ := 3.0    # 蠕动基频（Hz，移动时随速度略增）
+const SLITHER_SQ := 0.06     # 蠕动伸缩幅度（scale.x/y 反向交替，蛞蝓/黏液怪的行进波）
 
 ## 方向图集的行序：动画后缀 → 图集行号
 const DIR_ROW := {"s": 0, "n": 1, "e": 2, "se": 3, "ne": 4}
@@ -152,6 +158,63 @@ static func apply(
 
 	if shadow != null:
 		_apply_shadow(shadow, air, minf(delta * 14.0, 1.0))
+
+## 御剑/悬浮模式：不切腿帧（单姿势图集），浮沉/前倾/摇摆全程序驱动。
+## 待机也保持低速浮沉（始终悬在剑上），移动时浮沉加速并按移动方向前倾。
+static func apply_hover(
+	sprite: AnimatedSprite2D,
+	base_scale: Vector2,
+	moving: bool,
+	move_dir: Vector2,
+	delta: float,
+	speed_ratio: float = 1.0,
+	shadow: Sprite2D = null
+) -> void:
+	var freq_mult := 1.0 + 0.4 * clampf(speed_ratio, 0.0, 1.5) if moving else 1.0
+	var phase: float = float(sprite.get_meta(&"hover_phase", 0.0)) + delta * TAU * HOVER_FREQ * freq_mult
+	sprite.set_meta(&"hover_phase", fmod(phase, TAU * 1000.0))
+	var bob := sin(phase)
+
+	var k := minf(delta * 14.0, 1.0)
+	var scale_safe := maxf(base_scale.y, 0.01)
+	sprite.offset.y = lerpf(sprite.offset.y, -(HOVER_LIFT + bob * HOVER_BOB) / scale_safe, k)
+
+	# 只留极轻的整体缩放呼吸，无步态挤压
+	var breathe := 1.0 + bob * 0.006
+	sprite.scale = sprite.scale.lerp(Vector2(base_scale.x, base_scale.y * breathe), k)
+
+	var lean := 0.0
+	if moving:
+		var dir_sign := signf(move_dir.x) if absf(move_dir.x) > 0.01 else 0.0
+		lean = deg_to_rad(HOVER_LEAN_DEG * clampf(absf(move_dir.x), 0.0, 1.0) * clampf(speed_ratio, 0.0, 1.3)) * dir_sign
+	sprite.rotation = lerp_angle(sprite.rotation, lean, minf(delta * 10.0, 1.0))
+
+	if shadow != null:
+		_apply_shadow(shadow, 0.62 + 0.30 * bob, k)
+
+## 蠕动/滑行模式：贴地无悬浮无前倾（史莱姆、血蛹等无腿软体），
+## 行进波全靠 scale.x/y 反向交替伸缩；待机时慢速微动，影子保持稳定。
+static func apply_slither(
+	sprite: AnimatedSprite2D,
+	base_scale: Vector2,
+	moving: bool,
+	delta: float,
+	speed_ratio: float = 1.0,
+	shadow: Sprite2D = null
+) -> void:
+	var freq_mult := 1.0 + 0.5 * clampf(speed_ratio, 0.0, 1.5) if moving else 0.4
+	var amp_mult := 1.0 if moving else 0.4
+	var phase: float = float(sprite.get_meta(&"hover_phase", 0.0)) + delta * TAU * SLITHER_FREQ * freq_mult
+	sprite.set_meta(&"hover_phase", fmod(phase, TAU * 1000.0))
+	var wave := sin(phase) * SLITHER_SQ * amp_mult
+
+	var k := minf(delta * 14.0, 1.0)
+	sprite.offset.y = lerpf(sprite.offset.y, 0.0, k)
+	sprite.scale = sprite.scale.lerp(Vector2(base_scale.x * (1.0 + wave), base_scale.y * (1.0 - wave * 0.8)), k)
+	sprite.rotation = lerp_angle(sprite.rotation, 0.0, k)
+
+	if shadow != null:
+		_apply_shadow(shadow, 0.0, k)
 
 ## 影子贴地反馈：腾空时影子收缩变淡（脚离地的视觉补偿），触地/待机时恢复基准
 static func _apply_shadow(shadow: Sprite2D, air: float, k: float) -> void:

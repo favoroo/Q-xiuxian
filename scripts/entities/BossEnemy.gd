@@ -50,8 +50,9 @@ func _ready() -> void:
 		if light != null:
 			light.color = Color(0.8, 0.45, 1.0)
 			light.energy = 0.85
-	super._ready()
-	anim_sprite.modulate = _tint
+		super._ready()
+		hit_stun_resist = 0.25
+		anim_sprite.modulate = _tint
 	# 登场即上屏：HUD 血条由此信号点亮
 	GameManager.boss_hp_changed.emit(current_hp, max_hp, boss_title)
 
@@ -170,11 +171,11 @@ func _enter_phase2() -> void:
 	AudioManager.play_sfx("boss_raid", 1.15)
 	GameManager.shake_camera(5.0, 0.3)
 
-func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> void:
+func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
 	# Boss 抗击退：几乎推不动，走位压力全靠技能
-	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit)
+	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit, from_dot)
 	if dying:
 		return  # 血条收起由 boss_defeated 信号负责
 	if not _phase2 and current_hp <= max_hp * GameBalance.BOSS_PHASE2_AT:

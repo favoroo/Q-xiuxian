@@ -16,6 +16,8 @@ var invulnerable_time: float = 0.0
 var sun_orb_angle: float = 0.0
 var idle_bob_phase: float = 0.0
 var facing: String = "s"
+# 移动方式：gait=步态腿帧（默认）/ hover=御剑悬浮（单姿势图集 + RunMotion.apply_hover 程序驱动）
+var _motion_mode: String = "gait"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var regen_tick: float = 0.0
@@ -43,6 +45,7 @@ func _setup_sprite_frames() -> void:
 	# 角色独立形象：按道统读 CultivatorData.sprite 的 8 方向图集，缺图回退默认青衫修士
 	var sheet_path := "res://assets/art/pawn_blue_8dir.png"
 	var cdef := CultivatorData.get_def(GameManager.cultivator_id)
+	_motion_mode = String(cdef.get("motion", "gait"))
 	var char_sprite := String(cdef.get("sprite", ""))
 	if char_sprite != "" and ResourceLoader.exists(char_sprite):
 		sheet_path = char_sprite
@@ -56,7 +59,9 @@ func _setup_sprite_frames() -> void:
 		sf.add_frame("idle_" + dir, _cell_tex(base_tex, 0, row))
 
 		sf.add_animation("run_" + dir)
-		sf.set_animation_speed("run_" + dir, 10.5)
+		# 4 帧跑步循环（contact/passing×2 = 每循环 2 步）：8fps ≈ 每秒 4 步，
+		# 像素走路循环的行业经验是 4 帧素材不超过 8fps，再高就是"原地碎步倒腾"
+		sf.set_animation_speed("run_" + dir, 8.0)
 		sf.set_animation_loop("run_" + dir, true)
 		for c in range(1, 5):
 			sf.add_frame("run_" + dir, _cell_tex(base_tex, c, row))
@@ -249,16 +254,24 @@ func _physics_process(delta: float) -> void:
 			facing = face[0]
 			anim_sprite.flip_h = face[1]
 
-		var run_anim: String = "run_" + facing
-		RunMotion.select_anim(anim_sprite, run_anim, true)
+		if _motion_mode == "hover":
+			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
+			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+			RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
+		else:
+			var run_anim: String = "run_" + facing
+			RunMotion.select_anim(anim_sprite, run_anim, true)
 
-		var lean_axis: float = absf(effective_dir.x)
-		RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
+			var lean_axis: float = absf(effective_dir.x)
+			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 	else:
 		var idle_anim: String = "idle_" + facing
 		RunMotion.select_anim(anim_sprite, idle_anim, false)
-		idle_bob_phase += delta * 2.2
-		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
+		if _motion_mode == "hover":
+			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
+		else:
+			idle_bob_phase += delta * 2.2
+			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)
@@ -301,7 +314,7 @@ func _update_weapon_targets() -> void:
 		var col = res.get("collider")
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent() as Node2D
-			if not is_instance_valid(enemy) or enemy.is_in_group("herbs"):
+			if not is_instance_valid(enemy) or enemy.is_in_group("chests"):
 				continue
 			var eid := enemy.get_instance_id()
 			if seen_ids.has(eid):
@@ -362,11 +375,12 @@ func _update_weapon_targets() -> void:
 				w.current_target = null
 
 func _process_sun_orbs(delta: float) -> void:
-	sun_orb_angle += delta * 2.8
+	var haste_factor: float = clampf(1.0 / maxf(0.3, GameManager.attack_speed_mult * GameManager.synergy_haste_mult), 1.0, 2.5)
+	sun_orb_angle += delta * 2.8 * haste_factor
 	var count = sun_orb_container.get_child_count()
 	if count == 0:
 		return
-	var radius = 78.0 * GameManager.attack_range_mult
+	var radius: float = SunOrb.ORBIT_RADIUS * GameManager.attack_range_mult
 	for i in range(count):
 		var orb = sun_orb_container.get_child(i) as Node2D
 		var a = sun_orb_angle + float(i) * (TAU / float(count))

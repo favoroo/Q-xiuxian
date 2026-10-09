@@ -6,6 +6,9 @@ extends Node2D
 var from: Vector2 = Vector2.ZERO
 var to: Vector2 = Vector2.ZERO
 var width_mult: float = 1.0   # 星级越高雷身越粗
+## 光柱色由落雷法器决定（WeaponData 的 burst_tint）：三把落雷法器共用一条白蓝电柱，
+## 玩家分不清"天降离火"与"玄石大印"，与弹丸那笔账是同一个毛病。
+var tint: Color = GLOW_COLOR
 
 const CORE_COLOR := Color(1.0, 0.98, 0.85, 1.0)
 const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.42)
@@ -13,8 +16,8 @@ const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.42)
 func _ready() -> void:
 	global_position = from
 	var points := _build_jagged_points()
-	_add_line(points, 10.0 * width_mult, GLOW_COLOR)
-	_add_line(points, 3.2 * width_mult, CORE_COLOR)
+	_add_line(points, 10.0 * width_mult, tint)
+	_add_line(points, 3.2 * width_mult, CORE_COLOR if tint == GLOW_COLOR else Color(1.0, 0.97, 0.9, 1.0))
 	modulate.a = 1.0
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)

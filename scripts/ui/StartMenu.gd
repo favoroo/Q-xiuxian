@@ -5,6 +5,8 @@ extends Control
 ## 点「开始游戏」后淡出，交给 StartWeaponSelect 选本命法器（paused 链不中断）。
 
 signal settings_requested
+signal career_requested
+signal manual_requested
 
 var _title_block: PanelContainer
 var _sub_chip: Label
@@ -21,6 +23,9 @@ const DANGER_NAMES := ["凡尘", "微澜", "惊涛", "炼狱", "无间", "天劫
 ## 4:3 屏（可视高 720）下面两只落在半空。判据 LayoutCheck 逐档屏宽度量。
 const BRACKET_LEN := 56.0
 const BRACKET_INSET := 26.0
+## 按钮列行距的下限：视口再矮也不许挤成一条缝
+const CENTER_SEP_MIN := 5
+var _center_vbox: VBoxContainer = null
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_RESIZED and not _brackets.is_empty():
@@ -34,6 +39,7 @@ func _ready() -> void:
     _build_decor()
     _build_center()
     _build_version_label()
+    _fit_center_column()
     UpdateManager.update_available.connect(_on_update_available)
     UpdateManager.no_update_found.connect(_on_no_update_found)
     UpdateManager.check_failed.connect(_on_check_failed)
@@ -126,6 +132,7 @@ func _build_center() -> void:
     vbox.add_theme_constant_override("separation", 14)
     vbox.alignment = BoxContainer.ALIGNMENT_CENTER
     center.add_child(vbox)
+    _center_vbox = vbox
 
     # 标题：黄色斜切大色块 + 墨黑超大字
     _title_block = PanelContainer.new()
@@ -161,13 +168,34 @@ func _build_center() -> void:
     # 按钮列
     _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 56),
         GameStyle.BLUE, GameStyle.YELLOW, GameStyle.PAPER, _on_start_pressed))
-    _buttons.append(_make_button(vbox, "游 戏 设 置", 15, Vector2(220, 40),
+    _buttons.append(_make_button(vbox, "修  仙  志", 15, Vector2(220, 38),
+        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER, _on_career_pressed))
+    _buttons.append(_make_button(vbox, "教 程 手 册", 15, Vector2(220, 38),
+        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER, _on_manual_pressed))
+    _buttons.append(_make_button(vbox, "游 戏 设 置", 15, Vector2(220, 38),
         GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER_DIM, _on_settings_pressed))
-    _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 40),
+    _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 38),
         GameStyle.NAVY2, GameStyle.BLUE, GameStyle.PAPER_DIM, _on_update_pressed)
     _buttons.append(_update_btn)
-    _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 40),
+    _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 38),
         GameStyle.NAVY2, GameStyle.BAD, GameStyle.PAPER_DIM, _on_quit_pressed))
+
+## 按钮列的行距按 viewport 现算：主菜单又加了「修仙志」「教程手册」两颗按钮后，
+## 六颗 + 危险度行 + 标题在 960×540（16:9 真机的设计高）下要 583 高 ⇒ 「退出游戏」整颗掉到屏外
+## （判据 LayoutCheck 量到的就是这一格）。这里不砍文案、不压字号，只按剩余高度折算行距。
+func _fit_center_column() -> void:
+    if _center_vbox == null or not is_instance_valid(_center_vbox):
+        return
+    var n := _center_vbox.get_child_count()
+    if n < 2:
+        return
+    var sep := int(_center_vbox.get_theme_constant("separation"))
+    var body: float = _center_vbox.get_combined_minimum_size().y - float(sep) * float(n - 1)
+    var room: float = get_viewport().get_visible_rect().size.y - 16.0
+    if body + float(sep) * float(n - 1) <= room:
+        return
+    _center_vbox.add_theme_constant_override(
+        "separation", maxi(int((room - body) / float(n - 1)), CENTER_SEP_MIN))
 
 func _make_button(parent: Control, text: String, font_size: int, min_size: Vector2,
         bg: Color, hover_bg: Color, font_col: Color, callback: Callable) -> Button:
@@ -234,6 +262,7 @@ func _build_version_label() -> void:
 
 ## 打开开始界面（入场动画：标题弹入 + 按钮错峰弹入）
 func open() -> void:
+    _fit_center_column()
     visible = true
     modulate.a = 0.0
     _refresh_danger_row()   # 通关回来后可能刚解锁新档位
@@ -339,6 +368,12 @@ func _cancel_reset_timer() -> void:
 
 func _on_settings_pressed() -> void:
     settings_requested.emit()
+
+func _on_career_pressed() -> void:
+    career_requested.emit()
+
+func _on_manual_pressed() -> void:
+    manual_requested.emit()
 
 func _on_quit_pressed() -> void:
     get_tree().quit()

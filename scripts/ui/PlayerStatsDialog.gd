@@ -9,7 +9,10 @@ extends Control
 ## 卡里的读数一律现读 GameManager.get_stat_breakdown() 与 GameBalance / WeaponData 的同一批公式，
 ## 规则文案在 StatInfoData（只写人话、不抄数字），本面板不做第二套结算。
 
+signal closed
+
 var _closing: bool = false
+var _unpause_on_close: bool = true
 
 # UI 节点引用
 var _dim_rect: ColorRect
@@ -392,10 +395,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		close()
 		get_viewport().set_input_as_handled()
 
-func open() -> void:
+func open(unpause_on_close: bool = true) -> void:
 	if visible or GameManager.is_game_over:
 		return
 	_closing = false
+	_unpause_on_close = unpause_on_close
 	_panel.custom_minimum_size.y = _fit_panel_height()
 	refresh()
 	visible = true
@@ -412,8 +416,10 @@ func close() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func():
 		visible = false
-		get_tree().paused = false
+		if _unpause_on_close:
+			get_tree().paused = false
 		_closing = false
+		closed.emit()
 	)
 
 func refresh() -> void:
@@ -926,14 +932,12 @@ func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
 		rows.append(["特性", feats])
 
 	var notes: Array[String] = [
-		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行，与真的打出去那一下是同一笔账；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
+		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
 			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
-		"属性转化：这件法器把受益属性折成固定伤害增量，每升一星折算效率再 +25%。",
+		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
 		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
-	if bool(w.get("is_drone", false)):
-		notes.append("灵蝶环绕周身、触敌即伤，同样占一格上阵法器位。")
 
 	# 持有数与售价压进脚注：这两条不是「它怎么打人」，占一行读数不如省下来给乘区链
 	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
@@ -978,7 +982,7 @@ func _weapon_feats(def: Dictionary) -> String:
 		out.append("冰缓")
 	return "、".join(out)
 
-## 悟道条目详情：正文直接沿用 UpgradeData 的 desc（与三选一卡片同一份文案，不再抄第二遍）
+## 悟道条目详情：正文直接沿用 UpgradeData 的 desc（与波后悟道卡片同一份文案，不再抄第二遍）
 func _open_history_tip(item: Dictionary, idx: int, anchor: Control) -> void:
 	var id: String = String(item.get("id", ""))
 	var def := UpgradeData.get_upgrade_def(id)
@@ -996,10 +1000,10 @@ func _open_history_tip(item: Dictionary, idx: int, anchor: Control) -> void:
 		GameStyle.YELLOW if cap > 0 and taken >= cap else GameStyle.PAPER])
 	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
 	if cap > 0 and taken >= cap:
-		rows.append(["状态", "已叠满，不再出现在三选一", GameStyle.GREY])
+		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
 
 	var notes: Array[String] = [
-		"悟道三选一当场生效、不可撤销；同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
+		"升级只攒点数，每波妖潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
 		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
 	]
 	var stat_id := _stat_of_apply(apply)

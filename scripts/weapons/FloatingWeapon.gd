@@ -196,6 +196,7 @@ func _perform_projectile_attack() -> void:
 		p.homing_target = locked
 		p.direction = shot_dir.rotated(offset_ang)
 		p.damage = final_dmg
+		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
 		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
 		p.lifetime *= GameManager.attack_range_mult * GameManager.synergy_range_mult
@@ -248,6 +249,8 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	bolt.from = muzzle_point.global_position
 	bolt.to = target_pos
 	bolt.width_mult = 1.0 + 0.18 * float(star - 1)
+	if def.has("burst_tint"):
+		bolt.tint = def["burst_tint"]
 	get_tree().current_scene.add_child(bolt)
 
 	var burst = burst_scene.instantiate()
@@ -255,6 +258,9 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.radius = burst_radius * GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var final_dmg := _final_damage()
 	burst.damage = final_dmg
+	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
+	burst.tint = def.get("burst_tint", burst.tint)
+	burst.icon_path = String(def.get("burst_icon", ""))
 	if def.get("proc_burn", false):
 		burst.proc_burn = true
 		burst.burn_dps = final_dmg * float(def.get("burn_ratio", 0.5))
@@ -322,7 +328,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			if is_crit:
 				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
 			dmg *= GameManager.elite_damage_mult_for(enemy)
-			var knock = GameManager.knockback_vec(global_position, enemy.global_position, 240.0)
+			var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
+			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
 			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
 				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
@@ -355,8 +362,8 @@ func _find_target() -> Node2D:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			if enemy.is_in_group("herbs"):
-				continue  # 灵药丛可被波及摧毁，但不作为索敌目标
+			if enemy.is_in_group("herbs") or enemy.is_in_group("chests"):
+				continue  # 藏宝匣可被波及摧毁，但不作为索敌目标
 			var d = player.global_position.distance_to(enemy.global_position)
 			if d < min_dist:
 				min_dist = d
@@ -393,7 +400,7 @@ func _volley_targets(n: int) -> Array[Node2D]:
 		if col == null or col.get_parent() == null:
 			continue
 		var e := col.get_parent() as Node2D
-		if e == null or not e.has_method("take_damage") or e.is_in_group("herbs"):
+		if e == null or not e.has_method("take_damage") or e.is_in_group("herbs") or e.is_in_group("chests"):
 			continue
 		if out.has(e):
 			continue

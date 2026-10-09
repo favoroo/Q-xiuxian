@@ -20,11 +20,12 @@ radius = 15.0
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 70.0
+max_hp = 26.0
 move_speed = 105.0
 contact_damage = 13.0
 exp_reward = 3
 spritesheet_path = "res://assets/art/monster_yingmei_8dir.png"
+locomotion_mode = "hover"
 teleport_interval = 4.2
 
 [node name="Shadow" type="Sprite2D" parent="."]

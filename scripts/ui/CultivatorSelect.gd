@@ -24,6 +24,7 @@ var _title_label: Label
 var _sub_label: Label
 var _scroll: ScrollContainer
 var _list: VBoxContainer
+var _transitioning: bool = false
 
 func _ready() -> void:
 	visible = false
@@ -52,12 +53,42 @@ func _build_ui() -> void:
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 
+	# 顶部导航栏：左返回按钮 + 居中标题 + 右侧等宽占位保证绝对居中
+	var header_row := HBoxContainer.new()
+	header_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(header_row)
+
+	var back_btn := Button.new()
+	back_btn.text = "〈 返 回"
+	back_btn.custom_minimum_size = Vector2(84, 34)
+	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	back_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(back_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	back_btn.pressed.connect(_on_back_pressed)
+	header_row.add_child(back_btn)
+
+	var l_spacer := Control.new()
+	l_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_row.add_child(l_spacer)
+
 	_title_label = Label.new()
 	_title_label.text = "选 择 道 统"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(_title_label)
+	header_row.add_child(_title_label)
 	GameStyle.label(_title_label, 28, GameStyle.PAPER, 0, GameStyle.INK, true)
+
+	var r_spacer := Control.new()
+	r_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_row.add_child(r_spacer)
+
+	var dummy_r := Control.new()
+	dummy_r.custom_minimum_size = Vector2(84, 34)
+	dummy_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_row.add_child(dummy_r)
 
 	_sub_label = Label.new()
 	_sub_label.text = "每位修士都有独门天赋，也有必须背负的代价 · 上下滑动看全九人"
@@ -80,6 +111,7 @@ func _build_ui() -> void:
 	_scroll.add_child(_list)
 
 func show_select() -> void:
+	_transitioning = false
 	for child in _list.get_children():
 		child.queue_free()
 	var ids: Array = CultivatorData.all_ids()
@@ -101,17 +133,30 @@ static func text_col_w(vis_w: float) -> float:
 
 func _create_row(cid: String, col_w: float) -> Control:
 	var def: Dictionary = CultivatorData.get_def(cid)
+	var is_current: bool = (cid == GameManager.cultivator_id)
+	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
+	var best_d: int = GameManager.get_cultivator_best_danger(cid)
 	var row := PanelContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = GameStyle.NAVY
+	if not is_unlocked:
+		style.bg_color = GameStyle.INK.lightened(0.02)
+	elif is_current:
+		style.bg_color = GameStyle.NAVY.lightened(0.05)
+	else:
+		style.bg_color = GameStyle.NAVY
 	style.skew = Vector2(deg_to_rad(3.0), 0)
 	style.border_width_left = 2
 	style.border_width_top = 2
 	style.border_width_right = 2
 	style.border_width_bottom = 5
-	style.border_color = GameStyle.BLUE.darkened(0.35)
+	if not is_unlocked:
+		style.border_color = GameStyle.LINE
+	elif is_current:
+		style.border_color = GameStyle.YELLOW
+	else:
+		style.border_color = GameStyle.BLUE.darkened(0.35)
 	style.shadow_color = Color(0, 0, 0, 0.45)
 	style.shadow_size = 0
 	style.shadow_offset = Vector2(4, 4)
@@ -126,12 +171,12 @@ func _create_row(cid: String, col_w: float) -> Control:
 	hbox.add_theme_constant_override("separation", int(GAP))
 	row.add_child(hbox)
 
-	# 图标
+	# 图标（未解锁时压暗灰显）
 	var icon_box := PanelContainer.new()
 	icon_box.custom_minimum_size = Vector2(ICON, ICON)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.BLUE_EDGE, 2, 0.0))
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE if not is_unlocked else GameStyle.BLUE_EDGE, 2, 0.0))
 	var icon_tex := TextureRect.new()
 	if ResourceLoader.exists(def.get("icon", "")):
 		icon_tex.texture = load(def["icon"])
@@ -139,10 +184,12 @@ func _create_row(cid: String, col_w: float) -> Control:
 	icon_tex.custom_minimum_size = Vector2(ICON - 8, ICON - 8)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not is_unlocked:
+		icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
 	icon_box.add_child(icon_tex)
 	hbox.add_child(icon_box)
 
-	# 名号 + 称号
+	# 名号 + 称号 + 通关勋章
 	var name_col := VBoxContainer.new()
 	name_col.custom_minimum_size = Vector2(NAME_COL, 0)
 	name_col.add_theme_constant_override("separation", 4)
@@ -154,35 +201,82 @@ func _create_row(cid: String, col_w: float) -> Control:
 	name_lbl.text = GameStyle.wrap_cjk(def.get("name", "?"), GameStyle.display_font(), 17, NAME_COL)
 	name_lbl.custom_minimum_size = Vector2(NAME_COL, 0)
 	name_col.add_child(name_lbl)
-	GameStyle.label(name_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 17, GameStyle.PAPER_DIM if not is_unlocked else GameStyle.PAPER, 0, GameStyle.INK, true)
+
+	var badge_row := HBoxContainer.new()
+	badge_row.add_theme_constant_override("separation", 4)
+	badge_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	name_col.add_child(badge_row)
 
 	var epi_txt := GameStyle.wrap_cjk(" " + def.get("epithet", "") + " ", GameStyle.body_font(), 10, NAME_COL - 8.0)
 	var epithet_lbl := Label.new()
 	epithet_lbl.text = epi_txt
 	epithet_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 折行的控件必须钉住折行宽：不钉，容器按「一个汉字那么宽」去量它，
-	# 称号会被竖着一字一行排到 191 高（判据 LayoutCheck 量 rect 抓到的就是这一格）
 	epithet_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(epi_txt, GameStyle.body_font(), 10), 0)
 	epithet_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	epithet_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE))
-	name_col.add_child(epithet_lbl)
-	GameStyle.label(epithet_lbl, 10, GameStyle.PAPER)
+	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2 if not is_unlocked else GameStyle.BLUE))
+	badge_row.add_child(epithet_lbl)
+	GameStyle.label(epithet_lbl, 10, GameStyle.GREY if not is_unlocked else GameStyle.PAPER)
 
-	# 天赋（绿）与代价（红）：两列并排，各占算出来的列宽
-	hbox.add_child(_make_text_col(def.get("pros", []), "✦ ", GameStyle.GOOD, col_w))
-	hbox.add_child(_make_text_col(def.get("cons", []), "✖ ", GameStyle.BAD, col_w))
+	# 若已通关过危险度，展示通关金色勋章
+	if is_unlocked and best_d >= 0:
+		var medal_lbl := Label.new()
+		var d_name: String = AchievementData.danger_name(best_d)
+		medal_lbl.text = " ★ %s " % d_name
+		medal_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
+		badge_row.add_child(medal_lbl)
+		GameStyle.label(medal_lbl, 10, GameStyle.YELLOW)
 
-	# 行尾那颗键：跟着这一行走，不落在屏外
-	var btn := Button.new()
-	btn.text = "拜 入 此 门"
-	btn.custom_minimum_size = Vector2(BTN_W, 38)
-	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	btn.mouse_filter = Control.MOUSE_FILTER_PASS
-	btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(btn, GameStyle.BLUE, GameStyle.YELLOW, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
-	btn.pressed.connect(func(): _choose(cid))
-	hbox.add_child(btn)
+	if not is_unlocked:
+		# 未解锁提示区（合并两列宽度展示解锁成就条件）
+		var lock_box := VBoxContainer.new()
+		lock_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lock_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lock_box.add_theme_constant_override("separation", 4)
+		lock_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hbox.add_child(lock_box)
+
+		var ach := AchievementData.cultivator_unlock_achievement(cid)
+		var cond_text: String = String(ach.get("cond_desc", "完成特定天道考验"))
+		var lock_title := Label.new()
+		lock_title.text = "✦ 未 解 锁 · 天 道 锁 闭 ✦"
+		GameStyle.label(lock_title, 13, GameStyle.BAD)
+		lock_box.add_child(lock_title)
+
+		var cond_lbl := Label.new()
+		var total_col_w: float = col_w * 2.0 + GAP
+		cond_lbl.text = GameStyle.wrap_cjk("✦ 解锁功绩「%s」：%s" % [ach.get("name", "未知"), cond_text], GameStyle.body_font(), TXT, total_col_w)
+		cond_lbl.custom_minimum_size = Vector2(total_col_w, 0)
+		cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		GameStyle.label(cond_lbl, TXT, GameStyle.YELLOW)
+		lock_box.add_child(cond_lbl)
+
+		# 灰显禁用按钮
+		var btn := Button.new()
+		btn.text = "未 解 锁"
+		btn.custom_minimum_size = Vector2(BTN_W, 38)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		btn.mouse_filter = Control.MOUSE_FILTER_STOP
+		btn.disabled = true
+		btn.focus_mode = Control.FOCUS_NONE
+		GameStyle.button(btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, 6.0)
+		hbox.add_child(btn)
+	else:
+		# 已解锁：天赋（绿）与代价（红）
+		hbox.add_child(_make_text_col(def.get("pros", []), "✦ ", GameStyle.GOOD, col_w))
+		hbox.add_child(_make_text_col(def.get("cons", []), "✖ ", GameStyle.BAD, col_w))
+
+		# 行尾拜入按钮
+		var btn := Button.new()
+		btn.text = "拜 入 此 门"
+		btn.custom_minimum_size = Vector2(BTN_W, 38)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		btn.mouse_filter = Control.MOUSE_FILTER_PASS
+		btn.focus_mode = Control.FOCUS_NONE
+		GameStyle.button(btn, GameStyle.BLUE, GameStyle.YELLOW, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+		btn.pressed.connect(func(): _choose(cid))
+		hbox.add_child(btn)
 
 	return row
 
@@ -202,13 +296,41 @@ func _make_text_col(items: Array, mark: String, col: Color, col_w: float) -> VBo
 		GameStyle.label(l, TXT, col)
 	return box
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or _transitioning:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		_on_back_pressed()
+		get_viewport().set_input_as_handled()
+
+func _on_back_pressed() -> void:
+	if not visible or _transitioning:
+		return
+	_transitioning = true
+	AudioManager.play_sfx("ui_click")
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 0.0, 0.16)
+	tw.tween_callback(func():
+		visible = false
+		_transitioning = false
+		var start_menu = get_parent().get_node_or_null("StartMenu")
+		if start_menu != null and start_menu.has_method("open"):
+			start_menu.open()
+	)
+
 func _choose(cid: String) -> void:
+	if _transitioning:
+		return
+	_transitioning = true
 	AudioManager.play_sfx("level_up", 0.9)
 	GameManager.cultivator_id = cid
+	if GameManager.player != null and is_instance_valid(GameManager.player) and GameManager.player.has_method("_setup_sprite_frames"):
+		GameManager.player._setup_sprite_frames()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func():
 		visible = false
+		_transitioning = false
 		var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
 		if weapon_select != null:
 			weapon_select.show_select()
