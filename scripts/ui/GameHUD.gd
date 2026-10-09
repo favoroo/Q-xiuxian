@@ -212,74 +212,16 @@ func _refresh_synergy_badges() -> void:
 	for tag in GameManager.active_synergies.keys():
 		var data: Dictionary = GameManager.active_synergies[tag]
 		var n: int = int(data.get("count", 0))
-		var lv := int(data.get("level", 0))
-		if n <= 0:
+		if n <= 0 or not WeaponData.SYNERGIES.has(tag):
 			continue
-		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
-		var chip := Label.new()
-		chip.mouse_filter = Control.MOUSE_FILTER_STOP
-		# 徽记是带 gui_input 的 Label，不是按钮 ⇒ 摇杆认不出，得自己登记成长按键，
-		# 否则点徽记弹详解的同时脚下也长出一根摇杆。
-		chip.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-		var raw_th: Array = info.get("thresholds", [2, 4, 6])
-		var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
-		var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
-		chip.text = " %s (%d/%d) " % [info.get("name", tag), n, max_th]
-		if lv > 0:
-			var chip_color: Color = GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE
-			chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
-			GameStyle.label(chip, 11, GameStyle.INK_TEXT)
-		else:
-			chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-			GameStyle.label(chip, 11, GameStyle.PAPER_DIM)
-		chip.gui_input.connect(func(ev: InputEvent):
-			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-				_open_hud_synergy_tip(tag, chip)
+		var chip: Label
+		chip = SynergyUI.create_chip(tag, 11, func() -> void:
+			_open_hud_synergy_tip(tag, chip)
 		)
 		_synergy_box.add_child(chip)
 
 func _open_hud_synergy_tip(tag: String, anchor: Control) -> void:
-	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
-	if info.is_empty():
-		return
-	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
-	var n: int = int(data.get("count", 0))
-	var lv: int = int(data.get("level", 0))
-	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
-	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
-	var first_th: int = maxi(1, int(raw_th[0]) - shift)
-	var rows: Array = [
-		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.YELLOW if lv > 0 else GameStyle.PAPER],
-		["共鸣状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, first_th - n), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
-	]
-	var tier_lines: Array = PlayerStatsDialog.SYNERGY_TIER_LINES.get(tag, [])
-	for idx in range(raw_th.size()):
-		var th_need: int = maxi(1, int(raw_th[idx]) - shift)
-		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else ""
-		var reached: bool = n >= th_need
-		rows.append([
-			"(%d/%d) 阶梯" % [th_need, max_th],
-			tier_txt,
-			GameStyle.GOOD if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
-		])
-	var notes: Array[String] = [
-		"同标签法器上阵达到 %d / %d / %d 件时依次激活阶梯加成。" % [
-			maxi(1, int(raw_th[0]) - shift),
-			maxi(1, int(raw_th[1]) - shift),
-			max_th
-		],
-		String(info.get("desc", "")),
-	]
-	DetailTip.show_over(self, anchor, {
-		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
-		"chip": "五行共鸣" if tag in WeaponData.ELEMENTS else "器类羁绊",
-		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
-		"rows": rows,
-		"body": "流派共鸣：持有越多同类法器，道法威能越强盛。",
-		"notes": notes,
-		"foot": "在波间灵石阁挑选同标签法器可继续提升阶位。",
-	})
+	SynergyUI.open_tip(self, anchor, tag)
 
 ## 顶栏右侧追加属性与暂停按钮（触屏入口）
 func _build_top_buttons() -> void:
@@ -432,19 +374,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(tex_rect)
 
-			var star_lbl = Label.new()
-			star_lbl.text = "★%d" % int(w.get("star", 1))
-			star_lbl.add_theme_font_override("font", GameStyle.body_font())
-			star_lbl.add_theme_font_size_override("font_size", 10)
-			star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
-			star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
-			star_lbl.add_theme_constant_override("outline_size", 3)
-			star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			slot.add_child(star_lbl)
+			GameStyle.star_label(slot, int(w.get("star", 1)), 10)
 
 		weapons_bar.add_child(slot)
 
@@ -589,30 +519,11 @@ func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
 
 # ---------------- 随行神通按钮（圆形半透明浮动，按下即放 + 冷却环反馈） ----------------
 
-const SKILL_BTN_SIZE := 76.0
-
-## 圆形冷却绘制遮罩：暗色半透明圆面 + 顺时针环形冷却进度弧
-class SkillCdOverlay extends Control:
-	var cd_ratio: float = 0.0
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	func _draw() -> void:
-		if cd_ratio <= 0.001:
-			return
-		var center := size * 0.5
-		var radius := minf(center.x, center.y)
-		# 半透明暗底圆
-		draw_circle(center, radius, Color(0.02, 0.04, 0.08, 0.70))
-		# 顺时针环形冷却弧：随剩余比例顺时针填满
-		var sweep := TAU * clampf(1.0 - cd_ratio, 0.0, 1.0)
-		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, Color(0.35, 0.75, 1.0, 0.95), 3.0, true)
+const SKILL_BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
 
 var _skill_box: Control = null
 var _skill_btn: Button = null
-var _skill_cd_ring: SkillCdOverlay = null
+var _skill_cd_ring: SkillButtonView.SkillCdOverlay = null
 var _skill_cd_label: Label = null
 var _skill_name_label: Label = null
 var _skill_was_ready: bool = false
@@ -632,16 +543,13 @@ func _build_skill_button() -> void:
 	_skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_skill_btn.focus_mode = Control.FOCUS_NONE
 	_style_circle_skill_btn(_skill_btn)
-	# 支持多点触控与鼠标事件直通
 	_skill_btn.gui_input.connect(_on_skill_btn_input)
 	_skill_box.add_child(_skill_btn)
 
-	# 圆形冷却环与暗色遮罩
-	_skill_cd_ring = SkillCdOverlay.new()
+	_skill_cd_ring = SkillButtonView.SkillCdOverlay.new()
 	_skill_cd_ring.visible = false
 	_skill_btn.add_child(_skill_cd_ring)
 
-	# 冷却秒数数字
 	_skill_cd_label = Label.new()
 	_skill_cd_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_cd_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -651,7 +559,6 @@ func _build_skill_button() -> void:
 	_skill_btn.add_child(_skill_cd_label)
 	GameStyle.label(_skill_cd_label, 22, GameStyle.PAPER, 2, GameStyle.INK, true)
 
-	# 底部微缩神通名（缩地/神行/疾风等，辅助符文识别）
 	_skill_name_label = Label.new()
 	_skill_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
@@ -667,87 +574,11 @@ func _build_skill_button() -> void:
 			_apply_skill_btn_pos()
 	)
 
-## 圆形半透明按钮样式配置：正圆 + 半透明墨蓝背景 + 亮蓝/道统流金外环
 func _style_circle_skill_btn(btn: Button) -> void:
-	var r := int(SKILL_BTN_SIZE * 0.5)
-	var is_enhanced := false
-	if not GameManager.active_skill_id.is_empty():
-		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-	var border_col: Color = Color(1.0, 0.82, 0.30, 0.85) if is_enhanced else Color(0.28, 0.62, 1.0, 0.78)
+	SkillButtonView.style_circle_button(btn)
 
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.05, 0.09, 0.18, 0.52)
-	normal.border_color = border_col
-	normal.border_width_left = 2
-	normal.border_width_top = 2
-	normal.border_width_right = 2
-	normal.border_width_bottom = 2
-	normal.corner_radius_top_left = r
-	normal.corner_radius_top_right = r
-	normal.corner_radius_bottom_right = r
-	normal.corner_radius_bottom_left = r
-
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.08, 0.14, 0.28, 0.65)
-	hover.border_color = border_col.lightened(0.2)
-	hover.border_width_left = 3
-	hover.border_width_top = 3
-	hover.border_width_right = 3
-	hover.border_width_bottom = 3
-	hover.corner_radius_top_left = r
-	hover.corner_radius_top_right = r
-	hover.corner_radius_bottom_right = r
-	hover.corner_radius_bottom_left = r
-
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.18, 0.49, 1.0, 0.72)
-	pressed.border_color = Color(1.0, 0.90, 0.40, 0.95)
-	pressed.border_width_left = 3
-	pressed.border_width_top = 3
-	pressed.border_width_right = 3
-	pressed.border_width_bottom = 3
-	pressed.corner_radius_top_left = r
-	pressed.corner_radius_top_right = r
-	pressed.corner_radius_bottom_right = r
-	pressed.corner_radius_bottom_left = r
-
-	btn.add_theme_stylebox_override("normal", normal)
-	btn.add_theme_stylebox_override("hover", hover)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	btn.add_theme_font_override("font", GameStyle.display_font())
-	btn.add_theme_font_size_override("font_size", 28)
-	btn.add_theme_color_override("font_color", GameStyle.PAPER)
-	btn.add_theme_color_override("font_hover_color", GameStyle.YELLOW)
-	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)
-	btn.add_theme_constant_override("outline_size", 4)
-	btn.add_theme_color_override("font_outline_color", GameStyle.INK)
-
-## 位置三档位（脱离右下角贴边死角，移入屏幕黄金拇指区）
 func _apply_skill_btn_pos() -> void:
-	if _skill_box == null:
-		return
-	var pos := StringName(str(SettingsManager.get_val(&"display", &"skill_btn_pos", &"right_bottom")))
-	match pos:
-		&"right_mid":
-			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-			_skill_box.offset_left = -SKILL_BTN_SIZE - 56.0
-			_skill_box.offset_right = -56.0
-			_skill_box.offset_top = 130.0
-			_skill_box.offset_bottom = 130.0 + SKILL_BTN_SIZE
-		&"left_bottom":
-			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-			_skill_box.offset_left = 68.0
-			_skill_box.offset_right = 68.0 + SKILL_BTN_SIZE
-			_skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
-			_skill_box.offset_bottom = -72.0
-		_:
-			# 默认右下黄金拇指区：内缩 68px、上抬 72px，握持手机时大拇指自然舒适点按
-			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-			_skill_box.offset_left = -SKILL_BTN_SIZE - 68.0
-			_skill_box.offset_right = -68.0
-			_skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
-			_skill_box.offset_bottom = -72.0
+	SkillButtonView.apply_btn_pos(_skill_box)
 
 var _last_skill_press_frame: int = -1
 

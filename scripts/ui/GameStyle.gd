@@ -26,6 +26,21 @@ const BAD_DK := Color("8f2020")
 const GREY := Color("8f9cbe")       # 暗部正文
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/绿/红都不撞）
 
+# 稀有度 / 品阶统一色值（凡品 / 良品 / 仙品 / 传说）
+const RARITY_COMMON := Color(0.96, 0.95, 0.92)
+const RARITY_RARE := Color(1.0, 0.83, 0.3)
+const RARITY_EPIC := Color(0.35, 0.75, 1.0)
+const RARITY_LEGEND := Color(0.85, 0.45, 1.0)
+
+# 五行标签统一色值
+const ELEMENT_COLORS := {
+	"metal": Color(0.85, 0.86, 0.92),
+	"wood": Color(0.35, 0.75, 0.45),
+	"water": Color(0.35, 0.65, 0.95),
+	"fire": Color(0.9, 0.45, 0.3),
+	"earth": Color(0.8, 0.65, 0.35),
+}
+
 const SLANT_PLATE := 3.0
 const SLANT_BLOCK := 5.0
 const SLANT_BUTTON := 6.0
@@ -311,17 +326,47 @@ static func element_badge(font_size: int) -> Control:
     lbl.add_theme_stylebox_override("normal", sb)
     label(lbl, font_size, INK_TEXT)
     holder.add_child(lbl)
-    # 锚点钉在 holder 右上角并留 1px 内缩；宽高取 Label 最小尺寸（含边距），不许被撑开
-    var ms := lbl.get_combined_minimum_size()
+    # 零尺寸矩形钉在右上角，生长方向朝左/向下：入树前 get_combined_minimum_size() 拿到的是
+    # 兜底字体的偏大度量（badge_probe 实测 32×22 vs 真值 20×12），预采尺寸会把标签撑大糊住图标。
+    # 让引擎在入树后按真实 min size 自己从角落撑开——永远贴右上角、永远只有文字大小。
     lbl.anchor_left = 1.0
     lbl.anchor_right = 1.0
     lbl.anchor_top = 0.0
     lbl.anchor_bottom = 0.0
+    lbl.offset_left = -1.0
     lbl.offset_right = -1.0
-    lbl.offset_left = -1.0 - ms.x
     lbl.offset_top = 1.0
-    lbl.offset_bottom = 1.0 + ms.y
+    lbl.offset_bottom = 1.0
+    lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+    lbl.grow_vertical = Control.GROW_DIRECTION_END
     return holder
+
+## 如果法器吃「元素伤害」加成，在 parent 槽位挂上元素角标
+static func maybe_add_element_badge(parent: Control, weapon_id: String, font_size: int = 8) -> Control:
+    if weapon_id.is_empty():
+        return null
+    if WeaponData.elemental_scaling_coef(weapon_id) > 0.0:
+        var badge := element_badge(font_size)
+        parent.add_child(badge)
+        return badge
+    return null
+
+## 法器星级 Label（统一字号、描边、右下角对齐）
+static func star_label(parent: Control, star: int, font_size: int = 11) -> Label:
+    var lbl := Label.new()
+    lbl.text = "★%d" % star
+    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lbl.add_theme_font_override("font", body_font())
+    lbl.add_theme_font_size_override("font_size", font_size)
+    lbl.add_theme_color_override("font_color", YELLOW)
+    lbl.add_theme_color_override("font_outline_color", INK)
+    lbl.add_theme_constant_override("outline_size", 3)
+    lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+    lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    parent.add_child(lbl)
+    return lbl
 
 static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
         outline_col: Color = INK, display: bool = false) -> Label:

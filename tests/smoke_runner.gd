@@ -175,9 +175,12 @@ func _run() -> void:
 		kinds[e.name.get_basename()] = true
 	print("[INFO] 13 波在场敌种: " + str(kinds.keys()))
 
-	# 8. 藏宝匣砸开掉落
-	var chest_list := get_tree().get_nodes_in_group("chests")
-	var chest: Node2D = chest_list[0] if not chest_list.is_empty() else null
+	# 8. 藏宝匣砸开掉落：选取满耐久未受损匣子（避免战斗中被流弹预先波及）
+	var chest: Node2D = null
+	for c in get_tree().get_nodes_in_group("chests"):
+		if c is SpiritChest and c.remaining_hits == c.max_hits:
+			chest = c
+			break
 	if chest == null:
 		chest = SpiritChest.new()
 		chest.global_position = Vector2(100.0, 100.0)

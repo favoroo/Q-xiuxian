@@ -94,81 +94,10 @@ func _ready() -> void:
 	_load_progress()
 
 func _load_progress() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(PROGRESS_PATH) == OK:
-		max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
-		
-		var cults = cfg.get_value("progress", "unlocked_cultivators", [])
-		if cults is Array and not cults.is_empty():
-			unlocked_cultivators = cults.duplicate()
-		else:
-			unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
-		
-		var itms = cfg.get_value("progress", "unlocked_items", [])
-		if itms is Array and not itms.is_empty():
-			unlocked_items = itms.duplicate()
-		else:
-			unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
-		
-		var achs = cfg.get_value("progress", "unlocked_achievements", [])
-		if achs is Array:
-			unlocked_achievements = achs.duplicate()
-		else:
-			unlocked_achievements = []
-		
-		career_stats["total_runs"] = int(cfg.get_value("stats", "total_runs", 0))
-		career_stats["total_wins"] = int(cfg.get_value("stats", "total_wins", 0))
-		career_stats["total_kills"] = int(cfg.get_value("stats", "total_kills", 0))
-		career_stats["best_wave"] = int(cfg.get_value("stats", "best_wave", 0))
-		career_stats["best_kills"] = int(cfg.get_value("stats", "best_kills", 0))
-		career_stats["total_stones"] = int(cfg.get_value("stats", "total_stones", 0))
-		career_stats["total_time"] = float(cfg.get_value("stats", "total_time", 0.0))
-		
-		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
-		if cbd is Dictionary:
-			cultivator_best_danger = cbd.duplicate()
-		else:
-			cultivator_best_danger = {}
-		
-		var hist = cfg.get_value("history", "recent_runs", [])
-		if hist is Array:
-			run_history = hist.duplicate()
-		else:
-			run_history = []
-	else:
-		# 首次启动：加载默认开放集合
-		unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
-		unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
-		unlocked_achievements = []
-		cultivator_best_danger = {}
-		run_history = []
-
-	# 确保初始集合必在（防止旧档或异常数据丢失基础内容）
-	for cid in AchievementData.DEFAULT_CULTIVATORS:
-		if not (cid in unlocked_cultivators):
-			unlocked_cultivators.append(cid)
-	for iid in AchievementData.DEFAULT_ITEMS:
-		if not (iid in unlocked_items):
-			unlocked_items.append(iid)
+	ProgressStore.load_into(self)
 
 func _save_progress() -> void:
-	var cfg := ConfigFile.new()
-	cfg.set_value("progress", "max_danger", max_danger_unlocked)
-	cfg.set_value("progress", "unlocked_cultivators", unlocked_cultivators)
-	cfg.set_value("progress", "unlocked_items", unlocked_items)
-	cfg.set_value("progress", "unlocked_achievements", unlocked_achievements)
-	
-	cfg.set_value("stats", "total_runs", int(career_stats.get("total_runs", 0)))
-	cfg.set_value("stats", "total_wins", int(career_stats.get("total_wins", 0)))
-	cfg.set_value("stats", "total_kills", int(career_stats.get("total_kills", 0)))
-	cfg.set_value("stats", "best_wave", int(career_stats.get("best_wave", 0)))
-	cfg.set_value("stats", "best_kills", int(career_stats.get("best_kills", 0)))
-	cfg.set_value("stats", "total_stones", int(career_stats.get("total_stones", 0)))
-	cfg.set_value("stats", "total_time", float(career_stats.get("total_time", 0.0)))
-	
-	cfg.set_value("records", "cultivator_best_danger", cultivator_best_danger)
-	cfg.set_value("history", "recent_runs", run_history)
-	cfg.save(PROGRESS_PATH)
+	ProgressStore.save_from(self)
 
 ## 检查修士是否已解锁
 func is_cultivator_unlocked(cid: String) -> bool:
@@ -551,91 +480,31 @@ func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 		"rng": rng,
 	})
 
-# ---------------- 波后悟道结算 ----------------
+# ---------------- 波后悟道结算（委托 AllocSession） ----------------
 
-## 有没有攒下的待加点（WaveSpawner 用它决定清场后先进悟道还是直接开商店）
 func has_pending_upgrades() -> bool:
 	return pending_upgrade_points > 0
 
-## 开一次回合结算会话：刷新额度按回合重置，并灌第一批候选。
-## 池子空了（所有悟道都叠满）就当没这次结算：点数作废并直接放行商店，别把玩家锁在一屏空白前。
 func open_alloc_session() -> void:
-	if pending_upgrade_points <= 0:
-		return
-	alloc_points_total = pending_upgrade_points
-	alloc_reroll_count = 0
-	alloc_reroll_free_left = ALLOC_FREE_REROLLS
-	alloc_reroll_cost = GameBalance.reroll_cost(wave_number, alloc_reroll_count, shop_price_mult)
-	roll_alloc_offers()
-	if alloc_offers.is_empty():
-		force_end_alloc("悟道已尽")
-		return
-	alloc_opened.emit()
+	AllocSession.open_alloc_session(self)
 
-## 悟道池抽空时的兜底：剩点作废、面板收回、流程照走商店（判据里有「不许白罚」这条）
 func force_end_alloc(reason: String) -> void:
-	if pending_upgrade_points > 0:
-		announcement_triggered.emit("✦ %s · 剩余 %d 点作废 ✦" % [reason, pending_upgrade_points])
-	pending_upgrade_points = 0
-	alloc_offers = []
-	pending_points_changed.emit(0)
-	alloc_finished.emit()
+	AllocSession.force_end_alloc(self, reason)
 
-## 重灌一批候选（5 个）
 func roll_alloc_offers() -> void:
-	alloc_offers = roll_upgrades(UPGRADE_OFFER_COUNT)
+	AllocSession.roll_alloc_offers(self)
 
-## 选下第 index 个候选：属性立刻落地、扣 1 点额度；还有剩点就换一批新候选接着加。
-## 点数清零时发 alloc_finished，由 WaveSpawner 接着开灵石阁（UI 不直接指挥流程）。
 func take_alloc_upgrade(index: int) -> bool:
-	if index < 0 or index >= alloc_offers.size():
-		return false
-	var uid: String = String(alloc_offers[index].get("id", ""))
-	if uid.is_empty():
-		return false
-	apply_upgrade(uid)
-	pending_upgrade_points = maxi(0, pending_upgrade_points - 1)
-	pending_points_changed.emit(pending_upgrade_points)
-	AudioManager.play_sfx("gem_pickup", 1.25)
-	if pending_upgrade_points > 0:
-		roll_alloc_offers()
-		if alloc_offers.is_empty():
-			# 池子在这一步被点空了：剩下的点不许把玩家扣在这一屏
-			force_end_alloc("悟道已尽")
-		return true
-	# 点数加完：收候选、放行商店
-	alloc_offers = []
-	alloc_finished.emit()
-	return true
+	return AllocSession.take_alloc_upgrade(self, index)
 
-## 悟道刷新：先吃本回合免费额度，用完才按商店重掷同一条价格线扣灵石
 func reroll_alloc() -> bool:
-	if pending_upgrade_points <= 0:
-		return false
-	if alloc_reroll_free_left > 0:
-		alloc_reroll_free_left -= 1
-	else:
-		if spirit_stones < alloc_reroll_cost:
-			announcement_triggered.emit("灵石不够刷新悟道了")
-			AudioManager.play_sfx("ui_error", 0.9)
-			return false
-		spirit_stones -= alloc_reroll_cost
-		alloc_reroll_count += 1
-		alloc_reroll_cost = GameBalance.reroll_cost(wave_number, alloc_reroll_count, shop_price_mult)
-	roll_alloc_offers()
-	stats_updated.emit(kills, game_time, spirit_stones)
-	AudioManager.play_sfx("shop_reroll", 1.0)
-	return true
+	return AllocSession.reroll_alloc(self)
 
-## 刷新按钮文案：免费额度还在就说免费，用完报价（与灵石阁重掷同一口径）
 func alloc_reroll_label() -> String:
-	if alloc_reroll_free_left > 0:
-		return "免费刷新悟道 (剩 %d 次)" % alloc_reroll_free_left
-	return "刷新悟道 (%d 灵石)" % alloc_reroll_cost
+	return AllocSession.alloc_reroll_label(self)
 
-## 悟道刷新这一档要不要亮着（灵石不够且没有免费额度时按钮置灰，但保持可见）
 func can_reroll_alloc() -> bool:
-	return pending_upgrade_points > 0 and (alloc_reroll_free_left > 0 or spirit_stones >= alloc_reroll_cost)
+	return AllocSession.can_reroll_alloc(self)
 
 func get_stat_breakdown() -> Dictionary:
 	var cur_hp: float = 120.0
@@ -886,620 +755,118 @@ func cultivator_damage_mult(w_id: String) -> float:
 		m *= 1.0 + float(mods.get("non_drone_damage", 0.0))
 	return m
 
+# ---------------- 武器系统（委托 WeaponInventory） ----------------
+
 func _drone_id(item) -> String:
-	if item is Dictionary:
-		return String(item.get("id", "lingdie"))
-	return "lingdie"
+	return WeaponInventory.drone_id(item)
 
 func _drone_star(item) -> int:
-	if item is Dictionary:
-		return int(item.get("star", 1))
-	return int(item)
+	return WeaponInventory.drone_star(item)
 
 func slots_used() -> int:
-	var used := drones.size()
-	if player != null and player.has_method("get_weapon_count"):
-		used += player.get_weapon_count()
-	return used
+	return WeaponInventory.slots_used(self)
 
-## 获得一件法器：上阵栏位有空则上阵，否则进背包；两处都满返回 false
 func add_weapon(w_id: String, star: int = 1) -> bool:
-	var def := WeaponData.get_def(w_id)
-	if def.is_empty():
-		return false
-	if slots_used() < max_weapon_slots():
-		if def.get("behavior", -1) == WeaponData.Behavior.DRONE:
-			drones.append({"id": w_id, "star": star})
-			if player != null and player.has_method("sync_drones"):
-				player.sync_drones()
-		else:
-			if player == null or not player.has_method("add_weapon_instance"):
-				return false
-			player.add_weapon_instance(w_id, star)
-	else:
-		if stash.size() >= WeaponData.MAX_STASH_SLOTS:
-			return false
-		stash.append({
-			"id": w_id,
-			"name": def.get("name", "?"),
-			"star": star,
-			"icon": def.get("icon", ""),
-			"tag": def.get("tag", ""),
-		})
-	notify_weapons_updated(get_weapons_summary())
-	return true
+	return WeaponInventory.add_weapon(self, w_id, star)
 
-## (id, star) 的持有总数：上阵悬浮法器 + 灵蝶 + 背包
 func count_copies(w_id: String, star: int) -> int:
-	var n := 0
-	if player != null and player.has_method("get_equipped_weapons_data"):
-		for w in player.get_equipped_weapons_data():
-			if w.get("id", "") == w_id and int(w.get("star", 1)) == star:
-				n += 1
-	for s in drones:
-		if _drone_id(s) == w_id and _drone_star(s) == star:
-			n += 1
-	for e in stash:
-		if e.get("id", "") == w_id and int(e.get("star", 1)) == star:
-			n += 1
-	return n
+	return WeaponInventory.count_copies(self, w_id, star)
 
-## 按 merge_weapon 的消耗顺序统计「可被消耗的副本数」（排除 keep 指定的保留件）
-## 与 count_copies 的区别：这里要求是除保留件以外的 2 件，且分池统计以便合成前置校验
 func _count_mergeable_copies(w_id: String, star: int, keep: Dictionary) -> int:
-	var n := 0
-	var keep_pool: String = keep.get("pool", "")
-	var keep_index := int(keep.get("index", -1))
-	for j in range(stash.size()):
-		if keep_pool == "stash" and keep_index == j:
-			continue
-		if stash[j].get("id", "") == w_id and int(stash[j].get("star", 1)) == star:
-			n += 1
-	for j in range(drones.size()):
-		if keep_pool == "drone" and keep_index == j:
-			continue
-		if _drone_id(drones[j]) == w_id and _drone_star(drones[j]) == star:
-			n += 1
-	if player != null and player.has_method("get_equipped_weapons_data"):
-		var equipped: Array = player.get_equipped_weapons_data()
-		for j in range(equipped.size()):
-			if keep_pool == "equipped" and keep_index == j:
-				continue
-			if equipped[j].get("id", "") == w_id and int(equipped[j].get("star", 1)) == star:
-				n += 1
-	return n
+	return WeaponInventory.count_mergeable_copies(self, w_id, star, keep)
 
-## 手动合成：keep 指定保留哪一件（pool: "equipped"/"drone"/"stash"，index 为对应池下标），
-## 该件升 1 星，其余 2 件同名同星被消耗（背包 → 灵蝶 → 上阵 的顺序回收）
 func merge_weapon(w_id: String, star: int, keep: Dictionary) -> bool:
-	if star >= WeaponData.MAX_STAR:
-		return false
-	if count_copies(w_id, star) < 3:
-		return false
-	var need := 2
+	return WeaponInventory.merge_weapon(self, w_id, star, keep)
 
-	# 前置校验：先按「背包 → 灵蝶 → 上阵」的消耗顺序干跑一遍，副本不足就直接拒绝，
-	# 绝不留「状态改了一半才 return false」的中间态（keep.index 指错也在这里被拦住）。
-	if _count_mergeable_copies(w_id, star, keep) < need:
-		push_warning("merge_weapon: 缺少 2 件可消耗的同名同星副本（keep=%s）" % str(keep))
-		return false
-
-	# 1. 消耗背包副本（保留 keeper）
-	var new_stash: Array = []
-	for j in range(stash.size()):
-		var is_keeper: bool = keep.get("pool", "") == "stash" and int(keep.get("index", -1)) == j
-		if not is_keeper and stash[j].get("id", "") == w_id and int(stash[j].get("star", 1)) == star and need > 0:
-			need -= 1
-			continue
-		if is_keeper:
-			var k_def := WeaponData.get_def(w_id)
-			new_stash.append({
-				"id": w_id,
-				"name": k_def.get("name", "?"),
-				"star": star + 1,
-				"icon": k_def.get("icon", ""),
-				"tag": k_def.get("tag", ""),
-			})
-		else:
-			new_stash.append(stash[j])
-	stash = new_stash
-
-	# 2. 消耗上阵灵宝（重建数组并升级 keeper）
-	var is_drone_wp: bool = WeaponData.get_def(w_id).get("behavior", -1) == WeaponData.Behavior.DRONE or w_id == "lingdie"
-	if is_drone_wp:
-		var new_drones: Array = []
-		for j in range(drones.size()):
-			var is_keeper_d: bool = keep.get("pool", "") == "drone" and int(keep.get("index", -1)) == j
-			if not is_keeper_d and _drone_id(drones[j]) == w_id and _drone_star(drones[j]) == star and need > 0:
-				need -= 1
-				continue
-			if is_keeper_d:
-				new_drones.append({"id": w_id, "star": star + 1})
-			else:
-				new_drones.append(drones[j])
-		drones = new_drones
-		if player != null and player.has_method("sync_drones"):
-			player.sync_drones()
-
-	# 3. 消耗上阵悬浮法器（按节点引用移除，keeper 原地升级）
-	var keeper_node: Node = null
-	if player != null and player.has_method("get_equipped_weapons_data"):
-		var equipped: Array = player.get_equipped_weapons_data()
-		if keep.get("pool", "") == "equipped" and int(keep.get("index", -1)) >= 0 and int(keep.get("index", -1)) < equipped.size():
-			keeper_node = equipped[int(keep.get("index", -1))].get("node")
-		for j in range(equipped.size() - 1, -1, -1):
-			if need <= 0:
-				break
-			var w: Dictionary = equipped[j]
-			if w.get("node") == keeper_node:
-				continue
-			if w.get("id", "") == w_id and int(w.get("star", 1)) == star:
-				player.remove_weapon_instance(w.get("node"))
-				need -= 1
-
-	if need > 0:
-		push_warning("merge_weapon: 副本数量不足，状态已部分变更")
-		notify_weapons_updated(get_weapons_summary())
-		return false
-
-	# 4. 升级保留件
-	if keeper_node != null and is_instance_valid(keeper_node) and player.has_method("upgrade_weapon_instance"):
-		player.upgrade_weapon_instance(keeper_node, star + 1)
-
-	announcement_triggered.emit("✦ 三器合一 · %s ✦" % WeaponData.full_name(w_id, star + 1))
-	AudioManager.play_sfx("merge_success", 1.0)
-	notify_weapons_updated(get_weapons_summary())
-	return true
-
-## HUD/商店通用的上阵列表（悬浮法器在前，灵宝在后）
 func get_weapons_summary() -> Array:
-	var list: Array = []
-	if player != null and player.has_method("get_equipped_weapons_data"):
-		list.append_array(player.get_equipped_weapons_data())
-	for i in range(drones.size()):
-		var d_id := _drone_id(drones[i])
-		var d_star := _drone_star(drones[i])
-		var def := WeaponData.get_def(d_id)
-		list.append({
-			"id": d_id, "name": def.get("name", "灵宝"),
-			"star": d_star,
-			"icon": def.get("icon", ""), "is_drone": true,
-			"tag": def.get("tag", ""), "node": null, "drone_index": i,
-		})
-	return list
+	return WeaponInventory.get_weapons_summary(self)
 
 func notify_weapons_updated(weapons: Array) -> void:
 	recalc_synergies()
 	weapons_updated.emit(weapons)
 
-# ---------------- 流派羁绊 ----------------
-
-## 当前激活的羁绊：{tag: {"count": int, "level": int}}，level 0 = 未激活
-var active_synergies: Dictionary = {}
-
-var _applied_hp_bonus: float = 0.0  ## 御灵羁绊已应用到玩家的气血上限增量
-
-## 按上阵法器（含灵蝶）重算羁绊加成；换装/合成/出售后由 notify_weapons_updated 统一触发
-func recalc_synergies() -> void:
-	var counts := _tag_counts()
-	active_synergies.clear()
-	bonus_pierce = 0
-	synergy_damage_mult = 1.0
-	synergy_range_mult = 1.0
-	synergy_haste_mult = 1.0
-	synergy_crit_rate = 0.0
-	synergy_crit_mult = 0.0
-	synergy_hp_regen = 0.0
-	synergy_lifesteal = 0.0
-	synergy_move_speed_mult = 0.0
-	synergy_burn_mult = 1.0
-	synergy_armor = 0.0
-	synergy_knockback_mult = 1.0
-	var hp_bonus: float = 0.0
-	for tag in counts.keys():
-		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
-		if info.is_empty():
-			continue
-		var n := int(counts[tag])
-		# 御灵羁绊的门槛下移是角色特性，档位判定本身交给 GameBalance（可单测）
-		var shift := spirit_threshold_adj if tag == "spirit" else 0
-		var syn_level := GameBalance.synergy_level(n, info.get("thresholds", []), shift)
-		active_synergies[tag] = {"count": n, "level": syn_level}
-		if syn_level == 0:
-			continue
-		var v = info["values"][syn_level - 1]
-		match tag:
-			"sword":
-				synergy_range_mult += float(v)
-			"talisman":
-				bonus_pierce += int(v)
-			"thunder":
-				synergy_haste_mult *= float(v)
-			"spirit":
-				hp_bonus += float(v)
-			"wide":
-				synergy_damage_mult += float(v)
-			"metal":
-				synergy_crit_rate += float(v)
-				var cm_list: Array = [0.20, 0.40, 0.75]
-				synergy_crit_mult += float(cm_list[syn_level - 1])
-			"wood":
-				synergy_hp_regen += float(v)
-				var ls_list: Array = [0.02, 0.04, 0.07]
-				synergy_lifesteal += float(ls_list[syn_level - 1])
-			"water":
-				synergy_haste_mult *= float(v)
-				var spd_list: Array = [0.08, 0.16, 0.25]
-				synergy_move_speed_mult += float(spd_list[syn_level - 1])
-			"fire":
-				synergy_damage_mult += float(v)
-				var burn_list: Array = [0.30, 0.60, 1.00]
-				synergy_burn_mult += float(burn_list[syn_level - 1])
-			"earth":
-				synergy_armor += float(v)
-				var kb_list: Array = [0.25, 0.50, 0.80]
-				synergy_knockback_mult += float(kb_list[syn_level - 1])
-	synergy_max_hp_bonus = hp_bonus
-	_apply_synergy_hp(hp_bonus)
-
-## 御灵羁绊直接增减气血上限（差值法，避免叠加误差）
-func _apply_synergy_hp(new_bonus: float) -> void:
-	var delta := new_bonus - _applied_hp_bonus
-	_applied_hp_bonus = new_bonus
-	if player != null and is_instance_valid(player) and delta != 0.0:
-		player.max_health += delta
-		player.current_health = clampf(player.current_health, 0.0, player.max_health)
-		player_hp_changed.emit(player.current_health, player.max_health)
-
-## 按上阵 summary 下标出售（悬浮法器与灵蝶统一处理）
 func sell_weapon(index: int) -> bool:
-	var list := get_weapons_summary()
-	if index < 0 or index >= list.size():
-		return false
-	var item: Dictionary = list[index]
-	var price: int = 0
-	if item.get("is_drone", false):
-		var di := int(item.get("drone_index", -1))
-		if di < 0 or di >= drones.size():
-			return false
-		var d = drones[di]
-		price = WeaponData.sell_price(_drone_id(d), _drone_star(d))
-		drones.remove_at(di)
-		if player != null and player.has_method("sync_drones"):
-			player.sync_drones()
-	else:
-		var node: Node = item.get("node")
-		if node == null or not is_instance_valid(node):
-			return false
-		price = WeaponData.sell_price(item.get("id", ""), item.get("star", 1))
-		player.remove_weapon_instance(node)
-	spirit_stones += price
-	stats_updated.emit(kills, game_time, spirit_stones)
-	notify_weapons_updated(get_weapons_summary())
-	AudioManager.play_sfx("sell", 1.0)
-	return true
+	return WeaponInventory.sell_weapon(self, index)
 
-## 背包 → 上阵（上阵栏位有空位时）
 func equip_from_stash(index: int) -> bool:
-	if index < 0 or index >= stash.size():
-		return false
-	if slots_used() >= max_weapon_slots():
-		announcement_triggered.emit("上阵已满 %d 件，先卸下一件法器" % max_weapon_slots())
-		AudioManager.play_sfx("ui_error", 0.9)
-		return false
-	var entry: Dictionary = stash[index]
-	var e_id: String = entry.get("id", "")
-	var e_def := WeaponData.get_def(e_id)
-	stash.remove_at(index)
-	if e_def.get("behavior", -1) == WeaponData.Behavior.DRONE:
-		drones.append({"id": e_id, "star": int(entry.get("star", 1))})
-		if player != null and player.has_method("sync_drones"):
-			player.sync_drones()
-	else:
-		player.add_weapon_instance(e_id, int(entry.get("star", 1)))
-	notify_weapons_updated(get_weapons_summary())
-	AudioManager.play_sfx("equip", 1.0)
-	return true
+	return WeaponInventory.equip_from_stash(self, index)
 
-## 上阵 → 背包（summary 下标；背包有空位时）
 func unequip_to_stash(index: int) -> bool:
-	var list := get_weapons_summary()
-	if index < 0 or index >= list.size():
-		return false
-	if stash.size() >= WeaponData.MAX_STASH_SLOTS:
-		announcement_triggered.emit("背包已满，先出售一些法器")
-		AudioManager.play_sfx("ui_error", 0.9)
-		return false
-	var item: Dictionary = list[index]
-	if item.get("is_drone", false):
-		var di := int(item.get("drone_index", -1))
-		if di < 0 or di >= drones.size():
-			return false
-		drones.remove_at(di)
-		if player != null and player.has_method("sync_drones"):
-			player.sync_drones()
-	else:
-		var node: Node = item.get("node")
-		if node == null or not is_instance_valid(node):
-			return false
-		player.remove_weapon_instance(node)
-	var u_id: String = item.get("id", "")
-	var u_def := WeaponData.get_def(u_id)
-	stash.append({
-		"id": u_id,
-		"name": item.get("name", u_def.get("name", "?")),
-		"star": int(item.get("star", 1)),
-		"icon": item.get("icon", u_def.get("icon", "")),
-		"tag": item.get("tag", u_def.get("tag", "")),
-	})
-	notify_weapons_updated(get_weapons_summary())
-	AudioManager.play_sfx("unequip", 1.0)
-	return true
+	return WeaponInventory.unequip_to_stash(self, index)
 
-## 按背包下标出售
 func sell_stash(index: int) -> bool:
-	if index < 0 or index >= stash.size():
-		return false
-	var entry: Dictionary = stash[index]
-	var price := WeaponData.sell_price(entry.get("id", ""), int(entry.get("star", 1)))
-	stash.remove_at(index)
-	spirit_stones += price
-	stats_updated.emit(kills, game_time, spirit_stones)
-	notify_weapons_updated(get_weapons_summary())
-	AudioManager.play_sfx("sell", 1.0)
-	return true
+	return WeaponInventory.sell_stash(self, index)
 
-# ---------------- 波间商店 ----------------
+# ---------------- 流派羁绊（委托 SynergySystem） ----------------
 
-## 生成货架：new_wave=true 时重置重掷计数；锁定且未售出的商品原样保留
+var active_synergies: Dictionary = {}
+var _applied_hp_bonus: float = 0.0
+
+func recalc_synergies() -> void:
+	SynergySystem.recalc_synergies(self)
+
+func _apply_synergy_hp(new_bonus: float) -> void:
+	SynergySystem.apply_synergy_hp(self, new_bonus)
+
+# ---------------- 波间商店（委托 ShopSystem） ----------------
+
 func roll_shop(new_wave: bool = false) -> void:
-	if new_wave:
-		reroll_count = 0
-		reroll_free_left = free_rerolls
-	var wave := maxi(wave_number, 1)
-	var old := shop_offers
-	var new_offers: Array = []
-	for i in range(SHOP_BASE_SLOTS + shop_slots_bonus):
-		if i < old.size() and old[i].get("locked", false) and not old[i].get("sold", false):
-			new_offers.append(old[i])
-		else:
-			new_offers.append(_gen_offer(wave))
-	shop_offers = new_offers
-	reroll_cost = GameBalance.reroll_cost(wave, reroll_count, shop_price_mult)
-	if new_wave:
-		_apply_main_tag_pity(wave)
+	ShopSystem.roll_shop(self, new_wave)
 
-## 单个货架位：按概率分流 回气丹 / 法宝 / 法器（法器按标签亲和权重抽，公式见 GameBalance）
 func _gen_offer(wave: int) -> Dictionary:
-	var roll := rng.randf()
-	if roll < GameBalance.POTION_CHANCE:
-		return {
-			"kind": "potion", "id": WeaponData.POTION_ID,
-			"price": GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, wave, shop_price_mult),
-			"sold": false, "locked": false,
-		}
-	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE:
-		var item_id := ItemData.pick_id(luck, wave, items, rng, unlocked_items)
-		if item_id != "":
-			var idef := ItemData.get_def(item_id)
-			return {
-				"kind": "item", "id": item_id,
-				"price": GameBalance.item_price(int(idef.get("price", 20)), wave, shop_price_mult * item_price_mult),
-				"sold": false, "locked": false,
-			}
-		# 法宝池抽空（传说全购且余量未解锁）→ 本格落回法器
-	var w_id := _weighted_weapon_pick()
-	var base := int(WeaponData.get_def(w_id).get("price", 20))
-	return {
-		"kind": "weapon", "id": w_id,
-		"price": GameBalance.weapon_price(base, wave, shop_price_mult),
-		"sold": false, "locked": false,
-	}
+	return ShopSystem.gen_offer(self, wave)
 
-## 标签亲和+流派偏好软加权抽法器：持有 ≥2 件同 tag 法器时亲和倍率 ×2.5，
-## 多 tag 取其中最大者（不连乘，避免双 tag 武器被指数级放大）；角色限定流派非空时，
-## 命中 tag 法器权重 ×BONUS，其余保留 LEAK 漏出；福缘每点 +1% 权重
 func _weighted_weapon_pick() -> String:
-	var pool: Array = WeaponData.SHOP_POOL
-	var counts := _tag_counts()
-	var luck_mult := GameBalance.shop_luck_mult(luck)
-	var weights: Array = []
-	for w_id in pool:
-		var w := luck_mult
-		var best_aff := 1.0
-		for t in WeaponData.tags_of(w_id):
-			best_aff = maxf(best_aff, GameBalance.tag_affinity_mult(int(counts.get(t, 0))))
-		w *= best_aff
-		w *= GameBalance.tag_filter_mult(WeaponData.tags_of(w_id), shop_tag_filter)
-		weights.append(w)
-	var idx := GameBalance.weighted_pick_index(weights, rng.randf())
-	return String(pool[idx])
+	return ShopSystem.weighted_weapon_pick(self)
 
-## 上阵法器（含灵蝶）的 tag 计数——构筑方向判定的依据
 func _tag_counts() -> Dictionary:
-	var counts: Dictionary = {}
-	if player != null and player.has_method("get_equipped_weapons_data"):
-		for w in player.get_equipped_weapons_data():
-			for t in WeaponData.tags_of(w.get("id", "")):
-				counts[t] = int(counts.get(t, 0)) + 1
-	for s in drones:
-		for t in WeaponData.tags_of(_drone_id(s)):
-			counts[t] = int(counts.get(t, 0)) + 1
-	return counts
+	return SynergySystem.tag_counts(self)
 
 func get_tag_count(tag: String) -> int:
-	return int(_tag_counts().get(tag, 0))
+	return int(SynergySystem.tag_counts(self).get(tag, 0))
 
-## 主流派：当前持有数最多且 ≥2 件的 tag
 func _main_tag() -> String:
-	var counts := _tag_counts()
-	var best_tag := ""
-	var best_n := 1
-	for t in counts.keys():
-		if int(counts[t]) > best_n:
-			best_n = int(counts[t])
-			best_tag = t
-	return best_tag
+	return SynergySystem.main_tag(self)
 
-## 保底：连续 2 波货架没出现主流派法器时，第 3 波强制塞入一件
 func _apply_main_tag_pity(wave: int) -> void:
-	var main := _main_tag()
-	if main == "":
-		_no_main_tag_waves = 0
-		return
-	var has_main := false
-	for offer in shop_offers:
-		if offer.get("kind") == "weapon" and main in WeaponData.tags_of(offer.get("id", "")):
-			has_main = true
-			break
-	if has_main:
-		_no_main_tag_waves = 0
-		return
-	_no_main_tag_waves += 1
-	if _no_main_tag_waves < GameBalance.MAIN_TAG_PITY_WAVES:
-		return
-	# 找一个未锁定的法器位替换
-	var candidates: Array = []
-	for w_id in WeaponData.SHOP_POOL:
-		if main in WeaponData.tags_of(w_id):
-			candidates.append(w_id)
-	if candidates.is_empty():
-		return
-	for i in range(shop_offers.size()):
-		var offer: Dictionary = shop_offers[i]
-		if offer.get("locked", false) or offer.get("sold", false):
-			continue
-		if offer.get("kind") != "weapon":
-			continue
-		var w_id: String = String(rng_pick(candidates))
-		var base := int(WeaponData.get_def(w_id).get("price", 20))
-		shop_offers[i] = {
-			"kind": "weapon", "id": w_id,
-			"price": GameBalance.weapon_price(base, wave, shop_price_mult),
-			"sold": false, "locked": false,
-		}
-		break
-	_no_main_tag_waves = 0
+	SynergySystem.apply_main_tag_pity(self, wave)
 
 func toggle_lock(index: int) -> void:
-	if index < 0 or index >= shop_offers.size():
-		return
-	var offer: Dictionary = shop_offers[index]
-	if offer.get("sold", false):
-		return
-	offer["locked"] = not offer.get("locked", false)
-	AudioManager.play_sfx("shop_lock", 1.0)
+	ShopSystem.toggle_lock(self, index)
 
 func buy_offer(index: int) -> bool:
-	if index < 0 or index >= shop_offers.size():
-		return false
-	var offer: Dictionary = shop_offers[index]
-	if offer.get("sold", false) or spirit_stones < int(offer.get("price", 0)):
-		return false
-	var ok := false
-	match String(offer.get("kind", "weapon")):
-		"potion":
-			if player != null and player.has_method("heal"):
-				player.heal(player.max_health * 0.5)
-				ok = true
-		"item":
-			ok = add_item(offer.get("id", ""))
-			if not ok:
-				announcement_triggered.emit("此法宝每局限购一件")
-				AudioManager.play_sfx("ui_error", 0.9)
-				return false
-		_:
-			ok = add_weapon(offer.get("id", ""))
-			if not ok:
-				announcement_triggered.emit("上阵与背包都满了，先出售一些吧")
-				AudioManager.play_sfx("ui_error", 0.9)
-				return false
-	if not ok:
-		return false
-	spirit_stones -= int(offer.get("price", 0))
-	offer["sold"] = true
-	stats_updated.emit(kills, game_time, spirit_stones)
-	AudioManager.play_sfx("shop_buy", 1.0)
-	return true
+	return ShopSystem.buy_offer(self, index)
 
 func reroll_shop() -> bool:
-	# 先消耗本波免费重掷次数（通玄令），用完后才付灵石
-	if reroll_free_left > 0:
-		reroll_free_left -= 1
-	else:
-		if spirit_stones < reroll_cost:
-			return false
-		spirit_stones -= reroll_cost
-		reroll_count += 1
-	roll_shop(false)
-	stats_updated.emit(kills, game_time, spirit_stones)
-	AudioManager.play_sfx("shop_reroll", 1.0)
-	return true
+	return ShopSystem.reroll_shop(self)
 
 func confirm_shop() -> void:
-	get_tree().paused = false
-	shop_closed.emit()
+	ShopSystem.confirm_shop(self)
 
-# ---------------- 流程与打击感系统 ----------------
+# ---------------- 流程与打击感系统（委托 GameFeel 与 ProgressStore） ----------------
 
 var _hitstop_token: int = 0
 
-## 创伤度叠加震屏（白名单入口，见 FeedbackTier 上方注释）
 func add_trauma(amount: float) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
-		return
-	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("add_trauma"):
-		main_camera.add_trauma(amount)
+	GameFeel.add_trauma(self, amount)
 
-## 镜头缩放冲击
 func zoom_punch(scale_amount: float = 0.05, duration: float = 0.18) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
-		return
-	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("zoom_punch"):
-		main_camera.zoom_punch(scale_amount, duration)
+	GameFeel.zoom_punch(self, scale_amount, duration)
 
 func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
-		return
-	if main_camera != null and is_instance_valid(main_camera) and main_camera.has_method("shake"):
-		main_camera.shake(intensity, duration)
+	GameFeel.shake_camera(self, intensity, duration)
 
-## 真实时间顿帧（Hit-Stop / Freeze Frame），不受 Engine.time_scale 影响
 func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"hit_stop", true)):
-		return
-	_hitstop_token += 1
-	var token := _hitstop_token
-	Engine.time_scale = target_scale
-	get_tree().create_timer(duration, true, false, true).timeout.connect(func():
-		if _hitstop_token == token:
-			Engine.time_scale = 1.0
-	)
+	GameFeel.hit_stop(self, duration, target_scale)
 
-## 兼容旧调用
 func trigger_hitstop(duration: float = 0.045) -> void:
 	hit_stop(duration)
 
-## game-feel 重要性分级反馈聚合接口（包含相机创伤、顿帧与镜头冲击）
 func feedback(tier: int) -> void:
-	match tier:
-		FeedbackTier.SMALL:
-			add_trauma(0.08)
-		FeedbackTier.MEDIUM:
-			add_trauma(0.18)
-			hit_stop(0.035, 0.08)
-		FeedbackTier.LARGE:
-			add_trauma(0.38)
-			hit_stop(0.065, 0.04)
-			zoom_punch(0.035, 0.15)
-		FeedbackTier.HEAVY:
-			add_trauma(0.70)
-			hit_stop(0.09, 0.02)
-			zoom_punch(0.06, 0.22)
+	GameFeel.feedback(self, tier)
 
-## 触发全屏受击红晕脉冲
 func pulse_damage_vignette(color: Color = Color(0.85, 0.12, 0.12, 0.65), duration: float = 0.22) -> void:
-	screen_damage_pulsed.emit(color, duration)
+	GameFeel.pulse_damage_vignette(self, color, duration)
 
 func trigger_game_over(victory: bool = false) -> void:
 	if is_game_over:
@@ -1512,68 +879,9 @@ func trigger_game_over(victory: bool = false) -> void:
 	_record_run_and_check_achievements(victory)
 	game_over_triggered.emit(victory)
 
-## 结算时汇总生涯统计、记录战报、判定新成就解锁并统一落盘
 func _record_run_and_check_achievements(victory: bool) -> void:
-	var eff_wave := maxi(wave_number, VICTORY_WAVE if victory else 1)
-	var eff_stones := maxi(spirit_stones, peak_stones)
-	var eff_dodge := maxf(get_effective_dodge(), peak_dodge)
-	var eff_harvest := maxf(harvest, peak_harvest)
+	ProgressStore.record_run_and_check_achievements(self, victory)
 
-	career_stats["total_runs"] = int(career_stats.get("total_runs", 0)) + 1
-	if victory:
-		career_stats["total_wins"] = int(career_stats.get("total_wins", 0)) + 1
-	career_stats["total_kills"] = int(career_stats.get("total_kills", 0)) + kills
-	career_stats["best_wave"] = maxi(int(career_stats.get("best_wave", 0)), eff_wave)
-	career_stats["best_kills"] = maxi(int(career_stats.get("best_kills", 0)), kills)
-	career_stats["total_stones"] = int(career_stats.get("total_stones", 0)) + spirit_stones
-	career_stats["total_time"] = float(career_stats.get("total_time", 0.0)) + game_time
-
-	if victory and not cultivator_id.is_empty():
-		var prev_d := int(cultivator_best_danger.get(cultivator_id, -1))
-		if danger_level > prev_d:
-			cultivator_best_danger[cultivator_id] = danger_level
-
-	var cid_rec := cultivator_id if not cultivator_id.is_empty() else "jianchi"
-	var entry := {
-		"cultivator_id": cid_rec,
-		"danger": danger_level,
-		"wave": eff_wave,
-		"kills": kills,
-		"level": level,
-		"victory": victory,
-		"time": game_time,
-	}
-	run_history.push_front(entry)
-	while run_history.size() > 10:
-		run_history.pop_back()
-
-	var run_ctx := {
-		"victory": victory,
-		"danger": danger_level,
-		"wave": eff_wave,
-		"level": level,
-		"kills": kills,
-		"max_stones": eff_stones,
-		"max_dodge": eff_dodge,
-		"max_harvest": eff_harvest,
-	}
-	var newly := AchievementData.evaluate_new_unlocks(run_ctx, career_stats, unlocked_achievements)
-	last_run_new_achievements = []
-	for aid in newly:
-		unlocked_achievements.append(aid)
-		last_run_new_achievements.append(aid)
-		var adef := AchievementData.get_def(aid)
-		var rtype := String(adef.get("reward_type", ""))
-		var rid := String(adef.get("reward_id", ""))
-		if rtype == "cultivator" and not rid.is_empty() and not (rid in unlocked_cultivators):
-			unlocked_cultivators.append(rid)
-		elif rtype == "item" and not rid.is_empty() and not (rid in unlocked_items):
-			unlocked_items.append(rid)
-	_save_progress()
-	if not last_run_new_achievements.is_empty():
-		achievements_unlocked.emit(last_run_new_achievements)
-
-## 结算界面「继续无尽」：关闭结算并转入下一波商店
 func continue_endless() -> void:
 	endless_mode = true
 	is_game_over = false

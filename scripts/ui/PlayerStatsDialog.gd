@@ -1,21 +1,14 @@
 class_name PlayerStatsDialog
-extends Control
+extends BaseModalDialog
 
 ## 人物属性详情面板：仿《土豆兄弟》构筑总览界面
 ## 左侧：主要/次要属性 Tab 切换（覆盖全部 25 项属性，点按看详解与来源拆解）
 ## 右侧：上阵法器槽 + 流派羁绊阶梯加成卡（直观显示 2/6 持有进度与各级加成激活状态）+ 随身法宝/悟道历程双标签
 
-signal closed
-
-var _closing: bool = false
 var _unpause_on_close: bool = true
 
 # UI 节点引用
-var _dim_rect: ColorRect
-var _panel: PanelContainer
-var _title_label: Label
 var _meta_label: Label
-var _close_btn: Button
 
 # 左侧属性 Tab 与容器
 var _stat_tab_primary_btn: Button
@@ -77,50 +70,29 @@ var _history_list: VBoxContainer
 var _history_count_lbl: Label
 var _current_bottom_tab: int = 0 # 0 = 随身法宝, 1 = 悟道历程
 
-## 各流派每一档的阶梯文案（与 WeaponData.SYNERGIES 数值严格同源）
-const SYNERGY_TIER_LINES: Dictionary = {
-	"sword": ["攻击范围 +15%", "攻击范围 +30%", "攻击范围 +50%"],
-	"talisman": ["弹丸穿透 +1", "弹丸穿透 +2", "弹丸穿透 +3"],
-	"thunder": ["攻击间隔 -8%", "攻击间隔 -15%", "攻击间隔 -25%"],
-	"spirit": ["气血上限 +15", "气血上限 +30", "气血上限 +50"],
-	"wide": ["法器伤害 +10%", "法器伤害 +20%", "法器伤害 +30%"],
-	"metal": ["暴击率+6% · 暴伤+20%", "暴击率+12% · 暴伤+40%", "暴击率+20% · 暴伤+75%"],
-	"wood": ["回复+1.0/秒 · 吸血+2%", "回复+2.0/秒 · 吸血+4%", "回复+3.5/秒 · 吸血+7%"],
-	"water": ["攻击间隔-6% · 移速+8%", "攻击间隔-12% · 移速+16%", "攻击间隔-20% · 移速+25%"],
-	"fire": ["法伤+8% · 灼烧+30%", "法伤+16% · 灼烧+60%", "法伤+26% · 灼烧+100%"],
-	"earth": ["护甲+3 · 击退+25%", "护甲+6 · 击退+50%", "护甲+10 · 击退+80%"],
-}
+## 各流派每一档的阶梯文案（与 WeaponData.SYNERGIES 数值严格同源，集中收拢至 SynergyUI）
+const SYNERGY_TIER_LINES: Dictionary = SynergyUI.TIER_LINES
 
-func _ready() -> void:
-	visible = false
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_ui()
+func _get_title_text() -> String:
+	return "修 为 境 界  ·  人 物 属 性"
 
-func _build_ui() -> void:
-	# 1. 半透明暗色背景（阻挡并支持点击关闭）
-	_dim_rect = ColorRect.new()
-	_dim_rect.color = Color(0.02, 0.04, 0.09, 0.82)
-	_dim_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
-	_dim_rect.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			close()
-	)
-	add_child(_dim_rect)
+func _get_close_btn_text() -> String:
+	return "返 回 战 斗"
 
-	# 2. 居中大容器
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
+func _get_panel_size() -> Vector2:
+	return Vector2(900, _fit_panel_height())
 
-	# 3. 仙侠大面板
-	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(900, _fit_panel_height())
-	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
+func _get_panel_margins() -> Vector4:
+	return Vector4(16, 8, 16, 8)
+
+func _get_vbox_separation() -> int:
+	return 6
+
+func _get_close_btn_min_size() -> Vector2:
+	return Vector2(96, 30)
+
+func _build_body(root_vbox: VBoxContainer) -> void:
+	# 微调面板样式，保持原样视觉
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
 	panel_style.skew = Vector2(deg_to_rad(2.5), 0.0)
@@ -133,70 +105,28 @@ func _build_ui() -> void:
 	panel_style.shadow_size = 0
 	panel_style.shadow_offset = Vector2(8, 8)
 	_panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(_panel)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	_panel.add_child(margin)
-
-	var root_vbox := VBoxContainer.new()
-	root_vbox.add_theme_constant_override("separation", 6)
-	margin.add_child(root_vbox)
-
-	# 4. 顶部标题栏
-	var top_bar := HBoxContainer.new()
-	top_bar.add_theme_constant_override("separation", 10)
-
-	var title_box := PanelContainer.new()
-	title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(3, 4)))
-	var title_margin := MarginContainer.new()
-	title_margin.add_theme_constant_override("margin_left", 12)
-	title_margin.add_theme_constant_override("margin_right", 12)
-	title_margin.add_theme_constant_override("margin_top", 3)
-	title_margin.add_theme_constant_override("margin_bottom", 3)
-	_title_label = Label.new()
-	_title_label.text = "修 为 境 界  ·  人 物 属 性"
-	GameStyle.label(_title_label, 18, GameStyle.PAPER, 0, GameStyle.INK, true)
-	title_margin.add_child(_title_label)
-	title_box.add_child(title_margin)
-	top_bar.add_child(title_box)
 
 	_meta_label = Label.new()
 	GameStyle.label(_meta_label, 13, GameStyle.YELLOW)
 	_meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_meta_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	top_bar.add_child(_meta_label)
+	_tab_bar.add_child(_meta_label)
 
 	var hint_lbl := Label.new()
 	hint_lbl.text = "点任意条目查看加成拆解"
 	GameStyle.label(hint_lbl, 11, GameStyle.GREY)
 	hint_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	top_bar.add_child(hint_lbl)
+	_tab_bar.add_child(hint_lbl)
 
-	_close_btn = Button.new()
-	_close_btn.text = "返 回 战 斗"
-	_close_btn.custom_minimum_size = Vector2(96, 30)
-	_close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_close_btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER, 5.0)
-	_close_btn.pressed.connect(close)
-	top_bar.add_child(_close_btn)
-
-	root_vbox.add_child(top_bar)
-
-	# 5. 主体内容：左右分栏
+	# 主体内容：左右分栏
 	var body_hbox := HBoxContainer.new()
 	body_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body_hbox.add_theme_constant_override("separation", 12)
 	root_vbox.add_child(body_hbox)
 
-	# 左侧栏：主要/次要属性面板（仿土豆兄弟）
 	var left_panel := _build_left_stats_panel()
 	body_hbox.add_child(left_panel)
 
-	# 右侧栏：法器 + 流派羁绊阶梯 + 法宝/悟道
 	var right_panel := _build_right_equipment_and_history_panel()
 	body_hbox.add_child(right_panel)
 
@@ -677,16 +607,6 @@ func _create_line_style(color: Color) -> StyleBoxLine:
 	s.thickness = 1
 	return s
 
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		if DetailTip.close_all(self):
-			get_viewport().set_input_as_handled()
-			return
-		close()
-		get_viewport().set_input_as_handled()
-
 func open(unpause_on_close: bool = true) -> void:
 	if visible or GameManager.is_game_over:
 		return
@@ -866,50 +786,9 @@ func _refresh_cultivator() -> void:
 		_cult_cons_lbl.text = GameStyle.wrap_cjk(cons_txt, font, 11, w)
 		_cult_cons_lbl.visible = not cons.is_empty()
 
-## 道统详解：正面加成、负面代偿、随行神通契合、开局自带与商店/加点限制
+## 道统详解：正面加成、负面代偿、随行神通契合、开局自带与商店/加点限制（委托 StatsTipFactory）
 func _open_cultivator_tip(anchor: Control) -> void:
-	var def := CultivatorData.get_def(GameManager.cultivator_id)
-	if def.is_empty():
-		return
-	var rows: Array = []
-	var pros: Array = def.get("pros", [])
-	for i in range(pros.size()):
-		rows.append(["加成 %d" % (i + 1), String(pros[i]), GameStyle.GOOD])
-	var cons: Array = def.get("cons", [])
-	for i in range(cons.size()):
-		rows.append(["代偿 %d" % (i + 1), String(cons[i]), GameStyle.BAD])
-	var skill_id := CultivatorData.get_synergy_skill_id(GameManager.cultivator_id)
-	if not skill_id.is_empty():
-		var sdef := SkillData.get_def(skill_id)
-		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
-		rows.append(["随行神通", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.YELLOW])
-	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
-	if not start_equip.is_empty():
-		rows.append(["开局自带", start_equip, GameStyle.PAPER])
-
-	var notes: Array[String] = []
-	var allowed: Array = def.get("allowed_tags", [])
-	if not allowed.is_empty():
-		var tag_names: Array[String] = []
-		for t in allowed:
-			tag_names.append(String(WeaponData.SYNERGIES.get(String(t), {}).get("name", t)))
-		notes.append("道统亲和：灵石阁大幅偏向「%s」系法器，仍有少量他派漏出。" % "、".join(tag_names))
-	var locked: Array = def.get("locked_upgrades", [])
-	if not locked.is_empty():
-		var titles: Array[String] = []
-		for uid in locked:
-			titles.append(String(UpgradeData.get_upgrade_def(String(uid)).get("title", uid)))
-		notes.append("加点锁死：「%s」与本道统无缘，悟道候选中不会出现。" % "、".join(titles))
-
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": "%s · 道统特性" % String(def.get("name", "")),
-		"chip": "道统",
-		"chip_color": GameStyle.BLUE,
-		"rows": rows,
-		"body": "「%s」" % String(def.get("epithet", "")),
-		"notes": notes,
-		"foot": "加成与代偿开局即生效、全程不变；具体数值已计入左侧属性行与各条详解。",
-	})
+	var tip := StatsTipFactory.open_cultivator_tip(self, anchor)
 	_highlight_while_open(anchor, tip)
 
 func _refresh_weapons() -> void:
@@ -949,22 +828,8 @@ func _refresh_weapons() -> void:
 			slot.add_child(tex_rect)
 
 			# 吃「元素伤害」属性加成的法器挂橙红角标（判定与详情弹窗加成文案同源 stat_scalings）
-			if WeaponData.elemental_scaling_coef(String(w.get("id", ""))) > 0.0:
-				slot.add_child(GameStyle.element_badge(8))
-
-			var star_lbl := Label.new()
-			star_lbl.text = "★%d" % int(w.get("star", 1))
-			star_lbl.add_theme_font_override("font", GameStyle.body_font())
-			star_lbl.add_theme_font_size_override("font_size", 11)
-			star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
-			star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
-			star_lbl.add_theme_constant_override("outline_size", 3)
-			star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			slot.add_child(star_lbl)
+			GameStyle.maybe_add_element_badge(slot, String(w.get("id", "")), 8)
+			GameStyle.star_label(slot, int(w.get("star", 1)), 11)
 
 			GameStyle.tap(slot, func() -> void: _open_weapon_tip(w, false, slot))
 		else:
@@ -1003,23 +868,9 @@ func _refresh_weapons() -> void:
 			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.YELLOW, 1, 0.0))
 
 			# 吃「元素伤害」属性加成的法器挂橙红角标（仓库件与上阵件同一口径）
-			if not def.is_empty() and WeaponData.elemental_scaling_coef(String(item.get("id", ""))) > 0.0:
-				s_slot.add_child(GameStyle.element_badge(8))
-
-			var s_star := int(item.get("star", 1))
-			var s_star_lbl := Label.new()
-			s_star_lbl.text = "★%d" % s_star
-			s_star_lbl.add_theme_font_override("font", GameStyle.body_font())
-			s_star_lbl.add_theme_font_size_override("font_size", 10)
-			s_star_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
-			s_star_lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
-			s_star_lbl.add_theme_constant_override("outline_size", 3)
-			s_star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			s_star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-			s_star_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			s_star_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-			s_star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			s_slot.add_child(s_star_lbl)
+			if not def.is_empty():
+				GameStyle.maybe_add_element_badge(s_slot, String(item.get("id", "")), 8)
+			GameStyle.star_label(s_slot, int(item.get("star", 1)), 10)
 
 			if not def.is_empty():
 				s_slot.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1133,47 +984,19 @@ func _open_synergy_tip(tag: String, anchor: Control) -> void:
 	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 	if info.is_empty():
 		return
-	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
-	var n: int = int(data.get("count", 0))
-	var lv: int = int(data.get("level", 0))
-	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
-	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
-	var first_th: int = maxi(1, int(raw_th[0]) - shift)
-
-	var rows: Array = [
-		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.YELLOW if lv > 0 else GameStyle.PAPER],
-		["共鸣状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, first_th - n), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
-	]
-	var tier_lines: Array = SYNERGY_TIER_LINES.get(tag, [])
-	for idx in range(raw_th.size()):
-		var th_need: int = maxi(1, int(raw_th[idx]) - shift)
-		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else ""
-		var reached: bool = n >= th_need
-		rows.append([
-			"(%d/%d) 阶梯" % [th_need, max_th],
-			tier_txt,
-			GameStyle.GOOD if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
-		])
-
 	var match_weapons: Array[String] = []
 	for wid in WeaponData.DEFS.keys():
 		if tag in WeaponData.tags_of(wid):
 			match_weapons.append(String(WeaponData.get_def(wid).get("name", wid)))
-
 	var notes: Array[String] = [
 		"上阵同系法器（含同名多把）达到门槛件数即自动激活对应阶梯。",
 		"本流派法器：" + "、".join(match_weapons) + "。",
 	]
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
-		"chip": "五行共鸣" if tag in WeaponData.ELEMENTS else "器类羁绊",
-		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
-		"rows": rows,
-		"body": "流派总加成：" + String(info.get("desc", "")),
-		"notes": notes,
-		"foot": "纳戒仓库中的备用法器不计入上阵数量。",
-	})
+	var tip := SynergyUI.open_tip(self, anchor, tag,
+		"流派总加成：" + String(info.get("desc", "")),
+		"纳戒仓库中的备用法器不计入上阵数量。",
+		notes
+	)
 	_highlight_while_open(anchor, tip)
 
 func _refresh_items_and_history() -> void:
@@ -1275,39 +1098,7 @@ func _create_item_badge(item_id: String, count: int) -> Control:
 	return badge
 
 func _open_item_tip(item_id: String, count: int, anchor: Control) -> void:
-	var def := ItemData.get_def(item_id)
-	if def.is_empty():
-		return
-	var tier_num: int = int(def.get("tier", 1))
-	var tier_col: Color = ItemData.tier_color(tier_num)
-	var rows: Array = [
-		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["当前持有", "%d 件" % count, GameStyle.YELLOW],
-	]
-	var apply: Dictionary = def.get("apply", {})
-	for key in apply.keys():
-		var k := String(key)
-		var v := float(apply[key])
-		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
-
-	var desc_lines: Array = String(def.get("desc", "")).split("\n")
-	var notes: Array[String] = [
-		"本命法宝：购入即永久生效，不占用上阵法器槽位。",
-	]
-	for line in desc_lines:
-		var s := String(line).strip_edges()
-		if not s.is_empty():
-			notes.append(s)
-
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": String(def.get("name", item_id)),
-		"chip": "%s法宝" % ItemData.tier_label(tier_num),
-		"chip_color": tier_col,
-		"rows": rows,
-		"body": "法宝奇珍：属性加成与悟道同源叠加。",
-		"notes": notes,
-		"foot": "在波间灵石阁可继续购置更多奇珍。",
-	})
+	var tip := StatsTipFactory.open_item_tip(self, anchor, item_id, count)
 	_highlight_while_open(anchor, tip)
 
 func _create_history_row(item: Dictionary, idx: int) -> Control:
@@ -1404,200 +1195,9 @@ func _open_stat_tip(id: String, anchor: Control) -> void:
 	})
 	_highlight_while_open(anchor, tip)
 
-## 来源拆解：覆盖全部 25 项主要与次要属性
+## 来源拆解：覆盖全部 25 项主要与次要属性（下放到 StatInfoData）
 func _stat_tip_rows(id: String) -> Array:
-	var s := GameManager.get_stat_breakdown()
-	var rows: Array = []
-	match id:
-		"hp":
-			var mx: float = float(s.get("max_hp", 0.0))
-			var cur: float = float(s.get("current_hp", 0.0))
-			rows = [
-				["当前气血", "%d / %d" % [int(cur), int(mx)]],
-				["气血上限", "%.0f" % mx],
-				["已损", "%d 点" % int(mx - cur), GameStyle.BAD if cur < mx else GameStyle.GREY],
-				["御灵羁绊", "+%.0f" % GameManager.synergy_max_hp_bonus, _c(GameManager.synergy_max_hp_bonus)],
-				["道统", _cultivator_name()],
-			]
-		"regen":
-			var rate: float = float(s.get("hp_regen", 0.0))
-			var need: float = float(s.get("max_hp", 0.0)) - float(s.get("current_hp", 0.0))
-			rows = [
-				["每秒回复", "%.1f / 秒" % rate],
-				["悟道·法宝·道统", "%.1f" % GameManager.hp_regen, _c(GameManager.hp_regen)],
-				["青木羁绊", "+%.1f" % GameManager.synergy_hp_regen, _c(GameManager.synergy_hp_regen)],
-				["回满已损需要", "%.1f 秒" % (need / rate) if rate > 0.0 and need > 0.0 else "—"],
-			]
-		"armor":
-			var arm: float = float(s.get("armor", 0.0))
-			var nxt: float = GameBalance.armor_reduction(arm + 1.0) * 100.0
-			rows = [
-				["护甲合计", "%.0f 点" % arm],
-				["悟道·法宝·道统", "%+.0f" % GameManager.armor, _c(GameManager.armor)],
-				["厚土羁绊", "%+.0f" % GameManager.synergy_armor, _c(GameManager.synergy_armor)],
-				["当前减伤", "%.1f%%" % float(s.get("dmg_reduction_pct", 0.0)), _c(arm)],
-				["再加 1 点", "+%.1f%%" % (nxt - float(s.get("dmg_reduction_pct", 0.0))), GameStyle.GOOD],
-			]
-		"dodge":
-			var dg: float = float(s.get("dodge_pct", 0.0))
-			var cap: float = (GameManager.DODGE_CAP + GameManager.dodge_cap_bonus) * 100.0
-			rows = [
-				["闪避率", "%.0f%%" % dg, _c(dg)],
-				["悟道·法宝·道统", "%.0f%%" % (GameManager.dodge * 100.0), _c(GameManager.dodge)],
-				["硬上限", "%.0f%%" % cap, GameStyle.GREY],
-				["距上限", "%.0f%%" % maxf(0.0, cap - dg)],
-			]
-		"lifesteal":
-			rows = [
-				["触发概率", "%.0f%%" % float(s.get("lifesteal_pct", 0.0)), _c(float(s.get("lifesteal_pct", 0.0)))],
-				["悟道·法宝·道统", "%.0f%%" % (GameManager.lifesteal * 100.0), _c(GameManager.lifesteal)],
-				["青木羁绊", "+%.0f%%" % (GameManager.synergy_lifesteal * 100.0), _c(GameManager.synergy_lifesteal)],
-				["每秒至多", "%d 次" % GameManager.LIFESTEAL_MAX_PER_SEC],
-				["每次生效", "回复 1 点气血"],
-			]
-		"damage":
-			rows = [
-				["总乘区", "%d%%" % int(float(s.get("damage_mult", 1.0)) * 100.0)],
-				["换算增伤", "%+.0f%%" % float(s.get("damage_bonus_pct", 0.0)), _c(float(s.get("damage_bonus_pct", 0.0)))],
-				["悟道·法宝·道统", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
-				["流派羁绊", _mul(GameManager.synergy_damage_mult), _c(GameManager.synergy_damage_mult - 1.0)],
-				["暴击另算", "%.0f%% 概率 ×%.2f" % [float(s.get("crit_rate_pct", 0.0)), float(s.get("crit_dmg_pct", 150.0)) / 100.0]],
-			]
-		"melee_dmg":
-			var mv: float = float(s.get("melee_damage", 0.0))
-			rows = [
-				["近战伤害加成", "%+.0f" % mv, _c(mv)],
-				["受益法器", "青云剑 / 赤焰斩马刀 / 青木藤鞭 / 芭蕉扇"],
-				["星级放大", "每升 1 星转化效率 +25%"],
-			]
-		"ranged_dmg":
-			var rv: float = float(s.get("ranged_damage", 0.0))
-			rows = [
-				["远程伤害加成", "%+.0f" % rv, _c(rv)],
-				["受益法器", "庚金飞剑 / 柳叶飞刀 / 万木灵符 / 玄冰飞针 / 火焰符"],
-				["星级放大", "每升 1 星转化效率 +25%"],
-			]
-		"elemental_dmg":
-			var ev: float = float(s.get("elemental_damage", 0.0))
-			rows = [
-				["元素伤害加成", "%+.0f" % ev, _c(ev)],
-				["离火灼烧倍率", _mul(GameManager.synergy_burn_mult), _c(GameManager.synergy_burn_mult - 1.0)],
-				["受益法器", "火焰符 / 赤焰斩马刀 / 焚天宝灯 / 五雷法牌 / 番天印等"],
-			]
-		"engineering_dmg":
-			var gv: float = float(s.get("engineering_damage", 0.0))
-			rows = [
-				["御灵伤害加成", "%+.0f" % gv, _c(gv)],
-				["当前护体灵宝", "%d 尊" % GameManager.drones.size()],
-				["受益灵宝", "灵蝶 / 寒泉玉莲 / 混元古钟"],
-			]
-		"haste":
-			rows = [
-				["间隔缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
-				["实际攻击间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
-				["悟道·法宝·道统", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
-				["雷法·玄水羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
-				["间隔下限", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
-			]
-		"speed":
-			var eff: float = GameManager.move_speed_mult + GameManager.synergy_move_speed_mult
-			var spd: float = float(s.get("move_speed", 0.0))
-			rows = [
-				["实际移速", "%.0f" % spd],
-				["道统基础", "%.0f" % (spd / eff if eff > 0.01 else spd)],
-				["悟道·法宝·道统", "%+.0f%%" % ((GameManager.move_speed_mult - 1.0) * 100.0), _c(GameManager.move_speed_mult - 1.0)],
-				["玄水羁绊", "%+.0f%%" % (GameManager.synergy_move_speed_mult * 100.0), _c(GameManager.synergy_move_speed_mult)],
-			]
-		"pickup":
-			var pkm: float = GameManager.pickup_range_mult
-			var rad: float = float(s.get("pickup_radius", 0.0))
-			rows = [
-				["拾取半径", "%.0f 像素" % rad],
-				["倍率", _mul(pkm), _c(pkm - 1.0)],
-				["基础半径", "%.0f 像素" % (rad / pkm if pkm > 0.01 else rad)],
-			]
-		"range":
-			rows = [
-				["攻击范围", "%+.0f%%" % float(s.get("attack_range_pct", 0.0)), _c(float(s.get("attack_range_pct", 0.0)))],
-				["悟道·法宝·道统", _mul(GameManager.attack_range_mult), _c(GameManager.attack_range_mult - 1.0)],
-				["剑系羁绊", _mul(GameManager.synergy_range_mult), _c(GameManager.synergy_range_mult - 1.0)],
-			]
-		"crit":
-			var cmul: float = GameManager.crit_mult + GameManager.synergy_crit_mult
-			rows = [
-				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.YELLOW],
-				["悟道·法宝·道统", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],
-				["锐金羁绊", "+%.0f%%" % (GameManager.synergy_crit_rate * 100.0), _c(GameManager.synergy_crit_rate)],
-				["暴击倍率", "%.2f×" % cmul, _c(cmul - 1.5)],
-				["软上限", "%.0f%%" % (GameManager.CRIT_RATE_CAP * 100.0), GameStyle.GREY],
-			]
-		"luck":
-			var rw: Dictionary = GameBalance.rarity_weights(GameManager.luck)
-			rows = [
-				["福缘", "%.0f" % float(s.get("luck", 0.0)), _c(GameManager.luck)],
-				["仙品权重", "%.0f / %.0f" % [float(rw.get("epic", 0.0)), GameBalance.RARITY_TOTAL]],
-				["良品权重", "%.0f / %.0f" % [float(rw.get("rare", 0.0)), GameBalance.RARITY_TOTAL]],
-				["凡品权重", "%.0f / %.0f" % [float(rw.get("common", 0.0)), GameBalance.RARITY_TOTAL]],
-			]
-		"harvest":
-			var hv: float = float(s.get("harvest", 0.0))
-			var gain: int = GameBalance.harvest_gain(hv)
-			rows = [
-				["灵韵", "%.0f" % hv, _c(hv)],
-				["本波末发放", "+%d 灵石 / +%d 修为" % [gain, gain], GameStyle.YELLOW],
-				["每波复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
-				["增长截止", "第 %d 波（当前第 %d 波）" % [GameManager.HARVEST_GROWTH_WAVE_CAP, maxi(GameManager.wave_number, 1)]],
-			]
-		"xp_gain":
-			var xp_p: float = float(s.get("xp_gain_pct", 0.0))
-			rows = [
-				["修为获取倍率", _mul(GameManager.xp_gain_mult), _c(xp_p)],
-				["折算加成", "%+.0f%%" % xp_p, _c(xp_p)],
-				["当前升级门槛", "%d / %d" % [GameManager.experience, GameManager.experience_to_next]],
-			]
-		"shop_price":
-			var sp_p: float = float(s.get("shop_price_pct", 0.0))
-			rows = [
-				["灵石阁物价系数", _mul(GameManager.shop_price_mult), _c(-sp_p)],
-				["折算幅度", "%+.0f%%" % sp_p, _c(-sp_p)],
-			]
-		"bonus_pierce":
-			var bp: int = int(s.get("bonus_pierce", 0))
-			rows = [
-				["额外穿透人数", "+%d" % bp, _c(float(bp))],
-				["来源", "符箓羁绊 (2/4/6 件分别 +1/+2/+3)"],
-			]
-		"elite_dmg":
-			var ep: float = float(s.get("elite_damage_pct", 0.0))
-			rows = [
-				["对精英/Boss增伤", "%+.0f%%" % ep, _c(ep)],
-				["独立乘区", _mul(1.0 + GameManager.elite_damage), _c(ep)],
-			]
-		"knockback":
-			var kp: float = float(s.get("knockback_pct", 0.0))
-			rows = [
-				["击退总倍率", _mul(GameManager.knockback_mult * GameManager.synergy_knockback_mult), _c(kp)],
-				["悟道·法宝", _mul(GameManager.knockback_mult), _c(GameManager.knockback_mult - 1.0)],
-				["厚土羁绊", _mul(GameManager.synergy_knockback_mult), _c(GameManager.synergy_knockback_mult - 1.0)],
-			]
-		"free_rerolls":
-			var fr: int = int(s.get("free_rerolls", 0))
-			rows = [
-				["每波免费重掷", "%d 次" % fr, _c(float(fr))],
-				["本波剩余免费", "%d 次" % GameManager.reroll_free_left],
-			]
-		"kills":
-			var mins: float = maxf(GameManager.game_time, 1.0) / 60.0
-			rows = [
-				["本局诛妖", "%d 妖" % GameManager.kills],
-				["平均", "%.1f 妖/分钟" % (float(GameManager.kills) / mins)],
-			]
-		"stones":
-			rows = [
-				["随身灵石", "%d 枚" % GameManager.spirit_stones, GameStyle.YELLOW],
-				["下一波灵韵", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
-			]
-	return rows
+	return StatInfoData.stat_tip_rows(id)
 
 func _stat_tip_foot(id: String) -> String:
 	var src: Array[String] = StatInfoData.sources(id)
@@ -1606,181 +1206,22 @@ func _stat_tip_foot(id: String) -> String:
 	return "可提升途径：" + "、".join(src)
 
 func _open_empty_slot_tip(index: int, anchor: Control) -> void:
-	var max_slots := GameManager.max_weapon_slots()
-	var locked := index >= max_slots
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": "封印法器位" if locked else "空法器位",
-		"rows": [
-			["上阵位", "第 %d 槽 / 上限 %d 槽" % [index + 1, max_slots]],
-			["当前上阵", "%d 件" % GameManager.get_weapons_summary().size()],
-			["纳戒仓库", "%d 件" % GameManager.stash.size()],
-		],
-		"body": "本道统限制了上阵法器槽上限，此槽位不可装备。" if locked else "这一格还空着。法器按获得顺序自动补上阵法器位，不需要手动摆。",
-		"notes": [
-			"上阵 %d 格全满之后，新买的法器进纳戒仓库，只用于合成与出售。" % max_slots,
-			"上阵法器的数量（如 2/6、4/6、6/6）决定流派羁绊的激活档位。",
-		],
-		"foot": "波间在灵石阁买法器即可补上空槽。",
-	})
+	var tip := StatsTipFactory.open_empty_slot_tip(self, anchor, index)
 	_highlight_while_open(anchor, tip)
 
-## 法器详情：同时展示所属流派当前的 (n/6) 进度
 func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
-	var id: String = String(w.get("id", ""))
-	var def := WeaponData.get_def(id)
-	if def.is_empty():
-		return
-	var star := clampi(int(w.get("star", 1)), 1, WeaponData.MAX_STAR)
-	var base_dmg: float = float(def.get("damage", 0.0))
-	var star_mul: float = pow(WeaponData.STAR_DAMAGE_MULT, float(star - 1))
-	var bonus: float = GameManager.get_weapon_stat_bonus(id, star)
-	var gm_dmg: float = GameManager.weapon_damage_mult
-	var syn_dmg: float = GameManager.synergy_damage_mult
-	var cult_dmg: float = GameManager.cultivator_damage_mult(id)
-	var elem_dmg: float = GameManager.element_damage_mult(id)
-	var per_hit: float = (base_dmg * star_mul + bonus) * gm_dmg * syn_dmg * cult_dmg * elem_dmg
-	var cd: float = WeaponData.cooldown_for(id, star) * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
-	# 攻击范围：与其他行同口径显示最终生效值（词条 + 剑系羁绊乘区），有加成时附基础值
-	var base_range: float = float(def.get("range", 0.0))
-	var eff_range: float = base_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
-	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
-	var range_txt: String = "%.0f" % eff_range
-	if range_buffed:
-		range_txt = "%.0f（基础 %.0f）" % [eff_range, base_range]
-
-	var syn_parts: Array[String] = []
-	for t in def.get("tags", []):
-		var sinfo: Dictionary = WeaponData.SYNERGIES.get(t, {})
-		if not sinfo.is_empty():
-			var cnt: int = GameManager.get_tag_count(String(t))
-			syn_parts.append("%s(%d/6)" % [sinfo.get("name", t), cnt])
-
-	var rows: Array = [
-		["单发伤害", "%.1f" % per_hit, GameStyle.YELLOW],
-		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
-		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
-		["属性转化", "+%.1f" % bonus, _c(bonus)],
-		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
-		["道统×五行", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
-		["攻击范围", range_txt, GameStyle.YELLOW if range_buffed else GameStyle.PAPER],
-		["攻击间隔", "%.2f 秒" % cd],
-	]
-	var feats := _weapon_feats(def)
-	if not feats.is_empty():
-		rows.append(["特性", feats])
-
-	var notes: Array[String] = [
-		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
-			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
-		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
-		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
-			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
-	]
-
-	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
-		GameManager.count_copies(id, star), WeaponData.sell_price(id, star)]
-	if from_stash:
-		foot += "\n在纳戒仓库里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
-
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
-		"chip": " · ".join(syn_parts) if not syn_parts.is_empty() else String(def.get("tag", "")),
-		"chip_color": GameStyle.YELLOW_DK if from_stash else GameStyle.BLUE_DK,
-		"rows": rows,
-		"body": String(def.get("desc", "")),
-		"notes": notes,
-		"foot": foot,
-	})
+	var tip := StatsTipFactory.open_weapon_tip(self, anchor, w, from_stash)
 	_highlight_while_open(anchor, tip)
 
-func _weapon_feats(def: Dictionary) -> String:
-	var out: Array[String] = []
-	if int(def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
-		out.append("锁敌追击")
-	var pierce: int = int(def.get("pierce", 0))
-	if pierce > 0:
-		out.append("穿透 %d" % (pierce + GameManager.bonus_pierce))
-	var count: int = int(def.get("projectile_count", 1))
-	if count > 1:
-		out.append("一次 %d 段" % count)
-	var bounce: int = int(def.get("bounce_count", 0))
-	if bounce > 0:
-		out.append("弹射 %d 次" % bounce)
-	var arc: float = float(def.get("arc_scale", 1.0))
-	if arc > 1.001:
-		out.append("横扫 ×%s" % _num(arc))
-	if bool(def.get("proc_poison", false)):
-		out.append("附毒")
-	if bool(def.get("proc_burn", false)):
-		out.append("灼烧")
-	if float(def.get("proc_chill", 0.0)) > 0.0:
-		out.append("冰缓")
-	return "、".join(out)
-
-func _open_history_tip(item: Dictionary, idx: int, anchor: Control) -> void:
+func _open_history_tip(item: Dictionary, _idx: int, anchor: Control) -> void:
 	if _current_bottom_tab != 1:
 		_switch_bottom_tab(1)
-	var id: String = String(item.get("id", ""))
-	var def := UpgradeData.get_upgrade_def(id)
-	var apply: Dictionary = def.get("apply", {})
-	var taken: int = int(item.get("count", 1))
-	var cap: int = int(def.get("max_stacks", 0))
-	var t: float = float(item.get("time", 0.0))
-
-	var rows: Array = []
-	for key in apply.keys():
-		var k := String(key)
-		var v := float(apply[key])
-		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
-	rows.append(["已领悟", "第 %d 次 / 上限 %d 次" % [taken, cap],
-		GameStyle.YELLOW if cap > 0 and taken >= cap else GameStyle.PAPER])
-	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
-	if cap > 0 and taken >= cap:
-		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
-
-	var notes: Array[String] = [
-		"升级只攒点数，每波妖潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
-		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
-	]
-	var stat_id := _stat_of_apply(apply)
-	var foot := "" if stat_id.is_empty() else "这一条落在左侧「%s」那一行，点它可以看来源拆解。" % StatInfoData.title(stat_id)
-
-	var tip := DetailTip.show_over(self, anchor, {
-		"title": String(item.get("title", "悟道")),
-		"chip": String(item.get("rarity_label", "凡品")),
-		"chip_color": item.get("border_color", GameStyle.BLUE_DK),
-		"rows": rows,
-		"body": String(item.get("desc", "")),
-		"notes": notes,
-		"foot": foot,
-	})
+	var tip := StatsTipFactory.open_history_tip(self, anchor, item)
 	_highlight_while_open(anchor, tip)
 
-func _stat_of_apply(apply: Dictionary) -> String:
-	for key in apply.keys():
-		var sid: String = StatInfoData.stat_of_field(String(key))
-		if not sid.is_empty():
-			return sid
-	return ""
-
 func _cultivator_name() -> String:
-	var def := CultivatorData.get_def(GameManager.cultivator_id)
-	if def.is_empty():
-		return "未选道统"
-	return String(def.get("name", "未选道统"))
+	return StatInfoData._cultivator_name()
 
-## 语义色：正收益绿、负收益红、没动过白/灰
 func _c(v: float) -> Color:
-	if v > 0.0001:
-		return GameStyle.GOOD
-	if v < -0.0001:
-		return GameStyle.BAD
-	return GameStyle.PAPER
+	return StatsTipFactory._c(v)
 
-func _mul(v: float) -> String:
-	return "×%.2f" % v
-
-func _num(v: float) -> String:
-	if absf(v - roundf(v)) < 0.0001:
-		return "%d" % int(roundf(v))
-	return "%.2f" % v

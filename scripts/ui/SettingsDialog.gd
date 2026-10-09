@@ -1,15 +1,8 @@
 class_name SettingsDialog
-extends Control
+extends BaseModalDialog
 
 ## 游戏设置弹窗：包含灵音调律（音频）、剑意视界（战斗画面）与演化推衍（系统）三大分类
-## 严格遵循 GameStyle 大色块斜切设计语言与硬错位投影，支持键盘 ESC 与遮罩点击退出。
-
-signal closed
-
-var _closing: bool = false
-var _current_tab: int = 0
-var _tab_buttons: Array[Button] = []
-var _pages: Array[Control] = []
+## 继承 BaseModalDialog，严格遵循 GameStyle 大色块斜切设计语言与硬错位投影。
 
 # 音频控件映射: bus_name -> { "slider": HSlider, "val_lbl": Label, "mute_btn": Button }
 var _audio_controls: Dictionary = {}
@@ -21,97 +14,26 @@ var _cycle_controls: Dictionary = {}
 var _content_box: MarginContainer
 var _reset_tip_lbl: Label
 
-func _ready() -> void:
-	visible = false
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_ui()
-	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
-	SettingsManager.setting_changed.connect(_on_setting_changed)
+func _get_title_text() -> String:
+	return "天 地 律 动  ·  游 戏 设 置"
 
-func _build_ui() -> void:
-	# 1. 半透明暗色背景遮罩（拦截点击，支持点击关闭）
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.82)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			close()
-	)
-	add_child(dim)
+func _get_panel_size() -> Vector2:
+	return Vector2(740, 440)
 
-	# 2. 居中容器
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
+func _get_panel_margins() -> Vector4:
+	return Vector4(26, 18, 26, 18)
 
-	# 3. 斜切大面板（960x540 视口下 740x450）
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(740, 440)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
-	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 6
-	panel_style.border_color = GameStyle.BLUE
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
+func _get_vbox_separation() -> int:
+	return 14
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 26)
-	margin.add_theme_constant_override("margin_right", 26)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_bottom", 18)
-	panel.add_child(margin)
+func _get_top_bar_separation() -> int:
+	return 14
 
-	var root_vbox := VBoxContainer.new()
-	root_vbox.add_theme_constant_override("separation", 14)
-	margin.add_child(root_vbox)
+func _build_body(root_vbox: VBoxContainer) -> void:
+	add_tab_button(0, "✦ 灵音调律")
+	add_tab_button(1, "✦ 剑意视界")
+	add_tab_button(2, "✦ 演化推衍")
 
-	# 4. 顶部标题栏 + Tab 切换栏 + 关闭按钮
-	var top_bar := HBoxContainer.new()
-	top_bar.add_theme_constant_override("separation", 14)
-	root_vbox.add_child(top_bar)
-
-	var title_box := PanelContainer.new()
-	title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(3, 4)))
-	var title_margin := MarginContainer.new()
-	title_margin.add_theme_constant_override("margin_left", 14)
-	title_margin.add_theme_constant_override("margin_right", 14)
-	title_margin.add_theme_constant_override("margin_top", 4)
-	title_margin.add_theme_constant_override("margin_bottom", 4)
-	var title_lbl := Label.new()
-	title_lbl.text = "天 地 律 动  ·  游 戏 设 置"
-	GameStyle.label(title_lbl, 18, GameStyle.PAPER, 0, GameStyle.INK, true)
-	title_margin.add_child(title_lbl)
-	title_box.add_child(title_margin)
-	top_bar.add_child(title_box)
-
-	# Tab 按钮组
-	var tab_bar := HBoxContainer.new()
-	tab_bar.add_theme_constant_override("separation", 8)
-	tab_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(tab_bar)
-
-	_add_tab_button(tab_bar, 0, "✦ 灵音调律")
-	_add_tab_button(tab_bar, 1, "✦ 剑意视界")
-	_add_tab_button(tab_bar, 2, "✦ 演化推衍")
-
-	var close_btn := Button.new()
-	close_btn.text = "返 回"
-	close_btn.custom_minimum_size = Vector2(84, 34)
-	close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(close_btn, GameStyle.NAVY2, GameStyle.BLUE, 14, GameStyle.PAPER, 5.0)
-	close_btn.pressed.connect(close)
-	top_bar.add_child(close_btn)
-
-	# 5. 内容面板区域（带卡槽内衬）
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
@@ -126,7 +48,6 @@ func _build_ui() -> void:
 	_content_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_panel.add_child(_content_box)
 
-	# 6. 分页构建
 	_pages.append(_build_audio_page())
 	_pages.append(_build_display_page())
 	_pages.append(_build_system_page())
@@ -134,28 +55,13 @@ func _build_ui() -> void:
 	for p in _pages:
 		_content_box.add_child(p)
 
-	_switch_tab(0)
+	switch_tab(0)
+	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
+	SettingsManager.setting_changed.connect(_on_setting_changed)
 
-func _add_tab_button(parent: HBoxContainer, index: int, text: String) -> void:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(100, 32)
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.pressed.connect(func(): _switch_tab(index))
-	parent.add_child(btn)
-	_tab_buttons.append(btn)
-
-func _switch_tab(index: int) -> void:
-	_current_tab = index
-	for i in range(_pages.size()):
-		_pages[i].visible = (i == index)
-
-	for i in range(_tab_buttons.size()):
-		var b := _tab_buttons[i]
-		if i == index:
-			GameStyle.button(b, GameStyle.BLUE, GameStyle.BLUE_EDGE, 13, GameStyle.PAPER, 5.0)
-		else:
-			GameStyle.button(b, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+func _on_opened() -> void:
+	_refresh_all_ui()
+	get_tree().paused = true
 
 # ----------------- 分页 1：灵音调律（音频总线） -----------------
 
@@ -535,35 +441,3 @@ func _refresh_all_ui() -> void:
 		_update_toggle_btn_ui(k)
 	for k in _cycle_controls.keys():
 		_update_cycle_btn_ui(k)
-
-# ----------------- 弹窗开关控制 -----------------
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		close()
-		get_viewport().set_input_as_handled()
-
-func open() -> void:
-	if visible:
-		return
-	_closing = false
-	_refresh_all_ui()
-	visible = true
-	get_tree().paused = true
-	modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.16)
-
-func close() -> void:
-	if _closing or not visible:
-		return
-	_closing = true
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.12)
-	tw.tween_callback(func():
-		visible = false
-		_closing = false
-		closed.emit()
-	)

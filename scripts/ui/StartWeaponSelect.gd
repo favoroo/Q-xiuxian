@@ -159,8 +159,7 @@ func _create_card(w_id: String) -> Control:
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(icon_tex)
 	# 吃「元素伤害」属性加成的法器挂橙红角标（与商店/属性面板同一口径）
-	if WeaponData.elemental_scaling_coef(w_id) > 0.0:
-		icon_box.add_child(GameStyle.element_badge(8))
+	GameStyle.maybe_add_element_badge(icon_box, w_id, 8)
 	vbox.add_child(icon_box)
 
 	# 名称 + 星

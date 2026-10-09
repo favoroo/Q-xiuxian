@@ -18,6 +18,11 @@ const BOUNCE_SEARCH_RADIUS := 260.0       ## 弹射连锁的找下家半径（�
 ## 仅判据用：整体缩放转向速率（tests/ProjectileProbe.tscn 的 `-- --no-homing` 置 0 退回旧直线弹），
 ## 用来证明"命中率"这条断言真的有牙齿。运行时永远是 1.0。
 static var homing_scale: float = 1.0
+## 复用物理查询形状与参数，杜绝每帧弹丸重寻目标时 new CircleShape2D / PhysicsShapeQueryParameters2D
+static var _search_shape: CircleShape2D = null
+static var _search_query: PhysicsShapeQueryParameters2D = null
+static var query_alloc_count: int = 0
+static var query_reuse_count: int = 0
 
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 470.0
@@ -161,14 +166,18 @@ func _on_area_entered(area: Area2D) -> void:
 ## 就近找一个敌人。ahead_only = 只认弹头前方锥内的（丢目标重录用），false = 全向（弹射连锁用，历史行为）
 func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = HOMING_ACQUIRE_RADIUS if ahead_only else BOUNCE_SEARCH_RADIUS
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0.0, global_position)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 16)
+	if _search_shape == null or _search_query == null:
+		_search_shape = CircleShape2D.new()
+		_search_query = PhysicsShapeQueryParameters2D.new()
+		_search_query.shape = _search_shape
+		_search_query.collision_mask = 4
+		_search_query.collide_with_areas = true
+		query_alloc_count += 1
+	else:
+		query_reuse_count += 1
+	_search_shape.radius = HOMING_ACQUIRE_RADIUS if ahead_only else BOUNCE_SEARCH_RADIUS
+	_search_query.transform = Transform2D(0.0, global_position)
+	var results = space_state.intersect_shape(_search_query, 16)
 
 	var nearest: Node2D = null
 	var min_dist: float = 99999.0

@@ -13,6 +13,8 @@ var icon_path: String = ""
 var proc_burn: bool = false
 var burn_dps: float = 0.0
 var burn_dur: float = 3.0
+var proc_chill: float = 0.0
+var chill_dur: float = 2.0
 
 @onready var fx_sprite: Sprite2D = $FxSprite
 @onready var light: PointLight2D = $PointLight2D
@@ -94,15 +96,17 @@ func _deal_damage() -> void:
 			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)
 			# 藏宝匣（SpiritChest）也有 take_damage 但没有 dying/is_elite 字段，
 			# 所以一律走 get()：取不到就当 false，不许在这里炸一场落雷
-			var was_dying := bool(enemy.get("dying"))
+			var was_dying: bool = enemy.get("dying") == true
 			enemy.take_damage(dmg, knock, is_crit)
 			if proc_burn and enemy.has_method("apply_burn"):
 				enemy.apply_burn(burn_dps, burn_dur)
+			if proc_chill > 0.0 and enemy.has_method("apply_chill"):
+				enemy.apply_chill(proc_chill, chill_dur)
 			GameManager.try_lifesteal()
 			hits += 1
-			if bool(enemy.get("dying")) and not was_dying:
+			if (enemy.get("dying") == true) and not was_dying:
 				kills += 1
-			if bool(enemy.get("is_elite")):
+			if enemy.get("is_elite") == true:
 				hit_elite = true
 			if is_crit:
 				had_crit = true

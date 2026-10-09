@@ -3,7 +3,7 @@ extends Node
 ## 伤害与血量平衡仿真判据（2026-10-09，用户口径：「带几把青云剑秒杀所有敌人和Boss，整体优化伤害机制与敌人血量」）
 ##
 ## 本判据在 headless 环境下全真跑 GameBalance、WeaponData 与 GameManager 数值链路，钉死四大护栏：
-## 1) 15 件法器 ★1 零加点单体 DPS 严格收敛在分档带内，全库极差比 ≤ 2.0（杜绝个别法器 5 倍碾压或沦为纯摆设）；
+## 1) 20 件法器 ★1 零加点单体 DPS 严格收敛在分档带内，全库极差比 ≤ 2.0（杜绝个别法器 5 倍碾压或沦为纯摆设）；
 ## 2) 敌人气血曲线确为 1.15 复利增长，危险度 0 呈现前松后紧；
 ## 3) 标准成型 Build 在第 10/20 波 Boss 战击杀时长（TTK）落在 30~70s 区间（真正的 Boss 攻坚体验）；
 ## 4) 极端 6 把青云剑纯输出 Build 在第 20 波魔尊战 TTK 坚守 ≥ 8.0s（不剥夺暴力 build 的爽感，但彻底杜绝 0.5s 摸一下就秒的荒谬现象）。
@@ -33,11 +33,14 @@ func _ready() -> void:
 	else:
 		get_tree().quit(1)
 
-# ---------------- 1. 15 件法器单体 DPS 分档与极差比 ----------------
+# ---------------- 1. 20 件法器单体 DPS 分档与极差比 ----------------
 
 func _test_weapon_dps_normalization() -> void:
 	var single_target_weapons := ["qingyun_sword", "gengjin_feijian", "huoyan_fu", "chiyan_dao", "xuanbing_feizhen"]
-	var aoe_utility_weapons := ["qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin"]
+	var aoe_utility_weapons := [
+		"qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin",
+		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun"
+	]
 	var drone_weapons := ["lingdie", "hanquan_yulian", "hunyuan_zhong"]
 
 	var min_dps: float = 9999.0
@@ -59,7 +62,7 @@ func _test_weapon_dps_normalization() -> void:
 				"御灵环绕法器【%s】DPS 落在 40~50 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
-	_c.check(ratio <= 2.0, "全库 15 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+	_c.check(ratio <= 2.0, "全库 20 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
 
 # ---------------- 2. 敌人与 Boss 气血成长 ----------------
 

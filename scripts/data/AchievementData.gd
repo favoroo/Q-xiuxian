@@ -18,19 +18,24 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"jinsuanpan",
 ]
 
-## 初始默认进入灵石阁货架池的 11 件法宝
+## 初始默认进入灵石阁货架池的 16 件法宝
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
 	"qiankun_dai",
 	"jifeng_xue",
+	"qingxin_cha",
 	"zhekou_yufu",
 	"kuangxue_dan",
 	"guijia_fu",
 	"tongxuan_ling",
 	"leiyin_zhen",
+	"yinhun_deng",
+	"suoling_jia",
 	"wujian_shi",
 	"huichun_hulu",
+	"xiuluo_pei",
+	"taiyi_jindan",
 ]
 
 ## 成就里程碑定义表（顺序即「修仙志」展示顺序）

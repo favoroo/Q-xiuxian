@@ -1,25 +1,17 @@
 class_name ManualDialog
-extends Control
+extends BaseModalDialog
 
 ## 教程手册（传道玉简）：玩法入门、聚灵阵用法、法器/法宝/修士图鉴、进阶流派攻略。
-## 骨架复刻 CareerDialog（全屏暂停式弹窗 + Tab 分页）；图鉴内容现读
+## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
 ## 法宝/修士两页标注解锁条件，每次 open() 重建以反映最新解锁状态。
-
-signal closed
 
 const PANEL_SIZE := Vector2(880, 470)
 ## 正文排版宽度：880 面板 − 外边距 40 − 内容面板内边距 28 − 卡片内边距 24，再留余量
 const TEXT_W := 756.0
 
-## 五行配色（法器卡 chip 用）
-const ELEMENT_COLORS := {
-	"metal": Color(0.85, 0.86, 0.92),
-	"wood": Color(0.35, 0.75, 0.45),
-	"water": Color(0.35, 0.65, 0.95),
-	"fire": Color(0.9, 0.45, 0.3),
-	"earth": Color(0.8, 0.65, 0.35),
-}
+## 五行配色（法器卡 chip 用，与 GameStyle.ELEMENT_COLORS 同源）
+const ELEMENT_COLORS := GameStyle.ELEMENT_COLORS
 
 ## 法器 stat_scalings 的 key → 人话名（优先查 StatInfoData，这里补面板没有的行）
 const SCALING_NAMES := {
@@ -45,103 +37,34 @@ const BEHAVIOR_NAMES := {
 
 const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "冰缓", "proc_poison": "剧毒"}
 
-var _closing: bool = false
-var _current_tab: int = 0
-var _tab_buttons: Array[Button] = []
-var _pages: Array[Control] = []
 var _items_box: VBoxContainer
 var _cult_box: VBoxContainer
 
-func _ready() -> void:
-	visible = false
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_ui()
+func _get_title_text() -> String:
+	return "传 道 玉 简"
 
-func _build_ui() -> void:
-	# 1. 半透明暗色背景遮罩（点击空白处关闭）
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.85)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			close()
-	)
-	add_child(dim)
+func _get_panel_size() -> Vector2:
+	return PANEL_SIZE
 
-	# 2. 居中大容器
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
+func _get_top_bar_separation() -> int:
+	return 8
 
-	# 3. 斜切大面板
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = PANEL_SIZE
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
-	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 6
-	panel_style.border_color = GameStyle.BLUE
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
+func _get_tab_bar_separation() -> int:
+	return 6
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	panel.add_child(margin)
+func _get_title_font_size() -> int:
+	return 17
 
-	var root_vbox := VBoxContainer.new()
-	root_vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(root_vbox)
+func _get_close_btn_min_size() -> Vector2:
+	return Vector2(76, 34)
 
-	# 4. 顶部标题栏 + Tab 切换 + 关闭按钮
-	var top_bar := HBoxContainer.new()
-	top_bar.add_theme_constant_override("separation", 8)
-	root_vbox.add_child(top_bar)
+func _build_body(root_vbox: VBoxContainer) -> void:
+	add_tab_button(0, "入门指南", 96.0)
+	add_tab_button(1, "法器图鉴", 96.0)
+	add_tab_button(2, "法宝图鉴", 96.0)
+	add_tab_button(3, "修士图鉴", 96.0)
+	add_tab_button(4, "进阶心法", 96.0)
 
-	var title_box := PanelContainer.new()
-	title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(3, 4)))
-	var title_margin := MarginContainer.new()
-	title_margin.add_theme_constant_override("margin_left", 12)
-	title_margin.add_theme_constant_override("margin_right", 12)
-	title_margin.add_theme_constant_override("margin_top", 4)
-	title_margin.add_theme_constant_override("margin_bottom", 4)
-	var title_lbl := Label.new()
-	title_lbl.text = "传 道 玉 简"
-	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
-	title_margin.add_child(title_lbl)
-	title_box.add_child(title_margin)
-	top_bar.add_child(title_box)
-
-	var tab_bar := HBoxContainer.new()
-	tab_bar.add_theme_constant_override("separation", 6)
-	tab_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(tab_bar)
-
-	_add_tab_button(tab_bar, 0, "入门指南")
-	_add_tab_button(tab_bar, 1, "法器图鉴")
-	_add_tab_button(tab_bar, 2, "法宝图鉴")
-	_add_tab_button(tab_bar, 3, "修士图鉴")
-	_add_tab_button(tab_bar, 4, "进阶心法")
-
-	var close_btn := Button.new()
-	close_btn.text = "返 回"
-	close_btn.custom_minimum_size = Vector2(76, 34)
-	close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(close_btn, GameStyle.NAVY2, GameStyle.BLUE, 14, GameStyle.PAPER, 5.0)
-	close_btn.pressed.connect(close)
-	top_bar.add_child(close_btn)
-
-	# 5. 内容分页面板
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
@@ -158,60 +81,10 @@ func _build_ui() -> void:
 	_pages.append(_build_cultivators_page(content_panel))
 	_pages.append(_build_advanced_page(content_panel))
 
-	_switch_tab(0)
+	switch_tab(0)
 
-func _add_tab_button(parent: HBoxContainer, index: int, text: String) -> void:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(96, 32)
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.pressed.connect(func(): _switch_tab(index))
-	parent.add_child(btn)
-	_tab_buttons.append(btn)
-
-func _switch_tab(index: int) -> void:
-	_current_tab = index
-	for i in range(_pages.size()):
-		_pages[i].visible = (i == index)
-	for i in range(_tab_buttons.size()):
-		var b := _tab_buttons[i]
-		if i == index:
-			GameStyle.button(b, GameStyle.BLUE, GameStyle.BLUE_EDGE, 13, GameStyle.PAPER, 5.0)
-		else:
-			GameStyle.button(b, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
-
-## 打开手册并刷新受解锁状态影响的两页
-func open() -> void:
-	visible = true
-	_closing = false
+func _on_opened() -> void:
 	_refresh_dynamic_pages()
-	modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.2)
-
-func close() -> void:
-	if _closing:
-		return
-	DetailTip.close_all(self)
-	_closing = true
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.16)
-	tw.tween_callback(func():
-		visible = false
-		_closing = false
-		closed.emit()
-	)
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		# 先退详情卡，再退手册
-		if DetailTip.close_all(self):
-			get_viewport().set_input_as_handled()
-			return
-		close()
-		get_viewport().set_input_as_handled()
 
 # ----------------- 通用小件 -----------------
 
@@ -383,10 +256,9 @@ func _build_weapons_page(parent: Control) -> Control:
 				cls_name, GameStyle.PAPER_DIM,
 				func(anchor: Control): _open_weapon_tip(wid, anchor))
 			# 吃「元素伤害」属性加成的法器挂橙红角标（图鉴与商店/属性面板同一口径）
-			if WeaponData.elemental_scaling_coef(wid) > 0.0:
-				var icon_tex := card.get_meta("icon_tex") as TextureRect
-				if icon_tex != null:
-					icon_tex.get_parent().add_child(GameStyle.element_badge(8))
+			var icon_tex := card.get_meta("icon_tex") as TextureRect
+			if icon_tex != null and icon_tex.get_parent() != null:
+				GameStyle.maybe_add_element_badge(icon_tex.get_parent(), wid, 8)
 			grid.add_child(card)
 	return scroll
 

@@ -14,10 +14,10 @@ extends RefCounted
 
 const TIER_LABELS := {1: "凡品", 2: "良品", 3: "仙品", 4: "传说"}
 const TIER_COLORS := {
-	1: Color(0.96, 0.95, 0.92),
-	2: Color(1.0, 0.83, 0.3),
-	3: Color(0.35, 0.75, 1.0),
-	4: Color(0.85, 0.45, 1.0),
+	1: GameStyle.RARITY_COMMON,
+	2: GameStyle.RARITY_RARE,
+	3: GameStyle.RARITY_EPIC,
+	4: GameStyle.RARITY_LEGEND,
 }
 
 const DEFS: Dictionary = {
@@ -40,14 +40,20 @@ const DEFS: Dictionary = {
 		"desc": "袖里乾坤\n灵石拾取范围 +30%",
 		"apply": {"pickup_range_mult": 0.3},
 	},
-	"jifeng_xue": {
-		"name": "疾风靴", "tier": 1, "price": 13,
-		"icon": "res://assets/art/item_jifeng_xue.png",
-		"desc": "足下生风\n移动速度 +7%",
-		"apply": {"move_speed_mult": 0.07},
-	},
+		"jifeng_xue": {
+			"name": "疾风靴", "tier": 1, "price": 13,
+			"icon": "res://assets/art/item_jifeng_xue.png",
+			"desc": "足下生风\n移动速度 +7%",
+			"apply": {"move_speed_mult": 0.07},
+		},
+		"qingxin_cha": {
+			"name": "清心神行茶", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_qingxin_cha.png",
+			"desc": "神清气爽\n攻击间隔 -8%（出招更加迅捷）",
+			"apply": {"attack_speed_mult_mul": 0.92},
+		},
 
-	# ==================== 良品（tier 2 · 第 4 波起） ====================
+		# ==================== 良品（tier 2 · 第 4 波起） ====================
 	"zhekou_yufu": {
 		"name": "折扣玉符", "tier": 2, "price": 26,
 		"icon": "res://assets/art/item_zhekou_yufu.png",
@@ -72,55 +78,79 @@ const DEFS: Dictionary = {
 		"desc": "洞察玄机\n每波可免费重掷货架 +1 次",
 		"apply": {"free_rerolls": 1.0},
 	},
-	"leiyin_zhen": {
-		"name": "雷引针", "tier": 2, "price": 25,
-		"icon": "res://assets/art/item_leiyin_zhen.png",
-		"desc": "雷霆余威\n法器击退力度 +35%",
-		"apply": {"knockback_mult": 0.35},
-	},
+		"leiyin_zhen": {
+			"name": "雷引针", "tier": 2, "price": 25,
+			"icon": "res://assets/art/item_leiyin_zhen.png",
+			"desc": "雷霆余威\n法器击退力度 +35%",
+			"apply": {"knockback_mult": 0.35},
+		},
+		"yinhun_deng": {
+			"name": "引魂青铜灯", "tier": 2, "price": 25,
+			"icon": "res://assets/art/item_yinhun_deng.png",
+			"desc": "青灯引魂\n灵石拾取范围 +25%，攻击范围 +15%",
+			"apply": {"pickup_range_mult": 0.25, "attack_range_mult": 0.15},
+		},
+		"suoling_jia": {
+			"name": "锁灵金刚枷", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_suoling_jia.png",
+			"desc": "负枷释煞\n法器伤害 +22%，但移动速度 -6%",
+			"apply": {"weapon_damage_mult": 0.22, "move_speed_mult": -0.06},
+		},
 
-	# ==================== 仙品（tier 3 · 第 9 波起） ====================
-	"wuxing_pei": {
-		"name": "五行佩", "tier": 3, "price": 45,
-		"icon": "res://assets/art/item_wuxing_pei.png",
-		"desc": "五行贯通\n金木水火土全元素伤害 +6%",
-		"apply": {"element_damage_all": 0.06},
-	},
-	"wujian_shi": {
-		"name": "悟剑石", "tier": 3, "price": 42,
-		"icon": "res://assets/art/item_wujian_shi.png",
-		"desc": "闻道朝夕\n修为获取 +12%（不影响灵石）",
-		"apply": {"xp_gain_mult": 0.12},
-	},
-	"huichun_hulu": {
-		"name": "回春葫芦", "tier": 3, "price": 48,
-		"icon": "res://assets/art/item_huichun_hulu.png",
-		"desc": "悬壶济世\n气血回复 +0.5/秒，且每波结束恢复 15% 气血",
-		"apply": {"hp_regen": 0.5},
-		"wave_heal_pct": 0.15,
-	},
-	"pojia_zhui": {
-		"name": "破甲锥", "tier": 3, "price": 40,
-		"icon": "res://assets/art/item_pojia_zhui.png",
-		"desc": "擒贼擒王\n对精英与魔君的伤害 +25%",
-		"apply": {"elite_damage": 0.25},
-	},
+		# ==================== 仙品（tier 3 · 第 9 波起） ====================
+		"wuxing_pei": {
+			"name": "五行佩", "tier": 3, "price": 45,
+			"icon": "res://assets/art/item_wuxing_pei.png",
+			"desc": "五行贯通\n金木水火土全元素伤害 +6%",
+			"apply": {"element_damage_all": 0.06},
+		},
+		"wujian_shi": {
+			"name": "悟剑石", "tier": 3, "price": 42,
+			"icon": "res://assets/art/item_wujian_shi.png",
+			"desc": "闻道朝夕\n修为获取 +12%（不影响灵石）",
+			"apply": {"xp_gain_mult": 0.12},
+		},
+		"huichun_hulu": {
+			"name": "回春葫芦", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_huichun_hulu.png",
+			"desc": "悬壶济世\n气血回复 +0.5/秒，且每波结束恢复 15% 气血",
+			"apply": {"hp_regen": 0.5},
+			"wave_heal_pct": 0.15,
+		},
+		"pojia_zhui": {
+			"name": "破甲锥", "tier": 3, "price": 40,
+			"icon": "res://assets/art/item_pojia_zhui.png",
+			"desc": "擒贼擒王\n对精英与魔君的伤害 +25%",
+			"apply": {"elite_damage": 0.25},
+		},
+		"xiuluo_pei": {
+			"name": "修罗嗜血佩", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_xiuluo_pei.png",
+			"desc": "修罗化血\n吸血率 +4%，法器伤害 +12%，但护甲 -1",
+			"apply": {"lifesteal": 0.04, "weapon_damage_mult": 0.12, "armor": -1.0},
+		},
 
-	# ==================== 传说（tier 4 · 第 14 波起） ====================
-	"tisi_kuilei": {
-		"name": "替死傀儡", "tier": 4, "price": 90,
-		"icon": "res://assets/art/item_tisi_kuilei.png",
-		"desc": "以偶替身\n致死一击时傀儡碎裂挡劫：免死并恢复五成气血\n（每局限购一件，一次性消耗）",
-		"apply": {},
-		"revive": true,
-		"unique": true,
-	},
-	"hunyuan_zhu": {
-		"name": "混元珠", "tier": 4, "price": 85,
-		"icon": "res://assets/art/item_hunyuan_zhu.png",
-		"desc": "混元一气\n福缘 +8，灵韵 +8",
-		"apply": {"luck": 8.0, "harvest": 8.0},
-	},
+		# ==================== 传说（tier 4 · 第 14 波起） ====================
+		"tisi_kuilei": {
+			"name": "替死傀儡", "tier": 4, "price": 90,
+			"icon": "res://assets/art/item_tisi_kuilei.png",
+			"desc": "以偶替身\n致死一击时傀儡碎裂挡劫：免死并恢复五成气血\n（每局限购一件，一次性消耗）",
+			"apply": {},
+			"revive": true,
+			"unique": true,
+		},
+		"hunyuan_zhu": {
+			"name": "混元珠", "tier": 4, "price": 85,
+			"icon": "res://assets/art/item_hunyuan_zhu.png",
+			"desc": "混元一气\n福缘 +8，灵韵 +8",
+			"apply": {"luck": 8.0, "harvest": 8.0},
+		},
+		"taiyi_jindan": {
+			"name": "九转太乙丹", "tier": 4, "price": 88,
+			"icon": "res://assets/art/item_taiyi_jindan.png",
+			"desc": "九转涅槃\n气血上限 +25 并回满，伤害 +15%，护甲 +2，移速 +5%",
+			"apply": {"max_hp": 25.0, "hp_heal": 25.0, "weapon_damage_mult": 0.15, "armor": 2.0, "move_speed_mult": 0.05},
+		},
 }
 
 static func get_def(id: String) -> Dictionary:
@@ -155,5 +185,6 @@ static func pick_id(luck: float, wave: int, owned: Array, rng: RandomNumberGener
 		weights.append(w)
 	if pool.is_empty():
 		return ""
-	var roll: float = rng.randf() if rng != null else randf()
+	var active_rng: RandomNumberGenerator = rng if rng != null else GameManager.rng
+	var roll: float = active_rng.randf()
 	return String(pool[GameBalance.weighted_pick_index(weights, roll)])
