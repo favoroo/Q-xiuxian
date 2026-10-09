@@ -81,6 +81,8 @@ func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = PANEL_SIZE
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
+	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
 	panel_style.border_width_left = 2
 	panel_style.border_width_top = 2
@@ -284,6 +286,7 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 	sb.content_margin_bottom = 8.0
 	card.add_theme_stylebox_override("panel", sb)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.set_meta("tip_title", name)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
@@ -322,6 +325,9 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
 			on_press.call(card)
 	)
+	# 整格都是热区：图框那层 PanelContainer 默认 STOP，会把「点图片」这一枪截在半路 ——
+	# 真机上就成了点名字弹卡、点图没反应（用户 2026-10-09 反馈）。放在最后一步统一压子树。
+	GameStyle.hotzone(card)
 	return card
 
 # ----------------- 分页 1：入门指南 -----------------
@@ -565,6 +571,13 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	GameStyle.label(epithet_lbl, 11, GameStyle.GREY)
 	text_col.add_child(epithet_lbl)
 
+	var equip_str: String = String(def.get("start_equip", ""))
+	if not equip_str.is_empty():
+		var equip_lbl := Label.new()
+		equip_lbl.text = "✦ " + equip_str
+		GameStyle.label(equip_lbl, 12, GameStyle.YELLOW)
+		text_col.add_child(equip_lbl)
+
 	for pro in def.get("pros", []):
 		var pro_lbl := Label.new()
 		pro_lbl.text = "＋ " + String(pro)
@@ -760,3 +773,8 @@ func _refresh_dynamic_pages() -> void:
 		_rebuild_items_page()
 	if is_instance_valid(_cult_box):
 		_rebuild_cultivators_page()
+	# 五页都过一遍：卡片是 PanelContainer（默认 STOP），会把「按下」那一拍吃掉，
+	# 外层 ScrollContainer 收不到按下就锁不住手指拖动 → 真机上灰色卡片区域滑不动。
+	# 放在这里而不是 _build_ui 末尾：法宝/修士两页每次 open 都重建子树，得重刷一遍。
+	for p in _pages:
+		GameStyle.swipeable(p as Control)

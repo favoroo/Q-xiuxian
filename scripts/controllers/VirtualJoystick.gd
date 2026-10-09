@@ -15,6 +15,11 @@ signal joystick_updated(output: Vector2)
 const UI_PRESS_HOLD_GROUP := "ui_press_hold"
 ## 命中余量（像素）：斜切出来的视觉比控件矩形小，手指压在裁掉的角上也算按在键上
 const UI_PRESS_HOLD_PAD := 8.0
+## 遮罩豁免比例：宽和高都铺到这个成数视口的控件，是"背后那层暗底"而不是一颗键 ——
+## 就算被误登记进 ui_press_hold 也不许让位，否则整屏变成走位禁区（比冲突更难查）。
+## 取 0.98 而不是更小的数：暗底就是整屏（≥视口），而对话框/商店的卡体即使撑满大半屏
+## （灵石阁曾经 1124×521 撑出屏外）仍是一颗要护住的键，不该被当成遮罩放行。
+const UI_HOLD_BACKDROP_RATIO := 0.98
 
 @onready var base: TextureRect = $Base
 @onready var knob: TextureRect = $Base/Knob
@@ -27,10 +32,16 @@ var output: Vector2 = Vector2.ZERO
 static func rect_claims_ui_hold(hold_rect: Rect2, pos: Vector2, pad: float = UI_PRESS_HOLD_PAD) -> bool:
     return hold_rect.grow(pad).has_point(pos)
 
+## 纯函数：这块控件是不是「背后那层整屏暗底」而不是一颗键（见 UI_HOLD_BACKDROP_RATIO）。
+static func is_backdrop_rect(rect: Rect2, viewport_size: Vector2, ratio: float = UI_HOLD_BACKDROP_RATIO) -> bool:
+    return rect.size.x >= viewport_size.x * ratio and rect.size.y >= viewport_size.y * ratio
+
 ## 扫当前登记在案的长按键：只算真的还挂在树上、且看得见的那一颗
 ## （聚灵阵按钮出了范围就整块隐藏，那时右侧又该照常能拉动走位）。
 ## 灰掉（disabled）的按钮不接单，也就不许把这次走位抢走 —— 点它没反应，人就该照常被驱动。
+## 整屏暗底按 is_backdrop_rect 豁免：登记错成遮罩时宁可放行，也不能把满屏变成走位禁区。
 func is_press_on_ui_hold(pos: Vector2) -> bool:
+    var vp := get_viewport_rect().size
     for node in get_tree().get_nodes_in_group(UI_PRESS_HOLD_GROUP):
         if not is_instance_valid(node):
             continue
@@ -40,7 +51,10 @@ func is_press_on_ui_hold(pos: Vector2) -> bool:
         var b := c as BaseButton
         if b != null and b.disabled:
             continue
-        if rect_claims_ui_hold(c.get_global_rect(), pos):
+        var rect := c.get_global_rect()
+        if is_backdrop_rect(rect, vp):
+            continue
+        if rect_claims_ui_hold(rect, pos):
             return true
     return false
 

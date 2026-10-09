@@ -40,6 +40,7 @@ func _ready() -> void:
 	_test_danger_system()
 	_test_achievement_and_meta_save()
 	_test_knock_direction()
+	_test_spirit_orbit_dynamics()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)
@@ -159,7 +160,10 @@ func _test_enemy_mix() -> void:
 	_c.equals(WaveSpawner.pick_scene_key(1, 0.03), "xiexiu", "第 1 波 roll 落在邪修带内 → 邪修")
 	_c.equals(WaveSpawner.pick_scene_key(1, 0.06), "slime", "第 1 波邪修只占 6%，其余仍是史莱姆")
 	_c.equals(WaveSpawner.pick_scene_key(1, 0.5), "slime", "第 1 波仍不刷花妖（维持第 2 波解锁）")
-	_c.equals(WaveSpawner.pick_scene_key(5, 0.10), "xiexiu", "第 5 波邪修已占 18%，雷兽不再白捡那一段")
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.05), "danbao", "第 3 波丹爆傀儡已解锁，roll<0.12 → 丹爆傀儡")
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.20), "flower", "第 3 波邪修带被丹爆整段吃掉（[0.12,0.12) 为空），roll 0.20 落在花妖带")
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.70), "slime", "第 3 波高 roll 但未到蜂群带（0.70 < 0.78）仍是史莱姆")
+	_c.equals(WaveSpawner.pick_scene_key(5, 0.15), "xiexiu", "第 5 波邪修带为 [0.12, 0.18)，roll 0.15 落邪修")
 	_c.equals(WaveSpawner.pick_scene_key(5, 0.30), "leibeast", "第 5 波雷兽带为 [0.18, 0.42)")
 	_c.equals(WaveSpawner.pick_scene_key(12, 0.05), "danbao", "第 12 波 roll<0.12 → 丹爆傀儡")
 	_c.equals(WaveSpawner.pick_scene_key(12, 0.20), "xiexiu", "第 12 波 [0.12, 0.27) → 邪修")
@@ -1052,7 +1056,7 @@ func _test_cultivator_system() -> void:
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
-		for f in ["name", "epithet", "icon", "sprite", "pros", "cons", "mods"]:
+		for f in ["name", "epithet", "icon", "sprite", "pros", "cons", "mods", "start_equip"]:
 			if not d.has(f):
 				bad.append("%s.%s" % [cid, f])
 		if not ResourceLoader.exists(String(d.get("icon", ""))):
@@ -1119,6 +1123,20 @@ func _test_cultivator_system() -> void:
 	_c.near(GameManager.enemy_count_mult, 1.0, EPS, "常规修士妖潮规模不变")
 	GameManager.dodge = 1.0
 	_c.near(GameManager.get_effective_dodge(), GameManager.DODGE_CAP, EPS, "常规修士闪避上限仍 60%")
+
+	# 道统选择界面上下分层与开局装备验证
+	for cid in CultivatorData.all_ids():
+		var eq := CultivatorData.get_start_equip(cid)
+		_c.check(not eq.is_empty(), "修士 %s 配有明确开局装备/特权描述" % cid)
+	var cs := CultivatorSelect.new()
+	add_child(cs)
+	cs.show_select()
+	_c.equals(cs._roster_row.get_child_count(), 9, "道统选择界面下半部分展示 9 张形象小卡片")
+	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
+	cs._select_cultivator("fuzhen")
+	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
+	cs.queue_free()
+
 	GameManager.reset_run()
 
 # ---------------- 震退方向 ----------------
@@ -1422,3 +1440,42 @@ func _test_ranged_focus_dps() -> void:
 	_c.near(GameBalance.burn_tick_damage(20.0, 10.0, 1.0), 14.0, EPS, "10 点元素伤害为灼烧每跳额外提供 +4 点伤害")
 	_c.near(GameBalance.burn_tick_damage(20.0, 10.0, 1.5), 21.0, EPS, "离火羁绊倍率 1.5x 完整放大灼烧跳字")
 	_c.near(GameBalance.poison_tick_damage(10.0, 10.0), 8.0, EPS, "10 点元素伤害为剧毒每跳额外提供 +3 点伤害")
+
+# ---------------- 御灵（环绕法宝）动态轨道与伸缩扑击 ----------------
+
+func _test_spirit_orbit_dynamics() -> void:
+	# 1. 无敌情巡航：非战斗状态，所有灵宝平稳处于基准半径
+	var empty_res := GameBalance.compute_spirit_orbit([0.0, PI], [], 58.0, 28.0, 135.0)
+	_c.equals(bool(empty_res.get("in_combat", true)), false, "无敌情时不触发战斗激战状态")
+	_c.near(float(empty_res["radii"][0]), 58.0, EPS, "空敌情下第 1 枚灵宝回归 58px 基准半径")
+	_c.near(float(empty_res["radii"][1]), 58.0, EPS, "空敌情下第 2 枚灵宝回归 58px 基准半径")
+
+	# 2. 贴身危急突破（32px）：正前方灵宝极限内收至 32px 护体解围，杜绝贴身盲区
+	var danger_enemies := [{"dist": 32.0, "angle": 0.0}]
+	var danger_res := GameBalance.compute_spirit_orbit([0.0, PI], danger_enemies, 58.0, 28.0, 135.0)
+	_c.equals(bool(danger_res.get("in_combat", false)), true, "贴脸近敌触发战斗激战状态")
+	_c.near(float(danger_res["radii"][0]), 32.0, EPS, "同侧灵宝迅速内收至 32px 贴身封堵")
+
+	# 3. 极度贴身（10px）：内收半径被地板 min_radius(28px) 截断，不会坍缩进玩家中心
+	var super_close := [{"dist": 10.0, "angle": 0.0}]
+	var close_res := GameBalance.compute_spirit_orbit([0.0], super_close, 58.0, 28.0, 135.0)
+	_c.near(float(close_res["radii"][0]), 28.0, EPS, "内收最低安全地板 28px 防止穿模倒扣")
+
+	# 4. 扇区索敌扑击（105px）：朝向扇区内的敌人引发灵宝主动出圈扑杀
+	var lunge_enemies := [{"dist": 105.0, "angle": 0.1}]
+	var lunge_res := GameBalance.compute_spirit_orbit([0.0, PI], lunge_enemies, 58.0, 28.0, 135.0)
+	_c.near(float(lunge_res["radii"][0]), 105.0, EPS, "正前方扇区灵宝主动扑击外扩至 105px")
+
+	# 5. 超出最大射程（260px）：不触发激战加速，保持基准半径
+	var far_enemies := [{"dist": 260.0, "angle": 0.0}]
+	var far_res := GameBalance.compute_spirit_orbit([0.0, PI], far_enemies, 58.0, 28.0, 135.0)
+	_c.equals(bool(far_res.get("in_combat", true)), false, "超远距离敌人不触发战斗状态")
+	_c.near(float(far_res["radii"][0]), 58.0, EPS, "超远敌人下灵宝保持 58px")
+
+	# 6. 数据表三件御灵装备属性强化验证
+	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
+		var sdef := WeaponData.get_def(sid)
+		_c.check(float(sdef.get("range", 0.0)) >= 120.0, "御灵法器 %s 射程强化至 >= 120px（当前 %.0f）" % [sid, float(sdef.get("range", 0.0))])
+		_c.check(float(sdef.get("damage", 0.0)) >= 24.0, "御灵法器 %s 基础伤害强化至 >= 24（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
+		_c.check(float(sdef.get("knockback", 0.0)) >= 160.0, "御灵法器 %s 击退强化至 >= 160（当前 %.0f）" % [sid, float(sdef.get("knockback", 0.0))])
+

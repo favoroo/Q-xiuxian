@@ -66,8 +66,9 @@ func show_select() -> void:
 	var cdef: Dictionary = CultivatorData.get_def(GameManager.cultivator_id)
 	var cname: String = String(cdef.get("name", ""))
 	var cepi: String = String(cdef.get("epithet", ""))
+	var sname: String = String(SkillData.get_def(GameManager.pending_skill_id).get("name", ""))
 	if not cname.is_empty():
-		sub_label.text = "已入道统 · %s「%s」 · 五行法器择其一" % [cname, cepi]
+		sub_label.text = "已入道统 · %s「%s」 · 神通「%s」 · 五行法器择其一" % [cname, cepi, sname]
 	else:
 		sub_label.text = "灵田妖潮将至，五行法器择其一，随你上阵斩妖"
 	for child in cards_container.get_children():
@@ -229,6 +230,11 @@ func _on_back_pressed() -> void:
 	tw.tween_callback(func():
 		visible = false
 		_transitioning = false
+		# 返回链与前进链互为镜像：法器 ← 神通 ← 道统；旧档缺 SkillSelect 节点时回退到道统
+		var skill_select = get_parent().get_node_or_null("SkillSelect")
+		if skill_select != null and skill_select.has_method("show_select"):
+			skill_select.show_select()
+			return
 		var cult_select = get_parent().get_node_or_null("CultivatorSelect")
 		if cult_select != null and cult_select.has_method("show_select"):
 			cult_select.show_select()

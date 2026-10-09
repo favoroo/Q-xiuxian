@@ -5,7 +5,17 @@ extends RefCounted
 ## 星级：集齐 3 把同名同星，在波间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
 ## 双标签系统：器类（剑系/符箓/雷法/御灵/广域）+ 五行（锐金/青木/玄水/离火/厚土）
 ## 弹丸类（PROJECTILE）另带 bullet / bullet_spin 两个外观字段：打出去的东西按法器各自不同
-## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 == 屏上像素；缺 bullet 时回退 blade.png
+## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 == 屏上像素；缺 bullet 时回退 blade.png。
+## bullet_spin 2026-10-09 起才真正生效：以前代码按穿透数反推朝向（pierce<=1 就转），
+## 结果表里明明写了"不转"的玄冰飞针，打出去仍在原地打圈。
+##
+## 朝向与发射点（2026-10-09，用户口径：「飞剑发射时朝向不对，没朝敌人；不知道从哪里发射出来的」）：
+## - "tip"：剑尖/器口在【贴图坐标系】里相对画布中心的位置，单位 = 画布像素（图标 48×48，
+##   画布中心 (24,24) 即 Sprite2D 的轴心）。一个字段管两件事：
+##   方向 = 这张图天生朝哪儿（代码按它补偿，贴图才真正指向目标）；长度 = 出膛点离本体的距离。
+## - "upright": true = 宝灯/法牌/大印/灵藤这类没有锋刃方向的重器，本体保持世界竖直，不许随瞄准
+##   转圈（旧写法会把印玺横过来对着人）。此时 tip 只取长度，发射点落在"朝目标那一侧的器口"。
+## - 环绕类（DRONE）走 SunOrb，本体不旋转，不需要这两个字段。
 
 enum Behavior { MELEE, PROJECTILE, BURST, DRONE }
 
@@ -28,6 +38,7 @@ const DEFS: Dictionary = {
 			"damage": 33.0, "cooldown": 1.1, "range": 150.0,
 			"knockback": 240.0,
 			"price": 25, "icon": "res://assets/art/weapon_sword.png",
+			"tip": Vector2(23, -17),
 			"desc": "近身挥斩，剑气凌厉；受近战伤害与暴击率加成", "tag": "近战·剑系·金",
 			"tags": ["sword", "metal"],
 			"stat_scalings": {"melee_damage": 1.0, "crit_rate": 40.0},
@@ -38,6 +49,7 @@ const DEFS: Dictionary = {
 			"damage": 42.0, "cooldown": 0.85, "range": 460.0,
 			"knockback": 185.0,
 			"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
+			"tip": Vector2(20, -14),
 			"desc": "飞剑锁敌追击，贯穿两敌；受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
 			"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_spin": false,
 			"pierce": 2,
@@ -50,6 +62,7 @@ const DEFS: Dictionary = {
 			"damage": 16.0, "cooldown": 1.15, "range": 440.0,
 			"knockback": 110.0,
 			"price": 35, "icon": "res://assets/art/weapon_dagger.png",
+			"tip": Vector2(21, -24),
 			"desc": "扇形疾射三把细小飞刀，各锁一敌；受远程伤害与暴击率加成", "tag": "远程·符箓·金",
 			"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_spin": false,
 			"pierce": 3, "projectile_count": 3, "spread_angle": 0.20,
@@ -64,6 +77,7 @@ const DEFS: Dictionary = {
 			"damage": 24.0, "cooldown": 1.25, "range": 175.0,
 			"knockback": 260.0,
 			"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
+			"tip": Vector2(22, 0), "upright": true,
 			"desc": "苍翠灵藤大范围横扫，附带剧毒；受近战与元素伤害加成", "tag": "近战·广域·木",
 			"arc_scale": 1.35, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
 			"tags": ["wide", "wood"],
@@ -75,6 +89,7 @@ const DEFS: Dictionary = {
 			"damage": 26.0, "cooldown": 1.0, "range": 420.0,
 			"knockback": 140.0,
 			"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
+			"tip": Vector2(20, -18),
 			"desc": "青绿木符追敌弹射连锁并叠毒；受远程与元素伤害加成", "tag": "远程·符箓·木",
 			"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_spin": true,
 			"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
@@ -84,8 +99,8 @@ const DEFS: Dictionary = {
 		"lingdie": {
 			"name": "灵蝶", "behavior": Behavior.DRONE,
 			"sfx": "orb_hit",
-			"damage": 20.0, "cooldown": 0.32, "range": 78.0,
-			"knockback": 135.0,
+			"damage": 24.0, "cooldown": 0.28, "range": 120.0,
+			"knockback": 160.0,
 			"price": 40, "icon": "res://assets/art/sun_orb.png",
 			"desc": "灵蝶萦绕周身，触敌即伤；受御灵伤害与吸血率加成", "tag": "环绕·御灵·木",
 			"tags": ["spirit", "wood"],
@@ -99,6 +114,7 @@ const DEFS: Dictionary = {
 			"damage": 22.0, "cooldown": 1.3, "range": 185.0,
 			"knockback": 400.0,
 			"price": 20, "icon": "res://assets/art/weapon_fan.png",
+			"tip": Vector2(20, -14),
 			"desc": "扇出宽大罡风，冰缓敌人；受近战伤害与移速加成", "tag": "近战·广域·水",
 			"arc_scale": 1.35, "proc_chill": 0.35, "chill_dur": 2.5,
 			"tags": ["wide", "water"],
@@ -110,6 +126,7 @@ const DEFS: Dictionary = {
 			"damage": 16.0, "cooldown": 0.90, "range": 430.0,
 			"knockback": 95.0,
 			"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
+			"tip": Vector2(-18, 12),
 			"desc": "三枚玄冰飞针齐射追敌，刺骨冰寒；受远程伤害与移速加成", "tag": "远程·符箓·水",
 			"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_spin": false,
 			"pierce": 1, "projectile_count": 3, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
@@ -119,8 +136,8 @@ const DEFS: Dictionary = {
 		"hanquan_yulian": {
 			"name": "寒泉玉莲", "behavior": Behavior.DRONE,
 			"sfx": "orb_hit",
-			"damage": 22.0, "cooldown": 0.36, "range": 82.0,
-			"knockback": 160.0,
+			"damage": 26.0, "cooldown": 0.32, "range": 128.0,
+			"knockback": 190.0,
 			"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
 			"desc": "冰魄玉莲护体，触碰冰缓妖兽；受御灵伤害与攻速加成", "tag": "环绕·御灵·水",
 			"proc_chill": 0.40, "chill_dur": 2.5,
@@ -135,6 +152,7 @@ const DEFS: Dictionary = {
 			"damage": 17.0, "cooldown": 0.80, "range": 420.0,
 			"knockback": 155.0,
 			"price": 30, "icon": "res://assets/art/weapon_staff.png",
+			"tip": Vector2(6, -24),
 			"desc": "一次掷出两张爆燃符箓，追敌引燃；受元素与远程伤害加成", "tag": "远程·符箓·火",
 			"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_spin": true,
 			"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
@@ -148,6 +166,7 @@ const DEFS: Dictionary = {
 			"damage": 34.0, "cooldown": 1.28, "range": 165.0,
 			"knockback": 320.0,
 			"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
+			"tip": Vector2(19, 7),
 			"desc": "大开大合烈火重刀，引燃身前群妖；受近战与元素伤害加成", "tag": "近战·剑系·火",
 			"arc_scale": 1.25, "proc_burn": true, "burn_ratio": 0.45, "burn_dur": 3.0,
 			"tags": ["sword", "fire"],
@@ -159,6 +178,7 @@ const DEFS: Dictionary = {
 			"damage": 36.0, "cooldown": 1.50, "range": 390.0,
 			"knockback": 200.0,
 			"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
+			"tip": Vector2(22, 0), "upright": true,
 			"desc": "引落离火天劫轰击区域，点燃火海；受元素伤害极高加成", "tag": "远程·雷法·火",
 			"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
 			"proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
@@ -173,6 +193,7 @@ const DEFS: Dictionary = {
 			"damage": 38.0, "cooldown": 1.55, "range": 380.0,
 			"knockback": 280.0,
 			"price": 45, "icon": "res://assets/art/weapon_thunder.png",
+			"tip": Vector2(22, 0), "upright": true,
 			"desc": "引天雷厚土轰击目标区域，大范围强击退；受元素伤害与护甲加成", "tag": "远程·雷法·土",
 			"burst_radius": 80.0, "burst_tint": Color(0.62, 0.86, 1.0),
 			"tags": ["thunder", "earth"],
@@ -184,22 +205,23 @@ const DEFS: Dictionary = {
 			"damage": 42.0, "cooldown": 1.60, "range": 360.0,
 			"knockback": 360.0,
 			"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
+			"tip": Vector2(20, 0), "upright": true,
 			"desc": "番天玄石大印从天轰砸，受元素伤害与护甲极高加成！", "tag": "区域·广域·土",
 			"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
 			"burst_icon": "res://assets/art/weapon_earth_seal.png",
 			"tags": ["wide", "earth"],
 			"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
 		},
-		"hunyuan_zhong": {
-			"name": "混元古钟", "behavior": Behavior.DRONE,
-			"sfx": "orb_hit",
-			"damage": 25.0, "cooldown": 0.40, "range": 88.0,
-			"knockback": 300.0,
-			"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
-			"desc": "混元古钟环绕周身，强力撞退敌群；受御灵伤害与气血加成", "tag": "环绕·御灵·土",
-			"tags": ["spirit", "earth"],
-			"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
-		},
+			"hunyuan_zhong": {
+				"name": "混元古钟", "behavior": Behavior.DRONE,
+				"sfx": "orb_hit",
+				"damage": 30.0, "cooldown": 0.35, "range": 136.0,
+				"knockback": 340.0,
+				"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
+				"desc": "混元古钟环绕周身，强力撞退敌群；受御灵伤害与气血加成", "tag": "环绕·御灵·土",
+				"tags": ["spirit", "earth"],
+				"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
+			},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）

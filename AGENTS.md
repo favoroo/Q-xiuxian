@@ -87,9 +87,16 @@ $G --headless --path . res://tests/LayoutCheck.tscn      # UI 摆位（带 -- --
 $G --headless --path . res://tests/ProjectileProbe.tscn  # 弹丸命中（带 -- --no-homing）
 $G --headless --path . res://tests/FontCoverageCheck.tscn # 字体子集覆盖
 $G --headless --path . res://tests/WolfAiCheck.tscn       # AI 行为
+$G --headless --path . res://tests/SkillCheck.tscn        # 随行神通（技能数值/释放/冷却/回滚）
+$G --headless --path . res://tests/HoverIntentCheck.tscn  # 悬浮怪逼近/环绕/后撤可辨识
+$G --headless --path . res://tests/ManualHotzoneCheck.tscn # 图鉴整格可点（带 -- --selftest）
+$G --headless --path . res://tests/ScrollSwipeCheck.tscn  # 滚动列整列可手指拖动
+$G --headless --path . res://tests/WeaponAimCheck.tscn    # 法器朝向/出膛点（带 -- --selftest）
 ```
 
-非判据现场工具（要真实出声/出图，别加 `--headless`）：`AudioGallery` / `BoltPreview` / `BulletPreview` / `ShakeProbe`。
+非判据现场工具（要真实出声/出图，别加 `--headless`）：`AudioGallery` / `BoltPreview` / `BulletPreview` / `ShakeProbe` / `ObeliskSpentPreview`（界碑耗尽灰相出图对比）/ `WeaponAimPreview`（12 件法器 × 4 方向摆位出图）。
+
+`LayoutCheck` 报红时看数字（headless 可跑）：`$G --headless --path . res://tests/LayoutBleedProbe.tscn` —— 逐档屏宽打印面板与每张卡**画出来**的边界（斜切/放大那圈布局盒量不到的量）。
 
 ## 变更日志（每次改代码必读必写）
 

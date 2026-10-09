@@ -2,6 +2,26 @@ class_name FloatingWeapon
 extends Node2D
 
 ## 环绕玩家的悬浮法器：数值/行为全部来自 WeaponData，星级影响伤害与冷却
+##
+## 朝向的唯一真话（2026-10-09，用户口径：「庚金飞剑发射时朝向不对，没朝敌人；不知道从哪里发射的」）：
+## 本体节点 rotation == 真实瞄准方向（下称"发射帧"），贴图自己按 art_angle 反向补偿，
+## 于是"剑尖指向"和"弹丸出膛方向"和"这一发的 aim_dir"三者必然同轴 —— 不再靠贴图天生朝右。
+## 出膛点 = 发射帧 +X 上 muzzle_len 处，即 WeaponData 里每件法器标定的剑尖/器口。
+## 旧写法是 sprite.rotation 不动、节点转成瞄准角 ⇒ 天生朝右上 35° 的飞剑，剑尖永远偏着 35°，
+## 而 MuzzlePoint 又钉在贴图坐标 (20,0)（×0.55 缩放 = 11px 处，正落在剑格上），
+## 所以看着就是"从剑柄附近不知道哪儿冒出来一发"。
+
+## 未在表里标定 tip 时的兜底（判据 _test_five_elements_system 会钉住"每件都标定过"）
+const FALLBACK_TIP := Vector2(20, 0)
+
+## 近战"画多大==判多大"（2026-10-09）：判定是一个圆 —— 圆心在本体前突 MELEE_LUNGE、
+## 半径 MELEE_ARC_RADIUS × arc_scale × 射程乘区。弧光贴图 slash_effect.png 是围绕自身轴心、
+## 半径 24..31 画布像素、张角 ±70° 的一弯月牙，所以把月牙轴心摆到判定圆心、缩放取
+## 判定半径 / SLASH_ART_OUTER ⇒ 月牙外缘正好压在判定圆的边界上。
+## 旧写法 position=(18,0)、scale=0.85 是钉死的：月牙只够到本体前 ~44px，一挥真打到 ~105px。
+const MELEE_LUNGE := 30.0
+const MELEE_ARC_RADIUS := 75.0
+const SLASH_ART_OUTER := 31.0
 
 @export var weapon_def_id: String = "qingyun_sword"
 @export var star: int = 1
@@ -15,6 +35,11 @@ var pierce: int = 1
 var burst_radius: float = 80.0
 var arc_scale: float = 1.0
 
+var tip_local: Vector2 = FALLBACK_TIP  # 剑尖/器口，贴图坐标系、相对画布中心（画布像素）
+var art_angle: float = 0.0             # == tip_local.angle()：这张图天生朝哪个方向
+var upright: bool = false              # 重器保持世界竖直（宝灯/法牌/大印/灵藤）
+var muzzle_len: float = 11.0           # 出膛点离本体中心的屏上距离 = |tip| × 贴图缩放
+
 var cooldown_timer: float = 0.0
 var base_angle: float = 0.0        # 无目标时回归的基础槽位角（Player 下发）
 var spread_angle: float = 0.0      # 多把法器间的错开角，避免重叠（Player 下发）
@@ -25,7 +50,7 @@ var is_attacking: bool = false
 var bob_phase: float = 0.0
 
 @onready var sprite: Sprite2D = $Sprite2D
-@onready var muzzle_point: Marker2D = $Sprite2D/MuzzlePoint
+@onready var muzzle_point: Marker2D = $MuzzlePoint
 @onready var slash_sprite: Sprite2D = $SlashEffect
 
 var muzzle_flash: Sprite2D
@@ -48,6 +73,9 @@ func setup(def_id: String, star_level: int) -> void:
 	pierce = int(def.get("pierce", 1))
 	burst_radius = float(def.get("burst_radius", 80.0))
 	arc_scale = float(def.get("arc_scale", 1.0))
+	tip_local = def.get("tip", FALLBACK_TIP)
+	art_angle = tip_local.angle()
+	upright = bool(def.get("upright", false))
 
 func _ready() -> void:
 	slash_sprite.visible = false
@@ -58,7 +86,40 @@ func _ready() -> void:
 		setup(weapon_def_id, star)
 	if def.has("icon"):
 		sprite.texture = load(def["icon"])
+	# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
+	muzzle_len = tip_local.length() * sprite.scale.x
+	muzzle_point.position = Vector2(muzzle_len, 0.0)
+	_apply_facing(rotation)
 	_setup_muzzle_flash()
+
+## 朝向唯一入口：节点 rotation = 真实瞄准角（发射帧），贴图自己做补偿。
+## - 会转的法器：贴图补掉 art_angle ⇒ 画出来的剑尖必然落在发射帧 +X 上。
+##   朝左时再沿瞄准轴竖直镜像（flip_v）避免刀剑倒挂 —— 镜像会把 art_angle 变号，补偿角跟着变号。
+## - upright 的重器（宝灯/法牌/大印/灵藤）：贴图反向补掉本体转角，世界坐标里始终竖直，
+##   雷只从"朝目标那一侧的器口"引出（旧写法会把印玺横过来对着人）。
+## MuzzlePoint 挂在节点上而不是贴图下，所以镜像/补偿都不影响它 —— 旧写法把 Marker 钉在
+## Sprite2D 里，flip_v 一开剑尖和出膛点就分家。
+func _apply_facing(angle: float) -> void:
+	rotation = angle
+	if upright:
+		sprite.flip_v = false
+		sprite.rotation = -angle
+	else:
+		var mirrored: bool = absf(wrapf(angle, -PI, PI)) > PI * 0.5
+		sprite.flip_v = mirrored
+		sprite.rotation = art_angle if mirrored else -art_angle
+
+## 这一发的瞄准角：有目标就朝目标，没目标退回当前发射帧（贴图补偿由 _apply_facing 统一做）
+func _aim_at(pos: Vector2) -> float:
+	return (pos - global_position).angle()
+
+## 射程乘区（攻击范围词条 + 剑系/广域羁绊）：武器侧所有"够得着多远"都从这里取，不许各算各的
+func _range_mult() -> float:
+	return GameManager.attack_range_mult * GameManager.synergy_range_mult
+
+## 近战判定圆半径 —— 弧光外缘与 _deal_melee_damage 的查询圆共用这一个数
+func _melee_arc_radius() -> float:
+	return MELEE_ARC_RADIUS * arc_scale * _range_mult()
 
 ## 枪口闪光（远程法器开火反馈）：叠加发光的径向光斑
 func _setup_muzzle_flash() -> void:
@@ -73,7 +134,7 @@ func _setup_muzzle_flash() -> void:
 	muzzle_flash.position = muzzle_point.position
 	muzzle_flash.z_index = 6
 	muzzle_flash.visible = false
-	sprite.add_child(muzzle_flash)
+	add_child(muzzle_flash)
 
 ## 武器本体短促亮闪（近战挥砍/远程开火共用）
 func _flash_sprite(color: Color, dur: float) -> void:
@@ -94,7 +155,7 @@ func _process(delta: float) -> void:
 	else:
 		var player = GameManager.player
 		if player != null:
-			var max_reach = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult * 1.2
+			var max_reach = attack_range * _range_mult() * 1.2
 			if player.global_position.distance_to(current_target.global_position) > max_reach:
 				current_target = _find_target()
 
@@ -111,23 +172,20 @@ func _process(delta: float) -> void:
 		var bob_y = sin(bob_phase) * 3.0
 		position = position.lerp(orbit_pos + Vector2(0, bob_y), minf(delta * 14.0, 1.0))
 
-	# 3. 朝向：有目标面向目标；无目标朝轨道外
+	# 3. 朝向：有目标面向目标；无目标朝轨道外（贴图补偿与镜像都在 _apply_facing 一处算）
 	if not is_attacking:
 		if current_target != null:
-			var target_angle = (current_target.global_position - global_position).angle()
-			rotation = lerp_angle(rotation, target_angle, minf(delta * 15.0, 1.0))
+			var target_angle = _aim_at(current_target.global_position)
+			_apply_facing(lerp_angle(rotation, target_angle, minf(delta * 15.0, 1.0)))
 		else:
-			rotation = lerp_angle(rotation, dynamic_angle, minf(delta * 6.0, 1.0))
-
-		var norm_rot = wrapf(rotation, -PI, PI)
-		sprite.flip_v = abs(norm_rot) > PI * 0.5
+			_apply_facing(lerp_angle(rotation, dynamic_angle, minf(delta * 6.0, 1.0)))
 
 	# 4. 攻击
 	if cooldown_timer <= 0.0 and current_target != null and not is_attacking:
 		_perform_attack()
 
 func _perform_attack() -> void:
-	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
+	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult
 	match behavior:
 		WeaponData.Behavior.MELEE:
 			_perform_melee_attack()
@@ -146,7 +204,8 @@ func _perform_projectile_attack() -> void:
 	var aim_dir = Vector2.RIGHT.rotated(rotation)
 	if current_target != null:
 		aim_dir = (current_target.global_position - global_position).normalized()
-		rotation = aim_dir.angle()
+		# 开火这一帧就把发射帧拧到目标方位：贴图补偿跟着走，剑尖与出膛方向同轴
+		_apply_facing(aim_dir.angle())
 
 	# 后坐动画
 	var orig_pos = position
@@ -173,6 +232,15 @@ func _perform_projectile_attack() -> void:
 	var p_spread: float = float(def.get("spread_angle", 0.2))
 	var p_bounce: int = int(def.get("bounce_count", 0))
 	var final_dmg: float = _final_damage()
+	# 弹丸外观按法器归位（2026-10-09 才真正接上）：WeaponData 的 bullet / bullet_scale / bullet_spin
+	# 三个字段 2026-10-08 就写进表里了，但出膛那一圈从来没读它 —— 运行时五把远程法器
+	# 打出去的全是 BladeProjectile.tscn 里那张公共火符（用户口径：「不知道从哪里发射出来的」）。
+	var bullet_tex: Texture2D = null
+	var bullet_path: String = String(def.get("bullet", ""))
+	if not bullet_path.is_empty() and ResourceLoader.exists(bullet_path):
+		bullet_tex = load(bullet_path) as Texture2D
+	var bullet_scale: float = float(def.get("bullet_scale", 1.0))
+	var bullet_spins: bool = bool(def.get("bullet_spin", false))
 	# 逐发锁定：一次三发的法器，每一发各咬一个最近的敌人。
 	# 旧写法三发全按同一个 aim_dir 扇形散开 ⇒ 只剩一个敌人时两边那两发飞过头顶（仿真：350px
 	# 处散布侧偏 70+px，而判定只有 7px + 受击圈 15px），群怪时又因为不追踪而大量空放。
@@ -199,8 +267,10 @@ func _perform_projectile_attack() -> void:
 		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
 		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
-		p.lifetime *= GameManager.attack_range_mult * GameManager.synergy_range_mult
-		p.spin = behavior != WeaponData.Behavior.PROJECTILE or pierce <= 1
+		p.lifetime *= _range_mult()
+		p.bullet_texture = bullet_tex
+		p.bullet_scale = bullet_scale
+		p.spin = bullet_spins
 		if def.get("proc_burn", false):
 			p.proc_burn = true
 			p.burn_dps = final_dmg * float(def.get("burn_ratio", 0.4))
@@ -224,6 +294,8 @@ func _perform_burst_attack() -> void:
 		target_pos = current_target.global_position
 
 	var strike_dir := (target_pos - global_position).normalized()
+	# 发射帧对准落雷点：upright 的重器（宝灯/法牌/大印）本体保持竖直，只让雷从"朝目标那一侧的器口"引出
+	_apply_facing(strike_dir.angle())
 	var orig_pos := position
 	var cast_pos := orig_pos + Vector2(0.0, -16.0)
 
@@ -255,7 +327,7 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 
 	var burst = burst_scene.instantiate()
 	burst.global_position = target_pos
-	burst.radius = burst_radius * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	burst.radius = burst_radius * _range_mult()
 	var final_dmg := _final_damage()
 	burst.damage = final_dmg
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
@@ -278,14 +350,18 @@ func _perform_melee_attack() -> void:
 	var orig_pos = position
 	var thrust_pos = orig_pos + aim_dir * 26.0
 
-	# 挥砍弧光
-	var swing = deg_to_rad(45.0) * arc_scale
+	# 挥砍弧光：月牙轴心摆在判定圆心、缩放取 判定半径/月牙外缘 ⇒ 月牙外缘 == 那一帧查询圆的边界。
+	# 月牙自身张角 ±70°，本体从 aim-swing 扫到 aim+swing（swing ≤ 60°）时它一直罩着瞄准轴，
+	# 所以打出去的那一下和看得到的那一片是同一处。旧写法 position=(18,0)、scale=0.85 钉死，
+	# 月牙只够到本体前 ~44px，而一挥真打到 ~105px。
+	var swing := deg_to_rad(45.0) * arc_scale
 	var tw = create_tween()
-	rotation = aim_angle - swing
+	_apply_facing(aim_angle - swing)
 	slash_sprite.visible = true
 	slash_sprite.modulate.a = 1.0
+	slash_sprite.position = Vector2(MELEE_LUNGE, 0.0)
+	slash_sprite.scale = Vector2.ONE * (_melee_arc_radius() / SLASH_ART_OUTER)
 	slash_sprite.rotation = 0.0
-	slash_sprite.scale = Vector2.ONE * arc_scale
 	# 挥砍反馈：本体亮闪 + 轻微弹张
 	_flash_sprite(Color(1.45, 1.45, 1.45), 0.15)
 	scale = Vector2(1.08, 1.08)
@@ -293,7 +369,6 @@ func _perform_melee_attack() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(self, "position", thrust_pos, 0.08).set_trans(Tween.TRANS_QUAD)
 	tw.tween_property(self, "rotation", aim_angle + swing, 0.14).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(slash_sprite, "rotation", deg_to_rad(90.0) * arc_scale, 0.14)
 	tw.tween_property(slash_sprite, "modulate:a", 0.0, 0.18)
 
 	tw.chain().set_parallel(false)
@@ -311,10 +386,10 @@ func _perform_melee_attack() -> void:
 func _deal_melee_damage(aim_dir: Vector2) -> void:
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = 75.0 * arc_scale * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	shape.radius = _melee_arc_radius()
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
-	query.transform = Transform2D(0.0, global_position + aim_dir * 30.0)
+	query.transform = Transform2D(0.0, global_position + aim_dir * MELEE_LUNGE)
 	query.collision_mask = 4
 	query.collide_with_areas = true
 	var results = space_state.intersect_shape(query, 24)
@@ -347,7 +422,7 @@ func _find_target() -> Node2D:
 		return null
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	shape.radius = attack_range * _range_mult()
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	# 以玩家为圆心索敌：武器会自行换位到目标一侧，四周的敌人都在打击范围内
@@ -386,7 +461,7 @@ func _volley_targets(n: int) -> Array[Node2D]:
 		return out
 	var space_state = get_world_2d().direct_space_state
 	var shape = CircleShape2D.new()
-	shape.radius = attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	shape.radius = attack_range * _range_mult()
 	var query = PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, player.global_position)

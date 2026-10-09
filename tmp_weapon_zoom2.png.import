@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bw605y631703v"
-path="res://.godot/imported/tmp_manual_tab1.png-0ca6287cc750b1c8d01b88038114abc1.ctex"
+uid="uid://c4nsp5vifv6d4"
+path="res://.godot/imported/tmp_weapon_zoom2.png-a2eb03942d5db7e355592103373d1b51.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tmp_manual_tab1.png"
-dest_files=["res://.godot/imported/tmp_manual_tab1.png-0ca6287cc750b1c8d01b88038114abc1.ctex"]
+source_file="res://tmp_weapon_zoom2.png"
+dest_files=["res://.godot/imported/tmp_weapon_zoom2.png-a2eb03942d5db7e355592103373d1b51.ctex"]
 
 [params]
 

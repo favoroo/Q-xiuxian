@@ -1,29 +1,30 @@
 class_name CultivatorSelect
 extends Control
 
-## 开局道统择选：每名修士都是「超能力 + 严苛负面代偿」的不对称设计
-## 流程：StartMenu → CultivatorSelect → StartWeaponSelect（全程保持 paused）
-##
-## 为什么是「可上下滑的名单」而不是一排卡片（2026-10-08 用户拍板）：
-## 修士加到 9 名后，一排卡片横着 9×210 = 1890 单位远超 20:9 屏的 1202 可视宽，
-## 两头各几张卡直接出屏；卡内文案按内宽折行后又要 591 高 > 540 屏高，
-## 「拜入此门」整排落在屏外点不到 —— 不崩不报错，只有真机看得见。
-## 名单一行一人：图标｜名号+称号｜天赋（绿）｜代价（红）｜那颗键，
-## 一屏看得见四五个、上下滑看完九个，按钮永远在它那一行的行尾。
+## 开局道统择选（上下分层 Master-Detail 架构）：
+## - 上半部分：当前选中修士的详解大卡片（形象、名号、称号、开局装备与特权、独门天赋、背负代价、契合神通、拜入/解锁条件）
+## - 下半部分：全部 9 名修士的形象小卡片横排一览（头像、名号、状态/通关勋章），点击或方向键即时切换预览
+## 流程：StartMenu → CultivatorSelect → SkillSelect → StartWeaponSelect（全程保持 paused）
 
-const EDGE := 24.0        # 名单左右留的屏边
-const ROW_PAD_X := 10.0   # 行内左右边距
-const ICON := 48.0
-const NAME_COL := 150.0
-const BTN_W := 96.0
-const GAP := 12.0         # 各列之间
-const SCROLL_W := 14.0    # 竖向滚动条占的宽：算列宽时要先扣掉，不然整行比可视区宽
-const TXT := 12           # 天赋/代价字号
+const EDGE := 24.0          # 左右屏边留白（兼顾斜切面板伸出量，确保 drawn_rect 不出屏）
+const DETAIL_PAD_X := 14.0  # 顶部详解大卡片左右内边距
+const LEFT_COL_W := 148.0   # 顶部详解卡：左侧形象与名号列宽
+const RIGHT_COL_W := 128.0  # 顶部详解卡：右侧确认/解锁列宽
+const DETAIL_GAP := 12.0    # 顶部详解卡：左中右三列间距
+const ROW_PAD_X := 8.0      # 中间特性条目卡左右内边距
+const TAG_CHIP_W := 68.0    # 中间特性条目卡左侧分类色签宽
+const ROW_GAP := 8.0        # 分类色签与正文间距
+const BORDER_RESERVE := 16.0 # 外层面板描边 + 条目卡描边 + 色签内边距安全余量
+const TXT := 12             # 特性正文字号
+const ROSTER_GAP := 5.0     # 底部形象小卡片间距
+const SMALL_CARD_H := 104.0 # 底部形象小卡片高度
 
 var _title_label: Label
 var _sub_label: Label
-var _scroll: ScrollContainer
-var _list: VBoxContainer
+var _detail_panel: PanelContainer
+var _detail_margin: MarginContainer
+var _roster_row: HBoxContainer
+var _selected_id: String = "jianchi"
 var _transitioning: bool = false
 
 func _ready() -> void:
@@ -34,7 +35,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.02, 0.04, 0.09, 0.88)
+	bg.color = Color(0.02, 0.04, 0.09, 0.90)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -43,24 +44,24 @@ func _build_ui() -> void:
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", int(EDGE))
 	margin.add_theme_constant_override("margin_right", int(EDGE))
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_bottom", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 
-	# 顶部导航栏：左返回按钮 + 居中标题 + 右侧等宽占位保证绝对居中
+	# 1. 顶部导航栏：左返回按钮 + 居中标题 + 右侧等宽占位保证绝对居中
 	var header_row := HBoxContainer.new()
 	header_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(header_row)
 
 	var back_btn := Button.new()
 	back_btn.text = "〈 返 回"
-	back_btn.custom_minimum_size = Vector2(84, 34)
+	back_btn.custom_minimum_size = Vector2(84, 32)
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	back_btn.focus_mode = Control.FOCUS_NONE
@@ -78,7 +79,7 @@ func _build_ui() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	header_row.add_child(_title_label)
-	GameStyle.label(_title_label, 28, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(_title_label, 25, GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	var r_spacer := Control.new()
 	r_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -86,215 +87,437 @@ func _build_ui() -> void:
 	header_row.add_child(r_spacer)
 
 	var dummy_r := Control.new()
-	dummy_r.custom_minimum_size = Vector2(84, 34)
+	dummy_r.custom_minimum_size = Vector2(84, 32)
 	dummy_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header_row.add_child(dummy_r)
 
 	_sub_label = Label.new()
-	_sub_label.text = "每位修士都有独门天赋，也有必须背负的代价 · 上下滑动看全九人"
+	_sub_label.text = "点选下方修士卡片查看道统详情 · 确认开局装备、独门天赋与代价后拜入道门"
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(_sub_label)
-	GameStyle.label(_sub_label, 13, GameStyle.PAPER_DIM)
+	GameStyle.label(_sub_label, 12, GameStyle.PAPER_DIM)
 
-	_scroll = ScrollContainer.new()
-	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
-	vbox.add_child(_scroll)
+	# 2. 上半部分：当前选中人物的介绍大卡片
+	_detail_panel = PanelContainer.new()
+	_detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_detail_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	vbox.add_child(_detail_panel)
 
-	_list = VBoxContainer.new()
-	_list.add_theme_constant_override("separation", 8)
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.mouse_filter = Control.MOUSE_FILTER_PASS
-	_scroll.add_child(_list)
+	_detail_margin = MarginContainer.new()
+	_detail_margin.add_theme_constant_override("margin_left", int(DETAIL_PAD_X))
+	_detail_margin.add_theme_constant_override("margin_right", int(DETAIL_PAD_X))
+	_detail_margin.add_theme_constant_override("margin_top", 10)
+	_detail_margin.add_theme_constant_override("margin_bottom", 10)
+	_detail_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_panel.add_child(_detail_margin)
+
+	# 3. 下半部分：各个人物的形象小卡片与名称横排
+	_roster_row = HBoxContainer.new()
+	_roster_row.add_theme_constant_override("separation", int(ROSTER_GAP))
+	_roster_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_roster_row.custom_minimum_size = Vector2(0, SMALL_CARD_H)
+	_roster_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(_roster_row)
 
 func show_select() -> void:
 	_transitioning = false
-	for child in _list.get_children():
-		child.queue_free()
 	var ids: Array = CultivatorData.all_ids()
-	var col_w := text_col_w(get_viewport().get_visible_rect().size.x)
-	for cid in ids:
-		_list.add_child(_create_row(cid, col_w))
+	if not GameManager.cultivator_id.is_empty() and GameManager.cultivator_id in ids:
+		_selected_id = GameManager.cultivator_id
+	elif not (_selected_id in ids):
+		_selected_id = String(ids[0]) if not ids.is_empty() else "jianchi"
+	_rebuild_all()
 	visible = true
 	modulate.a = 0.0
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.25)
+	tw.tween_property(self, "modulate:a", 1.0, 0.22)
 
-## 天赋列/代价列各有多宽：整屏宽减掉左右屏边、行内边距、图标、名号列、按钮与列间距，
-## 剩下的平分给两列。名单要横向不出屏（只有竖向能滑），所以这一列宽必须现算。
-## 纯函数 ⇒ 判据 LayoutCheck 直接吃它，不另抄一份算术。
+## 顶部详解卡中间特性列的可用文字宽：
+## 整屏宽扣掉屏边留白、详解卡内边距、左列形象区、右列按钮区、列间距，再扣条目卡内边距与分类色签。
+## 纯函数 ⇒ LayoutCheck 直接调用它做全表文案折行校验，不另抄算术。
 static func text_col_w(vis_w: float) -> float:
-	var row_w := vis_w - EDGE * 2.0 - SCROLL_W
-	var used := ROW_PAD_X * 2.0 + ICON + NAME_COL + BTN_W + GAP * 4.0
-	return maxf(120.0, (row_w - used) * 0.5)
+	var panel_inner_w := vis_w - EDGE * 2.0 - DETAIL_PAD_X * 2.0
+	var mid_w := panel_inner_w - LEFT_COL_W - RIGHT_COL_W - DETAIL_GAP * 2.0
+	var txt_w := mid_w - ROW_PAD_X * 2.0 - TAG_CHIP_W - ROW_GAP - BORDER_RESERVE
+	return maxf(160.0, txt_w)
 
-func _create_row(cid: String, col_w: float) -> Control:
+## 底部每张形象小卡片的内部可用文字宽
+static func small_card_inner_w(vis_w: float, count: int = 9) -> float:
+	var n := maxi(1, count)
+	var total_w := vis_w - EDGE * 2.0 - ROSTER_GAP * float(n - 1)
+	var card_w := total_w / float(n)
+	return maxf(48.0, card_w - 10.0)
+
+func _select_cultivator(cid: String) -> void:
+	if _transitioning or cid == _selected_id:
+		return
+	AudioManager.play_sfx("ui_click")
+	_selected_id = cid
+	_rebuild_all()
+
+func _rebuild_all() -> void:
+	var vis_w := get_viewport().get_visible_rect().size.x
+	if vis_w <= 0.0:
+		vis_w = 960.0
+	_rebuild_detail_card(_selected_id, vis_w)
+	_rebuild_roster_cards(vis_w)
+
+# ---------------- 上半部分：人物介绍大卡片 ----------------
+
+func _rebuild_detail_card(cid: String, vis_w: float) -> void:
+	for child in _detail_margin.get_children():
+		child.queue_free()
+
 	var def: Dictionary = CultivatorData.get_def(cid)
-	var is_current: bool = (cid == GameManager.cultivator_id)
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var best_d: int = GameManager.get_cultivator_best_danger(cid)
-	var row := PanelContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_PASS
 
-	var style := StyleBoxFlat.new()
-	if not is_unlocked:
-		style.bg_color = GameStyle.INK.lightened(0.02)
-	elif is_current:
-		style.bg_color = GameStyle.NAVY.lightened(0.05)
-	else:
-		style.bg_color = GameStyle.NAVY
-	style.skew = Vector2(deg_to_rad(3.0), 0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 5
-	if not is_unlocked:
-		style.border_color = GameStyle.LINE
-	elif is_current:
-		style.border_color = GameStyle.YELLOW
-	else:
-		style.border_color = GameStyle.BLUE.darkened(0.35)
-	style.shadow_color = Color(0, 0, 0, 0.45)
-	style.shadow_size = 0
-	style.shadow_offset = Vector2(4, 4)
-	style.content_margin_left = ROW_PAD_X
-	style.content_margin_top = 8.0
-	style.content_margin_right = ROW_PAD_X
-	style.content_margin_bottom = 8.0
-	row.add_theme_stylebox_override("panel", style)
+	var p_style := StyleBoxFlat.new()
+	p_style.bg_color = GameStyle.NAVY if is_unlocked else GameStyle.INK.lightened(0.03)
+	p_style.skew = Vector2(deg_to_rad(GameStyle.SLANT_PLATE), 0.0)
+	p_style.border_width_left = 2
+	p_style.border_width_top = 2
+	p_style.border_width_right = 2
+	p_style.border_width_bottom = 5
+	p_style.border_color = GameStyle.YELLOW if is_unlocked else GameStyle.LINE
+	p_style.shadow_color = Color(0, 0, 0, 0.5)
+	p_style.shadow_size = 0
+	p_style.shadow_offset = Vector2(4, 5)
+	_detail_panel.add_theme_stylebox_override("panel", p_style)
 
 	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", int(DETAIL_GAP))
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_theme_constant_override("separation", int(GAP))
-	row.add_child(hbox)
+	_detail_margin.add_child(hbox)
 
-	# 图标（未解锁时压暗灰显）
+	# 1. 左列：大头像 + 名号 + 称号 + 通关状态
+	var left_col := VBoxContainer.new()
+	left_col.custom_minimum_size = Vector2(LEFT_COL_W, 0)
+	left_col.add_theme_constant_override("separation", 6)
+	left_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	left_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(left_col)
+
 	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(ICON, ICON)
-	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_box.custom_minimum_size = Vector2(72, 72)
+	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE if not is_unlocked else GameStyle.BLUE_EDGE, 2, 0.0))
+	var icon_border := GameStyle.YELLOW if is_unlocked else GameStyle.LINE
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, icon_border, 2, 0.0))
+
 	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(def.get("icon", "")):
-		icon_tex.texture = load(def["icon"])
+	if ResourceLoader.exists(String(def.get("icon", ""))):
+		icon_tex.texture = load(String(def["icon"]))
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(ICON - 8, ICON - 8)
+	icon_tex.custom_minimum_size = Vector2(60, 60)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if not is_unlocked:
 		icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
 	icon_box.add_child(icon_tex)
-	hbox.add_child(icon_box)
-
-	# 名号 + 称号 + 通关勋章
-	var name_col := VBoxContainer.new()
-	name_col.custom_minimum_size = Vector2(NAME_COL, 0)
-	name_col.add_theme_constant_override("separation", 4)
-	name_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	name_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(name_col)
+	left_col.add_child(icon_box)
 
 	var name_lbl := Label.new()
-	name_lbl.text = GameStyle.wrap_cjk(def.get("name", "?"), GameStyle.display_font(), 17, NAME_COL)
-	name_lbl.custom_minimum_size = Vector2(NAME_COL, 0)
-	name_col.add_child(name_lbl)
-	GameStyle.label(name_lbl, 17, GameStyle.PAPER_DIM if not is_unlocked else GameStyle.PAPER, 0, GameStyle.INK, true)
+	name_lbl.text = GameStyle.wrap_cjk(String(def.get("name", "?")), GameStyle.display_font(), 18, LEFT_COL_W)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.custom_minimum_size = Vector2(LEFT_COL_W, 0)
+	left_col.add_child(name_lbl)
+	GameStyle.label(name_lbl, 18, GameStyle.PAPER if is_unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 
-	var badge_row := HBoxContainer.new()
-	badge_row.add_theme_constant_override("separation", 4)
-	badge_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	name_col.add_child(badge_row)
-
-	var epi_txt := GameStyle.wrap_cjk(" " + def.get("epithet", "") + " ", GameStyle.body_font(), 10, NAME_COL - 8.0)
+	var epi_raw := " " + String(def.get("epithet", "")) + " "
+	var epi_txt := GameStyle.wrap_cjk(epi_raw, GameStyle.body_font(), 10, LEFT_COL_W - 8.0)
 	var epithet_lbl := Label.new()
 	epithet_lbl.text = epi_txt
 	epithet_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	epithet_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(epi_txt, GameStyle.body_font(), 10), 0)
 	epithet_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	epithet_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2 if not is_unlocked else GameStyle.BLUE))
-	badge_row.add_child(epithet_lbl)
-	GameStyle.label(epithet_lbl, 10, GameStyle.GREY if not is_unlocked else GameStyle.PAPER)
+	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE_DK if is_unlocked else GameStyle.NAVY2))
+	left_col.add_child(epithet_lbl)
+	GameStyle.label(epithet_lbl, 10, GameStyle.PAPER if is_unlocked else GameStyle.GREY)
 
-	# 若已通关过危险度，展示通关金色勋章
+	var status_chip := Label.new()
+	status_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	if is_unlocked and best_d >= 0:
-		var medal_lbl := Label.new()
 		var d_name: String = AchievementData.danger_name(best_d)
-		medal_lbl.text = " ★ %s " % d_name
-		medal_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
-		badge_row.add_child(medal_lbl)
-		GameStyle.label(medal_lbl, 10, GameStyle.YELLOW)
+		status_chip.text = " ★ 最高通关·%s " % d_name
+		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
+		GameStyle.label(status_chip, 10, GameStyle.YELLOW)
+	elif is_unlocked:
+		status_chip.text = " ✦ 道门已开 "
+		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
+		GameStyle.label(status_chip, 10, GameStyle.GOOD)
+	else:
+		status_chip.text = " ✖ 天道锁闭 "
+		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BAD_DK))
+		GameStyle.label(status_chip, 10, GameStyle.BAD)
+	left_col.add_child(status_chip)
 
-	if not is_unlocked:
-		# 未解锁提示区（合并两列宽度展示解锁成就条件）
-		var lock_box := VBoxContainer.new()
-		lock_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lock_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		lock_box.add_theme_constant_override("separation", 4)
-		lock_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hbox.add_child(lock_box)
+	# 2. 中列：结构化彩色特性行（开局装备 / 独门天赋 / 背负代价 / 契合神通）
+	var mid_col := VBoxContainer.new()
+	mid_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mid_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mid_col.add_theme_constant_override("separation", 6)
+	mid_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(mid_col)
 
+	var col_w := text_col_w(vis_w)
+
+	# (a) 开局装备与专属特权（黄色高亮）
+	var equip_text := "✦ " + CultivatorData.get_start_equip(cid)
+	mid_col.add_child(_make_info_row("开局装备", GameStyle.YELLOW_DK, GameStyle.YELLOW, [equip_text], GameStyle.YELLOW, col_w))
+
+	# (b) 独门天赋（绿色高亮）
+	var pros_lines: Array[String] = []
+	for p in def.get("pros", []):
+		pros_lines.append("＋ " + String(p))
+	var pros_joined := "    ".join(pros_lines) if pros_lines.size() <= 2 else "\n".join(pros_lines)
+	mid_col.add_child(_make_info_row("独门天赋", GameStyle.GOOD_DK, GameStyle.GOOD, [pros_joined], GameStyle.GOOD, col_w))
+
+	# (c) 背负代价（红色高亮）
+	var cons_lines: Array[String] = []
+	for c in def.get("cons", []):
+		cons_lines.append("－ " + String(c))
+	var cons_joined := "    ".join(cons_lines) if cons_lines.size() <= 2 else "\n".join(cons_lines)
+	mid_col.add_child(_make_info_row("背负代价", GameStyle.BAD_DK, GameStyle.BAD, [cons_joined], GameStyle.BAD, col_w))
+
+	# (d) 契合神通（蓝色高亮，动态从 SkillData 合入真实强化描述）
+	var syn_sid := CultivatorData.get_synergy_skill_id(cid)
+	var syn_text := "✦ 任意随行神通皆可搭配"
+	if not syn_sid.is_empty():
+		var sdef := SkillData.get_def(syn_sid)
+		var sname := String(sdef.get("name", syn_sid))
+		var enh := SkillData.enhance_desc(syn_sid, cid)
+		if not enh.is_empty():
+			syn_text = "✦ 专属契合「%s」：%s" % [sname, enh]
+		else:
+			syn_text = "✦ 专属契合「%s」" % sname
+	mid_col.add_child(_make_info_row("契合神通", GameStyle.BLUE_DK, GameStyle.BLUE_EDGE, [syn_text], GameStyle.BLUE_EDGE, col_w))
+
+	# 3. 右列：拜入此门按钮 或 解锁条件说明
+	var right_col := VBoxContainer.new()
+	right_col.custom_minimum_size = Vector2(RIGHT_COL_W, 0)
+	right_col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	right_col.add_theme_constant_override("separation", 8)
+	right_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	right_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(right_col)
+
+	if is_unlocked:
+		var ready_lbl := Label.new()
+		ready_lbl.text = "✦ 道统就绪 ✦"
+		ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(ready_lbl, 12, GameStyle.YELLOW)
+		right_col.add_child(ready_lbl)
+
+		var choose_btn := Button.new()
+		choose_btn.text = "拜 入 此 门"
+		choose_btn.custom_minimum_size = Vector2(RIGHT_COL_W, 46)
+		choose_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+		choose_btn.focus_mode = Control.FOCUS_NONE
+		GameStyle.button(choose_btn, GameStyle.BLUE, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+		choose_btn.pressed.connect(func(): _choose(cid))
+		right_col.add_child(choose_btn)
+	else:
 		var ach := AchievementData.cultivator_unlock_achievement(cid)
-		var cond_text: String = String(ach.get("cond_desc", "完成特定天道考验"))
-		var lock_title := Label.new()
-		lock_title.text = "✦ 未 解 锁 · 天 道 锁 闭 ✦"
-		GameStyle.label(lock_title, 13, GameStyle.BAD)
-		lock_box.add_child(lock_title)
+		var ach_name := String(ach.get("name", "天道考验"))
+		var cond_text := String(ach.get("cond_desc", "完成特定天道功绩后解锁"))
+
+		var lock_hdr := Label.new()
+		lock_hdr.text = "✦ 解锁条件 ✦"
+		lock_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(lock_hdr, 12, GameStyle.BAD)
+		right_col.add_child(lock_hdr)
+
+		var ach_lbl := Label.new()
+		var ach_wrapped := GameStyle.wrap_cjk("功绩「%s」" % ach_name, GameStyle.body_font(), 11, RIGHT_COL_W - 4.0)
+		ach_lbl.text = ach_wrapped
+		ach_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ach_lbl.custom_minimum_size = Vector2(RIGHT_COL_W - 4.0, 0)
+		ach_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		GameStyle.label(ach_lbl, 11, GameStyle.YELLOW)
+		right_col.add_child(ach_lbl)
 
 		var cond_lbl := Label.new()
-		var total_col_w: float = col_w * 2.0 + GAP
-		cond_lbl.text = GameStyle.wrap_cjk("✦ 解锁功绩「%s」：%s" % [ach.get("name", "未知"), cond_text], GameStyle.body_font(), TXT, total_col_w)
-		cond_lbl.custom_minimum_size = Vector2(total_col_w, 0)
+		var cond_wrapped := GameStyle.wrap_cjk(cond_text, GameStyle.body_font(), 11, RIGHT_COL_W - 4.0)
+		cond_lbl.text = cond_wrapped
+		cond_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cond_lbl.custom_minimum_size = Vector2(RIGHT_COL_W - 4.0, 0)
 		cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		GameStyle.label(cond_lbl, TXT, GameStyle.YELLOW)
-		lock_box.add_child(cond_lbl)
+		GameStyle.label(cond_lbl, 11, GameStyle.PAPER_DIM)
+		right_col.add_child(cond_lbl)
 
-		# 灰显禁用按钮
-		var btn := Button.new()
-		btn.text = "未 解 锁"
-		btn.custom_minimum_size = Vector2(BTN_W, 38)
-		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		btn.disabled = true
-		btn.focus_mode = Control.FOCUS_NONE
-		GameStyle.button(btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, 6.0)
-		hbox.add_child(btn)
+		var lock_btn := Button.new()
+		lock_btn.text = "未 解 锁"
+		lock_btn.custom_minimum_size = Vector2(RIGHT_COL_W, 38)
+		lock_btn.disabled = true
+		lock_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+		lock_btn.focus_mode = Control.FOCUS_NONE
+		GameStyle.button(lock_btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, 6.0)
+		right_col.add_child(lock_btn)
+
+## 构造一条「左侧色签 + 右侧着色文案」的特性行卡片
+func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
+		lines: Array, text_col: Color, col_w: float) -> PanelContainer:
+	var row_panel := PanelContainer.new()
+	row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = GameStyle.NAVY2
+	sb.skew = Vector2(deg_to_rad(2.0), 0.0)
+	sb.border_width_left = 3
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 2
+	sb.border_color = accent_col
+	sb.content_margin_left = ROW_PAD_X
+	sb.content_margin_right = ROW_PAD_X
+	sb.content_margin_top = 5.0
+	sb.content_margin_bottom = 5.0
+	row_panel.add_theme_stylebox_override("panel", sb)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", int(ROW_GAP))
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row_panel.add_child(hbox)
+
+	var tag_lbl := Label.new()
+	tag_lbl.text = " %s " % tag_title
+	tag_lbl.custom_minimum_size = Vector2(TAG_CHIP_W, 0)
+	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
+	GameStyle.label(tag_lbl, 11, accent_col)
+	hbox.add_child(tag_lbl)
+
+	var text_box := VBoxContainer.new()
+	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_box.add_theme_constant_override("separation", 2)
+	text_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(text_box)
+
+	for raw_line in lines:
+		var lbl := Label.new()
+		lbl.text = GameStyle.wrap_cjk(String(raw_line), GameStyle.body_font(), TXT, col_w)
+		lbl.custom_minimum_size = Vector2(col_w, 0)
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		GameStyle.label(lbl, TXT, text_col)
+		text_box.add_child(lbl)
+
+	return row_panel
+
+# ---------------- 下半部分：人物形象小卡片横排 ----------------
+
+func _rebuild_roster_cards(vis_w: float) -> void:
+	for child in _roster_row.get_children():
+		child.queue_free()
+
+	var ids: Array = CultivatorData.all_ids()
+	var inner_w := small_card_inner_w(vis_w, ids.size())
+	for cid in ids:
+		_roster_row.add_child(_create_small_card(String(cid), inner_w))
+
+func _create_small_card(cid: String, inner_w: float) -> Control:
+	var def: Dictionary = CultivatorData.get_def(cid)
+	var is_selected: bool = (cid == _selected_id)
+	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
+	var best_d: int = GameManager.get_cultivator_best_danger(cid)
+
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(66, SMALL_CARD_H)
+
+	var style := StyleBoxFlat.new()
+	if is_selected:
+		style.bg_color = GameStyle.NAVY.lightened(0.12)
+	elif is_unlocked:
+		style.bg_color = GameStyle.NAVY
 	else:
-		# 已解锁：天赋（绿）与代价（红）
-		hbox.add_child(_make_text_col(def.get("pros", []), "✦ ", GameStyle.GOOD, col_w))
-		hbox.add_child(_make_text_col(def.get("cons", []), "✖ ", GameStyle.BAD, col_w))
+		style.bg_color = GameStyle.INK.lightened(0.02)
+	style.skew = Vector2(deg_to_rad(GameStyle.SLANT_PLATE), 0.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 4
+	if is_selected:
+		style.border_color = GameStyle.YELLOW
+	elif is_unlocked:
+		style.border_color = GameStyle.BLUE.darkened(0.35)
+	else:
+		style.border_color = GameStyle.LINE
+	style.shadow_color = Color(0, 0, 0, 0.45)
+	style.shadow_size = 0
+	style.shadow_offset = Vector2(3, 3)
+	style.content_margin_left = 3.0
+	style.content_margin_right = 3.0
+	style.content_margin_top = 6.0
+	style.content_margin_bottom = 5.0
+	card.add_theme_stylebox_override("panel", style)
 
-		# 行尾拜入按钮
-		var btn := Button.new()
-		btn.text = "拜 入 此 门"
-		btn.custom_minimum_size = Vector2(BTN_W, 38)
-		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		btn.mouse_filter = Control.MOUSE_FILTER_PASS
-		btn.focus_mode = Control.FOCUS_NONE
-		GameStyle.button(btn, GameStyle.BLUE, GameStyle.YELLOW, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
-		btn.pressed.connect(func(): _choose(cid))
-		hbox.add_child(btn)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 3)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	card.add_child(vbox)
 
-	return row
+	# 形象小头像
+	var icon_box := PanelContainer.new()
+	icon_box.custom_minimum_size = Vector2(42, 42)
+	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var ib_border := GameStyle.YELLOW if is_selected else (GameStyle.BLUE_EDGE if is_unlocked else GameStyle.LINE)
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
-## 一列条目（每个条目一条文案，已按列宽切好硬换行）
-func _make_text_col(items: Array, mark: String, col: Color, col_w: float) -> VBoxContainer:
-	var box := VBoxContainer.new()
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	box.add_theme_constant_override("separation", 2)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for line in items:
-		var l := Label.new()
-		l.text = GameStyle.wrap_cjk(mark + line, GameStyle.body_font(), TXT, col_w)
-		l.custom_minimum_size = Vector2(col_w, 0)
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(l)
-		GameStyle.label(l, TXT, col)
-	return box
+	var icon_tex := TextureRect.new()
+	if ResourceLoader.exists(String(def.get("icon", ""))):
+		icon_tex.texture = load(String(def["icon"]))
+	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon_tex.custom_minimum_size = Vector2(36, 36)
+	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	if not is_unlocked:
+		icon_tex.modulate = Color(0.38, 0.38, 0.48, 0.68)
+	icon_box.add_child(icon_tex)
+	vbox.add_child(icon_box)
+
+	# 人物名称（窄屏自动切 11 号字保证单行不撑破）
+	var name_fsize := 12 if inner_w >= 78.0 else 11
+	var raw_name := String(def.get("name", "?"))
+	var name_lbl := Label.new()
+	name_lbl.text = GameStyle.wrap_cjk(raw_name, GameStyle.display_font(), name_fsize, inner_w)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.custom_minimum_size = Vector2(inner_w, 0)
+	var name_col := GameStyle.YELLOW if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+	GameStyle.label(name_lbl, name_fsize, name_col, 0, GameStyle.INK, true)
+	vbox.add_child(name_lbl)
+
+	# 底部状态小签
+	var tag_lbl := Label.new()
+	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if is_selected:
+		tag_lbl.text = "◆ 当前 ◆"
+		GameStyle.label(tag_lbl, 10, GameStyle.YELLOW)
+	elif not is_unlocked:
+		tag_lbl.text = "未解锁"
+		GameStyle.label(tag_lbl, 10, GameStyle.GREY)
+	elif best_d >= 0:
+		tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
+		GameStyle.label(tag_lbl, 10, GameStyle.YELLOW)
+	else:
+		tag_lbl.text = "已入门"
+		GameStyle.label(tag_lbl, 10, GameStyle.PAPER_DIM)
+	vbox.add_child(tag_lbl)
+
+	card.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+			_select_cultivator(cid)
+	)
+	GameStyle.hotzone(card)
+	return card
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible or _transitioning:
@@ -302,6 +525,26 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		_on_back_pressed()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_left"):
+		_step_selection(-1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_right"):
+		_step_selection(1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_accept"):
+		if GameManager.is_cultivator_unlocked(_selected_id):
+			_choose(_selected_id)
+			get_viewport().set_input_as_handled()
+
+func _step_selection(delta: int) -> void:
+	var ids: Array = CultivatorData.all_ids()
+	if ids.is_empty():
+		return
+	var idx := ids.find(_selected_id)
+	if idx < 0:
+		idx = 0
+	var next_idx := (idx + delta + ids.size()) % ids.size()
+	_select_cultivator(String(ids[next_idx]))
 
 func _on_back_pressed() -> void:
 	if not visible or _transitioning:
@@ -331,7 +574,12 @@ func _choose(cid: String) -> void:
 	tw.tween_callback(func():
 		visible = false
 		_transitioning = false
-		var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
-		if weapon_select != null:
-			weapon_select.show_select()
+		# 选人三步曲：道统 → 随行神通 → 本命法器；旧档缺 SkillSelect 节点时回退直进法器
+		var skill_select := get_parent().get_node_or_null("SkillSelect")
+		if skill_select != null and skill_select.has_method("show_select"):
+			skill_select.show_select()
+		else:
+			var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
+			if weapon_select != null:
+				weapon_select.show_select()
 	)

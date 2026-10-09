@@ -4,6 +4,8 @@ extends Node2D
 ## 聚灵阵 — 玩家主动长按激活的阵法节点。
 ## 玩家进入范围后 HUD 显示激活按钮，长按充能，松手前完成则触发全屏灵气冲击；
 ## 松手过早或离开范围则中断充能、进度归零。
+## 触发后进入「耗尽灰相」：熄灯、光圈撤掉、石碑去色 —— 一眼看出这座已经用掉了
+## （三座界碑共用同一份 .tscn，所以褪灰材质必须 resource_local_to_scene，见 .tscn）。
 
 ## 充能时长（秒）—— 比旧版 3s 短，手感更利落
 const CHARGE_TIME: float = 1.5
@@ -13,6 +15,10 @@ const BLESSING_DAMAGE: float = 85.0
 const KNOCK_FORCE: float = 320.0
 ## 掉落金色灵石数量
 const GEM_COUNT: int = 5
+## 爆闪之后转入灰相的时长（秒）
+const SPENT_FADE_TIME: float = 0.55
+## 耗尽态去色程度（0~1，喂给 desaturate.gdshader）
+const SPENT_DESATURATE: float = 1.0
 
 ## 与 HUD 通信的信号
 signal activation_available(obelisk: BlessingObelisk)
@@ -30,6 +36,8 @@ var charge_time: float = 0.0
 @onready var light: PointLight2D = $PointLight2D
 @onready var circle_sprite: Node2D = $ChargeCircle
 @onready var interaction_area: Area2D = $InteractionArea
+## 石碑褪灰走着色器：modulate 乘不出灰色（蓝底乘灰还是蓝），必须按亮度压色
+@onready var stone_mat: ShaderMaterial = $Sprite2D.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 var gold_gem_tex: Texture2D = preload("res://assets/art/gem_gold.png")
@@ -130,11 +138,19 @@ func _trigger_blessing() -> void:
 		gem.get_node("Sprite2D").texture = gold_gem_tex
 		gem.get_node("PointLight2D").color = Color(1.0, 0.85, 0.35)
 		get_parent().call_deferred("add_child", gem)
-	# 触发视觉：光能爆闪 + 灵符环淡出
+	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相
 	var tw = create_tween()
 	tw.tween_property(light, "energy", 5.0, 0.12)
-	tw.tween_property(light, "energy", 0.8, 0.5)
-	tw.parallel().tween_property(circle_sprite, "modulate:a", 0.15, 0.4)
+	tw.tween_property(light, "energy", 0.0, SPENT_FADE_TIME)
+	tw.parallel().tween_property(circle_sprite, "modulate:a", 0.0, SPENT_FADE_TIME)
+	if stone_mat != null:
+		tw.parallel().tween_property(stone_mat, ^"shader_parameter/amount", SPENT_DESATURATE, SPENT_FADE_TIME)
+	tw.tween_callback(_enter_spent_look)
+
+## 灰相收口：灯直接关掉、范围环不再占位（看不见却还在的圈就是 bug）
+func _enter_spent_look() -> void:
+	light.enabled = false
+	circle_sprite.visible = false
 
 ## 触发时的扩散灵气环 —— 视觉冲击
 func _spawn_shockwave_ring() -> void:

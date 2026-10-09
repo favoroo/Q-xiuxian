@@ -101,6 +101,11 @@ func _load_audio_assets() -> void:
 	_register_sfx("heal", _sfx_paths("heal", 2))
 	_register_sfx("victory", _sfx_paths("victory", 1))
 	_register_sfx("defeat", _sfx_paths("defeat", 1))
+	# 随行神通（bake_sfx.py 烘焙）
+	_register_sfx("skill_dash", _sfx_paths("skill_dash", 2))
+	_register_sfx("skill_buff", _sfx_paths("skill_buff", 2))
+	_register_sfx("skill_aegis", _sfx_paths("skill_aegis", 2))
+	_register_sfx("skill_heal", _sfx_paths("skill_heal", 2))
 
 ## 音效文件名规律：<key>_<序号>.wav，wav 与 ogg 两种产物都能认
 static func _sfx_paths(name: String, count: int) -> Array:

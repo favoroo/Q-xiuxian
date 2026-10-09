@@ -25,6 +25,14 @@ var flash_tween: Tween = null
 var squash_tween: Tween = null
 var dust_timer: float = 0.0
 
+# ---------------- 随行神通（技能）运行时 ----------------
+var skill_cd_left: float = 0.0     ## 技能冷却剩余秒（HUD 冷却遮罩轮询这个）
+var skill_cd_total: float = 1.0    ## 本次释放进入的总冷却（算遮罩比例用）
+var _skill_buffs: Dictionary = {}  ## 进行中的短时增益：buff id -> 剩余秒（gale / haste）
+var _dash_time: float = 0.0        ## 冲刺剩余秒（>0 期间移动被冲刺接管）
+var _dash_dir: Vector2 = Vector2.DOWN
+var _dash_speed: float = 0.0
+
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
 
@@ -168,8 +176,12 @@ func sync_drones() -> void:
 			var orb = sun_orb_scene.instantiate()
 			sun_orb_container.add_child(orb)
 	elif current_count > target.size():
-		for i in range(current_count - target.size()):
-			sun_orb_container.get_child(0).queue_free()
+		var to_remove = current_count - target.size()
+		for i in range(to_remove):
+			var last_idx = sun_orb_container.get_child_count() - 1
+			var child = sun_orb_container.get_child(last_idx)
+			sun_orb_container.remove_child(child)
+			child.queue_free()
 	for i in range(sun_orb_container.get_child_count()):
 		var orb = sun_orb_container.get_child(i) as SunOrb
 		if orb != null and i < target.size():
@@ -189,11 +201,116 @@ func heal(amount: float, quiet: bool = false) -> void:
 	AudioManager.play_sfx("heal", 0.9)
 	DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+" + str(int(amount)))
 
+# ---------------- 随行神通（技能） ----------------
+
+## HUD 技能按钮入口。false = 没放出来（CD 中 / 战斗外 / 无技能），调用方不发反馈
+func try_activate_skill() -> bool:
+	var sid := GameManager.active_skill_id
+	if sid.is_empty() or GameManager.is_game_over or skill_cd_left > 0.0:
+		return false
+	var spawner: Node = GameManager.wave_spawner
+	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
+		return false
+	var st := SkillData.final_stats(sid, GameManager.cultivator_id)
+	if st.is_empty():
+		return false
+	skill_cd_total = float(st["cooldown"])
+	skill_cd_left = skill_cd_total
+	match int(st["kind"]):
+		SkillData.Kind.DASH:
+			_do_dash(st)
+		SkillData.Kind.SPEED:
+			_do_gale(st)
+		SkillData.Kind.HASTE:
+			_do_haste(st)
+		SkillData.Kind.IFRAME:
+			_do_aegis(st)
+		SkillData.Kind.HEAL:
+			_do_renewal(st)
+	return true
+
+func _tick_skill_buffs(delta: float) -> void:
+	var expired: Array = []
+	for key in _skill_buffs.keys():
+		_skill_buffs[key] = float(_skill_buffs[key]) - delta
+		if float(_skill_buffs[key]) <= 0.0:
+			expired.append(key)
+	for key in expired:
+		_skill_buffs.erase(key)
+		# 到期精确回滚：buff 乘区与加点/羁绊乘区隔离，回 1.0 即完全无残留
+		match String(key):
+			"gale":
+				GameManager.buff_move_speed_mult = 1.0
+			"haste":
+				GameManager.buff_attack_speed_mult = 1.0
+
+## 无输入时按当前朝向给冲刺方向（facing + flip_h 还原 8 方向单位向量）
+func _facing_vec() -> Vector2:
+	var right := Vector2.LEFT if anim_sprite.flip_h else Vector2.RIGHT
+	match facing:
+		"n":
+			return Vector2.UP
+		"s":
+			return Vector2.DOWN
+		"e":
+			return right
+		"se":
+			return (Vector2.DOWN + right).normalized()
+		"ne":
+			return (Vector2.UP + right).normalized()
+	return Vector2.DOWN
+
+func _do_dash(st: Dictionary) -> void:
+	var dir: Vector2 = Vector2.ZERO
+	if GameManager.joystick != null and GameManager.joystick.has_method("get_direction"):
+		dir = GameManager.joystick.get_direction()
+	if dir.length_squared() < 0.03:
+		# 松手冲刺：沿当前惯性方向；站定则沿面朝方向
+		dir = velocity.normalized() if velocity.length_squared() > 900.0 else _facing_vec()
+	_dash_dir = dir.normalized()
+	_dash_time = float(st["duration"])
+	_dash_speed = float(st["distance"]) / maxf(0.05, _dash_time)
+	# 冲刺无敌覆盖位移全程再多 2 帧余量，落点瞬间不吃贴脸伤害
+	invulnerable_time = maxf(invulnerable_time, _dash_time + 0.04)
+	play_squash(Vector2(1.3, 0.72), 0.2)
+	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
+	AudioManager.play_sfx("skill_dash", 1.0)
+
+func _do_gale(st: Dictionary) -> void:
+	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
+	_skill_buffs["gale"] = float(st["duration"])
+	play_squash(Vector2(0.85, 1.2), 0.2)
+	AudioManager.play_sfx("skill_buff", 1.0)
+
+func _do_haste(st: Dictionary) -> void:
+	GameManager.buff_attack_speed_mult = maxf(GameManager.ATTACK_SPEED_FLOOR, 1.0 - float(st["power"]))
+	_skill_buffs["haste"] = float(st["duration"])
+	play_squash(Vector2(1.12, 0.9), 0.18)
+	AudioManager.play_sfx("skill_buff", 1.1)
+
+func _do_aegis(st: Dictionary) -> void:
+	invulnerable_time = maxf(invulnerable_time, float(st["duration"]))
+	play_squash(Vector2(0.82, 1.22), 0.24)
+	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, true)
+	AudioManager.play_sfx("skill_aegis", 1.0)
+
+func _do_renewal(st: Dictionary) -> void:
+	heal(max_health * float(st["power"]), true)
+	play_squash(Vector2(0.88, 1.16), 0.18)
+	DamageNumber.spawn(get_parent(), global_position, int(max_health * float(st["power"])), false, "+" + str(int(max_health * float(st["power"]))) + " HP")
+	AudioManager.play_sfx("skill_heal", 1.0)
+
 # ---------------- 主循环 ----------------
 
 func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
+
+	# 技能冷却与短时增益倒计时（与加点乘区隔离，到期精确回滚）
+	if skill_cd_left > 0.0:
+		skill_cd_left -= delta
+	if not _skill_buffs.is_empty():
+		_tick_skill_buffs(delta)
 
 	if invulnerable_time > 0.0:
 		invulnerable_time -= delta
@@ -217,8 +334,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 
-	var target_speed := base_speed * (GameManager.move_speed_mult + GameManager.synergy_move_speed_mult)
+	var target_speed := base_speed * (GameManager.move_speed_mult + GameManager.synergy_move_speed_mult) * GameManager.buff_move_speed_mult
 	var target_velocity := dir * target_speed
+	# 冲刺接管移动：不吃加减速插值，匀速直射，途中刀枪不入（无敌在 _do_dash 里已给）
+	if _dash_time > 0.0:
+		_dash_time -= delta
+		target_velocity = _dash_dir * _dash_speed
+		velocity = target_velocity
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
@@ -375,16 +497,78 @@ func _update_weapon_targets() -> void:
 				w.current_target = null
 
 func _process_sun_orbs(delta: float) -> void:
-	var haste_factor: float = clampf(1.0 / maxf(0.3, GameManager.attack_speed_mult * GameManager.synergy_haste_mult), 1.0, 2.5)
-	sun_orb_angle += delta * 2.8 * haste_factor
-	var count = sun_orb_container.get_child_count()
+	var count := sun_orb_container.get_child_count()
 	if count == 0:
 		return
-	var radius: float = SunOrb.ORBIT_RADIUS * GameManager.attack_range_mult
+
+	var range_mult: float = GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var base_radius: float = SunOrb.ORBIT_RADIUS * range_mult
+	var min_radius: float = SunOrb.MIN_ORBIT_RADIUS
+	var max_reach: float = 120.0
+	var max_star: int = 1
 	for i in range(count):
-		var orb = sun_orb_container.get_child(i) as Node2D
-		var a = sun_orb_angle + float(i) * (TAU / float(count))
-		orb.position = Vector2(cos(a), sin(a)) * radius
+		var orb_child := sun_orb_container.get_child(i) as SunOrb
+		if orb_child != null:
+			if orb_child.max_orbit_reach > max_reach:
+				max_reach = orb_child.max_orbit_reach
+			if orb_child.star > max_star:
+				max_star = orb_child.star
+	var eff_max_reach: float = max_reach * range_mult
+
+	# 扫描御灵感知圈内的敌人（用于扇区扑击、贴脸内收与战斗加速）
+	var enemies_info: Array[Dictionary] = []
+	var space_state := get_world_2d().direct_space_state
+	if space_state != null:
+		var shape := CircleShape2D.new()
+		shape.radius = eff_max_reach + 24.0
+		var query := PhysicsShapeQueryParameters2D.new()
+		query.shape = shape
+		query.transform = Transform2D(0.0, global_position)
+		query.collision_mask = 4
+		query.collide_with_areas = true
+		var results := space_state.intersect_shape(query, 32)
+		var seen_ids := {}
+		for res in results:
+			var col = res.get("collider")
+			if col and col.get_parent() and col.get_parent().has_method("take_damage"):
+				var enemy := col.get_parent() as Node2D
+				if not is_instance_valid(enemy) or enemy.is_in_group("chests") or enemy.is_in_group("herbs"):
+					continue
+				var eid := enemy.get_instance_id()
+				if seen_ids.has(eid):
+					continue
+				seen_ids[eid] = true
+				var offset := enemy.global_position - global_position
+				enemies_info.append({
+					"dist": offset.length(),
+					"angle": offset.angle(),
+				})
+
+	var orb_angles: Array[float] = []
+	for i in range(count):
+		orb_angles.append(wrapf(sun_orb_angle + float(i) * (TAU / float(count)), -PI, PI))
+
+	var orbit_res: Dictionary = GameBalance.compute_spirit_orbit(
+		orb_angles, enemies_info, base_radius, min_radius, eff_max_reach
+	)
+	var in_combat: bool = bool(orbit_res.get("in_combat", false))
+	var target_radii: Array = orbit_res.get("radii", [])
+
+	var haste_factor: float = clampf(1.0 / maxf(0.25, GameManager.attack_speed_mult * GameManager.synergy_haste_mult), 1.0, 3.2)
+	var surge_mult: float = 1.30 if in_combat else 1.0
+	var star_mult: float = 1.0 + 0.10 * float(max_star - 1)
+	sun_orb_angle += delta * 4.8 * haste_factor * surge_mult * star_mult
+
+	for i in range(count):
+		var orb := sun_orb_container.get_child(i) as SunOrb
+		if orb == null:
+			continue
+		var a: float = sun_orb_angle + float(i) * (TAU / float(count))
+		var tgt_r: float = float(target_radii[i]) if i < target_radii.size() else base_radius
+		orb.current_radius = lerpf(orb.current_radius, tgt_r, minf(delta * 12.0, 1.0))
+		orb.position = Vector2(cos(a), sin(a)) * orb.current_radius
+		# 随切线横向分量的轻微侧倾（既灵动又不倒立）
+		orb.rotation = clampf(-sin(a) * 0.25, -0.30, 0.30)
 
 func take_damage(amount: float) -> void:
 	if invulnerable_time > 0.0 or GameManager.is_game_over:

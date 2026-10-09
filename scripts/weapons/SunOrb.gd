@@ -8,12 +8,16 @@ extends Area2D
 ## 而贴到玩家身上的妖正好停在 24px 处（单武器实测台 tests/WeaponProbe.tscn：灵蝶 ★1
 ## 只有 19 点伤/秒，纸面是 42.9）。58 ± 18 覆盖 40..76px，再算敌人受击圈 15px ⇒ 贴身到半臂都打得到。
 const ORBIT_RADIUS: float = 58.0
-const CONTACT_RADIUS: float = 18.0     ## == sun_orb.png 在 0.75 缩放下的一半（36px 直径）：画多大打多大
+const MIN_ORBIT_RADIUS: float = 28.0
+const CONTACT_RADIUS: float = 20.0     ## 基础接触半径提升至 20px，配合动态伸缩杜绝盲区
 
 var star: int = 1
 var drone_id: String = "lingdie"
 var base_damage: float = 15.0
 var hit_cooldown: float = 0.35
+var current_radius: float = ORBIT_RADIUS ## 动态轨道当前平滑半径
+var max_orbit_reach: float = 125.0       ## 该灵宝的外扩扑击上限
+
 var _hit_ms: Dictionary = {}   ## 敌人 instance id → 上次命中时刻（毫秒）
 var _last_gc_ms: int = 0       ## 上次清理过期条目的时刻
 var _pulse_tween: Tween = null
@@ -28,6 +32,8 @@ func setup(star_level: int, weapon_id: String = "lingdie") -> void:
 	drone_id = weapon_id if not weapon_id.is_empty() else "lingdie"
 	base_damage = WeaponData.damage_for(drone_id, star)
 	hit_cooldown = WeaponData.cooldown_for(drone_id, star)
+	var def := WeaponData.get_def(drone_id)
+	max_orbit_reach = maxf(110.0, float(def.get("range", 125.0)))
 	_apply_contact_radius()
 	if is_inside_tree():
 		_apply_star_visuals()

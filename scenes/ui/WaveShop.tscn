@@ -122,8 +122,25 @@ theme_override_colors/font_color = Color(0.04, 0.055, 0.11, 1)
 theme_override_font_sizes/font_size = 17
 text = "灵石 0"
 
-[node name="OffersContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
+[node name="OffersScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="OffersPad" type="MarginContainer" parent="CenterContainer/Panel/MarginContainer/VBox/OffersScroll"]
+layout_mode = 2
+mouse_filter = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 0
+
+[node name="OffersContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox/OffersScroll/OffersPad"]
+layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 16
 alignment = 1
@@ -132,7 +149,7 @@ alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.561, 0.612, 0.745, 1)
 theme_override_font_sizes/font_size = 12
-text = "上阵与背包 · 点选法器后操作 · 集齐三把同名同星可手动合成升星"
+text = "上阵与背包 · 点选法器后可：三合一合成升星（集齐三把同名同星）· 上阵卸下 · 出售换灵石"
 horizontal_alignment = 1
 
 [node name="OwnedContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
@@ -141,7 +158,7 @@ theme_override_constants/separation = 10
 alignment = 1
 
 [node name="ActionBar" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
-custom_minimum_size = Vector2(0, 46)
+custom_minimum_size = Vector2(0, 38)
 layout_mode = 2
 theme_override_constants/separation = 10
 

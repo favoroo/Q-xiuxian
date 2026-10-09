@@ -511,3 +511,93 @@ static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) 
 		return away                              # 纯对撞（玩家—敌人—落点共线）：直接外推
 	return out.normalized()
 
+# ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
+
+const SPIRIT_BASE_RADIUS := 58.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
+const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24~40px 贴身盲区）
+const SPIRIT_MAX_REACH := 135.0          ## 默认最大扑击外扩极限
+const SPIRIT_DANGER_DIST := 48.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
+const SPIRIT_SECTOR_HALF_ANGLE := 0.96   ## 扇区扑击半角（~55°，灵宝朝向前方扇区）
+
+## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
+## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）
+## enemies_info: Array[Dictionary]，每个敌人的信息 { "dist": float, "angle": float }
+## 返回: { "radii": Array[float], "in_combat": bool }
+static func compute_spirit_orbit(
+	orb_angles: Array,
+	enemies_info: Array,
+	base_radius: float = SPIRIT_BASE_RADIUS,
+	min_radius: float = SPIRIT_MIN_RADIUS,
+	max_reach: float = SPIRIT_MAX_REACH
+) -> Dictionary:
+	var count := orb_angles.size()
+	var result_radii: Array[float] = []
+	for i in range(count):
+		result_radii.append(base_radius)
+
+	if count == 0:
+		return {"radii": result_radii, "in_combat": false}
+
+	if enemies_info.is_empty():
+		return {"radii": result_radii, "in_combat": false}
+
+	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）
+	var in_combat := false
+	var in_range_enemies: Array[Dictionary] = []
+	var danger_enemies: Array[Dictionary] = []
+	var sum_dist := 0.0
+
+	for e in enemies_info:
+		var d: float = float(e.get("dist", 9999.0))
+		if d <= max_reach + 20.0:
+			in_combat = true
+		if d <= max_reach:
+			in_range_enemies.append(e)
+			sum_dist += d
+		if d <= SPIRIT_DANGER_DIST:
+			danger_enemies.append(e)
+
+	if not in_combat or in_range_enemies.is_empty():
+		return {"radii": result_radii, "in_combat": in_combat}
+
+	var avg_reach_dist: float = clampf(sum_dist / float(in_range_enemies.size()), min_radius, base_radius * 1.25)
+
+	# 2. 为每枚灵宝计算自适应半径
+	for i in range(count):
+		var orb_a: float = float(orb_angles[i])
+		var assigned_r := -1.0
+
+		# 2.1 贴身危急优先内收自保：灵宝公转到危急敌人附近时，收缩到敌人身前封堵
+		var closest_danger_dist := 9999.0
+		for de in danger_enemies:
+			var de_ang: float = float(de.get("angle", 0.0))
+			var diff := absf(wrapf(de_ang - orb_a, -PI, PI))
+			if diff <= PI * 0.5:
+				var dd: float = float(de.get("dist", SPIRIT_DANGER_DIST))
+				if dd < closest_danger_dist:
+					closest_danger_dist = dd
+		if closest_danger_dist < 9999.0:
+			assigned_r = clampf(closest_danger_dist, min_radius, base_radius)
+
+		# 2.2 扇区索敌扑击：灵宝正前方扇区内的最近敌人，灵宝动态外扩扑击
+		if assigned_r < 0.0:
+			var best_sector_dist := 9999.0
+			for e in in_range_enemies:
+				var e_ang: float = float(e.get("angle", 0.0))
+				var diff := absf(wrapf(e_ang - orb_a, -PI, PI))
+				if diff <= SPIRIT_SECTOR_HALF_ANGLE:
+					var ed: float = float(e.get("dist", 9999.0))
+					if ed < best_sector_dist:
+						best_sector_dist = ed
+			if best_sector_dist < 9999.0:
+				assigned_r = clampf(best_sector_dist, min_radius, max_reach)
+
+		# 2.3 环体自适应呼吸：未锁定单体时柔性匹配敌群平均基准，否则回归 base_radius
+		if assigned_r < 0.0:
+			assigned_r = avg_reach_dist
+
+		result_radii[i] = assigned_r
+
+	return {"radii": result_radii, "in_combat": in_combat}
+
+

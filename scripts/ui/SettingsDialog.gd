@@ -52,6 +52,8 @@ func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(740, 440)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
+	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
 	panel_style.border_width_left = 2
 	panel_style.border_width_top = 2
@@ -310,6 +312,16 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "法刃命中或强敌湮灭瞬间的时空凝滞微顿帧（提高击打顿挫感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "气血受损及濒死警戒时刻屏幕边缘的暗红收缩呼吸晕影")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "在界面左上方常驻呈现当前灵息运转刷新率 (FPS)")
+	# 技能按钮停靠档位：右下（拇指区）/ 右中 / 左下，点按循环，HUD 监听 setting_changed 实时挪位
+	_add_cycle_row(
+		vbox,
+		"skill_btn_pos",
+		"技能按钮位置",
+		"随行神通释放键停靠位置：右下 / 右中 / 左下，按顺手程度点按切换",
+		func() -> String: return "位置 · %s" % SettingsManager.skill_btn_pos_label(),
+		func() -> bool: return true,
+		func(): SettingsManager.set_val(&"display", &"skill_btn_pos", SettingsManager.skill_btn_pos_next())
+	)
 
 	return scroll
 
