@@ -386,6 +386,21 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	r_desc.add_theme_color_override("default_color", Color(0.85, 0.87, 0.94))
 	vbox.add_child(r_desc)
 
+	# 「元素伤害」类加点（如五行真火）给一句受益提示：当前上阵有几把法器真吃这条加成。
+	# 不写死升级 id，按 apply 字段判定，以后加同类升级自动带上。
+	if "elemental_damage" in data.get("apply", {}):
+		var n_elem := 0
+		for w in GameManager.get_weapons_summary():
+			if WeaponData.elemental_scaling_coef(String(w.get("id", ""))) > 0.0:
+				n_elem += 1
+		var elem_lbl := Label.new()
+		elem_lbl.text = ("✦ 当前上阵 %d 把法器受此加成" % n_elem) if n_elem > 0 else "✦ 当前上阵法器均不受此加成"
+		elem_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		elem_lbl.custom_minimum_size = Vector2(inner_w, 0)
+		elem_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vbox.add_child(elem_lbl)
+		GameStyle.label(elem_lbl, 11, GameStyle.ELEMENT if n_elem > 0 else GameStyle.GREY)
+
 	card.add_child(vbox)
 
 	# 点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认领悟」

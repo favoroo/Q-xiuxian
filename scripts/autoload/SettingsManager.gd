@@ -44,7 +44,7 @@ const SCHEMA: Array[Dictionary] = [
 	{
 		"section": "audio",
 		"key": "sfx_volume",
-		"title": "音效应量",
+		"title": "音效音量",
 		"desc": "法宝出鞘、道法轰击与击杀音效 (SFX)",
 		"type": "slider",
 		"bus": &"SFX",

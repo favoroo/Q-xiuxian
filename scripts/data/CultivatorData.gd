@@ -10,7 +10,7 @@ extends RefCounted
 ##   start_drones                               —— 开局自带灵蝶数
 ##   spirit_threshold_adj                       —— 御灵羁绊门槛下移
 ##   dodge_cap                                  —— 闪避硬上限上移（魅影：0.6 → 0.9）
-##   weapon_slots_max                           —— 上阵法器槽位上限覆盖（独臂刀圣：1）
+##   weapon_slots_max                           —— 上阵法器槽位上限覆盖（独臂刀圣：3）
 ##   enemy_count_mult                           —— 妖潮规模倍率（狂战蛮修：1.5）
 ##   harvest_decay                              —— 每波灵韵流失点数（狂战蛮修：3）
 ##   xp_require_mult                            —— 升级修为需求倍率（夺舍散人：0.6）
@@ -65,7 +65,7 @@ const DEFS: Dictionary = {
 			"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 			"motion": "hover",
 			"start_equip": "开局额外自带 2 只「灵蝶」（御灵法器）协同作战",
-			"pros": ["御灵羁绊激活门槛 -1（2件即激活3灵羁绊）"],
+			"pros": ["御灵羁绊激活门槛 -1（2件即激活3件御灵羁绊）"],
 			"cons": ["非灵蝶法器伤害 -30%"],
 			"mods": {
 				"start_drones": 2,
@@ -83,7 +83,7 @@ const DEFS: Dictionary = {
 			"sprite": "res://assets/art/cultivator_jinsuanpan_8dir.png",
 			"motion": "hover",
 			"start_equip": "",
-			"pros": ["初始灵韵 +16（波末白领丰厚灵石）", "灵石阁全场商品永久八折（-20%）"],
+			"pros": ["初始灵韵 +16（波末白得丰厚灵石）", "灵石阁全场商品永久八折（-20%）"],
 			"cons": ["全法器伤害 -25%", "气血上限 -25%"],
 			"mods": {
 				"harvest": 16.0,
@@ -113,24 +113,24 @@ const DEFS: Dictionary = {
 			"locked_upgrades": ["armor_up"],
 			"skill_mods": {"dash": {"distance_mult": 1.55}},
 		},
-		"dubi": {
-			"name": "独臂刀圣",
-			"epithet": "一臂一刀，足以开山",
-			"icon": "res://assets/art/cultivator_dubi_icon.png",
-			"sprite": "res://assets/art/cultivator_dubi_8dir.png",
-			"motion": "hover",
-			"start_equip": "",
-			"pros": ["全法器伤害 ×2.0（伤害翻倍）", "施法间隔 -30%（极速出刀）"],
-			"cons": ["此生只执一器：上阵法器槽恒为 1"],
-			"mods": {
-				"damage_mult": 2.0,
-				"haste_mult": 0.7,
-				"weapon_slots_max": 1,
+			"dubi": {
+				"name": "独臂刀圣",
+				"epithet": "一臂一刀，足以开山",
+				"icon": "res://assets/art/cultivator_dubi_icon.png",
+				"sprite": "res://assets/art/cultivator_dubi_8dir.png",
+				"motion": "hover",
+				"start_equip": "",
+				"pros": ["全法器伤害 ×2.0（伤害翻倍）", "攻击间隔 -30%（极速出刀）"],
+				"cons": ["独臂御器：上阵法器槽上限为 3"],
+				"mods": {
+					"damage_mult": 2.0,
+					"haste_mult": 0.7,
+					"weapon_slots_max": 3,
+				},
+				"allowed_tags": [],
+				"locked_upgrades": [],
+				"skill_mods": {"haste": {"power_mult": 1.45}},
 			},
-			"allowed_tags": [],
-			"locked_upgrades": [],
-			"skill_mods": {"haste": {"power_mult": 1.45}},
-		},
 		"kuangzhan": {
 			"name": "狂战蛮修",
 			"epithet": "妖越多，血越热",
@@ -139,7 +139,7 @@ const DEFS: Dictionary = {
 			"motion": "hover",
 			"start_equip": "",
 			"pros": ["全法器伤害 +30%", "妖潮规模 +50%（更多击杀与灵石掉落）"],
-			"cons": ["杀气冲田：每波结束灵韵流失 3 点"],
+			"cons": ["杀气冲天：每波结束灵韵流失 3 点"],
 			"mods": {
 				"damage_mult": 1.3,
 				"enemy_count_mult": 1.5,

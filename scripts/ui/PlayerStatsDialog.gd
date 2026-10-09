@@ -56,6 +56,13 @@ var _kills_val_lbl: Label
 # 右侧法器、羁绊、法宝与历史节点（保留测试依赖变量名 _weapons_box / _stash_box / _history_list）
 var _wp_title_lbl: Label
 var _weapons_box: HBoxContainer
+# 顶部道统卡：当前角色的正面加成 / 负面代偿速览
+var _cult_card: PanelContainer
+var _cult_icon: TextureRect
+var _cult_name_lbl: Label
+var _cult_epi_lbl: Label
+var _cult_pros_lbl: Label
+var _cult_cons_lbl: Label
 var _stash_box: HBoxContainer
 var _stash_section: HBoxContainer
 var _synergy_flow: HFlowContainer
@@ -74,12 +81,12 @@ var _current_bottom_tab: int = 0 # 0 = 随身法宝, 1 = 悟道历程
 const SYNERGY_TIER_LINES: Dictionary = {
 	"sword": ["攻击范围 +15%", "攻击范围 +30%", "攻击范围 +50%"],
 	"talisman": ["弹丸穿透 +1", "弹丸穿透 +2", "弹丸穿透 +3"],
-	"thunder": ["施法间隔 -8%", "施法间隔 -15%", "施法间隔 -25%"],
+	"thunder": ["攻击间隔 -8%", "攻击间隔 -15%", "攻击间隔 -25%"],
 	"spirit": ["气血上限 +15", "气血上限 +30", "气血上限 +50"],
 	"wide": ["法器伤害 +10%", "法器伤害 +20%", "法器伤害 +30%"],
 	"metal": ["暴击率+6% · 暴伤+20%", "暴击率+12% · 暴伤+40%", "暴击率+20% · 暴伤+75%"],
 	"wood": ["回复+1.0/秒 · 吸血+2%", "回复+2.0/秒 · 吸血+4%", "回复+3.5/秒 · 吸血+7%"],
-	"water": ["间隔-6% · 移速+8%", "间隔-12% · 移速+16%", "间隔-20% · 移速+25%"],
+	"water": ["攻击间隔-6% · 移速+8%", "攻击间隔-12% · 移速+16%", "攻击间隔-20% · 移速+25%"],
 	"fire": ["法伤+8% · 灼烧+30%", "法伤+16% · 灼烧+60%", "法伤+26% · 灼烧+100%"],
 	"earth": ["护甲+3 · 击退+25%", "护甲+6 · 击退+50%", "护甲+10 · 击退+80%"],
 }
@@ -263,43 +270,53 @@ func _build_left_stats_panel() -> Control:
 	sep1.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
 	vbox.add_child(sep1)
 
-	# 主要属性页（15 行，加上顶端常驻气血共 16 项）
+	# 主要属性页（15 行，加上顶端常驻气血共 16 项）——按 攻击/生存/机动 分三块
 	_primary_stats_box = VBoxContainer.new()
 	_primary_stats_box.add_theme_constant_override("separation", 2)
 	_primary_stats_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_primary_stats_box)
 
-	_regen_val_lbl = _add_stat_row(_primary_stats_box, "regen", "+0.0 / 秒")
-	_lifesteal_val_lbl = _add_stat_row(_primary_stats_box, "lifesteal", "0% 概率")
-	_atk_val_lbl = _add_stat_row(_primary_stats_box, "damage", "+0%")
-	_melee_val_lbl = _add_stat_row(_primary_stats_box, "melee_dmg", "0")
-	_ranged_val_lbl = _add_stat_row(_primary_stats_box, "ranged_dmg", "0")
-	_elem_val_lbl = _add_stat_row(_primary_stats_box, "elemental_dmg", "0")
-	_eng_val_lbl = _add_stat_row(_primary_stats_box, "engineering_dmg", "0")
-	_haste_val_lbl = _add_stat_row(_primary_stats_box, "haste", "0.0%")
-	_crit_val_lbl = _add_stat_row(_primary_stats_box, "crit", "5% (1.5×)")
-	_range_val_lbl = _add_stat_row(_primary_stats_box, "range", "+0%")
-	_armor_val_lbl = _add_stat_row(_primary_stats_box, "armor", "0 (0%)")
-	_dodge_val_lbl = _add_stat_row(_primary_stats_box, "dodge", "0%")
-	_speed_val_lbl = _add_stat_row(_primary_stats_box, "speed", "210 (+0%)")
-	_luck_val_lbl = _add_stat_row(_primary_stats_box, "luck", "0")
-	_harvest_val_lbl = _add_stat_row(_primary_stats_box, "harvest", "0")
+	var atk_block := _add_stat_block(_primary_stats_box, "攻 击")
+	_atk_val_lbl = _add_stat_row(atk_block, "damage", "+0%")
+	_melee_val_lbl = _add_stat_row(atk_block, "melee_dmg", "0")
+	_ranged_val_lbl = _add_stat_row(atk_block, "ranged_dmg", "0")
+	_elem_val_lbl = _add_stat_row(atk_block, "elemental_dmg", "0")
+	_eng_val_lbl = _add_stat_row(atk_block, "engineering_dmg", "0")
+	_crit_val_lbl = _add_stat_row(atk_block, "crit", "5% (1.5×)")
+	_range_val_lbl = _add_stat_row(atk_block, "range", "+0%")
 
-	# 次要属性页（9 行）
+	var sur_block := _add_stat_block(_primary_stats_box, "生 存")
+	_regen_val_lbl = _add_stat_row(sur_block, "regen", "+0.0 / 秒")
+	_lifesteal_val_lbl = _add_stat_row(sur_block, "lifesteal", "0% 概率")
+	_armor_val_lbl = _add_stat_row(sur_block, "armor", "0 (0%)")
+	_dodge_val_lbl = _add_stat_row(sur_block, "dodge", "0%")
+
+	var util_block := _add_stat_block(_primary_stats_box, "机 动")
+	_haste_val_lbl = _add_stat_row(util_block, "haste", "0.0%")
+	_speed_val_lbl = _add_stat_row(util_block, "speed", "210 (+0%)")
+	_luck_val_lbl = _add_stat_row(util_block, "luck", "0")
+	_harvest_val_lbl = _add_stat_row(util_block, "harvest", "0")
+
+	# 次要属性页（9 行）——按 战斗/成长/经营 分三块
 	_secondary_stats_box = VBoxContainer.new()
-	_secondary_stats_box.add_theme_constant_override("separation", 4)
+	_secondary_stats_box.add_theme_constant_override("separation", 2)
 	_secondary_stats_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_secondary_stats_box)
 
-	_pickup_val_lbl = _add_stat_row(_secondary_stats_box, "pickup", "96 (+0%)")
-	_xp_gain_val_lbl = _add_stat_row(_secondary_stats_box, "xp_gain", "+0%")
-	_elite_dmg_val_lbl = _add_stat_row(_secondary_stats_box, "elite_dmg", "+0%")
-	_knockback_val_lbl = _add_stat_row(_secondary_stats_box, "knockback", "+0%")
-	_pierce_val_lbl = _add_stat_row(_secondary_stats_box, "bonus_pierce", "0")
-	_shop_price_val_lbl = _add_stat_row(_secondary_stats_box, "shop_price", "+0%")
-	_free_rerolls_val_lbl = _add_stat_row(_secondary_stats_box, "free_rerolls", "0 次")
-	_stones_val_lbl = _add_stat_row(_secondary_stats_box, "stones", "0 枚")
-	_kills_val_lbl = _add_stat_row(_secondary_stats_box, "kills", "0 妖")
+	var sec_combat := _add_stat_block(_secondary_stats_box, "战 斗")
+	_elite_dmg_val_lbl = _add_stat_row(sec_combat, "elite_dmg", "+0%")
+	_knockback_val_lbl = _add_stat_row(sec_combat, "knockback", "+0%")
+	_pierce_val_lbl = _add_stat_row(sec_combat, "bonus_pierce", "0")
+
+	var sec_growth := _add_stat_block(_secondary_stats_box, "成 长")
+	_pickup_val_lbl = _add_stat_row(sec_growth, "pickup", "96 (+0%)")
+	_xp_gain_val_lbl = _add_stat_row(sec_growth, "xp_gain", "+0%")
+
+	var sec_econ := _add_stat_block(_secondary_stats_box, "经 营")
+	_shop_price_val_lbl = _add_stat_row(sec_econ, "shop_price", "+0%")
+	_free_rerolls_val_lbl = _add_stat_row(sec_econ, "free_rerolls", "0 次")
+	_stones_val_lbl = _add_stat_row(sec_econ, "stones", "0 枚")
+	_kills_val_lbl = _add_stat_row(sec_econ, "kills", "0 妖")
 
 	_switch_stat_tab(0)
 	return left_panel
@@ -344,6 +361,29 @@ func _add_stat_row(parent: Container, stat_id: String, default_val: String) -> L
 	parent.add_child(_make_tip_row(stat_id, hbox))
 	return l_val
 
+## 属性分块：一组同类属性包一个浅色凹槽块，头行小标签 + 行列表（攻击/生存/机动…）
+func _add_stat_block(parent: Container, header_text: String) -> VBoxContainer:
+	var block := PanelContainer.new()
+	var bs := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	# 上下内边距 2/3：分组块 ×3，这里每省 2px 就是面板总高 6px——
+	# 内容最小高度必须压在 526 钳制值内（StatsTipCheck 的 9px 出屏边距判定），否则面板被撑高出屏。
+	bs.content_margin_left = 8.0
+	bs.content_margin_top = 2.0
+	bs.content_margin_right = 8.0
+	bs.content_margin_bottom = 3.0
+	block.add_theme_stylebox_override("panel", bs)
+	parent.add_child(block)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 1)
+	block.add_child(inner)
+
+	var head := Label.new()
+	head.text = header_text
+	GameStyle.label(head, 11, GameStyle.YELLOW)
+	inner.add_child(head)
+	return inner
+
 ## 把一行内容包进可点的整行热区。
 func _make_tip_row(stat_id: String, content: Control) -> Control:
 	var row := PanelContainer.new()
@@ -380,6 +420,69 @@ func _build_right_equipment_and_history_panel() -> Control:
 	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_vbox.add_theme_constant_override("separation", 8)
+
+	# 0. 顶部：当前道统特性速览（正面加成 / 负面代偿，点按看全部详解）
+	_cult_card = PanelContainer.new()
+	_cult_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	var cult_st := GameStyle.outlined_panel(GameStyle.NAVY, GameStyle.LINE, 2, 0.0)
+	cult_st.content_margin_left = 12.0
+	cult_st.content_margin_top = 5.0
+	cult_st.content_margin_right = 12.0
+	cult_st.content_margin_bottom = 5.0
+	_cult_card.add_theme_stylebox_override("panel", cult_st)
+	_cult_card.set_meta("sb_flat", cult_st)
+	_cult_card.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY.lightened(0.08), GameStyle.YELLOW, 2, 0.0))
+
+	var cult_row := HBoxContainer.new()
+	cult_row.add_theme_constant_override("separation", 10)
+	_cult_card.add_child(cult_row)
+
+	_cult_icon = TextureRect.new()
+	_cult_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_cult_icon.custom_minimum_size = Vector2(40, 40)
+	_cult_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_cult_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cult_row.add_child(_cult_icon)
+
+	var cult_text := VBoxContainer.new()
+	cult_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cult_text.add_theme_constant_override("separation", 1)
+	cult_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cult_row.add_child(cult_text)
+
+	var cult_head := HBoxContainer.new()
+	cult_head.add_theme_constant_override("separation", 8)
+	cult_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cult_text.add_child(cult_head)
+
+	_cult_name_lbl = Label.new()
+	GameStyle.label(_cult_name_lbl, 13, GameStyle.YELLOW)
+	cult_head.add_child(_cult_name_lbl)
+
+	_cult_epi_lbl = Label.new()
+	GameStyle.label(_cult_epi_lbl, 11, GameStyle.GREY)
+	cult_head.add_child(_cult_epi_lbl)
+
+	var cult_head_sp := Control.new()
+	cult_head_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cult_head_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cult_head.add_child(cult_head_sp)
+
+	var cult_hint := Label.new()
+	cult_hint.text = "点按看道统全部特性"
+	GameStyle.label(cult_hint, 10, GameStyle.GREY)
+	cult_head.add_child(cult_hint)
+
+	_cult_pros_lbl = Label.new()
+	GameStyle.label(_cult_pros_lbl, 11, GameStyle.GOOD)
+	cult_text.add_child(_cult_pros_lbl)
+
+	_cult_cons_lbl = Label.new()
+	GameStyle.label(_cult_cons_lbl, 11, GameStyle.BAD)
+	cult_text.add_child(_cult_cons_lbl)
+
+	GameStyle.tap(_cult_card, func() -> void: _open_cultivator_tip(_cult_card))
+	right_vbox.add_child(_cult_card)
 
 	# 1. 上半区：上阵法器与纳戒仓库
 	var wp_panel := PanelContainer.new()
@@ -464,7 +567,9 @@ func _build_right_equipment_and_history_panel() -> Control:
 	syn_vbox.add_child(syn_head)
 
 	var syn_scroll := ScrollContainer.new()
-	syn_scroll.custom_minimum_size = Vector2(0, 142)
+	# 100：给顶部道统卡让出纵向空间，同时保住 StatsTipCheck 的 9px 出屏边距判定
+	# （内容最小高度必须 ≤ 面板高度钳制 526，否则面板被撑高出屏）。羁绊卡可滚动，不丢信息。
+	syn_scroll.custom_minimum_size = Vector2(0, 100)
 	syn_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	syn_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	syn_vbox.add_child(syn_scroll)
@@ -722,10 +827,90 @@ func refresh() -> void:
 
 	_kills_val_lbl.text = "%d 妖" % GameManager.kills
 
-	# 3. 右侧法器、流派羁绊、法宝与历史刷新
+	# 3. 右侧道统卡、法器、流派羁绊、法宝与历史刷新
+	_refresh_cultivator()
 	_refresh_weapons()
 	_refresh_synergies()
 	_refresh_items_and_history()
+
+## 道统卡文案折行宽度预算：面板最小宽 900 − 外边距32 − 左栏296 − 分栏间距12 − 卡片内边距24 − 图标40 − 列距10 − 余量8
+func _cult_text_width() -> float:
+	var panel_w: float = maxf(900.0, get_viewport_rect().size.x)
+	return panel_w - 32.0 - 296.0 - 12.0 - 24.0 - 40.0 - 10.0 - 8.0
+
+func _refresh_cultivator() -> void:
+	if _cult_card == null:
+		return
+	var def := CultivatorData.get_def(GameManager.cultivator_id)
+	if def.is_empty():
+		_cult_card.visible = false
+		return
+	_cult_card.visible = true
+	if _cult_icon != null:
+		var icon_path: String = String(def.get("icon", ""))
+		_cult_icon.texture = load(icon_path) if not icon_path.is_empty() and ResourceLoader.exists(icon_path) else null
+	if _cult_name_lbl != null:
+		_cult_name_lbl.text = String(def.get("name", "未选道统"))
+	if _cult_epi_lbl != null:
+		_cult_epi_lbl.text = "「%s」" % String(def.get("epithet", ""))
+	var w := _cult_text_width()
+	var font := GameStyle.body_font()
+	var pros: Array = def.get("pros", [])
+	var cons: Array = def.get("cons", [])
+	if _cult_pros_lbl != null:
+		var pros_txt := "加成：" + "；".join(PackedStringArray(pros))
+		_cult_pros_lbl.text = GameStyle.wrap_cjk(pros_txt, font, 11, w)
+		_cult_pros_lbl.visible = not pros.is_empty()
+	if _cult_cons_lbl != null:
+		var cons_txt := "代偿：" + "；".join(PackedStringArray(cons))
+		_cult_cons_lbl.text = GameStyle.wrap_cjk(cons_txt, font, 11, w)
+		_cult_cons_lbl.visible = not cons.is_empty()
+
+## 道统详解：正面加成、负面代偿、随行神通契合、开局自带与商店/加点限制
+func _open_cultivator_tip(anchor: Control) -> void:
+	var def := CultivatorData.get_def(GameManager.cultivator_id)
+	if def.is_empty():
+		return
+	var rows: Array = []
+	var pros: Array = def.get("pros", [])
+	for i in range(pros.size()):
+		rows.append(["加成 %d" % (i + 1), String(pros[i]), GameStyle.GOOD])
+	var cons: Array = def.get("cons", [])
+	for i in range(cons.size()):
+		rows.append(["代偿 %d" % (i + 1), String(cons[i]), GameStyle.BAD])
+	var skill_id := CultivatorData.get_synergy_skill_id(GameManager.cultivator_id)
+	if not skill_id.is_empty():
+		var sdef := SkillData.get_def(skill_id)
+		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
+		rows.append(["随行神通", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.YELLOW])
+	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
+	if not start_equip.is_empty():
+		rows.append(["开局自带", start_equip, GameStyle.PAPER])
+
+	var notes: Array[String] = []
+	var allowed: Array = def.get("allowed_tags", [])
+	if not allowed.is_empty():
+		var tag_names: Array[String] = []
+		for t in allowed:
+			tag_names.append(String(WeaponData.SYNERGIES.get(String(t), {}).get("name", t)))
+		notes.append("道统亲和：灵石阁大幅偏向「%s」系法器，仍有少量他派漏出。" % "、".join(tag_names))
+	var locked: Array = def.get("locked_upgrades", [])
+	if not locked.is_empty():
+		var titles: Array[String] = []
+		for uid in locked:
+			titles.append(String(UpgradeData.get_upgrade_def(String(uid)).get("title", uid)))
+		notes.append("加点锁死：「%s」与本道统无缘，悟道候选中不会出现。" % "、".join(titles))
+
+	var tip := DetailTip.show_over(self, anchor, {
+		"title": "%s · 道统特性" % String(def.get("name", "")),
+		"chip": "道统",
+		"chip_color": GameStyle.BLUE,
+		"rows": rows,
+		"body": "「%s」" % String(def.get("epithet", "")),
+		"notes": notes,
+		"foot": "加成与代偿开局即生效、全程不变；具体数值已计入左侧属性行与各条详解。",
+	})
+	_highlight_while_open(anchor, tip)
 
 func _refresh_weapons() -> void:
 	for child in _weapons_box.get_children():
@@ -762,6 +947,10 @@ func _refresh_weapons() -> void:
 			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(tex_rect)
+
+			# 吃「元素伤害」属性加成的法器挂橙红角标（判定与详情弹窗加成文案同源 stat_scalings）
+			if WeaponData.elemental_scaling_coef(String(w.get("id", ""))) > 0.0:
+				slot.add_child(GameStyle.element_badge(8))
 
 			var star_lbl := Label.new()
 			star_lbl.text = "★%d" % int(w.get("star", 1))
@@ -812,6 +1001,10 @@ func _refresh_weapons() -> void:
 			s_slot.add_child(s_tex)
 			s_slot.set_meta("sb_flat", s_sb)
 			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.YELLOW, 1, 0.0))
+
+			# 吃「元素伤害」属性加成的法器挂橙红角标（仓库件与上阵件同一口径）
+			if not def.is_empty() and WeaponData.elemental_scaling_coef(String(item.get("id", ""))) > 0.0:
+				s_slot.add_child(GameStyle.element_badge(8))
 
 			var s_star := int(item.get("star", 1))
 			var s_star_lbl := Label.new()
@@ -1274,7 +1467,7 @@ func _stat_tip_rows(id: String) -> Array:
 			var mv: float = float(s.get("melee_damage", 0.0))
 			rows = [
 				["近战伤害加成", "%+.0f" % mv, _c(mv)],
-				["受益法器", "青云剑 / 赤焰刀 / 青木藤鞭 / 芭蕉扇"],
+				["受益法器", "青云剑 / 赤焰斩马刀 / 青木藤鞭 / 芭蕉扇"],
 				["星级放大", "每升 1 星转化效率 +25%"],
 			]
 		"ranged_dmg":
@@ -1289,7 +1482,7 @@ func _stat_tip_rows(id: String) -> Array:
 			rows = [
 				["元素伤害加成", "%+.0f" % ev, _c(ev)],
 				["离火灼烧倍率", _mul(GameManager.synergy_burn_mult), _c(GameManager.synergy_burn_mult - 1.0)],
-				["受益法器", "火焰符 / 赤焰刀 / 焚天宝灯 / 五雷法牌 / 番天印等"],
+				["受益法器", "火焰符 / 赤焰斩马刀 / 焚天宝灯 / 五雷法牌 / 番天印等"],
 			]
 		"engineering_dmg":
 			var gv: float = float(s.get("engineering_damage", 0.0))
@@ -1300,11 +1493,11 @@ func _stat_tip_rows(id: String) -> Array:
 			]
 		"haste":
 			rows = [
-				["冷却缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
-				["实际施法间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
+				["间隔缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
+				["实际攻击间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
 				["悟道·法宝·道统", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
 				["雷法·玄水羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
-				["间隔地板", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
+				["间隔下限", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
 			]
 		"speed":
 			var eff: float = GameManager.move_speed_mult + GameManager.synergy_move_speed_mult
@@ -1447,6 +1640,13 @@ func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
 	var elem_dmg: float = GameManager.element_damage_mult(id)
 	var per_hit: float = (base_dmg * star_mul + bonus) * gm_dmg * syn_dmg * cult_dmg * elem_dmg
 	var cd: float = WeaponData.cooldown_for(id, star) * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
+	# 攻击范围：与其他行同口径显示最终生效值（词条 + 剑系羁绊乘区），有加成时附基础值
+	var base_range: float = float(def.get("range", 0.0))
+	var eff_range: float = base_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
+	var range_txt: String = "%.0f" % eff_range
+	if range_buffed:
+		range_txt = "%.0f（基础 %.0f）" % [eff_range, base_range]
 
 	var syn_parts: Array[String] = []
 	for t in def.get("tags", []):
@@ -1462,7 +1662,8 @@ func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
 		["属性转化", "+%.1f" % bonus, _c(bonus)],
 		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
 		["道统×五行", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
-		["施法间隔", "%.2f 秒 (射程 %.0f)" % [cd, float(def.get("range", 0.0))]],
+		["攻击范围", range_txt, GameStyle.YELLOW if range_buffed else GameStyle.PAPER],
+		["攻击间隔", "%.2f 秒" % cd],
 	]
 	var feats := _weapon_feats(def)
 	if not feats.is_empty():
@@ -1472,7 +1673,7 @@ func _open_weapon_tip(w: Dictionary, from_stash: bool, anchor: Control) -> void:
 		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
 			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
 		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
-		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
+		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
 

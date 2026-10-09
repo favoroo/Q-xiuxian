@@ -1083,11 +1083,11 @@ func _test_cultivator_system() -> void:
 	_c.near(GameManager.get_effective_dodge(), 0.9, EPS, "魅影闪避上限 90%（其余人 60%）")
 	_c.check("armor_up" in GameManager.locked_upgrades, "魅影锁死罡气护体")
 
-	# 独臂刀圣（One Armed 原型）：上阵槽恒 1，伤害翻倍、施法更快
+	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害翻倍、施法更快
 	GameManager.reset_run()
 	GameManager.cultivator_id = "dubi"
 	GameManager._apply_cultivator()
-	_c.equals(GameManager.max_weapon_slots(), 1, "独臂刀圣上阵槽恒为 1")
+	_c.equals(GameManager.max_weapon_slots(), 3, "独臂刀圣上阵槽上限为 3")
 	_c.near(GameManager.weapon_damage_mult, 2.0, EPS, "独臂刀圣伤害 ×2.0")
 	_c.near(GameManager.attack_speed_mult, 0.7, EPS, "独臂刀圣施法间隔 ×0.7")
 

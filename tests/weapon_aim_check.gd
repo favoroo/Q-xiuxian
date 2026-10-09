@@ -22,9 +22,15 @@ extends Node
 ## 画面里剑尖背着敌人、弹丸从剑柄冒出来。第 6 条量"tip 那头上是不是亮剑身"，见
 ## _test_tip_matches_art()；换素材后 tip 必须用 tools/fit_weapon_icon.py 量，不许手打。
 ##
+## 2026-10-09 火焰符"飞行物太大"补的第 7 条 —— 弹丸屏上尺寸 = 画布 × 表里的 bullet_scale，
+## 且长轴不许大过发射它的法器本体（本体屏上尺寸现读 FloatingWeapon 的贴图缩放，不另写死一个数）。
+## 五张弹丸画布按 1.0 出图都是本体的 1.5 倍（火符 33×40 更是判定直径的 3 倍），满屏像飞招牌；
+## 而 bullet_scale 这个字段和 bullet 同一批写进表、出膛那一圈同样从来没读它 —— 与 3) 是同一个毛病。
+##
 ## 运行: godot --headless --path . res://tests/WeaponAimCheck.tscn
 ##       godot --headless --path . res://tests/WeaponAimCheck.tscn -- --selftest
-##       # 反例：① 把飞剑的补偿角清零 ⇒ 第 1 条报红；② 把 tip 取反 ⇒ 第 6 条报红
+##       # 反例：① 把飞剑的补偿角清零 ⇒ 第 1 条报红；② 把 tip 取反 ⇒ 第 6 条报红；
+##       #        ③ 把 BladeProjectile._ready 里的 sprite.scale 赋值改坏 ⇒ 第 7 条五连红
 
 const DIRS_DEG := [0.0, 45.0, 90.0, 135.0, 180.0, -135.0, -90.0, -45.0]
 const TOL_DEG := 2.0        ## 剑尖指向与瞄准轴的允许误差
@@ -262,14 +268,27 @@ func _test_projectile_bay() -> void:
 		_c.near(worst_dir, 0.0, fan, "%s 每一发都咬在目标方位的扇形包络内（最大偏角 %.2f°，包络 %.2f°）" % [label, worst_dir, fan])
 		_c.near(rad_to_deg(absf(angle_difference(sum_dir.angle(), w._aim_at(target.global_position)))), 0.0, 2.0,
 			"%s 一轮合成的中心方向正对目标" % label)
+		var want_path := String(def.get("bullet", ""))
 		var tex_path := ""
 		for p in shots:
 			var tex: Texture2D = p.sprite.texture
 			tex_path = String(tex.resource_path) if tex != null else ""
 			_c.equals(p.spin, bool(def.get("bullet_spin", false)),
 				"%s 弹丸自旋按表（bullet_spin=%s，实得 %s）" % [label, str(def.get("bullet_spin", false)), str(p.spin)])
+			if want_path != "":
+				# 屏上画出来的尺寸 = 画布 × 表里的 bullet_scale。钉住"这个字段真的被出膛那一圈读走了"——
+				# 火焰符的 33×40 画布按 1.0 出图是判定直径（半径 7px）的 3 倍，而 bullet_scale 早在表里躺着没人读。
+				var want_sc := float(def.get("bullet_scale", 1.0))
+				_c.near(p.sprite.scale.x, want_sc, 0.001,
+					"%s 弹丸屏上尺寸按表（应 ×%.2f，实得 ×%.2f ⇒ 画出来 %s）" % [
+						label, want_sc, p.sprite.scale.x, str(tex.get_size() * p.sprite.scale)])
+				# 尺子：弹丸不许大过发射它的法器本体（本体屏上尺寸现读，不另写死一个数）
+				var drawn := tex.get_size() * p.sprite.scale
+				var body_drawn := Vector2(w.sprite.texture.get_size()) * w.sprite.scale
+				_c.check(maxf(drawn.x, drawn.y) <= maxf(body_drawn.x, body_drawn.y) + 0.001,
+					"%s 弹丸不大过法器本体（弹丸长轴 %.1fpx vs 本体 %.1fpx）" % [
+						label, maxf(drawn.x, drawn.y), maxf(body_drawn.x, body_drawn.y)])
 			break
-		var want_path := String(def.get("bullet", ""))
 		_c.equals(tex_path, want_path, "%s 弹丸外观 = 表里那张（%s）" % [label, want_path.get_file()])
 		used_textures[tex_path] = String(def.get("name", "?"))
 		checked += 1

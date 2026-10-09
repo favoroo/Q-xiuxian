@@ -74,7 +74,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "haste_up",
 		"apply": {"attack_speed_mult_mul": 0.88},
 		"title": "法诀迅捷",
-		"desc": "[center]掐诀更快，施法更频\n• 施法间隔 [color=#6fd6ff][b]-12%[/b][/color]\n• 全部法器攻速提升[/center]",
+		"desc": "[center]出招更快，攻击更频\n• 攻击间隔 [color=#6fd6ff][b]-12%[/b][/color]\n• 全部法器攻速提升[/center]",
 		"rarity": "rare",
 		"rarity_label": "良品",
 		"icon": "res://assets/art/icon_haste.png",

@@ -304,8 +304,10 @@ func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
 ## （触屏无 hover，说明必须点得到；这一行省下来的竖向预算全给货架）。
 func _open_usage_tip() -> void:
 	var help_btn: Button = _info_bar.get_node("HelpButton")
+	var max_slots: int = GameManager.max_weapon_slots()
+	var slot_txt: String = "%d 件（本道统上限）" % max_slots if max_slots < WeaponData.MAX_SLOTS else "%d 件" % max_slots
 	var rows: Array = [
-		["周身槽位", "%d 件" % GameManager.max_weapon_slots(), GameStyle.PAPER],
+		["周身槽位", slot_txt, GameStyle.YELLOW if max_slots < WeaponData.MAX_SLOTS else GameStyle.PAPER],
 		["背包格数", "%d 格" % WeaponData.MAX_STASH_SLOTS, GameStyle.PAPER],
 		["货架格数", "%d 格" % GameManager.shop_offers.size(), GameStyle.PAPER],
 	]
@@ -316,6 +318,8 @@ func _open_usage_tip() -> void:
 		"重掷货架：换一批候选；每波有免费次数，用完按价格扣灵石。",
 		"已售出的格子本波不会补货，出战后货架重开。",
 	]
+	if max_slots < WeaponData.MAX_SLOTS:
+		notes.insert(0, "本道统限佩 %d 件上阵法器：超出上限的法器会收进背包，可用于三合一升星或先卸下当前法器再换装。" % max_slots)
 	DetailTip.show_over(self, help_btn, {
 		"title": "灵石阁怎么用",
 		"chip": "波间商店",
@@ -412,12 +416,14 @@ func _refresh_inventory() -> void:
 		child.queue_free()
 
 	var summary: Array = GameManager.get_weapons_summary()
+	var max_slots: int = GameManager.max_weapon_slots()
+	var slot_capped: bool = max_slots < WeaponData.MAX_SLOTS
 	# 背包空位画成凹槽提示容量；上阵较满时少画几个避免溢出
 	var empty_budget: int = clampi(10 - summary.size() - GameManager.stash.size(), 0, 3)
 	var free_tiles: int = mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)
 	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 法宝徽记）
 	var n_tile: int = summary.size() + GameManager.stash.size() + free_tiles + GameManager.items.size()
-	var n_chip: int = (0 if summary.is_empty() and GameManager.stash.is_empty() else 1) \
+	var n_chip: int = (0 if summary.is_empty() and GameManager.stash.is_empty() else (2 if slot_capped else 1)) \
 		+ (1 if not GameManager.items.is_empty() else 0)
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
 	if summary.is_empty() and GameManager.stash.is_empty():
@@ -426,6 +432,8 @@ func _refresh_inventory() -> void:
 		owned_container.add_child(empty_lbl)
 		GameStyle.label(empty_lbl, 13, GameStyle.GREY)
 	else:
+		if slot_capped:
+			owned_container.add_child(_create_equipped_cap_chip(summary.size(), max_slots))
 		for i in range(summary.size()):
 			owned_container.add_child(_create_inv_slot(summary[i], i, "equipped", tile))
 		owned_container.add_child(_create_stash_divider())
@@ -500,6 +508,10 @@ func _create_inv_slot(item: Dictionary, index: int, pool: String, tile: float) -
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(icon_tex)
 
+	# 吃「元素伤害」属性加成的法器挂橙红角标（与属性面板/图鉴同一口径）
+	if WeaponData.elemental_scaling_coef(id) > 0.0:
+		slot.add_child(GameStyle.element_badge(8))
+
 	var star_lbl := Label.new()
 	star_lbl.text = "★%d" % star
 	star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -524,6 +536,17 @@ func _create_inv_slot(item: Dictionary, index: int, pool: String, tile: float) -
 		_refresh_inventory()
 	)
 	return slot
+
+func _create_equipped_cap_chip(used: int, max_slots: int) -> Control:
+	var chip := PanelContainer.new()
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.YELLOW_DK, 1, 0.0))
+	var lbl := Label.new()
+	lbl.text = "上阵 %d/%d（仅限%d件）" % [used, max_slots, max_slots]
+	chip.add_child(lbl)
+	GameStyle.label(lbl, 11, GameStyle.YELLOW)
+	return chip
 
 func _create_stash_divider() -> Control:
 	var chip = PanelContainer.new()
@@ -638,8 +661,13 @@ func _refresh_action_bar() -> void:
 	var in_stash: bool = pool == "stash"
 	var mergeable: bool = star < WeaponData.MAX_STAR and GameManager.count_copies(id, star) >= 3
 
+	var max_slots: int = GameManager.max_weapon_slots()
+	var slots_full: bool = GameManager.slots_used() >= max_slots
 	var name_lbl = Label.new()
-	name_lbl.text = "%s · %s" % [WeaponData.full_name(id, star), "背包" if in_stash else "上阵中"]
+	var loc_txt := "背包" if in_stash else "上阵中"
+	if in_stash and slots_full:
+		loc_txt = "背包（上阵已满 %d/%d 件）" % [GameManager.slots_used(), max_slots]
+	name_lbl.text = "%s · %s" % [WeaponData.full_name(id, star), loc_txt]
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	action_bar.add_child(name_lbl)
@@ -671,9 +699,11 @@ func _refresh_action_bar() -> void:
 	move_btn.custom_minimum_size = Vector2(108, 32)
 	move_btn.focus_mode = Control.FOCUS_NONE
 	if in_stash:
-		move_btn.text = "上 阵"
-		move_btn.disabled = GameManager.slots_used() >= GameManager.max_weapon_slots()
-		GameStyle.button(move_btn, GameStyle.GOOD if not move_btn.disabled else GameStyle.NAVY2, GameStyle.GOOD_DK, 14, GameStyle.INK_TEXT, 6.0)
+		move_btn.disabled = slots_full
+		move_btn.text = "上阵已满(%d/%d)" % [GameManager.slots_used(), max_slots] if slots_full else "上 阵"
+		if slots_full:
+			move_btn.custom_minimum_size = Vector2(118, 32)
+		GameStyle.button(move_btn, GameStyle.GOOD if not move_btn.disabled else GameStyle.NAVY2, GameStyle.GOOD_DK, 14, GameStyle.INK_TEXT if not move_btn.disabled else GameStyle.GREY, 6.0)
 		move_btn.pressed.connect(func():
 			if GameManager.equip_from_stash(int(selected.get("index", -1))):
 				selected = {}
@@ -733,6 +763,8 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 	var title: String
 	var icon_path: String
 	var tag: String
+	var tag_parts: Array = []  # 武器羁绊每维一颗签的文案（2026-10-09 用户：不同的属性分块放）
+	var part_hot: Array = []   # 与 tag_parts 一一对应：买下这件该维羁绊是否即激活
 	var desc: String
 	var chip_color: Color = GameStyle.BLUE
 	var chip_text_color: Color = GameStyle.PAPER
@@ -763,23 +795,26 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 		title = def.get("name", "?")
 		icon_path = def.get("icon", "")
 		tag = def.get("tag", "")
-		# 双维羁绊进度：「剑系 1/2 · 锐金 1/2」提示离下一档还差几件，若买下能激活则金色高亮
+		# 双维羁绊进度：器类与五行各占一颗签、分块摆放（2026-10-09 用户：「不同的属性可以分块放」）。
+		# 「离下一档还差几件」的进度留在各自签上；买下能激活的那一维整签金色高亮（卡边框同步泛金）。
 		var wtags: Array = def.get("tags", [])
-		var tag_parts: Array = []
 		var will_activate := false
 		for t in wtags:
 			var syn: Dictionary = WeaponData.SYNERGIES.get(t, {})
-			if not syn.is_empty():
-				var n := GameManager.get_tag_count(t)
-				var next := "MAX"
-				var th_arr: Array = syn.get("thresholds", [])
-				for th in th_arr:
-					if n < int(th):
-						next = str(th)
-						if n + 1 == int(th):
-							will_activate = true
-						break
-				tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
+			if syn.is_empty():
+				continue
+			var n := GameManager.get_tag_count(t)
+			var next := "MAX"
+			var hot := false
+			var th_arr: Array = syn.get("thresholds", [])
+			for th in th_arr:
+				if n < int(th):
+					next = str(th)
+					hot = (n + 1 == int(th))
+					break
+			tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
+			part_hot.append(hot)
+			will_activate = will_activate or hot
 		if not tag_parts.is_empty():
 			tag = " · ".join(tag_parts)
 		if will_activate:
@@ -839,6 +874,9 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(icon_tex)
+	# 吃「元素伤害」属性加成的法器挂橙红角标（仅武器，丹药/法宝不走该链路）
+	if kind == "weapon" and WeaponData.elemental_scaling_coef(String(offer.get("id", ""))) > 0.0:
+		icon_box.add_child(GameStyle.element_badge(8))
 	head.add_child(icon_box)
 	# 名号可用宽 = 卡内宽 − 图标 − 缝隙；切完仍摆不下的名号由判据点名
 	var name_w: float = card_name_w(card_w)
@@ -853,27 +891,43 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(head)
 
-	# ── 行②：羁绊色签 + 锁定开关同一行。锁定从「独占一行 26」压成色签行右端一枚角键，
+	# ── 行②：羁绊色签（每维一颗、分块摆放）+ 锁定开关同一行。锁定从「独占一行 26」压成色签行右端一枚角键，
 	#    「留到下波」那句解释改由「怎么用？」点按可得（触屏无 hover，见 AGENTS.md UI 规范）。
 	var lock_w := 0.0 if sold else CARD_LOCK_W
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag_row.add_theme_constant_override("separation", 4)
-	var tag_budget: float = maxf(56.0, inner_w - lock_w - 4.0)
-	var tag_txt := GameStyle.wrap_cjk(" " + tag + " ", GameStyle.body_font(), 11, tag_budget)
-	var tag_lbl = Label.new()
-	tag_lbl.text = tag_txt
-	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 贴着字走的色签：折行宽要钉成「最宽那一行」，不钉会被容器压成一个字一行
-	# （判据 LayoutCheck 在灵石阁上抓到的就是这一格：框 5×191、文案竖着排）
-	tag_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(tag_txt, GameStyle.body_font(), 11), 0)
-	tag_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tag_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
-	tag_row.add_child(tag_lbl)
-	GameStyle.label(tag_lbl, 11, chip_text_color)
+	# 签流：一行摆不下就整签换到下一行；签内文字永不竖排 —— 文案钉宽 + 不开 autowrap（杜绝「框 5×191」老坑）
+	var tag_flow := HFlowContainer.new()
+	tag_flow.name = "TagFlow"
+	tag_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tag_flow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tag_flow.add_theme_constant_override("h_separation", 4)
+	tag_flow.add_theme_constant_override("v_separation", 2)
+	tag_row.add_child(tag_flow)
+	# 武器每维羁绊一颗签（买下即激活的那一维整签泛金），丹药/法宝维持单签
+	var chip_defs: Array = []
+	if tag_parts.is_empty():
+		chip_defs.append([tag, chip_color, chip_text_color])
+	else:
+		for i in range(tag_parts.size()):
+			var hot_i: bool = bool(part_hot[i])
+			chip_defs.append([tag_parts[i],
+				GameStyle.YELLOW if hot_i else chip_color,
+				GameStyle.INK_TEXT if hot_i else chip_text_color])
+	for cd in chip_defs:
+		var chip_txt: String = " %s " % cd[0]
+		var chip_lbl = Label.new()
+		chip_lbl.text = chip_txt
+		chip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# 贴着字走的色签：宽钉成「整句单行的宽」，签内不折行（判据 LayoutCheck 抓过竖排老坑）
+		chip_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(chip_txt, GameStyle.body_font(), 11), 0)
+		chip_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(cd[1]))
+		tag_flow.add_child(chip_lbl)
+		GameStyle.label(chip_lbl, 11, cd[2])
 	if not sold:
 		var locked: bool = offer.get("locked", false)
 		var lock_btn = Button.new()

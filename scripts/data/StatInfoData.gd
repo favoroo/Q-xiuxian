@@ -14,21 +14,21 @@ extends RefCounted
 ## 2. FIELDS 是「加点字段 → 人话名 + 单位」的唯一对照表，悟道/法宝卡片与详情里的幅度文案都走它，
 ##    新字段没登记就会在详情里露出原始 key（判据同样拦）；幅度数字仍只在 UpgradeData/ItemData 的 apply 里；
 ## 3. 单位换算规则（pct / pctmul / …）在这里定义，与 UpgradeData 各项 desc 里的手写百分号同源：
-##    pct 是「增量 ×100」，pctmul 是「乘数 -1 再 ×100」（如攻速 ×0.88 → 间隔 -12%）。
+##    pct 是「增量 ×100」，pctmul 是「乘数 -1 再 ×100」（如攻速 ×0.88 → 攻击间隔 -12%）。
 
 ## 加点字段 → 人话名 + 单位（单位含义见文件头第 3 条）
 const FIELDS: Dictionary = {
 	"weapon_damage_mult": {"name": "法器伤害", "unit": "pct"},
-	"attack_speed_mult_mul": {"name": "施法间隔", "unit": "pctmul"},
+	"attack_speed_mult_mul": {"name": "攻击间隔", "unit": "pctmul"},
 	"armor": {"name": "护甲", "unit": "pt"},
-	"move_speed_mult": {"name": "移速", "unit": "pct"},
+	"move_speed_mult": {"name": "移动速度", "unit": "pct"},
 	"attack_range_mult": {"name": "攻击范围", "unit": "pct"},
 	"pickup_range_mult": {"name": "拾取范围", "unit": "pct"},
 	"hp_regen": {"name": "气血回复", "unit": "rate"},
 	"crit_rate": {"name": "暴击率", "unit": "pct"},
 	"crit_mult": {"name": "暴击伤害", "unit": "pct"},
 	"dodge": {"name": "闪避率", "unit": "pct"},
-	"lifesteal": {"name": "噬元概率", "unit": "pct"},
+	"lifesteal": {"name": "吸血概率", "unit": "pct"},
 	"luck": {"name": "福缘", "unit": "pt"},
 	"harvest": {"name": "灵韵", "unit": "pt"},
 	"spirit_stones": {"name": "灵石", "unit": "stone"},
@@ -97,26 +97,26 @@ const STAT_FIELDS: Dictionary = {
 const STAT_TITLES: Dictionary = {
 	"hp": "气血值",
 	"regen": "气血回复",
-	"armor": "护甲罡气",
-	"dodge": "流云身法",
-	"lifesteal": "噬元诀",
+	"armor": "护甲",
+	"dodge": "闪避率",
+	"lifesteal": "吸血",
 	"damage": "法器伤害",
 	"melee_dmg": "近战伤害",
 	"ranged_dmg": "远程伤害",
 	"elemental_dmg": "元素伤害",
 	"engineering_dmg": "御灵伤害",
-	"haste": "掐诀神速",
-	"speed": "神行移速",
-	"pickup": "摄灵范围",
-	"range": "神识范围",
-	"crit": "天命暴击",
-	"luck": "气运福缘",
-	"harvest": "灵田灵韵",
+	"haste": "攻击间隔",
+	"speed": "移动速度",
+	"pickup": "拾取范围",
+	"range": "攻击范围",
+	"crit": "暴击",
+	"luck": "福缘",
+	"harvest": "灵韵",
 	"xp_gain": "修为获取",
 	"shop_price": "灵石阁物价",
-	"bonus_pierce": "法剑贯通",
+	"bonus_pierce": "贯穿",
 	"elite_dmg": "对精英伤害",
-	"knockback": "法器击退",
+	"knockback": "击退力度",
 	"free_rerolls": "免费重掷",
 	"kills": "累计诛妖",
 	"stones": "随身灵石",
@@ -128,13 +128,13 @@ const BRIEF: Dictionary = {
 	"regen": "不用停手、每秒自动结算一次的持续回血。",
 	"armor": "周身罡气：按百分比削掉每一次受击的伤害。",
 	"dodge": "身法缥缈难捉：整次攻击落空，一点血都不掉。",
-	"lifesteal": "命中时以概率从妖兽身上吸回 1 点气血。",
+	"lifesteal": "命中时以概率吸取 1 点气血。",
 	"damage": "所有法器伤害的总乘区，一件不漏。",
 	"melee_dmg": "加成所有挥斩与横扫类近战法器的基础伤害。",
 	"ranged_dmg": "加成所有飞射弹道类远程法器的基础伤害。",
 	"elemental_dmg": "加成符箓、雷法轰击以及灼烧与剧毒跳字伤害。",
 	"engineering_dmg": "加成所有环绕周身护体灵宝的基础伤害。",
-	"haste": "掐诀更快：缩短每件法器的施法间隔。",
+	"haste": "出招更快：缩短每件法器的攻击间隔。",
 	"speed": "走位躲潮的根本：修士的移动速度。",
 	"pickup": "灵石与修为自动飞进袖子的半径。",
 	"range": "法器够得着多远：索敌与挥斩的距离一起乘。",
@@ -182,11 +182,11 @@ static func rules(id: String) -> Array[String]:
 			out.append("气血上限 = 道统基础 × 道统气血系数，再加悟道与法宝的增量、御灵羁绊的额外气血。")
 			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，且保底 %d 点：护甲再高也抹不平最后一击。" % [
 				_fmt(GameBalance.ARMOR_COEF), int(GameBalance.DAMAGE_FLOOR)])
-			out.append("三条回血路：气血回复每秒持续回、噬元命中概率回、波末结算（灵韵与回春葫芦）。")
+			out.append("三条回血路：气血回复每秒持续回、吸血命中概率回、波末结算（灵韵与回春葫芦）。")
 		"regen":
 			out.append("每帧按「回复量 × 时间」累加，满血时不溢出、也不折抵成别的收益。")
 			out.append("青木羁绊额外加在这一条上，详情里单列一行。")
-			out.append("与噬元诀是两回事：这条是持续回，那条是命中掷概率、一次只回 1 点。")
+			out.append("与吸血是两回事：这条是持续回，那条是命中掷概率、一次只回 1 点。")
 		"armor":
 			out.append("减伤 = 1 − 1 ÷ (1 + 护甲 × %s)：收益递减但没有上限，堆得越高每点越不值钱。" % _fmt(GameBalance.ARMOR_COEF))
 			out.append("面板减伤不含「保底 %d 点」这一刀，所以高护甲挨小伤害时实际比面板略差。" % int(GameBalance.DAMAGE_FLOOR))
@@ -204,7 +204,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("单件法器还能把别的属性折成伤害，点法器图标看它吃什么属性。")
 		"melee_dmg":
 			out.append("按点数直接增加所有挥砍横扫类近战法器的基础伤害。")
-			out.append("青云剑、赤焰刀、青木藤鞭、芭蕉扇等近战法器均直接享受本项加成。")
+			out.append("青云剑、赤焰斩马刀、青木藤鞭、芭蕉扇等近战法器均直接享受本项加成。")
 		"ranged_dmg":
 			out.append("按点数直接增加所有飞剑飞针与飞射类远程法器的基础伤害。")
 			out.append("庚金飞剑、柳叶飞刀、玄冰飞针、万木灵符等远程法器直接享受本项加成。")
@@ -215,8 +215,8 @@ static func rules(id: String) -> Array[String]:
 			out.append("按点数直接增加所有环绕护体灵宝的基础接触伤害。")
 			out.append("灵蝶、寒泉玉莲、混元古钟等灵宝均享受全额加成，符阵灵童核心流派。")
 		"haste":
-			out.append("间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
-			out.append("地板 = 间隔 ×%s：到地板后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
+			out.append("攻击间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
+			out.append("下限 = 攻击间隔 ×%s：到下限后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
 			out.append("面板显示的是相对 1.00 的缩减量，所以 -12% 与 -14% 叠起来是 -23%，不是 -26%。")
 		"speed":
 			out.append("实际移速 = 道统基础移速 × (1 + 悟道/法宝加成 + 羁绊加成)。")
@@ -306,7 +306,7 @@ static func field_name(key: String) -> String:
 	if key.begins_with("element_damage_"):
 		var elem: String = key.trim_prefix("element_damage_")
 		if ELEMENT_NAMES.has(elem):
-			return "%s行伤害" % String(ELEMENT_NAMES[elem])
+			return "%s系伤害" % String(ELEMENT_NAMES[elem])
 	return key
 
 static func field_unit(key: String) -> String:

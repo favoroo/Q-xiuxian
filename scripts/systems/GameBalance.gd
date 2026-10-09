@@ -489,10 +489,10 @@ static func stat_scaling_label(key: String) -> String:
 		"max_hp_bonus": return "额外气血"
 		"hp_regen": return "气血回复"
 		"lifesteal": return "吸血率"
-		"crit_rate": return "额外会心"
-		"crit_mult_bonus": return "额外暴伤"
+		"crit_rate": return "额外暴击率"
+		"crit_mult_bonus": return "额外暴击伤害"
 		"move_speed_bonus": return "移速加成"
-		"cdr_bonus": return "掐诀神速"
+		"cdr_bonus": return "攻击间隔"
 		"damage_bonus": return "法伤加成"
 		"range_bonus": return "范围加成"
 	return key

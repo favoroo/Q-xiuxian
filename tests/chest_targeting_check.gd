@@ -12,7 +12,8 @@ extends Node
 ##    刻意把匣子摆在 40px、妖摆在 200px —— 混进同一条成本函数排序就会选匣子，红）。
 ##    集火模式（e_count == 1 ⇒ 全部打同一只）照旧优先于砸匣子，这条也一并钉住。
 ## 2) 现场层（用户报的那一条）：先立负对照 —— 无妖无匣时法器确实在打空；再摆一只匣子，
-##    要求若干帧内有法器把它锁成目标。少了负对照，"target 非空"可能只是残留目标在骗人。
+##    要求若干帧内有法器把它锁成目标、真的打到它、并在 4 秒内自己砸开。
+##    少了负对照，"target 非空"可能只是残留目标在骗人；只锁不打同样不算兑现。
 ## 3) 弹道层：一件法器一次三发、场上只有一只妖时，多出来的那发要转向匣子，
 ##    而不是往同一个活物身上重复招呼。
 ## 4) 耐久层：按"几下"计而不按血量 —— 99999 一发放不倒满匣，且头顶读数格数 == 剩余击数。
@@ -152,8 +153,11 @@ func _test_idle_then_target_chest() -> void:
 
 	var chest := _spawn_chest(Vector2(70.0, 0.0))
 	var chest_id := chest.get_instance_id()
+	var max_h := chest.max_hits
 	var targeted := false
-	for i in range(60):
+	var hits_taken := 0
+	var broken := false
+	for i in range(240):
 		_clear_enemies()
 		await get_tree().process_frame
 		for w in _weapons():
@@ -161,8 +165,13 @@ func _test_idle_then_target_chest() -> void:
 			if t != null and is_instance_valid(t) and t.get_instance_id() == chest_id:
 				targeted = true
 		if not is_instance_valid(chest):
+			broken = true
+			hits_taken = max_h
 			break
+		hits_taken = maxi(hits_taken, max_h - chest.remaining_hits)
 	_check(targeted, "脚边有匣子、场上无妖 ⇒ 法器把匣子锁成目标（旧写法：匣子被索敌跳过，永远打空）")
+	_check(hits_taken > 0, "锁上之后真的打到了（吃到 %d/%d 下）" % [hits_taken, max_h])
+	_check(broken, "无妖时脚边的匣子会被法器自己砸开（用户要的完整结果，不是只『看一眼』）")
 
 ## 3) 有妖时匣子不许抢目标 —— 匣子摆在 40px、妖摆在 120px，两者都在射程内
 func _test_enemy_outranks_chest() -> void:
