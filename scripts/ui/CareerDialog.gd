@@ -18,7 +18,10 @@ func _get_title_text() -> String:
 	return "修 仙 志  ·  天 道 功 绩 簿"
 
 func _get_panel_size() -> Vector2:
-	return Vector2(880, 470)
+	var vp := get_viewport_rect().size
+	if vp.x <= 0.0:
+		vp = Vector2(960, 540)
+	return Vector2(minf(880.0, vp.x - 48.0), minf(470.0, vp.y - 40.0))
 
 func _get_panel_margins() -> Vector4:
 	return Vector4(20, 14, 20, 14)
@@ -80,7 +83,7 @@ func _add_summary_card(parent: HBoxContainer, title: String, init_val: String) -
 	v_lbl.text = init_val
 	v_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(v_lbl, 14, GameStyle.YELLOW)
+	GameStyle.label(v_lbl, 14, GameStyle.JADE)
 	hbox.add_child(v_lbl)
 
 	parent.add_child(card)
@@ -152,14 +155,9 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 	var aid := String(adef.get("id", ""))
 	var is_done: bool = GameManager.is_achievement_unlocked(aid)
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = GameStyle.NAVY if is_done else GameStyle.INK.lightened(0.02)
-	style.skew = Vector2(deg_to_rad(2.0), 0)
-	style.border_width_left = 2
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 3
-	style.border_color = GameStyle.YELLOW if is_done else GameStyle.LINE
+	var style := GameStyle.side_card(GameStyle.JADE if is_done else GameStyle.LINE)
+	if not is_done:
+		style.bg_color = GameStyle.INK.lightened(0.02)
 	style.content_margin_left = 10.0
 	style.content_margin_right = 10.0
 	style.content_margin_top = 6.0
@@ -199,7 +197,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 
 	var cond_lbl := Label.new()
 	cond_lbl.text = String(adef.get("cond_desc", ""))
-	GameStyle.label(cond_lbl, 11, GameStyle.YELLOW if is_done else GameStyle.GREY)
+	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else GameStyle.GREY)
 	text_col.add_child(cond_lbl)
 
 	# 奖励说明
@@ -226,11 +224,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 func _create_history_row(entry: Dictionary) -> Control:
 	var row := PanelContainer.new()
 	var is_vic := bool(entry.get("victory", false))
-	var style := StyleBoxFlat.new()
-	style.bg_color = GameStyle.NAVY
-	style.border_width_left = 2
-	style.border_width_bottom = 2
-	style.border_color = GameStyle.BLUE if is_vic else GameStyle.BAD
+	var style := GameStyle.side_card(GameStyle.GOLD if is_vic else GameStyle.BAD, 0.0)
 	style.content_margin_left = 12.0
 	style.content_margin_right = 12.0
 	style.content_margin_top = 6.0
@@ -266,7 +260,7 @@ func _create_history_row(entry: Dictionary) -> Control:
 
 	var v_tag := Label.new()
 	v_tag.text = " 渡劫成功 " if is_vic else " 道消身殒 "
-	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE if is_vic else GameStyle.BAD_DK))
+	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_vic else GameStyle.BAD_DK))
 	GameStyle.label(v_tag, 11, GameStyle.PAPER if is_vic else GameStyle.BAD)
 	hbox.add_child(v_tag)
 

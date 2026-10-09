@@ -122,7 +122,7 @@ func _init_toast() -> void:
 	style.border_width_top = 2
 	style.border_width_right = 2
 	style.border_width_bottom = 4
-	style.border_color = GameStyle.YELLOW
+	style.border_color = GameStyle.JADE
 	_toast_panel.add_theme_stylebox_override("panel", style)
 
 	var margin := MarginContainer.new()
@@ -167,7 +167,7 @@ func _fit_toast(text: String) -> void:
 	_toast_panel.custom_minimum_size = Vector2(w, maxf(TOAST_MIN_H, chrome.y))
 
 ## 展示全局轻提示浮层（Toast）
-func show_toast(text: String, accent_color: Color = GameStyle.YELLOW, duration: float = 2.2) -> void:
+func show_toast(text: String, accent_color: Color = GameStyle.JADE, duration: float = 2.2) -> void:
 	if _toast_band == null or _toast_panel == null or _toast_label == null:
 		return
 	_toast_label.text = text

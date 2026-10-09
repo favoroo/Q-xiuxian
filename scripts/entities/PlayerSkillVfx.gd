@@ -89,7 +89,7 @@ func on_dash_start(direction: Vector2, distance: float, duration: float) -> void
 	dash_dir = direction.normalized()
 	dash_flash_timer = duration + 0.08
 	# 生成冲刺起步与拉伸残影
-	spawn_ghost(Color(GameStyle.BLUE_EDGE, 0.75), 0.28)
+	spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.75), 0.28)
 	queue_redraw()
 
 ## 神行术激活
@@ -97,7 +97,7 @@ func on_gale_start(duration: float) -> void:
 	gale_active = true
 	gale_timer = duration
 	gale_trail_timer = 0.0
-	spawn_ghost(Color(GameStyle.BLUE, 0.6), 0.25)
+	spawn_ghost(Color(GameStyle.GOLD, 0.6), 0.25)
 	queue_redraw()
 
 ## 疾风咒激活
@@ -213,14 +213,14 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 				gale_trail_timer -= delta
 				if gale_trail_timer <= 0.0:
 					gale_trail_timer = 0.08
-					spawn_ghost(Color(GameStyle.BLUE, 0.45), 0.22)
+					spawn_ghost(Color(GameStyle.GOLD, 0.45), 0.22)
 
 	# 5. 缩地成寸
 	if dash_flash_timer > 0.0:
 		needs_redraw = true
 		dash_flash_timer -= delta
 		if is_moving and fmod(dash_flash_timer, 0.04) < delta:
-			spawn_ghost(Color(GameStyle.BLUE_EDGE, 0.6), 0.20)
+			spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.6), 0.20)
 
 	# 6. 回春术
 	if renewal_progress >= 0.0:
@@ -297,9 +297,9 @@ func _draw() -> void:
 
 ## 绘制【疾风咒】：全身风暴气茧包裹 + 脚底八卦疾风大阵 + 升腾风刃粒子
 func _draw_haste_fx() -> void:
-	var col_main := Color(GameStyle.BLUE, 0.78)
-	var col_edge := Color(GameStyle.BLUE_EDGE, 0.95)
-	var col_fill := Color(GameStyle.BLUE.r, GameStyle.BLUE.g, GameStyle.BLUE.b, 0.11)
+	var col_main := Color(GameStyle.GOLD, 0.78)
+	var col_edge := Color(GameStyle.GOLD_EDGE, 0.95)
+	var col_fill := Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.11)
 
 	# 1. 全身疾风气茧底衬（椭圆半透明风幕，把人物从头顶到脚底完整包裹）
 	var pulse := sin(haste_rot * 0.8) * 1.5
@@ -346,7 +346,7 @@ func _draw_haste_fx() -> void:
 	# 5. 飞散的全身向上风刃粒子
 	for sp in haste_sparks:
 		var ratio := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0)
-		var p_col := Color(GameStyle.BLUE_EDGE.r, GameStyle.BLUE_EDGE.g, GameStyle.BLUE_EDGE.b, ratio * 0.92)
+		var p_col := Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, ratio * 0.92)
 		var p_pos := Vector2(sp["pos"])
 		var p_tail := p_pos - Vector2(sp["vel"]).normalized() * (9.0 * ratio)
 		draw_line(p_tail, p_pos, p_col, 2.2, true)
@@ -354,8 +354,8 @@ func _draw_haste_fx() -> void:
 ## 绘制【神行术】：脚底御风青轮 + 身侧破风流线（覆盖全身高度）
 func _draw_gale_wind() -> void:
 	var wave := sin(gale_wind_phase) * 2.5
-	var col_edge := Color(GameStyle.BLUE_EDGE, 0.88)
-	var col_main := Color(GameStyle.BLUE, 0.65)
+	var col_edge := Color(GameStyle.GOLD_EDGE, 0.88)
+	var col_main := Color(GameStyle.GOLD, 0.65)
 
 	# 1. 脚底御风大青轮（透视椭圆风环，完整托住双足）
 	var wheel_rx := 32.0
@@ -386,8 +386,8 @@ func _draw_dash_cone() -> void:
 	var tip := BODY_CENTER + cone_dir * 46.0
 	var left_wing := tip - cone_dir.rotated(deg_to_rad(36.0)) * 54.0
 	var right_wing := tip - cone_dir.rotated(-deg_to_rad(36.0)) * 54.0
-	var col_outer := Color(GameStyle.BLUE_EDGE, 0.9)
-	var col_fill := Color(GameStyle.BLUE.r, GameStyle.BLUE.g, GameStyle.BLUE.b, 0.18)
+	var col_outer := Color(GameStyle.GOLD_EDGE, 0.9)
+	var col_fill := Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.18)
 
 	draw_colored_polygon(PackedVector2Array([left_wing, tip, right_wing]), col_fill)
 	draw_line(left_wing, tip, col_outer, 3.2, true)
@@ -406,9 +406,9 @@ func _draw_aegis_shield() -> void:
 	var ry := SHIELD_RY + pulse
 
 	if aegis_active:
-		var col_border := Color(GameStyle.YELLOW_EDGE, 0.95)
-		var col_inner := Color(GameStyle.YELLOW, 0.55)
-		var col_fill := Color(GameStyle.YELLOW.r, GameStyle.YELLOW.g, GameStyle.YELLOW.b, 0.18)
+		var col_border := Color(GameStyle.JADE_EDGE, 0.95)
+		var col_inner := Color(GameStyle.JADE, 0.55)
+		var col_fill := Color(GameStyle.JADE.r, GameStyle.JADE.g, GameStyle.JADE.b, 0.18)
 
 		# 1. 全身包裹八角天罡金光罩（中心对准 BODY_CENTER，上下从 -62 到 +34 完整罩住发冠与双足）
 		var poly_pts := PackedVector2Array()
@@ -453,7 +453,7 @@ func _draw_aegis_shield() -> void:
 		var s_rx := rx + p * 22.0
 		var s_ry := ry + p * 26.0
 		var alpha := 1.0 - p
-		var col := Color(GameStyle.YELLOW_EDGE.r, GameStyle.YELLOW_EDGE.g, GameStyle.YELLOW_EDGE.b, alpha * 0.9)
+		var col := Color(GameStyle.JADE_EDGE.r, GameStyle.JADE_EDGE.g, GameStyle.JADE_EDGE.b, alpha * 0.9)
 		var shatter_pts := PackedVector2Array()
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)

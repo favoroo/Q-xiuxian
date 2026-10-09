@@ -44,7 +44,10 @@ func _get_title_text() -> String:
 	return "传 道 玉 简"
 
 func _get_panel_size() -> Vector2:
-	return PANEL_SIZE
+	var vp := get_viewport_rect().size
+	if vp.x <= 0.0:
+		vp = Vector2(960, 540)
+	return Vector2(minf(PANEL_SIZE.x, vp.x - 48.0), minf(PANEL_SIZE.y, vp.y - 40.0))
 
 func _get_top_bar_separation() -> int:
 	return 8
@@ -118,7 +121,7 @@ func _make_text_card(title: String, body: String, image: String = "", image_h: f
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ " + title
-	GameStyle.label(title_lbl, 15, GameStyle.YELLOW, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	if image != "" and ResourceLoader.exists(image):
@@ -270,14 +273,14 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	for t in def.get("tags", []):
 		if t in WeaponData.ELEMENTS:
 			elem = String(t)
-	var chip_color: Color = ELEMENT_COLORS.get(elem, GameStyle.BLUE)
+	var chip_color: Color = ELEMENT_COLORS.get(elem, GameStyle.GOLD)
 
 	var rows: Array = [
 		["路数", String(BEHAVIOR_NAMES.get(def.get("behavior", 0), "近战")), chip_color],
-		["伤害", "%d" % int(def.get("damage", 0)), GameStyle.YELLOW],
+		["伤害", "%d" % int(def.get("damage", 0)), GameStyle.JADE],
 		["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
 		["射程/范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.YELLOW],
+		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	if int(def.get("pierce", 0)) > 0:
 		rows.append(["贯穿", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
@@ -356,7 +359,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 	var tier_col := ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.YELLOW],
+		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	var desc_lines := String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
@@ -449,7 +452,7 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	if not equip_str.is_empty():
 		var equip_lbl := Label.new()
 		equip_lbl.text = "✦ " + equip_str
-		GameStyle.label(equip_lbl, 12, GameStyle.YELLOW)
+		GameStyle.label(equip_lbl, 12, GameStyle.JADE)
 		text_col.add_child(equip_lbl)
 
 	for pro in def.get("pros", []):
@@ -478,7 +481,7 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 		if not ach.is_empty():
 			var cond_lbl := Label.new()
 			cond_lbl.text = "解锁条件：" + String(ach.get("cond_desc", ""))
-			GameStyle.label(cond_lbl, 11, GameStyle.YELLOW)
+			GameStyle.label(cond_lbl, 11, GameStyle.JADE)
 			text_col.add_child(cond_lbl)
 	hbox.add_child(status_lbl)
 
@@ -514,7 +517,7 @@ func _make_synergy_card() -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ 流派羁绊"
-	GameStyle.label(title_lbl, 15, GameStyle.YELLOW, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var intro_lbl := Label.new()
@@ -539,7 +542,7 @@ func _make_synergy_card() -> Control:
 			var name_lbl := Label.new()
 			name_lbl.text = String(syn.get("name", tag))
 			name_lbl.custom_minimum_size = Vector2(64, 0)
-			GameStyle.label(name_lbl, 13, GameStyle.BLUE_EDGE if group[0] == "器类" else GameStyle.YELLOW,
+			GameStyle.label(name_lbl, 13, GameStyle.GOLD_EDGE if group[0] == "器类" else GameStyle.JADE,
 				0, GameStyle.INK, true)
 			line.add_child(name_lbl)
 			var desc_lbl := Label.new()
@@ -564,7 +567,7 @@ func _make_stat_guide_card() -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ 属性词条 · 这是什么"
-	GameStyle.label(title_lbl, 15, GameStyle.YELLOW, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var intro_lbl := Label.new()
@@ -581,7 +584,7 @@ func _make_stat_guide_card() -> Control:
 		var name_lbl := Label.new()
 		name_lbl.text = StatInfoData.title(sid)
 		name_lbl.custom_minimum_size = Vector2(96, 0)
-		GameStyle.label(name_lbl, 12, GameStyle.BLUE_EDGE, 0, GameStyle.INK, true)
+		GameStyle.label(name_lbl, 12, GameStyle.GOLD_EDGE, 0, GameStyle.INK, true)
 		line.add_child(name_lbl)
 		var brief_lbl := Label.new()
 		brief_lbl.text = GameStyle.wrap_cjk(StatInfoData.brief(sid), GameStyle.body_font(), 12, TEXT_W - 116.0)
@@ -599,7 +602,7 @@ func _make_build_card(guide: Dictionary) -> Control:
 	sb.content_margin_top = 8.0
 	sb.content_margin_bottom = 8.0
 	sb.border_width_bottom = 4
-	sb.border_color = GameStyle.BLUE
+	sb.border_color = GameStyle.GOLD
 	card.add_theme_stylebox_override("panel", sb)
 
 	var vbox := VBoxContainer.new()
@@ -608,7 +611,7 @@ func _make_build_card(guide: Dictionary) -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ 流派 · " + String(guide.get("name", ""))
-	GameStyle.label(title_lbl, 15, GameStyle.BLUE_EDGE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.GOLD_EDGE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var wps: Array[String] = []

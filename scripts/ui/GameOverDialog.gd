@@ -14,9 +14,12 @@ func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	GameStyle.label(title_label, 26, GameStyle.PAPER, 0, GameStyle.INK, true)
-	GameStyle.label(stats_label, 15, Color(0.85, 0.87, 0.94))
-	GameStyle.button(retry_btn, GameStyle.YELLOW, GameStyle.PAPER, 18, GameStyle.INK_TEXT)
-	GameStyle.button(endless_btn, GameStyle.BLUE, GameStyle.BLUE_EDGE, 16, GameStyle.PAPER)
+	GameStyle.label(stats_label, 15, GameStyle.PAPER)
+	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.PAPER, 18, GameStyle.INK_TEXT)
+	GameStyle.button(endless_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)
+	# 标题带铺半调网点（胜金/败朱砂面上的印刷味，压暗点阵两种底都读得出；垫在标题字底下）
+	var strip := GameStyle.halftone(title_band, Color(0.08, 0.07, 0.04, 0.16))
+	title_band.move_child(strip, 0)
 
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
 	vbox.add_theme_constant_override("separation", 10)
@@ -33,7 +36,7 @@ func _ready() -> void:
 	_menu_btn.custom_minimum_size = Vector2(230, 40)
 	_menu_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_menu_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_menu_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	GameStyle.button(_menu_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
 	_menu_btn.pressed.connect(_on_menu_pressed)
 	vbox.add_child(_menu_btn)
 
@@ -44,7 +47,9 @@ func _ready() -> void:
 func _on_game_over(victory: bool) -> void:
 	title_label.text = "渡 劫 成 功 ！" if victory else "道 消 身 殒"
 	title_band.add_theme_stylebox_override("panel",
-		GameStyle.block(GameStyle.BLUE if victory else GameStyle.BAD, GameStyle.SLANT_BAND, Vector2(4, 5)))
+		GameStyle.block(GameStyle.GOLD if victory else GameStyle.BAD, GameStyle.SLANT_BAND, Vector2(4, 5)))
+	# 鎏金带面上纸白字会洗白，胜利用墨黑字；朱砂带上保留纸白
+	GameStyle.label(title_label, 26, GameStyle.INK_TEXT if victory else GameStyle.PAPER, 0, GameStyle.INK, true)
 	var mins := int(GameManager.game_time / 60.0)
 	var secs := int(GameManager.game_time) % 60
 	var cdef: Dictionary = CultivatorData.get_def(GameManager.cultivator_id)
@@ -62,6 +67,8 @@ func _on_game_over(victory: bool) -> void:
 	modulate.a = 0.0
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.25)
+	# 开场一条斜带扫过（胜金败朱砂），压场用
+	GameStyle.slash_wipe(self, GameStyle.GOLD if victory else GameStyle.BAD)
 
 func _refresh_unlocks() -> void:
 	for c in _unlocks_box.get_children():
@@ -84,8 +91,8 @@ func _refresh_unlocks() -> void:
 		chip.text = " ✦ 功绩「%s」· %s：%s ✦ " % [adef.get("name", ""), prefix, rname]
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
-		GameStyle.label(chip, 12, GameStyle.YELLOW)
+		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
+		GameStyle.label(chip, 12, GameStyle.JADE)
 		_unlocks_box.add_child(chip)
 	if newly.size() > max_show:
 		var more := Label.new()

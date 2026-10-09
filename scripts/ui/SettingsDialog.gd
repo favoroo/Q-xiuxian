@@ -90,10 +90,7 @@ func _build_audio_page() -> Control:
 func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String, desc: String) -> void:
 	var row := PanelContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var r_st := StyleBoxFlat.new()
-	r_st.bg_color = Color(0.06, 0.09, 0.16, 0.7)
-	r_st.border_width_left = 3
-	r_st.border_color = GameStyle.BLUE
+	var r_st := GameStyle.side_card(GameStyle.GOLD, 0.0)
 	r_st.content_margin_left = 12.0
 	r_st.content_margin_top = 8.0
 	r_st.content_margin_right = 12.0
@@ -129,7 +126,7 @@ func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	slider.focus_mode = Control.FOCUS_ALL
-	var styles := GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.BLUE)
+	var styles := GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.GOLD)
 	slider.add_theme_stylebox_override("slider", styles[0])
 	slider.add_theme_stylebox_override("grabber_area", styles[1])
 	hbox.add_child(slider)
@@ -138,7 +135,7 @@ func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String
 	val_lbl.custom_minimum_size = Vector2(50, 24)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	GameStyle.label(val_lbl, 13, GameStyle.YELLOW)
+	GameStyle.label(val_lbl, 13, GameStyle.JADE)
 	hbox.add_child(val_lbl)
 
 	var mute_btn := Button.new()
@@ -183,9 +180,9 @@ func _update_audio_row_ui(bus: StringName) -> void:
 		GameStyle.button(mute_btn, GameStyle.BAD_DK, GameStyle.BAD, 12, GameStyle.PAPER, 4.0)
 	else:
 		val_lbl.text = "%d%%" % int(round(vol * 100.0))
-		val_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
+		val_lbl.add_theme_color_override("font_color", GameStyle.JADE)
 		mute_btn.text = "静音"
-		GameStyle.button(mute_btn, GameStyle.NAVY2, GameStyle.BLUE, 12, GameStyle.PAPER_DIM, 4.0)
+		GameStyle.button(mute_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 
 # ----------------- 分页 2：剑意视界（战斗与画面特效） -----------------
 
@@ -231,14 +228,11 @@ func _build_display_page() -> Control:
 
 	return scroll
 
-## 通用行外壳：左「标题 + 说明」右控件的深蓝斜条，开关行与档位行共用同一份摆位
+## 通用行外壳：左「标题 + 说明」右控件的金签墨条，开关行与档位行共用同一份摆位
 func _add_row_shell(parent: VBoxContainer, title: String, desc: String) -> HBoxContainer:
 	var row := PanelContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var r_st := StyleBoxFlat.new()
-	r_st.bg_color = Color(0.06, 0.09, 0.16, 0.7)
-	r_st.border_width_left = 3
-	r_st.border_color = GameStyle.BLUE
+	var r_st := GameStyle.side_card(GameStyle.GOLD, 0.0)
 	r_st.content_margin_left = 12.0
 	r_st.content_margin_top = 8.0
 	r_st.content_margin_right = 12.0
@@ -291,10 +285,10 @@ func _update_toggle_btn_ui(key: String) -> void:
 
 	if is_on:
 		btn.text = "已开启  [开]"
-		GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, 5.0)
+		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 	else:
 		btn.text = "已关闭  [关]"
-		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
 
 ## 多档循环行：点一下走下一档，文本直接写当前档位的人话名
 ## level_text / is_on / on_press 由调用方给，控件本身不认识任何具体设置项
@@ -325,9 +319,9 @@ func _update_cycle_btn_ui(key: String) -> void:
 	var btn: Button = ctrl["btn"]
 	btn.text = String((ctrl["level_text"] as Callable).call())
 	if bool((ctrl["is_on"] as Callable).call()):
-		GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, 5.0)
+		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 	else:
-		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
 
 # ----------------- 分页 3：演化推衍（系统与拓展） -----------------
 
@@ -356,7 +350,7 @@ func _build_system_page() -> Control:
 
 	var ver_title := Label.new()
 	ver_title.text = "✦ 当前运行状态"
-	GameStyle.label(ver_title, 14, GameStyle.YELLOW)
+	GameStyle.label(ver_title, 14, GameStyle.JADE)
 	ip_vbox.add_child(ver_title)
 
 	var ver_lbl := Label.new()
@@ -384,7 +378,7 @@ func _build_system_page() -> Control:
 
 	var exp_title := Label.new()
 	exp_title.text = "✦ 后续功能规划预留"
-	GameStyle.label(exp_title, 14, GameStyle.YELLOW)
+	GameStyle.label(exp_title, 14, GameStyle.JADE)
 	ep_vbox.add_child(exp_title)
 
 	var exp_desc := Label.new()

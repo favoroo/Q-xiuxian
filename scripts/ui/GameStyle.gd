@@ -1,35 +1,40 @@
 class_name GameStyle
 extends RefCounted
 
-## 「蓝白黄」大色块扁平化 UI 统一样式工厂（移植 dudu-cocos 的斜切语言）。
-## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；硬错位投影 + 同色压暗厚底边。
+## 「玄墨鎏金」斜切版画 UI 统一样式工厂（斜切语言移植自 dudu-cocos）。
+## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；硬错位墨影 + 同色压暗厚底边。
+## 色即功能：鎏金 = 主行动/选中，青玉 = 灵石货币/星级/辅助强调，朱砂 = 危险，青碧 = 增益。
 ## 字体：正文 MiSans-Semibold，大标题 MiSans-Heavy。
 
-const INK := Color("0a0e1a")        # 最深底
-const NAVY := Color("121a2e")       # 面板底
-const NAVY2 := Color("1a2440")      # 按钮底/未选中
-const LINE := Color("2a3550")       # 描线/分隔
-const PAPER := Color("f2efe4")      # 纸白
+# —— 底色（暖调玄墨）——
+const INK := Color("0b0d12")        # 最深底
+const NAVY := Color("141821")       # 面板底
+const NAVY2 := Color("1e2431")      # 按钮底/未选中
+const LINE := Color("333b4d")       # 描线/分隔
+
+# —— 文字 ——
+const PAPER := Color("f2efe4")      # 纸白正文
 const PAPER_DIM := Color("c9c4b4")  # 次要纸白
-const INK_TEXT := Color("0a0e1c")   # 亮面上的墨黑字
+const INK_TEXT := Color("14110a")   # 亮面上的暖墨黑字（纯黑在鎏金面上发死）
 
-const BLUE := Color("2f7dff")       # 主蓝 = 主行动
-const BLUE_EDGE := Color("8fb8ff")
-const BLUE_DK := Color("123c99")
-const YELLOW := Color("ffd24d")     # 点缀黄 = 货币/选中/星
-const YELLOW_EDGE := Color("ffe89a")
-const YELLOW_DK := Color("8f7414")
-const GOOD := Color("7dff9e")       # 治疗/增益
+# —— 角色色（色即功能）——
+const GOLD := Color("e0aa3e")       # 鎏金 = 主行动/选中/标题带
+const GOLD_EDGE := Color("f5d98a")
+const GOLD_DK := Color("8a6420")
+const JADE := Color("4fd1a5")       # 青玉 = 灵石货币/星级/辅助强调（灵石即玉）
+const JADE_EDGE := Color("a5ecd4")
+const JADE_DK := Color("1f7a5e")
+const GOOD := Color("7dffa9")       # 青碧 = 治疗/增益
 const GOOD_DK := Color("2f8f4c")
-const BAD := Color("ff5a5a")        # 危险/扣血
-const BAD_DK := Color("8f2020")
-const GREY := Color("8f9cbe")       # 暗部正文
-const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/绿/红都不撞）
+const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
+const BAD_DK := Color("8f2a1c")
+const GREY := Color("9aa1b5")       # 暗部正文
+const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与金/玉/碧/朱砂都不撞）
 
-# 稀有度 / 品阶统一色值（凡品 / 良品 / 仙品 / 传说）
+# 稀有度 / 品阶统一色值（凡品纸 / 良品玉 / 仙品金 / 传说紫）
 const RARITY_COMMON := Color(0.96, 0.95, 0.92)
-const RARITY_RARE := Color(1.0, 0.83, 0.3)
-const RARITY_EPIC := Color(0.35, 0.75, 1.0)
+const RARITY_RARE := Color(0.31, 0.82, 0.65)
+const RARITY_EPIC := Color(0.88, 0.67, 0.24)
 const RARITY_LEGEND := Color(0.85, 0.45, 1.0)
 
 # 五行标签统一色值
@@ -243,9 +248,12 @@ static func _strip_bbcode(s: String) -> String:
         i += 1
     return out
 
-## 基础斜切面板，带硬投影（shadow_size=0 保持边缘锐利）
+## 基础斜切面板，带硬错位墨影。
+## 坑：shadow_size = 0 时引擎压根不画投影（style_box_flat.cpp draw_shadow = shadow_size > 0），
+## 所以硬影要给 shadow_size = 1 —— StyleBoxFlat 的投影是无模糊的等形外扩剪影，
+## size 1 + offset 就是 dudu 那种「错位一块墨」的硬影，边缘依旧锐利。
 static func panel(bg: Color, skew_deg: float = SLANT_PLATE, shadow_offset: Vector2 = Vector2(4, 4),
-        shadow_col: Color = Color(0, 0, 0, 0.5)) -> StyleBoxFlat:
+        shadow_col: Color = Color(0, 0, 0, 0.55)) -> StyleBoxFlat:
     var sb := StyleBoxFlat.new()
     sb.bg_color = bg
     sb.skew = Vector2(deg_to_rad(skew_deg), 0.0)
@@ -255,18 +263,55 @@ static func panel(bg: Color, skew_deg: float = SLANT_PLATE, shadow_offset: Vecto
     sb.corner_radius_bottom_left = 0
     if shadow_offset != Vector2.ZERO:
         sb.shadow_color = shadow_col
-        sb.shadow_size = 0
+        sb.shadow_size = 1
         sb.shadow_offset = shadow_offset
     return sb
 
-## dudu 实底大色块：主色面 + 同色压暗厚底边 + 描边 + 硬投影
+## dudu 实底大色块：主色面 + 同色压暗厚底边 + 描边 + 硬错位墨影
 static func block(bg: Color, skew_deg: float = SLANT_BLOCK, shadow_offset: Vector2 = Vector2(4, 5)) -> StyleBoxFlat:
     var sb := panel(bg, skew_deg, shadow_offset)
     sb.border_width_left = 2
     sb.border_width_top = 2
     sb.border_width_right = 2
-    sb.border_width_bottom = 5
+    sb.border_width_bottom = 6
     sb.border_color = bg.darkened(0.4)
+    return sb
+
+## 墨面色带卡：墨底 + 顶部 accent 色带 + 同色细框 + 硬墨影。
+## dudu 的做法是「卡片用墨面+色带，不要整面实底」——实底留给主行动按钮与标题带，
+## 卡片整面亮色会糊成一片；墨底托纸白字，顶带那一笔 accent 就够标明身份
+## （稀有度/选中态/流派色都走这一个 accent 参数）。
+## StyleBoxFlat 边框是单色的：顶带 4 + 侧 1 + 底 2 共用 accent，正好顺出细框。
+static func card(accent: Color, skew_deg: float = SLANT_BLOCK, shadow_offset: Vector2 = Vector2(4, 5)) -> StyleBoxFlat:
+    var sb := panel(NAVY2, skew_deg, shadow_offset)
+    sb.border_width_left = 1
+    sb.border_width_top = 4
+    sb.border_width_right = 1
+    sb.border_width_bottom = 2
+    sb.border_color = accent
+    return sb
+
+## 弹窗大面板：墨底 + 2/2/2/6 accent 框 + 大硬影。
+## BaseModalDialog / 属性面板 / 暂停 / 更新弹窗同一条配方，别开小灶。
+static func dialog_panel(border: Color = GOLD, skew_deg: float = SLANT_PLATE,
+        shadow_offset: Vector2 = Vector2(8, 9)) -> StyleBoxFlat:
+    var sb := panel(NAVY, skew_deg, shadow_offset)
+    sb.border_width_left = 2
+    sb.border_width_top = 2
+    sb.border_width_right = 2
+    sb.border_width_bottom = 6
+    sb.border_color = border
+    return sb
+
+## 左侧色签行：列表行的身份标记是左边一条竖带。行内不投影 —— 列表里每行都拖一条墨影
+## 会糊成一锅，行的层次交给底色差（NAVY2 行压 NAVY 面板）。
+static func side_card(accent: Color, skew_deg: float = SLANT_PLATE) -> StyleBoxFlat:
+    var sb := panel(NAVY2, skew_deg, Vector2.ZERO)
+    sb.border_width_left = 3
+    sb.border_width_top = 1
+    sb.border_width_right = 1
+    sb.border_width_bottom = 2
+    sb.border_color = accent
     return sb
 
 ## 带外描边的斜切面板（武器槽/卡片描边态）
@@ -299,6 +344,82 @@ static func bar_styles(track: Color, fill: Color) -> Array:
 ## 色签 chip：小面积斜切更陡才读得出形状
 static func chip(face: Color) -> StyleBoxFlat:
     return block(face, SLANT_BAND, Vector2(2, 3))
+
+## 半调网点带：标题带上的印刷味装饰。一次性 _draw（retained），不进每帧路径，不参与交互。
+## 只铺大标题带（主菜单/结算这种一屏一条的场合），小卡片上网点只会糊成脏点。
+class HalftoneStrip:
+    extends Control
+    var dot_color := Color(0.95, 0.94, 0.89, 0.10)
+    var step := 14.0
+    var dot_r := 1.6
+
+    func _init() -> void:
+        mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+    func _notification(what: int) -> void:
+        if what == NOTIFICATION_RESIZED:
+            queue_redraw()
+
+    func _draw() -> void:
+        var row := 0
+        var y := step * 0.5
+        while y < size.y:
+            # 奇数行错半格，菱形点阵比方阵更有印刷味
+            var x := step * (0.5 if row % 2 == 0 else 1.0)
+            while x < size.x:
+                draw_circle(Vector2(x, y), dot_r, dot_color)
+                x += step
+            y += step
+            row += 1
+
+## 在 parent 上铺一条半调网点（满幅覆盖， parent 为 PanelContainer 时会被自动铺满）
+static func halftone(parent: Control, col := Color(0.95, 0.94, 0.89, 0.10)) -> Control:
+    var h := HalftoneStrip.new()
+    h.dot_color = col
+    h.set_anchors_preset(Control.PRESET_FULL_RECT)
+    parent.add_child(h)
+    return h
+
+## 入场动效：微缩 + 淡入回弹。容器管布局，position 动不得，所以走 pivot 缩放 + 透明度；
+## pivot 在布局前是零，挂一次 resized 持续跟随（之后卡片自身的选中缩放也受益）。
+## PROCESS 模式：悟道/灵石阁这些屏开着时游戏树是暂停的，暂停下 tween 默认不走。
+static func enter_anim(node: Control, delay: float = 0.0) -> void:
+    node.modulate = Color(1, 1, 1, 0)
+    node.scale = Vector2(0.96, 0.96)
+    if node.size != Vector2.ZERO:
+        node.pivot_offset = node.size * 0.5
+    if not node.resized.is_connected(_recenter_pivot.bind(node)):
+        node.resized.connect(_recenter_pivot.bind(node))
+    var tw := node.create_tween()
+    tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+    if delay > 0.0:
+        tw.tween_interval(delay)
+    tw.set_parallel()
+    tw.tween_property(node, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+    tw.tween_property(node, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+static func _recenter_pivot(node: Control) -> void:
+    if is_instance_valid(node):
+        node.pivot_offset = node.size * 0.5
+
+## 斜切扫屏：一条陡斜色带从屏左外扫到屏右外，结算/大胜场面的开场一笔。
+## 用完自己 queue_free。PROCESS 模式：结算屏开着时游戏树是暂停的。
+static func slash_wipe(host: Control, col: Color = GOLD) -> void:
+    var vp := host.get_viewport_rect().size
+    if vp.x <= 0.0:
+        return
+    var band := PanelContainer.new()
+    band.add_theme_stylebox_override("panel", panel(col, SLANT_BAND, Vector2.ZERO))
+    band.size = Vector2(vp.x * 0.45, vp.y * 1.7)
+    band.position = Vector2(-vp.x * 0.7, -vp.y * 0.35)
+    band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    band.set_meta("layout_bleed", true)   # 扫屏带大半时间在屏外，判据放行
+    host.add_child(band)
+    var tw := band.create_tween()
+    tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+    tw.tween_property(band, "position:x", vp.x * 1.25, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+    tw.parallel().tween_property(band, "modulate:a", 0.0, 0.18).set_delay(0.34)
+    tw.tween_callback(band.queue_free)
 
 ## 「元素」角标：贴武器图标右上角的纯色小方块（吃「元素伤害」属性加成的法器专用，
 ## 判定走 WeaponData.elemental_scaling_coef）。
@@ -358,7 +479,7 @@ static func star_label(parent: Control, star: int, font_size: int = 11) -> Label
     lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
     lbl.add_theme_font_override("font", body_font())
     lbl.add_theme_font_size_override("font_size", font_size)
-    lbl.add_theme_color_override("font_color", YELLOW)
+    lbl.add_theme_color_override("font_color", JADE)
     lbl.add_theme_color_override("font_outline_color", INK)
     lbl.add_theme_constant_override("outline_size", 3)
     lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -529,9 +650,9 @@ static func scrollable(sc: ScrollContainer) -> void:
 ## 滚动条只能靠 modulate 调颜色：theme 的 scroll_background / scroll_grabber 那几张 stylebox，
 ## 无论是 `bar.add_theme_stylebox_override()` 还是给 bar 挂一份 Theme，画出来都还是默认那根
 ## 浅灰圆头（实测：节点上 get_theme_stylebox 读回来是我们要的色，屏幕上不动；同一节点
-## modulate=红 立刻变红 ⇒ 4.7 的 ScrollBar 绘制不吃这两条路）。灰 × 深蓝 = 一条压在面板底上
-## 的暗蓝细带：不抢视线，也不在满屏深蓝里跳出「网页滚动条」。
+## modulate=红 立刻变红 ⇒ 4.7 的 ScrollBar 绘制不吃这两条路）。鎏金 × 玄墨 = 一条压在面板底上
+## 的暗金细带：不抢视线，也不在满屏墨色里跳出「网页滚动条」。
 static func _scroll_bar(bar: ScrollBar) -> void:
     if bar == null:
         return
-    bar.modulate = Color(0.34, 0.52, 0.92, 0.85)
+    bar.modulate = Color(0.88, 0.67, 0.24, 0.85)

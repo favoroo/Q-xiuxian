@@ -139,11 +139,11 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	GameStyle.label(title_label, 22, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(title_label, 22, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(info_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER)
-	GameStyle.button(confirm_btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 16, GameStyle.INK_TEXT, 6.0)
+	GameStyle.button(confirm_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 16, GameStyle.INK_TEXT, 6.0)
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm_pick)
 	GameManager.alloc_opened.connect(_on_alloc_opened)
@@ -237,7 +237,7 @@ func _update_gate_label() -> void:
 	else:
 		gate_label.text = "已选【%s】 · %s" % [
 			GameManager.alloc_offers[selected_index].get("title", "?"), rest]
-		GameStyle.label(gate_label, 13, GameStyle.YELLOW)
+		GameStyle.label(gate_label, 13, GameStyle.JADE)
 
 func _populate_cards() -> void:
 	for child in cards_container.get_children():
@@ -273,17 +273,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	card.pivot_offset = Vector2(_card_w * 0.5, CARD_MIN_H * 0.5)
 
 	var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
-	var style_normal := StyleBoxFlat.new()
-	style_normal.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
-	style_normal.skew = Vector2(deg_to_rad(3.0), 0.0)
-	style_normal.border_width_left = 2
-	style_normal.border_width_top = 2
-	style_normal.border_width_right = 2
-	style_normal.border_width_bottom = 5
-	style_normal.border_color = rarity_col
-	style_normal.shadow_color = Color(0, 0, 0, 0.6)
-	style_normal.shadow_size = 0
-	style_normal.shadow_offset = Vector2(6, 6)
+	var style_normal := GameStyle.card(rarity_col, 3.0, Vector2(6, 6))
 	style_normal.content_margin_left = CARD_PAD_X
 	style_normal.content_margin_top = 12.0
 	style_normal.content_margin_right = CARD_PAD_X
@@ -412,7 +402,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 		"title_lbl": title_lbl,
 	}
 
-## 选中态：金框 + 标题转黄 + 徽记换成「已选 ✦」，未选中的退回「×层数」。
+## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ✦」，未选中的退回「×层数」。
 ## 底部 gate_label 同时把「已选【名字】+ 还剩几点」写在明面上。
 func _select_card(index: int) -> void:
 	if index < 0 or index >= GameManager.alloc_offers.size():
@@ -438,12 +428,12 @@ func _select_card(index: int) -> void:
 		if is_sel:
 			tw.tween_property(card, "scale", Vector2(SEL_SCALE, SEL_SCALE), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color(1, 1, 1, 1), 0.12)
-			style.bg_color = Color(0.10, 0.15, 0.28, 0.99)
-			style.border_color = GameStyle.YELLOW
-			icon_st.border_color = GameStyle.YELLOW
-			title_lbl.add_theme_color_override("font_color", GameStyle.YELLOW)
+			style.bg_color = GameStyle.NAVY2.lightened(0.10)
+			style.border_color = GameStyle.GOLD
+			icon_st.border_color = GameStyle.GOLD
+			title_lbl.add_theme_color_override("font_color", GameStyle.GOLD)
 			badge.text = "已选 ✦"
-			badge.add_theme_color_override("font_color", GameStyle.YELLOW)
+			badge.add_theme_color_override("font_color", GameStyle.GOLD)
 		else:
 			tw.tween_property(card, "scale", Vector2(DIM_SCALE, DIM_SCALE), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color(0.78, 0.80, 0.86, 0.78), 0.12)

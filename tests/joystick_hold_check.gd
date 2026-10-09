@@ -205,7 +205,7 @@ func _run() -> void:
 	# 十五、真件：详解卡（非按钮的 PanelContainer 卡体）卡体让位、整屏暗底不让位。
 	# 用真 DetailTip 而不是自造替身，顺便把这件控件拉进编译 —— 它今天的改动就是这两条边界。
 	var tip := DetailTip.show_over(_host, _hold_key, {
-		"title": "判据详解", "chip": "现场", "chip_color": GameStyle.YELLOW,
+		"title": "判据详解", "chip": "现场", "chip_color": GameStyle.JADE,
 		"rows": [["当前", "1", GameStyle.PAPER]],
 		"body": "卡体不算禁区外的例外；暗底仍要把走位留下。",
 		"notes": ["这条判据盯的是「卡体让位、遮罩不让位」这条边界。"],

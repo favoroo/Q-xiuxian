@@ -57,31 +57,33 @@ func _build_decor() -> void:
     decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(decor)
 
-    # 横向斜切深蓝带（横穿标题后方）：有意比屏宽，两头出血 ⇒ 判据放行这一格
+    # 横向斜切墨带（横穿标题后方）：有意比屏宽，两头出血 ⇒ 判据放行这一格。
+    # 宽度跟视口走：写死 1100 在 20:9（可视宽 1202）上带子的两个断口会露在屏幕中段。
     var band := PanelContainer.new()
     band.add_theme_stylebox_override("panel", GameStyle.panel(GameStyle.NAVY2, GameStyle.SLANT_BAND, Vector2.ZERO))
     band.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    band.custom_minimum_size = Vector2(1100, 150)
-    band.position = Vector2(-550, 108)
+    var vw := get_viewport().get_visible_rect().size.x
+    band.custom_minimum_size = Vector2(vw + 160.0, 150)
+    band.position = Vector2(-(vw + 160.0) * 0.5, 108)
     band.mouse_filter = Control.MOUSE_FILTER_IGNORE
     band.set_meta("layout_bleed", true)
     decor.add_child(band)
     _decor_blocks.append(band)
 
-    # 点缀：左侧黄色斜切块 + 右下主蓝斜切块
+    # 点缀：左侧青玉斜切块 + 右侧鎏金斜切块（坐标按视口比例，宽屏不漂）
     var yblk := PanelContainer.new()
-    yblk.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.YELLOW, GameStyle.SLANT_BAND, Vector2(5, 6)))
+    yblk.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.JADE, GameStyle.SLANT_BAND, Vector2(5, 6)))
     yblk.custom_minimum_size = Vector2(64, 22)
-    yblk.position = Vector2(150, 246)
+    yblk.position = Vector2(vw * 0.156, 246)
     yblk.rotation = deg_to_rad(-4.0)
     yblk.mouse_filter = Control.MOUSE_FILTER_IGNORE
     decor.add_child(yblk)
     _decor_blocks.append(yblk)
 
     var bblk := PanelContainer.new()
-    bblk.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(5, 6)))
+    bblk.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(5, 6)))
     bblk.custom_minimum_size = Vector2(90, 18)
-    bblk.position = Vector2(730, 420)
+    bblk.position = Vector2(vw * 0.76, 420)
     bblk.rotation = deg_to_rad(3.0)
     bblk.mouse_filter = Control.MOUSE_FILTER_IGNORE
     decor.add_child(bblk)
@@ -93,7 +95,7 @@ func _build_decor() -> void:
     for i in range(4):
         var bracket := Line2D.new()
         bracket.width = 6.0
-        bracket.default_color = GameStyle.YELLOW
+        bracket.default_color = GameStyle.JADE
         bracket.joint_mode = Line2D.LINE_JOINT_ROUND
         bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
         bracket.end_cap_mode = Line2D.LINE_CAP_ROUND
@@ -134,28 +136,29 @@ func _build_center() -> void:
     center.add_child(vbox)
     _center_vbox = vbox
 
-    # 标题：黄色斜切大色块 + 墨黑超大字
+    # 标题：鎏金斜切大匾 + 墨黑超大字 + 半调网点（印刷味，只此一条）
     _title_block = PanelContainer.new()
     _title_block.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    var tstyle := GameStyle.block(GameStyle.YELLOW, GameStyle.SLANT_BLOCK, Vector2(8, 9))
+    var tstyle := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(8, 9))
     tstyle.content_margin_left = 34.0
     tstyle.content_margin_top = 10.0
     tstyle.content_margin_right = 34.0
     tstyle.content_margin_bottom = 14.0
     _title_block.add_theme_stylebox_override("panel", tstyle)
+    GameStyle.halftone(_title_block, Color(0.08, 0.07, 0.04, 0.14))
     var title := Label.new()
     title.text = "修 仙 幸 存 者"
     GameStyle.label(title, 56, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
     _title_block.add_child(title)
     vbox.add_child(_title_block)
 
-    # 副标题：主蓝 chip
+    # 副标题：墨底青玉字的小签
     _sub_chip = Label.new()
     _sub_chip.text = " 斩 妖 修 行 · 一 念 飞 升 "
     _sub_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _sub_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    _sub_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE))
-    GameStyle.label(_sub_chip, 14, GameStyle.PAPER)
+    _sub_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
+    GameStyle.label(_sub_chip, 14, GameStyle.JADE)
     vbox.add_child(_sub_chip)
 
     var spacer := Control.new()
@@ -165,17 +168,17 @@ func _build_center() -> void:
     # 危险度选择：通关当前最高档解锁下一档（落盘持久化，见 GameManager）
     _build_danger_row(vbox)
 
-    # 按钮列
+    # 按钮列（鎏金面上用墨黑字：纸白压金色会洗白）
     _buttons.append(_make_button(vbox, "开 始 游 戏", 24, Vector2(300, 56),
-        GameStyle.BLUE, GameStyle.YELLOW, GameStyle.PAPER, _on_start_pressed))
+        GameStyle.GOLD, GameStyle.GOLD_EDGE, GameStyle.INK_TEXT, _on_start_pressed))
     _buttons.append(_make_button(vbox, "修  仙  志", 15, Vector2(220, 38),
-        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER, _on_career_pressed))
+        GameStyle.NAVY2, GameStyle.JADE, GameStyle.PAPER, _on_career_pressed))
     _buttons.append(_make_button(vbox, "教 程 手 册", 15, Vector2(220, 38),
-        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER, _on_manual_pressed))
+        GameStyle.NAVY2, GameStyle.JADE, GameStyle.PAPER, _on_manual_pressed))
     _buttons.append(_make_button(vbox, "游 戏 设 置", 15, Vector2(220, 38),
-        GameStyle.NAVY2, GameStyle.YELLOW, GameStyle.PAPER_DIM, _on_settings_pressed))
+        GameStyle.NAVY2, GameStyle.JADE, GameStyle.PAPER_DIM, _on_settings_pressed))
     _update_btn = _make_button(vbox, "检 查 更 新", 15, Vector2(220, 38),
-        GameStyle.NAVY2, GameStyle.BLUE, GameStyle.PAPER_DIM, _on_update_pressed)
+        GameStyle.NAVY2, GameStyle.GOLD, GameStyle.PAPER_DIM, _on_update_pressed)
     _buttons.append(_update_btn)
     _buttons.append(_make_button(vbox, "退 出 游 戏", 15, Vector2(220, 38),
         GameStyle.NAVY2, GameStyle.BAD, GameStyle.PAPER_DIM, _on_quit_pressed))
@@ -242,7 +245,7 @@ func _refresh_danger_row() -> void:
         btn.disabled = not unlocked
         btn.text = DANGER_NAMES[d] if unlocked else "锁"
         if d == GameManager.danger_level and unlocked:
-            GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 13, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+            GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
         elif unlocked:
             GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 13, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
         else:
@@ -324,7 +327,7 @@ func _on_update_pressed() -> void:
         _cancel_reset_timer()
         _update_btn.text = "正在检查更新..."
         UpdateManager.check_for_update(true)
-        UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.BLUE)
+        UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.GOLD)
         return
 
     _cancel_reset_timer()

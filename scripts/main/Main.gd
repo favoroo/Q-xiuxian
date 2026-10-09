@@ -179,11 +179,11 @@ func _setup_map_bounds() -> void:
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.add_child(rect)
 
-	# 2. 界碑线：粗墨底线（±half）+ 内侧主蓝细线
-	_add_bound_line(map, half, 18.0, Color(0.04, 0.06, 0.1, 0.95))
-	_add_bound_line(map, half - 11.0, 5.0, Color(0.184, 0.49, 1.0, 0.85))
+	# 2. 界碑线：粗墨底线（±half）+ 内侧鎏金细线
+	_add_bound_line(map, half, 18.0, Color(0.043, 0.051, 0.071, 0.95))
+	_add_bound_line(map, half - 11.0, 5.0, Color(0.88, 0.67, 0.24, 0.85))
 
-	# 3. 黄色四角括号（呼应 UI 的斜切黄块语言）
+	# 3. 青玉四角括号（呼应 UI 的斜切玉块语言）
 	var bracket_len: float = 110.0
 	var inset: float = 22.0
 	var corners := [
@@ -202,7 +202,7 @@ func _setup_map_bounds() -> void:
 			origin + Vector2(0, -sgn.y * bracket_len),
 		])
 		bracket.width = 9.0
-		bracket.default_color = Color(1.0, 0.824, 0.302, 0.9)
+		bracket.default_color = Color(0.31, 0.82, 0.647, 0.9)
 		bracket.joint_mode = Line2D.LINE_JOINT_ROUND
 		bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
 		bracket.end_cap_mode = Line2D.LINE_CAP_ROUND

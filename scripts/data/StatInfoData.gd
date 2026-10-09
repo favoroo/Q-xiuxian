@@ -475,7 +475,7 @@ static func stat_tip_rows(id: String) -> Array:
 		"crit":
 			var cmul: float = GameManager.crit_mult + GameManager.synergy_crit_mult
 			rows = [
-				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.YELLOW],
+				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.JADE],
 				["悟道·法宝·道统", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],
 				["锐金羁绊", "+%.0f%%" % (GameManager.synergy_crit_rate * 100.0), _c(GameManager.synergy_crit_rate)],
 				["暴击倍率", "%.2f×" % cmul, _c(cmul - 1.5)],
@@ -494,7 +494,7 @@ static func stat_tip_rows(id: String) -> Array:
 			var gain: int = GameBalance.harvest_gain(hv)
 			rows = [
 				["灵韵", "%.0f" % hv, _c(hv)],
-				["本波末发放", "+%d 灵石 / +%d 修为" % [gain, gain], GameStyle.YELLOW],
+				["本波末发放", "+%d 灵石 / +%d 修为" % [gain, gain], GameStyle.JADE],
 				["每波复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
 				["增长截止", "第 %d 波（当前第 %d 波）" % [GameManager.HARVEST_GROWTH_WAVE_CAP, maxi(GameManager.wave_number, 1)]],
 			]
@@ -544,7 +544,7 @@ static func stat_tip_rows(id: String) -> Array:
 			]
 		"stones":
 			rows = [
-				["随身灵石", "%d 枚" % GameManager.spirit_stones, GameStyle.YELLOW],
+				["随身灵石", "%d 枚" % GameManager.spirit_stones, GameStyle.JADE],
 				["下一波灵韵", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
 			]
 	return rows

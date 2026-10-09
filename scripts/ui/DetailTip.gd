@@ -106,7 +106,7 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	_card.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var sb := GameStyle.outlined_panel(
 		Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.99),
-		GameStyle.BLUE, 2, GameStyle.SLANT_PLATE)
+		GameStyle.GOLD, 2, GameStyle.SLANT_PLATE)
 	sb.shadow_color = Color(0, 0, 0, 0.65)
 	sb.shadow_size = 0
 	sb.shadow_offset = Vector2(6, 6)
@@ -146,7 +146,7 @@ func _build_header(vbox: VBoxContainer, payload: Dictionary) -> void:
 	vbox.add_child(head)
 
 	var band := PanelContainer.new()
-	band.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(2, 3)))
+	band.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(2, 3)))
 	var band_margin := MarginContainer.new()
 	band_margin.add_theme_constant_override("margin_left", 8)
 	band_margin.add_theme_constant_override("margin_right", 8)
@@ -177,7 +177,7 @@ func _build_chip(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var chip := String(payload.get("chip", ""))
 	if chip.is_empty():
 		return
-	var col: Color = payload.get("chip_color", GameStyle.BLUE_DK)
+	var col: Color = payload.get("chip_color", GameStyle.GOLD_DK)
 	var lbl := Label.new()
 	lbl.text = " " + chip + " "
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -267,7 +267,7 @@ func _build_foot(vbox: VBoxContainer, payload: Dictionary) -> void:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.custom_minimum_size = Vector2(INNER_W, 0)
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(lbl, 11, GameStyle.BLUE_EDGE)
+	GameStyle.label(lbl, 11, GameStyle.GOLD_EDGE)
 	vbox.add_child(lbl)
 
 func _build_actions(vbox: VBoxContainer, payload: Dictionary) -> void:

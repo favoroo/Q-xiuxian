@@ -80,7 +80,7 @@ func _ready() -> void:
 	_pips.position = Vector2(0.0, -PIP_LIFT)
 	_pips.total = max_hits
 	_pips.left = remaining_hits
-	_pips.kept_color = GameStyle.YELLOW
+	_pips.kept_color = GameStyle.JADE
 	_pips.spent_color = GameStyle.NAVY2
 	_pips.edge_color = GameStyle.INK
 	add_child(_pips)

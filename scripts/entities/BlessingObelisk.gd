@@ -169,7 +169,7 @@ func _build_charge_readout() -> void:
 
 	if stone_mat != null:
 		## 灌灵色仍从 GameStyle 取，不在着色器里留一份第二真话
-		stone_mat.set_shader_parameter("fill_color", GameStyle.BLUE_EDGE)
+		stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
 
 ## 读数上屏（淡入）：淡的只是外观，进度真值由 _set_readout_ratio 单独维护
 func _show_readout() -> void:
@@ -199,8 +199,8 @@ func _set_readout_ratio(ratio: float) -> void:
 		_readout_arc.ratio = _readout_ratio
 		## 转黄只留给最后一档：线性拉色的话充到六成半就已经是土黄，看着像"卡住了"
 		var warm: float = smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)
-		_readout_arc.progress_color = GameStyle.BLUE.lerp(GameStyle.YELLOW, warm)
-		_readout_arc.head_color = GameStyle.BLUE_EDGE.lerp(GameStyle.YELLOW_EDGE, warm)
+		_readout_arc.progress_color = GameStyle.GOLD.lerp(GameStyle.JADE, warm)
+		_readout_arc.head_color = GameStyle.GOLD_EDGE.lerp(GameStyle.JADE_EDGE, warm)
 		_readout_arc.queue_redraw()
 	if _readout_label != null:
 		var pct: int = int(roundf(_readout_ratio * 100.0))
@@ -208,7 +208,7 @@ func _set_readout_ratio(ratio: float) -> void:
 			_readout_pct = pct
 			_readout_label.text = "%d%%" % pct
 			_readout_label.add_theme_color_override("font_color",
-				GameStyle.PAPER.lerp(GameStyle.YELLOW_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
+				GameStyle.PAPER.lerp(GameStyle.JADE_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
 	if stone_mat != null:
 		stone_mat.set_shader_parameter("fill_ratio", _readout_ratio)
 

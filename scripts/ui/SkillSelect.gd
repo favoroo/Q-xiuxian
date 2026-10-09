@@ -4,10 +4,13 @@ extends Control
 ## 随行神通五选一：选完道统后进入，选定后转本命法器六选一
 ## 道统契合判定与强化文案全部走 SkillData（is_enhanced_for_cultivator / enhance_desc），本地不抄数值
 
-## 卡片宽度与左右内边距：折行宽度由这两个数算出来，别在别处再抄一遍
-const CARD_W := 156.0
+## 卡片宽按屏宽现算（与本命法器同一套算术）：5 卡写死 156 时 720 宽整排要 820，左右出屏。
 const CARD_H := 310.0
 const CARD_PAD_X := 10.0
+const CARD_SEP := 10.0
+## 面板侧向总吃掉的宽：内边距 40×2 + 斜切出血与硬影留量 24
+const PANEL_CHROME_X := 104.0
+const PANEL_MIN_H := 470.0
 
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleLabel
@@ -15,10 +18,29 @@ const CARD_PAD_X := 10.0
 @onready var hint_label: Label = $CenterContainer/Panel/MarginContainer/VBox/HintLabel
 
 var _transitioning: bool = false
+var _card_w := 156.0
+
+## 一屏摆 n 张卡时每张的宽（纯函数，判据可拿同一份算术量文案）
+static func card_w_for(screen_w: float, count: int) -> float:
+	var avail := screen_w - PANEL_CHROME_X - CARD_SEP * float(count - 1)
+	return clampf(avail / float(count), 88.0, 156.0)
+
+## 图标框随卡宽缩：窄屏卡的内宽装不下 74 的满配图标框
+static func icon_size_for(card_w: float) -> float:
+	return clampf(card_w - CARD_PAD_X * 2.0 - 4.0, 56.0, 74.0)
 
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 面板样式收口到 GameStyle（旧版在 .tscn 里钉死 900 宽 + 旧蓝色板 + 不画的投影）
+	var panel: PanelContainer = $CenterContainer/Panel
+	var st := GameStyle.dialog_panel(GameStyle.LINE, GameStyle.SLANT_PLATE, Vector2(10, 10))
+	st.content_margin_left = 24.0
+	st.content_margin_top = 20.0
+	st.content_margin_right = 24.0
+	st.content_margin_bottom = 18.0
+	panel.add_theme_stylebox_override("panel", st)
+	panel.custom_minimum_size = Vector2(0, PANEL_MIN_H)
 	_setup_header_bar()
 	GameStyle.label(title_label, 30, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(sub_label, 14, GameStyle.PAPER_DIM)
@@ -38,7 +60,7 @@ func _setup_header_bar() -> void:
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	back_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(back_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	GameStyle.button(back_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	back_btn.pressed.connect(_on_back_pressed)
 	header_row.add_child(back_btn)
 
@@ -72,12 +94,13 @@ func show_select() -> void:
 		sub_label.text = "灵田妖潮将至，择一门随行神通，应劫保命"
 	for child in cards_container.get_children():
 		child.queue_free()
-	cards_container.add_theme_constant_override("separation", 10)
+	_card_w = card_w_for(get_viewport_rect().size.x, SkillData.OFFER_IDS.size())
+	cards_container.add_theme_constant_override("separation", int(CARD_SEP))
 	var idx := 0
 	for s_id in SkillData.OFFER_IDS:
 		var card = _create_card(s_id)
 		cards_container.add_child(card)
-		card.pivot_offset = Vector2(CARD_W * 0.5, CARD_H * 0.5)
+		card.pivot_offset = Vector2(_card_w * 0.5, CARD_H * 0.5)
 		card.scale = Vector2(0.72, 0.72)
 		card.modulate.a = 0.0
 		var ctw = card.create_tween()
@@ -91,9 +114,9 @@ func show_select() -> void:
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.25)
 
-## 描述可用的那一条内宽：卡片宽减去左右内边距
-static func _desc_w() -> float:
-	return CARD_W - CARD_PAD_X * 2.0
+## 描述可用的那一条内宽：本次摆卡的卡宽减去左右内边距
+func _desc_w() -> float:
+	return _card_w - CARD_PAD_X * 2.0
 
 func _create_card(s_id: String) -> Control:
 	var def := SkillData.get_def(s_id)
@@ -101,21 +124,11 @@ func _create_card(s_id: String) -> Control:
 	var enhanced := SkillData.is_enhanced_for_cultivator(s_id, cid)
 	var st := SkillData.final_stats(s_id, cid)
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(CARD_W, CARD_H)
+	card.custom_minimum_size = Vector2(_card_w, CARD_H)
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 
-	var base_border: Color = GameStyle.YELLOW if enhanced else GameStyle.BLUE.darkened(0.3)
-	var style = StyleBoxFlat.new()
-	style.bg_color = GameStyle.NAVY
-	style.skew = Vector2(deg_to_rad(3.0), 0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 5
-	style.border_color = base_border
-	style.shadow_color = Color(0, 0, 0, 0.55)
-	style.shadow_size = 0
-	style.shadow_offset = Vector2(5, 5)
+	var base_border: Color = GameStyle.JADE if enhanced else GameStyle.GOLD.darkened(0.3)
+	var style = GameStyle.card(base_border, 3.0, Vector2(5, 5))
 	style.content_margin_left = CARD_PAD_X
 	style.content_margin_top = 12.0
 	style.content_margin_right = CARD_PAD_X
@@ -129,10 +142,11 @@ func _create_card(s_id: String) -> Control:
 
 	# 符文占位图标（正式图标走 media-gen 后替换为 TextureRect）
 	var icon_box = PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(74, 74)
+	var icon_size := icon_size_for(_card_w)
+	icon_box.custom_minimum_size = Vector2(icon_size, icon_size)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.YELLOW if enhanced else GameStyle.BLUE_EDGE, 2, 0.0))
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE if enhanced else GameStyle.GOLD_EDGE, 2, 0.0))
 	var glyph_lbl = Label.new()
 	glyph_lbl.text = String(def.get("glyph", "?"))
 	glyph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -140,7 +154,7 @@ func _create_card(s_id: String) -> Control:
 	glyph_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	glyph_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(glyph_lbl)
-	GameStyle.label(glyph_lbl, 34, GameStyle.YELLOW if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(glyph_lbl, 34, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(icon_box)
 
 	# 名称
@@ -148,14 +162,14 @@ func _create_card(s_id: String) -> Control:
 	name_lbl.text = def.get("name", "?")
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(name_lbl)
-	GameStyle.label(name_lbl, 17, GameStyle.YELLOW if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 17, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	# 冷却 chip（契合时带标识，数值为角色合并后的真实冷却）
 	var cd_lbl = Label.new()
 	cd_lbl.text = (" ✦契合·冷却 %d 秒 " % int(round(float(st["cooldown"])))) if enhanced else (" 冷却 %d 秒 " % int(round(float(st["cooldown"]))))
 	cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cd_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	cd_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW))
+	cd_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
 	vbox.add_child(cd_lbl)
 	GameStyle.label(cd_lbl, 11, GameStyle.INK_TEXT)
 
@@ -180,9 +194,9 @@ func _create_card(s_id: String) -> Control:
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	btn.focus_mode = Control.FOCUS_NONE
 	if enhanced:
-		GameStyle.button(btn, GameStyle.YELLOW, GameStyle.YELLOW_EDGE, 14, GameStyle.INK_TEXT, 5.0, GameStyle.INK_TEXT)
+		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 14, GameStyle.INK_TEXT, 5.0, GameStyle.INK_TEXT)
 	else:
-		GameStyle.button(btn, GameStyle.BLUE, GameStyle.YELLOW, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+		GameStyle.button(btn, GameStyle.GOLD, GameStyle.JADE, 14, GameStyle.INK_TEXT, 5.0, GameStyle.INK_TEXT)
 	btn.pressed.connect(func(): _choose(s_id))
 	vbox.add_child(btn)
 
@@ -195,7 +209,7 @@ func _create_card(s_id: String) -> Control:
 	card.mouse_entered.connect(func():
 		var tw = card.create_tween()
 		tw.tween_property(card, "scale", Vector2(1.04, 1.04), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		style.border_color = GameStyle.YELLOW_EDGE if enhanced else GameStyle.BLUE_EDGE
+		style.border_color = GameStyle.JADE_EDGE if enhanced else GameStyle.GOLD_EDGE
 	)
 	card.mouse_exited.connect(func():
 		var tw = card.create_tween()
