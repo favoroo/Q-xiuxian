@@ -1174,7 +1174,7 @@ func _test_knock_direction() -> void:
 	# 玩家位置退回施力点（局外预览、单测）时，方向与纯径向逐位相同
 	_c.check(GameBalance.knock_dir(src, e, src).is_equal_approx(old_dir), "玩家位置退回施力点=旧行为")
 	# 调用点不许再自己抄径向：那等于把「往玩家身上推」写回去
-	for path in ["res://scripts/weapons/ThunderBurst.gd", "res://scripts/weapons/FloatingWeapon.gd", "res://scripts/weapons/SunOrb.gd", "res://scripts/systems/BlessingObelisk.gd"]:
+	for path in ["res://scripts/weapons/ThunderBurst.gd", "res://scripts/weapons/FloatingWeapon.gd", "res://scripts/weapons/SunOrb.gd", "res://scripts/entities/BlessingObelisk.gd"]:
 		var text := ""
 		var f := FileAccess.open(path, FileAccess.READ)
 		if f != null:

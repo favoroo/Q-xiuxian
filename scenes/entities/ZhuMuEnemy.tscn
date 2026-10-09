@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene uid="uid://b5wxb6ovn80a0" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/entities/EnemyBase.gd" id="1_enemy"]
 [ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]

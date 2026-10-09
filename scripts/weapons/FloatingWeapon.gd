@@ -433,17 +433,25 @@ func _find_target() -> Node2D:
 
 	var nearest: Node2D = null
 	var min_dist: float = 999999.0
+	var chest: Node2D = null
+	var chest_dist: float = 999999.0
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			if enemy.is_in_group("herbs") or enemy.is_in_group("chests"):
-				continue  # 藏宝匣可被波及摧毁，但不作为索敌目标
+			if enemy.is_in_group("herbs"):
+				continue
 			var d = player.global_position.distance_to(enemy.global_position)
+			if enemy.is_in_group("chests"):
+				if d < chest_dist:
+					chest_dist = d
+					chest = enemy
+				continue  # 匣子另册记账，见下面 return
 			if d < min_dist:
 				min_dist = d
 				nearest = enemy
-	return nearest
+	# 射程内还有活妖就不去砸匣子：匣子只补"这一件法器本来要打空气"的那个空
+	return nearest if nearest != null else chest
 
 ## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按离炮口的远近补齐。
 ## 返回长度 = min(场上可用人手, n)，调用方按 idx % size 取用 ⇒ 怪少时多发自然归约到同一个敌人。
@@ -470,20 +478,32 @@ func _volley_targets(n: int) -> Array[Node2D]:
 	var results = space_state.intersect_shape(query, 32)
 	var muzzle_pos: Vector2 = muzzle_point.global_position
 	var cands: Array[Node2D] = []
+	var chest_cands: Array[Node2D] = []
 	for res in results:
 		var col = res.get("collider")
 		if col == null or col.get_parent() == null:
 			continue
 		var e := col.get_parent() as Node2D
-		if e == null or not e.has_method("take_damage") or e.is_in_group("herbs") or e.is_in_group("chests"):
+		if e == null or not e.has_method("take_damage") or e.is_in_group("herbs"):
 			continue
 		if out.has(e):
+			continue
+		if e.is_in_group("chests"):
+			chest_cands.append(e)
 			continue
 		cands.append(e)
 	# 离炮口近的先被咬住：一次三发就是"点掉最近的三个"，而不是随便抽三个签
 	cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
 		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
+	chest_cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
 	for e in cands:
+		if out.size() >= n:
+			break
+		out.append(e)
+	# 场上妖不够分的时候，多出来的那几发不许往同一个活物身上重复招呼：
+	# 脚边有匣子就顺手砸匣子（匣子掉补给，重复的那发只掉一个"过量"）
+	for e in chest_cands:
 		if out.size() >= n:
 			break
 		out.append(e)

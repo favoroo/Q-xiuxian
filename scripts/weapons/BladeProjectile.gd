@@ -172,20 +172,26 @@ func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 
 	var nearest: Node2D = null
 	var min_dist: float = 99999.0
+	var chest: Node2D = null
+	var chest_dist: float = 99999.0
 	for res in results:
 		var col = res.get("collider")
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var target = col.get_parent() as Node2D
 			if exclude != null and target == exclude:
 				continue
-			if target.is_in_group("chests"):
-				continue
 			if ahead_only:
 				var to_t: Vector2 = target.global_position - global_position
 				if to_t.length_squared() < 1.0 or direction.dot(to_t.normalized()) < HOMING_ACQUIRE_AHEAD:
 					continue
 			var d := global_position.distance_to(target.global_position)
+			if target.is_in_group("chests"):
+				# 同一把尺子：匣子只在这一发本来要打空时才接（见 FloatingWeapon._find_target）
+				if d < chest_dist:
+					chest_dist = d
+					chest = target
+				continue
 			if d < min_dist:
 				min_dist = d
 				nearest = target
-	return nearest
+	return nearest if nearest != null else chest

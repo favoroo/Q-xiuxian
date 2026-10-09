@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene uid="uid://dmm2nkws5g51l" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/weapon_probe.gd" id="1_wprobe"]
 
