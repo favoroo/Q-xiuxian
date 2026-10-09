@@ -106,13 +106,7 @@ func _build_modal_chrome() -> void:
 	_panel.custom_minimum_size = _get_panel_size()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 6
-	panel_style.border_color = GameStyle.BLUE
-	_panel.add_theme_stylebox_override("panel", panel_style)
+	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.GOLD))
 	_center.add_child(_panel)
 
 	# 4. 内边距
@@ -134,7 +128,7 @@ func _build_modal_chrome() -> void:
 	_root_vbox.add_child(_top_bar)
 
 	_title_box = PanelContainer.new()
-	_title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(3, 4)))
+	_title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(3, 4)))
 	var title_margin := MarginContainer.new()
 	title_margin.add_theme_constant_override("margin_left", 14)
 	title_margin.add_theme_constant_override("margin_right", 14)
@@ -157,7 +151,7 @@ func _build_modal_chrome() -> void:
 	_close_btn.text = _get_close_btn_text()
 	_close_btn.custom_minimum_size = _get_close_btn_min_size()
 	_close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_close_btn, GameStyle.NAVY2, GameStyle.BLUE, 14, GameStyle.PAPER, 5.0)
+	GameStyle.button(_close_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0)
 	_close_btn.pressed.connect(close)
 	_top_bar.add_child(_close_btn)
 
@@ -189,9 +183,9 @@ func _switch_tab(index: int) -> void:
 		if not is_instance_valid(b):
 			continue
 		if i == index:
-			GameStyle.button(b, GameStyle.BLUE, GameStyle.BLUE_EDGE, 13, GameStyle.PAPER, 5.0)
+			GameStyle.button(b, GameStyle.GOLD, GameStyle.GOLD_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 		else:
-			GameStyle.button(b, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+			GameStyle.button(b, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
 	_on_tab_switched(index)
 
 ## 子类可选覆写：open 时的刷新逻辑

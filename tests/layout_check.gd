@@ -69,13 +69,14 @@ func _run() -> void:
 		get_tree().quit(1)
 
 ## 文案表逐条量：随机抽三张卡盖不住全部条目，而「哪一句会撑破格子」是数据决定的。
-## 每一格的可用的宽与面板里用的是同一份算术（StartWeaponSelect.CARD_W /
-## LevelUpDialog.CARD_W / CultivatorSelect.text_col_w），所以这里不抄数字。
+## 每一格的可用的宽与面板里用的是同一份算术（StartWeaponSelect.card_w_for /
+## LevelUpDialog.card_w_for / CultivatorSelect.text_col_w），所以这里不抄数字。
 func _check_all_table_texts() -> void:
 	var body := GameStyle.body_font()
 	var disp := GameStyle.display_font()
 	var bad: Array[String] = []
-	var w_inner: float = StartWeaponSelect.CARD_W - StartWeaponSelect.CARD_PAD_X * 2.0
+	var w_inner: float = StartWeaponSelect.card_w_for(
+		float(WIDTHS.min()), WeaponData.STARTER_IDS.size()) - StartWeaponSelect.CARD_PAD_X * 2.0
 	for id in WeaponData.DEFS.keys():
 		var def: Dictionary = WeaponData.get_def(id)
 		var txt := GameStyle.wrap_cjk(String(def.get("desc", "")), body, 12, w_inner)
@@ -138,7 +139,7 @@ func _stress_hud(hud: Control) -> void:
 	for tag in ["剑系", "符箓", "雷法", "御灵", "广域"]:
 		var chip := Label.new()
 		chip.text = " %s Lv.3 " % tag
-		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE_DK))
+		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
 		GameStyle.label(chip, 11, GameStyle.PAPER)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(chip)
@@ -201,7 +202,8 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "顶栏 HUD", "path": "res://scenes/ui/GameHUD.tscn", "open": "none"},
 		{"tag": "开始菜单", "path": "res://scenes/ui/StartMenu.tscn", "open": "open"},
 		{"tag": "道统选择", "path": "res://scripts/ui/CultivatorSelect.gd", "open": "show_select"},
-		{"tag": "本命法器", "path": "res://scenes/ui/StartWeaponSelect.tscn", "open": "show_select"},
+		{"tag": "本命法器", "path": "res://scenes/ui/StartWeaponSelect.tscn", "open": "show_select",
+			"settle": 0.6},
 		{"tag": "波后悟道结算", "path": "res://scenes/ui/LevelUpDialog.tscn",
 			"open": "_on_alloc_opened", "select": 1, "edge_gap": EDGE_GAP},
 		{"tag": "灵石阁", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
@@ -257,6 +259,12 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		_stress_hud(node)
 	await get_tree().process_frame
 	await get_tree().process_frame
+	# 卡片入场是错峰缩放 tween（0.72 → 1.0）：只等两帧量到的是缩小的中间帧，
+	# 真机落定后的整排宽度才算数（本命法器 720 宽出屏就是这么漏过去的）。
+	if spec.has("settle"):
+		await get_tree().create_timer(float(spec["settle"])).timeout
+		await get_tree().process_frame
+		await get_tree().process_frame
 	# 选中态才是这一屏的最坏情况（卡片放大），入场动画落定后再点选、再等放大落定。
 	# 按真实时间等：headless 帧率不固定，等帧数会量到动画中间那一帧。
 	if spec.has("select"):

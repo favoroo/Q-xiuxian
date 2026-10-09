@@ -57,12 +57,7 @@ func _build_ui() -> void:
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出，否则点面板空白处会在它底下长出摇杆
 	# （整屏 dim 仍不登记 —— 那等于一整块全屏禁区）。
 	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 10))
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 5
-	style.border_color = GameStyle.BLUE_EDGE
+	var style := GameStyle.dialog_panel(GameStyle.GOLD_EDGE, GameStyle.SLANT_PLATE, Vector2(8, 10))
 	_panel.add_theme_stylebox_override("panel", style)
 	center.add_child(_panel)
 
@@ -82,7 +77,7 @@ func _build_ui() -> void:
 	_title_label = Label.new()
 	_title_label.text = "发  现  新  版  本"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	GameStyle.label(_title_label, 26, GameStyle.YELLOW, 0, GameStyle.INK, true)
+	GameStyle.label(_title_label, 26, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(_title_label)
 
 	# 版本与体积行
@@ -93,7 +88,7 @@ func _build_ui() -> void:
 
 	_ver_label = Label.new()
 	_ver_label.text = "新版本: v0.0.0"
-	GameStyle.label(_ver_label, 14, GameStyle.BLUE_EDGE)
+	GameStyle.label(_ver_label, 14, GameStyle.GOLD_EDGE)
 	meta_row.add_child(_ver_label)
 
 	_size_label = Label.new()
@@ -134,7 +129,7 @@ func _build_ui() -> void:
 	_prog_bar.max_value = 100.0
 	_prog_bar.step = 0.1
 	_prog_bar.show_percentage = false
-	var styles = GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.BLUE)
+	var styles = GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.GOLD)
 	_prog_bar.add_theme_stylebox_override("background", styles[0])
 	_prog_bar.add_theme_stylebox_override("fill", styles[1])
 	_prog_box.add_child(_prog_bar)
@@ -145,7 +140,7 @@ func _build_ui() -> void:
 	_prog_label = Label.new()
 	_prog_label.text = "准备下载..."
 	_prog_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(_prog_label, 12, GameStyle.BLUE_EDGE)
+	GameStyle.label(_prog_label, 12, GameStyle.GOLD_EDGE)
 	prog_text_row.add_child(_prog_label)
 
 	_prog_sub = Label.new()
@@ -164,7 +159,7 @@ func _build_ui() -> void:
 	_update_btn.text = "立 即 更 新"
 	_update_btn.custom_minimum_size = Vector2(125, 42)
 	_update_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_update_btn, GameStyle.BLUE, GameStyle.YELLOW, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	GameStyle.button(_update_btn, GameStyle.GOLD, GameStyle.JADE, 14, GameStyle.INK_TEXT, 5.0, GameStyle.INK_TEXT)
 	_update_btn.pressed.connect(_on_update_pressed)
 	_btn_row.add_child(_update_btn)
 
@@ -172,7 +167,7 @@ func _build_ui() -> void:
 	_browser_btn.text = "浏览器下载"
 	_browser_btn.custom_minimum_size = Vector2(125, 42)
 	_browser_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_browser_btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(_browser_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0)
 	_browser_btn.pressed.connect(_on_browser_pressed)
 	_btn_row.add_child(_browser_btn)
 
@@ -244,7 +239,7 @@ func _render_release_notes(raw_notes: String) -> void:
 		if s.begins_with("### ") or s.begins_with("## "):
 			var text = s.trim_prefix("### ").trim_prefix("## ")
 			lbl.text = "【" + text + "】"
-			GameStyle.label(lbl, 13, GameStyle.YELLOW)
+			GameStyle.label(lbl, 13, GameStyle.JADE)
 		elif s.begins_with("- ") or s.begins_with("* "):
 			var text = s.substr(2).trim_prefix("**").trim_suffix("**")
 			lbl.text = " · " + text

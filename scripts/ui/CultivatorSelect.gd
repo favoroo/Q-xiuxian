@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	back_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(back_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	GameStyle.button(back_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	back_btn.pressed.connect(_on_back_pressed)
 	header_row.add_child(back_btn)
 
@@ -174,17 +174,10 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var best_d: int = GameManager.get_cultivator_best_danger(cid)
 
-	var p_style := StyleBoxFlat.new()
-	p_style.bg_color = GameStyle.NAVY if is_unlocked else GameStyle.INK.lightened(0.03)
-	p_style.skew = Vector2(deg_to_rad(GameStyle.SLANT_PLATE), 0.0)
-	p_style.border_width_left = 2
-	p_style.border_width_top = 2
-	p_style.border_width_right = 2
-	p_style.border_width_bottom = 5
-	p_style.border_color = GameStyle.YELLOW if is_unlocked else GameStyle.LINE
-	p_style.shadow_color = Color(0, 0, 0, 0.5)
-	p_style.shadow_size = 0
-	p_style.shadow_offset = Vector2(4, 5)
+	var p_style := GameStyle.card(GameStyle.JADE if is_unlocked else GameStyle.LINE,
+			GameStyle.SLANT_PLATE, Vector2(4, 5))
+	if not is_unlocked:
+		p_style.bg_color = GameStyle.INK.lightened(0.03)
 	_detail_panel.add_theme_stylebox_override("panel", p_style)
 
 	var hbox := HBoxContainer.new()
@@ -206,7 +199,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	icon_box.custom_minimum_size = Vector2(72, 72)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var icon_border := GameStyle.YELLOW if is_unlocked else GameStyle.LINE
+	var icon_border := GameStyle.JADE if is_unlocked else GameStyle.LINE
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, icon_border, 2, 0.0))
 
 	var icon_tex := TextureRect.new()
@@ -236,7 +229,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	epithet_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(epi_txt, GameStyle.body_font(), 10), 0)
 	epithet_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	epithet_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BLUE_DK if is_unlocked else GameStyle.NAVY2))
+	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK if is_unlocked else GameStyle.NAVY2))
 	left_col.add_child(epithet_lbl)
 	GameStyle.label(epithet_lbl, 10, GameStyle.PAPER if is_unlocked else GameStyle.GREY)
 
@@ -246,8 +239,8 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	if is_unlocked and best_d >= 0:
 		var d_name: String = AchievementData.danger_name(best_d)
 		status_chip.text = " ★ 最高通关·%s " % d_name
-		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW_DK))
-		GameStyle.label(status_chip, 10, GameStyle.YELLOW)
+		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
+		GameStyle.label(status_chip, 10, GameStyle.JADE)
 	elif is_unlocked:
 		status_chip.text = " ✦ 道门已开 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
@@ -272,7 +265,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var raw_equip := CultivatorData.get_start_equip(cid)
 	if not raw_equip.is_empty():
 		var equip_text := "✦ " + raw_equip
-		mid_col.add_child(_make_info_row("开局装备", GameStyle.YELLOW_DK, GameStyle.YELLOW, [equip_text], GameStyle.YELLOW, col_w))
+		mid_col.add_child(_make_info_row("开局装备", GameStyle.JADE_DK, GameStyle.JADE, [equip_text], GameStyle.JADE, col_w))
 
 	# (b) 独门天赋（绿色高亮）
 	var pros_lines: Array[String] = []
@@ -299,7 +292,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 			syn_text = "✦ 专属契合「%s」：%s" % [sname, enh]
 		else:
 			syn_text = "✦ 专属契合「%s」" % sname
-	mid_col.add_child(_make_info_row("契合神通", GameStyle.BLUE_DK, GameStyle.BLUE_EDGE, [syn_text], GameStyle.BLUE_EDGE, col_w))
+	mid_col.add_child(_make_info_row("契合神通", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE, [syn_text], GameStyle.GOLD_EDGE, col_w))
 
 	# 3. 右列：拜入此门按钮 或 解锁条件说明
 	var right_col := VBoxContainer.new()
@@ -314,7 +307,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var ready_lbl := Label.new()
 		ready_lbl.text = "✦ 道统就绪 ✦"
 		ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(ready_lbl, 12, GameStyle.YELLOW)
+		GameStyle.label(ready_lbl, 12, GameStyle.JADE)
 		right_col.add_child(ready_lbl)
 
 		var choose_btn := Button.new()
@@ -322,7 +315,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		choose_btn.custom_minimum_size = Vector2(RIGHT_COL_W, 46)
 		choose_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		choose_btn.focus_mode = Control.FOCUS_NONE
-		GameStyle.button(choose_btn, GameStyle.BLUE, GameStyle.YELLOW, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+		GameStyle.button(choose_btn, GameStyle.GOLD, GameStyle.JADE, 15, GameStyle.INK_TEXT, 6.0, GameStyle.INK_TEXT)
 		choose_btn.pressed.connect(func(): _choose(cid))
 		right_col.add_child(choose_btn)
 	else:
@@ -342,7 +335,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		ach_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ach_lbl.custom_minimum_size = Vector2(RIGHT_COL_W - 4.0, 0)
 		ach_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		GameStyle.label(ach_lbl, 11, GameStyle.YELLOW)
+		GameStyle.label(ach_lbl, 11, GameStyle.JADE)
 		right_col.add_child(ach_lbl)
 
 		var cond_lbl := Label.new()
@@ -370,14 +363,7 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 	row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = GameStyle.NAVY2
-	sb.skew = Vector2(deg_to_rad(2.0), 0.0)
-	sb.border_width_left = 3
-	sb.border_width_top = 1
-	sb.border_width_right = 1
-	sb.border_width_bottom = 2
-	sb.border_color = accent_col
+	var sb := GameStyle.side_card(accent_col)
 	sb.content_margin_left = ROW_PAD_X
 	sb.content_margin_right = ROW_PAD_X
 	sb.content_margin_top = 5.0
@@ -436,27 +422,13 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.custom_minimum_size = Vector2(66, SMALL_CARD_H)
 
-	var style := StyleBoxFlat.new()
+	var accent := GameStyle.JADE if is_selected else \
+			(GameStyle.GOLD.darkened(0.35) if is_unlocked else GameStyle.LINE)
+	var style := GameStyle.card(accent, GameStyle.SLANT_PLATE, Vector2(3, 3))
 	if is_selected:
-		style.bg_color = GameStyle.NAVY.lightened(0.12)
-	elif is_unlocked:
-		style.bg_color = GameStyle.NAVY
-	else:
+		style.bg_color = GameStyle.NAVY2.lightened(0.12)
+	elif not is_unlocked:
 		style.bg_color = GameStyle.INK.lightened(0.02)
-	style.skew = Vector2(deg_to_rad(GameStyle.SLANT_PLATE), 0.0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 4
-	if is_selected:
-		style.border_color = GameStyle.YELLOW
-	elif is_unlocked:
-		style.border_color = GameStyle.BLUE.darkened(0.35)
-	else:
-		style.border_color = GameStyle.LINE
-	style.shadow_color = Color(0, 0, 0, 0.45)
-	style.shadow_size = 0
-	style.shadow_offset = Vector2(3, 3)
 	style.content_margin_left = 3.0
 	style.content_margin_right = 3.0
 	style.content_margin_top = 6.0
@@ -472,7 +444,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var icon_box := PanelContainer.new()
 	icon_box.custom_minimum_size = Vector2(42, 42)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var ib_border := GameStyle.YELLOW if is_selected else (GameStyle.BLUE_EDGE if is_unlocked else GameStyle.LINE)
+	var ib_border := GameStyle.JADE if is_selected else (GameStyle.GOLD_EDGE if is_unlocked else GameStyle.LINE)
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
 	var icon_tex := TextureRect.new()
@@ -493,7 +465,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	name_lbl.text = GameStyle.wrap_cjk(raw_name, GameStyle.display_font(), name_fsize, inner_w)
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.custom_minimum_size = Vector2(inner_w, 0)
-	var name_col := GameStyle.YELLOW if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+	var name_col := GameStyle.JADE if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
 	GameStyle.label(name_lbl, name_fsize, name_col, 0, GameStyle.INK, true)
 	vbox.add_child(name_lbl)
 
@@ -502,13 +474,13 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if is_selected:
 		tag_lbl.text = "◆ 当前 ◆"
-		GameStyle.label(tag_lbl, 10, GameStyle.YELLOW)
+		GameStyle.label(tag_lbl, 10, GameStyle.JADE)
 	elif not is_unlocked:
 		tag_lbl.text = "未解锁"
 		GameStyle.label(tag_lbl, 10, GameStyle.GREY)
 	elif best_d >= 0:
 		tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
-		GameStyle.label(tag_lbl, 10, GameStyle.YELLOW)
+		GameStyle.label(tag_lbl, 10, GameStyle.JADE)
 	else:
 		tag_lbl.text = "已入门"
 		GameStyle.label(tag_lbl, 10, GameStyle.PAPER_DIM)

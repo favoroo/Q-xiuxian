@@ -27,17 +27,17 @@ func _ready() -> void:
 	banner.modulate.a = 0.0
 	_apply_safe_area()
 	# 蓝白黄斜切色块（场景里未定样的两块在这里补）
-	banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(5, 6)))
+	banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(5, 6)))
 	$TopContainer/CenterBox/TimeBlock.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.INK, GameStyle.SLANT_BAND, Vector2(4, 5)))
 
-	GameStyle.label($TopContainer/LeftBox/HPBlock/HBox/HPTitle, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
-	GameStyle.label(hp_label, 14, GameStyle.PAPER)
+	GameStyle.label($TopContainer/LeftBox/HPBlock/HBox/HPTitle, 17, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
+	GameStyle.label(hp_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(level_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(time_label, 24, GameStyle.PAPER, 0, GameStyle.INK, true)
-	GameStyle.label(wave_label, 15, GameStyle.YELLOW)
+	GameStyle.label(wave_label, 15, GameStyle.GOLD)
 	GameStyle.label(kills_label, 15, GameStyle.INK_TEXT)
 	GameStyle.label(shards_label, 15, GameStyle.INK_TEXT)
-	GameStyle.label(banner_label, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(banner_label, 17, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 
 	GameManager.player_hp_changed.connect(_on_hp_changed)
 	GameManager.player_exp_changed.connect(_on_exp_changed)
@@ -179,7 +179,12 @@ var _fps_timer: float = 0.0
 func _setup_fps_counter() -> void:
 	_fps_label = Label.new()
 	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_fps_label.position = Vector2(16, 514)
+	# 钉左下角而不是写死 y=514：窗口比 16:9 高时设计高度会涨（expand），写死就漂到半屏
+	_fps_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_fps_label.offset_left = 16.0
+	_fps_label.offset_top = -26.0
+	_fps_label.offset_right = 120.0
+	_fps_label.offset_bottom = -8.0
 	GameStyle.label(_fps_label, 12, GameStyle.GREY)
 	_fps_label.text = "FPS: 60"
 	add_child(_fps_label)
@@ -201,7 +206,7 @@ func _process(delta: float) -> void:
 			_fps_timer = 0.0
 			var fps := Engine.get_frames_per_second()
 			_fps_label.text = "FPS: %d" % fps
-			var fps_col := GameStyle.GOOD if fps >= 55 else (GameStyle.YELLOW if fps >= 35 else GameStyle.BAD)
+			var fps_col := GameStyle.GOOD if fps >= 55 else (GameStyle.JADE if fps >= 35 else GameStyle.BAD)
 			_fps_label.add_theme_color_override("font_color", fps_col)
 
 func _refresh_synergy_badges() -> void:
@@ -231,7 +236,7 @@ func _build_top_buttons() -> void:
 	stats_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	stats_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	stats_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(func(): stats_requested.emit())
 	$TopContainer/RightBox.add_child(stats_btn)
 
@@ -241,7 +246,7 @@ func _build_top_buttons() -> void:
 	pause_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pause_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0)
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	$TopContainer/RightBox.add_child(pause_btn)
 
@@ -287,7 +292,7 @@ func _build_pending_chip() -> void:
 	# 同羁绊徽记：PanelContainer 不是按钮，摇杆认不出 ⇒ 自己登记
 	_pending_chip.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	_pending_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_pending_chip.add_theme_stylebox_override("panel", GameStyle.chip(GameStyle.YELLOW))
+	_pending_chip.add_theme_stylebox_override("panel", GameStyle.chip(GameStyle.JADE))
 	_pending_label = Label.new()
 	_pending_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	GameStyle.label(_pending_label, 13, GameStyle.INK_TEXT)
@@ -307,9 +312,9 @@ func _open_pending_tip() -> void:
 	DetailTip.show_over(self, _pending_chip, {
 		"title": "悟道待加点",
 		"chip": "回合结算",
-		"chip_color": GameStyle.YELLOW,
+		"chip_color": GameStyle.JADE,
 		"rows": [
-			["本回合攒下", "%d 点" % pending, GameStyle.YELLOW],
+			["本回合攒下", "%d 点" % pending, GameStyle.JADE],
 			["什么时候加", "每波妖潮平息后统一结算", GameStyle.PAPER],
 			["每次给几个", "%d 个候选，可刷新" % GameManager.UPGRADE_OFFER_COUNT, GameStyle.PAPER],
 		],
@@ -360,7 +365,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 		var filled := i < weapons.size()
 		var style = GameStyle.outlined_panel(
 			GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.55),
-			GameStyle.BLUE if filled else GameStyle.LINE, 2, 5.0)
+			GameStyle.GOLD if filled else GameStyle.LINE, 2, 5.0)
 		slot.add_theme_stylebox_override("panel", style)
 
 		if filled:
@@ -413,7 +418,7 @@ func _build_obelisk_ui() -> void:
 	_obelisk_btn.custom_minimum_size = Vector2(110, 44)
 	_obelisk_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_obelisk_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_obelisk_btn, GameStyle.BLUE, GameStyle.BLUE, 15, GameStyle.PAPER, 6.0)
+	GameStyle.button(_obelisk_btn, GameStyle.GOLD, GameStyle.GOLD, 15, GameStyle.INK_TEXT, 6.0)
 	_obelisk_btn.gui_input.connect(_on_obelisk_btn_input)
 	# 这颗键不需要登记：按钮类控件由摇杆自动认走（DawnJoystick._ready 的两趟收口），
 	# 按住它不会在底下长出摇杆、也不会把人带出阵法范围。
@@ -460,11 +465,11 @@ func _on_obelisk_btn_input(event: InputEvent) -> void:
 	if is_press and _obelisk_active_ob != null:
 		_obelisk_active_ob.start_charge()
 		_obelisk_btn.text = "激活中..."
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE_DK, 6.0, Vector2(3, 4)))
+		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD_DK, 6.0, Vector2(3, 4)))
 	elif is_release and _obelisk_active_ob != null:
 		_obelisk_active_ob.stop_charge()
 		_obelisk_btn.text = "聚 灵"
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE, 6.0, Vector2(3, 4)))
+		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
@@ -498,7 +503,7 @@ func on_obelisk_charge_progress(_ob: BlessingObelisk, ratio: float) -> void:
 func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
 	if _obelisk_btn != null:
 		_obelisk_btn.text = "聚 灵"
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.BLUE, 6.0, Vector2(3, 4)))
+		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
 	if _obelisk_bar != null:
 		_obelisk_bar.value = 0.0
 
@@ -565,7 +570,7 @@ func _build_skill_button() -> void:
 	_skill_name_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_skill_name_label.offset_bottom = -7.0
 	_skill_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_skill_name_label, 10, GameStyle.YELLOW_EDGE, 2, GameStyle.INK)
+	GameStyle.label(_skill_name_label, 10, GameStyle.JADE_EDGE, 2, GameStyle.INK)
 	_skill_btn.add_child(_skill_name_label)
 
 	_apply_skill_btn_pos()

@@ -45,7 +45,7 @@ func _run_all() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		for t in TEXTS:
-			UpdateManager.show_toast(t, GameStyle.YELLOW, 30.0)
+			UpdateManager.show_toast(t, GameStyle.JADE, 30.0)
 			await get_tree().create_timer(SETTLE).timeout
 			var probe: Dictionary = UpdateManager.toast_probe()
 			_c.check(not probe.is_empty(), "屏宽 %d · 浮层已建" % w)
@@ -84,7 +84,7 @@ func _selftest() -> void:
 	var long_text := TEXTS[3]
 	get_tree().root.size = Vector2i(960, 540)
 	await get_tree().process_frame
-	UpdateManager.show_toast(long_text, GameStyle.YELLOW, 30.0)
+	UpdateManager.show_toast(long_text, GameStyle.JADE, 30.0)
 	await get_tree().create_timer(SETTLE).timeout
 	var probe: Dictionary = UpdateManager.toast_probe()
 	if probe.is_empty():

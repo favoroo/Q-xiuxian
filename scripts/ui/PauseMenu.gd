@@ -43,12 +43,7 @@ func _build_ui() -> void:
 	panel.custom_minimum_size = Vector2(330, 0)
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(9, 11))
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 5
-	style.border_color = GameStyle.LINE
+	var style := GameStyle.dialog_panel(GameStyle.LINE, GameStyle.SLANT_PLATE, Vector2(9, 11))
 	panel.add_theme_stylebox_override("panel", style)
 	center.add_child(panel)
 
@@ -79,25 +74,25 @@ func _build_ui() -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(spacer)
 
-	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.BLUE, GameStyle.YELLOW, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
+	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.GOLD, GameStyle.JADE, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
 	vbox.add_child(resume_btn)
 
 	# 六颗键分三排：整列排下去面板要 593 高 > 540 屏高，
 	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
-	var stats_btn := _mk_btn("人 物 属 性", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
+	var stats_btn := _mk_btn("人 物 属 性", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
-	var manual_btn := _mk_btn("教 程 手 册", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
+	var manual_btn := _mk_btn("教 程 手 册", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	manual_btn.pressed.connect(_on_manual_pressed)
 	_add_row(vbox, [stats_btn, manual_btn])
 
-	var settings_btn := _mk_btn("游 戏 设 置", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	var settings_btn := _mk_btn("游 戏 设 置", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
 	settings_btn.pressed.connect(_on_settings_pressed)
-	_update_btn = _mk_btn("检 查 更 新", 36, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER)
+	_update_btn = _mk_btn("检 查 更 新", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
 	_update_btn.pressed.connect(_on_check_update_pressed)
 	_add_row(vbox, [settings_btn, _update_btn])
 
-	_retry_btn = _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.YELLOW, 15, GameStyle.PAPER)
+	_retry_btn = _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER)
 	_retry_btn.pressed.connect(_on_retry_pressed)
 	var quit_btn := _mk_btn("退 出 游 戏", 36, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
 	quit_btn.pressed.connect(func(): get_tree().quit())
@@ -154,12 +149,12 @@ func _add_volume_row(parent: VBoxContainer, title: String, bus: StringName) -> v
 	slider.custom_minimum_size = Vector2(150, 24)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.focus_mode = Control.FOCUS_ALL
-	var styles := GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.BLUE)
+	var styles := GameStyle.bar_styles(GameStyle.NAVY2, GameStyle.GOLD)
 	slider.add_theme_stylebox_override("slider", styles[0])
 	slider.add_theme_stylebox_override("grabber_area", styles[1])
 	row.add_child(slider)
 
-	var val_lbl := GameStyle.label(Label.new(), 13, GameStyle.YELLOW)
+	var val_lbl := GameStyle.label(Label.new(), 13, GameStyle.JADE)
 	val_lbl.text = "%d%%" % int(slider.value)
 	val_lbl.custom_minimum_size = Vector2(46, 24)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -181,7 +176,7 @@ func _on_check_update_pressed() -> void:
 		return
 	if UpdateManager.is_checking:
 		_update_btn.text = "正在检查更新..."
-		UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.BLUE)
+		UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.GOLD)
 		return
 	_update_btn.text = "正在检查更新..."
 	UpdateManager.check_for_update(true)
@@ -269,14 +264,14 @@ func _reset_retry_confirm() -> void:
 		_retry_reset_tween = null
 	if is_instance_valid(_retry_btn):
 		_retry_btn.text = "重 新 开 始"
-		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.BLUE, 15, GameStyle.PAPER, 6.0)
+		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0)
 
 func _on_retry_pressed() -> void:
 	if not _retry_armed:
 		_retry_armed = true
 		if is_instance_valid(_retry_btn):
 			_retry_btn.text = "再点确认重开"
-			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.YELLOW, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.JADE, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 		if _retry_reset_tween != null and _retry_reset_tween.is_valid():
 			_retry_reset_tween.kill()
 		_retry_reset_tween = create_tween()

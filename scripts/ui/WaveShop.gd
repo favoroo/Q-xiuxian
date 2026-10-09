@@ -178,7 +178,7 @@ func _ready() -> void:
 	GameStyle.label(stones_label, 17, GameStyle.INK_TEXT)
 	GameStyle.label(wave_label, 15, GameStyle.PAPER_DIM)
 	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER_DIM)
-	GameStyle.button(confirm_btn, GameStyle.BLUE, GameStyle.YELLOW, 18, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+	GameStyle.button(confirm_btn, GameStyle.GOLD, GameStyle.JADE, 18, GameStyle.INK_TEXT, 6.0, GameStyle.INK_TEXT)
 	confirm_btn.text = "出  战"
 	# 两排滚动条统一长相：引擎默认那根浅灰与这块深蓝面板不搭（货架摆不平那一档会露出来）
 	GameStyle.scrollable(offers_scroll)
@@ -193,7 +193,7 @@ func _ready() -> void:
 	stats_btn.text = "属 性"
 	stats_btn.custom_minimum_size = Vector2(72, 32)
 	stats_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.YELLOW, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(func(): stats_requested.emit())
 	top_bar.add_child(stats_btn)
 
@@ -244,7 +244,7 @@ func _open_usage_tip() -> void:
 	var max_slots: int = GameManager.max_weapon_slots()
 	var slot_txt: String = "%d 件（本道统上限）" % max_slots if max_slots < WeaponData.MAX_SLOTS else "%d 件" % max_slots
 	var rows: Array = [
-		["周身槽位", slot_txt, GameStyle.YELLOW if max_slots < WeaponData.MAX_SLOTS else GameStyle.PAPER],
+		["周身槽位", slot_txt, GameStyle.JADE if max_slots < WeaponData.MAX_SLOTS else GameStyle.PAPER],
 		["背包格数", "%d 格" % WeaponData.MAX_STASH_SLOTS, GameStyle.PAPER],
 		["货架格数", "%d 格" % GameManager.shop_offers.size(), GameStyle.PAPER],
 	]
@@ -260,7 +260,7 @@ func _open_usage_tip() -> void:
 	DetailTip.show_over(self, help_btn, {
 		"title": "灵石阁怎么用",
 		"chip": "波间商店",
-		"chip_color": GameStyle.BLUE,
+		"chip_color": GameStyle.GOLD,
 		"rows": rows,
 		"body": "每波结束后来此置办法器：灵石换法器与法宝，摆不满的收进背包。",
 		"notes": notes,
@@ -421,10 +421,10 @@ func _create_inv_slot(item: Dictionary, index: int, pool: String, tile: float) -
 	var border: Color = GameStyle.LINE
 	var bg: Color = GameStyle.NAVY2
 	if pool == "equipped":
-		border = GameStyle.BLUE
+		border = GameStyle.GOLD
 		bg = GameStyle.NAVY
 	if mergeable:
-		border = GameStyle.YELLOW
+		border = GameStyle.JADE
 	if is_sel:
 		border = GameStyle.PAPER
 		bg = GameStyle.NAVY.lightened(0.08)
@@ -472,11 +472,11 @@ func _create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	var chip := PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.YELLOW_DK, 1, 0.0))
+	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE_DK, 1, 0.0))
 	var lbl := Label.new()
 	lbl.text = "上阵 %d/%d（仅限%d件）" % [used, max_slots, max_slots]
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.YELLOW)
+	GameStyle.label(lbl, 11, GameStyle.JADE)
 	return chip
 
 func _create_stash_divider() -> Control:
@@ -540,7 +540,7 @@ func _open_shop_item_tip(item_id: String, anchor: Control) -> void:
 	var tier_col: Color = ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.YELLOW],
+		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
@@ -610,12 +610,12 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	var bonus_col: Color = GameStyle.GOOD if bonus > 0.0001 else (GameStyle.BAD if bonus < -0.0001 else GameStyle.PAPER)
 	var rows: Array = [
 		["当前位置", loc_txt, GameStyle.PAPER_DIM if in_stash else GameStyle.GOOD],
-		["单发伤害", "%.1f" % per_hit, GameStyle.YELLOW],
+		["单发伤害", "%.1f" % per_hit, GameStyle.JADE],
 		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
 		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
 		["属性转化", "+%.1f" % bonus, bonus_col],
 		["攻击间隔", "%.2f 秒" % cd],
-		["攻击范围", range_txt, GameStyle.YELLOW if range_buffed else GameStyle.PAPER],
+		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 	]
 	var feats := StatsTipFactory.weapon_feats(def)
 	if not feats.is_empty():
@@ -639,8 +639,8 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	if mergeable:
 		actions.append([{
 			"text": "✦ 三合一 · 升至 %s ✦" % WeaponData.star_text(star + 1),
-			"color": GameStyle.YELLOW,
-			"edge_color": GameStyle.YELLOW_EDGE,
+			"color": GameStyle.JADE,
+			"edge_color": GameStyle.JADE_EDGE,
 			"text_color": GameStyle.INK_TEXT,
 			"callback": func() -> void:
 				var keep := {"pool": "equipped", "index": index}
@@ -705,7 +705,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	var tip_data := {
 		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
 		"chip": " · ".join(syn_parts) if not syn_parts.is_empty() else String(def.get("tag", "")),
-		"chip_color": GameStyle.YELLOW_DK if in_stash else GameStyle.BLUE_DK,
+		"chip_color": GameStyle.JADE_DK if in_stash else GameStyle.GOLD_DK,
 		"rows": rows,
 		"body": String(def.get("desc", "")),
 		"notes": notes,
@@ -789,9 +789,9 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var tag_parts: Array = []
 	var part_hot: Array = []
 	var desc: String
-	var chip_color: Color = GameStyle.BLUE
+	var chip_color: Color = GameStyle.GOLD
 	var chip_text_color: Color = GameStyle.PAPER
-	var edge_color: Color = GameStyle.BLUE_DK
+	var edge_color: Color = GameStyle.GOLD_DK
 
 	if is_potion:
 		title = "回气丹"
@@ -800,7 +800,7 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 		desc = "服下立刻恢复五成气血"
 		chip_color = GameStyle.GOOD
 		chip_text_color = GameStyle.INK_TEXT
-		edge_color = GameStyle.YELLOW_DK
+		edge_color = GameStyle.JADE_DK
 	elif is_item:
 		def = ItemData.get_def(offer.get("id", ""))
 		var tier := int(def.get("tier", 1))
@@ -838,9 +838,9 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 		if not tag_parts.is_empty():
 			tag = " · ".join(tag_parts)
 		if will_activate:
-			chip_color = GameStyle.YELLOW
+			chip_color = GameStyle.JADE
 			chip_text_color = GameStyle.INK_TEXT
-			edge_color = GameStyle.YELLOW
+			edge_color = GameStyle.JADE
 		desc = def.get("desc", "")
 		var bonus_dmg := GameManager.get_weapon_stat_bonus(w_id, 1)
 		if bonus_dmg > 0.05:
@@ -856,17 +856,7 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 func _create_offer_card_chrome(card_w: float, edge_color: Color) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(card_w, 0)
-	var style := StyleBoxFlat.new()
-	style.bg_color = GameStyle.NAVY
-	style.skew = Vector2(deg_to_rad(3.0), 0)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 5
-	style.border_color = edge_color
-	style.shadow_color = Color(0, 0, 0, 0.5)
-	style.shadow_size = 0
-	style.shadow_offset = Vector2(5, 5)
+	var style := GameStyle.card(edge_color, 3.0, Vector2(5, 5))
 	style.content_margin_left = OFFER_PAD_X
 	style.content_margin_top = CARD_PAD_Y
 	style.content_margin_right = OFFER_PAD_X
@@ -933,7 +923,7 @@ func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: 
 		for i in range(tag_parts.size()):
 			var hot_i: bool = bool(part_hot[i])
 			chip_defs.append([tag_parts[i],
-				GameStyle.YELLOW if hot_i else chip_color,
+				GameStyle.JADE if hot_i else chip_color,
 				GameStyle.INK_TEXT if hot_i else chip_text_color])
 	for cd in chip_defs:
 		var chip_txt: String = " %s " % cd[0]
@@ -954,8 +944,8 @@ func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: 
 		lock_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		lock_btn.focus_mode = Control.FOCUS_NONE
 		lock_btn.text = "已锁" if locked else "锁定"
-		GameStyle.button(lock_btn, GameStyle.YELLOW if locked else GameStyle.NAVY2,
-			GameStyle.YELLOW_DK if locked else GameStyle.LINE, 11,
+		GameStyle.button(lock_btn, GameStyle.JADE if locked else GameStyle.NAVY2,
+			GameStyle.JADE_DK if locked else GameStyle.LINE, 11,
 			GameStyle.INK_TEXT if locked else GameStyle.PAPER_DIM, 4.0)
 		lock_btn.pressed.connect(func():
 			GameManager.toggle_lock(index)
@@ -968,7 +958,7 @@ func _create_offer_card_price_btn(offer: Dictionary, index: int, sold: bool, pri
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(0, CARD_PRICE_H)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
-	GameStyle.button(btn, GameStyle.YELLOW, GameStyle.PAPER, 14, GameStyle.INK_TEXT, 6.0)
+	GameStyle.button(btn, GameStyle.JADE, GameStyle.PAPER, 14, GameStyle.INK_TEXT, 6.0)
 	btn.text = "%d 灵石" % price
 	if sold:
 		btn.text = "已 售 出"

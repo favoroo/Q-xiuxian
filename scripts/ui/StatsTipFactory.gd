@@ -35,7 +35,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	if not skill_id.is_empty():
 		var sdef := SkillData.get_def(skill_id)
 		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
-		rows.append(["随行神通", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.YELLOW])
+		rows.append(["随行神通", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE])
 	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
 	if not start_equip.is_empty():
 		rows.append(["开局自带", start_equip, GameStyle.PAPER])
@@ -57,7 +57,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	return DetailTip.show_over(host, anchor, {
 		"title": "%s · 道统特性" % String(def.get("name", "")),
 		"chip": "道统",
-		"chip_color": GameStyle.BLUE,
+		"chip_color": GameStyle.GOLD,
 		"rows": rows,
 		"body": "「%s」" % String(def.get("epithet", "")),
 		"notes": notes,
@@ -73,7 +73,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 	var tier_col: Color = ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["当前持有", "%d 件" % count, GameStyle.YELLOW],
+		["当前持有", "%d 件" % count, GameStyle.JADE],
 	]
 	var apply: Dictionary = def.get("apply", {})
 	for key in apply.keys():
@@ -150,13 +150,13 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 			syn_parts.append("%s(%d/6)" % [sinfo.get("name", t), cnt])
 
 	var rows: Array = [
-		["单发伤害", "%.1f" % per_hit, GameStyle.YELLOW],
+		["单发伤害", "%.1f" % per_hit, GameStyle.JADE],
 		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
 		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
 		["属性转化", "+%.1f" % bonus, _c(bonus)],
 		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
 		["道统×五行", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
-		["攻击范围", range_txt, GameStyle.YELLOW if range_buffed else GameStyle.PAPER],
+		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 		["攻击间隔", "%.2f 秒" % cd],
 	]
 	var feats := weapon_feats(def)
@@ -179,7 +179,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	return DetailTip.show_over(host, anchor, {
 		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
 		"chip": " · ".join(syn_parts) if not syn_parts.is_empty() else String(def.get("tag", "")),
-		"chip_color": GameStyle.YELLOW_DK if from_stash else GameStyle.BLUE_DK,
+		"chip_color": GameStyle.JADE_DK if from_stash else GameStyle.GOLD_DK,
 		"rows": rows,
 		"body": String(def.get("desc", "")),
 		"notes": notes,
@@ -225,7 +225,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 		var v := float(apply[key])
 		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
 	rows.append(["已领悟", "第 %d 次 / 上限 %d 次" % [taken, cap],
-		GameStyle.YELLOW if cap > 0 and taken >= cap else GameStyle.PAPER])
+		GameStyle.JADE if cap > 0 and taken >= cap else GameStyle.PAPER])
 	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
 	if cap > 0 and taken >= cap:
 		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
@@ -245,7 +245,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 	return DetailTip.show_over(host, anchor, {
 		"title": String(item.get("title", "悟道")),
 		"chip": String(item.get("rarity_label", "凡品")),
-		"chip_color": item.get("border_color", GameStyle.BLUE_DK),
+		"chip_color": item.get("border_color", GameStyle.GOLD_DK),
 		"rows": rows,
 		"body": String(item.get("desc", "")),
 		"notes": notes,

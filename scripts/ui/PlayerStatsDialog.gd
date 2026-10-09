@@ -80,7 +80,10 @@ func _get_close_btn_text() -> String:
 	return "返 回 战 斗"
 
 func _get_panel_size() -> Vector2:
-	return Vector2(900, _fit_panel_height())
+	var vw := get_viewport_rect().size.x
+	if vw <= 0.0:
+		vw = 960.0
+	return Vector2(minf(900.0, vw - 48.0), _fit_panel_height())
 
 func _get_panel_margins() -> Vector4:
 	return Vector4(16, 8, 16, 8)
@@ -92,22 +95,10 @@ func _get_close_btn_min_size() -> Vector2:
 	return Vector2(96, 30)
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	# 微调面板样式，保持原样视觉
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.985)
-	panel_style.skew = Vector2(deg_to_rad(2.5), 0.0)
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 6
-	panel_style.border_color = GameStyle.BLUE
-	panel_style.shadow_color = Color(0, 0, 0, 0.65)
-	panel_style.shadow_size = 0
-	panel_style.shadow_offset = Vector2(8, 8)
-	_panel.add_theme_stylebox_override("panel", panel_style)
+	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.GOLD, 2.5, Vector2(8, 8)))
 
 	_meta_label = Label.new()
-	GameStyle.label(_meta_label, 13, GameStyle.YELLOW)
+	GameStyle.label(_meta_label, 13, GameStyle.JADE)
 	_meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_meta_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_tab_bar.add_child(_meta_label)
@@ -152,7 +143,7 @@ func _build_left_stats_panel() -> Control:
 
 	var sec_title := Label.new()
 	sec_title.text = "✦ 属 性"
-	GameStyle.label(sec_title, 15, GameStyle.YELLOW)
+	GameStyle.label(sec_title, 15, GameStyle.JADE)
 	sec_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tab_bar.add_child(sec_title)
 
@@ -259,14 +250,14 @@ func _switch_stat_tab(tab_idx: int) -> void:
 		_secondary_stats_box.visible = (tab_idx == 1)
 	if _stat_tab_primary_btn != null:
 		if tab_idx == 0:
-			GameStyle.button(_stat_tab_primary_btn, GameStyle.PAPER, GameStyle.YELLOW, 12, GameStyle.INK_TEXT, 4.0)
+			GameStyle.button(_stat_tab_primary_btn, GameStyle.PAPER, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
-			GameStyle.button(_stat_tab_primary_btn, GameStyle.NAVY2, GameStyle.BLUE, 12, GameStyle.PAPER_DIM, 4.0)
+			GameStyle.button(_stat_tab_primary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 	if _stat_tab_secondary_btn != null:
 		if tab_idx == 1:
-			GameStyle.button(_stat_tab_secondary_btn, GameStyle.PAPER, GameStyle.YELLOW, 12, GameStyle.INK_TEXT, 4.0)
+			GameStyle.button(_stat_tab_secondary_btn, GameStyle.PAPER, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
-			GameStyle.button(_stat_tab_secondary_btn, GameStyle.NAVY2, GameStyle.BLUE, 12, GameStyle.PAPER_DIM, 4.0)
+			GameStyle.button(_stat_tab_secondary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 
 ## 属性行：名字来自 StatInfoData（面板与详解卡共用同一份标题，改一处就两处一起变）
 func _add_stat_row(parent: Container, stat_id: String, default_val: String) -> Label:
@@ -310,7 +301,7 @@ func _add_stat_block(parent: Container, header_text: String) -> VBoxContainer:
 
 	var head := Label.new()
 	head.text = header_text
-	GameStyle.label(head, 11, GameStyle.YELLOW)
+	GameStyle.label(head, 11, GameStyle.JADE)
 	inner.add_child(head)
 	return inner
 
@@ -323,7 +314,7 @@ func _make_tip_row(stat_id: String, content: Control) -> Control:
 	flat.content_margin_top = 1.0
 	flat.content_margin_bottom = 1.0
 	var on := StyleBoxFlat.new()
-	on.bg_color = Color(GameStyle.BLUE.r, GameStyle.BLUE.g, GameStyle.BLUE.b, 0.22)
+	on.bg_color = Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.22)
 	on.content_margin_top = 1.0
 	on.content_margin_bottom = 1.0
 	row.add_theme_stylebox_override("panel", flat)
@@ -361,7 +352,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	cult_st.content_margin_bottom = 5.0
 	_cult_card.add_theme_stylebox_override("panel", cult_st)
 	_cult_card.set_meta("sb_flat", cult_st)
-	_cult_card.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY.lightened(0.08), GameStyle.YELLOW, 2, 0.0))
+	_cult_card.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY.lightened(0.08), GameStyle.JADE, 2, 0.0))
 
 	var cult_row := HBoxContainer.new()
 	cult_row.add_theme_constant_override("separation", 10)
@@ -386,7 +377,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	cult_text.add_child(cult_head)
 
 	_cult_name_lbl = Label.new()
-	GameStyle.label(_cult_name_lbl, 13, GameStyle.YELLOW)
+	GameStyle.label(_cult_name_lbl, 13, GameStyle.JADE)
 	cult_head.add_child(_cult_name_lbl)
 
 	_cult_epi_lbl = Label.new()
@@ -431,7 +422,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	wp_head.add_theme_constant_override("separation", 10)
 	_wp_title_lbl = Label.new()
 	_wp_title_lbl.text = "✦ 上阵法器 (0/6)"
-	GameStyle.label(_wp_title_lbl, 14, GameStyle.YELLOW)
+	GameStyle.label(_wp_title_lbl, 14, GameStyle.JADE)
 	wp_head.add_child(_wp_title_lbl)
 
 	var wp_sp := Control.new()
@@ -483,7 +474,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	var syn_head := HBoxContainer.new()
 	var syn_title := Label.new()
 	syn_title.text = "✦ 流派羁绊与五行共鸣"
-	GameStyle.label(syn_title, 14, GameStyle.YELLOW)
+	GameStyle.label(syn_title, 14, GameStyle.JADE)
 	syn_head.add_child(syn_title)
 
 	var syn_sp := Control.new()
@@ -592,14 +583,14 @@ func _switch_bottom_tab(tab_idx: int) -> void:
 		_history_scroll.visible = (tab_idx == 1)
 	if _bottom_tab_items_btn != null:
 		if tab_idx == 0:
-			GameStyle.button(_bottom_tab_items_btn, GameStyle.BLUE, GameStyle.YELLOW, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+			GameStyle.button(_bottom_tab_items_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
 		else:
-			GameStyle.button(_bottom_tab_items_btn, GameStyle.NAVY2, GameStyle.BLUE, 12, GameStyle.PAPER_DIM, 4.0)
+			GameStyle.button(_bottom_tab_items_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 	if _bottom_tab_hist_btn != null:
 		if tab_idx == 1:
-			GameStyle.button(_bottom_tab_hist_btn, GameStyle.BLUE, GameStyle.YELLOW, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+			GameStyle.button(_bottom_tab_hist_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
 		else:
-			GameStyle.button(_bottom_tab_hist_btn, GameStyle.NAVY2, GameStyle.BLUE, 12, GameStyle.PAPER_DIM, 4.0)
+			GameStyle.button(_bottom_tab_hist_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 
 func _create_line_style(color: Color) -> StyleBoxLine:
 	var s := StyleBoxLine.new()
@@ -743,7 +734,7 @@ func refresh() -> void:
 	_free_rerolls_val_lbl.add_theme_color_override("font_color", _c(float(fr_v)))
 
 	_stones_val_lbl.text = "%d 枚" % GameManager.spirit_stones
-	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.YELLOW if GameManager.spirit_stones > 0 else GameStyle.PAPER)
+	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE if GameManager.spirit_stones > 0 else GameStyle.PAPER)
 
 	_kills_val_lbl.text = "%d 妖" % GameManager.kills
 
@@ -809,12 +800,12 @@ func _refresh_weapons() -> void:
 
 		var filled := i < summary.size()
 		var locked := i >= max_slots
-		var border_col: Color = GameStyle.BLUE if filled else GameStyle.LINE
+		var border_col: Color = GameStyle.GOLD if filled else GameStyle.LINE
 		var bg_col: Color = GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.45)
 		var sb_off := GameStyle.outlined_panel(bg_col, border_col, 2, 0.0)
 		slot.add_theme_stylebox_override("panel", sb_off)
 		slot.set_meta("sb_flat", sb_off)
-		slot.set_meta("sb_on", GameStyle.outlined_panel(bg_col, GameStyle.YELLOW, 2, 0.0))
+		slot.set_meta("sb_on", GameStyle.outlined_panel(bg_col, GameStyle.JADE, 2, 0.0))
 
 		if filled:
 			var w: Dictionary = summary[i]
@@ -865,7 +856,7 @@ func _refresh_weapons() -> void:
 			s_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			s_slot.add_child(s_tex)
 			s_slot.set_meta("sb_flat", s_sb)
-			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.YELLOW, 1, 0.0))
+			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.JADE, 1, 0.0))
 
 			# 吃「元素伤害」属性加成的法器挂橙红角标（仓库件与上阵件同一口径）
 			if not def.is_empty():
@@ -925,14 +916,14 @@ func _create_synergy_card(tag: String) -> Control:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(168, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	var border_col: Color = (GameStyle.YELLOW if is_elem else GameStyle.BLUE) if lv > 0 else GameStyle.LINE
-	var bg_col: Color = GameStyle.NAVY if lv > 0 else Color(0.07, 0.10, 0.18, 0.78)
+	var border_col: Color = (GameStyle.JADE if is_elem else GameStyle.GOLD) if lv > 0 else GameStyle.LINE
+	var bg_col: Color = GameStyle.NAVY2 if lv > 0 else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.78)
 	var sb_flat := GameStyle.outlined_panel(bg_col, border_col, 2 if lv > 0 else 1, 0.0)
 	sb_flat.content_margin_left = 8.0
 	sb_flat.content_margin_top = 5.0
 	sb_flat.content_margin_right = 8.0
 	sb_flat.content_margin_bottom = 5.0
-	var sb_on := GameStyle.outlined_panel(bg_col.lightened(0.08), GameStyle.YELLOW, 2, 0.0)
+	var sb_on := GameStyle.outlined_panel(bg_col.lightened(0.08), GameStyle.JADE, 2, 0.0)
 	sb_on.content_margin_left = 8.0
 	sb_on.content_margin_top = 5.0
 	sb_on.content_margin_right = 8.0
@@ -954,12 +945,12 @@ func _create_synergy_card(tag: String) -> Control:
 
 	var kind_lbl := Label.new()
 	kind_lbl.text = "五行" if is_elem else "器类"
-	GameStyle.label(kind_lbl, 10, GameStyle.YELLOW if is_elem else GameStyle.BLUE_EDGE)
+	GameStyle.label(kind_lbl, 10, GameStyle.JADE if is_elem else GameStyle.GOLD_EDGE)
 	head.add_child(kind_lbl)
 
 	var title_lbl := Label.new()
 	title_lbl.text = "%s (%d/%d)" % [info.get("name", tag), n, max_th]
-	var title_col: Color = (GameStyle.YELLOW if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
+	var title_col: Color = (GameStyle.JADE if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
 	GameStyle.label(title_lbl, 13, title_col)
 	head.add_child(title_lbl)
 
@@ -1063,7 +1054,7 @@ func _create_item_badge(item_id: String, count: int) -> Control:
 	sb_off.content_margin_top = 4.0
 	sb_off.content_margin_right = 8.0
 	sb_off.content_margin_bottom = 4.0
-	var sb_on := GameStyle.outlined_panel(GameStyle.NAVY2.lightened(0.1), GameStyle.YELLOW, 2, 0.0)
+	var sb_on := GameStyle.outlined_panel(GameStyle.NAVY2.lightened(0.1), GameStyle.JADE, 2, 0.0)
 	sb_on.content_margin_left = 6.0
 	sb_on.content_margin_top = 4.0
 	sb_on.content_margin_right = 8.0
@@ -1104,18 +1095,15 @@ func _open_item_tip(item_id: String, count: int, anchor: Control) -> void:
 func _create_history_row(item: Dictionary, idx: int) -> Control:
 	var row := PanelContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var r_style := StyleBoxFlat.new()
-	r_style.bg_color = Color(0.08, 0.11, 0.19, 0.8)
-	r_style.border_width_left = 2
-	r_style.border_color = item.get("border_color", GameStyle.PAPER_DIM)
+	var r_style := GameStyle.side_card(item.get("border_color", GameStyle.PAPER_DIM), 0.0)
 	r_style.content_margin_left = 8.0
 	r_style.content_margin_top = 3.0
 	r_style.content_margin_right = 8.0
 	r_style.content_margin_bottom = 3.0
 	row.add_theme_stylebox_override("panel", r_style)
 	var r_on := r_style.duplicate() as StyleBoxFlat
-	r_on.bg_color = Color(0.16, 0.22, 0.36, 0.95)
-	r_on.border_width_left = 4
+	r_on.bg_color = GameStyle.NAVY2.lightened(0.12)
+	r_on.border_width_left = 5
 	row.set_meta("sb_flat", r_style)
 	row.set_meta("sb_on", r_on)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1164,7 +1152,7 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 
 	var lvl_lbl := Label.new()
 	lvl_lbl.text = "Lv.%d" % int(item.get("level", 1))
-	GameStyle.label(lvl_lbl, 11, GameStyle.YELLOW)
+	GameStyle.label(lvl_lbl, 11, GameStyle.JADE)
 	hbox.add_child(lvl_lbl)
 
 	return row

@@ -32,7 +32,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 	var first_th: int = maxi(1, int(raw_th[0]) - shift)
 
 	var rows: Array = [
-		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.YELLOW if lv > 0 else GameStyle.PAPER],
+		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.JADE if lv > 0 else GameStyle.PAPER],
 		["共鸣状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, first_th - n), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
 	]
 	var tier_lines: Array = TIER_LINES.get(tag, [])
@@ -66,7 +66,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 	return {
 		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
 		"chip": "五行共鸣" if tag in WeaponData.ELEMENTS else "器类羁绊",
-		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
+		"chip_color": GameStyle.JADE if tag in WeaponData.ELEMENTS else GameStyle.GOLD,
 		"rows": rows,
 		"body": body_txt,
 		"notes": notes,
@@ -96,7 +96,7 @@ static func create_chip(tag: String, font_size: int = 12, on_tap: Callable = Cal
 	chip.text = " %s (%d/%d) " % [info.get("name", tag), n, max_th]
 
 	if lv > 0:
-		var chip_color: Color = GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE
+		var chip_color: Color = GameStyle.JADE if tag in WeaponData.ELEMENTS else GameStyle.GOLD
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
 		GameStyle.label(chip, font_size, GameStyle.INK_TEXT)
 	else:

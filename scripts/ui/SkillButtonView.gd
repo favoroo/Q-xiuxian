@@ -28,10 +28,10 @@ static func style_circle_button(btn: Button) -> void:
 	var is_enhanced := false
 	if not GameManager.active_skill_id.is_empty():
 		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-	var border_col: Color = Color(1.0, 0.82, 0.30, 0.85) if is_enhanced else Color(0.28, 0.62, 1.0, 0.78)
+	var border_col: Color = Color(0.31, 0.82, 0.65, 0.9) if is_enhanced else Color(0.88, 0.67, 0.24, 0.8)
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.05, 0.09, 0.18, 0.52)
+	normal.bg_color = Color(0.043, 0.051, 0.071, 0.55)
 	normal.border_color = border_col
 	normal.border_width_left = 2
 	normal.border_width_top = 2
@@ -43,7 +43,7 @@ static func style_circle_button(btn: Button) -> void:
 	normal.corner_radius_bottom_left = r
 
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.08, 0.14, 0.28, 0.65)
+	hover.bg_color = Color(0.078, 0.094, 0.129, 0.7)
 	hover.border_color = border_col.lightened(0.2)
 	hover.border_width_left = 3
 	hover.border_width_top = 3
@@ -55,8 +55,8 @@ static func style_circle_button(btn: Button) -> void:
 	hover.corner_radius_bottom_left = r
 
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.18, 0.49, 1.0, 0.72)
-	pressed.border_color = Color(1.0, 0.90, 0.40, 0.95)
+	pressed.bg_color = Color(0.88, 0.67, 0.24, 0.72)
+	pressed.border_color = Color(0.96, 0.85, 0.54, 0.95)
 	pressed.border_width_left = 3
 	pressed.border_width_top = 3
 	pressed.border_width_right = 3
@@ -73,7 +73,7 @@ static func style_circle_button(btn: Button) -> void:
 	btn.add_theme_font_override("font", GameStyle.display_font())
 	btn.add_theme_font_size_override("font_size", 28)
 	btn.add_theme_color_override("font_color", GameStyle.PAPER)
-	btn.add_theme_color_override("font_hover_color", GameStyle.YELLOW)
+	btn.add_theme_color_override("font_hover_color", GameStyle.JADE)
 	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)
 	btn.add_theme_constant_override("outline_size", 4)
 	btn.add_theme_color_override("font_outline_color", GameStyle.INK)
