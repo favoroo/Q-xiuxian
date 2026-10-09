@@ -40,6 +40,30 @@ var _dash_speed: float = 0.0
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
 
+# ---------------- 物理帧索敌与御灵查询复用缓冲（零每帧 new） ----------------
+var _target_shape: CircleShape2D = null
+var _target_query: PhysicsShapeQueryParameters2D = null
+var _orb_shape: CircleShape2D = null
+var _orb_query: PhysicsShapeQueryParameters2D = null
+var query_alloc_count: int = 0
+var query_reuse_count: int = 0
+
+var _weapons_buf: Array[FloatingWeapon] = []
+var _candidate_enemies_buf: Array[Node2D] = []
+var _candidate_chests_buf: Array[Node2D] = []
+var _candidate_targets_buf: Array[Node2D] = []
+var _seen_ids_buf: Dictionary = {}
+var _weapons_info_buf: Array[Dictionary] = []
+var _enemies_info_buf: Array[Dictionary] = []
+var _chests_info_buf: Array[Dictionary] = []
+var _weapons_dict_pool: Array[Dictionary] = []
+var _enemies_dict_pool: Array[Dictionary] = []
+var _chests_dict_pool: Array[Dictionary] = []
+var _orb_enemies_buf: Array[Dictionary] = []
+var _orb_dict_pool: Array[Dictionary] = []
+var _orb_angles_buf: Array[float] = []
+var _target_groups_buf: Dictionary = {}
+
 func _ready() -> void:
 	current_health = max_health
 	GameManager.player = self
@@ -445,38 +469,50 @@ func _physics_process(delta: float) -> void:
 	# 6. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
 	_update_weapon_targets()
 
+func _sort_candidate_by_dist(a: Node2D, b: Node2D) -> bool:
+	return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
+
+func _acquire_pooled_dict(pool: Array[Dictionary], idx: int) -> Dictionary:
+	while pool.size() <= idx:
+		pool.append({})
+	return pool[idx]
+
 func _update_weapon_targets() -> void:
 	equipped_cleanup()
 	var count = weapon_holder.get_child_count()
 	if count == 0:
 		return
 
-	var weapons: Array[FloatingWeapon] = []
+	_weapons_buf.clear()
 	var max_range: float = 0.0
 	for i in range(count):
 		var w = weapon_holder.get_child(i) as FloatingWeapon
 		if w != null and is_instance_valid(w):
-			weapons.append(w)
+			_weapons_buf.append(w)
 			var w_range = w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
 			if w_range > max_range:
 				max_range = w_range
 
-	if weapons.is_empty() or max_range <= 0.0:
+	if _weapons_buf.is_empty() or max_range <= 0.0:
 		return
 
 	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = max_range
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0.0, global_position)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 32)
+	if _target_shape == null or _target_query == null:
+		_target_shape = CircleShape2D.new()
+		_target_query = PhysicsShapeQueryParameters2D.new()
+		_target_query.shape = _target_shape
+		_target_query.collision_mask = 4
+		_target_query.collide_with_areas = true
+		query_alloc_count += 1
+	else:
+		query_reuse_count += 1
+	_target_shape.radius = max_range
+	_target_query.transform = Transform2D(0.0, global_position)
+	var results = space_state.intersect_shape(_target_query, 32)
 
-	var candidate_enemies: Array[Node2D] = []
-	var candidate_chests: Array[Node2D] = []
-	var seen_ids := {}
+	_candidate_enemies_buf.clear()
+	_candidate_chests_buf.clear()
+	_seen_ids_buf.clear()
 	for res in results:
 		var col = res.get("collider")
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
@@ -485,80 +521,79 @@ func _update_weapon_targets() -> void:
 				continue
 			var is_chest := enemy.is_in_group("chests")
 			# 匣子与妖怪共用 4 号层，同一圈查询两个都捞得到；匣子另册登记，只接闲着的法器
-			if is_chest and not candidate_chests.has(enemy):
-				candidate_chests.append(enemy)
+			if is_chest and not _candidate_chests_buf.has(enemy):
+				_candidate_chests_buf.append(enemy)
 				continue
 			if enemy.is_in_group("herbs"):
 				continue
 			var eid := enemy.get_instance_id()
-			if seen_ids.has(eid):
+			if _seen_ids_buf.has(eid):
 				continue
-			seen_ids[eid] = true
-			candidate_enemies.append(enemy)
+			_seen_ids_buf[eid] = true
+			_candidate_enemies_buf.append(enemy)
 
-	# 按距玩家从近到远排序，保证贴身危急判定与同向优先级稳定
-	candidate_enemies.sort_custom(func(a: Node2D, b: Node2D) -> bool:
-		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
-	)
-	candidate_chests.sort_custom(func(a: Node2D, b: Node2D) -> bool:
-		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
-	)
+	# 按距玩家从近到远排序，保证贴身危急判定与同向优先级稳定（命名方法避免每帧生成闭包）
+	_candidate_enemies_buf.sort_custom(_sort_candidate_by_dist)
+	_candidate_chests_buf.sort_custom(_sort_candidate_by_dist)
 
-	var weapons_info: Array[Dictionary] = []
-	for w in weapons:
+	_weapons_info_buf.clear()
+	for i in range(_weapons_buf.size()):
+		var w := _weapons_buf[i]
 		var prev_id := 0
 		if w.current_target != null and is_instance_valid(w.current_target):
 			prev_id = w.current_target.get_instance_id()
 		var w_range := w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
-		weapons_info.append({
-			"base_angle": w.base_angle,
-			"range": w_range,
-			"prev_id": prev_id,
-		})
+		var wd := _acquire_pooled_dict(_weapons_dict_pool, i)
+		wd["base_angle"] = w.base_angle
+		wd["range"] = w_range
+		wd["prev_id"] = prev_id
+		_weapons_info_buf.append(wd)
 
-	var enemies_info: Array[Dictionary] = []
-	for e in candidate_enemies:
+	_enemies_info_buf.clear()
+	for i in range(_candidate_enemies_buf.size()):
+		var e := _candidate_enemies_buf[i]
 		var offset := e.global_position - global_position
-		enemies_info.append({
-			"id": e.get_instance_id(),
-			"dist": offset.length(),
-			"angle": offset.angle(),
-		})
+		var ed := _acquire_pooled_dict(_enemies_dict_pool, i)
+		ed["id"] = e.get_instance_id()
+		ed["dist"] = offset.length()
+		ed["angle"] = offset.angle()
+		_enemies_info_buf.append(ed)
 
-	var chests_info: Array[Dictionary] = []
-	for c in candidate_chests:
+	_chests_info_buf.clear()
+	for i in range(_candidate_chests_buf.size()):
+		var c := _candidate_chests_buf[i]
 		var offset := c.global_position - global_position
-		chests_info.append({
-			"id": c.get_instance_id(),
-			"dist": offset.length(),
-			"angle": offset.angle(),
-		})
+		var cd := _acquire_pooled_dict(_chests_dict_pool, i)
+		cd["id"] = c.get_instance_id()
+		cd["dist"] = offset.length()
+		cd["angle"] = offset.angle()
+		_chests_info_buf.append(cd)
 
 	# 两段式：妖怪先分完，剩下无事可做的法器才去砸匣子（见 GameBalance.assign_targets_with_chests）
-	var assignments: Array = GameBalance.assign_targets_with_chests(weapons_info, enemies_info, chests_info)
-	var candidate_targets: Array[Node2D] = []
-	candidate_targets.append_array(candidate_enemies)
-	candidate_targets.append_array(candidate_chests)
+	var assignments: Array = GameBalance.assign_targets_with_chests(_weapons_info_buf, _enemies_info_buf, _chests_info_buf)
+	_candidate_targets_buf.clear()
+	_candidate_targets_buf.append_array(_candidate_enemies_buf)
+	_candidate_targets_buf.append_array(_candidate_chests_buf)
 
 	# 按实际共享同一目标的法器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
-	var target_groups := {}
-	for i in range(weapons.size()):
+	_target_groups_buf.clear()
+	for i in range(_weapons_buf.size()):
 		var t_idx := int(assignments[i])
 		if t_idx >= 0:
-			if not target_groups.has(t_idx):
-				target_groups[t_idx] = []
-			target_groups[t_idx].append(i)
+			if not _target_groups_buf.has(t_idx):
+				_target_groups_buf[t_idx] = []
+			_target_groups_buf[t_idx].append(i)
 
-	for i in range(weapons.size()):
-		var w := weapons[i]
+	for i in range(_weapons_buf.size()):
+		var w := _weapons_buf[i]
 		var t_idx := int(assignments[i])
-		if t_idx >= 0 and t_idx < candidate_targets.size():
-			var group: Array = target_groups[t_idx]
+		if t_idx >= 0 and t_idx < _candidate_targets_buf.size():
+			var group: Array = _target_groups_buf[t_idx]
 			var group_size := group.size()
 			var pos_in_group := group.find(i)
 			w.spread_angle = (float(pos_in_group) - float(group_size - 1) * 0.5) * deg_to_rad(24.0)
 			if not w.is_attacking:
-				w.current_target = candidate_targets[t_idx]
+				w.current_target = _candidate_targets_buf[t_idx]
 		else:
 			w.spread_angle = 0.0
 			if not w.is_attacking:
@@ -583,19 +618,24 @@ func _process_sun_orbs(delta: float) -> void:
 				max_star = orb_child.star
 	var eff_max_reach: float = max_reach * range_mult
 
-	# 扫描御灵感知圈内的敌人（用于扇区扑击、贴脸内收与战斗加速）
-	var enemies_info: Array[Dictionary] = []
+	# 扫描御灵感知圈内的敌人（复用查询与字典缓冲）
+	_orb_enemies_buf.clear()
 	var space_state := get_world_2d().direct_space_state
 	if space_state != null:
-		var shape := CircleShape2D.new()
-		shape.radius = eff_max_reach + 24.0
-		var query := PhysicsShapeQueryParameters2D.new()
-		query.shape = shape
-		query.transform = Transform2D(0.0, global_position)
-		query.collision_mask = 4
-		query.collide_with_areas = true
-		var results := space_state.intersect_shape(query, 32)
-		var seen_ids := {}
+		if _orb_shape == null or _orb_query == null:
+			_orb_shape = CircleShape2D.new()
+			_orb_query = PhysicsShapeQueryParameters2D.new()
+			_orb_query.shape = _orb_shape
+			_orb_query.collision_mask = 4
+			_orb_query.collide_with_areas = true
+			query_alloc_count += 1
+		else:
+			query_reuse_count += 1
+		_orb_shape.radius = eff_max_reach + 24.0
+		_orb_query.transform = Transform2D(0.0, global_position)
+		var results := space_state.intersect_shape(_orb_query, 32)
+		_seen_ids_buf.clear()
+		var idx := 0
 		for res in results:
 			var col = res.get("collider")
 			if col and col.get_parent() and col.get_parent().has_method("take_damage"):
@@ -603,21 +643,22 @@ func _process_sun_orbs(delta: float) -> void:
 				if not is_instance_valid(enemy) or enemy.is_in_group("chests") or enemy.is_in_group("herbs"):
 					continue
 				var eid := enemy.get_instance_id()
-				if seen_ids.has(eid):
+				if _seen_ids_buf.has(eid):
 					continue
-				seen_ids[eid] = true
+				_seen_ids_buf[eid] = true
 				var offset := enemy.global_position - global_position
-				enemies_info.append({
-					"dist": offset.length(),
-					"angle": offset.angle(),
-				})
+				var od := _acquire_pooled_dict(_orb_dict_pool, idx)
+				od["dist"] = offset.length()
+				od["angle"] = offset.angle()
+				_orb_enemies_buf.append(od)
+				idx += 1
 
-	var orb_angles: Array[float] = []
+	_orb_angles_buf.clear()
 	for i in range(count):
-		orb_angles.append(wrapf(sun_orb_angle + float(i) * (TAU / float(count)), -PI, PI))
+		_orb_angles_buf.append(wrapf(sun_orb_angle + float(i) * (TAU / float(count)), -PI, PI))
 
 	var orbit_res: Dictionary = GameBalance.compute_spirit_orbit(
-		orb_angles, enemies_info, base_radius, min_radius, eff_max_reach
+		_orb_angles_buf, _orb_enemies_buf, base_radius, min_radius, eff_max_reach
 	)
 	var in_combat: bool = bool(orbit_res.get("in_combat", false))
 	var target_radii: Array = orbit_res.get("radii", [])

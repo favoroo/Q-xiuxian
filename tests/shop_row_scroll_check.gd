@@ -171,6 +171,21 @@ func _check_swipe_not_select() -> void:
 	await _tap_at(t.get_global_rect().get_center())
 	_c.check(int(_shop.selected.get("index", -1)) == 2 and _shop.selected.get("pool", "") == "equipped",
 		"同一格原地微动后松手必须选中（否则「划不动也点不着」会一起假绿），实得 %s" % str(_shop.selected))
+	var w_tip := DetailTip.live(_shop)
+	_c.check(w_tip != null, "点击已购法器弹出悬浮详情菜单")
+	if w_tip != null:
+		var rows: Array = w_tip.payload.get("rows", [])
+		var body: String = String(w_tip.payload.get("body", ""))
+		var actions: Array = w_tip.payload.get("actions", [])
+		_c.check(not rows.is_empty() and not body.is_empty(), "悬浮菜单中展示法器属性详情（%d 行读数）与说明" % rows.size())
+		_c.check(not actions.is_empty(), "悬浮菜单中包含快捷操作按钮（%d 组操作）" % actions.size())
+		_c.check(not _shop.action_bar.visible, "底部不再展开一整行 ActionBar 菜单")
+		var r: Rect2 = w_tip.card_rect()
+		var vis := _shop.get_viewport_rect()
+		_c.check(r.position.x >= 0 and r.end.x <= vis.size.x and r.position.y >= 0 and r.end.y <= vis.size.y,
+			"法器悬浮菜单完整在可视区域内（%.0f,%.0f .. %.0f,%.0f）" % [r.position.x, r.position.y, r.end.x, r.end.y])
+	DetailTip.close_all(_shop)
+	await _wait_tips_gone()
 
 ## 法宝徽位：划动不弹详解，点按要弹
 func _check_chip_swipe() -> void:

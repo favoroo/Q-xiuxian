@@ -1,15 +1,8 @@
 class_name CareerDialog
-extends Control
+extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）：查看天道功绩达成情况、解锁奖励、生涯累计统计与最近战报
-## 采用全屏暂停式弹窗，双页签切换（天道功绩 / 历战名录），严格遵循 GameStyle 设计规范
-
-signal closed
-
-var _closing: bool = false
-var _current_tab: int = 0
-var _tab_buttons: Array[Button] = []
-var _pages: Array[Control] = []
+## 继承 BaseModalDialog，双页签切换（天道功绩 / 历战名录），严格遵循 GameStyle 设计规范
 
 # 顶部概览数据标签
 var _runs_val_lbl: Label
@@ -21,93 +14,21 @@ var _wave_val_lbl: Label
 var _ach_list_box: VBoxContainer
 var _history_list_box: VBoxContainer
 
-func _ready() -> void:
-	visible = false
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_build_ui()
+func _get_title_text() -> String:
+	return "修 仙 志  ·  天 道 功 绩 簿"
 
-func _build_ui() -> void:
-	# 1. 半透明暗色背景遮罩（支持点击空白处关闭）
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.85)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			close()
-	)
-	add_child(dim)
+func _get_panel_size() -> Vector2:
+	return Vector2(880, 470)
 
-	# 2. 居中大容器
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
+func _get_panel_margins() -> Vector4:
+	return Vector4(20, 14, 20, 14)
 
-	# 3. 斜切大面板（880 x 470）
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(880, 470)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
-	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 6
-	panel_style.border_color = GameStyle.BLUE
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
+func _build_body(root_vbox: VBoxContainer) -> void:
+	# 1. 注册顶部 Tab 按钮
+	add_tab_button(0, "✦ 天道功绩")
+	add_tab_button(1, "✦ 历战名录")
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	panel.add_child(margin)
-
-	var root_vbox := VBoxContainer.new()
-	root_vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(root_vbox)
-
-	# 4. 顶部标题栏 + Tab 切换 + 关闭按钮
-	var top_bar := HBoxContainer.new()
-	top_bar.add_theme_constant_override("separation", 12)
-	root_vbox.add_child(top_bar)
-
-	var title_box := PanelContainer.new()
-	title_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BLUE, GameStyle.SLANT_BAND, Vector2(3, 4)))
-	var title_margin := MarginContainer.new()
-	title_margin.add_theme_constant_override("margin_left", 14)
-	title_margin.add_theme_constant_override("margin_right", 14)
-	title_margin.add_theme_constant_override("margin_top", 4)
-	title_margin.add_theme_constant_override("margin_bottom", 4)
-	var title_lbl := Label.new()
-	title_lbl.text = "修 仙 志  ·  天 道 功 绩 簿"
-	GameStyle.label(title_lbl, 18, GameStyle.PAPER, 0, GameStyle.INK, true)
-	title_margin.add_child(title_lbl)
-	title_box.add_child(title_margin)
-	top_bar.add_child(title_box)
-
-	var tab_bar := HBoxContainer.new()
-	tab_bar.add_theme_constant_override("separation", 8)
-	tab_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_bar.add_child(tab_bar)
-
-	_add_tab_button(tab_bar, 0, "✦ 天道功绩")
-	_add_tab_button(tab_bar, 1, "✦ 历战名录")
-
-	var close_btn := Button.new()
-	close_btn.text = "返 回"
-	close_btn.custom_minimum_size = Vector2(84, 34)
-	close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(close_btn, GameStyle.NAVY2, GameStyle.BLUE, 14, GameStyle.PAPER, 5.0)
-	close_btn.pressed.connect(close)
-	top_bar.add_child(close_btn)
-
-	# 5. 生涯核心数据横条（4 个指标卡）
+	# 2. 生涯核心数据横条（4 个指标卡）
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 10)
 	root_vbox.add_child(stats_row)
@@ -117,7 +38,7 @@ func _build_ui() -> void:
 	_kills_val_lbl = _add_summary_card(stats_row, "累计斩妖", "0 只")
 	_wave_val_lbl = _add_summary_card(stats_row, "最高抵御", "第 0 波")
 
-	# 6. 内容分页面板
+	# 3. 内容分页面板
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
@@ -131,27 +52,10 @@ func _build_ui() -> void:
 	_pages.append(_build_achievements_page(content_panel))
 	_pages.append(_build_history_page(content_panel))
 
-	_switch_tab(0)
+	switch_tab(0)
 
-func _add_tab_button(parent: HBoxContainer, index: int, text: String) -> void:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(100, 32)
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.pressed.connect(func(): _switch_tab(index))
-	parent.add_child(btn)
-	_tab_buttons.append(btn)
-
-func _switch_tab(index: int) -> void:
-	_current_tab = index
-	for i in range(_pages.size()):
-		_pages[i].visible = (i == index)
-	for i in range(_tab_buttons.size()):
-		var b := _tab_buttons[i]
-		if i == index:
-			GameStyle.button(b, GameStyle.BLUE, GameStyle.BLUE_EDGE, 13, GameStyle.PAPER, 5.0)
-		else:
-			GameStyle.button(b, GameStyle.NAVY2, GameStyle.BLUE, 13, GameStyle.PAPER_DIM, 5.0)
+func _on_opened() -> void:
+	_refresh_data()
 
 func _add_summary_card(parent: HBoxContainer, title: String, init_val: String) -> Label:
 	var card := PanelContainer.new()
@@ -210,26 +114,6 @@ func _build_history_page(parent: Control) -> Control:
 	scroll.add_child(_history_list_box)
 	return scroll
 
-## 打开修仙志弹窗并刷新最新数据
-func open() -> void:
-	visible = true
-	_closing = false
-	_refresh_data()
-	modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.2)
-
-func close() -> void:
-	if _closing:
-		return
-	_closing = true
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.16)
-	tw.tween_callback(func():
-		visible = false
-		_closing = false
-		closed.emit()
-	)
 
 func _refresh_data() -> void:
 	# 1. 刷新顶部生涯概览
@@ -387,10 +271,3 @@ func _create_history_row(entry: Dictionary) -> Control:
 	hbox.add_child(v_tag)
 
 	return row
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not visible:
-		return
-	if event.is_action_pressed("ui_cancel"):
-		close()
-		get_viewport().set_input_as_handled()

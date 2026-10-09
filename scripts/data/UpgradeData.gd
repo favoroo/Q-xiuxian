@@ -14,9 +14,9 @@ extends RefCounted
 ## 字段白名单在 GameManager.apply_upgrade()，写错会在运行时 push_warning 里暴露。
 
 const RARITY_COLORS := {
-	"common": Color(0.96, 0.95, 0.92),
-	"rare": Color(1.0, 0.83, 0.3),
-	"epic": Color(0.35, 0.75, 1.0),
+	"common": GameStyle.RARITY_COMMON,
+	"rare": GameStyle.RARITY_RARE,
+	"epic": GameStyle.RARITY_EPIC,
 }
 
 const UPGRADES: Array[Dictionary] = [
@@ -299,10 +299,11 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 		pool_weights.append(w)
 
 	var result: Array[Dictionary] = []
+	var active_rng: RandomNumberGenerator = rng if rng != null else GameManager.rng
 	for i in range(count):
 		if pool.is_empty():
 			break
-		var roll: float = rng.randf() if rng != null else randf()
+		var roll: float = active_rng.randf()
 		var chosen: int = GameBalance.weighted_pick_index(pool_weights, roll)
 		var picked: Dictionary = pool[chosen].duplicate()
 		picked["border_color"] = RARITY_COLORS.get(picked.get("rarity", "common"), Color.WHITE)

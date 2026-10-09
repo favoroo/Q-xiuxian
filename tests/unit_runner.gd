@@ -827,9 +827,9 @@ func _test_screen_shake_budget() -> void:
 # ---------------- 五行武器矩阵与属性转化 ----------------
 
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：15 把法器（5 五行 × 3 把）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 15, "全武器库扩充至 15 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 15, "商店池覆盖全部 15 把法器")
+	# 1. 武器表完整性校验：20 把法器（5 五行 × 4 把）且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 20, "全武器库扩充至 20 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 20, "商店池覆盖全部 20 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -852,12 +852,12 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "15 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "20 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
 	for e_key in elem_counts.keys():
-		_c.equals(int(elem_counts[e_key]), 3, "五行【%s】恰好包含 3 把法器" % e_key)
+		_c.equals(int(elem_counts[e_key]), 4, "五行【%s】恰好包含 4 把法器" % e_key)
 
 	# 2. 土豆兄弟式属性受益折算（GameBalance.weapon_stat_bonus 纯函数）
 	var earth_scalings := {"armor": 3.5}
@@ -1262,7 +1262,7 @@ func _test_achievement_and_meta_save() -> void:
 			_c.check(not ItemData.get_def(rid).is_empty(), "成就 %s 奖励法宝 %s 在法宝表中存在" % [aid, rid])
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
 	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 4, "初始默认开放 4 名基础修士")
-	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 11, "初始默认开放 11 件基础法宝")
+	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 16, "初始默认开放 16 件基础法宝")
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()

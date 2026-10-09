@@ -20,6 +20,8 @@ extends Control
 ##   body       String      BBCode 正文（悟道卡沿用 UpgradeData 的 desc，不再抄一份）
 ##   notes      Array[String] 规则条目，逐行前缀圆点
 ##   foot       String      脚注小字
+##   actions    Array       底部操作按钮，支持单行 [act1, act2] 或多行 [[act1], [act2, act3]]
+##                          每个 act: {"text": String, "callback": Callable, "color": Color, ...}
 
 const GAP := 12.0
 const CARD_W := 306.0
@@ -129,6 +131,7 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	_build_body(vbox, payload)
 	_build_notes(vbox, payload)
 	_build_foot(vbox, payload)
+	_build_actions(vbox, payload)
 
 	# 卡高要等 RichTextLabel 的 fit_content 定下来才知道，所以尺寸一变就重新摆一次
 	# （Control 上这个信号叫 resized，size_changed 是 Node2D 的）
@@ -267,6 +270,70 @@ func _build_foot(vbox: VBoxContainer, payload: Dictionary) -> void:
 	GameStyle.label(lbl, 11, GameStyle.BLUE_EDGE)
 	vbox.add_child(lbl)
 
+func _build_actions(vbox: VBoxContainer, payload: Dictionary) -> void:
+	var raw_actions: Variant = payload.get("actions", [])
+	if not (raw_actions is Array) or (raw_actions as Array).is_empty():
+		return
+	var arr: Array = raw_actions as Array
+	var rows: Array = []
+	if arr[0] is Dictionary:
+		rows.append(arr)
+	elif arr[0] is Array:
+		rows.append_array(arr)
+	else:
+		return
+
+	var sep := _sep()
+	if sep != null:
+		vbox.add_child(sep)
+
+	var acts_box := VBoxContainer.new()
+	acts_box.name = "ActionsContainer"
+	acts_box.add_theme_constant_override("separation", 6)
+	acts_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(acts_box)
+
+	for row in rows:
+		if not (row is Array) or (row as Array).is_empty():
+			continue
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 8)
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		acts_box.add_child(hbox)
+
+		for act_item in (row as Array):
+			if not (act_item is Dictionary):
+				continue
+			var act: Dictionary = act_item
+			var btn := Button.new()
+			btn.text = String(act.get("text", ""))
+			btn.disabled = bool(act.get("disabled", false))
+			btn.focus_mode = Control.FOCUS_NONE
+			btn.mouse_filter = Control.MOUSE_FILTER_STOP
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			btn.custom_minimum_size = Vector2(0, 32)
+			var bg_col: Color = act.get("color", GameStyle.NAVY2)
+			var edge_col: Color = act.get("edge_color", GameStyle.LINE)
+			var text_col: Color = act.get("text_color", GameStyle.PAPER)
+			if btn.disabled:
+				bg_col = GameStyle.NAVY2.darkened(0.2)
+				edge_col = GameStyle.LINE.darkened(0.2)
+				text_col = GameStyle.GREY
+			GameStyle.button(btn, bg_col, edge_col, 13, text_col, 4.0)
+			if btn.disabled:
+				btn.add_theme_stylebox_override("disabled", GameStyle.block(bg_col, 4.0, Vector2(1, 1)))
+				btn.add_theme_color_override("font_disabled_color", text_col)
+			var cb: Callable = act.get("callback", Callable())
+			if cb.is_valid():
+				var keep_open: bool = bool(act.get("keep_open", false))
+				btn.pressed.connect(func() -> void:
+					if not keep_open:
+						close()
+					cb.call()
+				)
+			hbox.add_child(btn)
+
 func _sep() -> Control:
 	var s := HSeparator.new()
 	var line := StyleBoxLine.new()
@@ -320,6 +387,8 @@ func close() -> void:
 	if _closing or not is_instance_valid(self):
 		return
 	_closing = true
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	GameStyle._ignore_input(self)
 	closed.emit()
 	if _card != null and is_instance_valid(_card):
 		_card.resized.disconnect(_place)

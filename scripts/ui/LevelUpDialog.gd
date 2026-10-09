@@ -78,32 +78,27 @@ var _card_w: float = CARD_W
 ## 保存每张卡片的组件引用以便切换选中/未选中视觉状态
 var _card_entries: Array[Dictionary] = []
 
-# ---------------- 摆位算术（纯函数，判据共用同一份） ----------------
+# ---------------- 摆位算术（纯函数，与 WaveShop 同源，统一步入 ShopCardLayout） ----------------
 
 ## 这一档屏高下面板该占的高
 static func panel_h_for(screen_h: float) -> float:
-	return maxf(PANEL_MIN_H, screen_h - SCREEN_PAD_Y)
+	return ShopCardLayout.panel_h_for(screen_h, PANEL_MIN_H, SCREEN_PAD_Y)
 
-## 斜切把面板画出来的左右边推到布局盒外多少：引擎按布局盒竖直中线居中斜切
-## （style_box_flat.cpp: x_skew = -skew.x * (y - center.y)）⇒ 上下各伸出半个斜切量。
-## 投影不算：shadow_size = 0 时引擎根本不画投影。
+## 斜切把面板画出来的左右边推到布局盒外多少
 static func skew_x(h: float) -> float:
-	return absf(PANEL_SKEW_RAD) * h * 0.5
+	return ShopCardLayout.skew_x(PANEL_SKEW_RAD, h)
 
 ## 内容层单边占位 = Panel 内容边距 + MarginContainer 现调的那一份（取整，与节点逐单位一致）。
-## 平行四边形让底边整体比顶边多挪一个 skew_x(h)：右下角那颗按钮离**画出来的**右边
-## 只剩「占位 - skew_x」，所以这里按 lean 补一次（灵石阁 WaveShop.card_pad_x 同一口径）。
+## 平行四边形让底边整体比顶边多挪一个 skew_x(h)：右下角那颗按钮离画出来的右边只剩「占位 - skew_x」
 static func chrome_side(h: float) -> float:
 	return PANEL_CONTENT_SIDE + ceilf(CHROME_INNER_SIDE + skew_x(h))
 
 static func chrome_x(h: float) -> float:
 	return chrome_side(h) * 2.0
 
-## 滚动区左右要留的白：卡片自己也是斜切的，画出来的两个角比布局盒左右各宽 |skew|·h/2，
-## 而 ScrollContainer 会 clip ⇒ 不留白最外侧两张卡的角被削平（用户看到的「卡边没了」）。
-## 卡高不超过滚动区高、滚动区高不超过面板高 ⇒ 按面板高算就是最坏情况。
+## 滚动区左右要留的白（卡高不超过面板高，按面板高算最坏情况）
 static func card_pad_x(h: float) -> float:
-	return ceilf(absf(CARD_SKEW_RAD) * h * 0.5) + 2.0
+	return ShopCardLayout.card_pad_x(CARD_SKEW_RAD, h)
 
 ## 面板布局盒里的内容宽 = 屏幕宽 - 面板占位 - 面板两头画出来的斜切 - 两头呼吸量
 static func panel_inner_w(screen: Vector2) -> float:
@@ -116,7 +111,7 @@ static func avail_w(screen: Vector2) -> float:
 
 ## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
 static func gap_for(avail: float) -> float:
-	return clampf(avail * 0.010, CARD_GAP_MIN, CARD_GAP_MAX)
+	return ShopCardLayout.gap_for(avail, 0.010, CARD_GAP_MIN, CARD_GAP_MAX)
 
 ## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
 static func card_w_for(screen: Vector2, n: int) -> float:
@@ -126,7 +121,7 @@ static func card_w_for(screen: Vector2, n: int) -> float:
 	return clampf((avail - gap_for(avail) * float(n - 1)) / float(n), MIN_CARD_W, CARD_W)
 
 static func card_inner_w(card_w: float) -> float:
-	return card_w - CARD_PAD_X * 2.0
+	return ShopCardLayout.card_inner_w(card_w, CARD_PAD_X)
 
 ## 这一档屏宽下整块面板的布局盒该占的宽（画出来还要再加两头斜切，判据按它核对留白）
 static func panel_w_for(screen: Vector2, n: int) -> float:
@@ -135,12 +130,9 @@ static func panel_w_for(screen: Vector2, n: int) -> float:
 	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) \
 		+ card_pad_x(h) * 2.0 + chrome_x(h)
 
-## 选中要放大 ⇒ 这一行上下各让出的余量。卡片最高不超过滚动区高，而滚动区高不超过面板高，
-## 按 panel_h 上限算就是最坏情况：放大后画出来的高度正好落回滚动区内。
-## 再补 2 单位给入场/选中动画的 TRANS_BACK 过冲。
+## 选中要放大 ⇒ 这一行上下各让出的余量
 static func pop_gutter_y(screen_h: float) -> float:
-	var h := panel_h_for(screen_h)
-	return ceilf(h * (SEL_SCALE - 1.0) / (2.0 * SEL_SCALE)) + 2.0
+	return ShopCardLayout.pop_gutter_y(panel_h_for(screen_h), SEL_SCALE)
 
 func _ready() -> void:
 	visible = false

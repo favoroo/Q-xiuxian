@@ -337,6 +337,9 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 		burst.proc_burn = true
 		burst.burn_dps = final_dmg * float(def.get("burn_ratio", 0.5))
 		burst.burn_dur = float(def.get("burn_dur", 3.0))
+	if float(def.get("proc_chill", 0.0)) > 0.0:
+		burst.proc_chill = float(def.get("proc_chill", 0.0))
+		burst.chill_dur = float(def.get("chill_dur", 2.0))
 	get_tree().current_scene.add_child(burst)
 
 func _perform_melee_attack() -> void:
