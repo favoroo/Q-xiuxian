@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cobsentprev01"]
+
+[ext_resource type="Script" path="res://tests/obelisk_spent_preview.gd" id="1"]
+
+[node name="ObeliskSpentPreview" type="Node2D"]
+script = ExtResource("1")

@@ -3,9 +3,9 @@
 [ext_resource type="Script" path="res://scripts/ui/LevelUpDialog.gd" id="1_lvl"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 16.0
+content_margin_left = 12.0
 content_margin_top = 12.0
-content_margin_right = 16.0
+content_margin_right = 12.0
 content_margin_bottom = 12.0
 bg_color = Color(0.07, 0.1, 0.18, 0.97)
 skew = Vector2(0.052, 0)
@@ -76,9 +76,9 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_constants/margin_left = 12
+theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 12
+theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
 [node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel/MarginContainer"]
@@ -115,7 +115,17 @@ size_flags_vertical = 3
 horizontal_scroll_mode = 0
 vertical_scroll_mode = 1
 
-[node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox/CardScroll"]
+[node name="CardsPad" type="MarginContainer" parent="CenterContainer/Panel/MarginContainer/VBox/CardScroll"]
+layout_mode = 2
+mouse_filter = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 12
+
+[node name="CardsContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3

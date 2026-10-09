@@ -308,6 +308,30 @@ SFX = {
     "victory": [
         lambda b: (_arp(b, [523, 659, 784, 1047, 1319], t_step=0.11, dur=0.30, peak=0.16, echo=0.04),),
     ],
+    # 随行神通：冲刺是贴身风声，增益是上行琶音，护体是金属罩鸣，回春是柔和上行
+    "skill_dash": [
+        lambda b: (noise(b, dur=0.14, peak=0.16, ftype="bandpass", f0=600, f1=3400, q=0.8),
+                   tone(b, wtype="sine", f0=180, f1=420, dur=0.10, peak=0.08)),
+        lambda b: (noise(b, dur=0.12, peak=0.15, ftype="highpass", f0=900, f1=2800),
+                   tone(b, wtype="triangle", f0=240, f1=520, dur=0.08, peak=0.07)),
+    ],
+    "skill_buff": [
+        lambda b: (_arp(b, [660, 880, 1174], t_step=0.06, dur=0.18, peak=0.12),),
+        lambda b: (_arp(b, [587, 784, 1046], t_step=0.06, dur=0.18, peak=0.11),
+                   noise(b, dur=0.08, peak=0.04, ftype="highpass", f0=3600, f1=2400, t0=0.12)),
+    ],
+    "skill_aegis": [
+        lambda b: (tone(b, wtype="square", f0=220, f1=180, dur=0.18, peak=0.10, lp=1400),
+                   tone(b, wtype="sine", f0=1245, f1=1175, dur=0.26, peak=0.08, t0=0.02),
+                   noise(b, dur=0.16, peak=0.06, ftype="highpass", f0=4200, f1=2600, t0=0.01)),
+        lambda b: (tone(b, wtype="square", f0=196, f1=165, dur=0.20, peak=0.09, lp=1200),
+                   tone(b, wtype="sine", f0=1046, f1=988, dur=0.28, peak=0.08, t0=0.03)),
+    ],
+    "skill_heal": [
+        lambda b: (tone(b, wtype="sine", f0=523, f1=784, dur=0.24, peak=0.11),
+                   tone(b, wtype="triangle", f0=1046, f1=1568, dur=0.18, peak=0.05, t0=0.08)),
+        lambda b: (_arp(b, [523, 659, 880], t_step=0.07, dur=0.22, peak=0.10),),
+    ],
     "defeat": [
         lambda b: (_arp(b, [392, 330, 262], t_step=0.14, dur=0.30, peak=0.13),
                    tone(b, wtype="sine", f0=131, f1=128, dur=0.5, peak=0.10, t0=0.30)),
@@ -336,6 +360,10 @@ TARGET_PEAK = {
     "defeat": TARGET_PEAK_LOUD,
     "dodge": 0.24,
     "heal": 0.24,
+    "skill_dash": 0.24,
+    "skill_buff": 0.24,
+    "skill_aegis": 0.24,
+    "skill_heal": 0.24,
 }
 
 

@@ -99,10 +99,10 @@ func _ready() -> void:
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
 
-	# 出生先等一个完整冷却才允许起手（与 BossEnemy 的开场缓冲同一条口径）。
-	# 旧初值是 0.0，而刷怪半径 380~480px 正好压在长扑带里 ⇒ 出屏第一帧就进预警，
-	# 玩家还没看清这只怪就先被扑。
-	_charge_timer = charge_interval
+	# 出生缓冲：封顶 2.0 秒（仍然不是「出屏第一帧就扑」，玩家有 2 秒看清这只怪逼近）。
+	# 旧写法直接取 charge_interval（4.0s），而狼移速 120px/s 从 380~480px 走到冲刺下沿
+	# （120px）只要 2.2~3.0s ⇒ 冷却就绪时狼已贴脸进短咬带，冲刺条件 dist>120px 永远不满足。
+	_charge_timer = minf(charge_interval, 2.0)
 	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval
@@ -390,9 +390,20 @@ func _physics_process(delta: float) -> void:
 	var is_moving := current_speed > maxf(20.0, move_speed * 0.2)
 
 	if locomotion_mode == "hover":
-		# 悬浮：不切腿帧（单姿势图集），浮沉/前倾由程序驱动
+		# 悬浮：不切腿帧（单姿势图集），浮沉/侧倾/纵向意图由程序驱动。
+		# 侧倾喂**实际位移方向**而不是「面向玩家」的方向：邪修这类带 preferred_range 的
+		# 远程怪会后退放风筝，用面向方向 bank 的话，逼近与后撤倾同一个方向，玩家分不清
+		#（2026-10-09 用户现场：「踩着黑雾的为什么背对着走向我」——它其实在往后撤）。
+		# advance = 位移与面向的夹角余弦：+1 压过来 / -1 后撤 / ≈0 环绕侧滑。
+		# 受击定身期间归零：那一拍已有 play_squash + 微反冲在发反馈，不叠第二处。
+		var vel_dir := Vector2.ZERO
+		if is_moving and current_speed > 0.01:
+			vel_dir = velocity / current_speed
+		var advance := 0.0
+		if not is_in_hit_stun:
+			advance = vel_dir.dot(dir)
 		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
-		RunMotion.apply_hover(anim_sprite, current_base, is_moving, dir if is_moving else Vector2.ZERO, delta, speed_ratio, shadow_sprite)
+		RunMotion.apply_hover(anim_sprite, current_base, is_moving, vel_dir, delta, speed_ratio, shadow_sprite, advance)
 	elif locomotion_mode == "slither":
 		# 蠕动：贴地行进波（scale 伸缩），无悬浮无前倾
 		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)

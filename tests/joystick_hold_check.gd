@@ -15,7 +15,10 @@ extends Node
 ##  ② 非按钮热区（带 gui_input 的 Label / PanelContainer，如羁绊徽记、悟道待加点）仍要
 ##     自己 add_to_group ⇒ 判据用「登记过的标签」与「没登记的标签」把这条边界钉住。
 ##  ③ 灰掉（disabled）的按钮不接单 ⇒ 不许抢走这次走位。
-##  ④ 让位只让"按下的那一下、落在那颗键的矩形里"：不许把整屏糊成禁区，也不许按过一次就不能动。
+##  ④ 面板卡体（商店/悟道/属性/暂停/设置/修仙志/手册/详解卡/更新对话框这些 PanelContainer）
+##     自己登记 —— 它们不是按钮，摇杆认不出；但**整屏暗底遮罩一律不登记**，且摇杆有一道
+##     遮罩豁免兜底（is_backdrop_rect）：万一有人把 dim 也登记进来，也不许变成满屏禁区。
+##  ⑤ 让位只让"按下的那一下、落在那颗键的矩形里"：不许把整屏糊成禁区，也不许按过一次就不能动。
 ##
 ## 两条取舍：
 ##  ① 现场自造，不实例化 GameHUD —— GameHUD 要 GameManager 一堆信号才起得来，判据就会
@@ -44,6 +47,8 @@ var _auto_btn: Button
 var _disabled_btn: Button
 ## ⑤ 没登记的非按钮热区 ⇒ 不许让位（边界：只有按钮自动）
 var _plain_label: Label
+## ⑥ 第十七节用：一颗"被误登记的整屏暗底"，遮罩豁免要把它兜住
+var _backdrop: ColorRect
 
 func _ready() -> void:
 	if "--selftest" in OS.get_cmdline_user_args():
@@ -229,7 +234,6 @@ func _run() -> void:
 	get_tree().root.add_child(dlg)
 	await get_tree().process_frame
 	await _reset()
-	var far_of_card := Vector2(420, 500)
 	var far_of_card := Vector2(420, 300)
 	_c.check(absf(far_of_card.x - 480.0) < 230.0 and absf(far_of_card.y - 270.0) < 190.0,
 		"前提：这个点确实落在更新对话框那颗 460×380 面板矩形里")
@@ -237,6 +241,20 @@ func _run() -> void:
 	_c.check(_joy.is_active, "更新对话框隐藏时 ⇒ 它的卡体不算禁区（该点正落在面板矩形里）")
 	await _touch_release(22, far_of_card)
 	dlg.queue_free()
+	await get_tree().process_frame
+
+	# 十七、遮罩豁免（兜底护栏）：万一有人把整屏暗底也登记进来了，也不许变成满屏禁区
+	_c.check(not DawnJoystick.is_backdrop_rect(Rect2(0, 0, 880, 520), Vector2(960, 540)),
+		"正例 880×520 的大面板仍是一颗键（属性面板/手册卡体就是这个尺寸档）")
+	_c.check(not DawnJoystick.is_backdrop_rect(Rect2(0, 0, 1124, 521), Vector2(960, 540)),
+		"正例 撑出屏外的商店面板（1124×521）仍算键 —— 遮罩门槛不许吞掉它")
+	_c.check(DawnJoystick.is_backdrop_rect(Rect2(0, 0, 960, 540), Vector2(960, 540)),
+		"反例 铺满视口的那层才算遮罩")
+	await _reset()
+	await _touch_press(23, FREE_POS)
+	_c.check(_joy.is_active, "整屏遮罩被误登记 ⇒ 仍然放行走位（不许变成满屏禁区）")
+	await _touch_release(23, FREE_POS)
+	_backdrop.queue_free()
 	await get_tree().process_frame
 
 ## 摇杆入树之前：只有这颗"场景里既有的按钮"（它自己 _ready 时该扫到）
@@ -272,6 +290,14 @@ func _build_stage_after_joy() -> void:
 	_plain_label.position = Vector2(420, 60)
 	_plain_label.size = Vector2(110, 44)
 	_host.add_child(_plain_label)
+
+	# 十七的现场：一颗"被误登记进来的整屏暗底"（真实项目里就是 DetailTip 的 dim）
+	_backdrop = ColorRect.new()
+	_backdrop.color = Color(0.02, 0.04, 0.09, 0.3)
+	_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_backdrop.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
+	get_tree().root.add_child(_backdrop)
 
 func _make_btn(rect: Rect2, label: String) -> Button:
 	var b := Button.new()

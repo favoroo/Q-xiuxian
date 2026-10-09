@@ -23,7 +23,14 @@ const HYSTERESIS_DEG := 29.0 # 8方向扇区切换迟滞阈值（大于 22.5° �
 const HOVER_LIFT := 5.0      # 御剑悬浮基础高度（屏上像素，offset 按 base_scale 折算）
 const HOVER_BOB := 0.7       # 浮沉振幅（屏上像素）
 const HOVER_FREQ := 2.2      # 浮沉基频（Hz，移动时随速度略增）
-const HOVER_LEAN_DEG := 7.0  # 御剑移动前倾角（按移动方向水平分量缩放，竖直飞不前倾）
+const HOVER_BANK_DEG := 7.0  # 悬浮侧倾角：按**实际横向走位** bank（旧版按「面向玩家」的方向，
+                             # 于是逼近与后撤倾同一个方向，两种运动看不出区别）
+const HOVER_INTENT_SQUASH := 0.07  # 纵向意图形变：逼近沉身 / 后撤仰身的 scale.y 幅度（等体积反向补 x）
+const HOVER_INTENT_LIFT := 3.0     # 纵向意图偏移（屏上像素）：后撤抬高、逼近压低
+const HOVER_INTENT_BAND := 0.25    # |逼近度| 死区：环绕侧滑时不叠纵向形变，免得在 0 附近来回翻
+const HOVER_INTENT_FOLLOW := 10.0  # 意图形变跟随速率（/s），越小越黏
+const SHADOW_DRIFT := 5.0          # 影子滞后（屏上像素，云气拖在身后 = 上下走位唯一的方向线索）
+const SHADOW_STRETCH := 0.28       # 影子沿移动方向拉长比例
 const SLITHER_FREQ := 3.0    # 蠕动基频（Hz，移动时随速度略增）
 const SLITHER_SQ := 0.06     # 蠕动伸缩幅度（scale.x/y 反向交替，蛞蝓/黏液怪的行进波）
 
@@ -159,8 +166,14 @@ static func apply(
 	if shadow != null:
 		_apply_shadow(shadow, air, minf(delta * 14.0, 1.0))
 
-## 御剑/悬浮模式：不切腿帧（单姿势图集），浮沉/前倾/摇摆全程序驱动。
-## 待机也保持低速浮沉（始终悬在剑上），移动时浮沉加速并按移动方向前倾。
+## 御剑/悬浮模式：不切腿帧（单姿势图集），浮沉/侧倾/前倾全程序驱动。
+## 待机也保持低速浮沉（始终悬在剑上），移动时浮沉加速并按走位侧倾。
+## move_dir 传**实际位移方向**（不是「面向玩家」的方向）：侧倾按走位 bank，
+## 「压过来」和「后撤放风筝」的倾斜方向才天然相反。
+## advance = 实际位移与「面向目标」向量的点积（+1 逼近 / -1 后撤 / ≈0 环绕侧滑）。
+## 加它的原因（用户现场 2026-10-09：「踩着黑雾的为什么背对着走向我」）：悬浮怪永远只播
+## idle 单姿势，逼近/环绕/后撤三种运动在旧版长得一模一样（只剩一条上下浮），玩家只能靠猜。
+## 缺省 0.0 ⇒ 玩家不叠纵向意图（他自己就是「面向 = 走位」），悬浮玩家的手感保持原样。
 static func apply_hover(
 	sprite: AnimatedSprite2D,
 	base_scale: Vector2,
@@ -168,7 +181,8 @@ static func apply_hover(
 	move_dir: Vector2,
 	delta: float,
 	speed_ratio: float = 1.0,
-	shadow: Sprite2D = null
+	shadow: Sprite2D = null,
+	advance: float = 0.0
 ) -> void:
 	var freq_mult := 1.0 + 0.4 * clampf(speed_ratio, 0.0, 1.5) if moving else 1.0
 	var phase: float = float(sprite.get_meta(&"hover_phase", 0.0)) + delta * TAU * HOVER_FREQ * freq_mult
@@ -177,20 +191,34 @@ static func apply_hover(
 
 	var k := minf(delta * 14.0, 1.0)
 	var scale_safe := maxf(base_scale.y, 0.01)
-	sprite.offset.y = lerpf(sprite.offset.y, -(HOVER_LIFT + bob * HOVER_BOB) / scale_safe, k)
 
-	# 只留极轻的整体缩放呼吸，无步态挤压
+	# 纵向意图：带死区 + 一阶跟随，避免在「环绕」边界上抖
+	var intent := 0.0
+	if moving and absf(advance) > HOVER_INTENT_BAND:
+		intent = signf(advance) * minf(absf(advance), 1.0)
+	var cur_intent: float = float(sprite.get_meta(&"hover_intent", 0.0))
+	cur_intent = lerpf(cur_intent, intent, minf(delta * HOVER_INTENT_FOLLOW, 1.0))
+	sprite.set_meta(&"hover_intent", cur_intent)
+
+	# 后撤（intent<0）抬身、逼近（intent>0）沉身
+	var lift := HOVER_INTENT_LIFT * cur_intent
+	sprite.offset.y = lerpf(sprite.offset.y, -(HOVER_LIFT + bob * HOVER_BOB) / scale_safe + lift / scale_safe, k)
+
+	# 整体呼吸极轻；纵向意图形变等体积反向补到 x（沉身变宽、仰身变窄）
 	var breathe := 1.0 + bob * 0.006
-	sprite.scale = sprite.scale.lerp(Vector2(base_scale.x, base_scale.y * breathe), k)
+	var squash_y := 1.0 - HOVER_INTENT_SQUASH * cur_intent
+	sprite.scale = sprite.scale.lerp(
+		Vector2(base_scale.x * (2.0 - squash_y), base_scale.y * breathe * squash_y), k)
 
-	var lean := 0.0
+	var bank := 0.0
 	if moving:
-		var dir_sign := signf(move_dir.x) if absf(move_dir.x) > 0.01 else 0.0
-		lean = deg_to_rad(HOVER_LEAN_DEG * clampf(absf(move_dir.x), 0.0, 1.0) * clampf(speed_ratio, 0.0, 1.3)) * dir_sign
-	sprite.rotation = lerp_angle(sprite.rotation, lean, minf(delta * 10.0, 1.0))
+		bank = deg_to_rad(HOVER_BANK_DEG) * clampf(move_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.3)
+	sprite.rotation = lerp_angle(sprite.rotation, bank, minf(delta * 10.0, 1.0))
 
 	if shadow != null:
-		_apply_shadow(shadow, 0.62 + 0.30 * bob, k)
+		# 上下走位时 bank≈0，方向只能靠影子被拖长 + 滞后来说 ⇒ 竖直方向唯一的方向线索
+		var streak := move_dir if moving else Vector2.ZERO
+		_apply_shadow(shadow, 0.62 + 0.30 * bob, k, streak, clampf(speed_ratio, 0.0, 1.3))
 
 ## 蠕动/滑行模式：贴地无悬浮无前倾（史莱姆、血蛹等无腿软体），
 ## 行进波全靠 scale.x/y 反向交替伸缩；待机时慢速微动，影子保持稳定。
@@ -216,12 +244,22 @@ static func apply_slither(
 	if shadow != null:
 		_apply_shadow(shadow, 0.0, k)
 
-## 影子贴地反馈：腾空时影子收缩变淡（脚离地的视觉补偿），触地/待机时恢复基准
-static func _apply_shadow(shadow: Sprite2D, air: float, k: float) -> void:
+## 影子贴地反馈：腾空时影子收缩变淡（脚离地的视觉补偿），触地/待机时恢复基准。
+## streak/drift 非零时再叠一层「行进拖影」：沿移动方向拉长、并向后滞后一点（云气被拖在身后）。
+static func _apply_shadow(
+	shadow: Sprite2D,
+	air: float,
+	k: float,
+	streak: Vector2 = Vector2.ZERO,
+	drift: float = 0.0
+) -> void:
 	if not shadow.has_meta(&"gait_base"):
-		shadow.set_meta(&"gait_base", [shadow.scale, shadow.modulate.a])
+		shadow.set_meta(&"gait_base", [shadow.scale, shadow.modulate.a, shadow.position])
 	var base: Array = shadow.get_meta(&"gait_base")
 	var base_scale: Vector2 = base[0]
 	var base_alpha: float = base[1]
-	shadow.scale = shadow.scale.lerp(base_scale * (1.0 - SHADOW_SHRINK * air), k)
+	var base_pos: Vector2 = base[2]
+	var stretch := Vector2(1.0 + SHADOW_STRETCH * absf(streak.x), 1.0 + SHADOW_STRETCH * absf(streak.y))
+	shadow.scale = shadow.scale.lerp(base_scale * (1.0 - SHADOW_SHRINK * air) * stretch, k)
 	shadow.modulate.a = lerpf(shadow.modulate.a, base_alpha * (1.0 - SHADOW_FADE * air), k)
+	shadow.position = shadow.position.lerp(base_pos - streak * SHADOW_DRIFT * drift, k)

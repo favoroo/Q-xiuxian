@@ -116,6 +116,15 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
+	{
+		"section": "display",
+		"key": "skill_btn_pos",
+		"title": "技能按钮位置",
+		"desc": "战斗界面随行神通释放键的停靠位置",
+		"type": "cycle",
+		"default": &"right_bottom",
+		"options": [&"right_bottom", &"right_mid", &"left_bottom"],
+	},
 ]
 
 const BUS_KEY_MAP := {
@@ -235,6 +244,24 @@ func shake_level_label() -> String:
 func shake_level_next() -> StringName:
 	var i := SHAKE_LEVEL_ORDER.find(shake_level())
 	return SHAKE_LEVEL_ORDER[(i + 1) % SHAKE_LEVEL_ORDER.size()]
+
+# ----------------- 技能按钮位置（HUD 神通键停靠档位） -----------------
+
+const SKILL_BTN_POS_ORDER: Array[StringName] = [&"right_bottom", &"right_mid", &"left_bottom"]
+const SKILL_BTN_POS_LABELS: Dictionary = {"right_bottom": "右下", "right_mid": "右中", "left_bottom": "左下"}
+const SKILL_BTN_POS_DEFAULT := &"right_bottom"
+
+func skill_btn_pos() -> StringName:
+	return StringName(str(get_val(&"display", &"skill_btn_pos", SKILL_BTN_POS_DEFAULT)))
+
+## 档位的人话名（设置界面循环按钮用）
+func skill_btn_pos_label() -> String:
+	return String(SKILL_BTN_POS_LABELS.get(str(skill_btn_pos()), "右下"))
+
+## 循环到下一档（右下 → 右中 → 左下 → 右下）
+func skill_btn_pos_next() -> StringName:
+	var i := SKILL_BTN_POS_ORDER.find(skill_btn_pos())
+	return SKILL_BTN_POS_ORDER[(i + 1) % SKILL_BTN_POS_ORDER.size()]
 
 ## 档位与旧布尔总开关保持同源：老存档里只有 screen_shake，而界面只暴露一个循环控件，
 ## 两者不同步就会出现「显示标准、实际不震」这类看不见对不上的读数

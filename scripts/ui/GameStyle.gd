@@ -314,3 +314,41 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
     if not btn.has_meta("sfx_wired"):
         btn.set_meta("sfx_wired", true)
         btn.pressed.connect(func() -> void: AudioManager.play_sfx("ui_click"))
+
+## 把 node 设成一块「整块点得动」的热区：本体收事件，子孙一律不许截。
+## 为什么需要它：PanelContainer / Control / ColorRect 的 mouse_filter 默认是 STOP，
+## 卡片里再套一层图框（48×48 的描边底）就会在热区中间挖出一个「点了没反应」的洞 ——
+## 触屏没有 hover，洞是静默的：代码看着整块可点，真机上只有文字那一小块有反应
+## （用户 2026-10-09 真机：法宝图鉴点名字弹卡、点图片没反应）。
+## 卡内装饰节点不参与交互，所以整棵子树压成 IGNORE 是安全的；
+## 若日后卡里真要放按钮，那层自己改回 STOP 并单独接事件。
+static func hotzone(node: Control) -> Control:
+    node.mouse_filter = Control.MOUSE_FILTER_STOP
+    _ignore_input(node)
+    return node
+
+static func _ignore_input(node: Node) -> void:
+    for ch in node.get_children():
+        if ch is Control:
+            (ch as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+        _ignore_input(ch)
+
+## 让一块滚动区「整列都能用手指拖起来」：把里面只为好看的 STOP 容器降成 PASS。
+## 为什么必须显式做：Godot 4.7 的 ScrollContainer 拖动滚动走的是「左键按下那一拍 latch 住
+## （drag_touching）+ 之后的 MouseMotion 累加 relative」（scene/gui/scroll_container.cpp
+## 237-300，整段还被 is_touchscreen_available() 门控，真机上手指按下会转成模拟左键，
+## 所以这条链在 Android 成立）。而 PanelContainer / ColorRect / Control 的 mouse_filter
+## 默认是 STOP，STOP 会把「按下」这一拍就地吃掉、不再向父级冒泡 —— 卡片盖住多大面积，
+## 滑不动的面积就有多大（用户 2026-10-09 真机：传道玉简「灰色卡片滑不动、卡片缝隙能滑」，
+## 实测按在卡片上 ScrollContainer 一个事件都收不到，按在缝隙里才冒泡到它）。
+## PASS 仍自己收事件，所以卡片点按弹详解照旧，与 hotzone「整块都是热区」不冲突，
+## 只是不再拦冒泡。按钮保持原样：BaseButton 自己 accept_event，改它也不会让出这一拍。
+## 必须在整页子树建完之后调用（判据 tests/ScrollSwipeCheck.tscn 逐落点采样验证）。
+## 这里手写递归而不是 find_children("*", "Control", true)：那个 API 的 owned 参数默认 true，
+## 只认 owner 非空的节点，而本项目的卡片全是代码 new() 出来的（owner 为空）→ 会一个都找不到。
+static func swipeable(node: Node) -> void:
+    for ch in node.get_children():
+        var c := ch as Control
+        if c != null and not (c is BaseButton) and c.mouse_filter == Control.MOUSE_FILTER_STOP:
+            c.mouse_filter = Control.MOUSE_FILTER_PASS
+        swipeable(ch)

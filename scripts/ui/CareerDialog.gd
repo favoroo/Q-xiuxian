@@ -50,6 +50,8 @@ func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(880, 470)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
+	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var panel_style := GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_PLATE, Vector2(8, 9))
 	panel_style.border_width_left = 2
 	panel_style.border_width_top = 2

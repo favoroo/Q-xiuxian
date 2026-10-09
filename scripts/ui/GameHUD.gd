@@ -55,6 +55,7 @@ func _ready() -> void:
 	_build_top_buttons()
 	_build_boss_bar()
 	_build_obelisk_ui()
+	_build_skill_button()
 	_setup_fps_counter()
 	# 羁绊徽记单独一排，摆在顶栏之下。
 	# 挂在顶栏里 = 左组要 755 宽 > 它在 960 屏上只分到的 389 ⇒ 整条顶栏被撑到 1125 宽、
@@ -192,6 +193,7 @@ func _update_fps_visibility() -> void:
 		_fps_label.visible = bool(SettingsManager.get_val(&"display", &"show_fps", false))
 
 func _process(delta: float) -> void:
+	_poll_skill_button(delta)
 	if _fps_label != null and _fps_label.visible:
 		_fps_timer += delta
 		if _fps_timer >= 0.25:
@@ -218,19 +220,15 @@ func _refresh_synergy_badges() -> void:
 		# 徽记是带 gui_input 的 Label，不是按钮 ⇒ 摇杆认不出，得自己登记成长按键，
 		# 否则点徽记弹详解的同时脚下也长出一根摇杆。
 		chip.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-		var th_arr: Array = info.get("thresholds", [2, 4, 6])
-		var next_th := "MAX"
-		for th in th_arr:
-			if n < int(th):
-				next_th = str(th)
-				break
+		var raw_th: Array = info.get("thresholds", [2, 4, 6])
+		var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+		var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
+		chip.text = " %s (%d/%d) " % [info.get("name", tag), n, max_th]
 		if lv > 0:
-			chip.text = " %s Lv.%d " % [info.get("name", tag), lv]
 			var chip_color: Color = GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE
 			chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_color))
 			GameStyle.label(chip, 11, GameStyle.INK_TEXT)
 		else:
-			chip.text = " %s %d/%s " % [info.get("name", tag), n, next_th]
 			chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 			GameStyle.label(chip, 11, GameStyle.PAPER_DIM)
 		chip.gui_input.connect(func(ev: InputEvent):
@@ -246,18 +244,35 @@ func _open_hud_synergy_tip(tag: String, anchor: Control) -> void:
 	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
 	var n: int = int(data.get("count", 0))
 	var lv: int = int(data.get("level", 0))
-	var th_arr: Array = info.get("thresholds", [2, 4, 6])
+	var raw_th: Array = info.get("thresholds", [2, 4, 6])
+	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
+	var first_th: int = maxi(1, int(raw_th[0]) - shift)
 	var rows: Array = [
-		["当前持有", "%d 件法器" % n, GameStyle.YELLOW if n >= 2 else GameStyle.PAPER],
-		["激活档位", "Lv.%d" % lv if lv > 0 else "未激活 (需%d件)" % int(th_arr[0]), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
+		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.YELLOW if lv > 0 else GameStyle.PAPER],
+		["共鸣状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, first_th - n), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
 	]
+	var tier_lines: Array = PlayerStatsDialog.SYNERGY_TIER_LINES.get(tag, [])
+	for idx in range(raw_th.size()):
+		var th_need: int = maxi(1, int(raw_th[idx]) - shift)
+		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else ""
+		var reached: bool = n >= th_need
+		rows.append([
+			"(%d/%d) 阶梯" % [th_need, max_th],
+			tier_txt,
+			GameStyle.GOOD if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
+		])
 	var notes: Array[String] = [
-		"同标签法器上阵达到 2 / 4 / 6 件时激活阶梯加成。",
+		"同标签法器上阵达到 %d / %d / %d 件时依次激活阶梯加成。" % [
+			maxi(1, int(raw_th[0]) - shift),
+			maxi(1, int(raw_th[1]) - shift),
+			max_th
+		],
 		String(info.get("desc", "")),
 	]
 	DetailTip.show_over(self, anchor, {
-		"title": "%s羁绊" % info.get("name", tag),
-		"chip": "五行" if tag in WeaponData.ELEMENTS else "器类",
+		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
+		"chip": "五行共鸣" if tag in WeaponData.ELEMENTS else "器类羁绊",
 		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
 		"rows": rows,
 		"body": "流派共鸣：持有越多同类法器，道法威能越强盛。",
@@ -540,3 +555,172 @@ func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
 			_obelisk_bar.value = 0.0
 			_obelisk_active_ob = null
 		)
+
+# ---------------- 随行神通按钮（右下浮动，短按释放 / 长按看详解） ----------------
+
+const SKILL_BTN_SIZE := 64.0
+## 长按判定时长：超过它算「想看这是什么」，短按才是释放
+const SKILL_LONG_PRESS := 0.45
+
+var _skill_box: Control = null
+var _skill_btn: Button = null
+var _skill_cd_mask: ColorRect = null
+var _skill_cd_label: Label = null
+var _skill_pressing: bool = false
+var _skill_press_t: float = 0.0
+var _skill_was_ready: bool = false
+
+## 构建技能按钮：符文大字键 + 顶部冷却遮罩 + 秒数。位置档位存 display.skill_btn_pos
+func _build_skill_button() -> void:
+	_skill_box = Control.new()
+	_skill_box.visible = false
+	_skill_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_box.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
+	add_child(_skill_box)
+
+	_skill_btn = Button.new()
+	_skill_btn.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
+	_skill_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_skill_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_skill_btn, GameStyle.NAVY2, GameStyle.BLUE, 26, GameStyle.YELLOW, 6.0)
+	# gui_input 自管按下/松开（短按释放、长按详解）；按钮类控件摇杆自动认走，不会误长摇杆
+	_skill_btn.gui_input.connect(_on_skill_btn_input)
+	_skill_box.add_child(_skill_btn)
+
+	_skill_cd_mask = ColorRect.new()
+	_skill_cd_mask.color = Color(0.02, 0.03, 0.06, 0.74)
+	_skill_cd_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_cd_mask.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_skill_cd_mask.visible = false
+	_skill_btn.add_child(_skill_cd_mask)
+
+	_skill_cd_label = Label.new()
+	_skill_cd_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_skill_cd_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_skill_cd_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_skill_cd_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_cd_label.visible = false
+	_skill_btn.add_child(_skill_cd_label)
+	GameStyle.label(_skill_cd_label, 20, GameStyle.PAPER, 0, GameStyle.INK, true)
+
+	_apply_skill_btn_pos()
+	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
+		if sec == &"display" and key == &"skill_btn_pos":
+			_apply_skill_btn_pos()
+	)
+
+## 位置三档位：右下（拇指区，默认）/ 右中 / 左下
+func _apply_skill_btn_pos() -> void:
+	if _skill_box == null:
+		return
+	var pos := StringName(str(SettingsManager.get_val(&"display", &"skill_btn_pos", &"right_bottom")))
+	match pos:
+		&"right_mid":
+			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+			_skill_box.offset_left = -SKILL_BTN_SIZE - 24.0
+			_skill_box.offset_right = -24.0
+			# 聚灵阵按钮占中心右侧 60..140 一段，技能键让到它下方
+			_skill_box.offset_top = 152.0
+			_skill_box.offset_bottom = 152.0 + SKILL_BTN_SIZE
+		&"left_bottom":
+			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+			_skill_box.offset_left = 24.0
+			_skill_box.offset_right = 24.0 + SKILL_BTN_SIZE
+			_skill_box.offset_top = -SKILL_BTN_SIZE - 28.0
+			_skill_box.offset_bottom = -28.0
+		_:
+			_skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+			_skill_box.offset_left = -SKILL_BTN_SIZE - 24.0
+			_skill_box.offset_right = -24.0
+			_skill_box.offset_top = -SKILL_BTN_SIZE - 28.0
+			_skill_box.offset_bottom = -28.0
+
+## 短按释放 / 长按弹「这是什么」（Android 无 hover，详解走 DetailTip）
+func _on_skill_btn_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_skill_pressing = true
+			_skill_press_t = 0.0
+		else:
+			if _skill_pressing and _skill_press_t < SKILL_LONG_PRESS:
+				_try_cast_skill()
+			_skill_pressing = false
+
+func _try_cast_skill() -> void:
+	var player = GameManager.player
+	if player != null and player.has_method("try_activate_skill"):
+		player.try_activate_skill()
+
+## 冷却与可见性轮询（沿用 FPS 计数同款轮询，不加新信号）；由 _process 每帧调
+func _poll_skill_button(delta: float) -> void:
+	if _skill_box == null:
+		return
+	var player = GameManager.player
+	var show := GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty()
+	if _skill_box.visible != show:
+		_skill_box.visible = show
+		if show:
+			_skill_was_ready = false
+			var def := SkillData.get_def(GameManager.active_skill_id)
+			_skill_btn.text = String(def.get("glyph", "?"))
+	if not show or player == null:
+		_skill_pressing = false
+		return
+
+	# 长按计时：到点弹详解，本次按下不再触发释放
+	if _skill_pressing:
+		_skill_press_t += delta
+		if _skill_press_t >= SKILL_LONG_PRESS:
+			_skill_pressing = false
+			_open_skill_tip()
+
+	var cd_left: float = player.skill_cd_left
+	var cd_total: float = maxf(0.01, player.skill_cd_total)
+	var on_cd := cd_left > 0.0
+	_skill_cd_mask.visible = on_cd
+	_skill_cd_label.visible = on_cd
+	if on_cd:
+		# 遮罩从顶部按比例压下，秒数向上取整
+		_skill_cd_mask.anchor_bottom = clampf(cd_left / cd_total, 0.0, 1.0)
+		_skill_cd_label.text = str(int(ceil(cd_left)))
+		_skill_was_ready = false
+	elif not _skill_was_ready:
+		# 冷却转好：亮一下 + 轻弹，提醒可以再放
+		_skill_was_ready = true
+		_skill_btn.pivot_offset = Vector2(SKILL_BTN_SIZE * 0.5, SKILL_BTN_SIZE * 0.5)
+		var tw = create_tween()
+		tw.tween_property(_skill_btn, "scale", Vector2(1.14, 1.14), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_skill_btn, "scale", Vector2.ONE, 0.14)
+
+func _open_skill_tip() -> void:
+	var sid := GameManager.active_skill_id
+	var def := SkillData.get_def(sid)
+	if def.is_empty():
+		return
+	var st := SkillData.final_stats(sid, GameManager.cultivator_id)
+	var rows: Array = [["冷却", "%d 秒" % int(round(float(st["cooldown"])))]]
+	match int(st["kind"]):
+		SkillData.Kind.DASH:
+			rows.append(["冲刺距离", "%d 像素 · 途中无敌" % int(round(float(st["distance"])))])
+		SkillData.Kind.SPEED:
+			rows.append(["移速加成", "+%d%% · 持续 %.1f 秒" % [int(round(float(st["power"]) * 100.0)), float(st["duration"])]])
+		SkillData.Kind.HASTE:
+			rows.append(["施法间隔", "-%d%% · 持续 %.1f 秒" % [int(round(float(st["power"]) * 100.0)), float(st["duration"])]])
+		SkillData.Kind.IFRAME:
+			rows.append(["无敌时间", "%.1f 秒" % float(st["duration"])])
+		SkillData.Kind.HEAL:
+			rows.append(["回复量", "%d%% 最大气血" % int(round(float(st["power"]) * 100.0))])
+	var enhance := SkillData.enhance_desc(sid, GameManager.cultivator_id)
+	var notes: Array[String] = []
+	if not enhance.is_empty():
+		notes.append("✦ 道统契合：" + enhance)
+	DetailTip.show_over(self, _skill_btn, {
+		"title": String(def.get("name", "神通")),
+		"chip": "神通",
+		"chip_color": GameStyle.YELLOW,
+		"rows": rows,
+		"body": String(def.get("desc", "")),
+		"notes": notes,
+		"foot": "短按释放，冷却转好后可再次使用。",
+	})

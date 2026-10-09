@@ -250,6 +250,13 @@ var item_price_mult: float = 1.0   ## 多宝道人：法宝价格乘区（叠加
 var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛链（xp_require_mult 只作用于显示/判定值）
 
+# 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
+# 与加点/羁绊乘区隔离，到期由 Player 精确回 1.0，互不污染
+var pending_skill_id: String = "dash"  ## 选人流程里选定的技能（默认缩地成寸，直接 start_run 也有技能可用）
+var active_skill_id: String = ""       ## 本局生效的技能 id
+var buff_move_speed_mult: float = 1.0  ## 神行术短时移速乘区（Player._physics_process 消费）
+var buff_attack_speed_mult: float = 1.0 ## 疾风咒短时施法间隔乘区（FloatingWeapon._perform_attack 消费）
+
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
 var bonus_pierce: int = 0           ## 符箓羁绊：弹丸额外穿透
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
@@ -344,6 +351,10 @@ func reset_run() -> void:
 	xp_require_mult = 1.0
 	item_price_mult = 1.0
 	shop_slots_bonus = 0
+	pending_skill_id = "dash"
+	active_skill_id = ""
+	buff_move_speed_mult = 1.0
+	buff_attack_speed_mult = 1.0
 	_exp_chain = GameBalance.EXP_FIRST_LEVEL
 	bonus_pierce = 0
 	synergy_damage_mult = 1.0
@@ -708,7 +719,7 @@ func knockback_vec(source: Vector2, enemy_pos: Vector2, base: float) -> Vector2:
 func elite_damage_mult_for(enemy: Variant) -> float:
 	if elite_damage <= 0.0 or enemy == null:
 		return 1.0
-	return 1.0 + elite_damage if bool(enemy.get("is_elite")) else 1.0
+	return 1.0 + elite_damage if enemy.get("is_elite") == true else 1.0
 
 func get_player_stat_dict() -> Dictionary:
 	var cur_hp := 120.0
@@ -814,6 +825,8 @@ func try_revive() -> bool:
 func start_run(starter_id: String) -> void:
 	run_started = true
 	_apply_cultivator()
+	# 随行神通转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
+	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	add_weapon(starter_id)
 	announcement_triggered.emit("✦ 灵田巡守 · 斩妖护山 ✦")
 

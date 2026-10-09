@@ -11,11 +11,11 @@ script = ExtResource("1_fw")
 scale = Vector2(0.55, 0.55)
 texture = ExtResource("2_sword")
 
-[node name="MuzzlePoint" type="Marker2D" parent="Sprite2D"]
-position = Vector2(20, 0)
+[node name="MuzzlePoint" type="Marker2D" parent="."]
+position = Vector2(13, 0)
 
 [node name="SlashEffect" type="Sprite2D" parent="."]
 visible = false
-position = Vector2(18, 0)
-scale = Vector2(0.85, 0.85)
+position = Vector2(30, 0)
+scale = Vector2(2.4, 2.4)
 texture = ExtResource("3_slash")

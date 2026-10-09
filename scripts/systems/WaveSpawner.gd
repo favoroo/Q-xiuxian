@@ -229,7 +229,7 @@ func _spawn_regular(player: Node2D) -> void:
 ## 27% 刷火球怪；而同一结构下雷兽在第 5~7 波也白捡了 42%（它上面那格是空的）。
 ## 现在火球怪从第 1 波就占自己那一格，雷兽/花妖/史莱姆回到各自该有的份额。
 const MIX_DANBAO_EDGE := 0.12      ## 丹爆傀儡累计带上沿
-const MIX_DANBAO_WAVE := 12        ## 丹爆傀儡最早出现波次
+const MIX_DANBAO_WAVE := 3         ## 丹爆傀儡最早出现波次
 const MIX_XIEXIU_EDGE := 0.27      ## 邪修累计带上沿（第 8 波占满）
 const MIX_XIEXIU_START := 0.06     ## 邪修第 1 波的占比
 const MIX_XIEXIU_RAMP := 0.03      ## 邪修每波多刷 3%，到上沿为止

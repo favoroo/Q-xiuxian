@@ -9,6 +9,14 @@ extends Control
 ## 摆位口径：5 张卡不按死宽度摆，按 viewport 现算（下面那几个 *_for() 是纯函数，
 ## 判据 LayoutCheck 用同一份算术量最窄那一档，别处不再抄数字）。
 ## 纵向放不下交给 CardScroll 竖着滑 —— 全留 + 可滑到，不砍文案也不压字号。
+##
+## 2026-10-09 用户真机图：「两边有点溢出了，选中的那个卡片上下也有点溢出了」。
+## 两头出屏：旧算术把「屏幕宽 - 面板占位」全分给 5 张卡 ⇒ 面板布局盒正好贴住屏幕左右边，
+##   而它是斜切平行四边形（引擎绕布局盒竖直中线居中斜切），画出来的两个角各伸出 13.5 单位，
+##   被屏幕切掉。现在两头各让出 PANEL_AIR_X + 斜切伸出量。
+## 上下出屏：选中卡放大 1.03，而卡片本来就撑满整行 ⇒ 上下各顶出 5 单位，压到信息条与
+##   操作栏上。现在由 CardsPad 在这一行上下各留出 pop_gutter_y() 的放大余量。
+## 两处都由判据现量（LayoutCheck 的 drawn_rect 认斜切、滚动区滑不动时不许顶出上下边界），不靠肉眼。
 
 ## 旧 CARD_W 留作「宽屏上限」：判据的文案表按 card_inner_w() 现算，不直接读它
 const CARD_W := 262.0
@@ -17,15 +25,23 @@ const MIN_CARD_W := 118.0
 const CARD_GAP_MIN := 8.0
 const CARD_GAP_MAX := 18.0
 const CARD_MIN_H := 250.0
-## 面板左右固定占位：Panel 内容边距 16×2 + MarginContainer 12×2（与 .tscn 同源）
-const CHROME_X := 56.0
-## 面板与屏幕之间的呼吸量（合计 24，上下各 12）
+## 面板左右固定占位：Panel 内容边距 12×2 + MarginContainer 8×2（与 .tscn 同源）
+const CHROME_X := 40.0
+## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 20（画出来的斜切角之外再留）
 const SCREEN_PAD_Y := 24.0
+const PANEL_AIR_X := 20.0
 const PANEL_MIN_H := 420.0
+## 面板 stylebox 的斜切（弧度），与 LevelUpDialog.tscn 的 StyleBoxFlat_panel.skew 同源
+## = GameStyle.SLANT_PLATE 3°。判据会核对两边没漂（改 .tscn 里的 skew 必须同步这里）。
+const PANEL_SKEW_RAD := 0.052
+## 选中/未选中的缩放倍率：放大倍率同时决定这一行上下要留多少余量（pop_gutter_y）
+const SEL_SCALE := 1.03
+const DIM_SCALE := 0.97
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
 @onready var card_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll
-@onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsContainer
+@onready var cards_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad
+@onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleBand/TitleLabel
 @onready var info_label: Label = $CenterContainer/Panel/MarginContainer/VBox/InfoBand/InfoLabel
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/RerollButton
@@ -42,32 +58,52 @@ var _card_entries: Array[Dictionary] = []
 
 # ---------------- 摆位算术（纯函数，判据共用同一份） ----------------
 
-## 卡片行可用的宽 = 屏幕宽 - 面板左右固定占位
-static func avail_w(screen_w: float) -> float:
-	return maxf(0.0, screen_w - CHROME_X)
+## 这一档屏高下面板该占的高
+static func panel_h_for(screen_h: float) -> float:
+	return maxf(PANEL_MIN_H, screen_h - SCREEN_PAD_Y)
+
+## 斜切把面板画出来的左右边推到布局盒外多少：引擎按布局盒竖直中线居中斜切
+## （style_box_flat.cpp: x_skew = -skew.x * (y - center.y)）⇒ 上下各伸出半个斜切量。
+## 投影不算：shadow_size = 0 时引擎根本不画投影。
+static func skew_x(h: float) -> float:
+	return absf(PANEL_SKEW_RAD) * h * 0.5
+
+## 卡片行可用的宽 = 屏幕宽 - 面板左右占位 - 面板两头画出来的斜切 - 两头呼吸量
+static func avail_w(screen: Vector2) -> float:
+	var bleed: float = skew_x(panel_h_for(screen.y)) + PANEL_AIR_X
+	return maxf(0.0, screen.x - CHROME_X - bleed * 2.0)
 
 ## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
 static func gap_for(avail: float) -> float:
 	return clampf(avail * 0.014, CARD_GAP_MIN, CARD_GAP_MAX)
 
 ## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
-static func card_w_for(screen_w: float, n: int) -> float:
+static func card_w_for(screen: Vector2, n: int) -> float:
 	if n <= 0:
 		return CARD_W
-	var avail := avail_w(screen_w)
+	var avail := avail_w(screen)
 	return clampf((avail - gap_for(avail) * float(n - 1)) / float(n), MIN_CARD_W, CARD_W)
 
 static func card_inner_w(card_w: float) -> float:
 	return card_w - CARD_PAD_X * 2.0
 
-## 这一档屏宽下整块面板该占的宽（判据按它核对「两头不许出屏」）
-static func panel_w_for(screen_w: float, n: int) -> float:
-	var avail := avail_w(screen_w)
-	return card_w_for(screen_w, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) + CHROME_X
+## 这一档屏宽下整块面板的布局盒该占的宽（画出来还要再加两头斜切，判据按它核对留白）
+static func panel_w_for(screen: Vector2, n: int) -> float:
+	var avail := avail_w(screen)
+	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) + CHROME_X
+
+## 选中要放大 ⇒ 这一行上下各让出的余量。卡片最高不超过滚动区高，而滚动区高不超过面板高，
+## 按 panel_h 上限算就是最坏情况：放大后画出来的高度正好落回滚动区内。
+## 再补 2 单位给入场/选中动画的 TRANS_BACK 过冲。
+static func pop_gutter_y(screen_h: float) -> float:
+	var h := panel_h_for(screen_h)
+	return ceilf(h * (SEL_SCALE - 1.0) / (2.0 * SEL_SCALE)) + 2.0
 
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
+	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	GameStyle.label(title_label, 22, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(info_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
@@ -109,10 +145,13 @@ func _on_alloc_finished() -> void:
 func _layout_for_viewport() -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	var n: int = GameManager.UPGRADE_OFFER_COUNT
-	_card_w = card_w_for(screen.x, n)
-	panel.custom_minimum_size = Vector2(
-		panel_w_for(screen.x, n), maxf(PANEL_MIN_H, screen.y - SCREEN_PAD_Y))
-	cards_container.add_theme_constant_override("separation", gap_for(avail_w(screen.x)))
+	_card_w = card_w_for(screen, n)
+	panel.custom_minimum_size = Vector2(panel_w_for(screen, n), panel_h_for(screen.y))
+	cards_container.add_theme_constant_override("separation", int(gap_for(avail_w(screen))))
+	# 上下各让出放大余量：选中卡放大后仍在这行之内（判据 LayoutCheck 量这一点）
+	var gutter := int(pop_gutter_y(screen.y))
+	cards_pad.add_theme_constant_override("margin_top", gutter)
+	cards_pad.add_theme_constant_override("margin_bottom", gutter)
 
 # ---------------- 一屏候选 ----------------
 
@@ -166,14 +205,21 @@ func _populate_cards() -> void:
 		_card_entries.append(entry)
 		var card_col: Control = entry["root"]
 		cards_container.add_child(card_col)
-		card_col.pivot_offset = Vector2(_card_w * 0.5, 150.0)
+		card_col.pivot_offset = Vector2(_card_w * 0.5, CARD_MIN_H * 0.5)
 		card_col.scale = Vector2(0.8, 0.8)
 		card_col.modulate.a = 0.0
 		var ctw := card_col.create_tween()
+		# 缩放的支点要绕卡片自己的中心：布局出尺寸之前无从得知，动画第一帧（还是全透明）补上
+		ctw.tween_callback(_center_pivot.bind(card_col))
 		ctw.tween_interval(float(i) * 0.05)
 		ctw.set_parallel(true)
 		ctw.tween_property(card_col, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		ctw.tween_property(card_col, "modulate:a", 1.0, 0.16)
+
+## 支点 = 这一格自己的中心。不居中则放大时上下不对称（选中卡会往一边多顶出一截）。
+static func _center_pivot(c: Control) -> void:
+	if c.size.y > 0.0:
+		c.pivot_offset = c.size * 0.5
 
 func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	var card := PanelContainer.new()
@@ -326,10 +372,11 @@ func _select_card(index: int) -> void:
 		var is_sel: bool = (i == selected_index)
 		var owned := int(GameManager.upgrade_counts.get(GameManager.alloc_offers[i].get("id", ""), 0))
 
+		_center_pivot(card)
 		var tw := card.create_tween()
 		tw.set_parallel(true)
 		if is_sel:
-			tw.tween_property(card, "scale", Vector2(1.03, 1.03), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(card, "scale", Vector2(SEL_SCALE, SEL_SCALE), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color(1, 1, 1, 1), 0.12)
 			style.bg_color = Color(0.10, 0.15, 0.28, 0.99)
 			style.border_color = GameStyle.YELLOW
@@ -338,7 +385,7 @@ func _select_card(index: int) -> void:
 			badge.text = "已选 ✦"
 			badge.add_theme_color_override("font_color", GameStyle.YELLOW)
 		else:
-			tw.tween_property(card, "scale", Vector2(0.97, 0.97), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(card, "scale", Vector2(DIM_SCALE, DIM_SCALE), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color(0.78, 0.80, 0.86, 0.78), 0.12)
 			style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.96)
 			style.border_color = rarity_col

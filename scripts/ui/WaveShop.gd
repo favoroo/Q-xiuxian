@@ -6,33 +6,94 @@ extends Control
 
 signal stats_requested
 
+@onready var panel: PanelContainer = $CenterContainer/Panel
 @onready var stones_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/StonesChip/StonesLabel
 @onready var wave_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/WaveLabel
-@onready var offers_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersContainer
+@onready var offers_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll
+@onready var offers_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll/OffersPad
+@onready var offers_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll/OffersPad/OffersContainer
 @onready var owned_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/OwnedContainer
 @onready var action_bar: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/ActionBar
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/ConfirmButton
 
-## 货架卡片的宽度与内边距：按货架格数自适应计算，防止 5/6 格货架在 960 屏宽下横向出屏
-const OFFER_CARD_W := 196.0
+## 摆位口径与波后悟道面板同一把尺子（LevelUpDialog 里同名同形的 *_for()）：
+## 面板高按 viewport 钉死、卡宽按可用宽均分、两头给斜切画出来的角留出呼吸量，
+## 货架内容再长也只在这一排竖着滑 —— 全留 + 可滑到，不砍文案也不压字号。
+## 2026-10-09 用户真机现场：五张长文案卡（说明 + 「(当前属性额外伤害 +17)」那一句）把货架排
+## 撑到 315 高，整块面板 595 > 可视 540 ⇒ 居中的结果是一头顶、一底脚出屏，「出战」看不见。
+## 底栏（重掷/出战）与顶栏都钉在滚动区之外，永远在屏内；判据 LayoutCheck 点名量这三颗。
 const OFFER_PAD_X := 12.0
+## 面板左右固定占位：Panel 内容边距 28×2 + MarginContainer 12×2（与 .tscn 同源）
+const CHROME_X := 80.0
+## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 20（斜切画出来的角之外再留）
+const SCREEN_PAD_Y := 24.0
+const PANEL_AIR_X := 20.0
+const PANEL_MIN_H := 420.0
+## 面板 stylebox 的斜切（弧度），与 WaveShop.tscn 的 StyleBoxFlat_panel.skew 同源
+## （改 .tscn 里的 skew 必须同步这里，判据会核对两头留白）
+const PANEL_SKEW_RAD := 0.035
+const CARD_W_MIN := 132.0
+const CARD_W_MAX := 220.0
+const CARD_GAP_MIN := 10.0
+const CARD_GAP_MAX := 16.0
+## 货架卡的设计下限（内容更长时靠滚动解决，不再往上撑面板）
+const CARD_MIN_H := 268.0
 
-static func offer_card_w(count: int) -> float:
-	if count >= 6:
-		return 132.0
-	elif count == 5:
-		return 160.0
-	return OFFER_CARD_W
+## 这一档屏高下面板该占的高
+static func panel_h_for(screen_h: float) -> float:
+	return maxf(PANEL_MIN_H, screen_h - SCREEN_PAD_Y)
 
-static func offer_separation(count: int) -> int:
-	if count >= 6:
-		return 8
-	elif count == 5:
-		return 10
-	return 16
+## 斜切把面板画出来的左右边推到布局盒外多少：引擎按布局盒竖直中线居中斜切
+## （style_box_flat.cpp: x_skew = -skew.x * (y - center.y)）⇒ 上下各伸出半个斜切量。
+static func skew_x(h: float) -> float:
+	return absf(PANEL_SKEW_RAD) * h * 0.5
+
+## 货架卡自己的斜切（弧度），与 _create_offer_card 里 style.skew = deg_to_rad(3.0) 同源
+const CARD_SKEW_RAD := 0.052
+
+## 滚动区左右要留的白：卡片是斜切的平行四边形，画出来的两个角比布局盒左右各宽 |skew|·h/2。
+## 不留就会被滚动区自己的边界切掉角（判据 LayoutCheck 量的是画出来那一圈，不是布局盒）。
+## 卡片最高不超过滚动区高、滚动区高不超过面板高 ⇒ 按面板高上限算就是最坏情况。
+static func card_pad_x(screen: Vector2) -> float:
+	return ceilf(CARD_SKEW_RAD * panel_h_for(screen.y) * 0.5) + 2.0
+
+## 面板布局盒可用的宽 = 屏幕宽 - 面板左右占位 - 面板两头画出来的斜切 - 两头呼吸量
+static func panel_inner_w(screen: Vector2) -> float:
+	var bleed: float = skew_x(panel_h_for(screen.y)) + PANEL_AIR_X
+	return maxf(0.0, screen.x - CHROME_X - bleed * 2.0)
+
+## 一排卡可用的宽 = 面板内容宽 - 滚动区两头的斜切留白（card_pad_x）
+static func avail_w(screen: Vector2) -> float:
+	return maxf(0.0, panel_inner_w(screen) - card_pad_x(screen) * 2.0)
+
+## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
+static func gap_for(avail: float) -> float:
+	return clampf(avail * 0.014, CARD_GAP_MIN, CARD_GAP_MAX)
+
+## n 张卡均分可用宽，夹在 [CARD_W_MIN, CARD_W_MAX]
+static func offer_card_w(screen: Vector2, count: int) -> float:
+	if count <= 0:
+		return CARD_W_MAX
+	var avail := avail_w(screen)
+	return clampf((avail - gap_for(avail) * float(count - 1)) / float(count), CARD_W_MIN, CARD_W_MAX)
+
+static func offer_separation(screen: Vector2) -> int:
+	return int(round(gap_for(avail_w(screen))))
+
+## 卡片里文字可用的宽（与 LevelUpDialog.card_inner_w 同名同形，判据按它切文案的硬换行）
+static func card_inner_w(card_w: float) -> float:
+	return card_w - OFFER_PAD_X * 2.0
+
+## 这一档屏下整块面板的布局盒该占的宽（画出来还要再加两头斜切，判据按它核对留白）
+static func panel_w_for(screen: Vector2, count: int) -> float:
+	var avail := avail_w(screen)
+	return offer_card_w(screen, count) * float(count) \
+		+ gap_for(avail) * float(maxi(count - 1, 0)) + CHROME_X + card_pad_x(screen) * 2.0
 
 var _synergy_bar: HBoxContainer = null
+## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
+var _screen: Vector2 = Vector2(960, 540)
 
 ## 当前点选的法器：{"pool": "equipped"/"stash", "index": int}
 var selected: Dictionary = {}
@@ -40,6 +101,8 @@ var selected: Dictionary = {}
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
+	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	GameStyle.label(stones_label, 17, GameStyle.INK_TEXT)
 	GameStyle.label(wave_label, 15, GameStyle.PAPER_DIM)
 	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER_DIM)
@@ -81,20 +144,16 @@ func _refresh_synergy_bar() -> void:
 		var data: Dictionary = GameManager.active_synergies[tag]
 		var n := int(data.get("count", 0))
 		var lv := int(data.get("level", 0))
-		var thresholds: Array = info.get("thresholds", [])
-		var next := "MAX"
-		for th in thresholds:
-			if n < int(th):
-				next = str(th)
-				break
+		var raw_th: Array = info.get("thresholds", [2, 4, 6])
+		var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+		var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
 		var chip_lbl := Label.new()
 		chip_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip_lbl.text = " %s (%d/%d) " % [info.get("name", tag), n, max_th]
 		if lv > 0:
-			chip_lbl.text = " %s Lv.%d " % [info.get("name", tag), lv]
-			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW))
+			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE))
 			GameStyle.label(chip_lbl, 12, GameStyle.INK_TEXT)
 		else:
-			chip_lbl.text = " %s %d/%s " % [info.get("name", tag), n, next]
 			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 			GameStyle.label(chip_lbl, 12, GameStyle.PAPER_DIM)
 		chip_lbl.gui_input.connect(func(ev: InputEvent):
@@ -112,18 +171,35 @@ func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
 	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
 	var n: int = int(data.get("count", 0))
 	var lv: int = int(data.get("level", 0))
-	var th_list: Array = info.get("thresholds", [2, 4, 6])
+	var raw_th: Array = info.get("thresholds", [2, 4, 6])
+	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
+	var first_th: int = maxi(1, int(raw_th[0]) - shift)
 	var rows: Array = [
-		["当前持有", "%d 件法器" % n, GameStyle.YELLOW if n >= 2 else GameStyle.PAPER],
-		["激活档位", "Lv.%d" % lv if lv > 0 else "未激活 (需%d件)" % int(th_list[0]), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
+		["当前装备", "%d / %d 件" % [n, max_th], GameStyle.YELLOW if lv > 0 else GameStyle.PAPER],
+		["共鸣状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, first_th - n), GameStyle.GOOD if lv > 0 else GameStyle.GREY],
 	]
+	var tier_lines: Array = PlayerStatsDialog.SYNERGY_TIER_LINES.get(tag, [])
+	for idx in range(raw_th.size()):
+		var th_need: int = maxi(1, int(raw_th[idx]) - shift)
+		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else ""
+		var reached: bool = n >= th_need
+		rows.append([
+			"(%d/%d) 阶梯" % [th_need, max_th],
+			tier_txt,
+			GameStyle.GOOD if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
+		])
 	var notes: Array[String] = [
-		"同标签法器上阵达到 2 / 4 / 6 件时激活阶梯加成。",
+		"同标签法器上阵达到 %d / %d / %d 件时依次激活阶梯加成。" % [
+			maxi(1, int(raw_th[0]) - shift),
+			maxi(1, int(raw_th[1]) - shift),
+			max_th
+		],
 		String(info.get("desc", "")),
 	]
 	DetailTip.show_over(self, anchor, {
-		"title": "%s羁绊" % info.get("name", tag),
-		"chip": "五行" if tag in WeaponData.ELEMENTS else "器类",
+		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
+		"chip": "五行共鸣" if tag in WeaponData.ELEMENTS else "器类羁绊",
 		"chip_color": GameStyle.YELLOW if tag in WeaponData.ELEMENTS else GameStyle.BLUE,
 		"rows": rows,
 		"body": "流派共鸣：持有越多同类法器，道法威能越强盛。",
@@ -140,12 +216,26 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_shop_opened() -> void:
 	selected = {}
+	_layout_for_viewport()
 	refresh()
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.2)
+
+## 按这一档屏宽现算面板与货架卡：高钉成「屏幕高 - 呼吸量」，宽按格数均分可用宽。
+## 货架内容超出这一档给的高度时由 OffersScroll 竖着滑，面板本身不再被内容顶高。
+func _layout_for_viewport() -> void:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	_screen = screen
+	var count: int = maxi(GameManager.shop_offers.size(), 1)
+	panel.custom_minimum_size = Vector2(panel_w_for(screen, count), panel_h_for(screen.y))
+	# 两头让出卡片斜切的余量：画出来的角不许被滚动区边界切掉（判据量的是画出来那一圈）
+	var pad := int(card_pad_x(screen))
+	offers_pad.add_theme_constant_override("margin_left", pad)
+	offers_pad.add_theme_constant_override("margin_right", pad)
+	offers_scroll.scroll_vertical = 0
 
 func refresh() -> void:
 	stones_label.text = "灵石 %d" % GameManager.spirit_stones
@@ -160,12 +250,12 @@ func refresh() -> void:
 		child.queue_free()
 	var offers: Array = GameManager.shop_offers
 	var count := offers.size()
-	var card_w := offer_card_w(count)
-	offers_container.add_theme_constant_override("separation", offer_separation(count))
+	var card_w := offer_card_w(_screen, count)
+	offers_container.add_theme_constant_override("separation", offer_separation(_screen))
 	for i in range(count):
 		var c := _create_offer_card(offers[i], i, count)
 		offers_container.add_child(c)
-		c.pivot_offset = Vector2(card_w * 0.5, 134.0)
+		c.pivot_offset = Vector2(card_w * 0.5, CARD_MIN_H * 0.5)
 		c.scale = Vector2(0.82, 0.82)
 		c.modulate.a = 0.0
 		var ctw := c.create_tween()
@@ -372,13 +462,11 @@ func _refresh_action_bar() -> void:
 		child.queue_free()
 
 	if selected.is_empty():
-		var hint = Label.new()
-		hint.text = "◆ 点选法器：三合一合成升星 · 上阵/卸下 · 出售换灵石 ◆"
-		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		action_bar.add_child(hint)
-		GameStyle.label(hint, 12, GameStyle.GREY)
+		# 操作提示已并进上方「上阵与背包」那一行（OwnedLabel）：空载时这一排整排收起来，
+		# 把高度让给货架 —— 面板高已钉死，这里省下的每一单位都是少滑一点。
+		action_bar.visible = false
 		return
+	action_bar.visible = true
 
 	var item := _resolve_selected()
 	if item.is_empty():
@@ -479,7 +567,7 @@ func _resolve_selected() -> Dictionary:
 # ---------------- 货架 ----------------
 
 func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> Control:
-	var card_w := offer_card_w(total_count)
+	var card_w := offer_card_w(_screen, total_count)
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
 	var is_item: bool = kind == "item"
@@ -544,8 +632,8 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 			desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
 
 	var card = PanelContainer.new()
-	card.custom_minimum_size = Vector2(card_w, 268.0)
-	var inner_w: float = card_w - OFFER_PAD_X * 2.0
+	card.custom_minimum_size = Vector2(card_w, CARD_MIN_H)
+	var inner_w: float = card_inner_w(card_w)
 	var style = StyleBoxFlat.new()
 	style.bg_color = GameStyle.NAVY
 	style.skew = Vector2(deg_to_rad(3.0), 0)
@@ -655,6 +743,11 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 		)
 		vbox.add_child(lock_btn)
 	card.add_child(vbox)
+	# 货架排现在是可竖滑的：卡片本体（PanelContainer/Label 这类装饰性 STOP）要把「按下」那一拍
+	# 冒泡给 OffersScroll，否则手指压在卡上就滑不动（真机现场见 ScrollSwipeCheck 头注）。
+	# 只降装饰层：价格/锁定是 BaseButton，GameStyle.swipeable 会跳过，点按照常。
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
+	GameStyle.swipeable(card)
 	return card
 
 func _on_reroll() -> void:
