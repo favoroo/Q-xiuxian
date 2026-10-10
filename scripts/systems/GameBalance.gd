@@ -156,6 +156,27 @@ const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
+# ---------------- 妖狼系长扑：实冲位移 / 走廊扫掠几何 ----------------
+## 长扑是承诺型攻击：预警画多长，就得真撞得出多远、真判得了多宽。
+## 位移之所以有闭式解，是因为冲刺段绕开了 900 px/s² 的速度吸附（起步即满速、收势线性刹停）——
+## 旧写法让吸附插值自己爬速度，纸面 307px 实际要拖出一段"朝玩家拐弯"的滑行尾巴，
+## 于是画的线、冲的段、判的口径是三套数（用户 2026-10-10：「根本冲刺不到我」）。
+
+const CHARGE_BRAKE_END_SPEED_PCT := 0.0  ## 收势终点速度 = 峰速 × 它（0 = 刹到站定；>0 保留前滚，位移随之变长）
+
+## 长扑真实位移（px）= 匀速冲刺段 + 线性收势段（梯形面积，故刹车项取一半）
+static func charge_reach(peak_speed: float, dash_time: float, brake_time: float) -> float:
+	return maxf(peak_speed, 0.0) * (maxf(dash_time, 0.0) + maxf(brake_time, 0.0) * (1.0 + CHARGE_BRAKE_END_SPEED_PCT) * 0.5)
+
+## 点到线段最近点：冲刺走廊的扫掠判定用（本帧起点→终点就是狼身扫过的那一段）。
+## 退化处理：线段零长时投影分母兜底 ⇒ 自动降级为点距，地图边界 clamp 那一帧不会误判成穿墙撞人。
+static func seg_closest_point(seg_a: Vector2, seg_b: Vector2, p: Vector2) -> Vector2:
+	var ab := seg_b - seg_a
+	if ab.length_squared() < KNOCK_DIR_EPS:
+		return seg_a
+	var t := clampf((p - seg_a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	return seg_a + ab * t
+
 # ---------------- 商店定价 ----------------
 
 const WEAVE_WAVE_STEP := 2      ## 法器每波加价
@@ -324,15 +345,29 @@ static func upgrade_fields() -> Array:
 		"melee_damage", "ranged_damage", "elemental_damage", "engineering_damage",
 		"element_damage_all", "element_damage_metal", "element_damage_wood",
 		"element_damage_water", "element_damage_fire", "element_damage_earth",
+		"bonus_pierce", "thorns",
 	]
 
 # ---------------- 多武器智能索敌与分流分配 ----------------
 
 const DANGER_ZONE_RADIUS := 75.0  ## 贴身危急警戒半径（防暴毙优先集火区）
+const TARGETING_ELLIPSE_Y_RATIO := 0.65  ## 椭圆索敌垂直短轴压缩比（适配 16:9 扁平视野，防垂直打出屏幕盲区）
+const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(390.0, 220.0)  ## 默认视口半宽半高（960x540 / zoom 1.2 内缩 10px 安全边界）
+
+## 椭圆等效距离：将 y 轴按 y_ratio 还原为长轴标尺，计算在长轴尺度下的等效距离
+## 当 eff_dist <= range 时，几何点正好位于 (x/range)^2 + (y/(range*y_ratio))^2 <= 1 内
+static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:
+	var scaled_y := offset.y / maxf(0.01, y_ratio)
+	return sqrt(offset.x * offset.x + scaled_y * scaled_y)
+
+## 目标是否在以 center 为中心的当前屏幕可视视口范围内
+static func is_in_viewport(pos: Vector2, center: Vector2, half_extents: Vector2 = VIEWPORT_SAFE_HALF_EXTENTS) -> bool:
+	var diff := (pos - center).abs()
+	return diff.x <= half_extents.x and diff.y <= half_extents.y
 
 ## 为多把在场法器智能分配攻击目标（纯函数：无副作用、无节点依赖、确定性回归）
 ## weapons_info: Array[Dictionary]，每项包含 { "base_angle": float, "range": float, "prev_id": int }
-## enemies_info: Array[Dictionary]，每项包含 { "id": int, "dist": float, "angle": float }
+## enemies_info: Array[Dictionary]，每项包含 { "id": int, "dist": float, "angle": float, "on_screen": bool (可选) }
 ## 返回 Array[int]，长度等于 weapons_info.size()，每项对应 enemies_info 的下标（-1 为无目标）
 static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, danger_radius: float = DANGER_ZONE_RADIUS) -> Array:
 	var w_count := weapons_info.size()
@@ -411,12 +446,16 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 			var angle_diff := absf(wrapf(e_ang - w_base_angle, -PI, PI))
 
 			# 成本函数：
+			# - 屏幕外可见性惩罚（1500 分）：场上有任何屏幕内敌人时，武器坚决优先打同屏可见怪，杜绝打屏幕外盲区
 			# - 已被分配惩罚（500 分/武器）：强烈驱使武器挑选未被覆盖的不同方向敌人，防止 Overkill
 			# - 扇区契合度（0~120 分）：使槽位方位更顺路的武器迎战该侧敌人
 			# - 相对距离（0~80 分）：同方向优先打击距离更近的敌人
 			# - 目标粘滞奖励（-40 分）：当前已锁定敌人拥有微弱粘滞优势，防止帧间目标抖动
+			var on_screen: bool = bool(e_info.get("on_screen", true))
+			var offscreen_penalty := 0.0 if on_screen else 1500.0
 			var stickiness_bonus := 40.0 if (prev_id != 0 and prev_id == e_id) else 0.0
-			var cost: float = float(count_assigned) * 500.0 \
+			var cost: float = offscreen_penalty \
+				+ float(count_assigned) * 500.0 \
 				+ (angle_diff / PI) * 120.0 \
 				+ (e_dist / maxf(1.0, w_range)) * 80.0 \
 				- stickiness_bonus
@@ -526,6 +565,54 @@ static func stat_scaling_label(key: String) -> String:
 		"range_bonus": return "范围加成"
 		"harvest": return "收益"
 	return key
+
+## 加点 apply 字段 → 法器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
+## 与上面 weapon_stat_bonus 的折算 match 同源：法器 stat_scalings 里配了这个键才真吃这条属性。
+## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。
+const APPLY_WEAPON_STAT_MAP := {
+	"melee_damage": "melee_damage",
+	"ranged_damage": "ranged_damage",
+	"elemental_damage": "elemental_damage",
+	"engineering_damage": "engineering_damage",
+	"armor": "armor",
+	"max_hp": "max_hp_bonus",
+	"hp_regen": "hp_regen",
+	"lifesteal": "lifesteal",
+	"crit_rate": "crit_rate",
+	"crit_mult": "crit_mult_bonus",
+	"move_speed_mult": "move_speed_bonus",
+	"harvest": "harvest",
+}
+
+## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件法器变强（悟道卡片下方挂受益法器图标用）。
+## 口径与伤害结算逐条对齐：
+##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体法器受益；
+##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
+##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
+##   stat_scalings 键 → 法器配了该属性转化系数才算；
+##   其余（闪避/拾取/灵石/幸运/修为/重掷/反伤等玩家功能属性）→ 不作用于法器。
+## 纯函数：只读 WeaponData 静态表，不读 autoload。
+static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
+	for key in apply.keys():
+		var k := String(key)
+		match k:
+			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
+			"attack_range_mult", "element_damage_all", "elite_damage":
+				return true
+			"bonus_pierce":
+				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
+						== WeaponData.Behavior.PROJECTILE:
+					return true
+			_:
+				if k.begins_with("element_damage_"):
+					var elem := k.trim_prefix("element_damage_")
+					if elem in WeaponData.ELEMENTS and WeaponData.element_of(w_id) == elem:
+						return true
+				elif APPLY_WEAPON_STAT_MAP.has(k):
+					var sk: String = APPLY_WEAPON_STAT_MAP[k]
+					if float(WeaponData.get_def(w_id).get("stat_scalings", {}).get(sk, 0.0)) > 0.0:
+						return true
+	return false
 
 # ---------------- 五行异常状态（灼烧 / 剧毒）叠层与结算 ----------------
 

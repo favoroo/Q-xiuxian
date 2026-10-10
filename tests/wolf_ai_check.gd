@@ -4,13 +4,18 @@ extends Node
 ## 起因（用户现场 2026-10-08）：「近距离它为什么一直追着我、不放冲击技能，远距离才有冲击」。
 ## 旧版只有一条长扑，触发带下沿写死 120px ⇒ 贴着脸它整个技能不出手，只剩毫无预告的接触伤害
 ## 一路蹭；而且预警期不复查距离，玩家从 300px 走进贴身它照样把 307px 冲刺碾过去。
-## 现在近距离补了一记短扑咬，两带以 charge_min_range 为界互补。这一屏钉死七件事：
+## 现在近距离补了一记短扑咬，两带以 charge_min_range 为界互补。这一屏钉死十件事：
 ##   ① 出生缓冲（旧 _charge_timer 初值 0.0 ⇒ 出屏第一帧就预警）
 ##   ② 远带走长扑    ③ 超出上沿谁都不出手（不许无限追扑）
 ##   ④ 近带走短咬，且**没跳到位就不结算**（不白罚）
 ##   ⑤ 两带互补不留缝（119px 有得看 / 121px 有得看）
 ##   ⑥ 长扑预警中被贴掉跑道 ⇒ 就地转短咬，不再把冲刺打出去
-##   ⑦ 预警线长度 = 真撞得到的位移（不许虚报到玩家身上）
+##   ⑦ 预警带长度 = GameBalance.charge_reach（不许虚报到玩家身上）
+##   ⑧ 真冲出去的位移 = 画的带（逐帧量到速度归位，纸面/视觉/位移三方同尺；
+##      旧写法冲刺段交给 900 px/s² 吸附插值从 0 爬峰速 ⇒ 起步晚、尾段还朝玩家拐弯）
+##   ⑨ 静止玩家在线上必被这一冲**在冲刺段内**撂倒（旧写法只有 33.5px 身位滑碰这一个出口，
+##      冲刺段内根本碰不到人 ⇒ 这一条就是「根本冲刺不到我」的牙齿）
+##   ⑩ 侧身躲出走廊（60px > 半宽 34）零结算，且冲空有收势罚站、罚站期间不追人
 ## 运行: godot --headless --path . res://tests/WolfAiCheck.tscn
 ## 只摆一个裸 world + 真 Player + 一只狼，不跑波次（别的怪会污染阶段读数）。
 
@@ -60,6 +65,8 @@ func _run() -> void:
 		wolf_probe.bite_range <= wolf_probe.charge_min_range,
 		"前置：短咬上沿 ≤ 长拍下沿（两带互补的前提，%f ≤ %f）" % [wolf_probe.bite_range, wolf_probe.charge_min_range]
 	)
+	_c.check(wolf_probe.charge_brake_time > 0.0, "前置：配了收势刹车时长（⑧ 量的位移要把这一段算进去）")
+	_c.check(wolf_probe.charge_hit_radius > 0.0, "前置：配了冲刺走廊半宽（⑨⑩ 判的就是这条走廊）")
 	wolf_probe.queue_free()
 	await get_tree().process_frame
 
@@ -69,6 +76,9 @@ func _run() -> void:
 	await _case_bands_meet()
 	await _case_convert_on_closing()
 	await _case_warning_line_honest()
+	await _case_travel_matches_line()
+	await _case_lunge_delivers()
+	await _case_sidestep_whiffs()
 	await _case_real_chase_bites()
 
 	_world.queue_free()
@@ -195,16 +205,142 @@ func _case_convert_on_closing() -> void:
 		"预警中被贴掉跑道 → 转短咬（旧写法不复查距离，照样把冲刺打出去）")
 	wolf.queue_free()
 
-## ⑦：预警线只画「真撞得到的那一段」，不许画到玩家身上虚报射程
+## ⑦：预警带只画「真撞得到的那一段」，不许画到玩家身上虚报射程
 func _case_warning_line_honest() -> void:
 	var wolf := _spawn_wolf(400.0)
-	var reach := wolf.charge_duration * wolf.move_speed * wolf.charge_speed_mul
+	var reach: float = GameBalance.charge_reach(wolf.move_speed * wolf.charge_speed_mul, wolf.charge_duration, wolf.charge_brake_time)
 	var s: Dictionary = await _watch(wolf, 6.6, wolf.global_position)
 	_c.check(bool(s["windup"]), "预警线前置：400px 已进入长扑预警")
 	_c.check(float(s["line_max"]) <= reach + 1.0,
-		"预警线长度 ≤ 真实冲刺位移（线最长 %.1f，位移 %.1f）" % [float(s["line_max"]), reach])
+		"预警带长度 ≤ 真实冲刺位移（带最长 %.1f，charge_reach %.1f）" % [float(s["line_max"]), reach])
 	_c.check(float(s["line_max"]) < 399.0,
-		"400px 处不许把线画到玩家身上（旧写法恒等于当前距离 ⇒ 虚报 %.0fpx）" % (400.0 - reach))
+		"400px 处不许把带画到玩家身上（旧写法恒等于当前距离 ⇒ 虚报 %.0fpx）" % (400.0 - reach))
+	wolf.queue_free()
+
+## 读预警带中心线长（Line2D 的圆头端帽向两端各延伸半宽，那一段不算进"线长"读数）
+func _line_len(wolf: EnemyBase) -> float:
+	var line: Line2D = wolf._charge_warning_line
+	if line == null or line.get_point_count() < 2:
+		return 0.0
+	return line.get_point_position(0).distance_to(line.get_point_position(1))
+
+## 钉在 dist 处一路走到长扑起跑那一帧，返回预告期间画出的最长带（没起跑则 -1）
+## 复用 ⑥ 的两段式写法：钉住 = 只测触发与预告，不让它自己走位污染读数
+func _pin_until_launch(wolf: EnemyBase, dist: float) -> float:
+	var line_max := 0.0
+	var t := 0.0
+	while wolf._charge_active <= 0.0 and t < 6.0:
+		wolf.global_position = _player.global_position + Vector2(dist, 0.0)
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		line_max = maxf(line_max, _line_len(wolf))
+	return line_max if wolf._charge_active > 0.0 else -1.0
+
+## ⑧：真冲出去的位移 == 画出去的带（纸面 / 视觉 / 位移三方同一条尺子）
+## 旧写法冲刺段只交一个 target_vel，由 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速，
+## 冲完还留一段朝玩家拐弯的滑行 ⇒ 位移既不是纸面值、也不是画出来的长度
+func _case_travel_matches_line() -> void:
+	var wolf := _spawn_wolf(400.0)
+	var peak: float = wolf.move_speed * wolf.charge_speed_mul
+	var reach: float = GameBalance.charge_reach(peak, wolf.charge_duration, wolf.charge_brake_time)
+	var line_len: float = await _pin_until_launch(wolf, 400.0)
+	_c.check(line_len >= 0.0, "⑧ 前置：400px 起跑并画出了预警带")
+	# 起跑后解钉。400px 冲 336px 停在离玩家约 60px 处（> 走廊半宽）⇒ 这一冲必然落空，
+	# 落空接 0.9s 罚站、速度干净归零 ⇒ "量到速度归位"不会被下一次起步污染
+	var launch_pos: Vector2 = wolf.global_position
+	var travel := 0.0
+	var peak_seen := 0.0
+	var t := 0.0
+	while t < 3.0:
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		peak_seen = maxf(peak_seen, wolf.velocity.length())
+		travel = maxf(travel, launch_pos.distance_to(wolf.global_position))
+		if wolf._charge_active <= 0.0 and wolf._charge_brake <= 0.0 and wolf._charge_stagger > 0.0:
+			break
+	# 容差 ±10%：本屏跑在 Engine.time_scale = 8.0（一物理帧 = 0.133s），刹车段按帧量化最多丢 ~8%
+	var tol: float = maxf(reach * 0.10, 8.0)
+	_c.check(absf(travel - reach) <= tol,
+		"实冲位移 %.1f = charge_reach 纸面 %.1f（容差 ±%.1f）" % [travel, reach, tol])
+	_c.check(absf(line_len - travel) <= tol,
+		"画出去的带 %.1f = 实冲位移 %.1f（画多大 == 撞多远）" % [line_len, travel])
+	_c.check(absf(peak_seen - peak) <= peak * 0.03,
+		"起步即满速：峰值 %.0f = move_speed×mul %.0f（旧写法靠插值爬，白丢一段位移）" % [peak_seen, peak])
+	_c.check(travel <= reach * 1.35, "位移不许被悄悄放大（同 DashTravelProbe 那条兜底）")
+	wolf.queue_free()
+
+## ⑨：玩家站着不动 → 这一冲必须真的撂倒人，且在承诺段（冲刺+收势）内结算、只结算一下
+## 旧写法长扑只有 33.5px 身位滑碰这一个出口，走廊判定这条口根本不存在 ⇒ 本条红
+func _case_lunge_delivers() -> void:
+	var wolf := _spawn_wolf(320.0)
+	_c.check(GameManager.get_effective_dodge() < 0.05,
+		"⑨ 前置：默认修士闪避近乎为零（这条用血量下降作读数， dodge 高了读数会漂）")
+	var line_len: float = await _pin_until_launch(wolf, 320.0)
+	_c.check(line_len >= 0.0, "⑨ 前置：320px 起跑并画出了预警带")
+	# 起跑帧解钉，玩家零输入站在原地不动
+	var hp_before: float = _player.current_health
+	var launches := 0
+	var hits := 0
+	var was_active := false
+	var was_hit := false
+	var hit_in_commit := false
+	var damaged_in_commit := false
+	var staggered := false
+	var t := 0.0
+	while t < 1.9:
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		var locked: bool = wolf._charge_active > 0.0 or wolf._charge_brake > 0.0
+		var is_active: bool = wolf._charge_active > 0.0
+		if is_active and not was_active:
+			launches += 1
+		was_active = is_active
+		var is_hit: bool = wolf._charge_hit
+		if is_hit and not was_hit:
+			hits += 1
+			hit_in_commit = locked
+		was_hit = is_hit
+		if _player.current_health < hp_before and not damaged_in_commit:
+			damaged_in_commit = locked
+		if wolf._charge_stagger > 0.0:
+			staggered = true
+	_c.check(hits == 1 and hit_in_commit,
+		"静止玩家在线上：这一冲在承诺段内结算（起冲 %d 次 / 结算 %d 次，结算在承诺段 = %s）" % [launches, hits, hit_in_commit])
+	_c.check(damaged_in_commit, "结算真的掉到玩家血量上（掉血发生在承诺段 = %s）" % damaged_in_commit)
+	_c.check(not staggered, "碾到人的那一冲不罚站（落空才罚，命中已贴脸 ⇒ 下一步自然接短咬）")
+	wolf.queue_free()
+
+## ⑩：预警期侧身一步躲出走廊 → 零结算，且冲空要罚站挨打（躲开的奖励）
+func _case_sidestep_whiffs() -> void:
+	var wolf := _spawn_wolf(320.0)
+	var line_len: float = await _pin_until_launch(wolf, 320.0)
+	_c.check(line_len >= 0.0, "⑩ 前置：320px 起跑并画出了预警带")
+	# 起跑帧把玩家挪到侧向 60px（走廊半宽 34 ⇒ 留 26px 余量；方向已在起跑帧锁死，不再拐弯）
+	_player.global_position = Vector2(0.0, 60.0)
+	var hits := 0
+	var was_hit := false
+	var stagger_pos := Vector2.INF
+	var t := 0.0
+	var stagger_drift := 0.0
+	while t < 2.4:
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		var is_hit: bool = wolf._charge_hit
+		if is_hit and not was_hit:
+			hits += 1
+		was_hit = is_hit
+		# 罚站起算点：承诺段（冲刺 + 收势刹车）走完、_charge_stagger 独占的那一段
+		if stagger_pos == Vector2.INF:
+			if wolf._charge_stagger > 0.0 and wolf._charge_brake <= 0.0:
+				stagger_pos = wolf.global_position
+		elif wolf._charge_stagger > 0.0:
+			stagger_drift = maxf(stagger_drift, stagger_pos.distance_to(wolf.global_position))
+		else:
+			# 罚站走完了 ⇒ 读数结束。再往后是重新追击，不属于"站桩挨打"这一段
+			break
+	_c.check(hits == 0, "躲出走廊（横移 60 > 半宽 %.0f）这一冲零结算（结算 %d 次）" % [wolf.charge_hit_radius, hits])
+	_c.check(stagger_pos != Vector2.INF, "冲空了要罚站（落空收势硬直 = 玩家的反打窗口）")
+	_c.check(stagger_drift <= 10.0, "罚站期间不追人（站桩 %.1fs 内位移 %.1fpx）" % [wolf.charge_whiff_stagger, stagger_drift])
 	wolf.queue_free()
 
 ## 真走位：让它自己追（不钉），跑进贴身后短咬应当真的结算到玩家身上

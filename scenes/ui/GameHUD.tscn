@@ -3,19 +3,19 @@
 [ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
-bg_color = Color(0.043, 0.051, 0.071, 0.92)
+bg_color = Color(0, 0, 0, 0.92)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_fill"]
-bg_color = Color(0.09, 0.573, 0.427, 1)
+bg_color = Color(0.31, 0.82, 0.647, 1)
 border_width_bottom = 3
-border_color = Color(0.043, 0.051, 0.071, 1)
+border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_block"]
 content_margin_left = 12.0
 content_margin_top = 6.0
 content_margin_right = 14.0
 content_margin_bottom = 6.0
-bg_color = Color(0.29, 0.573, 0.969, 1)
+bg_color = Color(0.333, 0.627, 1, 1)
 skew = Vector2(0.087, 0)
 border_width_left = 2
 border_width_top = 2
@@ -27,7 +27,7 @@ shadow_size = 1
 shadow_offset = Vector2(4, 5)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_track"]
-bg_color = Color(0.043, 0.051, 0.071, 0.85)
+bg_color = Color(0, 0, 0, 0.85)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
 bg_color = Color(0.949, 0.937, 0.894, 1)
@@ -37,7 +37,7 @@ content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
-bg_color = Color(0.29, 0.573, 0.969, 1)
+bg_color = Color(0.333, 0.627, 1, 1)
 skew = Vector2(0.14, 0)
 border_width_bottom = 4
 border_color = Color(0.094, 0.282, 0.533, 1)
@@ -50,23 +50,23 @@ content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
-bg_color = Color(0.949, 0.937, 0.902, 0.95)
+bg_color = Color(0, 0, 0, 0.95)
 skew = Vector2(0.14, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 3
-border_color = Color(0.784, 0.761, 0.69, 1)
+border_color = Color(0.227, 0.227, 0.259, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kills_chip"]
 content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
-bg_color = Color(0.949, 0.937, 0.894, 1)
+bg_color = Color(0, 0, 0, 1)
 skew = Vector2(0.14, 0)
 border_width_bottom = 4
-border_color = Color(0.55, 0.53, 0.47, 1)
+border_color = Color(0.227, 0.227, 0.259, 1)
 shadow_color = Color(0, 0, 0, 0.45)
 shadow_size = 1
 shadow_offset = Vector2(3, 3)
@@ -76,7 +76,7 @@ content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
-bg_color = Color(0.09, 0.573, 0.427, 1)
+bg_color = Color(0.31, 0.82, 0.647, 1)
 skew = Vector2(0.14, 0)
 border_width_bottom = 4
 border_color = Color(0.122, 0.478, 0.369, 1)
@@ -135,7 +135,7 @@ theme_override_constants/separation = 8
 
 [node name="HPTitle" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 17
 text = "生命"
 
@@ -151,7 +151,7 @@ show_percentage = false
 
 [node name="HPLabel" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "100/100"
 
@@ -163,7 +163,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_level_badge")
 
 [node name="LevelLabel" type="Label" parent="TopContainer/LeftBox/LevelBadge"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 14
 text = "Lv.1"
 
@@ -181,7 +181,7 @@ mouse_filter = 2
 [node name="TimeLabel" type="Label" parent="TopContainer/CenterBox/TimeBlock"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.949, 0.937, 0.894, 1)
-theme_override_colors/font_outline_color = Color(0.043, 0.051, 0.071, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 24
 text = "00:00"
@@ -194,7 +194,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_wave_chip")
 
 [node name="WaveLabel" type="Label" parent="TopContainer/CenterBox/WaveChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.29, 0.573, 0.969, 1)
+theme_override_colors/font_color = Color(0.333, 0.627, 1, 1)
 theme_override_font_sizes/font_size = 15
 text = "第 1 波"
 
@@ -212,7 +212,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_kills_chip")
 
 [node name="KillsLabel" type="Label" parent="TopContainer/RightBox/KillsChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 15
 text = "击杀 0"
 
@@ -223,7 +223,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_shards_chip")
 
 [node name="ShardsLabel" type="Label" parent="TopContainer/RightBox/ShardsChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 15
 text = "金币 0"
 

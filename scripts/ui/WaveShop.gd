@@ -488,7 +488,7 @@ func _create_stash_divider() -> Control:
 	lbl.text = "背包 %d/%d" % [GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS]
 	chip.add_child(lbl)
 	# 暗井（INK 底）上的次要小字：GREY 翻转后偏暗，换暗底次级亮字
-	GameStyle.label(lbl, 11, Color(0.82, 0.8, 0.74))
+	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return chip
 
 func _create_items_divider() -> Control:
@@ -499,7 +499,7 @@ func _create_items_divider() -> Control:
 	var lbl = Label.new()
 	lbl.text = "道具 %d" % GameManager.items.size()
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, Color(0.82, 0.8, 0.74))
+	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return chip
 
 ## 已持有法宝的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡

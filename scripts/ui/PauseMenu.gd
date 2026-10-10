@@ -264,7 +264,7 @@ func _reset_retry_confirm() -> void:
 		_retry_reset_tween = null
 	if is_instance_valid(_retry_btn):
 		_retry_btn.text = "重 新 开 始"
-		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0)
+		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 
 func _on_retry_pressed() -> void:
 	if not _retry_armed:

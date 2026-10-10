@@ -249,6 +249,18 @@ const DEFS: Dictionary = {
 			"desc": "收益 +8，但武器伤害 -8%",
 			"apply": {"harvest": 8.0, "weapon_damage_mult": -0.08},
 		},
+		"poxu_lingfu": {
+			"name": "破虚符", "tier": 2, "price": 28,
+			"icon": "res://assets/art/item_liren_fu.png",
+			"desc": "飞剑飞符贯穿人数 +1，但攻击范围 -8%",
+			"apply": {"bonus_pierce": 1.0, "attack_range_mult": -0.08},
+		},
+		"fanzhen_tongjia": {
+			"name": "反震铜甲", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_guijia_fu.png",
+			"desc": "反震伤害 +40%，护甲 +2，但移速 -4%",
+			"apply": {"thorns": 0.40, "armor": 2.0, "move_speed_mult": -0.04},
+		},
 
 		# ---- 仙品（tier 3 · 第 9 波起） ----
 		"potian_zhui": {
@@ -287,6 +299,12 @@ const DEFS: Dictionary = {
 			"desc": "金木水火土全元素伤害 +8%",
 			"apply": {"element_damage_all": 0.08},
 		},
+		"jingang_fumo_jia": {
+			"name": "降魔宝甲", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_suoling_jia.png",
+			"desc": "反震伤害 +60%，护甲 +3，最大生命 +25",
+			"apply": {"thorns": 0.60, "armor": 3.0, "max_hp": 25.0, "hp_heal": 25.0},
+		},
 
 		# ---- 传说（tier 4 · 第 14 波起） ----
 		"zhuxian_sui": {
@@ -306,6 +324,12 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/item_tianji_pan.png",
 			"desc": "幸运 +10，每波免费重掷 +1 次，收益 +5",
 			"apply": {"luck": 10.0, "free_rerolls": 1.0, "harvest": 5.0},
+		},
+		"wuji_tianchuan_zhen": {
+			"name": "洞虚针", "tier": 4, "price": 88,
+			"icon": "res://assets/art/item_pojia_zhui.png",
+			"desc": "飞剑飞符贯穿人数 +2，远程伤害 +4",
+			"apply": {"bonus_pierce": 2.0, "ranged_damage": 4.0},
 		},
 }
 

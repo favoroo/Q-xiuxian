@@ -542,7 +542,13 @@ func _physics_process(delta: float) -> void:
 		_update_weapon_targets()
 
 func _sort_candidate_by_dist(a: Node2D, b: Node2D) -> bool:
-	return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
+	var a_on := GameBalance.is_in_viewport(a.global_position, global_position)
+	var b_on := GameBalance.is_in_viewport(b.global_position, global_position)
+	if a_on != b_on:
+		return a_on
+	var da := GameBalance.elliptical_distance(a.global_position - global_position)
+	var db := GameBalance.elliptical_distance(b.global_position - global_position)
+	return da < db
 
 func _acquire_pooled_dict(pool: Array[Dictionary], idx: int) -> Dictionary:
 	while pool.size() <= idx:
@@ -631,8 +637,9 @@ func _update_weapon_targets() -> void:
 		var offset := e.global_position - global_position
 		var ed := _acquire_pooled_dict(_enemies_dict_pool, i)
 		ed["id"] = e.get_instance_id()
-		ed["dist"] = offset.length()
+		ed["dist"] = GameBalance.elliptical_distance(offset)
 		ed["angle"] = offset.angle()
+		ed["on_screen"] = GameBalance.is_in_viewport(e.global_position, global_position)
 		_enemies_info_buf.append(ed)
 
 	_chests_info_buf.clear()
@@ -641,8 +648,9 @@ func _update_weapon_targets() -> void:
 		var offset := c.global_position - global_position
 		var cd := _acquire_pooled_dict(_chests_dict_pool, i)
 		cd["id"] = c.get_instance_id()
-		cd["dist"] = offset.length()
+		cd["dist"] = GameBalance.elliptical_distance(offset)
 		cd["angle"] = offset.angle()
+		cd["on_screen"] = GameBalance.is_in_viewport(c.global_position, global_position)
 		_chests_info_buf.append(cd)
 
 	# 两段式：妖怪先分完，剩下无事可做的法器才去砸匣子（见 GameBalance.assign_targets_with_chests）

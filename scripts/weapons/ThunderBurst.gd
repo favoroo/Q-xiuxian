@@ -36,8 +36,7 @@ func _ready() -> void:
 	tw.chain().tween_callback(queue_free)
 
 	_deal_damage.call_deferred()
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
-	# 震屏挪到 _deal_damage 里按战果发放：劈空的落雷不该让镜头跟着抖一下
+	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效
 	AudioManager.play_sfx("obelisk_blessing", 0.55)
 
 ## 落点之物：把法器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
@@ -112,17 +111,20 @@ func _deal_damage() -> void:
 				had_crit = true
 	if had_crit:
 		GameManager.hit_stop(0.04, 0.06)
+	# 劈空（hits==0）提前返回：不爆散、不震屏
 	if hits == 0:
 		return
-		# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
-		var trauma := 0.16
-		if kills >= 3:
-			trauma += 0.10
-		if hit_elite:
-			trauma += 0.14
-		GameManager.add_trauma(trauma)
-		# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
-		GameManager.kick_camera(Vector2.DOWN, 2.8)
-		GameFeel.vibrate(25, 0.6)
-		if kills >= 3 or hit_elite:
-			GameManager.zoom_punch(0.025, 0.14)
+	# 只有真的劈到人才爆散蓝白环与灵尘
+	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
+	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
+	var trauma := 0.16
+	if kills >= 3:
+		trauma += 0.10
+	if hit_elite:
+		trauma += 0.14
+	GameManager.add_trauma(trauma)
+	# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
+	GameManager.kick_camera(Vector2.DOWN, 2.8)
+	GameFeel.vibrate(25, 0.6)
+	if kills >= 3 or hit_elite:
+		GameManager.zoom_punch(0.025, 0.14)

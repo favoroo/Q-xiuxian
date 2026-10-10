@@ -1,45 +1,45 @@
 class_name GameStyle
 extends RefCounted
 
-## 「墨阑玉简」斜切版画 UI 统一样式工厂（黑舞台 × 纸白面板 × 主蓝强调，斜切语言移植自 dudu-cocos）。
-## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；硬错位墨影 + 同色压暗厚底边。
-## 色即功能：主蓝 = 主行动/选中，深玉绿 = 灵石货币/星级/辅助强调，朱砂 = 危险，增益绿 = 治疗。
-## ⚠ 2026-10-10 全局换肤：面板从「幽玄深蓝」翻转为「纸白面板」，历史常量名（NAVY/PAPER）沿用不改，
-##    但值的语义已翻转 —— NAVY 现在是纸白面板底，PAPER 现在是面板上的墨黑正文；
-##    暗底（舞台 INK / 暗色块 / 世界空间）上的亮字一律用 CHALK（旧「纸白」值迁到这里）。
-## 字体：正文 MiSans-Semibold，大标题 MiSans-Heavy。
+## 「墨阑玉简」斜切版画 UI 统一样式工厂（纯黑舞台 × 纯黑面板 × 主蓝强调，斜切语言移植自 dudu-cocos）。
+## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；同色压暗厚底边（近黑底自动改灰线勾轮廓）。
+## 色即功能：主蓝 = 主行动/选中，点缀黄 = 灵石货币/星级/选中强调，朱砂 = 危险，增益绿 = 治疗。
+## ⚠ 2026-10-10 二次换肤（纯黑主题）：用户拍板「底一律纯黑，不要深蓝/深灰」——弃纸白面板方案，
+##    INK/NAVY/NAVY2 三层底统一 #000000，层次全靠 accent 描边 + LINE 灰线勾轮廓；
+##    PAPER 值翻回纸白亮字，CHALK 与 PAPER 同值（「暗底亮字」语义保留，调用点不必改）；
+##    功能色按黑底重新调亮（JADE/GOOD/RARITY_* 从白底深色调回黑底亮调）。
 
-# —— 底色（黑舞台 × 纸白面板）——
-const INK := Color("0e0f13")        # 舞台底/暗色块/暗徽章（近黑微冷）
-const NAVY := Color("f2efe6")       # 面板底（纸白）※名字沿用历史，值已翻转
-const NAVY2 := Color("e7e3d5")      # 次级面/按钮底/未选中（纸灰）
-const LINE := Color("c8c2b0")       # 描线/分隔（浅灰线，白面板上用）
+# —— 底色（纯黑舞台 × 纯黑面板：三层底同值，层次交给描边）——
+const INK := Color("000000")        # 舞台底/暗色块/暗徽章（纯黑）
+const NAVY := Color("000000")       # 面板底（纯黑）※名字沿用历史
+const NAVY2 := Color("000000")      # 次级面/卡片底（纯黑，靠 accent 描边分层）
+const LINE := Color("3a3a42")       # 描线/分隔（中性灰线，黑底上勾轮廓/做 hover 面）
 
 # —— 文字 ——
-const PAPER := Color("16181d")      # 面板正文（墨黑）※值已翻转：白面板上的黑字
-const PAPER_DIM := Color("6b6f7a")  # 次要正文（灰墨）
-const INK_TEXT := Color("14161b")   # 亮面/蓝面上的黑字
-const CHALK := Color("f2efe4")      # 暗底亮字（舞台/暗色块/世界空间跳字）
+const PAPER := Color("f2efe4")      # 面板正文（纸白亮字）※值已翻回亮色
+const PAPER_DIM := Color("9ba1ac")  # 次要正文（灰，黑底可读）
+const INK_TEXT := Color("000000")   # 亮面/彩色面上的黑字
+const CHALK := Color("f2efe4")      # 暗底亮字（与 PAPER 同值；语义保留：用于世界空间/暗色块）
 
-# —— 角色色（色即功能）——
-const GOLD := Color("4a92f7")       # 主蓝 = 主行动/选中/标题带
-const GOLD_EDGE := Color("92c5ff")  # 霜华亮蓝
+# —— 角色色（色即功能，按黑底调亮）——
+const GOLD := Color("55a0ff")       # 主蓝 = 主行动/选中/标题带
+const GOLD_EDGE := Color("a9d3ff")  # 霜华亮蓝
 const GOLD_DK := Color("184888")    # 幽夜深蓝（立体厚底与阴影）
-const JADE := Color("17926d")       # 深玉绿 = 灵石货币/星级/辅助强调（白底可读，做底时配黑字）
-const JADE_EDGE := Color("a5ecd4")
-const JADE_DK := Color("1f7a5e")
-const GOOD := Color("1fa35c")       # 增益绿 = 治疗/增益（白底可读）
+const JADE := Color("ffd23f")       # 点缀黄 = 灵石货币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
+const JADE_EDGE := Color("ffe9a8")
+const JADE_DK := Color("8f6a14")
+const GOOD := Color("2fd271")       # 增益绿 = 治疗/增益（黑底可读）
 const GOOD_DK := Color("2f8f4c")
 const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
 const GREY := Color("7d8494")       # 暗部正文/禁用
-const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/玉/碧/朱砂都不撞）
+const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/增益绿/朱砂都不撞）
 
-# 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按白底可读调深
-const RARITY_COMMON := Color(0.55, 0.53, 0.47)
-const RARITY_RARE := Color(0.13, 0.63, 0.47)
-const RARITY_EPIC := Color("a8863a")  # 冷月霜金调深：低饱和古金，专供仙品法宝，不与主交互撞色
-const RARITY_LEGEND := Color(0.68, 0.32, 0.88)
+# 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按黑底可读调亮
+const RARITY_COMMON := Color(0.72, 0.70, 0.62)
+const RARITY_RARE := Color(0.22, 0.78, 0.60)
+const RARITY_EPIC := Color("d9b356")  # 冷月霜金调亮：古金在纯黑上要够亮才读得出品阶
+const RARITY_LEGEND := Color(0.74, 0.42, 0.94)
 
 # 五行标签统一色值
 const ELEMENT_COLORS := {
@@ -272,13 +272,18 @@ static func panel(bg: Color, skew_deg: float = SLANT_PLATE, shadow_offset: Vecto
     return sb
 
 ## dudu 实底大色块：主色面 + 同色压暗厚底边 + 描边 + 硬错位墨影
+## 纯黑主题坑：黑底块的「同色压暗」还是纯黑，画了等于没画 —— 近黑底一律改 LINE 灰线勾轮廓，
+## 否则未选中按钮/禁用块（bg=INK/NAVY2）会在纯黑面板上彻底隐形。
 static func block(bg: Color, skew_deg: float = SLANT_BLOCK, shadow_offset: Vector2 = Vector2(4, 5)) -> StyleBoxFlat:
     var sb := panel(bg, skew_deg, shadow_offset)
     sb.border_width_left = 2
     sb.border_width_top = 2
     sb.border_width_right = 2
     sb.border_width_bottom = 6
-    sb.border_color = bg.darkened(0.4)
+    var edge := bg.darkened(0.4)
+    if bg.get_luminance() < 0.08:
+        edge = LINE
+    sb.border_color = edge
     return sb
 
 ## 墨面色带卡：墨底 + 顶部 accent 色带 + 同色细框 + 硬墨影。
@@ -308,7 +313,7 @@ static func dialog_panel(border: Color = GOLD, skew_deg: float = SLANT_PLATE,
     return sb
 
 ## 左侧色签行：列表行的身份标记是左边一条竖带。行内不投影 —— 列表里每行都拖一条墨影
-## 会糊成一锅，行的层次交给底色差（NAVY2 行压 NAVY 面板）。
+## 会糊成一锅；纯黑主题下行与面板同底，行的层次交给 accent 竖带 + 细描边。
 static func side_card(accent: Color, skew_deg: float = SLANT_PLATE) -> StyleBoxFlat:
     var sb := panel(NAVY2, skew_deg, Vector2.ZERO)
     sb.border_width_left = 3

@@ -18,8 +18,12 @@ extends CharacterBody2D
 @export var charge_min_range: float = 120.0  ## 长扑需要的「跑道」下沿：比这更近不起手（旧写法写死 120² 在判定里）
 @export var charge_max_range: float = 450.0  ## 长扑上沿：远了不追扑（旧写法写死 450²）
 @export var charge_windup_time: float = 1.2  ## 站桩预警时长
-@export var charge_duration: float = 0.8     ## 冲刺时长（位移 = move_speed × charge_speed_mul × 它）
-@export var charge_speed_mul: float = 3.2    ## 冲刺倍速
+@export var charge_duration: float = 0.8     ## 冲刺时长（实冲位移见 GameBalance.charge_reach，不含纸面）
+@export var charge_speed_mul: float = 3.2    ## 冲刺倍速（起步即满速，不再靠加速度爬）
+@export var charge_brake_time: float = 0.25  ## 收势刹车时长：峰速线性刹到站定，这段位移也计入预警线
+@export var charge_hit_radius: float = 34.0  ## 冲刺走廊半宽：建议取「敌我碰撞半径之和」⇒ 预警带画多宽就判多宽
+@export var charge_damage_mul: float = 1.0   ## 冲刺伤害 = contact_damage × 它（与接触/短咬同一条尺子，别另起一档）
+@export var charge_whiff_stagger: float = 0.9 ## 落空收势硬直：冲空罚站给玩家反打窗口（命中则不罚）
 @export var bite_range: float = 0.0          ## >0：贴近短扑咬的触发上沿。建议与 charge_min_range 取同值 ⇒ 两带互补、中间不留空隙
 @export var bite_interval: float = 2.4       ## 短扑咬冷却（同样是整周期）
 @export var bite_windup_time: float = 0.35   ## 下蹲预告时长（方向在这一帧锁死，之后不追踪玩家，否则 0.35s 躲不开）
@@ -56,6 +60,9 @@ var _charge_active: float = 0.0
 var _charge_dir: Vector2 = Vector2.ZERO
 var _charge_windup: float = -1.0   ## >=0 表示进入冲刺预警阶段
 var _charge_warning_line: Line2D = null  ## 冲刺预警线节点
+var _charge_brake: float = 0.0     ## >0 收势刹车锁定段（这一段的位移同样是承诺出去的一部分）
+var _charge_stagger: float = 0.0   ## >0 落空罚站：不追人、任人打（冲刺的代价，与预警的兑现配成一对）
+var _charge_hit: bool = false      ## 这一冲已经结算过（一次冲刺只碾一下，同 _bite_hit 一口只结算一次）
 var _bite_timer: float = 0.0       ## 短扑咬冷却
 var _bite_windup: float = -1.0     ## >=0 表示下蹲预告中
 var _bite_active: float = 0.0      ## >0 表示起跳中
@@ -330,8 +337,10 @@ func _physics_process(delta: float) -> void:
 			target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
 	# 妖狼系的两套扑击（共用同一个移动出口 target_vel，靠 elif 链天然互斥）：
-	#   长扑 = 跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺
+	#   长扑 = 跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
 	#   短咬 = 贴进 charge_min_range 以内 → 下蹲预告（方向当帧锁死、之后不追踪）→ 小幅跃击咬一口
+	# 长扑的三件事必须同源，都取自 GameBalance.charge_reach：预警带长度、真实位移、扫掠判定。
+	# 冲刺/收势两段自己把 velocity 写死（下面 charge_locked 那一段因此跳过吸附插值）。
 	# 旧版只有长扑，且触发带下沿写死 120px：贴着脸它整个技能就不出手，只剩毫无预告的
 	# 接触伤害一路蹭（2026-10-08 用户现场：「近距离一直追着我、远距离才扑」）。
 	# 两带以 charge_min_range 为界互补 ⇒ 任何距离都有一个看得见预告的威胁。
@@ -356,11 +365,33 @@ func _physics_process(delta: float) -> void:
 				else:
 					_start_charge(dir)
 		
-		# 冲刺阶段
+		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
+		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
+		# ⇒ 0.43s 才够到速度（锁定时长一半耗在起步上），冲刺结束后还留一段朝玩家拐弯的滑行尾巴
+		# ⇒ 「画的线」「撞的段」「判的范围」是三套数，玩家只要动一下就永远碰不到它
 		elif _charge_active > 0.0:
 			_charge_active -= delta
-			target_vel = _charge_dir * move_speed * charge_speed_mul
+			velocity = _charge_dir * move_speed * charge_speed_mul
+			target_vel = velocity
+			knockback_velocity = Vector2.ZERO
 			_clear_charge_warning()
+			if _charge_active <= 0.0:
+				_charge_brake = charge_brake_time
+
+		# 收势刹车：峰速线性刹到站定。这一段也是承诺出去的位移，预警线按 GameBalance.charge_reach 已把它算进线长
+		elif _charge_brake > 0.0:
+			_charge_brake -= delta
+			var brake_k: float = maxf(_charge_brake / maxf(charge_brake_time, 0.0001), 0.0)
+			velocity = _charge_dir * (move_speed * charge_speed_mul) * brake_k
+			target_vel = velocity
+			knockback_velocity = Vector2.ZERO
+			if _charge_brake <= 0.0:
+				_settle_charge_recovery()
+
+		# 落空罚站：冲空了就是白给，玩家看得见「它过去了、站着不动」⇒ 躲开这条路才有奖励，而不只是没被打到
+		elif _charge_stagger > 0.0:
+			_charge_stagger -= delta
+			target_vel = Vector2.ZERO
 		
 		# 短咬：下蹲预告。方向在锁死那一帧定、之后不追踪玩家（0.35s 还追踪就躲不开了）
 		elif _bite_windup > 0.0:
@@ -443,7 +474,13 @@ func _physics_process(delta: float) -> void:
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
 
-	if is_in_hit_stun and _charge_active <= 0.0 and _bite_active <= 0.0:
+	# 冲刺锁定段 = 匀速冲刺 + 收势刹车。这两段的位移与命中走廊由状态机自己说话，见下
+	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
+	if charge_locked:
+		# velocity 已由状态机逐帧写死 ⇒ 既不交给吸附插值去改，
+		# 也不被受击硬直夺走（commit-through，与旧写法「硬直期间冲刺照冲」同一条口径）
+		pass
+	elif is_in_hit_stun and _bite_active <= 0.0:
 		velocity = knockback_velocity
 		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
 		var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN
@@ -455,6 +492,7 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.move_toward(target_vel, 900.0 * delta)
 		# 硬直结束时残余击退彻底清零，杜绝边追击边滑步的打冰球现象
 		knockback_velocity = Vector2.ZERO
+	var pos_before_move: Vector2 = global_position
 	move_and_slide()
 
 	# 界碑拦阻
@@ -544,7 +582,24 @@ func _physics_process(delta: float) -> void:
 		else:
 			procedural_view.special_state = 0.0
 
-		# 4. 玩家接触伤害判定
+	# 3.6 冲刺走廊扫掠结算：判定走的是「狼身这一帧扫过的那一段」，独立于本体碰撞。
+	# 旧写法长扑只有下面那条身位滑碰（狼 19.5 + 玩家 14 = 33.5px）这一个出口，
+	# 而预警 0.8s 够玩家横移 168px ⇒ 只要动一下就必然躲开，整个技能形同虚设
+	#（2026-10-10 用户现场：「根本冲刺不到我」）。近战短咬反倒有 bite_hit_radius 那道口
+	# ⇒ 近距离打得人、远距离打不到，威胁段刚好落在最不需要威胁的地方。
+	# 伤害只走 player.take_damage 这一个口子：无敌帧/闪避/护甲/受创反馈全复用，
+	# 不在这里发第二次反馈（同短咬那处口径）；一个 flag 钉死「一次冲刺只碾一下」。
+	if charge_locked and not _charge_hit:
+		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, player.global_position)
+		if closest.distance_to(player.global_position) <= charge_hit_radius:
+			_charge_hit = true
+			var hp_before_charge: float = player.current_health
+			player.take_damage(contact_damage * charge_damage_mul)
+			# 石岳反震：与接触伤害同一个口径，实际被打中才反弹
+			if GameManager.thorns_pct > 0.0 and player.current_health < hp_before_charge:
+				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
+
+	# 4. 玩家接触伤害判定
 	for i in range(get_slide_collision_count()):
 		var col = get_slide_collision(i)
 		var collider = col.get_collider()
@@ -698,34 +753,51 @@ func _explode(player: Node2D) -> void:
 	_no_drop = true
 	_die()
 
-## 开始冲刺（预警结束后调用）
+## 开始冲刺（预警结束后调用）：方向到此锁死，之后不再追踪玩家
 func _start_charge(dir: Vector2) -> void:
 	_charge_active = charge_duration
 	_charge_dir = dir
+	_charge_brake = 0.0
+	_charge_stagger = 0.0
+	_charge_hit = false
 	play_squash(Vector2(0.78, 1.24), 0.2)
+	# 起步扬尘：位移是瞬时满速，视觉就得卖「蹬地弹射」而不是「匀速滑出去」
+	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), dir)
 	_clear_charge_warning()
+
+## 收势落空判定：要等整段承诺（冲刺 + 刹车）的扫掠都结算完才许罚站。
+## 冲刺归零那一帧的命中判定在本函数之后才跑（扫掠在 move_and_slide 之后），
+## 在冲刺段末尾判会漏掉"最后一帧才够到人"的那一冲 ⇒ 碾到了还罚站，玩家看不懂。
+## 落空才罚站（这是玩家侧身一步的奖励）；碾到人则不罚（已贴脸，下一步自然接短咬）。
+func _settle_charge_recovery() -> void:
+	if not _charge_hit and charge_whiff_stagger > 0.0:
+		_charge_stagger = charge_whiff_stagger
+		play_squash(Vector2(1.22, 0.78), 0.18)
 
 ## 更新冲刺预警线（预警期间每帧调用）
 func _update_charge_warning(player: Node2D) -> void:
 	if _charge_warning_line == null:
 		_charge_warning_line = Line2D.new()
-		_charge_warning_line.width = 3.0
-		_charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.6)
+		# 带宽 = 判定走廊直径。Line2D 默认圆头端帽，所以画出来那颗胶囊就是
+		# 「玩家中心到本帧扫掠线段 ≤ charge_hit_radius」的点集本身 ⇒ 画多大 == 判多大
+		_charge_warning_line.width = charge_hit_radius * 2.0
+		_charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.2)
 		add_child(_charge_warning_line)
-	
+
 	# 更新端点：画「真撞得到的那一段」，不是画到玩家身上。
 	# 旧写法线恒等于当前距离，玩家站在 450px 时线长 450、而冲刺只有 ~307px
-	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）
+	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）。
+	# 线长与扫掠判定、与判据 ⑧ 的实测位移，三处都取自 GameBalance.charge_reach 这一个式子。
 	_charge_warning_line.clear_points()
 	_charge_warning_line.add_point(Vector2.ZERO)
 	var local_target: Vector2 = player.global_position - global_position
-	var reach: float = charge_duration * move_speed * charge_speed_mul
+	var reach: float = GameBalance.charge_reach(move_speed * charge_speed_mul, charge_duration, charge_brake_time)
 	if local_target.length() > reach:
 		local_target = local_target.normalized() * reach
 	_charge_warning_line.add_point(local_target)
-	
-	# 闪烁效果：alpha 在 0.3~0.8 之间正弦波动
-	var alpha: float = 0.55 + 0.25 * sin(_charge_windup * 12.0)
+
+	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）
+	var alpha: float = 0.15 + 0.10 * sin(_charge_windup * 12.0)
 	_charge_warning_line.default_color.a = alpha
 
 ## 清理预警线
@@ -806,15 +878,37 @@ func _spawn_minion() -> void:
 	play_squash(Vector2(1.22, 0.78), 0.2)
 	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
 
-## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一簇火花当残影
+## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一个淡出剪影当残影
 func _teleport_near_player(player: Node2D) -> void:
-	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, false)
+	_spawn_teleport_ghost()
 	var angle := GameManager.rng.randf() * TAU
 	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * 210.0
 	var lim: float = GameManager.MAP_HALF_EXTENT - 40.0
 	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 	play_squash(Vector2(1.3, 0.7), 0.2)
 	AudioManager.play_sfx("dodge", 0.7, 0.8)
+
+## 闪现残影：在旧位置生成一个本体当前帧的半透明剪影，快速淡出（区别于命中火花）
+func _spawn_teleport_ghost() -> void:
+	if anim_sprite == null or anim_sprite.sprite_frames == null:
+		return
+	var tex := anim_sprite.sprite_frames.get_frame_texture(anim_sprite.animation, anim_sprite.frame)
+	if tex == null:
+		return
+	var ghost := Sprite2D.new()
+	ghost.texture = tex
+	ghost.position = position  # 与本体同父节点，本地坐标即等价位置
+	ghost.flip_h = anim_sprite.flip_h
+	ghost.offset = anim_sprite.offset
+	ghost.scale = anim_sprite.global_scale
+	ghost.z_index = anim_sprite.z_index
+	ghost.modulate = Color(0.55, 0.75, 1.0, 0.5)
+	get_parent().add_child(ghost)
+	var tw := ghost.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
+	tw.chain().tween_callback(ghost.queue_free)
 
 ## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前波次缩放；自爆/消散不触发）
 func _split_offspring() -> void:

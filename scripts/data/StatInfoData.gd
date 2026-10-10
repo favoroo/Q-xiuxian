@@ -39,6 +39,8 @@ const FIELDS: Dictionary = {
 	"free_rerolls": {"name": "免费重掷", "unit": "times"},
 	"elite_damage": {"name": "对精英伤害", "unit": "pct"},
 	"shop_price_mul": {"name": "商店物价", "unit": "pctmul"},
+	"bonus_pierce": {"name": "贯穿", "unit": "pt"},
+	"thorns": {"name": "反震伤害", "unit": "pct"},
 	"melee_damage": {"name": "近战伤害", "unit": "pt"},
 	"ranged_damage": {"name": "远程伤害", "unit": "pt"},
 	"elemental_damage": {"name": "元素伤害", "unit": "pt"},
@@ -60,7 +62,7 @@ const PRIMARY_IDS: Array[String] = [
 
 ## 土豆兄弟式次要属性分组（辅助、特殊效果与统计）
 const SECONDARY_IDS: Array[String] = [
-	"pickup", "xp_gain", "shop_price", "bonus_pierce",
+	"pickup", "xp_gain", "shop_price", "bonus_pierce", "thorns",
 	"elite_dmg", "knockback", "free_rerolls", "kills", "stones"
 ]
 
@@ -85,7 +87,8 @@ const STAT_FIELDS: Dictionary = {
 	"pickup": ["pickup_range_mult"],
 	"xp_gain": ["xp_gain_mult"],
 	"shop_price": ["shop_price_mul"],
-	"bonus_pierce": [],
+	"bonus_pierce": ["bonus_pierce"],
+	"thorns": ["thorns"],
 	"elite_dmg": ["elite_damage"],
 	"knockback": ["knockback_mult"],
 	"free_rerolls": ["free_rerolls"],
@@ -115,6 +118,7 @@ const STAT_TITLES: Dictionary = {
 	"xp_gain": "经验获取",
 	"shop_price": "商店物价",
 	"bonus_pierce": "贯穿",
+	"thorns": "反震",
 	"elite_dmg": "对精英伤害",
 	"knockback": "击退力度",
 	"free_rerolls": "免费重掷",
@@ -144,6 +148,7 @@ const BRIEF: Dictionary = {
 	"xp_gain": "每颗经验光球提供的经验倍率。",
 	"shop_price": "商店商品的物价折算。",
 	"bonus_pierce": "远程弹丸类武器的额外穿透次数。",
+	"thorns": "受到近身攻击时，按比例反弹伤害给敌方。",
 	"elite_dmg": "对精英与Boss的额外伤害。",
 	"knockback": "击中敌人时的击退距离与力度。",
 	"free_rerolls": "每波商店开始时免费重掷的次数。",
@@ -250,7 +255,10 @@ static func rules(id: String) -> Array[String]:
 			out.append("角色自带八折特权，道具「折扣玉符」可进一步叠加折让。")
 		"bonus_pierce":
 			out.append("飞剑飞符穿透敌人数量的额外增量。")
-			out.append("弹射羁绊核心收益，可在敌潮阵线中反复洞穿造成海量伤害。")
+			out.append("弹射羁绊核心收益，升级「破甲透劲」与道具「破虚符」也可叠加。")
+		"thorns":
+			out.append("受到敌方近身碰撞掉血时，立刻按敌方碰撞伤害的该比例反弹给攻击者。")
+			out.append("守卫自带反震特权，升级「护体罡气」与法宝「反震铜甲」可不断累加。")
 		"elite_dmg":
 			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
 			out.append("升级「对精英夺旗」与道具「破甲锥」生效，不影响寻常小怪。")
@@ -515,7 +523,14 @@ static func stat_tip_rows(id: String) -> Array:
 			var bp: int = int(s.get("bonus_pierce", 0))
 			rows = [
 				["额外穿透人数", "+%d" % bp, _c(float(bp))],
-				["来源", "弹射羁绊 (2/4/6 件分别 +1/+2/+3)"],
+				["升级·道具", "+%d" % GameManager.stat_bonus_pierce, _c(float(GameManager.stat_bonus_pierce))],
+				["弹射羁绊", "+%d" % GameManager.synergy_bonus_pierce, _c(float(GameManager.synergy_bonus_pierce))],
+			]
+		"thorns":
+			var tp: float = float(s.get("thorns_pct", 0.0))
+			rows = [
+				["反震伤害比例", "%.0f%%" % tp, _c(tp)],
+				["触发时机", "受到敌方近身碰撞掉血时"],
 			]
 		"elite_dmg":
 			var ep: float = float(s.get("elite_damage_pct", 0.0))

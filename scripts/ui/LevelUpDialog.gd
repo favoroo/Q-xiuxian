@@ -368,20 +368,34 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	r_desc.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
 	vbox.add_child(r_desc)
 
-	# 「元素伤害」类加点（如五行真火）给一句受益提示：当前上阵有几把法器真吃这条加成。
-	# 不写死升级 id，按 apply 字段判定，以后加同类升级自动带上。
-	if "elemental_damage" in data.get("apply", {}):
-		var n_elem := 0
-		for w in GameManager.get_weapons_summary():
-			if WeaponData.elemental_scaling_coef(String(w.get("id", ""))) > 0.0:
-				n_elem += 1
-		var elem_lbl := Label.new()
-		elem_lbl.text = ("✦ 当前 %d 把武器受此加成" % n_elem) if n_elem > 0 else "✦ 当前武器均不受此加成"
-		elem_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		elem_lbl.custom_minimum_size = Vector2(inner_w, 0)
-		elem_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vbox.add_child(elem_lbl)
-		GameStyle.label(elem_lbl, 11, GameStyle.ELEMENT if n_elem > 0 else GameStyle.GREY)
+	# 受益法器图标行（2026-10-10 用户指令：「把当前佩戴的装备里对这个加点有增益的那个装备
+	# 也显示在这个卡片下方」）：这条悟道会让当前上阵的哪些法器变强，把它们的图标摆在卡片底部。
+	# 判定走 GameBalance.upgrade_benefits_weapon 纯函数，与伤害结算的属性映射同源
+	# （stat_scalings / 五行 tags / 全局乘区），不写死升级 id，以后加同类升级自动带上。
+	# 图标与 HUD 法器栏/商店同源，玩家能直接对上号；无受益时不显示（功能类加点保持卡片干净）。
+	#   ——取代旧版「✦ 当前 N 把武器受此加成」纯文字提示（只覆盖元素伤一类的老口径）。
+	var benefited: Array = []
+	for w in GameManager.get_weapons_summary():
+		if GameBalance.upgrade_benefits_weapon(data.get("apply", {}), String(w.get("id", ""))):
+			benefited.append(w)
+	if not benefited.is_empty():
+		var n_bf := benefited.size()
+		var icon_row := HBoxContainer.new()
+		icon_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		icon_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_row.add_theme_constant_override("separation", 2)
+		# 窄卡放不下 6 枚 18px 图标：按内宽现算边长，下限 12 —— 最窄卡（MIN_CARD_W）也放得下不外溢
+		var icon_sz: float = clampf((inner_w - 2.0 * float(n_bf - 1)) / float(n_bf), 12.0, 18.0)
+		for w in benefited:
+			var w_icon := TextureRect.new()
+			if ResourceLoader.exists(String(w.get("icon", ""))):
+				w_icon.texture = load(w["icon"])
+			w_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			w_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			w_icon.custom_minimum_size = Vector2(icon_sz, icon_sz)
+			w_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			icon_row.add_child(w_icon)
+		vbox.add_child(icon_row)
 
 	card.add_child(vbox)
 

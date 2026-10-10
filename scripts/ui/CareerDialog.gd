@@ -239,13 +239,13 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(adef.get("name", "未命名成就"))
-	# 未达成行是暗底（INK 压暗），字走暗底亮字；已达成行是纸灰卡，字走墨黑
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
+	# 未达成行是暗底（INK 压暗），字走暗底亮字；已达成行同底，名字走纸白
+	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	text_col.add_child(name_lbl)
 
 	var cond_lbl := Label.new()
 	cond_lbl.text = String(adef.get("cond_desc", ""))
-	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else Color(0.82, 0.80, 0.74))
+	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else GameStyle.PAPER_DIM)
 	text_col.add_child(cond_lbl)
 
 	# 奖励说明
@@ -264,7 +264,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 	status_lbl.text = " 已达成 " if is_done else " 未达成 "
 	status_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK if is_done else GameStyle.LINE))
-	# 暗绿徽章配暗底亮字（GOOD 已调深，与 GOOD_DK 同明度会糊）
+	# 深绿徽章底（GOOD_DK）配亮字，状态一眼可读
 	GameStyle.label(status_lbl, 12, GameStyle.CHALK if is_done else GameStyle.GREY)
 	hbox.add_child(status_lbl)
 
@@ -322,7 +322,7 @@ func _create_cultivator_row(cid: String) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(cdef.get("name", "未知角色"))
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
 	var title_lbl := Label.new()
@@ -345,8 +345,8 @@ func _create_cultivator_row(cid: String) -> Control:
 	var danger_txt := "最高「%s」" % AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关"
 	var detail_lbl := Label.new()
 	detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d · %s" % [wins, endless_txt, int(rec["best_kills"]), danger_txt]
-	# 解锁行走纸灰卡（灰墨字），锁定行走暗底（暗底亮字）
-	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM if unlocked else Color(0.82, 0.80, 0.74))
+	# 解锁行走纸白亮字（PAPER_DIM 次级），锁定行更暗一档（GREY）
+	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM if unlocked else GameStyle.GREY)
 	text_col.add_child(detail_lbl)
 
 	# 里程碑 4 档进度签（1/3/5/10 胜）：达标即点亮对应称号，纯展示、不挂任何奖励

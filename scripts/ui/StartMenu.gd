@@ -54,13 +54,11 @@ var _matrix_host: CenterContainer
 var _title_block: PanelContainer
 
 # 顶栏徽章控件
-var _realm_badge_btn: Button
 var _sound_badge_btn: Button
 var _top_set_btn: Button
 
 # Hero 大方块与内部控件
 var _hero_card: PanelContainer
-var _hero_sub_lbl: Label
 var _danger_buttons: Array[Button] = []
 var _endless_btn: Button
 var _hero_start_btn: Button
@@ -131,31 +129,21 @@ func _build_decor() -> void:
 		decor.add_child(bracket)
 		_brackets.append(bracket)
 
-## 顶栏贴角级联徽章带（仿 dudu-cocos 左上等级+货币、右上声音+设置）
+## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
 	var top_margin := MarginContainer.new()
 	top_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top_margin.offset_top = TOP_BAR_INSET_TOP
 	top_margin.offset_bottom = TOP_BAR_INSET_TOP + TOP_BAR_H
-	top_margin.add_theme_constant_override("margin_left", 28)
 	top_margin.add_theme_constant_override("margin_right", 28)
 	top_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(top_margin)
 
 	_top_bar = HBoxContainer.new()
 	_top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_top_bar.alignment = BoxContainer.ALIGNMENT_END
 	_top_bar.add_theme_constant_override("separation", 10)
 	top_margin.add_child(_top_bar)
-
-	# 左簇：境界徽章（点按进入修仙志）
-	_realm_badge_btn = _make_badge_button("难度 · 简单", Vector2(118, 36),
-		GameStyle.GOLD, GameStyle.GOLD_EDGE, GameStyle.INK_TEXT, _on_career_pressed)
-	_top_bar.add_child(_realm_badge_btn)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_top_bar.add_child(spacer)
 
 	# 右簇：声音快切徽章 + 设置徽章
 	_sound_badge_btn = _make_badge_button("音效 · 开", Vector2(96, 36),
@@ -173,7 +161,8 @@ func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Colo
 	btn.custom_minimum_size = min_sz
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(btn, bg, hover_bg, 13, font_col, GameStyle.SLANT_BAND)
+	# hover 面是彩块（GOLD），亮字压上去对比差，统一翻黑字
+	GameStyle.button(btn, bg, hover_bg, 13, font_col, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
 	btn.pressed.connect(callback)
 	return btn
 
@@ -219,7 +208,7 @@ func _build_center_matrix() -> void:
 	bot_pair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right_grid.add_child(bot_pair)
 
-	# 右上 1：修仙志（青玉色块）
+	# 右上 1：修仙志（点缀黄色块）
 	var career_res := _build_entry_block(
 		"CAREER", "战 绩", "0 胜 · 击杀 0 只",
 		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.JADE,
@@ -230,7 +219,7 @@ func _build_center_matrix() -> void:
 	_anim_blocks.append(career_res["card"])
 	_career_sub_lbl = career_res["sub_label"]
 
-	# 右上 2：传道玉简（青碧色块）
+	# 右上 2：传道玉简（增益绿色块）
 	var manual_res := _build_entry_block(
 		"MANUAL", "图鉴", "20 武器 · 18 道具 · 9 角色",
 		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOOD,
@@ -312,13 +301,6 @@ func _build_title_section(parent: Control) -> void:
 	GameStyle.label(title, 42, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	title_hbox.add_child(title)
 
-	var sub_chip := Label.new()
-	sub_chip.text = " 击杀敌人 · 生存到波末 "
-	sub_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sub_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-	GameStyle.label(sub_chip, 12, GameStyle.JADE)
-	title_hbox.add_child(sub_chip)
-
 	title_row.add_child(_title_block)
 
 ## 左侧整柱 Hero 大方块：开始渡劫 + 6 档危险度 + 无尽试炼开关
@@ -362,25 +344,15 @@ func _build_hero_block() -> PanelContainer:
 	_endless_btn.pressed.connect(_on_endless_toggle_pressed)
 	top_row.add_child(_endless_btn)
 
-	# 大标题 + 副说明
-	var title_box := VBoxContainer.new()
-	title_box.add_theme_constant_override("separation", 2)
-	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title_box)
-
+	# 大标题
 	var hero_title := Label.new()
 	hero_title.text = "开 始 游 戏"
 	GameStyle.label(hero_title, 32, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-	title_box.add_child(hero_title)
+	vbox.add_child(hero_title)
 
-	_hero_sub_lbl = Label.new()
-	_hero_sub_lbl.text = "九名角色 · 二十波敌人 · 生存通关"
-	GameStyle.label(_hero_sub_lbl, 12, GameStyle.NAVY2)
-	title_box.add_child(_hero_sub_lbl)
-
-	# 危险度选择区（深色内嵌衬板，让 6 档按钮在金色大块上清晰醒目）
+	# 危险度选择区（纯黑内嵌衬板，让 6 档按钮在金色大块上清晰醒目）
 	var danger_box := PanelContainer.new()
-	var d_sb := GameStyle.panel(Color(0.07, 0.09, 0.14, 0.92), GameStyle.SLANT_PLATE, Vector2.ZERO)
+	var d_sb := GameStyle.panel(Color(0, 0, 0, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
 	d_sb.content_margin_left = 8.0
 	d_sb.content_margin_right = 8.0
 	d_sb.content_margin_top = 6.0
@@ -627,17 +599,13 @@ func _refresh_endless_toggle() -> void:
 	var on := GameManager.start_in_endless
 	if on:
 		_endless_btn.text = "✦ 无尽模式 · [开]"
-		GameStyle.button(_endless_btn, GameStyle.GOOD, GameStyle.JADE_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BAND)
-		if _hero_sub_lbl != null:
-			_hero_sub_lbl.text = "无尽模式已开 · 突破二十波上限 · 战至终局"
+		GameStyle.button(_endless_btn, GameStyle.GOOD, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BAND)
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "直 入 无 尽  》"
 			GameStyle.button(_hero_start_btn, GameStyle.GOOD, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 	else:
 		_endless_btn.text = "无尽模式 · [关]"
 		GameStyle.button(_endless_btn, GameStyle.NAVY2, GameStyle.JADE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
-		if _hero_sub_lbl != null:
-			_hero_sub_lbl.text = "九名角色 · 二十波敌人 · 生存通关"
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "开 始 游 戏  》"
 			GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
@@ -651,15 +619,10 @@ func _refresh_sound_badge() -> void:
 		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, GameStyle.SLANT_BAND)
 	else:
 		_sound_badge_btn.text = "音效 · 开"
-		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE, GameStyle.SLANT_BAND)
+		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
 
 func _refresh_dynamic_texts() -> void:
-	# 1. 顶栏最高危险度
-	var max_d := clampi(GameManager.max_danger_unlocked, 0, DANGER_NAMES.size() - 1)
-	if _realm_badge_btn != null and is_instance_valid(_realm_badge_btn):
-		_realm_badge_btn.text = "难度 · %s" % DANGER_NAMES[max_d]
-
-	# 2. 修仙志卡片副行
+	# 1. 修仙志卡片副行
 	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
 		var cs := GameManager.career_stats
 		var wins := int(cs.get("total_wins", 0))
@@ -670,7 +633,7 @@ func _refresh_dynamic_texts() -> void:
 		else:
 			_career_sub_lbl.text = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
 
-	# 3. 传道玉简副行（显示已解锁修士/法宝数）
+	# 2. 传道玉简副行（显示已解锁修士/法宝数）
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
 		var c_cnt := GameManager.unlocked_cultivators.size()
 		var i_cnt := GameManager.unlocked_items.size()
@@ -679,7 +642,7 @@ func _refresh_dynamic_texts() -> void:
 			i_cnt, ItemData.all_ids().size()
 		]
 
-	# 4. 天地律动设置副行
+	# 3. 天地律动设置副行
 	if _settings_sub_lbl != null and is_instance_valid(_settings_sub_lbl):
 		var vol := int(round(SettingsManager.get_bus_volume(&"Master") * 100.0))
 		var muted := SettingsManager.is_bus_muted(&"Master")

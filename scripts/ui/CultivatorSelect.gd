@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(_sub_label)
-	GameStyle.label(_sub_label, 12, Color(0.82, 0.80, 0.74))
+	GameStyle.label(_sub_label, 12, GameStyle.PAPER_DIM)
 
 	# 2. 上半部分：当前选中人物的介绍大卡片
 	_detail_panel = PanelContainer.new()

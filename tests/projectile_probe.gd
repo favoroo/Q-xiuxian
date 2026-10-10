@@ -20,7 +20,7 @@ extends Node
 
 const BANDS := ["<150", "150-250", "250-350", "350+"]
 
-const LONE_DISTANCE := 300.0        ## A 段目标到玩家的半径：弹丸飞 0.64s，敌人已横移 70+px
+const LONE_DISTANCE := 210.0        ## A 段目标到玩家的长轴半径：适配收窄后的远程射程与椭圆轨迹
 const LONE_SPEED := 110.0           ## 横切线速度（史莱姆基础移速量级）
 const LONE_SECONDS := 12.0
 const MIN_A_HIT_RATE := 0.90        ## A 段（孤立横切目标）：追踪上线后实测 100%，关掉追踪 13.3%
@@ -69,10 +69,10 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_scan()
 	if _phase_lone and _strafe != null and is_instance_valid(_strafe) and GameManager.player != null:
-		# 匀速圆周横切：位置逐帧覆写，敌人自己的 AI（move_speed 已钉 0）插不上手
+		# 匀速椭圆横切：位置逐帧覆写，敌人自己的 AI（move_speed 已钉 0）插不上手
 		_strafe_ang += (LONE_SPEED / LONE_DISTANCE) * delta
 		_strafe.global_position = GameManager.player.global_position \
-			+ Vector2(cos(_strafe_ang), sin(_strafe_ang)) * LONE_DISTANCE
+			+ Vector2(cos(_strafe_ang) * LONE_DISTANCE, sin(_strafe_ang) * (LONE_DISTANCE * GameBalance.TARGETING_ELLIPSE_Y_RATIO))
 
 ## 从 root 递归扫 BladeProjectile：本 runner 把 Main 挂在 root 下，而弹丸是
 ## add_child 到池宿主（挂 current_scene 下），只扫 main 会一个都扫不到。

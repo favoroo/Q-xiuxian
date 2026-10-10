@@ -100,7 +100,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_prev_btn.custom_minimum_size = Vector2(110, 36)
 	_prev_btn.focus_mode = Control.FOCUS_NONE
 	_prev_btn.pressed.connect(func(): _go_page(_cur - 1))
-	GameStyle.button(_prev_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER)
+	GameStyle.button(_prev_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	nav.add_child(_prev_btn)
 
 	var mid := Control.new()
@@ -187,4 +187,4 @@ func _go_page(i: int) -> void:
 		GameStyle.button(_next_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 15, GameStyle.INK_TEXT)
 	else:
 		_next_btn.text = "下一步 〉"
-		GameStyle.button(_next_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER)
+		GameStyle.button(_next_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)

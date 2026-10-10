@@ -12,12 +12,18 @@
 用法：
     python3 tools/bake_sfx.py                 # 全量烘到 assets_raw/sfx/，并把 wav 放进 assets/audio/sfx/
     python3 tools/bake_sfx.py --ogg           # 转 ogg 进包体（需本机 ffmpeg 带 libvorbis，否则自动退回 wav）
-    python3 tools/bake_sfx.py --only enemy_death,sword_swing
+    python3 tools/bake_sfx.py --only enemy_death,impact_blade
     python3 tools/bake_sfx.py --list
+    python3 tools/bake_sfx.py --cand                        # 烘 A/B 候选（挑音色）→ assets/audio/sfx_cand/
+    python3 tools/bake_sfx.py --cand --only impact_blade,whoosh_light
+    python3 tools/bake_sfx.py --list-cand
 
 短音效默认留 wav：解码零延迟、不依赖容器 seek（与 dudu-cocos 的结论一致）。
 产物约定（与 AGENTS.md 一致）：assets_raw/ 是源、assets/ 是产物，勿手改产物。
 脚本最后一律打印可直接粘进 AudioManager._load_audio_assets() 的注册代码。
+⚠ 烘完必须跑一次编辑器导入（$G --headless --path . --editor --quit），
+  否则新 wav 没有 .import，播出来是静默哑的；AudioManager.missing_paths() 为空才算落地。
+⚠ 候选（--cand）不注册：挑剩的落选候选若进注册表就是一堆哑 key，会污染 sfx_keys() 与判据。
 """
 
 import argparse
@@ -33,6 +39,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_DIR = os.path.join(ROOT, "assets_raw", "sfx")
 OUT_DIR = os.path.join(ROOT, "assets", "audio", "sfx")
 RENDER_WINDOW = 0.8          # 统一渲染窗，尾部静音会被裁掉
+# 候选（A/B 挑音色用）单独一套目录：候选永远不进 AudioManager 注册表，
+# 否则挑剩的落选候选会变成一堆哑 key，污染 sfx_keys() 轮播与 UnitRunner 判据。
+CAND_RAW_DIR = os.path.join(ROOT, "assets_raw", "sfx_cand")
+CAND_OUT_DIR = os.path.join(ROOT, "assets", "audio", "sfx_cand")
 
 # ---------------- 确定性随机（烘焙可复现，diff 友好） ----------------
 
@@ -594,6 +604,68 @@ SFX = {
 }
 
 
+# ---------------- 音色候选（A/B 挑定稿用） ----------------
+# 争议族先各出 2-3 版，用户在 tests/AudioGallery.tscn 里用手指连发对比挑一个。
+# 结构：族名 -> [(候选字母, 目标峰值, 参数说明, 配方 lambda)]，一个候选就是一条可听的声。
+# meta 会随烘焙打印出来，也抄一份进 audio_gallery.gd 的 CAND_META，屏幕与 stdout 双印，
+# 这样用户报「剑要 B」时能对上具体参数，不必靠形容词沟通。
+# 挑定稿后：把选中候选的配方原样搬进上面的 SFX[族名]（需要几变体就复制几份改基频），
+# 删掉本表该条目，再清掉 assets{,_raw}/sfx_cand 目录。
+
+CANDIDATES = {
+    # 「剑听成棍子」的主修复点：金属锋刃入体。三版差在金属芯的亮/厚与尾巴长短。
+    "impact_blade": [
+        ("A", 0.42, "hp4.2k瞬态 + fm2000→1500 r2.76 idx4.2 + bp2.6k→1.2k + shimmer3.4k→4.6k",
+         lambda b: (noise(b, dur=0.012, peak=0.14, ftype="highpass", f0=4200),
+                    fm_tone(b, f0=2000, f1=1500, dur=0.12, peak=0.20, ratio=2.76, idx0=4.2, idx1=0.25),
+                    noise(b, dur=0.05, peak=0.10, ftype="bandpass", f0=2600, f1=1200, q=1.1, t0=0.012),
+                    shimmer(b, f0=3400, f1=4600, dur=0.07, peak=0.030, t0=0.05))),
+        ("B", 0.42, "hp3.2k瞬态 + fm1500→1000 r2.4 idx5.0 + bp1.6k→500 + saw420→180 阻力（更低更厚）",
+         lambda b: (noise(b, dur=0.014, peak=0.12, ftype="highpass", f0=3200),
+                    fm_tone(b, f0=1500, f1=1000, dur=0.14, peak=0.18, ratio=2.4, idx0=5.0, idx1=0.30),
+                    noise(b, dur=0.06, peak=0.13, ftype="bandpass", f0=1600, f1=500, q=1.2, t0=0.014),
+                    tone(b, wtype="sawtooth", f0=420, f1=180, dur=0.05, peak=0.09, lp=900, t0=0.03))),
+        ("C", 0.42, "hp4.6k瞬态 + fm2350→1800 r3.1 idx3.6 + shimmer3.2k→4.4k 长尾 + space（剑鸣余振）",
+         lambda b: (noise(b, dur=0.010, peak=0.13, ftype="highpass", f0=4600),
+                    fm_tone(b, f0=2350, f1=1800, dur=0.11, peak=0.17, ratio=3.1, idx0=3.6, idx1=0.18),
+                    noise(b, dur=0.045, peak=0.09, ftype="bandpass", f0=3000, f1=1500, q=1.0, t0=0.010),
+                    shimmer(b, f0=3200, f1=4400, dur=0.16, peak=0.050, t0=0.06),
+                    space(b, delay=0.07, fb=0.30, mix=0.12))),
+    ],
+    # 近战前摇破空层：只给空气声，低频一律留给 impact，两层才不会叠糊。
+    "whoosh_light": [
+        ("A", 0.30, "bp800→3400 上扫 0.075s q0.7 + hp3.2k 8ms 刃线（快薄锐）",
+         lambda b: (noise(b, dur=0.075, peak=0.18, ftype="bandpass", f0=800, f1=3400, q=0.7),
+                    noise(b, dur=0.008, peak=0.08, ftype="highpass", f0=3200, t0=0.055))),
+        ("B", 0.30, "bp520→2400 上扫 0.115s q0.6 + hp2.6k 30ms（厚长有质量）",
+         lambda b: (noise(b, dur=0.115, peak=0.16, ftype="bandpass", f0=520, f1=2400, q=0.6),
+                    noise(b, dur=0.030, peak=0.06, ftype="highpass", f0=2600, t0=0.070))),
+    ],
+    # 钝器命中（锤/锏/盾/尺/巨印落点）：短而干，长尾让给 enemy_hit_heavy。
+    "impact_blunt": [
+        ("A", 0.44, "tri180→62 + lp1.5k→280 噪 + sq320→120 lp420（砸·石钝低频头）",
+         lambda b: (tone(b, wtype="triangle", f0=180, f1=62, dur=0.075, peak=0.22),
+                    noise(b, dur=0.05, peak=0.18, ftype="lowpass", f0=1500, f1=280, q=1.0),
+                    tone(b, wtype="square", f0=320, f1=130, dur=0.035, peak=0.09, lp=420, t0=0.012))),
+        ("B", 0.44, "sine150→80 更短 + lp900→260 + bp700→300（闷·木钝少尾）",
+         lambda b: (tone(b, wtype="sine", f0=150, f1=80, dur=0.055, peak=0.24),
+                    noise(b, dur=0.045, peak=0.16, ftype="lowpass", f0=900, f1=260, q=1.0),
+                    noise(b, dur=0.030, peak=0.08, ftype="bandpass", f0=700, f1=300, q=1.3, t0=0.02))),
+    ],
+    # 春雷鼓的施法与落点双层共用一族，鼓 vs 雷鼓的差别在要不要给滚雷尾。
+    "drum_boom": [
+        ("A", 0.55, "sine165→46 鼓体 + bp400→150 掌拍 + sine173→48 微失谐拍频（纯鼓）",
+         lambda b: (tone(b, wtype="sine", f0=165, f1=46, dur=0.19, peak=0.30),
+                    noise(b, dur=0.06, peak=0.14, ftype="bandpass", f0=400, f1=150, q=1.1),
+                    tone(b, wtype="sine", f0=173, f1=48, dur=0.17, peak=0.10, t0=0.01))),
+        ("B", 0.55, "sine150→40 + bp380→140 + lp1.8k→150 0.24s 滚雷尾（雷鼓）",
+         lambda b: (tone(b, wtype="sine", f0=150, f1=40, dur=0.22, peak=0.30),
+                    noise(b, dur=0.05, peak=0.13, ftype="bandpass", f0=380, f1=140, q=1.2),
+                    noise(b, dur=0.24, peak=0.10, ftype="lowpass", f0=1800, f1=150, q=1.0, t0=0.04))),
+    ],
+}
+
+
 # ---------------- 响度归一 ----------------
 # 配方里的 peak 只是「相对关系」，真正决定混音是否均衡的是这一步：
 # 每条音色烘完都按分类目标峰值归一化，以后改配方不会改出「一个震耳一个听不见」。
@@ -645,10 +717,9 @@ def _peak(buf) -> float:
     return peak
 
 
-def _normalize(buf, name: str) -> float:
-    """预缩放：把音色抬/压到目标分类附近，保证后面过 tanh 限幅时不压太多。"""
+def _normalize(buf, target: float) -> float:
+    """预缩放：把音色抬/压到目标峰值附近，保证后面过 tanh 限幅时不压太多。"""
     peak = _peak(buf)
-    target = TARGET_PEAK.get(name, TARGET_PEAK_DEFAULT)
     if peak < 1e-4:
         return 0.0
     gain = target / peak
@@ -659,42 +730,85 @@ def _normalize(buf, name: str) -> float:
 
 # ---------------- WAV 封装与转码 ----------------
 
+def _bake_variant(seed_name: str, idx: int, fn, target: float, raw_dir: str, stem: str):
+    """渲染一条声：重播种 → 配方 → 预归一 → tanh 软限幅 → 裁尾 → 单声道 16-bit WAV。
+    限幅后还要再按 target 对齐一次峰值，这样 TARGET_PEAK 就是文件里的真实峰值，
+    不同 key 之间才有可比的响度（改配方不会改出「一个震耳一个听不见」）。
+    seed_name 决定确定性随机种子，stem 决定文件名。返回 (path, 秒, 预归一增益)。"""
+    global _seed
+    _seed = (0x2F6E2B1 + sum(ord(c) for c in seed_name) * 7919 + idx * 104729) & 0xFFFFFFFF
+    buf = [0.0] * int(round(SR * RENDER_WINDOW))
+    fn(buf)
+    gain = _normalize(buf, target)
+    # 软限幅：tanh 只压需要用的峰值，小信号几乎无损，保持音色间相对响度
+    k = math.tanh(1.1)
+    shaped = [math.tanh(v * 1.1) / k for v in buf]
+    sp = _peak(shaped)
+    if sp > 1e-6:
+        trim = target / sp
+        shaped = [v * trim for v in shaped]
+    pcm = bytearray()
+    for v in shaped:
+        s = -1.0 if v < -1.0 else (1.0 if v > 1.0 else v)
+        pcm += struct.pack("<h", int(s * 32767))
+    # 裁尾部静音（留 30ms 余量）
+    end = len(buf) - 1
+    while end > 0 and abs(buf[end]) < 0.0008:
+        end -= 1
+    keep = min(len(buf), end + int(round(SR * 0.03)) + 1)
+    pcm = pcm[:keep * 2]
+    os.makedirs(raw_dir, exist_ok=True)
+    path = os.path.join(raw_dir, "%s.wav" % stem)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(bytes(pcm))
+    return path, keep / SR, gain
+
+
 def render(name: str, variants) -> list:
-    paths = []
     target = TARGET_PEAK.get(name, TARGET_PEAK_DEFAULT)
-    for idx, fn in enumerate(variants, start=1):
-        global _seed
-        _seed = (0x2F6E2B1 + sum(ord(c) for c in name) * 7919 + idx * 104729) & 0xFFFFFFFF
-        buf = [0.0] * int(round(SR * RENDER_WINDOW))
-        fn(buf)
-        gain = _normalize(buf, name)
-        # 软限幅：tanh 只压需要用的峰值，小信号几乎无损，保持音色间相对响度
-        k = math.tanh(1.1)
-        shaped = [math.tanh(v * 1.1) / k for v in buf]
-        # 限幅会整体抬一点电平（除以 tanh(1.1)），所以峰值匹配放在限幅之后做，
-        # 这样 TARGET_PEAK 就是文件里的真实峰值，不同 key 之间才有可比的响度。
-        sp = _peak(shaped)
-        if sp > 1e-6:
-            trim = target / sp
-            shaped = [v * trim for v in shaped]
-        pcm = bytearray()
-        for v in shaped:
-            s = -1.0 if v < -1.0 else (1.0 if v > 1.0 else v)
-            pcm += struct.pack("<h", int(s * 32767))
-        # 裁尾部静音（留 30ms 余量）
-        end = len(buf) - 1
-        while end > 0 and abs(buf[end]) < 0.0008:
-            end -= 1
-        keep = min(len(buf), end + int(round(SR * 0.03)) + 1)
-        pcm = pcm[:keep * 2]
-        path = os.path.join(RAW_DIR, "%s_%d.wav" % (name, idx))
-        with wave.open(path, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(SR)
-            w.writeframes(bytes(pcm))
-        paths.append((path, keep / SR, gain))
-    return paths
+    return [_bake_variant(name, idx, fn, target, RAW_DIR, "%s_%d" % (name, idx))
+            for idx, fn in enumerate(variants, start=1)]
+
+
+def render_cands(families=None) -> list:
+    """烘 A/B 候选到 sfx_cand 目录：一个候选一条声，文件名 <族>_<字母>.wav。
+    与正式 key 完全隔离（不进注册表、不进 print_registry）。"""
+    rows = []
+    for family, cands in CANDIDATES.items():
+        if families and family not in families:
+            continue
+        for letter, target, meta, fn in cands:
+            stem = "%s_%s" % (family, letter)
+            path, secs, _gain = _bake_variant(stem, 1, fn, target, CAND_RAW_DIR, stem)
+            placed = to_cand_asset(path)
+            rows.append((stem, secs, os.path.getsize(placed) / 1024.0, target, meta))
+    write_cand_manifest(rows)
+    return rows
+
+
+def write_cand_manifest(rows) -> None:
+    """把候选的 peak/时长/配方参数写进 sfx_cand/cand_meta.json。
+    试听台读这份文件印在按钮上——参数与配方同源，不在 .gd 里手抄一份（手抄会漂移）。
+    --cand --only 只更新本次烘的族，其余族的条目保留，分批判也能凑齐一整页。"""
+    import json
+    out = os.path.join(CAND_OUT_DIR, "cand_meta.json")
+    doc = {}
+    if os.path.isfile(out):
+        try:
+            with open(out, encoding="utf-8") as f:
+                doc = json.load(f)
+        except (ValueError, OSError):
+            doc = {}
+    for stem, secs, kb, target, meta in rows:
+        family, letter = stem.rsplit("_", 1)
+        doc.setdefault(family, {})
+        doc[family][letter] = {"stem": stem, "dur": round(secs, 3), "kb": round(kb, 1),
+                               "peak": target, "meta": meta}
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=1, sort_keys=True)
 
 
 def have_vorbis() -> bool:
@@ -726,12 +840,29 @@ def to_wav_asset(wav_path: str) -> str:
     return out
 
 
-def print_registry(ext: str) -> None:
-    base = "res://assets/audio/sfx"
+def to_cand_asset(wav_path: str) -> str:
+    """候选复制进 assets/audio/sfx_cand/（独立目录，正式注册表永远看不见它）。"""
+    import shutil
+    os.makedirs(CAND_OUT_DIR, exist_ok=True)
+    out = os.path.join(CAND_OUT_DIR, os.path.basename(wav_path))
+    shutil.copyfile(wav_path, out)
+    return out
+
+
+def print_registry() -> None:
+    """打印可直接粘贴的注册代码。
+    形态必须与 AudioManager._load_audio_assets() 现状一致（_sfx_paths helper），
+    以前这里打的是硬编码路径数组，粘进去就与文件里的 helper 简写风格漂移。"""
     print("\n--- 粘进 AudioManager._load_audio_assets() 的注册代码 ---")
     for name, variants in SFX.items():
-        paths = ", ".join('"%s/%s_%d.%s"' % (base, name, i, ext) for i in range(1, len(variants) + 1))
-        print('\t_register_sfx("%s", [%s])' % (name, paths))
+        print('\t_register_sfx("%s", _sfx_paths("%s", %d))' % (name, name, len(variants)))
+
+
+def print_cand_table(rows) -> None:
+    print("\n--- 候选清单（抄进 tests/audio_gallery.gd 的 CAND_META，屏幕与 stdout 双印）---")
+    for stem, secs, kb, target, meta in rows:
+        print("CAND %-24s %.3fs %6.1fKB peak=%.2f | %s" % (stem, secs, kb, target, meta))
+    print("\n试听: $G --path . res://tests/AudioGallery.tscn   （不加 --headless，要真出声）")
 
 
 def main() -> int:
@@ -739,12 +870,34 @@ def main() -> int:
     ap.add_argument("--only", help="只烘这些 key，逗号分隔")
     ap.add_argument("--ogg", action="store_true", help="转成 ogg 进包体（需要 ffmpeg 有 libvorbis）")
     ap.add_argument("--list", action="store_true", help="列出全部 key 与变体数")
+    ap.add_argument("--cand", action="store_true",
+                    help="只烘 A/B 候选进 assets/audio/sfx_cand/（可与 --only 组合筛族名）")
+    ap.add_argument("--list-cand", action="store_true", help="列出候选族与各候选字母")
     args = ap.parse_args()
 
     if args.list:
         for name, variants in SFX.items():
             print("%-20s %d 变体" % (name, len(variants)))
         print("合计 %d 个 key / %d 个文件" % (len(SFX), sum(len(v) for v in SFX.values())))
+        return 0
+
+    if args.list_cand:
+        for family, cands in CANDIDATES.items():
+            print("%-16s %s" % (family, " ".join(c[0] for c in cands)))
+        print("合计 %d 族 / %d 个候选" % (len(CANDIDATES), sum(len(v) for v in CANDIDATES.values())))
+        return 0
+
+    # 候选分支必须排在 --only 校验之前：--only 是按正式 SFX 表校验 key 的，
+    # 候选族名不在那张表里，走到下面会被当成「未知 key」直接退出。
+    if args.cand:
+        fams = None
+        if args.only:
+            fams = [k.strip() for k in args.only.split(",") if k.strip()]
+            unknown = [f for f in fams if f not in CANDIDATES]
+            if unknown:
+                print("未知候选族: %s（--list-cand 看全部）" % unknown, file=sys.stderr)
+                return 2
+        print_cand_table(render_cands(fams))
         return 0
 
     keys = list(SFX.keys())
@@ -776,7 +929,7 @@ def main() -> int:
             line += " → %6.1f KB (%s)" % (pkb, ext)
             print(line)
     print("\n音效共 %.0f KB → %s" % (total_kb, OUT_DIR))
-    print_registry(ext if keys else "wav")
+    print_registry()
     return 0
 
 

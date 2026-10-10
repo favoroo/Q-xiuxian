@@ -185,7 +185,7 @@ func _setup_fps_counter() -> void:
 	_fps_label.offset_top = -26.0
 	_fps_label.offset_right = 120.0
 	_fps_label.offset_bottom = -8.0
-	GameStyle.label(_fps_label, 12, Color(0.82, 0.8, 0.74))
+	GameStyle.label(_fps_label, 12, GameStyle.PAPER_DIM)
 	_fps_label.text = "FPS: 60"
 	add_child(_fps_label)
 	_update_fps_visibility()
@@ -246,7 +246,7 @@ func _build_top_buttons() -> void:
 	pause_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pause_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	$TopContainer/RightBox.add_child(pause_btn)
 

@@ -42,6 +42,7 @@ func _ready() -> void:
 	_test_achievement_and_meta_save()
 	_test_career_milestones()
 	_test_knock_direction()
+	_test_charge_geometry()
 	_test_spirit_orbit_dynamics()
 
 	if _c.report("UNIT_RESULT"):
@@ -668,6 +669,19 @@ func _test_weapon_targeting() -> void:
 	var sticky_w := [{"base_angle": 0.0, "range": 150.0, "prev_id": 501}]
 	_c.equals(GameBalance.assign_weapon_targets(sticky_w, close_pair), [0], "粘滞保护：已锁定目标微弱劣势时不跳变")
 
+	# 7. 椭圆等效距离与同屏可见优先：垂直方向等效距离放大，且同屏敌人坚决优先于屏外敌人
+	var horiz_ed := GameBalance.elliptical_distance(Vector2(200.0, 0.0))
+	var vert_ed := GameBalance.elliptical_distance(Vector2(0.0, 200.0))
+	_c.near(horiz_ed, 200.0, 0.01, "椭圆距离：水平方向保持原长 200px")
+	_c.check(vert_ed > 300.0, "椭圆距离：垂直 200px 折算等效距离 > 300px（防垂直打出屏幕盲区）")
+	_c.check(GameBalance.is_in_viewport(Vector2(200, 150), Vector2.ZERO), "视口判定：(200,150) 处于视口内")
+	_c.check(not GameBalance.is_in_viewport(Vector2(0, 260), Vector2.ZERO), "视口判定：垂直 260px 超出视口半高")
+	var on_vs_off := [
+		{"id": 601, "dist": 100.0, "angle": 0.0, "on_screen": false},
+		{"id": 602, "dist": 140.0, "angle": PI, "on_screen": true},
+	]
+	_c.equals(GameBalance.assign_weapon_targets(w_single, on_vs_off), [1], "同屏优先：哪怕屏外敌人更近且顺向，仍优先锁定同屏可见敌人")
+
 # ---------------- 音频接线完整性 ----------------
 ## 这一组断言专门挡三类「听起来正常其实哑了」的事故：
 ##   注册了 key 但素材没进包 / 没被导入（本项目踩过：新烘的 wav 未跑 editor import）
@@ -894,6 +908,43 @@ func _test_five_elements_system() -> void:
 
 	var wood_scalings := {"hp_regen": 4.5}
 	_c.near(GameBalance.weapon_stat_bonus(wood_scalings, {"hp_regen": 2.0}, 1), 9.0, EPS, "2.0 气血回复在青木藤鞭下转化 +9 基础伤")
+
+	# 2b. 加点受益法器判定（GameBalance.upgrade_benefits_weapon，悟道卡片受益图标行同源）
+	_c.check(GameBalance.upgrade_benefits_weapon({"melee_damage": 2.0}, "qingyun_sword"), "近战强化让青云剑受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"melee_damage": 2.0}, "gengjin_feijian"), "近战强化不让飞剑（远程）受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"ranged_damage": 2.0}, "gengjin_feijian"), "远程强化让飞剑受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"ranged_damage": 2.0}, "qingyun_sword"), "远程强化不让青云剑（近战）受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "qingyun_sword")
+		and GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "lingdie"), "武器强化是全局乘区：近战与环绕都受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"attack_speed_mult_mul": 0.88}, "lingdie"), "攻速提升让环绕灵蝶受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"knockback_mult": 0.25}, "qingyun_sword"), "击退提升全体法器受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"elite_damage": 0.25}, "huoyan_fu"), "斩将加成全体法器受益（对精英乘区）")
+	_c.check(GameBalance.upgrade_benefits_weapon({"element_damage_wood": 0.10}, "wanmu_lingfu"), "青木真解让木系毒符受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"element_damage_wood": 0.10}, "qingyun_sword"), "青木真解不让金系青云剑受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"element_damage_all": 0.06}, "qingyun_sword")
+		and GameBalance.upgrade_benefits_weapon({"element_damage_all": 0.06}, "huoyan_fu"), "全元素强化五行法器都受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"armor": 2.0}, "fantian_yin"), "护甲提升让吃护甲转化的巨印受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"armor": 2.0}, "qingyun_sword"), "护甲提升不让不吃护甲转化的青云剑受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"max_hp": 25.0}, "hunyuan_zhong"), "生命提升让吃额外生命转化的古钟受益（异名映射）")
+	_c.check(GameBalance.upgrade_benefits_weapon({"hp_regen": 1.2}, "qingmu_tengbian"), "生命回复让藤鞭受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"lifesteal": 0.04}, "lingdie"), "吸血让灵蝶受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"crit_rate": 0.08}, "qingyun_sword"), "暴击率让吃暴击转化的青云剑受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"crit_mult": 0.25}, "gengjin_feijian"), "暴击伤害让吃暴伤转化的飞剑受益（异名映射）")
+	_c.check(GameBalance.upgrade_benefits_weapon({"move_speed_mult": 0.08}, "bajiao_fan"), "移速提升让风扇受益（异名映射）")
+	_c.check(GameBalance.upgrade_benefits_weapon({"harvest": 8.0}, "jubao_chi"), "收益提升让聚宝金尺受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"bonus_pierce": 1.0}, "gengjin_feijian"), "破甲透劲让弹丸类飞剑受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"bonus_pierce": 1.0}, "qingyun_sword"), "破甲透劲不让近战青云剑受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"dodge": 0.07}, "qingyun_sword")
+		and not GameBalance.upgrade_benefits_weapon({"pickup_range_mult": 0.4}, "lingdie")
+		and not GameBalance.upgrade_benefits_weapon({"thorns": 0.35}, "hunyuan_zhong"), "闪避/拾取/反伤类不作用于任何法器")
+	# 全表扫描：每条加点对全部法器判定不崩、且至少有一条加点让每把法器受益（图标行不会空摆全表）
+	var all_ids: Array = WeaponData.DEFS.keys()
+	var any_benefit := {}
+	for u in UpgradeData.UPGRADES:
+		for wid0 in all_ids:
+			if GameBalance.upgrade_benefits_weapon(u.get("apply", {}), String(wid0)):
+				any_benefit[wid0] = true
+	_c.check(any_benefit.size() == all_ids.size(), "每把法器都至少被一条加点覆盖（%d/%d）" % [any_benefit.size(), all_ids.size()])
 
 	# 3. 五行羁绊与多品类环绕灵宝在 GameManager 中的结算
 	GameManager.reset_run()
@@ -1221,6 +1272,23 @@ func _test_knock_direction() -> void:
 	var squash_vert := test_enemy._calculate_hit_squash(Vector2(10.0, 200.0), false)
 	_c.check(squash_vert.x > 1.0 and squash_vert.y < 1.0, "纵向受击垂直压扁水平拉伸")
 	test_enemy.free()
+
+# ---------------- 妖狼长扑：位移闭式解与走廊扫掠几何 ----------------
+
+## 真实帧的兑现由 WolfAiCheck 量（⑧⑨⑩），这里只钉公式自己：纸面位移与点到线段最近距离
+func _test_charge_geometry() -> void:
+	# 匀速冲刺段 + 线性收势段（梯形取一半）；数值与 LeiBeastEnemy.tscn 对齐 384 × (0.75 + 0.25/2)
+	_c.near(GameBalance.charge_reach(384.0, 0.75, 0.25), 336.0, EPS, "长扑位移 = 冲刺段 + 收势段一半")
+	_c.near(GameBalance.charge_reach(402.5, 0.8, 0.28), 378.35, 0.01, "精英烈雷兽走同一条式子")
+	_c.near(GameBalance.charge_reach(384.0, 0.0, 0.0), 0.0, EPS, "零时长 = 零位移（预警线不会凭空画长）")
+	_c.check(GameBalance.charge_reach(-100.0, 0.75, 0.25) >= 0.0, "负入参不许出负位移")
+	# 走廊：玩家中心到「本帧扫过的那一段」的最近点
+	var tail := Vector2(0.0, 0.0)
+	var head := Vector2(320.0, 0.0)
+	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(160.0, 30.0)).is_equal_approx(Vector2(160.0, 0.0)), "走廊内侧投影回线上")
+	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(500.0, 5.0)).is_equal_approx(head), "起跑点之外钳到线段起点")
+	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(-40.0, 5.0)).is_equal_approx(tail), "冲过头钳到线段终点（不许穿透继续判）")
+	_c.check(GameBalance.seg_closest_point(Vector2(50.0, 50.0), Vector2(50.0, 50.0), Vector2(50.0, 90.0)).is_equal_approx(Vector2(50.0, 50.0)), "零长线段退化成点距（贴边界 clamp 那一帧不炸）")
 
 # ---------------- 危险度（Danger 0~5）：公式、解锁与落盘 ----------------
 

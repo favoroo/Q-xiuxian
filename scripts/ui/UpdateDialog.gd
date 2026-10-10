@@ -167,7 +167,7 @@ func _build_ui() -> void:
 	_browser_btn.text = "浏览器下载"
 	_browser_btn.custom_minimum_size = Vector2(125, 42)
 	_browser_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_browser_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(_browser_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	_browser_btn.pressed.connect(_on_browser_pressed)
 	_btn_row.add_child(_browser_btn)
 

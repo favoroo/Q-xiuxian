@@ -181,7 +181,7 @@ func _process(delta: float) -> void:
 		var player = GameManager.player
 		if player != null:
 			var max_reach = attack_range * _range_mult() * 1.2
-			if player.global_position.distance_to(current_target.global_position) > max_reach:
+			if GameBalance.elliptical_distance(current_target.global_position - player.global_position) > max_reach:
 				_retarget_phase -= delta
 				if _retarget_phase <= 0.0:
 					_retarget_phase = RETARGET_INTERVAL
@@ -465,32 +465,40 @@ func _find_target() -> Node2D:
 	var player = GameManager.player
 	if player == null:
 		return null
-	# 以玩家为圆心索敌：武器会自行换位到目标一侧，四周的敌人都在打击范围内
-	var results := _query_enemies(attack_range * _range_mult(), player.global_position, 32)
+	# 以玩家为圆心外接查询，再用椭圆等效距离与同屏可见性过滤选优
+	var eff_range := attack_range * _range_mult()
+	var results := _query_enemies(eff_range, player.global_position, 32)
 
 	var nearest: Node2D = null
 	var min_dist: float = 999999.0
+	var nearest_on_screen: bool = false
 	var chest: Node2D = null
 	var chest_dist: float = 999999.0
+	var chest_on_screen: bool = false
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent()
-			if enemy.is_in_group("herbs"):
+			var enemy = col.get_parent() as Node2D
+			if enemy == null or enemy.is_in_group("herbs"):
 				continue
-			var d = player.global_position.distance_to(enemy.global_position)
+			var d := GameBalance.elliptical_distance(enemy.global_position - player.global_position)
+			if d > eff_range:
+				continue
+			var on_scr := GameBalance.is_in_viewport(enemy.global_position, player.global_position)
 			if enemy.is_in_group("chests"):
-				if d < chest_dist:
+				if chest == null or (on_scr and not chest_on_screen) or (on_scr == chest_on_screen and d < chest_dist):
 					chest_dist = d
+					chest_on_screen = on_scr
 					chest = enemy
 				continue  # 匣子另册记账，见下面 return
-			if d < min_dist:
+			if nearest == null or (on_scr and not nearest_on_screen) or (on_scr == nearest_on_screen and d < min_dist):
 				min_dist = d
+				nearest_on_screen = on_scr
 				nearest = enemy
 	# 射程内还有活妖就不去砸匣子：匣子只补"这一件法器本来要打空气"的那个空
 	return nearest if nearest != null else chest
 
-## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按离炮口的远近补齐。
+## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按同屏优先 + 离炮口的远近补齐。
 ## 返回长度 = min(场上可用人手, n)，调用方按 idx % size 取用 ⇒ 怪少时多发自然归约到同一个敌人。
 ## 纯索敌，不改任何数值：弹丸拿到目标后按 BladeProjectile.HOMING_TURN_RATE 自己拐过去。
 func _volley_targets(n: int) -> Array[Node2D]:
@@ -504,8 +512,10 @@ func _volley_targets(n: int) -> Array[Node2D]:
 	var player = GameManager.player
 	if player == null:
 		return out
-	var results := _query_enemies(attack_range * _range_mult(), player.global_position, 32)
+	var eff_range := attack_range * _range_mult()
+	var results := _query_enemies(eff_range, player.global_position, 32)
 	var muzzle_pos: Vector2 = muzzle_point.global_position
+	var player_pos: Vector2 = player.global_position
 	var cands: Array[Node2D] = []
 	var chest_cands: Array[Node2D] = []
 	for res in results:
@@ -517,14 +527,24 @@ func _volley_targets(n: int) -> Array[Node2D]:
 			continue
 		if out.has(e):
 			continue
+		if GameBalance.elliptical_distance(e.global_position - player_pos) > eff_range:
+			continue
 		if e.is_in_group("chests"):
 			chest_cands.append(e)
 			continue
 		cands.append(e)
-	# 离炮口近的先被咬住：一次三发就是"点掉最近的三个"，而不是随便抽三个签
+	# 同屏可见优先，同屏状态一致时离炮口近的先被咬住
 	cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		var a_on := GameBalance.is_in_viewport(a.global_position, player_pos)
+		var b_on := GameBalance.is_in_viewport(b.global_position, player_pos)
+		if a_on != b_on:
+			return a_on
 		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
 	chest_cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
+		var a_on := GameBalance.is_in_viewport(a.global_position, player_pos)
+		var b_on := GameBalance.is_in_viewport(b.global_position, player_pos)
+		if a_on != b_on:
+			return a_on
 		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
 	for e in cands:
 		if out.size() >= n:

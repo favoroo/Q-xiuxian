@@ -7,13 +7,13 @@ content_margin_left = 32.0
 content_margin_top = 26.0
 content_margin_right = 32.0
 content_margin_bottom = 26.0
-bg_color = Color(0.949, 0.937, 0.902, 0.98)
+bg_color = Color(0, 0, 0, 0.98)
 skew = Vector2(0.052, 0)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 6
-border_color = Color(0.784, 0.761, 0.69, 1)
+border_color = Color(0.227, 0.227, 0.259, 1)
 shadow_color = Color(0, 0, 0, 0.65)
 shadow_size = 1
 shadow_offset = Vector2(10, 10)
@@ -23,7 +23,7 @@ content_margin_left = 28.0
 content_margin_top = 6.0
 content_margin_right = 28.0
 content_margin_bottom = 6.0
-bg_color = Color(0.29, 0.573, 0.969, 1)
+bg_color = Color(0.333, 0.627, 1, 1)
 skew = Vector2(0.14, 0)
 border_width_bottom = 5
 border_color = Color(0.094, 0.282, 0.533, 1)
@@ -84,13 +84,13 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/TitleBand"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.078, 0.086, 0.106, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 26
 text = "阵 亡"
 
 [node name="StatsLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.086, 0.094, 0.114, 1)
+theme_override_colors/font_color = Color(0.949, 0.937, 0.894, 1)
 theme_override_font_sizes/font_size = 16
 text = "生存时长 00:00"
 horizontal_alignment = 1

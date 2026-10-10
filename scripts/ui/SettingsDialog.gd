@@ -99,7 +99,7 @@ func _build_audio_page() -> Control:
 
 	var tip := Label.new()
 	tip.text = "音效细调。支持静音与音量滑杆调节，实时生效并自动保存。"
-	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
+	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
@@ -204,7 +204,7 @@ func _update_audio_row_ui(bus: StringName) -> void:
 		val_lbl.text = "%d%%" % int(round(vol * 100.0))
 		val_lbl.add_theme_color_override("font_color", GameStyle.JADE)
 		mute_btn.text = "静音"
-		GameStyle.button(mute_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
+		GameStyle.button(mute_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 
 # ----------------- 分页 2：剑意视界（战斗与画面特效） -----------------
 
@@ -220,7 +220,7 @@ func _build_display_page() -> Control:
 
 	var tip := Label.new()
 	tip.text = "调整战斗反馈与画面效果。可自由开关顿帧、震屏与伤害跳字。"
-	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
+	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
 	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "命中与暴击时显示伤害数字，闪避时显示回避标识")
@@ -300,7 +300,7 @@ func _update_toggle_btn_ui(key: String) -> void:
 		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 	else:
 		btn.text = "已关闭  [关]"
-		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0, GameStyle.INK_TEXT)
 
 ## 多档循环行：点一下走下一档，文本直接写当前档位的人话名
 ## level_text / is_on / on_press 由调用方给，控件本身不认识任何具体设置项
@@ -333,7 +333,7 @@ func _update_cycle_btn_ui(key: String) -> void:
 	if bool((ctrl["is_on"] as Callable).call()):
 		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 	else:
-		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0, GameStyle.INK_TEXT)
 
 # ----------------- 分页 3：运指开阖（操作按钮布局） -----------------
 
@@ -351,7 +351,7 @@ func _build_controls_page() -> Control:
 
 	var tip := Label.new()
 	tip.text = "技能键与祭坛键的位置与大小都在调整模式里改：点选按钮后拖动摆放，滑杆只调选中的那颗，全程实时保存。"
-	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
+	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
 	_add_action_row(vbox, "按钮位置与大小", "进入调整模式，点选技能键或祭坛键，拖动摆放、滑杆调大小",

@@ -31,7 +31,7 @@ static func main_tag(gm: Node) -> String:
 static func recalc_synergies(gm: Node) -> void:
 	var counts := tag_counts(gm)
 	gm.active_synergies.clear()
-	gm.bonus_pierce = 0
+	gm.synergy_bonus_pierce = 0
 	gm.synergy_damage_mult = 1.0
 	gm.synergy_range_mult = 1.0
 	gm.synergy_haste_mult = 1.0
@@ -59,7 +59,7 @@ static func recalc_synergies(gm: Node) -> void:
 			"sword":
 				gm.synergy_range_mult += float(v)
 			"talisman":
-				gm.bonus_pierce += int(v)
+				gm.synergy_bonus_pierce += int(v)
 			"thunder":
 				gm.synergy_haste_mult *= float(v)
 			"spirit":
@@ -86,6 +86,7 @@ static func recalc_synergies(gm: Node) -> void:
 				gm.synergy_armor += float(v)
 				var kb_list: Array = [0.25, 0.50, 0.80]
 				gm.synergy_knockback_mult += float(kb_list[syn_level - 1])
+	gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
 	gm.synergy_max_hp_bonus = hp_bonus
 	apply_synergy_hp(gm, hp_bonus)
 

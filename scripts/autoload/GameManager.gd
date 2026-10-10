@@ -231,7 +231,9 @@ var buff_move_speed_mult: float = 1.0  ## 神行术短时移速乘区（Player._
 var buff_attack_speed_mult: float = 1.0 ## 疾风咒短时施法间隔乘区（FloatingWeapon._perform_attack 消费）
 
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
-var bonus_pierce: int = 0           ## 符箓羁绊：弹丸额外穿透
+var stat_bonus_pierce: int = 0      ## 升级/法宝：弹丸额外穿透基础
+var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量
+var bonus_pierce: int = 0           ## 弹丸额外穿透合计（stat + synergy）
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
 var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
 var synergy_haste_mult: float = 1.0   ## 雷法/玄水羁绊：额外攻速乘区
@@ -329,6 +331,8 @@ func reset_run() -> void:
 	buff_move_speed_mult = 1.0
 	buff_attack_speed_mult = 1.0
 	_exp_chain = GameBalance.EXP_FIRST_LEVEL
+	stat_bonus_pierce = 0
+	synergy_bonus_pierce = 0
 	bonus_pierce = 0
 	synergy_damage_mult = 1.0
 	synergy_range_mult = 1.0
@@ -503,6 +507,11 @@ func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 				free_rerolls += int(v)
 			"shop_price_mul":
 				shop_price_mult *= v
+			"bonus_pierce":
+				stat_bonus_pierce += int(v)
+				bonus_pierce = stat_bonus_pierce + synergy_bonus_pierce
+			"thorns":
+				thorns_pct += v
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
 					element_damage[e] = float(element_damage.get(e, 0.0)) + v
@@ -594,6 +603,7 @@ func get_stat_breakdown() -> Dictionary:
 		"elite_damage_pct": elite_damage * 100.0,
 		"free_rerolls": free_rerolls,
 		"bonus_pierce": bonus_pierce,
+		"thorns_pct": thorns_pct * 100.0,
 		"shop_price_pct": (shop_price_mult - 1.0) * 100.0,
 	}
 

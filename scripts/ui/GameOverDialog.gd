@@ -45,7 +45,7 @@ func _ready() -> void:
 	_menu_btn.custom_minimum_size = Vector2(230, 40)
 	_menu_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_menu_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_menu_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
+	GameStyle.button(_menu_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 	_menu_btn.pressed.connect(_on_menu_pressed)
 	vbox.add_child(_menu_btn)
 

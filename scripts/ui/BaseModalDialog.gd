@@ -151,7 +151,7 @@ func _build_modal_chrome() -> void:
 	_close_btn.text = _get_close_btn_text()
 	_close_btn.custom_minimum_size = _get_close_btn_min_size()
 	_close_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_close_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0)
+	GameStyle.button(_close_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	_close_btn.pressed.connect(close)
 	_top_bar.add_child(_close_btn)
 

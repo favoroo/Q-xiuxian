@@ -440,13 +440,13 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(def.get("name", cid))
-	# 锁定行是暗底（INK 压暗），名字走暗底亮字；解锁行是纸灰卡，走墨黑
-	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
+	# 锁定行是暗底（INK 压暗），名字走暗底亮字；解锁行同底，名字走纸白
+	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	text_col.add_child(name_lbl)
 
 	var epithet_lbl := Label.new()
 	epithet_lbl.text = String(def.get("epithet", ""))
-	GameStyle.label(epithet_lbl, 11, GameStyle.GREY if unlocked else Color(0.82, 0.80, 0.74))
+	GameStyle.label(epithet_lbl, 11, GameStyle.GREY)
 	text_col.add_child(epithet_lbl)
 
 	var equip_str: String = String(def.get("start_equip", ""))
