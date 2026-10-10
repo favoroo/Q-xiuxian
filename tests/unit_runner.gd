@@ -44,6 +44,7 @@ func _ready() -> void:
 	_test_knock_direction()
 	_test_charge_geometry()
 	_test_spirit_orbit_dynamics()
+	_test_turret_and_new_cultivators()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)
@@ -694,10 +695,15 @@ func _test_audio_wiring() -> void:
 
 	var needed := [
 		"blade_shoot", "enemy_hit", "enemy_hit_crit", "enemy_hit_heavy", "orb_hit", "gem_pickup", "level_up", "obelisk_blessing",
-		"enemy_death", "enemy_death_elite", "sword_swing", "talisman_throw", "thunder_strike",
+		"enemy_death", "enemy_death_elite", "talisman_throw", "thunder_strike",
 		"fan_gust", "shop_buy", "shop_reroll", "shop_lock", "sell", "equip", "unequip",
 		"merge_success", "ui_click", "ui_back", "ui_error", "wave_start", "wave_clear",
 		"boss_raid", "dodge", "heal", "victory", "defeat",
+		# 器型族（2026-10-10）：原 sword_swing 已彻底删除（配方是纯空气破空、零金属泛音，
+		# 剑与木棍听起来同一个声；敌我分源后再无人引用）
+		"whoosh_light", "whoosh_heavy", "impact_blade", "impact_blunt", "impact_crack",
+		"metal_dart", "flame_jet", "drum_boom", "flute_wave", "drone_flutter", "drone_chime",
+		"enemy_claw", "enemy_bolt", "enemy_fuse", "enemy_slam", "enemy_blink",
 	]
 	var silent: Array = []
 	for k in needed:
@@ -705,14 +711,34 @@ func _test_audio_wiring() -> void:
 			silent.append(k)
 	_c.check(silent.is_empty(), "游戏会用到的 %d 个音效 key 都能播（哑的: %s）" % [needed.size(), str(silent)])
 
-	# 数据表里配的 sfx 必须是已注册 key，否则 WeaponData 改了名而 AudioManager 没跟上
+	# 数据表里配的 sfx 必须是已注册 key，否则 WeaponData 改了名而 AudioManager 没跟上。
+	# 第二层 sfx_impact 只许近战与雷法配：弹丸的入肉声由被击敌人的 enemy_hit 承担，
+	# 环绕只有触敌一层 —— 配了就是白配（取音方根本不读），必须当场报红。
 	var bad_table: Array = []
+	var bad_impact: Array = []
+	var missing_impact: Array = []
 	for w_id in WeaponData.SHOP_POOL:
 		var k: String = WeaponData.sfx_for(w_id)
 		if not AudioManager.has_sfx(k):
 			bad_table.append("%s→%s" % [w_id, k])
-	_c.check(bad_table.is_empty(), "每件法器的开火音都注册过（异常: %s）" % str(bad_table))
-	_c.equals(WeaponData.sfx_for("qingyun_sword"), "sword_swing", "青云剑开火音按流派走")
+		var beh := int(WeaponData.DEFS[w_id].get("behavior", -1))
+		var ik: String = WeaponData.sfx_impact_for(w_id)
+		if beh == WeaponData.Behavior.MELEE or beh == WeaponData.Behavior.BURST:
+			if ik == "":
+				missing_impact.append(w_id)
+			elif not AudioManager.has_sfx(ik):
+				bad_impact.append("%s→%s" % [w_id, ik])
+		elif ik != "":
+			bad_impact.append("%s 配了第二层 %s（该行为没有命中帧）" % [w_id, ik])
+	_c.check(bad_table.is_empty(), "每件法器的第一层音都注册过（异常: %s）" % str(bad_table))
+	_c.check(bad_impact.is_empty(), "命中/落点音注册过且只给近战与雷法配（异常: %s）" % str(bad_impact))
+	_c.check(missing_impact.is_empty(), "近战与雷法都配了第二层，双层不许漏一层（漏配: %s）" % str(missing_impact))
+	_c.equals(WeaponData.sfx_for("qingyun_sword"), "whoosh_light", "长剑前摇走破空族，不再一声打到底")
+	_c.equals(WeaponData.sfx_impact_for("qingyun_sword"), "impact_blade", "长剑命中走刃金族（这才是「像剑」的那一声）")
+	_c.equals(WeaponData.sfx_impact_for("benlang_chui"), "impact_blunt", "崩浪锤是钝器，不许跟着风扇吹")
+	_c.equals(WeaponData.sfx_for("sanmei_huohu"), "flame_jet", "火葫芦喷焰，不再是甩飞剑那一声")
+	_c.equals(WeaponData.sfx_for("wulei_paizi"), "whoosh_light", "落雷系施法与落点分两层，落点才配 thunder_strike")
+	_c.equals(WeaponData.sfx_impact_for("wulei_paizi"), "thunder_strike", "雷牌落点听的是雷，不是钟和铃")
 	_c.equals(WeaponData.sfx_for("不存在的法器"), "blade_shoot", "未知 id 回落到通用开火音")
 
 	for bus in ["Master", "BGM", "SFX", "Voice"]:
@@ -865,9 +891,9 @@ func _test_screen_shake_budget() -> void:
 # ---------------- 五行武器矩阵与属性转化 ----------------
 
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：35 把法器（2026-10-10 起补齐器类×五行格子+流派专武）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 35, "全武器库扩充至 35 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 35, "商店池覆盖全部 35 把法器")
+	# 1. 武器表完整性校验：38 把法器（含机关支路 3 把）且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 38, "全武器库扩充至 38 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 38, "商店池覆盖全部 38 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -890,12 +916,12 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "35 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "38 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 2026-10-10 扩容后各系把数：金9/木7/水6/火6/土7（器类×五行格子补齐+流派专武）
-	var elem_expect := {"metal": 9, "wood": 7, "water": 6, "fire": 6, "earth": 7}
+	# 扩容后各系把数：金11/木7/水6/火7/土7（含机关 3 把）
+	var elem_expect := {"metal": 11, "wood": 7, "water": 6, "fire": 7, "earth": 7}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
@@ -1133,11 +1159,11 @@ func _test_item_system() -> void:
 
 
 
-# ---------------- 修士流派（角色）系统：9 名修士与不对称代偿 ----------------
+# ---------------- 修士流派（角色）系统：15 名修士与不对称代偿 ----------------
 
 func _test_cultivator_system() -> void:
-	# 数据表完整性：9 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
-	_c.equals(CultivatorData.all_ids().size(), 9, "修士扩充至 9 名")
+	# 数据表完整性：15 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 15, "修士扩充至 15 名")
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
@@ -1215,7 +1241,7 @@ func _test_cultivator_system() -> void:
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
-	_c.equals(cs._roster_row.get_child_count(), 9, "道统选择界面下半部分展示 9 张形象小卡片")
+	_c.equals(cs._roster_grid.get_child_count(), 15, "道统选择界面下半部分两排网格展示 15 张形象小卡片")
 	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
 	cs._select_cultivator("fuzhen")
 	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
@@ -1366,7 +1392,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 9, "成就里程碑共配置 9 条")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 13, "成就里程碑共配置 13 条")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -1378,8 +1404,8 @@ func _test_achievement_and_meta_save() -> void:
 		elif rtype == "item":
 			_c.check(not ItemData.get_def(rid).is_empty(), "成就 %s 奖励法宝 %s 在法宝表中存在" % [aid, rid])
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
-	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 4, "初始默认开放 4 名基础修士")
-	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 16, "初始默认开放 16 件基础法宝")
+	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 6, "初始默认开放 6 名基础修士")
+	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 18, "初始默认开放 18 件基础法宝")
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()
@@ -1714,12 +1740,86 @@ func _test_spirit_orbit_dynamics() -> void:
 	var haste_high_spd := GameBalance.spirit_orbit_angular_speed(2.4, 0.50, 1.0, false, 1)
 	_c.near(haste_high_spd, 2.4 * 2.0, EPS, "攻速翻倍时御灵转速翻倍为 4.8 rad/s")
 
-	# 7. 数据表三件御灵装备属性强化验证
+	# 7. 全局默认参数与新常数校验：基准半径 80px，最大外扩 185px，基础转速 2.8 rad/s
+	_c.near(GameBalance.SPIRIT_BASE_RADIUS, 80.0, EPS, "御灵基准半径常数提升至 80px")
+	_c.near(GameBalance.SPIRIT_MAX_REACH, 185.0, EPS, "御灵最大外扩常数提升至 185px")
+	_c.near(GameBalance.SPIRIT_BASE_ANGULAR_SPEED, 2.8, EPS, "御灵基础旋转角速度提升至 2.8 rad/s")
+	var default_res := GameBalance.compute_spirit_orbit([0.0], [])
+	_c.near(float(default_res["radii"][0]), 80.0, EPS, "缺省入参计算回归 80px 基础半径")
+
+# ---------------- 机关炮台支路与 6 名新修士专项判定 ----------------
+
+func _test_turret_and_new_cultivators() -> void:
+	# 1. 机关法器基础定义与行为校验
+	for wid in ["jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou"]:
+		var wdef := WeaponData.get_def(wid)
+		_c.equals(int(wdef.get("behavior", -1)), WeaponData.Behavior.TURRET, "%s 行为为 TURRET" % wid)
+		_c.check("contraption" in WeaponData.tags_of(wid), "%s 包含 contraption 机关标签" % wid)
+		_c.check(float(wdef.get("turret_lifetime", 0.0)) > 0.0, "%s 声明了炮台寿命" % wid)
+		_c.check(float(wdef.get("turret_fire_cd", 0.0)) > 0.0, "%s 声明了开火间隔" % wid)
+
+	# 2. 机关羁绊阶梯结算
+	GameManager.reset_run()
+	_c.near(GameManager.synergy_contraption_mult, 1.0, EPS, "无机关法器时羁绊乘区为 1.0")
+
+	# 3. 机关师（jiguan）：机关门槛 -1，初始召唤伤害 +3
+	GameManager.cultivator_id = "jiguan"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.contraption_threshold_adj, 1, "机关师机关门槛下移 1")
+	_c.near(GameManager.engineering_damage, 3.0, EPS, "机关师初始召唤伤害 +3")
+
+	# 4. 灵植夫（lingzhifu）：收益 +12，全武器伤害 ×0.85
+	GameManager.reset_run()
+	GameManager.cultivator_id = "lingzhifu"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.harvest, 12.0, EPS, "灵植夫初始收益 +12")
+	_c.near(GameManager.weapon_damage_mult, 0.85, EPS, "灵植夫全武器伤害 ×0.85")
+
+	# 5. 雷法真君（leifa）：元素伤害 +3，雷系/符箓加成，剑系减伤
+	GameManager.reset_run()
+	GameManager.cultivator_id = "leifa"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.elemental_damage, 3.0, EPS, "雷法真君初始元素伤害 +3")
+	_c.near(GameManager.cultivator_damage_mult("jinlei_zhui"), 1.30, EPS, "雷法真君雷系法器伤害 +30%")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 0.60, EPS, "雷法真君剑系法器伤害 -40%")
+
+	# 6. 守财奴（shoucainu）：结息 8%
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shoucainu"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.stone_interest_rate, 0.08, EPS, "守财奴结息比率 8%")
+	GameManager.spirit_stones = 100
+	GameManager.wave_number = 1
+	GameManager.apply_harvest()
+	_c.equals(GameManager.spirit_stones, 108, "100 灵石结息 8% 到账 8 枚灵石")
+
+	# 7. 嗜血魔修（shixue）：受击增伤
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shixue"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.armor, -3.0, EPS, "嗜血魔修初始护甲 -3")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "受击前无额外增伤")
+	GameManager.on_player_hit(10.0)
+	_c.equals(GameManager.on_hit_damage_stacks, 1, "受击 1 次叠 1 层")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.03, EPS, "受击 1 次增伤 +3%")
+	GameManager.reset_run()
+
+	# 7. 数据表三件御灵装备属性强化验证（射程全面扩展至 >= 170px，伤害 >= 20）
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
 		var sdef := WeaponData.get_def(sid)
-		_c.check(float(sdef.get("range", 0.0)) >= 120.0, "御灵法器 %s 射程强化至 >= 120px（当前 %.0f）" % [sid, float(sdef.get("range", 0.0))])
-		_c.check(float(sdef.get("damage", 0.0)) >= 15.0, "御灵法器 %s 基础伤害 >= 15（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
+		_c.check(float(sdef.get("range", 0.0)) >= 170.0, "御灵法器 %s 射程强化至 >= 170px（当前 %.0f）" % [sid, float(sdef.get("range", 0.0))])
+		_c.check(float(sdef.get("damage", 0.0)) >= 20.0, "御灵法器 %s 基础伤害 >= 20（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
 		_c.check(float(sdef.get("knockback", 0.0)) >= 160.0, "御灵法器 %s 击退强化至 >= 160（当前 %.0f）" % [sid, float(sdef.get("knockback", 0.0))])
+
+	# 8. 召唤羁绊工程伤害与气血双收益验证
+	GameManager.reset_run()
+	GameManager.drones = [1, 1]  # 2 件护蝶
+	SynergySystem.recalc_synergies(GameManager)
+	_c.near(GameManager.synergy_max_hp_bonus, 15.0, EPS, "2 召唤获得 +15 气血上限")
+	_c.near(GameManager.synergy_engineering_damage, 2.0, EPS, "2 召唤获得 +2 召唤伤害加成")
+	var stat_dict := GameManager.get_player_stat_dict()
+	_c.near(float(stat_dict.get("engineering_damage", 0.0)), 2.0, EPS, "角色属性表包含召唤羁绊工程伤害")
+	GameManager.reset_run()
 
 	# 8. 多法器神识分流与同目标短窗集火韧性验证
 	_c.near(GameBalance.multi_weapon_damage_mult(1), 1.0, EPS, "单把法器神识效率 100%")

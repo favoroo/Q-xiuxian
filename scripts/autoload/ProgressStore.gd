@@ -206,6 +206,9 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		"max_stones": eff_stones,
 		"max_dodge": eff_dodge,
 		"max_harvest": eff_harvest,
+		"damage_taken_count": gm.total_damage_taken_count,
+		"hp_healed": gm.total_hp_healed,
+		"max_summons": gm.max_concurrent_summons,
 	}
 	var newly := AchievementData.evaluate_new_unlocks(run_ctx, gm.career_stats, gm.unlocked_achievements)
 	gm.last_run_new_achievements = []

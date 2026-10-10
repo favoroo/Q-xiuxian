@@ -673,12 +673,12 @@ static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) 
 
 # ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
 
-const SPIRIT_BASE_RADIUS := 58.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
+const SPIRIT_BASE_RADIUS := 80.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
 const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24~40px 贴身盲区）
-const SPIRIT_MAX_REACH := 135.0          ## 默认最大扑击外扩极限
-const SPIRIT_DANGER_DIST := 48.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
-const SPIRIT_SECTOR_HALF_ANGLE := 0.96   ## 扇区扑击半角（~55°，灵宝朝向前方扇区）
-const SPIRIT_BASE_ANGULAR_SPEED := 2.4   ## 基础默认旋转角速度（减小至平稳从容的 2.4 rad/s）
+const SPIRIT_MAX_REACH := 185.0          ## 默认最大扑击外扩极限
+const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
+const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
+const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
 
 ## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
 ## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）
@@ -696,6 +696,11 @@ static func spirit_orbit_angular_speed(
 	var combat_scale: float = 1.18 if in_combat else 1.0
 	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
 	return base_speed * haste_scale * combat_scale * star_scale
+
+## 环绕灵宝接触结算占空比：轨道扫掠 + 扇区扑击 + 26px 接触圈下，敌人处于可结算位置的
+## 时间占比实测估计（tests/WeaponProbe.tscn 灵蝶 ★1 口径）。纸面 DPS × 该系数 = 有效 DPS，
+## WeaponData.sustained_single_dps 的 DRONE 分支按此折算，让平衡判据用"实伤口径"钉数值。
+const SPIRIT_CONTACT_DUTY := 0.75
 
 ## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
 ## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）

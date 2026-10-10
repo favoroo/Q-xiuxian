@@ -325,12 +325,26 @@ const DEFS: Dictionary = {
 			"desc": "幸运 +10，每波免费重掷 +1 次，收益 +5",
 			"apply": {"luck": 10.0, "free_rerolls": 1.0, "harvest": 5.0},
 		},
-		"wuji_tianchuan_zhen": {
-			"name": "洞虚针", "tier": 4, "price": 88,
-			"icon": "res://assets/art/item_pojia_zhui.png",
-			"desc": "飞剑飞符贯穿人数 +2，远程伤害 +4",
-			"apply": {"bonus_pierce": 2.0, "ranged_damage": 4.0},
-		},
+			"wuji_tianchuan_zhen": {
+				"name": "洞虚针", "tier": 4, "price": 88,
+				"icon": "res://assets/art/item_pojia_zhui.png",
+				"desc": "飞剑飞符贯穿人数 +2，远程伤害 +4",
+				"apply": {"bonus_pierce": 2.0, "ranged_damage": 4.0},
+			},
+
+			# ---- 机关/召唤配套法宝 ----
+			"luban_suo": {
+				"name": "鲁班锁", "tier": 2, "price": 28,
+				"icon": "res://assets/art/item_luban_suo.png",
+				"desc": "榫卯严丝合缝，召唤伤害 +2",
+				"apply": {"engineering_damage": 2.0},
+			},
+			"jiguan_hexin": {
+				"name": "机簧核心", "tier": 3, "price": 48,
+				"icon": "res://assets/art/item_jiguan_hexin.png",
+				"desc": "机括极速运转，召唤伤害 +3，攻击间隔 -8%",
+				"apply": {"engineering_damage": 3.0, "attack_speed_mult_mul": 0.92},
+			},
 }
 
 static func get_def(id: String) -> Dictionary:

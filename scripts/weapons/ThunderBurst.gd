@@ -10,6 +10,8 @@ var knockback_base: float = 200.0
 var tint: Color = Color(1.0, 0.95, 0.6)
 ## 落点"砸下来的东西"（番天镇岳印 = 玄石大印）；空字符串 = 只留光环与光柱
 var icon_path: String = ""
+## 落点音 key（由 FloatingWeapon 从 WeaponData.sfx_impact 下发，须在 add_child 前赋值）
+var sfx_impact_key: String = ""
 var proc_burn: bool = false
 var burn_dps: float = 0.0
 var burn_dur: float = 3.0
@@ -36,8 +38,10 @@ func _ready() -> void:
 	tw.chain().tween_callback(queue_free)
 
 	_deal_damage.call_deferred()
-	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效
-	AudioManager.play_sfx("obelisk_blessing", 0.55)
+	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效。
+	# 落点音留在这儿无条件播 —— 「雷落下来了」是发生过的事，劈不劈空都响。
+	# 旧写法硬编码 obelisk_blessing（石碑的祝福铃），于是雷牌/巨印/宝灯落下全是一串铃铛。
+	AudioManager.play_sfx(sfx_impact_key if sfx_impact_key != "" else "thunder_strike", 1.0)
 
 ## 落点之物：把法器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
 func _spawn_impact_icon() -> void:

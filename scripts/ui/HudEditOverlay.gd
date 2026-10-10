@@ -72,11 +72,11 @@ func _build() -> void:
 	add_child(_skill_proxy)
 
 	_obelisk_proxy = Button.new()
-	_obelisk_proxy.text = "祭 坛"
+	_obelisk_proxy.text = GameHUD.OBELISK_BTN_TEXT
 	_obelisk_proxy.custom_minimum_size = GameHUD.OBELISK_BTN_SIZE
 	_obelisk_proxy.mouse_filter = Control.MOUSE_FILTER_STOP
 	_obelisk_proxy.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_obelisk_proxy, GameStyle.GOLD, GameStyle.GOLD, 15, GameStyle.INK_TEXT, 6.0)
+	SkillButtonView.style_circle_action(_obelisk_proxy, GameStyle.GOLD, GameHUD.OBELISK_BTN_FONT)
 	_obelisk_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_OBELISK))
 	add_child(_obelisk_proxy)
 

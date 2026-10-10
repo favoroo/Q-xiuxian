@@ -28,7 +28,7 @@ extends RefCounted
 ##   转圈（旧写法会把印玺横过来对着人）。此时 tip 只取长度，发射点落在"朝目标那一侧的器口"。
 ## - 环绕类（DRONE）走 SunOrb，本体不旋转，不需要这两个字段。
 
-enum Behavior { MELEE, PROJECTILE, BURST, DRONE }
+enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET }
 
 const MAX_STAR: int = 3
 const MAX_SLOTS: int = 6
@@ -38,14 +38,14 @@ const STAR_COOLDOWN_MULT: float = 0.92
 const SELL_RATIO: float = 0.5
 const STAR_SELL_MULT: float = 1.6
 
-const CLASSES: Array[String] = ["sword", "talisman", "wide", "thunder", "spirit"]
+const CLASSES: Array[String] = ["sword", "talisman", "wide", "thunder", "spirit", "contraption"]
 const ELEMENTS: Array[String] = ["metal", "wood", "water", "fire", "earth"]
 
 const DEFS: Dictionary = {
 			# ==================== 金系 (Metal: 锋芒·暴击·破甲) ====================
 			"qingyun_sword": {
 				"name": "长剑", "behavior": Behavior.MELEE,
-				"sfx": "sword_swing",
+				"sfx": "whoosh_light", "sfx_impact": "impact_blade",
 				"damage": 30.0, "cooldown": 1.05, "range": 150.0,
 				"knockback": 240.0,
 				"price": 25, "icon": "res://assets/art/weapon_sword.png",
@@ -58,7 +58,7 @@ const DEFS: Dictionary = {
 			},
 				"gengjin_feijian": {
 					"name": "飞剑", "behavior": Behavior.PROJECTILE,
-					"sfx": "sword_swing",
+					"sfx": "blade_shoot",
 					"damage": 26.0, "cooldown": 0.92, "range": 245.0,
 					"knockback": 185.0,
 					"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
@@ -73,7 +73,7 @@ const DEFS: Dictionary = {
 				},
 				"liuye_feidao": {
 					"name": "飞刀", "behavior": Behavior.PROJECTILE,
-					"sfx": "talisman_throw",
+					"sfx": "metal_dart",
 					"damage": 12.0, "cooldown": 1.15, "range": 235.0,
 					"knockback": 110.0,
 					"price": 35, "icon": "res://assets/art/weapon_dagger.png",
@@ -86,7 +86,7 @@ const DEFS: Dictionary = {
 				},
 					"baoyu_liuhuazhen": {
 						"name": "暴雨针", "behavior": Behavior.PROJECTILE,
-						"sfx": "talisman_throw",
+						"sfx": "metal_dart",
 						"damage": 12.0, "cooldown": 1.25, "range": 220.0,
 						"knockback": 90.0,
 						"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
@@ -101,7 +101,7 @@ const DEFS: Dictionary = {
 				# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
 				"qingmu_tengbian": {
 					"name": "藤鞭", "behavior": Behavior.MELEE,
-					"sfx": "fan_gust",
+					"sfx": "whoosh_light", "sfx_impact": "impact_crack",
 					"damage": 18.0, "cooldown": 1.20, "range": 175.0,
 					"knockback": 260.0,
 					"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
@@ -124,19 +124,19 @@ const DEFS: Dictionary = {
 					"tags": ["talisman", "wood"],
 					"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.5},
 				},
-				"lingdie": {
-					"name": "护蝶", "behavior": Behavior.DRONE,
-					"sfx": "orb_hit",
-					"damage": 15.0, "cooldown": 0.50, "range": 120.0,
-					"knockback": 160.0,
-					"price": 40, "icon": "res://assets/art/sun_orb.png",
-					"desc": "环绕周身触碰即伤，受召唤伤害与吸血加成", "tag": "环绕·召唤·木",
-					"tags": ["spirit", "wood"],
-					"stat_scalings": {"engineering_damage": 1.0, "lifesteal": 100.0},
-				},
+					"lingdie": {
+						"name": "护蝶", "behavior": Behavior.DRONE,
+						"sfx": "drone_flutter",
+						"damage": 23.0, "cooldown": 0.48, "range": 175.0,
+						"knockback": 160.0,
+						"price": 40, "icon": "res://assets/art/sun_orb.png",
+						"desc": "环绕周身触碰即伤，受召唤伤害与吸血加成", "tag": "环绕·召唤·木",
+						"tags": ["spirit", "wood"],
+						"stat_scalings": {"engineering_damage": 1.0, "lifesteal": 100.0},
+					},
 				"lianhuan_lingdan": {
 					"name": "弹弓", "behavior": Behavior.PROJECTILE,
-					"sfx": "talisman_throw",
+					"sfx": "impact_crack",
 					"damage": 19.0, "cooldown": 0.95, "range": 230.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_sling.png",
@@ -152,7 +152,7 @@ const DEFS: Dictionary = {
 				# ==================== 水系 (Water: 极寒·缓速·迅捷) ====================
 					"bajiao_fan": {
 						"name": "风扇", "behavior": Behavior.MELEE,
-						"sfx": "fan_gust",
+						"sfx": "fan_gust", "sfx_impact": "impact_crack",
 						"damage": 25.0, "cooldown": 1.25, "range": 185.0,
 						"knockback": 400.0,
 						"price": 20, "icon": "res://assets/art/weapon_fan.png",
@@ -164,7 +164,7 @@ const DEFS: Dictionary = {
 				},
 				"xuanbing_feizhen": {
 					"name": "冰针", "behavior": Behavior.PROJECTILE,
-					"sfx": "talisman_throw",
+					"sfx": "metal_dart",
 					"damage": 14.0, "cooldown": 1.0, "range": 235.0,
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
@@ -175,20 +175,20 @@ const DEFS: Dictionary = {
 				"tags": ["sword", "water"],
 				"stat_scalings": {"ranged_damage": 0.8, "move_speed_bonus": 28.0},
 			},
-			"hanquan_yulian": {
-				"name": "冰莲", "behavior": Behavior.DRONE,
-				"sfx": "orb_hit",
-				"damage": 16.0, "cooldown": 0.54, "range": 128.0,
-				"knockback": 190.0,
-				"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
-				"desc": "环绕护体触碰即减速，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
-				"proc_chill": 0.40, "chill_dur": 2.5,
-				"tags": ["spirit", "water"],
-				"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
-			},
+				"hanquan_yulian": {
+					"name": "冰莲", "behavior": Behavior.DRONE,
+					"sfx": "drone_chime",
+					"damage": 24.0, "cooldown": 0.50, "range": 175.0,
+					"knockback": 190.0,
+					"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
+					"desc": "环绕护体触碰即减速，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
+					"proc_chill": 0.40, "chill_dur": 2.5,
+					"tags": ["spirit", "water"],
+					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
+				},
 				"bihai_chaoyindi": {
 					"name": "音笛", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "flute_wave", "sfx_impact": "flute_wave",
 					"damage": 31.0, "cooldown": 1.40, "range": 225.0,
 					"knockback": 320.0,
 					"price": 44, "icon": "res://assets/art/weapon_flute.png",
@@ -217,7 +217,7 @@ const DEFS: Dictionary = {
 				},
 					"chiyan_dao": {
 						"name": "烈焰刀", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
 						"damage": 24.0, "cooldown": 1.15, "range": 165.0,
 						"knockback": 320.0,
 						"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
@@ -229,7 +229,7 @@ const DEFS: Dictionary = {
 				},
 				"fentian_baodeng": {
 					"name": "天灯", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "whoosh_heavy", "sfx_impact": "flame_jet",
 					"damage": 20.0, "cooldown": 1.45, "range": 230.0,
 					"knockback": 200.0,
 					"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
@@ -242,7 +242,7 @@ const DEFS: Dictionary = {
 				},
 					"sanmei_huohu": {
 						"name": "火葫芦", "behavior": Behavior.PROJECTILE,
-						"sfx": "blade_shoot",
+						"sfx": "flame_jet",
 						"damage": 8.0, "cooldown": 0.42, "range": 170.0,
 						"knockback": 95.0,
 						"price": 42, "icon": "res://assets/art/weapon_fire_calabash.png",
@@ -258,7 +258,7 @@ const DEFS: Dictionary = {
 				# ==================== 土系 (Earth: 厚重·护甲·震退) ====================
 				"wulei_paizi": {
 					"name": "雷牌", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
 					"damage": 35.0, "cooldown": 1.50, "range": 225.0,
 					"knockback": 280.0,
 					"price": 45, "icon": "res://assets/art/weapon_thunder.png",
@@ -270,7 +270,7 @@ const DEFS: Dictionary = {
 				},
 				"fantian_yin": {
 					"name": "巨印", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
 					"damage": 38.0, "cooldown": 1.55, "range": 220.0,
 					"knockback": 360.0,
 					"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
@@ -281,19 +281,19 @@ const DEFS: Dictionary = {
 					"tags": ["wide", "earth"],
 					"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
 				},
-				"hunyuan_zhong": {
-					"name": "古钟", "behavior": Behavior.DRONE,
-					"sfx": "orb_hit",
-					"damage": 17.0, "cooldown": 0.56, "range": 136.0,
-					"knockback": 340.0,
-					"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
-					"desc": "环绕周身撞击击退敌群，受召唤伤害与生命加成", "tag": "环绕·召唤·土",
-					"tags": ["spirit", "earth"],
-					"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
-				},
+					"hunyuan_zhong": {
+						"name": "古钟", "behavior": Behavior.DRONE,
+						"sfx": "orb_hit",
+						"damage": 25.0, "cooldown": 0.52, "range": 180.0,
+						"knockback": 340.0,
+						"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
+						"desc": "环绕周身撞击击退敌群，受召唤伤害与生命加成", "tag": "环绕·召唤·土",
+						"tags": ["spirit", "earth"],
+						"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
+					},
 					"xuanwu_lingdun": {
 						"name": "重盾", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
 						"damage": 24.0, "cooldown": 1.20, "range": 170.0,
 						"knockback": 350.0,
 						"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
@@ -313,7 +313,7 @@ const DEFS: Dictionary = {
 				# ---- 补格子 9 把 ----
 				"jinzhen_fu": {
 					"name": "金针符", "behavior": Behavior.PROJECTILE,
-					"sfx": "talisman_throw",
+					"sfx": "metal_dart",
 					"damage": 9.0, "cooldown": 0.58, "range": 230.0,
 					"knockback": 80.0,
 					"price": 34, "icon": "res://assets/art/weapon_jinzhen_fu.png",
@@ -352,7 +352,7 @@ const DEFS: Dictionary = {
 				},
 					"jinjiao_jian": {
 						"name": "金蛟剪", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
 						"damage": 27.0, "cooldown": 1.25, "range": 185.0,
 						"knockback": 300.0,
 						"price": 38, "icon": "res://assets/art/weapon_jinjiao_jian.png",
@@ -364,7 +364,7 @@ const DEFS: Dictionary = {
 					},
 					"qingteng_jian": {
 						"name": "青藤剑", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_light", "sfx_impact": "impact_crack",
 						"damage": 21.0, "cooldown": 1.0, "range": 160.0,
 						"knockback": 220.0,
 						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
@@ -376,7 +376,7 @@ const DEFS: Dictionary = {
 				},
 				"jinlei_zhui": {
 					"name": "金雷锥", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
 					"damage": 35.0, "cooldown": 1.35, "range": 230.0,
 					"knockback": 220.0,
 					"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
@@ -388,7 +388,7 @@ const DEFS: Dictionary = {
 				},
 				"chunlei_gu": {
 					"name": "春雷鼓", "behavior": Behavior.BURST,
-					"sfx": "thunder_strike",
+					"sfx": "drum_boom", "sfx_impact": "drum_boom",
 					"damage": 24.0, "cooldown": 1.4, "range": 225.0,
 					"knockback": 200.0,
 					"price": 44, "icon": "res://assets/art/weapon_chunlei_gu.png",
@@ -399,32 +399,32 @@ const DEFS: Dictionary = {
 					"tags": ["thunder", "wood"],
 					"stat_scalings": {"elemental_damage": 1.0, "hp_regen": 4.0},
 				},
-				"haojin_lun": {
-					"name": "昊金轮", "behavior": Behavior.DRONE,
-					"sfx": "orb_hit",
-					"damage": 16.0, "cooldown": 0.48, "range": 124.0,
-					"knockback": 200.0,
-					"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
-					"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "环绕·召唤·金",
-					"tags": ["spirit", "metal"],
-					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
-				},
-				"lihuo_ya": {
-					"name": "离火鸦", "behavior": Behavior.DRONE,
-					"sfx": "orb_hit",
-					"damage": 13.0, "cooldown": 0.52, "range": 122.0,
-					"knockback": 150.0,
-					"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
-					"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "环绕·召唤·火",
-					"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
-					"tags": ["spirit", "fire"],
-					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
-				},
+					"haojin_lun": {
+						"name": "昊金轮", "behavior": Behavior.DRONE,
+						"sfx": "orb_hit",
+						"damage": 22.0, "cooldown": 0.45, "range": 170.0,
+						"knockback": 200.0,
+						"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
+						"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "环绕·召唤·金",
+						"tags": ["spirit", "metal"],
+						"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
+					},
+					"lihuo_ya": {
+						"name": "离火鸦", "behavior": Behavior.DRONE,
+						"sfx": "drone_flutter",
+						"damage": 19.0, "cooldown": 0.50, "range": 170.0,
+						"knockback": 150.0,
+						"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
+						"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "环绕·召唤·火",
+						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
+						"tags": ["spirit", "fire"],
+						"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
+					},
 
 				# ---- 流派特色 6 把 ----
 				"xueyin_dao": {
 					"name": "血饮狂刀", "behavior": Behavior.MELEE,
-					"sfx": "sword_swing",
+					"sfx": "whoosh_light", "sfx_impact": "impact_blade",
 					"damage": 14.0, "cooldown": 0.65, "range": 150.0,
 					"knockback": 160.0,
 					"price": 36, "icon": "res://assets/art/weapon_xueyin_dao.png",
@@ -436,7 +436,7 @@ const DEFS: Dictionary = {
 				},
 					"jubao_chi": {
 						"name": "聚宝金尺", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_light", "sfx_impact": "impact_blunt",
 						"damage": 22.0, "cooldown": 1.15, "range": 175.0,
 						"knockback": 260.0,
 						"price": 30, "icon": "res://assets/art/weapon_jubao_chi.png",
@@ -448,7 +448,7 @@ const DEFS: Dictionary = {
 					},
 					"tougu_ding": {
 						"name": "透骨钉", "behavior": Behavior.PROJECTILE,
-						"sfx": "talisman_throw",
+						"sfx": "metal_dart",
 						"damage": 14.0, "cooldown": 0.9, "range": 240.0,
 						"knockback": 100.0,
 						"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
@@ -461,7 +461,7 @@ const DEFS: Dictionary = {
 				},
 				"benlang_chui": {
 					"name": "崩浪锤", "behavior": Behavior.MELEE,
-					"sfx": "fan_gust",
+					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
 					"damage": 30.0, "cooldown": 1.4, "range": 180.0,
 					"knockback": 520.0,
 					"price": 34, "icon": "res://assets/art/weapon_benlang_chui.png",
@@ -473,7 +473,7 @@ const DEFS: Dictionary = {
 			},
 					"liuling_jian": {
 						"name": "六棱锏", "behavior": Behavior.MELEE,
-						"sfx": "sword_swing",
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
 						"damage": 26.0, "cooldown": 1.2, "range": 165.0,
 						"knockback": 330.0,
 						"price": 36, "icon": "res://assets/art/weapon_liuling_jian.png",
@@ -482,20 +482,65 @@ const DEFS: Dictionary = {
 				"tags": ["sword", "earth"],
 				"stat_scalings": {"melee_damage": 1.0, "armor": 3.0},
 			},
-			"xuanwu_pei": {
-				"name": "玄武佩", "behavior": Behavior.DRONE,
-				"sfx": "orb_hit",
-				"damage": 17.0, "cooldown": 0.58, "range": 130.0,
-				"knockback": 420.0,
-				"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
-				"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "环绕·召唤·土",
-				"tags": ["spirit", "earth"],
-				"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5, "max_hp_bonus": 0.10},
-			},
+					"xuanwu_pei": {
+						"name": "玄武佩", "behavior": Behavior.DRONE,
+						"sfx": "drone_chime",
+						"damage": 25.0, "cooldown": 0.54, "range": 175.0,
+						"knockback": 420.0,
+						"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
+						"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "环绕·召唤·土",
+						"tags": ["spirit", "earth"],
+						"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5, "max_hp_bonus": 0.10},
+					},
+
+				# ---- 机关支路 3 把 ----
+				"jiguan_nu": {
+					"name": "机关弩", "behavior": Behavior.TURRET,
+					"sfx": "metal_dart",
+					"damage": 18.0, "cooldown": 3.5, "range": 220.0,
+					"turret_fire_cd": 0.75, "turret_lifetime": 12.0, "turret_cap": 2,
+					"knockback": 120.0,
+					"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
+					"tip": Vector2(22, -20), "upright": true,
+					"desc": "布设自动索敌的机关弩台，受召唤伤害与暴击率加成", "tag": "机关·召唤·金",
+					"bullet": "res://assets/art/bullet_gold_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
+					"pierce": 1,
+					"tags": ["contraption", "metal"],
+					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 25.0},
+				},
+				"jianzhen_pan": {
+					"name": "剑阵盘", "behavior": Behavior.TURRET,
+					# 疾射飞剑 ⇒ 金属抛体离手族；whoosh_light 是近战前摇的铺垫层，当开火音发虚
+					"sfx": "blade_shoot",
+					"damage": 15.0, "cooldown": 4.0, "range": 200.0,
+					"turret_fire_cd": 0.60, "turret_lifetime": 12.0, "turret_cap": 2,
+					"knockback": 140.0,
+					"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
+					"tip": Vector2(22, 0), "upright": true,
+					"desc": "布设御剑阵盘疾射飞剑，受召唤与近战伤害加成", "tag": "机关·剑系·金",
+					"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.55, "bullet_spin": false,
+					"pierce": 2,
+					"tags": ["contraption", "sword", "metal"],
+					"stat_scalings": {"engineering_damage": 1.0, "melee_damage": 0.5},
+				},
+				"penhuo_jiguanshou": {
+					"name": "喷火兽", "behavior": Behavior.TURRET,
+					"sfx": "flame_jet",
+					"damage": 11.0, "cooldown": 4.2, "range": 175.0,
+					"turret_fire_cd": 0.42, "turret_lifetime": 10.0, "turret_cap": 2,
+					"knockback": 100.0,
+					"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
+					"tip": Vector2(22, -10), "upright": true,
+					"desc": "布设喷火机关兽持续灼烧敌群，受召唤与元素伤害加成", "tag": "机关·召唤·火",
+					"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
+					"pierce": 2, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
+					"tags": ["contraption", "fire"],
+					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.6},
+				},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
-## 涵盖器类 5 系 + 五行 5 系，共 10 种流派羁绊
+## 涵盖器类 6 系 + 五行 5 系，共 11 种流派羁绊
 const SYNERGIES: Dictionary = {
 	# ---- 器类羁绊 ----
 	"sword": {
@@ -513,15 +558,21 @@ const SYNERGIES: Dictionary = {
 		"values": [0.92, 0.85, 0.75],
 		"desc": "攻击间隔 -8/15/25%",
 	},
-	"spirit": {
-		"name": "召唤", "thresholds": [2, 4, 6],
-		"values": [15, 30, 50],
-		"desc": "最大生命 +15/30/50",
-	},
+		"spirit": {
+			"name": "召唤", "thresholds": [2, 4, 6],
+			"values": [15, 30, 50],
+			"eng_values": [2.0, 4.0, 7.0],
+			"desc": "最大生命 +15/30/50，召唤伤害 +2/4/7",
+		},
 	"wide": {
 		"name": "横扫", "thresholds": [2, 4, 6],
 		"values": [0.10, 0.20, 0.30],
 		"desc": "武器伤害 +10/20/30%",
+	},
+	"contraption": {
+		"name": "机关", "thresholds": [2, 4, 6],
+		"values": [0.15, 0.30, 0.50],
+		"desc": "机关伤害 +15/30/50%",
 	},
 
 	# ---- 五行羁绊 ----
@@ -555,7 +606,7 @@ const SYNERGIES: Dictionary = {
 ## 开局六选一：金木水火土五种代表性本命法器 + 御灵入门「灵蝶」
 const STARTER_IDS: Array = ["qingyun_sword", "wanmu_lingfu", "bajiao_fan", "huoyan_fu", "fantian_yin", "lingdie"]
 
-## 商店武器池（全部 35 把法器）
+## 商店武器池（全部 38 把法器）
 const SHOP_POOL: Array = [
 	"qingyun_sword", "gengjin_feijian", "liuye_feidao", "baoyu_liuhuazhen",
 	"qingmu_tengbian", "wanmu_lingfu", "lingdie", "lianhuan_lingdan",
@@ -566,6 +617,8 @@ const SHOP_POOL: Array = [
 	"jinzhen_fu", "xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "qingteng_jian",
 	"jinlei_zhui", "chunlei_gu", "haojin_lun", "lihuo_ya",
 	"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian", "xuanwu_pei",
+	# 机关支路 3 把
+	"jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou",
 ]
 
 ## 回血丹（商店消耗品）
@@ -630,6 +683,10 @@ static func element_of(id: String) -> String:
 static func sfx_for(id: String) -> String:
 	return String(DEFS.get(id, {}).get("sfx", "blade_shoot"))
 
+## 该法器的「第二层」音 key：MELEE=命中材质声（只在真打中时播），BURST=落点爆发声。
+static func sfx_impact_for(id: String) -> String:
+	return String(DEFS.get(id, {}).get("sfx_impact", ""))
+
 ## 弹丸从 2026-10-08 起带有限转向追踪（BladeProjectile.HOMING_TURN_RATE）：
 ## 场上只剩一个敌人时，一次三发的法器每一发最终都归它 ⇒ 单体口径按发数求和才与运行时一致。
 ## 下面两个纯函数是给"档位体检"当尺子用的（判据见 tests/unit_runner.gd::_test_ranged_focus_dps），
@@ -648,6 +705,8 @@ static func targets_per_shot(id: String) -> int:
 		return maxi(1, int(def.get("projectile_count", 1))) * per_bullet
 	if behavior == Behavior.DRONE:
 		return 3      ## 环绕接触：同时贴身的一般是两三尊
+	if behavior == Behavior.TURRET:
+		return 4      ## 机关炮台独立索敌
 	return 6          ## 近战弧扫 / 落雷圆形：天生群体
 ## 「点杀位」远程法器：弹丸类里单发最多只结算 FOCUS_RANGED_MAX_TARGETS 个敌人的那些。
 ## 这一档必须在"啃硬目标"上赢过贴脸与环绕，否则就是纯下位（用户 2026-10-08 的火符投诉）。
@@ -665,6 +724,12 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 		return 0.0
 	var dmg := damage_for(id, star)
 	var cd := maxf(0.05, cooldown_for(id, star))
+	if int(def.get("behavior", Behavior.MELEE)) == Behavior.TURRET:
+		var fire_cd: float = maxf(0.1, float(def.get("turret_fire_cd", 0.75)))
+		var t_dps: float = dmg / fire_cd
+		if def.get("proc_burn", false):
+			t_dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 2.5)) / fire_cd)
+		return t_dps
 	var per_hit: float = 1.0
 	if int(def.get("behavior", Behavior.MELEE)) == Behavior.PROJECTILE:
 		per_hit = float(mini(2, maxi(1, int(def.get("projectile_count", 1)))))
@@ -673,6 +738,9 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 		dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 3.0)) / cd)
 	if def.get("proc_poison", false):
 		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
+	# 环绕接触天生带"占空比税"：纸面 DPS × 接触占空比 = 有效单体 DPS（实伤口径）
+	if int(def.get("behavior", Behavior.MELEE)) == Behavior.DRONE:
+		dps *= GameBalance.SPIRIT_CONTACT_DUTY
 	return dps
 
 ## 该法器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。

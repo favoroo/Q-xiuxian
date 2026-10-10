@@ -916,7 +916,11 @@ func _create_synergy_card(tag: String) -> Control:
 	var n: int = int(data.get("count", 0))
 	var lv: int = int(data.get("level", 0))
 	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+	var shift: int = 0
+	if tag == "spirit":
+		shift = GameManager.spirit_threshold_adj
+	elif tag == "contraption":
+		shift = GameManager.contraption_threshold_adj
 	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
 	var is_elem: bool = tag in WeaponData.ELEMENTS
 

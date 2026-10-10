@@ -23,6 +23,13 @@ const MELEE_LUNGE := 30.0
 const MELEE_ARC_RADIUS := 75.0
 const SLASH_ART_OUTER := 124.0
 
+## 近战双层与雷法双层的相对响度（2026-10-10 音色重构）：
+## 前摇破空是「动作」，无条件播、当铺垫层，所以压低；命中材质是「战果」，只在真打中时补一记。
+## 旧写法只有一层，且写在打击帧 —— 一声纯空气破空挂在命中 moment，剑听上去就是棍子。
+const MELEE_WHOOSH_SCALE := 1.0
+const MELEE_IMPACT_SCALE := 0.95   ## 压在 enemy_hit（0.56 峰值）之下，三层同帧才不糊
+const BURST_CAST_SCALE := 0.7      ## 施法层：落点才是主角，这里只起手
+
 @export var weapon_def_id: String = "qingyun_sword"
 @export var star: int = 1
 
@@ -61,7 +68,10 @@ var muzzle_flash: Sprite2D
 
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
+var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
 const LightningBoltScript = preload("res://scripts/weapons/LightningBolt.gd")
+
+var active_turrets: Array[TurretUnit] = []
 
 const CHARGE_GLOW := Color(1.45, 1.28, 0.62)   # 五雷蓄力时的金光
 
@@ -208,9 +218,10 @@ func _process(delta: float) -> void:
 		else:
 			_apply_facing(lerp_angle(rotation, dynamic_angle, minf(delta * 6.0, 1.0)))
 
-	# 4. 攻击
-	if cooldown_timer <= 0.0 and current_target != null and not is_attacking:
-		_perform_attack()
+		# 4. 攻击
+		if cooldown_timer <= 0.0 and not is_attacking:
+			if behavior == WeaponData.Behavior.TURRET or current_target != null:
+				_perform_attack()
 
 func _perform_attack() -> void:
 	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult
@@ -221,6 +232,39 @@ func _perform_attack() -> void:
 			_perform_projectile_attack()
 		WeaponData.Behavior.BURST:
 			_perform_burst_attack()
+		WeaponData.Behavior.TURRET:
+			_perform_turret_attack()
+
+func _perform_turret_attack() -> void:
+	is_attacking = true
+	var player = GameManager.player
+	var spawn_pos: Vector2 = player.global_position if player != null else global_position
+
+	var alive: Array[TurretUnit] = []
+	for t in active_turrets:
+		if t != null and is_instance_valid(t) and not t._is_dying:
+			alive.append(t)
+	active_turrets = alive
+
+	var cap := int(def.get("turret_cap", 2)) + (star - 1)
+	if active_turrets.size() >= cap:
+		var oldest: TurretUnit = active_turrets.pop_front() as TurretUnit
+		if oldest != null and is_instance_valid(oldest):
+			oldest.dismiss()
+
+	var turret := turret_scene.instantiate() as TurretUnit
+	turret.setup(weapon_def_id, star)
+	turret.global_position = spawn_pos + Vector2(GameManager.rng.randf_range(-22, 22), GameManager.rng.randf_range(-16, 16))
+	get_tree().current_scene.add_child(turret)
+	active_turrets.append(turret)
+
+	var orig_pos := position
+	var tw := create_tween()
+	tw.tween_property(self, "position", orig_pos + Vector2(0, 8), 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(sprite, "modulate", Color(1.4, 1.3, 0.8), 0.08)
+	tw.tween_property(self, "position", orig_pos, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.12)
+	tw.tween_callback(func(): is_attacking = false)
 
 func _final_damage() -> float:
 	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
@@ -337,7 +381,9 @@ func _perform_burst_attack() -> void:
 	var cast_pos := orig_pos + Vector2(0.0, -16.0)
 
 	# 施法演出：法牌升起蓄力、金光微颤 → 引雷落于目标 → 前突回落
-	AudioManager.play_sfx("orb_hit", 0.7)
+	# 旧写法在这儿硬编码 orb_hit（钟），把表里配的 thunder_strike 整个架空了 ——
+	# 六把落雷系法器听起来全是「敲钟 + 祝福铃」。取音一律回表。
+	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), BURST_CAST_SCALE)
 	var tw = create_tween()
 	tw.tween_property(self, "position", cast_pos, 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "scale", Vector2(1.22, 1.22), 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -370,6 +416,8 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
 	burst.tint = def.get("burst_tint", burst.tint)
 	burst.icon_path = String(def.get("burst_icon", ""))
+	# 落点音必须在 add_child 之前下发：ThunderBurst 在 _ready 里就播它
+	burst.sfx_impact_key = WeaponData.sfx_impact_for(weapon_def_id)
 	if def.get("proc_burn", false):
 		burst.proc_burn = true
 		burst.burn_dps = final_dmg * float(def.get("burn_ratio", 0.5))
@@ -403,19 +451,23 @@ func _perform_melee_attack() -> void:
 	slash_sprite.rotation = 0.0
 
 	# 三段式近战节奏：前摇微撤蓄势 (0.05s) → 极速瞬扫涂抹 (0.04s) → 弹性卸力回正 (0.13s)
+	# 音效跟着这套节奏分两层：起手一声破空（动作，挥空也得有），咬到肉才补材质声（战果）。
+	# 旧写法只有一层、且挂在打击帧 —— 于是一把剑和一根棍子听起来完全一样。
+	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), MELEE_WHOOSH_SCALE)
 	var tw = create_tween()
 	# 1. 蓄力前摇（Anticipation）：刀身轻微后撤、微缩积蓄张力
 	tw.tween_property(self, "position", windup_pos, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "scale", Vector2(0.92, 1.08), 0.05)
 
-	# 2. 打击瞬发（Active）：爆发极速横扫，点亮月牙刀光并结算伤害与破空音
+	# 2. 打击瞬发（Active）：爆发极速横扫，点亮月牙刀光并结算伤害与材质音
 	tw.chain().tween_callback(func():
 		slash_sprite.visible = true
 		slash_sprite.modulate.a = 1.0
 		_flash_sprite(Color(1.5, 1.5, 1.5), 0.12)
-		AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 1.15)
 		var hits := _deal_melee_damage(aim_dir)
 		if hits > 0:
+			# 材质层只在真咬到肉时响；空挥只剩 50ms 前那一声破空
+			AudioManager.play_sfx(WeaponData.sfx_impact_for(weapon_def_id), MELEE_IMPACT_SCALE)
 			# 刀刃入肉阻力感：武器微反冲回弹
 			position -= aim_dir * 4.5
 	)

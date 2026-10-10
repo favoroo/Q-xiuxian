@@ -112,7 +112,7 @@ func _fire_ring() -> void:
 		bolt.damage = dmg
 		bolt.scale_factor = GameBalance.BOSS_BOLT_SCALE
 		get_parent().add_child(bolt)
-	AudioManager.play_sfx("blade_shoot", 0.5)
+	AudioManager.play_sfx("enemy_bolt", 0.6)
 	GameManager.add_trauma(0.12)
 
 ## 震地冲击：预警圈套在脚下，0.9s 后结算范围内伤害（预警期可跑出圈外躲避）
@@ -136,7 +136,7 @@ func _resolve_slam(player: Node2D) -> void:
 	# 震地 = 全场最该抖一下的时刻，但它自己就是一个事件：
 	# 旧的 feedback(MEDIUM) + shake_camera(6.0) 是同一次落地发两遍，合为一记 HEAVY
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	AudioManager.play_sfx("orb_hit", 1.2)
+	AudioManager.play_sfx("enemy_slam", 1.1)   ## Boss 砸地是地裂级低频，不许借灵宝触体的暖金钟
 	if player.global_position.distance_to(global_position) <= GameBalance.BOSS_SLAM_RADIUS:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT))
 

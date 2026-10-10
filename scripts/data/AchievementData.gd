@@ -10,15 +10,17 @@ extends RefCounted
 ## 危险度档位名号（D0 ~ D5）
 const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
 
-## 初始默认解锁的 4 名修士
+## 初始默认解锁的 6 名修士
 const DEFAULT_CULTIVATORS: Array[String] = [
 	"jianchi",
 	"shiyue",
 	"fuzhen",
 	"jinsuanpan",
+	"lingzhifu",
+	"leifa",
 ]
 
-## 初始默认进入灵石阁货架池的 16 件法宝
+## 初始默认进入灵石阁货架池的 18 件法宝
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
@@ -36,6 +38,8 @@ const DEFAULT_ITEMS: Array[String] = [
 	"huichun_hulu",
 	"xiuluo_pei",
 	"taiyi_jindan",
+	"luban_suo",
+	"jiguan_hexin",
 ]
 
 ## 成就里程碑定义表（顺序即「修仙志」展示顺序）
@@ -77,15 +81,51 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		"reward_name": "学者",
 		"icon": "res://assets/art/cultivator_duoshe_icon.png",
 	},
-	{
-		"id": "ach_cult_dubi",
-		"name": "极限挑战",
-		"cond_desc": "通关「困难」或更高难度",
-		"reward_type": "cultivator",
-		"reward_id": "dubi",
-		"reward_name": "狂战士",
-		"icon": "res://assets/art/cultivator_dubi_icon.png",
-	},
+		{
+			"id": "ach_cult_dubi",
+			"name": "极限挑战",
+			"cond_desc": "通关「困难」或更高难度",
+			"reward_type": "cultivator",
+			"reward_id": "dubi",
+			"reward_name": "狂战士",
+			"icon": "res://assets/art/cultivator_dubi_icon.png",
+		},
+		{
+			"id": "ach_cult_jiguan",
+			"name": "巧夺天工",
+			"cond_desc": "单局同时上阵机关或御灵法器达到4件",
+			"reward_type": "cultivator",
+			"reward_id": "jiguan",
+			"reward_name": "机关师",
+			"icon": "res://assets/art/cultivator_jiguan_icon.png",
+		},
+		{
+			"id": "ach_cult_yaowang",
+			"name": "悬壶济世",
+			"cond_desc": "单局累计气血回复达到200点",
+			"reward_type": "cultivator",
+			"reward_id": "yaowang",
+			"reward_name": "药王",
+			"icon": "res://assets/art/cultivator_yaowang_icon.png",
+		},
+		{
+			"id": "ach_cult_shoucainu",
+			"name": "日进斗金",
+			"cond_desc": "单局持有金币达到400枚",
+			"reward_type": "cultivator",
+			"reward_id": "shoucainu",
+			"reward_name": "守财奴",
+			"icon": "res://assets/art/cultivator_shoucainu_icon.png",
+		},
+		{
+			"id": "ach_cult_shixue",
+			"name": "浴血修罗",
+			"cond_desc": "单局累计承受伤害达到25次",
+			"reward_type": "cultivator",
+			"reward_id": "shixue",
+			"reward_name": "嗜血魔修",
+			"icon": "res://assets/art/cultivator_shixue_icon.png",
+		},
 	{
 		"id": "ach_item_pojia",
 		"name": "深入敌后",
@@ -199,6 +239,14 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return victory or total_wins >= 1
 		"ach_cult_dubi":
 			return (victory and danger >= 1)
+		"ach_cult_jiguan":
+			return int(run_ctx.get("max_summons", 0)) >= 4
+		"ach_cult_yaowang":
+			return float(run_ctx.get("hp_healed", 0.0)) >= 200.0 - 0.0001
+		"ach_cult_shoucainu":
+			return max_stones >= 400
+		"ach_cult_shixue":
+			return int(run_ctx.get("damage_taken_count", 0)) >= 25
 		"ach_item_pojia":
 			return best_wave >= 15
 		"ach_item_wuxing":

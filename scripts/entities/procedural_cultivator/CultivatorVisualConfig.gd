@@ -17,8 +17,8 @@ extends Resource
 
 ## 2. 面部与首服插槽 (Face & Head Gear)
 ## mask_style: "oval_chin" (鹅蛋尖), "square_rock" (方岩), "round_petite" (娇小圆), "sharp_fox" (敏锐狐), "stout_brute" (粗犷蛮)
-## horns_style: "butterfly" (蝶角), "dao_bun" (道髻木簪), "bamboo_hat" (斗笠), "talisman" (悬符), "gold_crown" (金冠), "bull_horns" (牛角), "fox_ears" (狐耳), "none" (光洁)
-## eye_style: "hollow_oval" (经典深渊), "sharp_slit" (冷眸细线), "round_pupil" (道童圆目), "angry_slit" (怒目)
+## horns_style: "butterfly" (蝶角), "dao_bun" (道髻木簪), "twin_buns" (童子双丫髻), "bamboo_hat" (斗笠), "talisman" (悬符), "gold_crown" (金冠), "bull_horns" (牛角), "fox_ears" (狐耳), "none" (光洁)
+## eye_style: "hollow_oval" (经典深渊), "sharp_slit" (冷眸细线), "round_pupil" (道童圆目), "round_bright" (童子亮眼), "angry_slit" (怒目)
 @export var face: Dictionary = {
 	"mask_style": "oval_chin",
 	"horns_style": "butterfly",
@@ -102,6 +102,18 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 			return make_duoshe()
 		"duobao":
 			return make_duobao()
+		"lingzhifu":
+			return make_lingzhifu()
+		"leifa":
+			return make_leifa()
+		"jiguan":
+			return make_jiguan()
+		"yaowang":
+			return make_yaowang()
+		"shoucainu":
+			return make_shoucainu()
+		"shixue":
+			return make_shixue()
 		"jianchi", _:
 			return make_jianchi()
 
@@ -165,21 +177,21 @@ static func make_shiyue() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 3. 符阵灵童（御灵驱蝶，以众凌寡，娇小玲珑，道法自然）
+# 3. 驯兽师（御蝶驱兽，以众凌寡，娇小玲珑，道法自然）
 static func make_fuzhen() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
-	cfg.body = { "scale": 0.85, "width_scale": 0.92, "height_scale": 0.95, "head_scale": 1.14 }
+	cfg.body = { "scale": 0.85, "width_scale": 0.92, "height_scale": 0.95, "head_scale": 1.10 }
 	cfg.face = {
 		"mask_style": "round_petite",
-		"horns_style": "dao_bun",
-		"eye_style": "round_pupil",
-		"eye_color": Color(0.35, 0.85, 1.0, 0.5), # 清澈灵动天青蓝
+		"horns_style": "twin_buns",
+		"eye_style": "round_bright",
+		"eye_color": Color(0.35, 0.85, 1.0, 0.65), # 清澈灵动天青蓝
 		"eye_core_color": Color(0.85, 0.98, 1.0)
 	}
 	cfg.cloak = {
 		"cloak_style": "short_cape",
-		"col_outer": Color(0.36, 0.16, 0.14),     # 朱砂赤红
-		"col_inner": Color(0.55, 0.38, 0.18),     # 杏黄道袍
+		"col_outer": Color(0.60, 0.22, 0.15),     # 明朱红短披
+		"col_inner": Color(0.92, 0.84, 0.64),     # 米杏白中衣
 		"col_edge": Color(0.95, 0.78, 0.30),      # 金符流光
 		"chest_ornament": "bagua"
 	}
@@ -367,6 +379,176 @@ static func make_duobao() -> CultivatorVisualConfig:
 		"col_shadow": Color(0.42, 0.28, 0.10),
 		"col_accent": Color(0.98, 0.88, 0.45),
 		"strap_style": "dual"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 10. 灵植夫（躬耕灵田，福泽延绵，青草麦香，生生不息）
+static func make_lingzhifu() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.02, "width_scale": 1.08, "height_scale": 0.98, "head_scale": 1.04 }
+	cfg.face = {
+		"mask_style": "round_petite",
+		"horns_style": "bamboo_hat",
+		"eye_style": "round_pupil",
+		"eye_color": Color(0.35, 0.88, 0.45, 0.55),
+		"eye_core_color": Color(0.85, 1.0, 0.90)
+	}
+	cfg.cloak = {
+		"cloak_style": "short_cape",
+		"col_outer": Color(0.14, 0.28, 0.16),
+		"col_inner": Color(0.35, 0.32, 0.14),
+		"col_edge": Color(0.65, 0.88, 0.45),
+		"chest_ornament": "none"
+	}
+	cfg.weapon = {
+		"weapon_type": "peach_sword",
+		"col_main": Color(0.48, 0.32, 0.18),
+		"col_shadow": Color(0.28, 0.18, 0.10),
+		"col_accent": Color(0.65, 0.88, 0.45),
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 11. 雷法真君（天雷轰顶，万法归宗，紫电破空，仙威赫赫）
+static func make_leifa() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.05, "width_scale": 0.98, "height_scale": 1.06, "head_scale": 0.96 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "dao_bun",
+		"eye_style": "sharp_slit",
+		"eye_color": Color(0.55, 0.65, 1.0, 0.65),
+		"eye_core_color": Color(0.92, 0.95, 1.0)
+	}
+	cfg.cloak = {
+		"cloak_style": "split_flowing",
+		"col_outer": Color(0.15, 0.12, 0.28),
+		"col_inner": Color(0.22, 0.18, 0.38),
+		"col_edge": Color(0.65, 0.75, 1.0),
+		"chest_ornament": "bagua"
+	}
+	cfg.weapon = {
+		"weapon_type": "bone_nail",
+		"col_main": Color(0.68, 0.75, 0.95),
+		"col_shadow": Color(0.35, 0.42, 0.65),
+		"col_accent": Color(0.95, 0.92, 0.45),
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 12. 机关师（百炼千机，甲阵锁岳，铜骨齿轮，巧夺天工）
+static func make_jiguan() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 0.98, "width_scale": 1.05, "height_scale": 0.98, "head_scale": 1.02 }
+	cfg.face = {
+		"mask_style": "square_rock",
+		"horns_style": "gold_crown",
+		"eye_style": "sharp_slit",
+		"eye_color": Color(0.95, 0.75, 0.25, 0.6),
+		"eye_core_color": Color(1.0, 0.95, 0.75)
+	}
+	cfg.cloak = {
+		"cloak_style": "heavy_overcoat",
+		"col_outer": Color(0.22, 0.18, 0.16),
+		"col_inner": Color(0.32, 0.24, 0.18),
+		"col_edge": Color(0.85, 0.68, 0.32),
+		"chest_ornament": "coin"
+	}
+	cfg.weapon = {
+		"weapon_type": "golden_abacus",
+		"col_main": Color(0.55, 0.48, 0.38),
+		"col_shadow": Color(0.32, 0.28, 0.22),
+		"col_accent": Color(0.92, 0.72, 0.30),
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 13. 药王（悬壶济世，金针度劫，仙草灵雾，玉体清心）
+static func make_yaowang() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 0.96, "width_scale": 0.92, "height_scale": 1.02, "head_scale": 1.02 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "dao_bun",
+		"eye_style": "hollow_oval",
+		"eye_color": Color(0.35, 0.92, 0.78, 0.55),
+		"eye_core_color": Color(0.88, 1.0, 0.95)
+	}
+	cfg.cloak = {
+		"cloak_style": "royal_shawl",
+		"col_outer": Color(0.12, 0.24, 0.24),
+		"col_inner": Color(0.18, 0.34, 0.32),
+		"col_edge": Color(0.45, 0.88, 0.78),
+		"chest_ornament": "pearl"
+	}
+	cfg.weapon = {
+		"weapon_type": "peach_sword",
+		"col_main": Color(0.35, 0.52, 0.48),
+		"col_shadow": Color(0.20, 0.32, 0.30),
+		"col_accent": Color(0.65, 0.95, 0.85),
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 14. 守财奴（寸利不让，金山聚顶，算盘敲响，财气逼人）
+static func make_shoucainu() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 0.94, "width_scale": 1.15, "height_scale": 0.92, "head_scale": 1.06 }
+	cfg.face = {
+		"mask_style": "round_petite",
+		"horns_style": "gold_crown",
+		"eye_style": "sharp_slit",
+		"eye_color": Color(1.0, 0.85, 0.15, 0.7),
+		"eye_core_color": Color(1.0, 0.98, 0.80)
+	}
+	cfg.cloak = {
+		"cloak_style": "tattered_rags",
+		"col_outer": Color(0.24, 0.18, 0.10),
+		"col_inner": Color(0.38, 0.28, 0.14),
+		"col_edge": Color(0.95, 0.82, 0.22),
+		"chest_ornament": "coin"
+	}
+	cfg.weapon = {
+		"weapon_type": "treasure_chest",
+		"col_main": Color(0.62, 0.48, 0.22),
+		"col_shadow": Color(0.36, 0.26, 0.12),
+		"col_accent": Color(1.0, 0.88, 0.32),
+		"strap_style": "dual"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 15. 嗜血魔修（以煞养身，痛极狂笑，血海翻涌，修罗降世）
+static func make_shixue() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.15, "width_scale": 1.12, "height_scale": 1.05, "head_scale": 0.95 }
+	cfg.face = {
+		"mask_style": "stout_brute",
+		"horns_style": "bull_horns",
+		"eye_style": "angry_slit",
+		"eye_color": Color(1.0, 0.15, 0.15, 0.75),
+		"eye_core_color": Color(1.0, 0.85, 0.85)
+	}
+	cfg.cloak = {
+		"cloak_style": "tattered_rags",
+		"col_outer": Color(0.18, 0.05, 0.05),
+		"col_inner": Color(0.28, 0.08, 0.08),
+		"col_edge": Color(0.92, 0.20, 0.18),
+		"chest_ornament": "skull"
+	}
+	cfg.weapon = {
+		"weapon_type": "broken_blade",
+		"col_main": Color(0.55, 0.22, 0.20),
+		"col_shadow": Color(0.30, 0.12, 0.12),
+		"col_accent": Color(0.98, 0.25, 0.20),
+		"strap_style": "diagonal",
+		"carry_front_pos": Vector2(10.0, 9.0), "carry_front_rot": 210.0,
+		"carry_side_pos": Vector2(-7.0, 8.0), "carry_side_rot": -10.0,
 	}
 	cfg._sync_palette()
 	return cfg

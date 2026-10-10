@@ -221,6 +221,16 @@ var harvest_decay: float = 0.0     ## 狂战蛮修：每波灵韵流失点数
 var xp_require_mult: float = 1.0   ## 夺舍散人：升级修为需求倍率
 var item_price_mult: float = 1.0   ## 多宝道人：法宝价格乘区（叠加在商店价格系数之上）
 var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
+var contraption_threshold_adj: int = 0  ## 机关师：机关羁绊门槛下移
+var stone_interest_rate: float = 0.0    ## 守财奴：波末灵石结息比率
+var stone_interest_cap: int = 15        ## 守财奴：波末灵石结息上限
+var on_hit_damage_bonus: float = 0.0    ## 嗜血魔修：受击单层增伤
+var on_hit_damage_cap_stacks: int = 10  ## 嗜血魔修：增伤最大层数
+var on_hit_damage_stacks: int = 0
+var on_hit_damage_timer: float = 0.0
+var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
+var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
+var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
@@ -238,6 +248,7 @@ var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘�
 var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
 var synergy_haste_mult: float = 1.0   ## 雷法/玄水羁绊：额外攻速乘区
 var synergy_max_hp_bonus: float = 0.0 ## 御灵羁绊：额外气血上限
+var synergy_engineering_damage: float = 0.0 ## 御灵羁绊：额外召唤伤害
 var synergy_crit_rate: float = 0.0    ## 锐金羁绊：额外暴击率
 var synergy_crit_mult: float = 0.0    ## 锐金羁绊：额外暴击伤害
 var synergy_hp_regen: float = 0.0     ## 青木羁绊：额外气血回复
@@ -246,6 +257,7 @@ var synergy_move_speed_mult: float = 0.0 ## 玄水羁绊：额外移速加成
 var synergy_burn_mult: float = 1.0    ## 离火羁绊：额外灼烧伤害倍率
 var synergy_armor: float = 0.0        ## 厚土羁绊：额外护甲
 var synergy_knockback_mult: float = 1.0 ## 厚土羁绊：额外受击震退力倍率
+var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关法器伤害乘区
 
 var _lifesteal_procs: int = 0
 var _lifesteal_window: float = 0.0
@@ -319,6 +331,16 @@ func reset_run() -> void:
 	cultivator_id = ""
 	thorns_pct = 0.0
 	spirit_threshold_adj = 0
+	contraption_threshold_adj = 0
+	stone_interest_rate = 0.0
+	stone_interest_cap = 15
+	on_hit_damage_bonus = 0.0
+	on_hit_damage_cap_stacks = 10
+	on_hit_damage_stacks = 0
+	on_hit_damage_timer = 0.0
+	total_damage_taken_count = 0
+	total_hp_healed = 0.0
+	max_concurrent_summons = 0
 	dodge_cap_bonus = 0.0
 	weapon_slots_override = 0
 	enemy_count_mult = 1.0
@@ -338,6 +360,7 @@ func reset_run() -> void:
 	synergy_range_mult = 1.0
 	synergy_haste_mult = 1.0
 	synergy_max_hp_bonus = 0.0
+	synergy_engineering_damage = 0.0
 	synergy_crit_rate = 0.0
 	synergy_crit_mult = 0.0
 	synergy_hp_regen = 0.0
@@ -346,6 +369,7 @@ func reset_run() -> void:
 	synergy_burn_mult = 1.0
 	synergy_armor = 0.0
 	synergy_knockback_mult = 1.0
+	synergy_contraption_mult = 1.0
 	active_synergies = {}
 	_applied_hp_bonus = 0.0
 	_lifesteal_procs = 0
@@ -374,6 +398,11 @@ func reset_run() -> void:
 	peak_harvest = 0.0
 
 func _process(delta: float) -> void:
+	if on_hit_damage_timer > 0.0:
+		on_hit_damage_timer -= delta
+		if on_hit_damage_timer <= 0.0:
+			on_hit_damage_stacks = 0
+
 	if not is_game_over and not get_tree().paused and player != null:
 		game_time += delta
 		_lifesteal_window += delta
@@ -669,7 +698,7 @@ func get_player_stat_dict() -> Dictionary:
 		"melee_damage": melee_damage,
 		"ranged_damage": ranged_damage,
 		"elemental_damage": elemental_damage,
-		"engineering_damage": engineering_damage,
+		"engineering_damage": engineering_damage + synergy_engineering_damage,
 		"harvest": harvest,
 	}
 
@@ -700,6 +729,13 @@ func apply_harvest() -> void:
 	if harvest_decay > 0.0:
 		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
+	# 守财奴金币结息 hook
+	if stone_interest_rate > 0.0 and spirit_stones > 0:
+		var interest := mini(stone_interest_cap, int(floor(float(spirit_stones) * stone_interest_rate)))
+		if interest > 0:
+			spirit_stones += interest
+			stats_updated.emit(kills, game_time, spirit_stones)
+			announcement_triggered.emit("✦ 金山结息 · 获得 %d 枚灵石 ✦" % interest)
 	# 回春葫芦等法宝的波末回血 hook
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
@@ -779,6 +815,14 @@ func _apply_cultivator() -> void:
 	thorns_pct = float(mods.get("thorns", 0.0))
 	shop_price_mult = float(mods.get("shop_price", 1.0))
 	spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
+	contraption_threshold_adj = int(mods.get("contraption_threshold_adj", 0))
+	stone_interest_rate = float(mods.get("stone_interest_rate", 0.0))
+	stone_interest_cap = int(mods.get("stone_interest_cap", 15))
+	on_hit_damage_bonus = float(mods.get("on_hit_damage_bonus", 0.0))
+	on_hit_damage_cap_stacks = int(mods.get("on_hit_damage_cap_stacks", 10))
+	elemental_damage += float(mods.get("elemental", 0.0))
+	engineering_damage += float(mods.get("engineering", 0.0))
+	hp_regen += float(mods.get("hp_regen", 0.0))
 	weapon_slots_override = int(mods.get("weapon_slots_max", 0))
 	enemy_count_mult = float(mods.get("enemy_count_mult", 1.0))
 	harvest_decay = float(mods.get("harvest_decay", 0.0))
@@ -803,7 +847,7 @@ func _apply_cultivator() -> void:
 	if start_drones > 0 and player != null and player.has_method("sync_drones"):
 		player.sync_drones()
 
-## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶惩罚）
+## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
 func cultivator_damage_mult(w_id: String) -> float:
 	var def := CultivatorData.get_def(cultivator_id)
 	if def.is_empty():
@@ -814,9 +858,20 @@ func cultivator_damage_mult(w_id: String) -> float:
 	for t in WeaponData.tags_of(w_id):
 		m *= 1.0 + float(tag_bonuses.get(t, 0.0))
 	var wdef := WeaponData.get_def(w_id)
-	if int(wdef.get("behavior", -1)) != WeaponData.Behavior.DRONE:
+	var w_beh := int(wdef.get("behavior", -1))
+	if w_beh != WeaponData.Behavior.DRONE:
 		m *= 1.0 + float(mods.get("non_drone_damage", 0.0))
+	if w_beh != WeaponData.Behavior.TURRET and w_beh != WeaponData.Behavior.DRONE:
+		m *= 1.0 + float(mods.get("non_contraption_damage", 0.0))
+	if on_hit_damage_bonus > 0.0 and on_hit_damage_stacks > 0:
+		m *= 1.0 + on_hit_damage_bonus * float(on_hit_damage_stacks)
 	return m
+
+func on_player_hit(_amount: float) -> void:
+	total_damage_taken_count += 1
+	if on_hit_damage_bonus > 0.0:
+		on_hit_damage_stacks = mini(on_hit_damage_cap_stacks, on_hit_damage_stacks + 1)
+		on_hit_damage_timer = 5.0
 
 # ---------------- 武器系统（委托 WeaponInventory） ----------------
 
@@ -846,6 +901,13 @@ func get_weapons_summary() -> Array:
 
 func notify_weapons_updated(weapons: Array) -> void:
 	recalc_synergies()
+	var cur_summons: int = drones.size()
+	if player != null and player.has_method("get_equipped_weapons_data"):
+		for w in player.get_equipped_weapons_data():
+			var beh := int(WeaponData.get_def(w.get("id", "")).get("behavior", -1))
+			if beh == WeaponData.Behavior.TURRET or beh == WeaponData.Behavior.DRONE:
+				cur_summons += 1
+	max_concurrent_summons = maxi(max_concurrent_summons, cur_summons)
 	weapons_updated.emit(weapons)
 
 func sell_weapon(index: int) -> bool:

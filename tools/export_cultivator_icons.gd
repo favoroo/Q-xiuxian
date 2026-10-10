@@ -12,7 +12,13 @@ const CULTIVATORS := [
 	"dubi",
 	"kuangzhan",
 	"duoshe",
-	"duobao"
+	"duobao",
+	"lingzhifu",
+	"leifa",
+	"jiguan",
+	"yaowang",
+	"shoucainu",
+	"shixue",
 ]
 
 func _ready() -> void:
@@ -32,6 +38,25 @@ func _export_all_icons() -> void:
 		pview.position = Vector2(48, 56)
 		pview.scale = Vector2(1.5, 1.5)
 		svp.add_child(pview)
+
+		# 驯兽师专属点缀：肩侧一只青蓝护蝶，呼应"开局自带护蝶"（仅进图标）
+		if cid == "fuzhen":
+			var fly := Node2D.new()
+			fly.position = Vector2(72, 24)
+			for wing_dx in [-1.0, 1.0]:
+				var wing := Polygon2D.new()
+				wing.polygon = PackedVector2Array([
+					Vector2(0, 0), Vector2(wing_dx * 6.0, -4.5), Vector2(wing_dx * 7.5, 2.0)
+				])
+				wing.color = Color(0.45, 0.85, 1.0, 0.9)
+				fly.add_child(wing)
+			var fly_body := Polygon2D.new()
+			fly_body.polygon = PackedVector2Array([
+				Vector2(-1.0, -3.0), Vector2(1.0, -3.0), Vector2(0.8, 3.0), Vector2(-0.8, 3.0)
+			])
+			fly_body.color = Color(0.10, 0.30, 0.45)
+			fly.add_child(fly_body)
+			svp.add_child(fly)
 
 		await get_tree().process_frame
 		await get_tree().process_frame

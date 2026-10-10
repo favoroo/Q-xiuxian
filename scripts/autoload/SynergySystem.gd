@@ -43,19 +43,28 @@ static func recalc_synergies(gm: Node) -> void:
 	gm.synergy_burn_mult = 1.0
 	gm.synergy_armor = 0.0
 	gm.synergy_knockback_mult = 1.0
+	gm.synergy_contraption_mult = 1.0
+	gm.synergy_engineering_damage = 0.0
 	var hp_bonus: float = 0.0
+	var eng_bonus: float = 0.0
 	for tag in counts.keys():
 		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 		if info.is_empty():
 			continue
 		var n := int(counts[tag])
-		var shift: int = gm.spirit_threshold_adj if tag == "spirit" else 0
+		var shift: int = 0
+		if tag == "spirit":
+			shift = gm.spirit_threshold_adj
+		elif tag == "contraption":
+			shift = gm.contraption_threshold_adj
 		var syn_level := GameBalance.synergy_level(n, info.get("thresholds", []), shift)
 		gm.active_synergies[tag] = {"count": n, "level": syn_level}
 		if syn_level == 0:
 			continue
 		var v = info["values"][syn_level - 1]
 		match tag:
+			"contraption":
+				gm.synergy_contraption_mult += float(v)
 			"sword":
 				gm.synergy_range_mult += float(v)
 			"talisman":
@@ -64,6 +73,9 @@ static func recalc_synergies(gm: Node) -> void:
 				gm.synergy_haste_mult *= float(v)
 			"spirit":
 				hp_bonus += float(v)
+				var eng_list: Array = info.get("eng_values", [2.0, 4.0, 7.0])
+				if syn_level <= eng_list.size():
+					eng_bonus += float(eng_list[syn_level - 1])
 			"wide":
 				gm.synergy_damage_mult += float(v)
 			"metal":
@@ -88,6 +100,7 @@ static func recalc_synergies(gm: Node) -> void:
 				gm.synergy_knockback_mult += float(kb_list[syn_level - 1])
 	gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
 	gm.synergy_max_hp_bonus = hp_bonus
+	gm.synergy_engineering_damage = eng_bonus
 	apply_synergy_hp(gm, hp_bonus)
 
 ## 御灵羁绊直接增减气血上限（差值法，避免叠加误差）

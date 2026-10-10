@@ -33,6 +33,7 @@ const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.PROJECTILE: "远程",
 	WeaponData.Behavior.BURST: "轰击",
 	WeaponData.Behavior.DRONE: "召唤",
+	WeaponData.Behavior.TURRET: "机关",
 }
 
 const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison": "中毒"}

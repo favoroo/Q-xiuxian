@@ -346,13 +346,8 @@ SFX = {
                    noise(b, dur=0.26, peak=0.16, ftype="lowpass", f0=2800, f1=170, q=1.4),
                    shimmer(b, f0=1200, f1=1900, dur=0.34, peak=0.040)),
     ],
-    # 攻击音按流派分开：近战破空 / 飞剑离手（替换西厨 knifeSlice）/ 符箓离指 / 落雷 / 扇风
-    "sword_swing": [
-        lambda b: (noise(b, dur=0.11, peak=0.16, ftype="bandpass", f0=760, f1=3000, q=0.8),
-                   tone(b, wtype="triangle", f0=340, f1=140, dur=0.06, peak=0.05)),
-        lambda b: (noise(b, dur=0.09, peak=0.14, ftype="bandpass", f0=1150, f1=2700, q=0.9),
-                   tone(b, wtype="triangle", f0=280, f1=155, dur=0.05, peak=0.045)),
-    ],
+    # 攻击音按器型分族（2026-10-10 见下方「器型族」）：飞剑离手 / 符箓离指 / 落雷 / 扇风。
+    # 原 sword_swing 已删：它是纯带通噪声破空、零金属泛音，剑与木棍挥起来是同一个声。
     "blade_shoot": [
         lambda b: (noise(b, dur=0.10, peak=0.17, ftype="bandpass", f0=900, f1=3400, q=0.9),
                    fm_tone(b, f0=1900, f1=1150, dur=0.06, peak=0.07, ratio=2.4, idx0=1.8),
@@ -389,6 +384,173 @@ SFX = {
                    fm_tone(b, f0=523, dur=0.22, peak=0.20, ratio=2.76, idx0=3.2, idx1=0.25)),
         lambda b: (noise(b, dur=0.02, peak=0.08, ftype="bandpass", f0=2600, f1=1900, q=1.6),
                    fm_tone(b, f0=660, dur=0.20, peak=0.19, ratio=3.01, idx0=2.8, idx1=0.22)),
+    ],
+    # ---------------- 器型族（2026-10-10 音色重构） ----------------
+    # 旧写法：35 把法器共用 6 个「流派音」，且近战只在打击帧播一声破空 —— 于是剑听起来
+    # 和木棍完全一样（sword_swing 是纯带通噪声，零金属泛音）。现在按「听到的音色 ==
+    # 那件器物」分族，近战拆成 前摇 whoosh + 命中 impact 两层。
+    #
+    # 分族原则：一个族 = 一种材质/器型，不是一把武器。族数刻意压在 16（玩家侧），
+    # 因为玩家可同时带 6 把法器，声音再多就分不清谁在打谁（用户明确要求别太杂）。
+    # 防糊靠两件事：① 族的频段互相错开（impact_* 占 1.2k-5k，enemy_hit 占 40-500Hz）
+    # ② AudioManager.SFX_GAP_MS 把同族同帧齐射合并成一声。
+
+    # 轻器前摇（剑/刀/剪/鞭/尺）：只给空气声，低频一律留给命中层，两层才不会叠糊
+    "whoosh_light": [
+        lambda b: (noise(b, dur=0.075, peak=0.18, ftype="bandpass", f0=800, f1=3400, q=0.7),
+                   noise(b, dur=0.008, peak=0.08, ftype="highpass", f0=3200, t0=0.055)),
+        lambda b: (noise(b, dur=0.070, peak=0.17, ftype="bandpass", f0=900, f1=3100, q=0.8),
+                   noise(b, dur=0.009, peak=0.07, ftype="highpass", f0=3400, t0=0.050)),
+    ],
+    # 重器前摇（盾/锤/锏/大印/宝灯）：扫频段压低，带一点分量感
+    "whoosh_heavy": [
+        lambda b: (noise(b, dur=0.130, peak=0.17, ftype="bandpass", f0=240, f1=860, q=0.6),
+                   tone(b, wtype="sine", f0=92, f1=60, dur=0.10, peak=0.10, t0=0.02)),
+        lambda b: (noise(b, dur=0.145, peak=0.16, ftype="bandpass", f0=280, f1=760, q=0.7),
+                   tone(b, wtype="triangle", f0=84, f1=54, dur=0.11, peak=0.09, t0=0.03)),
+    ],
+    # 金属锋刃入体（长剑/烈焰刀/血饮狂刀/金蛟剪）—— 本次事故的主修复点：
+    # 高频 1.2k-5k 的金属「铮」芯 + 刃芒，与 enemy_hit 的低频身体声频段错开，
+    # 短到 0.13s 才经得起多把近战高频齐挥（长尾会糊成一片）
+    "impact_blade": [
+        lambda b: (noise(b, dur=0.012, peak=0.14, ftype="highpass", f0=4200),
+                   fm_tone(b, f0=2000, f1=1500, dur=0.12, peak=0.20, ratio=2.76, idx0=4.2, idx1=0.25),
+                   noise(b, dur=0.05, peak=0.10, ftype="bandpass", f0=2600, f1=1200, q=1.1, t0=0.012),
+                   shimmer(b, f0=3400, f1=4600, dur=0.07, peak=0.030, t0=0.05)),
+        lambda b: (noise(b, dur=0.011, peak=0.13, ftype="highpass", f0=4400),
+                   fm_tone(b, f0=1750, f1=1300, dur=0.115, peak=0.19, ratio=2.9, idx0=4.0, idx1=0.22),
+                   noise(b, dur=0.048, peak=0.09, ftype="bandpass", f0=2900, f1=1350, q=1.2, t0=0.011),
+                   shimmer(b, f0=3600, f1=4800, dur=0.065, peak=0.028, t0=0.045)),
+        lambda b: (noise(b, dur=0.013, peak=0.13, ftype="highpass", f0=4000),
+                   fm_tone(b, f0=2130, f1=1620, dur=0.125, peak=0.18, ratio=2.6, idx0=4.4, idx1=0.28),
+                   noise(b, dur=0.052, peak=0.10, ftype="bandpass", f0=2400, f1=1100, q=1.0, t0=0.013),
+                   shimmer(b, f0=3200, f1=4300, dur=0.075, peak=0.030, t0=0.055)),
+    ],
+    # 钝器砸击（崩浪锤/六棱锏/重盾/聚宝金尺 + 巨印落点）：带低频「头」才像有质量，
+    # 但尾巴必须短干，长尾让给 enemy_hit_heavy，否则两声低频糊成一坨
+    "impact_blunt": [
+        lambda b: (tone(b, wtype="triangle", f0=180, f1=62, dur=0.075, peak=0.22),
+                   noise(b, dur=0.05, peak=0.18, ftype="lowpass", f0=1500, f1=280, q=1.0),
+                   tone(b, wtype="square", f0=320, f1=130, dur=0.035, peak=0.09, lp=420, t0=0.012)),
+        lambda b: (tone(b, wtype="triangle", f0=165, f1=56, dur=0.068, peak=0.21),
+                   noise(b, dur=0.045, peak=0.17, ftype="lowpass", f0=1300, f1=240, q=1.1),
+                   tone(b, wtype="square", f0=280, f1=115, dur=0.032, peak=0.085, lp=380, t0=0.010)),
+    ],
+    # 脆韧质（藤鞭皮质脆裂/青藤剑木刃/芭蕉扇扇面布振 + 弹弓弹性「啪」）：无低频、无金属 FM
+    "impact_crack": [
+        lambda b: (noise(b, dur=0.025, peak=0.20, ftype="highpass", f0=4800, f1=2400, q=0.9),
+                   noise(b, dur=0.04, peak=0.12, ftype="bandpass", f0=1900, f1=650, q=1.3, t0=0.02),
+                   tone(b, wtype="triangle", f0=1100, f1=380, dur=0.03, peak=0.08, t0=0.022)),
+        lambda b: (noise(b, dur=0.022, peak=0.19, ftype="highpass", f0=5200, f1=2600, q=1.0),
+                   noise(b, dur=0.038, peak=0.11, ftype="bandpass", f0=2100, f1=700, q=1.4, t0=0.018),
+                   tone(b, wtype="triangle", f0=980, f1=340, dur=0.028, peak=0.075, t0=0.020)),
+    ],
+    # 金属暗器离手（飞刀/暴雨针/冰针/金针符/透骨钉）：细金属「嗤」+ 上扫速度感。
+    # 旧写法让它们全放 talisman_throw 的纸响 —— 五把金属器听着像撒符纸
+    "metal_dart": [
+        lambda b: (noise(b, dur=0.04, peak=0.14, ftype="bandpass", f0=2100, f1=4400, q=0.9),
+                   fm_tone(b, f0=2400, f1=1700, dur=0.055, peak=0.13, ratio=3.2, idx0=1.8, idx1=0.3),
+                   tone(b, wtype="sine", f0=900, f1=1500, dur=0.035, peak=0.05)),
+        lambda b: (noise(b, dur=0.038, peak=0.13, ftype="bandpass", f0=2400, f1=4100, q=1.0),
+                   fm_tone(b, f0=2700, f1=1900, dur=0.05, peak=0.12, ratio=3.0, idx0=1.6, idx1=0.28),
+                   shimmer(b, f0=3400, f1=4200, dur=0.05, peak=0.028, t0=0.03)),
+    ],
+    # 喷焰（火葫芦开火 + 天灯落点）：火身宽带噪声 + 嘶焰 + 喷管低频。
+    # 旧写法让火葫芦播 blade_shoot（飞剑离手），一把喷火的葫芦听起来在甩剑
+    "flame_jet": [
+        lambda b: (noise(b, dur=0.17, peak=0.17, ftype="lowpass", f0=950, f1=320, q=0.9),
+                   noise(b, dur=0.12, peak=0.06, ftype="bandpass", f0=2600, f1=1800, q=1.2, t0=0.02),
+                   tone(b, wtype="sine", f0=120, f1=70, dur=0.10, peak=0.08, t0=0.01)),
+        lambda b: (noise(b, dur=0.19, peak=0.16, ftype="lowpass", f0=1100, f1=280, q=1.0),
+                   noise(b, dur=0.13, peak=0.055, ftype="bandpass", f0=2900, f1=2000, q=1.1, t0=0.03),
+                   tone(b, wtype="triangle", f0=135, f1=64, dur=0.11, peak=0.075, t0=0.015)),
+    ],
+    # 春雷鼓（施法与落点双层共用）：鼓皮体 + 掌拍膜振 + 8Hz 微失谐拍出「春雷滚」。
+    # 取候选 A（纯鼓）不要带滚雷尾的 B：施法与落点只差约 200ms，长尾会和自己的落点糊在一起
+    "drum_boom": [
+        lambda b: (tone(b, wtype="sine", f0=165, f1=46, dur=0.19, peak=0.30),
+                   noise(b, dur=0.06, peak=0.14, ftype="bandpass", f0=400, f1=150, q=1.1),
+                   tone(b, wtype="sine", f0=173, f1=48, dur=0.17, peak=0.10, t0=0.01)),
+        lambda b: (tone(b, wtype="sine", f0=148, f1=42, dur=0.21, peak=0.29),
+                   noise(b, dur=0.055, peak=0.13, ftype="bandpass", f0=460, f1=170, q=1.0),
+                   tone(b, wtype="sine", f0=156, f1=44, dur=0.18, peak=0.095, t0=0.012)),
+    ],
+    # 音笛（施法与落点双层共用）：笛音上滑 + 气口噪声。气口那层摩擦是笛的身份特征，
+    # 去掉它就只剩一个正弦，听着和普通法球无异
+    "flute_wave": [
+        lambda b: (tone(b, wtype="sine", f0=880, f1=1250, dur=0.20, peak=0.17, curve="lin"),
+                   noise(b, dur=0.05, peak=0.04, ftype="bandpass", f0=3200, f1=2400, q=1.4),
+                   shimmer(b, f0=2640, f1=3600, dur=0.10, peak=0.030, t0=0.12)),
+        lambda b: (tone(b, wtype="sine", f0=784, f1=1180, dur=0.22, peak=0.16, curve="lin"),
+                   noise(b, dur=0.055, peak=0.038, ftype="bandpass", f0=3500, f1=2600, q=1.3),
+                   shimmer(b, f0=2350, f1=3300, dur=0.11, peak=0.028, t0=0.13)),
+    ],
+    # 双翼灵宝触敌（护蝶/离火鸦）：两下快速翅拍，不是钟也不是磬
+    "drone_flutter": [
+        lambda b: (noise(b, dur=0.03, peak=0.13, ftype="lowpass", f0=1300, f1=500, q=1.0),
+                   noise(b, dur=0.03, peak=0.11, ftype="lowpass", f0=1100, f1=460, q=1.1, t0=0.04),
+                   fm_tone(b, f0=1600, dur=0.03, peak=0.05, ratio=2.4, idx0=1.2, t0=0.02)),
+        lambda b: (noise(b, dur=0.028, peak=0.12, ftype="lowpass", f0=1500, f1=560, q=1.1),
+                   noise(b, dur=0.028, peak=0.10, ftype="lowpass", f0=1250, f1=520, q=1.0, t0=0.045),
+                   fm_tone(b, f0=1800, dur=0.028, peak=0.045, ratio=2.6, idx0=1.1, t0=0.025)),
+    ],
+    # 玉磬/冰晶灵宝触敌（冰莲/玄武佩）：比 orb_hit 的暖金钟高、脆、带霜尾
+    "drone_chime": [
+        lambda b: (fm_tone(b, f0=1568, dur=0.11, peak=0.16, ratio=3.0, idx0=1.6, idx1=0.2),
+                   shimmer(b, f0=2600, f1=3300, dur=0.10, peak=0.030, t0=0.03)),
+        lambda b: (fm_tone(b, f0=1318, dur=0.12, peak=0.15, ratio=2.8, idx0=1.5, idx1=0.22),
+                   shimmer(b, f0=2300, f1=3000, dur=0.11, peak=0.028, t0=0.035)),
+    ],
+    # ---------------- 敌人专属族 ----------------
+    # 旧写法让妖物的扑咬/自爆/敌弹直接借用玩家的 sword_swing、orb_hit、blade_shoot，
+    # 连闪现都借玩家的 dodge ⇒ 战场上一片玩家武器声，分不清「谁在打谁」。
+    # 现在敌我彻底分源：敌人音一律 enemy_ 前缀，判据钉住「纯敌人模拟里玩家族 key 出现 0 次」。
+
+    # 妖物扑咬起手与跃击：有喉部低频的兽吼 + 爪风 + 齿磕（与纯空气 whoosh 一耳可分）
+    "enemy_claw": [
+        lambda b: (tone(b, wtype="sawtooth", f0=230, f1=92, dur=0.09, peak=0.16, lp=900),
+                   noise(b, dur=0.06, peak=0.13, ftype="bandpass", f0=1600, f1=700, q=1.1, t0=0.01),
+                   noise(b, dur=0.012, peak=0.07, ftype="highpass", f0=3000, t0=0.03)),
+        lambda b: (tone(b, wtype="sawtooth", f0=265, f1=105, dur=0.10, peak=0.15, lp=850),
+                   noise(b, dur=0.055, peak=0.12, ftype="bandpass", f0=1400, f1=620, q=1.2, t0=0.012),
+                   noise(b, dur=0.010, peak=0.06, ftype="highpass", f0=3300, t0=0.028)),
+        lambda b: (tone(b, wtype="sawtooth", f0=195, f1=80, dur=0.095, peak=0.16, lp=780),
+                   noise(b, dur=0.06, peak=0.11, ftype="bandpass", f0=1800, f1=760, q=1.0, t0=0.015),
+                   noise(b, dur=0.012, peak=0.065, ftype="highpass", f0=2800, t0=0.035)),
+    ],
+    # 敌方弹体离手：与玩家金属离手反向 —— 下扫 + 邪气嗡鸣，不带 FM 铃
+    "enemy_bolt": [
+        lambda b: (noise(b, dur=0.10, peak=0.16, ftype="bandpass", f0=1500, f1=400, q=1.1),
+                   tone(b, wtype="square", f0=300, f1=180, dur=0.07, peak=0.09, lp=600)),
+        lambda b: (noise(b, dur=0.09, peak=0.15, ftype="bandpass", f0=1800, f1=520, q=1.2),
+                   tone(b, wtype="square", f0=260, f1=150, dur=0.065, peak=0.085, lp=560)),
+    ],
+    # 丹爆傀儡引信：长嘶 + 三颗递进爆点，是「倒计时」而不是钟
+    "enemy_fuse": [
+        lambda b: (noise(b, dur=0.30, peak=0.13, ftype="bandpass", f0=2700, f1=2400, q=1.6),
+                   noise(b, dur=0.014, peak=0.14, ftype="highpass", f0=3600, t0=0.06),
+                   noise(b, dur=0.014, peak=0.15, ftype="highpass", f0=3800, t0=0.15),
+                   noise(b, dur=0.016, peak=0.16, ftype="highpass", f0=4000, t0=0.24)),
+        lambda b: (noise(b, dur=0.32, peak=0.12, ftype="bandpass", f0=2400, f1=2100, q=1.5),
+                   noise(b, dur=0.013, peak=0.13, ftype="highpass", f0=3400, t0=0.05),
+                   noise(b, dur=0.013, peak=0.145, ftype="highpass", f0=3700, t0=0.14),
+                   noise(b, dur=0.018, peak=0.16, ftype="highpass", f0=4200, t0=0.25)),
+    ],
+    # Boss 砸地：地裂级低频 + 空间尾巴（比 enemy_hit_heavy 长、比 wave_start 短促）
+    "enemy_slam": [
+        lambda b: (tone(b, wtype="sine", f0=72, f1=26, dur=0.30, peak=0.30),
+                   noise(b, dur=0.22, peak=0.20, ftype="lowpass", f0=900, f1=110, q=1.2),
+                   space(b, delay=0.08, fb=0.32, mix=0.15, hp=240.0)),
+        lambda b: (tone(b, wtype="sine", f0=84, f1=28, dur=0.28, peak=0.29),
+                   noise(b, dur=0.24, peak=0.18, ftype="lowpass", f0=1000, f1=130, q=1.1),
+                   space(b, delay=0.09, fb=0.34, mix=0.16, hp=260.0)),
+    ],
+    # 影魅闪现：玩家 dodge 的镜像 —— dodge 是上扫 + 灵光升散，闪现是下扫 + 残影下坠
+    "enemy_blink": [
+        lambda b: (noise(b, dur=0.08, peak=0.16, ftype="bandpass", f0=3400, f1=900, q=0.9),
+                   shimmer(b, f0=2800, f1=1400, dur=0.10, peak=0.05, t0=0.03)),
+        lambda b: (noise(b, dur=0.09, peak=0.15, ftype="bandpass", f0=3100, f1=800, q=1.0),
+                   shimmer(b, f0=2600, f1=1200, dur=0.11, peak=0.045, t0=0.035)),
     ],
     # 灵石清脆晶响：双叮 + 高频灵光（引擎端保留连拾升调，清脆爽感翻倍）——替换赌场硬币
     "gem_pickup": [
@@ -607,63 +769,15 @@ SFX = {
 # ---------------- 音色候选（A/B 挑定稿用） ----------------
 # 争议族先各出 2-3 版，用户在 tests/AudioGallery.tscn 里用手指连发对比挑一个。
 # 结构：族名 -> [(候选字母, 目标峰值, 参数说明, 配方 lambda)]，一个候选就是一条可听的声。
-# meta 会随烘焙打印出来，也抄一份进 audio_gallery.gd 的 CAND_META，屏幕与 stdout 双印，
-# 这样用户报「剑要 B」时能对上具体参数，不必靠形容词沟通。
+# meta 同时烘进 sfx_cand/cand_meta.json，试听台（tests/AudioGallery.tscn）直接读它把参数印在按钮上，
+# 不在 .gd 里抄第二份（抄了就漂移）。这样用户报「剑要 B」时能对上具体参数，不必靠形容词沟通。
 # 挑定稿后：把选中候选的配方原样搬进上面的 SFX[族名]（需要几变体就复制几份改基频），
 # 删掉本表该条目，再清掉 assets{,_raw}/sfx_cand 目录。
 
-CANDIDATES = {
-    # 「剑听成棍子」的主修复点：金属锋刃入体。三版差在金属芯的亮/厚与尾巴长短。
-    "impact_blade": [
-        ("A", 0.42, "hp4.2k瞬态 + fm2000→1500 r2.76 idx4.2 + bp2.6k→1.2k + shimmer3.4k→4.6k",
-         lambda b: (noise(b, dur=0.012, peak=0.14, ftype="highpass", f0=4200),
-                    fm_tone(b, f0=2000, f1=1500, dur=0.12, peak=0.20, ratio=2.76, idx0=4.2, idx1=0.25),
-                    noise(b, dur=0.05, peak=0.10, ftype="bandpass", f0=2600, f1=1200, q=1.1, t0=0.012),
-                    shimmer(b, f0=3400, f1=4600, dur=0.07, peak=0.030, t0=0.05))),
-        ("B", 0.42, "hp3.2k瞬态 + fm1500→1000 r2.4 idx5.0 + bp1.6k→500 + saw420→180 阻力（更低更厚）",
-         lambda b: (noise(b, dur=0.014, peak=0.12, ftype="highpass", f0=3200),
-                    fm_tone(b, f0=1500, f1=1000, dur=0.14, peak=0.18, ratio=2.4, idx0=5.0, idx1=0.30),
-                    noise(b, dur=0.06, peak=0.13, ftype="bandpass", f0=1600, f1=500, q=1.2, t0=0.014),
-                    tone(b, wtype="sawtooth", f0=420, f1=180, dur=0.05, peak=0.09, lp=900, t0=0.03))),
-        ("C", 0.42, "hp4.6k瞬态 + fm2350→1800 r3.1 idx3.6 + shimmer3.2k→4.4k 长尾 + space（剑鸣余振）",
-         lambda b: (noise(b, dur=0.010, peak=0.13, ftype="highpass", f0=4600),
-                    fm_tone(b, f0=2350, f1=1800, dur=0.11, peak=0.17, ratio=3.1, idx0=3.6, idx1=0.18),
-                    noise(b, dur=0.045, peak=0.09, ftype="bandpass", f0=3000, f1=1500, q=1.0, t0=0.010),
-                    shimmer(b, f0=3200, f1=4400, dur=0.16, peak=0.050, t0=0.06),
-                    space(b, delay=0.07, fb=0.30, mix=0.12))),
-    ],
-    # 近战前摇破空层：只给空气声，低频一律留给 impact，两层才不会叠糊。
-    "whoosh_light": [
-        ("A", 0.30, "bp800→3400 上扫 0.075s q0.7 + hp3.2k 8ms 刃线（快薄锐）",
-         lambda b: (noise(b, dur=0.075, peak=0.18, ftype="bandpass", f0=800, f1=3400, q=0.7),
-                    noise(b, dur=0.008, peak=0.08, ftype="highpass", f0=3200, t0=0.055))),
-        ("B", 0.30, "bp520→2400 上扫 0.115s q0.6 + hp2.6k 30ms（厚长有质量）",
-         lambda b: (noise(b, dur=0.115, peak=0.16, ftype="bandpass", f0=520, f1=2400, q=0.6),
-                    noise(b, dur=0.030, peak=0.06, ftype="highpass", f0=2600, t0=0.070))),
-    ],
-    # 钝器命中（锤/锏/盾/尺/巨印落点）：短而干，长尾让给 enemy_hit_heavy。
-    "impact_blunt": [
-        ("A", 0.44, "tri180→62 + lp1.5k→280 噪 + sq320→120 lp420（砸·石钝低频头）",
-         lambda b: (tone(b, wtype="triangle", f0=180, f1=62, dur=0.075, peak=0.22),
-                    noise(b, dur=0.05, peak=0.18, ftype="lowpass", f0=1500, f1=280, q=1.0),
-                    tone(b, wtype="square", f0=320, f1=130, dur=0.035, peak=0.09, lp=420, t0=0.012))),
-        ("B", 0.44, "sine150→80 更短 + lp900→260 + bp700→300（闷·木钝少尾）",
-         lambda b: (tone(b, wtype="sine", f0=150, f1=80, dur=0.055, peak=0.24),
-                    noise(b, dur=0.045, peak=0.16, ftype="lowpass", f0=900, f1=260, q=1.0),
-                    noise(b, dur=0.030, peak=0.08, ftype="bandpass", f0=700, f1=300, q=1.3, t0=0.02))),
-    ],
-    # 春雷鼓的施法与落点双层共用一族，鼓 vs 雷鼓的差别在要不要给滚雷尾。
-    "drum_boom": [
-        ("A", 0.55, "sine165→46 鼓体 + bp400→150 掌拍 + sine173→48 微失谐拍频（纯鼓）",
-         lambda b: (tone(b, wtype="sine", f0=165, f1=46, dur=0.19, peak=0.30),
-                    noise(b, dur=0.06, peak=0.14, ftype="bandpass", f0=400, f1=150, q=1.1),
-                    tone(b, wtype="sine", f0=173, f1=48, dur=0.17, peak=0.10, t0=0.01))),
-        ("B", 0.55, "sine150→40 + bp380→140 + lp1.8k→150 0.24s 滚雷尾（雷鼓）",
-         lambda b: (tone(b, wtype="sine", f0=150, f1=40, dur=0.22, peak=0.30),
-                    noise(b, dur=0.05, peak=0.13, ftype="bandpass", f0=380, f1=140, q=1.2),
-                    noise(b, dur=0.24, peak=0.10, ftype="lowpass", f0=1800, f1=150, q=1.0, t0=0.04))),
-    ],
-}
+# 2026-10-10 器型族定稿：impact_blade / whoosh_light / impact_blunt / drum_boom 四族的 A 版
+# 已原样搬进上面的 SFX，本表清空、sfx_cand 目录删除（用户口径「听着差不多，你定」）。
+# 机制留着是给以后新的音色争议用：--cand 出候选 → 试听台挑 → 搬进 SFX → 清表清目录。
+CANDIDATES = {}
 
 
 # ---------------- 响度归一 ----------------
@@ -681,12 +795,29 @@ TARGET_PEAK = {
     "player_hurt": 0.50,
     "enemy_death": TARGET_PEAK_LOUD,
     "enemy_death_elite": 0.58,
-    "sword_swing": TARGET_PEAK_LOUD,
     "blade_shoot": 0.34,
     "talisman_throw": TARGET_PEAK_LOUD,
     "thunder_strike": 0.55,
     "fan_gust": TARGET_PEAK_LOUD,
     "orb_hit": 0.32,
+    # 器型族：近战双层（前摇压低当铺垫，命中层抬上来但压在 enemy_hit 之下）
+    "whoosh_light": 0.30,
+    "whoosh_heavy": 0.36,
+    "impact_blade": 0.42,
+    "impact_blunt": 0.44,
+    "impact_crack": 0.40,
+    "metal_dart": 0.34,
+    "flame_jet": 0.36,
+    "drum_boom": 0.55,
+    "flute_wave": 0.45,
+    "drone_flutter": 0.26,
+    "drone_chime": 0.28,
+    # 敌人专属族：与玩家武器音彻底分源
+    "enemy_claw": 0.38,
+    "enemy_bolt": 0.40,
+    "enemy_fuse": 0.45,
+    "enemy_slam": 0.60,
+    "enemy_blink": 0.30,
     "gem_pickup": 0.26,
     "chest_hit": 0.34,
     "chest_open": 0.40,

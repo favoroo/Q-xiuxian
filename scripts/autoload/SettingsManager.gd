@@ -149,7 +149,7 @@ const SCHEMA: Array[Dictionary] = [
 		"title": "祭坛按钮位置",
 		"desc": "聚灵阵激活键的归一化屏幕中心点",
 		"type": "layout",
-		"default": Vector2(880.0 / 960.0, 352.0 / 540.0),
+		"default": Vector2(854.0 / 960.0, 354.0 / 540.0),
 	},
 	{
 		"section": "display",
@@ -285,9 +285,10 @@ func shake_level_next() -> StringName:
 const BTN_SCALE_MIN := 0.6
 const BTN_SCALE_MAX := 1.8
 ## 归一化中心点默认值 = 960×540 基准下旧的「右下」摆位
-## （技能键矩形 816..892 × 392..468，祭坛键矩形 820..940 × 330..374）
+## 两颗键同径（76 圆），默认上下叠成一列：技能键 816..892 × 392..468，
+## 祭坛键 816..892 × 316..392（中心正好压在其上方，两圆之间留 0 空隙）
 const SKILL_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 430.0 / 540.0)
-const OBELISK_BTN_XY_DEFAULT := Vector2(880.0 / 960.0, 352.0 / 540.0)
+const OBELISK_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 354.0 / 540.0)
 
 func skill_btn_xy() -> Vector2:
 	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT))

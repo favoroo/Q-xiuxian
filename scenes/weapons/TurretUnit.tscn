@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://cturret001"]
+
+[ext_resource type="Script" path="res://scripts/weapons/TurretUnit.gd" id="1_turret"]
+[ext_resource type="Texture2D" path="res://assets/art/weapon_needle_pouch.png" id="2_icon"]
+
+[node name="TurretUnit" type="Node2D"]
+script = ExtResource("1_turret")
+
+[node name="BaseRing" type="Node2D" parent="."]
+
+[node name="CoreSprite" type="Sprite2D" parent="."]
+scale = Vector2(0.55, 0.55)
+texture = ExtResource("2_icon")
+
+[node name="MuzzlePoint" type="Marker2D" parent="CoreSprite"]
+position = Vector2(24, 0)

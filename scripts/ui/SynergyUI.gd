@@ -11,6 +11,7 @@ const TIER_LINES: Dictionary = {
 	"thunder": ["攻击间隔 -8%", "攻击间隔 -15%", "攻击间隔 -25%"],
 	"spirit": ["最大生命 +15", "最大生命 +30", "最大生命 +50"],
 	"wide": ["武器伤害 +10%", "武器伤害 +20%", "武器伤害 +30%"],
+	"contraption": ["机关伤害 +15%", "机关伤害 +30%", "机关伤害 +50%"],
 	"metal": ["暴击率+6% · 暴伤+20%", "暴击率+12% · 暴伤+40%", "暴击率+20% · 暴伤+75%"],
 	"wood": ["回复+1.0/秒 · 吸血+2%", "回复+2.0/秒 · 吸血+4%", "回复+3.5/秒 · 吸血+7%"],
 	"water": ["攻击间隔-6% · 移速+8%", "攻击间隔-12% · 移速+16%", "攻击间隔-20% · 移速+25%"],
@@ -27,7 +28,11 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 	var n: int = int(data.get("count", 0))
 	var lv: int = int(data.get("level", 0))
 	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+	var shift: int = 0
+	if tag == "spirit":
+		shift = GameManager.spirit_threshold_adj
+	elif tag == "contraption":
+		shift = GameManager.contraption_threshold_adj
 	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
 	var first_th: int = maxi(1, int(raw_th[0]) - shift)
 
@@ -80,14 +85,18 @@ static func open_tip(host: Control, anchor: Control, tag: String, custom_body: S
 		return null
 	return DetailTip.show_over(host, anchor, data)
 
-## 创建一个标准的流派羁绊徽记 Label
+## 创建一个标准的流派羁绊徽记 Label；on_tap 会收到徽记自身，作为详情卡的锚点
 static func create_chip(tag: String, font_size: int = 12, on_tap: Callable = Callable()) -> Label:
 	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
 	var n: int = int(data.get("count", 0))
 	var lv: int = int(data.get("level", 0))
 	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = GameManager.spirit_threshold_adj if tag == "spirit" else 0
+	var shift: int = 0
+	if tag == "spirit":
+		shift = GameManager.spirit_threshold_adj
+	elif tag == "contraption":
+		shift = GameManager.contraption_threshold_adj
 	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
 
 	var chip := Label.new()
@@ -104,8 +113,9 @@ static func create_chip(tag: String, font_size: int = 12, on_tap: Callable = Cal
 		GameStyle.label(chip, font_size, GameStyle.PAPER_DIM)
 
 	if on_tap.is_valid():
-		chip.gui_input.connect(func(ev: InputEvent):
-			if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-				on_tap.call()
-		)
+		# 锚点由工厂回送给回调，不让调用方自己捕获：GDScript lambda 在创建那一刻按值捕获局部变量
+		# （`var chip; chip = create_chip(.., func(): open(tag, chip))` 里那一刻 chip 还是 null），
+		# 于是徽记拿着 null 去开卡、被 DetailTip 的空锚点守卫静默吞掉 —— 点了没反应且不报错。
+		# 识别器同属性面板换 GameStyle.tap：按下与抬起都在原地才算点，划动不误触。
+		GameStyle.tap(chip, func() -> void: on_tap.call(chip))
 	return chip

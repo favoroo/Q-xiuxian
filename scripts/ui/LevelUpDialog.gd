@@ -380,6 +380,15 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 			benefited.append(w)
 	if not benefited.is_empty():
 		var n_bf := benefited.size()
+		# 「受益装备」小字提醒（2026-10-10 用户反馈：光摆图标看不懂是什么意思）——
+		# 一行弱化小字点明下面这排图标的含义，再跟图标行；竖向多吃 ~14px，
+		# 最坏卡高 270 仍在 CARD_H_REF 280 上限内（desc 是 EXPAND_FILL，先吸收）。
+		var cap_lbl := Label.new()
+		cap_lbl.text = "受益装备"
+		cap_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cap_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		GameStyle.label(cap_lbl, 11, GameStyle.PAPER_DIM)
+		vbox.add_child(cap_lbl)
 		var icon_row := HBoxContainer.new()
 		icon_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		icon_row.mouse_filter = Control.MOUSE_FILTER_IGNORE

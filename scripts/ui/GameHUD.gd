@@ -219,9 +219,8 @@ func _refresh_synergy_badges() -> void:
 		var n: int = int(data.get("count", 0))
 		if n <= 0 or not WeaponData.SYNERGIES.has(tag):
 			continue
-		var chip: Label
-		chip = SynergyUI.create_chip(tag, 11, func() -> void:
-			_open_hud_synergy_tip(tag, chip)
+		var chip: Label = SynergyUI.create_chip(tag, 11, func(c: Control) -> void:
+			_open_hud_synergy_tip(tag, c)
 		)
 		_synergy_box.add_child(chip)
 
@@ -353,23 +352,25 @@ func _on_wave_changed(n: int) -> void:
 	wave_label.get_parent().visible = n >= 1
 
 func _on_weapons_updated(weapons: Array) -> void:
+	# 上阵一变就整排重建：摊在暗底下的旧详情卡报的是旧数，先收掉再建
+	DetailTip.close_all(self)
 	_refresh_synergy_badges()
 	for child in weapons_bar.get_children():
 		child.queue_free()
 
 	for i in range(WeaponData.MAX_SLOTS):
-		var slot = PanelContainer.new()
+		var slot := PanelContainer.new()
 		slot.custom_minimum_size = Vector2(36, 36)
-		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var filled := i < weapons.size()
+		# w 在挂回调之前就得有值：GDScript lambda 按值捕获创建那一刻的局部变量
+		var w: Dictionary = weapons[i] if filled else {}
 		var style = GameStyle.outlined_panel(
 			GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.55),
 			GameStyle.GOLD if filled else GameStyle.LINE, 2, 5.0)
 		slot.add_theme_stylebox_override("panel", style)
 
 		if filled:
-			var w = weapons[i]
 			var tex_rect = TextureRect.new()
 			if w.has("icon") and ResourceLoader.exists(w["icon"]):
 				tex_rect.texture = load(w["icon"])
@@ -382,6 +383,19 @@ func _on_weapons_updated(weapons: Array) -> void:
 			GameStyle.star_label(slot, int(w.get("star", 1)), 10)
 
 		weapons_bar.add_child(slot)
+		# 整块都是热区：图框与 ★ 只是显示件，子树压成 IGNORE 才不会在槽面中间挖按不动的洞
+		GameStyle.hotzone(slot)
+		# 槽不是按钮，摇杆的自动收口认不出 ⇒ 自己登记，否则点一下脚下就长出一根摇杆
+		slot.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
+		# 详情卡与属性面板/灵石阁同一工厂出，不另编一套文案
+		if filled:
+			GameStyle.tap(slot, func() -> void:
+				StatsTipFactory.open_weapon_tip(self, slot, w, false)
+			)
+		else:
+			GameStyle.tap(slot, func() -> void:
+				StatsTipFactory.open_empty_slot_tip(self, slot, i)
+			)
 
 func show_announcement(msg: String) -> void:
 	banner_label.text = msg
@@ -393,56 +407,53 @@ func show_announcement(msg: String) -> void:
 	tw.tween_interval(1.9)
 	tw.tween_property(banner, "modulate:a", 0.0, 0.35)
 
-# ---------------- 聚灵阵激活按钮（位置/大小可在设置·操作页自由拖调） ----------------
+# ---------------- 聚灵阵激活按钮（圆形键，位置/大小可在设置·操作页自由拖调） ----------------
 
-const OBELISK_BTN_SIZE := Vector2(110.0, 44.0)
+## 与技能键同径：两颗键并排时必须是同一个圆，基准在 SkillButtonView
+const OBELISK_BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
+const OBELISK_BTN_TEXT := "祭坛"
+## 圆键里两个字的最大字号：再大就贴着描边了
+const OBELISK_BTN_FONT := 22
 
 var _obelisk_btn: Button = null
-var _obelisk_bar: ProgressBar = null
-var _obelisk_box: VBoxContainer = null
+var _obelisk_ring: SkillButtonView.CircleProgressOverlay = null
+var _obelisk_box: Control = null
 var _obelisk_active_ob: BlessingObelisk = null
 
-## 构建聚灵阵激活 UI：按钮 + 贴键面充能条（摆位交给 _apply_btn_layout）
+## 构建聚灵阵激活 UI：圆形键 + 键面走针环（摆位交给 _apply_btn_layout）
 func _build_obelisk_ui() -> void:
-	_obelisk_box = VBoxContainer.new()
+	_obelisk_box = Control.new()
 	_obelisk_box.visible = false
 	_obelisk_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_obelisk_box.add_theme_constant_override("separation", 4)
+	_obelisk_box.custom_minimum_size = OBELISK_BTN_SIZE
 	add_child(_obelisk_box)
 
 	_obelisk_btn = Button.new()
-	_obelisk_btn.text = "祭 坛"
+	_obelisk_btn.text = OBELISK_BTN_TEXT
 	_obelisk_btn.custom_minimum_size = OBELISK_BTN_SIZE
+	_obelisk_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_obelisk_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_obelisk_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_obelisk_btn, GameStyle.GOLD, GameStyle.GOLD, 15, GameStyle.INK_TEXT, 6.0)
+	_style_obelisk_btn(false)
 	_obelisk_btn.gui_input.connect(_on_obelisk_btn_input)
 	# 这颗键不需要登记：按钮类控件由摇杆自动认走（DawnJoystick._ready 的两趟收口），
 	# 按住它不会在底下长出摇杆、也不会把人带出阵法范围。
 	_obelisk_box.add_child(_obelisk_btn)
 
-	## 充能条画在键面上（用户 2026-10-09：「这个进度条可以显示到按钮上面」）。
-	## 挂在键下面那条：一是把整块 UI 撑高一档，二是正好落在拇指根那一片，
-	## 按住的时候本来就看不见 —— 键面自己就是进度，才不用把视线挪开。
-	## 摆位三条约束：
-	##  ① mouse_filter 必须 IGNORE —— ProgressBar 默认 STOP，会在键底挖出一条按不动的死带。
-	##  ② 左右各内缩 8：键面是 6° 斜切的平行四边形，44 高上斜边横向偏移约 4.6，
-	##     贴着整宽画就会探到斜切之外。
-	##  ③ 上抬到压边之上：block() 的底边是 5px 同色压暗厚边，条压在厚边上就糊成一条边线。
-	_obelisk_bar = ProgressBar.new()
-	_obelisk_bar.max_value = 1.0
-	_obelisk_bar.value = 0.0
-	_obelisk_bar.show_percentage = false
-	_obelisk_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bar_styles: Array = GameStyle.bar_styles(Color(0.06, 0.05, 0.08, 0.8), Color(0.35, 0.75, 1, 0.95))
-	_obelisk_bar.add_theme_stylebox_override("background", bar_styles[0])
-	_obelisk_bar.add_theme_stylebox_override("fill", bar_styles[1])
-	_obelisk_btn.add_child(_obelisk_bar)
-	_obelisk_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_obelisk_bar.offset_left = 8.0
-	_obelisk_bar.offset_right = -8.0
-	_obelisk_bar.offset_top = -12.0
-	_obelisk_bar.offset_bottom = -6.0
+	## 充能进度画成键面上那一圈走针（原来是键底一根横条 —— 圆键里横条两头会探出圆面）。
+	## 两条约束照旧：
+	##  ① mouse_filter 必须 IGNORE —— 显示件在键面上截事件，就是挖一条按不动的死带。
+	##  ② 整圈收在圆面之内，半径由 overlay 自己的 arc_radius() 一处算（判据读同一个函数）。
+	## 按住时拇指正压着这颗键，所以真读数在阵法上（碑脚环 + 碑顶百分比），
+	## 键面这一圈只是「手没离开、眼睛还在别处」时的第二读数，两处读同一个 ratio。
+	_obelisk_ring = SkillButtonView.CircleProgressOverlay.new()
+	_obelisk_ring.progress_color = GameStyle.JADE
+	_obelisk_ring.head_color = GameStyle.JADE_EDGE
+	_obelisk_btn.add_child(_obelisk_ring)
+
+## 键面样式：平时墨底蓝勾边，按住充能整面翻实蓝 —— 文案不动，状态由底色 + 那一圈说
+func _style_obelisk_btn(charging: bool) -> void:
+	SkillButtonView.style_circle_action(_obelisk_btn, GameStyle.GOLD, OBELISK_BTN_FONT, charging)
 
 ## 聚灵阵按钮输入处理：按下开始充能，松开结束充能（支持鼠标与多点触控）
 func _on_obelisk_btn_input(event: InputEvent) -> void:
@@ -461,26 +472,22 @@ func _on_obelisk_btn_input(event: InputEvent) -> void:
 
 	if is_press and _obelisk_active_ob != null:
 		_obelisk_active_ob.start_charge()
-		_obelisk_btn.text = "激活中..."
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD_DK, 6.0, Vector2(3, 4)))
-		# GOLD_DK 已翻成幽夜深蓝（暗底）：充能态黑字看不见，换暗底亮字
-		_obelisk_btn.add_theme_color_override("font_color", GameStyle.CHALK)
+		_style_obelisk_btn(true)
 	elif is_release and _obelisk_active_ob != null:
 		_obelisk_active_ob.stop_charge()
-		_obelisk_btn.text = "祭 坛"
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
-		_obelisk_btn.add_theme_color_override("font_color", GameStyle.INK_TEXT)
+		_style_obelisk_btn(false)
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
 	_obelisk_active_ob = ob
-	_obelisk_btn.text = "祭 坛"
-	_obelisk_bar.value = 0.0
+	_obelisk_ring.set_ratio(0.0)
 	_obelisk_box.visible = true
 	_obelisk_box.modulate.a = 0.0
+	## 弹入只动「相对缩放」：直接 tween 到 1.0 会把设置里存的键体大小抹平
+	var s := _obelisk_box.scale
 	var tw = create_tween()
 	tw.tween_property(_obelisk_box, "modulate:a", 1.0, 0.18)
-	tw.parallel().tween_property(_obelisk_box, "scale", Vector2(1.0, 1.0), 0.18).from(Vector2(0.8, 0.8)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(_obelisk_box, "scale", s, 0.18).from(s * 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## 玩家离开聚灵阵范围：隐藏激活按钮
 func hide_obelisk_activation(_ob: BlessingObelisk) -> void:
@@ -494,32 +501,30 @@ func hide_obelisk_activation(_ob: BlessingObelisk) -> void:
 func on_obelisk_charge_started(_ob: BlessingObelisk) -> void:
 	pass
 
-## 聚灵阵充能进度更新：更新充能条
+## 聚灵阵充能进度更新：更新键面走针环
 func on_obelisk_charge_progress(_ob: BlessingObelisk, ratio: float) -> void:
-	if _obelisk_bar != null:
-		_obelisk_bar.value = ratio
+	if _obelisk_ring != null:
+		_obelisk_ring.set_ratio(ratio)
 
 ## 聚灵阵充能取消：重置按钮状态
 func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
 	if _obelisk_btn != null:
-		_obelisk_btn.text = "祭 坛"
-		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
-		_obelisk_btn.add_theme_color_override("font_color", GameStyle.INK_TEXT)
-	if _obelisk_bar != null:
-		_obelisk_bar.value = 0.0
+		_style_obelisk_btn(false)
+	if _obelisk_ring != null:
+		_obelisk_ring.set_ratio(0.0)
 
 ## 聚灵阵触发成功：播放完成动画后隐藏
 func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
 	if _obelisk_box != null and _obelisk_box.visible:
+		var s := _obelisk_box.scale
 		var tw = create_tween()
-		tw.tween_property(_obelisk_box, "scale", Vector2(1.15, 1.15), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_obelisk_box, "scale", s * 1.15, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.parallel().tween_property(_obelisk_box, "modulate:a", 0.0, 0.4)
 		tw.tween_callback(func():
 			_obelisk_box.visible = false
-			_obelisk_box.scale = Vector2.ONE
+			_obelisk_box.scale = s
 			_obelisk_box.modulate.a = 1.0
-			_obelisk_btn.text = "祭 坛"
-			_obelisk_bar.value = 0.0
+			_obelisk_ring.set_ratio(0.0)
 			_obelisk_active_ob = null
 		)
 
@@ -654,8 +659,7 @@ func set_btn_edit_mode(on: bool) -> void:
 		# 退出调整模式时若人还站在阵法范围内，按钮保持可见（等离开范围再收）
 		_obelisk_box.visible = on or _obelisk_active_ob != null
 		if on:
-			_obelisk_btn.text = "祭 坛"
-			_obelisk_bar.value = 0.0
+			_obelisk_ring.set_ratio(0.0)
 
 ## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
 func open_btn_edit_overlay(on_done: Callable = Callable()) -> void:

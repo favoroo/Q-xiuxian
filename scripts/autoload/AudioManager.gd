@@ -50,12 +50,31 @@ const SFX_GAP_MS := {
 	"player_hurt": 120,
 	"enemy_death": 30,
 	"enemy_death_elite": 60,
-	"sword_swing": 30,
 	"blade_shoot": 25,
 	"talisman_throw": 25,
 	"thunder_strike": 40,
 	"fan_gust": 35,
-	"orb_hit": 30,
+	"orb_hit": 50,
+	# 器型族。取值原则：① 同族两把武器同帧齐射要合并成一声（防糊）
+	# ② 必须小于该族最快那把武器在极限攻速下的触发间隔（防吞音）
+	# ③ 双层同 key 的族（鼓/笛）必须小于「施法 → 落点」那约 200ms，否则落点被自己吞掉
+	"whoosh_light": 70,
+	"whoosh_heavy": 70,
+	"impact_blade": 40,
+	"impact_blunt": 40,
+	"impact_crack": 40,
+	"metal_dart": 30,
+	"flame_jet": 120,     ## 火葫芦 cd 0.42，极限攻速约 0.30s
+	"drum_boom": 60,      ## 鼓的两层同 key，间隔约 200ms
+	"flute_wave": 120,    ## 笛同上，120 < 200 才留得住落点那一记
+	"drone_flutter": 50,
+	"drone_chime": 50,
+	# 敌人侧：群狼齐咬/群邪修齐射要合并成「一波攻势」而不是弹雨般几十声
+	"enemy_claw": 60,
+	"enemy_bolt": 50,
+	"enemy_fuse": 100,     ## 引信本身 0.3s 长嘶，间隔太小会把一条嘶鸣切成碎片
+	"enemy_slam": 150,
+	"enemy_blink": 80,
 	"gem_pickup": 25,
 	"chest_hit": 30,
 	"ui_click": 30,
@@ -102,12 +121,29 @@ func _load_audio_assets() -> void:
 	_register_sfx("player_hurt", _sfx_paths("player_hurt", 3))
 	_register_sfx("enemy_death", _sfx_paths("enemy_death", 3))
 	_register_sfx("enemy_death_elite", _sfx_paths("enemy_death_elite", 2))
-	_register_sfx("sword_swing", _sfx_paths("sword_swing", 2))
 	_register_sfx("blade_shoot", _sfx_paths("blade_shoot", 2))
 	_register_sfx("talisman_throw", _sfx_paths("talisman_throw", 2))
 	_register_sfx("thunder_strike", _sfx_paths("thunder_strike", 2))
 	_register_sfx("fan_gust", _sfx_paths("fan_gust", 2))
 	_register_sfx("orb_hit", _sfx_paths("orb_hit", 2))
+	# 器型族（近战双层：前摇 whoosh + 命中 impact；雷法双层：施法 sfx + 落点 sfx_impact）
+	_register_sfx("whoosh_light", _sfx_paths("whoosh_light", 2))
+	_register_sfx("whoosh_heavy", _sfx_paths("whoosh_heavy", 2))
+	_register_sfx("impact_blade", _sfx_paths("impact_blade", 3))
+	_register_sfx("impact_blunt", _sfx_paths("impact_blunt", 2))
+	_register_sfx("impact_crack", _sfx_paths("impact_crack", 2))
+	_register_sfx("metal_dart", _sfx_paths("metal_dart", 2))
+	_register_sfx("flame_jet", _sfx_paths("flame_jet", 2))
+	_register_sfx("drum_boom", _sfx_paths("drum_boom", 2))
+	_register_sfx("flute_wave", _sfx_paths("flute_wave", 2))
+	_register_sfx("drone_flutter", _sfx_paths("drone_flutter", 2))
+	_register_sfx("drone_chime", _sfx_paths("drone_chime", 2))
+	# 敌人专属族：敌我分源，不再借用玩家的挥砍/开火/闪避音
+	_register_sfx("enemy_claw", _sfx_paths("enemy_claw", 3))
+	_register_sfx("enemy_bolt", _sfx_paths("enemy_bolt", 2))
+	_register_sfx("enemy_fuse", _sfx_paths("enemy_fuse", 2))
+	_register_sfx("enemy_slam", _sfx_paths("enemy_slam", 2))
+	_register_sfx("enemy_blink", _sfx_paths("enemy_blink", 2))
 	_register_sfx("gem_pickup", _sfx_paths("gem_pickup", 2))
 	_register_sfx("chest_hit", _sfx_paths("chest_hit", 2))
 	_register_sfx("chest_open", _sfx_paths("chest_open", 2))
@@ -174,9 +210,32 @@ func has_sfx(key: String) -> bool:
 func sfx_keys() -> Array:
 	return sfx_dict.keys()
 
+# ---------------- 判据录音口 ----------------
+## 只在 tests/ 的判据场景里显式开启；不开启时 play_sfx 一行分支都不多走。
+## 捕获态不进播放器池、不查节流表、不消耗灵石连击状态 —— 量的是"想播什么"，不是"播出什么"。
+
+var _capturing: bool = false
+var _captured: Array[Dictionary] = []
+
+func begin_sfx_capture() -> void:
+	_capturing = true
+	_captured.clear()
+
+## 取走捕获序列并关闭捕获态
+func end_sfx_capture() -> Array[Dictionary]:
+	_capturing = false
+	return _captured
+
 # ---------------- 播放 ----------------
 
 func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float = 0.0) -> void:
+	# 判据录音口：headless 不出声，但「这次攻击实际播了哪个 key」必须量得到。
+	# 放在未注册检查之前 —— 调用点写了哑 key 这类事故（历史上真出过 play_sfx("powerUp2")）
+	# 只有在这里才留得下痕迹；被节流吞掉的调用同样记录，判据量的才是真实意图。
+	if _capturing:
+		_captured.append({"key": sfx_key, "scale": volume_scale, "registered": sfx_dict.has(sfx_key)})
+		return
+
 	if not sfx_dict.has(sfx_key):
 		push_warning("AudioManager: 未注册的音效 key 「%s」" % sfx_key)
 		return

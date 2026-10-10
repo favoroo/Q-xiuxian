@@ -63,11 +63,21 @@ func _test_weapon_dps_normalization() -> void:
 			_c.check(dps >= 18.0 and dps <= 26.0,
 				"群伤/功能法器【%s】DPS 落在 18~26 区间 (实得 %.1f)" % [w_id, dps])
 		elif w_id in drone_weapons:
-			_c.check(dps >= 28.0 and dps <= 34.0,
-				"御灵环绕法器【%s】DPS 落在 28~34 区间 (实得 %.1f)" % [w_id, dps])
+			# 2026-10-10 起御灵口径改为"实伤"：sustained_single_dps 对 DRONE 已乘接触占空比，
+			# 此带约束的是有效单体 DPS，而非纸面值；经数值强化后提升至 30~38 区间
+			_c.check(dps >= 30.0 and dps <= 38.0,
+				"御灵环绕法器【%s】有效 DPS 落在 30~38 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
 	_c.check(ratio <= 2.0, "全库 35 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+
+	# 御灵同档护栏（2026-10-10 用户口径：召唤打不动人）：御灵有效 DPS（已按接触占空比折算）
+	# 必须贴住青云剑单体 DPS 的 0.85 倍以上 —— 占空比一变、数值一飘，这里直接红。
+	var sword_dps := WeaponData.sustained_single_dps("qingyun_sword", 1)
+	for w_id in drone_weapons:
+		var drone_dps := WeaponData.sustained_single_dps(w_id, 1)
+		_c.check(drone_dps >= sword_dps * 0.85,
+			"御灵【%s】有效 DPS %.1f ≥ 0.85 × 青云剑 %.1f（召唤不许打不动人）" % [w_id, drone_dps, sword_dps])
 
 # ---------------- 2. 敌人与 Boss 气血成长 ----------------
 

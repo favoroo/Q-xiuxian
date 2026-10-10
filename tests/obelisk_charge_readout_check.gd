@@ -4,16 +4,16 @@ extends Node
 ## 运行: $G --headless --path . res://tests/ObeliskChargeReadoutCheck.tscn
 ##       $G --headless --path . res://tests/ObeliskChargeReadoutCheck.tscn -- --selftest
 ##
-## 立条目的现场（用户 2026-10-09 真机图）：长按「聚 灵」激活聚灵阵，拇指正压在那颗键上，
-## 键底下的充能条被手挡得死死的 —— 眼睛当时只能看着阵法。所以进度必须出现在阵法上，
+## 立条目的现场（用户 2026-10-09 真机图）：长按「祭坛」激活聚灵阵，拇指正压在那颗键上，
+## 键面上的读数被手挡得死死的 —— 眼睛当时只能看着阵法。所以进度必须出现在阵法上，
 ## 而这条判据钉的就是「出现了、而且画的是同一个数」：
 ##   ① 碑脚走针环 ChargeArc.ratio
 ##   ② 碑身灌灵 desaturate.gdshader 的 fill_ratio
 ##   ③ 碑顶百分比 Label.text
-##   ④ HUD 那根条（留着给桌面/鼠标，不许和阵法上那三处各说各话）
+##   ④ 键面那一圈走针（留着给「拇指压着键、眼睛还在别处」的那一拍，不许和阵法上那三处各说各话）
 ##
 ## 为什么逐帧比而不是只比首尾：这条判据真正的敌人是「另抄一套参数」——
-## 环用 3s、条用 1.5s 那种写法，首尾都对得上（都从 0 到 1），只有中途对不上。
+## 碑脚那圈用 3s、键面那一圈用 1.5s 这种写法，首尾都对得上（都从 0 到 1），只有中途对不上。
 ##
 ## 两条取舍：
 ##  ① 「人在范围内」这个前置直接写 is_player_inside = true：真造一个 Player 要把 Player.gd
@@ -34,7 +34,7 @@ var _ob: BlessingObelisk
 ## 第二座碑：验「三座碑各灌各的」，材质没 local_to_scene 时会在这里露馅
 var _ob2: BlessingObelisk
 var _btn: Button
-var _bar: ProgressBar
+var _ring: SkillButtonView.CircleProgressOverlay
 var _center := Vector2.ZERO
 
 func _ready() -> void:
@@ -69,9 +69,9 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	_btn = _hud._obelisk_btn
-	_bar = _hud._obelisk_bar
-	_c.check(_btn != null and _bar != null, "前提：HUD 的聚灵键与充能条都建起来了")
-	if _btn == null or _bar == null:
+	_ring = _hud._obelisk_ring
+	_c.check(_btn != null and _ring != null, "前提：HUD 的聚灵键与键面走针环都建起来了")
+	if _btn == null or _ring == null:
 		return
 	_center = _btn.get_global_rect().get_center()
 
@@ -121,11 +121,11 @@ func _run() -> void:
 		if internal >= 0.8:
 			break
 	_c.check(samples >= 12, "采到 %d 帧充能过程（够不够看出「中途对不上」）" % samples)
-	_c.check(bad == 0, "%d 帧里碑脚环 / 碑身灌光 / 碑顶读数 / HUD 条 与充能进度逐帧相等（错 %d 帧）" % [samples, bad])
+	_c.check(bad == 0, "%d 帧里碑脚环 / 碑身灌光 / 碑顶读数 / 键面那一圈 与充能进度逐帧相等（错 %d 帧）" % [samples, bad])
 	_c.check(bad_label == 0, "碑顶百分比文本逐帧等于进度（错 %d 帧）" % bad_label)
 	_c.check(last > first + 0.5, "采样期间进度确实在往上涨（%.2f → %.2f）" % [first, last])
 	_c.check(_ob.is_readout_shown(), "按住期间读数挂在阵法上")
-	_c.check(absf(_bar.value - last) <= EPS, "HUD 条与阵法读数同源（条 %.3f / 阵法 %.3f）" % [_bar.value, last])
+	_c.check(absf(_ring.ratio - last) <= EPS, "键面那一圈与阵法读数同源（键面 %.3f / 阵法 %.3f）" % [_ring.ratio, last])
 	# 各灌各的：另一座碑此刻必须还是空的（褪灰材质若没 local_to_scene，这里会一起亮）
 	_c.check(not _ob2.is_readout_shown() and _ob2.readout_ratio() == 0.0,
 		"同一时刻另一座碑没跟着亮（三座碑各灌各的）")
@@ -136,22 +136,26 @@ func _run() -> void:
 	_c.check(_ob.readout_ratio() == 0.0, "中断 ⇒ 阵法读数归零（实得 %.3f）" % _ob.readout_ratio())
 	_c.check(_ob._readout_arc.ratio == 0.0, "中断 ⇒ 走针环退干净")
 	_c.check(float(_ob.stone_mat.get_shader_parameter("fill_ratio")) == 0.0, "中断 ⇒ 碑身灌光退干净")
-	_c.check(_bar.value == 0.0, "中断 ⇒ HUD 条同归零")
+	_c.check(_ring.ratio == 0.0, "中断 ⇒ 键面那一圈同归零")
 	await get_tree().create_timer(0.35).timeout
 	_c.check(not _ob.is_readout_shown(), "中断后读数从阵法上撤下")
 
-	# 六·五、充能条贴在键面上（用户 2026-10-09：「这个进度条可以显示到按钮上面」）
-	# 三件事分别钉：挂在键上而不是键下面另起一条、整条落在键的矩形里（不探出斜切边）、
-	# 按在条那一片上仍然算按在这颗键上（ProgressBar 默认 STOP，会在键底挖一条死带）。
-	var bar_rect: Rect2 = _bar.get_global_rect()
+	# 六·五、进度画在键面上（用户 2026-10-09：「这个进度条可以显示到按钮上面」；
+	# 2026-10-10 键改成圆形，横条换成一圈走针）。三件事分别钉：
+	#  ① 挂在键上，不是键外面另起一块被拇指根盖住；
+	#  ② 整圈收在圆面之内（半径 + 半根线宽越过键半径，探出去的就是一圈悬空的黄线）；
+	#  ③ 按在走针那一片上仍然算按在这颗键上（显示件默认 STOP，会在键缘挖一条死带）。
 	var btn_rect: Rect2 = _btn.get_global_rect()
-	_c.check(_bar.get_parent() == _btn, "充能条挂在键面上（不是键下面另起一条被拇指根盖住）")
-	_c.check(btn_rect.encloses(bar_rect),
-		"充能条整条落在键的矩形内（键 %s / 条 %s）" % [str(btn_rect), str(bar_rect)])
-	await _press(bar_rect.get_center(), true)
-	_c.check(_ob.is_charging, "按在充能条那一片上 ⇒ 照样开始充能（显示件不许挖死带）")
-	await _press(bar_rect.get_center(), false)
-	_c.check(not _ob.is_charging, "在条那一片抬起 ⇒ 停住")
+	_c.check(_ring.get_parent() == _btn, "走针环挂在键面上（不是键外面另起一块）")
+	_c.check(_ring.arc_radius() + _ring.width * 0.5 <= btn_rect.size.x * 0.5 + 0.01,
+		"走针整圈收在圆键之内（半径 %.1f + 半宽 %.1f vs 键半径 %.1f）" % [
+				_ring.arc_radius(), _ring.width, btn_rect.size.x * 0.5])
+	## 死带取样打在针尖那一片：键底缘内侧 4 单位，正是弧画过的地方
+	var ring_pt := btn_rect.get_center() + Vector2(0, btn_rect.size.y * 0.5 - 4.0)
+	await _press(ring_pt, true)
+	_c.check(_ob.is_charging, "按在走针那一片上 ⇒ 照样开始充能（显示件不许挖死带）")
+	await _press(ring_pt, false)
+	_c.check(not _ob.is_charging, "在走针那一片抬起 ⇒ 停住")
 
 	# 七、按住到满 ⇒ 触发那一帧读数正好画满一整圈（不许「已经放了但看着还差一截」）
 	await _press(_center, true)
@@ -181,7 +185,7 @@ func _tracks(ob: BlessingObelisk, internal: float) -> bool:
 		return false
 	if absf(float(ob.stone_mat.get_shader_parameter("fill_ratio")) - internal) > EPS:
 		return false
-	return absf(_bar.value - internal) <= EPS
+	return absf(_ring.ratio - internal) <= EPS
 
 func _pct_text(ratio: float) -> String:
 	return "%d%%" % int(roundf(clampf(ratio, 0.0, 1.0) * 100.0))
@@ -200,8 +204,8 @@ func _build_stage() -> void:
 	stage.add_child(_ob2)
 	_hud = HUD_SCENE.instantiate()
 	get_tree().root.add_child(_hud)
-	## 接线照 Main.gd 那一套（六条一根不落）：HUD 那根条是信号驱动的，
-	## 不接的话「阵法与条同源」就变成我自己喂给自己的数
+	## 接线照 Main.gd 那一套（六条一根不落）：键面那一圈是信号驱动的，
+	## 不接的话「阵法与键面同源」就变成我自己喂给自己的数
 	_ob.activation_available.connect(_hud.show_obelisk_activation)
 	_ob.activation_unavailable.connect(_hud.hide_obelisk_activation)
 	_ob.charge_started.connect(_hud.on_obelisk_charge_started)
@@ -235,7 +239,7 @@ func _selftest() -> void:
 	_build_stage()
 	await get_tree().process_frame
 	_btn = _hud._obelisk_btn
-	_bar = _hud._obelisk_bar
+	_ring = _hud._obelisk_ring
 	# 不依赖派发：直接走 HUD 之外最短的一条真链路把进度推到一半
 	_ob.start_charge()
 	var guard := 0
@@ -246,7 +250,7 @@ func _selftest() -> void:
 	_ob.is_charging = false
 	var internal: float = _ob.charge_time / BlessingObelisk.CHARGE_TIME
 	_c.check(internal > 0.4, "前提：进度已推到 %.2f 并冻住" % internal)
-	_c.check(_tracks(_ob, internal), "正例：真充能中的碑，三处读数与 HUD 条都在跟同一个进度")
+	_c.check(_tracks(_ob, internal), "正例：真充能中的碑，三处读数与键面那一圈都在跟同一个进度")
 
 	_ob._readout_arc.ratio = 0.0
 	_c.check(not _tracks(_ob, internal), "反例① 走针环没跟上 ⇒ 判红（旧写法：进度只画在按钮上）")
@@ -263,5 +267,9 @@ func _selftest() -> void:
 	_ob._readout_arc.ratio = internal * 0.5
 	_c.check(not _tracks(_ob, internal), "反例④ 环与进度不同径（另抄一套时长）⇒ 判红")
 	_ob._readout_arc.ratio = internal
+
+	_ring.ratio = 0.0
+	_c.check(not _tracks(_ob, internal), "反例⑤ 键面那一圈没接到进度 ⇒ 判红（换了画法也不许断源）")
+	_ring.ratio = internal
 
 	_c.check(_tracks(_ob, internal), "复原 ⇒ 判绿（反例是人为造的，不是判据空转）")

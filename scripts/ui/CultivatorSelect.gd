@@ -3,11 +3,12 @@ extends Control
 
 ## 开局道统择选（上下分层 Master-Detail 架构）：
 ## - 上半部分：当前选中修士的详解大卡片（形象、名号、称号、开局装备与特权、独门天赋、背负代价、契合神通、拜入/解锁条件）
-## - 下半部分：全部 9 名修士的形象小卡片横排一览（头像、名号、状态/通关勋章），点击或方向键即时切换预览
+## - 下半部分：全部修士的形象小卡片两排网格一览（头像、名号、状态/通关勋章），点击或方向键即时切换预览
 ## 流程：StartMenu → CultivatorSelect → SkillSelect → StartWeaponSelect（全程保持 paused）
 
 const EDGE := 24.0          # 左右屏边留白（兼顾斜切面板伸出量，确保 drawn_rect 不出屏）
 const DETAIL_PAD_X := 14.0  # 顶部详解大卡片左右内边距
+const DETAIL_INSET := 36.0  # 顶部详解大卡片两侧收窄量（比下方卡片区窄一截，视觉分层）
 const LEFT_COL_W := 148.0   # 顶部详解卡：左侧形象与名号列宽
 const RIGHT_COL_W := 128.0  # 顶部详解卡：右侧确认/解锁列宽
 const DETAIL_GAP := 12.0    # 顶部详解卡：左中右三列间距
@@ -17,13 +18,14 @@ const ROW_GAP := 8.0        # 分类色签与正文间距
 const BORDER_RESERVE := 16.0 # 外层面板描边 + 条目卡描边 + 色签内边距安全余量
 const TXT := 12             # 特性正文字号
 const ROSTER_GAP := 5.0     # 底部形象小卡片间距
-const SMALL_CARD_H := 104.0 # 底部形象小卡片高度
+const SMALL_CARD_H := 96.0  # 底部形象小卡片高度（两排后略压，给上方详解卡留空间）
 
 var _title_label: Label
 var _sub_label: Label
 var _detail_panel: PanelContainer
 var _detail_margin: MarginContainer
-var _roster_row: HBoxContainer
+var _roster_scroll: ScrollContainer
+var _roster_grid: GridContainer
 var _selected_id: String = "jianchi"
 var _transitioning: bool = false
 
@@ -98,12 +100,18 @@ func _build_ui() -> void:
 	vbox.add_child(_sub_label)
 	GameStyle.label(_sub_label, 12, GameStyle.PAPER_DIM)
 
-	# 2. 上半部分：当前选中人物的介绍大卡片
+	# 2. 上半部分：当前选中人物的介绍大卡片（外套收窄边距，比下方卡片区窄一截）
+	var detail_inset := MarginContainer.new()
+	detail_inset.add_theme_constant_override("margin_left", int(DETAIL_INSET))
+	detail_inset.add_theme_constant_override("margin_right", int(DETAIL_INSET))
+	detail_inset.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(detail_inset)
+
 	_detail_panel = PanelContainer.new()
 	_detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_detail_panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	vbox.add_child(_detail_panel)
+	detail_inset.add_child(_detail_panel)
 
 	_detail_margin = MarginContainer.new()
 	_detail_margin.add_theme_constant_override("margin_left", int(DETAIL_PAD_X))
@@ -113,13 +121,22 @@ func _build_ui() -> void:
 	_detail_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_detail_panel.add_child(_detail_margin)
 
-	# 3. 下半部分：各个人物的形象小卡片与名称横排
-	_roster_row = HBoxContainer.new()
-	_roster_row.add_theme_constant_override("separation", int(ROSTER_GAP))
-	_roster_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_roster_row.custom_minimum_size = Vector2(0, SMALL_CARD_H)
-	_roster_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_roster_row)
+	# 3. 下半部分：各人物的形象小卡片两排网格（滚动区兜底，正常尺寸下一屏放得下）
+	_roster_scroll = ScrollContainer.new()
+	_roster_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_roster_scroll.custom_minimum_size = Vector2(0, SMALL_CARD_H * 2.0 + ROSTER_GAP + 4)
+	_roster_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_roster_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	GameStyle.scrollable(_roster_scroll)
+	vbox.add_child(_roster_scroll)
+
+	_roster_grid = GridContainer.new()
+	_roster_grid.add_theme_constant_override("h_separation", int(ROSTER_GAP))
+	_roster_grid.add_theme_constant_override("v_separation", int(ROSTER_GAP))
+	_roster_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_roster_grid.alignment = BoxContainer.ALIGNMENT_CENTER
+	_roster_grid.mouse_filter = Control.MOUSE_FILTER_PASS
+	_roster_scroll.add_child(_roster_grid)
 
 func show_select() -> void:
 	_transitioning = false
@@ -135,19 +152,20 @@ func show_select() -> void:
 	tw.tween_property(self, "modulate:a", 1.0, 0.22)
 
 ## 顶部详解卡中间特性列的可用文字宽：
-## 整屏宽扣掉屏边留白、详解卡内边距、左列形象区、右列按钮区、列间距，再扣条目卡内边距与分类色签。
+## 整屏宽扣掉屏边留白、详解卡两侧收窄与内边距、左列形象区、右列按钮区、列间距，再扣条目卡内边距与分类色签。
 ## 纯函数 ⇒ LayoutCheck 直接调用它做全表文案折行校验，不另抄算术。
 static func text_col_w(vis_w: float) -> float:
-	var panel_inner_w := vis_w - EDGE * 2.0 - DETAIL_PAD_X * 2.0
+	var panel_inner_w := vis_w - EDGE * 2.0 - DETAIL_INSET * 2.0 - DETAIL_PAD_X * 2.0
 	var mid_w := panel_inner_w - LEFT_COL_W - RIGHT_COL_W - DETAIL_GAP * 2.0
 	var txt_w := mid_w - ROW_PAD_X * 2.0 - TAG_CHIP_W - ROW_GAP - BORDER_RESERVE
 	return maxf(160.0, txt_w)
 
-## 底部每张形象小卡片的内部可用文字宽
-static func small_card_inner_w(vis_w: float, count: int = 9) -> float:
+## 底部两排网格中每张形象小卡片的内部可用文字宽（列数 = 向上取整的半数，奇数张时末排少一张）
+static func small_card_inner_w(vis_w: float, count: int = 15) -> float:
 	var n := maxi(1, count)
-	var total_w := vis_w - EDGE * 2.0 - ROSTER_GAP * float(n - 1)
-	var card_w := total_w / float(n)
+	var cols := float(int(ceil(n / 2.0)))
+	var total_w := vis_w - EDGE * 2.0 - ROSTER_GAP * (cols - 1.0)
+	var card_w := floorf(total_w / cols)
 	return maxf(48.0, card_w - 10.0)
 
 func _select_cultivator(cid: String) -> void:
@@ -411,26 +429,28 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 
 	return row_panel
 
-# ---------------- 下半部分：人物形象小卡片横排 ----------------
+# ---------------- 下半部分：人物形象小卡片两排网格 ----------------
 
 func _rebuild_roster_cards(vis_w: float) -> void:
-	for child in _roster_row.get_children():
+	for child in _roster_grid.get_children():
 		child.queue_free()
 
 	var ids: Array = CultivatorData.all_ids()
+	_roster_grid.columns = int(ceil(ids.size() / 2.0))
 	var inner_w := small_card_inner_w(vis_w, ids.size())
+	var card_w := inner_w + 10.0
 	for cid in ids:
-		_roster_row.add_child(_create_small_card(String(cid), inner_w))
+		_roster_grid.add_child(_create_small_card(String(cid), inner_w, card_w))
+	GameStyle.swipeable(_roster_grid)
 
-func _create_small_card(cid: String, inner_w: float) -> Control:
+func _create_small_card(cid: String, inner_w: float, card_w: float) -> Control:
 	var def: Dictionary = CultivatorData.get_def(cid)
 	var is_selected: bool = (cid == _selected_id)
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var best_d: int = GameManager.get_cultivator_best_danger(cid)
 
 	var card := PanelContainer.new()
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size = Vector2(66, SMALL_CARD_H)
+	card.custom_minimum_size = Vector2(card_w, SMALL_CARD_H)
 
 	var accent := GameStyle.JADE if is_selected else \
 			(GameStyle.GOLD.darkened(0.35) if is_unlocked else GameStyle.LINE)

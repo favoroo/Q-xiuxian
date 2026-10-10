@@ -76,12 +76,12 @@ func _ready() -> void:
 			float(shot.stone_mat.get_shader_parameter("fill_ratio")),
 			str(shot.is_readout_shown()), shot._readout_arc.ratio, shot._readout_label.text,
 		])
-	print("HUD 键 %s / 键面充能条 %s" % [str(_hud._obelisk_btn.get_global_rect()),
-			str(_hud._obelisk_bar.get_global_rect())])
+	print("HUD 键 %s / 键面走针环 %s" % [str(_hud._obelisk_btn.get_global_rect()),
+			str(_hud._obelisk_ring.get_global_rect())])
 	get_tree().quit(0)
 
 ## 最后一张给人看键面：真 GameHUD + 真按下（push_input 打键的中心），
-## 充到六成半那一档定格 —— 同屏比「阵法上的进度」与「键面上的进度条」是不是一个数
+## 充到六成半那一档定格 —— 同屏比「阵法上的进度」与「键面上那一圈」是不是一个数
 func _shoot_hud() -> void:
 	for ob in _nodes:
 		ob.light.enabled = true
@@ -91,7 +91,7 @@ func _shoot_hud() -> void:
 	await get_tree().process_frame
 	var target := _nodes[0]
 	target.is_player_inside = true
-	## 接线照 Main.gd：键面上的条是 charge_progress_updated 驱动的，不接就是根空槽
+	## 接线照 Main.gd：键面那一圈是 charge_progress_updated 驱动的，不接就是圈空着
 	target.charge_started.connect(_hud.on_obelisk_charge_started)
 	target.charge_progress_updated.connect(_hud.on_obelisk_charge_progress)
 	target.charge_cancelled.connect(_hud.on_obelisk_charge_cancelled)
@@ -120,22 +120,22 @@ func _shoot_hud() -> void:
 		await get_tree().process_frame
 		guard += 1
 	_shoot("hud")
-	# 键面特写要在**还按着**的时候拍：一抬起 stop_charge() 就把条归零、文案回「聚 灵」
+	# 键面特写要在**还按着**的时候拍：一抬起 stop_charge() 就把那一圈归零、键面翻回墨底
 	_key_crop()
 	ev.pressed = false
 	_hud._on_obelisk_btn_input(ev)
 	get_tree().root.push_input(ev)
 	await get_tree().create_timer(0.3, true, false, true).timeout
-	print("HUD shot ratio=%.3f bar=%.3f 按住的键=%s" % [
-		target.readout_ratio(), _hud._obelisk_bar.value, str(target.is_charging)])
+	print("HUD shot ratio=%.3f ring=%.3f 按住的键=%s" % [
+		target.readout_ratio(), _hud._obelisk_ring.ratio, str(target.is_charging)])
 
-## 键面特写：连键外一圈底板一起裁，量得出条有没有探出斜切边
+## 键面特写：连键外一圈底板一起裁（圆键外扩 30 见方），量得出那一圈有没有探出圆边
 func _key_crop() -> void:
 	var img := get_viewport().get_texture().get_image()
 	var k := float(img.get_width()) / 960.0
 	var r: Rect2 = _hud._obelisk_btn.get_global_rect()
-	_shoot("hud_key", Rect2(Vector2((r.position.x - 30.0) * k, (r.position.y - 16.0) * k),
-			Vector2(180.0 * k, 96.0 * k)))
+	_shoot("hud_key", Rect2(Vector2((r.position.x - 30.0) * k, (r.position.y - 30.0) * k),
+			Vector2((r.size.x + 60.0) * k, (r.size.y + 60.0) * k)))
 
 func _shoot(tag: String, crop: Rect2 = Rect2()) -> void:
 	var img := get_viewport().get_texture().get_image()

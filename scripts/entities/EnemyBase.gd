@@ -426,7 +426,8 @@ func _physics_process(delta: float) -> void:
 			_bite_dir = dir
 			_show_bite_warning(dir)
 			play_squash(Vector2(1.24, 0.76), bite_windup_time)
-			AudioManager.play_sfx("sword_swing", 0.55, GameManager.rng.randf_range(0.92, 1.08))
+			# 起手是妖物自己的扑咬声，不许借玩家法器的挥砍（旧写法播 sword_swing，战场上分不清谁在打）
+			AudioManager.play_sfx("enemy_claw", 0.5, GameManager.rng.randf_range(0.92, 1.08))
 
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
 	if explode_radius > 0.0:
@@ -435,7 +436,7 @@ func _physics_process(delta: float) -> void:
 				_fuse = 0.8
 				anim_sprite.modulate = Color(2.2, 0.9, 0.6)
 				play_squash(Vector2(1.2, 0.82), 0.3)
-				AudioManager.play_sfx("orb_hit", 1.3)
+				AudioManager.play_sfx("enemy_fuse", 1.0)   ## 引信是递进爆点的倒计时，不是灵宝触体的钟
 		else:
 			_fuse -= delta
 			target_vel = Vector2.ZERO
@@ -812,7 +813,7 @@ func _launch_bite(dir: Vector2) -> void:
 	_bite_dir = dir
 	_bite_hit = false
 	play_squash(Vector2(0.72, 1.3), 0.18)
-	AudioManager.play_sfx("sword_swing", 0.8, GameManager.rng.randf_range(0.92, 1.08))
+	AudioManager.play_sfx("enemy_claw", 0.85, GameManager.rng.randf_range(0.92, 1.08))
 
 ## 画短咬预告线：长度 = 这一跳真跳得出去的位移（bite_hit_radius 是终点附近的咬合半径，
 ## 不另画圈 —— 判定就落在看得见这条线的落点上，"特效范围 = 判定范围"）
@@ -846,7 +847,7 @@ func _fire_bolt(player: Node2D) -> void:
 		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
 		get_parent().add_child(bolt)
 	play_squash(Vector2(1.16, 0.84), 0.16)
-	AudioManager.play_sfx("blade_shoot", 0.6)
+	AudioManager.play_sfx("enemy_bolt", 0.7)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
 func _pulse_buff_aura() -> void:
@@ -886,7 +887,7 @@ func _teleport_near_player(player: Node2D) -> void:
 	var lim: float = GameManager.MAP_HALF_EXTENT - 40.0
 	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 	play_squash(Vector2(1.3, 0.7), 0.2)
-	AudioManager.play_sfx("dodge", 0.7, 0.8)
+	AudioManager.play_sfx("enemy_blink", 0.8)   ## 妖异残影是「下坠」，不许借玩家缩地成寸的 dodge
 
 ## 闪现残影：在旧位置生成一个本体当前帧的半透明剪影，快速淡出（区别于命中火花）
 func _spawn_teleport_ghost() -> void:

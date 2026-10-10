@@ -7,16 +7,16 @@ extends Area2D
 ## 旧写法是 .tscn 里钉 14px 碰撞 + Player 里写死 78px 轨道 ⇒ 距玩家 49px 以内是盲区，
 ## 而贴到玩家身上的妖正好停在 24px 处（单武器实测台 tests/WeaponProbe.tscn：灵蝶 ★1
 ## 只有 19 点伤/秒，纸面是 42.9）。58 ± 18 覆盖 40..76px，再算敌人受击圈 15px ⇒ 贴身到半臂都打得到。
-const ORBIT_RADIUS: float = 58.0
+const ORBIT_RADIUS: float = 80.0
 const MIN_ORBIT_RADIUS: float = 28.0
-const CONTACT_RADIUS: float = 20.0     ## 基础接触半径提升至 20px，配合动态伸缩杜绝盲区
+const CONTACT_RADIUS: float = 30.0     ## 接触半径 30px：敌人受击圈 15px ⇒ 合计 ~45px 触达，弥补轨道扫掠的占空比损失
 
 var star: int = 1
 var drone_id: String = "lingdie"
 var base_damage: float = 15.0
 var hit_cooldown: float = 0.35
 var current_radius: float = ORBIT_RADIUS ## 动态轨道当前平滑半径
-var max_orbit_reach: float = 125.0       ## 该灵宝的外扩扑击上限
+var max_orbit_reach: float = 175.0       ## 该灵宝的外扩扑击上限
 
 var _hit_ms: Dictionary = {}   ## 敌人 instance id → 上次命中时刻（毫秒）
 var _last_gc_ms: int = 0       ## 上次清理过期条目的时刻
@@ -34,7 +34,7 @@ func setup(star_level: int, weapon_id: String = "lingdie") -> void:
 	base_damage = WeaponData.damage_for(drone_id, star)
 	hit_cooldown = WeaponData.cooldown_for(drone_id, star)
 	var def := WeaponData.get_def(drone_id)
-	max_orbit_reach = maxf(110.0, float(def.get("range", 125.0)))
+	max_orbit_reach = maxf(150.0, float(def.get("range", 175.0)))
 	_apply_contact_radius()
 	if is_inside_tree():
 		_apply_star_visuals()
@@ -98,7 +98,7 @@ func _try_damage(area: Area2D) -> void:
 	if enemy and enemy.has_method("take_damage"):
 		var id: int = enemy.get_instance_id()
 		var now: int = Time.get_ticks_msec()
-		var eff_cd: float = maxf(0.08, hit_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult)
+		var eff_cd: float = maxf(0.08, hit_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult)
 		var cd_ms: int = maxi(1, int(round(eff_cd * 1000.0)))
 		if _hit_ms.has(id) and now - int(_hit_ms[id]) < cd_ms:
 			return

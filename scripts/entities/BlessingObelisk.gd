@@ -247,6 +247,12 @@ func _process(delta: float) -> void:
 	if is_triggered:
 		return
 	if is_charging:
+		# 波次结束守门：敌潮平息后再充满 = 空场释放，白白耗掉这座跨波共用的碑。
+		# 波次一离开 FIGHT 阶段立即按取消处理（进度归零，碑保留到下一波）。
+		var spawner = GameManager.wave_spawner
+		if spawner != null and spawner.phase != WaveSpawner.Phase.FIGHT:
+			stop_charge()
+			return
 		charge_time = minf(CHARGE_TIME, charge_time + delta)
 		var ratio: float = charge_time / CHARGE_TIME
 		charge_progress_updated.emit(self, ratio)

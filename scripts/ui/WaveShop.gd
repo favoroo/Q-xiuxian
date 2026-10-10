@@ -228,9 +228,8 @@ func _refresh_synergy_bar() -> void:
 	for tag in GameManager.active_synergies.keys():
 		if not WeaponData.SYNERGIES.has(tag):
 			continue
-		var chip_lbl: Label
-		chip_lbl = SynergyUI.create_chip(tag, 12, func() -> void:
-			_open_shop_synergy_tip(tag, chip_lbl)
+		var chip_lbl: Label = SynergyUI.create_chip(tag, 12, func(c: Control) -> void:
+			_open_shop_synergy_tip(tag, c)
 		)
 		_synergy_box.add_child(chip_lbl)
 
@@ -307,7 +306,9 @@ func _layout_for_viewport() -> void:
 	# 每次开面板陈列行回到最左：上一波划到哪里不该带到这一波
 	owned_scroll.scroll_horizontal = 0
 
-func refresh() -> void:
+## animate=false 时卡片直接就位、不重播入场动画：买入一件/切换锁定这类操作型刷新
+## 不该把整排卡的注意力拽走（2026-10-10 用户指令优化）；开店与重掷（真换了新货）才播。
+func refresh(animate: bool = true) -> void:
 	stones_label.text = "金币 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
 	if GameManager.reroll_free_left > 0:
@@ -325,6 +326,8 @@ func refresh() -> void:
 	for i in range(count):
 		var c := _create_offer_card(offers[i], i, count)
 		offers_container.add_child(c)
+		if not animate:
+			continue
 		c.pivot_offset = Vector2(card_w * 0.5, CARD_H_REF * 0.5)
 		c.scale = Vector2(0.82, 0.82)
 		c.modulate.a = 0.0
@@ -653,7 +656,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 				if not GameManager.merge_weapon(id, star, keep):
 					AudioManager.play_sfx("ui_error", 0.9)
 				selected = {}
-				refresh()
+				refresh(false)
 		}])
 
 	var row_ops: Array = []
@@ -669,7 +672,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 			"callback": func() -> void:
 				if GameManager.equip_from_stash(index):
 					selected = {}
-					refresh()
+					refresh(false)
 		})
 	else:
 		var unequip_disabled := GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS
@@ -683,7 +686,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 			"callback": func() -> void:
 				if GameManager.unequip_to_stash(index):
 					selected = {}
-					refresh()
+					refresh(false)
 		})
 
 	row_ops.append({
@@ -699,7 +702,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 				ok = GameManager.sell_weapon(index)
 			if ok:
 				selected = {}
-				refresh()
+				refresh(false)
 	})
 	actions.append(row_ops)
 
@@ -761,7 +764,7 @@ func _create_offer_card(offer: Dictionary, index: int, total_count: int = 4) -> 
 	# 行①：图标与名号同行
 	vbox.add_child(_create_offer_card_head(offer, card_w, data.kind, data.title, data.icon_path))
 	# 行②：色签流 + 锁定开关同行
-	vbox.add_child(_create_offer_card_tag_row(offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot))
+	vbox.add_child(_create_offer_card_tag_row(offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready))
 	# 行③：说明全文
 	var desc_lbl := Label.new()
 	desc_lbl.text = GameStyle.wrap_cjk(data.desc, GameStyle.body_font(), 12, inner_w)
@@ -790,6 +793,7 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var tag_parts: Array = []
 	var part_hot: Array = []
 	var desc: String
+	var merge_ready := false
 	var chip_color: Color = GameStyle.GOLD
 	var chip_text_color: Color = GameStyle.PAPER
 	var edge_color: Color = GameStyle.GOLD_DK
@@ -842,6 +846,13 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 			chip_color = GameStyle.JADE
 			chip_text_color = GameStyle.INK_TEXT
 			edge_color = GameStyle.JADE
+		# 买下即凑齐三合一：手里同名同星正好 2 把（货架只卖 1 星，买这把就满 3）——
+		# 绿边 + 「可合成」角标，与背包槽位 mergeable 绿边同口径。==2 才提示：
+		# 手里已有 3 把说明早已凑齐（该先去合成），买了变 4 把不叫「凑齐」。
+		merge_ready = not bool(offer.get("sold", false)) \
+				and GameManager.count_copies(w_id, 1) == 2
+		if merge_ready:
+			edge_color = GameStyle.JADE
 		desc = def.get("desc", "")
 		var bonus_dmg := GameManager.get_weapon_stat_bonus(w_id, 1)
 		if bonus_dmg > 0.05:
@@ -850,8 +861,9 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 	return {
 		"kind": kind, "is_potion": is_potion, "is_item": is_item, "def": def,
 		"title": title, "icon_path": icon_path, "tag": tag, "tag_parts": tag_parts,
-		"part_hot": part_hot, "desc": desc, "chip_color": chip_color,
-		"chip_text_color": chip_text_color, "edge_color": edge_color,
+		"part_hot": part_hot, "desc": desc, "merge_ready": merge_ready,
+		"chip_color": chip_color, "chip_text_color": chip_text_color,
+		"edge_color": edge_color,
 	}
 
 func _create_offer_card_chrome(card_w: float, edge_color: Color) -> PanelContainer:
@@ -902,7 +914,7 @@ func _create_offer_card_head(offer: Dictionary, card_w: float, kind: String, tit
 	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
 	return head
 
-func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array) -> HBoxContainer:
+func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false) -> HBoxContainer:
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -926,6 +938,9 @@ func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: 
 			chip_defs.append([tag_parts[i],
 				GameStyle.JADE if hot_i else chip_color,
 				GameStyle.INK_TEXT if hot_i else chip_text_color])
+	# 「买下即凑齐三合一」角标：绿面墨字，与背包 mergeable 绿边同口径
+	if merge_ready:
+		chip_defs.append(["可合成", GameStyle.JADE, GameStyle.INK_TEXT])
 	for cd in chip_defs:
 		var chip_txt: String = " %s " % cd[0]
 		var chip_lbl := Label.new()
@@ -950,7 +965,7 @@ func _create_offer_card_tag_row(offer: Dictionary, index: int, sold: bool, tag: 
 			GameStyle.INK_TEXT if locked else GameStyle.PAPER_DIM, 4.0)
 		lock_btn.pressed.connect(func():
 			GameManager.toggle_lock(index)
-			refresh()
+			refresh(false)
 		)
 		tag_row.add_child(lock_btn)
 	return tag_row
@@ -977,7 +992,7 @@ func _create_offer_card_price_btn(offer: Dictionary, index: int, sold: bool, pri
 		btn.text = "%d 金币 · 入背包" % price
 	btn.pressed.connect(func():
 		if GameManager.buy_offer(index):
-			refresh()
+			refresh(false)
 	)
 	return btn
 
@@ -988,6 +1003,6 @@ func _on_reroll() -> void:
 
 func _on_confirm() -> void:
 	DetailTip.close_all(self)
-	AudioManager.play_sfx("orb_hit", 1.0)
+	AudioManager.play_sfx("ui_confirm", 0.9)
 	visible = false
 	GameManager.confirm_shop()

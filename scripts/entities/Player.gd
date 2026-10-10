@@ -272,6 +272,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 	var gained := current_health - before
 	if gained <= 0.01:
 		return
+	GameManager.total_hp_healed += gained
 	if quiet:
 		return
 	play_squash(Vector2(0.88, 1.16), 0.18)
@@ -421,11 +422,13 @@ func _physics_process(delta: float) -> void:
 	# 灵愈心法 + 青木羁绊：持续回血
 	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
 	if total_regen > 0.0 and current_health < max_health:
+		var before_regen := current_health
 		current_health = minf(max_health, current_health + total_regen * delta)
+		GameManager.total_hp_healed += maxf(0.0, current_health - before_regen)
 		regen_tick += delta
-		if regen_tick >= 0.5:
-			regen_tick = 0.0
-			GameManager.player_hp_changed.emit(current_health, max_health)
+	if regen_tick >= 0.5:
+		regen_tick = 0.0
+		GameManager.player_hp_changed.emit(current_health, max_health)
 
 	# 1. 移动输入与高响应加减速平滑
 	var dir: Vector2 = Vector2.ZERO
@@ -691,7 +694,7 @@ func _process_sun_orbs(delta: float) -> void:
 	var range_mult: float = GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var base_radius: float = SunOrb.ORBIT_RADIUS * range_mult
 	var min_radius: float = SunOrb.MIN_ORBIT_RADIUS
-	var max_reach: float = 120.0
+	var max_reach: float = 175.0
 	var max_star: int = 1
 	for i in range(count):
 		var orb_child := sun_orb_container.get_child(i) as SunOrb
@@ -780,6 +783,7 @@ func take_damage(amount: float) -> void:
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
 	current_health = maxf(0.0, current_health - reduced)
 	invulnerable_time = 0.55
+	GameManager.on_player_hit(reduced)
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
 	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压 + 触觉震感
