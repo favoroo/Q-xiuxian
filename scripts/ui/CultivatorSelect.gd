@@ -37,7 +37,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.02, 0.02, 0.03, 0.90)
+	bg.color = GameStyle.dim_overlay(0.90)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -225,7 +225,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		pview.scale = Vector2(0.95, 0.95)
 		pview.setup_character_id(cid)
 		if not is_unlocked:
-			pview.modulate = Color(0.4, 0.4, 0.5, 0.7)
+			pview.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(pview)
 	else:
 		var icon_tex := TextureRect.new()
@@ -236,7 +236,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if not is_unlocked:
-			icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
+			icon_tex.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(icon_tex)
 	left_col.add_child(icon_box)
 
@@ -293,19 +293,17 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var equip_text := "✦ " + raw_equip
 		mid_col.add_child(_make_info_row("初始装备", GameStyle.JADE_DK, GameStyle.JADE, [equip_text], GameStyle.JADE, col_w))
 
-	# (b) 独门天赋（绿色高亮）
+	# (b) 独门天赋（绿色高亮）——一律一条一行（2026-10-11 土豆兄弟式口径：逐条短行不并排）
 	var pros_lines: Array[String] = []
 	for p in def.get("pros", []):
 		pros_lines.append("＋ " + String(p))
-	var pros_joined := "    ".join(pros_lines) if pros_lines.size() <= 2 else "\n".join(pros_lines)
-	mid_col.add_child(_make_info_row("天赋", GameStyle.GOOD_DK, GameStyle.GOOD, [pros_joined], GameStyle.GOOD, col_w))
+	mid_col.add_child(_make_info_row("天赋", GameStyle.GOOD_DK, GameStyle.GOOD, pros_lines, GameStyle.GOOD, col_w))
 
-	# (c) 背负代价（红色高亮）
+	# (c) 背负代价（红色高亮）——同上一条一行
 	var cons_lines: Array[String] = []
 	for c in def.get("cons", []):
 		cons_lines.append("－ " + String(c))
-	var cons_joined := "    ".join(cons_lines) if cons_lines.size() <= 2 else "\n".join(cons_lines)
-	mid_col.add_child(_make_info_row("代价", GameStyle.BAD_DK, GameStyle.BAD, [cons_joined], GameStyle.BAD, col_w))
+	mid_col.add_child(_make_info_row("代价", GameStyle.BAD_DK, GameStyle.BAD, cons_lines, GameStyle.BAD, col_w))
 
 	# (d) 契合神通（蓝色高亮，动态从 SkillData 合入真实强化描述）
 	var syn_sid := CultivatorData.get_synergy_skill_id(cid)
@@ -483,7 +481,7 @@ func _create_small_card(cid: String, inner_w: float, card_w: float) -> Control:
 		pview.scale = Vector2(0.55, 0.55)
 		pview.setup_character_id(cid)
 		if not is_unlocked:
-			pview.modulate = Color(0.38, 0.38, 0.48, 0.68)
+			pview.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(pview)
 	else:
 		var icon_tex := TextureRect.new()
@@ -493,7 +491,7 @@ func _create_small_card(cid: String, inner_w: float, card_w: float) -> Control:
 		icon_tex.custom_minimum_size = Vector2(36, 36)
 		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		if not is_unlocked:
-			icon_tex.modulate = Color(0.38, 0.38, 0.48, 0.68)
+			icon_tex.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 

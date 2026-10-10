@@ -6,7 +6,8 @@ extends RefCounted
 ## 档位解锁波次与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
-## 与悟道加点共用同一条属性链路——文案里的数值必须与 apply 同源一致。
+## 与悟道加点共用同一条属性链路。卡面/详情卡的加成行由 BonusRows 从 apply 直接生成（正绿负红），
+## desc 只写 apply 之外的机制说明，不再手抄数值——数字与生效幅度天然同源。
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
 ##   wave_heal_pct —— 波末按气血上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本法宝免死并回半血（GameManager.try_revive）
@@ -25,31 +26,31 @@ const DEFS: Dictionary = {
 	"jubaopen": {
 		"name": "储蓄罐", "tier": 1, "price": 14,
 		"icon": "res://assets/art/item_jubaopen.png",
-		"desc": "每波结束白得金币与经验\n收益 +6",
+		"desc": "每波结束白得金币与经验",
 		"apply": {"harvest": 6.0},
 	},
 	"mibao_luopan": {
 		"name": "寻宝罗盘", "tier": 1, "price": 12,
 		"icon": "res://assets/art/item_mibao_luopan.png",
-		"desc": "幸运 +5（高稀有度升级与道具更易出现）",
+		"desc": "高稀有度升级与道具更易出现",
 		"apply": {"luck": 5.0},
 	},
 	"qiankun_dai": {
 		"name": "拾取袋", "tier": 1, "price": 12,
 		"icon": "res://assets/art/item_qiankun_dai.png",
-		"desc": "金币拾取范围 +30%",
+		"desc": "",
 		"apply": {"pickup_range_mult": 0.3},
 	},
 		"jifeng_xue": {
 			"name": "速跑靴", "tier": 1, "price": 13,
 			"icon": "res://assets/art/item_jifeng_xue.png",
-			"desc": "移动速度 +7%",
+			"desc": "",
 			"apply": {"move_speed_mult": 0.07},
 		},
 		"qingxin_cha": {
 			"name": "速攻药", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_qingxin_cha.png",
-			"desc": "攻击间隔 -8%",
+			"desc": "",
 			"apply": {"attack_speed_mult_mul": 0.92},
 		},
 
@@ -57,43 +58,43 @@ const DEFS: Dictionary = {
 	"zhekou_yufu": {
 		"name": "折扣券", "tier": 2, "price": 26,
 		"icon": "res://assets/art/item_zhekou_yufu.png",
-		"desc": "商店物价 -8%（可叠加）",
+		"desc": "可叠加",
 		"apply": {"shop_price_mul": 0.92},
 	},
 	"kuangxue_dan": {
 		"name": "狂暴药", "tier": 2, "price": 24,
 		"icon": "res://assets/art/item_kuangxue_dan.png",
-		"desc": "武器伤害 +18%，但护甲 -2",
+		"desc": "",
 		"apply": {"weapon_damage_mult": 0.18, "armor": -2.0},
 	},
 	"guijia_fu": {
 		"name": "龟甲", "tier": 2, "price": 24,
 		"icon": "res://assets/art/item_guijia_fu.png",
-		"desc": "护甲 +4，但移速 -6%",
+		"desc": "",
 		"apply": {"armor": 4.0, "move_speed_mult": -0.06},
 	},
 	"tongxuan_ling": {
 		"name": "重掷令", "tier": 2, "price": 22,
 		"icon": "res://assets/art/item_tongxuan_ling.png",
-		"desc": "每波免费重掷商店 +1 次",
+		"desc": "",
 		"apply": {"free_rerolls": 1.0},
 	},
 		"leiyin_zhen": {
 			"name": "雷击针", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_leiyin_zhen.png",
-			"desc": "武器击退力度 +35%",
+			"desc": "",
 			"apply": {"knockback_mult": 0.35},
 		},
 		"yinhun_deng": {
 			"name": "引路灯", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_yinhun_deng.png",
-			"desc": "金币拾取范围 +25%，攻击范围 +15%",
+			"desc": "",
 			"apply": {"pickup_range_mult": 0.25, "attack_range_mult": 0.15},
 		},
 		"suoling_jia": {
 			"name": "狂战枷", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_suoling_jia.png",
-			"desc": "武器伤害 +22%，但移速 -6%",
+			"desc": "",
 			"apply": {"weapon_damage_mult": 0.22, "move_speed_mult": -0.06},
 		},
 
@@ -101,32 +102,32 @@ const DEFS: Dictionary = {
 		"wuxing_pei": {
 			"name": "五行石", "tier": 3, "price": 45,
 			"icon": "res://assets/art/item_wuxing_pei.png",
-			"desc": "金木水火土全元素伤害 +6%",
+			"desc": "",
 			"apply": {"element_damage_all": 0.06},
 		},
 		"wujian_shi": {
 			"name": "经验石", "tier": 3, "price": 42,
 			"icon": "res://assets/art/item_wujian_shi.png",
-			"desc": "经验获取 +12%",
+			"desc": "",
 			"apply": {"xp_gain_mult": 0.12},
 		},
 		"huichun_hulu": {
 			"name": "回复葫芦", "tier": 3, "price": 48,
 			"icon": "res://assets/art/item_huichun_hulu.png",
-			"desc": "生命回复 +0.5/秒，每波结束恢复15%生命",
+			"desc": "每波结束恢复15%生命",
 			"apply": {"hp_regen": 0.5},
 			"wave_heal_pct": 0.15,
 		},
 		"pojia_zhui": {
 			"name": "破甲针", "tier": 3, "price": 40,
 			"icon": "res://assets/art/item_pojia_zhui.png",
-			"desc": "对精英与Boss伤害 +25%",
+			"desc": "",
 			"apply": {"elite_damage": 0.25},
 		},
 		"xiuluo_pei": {
 			"name": "嗜血石", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_xiuluo_pei.png",
-			"desc": "吸血 +4%，武器伤害 +12%，但护甲 -1",
+			"desc": "",
 			"apply": {"lifesteal": 0.04, "weapon_damage_mult": 0.12, "armor": -1.0},
 		},
 
@@ -142,13 +143,13 @@ const DEFS: Dictionary = {
 		"hunyuan_zhu": {
 			"name": "万能珠", "tier": 4, "price": 85,
 			"icon": "res://assets/art/item_hunyuan_zhu.png",
-			"desc": "幸运 +8，收益 +8",
+			"desc": "",
 			"apply": {"luck": 8.0, "harvest": 8.0},
 		},
 		"taiyi_jindan": {
 			"name": "极效药丸", "tier": 4, "price": 88,
 			"icon": "res://assets/art/item_taiyi_jindan.png",
-			"desc": "最大生命 +25 并回满，伤害 +15%，护甲 +2，移速 +5%",
+			"desc": "",
 			"apply": {"max_hp": 25.0, "hp_heal": 25.0, "weapon_damage_mult": 0.15, "armor": 2.0, "move_speed_mult": 0.05},
 		},
 
@@ -160,37 +161,37 @@ const DEFS: Dictionary = {
 		"lijian_shi": {
 			"name": "砺剑石", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_lijian_shi.png",
-			"desc": "近战伤害 +2",
+			"desc": "",
 			"apply": {"melee_damage": 2.0},
 		},
 		"feihuang_shi": {
 			"name": "飞蝗石", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_feihuang_shi.png",
-			"desc": "远程伤害 +2",
+			"desc": "",
 			"apply": {"ranged_damage": 2.0},
 		},
 		"juling_fu": {
 			"name": "聚灵符", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_juling_fu.png",
-			"desc": "元素伤害 +2",
+			"desc": "",
 			"apply": {"elemental_damage": 2.0},
 		},
 		"yuling_pai": {
 			"name": "御灵牌", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_yuling_pai.png",
-			"desc": "召唤伤害 +2",
+			"desc": "",
 			"apply": {"engineering_damage": 2.0},
 		},
 		"hupi_qun": {
 			"name": "虎皮裙", "tier": 1, "price": 15,
 			"icon": "res://assets/art/item_hupi_qun.png",
-			"desc": "最大生命 +12",
+			"desc": "",
 			"apply": {"max_hp": 12.0, "hp_heal": 12.0},
 		},
 		"manli_huwan": {
 			"name": "蛮力护腕", "tier": 1, "price": 15,
 			"icon": "res://assets/art/item_manli_huwan.png",
-			"desc": "武器伤害 +10%，但攻击间隔 +4%",
+			"desc": "",
 			"apply": {"weapon_damage_mult": 0.10, "attack_speed_mult_mul": 1.04},
 		},
 
@@ -198,67 +199,67 @@ const DEFS: Dictionary = {
 		"jinjing_shi": {
 			"name": "金精石", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_jinjing_shi.png",
-			"desc": "金系法器伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_metal": 0.08},
 		},
 		"chenxiang_mu": {
 			"name": "沉香木", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_chenxiang_mu.png",
-			"desc": "木系法器伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_wood": 0.08},
 		},
 		"hantan_yu": {
 			"name": "寒潭玉", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_hantan_yu.png",
-			"desc": "水系法器伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_water": 0.08},
 		},
 		"dihuo_jing": {
 			"name": "地火精", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_dihuo_jing.png",
-			"desc": "火系法器伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_fire": 0.08},
 		},
 		"houtu_he": {
 			"name": "厚土核", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_houtu_he.png",
-			"desc": "土系法器伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_earth": 0.08},
 		},
 		"liren_fu": {
 			"name": "利刃符", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_liren_fu.png",
-			"desc": "暴击率 +6%，但护甲 -1",
+			"desc": "",
 			"apply": {"crit_rate": 0.06, "armor": -1.0},
 		},
 		"yinxue_zhu": {
 			"name": "饮血珠", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_yinxue_zhu.png",
-			"desc": "吸血 +3%，但生命回复 -0.3/秒",
+			"desc": "",
 			"apply": {"lifesteal": 0.03, "hp_regen": -0.3},
 		},
 		"dingxing_pan": {
 			"name": "定星盘", "tier": 2, "price": 24,
 			"icon": "res://assets/art/item_dingxing_pan.png",
-			"desc": "攻击范围 +15%，但移速 -4%",
+			"desc": "",
 			"apply": {"attack_range_mult": 0.15, "move_speed_mult": -0.04},
 		},
 		"jucai_dai": {
 			"name": "聚财袋", "tier": 2, "price": 24,
 			"icon": "res://assets/art/item_jucai_dai.png",
-			"desc": "收益 +8，但武器伤害 -8%",
+			"desc": "",
 			"apply": {"harvest": 8.0, "weapon_damage_mult": -0.08},
 		},
 		"poxu_lingfu": {
 			"name": "破虚符", "tier": 2, "price": 28,
-			"icon": "res://assets/art/item_liren_fu.png",
-			"desc": "飞剑飞符贯穿人数 +1，但攻击范围 -8%",
+			"icon": "res://assets/art/item_poxu_lingfu.png",
+			"desc": "",
 			"apply": {"bonus_pierce": 1.0, "attack_range_mult": -0.08},
 		},
 		"fanzhen_tongjia": {
 			"name": "反震铜甲", "tier": 2, "price": 26,
-			"icon": "res://assets/art/item_guijia_fu.png",
-			"desc": "反震伤害 +40%，护甲 +2，但移速 -4%",
+			"icon": "res://assets/art/item_fanzhen_tongjia.png",
+			"desc": "",
 			"apply": {"thorns": 0.40, "armor": 2.0, "move_speed_mult": -0.04},
 		},
 
@@ -266,43 +267,43 @@ const DEFS: Dictionary = {
 		"potian_zhui": {
 			"name": "破天锥", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_potian_zhui.png",
-			"desc": "暴击伤害 +35%",
+			"desc": "",
 			"apply": {"crit_mult": 0.35},
 		},
 		"jingang_zhuo": {
 			"name": "金刚琢", "tier": 3, "price": 44,
 			"icon": "res://assets/art/item_jingang_zhuo.png",
-			"desc": "护甲 +5，但闪避 -8%",
+			"desc": "",
 			"apply": {"armor": 5.0, "dodge": -0.08},
 		},
 		"shenxing_xue": {
 			"name": "神行靴", "tier": 3, "price": 43,
 			"icon": "res://assets/art/item_shenxing_xue.png",
-			"desc": "移速 +12%，但攻击范围 -10%",
+			"desc": "",
 			"apply": {"move_speed_mult": 0.12, "attack_range_mult": -0.10},
 		},
 		"leiling_zhu": {
 			"name": "雷灵珠", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_leiling_zhu.png",
-			"desc": "攻击间隔 -12%，但幸运 -3",
+			"desc": "",
 			"apply": {"attack_speed_mult_mul": 0.88, "luck": -3.0},
 		},
 		"juling_zhentu": {
 			"name": "聚灵阵图", "tier": 3, "price": 48,
 			"icon": "res://assets/art/item_juling_zhentu.png",
-			"desc": "召唤伤害 +4，最大生命 +10",
+			"desc": "",
 			"apply": {"engineering_damage": 4.0, "max_hp": 10.0, "hp_heal": 10.0},
 		},
 		"hunyuan_yiqifu": {
 			"name": "混元一气符", "tier": 3, "price": 50,
 			"icon": "res://assets/art/item_hunyuan_yiqifu.png",
-			"desc": "金木水火土全元素伤害 +8%",
+			"desc": "",
 			"apply": {"element_damage_all": 0.08},
 		},
 		"jingang_fumo_jia": {
 			"name": "降魔宝甲", "tier": 3, "price": 48,
-			"icon": "res://assets/art/item_suoling_jia.png",
-			"desc": "反震伤害 +60%，护甲 +3，最大生命 +25",
+			"icon": "res://assets/art/item_jingang_fumo_jia.png",
+			"desc": "",
 			"apply": {"thorns": 0.60, "armor": 3.0, "max_hp": 25.0, "hp_heal": 25.0},
 		},
 
@@ -310,25 +311,25 @@ const DEFS: Dictionary = {
 		"zhuxian_sui": {
 			"name": "诛仙剑穗", "tier": 4, "price": 92,
 			"icon": "res://assets/art/item_zhuxian_sui.png",
-			"desc": "武器伤害 +30%，暴击率 +8%，但护甲 -2",
+			"desc": "",
 			"apply": {"weapon_damage_mult": 0.30, "crit_rate": 0.08, "armor": -2.0},
 		},
 		"xuanwu_yin": {
 			"name": "玄武印", "tier": 4, "price": 90,
 			"icon": "res://assets/art/item_xuanwu_yin.png",
-			"desc": "最大生命 +40，护甲 +4，但移速 -8%",
+			"desc": "",
 			"apply": {"max_hp": 40.0, "hp_heal": 40.0, "armor": 4.0, "move_speed_mult": -0.08},
 		},
 		"tianji_pan": {
 			"name": "天机盘", "tier": 4, "price": 88,
 			"icon": "res://assets/art/item_tianji_pan.png",
-			"desc": "幸运 +10，每波免费重掷 +1 次，收益 +5",
+			"desc": "",
 			"apply": {"luck": 10.0, "free_rerolls": 1.0, "harvest": 5.0},
 		},
 			"wuji_tianchuan_zhen": {
 				"name": "洞虚针", "tier": 4, "price": 88,
-				"icon": "res://assets/art/item_pojia_zhui.png",
-				"desc": "飞剑飞符贯穿人数 +2，远程伤害 +4",
+				"icon": "res://assets/art/item_wuji_tianchuan_zhen.png",
+				"desc": "",
 				"apply": {"bonus_pierce": 2.0, "ranged_damage": 4.0},
 			},
 
@@ -336,13 +337,13 @@ const DEFS: Dictionary = {
 			"luban_suo": {
 				"name": "鲁班锁", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_luban_suo.png",
-				"desc": "榫卯严丝合缝，召唤伤害 +2",
+				"desc": "榫卯严丝合缝",
 				"apply": {"engineering_damage": 2.0},
 			},
 			"jiguan_hexin": {
 				"name": "机簧核心", "tier": 3, "price": 48,
 				"icon": "res://assets/art/item_jiguan_hexin.png",
-				"desc": "机括极速运转，召唤伤害 +3，攻击间隔 -8%",
+				"desc": "机括极速运转",
 				"apply": {"engineering_damage": 3.0, "attack_speed_mult_mul": 0.92},
 			},
 }

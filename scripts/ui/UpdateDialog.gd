@@ -41,7 +41,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	# 全屏暗底遮罩
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.03, 0.75)
+	dim.color = GameStyle.dim_overlay(0.75)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)

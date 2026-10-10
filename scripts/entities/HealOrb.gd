@@ -22,6 +22,38 @@ const JUDGE_RADIUS := 10.0           ## 判定圆跟着画幅一起收：与 Ast
 const TINT_READY := Color(0.65, 1.35, 0.7)    ## 可入口
 const TINT_WAITING := Color(0.50, 0.60, 0.53) ## 满血待命：看得见，但不催你
 
+# —— 对象池（2026-10-11，照 AstralGem 模式）——
+## 残丹掉落/藏宝匣葫芦每次 new()+queue_free；掉落频率低于宝石但同属击杀路径，顺手同池化。
+## 回收时必须 remove_from_group("gems")：波末结算按组请珠，池里休眠的假珠不能入账。
+## 兼容约定：裸 new() + add_child 的旧路径（HealOrbCheck/预览）保持原行为不受影响。
+const POOL_CAP := 64
+const BASE_HEAL := 3.0        ## 默认回血量：activate 复用时重置的基准（与字段初值同源）
+static var _pool: Array[HealOrb] = []
+static var _host: Node2D = null
+static var created_count: int = 0
+static var reused_count: int = 0
+
+static func _ensure_host(parent: Node) -> void:
+	if _host != null and is_instance_valid(_host):
+		return
+	_pool.clear()
+	_host = Node2D.new()
+	_host.name = "HealOrbPool"
+	parent.add_child(_host)
+
+## 取一颗回复珠（优先复用）：调用方在调用后写 global_position/heal_amount 或 heal_pct，最后调 activate()
+static func acquire_or_new(parent: Node) -> HealOrb:
+	_ensure_host(parent)
+	while not _pool.is_empty():
+		var o: HealOrb = _pool.pop_back()
+		if is_instance_valid(o):
+			reused_count += 1
+			return o
+	var no := HealOrb.new()
+	created_count += 1
+	_host.add_child(no)
+	return no
+
 var heal_amount: float = 3.0
 var heal_pct: float = 0.0   ## >0 时按玩家气血上限百分比恢复（回春葫芦用）
 
@@ -35,6 +67,8 @@ var _sprite: Sprite2D
 var _loot_renderer: ProceduralLootRenderer
 var _bob_tween: Tween = null
 var _settling: bool = false        ## 波末结算中（不再被满血闸拦下）
+var _pooled: bool = false          ## 池状态标记：true = 已回池休眠（防双重回收）
+var _shape: CollisionShape2D = null
 
 func _ready() -> void:
 	add_to_group("gems")
@@ -59,8 +93,52 @@ func _ready() -> void:
 	circle.radius = JUDGE_RADIUS
 	shape.shape = circle
 	add_child(shape)
+	_shape = shape
 
 	_start_bob()
+
+## 出膛激活：池化后 _ready 只在首建时跑过，全部运行时状态在这里重铺
+##（改字段签名时对照这里）。heal_amount/heal_pct 先归默认，调用方按需覆盖。
+func activate() -> void:
+	_pooled = false
+	visible = true
+	heal_amount = BASE_HEAL
+	heal_pct = 0.0
+	target_player = null
+	_settling = false
+	current_speed = -40.0
+	# 等一下满血灰相：回收珠可能带着 waiting 相回池，直接复位（不走 _set_waiting 的同值短路）
+	waiting_full_hp = false
+	if _sprite != null:
+		_sprite.modulate = TINT_READY
+	if _loot_renderer != null:
+		_loot_renderer.is_waiting = false
+	set_physics_process(true)
+	set_deferred("monitoring", true)
+	set_deferred("monitorable", true)
+	_shape.set_deferred("disabled", false)
+	add_to_group("gems")
+	_start_bob()
+
+## 回收入池（替代 queue_free）：休眠物理与飘浮动画，退出 gems 组，池满或宿主失效才真释放
+func recycle() -> void:
+	if _pooled:
+		return
+	_pooled = true
+	target_player = null
+	_settling = false
+	if _bob_tween != null and _bob_tween.is_valid():
+		_bob_tween.kill()
+	remove_from_group("gems")
+	set_physics_process(false)
+	_shape.set_deferred("disabled", true)
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+	visible = false
+	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
+		queue_free()
+		return
+	_pool.append(self)
 
 ## 这一口下去有没有实效：满血（含容差）就是没实效，吃了等于白丢一份治疗
 static func heal_is_useful(player: Node2D) -> bool:
@@ -139,7 +217,7 @@ func _collect(p: Player) -> void:
 		DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
 		AudioManager.play_sfx("gem_pickup", 1.25)
 	target_player = null
-	queue_free()
+	recycle()
 
 func _set_waiting(value: bool) -> void:
 	# 没变就不回写：接触这一路每帧都跑，重复赋值会把渲染器持续打脏，20Hz 重绘节流白做。

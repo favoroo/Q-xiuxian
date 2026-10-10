@@ -75,11 +75,9 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 		["品阶", ItemData.tier_label(tier_num), tier_col],
 		["当前持有", "%d 件" % count, GameStyle.JADE],
 	]
-	var apply: Dictionary = def.get("apply", {})
-	for key in apply.keys():
-		var k := String(key)
-		var v := float(apply[key])
-		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
+	# 加成行（2026-10-11 改版）：统一走 BonusRows —— 乘算字段（攻击间隔/物价）按语义判色，
+	# 修正旧 _c 按符号判色把「物价上涨」也染绿的口径问题
+	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
 
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = [
@@ -120,7 +118,10 @@ static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> C
 	})
 
 ## 法器详情卡
-static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_stash: bool) -> Control:
+## benefit_note：从「受益装备」那一排图标点进来时带上的一句话（这条悟道走的哪条链路），
+## 其余入口（HUD 法器栏 / 属性面板 / 商店）留空，卡片内容一字不差是同一张。
+static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_stash: bool,
+		benefit_note: String = "") -> Control:
 	var id: String = String(w.get("id", ""))
 	var def := WeaponData.get_def(id)
 	if def.is_empty():
@@ -170,6 +171,8 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
+	if not benefit_note.is_empty():
+		notes.push_front(benefit_note)
 
 	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
 		GameManager.count_copies(id, star), WeaponData.sell_price(id, star)]
@@ -219,11 +222,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 	var cap: int = int(def.get("max_stacks", 0))
 	var t: float = float(item.get("time", 0.0))
 
-	var rows: Array = []
-	for key in apply.keys():
-		var k := String(key)
-		var v := float(apply[key])
-		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), _c(v)])
+	var rows: Array = BonusRows.apply_rows(apply)
 	rows.append(["已领悟", "第 %d 次 / 上限 %d 次" % [taken, cap],
 		GameStyle.JADE if cap > 0 and taken >= cap else GameStyle.PAPER])
 	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
@@ -242,12 +241,18 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 			break
 	var foot := "" if stat_id.is_empty() else "这一条落在左侧「%s」那一行，点它可以看来源拆解。" % StatInfoData.title(stat_id)
 
+	# 纯数值项的 desc 已不再复述数字（卡面加成行由 BonusRows 从 apply 生成，见 UpgradeData 头注），
+	# 「解释」由口径说明兜底——判据 StatsTipCheck 要求每张点开的卡都有解释行
+	var body := String(item.get("desc", ""))
+	if body.is_empty():
+		body = "这一条的加成幅度就是上面几行读数：与生效数值同源，选中即生效、不可撤销。"
+
 	return DetailTip.show_over(host, anchor, {
 		"title": String(item.get("title", "升级")),
 		"chip": String(item.get("rarity_label", "普通")),
 		"chip_color": item.get("border_color", GameStyle.GOLD_DK),
 		"rows": rows,
-		"body": String(item.get("desc", "")),
+		"body": body,
 		"notes": notes,
 		"foot": foot,
 	})

@@ -127,13 +127,15 @@ const SCHEMA: Array[Dictionary] = [
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
 	# 归一化中心点（相对设计视口 0..1），换屏比不漂移；缩放为底尺寸倍率
+	# 默认值直接引用下面的常量，不在这里重抄一遍数字：两处各写一份，改了一处就会
+	# 出现「设置页显示的是 A、reset 之后实际生效的是 B」这种对不上的读数
 	{
 		"section": "display",
 		"key": "skill_btn_xy",
 		"title": "技能按钮位置",
 		"desc": "随行神通键的归一化屏幕中心点",
 		"type": "layout",
-		"default": Vector2(854.0 / 960.0, 430.0 / 540.0),
+		"default": SKILL_BTN_XY_DEFAULT,
 	},
 	{
 		"section": "display",
@@ -149,7 +151,7 @@ const SCHEMA: Array[Dictionary] = [
 		"title": "祭坛按钮位置",
 		"desc": "聚灵阵激活键的归一化屏幕中心点",
 		"type": "layout",
-		"default": Vector2(854.0 / 960.0, 354.0 / 540.0),
+		"default": OBELISK_BTN_XY_DEFAULT,
 	},
 	{
 		"section": "display",
@@ -158,6 +160,16 @@ const SCHEMA: Array[Dictionary] = [
 		"desc": "聚灵阵激活键的尺寸缩放倍率",
 		"type": "layout",
 		"default": 1.0,
+	},
+
+	# --------- 仙途指引（开局自动弹指南的偏好；开关本体在指南卡底部） ---------
+	{
+		"section": "ui",
+		"key": "tutorial_muted",
+		"title": "下次不弹出",
+		"desc": "勾上后点开始游戏不再自动弹新手指南，主菜单与设置页的手动入口不受影响",
+		"type": "toggle",
+		"default": false,
 	},
 ]
 
@@ -199,6 +211,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_init_defaults()
 	_load_settings()
+	_follow_legacy_layout_default()
 	_apply_all_audio()
 
 ## 初始化默认配置
@@ -286,9 +299,13 @@ const BTN_SCALE_MIN := 0.6
 const BTN_SCALE_MAX := 1.8
 ## 归一化中心点默认值 = 960×540 基准下旧的「右下」摆位
 ## 两颗键同径（76 圆），默认上下叠成一列：技能键 816..892 × 392..468，
-## 祭坛键 816..892 × 316..392（中心正好压在其上方，两圆之间留 0 空隙）
+## 祭坛键 816..892 × 292..368 —— 两圆之间留 BTN_DEFAULT_EDGE_GAP 的设计像素空隙。
+## 以前是 0 空隙（两圈描边正好相切），用户 2026-10-11 真机图：看着就是两颗键压在一起，
+## 且手指落在相切那条线上时拾取给谁全看运气。空隙口径由 UnitRunner 钉住。
 const SKILL_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 430.0 / 540.0)
-const OBELISK_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 354.0 / 540.0)
+const OBELISK_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 330.0 / 540.0)
+## 默认摆位下两颗键圆边之间的最小间距（设计像素，按 960×540 基准算）
+const BTN_DEFAULT_EDGE_GAP := 24.0
 
 func skill_btn_xy() -> Vector2:
 	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT))
@@ -320,6 +337,34 @@ func reset_button_layout() -> void:
 	set_val(&"display", &"skill_btn_scale", 1.0)
 	set_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT)
 	set_val(&"display", &"obelisk_btn_scale", 1.0)
+
+## v0.0.17 及更早的出厂摆位：祭坛键与技能键 0 空隙相切
+const OBELISK_BTN_XY_LEGACY := Vector2(854.0 / 960.0, 354.0 / 540.0)
+
+## 出厂摆位换代的一次性跟随。
+## 为什么需要：`_save_settings()` 是把整份 `_settings`（含从没碰过的默认项）一次写盘的，
+## 所以老玩家只要改过任意一个设置，上一版的出厂坐标就已经落在存档里 —— 只改常量他们永远跟不到，
+## 屏幕上还是那颗相切的旧键。这里只认「存档值正好等于旧出厂位」这一种情况：
+## 玩家自己拖过的位置一律不碰。
+func _follow_legacy_layout_default() -> void:
+	if not _settings.has("display"):
+		return
+	var sec: Dictionary = _settings["display"]
+	var v: Variant = sec.get("obelisk_btn_xy", null)
+	if v is Vector2 and (v as Vector2).is_equal_approx(OBELISK_BTN_XY_LEGACY):
+		sec["obelisk_btn_xy"] = OBELISK_BTN_XY_DEFAULT
+
+# ----------------- 仙途指引（新手指南自动弹出） -----------------
+
+## 新手指南是否已被玩家勾掉「下次不弹出」：true = 点开始游戏不再自动弹。
+## 只影响自动弹这一条路径；主菜单/设置页的手动入口永远能翻（见 StartMenu._on_guide_pressed、
+## SettingsDialog 底部「新手指南」按钮），所以勾掉之后玩家还能自己点开并取消勾选。
+func tutorial_muted() -> bool:
+	return bool(get_val(&"ui", &"tutorial_muted", false))
+
+## 写入勾选态并即时落盘 user://settings.cfg（偏好，不进 progress.cfg）
+func set_tutorial_muted(muted: bool) -> void:
+	set_val(&"ui", &"tutorial_muted", muted)
 
 func _norm_xy(v: Variant) -> Vector2:
 	var p := v as Vector2

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://beid5g83iqslg"]
+
+[ext_resource type="Script" path="res://tests/wave_countdown_preview.gd" id="1_wavepreview"]
+
+[node name="WaveCountdownPreview" type="Node"]
+script = ExtResource("1_wavepreview")

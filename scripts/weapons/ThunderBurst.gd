@@ -1,7 +1,12 @@
 class_name ThunderBurst
 extends Node2D
 
-## 五雷法牌的落雷爆发：命中范围内所有敌人一次，短暂闪光后自毁
+## 五雷法牌的落雷爆发：命中范围内所有敌人一次，短暂闪光后回池休眠
+##
+## 对象池（2026-10-11 第 6 波卡顿优化，照 EnemyBolt/AstralGem 模式）：雷法连发时
+## Node2D + PointLight2D + 雷柱/镇岳印子节点整套 instantiate/queue_free 归零，灯体随复用免重建。
+## 兼容约定：出膛方必须走 acquire(parent, scene) → 逐项写字段 → activate()（唯一调用方
+## FloatingWeapon._spawn_lightning）；_ready 只建常驻设施不触发爆发，裸 add_child 不再自动起爆。
 
 var radius: float = 80.0
 var damage: float = 35.0
@@ -10,7 +15,7 @@ var knockback_base: float = 200.0
 var tint: Color = Color(1.0, 0.95, 0.6)
 ## 落点"砸下来的东西"（番天镇岳印 = 玄石大印）；空字符串 = 只留光环与光柱
 var icon_path: String = ""
-## 落点音 key（由 FloatingWeapon 从 WeaponData.sfx_impact 下发，须在 add_child 前赋值）
+## 落点音 key（由 FloatingWeapon 从 WeaponData.sfx_impact 下发，须在 activate() 前赋值）
 var sfx_impact_key: String = ""
 var proc_burn: bool = false
 var burn_dps: float = 0.0
@@ -18,10 +23,59 @@ var burn_dur: float = 3.0
 var proc_chill: float = 0.0
 var chill_dur: float = 2.0
 
+# —— 对象池 ——
+const POOL_CAP := 24
+static var _pool: Array[ThunderBurst] = []
+static var _host: Node2D = null
+static var created_count: int = 0    ## 累计 instantiate 数（PerfProbe 判据口径同 EnemyBolt）
+static var reused_count: int = 0     ## 累计池复用数
+
+static func _ensure_host(parent: Node) -> void:
+	if _host != null and is_instance_valid(_host):
+		return
+	_pool.clear()   # 旧宿主已失效，残留池引用一并作废
+	_host = Node2D.new()
+	_host.name = "ThunderBurstPool"
+	parent.add_child(_host)
+
+## 取一次落雷（优先复用）：调用方在调用后写 radius/damage/tint 等字段，最后调 activate() 起爆。
+## scene 传调用方预落的 ThunderBurst.tscn（脚本不反向 preload 自身场景，避免环引用）。
+static func acquire(parent: Node, scene: PackedScene) -> ThunderBurst:
+	_ensure_host(parent)
+	while not _pool.is_empty():
+		var b: ThunderBurst = _pool.pop_back()
+		if is_instance_valid(b):
+			reused_count += 1
+			return b
+	var nb := scene.instantiate() as ThunderBurst
+	created_count += 1
+	_host.add_child(nb)
+	return nb
+
+## 伤害查询的形状/参数静态复用（照 TurretUnit 口径）：每次起爆零分配；
+## 同帧多发起爆共享同一形状，半径在查询前现写、查询同步完成，无跨帧持有
+static var _dmg_shape: CircleShape2D = null
+static var _dmg_query: PhysicsShapeQueryParameters2D = null
+
 @onready var fx_sprite: Sprite2D = $FxSprite
 @onready var light: PointLight2D = $PointLight2D
 
+var _pooled: bool = false
+
 func _ready() -> void:
+	# 常驻设施（FxSprite/PointLight2D）由场景给出；爆发行为全部在 activate()，
+	# 池化首建时字段尚未写入，_ready 不读任何业务字段
+	pass
+
+## 起爆激活：视觉重置 → 雷柱/镇岳印 → 演出与结算。复用时 _ready 已跑过一次，
+## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx）
+func activate() -> void:
+	_pooled = false
+	visible = true
+	# 上一发的雷柱与镇岳印已在爆发中淡出，直接清掉再铺新的
+	for c in get_children():
+		if c is Line2D or (c is Sprite2D and c != fx_sprite):
+			c.queue_free()
 	fx_sprite.scale = Vector2.ONE * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
 	light.color = tint
@@ -35,13 +89,25 @@ func _ready() -> void:
 	tw.tween_property(light, "energy", 2.2, 0.06)
 	tw.chain().tween_property(fx_sprite, "modulate:a", 0.0, 0.18)
 	tw.parallel().tween_property(light, "energy", 0.0, 0.2)
-	tw.chain().tween_callback(queue_free)
+	tw.chain().tween_callback(_recycle)
 
 	_deal_damage.call_deferred()
 	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效。
 	# 落点音留在这儿无条件播 —— 「雷落下来了」是发生过的事，劈不劈空都响。
 	# 旧写法硬编码 obelisk_blessing（石碑的祝福铃），于是雷牌/巨印/宝灯落下全是一串铃铛。
 	AudioManager.play_sfx(sfx_impact_key if sfx_impact_key != "" else "thunder_strike", 1.0)
+
+## 回收入池（替代 queue_free）：灯光熄灭、池满或宿主失效才真释放
+func _recycle() -> void:
+	if _pooled:
+		return
+	_pooled = true
+	visible = false
+	light.energy = 0.0
+	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
+		queue_free()
+		return
+	_pool.append(self)
 
 ## 落点之物：把法器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
 func _spawn_impact_icon() -> void:
@@ -75,14 +141,15 @@ func _spawn_sky_beam() -> void:
 
 func _deal_damage() -> void:
 	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = radius
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0.0, global_position)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 24)
+	if _dmg_shape == null or _dmg_query == null:
+		_dmg_shape = CircleShape2D.new()
+		_dmg_query = PhysicsShapeQueryParameters2D.new()
+		_dmg_query.shape = _dmg_shape
+		_dmg_query.collision_mask = 4
+		_dmg_query.collide_with_areas = true
+	_dmg_shape.radius = radius
+	_dmg_query.transform = Transform2D(0.0, global_position)
+	var results = space_state.intersect_shape(_dmg_query, 24)
 
 	var had_crit := false
 	var hits := 0

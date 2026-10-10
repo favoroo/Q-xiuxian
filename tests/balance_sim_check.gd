@@ -25,6 +25,8 @@ func _ready() -> void:
 	_test_weapon_dps_normalization()
 	_test_enemy_and_boss_hp_scaling()
 	_test_reference_build_ttks()
+	_test_survivability()
+	_test_spawn_budget_binding()
 	if _selftest:
 		_test_selftest_guard()
 
@@ -230,10 +232,129 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 		total_dps += hit_dps
 	return total_dps
 
+# ---------------- 5. 挨打侧生存余量（危险度 0 = 「简单」） ----------------
+
+## 常用杂怪基础接触伤中位（scenes/entities：Slime 12 / XieXiu 13 / YingMei 13 / XueYong 14 / Flower 15）
+const MIXED_MOB_CONTACT := 14.0
+
+## 每秒进伤上限 = 单下实伤 ÷ 玩家无敌帧。小怪厚度 4.5 倍后怪在场久、挨打频率顶到这个上限，
+## 所以「容易死」的尺子就是单下伤害，而不是每秒理论输出。
+func _measure_player_runtime() -> Dictionary:
+	var scene: PackedScene = load("res://scenes/entities/Player.tscn")
+	var p := scene.instantiate() as Player
+	add_child(p)
+	var base_hp := p.max_health
+	var iframe := 0.0
+	for i in range(5):
+		p.invulnerable_time = 0.0
+		p.current_health = base_hp
+		p.take_damage(1.0)
+		iframe = p.invulnerable_time
+		if iframe > 0.0:
+			break
+	p.queue_free()
+	return {"iframe": iframe, "hp": base_hp}
+
+## 与 WaveSpawner 刷怪那两行同一口径：场景基础值 × 唯一敌伤出口 × 危险度倍率（浮动取均值 1.0）
+func _raw_contact(base: float, wave: int, danger: int) -> float:
+	return ceilf(base * GameBalance.enemy_dmg_mult(wave) * GameBalance.danger_dmg_mult(danger))
+
+func _survive_sec(hp: float, armor: float, raw: float, iframe: float) -> float:
+	return iframe * hp / GameBalance.incoming_damage(raw, armor)
+
+func _upgrade_apply(upgrade_id: String, field: String) -> float:
+	var apply: Dictionary = UpgradeData.get_upgrade_def(upgrade_id).get("apply", {})
+	return float(apply.get(field, 0.0))
+
+func _test_survivability() -> void:
+	var rt := _measure_player_runtime()
+	var iframe: float = rt["iframe"]
+	var base_hp: float = rt["hp"]
+	_c.check(iframe >= 0.4 and iframe <= 0.7,
+		"玩家无敌帧读自真节点 %.2fs（顶格挨打 %.2f 下/秒）" % [iframe, 1.0 / maxf(0.01, iframe)])
+	_c.check(base_hp >= 100.0, "裸装气血读自真节点 %.0f" % base_hp)
+
+	var hp_per := _upgrade_apply("hp_up", "max_hp")
+	var armor_per := _upgrade_apply("armor_up", "armor")
+	_c.check(hp_per > 0.0 and armor_per > 0.0,
+		"生存档位取自 UpgradeData 加点表（生命 +%.0f/点、护甲 +%.1f/点）" % [hp_per, armor_per])
+	# 第 10 波前有 9 次悟道、第 20 波前有 19 次：这里取「愿意分一半给生存」的档
+	var half_hp := base_hp + 3.0 * hp_per
+	var half_armor := 3.0 * armor_per
+	var meta_hp := base_hp + 6.0 * hp_per
+	var meta_armor := 5.0 * armor_per
+
+	# 5.1 最低档前段必须留试错空间（用户口径：简单难度都很容易死）
+	var w1_raw := _raw_contact(MIXED_MOB_CONTACT, 1, 0)
+	var w1_pct := GameBalance.incoming_damage(w1_raw, 0.0) / base_hp
+	_c.check(w1_pct <= 0.09,
+		"危险度 0 第 1 波单下掉裸装气血 %.1f%%（≤9%%：吃两下不慌）" % (w1_pct * 100.0))
+	var w1_sec := _survive_sec(base_hp, 0.0, w1_raw, iframe)
+	_c.check(w1_sec >= 6.0, "危险度 0 裸装第 1 波站进怪群活 %.1fs（≥6.0s）" % w1_sec)
+	var w5_sec := _survive_sec(base_hp, 0.0, _raw_contact(MIXED_MOB_CONTACT, 5, 0), iframe)
+	_c.check(w5_sec >= 5.0, "危险度 0 裸装第 5 波站进怪群活 %.1fs（≥5.0s）" % w5_sec)
+
+	# 5.2 中段与后段：肯点生存就不该被怪群秒躺
+	var w10_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, 0), iframe)
+	_c.check(w10_sec >= 8.5, "半肉 Build（气血 %.0f/护甲 %.0f）第 10 波站进怪群活 %.1fs（≥8.5s）" % [half_hp, half_armor, w10_sec])
+	var w20_sec := _survive_sec(meta_hp, meta_armor, _raw_contact(MIXED_MOB_CONTACT, 20, 0), iframe)
+	_c.check(w20_sec >= 8.0, "成型 Build（气血 %.0f/护甲 %.0f）第 20 波站进怪群活 %.1fs（≥8.0s）" % [meta_hp, meta_armor, w20_sec])
+
+	# 5.3 单发最重的那一下（Boss 震地）不许一口糊掉三成血
+	var slam := GameBalance.incoming_damage(_raw_contact(GameBalance.BOSS_CONTACT_BASE, 10, 0) * GameBalance.BOSS_SLAM_DMG_MULT, half_armor)
+	_c.check(slam <= half_hp * 0.15,
+		"第 10 波魔君震地单发掉半肉 Build %.1f%%（≤15%%：一口糊半血就是白给）" % (slam / half_hp * 100.0))
+
+	# 5.4 六档梯度不许因为整体下调而倒挂
+	var d5_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, GameBalance.DANGER_MAX), iframe)
+	_c.check(d5_sec < w10_sec, "危险度 %d 生存 %.1fs 仍短于危险度 0 的 %.1fs（梯子还在）" % [GameBalance.DANGER_MAX, d5_sec, w10_sec])
+	_c.check(d5_sec >= 5.0, "极限档半肉 Build 第 10 波也至少活 %.1fs（≥5.0s：最高档该难，但不该没有反应时间）" % d5_sec)
+
+	print("SURVIVAL 危险度0 裸装(%.0f血/0甲)：" % base_hp)
+	for w in [1, 3, 5, 8, 10, 15, 20]:
+		var raw := _raw_contact(MIXED_MOB_CONTACT, w, 0)
+		print("  W%-2d 单下 %2d（%.1f%% 血）→ 顶格挨打 %.1fs" % [w, raw, GameBalance.incoming_damage(raw, 0.0) / base_hp * 100.0, _survive_sec(base_hp, 0.0, raw, iframe)])
+	print("SURVIVAL 半肉(%.0f/%.0f) W10 %.1fs · 成型(%.0f/%.0f) W20 %.1fs · 极限 W10 %.1fs · 无敌帧 %.2fs" % [
+		half_hp, half_armor, w10_sec, meta_hp, meta_armor, w20_sec, d5_sec, iframe])
+
 # ---------------- 自检守卫 ----------------
+
+## 5. 刷怪预算绑定点对照（2026-10-11 土豆兄弟式克制）：旧口径的波内总刷入
+## （时长/间隔 × 平均批量，含 25% 追加概率）与预算 wave_spawn_budget 逐波对照。
+## 钉死两条意图：前 5 波预算不触发（前期手感不变），第 6 波起预算收紧且越到后期收得越狠；
+## 打印表即调参时的校准尺。
+func _test_spawn_budget_binding() -> void:
+	var table: Array[String] = []
+	for w in range(1, 21):
+		var rounds := GameBalance.wave_duration(w) / GameBalance.spawn_interval(w)
+		# 平均批量 = 基础批量 ×(1-p) + (基础+1)×p（25% 追加概率只加这一只）
+		var batch_base := 1.0 + float(int(float(w) / GameBalance.SPAWN_BATCH_EVERY_WAVES))
+		var batch_avg := batch_base * (1.0 - GameBalance.SPAWN_BATCH_BONUS_CHANCE) \
+			+ (batch_base + 1.0) * GameBalance.SPAWN_BATCH_BONUS_CHANCE
+		var old_total := rounds * batch_avg
+		var budget := float(GameBalance.wave_spawn_budget(w))
+		if w <= 5:
+			_c.check(budget >= old_total - 0.5,
+				"前 5 波预算不触发（W%d 旧总量 %.0f ≤ 预算 %.0f）" % [w, old_total, budget])
+		else:
+			_c.check(budget < old_total,
+				"第 %d 波预算收紧（旧总量 %.0f → 预算 %.0f）" % [w, old_total, budget])
+		table.append("W%-2d 旧%5.0f → 预算%4.0f（%+3.0f%%）" % [w, old_total, budget, (budget / old_total - 1.0) * 100.0])
+	print("BUDGET 刷怪预算对照（危险度 0）:")
+	for line in table:
+		print("  " + line)
 
 func _test_selftest_guard() -> void:
 	# 验证反例：如果把 Boss 基础血量误改成旧版的 1000，极端 build 的 TTK 会跌破 8 秒
 	var old_boss_hp_w20 := 1000.0 * GameBalance.enemy_hp_mult(20)
 	var fake_ext_ttk := old_boss_hp_w20 / 20000.0
 	_c.check(fake_ext_ttk < 2.0, "自检证实：旧版 1000 基础血量在极端 build 下 TTK 仅 %.2fs 会直接报红" % fake_ext_ttk)
+
+	# 验证反例：敌伤总闸退回旧基线 1.0（未乘 ENEMY_DMG_BASE_MULT）时，第 1 波生存秒数直接掉出下限
+	var rt := _measure_player_runtime()
+	var iframe: float = rt["iframe"]
+	var base_hp: float = rt["hp"]
+	var old_w1_raw := ceilf(MIXED_MOB_CONTACT * 1.0)
+	var old_w1_sec := _survive_sec(base_hp, 0.0, old_w1_raw, iframe)
+	_c.check(old_w1_sec < 6.0,
+		"自检证实：旧敌伤基线 ×1.0 下第 1 波裸装仅活 %.1fs，会直接报红（现基线 ×%.2f）" % [old_w1_sec, GameBalance.ENEMY_DMG_BASE_MULT])

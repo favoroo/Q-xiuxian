@@ -705,7 +705,49 @@ func _process_sun_orbs(delta: float) -> void:
 				max_star = orb_child.star
 	var eff_max_reach: float = max_reach * range_mult
 
-	# 扫描御灵感知圈内的敌人（复用查询与字典缓冲）
+	# 扫描御灵感知圈内的敌人（复用查询与字典缓冲）：10Hz 快照（2026-10-11 第 6 波卡顿优化）
+	_orb_scan_phase -= delta
+	if _orb_scan_phase <= 0.0:
+		_orb_scan_phase = ORB_SCAN_INTERVAL
+		_scan_orb_enemies(eff_max_reach)
+
+	_orb_angles_buf.clear()
+	for i in range(count):
+		_orb_angles_buf.append(wrapf(sun_orb_angle + float(i) * (TAU / float(count)), -PI, PI))
+
+	var orbit_res: Dictionary = GameBalance.compute_spirit_orbit(
+		_orb_angles_buf, _orb_enemies_buf, base_radius, min_radius, eff_max_reach
+	)
+	var in_combat: bool = bool(orbit_res.get("in_combat", false))
+	var target_radii: Array = orbit_res.get("radii", [])
+
+	var angular_speed: float = GameBalance.spirit_orbit_angular_speed(
+		GameBalance.SPIRIT_BASE_ANGULAR_SPEED,
+		GameManager.attack_speed_mult,
+		GameManager.synergy_haste_mult,
+		in_combat,
+		max_star
+	)
+	sun_orb_angle += delta * angular_speed
+
+	for i in range(count):
+		var orb := sun_orb_container.get_child(i) as SunOrb
+		if orb == null:
+			continue
+		var a: float = sun_orb_angle + float(i) * (TAU / float(count))
+		var tgt_r: float = float(target_radii[i]) if i < target_radii.size() else base_radius
+		orb.current_radius = lerpf(orb.current_radius, tgt_r, minf(delta * 12.0, 1.0))
+		orb.position = Vector2(cos(a), sin(a)) * orb.current_radius
+		# 随切线横向分量的轻微侧倾（既灵动又不倒立）
+		orb.rotation = clampf(-sin(a) * 0.25, -0.30, 0.30)
+
+## 御灵扫描节流（2026-10-11 第 6 波卡顿优化）：物理查询 10Hz 快照，轨道公式与位置插值
+## 仍逐帧跑（吃快照）；与武器索敌同款待遇 —— 敌人入圈最多延迟 100ms 被扑击，肉眼无感
+const ORB_SCAN_INTERVAL := 0.1
+var _orb_scan_phase: float = 0.05   ## 初相偏移：与武器索敌的 10Hz 错开，避免同帧叠加物理查询
+
+## 御灵感知圈敌人快照（原 _process_sun_orbs 每帧段原样搬移，唯一变化是改由节流器调用）
+func _scan_orb_enemies(eff_max_reach: float) -> void:
 	_orb_enemies_buf.clear()
 	var space_state := get_world_2d().direct_space_state
 	if space_state != null:
@@ -739,36 +781,6 @@ func _process_sun_orbs(delta: float) -> void:
 				od["angle"] = offset.angle()
 				_orb_enemies_buf.append(od)
 				idx += 1
-
-	_orb_angles_buf.clear()
-	for i in range(count):
-		_orb_angles_buf.append(wrapf(sun_orb_angle + float(i) * (TAU / float(count)), -PI, PI))
-
-	var orbit_res: Dictionary = GameBalance.compute_spirit_orbit(
-		_orb_angles_buf, _orb_enemies_buf, base_radius, min_radius, eff_max_reach
-	)
-	var in_combat: bool = bool(orbit_res.get("in_combat", false))
-	var target_radii: Array = orbit_res.get("radii", [])
-
-	var angular_speed: float = GameBalance.spirit_orbit_angular_speed(
-		GameBalance.SPIRIT_BASE_ANGULAR_SPEED,
-		GameManager.attack_speed_mult,
-		GameManager.synergy_haste_mult,
-		in_combat,
-		max_star
-	)
-	sun_orb_angle += delta * angular_speed
-
-	for i in range(count):
-		var orb := sun_orb_container.get_child(i) as SunOrb
-		if orb == null:
-			continue
-		var a: float = sun_orb_angle + float(i) * (TAU / float(count))
-		var tgt_r: float = float(target_radii[i]) if i < target_radii.size() else base_radius
-		orb.current_radius = lerpf(orb.current_radius, tgt_r, minf(delta * 12.0, 1.0))
-		orb.position = Vector2(cos(a), sin(a)) * orb.current_radius
-		# 随切线横向分量的轻微侧倾（既灵动又不倒立）
-		orb.rotation = clampf(-sin(a) * 0.25, -0.30, 0.30)
 
 func take_damage(amount: float) -> void:
 	if invulnerable_time > 0.0 or GameManager.is_game_over:

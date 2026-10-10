@@ -2,7 +2,6 @@ extends Node
 
 ## 全局状态中枢：经济（灵石）、属性加点、武器持有与合成、波次推进、商店货架
 
-@warning_ignore("unused_signal")
 signal player_hp_changed(current_hp: float, max_hp: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
 signal player_leveled_up(level: int)
@@ -11,9 +10,7 @@ signal game_over_triggered(victory: bool)
 signal upgrade_applied(upgrade_id: String)
 signal announcement_triggered(text: String)
 signal weapons_updated(weapons: Array)
-@warning_ignore("unused_signal")
 signal wave_changed(wave_number: int)
-@warning_ignore("unused_signal")
 signal shop_opened
 signal shop_closed
 ## 波后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
@@ -63,6 +60,20 @@ var joystick = null
 var main_camera: Camera2D = null
 var wave_spawner: Node = null
 
+# 敌人活体登记（2026-10-11）：EnemyBase 在 _ready/_exit_tree 进出。
+# 高频消费方（鼓妖光环每 0.25s、蛛母/影魅/Boss 的召唤上限、刷怪口容量）改读这里，
+# 不再各自 get_nodes_in_group("enemies") 构造全组数组；"enemies" 组保留给低频遍历与测试。
+var live_enemies: Array = []   ## 当前在场敌人（含濒死未清的，语义与 "enemies" 组一致）
+var enemy_count: int = 0       ## live_enemies.size() 的计数镜像
+
+func register_enemy(e: Node) -> void:
+	live_enemies.append(e)
+	enemy_count = live_enemies.size()
+
+func unregister_enemy(e: Node) -> void:
+	live_enemies.erase(e)
+	enemy_count = live_enemies.size()
+
 # 危险度（仿土豆兄弟 Danger 0~5）：通关当前最高档解锁下一档，落盘 user://progress.cfg
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
 var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
@@ -89,7 +100,6 @@ var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 I
 # 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
 var cultivator_records: Dictionary = {}   ## 每位修士生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
 var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
-var tutorial_seen: bool = false          ## 新手指南弹窗是否已看过（首次点开始游戏时弹一次）
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
 const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
 
@@ -291,111 +301,8 @@ var upgrade_history: Array[Dictionary] = []
 var upgrade_counts: Dictionary = {}
 
 func reset_run() -> void:
-	Engine.time_scale = 1.0
-	_hitstop_token += 1
-	rng.randomize()
-	kills = 0
-	game_time = 0.0
-	spirit_stones = 0
-	level = 1
-	experience = 0
-	experience_to_next = GameBalance.EXP_FIRST_LEVEL
-	is_game_over = false
-	pending_upgrade_points = 0
-	wave_number = 0
-	endless_mode = false
-	run_started = false
-	weapon_damage_mult = 1.0
-	melee_damage = 0.0
-	ranged_damage = 0.0
-	elemental_damage = 0.0
-	engineering_damage = 0.0
-	attack_speed_mult = 1.0
-	move_speed_mult = 1.0
-	pickup_range_mult = 1.0
-	attack_range_mult = 1.0
-	armor = 0.0
-	hp_regen = 0.0
-	crit_rate = 0.05
-	crit_mult = 1.5
-	dodge = 0.0
-	lifesteal = 0.0
-	luck = 0.0
-	harvest = 0.0
-	xp_gain_mult = 1.0
-	knockback_mult = 1.0
-	elite_damage = 0.0
-	free_rerolls = 0
-	element_damage = {}
-	locked_upgrades = []
-	cultivator_id = ""
-	thorns_pct = 0.0
-	spirit_threshold_adj = 0
-	contraption_threshold_adj = 0
-	stone_interest_rate = 0.0
-	stone_interest_cap = 15
-	on_hit_damage_bonus = 0.0
-	on_hit_damage_cap_stacks = 10
-	on_hit_damage_stacks = 0
-	on_hit_damage_timer = 0.0
-	total_damage_taken_count = 0
-	total_hp_healed = 0.0
-	max_concurrent_summons = 0
-	dodge_cap_bonus = 0.0
-	weapon_slots_override = 0
-	enemy_count_mult = 1.0
-	harvest_decay = 0.0
-	xp_require_mult = 1.0
-	item_price_mult = 1.0
-	shop_slots_bonus = 0
-	pending_skill_id = "dash"
-	active_skill_id = ""
-	buff_move_speed_mult = 1.0
-	buff_attack_speed_mult = 1.0
-	_exp_chain = GameBalance.EXP_FIRST_LEVEL
-	stat_bonus_pierce = 0
-	synergy_bonus_pierce = 0
-	bonus_pierce = 0
-	synergy_damage_mult = 1.0
-	synergy_range_mult = 1.0
-	synergy_haste_mult = 1.0
-	synergy_max_hp_bonus = 0.0
-	synergy_engineering_damage = 0.0
-	synergy_crit_rate = 0.0
-	synergy_crit_mult = 0.0
-	synergy_hp_regen = 0.0
-	synergy_lifesteal = 0.0
-	synergy_move_speed_mult = 0.0
-	synergy_burn_mult = 1.0
-	synergy_armor = 0.0
-	synergy_knockback_mult = 1.0
-	synergy_contraption_mult = 1.0
-	active_synergies = {}
-	_applied_hp_bonus = 0.0
-	_lifesteal_procs = 0
-	_lifesteal_window = 0.0
-	_hud_tick = 0.0
-	shop_offers = []
-	reroll_cost = 2
-	reroll_count = 0
-	reroll_free_left = 0
-	shop_price_mult = 1.0
-	shop_tag_filter = []
-	_no_main_tag_waves = 0
-	alloc_offers = []
-	alloc_points_total = 0
-	alloc_reroll_cost = 2
-	alloc_reroll_count = 0
-	alloc_reroll_free_left = 0
-	items = []
-	drones = []
-	stash = []
-	upgrade_history.clear()
-	upgrade_counts.clear()
-	last_run_new_achievements = []
-	peak_stones = 0
-	peak_dodge = 0.0
-	peak_harvest = 0.0
+	# 70+ 单局成员的清零表在 RunReset（显式类型化赋值），新增成员记得去那边补默认值
+	RunReset.reset(self)
 
 func _process(delta: float) -> void:
 	if on_hit_damage_timer > 0.0:
@@ -443,17 +350,20 @@ func add_experience(amount: int) -> void:
 
 func add_spirit_stones(amount: int) -> void:
 	spirit_stones += amount
-	if spirit_stones > peak_stones:
-		peak_stones = spirit_stones
+	touch_peak_stones()
 	stats_updated.emit(kills, game_time, spirit_stones)
 
 func register_kill(is_elite: bool = false) -> void:
 	kills += 1
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
-		if spirit_stones > peak_stones:
-			peak_stones = spirit_stones
+		touch_peak_stones()
 	stats_updated.emit(kills, game_time, spirit_stones)
+
+## 单局灵石峰值记账（成就判定用）：所有改 spirit_stones 后想记峰值的地方都走这个
+func touch_peak_stones() -> void:
+	if spirit_stones > peak_stones:
+		peak_stones = spirit_stones
 
 # ---------------- 属性加点 ----------------
 
@@ -480,77 +390,9 @@ func apply_upgrade(upgrade_id: String) -> void:
 	upgrade_applied.emit(upgrade_id)
 
 ## 属性字段统一落地入口：悟道加点（apply_upgrade）与法宝（add_item）共用同一条链路，
-## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露
+## 白名单与落地规则在 StatSystem（2026-10-11 抽离）
 func _apply_stat_fields(apply: Dictionary, source: String) -> void:
-	for key in apply.keys():
-		var v: float = float(apply[key])
-		match key:
-			"weapon_damage_mult":
-				weapon_damage_mult += v
-			"melee_damage":
-				melee_damage += v
-			"ranged_damage":
-				ranged_damage += v
-			"elemental_damage":
-				elemental_damage += v
-			"engineering_damage":
-				engineering_damage += v
-			"attack_speed_mult_mul":
-				attack_speed_mult = maxf(ATTACK_SPEED_FLOOR, attack_speed_mult * v)
-			"armor":
-				armor += v
-			"move_speed_mult":
-				move_speed_mult += v
-			"attack_range_mult":
-				attack_range_mult += v
-			"pickup_range_mult":
-				pickup_range_mult += v
-			"hp_regen":
-				hp_regen += v
-			"crit_rate":
-				crit_rate = minf(crit_rate + v, CRIT_RATE_CAP)
-			"crit_mult":
-				crit_mult += v
-			"dodge":
-				dodge = minf(dodge + v, DODGE_CAP + dodge_cap_bonus)
-			"lifesteal":
-				lifesteal += v
-			"luck":
-				luck += v
-			"harvest":
-				harvest += v
-			"spirit_stones":
-				add_spirit_stones(int(v))
-			"max_hp":
-				if player and player.has_method("increase_max_hp"):
-					player.increase_max_hp(v, float(apply.get("hp_heal", 0.0)))
-			"hp_heal":
-				pass  # 已随 max_hp 一起结算
-			"xp_gain_mult":
-				xp_gain_mult += v
-			"knockback_mult":
-				knockback_mult += v
-			"elite_damage":
-				elite_damage += v
-			"free_rerolls":
-				free_rerolls += int(v)
-			"shop_price_mul":
-				shop_price_mult *= v
-			"bonus_pierce":
-				stat_bonus_pierce += int(v)
-				bonus_pierce = stat_bonus_pierce + synergy_bonus_pierce
-			"thorns":
-				thorns_pct += v
-			"element_damage_all":
-				for e in WeaponData.ELEMENTS:
-					element_damage[e] = float(element_damage.get(e, 0.0)) + v
-			_:
-				# element_damage_metal / _wood / _water / _fire / _earth：单元素加成
-				if key.begins_with("element_damage_") and key.trim_prefix("element_damage_") in WeaponData.ELEMENTS:
-					var elem: String = key.trim_prefix("element_damage_")
-					element_damage[elem] = float(element_damage.get(elem, 0.0)) + v
-				else:
-					push_warning("apply_stat_fields: 未知加点字段 %s（来自 %s）" % [key, source])
+	StatSystem.apply_stat_fields(self, apply, source)
 
 ## 抽一批悟道候选。UpgradeData 是纯函数层、不读单例，所以这里负责把当前局面打包成 ctx 传过去。
 ## 默认一次给 UPGRADE_OFFER_COUNT（5）个：候选太少时「刷新」没意义（2026-10-09 用户指令）。
@@ -588,53 +430,9 @@ func alloc_reroll_label() -> String:
 func can_reroll_alloc() -> bool:
 	return AllocSession.can_reroll_alloc(self)
 
+## 属性面板聚合口径在 StatBreakdown（ui/stats，2026-10-11 迁出）：渲染层只读模型
 func get_stat_breakdown() -> Dictionary:
-	var cur_hp: float = 120.0
-	var max_hp: float = 120.0
-	var base_spd: float = 210.0
-	if player != null and is_instance_valid(player):
-		cur_hp = float(player.current_health)
-		max_hp = float(player.max_health)
-		base_spd = float(player.base_speed)
-	var total_armor := armor + synergy_armor
-	var dmg_reduction: float = GameBalance.armor_reduction(total_armor)
-	var eff_haste := attack_speed_mult * synergy_haste_mult
-	var cdr_pct: float = (1.0 - eff_haste) * 100.0
-	var eff_move := move_speed_mult + synergy_move_speed_mult
-	var eff_dmg := weapon_damage_mult * synergy_damage_mult
-	return {
-		"current_hp": cur_hp,
-		"max_hp": max_hp,
-		"hp_regen": hp_regen + synergy_hp_regen,
-		"armor": total_armor,
-		"dmg_reduction_pct": dmg_reduction * 100.0,
-		"damage_mult": eff_dmg,
-		"damage_bonus_pct": (eff_dmg - 1.0) * 100.0,
-		"melee_damage": melee_damage,
-		"ranged_damage": ranged_damage,
-		"elemental_damage": elemental_damage,
-		"engineering_damage": engineering_damage,
-		"attack_speed_mult": eff_haste,
-		"cdr_pct": cdr_pct,
-		"move_speed": base_spd * eff_move,
-		"move_speed_bonus_pct": (eff_move - 1.0) * 100.0,
-		"pickup_radius": 96.0 * pickup_range_mult,
-		"pickup_bonus_pct": (pickup_range_mult - 1.0) * 100.0,
-		"attack_range_pct": (attack_range_mult * synergy_range_mult - 1.0) * 100.0,
-		"crit_rate_pct": get_crit_rate() * 100.0,
-		"crit_dmg_pct": (crit_mult + synergy_crit_mult) * 100.0,
-		"dodge_pct": get_effective_dodge() * 100.0,
-		"lifesteal_pct": (lifesteal + synergy_lifesteal) * 100.0,
-		"luck": luck,
-		"harvest": harvest,
-		"xp_gain_pct": (xp_gain_mult - 1.0) * 100.0,
-		"knockback_pct": (knockback_mult * synergy_knockback_mult - 1.0) * 100.0,
-		"elite_damage_pct": elite_damage * 100.0,
-		"free_rerolls": free_rerolls,
-		"bonus_pierce": bonus_pierce,
-		"thorns_pct": thorns_pct * 100.0,
-		"shop_price_pct": (shop_price_mult - 1.0) * 100.0,
-	}
+	return StatBreakdown.breakdown(self)
 
 func get_effective_armor() -> float:
 	return armor + synergy_armor
@@ -721,11 +519,14 @@ func try_lifesteal() -> void:
 		player.heal(1.0, true)
 
 ## 波间灵韵结算：无偿发放等额灵石+修为；狂战蛮修的杀气让灵韵每波流失；随后灵韵自我复利（增长截止波次见常量区）
-func apply_harvest() -> void:
+## budget_comp_exp：刷怪预算未花完部分的折算经验补差（WaveSpawner 传入，BalanceEconomy.budget_compensation_exp），
+## 与灵韵一并到账、同一句播报 —— 减潮不减收入，购买力与旧口径持平
+func apply_harvest(budget_comp_exp: int = 0) -> void:
 	var gain := GameBalance.harvest_gain(harvest)
-	if gain > 0:
-		add_experience(gain)
-		announcement_triggered.emit("✦ 收益到账 · 金币与经验 +%d ✦" % gain)
+	var total_gain := gain + maxi(0, budget_comp_exp)
+	if total_gain > 0:
+		add_experience(total_gain)
+		announcement_triggered.emit("✦ 收益到账 · 金币与经验 +%d ✦" % total_gain)
 	if harvest_decay > 0.0:
 		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
@@ -798,74 +599,13 @@ func start_run(starter_id: String) -> void:
 	else:
 		announcement_triggered.emit("✦ 生存战斗 · 击杀敌人 ✦")
 
-## 开局应用修士流派的正负代偿
+## 开局应用修士流派的正负代偿（规则在 CultivatorSystem，2026-10-11 抽离）
 func _apply_cultivator() -> void:
-	var def := CultivatorData.get_def(cultivator_id)
-	if def.is_empty():
-		return
-	var mods: Dictionary = def.get("mods", {})
-	crit_rate += float(mods.get("crit_rate", 0.0))
-	armor += float(mods.get("armor", 0.0))
-	harvest += float(mods.get("harvest", 0.0))
-	dodge += float(mods.get("dodge", 0.0))
-	dodge_cap_bonus = float(mods.get("dodge_cap", 0.0))
-	move_speed_mult *= float(mods.get("speed_mult", 1.0))
-	weapon_damage_mult *= float(mods.get("damage_mult", 1.0))
-	attack_speed_mult = maxf(ATTACK_SPEED_FLOOR, attack_speed_mult * float(mods.get("haste_mult", 1.0)))
-	thorns_pct = float(mods.get("thorns", 0.0))
-	shop_price_mult = float(mods.get("shop_price", 1.0))
-	spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
-	contraption_threshold_adj = int(mods.get("contraption_threshold_adj", 0))
-	stone_interest_rate = float(mods.get("stone_interest_rate", 0.0))
-	stone_interest_cap = int(mods.get("stone_interest_cap", 15))
-	on_hit_damage_bonus = float(mods.get("on_hit_damage_bonus", 0.0))
-	on_hit_damage_cap_stacks = int(mods.get("on_hit_damage_cap_stacks", 10))
-	elemental_damage += float(mods.get("elemental", 0.0))
-	engineering_damage += float(mods.get("engineering", 0.0))
-	hp_regen += float(mods.get("hp_regen", 0.0))
-	weapon_slots_override = int(mods.get("weapon_slots_max", 0))
-	enemy_count_mult = float(mods.get("enemy_count_mult", 1.0))
-	harvest_decay = float(mods.get("harvest_decay", 0.0))
-	xp_require_mult = float(mods.get("xp_require_mult", 1.0))
-	item_price_mult = float(mods.get("item_price", 1.0))
-	shop_slots_bonus = int(mods.get("shop_slots", 0))
-	# 需求倍率只折算判定值，修为门槛链保持原曲线（避免倍率逐层复利）
-	experience_to_next = maxi(1, int(round(float(_exp_chain) * xp_require_mult)))
-	shop_tag_filter = def.get("allowed_tags", [])
-	locked_upgrades = def.get("locked_upgrades", [])
-	if player != null and is_instance_valid(player):
-		if player.has_method("_setup_sprite_frames"):
-			player._setup_sprite_frames()
-		var hp_mult := float(mods.get("hp_mult", 1.0))
-		if hp_mult != 1.0:
-			player.max_health *= hp_mult
-			player.current_health = player.max_health
-			player_hp_changed.emit(player.current_health, player.max_health)
-	var start_drones := int(mods.get("start_drones", 0))
-	for i in range(start_drones):
-		drones.append(1)
-	if start_drones > 0 and player != null and player.has_method("sync_drones"):
-		player.sync_drones()
+	CultivatorSystem.apply_cultivator(self)
 
 ## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
 func cultivator_damage_mult(w_id: String) -> float:
-	var def := CultivatorData.get_def(cultivator_id)
-	if def.is_empty():
-		return 1.0
-	var mods: Dictionary = def.get("mods", {})
-	var m := 1.0
-	var tag_bonuses: Dictionary = mods.get("tag_damage", {})
-	for t in WeaponData.tags_of(w_id):
-		m *= 1.0 + float(tag_bonuses.get(t, 0.0))
-	var wdef := WeaponData.get_def(w_id)
-	var w_beh := int(wdef.get("behavior", -1))
-	if w_beh != WeaponData.Behavior.DRONE:
-		m *= 1.0 + float(mods.get("non_drone_damage", 0.0))
-	if w_beh != WeaponData.Behavior.TURRET and w_beh != WeaponData.Behavior.DRONE:
-		m *= 1.0 + float(mods.get("non_contraption_damage", 0.0))
-	if on_hit_damage_bonus > 0.0 and on_hit_damage_stacks > 0:
-		m *= 1.0 + on_hit_damage_bonus * float(on_hit_damage_stacks)
-	return m
+	return CultivatorSystem.damage_mult(self, w_id)
 
 func on_player_hit(_amount: float) -> void:
 	total_damage_taken_count += 1
@@ -990,9 +730,6 @@ func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
 ## 小怪伏诛的微顿帧（GameFeel 内部限流）：只在 EnemyBase 判定致命一刀时调用
 func kill_hit_stop() -> void:
 	GameFeel.kill_hit_stop(self)
-
-func trigger_hitstop(duration: float = 0.045) -> void:
-	hit_stop(duration)
 
 func feedback(tier: int) -> void:
 	GameFeel.feedback(self, tier)

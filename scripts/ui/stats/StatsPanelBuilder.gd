@@ -50,7 +50,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	hp_box.add_theme_constant_override("separation", 6)
 	var hp_title := Label.new()
 	hp_title.text = StatInfoData.title("hp")
-	GameStyle.label(hp_title, 12, GameStyle.PAPER_DIM)
+	GameStyle.label(hp_title, 12, GameStyle.PAPER)
 	hp_box.add_child(hp_title)
 
 	dialog._hp_bar = ProgressBar.new()
@@ -61,7 +61,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	# 纯显示件也要让开「按下」那一拍：ProgressBar 的 mouse_filter 默认是 STOP，它自己不处理
 	# 输入却照样把事件吃掉 → 气血值那一整行里最显眼的血条成了死点（点名字弹卡、点血条没反应）。
 	dialog._hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bar_st := GameStyle.bar_styles(Color(0.04, 0.06, 0.1, 0.85), GameStyle.GOOD)
+	var bar_st := GameStyle.bar_styles(GameStyle.with_alpha(Color(0.04, 0.06, 0.1), 0.85), GameStyle.GOOD)
 	dialog._hp_bar.add_theme_stylebox_override("background", bar_st[0])
 	dialog._hp_bar.add_theme_stylebox_override("fill", bar_st[1])
 	hp_box.add_child(dialog._hp_bar)
@@ -127,14 +127,16 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._switch_stat_tab(0)
 	return left_panel
 
-## 属性行：名字来自 StatInfoData（面板与详解卡共用同一份标题，改一处就两处一起变）
+## 属性行：名字来自 StatInfoData（面板与详解卡共用同一份标题，改一处就两处一起变）。
+## 2026-10-11 土豆兄弟式口径：名字纸白左对齐、数值右对齐（零值灰由 refresh 的 _c_row 压暗）
 static func add_stat_row(dialog: PlayerStatsDialog, parent: Container, stat_id: String, default_val: String) -> Label:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 6)
 
 	var l_name := Label.new()
 	l_name.text = StatInfoData.title(stat_id)
-	GameStyle.label(l_name, 12, GameStyle.PAPER_DIM)
+	l_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	GameStyle.label(l_name, 12, GameStyle.PAPER)
 	hbox.add_child(l_name)
 
 	var spacer := Control.new()
@@ -144,6 +146,7 @@ static func add_stat_row(dialog: PlayerStatsDialog, parent: Container, stat_id: 
 
 	var l_val := Label.new()
 	l_val.text = default_val
+	l_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	GameStyle.label(l_val, 12, GameStyle.PAPER)
 	hbox.add_child(l_val)
 
@@ -182,7 +185,7 @@ static func make_tip_row(dialog: PlayerStatsDialog, stat_id: String, content: Co
 	flat.content_margin_top = 1.0
 	flat.content_margin_bottom = 1.0
 	var on := StyleBoxFlat.new()
-	on.bg_color = Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.22)
+	on.bg_color = GameStyle.with_alpha(GameStyle.GOLD, 0.22)
 	on.content_margin_top = 1.0
 	on.content_margin_bottom = 1.0
 	row.add_theme_stylebox_override("panel", flat)

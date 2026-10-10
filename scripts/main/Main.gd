@@ -71,6 +71,13 @@ func _ready() -> void:
 				_manual_return_to_pause = false
 				pause_menu.open()
 		)
+		# 商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派法器」：直达武器图鉴并预选流派筛选；
+		# 关闭后回落到仍开着的商店，不走暂停菜单回退
+		if $UILayer.has_node("WaveShop"):
+			$UILayer/WaveShop.manual_requested.connect(func(tag: String):
+				_manual_return_to_pause = false
+				manual_dialog.open_weapons_page(tag)
+			)
 	settings_dialog.closed.connect(func():
 		if _settings_return_to_pause:
 			_settings_return_to_pause = false

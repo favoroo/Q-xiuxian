@@ -19,9 +19,9 @@ class SkillCdOverlay extends Control:
 			return
 		var center := size * 0.5
 		var radius := minf(center.x, center.y)
-		draw_circle(center, radius, Color(0.02, 0.02, 0.03, 0.70))
+		draw_circle(center, radius, GameStyle.dim_overlay(0.70))
 		var sweep := TAU * clampf(1.0 - cd_ratio, 0.0, 1.0)
-		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, Color(0.35, 0.75, 1.0, 0.95), 3.0, true)
+		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, GameStyle.with_alpha(GameStyle.COOLDOWN_ARC, 0.95), 3.0, true)
 
 ## 键面环形进度：正上方起针、顺时针填满的一圈弧 + 弧头亮点。
 ## 给「按住才生效」的动作键（祭坛充能）当键面读数 —— 横条在圆键里会探出圆面，
@@ -63,10 +63,10 @@ static func style_circle_button(btn: Button) -> void:
 	var is_enhanced := false
 	if not GameManager.active_skill_id.is_empty():
 		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-	var border_col: Color = Color(GameStyle.JADE, 0.9) if is_enhanced else Color(GameStyle.GOLD, 0.8)
+	var border_col: Color = GameStyle.with_alpha(GameStyle.JADE, 0.9) if is_enhanced else GameStyle.with_alpha(GameStyle.GOLD, 0.8)
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(GameStyle.INK, 0.55)
+	normal.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
 	normal.border_color = border_col
 	normal.border_width_left = 2
 	normal.border_width_top = 2
@@ -78,7 +78,7 @@ static func style_circle_button(btn: Button) -> void:
 	normal.corner_radius_bottom_left = r
 
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(GameStyle.NAVY, 0.7)
+	hover.bg_color = GameStyle.with_alpha(GameStyle.NAVY, 0.7)
 	hover.border_color = border_col.lightened(0.2)
 	hover.border_width_left = 3
 	hover.border_width_top = 3
@@ -90,8 +90,8 @@ static func style_circle_button(btn: Button) -> void:
 	hover.corner_radius_bottom_left = r
 
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(GameStyle.GOLD, 0.72)
-	pressed.border_color = Color(GameStyle.GOLD_EDGE, 0.95)
+	pressed.bg_color = GameStyle.with_alpha(GameStyle.GOLD, 0.72)
+	pressed.border_color = GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.95)
 	pressed.border_width_left = 3
 	pressed.border_width_top = 3
 	pressed.border_width_right = 3
@@ -120,11 +120,11 @@ static func style_circle_button(btn: Button) -> void:
 static func style_circle_action(btn: Button, accent: Color, font_size: int,
 		filled: bool = false) -> void:
 	btn.add_theme_stylebox_override("normal", _circle_box(
-			Color(accent, 0.72) if filled else Color(GameStyle.INK, 0.55),
+			GameStyle.with_alpha(accent, 0.72) if filled else GameStyle.with_alpha(GameStyle.INK, 0.55),
 			accent.lightened(0.25) if filled else accent,
 			3 if filled else 2))
-	btn.add_theme_stylebox_override("hover", _circle_box(Color(GameStyle.NAVY, 0.7), accent.lightened(0.2), 3))
-	btn.add_theme_stylebox_override("pressed", _circle_box(Color(accent, 0.72), accent.lightened(0.4), 3))
+	btn.add_theme_stylebox_override("hover", _circle_box(GameStyle.with_alpha(GameStyle.NAVY, 0.7), accent.lightened(0.2), 3))
+	btn.add_theme_stylebox_override("pressed", _circle_box(GameStyle.with_alpha(accent, 0.72), accent.lightened(0.4), 3))
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_font_override("font", GameStyle.display_font())
 	btn.add_theme_font_size_override("font_size", font_size)

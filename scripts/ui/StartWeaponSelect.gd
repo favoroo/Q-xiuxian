@@ -194,6 +194,10 @@ func _create_card(w_id: String) -> Control:
 	vbox.add_child(tag_lbl)
 	GameStyle.label(tag_lbl, 11, GameStyle.INK_TEXT)
 
+	# 伤害行（2026-10-11 土豆兄弟式口径：武器卡最显眼处就是伤害，与商店货架卡同款）
+	var dmg_row := BonusRows.make_row("伤害", BonusRows.fmt_num(WeaponData.damage_for(w_id, 1)), GameStyle.JADE, 12, _desc_w())
+	vbox.add_child(dmg_row)
+
 	# 描述（换行切进文本，不交给引擎折行：见 GameStyle.wrap_cjk 头注）
 	var desc_lbl = Label.new()
 	desc_lbl.text = GameStyle.wrap_cjk(def.get("desc", ""), GameStyle.body_font(), 12, _desc_w())

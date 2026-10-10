@@ -18,6 +18,22 @@ static func armor_reduction(armor: float) -> float:
 static func incoming_damage(raw: float, armor: float) -> float:
 	return maxf(DAMAGE_FLOOR, raw / (1.0 + maxf(0.0, armor) * ARMOR_COEF))
 
+# ---------------- 玩家气血档位（读数取色的唯一一把尺）----------------
+## 「什么时候算危险」只许有一处定义：HUD 那行血字的颜色、灵石阁顶栏气血徽记的底色、
+## 详情卡里的提示，全部走 hp_is_low。以前 0.28 只写在 GameHUD 里，
+## 商店要跟着变色就得手抄一遍 —— 抄的那一份永远不会跟着改。
+const HP_LOW_RATIO := 0.28      ## 剩余气血占上限低于此档 = 危险（朱砂）
+
+## 剩余比例（0~1）；上限为 0（玩家还没生成 / 单测空载）按满血算，不许出 NaN 与除零
+static func hp_ratio(cur: float, max_v: float) -> float:
+	return cur / max_v if max_v > 0.0 else 1.0
+
+static func hp_is_low(cur: float, max_v: float) -> bool:
+	return max_v > 0.0 and hp_ratio(cur, max_v) < HP_LOW_RATIO
+
+static func hp_is_full(cur: float, max_v: float) -> bool:
+	return max_v > 0.0 and cur >= max_v - 0.5
+
 # ---------------- 打击感：镜头创伤（震屏） ----------------
 ## 震屏的唯一数学来源。口径（2026-10-08 用户口径：「一直摇不好，这效果要留给特殊场景」）：
 ##   1) 普通命中 / 普通小怪死亡 **一律不发创伤**，打击感交给挤压形变 + 受击火花 + 跳字 + 顿帧；

@@ -227,7 +227,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 	icon_tex.custom_minimum_size = Vector2(30, 30)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if not is_done:
-		icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
+		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)
 	hbox.add_child(icon_box)
 
@@ -306,7 +306,7 @@ func _create_cultivator_row(cid: String) -> Control:
 	icon_tex.custom_minimum_size = Vector2(38, 38)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if not unlocked:
-		icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
+		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)
 	hbox.add_child(icon_box)
 

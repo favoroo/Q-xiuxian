@@ -20,7 +20,8 @@ const TIER_LINES: Dictionary = {
 }
 
 ## 组装流派羁绊详情数据字典（供 DetailTip.show_over 使用）
-static func build_tip_data(tag: String, custom_body: String = "", custom_foot: String = "", custom_notes: Array = []) -> Dictionary:
+## extra_actions：追加到底部的操作按钮（DetailTip actions 口径），如商店的「查看该流派法器」
+static func build_tip_data(tag: String, custom_body: String = "", custom_foot: String = "", custom_notes: Array = [], extra_actions: Array = []) -> Dictionary:
 	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 	if info.is_empty():
 		return {}
@@ -68,7 +69,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 	var body_txt := custom_body if not custom_body.is_empty() else "羁绊：持有越多同类武器，加成越强。"
 	var foot_txt := custom_foot if not custom_foot.is_empty() else "在波间商店挑选同标签武器可继续提升阶位。"
 
-	return {
+	var payload: Dictionary = {
 		"title": "%s (%d/%d)" % [info.get("name", tag), n, max_th],
 		"chip": "元素共鸣" if tag in WeaponData.ELEMENTS else "类型羁绊",
 		"chip_color": GameStyle.JADE if tag in WeaponData.ELEMENTS else GameStyle.GOLD,
@@ -77,10 +78,13 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 		"notes": notes,
 		"foot": foot_txt,
 	}
+	if not extra_actions.is_empty():
+		payload["actions"] = extra_actions
+	return payload
 
 ## 打开流派羁绊详情弹窗并返回实例
-static func open_tip(host: Control, anchor: Control, tag: String, custom_body: String = "", custom_foot: String = "", custom_notes: Array = []) -> Control:
-	var data := build_tip_data(tag, custom_body, custom_foot, custom_notes)
+static func open_tip(host: Control, anchor: Control, tag: String, custom_body: String = "", custom_foot: String = "", custom_notes: Array = [], extra_actions: Array = []) -> Control:
+	var data := build_tip_data(tag, custom_body, custom_foot, custom_notes, extra_actions)
 	if data.is_empty():
 		return null
 	return DetailTip.show_over(host, anchor, data)

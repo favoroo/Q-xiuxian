@@ -87,27 +87,29 @@ func _run() -> void:
 			var nd: Node = stack.pop_back()
 			if nd is ThunderBurst:
 				var b := nd as Node2D
-				live_bursts += 1
-				var far: bool = b.global_position.distance_to(player.global_position) > float(b.radius)
-				if far:
-					far_impacts += 1
-				for en in get_tree().get_nodes_in_group("enemies"):
-					if not (en is Node2D):
-						continue
-					var e2 := en as Node2D
-					if e2.global_position.distance_to(b.global_position) > float(b.radius):
-						continue
-					var av: Vector2 = e2.global_position - player.global_position
-					if av.length_squared() < 25.0:
-						continue
-					av = av.normalized()
-					pairs += 1
-					# 旧规则：纯径向（以落点为心）
-					if (e2.global_position - b.global_position).normalized().dot(av) < -0.01:
-						old_bad += 1
-					# 新规则：统一出口
-					if GameBalance.knock_dir(b.global_position, e2.global_position, player.global_position).dot(av) < -0.01:
-						bad += 1
+				# 池化休眠体（2026-10-11 ThunderBurst 转对象池）visible=false 常驻树中，不算在场爆发
+				if b.visible:
+					live_bursts += 1
+					var far: bool = b.global_position.distance_to(player.global_position) > float(b.radius)
+					if far:
+						far_impacts += 1
+					for en in get_tree().get_nodes_in_group("enemies"):
+						if not (en is Node2D):
+							continue
+						var e2 := en as Node2D
+						if e2.global_position.distance_to(b.global_position) > float(b.radius):
+							continue
+						var av: Vector2 = e2.global_position - player.global_position
+						if av.length_squared() < 25.0:
+							continue
+						av = av.normalized()
+						pairs += 1
+						# 旧规则：纯径向（以落点为心）
+						if (e2.global_position - b.global_position).normalized().dot(av) < -0.01:
+							old_bad += 1
+						# 新规则：统一出口
+						if GameBalance.knock_dir(b.global_position, e2.global_position, player.global_position).dot(av) < -0.01:
+							bad += 1
 			elif nd is FloatingWeapon and int(nd.behavior) == WeaponData.Behavior.BURST:
 				live_weapons += 1
 			for ch in nd.get_children():

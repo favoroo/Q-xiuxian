@@ -241,6 +241,36 @@ const APPLY_WEAPON_STAT_MAP := {
 	"harvest": "harvest",
 }
 
+## 这条加点通过**哪些属性链路**让某件法器变强（返回命中的 apply 键，顺序同 apply 表）。
+## 与 upgrade_benefits_weapon 同一份判定，只多回一份「为什么是它」：悟道卡片下方那排
+## 「受益装备」图标点开后的详情卡用它写清这条链路，不再另抄一套口径（改判定只改这里）。
+## 纯函数：只读 WeaponData 静态表，不读 autoload。
+static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[String]:
+	var out: Array[String] = []
+	for key in apply.keys():
+		var k := String(key)
+		match k:
+			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
+			"attack_range_mult", "element_damage_all", "elite_damage":
+				if not out.has(k):
+					out.append(k)
+			"bonus_pierce":
+				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
+						== WeaponData.Behavior.PROJECTILE and not out.has(k):
+					out.append(k)
+			_:
+				if k.begins_with("element_damage_"):
+					var elem := k.trim_prefix("element_damage_")
+					if elem in WeaponData.ELEMENTS and WeaponData.element_of(w_id) == elem \
+							and not out.has(k):
+						out.append(k)
+				elif APPLY_WEAPON_STAT_MAP.has(k):
+					var sk: String = APPLY_WEAPON_STAT_MAP[k]
+					if float(WeaponData.get_def(w_id).get("stat_scalings", {}).get(sk, 0.0)) > 0.0 \
+							and not out.has(k):
+						out.append(k)
+	return out
+
 ## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件法器变强（悟道卡片下方挂受益法器图标用）。
 ## 口径与伤害结算逐条对齐：
 ##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体法器受益；
@@ -248,28 +278,9 @@ const APPLY_WEAPON_STAT_MAP := {
 ##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
 ##   stat_scalings 键 → 法器配了该属性转化系数才算；
 ##   其余（闪避/拾取/灵石/幸运/修为/重掷/反伤等玩家功能属性）→ 不作用于法器。
-## 纯函数：只读 WeaponData 静态表，不读 autoload。
+## 判据与 upgrade_benefit_reasons 同一条链：有链路才算受益，不另写一遍分支。
 static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
-	for key in apply.keys():
-		var k := String(key)
-		match k:
-			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
-			"attack_range_mult", "element_damage_all", "elite_damage":
-				return true
-			"bonus_pierce":
-				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
-						== WeaponData.Behavior.PROJECTILE:
-					return true
-			_:
-				if k.begins_with("element_damage_"):
-					var elem := k.trim_prefix("element_damage_")
-					if elem in WeaponData.ELEMENTS and WeaponData.element_of(w_id) == elem:
-						return true
-				elif APPLY_WEAPON_STAT_MAP.has(k):
-					var sk: String = APPLY_WEAPON_STAT_MAP[k]
-					if float(WeaponData.get_def(w_id).get("stat_scalings", {}).get(sk, 0.0)) > 0.0:
-						return true
-	return false
+	return not upgrade_benefit_reasons(apply, w_id).is_empty()
 
 # ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
 

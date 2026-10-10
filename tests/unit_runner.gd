@@ -20,7 +20,8 @@ func _ready() -> void:
 	var targeting := UnitTargetingTests.new(_c)
 	var content := UnitContentTests.new(_c)
 	var infra := UnitInfraTests.new(_c)
-	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra]:
+	var consistency := UnitConsistencyTests.new(_c)
+	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra, consistency]:
 		add_child(m)
 
 	economy._test_exp_curve()
@@ -58,6 +59,9 @@ func _ready() -> void:
 	combat._test_charge_geometry()
 	targeting._test_spirit_orbit_dynamics()
 	content._test_turret_and_new_cultivators()
+	consistency._test_upgrade_desc_apply()
+	consistency._test_item_desc_apply()
+	consistency._test_skill_desc_apply()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)

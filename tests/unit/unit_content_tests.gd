@@ -85,6 +85,23 @@ func _test_five_elements_system() -> void:
 			if GameBalance.upgrade_benefits_weapon(u.get("apply", {}), String(wid0)):
 				any_benefit[wid0] = true
 	_c.check(any_benefit.size() == all_ids.size(), "每把法器都至少被一条加点覆盖（%d/%d）" % [any_benefit.size(), all_ids.size()])
+	# 2c. 受益链路读数与受益判定同源：upgrade_benefit_reasons 是判定的唯一出处（卡片「该不该挂这颗
+	#     图标」与详情卡那句「这条悟道走的哪条链路」共用它）。全表 × 全法器逐对比对，防两条分叉。
+	var diverged := 0
+	for u2 in UpgradeData.UPGRADES:
+		var apply2: Dictionary = u2.get("apply", {})
+		for wid2 in all_ids:
+			var has_reason: bool = not GameBalance.upgrade_benefit_reasons(apply2, String(wid2)).is_empty()
+			if has_reason != GameBalance.upgrade_benefits_weapon(apply2, String(wid2)):
+				diverged += 1
+	_c.check(diverged == 0, "全表 × 全法器：有链路才算受益，判定与链路读数零分叉（%d 处不一致）" % diverged)
+	_c.check(GameBalance.upgrade_benefit_reasons({"melee_damage": 2.0}, "qingyun_sword") == ["melee_damage"],
+		"近战强化在青云剑上回一条链路 melee_damage（详情卡那句「走的哪条链路」取的就是它）")
+	_c.check(GameBalance.upgrade_benefit_reasons({"melee_damage": 2.0}, "gengjin_feijian").is_empty(),
+		"近战强化在飞剑上零链路")
+	_c.check(GameBalance.upgrade_benefit_reasons({"bonus_pierce": 1.0}, "qingyun_sword").is_empty()
+		and GameBalance.upgrade_benefit_reasons({"bonus_pierce": 1.0}, "gengjin_feijian") == ["bonus_pierce"],
+		"贯穿只回给弹丸类链路")
 
 	# 3. 五行羁绊与多品类环绕灵宝在 GameManager 中的结算
 	GameManager.reset_run()

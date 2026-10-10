@@ -12,6 +12,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
+	# 窗口钉到桌面调试口径 960×540（AGENTS.md）：与设计分辨率 1:1，避掉 1280×720 override 窗口下
+	# 视口外圈露白底的问题（shop/alloc 弹窗截过一圈白边，2026-10-11）。
+	DisplayServer.window_set_size(Vector2i(960, 540))
 	# 真实主场景：UILayer/HUD/祭坛/宝箱/商店/悟道全套都在里面
 	var main: Node = load("res://scenes/main/Main.tscn").instantiate()
 	get_tree().root.add_child(main)

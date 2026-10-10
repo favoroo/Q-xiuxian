@@ -105,6 +105,42 @@ func _run() -> void:
 	world.remove_child(fx)
 	fx.free()
 
+	# ---------- 5.5 敌方火球池（2026-10-11）：出膛 / 回收 / 复用 / 判定圆重铺 ----------
+	var bolt_a := EnemyBolt.acquire(world)
+	bolt_a.global_position = Vector2.ZERO
+	bolt_a.direction = Vector2.RIGHT
+	bolt_a.activate()
+	var bolt_created := EnemyBolt.created_count
+	_check(bolt_created >= 1, "火球池首轮新建 1 颗 (%d)" % bolt_created)
+	bolt_a._recycle()
+	_check(EnemyBolt._pool.size() == 1 and not bolt_a.visible, "回收后回池休眠并隐身 (%d)" % EnemyBolt._pool.size())
+	var bolt_b := EnemyBolt.acquire(world)
+	_check(bolt_b == bolt_a and EnemyBolt.created_count == bolt_created, "第二次 acquire 复用同一实例不新建")
+	bolt_b.scale_factor = GameBalance.BOSS_BOLT_SCALE
+	bolt_b.activate()
+	_check(bolt_b.visible and not bolt_b._pooled, "复用出膛后可见且激活")
+	_check((bolt_b._circle as CircleShape2D).radius == EnemyBolt.RADIUS * GameBalance.BOSS_BOLT_SCALE,
+		"复用激活按 scale_factor 重铺判定圆")
+	_check(bolt_b.lifetime == EnemyBolt.BASE_LIFETIME, "复用激活重置寿命（残值不清会出膛即逝）")
+	bolt_b._recycle()
+
+	# ---------- 5.6 回复珠池（2026-10-11）：出膛 / 回收 / 复用 / gems 组语义 ----------
+	var orb_a := HealOrb.acquire_or_new(world)
+	orb_a.global_position = Vector2(50, 50)
+	orb_a.heal_pct = 0.15
+	orb_a.activate()
+	var orb_created := HealOrb.created_count
+	_check(orb_created >= 1, "回复珠池首轮新建 1 颗 (%d)" % orb_created)
+	_check(orb_a.is_in_group("gems"), "激活后在 gems 组（波末结算可见）")
+	orb_a.recycle()
+	_check(not orb_a.is_in_group("gems") and HealOrb._pool.size() == 1, "回收后退出 gems 组并入池")
+	var orb_b := HealOrb.acquire_or_new(world)
+	_check(orb_b == orb_a and HealOrb.created_count == orb_created, "第二次 acquire 复用同一实例不新建")
+	orb_b.activate()
+	_check(orb_b.heal_pct == 0.0 and orb_b.heal_amount == HealOrb.BASE_HEAL, "复用激活重置回血参数")
+	_check(orb_b.is_in_group("gems") and orb_b.visible, "复用激活重新入组并可见")
+	orb_b.recycle()
+
 	# ---------- 6. 缓存清理不影响运行中对象 ----------
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bwavedown0chk"]
+
+[ext_resource type="Script" path="res://tests/wave_countdown_check.gd" id="1_wavecountdown"]
+
+[node name="WaveCountdownCheck" type="Node"]
+script = ExtResource("1_wavecountdown")

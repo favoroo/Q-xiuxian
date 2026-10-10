@@ -5,6 +5,8 @@ extends BaseModalDialog
 ## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
 ## 法宝/修士两页标注解锁条件，每次 open() 重建以反映最新解锁状态。
+## 武器页委托 WeaponCodexBuilder 构建：流派筛选条（类型/元素）+ 卡面关键数值行，
+## 商店羁绊详情卡「查看该流派法器」经 open_weapons_page() 深链直达并预选筛选。
 
 const PANEL_SIZE := Vector2(880, 470)
 ## 正文排版宽度：880 面板 − 外边距 40 − 内容面板内边距 28 − 卡片内边距 24，再留余量
@@ -40,6 +42,11 @@ const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison
 
 var _items_box: VBoxContainer
 var _cult_box: VBoxContainer
+var _weapons_box: VBoxContainer
+## 武器图鉴当前流派筛选（"" = 全部；tag 取 WeaponData.CLASSES / ELEMENTS）
+var weapon_filter: String = ""
+## 筛选 chips（tag → Label），build_page 建一次常驻，rebuild 时只重涂不重建
+var _filter_chips: Dictionary = {}
 
 func _get_title_text() -> String:
 	return "图 鉴"
@@ -88,7 +95,35 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	switch_tab(0)
 
 func _on_opened() -> void:
+	# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选，
+	# 深链（open_weapons_page）在 open() 之后才设筛选，不受这里影响。
+	weapon_filter = ""
+	if _weapons_box != null:
+		_rebuild_weapons_page()
 	_refresh_dynamic_pages()
+
+## 深链入口：商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派法器」直达武器页并预选筛选。
+func open_weapons_page(filter_tag: String = "") -> void:
+	open()
+	weapon_filter = String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
+	switch_tab(1)
+	_rebuild_weapons_page()
+
+func _on_filter_chip_tapped(tag: String) -> void:
+	weapon_filter = "" if String(tag) == weapon_filter else String(tag)
+	_rebuild_weapons_page()
+
+func _rebuild_weapons_page() -> void:
+	if _weapons_box == null:
+		return
+	for c in _weapons_box.get_children():
+		c.queue_free()
+	WeaponCodexBuilder.rebuild(self)
+	WeaponCodexBuilder.restyle_chips(self)
+	# 整页子树重建过，滚动拖动锁要重挂（头注「灰色卡片滑不动」坑）；
+	# 筛选 chips 在滚动区外也一起过一遍——PASS 不影响它们收点按。
+	if _pages.size() > 1:
+		GameStyle.swipeable(_pages[1] as Control)
 
 # ----------------- 通用小件 -----------------
 
@@ -151,9 +186,9 @@ func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	return tex
 
-## 图鉴小卡：图标 + 名称（+ 可选副标签），点按开 DetailTip
+## 图鉴小卡：图标 + 名称（+ 可选副标签 + 可选关键数值行），点按开 DetailTip
 func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
-		on_press: Callable) -> PanelContainer:
+		on_press: Callable, stat_line: String = "") -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(148, 0)
 	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
@@ -198,6 +233,13 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 		GameStyle.label(sub_lbl, 11, sub_color)
 		vbox.add_child(sub_lbl)
 
+	if stat_line != "":
+		var stat_lbl := Label.new()
+		stat_lbl.text = stat_line
+		stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(stat_lbl, 10, GameStyle.PAPER_DIM)
+		vbox.add_child(stat_lbl)
+
 	GameStyle.tap(card, func() -> void: on_press.call(card))
 	# 整格都是热区：图框那层 PanelContainer 默认 STOP，会把「点图片」这一枪截在半路 ——
 	# 真机上就成了点名字弹卡、点图没反应（用户 2026-10-09 反馈）。放在最后一步统一压子树。
@@ -220,51 +262,9 @@ func _build_basics_page(parent: Control) -> Control:
 
 # ----------------- 分页 2：法器图鉴 -----------------
 
+## 筛选条 + 网格的构建与重建全在 WeaponCodexBuilder（本类只持状态与深链入口）
 func _build_weapons_page(parent: Control) -> Control:
-	var scroll := _new_scroll(parent)
-	var box := _new_scroll_vbox(scroll)
-
-	box.add_child(_make_text_card("武器规则",
-		"武器只能在波间「商店」购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意武器卡查看射程、冷却与属性受益。" % [
-			WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
-			String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
-			WeaponData.MAX_STAR]))
-
-	# 按五行分组展示，与 WeaponData.DEFS 的排布同源
-	for elem in WeaponData.ELEMENTS:
-		var header := Label.new()
-		header.text = "── %s行武器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem))
-		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(header, 13, ELEMENT_COLORS.get(elem, GameStyle.PAPER), 0, GameStyle.INK, true)
-		box.add_child(header)
-
-		var grid := GridContainer.new()
-		grid.columns = 5
-		grid.add_theme_constant_override("h_separation", 8)
-		grid.add_theme_constant_override("v_separation", 8)
-		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		box.add_child(grid)
-
-		for wid in WeaponData.DEFS.keys():
-			var def: Dictionary = WeaponData.DEFS[wid]
-			var tags: Array = def.get("tags", [])
-			if not (elem in tags):
-				continue
-			var cls := ""
-			for t in tags:
-				if t != elem:
-					cls = String(t)
-			var cls_name := String(WeaponData.SYNERGIES.get(cls, {}).get("name", cls))
-			var card := _make_entry_card(
-				String(def.get("icon", "")), String(def.get("name", wid)),
-				cls_name, GameStyle.PAPER_DIM,
-				func(anchor: Control): _open_weapon_tip(wid, anchor))
-			# 吃「元素伤害」属性加成的法器挂橙红角标（图鉴与商店/属性面板同一口径）
-			var icon_tex := card.get_meta("icon_tex") as TextureRect
-			if icon_tex != null and icon_tex.get_parent() != null:
-				GameStyle.maybe_add_element_badge(icon_tex.get_parent(), wid, 8)
-			grid.add_child(card)
-	return scroll
+	return WeaponCodexBuilder.build_page(self, parent)
 
 func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	var def := WeaponData.get_def(wid)
@@ -322,7 +322,7 @@ func _rebuild_items_page() -> void:
 	for c in _items_box.get_children():
 		c.queue_free()
 	_items_box.add_child(_make_text_card("道具规则",
-		"道具是买即生效的被动奇珍，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随波次陆续现身。\n点按任意道具卡查看效果与入手价。"))
+		"道具是买即生效的被动奇珍，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随波次陆续现身。\n加成读数认颜色：绿色是增益、红色是代偿，数值与实际生效幅度同源。\n点按任意道具卡查看效果与入手价。"))
 
 	for tier in [1, 2, 3, 4]:
 		var tier_col: Color = ItemData.tier_color(tier)
@@ -349,7 +349,7 @@ func _rebuild_items_page() -> void:
 				"" if unlocked else "未入阁", GameStyle.GREY,
 				func(anchor: Control): _open_item_tip(iid, anchor))
 			if not unlocked:
-				(card.get_meta("icon_tex") as TextureRect).modulate = Color(0.4, 0.4, 0.5, 0.7)
+				(card.get_meta("icon_tex") as TextureRect).modulate = GameStyle.disabled_modulate()
 			grid.add_child(card)
 
 func _open_item_tip(iid: String, anchor: Control) -> void:
@@ -362,6 +362,8 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 		["品阶", ItemData.tier_label(tier_num), tier_col],
 		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
+	# 加成行（2026-10-11 土豆兄弟式改版）：与商店卡面同源同色，BonusRows 从 apply 直接生成
+	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
 	var desc_lines := String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
 	for line in desc_lines:
@@ -429,7 +431,7 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	tex.offset_right = -4
 	tex.offset_bottom = -4
 	if not unlocked:
-		tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
+		tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(tex)
 	hbox.add_child(icon_box)
 

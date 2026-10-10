@@ -91,7 +91,7 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	modulate.a = 0.0
 
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.03, 0.5)
+	dim.color = GameStyle.dim_overlay(0.5)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(_on_dim_input)
@@ -105,9 +105,9 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	# 就是一整块全屏禁区，读详解期间完全不能走位。
 	_card.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	var sb := GameStyle.outlined_panel(
-		Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.99),
+		GameStyle.with_alpha(GameStyle.NAVY, 0.99),
 		GameStyle.GOLD, 2, GameStyle.SLANT_PLATE)
-	sb.shadow_color = Color(0, 0, 0, 0.65)
+	sb.shadow_color = GameStyle.with_alpha(Color.BLACK, 0.65)
 	sb.shadow_size = 0
 	sb.shadow_offset = Vector2(6, 6)
 	_card.add_theme_stylebox_override("panel", sb)

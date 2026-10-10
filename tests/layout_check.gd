@@ -132,7 +132,13 @@ func _stress_hud(hud: Control) -> void:
 	hud.hp_label.text = "12847/12847"
 	hud.level_label.text = "Lv.99"
 	hud.time_label.text = "20:00"
-	hud.wave_label.text = "第 20 波"
+	# 波次倒计时上线后这颗芯片最长的一串是「第 N 波 · M:SS」：样本与屏幕走同一个格式化
+	# 出口（worst_case_text），连「锁住每帧刷新」也由控件自己做 —— 分两处 poke 就会有一处
+	# 漏掉，量到的仍是当前波那条短读数，溢出看不见。
+	if hud.wave_countdown != null:
+		hud.wave_countdown.show_as_worst_case()
+	else:
+		hud.wave_label.text = "第 20 波"
 	hud.kills_label.text = "斩妖 12847"
 	hud.shards_label.text = "灵石 99999"
 	var box: HBoxContainer = hud.get("_synergy_box")

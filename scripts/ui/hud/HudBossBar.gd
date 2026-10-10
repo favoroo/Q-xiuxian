@@ -38,7 +38,7 @@ func _build_row() -> void:
 	_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_bar.show_percentage = false
 	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var styles: Array = GameStyle.bar_styles(Color(0.06, 0.04, 0.06, 0.9), GameStyle.BAD)
+	var styles: Array = GameStyle.bar_styles(GameStyle.with_alpha(Color(0.06, 0.04, 0.06), 0.9), GameStyle.BAD)
 	_bar.add_theme_stylebox_override("background", styles[0])
 	_bar.add_theme_stylebox_override("fill", styles[1])
 	row.add_child(_bar)

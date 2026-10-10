@@ -119,12 +119,52 @@ func _test_settings_manager() -> void:
 	_c.near(SettingsManager.get_bus_volume(&"Master"), 1.0, 0.01, "重置默认后主音量恢复 100%")
 	_c.equals(bool(SettingsManager.get_val(&"display", &"damage_numbers", false)), true, "重置默认后伤害跳字恢复开启")
 	_c.equals(bool(SettingsManager.get_val(&"display", &"screen_shake", false)), true, "重置默认后屏幕震动恢复开启")
+	_test_floating_btn_defaults()
 
 	# 5. 还原测试前状态
 	SettingsManager.set_bus_volume(&"Master", orig_master)
 	SettingsManager.set_bus_muted(&"Master", orig_master_mute)
 	SettingsManager.set_val(&"display", &"damage_numbers", orig_dmg_num)
 	SettingsManager.set_val(&"display", &"screen_shake", orig_shake)
+
+## 两颗浮动键的出厂摆位与键面文案（用户 2026-10-11 真机图：祭坛键和技能键贴在一起，
+## 看着就是两颗压成一颗；键面只写「祭坛」也看不出按下去是干什么的）。
+## 只在 reset_to_defaults() 之后跑：那时读到的就是出厂位，不受玩家自己拖过的存档影响。
+## 位置是归一化的、键径是设计像素定值，所以两圆间距在 960×540 这一档最小
+## （视口更高只会更开），拿它当尺子量到的是最坏情况。
+func _test_floating_btn_defaults() -> void:
+	var design_h := 540.0
+	var d := SkillButtonView.SKILL_BTN_SIZE
+	# 一、SCHEMA 里的 default 与常量同源：抄两份数字，早晚会「设置页显示 A、实际生效 B」
+	_c.equals(SettingsManager.obelisk_btn_xy(), SettingsManager.OBELISK_BTN_XY_DEFAULT,
+			"祭坛键出厂位取自 OBELISK_BTN_XY_DEFAULT（不是 SCHEMA 里另抄的一份）")
+	_c.equals(SettingsManager.skill_btn_xy(), SettingsManager.SKILL_BTN_XY_DEFAULT,
+			"技能键出厂位取自 SKILL_BTN_XY_DEFAULT")
+	# 二、两圆之间必须留得开：旧写法 0 空隙相切，量出来正好 0
+	var gap := (SettingsManager.skill_btn_xy().y - SettingsManager.obelisk_btn_xy().y) * design_h - d
+	_c.check(gap >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
+			"出厂摆位两圆圆边之间留 %.1f 设计像素（要求 >= %.0f；0 空隙时两圈描边贴成一颗）" % [
+					gap, SettingsManager.BTN_DEFAULT_EDGE_GAP])
+	_c.check(gap <= d, "两圆也没开成一里地（%.1f <= 键径 %.0f，同列叠放还要一眼看出是一对）" % [gap, d])
+	# 三、键面文案收在圆面之内：量的是「画出来的那一圈」——文案外接框的对角半径
+	#     要小于圆面内缘（键径一半再收掉 _circle_box 那 2 像素描边）
+	var f := GameStyle.display_font()
+	var box: Vector2 = f.get_multiline_string_size(HudObeliskButton.BTN_TEXT,
+			HORIZONTAL_ALIGNMENT_CENTER, -1.0, HudObeliskButton.BTN_FONT)
+	var corner := box.length() * 0.5
+	var inner_r := d * 0.5 - 2.0
+	_c.check(HudObeliskButton.BTN_TEXT.contains("\n"),
+			"文案「%s」分行排（单行「激活祭祀」22 号宽 88，圆面只有 72 可用）" % HudObeliskButton.BTN_TEXT)
+	_c.check(corner <= inner_r,
+			"键面文案收在圆键之内（%.0f×%.0f 外接框角半径 %.1f <= 内缘 %.1f）" % [
+					box.x, box.y, corner, inner_r])
+	# 四、也不许压在走针那一圈上：按住充能时那一圈正是拇指盯着的读数
+	var ov := SkillButtonView.CircleProgressOverlay.new()
+	ov.size = HudObeliskButton.BTN_SIZE
+	var arc_r := ov.arc_radius()
+	ov.free()
+	_c.check(corner <= arc_r,
+			"键面文案收在走针环之内（角半径 %.1f <= 走针半径 %.1f，按住时那一圈不压在字上）" % [corner, arc_r])
 
 # ---------------- 震屏：创伤预算与强度档位 ----------------
 

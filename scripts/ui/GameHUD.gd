@@ -33,11 +33,16 @@ const OBELISK_BTN_FONT := HudObeliskButton.BTN_FONT
 var _skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
 var _boss_bar_widget: HudBossBar = null
+## 顶栏波次倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
+## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
+var wave_countdown: HudWaveCountdown = null
 
 ## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
 var _skill_box: Control = null
 var _skill_btn: Button = null
 var _obelisk_btn: Button = null
+## 键面走针环：充能读数判据与出图台读它（拆分时漏了这一根，判据当场跑成 0 项空转）
+var _obelisk_ring: SkillButtonView.CircleProgressOverlay = null
 
 ## 兼容：判据读技能键震颤状态（真身在 HudSkillButton）
 var _skill_shaking: bool :
@@ -127,11 +132,17 @@ func _build_widgets() -> void:
 	_obelisk_widget = HudObeliskButton.new()
 	add_child(_obelisk_widget)
 	_obelisk_btn = _obelisk_widget.get_btn()
+	_obelisk_ring = _obelisk_widget.get_ring()
 	_skill_widget = HudSkillButton.new()
 	add_child(_skill_widget)
 	_skill_box = _skill_widget
 	_skill_btn = _skill_widget.get_btn()
 	add_child(HudFpsCounter.new())
+	# 波次倒计时：作为 WaveChip 的第二个孩子铺进同一格内容矩形 —— PanelContainer 会把
+	# 所有子节点都摆成内容区，所以这颗零最小尺寸的 Control 既不改变芯片大小，又能拿到
+	# 与文字同样宽的底边去画那根线（不改 .tscn、不给顶栏添新格子）。
+	wave_countdown = HudWaveCountdown.new(wave_label)
+	$TopContainer/CenterBox/WaveChip.add_child(wave_countdown)
 
 ## 供冒烟测试与调试断言：血条当前是否上屏
 func is_boss_bar_visible() -> bool:
@@ -272,7 +283,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	var tw = create_tween()
 	tw.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	hp_label.text = str(int(cur)) + "/" + str(int(max_v))
-	var low := max_v > 0.0 and (cur / max_v) < 0.28
+	var low := GameBalance.hp_is_low(cur, max_v)
 	hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
 
 func _on_leveled_up(_lvl: int) -> void:
@@ -297,8 +308,13 @@ func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
 	time_label.text = "%02d:%02d" % [mins, secs]
 
 func _on_wave_changed(n: int) -> void:
-	wave_label.text = "第 %d 波" % maxi(n, 1)
 	wave_label.get_parent().visible = n >= 1
+	# 文案交给波次倒计时控件写（它与剩余时间同一条读数、同一次取值）；
+	# _ready 里这一次调用发生在控件建好之前，所以留一条纯波号的兜底。
+	if wave_countdown != null:
+		wave_countdown.refresh_now()
+	else:
+		wave_label.text = HudWaveCountdown.wave_head(n)
 
 func _on_weapons_updated(weapons: Array) -> void:
 	# 上阵一变就整排重建：摊在暗底下的旧详情卡报的是旧数，先收掉再建
@@ -315,7 +331,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 		# w 在挂回调之前就得有值：GDScript lambda 按值捕获创建那一刻的局部变量
 		var w: Dictionary = weapons[i] if filled else {}
 		var style = GameStyle.outlined_panel(
-			GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.55),
+			GameStyle.NAVY if filled else GameStyle.with_alpha(GameStyle.INK, 0.55),
 			GameStyle.GOLD if filled else GameStyle.LINE, 2, 5.0)
 		slot.add_theme_stylebox_override("panel", style)
 

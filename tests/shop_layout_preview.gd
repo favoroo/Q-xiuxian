@@ -30,6 +30,11 @@ func _ready() -> void:
 	for i in range(SIZES.size()):
 		for count in [GameManager.SHOP_BASE_SLOTS, GameManager.SHOP_BASE_SLOTS + 1]:
 			await _shoot(SIZES[i], TAGS[i], count)
+	# 这轮新加的两处读数光看判据绿了不算看完（视觉改动要真出图）：
+	# 造一个真 Player 打到残血、把金币压到买不起最贵那把 ⇒ 徽记该翻朱砂、价格键该转灰
+	_make_player(0.15)
+	await _shoot(SIZES[0], "残血买不起", GameManager.SHOP_BASE_SLOTS, 30)
+	await _shoot(SIZES[1], "残血买不起", GameManager.SHOP_BASE_SLOTS, 30)
 	print("\nSHOP_PREVIEW_DONE")
 	get_tree().quit(0)
 
@@ -49,6 +54,18 @@ func _stress_inventory() -> void:
 	if ItemData.all_ids().size() > 1:
 		GameManager.add_item(String(ItemData.all_ids()[1]))
 
+## 预览专用：本判据不建 Main，所以这里补一个真 Player 节点给顶栏气血徽记读数
+## （用真场景而不是自造双，是为了让「87/120」那串字与真机同一来源）
+func _make_player(ratio: float) -> void:
+	if GameManager.player != null and is_instance_valid(GameManager.player):
+		return
+	var p: Node2D = (load("res://scenes/entities/Player.tscn") as PackedScene).instantiate()
+	_holder.add_child(p)
+	GameManager.player = p
+	p.current_health = p.max_health * ratio
+	GameManager.player_hp_changed.emit(p.current_health, p.max_health)
+
+
 ## 把货架钉成最长文案：随机三张盖不住最坏情况，哪一句会撑破格子是数据决定的
 func _pin_offers() -> void:
 	var offers: Array = GameManager.shop_offers
@@ -62,7 +79,7 @@ func _pin_offers() -> void:
 		offers[2 + i] = {"kind": "weapon", "id": long_ids[i], "price": 41,
 			"sold": false, "locked": i % 2 == 0}
 
-func _shoot(size: Vector2i, tag: String, count: int) -> void:
+func _shoot(size: Vector2i, tag: String, count: int, stones: int = 500) -> void:
 	DisplayServer.window_set_size(size)
 	get_tree().root.size = size
 	await get_tree().process_frame
@@ -70,6 +87,7 @@ func _shoot(size: Vector2i, tag: String, count: int) -> void:
 	GameManager.shop_slots_bonus = maxi(0, count - GameManager.SHOP_BASE_SLOTS)
 	GameManager.roll_shop(true)
 	_pin_offers()
+	GameManager.spirit_stones = stones
 	var screen: Vector2 = get_tree().root.get_visible_rect().size
 	var node: Control = load("res://scenes/ui/WaveShop.tscn").instantiate()
 	node.visible = true

@@ -153,10 +153,11 @@ func _destroy() -> void:
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, false)
 	AudioManager.play_sfx("chest_open", 0.9)
 	if GameManager.rng.randf() < 0.6:
-		var fruit := HealOrb.new()
+		# 回复珠走对象池（2026-10-11，与宝石同一条路）
+		var fruit := HealOrb.acquire_or_new(get_parent())
 		fruit.global_position = global_position
 		fruit.heal_pct = 0.15
-		get_parent().call_deferred("add_child", fruit)
+		fruit.activate()
 	else:
 		for i in range(3):
 			# 宝石走对象池（2026-10-10 第 6 波卡顿优化）

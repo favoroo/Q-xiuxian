@@ -23,9 +23,11 @@ const SPAWN_INTERVAL_MIN := BalanceWave.SPAWN_INTERVAL_MIN
 const SPAWN_INTERVAL_PER_WAVE := BalanceWave.SPAWN_INTERVAL_PER_WAVE
 const SPAWN_BATCH_EVERY_WAVES := BalanceWave.SPAWN_BATCH_EVERY_WAVES
 const SPAWN_BATCH_BONUS_CHANCE := BalanceWave.SPAWN_BATCH_BONUS_CHANCE
+const WAVE_SPAWN_BUDGET_MAX := BalanceWave.WAVE_SPAWN_BUDGET_MAX
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
+const ENEMY_DMG_BASE_MULT := BalanceWave.ENEMY_DMG_BASE_MULT
 const ENEMY_STAT_VARIANCE := BalanceWave.ENEMY_STAT_VARIANCE
 const ELITE_STONE_BONUS := BalanceWave.ELITE_STONE_BONUS
 const ELITE_WAVES := BalanceWave.ELITE_WAVES
@@ -72,6 +74,7 @@ const RARITY_COMMON_FLOOR := BalanceEconomy.RARITY_COMMON_FLOOR
 const LUCK_EPIC_PER_POINT := BalanceEconomy.LUCK_EPIC_PER_POINT
 const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
+const POTION_HEAL_RATIO := BalanceEconomy.POTION_HEAL_RATIO
 const TAG_AFFINITY_MIN_COPIES := BalanceEconomy.TAG_AFFINITY_MIN_COPIES
 const TAG_AFFINITY_MULT := BalanceEconomy.TAG_AFFINITY_MULT
 const LUCK_SHOP_PER_POINT := BalanceEconomy.LUCK_SHOP_PER_POINT
@@ -84,6 +87,7 @@ const ITEM_TIER_BASE := BalanceEconomy.ITEM_TIER_BASE
 # 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
 const ARMOR_COEF := BalanceCombat.ARMOR_COEF
 const DAMAGE_FLOOR := BalanceCombat.DAMAGE_FLOOR
+const HP_LOW_RATIO := BalanceCombat.HP_LOW_RATIO
 const TRAUMA_DECAY := BalanceCombat.TRAUMA_DECAY
 const TRAUMA_BUDGET := BalanceCombat.TRAUMA_BUDGET
 const SHAKE_EXPONENT := BalanceCombat.SHAKE_EXPONENT
@@ -146,6 +150,14 @@ static func item_price(base: int, wave: int, price_mult: float) -> int:
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.potion_price(base, wave, price_mult)
 
+## 回气丹这一口回多少：货架卡、气血详情卡与 ShopSystem 的 heal() 共用这一条
+static func potion_heal_amount(max_hp: float) -> float:
+	return BalanceEconomy.potion_heal_amount(max_hp)
+
+## 这一口实际回得上多少（按当前缺血截断）：货架卡与气血详情卡的读数出口
+static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
+	return BalanceEconomy.potion_effective_heal(max_hp, cur_hp)
+
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return BalanceEconomy.reroll_cost(wave, reroll_count, price_mult)
 
@@ -192,6 +204,14 @@ static func spawn_interval(wave: int) -> float:
 static func spawn_batch(wave: int, roll: float) -> int:
 	return BalanceWave.spawn_batch(wave, roll)
 
+## 波内总刷入预算（土豆兄弟式克制）：预算耗尽即停手，场上越打越空
+static func wave_spawn_budget(wave: int) -> int:
+	return BalanceWave.wave_spawn_budget(wave)
+
+## 刷怪预算未花完部分的波末经验补差（减潮不减收入）
+static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
+	return BalanceEconomy.budget_compensation_exp(shortfall, avg_exp)
+
 static func enemy_hp_mult(wave: int) -> float:
 	return BalanceWave.enemy_hp_mult(wave)
 
@@ -225,6 +245,16 @@ static func armor_reduction(armor: float) -> float:
 
 static func incoming_damage(raw: float, armor: float) -> float:
 	return BalanceCombat.incoming_damage(raw, armor)
+
+## 玩家气血读数分档：HUD 血字与灵石阁气血徽记同一把尺（0 = 空载，按满血放行）
+static func hp_ratio(cur: float, max_v: float) -> float:
+	return BalanceCombat.hp_ratio(cur, max_v)
+
+static func hp_is_low(cur: float, max_v: float) -> bool:
+	return BalanceCombat.hp_is_low(cur, max_v)
+
+static func hp_is_full(cur: float, max_v: float) -> bool:
+	return BalanceCombat.hp_is_full(cur, max_v)
 
 static func trauma_steady_state() -> float:
 	return BalanceCombat.trauma_steady_state()
@@ -283,6 +313,10 @@ static func stat_scaling_label(key: String) -> String:
 
 static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
 	return BalanceTargeting.upgrade_benefits_weapon(apply, w_id)
+
+## 这条加点通过哪些属性链路强化某件法器（受益判定同源，只多回一份「为什么是它」）
+static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[String]:
+	return BalanceTargeting.upgrade_benefit_reasons(apply, w_id)
 
 static func spirit_orbit_angular_speed(
 	base_speed: float = SPIRIT_BASE_ANGULAR_SPEED,

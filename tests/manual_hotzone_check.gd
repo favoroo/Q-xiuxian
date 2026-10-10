@@ -42,6 +42,11 @@ func _ready() -> void:
 
 func _run() -> void:
 	get_tree().root.size = VIEWPORT_SIZE
+	# 4× 时基加速：每张卡都要「滚进可视区等补间停稳 + 弹卡后等 0.1s 淡出收卡」，全是真实时钟
+	# 等待；图鉴条目涨到 38 武器 + 51 法宝后整轮刚好压过 GameManager 的 45s 无头守护。
+	# 守护定时器自己是 ignore_time_scale，不受影响；判据的停稳/收卡都是轮询到「真没了」，
+	# 加速只省等待、不改判定。跑完不还原——进程随即 quit(0/1)。
+	Engine.time_scale = 4.0
 	_manual = ManualDialog.new()
 	add_child(_manual)
 	_manual.open()

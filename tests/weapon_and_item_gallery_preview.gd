@@ -137,7 +137,7 @@ func _build_ui() -> void:
 	bottom_panel.add_child(bot_vbox)
 
 	var bot_title := Label.new()
-	bot_title.text = "八大悟道属性图标 & 纯矢量弹道飞行物实机展示"
+	bot_title.text = "悟道属性图标 & 纯矢量弹道飞行物实机展示"
 	GameStyle.label(bot_title, 11, Color(0.4, 0.8, 1.0), 0, GameStyle.INK, true)
 	bot_vbox.add_child(bot_title)
 
@@ -146,9 +146,9 @@ func _build_ui() -> void:
 	bot_hbox.add_theme_constant_override("separation", 10)
 	bot_vbox.add_child(bot_hbox)
 
-	# 属性图标行 (8 核心属性)
+	# 属性图标行 (17 项悟道属性)
 	var stat_grid := GridContainer.new()
-	stat_grid.columns = 4
+	stat_grid.columns = 6
 	stat_grid.add_theme_constant_override("h_separation", 4)
 	stat_grid.add_theme_constant_override("v_separation", 4)
 	bot_hbox.add_child(stat_grid)
@@ -162,6 +162,15 @@ func _build_ui() -> void:
 		["回血", "res://assets/art/icon_regen.png"],
 		["磁吸", "res://assets/art/icon_magnet.png"],
 		["灵石", "res://assets/art/icon_coin.png"],
+		["暴击", "res://assets/art/icon_crit.png"],
+		["爆伤", "res://assets/art/icon_critdmg.png"],
+		["闪避", "res://assets/art/icon_dodge.png"],
+		["吸血", "res://assets/art/icon_lifesteal.png"],
+		["幸运", "res://assets/art/icon_luck.png"],
+		["收益", "res://assets/art/icon_harvest.png"],
+		["范围", "res://assets/art/icon_range.png"],
+		["罡气", "res://assets/art/icon_thorns.png"],
+		["透劲", "res://assets/art/icon_pierce.png"],
 	]
 	for s_info in stats:
 		var scard := _create_stat_icon_chip(s_info[0], s_info[1])

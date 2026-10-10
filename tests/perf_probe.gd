@@ -14,6 +14,10 @@ extends Node
 ##    全员移出屏幕 0.5 秒，重绘增量 ≤ 2（屏外剔除）；120 颗在场只点亮 GEM_LIGHT_CAP 盏灯；
 ##    回收再取两轮，第二轮 created 零增长、reused 等量增长（对象池）；
 ##    场上宝石数超 GEM_SOFT_CAP 后，最旧一颗被强制 magnet_to（软上限保险丝，无经验损失）。
+## 5. 受击视觉零分配 + 落雷池 + 屏外判定节流（2026-10-11 第 6 波卡顿优化）：
+##    12 次 take_damage 全程 get_processed_tweens() 零增长（旧写法每次受击挤压+闪白各建一个 Tween），
+##    且 0.3s 内闪白参数归零、juice_scale 回正（帧内计时衰减在跑）；
+##    落雷 acquire 两轮，第二轮零新建全复用；敌人在屏外 0.5s 内 _offscreen 收敛为 true（10Hz 节流不失效）。
 ##
 ## 运行：godot --headless --path . res://tests/PerfProbe.tscn
 ## 注意：本判据依赖真实节拍，禁止 Engine.time_scale 加速（会破坏重绘节流计时）。
@@ -234,6 +238,69 @@ func _run() -> void:
 		if g.target_player != null:
 			fused += 1
 	_check(fused >= 1, "软上限保险丝：超 GEM_SOFT_CAP 后最旧宝石被强制吸附（吸附中 %d 颗）" % fused)
+
+	# ================= 5. 受击视觉零分配 + 落雷池 + 屏外判定节流 =================
+	# 5a. 受击零 Tween 分配：旧写法每次 take_damage 建 2 个 Tween（挤压+闪白）；
+	#     现在衰减走帧内计时 —— 命中全程 get_processed_tweens() 零增长，
+	#     且 0.3s 内 flash_modifier 归零、juice_scale 回正（衰减确实在跑，不是压根没触发）
+	var hit_e := slime_scene.instantiate() as EnemyBase
+	hit_e.position = Vector2(300.0, 300.0)
+	world.add_child(hit_e)
+	await get_tree().process_frame
+	var tweens_before: int = get_tree().get_processed_tweens().size()
+	for i in range(12):
+		hit_e.take_damage(5.0, Vector2(30.0, 0.0), false)
+	var tween_delta: int = get_tree().get_processed_tweens().size() - tweens_before
+	_check(tween_delta == 0, "受击零 Tween 分配：12 次受击 Tween 计数零增长（实得 %+d）" % tween_delta)
+	await get_tree().create_timer(0.3).timeout
+	var flash_val: float = float(hit_e.hit_flash_mat.get_shader_parameter("flash_modifier"))
+	_check(flash_val <= 0.001, "闪白帧内计时衰减归零（实得 %.3f）" % flash_val)
+	_check(hit_e.juice_scale.distance_to(Vector2.ONE) < 0.02, "挤压回弹帧内计时归位")
+	world.remove_child(hit_e)
+	hit_e.free()
+
+	# 5b. 屏外判定 10Hz 节流不失效：出屏 0.5s 内 _offscreen 必须收敛为 true
+	var cull_e := slime_scene.instantiate() as EnemyBase
+	cull_e.position = Vector2(-4000.0, -4000.0)
+	world.add_child(cull_e)
+	await get_tree().create_timer(0.5).timeout
+	_check(cull_e._offscreen, "屏外判定节流后仍收敛（10Hz + 错相）")
+	world.remove_child(cull_e)
+	cull_e.free()
+
+	# 5c. 落雷对象池：acquire 两轮，第二轮零新建全复用
+	var tb_scene: PackedScene = load("res://scenes/weapons/ThunderBurst.tscn")
+	var tb_created0: int = ThunderBurst.created_count
+	var tb_reused0: int = ThunderBurst.reused_count
+	var bursts: Array[ThunderBurst] = []
+	for i in range(3):
+		var tb := ThunderBurst.acquire(world, tb_scene)
+		tb.global_position = Vector2(200.0 + 60.0 * float(i), 300.0)
+		tb.radius = 70.0
+		tb.damage = 1.0
+		tb.activate()
+		bursts.append(tb)
+	_check(ThunderBurst.created_count == tb_created0 + 3,
+		"落雷首轮 3 发全量新建 (%d/%d)" % [ThunderBurst.created_count - tb_created0, 3])
+	_check(ThunderBurst.reused_count == tb_reused0, "落雷首轮零复用 (%d)" % (ThunderBurst.reused_count - tb_reused0))
+	# 等一帧让 call_deferred 的 _deal_damage 结算完，避免回收后残留延迟调用
+	await get_tree().process_frame
+	for tb in bursts:
+		tb._recycle()
+	_check(ThunderBurst._pool.size() == 3, "落雷 3 发全部回池 (%d)" % ThunderBurst._pool.size())
+	var bursts2: Array[ThunderBurst] = []
+	for i in range(3):
+		var tb := ThunderBurst.acquire(world, tb_scene)
+		tb.global_position = Vector2(-200.0 - 60.0 * float(i), 300.0)
+		tb.radius = 70.0
+		tb.damage = 1.0
+		tb.activate()
+		bursts2.append(tb)
+	_check(ThunderBurst.created_count == tb_created0 + 3, "落雷第二轮零新建")
+	_check(ThunderBurst.reused_count == tb_reused0 + 3, "落雷第二轮复用计数 +3")
+	await get_tree().process_frame
+	for tb in bursts2:
+		tb._recycle()
 
 	# 清场（清场统一放文件尾）
 	for p in flying:

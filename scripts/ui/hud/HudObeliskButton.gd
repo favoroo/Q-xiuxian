@@ -6,9 +6,15 @@ extends Control
 ## 摆位算术在 HudButtonLayout。
 
 const BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
-const BTN_TEXT := "祭坛"
-## 圆键里两个字的最大字号：再大就贴着描边了
-const BTN_FONT := 22
+## 键面文案（用户 2026-10-11：「祭坛」只说了那是个什么东西，没说这颗键按下去干什么）。
+## 四个字必须分两行：单行「激活祭祀」在 22 字号下宽 88，而圆键去掉描边只剩 72 可用 ——
+## 一行排下去字会探出圆面，斜着看就是键在漏字。
+const BTN_TEXT := "激活\n祭祀"
+## 18 是「两行都不出圆面、也不压走针那一圈」的上限（字号实测口径见 UnitRunner 那条判据）：
+## 22 号两行外接框 44×62 → 角半径 38.0，正好顶在描边上；18 号 37×52 → 角半径 31.9，
+## 收进走针环半径（CircleProgressOverlay.arc_radius = 33.5）之内，按住充能时那一圈不会压在字上。
+## 口径由 UnitRunner 钉（见 tests/unit/unit_infra_tests.gd）。
+const BTN_FONT := 18
 
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
@@ -142,6 +148,10 @@ func size_px() -> Vector2:
 
 func get_btn() -> Button:
 	return _btn
+
+## 键面走针环（判据与出图台读它，别再去 HUD 上找一个不存在的同名属性）
+func get_ring() -> SkillButtonView.CircleProgressOverlay:
+	return _ring
 
 func _apply_layout() -> void:
 	HudButtonLayout.apply(self, SettingsManager.obelisk_btn_xy(), SettingsManager.obelisk_btn_scale(), BTN_SIZE)

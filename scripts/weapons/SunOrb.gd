@@ -40,6 +40,8 @@ func setup(star_level: int, weapon_id: String = "lingdie") -> void:
 		_apply_star_visuals()
 
 func _ready() -> void:
+	# 错相：多枚灵宝把轮询劈到 4 个相位上，不同帧做重叠查询
+	_poll_timer = float(get_instance_id() % 4) * (POLL_INTERVAL / 4.0)
 	_apply_star_visuals()
 
 ## 判定半径逐实例重建：.tscn 里的 SubResource 在同一份 PackedScene 的多个实例间是共享的，
@@ -85,8 +87,18 @@ func _apply_star_visuals() -> void:
 
 ## 接触伤害必须"贴着就持续结算"：只挂 area_entered ⇒ 进入那一帧打一下，
 ## 敌人挂在环上不再触发第二下，纸面 42.9 DPS 实测只有 11~19。
-## 冷却按每个敌人独立计（_try_damage 里的 _hit_ms），逐帧轮询不会变成每秒 60 下。
-func _physics_process(_delta: float) -> void:
+## 冷却按每个敌人独立计（_try_damage 里的 _hit_ms），轮询不会变成每秒 60 下。
+## 轮询节流（2026-10-11 第 6 波卡顿优化）：get_overlapping_areas 15Hz + instance_id 错相，
+## _on_area_entered 信号照旧即时兜住"刚贴上"的第一下；持续贴着的补刀最坏延迟 66ms，
+## 而伤害独立冷却下限 80ms —— 不会漏掉任何一次本该发生的结算。
+const POLL_INTERVAL := 0.066
+var _poll_timer: float = 0.0
+
+func _physics_process(delta: float) -> void:
+	_poll_timer -= delta
+	if _poll_timer > 0.0:
+		return
+	_poll_timer = POLL_INTERVAL
 	for area in get_overlapping_areas():
 		_try_damage(area)
 

@@ -136,7 +136,7 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	GameStyle.tap(chip, func(): open_item_tip(shop, item_id, chip))
 	return chip
 
-## 法宝徽记的详情卡：品阶/价格 + 描述逐行
+## 法宝徽记的详情卡：品阶/价格 + 加成行（与货架卡同源） + 描述逐行
 static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> void:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
@@ -147,6 +147,8 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		["品阶", ItemData.tier_label(tier_num), tier_col],
 		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
+	# 加成行（2026-10-11 土豆兄弟式改版）：BonusRows 从 apply 生成，与货架卡同一把尺子
+	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
 	for line in desc_lines:
@@ -169,6 +171,6 @@ static func create_empty_stash_slot(tile: float) -> Control:
 	slot.custom_minimum_size = Vector2(maxf(20.0, tile * 0.6), tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := GameStyle.slot()
-	style.bg_color = Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.55)
+	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
 	slot.add_theme_stylebox_override("panel", style)
 	return slot

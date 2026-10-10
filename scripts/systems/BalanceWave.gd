@@ -16,11 +16,35 @@ const SPAWN_INTERVAL_MIN := 0.45
 const SPAWN_INTERVAL_PER_WAVE := 0.045
 const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一轮多刷 1 只
 const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
+# 2026-10-11 土豆兄弟式克制：波内总刷入预算 —— 间隔刷怪照旧，但全波累计刷出只数封顶，
+# 预算耗尽即停手。旧口径「杀几只补几只」会把同屏恒定顶到上限（第 6 波起整波满载，
+# 体感无限刷怪且是持续卡顿源）；预算制下越打越空，击杀速度重新变得有意义。
+# 绑定点对照（旧总量 = 时长/间隔 × 平均批量，见 tests/balance_sim_check.gd 第 5 节）：
+# W1~5 预算不触发（前期手感不变）；W6 39/54 ≈ -28%、W10 55/78 ≈ -30%、W12 起批量跳档后
+# 收得更狠（~-55%）、W20 95/364 ≈ -74%。危险度/角色的妖潮倍率由调用方乘。
+const WAVE_SPAWN_BUDGET_BASE := 15.0
+const WAVE_SPAWN_BUDGET_PER_WAVE := 4.0
+const WAVE_SPAWN_BUDGET_MAX := 110.0
+
+## 波内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算
+static func wave_spawn_budget(wave: int) -> int:
+	return int(minf(WAVE_SPAWN_BUDGET_BASE + float(maxi(wave, 1)) * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX))
 const ENEMY_HP_GROWTH := 1.16             ## 每波气血复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
 ## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
 const MOB_HP_BASE_MULT := 4.5
 const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
+## 敌伤整体基线倍率：所有敌人伤害的唯一总闸。
+## 折进 enemy_dmg_mult 这一个出口 ⇒ 接触 / 冲刺 / 短咬 / 自爆 / 火球 / Boss 接触·环弹·震地
+## 与 Boss 召唤的小怪全部同源跟着走，任何敌人脚本都不许再自己乘一遍。
+## 2026-10-11 用户真机口径：「敌人伤害降低一点，我简单难度都感觉很容易死」。
+## 根因：小怪厚度抬到 MOB_HP_BASE_MULT(4.5) 后怪在场时间变长，挨打频率顶到玩家无敌帧上限
+##（0.55s/下 = 1.82 下/秒）——单下伤害直接等于每秒进伤。旧基线下危险度 0 裸装（120 血/0 甲）
+## 站进常用杂怪群（基础接触伤 14）第 1 波单下发 14 = 11.7% 气血、只活 4.7s，第 5 波只剩 3.7s，
+## 最低档没有试错空间，故把基线降到 0.65（W1 单下 10 = 8.3% 气血、活 6.6s；W5 活 5.5s）。
+## 尺子与档位口径见 tests/balance_sim_check.gd 第 5 节「挨打侧生存余量」。
+## 六档危险度的 +12%/档梯度（danger_dmg_mult）不受影响，整条梯子一起下移。
+const ENEMY_DMG_BASE_MULT := 0.65
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
 
@@ -38,8 +62,11 @@ static func spawn_batch(wave: int, roll: float) -> int:
 static func enemy_hp_mult(wave: int) -> float:
 	return pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
 
+## 敌人伤害的唯一倍率出口：整体基线 × 每波复利。
+## 调用方（WaveSpawner 刷怪/Boss 注入、EnemyBase 产卵·分裂·召唤小怪）只乘这一条，
+## 敌弹伤害按 contact_damage/13 反推、Boss 环弹与震地按系数派生，全链路同源。
 static func enemy_dmg_mult(wave: int) -> float:
-	return pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
+	return ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
 
 # ---------------- 精英 / Boss 波（固定关卡） ----------------
 

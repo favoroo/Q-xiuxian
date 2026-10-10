@@ -86,7 +86,7 @@ func _on_tab_switched(_index: int) -> void:
 func _build_modal_chrome() -> void:
 	# 1. 半透明暗色遮罩（点击空白处关闭）
 	_dim_rect = ColorRect.new()
-	_dim_rect.color = Color(0.02, 0.02, 0.03, 0.85)
+	_dim_rect.color = GameStyle.dim_overlay(0.85)
 	_dim_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dim_rect.gui_input.connect(func(event: InputEvent):

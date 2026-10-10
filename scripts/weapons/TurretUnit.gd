@@ -19,6 +19,10 @@ var _lifetime_timer: float = 0.0
 var _is_dying: bool = false
 var _spin_angle: float = 0.0
 
+## 索敌节流（2026-10-11，与 FloatingWeapon 同款）：intersect_shape 最多 15Hz
+const TARGET_SEARCH_INTERVAL := 0.066
+var _search_timer: float = 0.0
+
 static var _search_shape: CircleShape2D = null
 static var _search_query: PhysicsShapeQueryParameters2D = null
 
@@ -38,6 +42,8 @@ func setup(def_id: String, star_level: int) -> void:
 	lifetime = float(def.get("turret_lifetime", 12.0))
 	_lifetime_timer = lifetime
 	_cooldown_timer = GameManager.rng.randf_range(0.1, 0.3)
+	# 错相：多台炮台把索敌查询劈散到不同帧
+	_search_timer = GameManager.rng.randf_range(0.0, TARGET_SEARCH_INTERVAL)
 
 func _ready() -> void:
 	add_to_group("turrets")
@@ -89,9 +95,13 @@ func _process(delta: float) -> void:
 	if _lifetime_timer < 2.0:
 		modulate.a = 0.5 + 0.5 * sin(_lifetime_timer * 16.0)
 
-	# 索敌与瞄准
-	if current_target == null or not is_instance_valid(current_target) or not _is_target_in_range(current_target):
-		current_target = _find_target()
+	# 索敌与瞄准：15Hz 节流（2026-10-11 第 6 波卡顿优化，照 FloatingWeapon 先例）——
+	# 目标失效不再当帧立即重查，下一节拍再找；炮弹冷却远长于 66ms，火力读数无感
+	_search_timer -= delta
+	if _search_timer <= 0.0:
+		_search_timer = TARGET_SEARCH_INTERVAL
+		if current_target == null or not is_instance_valid(current_target) or not _is_target_in_range(current_target):
+			current_target = _find_target()
 
 	if current_target != null and is_instance_valid(current_target):
 		var target_angle := (current_target.global_position - global_position).angle()

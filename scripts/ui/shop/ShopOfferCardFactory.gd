@@ -5,7 +5,7 @@ extends RefCounted
 ## 从 WaveShop 拆出：摆位口径与常量仍在 WaveShop（唯一真话，判据引用它们），
 ## 买入/锁定等操作回调经 shop 门面回流（refresh(false) 重排货架）。
 
-## 构建一张货架卡：行①图标与名号同行、行②色签+锁定、行③说明全文、行④价格/购买
+## 构建一张货架卡：行①图标与名号同行、行②色签+锁定、行③加成行块+说明、行④价格/购买
 static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_count: int = 4) -> Control:
 	var card_w := WaveShop.offer_card_w(shop._screen, total_count)
 	var data := resolve_offer_data(offer)
@@ -24,15 +24,24 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path))
 	# 行②：色签流 + 锁定开关同行
 	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready))
-	# 行③：说明全文
-	var desc_lbl := Label.new()
-	desc_lbl.text = GameStyle.wrap_cjk(data.desc, GameStyle.body_font(), 12, inner_w)
-	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	desc_lbl.custom_minimum_size = Vector2(inner_w, 0)
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
-	vbox.add_child(desc_lbl)
+	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
+	var stat_rows: Array = data.stat_rows
+	if not stat_rows.is_empty():
+		vbox.add_child(BonusRows.build_rows_block(stat_rows, 12, inner_w))
+	if not String(data.desc).is_empty():
+		var desc_lbl := Label.new()
+		desc_lbl.text = GameStyle.wrap_cjk(data.desc, GameStyle.body_font(), 12, inner_w)
+		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		desc_lbl.custom_minimum_size = Vector2(inner_w, 0)
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
+		vbox.add_child(desc_lbl)
+	# 弹性占位：纯加成卡（如药水、desc 已清空的道具）也要把价格键钉在卡底，
+	# 不然货架把卡拉成等高后价格悬在半空、卡底留一大段黑
+	var stretch := Control.new()
+	stretch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stretch.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(stretch)
 	# 行④：价格/购买按钮
 	vbox.add_child(_create_card_price_btn(shop, offer, index, sold, price, data.is_item, data.def, data.kind))
 
@@ -41,7 +50,8 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	GameStyle.swipeable(card)
 	return card
 
-## 装配这张卡的全部数据（武器/道具/药水三种货）：名号、图标、色签、说明、边色与「可合成」角标
+## 装配这张卡的全部数据（武器/道具/药水三种货）：名号、图标、色签、加成行、说明、边色与「可合成」角标
+## stat_rows 是卡面加成行（[名字, 幅度, 颜色]），数字由 BonusRows 从数据表直接生成，不在 desc 里手抄
 static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
@@ -53,6 +63,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var tag_parts: Array = []
 	var part_hot: Array = []
 	var desc: String
+	var stat_rows: Array = []
 	var merge_ready := false
 	var chip_color: Color = GameStyle.GOLD
 	var chip_text_color: Color = GameStyle.PAPER
@@ -62,7 +73,16 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		title = "回复药"
 		icon_path = "res://assets/art/icon_hp.png"
 		tag = "药水"
-		desc = "使用立刻恢复50%生命"
+		desc = ""
+		# 卡上印的是「现在买下这一口，真能回多少」：与 ShopSystem 喂给 heal() 同一条公式，
+		# 再按当前缺血截断 ⇒ 数字永远不会承诺一个兑现不了的量。
+		# 只写「50% 生命」判断不了要不要买（2026-10-11 用户：「商店界面也要显示血量，
+		# 不然也不知道回复道具要不要买」）。满血时就是 +0，红字，别花这个钱。
+		var stats := GameManager.get_player_stat_dict()
+		var eff := GameBalance.potion_effective_heal(
+				float(stats.get("max_hp", 0.0)), float(stats.get("current_hp", 0.0)))
+		stat_rows = [["回复气血", "+%d" % int(round(eff)),
+				GameStyle.GOOD if eff > 0.5 else GameStyle.BAD]]
 		chip_color = GameStyle.GOOD
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = GameStyle.JADE_DK
@@ -73,6 +93,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		icon_path = def.get("icon", "")
 		tag = "%s·道具" % ItemData.tier_label(tier)
 		desc = def.get("desc", "")
+		stat_rows = BonusRows.apply_rows(def.get("apply", {}))
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = ItemData.tier_color(tier).darkened(0.35)
@@ -114,14 +135,17 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		if merge_ready:
 			edge_color = GameStyle.JADE
 		desc = def.get("desc", "")
+		# 伤害置顶（土豆兄弟口径）：货架卡最显眼处就是这把武器的 1 星伤害
+		stat_rows = [["伤害", BonusRows.fmt_num(WeaponData.damage_for(w_id, 1)), GameStyle.JADE]]
+		# 玩家属性已经能喂给这把武器额外伤害时，亮一行加成额（买前就能看到这把有多吃属性）
 		var bonus_dmg := GameManager.get_weapon_stat_bonus(w_id, 1)
 		if bonus_dmg > 0.05:
-			desc += "\n(当前属性额外伤害 +%d)" % int(round(bonus_dmg))
+			stat_rows.append(["属性加成", "+%d" % int(round(bonus_dmg)), GameStyle.GOOD])
 
 	return {
 		"kind": kind, "is_potion": is_potion, "is_item": is_item, "def": def,
 		"title": title, "icon_path": icon_path, "tag": tag, "tag_parts": tag_parts,
-		"part_hot": part_hot, "desc": desc, "merge_ready": merge_ready,
+		"part_hot": part_hot, "desc": desc, "stat_rows": stat_rows, "merge_ready": merge_ready,
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
 		"edge_color": edge_color,
 	}
@@ -245,6 +269,10 @@ static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int
 		btn.disabled = true
 	elif GameManager.spirit_stones < price:
 		btn.disabled = true
+		# 买不起要留着那颗灰键、并且把差额写在脸上：上一版只把键置灰，
+		# 灰面与纯黑面板同色 ⇒ 真机上看起来像「这一格没有按钮」（2026-10-11 用户指令）。
+		# 差额是「再打一波就买得起」的判断依据，比一个灰块有用。
+		btn.text = "%d 金币 · 差 %d" % [price, price - GameManager.spirit_stones]
 	elif is_item and bool(def.get("unique", false)) and GameManager.has_item(offer.get("id", "")):
 		btn.disabled = true
 		btn.text = "已 持 有"

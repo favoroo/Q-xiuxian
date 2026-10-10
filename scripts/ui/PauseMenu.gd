@@ -29,7 +29,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.03, 0.72)
+	dim.color = GameStyle.dim_overlay(0.72)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -113,7 +113,7 @@ func _build_ui() -> void:
 	vbox.add_child(_ver_label)
 
 func _mk_btn(text: String, h: float, bg: Color, hover_bg: Color, font_size: int,
-		font_col: Color, hover_font_col: Color = Color(0, 0, 0, 0)) -> Button:
+		font_col: Color, hover_font_col: Color = Color.TRANSPARENT) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.custom_minimum_size = Vector2(0, h)

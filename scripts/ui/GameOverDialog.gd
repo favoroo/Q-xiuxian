@@ -19,7 +19,7 @@ func _ready() -> void:
 	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT)
 	GameStyle.button(endless_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)
 	# 标题带铺半调网点（胜蓝/败朱砂面上的微芒点阵，垫在标题字底下）
-	var strip := GameStyle.halftone(title_band, Color(0.95, 0.98, 1.0, 0.14))
+	var strip := GameStyle.halftone(title_band, GameStyle.with_alpha(Color("f2faff"), 0.14))
 	title_band.move_child(strip, 0)
 
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox

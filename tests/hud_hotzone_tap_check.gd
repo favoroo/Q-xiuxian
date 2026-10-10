@@ -20,7 +20,8 @@ extends Node
 ## （emit 会绕过拾取，热区是死的也照样全绿）。
 ## 防假 PASS：① 先自证「空白处按下能叫醒摇杆」，否则后面每一条「没长摇杆」都是空判；
 ## ② 徽记/槽位数不足、点完 live() 是 null、读数与数据表对不上，一律 FAIL；
-## ③ --selftest 把修复前的形状原样造一颗打同一枪，必须报出「点了没反应」，才算有牙齿。
+## ③ --selftest 把修复前的形状原样造一颗打同一枪，必须报出「点了没反应」，才算有牙齿；
+##    每把反例旁边各留一颗正例（同一排、同一尺寸、正确接线），证明「没弹」不是「事件没送到」。
 
 ## 默认 960（桌面调试档）；判据可用 --width= 换档，真机三档 720 / 960 / 1204 都要卡不探出屏
 const VIEWPORT_SIZE := Vector2i(960, 540)
@@ -276,8 +277,10 @@ func _corners(c: Control) -> Array[Vector2]:
 ## —— 第二条是防「落点打歪」冒充「热区是坏的」：720 档画布/窗口两套坐标差一个 scale，
 ## 打歪时徽记那一排会整排红，看起来像真 bug（实测踩过）。GameStyle.tap 在收到按下时会在
 ## 那颗控件上留 _gs_tap_down 记账，读它就等于问引擎「这一枪落在谁身上」。
-func _tap_at(host: Control, target: Control, label: String, at := Vector2(INF, INF)) -> String:
-	var pos: Vector2 = at if at.x < INF else _center(target)
+func _tap_at(host: Control, target: Control, label: String, at := Vector2.INF) -> String:
+	var pos: Vector2 = _center(target)
+	if at != Vector2.INF:
+		pos = at	# 角上取样那一类：落点由调用方指定，热区仍是同一格
 	await _wait_tips_gone(host)
 	await _press(pos)
 	_c.check(target.has_meta(GameStyle._TAP_DOWN_META),
@@ -288,17 +291,16 @@ func _tap_at(host: Control, target: Control, label: String, at := Vector2(INF, I
 	return _collect(host)
 
 ## 反例专用：诱饵本来就不该登记，摇杆长不长不是这一枪要判的事，收尾归零即可。
-## 但「送到了没有」照量 —— 否则反例那条「没弹卡」可能只是打歪了。
+## 「这一枪送到了谁身上」由各反例自己证：旧接线那颗会在自己的 gui_input 里记账，
+## 新接线那颗由 GameStyle.tap 记账 —— 拿同一把尺子量两者会假红（旧写法压根不写那个 meta）。
 func _tap_only(host: Control, target: Control) -> String:
 	var pos := _center(target)
 	await _wait_tips_gone(host)
 	await _press(pos)
-	var landed := target.has_meta(GameStyle._TAP_DOWN_META)
 	await _motion(pos + Vector2(0, -JITTER))
 	await _release(pos + Vector2(0, -JITTER))
 	var title := _collect(host)
 	await _reset_joy()
-	_c.check(landed, "反例落点：这一枪真送到了诱饵 %s 身上（否则「没弹卡」不算判定）" % target.name)
 	return title
 
 func _swipe_at(host: Control, target: Control, dy: float) -> String:
@@ -416,12 +418,16 @@ func _selftest() -> void:
 	old_chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	old_chip.text = " 反例① "
 	old_chip.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-			old_cb.call()
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+			old_chip.set_meta("_saw_event", true)	# 引擎确实把这一枪送给了它
+			if not ev.pressed:
+				old_cb.call()
 	)
 	box.add_child(old_chip)
 	await _settle(2)
 	var got_old := await _tap_only(_hud, old_chip)
+	_c.check(old_chip.has_meta("_saw_event"),
+		"反例① 落点自证：旧接线那颗自己收到了事件（所以下面那条「没弹」是热区坏，不是打歪）")
 	_c.check(got_old == "",
 		"反例① 旧接线同一枪弹不出卡（实得「%s」）—— 尺子抓得住按值捕获 null 那个根因" % got_old)
 
@@ -446,6 +452,20 @@ func _selftest() -> void:
 	_c.check(got_slot == "",
 		"反例② 全 IGNORE 的槽同一枪弹不出卡（实得「%s」）—— 尺子抓得住整排零热区" % got_slot)
 	old_slot.free()
+	# 正例②：同一排、同一尺寸，接好热区的那一颗必须弹得出来。
+	# 有这一条，上面那个「没弹」才是「IGNORE 收不到事件」而不是「那个位置本来就点不到」。
+	var good_slot := PanelContainer.new()
+	good_slot.custom_minimum_size = Vector2(36, 36)
+	bar.add_child(good_slot)
+	GameStyle.hotzone(good_slot)
+	GameStyle.tap(good_slot, func() -> void:
+		DetailTip.show_over(_hud, good_slot, {"title": "正例② 新槽"})
+	)
+	await _settle(2)
+	var got_good := await _tap_only(_hud, good_slot)
+	_c.check(got_good == "正例② 新槽",
+		"正例② 同一排接好热区的槽弹得出来（实得「%s」）—— 反例② 的没弹是 IGNORE 的锅" % got_good)
+	good_slot.free()
 
 	# 反例③：接了热区但没登记 ui_press_hold ⇒ 摇杆必须长出来（拦住「忘了登记」这一步）
 	var loose_slot := PanelContainer.new()

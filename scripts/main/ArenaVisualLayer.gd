@@ -7,12 +7,21 @@ extends Node2D
 var _time: float = 0.0
 var half_extent: float = 680.0
 
+## 重绘节流（2026-10-11 第 6 波卡顿优化）：本层是全场唯一每帧无条件 queue_redraw 的大矢量层，
+## 而动画全是慢速量（灵脉 90s/圈自转 + 呼吸正弦），20Hz 重绘肉眼无感 —— 每帧全量重绘是白烧。
+const REDRAW_INTERVAL := 0.05
+var _redraw_timer: float = 0.0
+
 func _ready() -> void:
 	z_index = 1  # 位于地砖 TextureRect 之上，实体层与判定物之下
 
 func _process(delta: float) -> void:
+	# _time 逐帧累计不节流，重绘触发时取到的是当前时刻，动画不会因节流变卡
 	_time += delta
-	queue_redraw()
+	_redraw_timer -= delta
+	if _redraw_timer <= 0.0:
+		_redraw_timer = REDRAW_INTERVAL
+		queue_redraw()
 
 func _draw() -> void:
 	_draw_central_taiji_array()

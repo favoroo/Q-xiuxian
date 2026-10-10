@@ -98,13 +98,24 @@ var chill_slow: float = 0.0
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
-var flash_tween: Tween = null
-var squash_tween: Tween = null
+# —— 受击视觉零 Tween 分配化（2026-10-11 第 6 波卡顿优化）——
+## 旧写法每次受击 create_tween ×2（挤压回弹 + 闪白），DoT 每 0.5s×N 敌也在持续触发；
+## 35 怪高频命中的波次里 Tween 生命周期管理是实打实的分配热点。改帧内计时衰减，
+## 曲线与原 Tween 一致（挤压 TRANS_BACK EASE_OUT；闪白 0.02s 拉满段在 60fps 下只有
+## 1~2 帧，命中瞬间直接置峰，视觉无差）。衰减统一在 _tick_hit_fx 逐帧做。
+var _squash_from: Vector2 = Vector2.ONE  ## 挤压起点（目标形变）
+var _squash_t: float = 0.0               ## 挤压剩余时长
+var _squash_dur: float = 0.16            ## 挤压总时长（插值分母）
+var _flash_t: float = 0.0                ## 闪白剩余时长（衰减段）
+var _flash_down_dur: float = 0.11        ## 本次闪白衰减总时长（归一化分母）
+var _flash_swap_t: float = 0.0           ## 暴击绯金→暖白换色倒计时（普通命中为 0）
 var _hit_tilt: float = 0.0          ## 受创后仰倾角（受击瞬间沿受力反向倾斜，急刹后平滑回正）
 
-## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与每帧缓存判定
+## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与节流判定缓存
 const CULL_MARGIN := 64.0
+const CULL_INTERVAL := 0.1          ## 屏外判定 10Hz（敌人进出屏幕是秒级事件，60Hz 判定是白烧）
 var _offscreen: bool = false
+var _cull_timer: float = 0.0        ## 错相初值在 _ready 按 instance_id 摊开
 var dying: bool = false
 var procedural_view: ProceduralEnemyView = null
 
@@ -141,6 +152,15 @@ func _ready() -> void:
 	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval
+
+	# 活体登记（2026-10-11）：鼓妖光环/产卵上限/召唤上限改走 GameManager.live_enemies，
+	# 不再每脉冲 get_nodes_in_group("enemies") 造全组数组；_exit_tree 注销，语义与组一致
+	GameManager.register_enemy(self)
+	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
+	_cull_timer = float(get_instance_id() % 6) * (CULL_INTERVAL / 6.0)
+
+func _exit_tree() -> void:
+	GameManager.unregister_enemy(self)
 
 func _deduce_enemy_id() -> String:
 	var n := name.to_lower()
@@ -241,16 +261,23 @@ func _setup_frames(path: String) -> void:
 	anim_sprite.sprite_frames = sf
 	anim_sprite.play("run_s")
 
-## 挤压与拉伸形变回弹（Squash & Stretch）
+## 挤压与拉伸形变回弹（Squash & Stretch）——零 Tween 分配版：记录起点与时长，
+## 回弹插值在 _tick_hit_fx 逐帧做（TRANS_BACK EASE_OUT 同款过冲曲线）
 func play_squash(target: Vector2, duration: float = 0.16) -> void:
-	if squash_tween != null and squash_tween.is_valid():
-		squash_tween.kill()
 	juice_scale = target
-	squash_tween = create_tween()
-	squash_tween.tween_property(self, "juice_scale", Vector2.ONE, duration)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_squash_from = target
+	_squash_t = maxf(duration, 0.001)
+	_squash_dur = _squash_t
 
 # ---------------- 每帧调度：移动 / 行为计时器 / 状态机推进 ----------------
+## 2026-10-11 机械拆分：原 367 行上帝函数按支路切成「异常结算 / 有效移速 / 硬直计时 /
+## 行为推进 / 速度解算 / 受击视觉 / 动画同步 / 接触结算」八个私有函数，零逻辑改动。
+## 帧内中间量走 _pp_* 成员（帧首重写，不跨帧持有语义），跨函数不再拖一长串参数。
+
+# —— _physics_process 帧内中间量 ——
+var _pp_stun: bool = false                   ## 本帧受击硬直是否仍在
+var _pp_target_vel: Vector2 = Vector2.ZERO   ## 本帧期望速度（各行为支路共同写这一个出口）
+
 func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over or dying:
 		return
@@ -259,20 +286,63 @@ func _physics_process(delta: float) -> void:
 	if player == null:
 		return
 
-	# 屏外缓存（2026-10-10 第 6 波卡顿优化）：每帧判定一次，take_damage 里
-	# 屏外只扣血跳过跳字与火花（音效/硬直/击退/闪白保留）
-	var vp := get_viewport()
-	if vp != null:
-		var sp: Vector2 = vp.get_canvas_transform() * global_position
-		var lim: Vector2 = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
-		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > lim.x or sp.y > lim.y
+	# 屏外缓存（2026-10-10 第 6 波卡顿优化，2026-10-11 加 10Hz 节流）：take_damage 里
+	# 屏外只扣血跳过跳字与火花（音效/硬直/击退/闪白保留）。
+	# 敌人进出屏幕是秒级事件，10Hz 判定足够；每敌错相劈开 transform 查询
+	_cull_timer -= delta
+	if _cull_timer <= 0.0:
+		_cull_timer = CULL_INTERVAL
+		_update_offscreen_cull()
+
+	# 受击视觉衰减（零分配）：挤压回弹与闪白逐帧推进。
+	# 必须放在行为支路之前 —— 冲刺/短咬等支路会提前 return，衰减不能跟着断
+	_tick_hit_fx(delta)
 
 	if _focus_hit_timer > 0.0:
 		_focus_hit_timer -= delta
 		if _focus_hit_timer <= 0.0:
 			_focus_hit_count = 0
 
-	# 0. 五行元素异常状态结算（灼烧/剧毒/冰缓）
+	# 0. 五行元素异常状态结算（灼烧/剧毒跳伤；致死即结束本帧）
+	if _tick_damage_over_time(delta):
+		return
+
+	# 有效移速：冰缓减速 × 鼓妖光环加速
+	var eff_speed := _effective_speed(delta)
+
+	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
+	_pp_stun = _tick_hit_stun(delta)
+
+	# 2. 追击玩家（平滑加速度 + 贴身防旋转抽搐）：期望速度与各行为支路推进
+	var to_player: Vector2 = player.global_position - global_position
+	var dist_sq: float = to_player.length_squared()
+	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
+	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
+	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
+	_pp_target_vel = Vector2.ZERO if _pp_stun else (dir * eff_speed)
+	if _tick_behaviors(delta, player, dir, dist_sq, eff_speed):
+		return
+
+	# 位移解算（冲刺锁定段不插值）+ 界碑拦阻
+	_resolve_velocity(delta)
+	var pos_before_move: Vector2 = global_position
+	move_and_slide()
+	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
+	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+
+	_tick_hit_visuals(delta)
+	_update_facing_and_anim(delta, dir, dist_sq)
+	_resolve_contact_damage(player, pos_before_move)
+
+func _update_offscreen_cull() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		var sp: Vector2 = vp.get_canvas_transform() * global_position
+		var lim: Vector2 = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > lim.x or sp.y > lim.y
+
+## 灼烧/剧毒跳伤结算；致死（dying）返回 true，调用方立即结束本帧
+func _tick_damage_over_time(delta: float) -> bool:
 	if burn_timer > 0.0:
 		burn_timer -= delta
 		_burn_tick += delta
@@ -281,7 +351,7 @@ func _physics_process(delta: float) -> void:
 			var b_dmg := GameBalance.burn_tick_damage(burn_dps, GameManager.elemental_damage, GameManager.synergy_burn_mult)
 			take_damage(b_dmg, Vector2.ZERO, false, true)
 			if dying:
-				return
+				return true
 		if burn_timer <= 0.0:
 			burn_dps = 0.0
 	if poison_timer > 0.0:
@@ -292,9 +362,13 @@ func _physics_process(delta: float) -> void:
 			var p_dmg := GameBalance.poison_tick_damage(poison_dps, GameManager.elemental_damage)
 			take_damage(p_dmg, Vector2.ZERO, false, true)
 			if dying:
-				return
+				return true
 		if poison_timer <= 0.0:
 			poison_dps = 0.0
+	return false
+
+## 有效移速 = 基础 ×（1-冰缓）× 光环；顺带处理冰缓染色与光环过期待遇失效
+func _effective_speed(delta: float) -> float:
 	var eff_speed: float = move_speed
 	if chill_timer > 0.0:
 		chill_timer -= delta
@@ -308,9 +382,10 @@ func _physics_process(delta: float) -> void:
 	# 鼓妖光环：被覆盖期间加速，过期待遇自动失效
 	if _aura_speed_mult != 1.0 and Time.get_ticks_msec() > _aura_until_ms:
 		_aura_speed_mult = 1.0
-	eff_speed *= _aura_speed_mult
+	return eff_speed * _aura_speed_mult
 
-	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
+## 受击卡肉/硬直计时与击退急刹擦地扬尘；返回硬直是否仍在
+func _tick_hit_stun(delta: float) -> bool:
 	var is_in_hit_freeze := _hit_freeze_timer > 0.0
 	if is_in_hit_freeze:
 		_hit_freeze_timer -= delta
@@ -324,25 +399,20 @@ func _physics_process(delta: float) -> void:
 		if _skid_dust_timer <= 0.0:
 			_skid_dust_timer = 0.045
 			JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), knockback_velocity)
+	return is_in_hit_stun
 
-	# 2. 追击玩家（平滑加速度 + 贴身防旋转抽搐）
-	var to_player: Vector2 = player.global_position - global_position
-	var dist_sq: float = to_player.length_squared()
-	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
-
-	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
-	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
-	var target_vel := Vector2.ZERO if is_in_hit_stun else (dir * eff_speed)
-
+## 行为支路推进：远程风筝 / 扑咬状态机 / 自爆引信 / 火球 / 产卵 / 光环 / 闪现。
+## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
+func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
-	if not is_in_hit_stun and preferred_range > 0.0:
+	if not _pp_stun and preferred_range > 0.0:
 		var dist := sqrt(dist_sq)
 		if dist < preferred_range - 30.0:
-			target_vel = -dir * eff_speed * 0.8
+			_pp_target_vel = -dir * eff_speed * 0.8
 		elif dist <= preferred_range + 30.0:
-			target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
+			_pp_target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
-	# 妖狼系的两套扑击（共用同一个移动出口 target_vel，靠 elif 链天然互斥）：
+	# 妖狼系的两套扑击（共用同一个移动出口 _pp_target_vel，靠 elif 链天然互斥）：
 	#   长扑 = 跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
 	#   短咬 = 贴进 charge_min_range 以内 → 下蹲预告（方向当帧锁死、之后不追踪）→ 小幅跃击咬一口
 	# 长扑的三件事必须同源，都取自 GameBalance.charge_reach：预警带长度、真实位移、扫掠判定。
@@ -355,11 +425,11 @@ func _physics_process(delta: float) -> void:
 		_bite_timer -= delta
 		var min_sq: float = charge_min_range * charge_min_range
 		var max_sq: float = charge_max_range * charge_max_range
-		
+
 		# 预警阶段：原地不动，画预警线
 		if _charge_windup > 0.0:
 			_charge_windup -= delta
-			target_vel = Vector2.ZERO
+			_pp_target_vel = Vector2.ZERO
 			_update_charge_warning(player)
 			if _charge_windup <= 0.0:
 				# 预警期间玩家贴进了「没跑道」的距离 ⇒ 就地转成短咬：它已经站桩预警了
@@ -370,7 +440,7 @@ func _physics_process(delta: float) -> void:
 					_launch_bite(dir)
 				else:
 					_start_charge(dir)
-		
+
 		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
 		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
 		# ⇒ 0.43s 才够到速度（锁定时长一半耗在起步上），冲刺结束后还留一段朝玩家拐弯的滑行尾巴
@@ -378,7 +448,7 @@ func _physics_process(delta: float) -> void:
 		elif _charge_active > 0.0:
 			_charge_active -= delta
 			velocity = _charge_dir * move_speed * charge_speed_mul
-			target_vel = velocity
+			_pp_target_vel = velocity
 			knockback_velocity = Vector2.ZERO
 			_clear_charge_warning()
 			if _charge_active <= 0.0:
@@ -389,7 +459,7 @@ func _physics_process(delta: float) -> void:
 			_charge_brake -= delta
 			var brake_k: float = maxf(_charge_brake / maxf(charge_brake_time, 0.0001), 0.0)
 			velocity = _charge_dir * (move_speed * charge_speed_mul) * brake_k
-			target_vel = velocity
+			_pp_target_vel = velocity
 			knockback_velocity = Vector2.ZERO
 			if _charge_brake <= 0.0:
 				_settle_charge_recovery()
@@ -397,12 +467,12 @@ func _physics_process(delta: float) -> void:
 		# 落空罚站：冲空了就是白给，玩家看得见「它过去了、站着不动」⇒ 躲开这条路才有奖励，而不只是没被打到
 		elif _charge_stagger > 0.0:
 			_charge_stagger -= delta
-			target_vel = Vector2.ZERO
-		
+			_pp_target_vel = Vector2.ZERO
+
 		# 短咬：下蹲预告。方向在锁死那一帧定、之后不追踪玩家（0.35s 还追踪就躲不开了）
 		elif _bite_windup > 0.0:
 			_bite_windup -= delta
-			target_vel = Vector2.ZERO
+			_pp_target_vel = Vector2.ZERO
 			if _bite_windup <= 0.0:
 				_launch_bite(_bite_dir)
 
@@ -410,7 +480,7 @@ func _physics_process(delta: float) -> void:
 		# 所以贴着它被蹭到的那一下不会和这一口叠加）
 		elif _bite_active > 0.0:
 			_bite_active -= delta
-			target_vel = _bite_dir * move_speed * bite_speed_mul
+			_pp_target_vel = _bite_dir * move_speed * bite_speed_mul
 			if not _bite_hit and dist_sq < bite_hit_radius * bite_hit_radius:
 				_bite_hit = true
 				player.take_damage(contact_damage * bite_damage_mul)
@@ -445,12 +515,12 @@ func _physics_process(delta: float) -> void:
 				AudioManager.play_sfx("enemy_fuse", 1.0)   ## 引信是递进爆点的倒计时，不是灵宝触体的钟
 		else:
 			_fuse -= delta
-			target_vel = Vector2.ZERO
-			anim_sprite.position.x = randf_range(-1.6, 1.6)
+			_pp_target_vel = Vector2.ZERO
+			anim_sprite.position.x = GameManager.rng.randf_range(-1.6, 1.6)
 			if _fuse <= 0.0:
 				anim_sprite.position.x = 0.0
 				_explode(player)
-				return
+				return true
 
 	# 御剑邪修：保持距离的同时周期性发射火球
 	if bolt_interval > 0.0 and _fuse < 0.0:
@@ -464,7 +534,7 @@ func _physics_process(delta: float) -> void:
 		_minion_timer -= delta
 		if _minion_timer <= 0.0:
 			_minion_timer = spawn_minion_interval
-			if get_tree().get_nodes_in_group("enemies").size() < GameBalance.ZHUMU_MINION_CAP:
+			if GameManager.enemy_count < GameBalance.ZHUMU_MINION_CAP:
 				_spawn_minion()
 
 	# 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速
@@ -481,13 +551,17 @@ func _physics_process(delta: float) -> void:
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
 
-	# 冲刺锁定段 = 匀速冲刺 + 收势刹车。这两段的位移与命中走廊由状态机自己说话，见下
+	return false
+
+## 速度解算：冲刺/收势锁定段由状态机逐帧写死（不交给插值、不被硬直夺走）；
+## 硬直期间位移纯由击退主导并快速衰减；平时吸附插值追击
+func _resolve_velocity(delta: float) -> void:
 	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
 	if charge_locked:
 		# velocity 已由状态机逐帧写死 ⇒ 既不交给吸附插值去改，
 		# 也不被受击硬直夺走（commit-through，与旧写法「硬直期间冲刺照冲」同一条口径）
 		pass
-	elif is_in_hit_stun and _bite_active <= 0.0:
+	elif _pp_stun and _bite_active <= 0.0:
 		velocity = knockback_velocity
 		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
 		var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN
@@ -496,17 +570,30 @@ func _physics_process(delta: float) -> void:
 		else:
 			knockback_velocity = Vector2.ZERO
 	else:
-		velocity = velocity.move_toward(target_vel, 900.0 * delta)
+		velocity = velocity.move_toward(_pp_target_vel, 900.0 * delta)
 		# 硬直结束时残余击退彻底清零，杜绝边追击边滑步的打冰球现象
 		knockback_velocity = Vector2.ZERO
-	var pos_before_move: Vector2 = global_position
-	move_and_slide()
 
-	# 界碑拦阻
-	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
-	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+## 受击视觉零分配衰减（2026-10-11）：挤压回弹（TRANS_BACK EASE_OUT 同款过冲曲线）
+## 与闪白衰减逐帧推进，替代原先每次受击 create_tween ×2 的分配热点
+func _tick_hit_fx(delta: float) -> void:
+	if _squash_t > 0.0:
+		_squash_t = maxf(0.0, _squash_t - delta)
+		var t := 1.0 - _squash_t / _squash_dur
+		var c1 := 1.70158
+		var e := 1.0 + (c1 + 1.0) * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0)
+		juice_scale = _squash_from.lerp(Vector2.ONE, clampf(e, 0.0, 1.0))
+	if _flash_t > 0.0:
+		_flash_t = maxf(0.0, _flash_t - delta)
+		if hit_flash_mat != null:
+			hit_flash_mat.set_shader_parameter("flash_modifier", clampf(_flash_t / _flash_down_dur, 0.0, 1.0))
+	if _flash_swap_t > 0.0:
+		_flash_swap_t -= delta
+		if _flash_swap_t <= 0.0 and hit_flash_mat != null:
+			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
 
-	# 受击视觉微反冲回弹（非自爆抖动期间生效，同步作用于精灵与程序化矢量视图）
+## 受击视觉：微反冲回弹（非自爆抖动期间生效，同步作用于精灵与程序化矢量视图）与后仰倾角衰减
+func _tick_hit_visuals(delta: float) -> void:
 	if _hit_jiggle_offset.length_squared() > 0.01:
 		_hit_jiggle_offset = _hit_jiggle_offset.lerp(Vector2.ZERO, minf(delta * 24.0, 1.0))
 	else:
@@ -522,6 +609,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		_hit_tilt = 0.0
 
+## 朝向迟滞 + 三档步态动画（步态腿帧 / 悬浮 / 蠕动）+ 程序化矢量视图同步
+func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void:
 	# 3. Sprite 方向 & 动画（带迟滞滤波 + 贴近锁定 + 移速步频自适应）
 	# 当怪物与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
 	if dist_sq > 324.0 and dir.length_squared() > 0.01:
@@ -534,7 +623,7 @@ func _physics_process(delta: float) -> void:
 	var current_speed := velocity.length()
 	var speed_ratio: float = (current_speed / move_speed) if move_speed > 0.0 else 1.0
 	# 受击硬直期间强制停步：不踏步、不迈腿；正常移动且实际位移足够才播跑步动画
-	var is_moving := (not is_in_hit_stun) and current_speed > maxf(20.0, move_speed * 0.2)
+	var is_moving := (not _pp_stun) and current_speed > maxf(20.0, move_speed * 0.2)
 
 	if locomotion_mode == "hover":
 		# 悬浮：不切腿帧（单姿势图集），浮沉/侧倾/纵向意图由程序驱动。
@@ -547,7 +636,7 @@ func _physics_process(delta: float) -> void:
 		if is_moving and current_speed > 0.01:
 			vel_dir = velocity / current_speed
 		var advance := 0.0
-		if not is_in_hit_stun:
+		if not _pp_stun:
 			advance = vel_dir.dot(dir)
 		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
 		RunMotion.apply_hover(anim_sprite, current_base, is_moving, vel_dir, delta, speed_ratio, shadow_sprite, advance)
@@ -574,7 +663,7 @@ func _physics_process(delta: float) -> void:
 		procedural_view.modulate = anim_sprite.modulate
 		procedural_view.is_moving = is_moving
 		procedural_view.speed_ratio = speed_ratio
-		if is_in_hit_stun:
+		if _pp_stun:
 			procedural_view.bank_angle = _hit_tilt
 		elif locomotion_mode == "hover":
 			var vel_dir := Vector2.ZERO
@@ -589,6 +678,8 @@ func _physics_process(delta: float) -> void:
 		else:
 			procedural_view.special_state = 0.0
 
+## 冲刺走廊扫掠结算 + 玩家接触伤害判定（石岳反震与接触伤害同一把尺子）
+func _resolve_contact_damage(player: Node2D, pos_before_move: Vector2) -> void:
 	# 3.6 冲刺走廊扫掠结算：判定走的是「狼身这一帧扫过的那一段」，独立于本体碰撞。
 	# 旧写法长扑只有下面那条身位滑碰（狼 19.5 + 玩家 14 = 33.5px）这一个出口，
 	# 而预警 0.8s 够玩家横移 168px ⇒ 只要动一下就必然躲开，整个技能形同虚设
@@ -596,6 +687,7 @@ func _physics_process(delta: float) -> void:
 	# ⇒ 近距离打得人、远距离打不到，威胁段刚好落在最不需要威胁的地方。
 	# 伤害只走 player.take_damage 这一个口子：无敌帧/闪避/护甲/受创反馈全复用，
 	# 不在这里发第二次反馈（同短咬那处口径）；一个 flag 钉死「一次冲刺只碾一下」。
+	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
 	if charge_locked and not _charge_hit:
 		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, player.global_position)
 		if closest.distance_to(player.global_position) <= charge_hit_radius:
@@ -685,23 +777,21 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-	# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）
+	# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
+	# 命中瞬间拉满 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
+	# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）
 	if hit_flash_mat != null:
-		if flash_tween != null and flash_tween.is_valid():
-			flash_tween.kill()
-		flash_tween = create_tween()
 		if is_crit:
 			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 1.0, 0.02)
-			flash_tween.tween_callback(func():
-				if hit_flash_mat != null:
-					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
-			)
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.12)
+			_flash_t = 0.12
+			_flash_down_dur = 0.12
+			_flash_swap_t = 0.02
 		else:
 			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 1.0, 0.02)
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.11)
+			_flash_t = 0.11
+			_flash_down_dur = 0.11
+			_flash_swap_t = 0.0
+		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
 
 	if current_hp <= 0.0:
 		# 斩杀加成：致命一刀击退放大（尸体随爆散朝打击方向飞出）；
@@ -855,14 +945,15 @@ func _clear_bite_warning() -> void:
 func _fire_bolt(player: Node2D) -> void:
 	var base_dir: Vector2 = (player.global_position - global_position).normalized()
 	for i in range(maxi(1, bolt_count)):
-		var bolt := EnemyBolt.new()
+		# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
+		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		var offset_ang := 0.0
 		if bolt_count > 1:
 			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
 		bolt.direction = base_dir.rotated(offset_ang)
 		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
-		get_parent().add_child(bolt)
+		bolt.activate()
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
 
@@ -871,7 +962,7 @@ func _fire_bolt(player: Node2D) -> void:
 
 func _pulse_buff_aura() -> void:
 	var radius_sq := buff_radius * buff_radius
-	for e in get_tree().get_nodes_in_group("enemies"):
+	for e in GameManager.live_enemies:
 		if e == self or not (e is EnemyBase) or e.dying:
 			continue
 		if global_position.distance_squared_to(e.global_position) <= radius_sq:
@@ -994,14 +1085,15 @@ func _die() -> void:
 		gem_count = 0
 	if heal_orb_drop > 0 and gem_count > 0:
 		gem_count = 0
-		var orb := HealOrb.new()
+		# 回复珠走对象池（2026-10-11，与宝石同一条路）
+		var orb := HealOrb.acquire_or_new(get_parent())
 		orb.global_position = global_position
 		orb.heal_amount = float(heal_orb_drop)
-		get_parent().call_deferred("add_child", orb)
+		orb.activate()
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-		var offset = Vector2.ZERO if gem_count == 1 else Vector2(randf_range(-24.0, 24.0), randf_range(-24.0, 24.0))
+		var offset = Vector2.ZERO if gem_count == 1 else Vector2(GameManager.rng.randf_range(-24.0, 24.0), GameManager.rng.randf_range(-24.0, 24.0))
 		gem.global_position = global_position + offset
 		gem.exp_value = exp_reward
 		gem.is_gold = is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
@@ -1012,8 +1104,13 @@ func _die() -> void:
 	set_physics_process(false)
 	$CollisionShape2D.set_deferred("disabled", true)
 	$Hurtbox/CollisionShape2D.set_deferred("disabled", true)
-	if squash_tween != null and squash_tween.is_valid():
-		squash_tween.kill()
+	# 尸体停帧后 _tick_hit_fx 不再跑：闪白与挤压就地归位，别让尸体挂着半截闪白消散
+	_squash_t = 0.0
+	juice_scale = Vector2.ONE
+	_flash_t = 0.0
+	_flash_swap_t = 0.0
+	if hit_flash_mat != null:
+		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 
 		# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
 		var tw = create_tween()

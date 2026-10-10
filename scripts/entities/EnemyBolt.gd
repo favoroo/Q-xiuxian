@@ -19,12 +19,50 @@ const BODY_COLOR := Color(1.0, 0.45, 0.12)   ## 球体
 const CORE_COLOR := Color(1.0, 0.87, 0.45)   ## 高光芯
 const RIM_COLOR := Color(0.42, 0.07, 0.04)   ## 硬描边，压在判定圆内侧
 
+# —— 对象池（2026-10-11，照 AstralGem/BladeProjectile 模式）——
+## 御剑邪修周期直射 + 魔君环弹齐射（一圈 18+ 发）每次 new()+queue_free，Area2D + 碰撞体
+## 全套生命周期分配是波次卡顿源。死亡/到期回池休眠，activate() 全量重置。
+## 兼容约定：裸 new() + add_child 的旧路径（预览/单测）保持原行为不受影响。
+const POOL_CAP := 96
+const BASE_LIFETIME := 3.0   ## 场景默认寿命：activate 复用时重置的基准
+static var _pool: Array[EnemyBolt] = []
+static var _host: Node2D = null
+static var created_count: int = 0    ## 累计 instantiate 数（PoolCheck 断言用）
+static var reused_count: int = 0     ## 累计池复用数
+
+static func _ensure_host(parent: Node) -> void:
+	if _host != null and is_instance_valid(_host):
+		return
+	_pool.clear()   # 旧宿主已失效，残留池引用一并作废
+	_host = Node2D.new()
+	_host.name = "EnemyBoltPool"
+	parent.add_child(_host)
+
+## 取一颗火球（优先复用）：发射方在调用后写 global_position/direction/speed/damage/scale_factor，
+## 最后调 activate() 出膛
+static func acquire(parent: Node) -> EnemyBolt:
+	_ensure_host(parent)
+	while not _pool.is_empty():
+		var b: EnemyBolt = _pool.pop_back()
+		if is_instance_valid(b):
+			reused_count += 1
+			return b
+	var nb := EnemyBolt.new()
+	created_count += 1
+	_host.add_child(nb)
+	return nb
+
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 300.0
 var damage: float = 6.0
 var lifetime: float = 3.0
 var scale_factor: float = 1.0  ## 整体缩放（Boss 环弹比普通火球大），外观与碰撞一起缩
 var radius: float = RADIUS     ## 实际判定半径 = RADIUS × scale_factor，_ready 里定一次
+
+## 池状态与 _ready 建好的节点引用（复用时 activate 重铺要用）
+var _pooled: bool = false
+var _shape_node: CollisionShape2D = null
+var _circle: CircleShape2D = null
 
 func _ready() -> void:
 	collision_layer = 0
@@ -39,8 +77,42 @@ func _ready() -> void:
 	circle.radius = radius
 	shape.shape = circle
 	add_child(shape)
+	_shape_node = shape
+	_circle = circle
 
 	body_entered.connect(_on_body_entered)
+
+## 出膛激活：池化后 _ready 只在首建时跑过，所有依赖字段的视觉与物理状态
+## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
+##   direction/speed/damage/lifetime/scale_factor ⇒ radius/碰撞圆/寿命
+func activate() -> void:
+	_pooled = false
+	visible = true
+	rotation = 0.0
+	radius = RADIUS * maxf(scale_factor, 0.05)
+	if _circle != null:
+		_circle.radius = radius
+		queue_redraw()
+	lifetime = BASE_LIFETIME
+	set_physics_process(true)
+	# 碰撞恢复必须走 deferred：同一帧「回收→复用」时，回收的 disabled=true deferred
+	# 会在帧末 flush，直接赋值的 false 会被它覆盖（照 BladeProjectile.activate 同一条坑）
+	set_deferred("monitoring", true)
+	_shape_node.set_deferred("disabled", false)
+
+## 回收入池（替代 queue_free）：休眠物理与碰撞，池满或宿主失效才真释放
+func _recycle() -> void:
+	if _pooled:
+		return
+	_pooled = true
+	set_physics_process(false)
+	set_deferred("monitoring", false)
+	_shape_node.set_deferred("disabled", true)
+	visible = false
+	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
+		queue_free()
+		return
+	_pool.append(self)
 
 func _draw() -> void:
 	# 描边中心放在 radius - 1、线宽 2 ⇒ 最外沿正好压在判定圆上，视觉永不超过实际范围
@@ -52,10 +124,10 @@ func _physics_process(delta: float) -> void:
 	position += direction * speed * delta
 	lifetime -= delta
 	if lifetime <= 0.0:
-		queue_free()
+		_recycle()
 
 func _on_body_entered(body: Node) -> void:
 	if body is Player:
 		body.take_damage(damage)
 		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, direction, false)
-		queue_free()
+		_recycle()

@@ -223,103 +223,104 @@ func refresh() -> void:
 
 	var reg: float = float(stats["hp_regen"])
 	_regen_val_lbl.text = "+%.1f / 秒" % reg
-	_regen_val_lbl.add_theme_color_override("font_color", _c(reg))
+	_regen_val_lbl.add_theme_color_override("font_color", _c_row(reg))
 
 	var ls_pct: float = float(stats["lifesteal_pct"])
 	_lifesteal_val_lbl.text = "%.0f%%" % ls_pct
-	_lifesteal_val_lbl.add_theme_color_override("font_color", _c(ls_pct))
+	_lifesteal_val_lbl.add_theme_color_override("font_color", _c_row(ls_pct))
 
 	var dmg_bonus: float = float(stats["damage_bonus_pct"])
 	_atk_val_lbl.text = "%s%.0f%%" % ["+" if dmg_bonus >= 0 else "", dmg_bonus]
-	_atk_val_lbl.add_theme_color_override("font_color", _c(dmg_bonus))
+	_atk_val_lbl.add_theme_color_override("font_color", _c_row(dmg_bonus))
 
 	var melee_v: float = float(stats["melee_damage"])
 	_melee_val_lbl.text = "%s%.0f" % ["+" if melee_v > 0 else "", melee_v]
-	_melee_val_lbl.add_theme_color_override("font_color", _c(melee_v))
+	_melee_val_lbl.add_theme_color_override("font_color", _c_row(melee_v))
 
 	var ranged_v: float = float(stats["ranged_damage"])
 	_ranged_val_lbl.text = "%s%.0f" % ["+" if ranged_v > 0 else "", ranged_v]
-	_ranged_val_lbl.add_theme_color_override("font_color", _c(ranged_v))
+	_ranged_val_lbl.add_theme_color_override("font_color", _c_row(ranged_v))
 
 	var elem_v: float = float(stats["elemental_damage"])
 	_elem_val_lbl.text = "%s%.0f" % ["+" if elem_v > 0 else "", elem_v]
-	_elem_val_lbl.add_theme_color_override("font_color", _c(elem_v))
+	_elem_val_lbl.add_theme_color_override("font_color", _c_row(elem_v))
 
 	var eng_v: float = float(stats["engineering_damage"])
 	_eng_val_lbl.text = "%s%.0f" % ["+" if eng_v > 0 else "", eng_v]
-	_eng_val_lbl.add_theme_color_override("font_color", _c(eng_v))
+	_eng_val_lbl.add_theme_color_override("font_color", _c_row(eng_v))
 
 	var cdr: float = float(stats["cdr_pct"])
 	_haste_val_lbl.text = "%s%.1f%%" % ["+" if cdr > 0 else "", cdr]
-	_haste_val_lbl.add_theme_color_override("font_color", _c(cdr))
+	_haste_val_lbl.add_theme_color_override("font_color", _c_row(cdr))
 
 	var cr: float = float(stats["crit_rate_pct"])
 	var cdmg: float = float(stats["crit_dmg_pct"]) / 100.0
 	_crit_val_lbl.text = "%.0f%% (%.1f×)" % [cr, cdmg]
-	_crit_val_lbl.add_theme_color_override("font_color", GameStyle.GOOD if cr > 5.0 or cdmg > 1.5 else GameStyle.PAPER)
+	_crit_val_lbl.add_theme_color_override("font_color", GameStyle.GOOD if cr > 5.0 or cdmg > 1.5 else GameStyle.PAPER_DIM)
 
 	var rng_bonus: float = float(stats["attack_range_pct"])
 	_range_val_lbl.text = "%s%.0f%%" % ["+" if rng_bonus >= 0 else "", rng_bonus]
-	_range_val_lbl.add_theme_color_override("font_color", _c(rng_bonus))
+	_range_val_lbl.add_theme_color_override("font_color", _c_row(rng_bonus))
 
 	var arm: float = float(stats["armor"])
 	_armor_val_lbl.text = "%.0f (减伤 %.0f%%)" % [arm, float(stats["dmg_reduction_pct"])]
-	_armor_val_lbl.add_theme_color_override("font_color", _c(arm))
+	_armor_val_lbl.add_theme_color_override("font_color", _c_row(arm))
 
 	var dodge_pct: float = float(stats["dodge_pct"])
 	_dodge_val_lbl.text = "%.0f%%" % dodge_pct
-	_dodge_val_lbl.add_theme_color_override("font_color", _c(dodge_pct))
+	_dodge_val_lbl.add_theme_color_override("font_color", _c_row(dodge_pct))
 
 	var spd_bonus: float = float(stats["move_speed_bonus_pct"])
 	_speed_val_lbl.text = "%.0f (%s%.0f%%)" % [float(stats["move_speed"]), "+" if spd_bonus >= 0 else "", spd_bonus]
-	_speed_val_lbl.add_theme_color_override("font_color", _c(spd_bonus))
+	_speed_val_lbl.add_theme_color_override("font_color", _c_row(spd_bonus))
 
 	var luck_v: float = float(stats["luck"])
 	_luck_val_lbl.text = "%s%.0f" % ["+" if luck_v > 0 else "", luck_v]
-	_luck_val_lbl.add_theme_color_override("font_color", _c(luck_v))
+	_luck_val_lbl.add_theme_color_override("font_color", _c_row(luck_v))
 
 	var harvest_v: float = float(stats["harvest"])
 	_harvest_val_lbl.text = "%.0f (波末 +%d)" % [harvest_v, GameBalance.harvest_gain(harvest_v)]
-	_harvest_val_lbl.add_theme_color_override("font_color", _c(harvest_v))
+	_harvest_val_lbl.add_theme_color_override("font_color", _c_row(harvest_v))
 
 	# 2. 左侧次要属性刷新
 	var pk_bonus: float = float(stats["pickup_bonus_pct"])
 	_pickup_val_lbl.text = "%.0f (%s%.0f%%)" % [float(stats["pickup_radius"]), "+" if pk_bonus >= 0 else "", pk_bonus]
-	_pickup_val_lbl.add_theme_color_override("font_color", _c(pk_bonus))
+	_pickup_val_lbl.add_theme_color_override("font_color", _c_row(pk_bonus))
 
 	var xp_pct: float = float(stats["xp_gain_pct"])
 	_xp_gain_val_lbl.text = "%s%.0f%%" % ["+" if xp_pct >= 0 else "", xp_pct]
-	_xp_gain_val_lbl.add_theme_color_override("font_color", _c(xp_pct))
+	_xp_gain_val_lbl.add_theme_color_override("font_color", _c_row(xp_pct))
 
 	var elite_pct: float = float(stats["elite_damage_pct"])
 	_elite_dmg_val_lbl.text = "%s%.0f%%" % ["+" if elite_pct >= 0 else "", elite_pct]
-	_elite_dmg_val_lbl.add_theme_color_override("font_color", _c(elite_pct))
+	_elite_dmg_val_lbl.add_theme_color_override("font_color", _c_row(elite_pct))
 
 	var kb_pct: float = float(stats["knockback_pct"])
 	_knockback_val_lbl.text = "%s%.0f%%" % ["+" if kb_pct >= 0 else "", kb_pct]
-	_knockback_val_lbl.add_theme_color_override("font_color", _c(kb_pct))
+	_knockback_val_lbl.add_theme_color_override("font_color", _c_row(kb_pct))
 
 	var pierce_v: int = int(stats["bonus_pierce"])
 	_pierce_val_lbl.text = "%s%d" % ["+" if pierce_v > 0 else "", pierce_v]
-	_pierce_val_lbl.add_theme_color_override("font_color", _c(float(pierce_v)))
+	_pierce_val_lbl.add_theme_color_override("font_color", _c_row(float(pierce_v)))
 
 	var th_pct: float = float(stats.get("thorns_pct", 0.0))
 	_thorns_val_lbl.text = "%s%.0f%%" % ["+" if th_pct > 0 else "", th_pct]
-	_thorns_val_lbl.add_theme_color_override("font_color", _c(th_pct))
+	_thorns_val_lbl.add_theme_color_override("font_color", _c_row(th_pct))
 
 	var sp_pct: float = float(stats["shop_price_pct"])
 	_shop_price_val_lbl.text = "%s%.0f%%" % ["+" if sp_pct >= 0 else "", sp_pct]
 	# 物价降低是好事（绿色），物价上涨是坏事（红色）
-	_shop_price_val_lbl.add_theme_color_override("font_color", _c(-sp_pct))
+	_shop_price_val_lbl.add_theme_color_override("font_color", _c_row(-sp_pct))
 
 	var fr_v: int = int(stats["free_rerolls"])
 	_free_rerolls_val_lbl.text = "%d 次" % fr_v
-	_free_rerolls_val_lbl.add_theme_color_override("font_color", _c(float(fr_v)))
+	_free_rerolls_val_lbl.add_theme_color_override("font_color", _c_row(float(fr_v)))
 
 	_stones_val_lbl.text = "%d 枚" % GameManager.spirit_stones
-	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE if GameManager.spirit_stones > 0 else GameStyle.PAPER)
+	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE if GameManager.spirit_stones > 0 else GameStyle.PAPER_DIM)
 
 	_kills_val_lbl.text = "%d 杀" % GameManager.kills
+	_kills_val_lbl.add_theme_color_override("font_color", GameStyle.PAPER if GameManager.kills > 0 else GameStyle.PAPER_DIM)
 
 	# 3. 右侧道统卡、法器、流派羁绊、法宝与历史刷新
 	_refresh_cultivator()
@@ -531,4 +532,11 @@ func _cultivator_name() -> String:
 
 func _c(v: float) -> Color:
 	return StatsTipFactory._c(v)
+
+## 面板行专用判色（2026-10-11 土豆兄弟式口径）：非零走正绿负红，零值压暗灰白——
+## 一眼只看见「有修炼成果」的那几行； stones 灵石与暴击等特殊口径在 refresh 里单独处理
+func _c_row(v: float) -> Color:
+	if absf(v) < 0.0001:
+		return GameStyle.PAPER_DIM
+	return _c(v)
 

@@ -33,6 +33,19 @@ static func item_price(base: int, wave: int, price_mult: float) -> int:
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + maxi(wave, 1)) * price_mult)
 
+## 回气丹回复量：按气血上限的比例。货架卡上印的数、气血详情卡里说的数、ShopSystem 真喂给
+## heal() 的数，三处都从这一个出口拿（2026-10-11 用户：「商店界面也要显示血量，
+## 不然也不知道回复道具要不要买」——要能判断，卡面上的数就必须是真会兑现的那个数）。
+const POTION_HEAL_RATIO := 0.5
+
+static func potion_heal_amount(max_hp: float) -> float:
+	return maxf(0.0, max_hp) * POTION_HEAL_RATIO
+
+## 这一口现在实际回得上多少：heal() 会把超出上限的那截丢掉，卡面上就不许把它算进读数。
+## 满血时是 0 —— 货架卡据此出红字「+0」，买前就看得见「这钱白花」。
+static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
+	return minf(potion_heal_amount(max_hp), maxf(0.0, max_hp - cur_hp))
+
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return int(float(REROLL_BASE + maxi(wave, 1) * REROLL_WAVE_STEP + maxi(reroll_count, 0) * REROLL_COUNT_STEP) * price_mult)
 
@@ -48,6 +61,21 @@ static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> flo
 	if wave < growth_wave_cap:
 		return harvest * HARVEST_GROWTH
 	return harvest
+
+# ---------------- 妖潮预算补差 ----------------
+
+## 波内总刷入预算（BalanceWave.wave_spawn_budget）收紧后，被预算拦下的怪不再掉宝石，
+## 经验收入随之下滑。波末按「未刷出只数 × 均值」折成经验找平，商店/加点购买力不变。
+## 均值优先用本波实际刷出敌人的 exp_reward 均值（WaveSpawner 现场统计），
+## 一只都没刷出来的极端波次才落兜底值。
+const BUDGET_COMP_EXP_FALLBACK := 2.0
+
+## 补差经验 = 未刷出只数 × 每只期望经验（未刷出 ≤0 就是 0）
+static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
+	if shortfall <= 0:
+		return 0
+	var eff_avg := avg_exp if avg_exp > 0.0 else BUDGET_COMP_EXP_FALLBACK
+	return int(round(float(shortfall) * eff_avg))
 
 # ---------------- 残丹化灵（波末没贴上去吃掉的回复珠）----------------
 

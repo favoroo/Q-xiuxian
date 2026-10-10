@@ -265,7 +265,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 		var filled := i < summary.size()
 		var locked := i >= max_slots
 		var border_col: Color = GameStyle.GOLD if filled else GameStyle.LINE
-		var bg_col: Color = GameStyle.NAVY if filled else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.45)
+		var bg_col: Color = GameStyle.NAVY if filled else GameStyle.with_alpha(GameStyle.INK, 0.45)
 		var sb_off := GameStyle.outlined_panel(bg_col, border_col, 2, 0.0)
 		slot.add_theme_stylebox_override("panel", sb_off)
 		slot.set_meta("sb_flat", sb_off)

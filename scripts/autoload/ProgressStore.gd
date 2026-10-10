@@ -46,8 +46,6 @@ static func load_into(gm: Node) -> void:
 		var vlog = cfg.get_value("records", "victory_log", [])
 		gm.victory_log = vlog.duplicate() if vlog is Array else []
 
-		gm.tutorial_seen = bool(cfg.get_value("progress", "tutorial_seen", false))
-
 		var hist = cfg.get_value("history", "recent_runs", [])
 		gm.run_history = hist.duplicate() if hist is Array else []
 	else:
@@ -86,7 +84,8 @@ static func save_from(gm: Node) -> void:
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
 	cfg.set_value("records", "cultivator_records", gm.cultivator_records)
 	cfg.set_value("records", "victory_log", gm.victory_log)
-	cfg.set_value("progress", "tutorial_seen", gm.tutorial_seen)
+	# 新手指南「下次不弹出」是玩家偏好，2026-10-11 起落 user://settings.cfg
+	# （SettingsManager.tutorial_muted），不再占用局外进度存档的 tutorial_seen 位。
 	cfg.set_value("history", "recent_runs", gm.run_history)
 	cfg.save(PROGRESS_PATH)
 

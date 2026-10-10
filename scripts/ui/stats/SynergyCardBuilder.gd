@@ -22,7 +22,7 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 	card.custom_minimum_size = Vector2(168, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var border_col: Color = (GameStyle.JADE if is_elem else GameStyle.GOLD) if lv > 0 else GameStyle.LINE
-	var bg_col: Color = GameStyle.NAVY2 if lv > 0 else Color(GameStyle.INK.r, GameStyle.INK.g, GameStyle.INK.b, 0.78)
+	var bg_col: Color = GameStyle.NAVY2 if lv > 0 else GameStyle.with_alpha(GameStyle.INK, 0.78)
 	var sb_flat := GameStyle.outlined_panel(bg_col, border_col, 2 if lv > 0 else 1, 0.0)
 	sb_flat.content_margin_left = 8.0
 	sb_flat.content_margin_top = 5.0

@@ -47,6 +47,21 @@ func _test_pricing() -> void:
 	_c.near(GameBalance.tag_filter_mult(["spirit"], ["sword"]), GameBalance.TAG_FILTER_LEAK, EPS, "未命中 → LEAK 漏出权重")
 	_c.near(GameBalance.tag_filter_mult(["sword", "spirit"], ["sword"]), GameBalance.TAG_FILTER_BONUS, EPS, "多 tag 命中其一即 BONUS")
 
+	# 回气丹回多少：货架卡、气血徽记拆解与 ShopSystem 的 heal() 三处共用这一条，
+	# 卡上不许印一个兑现不了的量（缺血不够就按缺血截断，满血就是 0）
+	_c.near(GameBalance.potion_heal_amount(120.0), 60.0, EPS, "名义量 = 上限 × POTION_HEAL_RATIO")
+	_c.near(GameBalance.potion_heal_amount(0.0), 0.0, EPS, "空载（没有 Player）回 0，不出 NaN")
+	_c.near(GameBalance.potion_effective_heal(120.0, 100.0), 20.0, EPS, "缺血 20 → 只回得上 20")
+	_c.near(GameBalance.potion_effective_heal(120.0, 50.0), 60.0, EPS, "缺血够 → 回满名义量")
+	_c.near(GameBalance.potion_effective_heal(120.0, 120.0), 0.0, EPS, "满血 → 0（买就是白花钱）")
+	_c.near(GameBalance.potion_effective_heal(0.0, 0.0), 0.0, EPS, "空载 → 0")
+	# 危险档只有一把尺：HUD 血字与灵石阁徽记都走 hp_is_low，阈值挪了两边一起动
+	_c.check(GameBalance.hp_is_low(30.0, 120.0), "剩 25% 算危险（低于 HP_LOW_RATIO）")
+	_c.check(not GameBalance.hp_is_low(40.0, 120.0), "剩 33% 不算危险")
+	_c.check(not GameBalance.hp_is_low(30.0, 0.0), "空载（上限 0）不许报危险，也不许除零")
+	_c.check(GameBalance.hp_is_full(119.6, 120.0), "差半点在四舍五入内算满血")
+	_c.check(not GameBalance.hp_is_full(119.0, 120.0), "差 1 点不算满血")
+
 func _test_harvest() -> void:
 	_c.equals(GameBalance.harvest_gain(7.6), 8, "灵韵发放四舍五入")
 	_c.equals(GameBalance.harvest_gain(0.4), 0, "不足 0.5 不发")
@@ -57,6 +72,12 @@ func _test_harvest() -> void:
 	for w in range(1, 16):
 		h = GameBalance.harvest_next(h, w, 16)
 	_c.near(h, 100.0 * pow(1.05, 15), 0.01, "15 次复利累计正确")
+	# 刷怪预算补差（2026-10-11）：预算没花完的部分波末折经验找平，减潮不减收入
+	_c.equals(GameBalance.budget_compensation_exp(0, 2.0), 0, "预算零未刷出 → 零补差")
+	_c.equals(GameBalance.budget_compensation_exp(-3, 2.0), 0, "负差额按 0 收")
+	_c.equals(GameBalance.budget_compensation_exp(10, 0.0), 20, "均值缺失落兜底 2")
+	_c.equals(GameBalance.budget_compensation_exp(10, 1.5), 15, "均值生效：10 只 × 1.5")
+	_c.equals(GameBalance.budget_compensation_exp(7, 2.4), 17, "四舍五入：16.8 → 17")
 
 func _test_rarity_weights() -> void:
 	var base: Dictionary = GameBalance.rarity_weights(0.0)

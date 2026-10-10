@@ -8,14 +8,19 @@ tools/run_test.py — 修仙幸存者自动化测试与防挂起运行器
 3. 提取结果关键词与错误堆栈，清晰输出测试摘要
 4. 支持一键清理后台遗留的无头 Godot 僵尸进程 (--clean-zombies)
 5. 支持一键跑通 6 大核心基线测试 (--core)
+6. 全量回归：扫描 tests/*.tscn 全跑，跳过现场预览类 (--all)
+7. 秒级门禁：仅跑 UnitRunner 数值单测 (--quick，pre-commit 钩子用)
 
 用法示例：
   python3 tools/run_test.py UnitRunner
-  python3 tools/run_test.py --core
+  python3 tools/run_test.py --quick     # 秒级数值门禁
+  python3 tools/run_test.py --core      # 6 大核心基线
+  python3 tools/run_test.py --all       # 全量判据回归
   python3 tools/run_test.py --clean-zombies
 """
 
 import argparse
+import glob
 import os
 import signal
 import subprocess
@@ -32,6 +37,26 @@ CORE_TESTS = [
     "res://tests/FontCoverageCheck.tscn",
     "res://tests/BalanceSimCheck.tscn",
 ]
+
+# --all 全量回归时跳过的场景：需要真实出声/出图的现场预览（headless 下无意义），以及明确不适合批量跑的
+ALL_SKIP_PATTERNS = ("Preview", "AudioGallery")
+# 名字不带 Preview 但同样 headless 跑不了的：WeaponHeadFusionCheck 要真实窗口出图（文件头有说明），
+# WeaponProbe 是"一件法器一进程"的手动实测台（非判据，必须带 -- --only <weapon> 参数）
+ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn"}
+
+
+def discover_all_tests():
+    """扫描 tests/*.tscn 全部判据场景，返回 (targets, skipped_names)"""
+    tests_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tests")
+    scenes = sorted(glob.glob(os.path.join(tests_dir, "*.tscn")))
+    targets, skipped = [], []
+    for p in scenes:
+        name = os.path.basename(p)
+        if name in ALL_SKIP_NAMES or any(k in name for k in ALL_SKIP_PATTERNS):
+            skipped.append(name)
+            continue
+        targets.append("res://tests/" + name)
+    return targets, skipped
 
 def clean_zombies() -> int:
     """清理后台遗留的无头 Godot 僵尸进程"""
@@ -152,6 +177,8 @@ def main():
     parser = argparse.ArgumentParser(description="修仙幸存者安全测试运行工具")
     parser.add_argument("tests", nargs="*", help="要运行的测试名称或场景路径")
     parser.add_argument("--core", action="store_true", help="运行 6 大核心基线测试")
+    parser.add_argument("--all", action="store_true", help="扫描 tests/*.tscn 全量回归（跳过需真实出声出图的 Preview/Gallery）")
+    parser.add_argument("--quick", action="store_true", help="秒级门禁：仅跑 UnitRunner 数值单测（pre-commit 用）")
     parser.add_argument("--clean-zombies", action="store_true", help="清理后台挂起的无头 Godot 进程")
     parser.add_argument("--timeout", type=float, default=25.0, help="单项测试超时秒数（默认 25s）")
 
@@ -161,8 +188,15 @@ def main():
         sys.exit(clean_zombies())
 
     targets = []
+    if args.quick:
+        targets.append("res://tests/UnitRunner.tscn")
     if args.core:
         targets.extend(CORE_TESTS)
+    if args.all:
+        all_targets, skipped = discover_all_tests()
+        targets.extend(all_targets)
+        if skipped:
+            print(f"[SKIP] --all 跳过 {len(skipped)} 个现场预览场景: {', '.join(skipped)}")
 
     for t in args.tests:
         targets.append(resolve_scene_path(t))

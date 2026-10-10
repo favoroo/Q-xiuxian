@@ -7,6 +7,9 @@ extends Control
 ## 货架卡构建在 ShopOfferCardFactory、法器悬浮菜单在 ShopWeaponTip、陈列槽位在 ShopInventoryRow。
 
 signal stats_requested
+## 查流派法器总表：filter_tag 为 "" 时打开武器图鉴不筛选（顶栏按钮），
+## 否则直达并预选该流派（羁绊详情卡「查看该流派法器」）；Main 接线到 ManualDialog
+signal manual_requested(filter_tag: String)
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
 @onready var stones_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/StonesChip/StonesLabel
@@ -166,6 +169,8 @@ static func shelf_needs_h_slide(screen: Vector2, count: int) -> bool:
 ## 第二行：左羁绊、右「怎么用？」（原 OwnedLabel 那一整行提示搬进点按可得的详情卡）
 var _info_bar: HBoxContainer = null
 var _synergy_box: HBoxContainer = null
+## 顶栏气血徽记（见 ShopHpChip 头注）：买不买回复道具的依据就印在这一屏
+var _hp_chip: ShopHpChip = null
 ## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
 var _screen: Vector2 = Vector2(960, 540)
 
@@ -198,6 +203,23 @@ func _ready() -> void:
 	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(func(): stats_requested.emit())
 	top_bar.add_child(stats_btn)
+
+	# 「图鉴」插在「属性」左边：买武器的间隙随时查流派法器总表；
+	# 更顺的一条路是点上面羁绊签（如「召唤 (6/5)」）详情卡里的直达按钮（见 _open_shop_synergy_tip）
+	var manual_btn := Button.new()
+	manual_btn.text = "图 鉴"
+	manual_btn.custom_minimum_size = Vector2(72, 32)
+	manual_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(manual_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	manual_btn.pressed.connect(func(): manual_requested.emit(""))
+	top_bar.add_child(manual_btn)
+	top_bar.move_child(manual_btn, stats_btn.get_index())
+
+	# 气血徽记插在「金币」左边：这两颗是同一类东西（这一屏上仅有的两个资源读数），
+	# 买回气丹要在它们之间来回比 —— 隔成一左一右就得靠记忆算账（见 ShopHpChip 头注）。
+	_hp_chip = ShopHpChip.new(self)
+	top_bar.add_child(_hp_chip)
+	top_bar.move_child(_hp_chip, stones_label.get_parent().get_index())
 
 	# 第二行：左边羁绊总览，右边「怎么用？」。原先这一屏有两行纯文字（羁绊行 + 操作提示行），
 	# 合起来吃掉 25+8 单位竖向预算；提示是「想知道才看」的东西 ⇒ 收进点按可得的详情卡。
@@ -236,7 +258,10 @@ func _refresh_synergy_bar() -> void:
 		_synergy_box.add_child(chip_lbl)
 
 func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
-	SynergyUI.open_tip(self, anchor, tag)
+	# 详情卡底部给一键直达：跳图鉴武器页并按该流派筛选（DetailTip 会先收卡再回调）
+	SynergyUI.open_tip(self, anchor, tag, "", "", [], [
+		{"text": "查看该流派法器", "callback": func() -> void: manual_requested.emit(tag)},
+	])
 
 ## 「怎么用？」：原先钉在货架下方那一整行的操作提示，收进点按可得的详情卡
 ## （触屏无 hover，说明必须点得到；这一行省下来的竖向预算全给货架）。
@@ -311,12 +336,21 @@ func _layout_for_viewport() -> void:
 ## animate=false 时卡片直接就位、不重播入场动画：买入一件/切换锁定这类操作型刷新
 ## 不该把整排卡的注意力拽走（2026-10-10 用户指令优化）；开店与重掷（真换了新货）才播。
 func refresh(animate: bool = true) -> void:
+	# 整排卡要重建 ⇒ 先收掉还开着的详情卡：卡上印的是刚才那批数，买入/锁定之后就是旧账
+	DetailTip.close_all(self)
 	stones_label.text = "金币 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
+	# 气血读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
+	var hp_stats: Dictionary = GameManager.get_player_stat_dict()
+	_hp_chip.set_value(float(hp_stats.get("current_hp", 0.0)), float(hp_stats.get("max_hp", 0.0)))
 	if GameManager.reroll_free_left > 0:
 		reroll_btn.text = "免费重掷 (剩 %d 次)" % GameManager.reroll_free_left
+		reroll_btn.disabled = false
 	else:
 		reroll_btn.text = "重掷货架 (%d 金币)" % GameManager.reroll_cost
+		# 重掷也是一笔要花钱的货：钱不够就转成那颗看得见的灰键（与货架价格键同一条口径），
+		# 不许按下去什么也没发生（原先 buy 之外的这条路径静默 return false，连个反馈都没有）
+		reroll_btn.disabled = GameManager.spirit_stones < GameManager.reroll_cost
 	_refresh_synergy_bar()
 
 	for child in offers_container.get_children():

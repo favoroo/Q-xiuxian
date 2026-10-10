@@ -55,6 +55,22 @@ const SLANT_BLOCK := 5.0
 const SLANT_BUTTON := 6.0
 const SLANT_BAND := 10.0
 
+# —— 透明度组合（2026-10-11 收口：UI 层不再手写 Color(r,g,b,a)，统一从这几个入口取）——
+const DIM_BASE := Color(0.02, 0.02, 0.03)    # 弹窗/浮层遮罩基色（近黑微蓝）
+const COOLDOWN_ARC := Color(0.35, 0.75, 1.0) # 技能冷却环弧光蓝
+
+## 某色 rgb + 自定透明度：半透明层的唯一写法，替代散落的 Color(c.r, c.g, c.b, a)
+static func with_alpha(c: Color, a: float) -> Color:
+    return Color(c.r, c.g, c.b, a)
+
+## 弹窗/浮层的压暗遮罩：基色统一，只允许浓度差异（0.5 轻提示 ～ 0.9 全屏模态）
+static func dim_overlay(alpha: float) -> Color:
+    return Color(DIM_BASE.r, DIM_BASE.g, DIM_BASE.b, alpha)
+
+## 图标/卡片禁用态灰化（可见但不可用的那一档）
+static func disabled_modulate() -> Color:
+    return Color(0.4, 0.4, 0.5, 0.7)
+
 const FONT_BODY := "res://fonts/MiSans-Semibold.woff2"
 const FONT_DISPLAY := "res://fonts/MiSans-Heavy.woff2"
 
@@ -508,7 +524,8 @@ static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
         l.add_theme_color_override("font_outline_color", outline_col)
     return l
 
-## 按钮三态（normal / hover / pressed）
+## 按钮四态（normal / hover / pressed / disabled）：禁用态在这里统一给灰面，
+## 每个界面不再自己补 disabled stylebox（漏一处就是一颗看不见的死键）。
 static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
         font_color: Color = PAPER, skew_deg: float = SLANT_BUTTON,
         hover_color: Color = Color(0, 0, 0, 0)) -> void:
@@ -517,6 +534,11 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
     btn.add_theme_stylebox_override("normal", normal)
     btn.add_theme_stylebox_override("hover", hover)
     btn.add_theme_stylebox_override("pressed", block(hover_bg.darkened(0.15), skew_deg, Vector2(1, 1)))
+    # 禁用态也要看得见：引擎默认那套 disabled 与纯黑面板几乎同色，「按不动」在真机上看起来
+    # 像「这里根本没有按钮」（用户 2026-10-11 真机：灵石阁里金币不够的商品）。
+    # 口径 = 一颗比面板亮一档的灰键 + 纸暗字：形状、价格、差多少全在，只是按不动。
+    btn.add_theme_stylebox_override("disabled", block(LINE, skew_deg, Vector2(3, 4)))
+    btn.add_theme_color_override("font_disabled_color", PAPER_DIM)
     btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
     btn.add_theme_font_override("font", body_font())
     btn.add_theme_font_size_override("font_size", font_size)

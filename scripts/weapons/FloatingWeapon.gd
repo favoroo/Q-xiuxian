@@ -398,7 +398,7 @@ func _perform_burst_attack() -> void:
 	tw.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.18)
 	tw.tween_callback(func(): is_attacking = false)
 
-## 引雷：锯齿闪电从法器射向落雷点，落雷爆发在 ThunderBurst 自身的 _ready 里结算
+## 引雷：锯齿闪电从法器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
 func _spawn_lightning(target_pos: Vector2) -> void:
 	var bolt = LightningBoltScript.new()
 	bolt.from = muzzle_point.global_position
@@ -408,7 +408,8 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 		bolt.tint = def["burst_tint"]
 	get_tree().current_scene.add_child(bolt)
 
-	var burst = burst_scene.instantiate()
+	# 落雷走对象池（2026-10-11 第 6 波卡顿优化）：acquire → 写字段 → activate 起爆
+	var burst = ThunderBurst.acquire(get_tree().current_scene, burst_scene)
 	burst.global_position = target_pos
 	burst.radius = burst_radius * _range_mult()
 	var final_dmg := _final_damage()
@@ -416,7 +417,7 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
 	burst.tint = def.get("burst_tint", burst.tint)
 	burst.icon_path = String(def.get("burst_icon", ""))
-	# 落点音必须在 add_child 之前下发：ThunderBurst 在 _ready 里就播它
+	# 落点音必须在 activate() 之前下发：activate 里就播它
 	burst.sfx_impact_key = WeaponData.sfx_impact_for(weapon_def_id)
 	if def.get("proc_burn", false):
 		burst.proc_burn = true
@@ -425,7 +426,7 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	if float(def.get("proc_chill", 0.0)) > 0.0:
 		burst.proc_chill = float(def.get("proc_chill", 0.0))
 		burst.chill_dur = float(def.get("chill_dur", 2.0))
-	get_tree().current_scene.add_child(burst)
+	burst.activate()
 
 func _perform_melee_attack() -> void:
 	is_attacking = true

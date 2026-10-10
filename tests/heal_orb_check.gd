@@ -247,9 +247,16 @@ func _set_hp(pct: float) -> void:
 	GameManager.player_hp_changed.emit(_player.current_health, _player.max_health)
 
 ## 珠子是否已被吃掉：queue_free 在帧末真的 free 掉了，直接调方法会打在 freed 实例上。
+## 池化后（回复珠 2026-10-11、灵石 2026-10-10）入袋的珠子回池休眠而非销毁，_pooled 同样算「已吃」。
 ## 参数故意不标 Node —— 标了类型反而会在传 freed 引用时先炸一次「不是期望类的子类」。
 func _eaten(node) -> bool:
-	return not is_instance_valid(node) or node.is_queued_for_deletion()
+	if not is_instance_valid(node) or node.is_queued_for_deletion():
+		return true
+	if node is HealOrb and node._pooled:
+		return true
+	if node is AstralGem and node._pooled:
+		return true
+	return false
 
 ## 反例 A：旧写法 —— 回复珠实现 magnet_to，走进摄灵圈就被隔空吸走
 class SuckedOrb extends HealOrb:

@@ -85,7 +85,8 @@ static func buy_offer(gm: Node, index: int) -> bool:
 	match String(offer.get("kind", "weapon")):
 		"potion":
 			if gm.player != null and gm.player.has_method("heal"):
-				gm.player.heal(gm.player.max_health * 0.5)
+				# 回复量与货架卡上印的那个数是同一条公式（GameBalance.potion_heal_amount）
+				gm.player.heal(GameBalance.potion_heal_amount(gm.player.max_health))
 				ok = true
 		"item":
 			ok = gm.add_item(offer.get("id", ""))

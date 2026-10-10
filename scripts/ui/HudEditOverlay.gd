@@ -46,7 +46,7 @@ func open(hud: GameHUD) -> void:
 
 func _build() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.03, 0.62)
+	dim.color = GameStyle.dim_overlay(0.62)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -227,9 +227,9 @@ func _update_size_ui() -> void:
 
 func _update_selection_visuals() -> void:
 	if _skill_proxy != null:
-		_skill_proxy.modulate = Color(1.0, 1.0, 1.0, 1.0 if _selected == DRAG_SKILL else 0.5)
+		_skill_proxy.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == DRAG_SKILL else 0.5)
 	if _obelisk_proxy != null:
-		_obelisk_proxy.modulate = Color(1.0, 1.0, 1.0, 1.0 if _selected == DRAG_OBELISK else 0.5)
+		_obelisk_proxy.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == DRAG_OBELISK else 0.5)
 
 ## 滑杆只调当前选中的那颗
 func _on_size_slider_changed(v: float) -> void:

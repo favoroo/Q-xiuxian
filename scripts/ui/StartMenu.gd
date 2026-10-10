@@ -122,7 +122,7 @@ func _build_decor() -> void:
 	for i in range(4):
 		var bracket := Line2D.new()
 		bracket.width = 4.0
-		bracket.default_color = Color(GameStyle.JADE.r, GameStyle.JADE.g, GameStyle.JADE.b, 0.45)
+		bracket.default_color = GameStyle.with_alpha(GameStyle.JADE, 0.45)
 		bracket.joint_mode = Line2D.LINE_JOINT_ROUND
 		bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
 		bracket.end_cap_mode = Line2D.LINE_CAP_ROUND
@@ -352,7 +352,7 @@ func _build_hero_block() -> PanelContainer:
 
 	# 危险度选择区（纯黑内嵌衬板，让 6 档按钮在金色大块上清晰醒目）
 	var danger_box := PanelContainer.new()
-	var d_sb := GameStyle.panel(Color(0, 0, 0, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
+	var d_sb := GameStyle.panel(GameStyle.with_alpha(Color.BLACK, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
 	d_sb.content_margin_left = 8.0
 	d_sb.content_margin_right = 8.0
 	d_sb.content_margin_top = 6.0
@@ -457,7 +457,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	var sub_lbl := Label.new()
 	sub_lbl.text = sub_text
 	sub_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sub_col := Color(ink_col.r, ink_col.g, ink_col.b, 0.78)
+	var sub_col := GameStyle.with_alpha(ink_col, 0.78)
 	GameStyle.label(sub_lbl, 12, sub_col)
 	bot_row.add_child(sub_lbl)
 
@@ -722,16 +722,23 @@ func _on_start_pressed() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func():
 		visible = false
-		# 新手指南：未看过就在选角前弹一次（老玩家旧档也弹一次），关闭后再进选角
-		var tut := get_parent().get_node_or_null("TutorialDialog")
-		if tut != null and not GameManager.tutorial_seen:
-			GameManager.tutorial_seen = true
-			ProgressStore.save_from(GameManager)
-			tut.closed.connect(_after_tutorial)
+		# 新手指南：没勾「下次不弹出」就在选角前弹一次（每次开局都弹），关闭后再进选角
+		if _auto_show_tutorial():
+			var tut := get_parent().get_node_or_null("TutorialDialog")
+			# one-shot：现在指南每局都弹，常驻连接会让后面任何一次关闭（含主菜单/设置页
+			# 手动翻开）都再跳一次选角，且第二次 connect 同_callable 会被引擎报错拒绝
+			tut.closed.connect(_after_tutorial, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 			tut.open()
 			return
 		_after_tutorial()
 	)
+
+## 开局自动弹新手指南的门控：只看玩家偏好（勾过「下次不弹出」= SettingsManager.tutorial_muted
+## = true 才不弹）。判定抽成函数是给 TutorialGateCheck 直接调的，别在测试里另抄一份条件。
+## 手动入口（主菜单「新手指南」/设置页底部按钮）不受这条门控影响。
+func _auto_show_tutorial() -> bool:
+	var tut := get_parent().get_node_or_null("TutorialDialog")
+	return tut != null and not SettingsManager.tutorial_muted()
 
 func _after_tutorial() -> void:
 	var cult_select := get_parent().get_node_or_null("CultivatorSelect")
@@ -806,7 +813,7 @@ func _on_manual_pressed() -> void:
 	manual_requested.emit()
 
 func _on_guide_pressed() -> void:
-	# 手动重温新手指南：不动 tutorial_seen 存档位，关闭后留在主菜单
+	# 手动重温新手指南：不受「下次不弹出」偏好影响，关闭后留在主菜单
 	var tut := get_parent().get_node_or_null("TutorialDialog")
 	if tut != null:
 		tut.open()

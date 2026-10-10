@@ -105,13 +105,14 @@ func _fire_ring() -> void:
 	var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_RING_DMG_MULT)
 	for i in range(count):
 		var ang := TAU * float(i) / float(count)
-		var bolt := EnemyBolt.new()
+		# 火球走对象池（2026-10-11）：一圈 18+ 发不再走 instantiate/free
+		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = Vector2(cos(ang), sin(ang))
 		bolt.speed = GameBalance.BOSS_BOLT_SPEED
 		bolt.damage = dmg
 		bolt.scale_factor = GameBalance.BOSS_BOLT_SCALE
-		get_parent().add_child(bolt)
+		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.6)
 	GameManager.add_trauma(0.12)
 
@@ -142,8 +143,7 @@ func _resolve_slam(player: Node2D) -> void:
 
 ## 召唤妖群：Boss 战中持续供怪供经验，场面爆量时让位
 func _cast_summon(player: Node2D) -> void:
-	var enemies := get_tree().get_nodes_in_group("enemies").size()
-	if enemies >= GameBalance.BOSS_SUMMON_CAP:
+	if GameManager.enemy_count >= GameBalance.BOSS_SUMMON_CAP:
 		return
 	var count: int = GameBalance.BOSS_SUMMON_COUNT + (1 if _phase2 else 0)
 	var hp_mult := GameBalance.enemy_hp_mult(GameManager.wave_number)

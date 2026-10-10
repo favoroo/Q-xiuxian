@@ -6,9 +6,17 @@ extends Node2D
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
-## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35 —— 小怪加血 3.5 倍后单敌存活更久，
-## 密度由「少而硬」维持，击杀成为低频但每下都有读数的事件
-@export var max_enemies: int = 35
+## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 再随「波内总刷入预算」下调至 28
+## —— 小怪加血 3.5 倍后单敌存活更久，密度由「少而硬」维持；总刷入量另由预算封顶（见下）
+@export var max_enemies: int = 28
+
+# —— 波内总刷入预算（2026-10-11 土豆兄弟式克制，曲线见 BalanceWave.wave_spawn_budget）——
+## 预算只闸 _spawn_regular 的常规刷怪；精英/Boss 登场与分裂·产卵·召唤等衍生怪各有自己的上限，不占预算。
+## 波末把「预算 − 实际刷出」的差额交给灵韵结算折经验补差（BalanceEconomy.budget_compensation_exp），
+## 击杀收入与旧口径基本持平 —— 只减压力不减经济。
+var _budget_total: int = 0      ## 本波预算总只数（已乘危险度/角色妖潮倍率）
+var _budget_used: int = 0       ## 本波已实际刷出只数
+var _budget_exp_sum: float = 0.0  ## 已刷出敌人 exp_reward 累计（补差均值用）
 
 var phase: int = Phase.WAITING
 ## 波次号的唯一来源是 GameManager.wave_number。
@@ -120,6 +128,10 @@ func start_wave(n: int) -> void:
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
 	phase = Phase.FIGHT
+	# 本波刷怪预算：危险度与角色妖潮倍率与同屏上限同源同乘
+	_budget_total = int(round(float(GameBalance.wave_spawn_budget(n)) * GameBalance.danger_count_mult(GameManager.danger_level) * GameManager.enemy_count_mult))
+	_budget_used = 0
+	_budget_exp_sum = 0.0
 	_spawn_chests()
 	if _is_boss_wave(n):
 		GameManager.announcement_triggered.emit("✦ 第 %d 波 · Boss来袭 ✦" % n)
@@ -154,8 +166,10 @@ func end_wave() -> void:
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
 	GameManager.announcement_triggered.emit("第 %d 波敌潮平息" % wave_number)
-	# 灵韵结算：无偿灵石+修为，随后复利增长
-	GameManager.apply_harvest()
+	# 灵韵结算：无偿灵石+修为，随后复利增长；刷怪预算没花完的部分折经验找平（击杀收入不因减潮缩水）
+	var budget_shortfall := maxi(0, _budget_total - _budget_used)
+	var avg_exp := (_budget_exp_sum / float(_budget_used)) if _budget_used > 0 else 0.0
+	GameManager.apply_harvest(GameBalance.budget_compensation_exp(budget_shortfall, avg_exp))
 	# 余怪消散（不掉落）
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
@@ -215,13 +229,17 @@ func _on_shop_closed() -> void:
 	start_wave(wave_number + 1)
 
 func _spawn_regular(player: Node2D) -> void:
+	# 波内总刷入预算：耗尽即停手（波次时长照常跑满，场上越打越空）
+	if _budget_used >= _budget_total:
+		return
 	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每轮刷怪量
 	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
-	var enemy_count = get_tree().get_nodes_in_group("enemies").size()
-	if enemy_count >= enemy_cap:
+	if GameManager.enemy_count >= enemy_cap:
 		return
 
 	var count := int(round(float(GameBalance.spawn_batch(wave_number, GameManager.rng.randf())) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
+	# 最后一轮允许部分兑现：预算剩几只刷几只，不整轮丢弃
+	count = mini(count, _budget_total - _budget_used)
 	for i in range(count):
 		var angle := GameManager.rng.randf() * TAU
 		var spawn_dist := GameManager.rng.randf_range(380.0, 480.0)
@@ -233,6 +251,8 @@ func _spawn_regular(player: Node2D) -> void:
 		enemy.add_to_group("enemies")
 		_scale_to_wave(enemy)
 		get_parent().add_child(enemy)
+		_budget_used += 1
+		_budget_exp_sum += float(enemy.exp_reward)
 
 ## 怪物配比表：随波次引入新威胁（雷兽冲锋 → 丹爆傀儡）。
 ## 邪修（放火球那颗）不再靠解锁波次登场 —— 第 1 波就有，占比按 MIX_XIEXIU_RAMP 爬坡，
