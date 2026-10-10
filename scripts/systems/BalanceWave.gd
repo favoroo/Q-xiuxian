@@ -1,0 +1,96 @@
+class_name BalanceWave
+extends RefCounted
+
+## 波次曲线：刷怪节奏、精英/Boss 波、危险度梯度。全部 static 纯函数。
+## 与 GameBalance 同规约：不读 autoload、不碰节点、不调全局 randf()，随机由调用方传 roll。
+
+# ---------------- 波次与刷怪 ----------------
+
+const WAVE_DURATION_BASE := 20.0
+const WAVE_DURATION_PER_WAVE := 2.0
+const WAVE_DURATION_MAX := 60.0
+# 2026-10-10 打击感重塑：刷怪放缓 + 批量收窄（小怪加血 3.5 倍后单敌活得更久，
+# 同屏密度由更少的刷入量维持，击杀成为「低频但每下都有读数」的事件）
+const SPAWN_INTERVAL_BASE := 1.60
+const SPAWN_INTERVAL_MIN := 0.45
+const SPAWN_INTERVAL_PER_WAVE := 0.045
+const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一轮多刷 1 只
+const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
+const ENEMY_HP_GROWTH := 1.16             ## 每波气血复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
+## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
+## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
+const MOB_HP_BASE_MULT := 4.5
+const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
+const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
+const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
+
+static func wave_duration(wave: int) -> float:
+	return minf(WAVE_DURATION_BASE + float(maxi(wave, 1)) * WAVE_DURATION_PER_WAVE, WAVE_DURATION_MAX)
+
+## 刷怪间隔随波次收紧，到下限后不再变快（否则后期同屏爆量）
+static func spawn_interval(wave: int) -> float:
+	return maxf(SPAWN_INTERVAL_MIN, SPAWN_INTERVAL_BASE - float(maxi(wave, 1)) * SPAWN_INTERVAL_PER_WAVE)
+
+## 一轮刷几只。roll 必须由调用方给（如 GameManager.rng.randf()）
+static func spawn_batch(wave: int, roll: float) -> int:
+	return 1 + int(float(maxi(wave, 1)) / SPAWN_BATCH_EVERY_WAVES) + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
+
+static func enemy_hp_mult(wave: int) -> float:
+	return pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
+
+static func enemy_dmg_mult(wave: int) -> float:
+	return pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
+
+# ---------------- 精英 / Boss 波（固定关卡） ----------------
+
+const ELITE_WAVES := [5, 15]             ## 精英波：铁甲魔傀小头目
+const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
+const BOSS_HP_BASE := 6500.0             ## Boss 基础气血（适配神识分流与新法器基数：W10≈2.5万 / W20≈11万；成型 ~45s、极端 6 剑 ~12s）
+const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
+const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
+const BOSS_RING_COUNT := 16              ## 环弹齐射数量
+const BOSS_RING_COUNT_P2 := 8            ## 二阶段环弹增量
+const BOSS_RING_DMG_MULT := 0.55         ## 环弹伤害 = 接触伤害 × 系数
+const BOSS_BOLT_SPEED := 235.0           ## 环弹飞行速度
+const BOSS_BOLT_SCALE := 1.5             ## 环弹视觉/碰撞放大
+const BOSS_SLAM_WINDUP := 0.9            ## 震地冲击预警时长
+const BOSS_SLAM_RADIUS := 175.0          ## 震地冲击半径
+const BOSS_SLAM_DMG_MULT := 1.35         ## 震地伤害 = 接触伤害 × 系数
+const BOSS_SUMMON_COUNT := 3             ## 召唤妖群数量
+const BOSS_SUMMON_CAP := 16              ## 场面敌人达到该数后召唤不再生效（2026-10-10 随整体减潮下调）
+const BOSS_PHASE2_AT := 0.5              ## 二阶段触发血线（≤50%）
+const BOSS_PHASE2_INTERVAL_MULT := 0.7   ## 二阶段攻击间隔缩短倍率
+const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
+const BOSS_KNOCKBACK_RESIST := 0.18      ## Boss 击退系数（越低越推不动）
+const BOSS_STONE_REWARD := 150           ## Boss 击杀额外灵石奖励
+
+## 固定 Boss 波：10/20 波，20 波后（无尽）每 10 波再逢魔君
+static func is_boss_wave(n: int) -> bool:
+	return n in BOSS_WAVES or (n > BOSS_WAVES.max() and n % 10 == 0)
+
+## 精英波：5/15 波；无尽模式 20 波后每 3 波一次（Boss 波让位）
+static func is_elite_wave(n: int, endless: bool = false) -> bool:
+	return n in ELITE_WAVES or (endless and n > BOSS_WAVES.max() and n % 3 == 0 and not is_boss_wave(n))
+
+## Boss 气血：与普通敌人同一条 hp 曲线，靠基础值拉开厚度差距
+static func boss_hp(wave: int) -> float:
+	return BOSS_HP_BASE * enemy_hp_mult(wave)
+
+static func boss_contact_damage(wave: int) -> float:
+	return ceilf(BOSS_CONTACT_BASE * enemy_dmg_mult(wave))
+
+# ---------------- 危险度（通关解锁的难度梯度，仿土豆兄弟 Danger 0~5） ----------------
+
+const DANGER_MAX := 5
+const DANGER_HP_PER := 0.22     ## 每档妖兽气血 +22%
+const DANGER_DMG_PER := 0.12    ## 每档妖兽伤害 +12%
+const DANGER_COUNT_PER := 0.15  ## 每档妖潮规模 +15%
+
+static func danger_hp_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER
+
+static func danger_dmg_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_DMG_PER
+
+static func danger_count_mult(danger: int) -> float:
+	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER

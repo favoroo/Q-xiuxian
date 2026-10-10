@@ -277,7 +277,7 @@ func _corners(c: Control) -> Array[Vector2]:
 ## 打歪时徽记那一排会整排红，看起来像真 bug（实测踩过）。GameStyle.tap 在收到按下时会在
 ## 那颗控件上留 _gs_tap_down 记账，读它就等于问引擎「这一枪落在谁身上」。
 func _tap_at(host: Control, target: Control, label: String, at := Vector2(INF, INF)) -> String:
-	var pos: Vector2 = at if at.x < INF.x else _center(target)
+	var pos: Vector2 = at if at.x < INF else _center(target)
 	await _wait_tips_gone(host)
 	await _press(pos)
 	_c.check(target.has_meta(GameStyle._TAP_DOWN_META),

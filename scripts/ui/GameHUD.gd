@@ -23,6 +23,31 @@ const BASE_TOP := 20.0
 ## 让位上限：读数再大也不许被一个离谱的 safe area 推到屏心
 const SAFE_CAP := 140.0
 
+## 按钮口径与直径基准（真身在 SkillButtonView / HudObeliskButton，判据与覆盖层从这里取值）
+const SKILL_BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
+const OBELISK_BTN_SIZE := HudObeliskButton.BTN_SIZE
+const OBELISK_BTN_TEXT := HudObeliskButton.BTN_TEXT
+const OBELISK_BTN_FONT := HudObeliskButton.BTN_FONT
+
+## 子控件（拆分自本文件）：技能键 / 祭坛键 / 魔君血条 / FPS 读数 / 待加点徽记
+var _skill_widget: HudSkillButton = null
+var _obelisk_widget: HudObeliskButton = null
+var _boss_bar_widget: HudBossBar = null
+
+## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
+var _skill_box: Control = null
+var _skill_btn: Button = null
+var _obelisk_btn: Button = null
+
+## 兼容：判据读技能键震颤状态（真身在 HudSkillButton）
+var _skill_shaking: bool :
+	get:
+		return _skill_widget != null and _skill_widget.is_shaking()
+
+var _synergy_box: HBoxContainer = null
+var _safe_insets: Array[float] = [0.0, 0.0, 0.0]
+var _edit_overlay: HudEditOverlay = null
+
 func _ready() -> void:
 	banner.modulate.a = 0.0
 	_apply_safe_area()
@@ -46,17 +71,11 @@ func _ready() -> void:
 	GameManager.announcement_triggered.connect(show_announcement)
 	GameManager.weapons_updated.connect(_on_weapons_updated)
 	GameManager.wave_changed.connect(_on_wave_changed)
-	GameManager.boss_hp_changed.connect(_on_boss_hp_changed)
-	GameManager.boss_defeated.connect(_on_boss_defeated)
-	GameManager.pending_points_changed.connect(func(_n: int) -> void: _refresh_pending_chip())
 	_on_wave_changed(GameManager.wave_number)
 
 	_on_weapons_updated(GameManager.get_weapons_summary())
 	_build_top_buttons()
-	_build_boss_bar()
-	_build_obelisk_ui()
-	_build_skill_button()
-	_setup_fps_counter()
+	_build_widgets()
 	# 羁绊徽记单独一排，摆在顶栏之下。
 	# 挂在顶栏里 = 左组要 755 宽 > 它在 960 屏上只分到的 389 ⇒ 整条顶栏被撑到 1125 宽、
 	# 两头各出屏 82（气血块少半截、「暂停」整个没了，用户 2026-10-08 说的「顶部的一些 UI
@@ -71,11 +90,6 @@ func _ready() -> void:
 	_synergy_box.offset_bottom = 88.0
 	add_child(_synergy_box)
 	_build_pending_chip()
-
-var _synergy_box: HBoxContainer = null
-var _pending_chip: PanelContainer = null
-var _pending_label: Label = null
-var _safe_insets: Array[float] = [0.0, 0.0, 0.0]
 
 # ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
 
@@ -104,110 +118,101 @@ static func safe_insets(safe: Rect2, win: Rect2, scale: float) -> Array[float]:
 	out[2] = clampf((win.end.x - safe.end.x) / scale, 0.0, SAFE_CAP)
 	return out
 
-# ---------------- Boss 血条（固定 Boss 关专用，信号驱动上屏/收起） ----------------
+# ---------------- 子控件构建与门面（判据 / 覆盖层 / Main 接线的兼容接口） ----------------
 
-var _boss_box: PanelContainer = null
-var _boss_title_label: Label = null
-var _boss_bar: ProgressBar = null
-var _boss_active: bool = false
-
-## 顶部居中血条：红斜切大色块 + 魔君名号，P5 剪纸风与顶栏一致
-func _build_boss_bar() -> void:
-	_boss_box = PanelContainer.new()
-	_boss_box.visible = false
-	_boss_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_boss_box.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.BAD_DK, GameStyle.SLANT_BAND, Vector2(4, 5)))
-	_boss_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	_boss_box.offset_left = -240.0
-	_boss_box.offset_right = 240.0
-	_boss_box.offset_top = 140.0
-	_boss_box.offset_bottom = 178.0
-	_boss_box.pivot_offset = Vector2(240.0, 19.0)
-	add_child(_boss_box)
-
-	var row := HBoxContainer.new()
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation", 10)
-	_boss_box.add_child(row)
-
-	_boss_title_label = Label.new()
-	_boss_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_boss_title_label, 15, GameStyle.CHALK)
-	row.add_child(_boss_title_label)
-
-	_boss_bar = ProgressBar.new()
-	_boss_bar.custom_minimum_size = Vector2(300, 16)
-	_boss_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_boss_bar.show_percentage = false
-	_boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var styles: Array = GameStyle.bar_styles(Color(0.06, 0.04, 0.06, 0.9), GameStyle.BAD)
-	_boss_bar.add_theme_stylebox_override("background", styles[0])
-	_boss_bar.add_theme_stylebox_override("fill", styles[1])
-	row.add_child(_boss_bar)
-
-func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
-	if not _boss_active:
-		_boss_active = true
-		_boss_title_label.text = title
-		_boss_bar.max_value = max_v
-		_boss_bar.value = cur
-		_boss_box.modulate.a = 1.0
-		_boss_box.visible = true
-		# 登场弹跳：与 banner / 等级徽章同款 BACK 缓动
-		var tw := create_tween()
-		tw.tween_property(_boss_box, "scale", Vector2.ONE, 0.22)\
-			.from(Vector2(0.6, 0.6)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	elif absf(_boss_bar.value - cur) > 0.5:
-		var tw := create_tween()
-		tw.tween_property(_boss_bar, "value", cur, 0.15)
-
-func _on_boss_defeated(_title: String) -> void:
-	_boss_active = false
-	var tw := create_tween()
-	tw.tween_property(_boss_box, "modulate:a", 0.0, 0.3)
-	tw.tween_callback(func():
-		_boss_box.visible = false
-		_boss_box.modulate.a = 1.0)
+## 构建四块子控件，add_child 顺序保持拆分前的树序（Boss 血条 → 祭坛键 → 技能键 → FPS）
+func _build_widgets() -> void:
+	_boss_bar_widget = HudBossBar.new()
+	add_child(_boss_bar_widget)
+	_obelisk_widget = HudObeliskButton.new()
+	add_child(_obelisk_widget)
+	_obelisk_btn = _obelisk_widget.get_btn()
+	_skill_widget = HudSkillButton.new()
+	add_child(_skill_widget)
+	_skill_box = _skill_widget
+	_skill_btn = _skill_widget.get_btn()
+	add_child(HudFpsCounter.new())
 
 ## 供冒烟测试与调试断言：血条当前是否上屏
 func is_boss_bar_visible() -> bool:
-	return _boss_box != null and _boss_box.visible
+	return _boss_bar_widget != null and _boss_bar_widget.is_showing()
 
-var _fps_label: Label = null
-var _fps_timer: float = 0.0
+## 供 HudEditOverlay 同步拖动代理与判据用：按钮视觉中心（设计坐标）
+func skill_btn_center_px() -> Vector2:
+	return _skill_widget.center_px()
 
-func _setup_fps_counter() -> void:
-	_fps_label = Label.new()
-	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# 钉左下角而不是写死 y=514：窗口比 16:9 高时设计高度会涨（expand），写死就漂到半屏
-	_fps_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_fps_label.offset_left = 16.0
-	_fps_label.offset_top = -26.0
-	_fps_label.offset_right = 120.0
-	_fps_label.offset_bottom = -8.0
-	GameStyle.label(_fps_label, 12, GameStyle.PAPER_DIM)
-	_fps_label.text = "FPS: 60"
-	add_child(_fps_label)
-	_update_fps_visibility()
-	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
-		if sec == &"display" and key == &"show_fps":
-			_update_fps_visibility()
-	)
+func skill_btn_size_px() -> Vector2:
+	return _skill_widget.size_px()
 
-func _update_fps_visibility() -> void:
-	if _fps_label != null:
-		_fps_label.visible = bool(SettingsManager.get_val(&"display", &"show_fps", false))
+func obelisk_btn_center_px() -> Vector2:
+	return _obelisk_widget.center_px()
 
-func _process(delta: float) -> void:
-	_poll_skill_button(delta)
-	if _fps_label != null and _fps_label.visible:
-		_fps_timer += delta
-		if _fps_timer >= 0.25:
-			_fps_timer = 0.0
-			var fps := Engine.get_frames_per_second()
-			_fps_label.text = "FPS: %d" % fps
-			var fps_col := GameStyle.GOOD if fps >= 55 else (GameStyle.JADE if fps >= 35 else GameStyle.BAD)
-			_fps_label.add_theme_color_override("font_color", fps_col)
+func obelisk_btn_size_px() -> Vector2:
+	return _obelisk_widget.size_px()
+
+func _on_skill_btn_input(event: InputEvent) -> void:
+	_skill_widget.handle_input(event)
+
+func _on_obelisk_btn_input(event: InputEvent) -> void:
+	_obelisk_widget.handle_input(event)
+
+## 全局输入拦截：触屏第二根手指直通（左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
+func _input(event: InputEvent) -> void:
+	_skill_widget.handle_engine_input(event)
+
+## 触发技能释放（判据从 HUD 门面调用）
+func _trigger_skill_press() -> void:
+	_skill_widget.trigger_press()
+
+## 聚灵阵显隐与充能反馈（BlessingObelisk 信号经 Main 接到这里）
+func show_obelisk_activation(ob: BlessingObelisk) -> void:
+	_obelisk_widget.show_obelisk_activation(ob)
+
+func hide_obelisk_activation(ob: BlessingObelisk) -> void:
+	_obelisk_widget.hide_obelisk_activation(ob)
+
+func on_obelisk_charge_started(ob: BlessingObelisk) -> void:
+	_obelisk_widget.on_obelisk_charge_started(ob)
+
+func on_obelisk_charge_progress(ob: BlessingObelisk, ratio: float) -> void:
+	_obelisk_widget.on_obelisk_charge_progress(ob, ratio)
+
+func on_obelisk_charge_cancelled(ob: BlessingObelisk) -> void:
+	_obelisk_widget.on_obelisk_charge_cancelled(ob)
+
+func on_obelisk_blessing_triggered(ob: BlessingObelisk) -> void:
+	_obelisk_widget.on_obelisk_blessing_triggered(ob)
+
+## 进入/退出按钮调整模式：强制亮出两颗键交给覆盖层拖动（树此时是暂停态）
+func set_btn_edit_mode(on: bool) -> void:
+	_skill_widget.set_edit_mode(on)
+	_obelisk_widget.set_edit_mode(on)
+
+## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
+func open_btn_edit_overlay(on_done: Callable = Callable()) -> void:
+	if _edit_overlay == null:
+		_edit_overlay = HudEditOverlay.new()
+		get_parent().add_child(_edit_overlay)
+		_edit_overlay.finished.connect(func():
+			set_btn_edit_mode(false)
+			_edit_overlay.visible = false
+		)
+	_edit_overlay.move_to_front()
+	set_btn_edit_mode(true)
+	_edit_overlay.open(self)
+	if on_done.is_valid():
+		_edit_overlay.finished.connect(on_done, CONNECT_ONE_SHOT)
+
+# ---------------- 待加点徽记（真身 HudPendingChip，挂顶栏左组） ----------------
+
+func _build_pending_chip() -> void:
+	var chip := HudPendingChip.new(self)
+	var left_box: HBoxContainer = $TopContainer/LeftBox
+	left_box.add_child(chip)
+	# 贴在 Lv 徽记之后（附属读数跟着主体走，不许甩到屏幕另一头）
+	left_box.move_child(chip, 2)
+
+# ---------------- 羁绊徽记 ----------------
 
 func _refresh_synergy_badges() -> void:
 	if _synergy_box == null:
@@ -259,7 +264,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
 			if _skill_box != null and _skill_box.visible:
-				_trigger_skill_press()
+				_skill_widget.trigger_press()
 				get_viewport().set_input_as_handled()
 
 func _on_hp_changed(cur: float, max_v: float) -> void:
@@ -277,62 +282,6 @@ func _on_leveled_up(_lvl: int) -> void:
 		badge.scale = Vector2(1.4, 1.4)
 		var tw := badge.create_tween()
 		tw.tween_property(badge, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_refresh_pending_chip()
-
-# ---------------- 待加点徽记（升级不再打断战斗，攒下的点数必须看得见） ----------------
-
-## 顶栏 Lv 徽记右边那颗「悟道 ×N」：只在建号后有数时出现，点按弹详情卡讲清规则。
-## 为什么非要摆这颗：战斗中的升级从此不当场弹面板，玩家只看见 Lv 跳了一下 ——
-## 不告诉他「这回合结束能补几点」，就会当成加点没生效（看不见的控件就是 bug）。
-func _build_pending_chip() -> void:
-	_pending_chip = PanelContainer.new()
-	_pending_chip.name = "PendingChip"
-	_pending_chip.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 同羁绊徽记：PanelContainer 不是按钮，摇杆认不出 ⇒ 自己登记
-	_pending_chip.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	_pending_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_pending_chip.add_theme_stylebox_override("panel", GameStyle.chip(GameStyle.JADE))
-	_pending_label = Label.new()
-	_pending_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_pending_label, 13, GameStyle.INK_TEXT)
-	_pending_chip.add_child(_pending_label)
-	var left_box: HBoxContainer = $TopContainer/LeftBox
-	left_box.add_child(_pending_chip)
-	# 贴在 Lv 徽记之后（附属读数跟着主体走，不许甩到屏幕另一头）
-	left_box.move_child(_pending_chip, 2)
-	_pending_chip.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-			_open_pending_tip()
-	)
-	_refresh_pending_chip()
-
-func _open_pending_tip() -> void:
-	var pending := GameManager.pending_upgrade_points
-	DetailTip.show_over(self, _pending_chip, {
-		"title": "升级待加点",
-		"chip": "回合结算",
-		"chip_color": GameStyle.JADE,
-		"rows": [
-			["本回合攒下", "%d 点" % pending, GameStyle.JADE],
-			["什么时候加", "每波敌潮平息后统一结算", GameStyle.PAPER],
-			["每次给几个", "%d 个候选，可刷新" % GameManager.UPGRADE_OFFER_COUNT, GameStyle.PAPER],
-		],
-		"body": "战斗中升级不再打断操作：升 1 级攒 1 点，回合结束一次性加完。",
-		"notes": [
-			"点数必须加完才能进商店置办武器。",
-			"升级候选每回合可免费刷新 1 次，之后按货架同一档价格扣金币。",
-			"同一条升级有叠层上限，叠满后不再出现在候选里。",
-		],
-		"foot": "已领悟的条目可在「属性」面板的升级页翻看。",
-	})
-
-func _refresh_pending_chip() -> void:
-	if _pending_chip == null or not is_instance_valid(_pending_chip):
-		return
-	var pending: int = GameManager.pending_upgrade_points
-	_pending_chip.visible = pending > 0
-	if pending > 0:
-		_pending_label.text = "升级 ×%d" % pending
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target
@@ -406,407 +355,3 @@ func show_announcement(msg: String) -> void:
 	tw.tween_property(banner, "scale", Vector2.ONE, 0.1)
 	tw.tween_interval(1.9)
 	tw.tween_property(banner, "modulate:a", 0.0, 0.35)
-
-# ---------------- 聚灵阵激活按钮（圆形键，位置/大小可在设置·操作页自由拖调） ----------------
-
-## 与技能键同径：两颗键并排时必须是同一个圆，基准在 SkillButtonView
-const OBELISK_BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
-const OBELISK_BTN_TEXT := "祭坛"
-## 圆键里两个字的最大字号：再大就贴着描边了
-const OBELISK_BTN_FONT := 22
-
-var _obelisk_btn: Button = null
-var _obelisk_ring: SkillButtonView.CircleProgressOverlay = null
-var _obelisk_box: Control = null
-var _obelisk_active_ob: BlessingObelisk = null
-
-## 构建聚灵阵激活 UI：圆形键 + 键面走针环（摆位交给 _apply_btn_layout）
-func _build_obelisk_ui() -> void:
-	_obelisk_box = Control.new()
-	_obelisk_box.visible = false
-	_obelisk_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_obelisk_box.custom_minimum_size = OBELISK_BTN_SIZE
-	add_child(_obelisk_box)
-
-	_obelisk_btn = Button.new()
-	_obelisk_btn.text = OBELISK_BTN_TEXT
-	_obelisk_btn.custom_minimum_size = OBELISK_BTN_SIZE
-	_obelisk_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_obelisk_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_obelisk_btn.focus_mode = Control.FOCUS_NONE
-	_style_obelisk_btn(false)
-	_obelisk_btn.gui_input.connect(_on_obelisk_btn_input)
-	# 这颗键不需要登记：按钮类控件由摇杆自动认走（DawnJoystick._ready 的两趟收口），
-	# 按住它不会在底下长出摇杆、也不会把人带出阵法范围。
-	_obelisk_box.add_child(_obelisk_btn)
-
-	## 充能进度画成键面上那一圈走针（原来是键底一根横条 —— 圆键里横条两头会探出圆面）。
-	## 两条约束照旧：
-	##  ① mouse_filter 必须 IGNORE —— 显示件在键面上截事件，就是挖一条按不动的死带。
-	##  ② 整圈收在圆面之内，半径由 overlay 自己的 arc_radius() 一处算（判据读同一个函数）。
-	## 按住时拇指正压着这颗键，所以真读数在阵法上（碑脚环 + 碑顶百分比），
-	## 键面这一圈只是「手没离开、眼睛还在别处」时的第二读数，两处读同一个 ratio。
-	_obelisk_ring = SkillButtonView.CircleProgressOverlay.new()
-	_obelisk_ring.progress_color = GameStyle.JADE
-	_obelisk_ring.head_color = GameStyle.JADE_EDGE
-	_obelisk_btn.add_child(_obelisk_ring)
-
-## 键面样式：平时墨底蓝勾边，按住充能整面翻实蓝 —— 文案不动，状态由底色 + 那一圈说
-func _style_obelisk_btn(charging: bool) -> void:
-	SkillButtonView.style_circle_action(_obelisk_btn, GameStyle.GOLD, OBELISK_BTN_FONT, charging)
-
-## 聚灵阵按钮输入处理：按下开始充能，松开结束充能（支持鼠标与多点触控）
-func _on_obelisk_btn_input(event: InputEvent) -> void:
-	var is_press := false
-	var is_release := false
-	if event is InputEventScreenTouch:
-		if event.pressed:
-			is_press = true
-		else:
-			is_release = true
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			is_press = true
-		else:
-			is_release = true
-
-	if is_press and _obelisk_active_ob != null:
-		_obelisk_active_ob.start_charge()
-		_style_obelisk_btn(true)
-	elif is_release and _obelisk_active_ob != null:
-		_obelisk_active_ob.stop_charge()
-		_style_obelisk_btn(false)
-
-## 玩家进入聚灵阵范围：显示激活按钮
-func show_obelisk_activation(ob: BlessingObelisk) -> void:
-	_obelisk_active_ob = ob
-	_obelisk_ring.set_ratio(0.0)
-	_obelisk_box.visible = true
-	_obelisk_box.modulate.a = 0.0
-	## 弹入只动「相对缩放」：直接 tween 到 1.0 会把设置里存的键体大小抹平
-	var s := _obelisk_box.scale
-	var tw = create_tween()
-	tw.tween_property(_obelisk_box, "modulate:a", 1.0, 0.18)
-	tw.parallel().tween_property(_obelisk_box, "scale", s, 0.18).from(s * 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-## 玩家离开聚灵阵范围：隐藏激活按钮
-func hide_obelisk_activation(_ob: BlessingObelisk) -> void:
-	_obelisk_active_ob = null
-	if _obelisk_box != null:
-		var tw = create_tween()
-		tw.tween_property(_obelisk_box, "modulate:a", 0.0, 0.2)
-		tw.tween_callback(func(): _obelisk_box.visible = false)
-
-## 聚灵阵开始充能：视觉反馈
-func on_obelisk_charge_started(_ob: BlessingObelisk) -> void:
-	pass
-
-## 聚灵阵充能进度更新：更新键面走针环
-func on_obelisk_charge_progress(_ob: BlessingObelisk, ratio: float) -> void:
-	if _obelisk_ring != null:
-		_obelisk_ring.set_ratio(ratio)
-
-## 聚灵阵充能取消：重置按钮状态
-func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
-	if _obelisk_btn != null:
-		_style_obelisk_btn(false)
-	if _obelisk_ring != null:
-		_obelisk_ring.set_ratio(0.0)
-
-## 聚灵阵触发成功：播放完成动画后隐藏
-func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
-	if _obelisk_box != null and _obelisk_box.visible:
-		var s := _obelisk_box.scale
-		var tw = create_tween()
-		tw.tween_property(_obelisk_box, "scale", s * 1.15, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(_obelisk_box, "modulate:a", 0.0, 0.4)
-		tw.tween_callback(func():
-			_obelisk_box.visible = false
-			_obelisk_box.scale = s
-			_obelisk_box.modulate.a = 1.0
-			_obelisk_ring.set_ratio(0.0)
-			_obelisk_active_ob = null
-		)
-
-# ---------------- 随行神通按钮（圆形半透明浮动，按下即放 + 冷却环反馈） ----------------
-
-const SKILL_BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
-
-var _skill_box: Control = null
-var _skill_btn: Button = null
-var _skill_icon_rect: TextureRect = null
-var _skill_cd_ring: SkillButtonView.SkillCdOverlay = null
-var _skill_cd_label: Label = null
-var _skill_name_label: Label = null
-var _skill_was_ready: bool = false
-var _skill_shaking: bool = false
-
-## 构建技能按钮：圆形半透明键 + 环形冷却遮罩 + 秒数 + 快捷键支持
-func _build_skill_button() -> void:
-	_skill_box = Control.new()
-	_skill_box.visible = false
-	_skill_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_skill_box.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
-	add_child(_skill_box)
-
-	_skill_btn = Button.new()
-	_skill_btn.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
-	_skill_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	_skill_btn.focus_mode = Control.FOCUS_NONE
-	_style_circle_skill_btn(_skill_btn)
-	_skill_btn.gui_input.connect(_on_skill_btn_input)
-	_skill_box.add_child(_skill_btn)
-
-	_skill_icon_rect = TextureRect.new()
-	_skill_icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_skill_icon_rect.offset_left = 16.0
-	_skill_icon_rect.offset_top = 11.0
-	_skill_icon_rect.offset_right = -16.0
-	_skill_icon_rect.offset_bottom = -21.0
-	_skill_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_skill_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_skill_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_skill_icon_rect.visible = false
-	_skill_btn.add_child(_skill_icon_rect)
-
-	_skill_cd_ring = SkillButtonView.SkillCdOverlay.new()
-	_skill_cd_ring.visible = false
-	_skill_btn.add_child(_skill_cd_ring)
-
-	_skill_cd_label = Label.new()
-	_skill_cd_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_skill_cd_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_skill_cd_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_skill_cd_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_skill_cd_label.visible = false
-	_skill_btn.add_child(_skill_cd_label)
-	GameStyle.label(_skill_cd_label, 22, GameStyle.CHALK, 2, GameStyle.INK, true)
-
-	_skill_name_label = Label.new()
-	_skill_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_skill_name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	_skill_name_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_skill_name_label.offset_bottom = -7.0
-	_skill_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_skill_name_label, 10, GameStyle.JADE_EDGE, 2, GameStyle.INK)
-	_skill_btn.add_child(_skill_name_label)
-
-	_apply_btn_layout()
-	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
-		if sec == &"display" and key in [&"skill_btn_xy", &"skill_btn_scale", &"obelisk_btn_xy", &"obelisk_btn_scale"]:
-			_apply_btn_layout()
-	)
-
-func _style_circle_skill_btn(btn: Button) -> void:
-	SkillButtonView.style_circle_button(btn)
-
-# ---------------- 按钮自由布局（技能键 / 祭坛键：设置·操作页拖动与缩放） ----------------
-
-var _edit_mode: bool = false
-var _edit_overlay: HudEditOverlay = null
-
-## 归一化中心点 + 缩放 → 实际摆位。布局矩形按未缩放底尺寸居中，
-## 视觉缩放围绕 pivot（矩形中心）放大 ⇒ 视觉中心永远钉在存档点上，换屏比不漂移。
-func _apply_box_layout(box: Control, norm: Vector2, scale_f: float, base: Vector2) -> void:
-	if box == null:
-		return
-	var vp := get_viewport_rect().size
-	var s := clampf(scale_f, SettingsManager.BTN_SCALE_MIN, SettingsManager.BTN_SCALE_MAX)
-	# 中心点夹回屏内（半尺寸 + 2px 余量），怎么拖都不会整个出屏找不回来
-	var half := base * s * 0.5 + Vector2(2.0, 2.0)
-	half.x = minf(half.x, vp.x * 0.5)
-	half.y = minf(half.y, vp.y * 0.5)
-	var c := Vector2(clampf(norm.x, 0.0, 1.0) * vp.x, clampf(norm.y, 0.0, 1.0) * vp.y)
-	c.x = clampf(c.x, half.x, vp.x - half.x)
-	c.y = clampf(c.y, half.y, vp.y - half.y)
-	box.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	box.offset_left = c.x - base.x * 0.5
-	box.offset_top = c.y - base.y * 0.5
-	box.offset_right = c.x + base.x * 0.5
-	box.offset_bottom = c.y + base.y * 0.5
-	box.pivot_offset = base * 0.5
-	box.scale = Vector2(s, s)
-
-func _apply_btn_layout() -> void:
-	_apply_box_layout(_skill_box, SettingsManager.skill_btn_xy(), SettingsManager.skill_btn_scale(), Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE))
-	_apply_box_layout(_obelisk_box, SettingsManager.obelisk_btn_xy(), SettingsManager.obelisk_btn_scale(), OBELISK_BTN_SIZE)
-
-## 供 HudEditOverlay 同步拖动代理与判据用：按钮视觉中心（设计坐标）
-func skill_btn_center_px() -> Vector2:
-	return _skill_box.position + _skill_box.pivot_offset
-
-func skill_btn_size_px() -> Vector2:
-	return Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
-
-func obelisk_btn_center_px() -> Vector2:
-	return _obelisk_box.position + _obelisk_box.pivot_offset
-
-func obelisk_btn_size_px() -> Vector2:
-	return OBELISK_BTN_SIZE
-
-## 进入/退出按钮调整模式：强制亮出两颗键交给覆盖层拖动（树此时是暂停态）
-func set_btn_edit_mode(on: bool) -> void:
-	_edit_mode = on
-	if _skill_box != null:
-		if on and GameManager.active_skill_id.is_empty():
-			# 主菜单阶段还没选神通：摆个占位字面，照样能拖
-			_skill_btn.text = "技"
-			_skill_icon_rect.visible = false
-			_skill_name_label.text = ""
-		_skill_box.visible = on or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
-	if _obelisk_box != null:
-		# 退出调整模式时若人还站在阵法范围内，按钮保持可见（等离开范围再收）
-		_obelisk_box.visible = on or _obelisk_active_ob != null
-		if on:
-			_obelisk_ring.set_ratio(0.0)
-
-## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
-func open_btn_edit_overlay(on_done: Callable = Callable()) -> void:
-	if _edit_overlay == null:
-		_edit_overlay = HudEditOverlay.new()
-		get_parent().add_child(_edit_overlay)
-		_edit_overlay.finished.connect(func():
-			set_btn_edit_mode(false)
-			_edit_overlay.visible = false
-		)
-	_edit_overlay.move_to_front()
-	set_btn_edit_mode(true)
-	_edit_overlay.open(self)
-	if on_done.is_valid():
-		_edit_overlay.finished.connect(on_done, CONNECT_ONE_SHOT)
-
-var _last_skill_press_frame: int = -1
-
-## 全局输入拦截：支持触控第二根手指（左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
-func _input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch and event.pressed:
-		if _is_gameplay_active() and _is_point_on_skill_btn(event.position):
-			_trigger_skill_press()
-
-func _is_gameplay_active() -> bool:
-	if not visible or get_tree().paused:
-		return false
-	if not GameManager.run_started or GameManager.is_game_over:
-		return false
-	var spawner: Node = GameManager.wave_spawner
-	if spawner != null and int(spawner.get("phase")) != int(WaveSpawner.Phase.FIGHT):
-		return false
-	return true
-
-func _is_point_on_skill_btn(pos: Vector2) -> bool:
-	if _skill_btn == null or not is_instance_valid(_skill_btn) or not _skill_btn.is_visible_in_tree():
-		return false
-	var center := skill_btn_center_px()
-	# 圆形热区跟随缩放，半径外扩 8px 触控容错
-	var r := SKILL_BTN_SIZE * SettingsManager.skill_btn_scale() * 0.5 + 8.0
-	return pos.distance_to(center) <= r
-
-## 输入处理：触屏与鼠标统一支持，按下即放（0 延迟），解决双指拉摇杆时技能不响应问题
-func _on_skill_btn_input(event: InputEvent) -> void:
-	var pressed := false
-	if event is InputEventScreenTouch:
-		pressed = event.pressed
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		pressed = event.pressed
-
-	if pressed:
-		_trigger_skill_press()
-
-## 触发技能释放（含成功弹性反馈与冷却震颤反馈）
-func _trigger_skill_press() -> void:
-	var cur_frame := Engine.get_process_frames()
-	if _last_skill_press_frame == cur_frame:
-		return
-	_last_skill_press_frame = cur_frame
-
-	var player = GameManager.player
-	var cast_success := false
-	if player != null and player.has_method("try_activate_skill"):
-		cast_success = player.try_activate_skill()
-
-	if cast_success:
-		_play_skill_cast_fx()
-	else:
-		_play_skill_reject_fx()
-
-## 释放成功：弹性微缩放 + 脉冲反馈
-func _play_skill_cast_fx() -> void:
-	if _skill_btn == null:
-		return
-	_skill_btn.pivot_offset = Vector2(SKILL_BTN_SIZE * 0.5, SKILL_BTN_SIZE * 0.5)
-	var tw = create_tween()
-	tw.tween_property(_skill_btn, "scale", Vector2(0.86, 0.86), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_skill_btn, "scale", Vector2.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-## 冷却中或无法释放：左右微抖 + 倒计时脉冲，明确给玩家反馈“在冷却中”，不再静默无反应
-func _play_skill_reject_fx() -> void:
-	if _skill_btn == null or _skill_shaking:
-		return
-	_skill_shaking = true
-	var orig_pos := _skill_btn.position
-	var tw = create_tween()
-	tw.tween_property(_skill_btn, "position:x", orig_pos.x - 5.0, 0.04)
-	tw.tween_property(_skill_btn, "position:x", orig_pos.x + 5.0, 0.04)
-	tw.tween_property(_skill_btn, "position:x", orig_pos.x, 0.04)
-	if _skill_cd_label != null and _skill_cd_label.visible:
-		_skill_cd_label.pivot_offset = _skill_cd_label.size * 0.5
-		tw.parallel().tween_property(_skill_cd_label, "scale", Vector2(1.25, 1.25), 0.06)
-		tw.tween_property(_skill_cd_label, "scale", Vector2.ONE, 0.08)
-	tw.tween_callback(func(): _skill_shaking = false)
-	AudioManager.play_sfx("ui_error", 0.7)
-
-## 冷却与可见性轮询（由 _process 每帧调）
-func _poll_skill_button(_delta: float) -> void:
-	if _skill_box == null:
-		return
-	var player = GameManager.player
-	var show := _edit_mode or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
-	if _skill_box.visible != show:
-		_skill_box.visible = show
-		if show:
-			_skill_was_ready = false
-			var def := SkillData.get_def(GameManager.active_skill_id)
-			var icon_path: String = String(def.get("icon", ""))
-			var is_enhanced: bool = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-			if _skill_icon_rect != null:
-				if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-					_skill_btn.text = ""
-					_skill_icon_rect.texture = load(icon_path)
-					_skill_icon_rect.visible = true
-					_skill_icon_rect.modulate = GameStyle.JADE_EDGE if is_enhanced else GameStyle.CHALK
-				else:
-					_skill_icon_rect.visible = false
-					_skill_btn.text = String(def.get("glyph", "?"))
-			else:
-				_skill_btn.text = String(def.get("glyph", "?"))
-
-			var s_name: String = String(def.get("name", ""))
-			if _skill_name_label != null:
-				_skill_name_label.text = s_name.substr(0, 2)
-			_style_circle_skill_btn(_skill_btn)
-	if not show or player == null:
-		return
-
-	var cd_left: float = player.skill_cd_left
-	var cd_total: float = maxf(0.01, player.skill_cd_total)
-	var on_cd := cd_left > 0.0
-	var ratio := clampf(cd_left / cd_total, 0.0, 1.0)
-
-	_skill_cd_ring.visible = on_cd
-	_skill_cd_ring.cd_ratio = ratio
-	_skill_cd_ring.queue_redraw()
-
-	_skill_cd_label.visible = on_cd
-	if _skill_icon_rect != null and _skill_icon_rect.visible:
-		_skill_icon_rect.modulate.a = 0.35 if on_cd else 1.0
-	if on_cd:
-		_skill_cd_label.text = str(int(ceil(cd_left)))
-		_skill_was_ready = false
-	elif not _skill_was_ready:
-		# 冷却转好：亮一下 + 弹性放大，提醒可以再放
-		_skill_was_ready = true
-		_skill_btn.pivot_offset = Vector2(SKILL_BTN_SIZE * 0.5, SKILL_BTN_SIZE * 0.5)
-		var tw = create_tween()
-		tw.tween_property(_skill_btn, "scale", Vector2(1.16, 1.16), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(_skill_btn, "scale", Vector2.ONE, 0.14)

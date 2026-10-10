@@ -1,6 +1,9 @@
 class_name EnemyBase
 extends CharacterBody2D
 
+## 敌人通用基类（行为开关式上帝基类）：8 种行为支路靠 @export 开关组装，已按支路补分节注释。
+## 组件化重构暂缓（2026-10-11 决策）：涉及每帧 AI/物理逻辑，留待大型敌人扩展需求出现时单独立项。
+# ---------------- 敌种行为开关（.tscn 按敌种配置；>0 启用对应行为支路） ----------------
 @export var max_hp: float = 18.0
 @export var move_speed: float = 110.0
 @export var contact_damage: float = 12.0
@@ -43,6 +46,7 @@ extends CharacterBody2D
 @export var minion_scene: PackedScene = null
 @export var teleport_interval: float = 0.0 ## >0：影魅系——每隔 N 秒闪现到玩家侧翼
 
+# ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
 var knockback_velocity: Vector2 = Vector2.ZERO
 var hit_stun_timer: float = 0.0   ## 受击定身硬直计时（期间暂停主动追击速度，仅随击退滑行）
@@ -104,6 +108,7 @@ var _offscreen: bool = false
 var dying: bool = false
 var procedural_view: ProceduralEnemyView = null
 
+# ---------------- 生命周期与程序化外观初始化 ----------------
 func _ready() -> void:
 	# 小怪整体加血（GameBalance.MOB_HP_BASE_MULT）：精英/Boss 不吃这条，它们的厚度由基础值拉开。
 	# 放在 _ready 这一唯一收口：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
@@ -245,6 +250,7 @@ func play_squash(target: Vector2, duration: float = 0.16) -> void:
 	squash_tween.tween_property(self, "juice_scale", Vector2.ONE, duration)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+# ---------------- 每帧调度：移动 / 行为计时器 / 状态机推进 ----------------
 func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over or dying:
 		return
@@ -611,6 +617,7 @@ func _physics_process(delta: float) -> void:
 			if GameManager.thorns_pct > 0.0 and collider.current_health < hp_before:
 				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
 
+# ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
@@ -720,6 +727,8 @@ func _calculate_hit_squash(knockback: Vector2, is_crit: bool) -> Vector2:
 		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)
 
 ## 施加【离火灼烧】：按秒持续扣血，受离火羁绊与元素伤害增伤，多源叠加共鸣
+# ---------------- 五行异常施加（灼烧 / 冰缓 / 剧毒） ----------------
+
 func apply_burn(dps: float, duration: float) -> void:
 	if dying:
 		return
@@ -743,6 +752,8 @@ func apply_poison(dps: float, duration: float) -> void:
 	poison_timer = maxf(poison_timer, duration)
 
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
+# ---------------- 行为支路：自爆 ----------------
+
 func _explode(player: Node2D) -> void:
 	if dying:
 		return
@@ -755,6 +766,8 @@ func _explode(player: Node2D) -> void:
 	_die()
 
 ## 开始冲刺（预警结束后调用）：方向到此锁死，之后不再追踪玩家
+# ---------------- 行为支路：长扑冲刺 ----------------
+
 func _start_charge(dir: Vector2) -> void:
 	_charge_active = charge_duration
 	_charge_dir = dir
@@ -808,6 +821,8 @@ func _clear_charge_warning() -> void:
 		_charge_warning_line = null
 
 ## 短咬起跳（下蹲预告结束、或长扑预警中被玩家贴掉跑道时调用）
+# ---------------- 行为支路：短扑咬 ----------------
+
 func _launch_bite(dir: Vector2) -> void:
 	_bite_active = bite_duration
 	_bite_dir = dir
@@ -835,6 +850,8 @@ func _clear_bite_warning() -> void:
 		_bite_warning_line = null
 
 ## 发射火球（御剑邪修；bolt_count>1 时按 bolt_spread 扇形展开，剑煞邪修三连击）
+# ---------------- 行为支路：远程火球 ----------------
+
 func _fire_bolt(player: Node2D) -> void:
 	var base_dir: Vector2 = (player.global_position - global_position).normalized()
 	for i in range(maxi(1, bolt_count)):
@@ -850,6 +867,8 @@ func _fire_bolt(player: Node2D) -> void:
 	AudioManager.play_sfx("enemy_bolt", 0.7)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
+# ---------------- 行为支路：鼓妖光环 ----------------
+
 func _pulse_buff_aura() -> void:
 	var radius_sq := buff_radius * buff_radius
 	for e in get_tree().get_nodes_in_group("enemies"):
@@ -866,6 +885,8 @@ func receive_aura(mult: float, duration_ms: int) -> void:
 	_aura_until_ms = Time.get_ticks_msec() + duration_ms
 
 ## 蛛母产卵：幼体在自身周围落点，血量/伤害按当前波次同公式缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
+# ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
+
 func _spawn_minion() -> void:
 	var m := minion_scene.instantiate() as EnemyBase
 	if m == null:
@@ -925,6 +946,8 @@ func _split_offspring() -> void:
 		get_parent().call_deferred("add_child", child)
 
 ## 波次结束时的消散：不掉落、不计数
+# ---------------- 死亡与清场 ----------------
+
 func dissolve() -> void:
 	if dying:
 		return

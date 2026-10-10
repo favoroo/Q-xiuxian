@@ -1,0 +1,395 @@
+class_name BalanceTargeting
+extends RefCounted
+
+## 索敌与折算数值：多武器智能索敌分流、藏宝匣两段式分配、武器属性受益折算、
+## 御灵（环绕法宝）动态轨道、多武器神识分流。全部 static 纯函数。
+## 与 GameBalance 同规约：不读 autoload、不碰节点、不调全局 randf()；只读 WeaponData 静态表。
+
+# ---------------- 多武器智能索敌与分流分配 ----------------
+
+const DANGER_ZONE_RADIUS := 75.0  ## 贴身危急警戒半径（防暴毙优先集火区）
+const TARGETING_ELLIPSE_Y_RATIO := 0.65  ## 椭圆索敌垂直短轴压缩比（适配 16:9 扁平视野，防垂直打出屏幕盲区）
+const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(390.0, 220.0)  ## 默认视口半宽半高（960x540 / zoom 1.2 内缩 10px 安全边界）
+
+## 椭圆等效距离：将 y 轴按 y_ratio 还原为长轴标尺，计算在长轴尺度下的等效距离
+## 当 eff_dist <= range 时，几何点正好位于 (x/range)^2 + (y/(range*y_ratio))^2 <= 1 内
+static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:
+	var scaled_y := offset.y / maxf(0.01, y_ratio)
+	return sqrt(offset.x * offset.x + scaled_y * scaled_y)
+
+## 目标是否在以 center 为中心的当前屏幕可视视口范围内
+static func is_in_viewport(pos: Vector2, center: Vector2, half_extents: Vector2 = VIEWPORT_SAFE_HALF_EXTENTS) -> bool:
+	var diff := (pos - center).abs()
+	return diff.x <= half_extents.x and diff.y <= half_extents.y
+
+## 为多把在场法器智能分配攻击目标（纯函数：无副作用、无节点依赖、确定性回归）
+## weapons_info: Array[Dictionary]，每项包含 { "base_angle": float, "range": float, "prev_id": int }
+## enemies_info: Array[Dictionary]，每项包含 { "id": int, "dist": float, "angle": float, "on_screen": bool (可选) }
+## 返回 Array[int]，长度等于 weapons_info.size()，每项对应 enemies_info 的下标（-1 为无目标）
+static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, danger_radius: float = DANGER_ZONE_RADIUS) -> Array:
+	var w_count := weapons_info.size()
+	var e_count := enemies_info.size()
+	var result: Array = []
+	for i in range(w_count):
+		result.append(-1)
+
+	if w_count == 0 or e_count == 0:
+		return result
+
+	# 1. 若仅单一目标，所有在射程内的武器集中集火该目标（集火模式）
+	if e_count == 1:
+		var single_dist: float = float(enemies_info[0].get("dist", 0.0))
+		for i in range(w_count):
+			var w_range: float = float(weapons_info[i].get("range", 150.0))
+			if single_dist <= w_range:
+				result[i] = 0
+		return result
+
+	var assigned_counts := {}
+	for e_idx in range(e_count):
+		assigned_counts[e_idx] = 0
+
+	# 2. 贴身危急威胁优先防守：
+	# 若有敌人突破到贴身危险区（<= danger_radius），优先为每个贴身敌人分配角度最契合的武器解围
+	var danger_enemy_indices: Array[int] = []
+	for e_idx in range(e_count):
+		var d: float = float(enemies_info[e_idx].get("dist", 9999.0))
+		if d <= danger_radius:
+			danger_enemy_indices.append(e_idx)
+
+	for danger_e_idx in danger_enemy_indices:
+		var e_ang: float = float(enemies_info[danger_e_idx].get("angle", 0.0))
+		var e_dist: float = float(enemies_info[danger_e_idx].get("dist", 0.0))
+		var best_w_idx := -1
+		var best_diff := 999.0
+		for w_idx in range(w_count):
+			if result[w_idx] != -1:
+				continue
+			var w_range: float = float(weapons_info[w_idx].get("range", 150.0))
+			if e_dist > w_range:
+				continue
+			var w_ang: float = float(weapons_info[w_idx].get("base_angle", 0.0))
+			var diff := absf(wrapf(e_ang - w_ang, -PI, PI))
+			if diff < best_diff:
+				best_diff = diff
+				best_w_idx = w_idx
+		if best_w_idx != -1:
+			result[best_w_idx] = danger_e_idx
+			assigned_counts[danger_e_idx] = int(assigned_counts.get(danger_e_idx, 0)) + 1
+
+	# 3. 对其余武器进行多向扇区分流分配：
+	# 综合考量目标占用惩罚、扇区角度契合度、距离权重及目标粘滞性
+	for w_idx in range(w_count):
+		if result[w_idx] != -1:
+			continue
+
+		var w_info: Dictionary = weapons_info[w_idx]
+		var w_range: float = float(w_info.get("range", 150.0))
+		var w_base_angle: float = float(w_info.get("base_angle", 0.0))
+		var prev_id: int = int(w_info.get("prev_id", 0))
+
+		var best_e_idx := -1
+		var lowest_cost := 9999999.0
+
+		for e_idx in range(e_count):
+			var e_info: Dictionary = enemies_info[e_idx]
+			var e_dist: float = float(e_info.get("dist", 9999.0))
+			if e_dist > w_range:
+				continue
+
+			var e_ang: float = float(e_info.get("angle", 0.0))
+			var e_id: int = int(e_info.get("id", 0))
+			var count_assigned: int = int(assigned_counts.get(e_idx, 0))
+			var angle_diff := absf(wrapf(e_ang - w_base_angle, -PI, PI))
+
+			# 成本函数：
+			# - 屏幕外可见性惩罚（1500 分）：场上有任何屏幕内敌人时，武器坚决优先打同屏可见怪，杜绝打屏幕外盲区
+			# - 已被分配惩罚（500 分/武器）：强烈驱使武器挑选未被覆盖的不同方向敌人，防止 Overkill
+			# - 扇区契合度（0~120 分）：使槽位方位更顺路的武器迎战该侧敌人
+			# - 相对距离（0~80 分）：同方向优先打击距离更近的敌人
+			# - 目标粘滞奖励（-40 分）：当前已锁定敌人拥有微弱粘滞优势，防止帧间目标抖动
+			var on_screen: bool = bool(e_info.get("on_screen", true))
+			var offscreen_penalty := 0.0 if on_screen else 1500.0
+			var stickiness_bonus := 40.0 if (prev_id != 0 and prev_id == e_id) else 0.0
+			var cost: float = offscreen_penalty \
+				+ float(count_assigned) * 500.0 \
+				+ (angle_diff / PI) * 120.0 \
+				+ (e_dist / maxf(1.0, w_range)) * 80.0 \
+				- stickiness_bonus
+
+			if cost < lowest_cost:
+				lowest_cost = cost
+				best_e_idx = e_idx
+
+		if best_e_idx != -1:
+			result[w_idx] = best_e_idx
+			assigned_counts[best_e_idx] = int(assigned_counts.get(best_e_idx, 0)) + 1
+
+	return result
+
+# ---------------- 藏宝匣：可砸，但不算威胁 ----------------
+
+const CHEST_BREAK_HITS := 3   ## 藏宝匣挨几下砸开。只数"打到了几下"，与伤害数值无关
+
+## 纯函数：两段式分配 —— 先按原有规则把法器派给妖怪，剩下确实无事可做的法器再去砸匣子。
+## 为什么分两段而不是把匣子混进 enemies_info 一起排：匣子和妖怪在同一条成本函数里
+## 只比"角度 + 距离"，一个脚边的匣子会把法器从还没人管的妖怪身上拽走（匣子不会打你，会打你的妖会）。
+## 两段式保证：妖怪永远优先，匣子只吃闲着的法器与多出来的弹道。
+## enemies_info / chests_info 同构：{ "id": int, "dist": float, "angle": float }
+## 返回 Array[int]，下标落在 enemies_info ++ chests_info 这条拼接数组上（-1 = 无事可做）
+static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array, chests_info: Array) -> Array:
+	var result: Array = assign_weapon_targets(weapons_info, enemies_info)
+	if chests_info.is_empty():
+		return result
+	var idle_weapons: Array = []
+	var idle_slots: Array[int] = []
+	for w_idx in range(result.size()):
+		if int(result[w_idx]) < 0:
+			idle_weapons.append(weapons_info[w_idx])
+			idle_slots.append(w_idx)
+	if idle_weapons.is_empty():
+		return result
+	var chest_assign: Array = assign_weapon_targets(idle_weapons, chests_info)
+	for i in range(idle_slots.size()):
+		var c_idx := int(chest_assign[i])
+		if c_idx >= 0:
+			result[idle_slots[i]] = enemies_info.size() + c_idx
+	return result
+
+# ---------------- 武器属性受益折算（仿土豆兄弟属性加成） ----------------
+
+## 纯函数：根据武器设定的 stat_scalings 与玩家当前属性状态，计算出附加在基础伤害上的数值增量
+## stat_scalings: { "armor": 3.5, "crit_rate": 40.0, ... }
+## player_stats: { "armor": float, "crit_rate": float, "hp_regen": float, ... }
+## star: 星级，每升一星该法器的属性转化效率提升 25%（★1: 1.0x, ★2: 1.25x, ★3: 1.5x）
+static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> float:
+	if stat_scalings.is_empty():
+		return 0.0
+	var bonus: float = 0.0
+	var star_mult: float = 1.0 + 0.25 * float(clampi(star, 1, 3) - 1)
+	for key in stat_scalings.keys():
+		var coef: float = float(stat_scalings[key])
+		var val: float = 0.0
+		match key:
+			"armor":
+				val = maxf(0.0, float(player_stats.get("armor", 0.0)))
+			"max_hp_bonus":
+				val = maxf(0.0, float(player_stats.get("max_hp", 100.0)) - 100.0)
+			"hp_regen":
+				val = maxf(0.0, float(player_stats.get("hp_regen", 0.0)))
+			"lifesteal":
+				val = maxf(0.0, float(player_stats.get("lifesteal", 0.0)))
+			"crit_rate":
+				val = maxf(0.0, float(player_stats.get("crit_rate", 0.05)) - 0.05)
+			"crit_mult_bonus":
+				val = maxf(0.0, float(player_stats.get("crit_mult", 1.5)) - 1.5)
+			"move_speed_bonus":
+				val = maxf(0.0, float(player_stats.get("move_speed_mult", 1.0)) - 1.0)
+			"cdr_bonus":
+				val = maxf(0.0, 1.0 - float(player_stats.get("attack_speed_mult", 1.0)))
+			"damage_bonus":
+				val = maxf(0.0, float(player_stats.get("weapon_damage_mult", 1.0)) - 1.0)
+			"range_bonus":
+				val = maxf(0.0, float(player_stats.get("attack_range_mult", 1.0)) - 1.0)
+			"melee_damage":
+				val = maxf(0.0, float(player_stats.get("melee_damage", 0.0)))
+			"ranged_damage":
+				val = maxf(0.0, float(player_stats.get("ranged_damage", 0.0)))
+			"elemental_damage":
+				val = maxf(0.0, float(player_stats.get("elemental_damage", 0.0)))
+			"engineering_damage":
+				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
+			"harvest":
+				val = maxf(0.0, float(player_stats.get("harvest", 0.0)))
+		bonus += val * coef
+	return bonus * star_mult
+
+static func stat_scaling_label(key: String) -> String:
+	match key:
+		"melee_damage": return "近战伤害"
+		"ranged_damage": return "远程伤害"
+		"elemental_damage": return "元素伤害"
+		"engineering_damage": return "召唤伤害"
+		"armor": return "护甲"
+		"max_hp_bonus": return "额外生命"
+		"hp_regen": return "生命回复"
+		"lifesteal": return "吸血率"
+		"crit_rate": return "额外暴击率"
+		"crit_mult_bonus": return "额外暴击伤害"
+		"move_speed_bonus": return "移速加成"
+		"cdr_bonus": return "攻击间隔"
+		"damage_bonus": return "武器伤害加成"
+		"range_bonus": return "范围加成"
+		"harvest": return "收益"
+	return key
+
+## 加点 apply 字段 → 法器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
+## 与上面 weapon_stat_bonus 的折算 match 同源：法器 stat_scalings 里配了这个键才真吃这条属性。
+## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。
+const APPLY_WEAPON_STAT_MAP := {
+	"melee_damage": "melee_damage",
+	"ranged_damage": "ranged_damage",
+	"elemental_damage": "elemental_damage",
+	"engineering_damage": "engineering_damage",
+	"armor": "armor",
+	"max_hp": "max_hp_bonus",
+	"hp_regen": "hp_regen",
+	"lifesteal": "lifesteal",
+	"crit_rate": "crit_rate",
+	"crit_mult": "crit_mult_bonus",
+	"move_speed_mult": "move_speed_bonus",
+	"harvest": "harvest",
+}
+
+## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件法器变强（悟道卡片下方挂受益法器图标用）。
+## 口径与伤害结算逐条对齐：
+##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体法器受益；
+##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
+##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
+##   stat_scalings 键 → 法器配了该属性转化系数才算；
+##   其余（闪避/拾取/灵石/幸运/修为/重掷/反伤等玩家功能属性）→ 不作用于法器。
+## 纯函数：只读 WeaponData 静态表，不读 autoload。
+static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
+	for key in apply.keys():
+		var k := String(key)
+		match k:
+			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
+			"attack_range_mult", "element_damage_all", "elite_damage":
+				return true
+			"bonus_pierce":
+				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
+						== WeaponData.Behavior.PROJECTILE:
+					return true
+			_:
+				if k.begins_with("element_damage_"):
+					var elem := k.trim_prefix("element_damage_")
+					if elem in WeaponData.ELEMENTS and WeaponData.element_of(w_id) == elem:
+						return true
+				elif APPLY_WEAPON_STAT_MAP.has(k):
+					var sk: String = APPLY_WEAPON_STAT_MAP[k]
+					if float(WeaponData.get_def(w_id).get("stat_scalings", {}).get(sk, 0.0)) > 0.0:
+						return true
+	return false
+
+# ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
+
+const SPIRIT_BASE_RADIUS := 80.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
+const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24~40px 贴身盲区）
+const SPIRIT_MAX_REACH := 185.0          ## 默认最大扑击外扩极限
+const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
+const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
+const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
+
+## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
+## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）
+## synergy_haste_mult: GameManager.synergy_haste_mult（雷法/玄水羁绊加成）
+## in_combat: 战斗感知圈内有敌人时触发温和激战加速（1.18x）
+static func spirit_orbit_angular_speed(
+	base_speed: float = SPIRIT_BASE_ANGULAR_SPEED,
+	attack_speed_mult: float = 1.0,
+	synergy_haste_mult: float = 1.0,
+	in_combat: bool = false,
+	max_star: int = 1
+) -> float:
+	var eff_cd_mult: float = clampf(attack_speed_mult * synergy_haste_mult, 0.25, 1.5)
+	var haste_scale: float = 1.0 / eff_cd_mult
+	var combat_scale: float = 1.18 if in_combat else 1.0
+	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
+	return base_speed * haste_scale * combat_scale * star_scale
+
+## 环绕灵宝接触结算占空比：轨道扫掠 + 扇区扑击 + 26px 接触圈下，敌人处于可结算位置的
+## 时间占比实测估计（tests/WeaponProbe.tscn 灵蝶 ★1 口径）。纸面 DPS × 该系数 = 有效 DPS，
+## WeaponData.sustained_single_dps 的 DRONE 分支按此折算，让平衡判据用"实伤口径"钉数值。
+const SPIRIT_CONTACT_DUTY := 0.75
+
+## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
+## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）
+## enemies_info: Array[Dictionary]，每个敌人的信息 { "dist": float, "angle": float }
+## 返回: { "radii": Array[float], "in_combat": bool }
+static func compute_spirit_orbit(
+	orb_angles: Array,
+	enemies_info: Array,
+	base_radius: float = SPIRIT_BASE_RADIUS,
+	min_radius: float = SPIRIT_MIN_RADIUS,
+	max_reach: float = SPIRIT_MAX_REACH
+) -> Dictionary:
+	var count := orb_angles.size()
+	var result_radii: Array[float] = []
+	for i in range(count):
+		result_radii.append(base_radius)
+
+	if count == 0:
+		return {"radii": result_radii, "in_combat": false}
+
+	if enemies_info.is_empty():
+		return {"radii": result_radii, "in_combat": false}
+
+	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）
+	var in_combat := false
+	var in_range_enemies: Array[Dictionary] = []
+	var danger_enemies: Array[Dictionary] = []
+	var sum_dist := 0.0
+
+	for e in enemies_info:
+		var d: float = float(e.get("dist", 9999.0))
+		if d <= max_reach + 20.0:
+			in_combat = true
+		if d <= max_reach:
+			in_range_enemies.append(e)
+			sum_dist += d
+		if d <= SPIRIT_DANGER_DIST:
+			danger_enemies.append(e)
+
+	if not in_combat or in_range_enemies.is_empty():
+		return {"radii": result_radii, "in_combat": in_combat}
+
+	var avg_reach_dist: float = clampf(sum_dist / float(in_range_enemies.size()), min_radius, base_radius * 1.25)
+
+	# 2. 为每枚灵宝计算自适应半径
+	for i in range(count):
+		var orb_a: float = float(orb_angles[i])
+		var assigned_r := -1.0
+
+		# 2.1 贴身危急优先内收自保：灵宝公转到危急敌人附近时，收缩到敌人身前封堵
+		var closest_danger_dist := 9999.0
+		for de in danger_enemies:
+			var de_ang: float = float(de.get("angle", 0.0))
+			var diff := absf(wrapf(de_ang - orb_a, -PI, PI))
+			if diff <= PI * 0.5:
+				var dd: float = float(de.get("dist", SPIRIT_DANGER_DIST))
+				if dd < closest_danger_dist:
+					closest_danger_dist = dd
+		if closest_danger_dist < 9999.0:
+			assigned_r = clampf(closest_danger_dist, min_radius, base_radius)
+
+		# 2.2 扇区索敌扑击：灵宝正前方扇区内的最近敌人，灵宝动态外扩扑击
+		if assigned_r < 0.0:
+			var best_sector_dist := 9999.0
+			for e in in_range_enemies:
+				var e_ang: float = float(e.get("angle", 0.0))
+				var diff := absf(wrapf(e_ang - orb_a, -PI, PI))
+				if diff <= SPIRIT_SECTOR_HALF_ANGLE:
+					var ed: float = float(e.get("dist", 9999.0))
+					if ed < best_sector_dist:
+						best_sector_dist = ed
+			if best_sector_dist < 9999.0:
+				assigned_r = clampf(best_sector_dist, min_radius, max_reach)
+
+		# 2.3 环体自适应呼吸：未锁定单体时柔性匹配敌群平均基准，否则回归 base_radius
+		if assigned_r < 0.0:
+			assigned_r = avg_reach_dist
+
+		result_radii[i] = assigned_r
+
+	return {"radii": result_radii, "in_combat": in_combat}
+
+# ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
+
+const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把法器的神识分流系数
+
+## 纯函数：根据当前上阵法器总数（含悬浮法器与环绕灵物），计算单把法器的直击神识分流效率
+## 1 把: 1.00 (100%), 2 把: ~0.893 (总 1.79x), 3 把: ~0.806 (总 2.42x), 4 把: ~0.735 (总 2.94x),
+## 5 把: ~0.676 (总 3.38x), 6 把: ~0.625 (总 3.75x)。
+## 每多买一把法器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
+static func multi_weapon_damage_mult(slot_count: int) -> float:
+	return 1.0 / (1.0 + MULTI_WEAPON_LOAD_PER_EXTRA * float(maxi(1, slot_count) - 1))

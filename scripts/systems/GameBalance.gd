@@ -1,689 +1,289 @@
 class_name GameBalance
 extends RefCounted
 
-## 数值公式集中地：全部 static 纯函数 —— 不读 autoload、不碰节点、不调全局 randf()。
-## 两条硬性约束（破掉任何一条，这层就白建了）：
+## 数值公式门面：全部实现已按主题拆到同目录四个 static 类（2026-10-11 拆分，降低并行调参冲突面）：
+##   BalanceWave      波次/刷怪/精英Boss/危险度
+##   BalanceEconomy   经验/商店定价/灵韵/残丹化灵/稀有度/货架抽取/法宝档位/羁绊档位/加点白名单
+##   BalanceCombat    护甲受伤/镜头创伤/受击硬直击退/长扑几何/五行异常/震退方向/集火韧性
+##   BalanceTargeting 索敌分流/藏宝匣/武器属性折算/御灵轨道/神识分流
+## 本文件只做转发：旧引用（GameBalance.xxx，22 个文件）零改动；新增公式直接进主题类，
+## 需要旧入口时在这里补一行转发。两条硬性约束对四个主题类同样生效：
 ##   1. 需要随机数的地方由调用方传入 rng 或已经抽好的 roll，这样单测可以固定种子做确定性断言；
 ##   2. 入参出参只用值类型，任何依赖 Player / GameManager 状态的判断都留在调用方。
 ## 配套单测：tests/UnitRunner.gd（headless，不加载任何场景）。
 
-# ---------------- 经验 / 等级 ----------------
+# ---------------- 常量转发（调参改主题类，别改这里） ----------------
 
-const EXP_FIRST_LEVEL := 10   ## 1→2 级所需修为
-const EXP_GROWTH := 1.35      ## 每级需求的环比
-const EXP_FLAT := 5           ## 每级需求的固定加值
+# 波次 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
+const WAVE_DURATION_BASE := BalanceWave.WAVE_DURATION_BASE
+const WAVE_DURATION_PER_WAVE := BalanceWave.WAVE_DURATION_PER_WAVE
+const WAVE_DURATION_MAX := BalanceWave.WAVE_DURATION_MAX
+const SPAWN_INTERVAL_BASE := BalanceWave.SPAWN_INTERVAL_BASE
+const SPAWN_INTERVAL_MIN := BalanceWave.SPAWN_INTERVAL_MIN
+const SPAWN_INTERVAL_PER_WAVE := BalanceWave.SPAWN_INTERVAL_PER_WAVE
+const SPAWN_BATCH_EVERY_WAVES := BalanceWave.SPAWN_BATCH_EVERY_WAVES
+const SPAWN_BATCH_BONUS_CHANCE := BalanceWave.SPAWN_BATCH_BONUS_CHANCE
+const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
+const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
+const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
+const ENEMY_STAT_VARIANCE := BalanceWave.ENEMY_STAT_VARIANCE
+const ELITE_STONE_BONUS := BalanceWave.ELITE_STONE_BONUS
+const ELITE_WAVES := BalanceWave.ELITE_WAVES
+const BOSS_WAVES := BalanceWave.BOSS_WAVES
+const BOSS_HP_BASE := BalanceWave.BOSS_HP_BASE
+const BOSS_CONTACT_BASE := BalanceWave.BOSS_CONTACT_BASE
+const BOSS_ATTACK_INTERVAL := BalanceWave.BOSS_ATTACK_INTERVAL
+const BOSS_RING_COUNT := BalanceWave.BOSS_RING_COUNT
+const BOSS_RING_COUNT_P2 := BalanceWave.BOSS_RING_COUNT_P2
+const BOSS_RING_DMG_MULT := BalanceWave.BOSS_RING_DMG_MULT
+const BOSS_BOLT_SPEED := BalanceWave.BOSS_BOLT_SPEED
+const BOSS_BOLT_SCALE := BalanceWave.BOSS_BOLT_SCALE
+const BOSS_SLAM_WINDUP := BalanceWave.BOSS_SLAM_WINDUP
+const BOSS_SLAM_RADIUS := BalanceWave.BOSS_SLAM_RADIUS
+const BOSS_SLAM_DMG_MULT := BalanceWave.BOSS_SLAM_DMG_MULT
+const BOSS_SUMMON_COUNT := BalanceWave.BOSS_SUMMON_COUNT
+const BOSS_SUMMON_CAP := BalanceWave.BOSS_SUMMON_CAP
+const BOSS_PHASE2_AT := BalanceWave.BOSS_PHASE2_AT
+const BOSS_PHASE2_INTERVAL_MULT := BalanceWave.BOSS_PHASE2_INTERVAL_MULT
+const BOSS_PHASE2_SPEED_MULT := BalanceWave.BOSS_PHASE2_SPEED_MULT
+const BOSS_KNOCKBACK_RESIST := BalanceWave.BOSS_KNOCKBACK_RESIST
+const BOSS_STONE_REWARD := BalanceWave.BOSS_STONE_REWARD
+const DANGER_MAX := BalanceWave.DANGER_MAX
+const DANGER_HP_PER := BalanceWave.DANGER_HP_PER
+const DANGER_DMG_PER := BalanceWave.DANGER_DMG_PER
+const DANGER_COUNT_PER := BalanceWave.DANGER_COUNT_PER
 
-## 下一级所需修为（截断方式与历史实现保持一致）
+# 经验 / 定价 / 灵韵 / 稀有度 / 货架 / 法宝档位 / 白名单 → BalanceEconomy
+const EXP_FIRST_LEVEL := BalanceEconomy.EXP_FIRST_LEVEL
+const EXP_GROWTH := BalanceEconomy.EXP_GROWTH
+const EXP_FLAT := BalanceEconomy.EXP_FLAT
+const WEAVE_WAVE_STEP := BalanceEconomy.WEAVE_WAVE_STEP
+const ITEM_WAVE_STEP := BalanceEconomy.ITEM_WAVE_STEP
+const REROLL_BASE := BalanceEconomy.REROLL_BASE
+const REROLL_WAVE_STEP := BalanceEconomy.REROLL_WAVE_STEP
+const REROLL_COUNT_STEP := BalanceEconomy.REROLL_COUNT_STEP
+const HARVEST_GROWTH := BalanceEconomy.HARVEST_GROWTH
+const HEAL_OVERFLOW_STONE_PER_HP := BalanceEconomy.HEAL_OVERFLOW_STONE_PER_HP
+const HEAL_OVERFLOW_STONE_CAP := BalanceEconomy.HEAL_OVERFLOW_STONE_CAP
+const RARITY_EPIC_BASE := BalanceEconomy.RARITY_EPIC_BASE
+const RARITY_RARE := BalanceEconomy.RARITY_RARE
+const RARITY_TOTAL := BalanceEconomy.RARITY_TOTAL
+const RARITY_COMMON_FLOOR := BalanceEconomy.RARITY_COMMON_FLOOR
+const LUCK_EPIC_PER_POINT := BalanceEconomy.LUCK_EPIC_PER_POINT
+const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
+const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
+const TAG_AFFINITY_MIN_COPIES := BalanceEconomy.TAG_AFFINITY_MIN_COPIES
+const TAG_AFFINITY_MULT := BalanceEconomy.TAG_AFFINITY_MULT
+const LUCK_SHOP_PER_POINT := BalanceEconomy.LUCK_SHOP_PER_POINT
+const MAIN_TAG_PITY_WAVES := BalanceEconomy.MAIN_TAG_PITY_WAVES
+const TAG_FILTER_BONUS := BalanceEconomy.TAG_FILTER_BONUS
+const TAG_FILTER_LEAK := BalanceEconomy.TAG_FILTER_LEAK
+const ITEM_TIER_WAVES := BalanceEconomy.ITEM_TIER_WAVES
+const ITEM_TIER_BASE := BalanceEconomy.ITEM_TIER_BASE
+
+# 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
+const ARMOR_COEF := BalanceCombat.ARMOR_COEF
+const DAMAGE_FLOOR := BalanceCombat.DAMAGE_FLOOR
+const TRAUMA_DECAY := BalanceCombat.TRAUMA_DECAY
+const TRAUMA_BUDGET := BalanceCombat.TRAUMA_BUDGET
+const SHAKE_EXPONENT := BalanceCombat.SHAKE_EXPONENT
+const HIT_STUN_NORMAL := BalanceCombat.HIT_STUN_NORMAL
+const HIT_STUN_CRIT := BalanceCombat.HIT_STUN_CRIT
+const HIT_FREEZE_NORMAL := BalanceCombat.HIT_FREEZE_NORMAL
+const HIT_FREEZE_CRIT := BalanceCombat.HIT_FREEZE_CRIT
+const KNOCKBACK_IMPULSE_SCALE := BalanceCombat.KNOCKBACK_IMPULSE_SCALE
+const KNOCKBACK_DECAY_STUN := BalanceCombat.KNOCKBACK_DECAY_STUN
+const KNOCKBACK_DECAY_FREE := BalanceCombat.KNOCKBACK_DECAY_FREE
+const KNOCKBACK_MAX_SPEED_NORMAL := BalanceCombat.KNOCKBACK_MAX_SPEED_NORMAL
+const KNOCKBACK_MAX_SPEED_CRIT := BalanceCombat.KNOCKBACK_MAX_SPEED_CRIT
+const KNOCKBACK_HEAVY_SPEED := BalanceCombat.KNOCKBACK_HEAVY_SPEED
+const KNOCKBACK_HEAVY_DECAY_MULT := BalanceCombat.KNOCKBACK_HEAVY_DECAY_MULT
+const KILL_KNOCKBACK_MULT := BalanceCombat.KILL_KNOCKBACK_MULT
+const KILL_LAUNCH_DURATION := BalanceCombat.KILL_LAUNCH_DURATION
+const KILL_LAUNCH_MAX := BalanceCombat.KILL_LAUNCH_MAX
+const KILL_HITSTOP_DURATION := BalanceCombat.KILL_HITSTOP_DURATION
+const KILL_HITSTOP_SCALE := BalanceCombat.KILL_HITSTOP_SCALE
+const KILL_HITSTOP_MIN_INTERVAL := BalanceCombat.KILL_HITSTOP_MIN_INTERVAL
+const ZHUMU_MINION_CAP := BalanceCombat.ZHUMU_MINION_CAP
+const CHARGE_BRAKE_END_SPEED_PCT := BalanceCombat.CHARGE_BRAKE_END_SPEED_PCT
+const BURN_STACK_RATIO := BalanceCombat.BURN_STACK_RATIO
+const POISON_STACK_RATIO := BalanceCombat.POISON_STACK_RATIO
+const BURN_ELEM_TICK_COEF := BalanceCombat.BURN_ELEM_TICK_COEF
+const POISON_ELEM_TICK_COEF := BalanceCombat.POISON_ELEM_TICK_COEF
+const DOT_TICK_INTERVAL := BalanceCombat.DOT_TICK_INTERVAL
+const KNOCK_DIR_EPS := BalanceCombat.KNOCK_DIR_EPS
+const FOCUS_FIRE_WINDOW := BalanceCombat.FOCUS_FIRE_WINDOW
+const FOCUS_FIRE_HIT2_MULT := BalanceCombat.FOCUS_FIRE_HIT2_MULT
+const FOCUS_FIRE_HIT3_MULT := BalanceCombat.FOCUS_FIRE_HIT3_MULT
+
+# 索敌 / 藏宝匣 / 折算 / 御灵 / 神识分流 → BalanceTargeting
+const DANGER_ZONE_RADIUS := BalanceTargeting.DANGER_ZONE_RADIUS
+const TARGETING_ELLIPSE_Y_RATIO := BalanceTargeting.TARGETING_ELLIPSE_Y_RATIO
+const VIEWPORT_SAFE_HALF_EXTENTS := BalanceTargeting.VIEWPORT_SAFE_HALF_EXTENTS
+const CHEST_BREAK_HITS := BalanceTargeting.CHEST_BREAK_HITS
+const APPLY_WEAPON_STAT_MAP := BalanceTargeting.APPLY_WEAPON_STAT_MAP
+const SPIRIT_BASE_RADIUS := BalanceTargeting.SPIRIT_BASE_RADIUS
+const SPIRIT_MIN_RADIUS := BalanceTargeting.SPIRIT_MIN_RADIUS
+const SPIRIT_MAX_REACH := BalanceTargeting.SPIRIT_MAX_REACH
+const SPIRIT_DANGER_DIST := BalanceTargeting.SPIRIT_DANGER_DIST
+const SPIRIT_SECTOR_HALF_ANGLE := BalanceTargeting.SPIRIT_SECTOR_HALF_ANGLE
+const SPIRIT_BASE_ANGULAR_SPEED := BalanceTargeting.SPIRIT_BASE_ANGULAR_SPEED
+const SPIRIT_CONTACT_DUTY := BalanceTargeting.SPIRIT_CONTACT_DUTY
+const MULTI_WEAPON_LOAD_PER_EXTRA := BalanceTargeting.MULTI_WEAPON_LOAD_PER_EXTRA
+
+# ---------------- 函数转发（签名原样，实现进主题类） ----------------
+
+# 经验 / 定价 / 灵韵 / 化灵 / 稀有度 / 货架 / 档位 / 羁绊 / 白名单 → BalanceEconomy
 static func exp_to_next(prev_needed: int) -> int:
-	return int(float(prev_needed) * EXP_GROWTH) + EXP_FLAT
-
-# ---------------- 护甲 / 受伤 ----------------
-
-const ARMOR_COEF := 0.08      ## 减伤 = 1 - 1/(1+护甲×0.08)
-const DAMAGE_FLOOR := 1.0     ## 实伤保底，防止高护甲把伤害抹成 0
-
-## 面板用的减伤比例（0~1）。注意它不含 DAMAGE_FLOOR，高护甲打小伤害时面板会略优于实际
-static func armor_reduction(armor: float) -> float:
-	return 1.0 - (1.0 / (1.0 + maxf(0.0, armor) * ARMOR_COEF))
-
-## 实际扣血。Player 与 HUD 从此共用同一条公式，不再各写一套
-static func incoming_damage(raw: float, armor: float) -> float:
-	return maxf(DAMAGE_FLOOR, raw / (1.0 + maxf(0.0, armor) * ARMOR_COEF))
-
-# ---------------- 波次与刷怪 ----------------
-
-const WAVE_DURATION_BASE := 20.0
-const WAVE_DURATION_PER_WAVE := 2.0
-const WAVE_DURATION_MAX := 60.0
-# 2026-10-10 打击感重塑：刷怪放缓 + 批量收窄（小怪加血 3.5 倍后单敌活得更久，
-# 同屏密度由更少的刷入量维持，击杀成为「低频但每下都有读数」的事件）
-const SPAWN_INTERVAL_BASE := 1.60
-const SPAWN_INTERVAL_MIN := 0.45
-const SPAWN_INTERVAL_PER_WAVE := 0.045
-const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一轮多刷 1 只
-const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
-const ENEMY_HP_GROWTH := 1.16             ## 每波气血复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
-## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
-## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
-const MOB_HP_BASE_MULT := 4.5
-const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
-const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
-const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
-
-static func wave_duration(wave: int) -> float:
-	return minf(WAVE_DURATION_BASE + float(maxi(wave, 1)) * WAVE_DURATION_PER_WAVE, WAVE_DURATION_MAX)
-
-## 刷怪间隔随波次收紧，到下限后不再变快（否则后期同屏爆量）
-static func spawn_interval(wave: int) -> float:
-	return maxf(SPAWN_INTERVAL_MIN, SPAWN_INTERVAL_BASE - float(maxi(wave, 1)) * SPAWN_INTERVAL_PER_WAVE)
-
-## 一轮刷几只。roll 必须由调用方给（如 GameManager.rng.randf()）
-static func spawn_batch(wave: int, roll: float) -> int:
-	return 1 + int(float(maxi(wave, 1)) / SPAWN_BATCH_EVERY_WAVES) + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
-
-static func enemy_hp_mult(wave: int) -> float:
-	return pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
-
-static func enemy_dmg_mult(wave: int) -> float:
-	return pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
-
-# ---------------- 精英 / Boss 波（固定关卡） ----------------
-
-const ELITE_WAVES := [5, 15]             ## 精英波：铁甲魔傀小头目
-const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
-const BOSS_HP_BASE := 6500.0             ## Boss 基础气血（适配神识分流与新法器基数：W10≈2.5万 / W20≈11万；成型 ~45s、极端 6 剑 ~12s）
-const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
-const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
-const BOSS_RING_COUNT := 16              ## 环弹齐射数量
-const BOSS_RING_COUNT_P2 := 8            ## 二阶段环弹增量
-const BOSS_RING_DMG_MULT := 0.55         ## 环弹伤害 = 接触伤害 × 系数
-const BOSS_BOLT_SPEED := 235.0           ## 环弹飞行速度
-const BOSS_BOLT_SCALE := 1.5             ## 环弹视觉/碰撞放大
-const BOSS_SLAM_WINDUP := 0.9            ## 震地冲击预警时长
-const BOSS_SLAM_RADIUS := 175.0          ## 震地冲击半径
-const BOSS_SLAM_DMG_MULT := 1.35         ## 震地伤害 = 接触伤害 × 系数
-const BOSS_SUMMON_COUNT := 3             ## 召唤妖群数量
-const BOSS_SUMMON_CAP := 16              ## 场面敌人达到该数后召唤不再生效（2026-10-10 随整体减潮下调）
-const BOSS_PHASE2_AT := 0.5              ## 二阶段触发血线（≤50%）
-const BOSS_PHASE2_INTERVAL_MULT := 0.7   ## 二阶段攻击间隔缩短倍率
-const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
-const BOSS_KNOCKBACK_RESIST := 0.18      ## Boss 击退系数（越低越推不动）
-const BOSS_STONE_REWARD := 150           ## Boss 击杀额外灵石奖励
-
-## 固定 Boss 波：10/20 波，20 波后（无尽）每 10 波再逢魔君
-static func is_boss_wave(n: int) -> bool:
-	return n in BOSS_WAVES or (n > BOSS_WAVES.max() and n % 10 == 0)
-
-## 精英波：5/15 波；无尽模式 20 波后每 3 波一次（Boss 波让位）
-static func is_elite_wave(n: int, endless: bool = false) -> bool:
-	return n in ELITE_WAVES or (endless and n > BOSS_WAVES.max() and n % 3 == 0 and not is_boss_wave(n))
-
-## Boss 气血：与普通敌人同一条 hp 曲线，靠基础值拉开厚度差距
-static func boss_hp(wave: int) -> float:
-	return BOSS_HP_BASE * enemy_hp_mult(wave)
-
-static func boss_contact_damage(wave: int) -> float:
-	return ceilf(BOSS_CONTACT_BASE * enemy_dmg_mult(wave))
-
-# ---------------- 打击感：镜头创伤（震屏） ----------------
-## 震屏的唯一数学来源。口径（2026-10-08 用户口径：「一直摇不好，这效果要留给特殊场景」）：
-##   1) 普通命中 / 普通小怪死亡 **一律不发创伤**，打击感交给挤压形变 + 受击火花 + 跳字 + 顿帧；
-##   2) 创伤只发给「值得看的节点」：玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中；
-##   3) 即便将来有人拿高频事件乱调 add_trauma，「每秒预算 ÷ 每秒衰减」把最坏稳态创伤钉死在
-##      0.34（对应位移 ±1.4px）：镜头最多只剩一点轻颤，不会再整局猛摇。
-##      预算给的是上限而不是"刷着刷着就归零"，所以口径要盯稳态值，别只看预算比衰减小。
-
-const TRAUMA_DECAY := 2.2          ## 每秒衰减量：震停耗时 = 创伤 / 本值
-const TRAUMA_BUDGET := 0.75        ## 每秒最多可累加的创伤
-const SHAKE_EXPONENT := 2.0        ## 震幅 = 创伤^n：小震只轻颤，重震才猛晃
-
-## 最坏稳态创伤：调用方每秒把预算刷满时，镜头最终停在哪一格
-static func trauma_steady_state() -> float:
-	return minf(1.0, TRAUMA_BUDGET / TRAUMA_DECAY)
-
-## 本帧实际允许叠加的创伤：先按「每秒剩余预算」夹制，再夹非负。
-## 调用方负责记预算流水账（见 SmoothCamera），这里只做纯夹制，便于固定断言。
-static func trauma_grant(amount: float, budget_left: float) -> float:
-	return clampf(amount, 0.0, maxf(budget_left, 0.0))
-
-## 创伤 → 震幅系数（0~1），位移与滚转都乘它
-static func shake_amount(trauma: float) -> float:
-	return pow(clampf(trauma, 0.0, 1.0), SHAKE_EXPONENT)
-
-## 一次给定量能震多久（秒）：设置项文案与调参时的直观读数
-static func shake_duration(trauma: float) -> float:
-	return clampf(trauma, 0.0, 1.0) / TRAUMA_DECAY
-
-# ---------------- 打击感：受击硬直 / 击退衰减 / 斩杀反馈 ----------------
-## 这一组常量钉住「空洞骑士/死亡细胞风格」刀刀入肉、分级短击退与干脆刹停的手感读数（2026-10-10 打击感重构）。
-
-const HIT_STUN_NORMAL := 0.14            ## 普通受击硬直（秒）：短促击退（~0.11s）后原地定身抽搐，期间主动追击归零
-const HIT_STUN_CRIT := 0.20              ## 暴击受击硬直（秒）：更扎实的原地受创定身
-const HIT_FREEZE_NORMAL := 0.035         ## 普通命中局部受创抽搐/定格时长（秒，~2帧）
-const HIT_FREEZE_CRIT := 0.065           ## 暴击命中局部受创抽搐/定格时长（秒，~4帧）
-const KNOCKBACK_IMPULSE_SCALE := 1.45    ## 击退初速度折算系数：轻武器短击退(~11-14px)，重武器强击退(~40-50px)
-const KNOCKBACK_DECAY_STUN := 12.0       ## 硬直期间击退衰减率：0.11s内快速到位并干脆刹停，杜绝打冰球与持续滑行
-const KNOCKBACK_DECAY_FREE := 24.0       ## 硬直结束后残余击退极速清零率
-const KNOCKBACK_MAX_SPEED_NORMAL := 620.0 ## 普通受击初速上限（px/s）：单次击退位移严格封顶（~50px以内）
-const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）：暴击击退封顶（~65px以内）
-const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
-const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把怪物甩出半屏）
-const KILL_KNOCKBACK_MULT := 1.3         ## 致命一刀击退适度放大
-const KILL_LAUNCH_DURATION := 0.12       ## 尸体飞出急刹滑程（秒）
-const KILL_LAUNCH_MAX := 42.0            ## 尸体飞出位移上限（px，防尸体像冰球一样滑出屏幕）
-const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
-const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
-const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
-const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
-
-# ---------------- 妖狼系长扑：实冲位移 / 走廊扫掠几何 ----------------
-## 长扑是承诺型攻击：预警画多长，就得真撞得出多远、真判得了多宽。
-## 位移之所以有闭式解，是因为冲刺段绕开了 900 px/s² 的速度吸附（起步即满速、收势线性刹停）——
-## 旧写法让吸附插值自己爬速度，纸面 307px 实际要拖出一段"朝玩家拐弯"的滑行尾巴，
-## 于是画的线、冲的段、判的口径是三套数（用户 2026-10-10：「根本冲刺不到我」）。
-
-const CHARGE_BRAKE_END_SPEED_PCT := 0.0  ## 收势终点速度 = 峰速 × 它（0 = 刹到站定；>0 保留前滚，位移随之变长）
-
-## 长扑真实位移（px）= 匀速冲刺段 + 线性收势段（梯形面积，故刹车项取一半）
-static func charge_reach(peak_speed: float, dash_time: float, brake_time: float) -> float:
-	return maxf(peak_speed, 0.0) * (maxf(dash_time, 0.0) + maxf(brake_time, 0.0) * (1.0 + CHARGE_BRAKE_END_SPEED_PCT) * 0.5)
-
-## 点到线段最近点：冲刺走廊的扫掠判定用（本帧起点→终点就是狼身扫过的那一段）。
-## 退化处理：线段零长时投影分母兜底 ⇒ 自动降级为点距，地图边界 clamp 那一帧不会误判成穿墙撞人。
-static func seg_closest_point(seg_a: Vector2, seg_b: Vector2, p: Vector2) -> Vector2:
-	var ab := seg_b - seg_a
-	if ab.length_squared() < KNOCK_DIR_EPS:
-		return seg_a
-	var t := clampf((p - seg_a).dot(ab) / ab.length_squared(), 0.0, 1.0)
-	return seg_a + ab * t
-
-# ---------------- 商店定价 ----------------
-
-const WEAVE_WAVE_STEP := 2      ## 法器每波加价
-const ITEM_WAVE_STEP := 2       ## 法宝每波加价（与法器同一步调）
-const REROLL_BASE := 2
-const REROLL_WAVE_STEP := 1     ## 重掷价随波次上升
-const REROLL_COUNT_STEP := 2    ## 本波每重掷一次再涨
+	return BalanceEconomy.exp_to_next(prev_needed)
 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
-	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
+	return BalanceEconomy.weapon_price(base, wave, price_mult)
 
-## 法宝（被动道具）定价：与法器同一公式，基准价来自 ItemData 按档位定
 static func item_price(base: int, wave: int, price_mult: float) -> int:
-	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
+	return BalanceEconomy.item_price(base, wave, price_mult)
 
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
-	return int(float(base + maxi(wave, 1)) * price_mult)
+	return BalanceEconomy.potion_price(base, wave, price_mult)
 
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
-	return int(float(REROLL_BASE + maxi(wave, 1) * REROLL_WAVE_STEP + maxi(reroll_count, 0) * REROLL_COUNT_STEP) * price_mult)
-
-# ---------------- 危险度（通关解锁的难度梯度，仿土豆兄弟 Danger 0~5） ----------------
-
-const DANGER_MAX := 5
-const DANGER_HP_PER := 0.22     ## 每档妖兽气血 +22%
-const DANGER_DMG_PER := 0.12    ## 每档妖兽伤害 +12%
-const DANGER_COUNT_PER := 0.15  ## 每档妖潮规模 +15%
-
-static func danger_hp_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER
-
-static func danger_dmg_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_DMG_PER
-
-static func danger_count_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER
-
-# ---------------- 灵韵（波末无偿发放并自我复利）----------------
-
-const HARVEST_GROWTH := 1.05
+	return BalanceEconomy.reroll_cost(wave, reroll_count, price_mult)
 
 static func harvest_gain(harvest: float) -> int:
-	return int(round(harvest))
+	return BalanceEconomy.harvest_gain(harvest)
 
-## 复利只涨到 growth_wave_cap 波为止（之后持平，防止后期指数爆炸）
 static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> float:
-	if wave < growth_wave_cap:
-		return harvest * HARVEST_GROWTH
-	return harvest
+	return BalanceEconomy.harvest_next(harvest, wave, growth_wave_cap)
 
-# ---------------- 残丹化灵（波末没贴上去吃掉的回复珠）----------------
-
-## 回不上的那截气血折成灵石：每点 0.8。钉在藏宝匣另一路上 —— 满口 18 点 ×0.8 ≈ 14，
-## 与「约四成掉 3 颗金灵石（各 5 修为/灵石）」同档，砸匣子两条路不等价也不悬殊。
-const HEAL_OVERFLOW_STONE_PER_HP := 0.8
-## 单颗封顶：气血上限越高、15% 口越大，不封顶就滚成巨款
-const HEAL_OVERFLOW_STONE_CAP := 15
-
-## 溢出气血 → 灵石数（0 溢出就是 0，负数按 0 收）
 static func heal_overflow_stones(overflow_hp: float) -> int:
-	if overflow_hp <= 0.0:
-		return 0
-	return clampi(int(round(overflow_hp * HEAL_OVERFLOW_STONE_PER_HP)), 0, HEAL_OVERFLOW_STONE_CAP)
+	return BalanceEconomy.heal_overflow_stones(overflow_hp)
 
-# ---------------- 悟道候选的稀有度权重 ----------------
-
-const RARITY_EPIC_BASE := 10.0
-const RARITY_RARE := 30.0
-const RARITY_TOTAL := 100.0
-const RARITY_COMMON_FLOOR := 10.0
-const LUCK_EPIC_PER_POINT := 1.0
-
-## 福缘每点抬高仙品权重 1，差额从凡品里扣 —— 三档之和恒定，不会整体变稀有
 static func rarity_weights(luck: float) -> Dictionary:
-	var epic: float = RARITY_EPIC_BASE + maxf(0.0, luck) * LUCK_EPIC_PER_POINT
-	var common: float = maxf(RARITY_COMMON_FLOOR, RARITY_TOTAL - RARITY_RARE - epic)
-	return {"common": common, "rare": RARITY_RARE, "epic": epic}
+	return BalanceEconomy.rarity_weights(luck)
 
-# ---------------- 货架抽取 ----------------
-
-const POTION_CHANCE := 0.15            ## 每个货架位出回气丹的概率
-const ITEM_CHANCE := 0.30              ## 每个货架位出法宝（被动道具）的概率
-const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和
-const TAG_AFFINITY_MULT := 2.5
-const LUCK_SHOP_PER_POINT := 0.01      ## 福缘对法器权重的加法系数
-const MAIN_TAG_PITY_WAVES := 2         ## 连续几波没出主流派就强制塞一件
-const TAG_FILTER_BONUS := 4.0          ## 流派偏好软加权：命中角色限定 tag 的法器权重倍率
-const TAG_FILTER_LEAK := 0.2           ## 未命中限定 tag 的法器保留的小权重（漏出率）
-
-## 某流派的亲和倍率：持有不足 MIN_COPIES 件时恒为 1
 static func tag_affinity_mult(copies: int) -> float:
-	return TAG_AFFINITY_MULT if copies >= TAG_AFFINITY_MIN_COPIES else 1.0
+	return BalanceEconomy.tag_affinity_mult(copies)
 
-## 流派偏好的软加权：角色限定流派非空时，命中 tag 的法器 ×BONUS，其余保留 LEAK 小权重。
-## 替代旧版硬过滤——硬过滤在池中只有 1 件同名法器时会让货架坍缩为单一武器。
 static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
-	if filter_tags.is_empty():
-		return 1.0
-	for t in weapon_tags:
-		if t in filter_tags:
-			return TAG_FILTER_BONUS
-	return TAG_FILTER_LEAK
+	return BalanceEconomy.tag_filter_mult(weapon_tags, filter_tags)
 
 static func shop_luck_mult(luck: float) -> float:
-	return 1.0 + maxf(0.0, luck) * LUCK_SHOP_PER_POINT
+	return BalanceEconomy.shop_luck_mult(luck)
 
-# ---------------- 法宝（被动道具）档位权重 ----------------
-
-## 各档位最早出现的波次（下标 1~4 对应 tier 1~4，0 为占位）：高档法宝随波次解锁
-const ITEM_TIER_WAVES := [0, 1, 4, 9, 14]
-const ITEM_TIER_BASE := [0.0, 60.0, 30.0, 9.0, 1.0]   ## 无福缘时的档位基础权重
-
-## 法宝档位权重：返回长度 4 的数组（tier1~4）。福缘抬高高档权重（差额从凡品扣），
-## 未到解锁波次的档位权重清零；凡品有权重地板防归零
 static func item_tier_weights(luck: float, wave: int) -> Array:
-	var l := maxf(0.0, luck)
-	var w := [ITEM_TIER_BASE[1], ITEM_TIER_BASE[2], ITEM_TIER_BASE[3], ITEM_TIER_BASE[4]]
-	w[3] += l * 0.15
-	w[2] += l * 0.35
-	w[0] = maxf(10.0, w[0] - l * 0.5)
-	for i in range(4):
-		if maxi(wave, 1) < int(ITEM_TIER_WAVES[i + 1]):
-			w[i] = 0.0
-	return w
+	return BalanceEconomy.item_tier_weights(luck, wave)
 
-## 权重抽奖：给定等长权重表与 [0,1) 的 roll，返回命中下标；权重全 0 或表空返回 0。
-## 用「累加到 target 之前」的判定而不是「减到 ≤0」，否则权重为 0 的项在 roll 恰好为 0 时会被选中。
 static func weighted_pick_index(weights: Array, roll: float) -> int:
-	if weights.is_empty():
-		return 0
-	var total := 0.0
-	for w in weights:
-		total += float(w)
-	if total <= 0.0:
-		return 0
-	var target: float = clampf(roll, 0.0, 0.999999) * total
-	var acc := 0.0
-	for i in range(weights.size()):
-		acc += float(weights[i])
-		if target < acc:
-			return i
-	return weights.size() - 1
+	return BalanceEconomy.weighted_pick_index(weights, roll)
 
-# ---------------- 流派羁绊 ----------------
-
-## 羁绊档位：持有 count 件时达到的等级（0 = 未激活）。
-## threshold_shift 是角色对门槛的下移量（符阵灵童的御灵羁绊门槛），下移后最低只到 1 件。
 static func synergy_level(count: int, thresholds: Array, threshold_shift: int = 0) -> int:
-	var level := 0
-	for i in range(thresholds.size()):
-		var th := maxi(1, int(thresholds[i]) - threshold_shift)
-		if count >= th:
-			level = i + 1
-	return level
+	return BalanceEconomy.synergy_level(count, thresholds, threshold_shift)
 
-# ---------------- 加点字段白名单 ----------------
-
-## GameManager.apply_upgrade() 认得的字段名。数据表写了不在这里的键 = 静默无效，
-## 单测靠它把拼写错误挡在编译期之外。
 static func upgrade_fields() -> Array:
-	return [
-		"weapon_damage_mult", "attack_speed_mult_mul", "armor", "move_speed_mult",
-		"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
-		"dodge", "lifesteal", "luck", "harvest", "spirit_stones", "max_hp", "hp_heal",
-		"xp_gain_mult", "knockback_mult", "free_rerolls", "elite_damage", "shop_price_mul",
-		"melee_damage", "ranged_damage", "elemental_damage", "engineering_damage",
-		"element_damage_all", "element_damage_metal", "element_damage_wood",
-		"element_damage_water", "element_damage_fire", "element_damage_earth",
-		"bonus_pierce", "thorns",
-	]
+	return BalanceEconomy.upgrade_fields()
 
-# ---------------- 多武器智能索敌与分流分配 ----------------
+# 波次 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
+static func wave_duration(wave: int) -> float:
+	return BalanceWave.wave_duration(wave)
 
-const DANGER_ZONE_RADIUS := 75.0  ## 贴身危急警戒半径（防暴毙优先集火区）
-const TARGETING_ELLIPSE_Y_RATIO := 0.65  ## 椭圆索敌垂直短轴压缩比（适配 16:9 扁平视野，防垂直打出屏幕盲区）
-const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(390.0, 220.0)  ## 默认视口半宽半高（960x540 / zoom 1.2 内缩 10px 安全边界）
+static func spawn_interval(wave: int) -> float:
+	return BalanceWave.spawn_interval(wave)
 
-## 椭圆等效距离：将 y 轴按 y_ratio 还原为长轴标尺，计算在长轴尺度下的等效距离
-## 当 eff_dist <= range 时，几何点正好位于 (x/range)^2 + (y/(range*y_ratio))^2 <= 1 内
+static func spawn_batch(wave: int, roll: float) -> int:
+	return BalanceWave.spawn_batch(wave, roll)
+
+static func enemy_hp_mult(wave: int) -> float:
+	return BalanceWave.enemy_hp_mult(wave)
+
+static func enemy_dmg_mult(wave: int) -> float:
+	return BalanceWave.enemy_dmg_mult(wave)
+
+static func is_boss_wave(n: int) -> bool:
+	return BalanceWave.is_boss_wave(n)
+
+static func is_elite_wave(n: int, endless: bool = false) -> bool:
+	return BalanceWave.is_elite_wave(n, endless)
+
+static func boss_hp(wave: int) -> float:
+	return BalanceWave.boss_hp(wave)
+
+static func boss_contact_damage(wave: int) -> float:
+	return BalanceWave.boss_contact_damage(wave)
+
+static func danger_hp_mult(danger: int) -> float:
+	return BalanceWave.danger_hp_mult(danger)
+
+static func danger_dmg_mult(danger: int) -> float:
+	return BalanceWave.danger_dmg_mult(danger)
+
+static func danger_count_mult(danger: int) -> float:
+	return BalanceWave.danger_count_mult(danger)
+
+# 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
+static func armor_reduction(armor: float) -> float:
+	return BalanceCombat.armor_reduction(armor)
+
+static func incoming_damage(raw: float, armor: float) -> float:
+	return BalanceCombat.incoming_damage(raw, armor)
+
+static func trauma_steady_state() -> float:
+	return BalanceCombat.trauma_steady_state()
+
+static func trauma_grant(amount: float, budget_left: float) -> float:
+	return BalanceCombat.trauma_grant(amount, budget_left)
+
+static func shake_amount(trauma: float) -> float:
+	return BalanceCombat.shake_amount(trauma)
+
+static func shake_duration(trauma: float) -> float:
+	return BalanceCombat.shake_duration(trauma)
+
+static func charge_reach(peak_speed: float, dash_time: float, brake_time: float) -> float:
+	return BalanceCombat.charge_reach(peak_speed, dash_time, brake_time)
+
+static func seg_closest_point(seg_a: Vector2, seg_b: Vector2, p: Vector2) -> Vector2:
+	return BalanceCombat.seg_closest_point(seg_a, seg_b, p)
+
+static func stack_burn_dps(current_dps: float, incoming_dps: float) -> float:
+	return BalanceCombat.stack_burn_dps(current_dps, incoming_dps)
+
+static func stack_poison_dps(current_dps: float, incoming_dps: float) -> float:
+	return BalanceCombat.stack_poison_dps(current_dps, incoming_dps)
+
+static func burn_tick_damage(burn_dps: float, elemental_damage: float, synergy_burn_mult: float = 1.0) -> float:
+	return BalanceCombat.burn_tick_damage(burn_dps, elemental_damage, synergy_burn_mult)
+
+static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> float:
+	return BalanceCombat.poison_tick_damage(poison_dps, elemental_damage)
+
+static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) -> Vector2:
+	return BalanceCombat.knock_dir(source, enemy_pos, player_pos)
+
+static func focus_fire_mult(recent_hits: int) -> float:
+	return BalanceCombat.focus_fire_mult(recent_hits)
+
+# 索敌 / 藏宝匣 / 折算 / 御灵 / 神识分流 → BalanceTargeting
 static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:
-	var scaled_y := offset.y / maxf(0.01, y_ratio)
-	return sqrt(offset.x * offset.x + scaled_y * scaled_y)
+	return BalanceTargeting.elliptical_distance(offset, y_ratio)
 
-## 目标是否在以 center 为中心的当前屏幕可视视口范围内
 static func is_in_viewport(pos: Vector2, center: Vector2, half_extents: Vector2 = VIEWPORT_SAFE_HALF_EXTENTS) -> bool:
-	var diff := (pos - center).abs()
-	return diff.x <= half_extents.x and diff.y <= half_extents.y
+	return BalanceTargeting.is_in_viewport(pos, center, half_extents)
 
-## 为多把在场法器智能分配攻击目标（纯函数：无副作用、无节点依赖、确定性回归）
-## weapons_info: Array[Dictionary]，每项包含 { "base_angle": float, "range": float, "prev_id": int }
-## enemies_info: Array[Dictionary]，每项包含 { "id": int, "dist": float, "angle": float, "on_screen": bool (可选) }
-## 返回 Array[int]，长度等于 weapons_info.size()，每项对应 enemies_info 的下标（-1 为无目标）
 static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, danger_radius: float = DANGER_ZONE_RADIUS) -> Array:
-	var w_count := weapons_info.size()
-	var e_count := enemies_info.size()
-	var result: Array = []
-	for i in range(w_count):
-		result.append(-1)
+	return BalanceTargeting.assign_weapon_targets(weapons_info, enemies_info, danger_radius)
 
-	if w_count == 0 or e_count == 0:
-		return result
-
-	# 1. 若仅单一目标，所有在射程内的武器集中集火该目标（集火模式）
-	if e_count == 1:
-		var single_dist: float = float(enemies_info[0].get("dist", 0.0))
-		for i in range(w_count):
-			var w_range: float = float(weapons_info[i].get("range", 150.0))
-			if single_dist <= w_range:
-				result[i] = 0
-		return result
-
-	var assigned_counts := {}
-	for e_idx in range(e_count):
-		assigned_counts[e_idx] = 0
-
-	# 2. 贴身危急威胁优先防守：
-	# 若有敌人突破到贴身危险区（<= danger_radius），优先为每个贴身敌人分配角度最契合的武器解围
-	var danger_enemy_indices: Array[int] = []
-	for e_idx in range(e_count):
-		var d: float = float(enemies_info[e_idx].get("dist", 9999.0))
-		if d <= danger_radius:
-			danger_enemy_indices.append(e_idx)
-
-	for danger_e_idx in danger_enemy_indices:
-		var e_ang: float = float(enemies_info[danger_e_idx].get("angle", 0.0))
-		var e_dist: float = float(enemies_info[danger_e_idx].get("dist", 0.0))
-		var best_w_idx := -1
-		var best_diff := 999.0
-		for w_idx in range(w_count):
-			if result[w_idx] != -1:
-				continue
-			var w_range: float = float(weapons_info[w_idx].get("range", 150.0))
-			if e_dist > w_range:
-				continue
-			var w_ang: float = float(weapons_info[w_idx].get("base_angle", 0.0))
-			var diff := absf(wrapf(e_ang - w_ang, -PI, PI))
-			if diff < best_diff:
-				best_diff = diff
-				best_w_idx = w_idx
-		if best_w_idx != -1:
-			result[best_w_idx] = danger_e_idx
-			assigned_counts[danger_e_idx] = int(assigned_counts.get(danger_e_idx, 0)) + 1
-
-	# 3. 对其余武器进行多向扇区分流分配：
-	# 综合考量目标占用惩罚、扇区角度契合度、距离权重及目标粘滞性
-	for w_idx in range(w_count):
-		if result[w_idx] != -1:
-			continue
-
-		var w_info: Dictionary = weapons_info[w_idx]
-		var w_range: float = float(w_info.get("range", 150.0))
-		var w_base_angle: float = float(w_info.get("base_angle", 0.0))
-		var prev_id: int = int(w_info.get("prev_id", 0))
-
-		var best_e_idx := -1
-		var lowest_cost := 9999999.0
-
-		for e_idx in range(e_count):
-			var e_info: Dictionary = enemies_info[e_idx]
-			var e_dist: float = float(e_info.get("dist", 9999.0))
-			if e_dist > w_range:
-				continue
-
-			var e_ang: float = float(e_info.get("angle", 0.0))
-			var e_id: int = int(e_info.get("id", 0))
-			var count_assigned: int = int(assigned_counts.get(e_idx, 0))
-			var angle_diff := absf(wrapf(e_ang - w_base_angle, -PI, PI))
-
-			# 成本函数：
-			# - 屏幕外可见性惩罚（1500 分）：场上有任何屏幕内敌人时，武器坚决优先打同屏可见怪，杜绝打屏幕外盲区
-			# - 已被分配惩罚（500 分/武器）：强烈驱使武器挑选未被覆盖的不同方向敌人，防止 Overkill
-			# - 扇区契合度（0~120 分）：使槽位方位更顺路的武器迎战该侧敌人
-			# - 相对距离（0~80 分）：同方向优先打击距离更近的敌人
-			# - 目标粘滞奖励（-40 分）：当前已锁定敌人拥有微弱粘滞优势，防止帧间目标抖动
-			var on_screen: bool = bool(e_info.get("on_screen", true))
-			var offscreen_penalty := 0.0 if on_screen else 1500.0
-			var stickiness_bonus := 40.0 if (prev_id != 0 and prev_id == e_id) else 0.0
-			var cost: float = offscreen_penalty \
-				+ float(count_assigned) * 500.0 \
-				+ (angle_diff / PI) * 120.0 \
-				+ (e_dist / maxf(1.0, w_range)) * 80.0 \
-				- stickiness_bonus
-
-			if cost < lowest_cost:
-				lowest_cost = cost
-				best_e_idx = e_idx
-
-		if best_e_idx != -1:
-			result[w_idx] = best_e_idx
-			assigned_counts[best_e_idx] = int(assigned_counts.get(best_e_idx, 0)) + 1
-
-	return result
-
-# ---------------- 藏宝匣：可砸，但不算威胁 ----------------
-
-const CHEST_BREAK_HITS := 3   ## 藏宝匣挨几下砸开。只数"打到了几下"，与伤害数值无关
-
-## 纯函数：两段式分配 —— 先按原有规则把法器派给妖怪，剩下确实无事可做的法器再去砸匣子。
-## 为什么分两段而不是把匣子混进 enemies_info 一起排：匣子和妖怪在同一条成本函数里
-## 只比"角度 + 距离"，一个脚边的匣子会把法器从还没人管的妖怪身上拽走（匣子不会打你，会打你的妖会）。
-## 两段式保证：妖怪永远优先，匣子只吃闲着的法器与多出来的弹道。
-## enemies_info / chests_info 同构：{ "id": int, "dist": float, "angle": float }
-## 返回 Array[int]，下标落在 enemies_info ++ chests_info 这条拼接数组上（-1 = 无事可做）
 static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array, chests_info: Array) -> Array:
-	var result: Array = assign_weapon_targets(weapons_info, enemies_info)
-	if chests_info.is_empty():
-		return result
-	var idle_weapons: Array = []
-	var idle_slots: Array[int] = []
-	for w_idx in range(result.size()):
-		if int(result[w_idx]) < 0:
-			idle_weapons.append(weapons_info[w_idx])
-			idle_slots.append(w_idx)
-	if idle_weapons.is_empty():
-		return result
-	var chest_assign: Array = assign_weapon_targets(idle_weapons, chests_info)
-	for i in range(idle_slots.size()):
-		var c_idx := int(chest_assign[i])
-		if c_idx >= 0:
-			result[idle_slots[i]] = enemies_info.size() + c_idx
-	return result
+	return BalanceTargeting.assign_targets_with_chests(weapons_info, enemies_info, chests_info)
 
-# ---------------- 武器属性受益折算（仿土豆兄弟属性加成） ----------------
-
-## 纯函数：根据武器设定的 stat_scalings 与玩家当前属性状态，计算出附加在基础伤害上的数值增量
-## stat_scalings: { "armor": 3.5, "crit_rate": 40.0, ... }
-## player_stats: { "armor": float, "crit_rate": float, "hp_regen": float, ... }
-## star: 星级，每升一星该法器的属性转化效率提升 25%（★1: 1.0x, ★2: 1.25x, ★3: 1.5x）
 static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> float:
-	if stat_scalings.is_empty():
-		return 0.0
-	var bonus: float = 0.0
-	var star_mult: float = 1.0 + 0.25 * float(clampi(star, 1, 3) - 1)
-	for key in stat_scalings.keys():
-		var coef: float = float(stat_scalings[key])
-		var val: float = 0.0
-		match key:
-			"armor":
-				val = maxf(0.0, float(player_stats.get("armor", 0.0)))
-			"max_hp_bonus":
-				val = maxf(0.0, float(player_stats.get("max_hp", 100.0)) - 100.0)
-			"hp_regen":
-				val = maxf(0.0, float(player_stats.get("hp_regen", 0.0)))
-			"lifesteal":
-				val = maxf(0.0, float(player_stats.get("lifesteal", 0.0)))
-			"crit_rate":
-				val = maxf(0.0, float(player_stats.get("crit_rate", 0.05)) - 0.05)
-			"crit_mult_bonus":
-				val = maxf(0.0, float(player_stats.get("crit_mult", 1.5)) - 1.5)
-			"move_speed_bonus":
-				val = maxf(0.0, float(player_stats.get("move_speed_mult", 1.0)) - 1.0)
-			"cdr_bonus":
-				val = maxf(0.0, 1.0 - float(player_stats.get("attack_speed_mult", 1.0)))
-			"damage_bonus":
-				val = maxf(0.0, float(player_stats.get("weapon_damage_mult", 1.0)) - 1.0)
-			"range_bonus":
-				val = maxf(0.0, float(player_stats.get("attack_range_mult", 1.0)) - 1.0)
-			"melee_damage":
-				val = maxf(0.0, float(player_stats.get("melee_damage", 0.0)))
-			"ranged_damage":
-				val = maxf(0.0, float(player_stats.get("ranged_damage", 0.0)))
-			"elemental_damage":
-				val = maxf(0.0, float(player_stats.get("elemental_damage", 0.0)))
-			"engineering_damage":
-				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
-			"harvest":
-				val = maxf(0.0, float(player_stats.get("harvest", 0.0)))
-		bonus += val * coef
-	return bonus * star_mult
+	return BalanceTargeting.weapon_stat_bonus(stat_scalings, player_stats, star)
 
 static func stat_scaling_label(key: String) -> String:
-	match key:
-		"melee_damage": return "近战伤害"
-		"ranged_damage": return "远程伤害"
-		"elemental_damage": return "元素伤害"
-		"engineering_damage": return "召唤伤害"
-		"armor": return "护甲"
-		"max_hp_bonus": return "额外生命"
-		"hp_regen": return "生命回复"
-		"lifesteal": return "吸血率"
-		"crit_rate": return "额外暴击率"
-		"crit_mult_bonus": return "额外暴击伤害"
-		"move_speed_bonus": return "移速加成"
-		"cdr_bonus": return "攻击间隔"
-		"damage_bonus": return "武器伤害加成"
-		"range_bonus": return "范围加成"
-		"harvest": return "收益"
-	return key
+	return BalanceTargeting.stat_scaling_label(key)
 
-## 加点 apply 字段 → 法器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
-## 与上面 weapon_stat_bonus 的折算 match 同源：法器 stat_scalings 里配了这个键才真吃这条属性。
-## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。
-const APPLY_WEAPON_STAT_MAP := {
-	"melee_damage": "melee_damage",
-	"ranged_damage": "ranged_damage",
-	"elemental_damage": "elemental_damage",
-	"engineering_damage": "engineering_damage",
-	"armor": "armor",
-	"max_hp": "max_hp_bonus",
-	"hp_regen": "hp_regen",
-	"lifesteal": "lifesteal",
-	"crit_rate": "crit_rate",
-	"crit_mult": "crit_mult_bonus",
-	"move_speed_mult": "move_speed_bonus",
-	"harvest": "harvest",
-}
-
-## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件法器变强（悟道卡片下方挂受益法器图标用）。
-## 口径与伤害结算逐条对齐：
-##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体法器受益；
-##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
-##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
-##   stat_scalings 键 → 法器配了该属性转化系数才算；
-##   其余（闪避/拾取/灵石/幸运/修为/重掷/反伤等玩家功能属性）→ 不作用于法器。
-## 纯函数：只读 WeaponData 静态表，不读 autoload。
 static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
-	for key in apply.keys():
-		var k := String(key)
-		match k:
-			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
-			"attack_range_mult", "element_damage_all", "elite_damage":
-				return true
-			"bonus_pierce":
-				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
-						== WeaponData.Behavior.PROJECTILE:
-					return true
-			_:
-				if k.begins_with("element_damage_"):
-					var elem := k.trim_prefix("element_damage_")
-					if elem in WeaponData.ELEMENTS and WeaponData.element_of(w_id) == elem:
-						return true
-				elif APPLY_WEAPON_STAT_MAP.has(k):
-					var sk: String = APPLY_WEAPON_STAT_MAP[k]
-					if float(WeaponData.get_def(w_id).get("stat_scalings", {}).get(sk, 0.0)) > 0.0:
-						return true
-	return false
+	return BalanceTargeting.upgrade_benefits_weapon(apply, w_id)
 
-# ---------------- 五行异常状态（灼烧 / 剧毒）叠层与结算 ----------------
-
-const BURN_STACK_RATIO := 0.25         ## 多源灼烧叠层共鸣系数：已处于灼烧时，叠加新灼烧量的 25%
-const POISON_STACK_RATIO := 0.50       ## 剧毒叠层累加系数
-const BURN_ELEM_TICK_COEF := 0.40      ## 每点元素伤害对每次灼烧跳字（0.5s）的额外伤害加成
-const POISON_ELEM_TICK_COEF := 0.30    ## 每点元素伤害对每次剧毒跳字（0.5s）的额外伤害加成
-const DOT_TICK_INTERVAL := 0.50        ## DoT 跳字结算周期（秒）
-
-## 施加灼烧后的新 DPS：未灼烧时全额起算，已灼烧时在保留最高值基础上叠加 25% 共鸣伤害
-static func stack_burn_dps(current_dps: float, incoming_dps: float) -> float:
-	if current_dps <= 0.0:
-		return maxf(0.0, incoming_dps)
-	return maxf(current_dps, incoming_dps) + maxf(0.0, incoming_dps) * BURN_STACK_RATIO
-
-## 施加剧毒后的新 DPS：持续累加
-static func stack_poison_dps(current_dps: float, incoming_dps: float) -> float:
-	return maxf(0.0, current_dps) + maxf(0.0, incoming_dps) * POISON_STACK_RATIO
-
-## 单次灼烧跳字（每 0.5s）实际结算伤害：受元素伤害属性与离火羁绊倍率双重增幅
-static func burn_tick_damage(burn_dps: float, elemental_damage: float, synergy_burn_mult: float = 1.0) -> float:
-	var base_tick := maxf(0.0, burn_dps) * DOT_TICK_INTERVAL + maxf(0.0, elemental_damage) * BURN_ELEM_TICK_COEF
-	return maxf(1.0, base_tick * maxf(1.0, synergy_burn_mult))
-
-## 单次剧毒跳字（每 0.5s）实际结算伤害：受元素伤害属性增幅
-static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> float:
-	var base_tick := maxf(0.0, poison_dps) * DOT_TICK_INTERVAL + maxf(0.0, elemental_damage) * POISON_ELEM_TICK_COEF
-	return maxf(1.0, base_tick)
-
-# ---------------- 震退方向 ----------------
-
-const KNOCK_DIR_EPS := 0.0001   ## 方向退化为零向量的判定阈值（比的是长度平方）
-
-## 法器震退的单位方向：以「受击点 − 施力点」的径向为主，但绝不把敌人往玩家身上推。
-## 为什么要另算一支：BURST 类法器的落点是 GameBalance.assign_weapon_targets 按角度扇区分的，
-## 常常砸在离玩家两三百像素的另一侧敌人上 —— 纯径向就会把「落点与玩家之间」那圈敌人往玩家脸上拱
-## （用户 2026-10-08：镇岳印「震一下，把敌人一波一波推到我身边来」）。
-## 改法：径向带朝玩家的分量时把那一支投影掉 ⇒ 敌人侧身滑开；三点共线的纯对撞退化为直接外推。
-## 输出恒为单位向量，所以各法器的击退力度数值一个字都不改。纯函数：入参出参只用值类型。
-static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) -> Vector2:
-	var radial := enemy_pos - source
-	if radial.length_squared() < KNOCK_DIR_EPS:
-		radial = enemy_pos - player_pos          # 施力点压在敌人身上：改按远离玩家推
-	if radial.length_squared() < KNOCK_DIR_EPS:
-		return Vector2.ZERO                      # 敌人和玩家重合，没有方向可言
-	var dir := radial.normalized()
-	var away := enemy_pos - player_pos
-	if away.length_squared() < KNOCK_DIR_EPS:
-		return dir                               # 敌人正贴在玩家身上：维持径向
-	away = away.normalized()
-	var along: float = dir.dot(away)
-	if along >= 0.0:
-		return dir                               # 本来就朝外，径向原样保留
-	var out := dir - away * along                # 去掉「朝玩家」那一分量
-	if out.length_squared() < KNOCK_DIR_EPS:
-		return away                              # 纯对撞（玩家—敌人—落点共线）：直接外推
-	return out.normalized()
-
-# ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
-
-const SPIRIT_BASE_RADIUS := 80.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
-const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24~40px 贴身盲区）
-const SPIRIT_MAX_REACH := 185.0          ## 默认最大扑击外扩极限
-const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
-const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
-const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
-
-## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
-## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）
-## synergy_haste_mult: GameManager.synergy_haste_mult（雷法/玄水羁绊加成）
-## in_combat: 战斗感知圈内有敌人时触发温和激战加速（1.18x）
 static func spirit_orbit_angular_speed(
 	base_speed: float = SPIRIT_BASE_ANGULAR_SPEED,
 	attack_speed_mult: float = 1.0,
@@ -691,21 +291,8 @@ static func spirit_orbit_angular_speed(
 	in_combat: bool = false,
 	max_star: int = 1
 ) -> float:
-	var eff_cd_mult: float = clampf(attack_speed_mult * synergy_haste_mult, 0.25, 1.5)
-	var haste_scale: float = 1.0 / eff_cd_mult
-	var combat_scale: float = 1.18 if in_combat else 1.0
-	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
-	return base_speed * haste_scale * combat_scale * star_scale
+	return BalanceTargeting.spirit_orbit_angular_speed(base_speed, attack_speed_mult, synergy_haste_mult, in_combat, max_star)
 
-## 环绕灵宝接触结算占空比：轨道扫掠 + 扇区扑击 + 26px 接触圈下，敌人处于可结算位置的
-## 时间占比实测估计（tests/WeaponProbe.tscn 灵蝶 ★1 口径）。纸面 DPS × 该系数 = 有效 DPS，
-## WeaponData.sustained_single_dps 的 DRONE 分支按此折算，让平衡判据用"实伤口径"钉数值。
-const SPIRIT_CONTACT_DUTY := 0.75
-
-## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
-## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）
-## enemies_info: Array[Dictionary]，每个敌人的信息 { "dist": float, "angle": float }
-## 返回: { "radii": Array[float], "in_combat": bool }
 static func compute_spirit_orbit(
 	orb_angles: Array,
 	enemies_info: Array,
@@ -713,97 +300,7 @@ static func compute_spirit_orbit(
 	min_radius: float = SPIRIT_MIN_RADIUS,
 	max_reach: float = SPIRIT_MAX_REACH
 ) -> Dictionary:
-	var count := orb_angles.size()
-	var result_radii: Array[float] = []
-	for i in range(count):
-		result_radii.append(base_radius)
+	return BalanceTargeting.compute_spirit_orbit(orb_angles, enemies_info, base_radius, min_radius, max_reach)
 
-	if count == 0:
-		return {"radii": result_radii, "in_combat": false}
-
-	if enemies_info.is_empty():
-		return {"radii": result_radii, "in_combat": false}
-
-	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）
-	var in_combat := false
-	var in_range_enemies: Array[Dictionary] = []
-	var danger_enemies: Array[Dictionary] = []
-	var sum_dist := 0.0
-
-	for e in enemies_info:
-		var d: float = float(e.get("dist", 9999.0))
-		if d <= max_reach + 20.0:
-			in_combat = true
-		if d <= max_reach:
-			in_range_enemies.append(e)
-			sum_dist += d
-		if d <= SPIRIT_DANGER_DIST:
-			danger_enemies.append(e)
-
-	if not in_combat or in_range_enemies.is_empty():
-		return {"radii": result_radii, "in_combat": in_combat}
-
-	var avg_reach_dist: float = clampf(sum_dist / float(in_range_enemies.size()), min_radius, base_radius * 1.25)
-
-	# 2. 为每枚灵宝计算自适应半径
-	for i in range(count):
-		var orb_a: float = float(orb_angles[i])
-		var assigned_r := -1.0
-
-		# 2.1 贴身危急优先内收自保：灵宝公转到危急敌人附近时，收缩到敌人身前封堵
-		var closest_danger_dist := 9999.0
-		for de in danger_enemies:
-			var de_ang: float = float(de.get("angle", 0.0))
-			var diff := absf(wrapf(de_ang - orb_a, -PI, PI))
-			if diff <= PI * 0.5:
-				var dd: float = float(de.get("dist", SPIRIT_DANGER_DIST))
-				if dd < closest_danger_dist:
-					closest_danger_dist = dd
-		if closest_danger_dist < 9999.0:
-			assigned_r = clampf(closest_danger_dist, min_radius, base_radius)
-
-		# 2.2 扇区索敌扑击：灵宝正前方扇区内的最近敌人，灵宝动态外扩扑击
-		if assigned_r < 0.0:
-			var best_sector_dist := 9999.0
-			for e in in_range_enemies:
-				var e_ang: float = float(e.get("angle", 0.0))
-				var diff := absf(wrapf(e_ang - orb_a, -PI, PI))
-				if diff <= SPIRIT_SECTOR_HALF_ANGLE:
-					var ed: float = float(e.get("dist", 9999.0))
-					if ed < best_sector_dist:
-						best_sector_dist = ed
-			if best_sector_dist < 9999.0:
-				assigned_r = clampf(best_sector_dist, min_radius, max_reach)
-
-		# 2.3 环体自适应呼吸：未锁定单体时柔性匹配敌群平均基准，否则回归 base_radius
-		if assigned_r < 0.0:
-			assigned_r = avg_reach_dist
-
-		result_radii[i] = assigned_r
-
-	return {"radii": result_radii, "in_combat": in_combat}
-
-# ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
-
-const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把法器的神识分流系数
-
-## 纯函数：根据当前上阵法器总数（含悬浮法器与环绕灵物），计算单把法器的直击神识分流效率
-## 1 把: 1.00 (100%), 2 把: ~0.893 (总 1.79x), 3 把: ~0.806 (总 2.42x), 4 把: ~0.735 (总 2.94x),
-## 5 把: ~0.676 (总 3.38x), 6 把: ~0.625 (总 3.75x)。
-## 每多买一把法器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
 static func multi_weapon_damage_mult(slot_count: int) -> float:
-	return 1.0 / (1.0 + MULTI_WEAPON_LOAD_PER_EXTRA * float(maxi(1, slot_count) - 1))
-
-# ---------------- 同目标短窗集火韧性（防一帧蒸发，保障受击打击感） ----------------
-
-const FOCUS_FIRE_WINDOW := 0.22      ## 集火保护短窗（秒）
-const FOCUS_FIRE_HIT2_MULT := 0.70  ## 窗口内第 2 击伤害倍率
-const FOCUS_FIRE_HIT3_MULT := 0.50  ## 窗口内第 3 击及后续伤害倍率
-
-## 纯函数：根据短窗内已有直击命中次数（recent_hits，0 = 窗口首击），计算本次直击受击乘区
-static func focus_fire_mult(recent_hits: int) -> float:
-	if recent_hits <= 0:
-		return 1.0
-	if recent_hits == 1:
-		return FOCUS_FIRE_HIT2_MULT
-	return FOCUS_FIRE_HIT3_MULT
+	return BalanceTargeting.multi_weapon_damage_mult(slot_count)

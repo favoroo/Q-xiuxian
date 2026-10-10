@@ -97,6 +97,15 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与血量平�
 - **非判据现场预览（`tests/*Preview.tscn` / `AudioGallery.tscn`）**：需要真实出声/出图，运行时**不加 `--headless`**。
 - **约定**：新增测试直接放入 `tests/` 即可，**禁止将新增测试命令追加到本文件**。
 
+## 并行协作约定（多 Agent 并行开发）
+
+本项目常由多个 Agent 并行修改，按此约定避让以减少文件冲突：
+
+- **共享串行文件**（同一时间全局只允许一个 Agent 改，改前先 `git status --short` 看是否已被占用）：`export_presets.cfg`、`project.godot`、`scripts/autoload/Version.gd`、`assets_raw/manifest.jsonl`、`tools/font_charset.txt` + `fonts/MiSans-*.woff2`、`scripts/ui/GameStyle.gd`（唯一取色入口）。
+- **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd` / `tests/unit_runner.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。
+- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 灵石阁卡工厂与槽位；`scripts/ui/stats/` 属性面板 builder；`scripts/systems/Balance*.gd` 数值公式；`tests/unit/` 单测主题模块。
+- `CHANGELOG.md` 为追加式，正常往上加即可，冲突面小。
+
 ## 变更日志（每次改代码必读必写）
 
 改完追加写入 [CHANGELOG.md](CHANGELOG.md)（gitignored，仅本地）。**格式 `## YYYY-MM-DD #序号`**（如 `## 2026-10-09 #01`），序号当日从 01 起、**不记时间点**、**新的在上面**。每条一句话概述改了什么 + 关键文件路径；**只记对排查问题有用的根因、陷阱与架构变动**——Bug 用 `Fixed:` 标出根因，新系统/重构点出涉及文件。**不记**：逐项 `Added`/`Changed`/`Verified` 标签流水账、测试项数与 exit 状态明细、selftest 细节、用户原话、设计推导、临时出图路径。无论是否提交都要记。
