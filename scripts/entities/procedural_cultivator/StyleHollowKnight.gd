@@ -25,8 +25,8 @@ func _draw_front() -> void:
 	draw_filled_ellipse(Vector2(0, 32), 16.0, 4.5, Color(0.04, 0.06, 0.08, 0.45))
 	draw_arc(Vector2(0, 32), 18.0, 0, TAU, 24, Color(0.35, 0.75, 0.60, 0.18 + sin(_time * 3.0) * 0.05), 1.2, true)
 
-	# 2. 背负的修长纯白骨钉飞剑（倾斜斜插后背）
-	_draw_hollow_nail(Vector2(-1, -10 + float_y), deg_to_rad(-24.0))
+	# 2. 背后大角度斜贯背负之纯白骨钉（剑柄探出右肩，剑尖探出左下摆）
+	_draw_hollow_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
 
 	# 3. 破损墨绿蝉翼道披（多层叠落，有破口锐角）
 	var cloak_pts: PackedVector2Array = [
@@ -102,6 +102,8 @@ func _draw_side() -> void:
 		Vector2(6, 18 + float_y),
 		Vector2(6, 0 + float_y)
 	]
+	# 侧面后背背负之骨钉（贴合后背斗篷，剑尖向后上方斜挑）
+	_draw_hollow_nail(Vector2(-6, 6 + float_y), deg_to_rad(-22.0))
 	draw_colored_polygon(cloak_pts, CLOAK_GREEN)
 	draw_polyline(cloak_pts, CLOAK_EDGE, 1.2, true)
 
@@ -124,9 +126,6 @@ func _draw_side() -> void:
 	draw_soft_glow(eye_pos, 5.5, EYE_GLOW, 3)
 	draw_filled_ellipse(eye_pos, 2.6, 4.2, EYE_WHITE)
 
-	# 6. 单手执长骨钉斜指前方待发
-	_draw_hollow_nail(Vector2(14, 10 + float_y), deg_to_rad(62.0))
-
 func _draw_back() -> void:
 	var float_y := sin(_time * 2.8) * 2.0 if animate else 0.0
 	var cloak_sway := sin(_time * 3.5) * 2.5 if animate else 0.0
@@ -134,11 +133,36 @@ func _draw_back() -> void:
 	# 1. 虚空地影
 	draw_filled_ellipse(Vector2(0, 32), 16.0, 4.5, Color(0.04, 0.06, 0.08, 0.45))
 
-	# 2. 纯黑后脑
+	# 2. 背后全覆盖的墨绿残破斗篷（作为深色底衬）
+	var cloak_pts: PackedVector2Array = [
+		Vector2(-8, -6 + float_y), Vector2(8, -6 + float_y),
+		Vector2(15, 14 + float_y),
+		Vector2(12 + cloak_sway * 0.4, 29 + float_y),
+		Vector2(5, 27 + float_y),
+		Vector2(0, 31 + float_y),
+		Vector2(-6, 26 + float_y),
+		Vector2(-13 - cloak_sway * 0.4, 29 + float_y),
+		Vector2(-15, 14 + float_y)
+	]
+	draw_colored_polygon(cloak_pts, CLOAK_GREEN)
+	draw_polyline(cloak_pts, CLOAK_EDGE, 1.2, true)
+
+	# 3. 后背斜跨剑带
+	var p_top := Vector2(8, -6 + float_y)
+	var p_bot := Vector2(-8, 18 + float_y)
+	draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 3.0)
+	draw_line(p_top, p_bot, CLOAK_EDGE, 1.0)
+	var center := (p_top + p_bot) * 0.5
+	draw_circle(center, 2.8, NAIL_WHITE)
+	draw_circle(center, 1.4, VOID_BLACK)
+
+	# 4. 在斗篷最外层绘制斜跨背负的长骨钉！
+	_draw_hollow_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
+
+	# 5. 纯黑后脑与双角
 	var head_center := Vector2(0, -14 + float_y)
 	draw_circle(head_center, 9.5, VOID_BLACK)
 
-	# 3. 后脑双角（对称耸立直刺虚空）
 	var left_horn: PackedVector2Array = [
 		head_center + Vector2(-6, -4),
 		head_center + Vector2(-12, -18),
@@ -156,43 +180,34 @@ func _draw_back() -> void:
 	]
 	draw_colored_polygon(right_horn, VOID_BLACK)
 
-	# 4. 背后全覆盖的墨绿残破斗篷
-	var cloak_pts: PackedVector2Array = [
-		Vector2(-8, -6 + float_y), Vector2(8, -6 + float_y),
-		Vector2(15, 14 + float_y),
-		Vector2(12 + cloak_sway * 0.4, 29 + float_y),
-		Vector2(5, 27 + float_y),
-		Vector2(0, 31 + float_y),
-		Vector2(-6, 26 + float_y),
-		Vector2(-13 - cloak_sway * 0.4, 29 + float_y),
-		Vector2(-15, 14 + float_y)
-	]
-	draw_colored_polygon(cloak_pts, CLOAK_GREEN)
-	draw_polyline(cloak_pts, CLOAK_EDGE, 1.2, true)
-
-	# 5. 背后正中垂直背负的长骨钉
-	_draw_hollow_nail(Vector2(0, 0 + float_y), deg_to_rad(-10.0))
-
 ## 辅助函数：绘制空洞骑士极简纯白修长骨钉
 func _draw_hollow_nail(pos: Vector2, rot: float) -> void:
 	var t := Transform2D(rot, pos)
 	# 极长且锐利的白骨剑身
 	var nail_pts: PackedVector2Array = [
-		t * Vector2(0, -32),  # 极其尖锐的钉尖
-		t * Vector2(2.6, -22),
-		t * Vector2(2.8, 12),
-		t * Vector2(-2.8, 12),
-		t * Vector2(-2.6, -22)
+		t * Vector2(0, -36),  # 极其尖锐的钉尖
+		t * Vector2(3.0, -26),
+		t * Vector2(3.0, 13),
+		t * Vector2(-3.0, 13),
+		t * Vector2(-3.0, -26)
 	]
 	draw_colored_polygon(nail_pts, NAIL_WHITE)
-	# 骨钉右侧刻面阴影
+	# 骨钉刻面阴影
 	var shadow_pts: PackedVector2Array = [
-		t * Vector2(0, -32),
-		t * Vector2(2.6, -22),
-		t * Vector2(2.8, 12),
-		t * Vector2(0, 12)
+		t * Vector2(0, -36),
+		t * Vector2(3.0, -26),
+		t * Vector2(3.0, 13),
+		t * Vector2(0, 13)
 	]
 	draw_colored_polygon(shadow_pts, NAIL_SHADOW)
-	# 骨质剑柄
-	draw_line(t * Vector2(0, 12), t * Vector2(0, 20), NAIL_WHITE, 2.2)
-	draw_circle(t * Vector2(0, 21), 2.2, NAIL_SHADOW)
+	# 剑尖凝聚纯白冷月光点
+	draw_circle(t * Vector2(0, -36), 2.2, Color.WHITE)
+	draw_soft_glow(t * Vector2(0, -36), 6.0, EYE_GLOW, 2)
+	# 骨质剑格与剑柄
+	var guard_pts: PackedVector2Array = [
+		t * Vector2(-4.0, 13), t * Vector2(4.0, 13),
+		t * Vector2(3.0, 16), t * Vector2(-3.0, 16)
+	]
+	draw_colored_polygon(guard_pts, NAIL_SHADOW)
+	draw_line(t * Vector2(0, 16), t * Vector2(0, 23), NAIL_WHITE, 2.5)
+	draw_circle(t * Vector2(0, 24), 2.6, NAIL_SHADOW)
