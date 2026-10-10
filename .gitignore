@@ -18,6 +18,10 @@ CHANGELOG.md
 .zcode/
 .workbuddy/
 
+# 测试预览工具跑出的截图/诊断图（临时产物，可再生成；已入库的画廊图不受影响）
+tests/styles/*.png
+tests/styles/*.png.import
+
 # macOS 文件系统元数据
 .DS_Store
 
