@@ -18,6 +18,24 @@ enum Angle {
 	BACK   ## 背面视角
 }
 
+## 分层渲染开关（仅供像素判据取掩码用，0 表示不过滤＝游戏内正常全画）
+## 判据需要单独拿到「只有武器」「只有头部」这两圈真实画出来的像素，
+## 所以过滤必须发生在渲染器自己的绘制入口上，不能在测试里另画一套。
+enum Layer {
+	SHADOW = 1,   ## 地影
+	MOTES  = 2,   ## 周天灵气/眼尾拖影
+	WEAPON = 4,   ## 背负本命法器
+	CLOAK  = 8,   ## 斗篷与胸饰
+	HEAD   = 16,  ## 面壳 + 首服 + 眼
+	FX     = 32,  ## 斩痕/受击闪光
+}
+
+## 位掩码；0 = 全开。非 0 时只画被选中的层。
+var debug_layers: int = 0
+
+func _layer_on(layer: int) -> bool:
+	return debug_layers == 0 or (debug_layers & layer) != 0
+
 @export var config: CultivatorVisualConfig:
 	set(val):
 		config = val

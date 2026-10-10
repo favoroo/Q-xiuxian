@@ -35,6 +35,7 @@ func _run() -> void:
 	# （Engine.time_scale = 0.04），把 9 秒的实测拖成几十分钟。这里关掉顿帧只改内存
 	# （auto_save = false，不落盘、不动用户设置），最后再验一次时间标度没留残值。
 	SettingsManager.set_val(&"display", &"hit_stop", false, false)
+	Engine.time_scale = 8.0
 
 	_world = Node2D.new()
 	_world.name = "WolfAiWorld"
@@ -71,6 +72,7 @@ func _run() -> void:
 	await _case_real_chase_bites()
 
 	_world.queue_free()
+	Engine.time_scale = 1.0
 	# 时间标度留残值 = 上面所有"游戏秒"的读数都不可信，宁可红也不交假绿
 	_c.check(is_equal_approx(Engine.time_scale, 1.0), "收尾：Engine.time_scale 已回到 1.0")
 	if _c.report("WOLF_RESULT"):

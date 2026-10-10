@@ -27,6 +27,10 @@ func _ready() -> void:
 	_spot(Vector2(660, 260), HealOrb.TINT_READY, "波末结算中（飞进袖中）")
 	_spot(Vector2(860, 260), Color(0, 0, 0, 0), "已入口 → 空手（只剩判定圈示意）")
 
+	if DisplayServer.get_name() == "headless":
+		await get_tree().create_timer(0.1).timeout
+		get_tree().quit(0)
+
 func _spot(pos: Vector2, tint: Color, caption: String) -> void:
 	var holder := Node2D.new()
 	holder.position = pos

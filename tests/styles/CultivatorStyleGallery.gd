@@ -27,9 +27,9 @@ func _ready() -> void:
 	add_child(mask)
 
 	# 3. 顶部总标题与副标题
-		var title_lbl := Label.new()
-		title_lbl.text = "渡个劫 · 四大画风定制人设全景对比看板 (纯代码绘制)"
-		title_lbl.position = Vector2(24, 8)
+	var title_lbl := Label.new()
+	title_lbl.text = "渡个劫 · 四大画风定制人设全景对比看板 (纯代码绘制)"
+	title_lbl.position = Vector2(24, 8)
 	title_lbl.add_theme_font_size_override("font_size", 16)
 	title_lbl.add_theme_color_override("font_color", Color(0.96, 0.85, 0.40))
 	add_child(title_lbl)
@@ -219,13 +219,15 @@ func _schedule_screenshot() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	if img:
-		DirAccess.make_dir_recursive_absolute("tests/styles")
-		img.save_png(OUTPUT_IMG_PATH)
-		print("[SAVED] 画风对比看板已成功导出至: %s" % OUTPUT_IMG_PATH)
-		if OS.get_cmdline_user_args().has("--export") or DisplayServer.get_name() == "headless":
-			get_tree().quit()
+	if DisplayServer.get_name() != "headless":
+		var tex := get_viewport().get_texture()
+		var img := tex.get_image() if tex != null else null
+		if img:
+			DirAccess.make_dir_recursive_absolute("tests/styles")
+			img.save_png(OUTPUT_IMG_PATH)
+			print("[SAVED] 画风对比看板已成功导出至: %s" % OUTPUT_IMG_PATH)
+	if OS.get_cmdline_user_args().has("--export") or DisplayServer.get_name() == "headless":
+		get_tree().quit(0)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:

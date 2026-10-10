@@ -186,6 +186,21 @@ def _arp(buf, freqs, *, t_step=0.09, dur=0.26, peak=0.15, wtype="triangle", echo
 
 
 SFX = {
+    # 命中反馈分层：受击入肉、暴击低频撕裂（Sub-Bass）、重器钝击
+    "enemy_hit_crit": [
+        lambda b: (tone(b, wtype="sine", f0=130, f1=36, dur=0.18, peak=0.32),
+                   noise(b, dur=0.08, peak=0.18, ftype="bandpass", f0=1600, f1=450, q=1.4),
+                   tone(b, wtype="triangle", f0=820, f1=240, dur=0.045, peak=0.12)),
+        lambda b: (tone(b, wtype="sawtooth", f0=140, f1=42, dur=0.16, peak=0.26, lp=320),
+                   noise(b, dur=0.09, peak=0.20, ftype="lowpass", f0=2200, f1=380, q=1.2),
+                   tone(b, wtype="sine", f0=1100, f1=320, dur=0.04, peak=0.10)),
+    ],
+    "enemy_hit_heavy": [
+        lambda b: (tone(b, wtype="sine", f0=95, f1=28, dur=0.22, peak=0.35),
+                   noise(b, dur=0.14, peak=0.18, ftype="lowpass", f0=900, f1=180, q=1.5)),
+        lambda b: (tone(b, wtype="triangle", f0=110, f1=32, dur=0.20, peak=0.32),
+                   noise(b, dur=0.12, peak=0.16, ftype="bandpass", f0=1200, f1=220, q=1.1)),
+    ],
     # 妖物死灭：以前普通敌人死亡是全静音的，而击杀是本作最高频的事件
     "enemy_death": [
         lambda b: (tone(b, wtype="sine", f0=300, f1=90, dur=0.10, peak=0.18),

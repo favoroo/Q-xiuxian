@@ -224,10 +224,12 @@ func _test_facing() -> void:
 
 func _spawned() -> Array[BladeProjectile]:
 	var out: Array[BladeProjectile] = []
-	for c in get_tree().current_scene.get_children():
-		var p := c as BladeProjectile
-		if p != null:
-			out.append(p)
+	var cur: Node = get_tree().current_scene
+	if cur != null:
+		for node in cur.find_children("*", "BladeProjectile", true, false):
+			var p := node as BladeProjectile
+			if p != null and p.visible and not p.is_queued_for_deletion():
+				out.append(p)
 	return out
 
 func _test_projectile_bay() -> void:
@@ -335,7 +337,7 @@ func _run_selftest() -> void:
 	var fixed := _facing_err(w, aim)
 	w.sprite.rotation = 0.0      # 旧写法：贴图不补偿，本体转多少算多少
 	var broken := _facing_err(w, aim)
-	var def := WeaponData.get_def("gengjin_feijian")
+	var def := WeaponData.get_def("qingyun_sword")
 	var img := _icon_image(String(def.get("icon", "")))
 	var right := _luma_bias_along(img, def["tip"])
 	var flipped := _luma_bias_along(img, -Vector2(def["tip"]))

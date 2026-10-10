@@ -116,5 +116,9 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
-	get_viewport().get_texture().get_image().save_png("/tmp/ui_style_preview.png")
-	get_tree().quit()
+	if DisplayServer.get_name() != "headless":
+		var tex := get_viewport().get_texture()
+		var img := tex.get_image() if tex != null else null
+		if img != null:
+			img.save_png("/tmp/ui_style_preview.png")
+	get_tree().quit(0)

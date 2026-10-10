@@ -58,10 +58,13 @@ func _ready() -> void:
 			node._card_w, float(cont.get_theme_constant("separation")),
 			LevelUpDialog.card_inner_w(node._card_w)])
 		await get_tree().process_frame
-		var img := get_viewport().get_texture().get_image()
-		var path := "/tmp/alloc_layout_%s.png" % TAGS[i]
-		img.save_png(path)
-		print("  SAVED %s %s" % [path, img.get_size()])
+		if DisplayServer.get_name() != "headless":
+			var tex := get_viewport().get_texture()
+			var img := tex.get_image() if tex != null else null
+			if img != null:
+				var path := "/tmp/alloc_layout_%s.png" % TAGS[i]
+				img.save_png(path)
+				print("  SAVED %s %s" % [path, img.get_size()])
 		node.queue_free()
 		await get_tree().process_frame
 	print("\nALLOC_LAYOUT_DONE")

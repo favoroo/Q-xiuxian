@@ -57,7 +57,11 @@ func _seed_full() -> void:
 
 func _shot(path: String) -> void:
 	await get_tree().process_frame
-	get_viewport().get_texture().get_image().save_png(path)
+	if DisplayServer.get_name() != "headless":
+		var tex := get_viewport().get_texture()
+		var img := tex.get_image() if tex != null else null
+		if img != null:
+			img.save_png(path)
 
 func _settle(n: int) -> void:
 	for _i in range(n):

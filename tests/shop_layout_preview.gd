@@ -87,10 +87,14 @@ func _shoot(size: Vector2i, tag: String, count: int) -> void:
 	for card in node.offers_container.get_children():
 		if card is Control:
 			need_h = maxf(need_h, (card as Control).get_combined_minimum_size().y)
-	var path := "/tmp/shop_%s_%d格.png" % [tag, count]
-	get_viewport().get_texture().get_image().save_png(path)
-	print("SHOP %s 货架%d格 设计可视 %.0fx%.0f · 滚动区高 %.0f / 最高卡需 %.0f → %s · %s" % [
-		tag, count, screen.x, screen.y, scroll.size.y, need_h,
-		"一屏放完" if need_h <= scroll.size.y + 1.0 else "▲ 要上下滑", path])
-	node.queue_free()
+		var path := "/tmp/shop_%s_%d格.png" % [tag, count]
+		if DisplayServer.get_name() != "headless":
+			var tex := get_viewport().get_texture()
+			var img := tex.get_image() if tex != null else null
+			if img != null:
+				img.save_png(path)
+		print("SHOP %s 货架%d格 设计可视 %.0fx%.0f · 滚动区高 %.0f / 最高卡需 %.0f → %s · %s" % [
+			tag, count, screen.x, screen.y, scroll.size.y, need_h,
+			"一屏放完" if need_h <= scroll.size.y + 1.0 else "▲ 要上下滑", path])
+		node.queue_free()
 	await get_tree().process_frame

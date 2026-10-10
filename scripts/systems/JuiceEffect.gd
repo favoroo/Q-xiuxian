@@ -19,6 +19,7 @@ var lifetime: float = 0.2
 var elapsed: float = 0.0
 var is_crit: bool = false
 var is_elite: bool = false
+var _hit_angle: float = 0.0  ## 受击主方向角（用于绘制瞬爆中心斩痕星芒）
 
 # 粒子（并行数组，下标一一对应）。数组预热后按下标覆盖，只用 _p_count 标记有效长度，
 # 每次生成不再 clear/append，也不再有「每颗粒子一个 Dictionary」。
@@ -190,6 +191,20 @@ func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
 
+	# 0. 受击瞬间中心闪光核与锐利斩痕星芒（仅前 35% 生命周期内爆发，「短、快、准」瞬间反馈）
+	if effect_type == EffectType.HIT_SPARKS and progress < 0.36:
+		var flash_t := 1.0 - (progress / 0.36)
+		var core_r := (9.5 if is_crit else 6.0) * flash_t
+		var core_c := Color(1.0, 0.98, 0.92, flash_t * 0.95)
+		draw_circle(Vector2.ZERO, core_r, core_c)
+		var slash_dir := Vector2.RIGHT.rotated(_hit_angle + PI * 0.5)
+		var slash_len := (24.0 if is_crit else 14.0) * (0.4 + 0.6 * flash_t)
+		var slash_col := Color(1.0, 0.92, 0.65, flash_t * 0.92) if is_crit else Color(0.88, 0.97, 1.0, flash_t * 0.85)
+		draw_line(-slash_dir * slash_len, slash_dir * slash_len, slash_col, (3.2 if is_crit else 2.2) * flash_t, true)
+		if is_crit:
+			var cross_dir := Vector2.RIGHT.rotated(_hit_angle)
+			draw_line(-cross_dir * (slash_len * 0.75), cross_dir * (slash_len * 1.15), Color(1.0, 0.45, 0.2, flash_t * 0.88), 2.6 * flash_t, true)
+
 	# 1. 冲击光环
 	for i in range(_r_count):
 		var col: Color = _r_col[i]
@@ -217,12 +232,13 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 	if not _ready_to_spawn(parent):
 		return
 	var fx := _acquire()
-	fx._begin(EffectType.HIT_SPARKS, pos, 0.22 if not crit else 0.28, Z_OVERLAY)
+	fx._begin(EffectType.HIT_SPARKS, pos, 0.20 if not crit else 0.25, Z_OVERLAY)
 	fx.is_crit = crit
 
-	var count := 7 if not crit else 12
+	var count := 8 if not crit else 14
 	var base_angle := hit_dir.angle() if hit_dir.length_squared() > 0.01 else randf() * TAU
-	var cone := deg_to_rad(65.0)
+	fx._hit_angle = base_angle
+	var cone := deg_to_rad(58.0)
 
 	var core_col := Color(0.9, 0.98, 1.0, 1.0) if not crit else Color(1.0, 0.96, 0.65, 1.0)
 	var glow_col := Color(0.3, 0.7, 1.0, 0.9) if not crit else Color(1.0, 0.65, 0.15, 0.95)

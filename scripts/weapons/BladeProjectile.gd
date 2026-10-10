@@ -251,6 +251,7 @@ static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
 		return
 	_pool.clear()
+	_lit_count = 0   ## 宿主销毁 = 灯随弹丸一起没了，名额同步归零
 	_host = Node2D.new()
 	_host.name = "BladeProjectilePool"
 	parent.add_child(_host)

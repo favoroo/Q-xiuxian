@@ -66,7 +66,6 @@ var charge_time: float = 0.0
 @onready var stone_mat: ShaderMaterial = $Sprite2D.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
-var gold_gem_tex: Texture2D = preload("res://assets/art/gem_gold.png")
 
 ## 程序化矢量阵台渲染器
 var _obelisk_renderer: ProceduralObeliskRenderer = null
@@ -310,14 +309,13 @@ func _trigger_blessing() -> void:
 			enemy.take_damage(BLESSING_DAMAGE, knock, true)
 	# 掉落金色灵石
 	for i in range(GEM_COUNT):
-		var gem = gem_scene.instantiate() as AstralGem
+		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
+		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
 		var offset = Vector2(randf_range(-40.0, 40.0), randf_range(-40.0, 40.0))
 		gem.global_position = global_position + offset
 		gem.is_gold = true
 		gem.exp_value = 10
-		gem.get_node("Sprite2D").texture = gold_gem_tex
-		gem.get_node("PointLight2D").color = Color(1.0, 0.85, 0.35)
-		get_parent().call_deferred("add_child", gem)
+		gem.activate()
 	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相
 	var tw = create_tween()
 	tw.tween_property(light, "energy", 5.0, 0.12)

@@ -42,9 +42,11 @@ func _ready() -> void:
 		i += 1
 	for f in range(6):
 		await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	img.save_png("/tmp/bullet_render.png")
-	print("SAVED ", img.get_size())
+	if DisplayServer.get_name() != "headless":
+		var img := get_viewport().get_texture().get_image()
+		if img != null:
+			img.save_png("/tmp/bullet_render.png")
+			print("SAVED ", img.get_size())
 	get_tree().quit(0)
 
 func _person(path: String, sc: float, at: Vector2) -> void:

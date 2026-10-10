@@ -48,7 +48,6 @@ const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
-var gold_gem_tex: Texture2D = preload("res://assets/art/gem_gold.png")
 
 ## 与 EnemyBase 同名：ThunderBurst 按 get("dying") 判断这一件是否已结算过
 var dying: bool = false
@@ -169,14 +168,13 @@ func _destroy() -> void:
 		get_parent().call_deferred("add_child", fruit)
 	else:
 		for i in range(3):
-			var gem := gem_scene.instantiate() as AstralGem
+			# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
+			var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
 			gem.global_position = global_position + Vector2(
 				GameManager.rng.randf_range(-20.0, 20.0), GameManager.rng.randf_range(-20.0, 20.0))
 			gem.is_gold = true
 			gem.exp_value = 5
-			gem.get_node("Sprite2D").texture = gold_gem_tex
-			gem.get_node("PointLight2D").color = Color(1.0, 0.82, 0.35)
-			get_parent().call_deferred("add_child", gem)
+			gem.activate()
 	queue_free()
 
 ## 波末还没砸开的匣子随余怪一起消散（不掉落）—— 与 EnemyBase.dissolve 同一口径。

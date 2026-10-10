@@ -77,6 +77,7 @@ func _ready() -> void:
 	anim_base_scale = anim_sprite.scale
 	# 浮游法器在 _process 里做轨道跟随（渲染帧率），父链开了物理插值会互相打架，关闭该分支插值
 	weapon_holder.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_search_phase = fposmod(float(get_instance_id() % 97) * 0.001, TARGET_SEARCH_INTERVAL)
 	sync_drones()
 	_sync_pickup_radius()
 
@@ -533,7 +534,12 @@ func _physics_process(delta: float) -> void:
 		skill_vfx.update_vfx(delta, is_moving, velocity)
 
 	# 6. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
-	_update_weapon_targets()
+	# 10Hz 节流 + 错相（2026-10-10 第 6 波卡顿优化）：敌人位置连续，索敌无需逐帧
+	# intersect_shape；新目标入射程最多延迟 100ms 锁定，肉眼无感
+	_search_phase -= delta
+	if _search_phase <= 0.0:
+		_search_phase = TARGET_SEARCH_INTERVAL
+		_update_weapon_targets()
 
 func _sort_candidate_by_dist(a: Node2D, b: Node2D) -> bool:
 	return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
@@ -542,6 +548,10 @@ func _acquire_pooled_dict(pool: Array[Dictionary], idx: int) -> Dictionary:
 	while pool.size() <= idx:
 		pool.append({})
 	return pool[idx]
+
+## 索敌节流（2026-10-10 第 6 波卡顿优化）：10Hz + instance_id 错相
+const TARGET_SEARCH_INTERVAL := 0.1
+var _search_phase: float = 0.0
 
 func _update_weapon_targets() -> void:
 	equipped_cleanup()
@@ -764,8 +774,9 @@ func take_damage(amount: float) -> void:
 	invulnerable_time = 0.55
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
-	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压
+	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压 + 触觉震感
 	GameManager.feedback(GameManager.FeedbackTier.LARGE)
+	GameFeel.vibrate(40, 0.85)
 	GameManager.pulse_damage_vignette(Color(0.85, 0.12, 0.12, 0.65), 0.24)
 	play_squash(Vector2(1.35, 0.72), 0.22)
 	if is_procedural and procedural_view != null:

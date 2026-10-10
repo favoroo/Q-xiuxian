@@ -31,6 +31,26 @@ var width_scale: float = 1.0
 var height_scale: float = 1.0
 var head_scale: float = 1.0
 
+# ----------------- 背负法器位姿基准 -----------------
+## 正面：斜背，柄与剑首从右肩外探出、剑尖朝下收进斗篷后。
+## 锚点刻意压在面具轮廓（oval_chin 左右 x=±9.5、下巴 y=-5）之外——
+## 骨钉剑/厚背断刀/兽骨斧的填充色与骨白面壳色差不到 0.17，一贴脸就画成"剑长在脸上"。
+const CARRY_FRONT_POS := Vector2(10.5, 0.0)
+const CARRY_FRONT_ROT := 205.0
+## 侧面：法器负于后背中下方，端头向后上轻挑，下端收于斗篷内
+const CARRY_SIDE_POS := Vector2(-6.5, 4.5)
+const CARRY_SIDE_ROT := -18.0
+## 背面：横贯背部中下方，上端留足离后脑的空白
+const CARRY_BACK_POS := Vector2(2.0, 11.0)
+const CARRY_BACK_ROT := 158.0
+
+var carry_front_pos: Vector2 = CARRY_FRONT_POS
+var carry_front_rot: float = CARRY_FRONT_ROT
+var carry_side_pos: Vector2 = CARRY_SIDE_POS
+var carry_side_rot: float = CARRY_SIDE_ROT
+var carry_back_pos: Vector2 = CARRY_BACK_POS
+var carry_back_rot: float = CARRY_BACK_ROT
+
 var mask_style: String = "oval_chin"
 var horns_style: String = "butterfly"
 var eye_style: String = "hollow_oval"
@@ -83,6 +103,12 @@ func _sync_config() -> void:
 	col_weapon_main = w_dict.get("col_main", Color(0.95, 0.97, 1.0))
 	col_weapon_shadow = w_dict.get("col_shadow", Color(0.70, 0.78, 0.86))
 	col_weapon_accent = w_dict.get("col_accent", Color(1.0, 1.0, 1.0, 0.9))
+	carry_front_pos = w_dict.get("carry_front_pos", CARRY_FRONT_POS)
+	carry_front_rot = float(w_dict.get("carry_front_rot", CARRY_FRONT_ROT))
+	carry_side_pos = w_dict.get("carry_side_pos", CARRY_SIDE_POS)
+	carry_side_rot = float(w_dict.get("carry_side_rot", CARRY_SIDE_ROT))
+	carry_back_pos = w_dict.get("carry_back_pos", CARRY_BACK_POS)
+	carry_back_rot = float(w_dict.get("carry_back_rot", CARRY_BACK_ROT))
 
 	# 骨玉基底
 	col_bone = config.bone_white
@@ -119,17 +145,17 @@ func _draw_idle(angle: Angle) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(Vector2(6, -6 + float_y), deg_to_rad(22.0), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, eye_pulse)
 		Angle.SIDE:
-			_draw_modular_weapon(Vector2(-5, 1 + float_y), deg_to_rad(-16.0), Angle.SIDE)
+			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.SIDE)
 			_draw_head_side(float_y, eye_pulse)
 		Angle.BACK:
 			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
-			_draw_modular_weapon(Vector2(1, -2 + float_y), deg_to_rad(152.0), Angle.BACK)
+			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
 
 # ==================== 2. 奔跑 / 御风飞行 (RUN / GLIDE) ====================
@@ -151,18 +177,18 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(Vector2(6, -6 + float_y * 0.85), deg_to_rad(22.0 + sin(wave_t) * 2.5), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y * 0.85), deg_to_rad(carry_front_rot + sin(wave_t) * 2.5), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.FRONT)
 			_draw_head_front(float_y, 0.06)
 		Angle.SIDE:
-			_draw_modular_weapon(Vector2(-5, 1 + float_y), deg_to_rad(-15.0), Angle.SIDE)
+			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot + 1.0), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.SIDE)
 			_draw_head_side(float_y, 0.05)
 			_draw_eye_trail(float_y)
 		Angle.BACK:
 			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
-			_draw_modular_weapon(Vector2(1, -2 + float_y), deg_to_rad(152.0), Angle.BACK)
+			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
 
 # ==================== 3. 冲刺 (DASH) ====================
@@ -181,7 +207,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(Vector2(7, -5 + dash_y), deg_to_rad(30.0), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(1.5, dash_y + 1.0), deg_to_rad(carry_front_rot + 12.0), Angle.FRONT)
 			_draw_modular_cloak(dash_y, 0.0, 6.0, Angle.FRONT)
 			_draw_head_front(dash_y + 1, 0.3)
 		Angle.SIDE:
@@ -192,7 +218,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 		Angle.BACK:
 			_draw_modular_cloak(dash_y, 0.0, 6.0, Angle.BACK)
 			_draw_modular_strap(dash_y)
-			_draw_modular_weapon(Vector2(3, 4 + dash_y), deg_to_rad(144.0), Angle.BACK)
+			_draw_modular_weapon(carry_back_pos + Vector2(2.0, dash_y), deg_to_rad(carry_back_rot - 8.0), Angle.BACK)
 			_draw_head_back(dash_y + 1)
 
 # ==================== 4. 攻击挥剑 (ATTACK) ====================
@@ -206,7 +232,7 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(Vector2(6, -6 + float_y), deg_to_rad(22.0), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
 			_draw_modular_cloak(float_y, 2.5, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, 0.25)
 			_draw_slash_crescent(Vector2(0, 12 + float_y), deg_to_rad(90.0), 38.0, progress)
@@ -219,7 +245,7 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 		Angle.BACK:
 			_draw_modular_cloak(float_y, 2.5, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
-			_draw_modular_weapon(Vector2(-1, 2 + float_y), deg_to_rad(152.0), Angle.BACK)
+			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
 			_draw_slash_crescent(Vector2(0, -8 + float_y), deg_to_rad(-90.0), 38.0, progress)
 
@@ -234,26 +260,28 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(Vector2(6, -6), deg_to_rad(22.0), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(0.5, -1.0), deg_to_rad(carry_front_rot - 6.0), Angle.FRONT)
 			_draw_modular_cloak(0.0, -2.0, 0.0, Angle.FRONT)
 			_draw_head_front(0.0, 0.35)
 		Angle.SIDE:
-			_draw_modular_weapon(Vector2(-5, 4), deg_to_rad(-16.0), Angle.SIDE)
+			_draw_modular_weapon(carry_side_pos + Vector2(0, 3.0), deg_to_rad(carry_side_rot), Angle.SIDE)
 			_draw_modular_cloak(0.0, -2.0, -1.0, Angle.SIDE)
 			_draw_head_side(0.0, 0.35)
 		Angle.BACK:
 			_draw_modular_cloak(0.0, -2.0, 0.0, Angle.BACK)
 			_draw_modular_strap(0.0)
-			_draw_modular_weapon(Vector2(-1, 2), deg_to_rad(-140.0), Angle.BACK)
+			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, 4.0), deg_to_rad(carry_back_rot + 12.0), Angle.BACK)
 			_draw_head_back(0.0)
 
-	if hit_flash > 0.05:
+	if hit_flash > 0.05 and _layer_on(Layer.FX):
 		draw_soft_glow(Vector2(0, 0), 22.0, Color(1.0, 1.0, 1.0, hit_flash * 0.4), 2)
 		draw_circle(Vector2(0, -10), 11.0, Color(1.0, 1.0, 1.0, hit_flash * 0.35))
 
 # ==================== 辅助效果：地影与道韵灵气 ====================
 
 func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> void:
+	if not _layer_on(Layer.SHADOW):
+		return
 	draw_filled_ellipse(pos, rx, ry, Color(0.03, 0.04, 0.07, alpha))
 	draw_filled_ellipse(pos, rx * 0.65, ry * 0.65, Color(0.02, 0.02, 0.04, alpha * 0.4))
 	var edge_col := col_cloak_edge
@@ -262,6 +290,8 @@ func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> vo
 	draw_arc(pos, rx + 1.8, 0, TAU, 28, Color(edge_col.r, edge_col.g, edge_col.b, alpha * 0.28), 1.0, true)
 
 func _draw_immortal_motes(float_y: float) -> void:
+	if not _layer_on(Layer.MOTES):
+		return
 	var eff_col := col_cloak_edge
 	var eff_eye := col_eye_glow
 	if cloak_shimmer_color.a > 0.01:
@@ -294,6 +324,8 @@ func _draw_immortal_motes(float_y: float) -> void:
 			draw_line(Vector2(ex, ey), Vector2(ex, ey) + tail_dir * 5.0, Color(eff_col.r, eff_col.g, eff_col.b, extra_a * 0.65), 1.2)
 
 func _draw_eye_trail(float_y: float) -> void:
+	if not _layer_on(Layer.MOTES):
+		return
 	var eff_eye := col_eye_glow
 	if eye_override_color.a > 0.01:
 		eff_eye = col_eye_glow.lerp(eye_override_color, clampf(eye_override_color.a, 0.0, 1.0))
@@ -307,18 +339,24 @@ func _draw_eye_trail(float_y: float) -> void:
 # ==================== 头部与面具插槽绘制 ====================
 
 func _draw_head_front(float_y: float, eye_pulse: float) -> void:
+	if not _layer_on(Layer.HEAD):
+		return
 	var head_center := Vector2(0, -15 + float_y)
 	_draw_modular_headwear(head_center, Angle.FRONT)
 	_draw_modular_mask(head_center, Angle.FRONT)
 	_draw_modular_eyes(head_center, Angle.FRONT, eye_pulse)
 
 func _draw_head_side(float_y: float, eye_pulse: float) -> void:
+	if not _layer_on(Layer.HEAD):
+		return
 	var head_center := Vector2(1.2, -15 + float_y)
 	_draw_modular_headwear(head_center, Angle.SIDE)
 	_draw_modular_mask(head_center, Angle.SIDE)
 	_draw_modular_eyes(head_center, Angle.SIDE, eye_pulse)
 
 func _draw_head_back(float_y: float) -> void:
+	if not _layer_on(Layer.HEAD):
+		return
 	var head_center := Vector2(0, -15 + float_y)
 	draw_circle(head_center, 9.5 * head_scale, col_bone)
 	draw_arc(head_center, 9.5 * head_scale, 0, TAU, 24, col_bone_shadow, 1.2, true)
@@ -861,6 +899,8 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 # ==================== 斗篷插槽绘制（端正挺拔躯干 + 水平齐整自然下摆） ====================
 
 func _draw_modular_cloak(float_y: float, wave: float, drag: float, angle: Angle) -> void:
+	if not _layer_on(Layer.CLOAK):
+		return
 	match angle:
 		Angle.FRONT:
 			_draw_cloak_front_modular(float_y, wave, drag)
@@ -1085,6 +1125,8 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 		draw_arc(Vector2(0, 2 + float_y), 6.0 * w, 0, PI * 0.8, 14, col_gold, 1.2)
 
 func _draw_cloak_dash_side(dash_y: float) -> void:
+	if not _layer_on(Layer.CLOAK):
+		return
 	var w := width_scale
 	var dash_pts: PackedVector2Array = [
 		Vector2(2.0, -6 + dash_y),
@@ -1174,6 +1216,8 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 # ==================== 背负本命法器插槽绘制 ====================
 
 func _draw_modular_strap(float_y: float) -> void:
+	if not _layer_on(Layer.CLOAK):
+		return
 	match strap_style:
 		"dual":
 			var l_top := Vector2(-6, -6 + float_y)
@@ -1200,6 +1244,8 @@ func _draw_modular_strap(float_y: float) -> void:
 
 ## 绘制法器（正面探出右肩上方、下半部藏于斗篷后绝不露底，侧面贴背，背面外挂最表层）
 func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
+	if not _layer_on(Layer.WEAPON):
+		return
 	var t := Transform2D(rot, pos)
 
 	match weapon_type:
@@ -1347,6 +1393,8 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 
 ## 绘制月牙斩痕
 func _draw_slash_crescent(pos: Vector2, rot: float, radius: float, progress: float) -> void:
+	if not _layer_on(Layer.FX):
+		return
 	if progress <= 0.0 or progress >= 1.0:
 		return
 	var t := Transform2D(rot, pos)

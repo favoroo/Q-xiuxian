@@ -22,6 +22,19 @@ static func shake_camera(gm: Node, intensity: float = 3.5, duration: float = 0.1
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("shake"):
 		gm.main_camera.shake(intensity, duration)
 
+static func kick_camera(gm: Node, dir: Vector2, strength: float = 3.0) -> void:
+	if SettingsManager.shake_mult() <= 0.0:
+		return
+	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("kick_directional"):
+		gm.main_camera.kick_directional(dir, strength)
+
+## 零延迟触觉反馈（Android 真机马达振动，桌面端静默忽略）
+static func vibrate(duration_ms: int = 18, amplitude: float = 0.5) -> void:
+	if not bool(SettingsManager.get_val(&"display", &"haptics", true)):
+		return
+	if OS.has_feature("mobile"):
+		Input.vibrate_handheld(duration_ms, amplitude)
+
 static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.05) -> void:
 	if not bool(SettingsManager.get_val(&"display", &"hit_stop", true)):
 		return

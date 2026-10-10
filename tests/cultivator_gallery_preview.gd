@@ -178,6 +178,8 @@ func _make_char_card(cid: String) -> PanelContainer:
 	return panel
 
 func _export_showcase_image() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	DirAccess.make_dir_recursive_absolute("tests/styles")
 	var vp := get_viewport()
 	if vp != null:
