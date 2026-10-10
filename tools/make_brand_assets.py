@@ -5,10 +5,13 @@
   assets_raw/images/app_icon_concept.png       青衫小修士头像
 
 输出（assets/brand/，随 APK 打包）：
-  app_icon.png                 512²   Godot 项目/桌面图标 + Godot boot splash（不透明白底）
+  app_icon.png                 512²   Godot 项目/桌面图标（不透明深底）
   launcher_192.png             192²   Android 传统 launcher 图标
   adaptive_foreground_432.png  432²   自适应图标前景（主体外接圆撑满 66% 安全圆）
   adaptive_background_432.png  432²   自适应图标背景（深青黑）
+  splash_round.png             512²   Godot boot splash：系统圆标的放大版（圆形黑底 +
+                                      同 66% 构图人物，圆外透明），系统圆标消失时被
+                                      同形状图形无缝接管，消除"图标闪一下"的切图感
 
 底色链：图标底 / Android 系统 splash 圆标底 / Godot boot splash 底全为深青黑（#090D17，
 与游戏 clearColor 同族），启动全程（系统圆标 → boot splash → 进游戏）只出现一个视觉主体
@@ -18,7 +21,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageDraw, ImageEnhance
 
 ROOT = Path(__file__).resolve().parent.parent
 ICON_SRC = ROOT / "assets_raw/images/app_icon_concept.png"
@@ -89,6 +92,22 @@ def make_adaptive_foreground() -> Image.Image:
     return canvas
 
 
+def make_splash_round() -> Image.Image:
+    """系统圆标的放大版：圆形深底 + 同 66% 构图人物，圆外透明。
+
+    复用 adaptive 前景的构图（人物外接圆 = 画布 66%），缩放到 512 后人物占比
+    与系统圆标完全一致；切换瞬间只有圆形直径的变化，无形状/构图跳变。
+    """
+    size = 512
+    fg = make_adaptive_foreground().resize((size, size), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+    canvas.paste(solid_background(size).convert("RGBA"), (0, 0), mask)
+    canvas.alpha_composite(fg)
+    return canvas
+
+
 def check(path: Path, size: int, opaque: bool, safe_zone: bool = False) -> None:
     img = Image.open(path)
     if img.size != (size, size):
@@ -117,11 +136,13 @@ def main() -> None:
     master.resize((192, 192), Image.LANCZOS).save(OUT / "launcher_192.png")
     make_adaptive_foreground().save(OUT / "adaptive_foreground_432.png")
     solid_background(432).save(OUT / "adaptive_background_432.png")
+    make_splash_round().save(OUT / "splash_round.png")
 
     check(OUT / "app_icon.png", 512, opaque=True)
     check(OUT / "launcher_192.png", 192, opaque=True)
     check(OUT / "adaptive_foreground_432.png", 432, opaque=False, safe_zone=True)
     check(OUT / "adaptive_background_432.png", 432, opaque=True)
+    check(OUT / "splash_round.png", 512, opaque=False)
     print("DONE: assets/brand/ 全部素材已生成并通过自检")
 
 
