@@ -40,13 +40,7 @@ func _draw_front() -> void:
 	# 身体下部暗色弧面（增加饱满体积感）
 	draw_arc(Vector2(0, 10 + bob), 12.0, 0.2, PI - 0.2, 16, ROBE_SHADOW, 4.0)
 
-	# 4. 黄色腰封与小玉扣
-	var belt_y := 4.0 + bob
-	draw_line(Vector2(-14, belt_y), Vector2(14, belt_y), OUTLINE, OUTLINE_W + 2.0)
-	draw_line(Vector2(-14, belt_y), Vector2(14, belt_y), BELT_GOLD, OUTLINE_W)
-	draw_stroked_circle(Vector2(0, belt_y), 3.5, Color(0.40, 0.95, 0.75), OUTLINE, OUTLINE_W)
-
-	# 5. 头顶发髻、红头绳与小木簪
+	# 4. 头顶发髻、红头绳与小木簪
 	var bun_y := -24.0 + bob
 	draw_line(Vector2(-10, bun_y), Vector2(10, bun_y - 2), WOOD_BROWN, OUTLINE_W + 1.0) # 横插木簪
 	draw_stroked_circle(Vector2(0, bun_y), 6.5, Color(0.15, 0.16, 0.20), OUTLINE, OUTLINE_W) # 黑墨发髻
@@ -105,10 +99,6 @@ func _draw_side() -> void:
 	# 侧面坚毅/专注小嘴
 	draw_line(eye_pos + Vector2(1, 8), eye_pos + Vector2(6, 7), OUTLINE, 2.2)
 
-	# 6. 黄色腰封（侧面倾斜）
-	draw_line(Vector2(-14, 5 + bob), Vector2(14, 7 + bob), OUTLINE, OUTLINE_W + 2.0)
-	draw_line(Vector2(-14, 5 + bob), Vector2(14, 7 + bob), BELT_GOLD, OUTLINE_W)
-
 	# 7. 双手前伸持剑突刺
 	draw_stroked_circle(Vector2(14, 4 + bob), 4.2, SKIN_TONE, OUTLINE, OUTLINE_W)
 	_draw_brotato_sword(Vector2(26 + sword_thrust, 2 + bob), deg_to_rad(65.0))
@@ -131,11 +121,6 @@ func _draw_back() -> void:
 		Vector2(0, 18 + bob)
 	])
 	draw_stroked_polygon(body_pts, ROBE_GREEN, OUTLINE, OUTLINE_W)
-
-	# 4. 后腰黄色腰带
-	var belt_y := 4.0 + bob
-	draw_line(Vector2(-14, belt_y), Vector2(14, belt_y), OUTLINE, OUTLINE_W + 2.0)
-	draw_line(Vector2(-14, belt_y), Vector2(14, belt_y), BELT_GOLD, OUTLINE_W)
 
 	# 5. 背后斜插的大飞剑（土豆兄弟经典武器外挂）
 	var sword_pos := Vector2(-2, -4 + bob)

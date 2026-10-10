@@ -92,8 +92,8 @@ func _test_armor() -> void:
 
 func _test_wave_scaling() -> void:
 	_c.near(GameBalance.enemy_hp_mult(1), 1.0, EPS, "第 1 波血量倍率 1.0")
-	_c.near(GameBalance.enemy_hp_mult(10), pow(1.15, 9), EPS, "第 10 波血量复利 ×3.52")
-	_c.near(GameBalance.enemy_hp_mult(20), pow(1.15, 19), EPS, "第 20 波血量复利 ×14.23")
+	_c.near(GameBalance.enemy_hp_mult(10), pow(1.16, 9), EPS, "第 10 波血量复利 ×3.80")
+	_c.near(GameBalance.enemy_hp_mult(20), pow(1.16, 19), EPS, "第 20 波血量复利 ×16.89")
 	_c.near(GameBalance.enemy_dmg_mult(10), pow(1.06, 9), EPS, "第 10 波接触伤害复利 ×1.69")
 	_c.near(GameBalance.wave_duration(1), 22.0, EPS, "第 1 波时长 22s")
 	_c.near(GameBalance.wave_duration(20), 60.0, EPS, "第 20 波封顶 60s")
@@ -1085,12 +1085,12 @@ func _test_cultivator_system() -> void:
 	_c.near(GameManager.get_effective_dodge(), 0.9, EPS, "魅影闪避上限 90%（其余人 60%）")
 	_c.check("armor_up" in GameManager.locked_upgrades, "魅影锁死罡气护体")
 
-	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害翻倍、施法更快
+	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害 ×1.65、施法更快
 	GameManager.reset_run()
 	GameManager.cultivator_id = "dubi"
 	GameManager._apply_cultivator()
 	_c.equals(GameManager.max_weapon_slots(), 3, "独臂刀圣上阵槽上限为 3")
-	_c.near(GameManager.weapon_damage_mult, 2.0, EPS, "独臂刀圣伤害 ×2.0")
+	_c.near(GameManager.weapon_damage_mult, 1.65, EPS, "独臂刀圣伤害 ×1.65")
 	_c.near(GameManager.attack_speed_mult, 0.7, EPS, "独臂刀圣施法间隔 ×0.7")
 
 	# 狂战蛮修（Loud 原型）：妖潮 +50%，灵韵每波流失 3 点再复利；流失下限为 0
@@ -1539,16 +1539,16 @@ func _test_ranged_focus_dps() -> void:
 	_c.near(WeaponData.sustained_single_dps("huoyan_fu", 1),
 		hf_dmg * hf_n / hf_cd + hf_dmg * float(hf.get("burn_ratio", 0.0)), 0.001,
 		"单体 DPS = 逐发弹伤之和 + 常驻灼烧（与 BladeProjectile 的 burn_dps 同源）")
-	# 青云剑 ★1：近战在 FloatingWeapon._deal_melee_damage 里有 ×1.35 加护
+	# 青云剑 ★1：面板即实伤（不再暗乘 1.35）
 	var qy := WeaponData.get_def("qingyun_sword")
 	_c.near(WeaponData.sustained_single_dps("qingyun_sword", 1),
-		float(qy.get("damage", 0.0)) * 1.35 / float(qy.get("cooldown", 1.0)), 0.001,
-		"近战单体 DPS 含 ×1.35 加护")
-	# 玄冰飞针：三发齐射在"场上只剩一个敌人"时全部归它（追踪上线后的新口径）
+		float(qy.get("damage", 0.0)) / float(qy.get("cooldown", 1.0)), 0.001,
+		"近战单体 DPS 面板即实伤")
+	# 玄冰飞针：三发齐射对单目标按最多 2 发命中折算
 	var xb := WeaponData.get_def("xuanbing_feizhen")
 	_c.near(WeaponData.sustained_single_dps("xuanbing_feizhen", 1),
-		float(xb.get("damage", 0.0)) * float(xb.get("projectile_count", 1)) / float(xb.get("cooldown", 1.0)), 0.001,
-		"多发弹丸对孤立目标按发数求和")
+		float(xb.get("damage", 0.0)) * float(mini(2, int(xb.get("projectile_count", 1)))) / float(xb.get("cooldown", 1.0)), 0.001,
+		"多发散射弹丸对单目标按上限 2 发折算")
 	_c.check(WeaponData.sustained_single_dps("huoyan_fu", 3) > WeaponData.sustained_single_dps("huoyan_fu", 2),
 		"星级越高单体 DPS 越高（尺子跟 damage_for/cooldown_for 同向）")
 
@@ -1640,7 +1640,23 @@ func _test_spirit_orbit_dynamics() -> void:
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
 		var sdef := WeaponData.get_def(sid)
 		_c.check(float(sdef.get("range", 0.0)) >= 120.0, "御灵法器 %s 射程强化至 >= 120px（当前 %.0f）" % [sid, float(sdef.get("range", 0.0))])
-		_c.check(float(sdef.get("damage", 0.0)) >= 24.0, "御灵法器 %s 基础伤害强化至 >= 24（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
+		_c.check(float(sdef.get("damage", 0.0)) >= 15.0, "御灵法器 %s 基础伤害 >= 15（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
 		_c.check(float(sdef.get("knockback", 0.0)) >= 160.0, "御灵法器 %s 击退强化至 >= 160（当前 %.0f）" % [sid, float(sdef.get("knockback", 0.0))])
+
+	# 8. 多法器神识分流与同目标短窗集火韧性验证
+	_c.near(GameBalance.multi_weapon_damage_mult(1), 1.0, EPS, "单把法器神识效率 100%")
+	_c.near(GameBalance.multi_weapon_damage_mult(6), 1.0 / 1.6, EPS, "6 把法器单把神识分流系数 62.5%（总有效倍率 3.75x）")
+	var prev_tot := 0.0
+	var tot_monotonic := true
+	for n_slots in range(1, 7):
+		var tot := float(n_slots) * GameBalance.multi_weapon_damage_mult(n_slots)
+		if tot <= prev_tot:
+			tot_monotonic = false
+		prev_tot = tot
+	_c.check(tot_monotonic, "1~6 把法器总有效倍率严格单调递增（多戴必正收益）")
+	_c.near(GameBalance.focus_fire_mult(0), 1.0, EPS, "短窗第 1 击全额 100%")
+	_c.near(GameBalance.focus_fire_mult(1), 0.70, EPS, "短窗第 2 击折算 70%")
+	_c.near(GameBalance.focus_fire_mult(2), 0.50, EPS, "短窗第 3 击折算 50%")
+	_c.near(GameBalance.focus_fire_mult(5), 0.50, EPS, "短窗后续连击保底 50%")
 
 

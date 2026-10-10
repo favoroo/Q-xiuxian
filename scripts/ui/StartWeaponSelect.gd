@@ -45,9 +45,9 @@ func _ready() -> void:
 	_setup_header_bar()
 	GameStyle.label(title_label, 30, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(sub_label, 14, GameStyle.PAPER_DIM)
-	sub_label.text = "灵田妖潮将至，五行法器与御灵灵蝶择其一，随你上阵斩妖"
+	sub_label.text = "选择一件初始武器开始战斗"
 	GameStyle.label(hint_label, 12, GameStyle.GREY)
-	hint_label.text = "◆ 五行相协、法器共鸣：集齐三把同名同星法器可在商店手动升星 ◆"
+	hint_label.text = "◆ 元素搭配、武器共鸣：集齐三把同名同星武器可在商店手动升星 ◆"
 
 func _setup_header_bar() -> void:
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
@@ -57,7 +57,7 @@ func _setup_header_bar() -> void:
 	vbox.move_child(header_row, 0)
 
 	var back_btn := Button.new()
-	back_btn.text = "〈 重选道统"
+	back_btn.text = "〈 重选角色"
 	back_btn.custom_minimum_size = Vector2(98, 34)
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -92,9 +92,9 @@ func show_select() -> void:
 	var cepi: String = String(cdef.get("epithet", ""))
 	var sname: String = String(SkillData.get_def(GameManager.pending_skill_id).get("name", ""))
 	if not cname.is_empty():
-		sub_label.text = "已入道统 · %s「%s」 · 神通「%s」 · 五行法器与御灵灵蝶择其一" % [cname, cepi, sname]
+		sub_label.text = "已选角色 · %s「%s」 · 技能「%s」 · 选择一件初始武器" % [cname, cepi, sname]
 	else:
-		sub_label.text = "灵田妖潮将至，五行法器与御灵灵蝶择其一，随你上阵斩妖"
+		sub_label.text = "选择一件初始武器开始战斗"
 	for child in cards_container.get_children():
 		child.queue_free()
 	_card_w = card_w_for(get_viewport_rect().size.x, WeaponData.STARTER_IDS.size())
@@ -187,7 +187,7 @@ func _create_card(w_id: String) -> Control:
 
 	# 行为签（若契合当前道统则追加契合标识）
 	var tag_lbl = Label.new()
-	tag_lbl.text = (" ✦契合·%s " % def.get("tag", "")) if rec else (" " + def.get("tag", "") + " ")
+	tag_lbl.text = (" ✦适配·%s " % def.get("tag", "")) if rec else (" " + def.get("tag", "") + " ")
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
@@ -206,7 +206,7 @@ func _create_card(w_id: String) -> Control:
 
 	# 选择按钮
 	var btn = Button.new()
-	btn.text = "执 此 器"
+	btn.text = "装 备 此 武 器"
 	btn.custom_minimum_size = Vector2(0, 36)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	btn.focus_mode = Control.FOCUS_NONE

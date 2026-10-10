@@ -165,7 +165,7 @@ func set_start_in_endless(enabled: bool) -> void:
 func _maybe_unlock_danger() -> void:
 	if danger_level >= max_danger_unlocked and max_danger_unlocked < GameBalance.DANGER_MAX:
 		max_danger_unlocked += 1
-		announcement_triggered.emit("✦ 天道认可 · 危险度「%d」已解锁 ✦" % max_danger_unlocked)
+		announcement_triggered.emit("✦ 难度「%d」已解锁 ✦" % max_danger_unlocked)
 
 var kills: int = 0
 var game_time: float = 0.0
@@ -434,7 +434,7 @@ func apply_upgrade(upgrade_id: String) -> void:
 		"id": upgrade_id,
 		"title": def.get("title", upgrade_id),
 		"rarity": def.get("rarity", "common"),
-		"rarity_label": def.get("rarity_label", "凡品"),
+		"rarity_label": def.get("rarity_label", "普通"),
 		"icon": def.get("icon", ""),
 		"desc": def.get("desc", ""),
 		"border_color": def.get("border_color", Color.WHITE),
@@ -608,6 +608,10 @@ func get_effective_dodge() -> float:
 func max_weapon_slots() -> int:
 	return weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
 
+## 多法器神识分流系数：按当前上阵法器总数（悬浮法器 + 环绕灵物）计算单把直击伤害折算
+func get_multi_weapon_damage_mult() -> float:
+	return GameBalance.multi_weapon_damage_mult(slots_used())
+
 ## 五行真解：某件法器吃到的元素伤害乘区（按 WeaponData.element_of 取对应元素加成）
 func element_damage_mult(w_id: String) -> float:
 	if element_damage.is_empty():
@@ -679,7 +683,7 @@ func apply_harvest() -> void:
 	var gain := GameBalance.harvest_gain(harvest)
 	if gain > 0:
 		add_experience(gain)
-		announcement_triggered.emit("✦ 灵韵滋养 · 灵石与修为 +%d ✦" % gain)
+		announcement_triggered.emit("✦ 收益到账 · 金币与经验 +%d ✦" % gain)
 	if harvest_decay > 0.0:
 		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
@@ -727,7 +731,7 @@ func try_revive() -> bool:
 		player.current_health = player.max_health * 0.5
 		player.invulnerable_time = 2.0
 		player_hp_changed.emit(player.current_health, player.max_health)
-	announcement_triggered.emit("✦ 替死傀儡碎裂 · 死里逃生 ✦")
+	announcement_triggered.emit("✦ 替身娃娃碎裂 · 死里逃生 ✦")
 	AudioManager.play_sfx("level_up", 1.0)
 	return true
 
@@ -742,9 +746,9 @@ func start_run(starter_id: String) -> void:
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	add_weapon(starter_id)
 	if endless_mode:
-		announcement_triggered.emit("✦ 无尽试炼 · 战至道殒 ✦")
+		announcement_triggered.emit("✦ 无尽模式 · 战至终局 ✦")
 	else:
-		announcement_triggered.emit("✦ 灵田巡守 · 斩妖护山 ✦")
+		announcement_triggered.emit("✦ 生存战斗 · 击杀敌人 ✦")
 
 ## 灵石囊兑入：修仙志领取的里程碑灵石在本局开局一次性生效（无 player 依赖，单测可直调）
 func _redeem_stone_purse() -> void:
@@ -755,7 +759,7 @@ func _redeem_stone_purse() -> void:
 	spirit_stones += amount
 	if spirit_stones > peak_stones:
 		peak_stones = spirit_stones
-	announcement_triggered.emit("✦ 灵石囊生效 · 开局灵石 +%d ✦" % amount)
+		announcement_triggered.emit("✦ 金币到账 · 开局金币 +%d ✦" % amount)
 
 ## 开局应用修士流派的正负代偿
 func _apply_cultivator() -> void:

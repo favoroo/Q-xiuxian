@@ -24,6 +24,26 @@ static var _search_query: PhysicsShapeQueryParameters2D = null
 static var query_alloc_count: int = 0
 static var query_reuse_count: int = 0
 
+# —— 对象池（2026-10-10 性能优化）——
+## 三发齐射 × 多件远程法器每秒 instantiate/free 十几次节点（Area2D + 碰撞体 + 矢量渲染器
+## 全套生命周期）是「剑一多就卡」的分配压力来源。照 JuiceEffect/DamageNumber 池模式：
+## 死亡不再 queue_free 而是回池休眠，复用由 activate() 全量重置（字段清单见 activate 注释）。
+const POOL_CAP := 64
+## 场景默认寿命：activate 复用时重置的基准（FloatingWeapon 出膛再乘 range_mult）
+const BASE_LIFETIME := 1.6
+## —— 弹丸灯光上限 ——
+## 每发弹丸一盏 PointLight2D，6 剑齐射常驻 10~20 盏 2D 动态灯，光照 pass 逐灯叠加是
+## 渲染侧主卡因。全场最多同时点亮 LIGHT_CAP 盏，超限弹丸灯灭但矢量渲染器自带的
+## 辉光多边形仍在（ProceduralProjectileRenderer 光晕），视觉不空。
+const LIGHT_CAP := 6
+static var _pool: Array[BladeProjectile] = []
+static var _host: Node2D = null
+static var created_count: int = 0    ## 累计 instantiate 数（tests/PerfProbe 断言用）
+static var reused_count: int = 0     ## 累计池复用数
+static var _lit_count: int = 0       ## 当前点亮的弹丸灯数
+## 回收终值登记（launch_id -> {pierce,bounce}）：projectile_probe 结账用，读取后由探针清除
+static var _final_stats: Dictionary = {}
+
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 470.0
 var damage: float = 20.0
@@ -42,6 +62,14 @@ var bullet_texture: Texture2D = null
 var bullet_scale: float = 1.0
 ## 还能"另找目标"几次：命中过一次就归零 —— 穿透的语义是"一条线穿过去"，不是"拐回来再穿一遍"
 var acquire_left: int = 1
+
+## 池状态标记：true = 已回池休眠（防双重回收）；_has_light = 是否持有灯名额
+var _pooled: bool = false
+var _has_light: bool = false
+
+## 发射序号：activate 一次 +1，全局限一（PoolCheck 后探针按它区分「同一实例的多次发射」）
+static var launch_seq: int = 0
+var launch_id: int = -1
 
 # 五行异常触发
 var proc_burn: bool = false
@@ -62,9 +90,8 @@ func _ready() -> void:
 	if bullet_texture != null:
 		sprite.texture = bullet_texture
 		sprite.scale = Vector2.ONE * bullet_scale
-	if spin:
-		var tw = create_tween().set_loops()
-		tw.tween_property(sprite, "rotation", TAU, 0.45).as_relative()
+	# 自转不再用无限循环 Tween（每发弹丸一个常驻 Tween 是纯浪费）：
+	# 改 _physics_process 手写推进，池化复用时零重建
 	_setup_vector_visual()
 	_apply_elemental_tint()
 
@@ -99,9 +126,11 @@ func _apply_elemental_tint() -> void:
 func _physics_process(delta: float) -> void:
 	_steer(delta)
 	position += direction * speed * delta
+	if spin:
+		sprite.rotation += delta * (TAU / 0.45)   ## 与旧 Tween 同速：0.45s 一整圈
 	lifetime -= delta
 	if lifetime <= 0.0:
-		queue_free()
+		_recycle()
 
 ## 每帧把弹向朝锁定目标拧过去，最多拧 HOMING_TURN_RATE × delta × homing_scale。
 ## homing_scale 为 0（判据反例）时等价于旧行为：直线飞行、永不修正。
@@ -170,7 +199,7 @@ func _on_area_entered(area: Area2D) -> void:
 
 		pierce_left -= 1
 		if pierce_left <= 0:
-			queue_free()
+			_recycle()
 
 ## 就近找一个敌人。ahead_only = 只认弹头前方锥内的（丢目标重录用），false = 全向（弹射连锁用，历史行为）
 func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
@@ -213,3 +242,102 @@ func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 				min_dist = d
 				nearest = target
 	return nearest if nearest != null else chest
+
+# ----------------- 对象池与灯光管理 -----------------
+
+## 池宿主挂在场景根下（同 JuiceEffect 模式），场景切换后旧池随宿主一起销毁，
+## acquire 时用 is_instance_valid 过滤空壳并重建宿主。
+static func _ensure_host(parent: Node) -> void:
+	if _host != null and is_instance_valid(_host):
+		return
+	_pool.clear()
+	_host = Node2D.new()
+	_host.name = "BladeProjectilePool"
+	parent.add_child(_host)
+
+## 取一发弹丸：池里有就复用，没有 instantiate 新的挂到池宿主下。
+## 调用方随后设置全部战斗字段并调用 activate()。
+static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
+	_ensure_host(parent)
+	while not _pool.is_empty():
+		var p: BladeProjectile = _pool.pop_back()
+		if is_instance_valid(p):
+			reused_count += 1
+			return p
+	var np := scene.instantiate() as BladeProjectile
+	created_count += 1
+	_host.add_child(np)
+	return np
+
+## 出膛激活：池化后 _ready 先于战斗字段赋值跑过，所有依赖字段的视觉与物理状态
+## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
+##   direction/speed/damage/knockback_base/lifetime/pierce_left/bounce_left/
+##   homing_target/acquire_left/proc_burn/burn_dps/burn_dur/proc_chill/chill_dur/
+##   proc_poison/poison_dur/bullet_texture/bullet_scale/spin
+func activate() -> void:
+	_pooled = false
+	launch_seq += 1
+	launch_id = launch_seq
+	visible = true
+	# 残值清零：lifetime（FloatingWeapon 出膛时是乘 range_mult 的，复用弹丸若带着上一发
+	# 的残值会「出膛即逝」——ProjectileProbe B 段贴脸 100% 落空的元凶）与 acquire_left
+	# （命中即置 0，复用后必须恢复丢目标重找的额度）
+	lifetime = BASE_LIFETIME
+	acquire_left = 1
+	rotation = direction.angle()
+	sprite.texture = bullet_texture
+	sprite.scale = Vector2.ONE * bullet_scale
+	sprite.rotation = 0.0
+	if _vector_renderer != null:
+		var path_str := bullet_texture.resource_path if bullet_texture != null else ""
+		_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+		_vector_renderer.queue_redraw()
+	_apply_elemental_tint()
+	# 碰撞恢复必须也走 deferred：同一帧「回收→复用」时，回收的 disabled=true deferred
+	# 会在帧末 flush，直接赋值的 false 会被它覆盖 —— 弹丸从此永世撞不到人（探针 B 段 0% 命中的元凶）。
+	# 两个 deferred 按入队顺序执行：回收(true) → 出膛(false)，最终值必落在出膛侧。
+	$CollisionShape2D.set_deferred("disabled", false)
+	set_deferred("monitoring", true)
+	set_physics_process(true)
+	_try_acquire_light()
+
+## 回收入池（替代 queue_free）：休眠物理与碰撞，灯让位，池满或宿主失效才真释放
+func _recycle() -> void:
+	if _pooled:
+		return
+	# 终值上报：贴脸弹丸常在两次扫描之间完成「命中→回收」，逐帧扫描读不到终值，
+	# 探针（projectile_probe）结账时优先读这里，防把真实命中误记成落空
+	if launch_id >= 0:
+		_final_stats[launch_id] = {"pierce": pierce_left, "bounce": bounce_left}
+	_pooled = true
+	homing_target = null
+	_release_light()
+	set_physics_process(false)
+	set_deferred("monitoring", false)
+	$CollisionShape2D.set_deferred("disabled", true)
+	visible = false
+	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
+		queue_free()
+		return
+	_pool.append(self)
+
+## 灯按 LIGHT_CAP 先到先得：超限弹丸熄灯飞行（矢量辉光仍在），回收时让位
+func _try_acquire_light() -> void:
+	if glow == null:
+		return
+	if _has_light:
+		glow.visible = true
+		return
+	if _lit_count < LIGHT_CAP:
+		_lit_count += 1
+		_has_light = true
+		glow.visible = true
+	else:
+		glow.visible = false
+
+func _release_light() -> void:
+	if _has_light:
+		_lit_count = maxi(0, _lit_count - 1)
+		_has_light = false
+	if glow != null:
+		glow.visible = false

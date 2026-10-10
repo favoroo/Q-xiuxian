@@ -52,14 +52,14 @@ func _test_weapon_dps_normalization() -> void:
 		max_dps = maxf(max_dps, dps)
 
 		if w_id in single_target_weapons:
-			_c.check(dps >= 38.0 and dps <= 46.0,
-				"单体专注法器【%s】DPS 落在 38~46 区间 (实得 %.1f)" % [w_id, dps])
+			_c.check(dps >= 26.0 and dps <= 32.0,
+				"单体专注法器【%s】DPS 落在 26~32 区间 (实得 %.1f)" % [w_id, dps])
 		elif w_id in aoe_utility_weapons:
-			_c.check(dps >= 25.0 and dps <= 38.0,
-				"群伤/功能法器【%s】DPS 落在 25~38 区间 (实得 %.1f)" % [w_id, dps])
+			_c.check(dps >= 18.0 and dps <= 26.0,
+				"群伤/功能法器【%s】DPS 落在 18~26 区间 (实得 %.1f)" % [w_id, dps])
 		elif w_id in drone_weapons:
-			_c.check(dps >= 40.0 and dps <= 50.0,
-				"御灵环绕法器【%s】DPS 落在 40~50 区间 (实得 %.1f)" % [w_id, dps])
+			_c.check(dps >= 28.0 and dps <= 34.0,
+				"御灵环绕法器【%s】DPS 落在 28~34 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
 	_c.check(ratio <= 2.0, "全库 20 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
@@ -67,33 +67,46 @@ func _test_weapon_dps_normalization() -> void:
 # ---------------- 2. 敌人与 Boss 气血成长 ----------------
 
 func _test_enemy_and_boss_hp_scaling() -> void:
-	# 前松后紧：前 5 波平缓，10 波成型，20 波厚重
+	# 前松后紧：前 5 波平缓，10 波成型，20 波厚重（1.16 复利）
 	var m1 := GameBalance.enemy_hp_mult(1)
 	var m5 := GameBalance.enemy_hp_mult(5)
 	var m10 := GameBalance.enemy_hp_mult(10)
 	var m20 := GameBalance.enemy_hp_mult(20)
 
 	_c.near(m1, 1.0, EPS, "第 1 波气血倍率 1.0")
-	_c.check(m5 >= 1.70 and m5 <= 1.80, "第 5 波气血倍率温和 (~1.75x，实得 %.2f)" % m5)
-	_c.check(m10 >= 3.40 and m10 <= 3.60, "第 10 波气血倍率提速 (~3.52x，实得 %.2f)" % m10)
-	_c.check(m20 >= 14.0 and m20 <= 14.5, "第 20 波气血倍率达 ~14.2x (实得 %.2f)" % m20)
+	_c.check(m5 >= 1.75 and m5 <= 1.85, "第 5 波气血倍率温和 (~1.81x，实得 %.2f)" % m5)
+	_c.check(m10 >= 3.70 and m10 <= 3.90, "第 10 波气血倍率提速 (~3.80x，实得 %.2f)" % m10)
+	_c.check(m20 >= 16.5 and m20 <= 17.2, "第 20 波气血倍率达 ~16.88x (实得 %.2f)" % m20)
 
 	# Boss 气血
 	var b10 := GameBalance.boss_hp(10)
 	var b20 := GameBalance.boss_hp(20)
-	_c.check(b10 >= 45000.0 and b10 <= 55000.0, "第 10 波 Boss 气血落在 4.5~5.5 万 (实得 %.0f)" % b10)
-	_c.check(b20 >= 180000.0 and b20 <= 210000.0, "第 20 波魔尊气血落在 18~21 万 (实得 %.0f)" % b20)
+	_c.check(b10 >= 22000.0 and b10 <= 28000.0, "第 10 波 Boss 气血落在 2.2~2.8 万 (实得 %.0f)" % b10)
+	_c.check(b20 >= 100000.0 and b20 <= 120000.0, "第 20 波魔尊气血落在 10~12 万 (实得 %.0f)" % b20)
 
 # ---------------- 3. 三档参考 Build 仿真与击杀时长（TTK）----------------
 
 func _test_reference_build_ttks() -> void:
-	# 3.1 杂怪 TTK（史莱姆 base 18 × MOB_HP_BASE_MULT = 63，雷兽 base 45 × 3.5 ≈ 158）
-	# 2026-10-10 用户口径反转：「敌人都是一击秒杀，感觉不到打击感」——
-	# W1 裸青云剑（44.55/刀）砍 63 血史莱姆要 2 刀，TTK ≈ 1.56s，受击硬直/击退/火花才有机会呈现。
-	# 这条护栏钉的是「不许一击秒杀」，不是「必须秒得快」。
-	var w1_slime_ttk := 18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(1) / WeaponData.sustained_single_dps("qingyun_sword", 1)
-	_c.check(w1_slime_ttk >= 1.0 and w1_slime_ttk <= 3.0,
-		"W1 杂怪不再一刀秒：首发法器 TTK 落在 1~3s（约 2~3 刀，实得 %.2fs）" % w1_slime_ttk)
+	# 3.1 杂怪 TTK 与多把 ★1 法器集火韧性
+	# W1 史莱姆 base 18 × MOB_HP_BASE_MULT(4.5) = 81，蜂群精 base 12 × 4.5 = 54
+	var w1_slime_hp := 18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(1)
+	var w1_slime_ttk := w1_slime_hp / WeaponData.sustained_single_dps("qingyun_sword", 1)
+	_c.check(w1_slime_ttk >= 2.0 and w1_slime_ttk <= 4.0,
+		"W1 杂怪扎实耐打：首发法器 TTK 落在 2~4s（约 3 刀，实得 %.2fs）" % w1_slime_ttk)
+
+	# 佩戴 4 把 ★1 青云剑（W3 史莱姆 81 * 1.16^2 ≈ 109 HP）：
+	# 单剑基础 30 × 神识分流(4把=0.735) = 22.06/刀；即使 4 剑同帧集火同一只怪，
+	# 经短窗集火保护（1.0 + 0.7 + 0.5 + 0.5 = 2.7 倍单刀）仅打 59.6 < 109 HP，绝不秒杀！
+	var w3_slime_hp := ceilf(18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(3))
+	var single_sword_hit_4w := WeaponData.damage_for("qingyun_sword", 1) * GameBalance.multi_weapon_damage_mult(4)
+	var volley_4w_burst := single_sword_hit_4w * (GameBalance.focus_fire_mult(0) + GameBalance.focus_fire_mult(1) + GameBalance.focus_fire_mult(2) + GameBalance.focus_fire_mult(3))
+	_c.check(volley_4w_burst < w3_slime_hp * 0.75,
+		"4 把 ★1 武器同帧齐射绝不秒杀 W3 小怪（齐射伤害 %.1f < 气血 %.0f 的 75%%）" % [volley_4w_burst, w3_slime_hp])
+	var single_sword_hit_6w := WeaponData.damage_for("qingyun_sword", 1) * GameBalance.multi_weapon_damage_mult(6)
+	var volley_6w_burst := single_sword_hit_6w * (1.0 + 0.7 + 0.5 * 4.0)
+	var w4_slime_hp := ceilf(18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(4))
+	_c.check(volley_6w_burst < w4_slime_hp,
+		"6 把 ★1 武器同帧齐射绝不秒杀 W4 小怪（齐射伤害 %.1f < 气血 %.0f）" % [volley_6w_burst, w4_slime_hp])
 
 	# 3.2 成型 Build 仿真（Standard Meta Build）
 	# W10: 5 把法器 (2把★2, 3把★1), 8 项悟道加点, 1 件法宝
@@ -110,8 +123,8 @@ func _test_reference_build_ttks() -> void:
 		true
 	)
 	var std_w10_boss_ttk := GameBalance.boss_hp(10) / std_w10_dps
-	_c.check(std_w10_boss_ttk >= 30.0 and std_w10_boss_ttk <= 65.0,
-		"成型 Build 在第 10 波 Boss 战时长 30~65s (实测 %.1fs, DPS=%.0f)" % [std_w10_boss_ttk, std_w10_dps])
+	_c.check(std_w10_boss_ttk >= 30.0 and std_w10_boss_ttk <= 70.0,
+		"成型 Build 在第 10 波 Boss 战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [std_w10_boss_ttk, std_w10_dps])
 
 	# W20: 6 把法器 (2把★3, 4把★2), 18 项悟道加点, 3 件法宝
 	var std_w20_dps := _simulate_build_dps(
@@ -160,7 +173,7 @@ func _test_reference_build_ttks() -> void:
 	_c.check(ext_w20_boss_ttk <= 20.0,
 		"极端 6 剑满配 Build 依然保留高爆发爽感：TTK <= 20.0s (实测 %.1fs)" % ext_w20_boss_ttk)
 
-# 纯静态链路仿真计算
+# 纯静态链路仿真计算（含多法器神识分流与散射命中规则）
 func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> float:
 	var w_dmg_mult: float = float(stats.get("weapon_damage_mult", 1.0))
 	var syn_dmg: float = float(stats.get("synergy_damage_mult", 1.0))
@@ -171,6 +184,7 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)) + float(stats.get("synergy_crit_rate", 0.0)))
 	var crit_m: float = float(stats.get("crit_mult", 1.5)) + float(stats.get("synergy_crit_mult", 0.0))
 	var elite_mult: float = (1.0 + float(stats.get("elite_damage", 0.0))) if vs_elite else 1.0
+	var multi_mult: float = GameBalance.multi_weapon_damage_mult(weapons.size())
 
 	var total_dps := 0.0
 	for item in weapons:
@@ -181,14 +195,13 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 		var base_cd := WeaponData.cooldown_for(wid, star)
 
 		var stat_bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, star)
-		var final_d := (base_d + stat_bonus) * w_dmg_mult * syn_dmg * cult_dmg * elem_dmg
+		var final_d := (base_d + stat_bonus) * w_dmg_mult * syn_dmg * cult_dmg * elem_dmg * multi_mult
 
 		var beh := int(def.get("behavior", WeaponData.Behavior.MELEE))
 		var per_hit := final_d
-		if beh == WeaponData.Behavior.MELEE:
-			per_hit *= 1.35
-		elif beh == WeaponData.Behavior.PROJECTILE:
-			per_hit *= float(maxi(1, int(def.get("projectile_count", 1))))
+		if beh == WeaponData.Behavior.PROJECTILE:
+			var max_lock: int = 2 if vs_elite else 1
+			per_hit *= float(mini(max_lock, maxi(1, int(def.get("projectile_count", 1)))))
 
 		var eff_cd := maxf(0.08, base_cd * atk_spd * syn_haste)
 		var expected_crit := 1.0 + crit_r * (crit_m - 1.0)

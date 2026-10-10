@@ -99,7 +99,7 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与血量平�
 
 ## 变更日志（每次改代码必读必写）
 
-改完追加写入 [CHANGELOG.md](CHANGELOG.md)（gitignored，仅本地）。**格式 `## YYYY-MM-DD #序号`**（如 `## 2026-10-09 #01`），序号当日从 01 起、**不记时间点**、**新的在上面**。头一句话概述，子项用 `Added`/`Changed`/`Fixed`/`Removed`/`Verified` + 文件路径。每子项一句话。未提交也要记。
+改完追加写入 [CHANGELOG.md](CHANGELOG.md)（gitignored，仅本地）。**格式 `## YYYY-MM-DD #序号`**（如 `## 2026-10-09 #01`），序号当日从 01 起、**不记时间点**、**新的在上面**。每条一句话概述改了什么 + 关键文件路径；**只记对排查问题有用的根因、陷阱与架构变动**——Bug 用 `Fixed:` 标出根因，新系统/重构点出涉及文件。**不记**：逐项 `Added`/`Changed`/`Verified` 标签流水账、测试项数与 exit 状态明细、selftest 细节、用户原话、设计推导、临时出图路径。无论是否提交都要记。
 
 ## 必须知道的坑
 

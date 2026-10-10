@@ -5,6 +5,7 @@ extends BaseModalDialog
 ## 道统功名：每角色渡劫成功次数、无尽最高波数、最高危险度、称号里程碑与灵石囊领取
 ## 渡劫实录：每次渡劫成功的完整战报快照（上阵法器/法宝/关键属性），点击行展开回看
 ## 滚动区内的领取/展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
+## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 第 5 步）
 
 # 顶部概览数据标签（6 卡）
 var _runs_val_lbl: Label
@@ -21,7 +22,7 @@ var _log_list_box: VBoxContainer
 var _expanded_log_idx: int = -1  ## 渡劫实录当前展开的快照下标（-1 = 全部收起）
 
 func _get_title_text() -> String:
-	return "修 仙 志  ·  天 道 功 绩 簿"
+	return "战 绩  ·  游 戏 记 录"
 
 func _get_panel_size() -> Vector2:
 	var vp := get_viewport_rect().size
@@ -34,20 +35,20 @@ func _get_panel_margins() -> Vector4:
 
 func _build_body(root_vbox: VBoxContainer) -> void:
 	# 1. 注册顶部 Tab 按钮
-	add_tab_button(0, "✦ 天道功绩")
-	add_tab_button(1, "✦ 道统功名")
-	add_tab_button(2, "✦ 渡劫实录")
+	add_tab_button(0, "✦ 成就")
+	add_tab_button(1, "✦ 角色")
+	add_tab_button(2, "✦ 战斗记录")
 
 	# 2. 生涯核心数据横条（6 个指标卡）
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 8)
 	root_vbox.add_child(stats_row)
 
-	_runs_val_lbl = _add_summary_card(stats_row, "修行局数", "0 局")
-	_wins_val_lbl = _add_summary_card(stats_row, "渡劫成功", "0 胜")
-	_kills_val_lbl = _add_summary_card(stats_row, "累计斩妖", "0 只")
-	_wave_val_lbl = _add_summary_card(stats_row, "最高抵御", "第 0 波")
-	_purse_val_lbl = _add_summary_card(stats_row, "灵石囊", "0")
+	_runs_val_lbl = _add_summary_card(stats_row, "游戏局数", "0 局")
+	_wins_val_lbl = _add_summary_card(stats_row, "通关", "0 胜")
+	_kills_val_lbl = _add_summary_card(stats_row, "累计击杀", "0 只")
+	_wave_val_lbl = _add_summary_card(stats_row, "最高波数", "第 0 波")
+	_purse_val_lbl = _add_summary_card(stats_row, "金币", "0")
 	_title_val_lbl = _add_summary_card(stats_row, "已获称号", "0/0")
 
 	# 3. 内容分页面板
@@ -156,7 +157,7 @@ func _refresh_data() -> void:
 	_wins_val_lbl.text = "%d 胜 (%.0f%%)" % [wins, win_rate]
 	_kills_val_lbl.text = "%d 只" % kills
 	_wave_val_lbl.text = "第 %d 波" % b_wave
-	_purse_val_lbl.text = "%d 灵石" % GameManager.stone_purse
+	_purse_val_lbl.text = "%d 金币" % GameManager.stone_purse
 
 	# 已获称号数：有渡劫成功的角色数 / 角色总数
 	var total_c := CultivatorData.DEFS.size()
@@ -180,6 +181,13 @@ func _refresh_data() -> void:
 
 	# 4. 刷新渡劫实录列表
 	_rebuild_log_list()
+
+	# 5. 三页整棵子树放开「按下」冒泡：行卡是 PanelContainer（mouse_filter 默认 STOP），
+	#    会把外层 ScrollContainer 起手锁定手指拖动要的那一拍就地吃掉 —— 卡片盖住多大面积
+	#    就滑不动多大面积，只有卡片缝隙能划（用户 2026-10-10 真机：天道功绩簿「只有手碰到
+	#    黑色间隔才能滑动」）。列表每次刷新都重建，所以在这里补刷，不在 _build_body 里补。
+	for p in _pages:
+		GameStyle.swipeable(p as Control)
 
 func _fmt_time(t: float) -> String:
 	return "%02d:%02d" % [int(t / 60.0), int(t) % 60]
@@ -233,7 +241,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 	hbox.add_child(text_col)
 
 	var name_lbl := Label.new()
-	name_lbl.text = String(adef.get("name", "未名功绩"))
+	name_lbl.text = String(adef.get("name", "未命名成就"))
 	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	text_col.add_child(name_lbl)
 
@@ -244,7 +252,7 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 
 	# 奖励说明
 	var rtype := String(adef.get("reward_type", ""))
-	var rprefix := "解锁道统：" if rtype == "cultivator" else "入阁法宝："
+	var rprefix := "解锁角色：" if rtype == "cultivator" else "解锁道具："
 	var rname := String(adef.get("reward_name", ""))
 	var reward_lbl := Label.new()
 	reward_lbl.text = "%s%s" % [rprefix, rname]
@@ -314,7 +322,7 @@ func _create_cultivator_row(cid: String) -> Control:
 	text_col.add_child(name_row)
 
 	var name_lbl := Label.new()
-	name_lbl.text = String(cdef.get("name", "未知修士"))
+	name_lbl.text = String(cdef.get("name", "未知角色"))
 	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
@@ -328,16 +336,16 @@ func _create_cultivator_row(cid: String) -> Control:
 		title_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
 		GameStyle.label(title_lbl, 11, GameStyle.INK_TEXT)
 	else:
-		title_lbl.text = " 待证道 "
+		title_lbl.text = "待解锁"
 		title_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 		GameStyle.label(title_lbl, 11, GameStyle.PAPER_DIM)
 	title_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_row.add_child(title_lbl)
 
-	var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未至"
-	var danger_txt := "最高「%s」" % AchievementData.danger_name(best_danger) if best_danger >= 0 else "未渡劫"
+	var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"
+	var danger_txt := "最高「%s」" % AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关"
 	var detail_lbl := Label.new()
-	detail_lbl.text = "渡劫 %d 次 · %s · 斩妖之最 %d · %s" % [wins, endless_txt, int(rec["best_kills"]), danger_txt]
+	detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d · %s" % [wins, endless_txt, int(rec["best_kills"]), danger_txt]
 	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM)
 	text_col.add_child(detail_lbl)
 
@@ -378,19 +386,19 @@ func _create_cultivator_row(cid: String) -> Control:
 		c_sb.content_margin_bottom = 6.0
 		claim_panel.add_theme_stylebox_override("panel", c_sb)
 		var claim_lbl := Label.new()
-		claim_lbl.text = "领 %d 灵石" % int(next_mile["stones"])
+		claim_lbl.text = "领 %d 金币" % int(next_mile["stones"])
 		GameStyle.label(claim_lbl, 12, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 		claim_panel.add_child(claim_lbl)
 		var tier := int(next_mile["wins"])
 		GameStyle.tap(claim_panel, func() -> void: _on_claim_pressed(cid, tier))
 		hbox.add_child(claim_panel)
 	elif wins <= 0:
-		hbox.add_child(_dim_hint("待首次渡劫"))
+		hbox.add_child(_dim_hint("待首次通关"))
 	elif _all_milestones_claimed(cid):
 		hbox.add_child(_dim_hint("已 领 齐"))
 	else:
 		var need := _next_milestone_wins(cid)
-		hbox.add_child(_dim_hint("渡 %d 次可领" % need))
+		hbox.add_child(_dim_hint("通关 %d 次可领" % need))
 
 	# 行点按 → 「这是什么」详情（生涯档案 / 解锁条件）
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -435,36 +443,36 @@ func _on_claim_pressed(cid: String, tier: int) -> void:
 ## 道统行点按详情：已解锁看生涯档案，未解锁看达成条件
 func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 	var cdef := CultivatorData.get_def(cid)
-	var cname := String(cdef.get("name", "未知修士"))
+	var cname := String(cdef.get("name", "未知角色"))
 	if not GameManager.is_cultivator_unlocked(cid):
 		var adef := AchievementData.cultivator_unlock_achievement(cid)
-		var cond := String(adef.get("cond_desc", "达成对应天道功绩后解锁"))
+		var cond := String(adef.get("cond_desc", "达成对应成就后解锁"))
 		var rname := String(adef.get("name", ""))
 		DetailTip.show_over(self, anchor, {
 			"title": "%s · 未解锁" % cname,
-			"chip": "封印",
+			"chip": "锁定",
 			"chip_color": GameStyle.LINE,
-			"rows": [["解锁功绩", rname if rname != "" else "——", GameStyle.PAPER]],
+			"rows": [["解锁条件", rname if rname != "" else "——", GameStyle.PAPER]],
 			"body": cond,
-			"foot": "达成后自动入列，届时于此处沉淀该道统的功名。",
+			"foot": "达成后自动解锁，届时在此显示该角色的记录。",
 		})
 		return
 	var rec := GameManager.get_cultivator_record(cid)
 	var wins := int(rec["wins"])
 	var rows: Array = [
-		["修行局数", "%d 局" % int(rec["runs"]), GameStyle.PAPER],
-		["渡劫成功", "%d 次" % wins, GameStyle.JADE],
+		["游戏局数", "%d 局" % int(rec["runs"]), GameStyle.PAPER],
+		["通关", "%d 次" % wins, GameStyle.JADE],
 		["无尽最高", ("第 %d 波" % int(rec["endless_best_wave"])) if int(rec["endless_best_wave"]) > 0 else "未入无尽", GameStyle.PAPER],
-		["斩妖之最", "%d 只" % int(rec["best_kills"]), GameStyle.PAPER],
-		["最高危险度", AchievementData.danger_name(GameManager.get_cultivator_best_danger(cid)) if GameManager.get_cultivator_best_danger(cid) >= 0 else "未渡劫", GameStyle.GOLD],
+		["最高击杀", "%d 只" % int(rec["best_kills"]), GameStyle.PAPER],
+		["最高难度", AchievementData.danger_name(GameManager.get_cultivator_best_danger(cid)) if GameManager.get_cultivator_best_danger(cid) >= 0 else "未通关", GameStyle.GOLD],
 	]
 	DetailTip.show_over(self, anchor, {
-		"title": "%s · 道统功名" % cname,
+		"title": "%s · 角色记录" % cname,
 		"chip": "档案",
 		"chip_color": GameStyle.JADE,
 		"rows": rows,
-		"body": "称号「%s」" % AchievementData.title_for_wins(wins) if AchievementData.title_for_wins(wins) != "" else "尚未证得称号",
-		"foot": "里程碑奖励为一次性灵石囊，领取后于下一局开局兑入囊中灵石。",
+		"body": "称号「%s」" % AchievementData.title_for_wins(wins) if AchievementData.title_for_wins(wins) != "" else "尚未获得称号",
+		"foot": "里程碑奖励为一次性金币，领取后于下一局开局到账。",
 	})
 
 # ----------------- 渡劫实录行 -----------------
@@ -473,10 +481,10 @@ func _rebuild_log_list() -> void:
 	for c in _log_list_box.get_children():
 		c.queue_free()
 
-	_log_list_box.add_child(_section_header("✦ 渡劫战报 · 共 %d 次" % GameManager.victory_log.size()))
+	_log_list_box.add_child(_section_header("✦ 通关记录 · 共 %d 次" % GameManager.victory_log.size()))
 	if GameManager.victory_log.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "尚无渡劫战报 · 完成 20 波渡劫即成实录"
+		empty_lbl.text = "暂无通关记录 · 完成 20 波即可记录"
 		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(empty_lbl, 13, GameStyle.GREY)
 		_log_list_box.add_child(empty_lbl)
@@ -485,16 +493,19 @@ func _rebuild_log_list() -> void:
 			_log_list_box.add_child(_create_log_row(GameManager.victory_log[i], i))
 
 	_log_list_box.add_child(_spacer(6))
-	_log_list_box.add_child(_section_header("✦ 近期历战 · 最近 %d 局" % GameManager.run_history.size()))
+	_log_list_box.add_child(_section_header("✦ 最近游戏 · 最近 %d 局" % GameManager.run_history.size()))
 	if GameManager.run_history.is_empty():
 		var empty2 := Label.new()
-		empty2.text = "暂无历战战报 · 前往斩妖修道即可沉淀战果"
+		empty2.text = "暂无记录 · 开始游戏即可记录"
 		empty2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(empty2, 13, GameStyle.GREY)
 		_log_list_box.add_child(empty2)
 	else:
 		for entry in GameManager.run_history:
 			_log_list_box.add_child(_create_history_row(entry))
+
+	# 展开/收起战报只重建本列（不走 _refresh_data），新挂的详情面板同样是 STOP 卡片
+	GameStyle.swipeable(_log_list_box)
 
 func _spacer(h: float) -> Control:
 	var sp := Control.new()
@@ -534,12 +545,12 @@ func _create_log_row(snap: Dictionary, idx: int) -> Control:
 	var cdef := CultivatorData.get_def(cid)
 	var dname := AchievementData.danger_name(int(snap.get("danger", 0)))
 	var c_lbl := Label.new()
-	c_lbl.text = "%s「%s」" % [String(cdef.get("name", "修士")), dname]
+	c_lbl.text = "%s「%s」" % [String(cdef.get("name", "角色")), dname]
 	GameStyle.label(c_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	hbox.add_child(c_lbl)
 
 	var detail_lbl := Label.new()
-	detail_lbl.text = "第 %d 波 · 斩妖 %d · Lv.%d · %s" % [
+	detail_lbl.text = "第 %d 波 · 击杀 %d · Lv.%d · %s" % [
 		int(snap.get("wave", 0)), int(snap.get("kills", 0)), int(snap.get("level", 1)), _fmt_time(float(snap.get("time", 0.0))),
 	]
 	detail_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -547,7 +558,7 @@ func _create_log_row(snap: Dictionary, idx: int) -> Control:
 	hbox.add_child(detail_lbl)
 
 	var v_tag := Label.new()
-	v_tag.text = " 渡劫成功 %s " % ("▲" if expanded else "◆")
+	v_tag.text = " 通关 %s " % ("▲" if expanded else "◆")
 	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
 	GameStyle.label(v_tag, 11, GameStyle.INK_TEXT)
 	hbox.add_child(v_tag)
@@ -575,10 +586,10 @@ func _create_log_row(snap: Dictionary, idx: int) -> Control:
 
 	# 上阵法器
 	var weapons: Array = snap.get("weapons", [])
-	d_vbox.add_child(_kit_section("上阵法器", weapons, false))
-	# 法宝
+	d_vbox.add_child(_kit_section("装备武器", weapons, false))
+	# 道具
 	var items: Array = snap.get("items", [])
-	d_vbox.add_child(_kit_section("随行法宝", items, true))
+	d_vbox.add_child(_kit_section("携带道具", items, true))
 	# 关键属性
 	d_vbox.add_child(_stats_grid(snap))
 
@@ -630,21 +641,21 @@ func _open_kit_tip(kit: Dictionary, is_item: bool, anchor: Control) -> void:
 	if is_item:
 		DetailTip.show_over(self, anchor, {
 			"title": kit_name,
-			"chip": "法宝",
+			"chip": "道具",
 			"chip_color": GameStyle.GOLD,
-			"rows": [["品类", "随行被动法宝", GameStyle.PAPER]],
-			"body": "渡劫成功当局购入并持有的法宝。",
-			"foot": "法宝买即生效、无限持有，详情可在图鉴手册查阅。",
+			"rows": [["类型", "携带的被动道具", GameStyle.PAPER]],
+			"body": "通关当局购买并持有的道具。",
+			"foot": "道具买即生效、整局持有，详情可在图鉴查阅。",
 		})
 	else:
 		var star := int(kit.get("star", 1))
 		DetailTip.show_over(self, anchor, {
 			"title": kit_name,
-			"chip": "法器",
+			"chip": "武器",
 			"chip_color": GameStyle.JADE,
 			"rows": [["星级", "★%d" % star, GameStyle.JADE]],
-			"body": "渡劫成功当局的上阵法器（含护体灵宝）。",
-			"foot": "灵蝶为环绕护体的御灵法宝，其余为悬浮施放的法器。",
+			"body": "通关当局装备的武器（含召唤武器）。",
+			"foot": "护蝶为环绕型召唤武器，其余为自动攻击的武器。",
 		})
 
 ## 关键属性 4 列网格（境界取快照根字段，其余取 stats 子字典）
@@ -657,14 +668,14 @@ func _stats_grid(snap: Dictionary) -> Control:
 	var dodge := float(stats.get("dodge", 0.0))
 	var crit := float(stats.get("crit_rate", 0.0))
 	var cells: Array = [
-		["境界", "Lv.%d" % int(snap.get("level", 1))],
-		["气血上限", "%.0f" % float(stats.get("hp_max", 0.0))],
+		["等级", "Lv.%d" % int(snap.get("level", 1))],
+		["最大生命", "%.0f" % float(stats.get("hp_max", 0.0))],
 		["护甲", "%.0f" % float(stats.get("armor", 0.0))],
 		["闪避", "%.0f%%" % (dodge * 100.0)],
 		["暴击率", "%.0f%%" % (crit * 100.0)],
-		["灵韵", "%.0f" % float(stats.get("harvest", 0.0))],
-		["福缘", "%.0f" % float(stats.get("luck", 0.0))],
-		["囊中灵石", "%d" % int(stats.get("stones", 0))],
+		["收益", "%.0f" % float(stats.get("harvest", 0.0))],
+		["幸运", "%.0f" % float(stats.get("luck", 0.0))],
+		["持有金币", "%d" % int(stats.get("stones", 0))],
 	]
 	for c in cells:
 		var k_lbl := Label.new()
@@ -696,7 +707,7 @@ func _create_history_row(entry: Dictionary) -> Control:
 
 	var cid := String(entry.get("cultivator_id", "jianchi"))
 	var cdef := CultivatorData.get_def(cid)
-	var cname := String(cdef.get("name", "修士"))
+	var cname := String(cdef.get("name", "角色"))
 	var dname := AchievementData.danger_name(int(entry.get("danger", 0)))
 
 	var c_lbl := Label.new()
@@ -710,18 +721,18 @@ func _create_history_row(entry: Dictionary) -> Control:
 	var dur := float(entry.get("time", 0.0))
 
 	var detail_lbl := Label.new()
-	detail_lbl.text = "抵达第 %d 波 · 斩妖 %d 只 · 境界 Lv.%d · 耗时 %s" % [wave, kills, lvl, _fmt_time(dur)]
+	detail_lbl.text = "抵达第 %d 波 · 击杀 %d 只 · 等级 Lv.%d · 耗时 %s" % [wave, kills, lvl, _fmt_time(dur)]
 	detail_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM)
 	hbox.add_child(detail_lbl)
 
 	var v_tag := Label.new()
 	if is_vic:
-		v_tag.text = " 渡劫成功 "
+		v_tag.text = " 通关 "
 	elif is_endless:
-		v_tag.text = " 无尽道殒 "
+		v_tag.text = " 无尽结束 "
 	else:
-		v_tag.text = " 道消身殒 "
+		v_tag.text = " 阵亡 "
 	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_vic else GameStyle.BAD_DK))
 	GameStyle.label(v_tag, 11, GameStyle.PAPER if is_vic else GameStyle.BAD)
 	hbox.add_child(v_tag)

@@ -5,7 +5,7 @@ extends CultivatorBase
 ## 特征：
 ## 1. 现代 16-bit 艺术级微像素：暗色像素勾边与高光像素抖动
 ## 2. 头戴微倾的精编竹斗笠，额前散落飘逸碎发
-## 3. 天青月华流云道袍，系玄金锦缎腰封
+## 3. 天青月华流云道袍，素净无腰封
 ## 4. 腰悬赤朱仙家酒葫芦与羊脂白玉佩，桃花金装秋水长剑
 
 const OUTLINE := Color(0.12, 0.14, 0.18)
@@ -22,7 +22,7 @@ const PALETTE := {
 	"robe_mid": Color(0.32, 0.60, 0.72),      # 天青主调
 	"robe_dark": Color(0.20, 0.42, 0.52),     # 天青深影
 	"white_inner": Color(0.95, 0.96, 0.98),   # 月华素白
-	"belt": Color(0.22, 0.24, 0.30),          # 玄墨腰封
+	"belt": Color(0.22, 0.24, 0.30),          # 剑柄丝绦玄墨
 	"gold": Color(0.96, 0.82, 0.28),          # 纯金饰扣
 	"gourd": Color(0.85, 0.30, 0.22),         # 赤朱酒葫芦
 	"jade": Color(0.85, 0.96, 0.92),          # 羊脂白玉
@@ -60,10 +60,7 @@ func _draw_front() -> void:
 	_px_rect(Vector2(-4, -4 + bob), Vector2(8, 5), PALETTE["white_inner"])
 	_px_rect(Vector2(-2, -4 + bob), Vector2(4, 3), PALETTE["skin"])
 
-	# 6. 玄金锦缎腰封 + 赤朱酒葫芦 + 羊脂白玉佩
-	_px_rect(Vector2(-9, 5 + bob), Vector2(18, 4), PALETTE["belt"])
-	_px_rect(Vector2(-2.5, 4.5 + bob), Vector2(5, 5), PALETTE["gold"]) # 金扣
-
+	# 6. 赤朱酒葫芦 + 羊脂白玉佩
 	# 左侧悬挂赤朱仙家酒葫芦
 	var gourd_pos := Vector2(-7, 8 + bob)
 	_px_rect(gourd_pos, Vector2(4, 6), PALETTE["gourd"])
@@ -139,11 +136,10 @@ func _draw_side() -> void:
 	_px_rect(Vector2(-7, 9 + bob), Vector2(14, 14), PALETTE["robe_mid"])
 	_px_rect(Vector2(1, 9 + bob), Vector2(6, 14), PALETTE["robe_light"])
 
-	# 4. 侧身上身与腰封酒葫芦
+	# 4. 侧身上身与酒葫芦
 	_px_rect(Vector2(-7, -4 + bob), Vector2(14, 14), OUTLINE)
 	_px_rect(Vector2(-6, -3 + bob), Vector2(12, 12), PALETTE["robe_mid"])
 	_px_rect(Vector2(0, -3 + bob), Vector2(6, 12), PALETTE["robe_light"])
-	_px_rect(Vector2(-7, 5 + bob), Vector2(14, 4), PALETTE["belt"])
 
 	# 侧身酒葫芦
 	_px_rect(Vector2(-8, 7 + bob), Vector2(4, 6), PALETTE["gourd"])
@@ -194,10 +190,9 @@ func _draw_back() -> void:
 	_px_rect(Vector2(-9, 9 + bob), Vector2(18, 14), PALETTE["robe_mid"])
 	_px_rect(Vector2(-1, 9 + bob), Vector2(2, 14), PALETTE["robe_dark"])
 
-	# 5. 上身后背与腰封酒葫芦
+	# 5. 上身后背与酒葫芦
 	_px_rect(Vector2(-9, -4 + bob), Vector2(18, 14), OUTLINE)
 	_px_rect(Vector2(-8, -3 + bob), Vector2(16, 12), PALETTE["robe_mid"])
-	_px_rect(Vector2(-9, 5 + bob), Vector2(18, 4), PALETTE["belt"])
 	_px_rect(Vector2(-8, 7 + bob), Vector2(4, 6), PALETTE["gourd"])
 
 	# 6. 后脑发丝与从上俯视的竹斗笠

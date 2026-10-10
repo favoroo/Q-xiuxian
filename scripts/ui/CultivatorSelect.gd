@@ -75,7 +75,7 @@ func _build_ui() -> void:
 	header_row.add_child(l_spacer)
 
 	_title_label = Label.new()
-	_title_label.text = "选 择 道 统"
+	_title_label.text = "选 择 角 色"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	header_row.add_child(_title_label)
@@ -92,7 +92,7 @@ func _build_ui() -> void:
 	header_row.add_child(dummy_r)
 
 	_sub_label = Label.new()
-	_sub_label.text = "点选下方修士卡片查看道统详情 · 确认开局装备、独门天赋与代价后拜入道门"
+	_sub_label.text = "点选下方角色卡片查看详情 · 确认初始装备、天赋与代价后选择"
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(_sub_label)
@@ -251,11 +251,11 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
 		GameStyle.label(status_chip, 10, GameStyle.JADE)
 	elif is_unlocked:
-		status_chip.text = " ✦ 道门已开 "
+		status_chip.text = " ✦ 已解锁 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
 		GameStyle.label(status_chip, 10, GameStyle.GOOD)
 	else:
-		status_chip.text = " ✖ 天道锁闭 "
+		status_chip.text = " ✖ 未解锁 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BAD_DK))
 		GameStyle.label(status_chip, 10, GameStyle.BAD)
 	left_col.add_child(status_chip)
@@ -274,25 +274,25 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var raw_equip := CultivatorData.get_start_equip(cid)
 	if not raw_equip.is_empty():
 		var equip_text := "✦ " + raw_equip
-		mid_col.add_child(_make_info_row("开局装备", GameStyle.JADE_DK, GameStyle.JADE, [equip_text], GameStyle.JADE, col_w))
+		mid_col.add_child(_make_info_row("初始装备", GameStyle.JADE_DK, GameStyle.JADE, [equip_text], GameStyle.JADE, col_w))
 
 	# (b) 独门天赋（绿色高亮）
 	var pros_lines: Array[String] = []
 	for p in def.get("pros", []):
 		pros_lines.append("＋ " + String(p))
 	var pros_joined := "    ".join(pros_lines) if pros_lines.size() <= 2 else "\n".join(pros_lines)
-	mid_col.add_child(_make_info_row("独门天赋", GameStyle.GOOD_DK, GameStyle.GOOD, [pros_joined], GameStyle.GOOD, col_w))
+	mid_col.add_child(_make_info_row("天赋", GameStyle.GOOD_DK, GameStyle.GOOD, [pros_joined], GameStyle.GOOD, col_w))
 
 	# (c) 背负代价（红色高亮）
 	var cons_lines: Array[String] = []
 	for c in def.get("cons", []):
 		cons_lines.append("－ " + String(c))
 	var cons_joined := "    ".join(cons_lines) if cons_lines.size() <= 2 else "\n".join(cons_lines)
-	mid_col.add_child(_make_info_row("背负代价", GameStyle.BAD_DK, GameStyle.BAD, [cons_joined], GameStyle.BAD, col_w))
+	mid_col.add_child(_make_info_row("代价", GameStyle.BAD_DK, GameStyle.BAD, [cons_joined], GameStyle.BAD, col_w))
 
 	# (d) 契合神通（蓝色高亮，动态从 SkillData 合入真实强化描述）
 	var syn_sid := CultivatorData.get_synergy_skill_id(cid)
-	var syn_text := "✦ 任意随行神通皆可搭配"
+	var syn_text := "✦ 任意技能皆可搭配"
 	if not syn_sid.is_empty():
 		var sdef := SkillData.get_def(syn_sid)
 		var sname := String(sdef.get("name", syn_sid))
@@ -301,7 +301,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 			syn_text = "✦ 专属契合「%s」：%s" % [sname, enh]
 		else:
 			syn_text = "✦ 专属契合「%s」" % sname
-	mid_col.add_child(_make_info_row("契合神通", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE, [syn_text], GameStyle.GOLD_EDGE, col_w))
+		mid_col.add_child(_make_info_row("适配技能", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE, [syn_text], GameStyle.GOLD_EDGE, col_w))
 
 	# 3. 右列：拜入此门按钮 或 解锁条件说明
 	var right_col := VBoxContainer.new()
@@ -314,13 +314,13 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	if is_unlocked:
 		var ready_lbl := Label.new()
-		ready_lbl.text = "✦ 道统就绪 ✦"
+		ready_lbl.text = "✦ 角色就绪 ✦"
 		ready_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(ready_lbl, 12, GameStyle.JADE)
 		right_col.add_child(ready_lbl)
 
 		var choose_btn := Button.new()
-		choose_btn.text = "拜 入 此 门"
+		choose_btn.text = "选 择 此 角 色"
 		choose_btn.custom_minimum_size = Vector2(RIGHT_COL_W, 46)
 		choose_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		choose_btn.focus_mode = Control.FOCUS_NONE
@@ -329,8 +329,8 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		right_col.add_child(choose_btn)
 	else:
 		var ach := AchievementData.cultivator_unlock_achievement(cid)
-		var ach_name := String(ach.get("name", "天道考验"))
-		var cond_text := String(ach.get("cond_desc", "完成特定天道功绩后解锁"))
+		var ach_name := String(ach.get("name", "解锁条件"))
+		var cond_text := String(ach.get("cond_desc", "完成特定成就后解锁"))
 
 		var lock_hdr := Label.new()
 		lock_hdr.text = "✦ 解锁条件 ✦"
@@ -339,7 +339,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		right_col.add_child(lock_hdr)
 
 		var ach_lbl := Label.new()
-		var ach_wrapped := GameStyle.wrap_cjk("功绩「%s」" % ach_name, GameStyle.body_font(), 11, RIGHT_COL_W - 4.0)
+		var ach_wrapped := GameStyle.wrap_cjk("成就「%s」" % ach_name, GameStyle.body_font(), 11, RIGHT_COL_W - 4.0)
 		ach_lbl.text = ach_wrapped
 		ach_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ach_lbl.custom_minimum_size = Vector2(RIGHT_COL_W - 4.0, 0)
@@ -501,7 +501,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
 		GameStyle.label(tag_lbl, 10, GameStyle.JADE)
 	else:
-		tag_lbl.text = "已入门"
+		tag_lbl.text = "已选择"
 		GameStyle.label(tag_lbl, 10, GameStyle.PAPER_DIM)
 	vbox.add_child(tag_lbl)
 

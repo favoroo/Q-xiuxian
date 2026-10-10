@@ -12,10 +12,10 @@ shader_parameter/flash_color = Color(1, 1, 0.9, 1)
 shader_parameter/flash_modifier = 0.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 15.0
+radius = 21.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
-radius = 19.0
+radius = 26.6
 
 [node name="ChileiEliteEnemy" type="CharacterBody2D"]
 collision_layer = 4
@@ -43,14 +43,14 @@ bite_hit_radius = 44.0
 bite_damage_mul = 1.1
 
 [node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 18)
-scale = Vector2(1.0, 1.0)
+position = Vector2(0.0, 25.2)
+scale = Vector2(1.40, 1.40)
 texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 modulate = Color(1.45, 0.6, 0.45, 1)
 material = SubResource("ShaderMaterial_chilei")
-scale = Vector2(0.62, 0.62)
+scale = Vector2(0.87, 0.87)
 
 [node name="PointLight2D" type="PointLight2D" parent="."]
 color = Color(1, 0.5, 0.35, 1)

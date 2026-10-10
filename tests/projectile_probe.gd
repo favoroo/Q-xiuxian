@@ -75,7 +75,9 @@ func _physics_process(delta: float) -> void:
 			+ Vector2(cos(_strafe_ang), sin(_strafe_ang)) * LONE_DISTANCE
 
 ## 从 root 递归扫 BladeProjectile：本 runner 把 Main 挂在 root 下，而弹丸是
-## add_child 到 get_tree().current_scene（= runner 根），只扫 main 会一个都扫不到。
+## add_child 到池宿主（挂 current_scene 下），只扫 main 会一个都扫不到。
+## 池化后（2026-10-10）弹丸实例会休眠复用：跳过回池的（visible=false），并按
+## launch_id 而不是 instance_id 记账 —— 同一实例的第二次发射是一发新弹。
 func _scan() -> void:
 	var found: Dictionary = {}
 	_collect(get_tree().root, found)
@@ -102,18 +104,30 @@ func _scan() -> void:
 			continue
 		var rec: Dictionary = _seen[id]
 		_seen.erase(id)
-		var hits: int = (int(rec["p0"]) - int(rec["pierce"])) + (int(rec["b0"]) - int(rec["bounce"]))
+		# 弹丸可能「出膛→命中→回收」全发生在两次扫描之间，pf 缓存读不到终值；
+		# _recycle 会把真实终值登记到 _final_stats，优先用它结账
+		var pf: int = int(rec["pierce"])
+		var bf: int = int(rec["bounce"])
+		var final: Dictionary = BladeProjectile._final_stats.get(id, {})
+		if not final.is_empty():
+			pf = int(final["pierce"])
+			bf = int(final["bounce"])
+			BladeProjectile._final_stats.erase(id)
+		var hits: int = (int(rec["p0"]) - pf) + (int(rec["b0"]) - bf)
 		_hit_units += hits
 		if hits == 0:
 			_whiffs += 1
 			_band_whiffs[_band_of(float(rec["aim"]))] += 1
 			if bool(rec["phase"]):
 				_a_whiffs += 1
+			if OS.has_environment("PERF_DEBUG"):
+				print("[WHIFF] id=%s p0=%s pf=%s b0=%s bf=%s aim=%.0f" % [
+					str(id), str(rec["p0"]), str(pf), str(rec["b0"]), str(bf), float(rec["aim"])])
 
 func _collect(node: Node, out: Dictionary) -> void:
 	for ch in node.get_children():
-		if ch is BladeProjectile and is_instance_valid(ch):
-			out[ch.get_instance_id()] = ch
+		if ch is BladeProjectile and is_instance_valid(ch) and not ch._pooled and ch.launch_id >= 0:
+			out[ch.launch_id] = ch
 		_collect(ch, out)
 
 func _nearest_enemy_dist(from: Vector2) -> float:

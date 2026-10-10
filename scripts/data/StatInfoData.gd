@@ -18,31 +18,31 @@ extends RefCounted
 
 ## 加点字段 → 人话名 + 单位（单位含义见文件头第 3 条）
 const FIELDS: Dictionary = {
-	"weapon_damage_mult": {"name": "法器伤害", "unit": "pct"},
+	"weapon_damage_mult": {"name": "武器伤害", "unit": "pct"},
 	"attack_speed_mult_mul": {"name": "攻击间隔", "unit": "pctmul"},
 	"armor": {"name": "护甲", "unit": "pt"},
 	"move_speed_mult": {"name": "移动速度", "unit": "pct"},
 	"attack_range_mult": {"name": "攻击范围", "unit": "pct"},
 	"pickup_range_mult": {"name": "拾取范围", "unit": "pct"},
-	"hp_regen": {"name": "气血回复", "unit": "rate"},
+	"hp_regen": {"name": "生命回复", "unit": "rate"},
 	"crit_rate": {"name": "暴击率", "unit": "pct"},
 	"crit_mult": {"name": "暴击伤害", "unit": "pct"},
 	"dodge": {"name": "闪避率", "unit": "pct"},
 	"lifesteal": {"name": "吸血概率", "unit": "pct"},
-	"luck": {"name": "福缘", "unit": "pt"},
-	"harvest": {"name": "灵韵", "unit": "pt"},
-	"spirit_stones": {"name": "灵石", "unit": "stone"},
-	"max_hp": {"name": "气血上限", "unit": "pt"},
+	"luck": {"name": "幸运", "unit": "pt"},
+	"harvest": {"name": "收益", "unit": "pt"},
+	"spirit_stones": {"name": "金币", "unit": "stone"},
+	"max_hp": {"name": "最大生命", "unit": "pt"},
 	"hp_heal": {"name": "立即回复", "unit": "pt"},
-	"xp_gain_mult": {"name": "修为获取", "unit": "pct"},
+	"xp_gain_mult": {"name": "经验获取", "unit": "pct"},
 	"knockback_mult": {"name": "击退力度", "unit": "pct"},
 	"free_rerolls": {"name": "免费重掷", "unit": "times"},
 	"elite_damage": {"name": "对精英伤害", "unit": "pct"},
-	"shop_price_mul": {"name": "灵石阁物价", "unit": "pctmul"},
+	"shop_price_mul": {"name": "商店物价", "unit": "pctmul"},
 	"melee_damage": {"name": "近战伤害", "unit": "pt"},
 	"ranged_damage": {"name": "远程伤害", "unit": "pt"},
 	"elemental_damage": {"name": "元素伤害", "unit": "pt"},
-	"engineering_damage": {"name": "御灵伤害", "unit": "pt"},
+	"engineering_damage": {"name": "召唤伤害", "unit": "pt"},
 	"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
 }
 
@@ -95,60 +95,60 @@ const STAT_FIELDS: Dictionary = {
 
 ## 面板每一行的标题（与 PlayerStatsDialog 的行名同源，判据比对用）
 const STAT_TITLES: Dictionary = {
-	"hp": "气血值",
-	"regen": "气血回复",
+	"hp": "生命值",
+	"regen": "生命回复",
 	"armor": "护甲",
 	"dodge": "闪避率",
 	"lifesteal": "吸血",
-	"damage": "法器伤害",
+	"damage": "武器伤害",
 	"melee_dmg": "近战伤害",
 	"ranged_dmg": "远程伤害",
 	"elemental_dmg": "元素伤害",
-	"engineering_dmg": "御灵伤害",
+	"engineering_dmg": "召唤伤害",
 	"haste": "攻击间隔",
 	"speed": "移动速度",
 	"pickup": "拾取范围",
 	"range": "攻击范围",
 	"crit": "暴击",
-	"luck": "福缘",
-	"harvest": "灵韵",
-	"xp_gain": "修为获取",
-	"shop_price": "灵石阁物价",
+	"luck": "幸运",
+	"harvest": "收益",
+	"xp_gain": "经验获取",
+	"shop_price": "商店物价",
 	"bonus_pierce": "贯穿",
 	"elite_dmg": "对精英伤害",
 	"knockback": "击退力度",
 	"free_rerolls": "免费重掷",
-	"kills": "累计诛妖",
-	"stones": "随身灵石",
+	"kills": "累计击杀",
+	"stones": "随身金币",
 }
 
 ## 一句话「这是什么」；结算规则与上限走 rules()
 const BRIEF: Dictionary = {
-	"hp": "修士的命线：归零即身死道消，本局结束。",
-	"regen": "不用停手、每秒自动结算一次的持续回血。",
-	"armor": "周身罡气：按百分比削掉每一次受击的伤害。",
-	"dodge": "身法缥缈难捉：整次攻击落空，一点血都不掉。",
-	"lifesteal": "命中时以概率吸取 1 点气血。",
-	"damage": "所有法器伤害的总乘区，一件不漏。",
-	"melee_dmg": "加成所有挥斩与横扫类近战法器的基础伤害。",
-	"ranged_dmg": "加成所有飞射弹道类远程法器的基础伤害。",
-	"elemental_dmg": "加成符箓、雷法轰击以及灼烧与剧毒跳字伤害。",
-	"engineering_dmg": "加成所有环绕周身护体灵宝的基础伤害。",
-	"haste": "出招更快：缩短每件法器的攻击间隔。",
-	"speed": "走位躲潮的根本：修士的移动速度。",
-	"pickup": "灵石与修为自动飞进袖子的半径。",
-	"range": "法器够得着多远：索敌与挥斩的距离一起乘。",
-	"crit": "会心一击的概率与倍率，两个乘区相乘。",
-	"luck": "气运：抬高高稀有度悟道与高阶法宝的现身权重。",
-	"harvest": "灵田生金：每波结束无偿发放灵石与修为，并且自我复利。",
-	"xp_gain": "每颗修为光球提供的经验倍率加成。",
-	"shop_price": "波间灵石阁刷新与购买商品的物价折算。",
-	"bonus_pierce": "所有远程弹丸类法器的额外贯穿敌人次数。",
-	"elite_dmg": "对精英头目与魔君 Boss 的额外伤害加成乘区。",
-	"knockback": "击中妖兽时的击退距离与推力倍率。",
-	"free_rerolls": "每波灵石阁开始时可无偿重掷货架的次数。",
-	"kills": "本局击杀妖兽的总数，含精英与魔君。",
-	"stones": "本局货币：灵石阁买法器、法宝、重掷货架都花它。",
+	"hp": "角色的命线：归零即阵亡，本局结束。",
+	"regen": "每秒自动回复的生命值。",
+	"armor": "按百分比减免每次受击的伤害。",
+	"dodge": "有概率完全闪避一次攻击，不掉血。",
+	"lifesteal": "命中时有概率吸取1点生命。",
+	"damage": "所有武器伤害的总乘区。",
+	"melee_dmg": "加成近战类武器的基础伤害。",
+	"ranged_dmg": "加成远程类武器的基础伤害。",
+	"elemental_dmg": "加成元素伤害与灼烧、中毒等持续伤害。",
+	"engineering_dmg": "加成环绕类召唤武器的基础伤害。",
+	"haste": "缩短每件武器的攻击间隔。",
+	"speed": "角色的移动速度。",
+	"pickup": "金币与经验自动拾取的范围。",
+	"range": "武器索敌与攻击的距离。",
+	"crit": "暴击的概率与倍率。",
+	"luck": "提高高稀有度升级与道具的出现概率。",
+	"harvest": "每波结束白得金币与经验，且有复利增长。",
+	"xp_gain": "每颗经验光球提供的经验倍率。",
+	"shop_price": "商店商品的物价折算。",
+	"bonus_pierce": "远程弹丸类武器的额外穿透次数。",
+	"elite_dmg": "对精英与Boss的额外伤害。",
+	"knockback": "击中敌人时的击退距离与力度。",
+	"free_rerolls": "每波商店开始时免费重掷的次数。",
+	"kills": "本局击杀敌人的总数，含精英与Boss。",
+	"stones": "本局货币：买武器、道具、重掷都花它。",
 }
 
 static func ids() -> Array:
@@ -179,93 +179,93 @@ static func rules(id: String) -> Array[String]:
 	var out: Array[String] = []
 	match id:
 		"hp":
-			out.append("气血上限 = 道统基础 × 道统气血系数，再加悟道与法宝的增量、御灵羁绊的额外气血。")
+			out.append("最大生命 = 角色基础 × 角色生命系数，再加升级与道具的增量、召唤羁绊的额外生命。")
 			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，且保底 %d 点：护甲再高也抹不平最后一击。" % [
 				_fmt(GameBalance.ARMOR_COEF), int(GameBalance.DAMAGE_FLOOR)])
-			out.append("三条回血路：气血回复每秒持续回、吸血命中概率回、波末结算（灵韵与回春葫芦）。")
+			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、波末结算（收益与回春葫芦）。")
 		"regen":
 			out.append("每帧按「回复量 × 时间」累加，满血时不溢出、也不折抵成别的收益。")
-			out.append("青木羁绊额外加在这一条上，详情里单列一行。")
+			out.append("木系羁绊额外加在这一条上，详情里单列一行。")
 			out.append("与吸血是两回事：这条是持续回，那条是命中掷概率、一次只回 1 点。")
 		"armor":
 			out.append("减伤 = 1 − 1 ÷ (1 + 护甲 × %s)：收益递减但没有上限，堆得越高每点越不值钱。" % _fmt(GameBalance.ARMOR_COEF))
 			out.append("面板减伤不含「保底 %d 点」这一刀，所以高护甲挨小伤害时实际比面板略差。" % int(GameBalance.DAMAGE_FLOOR))
-			out.append("厚土羁绊与法宝「龟甲符」加在这条上；「狂血丹」用护甲换伤害，会倒扣。")
+			out.append("土系羁绊与道具「龟甲符」加在这条上；「狂血丹」用护甲换伤害，会倒扣。")
 		"dodge":
 			out.append("硬上限 %d%%：到顶之后再点这一条不会继续涨，多余的额度是浪费。" % int(GameManager.DODGE_CAP * 100.0))
 			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
 		"lifesteal":
-			out.append("每次生效只回 1 点气血：概率越高越稳，不会一次回一大截。")
-			out.append("每秒至多触发 %d 次：高频法器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
-			out.append("青木羁绊的加成与悟道、法宝合在一起算，共用同一个每秒闸。")
+			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
+			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
+			out.append("木系羁绊的加成与升级、道具合在一起算，共用同一个每秒闸。")
 		"damage":
-			out.append("面板 = 悟道/法宝/道统乘区 × 流派羁绊乘区，以 100% 为基准。")
+			out.append("面板 = 升级/道具/角色乘区 × 流派羁绊乘区，以 100% 为基准。")
 			out.append("暴击是另一个乘区，与这一条相乘，不互相打折。")
-			out.append("单件法器还能把别的属性折成伤害，点法器图标看它吃什么属性。")
+			out.append("单件武器还能把别的属性折成伤害，点武器图标看它吃什么属性。")
 		"melee_dmg":
-			out.append("按点数直接增加所有挥砍横扫类近战法器的基础伤害。")
-			out.append("青云剑、赤焰斩马刀、青木藤鞭、芭蕉扇等近战法器均直接享受本项加成。")
+			out.append("按点数直接增加所有挥砍横扫类近战武器的基础伤害。")
+			out.append("长剑、烈焰刀、藤鞭、风扇等近战武器均直接享受本项加成。")
 		"ranged_dmg":
-			out.append("按点数直接增加所有飞剑飞针与飞射类远程法器的基础伤害。")
-			out.append("庚金飞剑、柳叶飞刀、玄冰飞针、万木灵符等远程法器直接享受本项加成。")
+			out.append("按点数直接增加所有飞剑飞针与飞射类远程武器的基础伤害。")
+			out.append("飞剑、飞刀、冰针、毒符等远程武器直接享受本项加成。")
 		"elemental_dmg":
 			out.append("按点数直接增加符箓、雷法轰击以及异常状态的伤害。")
-			out.append("直接提升火焰符灼烧与万木符剧毒的每秒跳字伤害，离火与青木修士首选。")
+			out.append("直接提升火符灼烧与毒符中毒的每秒跳字伤害，火系与木系角色首选。")
 		"engineering_dmg":
-			out.append("按点数直接增加所有环绕护体灵宝的基础接触伤害。")
-			out.append("灵蝶、寒泉玉莲、混元古钟等灵宝均享受全额加成，符阵灵童核心流派。")
+			out.append("按点数直接增加所有环绕类召唤武器的基础接触伤害。")
+			out.append("护蝶、冰莲、古钟等召唤武器均享受全额加成，符阵灵童核心流派。")
 		"haste":
 			out.append("攻击间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
 			out.append("下限 = 攻击间隔 ×%s：到下限后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
 			out.append("面板显示的是相对 1.00 的缩减量，所以 -12% 与 -14% 叠起来是 -23%，不是 -26%。")
 		"speed":
-			out.append("实际移速 = 道统基础移速 × (1 + 悟道/法宝加成 + 羁绊加成)。")
-			out.append("道统的负面代偿直接乘在这一条上，所以读数可能是负的（如石岳·体修 -15%）。")
-			out.append("个别道统会锁死某条悟道（如石岳锁「神行符」），被锁的那条不再出现在候选里。")
+			out.append("实际移速 = 角色基础移速 × (1 + 升级/道具加成 + 羁绊加成)。")
+			out.append("角色的负面代偿直接乘在这一条上，所以读数可能是负的（如石岳·体修 -15%）。")
+			out.append("个别角色会锁死某条升级（如石岳锁「神行符」），被锁的那条不再出现在候选里。")
 		"pickup":
-			out.append("半径 = 基础拾取半径 × 倍率，只管灵石与修为的吸附，不影响攻击距离。")
-			out.append("这条不够高时，灵石会留在地上等人走过去捡，站得远就捡得慢。")
+			out.append("半径 = 基础拾取半径 × 倍率，只管金币与经验的吸附，不影响攻击距离。")
+			out.append("这条不够高时，金币会留在地上等人走过去捡，站得远就捡得慢。")
 		"range":
-			out.append("乘在每件法器的射程上；剑系羁绊额外加这一条。")
-			out.append("近战法器同样吃它——挥斩的弧更长，不是只有远程受益。")
+			out.append("乘在每件武器的射程上；剑系羁绊额外加这一条。")
+			out.append("近战武器同样吃它——挥斩的弧更长，不是只有远程受益。")
 		"crit":
 			out.append("概率与倍率是两件事：先按概率判定会不会心，命中后再按倍率放大那一刀。")
 			out.append("暴击率有软上限 %d%%：到顶之后再加是白加。" % int(GameManager.CRIT_RATE_CAP * 100.0))
 			out.append("暴击伤害按倍率相加，只影响会心那一刀，普通攻击完全不吃。")
-			out.append("锐金羁绊同时抬这两处；部分法器还会把暴击率直接折成额外伤害。")
+			out.append("金系羁绊同时抬这两处；部分武器还会把暴击率直接折成额外伤害。")
 		"luck":
-			out.append("每点把仙品权重抬 %s，差额从凡品里扣：三档之和恒定，不会整体变稀有。" % _fmt(GameBalance.LUCK_EPIC_PER_POINT))
-			out.append("凡品权重有地板 %s，所以福缘堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
-			out.append("对灵石阁货架是按权重微调，不是必出；福缘低也不至于刷不出货。")
+			out.append("每点把史诗权重抬 %s，差额从普通里扣：三档之和恒定，不会整体变稀有。" % _fmt(GameBalance.LUCK_EPIC_PER_POINT))
+			out.append("普通权重有地板 %s，所以幸运堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
+			out.append("对商店货架是按权重微调，不是必出；幸运低也不至于刷不出货。")
 		"harvest":
-			out.append("波末按等额发放：灵韵 8 就是灵石与修为各 +8，与击杀掉落另算。")
+			out.append("波末按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
 			out.append("每波自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
-			out.append("修为与灵石同源，所以灵韵高 = 升级快 = 悟道次数多。")
+			out.append("经验与金币同源，所以收益高 = 升级快 = 升级次数多。")
 		"xp_gain":
-			out.append("修为获取倍率：只放大吸收修为光球时的升级经验，不影响灵石获取。")
-			out.append("主要由良品悟道「悟性通明」与仙品法宝「悟剑石」提供。")
+			out.append("经验获取倍率：只放大吸收经验光球时的升级经验，不影响金币获取。")
+			out.append("主要由稀有升级「悟性通明」与史诗道具「悟剑石」提供。")
 		"shop_price":
-			out.append("灵石阁所有在售法器、法宝及重掷费用的全局价格折算比例。")
-			out.append("散修自带八折特权，法宝「折扣玉符」可进一步叠加折让。")
+			out.append("商店所有在售武器、道具及重掷费用的全局价格折算比例。")
+			out.append("角色自带八折特权，道具「折扣玉符」可进一步叠加折让。")
 		"bonus_pierce":
 			out.append("飞剑飞符穿透敌人数量的额外增量。")
-			out.append("符箓羁绊核心收益，可在群妖阵线中反复洞穿造成海量伤害。")
+			out.append("弹射羁绊核心收益，可在敌潮阵线中反复洞穿造成海量伤害。")
 		"elite_dmg":
-			out.append("对精英小头目与守关魔君的独立伤害乘区加成。")
-			out.append("悟道「斩将夺旗」与法宝「破甲锥」生效，不影响寻常小妖。")
+			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
+			out.append("升级「对精英夺旗」与道具「破甲锥」生效，不影响寻常小怪。")
 		"knockback":
-			out.append("法器震退妖兽的推力与距离加成倍率。")
-			out.append("厚土羁绊与法宝「雷引针」加在这条上，防高密度妖潮近身。")
+			out.append("武器击退敌人的推力与距离加成倍率。")
+			out.append("土系羁绊与道具「雷引针」加在这条上，防高密度敌潮近身。")
 		"free_rerolls":
-			out.append("每波进入灵石阁时无需花费灵石即可免费重掷货架的次数。")
-			out.append("法宝「通玄令」提供，用完后重掷费用才开始按正常递增结算。")
+			out.append("每波进入商店时无需花费金币即可免费重掷货架的次数。")
+			out.append("道具「重掷令」提供，用完后重掷费用才开始按正常递增结算。")
 		"kills":
 			out.append("只是读数：不吃任何加成，也不参与结算公式。")
-			out.append("精英与魔君同样计入；它们多掉的灵石走另一条账。")
+			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
 		"stones":
-			out.append("来源三条：击杀掉落、灵韵波末发放、悟道「灵石补给」当场给一笔。")
-			out.append("只在局内有效，局末不结转下局；灵石阁的重掷费用逐次递增。")
+			out.append("来源三条：击杀掉落、收益波末发放、升级「金币补给」当场给一笔。")
+			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
 	return out
 
 ## 这一行能被哪些途径抬高：扫悟道表与法宝表的 apply，命中本行吃的字段就报名字。
@@ -278,11 +278,11 @@ static func sources(id: String) -> Array[String]:
 	for udef in UpgradeData.UPGRADES:
 		var u: Dictionary = udef
 		if _apply_hits(u.get("apply", {}), fields):
-			out.append("悟道·%s" % String(u.get("title", "?")))
+			out.append("升级·%s" % String(u.get("title", "?")))
 	for key in ItemData.DEFS.keys():
 		var idef: Dictionary = ItemData.DEFS[key]
 		if _apply_hits(idef.get("apply", {}), fields):
-			out.append("法宝·%s" % String(idef.get("name", "?")))
+			out.append("道具·%s" % String(idef.get("name", "?")))
 	return out
 
 static func _apply_hits(apply: Dictionary, fields: Array) -> bool:
@@ -351,8 +351,8 @@ static func _mul(v: float) -> String:
 static func _cultivator_name() -> String:
 	var def := CultivatorData.get_def(GameManager.cultivator_id)
 	if def.is_empty():
-		return "未选道统"
-	return String(def.get("name", "未选道统"))
+		return "未选角色"
+	return String(def.get("name", "未选角色"))
 
 ## 来源拆解：覆盖全部 25 项主要与次要属性（供 PlayerStatsDialog 详情卡调用）
 static func stat_tip_rows(id: String) -> Array:
@@ -363,19 +363,19 @@ static func stat_tip_rows(id: String) -> Array:
 			var mx: float = float(s.get("max_hp", 0.0))
 			var cur: float = float(s.get("current_hp", 0.0))
 			rows = [
-				["当前气血", "%d / %d" % [int(cur), int(mx)]],
-				["气血上限", "%.0f" % mx],
+				["当前生命", "%d / %d" % [int(cur), int(mx)]],
+				["最大生命", "%.0f" % mx],
 				["已损", "%d 点" % int(mx - cur), GameStyle.BAD if cur < mx else GameStyle.GREY],
-				["御灵羁绊", "+%.0f" % GameManager.synergy_max_hp_bonus, _c(GameManager.synergy_max_hp_bonus)],
-				["道统", _cultivator_name()],
+				["召唤羁绊", "+%.0f" % GameManager.synergy_max_hp_bonus, _c(GameManager.synergy_max_hp_bonus)],
+				["角色", _cultivator_name()],
 			]
 		"regen":
 			var rate: float = float(s.get("hp_regen", 0.0))
 			var need: float = float(s.get("max_hp", 0.0)) - float(s.get("current_hp", 0.0))
 			rows = [
 				["每秒回复", "%.1f / 秒" % rate],
-				["悟道·法宝·道统", "%.1f" % GameManager.hp_regen, _c(GameManager.hp_regen)],
-				["青木羁绊", "+%.1f" % GameManager.synergy_hp_regen, _c(GameManager.synergy_hp_regen)],
+				["升级·道具·角色", "%.1f" % GameManager.hp_regen, _c(GameManager.hp_regen)],
+				["木系羁绊", "+%.1f" % GameManager.synergy_hp_regen, _c(GameManager.synergy_hp_regen)],
 				["回满已损需要", "%.1f 秒" % (need / rate) if rate > 0.0 and need > 0.0 else "—"],
 			]
 		"armor":
@@ -383,8 +383,8 @@ static func stat_tip_rows(id: String) -> Array:
 			var nxt: float = GameBalance.armor_reduction(arm + 1.0) * 100.0
 			rows = [
 				["护甲合计", "%.0f 点" % arm],
-				["悟道·法宝·道统", "%+.0f" % GameManager.armor, _c(GameManager.armor)],
-				["厚土羁绊", "%+.0f" % GameManager.synergy_armor, _c(GameManager.synergy_armor)],
+				["升级·道具·角色", "%+.0f" % GameManager.armor, _c(GameManager.armor)],
+				["土系羁绊", "%+.0f" % GameManager.synergy_armor, _c(GameManager.synergy_armor)],
 				["当前减伤", "%.1f%%" % float(s.get("dmg_reduction_pct", 0.0)), _c(arm)],
 				["再加 1 点", "+%.1f%%" % (nxt - float(s.get("dmg_reduction_pct", 0.0))), GameStyle.GOOD],
 			]
@@ -393,23 +393,23 @@ static func stat_tip_rows(id: String) -> Array:
 			var cap: float = (GameManager.DODGE_CAP + GameManager.dodge_cap_bonus) * 100.0
 			rows = [
 				["闪避率", "%.0f%%" % dg, _c(dg)],
-				["悟道·法宝·道统", "%.0f%%" % (GameManager.dodge * 100.0), _c(GameManager.dodge)],
+				["升级·道具·角色", "%.0f%%" % (GameManager.dodge * 100.0), _c(GameManager.dodge)],
 				["硬上限", "%.0f%%" % cap, GameStyle.GREY],
 				["距上限", "%.0f%%" % maxf(0.0, cap - dg)],
 			]
 		"lifesteal":
 			rows = [
 				["触发概率", "%.0f%%" % float(s.get("lifesteal_pct", 0.0)), _c(float(s.get("lifesteal_pct", 0.0)))],
-				["悟道·法宝·道统", "%.0f%%" % (GameManager.lifesteal * 100.0), _c(GameManager.lifesteal)],
-				["青木羁绊", "+%.0f%%" % (GameManager.synergy_lifesteal * 100.0), _c(GameManager.synergy_lifesteal)],
+				["升级·道具·角色", "%.0f%%" % (GameManager.lifesteal * 100.0), _c(GameManager.lifesteal)],
+				["木系羁绊", "+%.0f%%" % (GameManager.synergy_lifesteal * 100.0), _c(GameManager.synergy_lifesteal)],
 				["每秒至多", "%d 次" % GameManager.LIFESTEAL_MAX_PER_SEC],
-				["每次生效", "回复 1 点气血"],
+				["每次生效", "回复 1 点生命"],
 			]
 		"damage":
 			rows = [
 				["总乘区", "%d%%" % int(float(s.get("damage_mult", 1.0)) * 100.0)],
 				["换算增伤", "%+.0f%%" % float(s.get("damage_bonus_pct", 0.0)), _c(float(s.get("damage_bonus_pct", 0.0)))],
-				["悟道·法宝·道统", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
+				["升级·道具·角色", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
 				["流派羁绊", _mul(GameManager.synergy_damage_mult), _c(GameManager.synergy_damage_mult - 1.0)],
 				["暴击另算", "%.0f%% 概率 ×%.2f" % [float(s.get("crit_rate_pct", 0.0)), float(s.get("crit_dmg_pct", 150.0)) / 100.0]],
 			]
@@ -417,36 +417,36 @@ static func stat_tip_rows(id: String) -> Array:
 			var mv: float = float(s.get("melee_damage", 0.0))
 			rows = [
 				["近战伤害加成", "%+.0f" % mv, _c(mv)],
-				["受益法器", "青云剑 / 赤焰斩马刀 / 青木藤鞭 / 芭蕉扇"],
+				["受益武器", "长剑 / 烈焰刀 / 藤鞭 / 风扇"],
 				["星级放大", "每升 1 星转化效率 +25%"],
 			]
 		"ranged_dmg":
 			var rv: float = float(s.get("ranged_damage", 0.0))
 			rows = [
 				["远程伤害加成", "%+.0f" % rv, _c(rv)],
-				["受益法器", "庚金飞剑 / 柳叶飞刀 / 万木灵符 / 玄冰飞针 / 火焰符"],
+				["受益武器", "飞剑 / 飞刀 / 毒符 / 冰针 / 火符"],
 				["星级放大", "每升 1 星转化效率 +25%"],
 			]
 		"elemental_dmg":
 			var ev: float = float(s.get("elemental_damage", 0.0))
 			rows = [
 				["元素伤害加成", "%+.0f" % ev, _c(ev)],
-				["离火灼烧倍率", _mul(GameManager.synergy_burn_mult), _c(GameManager.synergy_burn_mult - 1.0)],
-				["受益法器", "火焰符 / 赤焰斩马刀 / 焚天宝灯 / 五雷法牌 / 番天印等"],
+				["火系灼烧倍率", _mul(GameManager.synergy_burn_mult), _c(GameManager.synergy_burn_mult - 1.0)],
+				["受益武器", "火符 / 烈焰刀 / 天灯 / 雷牌 / 巨印等"],
 			]
 		"engineering_dmg":
 			var gv: float = float(s.get("engineering_damage", 0.0))
 			rows = [
-				["御灵伤害加成", "%+.0f" % gv, _c(gv)],
-				["当前护体灵宝", "%d 尊" % GameManager.drones.size()],
-				["受益灵宝", "灵蝶 / 寒泉玉莲 / 混元古钟"],
+				["召唤伤害加成", "%+.0f" % gv, _c(gv)],
+				["当前召唤武器", "%d 尊" % GameManager.drones.size()],
+				["受益武器", "护蝶 / 冰莲 / 古钟"],
 			]
 		"haste":
 			rows = [
 				["间隔缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
 				["实际攻击间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
-				["悟道·法宝·道统", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
-				["雷法·玄水羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
+				["升级·道具·角色", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
+				["范围·水系羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
 				["间隔下限", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
 			]
 		"speed":
@@ -454,9 +454,9 @@ static func stat_tip_rows(id: String) -> Array:
 			var spd: float = float(s.get("move_speed", 0.0))
 			rows = [
 				["实际移速", "%.0f" % spd],
-				["道统基础", "%.0f" % (spd / eff if eff > 0.01 else spd)],
-				["悟道·法宝·道统", "%+.0f%%" % ((GameManager.move_speed_mult - 1.0) * 100.0), _c(GameManager.move_speed_mult - 1.0)],
-				["玄水羁绊", "%+.0f%%" % (GameManager.synergy_move_speed_mult * 100.0), _c(GameManager.synergy_move_speed_mult)],
+				["角色基础", "%.0f" % (spd / eff if eff > 0.01 else spd)],
+				["升级·道具·角色", "%+.0f%%" % ((GameManager.move_speed_mult - 1.0) * 100.0), _c(GameManager.move_speed_mult - 1.0)],
+				["水系羁绊", "%+.0f%%" % (GameManager.synergy_move_speed_mult * 100.0), _c(GameManager.synergy_move_speed_mult)],
 			]
 		"pickup":
 			var pkm: float = GameManager.pickup_range_mult
@@ -469,53 +469,53 @@ static func stat_tip_rows(id: String) -> Array:
 		"range":
 			rows = [
 				["攻击范围", "%+.0f%%" % float(s.get("attack_range_pct", 0.0)), _c(float(s.get("attack_range_pct", 0.0)))],
-				["悟道·法宝·道统", _mul(GameManager.attack_range_mult), _c(GameManager.attack_range_mult - 1.0)],
+				["升级·道具·角色", _mul(GameManager.attack_range_mult), _c(GameManager.attack_range_mult - 1.0)],
 				["剑系羁绊", _mul(GameManager.synergy_range_mult), _c(GameManager.synergy_range_mult - 1.0)],
 			]
 		"crit":
 			var cmul: float = GameManager.crit_mult + GameManager.synergy_crit_mult
 			rows = [
 				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.JADE],
-				["悟道·法宝·道统", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],
-				["锐金羁绊", "+%.0f%%" % (GameManager.synergy_crit_rate * 100.0), _c(GameManager.synergy_crit_rate)],
+				["升级·道具·角色", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],
+				["金系羁绊", "+%.0f%%" % (GameManager.synergy_crit_rate * 100.0), _c(GameManager.synergy_crit_rate)],
 				["暴击倍率", "%.2f×" % cmul, _c(cmul - 1.5)],
 				["软上限", "%.0f%%" % (GameManager.CRIT_RATE_CAP * 100.0), GameStyle.GREY],
 			]
 		"luck":
 			var rw: Dictionary = GameBalance.rarity_weights(GameManager.luck)
 			rows = [
-				["福缘", "%.0f" % float(s.get("luck", 0.0)), _c(GameManager.luck)],
-				["仙品权重", "%.0f / %.0f" % [float(rw.get("epic", 0.0)), GameBalance.RARITY_TOTAL]],
-				["良品权重", "%.0f / %.0f" % [float(rw.get("rare", 0.0)), GameBalance.RARITY_TOTAL]],
-				["凡品权重", "%.0f / %.0f" % [float(rw.get("common", 0.0)), GameBalance.RARITY_TOTAL]],
+				["幸运", "%.0f" % float(s.get("luck", 0.0)), _c(GameManager.luck)],
+				["史诗权重", "%.0f / %.0f" % [float(rw.get("epic", 0.0)), GameBalance.RARITY_TOTAL]],
+				["稀有权重", "%.0f / %.0f" % [float(rw.get("rare", 0.0)), GameBalance.RARITY_TOTAL]],
+				["普通权重", "%.0f / %.0f" % [float(rw.get("common", 0.0)), GameBalance.RARITY_TOTAL]],
 			]
 		"harvest":
 			var hv: float = float(s.get("harvest", 0.0))
 			var gain: int = GameBalance.harvest_gain(hv)
 			rows = [
-				["灵韵", "%.0f" % hv, _c(hv)],
-				["本波末发放", "+%d 灵石 / +%d 修为" % [gain, gain], GameStyle.JADE],
+				["收益", "%.0f" % hv, _c(hv)],
+				["本波末发放", "+%d 金币 / +%d 经验" % [gain, gain], GameStyle.JADE],
 				["每波复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
 				["增长截止", "第 %d 波（当前第 %d 波）" % [GameManager.HARVEST_GROWTH_WAVE_CAP, maxi(GameManager.wave_number, 1)]],
 			]
 		"xp_gain":
 			var xp_p: float = float(s.get("xp_gain_pct", 0.0))
 			rows = [
-				["修为获取倍率", _mul(GameManager.xp_gain_mult), _c(xp_p)],
+				["经验获取倍率", _mul(GameManager.xp_gain_mult), _c(xp_p)],
 				["折算加成", "%+.0f%%" % xp_p, _c(xp_p)],
 				["当前升级门槛", "%d / %d" % [GameManager.experience, GameManager.experience_to_next]],
 			]
 		"shop_price":
 			var sp_p: float = float(s.get("shop_price_pct", 0.0))
 			rows = [
-				["灵石阁物价系数", _mul(GameManager.shop_price_mult), _c(-sp_p)],
+				["商店物价系数", _mul(GameManager.shop_price_mult), _c(-sp_p)],
 				["折算幅度", "%+.0f%%" % sp_p, _c(-sp_p)],
 			]
 		"bonus_pierce":
 			var bp: int = int(s.get("bonus_pierce", 0))
 			rows = [
 				["额外穿透人数", "+%d" % bp, _c(float(bp))],
-				["来源", "符箓羁绊 (2/4/6 件分别 +1/+2/+3)"],
+				["来源", "弹射羁绊 (2/4/6 件分别 +1/+2/+3)"],
 			]
 		"elite_dmg":
 			var ep: float = float(s.get("elite_damage_pct", 0.0))
@@ -527,8 +527,8 @@ static func stat_tip_rows(id: String) -> Array:
 			var kp: float = float(s.get("knockback_pct", 0.0))
 			rows = [
 				["击退总倍率", _mul(GameManager.knockback_mult * GameManager.synergy_knockback_mult), _c(kp)],
-				["悟道·法宝", _mul(GameManager.knockback_mult), _c(GameManager.knockback_mult - 1.0)],
-				["厚土羁绊", _mul(GameManager.synergy_knockback_mult), _c(GameManager.synergy_knockback_mult - 1.0)],
+				["升级·道具", _mul(GameManager.knockback_mult), _c(GameManager.knockback_mult - 1.0)],
+				["土系羁绊", _mul(GameManager.synergy_knockback_mult), _c(GameManager.synergy_knockback_mult - 1.0)],
 			]
 		"free_rerolls":
 			var fr: int = int(s.get("free_rerolls", 0))
@@ -539,12 +539,12 @@ static func stat_tip_rows(id: String) -> Array:
 		"kills":
 			var mins: float = maxf(GameManager.game_time, 1.0) / 60.0
 			rows = [
-				["本局诛妖", "%d 妖" % GameManager.kills],
-				["平均", "%.1f 妖/分钟" % (float(GameManager.kills) / mins)],
+				["本局击杀", "%d 个" % GameManager.kills],
+				["平均", "%.1f 个/分钟" % (float(GameManager.kills) / mins)],
 			]
 		"stones":
 			rows = [
-				["随身灵石", "%d 枚" % GameManager.spirit_stones, GameStyle.JADE],
-				["下一波灵韵", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
+				["随身金币", "%d 枚" % GameManager.spirit_stones, GameStyle.JADE],
+				["下一波收益", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
 			]
 	return rows

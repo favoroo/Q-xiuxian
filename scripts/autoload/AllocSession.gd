@@ -13,7 +13,7 @@ static func open_alloc_session(gm: Node) -> void:
 	gm.alloc_reroll_cost = GameBalance.reroll_cost(gm.wave_number, gm.alloc_reroll_count, gm.shop_price_mult)
 	roll_alloc_offers(gm)
 	if gm.alloc_offers.is_empty():
-		force_end_alloc(gm, "悟道已尽")
+		force_end_alloc(gm, "升级已尽")
 		return
 	gm.alloc_opened.emit()
 
@@ -41,7 +41,7 @@ static func take_alloc_upgrade(gm: Node, index: int) -> bool:
 	if gm.pending_upgrade_points > 0:
 		roll_alloc_offers(gm)
 		if gm.alloc_offers.is_empty():
-			force_end_alloc(gm, "悟道已尽")
+			force_end_alloc(gm, "升级已尽")
 		return true
 	gm.alloc_offers.clear()
 	gm.alloc_finished.emit()
@@ -54,7 +54,7 @@ static func reroll_alloc(gm: Node) -> bool:
 		gm.alloc_reroll_free_left -= 1
 	else:
 		if gm.spirit_stones < gm.alloc_reroll_cost:
-			gm.announcement_triggered.emit("灵石不够刷新悟道了")
+			gm.announcement_triggered.emit("金币不够刷新升级了")
 			AudioManager.play_sfx("ui_error", 0.9)
 			return false
 		gm.spirit_stones -= gm.alloc_reroll_cost
@@ -67,8 +67,8 @@ static func reroll_alloc(gm: Node) -> bool:
 
 static func alloc_reroll_label(gm: Node) -> String:
 	if gm.alloc_reroll_free_left > 0:
-		return "免费刷新悟道 (剩 %d 次)" % gm.alloc_reroll_free_left
-	return "刷新悟道 (%d 灵石)" % gm.alloc_reroll_cost
+		return "免费刷新升级 (剩 %d 次)" % gm.alloc_reroll_free_left
+	return "刷新升级 (%d 金币)" % gm.alloc_reroll_cost
 
 static func can_reroll_alloc(gm: Node) -> bool:
 	return gm.pending_upgrade_points > 0 and (gm.alloc_reroll_free_left > 0 or gm.spirit_stones >= gm.alloc_reroll_cost)

@@ -98,7 +98,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 layout_mode = 2
 theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
 theme_override_font_sizes/font_size = 20
-text = "灵 石 阁"
+text = "商 店"
 
 [node name="Spacer1" type="Control" parent="CenterContainer/Panel/MarginContainer/VBox/TopBar"]
 layout_mode = 2
@@ -120,7 +120,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_stones_chip")
 layout_mode = 2
 theme_override_colors/font_color = Color(0.078, 0.067, 0.039, 1)
 theme_override_font_sizes/font_size = 17
-text = "灵石 0"
+text = "金币 0"
 
 [node name="OffersScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2

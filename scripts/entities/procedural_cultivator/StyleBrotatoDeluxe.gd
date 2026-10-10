@@ -52,13 +52,6 @@ func _draw_front() -> void:
 	draw_circle(bagua_center + Vector2(0, -2.5), 1.0, Color.WHITE)
 	draw_circle(bagua_center + Vector2(0, 2.5), 1.0, BELT_BLACK)
 
-	# 6. 玄黑腰带与红流苏
-	var belt_y := 5.0 + bob
-	draw_line(Vector2(-15, belt_y), Vector2(15, belt_y), OUTLINE, OUTLINE_W + 2.2)
-	draw_line(Vector2(-15, belt_y), Vector2(15, belt_y), BELT_BLACK, OUTLINE_W)
-	draw_stroked_circle(Vector2(0, belt_y), 3.2, ROBE_INNER_RED, OUTLINE, 1.8)
-	draw_line(Vector2(0, belt_y + 3), Vector2(1, belt_y + 8), ROBE_INNER_RED, 2.0)
-
 	# 7. 头部发髻、朱砂降魔抹额与小木簪
 	var bun_y := -25.0 + bob
 	draw_line(Vector2(-11, bun_y), Vector2(11, bun_y - 2), Color(0.70, 0.48, 0.28), OUTLINE_W + 1.2) # 横插木簪
@@ -138,9 +131,6 @@ func _draw_side() -> void:
 	# 侧面叼着的灵草向前伸展
 	draw_line(eye_pos + Vector2(4, 8), eye_pos + Vector2(15, 6), Color(0.25, 0.80, 0.45), 2.2)
 
-	# 7. 侧身玄黑腰封
-	draw_line(Vector2(-14, 5 + bob), Vector2(15, 7 + bob), BELT_BLACK, OUTLINE_W + 1.5)
-
 	# 8. 双手握雷火剑前刺
 	draw_stroked_circle(Vector2(14, 5 + bob), 4.5, BELT_BLACK, OUTLINE, OUTLINE_W)
 	_draw_thunder_sword(Vector2(28 + thrust, 3 + bob), deg_to_rad(65.0))
@@ -172,9 +162,6 @@ func _draw_back() -> void:
 	draw_stroked_circle(bagua_center, 7.5, Color.WHITE, OUTLINE, 2.0)
 	draw_circle(bagua_center + Vector2(0, -3.2), 3.5, BELT_BLACK)
 	draw_circle(bagua_center + Vector2(0, 3.2), 3.5, Color.WHITE)
-
-	# 后腰带
-	draw_line(Vector2(-15, 5 + bob), Vector2(15, 5 + bob), BELT_BLACK, OUTLINE_W + 1.5)
 
 	# 5. 后脑发髻与木簪
 	var bun_y := -25.0 + bob

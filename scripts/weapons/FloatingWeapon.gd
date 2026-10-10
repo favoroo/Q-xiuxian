@@ -61,6 +61,24 @@ const LightningBoltScript = preload("res://scripts/weapons/LightningBolt.gd")
 
 const CHARGE_GLOW := Color(1.45, 1.28, 0.62)   # 五雷蓄力时的金光
 
+## 物理查询对象 static 复用（2026-10-10 性能优化，照 BladeProjectile._search_shape 模式）：
+## 三处索敌/命中查询每次 new CircleShape2D + QueryParams 是白扔的分配压力。
+## 单线程使用安全，radius/transform 每次调用重设。
+static var _search_shape: CircleShape2D = null
+static var _search_query: PhysicsShapeQueryParameters2D = null
+
+## 以 center 为圆心、radius 为半径查敌人受击区（碰撞层 4），max_results 控制截断数
+func _query_enemies(radius: float, center: Vector2, max_results: int) -> Array:
+	if _search_shape == null or _search_query == null:
+		_search_shape = CircleShape2D.new()
+		_search_query = PhysicsShapeQueryParameters2D.new()
+		_search_query.shape = _search_shape
+		_search_query.collision_mask = 4
+		_search_query.collide_with_areas = true
+	_search_shape.radius = radius
+	_search_query.transform = Transform2D(0.0, center)
+	return get_world_2d().direct_space_state.intersect_shape(_search_query, max_results)
+
 ## 必须在 add_child 之前调用
 func setup(def_id: String, star_level: int) -> void:
 	weapon_def_id = def_id
@@ -196,7 +214,7 @@ func _perform_attack() -> void:
 
 func _final_damage() -> float:
 	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id)
+	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -249,15 +267,23 @@ func _perform_projectile_attack() -> void:
 	var volley: Array[Node2D] = _volley_targets(p_count)
 
 	for idx in range(p_count):
-		var p = projectile_scene.instantiate() as BladeProjectile
+		# 弹丸走对象池（2026-10-10 性能优化）：不再 instantiate/queue_free 高频往复
+		var p := BladeProjectile.acquire_or_new(projectile_scene, get_tree().current_scene)
 		p.global_position = muzzle_point.global_position
 		var offset_ang := 0.0
 		if p_count > 1:
 			offset_ang = (float(idx) - float(p_count - 1) * 0.5) * p_spread
-		# 出膛方向：优先朝这一发自己咬定的敌人，再叠扇形错开角（没有第二目标时退回主目标方位）
+		# 出膛方向与追踪：每发优先分配不同敌人；超出目标数的多余弹丸不再全部追踪同一小怪（防散射变秒杀炮），
+		# 精英/Boss 允许最多 2 发锁定，其余保持扇形散角飞出。
 		var shot_dir: Vector2 = aim_dir
-		var locked: Node2D = volley[idx % volley.size()] if not volley.is_empty() else null
-		if locked != null:
+		var locked: Node2D = null
+		if idx < volley.size():
+			locked = volley[idx]
+		elif not volley.is_empty():
+			var first_t: Node2D = volley[0]
+			if first_t != null and is_instance_valid(first_t) and first_t.get("is_elite") == true and idx == 1:
+				locked = first_t
+		if locked != null and is_instance_valid(locked):
 			var to_lock: Vector2 = locked.global_position - muzzle_point.global_position
 			if to_lock.length_squared() > 1.0:
 				shot_dir = to_lock.normalized()
@@ -282,7 +308,8 @@ func _perform_projectile_attack() -> void:
 			p.proc_poison = true
 			p.poison_dps = final_dmg * float(def.get("poison_ratio", 0.3))
 			p.poison_dur = float(def.get("poison_dur", 2.5))
-		get_tree().current_scene.add_child(p)
+		# 池化后 _ready 先于字段赋值跑过，由 activate 按当前字段值统一铺视觉与物理状态
+		p.activate()
 
 	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id))
 
@@ -387,21 +414,13 @@ func _perform_melee_attack() -> void:
 	_deal_melee_damage(aim_dir)
 
 func _deal_melee_damage(aim_dir: Vector2) -> void:
-	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = _melee_arc_radius()
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0.0, global_position + aim_dir * MELEE_LUNGE)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 24)
+	var results := _query_enemies(_melee_arc_radius(), global_position + aim_dir * MELEE_LUNGE, 24)
 
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			var dmg = _final_damage() * 1.35
+			var dmg = _final_damage()
 			var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 			if is_crit:
 				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
@@ -423,16 +442,8 @@ func _find_target() -> Node2D:
 	var player = GameManager.player
 	if player == null:
 		return null
-	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = attack_range * _range_mult()
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
 	# 以玩家为圆心索敌：武器会自行换位到目标一侧，四周的敌人都在打击范围内
-	query.transform = Transform2D(0.0, player.global_position)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 32)
+	var results := _query_enemies(attack_range * _range_mult(), player.global_position, 32)
 
 	var nearest: Node2D = null
 	var min_dist: float = 999999.0
@@ -470,15 +481,7 @@ func _volley_targets(n: int) -> Array[Node2D]:
 	var player = GameManager.player
 	if player == null:
 		return out
-	var space_state = get_world_2d().direct_space_state
-	var shape = CircleShape2D.new()
-	shape.radius = attack_range * _range_mult()
-	var query = PhysicsShapeQueryParameters2D.new()
-	query.shape = shape
-	query.transform = Transform2D(0.0, player.global_position)
-	query.collision_mask = 4
-	query.collide_with_areas = true
-	var results = space_state.intersect_shape(query, 32)
+	var results := _query_enemies(attack_range * _range_mult(), player.global_position, 32)
 	var muzzle_pos: Vector2 = muzzle_point.global_position
 	var cands: Array[Node2D] = []
 	var chest_cands: Array[Node2D] = []

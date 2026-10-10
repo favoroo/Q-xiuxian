@@ -42,11 +42,10 @@ const SPAWN_INTERVAL_MIN := 0.45
 const SPAWN_INTERVAL_PER_WAVE := 0.045
 const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一轮多刷 1 只
 const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
-const ENEMY_HP_GROWTH := 1.15             ## 每波气血复利倍率（W5≈1.75 / W10≈3.52 / W15≈7.08 / W20≈14.23）
+const ENEMY_HP_GROWTH := 1.16             ## 每波气血复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
-## 2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」——最弱杂怪也要吃 2 刀以上，
-## 受击硬直、击退、火花、闪白这些反馈才有机会被看见。
-const MOB_HP_BASE_MULT := 3.5
+## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
+const MOB_HP_BASE_MULT := 4.5
 const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
@@ -72,7 +71,7 @@ static func enemy_dmg_mult(wave: int) -> float:
 
 const ELITE_WAVES := [5, 15]             ## 精英波：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
-const BOSS_HP_BASE := 14000.0            ## Boss 基础气血（W10≈4.9万 / W20≈20万；成型 ~45s、极端 6 剑 ~10s）
+const BOSS_HP_BASE := 6500.0             ## Boss 基础气血（适配神识分流与新法器基数：W10≈2.5万 / W20≈11万；成型 ~45s、极端 6 剑 ~12s）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
 const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量
@@ -507,16 +506,16 @@ static func stat_scaling_label(key: String) -> String:
 		"melee_damage": return "近战伤害"
 		"ranged_damage": return "远程伤害"
 		"elemental_damage": return "元素伤害"
-		"engineering_damage": return "御灵伤害"
+		"engineering_damage": return "召唤伤害"
 		"armor": return "护甲"
-		"max_hp_bonus": return "额外气血"
-		"hp_regen": return "气血回复"
+		"max_hp_bonus": return "额外生命"
+		"hp_regen": return "生命回复"
 		"lifesteal": return "吸血率"
 		"crit_rate": return "额外暴击率"
 		"crit_mult_bonus": return "额外暴击伤害"
 		"move_speed_bonus": return "移速加成"
 		"cdr_bonus": return "攻击间隔"
-		"damage_bonus": return "法伤加成"
+		"damage_bonus": return "武器伤害加成"
 		"range_bonus": return "范围加成"
 	return key
 
@@ -684,4 +683,27 @@ static func compute_spirit_orbit(
 
 	return {"radii": result_radii, "in_combat": in_combat}
 
+# ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
 
+const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把法器的神识分流系数
+
+## 纯函数：根据当前上阵法器总数（含悬浮法器与环绕灵物），计算单把法器的直击神识分流效率
+## 1 把: 1.00 (100%), 2 把: ~0.893 (总 1.79x), 3 把: ~0.806 (总 2.42x), 4 把: ~0.735 (总 2.94x),
+## 5 把: ~0.676 (总 3.38x), 6 把: ~0.625 (总 3.75x)。
+## 每多买一把法器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
+static func multi_weapon_damage_mult(slot_count: int) -> float:
+	return 1.0 / (1.0 + MULTI_WEAPON_LOAD_PER_EXTRA * float(maxi(1, slot_count) - 1))
+
+# ---------------- 同目标短窗集火韧性（防一帧蒸发，保障受击打击感） ----------------
+
+const FOCUS_FIRE_WINDOW := 0.22      ## 集火保护短窗（秒）
+const FOCUS_FIRE_HIT2_MULT := 0.70  ## 窗口内第 2 击伤害倍率
+const FOCUS_FIRE_HIT3_MULT := 0.50  ## 窗口内第 3 击及后续伤害倍率
+
+## 纯函数：根据短窗内已有直击命中次数（recent_hits，0 = 窗口首击），计算本次直击受击乘区
+static func focus_fire_mult(recent_hits: int) -> float:
+	if recent_hits <= 0:
+		return 1.0
+	if recent_hits == 1:
+		return FOCUS_FIRE_HIT2_MULT
+	return FOCUS_FIRE_HIT3_MULT

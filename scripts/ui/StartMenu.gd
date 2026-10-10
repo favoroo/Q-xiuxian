@@ -3,16 +3,16 @@ extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
 ##   ① 顶栏贴角级联徽章带（左：生涯最高危险度 + 灵石囊储备；右：快速静音 + 游戏设置）
-##   ② 居中斜切大匾标题（「渡 个 劫」+ 半调网点）
+##   ② 居中斜切大匾标题（「渡 个 劫」）—— 贴顶栏，不跟着整组往下飘
 ##   ③ 左 1 主方块（Hero「开始渡劫」，内嵌 6 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
-##   ④ 底部通宽横幅（天道版本信息与检查更新）
+##   ④ 底部通宽横幅（天道版本信息与检查更新）—— 贴屏底
 ## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择道统（paused 链不中断）。
 
 signal settings_requested
 signal career_requested
 signal manual_requested
 
-const DANGER_NAMES := ["凡尘", "微澜", "惊涛", "炼狱", "无间", "天劫"]
+const DANGER_NAMES := ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
 
 ## 四角括号是「贴着屏角」的装饰：坐标跟着这一屏的实得尺寸走
 const BRACKET_LEN := 48.0
@@ -27,11 +27,27 @@ const ROW_GAP := 14.0
 const HERO_H := 284.0
 const SMALL_H := 135.0
 const BANNER_H := 42.0
+const TITLE_H_BASE := 68.0           # 标题匾基准高：只给首帧没量到实得高时兜底用
+
+## 竖向这一列怎么贴（2026-10-10 用户真机：「标题上面怎么有那么大的空白间距」）。
+## 旧写法把「标题 + 矩阵 + 横幅」装进一个 VBox 整组居中 ⇒ 标题被推到 y=82，屏上半截全是空的，
+## 而眼睛看到的「空白」是屏顶→标题那 82 单位，不是组内那 12 单位缝隙。
+## 现在三段各贴各位：标题贴顶栏、横幅贴屏底；中间那点富余先当气口，气口撑到上限
+## （4:3 平板那种高屏）才让主块长高 —— 540 这一档富余刚好只够气口，方块密度不变。
+const TOP_BAR_INSET_TOP := 12.0        # 顶栏带离屏顶
+const TOP_BAR_H := 40.0                # 顶栏带高（徽章 36 + 余量）
+const TITLE_GAP_TOP := 10.0            # 顶栏底 → 标题顶
+const BANNER_MARGIN_BOTTOM := 16.0     # 横幅底 → 屏底
+const BLOCK_GAP_MAX := 40.0            # 标题与矩阵、矩阵与横幅之间的气口上界，再空就让主块长高
+const HERO_H_MAX := 340.0              # 主块长高的封顶：再多只是把空白搬进卡里
+const BAND_TITLE_OFFSET := 14.0        # 装饰斜带顶边相对标题顶边的下移
 
 var _decor_band: PanelContainer
 var _brackets: Array[Line2D] = []
 var _top_bar: HBoxContainer
-var _center_vbox: VBoxContainer
+var _title_host: CenterContainer
+var _matrix_host: CenterContainer
+var _banner_host: CenterContainer
 var _title_block: PanelContainer
 
 # 顶栏徽章控件
@@ -76,6 +92,8 @@ func _ready() -> void:
 	_build_top_bar()
 	_build_center_matrix()
 	_layout_responsive()
+	# 首帧的标题高要等容器排完才量得到：延一帧再贴一次，否则第一段排版用的是保底高度
+	call_deferred("_layout_responsive")
 	UpdateManager.update_available.connect(_on_update_available)
 	UpdateManager.no_update_found.connect(_on_no_update_found)
 	UpdateManager.check_failed.connect(_on_check_failed)
@@ -117,8 +135,8 @@ func _build_decor() -> void:
 func _build_top_bar() -> void:
 	var top_margin := MarginContainer.new()
 	top_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_margin.offset_top = 12.0
-	top_margin.offset_bottom = 52.0
+	top_margin.offset_top = TOP_BAR_INSET_TOP
+	top_margin.offset_bottom = TOP_BAR_INSET_TOP + TOP_BAR_H
 	top_margin.add_theme_constant_override("margin_left", 28)
 	top_margin.add_theme_constant_override("margin_right", 28)
 	top_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -130,11 +148,11 @@ func _build_top_bar() -> void:
 	top_margin.add_child(_top_bar)
 
 	# 左簇：境界徽章 + 灵石囊徽章（点按均进入修仙志）
-	_realm_badge_btn = _make_badge_button("极道 · 凡尘", Vector2(118, 36),
+	_realm_badge_btn = _make_badge_button("难度 · 简单", Vector2(118, 36),
 		GameStyle.GOLD, GameStyle.GOLD_EDGE, GameStyle.INK_TEXT, _on_career_pressed)
 	_top_bar.add_child(_realm_badge_btn)
 
-	_purse_badge_btn = _make_badge_button("灵石囊 0", Vector2(116, 36),
+	_purse_badge_btn = _make_badge_button("金币 0", Vector2(116, 36),
 		GameStyle.NAVY2, GameStyle.JADE, GameStyle.JADE, _on_career_pressed)
 	_top_bar.add_child(_purse_badge_btn)
 
@@ -144,7 +162,7 @@ func _build_top_bar() -> void:
 	_top_bar.add_child(spacer)
 
 	# 右簇：声音快切徽章 + 设置徽章
-	_sound_badge_btn = _make_badge_button("灵音 · 开", Vector2(96, 36),
+	_sound_badge_btn = _make_badge_button("音效 · 开", Vector2(96, 36),
 		GameStyle.NAVY2, GameStyle.GOLD, GameStyle.JADE, _on_sound_toggle_pressed)
 	_top_bar.add_child(_sound_badge_btn)
 
@@ -163,29 +181,27 @@ func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Colo
 	btn.pressed.connect(callback)
 	return btn
 
-## 中央主区：标题大匾 + 五块大色块矩阵 + 底部通宽横幅
+## 中央主区：标题大匾（贴顶栏）+ 五块大色块矩阵（居中）+ 底部通宽横幅（贴屏底）
+## 三块各挂各的容器，竖向落位由 `_layout_responsive()` 现算 —— 组内缝隙不再决定标题高低。
 func _build_center_matrix() -> void:
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.offset_top = 42.0
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
-
-	_center_vbox = VBoxContainer.new()
-	_center_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	_center_vbox.add_theme_constant_override("separation", 12)
-	_center_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center.add_child(_center_vbox)
-
 	# 1. 街机海报标题大匾
-	_build_title_section(_center_vbox)
+	_title_host = CenterContainer.new()
+	_title_host.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_title_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_title_host)
+	_build_title_section(_title_host)
 
 	# 2. 五块实底大色块矩阵（左 Hero 整柱 + 右 2×2）
+	_matrix_host = CenterContainer.new()
+	_matrix_host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_matrix_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_matrix_host)
+
 	var matrix_row := HBoxContainer.new()
 	matrix_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	matrix_row.add_theme_constant_override("separation", int(BASE_GAP_HERO))
 	matrix_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_center_vbox.add_child(matrix_row)
+	_matrix_host.add_child(matrix_row)
 
 	_hero_card = _build_hero_block()
 	matrix_row.add_child(_hero_card)
@@ -209,7 +225,7 @@ func _build_center_matrix() -> void:
 
 	# 右上 1：修仙志（青玉色块）
 	var career_res := _build_entry_block(
-		"CAREER", "修 仙 志", "0 胜 · 斩妖 0 只",
+		"CAREER", "战 绩", "0 胜 · 击杀 0 只",
 		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.JADE,
 		_on_career_pressed, true
 	)
@@ -221,7 +237,7 @@ func _build_center_matrix() -> void:
 
 	# 右上 2：传道玉简（青碧色块）
 	var manual_res := _build_entry_block(
-		"MANUAL", "传道玉简", "20 法器 · 18 法宝 · 9 道统",
+		"MANUAL", "图鉴", "20 武器 · 18 道具 · 9 角色",
 		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOOD,
 		_on_manual_pressed, false
 	)
@@ -232,7 +248,7 @@ func _build_center_matrix() -> void:
 
 	# 右下 1：天地律动·设置（纸白色块）
 	var settings_res := _build_entry_block(
-		"CONFIG", "天地律动", "灵音 · 视界 · 震屏调律",
+		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
 		GameStyle.PAPER, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOLD,
 		_on_settings_pressed, false
 	)
@@ -243,7 +259,7 @@ func _build_center_matrix() -> void:
 
 	# 右下 2：归隐山林·退出（朱砂色块）
 	var quit_res := _build_entry_block(
-		"EXIT", "归隐山林", "收剑入鞘 · 暂离凡尘",
+		"EXIT", "退出游戏", "保存进度 · 暂时离开",
 		GameStyle.BAD, GameStyle.PAPER, GameStyle.INK, GameStyle.PAPER,
 		_on_quit_pressed, false
 	)
@@ -252,11 +268,15 @@ func _build_center_matrix() -> void:
 	_anim_blocks.append(quit_res["card"])
 
 	# 3. 底部通宽收尾横幅
+	_banner_host = CenterContainer.new()
+	_banner_host.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_banner_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_banner_host)
 	_banner_panel = _build_bottom_banner()
-	_center_vbox.add_child(_banner_panel)
+	_banner_host.add_child(_banner_panel)
 	_anim_blocks.append(_banner_panel)
 
-func _build_title_section(parent: VBoxContainer) -> void:
+func _build_title_section(parent: Control) -> void:
 	var title_row := HBoxContainer.new()
 	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	title_row.add_theme_constant_override("separation", 14)
@@ -271,7 +291,6 @@ func _build_title_section(parent: VBoxContainer) -> void:
 	tstyle.content_margin_right = 28.0
 	tstyle.content_margin_bottom = 8.0
 	_title_block.add_theme_stylebox_override("panel", tstyle)
-	GameStyle.halftone(_title_block, Color(0.95, 0.98, 1.0, 0.14))
 
 	var title_hbox := HBoxContainer.new()
 	title_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -285,7 +304,7 @@ func _build_title_section(parent: VBoxContainer) -> void:
 	title_hbox.add_child(title)
 
 	var sub_chip := Label.new()
-	sub_chip.text = " 斩妖修行 · 一念飞升 "
+	sub_chip.text = " 击杀敌人 · 生存到波末 "
 	sub_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sub_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 	GameStyle.label(sub_chip, 12, GameStyle.JADE)
@@ -303,7 +322,6 @@ func _build_hero_block() -> PanelContainer:
 	sb.content_margin_top = 12.0
 	sb.content_margin_bottom = 14.0
 	card.add_theme_stylebox_override("panel", sb)
-	GameStyle.halftone(card, Color(0.95, 0.98, 1.0, 0.10))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 7)
@@ -342,12 +360,12 @@ func _build_hero_block() -> PanelContainer:
 	vbox.add_child(title_box)
 
 	var hero_title := Label.new()
-	hero_title.text = "开 始 渡 劫"
+	hero_title.text = "开 始 游 戏"
 	GameStyle.label(hero_title, 32, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	title_box.add_child(hero_title)
 
 	_hero_sub_lbl = Label.new()
-	_hero_sub_lbl.text = "九大道统 · 二十波妖潮 · 飞升渡劫"
+	_hero_sub_lbl.text = "九名角色 · 二十波敌人 · 生存通关"
 	GameStyle.label(_hero_sub_lbl, 12, GameStyle.NAVY2)
 	title_box.add_child(_hero_sub_lbl)
 
@@ -372,7 +390,7 @@ func _build_hero_block() -> PanelContainer:
 	danger_vbox.add_child(d_head)
 
 	var d_lbl := Label.new()
-	d_lbl.text = "危险度选择 · 通关当前最高档解锁下一档"
+	d_lbl.text = "难度选择 · 通关当前最高档解锁下一档"
 	GameStyle.label(d_lbl, 11, GameStyle.PAPER_DIM)
 	d_head.add_child(d_lbl)
 
@@ -400,7 +418,7 @@ func _build_hero_block() -> PanelContainer:
 
 	# 底部整条出战主按钮
 	_hero_start_btn = Button.new()
-	_hero_start_btn.text = "踏 入 仙 途  》"
+	_hero_start_btn.text = "开 始 游 戏  》"
 	_hero_start_btn.custom_minimum_size = Vector2(0, 42)
 	_hero_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hero_start_btn.focus_mode = Control.FOCUS_NONE
@@ -532,7 +550,7 @@ func _build_bottom_banner() -> PanelContainer:
 	hbox.add_child(chip)
 
 	_banner_ver_lbl = Label.new()
-	_banner_ver_lbl.text = "%s %s · 灵田巡守 · 诛邪渡劫" % [Version.APP_NAME, Version.APP_VERSION_NAME]
+	_banner_ver_lbl.text = "%s %s · 生存战斗 · 击杀敌人" % [Version.APP_NAME, Version.APP_VERSION_NAME]
 	_banner_ver_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	GameStyle.label(_banner_ver_lbl, 13, GameStyle.PAPER)
 	hbox.add_child(_banner_ver_lbl)
@@ -560,12 +578,34 @@ func _layout_responsive() -> void:
 	# 1. 四角括号贴角重排
 	_layout_brackets(vp)
 
-	# 2. 装饰斜带跨屏重排
+	# 2. 竖向三段落位：标题贴顶栏、横幅贴屏底，矩阵夹在中间。
+	#    中间富余先摊成气口（≤BLOCK_GAP_MAX），气口顶到上限还有富余才让主块长高（≤HERO_H_MAX）。
+	#    960×540 这一档算出来气口 34、主块 284 ⇒ 方块密度与旧版一致，只是不再往下飘。
+	var title_top := TOP_BAR_INSET_TOP + TOP_BAR_H + TITLE_GAP_TOP
+	var title_h := _title_h()
+	var title_bottom := title_top + title_h
+	var banner_top := vp.y - BANNER_MARGIN_BOTTOM - BANNER_H
+	var mid_region := banner_top - title_bottom
+	var gap := minf(maxf((mid_region - HERO_H) / 2.0, 0.0), BLOCK_GAP_MAX)
+	var hero_h := clampf(mid_region - 2.0 * gap, HERO_H, HERO_H_MAX)
+	gap = maxf((mid_region - hero_h) / 2.0, 0.0)
+	var small_h := (hero_h - ROW_GAP) / 2.0
+	if _title_host != null and is_instance_valid(_title_host):
+		_title_host.offset_top = title_top
+		_title_host.offset_bottom = title_top + title_h
+	if _matrix_host != null and is_instance_valid(_matrix_host):
+		_matrix_host.offset_top = title_bottom + gap
+		_matrix_host.offset_bottom = -(vp.y - banner_top + gap)
+	if _banner_host != null and is_instance_valid(_banner_host):
+		_banner_host.offset_top = -(BANNER_MARGIN_BOTTOM + BANNER_H)
+		_banner_host.offset_bottom = -BANNER_MARGIN_BOTTOM
+
+	# 3. 装饰斜带跨屏重排（顶边跟着标题走，不再钉死像素）
 	if _decor_band != null and is_instance_valid(_decor_band):
 		_decor_band.custom_minimum_size = Vector2(vp.x + 180.0, 140.0)
-		_decor_band.position = Vector2(-90.0, 96.0)
+		_decor_band.position = Vector2(-90.0, title_top + BAND_TITLE_OFFSET)
 
-	# 3. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
+	# 4. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
 	var base_total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
 	var avail_w := maxf(640.0, vp.x - 44.0)
 	var f := clampf(avail_w / base_total_w, 0.74, 1.15)
@@ -579,15 +619,24 @@ func _layout_responsive() -> void:
 	var total_w := hero_w + gap_hero + small_w * 2.0 + gap_col
 
 	if _hero_card != null and is_instance_valid(_hero_card):
-		_hero_card.custom_minimum_size = Vector2(hero_w, HERO_H)
+		_hero_card.custom_minimum_size = Vector2(hero_w, hero_h)
 	for sc in _small_cards:
 		if is_instance_valid(sc):
-			sc.custom_minimum_size = Vector2(small_w, SMALL_H)
+			sc.custom_minimum_size = Vector2(small_w, small_h)
 	for btn in _danger_buttons:
 		if is_instance_valid(btn):
 			btn.custom_minimum_size = Vector2(maxf(34.0, floorf((hero_w - 64.0) / 6.0)), 28.0)
 	if _banner_panel != null and is_instance_valid(_banner_panel):
 		_banner_panel.custom_minimum_size = Vector2(total_w, BANNER_H)
+
+## 标题匾这一行多高：量实得的最小高（字体 + stylebox 边距），量不到时（首帧还没排）
+## 用基准档兜一帧，`_ready` 里已 call_deferred 再贴一次。
+func _title_h() -> float:
+	if _title_block != null and is_instance_valid(_title_block):
+		var h := _title_block.get_combined_minimum_size().y
+		if h > 0.0:
+			return h
+	return TITLE_H_BASE
 
 func _layout_brackets(vp: Vector2) -> void:
 	var w := vp.x
@@ -629,20 +678,20 @@ func _refresh_endless_toggle() -> void:
 		return
 	var on := GameManager.start_in_endless
 	if on:
-		_endless_btn.text = "✦ 无尽试炼 · [开]"
+		_endless_btn.text = "✦ 无尽模式 · [开]"
 		GameStyle.button(_endless_btn, GameStyle.GOOD, GameStyle.JADE_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BAND)
 		if _hero_sub_lbl != null:
-			_hero_sub_lbl.text = "无尽试炼已启 · 突破二十波枷锁 · 战至道殒"
+			_hero_sub_lbl.text = "无尽模式已开 · 突破二十波上限 · 战至终局"
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "直 入 无 尽  》"
 			GameStyle.button(_hero_start_btn, GameStyle.GOOD_DK, GameStyle.GOOD, 18, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
 	else:
-		_endless_btn.text = "无尽试炼 · [关]"
+		_endless_btn.text = "无尽模式 · [关]"
 		GameStyle.button(_endless_btn, GameStyle.NAVY2, GameStyle.JADE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
 		if _hero_sub_lbl != null:
-			_hero_sub_lbl.text = "九大道统 · 二十波妖潮 · 飞升渡劫"
+			_hero_sub_lbl.text = "九名角色 · 二十波敌人 · 生存通关"
 		if _hero_start_btn != null:
-			_hero_start_btn.text = "踏 入 仙 途  》"
+			_hero_start_btn.text = "开 始 游 戏  》"
 			GameStyle.button(_hero_start_btn, GameStyle.NAVY2, GameStyle.JADE, 18, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
 
 func _refresh_sound_badge() -> void:
@@ -650,19 +699,19 @@ func _refresh_sound_badge() -> void:
 		return
 	var muted := SettingsManager.is_bus_muted(&"Master")
 	if muted:
-		_sound_badge_btn.text = "灵音 · 静"
+		_sound_badge_btn.text = "音效 · 关"
 		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.PAPER, GameStyle.SLANT_BAND)
 	else:
-		_sound_badge_btn.text = "灵音 · 开"
+		_sound_badge_btn.text = "音效 · 开"
 		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE, GameStyle.SLANT_BAND)
 
 func _refresh_dynamic_texts() -> void:
 	# 1. 顶栏最高危险度与灵石囊
 	var max_d := clampi(GameManager.max_danger_unlocked, 0, DANGER_NAMES.size() - 1)
 	if _realm_badge_btn != null and is_instance_valid(_realm_badge_btn):
-		_realm_badge_btn.text = "极道 · %s" % DANGER_NAMES[max_d]
+		_realm_badge_btn.text = "难度 · %s" % DANGER_NAMES[max_d]
 	if _purse_badge_btn != null and is_instance_valid(_purse_badge_btn):
-		_purse_badge_btn.text = "灵石囊 %d" % GameManager.stone_purse
+		_purse_badge_btn.text = "金币 %d" % GameManager.stone_purse
 
 	# 2. 修仙志卡片副行与可领角签
 	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
@@ -671,9 +720,9 @@ func _refresh_dynamic_texts() -> void:
 		var kills := int(cs.get("total_kills", 0))
 		var b_wave := int(cs.get("best_wave", 0))
 		if b_wave > 0:
-			_career_sub_lbl.text = "%d 胜 · 最高 %d 波 · 斩 %d" % [wins, b_wave, kills]
+			_career_sub_lbl.text = "%d 胜 · 最高 %d 波 · 击杀 %d" % [wins, b_wave, kills]
 		else:
-			_career_sub_lbl.text = "%d 胜 · 累计斩妖 %d 只" % [wins, kills]
+			_career_sub_lbl.text = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
 	if _career_claim_chip != null and is_instance_valid(_career_claim_chip):
 		_career_claim_chip.visible = GameManager.has_claimable_rewards()
 
@@ -681,7 +730,7 @@ func _refresh_dynamic_texts() -> void:
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
 		var c_cnt := GameManager.unlocked_cultivators.size()
 		var i_cnt := GameManager.unlocked_items.size()
-		_manual_sub_lbl.text = "修士 %d/%d · 法宝 %d/%d" % [
+		_manual_sub_lbl.text = "角色 %d/%d · 道具 %d/%d" % [
 			c_cnt, CultivatorData.all_ids().size(),
 			i_cnt, ItemData.all_ids().size()
 		]

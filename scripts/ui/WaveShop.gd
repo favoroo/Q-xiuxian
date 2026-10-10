@@ -242,29 +242,29 @@ func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
 func _open_usage_tip() -> void:
 	var help_btn: Button = _info_bar.get_node("HelpButton")
 	var max_slots: int = GameManager.max_weapon_slots()
-	var slot_txt: String = "%d 件（本道统上限）" % max_slots if max_slots < WeaponData.MAX_SLOTS else "%d 件" % max_slots
+	var slot_txt: String = "%d 件（本角色上限）" % max_slots if max_slots < WeaponData.MAX_SLOTS else "%d 件" % max_slots
 	var rows: Array = [
-		["周身槽位", slot_txt, GameStyle.JADE if max_slots < WeaponData.MAX_SLOTS else GameStyle.PAPER],
+		["武器槽", slot_txt, GameStyle.JADE if max_slots < WeaponData.MAX_SLOTS else GameStyle.PAPER],
 		["背包格数", "%d 格" % WeaponData.MAX_STASH_SLOTS, GameStyle.PAPER],
 		["货架格数", "%d 格" % GameManager.shop_offers.size(), GameStyle.PAPER],
 	]
 	var notes: Array[String] = [
-		"点中一件法器（上阵或背包里的）才能动手：三合一合成升星、上阵卸下、出售换灵石。",
+		"点中一件武器（装备或背包里的）才能操作：三合一升星、装备卸下、出售换金币。",
 		"三合一：集齐三把同名同星，合成后升一星（最高 %s）。" % WeaponData.star_text(WeaponData.MAX_STAR),
 		"锁定：这一格留到下波，重掷与刷新都不会换掉它。",
-		"重掷货架：换一批候选；每波有免费次数，用完按价格扣灵石。",
+		"重掷货架：换一批候选；每波有免费次数，用完按价格扣金币。",
 		"已售出的格子本波不会补货，出战后货架重开。",
 	]
 	if max_slots < WeaponData.MAX_SLOTS:
-		notes.insert(0, "本道统限佩 %d 件上阵法器：超出上限的法器会收进背包，可用于三合一升星或先卸下当前法器再换装。" % max_slots)
+		notes.insert(0, "本角色限装备 %d 件武器：超出上限的武器会收进背包，可用于三合一升星或先卸下当前武器再换装。" % max_slots)
 	DetailTip.show_over(self, help_btn, {
-		"title": "灵石阁怎么用",
+		"title": "商店怎么用",
 		"chip": "波间商店",
 		"chip_color": GameStyle.GOLD,
 		"rows": rows,
-		"body": "每波结束后来此置办法器：灵石换法器与法宝，摆不满的收进背包。",
+		"body": "每波结束后来此购买武器：金币换武器与道具，摆不满的收进背包。",
 		"notes": notes,
-		"foot": "周身槽位满时再买，新法器会自动进背包。",
+		"foot": "武器槽满时再买，新武器会自动进背包。",
 	})
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -308,12 +308,12 @@ func _layout_for_viewport() -> void:
 	owned_scroll.scroll_horizontal = 0
 
 func refresh() -> void:
-	stones_label.text = "灵石 %d" % GameManager.spirit_stones
-	wave_label.text = "第 %d 波来犯之前 · 置办法器" % (GameManager.wave_number + 1)
+	stones_label.text = "金币 %d" % GameManager.spirit_stones
+	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
 	if GameManager.reroll_free_left > 0:
 		reroll_btn.text = "免费重掷 (剩 %d 次)" % GameManager.reroll_free_left
 	else:
-		reroll_btn.text = "重掷货架 (%d 灵石)" % GameManager.reroll_cost
+		reroll_btn.text = "重掷货架 (%d 金币)" % GameManager.reroll_cost
 	_refresh_synergy_bar()
 
 	for child in offers_container.get_children():
@@ -368,7 +368,7 @@ func _refresh_inventory() -> void:
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
 	if summary.is_empty() and GameManager.stash.is_empty():
 		var empty_lbl = Label.new()
-		empty_lbl.text = "（周身还没有法器）"
+		empty_lbl.text = "（还没有装备武器）"
 		owned_container.add_child(empty_lbl)
 		GameStyle.label(empty_lbl, 13, GameStyle.GREY)
 	else:
@@ -474,7 +474,7 @@ func _create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE_DK, 1, 0.0))
 	var lbl := Label.new()
-	lbl.text = "上阵 %d/%d（仅限%d件）" % [used, max_slots, max_slots]
+	lbl.text = "装备 %d/%d（上限%d件）" % [used, max_slots, max_slots]
 	chip.add_child(lbl)
 	GameStyle.label(lbl, 11, GameStyle.JADE)
 	return chip
@@ -496,7 +496,7 @@ func _create_items_divider() -> Control:
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
 	var lbl = Label.new()
-	lbl.text = "法宝 %d" % GameManager.items.size()
+	lbl.text = "道具 %d" % GameManager.items.size()
 	chip.add_child(lbl)
 	GameStyle.label(lbl, 11, GameStyle.GREY)
 	return chip
@@ -540,7 +540,7 @@ func _open_shop_item_tip(item_id: String, anchor: Control) -> void:
 	var tier_col: Color = ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
+		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
@@ -550,12 +550,12 @@ func _open_shop_item_tip(item_id: String, anchor: Control) -> void:
 			notes.append(s)
 	DetailTip.show_over(self, anchor, {
 		"title": String(def.get("name", item_id)),
-		"chip": "法宝灵物",
+		"chip": "被动道具",
 		"chip_color": tier_col,
 		"rows": rows,
-		"body": "本命法宝：被动生效，无需占用上阵槽位，整局战斗持续庇护。",
+		"body": "被动道具：自动生效，不占武器槽，整局持续有效。",
 		"notes": notes,
-		"foot": "在波间灵石阁可邂逅更多稀世奇珍。",
+		"foot": "每波商店会刷新更多道具。",
 	})
 
 func _create_empty_stash_slot(tile: float) -> Control:
@@ -603,9 +603,9 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 
 	var max_slots: int = GameManager.max_weapon_slots()
 	var slots_full: bool = GameManager.slots_used() >= max_slots
-	var loc_txt := "背包中" if in_stash else "上阵中"
+	var loc_txt := "背包中" if in_stash else "装备中"
 	if in_stash and slots_full:
-		loc_txt = "背包中（上阵已满 %d/%d）" % [GameManager.slots_used(), max_slots]
+		loc_txt = "背包中（装备已满 %d/%d）" % [GameManager.slots_used(), max_slots]
 
 	var bonus_col: Color = GameStyle.GOOD if bonus > 0.0001 else (GameStyle.BAD if bonus < -0.0001 else GameStyle.PAPER)
 	var rows: Array = [
@@ -631,9 +631,9 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	else:
 		notes.append("三合一升星：同名同星集满 3 件可合成升星（当前持有 %d/3 件）。" % copies_total)
 
-	var foot := "同名同星 %d 件 · 出售可得 %d 灵石" % [copies_total, price]
+	var foot := "同名同星 %d 件 · 出售可得 %d 金币" % [copies_total, price]
 	if in_stash:
-		foot += "\n在纳戒背包中：未上阵、不参与攻击，可用于三合一升星或换装上阵。"
+		foot += "\n在背包中：未装备、不参与攻击，可用于三合一升星或换装装备。"
 
 	var actions: Array = []
 	if mergeable:
@@ -658,7 +658,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	var row_ops: Array = []
 	if in_stash:
 		var move_disabled := slots_full
-		var move_text := "上阵已满(%d/%d)" % [GameManager.slots_used(), max_slots] if slots_full else "上  阵"
+		var move_text := "装备已满(%d/%d)" % [GameManager.slots_used(), max_slots] if slots_full else "装  备"
 		row_ops.append({
 			"text": move_text,
 			"disabled": move_disabled,
@@ -686,7 +686,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 		})
 
 	row_ops.append({
-		"text": "售 %d 灵石" % price,
+		"text": "售 %d 金币" % price,
 		"color": GameStyle.BAD,
 		"edge_color": GameStyle.BAD_DK,
 		"text_color": GameStyle.PAPER,
@@ -703,7 +703,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 	actions.append(row_ops)
 
 	var tip_data := {
-		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
+		"title": "%s %s" % [String(def.get("name", "武器")), WeaponData.star_text(star)],
 		"chip": " · ".join(syn_parts) if not syn_parts.is_empty() else String(def.get("tag", "")),
 		"chip_color": GameStyle.JADE_DK if in_stash else GameStyle.GOLD_DK,
 		"rows": rows,
@@ -794,10 +794,10 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var edge_color: Color = GameStyle.GOLD_DK
 
 	if is_potion:
-		title = "回气丹"
+		title = "回复药"
 		icon_path = "res://assets/art/icon_hp.png"
-		tag = "丹药"
-		desc = "服下立刻恢复五成气血"
+		tag = "药水"
+		desc = "使用立刻恢复50%生命"
 		chip_color = GameStyle.GOOD
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = GameStyle.JADE_DK
@@ -806,7 +806,7 @@ func _resolve_offer_data(offer: Dictionary) -> Dictionary:
 		var tier := int(def.get("tier", 1))
 		title = def.get("name", "?")
 		icon_path = def.get("icon", "")
-		tag = "%s·法宝" % ItemData.tier_label(tier)
+		tag = "%s·道具" % ItemData.tier_label(tier)
 		desc = def.get("desc", "")
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
@@ -959,7 +959,7 @@ func _create_offer_card_price_btn(offer: Dictionary, index: int, sold: bool, pri
 	btn.custom_minimum_size = Vector2(0, CARD_PRICE_H)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	GameStyle.button(btn, GameStyle.JADE, GameStyle.PAPER, 14, GameStyle.INK_TEXT, 6.0)
-	btn.text = "%d 灵石" % price
+	btn.text = "%d 金币" % price
 	if sold:
 		btn.text = "已 售 出"
 		btn.disabled = true
@@ -971,9 +971,9 @@ func _create_offer_card_price_btn(offer: Dictionary, index: int, sold: bool, pri
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots() \
 			and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
 		btn.disabled = true
-		btn.text = "上阵背包已满"
+		btn.text = "装备背包已满"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots():
-		btn.text = "%d 灵石 · 入背包" % price
+		btn.text = "%d 金币 · 入背包" % price
 	btn.pressed.connect(func():
 		if GameManager.buy_offer(index):
 			refresh()

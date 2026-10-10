@@ -76,7 +76,7 @@ func _process_fight(delta: float) -> void:
 		if _boss_still_alive():
 			if not _overtime_noted:
 				_overtime_noted = true
-				GameManager.announcement_triggered.emit("⚠ 魔君未除 · 妖潮不退 ⚠")
+				GameManager.announcement_triggered.emit("⚠ Boss未除 · 敌潮不退 ⚠")
 			return
 		end_wave()
 		return
@@ -122,15 +122,15 @@ func start_wave(n: int) -> void:
 	phase = Phase.FIGHT
 	_spawn_chests()
 	if _is_boss_wave(n):
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 魔君压境 ✦" % n)
+		GameManager.announcement_triggered.emit("✦ 第 %d 波 · Boss来袭 ✦" % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	elif _is_elite_wave(n):
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 妖潮来袭 ✦" % n)
+		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 敌潮来袭 ✦" % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	else:
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 妖潮来袭 ✦" % n)
+		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 敌潮来袭 ✦" % n)
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 
@@ -153,7 +153,7 @@ func end_wave() -> void:
 	phase = Phase.CLEARING
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
-	GameManager.announcement_triggered.emit("第 %d 波妖潮平息" % wave_number)
+	GameManager.announcement_triggered.emit("第 %d 波敌潮平息" % wave_number)
 	# 灵韵结算：无偿灵石+修为，随后复利增长
 	GameManager.apply_harvest()
 	# 余怪消散（不掉落）
@@ -329,8 +329,8 @@ func _spawn_elite(player: Node2D) -> void:
 	_scale_to_wave(elite)
 	get_parent().add_child(elite)
 
-	var titles := {golem_scene: "铁甲魔傀", chilei_elite_scene: "赤雷兽", jiansha_elite_scene: "剑煞邪修"}
-	GameManager.announcement_triggered.emit("⚠ %s破阵而入！" % titles.get(scene, "精英妖物"))
+	var titles := {golem_scene: "铁甲巨怪", chilei_elite_scene: "烈雷兽", jiansha_elite_scene: "剑客亡灵"}
+	GameManager.announcement_triggered.emit("⚠ %s突入战场！" % titles.get(scene, "精英敌人"))
 	GameManager.shake_camera(5.0, 0.25)
 
 ## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻
@@ -369,14 +369,14 @@ func _boss_still_alive() -> bool:
 
 func _boss_title() -> String:
 	if wave_number > GameManager.VICTORY_WAVE:
-		return "妖皇回响"     ## 无尽波次的轮回魔君
+		return "回响Boss"     ## 无尽波次的轮回魔君
 	if wave_number >= GameManager.VICTORY_WAVE:
-		return "心魔魔尊"     ## 第 20 波最终关
-	return "赤炎魔将"         ## 第 10 波首个 Boss 关
+		return "最终Boss"     ## 第 20 波最终关
+	return "火焰Boss"         ## 第 10 波首个 Boss 关
 
 func _boss_announcement() -> String:
 	if wave_number == GameManager.VICTORY_WAVE:
-		return "⚠ 心魔劫 · 心魔魔尊现世！"
+		return "⚠ 最终Boss战 · 最终Boss出现！"
 	if wave_number > GameManager.VICTORY_WAVE:
-		return "⚠ 妖皇回响 · 轮回魔君再临！"
-	return "⚠ Boss 波 · 赤炎魔将破阵而入！"
+		return "⚠ 回响Boss · 再次出现！"
+	return "⚠ Boss波 · 火焰Boss突入战场！"

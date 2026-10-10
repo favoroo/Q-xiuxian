@@ -15,7 +15,7 @@ var _content_box: MarginContainer
 var _reset_tip_lbl: Label
 
 func _get_title_text() -> String:
-	return "天 地 律 动  ·  游 戏 设 置"
+	return "游 戏 设 置"
 
 func _get_panel_size() -> Vector2:
 	return Vector2(740, 440)
@@ -30,9 +30,9 @@ func _get_top_bar_separation() -> int:
 	return 14
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	add_tab_button(0, "✦ 灵音调律")
-	add_tab_button(1, "✦ 剑意视界")
-	add_tab_button(2, "✦ 演化推衍")
+	add_tab_button(0, "✦ 音效")
+	add_tab_button(1, "✦ 画面")
+	add_tab_button(2, "✦ 其他")
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -59,6 +59,13 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 
+	# 三页整棵子树放开「按下」冒泡：设置行是 PanelContainer（mouse_filter 默认 STOP），
+	# 会把外层 ScrollContainer 起手锁定手指拖动要的那一拍吃掉 → 真机上只有卡片缝隙能划。
+	# 行控件（HSlider / Button）自己收事件，降成 PASS 不影响拖滑杆与点按钮。
+	# 本弹窗的页签内容只在 _ready 建一次（刷新只改文本），所以这里建完刷一遍就够。
+	for p in _pages:
+		GameStyle.swipeable(p as Control)
+
 func _on_opened() -> void:
 	_refresh_all_ui()
 	get_tree().paused = true
@@ -76,14 +83,14 @@ func _build_audio_page() -> Control:
 	scroll.add_child(vbox)
 
 	var tip := Label.new()
-	tip.text = "天地乾坤四维灵音微调。支持细化静音与音量滑杆调节，数值实时生效并持久存盘。"
+	tip.text = "音效细调。支持静音与音量滑杆调节，实时生效并自动保存。"
 	GameStyle.label(tip, 12, GameStyle.GREY)
 	vbox.add_child(tip)
 
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
-	_add_audio_slider_row(vbox, &"BGM", "灵乐音量", "背景修仙律动音乐 (BGM)")
-	_add_audio_slider_row(vbox, &"SFX", "音效音量", "法术轰鸣、兵刃破空与诛妖音效 (SFX)")
-	_add_audio_slider_row(vbox, &"Voice", "道音启示", "天道箴言、人物台词与提示语音 (Voice)")
+	_add_audio_slider_row(vbox, &"BGM", "音乐音量", "背景音乐 (BGM)")
+	_add_audio_slider_row(vbox, &"SFX", "音效音量", "战斗与击杀音效 (SFX)")
+	_add_audio_slider_row(vbox, &"Voice", "语音音量", "角色台词与提示语音 (Voice)")
 
 	return scroll
 
@@ -197,30 +204,30 @@ func _build_display_page() -> Control:
 	scroll.add_child(vbox)
 
 	var tip := Label.new()
-	tip.text = "调整战斗反馈与画面视觉效果。针对设备性能或视疲劳体验，可自由启闭顿帧、震屏与跳字。"
+	tip.text = "调整战斗反馈与画面效果。可自由开关顿帧、震屏与伤害跳字。"
 	GameStyle.label(tip, 12, GameStyle.GREY)
 	vbox.add_child(tip)
 
-	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "在命中与暴击时展现跳动伤害数字与身法回避标识")
+	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "命中与暴击时显示伤害数字，闪避时显示回避标识")
 	# 震屏不给「开/关」两态：他想要的是"偶尔来一下"，所以按幅度分四档，人话命名、不暴露系数
 	_add_cycle_row(
 		vbox,
 		"shake_intensity",
 		"屏幕震动",
-		"只在诛精英、受创、天雷落劫等要紧时刻震一下；点按切换 关闭 / 轻 / 标准 / 强",
+		"只在击杀精英、受击等关键时刻震动；点按切换 关闭 / 轻 / 标准 / 强",
 		func() -> String: return "震屏 · %s" % SettingsManager.shake_level_label(),
 		func() -> bool: return SettingsManager.shake_mult() > 0.0,
 		func(): SettingsManager.set_val(&"display", &"shake_intensity", SettingsManager.shake_level_next())
 	)
-	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "法刃命中或强敌湮灭瞬间的时空凝滞微顿帧（提高击打顿挫感）")
-	_add_toggle_row(vbox, "screen_flash", "受击红晕", "气血受损及濒死警戒时刻屏幕边缘的暗红收缩呼吸晕影")
-	_add_toggle_row(vbox, "show_fps", "实时帧率", "在界面左上方常驻呈现当前灵息运转刷新率 (FPS)")
+	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
+	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
+	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
 	# 技能按钮停靠档位：右下（拇指区）/ 右中 / 左下，点按循环，HUD 监听 setting_changed 实时挪位
 	_add_cycle_row(
 		vbox,
 		"skill_btn_pos",
 		"技能按钮位置",
-		"随行神通释放键停靠位置：右下 / 右中 / 左下，按顺手程度点按切换",
+		"技能释放键位置：右下 / 右中 / 左下，点按切换",
 		func() -> String: return "位置 · %s" % SettingsManager.skill_btn_pos_label(),
 		func() -> bool: return true,
 		func(): SettingsManager.set_val(&"display", &"skill_btn_pos", SettingsManager.skill_btn_pos_next())

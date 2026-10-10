@@ -23,7 +23,6 @@ var col_slash_glow: Color = Color(0.40, 0.85, 0.70, 0.4)
 var col_gold: Color = Color(0.96, 0.84, 0.32)
 var col_gold_shadow: Color = Color(0.65, 0.48, 0.18)
 var col_jade: Color = Color(0.58, 0.94, 0.80)
-var col_sash: Color = Color(0.08, 0.10, 0.14)
 var col_tassel_red: Color = Color(0.88, 0.22, 0.18)
 
 # ----------------- 插槽参数缓存 -----------------
@@ -92,7 +91,6 @@ func _sync_config() -> void:
 	col_slash_glow = col_cloak_edge
 
 	# 协调衍生细节色
-	col_sash = Color(col_cloak_outer.r * 0.35, col_cloak_outer.g * 0.35, col_cloak_outer.b * 0.35, 0.96)
 	if cloak_style == "royal_shawl":
 		col_gold = col_cloak_edge
 	elif cloak_style == "tattered_rags":
@@ -121,6 +119,7 @@ func _draw_idle(angle: Angle) -> void:
 
 	match angle:
 		Angle.FRONT:
+			_draw_modular_weapon(Vector2(6, -6 + float_y), deg_to_rad(22.0), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, eye_pulse)
 		Angle.SIDE:
@@ -139,21 +138,22 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
-	var wave_t := _time * 4.2
-	var float_y := sin(wave_t) * 1.5
-	# 风阻极微幅波动（不超过 2.2px），杜绝后仰失真
-	var cloak_drag := clampf(speed_ratio, 0.4, 1.4) * 2.2
-	var cloak_wave := cos(wave_t) * 1.8 + sin(_time * 8.5) * 0.6
+	var wave_t := _time * 5.2
+	var float_y := sin(wave_t) * 2.4
+	# 风阻波动与双频斗篷衣摆，营造灵动御风感
+	var cloak_drag := clampf(speed_ratio, 0.4, 1.4) * 2.8
+	var cloak_wave := cos(wave_t) * 2.8 + sin(_time * 9.5) * 0.9
 
-	var shadow_alpha := 0.42 - sin(wave_t) * 0.05
-	var shadow_rx := (16.0 - sin(wave_t) * 0.6) * width_scale
+	var shadow_alpha := 0.44 - sin(wave_t) * 0.07
+	var shadow_rx := (16.5 - sin(wave_t) * 1.1) * width_scale
 	_draw_ground_shadow(Vector2(0, 32), shadow_rx, 4.4, shadow_alpha)
 	_draw_immortal_motes(float_y)
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.FRONT)
-			_draw_head_front(float_y, 0.0)
+			_draw_modular_weapon(Vector2(6, -6 + float_y * 0.85), deg_to_rad(22.0 + sin(wave_t) * 2.5), Angle.FRONT)
+			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.FRONT)
+			_draw_head_front(float_y, 0.06)
 		Angle.SIDE:
 			_draw_modular_weapon(Vector2(-5, 1 + float_y), deg_to_rad(-15.0), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.SIDE)
@@ -181,6 +181,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
+			_draw_modular_weapon(Vector2(7, -5 + dash_y), deg_to_rad(30.0), Angle.FRONT)
 			_draw_modular_cloak(dash_y, 0.0, 6.0, Angle.FRONT)
 			_draw_head_front(dash_y + 1, 0.3)
 		Angle.SIDE:
@@ -205,6 +206,7 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
+			_draw_modular_weapon(Vector2(6, -6 + float_y), deg_to_rad(22.0), Angle.FRONT)
 			_draw_modular_cloak(float_y, 2.5, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, 0.25)
 			_draw_slash_crescent(Vector2(0, 12 + float_y), deg_to_rad(90.0), 38.0, progress)
@@ -232,6 +234,7 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
+			_draw_modular_weapon(Vector2(6, -6), deg_to_rad(22.0), Angle.FRONT)
 			_draw_modular_cloak(0.0, -2.0, 0.0, Angle.FRONT)
 			_draw_head_front(0.0, 0.35)
 		Angle.SIDE:
@@ -860,7 +863,7 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 func _draw_modular_cloak(float_y: float, wave: float, drag: float, angle: Angle) -> void:
 	match angle:
 		Angle.FRONT:
-			_draw_cloak_front_modular(float_y, wave)
+			_draw_cloak_front_modular(float_y, wave, drag)
 		Angle.SIDE:
 			_draw_cloak_side_modular(float_y, wave, drag)
 		Angle.BACK:
@@ -868,17 +871,18 @@ func _draw_modular_cloak(float_y: float, wave: float, drag: float, angle: Angle)
 
 # ----------------- 正面斗篷 -----------------
 
-func _draw_cloak_front_modular(float_y: float, wave: float) -> void:
+func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 0.0) -> void:
 	var w := width_scale
+	var flare := extra_drag * 0.45
 
 	# 1. 内衬道袍底衬
 	var inner_pts: PackedVector2Array = [
 		Vector2(0, -4 + float_y),
-		Vector2(-15 * w, 12 + float_y),
-		Vector2(-14 * w + wave * 0.2, 30 + float_y),
-		Vector2(0, 27 + float_y),
-		Vector2(14 * w - wave * 0.2, 30 + float_y),
-		Vector2(15 * w, 12 + float_y)
+		Vector2((-15 - flare * 0.4) * w, 12 + float_y),
+		Vector2((-14 - flare) * w + wave * 0.4, 30 + float_y),
+		Vector2(wave * 0.15, 27 + float_y),
+		Vector2((14 + flare) * w - wave * 0.4, 30 + float_y),
+		Vector2((15 + flare * 0.4) * w, 12 + float_y)
 	]
 	draw_colored_polygon(inner_pts, col_cloak_inner)
 
@@ -900,61 +904,61 @@ func _draw_cloak_front_modular(float_y: float, wave: float) -> void:
 			outer_pts = [
 				Vector2(0, -6 + float_y),
 				Vector2(-11 * w, -2 + float_y),
-				Vector2(-16 * w, 15 + float_y),
-				Vector2(-14 * w, 31 + float_y),
-				Vector2(0, 30 + float_y),
-				Vector2(14 * w, 31 + float_y),
-				Vector2(16 * w, 15 + float_y),
+				Vector2((-16 - flare * 0.5) * w, 15 + float_y),
+				Vector2((-14 - flare) * w + wave * 0.35, 31 + float_y),
+				Vector2(wave * 0.2, 30 + float_y),
+				Vector2((14 + flare) * w - wave * 0.35, 31 + float_y),
+				Vector2((16 + flare * 0.5) * w, 15 + float_y),
 				Vector2(11 * w, -2 + float_y)
 			]
 		"short_cape":
 			outer_pts = [
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
-				Vector2(-13 * w, 12 + float_y),
-				Vector2(-10 * w, 22 + float_y),
-				Vector2(-4 * w, 25 + float_y),
-				Vector2(4 * w, 25 + float_y),
-				Vector2(10 * w, 22 + float_y),
-				Vector2(13 * w, 12 + float_y),
+				Vector2((-13 - flare * 0.5) * w, 12 + float_y),
+				Vector2((-10 - flare) * w + wave * 0.4, 22 + float_y),
+				Vector2(-4 * w + wave * 0.2, 25 + float_y),
+				Vector2(4 * w - wave * 0.2, 25 + float_y),
+				Vector2((10 + flare) * w - wave * 0.4, 22 + float_y),
+				Vector2((13 + flare * 0.5) * w, 12 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
 		"tattered_rags":
 			outer_pts = [
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
-				Vector2(-15 * w, 15 + float_y),
-				Vector2(-13 * w, 27 + float_y),
-				Vector2(-9 * w, 32 + float_y),
+				Vector2((-15 - flare * 0.5) * w, 15 + float_y),
+				Vector2((-13 - flare) * w + wave * 0.45, 27 + float_y),
+				Vector2((-9 - flare * 0.6) * w + wave * 0.3, 32 + float_y),
 				Vector2(-5 * w, 24 + float_y),
-				Vector2(0, 31 + float_y),
+				Vector2(wave * 0.2, 31 + float_y),
 				Vector2(6 * w, 23 + float_y),
-				Vector2(11 * w, 32 + float_y),
-				Vector2(15 * w, 15 + float_y),
+				Vector2((11 + flare * 0.8) * w - wave * 0.4, 32 + float_y),
+				Vector2((15 + flare * 0.5) * w, 15 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
 		"royal_shawl":
 			outer_pts = [
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
-				Vector2(-15 * w, 14 + float_y),
-				Vector2(-12 * w, 29 + float_y),
-				Vector2(0, 27 + float_y),
-				Vector2(12 * w, 29 + float_y),
-				Vector2(15 * w, 14 + float_y),
+				Vector2((-15 - flare * 0.5) * w, 14 + float_y),
+				Vector2((-12 - flare) * w + wave * 0.4, 29 + float_y),
+				Vector2(wave * 0.15, 27 + float_y),
+				Vector2((12 + flare) * w - wave * 0.4, 29 + float_y),
+				Vector2((15 + flare * 0.5) * w, 14 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
 		"split_flowing", _:
 			outer_pts = [
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
-				Vector2(-14 * w, 15 + float_y),
-				Vector2(-12 * w + wave * 0.3, 28 + float_y),
-				Vector2(-7 * w, 24 + float_y),
-				Vector2(-3 * w, 31 + float_y),
-				Vector2(2 * w, 26 + float_y),
-				Vector2(8 * w + wave * 0.2, 29 + float_y),
-				Vector2(14 * w, 15 + float_y),
+				Vector2((-14 - flare * 0.5) * w, 15 + float_y),
+				Vector2((-12 - flare) * w + wave * 0.5, 28 + float_y),
+				Vector2(-7 * w + wave * 0.2, 24 + float_y),
+				Vector2(-3 * w + wave * 0.3, 31 + float_y),
+				Vector2(2 * w - wave * 0.2, 26 + float_y),
+				Vector2((8 + flare) * w - wave * 0.4, 29 + float_y),
+				Vector2((14 + flare * 0.5) * w, 15 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
 
@@ -967,8 +971,6 @@ func _draw_cloak_front_modular(float_y: float, wave: float) -> void:
 	if cloak_style == "royal_shawl":
 		draw_arc(Vector2(-7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
 		draw_arc(Vector2(7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
-
-	_draw_waist_front(float_y)
 
 # ----------------- 侧面斗篷（彻底重构：端正挺拔躯干 + 水平齐整自然下摆） -----------------
 
@@ -1082,8 +1084,6 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 	if cloak_style == "royal_shawl":
 		draw_arc(Vector2(0, 2 + float_y), 6.0 * w, 0, PI * 0.8, 14, col_gold, 1.2)
 
-	_draw_waist_side(float_y, wave, d)
-
 func _draw_cloak_dash_side(dash_y: float) -> void:
 	var w := width_scale
 	var dash_pts: PackedVector2Array = [
@@ -1171,71 +1171,6 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 	_draw_cloak_rim_shimmer(back_pts, col_cloak_edge)
 	draw_line(Vector2(0, -2 + float_y), Vector2(0, 24 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
 
-# ==================== 修仙配饰：云锦腰封、双股真丝流苏与玉佩 ====================
-
-func _draw_waist_front(float_y: float) -> void:
-	var w := width_scale
-	var waist_y := 12.0 + float_y
-
-	# 云锦宽腰封（暗色底衬 + 双金线包边）
-	draw_line(Vector2(-9 * w, waist_y), Vector2(9 * w, waist_y), col_sash, 3.2)
-	draw_line(Vector2(-8 * w, waist_y - 1.2), Vector2(8 * w, waist_y - 1.2), Color(col_gold.r, col_gold.g, col_gold.b, 0.7), 1.0)
-	draw_line(Vector2(-8 * w, waist_y + 1.2), Vector2(8 * w, waist_y + 1.2), Color(col_gold.r, col_gold.g, col_gold.b, 0.7), 1.0)
-
-	# 道统专属腰扣与紧凑佩饰
-	match chest_ornament:
-		"bagua": # 八卦太极护心扣（符童）
-			draw_circle(Vector2(0, waist_y), 2.8, col_void)
-			draw_arc(Vector2(0, waist_y), 2.8, 0, TAU, 16, col_gold, 1.2)
-			draw_circle(Vector2(-0.8, waist_y), 0.8, col_void)
-			draw_circle(Vector2(0.8, waist_y), 0.8, col_eye_core)
-			# 紧凑朱红小流苏
-			draw_line(Vector2(0, waist_y + 2.8), Vector2(0, waist_y + 8.5), col_tassel_red, 1.4)
-			draw_circle(Vector2(0, waist_y + 9.0), 1.0, col_gold)
-
-		"coin": # 聚宝足金通宝扣（金算盘）
-			draw_circle(Vector2(0, waist_y), 3.0, col_gold)
-			draw_rect(Rect2(Vector2(-1.0, waist_y - 1.0), Vector2(2.0, 2.0)), col_void)
-			draw_line(Vector2(0, waist_y + 3.0), Vector2(0, waist_y + 8.5), col_gold, 1.3)
-			draw_circle(Vector2(0, waist_y + 9.0), 1.1, col_gold)
-
-		"skull": # 苍茫兽骨方锁扣（石岳、狂战）
-			var sk_pts: PackedVector2Array = [
-				Vector2(-3.2, waist_y - 1.8), Vector2(3.2, waist_y - 1.8),
-				Vector2(2.4, waist_y + 2.2), Vector2(-2.4, waist_y + 2.2)
-			]
-			draw_colored_polygon(sk_pts, col_bone)
-			draw_polyline(sk_pts, col_bone_shadow, 1.0, true)
-
-		"pearl", _: # 羊脂白玉双鱼佩（青云独孤、魅影幽娘、独臂刀圣）
-			draw_circle(Vector2(0, waist_y), 2.6, col_jade)
-			draw_circle(Vector2(0, waist_y), 1.1, col_sash) # 玉环通心
-			draw_line(Vector2(0, waist_y + 2.6), Vector2(0, waist_y + 8.5), col_cloak_edge, 1.3)
-			draw_circle(Vector2(0, waist_y + 9.0), 1.0, col_jade)
-
-	if sigil_boost > 0.05:
-		draw_circle(Vector2(0, waist_y), 1.2, Color(1, 1, 1, 0.85 * sigil_boost))
-
-func _draw_waist_side(float_y: float, wave: float, extra_drag: float) -> void:
-	var w := width_scale
-	var waist_y := 12.0 + float_y
-	var d := extra_drag
-
-	draw_line(Vector2(-5.5 * w, waist_y), Vector2(6.0 * w, waist_y), col_sash, 2.8)
-	draw_line(Vector2(-4.5 * w, waist_y - 1.0), Vector2(5.5 * w, waist_y - 1.0), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
-	draw_line(Vector2(-4.5 * w, waist_y + 1.0), Vector2(5.5 * w, waist_y + 1.0), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
-
-	var jade_pos := Vector2(2.0 * w, waist_y)
-	draw_circle(jade_pos, 1.8, col_jade)
-	draw_circle(jade_pos, 0.8, col_sash)
-	var tassel_sway := sin(_time * 4.2) * 0.8 - d * 0.15
-	var tassel_end := jade_pos + Vector2(tassel_sway, 7.5)
-	draw_line(jade_pos, tassel_end, col_cloak_edge, 1.1)
-	draw_circle(tassel_end, 0.9, col_jade)
-
-	if sigil_boost > 0.05:
-		draw_circle(jade_pos, 1.0, Color(1, 1, 1, 0.85 * sigil_boost))
-
 # ==================== 背负本命法器插槽绘制 ====================
 
 func _draw_modular_strap(float_y: float) -> void:
@@ -1263,10 +1198,8 @@ func _draw_modular_strap(float_y: float) -> void:
 			draw_circle(center, 1.2, col_void)
 			draw_circle(center, 0.6, col_gold)
 
-## 绘制法器（摄影三向铁律：正面完全收于身后不露下沿、侧面贴背不露底、背面外挂最表层）
+## 绘制法器（正面探出右肩上方、下半部藏于斗篷后绝不露底，侧面贴背，背面外挂最表层）
 func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
-	if angle == Angle.FRONT:
-		return
 	var t := Transform2D(rot, pos)
 
 	match weapon_type:

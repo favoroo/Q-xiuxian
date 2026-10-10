@@ -11,10 +11,10 @@ shader_parameter/flash_color = Color(1, 1, 0.9, 1)
 shader_parameter/flash_modifier = 0.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 13.0
+radius = 19.5
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
-radius = 16.0
+radius = 24.0
 
 [node name="LeiBeastEnemy" type="CharacterBody2D"]
 collision_layer = 4
@@ -41,14 +41,14 @@ bite_hit_radius = 40.0
 bite_damage_mul = 1.0
 
 [node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 16)
-scale = Vector2(0.9, 0.9)
+position = Vector2(0.0, 24.0)
+scale = Vector2(1.35, 1.35)
 texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 modulate = Color(1.25, 0.95, 0.5, 1)
 material = SubResource("ShaderMaterial_beast")
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.75, 0.75)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)

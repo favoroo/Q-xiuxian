@@ -147,21 +147,16 @@ func play_hit(duration: float = 0.15) -> void:
 		renderer.current_action = CultivatorRendererBase.Action.HIT
 		renderer.hit_progress = 0.0
 
-## 8 方向平滑映射到 3 视界角度
+## 土豆兄弟式纯正面视角：全方向移动均以正面面向玩家，仅水平方向移动触发左右镜像翻转
 func set_facing_dir(face_str: String, is_flip: bool) -> void:
 	facing = face_str
-	self.flip_h = is_flip
+	if face_str != "n" and face_str != "s":
+		self.flip_h = is_flip
 
 	if renderer == null:
 		return
 
-	match face_str:
-		"s":
-			renderer.current_angle = CultivatorRendererBase.Angle.FRONT
-		"n":
-			renderer.current_angle = CultivatorRendererBase.Angle.BACK
-		_:
-			renderer.current_angle = CultivatorRendererBase.Angle.SIDE
+	renderer.current_angle = CultivatorRendererBase.Angle.FRONT
 
 ## 换装/切换角色渲染器工厂接口（为后续其他角色扩展定好标准）
 func set_character(renderer_cls: GDScript, cfg: CultivatorVisualConfig = null) -> void:

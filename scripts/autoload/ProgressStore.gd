@@ -122,7 +122,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), gm.wave_number)
 		gm.career_stats["best_kills"] = maxi(int(gm.career_stats.get("best_kills", 0)), gm.kills)
 		if rec_e["endless_best_wave"] > prev_rec_e["endless_best_wave"]:
-			gm.last_run_new_records.append("道统新纪录 · 无尽第 %d 波" % gm.wave_number)
+			gm.last_run_new_records.append("角色新纪录 · 无尽第 %d 波" % gm.wave_number)
 		gm.run_history.push_front({
 			"cultivator_id": cid_rec,
 			"danger": gm.danger_level,
@@ -192,16 +192,16 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 
 	# 新纪录文案（供结算弹窗展示）
 	if gm.kills > prev_best_kills:
-		gm.last_run_new_records.append("生涯新纪录 · 斩妖 %d 只" % gm.kills)
+		gm.last_run_new_records.append("生涯新纪录 · 击杀 %d 只" % gm.kills)
 	if victory and eff_wave > prev_best_wave:
 		gm.last_run_new_records.append("生涯新纪录 · 抵御第 %d 波" % eff_wave)
 	if victory and prev_wins == 0:
 		var cdef := CultivatorData.get_def(cid_rec)
-		gm.last_run_new_records.append("道统首胜 · %s" % String(cdef.get("name", "修士")))
+		gm.last_run_new_records.append("角色首胜 · %s" % String(cdef.get("name", "角色")))
 	# 里程碑达标提示（只提示不自动发灵石，需在修仙志手动领取）
 	for m in AchievementData.milestones_of(cid_rec):
 		if prev_wins < int(m["wins"]) and int(rec["wins"]) >= int(m["wins"]):
-			gm.last_run_new_records.append("里程碑达成 ·「%s」灵石囊待领取" % String(m["title"]))
+			gm.last_run_new_records.append("里程碑达成 ·「%s」金币待领取" % String(m["title"]))
 
 	var run_ctx := {
 		"victory": victory,
@@ -234,7 +234,7 @@ static func _make_victory_snapshot(gm: Node, cid: String, wave: int) -> Dictiona
 	var weapons: Array = []
 	for w in gm.get_weapons_summary():
 		weapons.append({
-			"name": String(w.get("name", "法器")),
+			"name": String(w.get("name", "武器")),
 			"star": int(w.get("star", 1)),
 			"icon": String(w.get("icon", "")),
 			"is_drone": bool(w.get("is_drone", false)),
@@ -245,7 +245,7 @@ static func _make_victory_snapshot(gm: Node, cid: String, wave: int) -> Dictiona
 		if idef.is_empty():
 			continue
 		items.append({
-			"name": String(idef.get("name", "法宝")),
+			"name": String(idef.get("name", "道具")),
 			"icon": String(idef.get("icon", "")),
 		})
 	var hp_max := 0.0
