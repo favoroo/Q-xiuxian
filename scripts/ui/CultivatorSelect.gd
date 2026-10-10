@@ -202,16 +202,24 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var icon_border := GameStyle.JADE if is_unlocked else GameStyle.LINE
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, icon_border, 2, 0.0))
 
-	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(String(def.get("icon", ""))):
-		icon_tex.texture = load(String(def["icon"]))
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(60, 60)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if not is_unlocked:
-		icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
-	icon_box.add_child(icon_tex)
+	if String(def.get("motion", "")) == "procedural":
+		var pview := ProceduralCultivatorView.new()
+		pview.position = Vector2(36, 42)
+		pview.scale = Vector2(0.95, 0.95)
+		if not is_unlocked:
+			pview.modulate = Color(0.4, 0.4, 0.5, 0.7)
+		icon_box.add_child(pview)
+	else:
+		var icon_tex := TextureRect.new()
+		if ResourceLoader.exists(String(def.get("icon", ""))):
+			icon_tex.texture = load(String(def["icon"]))
+		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_tex.custom_minimum_size = Vector2(60, 60)
+		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if not is_unlocked:
+			icon_tex.modulate = Color(0.4, 0.4, 0.5, 0.7)
+		icon_box.add_child(icon_tex)
 	left_col.add_child(icon_box)
 
 	var name_lbl := Label.new()
