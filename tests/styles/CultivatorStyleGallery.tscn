@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c6y78gallery01"]
+
+[ext_resource type="Script" path="res://tests/styles/CultivatorStyleGallery.gd" id="1_gallery"]
+
+[node name="CultivatorStyleGallery" type="Node2D"]
+script = ExtResource("1_gallery")

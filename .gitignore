@@ -18,3 +18,6 @@ CHANGELOG.md
 .zcode/
 .workbuddy/
 
+# macOS 文件系统元数据
+.DS_Store
+
