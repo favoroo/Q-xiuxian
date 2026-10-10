@@ -50,17 +50,21 @@ func _draw_idle(angle: Angle) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_nail(Vector2(-2, -10 + float_y), deg_to_rad(-24.0))
+			# 正面视角：右手拔剑人体工学斜贯背负，剑柄高耸探出右肩，剑尖从左腰下摆外露
+			_draw_nail(Vector2(-1, 3 + float_y), deg_to_rad(-140.0))
 			_draw_cloak_front(float_y, cloak_wave)
 			_draw_chest_pearl(float_y)
 			_draw_head_front(float_y, eye_pulse)
 		Angle.SIDE:
+			# 侧面视角：骨钉同样背负在后背！剑尖向后上方斜挑，剑身贴于斗篷侧面
+			_draw_nail(Vector2(-6, 6 + float_y), deg_to_rad(-22.0))
 			_draw_cloak_side(float_y, cloak_wave, 0.0)
 			_draw_head_side(float_y, eye_pulse)
-			_draw_nail(Vector2(16, 8 + float_y), deg_to_rad(62.0)) # 单手握钉待发
 		Angle.BACK:
-			_draw_nail(Vector2(0, 0 + float_y), deg_to_rad(-8.0))
+			# 背面视角：骨钉背负在斗篷最外层！剑身斜跨背脊，黑白对比鲜明
 			_draw_cloak_back(float_y, cloak_wave)
+			_draw_sword_strap(float_y)
+			_draw_nail(Vector2(-1, 3 + float_y), deg_to_rad(-140.0))
 			_draw_head_back(float_y)
 
 # ==================== 2. 奔跑 (RUN) ====================
@@ -74,20 +78,20 @@ func _draw_run(angle: Angle, phase: float, _air_val: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_nail(Vector2(-2, -10 + step_lift), deg_to_rad(-24.0))
+			_draw_nail(Vector2(-1, 3 + step_lift), deg_to_rad(-140.0))
 			_draw_cloak_front(step_lift, cloak_fly)
 			_draw_chest_pearl(step_lift)
 			_draw_head_front(step_lift, 0.0)
 		Angle.SIDE:
-			# 奔跑大前倾，披风如蝉翼向后剧烈展开
+			# 侧面奔跑：骨钉背负在后背随步伐轻微颠簸，斗篷如蝉翼向后大张
+			var nail_bob := cos(phase * TAU) * 2.5
+			_draw_nail(Vector2(-6, 6 + step_lift + nail_bob), deg_to_rad(-20.0 + forward_lean))
 			_draw_cloak_side(step_lift, cloak_fly, 8.0)
 			_draw_head_side(step_lift, 0.05)
-			# 奔跑时骨钉在身侧上下轻颠
-			var nail_bob := cos(phase * TAU) * 3.0
-			_draw_nail(Vector2(14, 10 + step_lift + nail_bob), deg_to_rad(55.0 + forward_lean))
 		Angle.BACK:
-			_draw_nail(Vector2(0, 0 + step_lift), deg_to_rad(-8.0))
 			_draw_cloak_back(step_lift, cloak_fly)
+			_draw_sword_strap(step_lift)
+			_draw_nail(Vector2(-1, 3 + step_lift), deg_to_rad(-140.0))
 			_draw_head_back(step_lift)
 
 # ==================== 3. 冲刺 (DASH) ====================
@@ -108,7 +112,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_nail(Vector2(-2, -8 + dash_y), deg_to_rad(-30.0))
+			_draw_nail(Vector2(3, 5 + dash_y), deg_to_rad(144.0))
 			_draw_cloak_front(dash_y, 6.0)
 			_draw_chest_pearl(dash_y)
 			_draw_head_front(dash_y, 0.2)
@@ -122,8 +126,9 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 			# 骨钉笔直前突平刺！
 			_draw_nail(Vector2(26, dash_y + 2), deg_to_rad(85.0))
 		Angle.BACK:
-			_draw_nail(Vector2(0, dash_y), deg_to_rad(-12.0))
 			_draw_cloak_back(dash_y, 6.0)
+			_draw_sword_strap(dash_y)
+			_draw_nail(Vector2(3, 5 + dash_y), deg_to_rad(144.0))
 			_draw_head_back(dash_y)
 
 # ==================== 4. 攻击斩击 (ATTACK) ====================
@@ -134,12 +139,12 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 
 	match angle:
 		Angle.FRONT:
-			_draw_nail(Vector2(-2, -10 + float_y), deg_to_rad(-24.0))
+			_draw_nail(Vector2(-1, 3 + float_y), deg_to_rad(-140.0))
 			_draw_cloak_front(float_y, 2.0)
 			_draw_chest_pearl(float_y)
 			_draw_head_front(float_y, 0.15)
 			# 正面斜向斩弧
-			_draw_slash_crescent(Vector2(10, 6), deg_to_rad(-20.0), 32.0, progress)
+			_draw_slash_crescent(Vector2(14, 6), deg_to_rad(-20.0), 34.0, progress)
 		Angle.SIDE:
 			_draw_cloak_side(float_y, 2.0, 0.0)
 			_draw_head_side(float_y, 0.2)
@@ -151,8 +156,10 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 			_draw_nail(Vector2(14, 6), nail_angle)
 		Angle.BACK:
 			_draw_cloak_back(float_y, 2.0)
+			_draw_sword_strap(float_y)
+			_draw_nail(Vector2(-1, 3 + float_y), deg_to_rad(-140.0))
 			_draw_head_back(float_y)
-			_draw_slash_crescent(Vector2(-10, 6), deg_to_rad(160.0), 32.0, progress)
+			_draw_slash_crescent(Vector2(-12, 4), deg_to_rad(160.0), 34.0, progress)
 
 # ==================== 5. 受击 (HIT) ====================
 
@@ -166,14 +173,18 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 	# 绘制人物本体（附带白霜闪光遮罩）
 	match angle:
 		Angle.FRONT:
+			_draw_nail(Vector2(-1, 3), deg_to_rad(-140.0))
 			_draw_cloak_front(0.0, -3.0)
 			_draw_head_front(0.0, 0.4)
 			_draw_chest_pearl(0.0)
 		Angle.SIDE:
+			_draw_nail(Vector2(-6, 6), deg_to_rad(-22.0))
 			_draw_cloak_side(0.0, -4.0, -4.0)
 			_draw_head_side(0.0, 0.4)
 		Angle.BACK:
 			_draw_cloak_back(0.0, -3.0)
+			_draw_sword_strap(0.0)
+			_draw_nail(Vector2(-1, 3), deg_to_rad(-140.0))
 			_draw_head_back(0.0)
 
 	# 受击白光微粒震颤
@@ -361,27 +372,45 @@ func _draw_chest_pearl(float_y: float) -> void:
 	draw_circle(chest_pos, 3.2, col_bone)
 	draw_circle(chest_pos, 1.6, col_cloak_edge)
 
+func _draw_sword_strap(float_y: float) -> void:
+	# 后背斜跨剑带（从右肩上方贯通到左下腰际）
+	var p_top := Vector2(8, -6 + float_y)
+	var p_bot := Vector2(-8, 18 + float_y)
+	draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 3.0)
+	draw_line(p_top, p_bot, col_cloak_edge, 1.0)
+	# 剑带正中的冷白骨玉搭扣
+	var center := (p_top + p_bot) * 0.5
+	draw_circle(center, 3.0, col_bone)
+	draw_circle(center, 1.5, col_void)
+
 func _draw_nail(pos: Vector2, rot: float) -> void:
 	var t := Transform2D(rot, pos)
+	# 极长且锐利的纯白剑身
 	var nail_pts: PackedVector2Array = [
-		t * Vector2(0, -36), # 极长剑尖
-		t * Vector2(3.0, -26),
-		t * Vector2(3.0, 13),
-		t * Vector2(-3.0, 13),
-		t * Vector2(-3.0, -26)
+		t * Vector2(0, -38), # 极长剑尖
+		t * Vector2(3.2, -26),
+		t * Vector2(3.2, 14),
+		t * Vector2(-3.2, 14),
+		t * Vector2(-3.2, -26)
 	]
 	draw_colored_polygon(nail_pts, col_nail_white)
-	# 剑脊阴影
+	# 剑脊阴影倒角（左亮右暗，立体分明）
 	draw_colored_polygon(PackedVector2Array([
-		t * Vector2(0, -36), t * Vector2(3.0, -26),
-		t * Vector2(3.0, 13), t * Vector2(0, 13)
+		t * Vector2(0, -38), t * Vector2(3.2, -26),
+		t * Vector2(3.2, 14), t * Vector2(0, 14)
 	]), col_nail_shadow)
-	# 剑尖凝聚纯白星尘光点
-	draw_circle(t * Vector2(0, -36), 2.2, Color.WHITE)
-	draw_soft_glow(t * Vector2(0, -36), 6.0, col_eye_glow, 2)
-	# 骨质剑柄
-	draw_line(t * Vector2(0, 13), t * Vector2(0, 22), col_nail_white, 2.5)
-	draw_circle(t * Vector2(0, 23), 2.6, col_nail_shadow)
+	# 剑尖凝聚纯白星尘光点与冷月微光
+	draw_circle(t * Vector2(0, -38), 2.4, Color.WHITE)
+	draw_soft_glow(t * Vector2(0, -38), 7.0, col_eye_glow, 2)
+	# 骨质剑格与剑柄
+	var guard_pts: PackedVector2Array = [
+		t * Vector2(-4.5, 14), t * Vector2(4.5, 14),
+		t * Vector2(3.5, 17), t * Vector2(-3.5, 17)
+	]
+	draw_colored_polygon(guard_pts, col_bone_shadow)
+	draw_line(t * Vector2(0, 17), t * Vector2(0, 24), col_nail_white, 2.6)
+	draw_circle(t * Vector2(0, 25), 2.8, col_nail_white)
+	draw_circle(t * Vector2(0, 25), 1.4, col_nail_shadow)
 
 ## 绘制标志性的空洞骑士纯白冷月月牙斩弧 (Pale Crescent Slash)
 func _draw_slash_crescent(pos: Vector2, rot: float, radius: float, progress: float) -> void:
