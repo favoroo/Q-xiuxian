@@ -18,7 +18,15 @@ enum Angle {
 	BACK   ## 背面视角
 }
 
-@export var config: CultivatorVisualConfig
+@export var config: CultivatorVisualConfig:
+	set(val):
+		config = val
+		_on_config_changed()
+		queue_redraw()
+
+func _on_config_changed() -> void:
+	pass
+
 
 var current_action: Action = Action.IDLE:
 	set(val):

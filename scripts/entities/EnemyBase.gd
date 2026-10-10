@@ -6,6 +6,7 @@ extends CharacterBody2D
 @export var contact_damage: float = 12.0
 @export var is_elite: bool = false
 @export var exp_reward: int = 1
+@export var enemy_id: String = ""          ## 敌种标识（为空时自动由节点名推导）
 @export var spritesheet_path: String = ""
 # 移动方式：gait=步态腿帧（默认）/ hover=悬浮（单姿势图集 + apply_hover 浮沉前倾）/ slither=蠕动（apply_slither 行进波）
 @export var locomotion_mode: String = "gait"
@@ -85,6 +86,7 @@ var gold_gem_tex: Texture2D = preload("res://assets/art/gem_gold.png")
 var flash_tween: Tween = null
 var squash_tween: Tween = null
 var dying: bool = false
+var procedural_view: ProceduralEnemyView = null
 
 func _ready() -> void:
 	current_hp = max_hp
@@ -94,6 +96,11 @@ func _ready() -> void:
 	else:
 		if anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
 			anim_sprite.play("idle")
+
+	var eid := enemy_id
+	if eid.is_empty():
+		eid = _deduce_enemy_id()
+	_init_procedural_view(eid)
 
 	# 妖物出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
@@ -108,6 +115,53 @@ func _ready() -> void:
 	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval
+
+func _deduce_enemy_id() -> String:
+	var n := name.to_lower()
+	if n.begins_with("boss"):
+		return "boss"
+	elif n.begins_with("chilei"):
+		return "chilei_elite"
+	elif n.begins_with("jiansha"):
+		return "jiansha_elite"
+	elif n.begins_with("golem"):
+		return "golem"
+	elif n.begins_with("slime"):
+		return "slime"
+	elif n.begins_with("flower"):
+		return "flower"
+	elif n.begins_with("leibeast"):
+		return "leibeast"
+	elif n.begins_with("xiexiu"):
+		return "xiexiu"
+	elif n.begins_with("danbao"):
+		return "danbao"
+	elif n.begins_with("fengqun"):
+		return "fengqun"
+	elif n.begins_with("xueyong"):
+		return "xueyong"
+	elif n.begins_with("guyao"):
+		return "guyao"
+	elif n.begins_with("yingmei"):
+		return "yingmei"
+	elif n.begins_with("zhumu"):
+		return "zhumu"
+	return "slime"
+
+func _init_procedural_view(eid: String) -> void:
+	if procedural_view != null:
+		procedural_view.queue_free()
+	procedural_view = ProceduralEnemyView.new()
+	var is_boss_enemy: bool = (eid == "boss" or self.get("final_boss") != null)
+	var is_final: bool = bool(self.get("final_boss")) if self.get("final_boss") != null else false
+	procedural_view.setup(eid, is_elite, is_boss_enemy, is_final)
+	if anim_sprite != null:
+		anim_sprite.visible = false
+		procedural_view.position = anim_sprite.position
+		procedural_view.scale = anim_sprite.scale
+		if hit_flash_mat != null:
+			procedural_view.material = hit_flash_mat
+	add_child(procedural_view)
 
 ## 同种敌人的帧集合逐字节相同，按「贴图路径|是否精英」缓存：
 ## 原先每只敌人在 _ready 里新建一套 SpriteFrames + 8 方向 ×6 帧 AtlasTexture，
@@ -421,7 +475,29 @@ func _physics_process(delta: float) -> void:
 	else:
 		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
 
-	# 4. 玩家接触伤害判定
+	# 3.5 同步程序化矢量视图
+	if procedural_view != null:
+		procedural_view.facing = facing
+		procedural_view.flip_h = anim_sprite.flip_h
+		procedural_view.scale = anim_sprite.scale
+		procedural_view.modulate = anim_sprite.modulate
+		procedural_view.is_moving = is_moving
+		procedural_view.speed_ratio = speed_ratio
+		if locomotion_mode == "hover":
+			var vel_dir := Vector2.ZERO
+			if is_moving and current_speed > 0.01:
+				vel_dir = velocity / current_speed
+			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
+			if not is_in_hit_stun:
+				procedural_view.advance = vel_dir.dot(dir)
+		if _fuse >= 0.0:
+			procedural_view.special_state = 1.0
+		elif _charge_windup >= 0.0 or _bite_windup >= 0.0:
+			procedural_view.special_state = 1.0
+		else:
+			procedural_view.special_state = 0.0
+
+		# 4. 玩家接触伤害判定
 	for i in range(get_slide_collision_count()):
 		var col = get_slide_collision(i)
 		var collider = col.get_collider()
@@ -671,6 +747,9 @@ func dissolve() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.4)
 	tw.tween_property(anim_sprite, "scale", anim_sprite.scale * 0.6, 0.4)
+	if procedural_view != null:
+		tw.tween_property(procedural_view, "modulate:a", 0.0, 0.4)
+		tw.tween_property(procedural_view, "scale", procedural_view.scale * 0.6, 0.4)
 	tw.chain().tween_callback(queue_free)
 
 func _die() -> void:
@@ -724,11 +803,17 @@ func _die() -> void:
 	if squash_tween != null and squash_tween.is_valid():
 		squash_tween.kill()
 
-	# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
-	var tw = create_tween()
-	tw.tween_property(anim_sprite, "scale", anim_base_scale * Vector2(1.28, 1.28), 0.045)\
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.set_parallel(true)
-	tw.tween_property(anim_sprite, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.14)
-	tw.chain().tween_callback(queue_free)
+		# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
+		var tw = create_tween()
+		tw.tween_property(anim_sprite, "scale", anim_base_scale * Vector2(1.28, 1.28), 0.045)\
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		if procedural_view != null:
+			tw.parallel().tween_property(procedural_view, "scale", anim_base_scale * Vector2(1.28, 1.28), 0.045)\
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.set_parallel(true)
+		tw.tween_property(anim_sprite, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.14)
+		if procedural_view != null:
+			tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+			tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
+		tw.chain().tween_callback(queue_free)

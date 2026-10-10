@@ -93,8 +93,10 @@ func _setup_sprite_frames() -> void:
 			procedural_view = ProceduralCultivatorView.new()
 			procedural_view.position = anim_sprite.position
 			procedural_view.scale = Vector2(1.2, 1.2)
+			procedural_view.setup_character_id(GameManager.cultivator_id)
 			add_child(procedural_view)
 		else:
+			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.visible = true
 	else:
 		is_procedural = false
@@ -469,39 +471,46 @@ func _physics_process(delta: float) -> void:
 			anim_sprite.flip_h = face[1]
 
 			if is_procedural and procedural_view != null:
-				procedural_view.scale = current_base * 1.5
-				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
-				gait_phase_counter += delta * 3.5 * speed_ratio
+				gait_phase_counter += delta * 1.8 * clampf(speed_ratio, 0.6, 1.3)
 				if gait_phase_counter > 1.0:
 					gait_phase_counter -= 1.0
-				var air_val := sin(gait_phase_counter * TAU)
-				var lean_axis: float = absf(effective_dir.x) * 0.1
-				procedural_view.play_run(gait_phase_counter, air_val, speed_ratio, lean_axis)
-				if shadow_sprite != null:
-					shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + air_val * 0.05)
-			elif _motion_mode == "hover":
-				# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
-				RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
-				RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
-			else:
-				var run_anim: String = "run_" + facing
-				RunMotion.select_anim(anim_sprite, run_anim, true)
-
-				var lean_axis: float = absf(effective_dir.x)
-				RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
-		else:
-			var idle_anim: String = "idle_" + facing
-			if is_procedural and procedural_view != null:
-				procedural_view.scale = current_base * 1.5
+				var hover_bob := sin(gait_phase_counter * TAU) * 0.02
+				procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.5, 1.0 + hover_bob)
 				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
-				procedural_view.play_idle()
-			elif _motion_mode == "hover":
-				RunMotion.select_anim(anim_sprite, idle_anim, false)
-				RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
-			else:
-				RunMotion.select_anim(anim_sprite, idle_anim, false)
-				idle_bob_phase += delta * 2.2
-				RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
+				# 身体随横向移速优雅侧倾（Bank Roll），御风滑行
+				var target_bank := deg_to_rad(7.5) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.3)
+				procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 12.0, 1.0))
+				procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
+				if shadow_sprite != null:
+					# 影子跟随移速方向自然拉伸拖尾与呼吸
+					var shadow_pulse := 1.0 - sin(gait_phase_counter * TAU) * 0.05
+					shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + 0.15 * speed_ratio) * shadow_pulse
+		elif _motion_mode == "hover":
+			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
+			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+			RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
+		else:
+			var run_anim: String = "run_" + facing
+			RunMotion.select_anim(anim_sprite, run_anim, true)
+
+			var lean_axis: float = absf(effective_dir.x)
+			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
+	else:
+		var idle_anim: String = "idle_" + facing
+		if is_procedural and procedural_view != null:
+			procedural_view.scale = current_base * 1.5
+			procedural_view.rotation = lerp_angle(procedural_view.rotation, 0.0, minf(delta * 10.0, 1.0))
+			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
+			procedural_view.play_idle()
+			if shadow_sprite != null:
+				shadow_sprite.scale = Vector2(0.85, 0.85)
+		elif _motion_mode == "hover":
+			RunMotion.select_anim(anim_sprite, idle_anim, false)
+			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
+		else:
+			RunMotion.select_anim(anim_sprite, idle_anim, false)
+			idle_bob_phase += delta * 2.2
+			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)

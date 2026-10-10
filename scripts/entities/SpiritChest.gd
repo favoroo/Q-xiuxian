@@ -51,6 +51,7 @@ var max_hits: int = GameBalance.CHEST_BREAK_HITS
 var remaining_hits: int = GameBalance.CHEST_BREAK_HITS
 
 var _sprite: Sprite2D
+var _loot_renderer: ProceduralLootRenderer
 var _pips: HitPips
 var _box: Area2D
 var _box_shape: CollisionShape2D
@@ -74,7 +75,15 @@ func _ready() -> void:
 	_sprite = Sprite2D.new()
 	_sprite.texture = preload("res://assets/art/prop_chest.png")
 	_sprite.scale = Vector2.ZERO
+	_sprite.visible = false
 	add_child(_sprite)
+
+	_loot_renderer = ProceduralLootRenderer.new()
+	_loot_renderer.loot_type = ProceduralLootRenderer.LootType.CHEST
+	_loot_renderer.chest_total_hits = max_hits
+	_loot_renderer.chest_left_hits = remaining_hits
+	_loot_renderer.scale = Vector2.ZERO
+	add_child(_loot_renderer)
 
 	_pips = HitPips.new()
 	_pips.position = Vector2(0.0, -PIP_LIFT)
@@ -87,10 +96,12 @@ func _ready() -> void:
 
 	# 砸落登场 + 匣内灵气吞吐
 	var tw := create_tween()
+	tw.set_parallel(true)
 	tw.tween_property(_sprite, "scale", BASE_SCALE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_loot_renderer, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_breathe = create_tween().set_loops()
-	_breathe.tween_property(_sprite, "scale", BASE_SCALE * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
-	_breathe.tween_property(_sprite, "scale", BASE_SCALE, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_loot_renderer, "scale", Vector2.ONE * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_loot_renderer, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE)
 
 ## 武器判定命中（与 EnemyBase 同签名，被挥砍/落雷/弹丸/灵蝶波及）
 ## 只数"打到了几下"：amount 不参与耐久结算，因此匣子既不会被高伤一发秒掉，
@@ -106,6 +117,8 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	_jiggle(knockback)
 	_pips.left = remaining_hits
 	_pips.queue_redraw()
+	if _loot_renderer != null:
+		_loot_renderer.chest_left_hits = remaining_hits
 	if remaining_hits <= 0:
 		_destroy()
 
@@ -113,8 +126,9 @@ func _flash() -> void:
 	if _flash_tw != null and _flash_tw.is_valid():
 		_flash_tw.kill()
 	_flash_tw = create_tween()
-	_flash_tw.tween_property(_sprite, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
-	_flash_tw.tween_property(_sprite, "modulate", Color.WHITE, 0.10)
+	var target_vis = _loot_renderer if _loot_renderer != null else _sprite
+	_flash_tw.tween_property(target_vis, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
+	_flash_tw.tween_property(target_vis, "modulate", Color.WHITE, 0.10)
 
 ## 受击微反冲：精灵朝击退方向偏一下再回位（匣子本体不位移，位移的是画）
 func _jiggle(knockback: Vector2) -> void:
@@ -122,8 +136,9 @@ func _jiggle(knockback: Vector2) -> void:
 		_jiggle_tw.kill()
 	var dir := knockback.normalized() if knockback.length_squared() > 1.0 else Vector2.UP
 	_jiggle_tw = create_tween()
-	_jiggle_tw.tween_property(_sprite, "position", dir * JIGGLE_PX, 0.045)
-	_jiggle_tw.tween_property(_sprite, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
+	var target_vis = _loot_renderer if _loot_renderer != null else _sprite
+	_jiggle_tw.tween_property(target_vis, "position", dir * JIGGLE_PX, 0.045)
+	_jiggle_tw.tween_property(target_vis, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
 
 func _destroy() -> void:
 	if dying or is_queued_for_deletion():
@@ -166,4 +181,7 @@ func dissolve() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(_sprite, "modulate:a", 0.0, 0.4)
 	tw.tween_property(_sprite, "scale", _sprite.scale * 0.6, 0.4)
+	if _loot_renderer != null:
+		tw.tween_property(_loot_renderer, "modulate:a", 0.0, 0.4)
+		tw.tween_property(_loot_renderer, "scale", _loot_renderer.scale * 0.6, 0.4)
 	tw.chain().tween_callback(queue_free)

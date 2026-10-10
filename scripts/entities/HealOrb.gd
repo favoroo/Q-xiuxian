@@ -30,6 +30,7 @@ var max_speed: float = 680.0
 var acceleration: float = 850.0
 
 var _sprite: Sprite2D
+var _loot_renderer: ProceduralLootRenderer
 var _bob_tween: Tween = null
 var _settling: bool = false        ## 波末结算中（不再被满血闸拦下）
 
@@ -44,7 +45,12 @@ func _ready() -> void:
 	_sprite.texture = load("res://assets/art/icon_hp.png")
 	_sprite.modulate = TINT_READY
 	_sprite.scale = SPRITE_SCALE
+	_sprite.visible = false
 	add_child(_sprite)
+
+	_loot_renderer = ProceduralLootRenderer.new()
+	_loot_renderer.loot_type = ProceduralLootRenderer.LootType.HEAL_ORB
+	add_child(_loot_renderer)
 
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
@@ -136,10 +142,15 @@ func _set_waiting(value: bool) -> void:
 	waiting_full_hp = value
 	if _sprite != null:
 		_sprite.modulate = TINT_WAITING if value else TINT_READY
+	if _loot_renderer != null:
+		_loot_renderer.is_waiting = value
 
 func _start_bob() -> void:
 	if _bob_tween != null and _bob_tween.is_valid():
 		_bob_tween.kill()
+	var target_node = _loot_renderer if _loot_renderer != null else _sprite
+	if target_node == null:
+		return
 	_bob_tween = create_tween().set_loops()
-	_bob_tween.tween_property(_sprite, "position:y", -3.0, 0.45).set_trans(Tween.TRANS_SINE)
-	_bob_tween.tween_property(_sprite, "position:y", 3.0, 0.45).set_trans(Tween.TRANS_SINE)
+	_bob_tween.tween_property(target_node, "position:y", -3.0, 0.45).set_trans(Tween.TRANS_SINE)
+	_bob_tween.tween_property(target_node, "position:y", 3.0, 0.45).set_trans(Tween.TRANS_SINE)

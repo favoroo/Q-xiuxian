@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cb4m2x8p5v1a9"]
+
+[ext_resource type="Script" path="res://tools/export_cultivator_icons.gd" id="1_icon_exp"]
+
+[node name="ExportCultivatorIcons" type="Node2D"]
+script = ExtResource("1_icon_exp")

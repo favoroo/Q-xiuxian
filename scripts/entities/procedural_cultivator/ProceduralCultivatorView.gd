@@ -42,6 +42,8 @@ func _init_renderer() -> void:
 
 	if config:
 		renderer.config = config
+		if renderer is HollowKnightCultivatorRenderer:
+			(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
 	add_child(renderer)
 
 func _process(delta: float) -> void:
@@ -137,3 +139,13 @@ func set_character(renderer_cls: GDScript, cfg: CultivatorVisualConfig = null) -
 	renderer_script = renderer_cls
 	config = cfg
 	_init_renderer()
+
+## 快速按道统 ID 配置角色（全套插槽预设自动化装配）
+func setup_character_id(cid: String) -> void:
+	var cfg := CultivatorVisualConfig.get_config(cid)
+	config = cfg
+	if renderer is HollowKnightCultivatorRenderer:
+		(renderer as HollowKnightCultivatorRenderer).set_visual_config(cfg)
+	else:
+		_init_renderer()
+

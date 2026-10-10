@@ -68,6 +68,9 @@ var charge_time: float = 0.0
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 var gold_gem_tex: Texture2D = preload("res://assets/art/gem_gold.png")
 
+## 程序化矢量阵台渲染器
+var _obelisk_renderer: ProceduralObeliskRenderer = null
+
 ## 充能期间的粒子效果 —— 灵气汇聚
 var _charge_particles: CPUParticles2D = null
 ## 世界侧进度读数（碑脚环 + 碑顶数字），只在充能期间挂着
@@ -108,6 +111,21 @@ class ChargeArc:
 func _ready() -> void:
 	light.energy = 1.2
 	circle_sprite.rotation = 0.0
+
+	# 隐藏旧像素贴图与粗暴复用的摇杆底图，转由纯矢量悬晶大阵接管渲染
+	var old_sprite = get_node_or_null("Sprite2D") as CanvasItem
+	if old_sprite != null:
+		old_sprite.visible = false
+	var old_circle = get_node_or_null("ChargeCircle") as CanvasItem
+	if old_circle != null:
+		old_circle.visible = false
+
+	if _obelisk_renderer == null:
+		_obelisk_renderer = ProceduralObeliskRenderer.new()
+		add_child(_obelisk_renderer)
+		# 确保层级在交互圈之下但在地面之上
+		move_child(_obelisk_renderer, 0)
+
 	_setup_charge_particles()
 	_build_charge_readout()
 
@@ -211,6 +229,8 @@ func _set_readout_ratio(ratio: float) -> void:
 				GameStyle.PAPER.lerp(GameStyle.JADE_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
 	if stone_mat != null:
 		stone_mat.set_shader_parameter("fill_ratio", _readout_ratio)
+	if _obelisk_renderer != null:
+		_obelisk_renderer.fill_ratio = _readout_ratio
 
 ## 世界侧读数最后画出来的进度真值（判据与 HUD 条同源用）：中断即归零、放满停在 1.0
 func readout_ratio() -> float:
@@ -221,6 +241,10 @@ func is_readout_shown() -> bool:
 	return _readout != null and _readout.visible
 
 func _process(delta: float) -> void:
+	if _obelisk_renderer != null:
+		_obelisk_renderer.is_player_inside = is_player_inside
+		_obelisk_renderer.is_charging = is_charging
+		_obelisk_renderer.ring_rotation = circle_sprite.rotation
 	if is_triggered:
 		return
 	if is_charging:
@@ -308,6 +332,8 @@ func _trigger_blessing() -> void:
 func _enter_spent_look() -> void:
 	light.enabled = false
 	circle_sprite.visible = false
+	if _obelisk_renderer != null:
+		_obelisk_renderer.is_spent = true
 
 ## 触发时的扩散灵气环 —— 视觉冲击
 func _spawn_shockwave_ring() -> void:

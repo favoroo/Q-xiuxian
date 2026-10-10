@@ -105,16 +105,16 @@ func _exit_tree() -> void:
 
 func _setup_dust() -> void:
 	dust_particles = CPUParticles2D.new()
-	dust_particles.amount = 18
-	dust_particles.lifetime = 2.5
+	dust_particles.amount = 26
+	dust_particles.lifetime = 3.2
 	dust_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	dust_particles.emission_rect_extents = Vector2(480, 280)
-	dust_particles.gravity = Vector2(3.0, 5.0)
-	dust_particles.initial_velocity_min = 6.0
-	dust_particles.initial_velocity_max = 14.0
-	dust_particles.scale_amount_min = 1.5
-	dust_particles.scale_amount_max = 3.0
-	dust_particles.color = Color(0.75, 0.85, 0.9, 0.2)
+	dust_particles.gravity = Vector2(0.0, -8.0)
+	dust_particles.initial_velocity_min = 4.0
+	dust_particles.initial_velocity_max = 12.0
+	dust_particles.scale_amount_min = 1.2
+	dust_particles.scale_amount_max = 2.4
+	dust_particles.color = Color(0.35, 0.85, 1.0, 0.28)
 	$AtmosphereLayer.add_child(dust_particles)
 
 func _process(delta: float) -> void:
@@ -156,14 +156,14 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 		mat.set_shader_parameter("vignette_opacity", 0.5)
 	)
 
-## 灵田界碑：可活动范围（GameManager.MAP_HALF_EXTENT）之外压暗，
-## 边界描墨线 + 内侧蓝线 + 黄色四角括号，明示「这里就是地图边缘」
+## 灵田界碑与战台装饰：可活动范围（GameManager.MAP_HALF_EXTENT）之外压暗，
+## 战场中心太极四象古阵与九天锁灵结界光墙（由 ArenaVisualLayer 矢量渲染）
 func _setup_map_bounds() -> void:
 	var map: Node2D = $MapLayer
 	var half: float = GameManager.MAP_HALF_EXTENT
 	var ground_half: float = 2400.0
 
-	# 1. 场外压暗：边界到地砖边缘的四块遮罩
+	# 1. 场外压暗：边界到地砖边缘的四块遮罩（保持深渊幽冥压暗）
 	var dim := Color(0.02, 0.04, 0.09, 0.66)
 	var bands := [
 		[Vector2(-ground_half, -ground_half), Vector2(ground_half * 2.0, ground_half - half)],
@@ -179,45 +179,7 @@ func _setup_map_bounds() -> void:
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.add_child(rect)
 
-	# 2. 界碑线：粗墨底线（±half）+ 内侧鎏金细线
-	_add_bound_line(map, half, 18.0, Color(0.043, 0.051, 0.071, 0.95))
-	_add_bound_line(map, half - 11.0, 5.0, Color(0.88, 0.67, 0.24, 0.85))
-
-	# 3. 青玉四角括号（呼应 UI 的斜切玉块语言）
-	var bracket_len: float = 110.0
-	var inset: float = 22.0
-	var corners := [
-		Vector2(-half + inset, -half + inset), Vector2(1, 1),
-		Vector2(half - inset, -half + inset), Vector2(-1, 1),
-		Vector2(half - inset, half - inset), Vector2(-1, -1),
-		Vector2(-half + inset, half - inset), Vector2(1, -1),
-	]
-	for i in range(0, corners.size(), 2):
-		var origin: Vector2 = corners[i]
-		var sgn: Vector2 = corners[i + 1]
-		var bracket := Line2D.new()
-		bracket.points = PackedVector2Array([
-			origin + Vector2(-sgn.x * bracket_len, 0),
-			origin,
-			origin + Vector2(0, -sgn.y * bracket_len),
-		])
-		bracket.width = 9.0
-		bracket.default_color = Color(0.31, 0.82, 0.647, 0.9)
-		bracket.joint_mode = Line2D.LINE_JOINT_ROUND
-		bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		bracket.end_cap_mode = Line2D.LINE_CAP_ROUND
-		bracket.z_index = 2
-		map.add_child(bracket)
-
-func _add_bound_line(parent: Node2D, half: float, width: float, color: Color) -> void:
-	var line := Line2D.new()
-	line.points = PackedVector2Array([
-		Vector2(-half, -half), Vector2(half, -half),
-		Vector2(half, half), Vector2(-half, half),
-	])
-	line.width = width
-	line.default_color = color
-	line.closed = true
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.z_index = 2
-	parent.add_child(line)
+	# 2. 战台程序化矢量层：中心太极四象大阵 + 四方灵脉槽 + 锁灵结界光墙与青铜镇魂阵角
+	var arena_vis := ArenaVisualLayer.new()
+	arena_vis.half_extent = half
+	map.add_child(arena_vis)
