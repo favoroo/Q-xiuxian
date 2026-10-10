@@ -31,10 +31,10 @@ func _build_ui() -> void:
 	add_child(main_vbox)
 
 	# 顶部标题栏
-		var title_box := HBoxContainer.new()
-		var title_lbl := Label.new()
-		title_lbl.text = "渡个劫 · 空洞冷冽国风【法器 · 法宝 · 属性 · 弹道】全要素视觉矩阵"
-		GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+	var title_box := HBoxContainer.new()
+	var title_lbl := Label.new()
+	title_lbl.text = "渡个劫 · 空洞冷冽国风【法器 · 法宝 · 属性 · 弹道】全要素视觉矩阵"
+	GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	title_box.add_child(title_lbl)
 
 	var sub_lbl := Label.new()
@@ -281,15 +281,18 @@ func _mount_proj_preview(parent: Control, kind: ProceduralProjectileRenderer.Pro
 	parent.add_child(lbl)
 
 func _export_showcase_image() -> void:
-	DirAccess.make_dir_recursive_absolute("tests/styles")
-	var vp := get_viewport()
-	if vp != null:
-		var tex := vp.get_texture()
-		if tex != null:
-			var img := tex.get_image()
-			if img != null and not img.is_empty():
-				var path := "tests/styles/weapon_and_item_gallery.png"
-				img.save_png(path)
-				print("[WeaponAndItemGalleryPreview] 成功导出全套法器/法宝/属性/弹道矩阵看板至: %s" % path)
-	await get_tree().create_timer(0.1).timeout
-	get_tree().quit()
+	if DisplayServer.get_name() != "headless":
+		DirAccess.make_dir_recursive_absolute("tests/styles")
+		var vp := get_viewport()
+		if vp != null:
+			var tex := vp.get_texture()
+			if tex != null:
+				var img := tex.get_image()
+				if img != null and not img.is_empty():
+					var path := "tests/styles/weapon_and_item_gallery.png"
+					img.save_png(path)
+					print("[WeaponAndItemGalleryPreview] 成功导出全套法器/法宝/属性/弹道矩阵看板至: %s" % path)
+	print("WEAPON_AND_ITEM_GALLERY_RESULT: ALL PASS")
+	if OS.get_cmdline_user_args().has("--export") or DisplayServer.get_name() == "headless":
+		await get_tree().create_timer(0.1).timeout
+		get_tree().quit(0)

@@ -41,9 +41,12 @@ func _ready() -> void:
 		add_child(lab)
 	for f in range(8):
 		await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	img.save_png("/tmp/weapon_aim_render.png")
-	print("SAVED /tmp/weapon_aim_render.png ", img.get_size())
+	if DisplayServer.get_name() != "headless":
+		var tex := get_viewport().get_texture()
+		var img := tex.get_image() if tex != null else null
+		if img != null:
+			img.save_png("/tmp/weapon_aim_render.png")
+			print("SAVED /tmp/weapon_aim_render.png ", img.get_size())
 	get_tree().quit(0)
 
 func _add_bg() -> void:

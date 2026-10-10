@@ -29,6 +29,11 @@ func _ready() -> void:
 	title.text = "音效试听台 · %d 个 key / %d 段 BGM" % [_keys.size(), _bgm_keys.size()]
 	current.text = "准备…"
 
+	if DisplayServer.get_name() == "headless":
+		print("[AUDIO_GALLERY] Headless 模式自动跳过试听，音效 key 数量: %d" % _keys.size())
+		await get_tree().create_timer(0.1).timeout
+		get_tree().quit(0)
+
 func _process(delta: float) -> void:
 	_timer -= delta
 	if _timer > 0.0:

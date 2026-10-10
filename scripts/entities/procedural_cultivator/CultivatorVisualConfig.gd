@@ -41,6 +41,9 @@ extends Resource
 ## 4. 背负本命法器插槽 (Back Artifact / Weapon)
 ## weapon_type: "bone_nail" (骨钉剑), "stone_pillar" (玄石尺/碑), "peach_sword" (桃木剑), "golden_abacus" (金算盘),
 ##              "shadow_daggers" (暗影双刃), "broken_blade" (厚背断刀), "bone_axe" (巨兽骨斧), "soul_banner" (招魂幡), "treasure_chest" (多宝匣)
+## carry_front_pos / carry_front_rot / carry_side_pos / carry_side_rot / carry_back_pos / carry_back_rot:
+##              可选的背负位姿覆盖。头饰宽大（蛮修双角、刀圣斗笠）或法器填充色接近骨白时，
+##              要用它把法器挪到头部轮廓之外，否则会画成"法器长在脸上"。缺省值见渲染器 CARRY_* 常量。
 @export var weapon: Dictionary = {
 	"weapon_type": "bone_nail",
 	"col_main": Color(0.95, 0.97, 1.0),
@@ -269,7 +272,10 @@ static func make_duanbi() -> CultivatorVisualConfig:
 		"col_main": Color(0.88, 0.90, 0.94),      # 厚背斩马狂刀
 		"col_shadow": Color(0.52, 0.56, 0.62),
 		"col_accent": Color(0.98, 0.35, 0.30),
-		"strap_style": "diagonal"
+		"strap_style": "diagonal",
+		# 刀身与骨白面具几乎同色，且竹斗笠横挑很宽：把刀压到斗笠下方、肩外再探出来
+		"carry_front_pos": Vector2(9.5, 8.0), "carry_front_rot": 214.0,
+		"carry_side_pos": Vector2(-7.5, 8.0), "carry_side_rot": -12.0,
 	}
 	cfg._sync_palette()
 	return cfg
@@ -300,7 +306,11 @@ static func make_kuangzhan() -> CultivatorVisualConfig:
 		"col_main": Color(0.92, 0.90, 0.85),      # 蛮荒巨兽头骨双刃斧
 		"col_shadow": Color(0.62, 0.58, 0.52),
 		"col_accent": Color(0.95, 0.20, 0.20),
-		"strap_style": "diagonal"
+		"strap_style": "diagonal",
+		# 骨斧同样近骨白，而蛮修双角横挑到 x=±26：把斧子整体压到下巴以下横躺，
+		# 斧刃朝上从右肩外探出，避开双角与面具那两圈白
+		"carry_front_pos": Vector2(14.0, 12.0), "carry_front_rot": 8.0,
+		"carry_side_pos": Vector2(-8.0, 9.0), "carry_side_rot": -10.0,
 	}
 	cfg._sync_palette()
 	return cfg

@@ -132,6 +132,8 @@ func _run() -> void:
 	var locked_id: String = GameManager.shop_offers[0].get("id", "")
 	GameManager.roll_shop(true)
 	_check(GameManager.shop_offers[0].get("id", "") == locked_id and GameManager.shop_offers[0].get("locked", false), "锁定商品跨刷新保留")
+	while GameManager.reroll_free_left > 0:
+		GameManager.reroll_shop()
 	var cost1: int = GameManager.reroll_cost
 	GameManager.reroll_shop()
 	_check(GameManager.reroll_cost > cost1, "reroll 费用递增 %d→%d" % [cost1, GameManager.reroll_cost])

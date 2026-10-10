@@ -49,6 +49,10 @@ var current_target: Node2D = null
 var is_attacking: bool = false
 var bob_phase: float = 0.0
 
+## 脱程重查节流（2026-10-10 第 6 波卡顿优化）：15Hz + instance_id 错相
+const RETARGET_INTERVAL := 1.0 / 15.0
+var _retarget_phase: float = 0.0
+
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var muzzle_point: Marker2D = $MuzzlePoint
 @onready var slash_sprite: Sprite2D = $SlashEffect
@@ -99,6 +103,7 @@ func _ready() -> void:
 	slash_sprite.visible = false
 	slash_sprite.modulate.a = 0.0
 	bob_phase = randf() * TAU
+	_retarget_phase = fposmod(float(get_instance_id() % 97) * 0.001, RETARGET_INTERVAL)
 	dynamic_angle = base_angle
 	if def.is_empty():
 		setup(weapon_def_id, star)
@@ -168,6 +173,8 @@ func _process(delta: float) -> void:
 	bob_phase += delta * 3.5
 
 	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
+	# 脱程重查降到 15Hz + 错相（2026-10-10 第 6 波卡顿优化）：目标连续移动，
+	# 逐帧重查浪费；失效回退保留即时，防打空
 	if current_target == null or not is_instance_valid(current_target):
 		current_target = _find_target()
 	else:
@@ -175,7 +182,10 @@ func _process(delta: float) -> void:
 		if player != null:
 			var max_reach = attack_range * _range_mult() * 1.2
 			if player.global_position.distance_to(current_target.global_position) > max_reach:
-				current_target = _find_target()
+				_retarget_phase -= delta
+				if _retarget_phase <= 0.0:
+					_retarget_phase = RETARGET_INTERVAL
+					current_target = _find_target()
 
 	# 2. 动态轨道：有目标时沿轨道滑向目标方位（自动换位），无目标时回归基础槽位
 	if not is_attacking:
@@ -225,11 +235,11 @@ func _perform_projectile_attack() -> void:
 		# 开火这一帧就把发射帧拧到目标方位：贴图补偿跟着走，剑尖与出膛方向同轴
 		_apply_facing(aim_dir.angle())
 
-	# 后坐动画
+	# 后坐动画：极速后座冲击（0.03s）+ 弹性回正，凸显远程出膛爆发力
 	var orig_pos = position
 	var recoil_pos = orig_pos - aim_dir * 8.0
 	var tw = create_tween()
-	tw.tween_property(self, "position", recoil_pos, 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "position", recoil_pos, 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "position", orig_pos, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_callback(func(): is_attacking = false)
 
@@ -378,43 +388,54 @@ func _perform_melee_attack() -> void:
 
 	var aim_angle = aim_dir.angle()
 	var orig_pos = position
+	var windup_pos = orig_pos - aim_dir * 8.0
 	var thrust_pos = orig_pos + aim_dir * 26.0
 
 	# 挥砍弧光：月牙轴心摆在判定圆心、缩放取 判定半径/月牙外缘 ⇒ 月牙外缘 == 那一帧查询圆的边界。
 	# 月牙自身张角 ±70°，本体从 aim-swing 扫到 aim+swing（swing ≤ 60°）时它一直罩着瞄准轴，
-	# 所以打出去的那一下和看得到的那一片是同一处。旧写法 position=(18,0)、scale=0.85 钉死，
-	# 月牙只够到本体前 ~44px，而一挥真打到 ~105px。
+	# 所以打出去的那一下和看得到的那一片是同一处。
 	var swing := deg_to_rad(45.0) * arc_scale
-	var tw = create_tween()
 	_apply_facing(aim_angle - swing)
-	slash_sprite.visible = true
-	slash_sprite.modulate.a = 1.0
+	slash_sprite.visible = false
+	slash_sprite.modulate.a = 0.0
 	slash_sprite.position = Vector2(MELEE_LUNGE, 0.0)
 	slash_sprite.scale = Vector2.ONE * (_melee_arc_radius() / SLASH_ART_OUTER)
 	slash_sprite.rotation = 0.0
-	# 挥砍反馈：本体亮闪 + 轻微弹张
-	_flash_sprite(Color(1.45, 1.45, 1.45), 0.15)
-	scale = Vector2(1.08, 1.08)
 
-	tw.set_parallel(true)
-	tw.tween_property(self, "position", thrust_pos, 0.08).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(self, "rotation", aim_angle + swing, 0.14).set_trans(Tween.TRANS_QUAD)
-	tw.tween_property(slash_sprite, "modulate:a", 0.0, 0.18)
+	# 三段式近战节奏：前摇微撤蓄势 (0.05s) → 极速瞬扫涂抹 (0.04s) → 弹性卸力回正 (0.13s)
+	var tw = create_tween()
+	# 1. 蓄力前摇（Anticipation）：刀身轻微后撤、微缩积蓄张力
+	tw.tween_property(self, "position", windup_pos, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(self, "scale", Vector2(0.92, 1.08), 0.05)
 
-	tw.chain().set_parallel(false)
-	tw.tween_property(self, "position", orig_pos, 0.12).set_trans(Tween.TRANS_SINE)
-	tw.parallel().tween_property(self, "scale", Vector2.ONE, 0.14)
-	tw.tween_callback(func():
+	# 2. 打击瞬发（Active）：爆发极速横扫，点亮月牙刀光并结算伤害与破空音
+	tw.chain().tween_callback(func():
+		slash_sprite.visible = true
+		slash_sprite.modulate.a = 1.0
+		_flash_sprite(Color(1.5, 1.5, 1.5), 0.12)
+		AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 1.15)
+		var hits := _deal_melee_damage(aim_dir)
+		if hits > 0:
+			# 刀刃入肉阻力感：武器微反冲回弹
+			position -= aim_dir * 4.5
+	)
+	tw.tween_property(self, "position", thrust_pos, 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(self, "rotation", aim_angle + swing, 0.04).set_trans(Tween.TRANS_EXPO)
+	tw.parallel().tween_property(self, "scale", Vector2(1.15, 0.92), 0.04)
+	tw.parallel().tween_property(slash_sprite, "modulate:a", 0.0, 0.14)
+
+	# 3. 卸力后摇（Recovery）：TRANS_BACK 弹性回正至环绕槽位
+	tw.chain().set_parallel(true)
+	tw.tween_property(self, "position", orig_pos, 0.13).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "scale", Vector2.ONE, 0.13).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_callback(func():
 		is_attacking = false
 		slash_sprite.visible = false
 	)
 
-	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 1.15)
-
-	_deal_melee_damage(aim_dir)
-
-func _deal_melee_damage(aim_dir: Vector2) -> void:
+func _deal_melee_damage(aim_dir: Vector2) -> int:
 	var results := _query_enemies(_melee_arc_radius(), global_position + aim_dir * MELEE_LUNGE, 24)
+	var hit_count := 0
 
 	for res in results:
 		var col = res["collider"]
@@ -428,6 +449,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
 			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
+			hit_count += 1
 			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
 				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
 			if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):
@@ -437,6 +459,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> void:
 			GameManager.try_lifesteal()
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
+	return hit_count
 
 func _find_target() -> Node2D:
 	var player = GameManager.player

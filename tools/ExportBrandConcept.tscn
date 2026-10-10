@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbrandconcept1"]
+
+[ext_resource type="Script" path="res://tools/export_brand_concept.gd" id="1_brand_exp"]
+
+[node name="ExportBrandConcept" type="Node2D"]
+script = ExtResource("1_brand_exp")

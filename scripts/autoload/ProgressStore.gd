@@ -51,6 +51,8 @@ static func load_into(gm: Node) -> void:
 
 		gm.stone_purse = int(cfg.get_value("records", "stone_purse", 0))
 
+		gm.tutorial_seen = bool(cfg.get_value("progress", "tutorial_seen", false))
+
 		var hist = cfg.get_value("history", "recent_runs", [])
 		gm.run_history = hist.duplicate() if hist is Array else []
 	else:
@@ -93,6 +95,7 @@ static func save_from(gm: Node) -> void:
 	cfg.set_value("records", "victory_log", gm.victory_log)
 	cfg.set_value("records", "claimed_milestones", gm.claimed_milestones)
 	cfg.set_value("records", "stone_purse", gm.stone_purse)
+	cfg.set_value("progress", "tutorial_seen", gm.tutorial_seen)
 	cfg.set_value("history", "recent_runs", gm.run_history)
 	cfg.save(PROGRESS_PATH)
 

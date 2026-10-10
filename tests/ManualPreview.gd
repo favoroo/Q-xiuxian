@@ -14,7 +14,10 @@ func _ready() -> void:
 		manual._switch_tab(tab)
 		await get_tree().process_frame
 		await get_tree().process_frame
-		var img := get_viewport().get_texture().get_image()
-		img.save_png("res://tmp_manual_tab%d.png" % tab)
-		print("SAVED tmp_manual_tab%d.png" % tab)
-	get_tree().quit()
+		if DisplayServer.get_name() != "headless":
+			var tex := get_viewport().get_texture()
+			var img := tex.get_image() if tex != null else null
+			if img != null:
+				img.save_png("res://tmp_manual_tab%d.png" % tab)
+				print("SAVED tmp_manual_tab%d.png" % tab)
+	get_tree().quit(0)

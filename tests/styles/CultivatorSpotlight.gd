@@ -67,11 +67,13 @@ func _render_next_style() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var img := get_viewport().get_texture().get_image()
-	if img:
-		var out_path := "tests/styles/spotlight_%s.png" % cfg["id"]
-		img.save_png(out_path)
-		print("[SAVED SPOTLIGHT] %s -> %s" % [cfg["name"], out_path])
+		if DisplayServer.get_name() != "headless":
+			var tex := get_viewport().get_texture()
+			var img := tex.get_image() if tex != null else null
+			if img:
+				var out_path := "tests/styles/spotlight_%s.png" % cfg["id"]
+				img.save_png(out_path)
+				print("[SAVED SPOTLIGHT] %s -> %s" % [cfg["name"], out_path])
 
 	_current_idx += 1
 	_render_next_style()

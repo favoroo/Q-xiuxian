@@ -815,14 +815,26 @@ func _on_start_pressed() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func():
 		visible = false
-		var cult_select := get_parent().get_node_or_null("CultivatorSelect")
-		if cult_select != null:
-			cult_select.show_select()
-		else:
-			var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
-			if weapon_select != null:
-				weapon_select.show_select()
+		# 新手指南：仅新档（未看过且从未开局过）在选角前弹一次，关闭后再进选角
+		var tut := get_parent().get_node_or_null("TutorialDialog")
+		if tut != null and not GameManager.tutorial_seen \
+				and int(GameManager.career_stats.get("total_runs", 0)) == 0:
+			GameManager.tutorial_seen = true
+			ProgressStore.save_from(GameManager)
+			tut.closed.connect(_after_tutorial)
+			tut.open()
+			return
+		_after_tutorial()
 	)
+
+func _after_tutorial() -> void:
+	var cult_select := get_parent().get_node_or_null("CultivatorSelect")
+	if cult_select != null:
+		cult_select.show_select()
+	else:
+		var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
+		if weapon_select != null:
+			weapon_select.show_select()
 
 func _on_update_pressed() -> void:
 	if not is_instance_valid(_update_btn):

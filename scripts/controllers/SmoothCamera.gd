@@ -22,6 +22,7 @@ var _t: float = 0.0
 var _base_zoom: Vector2 = Vector2(1.2, 1.2)
 var _zoom_tween: Tween = null
 var _lookahead: Vector2 = Vector2.ZERO
+var _kick_offset: Vector2 = Vector2.ZERO  ## 方向性冲击位移（顺受力方向猛推后快速高阻尼回弹）
 ## 档位幅度倍率（SettingsManager.shake_mult() 的缓存，随 setting_changed 刷新）
 var _intensity: float = 1.0
 ## 本秒剩余可叠加的创伤预算
@@ -62,6 +63,12 @@ func _physics_process(delta: float) -> void:
 		_budget_timer += 1.0
 		_budget_left = GameBalance.TRAUMA_BUDGET
 
+	# 方向性瞬时冲击衰减（高阻尼弹簧迅速回正）
+	if _kick_offset.length_squared() > 0.01:
+		_kick_offset = _kick_offset.lerp(Vector2.ZERO, minf(delta * 22.0, 1.0))
+	else:
+		_kick_offset = Vector2.ZERO
+
 	if trauma > 0.0:
 		trauma = maxf(trauma - trauma_decay * delta, 0.0)
 		var shake_amt := GameBalance.shake_amount(trauma) * _intensity
@@ -69,15 +76,23 @@ func _physics_process(delta: float) -> void:
 		offset = Vector2(
 			max_offset.x * shake_amt * _shake_axis(1.3, _t),
 			max_offset.y * shake_amt * _shake_axis(3.7, _t)
-		)
+		) + _kick_offset
 		rotation = max_roll * shake_amt * _shake_axis(7.1, _t * 0.85)
 	else:
-		offset = Vector2.ZERO
+		offset = _kick_offset
 		rotation = 0.0
 
 ## 多频无公倍正弦合成的连续伪随机波形（平滑不刺眼）
 func _shake_axis(seed_val: float, t: float) -> float:
 	return 0.6 * sin(t * 1.7 + seed_val) + 0.4 * sin(t * 3.1 + seed_val * 2.1)
+
+## 方向性冲击位移（Directional Kick）：沿受力方向猛推后迅速归零（受 shake_mult 约束）
+func kick_directional(dir: Vector2, strength: float = 3.5) -> void:
+	if _intensity <= 0.0 or dir.length_squared() < 0.001:
+		return
+	var norm_dir := dir.normalized()
+	_kick_offset += norm_dir * minf(strength * _intensity, 9.0)
+	offset += norm_dir * minf(strength * _intensity, 9.0)
 
 ## 叠加创伤值（0.0 ~ 1.0）：只在「值得看的节点」调用
 ## 精英/首领的登场·震地·伏诛、玩家受创、界碑聚灵阵、落雷命中 —— 普通命中与小怪死亡不给

@@ -9,6 +9,11 @@ extends Node
 ##    灯名额 ≤ LIGHT_CAP；activate 后视觉/物理状态就位，recycle 后休眠回池。
 ## 3. 满载逻辑帧耗时：35 敌 + 玩家 + 6 弹丸跑 60 物理帧，
 ##    Performance.TIME_PHYSICS_PROCESS 均值 ≤ 8ms（只测逻辑+物理，渲染侧另由桌面实测）。
+## 4. 宝石系统（2026-10-10 第 6 波卡顿优化）：120 颗宝石同屏 1 秒，
+##    ProceduralLootRenderer.redraw_count 增量 ≤ 120×25+60（20Hz 节流 + 错相余量，未节流约 7200）；
+##    全员移出屏幕 0.5 秒，重绘增量 ≤ 2（屏外剔除）；120 颗在场只点亮 GEM_LIGHT_CAP 盏灯；
+##    回收再取两轮，第二轮 created 零增长、reused 等量增长（对象池）；
+##    场上宝石数超 GEM_SOFT_CAP 后，最旧一颗被强制 magnet_to（软上限保险丝，无经验损失）。
 ##
 ## 运行：godot --headless --path . res://tests/PerfProbe.tscn
 ## 注意：本判据依赖真实节拍，禁止 Engine.time_scale 加速（会破坏重绘节流计时）。
@@ -152,7 +157,85 @@ func _run() -> void:
 	print("PERF: 35 敌 + 6 弹丸物理帧均耗时 = %.2f ms（阈值 ≤ 8）" % avg_ms)
 	_check(avg_ms <= 8.0, "满载逻辑帧耗时 ≤ 8ms（实得 %.2fms，含 35 怪 AI + Jolt 物理 + 6 弹丸）" % avg_ms)
 
-	# 清场
+	# ================= 4. 宝石系统：节流 + 屏外剔除 + 灯名额 + 对象池 + 软上限保险丝 =================
+	# 满载战斗期间敌人死亡会掉宝石，先全部回池，避免残留宝石占用灯名额污染判据
+	for g in AstralGem._active_gems.duplicate():
+		if is_instance_valid(g):
+			g.recycle()
+	# 玩家挪离宝石网格（原点距 (60,40) 仅 ~72px，拾取圈会把判据宝石吃掉一颗）
+	player.global_position = Vector2(480.0, 500.0)
+	var gem_scene: PackedScene = load("res://scenes/entities/AstralGem.tscn")
+	var gem_created0: int = AstralGem.created_count
+	var gem_reused0: int = AstralGem.reused_count
+	var gems: Array[AstralGem] = []
+	for i in range(120):
+		var g := AstralGem.acquire_or_new(gem_scene, world)
+		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + float(i / 20) * 44.0)
+		g.exp_value = 1
+		g.is_gold = false
+		g.activate()
+		gems.append(g)
+	_check(AstralGem.created_count == gem_created0 + 120,
+		"宝石首轮 120 颗全量新建 (%d/%d)" % [AstralGem.created_count - gem_created0, 120])
+
+	# 重绘节流：屏内 120 颗跑 1.0s，20Hz + 错相 ⇒ ≤ 120×25 + 余量（未节流约 7200）
+	var gem_redraw_before: int = ProceduralLootRenderer.redraw_count
+	await get_tree().create_timer(1.0).timeout
+	var gem_redraw_inscreen: int = ProceduralLootRenderer.redraw_count - gem_redraw_before
+	_check(gem_redraw_inscreen <= 3060,
+		"宝石重绘节流：120 颗 1s 重绘 ≤ 3060（实得 %d）" % gem_redraw_inscreen)
+
+	# 屏外剔除
+	for g in gems:
+		g.global_position = Vector2(-4000.0, -4000.0)
+	gem_redraw_before = ProceduralLootRenderer.redraw_count
+	await get_tree().create_timer(0.5).timeout
+	var gem_redraw_off: int = ProceduralLootRenderer.redraw_count - gem_redraw_before
+	_check(gem_redraw_off <= 2, "宝石屏外剔除：出屏 0.5s 重绘 ≤ 2（实得 %d）" % gem_redraw_off)
+
+	# 灯名额：120 颗在场只点亮 GEM_LIGHT_CAP 盏
+	var gem_lit := 0
+	for g in gems:
+		var lt := g.get_node_or_null("PointLight2D") as PointLight2D
+		if lt != null and lt.visible:
+			gem_lit += 1
+	_check(gem_lit == AstralGem.GEM_LIGHT_CAP,
+		"宝石灯名额：120 颗只点亮 %d 盏（上限 %d）" % [gem_lit, AstralGem.GEM_LIGHT_CAP])
+
+	# 对象池：回收全部再取，零新建全复用
+	for g in gems:
+		g.recycle()
+	_check(AstralGem._pool.size() == 120, "宝石 120 颗全部回池 (%d)" % AstralGem._pool.size())
+	var gems2: Array[AstralGem] = []
+	for i in range(120):
+		var g := AstralGem.acquire_or_new(gem_scene, world)
+		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + float(i / 20) * 44.0)
+		g.exp_value = 1
+		g.is_gold = (i % 30 == 0)   ## 混入金宝验证 activate 状态重铺
+		g.activate()
+		gems2.append(g)
+	_check(AstralGem.created_count == gem_created0 + 120,
+		"宝石第二轮零新建 (%d/%d)" % [AstralGem.created_count - gem_created0, 120])
+	_check(AstralGem.reused_count == gem_reused0 + 120,
+		"宝石第二轮复用计数 +120 (%d)" % (AstralGem.reused_count - gem_reused0))
+	_check(gems2[1].is_gold == false and gems2[0].is_gold == true,
+		"activate 后金宝/普宝视觉状态重铺正确")
+
+	# 软上限保险丝：场上 120 颗再补 21 颗 ⇒ 第 141 颗起最旧的被强制吸附
+	for i in range(21):
+		var g := AstralGem.acquire_or_new(gem_scene, world)
+		g.global_position = Vector2(-480.0 + float(i) * 8.0, 480.0)
+		g.exp_value = 1
+		g.is_gold = false
+		g.activate()
+		gems2.append(g)
+	var fused := 0
+	for g in gems2:
+		if g.target_player != null:
+			fused += 1
+	_check(fused >= 1, "软上限保险丝：超 GEM_SOFT_CAP 后最旧宝石被强制吸附（吸附中 %d 颗）" % fused)
+
+	# 清场（清场统一放文件尾）
 	for p in flying:
 		p._recycle()
 	for e in horde:

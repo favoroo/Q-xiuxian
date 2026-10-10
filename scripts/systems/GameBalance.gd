@@ -139,6 +139,8 @@ static func shake_duration(trauma: float) -> float:
 
 const HIT_STUN_NORMAL := 0.10            ## 普通受击硬直（秒）：期间追击归零，位移纯由击退主导
 const HIT_STUN_CRIT := 0.14              ## 暴击受击硬直（秒）
+const HIT_FREEZE_NORMAL := 0.035         ## 普通命中局部卡肉冻结（秒，~2帧）：期间不位移吸附在刀尖，随后爆发击退
+const HIT_FREEZE_CRIT := 0.065           ## 暴击命中局部卡肉冻结（秒，~4帧）
 const KNOCKBACK_DECAY_STUN := 9.0        ## 硬直期间击退衰减率（衰减略缓，保留滑行手感）
 const KNOCKBACK_DECAY_FREE := 14.0       ## 硬直结束后击退衰减率（快速收尾）
 const KNOCKBACK_HEAVY_SPEED := 260.0     ## 重击击退初速阈值（px/s）

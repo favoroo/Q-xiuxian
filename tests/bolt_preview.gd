@@ -36,9 +36,11 @@ func _ready() -> void:
 	add_child(big)
 	for i in range(4):
 		await get_tree().process_frame
-	var img := get_viewport().get_texture().get_image()
-	img.save_png("/tmp/bolt_render.png")
-	print("SAVED ", img.get_size(), " normal_r=", first.radius, " boss_r=", big.radius)
+	if DisplayServer.get_name() != "headless":
+		var img := get_viewport().get_texture().get_image()
+		if img != null:
+			img.save_png("/tmp/bolt_render.png")
+			print("SAVED ", img.get_size(), " normal_r=", first.radius, " boss_r=", big.radius)
 	get_tree().quit(0)
 
 func _person(path: String, sc: float, at: Vector2, mod: Color) -> void:

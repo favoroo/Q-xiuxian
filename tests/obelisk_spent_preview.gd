@@ -51,7 +51,10 @@ func _ready() -> void:
 	get_tree().quit(0)
 
 func _shoot(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	var img := get_viewport().get_texture().get_image()
-	var path := "/tmp/obelisk_%s.png" % tag
-	img.save_png(path)
-	print("SAVED ", path, " ", img.get_size())
+	if img != null:
+		var path := "/tmp/obelisk_%s.png" % tag
+		img.save_png(path)
+		print("SAVED ", path, " ", img.get_size())

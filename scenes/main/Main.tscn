@@ -21,6 +21,7 @@
 [ext_resource type="Script" path="res://scripts/ui/CareerDialog.gd" id="19_career"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ManualDialog.tscn" id="20_manual"]
 [ext_resource type="PackedScene" uid="uid://skillsel001" path="res://scenes/ui/SkillSelect.tscn" id="21_skill"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TutorialDialog.tscn" id="22_tutorial"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -121,4 +122,6 @@ script = ExtResource("16_stats")
 script = ExtResource("19_career")
 
 [node name="ManualDialog" parent="UILayer" instance=ExtResource("20_manual")]
+
+[node name="TutorialDialog" parent="UILayer" instance=ExtResource("22_tutorial")]
 

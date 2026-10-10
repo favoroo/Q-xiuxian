@@ -50,6 +50,9 @@ func _ready() -> void:
 			## 第 0 列当基线：完全没充过的样子，用来比对灌灵到底改变了碑身哪一段
 			pinned._hide_readout()
 	await get_tree().create_timer(0.4, true, false, true).timeout
+	if DisplayServer.get_name() == "headless":
+		get_tree().quit(0)
+		return
 	_shoot("all")
 	# 特写按真实出图分辨率换算：窗口 1280×720 时设计坐标要乘 4/3 才裁得准
 	var img := get_viewport().get_texture().get_image()

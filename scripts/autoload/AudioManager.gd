@@ -78,6 +78,8 @@ func _load_audio_assets() -> void:
 	_register_sfx("obelisk_blessing", ["res://assets/audio/sfx/laser1.ogg"])
 
 	# 以下由 tools/bake_sfx.py 烘焙（同 key 多变体随机播 + 播放时抖音高）
+	_register_sfx("enemy_hit_crit", _sfx_paths("enemy_hit_crit", 2))
+	_register_sfx("enemy_hit_heavy", _sfx_paths("enemy_hit_heavy", 2))
 	_register_sfx("enemy_death", _sfx_paths("enemy_death", 3))
 	_register_sfx("enemy_death_elite", _sfx_paths("enemy_death_elite", 2))
 	_register_sfx("sword_swing", _sfx_paths("sword_swing", 2))

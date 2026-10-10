@@ -114,12 +114,15 @@ func _deal_damage() -> void:
 		GameManager.hit_stop(0.04, 0.06)
 	if hits == 0:
 		return
-	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
-	var trauma := 0.16
-	if kills >= 3:
-		trauma += 0.10
-	if hit_elite:
-		trauma += 0.14
-	GameManager.add_trauma(trauma)
-	if kills >= 3 or hit_elite:
-		GameManager.zoom_punch(0.025, 0.14)
+		# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
+		var trauma := 0.16
+		if kills >= 3:
+			trauma += 0.10
+		if hit_elite:
+			trauma += 0.14
+		GameManager.add_trauma(trauma)
+		# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
+		GameManager.kick_camera(Vector2.DOWN, 2.8)
+		GameFeel.vibrate(25, 0.6)
+		if kills >= 3 or hit_elite:
+			GameManager.zoom_punch(0.025, 0.14)

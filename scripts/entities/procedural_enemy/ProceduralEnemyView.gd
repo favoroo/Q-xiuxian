@@ -56,6 +56,7 @@ func _ready() -> void:
 
 func _init_renderer() -> void:
 	renderer = HollowKnightEnemyRenderer.new()
+	renderer.use_parent_material = true
 	if config:
 		renderer.config = config
 	renderer.flip_h = flip_h

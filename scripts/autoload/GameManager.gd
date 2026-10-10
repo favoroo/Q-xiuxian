@@ -90,6 +90,7 @@ var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 I
 var cultivator_records: Dictionary = {}   ## 每位修士生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
 var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
 var claimed_milestones: Array = []        ## 已领取的里程碑 id（"cid_次数"）
+var tutorial_seen: bool = false          ## 新手指南弹窗是否已看过（首次点开始游戏时弹一次）
 var stone_purse: int = 0                  ## 灵石囊：已领取未兑入的灵石，start_run 一次性兑入
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
 const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
@@ -101,6 +102,24 @@ var peak_harvest: float = 0.0
 
 func _ready() -> void:
 	_load_progress()
+	if DisplayServer.get_name() == "headless" and not Engine.is_editor_hint():
+		call_deferred("_setup_headless_guard")
+
+## 无头模式守护：防止测试或工具场景因语法错误/遗漏 quit() 导致 Godot 进程永久挂起
+func _setup_headless_guard() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var cs := tree.current_scene
+	if cs != null and cs.get_script() == null:
+		printerr("[HEADLESS_GUARD] 场景根脚本加载失败 (%s)，已自动终止无头进程以防死循环。" % cs.scene_file_path)
+		tree.quit(1)
+		return
+	await tree.create_timer(45.0, true, false, true).timeout
+	var cur := tree.current_scene
+	var path := cur.scene_file_path if cur != null else "unknown"
+	printerr("[HEADLESS_GUARD] 无头模式运行超过 45s 未退出 (%s)，自动强制终止。" % path)
+	tree.quit(124)
 
 func _load_progress() -> void:
 	ProgressStore.load_into(self)
@@ -917,6 +936,9 @@ func zoom_punch(scale_amount: float = 0.05, duration: float = 0.18) -> void:
 
 func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
 	GameFeel.shake_camera(self, intensity, duration)
+
+func kick_camera(dir: Vector2, strength: float = 3.0) -> void:
+	GameFeel.kick_camera(self, dir, strength)
 
 func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
 	GameFeel.hit_stop(self, duration, target_scale)

@@ -679,7 +679,7 @@ func _test_audio_wiring() -> void:
 	_c.check(missing.is_empty(), "注册表里的音效文件全部就位（缺: %s）" % str(missing))
 
 	var needed := [
-		"blade_shoot", "enemy_hit", "orb_hit", "gem_pickup", "level_up", "obelisk_blessing",
+		"blade_shoot", "enemy_hit", "enemy_hit_crit", "enemy_hit_heavy", "orb_hit", "gem_pickup", "level_up", "obelisk_blessing",
 		"enemy_death", "enemy_death_elite", "sword_swing", "talisman_throw", "thunder_strike",
 		"fan_gust", "shop_buy", "shop_reroll", "shop_lock", "sell", "equip", "unequip",
 		"merge_success", "ui_click", "ui_back", "ui_error", "wave_start", "wave_clear",
@@ -771,6 +771,10 @@ func _test_settings_manager() -> void:
 ## 修完之后靠两条钉住：① 创伤只发给"值得看的节点"（口径写在 GameBalance 段注释里）；
 ## ② 就算将来有人再拿高频事件乱发，每秒预算也把最坏震幅钉在轻颤级别。
 func _test_screen_shake_budget() -> void:
+	# 0. 局部非对称卡肉冻结时间常量
+	_c.check(GameBalance.HIT_FREEZE_NORMAL > 0.02 and GameBalance.HIT_FREEZE_NORMAL < 0.05, "普通命中局部卡肉冻结为 2~3 帧 (0.035s)")
+	_c.check(GameBalance.HIT_FREEZE_CRIT > GameBalance.HIT_FREEZE_NORMAL, "暴击局部卡肉冻结长于普通命中")
+
 	# 1. 纯函数层：预算夹制
 	_c.near(GameBalance.trauma_grant(0.09, 0.75), 0.09, EPS, "预算充足时全额发放")
 	_c.near(GameBalance.trauma_grant(0.90, 0.75), 0.75, EPS, "单笔被剩余预算夹住")
@@ -791,11 +795,16 @@ func _test_screen_shake_budget() -> void:
 	_c.near(got, GameBalance.TRAUMA_BUDGET, 0.001, "高频击杀被夹到每秒 0.75 上限")
 	_c.near(left, 0.0, 0.001, "一秒的预算已被刷光")
 
-	# 3. 真相机：连打 3 秒（60 次/秒）也只能停在稳态轻颤，且停手后必定向零
+	# 3. 真相机：连打 3 秒（60 次/秒）也只能停在稳态轻颤，且停手后必定向零；方向性冲击快速回正
 	var orig_level := SettingsManager.shake_level()
 	SettingsManager.set_val(&"display", &"shake_intensity", &"standard")
 	var cam := SmoothCamera.new()
 	add_child(cam)
+	cam.kick_directional(Vector2.RIGHT, 4.0)
+	_c.check(cam.offset.x > 0.5, "方向性冲击即时产生正向位移")
+	for i in range(20):
+		cam._physics_process(1.0 / 60.0)
+	_c.near(cam.offset.x, 0.0, 0.05, "方向性冲击 0.33s 内衰减归零")
 	for i in range(180):
 		cam.add_trauma(0.09)
 		cam._physics_process(1.0 / 60.0)
