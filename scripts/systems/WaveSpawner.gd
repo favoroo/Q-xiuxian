@@ -6,7 +6,9 @@ extends Node2D
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
-@export var max_enemies: int = 55
+## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35 —— 小怪加血 3.5 倍后单敌存活更久，
+## 密度由「少而硬」维持，击杀成为低频但每下都有读数的事件
+@export var max_enemies: int = 35
 
 var phase: int = Phase.WAITING
 ## 波次号的唯一来源是 GameManager.wave_number。

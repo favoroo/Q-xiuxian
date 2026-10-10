@@ -44,6 +44,7 @@ var knockback_velocity: Vector2 = Vector2.ZERO
 var hit_stun_timer: float = 0.0   ## 受击定身硬直计时（期间暂停主动追击速度，仅随击退滑行）
 var hit_stun_resist: float = 1.0  ## 受击硬直倍率（小怪 1.0，精英 0.55，Boss 0.25）
 var _hit_jiggle_offset: Vector2 = Vector2.ZERO  ## 受击瞬间视觉微反冲偏移
+var _death_overkill_ratio: float = 0.0  ## 致命一刀的溢出伤害比例（死亡爆散规模放大用）
 var facing: String = "s"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
@@ -89,6 +90,11 @@ var dying: bool = false
 var procedural_view: ProceduralEnemyView = null
 
 func _ready() -> void:
+	# 小怪整体加血（GameBalance.MOB_HP_BASE_MULT）：精英/Boss 不吃这条，它们的厚度由基础值拉开。
+	# 放在 _ready 这一唯一收口：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
+	# 不用在四个刷怪口各乘一遍。2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」。
+	if not is_elite:
+		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
 	anim_base_scale = anim_sprite.scale
 	if spritesheet_path != "" and ResourceLoader.exists(spritesheet_path):
@@ -275,8 +281,11 @@ func _physics_process(delta: float) -> void:
 	if is_in_hit_stun:
 		hit_stun_timer -= delta
 
-	# 硬直期间衰减略微平缓保留滑行手感，硬直结束后快速收尾
-	var decay_rate := 9.0 if is_in_hit_stun else 14.0
+	# 硬直期间衰减略微平缓保留滑行手感，硬直结束后快速收尾；
+	# 重击（击退初速超阈值）衰减再打折 ⇒ 飞得更远，「这一刀砍狠了」有位移读数
+	var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN if is_in_hit_stun else GameBalance.KNOCKBACK_DECAY_FREE
+	if knockback_velocity.length_squared() > GameBalance.KNOCKBACK_HEAVY_SPEED * GameBalance.KNOCKBACK_HEAVY_SPEED:
+		decay_rate *= GameBalance.KNOCKBACK_HEAVY_DECAY_MULT
 	if knockback_velocity.length_squared() > 10.0:
 		knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * decay_rate, 1.0))
 	else:
@@ -396,7 +405,7 @@ func _physics_process(delta: float) -> void:
 		_minion_timer -= delta
 		if _minion_timer <= 0.0:
 			_minion_timer = spawn_minion_interval
-			if get_tree().get_nodes_in_group("enemies").size() < 45:
+			if get_tree().get_nodes_in_group("enemies").size() < GameBalance.ZHUMU_MINION_CAP:
 				_spawn_minion()
 
 	# 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速
@@ -518,7 +527,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 土豆兄弟风格受击硬直定身（hit-stun）：
 	# 受击瞬间暂停主动 AI 追击速度，由纯击退冲量主导位移；DoT tick 不触发硬直以保手感纯粹
 	if not from_dot:
-		var base_stun: float = 0.14 if is_crit else 0.075
+		var base_stun: float = GameBalance.HIT_STUN_CRIT if is_crit else GameBalance.HIT_STUN_NORMAL
 		hit_stun_timer = maxf(hit_stun_timer, base_stun * elite_scale * hit_stun_resist)
 
 	# 1. 声音与跳字
@@ -555,6 +564,14 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.10)
 
 	if current_hp <= 0.0:
+		# 斩杀加成：致命一刀击退放大（尸体随爆散朝打击方向飞出）；
+		# 溢出伤害比例留给死亡爆散放大规模 —— 大数字暴击能把妖物「打爆」
+		knockback_velocity *= GameBalance.KILL_KNOCKBACK_MULT
+		_death_overkill_ratio = clampf(-current_hp / maxf(max_hp, 1.0), 0.0, 1.5)
+		# 击杀微顿帧（GameFeel 限流）：减潮加肉后击杀是低频事件，这一记「确认感」值得给；
+		# DoT 跳死不发（那不是玩家亲手砍的一刀），精英伏诛走 LARGE 反馈自带顿帧不重复发
+		if not from_dot and not is_elite:
+			GameManager.kill_hit_stop()
 		_die()
 
 ## 根据受击方向计算定向挤压形变
@@ -766,8 +783,8 @@ func _die() -> void:
 	_clear_charge_warning()
 	_clear_bite_warning()
 
-	# 击杀视觉爆散与分级震屏
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite)
+	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）
+	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio)
 	if is_elite:
 		GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
@@ -816,4 +833,11 @@ func _die() -> void:
 		if procedural_view != null:
 			tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 			tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
+		# 斩杀击飞：尸体沿致命一刀的击退方向滑出（与塌缩淡出同拍；DoT 跳死无击退自然不动）
+		var launch := knockback_velocity * GameBalance.KILL_LAUNCH_DURATION
+		if launch.length() > GameBalance.KILL_LAUNCH_MAX:
+			launch = launch.normalized() * GameBalance.KILL_LAUNCH_MAX
+		if launch.length_squared() > 1.0:
+			tw.tween_property(self, "global_position", global_position + launch, GameBalance.KILL_LAUNCH_DURATION)\
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tw.chain().tween_callback(queue_free)

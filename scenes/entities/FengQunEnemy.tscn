@@ -23,7 +23,7 @@ script = ExtResource("1_enemy")
 max_hp = 8.0
 move_speed = 168.0
 contact_damage = 6.0
-exp_reward = 1
+exp_reward = 2
 spritesheet_path = "res://assets/art/monster_fengqun_8dir.png"
 locomotion_mode = "hover"
 

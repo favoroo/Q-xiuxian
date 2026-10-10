@@ -224,6 +224,7 @@ def main() -> None:
     ap.add_argument("--charset-only", action="store_true", help="只重扫两个账本，不动字体")
     ap.add_argument("--accept-exempt", action="store_true",
                     help="确认豁免账的增删（源码里有、MiSans 渲染不了的字）")
+    ap.add_argument("--force", action="store_true", help="强制重新压缩生成子集字体（即使字集无变化）")
     args = ap.parse_args()
 
     for n in SUBSET_FONTS:
@@ -261,7 +262,12 @@ def main() -> None:
                      "\n  若它们只出现在注释里或确实可接受 → python3 tools/subset_fonts.py --accept-exempt"
                      "\n  若是新文案里带进来的、要保证字形一致 → 换字，别接受。")
 
-    write_char_file(CHARSET_FILE, charset, "字集")
+    old_charset = read_char_file(CHARSET_FILE)
+    charset_changed = (charset != old_charset)
+    if charset_changed:
+        write_char_file(CHARSET_FILE, charset, "字集")
+    else:
+        print(f"  字集无变化：{len(charset)} 个码位")
     if exempt != committed:
         write_char_file(EXEMPT_FILE, exempt, "豁免账")
     else:
@@ -269,6 +275,23 @@ def main() -> None:
 
     if args.charset_only:
         print("只写了账本，字体未动。")
+        return
+
+    # 检查当前 fonts/ 下的字体是否已经是完备的子集产物
+    fonts_ready = True
+    for n in SUBSET_FONTS:
+        dst = os.path.join(FONTS_DIR, n)
+        if not os.path.exists(dst):
+            fonts_ready = False
+            break
+        cov = font_coverage(dst)
+        wanted = {ord(c) for c in charset}
+        if not wanted.issubset(cov) or len(cov) > 8000:
+            fonts_ready = False
+            break
+
+    if not charset_changed and fonts_ready and not args.force:
+        print("  ✓ 字集无变化且当前子集字体完整有效，跳过重压（耗时 0 秒；加 --force 强制重压）。")
         return
 
     print("\n子集化...")

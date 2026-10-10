@@ -37,6 +37,7 @@ func _ready() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	Engine.time_scale = 10.0
 	_holder = Control.new()
 	_holder.name = "LayoutHolder"
 	_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -62,6 +63,7 @@ func _run() -> void:
 		for spec in _screens():
 			await _check_screen(spec, screen)
 		get_tree().paused = false
+	Engine.time_scale = 1.0
 	_check_all_table_texts()
 	if _c.report("LAYOUT_RESULT"):
 		get_tree().quit(0)

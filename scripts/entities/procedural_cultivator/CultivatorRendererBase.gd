@@ -52,6 +52,15 @@ var attack_progress: float = 0.0 # 0.0 到 1.0
 var hit_progress: float = 0.0    # 0.0 到 1.0
 var lean_angle: float = 0.0
 
+## 技能动态外观修饰参数（支持眼睛变色、斗篷反光流光、道印激活等）
+var skill_aura_type: String = ""
+var eye_override_color: Color = Color.TRANSPARENT
+var eye_glow_boost: float = 0.0
+var cloak_shimmer_color: Color = Color.TRANSPARENT
+var cloak_shimmer_intensity: float = 0.0
+var sigil_boost: float = 0.0
+var motes_boost: float = 0.0
+
 var _time: float = 0.0
 
 func _process(delta: float) -> void:

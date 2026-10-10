@@ -66,6 +66,7 @@ var wave_spawner: Node = null
 # 危险度（仿土豆兄弟 Danger 0~5）：通关当前最高档解锁下一档，落盘 user://progress.cfg
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
 var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
+var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（reset_run 不动它）
 const PROGRESS_PATH := "user://progress.cfg"
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
@@ -84,6 +85,14 @@ var career_stats: Dictionary = {
 var cultivator_best_danger: Dictionary = {}  ## 每位修士通关过的最高危险度 {cultivator_id: danger_int}
 var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
+
+# 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
+var cultivator_records: Dictionary = {}   ## 每位修士生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
+var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
+var claimed_milestones: Array = []        ## 已领取的里程碑 id（"cid_次数"）
+var stone_purse: int = 0                  ## 灵石囊：已领取未兑入的灵石，start_run 一次性兑入
+var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
+const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
 
 # 单局峰值追踪（供成就判定）
 var peak_stones: int = 0
@@ -115,9 +124,42 @@ func is_achievement_unlocked(ach_id: String) -> bool:
 func get_cultivator_best_danger(cid: String) -> int:
 	return int(cultivator_best_danger.get(cid, -1))
 
+## 查询某位修士的生涯档案（无记录返回零值字典）
+func get_cultivator_record(cid: String) -> Dictionary:
+	var rec: Dictionary = cultivator_records.get(cid, {})
+	return {
+		"runs": int(rec.get("runs", 0)),
+		"wins": int(rec.get("wins", 0)),
+		"endless_best_wave": int(rec.get("endless_best_wave", 0)),
+		"best_kills": int(rec.get("best_kills", 0)),
+	}
+
+## 是否存在可领取的里程碑奖励（供主菜单修仙志红点）
+func has_claimable_rewards() -> bool:
+	return AchievementData.any_claimable(cultivator_records, claimed_milestones)
+
+## 领取某角色某档里程碑奖励：灵石入灵石囊（下局开局兑入），重复领取与未达标均幂等拒绝
+func claim_milestone(cid: String, wins_tier: int) -> bool:
+	var mile_id := "%s_%d" % [cid, wins_tier]
+	if mile_id in claimed_milestones:
+		return false
+	if int(get_cultivator_record(cid)["wins"]) < wins_tier:
+		return false
+	for m in AchievementData.milestones_of(cid):
+		if int(m["wins"]) == wins_tier:
+			claimed_milestones.append(mile_id)
+			stone_purse += int(m["stones"])
+			_save_progress()
+			return true
+	return false
+
 ## 选择危险度：不允许选未解锁的档位
 func set_danger(d: int) -> void:
 	danger_level = clampi(d, 0, max_danger_unlocked)
+
+## 设置是否从主菜单直接进入无尽试炼
+func set_start_in_endless(enabled: bool) -> void:
+	start_in_endless = enabled
 
 ## 通关当前最高档 → 解锁下一档（打旧档不算数，防刷低档解锁）
 func _maybe_unlock_danger() -> void:
@@ -693,11 +735,27 @@ func try_revive() -> bool:
 
 func start_run(starter_id: String) -> void:
 	run_started = true
+	endless_mode = start_in_endless
 	_apply_cultivator()
+	_redeem_stone_purse()
 	# 随行神通转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	add_weapon(starter_id)
-	announcement_triggered.emit("✦ 灵田巡守 · 斩妖护山 ✦")
+	if endless_mode:
+		announcement_triggered.emit("✦ 无尽试炼 · 战至道殒 ✦")
+	else:
+		announcement_triggered.emit("✦ 灵田巡守 · 斩妖护山 ✦")
+
+## 灵石囊兑入：修仙志领取的里程碑灵石在本局开局一次性生效（无 player 依赖，单测可直调）
+func _redeem_stone_purse() -> void:
+	if stone_purse <= 0:
+		return
+	var amount := stone_purse
+	stone_purse = 0
+	spirit_stones += amount
+	if spirit_stones > peak_stones:
+		peak_stones = spirit_stones
+	announcement_triggered.emit("✦ 灵石囊生效 · 开局灵石 +%d ✦" % amount)
 
 ## 开局应用修士流派的正负代偿
 func _apply_cultivator() -> void:
@@ -858,6 +916,10 @@ func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
 
 func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
 	GameFeel.hit_stop(self, duration, target_scale)
+
+## 小怪伏诛的微顿帧（GameFeel 内部限流）：只在 EnemyBase 判定致命一刀时调用
+func kill_hit_stop() -> void:
+	GameFeel.kill_hit_stop(self)
 
 func trigger_hitstop(duration: float = 0.045) -> void:
 	hit_stop(duration)

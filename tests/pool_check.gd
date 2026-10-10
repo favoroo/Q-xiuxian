@@ -14,6 +14,7 @@ func _ready() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	Engine.time_scale = 10.0
 	var world := Node2D.new()
 	world.name = "PoolCheckWorld"
 	get_tree().root.add_child(world)
@@ -112,6 +113,7 @@ func _run() -> void:
 	_check(DamageNumber.created_count() == 1, "清理后可重新建池并继续工作")
 
 	world.free()
+	Engine.time_scale = 1.0
 
 	if _c.report("POOL_RESULT"):
 		get_tree().quit(0)

@@ -124,6 +124,49 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	},
 ]
 
+## 道统功名里程碑（每角色渡劫成功次数档位，2026-10-10 修仙志升级）
+## 称号达标自动点亮（纯展示），灵石囊需在修仙志手动领取，开局时一次性兑入灵石
+const MILESTONE_WINS: Array[int] = [1, 3, 5, 10]
+const MILESTONE_TITLES: Array[String] = ["初证道果", "小道有成", "道基稳固", "渡劫金丹"]
+const MILESTONE_STONES: Array[int] = [30, 60, 100, 200]
+
+## 每角色里程碑定义表：{id: "cid_次数", cultivator_id, wins, title, stones}
+static func milestones_of(cid: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for i in range(MILESTONE_WINS.size()):
+		var w := MILESTONE_WINS[i]
+		out.append({
+			"id": "%s_%d" % [cid, w],
+			"cultivator_id": cid,
+			"wins": w,
+			"title": MILESTONE_TITLES[i],
+			"stones": MILESTONE_STONES[i],
+		})
+	return out
+
+## 渡劫成功次数对应的最高称号（0 次返回空串）
+static func title_for_wins(wins: int) -> String:
+	var title := ""
+	for i in range(MILESTONE_WINS.size()):
+		if wins >= MILESTONE_WINS[i]:
+			title = MILESTONE_TITLES[i]
+	return title
+
+## 单条里程碑当前是否可领取（达标且未领过）
+static func is_milestone_claimable(mile_def: Dictionary, wins: int, claimed: Array) -> bool:
+	if String(mile_def.get("id", "")) in claimed:
+		return false
+	return wins >= int(mile_def.get("wins", 999999))
+
+## 是否存在任意可领取的里程碑（供修仙志入口红点）
+static func any_claimable(records: Dictionary, claimed: Array) -> bool:
+	for cid in records:
+		var wins := int(records[cid].get("wins", 0)) if records[cid] is Dictionary else 0
+		for m in milestones_of(String(cid)):
+			if is_milestone_claimable(m, wins, claimed):
+				return true
+	return false
+
 static func danger_name(d: int) -> String:
 	return DANGER_NAMES[clampi(d, 0, DANGER_NAMES.size() - 1)]
 

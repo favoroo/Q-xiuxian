@@ -40,6 +40,7 @@ func _ready() -> void:
 	get_tree().quit(0 if _c.report("TOAST_RESULT") else 1)
 
 func _run_all() -> void:
+	Engine.time_scale = 10.0
 	for w in WIDTHS:
 		get_tree().root.size = Vector2i(w, 540)
 		await get_tree().process_frame
@@ -58,6 +59,7 @@ func _run_all() -> void:
 			_c.check(_rect_ok(vis, probe["label_min"], probe["screen"]),
 				"屏宽 %d · 不出屏/居中/停在顶部那一带/装得下（实得 x=%.0f..%.0f y=%.0f..%.0f）：%s" % [
 					w, vis.position.x, vis.end.x, vis.position.y, vis.end.y, t])
+	Engine.time_scale = 1.0
 
 ## 一条浮层的全部几何账：左右在屏内、横向居中、静止在顶栏下方那一带、不铺成通宽横幅、
 ## 文案按 Label 自己的折行账装得下

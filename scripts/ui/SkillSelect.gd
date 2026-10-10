@@ -140,21 +140,37 @@ func _create_card(s_id: String) -> Control:
 	vbox.add_theme_constant_override("separation", 8)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 
-	# 符文占位图标（正式图标走 media-gen 后替换为 TextureRect）
+	# 技能图标（单色扁平矢量图标，契合时动态青玉染色，未契合时骨白染色）
 	var icon_box = PanelContainer.new()
 	var icon_size := icon_size_for(_card_w)
 	icon_box.custom_minimum_size = Vector2(icon_size, icon_size)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE if enhanced else GameStyle.GOLD_EDGE, 2, 0.0))
-	var glyph_lbl = Label.new()
-	glyph_lbl.text = String(def.get("glyph", "?"))
-	glyph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	glyph_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	glyph_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_child(glyph_lbl)
-	GameStyle.label(glyph_lbl, 34, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
+
+	var icon_path: String = String(def.get("icon", ""))
+	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
+		var tex_rect = TextureRect.new()
+		tex_rect.texture = load(icon_path)
+		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		tex_rect.offset_left = 6.0
+		tex_rect.offset_top = 6.0
+		tex_rect.offset_right = -6.0
+		tex_rect.offset_bottom = -6.0
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tex_rect.modulate = GameStyle.JADE if enhanced else GameStyle.PAPER
+		icon_box.add_child(tex_rect)
+	else:
+		var glyph_lbl = Label.new()
+		glyph_lbl.text = String(def.get("glyph", "?"))
+		glyph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		glyph_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		glyph_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		glyph_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(glyph_lbl)
+		GameStyle.label(glyph_lbl, 34, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(icon_box)
 
 	# 名称

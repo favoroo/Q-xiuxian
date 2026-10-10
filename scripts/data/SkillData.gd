@@ -17,6 +17,7 @@ const DEFS: Dictionary = {
 	"dash": {
 		"name": "缩地成寸",
 		"glyph": "冲",
+		"icon": "res://assets/art/skill_dash.png",
 		"kind": Kind.DASH,
 		"cooldown": 8.0,
 		"duration": 0.16,     # 冲刺位移耗时（秒），期间无敌
@@ -26,6 +27,7 @@ const DEFS: Dictionary = {
 	"gale": {
 		"name": "神行术",
 		"glyph": "行",
+		"icon": "res://assets/art/skill_gale.png",
 		"kind": Kind.SPEED,
 		"cooldown": 14.0,
 		"duration": 4.0,
@@ -35,6 +37,7 @@ const DEFS: Dictionary = {
 	"haste": {
 		"name": "疾风咒",
 		"glyph": "疾",
+		"icon": "res://assets/art/skill_haste.png",
 		"kind": Kind.HASTE,
 		"cooldown": 16.0,
 		"duration": 5.0,
@@ -44,6 +47,7 @@ const DEFS: Dictionary = {
 	"aegis": {
 		"name": "金光护体",
 		"glyph": "护",
+		"icon": "res://assets/art/skill_aegis.png",
 		"kind": Kind.IFRAME,
 		"cooldown": 20.0,
 		"duration": 1.6,
@@ -52,6 +56,7 @@ const DEFS: Dictionary = {
 	"renewal": {
 		"name": "回春术",
 		"glyph": "愈",
+		"icon": "res://assets/art/skill_renewal.png",
 		"kind": Kind.HEAL,
 		"cooldown": 25.0,
 		"power": 0.25,        # 回复最大气血比例

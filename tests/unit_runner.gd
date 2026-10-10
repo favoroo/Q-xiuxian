@@ -38,7 +38,9 @@ func _ready() -> void:
 	_test_item_system()
 	_test_cultivator_system()
 	_test_danger_system()
+	_test_start_in_endless()
 	_test_achievement_and_meta_save()
+	_test_career_milestones()
 	_test_knock_direction()
 	_test_spirit_orbit_dynamics()
 
@@ -96,7 +98,7 @@ func _test_wave_scaling() -> void:
 	_c.near(GameBalance.wave_duration(1), 22.0, EPS, "第 1 波时长 22s")
 	_c.near(GameBalance.wave_duration(20), 60.0, EPS, "第 20 波封顶 60s")
 	_c.near(GameBalance.wave_duration(99), 60.0, EPS, "无尽波次也封顶 60s")
-	_c.near(GameBalance.spawn_interval(1), 1.295, EPS, "第 1 波刷怪间隔 1.295s")
+	_c.near(GameBalance.spawn_interval(1), 1.555, EPS, "第 1 波刷怪间隔 1.555s")
 	_c.near(GameBalance.spawn_interval(40), GameBalance.SPAWN_INTERVAL_MIN, EPS, "刷怪间隔有下限")
 	_c.near(GameBalance.enemy_hp_mult(0), GameBalance.enemy_hp_mult(1), EPS, "非法波次 0 被夹到 1")
 
@@ -132,8 +134,8 @@ func _test_boss_waves() -> void:
 func _test_spawn_shape() -> void:
 	_c.equals(GameBalance.spawn_batch(1, 0.0), 2, "第 1 波 + 触发追加 → 2 只")
 	_c.equals(GameBalance.spawn_batch(1, 0.9), 1, "第 1 波未触发追加 → 1 只")
-	_c.equals(GameBalance.spawn_batch(8, 0.9), 3, "第 8 波 → 1+2=3 只")
-	_c.equals(GameBalance.spawn_batch(8, 0.0), 4, "第 8 波追加 → 4 只")
+	_c.equals(GameBalance.spawn_batch(8, 0.9), 2, "第 8 波 → 1+1=2 只")
+	_c.equals(GameBalance.spawn_batch(8, 0.0), 3, "第 8 波追加 → 3 只")
 	_c.equals(GameBalance.ELITE_STONE_BONUS, 25, "精英额外灵石 25")
 	var count_at_cap := 0
 	for i in range(200):
@@ -1245,6 +1247,29 @@ func _test_danger_system() -> void:
 	GameManager.danger_level = 0
 	GameManager.reset_run()
 
+func _test_start_in_endless() -> void:
+	GameManager.reset_run()
+	_c.check(not GameManager.endless_mode, "默认开局非无尽模式")
+	_c.check(not GameManager.start_in_endless, "默认 start_in_endless 为 false")
+
+	# 设置从主菜单直接进入无尽试炼
+	GameManager.set_start_in_endless(true)
+	_c.check(GameManager.start_in_endless, "set_start_in_endless 生效")
+	GameManager.reset_run()
+	_c.check(GameManager.start_in_endless, "reset_run 保留主菜单无尽开关状态")
+
+	GameManager.cultivator_id = "jianchi"
+	GameManager.start_run("qingyun_sword")
+	_c.check(GameManager.endless_mode, "开启无尽开关后 start_run 自动激活 endless_mode")
+
+	# 恢复默认
+	GameManager.set_start_in_endless(false)
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager.start_run("qingyun_sword")
+	_c.check(not GameManager.endless_mode, "关闭后恢复普通模式")
+	GameManager.reset_run()
+
 # ---------------- 成就里程碑、法宝过滤与生涯持久化存档 ----------------
 
 func _test_achievement_and_meta_save() -> void:
@@ -1355,6 +1380,125 @@ func _test_achievement_and_meta_save() -> void:
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_records
 	GameManager.run_history = orig_hist
+	GameManager._save_progress()
+	GameManager.reset_run()
+
+# ---------------- 道统功名与渡劫实录（2026-10-10 修仙志升级） ----------------
+
+## 覆盖：每角色生涯档案累加、无尽终局不双计生涯总量、渡劫快照白名单序列化、
+## 里程碑领取幂等、灵石囊开局兑入、新字段落盘往返。
+func _test_career_milestones() -> void:
+	# 备份真实进度（含本轮新增的局外字段）
+	var orig_stats := GameManager.career_stats.duplicate()
+	var orig_best_danger := GameManager.cultivator_best_danger.duplicate()
+	var orig_records := GameManager.cultivator_records.duplicate()
+	var orig_vlog := GameManager.victory_log.duplicate()
+	var orig_miles := GameManager.claimed_milestones.duplicate()
+	var orig_purse := GameManager.stone_purse
+	var orig_hist := GameManager.run_history.duplicate()
+	var orig_cults := GameManager.unlocked_cultivators.duplicate()
+	var orig_items := GameManager.unlocked_items.duplicate()
+	var orig_achs := GameManager.unlocked_achievements.duplicate()
+	var orig_danger_max := GameManager.max_danger_unlocked
+
+	# 清场
+	GameManager.career_stats = {
+		"total_runs": 0, "total_wins": 0, "total_kills": 0,
+		"best_wave": 0, "best_kills": 0, "total_stones": 0, "total_time": 0.0,
+	}
+	GameManager.cultivator_best_danger = {}
+	GameManager.cultivator_records = {}
+	GameManager.victory_log = []
+	GameManager.claimed_milestones = []
+	GameManager.stone_purse = 0
+	GameManager.run_history = []
+	GameManager.unlocked_achievements = []
+	GameManager.last_run_new_records = []
+
+	# 1. 渡劫成功（20 波）：档案累加 + 快照落库 + 首胜纪录文案
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shiyue"
+	GameManager.danger_level = 0
+	GameManager.kills = 420
+	GameManager.spirit_stones = 130
+	GameManager.wave_number = 20
+	GameManager.trigger_game_over(true)
+
+	var rec := GameManager.get_cultivator_record("shiyue")
+	_c.equals(int(rec["runs"]), 1, "石岳生涯局数 +1")
+	_c.equals(int(rec["wins"]), 1, "石岳渡劫成功 +1")
+	_c.equals(int(rec["best_kills"]), 420, "石岳斩妖之最 420")
+	_c.equals(GameManager.victory_log.size(), 1, "渡劫实录新增 1 条快照")
+	var snap: Dictionary = GameManager.victory_log[0]
+	_c.check(not snap.has("node"), "快照顶层不含节点引用")
+	_c.equals(int(snap["kills"]), 420, "快照记录本局斩妖数")
+	_c.equals(int(snap["wave"]), GameManager.VICTORY_WAVE, "快照记录渡劫波次 20")
+	_c.check(snap.has("weapons") and snap.has("items") and snap.has("stats"), "快照含法器/法宝/属性三段")
+	_c.check(String(snap.get("datetime", "")) != "", "快照带结算时刻")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("首胜")), "首胜生成新纪录文案")
+
+	# 2. 继续无尽 → 第 25 波道殒：生涯总量不双计，只补无尽纪录与战报
+	GameManager.continue_endless()
+	GameManager.wave_number = 25
+	GameManager.kills = 700
+	GameManager.trigger_game_over(false)
+
+	_c.equals(int(GameManager.career_stats["total_runs"]), 1, "无尽终局不再累计生涯局数（无双计）")
+	_c.equals(int(GameManager.career_stats["total_kills"]), 420, "无尽终局不再重复累计斩妖")
+	_c.equals(int(GameManager.career_stats["best_wave"]), 25, "生涯最高波次更新为 25")
+	rec = GameManager.get_cultivator_record("shiyue")
+	_c.equals(int(rec["endless_best_wave"]), 25, "石岳无尽最高关数 25")
+	_c.equals(int(rec["best_kills"]), 700, "石岳斩妖之最抬升到 700")
+	_c.equals(GameManager.run_history.size(), 2, "渡劫与无尽道殒各留一条战报")
+	_c.check(bool(GameManager.run_history[0].get("endless", false)), "最新战报标记无尽道殒")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("无尽")), "无尽新纪录文案生成")
+	_c.equals(GameManager.victory_log.size(), 1, "无尽道殒不进渡劫实录")
+
+	# 3. 里程碑领取：达标可领、未达标拒绝、重复领取幂等
+	_c.equals(GameManager.has_claimable_rewards(), true, "渡劫 1 次后存在可领取奖励")
+	_c.check(GameManager.claim_milestone("shiyue", 3) == false, "未达标档位领取被拒")
+	_c.check(GameManager.claim_milestone("shiyue", 1), "1 胜档里程碑领取成功")
+	_c.equals(GameManager.stone_purse, 30, "灵石囊入账 30")
+	_c.check(GameManager.claim_milestone("shiyue", 1) == false, "重复领取幂等拒绝")
+	_c.equals(GameManager.stone_purse, 30, "重复领取不重复入账")
+
+	# 4. 灵石囊兑入：开局一次性入账并清零
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shiyue"
+	GameManager._redeem_stone_purse()
+	_c.equals(GameManager.spirit_stones, 30, "开局兑入灵石囊 30")
+	_c.equals(GameManager.stone_purse, 0, "灵石囊兑入后清零")
+
+	# 5. 存档往返：新字段落盘恢复无损
+	GameManager.stone_purse = 45
+	GameManager._save_progress()
+	GameManager.cultivator_records = {}
+	GameManager.victory_log = []
+	GameManager.claimed_milestones = []
+	GameManager.stone_purse = 0
+	GameManager._load_progress()
+	_c.equals(GameManager.stone_purse, 45, "读档后灵石囊恢复")
+	_c.equals(GameManager.victory_log.size(), 1, "读档后渡劫实录恢复")
+	rec = GameManager.get_cultivator_record("shiyue")
+	_c.equals(int(rec["wins"]), 1, "读档后石岳渡劫次数恢复")
+	_c.equals(int(rec["endless_best_wave"]), 25, "读档后无尽最高关数恢复")
+	_c.check("shiyue_1" in GameManager.claimed_milestones, "读档后已领里程碑恢复")
+
+	# 还原测试前的玩家真实进度
+	GameManager.career_stats = orig_stats
+	GameManager.cultivator_best_danger = orig_best_danger
+	GameManager.cultivator_records = orig_records
+	GameManager.victory_log = orig_vlog
+	GameManager.claimed_milestones = orig_miles
+	GameManager.stone_purse = orig_purse
+	GameManager.run_history = orig_hist
+	GameManager.unlocked_cultivators = orig_cults
+	GameManager.unlocked_items = orig_items
+	GameManager.unlocked_achievements = orig_achs
+	GameManager.max_danger_unlocked = orig_danger_max
+	GameManager.last_run_new_records = []
 	GameManager._save_progress()
 	GameManager.reset_run()
 

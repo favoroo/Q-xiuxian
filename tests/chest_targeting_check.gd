@@ -35,8 +35,10 @@ func _ready() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	Engine.time_scale = 8.0
 	_test_pure_priority()
 	await _test_live()
+	Engine.time_scale = 1.0
 	if _c.report("CHESTTARGET_RESULT"):
 		get_tree().quit(0)
 	else:

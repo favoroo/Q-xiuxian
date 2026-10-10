@@ -15,7 +15,7 @@ extends Area2D
 
 const FULL_HP_EPS := 0.01            ## 视为满血的容差（每秒回血顶到上限时的浮点毛刺）
 const ARRIVE_DIST := 22.0            ## 波末结算飞抵距离
-const SPRITE_SCALE := Vector2(0.19, 0.19)  ## 128 图源缩到 ≈24 px 画幅：与 AstralGem（24×24 图 ×1）同档大小
+const SPRITE_SCALE := Vector2(0.375, 0.375)  ## 128 图源缩到 ≈48 px 画幅：与 AstralGem（48×48 图 ×1）同档大小
 const JUDGE_RADIUS := 10.0           ## 判定圆跟着画幅一起收：与 AstralGem 那颗的半径 10 同一把尺子
 const TINT_READY := Color(0.65, 1.35, 0.7)    ## 可入口
 const TINT_WAITING := Color(0.50, 0.60, 0.53) ## 满血待命：看得见，但不催你

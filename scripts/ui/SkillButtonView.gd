@@ -28,10 +28,10 @@ static func style_circle_button(btn: Button) -> void:
 	var is_enhanced := false
 	if not GameManager.active_skill_id.is_empty():
 		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-	var border_col: Color = Color(0.31, 0.82, 0.65, 0.9) if is_enhanced else Color(0.88, 0.67, 0.24, 0.8)
+	var border_col: Color = Color(GameStyle.JADE, 0.9) if is_enhanced else Color(GameStyle.GOLD, 0.8)
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.043, 0.051, 0.071, 0.55)
+	normal.bg_color = Color(GameStyle.INK, 0.55)
 	normal.border_color = border_col
 	normal.border_width_left = 2
 	normal.border_width_top = 2
@@ -43,7 +43,7 @@ static func style_circle_button(btn: Button) -> void:
 	normal.corner_radius_bottom_left = r
 
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.078, 0.094, 0.129, 0.7)
+	hover.bg_color = Color(GameStyle.NAVY, 0.7)
 	hover.border_color = border_col.lightened(0.2)
 	hover.border_width_left = 3
 	hover.border_width_top = 3
@@ -55,8 +55,8 @@ static func style_circle_button(btn: Button) -> void:
 	hover.corner_radius_bottom_left = r
 
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.88, 0.67, 0.24, 0.72)
-	pressed.border_color = Color(0.96, 0.85, 0.54, 0.95)
+	pressed.bg_color = Color(GameStyle.GOLD, 0.72)
+	pressed.border_color = Color(GameStyle.GOLD_EDGE, 0.95)
 	pressed.border_width_left = 3
 	pressed.border_width_top = 3
 	pressed.border_width_right = 3

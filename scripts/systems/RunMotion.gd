@@ -90,6 +90,8 @@ static func _angle_diff_deg(a: float, b: float) -> float:
 ## 动画集切换：manual_drive=true（跑步）时暂停自动播放，帧推进交给 apply 的相位驱动；
 ## false（待机）恢复自动播放。方向切换只换帧集，步态相位存在 sprite meta 上天然连续。
 static func select_anim(sprite: AnimatedSprite2D, anim: String, manual_drive: bool) -> void:
+	if sprite == null or sprite.sprite_frames == null or not sprite.sprite_frames.has_animation(anim):
+		return
 	if sprite.animation != anim:
 		sprite.animation = anim
 	if manual_drive:

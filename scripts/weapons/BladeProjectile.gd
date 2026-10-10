@@ -148,9 +148,8 @@ func _on_area_entered(area: Area2D) -> void:
 		if proc_poison and enemy.has_method("apply_poison"):
 			enemy.apply_poison(poison_dps, poison_dur)
 
-		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, direction, is_crit)
-		# 震屏/顿帧由被击一方 EnemyBase.take_damage 统一发放：
-		# 这里再加一份就是同一次命中计费两遍，也是镜头一直摇的直接原因之一
+		# 受击火花 / 震屏 / 顿帧全部由被击一方 EnemyBase.take_damage 统一发放：
+		# 弹体侧再发一份就是同一次命中火花双发、创伤计两遍（方向读数糊掉 + 镜头一直摇的元凶）
 
 		# 这一发已经吃到身上：不再回头咬同一个目标（穿透剩下的次数按直线贯穿排队站位的敌人）
 		homing_target = null
