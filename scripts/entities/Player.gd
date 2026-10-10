@@ -28,6 +28,9 @@ var regen_tick: float = 0.0
 var flash_tween: Tween = null
 var squash_tween: Tween = null
 var dust_timer: float = 0.0
+var procedural_view: ProceduralCultivatorView = null
+var is_procedural: bool = false
+var gait_phase_counter: float = 0.0
 
 # ---------------- 随行神通（技能）运行时 ----------------
 var skill_cd_left: float = 0.0     ## 技能冷却剩余秒（HUD 冷却遮罩轮询这个）
@@ -82,6 +85,23 @@ func _setup_sprite_frames() -> void:
 	var sheet_path := "res://assets/art/pawn_blue_8dir.png"
 	var cdef := CultivatorData.get_def(GameManager.cultivator_id)
 	_motion_mode = String(cdef.get("motion", "gait"))
+
+	if _motion_mode == "procedural":
+		is_procedural = true
+		anim_sprite.visible = false
+		if procedural_view == null:
+			procedural_view = ProceduralCultivatorView.new()
+			procedural_view.position = anim_sprite.position
+			procedural_view.scale = Vector2(1.2, 1.2)
+			add_child(procedural_view)
+		else:
+			procedural_view.visible = true
+	else:
+		is_procedural = false
+		anim_sprite.visible = true
+		if procedural_view != null:
+			procedural_view.visible = false
+
 	var char_sprite := String(cdef.get("sprite", ""))
 	if char_sprite != "" and ResourceLoader.exists(char_sprite):
 		sheet_path = char_sprite
@@ -319,6 +339,8 @@ func _do_dash(st: Dictionary) -> void:
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
 	if skill_vfx != null:
 		skill_vfx.on_dash_start(_dash_dir, float(st["distance"]), _dash_time)
+	if is_procedural and procedural_view != null:
+		procedural_view.play_dash(_dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
 
 func _do_gale(st: Dictionary) -> void:
@@ -366,15 +388,21 @@ func _physics_process(delta: float) -> void:
 	if not _skill_buffs.is_empty():
 		_tick_skill_buffs(delta)
 
-	if invulnerable_time > 0.0:
-		invulnerable_time -= delta
-		# 金光护体期间角色泛金光高亮，普通受击无敌维持半透明呼吸频闪
-		if skill_vfx != null and skill_vfx.aegis_active:
-			anim_sprite.modulate = Color(1.3, 1.25, 0.85, 0.95)
+		if invulnerable_time > 0.0:
+			invulnerable_time -= delta
+			# 金光护体期间角色泛金光高亮，普通受击无敌维持半透明呼吸频闪
+			var mod_col := Color.WHITE
+			if skill_vfx != null and skill_vfx.aegis_active:
+				mod_col = Color(1.3, 1.25, 0.85, 0.95)
+			else:
+				mod_col = Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
+			anim_sprite.modulate = mod_col
+			if is_procedural and procedural_view != null:
+				procedural_view.modulate = mod_col
 		else:
-			anim_sprite.modulate = Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
-	else:
-		anim_sprite.modulate = Color.WHITE
+			anim_sprite.modulate = Color.WHITE
+			if is_procedural and procedural_view != null:
+				procedural_view.modulate = Color.WHITE
 
 	# 灵愈心法 + 青木羁绊：持续回血
 	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
@@ -440,24 +468,40 @@ func _physics_process(delta: float) -> void:
 			facing = face[0]
 			anim_sprite.flip_h = face[1]
 
-		if _motion_mode == "hover":
-			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
-			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
-			RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
-		else:
-			var run_anim: String = "run_" + facing
-			RunMotion.select_anim(anim_sprite, run_anim, true)
+			if is_procedural and procedural_view != null:
+				procedural_view.scale = current_base * 1.5
+				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
+				gait_phase_counter += delta * 3.5 * speed_ratio
+				if gait_phase_counter > 1.0:
+					gait_phase_counter -= 1.0
+				var air_val := sin(gait_phase_counter * TAU)
+				var lean_axis: float = absf(effective_dir.x) * 0.1
+				procedural_view.play_run(gait_phase_counter, air_val, speed_ratio, lean_axis)
+				if shadow_sprite != null:
+					shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + air_val * 0.05)
+			elif _motion_mode == "hover":
+				# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
+				RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+				RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
+			else:
+				var run_anim: String = "run_" + facing
+				RunMotion.select_anim(anim_sprite, run_anim, true)
 
-			var lean_axis: float = absf(effective_dir.x)
-			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
-	else:
-		var idle_anim: String = "idle_" + facing
-		RunMotion.select_anim(anim_sprite, idle_anim, false)
-		if _motion_mode == "hover":
-			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
+				var lean_axis: float = absf(effective_dir.x)
+				RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 		else:
-			idle_bob_phase += delta * 2.2
-			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
+			var idle_anim: String = "idle_" + facing
+			if is_procedural and procedural_view != null:
+				procedural_view.scale = current_base * 1.5
+				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
+				procedural_view.play_idle()
+			elif _motion_mode == "hover":
+				RunMotion.select_anim(anim_sprite, idle_anim, false)
+				RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
+			else:
+				RunMotion.select_anim(anim_sprite, idle_anim, false)
+				idle_bob_phase += delta * 2.2
+				RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)
@@ -702,6 +746,8 @@ func take_damage(amount: float) -> void:
 	GameManager.feedback(GameManager.FeedbackTier.LARGE)
 	GameManager.pulse_damage_vignette(Color(0.85, 0.12, 0.12, 0.65), 0.24)
 	play_squash(Vector2(1.35, 0.72), 0.22)
+	if is_procedural and procedural_view != null:
+		procedural_view.play_hit(0.2)
 	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, false)
 	AudioManager.play_sfx("enemy_hit", 0.8)
 

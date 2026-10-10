@@ -22,23 +22,24 @@ extends RefCounted
 ## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
 
 const DEFS: Dictionary = {
-		"jianchi": {
-			"name": "剑痴·独孤",
-			"epithet": "一人一剑，不问苍生",
-			"icon": "res://assets/art/cultivator_jianchi_icon.png",
-			"sprite": "res://assets/art/pawn_blue_8dir.png",
-			"motion": "hover",
-			"start_equip": "",
-			"pros": ["剑系法器伤害 +60%", "初始暴击率 +15%"],
-			"cons": ["此生只执剑：商店以剑系法器为主，偶有他派漏出"],
-			"mods": {
-				"crit_rate": 0.15,
-				"tag_damage": {"sword": 0.6},
+			"jianchi": {
+				"name": "青云剑修·独孤",
+				"epithet": "一人一剑，不问苍生",
+				"icon": "res://assets/art/cultivator_jianchi_icon.png",
+				"sprite": "res://assets/art/pawn_blue_8dir.png",
+				"motion": "procedural",
+				"render_style": "hollow_knight",
+				"start_equip": "",
+				"pros": ["剑系法器伤害 +60%", "初始暴击率 +15%"],
+				"cons": ["此生只执剑：商店以剑系法器为主，偶有他派漏出"],
+				"mods": {
+					"crit_rate": 0.15,
+					"tag_damage": {"sword": 0.6},
+				},
+				"allowed_tags": ["sword"],
+				"locked_upgrades": [],
+				"skill_mods": {"haste": {"duration_add": 2.5}},
 			},
-			"allowed_tags": ["sword"],
-			"locked_upgrades": [],
-			"skill_mods": {"haste": {"duration_add": 2.5}},
-		},
 		"shiyue": {
 			"name": "石岳·体修",
 			"epithet": "肉身成圣，岿然如山",
