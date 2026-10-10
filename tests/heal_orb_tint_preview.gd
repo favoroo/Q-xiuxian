@@ -9,7 +9,7 @@ extends Node
 
 func _ready() -> void:
 	var title := Label.new()
-	title.text = "回复珠两相：左=可入口  右=满血待命（同一个 sprite，只换 modulate）"
+	title.text = "回复珠两相：左=可入口  右=满血待命（同一颗珠子，只切渲染器的 is_waiting 相）"
 	title.add_theme_font_override("font", GameStyle.display_font())
 	title.add_theme_font_size_override("font_size", 20)
 	title.position = Vector2(24, 16)

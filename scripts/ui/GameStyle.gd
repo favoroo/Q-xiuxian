@@ -1,41 +1,45 @@
 class_name GameStyle
 extends RefCounted
 
-## 「幽蓝灵枢」斜切版画 UI 统一样式工厂（冷冽仙侠风格，斜切语言移植自 dudu-cocos）。
+## 「墨阑玉简」斜切版画 UI 统一样式工厂（黑舞台 × 纸白面板 × 主蓝强调，斜切语言移植自 dudu-cocos）。
 ## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；硬错位墨影 + 同色压暗厚底边。
-## 色即功能：灵枢蓝 = 主行动/选中，青玉 = 灵石货币/星级/辅助强调，朱砂 = 危险，青碧 = 增益。
+## 色即功能：主蓝 = 主行动/选中，深玉绿 = 灵石货币/星级/辅助强调，朱砂 = 危险，增益绿 = 治疗。
+## ⚠ 2026-10-10 全局换肤：面板从「幽玄深蓝」翻转为「纸白面板」，历史常量名（NAVY/PAPER）沿用不改，
+##    但值的语义已翻转 —— NAVY 现在是纸白面板底，PAPER 现在是面板上的墨黑正文；
+##    暗底（舞台 INK / 暗色块 / 世界空间）上的亮字一律用 CHALK（旧「纸白」值迁到这里）。
 ## 字体：正文 MiSans-Semibold，大标题 MiSans-Heavy。
 
-# —— 底色（幽玄深蓝冷墨）——
-const INK := Color("0b0e14")        # 最深底（冷调虚空墨）
-const NAVY := Color("121722")       # 面板底（幽冥深蓝墨）
-const NAVY2 := Color("1a2233")      # 按钮底/未选中（深靛暗夜）
-const LINE := Color("2d374d")       # 描线/分隔（冷铁暗纹）
+# —— 底色（黑舞台 × 纸白面板）——
+const INK := Color("0e0f13")        # 舞台底/暗色块/暗徽章（近黑微冷）
+const NAVY := Color("f2efe6")       # 面板底（纸白）※名字沿用历史，值已翻转
+const NAVY2 := Color("e7e3d5")      # 次级面/按钮底/未选中（纸灰）
+const LINE := Color("c8c2b0")       # 描线/分隔（浅灰线，白面板上用）
 
 # —— 文字 ——
-const PAPER := Color("f2efe4")      # 纸白正文
-const PAPER_DIM := Color("c9c4b4")  # 次要纸白
-const INK_TEXT := Color("0d1117")   # 亮面上的冷墨黑字（在灵蓝面与玉面上对比鲜明）
+const PAPER := Color("16181d")      # 面板正文（墨黑）※值已翻转：白面板上的黑字
+const PAPER_DIM := Color("6b6f7a")  # 次要正文（灰墨）
+const INK_TEXT := Color("14161b")   # 亮面/蓝面上的黑字
+const CHALK := Color("f2efe4")      # 暗底亮字（舞台/暗色块/世界空间跳字）
 
 # —— 角色色（色即功能）——
-const GOLD := Color("4a92f7")       # 灵枢蓝/霁蓝 = 主行动/选中/标题带（彻底脱离刺眼暖黄）
+const GOLD := Color("4a92f7")       # 主蓝 = 主行动/选中/标题带
 const GOLD_EDGE := Color("92c5ff")  # 霜华亮蓝
 const GOLD_DK := Color("184888")    # 幽夜深蓝（立体厚底与阴影）
-const JADE := Color("4fd1a5")       # 青玉 = 灵石货币/星级/辅助强调（灵石即玉）
+const JADE := Color("17926d")       # 深玉绿 = 灵石货币/星级/辅助强调（白底可读，做底时配黑字）
 const JADE_EDGE := Color("a5ecd4")
 const JADE_DK := Color("1f7a5e")
-const GOOD := Color("7dffa9")       # 青碧 = 治疗/增益
+const GOOD := Color("1fa35c")       # 增益绿 = 治疗/增益（白底可读）
 const GOOD_DK := Color("2f8f4c")
 const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
-const GREY := Color("9aa1b5")       # 暗部正文
+const GREY := Color("7d8494")       # 暗部正文/禁用
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/玉/碧/朱砂都不撞）
 
-# 稀有度 / 品阶统一色值（凡品纸 / 良品玉 / 仙品霜金 / 传说紫）
-const RARITY_COMMON := Color(0.96, 0.95, 0.92)
-const RARITY_RARE := Color(0.31, 0.82, 0.65)
-const RARITY_EPIC := Color("d4ba74")  # 冷月霜金：低饱和古金微光，专供仙品法宝，不与主交互撞色
-const RARITY_LEGEND := Color(0.85, 0.45, 1.0)
+# 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按白底可读调深
+const RARITY_COMMON := Color(0.55, 0.53, 0.47)
+const RARITY_RARE := Color(0.13, 0.63, 0.47)
+const RARITY_EPIC := Color("a8863a")  # 冷月霜金调深：低饱和古金，专供仙品法宝，不与主交互撞色
+const RARITY_LEGEND := Color(0.68, 0.32, 0.88)
 
 # 五行标签统一色值
 const ELEMENT_COLORS := {

@@ -37,7 +37,7 @@ static func take_alloc_upgrade(gm: Node, index: int) -> bool:
 	gm.apply_upgrade(uid)
 	gm.pending_upgrade_points = maxi(0, gm.pending_upgrade_points - 1)
 	gm.pending_points_changed.emit(gm.pending_upgrade_points)
-	AudioManager.play_sfx("gem_pickup", 1.25)
+	AudioManager.play_sfx("stat_alloc", 1.25)
 	if gm.pending_upgrade_points > 0:
 		roll_alloc_offers(gm)
 		if gm.alloc_offers.is_empty():

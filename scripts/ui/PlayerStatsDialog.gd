@@ -166,7 +166,7 @@ func _build_left_stats_panel() -> Control:
 	hp_box.add_theme_constant_override("separation", 6)
 	var hp_title := Label.new()
 	hp_title.text = StatInfoData.title("hp")
-	GameStyle.label(hp_title, 12, GameStyle.PAPER_DIM)
+	GameStyle.label(hp_title, 12, Color(0.82, 0.80, 0.74))
 	hp_box.add_child(hp_title)
 
 	_hp_bar = ProgressBar.new()
@@ -250,12 +250,13 @@ func _switch_stat_tab(tab_idx: int) -> void:
 		_secondary_stats_box.visible = (tab_idx == 1)
 	if _stat_tab_primary_btn != null:
 		if tab_idx == 0:
-			GameStyle.button(_stat_tab_primary_btn, GameStyle.PAPER, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
+			# 选中态亮底：PAPER 已翻转为墨黑不能再做底，换 CHALK（旧纸白值）托黑字
+			GameStyle.button(_stat_tab_primary_btn, GameStyle.CHALK, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
 			GameStyle.button(_stat_tab_primary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 	if _stat_tab_secondary_btn != null:
 		if tab_idx == 1:
-			GameStyle.button(_stat_tab_secondary_btn, GameStyle.PAPER, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
+			GameStyle.button(_stat_tab_secondary_btn, GameStyle.CHALK, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
 			GameStyle.button(_stat_tab_secondary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0)
 
@@ -431,7 +432,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 
 	var wp_sub := Label.new()
 	wp_sub.text = "点图标看伤害乘区与升星规则"
-	GameStyle.label(wp_sub, 11, GameStyle.GREY)
+	GameStyle.label(wp_sub, 11, Color(0.82, 0.80, 0.74))
 	wp_head.add_child(wp_sub)
 	wp_vbox.add_child(wp_head)
 
@@ -449,7 +450,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	var stash_title := Label.new()
 	stash_title.text = "仓库:"
 	stash_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	GameStyle.label(stash_title, 12, GameStyle.GREY)
+	GameStyle.label(stash_title, 12, Color(0.82, 0.80, 0.74))
 	_stash_section.add_child(stash_title)
 	_stash_box = HBoxContainer.new()
 	_stash_box.add_theme_constant_override("separation", 6)
@@ -483,7 +484,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 
 	_synergy_hint_lbl = Label.new()
 	_synergy_hint_lbl.text = "集齐 2 / 4 / 6 件同系武器解锁阶梯加成"
-	GameStyle.label(_synergy_hint_lbl, 11, GameStyle.GREY)
+	GameStyle.label(_synergy_hint_lbl, 11, Color(0.82, 0.80, 0.74))
 	syn_head.add_child(_synergy_hint_lbl)
 	syn_vbox.add_child(syn_head)
 
@@ -541,7 +542,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 
 	_history_count_lbl = Label.new()
 	_history_count_lbl.text = "点按图标或条目查看详情"
-	GameStyle.label(_history_count_lbl, 11, GameStyle.PAPER_DIM)
+	GameStyle.label(_history_count_lbl, 11, Color(0.82, 0.80, 0.74))
 	bot_header.add_child(_history_count_lbl)
 	bot_vbox.add_child(bot_header)
 
@@ -828,7 +829,7 @@ func _refresh_weapons() -> void:
 			empty_dot.text = "×" if locked else "·"
 			empty_dot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			empty_dot.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			GameStyle.label(empty_dot, 15, GameStyle.BAD if locked else GameStyle.GREY)
+			GameStyle.label(empty_dot, 15, GameStyle.BAD if locked else Color(0.82, 0.80, 0.74))
 			slot.add_child(empty_dot)
 			GameStyle.tap(slot, func() -> void: _open_empty_slot_tip(i, slot))
 
@@ -895,7 +896,7 @@ func _refresh_synergies() -> void:
 	if tags.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "当前尚未装备武器。装备同系（如剑系、火系）武器满 2 / 4 / 6 件即可触发阶梯共鸣加成。"
-		GameStyle.label(empty_lbl, 12, GameStyle.GREY)
+		GameStyle.label(empty_lbl, 12, Color(0.82, 0.80, 0.74))
 		_synergy_flow.add_child(empty_lbl)
 		return
 
@@ -945,12 +946,14 @@ func _create_synergy_card(tag: String) -> Control:
 
 	var kind_lbl := Label.new()
 	kind_lbl.text = "元素" if is_elem else "类型"
-	GameStyle.label(kind_lbl, 10, GameStyle.JADE if is_elem else GameStyle.GOLD_EDGE)
+	# 纸灰激活卡上亮蓝字会洗白，走主蓝；未激活暗卡上主蓝依旧可读
+	GameStyle.label(kind_lbl, 10, GameStyle.JADE if is_elem else GameStyle.GOLD)
 	head.add_child(kind_lbl)
 
 	var title_lbl := Label.new()
 	title_lbl.text = "%s (%d/%d)" % [info.get("name", tag), n, max_th]
-	var title_col: Color = (GameStyle.JADE if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
+	# 未激活暗卡上的次要字走暗底亮字（PAPER_DIM 是给纸灰面准备的灰墨）
+	var title_col: Color = (GameStyle.JADE if is_elem else GameStyle.PAPER) if lv > 0 else Color(0.82, 0.80, 0.74)
 	GameStyle.label(title_lbl, 13, title_col)
 	head.add_child(title_lbl)
 
@@ -964,7 +967,9 @@ func _create_synergy_card(tag: String) -> Control:
 		var line_lbl := Label.new()
 		var prefix: String = "★" if is_current_tier else ("·" if not reached else "+")
 		line_lbl.text = "%s(%d) %s" % [prefix, th_need, tier_txt]
-		var line_col: Color = GameStyle.GOOD if is_current_tier else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
+		# 当前档增益绿；激活卡（纸灰面）灰墨分档，未激活暗卡统一暗底亮字
+		var line_col: Color = GameStyle.GOOD if is_current_tier \
+				else ((GameStyle.PAPER_DIM if reached else GameStyle.GREY) if lv > 0 else Color(0.82, 0.80, 0.74))
 		GameStyle.label(line_lbl, 11, line_col)
 		vbox.add_child(line_lbl)
 
@@ -1011,7 +1016,7 @@ func _refresh_items_and_history() -> void:
 	if item_list.is_empty():
 		var empty_item_lbl := Label.new()
 		empty_item_lbl.text = "尚未购入携带道具。在波间商店可购置各类被动奇珍。"
-		GameStyle.label(empty_item_lbl, 12, GameStyle.GREY)
+		GameStyle.label(empty_item_lbl, 12, Color(0.82, 0.80, 0.74))
 		_items_flow.add_child(empty_item_lbl)
 	else:
 		# 合并同名法宝计数展示，如「聚宝盆 ×2」
@@ -1031,7 +1036,7 @@ func _refresh_items_and_history() -> void:
 	if history.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "尚未有升级加成，每波平息后可根据等级提升领悟天地法则。"
-		GameStyle.label(empty_lbl, 12, GameStyle.GREY)
+		GameStyle.label(empty_lbl, 12, Color(0.82, 0.80, 0.74))
 		_history_list.add_child(empty_lbl)
 		return
 
@@ -1135,7 +1140,8 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 	pill_sb.content_margin_top = 1.0
 	pill_sb.content_margin_bottom = 1.0
 	pill.add_theme_stylebox_override("normal", pill_sb)
-	var band_text_col: Color = GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.PAPER
+	# 浅色带配黑字，深色带配暗底亮字（PAPER 已翻转为墨黑，深色带上会糊）
+	var band_text_col: Color = GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.CHALK
 	pill.add_theme_color_override("font_color", band_text_col)
 	hbox.add_child(pill)
 

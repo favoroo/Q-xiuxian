@@ -151,6 +151,162 @@ const DEFS: Dictionary = {
 			"desc": "最大生命 +25 并回满，伤害 +15%，护甲 +2，移速 +5%",
 			"apply": {"max_hp": 25.0, "hp_heal": 25.0, "weapon_damage_mult": 0.15, "armor": 2.0, "move_speed_mult": 0.05},
 		},
+
+		# ==================== 2026-10-10 新增 24 件（参考土豆兄弟道具池） ====================
+		# 补四条伤害链路（近战/远程/元素/召唤）的物品支撑，首次启用单元素加成字段
+		# element_damage_<五行>（专精流核心），并加一批「有得有失」的交易式道具。
+
+		# ---- 凡品（tier 1 · 第 1 波起） ----
+		"lijian_shi": {
+			"name": "砺剑石", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_lijian_shi.png",
+			"desc": "近战伤害 +2",
+			"apply": {"melee_damage": 2.0},
+		},
+		"feihuang_shi": {
+			"name": "飞蝗石", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_feihuang_shi.png",
+			"desc": "远程伤害 +2",
+			"apply": {"ranged_damage": 2.0},
+		},
+		"juling_fu": {
+			"name": "聚灵符", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_juling_fu.png",
+			"desc": "元素伤害 +2",
+			"apply": {"elemental_damage": 2.0},
+		},
+		"yuling_pai": {
+			"name": "御灵牌", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_yuling_pai.png",
+			"desc": "召唤伤害 +2",
+			"apply": {"engineering_damage": 2.0},
+		},
+		"hupi_qun": {
+			"name": "虎皮裙", "tier": 1, "price": 15,
+			"icon": "res://assets/art/item_hupi_qun.png",
+			"desc": "最大生命 +12",
+			"apply": {"max_hp": 12.0, "hp_heal": 12.0},
+		},
+		"manli_huwan": {
+			"name": "蛮力护腕", "tier": 1, "price": 15,
+			"icon": "res://assets/art/item_manli_huwan.png",
+			"desc": "武器伤害 +10%，但攻击间隔 +4%",
+			"apply": {"weapon_damage_mult": 0.10, "attack_speed_mult_mul": 1.04},
+		},
+
+		# ---- 良品（tier 2 · 第 4 波起） ----
+		"jinjing_shi": {
+			"name": "金精石", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_jinjing_shi.png",
+			"desc": "金系法器伤害 +8%",
+			"apply": {"element_damage_metal": 0.08},
+		},
+		"chenxiang_mu": {
+			"name": "沉香木", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_chenxiang_mu.png",
+			"desc": "木系法器伤害 +8%",
+			"apply": {"element_damage_wood": 0.08},
+		},
+		"hantan_yu": {
+			"name": "寒潭玉", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_hantan_yu.png",
+			"desc": "水系法器伤害 +8%",
+			"apply": {"element_damage_water": 0.08},
+		},
+		"dihuo_jing": {
+			"name": "地火精", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_dihuo_jing.png",
+			"desc": "火系法器伤害 +8%",
+			"apply": {"element_damage_fire": 0.08},
+		},
+		"houtu_he": {
+			"name": "厚土核", "tier": 2, "price": 26,
+			"icon": "res://assets/art/item_houtu_he.png",
+			"desc": "土系法器伤害 +8%",
+			"apply": {"element_damage_earth": 0.08},
+		},
+		"liren_fu": {
+			"name": "利刃符", "tier": 2, "price": 25,
+			"icon": "res://assets/art/item_liren_fu.png",
+			"desc": "暴击率 +6%，但护甲 -1",
+			"apply": {"crit_rate": 0.06, "armor": -1.0},
+		},
+		"yinxue_zhu": {
+			"name": "饮血珠", "tier": 2, "price": 25,
+			"icon": "res://assets/art/item_yinxue_zhu.png",
+			"desc": "吸血 +3%，但生命回复 -0.3/秒",
+			"apply": {"lifesteal": 0.03, "hp_regen": -0.3},
+		},
+		"dingxing_pan": {
+			"name": "定星盘", "tier": 2, "price": 24,
+			"icon": "res://assets/art/item_dingxing_pan.png",
+			"desc": "攻击范围 +15%，但移速 -4%",
+			"apply": {"attack_range_mult": 0.15, "move_speed_mult": -0.04},
+		},
+		"jucai_dai": {
+			"name": "聚财袋", "tier": 2, "price": 24,
+			"icon": "res://assets/art/item_jucai_dai.png",
+			"desc": "收益 +8，但武器伤害 -8%",
+			"apply": {"harvest": 8.0, "weapon_damage_mult": -0.08},
+		},
+
+		# ---- 仙品（tier 3 · 第 9 波起） ----
+		"potian_zhui": {
+			"name": "破天锥", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_potian_zhui.png",
+			"desc": "暴击伤害 +35%",
+			"apply": {"crit_mult": 0.35},
+		},
+		"jingang_zhuo": {
+			"name": "金刚琢", "tier": 3, "price": 44,
+			"icon": "res://assets/art/item_jingang_zhuo.png",
+			"desc": "护甲 +5，但闪避 -8%",
+			"apply": {"armor": 5.0, "dodge": -0.08},
+		},
+		"shenxing_xue": {
+			"name": "神行靴", "tier": 3, "price": 43,
+			"icon": "res://assets/art/item_shenxing_xue.png",
+			"desc": "移速 +12%，但攻击范围 -10%",
+			"apply": {"move_speed_mult": 0.12, "attack_range_mult": -0.10},
+		},
+		"leiling_zhu": {
+			"name": "雷灵珠", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_leiling_zhu.png",
+			"desc": "攻击间隔 -12%，但幸运 -3",
+			"apply": {"attack_speed_mult_mul": 0.88, "luck": -3.0},
+		},
+		"juling_zhentu": {
+			"name": "聚灵阵图", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_juling_zhentu.png",
+			"desc": "召唤伤害 +4，最大生命 +10",
+			"apply": {"engineering_damage": 4.0, "max_hp": 10.0, "hp_heal": 10.0},
+		},
+		"hunyuan_yiqifu": {
+			"name": "混元一气符", "tier": 3, "price": 50,
+			"icon": "res://assets/art/item_hunyuan_yiqifu.png",
+			"desc": "金木水火土全元素伤害 +8%",
+			"apply": {"element_damage_all": 0.08},
+		},
+
+		# ---- 传说（tier 4 · 第 14 波起） ----
+		"zhuxian_sui": {
+			"name": "诛仙剑穗", "tier": 4, "price": 92,
+			"icon": "res://assets/art/item_zhuxian_sui.png",
+			"desc": "武器伤害 +30%，暴击率 +8%，但护甲 -2",
+			"apply": {"weapon_damage_mult": 0.30, "crit_rate": 0.08, "armor": -2.0},
+		},
+		"xuanwu_yin": {
+			"name": "玄武印", "tier": 4, "price": 90,
+			"icon": "res://assets/art/item_xuanwu_yin.png",
+			"desc": "最大生命 +40，护甲 +4，但移速 -8%",
+			"apply": {"max_hp": 40.0, "hp_heal": 40.0, "armor": 4.0, "move_speed_mult": -0.08},
+		},
+		"tianji_pan": {
+			"name": "天机盘", "tier": 4, "price": 88,
+			"icon": "res://assets/art/item_tianji_pan.png",
+			"desc": "幸运 +10，每波免费重掷 +1 次，收益 +5",
+			"apply": {"luck": 10.0, "free_rerolls": 1.0, "harvest": 5.0},
+		},
 }
 
 static func get_def(id: String) -> Dictionary:

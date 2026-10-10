@@ -89,6 +89,7 @@ var chill_slow: float = 0.0
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 var flash_tween: Tween = null
 var squash_tween: Tween = null
+var _hit_tilt: float = 0.0          ## 受创后仰倾角（受击瞬间沿受力反向倾斜，急刹后平滑回正）
 
 ## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与每帧缓存判定
 const CULL_MARGIN := 64.0
@@ -296,7 +297,7 @@ func _physics_process(delta: float) -> void:
 		_aura_speed_mult = 1.0
 	eff_speed *= _aura_speed_mult
 
-	# 1. 击退速度指数衰减与受击硬直定身
+	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
 	var is_in_hit_freeze := _hit_freeze_timer > 0.0
 	if is_in_hit_freeze:
 		_hit_freeze_timer -= delta
@@ -304,22 +305,11 @@ func _physics_process(delta: float) -> void:
 	if is_in_hit_stun:
 		hit_stun_timer -= delta
 
-	# 硬直期间衰减略微平缓保留滑行手感，硬直结束后快速收尾；
-	# 局部卡肉定格（_hit_freeze_timer > 0）期间阻断位移衰减，保持冲量待释放
-	var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN if is_in_hit_stun else GameBalance.KNOCKBACK_DECAY_FREE
-	if knockback_velocity.length_squared() > GameBalance.KNOCKBACK_HEAVY_SPEED * GameBalance.KNOCKBACK_HEAVY_SPEED:
-		decay_rate *= GameBalance.KNOCKBACK_HEAVY_DECAY_MULT
-	if not is_in_hit_freeze:
-		if knockback_velocity.length_squared() > 10.0:
-			knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * decay_rate, 1.0))
-		else:
-			knockback_velocity = Vector2.ZERO
-
-	# 击退滑行擦地烟尘（重度被击退时扬尘，建立与地面摩擦阻力感）
-	if is_in_hit_stun and not is_in_hit_freeze and knockback_velocity.length_squared() > 14400.0:
+	# 击退急刹擦地烟尘（被击退起步瞬间扬尘，表现地面抓地阻力）
+	if is_in_hit_stun and knockback_velocity.length_squared() > 14400.0:
 		_skid_dust_timer -= delta
 		if _skid_dust_timer <= 0.0:
-			_skid_dust_timer = 0.06
+			_skid_dust_timer = 0.045
 			JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), knockback_velocity)
 
 	# 2. 追击玩家（平滑加速度 + 贴身防旋转抽搐）
@@ -453,12 +443,18 @@ func _physics_process(delta: float) -> void:
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
 
-	if is_in_hit_freeze:
-		velocity = Vector2.ZERO
-	elif is_in_hit_stun and _charge_active <= 0.0 and _bite_active <= 0.0:
+	if is_in_hit_stun and _charge_active <= 0.0 and _bite_active <= 0.0:
 		velocity = knockback_velocity
+		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
+		var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN
+		if knockback_velocity.length_squared() > 16.0:
+			knockback_velocity = knockback_velocity.lerp(Vector2.ZERO, minf(delta * decay_rate, 1.0))
+		else:
+			knockback_velocity = Vector2.ZERO
 	else:
-		velocity = velocity.move_toward(target_vel, 900.0 * delta) + knockback_velocity
+		velocity = velocity.move_toward(target_vel, 900.0 * delta)
+		# 硬直结束时残余击退彻底清零，杜绝边追击边滑步的打冰球现象
+		knockback_velocity = Vector2.ZERO
 	move_and_slide()
 
 	# 界碑拦阻
@@ -475,6 +471,12 @@ func _physics_process(delta: float) -> void:
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
+	# 受创后仰倾角衰减
+	if absf(_hit_tilt) > 0.005:
+		_hit_tilt = lerpf(_hit_tilt, 0.0, minf(delta * 14.0, 1.0))
+	else:
+		_hit_tilt = 0.0
+
 	# 3. Sprite 方向 & 动画（带迟滞滤波 + 贴近锁定 + 移速步频自适应）
 	# 当怪物与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
 	if dist_sq > 324.0 and dir.length_squared() > 0.01:
@@ -486,8 +488,8 @@ func _physics_process(delta: float) -> void:
 	var current_base := anim_base_scale * juice_scale
 	var current_speed := velocity.length()
 	var speed_ratio: float = (current_speed / move_speed) if move_speed > 0.0 else 1.0
-	# 实际位移足够才播跑步动画：远程怪环绕游走/贴身减速时不再原地空踏步（滑行悬浮感来源）
-	var is_moving := current_speed > maxf(20.0, move_speed * 0.2)
+	# 受击硬直期间强制停步：不踏步、不迈腿；正常移动且实际位移足够才播跑步动画
+	var is_moving := (not is_in_hit_stun) and current_speed > maxf(20.0, move_speed * 0.2)
 
 	if locomotion_mode == "hover":
 		# 悬浮：不切腿帧（单姿势图集），浮沉/侧倾/纵向意图由程序驱动。
@@ -527,13 +529,14 @@ func _physics_process(delta: float) -> void:
 		procedural_view.modulate = anim_sprite.modulate
 		procedural_view.is_moving = is_moving
 		procedural_view.speed_ratio = speed_ratio
-		if locomotion_mode == "hover":
+		if is_in_hit_stun:
+			procedural_view.bank_angle = _hit_tilt
+		elif locomotion_mode == "hover":
 			var vel_dir := Vector2.ZERO
 			if is_moving and current_speed > 0.01:
 				vel_dir = velocity / current_speed
 			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
-			if not is_in_hit_stun:
-				procedural_view.advance = vel_dir.dot(dir)
+			procedural_view.advance = vel_dir.dot(dir)
 		if _fuse >= 0.0:
 			procedural_view.special_state = 1.0
 		elif _charge_windup >= 0.0 or _bite_windup >= 0.0:
@@ -563,35 +566,44 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		_focus_hit_count += 1
 		_focus_hit_timer = GameBalance.FOCUS_FIRE_WINDOW
 	current_hp -= amount
-	var elite_scale: float = 0.55 if is_elite else 1.0
-	knockback_velocity = knockback * elite_scale * GameManager.synergy_knockback_mult
 
-	# 土豆兄弟风格受击硬直定身（hit-stun）与局部卡肉冻结（local hit freeze）：
-	# 受击瞬间暂停主动 AI 追击速度，并在前 2~4 帧短暂冻结位移吸附在刀尖，随后释放全部击退冲量；DoT tick 不触发硬直以保手感纯粹
+	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
+	var elite_scale: float = 0.55 if is_elite else 1.0
+	var crit_kb_mult: float = 1.25 if is_crit else 1.0
+	var raw_kb := knockback * (GameBalance.KNOCKBACK_IMPULSE_SCALE * elite_scale * crit_kb_mult)
+	var max_spd: float = GameBalance.KNOCKBACK_MAX_SPEED_CRIT if is_crit else GameBalance.KNOCKBACK_MAX_SPEED_NORMAL
+	if raw_kb.length() > max_spd:
+		raw_kb = raw_kb.normalized() * max_spd
+	knockback_velocity = raw_kb
+
+	# 受击硬直定身（hit-stun）与后仰姿态：
+	# 受击当帧立即暂停主动 AI 追击速度，并在极速刹停后原地僵直定身；DoT tick 不触发硬直以保手感纯粹
 	if not from_dot:
 		var base_stun: float = GameBalance.HIT_STUN_CRIT if is_crit else GameBalance.HIT_STUN_NORMAL
 		hit_stun_timer = maxf(hit_stun_timer, base_stun * elite_scale * hit_stun_resist)
 		var freeze_dur: float = GameBalance.HIT_FREEZE_CRIT if is_crit else GameBalance.HIT_FREEZE_NORMAL
 		_hit_freeze_timer = maxf(_hit_freeze_timer, freeze_dur * elite_scale * hit_stun_resist)
+		if knockback.length_squared() > 10.0:
+			_hit_tilt = -knockback.normalized().x * deg_to_rad(14.0)
 
-	# 1. 声音与跳字（分层听觉：清脆入肉层 + 暴击低频下潜/重击层）
-	# DoT tick（灼烧/剧毒）每 0.5s × N 敌各播一声 enemy_hit 会糊成一片爆响，故 tick 走静音路径，只留跳字/视觉反馈。
+	# 1. 声音与震动（分层听觉：入肉撕裂+低频下潜 + 肉眼可见的方向性顿挫冲击）
 	if is_crit:
 		if not from_dot:
 			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
 			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
-		# 暴击给顿帧不给震屏：命中是本作最高频的事件，一旦发创伤，镜头整局都停不下来。
-		# 只有打在精英/首领身上的暴击才值得抖一下（低频，且是「打狠了」的读数）
-		GameManager.hit_stop(0.035, 0.08)
+		GameManager.hit_stop(0.04, 0.08)
+		GameManager.kick_camera(knockback, 6.5)
+		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
 		if is_elite:
-			GameManager.add_trauma(0.12)
-			GameManager.kick_camera(knockback, 2.4)
-			GameFeel.vibrate(22, 0.55)
+			GameManager.add_trauma(0.28)
+			GameFeel.vibrate(26, 0.65)
 	elif not from_dot:
+		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤
+		GameManager.kick_camera(knockback, 2.8)
 		var pitch: float = randf_range(0.94, 1.08) if not is_elite else 0.85
-		AudioManager.play_sfx("enemy_hit", 1.05 if not is_elite else 0.85, pitch)
-		if is_elite or knockback.length_squared() > GameBalance.KNOCKBACK_HEAVY_SPEED * GameBalance.KNOCKBACK_HEAVY_SPEED:
-			AudioManager.play_sfx("enemy_hit_heavy", 0.90, randf_range(0.92, 1.06))
+		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
+		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
+			AudioManager.play_sfx("enemy_hit_heavy", 1.00, randf_range(0.92, 1.06))
 
 	# 跳字与火花（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻不发火花（每 0.5s × N 敌堆得太多），跳字保留。
@@ -605,12 +617,12 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 
 	# 受击微反冲视觉位移（Jiggle Recoil）：受击当帧向击退方向微颤并同步至程序化视图
 	if not from_dot and knockback.length_squared() > 10.0:
-		_hit_jiggle_offset = knockback.normalized() * (4.2 if is_crit else 2.6)
+		_hit_jiggle_offset = knockback.normalized() * (4.2 if is_crit else 2.8)
 		anim_sprite.position = _hit_jiggle_offset
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-	# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金）
+	# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）
 	if hit_flash_mat != null:
 		if flash_tween != null and flash_tween.is_valid():
 			flash_tween.kill()
@@ -622,11 +634,11 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 				if hit_flash_mat != null:
 					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
 			)
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.09)
+			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.12)
 		else:
 			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 1.0, 0.025)
-			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.08)
+			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 1.0, 0.02)
+			flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.11)
 
 	if current_hp <= 0.0:
 		# 斩杀加成：致命一刀击退放大（尸体随爆散朝打击方向飞出）；
@@ -851,12 +863,13 @@ func _die() -> void:
 	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio)
 	if is_elite:
+		GameManager.kick_camera(knockback_velocity, 8.5)
 		GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		# 普通妖物死亡不再发创伤：尸潮里每秒十几二十次，叠起来镜头就永远摇个不停。
-		# 读数交给爆散环 + 死亡音（击杀是本作最高频的反馈事件，以前它甚至是静音的）
-		AudioManager.play_sfx("enemy_death", 0.85)
+		# 普通妖物死亡给一记沿击飞方向的微冲量（2.5px），确认感极佳且不累加持续创伤
+		GameManager.kick_camera(knockback_velocity, 2.5)
+		AudioManager.play_sfx("enemy_death", 0.90)
 
 	var gem_count = 1 if not is_elite else 5
 	if _no_drop:

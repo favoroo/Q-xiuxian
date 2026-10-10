@@ -15,7 +15,8 @@ texture = ExtResource("2_sword")
 position = Vector2(13, 0)
 
 [node name="SlashEffect" type="Sprite2D" parent="."]
+texture_filter = 2
 visible = false
 position = Vector2(30, 0)
-scale = Vector2(2.4, 2.4)
+scale = Vector2(0.6, 0.6)
 texture = ExtResource("3_slash")

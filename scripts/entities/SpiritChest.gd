@@ -35,14 +35,14 @@ class HitPips:
 			draw_rect(rect, kept_color if i < left else spent_color, true)
 			draw_rect(rect.grow(1.0), edge_color, false, 1.0)
 
-const BASE_SCALE := Vector2(0.5, 0.5)
+const BASE_SCALE := Vector2(34.0 / 96.0, 34.0 / 96.0)
 ## 体型倍率（2026-10-10 用户口径「敌人和宝箱的大小要大一点」）。
-## 量尺来自 res://tests/EntitySizeProbe.tscn：匣子画出来只有 28×22 逻辑像素，而修士本体 47 宽，
-## 且它的判定圆直径本来就有 34 —— 画得比判的还小，打起来是「明明没碰到却一直在掉格」。
-## 视觉与判定同倍放缩（AGENTS.md 铁律 7），读数高度 PIP_LIFT 跟着走，否则要点压在匣盖上。
+## 判定圆直径 34（局部半径 17），精灵按「屏幕宽 == 判定直径」定标：
+## prop_chest.png 产物画布 96×87（源图 assets_raw 256px 预缩一半，2026-10-10 生图换稿），
+## ×SIZE_MULT 后与判定同涨 —— 视觉与判定同倍放缩（AGENTS.md 铁律 7），PIP_LIFT 跟着走。
 const SIZE_MULT := 1.5
-## 读数离匣心的高度：prop_chest.png 画布 128×124 铺满不透明像素，×0.5 后上沿在匣心上方 31px，
-## 这条要在它之上（量出来的，不是估的）—— 摆在 26 会正正压在匣盖上，等于没有。
+## 读数离匣心的高度：产物画布 87 高，×(34/96×1.5) 后上沿在匣心上方约 23px，
+## 这条要在它之上 —— 摆在 40×SIZE_MULT=60px，远在匣顶上方，不压画面。
 const PIP_LIFT := 40.0 * SIZE_MULT
 const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
@@ -55,7 +55,6 @@ var max_hits: int = GameBalance.CHEST_BREAK_HITS
 var remaining_hits: int = GameBalance.CHEST_BREAK_HITS
 
 var _sprite: Sprite2D
-var _loot_renderer: ProceduralLootRenderer
 var _pips: HitPips
 var _box: Area2D
 var _box_shape: CollisionShape2D
@@ -79,16 +78,10 @@ func _ready() -> void:
 
 	_sprite = Sprite2D.new()
 	_sprite.texture = preload("res://assets/art/prop_chest.png")
+	# 0.2 倍微缩显示，全局 Nearest 会碎边出洞 —— 单节点开 Linear（SlashEffect 同款先例）
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.scale = Vector2.ZERO
-	_sprite.visible = false
 	add_child(_sprite)
-
-	_loot_renderer = ProceduralLootRenderer.new()
-	_loot_renderer.loot_type = ProceduralLootRenderer.LootType.CHEST
-	_loot_renderer.chest_total_hits = max_hits
-	_loot_renderer.chest_left_hits = remaining_hits
-	_loot_renderer.scale = Vector2.ZERO
-	add_child(_loot_renderer)
 
 	_pips = HitPips.new()
 	_pips.position = Vector2(0.0, -PIP_LIFT)
@@ -100,23 +93,25 @@ func _ready() -> void:
 	add_child(_pips)
 
 	# 砸落登场 + 匣内灵气吞吐，两者都落在 SIZE_MULT 这一档体型上。
-	# 呼吸必须等登场落定再接手：两条 tween 同写 _loot_renderer.scale 时谁后写谁赢，
-	# 匣子画多大就取决于量到哪一帧（2026-10-10 量尺同一只匣子两次读数 32×24 / 58×46）。
-	var rest := Vector2.ONE * SIZE_MULT
+	# 呼吸必须等登场落定再接手：两条 tween 同写 _sprite.scale 时谁后写谁赢。
+	var rest := BASE_SCALE * SIZE_MULT
 	_entrance_tw = create_tween()
-	_entrance_tw.set_parallel(true)
-	_entrance_tw.tween_property(_sprite, "scale", BASE_SCALE * SIZE_MULT, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_entrance_tw.tween_property(_loot_renderer, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_entrance_tw.chain().tween_callback(_start_breathe)
+	_entrance_tw.tween_property(_sprite, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_entrance_tw.tween_callback(_start_breathe)
 
 ## 登场落定后才开始吞吐：起幅就是 rest，之后只在 rest 与 rest×1.04 之间摆
 func _start_breathe() -> void:
-	if _loot_renderer == null or not is_instance_valid(_loot_renderer):
+	if _sprite == null or not is_instance_valid(_sprite):
 		return
-	var rest := Vector2.ONE * SIZE_MULT
+	var rest := BASE_SCALE * SIZE_MULT
 	_breathe = create_tween().set_loops()
-	_breathe.tween_property(_loot_renderer, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
-	_breathe.tween_property(_loot_renderer, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_sprite, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_sprite, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
+
+## 受损后的常驻相：微暗微冷，越裂越沉 —— 「这匣子挨过打」的底色，闪白要回到这里而不是纯白
+func _resting_modulate() -> Color:
+	var dmg := 1.0 - float(remaining_hits) / float(maxi(1, max_hits))
+	return Color.WHITE.lerp(Color(0.62, 0.60, 0.72), dmg * 0.55)
 
 ## 武器判定命中（与 EnemyBase 同签名，被挥砍/落雷/弹丸/灵蝶波及）
 ## 只数"打到了几下"：amount 不参与耐久结算，因此匣子既不会被高伤一发秒掉，
@@ -126,14 +121,12 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 		return
 	remaining_hits -= 1
 	# 匣子不是威胁，不值得震屏与顿帧：只给"木裂"这一层反馈（高频事件按重要性稀缺发放）
-	AudioManager.play_sfx("enemy_hit", 0.85, randf_range(1.22, 1.40))
+	AudioManager.play_sfx("chest_hit", 0.9)
 	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
 	_flash()
 	_jiggle(knockback)
 	_pips.left = remaining_hits
 	_pips.queue_redraw()
-	if _loot_renderer != null:
-		_loot_renderer.chest_left_hits = remaining_hits
 	if remaining_hits <= 0:
 		_destroy()
 
@@ -141,9 +134,8 @@ func _flash() -> void:
 	if _flash_tw != null and _flash_tw.is_valid():
 		_flash_tw.kill()
 	_flash_tw = create_tween()
-	var target_vis = _loot_renderer if _loot_renderer != null else _sprite
-	_flash_tw.tween_property(target_vis, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
-	_flash_tw.tween_property(target_vis, "modulate", Color.WHITE, 0.10)
+	_flash_tw.tween_property(_sprite, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
+	_flash_tw.tween_property(_sprite, "modulate", _resting_modulate(), 0.10)
 
 ## 受击微反冲：精灵朝击退方向偏一下再回位（匣子本体不位移，位移的是画）
 func _jiggle(knockback: Vector2) -> void:
@@ -151,16 +143,15 @@ func _jiggle(knockback: Vector2) -> void:
 		_jiggle_tw.kill()
 	var dir := knockback.normalized() if knockback.length_squared() > 1.0 else Vector2.UP
 	_jiggle_tw = create_tween()
-	var target_vis = _loot_renderer if _loot_renderer != null else _sprite
-	_jiggle_tw.tween_property(target_vis, "position", dir * JIGGLE_PX, 0.045)
-	_jiggle_tw.tween_property(target_vis, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
+	_jiggle_tw.tween_property(_sprite, "position", dir * JIGGLE_PX, 0.045)
+	_jiggle_tw.tween_property(_sprite, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
 
 func _destroy() -> void:
 	if dying or is_queued_for_deletion():
 		return
 	dying = true
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, false)
-	AudioManager.play_sfx("gem_pickup", 0.8)
+	AudioManager.play_sfx("chest_open", 0.9)
 	if GameManager.rng.randf() < 0.6:
 		var fruit := HealOrb.new()
 		fruit.global_position = global_position
@@ -197,7 +188,4 @@ func dissolve() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(_sprite, "modulate:a", 0.0, 0.4)
 	tw.tween_property(_sprite, "scale", _sprite.scale * 0.6, 0.4)
-	if _loot_renderer != null:
-		tw.tween_property(_loot_renderer, "modulate:a", 0.0, 0.4)
-		tw.tween_property(_loot_renderer, "scale", _loot_renderer.scale * 0.6, 0.4)
 	tw.chain().tween_callback(queue_free)

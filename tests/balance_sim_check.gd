@@ -33,15 +33,20 @@ func _ready() -> void:
 	else:
 		get_tree().quit(1)
 
-# ---------------- 1. 20 件法器单体 DPS 分档与极差比 ----------------
+# ---------------- 1. 35 件法器单体 DPS 分档与极差比 ----------------
 
 func _test_weapon_dps_normalization() -> void:
-	var single_target_weapons := ["qingyun_sword", "gengjin_feijian", "huoyan_fu", "chiyan_dao", "xuanbing_feizhen"]
+	var single_target_weapons := [
+		"qingyun_sword", "gengjin_feijian", "huoyan_fu", "chiyan_dao", "xuanbing_feizhen",
+		"jinzhen_fu", "qingteng_jian",
+	]
 	var aoe_utility_weapons := [
 		"qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin",
-		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun"
+		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun",
+		"xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "jinlei_zhui", "chunlei_gu",
+		"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian",
 	]
-	var drone_weapons := ["lingdie", "hanquan_yulian", "hunyuan_zhong"]
+	var drone_weapons := ["lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei"]
 
 	var min_dps: float = 9999.0
 	var max_dps: float = 0.0
@@ -62,7 +67,7 @@ func _test_weapon_dps_normalization() -> void:
 				"御灵环绕法器【%s】DPS 落在 28~34 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
-	_c.check(ratio <= 2.0, "全库 20 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+	_c.check(ratio <= 2.0, "全库 35 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
 
 # ---------------- 2. 敌人与 Boss 气血成长 ----------------
 

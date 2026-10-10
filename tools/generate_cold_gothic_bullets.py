@@ -95,6 +95,38 @@ def gen_blade():
     d.line([(42*s, 24*s), (6*s, 24*s)], fill=(90, 215, 165, 255), width=int(2*s))
     save(img, "blade.png", (48, 48))
 
+# 10. bullet_gold_needle.png (40x8) - 金针符专属：暗金细长针
+def gen_bullet_gold_needle():
+    img, d, s = canvas(40, 8)
+    pts = [(38*s, 4*s), (12*s, 2*s), (2*s, 3*s), (2*s, 5*s), (12*s, 6*s)]
+    d.polygon(pts, fill=(235, 195, 70, 255), outline=(35, 26, 10, 255), width=int(1.0*s))
+    d.line([(38*s, 4*s), (4*s, 4*s)], fill=(255, 245, 190, 255), width=int(1.2*s))
+    save(img, "bullet_gold_needle.png", (40, 8))
+
+# 11. bullet_ice_talisman.png (38x24) - 玄冰符专属：霜蓝冰符纸
+def gen_bullet_ice_talisman():
+    img, d, s = canvas(38, 24)
+    rect = [4*s, 4*s, 34*s, 20*s]
+    d.rectangle(rect, fill=(210, 235, 250, 255), outline=(35, 95, 155, 255), width=int(2*s))
+    d.line([(10*s, 12*s), (28*s, 12*s)], fill=(90, 185, 245, 255), width=int(2*s))
+    save(img, "bullet_ice_talisman.png", (38, 24))
+
+# 12. bullet_earth_talisman.png (36x28) - 镇山符专属：玄黄厚重符纸
+def gen_bullet_earth_talisman():
+    img, d, s = canvas(36, 28)
+    rect = [4*s, 4*s, 32*s, 24*s]
+    d.rectangle(rect, fill=(235, 215, 165, 255), outline=(85, 65, 30, 255), width=int(2.2*s))
+    d.polygon([(18*s, 8*s), (26*s, 20*s), (10*s, 20*s)], fill=(155, 120, 55, 255))
+    save(img, "bullet_earth_talisman.png", (36, 28))
+
+# 13. bullet_bone_spike.png (40x10) - 透骨钉专属：骨白毒芒长钉
+def gen_bullet_bone_spike():
+    img, d, s = canvas(40, 10)
+    pts = [(38*s, 5*s), (14*s, 2*s), (3*s, 3*s), (3*s, 7*s), (14*s, 8*s)]
+    d.polygon(pts, fill=(235, 240, 230, 255), outline=(20, 35, 25, 255), width=int(1.2*s))
+    d.line([(38*s, 5*s), (22*s, 5*s)], fill=(95, 225, 120, 255), width=int(1.6*s))
+    save(img, "bullet_bone_spike.png", (40, 10))
+
 if __name__ == "__main__":
     gen_bullet_gold_sword()
     gen_bullet_leaf_dagger()
@@ -105,4 +137,8 @@ if __name__ == "__main__":
     gen_bullet_spirit_pellet()
     gen_bullet_fire_flame()
     gen_blade()
+    gen_bullet_gold_needle()
+    gen_bullet_ice_talisman()
+    gen_bullet_earth_talisman()
+    gen_bullet_bone_spike()
     print("全部子弹底图生成完毕！")

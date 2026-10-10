@@ -91,8 +91,9 @@ func kick_directional(dir: Vector2, strength: float = 3.5) -> void:
 	if _intensity <= 0.0 or dir.length_squared() < 0.001:
 		return
 	var norm_dir := dir.normalized()
-	_kick_offset += norm_dir * minf(strength * _intensity, 9.0)
-	offset += norm_dir * minf(strength * _intensity, 9.0)
+	var impulse := norm_dir * minf(strength * _intensity, 9.0)
+	_kick_offset = (_kick_offset + impulse).limit_length(10.0 * _intensity)
+	offset = _kick_offset
 
 ## 叠加创伤值（0.0 ~ 1.0）：只在「值得看的节点」调用
 ## 精英/首领的登场·震地·伏诛、玩家受创、界碑聚灵阵、落雷命中 —— 普通命中与小怪死亡不给

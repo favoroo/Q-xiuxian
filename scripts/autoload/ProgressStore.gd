@@ -46,11 +46,6 @@ static func load_into(gm: Node) -> void:
 		var vlog = cfg.get_value("records", "victory_log", [])
 		gm.victory_log = vlog.duplicate() if vlog is Array else []
 
-		var miles = cfg.get_value("records", "claimed_milestones", [])
-		gm.claimed_milestones = miles.duplicate() if miles is Array else []
-
-		gm.stone_purse = int(cfg.get_value("records", "stone_purse", 0))
-
 		gm.tutorial_seen = bool(cfg.get_value("progress", "tutorial_seen", false))
 
 		var hist = cfg.get_value("history", "recent_runs", [])
@@ -62,8 +57,6 @@ static func load_into(gm: Node) -> void:
 		gm.cultivator_best_danger = {}
 		gm.cultivator_records = {}
 		gm.victory_log = []
-		gm.claimed_milestones = []
-		gm.stone_purse = 0
 		gm.run_history = []
 
 	# 确保初始集合必在（防止旧档或异常数据丢失基础内容）
@@ -93,8 +86,6 @@ static func save_from(gm: Node) -> void:
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
 	cfg.set_value("records", "cultivator_records", gm.cultivator_records)
 	cfg.set_value("records", "victory_log", gm.victory_log)
-	cfg.set_value("records", "claimed_milestones", gm.claimed_milestones)
-	cfg.set_value("records", "stone_purse", gm.stone_purse)
 	cfg.set_value("progress", "tutorial_seen", gm.tutorial_seen)
 	cfg.set_value("history", "recent_runs", gm.run_history)
 	cfg.save(PROGRESS_PATH)
@@ -201,10 +192,10 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	if victory and prev_wins == 0:
 		var cdef := CultivatorData.get_def(cid_rec)
 		gm.last_run_new_records.append("角色首胜 · %s" % String(cdef.get("name", "角色")))
-	# 里程碑达标提示（只提示不自动发灵石，需在修仙志手动领取）
-	for m in AchievementData.milestones_of(cid_rec):
+	# 里程碑达标提示（称号即时点亮，不发放任何奖励）
+	for m in AchievementData.MILESTONES:
 		if prev_wins < int(m["wins"]) and int(rec["wins"]) >= int(m["wins"]):
-			gm.last_run_new_records.append("里程碑达成 ·「%s」金币待领取" % String(m["title"]))
+			gm.last_run_new_records.append("里程碑达成 · 称号「%s」" % String(m["title"]))
 
 	var run_ctx := {
 		"victory": victory,

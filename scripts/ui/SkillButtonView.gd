@@ -19,7 +19,7 @@ class SkillCdOverlay extends Control:
 			return
 		var center := size * 0.5
 		var radius := minf(center.x, center.y)
-		draw_circle(center, radius, Color(0.02, 0.04, 0.08, 0.70))
+		draw_circle(center, radius, Color(0.02, 0.02, 0.03, 0.70))
 		var sweep := TAU * clampf(1.0 - cd_ratio, 0.0, 1.0)
 		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, Color(0.35, 0.75, 1.0, 0.95), 3.0, true)
 
@@ -72,32 +72,8 @@ static func style_circle_button(btn: Button) -> void:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_font_override("font", GameStyle.display_font())
 	btn.add_theme_font_size_override("font_size", 28)
-	btn.add_theme_color_override("font_color", GameStyle.PAPER)
+	btn.add_theme_color_override("font_color", GameStyle.CHALK)
 	btn.add_theme_color_override("font_hover_color", GameStyle.JADE)
 	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)
 	btn.add_theme_constant_override("outline_size", 4)
 	btn.add_theme_color_override("font_outline_color", GameStyle.INK)
-
-static func apply_btn_pos(skill_box: Control) -> void:
-	if skill_box == null:
-		return
-	var pos := StringName(str(SettingsManager.get_val(&"display", &"skill_btn_pos", &"right_bottom")))
-	match pos:
-		&"right_mid":
-			skill_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-			skill_box.offset_left = -SKILL_BTN_SIZE - 56.0
-			skill_box.offset_right = -56.0
-			skill_box.offset_top = 130.0
-			skill_box.offset_bottom = 130.0 + SKILL_BTN_SIZE
-		&"left_bottom":
-			skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-			skill_box.offset_left = 68.0
-			skill_box.offset_right = 68.0 + SKILL_BTN_SIZE
-			skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
-			skill_box.offset_bottom = -72.0
-		_:
-			skill_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-			skill_box.offset_left = -SKILL_BTN_SIZE - 68.0
-			skill_box.offset_right = -68.0
-			skill_box.offset_top = -SKILL_BTN_SIZE - 72.0
-			skill_box.offset_bottom = -72.0

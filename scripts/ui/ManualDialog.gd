@@ -440,12 +440,13 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(def.get("name", cid))
-	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
+	# 锁定行是暗底（INK 压暗），名字走暗底亮字；解锁行是纸灰卡，走墨黑
+	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
 	text_col.add_child(name_lbl)
 
 	var epithet_lbl := Label.new()
 	epithet_lbl.text = String(def.get("epithet", ""))
-	GameStyle.label(epithet_lbl, 11, GameStyle.GREY)
+	GameStyle.label(epithet_lbl, 11, GameStyle.GREY if unlocked else Color(0.82, 0.80, 0.74))
 	text_col.add_child(epithet_lbl)
 
 	var equip_str: String = String(def.get("start_equip", ""))
@@ -472,7 +473,8 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	if unlocked:
 		status_lbl.text = " 已入门 "
 		status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
-		GameStyle.label(status_lbl, 12, GameStyle.GOOD)
+		# 暗绿徽章配暗底亮字（GOOD 已调深，与 GOOD_DK 同明度会糊）
+		GameStyle.label(status_lbl, 12, GameStyle.CHALK)
 	else:
 		status_lbl.text = " 未解锁 "
 		status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
@@ -542,7 +544,8 @@ func _make_synergy_card() -> Control:
 			var name_lbl := Label.new()
 			name_lbl.text = String(syn.get("name", tag))
 			name_lbl.custom_minimum_size = Vector2(64, 0)
-			GameStyle.label(name_lbl, 13, GameStyle.GOLD_EDGE if group[0] == "类型" else GameStyle.JADE,
+			# 纸灰卡上亮蓝字会洗白，类型名走主蓝（元素名深玉绿白底可读，不动）
+			GameStyle.label(name_lbl, 13, GameStyle.GOLD if group[0] == "类型" else GameStyle.JADE,
 				0, GameStyle.INK, true)
 			line.add_child(name_lbl)
 			var desc_lbl := Label.new()
@@ -584,7 +587,7 @@ func _make_stat_guide_card() -> Control:
 		var name_lbl := Label.new()
 		name_lbl.text = StatInfoData.title(sid)
 		name_lbl.custom_minimum_size = Vector2(96, 0)
-		GameStyle.label(name_lbl, 12, GameStyle.GOLD_EDGE, 0, GameStyle.INK, true)
+		GameStyle.label(name_lbl, 12, GameStyle.GOLD, 0, GameStyle.INK, true)
 		line.add_child(name_lbl)
 		var brief_lbl := Label.new()
 		brief_lbl.text = GameStyle.wrap_cjk(StatInfoData.brief(sid), GameStyle.body_font(), 12, TEXT_W - 116.0)
@@ -611,7 +614,7 @@ func _make_build_card(guide: Dictionary) -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ 流派 · " + String(guide.get("name", ""))
-	GameStyle.label(title_lbl, 15, GameStyle.GOLD_EDGE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.GOLD, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var wps: Array[String] = []

@@ -86,7 +86,7 @@ func _on_tab_switched(_index: int) -> void:
 func _build_modal_chrome() -> void:
 	# 1. 半透明暗色遮罩（点击空白处关闭）
 	_dim_rect = ColorRect.new()
-	_dim_rect.color = Color(0.02, 0.04, 0.09, 0.85)
+	_dim_rect.color = Color(0.02, 0.02, 0.03, 0.85)
 	_dim_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dim_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dim_rect.gui_input.connect(func(event: InputEvent):
@@ -185,7 +185,8 @@ func _switch_tab(index: int) -> void:
 		if i == index:
 			GameStyle.button(b, GameStyle.GOLD, GameStyle.GOLD_EDGE, 13, GameStyle.INK_TEXT, 5.0)
 		else:
-			GameStyle.button(b, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
+			# 悬停转主蓝底：灰墨字压蓝底洗掉，悬停态换黑字（黑舞台主题蓝底配黑字）
+			GameStyle.button(b, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0, GameStyle.INK_TEXT)
 	_on_tab_switched(index)
 
 ## 子类可选覆写：open 时的刷新逻辑

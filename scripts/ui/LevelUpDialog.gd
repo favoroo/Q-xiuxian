@@ -292,7 +292,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	var rarity_lbl := Label.new()
 	rarity_lbl.text = " " + data.get("rarity_label", "普通") + " "
 	GameStyle.label(rarity_lbl, 11, GameStyle.PAPER)
-	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.PAPER
+	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.CHALK
 	rarity_lbl.add_theme_color_override("font_color", band_text_col)
 	var pill_style := GameStyle.block(rarity_col, GameStyle.SLANT_BAND, Vector2(2, 2))
 	pill_style.content_margin_top = 2.0
@@ -317,7 +317,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	icon_box.custom_minimum_size = Vector2(56, 56)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.PAPER_DIM, 2, 0.0)
+	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
 	icon_box.add_theme_stylebox_override("panel", icon_panel_style)
 
 	var icon_tex := TextureRect.new()
@@ -365,7 +365,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	r_desc.add_theme_font_override("bold_font", GameStyle.body_font())
 	r_desc.add_theme_font_size_override("normal_font_size", 13)
 	r_desc.add_theme_font_size_override("bold_font_size", 13)
-	r_desc.add_theme_color_override("default_color", Color(0.85, 0.87, 0.94))
+	r_desc.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
 	vbox.add_child(r_desc)
 
 	# 「元素伤害」类加点（如五行真火）给一句受益提示：当前上阵有几把法器真吃这条加成。
@@ -439,7 +439,7 @@ func _select_card(index: int) -> void:
 			tw.tween_property(card, "modulate", Color(0.78, 0.80, 0.86, 0.78), 0.12)
 			style.bg_color = Color(GameStyle.NAVY.r, GameStyle.NAVY.g, GameStyle.NAVY.b, 0.96)
 			style.border_color = rarity_col
-			icon_st.border_color = GameStyle.PAPER_DIM
+			icon_st.border_color = GameStyle.LINE
 			title_lbl.add_theme_color_override("font_color", GameStyle.PAPER)
 			badge.text = "×%d" % owned if owned > 0 else ""
 			badge.add_theme_color_override("font_color", GameStyle.GREY)

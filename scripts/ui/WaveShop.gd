@@ -476,7 +476,7 @@ func _create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	var lbl := Label.new()
 	lbl.text = "装备 %d/%d（上限%d件）" % [used, max_slots, max_slots]
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.JADE)
+	GameStyle.label(lbl, 11, GameStyle.JADE_EDGE)
 	return chip
 
 func _create_stash_divider() -> Control:
@@ -487,7 +487,8 @@ func _create_stash_divider() -> Control:
 	var lbl = Label.new()
 	lbl.text = "背包 %d/%d" % [GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS]
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.GREY)
+	# 暗井（INK 底）上的次要小字：GREY 翻转后偏暗，换暗底次级亮字
+	GameStyle.label(lbl, 11, Color(0.82, 0.8, 0.74))
 	return chip
 
 func _create_items_divider() -> Control:
@@ -498,7 +499,7 @@ func _create_items_divider() -> Control:
 	var lbl = Label.new()
 	lbl.text = "道具 %d" % GameManager.items.size()
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.GREY)
+	GameStyle.label(lbl, 11, Color(0.82, 0.8, 0.74))
 	return chip
 
 ## 已持有法宝的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
@@ -689,7 +690,7 @@ func _open_shop_weapon_tip(item: Dictionary, pool: String, index: int, anchor: C
 		"text": "售 %d 金币" % price,
 		"color": GameStyle.BAD,
 		"edge_color": GameStyle.BAD_DK,
-		"text_color": GameStyle.PAPER,
+		"text_color": GameStyle.CHALK,
 		"callback": func() -> void:
 			var ok := false
 			if in_stash:
@@ -958,7 +959,7 @@ func _create_offer_card_price_btn(offer: Dictionary, index: int, sold: bool, pri
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(0, CARD_PRICE_H)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
-	GameStyle.button(btn, GameStyle.JADE, GameStyle.PAPER, 14, GameStyle.INK_TEXT, 6.0)
+	GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 14, GameStyle.INK_TEXT, 6.0)
 	btn.text = "%d 金币" % price
 	if sold:
 		btn.text = "已 售 出"

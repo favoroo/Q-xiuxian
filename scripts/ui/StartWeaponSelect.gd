@@ -266,7 +266,7 @@ func _choose(w_id: String) -> void:
 	if _transitioning:
 		return
 	_transitioning = true
-	AudioManager.play_sfx("level_up", 0.9)
+	AudioManager.play_sfx("ui_confirm", 0.95)
 	GameManager.start_run(w_id)
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)

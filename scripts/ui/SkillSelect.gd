@@ -160,7 +160,7 @@ func _create_card(s_id: String) -> Control:
 		tex_rect.offset_right = -6.0
 		tex_rect.offset_bottom = -6.0
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		tex_rect.modulate = GameStyle.JADE if enhanced else GameStyle.PAPER
+		tex_rect.modulate = GameStyle.JADE if enhanced else GameStyle.CHALK
 		icon_box.add_child(tex_rect)
 	else:
 		var glyph_lbl = Label.new()
@@ -260,7 +260,7 @@ func _choose(s_id: String) -> void:
 	if _transitioning:
 		return
 	_transitioning = true
-	AudioManager.play_sfx("level_up", 0.9)
+	AudioManager.play_sfx("ui_confirm", 0.95)
 	GameManager.pending_skill_id = s_id
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)

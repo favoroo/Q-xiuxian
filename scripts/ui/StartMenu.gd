@@ -2,10 +2,10 @@ class_name StartMenu
 extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
-##   ① 顶栏贴角级联徽章带（左：生涯最高危险度 + 灵石囊储备；右：快速静音 + 游戏设置）
+##   ① 顶栏贴角级联徽章带（左：生涯最高危险度；右：快速静音 + 游戏设置）
 ##   ② 居中斜切大匾标题（「渡 个 劫」）—— 贴顶栏，不跟着整组往下飘
 ##   ③ 左 1 主方块（Hero「开始渡劫」，内嵌 6 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
-##   ④ 底部通宽横幅（天道版本信息与检查更新）—— 贴屏底
+##   ④ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
 ## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择道统（paused 链不中断）。
 
 signal settings_requested
@@ -26,18 +26,22 @@ const BASE_GAP_COL := 16.0
 const ROW_GAP := 14.0
 const HERO_H := 284.0
 const SMALL_H := 135.0
-const BANNER_H := 42.0
+const CORNER_BTN_H := 26.0            # 右下角「检查更新」小按钮高
 const TITLE_H_BASE := 68.0           # 标题匾基准高：只给首帧没量到实得高时兜底用
 
 ## 竖向这一列怎么贴（2026-10-10 用户真机：「标题上面怎么有那么大的空白间距」）。
 ## 旧写法把「标题 + 矩阵 + 横幅」装进一个 VBox 整组居中 ⇒ 标题被推到 y=82，屏上半截全是空的，
 ## 而眼睛看到的「空白」是屏顶→标题那 82 单位，不是组内那 12 单位缝隙。
-## 现在三段各贴各位：标题贴顶栏、横幅贴屏底；中间那点富余先当气口，气口撑到上限
+## 现在三段各贴各位：标题贴顶栏、检查更新按钮贴右下角；中间那点富余先当气口，气口撑到上限
 ## （4:3 平板那种高屏）才让主块长高 —— 540 这一档富余刚好只够气口，方块密度不变。
 const TOP_BAR_INSET_TOP := 12.0        # 顶栏带离屏顶
 const TOP_BAR_H := 40.0                # 顶栏带高（徽章 36 + 余量）
-const TITLE_GAP_TOP := 10.0            # 顶栏底 → 标题顶
-const BANNER_MARGIN_BOTTOM := 16.0     # 横幅底 → 屏底
+const TITLE_GAP_TOP := -12.0           # 顶栏底 → 标题顶（负值 = 匾顶提进顶栏带，与徽章齐平；2026-10-10 二次复核：10→0 用户仍觉没动，再提 12 压掉中上空档；匾居中与两侧徽章无横向冲突）
+## 右下角那颗检查更新按钮的收边位（2026-10-10 用户：底部通宽横幅「不用搞这么长，保留右下角这一块就可以了」）。
+## 底距 26 是让按钮连 4px 硬影都不盖住屏底那条装饰括号（括号在 BRACKET_INSET=18 处）。
+const CORNER_MARGIN_BOTTOM := 26.0
+const CORNER_MARGIN_RIGHT := 34.0
+const FOOT_BAND_H := CORNER_MARGIN_BOTTOM + CORNER_BTN_H   # 矩阵与屏底之间为按钮预留的收边带
 const BLOCK_GAP_MAX := 40.0            # 标题与矩阵、矩阵与横幅之间的气口上界，再空就让主块长高
 const HERO_H_MAX := 340.0              # 主块长高的封顶：再多只是把空白搬进卡里
 const BAND_TITLE_OFFSET := 14.0        # 装饰斜带顶边相对标题顶边的下移
@@ -47,12 +51,10 @@ var _brackets: Array[Line2D] = []
 var _top_bar: HBoxContainer
 var _title_host: CenterContainer
 var _matrix_host: CenterContainer
-var _banner_host: CenterContainer
 var _title_block: PanelContainer
 
 # 顶栏徽章控件
 var _realm_badge_btn: Button
-var _purse_badge_btn: Button
 var _sound_badge_btn: Button
 var _top_set_btn: Button
 
@@ -66,13 +68,11 @@ var _hero_start_btn: Button
 # 右侧 2×2 大方块与动态副文案
 var _small_cards: Array[PanelContainer] = []
 var _career_sub_lbl: Label
-var _career_claim_chip: Label
 var _manual_sub_lbl: Label
 var _settings_sub_lbl: Label
 
-# 底部通宽横幅
-var _banner_panel: PanelContainer
-var _banner_ver_lbl: Label
+# 右下角检查更新按钮（右对齐容器托着，按钮随状态文案自己变宽）
+var _update_host: HBoxContainer
 var _update_btn: Button
 var _update_reset_tween: Tween
 
@@ -147,14 +147,10 @@ func _build_top_bar() -> void:
 	_top_bar.add_theme_constant_override("separation", 10)
 	top_margin.add_child(_top_bar)
 
-	# 左簇：境界徽章 + 灵石囊徽章（点按均进入修仙志）
+	# 左簇：境界徽章（点按进入修仙志）
 	_realm_badge_btn = _make_badge_button("难度 · 简单", Vector2(118, 36),
 		GameStyle.GOLD, GameStyle.GOLD_EDGE, GameStyle.INK_TEXT, _on_career_pressed)
 	_top_bar.add_child(_realm_badge_btn)
-
-	_purse_badge_btn = _make_badge_button("金币 0", Vector2(116, 36),
-		GameStyle.NAVY2, GameStyle.JADE, GameStyle.JADE, _on_career_pressed)
-	_top_bar.add_child(_purse_badge_btn)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -181,7 +177,7 @@ func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Colo
 	btn.pressed.connect(callback)
 	return btn
 
-## 中央主区：标题大匾（贴顶栏）+ 五块大色块矩阵（居中）+ 底部通宽横幅（贴屏底）
+## 中央主区：标题大匾（贴顶栏）+ 五块大色块矩阵（居中）+ 右下角检查更新按钮（贴屏底屏右）
 ## 三块各挂各的容器，竖向落位由 `_layout_responsive()` 现算 —— 组内缝隙不再决定标题高低。
 func _build_center_matrix() -> void:
 	# 1. 街机海报标题大匾
@@ -227,19 +223,18 @@ func _build_center_matrix() -> void:
 	var career_res := _build_entry_block(
 		"CAREER", "战 绩", "0 胜 · 击杀 0 只",
 		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.JADE,
-		_on_career_pressed, true
+		_on_career_pressed
 	)
 	top_pair.add_child(career_res["card"])
 	_small_cards.append(career_res["card"])
 	_anim_blocks.append(career_res["card"])
 	_career_sub_lbl = career_res["sub_label"]
-	_career_claim_chip = career_res["badge_label"]
 
 	# 右上 2：传道玉简（青碧色块）
 	var manual_res := _build_entry_block(
 		"MANUAL", "图鉴", "20 武器 · 18 道具 · 9 角色",
 		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOOD,
-		_on_manual_pressed, false
+		_on_manual_pressed
 	)
 	top_pair.add_child(manual_res["card"])
 	_small_cards.append(manual_res["card"])
@@ -250,31 +245,45 @@ func _build_center_matrix() -> void:
 	var settings_res := _build_entry_block(
 		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
 		GameStyle.PAPER, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOLD,
-		_on_settings_pressed, false
+		_on_settings_pressed
 	)
 	bot_pair.add_child(settings_res["card"])
 	_small_cards.append(settings_res["card"])
 	_anim_blocks.append(settings_res["card"])
 	_settings_sub_lbl = settings_res["sub_label"]
 
-	# 右下 2：归隐山林·退出（朱砂色块）
-	var quit_res := _build_entry_block(
-		"EXIT", "退出游戏", "保存进度 · 暂时离开",
-		GameStyle.BAD, GameStyle.PAPER, GameStyle.INK, GameStyle.PAPER,
-		_on_quit_pressed, false
+	# 右下 2：新手指南（元素橙色块）
+	var guide_res := _build_entry_block(
+		"GUIDE", "新手指南", "六页图文 · 随时重温",
+		GameStyle.ELEMENT, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.ELEMENT,
+		_on_guide_pressed
 	)
-	bot_pair.add_child(quit_res["card"])
-	_small_cards.append(quit_res["card"])
-	_anim_blocks.append(quit_res["card"])
+	bot_pair.add_child(guide_res["card"])
+	_small_cards.append(guide_res["card"])
+	_anim_blocks.append(guide_res["card"])
 
-	# 3. 底部通宽收尾横幅
-	_banner_host = CenterContainer.new()
-	_banner_host.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_banner_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_banner_host)
-	_banner_panel = _build_bottom_banner()
-	_banner_host.add_child(_banner_panel)
-	_anim_blocks.append(_banner_panel)
+	# 3. 右下角一颗检查更新按钮
+	_update_host = HBoxContainer.new()
+	_update_host.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_update_host.alignment = BoxContainer.ALIGNMENT_END
+	_update_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_update_host)
+
+	_update_btn = Button.new()
+	_update_btn.text = "检查更新"
+	_update_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
+	_update_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_update_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+	# 状态文案（「已是最新版」「新版 v0.0.17!」）比默认四字长，按钮要贴字自己撑开；
+	# GameStyle.block 不带左右内距，这里补上，否则长文案会顶到斜切边。
+	for key in ["normal", "hover", "pressed"]:
+		var sbs := _update_btn.get_theme_stylebox(StringName(key)) as StyleBoxFlat
+		if sbs != null:
+			sbs.content_margin_left = 10.0
+			sbs.content_margin_right = 10.0
+	_update_btn.pressed.connect(_on_update_pressed)
+	_update_host.add_child(_update_btn)
+	_anim_blocks.append(_update_btn)
 
 func _build_title_section(parent: Control) -> void:
 	var title_row := HBoxContainer.new()
@@ -422,7 +431,7 @@ func _build_hero_block() -> PanelContainer:
 	_hero_start_btn.custom_minimum_size = Vector2(0, 42)
 	_hero_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hero_start_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_hero_start_btn, GameStyle.NAVY2, GameStyle.JADE, 18, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
+	GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 	_hero_start_btn.pressed.connect(_on_start_pressed)
 	vbox.add_child(_hero_start_btn)
 
@@ -433,7 +442,7 @@ func _build_hero_block() -> PanelContainer:
 ## 右列 2×2 实底大色块构建器（整块可点，内置角签、大名号、副文案、右下箭标）
 func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 		face_col: Color, ink_col: Color, chip_bg: Color, chip_fg: Color,
-		callback: Callable, with_badge: bool) -> Dictionary:
+		callback: Callable) -> Dictionary:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_SMALL_W, SMALL_H)
 	var normal_sb := GameStyle.block(face_col, GameStyle.SLANT_BLOCK, Vector2(5, 6))
@@ -447,7 +456,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	vbox.add_theme_constant_override("separation", 4)
 	card.add_child(vbox)
 
-	# 顶行：英文角签 + 可选提醒角标
+	# 顶行：英文角签
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 6)
 	vbox.add_child(top_row)
@@ -457,19 +466,6 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
 	GameStyle.label(chip, 10, chip_fg)
 	top_row.add_child(chip)
-
-	var top_sp := Control.new()
-	top_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(top_sp)
-
-	var badge_lbl: Label = null
-	if with_badge:
-		badge_lbl = Label.new()
-		badge_lbl.text = " 有奖可领 "
-		badge_lbl.visible = false
-		badge_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.ELEMENT))
-		GameStyle.label(badge_lbl, 10, GameStyle.INK_TEXT)
-		top_row.add_child(badge_lbl)
 
 	# 中行：大标题
 	var name_lbl := Label.new()
@@ -520,51 +516,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	return {
 		"card": card,
 		"sub_label": sub_lbl,
-		"badge_label": badge_lbl,
 	}
-
-## 底部通宽横幅（仿 dudu-cocos 底部活动/状态条）
-func _build_bottom_banner() -> PanelContainer:
-	var total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
-	var banner := PanelContainer.new()
-	banner.custom_minimum_size = Vector2(total_w, BANNER_H)
-	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_BLOCK, Vector2(4, 5))
-	sb.border_color = GameStyle.GOLD_DK
-	sb.content_margin_left = 16.0
-	sb.content_margin_right = 14.0
-	sb.content_margin_top = 5.0
-	sb.content_margin_bottom = 7.0
-	banner.add_theme_stylebox_override("panel", sb)
-
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 12)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.add_child(hbox)
-
-	var chip := Label.new()
-	chip.text = " REALM "
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.ELEMENT))
-	GameStyle.label(chip, 10, GameStyle.INK_TEXT)
-	hbox.add_child(chip)
-
-	_banner_ver_lbl = Label.new()
-	_banner_ver_lbl.text = "%s %s · 生存战斗 · 击杀敌人" % [Version.APP_NAME, Version.APP_VERSION_NAME]
-	_banner_ver_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(_banner_ver_lbl, 13, GameStyle.PAPER)
-	hbox.add_child(_banner_ver_lbl)
-
-	_update_btn = Button.new()
-	_update_btn.text = "检 查 更 新"
-	_update_btn.custom_minimum_size = Vector2(118, 28)
-	_update_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_update_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_update_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
-	_update_btn.pressed.connect(_on_update_pressed)
-	hbox.add_child(_update_btn)
-
-	return banner
 
 ## 响应式排版：适配 720（4:3）/ 960（16:9）/ 1204（20:9），保证斜切块画出来绝不出屏
 func _layout_responsive() -> void:
@@ -578,14 +530,14 @@ func _layout_responsive() -> void:
 	# 1. 四角括号贴角重排
 	_layout_brackets(vp)
 
-	# 2. 竖向三段落位：标题贴顶栏、横幅贴屏底，矩阵夹在中间。
+	# 2. 竖向三段落位：标题贴顶栏、检查更新按钮贴右下角，矩阵夹在中间。
 	#    中间富余先摊成气口（≤BLOCK_GAP_MAX），气口顶到上限还有富余才让主块长高（≤HERO_H_MAX）。
 	#    960×540 这一档算出来气口 34、主块 284 ⇒ 方块密度与旧版一致，只是不再往下飘。
 	var title_top := TOP_BAR_INSET_TOP + TOP_BAR_H + TITLE_GAP_TOP
 	var title_h := _title_h()
 	var title_bottom := title_top + title_h
-	var banner_top := vp.y - BANNER_MARGIN_BOTTOM - BANNER_H
-	var mid_region := banner_top - title_bottom
+	var foot_top := vp.y - FOOT_BAND_H
+	var mid_region := foot_top - title_bottom
 	var gap := minf(maxf((mid_region - HERO_H) / 2.0, 0.0), BLOCK_GAP_MAX)
 	var hero_h := clampf(mid_region - 2.0 * gap, HERO_H, HERO_H_MAX)
 	gap = maxf((mid_region - hero_h) / 2.0, 0.0)
@@ -595,10 +547,11 @@ func _layout_responsive() -> void:
 		_title_host.offset_bottom = title_top + title_h
 	if _matrix_host != null and is_instance_valid(_matrix_host):
 		_matrix_host.offset_top = title_bottom + gap
-		_matrix_host.offset_bottom = -(vp.y - banner_top + gap)
-	if _banner_host != null and is_instance_valid(_banner_host):
-		_banner_host.offset_top = -(BANNER_MARGIN_BOTTOM + BANNER_H)
-		_banner_host.offset_bottom = -BANNER_MARGIN_BOTTOM
+		_matrix_host.offset_bottom = -(vp.y - foot_top + gap)
+	if _update_host != null and is_instance_valid(_update_host):
+		_update_host.offset_top = -FOOT_BAND_H
+		_update_host.offset_bottom = -CORNER_MARGIN_BOTTOM
+		_update_host.offset_right = -CORNER_MARGIN_RIGHT
 
 	# 3. 装饰斜带跨屏重排（顶边跟着标题走，不再钉死像素）
 	if _decor_band != null and is_instance_valid(_decor_band):
@@ -614,9 +567,6 @@ func _layout_responsive() -> void:
 
 	var hero_w := roundf(BASE_HERO_W * f)
 	var small_w := roundf(BASE_SMALL_W * f)
-	var gap_hero := roundf(BASE_GAP_HERO * f)
-	var gap_col := roundf(BASE_GAP_COL * f)
-	var total_w := hero_w + gap_hero + small_w * 2.0 + gap_col
 
 	if _hero_card != null and is_instance_valid(_hero_card):
 		_hero_card.custom_minimum_size = Vector2(hero_w, hero_h)
@@ -626,8 +576,6 @@ func _layout_responsive() -> void:
 	for btn in _danger_buttons:
 		if is_instance_valid(btn):
 			btn.custom_minimum_size = Vector2(maxf(34.0, floorf((hero_w - 64.0) / 6.0)), 28.0)
-	if _banner_panel != null and is_instance_valid(_banner_panel):
-		_banner_panel.custom_minimum_size = Vector2(total_w, BANNER_H)
 
 ## 标题匾这一行多高：量实得的最小高（字体 + stylebox 边距），量不到时（首帧还没排）
 ## 用基准档兜一帧，`_ready` 里已 call_deferred 再贴一次。
@@ -684,7 +632,7 @@ func _refresh_endless_toggle() -> void:
 			_hero_sub_lbl.text = "无尽模式已开 · 突破二十波上限 · 战至终局"
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "直 入 无 尽  》"
-			GameStyle.button(_hero_start_btn, GameStyle.GOOD_DK, GameStyle.GOOD, 18, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
+			GameStyle.button(_hero_start_btn, GameStyle.GOOD, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 	else:
 		_endless_btn.text = "无尽模式 · [关]"
 		GameStyle.button(_endless_btn, GameStyle.NAVY2, GameStyle.JADE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
@@ -692,7 +640,7 @@ func _refresh_endless_toggle() -> void:
 			_hero_sub_lbl.text = "九名角色 · 二十波敌人 · 生存通关"
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "开 始 游 戏  》"
-			GameStyle.button(_hero_start_btn, GameStyle.NAVY2, GameStyle.JADE, 18, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
+			GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 
 func _refresh_sound_badge() -> void:
 	if _sound_badge_btn == null or not is_instance_valid(_sound_badge_btn):
@@ -700,20 +648,18 @@ func _refresh_sound_badge() -> void:
 	var muted := SettingsManager.is_bus_muted(&"Master")
 	if muted:
 		_sound_badge_btn.text = "音效 · 关"
-		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.PAPER, GameStyle.SLANT_BAND)
+		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, GameStyle.SLANT_BAND)
 	else:
 		_sound_badge_btn.text = "音效 · 开"
 		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE, GameStyle.SLANT_BAND)
 
 func _refresh_dynamic_texts() -> void:
-	# 1. 顶栏最高危险度与灵石囊
+	# 1. 顶栏最高危险度
 	var max_d := clampi(GameManager.max_danger_unlocked, 0, DANGER_NAMES.size() - 1)
 	if _realm_badge_btn != null and is_instance_valid(_realm_badge_btn):
 		_realm_badge_btn.text = "难度 · %s" % DANGER_NAMES[max_d]
-	if _purse_badge_btn != null and is_instance_valid(_purse_badge_btn):
-		_purse_badge_btn.text = "金币 %d" % GameManager.stone_purse
 
-	# 2. 修仙志卡片副行与可领角签
+	# 2. 修仙志卡片副行
 	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
 		var cs := GameManager.career_stats
 		var wins := int(cs.get("total_wins", 0))
@@ -723,8 +669,6 @@ func _refresh_dynamic_texts() -> void:
 			_career_sub_lbl.text = "%d 胜 · 最高 %d 波 · 击杀 %d" % [wins, b_wave, kills]
 		else:
 			_career_sub_lbl.text = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
-	if _career_claim_chip != null and is_instance_valid(_career_claim_chip):
-		_career_claim_chip.visible = GameManager.has_claimable_rewards()
 
 	# 3. 传道玉简副行（显示已解锁修士/法宝数）
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
@@ -807,7 +751,7 @@ func _on_sound_toggle_pressed() -> void:
 	_refresh_dynamic_texts()
 
 func _on_start_pressed() -> void:
-	AudioManager.play_sfx("level_up", 0.9)
+	AudioManager.play_sfx("ui_confirm", 0.95)
 	if ResourceLoader.exists("res://assets/audio/vo_guide_start.wav"):
 		AudioManager.play_voice(load("res://assets/audio/vo_guide_start.wav"))
 	var tw := create_tween()
@@ -815,10 +759,9 @@ func _on_start_pressed() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func():
 		visible = false
-		# 新手指南：仅新档（未看过且从未开局过）在选角前弹一次，关闭后再进选角
+		# 新手指南：未看过就在选角前弹一次（老玩家旧档也弹一次），关闭后再进选角
 		var tut := get_parent().get_node_or_null("TutorialDialog")
-		if tut != null and not GameManager.tutorial_seen \
-				and int(GameManager.career_stats.get("total_runs", 0)) == 0:
+		if tut != null and not GameManager.tutorial_seen:
 			GameManager.tutorial_seen = true
 			ProgressStore.save_from(GameManager)
 			tut.closed.connect(_after_tutorial)
@@ -869,7 +812,7 @@ func _on_no_update_found() -> void:
 	_update_reset_tween.tween_interval(2.5)
 	_update_reset_tween.tween_callback(func():
 		if is_instance_valid(_update_btn):
-			_update_btn.text = "检 查 更 新"
+			_update_btn.text = "检查更新"
 	)
 
 func _on_check_failed(_err_msg: String) -> void:
@@ -882,7 +825,7 @@ func _on_check_failed(_err_msg: String) -> void:
 	_update_reset_tween.tween_interval(2.5)
 	_update_reset_tween.tween_callback(func():
 		if is_instance_valid(_update_btn):
-			_update_btn.text = "检 查 更 新"
+			_update_btn.text = "检查更新"
 	)
 
 func _cancel_reset_timer() -> void:
@@ -899,5 +842,8 @@ func _on_career_pressed() -> void:
 func _on_manual_pressed() -> void:
 	manual_requested.emit()
 
-func _on_quit_pressed() -> void:
-	get_tree().quit()
+func _on_guide_pressed() -> void:
+	# 手动重温新手指南：不动 tutorial_seen 存档位，关闭后留在主菜单
+	var tut := get_parent().get_node_or_null("TutorialDialog")
+	if tut != null:
+		tut.open()

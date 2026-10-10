@@ -15,13 +15,13 @@ extends Node2D
 const FALLBACK_TIP := Vector2(20, 0)
 
 ## 近战"画多大==判多大"（2026-10-09）：判定是一个圆 —— 圆心在本体前突 MELEE_LUNGE、
-## 半径 MELEE_ARC_RADIUS × arc_scale × 射程乘区。弧光贴图 slash_effect.png 是围绕自身轴心、
-## 半径 24..31 画布像素、张角 ±70° 的一弯月牙，所以把月牙轴心摆到判定圆心、缩放取
+## 半径 MELEE_ARC_RADIUS × arc_scale × 射程乘区。弧光贴图 slash_effect.png（256px 高清直出，
+## 2026-10-10 重烘：细月牙 + 白锋外缘，压掉旧 64px 版放大后的马赛克）围绕自身轴心、
+## 半径 124 画布像素、张角 ±70° 的一弯细月牙，所以把月牙轴心摆到判定圆心、缩放取
 ## 判定半径 / SLASH_ART_OUTER ⇒ 月牙外缘正好压在判定圆的边界上。
-## 旧写法 position=(18,0)、scale=0.85 是钉死的：月牙只够到本体前 ~44px，一挥真打到 ~105px。
 const MELEE_LUNGE := 30.0
 const MELEE_ARC_RADIUS := 75.0
-const SLASH_ART_OUTER := 31.0
+const SLASH_ART_OUTER := 124.0
 
 @export var weapon_def_id: String = "qingyun_sword"
 @export var star: int = 1

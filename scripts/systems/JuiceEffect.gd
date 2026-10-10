@@ -191,19 +191,19 @@ func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
 
-	# 0. 受击瞬间中心闪光核与锐利斩痕星芒（仅前 35% 生命周期内爆发，「短、快、准」瞬间反馈）
-	if effect_type == EffectType.HIT_SPARKS and progress < 0.36:
-		var flash_t := 1.0 - (progress / 0.36)
-		var core_r := (9.5 if is_crit else 6.0) * flash_t
-		var core_c := Color(1.0, 0.98, 0.92, flash_t * 0.95)
+	# 0. 受击瞬间中心高亮闪光核与锐利斩痕光刃（空洞骑士风：黑白/青金高对比度爆发）
+	if effect_type == EffectType.HIT_SPARKS and progress < 0.42:
+		var flash_t := 1.0 - (progress / 0.42)
+		var core_r := (14.0 if is_crit else 9.0) * flash_t
+		var core_c := Color(1.5, 1.5, 1.35, flash_t * 0.95)
 		draw_circle(Vector2.ZERO, core_r, core_c)
 		var slash_dir := Vector2.RIGHT.rotated(_hit_angle + PI * 0.5)
-		var slash_len := (24.0 if is_crit else 14.0) * (0.4 + 0.6 * flash_t)
-		var slash_col := Color(1.0, 0.92, 0.65, flash_t * 0.92) if is_crit else Color(0.88, 0.97, 1.0, flash_t * 0.85)
-		draw_line(-slash_dir * slash_len, slash_dir * slash_len, slash_col, (3.2 if is_crit else 2.2) * flash_t, true)
+		var slash_len := (34.0 if is_crit else 22.0) * (0.35 + 0.65 * flash_t)
+		var slash_col := Color(1.0, 0.94, 0.68, flash_t * 0.95) if is_crit else Color(0.92, 0.98, 1.0, flash_t * 0.92)
+		draw_line(-slash_dir * slash_len, slash_dir * slash_len, slash_col, (4.2 if is_crit else 3.0) * flash_t, true)
 		if is_crit:
 			var cross_dir := Vector2.RIGHT.rotated(_hit_angle)
-			draw_line(-cross_dir * (slash_len * 0.75), cross_dir * (slash_len * 1.15), Color(1.0, 0.45, 0.2, flash_t * 0.88), 2.6 * flash_t, true)
+			draw_line(-cross_dir * (slash_len * 0.75), cross_dir * (slash_len * 1.15), Color(1.0, 0.42, 0.18, flash_t * 0.92), 3.4 * flash_t, true)
 
 	# 1. 冲击光环
 	for i in range(_r_count):
@@ -232,31 +232,31 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 	if not _ready_to_spawn(parent):
 		return
 	var fx := _acquire()
-	fx._begin(EffectType.HIT_SPARKS, pos, 0.20 if not crit else 0.25, Z_OVERLAY)
+	fx._begin(EffectType.HIT_SPARKS, pos, 0.22 if not crit else 0.28, Z_OVERLAY)
 	fx.is_crit = crit
 
-	var count := 8 if not crit else 14
+	var count := 12 if not crit else 18
 	var base_angle := hit_dir.angle() if hit_dir.length_squared() > 0.01 else randf() * TAU
 	fx._hit_angle = base_angle
-	var cone := deg_to_rad(58.0)
+	var cone := deg_to_rad(62.0)
 
-	var core_col := Color(0.9, 0.98, 1.0, 1.0) if not crit else Color(1.0, 0.96, 0.65, 1.0)
-	var glow_col := Color(0.3, 0.7, 1.0, 0.9) if not crit else Color(1.0, 0.65, 0.15, 0.95)
+	var core_col := Color(0.95, 0.99, 1.0, 1.0) if not crit else Color(1.0, 0.96, 0.70, 1.0)
+	var glow_col := Color(0.35, 0.75, 1.0, 0.95) if not crit else Color(1.0, 0.60, 0.15, 0.95)
 
 	for i in range(count):
 		var a := base_angle + randf_range(-cone, cone)
-		var spd := randf_range(160.0, 320.0) if not crit else randf_range(240.0, 480.0)
-		var col := core_col if randf() < 0.4 else glow_col
+		var spd := randf_range(180.0, 360.0) if not crit else randf_range(260.0, 520.0)
+		var col := core_col if randf() < 0.45 else glow_col
 		fx._add_particle(
 			Vector2.ZERO,
 			Vector2(cos(a), sin(a)) * spd,
-			randf_range(8.0, 16.0) if not crit else randf_range(12.0, 24.0),
+			randf_range(10.0, 20.0) if not crit else randf_range(14.0, 28.0),
 			col,
-			2.2 if not crit else 3.2)
+			3.0 if not crit else 4.0)
 
 	# 暴击追加一记微型扩散光斑环
 	if crit:
-		fx._add_ring(4.0, 28.0, Color(1.0, 0.88, 0.4, 0.85), 3.0)
+		fx._add_ring(4.0, 32.0, Color(1.0, 0.88, 0.4, 0.85), 3.2)
 
 ## 妖物死灭爆散：灵气崩解环 + 散逸灵尘。
 ## overkill_ratio = 致命一刀的溢出伤害 / 最大气血（0~1.5）：大数字暴击把妖物「打爆」，

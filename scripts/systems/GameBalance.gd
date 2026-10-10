@@ -135,19 +135,22 @@ static func shake_duration(trauma: float) -> float:
 	return clampf(trauma, 0.0, 1.0) / TRAUMA_DECAY
 
 # ---------------- 打击感：受击硬直 / 击退衰减 / 斩杀反馈 ----------------
-## 这一组常量钉住「砍在肉上」的手感读数（2026-10-10 打击感重塑）。
+## 这一组常量钉住「空洞骑士/死亡细胞风格」刀刀入肉、分级短击退与干脆刹停的手感读数（2026-10-10 打击感重构）。
 
-const HIT_STUN_NORMAL := 0.10            ## 普通受击硬直（秒）：期间追击归零，位移纯由击退主导
-const HIT_STUN_CRIT := 0.14              ## 暴击受击硬直（秒）
-const HIT_FREEZE_NORMAL := 0.035         ## 普通命中局部卡肉冻结（秒，~2帧）：期间不位移吸附在刀尖，随后爆发击退
-const HIT_FREEZE_CRIT := 0.065           ## 暴击命中局部卡肉冻结（秒，~4帧）
-const KNOCKBACK_DECAY_STUN := 9.0        ## 硬直期间击退衰减率（衰减略缓，保留滑行手感）
-const KNOCKBACK_DECAY_FREE := 14.0       ## 硬直结束后击退衰减率（快速收尾）
-const KNOCKBACK_HEAVY_SPEED := 260.0     ## 重击击退初速阈值（px/s）
-const KNOCKBACK_HEAVY_DECAY_MULT := 0.55 ## 重击衰减打折 ⇒ 飞得更远，「这一刀砍狠了」有位移读数
-const KILL_KNOCKBACK_MULT := 1.6         ## 致命一刀击退放大：尸体随爆散朝打击方向飞出
-const KILL_LAUNCH_DURATION := 0.18       ## 尸体飞出滑程（秒）
-const KILL_LAUNCH_MAX := 90.0            ## 尸体飞出位移上限（px，防超重暴击把尸体甩出屏幕）
+const HIT_STUN_NORMAL := 0.14            ## 普通受击硬直（秒）：短促击退（~0.11s）后原地定身抽搐，期间主动追击归零
+const HIT_STUN_CRIT := 0.20              ## 暴击受击硬直（秒）：更扎实的原地受创定身
+const HIT_FREEZE_NORMAL := 0.035         ## 普通命中局部受创抽搐/定格时长（秒，~2帧）
+const HIT_FREEZE_CRIT := 0.065           ## 暴击命中局部受创抽搐/定格时长（秒，~4帧）
+const KNOCKBACK_IMPULSE_SCALE := 1.45    ## 击退初速度折算系数：轻武器短击退(~11-14px)，重武器强击退(~40-50px)
+const KNOCKBACK_DECAY_STUN := 12.0       ## 硬直期间击退衰减率：0.11s内快速到位并干脆刹停，杜绝打冰球与持续滑行
+const KNOCKBACK_DECAY_FREE := 24.0       ## 硬直结束后残余击退极速清零率
+const KNOCKBACK_MAX_SPEED_NORMAL := 620.0 ## 普通受击初速上限（px/s）：单次击退位移严格封顶（~50px以内）
+const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）：暴击击退封顶（~65px以内）
+const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
+const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把怪物甩出半屏）
+const KILL_KNOCKBACK_MULT := 1.3         ## 致命一刀击退适度放大
+const KILL_LAUNCH_DURATION := 0.12       ## 尸体飞出急刹滑程（秒）
+const KILL_LAUNCH_MAX := 42.0            ## 尸体飞出位移上限（px，防尸体像冰球一样滑出屏幕）
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
 const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
@@ -500,6 +503,8 @@ static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionar
 				val = maxf(0.0, float(player_stats.get("elemental_damage", 0.0)))
 			"engineering_damage":
 				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
+			"harvest":
+				val = maxf(0.0, float(player_stats.get("harvest", 0.0)))
 		bonus += val * coef
 	return bonus * star_mult
 
@@ -519,6 +524,7 @@ static func stat_scaling_label(key: String) -> String:
 		"cdr_bonus": return "攻击间隔"
 		"damage_bonus": return "武器伤害加成"
 		"range_bonus": return "范围加成"
+		"harvest": return "收益"
 	return key
 
 # ---------------- 五行异常状态（灼烧 / 剧毒）叠层与结算 ----------------

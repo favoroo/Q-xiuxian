@@ -782,7 +782,7 @@ func take_damage(amount: float) -> void:
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.2)
 	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, false)
-	AudioManager.play_sfx("enemy_hit", 0.8)
+	AudioManager.play_sfx("player_hurt", 0.9)
 
 	if hit_flash_mat != null:
 		if flash_tween != null and flash_tween.is_valid():

@@ -35,7 +35,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.02, 0.04, 0.09, 0.90)
+	bg.color = Color(0.02, 0.02, 0.03, 0.90)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -79,7 +79,7 @@ func _build_ui() -> void:
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	header_row.add_child(_title_label)
-	GameStyle.label(_title_label, 25, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(_title_label, 25, GameStyle.CHALK, 0, GameStyle.INK, true)
 
 	var r_spacer := Control.new()
 	r_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(_sub_label)
-	GameStyle.label(_sub_label, 12, GameStyle.PAPER_DIM)
+	GameStyle.label(_sub_label, 12, Color(0.82, 0.80, 0.74))
 
 	# 2. 上半部分：当前选中人物的介绍大卡片
 	_detail_panel = PanelContainer.new()
@@ -240,7 +240,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	epithet_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK if is_unlocked else GameStyle.NAVY2))
 	left_col.add_child(epithet_lbl)
-	GameStyle.label(epithet_lbl, 10, GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+	GameStyle.label(epithet_lbl, 10, GameStyle.CHALK if is_unlocked else GameStyle.GREY)
 
 	var status_chip := Label.new()
 	status_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -390,7 +390,8 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
-	GameStyle.label(tag_lbl, 11, accent_col)
+	# 特性行的白面上，行文案用 accent 深色；小签本身是 _DK 暗底，签上字用亮白
+	GameStyle.label(tag_lbl, 11, GameStyle.CHALK)
 	hbox.add_child(tag_lbl)
 
 	var text_box := VBoxContainer.new()
@@ -558,7 +559,7 @@ func _choose(cid: String) -> void:
 	if _transitioning:
 		return
 	_transitioning = true
-	AudioManager.play_sfx("level_up", 0.9)
+	AudioManager.play_sfx("ui_confirm", 0.95)
 	GameManager.cultivator_id = cid
 	if GameManager.player != null and is_instance_valid(GameManager.player) and GameManager.player.has_method("_setup_sprite_frames"):
 		GameManager.player._setup_sprite_frames()

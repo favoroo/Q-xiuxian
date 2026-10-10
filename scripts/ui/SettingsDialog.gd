@@ -1,7 +1,7 @@
 class_name SettingsDialog
 extends BaseModalDialog
 
-## 游戏设置弹窗：包含灵音调律（音频）、剑意视界（战斗画面）与演化推衍（系统）三大分类
+## 游戏设置弹窗：灵音调律（音频）/ 剑意视界（战斗画面）/ 运指开阖（操作按钮布局）/ 演化推衍（系统）四大分类
 ## 继承 BaseModalDialog，严格遵循 GameStyle 大色块斜切设计语言与硬错位投影。
 
 # 音频控件映射: bus_name -> { "slider": HSlider, "val_lbl": Label, "mute_btn": Button }
@@ -32,7 +32,8 @@ func _get_top_bar_separation() -> int:
 func _build_body(root_vbox: VBoxContainer) -> void:
 	add_tab_button(0, "✦ 音效")
 	add_tab_button(1, "✦ 画面")
-	add_tab_button(2, "✦ 其他")
+	add_tab_button(2, "✦ 操作")
+	add_tab_button(3, "✦ 其他")
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -50,10 +51,24 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	_pages.append(_build_audio_page())
 	_pages.append(_build_display_page())
+	_pages.append(_build_controls_page())
 	_pages.append(_build_system_page())
 
 	for p in _pages:
 		_content_box.add_child(p)
+
+	# 底部常驻动作条：新手指南任何页签都在手边（原「其他」页单页入口上提，免翻页找）
+	var foot_bar := HBoxContainer.new()
+	foot_bar.add_theme_constant_override("separation", 12)
+	root_vbox.add_child(foot_bar)
+
+	var guide_btn := Button.new()
+	guide_btn.text = "✦ 新手指南"
+	guide_btn.custom_minimum_size = Vector2(130, 32)
+	guide_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(guide_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	guide_btn.pressed.connect(_open_tutorial)
+	foot_bar.add_child(guide_btn)
 
 	switch_tab(0)
 	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
@@ -84,7 +99,7 @@ func _build_audio_page() -> Control:
 
 	var tip := Label.new()
 	tip.text = "音效细调。支持静音与音量滑杆调节，实时生效并自动保存。"
-	GameStyle.label(tip, 12, GameStyle.GREY)
+	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
 	vbox.add_child(tip)
 
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
@@ -184,7 +199,7 @@ func _update_audio_row_ui(bus: StringName) -> void:
 		val_lbl.text = "静音"
 		val_lbl.add_theme_color_override("font_color", GameStyle.BAD)
 		mute_btn.text = "解除静音"
-		GameStyle.button(mute_btn, GameStyle.BAD_DK, GameStyle.BAD, 12, GameStyle.PAPER, 4.0)
+		GameStyle.button(mute_btn, GameStyle.BAD_DK, GameStyle.BAD, 12, GameStyle.CHALK, 4.0)
 	else:
 		val_lbl.text = "%d%%" % int(round(vol * 100.0))
 		val_lbl.add_theme_color_override("font_color", GameStyle.JADE)
@@ -205,7 +220,7 @@ func _build_display_page() -> Control:
 
 	var tip := Label.new()
 	tip.text = "调整战斗反馈与画面效果。可自由开关顿帧、震屏与伤害跳字。"
-	GameStyle.label(tip, 12, GameStyle.GREY)
+	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
 	vbox.add_child(tip)
 
 	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "命中与暴击时显示伤害数字，闪避时显示回避标识")
@@ -222,16 +237,6 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
-	# 技能按钮停靠档位：右下（拇指区）/ 右中 / 左下，点按循环，HUD 监听 setting_changed 实时挪位
-	_add_cycle_row(
-		vbox,
-		"skill_btn_pos",
-		"技能按钮位置",
-		"技能释放键位置：右下 / 右中 / 左下，点按切换",
-		func() -> String: return "位置 · %s" % SettingsManager.skill_btn_pos_label(),
-		func() -> bool: return true,
-		func(): SettingsManager.set_val(&"display", &"skill_btn_pos", SettingsManager.skill_btn_pos_next())
-	)
 
 	return scroll
 
@@ -330,7 +335,58 @@ func _update_cycle_btn_ui(key: String) -> void:
 	else:
 		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER_DIM, 5.0)
 
-# ----------------- 分页 3：演化推衍（系统与拓展） -----------------
+# ----------------- 分页 3：运指开阖（操作按钮布局） -----------------
+
+## 位置与大小都收进调整模式里现场调（看着按钮调才直观），本页只留入口与兜底
+
+func _build_controls_page() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(vbox)
+
+	var tip := Label.new()
+	tip.text = "技能键与祭坛键的位置与大小都在调整模式里改：点选按钮后拖动摆放，滑杆只调选中的那颗，全程实时保存。"
+	GameStyle.label(tip, 12, Color(0.82, 0.80, 0.74))
+	vbox.add_child(tip)
+
+	_add_action_row(vbox, "按钮位置与大小", "进入调整模式，点选技能键或祭坛键，拖动摆放、滑杆调大小",
+		"进入调整模式", _enter_btn_edit_mode, false)
+	_add_action_row(vbox, "恢复默认布局", "两个按钮的位置与大小一起回到出厂摆位",
+		"恢复默认", func(): SettingsManager.reset_button_layout(), true)
+
+	return scroll
+
+## 动作行：右侧一颗按钮执行一件事（进入调整模式 / 恢复默认布局）
+func _add_action_row(parent: VBoxContainer, title: String, desc: String,
+		btn_text: String, on_press: Callable, danger: bool) -> void:
+	var hbox := _add_row_shell(parent, title, desc)
+
+	var btn := Button.new()
+	btn.text = btn_text
+	btn.custom_minimum_size = Vector2(150, 30)
+	btn.focus_mode = Control.FOCUS_NONE
+	if danger:
+		GameStyle.button(btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0, GameStyle.CHALK)
+	else:
+		GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
+	hbox.add_child(btn)
+	btn.pressed.connect(on_press)
+
+## 进入按钮调整模式：藏起设置面板（不发 closed，回来还停在当前页），交给 HUD 覆盖层拖
+func _enter_btn_edit_mode() -> void:
+	var hud := get_parent().get_node_or_null("GameHUD") as GameHUD
+	if hud == null:
+		return
+	DetailTip.close_all(self)
+	visible = false
+	hud.open_btn_edit_overlay(func(): visible = true)
+
+# ----------------- 分页 4：演化推衍（系统与拓展） -----------------
 
 func _build_system_page() -> Control:
 	var scroll := ScrollContainer.new()
@@ -403,7 +459,7 @@ func _build_system_page() -> Control:
 	reset_btn.text = "恢 复 默 认 设 置"
 	reset_btn.custom_minimum_size = Vector2(160, 36)
 	reset_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(reset_btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(reset_btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0, GameStyle.CHALK)
 	reset_btn.pressed.connect(_on_reset_pressed)
 	bottom_hbox.add_child(reset_btn)
 
@@ -413,6 +469,13 @@ func _build_system_page() -> Control:
 	bottom_hbox.add_child(_reset_tip_lbl)
 
 	return scroll
+
+## 打开新手指南：TutorialDialog 在 UILayer 中排在设置之后，天然盖在其上；
+## ESC 先关指南再回设置，关掉后停在当前页签
+func _open_tutorial() -> void:
+	var tut := get_parent().get_node_or_null("TutorialDialog")
+	if tut != null:
+		tut.open()
 
 func _on_reset_pressed() -> void:
 	SettingsManager.reset_to_defaults()

@@ -7,7 +7,9 @@ extends Area2D
 ##      入口靠自己的 Area2D 认玩家身体那一层，判定圆 = 画出来的那颗珠子（半径 10）；
 ##      画幅与晶石同档（≈24 px），两颗掉在地上的东西一般大（2026-10-09 用户指令「葫芦再小一点」）。
 ##   ②「满血不会被拾取」—— 顶满时贴上去也不入口，压成灰相留在原地；贴身这一路每帧读引擎的
-##      接触名单，所以「压着葫芦挨一刀」不必重新踩上去也算数。
+##      接触名单，所以「压着葫芦挨一刀」不必重新踩上去也算数。灰相是「你正压着它、且现在满血」
+##      的实时读数而非作废印章：身体一离开就恢复可入口相（2026-10-10 用户口径），否则玩家掉血
+##      之后回头看那颗早就试过的葫芦，会顶着一张「已经没用」的脸被白白绕开。
 ##   ③「回合结束时未拾取的葫芦，溢出生命值部分变成灵石」—— WaveSpawner.end_wave 把场上的
 ##      珠子请进袖中结算：按当前缺血回血，回不上的那一截走 GameBalance.heal_overflow_stones
 ##      折灵石并当场飘字。既不白丢治疗，也不留一颗永远躺在地上的珠子。
@@ -24,7 +26,7 @@ var heal_amount: float = 3.0
 var heal_pct: float = 0.0   ## >0 时按玩家气血上限百分比恢复（回春葫芦用）
 
 var target_player: Node2D = null   ## 仅波末结算的飞行途中非空
-var waiting_full_hp: bool = false  ## true = 满血贴上去也没入口，留在原地等掉血
+var waiting_full_hp: bool = false  ## true = 此刻正被满血的身体压着，这一拍不入口；身体一离开就转回 false
 var current_speed: float = -40.0
 var max_speed: float = 680.0
 var acceleration: float = 850.0
@@ -77,6 +79,7 @@ func _physics_process(delta: float) -> void:
 	# 存了就会过期 —— 玩家一步跨开、名单先清，才轮到「掉血那一拍」。
 	var touching := _touching_player()
 	if touching == null:
+		_set_waiting(false)
 		return
 	if not heal_is_useful(touching):
 		_set_waiting(true)
@@ -139,6 +142,9 @@ func _collect(p: Player) -> void:
 	queue_free()
 
 func _set_waiting(value: bool) -> void:
+	# 没变就不回写：接触这一路每帧都跑，重复赋值会把渲染器持续打脏，20Hz 重绘节流白做。
+	if waiting_full_hp == value:
+		return
 	waiting_full_hp = value
 	if _sprite != null:
 		_sprite.modulate = TINT_WAITING if value else TINT_READY

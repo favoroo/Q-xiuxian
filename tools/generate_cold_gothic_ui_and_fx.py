@@ -76,40 +76,64 @@ def gen_joy_knob():
 
     downscale_save(img, os.path.join(ART_DIR, "joy_knob.png"), (64, 64))
 
-# 3. 近战挥斩剑气月牙 slash_effect.png (64x64)
-# 必须严格符合：中心 (32, 32)，外径 ~31px，张角 -70° ~ +70°
+# 3. 近战挥斩剑气月牙 slash_effect.png (256x256 高清直出)
+# 2026-10-10 用户口径：「剑气太粗太丑，还有像素马赛克；我们没有像素风」。
+# 旧版 64px 纯色月牙被放大 ~2.4 倍再叠全局 Nearest 过滤 → 粗块马赛克。
+# 新版 numpy 极坐标场直接烘 256px：细月牙（最厚 ~18% 半径）、外缘白锋高斯亮线、
+# 内里青蓝拖尾渐隐、尖端羽化收尖；运行时配 Linear 过滤（FloatingWeapon.tscn SlashEffect）。
+# 判定同源不变：中心 (127.5, 127.5)、外径 124px（== 旧 31px × 4，对齐 FloatingWeapon.SLASH_ART_OUTER）、张角 ±70°
 def gen_slash_effect():
-    img, d, s = super_canvas(64, 64)
-    cx, cy = 32 * s, 32 * s
-    r_outer_max = 30.8 * s
-    r_inner_base = 22.0 * s
+    S = 256
+    R_OUT = 124.0
+    HALF = math.radians(70.0)
+    cx = cy = (S - 1) * 0.5
 
-    outer_pts = []
-    inner_pts = []
-    segs = 40
-    half_angle = math.radians(69.0)
+    yy, xx = np.mgrid[0:S, 0:S].astype(np.float32)
+    dx = xx - cx
+    dy = yy - cy
+    r = np.hypot(dx, dy)
+    ang = np.abs(np.arctan2(dy, dx))
 
-    for i in range(segs + 1):
-        t = -half_angle + (2 * half_angle) * (i / segs)
-        # 尖端逐渐收细
-        fade = 1.0 - (abs(t) / half_angle) ** 2
-        r_out = r_outer_max - (1.0 - fade) * 2.0 * s
-        r_in = r_inner_base + fade * 3.5 * s
-        if r_in > r_out - 1.0*s:
-            r_in = r_out - 1.0*s
+    # 角向窗：±70° 内成立、边缘 3° 羽化；taper 让月牙往尖端收细
+    edge = np.clip((HALF - ang) / math.radians(3.0), 0.0, 1.0)
+    taper = np.power(np.clip(1.0 - ang / HALF, 0.0, 1.0), 0.65)
 
-        outer_pts.append((cx + r_out * math.cos(t), cy + r_out * math.sin(t)))
-        inner_pts.append((cx + r_in * math.cos(t), cy + r_in * math.sin(t)))
+    depth = R_OUT - r  # >0 在外缘以内
+    T = 4.0 + 19.0 * np.power(taper, 1.3)  # 月牙厚度：中央 ~23px、尖端收尖
 
-    crescent = outer_pts + list(reversed(inner_pts))
-    # 剑气外层幽蓝光晕
-    d.polygon(crescent, fill=(100, 200, 255, 180))
+    # 弯月主体：外缘处最实、向内渐隐；外缘外 2.5px 微羽化防硬切边
+    inside = np.power(np.clip(1.0 - depth / T, 0.0, 1.0), 1.4)
+    body = np.where(depth >= 0.0, inside, np.exp(depth / 2.5))
 
-    # 剑气核心纯白锋刃线 (外缘 1.5px 纯白如霜)
-    d.line(outer_pts, fill=COL_PAPER, width=int(2.2*s))
-    d.line(outer_pts[:10] + outer_pts[-10:], fill=COL_WHITE, width=int(1.5*s))
+    # 内里拖尾青光：比主体更宽更淡，做"剑气余韵"
+    trail = np.exp(-np.square((depth - T * 0.55) / (T * 0.75)))
+    # 外缘白锋：贴着外缘的高斯亮线，尖端略暗
+    core = np.exp(-np.square((depth - 2.0) / 2.2))
 
-    downscale_save(img, os.path.join(ART_DIR, "slash_effect.png"), (64, 64))
+    a_trail = 0.22 * trail * edge * taper
+    a_body = 0.58 * body * edge
+    a_core = 0.98 * core * edge * (0.35 + 0.65 * taper)
+
+    # 三层 alpha-over 合成（trail 在底、core 压顶）
+    a_total = np.zeros_like(r)
+    col = np.zeros((S, S, 3), dtype=np.float32)
+    for a_l, (cr, cg, cb) in [
+        (a_trail, (90, 190, 255)),
+        (a_body, (110, 205, 255)),
+        (a_core, (245, 252, 255)),
+    ]:
+        a_l = np.clip(a_l, 0.0, 1.0)
+        w = (1.0 - a_total) * a_l
+        col[..., 0] += (cr / 255.0) * w
+        col[..., 1] += (cg / 255.0) * w
+        col[..., 2] += (cb / 255.0) * w
+        a_total = a_total + w
+
+    rgb = np.where(a_total[..., None] > 1e-4, col / np.maximum(a_total[..., None], 1e-4), 0.0)
+    out = np.dstack([rgb, a_total[..., None]])
+    img = Image.fromarray((np.clip(out, 0.0, 1.0) * 255.0).astype(np.uint8), "RGBA")
+    img.save(os.path.join(ART_DIR, "slash_effect.png"), "PNG")
+    print(f"[VectorGen] 导出: {os.path.join(ART_DIR, 'slash_effect.png')} ({S}, {S})")
 
 # 4. 菱形水晶掉落物 gem_blue.png & gem_gold.png (48x48)
 def gen_rhombus_gem(is_gold=False):

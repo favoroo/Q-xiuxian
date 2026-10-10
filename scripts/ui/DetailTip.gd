@@ -91,7 +91,7 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	modulate.a = 0.0
 
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.5)
+	dim.color = Color(0.02, 0.02, 0.03, 0.5)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(_on_dim_input)
@@ -181,7 +181,7 @@ func _build_chip(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var lbl := Label.new()
 	lbl.text = " " + chip + " "
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(lbl, 11, GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.PAPER)
+	GameStyle.label(lbl, 11, GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.CHALK)
 	lbl.add_theme_stylebox_override("normal", GameStyle.chip(col))
 	vbox.add_child(lbl)
 
@@ -267,7 +267,7 @@ func _build_foot(vbox: VBoxContainer, payload: Dictionary) -> void:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.custom_minimum_size = Vector2(INNER_W, 0)
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(lbl, 11, GameStyle.GOLD_EDGE)
+	GameStyle.label(lbl, 11, GameStyle.GOLD)
 	vbox.add_child(lbl)
 
 func _build_actions(vbox: VBoxContainer, payload: Dictionary) -> void:

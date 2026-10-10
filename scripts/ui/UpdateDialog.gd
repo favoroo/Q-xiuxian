@@ -41,7 +41,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	# 全屏暗底遮罩
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.75)
+	dim.color = Color(0.02, 0.02, 0.03, 0.75)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -88,7 +88,7 @@ func _build_ui() -> void:
 
 	_ver_label = Label.new()
 	_ver_label.text = "新版本: v0.0.0"
-	GameStyle.label(_ver_label, 14, GameStyle.GOLD_EDGE)
+	GameStyle.label(_ver_label, 14, GameStyle.GOLD)
 	meta_row.add_child(_ver_label)
 
 	_size_label = Label.new()
@@ -140,7 +140,7 @@ func _build_ui() -> void:
 	_prog_label = Label.new()
 	_prog_label.text = "准备下载..."
 	_prog_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(_prog_label, 12, GameStyle.GOLD_EDGE)
+	GameStyle.label(_prog_label, 12, GameStyle.GOLD)
 	prog_text_row.add_child(_prog_label)
 
 	_prog_sub = Label.new()
@@ -175,7 +175,7 @@ func _build_ui() -> void:
 	_cancel_btn.text = "稍 后 再 说"
 	_cancel_btn.custom_minimum_size = Vector2(110, 42)
 	_cancel_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_cancel_btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0)
+	GameStyle.button(_cancel_btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0, GameStyle.CHALK)
 	_cancel_btn.pressed.connect(_on_cancel_pressed)
 	_btn_row.add_child(_cancel_btn)
 

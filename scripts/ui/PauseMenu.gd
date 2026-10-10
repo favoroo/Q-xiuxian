@@ -29,7 +29,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.04, 0.09, 0.72)
+	dim.color = Color(0.02, 0.02, 0.03, 0.72)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -94,9 +94,9 @@ func _build_ui() -> void:
 
 	_retry_btn = _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER)
 	_retry_btn.pressed.connect(_on_retry_pressed)
-	var quit_btn := _mk_btn("退 出 游 戏", 36, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.PAPER)
-	quit_btn.pressed.connect(func(): get_tree().quit())
-	_add_row(vbox, [_retry_btn, quit_btn])
+	var menu_btn := _mk_btn("返 回 主 菜 单", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
+	menu_btn.pressed.connect(_on_menu_pressed)
+	_add_row(vbox, [_retry_btn, menu_btn])
 
 	# 快捷音量微调（与 SettingsManager 双向同步）
 	var vol_title := GameStyle.label(Label.new(), 12, GameStyle.GREY)
@@ -271,7 +271,7 @@ func _on_retry_pressed() -> void:
 		_retry_armed = true
 		if is_instance_valid(_retry_btn):
 			_retry_btn.text = "再点确认重开"
-			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.JADE, 14, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
+			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.JADE, 14, GameStyle.CHALK, 6.0, GameStyle.INK_TEXT)
 		if _retry_reset_tween != null and _retry_reset_tween.is_valid():
 			_retry_reset_tween.kill()
 		_retry_reset_tween = create_tween()
@@ -279,6 +279,14 @@ func _on_retry_pressed() -> void:
 		_retry_reset_tween.tween_callback(_reset_retry_confirm)
 		return
 	_reset_retry_confirm()
+	get_tree().paused = false
+	# 带标记重载：Main._ready 消费后跳过主菜单，直落选角界面重开一把
+	GameManager.restart_to_select = true
+	GameManager.reset_run()
+	get_tree().reload_current_scene()
+
+## 返回主菜单：整场景重载，Main._ready 默认开主菜单；战场残留随场景重建一并清空
+func _on_menu_pressed() -> void:
 	get_tree().paused = false
 	GameManager.reset_run()
 	get_tree().reload_current_scene()

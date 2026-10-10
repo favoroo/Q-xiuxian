@@ -12,7 +12,7 @@ dest_files=["res://.godot/imported/bgm_cultivation.mp3-41abd95307616002a40f4a997
 
 [params]
 
-loop=false
+loop=true
 loop_offset=0
 bpm=0
 beat_count=0

@@ -7,13 +7,14 @@ extends Node
 ##   ③ 满血贴身也不入口：压成灰相留在原地；压着不动掉血（不会有第二次 body_entered）
 ##      由接触期每帧复检抓到
 ##   ④ 不追人：贴着满血葫芦走开后再掉血 → 珠子留在原地不动
+##      且灰相随接触解除：走开就恢复可入口相，不许顶着「已作废」的脸骗人绕开
 ##   ⑤ 回不上的那截折灵石：缺血 5 吃 18 → 回 5 + 溢出 13 折成灵石
 ##   ⑥ 波末结算走生产入口（WaveSpawner.end_wave 遍历 gems 组）：满血没捡到的葫芦请进袖中，
 ##      血一点不涨、溢出 18 点折 14 灵石（与藏宝匣金灵石那一路同档）
 ##   ⑦ heal() 诚实：满血回不涨血、残血精确封顶
 ## 运行: godot --headless --path . res://tests/HealOrbCheck.tscn
 ##       godot --headless --path . res://tests/HealOrbCheck.tscn -- --selftest
-##       反例把旧写法复刻两遍（隔空就吸 / 波末吞了不折钱），证明 ①⑥ 不是空枪
+##       反例把旧写法复刻三遍（隔空就吸 / 波末吞了不折钱 / 灰相粘住不解），证明 ①④⑥ 不是空枪
 
 const EPS := 0.6              ## 血量断言容差
 const STONE_EPS := 0.5        ## 灵石是整数，留半个的容差只为一眼看出差在哪
@@ -114,23 +115,29 @@ func _main_cases() -> void:
 	await _settle(4)
 	_c.check(not _eaten(watch), "满血贴身：也不入口")
 	_c.check(watch.waiting_full_hp, "满血贴身：转入待命")
-	_c.equals(watch._sprite.modulate, HealOrb.TINT_WAITING, "满血贴身：压成灰相，看得出它现在不催你")
+	_c.check(not watch._sprite.visible,
+		"灰相这把尺子对：sprite 从 _ready 起就隐藏，读它的 modulate 是空枪")
+	_c.check(_drawn_waiting(watch), "满血贴身：压成灰相，看得出它现在不催你")
 	_set_hp(0.8)   # 压着葫芦挨一刀：不会有第二次 body_entered
 	await _settle(4)
 	_c.check(_eaten(watch), "压着葫芦掉血：接触期每帧复检抓到这一拍")
 
-	# ---- ④ 走开后不追人 ----
+	# ---- ④ 走开后不追人 + 灰相不粘人 ----
 	_set_hp(1.0)
 	var leaver := _spawn_orb(0.0, 0.15, 0.0)
 	_step_on(leaver)
 	await _settle(4)
+	_c.check(_drawn_waiting(leaver), "走开前：满血贴身，它正顶着灰相")
 	leaver.global_position = _player.global_position + Vector2(FAR_AWAY, 0.0)
-	await _settle(2)   # 真人是「走出去」，接触名单要一拍才落地；这一拍之后才算 separation
+	await _settle(3)   # 真人是「走出去」，接触名单要一拍才落地；这一拍之后才算 separation
 	_c.check(leaver._touching_player() == null, "走开：引擎接触名单里已经没有玩家身体")
+	_c.check(not leaver.waiting_full_hp and not _drawn_waiting(leaver),
+		"走开：灰相当场解除 —— 这颗现在踩上去能回血，不许顶着作废的脸")
 	_set_hp(0.5)
 	await _settle(12)
 	_c.check(not _eaten(leaver) and leaver.target_player == null,
 		"走开后再掉血：珠子留在原地，不追着人飞")
+	_c.check(not _drawn_waiting(leaver), "残血期站在远处看它：仍是可入口相")
 	_step_on(leaver)
 	await _settle(4)
 	_c.check(_eaten(leaver), "再走回去压上：这才入口")
@@ -212,6 +219,13 @@ func _drawn_width(node: Node) -> float:
 		return -1.0
 	return float(sp.texture.get_width()) * sp.scale.x
 
+## 玩家看得见的那一相：由 _loot_renderer.is_waiting 决定 —— 那是 _draw() 唯一吃的灰相开关。
+## 不读 _sprite.modulate：那颗 sprite 从 _ready 起就 visible=false，读它等于对着一张黑纸判颜色。
+func _drawn_waiting(orb: HealOrb) -> bool:
+	if orb == null or not is_instance_valid(orb):
+		return false
+	return orb._loot_renderer.is_waiting
+
 ## 把人压到珠子上（生产里等价于「走过去站住」；珠子自己实现接触判定，不靠玩家摄灵圈）
 func _step_on(orb: HealOrb) -> void:
 	orb.global_position = _player.global_position
@@ -266,6 +280,22 @@ class UnpaidOrb extends HealOrb:
 		p.heal(p.max_health * heal_pct)
 		queue_free()
 
+## 反例 C：旧写法 —— 灰相只在「正压着」那一拍被写，人走开就不再过问，
+## 于是这颗从此一直顶着作废的脸，哪怕再踩上去真的能回血
+class StickyOrb extends HealOrb:
+	func _physics_process(delta: float) -> void:
+		if _settling:
+			_fly_to_settle(delta)
+			return
+		var touching := _touching_player()
+		if touching == null:
+			return
+		if not heal_is_useful(touching):
+			_set_waiting(true)
+			return
+		_set_waiting(false)
+		_collect(touching)
+
 func _selftest() -> void:
 	# 反例 A：① 那一枪必须抓到隔空吸附
 	_set_hp(0.5)
@@ -277,6 +307,37 @@ func _selftest() -> void:
 	await _settle(40)
 	_c.check(_eaten(bad) or bad.target_player != null, "反例A① 走进摄灵圈就被隔空吸走：被点名")
 	_c.check(_player.current_health > hp_before, "反例A② 人没贴上去血就回了：被点名")
+
+	# 反例 C：④ 那一枪必须抓到「人走开了灰相还粘着」
+	_set_hp(1.0)
+	var sticky := StickyOrb.new()
+	sticky.heal_pct = 0.15
+	_player.get_parent().add_child(sticky)
+	sticky.global_position = _player.global_position
+	await _settle(4)
+	_c.check(sticky.waiting_full_hp and _drawn_waiting(sticky),
+		"反例C① 满血贴身时确实压成了灰相（不然下一枪量不到东西）")
+	sticky.global_position = _player.global_position + Vector2(FAR_AWAY, 0.0)
+	await _settle(3)
+	_c.check(not _eaten(sticky) and sticky._touching_player() == null,
+		"反例C② 人已走开、珠子还在原地（尺子活着）")
+	_c.check(_drawn_waiting(sticky),
+		"反例C③ 旧写法：走开了还顶着灰相，把「现在踩上去能回血」说成「已作废」：被点名")
+
+	# 正例 C：同一把尺子换到新珠子上，走开必须真的解灰（不然上面那枪是空枪）
+	_set_hp(1.0)
+	var fresh := _spawn_orb(0.0, 0.15, 0.0)
+	await _settle(4)
+	_c.check(_drawn_waiting(fresh), "正例C① 新珠子满血贴身同样压成灰相")
+	fresh.global_position = _player.global_position + Vector2(FAR_AWAY, 0.0)
+	await _settle(3)
+	_c.check(not fresh.waiting_full_hp and not _drawn_waiting(fresh),
+		"正例C② 新珠子走开后灰相解除，回到可入口相")
+	# 这两颗要请出场：还挂在 gems 组里，下面反例B 的 end_wave 会把它们一并结算成灵石，
+	# 那杆枪量到的就是三颗珠子的钱。
+	sticky.queue_free()
+	fresh.queue_free()
+	await _settle(2)
 
 	# 反例 B：⑥ 那一枪必须抓到「吞了不给钱」
 	_set_hp(1.0)

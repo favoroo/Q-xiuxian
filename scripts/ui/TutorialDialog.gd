@@ -1,48 +1,45 @@
 class_name TutorialDialog
 extends BaseModalDialog
 
-## 新手指南（首次进入弹窗）：分页图文向导，只讲本作特色机制。
-## 触发：StartMenu 点「开始游戏」后、选角前（仅新档未看过），见 StartMenu._on_start_pressed。
-## 翻页为线性向导（上一步/下一步），不复用基类 Tab（Tab 是任意跳转模式）；
-## _tab_bar 插槽改作页码指示块。任意关闭路径（跳过/ESC/遮罩）都走 close() → closed，
-## StartMenu 用 closed 信号串接选角界面，无死路。
+## 新手指南（首次进入弹窗 + 设置「新手指南」入口）：分页图文向导，只讲本作特色机制。
+## 配图是实机截图（tools/TutorialShot.tscn 产出，assets/art/tutorial/），不是图标——
+## 教学意义优先：羁绊页拍属性面板、商店页拍货架锁定/重掷/星标陈列，正文直接指着图讲。
+## 触发：StartMenu 点「开始游戏」后、选角前（未看过就弹），见 StartMenu._on_start_pressed；
+## 设置页入口见 SettingsDialog._build_body（底部常驻按钮，任何页签可见）。
+## 翻页为线性向导（上一步/下一步），不复用基类 Tab；_tab_bar 插槽改作页码指示块。
+## 任意关闭路径（跳过/ESC/遮罩）都走 close() → closed，StartMenu 用 closed 信号串接选角。
 
-const PANEL_SIZE := Vector2(760, 430)
-## 正文排版宽度：760 面板 − 外边距 40 − 内容面板内边距 28 − 页内边距 24，再留余量
-const TEXT_W := 652.0
-const IMG_H := 72.0
+const PANEL_SIZE := Vector2(880, 540)
+## 两栏页：左图宽（16:9 → 高 259）与右栏正文换行宽度（788 内宽 − 图 460 − 栏距 14 − 余量）
+const IMG_W := 460.0
+const COL_TEXT_W := 300.0
 
-## 分页文案：title 页题 / body 正文 / images 插图路径列表（assets/art/ 独立 PNG）
+## 分页文案：title 页题 / body 正文 / image 实机截图路径（全部带图，左图右文两栏）
 const PAGES: Array[Dictionary] = [
 	{
-		"title": "欢迎渡劫",
-		"body": "道友初入修行界。目标很简单：活过二十波天劫。\n武器会自动索敌攻击，你只管摇杆走位、捡金币和经验；每波结束先悟道加点，再进灵石阁武装自己。",
-		"images": ["res://assets/art/icon_coin.png"],
+		"title": "战斗与神通",
+		"body": "左下摇杆走位，法器自动索敌攻击——你只管躲伤害、捡金币和经验。\n右下圆钮是神通，手动释放带冷却，关键时刻保命（图中「冲刺」）。打不过就跑，边退边打是活下去的第一要义。",
+		"image": "res://assets/art/tutorial/shot_combat.png",
 	},
 	{
 		"title": "装备标签羁绊",
-		"body": "每件法器带「器类 + 五行」双标签。凑齐同标签的多件法器会点亮羁绊加成，凑得越多加成越强——阵容越纯越好。\n连续两波没刷到本命标签，下一波天必补。",
-		"images": ["res://assets/art/weapon_fire_blade.png", "res://assets/art/weapon_ice_lotus.png"],
+		"body": "每件法器带「器类 + 五行」双标签。点右上「属性」打开面板，看「羁绊与元素共鸣」一栏：同标签凑齐 2 / 4 / 6 件，阶梯式点亮加成（图中火系 2/6 已亮）——阵容越纯越强。",
+		"image": "res://assets/art/tutorial/shot_synergy.png",
 	},
 	{
-		"title": "灵石阁与悟道",
-		"body": "商店每波给 5 格货架：看中的可锁定留到下波；不满意可重掷，费用逐次递增，先用免费次数。\n波后悟道一屏给 5 张属性卡，每回合也有 1 次免费刷新。",
-		"images": ["res://assets/art/item_jubaopen.png"],
+		"title": "灵石阁与升星",
+		"body": "波间商店刷 5 格货架：看中的点卡上「锁定」留到下波；不满意点左下「重掷货架」，费用逐次递增。\n背包陈列槽里集齐 3 把同名同星法器可合成升星，每星伤害翻倍——看到同名先买下囤着。",
+		"image": "res://assets/art/tutorial/shot_shop.png",
 	},
 	{
-		"title": "三合一升星",
-		"body": "集齐 3 把同名同星的法器即可合成升一星：每星伤害翻倍，最高三颗星。前期看到同名法器不妨先买下囤着。\n战斗中升级只攒点数，波次结束后统一加点，打怪途中不打断。",
-		"images": ["res://assets/art/weapon_gold_sword.png"],
+		"title": "悟道加点",
+		"body": "战斗中升级不打断，只攒点数，波次结束后统一加。\n一屏给 5 张候选卡：点中一张再按「确认选择」；每回合 1 次免费刷新（图中左下按钮），之后按次扣金币。",
+		"image": "res://assets/art/tutorial/shot_alloc.png",
 	},
 	{
 		"title": "场景交互物",
-		"body": "场上共有三座聚灵阵：走入光圈长按「激活」约 1.5 秒，触发全屏冲击重创敌人并散落金币——每座只能用一次，留给 Boss 或绝境。\n宝箱挨 3 下砸开，掉回复或金币。",
-		"images": ["res://assets/art/obelisk.png", "res://assets/art/prop_chest.png"],
-	},
-	{
-		"title": "神通",
-		"body": "出战前择一件神通随身携带，战斗中点右侧按钮手动释放，带冷却，关键时刻能保命。\n祝道友渡劫顺利——完整机制可随时在暂停菜单的「图鉴」中查阅。",
-		"images": ["res://assets/art/skill_aegis.png"],
+		"body": "场上三座聚灵阵（图中顶部发光的阵）：走入光圈长按「激活」约 1.5 秒，全屏冲击重创敌人并散落金币——每座只能用一次，留给 Boss 波或绝境。\n场上的宝箱挨 3 下砸开，掉回复或金币。",
+		"image": "res://assets/art/tutorial/shot_field.png",
 	},
 ]
 
@@ -120,7 +117,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	_go_page(0)
 
-## 构建单页：页题（青玉）+ 插图行（居中）+ 正文（wrap_cjk 硬换行）
+## 构建单页：左实机截图 + 右（页题 + 正文顶对齐），正文 wrap_cjk 硬换行
 func _build_page(p: Dictionary) -> Control:
 	var page := PanelContainer.new()
 	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -131,35 +128,40 @@ func _build_page(p: Dictionary) -> Control:
 	sb.content_margin_bottom = 8.0
 	page.add_theme_stylebox_override("panel", sb)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	page.add_child(vbox)
+	# 两栏：左实机截图 + 右（页题 + 正文，顶部对齐）
+	# 整行按内容高（259）收缩并在卡片内垂直居中——行内两者顶对齐、整块上下居中，
+	# 消掉卡片底部大空白。
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	page.add_child(row)
+
+	var img_path := String(p.get("image", ""))
+	var tex := TextureRect.new()
+	if ResourceLoader.exists(img_path):
+		tex.texture = load(img_path)
+	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex.custom_minimum_size = Vector2(IMG_W, IMG_W * 9.0 / 16.0)
+	# 顶部对齐关键：不能 FILL——面板比图片高时矩形被撑高，KEEP_ASPECT_CENTERED 会把
+	# 画面垂直居中，图片顶部就比右栏文字低一截；SHRINK_BEGIN 让矩形贴顶、画面即矩形。
+	tex.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(tex)
+
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 8)
+	row.add_child(col)
 
 	var title_lbl := Label.new()
 	title_lbl.text = "✦ " + String(p.get("title", ""))
 	GameStyle.label(title_lbl, 16, GameStyle.JADE, 0, GameStyle.INK, true)
-	vbox.add_child(title_lbl)
-
-	var imgs: Array = p.get("images", [])
-	if not imgs.is_empty():
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 18)
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		for path in imgs:
-			var tex := TextureRect.new()
-			if ResourceLoader.exists(String(path)):
-				tex.texture = load(String(path))
-			tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex.custom_minimum_size = Vector2(IMG_H * 1.4, IMG_H)
-			row.add_child(tex)
-		vbox.add_child(row)
+	col.add_child(title_lbl)
 
 	var body_lbl := Label.new()
-	body_lbl.text = GameStyle.wrap_cjk(String(p.get("body", "")), GameStyle.body_font(), 14, TEXT_W)
-	GameStyle.label(body_lbl, 14, GameStyle.PAPER_DIM)
-	vbox.add_child(body_lbl)
+	body_lbl.text = GameStyle.wrap_cjk(String(p.get("body", "")), GameStyle.body_font(), 13, COL_TEXT_W)
+	GameStyle.label(body_lbl, 13, GameStyle.PAPER_DIM)
+	col.add_child(body_lbl)
 
 	return page
 

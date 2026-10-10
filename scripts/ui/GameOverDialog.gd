@@ -16,7 +16,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	GameStyle.label(title_label, 26, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(stats_label, 15, GameStyle.PAPER)
-	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.PAPER, 18, GameStyle.INK_TEXT)
+	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT)
 	GameStyle.button(endless_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)
 	# 标题带铺半调网点（胜蓝/败朱砂面上的微芒点阵，垫在标题字底下）
 	var strip := GameStyle.halftone(title_band, Color(0.95, 0.98, 1.0, 0.14))
@@ -54,11 +54,12 @@ func _ready() -> void:
 	endless_btn.pressed.connect(_on_endless_pressed)
 
 func _on_game_over(victory: bool) -> void:
+	AudioManager.play_bgm_key("victory" if victory else "defeat", true)
 	title_label.text = "通 关 成 功 ！" if victory else "阵 亡"
 	title_band.add_theme_stylebox_override("panel",
 		GameStyle.block(GameStyle.GOLD if victory else GameStyle.BAD, GameStyle.SLANT_BAND, Vector2(4, 5)))
-	# 鎏金带面上纸白字会洗白，胜利用墨黑字；朱砂带上保留纸白
-	GameStyle.label(title_label, 26, GameStyle.INK_TEXT if victory else GameStyle.PAPER, 0, GameStyle.INK, true)
+	# 胜利主蓝带配墨黑字；朱砂带配暗底亮字（PAPER 已翻转为墨黑，红底上不可再用）
+	GameStyle.label(title_label, 26, GameStyle.INK_TEXT if victory else GameStyle.CHALK, 0, GameStyle.INK, true)
 	var mins := int(GameManager.game_time / 60.0)
 	var secs := int(GameManager.game_time) % 60
 	var cdef: Dictionary = CultivatorData.get_def(GameManager.cultivator_id)
@@ -102,7 +103,8 @@ func _refresh_unlocks() -> void:
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
-		GameStyle.label(chip, 12, GameStyle.JADE)
+		# 暗玉徽章配暗底亮字（JADE 已调深，与 JADE_DK 同明度会糊）
+		GameStyle.label(chip, 12, GameStyle.CHALK)
 		_unlocks_box.add_child(chip)
 	if newly.size() > max_show:
 		var more := Label.new()
@@ -145,6 +147,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_retry_pressed() -> void:
 	get_tree().paused = false
+	# 带标记重载：与暂停菜单「重新开始」同路，跳过主菜单直落选角界面
+	GameManager.restart_to_select = true
 	GameManager.reset_run()
 	get_tree().reload_current_scene()
 

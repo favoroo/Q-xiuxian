@@ -56,7 +56,7 @@ static func _ensure_settings() -> void:
 	_normal_settings = LabelSettings.new()
 	_normal_settings.font = GameStyle.body_font()
 	_normal_settings.font_size = 14
-	_normal_settings.font_color = GameStyle.PAPER
+	_normal_settings.font_color = GameStyle.CHALK  # 世界空间暗底跳字用亮字（PAPER 已翻转为白面板黑字）
 	_normal_settings.outline_size = 4
 	_normal_settings.outline_color = Color(0.02, 0.03, 0.06, 0.92)
 

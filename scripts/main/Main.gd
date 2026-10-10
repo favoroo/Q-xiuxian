@@ -52,7 +52,7 @@ func _ready() -> void:
 		start_menu.career_requested.connect(func():
 			career_dialog.open()
 		)
-		# 修仙志关闭后刷新主菜单动态角签：奖励领完即灭、灵石囊入账即显
+		# 修仙志关闭后回刷主菜单顶栏与卡片副行文案
 		if career_dialog.has_signal("closed") and start_menu.has_method("_refresh_dynamic_texts"):
 			career_dialog.closed.connect(start_menu._refresh_dynamic_texts)
 	if $UILayer.has_node("ManualDialog"):
@@ -90,15 +90,22 @@ func _ready() -> void:
 			ob.charge_cancelled.connect(hud.on_obelisk_charge_cancelled)
 			ob.blessing_triggered.connect(hud.on_obelisk_blessing_triggered)
 
-	# BGM 交给 AudioManager 的状态机：素材没就位就什么都不播，不再在这里硬切某一条流
-	AudioManager.play_bgm_key("battle")
+	# BGM 交给 AudioManager 的状态机：开局在主菜单与选人阶段播放 menu，进入波次后由 WaveSpawner 切 battle/trial
+	AudioManager.play_bgm_key("menu")
 
 	# 静默检查更新（带24小时节流）
 	UpdateManager.check_for_update(false)
 
-	# 开局暂停：先显示开始界面，点「开始游戏」后再选本命法器
-	start_menu.open()
+	# 开局暂停：默认先显示开始界面，点「开始游戏」后再选本命法器；
+	# 局内「重新开始 / 再战一局」重载场景带 restart_to_select 标记时，跳过主菜单直落选角
 	get_tree().paused = true
+	var go_select: bool = GameManager.restart_to_select
+	GameManager.restart_to_select = false
+	var cult_select: Control = $UILayer.get_node_or_null("CultivatorSelect")
+	if go_select and cult_select != null and cult_select.has_method("show_select"):
+		cult_select.show_select()
+	else:
+		start_menu.open()
 
 func _exit_tree() -> void:
 	# 静态缓存（敌人共享帧集 / 跳字池 / 特效池与样式表）随场景释放，
@@ -167,8 +174,8 @@ func _setup_map_bounds() -> void:
 	var half: float = GameManager.MAP_HALF_EXTENT
 	var ground_half: float = 2400.0
 
-	# 1. 场外压暗：边界到地砖边缘的四块遮罩（保持深渊幽冥压暗）
-	var dim := Color(0.02, 0.04, 0.09, 0.66)
+	# 1. 场外压暗：边界到地砖边缘的四块遮罩（保持深渊压暗，去蓝取中性墨色）
+	var dim := Color(0.02, 0.02, 0.03, 0.66)
 	var bands := [
 		[Vector2(-ground_half, -ground_half), Vector2(ground_half * 2.0, ground_half - half)],
 		[Vector2(-ground_half, half), Vector2(ground_half * 2.0, ground_half - half)],

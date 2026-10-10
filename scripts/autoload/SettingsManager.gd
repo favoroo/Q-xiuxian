@@ -124,14 +124,40 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
+
+	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
+	# 归一化中心点（相对设计视口 0..1），换屏比不漂移；缩放为底尺寸倍率
 	{
 		"section": "display",
-		"key": "skill_btn_pos",
+		"key": "skill_btn_xy",
 		"title": "技能按钮位置",
-		"desc": "技能释放键的位置：右下 / 右中 / 左下",
-		"type": "cycle",
-		"default": &"right_bottom",
-		"options": [&"right_bottom", &"right_mid", &"left_bottom"],
+		"desc": "随行神通键的归一化屏幕中心点",
+		"type": "layout",
+		"default": Vector2(854.0 / 960.0, 430.0 / 540.0),
+	},
+	{
+		"section": "display",
+		"key": "skill_btn_scale",
+		"title": "技能按钮大小",
+		"desc": "随行神通键的尺寸缩放倍率",
+		"type": "layout",
+		"default": 1.0,
+	},
+	{
+		"section": "display",
+		"key": "obelisk_btn_xy",
+		"title": "祭坛按钮位置",
+		"desc": "聚灵阵激活键的归一化屏幕中心点",
+		"type": "layout",
+		"default": Vector2(880.0 / 960.0, 352.0 / 540.0),
+	},
+	{
+		"section": "display",
+		"key": "obelisk_btn_scale",
+		"title": "祭坛按钮大小",
+		"desc": "聚灵阵激活键的尺寸缩放倍率",
+		"type": "layout",
+		"default": 1.0,
 	},
 ]
 
@@ -253,23 +279,53 @@ func shake_level_next() -> StringName:
 	var i := SHAKE_LEVEL_ORDER.find(shake_level())
 	return SHAKE_LEVEL_ORDER[(i + 1) % SHAKE_LEVEL_ORDER.size()]
 
-# ----------------- 技能按钮位置（HUD 神通键停靠档位） -----------------
+# ----------------- 操作按钮布局（技能键 / 祭坛键自由拖动） -----------------
 
-const SKILL_BTN_POS_ORDER: Array[StringName] = [&"right_bottom", &"right_mid", &"left_bottom"]
-const SKILL_BTN_POS_LABELS: Dictionary = {"right_bottom": "右下", "right_mid": "右中", "left_bottom": "左下"}
-const SKILL_BTN_POS_DEFAULT := &"right_bottom"
+## 缩放倍率上下限（操作页滑杆与拖动摆位共用同一夹取）
+const BTN_SCALE_MIN := 0.6
+const BTN_SCALE_MAX := 1.8
+## 归一化中心点默认值 = 960×540 基准下旧的「右下」摆位
+## （技能键矩形 816..892 × 392..468，祭坛键矩形 820..940 × 330..374）
+const SKILL_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 430.0 / 540.0)
+const OBELISK_BTN_XY_DEFAULT := Vector2(880.0 / 960.0, 352.0 / 540.0)
 
-func skill_btn_pos() -> StringName:
-	return StringName(str(get_val(&"display", &"skill_btn_pos", SKILL_BTN_POS_DEFAULT)))
+func skill_btn_xy() -> Vector2:
+	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT))
 
-## 档位的人话名（设置界面循环按钮用）
-func skill_btn_pos_label() -> String:
-	return String(SKILL_BTN_POS_LABELS.get(str(skill_btn_pos()), "右下"))
+func set_skill_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
+	set_val(&"display", &"skill_btn_xy", _norm_xy(norm), auto_save)
 
-## 循环到下一档（右下 → 右中 → 左下 → 右下）
-func skill_btn_pos_next() -> StringName:
-	var i := SKILL_BTN_POS_ORDER.find(skill_btn_pos())
-	return SKILL_BTN_POS_ORDER[(i + 1) % SKILL_BTN_POS_ORDER.size()]
+func skill_btn_scale() -> float:
+	return _btn_scale(get_val(&"display", &"skill_btn_scale", 1.0))
+
+func set_skill_btn_scale(scale_f: float, auto_save: bool = true) -> void:
+	set_val(&"display", &"skill_btn_scale", _btn_scale(scale_f), auto_save)
+
+func obelisk_btn_xy() -> Vector2:
+	return _norm_xy(get_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT))
+
+func set_obelisk_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
+	set_val(&"display", &"obelisk_btn_xy", _norm_xy(norm), auto_save)
+
+func obelisk_btn_scale() -> float:
+	return _btn_scale(get_val(&"display", &"obelisk_btn_scale", 1.0))
+
+func set_obelisk_btn_scale(scale_f: float, auto_save: bool = true) -> void:
+	set_val(&"display", &"obelisk_btn_scale", _btn_scale(scale_f), auto_save)
+
+## 恢复两个按钮的出厂摆位（位置 + 大小一起回默认）
+func reset_button_layout() -> void:
+	set_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT)
+	set_val(&"display", &"skill_btn_scale", 1.0)
+	set_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT)
+	set_val(&"display", &"obelisk_btn_scale", 1.0)
+
+func _norm_xy(v: Variant) -> Vector2:
+	var p := v as Vector2
+	return Vector2(clampf(p.x, 0.0, 1.0), clampf(p.y, 0.0, 1.0))
+
+func _btn_scale(v: Variant) -> float:
+	return clampf(float(v), BTN_SCALE_MIN, BTN_SCALE_MAX)
 
 ## 档位与旧布尔总开关保持同源：老存档里只有 screen_shake，而界面只暴露一个循环控件，
 ## 两者不同步就会出现「显示标准、实际不震」这类看不见对不上的读数

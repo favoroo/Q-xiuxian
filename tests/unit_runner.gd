@@ -717,16 +717,24 @@ func _test_audio_wiring() -> void:
 	for key in AudioManager.BGM_TABLE.keys():
 		var path: String = AudioManager.BGM_TABLE[key].get("path", "")
 		_c.check(ResourceLoader.exists(path), "BGM 素材就位：%s (%s)" % [key, path.get_file()])
+	AudioManager.play_bgm_key("menu")
+	_c.equals(String(AudioManager.bgm_key), "menu", "主菜单切到 menu")
 	AudioManager.play_bgm_key("battle")
 	_c.equals(String(AudioManager.bgm_key), "battle", "battle 在播")
 	AudioManager.play_bgm_key("shop")
 	_c.equals(String(AudioManager.bgm_key), "shop", "商店阶段切到 shop")
-	AudioManager.play_bgm_key("shop")
+	AudioManager.play_bgm_key("trial")
+	_c.equals(String(AudioManager.bgm_key), "trial", "Boss阶段切到 trial")
+	AudioManager.play_bgm_key("victory")
+	_c.equals(String(AudioManager.bgm_key), "victory", "胜利结算切到 victory")
+	AudioManager.play_bgm_key("defeat")
+	_c.equals(String(AudioManager.bgm_key), "defeat", "失败结算切到 defeat")
+	AudioManager.play_bgm_key("defeat")
 	_c.equals(String(AudioManager.bgm_players[AudioManager.bgm_next].stream.resource_path),
-		AudioManager.BGM_TABLE["shop"]["path"], "重复调同一 key 不会重头播")
+		AudioManager.BGM_TABLE["defeat"]["path"], "重复调同一 key 不会重头播")
 	AudioManager.play_bgm_key("这个 key 不存在")
-	_c.equals(String(AudioManager.bgm_key), "shop", "未知 BGM key 不影响当前播放")
-	AudioManager.play_bgm_key("battle")
+	_c.equals(String(AudioManager.bgm_key), "defeat", "未知 BGM key 不影响当前播放")
+	AudioManager.play_bgm_key("menu")
 
 # ---------------- 游戏设置模块 ----------------
 
@@ -771,9 +779,14 @@ func _test_settings_manager() -> void:
 ## 修完之后靠两条钉住：① 创伤只发给"值得看的节点"（口径写在 GameBalance 段注释里）；
 ## ② 就算将来有人再拿高频事件乱发，每秒预算也把最坏震幅钉在轻颤级别。
 func _test_screen_shake_budget() -> void:
-	# 0. 局部非对称卡肉冻结时间常量
+	# 0. 击退高阻尼急刹与硬直常量（空洞骑士/死亡细胞风格）
 	_c.check(GameBalance.HIT_FREEZE_NORMAL > 0.02 and GameBalance.HIT_FREEZE_NORMAL < 0.05, "普通命中局部卡肉冻结为 2~3 帧 (0.035s)")
 	_c.check(GameBalance.HIT_FREEZE_CRIT > GameBalance.HIT_FREEZE_NORMAL, "暴击局部卡肉冻结长于普通命中")
+	_c.check(GameBalance.KNOCKBACK_DECAY_STUN >= 10.0 and GameBalance.KNOCKBACK_DECAY_STUN <= 16.0, "击退衰减为适度高阻尼急刹 (10~16)")
+	_c.check(GameBalance.KNOCKBACK_MAX_SPEED_NORMAL >= 500.0, "普通击退初速允许各法器展现差异")
+	_c.check(GameBalance.KNOCKBACK_MAX_SPEED_CRIT > GameBalance.KNOCKBACK_MAX_SPEED_NORMAL, "暴击击退上限高于普通命中")
+	_c.check(GameBalance.KNOCKBACK_IMPULSE_SCALE > 1.0, "击退冲量折算系数大于 1.0")
+	_c.check(GameBalance.HIT_STUN_NORMAL >= 0.12, "普通硬直至少 0.12s 保证急刹后有原地僵直定身")
 
 	# 1. 纯函数层：预算夹制
 	_c.near(GameBalance.trauma_grant(0.09, 0.75), 0.09, EPS, "预算充足时全额发放")
@@ -838,9 +851,9 @@ func _test_screen_shake_budget() -> void:
 # ---------------- 五行武器矩阵与属性转化 ----------------
 
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：20 把法器（5 五行 × 4 把）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 20, "全武器库扩充至 20 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 20, "商店池覆盖全部 20 把法器")
+	# 1. 武器表完整性校验：35 把法器（2026-10-10 起补齐器类×五行格子+流派专武）且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 35, "全武器库扩充至 35 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 35, "商店池覆盖全部 35 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -863,12 +876,14 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "20 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "35 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
+	# 2026-10-10 扩容后各系把数：金9/木7/水6/火6/土7（器类×五行格子补齐+流派专武）
+	var elem_expect := {"metal": 9, "wood": 7, "water": 6, "fire": 6, "earth": 7}
 	for e_key in elem_counts.keys():
-		_c.equals(int(elem_counts[e_key]), 4, "五行【%s】恰好包含 4 把法器" % e_key)
+		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
 	# 2. 土豆兄弟式属性受益折算（GameBalance.weapon_stat_bonus 纯函数）
 	var earth_scalings := {"armor": 3.5}
@@ -1395,15 +1410,13 @@ func _test_achievement_and_meta_save() -> void:
 # ---------------- 道统功名与渡劫实录（2026-10-10 修仙志升级） ----------------
 
 ## 覆盖：每角色生涯档案累加、无尽终局不双计生涯总量、渡劫快照白名单序列化、
-## 里程碑领取幂等、灵石囊开局兑入、新字段落盘往返。
+## 里程碑称号达标点亮（纯展示无奖励）、新字段落盘往返。
 func _test_career_milestones() -> void:
 	# 备份真实进度（含本轮新增的局外字段）
 	var orig_stats := GameManager.career_stats.duplicate()
 	var orig_best_danger := GameManager.cultivator_best_danger.duplicate()
 	var orig_records := GameManager.cultivator_records.duplicate()
 	var orig_vlog := GameManager.victory_log.duplicate()
-	var orig_miles := GameManager.claimed_milestones.duplicate()
-	var orig_purse := GameManager.stone_purse
 	var orig_hist := GameManager.run_history.duplicate()
 	var orig_cults := GameManager.unlocked_cultivators.duplicate()
 	var orig_items := GameManager.unlocked_items.duplicate()
@@ -1418,8 +1431,6 @@ func _test_career_milestones() -> void:
 	GameManager.cultivator_best_danger = {}
 	GameManager.cultivator_records = {}
 	GameManager.victory_log = []
-	GameManager.claimed_milestones = []
-	GameManager.stone_purse = 0
 	GameManager.run_history = []
 	GameManager.unlocked_achievements = []
 	GameManager.last_run_new_records = []
@@ -1446,6 +1457,10 @@ func _test_career_milestones() -> void:
 	_c.check(String(snap.get("datetime", "")) != "", "快照带结算时刻")
 	_c.check(GameManager.last_run_new_records.any(
 		func(s: Variant) -> bool: return String(s).contains("首胜")), "首胜生成新纪录文案")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("里程碑达成")), "1 胜达标生成里程碑文案")
+	_c.check(GameManager.last_run_new_records.all(
+		func(s: Variant) -> bool: return not String(s).contains("领取")), "里程碑文案不承诺领取奖励")
 
 	# 2. 继续无尽 → 第 25 波道殒：生涯总量不双计，只补无尽纪录与战报
 	GameManager.continue_endless()
@@ -1465,43 +1480,29 @@ func _test_career_milestones() -> void:
 		func(s: Variant) -> bool: return String(s).contains("无尽")), "无尽新纪录文案生成")
 	_c.equals(GameManager.victory_log.size(), 1, "无尽道殒不进渡劫实录")
 
-	# 3. 里程碑领取：达标可领、未达标拒绝、重复领取幂等
-	_c.equals(GameManager.has_claimable_rewards(), true, "渡劫 1 次后存在可领取奖励")
-	_c.check(GameManager.claim_milestone("shiyue", 3) == false, "未达标档位领取被拒")
-	_c.check(GameManager.claim_milestone("shiyue", 1), "1 胜档里程碑领取成功")
-	_c.equals(GameManager.stone_purse, 30, "灵石囊入账 30")
-	_c.check(GameManager.claim_milestone("shiyue", 1) == false, "重复领取幂等拒绝")
-	_c.equals(GameManager.stone_purse, 30, "重复领取不重复入账")
+	# 3. 称号阶梯：达标即点亮，纯展示、不发放任何奖励
+	_c.equals(AchievementData.title_for_wins(0), "", "0 次渡劫无称号")
+	_c.equals(AchievementData.title_for_wins(1), "初学者", "1 胜点亮初学者")
+	_c.equals(AchievementData.title_for_wins(3), "进阶者", "3 胜点亮进阶者")
+	_c.equals(AchievementData.title_for_wins(5), "老手", "5 胜点亮老手")
+	_c.equals(AchievementData.title_for_wins(10), "大师", "10 胜点亮大师")
+	_c.equals(AchievementData.title_for_wins(184), "大师", "超档仍取最高一档称号")
 
-	# 4. 灵石囊兑入：开局一次性入账并清零
-	GameManager.reset_run()
-	GameManager.cultivator_id = "shiyue"
-	GameManager._redeem_stone_purse()
-	_c.equals(GameManager.spirit_stones, 30, "开局兑入灵石囊 30")
-	_c.equals(GameManager.stone_purse, 0, "灵石囊兑入后清零")
-
-	# 5. 存档往返：新字段落盘恢复无损
-	GameManager.stone_purse = 45
+	# 4. 存档往返：新字段落盘恢复无损
 	GameManager._save_progress()
 	GameManager.cultivator_records = {}
 	GameManager.victory_log = []
-	GameManager.claimed_milestones = []
-	GameManager.stone_purse = 0
 	GameManager._load_progress()
-	_c.equals(GameManager.stone_purse, 45, "读档后灵石囊恢复")
 	_c.equals(GameManager.victory_log.size(), 1, "读档后渡劫实录恢复")
 	rec = GameManager.get_cultivator_record("shiyue")
 	_c.equals(int(rec["wins"]), 1, "读档后石岳渡劫次数恢复")
 	_c.equals(int(rec["endless_best_wave"]), 25, "读档后无尽最高关数恢复")
-	_c.check("shiyue_1" in GameManager.claimed_milestones, "读档后已领里程碑恢复")
 
 	# 还原测试前的玩家真实进度
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_best_danger
 	GameManager.cultivator_records = orig_records
 	GameManager.victory_log = orig_vlog
-	GameManager.claimed_milestones = orig_miles
-	GameManager.stone_purse = orig_purse
 	GameManager.run_history = orig_hist
 	GameManager.unlocked_cultivators = orig_cults
 	GameManager.unlocked_items = orig_items

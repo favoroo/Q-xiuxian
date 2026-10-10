@@ -89,9 +89,7 @@ var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 I
 # 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
 var cultivator_records: Dictionary = {}   ## 每位修士生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
 var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
-var claimed_milestones: Array = []        ## 已领取的里程碑 id（"cid_次数"）
 var tutorial_seen: bool = false          ## 新手指南弹窗是否已看过（首次点开始游戏时弹一次）
-var stone_purse: int = 0                  ## 灵石囊：已领取未兑入的灵石，start_run 一次性兑入
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
 const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
 
@@ -153,25 +151,6 @@ func get_cultivator_record(cid: String) -> Dictionary:
 		"best_kills": int(rec.get("best_kills", 0)),
 	}
 
-## 是否存在可领取的里程碑奖励（供主菜单修仙志红点）
-func has_claimable_rewards() -> bool:
-	return AchievementData.any_claimable(cultivator_records, claimed_milestones)
-
-## 领取某角色某档里程碑奖励：灵石入灵石囊（下局开局兑入），重复领取与未达标均幂等拒绝
-func claim_milestone(cid: String, wins_tier: int) -> bool:
-	var mile_id := "%s_%d" % [cid, wins_tier]
-	if mile_id in claimed_milestones:
-		return false
-	if int(get_cultivator_record(cid)["wins"]) < wins_tier:
-		return false
-	for m in AchievementData.milestones_of(cid):
-		if int(m["wins"]) == wins_tier:
-			claimed_milestones.append(mile_id)
-			stone_purse += int(m["stones"])
-			_save_progress()
-			return true
-	return false
-
 ## 选择危险度：不允许选未解锁的档位
 func set_danger(d: int) -> void:
 	danger_level = clampi(d, 0, max_danger_unlocked)
@@ -201,6 +180,10 @@ var pending_upgrade_points: int = 0
 var wave_number: int = 0
 var endless_mode: bool = false
 var run_started: bool = false
+
+## 跨场景路由标记：局内「重新开始 / 再战一局」重载场景前置真，
+## Main._ready 消费后跳过主菜单直落选角界面（不在 reset_run 里清，避免先于消费被抹掉）
+var restart_to_select: bool = false
 
 # 玩家属性（加点系统）
 var weapon_damage_mult: float = 1.0
@@ -677,6 +660,7 @@ func get_player_stat_dict() -> Dictionary:
 		"ranged_damage": ranged_damage,
 		"elemental_damage": elemental_damage,
 		"engineering_damage": engineering_damage,
+		"harvest": harvest,
 	}
 
 func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
@@ -760,7 +744,6 @@ func start_run(starter_id: String) -> void:
 	run_started = true
 	endless_mode = start_in_endless
 	_apply_cultivator()
-	_redeem_stone_purse()
 	# 随行神通转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	add_weapon(starter_id)
@@ -768,17 +751,6 @@ func start_run(starter_id: String) -> void:
 		announcement_triggered.emit("✦ 无尽模式 · 战至终局 ✦")
 	else:
 		announcement_triggered.emit("✦ 生存战斗 · 击杀敌人 ✦")
-
-## 灵石囊兑入：修仙志领取的里程碑灵石在本局开局一次性生效（无 player 依赖，单测可直调）
-func _redeem_stone_purse() -> void:
-	if stone_purse <= 0:
-		return
-	var amount := stone_purse
-	stone_purse = 0
-	spirit_stones += amount
-	if spirit_stones > peak_stones:
-		peak_stones = spirit_stones
-		announcement_triggered.emit("✦ 金币到账 · 开局金币 +%d ✦" % amount)
 
 ## 开局应用修士流派的正负代偿
 func _apply_cultivator() -> void:

@@ -2,17 +2,16 @@ class_name CareerDialog
 extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）三页签：天道功绩 / 道统功名 / 渡劫实录
-## 道统功名：每角色渡劫成功次数、无尽最高波数、最高危险度、称号里程碑与灵石囊领取
+## 道统功名：每角色渡劫成功次数、无尽最高波数、最高危险度、称号里程碑进度
 ## 渡劫实录：每次渡劫成功的完整战报快照（上阵法器/法宝/关键属性），点击行展开回看
-## 滚动区内的领取/展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
+## 滚动区内的展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
 ## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 第 5 步）
 
-# 顶部概览数据标签（6 卡）
+# 顶部概览数据标签（5 卡）
 var _runs_val_lbl: Label
 var _wins_val_lbl: Label
 var _kills_val_lbl: Label
 var _wave_val_lbl: Label
-var _purse_val_lbl: Label
 var _title_val_lbl: Label
 
 # 各页列表容器
@@ -39,7 +38,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	add_tab_button(1, "✦ 角色")
 	add_tab_button(2, "✦ 战斗记录")
 
-	# 2. 生涯核心数据横条（6 个指标卡）
+	# 2. 生涯核心数据横条（5 个指标卡）
 	var stats_row := HBoxContainer.new()
 	stats_row.add_theme_constant_override("separation", 8)
 	root_vbox.add_child(stats_row)
@@ -48,7 +47,6 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_wins_val_lbl = _add_summary_card(stats_row, "通关", "0 胜")
 	_kills_val_lbl = _add_summary_card(stats_row, "累计击杀", "0 只")
 	_wave_val_lbl = _add_summary_card(stats_row, "最高波数", "第 0 波")
-	_purse_val_lbl = _add_summary_card(stats_row, "金币", "0")
 	_title_val_lbl = _add_summary_card(stats_row, "已获称号", "0/0")
 
 	# 3. 内容分页面板
@@ -115,7 +113,7 @@ func _build_achievements_page(parent: Control) -> Control:
 	scroll.add_child(_ach_list_box)
 	return scroll
 
-# ----------------- 分页 2：道统功名（每角色档案 + 里程碑领取） -----------------
+# ----------------- 分页 2：道统功名（每角色档案 + 称号进度） -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
@@ -157,7 +155,6 @@ func _refresh_data() -> void:
 	_wins_val_lbl.text = "%d 胜 (%.0f%%)" % [wins, win_rate]
 	_kills_val_lbl.text = "%d 只" % kills
 	_wave_val_lbl.text = "第 %d 波" % b_wave
-	_purse_val_lbl.text = "%d 金币" % GameManager.stone_purse
 
 	# 已获称号数：有渡劫成功的角色数 / 角色总数
 	var total_c := CultivatorData.DEFS.size()
@@ -242,12 +239,13 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(adef.get("name", "未命名成就"))
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
+	# 未达成行是暗底（INK 压暗），字走暗底亮字；已达成行是纸灰卡，字走墨黑
+	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
 	text_col.add_child(name_lbl)
 
 	var cond_lbl := Label.new()
 	cond_lbl.text = String(adef.get("cond_desc", ""))
-	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else GameStyle.GREY)
+	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else Color(0.82, 0.80, 0.74))
 	text_col.add_child(cond_lbl)
 
 	# 奖励说明
@@ -266,7 +264,8 @@ func _create_achievement_row(adef: Dictionary) -> Control:
 	status_lbl.text = " 已达成 " if is_done else " 未达成 "
 	status_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK if is_done else GameStyle.LINE))
-	GameStyle.label(status_lbl, 12, GameStyle.GOOD if is_done else GameStyle.GREY)
+	# 暗绿徽章配暗底亮字（GOOD 已调深，与 GOOD_DK 同明度会糊）
+	GameStyle.label(status_lbl, 12, GameStyle.CHALK if is_done else GameStyle.GREY)
 	hbox.add_child(status_lbl)
 
 	return row
@@ -323,7 +322,7 @@ func _create_cultivator_row(cid: String) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(cdef.get("name", "未知角色"))
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else Color(0.82, 0.80, 0.74), 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
 	var title_lbl := Label.new()
@@ -346,99 +345,27 @@ func _create_cultivator_row(cid: String) -> Control:
 	var danger_txt := "最高「%s」" % AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关"
 	var detail_lbl := Label.new()
 	detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d · %s" % [wins, endless_txt, int(rec["best_kills"]), danger_txt]
-	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM)
+	# 解锁行走纸灰卡（灰墨字），锁定行走暗底（暗底亮字）
+	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM if unlocked else Color(0.82, 0.80, 0.74))
 	text_col.add_child(detail_lbl)
 
-	# 里程碑 4 档进度签（1/3/5/10 胜）
+	# 里程碑 4 档进度签（1/3/5/10 胜）：达标即点亮对应称号，纯展示、不挂任何奖励
 	var pips := HBoxContainer.new()
 	pips.add_theme_constant_override("separation", 4)
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hbox.add_child(pips)
-	var claimed: Array = GameManager.claimed_milestones
-	for m in AchievementData.milestones_of(cid):
-		var m_id := String(m["id"])
-		var m_wins := int(m["wins"])
+	for m in AchievementData.MILESTONES:
+		var reached := wins >= int(m["wins"])
 		var pip := Label.new()
-		if m_id in claimed:
-			pip.text = " 已领 "
-			pip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
-			GameStyle.label(pip, 10, GameStyle.GOOD)
-		elif wins >= m_wins:
-			pip.text = " 可领 "
-			pip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
-			GameStyle.label(pip, 10, GameStyle.INK_TEXT)
-		else:
-			pip.text = " %d胜 " % m_wins
-			pip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
-			GameStyle.label(pip, 10, GameStyle.GREY)
+		pip.text = " %d胜 " % int(m["wins"])
+		pip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if reached else GameStyle.LINE))
+		GameStyle.label(pip, 10, GameStyle.INK_TEXT if reached else GameStyle.GREY)
 		pips.add_child(pip)
-
-	# 领取控件（滚动区禁 Button，PanelContainer + tap）
-	var next_mile := _next_claimable_milestone(cid)
-	if next_mile.size() > 0:
-		var claim_panel := PanelContainer.new()
-		claim_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-		claim_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var c_sb := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BUTTON, Vector2(2, 3))
-		c_sb.content_margin_left = 10.0
-		c_sb.content_margin_right = 10.0
-		c_sb.content_margin_top = 6.0
-		c_sb.content_margin_bottom = 6.0
-		claim_panel.add_theme_stylebox_override("panel", c_sb)
-		var claim_lbl := Label.new()
-		claim_lbl.text = "领 %d 金币" % int(next_mile["stones"])
-		GameStyle.label(claim_lbl, 12, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-		claim_panel.add_child(claim_lbl)
-		var tier := int(next_mile["wins"])
-		GameStyle.tap(claim_panel, func() -> void: _on_claim_pressed(cid, tier))
-		hbox.add_child(claim_panel)
-	elif wins <= 0:
-		hbox.add_child(_dim_hint("待首次通关"))
-	elif _all_milestones_claimed(cid):
-		hbox.add_child(_dim_hint("已 领 齐"))
-	else:
-		var need := _next_milestone_wins(cid)
-		hbox.add_child(_dim_hint("通关 %d 次可领" % need))
 
 	# 行点按 → 「这是什么」详情（生涯档案 / 解锁条件）
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	GameStyle.tap(row, func() -> void: _open_cultivator_tip(cid, row))
 	return row
-
-func _dim_hint(text: String) -> Label:
-	var lbl := Label.new()
-	lbl.text = " %s " % text
-	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
-	GameStyle.label(lbl, 11, GameStyle.GREY)
-	return lbl
-
-func _next_claimable_milestone(cid: String) -> Dictionary:
-	var wins: int = int(GameManager.get_cultivator_record(cid).get("wins", 0))
-	for m in AchievementData.milestones_of(cid):
-		if AchievementData.is_milestone_claimable(m, int(wins), GameManager.claimed_milestones):
-			return m
-	return {}
-
-func _next_milestone_wins(cid: String) -> int:
-	var wins := int(GameManager.get_cultivator_record(cid)["wins"])
-	for m in AchievementData.milestones_of(cid):
-		if int(m["wins"]) > wins:
-			return int(m["wins"])
-	return -1
-
-func _all_milestones_claimed(cid: String) -> bool:
-	for m in AchievementData.milestones_of(cid):
-		if not (String(m["id"]) in GameManager.claimed_milestones):
-			return false
-	return true
-
-## 领取里程碑奖励：灵石入灵石囊，音效 + 全页刷新
-func _on_claim_pressed(cid: String, tier: int) -> void:
-	if not GameManager.claim_milestone(cid, tier):
-		return
-	AudioManager.play_sfx("level_up", 1.0)
-	_refresh_data()
 
 ## 道统行点按详情：已解锁看生涯档案，未解锁看达成条件
 func _open_cultivator_tip(cid: String, anchor: Control) -> void:
@@ -472,7 +399,7 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 		"chip_color": GameStyle.JADE,
 		"rows": rows,
 		"body": "称号「%s」" % AchievementData.title_for_wins(wins) if AchievementData.title_for_wins(wins) != "" else "尚未获得称号",
-		"foot": "里程碑奖励为一次性金币，领取后于下一局开局到账。",
+		"foot": "称号按通关 1/3/5/10 次自动点亮，仅作记录、不发奖励。",
 	})
 
 # ----------------- 渡劫实录行 -----------------
@@ -734,7 +661,8 @@ func _create_history_row(entry: Dictionary) -> Control:
 	else:
 		v_tag.text = " 阵亡 "
 	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_vic else GameStyle.BAD_DK))
-	GameStyle.label(v_tag, 11, GameStyle.PAPER if is_vic else GameStyle.BAD)
+	# 朱砂暗徽章配暗底亮字（BAD 压 BAD_DK 会糊）
+	GameStyle.label(v_tag, 11, GameStyle.PAPER if is_vic else GameStyle.CHALK)
 	hbox.add_child(v_tag)
 
 	return row

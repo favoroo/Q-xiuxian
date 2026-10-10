@@ -33,7 +33,7 @@ func _ready() -> void:
 	GameStyle.label($TopContainer/LeftBox/HPBlock/HBox/HPTitle, 17, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(hp_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(level_label, 14, GameStyle.INK_TEXT)
-	GameStyle.label(time_label, 24, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(time_label, 24, GameStyle.CHALK, 0, GameStyle.INK, true)
 	GameStyle.label(wave_label, 15, GameStyle.GOLD)
 	GameStyle.label(kills_label, 15, GameStyle.INK_TEXT)
 	GameStyle.label(shards_label, 15, GameStyle.INK_TEXT)
@@ -132,7 +132,7 @@ func _build_boss_bar() -> void:
 
 	_boss_title_label = Label.new()
 	_boss_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_boss_title_label, 15, GameStyle.PAPER)
+	GameStyle.label(_boss_title_label, 15, GameStyle.CHALK)
 	row.add_child(_boss_title_label)
 
 	_boss_bar = ProgressBar.new()
@@ -185,7 +185,7 @@ func _setup_fps_counter() -> void:
 	_fps_label.offset_top = -26.0
 	_fps_label.offset_right = 120.0
 	_fps_label.offset_bottom = -8.0
-	GameStyle.label(_fps_label, 12, GameStyle.GREY)
+	GameStyle.label(_fps_label, 12, Color(0.82, 0.8, 0.74))
 	_fps_label.text = "FPS: 60"
 	add_child(_fps_label)
 	_update_fps_visibility()
@@ -393,29 +393,26 @@ func show_announcement(msg: String) -> void:
 	tw.tween_interval(1.9)
 	tw.tween_property(banner, "modulate:a", 0.0, 0.35)
 
-# ---------------- 聚灵阵激活按钮（右侧长按触发） ----------------
+# ---------------- 聚灵阵激活按钮（位置/大小可在设置·操作页自由拖调） ----------------
+
+const OBELISK_BTN_SIZE := Vector2(110.0, 44.0)
 
 var _obelisk_btn: Button = null
 var _obelisk_bar: ProgressBar = null
 var _obelisk_box: VBoxContainer = null
 var _obelisk_active_ob: BlessingObelisk = null
 
-## 构建聚灵阵激活 UI：右侧按钮，充能条贴在键面上
+## 构建聚灵阵激活 UI：按钮 + 贴键面充能条（摆位交给 _apply_btn_layout）
 func _build_obelisk_ui() -> void:
 	_obelisk_box = VBoxContainer.new()
 	_obelisk_box.visible = false
 	_obelisk_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_obelisk_box.add_theme_constant_override("separation", 4)
-	_obelisk_box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
-	_obelisk_box.offset_left = -140.0
-	_obelisk_box.offset_right = -20.0
-	_obelisk_box.offset_top = 60.0
-	_obelisk_box.offset_bottom = 140.0
 	add_child(_obelisk_box)
 
 	_obelisk_btn = Button.new()
 	_obelisk_btn.text = "祭 坛"
-	_obelisk_btn.custom_minimum_size = Vector2(110, 44)
+	_obelisk_btn.custom_minimum_size = OBELISK_BTN_SIZE
 	_obelisk_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_obelisk_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(_obelisk_btn, GameStyle.GOLD, GameStyle.GOLD, 15, GameStyle.INK_TEXT, 6.0)
@@ -466,10 +463,13 @@ func _on_obelisk_btn_input(event: InputEvent) -> void:
 		_obelisk_active_ob.start_charge()
 		_obelisk_btn.text = "激活中..."
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD_DK, 6.0, Vector2(3, 4)))
+		# GOLD_DK 已翻成幽夜深蓝（暗底）：充能态黑字看不见，换暗底亮字
+		_obelisk_btn.add_theme_color_override("font_color", GameStyle.CHALK)
 	elif is_release and _obelisk_active_ob != null:
 		_obelisk_active_ob.stop_charge()
 		_obelisk_btn.text = "祭 坛"
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
+		_obelisk_btn.add_theme_color_override("font_color", GameStyle.INK_TEXT)
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
@@ -504,6 +504,7 @@ func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
 	if _obelisk_btn != null:
 		_obelisk_btn.text = "祭 坛"
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
+		_obelisk_btn.add_theme_color_override("font_color", GameStyle.INK_TEXT)
 	if _obelisk_bar != null:
 		_obelisk_bar.value = 0.0
 
@@ -575,7 +576,7 @@ func _build_skill_button() -> void:
 	_skill_cd_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_skill_cd_label.visible = false
 	_skill_btn.add_child(_skill_cd_label)
-	GameStyle.label(_skill_cd_label, 22, GameStyle.PAPER, 2, GameStyle.INK, true)
+	GameStyle.label(_skill_cd_label, 22, GameStyle.CHALK, 2, GameStyle.INK, true)
 
 	_skill_name_label = Label.new()
 	_skill_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -586,17 +587,90 @@ func _build_skill_button() -> void:
 	GameStyle.label(_skill_name_label, 10, GameStyle.JADE_EDGE, 2, GameStyle.INK)
 	_skill_btn.add_child(_skill_name_label)
 
-	_apply_skill_btn_pos()
+	_apply_btn_layout()
 	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
-		if sec == &"display" and key == &"skill_btn_pos":
-			_apply_skill_btn_pos()
+		if sec == &"display" and key in [&"skill_btn_xy", &"skill_btn_scale", &"obelisk_btn_xy", &"obelisk_btn_scale"]:
+			_apply_btn_layout()
 	)
 
 func _style_circle_skill_btn(btn: Button) -> void:
 	SkillButtonView.style_circle_button(btn)
 
-func _apply_skill_btn_pos() -> void:
-	SkillButtonView.apply_btn_pos(_skill_box)
+# ---------------- 按钮自由布局（技能键 / 祭坛键：设置·操作页拖动与缩放） ----------------
+
+var _edit_mode: bool = false
+var _edit_overlay: HudEditOverlay = null
+
+## 归一化中心点 + 缩放 → 实际摆位。布局矩形按未缩放底尺寸居中，
+## 视觉缩放围绕 pivot（矩形中心）放大 ⇒ 视觉中心永远钉在存档点上，换屏比不漂移。
+func _apply_box_layout(box: Control, norm: Vector2, scale_f: float, base: Vector2) -> void:
+	if box == null:
+		return
+	var vp := get_viewport_rect().size
+	var s := clampf(scale_f, SettingsManager.BTN_SCALE_MIN, SettingsManager.BTN_SCALE_MAX)
+	# 中心点夹回屏内（半尺寸 + 2px 余量），怎么拖都不会整个出屏找不回来
+	var half := base * s * 0.5 + Vector2(2.0, 2.0)
+	half.x = minf(half.x, vp.x * 0.5)
+	half.y = minf(half.y, vp.y * 0.5)
+	var c := Vector2(clampf(norm.x, 0.0, 1.0) * vp.x, clampf(norm.y, 0.0, 1.0) * vp.y)
+	c.x = clampf(c.x, half.x, vp.x - half.x)
+	c.y = clampf(c.y, half.y, vp.y - half.y)
+	box.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	box.offset_left = c.x - base.x * 0.5
+	box.offset_top = c.y - base.y * 0.5
+	box.offset_right = c.x + base.x * 0.5
+	box.offset_bottom = c.y + base.y * 0.5
+	box.pivot_offset = base * 0.5
+	box.scale = Vector2(s, s)
+
+func _apply_btn_layout() -> void:
+	_apply_box_layout(_skill_box, SettingsManager.skill_btn_xy(), SettingsManager.skill_btn_scale(), Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE))
+	_apply_box_layout(_obelisk_box, SettingsManager.obelisk_btn_xy(), SettingsManager.obelisk_btn_scale(), OBELISK_BTN_SIZE)
+
+## 供 HudEditOverlay 同步拖动代理与判据用：按钮视觉中心（设计坐标）
+func skill_btn_center_px() -> Vector2:
+	return _skill_box.position + _skill_box.pivot_offset
+
+func skill_btn_size_px() -> Vector2:
+	return Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
+
+func obelisk_btn_center_px() -> Vector2:
+	return _obelisk_box.position + _obelisk_box.pivot_offset
+
+func obelisk_btn_size_px() -> Vector2:
+	return OBELISK_BTN_SIZE
+
+## 进入/退出按钮调整模式：强制亮出两颗键交给覆盖层拖动（树此时是暂停态）
+func set_btn_edit_mode(on: bool) -> void:
+	_edit_mode = on
+	if _skill_box != null:
+		if on and GameManager.active_skill_id.is_empty():
+			# 主菜单阶段还没选神通：摆个占位字面，照样能拖
+			_skill_btn.text = "技"
+			_skill_icon_rect.visible = false
+			_skill_name_label.text = ""
+		_skill_box.visible = on or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
+	if _obelisk_box != null:
+		# 退出调整模式时若人还站在阵法范围内，按钮保持可见（等离开范围再收）
+		_obelisk_box.visible = on or _obelisk_active_ob != null
+		if on:
+			_obelisk_btn.text = "祭 坛"
+			_obelisk_bar.value = 0.0
+
+## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
+func open_btn_edit_overlay(on_done: Callable = Callable()) -> void:
+	if _edit_overlay == null:
+		_edit_overlay = HudEditOverlay.new()
+		get_parent().add_child(_edit_overlay)
+		_edit_overlay.finished.connect(func():
+			set_btn_edit_mode(false)
+			_edit_overlay.visible = false
+		)
+	_edit_overlay.move_to_front()
+	set_btn_edit_mode(true)
+	_edit_overlay.open(self)
+	if on_done.is_valid():
+		_edit_overlay.finished.connect(on_done, CONNECT_ONE_SHOT)
 
 var _last_skill_press_frame: int = -1
 
@@ -619,9 +693,9 @@ func _is_gameplay_active() -> bool:
 func _is_point_on_skill_btn(pos: Vector2) -> bool:
 	if _skill_btn == null or not is_instance_valid(_skill_btn) or not _skill_btn.is_visible_in_tree():
 		return false
-	var center := _skill_btn.global_position + _skill_btn.size * 0.5
-	# 圆形热区，半径外扩 8px 触控容错
-	var r := SKILL_BTN_SIZE * 0.5 + 8.0
+	var center := skill_btn_center_px()
+	# 圆形热区跟随缩放，半径外扩 8px 触控容错
+	var r := SKILL_BTN_SIZE * SettingsManager.skill_btn_scale() * 0.5 + 8.0
 	return pos.distance_to(center) <= r
 
 ## 输入处理：触屏与鼠标统一支持，按下即放（0 延迟），解决双指拉摇杆时技能不响应问题
@@ -683,7 +757,7 @@ func _poll_skill_button(_delta: float) -> void:
 	if _skill_box == null:
 		return
 	var player = GameManager.player
-	var show := GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty()
+	var show := _edit_mode or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
 	if _skill_box.visible != show:
 		_skill_box.visible = show
 		if show:
@@ -696,7 +770,7 @@ func _poll_skill_button(_delta: float) -> void:
 					_skill_btn.text = ""
 					_skill_icon_rect.texture = load(icon_path)
 					_skill_icon_rect.visible = true
-					_skill_icon_rect.modulate = GameStyle.JADE_EDGE if is_enhanced else GameStyle.PAPER
+					_skill_icon_rect.modulate = GameStyle.JADE_EDGE if is_enhanced else GameStyle.CHALK
 				else:
 					_skill_icon_rect.visible = false
 					_skill_btn.text = String(def.get("glyph", "?"))

@@ -225,7 +225,7 @@ func _set_readout_ratio(ratio: float) -> void:
 			_readout_pct = pct
 			_readout_label.text = "%d%%" % pct
 			_readout_label.add_theme_color_override("font_color",
-				GameStyle.PAPER.lerp(GameStyle.JADE_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
+				GameStyle.CHALK.lerp(GameStyle.JADE_EDGE, smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)))
 	if stone_mat != null:
 		stone_mat.set_shader_parameter("fill_ratio", _readout_ratio)
 	if _obelisk_renderer != null:
