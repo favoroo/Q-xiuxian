@@ -134,7 +134,6 @@ func _build_ui() -> void:
 	_roster_grid.add_theme_constant_override("h_separation", int(ROSTER_GAP))
 	_roster_grid.add_theme_constant_override("v_separation", int(ROSTER_GAP))
 	_roster_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_roster_grid.alignment = BoxContainer.ALIGNMENT_CENTER
 	_roster_grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	_roster_scroll.add_child(_roster_grid)
 
