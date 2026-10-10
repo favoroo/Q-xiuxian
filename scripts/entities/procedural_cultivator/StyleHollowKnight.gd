@@ -26,7 +26,7 @@ func _draw_front() -> void:
 	draw_arc(Vector2(0, 32), 18.0, 0, TAU, 24, Color(0.35, 0.75, 0.60, 0.18 + sin(_time * 3.0) * 0.05), 1.2, true)
 
 	# 2. 背后大角度斜贯背负之纯白骨钉（剑柄探出右肩，剑尖探出左下摆）
-	_draw_hollow_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
+	_draw_hollow_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 3. 破损墨绿蝉翼道披（多层叠落，有破口锐角）
 	var cloak_pts: PackedVector2Array = [
@@ -103,7 +103,7 @@ func _draw_side() -> void:
 		Vector2(6, 0 + float_y)
 	]
 	# 侧面后背背负之骨钉（贴合后背斗篷，剑尖向后上方斜挑）
-	_draw_hollow_nail(Vector2(-6, 6 + float_y), deg_to_rad(-22.0))
+	_draw_hollow_nail(Vector2(-7, 2 + float_y), deg_to_rad(-24.0))
 	draw_colored_polygon(cloak_pts, CLOAK_GREEN)
 	draw_polyline(cloak_pts, CLOAK_EDGE, 1.2, true)
 
@@ -157,7 +157,7 @@ func _draw_back() -> void:
 	draw_circle(center, 1.4, VOID_BLACK)
 
 	# 4. 在斗篷最外层绘制斜跨背负的长骨钉！
-	_draw_hollow_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
+	_draw_hollow_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 5. 纯黑后脑与双角
 	var head_center := Vector2(0, -14 + float_y)
@@ -183,31 +183,25 @@ func _draw_back() -> void:
 ## 辅助函数：绘制空洞骑士极简纯白修长骨钉
 func _draw_hollow_nail(pos: Vector2, rot: float) -> void:
 	var t := Transform2D(rot, pos)
-	# 极长且锐利的白骨剑身
+	# 小巧精致的纯白骨钉（总长仅约 26px，绝不拖出斗篷底部）
 	var nail_pts: PackedVector2Array = [
-		t * Vector2(0, -36),  # 极其尖锐的钉尖
-		t * Vector2(3.0, -26),
-		t * Vector2(3.0, 13),
-		t * Vector2(-3.0, 13),
-		t * Vector2(-3.0, -26)
+		t * Vector2(0, -15),  # 剑尖
+		t * Vector2(2.4, -9),
+		t * Vector2(2.0, 3),
+		t * Vector2(-2.0, 3),
+		t * Vector2(-2.4, -9)
 	]
 	draw_colored_polygon(nail_pts, NAIL_WHITE)
-	# 骨钉刻面阴影
-	var shadow_pts: PackedVector2Array = [
-		t * Vector2(0, -36),
-		t * Vector2(3.0, -26),
-		t * Vector2(3.0, 13),
-		t * Vector2(0, 13)
-	]
-	draw_colored_polygon(shadow_pts, NAIL_SHADOW)
-	# 剑尖凝聚纯白冷月光点
-	draw_circle(t * Vector2(0, -36), 2.2, Color.WHITE)
-	draw_soft_glow(t * Vector2(0, -36), 6.0, EYE_GLOW, 2)
-	# 骨质剑格与剑柄
+	draw_colored_polygon(PackedVector2Array([
+		t * Vector2(0, -15), t * Vector2(2.4, -9),
+		t * Vector2(2.0, 3), t * Vector2(0, 3)
+	]), NAIL_SHADOW)
+	draw_line(t * Vector2(0, -13), t * Vector2(0, 2), Color(1.0, 1.0, 1.0, 0.9), 1.0)
 	var guard_pts: PackedVector2Array = [
-		t * Vector2(-4.0, 13), t * Vector2(4.0, 13),
-		t * Vector2(3.0, 16), t * Vector2(-3.0, 16)
+		t * Vector2(-3.0, 3), t * Vector2(3.0, 3),
+		t * Vector2(2.2, 5.5), t * Vector2(-2.2, 5.5)
 	]
 	draw_colored_polygon(guard_pts, NAIL_SHADOW)
-	draw_line(t * Vector2(0, 16), t * Vector2(0, 23), NAIL_WHITE, 2.5)
-	draw_circle(t * Vector2(0, 24), 2.6, NAIL_SHADOW)
+	draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), NAIL_WHITE, 2.0)
+	draw_circle(t * Vector2(0, 11), 1.6, NAIL_WHITE)
+	draw_circle(t * Vector2(0, 11), 0.8, NAIL_SHADOW)

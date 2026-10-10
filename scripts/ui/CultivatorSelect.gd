@@ -206,6 +206,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var pview := ProceduralCultivatorView.new()
 		pview.position = Vector2(36, 42)
 		pview.scale = Vector2(0.95, 0.95)
+		pview.setup_character_id(cid)
 		if not is_unlocked:
 			pview.modulate = Color(0.4, 0.4, 0.5, 0.7)
 		icon_box.add_child(pview)
@@ -451,19 +452,29 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	# 形象小头像
 	var icon_box := PanelContainer.new()
 	icon_box.custom_minimum_size = Vector2(42, 42)
+	icon_box.clip_contents = true
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var ib_border := GameStyle.JADE if is_selected else (GameStyle.GOLD_EDGE if is_unlocked else GameStyle.LINE)
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
-	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(String(def.get("icon", ""))):
-		icon_tex.texture = load(String(def["icon"]))
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(36, 36)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	if not is_unlocked:
-		icon_tex.modulate = Color(0.38, 0.38, 0.48, 0.68)
-	icon_box.add_child(icon_tex)
+	if String(def.get("motion", "")) == "procedural":
+		var pview := ProceduralCultivatorView.new()
+		pview.position = Vector2(21, 23)
+		pview.scale = Vector2(0.55, 0.55)
+		pview.setup_character_id(cid)
+		if not is_unlocked:
+			pview.modulate = Color(0.38, 0.38, 0.48, 0.68)
+		icon_box.add_child(pview)
+	else:
+		var icon_tex := TextureRect.new()
+		if ResourceLoader.exists(String(def.get("icon", ""))):
+			icon_tex.texture = load(String(def["icon"]))
+		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_tex.custom_minimum_size = Vector2(36, 36)
+		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if not is_unlocked:
+			icon_tex.modulate = Color(0.38, 0.38, 0.48, 0.68)
+		icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 
 	# 人物名称（窄屏自动切 11 号字保证单行不撑破）

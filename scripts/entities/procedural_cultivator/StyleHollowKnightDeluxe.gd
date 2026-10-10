@@ -27,7 +27,7 @@ func _draw_front() -> void:
 	draw_arc(Vector2(0, 33), 20.0, 0, TAU, 32, Color(0.40, 0.80, 0.68, 0.18 + sin(_time * 3.0) * 0.08), 1.4, true)
 
 	# 2. 背后背负之纯白月光长骨钉（大角度斜贯背负，剑柄探出右肩，剑尖探出左腰）
-	_draw_deluxe_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
+	_draw_deluxe_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 3. 双层如翼大披风
 	# 内层幽绿薄纱（露在底端两侧）
@@ -145,7 +145,7 @@ func _draw_side() -> void:
 		Vector2(6, 0 + float_y)
 	]
 	# 侧面后背背负之月光骨钉（贴合后背斗篷，剑尖向后上方斜挑）
-	_draw_deluxe_nail(Vector2(-6, 6 + float_y), deg_to_rad(-22.0))
+	_draw_deluxe_nail(Vector2(-7, 2 + float_y), deg_to_rad(-24.0))
 	draw_colored_polygon(cloak_pts, CLOAK_OUTER)
 	draw_polyline(cloak_pts, CLOAK_EDGE, 1.2, true)
 
@@ -214,7 +214,7 @@ func _draw_back() -> void:
 	draw_circle(center, 1.5, VOID_BLACK)
 
 	# 4. 在斗篷最外层绘制斜跨背负的长骨钉！
-	_draw_deluxe_nail(Vector2(2, 4 + float_y), deg_to_rad(148.0))
+	_draw_deluxe_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 5. 后脑骨玉冠与双角
 	var head_center := Vector2(0, -15 + float_y)
@@ -242,32 +242,25 @@ func _draw_back() -> void:
 ## 绘制月光纯白修长骨钉（锋芒如雪）
 func _draw_deluxe_nail(pos: Vector2, rot: float) -> void:
 	var t := Transform2D(rot, pos)
-	# 极其修长锋利的纯白剑身
+	# 小巧精致的纯白月光骨钉（总长仅约 26px，紧凑秀雅，绝不拖出斗篷底部）
 	var nail_pts: PackedVector2Array = [
-		t * Vector2(0, -38), # 极长剑尖
-		t * Vector2(3.2, -26),
-		t * Vector2(3.2, 14),
-		t * Vector2(-3.2, 14),
-		t * Vector2(-3.2, -26)
+		t * Vector2(0, -15), # 剑尖
+		t * Vector2(2.4, -9),
+		t * Vector2(2.0, 3),
+		t * Vector2(-2.0, 3),
+		t * Vector2(-2.4, -9)
 	]
 	draw_colored_polygon(nail_pts, BONE_WHITE)
-	# 剑脊暗面
-	var shadow_pts: PackedVector2Array = [
-		t * Vector2(0, -38),
-		t * Vector2(3.2, -26),
-		t * Vector2(3.2, 14),
-		t * Vector2(0, 14)
-	]
-	draw_colored_polygon(shadow_pts, BONE_SHADOW)
-	# 剑尖凝聚纯白星尘光粒
-	draw_circle(t * Vector2(0, -38), 2.4, Color.WHITE)
-	draw_soft_glow(t * Vector2(0, -38), 7.0, MOON_GLOW, 2)
-	# 骨质剑格与剑柄
+	draw_colored_polygon(PackedVector2Array([
+		t * Vector2(0, -15), t * Vector2(2.4, -9),
+		t * Vector2(2.0, 3), t * Vector2(0, 3)
+	]), BONE_SHADOW)
+	draw_line(t * Vector2(0, -13), t * Vector2(0, 2), Color(1.0, 1.0, 1.0, 0.9), 1.0)
 	var guard_pts: PackedVector2Array = [
-		t * Vector2(-4.5, 14), t * Vector2(4.5, 14),
-		t * Vector2(3.5, 17), t * Vector2(-3.5, 17)
+		t * Vector2(-3.0, 3), t * Vector2(3.0, 3),
+		t * Vector2(2.2, 5.5), t * Vector2(-2.2, 5.5)
 	]
 	draw_colored_polygon(guard_pts, BONE_SHADOW)
-	draw_line(t * Vector2(0, 17), t * Vector2(0, 24), BONE_WHITE, 2.6)
-	draw_circle(t * Vector2(0, 25), 2.8, BONE_WHITE)
-	draw_circle(t * Vector2(0, 25), 1.4, BONE_SHADOW)
+	draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), BONE_WHITE, 2.0)
+	draw_circle(t * Vector2(0, 11), 1.6, BONE_WHITE)
+	draw_circle(t * Vector2(0, 11), 0.8, BONE_SHADOW)

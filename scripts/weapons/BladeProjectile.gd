@@ -55,6 +55,7 @@ var poison_dur: float = 2.5
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var glow: PointLight2D = $PointLight2D
+var _vector_renderer: ProceduralProjectileRenderer = null
 
 func _ready() -> void:
 	rotation = direction.angle()
@@ -64,7 +65,16 @@ func _ready() -> void:
 	if spin:
 		var tw = create_tween().set_loops()
 		tw.tween_property(sprite, "rotation", TAU, 0.45).as_relative()
+	_setup_vector_visual()
 	_apply_elemental_tint()
+
+func _setup_vector_visual() -> void:
+	var path_str := bullet_texture.resource_path if bullet_texture != null else ""
+	_vector_renderer = ProceduralProjectileRenderer.new()
+	_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+	sprite.add_child(_vector_renderer)
+	# 隐蔽旧像素贴图，保留子节点矢量渲染
+	sprite.self_modulate.a = 0.0
 
 ## 异常色温：弹丸本体与它自带的那盏 PointLight2D 一起染色（场景里默认是暖橙，
 ## 冰针顶着一盏暖灯看着就像打歪了）。只改色相，不改判定、不改尺寸。

@@ -25,6 +25,7 @@ var _pulse_tween: Tween = null
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var _base_sprite_scale: Vector2 = sprite.scale
+var _drone_renderer: ProceduralDroneRenderer = null
 
 ## 由 Player.sync_drones 下发星级与法宝 id（必须在节点可用后调用）
 func setup(star_level: int, weapon_id: String = "lingdie") -> void:
@@ -61,6 +62,19 @@ func _apply_star_visuals() -> void:
 	if star >= 2:
 		tint = Color(1.0, 0.95, 0.72) if star == 2 else Color(1.0, 0.88, 0.45)
 	sprite.modulate = tint
+
+	# 挂载纯矢量动态灵宝视觉
+	if _drone_renderer == null:
+		_drone_renderer = ProceduralDroneRenderer.new()
+		sprite.add_child(_drone_renderer)
+		sprite.self_modulate.a = 0.0
+	_drone_renderer.star = star
+	if drone_id == "hanquan_yulian":
+		_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.HANQUAN_YULIAN
+	elif drone_id == "hunyuan_zhong":
+		_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.HUNYUAN_ZHONG
+	else:
+		_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.LINGDIE
 
 ## 接触伤害必须"贴着就持续结算"：只挂 area_entered ⇒ 进入那一帧打一下，
 ## 敌人挂在环上不再触发第二下，纸面 42.9 DPS 实测只有 11~19。
