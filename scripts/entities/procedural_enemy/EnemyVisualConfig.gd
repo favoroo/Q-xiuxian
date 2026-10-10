@@ -255,7 +255,7 @@ static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
 	cfg.body_radius = 26.0
 	cfg.scale_factor = 1.6 if not final_boss else 1.85
 	if final_boss:
-		cfg.display_name = "心魔魔尊"
+		cfg.display_name = "最终Boss"
 		cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
 		cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
 		cfg.col_accent = Color(0.60, 0.30, 0.85, 0.95)   # 神魔紫焰法轮

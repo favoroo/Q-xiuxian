@@ -95,7 +95,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 22
-text = "悟 道 加 点"
+text = "升 级 加 点"
 
 [node name="InfoBand" type="PanelContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
@@ -140,17 +140,17 @@ theme_override_constants/separation = 12
 [node name="RerollButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 custom_minimum_size = Vector2(186, 44)
 layout_mode = 2
-text = "刷新悟道"
+text = "刷新升级"
 
 [node name="GateLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.788, 0.769, 0.706, 1)
 theme_override_font_sizes/font_size = 13
-text = "点中一张卡，再按右侧「确认领悟」"
+text = "点中一张卡，再按右侧「确认选择」"
 vertical_alignment = 1
 
 [node name="ConfirmButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 custom_minimum_size = Vector2(148, 44)
 layout_mode = 2
-text = "确认领悟 ✦"
+text = "确认选择 ✦"

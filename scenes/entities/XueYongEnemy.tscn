@@ -12,10 +12,10 @@ shader_parameter/flash_color = Color(1, 1, 0.9, 1)
 shader_parameter/flash_modifier = 0.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 14.0
+radius = 21.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
-radius = 17.0
+radius = 25.5
 
 [node name="XueYongEnemy" type="CharacterBody2D"]
 collision_layer = 4
@@ -31,13 +31,13 @@ split_count = 3
 split_scene = ExtResource("4_slime")
 
 [node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 15)
-scale = Vector2(0.5, 0.5)
+position = Vector2(0.0, 22.5)
+scale = Vector2(0.75, 0.75)
 texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 material = SubResource("ShaderMaterial_xueyong")
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.75, 0.75)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)

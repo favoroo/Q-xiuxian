@@ -14,54 +14,54 @@ extends RefCounted
 enum Kind { DASH, SPEED, HASTE, IFRAME, HEAL }
 
 const DEFS: Dictionary = {
-	"dash": {
-		"name": "缩地成寸",
-		"glyph": "冲",
-		"icon": "res://assets/art/skill_dash.png",
-		"kind": Kind.DASH,
-		"cooldown": 8.0,
-		"duration": 0.16,     # 冲刺位移耗时（秒），期间无敌
-		"distance": 150.0,    # 冲刺距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
-		"desc": "向当前方向瞬身突进，突进途中万法不侵。",
-	},
-	"gale": {
-		"name": "神行术",
-		"glyph": "行",
-		"icon": "res://assets/art/skill_gale.png",
-		"kind": Kind.SPEED,
-		"cooldown": 14.0,
-		"duration": 4.0,
-		"power": 0.60,        # 移速加成比例
-		"desc": "御风而行：移速提升六成，持续四息。",
-	},
-	"haste": {
-		"name": "疾风咒",
-		"glyph": "疾",
-		"icon": "res://assets/art/skill_haste.png",
-		"kind": Kind.HASTE,
-		"cooldown": 16.0,
-		"duration": 5.0,
-		"power": 0.40,        # 攻击间隔缩减比例
-		"desc": "咒力催动法器：攻击间隔缩短四成，持续五息。",
-	},
-	"aegis": {
-		"name": "金光护体",
-		"glyph": "护",
-		"icon": "res://assets/art/skill_aegis.png",
-		"kind": Kind.IFRAME,
-		"cooldown": 20.0,
-		"duration": 1.6,
-		"desc": "金光罩体：短时间内刀枪不入，不受任何伤害。",
-	},
-	"renewal": {
-		"name": "回春术",
-		"glyph": "愈",
-		"icon": "res://assets/art/skill_renewal.png",
-		"kind": Kind.HEAL,
-		"cooldown": 25.0,
-		"power": 0.25,        # 回复最大气血比例
-		"desc": "枯木逢春：立即回复两成半最大气血。",
-	},
+		"dash": {
+			"name": "冲刺",
+			"glyph": "冲",
+			"icon": "res://assets/art/skill_dash.png",
+			"kind": Kind.DASH,
+			"cooldown": 8.0,
+			"duration": 0.16,     # 冲刺位移耗时（秒），期间无敌
+			"distance": 150.0,    # 冲刺距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
+			"desc": "向当前方向冲刺，冲刺过程中无敌",
+		},
+		"gale": {
+			"name": "加速",
+			"glyph": "行",
+			"icon": "res://assets/art/skill_gale.png",
+			"kind": Kind.SPEED,
+			"cooldown": 14.0,
+			"duration": 4.0,
+			"power": 0.60,        # 移速加成比例
+			"desc": "移速提升60%，持续4秒",
+		},
+		"haste": {
+			"name": "急速",
+			"glyph": "快",
+			"icon": "res://assets/art/skill_haste.png",
+			"kind": Kind.HASTE,
+			"cooldown": 16.0,
+			"duration": 5.0,
+			"power": 0.40,        # 攻击间隔缩减比例
+			"desc": "攻击间隔缩短40%，持续5秒",
+		},
+		"aegis": {
+			"name": "无敌",
+			"glyph": "盾",
+			"icon": "res://assets/art/skill_aegis.png",
+			"kind": Kind.IFRAME,
+			"cooldown": 20.0,
+			"duration": 1.6,
+			"desc": "短时间内不受任何伤害",
+		},
+		"renewal": {
+			"name": "治疗",
+			"glyph": "治",
+			"icon": "res://assets/art/skill_renewal.png",
+			"kind": Kind.HEAL,
+			"cooldown": 25.0,
+			"power": 0.25,        # 回复最大气血比例
+			"desc": "立即回复25%最大生命",
+		},
 }
 
 ## 技能卡横排顺序（也是选择界面的展示顺序）

@@ -160,7 +160,7 @@ static func merge_weapon(gm: Node, w_id: String, star: int, keep: Dictionary) ->
 	if keeper_node != null and is_instance_valid(keeper_node) and gm.player.has_method("upgrade_weapon_instance"):
 		gm.player.upgrade_weapon_instance(keeper_node, star + 1)
 
-	gm.announcement_triggered.emit("✦ 三器合一 · %s ✦" % WeaponData.full_name(w_id, star + 1))
+	gm.announcement_triggered.emit("✦ 三合一 · %s ✦" % WeaponData.full_name(w_id, star + 1))
 	AudioManager.play_sfx("merge_success", 1.0)
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	return true
@@ -215,7 +215,7 @@ static func equip_from_stash(gm: Node, index: int) -> bool:
 	if index < 0 or index >= gm.stash.size():
 		return false
 	if slots_used(gm) >= gm.max_weapon_slots():
-		gm.announcement_triggered.emit("上阵已满 %d 件，先卸下一件法器" % gm.max_weapon_slots())
+		gm.announcement_triggered.emit("装备已满 %d 件，先卸下一件武器" % gm.max_weapon_slots())
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	var entry: Dictionary = gm.stash[index]
@@ -238,7 +238,7 @@ static func unequip_to_stash(gm: Node, index: int) -> bool:
 	if index < 0 or index >= list.size():
 		return false
 	if gm.stash.size() >= WeaponData.MAX_STASH_SLOTS:
-		gm.announcement_triggered.emit("背包已满，先出售一些法器")
+		gm.announcement_triggered.emit("背包已满，先出售一些武器")
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	var item: Dictionary = list[index]

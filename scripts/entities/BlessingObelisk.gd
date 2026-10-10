@@ -298,7 +298,7 @@ func _trigger_blessing() -> void:
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
-	GameManager.announcement_triggered.emit("⚡ 护山大阵启动 · 灵气荡涤四方 ⚡")
+	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 冲击波扫荡全场 ⚡")
 	_spawn_shockwave_ring()
 	# 对范围内所有敌人造成伤害与击退
 	# 方向走 GameBalance.knock_dir（永不把敌人往玩家身上推）

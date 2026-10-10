@@ -18,11 +18,11 @@ const SCALING_NAMES := {
 	"melee_damage": "近战伤害",
 	"ranged_damage": "远程伤害",
 	"elemental_damage": "元素伤害",
-	"engineering_damage": "御灵伤害",
+	"engineering_damage": "召唤伤害",
 	"crit_rate": "暴击率",
 	"crit_mult_bonus": "暴击伤害",
 	"armor": "护甲",
-	"max_hp": "气血上限",
+	"max_hp": "最大生命",
 	"move_speed_mult": "移动速度",
 	"attack_speed_mult": "攻击速度",
 	"lifesteal": "吸血",
@@ -32,16 +32,16 @@ const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.MELEE: "近战",
 	WeaponData.Behavior.PROJECTILE: "远程",
 	WeaponData.Behavior.BURST: "轰击",
-	WeaponData.Behavior.DRONE: "御灵",
+	WeaponData.Behavior.DRONE: "召唤",
 }
 
-const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "冰缓", "proc_poison": "剧毒"}
+const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison": "中毒"}
 
 var _items_box: VBoxContainer
 var _cult_box: VBoxContainer
 
 func _get_title_text() -> String:
-	return "传 道 玉 简"
+	return "图 鉴"
 
 func _get_panel_size() -> Vector2:
 	var vp := get_viewport_rect().size
@@ -63,10 +63,10 @@ func _get_close_btn_min_size() -> Vector2:
 
 func _build_body(root_vbox: VBoxContainer) -> void:
 	add_tab_button(0, "入门指南", 96.0)
-	add_tab_button(1, "法器图鉴", 96.0)
-	add_tab_button(2, "法宝图鉴", 96.0)
-	add_tab_button(3, "修士图鉴", 96.0)
-	add_tab_button(4, "进阶心法", 96.0)
+	add_tab_button(1, "武器图鉴", 96.0)
+	add_tab_button(2, "道具图鉴", 96.0)
+	add_tab_button(3, "角色图鉴", 96.0)
+	add_tab_button(4, "进阶攻略", 96.0)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -223,8 +223,8 @@ func _build_weapons_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
 	var box := _new_scroll_vbox(scroll)
 
-	box.add_child(_make_text_card("法器规则",
-		"法器只能在波间「灵石阁」购买：上阵 %d 槽，纳戒（背包）%d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意法器卡查看射程、冷却与属性受益。" % [
+	box.add_child(_make_text_card("武器规则",
+		"武器只能在波间「商店」购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意武器卡查看射程、冷却与属性受益。" % [
 			WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
 			String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
 			WeaponData.MAX_STAR]))
@@ -232,7 +232,7 @@ func _build_weapons_page(parent: Control) -> Control:
 	# 按五行分组展示，与 WeaponData.DEFS 的排布同源
 	for elem in WeaponData.ELEMENTS:
 		var header := Label.new()
-		header.text = "── %s行法器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem))
+		header.text = "── %s行武器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem))
 		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(header, 13, ELEMENT_COLORS.get(elem, GameStyle.PAPER), 0, GameStyle.INK, true)
 		box.add_child(header)
@@ -280,7 +280,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 		["伤害", "%d" % int(def.get("damage", 0)), GameStyle.JADE],
 		["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
 		["射程/范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
+		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	if int(def.get("pierce", 0)) > 0:
 		rows.append(["贯穿", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
@@ -298,7 +298,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 			var k := String(key)
 			names.append(String(SCALING_NAMES.get(k, StatInfoData.field_name(k))))
 		notes.append("属性受益：" + "、".join(names))
-	notes.append("集齐 3 把同名同星可在灵石阁合成升星")
+	notes.append("集齐 3 把同名同星可在商店合成升星")
 
 	DetailTip.show_over(self, anchor, {
 		"title": String(def.get("name", wid)),
@@ -307,7 +307,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 		"rows": rows,
 		"body": String(def.get("desc", "")),
 		"notes": notes,
-		"foot": "法器仅在波间灵石阁有售",
+		"foot": "武器仅在波间商店有售",
 	})
 
 # ----------------- 分页 3：法宝图鉴 -----------------
@@ -320,8 +320,8 @@ func _build_items_page(parent: Control) -> Control:
 func _rebuild_items_page() -> void:
 	for c in _items_box.get_children():
 		c.queue_free()
-	_items_box.add_child(_make_text_card("法宝规则",
-		"法宝是买即生效的被动奇珍，无限持有、不占法器栏位。\n品阶越高现身越晚、价格越贵：凡品开局即有，良品、仙品、传说随波次陆续现身。\n点按任意法宝卡查看效果与入手价。"))
+	_items_box.add_child(_make_text_card("道具规则",
+		"道具是买即生效的被动奇珍，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随波次陆续现身。\n点按任意道具卡查看效果与入手价。"))
 
 	for tier in [1, 2, 3, 4]:
 		var tier_col: Color = ItemData.tier_color(tier)
@@ -359,7 +359,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 	var tier_col := ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入灵石", "%d 灵石" % int(def.get("price", 0)), GameStyle.JADE],
+		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	var desc_lines := String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = []
@@ -393,8 +393,8 @@ func _build_cultivators_page(parent: Control) -> Control:
 func _rebuild_cultivators_page() -> void:
 	for c in _cult_box.get_children():
 		c.queue_free()
-	_cult_box.add_child(_make_text_card("道统规则",
-		"每名修士都是「超能力 + 严苛负面代偿」的不对称设计：选人是本局最重要的流派决定。\n初始开放四名道统，其余通过「修仙志」的天道功绩解锁。"))
+	_cult_box.add_child(_make_text_card("角色规则",
+		"每名角色都是「超能力 + 严苛负面代偿」的不对称设计：选人是本局最重要的流派决定。\n初始开放四名角色，其余通过「战绩」的成就解锁。"))
 
 	for cid in CultivatorData.DEFS.keys():
 		var def: Dictionary = CultivatorData.DEFS[cid]
@@ -522,12 +522,12 @@ func _make_synergy_card() -> Control:
 
 	var intro_lbl := Label.new()
 	intro_lbl.text = GameStyle.wrap_cjk(
-		"持有同一标签的法器达 2 / 4 / 6 件时逐级激活羁绊加成。器类与五行两条线互不冲突、同时生效——凑羁绊是中期发力的核心。",
+		"持有同一标签的武器达 2 / 4 / 6 件时逐级激活羁绊加成。类型与元素两条线互不冲突、同时生效——凑羁绊是中期发力的核心。",
 		GameStyle.body_font(), 13, TEXT_W)
 	GameStyle.label(intro_lbl, 13, GameStyle.PAPER_DIM)
 	vbox.add_child(intro_lbl)
 
-	for group in [["器类", WeaponData.CLASSES], ["五行", WeaponData.ELEMENTS]]:
+	for group in [["类型", WeaponData.CLASSES], ["元素", WeaponData.ELEMENTS]]:
 		var g_lbl := Label.new()
 		g_lbl.text = "─ %s ─" % String(group[0])
 		GameStyle.label(g_lbl, 12, GameStyle.GREY)
@@ -542,7 +542,7 @@ func _make_synergy_card() -> Control:
 			var name_lbl := Label.new()
 			name_lbl.text = String(syn.get("name", tag))
 			name_lbl.custom_minimum_size = Vector2(64, 0)
-			GameStyle.label(name_lbl, 13, GameStyle.GOLD_EDGE if group[0] == "器类" else GameStyle.JADE,
+			GameStyle.label(name_lbl, 13, GameStyle.GOLD_EDGE if group[0] == "类型" else GameStyle.JADE,
 				0, GameStyle.INK, true)
 			line.add_child(name_lbl)
 			var desc_lbl := Label.new()
@@ -572,7 +572,7 @@ func _make_stat_guide_card() -> Control:
 
 	var intro_lbl := Label.new()
 	intro_lbl.text = GameStyle.wrap_cjk(
-		"局内点右上「境界」打开属性面板，每条属性还能点按看结算公式与上限。以下是常用词条的一句话解读：",
+		"局内点右上「等级」打开属性面板，每条属性还能点按看结算公式与上限。以下是常用词条的一句话解读：",
 		GameStyle.body_font(), 13, TEXT_W)
 	GameStyle.label(intro_lbl, 13, GameStyle.PAPER_DIM)
 	vbox.add_child(intro_lbl)
@@ -618,11 +618,11 @@ func _make_build_card(guide: Dictionary) -> Control:
 	for w in guide.get("weapons", []):
 		wps.append(String(w))
 	var rows := [
-		["推荐道统", String(guide.get("cultivator", ""))],
-		["核心法器", "、".join(wps)],
+		["推荐角色", String(guide.get("cultivator", ""))],
+		["核心武器", "、".join(wps)],
 		["关键羁绊", String(guide.get("synergies", ""))],
 		["加点顺序", String(guide.get("upgrades", ""))],
-		["推荐法宝", String(guide.get("items", ""))],
+		["推荐道具", String(guide.get("items", ""))],
 	]
 	for r in rows:
 		var line := HBoxContainer.new()

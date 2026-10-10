@@ -8,7 +8,7 @@ extends RefCounted
 ##   2. 初始开放 4 名代表性修士 + 11 件基础法宝，其余 5 名进阶修士与 4 件高阶法宝通过里程碑解锁。
 
 ## 危险度档位名号（D0 ~ D5）
-const DANGER_NAMES: Array[String] = ["凡尘", "微澜", "惊涛", "炼狱", "无间", "天劫"]
+const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
 
 ## 初始默认解锁的 4 名修士
 const DEFAULT_CULTIVATORS: Array[String] = [
@@ -43,83 +43,83 @@ const DEFAULT_ITEMS: Array[String] = [
 const ACHIEVEMENTS: Array[Dictionary] = [
 	{
 		"id": "ach_cult_meiying",
-		"name": "踏雪无痕",
-		"cond_desc": "单局有效闪避达到 35%，或累计斩妖 500 只",
+		"name": "影行者",
+		"cond_desc": "单局有效闪避达到35%，或累计击杀500只敌人",
 		"reward_type": "cultivator",
 		"reward_id": "meiying",
-		"reward_name": "魅影·幽娘",
+		"reward_name": "影者",
 		"icon": "res://assets/art/cultivator_meiying_icon.png",
 	},
 	{
 		"id": "ach_cult_kuangzhan",
-		"name": "百战喋血",
-		"cond_desc": "生涯累计斩妖达到 1500 只",
+		"name": "百战不殆",
+		"cond_desc": "累计击杀达到1500只",
 		"reward_type": "cultivator",
 		"reward_id": "kuangzhan",
-		"reward_name": "狂战蛮修",
+		"reward_name": "蛮兵",
 		"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
 	},
 	{
 		"id": "ach_cult_duobao",
 		"name": "富甲一方",
-		"cond_desc": "单局囊中灵石达到 250 枚",
+		"cond_desc": "单局金币达到250枚",
 		"reward_type": "cultivator",
 		"reward_id": "duobao",
-		"reward_name": "多宝道人",
+		"reward_name": "收藏家",
 		"icon": "res://assets/art/cultivator_duobao_icon.png",
 	},
 	{
 		"id": "ach_cult_duoshe",
-		"name": "渡劫初成",
-		"cond_desc": "使用任意道统通关 1 次（完成第 20 波）",
+		"name": "初次通关",
+		"cond_desc": "使用任意角色通关1次（完成第20波）",
 		"reward_type": "cultivator",
 		"reward_id": "duoshe",
-		"reward_name": "夺舍散人",
+		"reward_name": "学者",
 		"icon": "res://assets/art/cultivator_duoshe_icon.png",
 	},
 	{
 		"id": "ach_cult_dubi",
-		"name": "孤峰问剑",
-		"cond_desc": "通关危险度「微澜」或更高档位",
+		"name": "极限挑战",
+		"cond_desc": "通关「困难」或更高难度",
 		"reward_type": "cultivator",
 		"reward_id": "dubi",
-		"reward_name": "独臂刀圣",
+		"reward_name": "狂战士",
 		"icon": "res://assets/art/cultivator_dubi_icon.png",
 	},
 	{
 		"id": "ach_item_pojia",
-		"name": "斩将夺旗",
-		"cond_desc": "单局抵达第 15 波",
+		"name": "深入敌后",
+		"cond_desc": "单局抵达第15波",
 		"reward_type": "item",
 		"reward_id": "pojia_zhui",
-		"reward_name": "破甲锥",
+		"reward_name": "破甲针",
 		"icon": "res://assets/art/item_pojia_zhui.png",
 	},
 	{
 		"id": "ach_item_wuxing",
 		"name": "五行齐聚",
-		"cond_desc": "单局境界达到 Lv.15",
+		"cond_desc": "单局等级达到Lv.15",
 		"reward_type": "item",
 		"reward_id": "wuxing_pei",
-		"reward_name": "五行佩",
+		"reward_name": "五行石",
 		"icon": "res://assets/art/item_wuxing_pei.png",
 	},
 	{
 		"id": "ach_item_hunyuan",
-		"name": "生财有道",
-		"cond_desc": "单局灵韵达到 30 点",
+		"name": "收益满载",
+		"cond_desc": "单局收益达到30点",
 		"reward_type": "item",
 		"reward_id": "hunyuan_zhu",
-		"reward_name": "混元珠",
+		"reward_name": "万能珠",
 		"icon": "res://assets/art/item_hunyuan_zhu.png",
 	},
 	{
 		"id": "ach_item_kuilei",
 		"name": "九死一生",
-		"cond_desc": "累计修行 5 局，或任意通关 1 次",
+		"cond_desc": "累计游玩5局，或任意通关1次",
 		"reward_type": "item",
 		"reward_id": "tisi_kuilei",
-		"reward_name": "替死傀儡",
+		"reward_name": "替身娃娃",
 		"icon": "res://assets/art/item_tisi_kuilei.png",
 	},
 ]
@@ -127,7 +127,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 ## 道统功名里程碑（每角色渡劫成功次数档位，2026-10-10 修仙志升级）
 ## 称号达标自动点亮（纯展示），灵石囊需在修仙志手动领取，开局时一次性兑入灵石
 const MILESTONE_WINS: Array[int] = [1, 3, 5, 10]
-const MILESTONE_TITLES: Array[String] = ["初证道果", "小道有成", "道基稳固", "渡劫金丹"]
+const MILESTONE_TITLES: Array[String] = ["初学者", "进阶者", "老手", "大师"]
 const MILESTONE_STONES: Array[int] = [30, 60, 100, 200]
 
 ## 每角色里程碑定义表：{id: "cid_次数", cultivator_id, wins, title, stones}

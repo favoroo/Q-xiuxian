@@ -35,7 +35,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	if not skill_id.is_empty():
 		var sdef := SkillData.get_def(skill_id)
 		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
-		rows.append(["随行神通", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE])
+		rows.append(["随行技能", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE])
 	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
 	if not start_equip.is_empty():
 		rows.append(["开局自带", start_equip, GameStyle.PAPER])
@@ -46,17 +46,17 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 		var tag_names: Array[String] = []
 		for t in allowed:
 			tag_names.append(String(WeaponData.SYNERGIES.get(String(t), {}).get("name", t)))
-		notes.append("道统亲和：灵石阁大幅偏向「%s」系法器，仍有少量他派漏出。" % "、".join(tag_names))
+		notes.append("角色适配：商店大幅偏向「%s」系武器，仍有少量他派漏出。" % "、".join(tag_names))
 	var locked: Array = def.get("locked_upgrades", [])
 	if not locked.is_empty():
 		var titles: Array[String] = []
 		for uid in locked:
 			titles.append(String(UpgradeData.get_upgrade_def(String(uid)).get("title", uid)))
-		notes.append("加点锁死：「%s」与本道统无缘，悟道候选中不会出现。" % "、".join(titles))
+		notes.append("加点锁定：「%s」与本角色无缘，升级候选中不会出现。" % "、".join(titles))
 
 	return DetailTip.show_over(host, anchor, {
-		"title": "%s · 道统特性" % String(def.get("name", "")),
-		"chip": "道统",
+		"title": "%s · 角色特性" % String(def.get("name", "")),
+		"chip": "角色",
 		"chip_color": GameStyle.GOLD,
 		"rows": rows,
 		"body": "「%s」" % String(def.get("epithet", "")),
@@ -83,7 +83,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = [
-		"本命法宝：购入即永久生效，不占用上阵法器槽位。",
+		"被动道具：购入即永久生效，不占用上阵武器槽位。",
 	]
 	for line in desc_lines:
 		var s := String(line).strip_edges()
@@ -92,12 +92,12 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 
 	return DetailTip.show_over(host, anchor, {
 		"title": String(def.get("name", item_id)),
-		"chip": "%s法宝" % ItemData.tier_label(tier_num),
+		"chip": "%s道具" % ItemData.tier_label(tier_num),
 		"chip_color": tier_col,
 		"rows": rows,
-		"body": "法宝奇珍：属性加成与悟道同源叠加。",
+		"body": "稀有道具：属性加成与升级同源叠加。",
 		"notes": notes,
-		"foot": "在波间灵石阁可继续购置更多奇珍。",
+		"foot": "在波间商店可继续购置更多奇珍。",
 	})
 
 ## 空/封印法器位详情卡
@@ -105,18 +105,18 @@ static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> C
 	var max_slots: int = GameManager.max_weapon_slots()
 	var locked: bool = index >= max_slots
 	return DetailTip.show_over(host, anchor, {
-		"title": "封印法器位" if locked else "空法器位",
+		"title": "锁定武器位" if locked else "空武器位",
 		"rows": [
 			["上阵位", "第 %d 槽 / 上限 %d 槽" % [index + 1, max_slots]],
 			["当前上阵", "%d 件" % GameManager.get_weapons_summary().size()],
-			["纳戒仓库", "%d 件" % GameManager.stash.size()],
+			["背包", "%d 件" % GameManager.stash.size()],
 		],
-		"body": "本道统限制了上阵法器槽上限，此槽位不可装备。" if locked else "这一格还空着。法器按获得顺序自动补上阵法器位，不需要手动摆。",
+		"body": "本角色限制了上阵武器槽上限，此槽位不可装备。" if locked else "这一格还空着。武器按获得顺序自动补上阵武器位，不需要手动摆。",
 		"notes": [
-			"上阵 %d 格全满之后，新买的法器进纳戒仓库，只用于合成与出售。" % max_slots,
-			"上阵法器的数量（如 2/6、4/6、6/6）决定流派羁绊的激活档位。",
+			"上阵 %d 格全满之后，新买的武器进背包，只用于合成与出售。" % max_slots,
+			"上阵武器的数量（如 2/6、4/6、6/6）决定流派羁绊的激活档位。",
 		],
-		"foot": "波间在灵石阁买法器即可补上空槽。",
+		"foot": "波间在商店买武器即可补上空槽。",
 	})
 
 ## 法器详情卡
@@ -155,7 +155,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
 		["属性转化", "+%.1f" % bonus, _c(bonus)],
 		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
-		["道统×五行", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
+		["角色×元素", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 		["攻击间隔", "%.2f 秒" % cd],
 	]
@@ -164,20 +164,20 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		rows.append(["特性", feats])
 
 	var notes: Array[String] = [
-		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 道统 × 五行；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
+		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 角色 × 元素；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
 			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
 		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
-		"升星：同名同星集满 3 件在灵石阁合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
+		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
 
 	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
 		GameManager.count_copies(id, star), WeaponData.sell_price(id, star)]
 	if from_stash:
-		foot += "\n在纳戒仓库里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
+		foot += "\n在背包里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
 
 	return DetailTip.show_over(host, anchor, {
-		"title": "%s %s" % [String(def.get("name", "法器")), WeaponData.star_text(star)],
+		"title": "%s %s" % [String(def.get("name", "武器")), WeaponData.star_text(star)],
 		"chip": " · ".join(syn_parts) if not syn_parts.is_empty() else String(def.get("tag", "")),
 		"chip_color": GameStyle.JADE_DK if from_stash else GameStyle.GOLD_DK,
 		"rows": rows,
@@ -231,7 +231,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
 
 	var notes: Array[String] = [
-		"升级只攒点数，每波妖潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
+		"升级只攒点数，每波敌潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
 		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
 	]
 	var stat_id := ""
@@ -243,8 +243,8 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 	var foot := "" if stat_id.is_empty() else "这一条落在左侧「%s」那一行，点它可以看来源拆解。" % StatInfoData.title(stat_id)
 
 	return DetailTip.show_over(host, anchor, {
-		"title": String(item.get("title", "悟道")),
-		"chip": String(item.get("rarity_label", "凡品")),
+		"title": String(item.get("title", "升级")),
+		"chip": String(item.get("rarity_label", "普通")),
 		"chip_color": item.get("border_color", GameStyle.GOLD_DK),
 		"rows": rows,
 		"body": String(item.get("desc", "")),

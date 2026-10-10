@@ -481,21 +481,23 @@ func _physics_process(delta: float) -> void:
 			facing = face[0]
 			anim_sprite.flip_h = face[1]
 
-			if is_procedural and procedural_view != null:
-				gait_phase_counter += delta * 1.8 * clampf(speed_ratio, 0.6, 1.3)
-				if gait_phase_counter > 1.0:
-					gait_phase_counter -= 1.0
-				var hover_bob := sin(gait_phase_counter * TAU) * 0.02
-				procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.5, 1.0 + hover_bob)
-				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
-				# 修士御风身姿挺拔：极微幅气动呼吸侧倾（上限1.2°），杜绝左右移动时斗篷大角度失真倾斜
-				var target_bank := deg_to_rad(1.2) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.0)
-				procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 12.0, 1.0))
-				procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
-				if shadow_sprite != null:
-					# 影子跟随移速方向自然拉伸拖尾与呼吸
-					var shadow_pulse := 1.0 - sin(gait_phase_counter * TAU) * 0.05
-					shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + 0.15 * speed_ratio) * shadow_pulse
+		if is_procedural and procedural_view != null:
+			gait_phase_counter += delta * 2.4 * clampf(speed_ratio, 0.7, 1.4)
+			if gait_phase_counter > 1.0:
+				gait_phase_counter -= 1.0
+			# 土豆兄弟式步态弹性（Squash & Stretch）：垂直弹跳与横向挤压形变
+			var bounce_amp := 0.065 * clampf(speed_ratio, 0.6, 1.25)
+			var hover_bob := sin(gait_phase_counter * TAU) * bounce_amp
+			procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.7, 1.0 + hover_bob)
+			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
+			# 土豆兄弟式御风灵动侧倾：水平移速驱动 4.8° 弹性倾角，转向灵动自然
+			var target_bank := deg_to_rad(4.8) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.2)
+			procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 14.0, 1.0))
+			procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
+			if shadow_sprite != null:
+				# 影子跟随移速方向自然拉伸拖尾与呼吸
+				var shadow_pulse := 1.0 - sin(gait_phase_counter * TAU) * 0.08
+				shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + 0.15 * speed_ratio) * shadow_pulse
 		elif _motion_mode == "hover":
 			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
 			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
@@ -753,7 +755,7 @@ func take_damage(amount: float) -> void:
 
 	# 流云身法：闪避成功不掉血、不消耗无敌帧
 	if GameManager.rng.randf() < GameManager.get_effective_dodge():
-		DamageNumber.spawn(get_parent(), global_position, 0, false, "身法回避")
+		DamageNumber.spawn(get_parent(), global_position, 0, false, "闪避")
 		AudioManager.play_sfx("dodge", 1.0)
 		return
 

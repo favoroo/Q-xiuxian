@@ -45,7 +45,7 @@ func _ready() -> void:
 	GameStyle.label(title_label, 30, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(sub_label, 14, GameStyle.PAPER_DIM)
 	GameStyle.label(hint_label, 12, GameStyle.GREY)
-	hint_label.text = "◆ 金边为道统契合神通：所选道统对它加持专属强化 ◆"
+	hint_label.text = "◆ 金边为角色适配技能：所选角色对它加持专属强化 ◆"
 
 func _setup_header_bar() -> void:
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
@@ -55,7 +55,7 @@ func _setup_header_bar() -> void:
 	vbox.move_child(header_row, 0)
 
 	var back_btn := Button.new()
-	back_btn.text = "〈 重选道统"
+	back_btn.text = "〈 重选角色"
 	back_btn.custom_minimum_size = Vector2(98, 34)
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -89,9 +89,9 @@ func show_select() -> void:
 	var cname: String = String(cdef.get("name", ""))
 	var cepi: String = String(cdef.get("epithet", ""))
 	if not cname.is_empty():
-		sub_label.text = "已入道统 · %s「%s」 · 随行神通择其一" % [cname, cepi]
+		sub_label.text = "已选角色 · %s「%s」 · 选择一个技能" % [cname, cepi]
 	else:
-		sub_label.text = "灵田妖潮将至，择一门随行神通，应劫保命"
+		sub_label.text = "选择一个技能辅助战斗"
 	for child in cards_container.get_children():
 		child.queue_free()
 	_card_w = card_w_for(get_viewport_rect().size.x, SkillData.OFFER_IDS.size())
@@ -182,7 +182,7 @@ func _create_card(s_id: String) -> Control:
 
 	# 冷却 chip（契合时带标识，数值为角色合并后的真实冷却）
 	var cd_lbl = Label.new()
-	cd_lbl.text = (" ✦契合·冷却 %d 秒 " % int(round(float(st["cooldown"])))) if enhanced else (" 冷却 %d 秒 " % int(round(float(st["cooldown"]))))
+	cd_lbl.text = (" ✦适配·冷却 %d 秒 " % int(round(float(st["cooldown"])))) if enhanced else (" 冷却 %d 秒 " % int(round(float(st["cooldown"]))))
 	cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cd_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	cd_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
@@ -193,7 +193,7 @@ func _create_card(s_id: String) -> Control:
 	var desc_text: String = String(def.get("desc", ""))
 	var enhance := SkillData.enhance_desc(s_id, cid)
 	if not enhance.is_empty():
-		desc_text += "\n✦ 道统契合：" + enhance
+		desc_text += "\n✦ 角色适配：" + enhance
 	var desc_lbl = Label.new()
 	desc_lbl.text = GameStyle.wrap_cjk(desc_text, GameStyle.body_font(), 12, _desc_w())
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -205,7 +205,7 @@ func _create_card(s_id: String) -> Control:
 
 	# 选择按钮
 	var btn = Button.new()
-	btn.text = "携 此 术"
+	btn.text = "选 择 此 技 能"
 	btn.custom_minimum_size = Vector2(0, 36)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	btn.focus_mode = Control.FOCUS_NONE

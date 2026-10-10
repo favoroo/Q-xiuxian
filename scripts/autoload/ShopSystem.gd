@@ -90,13 +90,13 @@ static func buy_offer(gm: Node, index: int) -> bool:
 		"item":
 			ok = gm.add_item(offer.get("id", ""))
 			if not ok:
-				gm.announcement_triggered.emit("此法宝每局限购一件")
+				gm.announcement_triggered.emit("此道具每局限购一件")
 				AudioManager.play_sfx("ui_error", 0.9)
 				return false
 		_:
 			ok = WeaponInventory.add_weapon(gm, offer.get("id", ""))
 			if not ok:
-				gm.announcement_triggered.emit("上阵与背包都满了，先出售一些吧")
+				gm.announcement_triggered.emit("装备与背包都满了，先出售一些吧")
 				AudioManager.play_sfx("ui_error", 0.9)
 				return false
 	if not ok:

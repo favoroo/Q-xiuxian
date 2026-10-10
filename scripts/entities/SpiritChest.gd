@@ -36,9 +36,14 @@ class HitPips:
 			draw_rect(rect.grow(1.0), edge_color, false, 1.0)
 
 const BASE_SCALE := Vector2(0.5, 0.5)
+## 体型倍率（2026-10-10 用户口径「敌人和宝箱的大小要大一点」）。
+## 量尺来自 res://tests/EntitySizeProbe.tscn：匣子画出来只有 28×22 逻辑像素，而修士本体 47 宽，
+## 且它的判定圆直径本来就有 34 —— 画得比判的还小，打起来是「明明没碰到却一直在掉格」。
+## 视觉与判定同倍放缩（AGENTS.md 铁律 7），读数高度 PIP_LIFT 跟着走，否则要点压在匣盖上。
+const SIZE_MULT := 1.5
 ## 读数离匣心的高度：prop_chest.png 画布 128×124 铺满不透明像素，×0.5 后上沿在匣心上方 31px，
 ## 这条要在它之上（量出来的，不是估的）—— 摆在 26 会正正压在匣盖上，等于没有。
-const PIP_LIFT := 40.0
+const PIP_LIFT := 40.0 * SIZE_MULT
 const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
 
@@ -58,6 +63,7 @@ var _box_shape: CollisionShape2D
 var _flash_tw: Tween
 var _jiggle_tw: Tween
 var _breathe: Tween
+var _entrance_tw: Tween
 
 func _ready() -> void:
 	add_to_group("chests")
@@ -68,7 +74,7 @@ func _ready() -> void:
 	add_child(_box)
 	_box_shape = CollisionShape2D.new()
 	var circle := CircleShape2D.new()
-	circle.radius = 17.0
+	circle.radius = 17.0 * SIZE_MULT
 	_box_shape.shape = circle
 	_box.add_child(_box_shape)
 
@@ -94,14 +100,24 @@ func _ready() -> void:
 	_pips.edge_color = GameStyle.INK
 	add_child(_pips)
 
-	# 砸落登场 + 匣内灵气吞吐
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(_sprite, "scale", BASE_SCALE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(_loot_renderer, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# 砸落登场 + 匣内灵气吞吐，两者都落在 SIZE_MULT 这一档体型上。
+	# 呼吸必须等登场落定再接手：两条 tween 同写 _loot_renderer.scale 时谁后写谁赢，
+	# 匣子画多大就取决于量到哪一帧（2026-10-10 量尺同一只匣子两次读数 32×24 / 58×46）。
+	var rest := Vector2.ONE * SIZE_MULT
+	_entrance_tw = create_tween()
+	_entrance_tw.set_parallel(true)
+	_entrance_tw.tween_property(_sprite, "scale", BASE_SCALE * SIZE_MULT, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_entrance_tw.tween_property(_loot_renderer, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_entrance_tw.chain().tween_callback(_start_breathe)
+
+## 登场落定后才开始吞吐：起幅就是 rest，之后只在 rest 与 rest×1.04 之间摆
+func _start_breathe() -> void:
+	if _loot_renderer == null or not is_instance_valid(_loot_renderer):
+		return
+	var rest := Vector2.ONE * SIZE_MULT
 	_breathe = create_tween().set_loops()
-	_breathe.tween_property(_loot_renderer, "scale", Vector2.ONE * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
-	_breathe.tween_property(_loot_renderer, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_loot_renderer, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_loot_renderer, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
 
 ## 武器判定命中（与 EnemyBase 同签名，被挥砍/落雷/弹丸/灵蝶波及）
 ## 只数"打到了几下"：amount 不参与耐久结算，因此匣子既不会被高伤一发秒掉，
@@ -169,6 +185,8 @@ func dissolve() -> void:
 	if dying:
 		return
 	dying = true
+	if _entrance_tw != null and _entrance_tw.is_valid():
+		_entrance_tw.kill()
 	if _breathe != null and _breathe.is_valid():
 		_breathe.kill()
 	if _flash_tw != null and _flash_tw.is_valid():

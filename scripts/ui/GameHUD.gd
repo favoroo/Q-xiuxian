@@ -310,21 +310,21 @@ func _build_pending_chip() -> void:
 func _open_pending_tip() -> void:
 	var pending := GameManager.pending_upgrade_points
 	DetailTip.show_over(self, _pending_chip, {
-		"title": "悟道待加点",
+		"title": "升级待加点",
 		"chip": "回合结算",
 		"chip_color": GameStyle.JADE,
 		"rows": [
 			["本回合攒下", "%d 点" % pending, GameStyle.JADE],
-			["什么时候加", "每波妖潮平息后统一结算", GameStyle.PAPER],
+			["什么时候加", "每波敌潮平息后统一结算", GameStyle.PAPER],
 			["每次给几个", "%d 个候选，可刷新" % GameManager.UPGRADE_OFFER_COUNT, GameStyle.PAPER],
 		],
 		"body": "战斗中升级不再打断操作：升 1 级攒 1 点，回合结束一次性加完。",
 		"notes": [
-			"点数必须加完才能进灵石阁置办法器。",
-			"悟道候选每回合可免费刷新 1 次，之后按货架同一档价格扣灵石。",
-			"同一条悟道有叠层上限，叠满后不再出现在候选里。",
+			"点数必须加完才能进商店置办武器。",
+			"升级候选每回合可免费刷新 1 次，之后按货架同一档价格扣金币。",
+			"同一条升级有叠层上限，叠满后不再出现在候选里。",
 		],
-		"foot": "已领悟的条目可在「属性」面板的悟道页翻看。",
+		"foot": "已领悟的条目可在「属性」面板的升级页翻看。",
 	})
 
 func _refresh_pending_chip() -> void:
@@ -333,7 +333,7 @@ func _refresh_pending_chip() -> void:
 	var pending: int = GameManager.pending_upgrade_points
 	_pending_chip.visible = pending > 0
 	if pending > 0:
-		_pending_label.text = "悟道 ×%d" % pending
+		_pending_label.text = "升级 ×%d" % pending
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target
@@ -342,8 +342,8 @@ func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	level_label.text = "Lv." + str(lvl)
 
 func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
-	kills_label.text = "斩妖 " + str(kills)
-	shards_label.text = "灵石 " + str(stones)
+	kills_label.text = "击杀 " + str(kills)
+	shards_label.text = "金币 " + str(stones)
 	var mins = int(g_time / 60.0)
 	var secs = int(g_time) % 60
 	time_label.text = "%02d:%02d" % [mins, secs]
@@ -414,7 +414,7 @@ func _build_obelisk_ui() -> void:
 	add_child(_obelisk_box)
 
 	_obelisk_btn = Button.new()
-	_obelisk_btn.text = "聚 灵"
+	_obelisk_btn.text = "祭 坛"
 	_obelisk_btn.custom_minimum_size = Vector2(110, 44)
 	_obelisk_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	_obelisk_btn.focus_mode = Control.FOCUS_NONE
@@ -468,13 +468,13 @@ func _on_obelisk_btn_input(event: InputEvent) -> void:
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD_DK, 6.0, Vector2(3, 4)))
 	elif is_release and _obelisk_active_ob != null:
 		_obelisk_active_ob.stop_charge()
-		_obelisk_btn.text = "聚 灵"
+		_obelisk_btn.text = "祭 坛"
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
 	_obelisk_active_ob = ob
-	_obelisk_btn.text = "聚 灵"
+	_obelisk_btn.text = "祭 坛"
 	_obelisk_bar.value = 0.0
 	_obelisk_box.visible = true
 	_obelisk_box.modulate.a = 0.0
@@ -502,7 +502,7 @@ func on_obelisk_charge_progress(_ob: BlessingObelisk, ratio: float) -> void:
 ## 聚灵阵充能取消：重置按钮状态
 func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
 	if _obelisk_btn != null:
-		_obelisk_btn.text = "聚 灵"
+		_obelisk_btn.text = "祭 坛"
 		_obelisk_btn.add_theme_stylebox_override("normal", GameStyle.block(GameStyle.GOLD, 6.0, Vector2(3, 4)))
 	if _obelisk_bar != null:
 		_obelisk_bar.value = 0.0
@@ -517,7 +517,7 @@ func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
 			_obelisk_box.visible = false
 			_obelisk_box.scale = Vector2.ONE
 			_obelisk_box.modulate.a = 1.0
-			_obelisk_btn.text = "聚 灵"
+			_obelisk_btn.text = "祭 坛"
 			_obelisk_bar.value = 0.0
 			_obelisk_active_ob = null
 		)

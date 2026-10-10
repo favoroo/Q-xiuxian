@@ -20,9 +20,7 @@ const COLOR_RAMP := {
 	"robe_mid": Color(0.28, 0.62, 0.40),     # 主调翡翠
 	"robe_dark": Color(0.18, 0.42, 0.28),    # 背光深林
 	"white_inner": Color(0.93, 0.95, 0.96),  # 月白中衣
-	"belt_brown": Color(0.58, 0.36, 0.20),   # 暖棕丝绦
 	"belt_buckle": Color(0.96, 0.80, 0.28),  # 纯金扣
-	"jade_white": Color(0.85, 0.96, 0.92),   # 羊脂青白玉
 	"shoes_black": Color(0.16, 0.18, 0.22),
 	"tassel_red": Color(0.86, 0.22, 0.25)
 }
@@ -51,16 +49,10 @@ func _draw_front() -> void:
 	# 裙摆中缝露月白内衬
 	_draw_px_rect(Vector2(-1, 13 + bob), Vector2(2, 9), COLOR_RAMP["white_inner"])
 
-	# 5. 上身躯干与腰带
+	# 5. 上身躯干
 	_draw_px_rect(Vector2(-8, -5 + bob), Vector2(16, 14), COLOR_RAMP["outline"])
 	_draw_px_rect(Vector2(-7, -4 + bob), Vector2(14, 12), COLOR_RAMP["robe_mid"])
 	_draw_px_rect(Vector2(-7, -4 + bob), Vector2(6, 12), COLOR_RAMP["robe_light"])
-	# 暖棕腰封与金扣
-	_draw_px_rect(Vector2(-8, 5 + bob), Vector2(16, 4), COLOR_RAMP["belt_brown"])
-	_draw_px_rect(Vector2(-2.5, 4.5 + bob), Vector2(5, 5), COLOR_RAMP["belt_buckle"])
-	# 垂挂青白玉佩与红穗
-	_draw_px_rect(Vector2(1.5, 8 + bob), Vector2(2.5, 3.5), COLOR_RAMP["jade_white"])
-	_draw_px_rect(Vector2(2, 11.5 + bob), Vector2(1.5, 5), COLOR_RAMP["tassel_red"])
 
 	# 6. 交领领口（V字叠衽）
 	_draw_px_rect(Vector2(-3.5, -5 + bob), Vector2(7, 4.5), COLOR_RAMP["white_inner"])
@@ -115,12 +107,10 @@ func _draw_side() -> void:
 	_draw_px_rect(Vector2(-6, 8 + bob), Vector2(12, 14), COLOR_RAMP["robe_mid"])
 	_draw_px_rect(Vector2(1, 8 + bob), Vector2(5, 14), COLOR_RAMP["robe_light"])
 
-	# 4. 侧身上身与腰封
+	# 4. 侧身上身
 	_draw_px_rect(Vector2(-6, -5 + bob), Vector2(12, 14), COLOR_RAMP["outline"])
 	_draw_px_rect(Vector2(-5, -4 + bob), Vector2(10, 12), COLOR_RAMP["robe_mid"])
 	_draw_px_rect(Vector2(0, -4 + bob), Vector2(5, 12), COLOR_RAMP["robe_light"])
-	_draw_px_rect(Vector2(-6, 5 + bob), Vector2(12, 4), COLOR_RAMP["belt_brown"])
-	_draw_px_rect(Vector2(2.5, 4.5 + bob), Vector2(3.5, 5), COLOR_RAMP["belt_buckle"])
 
 	# 5. 侧面头部与五官
 	var head_y := -19.0 + bob
@@ -163,10 +153,9 @@ func _draw_back() -> void:
 	_draw_px_rect(Vector2(-8, 8 + bob), Vector2(16, 14), COLOR_RAMP["robe_mid"])
 	_draw_px_rect(Vector2(-1, 8 + bob), Vector2(2, 14), COLOR_RAMP["robe_dark"])
 
-	# 5. 上身后背与后腰带
+	# 5. 上身后背
 	_draw_px_rect(Vector2(-8, -5 + bob), Vector2(16, 14), COLOR_RAMP["outline"])
 	_draw_px_rect(Vector2(-7, -4 + bob), Vector2(14, 12), COLOR_RAMP["robe_mid"])
-	_draw_px_rect(Vector2(-8, 5 + bob), Vector2(16, 4), COLOR_RAMP["belt_brown"])
 
 	# 6. 后脑发丝与整齐发束
 	var head_y := -19.0 + bob

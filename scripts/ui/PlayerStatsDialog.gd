@@ -74,7 +74,7 @@ var _current_bottom_tab: int = 0 # 0 = 随身法宝, 1 = 悟道历程
 const SYNERGY_TIER_LINES: Dictionary = SynergyUI.TIER_LINES
 
 func _get_title_text() -> String:
-	return "修 为 境 界  ·  人 物 属 性"
+	return "等 级  ·  属 性 面 板"
 
 func _get_close_btn_text() -> String:
 	return "返 回 战 斗"
@@ -237,7 +237,7 @@ func _build_left_stats_panel() -> Control:
 	_shop_price_val_lbl = _add_stat_row(sec_econ, "shop_price", "+0%")
 	_free_rerolls_val_lbl = _add_stat_row(sec_econ, "free_rerolls", "0 次")
 	_stones_val_lbl = _add_stat_row(sec_econ, "stones", "0 枚")
-	_kills_val_lbl = _add_stat_row(sec_econ, "kills", "0 妖")
+	_kills_val_lbl = _add_stat_row(sec_econ, "kills", "0 杀")
 
 	_switch_stat_tab(0)
 	return left_panel
@@ -390,7 +390,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	cult_head.add_child(cult_head_sp)
 
 	var cult_hint := Label.new()
-	cult_hint.text = "点按看道统全部特性"
+	cult_hint.text = "点按看角色全部特性"
 	GameStyle.label(cult_hint, 10, GameStyle.GREY)
 	cult_head.add_child(cult_hint)
 
@@ -421,7 +421,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	var wp_head := HBoxContainer.new()
 	wp_head.add_theme_constant_override("separation", 10)
 	_wp_title_lbl = Label.new()
-	_wp_title_lbl.text = "✦ 上阵法器 (0/6)"
+	_wp_title_lbl.text = "✦ 装备武器 (0/6)"
 	GameStyle.label(_wp_title_lbl, 14, GameStyle.JADE)
 	wp_head.add_child(_wp_title_lbl)
 
@@ -473,7 +473,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 
 	var syn_head := HBoxContainer.new()
 	var syn_title := Label.new()
-	syn_title.text = "✦ 流派羁绊与五行共鸣"
+	syn_title.text = "✦ 羁绊与元素共鸣"
 	GameStyle.label(syn_title, 14, GameStyle.JADE)
 	syn_head.add_child(syn_title)
 
@@ -482,7 +482,7 @@ func _build_right_equipment_and_history_panel() -> Control:
 	syn_head.add_child(syn_sp)
 
 	_synergy_hint_lbl = Label.new()
-	_synergy_hint_lbl.text = "集齐 2 / 4 / 6 件同系法器解锁阶梯加成"
+	_synergy_hint_lbl.text = "集齐 2 / 4 / 6 件同系武器解锁阶梯加成"
 	GameStyle.label(_synergy_hint_lbl, 11, GameStyle.GREY)
 	syn_head.add_child(_synergy_hint_lbl)
 	syn_vbox.add_child(syn_head)
@@ -522,14 +522,14 @@ func _build_right_equipment_and_history_panel() -> Control:
 	bot_header.add_theme_constant_override("separation", 8)
 
 	_bottom_tab_items_btn = Button.new()
-	_bottom_tab_items_btn.text = "✦ 随身法宝 (0)"
+	_bottom_tab_items_btn.text = "✦ 携带道具 (0)"
 	_bottom_tab_items_btn.custom_minimum_size = Vector2(136, 26)
 	_bottom_tab_items_btn.focus_mode = Control.FOCUS_NONE
 	_bottom_tab_items_btn.pressed.connect(func(): _switch_bottom_tab(0))
 	bot_header.add_child(_bottom_tab_items_btn)
 
 	_bottom_tab_hist_btn = Button.new()
-	_bottom_tab_hist_btn.text = "✦ 悟道历程 (0)"
+	_bottom_tab_hist_btn.text = "✦ 升级记录 (0)"
 	_bottom_tab_hist_btn.custom_minimum_size = Vector2(136, 26)
 	_bottom_tab_hist_btn.focus_mode = Control.FOCUS_NONE
 	_bottom_tab_hist_btn.pressed.connect(func(): _switch_bottom_tab(1))
@@ -736,7 +736,7 @@ func refresh() -> void:
 	_stones_val_lbl.text = "%d 枚" % GameManager.spirit_stones
 	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE if GameManager.spirit_stones > 0 else GameStyle.PAPER)
 
-	_kills_val_lbl.text = "%d 妖" % GameManager.kills
+	_kills_val_lbl.text = "%d 杀" % GameManager.kills
 
 	# 3. 右侧道统卡、法器、流派羁绊、法宝与历史刷新
 	_refresh_cultivator()
@@ -761,7 +761,7 @@ func _refresh_cultivator() -> void:
 		var icon_path: String = String(def.get("icon", ""))
 		_cult_icon.texture = load(icon_path) if not icon_path.is_empty() and ResourceLoader.exists(icon_path) else null
 	if _cult_name_lbl != null:
-		_cult_name_lbl.text = String(def.get("name", "未选道统"))
+		_cult_name_lbl.text = String(def.get("name", "未选角色"))
 	if _cult_epi_lbl != null:
 		_cult_epi_lbl.text = "「%s」" % String(def.get("epithet", ""))
 	var w := _cult_text_width()
@@ -791,7 +791,7 @@ func _refresh_weapons() -> void:
 	var summary := GameManager.get_weapons_summary()
 	var max_slots := GameManager.max_weapon_slots()
 	if _wp_title_lbl != null:
-		_wp_title_lbl.text = "✦ 上阵法器 (%d/%d)" % [summary.size(), max_slots]
+		_wp_title_lbl.text = "✦ 装备武器 (%d/%d)" % [summary.size(), max_slots]
 
 	for i in range(WeaponData.MAX_SLOTS):
 		var slot := PanelContainer.new()
@@ -894,7 +894,7 @@ func _refresh_synergies() -> void:
 
 	if tags.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "当前尚未装备法器。装备同系（如剑系、离火）法器满 2 / 4 / 6 件即可触发阶梯共鸣加成。"
+		empty_lbl.text = "当前尚未装备武器。装备同系（如剑系、火系）武器满 2 / 4 / 6 件即可触发阶梯共鸣加成。"
 		GameStyle.label(empty_lbl, 12, GameStyle.GREY)
 		_synergy_flow.add_child(empty_lbl)
 		return
@@ -944,7 +944,7 @@ func _create_synergy_card(tag: String) -> Control:
 	vbox.add_child(head)
 
 	var kind_lbl := Label.new()
-	kind_lbl.text = "五行" if is_elem else "器类"
+	kind_lbl.text = "元素" if is_elem else "类型"
 	GameStyle.label(kind_lbl, 10, GameStyle.JADE if is_elem else GameStyle.GOLD_EDGE)
 	head.add_child(kind_lbl)
 
@@ -980,12 +980,12 @@ func _open_synergy_tip(tag: String, anchor: Control) -> void:
 		if tag in WeaponData.tags_of(wid):
 			match_weapons.append(String(WeaponData.get_def(wid).get("name", wid)))
 	var notes: Array[String] = [
-		"上阵同系法器（含同名多把）达到门槛件数即自动激活对应阶梯。",
-		"本流派法器：" + "、".join(match_weapons) + "。",
+		"上阵同系武器（含同名多把）达到门槛件数即自动激活对应阶梯。",
+		"本流派武器：" + "、".join(match_weapons) + "。",
 	]
 	var tip := SynergyUI.open_tip(self, anchor, tag,
 		"流派总加成：" + String(info.get("desc", "")),
-		"纳戒仓库中的备用法器不计入上阵数量。",
+		"背包中的备用武器不计入上阵数量。",
 		notes
 	)
 	_highlight_while_open(anchor, tip)
@@ -999,9 +999,9 @@ func _refresh_items_and_history() -> void:
 	var item_list := GameManager.items
 	var history := GameManager.upgrade_history
 	if _bottom_tab_items_btn != null:
-		_bottom_tab_items_btn.text = "✦ 随身法宝 (%d)" % item_list.size()
+		_bottom_tab_items_btn.text = "✦ 携带道具 (%d)" % item_list.size()
 	if _bottom_tab_hist_btn != null:
-		_bottom_tab_hist_btn.text = "✦ 悟道历程 (%d)" % history.size()
+		_bottom_tab_hist_btn.text = "✦ 升级记录 (%d)" % history.size()
 
 	# 若法宝为空但已有悟道记录，自动展示悟道历程避免空面板；反之有法宝时优先展示法宝
 	if item_list.is_empty() and not history.is_empty() and _current_bottom_tab == 0:
@@ -1010,7 +1010,7 @@ func _refresh_items_and_history() -> void:
 	# 1. 填充随身法宝
 	if item_list.is_empty():
 		var empty_item_lbl := Label.new()
-		empty_item_lbl.text = "尚未购入随身法宝。在波间灵石阁可购置各类被动奇珍。"
+		empty_item_lbl.text = "尚未购入携带道具。在波间商店可购置各类被动奇珍。"
 		GameStyle.label(empty_item_lbl, 12, GameStyle.GREY)
 		_items_flow.add_child(empty_item_lbl)
 	else:
@@ -1030,7 +1030,7 @@ func _refresh_items_and_history() -> void:
 	# 2. 填充历史悟道记录
 	if history.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "尚未有悟道加成，每波平息后可根据境界提升领悟天地法则。"
+		empty_lbl.text = "尚未有升级加成，每波平息后可根据等级提升领悟天地法则。"
 		GameStyle.label(empty_lbl, 12, GameStyle.GREY)
 		_history_list.add_child(empty_lbl)
 		return
@@ -1128,7 +1128,7 @@ func _create_history_row(item: Dictionary, idx: int) -> Control:
 		hbox.add_child(tex)
 
 	var pill := Label.new()
-	pill.text = " " + item.get("rarity_label", "凡品") + " "
+	pill.text = " " + item.get("rarity_label", "普通") + " "
 	GameStyle.label(pill, 10, GameStyle.PAPER)
 	var col: Color = item.get("border_color", GameStyle.PAPER)
 	var pill_sb := GameStyle.block(col, GameStyle.SLANT_BAND, Vector2(1, 1))

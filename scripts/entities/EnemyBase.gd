@@ -67,6 +67,8 @@ var _teleport_timer: float = 0.0   ## 闪现计时
 var _buff_timer: float = 0.0       ## 光环脉冲计时（每 0.25s 刷新一次范围内同伴）
 var _aura_speed_mult: float = 1.0  ## 被鼓妖光环覆盖时的移速加成
 var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
+var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
+var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
 
 # 五行元素异常状态（灼烧/冰缓/剧毒）
 var burn_timer: float = 0.0
@@ -237,6 +239,11 @@ func _physics_process(delta: float) -> void:
 	var player = GameManager.player
 	if player == null:
 		return
+
+	if _focus_hit_timer > 0.0:
+		_focus_hit_timer -= delta
+		if _focus_hit_timer <= 0.0:
+			_focus_hit_count = 0
 
 	# 0. 五行元素异常状态结算（灼烧/剧毒/冰缓）
 	if burn_timer > 0.0:
@@ -520,6 +527,13 @@ func _physics_process(delta: float) -> void:
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
+	# 普通小怪同目标短窗集火保护：防多把法器同帧命中瞬间蒸发，保证受击硬直/击退/闪白充分展现
+	if not from_dot and not is_elite:
+		if _focus_hit_timer <= 0.0:
+			_focus_hit_count = 0
+		amount *= GameBalance.focus_fire_mult(_focus_hit_count)
+		_focus_hit_count += 1
+		_focus_hit_timer = GameBalance.FOCUS_FIRE_WINDOW
 	current_hp -= amount
 	var elite_scale: float = 0.55 if is_elite else 1.0
 	knockback_velocity = knockback * elite_scale * GameManager.synergy_knockback_mult

@@ -50,8 +50,6 @@ func _draw_front() -> void:
 	]
 	draw_colored_polygon(torso_pts, SHADOW_BODY)
 	draw_polyline(torso_pts, HIGHLIGHT_EDGE, 1.2, true)
-	# 玄金扣腰带
-	draw_line(Vector2(-9, 3), Vector2(9, 3), Color(0.85, 0.72, 0.25), 2.0)
 
 	# 5. 腰间佩剑微拔出鞘，露出一抹霓虹青刃
 	var sword_pts: PackedVector2Array = [

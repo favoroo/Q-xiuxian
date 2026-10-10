@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	vbox.add_child(title)
 
 	var subtitle := GameStyle.label(Label.new(), 13, GameStyle.GREY)
-	subtitle.text = "妖潮暂歇 · 灵息归元"
+	subtitle.text = "战斗暂停 · 休整片刻"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(subtitle)
 
@@ -103,7 +103,7 @@ func _build_ui() -> void:
 	vol_title.text = "快 捷 音 量"
 	vol_title.custom_minimum_size = Vector2(0, 16)
 	vbox.add_child(vol_title)
-	_add_volume_row(vbox, "灵乐", &"BGM")
+	_add_volume_row(vbox, "音乐", &"BGM")
 	_add_volume_row(vbox, "音效", &"SFX")
 
 	_ver_label = Label.new()

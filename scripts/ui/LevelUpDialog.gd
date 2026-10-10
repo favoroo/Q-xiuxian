@@ -207,14 +207,14 @@ func _refresh() -> void:
 
 func _refresh_bars() -> void:
 	var pending: int = GameManager.pending_upgrade_points
-	var head: String = "第 %d 波已平" % maxi(GameManager.wave_number, 1)
+	var head: String = "第 %d 波结束" % maxi(GameManager.wave_number, 1)
 	if pending > 1:
 		head += " · 待加点 %d/%d" % [pending, GameManager.alloc_points_total]
 	elif pending == 1:
 		head += " · 待加点 1"
 	else:
-		head += " · 悟道已圆满"
-	title_label.text = "悟 道 加 点"
+		head += " · 升级已完成"
+	title_label.text = "升 级 加 点"
 	info_label.text = GameStyle.wrap_cjk(head, GameStyle.body_font(), 13,
 		maxf(120.0, get_viewport().get_visible_rect().size.x - 120.0))
 	reroll_btn.text = GameManager.alloc_reroll_label()
@@ -223,16 +223,16 @@ func _refresh_bars() -> void:
 	_update_gate_label()
 
 func _update_confirm_btn() -> void:
-	confirm_btn.text = "确认领悟 ✦"
+	confirm_btn.text = "确认选择 ✦"
 	confirm_btn.disabled = selected_index < 0 or not _can_interact or _is_confirming
 	confirm_btn.custom_minimum_size = Vector2(148, 44)
 
 ## 底部这条读数把「选了哪一条」与「还剩几点」都摆在明面上（触屏无 hover，点了就得看得见）
 func _update_gate_label() -> void:
 	var pending: int = GameManager.pending_upgrade_points
-	var rest := "还剩 %d 点未加" % pending if pending > 0 else "点已加完 · 稍候进灵石阁"
+	var rest := "还剩 %d 点未加" % pending if pending > 0 else "点已加完 · 稍候进商店"
 	if selected_index < 0 or selected_index >= GameManager.alloc_offers.size():
-		gate_label.text = "点中一张卡，再按右侧「确认领悟」 · %s" % rest
+		gate_label.text = "点中一张卡，再按右侧「确认选择」 · %s" % rest
 		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	else:
 		gate_label.text = "已选【%s】 · %s" % [
@@ -290,7 +290,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	hbox_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var rarity_lbl := Label.new()
-	rarity_lbl.text = " " + data.get("rarity_label", "凡品") + " "
+	rarity_lbl.text = " " + data.get("rarity_label", "普通") + " "
 	GameStyle.label(rarity_lbl, 11, GameStyle.PAPER)
 	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.PAPER
 	rarity_lbl.add_theme_color_override("font_color", band_text_col)
@@ -376,7 +376,7 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 			if WeaponData.elemental_scaling_coef(String(w.get("id", ""))) > 0.0:
 				n_elem += 1
 		var elem_lbl := Label.new()
-		elem_lbl.text = ("✦ 当前上阵 %d 把法器受此加成" % n_elem) if n_elem > 0 else "✦ 当前上阵法器均不受此加成"
+		elem_lbl.text = ("✦ 当前 %d 把武器受此加成" % n_elem) if n_elem > 0 else "✦ 当前武器均不受此加成"
 		elem_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		elem_lbl.custom_minimum_size = Vector2(inner_w, 0)
 		elem_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

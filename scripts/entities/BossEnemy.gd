@@ -11,7 +11,7 @@ extends EnemyBase
 
 enum Pattern { RING, SLAM, SUMMON }
 
-@export var boss_title: String = "妖潮魔君"
+@export var boss_title: String = "敌潮Boss"
 @export var final_boss: bool = false      ## 第 20 波魔尊：换紫皮、放大身形
 @export var attack_interval: float = GameBalance.BOSS_ATTACK_INTERVAL  ## 特殊攻击循环间隔
 
@@ -167,7 +167,7 @@ func _enter_phase2() -> void:
 	anim_sprite.modulate = _tint
 	move_speed *= GameBalance.BOSS_PHASE2_SPEED_MULT
 	play_squash(Vector2(1.3, 0.75), 0.35)
-	GameManager.announcement_triggered.emit("⚠ %s · 魔焰滔天 ⚠" % boss_title)
+	GameManager.announcement_triggered.emit("⚠ %s · 狂暴形态 ⚠" % boss_title)
 	AudioManager.play_sfx("boss_raid", 1.15)
 	# 统一走 feedback() 分级体系（创伤 + 顿帧 + 缩放冲击一套齐），不再旧式 shake_camera 直调
 	GameManager.feedback(GameManager.FeedbackTier.LARGE)
@@ -193,6 +193,6 @@ func _die() -> void:
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	# shake_camera(9.0) 与 HEAVY 是同一件事发两遍（创伤叠到 1.0 直接顶格），去掉重复的那份
 	AudioManager.play_sfx("enemy_death_elite", 0.75)
-	GameManager.announcement_triggered.emit("✦ %s · 已伏诛 ✦" % boss_title)
+	GameManager.announcement_triggered.emit("✦ %s · 已击杀 ✦" % boss_title)
 	GameManager.boss_defeated.emit(boss_title)
 	super._die()

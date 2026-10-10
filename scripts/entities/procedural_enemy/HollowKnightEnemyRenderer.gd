@@ -8,13 +8,16 @@ extends Node2D
 @export var config: EnemyVisualConfig:
 	set(val):
 		config = val
-		queue_redraw()
+		if config != null:
+			# 精英/Boss 数量少、动作分量重，保持每帧重绘；普通怪走 20Hz 节流
+			_redraw_interval = REDRAW_INTERVAL_MOB if (not config.is_elite and not config.is_boss) else 0.0
+		_dirty = true
 
 # 运动驱动状态
 var flip_h: bool = false:
 	set(val):
 		flip_h = val
-		queue_redraw()
+		_dirty = true
 
 var facing: String = "s"
 var is_moving: bool = false
@@ -26,9 +29,42 @@ var special_state: float = 0.0  ## 特殊机制状态（丹爆引信/雷兽蓄�
 
 var _time: float = 0.0
 
+# —— 重绘节流（2026-10-10 性能优化）——
+## 全量 _draw 每只怪一次重建几十条矢量指令，35 敌同屏就是每帧几千条，
+## 是「敌人一多就卡」的头号热点。处理：普通怪降频 20Hz 重绘（本来是 10fps 帧动画风格，
+## 20fps 矢量动画无感），精英/Boss 数量少保持每帧；每实例随机错相把重绘摊到不同帧
+## 避免「每 N 帧一次尖峰」；屏外直接跳过重绘（_time 照常推进，回屏即恢复）。
+const REDRAW_INTERVAL_MOB := 0.05   ## 普通怪重绘间隔：20Hz
+const CULL_MARGIN := 64.0           ## 屏外剔除余量（px），防半身出屏闪烁
+static var redraw_count: int = 0    ## 重绘发放计数（tests/PerfProbe 断言用）
+
+var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相载体）
+var _redraw_interval: float = REDRAW_INTERVAL_MOB
+var _offscreen: bool = false
+var _dirty: bool = false            ## 状态翻转（镜像/换装）时插队重绘
+
+func _ready() -> void:
+	# 错相：用 instance_id 派生初值（不碰玩法随机），把 35 只怪的重绘摊到不同帧，
+	# 避免「每 N 帧一次集中重绘尖峰」把节流收益吃掉
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL_MOB)
+
 func _process(delta: float) -> void:
 	_time += delta
-	queue_redraw()
+	var vp := get_viewport()
+	if vp != null:
+		var sp: Vector2 = vp.get_canvas_transform() * global_position
+		var limit := vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN \
+			or sp.x > limit.x or sp.y > limit.y
+		if _offscreen:
+			return
+	if _dirty or _draw_phase <= 0.0:
+		_dirty = false
+		_draw_phase = _redraw_interval
+		redraw_count += 1
+		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _draw() -> void:
 	if config == null:

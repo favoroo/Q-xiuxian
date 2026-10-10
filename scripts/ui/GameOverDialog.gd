@@ -54,7 +54,7 @@ func _ready() -> void:
 	endless_btn.pressed.connect(_on_endless_pressed)
 
 func _on_game_over(victory: bool) -> void:
-	title_label.text = "渡 劫 成 功 ！" if victory else "道 消 身 殒"
+	title_label.text = "通 关 成 功 ！" if victory else "阵 亡"
 	title_band.add_theme_stylebox_override("panel",
 		GameStyle.block(GameStyle.GOLD if victory else GameStyle.BAD, GameStyle.SLANT_BAND, Vector2(4, 5)))
 	# 鎏金带面上纸白字会洗白，胜利用墨黑字；朱砂带上保留纸白
@@ -65,8 +65,8 @@ func _on_game_over(victory: bool) -> void:
 	var cname: String = String(cdef.get("name", ""))
 	var dname: String = AchievementData.danger_name(GameManager.danger_level)
 	var eff_wave := maxi(GameManager.wave_number, GameManager.VICTORY_WAVE if victory else 1)
-	var cult_line: String = ("道统 %s · 危险度「%s」· 第 %d 波\n" % [cname, dname, eff_wave]) if not cname.is_empty() else ("危险度「%s」· 第 %d 波\n" % [dname, eff_wave])
-	stats_label.text = "%s镇守时长 %02d:%02d · 境界 Lv.%d\n斩妖 %d 只 · 囊中灵石 %d 枚" % [
+	var cult_line: String = ("角色 %s · 难度「%s」· 第 %d 波\n" % [cname, dname, eff_wave]) if not cname.is_empty() else ("难度「%s」· 第 %d 波\n" % [dname, eff_wave])
+	stats_label.text = "%s生存时长 %02d:%02d · 等级 Lv.%d\n击杀 %d 只 · 囊中金币 %d 枚" % [
 		cult_line, mins, secs, GameManager.level, GameManager.kills, GameManager.spirit_stones
 	]
 	_refresh_unlocks()
@@ -96,9 +96,9 @@ func _refresh_unlocks() -> void:
 			continue
 		var rtype := String(adef.get("reward_type", ""))
 		var rname := String(adef.get("reward_name", ""))
-		var prefix := "新道统解锁" if rtype == "cultivator" else "新法宝入阁"
+		var prefix := "新角色解锁" if rtype == "cultivator" else "新道具解锁"
 		var chip := Label.new()
-		chip.text = " ✦ 功绩「%s」· %s：%s ✦ " % [adef.get("name", ""), prefix, rname]
+		chip.text = " ✦ 成就「%s」· %s：%s ✦ " % [adef.get("name", ""), prefix, rname]
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
@@ -106,7 +106,7 @@ func _refresh_unlocks() -> void:
 		_unlocks_box.add_child(chip)
 	if newly.size() > max_show:
 		var more := Label.new()
-		more.text = "（另有 %d 项功绩达成，可于主菜单「修仙志」查阅）" % (newly.size() - max_show)
+		more.text = "（另有 %d 项成就达成，可于主菜单「战绩」查阅）" % (newly.size() - max_show)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
 		_unlocks_box.add_child(more)
@@ -131,7 +131,7 @@ func _refresh_records() -> void:
 		_records_box.add_child(chip)
 	if records.size() > max_show:
 		var more := Label.new()
-		more.text = "（另有 %d 条新纪录，可于主菜单「修仙志」查阅）" % (records.size() - max_show)
+		more.text = "（另有 %d 条新纪录，可于主菜单「战绩」查阅）" % (records.size() - max_show)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
 		_records_box.add_child(more)

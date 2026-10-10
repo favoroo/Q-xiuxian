@@ -12,10 +12,10 @@ shader_parameter/flash_color = Color(1, 1, 0.9, 1)
 shader_parameter/flash_modifier = 0.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 16.0
+radius = 24.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
-radius = 20.0
+radius = 30.0
 
 [node name="ZhuMuEnemy" type="CharacterBody2D"]
 collision_layer = 4
@@ -31,13 +31,13 @@ spawn_minion_interval = 3.5
 minion_scene = ExtResource("4_fengqun")
 
 [node name="Shadow" type="Sprite2D" parent="."]
-position = Vector2(0, 17)
-scale = Vector2(0.58, 0.58)
+position = Vector2(0.0, 25.5)
+scale = Vector2(0.87, 0.87)
 texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 material = SubResource("ShaderMaterial_zhumu")
-scale = Vector2(0.56, 0.56)
+scale = Vector2(0.84, 0.84)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)

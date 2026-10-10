@@ -133,7 +133,7 @@ func _collect(p: Player) -> void:
 	var stones := GameBalance.heal_overflow_stones(overflow)
 	if stones > 0:
 		GameManager.add_spirit_stones(stones)
-		DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 灵石" % stones)
+		DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
 		AudioManager.play_sfx("gem_pickup", 1.25)
 	target_player = null
 	queue_free()
