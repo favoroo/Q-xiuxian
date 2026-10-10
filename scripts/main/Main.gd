@@ -48,9 +48,13 @@ func _ready() -> void:
 			settings_dialog.open()
 		)
 	if start_menu.has_signal("career_requested") and $UILayer.has_node("CareerDialog"):
+		var career_dialog: Control = $UILayer/CareerDialog
 		start_menu.career_requested.connect(func():
-			$UILayer/CareerDialog.open()
+			career_dialog.open()
 		)
+		# 修仙志关闭后刷新主菜单动态角签：奖励领完即灭、灵石囊入账即显
+		if career_dialog.has_signal("closed") and start_menu.has_method("_refresh_dynamic_texts"):
+			career_dialog.closed.connect(start_menu._refresh_dynamic_texts)
 	if $UILayer.has_node("ManualDialog"):
 		var manual_dialog: Control = $UILayer/ManualDialog
 		if start_menu.has_signal("manual_requested"):

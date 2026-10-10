@@ -23,7 +23,7 @@ script = ExtResource("1_enemy")
 max_hp = 18.0
 move_speed = 105.0
 contact_damage = 12.0
-exp_reward = 1
+exp_reward = 3
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 locomotion_mode = "slither"
 

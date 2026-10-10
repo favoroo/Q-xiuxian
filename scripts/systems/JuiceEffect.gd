@@ -242,25 +242,28 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 	if crit:
 		fx._add_ring(4.0, 28.0, Color(1.0, 0.88, 0.4, 0.85), 3.0)
 
-## 妖物死灭爆散：灵气崩解环 + 散逸灵尘
-static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false) -> void:
+## 妖物死灭爆散：灵气崩解环 + 散逸灵尘。
+## overkill_ratio = 致命一刀的溢出伤害 / 最大气血（0~1.5）：大数字暴击把妖物「打爆」，
+## 爆散环径与灵尘量随溢出比例放大（2026-10-10 斩杀反馈）。
+static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false, overkill_ratio: float = 0.0) -> void:
 	if not _ready_to_spawn(parent):
 		return
+	var boost := 1.0 + clampf(overkill_ratio, 0.0, 1.5) * 0.5
 	var fx := _acquire()
 	fx._begin(EffectType.DEATH_BURST, pos, 0.32 if not elite else 0.45, Z_OVERLAY)
 	fx.is_elite = elite
 
 	# 冲击扩散光环
 	var ring_col := Color(0.45, 0.8, 1.0, 0.8) if not elite else Color(1.0, 0.85, 0.3, 0.95)
-	fx._add_ring(6.0, 36.0 if not elite else 64.0, ring_col, 3.5 if not elite else 5.0)
+	fx._add_ring(6.0, (36.0 if not elite else 64.0) * boost, ring_col, (3.5 if not elite else 5.0) * lerpf(1.0, boost, 0.5))
 	if elite:
-		fx._add_ring(2.0, 42.0, Color(1.0, 1.0, 0.9, 0.9), 2.5)
+		fx._add_ring(2.0, 42.0 * boost, Color(1.0, 1.0, 0.9, 0.9), 2.5)
 
 	# 崩散灵气粒子
-	var count := 10 if not elite else 22
+	var count := int(round((10.0 if not elite else 22.0) * boost))
 	for i in range(count):
 		var a := randf() * TAU
-		var spd := randf_range(90.0, 220.0) if not elite else randf_range(140.0, 360.0)
+		var spd := (randf_range(90.0, 220.0) if not elite else randf_range(140.0, 360.0)) * lerpf(1.0, boost, 0.6)
 		var col := Color(0.7, 0.9, 1.0, 0.9) if not elite else Color(1.0, 0.75 + randf() * 0.25, 0.3, 0.9)
 		fx._add_particle(
 			Vector2.ZERO,

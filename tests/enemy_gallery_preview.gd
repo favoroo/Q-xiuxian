@@ -71,9 +71,9 @@ func _build_gallery() -> void:
 	header.add_theme_constant_override("separation", 10)
 	root_vbox.add_child(header)
 
-	var title_lbl := Label.new()
-	title_lbl.text = "修仙幸存者 · 空洞冷冽国风全妖魔画廊"
-	GameStyle.label(title_lbl, 13, GameStyle.PAPER, true)
+		var title_lbl := Label.new()
+		title_lbl.text = "渡个劫 · 空洞冷冽国风全妖魔画廊"
+		GameStyle.label(title_lbl, 13, GameStyle.PAPER, true)
 	header.add_child(title_lbl)
 
 	var sub_lbl := Label.new()

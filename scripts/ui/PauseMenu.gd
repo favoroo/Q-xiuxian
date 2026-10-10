@@ -107,7 +107,7 @@ func _build_ui() -> void:
 	_add_volume_row(vbox, "音效", &"SFX")
 
 	_ver_label = Label.new()
-	_ver_label.text = "修仙幸存者 " + Version.APP_VERSION_NAME
+	_ver_label.text = Version.APP_NAME + " " + Version.APP_VERSION_NAME
 	_ver_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(_ver_label, 11, GameStyle.GREY)
 	vbox.add_child(_ver_label)

@@ -528,6 +528,7 @@ const SKILL_BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
 
 var _skill_box: Control = null
 var _skill_btn: Button = null
+var _skill_icon_rect: TextureRect = null
 var _skill_cd_ring: SkillButtonView.SkillCdOverlay = null
 var _skill_cd_label: Label = null
 var _skill_name_label: Label = null
@@ -550,6 +551,18 @@ func _build_skill_button() -> void:
 	_style_circle_skill_btn(_skill_btn)
 	_skill_btn.gui_input.connect(_on_skill_btn_input)
 	_skill_box.add_child(_skill_btn)
+
+	_skill_icon_rect = TextureRect.new()
+	_skill_icon_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_skill_icon_rect.offset_left = 16.0
+	_skill_icon_rect.offset_top = 11.0
+	_skill_icon_rect.offset_right = -16.0
+	_skill_icon_rect.offset_bottom = -21.0
+	_skill_icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_skill_icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_skill_icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_icon_rect.visible = false
+	_skill_btn.add_child(_skill_icon_rect)
 
 	_skill_cd_ring = SkillButtonView.SkillCdOverlay.new()
 	_skill_cd_ring.visible = false
@@ -676,7 +689,20 @@ func _poll_skill_button(_delta: float) -> void:
 		if show:
 			_skill_was_ready = false
 			var def := SkillData.get_def(GameManager.active_skill_id)
-			_skill_btn.text = String(def.get("glyph", "?"))
+			var icon_path: String = String(def.get("icon", ""))
+			var is_enhanced: bool = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
+			if _skill_icon_rect != null:
+				if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
+					_skill_btn.text = ""
+					_skill_icon_rect.texture = load(icon_path)
+					_skill_icon_rect.visible = true
+					_skill_icon_rect.modulate = GameStyle.JADE_EDGE if is_enhanced else GameStyle.PAPER
+				else:
+					_skill_icon_rect.visible = false
+					_skill_btn.text = String(def.get("glyph", "?"))
+			else:
+				_skill_btn.text = String(def.get("glyph", "?"))
+
 			var s_name: String = String(def.get("name", ""))
 			if _skill_name_label != null:
 				_skill_name_label.text = s_name.substr(0, 2)
@@ -694,6 +720,8 @@ func _poll_skill_button(_delta: float) -> void:
 	_skill_cd_ring.queue_redraw()
 
 	_skill_cd_label.visible = on_cd
+	if _skill_icon_rect != null and _skill_icon_rect.visible:
+		_skill_icon_rect.modulate.a = 0.35 if on_cd else 1.0
 	if on_cd:
 		_skill_cd_label.text = str(int(ceil(cd_left)))
 		_skill_was_ready = false

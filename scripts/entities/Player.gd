@@ -81,6 +81,17 @@ func _ready() -> void:
 	_sync_pickup_radius()
 
 func _setup_sprite_frames() -> void:
+	if GameManager.cultivator_id.is_empty():
+		anim_sprite.visible = false
+		if shadow_sprite != null:
+			shadow_sprite.visible = false
+		if procedural_view != null:
+			procedural_view.visible = false
+		return
+
+	if shadow_sprite != null:
+		shadow_sprite.visible = true
+
 	# 角色独立形象：按道统读 CultivatorData.sprite 的 8 方向图集，缺图回退默认青衫修士
 	var sheet_path := "res://assets/art/pawn_blue_8dir.png"
 	var cdef := CultivatorData.get_def(GameManager.cultivator_id)
@@ -390,21 +401,21 @@ func _physics_process(delta: float) -> void:
 	if not _skill_buffs.is_empty():
 		_tick_skill_buffs(delta)
 
-		if invulnerable_time > 0.0:
-			invulnerable_time -= delta
-			# 金光护体期间角色泛金光高亮，普通受击无敌维持半透明呼吸频闪
-			var mod_col := Color.WHITE
-			if skill_vfx != null and skill_vfx.aegis_active:
-				mod_col = Color(1.3, 1.25, 0.85, 0.95)
-			else:
-				mod_col = Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
-			anim_sprite.modulate = mod_col
-			if is_procedural and procedural_view != null:
-				procedural_view.modulate = mod_col
-		else:
-			anim_sprite.modulate = Color.WHITE
-			if is_procedural and procedural_view != null:
-				procedural_view.modulate = Color.WHITE
+	# 受击无敌帧倒计时与频闪反馈
+	if invulnerable_time > 0.0:
+		invulnerable_time -= delta
+		# 金光护体期间图集角色泛金光高亮，程序化角色由矢量渲染器精细驱动局部流光与高光
+		var is_aegis := skill_vfx != null and skill_vfx.aegis_active
+		var sprite_mod := Color(1.3, 1.25, 0.85, 0.95) if is_aegis else Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
+		anim_sprite.modulate = sprite_mod
+		if is_procedural and procedural_view != null:
+			# 程序化角色在金光护体期间保持清晰白底（由眼睛/斗篷/道印高精流光点亮），普通受击时正常频闪提示
+			var proc_mod := Color.WHITE if is_aegis else Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
+			procedural_view.modulate = proc_mod
+	else:
+		anim_sprite.modulate = Color.WHITE
+		if is_procedural and procedural_view != null:
+			procedural_view.modulate = Color.WHITE
 
 	# 灵愈心法 + 青木羁绊：持续回血
 	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
@@ -477,8 +488,8 @@ func _physics_process(delta: float) -> void:
 				var hover_bob := sin(gait_phase_counter * TAU) * 0.02
 				procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.5, 1.0 + hover_bob)
 				procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
-				# 身体随横向移速优雅侧倾（Bank Roll），御风滑行
-				var target_bank := deg_to_rad(7.5) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.3)
+				# 修士御风身姿挺拔：极微幅气动呼吸侧倾（上限1.2°），杜绝左右移动时斗篷大角度失真倾斜
+				var target_bank := deg_to_rad(1.2) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.0)
 				procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 12.0, 1.0))
 				procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
 				if shadow_sprite != null:

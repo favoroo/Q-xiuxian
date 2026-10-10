@@ -38,6 +38,7 @@ func _ready() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	Engine.time_scale = 8.0
 	var main = load("res://scenes/main/Main.tscn").instantiate()
 	get_tree().root.add_child(main)
 	await get_tree().process_frame
@@ -53,7 +54,11 @@ func _run() -> void:
 	var p_atlas_path: String = (p_frame as AtlasTexture).atlas.resource_path if p_frame is AtlasTexture else ""
 	_check(p_atlas_path == "res://assets/art/cultivator_fuzhen_8dir.png", "选角后玩家外观切为符阵灵童图集 (实际 %s)" % p_atlas_path)
 
-	await get_tree().create_timer(2.0).timeout
+	# 等第一只敌人刷出（条件达成即走，不再写死 sleep）
+	var wait_spawn := 0
+	while get_tree().get_nodes_in_group("enemies").is_empty() and wait_spawn < 120:
+		await get_tree().physics_frame
+		wait_spawn += 1
 	_check(GameManager.wave_number == 1, "第 1 波已开启")
 	var enemy_count := get_tree().get_nodes_in_group("enemies").size()
 	_check(enemy_count > 0, "敌人已刷出 (%d)" % enemy_count)
@@ -169,7 +174,11 @@ func _run() -> void:
 	await get_tree().process_frame
 	var chests := get_tree().get_nodes_in_group("chests").size()
 	_check(chests > 0, "藏宝匣已刷新 (%d)" % chests)
-	await _wait_clean(6.0)
+	var wait_w13 := 0
+	while get_tree().get_nodes_in_group("enemies").size() < 10 and wait_w13 < 100:
+		await get_tree().physics_frame
+		_dismiss_dialogs()
+		wait_w13 += 1
 	var kinds := {}
 	for e in get_tree().get_nodes_in_group("enemies"):
 		kinds[e.name.get_basename()] = true
@@ -203,15 +212,23 @@ func _run() -> void:
 	GameManager.player.max_health = 99999.0
 	GameManager.player.current_health = 99999.0
 	spawner.start_wave(10)
-	await _wait_clean(3.5)
+	var hud: Node = main.get_node_or_null("UILayer/GameHUD")
+	var wait_boss_spawn := 0
+	while (get_tree().get_nodes_in_group("boss").is_empty() or (hud != null and not hud.is_boss_bar_visible())) and wait_boss_spawn < 120:
+		await get_tree().physics_frame
+		_dismiss_dialogs()
+		wait_boss_spawn += 1
 	var bosses := get_tree().get_nodes_in_group("boss")
 	_check(bosses.size() == 1, "第 10 波固定刷新 1 只魔君 (实际 %d)" % bosses.size())
-	var hud: Node = main.get_node_or_null("UILayer/GameHUD")
 	_check(hud != null and hud.is_boss_bar_visible(), "魔君登场后 Boss 血条上屏")
 	if bosses.size() > 0:
 		var stones_before_boss: int = GameManager.spirit_stones
 		bosses[0].take_damage(9999999.0, Vector2.ZERO, false)
-		await _wait_clean(3.5)
+		var wait_boss_die := 0
+		while (get_tree().get_nodes_in_group("boss").size() > 0 or (hud != null and hud.is_boss_bar_visible()) or GameManager.shop_offers.size() < GameManager.SHOP_BASE_SLOTS) and wait_boss_die < 180:
+			await get_tree().physics_frame
+			_dismiss_dialogs()
+			wait_boss_die += 1
 		_check(get_tree().get_nodes_in_group("boss").size() == 0, "魔君伏诛后离场")
 		_check(GameManager.spirit_stones >= stones_before_boss + GameBalance.BOSS_STONE_REWARD,
 			"魔君掉落灵石奖励 (+%d)" % GameBalance.BOSS_STONE_REWARD)
@@ -261,11 +278,15 @@ func _run() -> void:
 		settings.open()
 		_check(settings.visible, "设置面板正常打开")
 		settings.close()
-		await get_tree().create_timer(0.2).timeout
+		var wait_sett := 0
+		while settings.visible and wait_sett < 60:
+			await get_tree().physics_frame
+			wait_sett += 1
 		_check(not settings.visible, "设置面板正常关闭")
 
-	await _wait_clean(2.0)
+	await get_tree().process_frame
 	_dismiss_dialogs()
+	Engine.time_scale = 1.0
 
 	if _c.report("SMOKE_RESULT"):
 		get_tree().quit(0)

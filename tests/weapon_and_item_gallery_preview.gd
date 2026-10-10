@@ -31,10 +31,10 @@ func _build_ui() -> void:
 	add_child(main_vbox)
 
 	# 顶部标题栏
-	var title_box := HBoxContainer.new()
-	var title_lbl := Label.new()
-	title_lbl.text = "修仙幸存者 · 空洞冷冽国风【法器 · 法宝 · 属性 · 弹道】全要素视觉矩阵"
-	GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+		var title_box := HBoxContainer.new()
+		var title_lbl := Label.new()
+		title_lbl.text = "渡个劫 · 空洞冷冽国风【法器 · 法宝 · 属性 · 弹道】全要素视觉矩阵"
+		GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	title_box.add_child(title_lbl)
 
 	var sub_lbl := Label.new()

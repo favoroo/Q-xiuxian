@@ -354,7 +354,7 @@ func _build_system_page() -> Control:
 	ip_vbox.add_child(ver_title)
 
 	var ver_lbl := Label.new()
-	ver_lbl.text = "游戏版本：修仙幸存者 " + Version.APP_VERSION_NAME + " (Godot 4.7 Forward+)"
+	ver_lbl.text = "游戏版本：" + Version.APP_NAME + " (" + Version.APP_NAME_EN + ") " + Version.APP_VERSION_NAME + " (Godot 4.7 Forward+)"
 	GameStyle.label(ver_lbl, 13, GameStyle.PAPER)
 	ip_vbox.add_child(ver_lbl)
 

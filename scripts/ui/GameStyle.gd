@@ -1,26 +1,26 @@
 class_name GameStyle
 extends RefCounted
 
-## 「玄墨鎏金」斜切版画 UI 统一样式工厂（斜切语言移植自 dudu-cocos）。
+## 「幽蓝灵枢」斜切版画 UI 统一样式工厂（冷冽仙侠风格，斜切语言移植自 dudu-cocos）。
 ## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；硬错位墨影 + 同色压暗厚底边。
-## 色即功能：鎏金 = 主行动/选中，青玉 = 灵石货币/星级/辅助强调，朱砂 = 危险，青碧 = 增益。
+## 色即功能：灵枢蓝 = 主行动/选中，青玉 = 灵石货币/星级/辅助强调，朱砂 = 危险，青碧 = 增益。
 ## 字体：正文 MiSans-Semibold，大标题 MiSans-Heavy。
 
-# —— 底色（暖调玄墨）——
-const INK := Color("0b0d12")        # 最深底
-const NAVY := Color("141821")       # 面板底
-const NAVY2 := Color("1e2431")      # 按钮底/未选中
-const LINE := Color("333b4d")       # 描线/分隔
+# —— 底色（幽玄深蓝冷墨）——
+const INK := Color("0b0e14")        # 最深底（冷调虚空墨）
+const NAVY := Color("121722")       # 面板底（幽冥深蓝墨）
+const NAVY2 := Color("1a2233")      # 按钮底/未选中（深靛暗夜）
+const LINE := Color("2d374d")       # 描线/分隔（冷铁暗纹）
 
 # —— 文字 ——
 const PAPER := Color("f2efe4")      # 纸白正文
 const PAPER_DIM := Color("c9c4b4")  # 次要纸白
-const INK_TEXT := Color("14110a")   # 亮面上的暖墨黑字（纯黑在鎏金面上发死）
+const INK_TEXT := Color("0d1117")   # 亮面上的冷墨黑字（在灵蓝面与玉面上对比鲜明）
 
 # —— 角色色（色即功能）——
-const GOLD := Color("e0aa3e")       # 鎏金 = 主行动/选中/标题带
-const GOLD_EDGE := Color("f5d98a")
-const GOLD_DK := Color("8a6420")
+const GOLD := Color("4a92f7")       # 灵枢蓝/霁蓝 = 主行动/选中/标题带（彻底脱离刺眼暖黄）
+const GOLD_EDGE := Color("92c5ff")  # 霜华亮蓝
+const GOLD_DK := Color("184888")    # 幽夜深蓝（立体厚底与阴影）
 const JADE := Color("4fd1a5")       # 青玉 = 灵石货币/星级/辅助强调（灵石即玉）
 const JADE_EDGE := Color("a5ecd4")
 const JADE_DK := Color("1f7a5e")
@@ -29,12 +29,12 @@ const GOOD_DK := Color("2f8f4c")
 const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
 const GREY := Color("9aa1b5")       # 暗部正文
-const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与金/玉/碧/朱砂都不撞）
+const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/玉/碧/朱砂都不撞）
 
-# 稀有度 / 品阶统一色值（凡品纸 / 良品玉 / 仙品金 / 传说紫）
+# 稀有度 / 品阶统一色值（凡品纸 / 良品玉 / 仙品霜金 / 传说紫）
 const RARITY_COMMON := Color(0.96, 0.95, 0.92)
 const RARITY_RARE := Color(0.31, 0.82, 0.65)
-const RARITY_EPIC := Color(0.88, 0.67, 0.24)
+const RARITY_EPIC := Color("d4ba74")  # 冷月霜金：低饱和古金微光，专供仙品法宝，不与主交互撞色
 const RARITY_LEGEND := Color(0.85, 0.45, 1.0)
 
 # 五行标签统一色值
@@ -650,9 +650,9 @@ static func scrollable(sc: ScrollContainer) -> void:
 ## 滚动条只能靠 modulate 调颜色：theme 的 scroll_background / scroll_grabber 那几张 stylebox，
 ## 无论是 `bar.add_theme_stylebox_override()` 还是给 bar 挂一份 Theme，画出来都还是默认那根
 ## 浅灰圆头（实测：节点上 get_theme_stylebox 读回来是我们要的色，屏幕上不动；同一节点
-## modulate=红 立刻变红 ⇒ 4.7 的 ScrollBar 绘制不吃这两条路）。鎏金 × 玄墨 = 一条压在面板底上
-## 的暗金细带：不抢视线，也不在满屏墨色里跳出「网页滚动条」。
+## modulate=红 立刻变红 ⇒ 4.7 的 ScrollBar 绘制不吃这两条路）。幽蓝 × 冷墨 = 一条压在面板底上
+## 的灵蓝细带：不抢视线，也不在满屏冷色里跳出「网页滚动条」。
 static func _scroll_bar(bar: ScrollBar) -> void:
     if bar == null:
         return
-    bar.modulate = Color(0.88, 0.67, 0.24, 0.85)
+    bar.modulate = Color(GOLD.r, GOLD.g, GOLD.b, 0.85)

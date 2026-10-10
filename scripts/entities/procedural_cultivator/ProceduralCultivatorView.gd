@@ -18,6 +18,20 @@ var _attack_duration: float = 0.26
 var _hit_timer: float = 0.0
 var _hit_duration: float = 0.15
 
+# 技能外观动态修饰目标与平滑插值状态
+var _target_aura_type: String = ""
+var _target_eye_color: Color = Color.TRANSPARENT
+var _target_eye_boost: float = 0.0
+var _target_cloak_color: Color = Color.TRANSPARENT
+var _target_cloak_shimmer: float = 0.0
+var _target_sigil_boost: float = 0.0
+var _target_motes_boost: float = 0.0
+
+var _cur_eye_boost: float = 0.0
+var _cur_cloak_shimmer: float = 0.0
+var _cur_sigil_boost: float = 0.0
+var _cur_motes_boost: float = 0.0
+
 # 朝向与翻转
 var flip_h: bool = false:
 	set(val):
@@ -73,6 +87,21 @@ func _process(delta: float) -> void:
 		renderer.hit_progress = prog
 		if _hit_timer <= 0.0 and renderer.current_action == CultivatorRendererBase.Action.HIT:
 			renderer.current_action = CultivatorRendererBase.Action.IDLE
+
+	# 4. 技能动态外观平滑插值过渡（淡入淡出）
+	var step: float = delta * 6.5
+	_cur_eye_boost = move_toward(_cur_eye_boost, _target_eye_boost, step)
+	_cur_cloak_shimmer = move_toward(_cur_cloak_shimmer, _target_cloak_shimmer, step)
+	_cur_sigil_boost = move_toward(_cur_sigil_boost, _target_sigil_boost, step)
+	_cur_motes_boost = move_toward(_cur_motes_boost, _target_motes_boost, step)
+
+	renderer.skill_aura_type = _target_aura_type
+	renderer.eye_override_color = _target_eye_color
+	renderer.eye_glow_boost = _cur_eye_boost
+	renderer.cloak_shimmer_color = _target_cloak_color
+	renderer.cloak_shimmer_intensity = _cur_cloak_shimmer
+	renderer.sigil_boost = _cur_sigil_boost
+	renderer.motes_boost = _cur_motes_boost
 
 # ==================== 动作控制核心接口 ====================
 
@@ -148,4 +177,65 @@ func setup_character_id(cid: String) -> void:
 		(renderer as HollowKnightCultivatorRenderer).set_visual_config(cfg)
 	else:
 		_init_renderer()
+
+## 触发或更新技能法相视觉（眼睛变色、斗篷流光、道印激活、周天灵气）
+func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) -> void:
+	if not active:
+		if _target_aura_type == skill_id:
+			_target_aura_type = ""
+			_target_eye_color = Color.TRANSPARENT
+			_target_eye_boost = 0.0
+			_target_cloak_color = Color.TRANSPARENT
+			_target_cloak_shimmer = 0.0
+			_target_sigil_boost = 0.0
+			_target_motes_boost = 0.0
+		return
+
+	_target_aura_type = skill_id
+	var g_gold := GameStyle.GOLD_EDGE
+	var g_jade := GameStyle.JADE_EDGE
+	var g_good := GameStyle.GOOD
+	match skill_id:
+		"aegis": # 金光护体：神圣纯金白芒眼眸、极亮鎏金斗篷流光反光、额印全亮、周天金芒
+			_target_eye_color = Color(1.0, 0.92, 0.55, 0.95)
+			_target_eye_boost = 1.1 * intensity
+			_target_cloak_color = Color(g_gold.r, g_gold.g, g_gold.b, 1.0)
+			_target_cloak_shimmer = 1.1 * intensity
+			_target_sigil_boost = 1.0 * intensity
+			_target_motes_boost = 1.0 * intensity
+		"haste": # 疾风咒：超频疾风青芒眼眸、疾风青金斗篷反光、高速风刃灵气
+			_target_eye_color = Color(0.65, 0.95, 0.85, 0.90)
+			_target_eye_boost = 0.85 * intensity
+			_target_cloak_color = Color(g_gold.r, g_gold.g, g_gold.b, 0.9)
+			_target_cloak_shimmer = 0.8 * intensity
+			_target_sigil_boost = 0.75 * intensity
+			_target_motes_boost = 0.85 * intensity
+		"gale": # 神行术：灵动风灵青金眼眸、斗篷微风流光、御风灵气
+			_target_eye_color = Color(0.55, 0.92, 0.78, 0.85)
+			_target_eye_boost = 0.7 * intensity
+			_target_cloak_color = Color(g_jade.r, g_jade.g, g_jade.b, 0.85)
+			_target_cloak_shimmer = 0.7 * intensity
+			_target_sigil_boost = 0.5 * intensity
+			_target_motes_boost = 0.75 * intensity
+		"dash": # 缩地成寸：瞬身纯白剑意锋芒爆闪、斗篷极速流光
+			_target_eye_color = Color(1.0, 1.0, 1.0, 1.0)
+			_target_eye_boost = 1.25 * intensity
+			_target_cloak_color = Color(1.0, 0.95, 0.8, 1.0)
+			_target_cloak_shimmer = 1.2 * intensity
+			_target_sigil_boost = 0.85 * intensity
+			_target_motes_boost = 0.95 * intensity
+		"renewal": # 回春术：温润生机翠玉眼眸、斗篷甘露青碧灵波、生机道韵
+			_target_eye_color = Color(g_good.r, g_good.g, g_good.b, 0.95)
+			_target_eye_boost = 0.85 * intensity
+			_target_cloak_color = Color(g_good.r, g_good.g, g_good.b, 0.9)
+			_target_cloak_shimmer = 0.85 * intensity
+			_target_sigil_boost = 0.95 * intensity
+			_target_motes_boost = 0.95 * intensity
+		_:
+			_target_eye_color = Color.TRANSPARENT
+			_target_eye_boost = 0.0
+			_target_cloak_color = Color.TRANSPARENT
+			_target_cloak_shimmer = 0.0
+			_target_sigil_boost = 0.0
+			_target_motes_boost = 0.0
 

@@ -15,12 +15,13 @@
 
 - 光照方向：月华冷光或法宝自发冷色微芒，无强烈暖阳定向光
 - 色板倾向：严格对齐 GameStyle 调色板
-  - 虚空墨黑（`INK` Color(0.06, 0.08, 0.12)）
-  - 骨白玄霜（`PAPER` Color(0.92, 0.94, 0.96)）
-  - 冷月暗金（`GOLD` Color(0.92, 0.76, 0.28)）
-  - 寒泉灵玉（`JADE` Color(0.35, 0.85, 0.65)）
-  - 九幽深蓝（`NAVY` Color(0.18, 0.35, 0.65)）
-  - 煞血朱砂（`CRIMSON` Color(0.85, 0.25, 0.25)）
+  - 虚空墨黑（`INK` Color("0b0e14")）
+  - 骨白玄霜（`PAPER` Color("f2efe4")）
+  - 灵枢霁蓝（`GOLD` Color("4388e6")，主行动/选中高亮）
+  - 寒泉灵玉（`JADE` Color("4fd1a5")，灵石货币/辅助强调）
+  - 九幽深蓝（`NAVY` Color("121722")，面板底色）
+  - 煞血朱砂（`BAD` Color("e2503c")，危险扣血）
+  - 冷月霜金（`RARITY_EPIC` Color("d4ba74")，极品法宝微芒）
 - 调色板纪律：
   - 拒绝高饱和度彩绘、拒绝大红大绿卡通配色；
   - 拒绝枕头式 shading（四边均匀描阴影使器物发胀无体积）；
@@ -29,7 +30,7 @@
   - 武器与法宝剪影清晰利落，避免细碎毛刺；
   - 在深暗冷青石板背景上具有极高辨识度。
 - UI 风格：
-  - 墨蓝底 + 骨白 + 暗金 + 寒玉，硬质斜切平行四边形（PLATE 3 / BLOCK 5 / BUTTON 6 / BAND 10），无圆角无柔光，硬朗冷峻。
+  - 幽玄墨蓝底 + 骨白 + 灵枢霁蓝 + 寒泉灵玉，硬质斜切平行四边形（PLATE 3 / BLOCK 5 / BUTTON 6 / BAND 10），无圆角无柔光，硬朗冷峻出尘。
 - 音乐风格：
   - cold ethereal xianxia ambient guqin and dark soundscapes over distant ritual war drum, lonely, mystic, chill gothic cultivation battle, loop, instrumental only
 

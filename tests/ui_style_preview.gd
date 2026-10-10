@@ -1,6 +1,6 @@
 extends Control
 
-## 非判据现场预览：玄墨鎏金 UI 套件样张。
+## 非判据现场预览：幽蓝灵枢 UI 套件样张。
 ## 运行（不加 --headless，要真出图）：
 ##   $G --path . res://tests/UiStylePreview.tscn
 ## 打开后自动排一块样张、存 /tmp/ui_style_preview.png、自行退出。
@@ -11,7 +11,7 @@ func _ready() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
-	# 标题大匾（鎏金 + 网点）
+	# 标题大匾（灵蓝 + 网点）
 	var title := PanelContainer.new()
 	title.position = Vector2(240, 40)
 	var tst := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(8, 9))
@@ -20,7 +20,7 @@ func _ready() -> void:
 	tst.content_margin_right = 30.0
 	tst.content_margin_bottom = 12.0
 	title.add_theme_stylebox_override("panel", tst)
-	GameStyle.halftone(title, Color(0.08, 0.07, 0.04, 0.14))
+	GameStyle.halftone(title, Color(0.95, 0.98, 1.0, 0.14))
 	var tl := Label.new()
 	tl.text = "修 仙 幸 存 者"
 	GameStyle.label(tl, 40, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
@@ -58,7 +58,7 @@ func _ready() -> void:
 		c.add_child(v)
 		add_child(c)
 
-	# 按钮三颗：主行动鎏金 / 次要墨底 / 危险朱砂
+	# 按钮三颗：主行动灵蓝 / 次要墨底 / 危险朱砂
 	var b1 := Button.new()
 	b1.text = "开 始 游 戏"
 	b1.position = Vector2(60, 340)
@@ -108,7 +108,7 @@ func _ready() -> void:
 	add_child(dlg)
 
 	var note := Label.new()
-	note.text = "玄墨鎏金样张 · 硬影/厚底边/色带卡/网点"
+	note.text = "幽蓝灵枢样张 · 硬影/厚底边/色带卡/冷冽仙侠"
 	note.position = Vector2(510, 460)
 	GameStyle.label(note, 12, GameStyle.GREY)
 	add_child(note)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bake_sfx.py —— 修仙幸存者音效离线烘焙（纯标准库，零模型依赖）
+"""bake_sfx.py —— 渡个劫 (Dao Trial) 音效离线烘焙（纯标准库，零模型依赖）
 
 移植自 dudu-cocos/tools/bake-audio.ts 的合成内核，用数学而不是录音生成音效：
     tone  = 振荡器(sine/square/sawtooth/triangle + 频率指数/线性斜坡) × 指数包络 [可选 lowpass]
@@ -466,7 +466,7 @@ def print_registry(ext: str) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="烘焙修仙幸存者音效")
+    ap = argparse.ArgumentParser(description="烘焙渡个劫音效")
     ap.add_argument("--only", help="只烘这些 key，逗号分隔")
     ap.add_argument("--ogg", action="store_true", help="转成 ogg 进包体（需要 ffmpeg 有 libvorbis）")
     ap.add_argument("--list", action="store_true", help="列出全部 key 与变体数")

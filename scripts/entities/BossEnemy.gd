@@ -169,7 +169,8 @@ func _enter_phase2() -> void:
 	play_squash(Vector2(1.3, 0.75), 0.35)
 	GameManager.announcement_triggered.emit("⚠ %s · 魔焰滔天 ⚠" % boss_title)
 	AudioManager.play_sfx("boss_raid", 1.15)
-	GameManager.shake_camera(5.0, 0.3)
+	# 统一走 feedback() 分级体系（创伤 + 顿帧 + 缩放冲击一套齐），不再旧式 shake_camera 直调
+	GameManager.feedback(GameManager.FeedbackTier.LARGE)
 
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:

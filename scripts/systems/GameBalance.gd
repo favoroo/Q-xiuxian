@@ -35,12 +35,18 @@ static func incoming_damage(raw: float, armor: float) -> float:
 const WAVE_DURATION_BASE := 20.0
 const WAVE_DURATION_PER_WAVE := 2.0
 const WAVE_DURATION_MAX := 60.0
-const SPAWN_INTERVAL_BASE := 1.35
-const SPAWN_INTERVAL_MIN := 0.30
-const SPAWN_INTERVAL_PER_WAVE := 0.055
-const SPAWN_BATCH_EVERY_WAVES := 4.0      ## 每多 4 波，一轮多刷 1 只
-const SPAWN_BATCH_BONUS_CHANCE := 0.4     ## 额外一只的概率
+# 2026-10-10 打击感重塑：刷怪放缓 + 批量收窄（小怪加血 3.5 倍后单敌活得更久，
+# 同屏密度由更少的刷入量维持，击杀成为「低频但每下都有读数」的事件）
+const SPAWN_INTERVAL_BASE := 1.60
+const SPAWN_INTERVAL_MIN := 0.45
+const SPAWN_INTERVAL_PER_WAVE := 0.045
+const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一轮多刷 1 只
+const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 const ENEMY_HP_GROWTH := 1.15             ## 每波气血复利倍率（W5≈1.75 / W10≈3.52 / W15≈7.08 / W20≈14.23）
+## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
+## 2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」——最弱杂怪也要吃 2 刀以上，
+## 受击硬直、击退、火花、闪白这些反馈才有机会被看见。
+const MOB_HP_BASE_MULT := 3.5
 const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
@@ -78,7 +84,7 @@ const BOSS_SLAM_WINDUP := 0.9            ## 震地冲击预警时长
 const BOSS_SLAM_RADIUS := 175.0          ## 震地冲击半径
 const BOSS_SLAM_DMG_MULT := 1.35         ## 震地伤害 = 接触伤害 × 系数
 const BOSS_SUMMON_COUNT := 3             ## 召唤妖群数量
-const BOSS_SUMMON_CAP := 26              ## 场面敌人达到该数后召唤不再生效
+const BOSS_SUMMON_CAP := 16              ## 场面敌人达到该数后召唤不再生效（2026-10-10 随整体减潮下调）
 const BOSS_PHASE2_AT := 0.5              ## 二阶段触发血线（≤50%）
 const BOSS_PHASE2_INTERVAL_MULT := 0.7   ## 二阶段攻击间隔缩短倍率
 const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
@@ -128,6 +134,23 @@ static func shake_amount(trauma: float) -> float:
 ## 一次给定量能震多久（秒）：设置项文案与调参时的直观读数
 static func shake_duration(trauma: float) -> float:
 	return clampf(trauma, 0.0, 1.0) / TRAUMA_DECAY
+
+# ---------------- 打击感：受击硬直 / 击退衰减 / 斩杀反馈 ----------------
+## 这一组常量钉住「砍在肉上」的手感读数（2026-10-10 打击感重塑）。
+
+const HIT_STUN_NORMAL := 0.10            ## 普通受击硬直（秒）：期间追击归零，位移纯由击退主导
+const HIT_STUN_CRIT := 0.14              ## 暴击受击硬直（秒）
+const KNOCKBACK_DECAY_STUN := 9.0        ## 硬直期间击退衰减率（衰减略缓，保留滑行手感）
+const KNOCKBACK_DECAY_FREE := 14.0       ## 硬直结束后击退衰减率（快速收尾）
+const KNOCKBACK_HEAVY_SPEED := 260.0     ## 重击击退初速阈值（px/s）
+const KNOCKBACK_HEAVY_DECAY_MULT := 0.55 ## 重击衰减打折 ⇒ 飞得更远，「这一刀砍狠了」有位移读数
+const KILL_KNOCKBACK_MULT := 1.6         ## 致命一刀击退放大：尸体随爆散朝打击方向飞出
+const KILL_LAUNCH_DURATION := 0.18       ## 尸体飞出滑程（秒）
+const KILL_LAUNCH_MAX := 90.0            ## 尸体飞出位移上限（px，防超重暴击把尸体甩出屏幕）
+const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
+const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
+const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
+const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
 # ---------------- 商店定价 ----------------
 

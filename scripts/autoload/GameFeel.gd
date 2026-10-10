@@ -33,6 +33,18 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 			Engine.time_scale = 1.0
 	)
 
+static var _last_kill_hitstop_ms: int = 0
+
+## 击杀微顿帧（限流版）：小怪伏诛那一刀的「确认感」。
+## 口径：击杀仍属高频事件，KILL_HITSTOP_MIN_INTERVAL 最小间隔保证最坏稳态只是持续轻顿，
+## 不会把时间锁死；普通命中与 DoT 跳死不走这里（2026-10-10 打击感重塑）。
+static func kill_hit_stop(gm: Node) -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_kill_hitstop_ms < int(GameBalance.KILL_HITSTOP_MIN_INTERVAL * 1000.0):
+		return
+	_last_kill_hitstop_ms = now
+	hit_stop(gm, GameBalance.KILL_HITSTOP_DURATION, GameBalance.KILL_HITSTOP_SCALE)
+
 static func feedback(gm: Node, tier: int) -> void:
 	match tier:
 		gm.FeedbackTier.SMALL:

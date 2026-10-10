@@ -9,6 +9,7 @@ extends Control
 
 var _menu_btn: Button
 var _unlocks_box: VBoxContainer
+var _records_box: VBoxContainer
 
 func _ready() -> void:
 	visible = false
@@ -17,8 +18,8 @@ func _ready() -> void:
 	GameStyle.label(stats_label, 15, GameStyle.PAPER)
 	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.PAPER, 18, GameStyle.INK_TEXT)
 	GameStyle.button(endless_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)
-	# 标题带铺半调网点（胜金/败朱砂面上的印刷味，压暗点阵两种底都读得出；垫在标题字底下）
-	var strip := GameStyle.halftone(title_band, Color(0.08, 0.07, 0.04, 0.16))
+	# 标题带铺半调网点（胜蓝/败朱砂面上的微芒点阵，垫在标题字底下）
+	var strip := GameStyle.halftone(title_band, Color(0.95, 0.98, 1.0, 0.14))
 	title_band.move_child(strip, 0)
 
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
@@ -30,6 +31,14 @@ func _ready() -> void:
 	_unlocks_box.visible = false
 	vbox.add_child(_unlocks_box)
 	vbox.move_child(_unlocks_box, stats_label.get_index() + 1)
+
+	# 新纪录标签（本局刷新的生涯/道统纪录文案，紧排在成就解锁之后）
+	_records_box = VBoxContainer.new()
+	_records_box.add_theme_constant_override("separation", 4)
+	_records_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_records_box.visible = false
+	vbox.add_child(_records_box)
+	vbox.move_child(_records_box, _unlocks_box.get_index() + 1)
 
 	_menu_btn = Button.new()
 	_menu_btn.text = "返 回 主 菜 单"
@@ -61,6 +70,7 @@ func _on_game_over(victory: bool) -> void:
 		cult_line, mins, secs, GameManager.level, GameManager.kills, GameManager.spirit_stones
 	]
 	_refresh_unlocks()
+	_refresh_records()
 	endless_btn.visible = victory and not GameManager.endless_mode
 	visible = true
 	get_tree().paused = true
@@ -100,6 +110,31 @@ func _refresh_unlocks() -> void:
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
 		_unlocks_box.add_child(more)
+
+## 新纪录标签：本局刷新的生涯/道统纪录（金 chips，上限 3 条）
+func _refresh_records() -> void:
+	for c in _records_box.get_children():
+		c.queue_free()
+	var records: Array = GameManager.last_run_new_records
+	if records.is_empty():
+		_records_box.visible = false
+		return
+	_records_box.visible = true
+	var max_show := mini(records.size(), 3)
+	for i in range(max_show):
+		var chip := Label.new()
+		chip.text = " ✦ %s ✦ " % String(records[i])
+		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+		GameStyle.label(chip, 12, GameStyle.INK_TEXT)
+		_records_box.add_child(chip)
+	if records.size() > max_show:
+		var more := Label.new()
+		more.text = "（另有 %d 条新纪录，可于主菜单「修仙志」查阅）" % (records.size() - max_show)
+		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
+		_records_box.add_child(more)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:

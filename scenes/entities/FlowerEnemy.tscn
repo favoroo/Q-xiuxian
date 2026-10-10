@@ -23,7 +23,7 @@ script = ExtResource("1_enemy")
 max_hp = 25.0
 move_speed = 138.0
 contact_damage = 15.0
-exp_reward = 2
+exp_reward = 4
 spritesheet_path = "res://assets/art/warrior_red_8dir.png"
 locomotion_mode = "hover"
 

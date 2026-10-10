@@ -87,10 +87,13 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 # ---------------- 3. 三档参考 Build 仿真与击杀时长（TTK）----------------
 
 func _test_reference_build_ttks() -> void:
-	# 3.1 杂怪 TTK（史莱姆 base 18，雷兽 base 45）
-	# W1 裸青云剑：18 / 40.5 ≈ 0.44s
-	var w1_slime_ttk := 18.0 * GameBalance.enemy_hp_mult(1) / WeaponData.sustained_single_dps("qingyun_sword", 1)
-	_c.check(w1_slime_ttk <= 1.0, "W1 杂怪被首发法器 1 秒内斩灭 (%.2fs)" % w1_slime_ttk)
+	# 3.1 杂怪 TTK（史莱姆 base 18 × MOB_HP_BASE_MULT = 63，雷兽 base 45 × 3.5 ≈ 158）
+	# 2026-10-10 用户口径反转：「敌人都是一击秒杀，感觉不到打击感」——
+	# W1 裸青云剑（44.55/刀）砍 63 血史莱姆要 2 刀，TTK ≈ 1.56s，受击硬直/击退/火花才有机会呈现。
+	# 这条护栏钉的是「不许一击秒杀」，不是「必须秒得快」。
+	var w1_slime_ttk := 18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(1) / WeaponData.sustained_single_dps("qingyun_sword", 1)
+	_c.check(w1_slime_ttk >= 1.0 and w1_slime_ttk <= 3.0,
+		"W1 杂怪不再一刀秒：首发法器 TTK 落在 1~3s（约 2~3 刀，实得 %.2fs）" % w1_slime_ttk)
 
 	# 3.2 成型 Build 仿真（Standard Meta Build）
 	# W10: 5 把法器 (2把★2, 3把★1), 8 项悟道加点, 1 件法宝
