@@ -276,17 +276,22 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 			elem = String(t)
 	var chip_color: Color = ELEMENT_COLORS.get(elem, GameStyle.GOLD)
 
+	# 行名与货架卡/详情卡用同一套词（2026-10-11 用户「看不懂」口径的同类问题）：
+	# 旧写法这里自有一套黑话 ——「路数」「射程/范围」「贯穿」，与商店那屏的
+	# 「攻击方式」「攻击范围」「穿透」指的是同一件事，玩家对不上号。
+	# 「伤害」加「基础」两字：图鉴这一列是数据表纸面值，本局加成不在这里，
+	# 而商店卡上那个「伤害 26 → 31.1」右边才是你实际打得出的数，不加限定词会当成同一个。
 	var rows: Array = [
-		["路数", String(BEHAVIOR_NAMES.get(def.get("behavior", 0), "近战")), chip_color],
-		["伤害", "%d" % int(def.get("damage", 0)), GameStyle.JADE],
+		["攻击方式", String(BEHAVIOR_NAMES.get(def.get("behavior", 0), "近战")), chip_color],
+		["基础伤害", "%d" % int(def.get("damage", 0)), GameStyle.JADE],
 		["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
-		["射程/范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
+		["攻击范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
 		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
 	if int(def.get("pierce", 0)) > 0:
-		rows.append(["贯穿", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
+		rows.append(["穿透", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
 	if int(def.get("projectile_count", 1)) > 1:
-		rows.append(["齐射", "%d 枚" % int(def["projectile_count"]), GameStyle.PAPER])
+		rows.append(["齐射", "%d 发" % int(def["projectile_count"]), GameStyle.PAPER])
 	for proc_key in PROC_NAMES.keys():
 		if def.has(proc_key):
 			rows.append(["异常状态", PROC_NAMES[proc_key], chip_color])

@@ -122,6 +122,11 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 	var scene := _scene_root_for(parent)
 	if scene == null:
 		return
+	# 视口兜底：与 JuiceEffect 同口径——屏外位置的跳字不生成。调用方的 _offscreen
+	# 是 10Hz 采样（最多 100ms 陈旧），拦不住刚出屏/边缘带目标的「凭空数字」。
+	var vp := parent.get_viewport()
+	if vp != null and not vp.get_visible_rect().grow(-8.0).has_point(vp.get_canvas_transform() * pos):
+		return
 
 	_ensure_settings()
 	_ensure_host(scene)

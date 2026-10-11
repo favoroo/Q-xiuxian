@@ -8,6 +8,10 @@ extends PanelContainer
 
 var _label: Label = null
 var _host: Control = null
+## 上一次刷新时的点数：-1 = 还没刷新过；用来区分「首现弹入」和「增长脉冲」
+var _last_pending := -1
+var _pop_tween: Tween = null
+var _pulse_tween: Tween = null
 
 func _init(host: Control) -> void:
 	_host = host
@@ -53,6 +57,39 @@ func _open_tip() -> void:
 
 func _refresh() -> void:
 	var pending: int = GameManager.pending_upgrade_points
+	var was_visible := visible
 	visible = pending > 0
-	if pending > 0:
-		_label.text = "升级 ×%d" % pending
+	if pending <= 0:
+		_last_pending = pending
+		return
+	_label.text = "升级 ×%d" % pending
+	if not was_visible:
+		_play_pop()
+	elif _last_pending >= 0 and pending > _last_pending:
+		_play_pulse()
+	_last_pending = pending
+
+## 首现弹入：升级攒下第 1 点时从中心弹出来 —— 徽记在闪、这颗跟着蹦，升级感才接得上。
+## 文字刚设置时容器尺寸还没排版完，先等一拍再取中心 pivot，否则会从左上角缩放。
+func _play_pop() -> void:
+	if _pop_tween != null and _pop_tween.is_valid():
+		_pop_tween.kill()
+	await get_tree().process_frame
+	if not visible or not is_inside_tree():
+		return
+	pivot_offset = size * 0.5
+	modulate.a = 0.0
+	scale = Vector2(0.6, 0.6)
+	_pop_tween = create_tween()
+	_pop_tween.set_parallel()
+	_pop_tween.tween_property(self, "modulate:a", 1.0, 0.14)
+	_pop_tween.tween_property(self, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## 点数增长脉冲：连升多级时 ×N 逐级蹦一下，提示「又攒了一格」
+func _play_pulse() -> void:
+	if _pulse_tween != null and _pulse_tween.is_valid():
+		_pulse_tween.kill()
+	_label.pivot_offset = _label.size * 0.5
+	_label.scale = Vector2(1.35, 1.35)
+	_pulse_tween = create_tween()
+	_pulse_tween.tween_property(_label, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

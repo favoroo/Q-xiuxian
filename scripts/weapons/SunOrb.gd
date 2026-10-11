@@ -9,7 +9,7 @@ extends Area2D
 ## 只有 19 点伤/秒，纸面是 42.9）。58 ± 18 覆盖 40..76px，再算敌人受击圈 15px ⇒ 贴身到半臂都打得到。
 const ORBIT_RADIUS: float = 80.0
 const MIN_ORBIT_RADIUS: float = 28.0
-const CONTACT_RADIUS: float = 30.0     ## 接触半径 30px：敌人受击圈 15px ⇒ 合计 ~45px 触达，弥补轨道扫掠的占空比损失
+const CONTACT_RADIUS: float = 33.0     ## 接触半径 33px：敌人受击圈 15px ⇒ 合计 ~48px 触达，弥补轨道扫掠的占空比损失（2026-10-11 用户「召唤还是弱」再放宽一档）
 
 var star: int = 1
 var drone_id: String = "lingdie"
@@ -34,7 +34,7 @@ func setup(star_level: int, weapon_id: String = "lingdie") -> void:
 	base_damage = WeaponData.damage_for(drone_id, star)
 	hit_cooldown = WeaponData.cooldown_for(drone_id, star)
 	var def := WeaponData.get_def(drone_id)
-	max_orbit_reach = maxf(150.0, float(def.get("range", 175.0)))
+	max_orbit_reach = maxf(150.0, float(def.get("range", 205.0)))
 	_apply_contact_radius()
 	if is_inside_tree():
 		_apply_star_visuals()

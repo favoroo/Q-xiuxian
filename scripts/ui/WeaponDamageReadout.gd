@@ -59,9 +59,12 @@ static func per_second(w_id: String, star: int, slot_count: int = -1) -> float:
 	return WeaponData.sustained_single_dps(w_id, s) * (per_hit(w_id, s, slot_count) / base) / haste
 
 ## 机关法器的炮台是「多座各自开火」，平衡判据本身就不给它进 DPS 档，这里也不替它聚合，
-## 所以那一行必须叫「单座每秒」，不能和别的法器的「每秒」混成同一个词。
+## 所以那一行必须叫「单座每秒伤害」，不能和别的法器的「每秒伤害」混成同一个词。
+## 行名一律带「伤害」两字收尾（2026-10-11 用户：光写「每秒」没人知道是什么的每秒）：
+## 卡面上「伤害 26 → 31.1」与「每秒伤害 31.6」是同一把法器的两个不同口径，
+## 少了名词这两行看着像同一个数写了两遍。
 static func per_second_label(w_id: String) -> String:
-	return "单座每秒" if is_turret(WeaponData.get_def(w_id)) else "每秒"
+	return "单座每秒伤害" if is_turret(WeaponData.get_def(w_id)) else "每秒伤害"
 
 ## 「纸面 → 你现在」一行话。两数相同就只写纸面值，不多画一个箭头骗人。
 ## digits: -1 走 BonusRows 的整数不带小数口径；间隔这类要两位小数的传 2。

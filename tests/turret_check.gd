@@ -36,6 +36,16 @@ func _run() -> void:
 	# base 18 + engineering 5 = 23 * 1.30 = 29.9
 	_c.near(dmg, (18.0 + 5.0) * 1.30, 0.1, "炮台伤害完整吃到召唤伤害加点与机关羁绊")
 
+	# 2.5 索敌范围乘区（2026-10-11 补漏回归）：详情卡展示「范围 = 基础 × 攻击范围词条 × 范围羁绊」，
+	# 机关台实际索敌必须同源 —— 面板报多大就得索多大，加点攻击范围不许对机关台失明
+	GameManager.reset_run()
+	t1.setup("jiguan_nu", 1)
+	_c.near(t1._eff_range(), 220.0, 0.01, "无加成时机关弩索敌范围为表值 220")
+	GameManager.attack_range_mult = 1.5
+	GameManager.synergy_range_mult = 1.2
+	_c.near(t1._eff_range(), 220.0 * 1.5 * 1.2, 0.01, "机关台索敌范围吃到攻击范围词条与范围羁绊乘区")
+	GameManager.reset_run()
+
 	# 3. FloatingWeapon 布设机关与同屏上限
 	var fw: Node = load("res://scenes/weapons/FloatingWeapon.tscn").instantiate()
 	fw.setup("jiguan_nu", 1)

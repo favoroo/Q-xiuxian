@@ -231,6 +231,10 @@ func _draw() -> void:
 static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit: bool = false) -> void:
 	if not _ready_to_spawn(parent):
 		return
+	# 视口兜底：打中了看不见的目标（屏外妖物/藏宝匣）也不许在屏内露出特效。
+	# EnemyBase._offscreen 是 10Hz 采样且留有 64px 边缘带，拦不住边缘泄露，这里用实时画布变换终审。
+	if not _pos_in_viewport(parent, pos):
+		return
 	var fx := _acquire()
 	fx._begin(EffectType.HIT_SPARKS, pos, 0.22 if not crit else 0.28, Z_OVERLAY)
 	fx.is_crit = crit
@@ -264,6 +268,9 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 ## crit_kill = 致命一刀是暴击：追加一圈暴击同款鎏金冲击环，暴击斩杀与普通伏诛一眼可辨（2026-10-11）。
 static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false, overkill_ratio: float = 0.0, crit_kill: bool = false) -> void:
 	if not _ready_to_spawn(parent):
+		return
+	# 同火花：屏外击杀的爆散环不生成（尸体塌缩 0.14s 就没，爆散却要放 0.4s，最像「空地凭空特效」）
+	if not _pos_in_viewport(parent, pos):
 		return
 	var boost := 1.0 + clampf(overkill_ratio, 0.0, 1.5) * 0.5
 	var fx := _acquire()
@@ -329,6 +336,15 @@ static func _ready_to_spawn(parent: Node) -> bool:
 		return false
 	_ensure_host(scene)
 	return _host != null and is_instance_valid(_host)
+
+## 命中/爆散类特效的视口终审：位置投到屏幕坐标后不在可见矩形内（再收 8px 防边缘露半截）就不发。
+## 拿不到视口（极端 headless 环境）时按可见放行——宁可多画，不误杀正常反馈。
+static func _pos_in_viewport(parent: Node, pos: Vector2) -> bool:
+	var vp := parent.get_viewport()
+	if vp == null:
+		return true
+	var screen := vp.get_canvas_transform() * pos
+	return vp.get_visible_rect().grow(-8.0).has_point(screen)
 
 ## 取池宿主应挂的场景根（测试里 current_scene 为空时退回向上找 root 的直接子节点）
 static func _scene_root_for(node: Node) -> Node:

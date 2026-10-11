@@ -66,6 +66,8 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 			ShopWeaponTip.open(shop, item, pool, index, slot)
 			shop._refresh_inventory()
 	)
+	# 拖拽换装：这一格也是「按住拎起 → 拖到目标格放下」的源与落点（手势口径见 ShopDragDrop 头注）
+	shop.drag_register(slot, {"pool": pool, "index": index})
 	return slot
 
 ## 上阵容量签：「装备 n/上限n件」（限件数角色才出现）
@@ -80,8 +82,8 @@ static func create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	GameStyle.label(lbl, 11, GameStyle.JADE_EDGE)
 	return chip
 
-## 背包分隔签：「背包 n/9」
-static func create_stash_divider() -> Control:
+## 背包分隔签：「背包 n/9」；兼作拖拽落点 —— 上阵件拖到这一签上＝卸入背包
+static func create_stash_divider(shop: WaveShop) -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -91,6 +93,8 @@ static func create_stash_divider() -> Control:
 	chip.add_child(lbl)
 	# 暗井（INK 底）上的次要小字：GREY 翻转后偏暗，换暗底次级亮字
 	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
+	if shop != null:
+		shop.drag_register(chip, {"pool": "stash", "index": -1, "kind": "end"})
 	return chip
 
 ## 法宝分隔签：「道具 n」
@@ -165,12 +169,14 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		"foot": "每波商店会刷新更多道具。",
 	})
 
-## 背包空位：凹槽提示容量
-static func create_empty_stash_slot(tile: float) -> Control:
+## 背包空位：凹槽提示容量；兼作拖拽落点（拖到空位＝卸到队尾 / 背包件挪到队尾）
+static func create_empty_stash_slot(shop: WaveShop, tile: float) -> Control:
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(maxf(20.0, tile * 0.6), tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := GameStyle.slot()
 	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
 	slot.add_theme_stylebox_override("panel", style)
+	if shop != null:
+		shop.drag_register(slot, {"pool": "stash", "index": -1, "kind": "end"})
 	return slot

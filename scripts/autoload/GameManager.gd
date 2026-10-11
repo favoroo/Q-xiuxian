@@ -347,13 +347,20 @@ func add_experience(amount: int) -> void:
 	spirit_stones += amount
 	AudioManager.play_sfx("gem_pickup")
 
+	# 连升音阶：一次吃大经验球跨多级时音高逐级抬升（同 gem_pickup 的连击升调手感）；
+	# 首级不传 pitch，保住音效本来的随机变体
+	var levels_gained := 0
 	while experience >= experience_to_next:
 		experience -= experience_to_next
 		level += 1
 		_exp_chain = GameBalance.exp_to_next(_exp_chain)
 		# 夺舍散人这类需求倍率只折算判定值，链条本身保持原曲线（避免倍率逐层复利）
 		experience_to_next = maxi(1, int(round(float(_exp_chain) * xp_require_mult)))
-		AudioManager.play_sfx("level_up")
+		if levels_gained == 0:
+			AudioManager.play_sfx("level_up")
+		else:
+			AudioManager.play_sfx("level_up", 1.0, 1.0 + 0.08 * float(mini(levels_gained, 4)))
+		levels_gained += 1
 		# 升级不再当场弹面板打断战斗：升 1 级攒 1 点，回合结束统一结算
 		pending_upgrade_points += 1
 		pending_points_changed.emit(pending_upgrade_points)
@@ -672,6 +679,14 @@ func equip_from_stash(index: int) -> bool:
 
 func unequip_to_stash(index: int) -> bool:
 	return WeaponInventory.unequip_to_stash(self, index)
+
+## 背包 → 上阵换装（上阵满时与该格互换，换下的回背包原位）：拖拽换装用
+func swap_into_equipped(stash_index: int, equipped_index: int) -> bool:
+	return WeaponInventory.swap_into_equipped(self, stash_index, equipped_index)
+
+## 背包内拖拽排序
+func reorder_stash(from: int, to: int) -> bool:
+	return WeaponInventory.reorder_stash(self, from, to)
 
 func sell_stash(index: int) -> bool:
 	return WeaponInventory.sell_stash(self, index)

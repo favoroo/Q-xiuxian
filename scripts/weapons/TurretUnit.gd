@@ -112,8 +112,15 @@ func _process(delta: float) -> void:
 	if _cooldown_timer <= 0.0 and current_target != null and is_instance_valid(current_target):
 		_fire()
 
+## 射程乘区（攻击范围词条 + 剑系/广域羁绊）：照 FloatingWeapon._range_mult 同一口径——
+## 详情卡/商店卡展示的「攻击范围 = 基础 × 该乘区」，机关台实际索敌必须同源（2026-10-11 补漏：
+## 旧写法用定值 attack_range，面板显示 240 实际只索 220，加点攻击范围对机关台完全不生效）
+func _eff_range() -> float:
+	return attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+
 func _is_target_in_range(t: Node2D) -> bool:
-	return global_position.distance_squared_to(t.global_position) <= attack_range * attack_range
+	var eff := _eff_range()
+	return global_position.distance_squared_to(t.global_position) <= eff * eff
 
 func _find_target() -> Node2D:
 	if _search_shape == null or _search_query == null:
@@ -122,7 +129,7 @@ func _find_target() -> Node2D:
 		_search_query.shape = _search_shape
 		_search_query.collision_mask = 4
 		_search_query.collide_with_areas = true
-	_search_shape.radius = attack_range
+	_search_shape.radius = _eff_range()
 	_search_query.transform = Transform2D(0.0, global_position)
 	var results := get_world_2d().direct_space_state.intersect_shape(_search_query, 24)
 

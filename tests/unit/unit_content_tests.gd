@@ -59,8 +59,30 @@ func _test_five_elements_system() -> void:
 	_c.equals(label_of["fantian_yin"], "范围", "番天印标记范围")
 	_c.equals(label_of["lingdie"], "环绕", "灵蝶标记环绕")
 	_c.equals(label_of["jiguan_nu"], "机关", "机关弩标记机关")
-	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透3·3段", "柳叶飞刀紧凑特性＝穿透3·3段")
+	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透3·3发", "柳叶飞刀紧凑特性＝穿透3·3发（量词用「发」：projectile_count 是出膛弹丸数，不是连击段数）")
 	_c.equals(WeaponData.card_feats(WeaponData.get_def("qingyun_sword")), "", "青云剑无机械特性时不占卡面特性行")
+
+	# 1c. 货架卡加成行的横向预算：卡内宽下限 124（CARD_W_MIN 148 − OFFER_PAD_X 12×2），
+	#     BonusRows 一行不换行 ⇒ 行名 + 数值超格就把整块面板顶出屏（LayoutCheck 量的是最坏屏，
+	#     这里按最坏读数直接拦：谁再把行名拉长一档、或给窄卡加一行长名，当场红）。
+	#     数值不读本局乘区，统一换成「999 → 9999.9」这一档最宽样本。
+	var body_f: Font = GameStyle.body_font()
+	var inner_min: float = WaveShop.card_inner_w(WaveShop.CARD_W_MIN)
+	var worst_arrow: String = WeaponDamageReadout.arrow_text(999.0, 9999.9)
+	var rows_too_wide: Array = []
+	for w3 in WeaponData.SHOP_POOL:
+		var d3: Dictionary = ShopOfferCardFactory.resolve_offer_data(
+				{"kind": "weapon", "id": String(w3)})
+		for r3 in d3.get("stat_rows", []):
+			var val_txt := String(r3[1])
+			if val_txt.contains("→"):
+				val_txt = worst_arrow
+			var need: float = GameStyle.line_max_w(String(r3[0]), body_f, 12) \
+					+ GameStyle.line_max_w(val_txt, body_f, 12) + 4.0
+			if need > inner_min:
+				rows_too_wide.append("%s「%s」%.0f>%d" % [String(w3), String(r3[0]), need, int(inner_min)])
+	_c.check(rows_too_wide.is_empty(),
+			"48 把法器的货架卡每一行都装得进 %d 卡内宽（超宽: %s）" % [int(inner_min), str(rows_too_wide)])
 
 	# 2. 土豆兄弟式属性受益折算（GameBalance.weapon_stat_bonus 纯函数）
 	var earth_scalings := {"armor": 3.5}

@@ -12,6 +12,7 @@ extends CharacterBody2D
 ##
 ## 血量是它的寿命：受击有无敌帧（HIT_INVINCIBLE，敌人接触伤害逐帧结算，没它一秒被磨没），
 ## 血量耗尽即消散；没有波间回血 ——「血量没耗完就一直在场」。
+## 血量不挂血条：受击时把 hp_ratio 灌给渲染器，由灵狐本体传达（灵光/灵印转暗、濒死裂纹闪烁）。
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
 ## 索敌读 GameManager.live_enemies 登记表，不做物理查询（最多 3 只，10Hz 重索节流）。
 
@@ -129,7 +130,7 @@ func _try_attack(dir: Vector2) -> void:
 		lunge.tween_property(_renderer, "position", Vector2.ZERO, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	AudioManager.play_sfx("enemy_claw", 0.45, GameManager.rng.randf_range(0.95, 1.1))
 
-## 受击（敌人接触/短咬/自爆的口子）：无敌帧挡逐帧接触结算，闪白 + 血条刷新
+## 受击（敌人接触/短咬/自爆的口子）：无敌帧挡逐帧接触结算，闪白 + 灵息转暗（hp_ratio 灌给渲染器）
 func take_damage(amount: float) -> void:
 	if _dying or _invincible_timer > 0.0:
 		return
@@ -137,7 +138,8 @@ func take_damage(amount: float) -> void:
 	current_hp -= amount
 	_hit_flash = 0.12
 	modulate = Color(1.8, 1.8, 1.8)
-	queue_redraw()
+	if _renderer != null:
+		_renderer.hp_ratio = clampf(current_hp / max_hp, 0.0, 1.0)
 	if current_hp <= 0.0:
 		_die()
 
@@ -153,13 +155,3 @@ func _die() -> void:
 	tw.tween_property(self, "scale", Vector2(0.1, 0.1), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(self, "modulate:a", 0.0, 0.3)
 	tw.chain().tween_callback(queue_free)
-
-## 头顶血条（世界侧，只在中过招后才挂出来）
-func _draw() -> void:
-	if current_hp >= max_hp or _dying or max_hp <= 0.0:
-		return
-	var w := 30.0
-	var y := -30.0
-	draw_rect(Rect2(-w * 0.5, y, w, 4.0), Color(0.02, 0.03, 0.06, 0.85))
-	var ratio := clampf(current_hp / max_hp, 0.0, 1.0)
-	draw_rect(Rect2(-w * 0.5, y, w * ratio, 4.0), GameStyle.GOLD)

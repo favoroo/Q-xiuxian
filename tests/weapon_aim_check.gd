@@ -20,6 +20,8 @@ extends Node
 ##    同日再补挥空门控：月牙只在挥砍真咬到肉时亮（判定圆内无可命中体 ⇒ 打击帧不亮）——
 ##    旧写法先亮后结算，空挥会在空地上凭空冒出一整片剑气（用户报的「打击效果乱飘」主源）。
 ##    为此本判据自带一个挂碰撞层 4 的桩敌：命中路径的几何断言靠它才走得到。
+##    同日再补屏外命中门控：咬到视口外的目标伤害照结、月牙不亮（桩玩家挪远使桩敌落出
+##    390×220 安全框）——物理命中不分可见性，凭空亮在屏内的刀光同属「打击效果乱飘」。
 ## 5) 弹丸转不转由表里的 bullet_spin 说了算（玄冰飞针写的是 false，旧代码按穿透数反推 ⇒ 在乱转）。
 ##
 ## 2026-10-09 庚金飞剑二次返工补的第 6 条 —— 前 1)/2) 条抓不到用户第二次报的那个问题：
@@ -390,6 +392,29 @@ func _test_melee_arc() -> void:
 		w.free()
 		foe.free()
 		target.free()
+
+		# —— 屏外命中门控（2026-10-11，用户口径：「必须要有敌人才有特效，看不见的也不许有」）——
+		# 咬到视口外的目标：伤害照结（结算不打折），但月牙/材质声/反冲一律静音。
+		# 手法：把桩玩家（is_in_viewport 的视口中心）挪到远处，桩敌相对它落出 390×220 安全框。
+		var far_w := _make(def_id)
+		await get_tree().process_frame
+		var far_target := Node2D.new()
+		far_target.position = far_w.position + Vector2(40.0, 0.0)
+		_world.add_child(far_target)
+		far_w.current_target = far_target
+		var far_foe := _make_stub_enemy(far_w.position + Vector2(FloatingWeapon.MELEE_LUNGE, 0.0))
+		GameManager.player.position = Vector2(4000.0, 4000.0)
+		await get_tree().physics_frame
+		far_w._perform_melee_attack()
+		await get_tree().create_timer(0.15).timeout
+		_c.check(far_foe.hit_count > 0,
+			"%s 屏外桩敌伤害照结（命中 %d 次，只静音演出不动结算）" % [label, far_foe.hit_count])
+		_c.check(not far_w.slash_sprite.visible and far_w.slash_sprite.modulate.a < 0.05,
+			"%s 咬到屏外目标不亮月牙（打击帧已过，弧光仍隐藏）" % label)
+		GameManager.player.position = Vector2.ZERO
+		far_w.free()
+		far_foe.free()
+		far_target.free()
 
 # ---------------- 反例：证明第 1 条断言真的有牙齿 ----------------
 

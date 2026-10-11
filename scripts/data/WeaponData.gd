@@ -127,7 +127,7 @@ const DEFS: Dictionary = {
 					"lingdie": {
 						"name": "护蝶", "behavior": Behavior.DRONE,
 						"sfx": "drone_flutter",
-						"damage": 23.0, "cooldown": 0.48, "range": 175.0,
+						"damage": 23.0, "cooldown": 0.48, "range": 205.0,
 						"knockback": 160.0,
 						"price": 40, "icon": "res://assets/art/sun_orb.png",
 						"desc": "环绕周身触碰即伤，受召唤伤害与吸血加成", "tag": "环绕·召唤·木",
@@ -178,7 +178,7 @@ const DEFS: Dictionary = {
 				"hanquan_yulian": {
 					"name": "冰莲", "behavior": Behavior.DRONE,
 					"sfx": "drone_chime",
-					"damage": 24.0, "cooldown": 0.50, "range": 175.0,
+					"damage": 24.0, "cooldown": 0.50, "range": 205.0,
 					"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
 					"desc": "环绕护体触碰即减速，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
@@ -284,7 +284,7 @@ const DEFS: Dictionary = {
 					"hunyuan_zhong": {
 						"name": "古钟", "behavior": Behavior.DRONE,
 						"sfx": "orb_hit",
-						"damage": 25.0, "cooldown": 0.52, "range": 180.0,
+						"damage": 25.0, "cooldown": 0.52, "range": 210.0,
 						"knockback": 340.0,
 						"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
 						"desc": "环绕周身撞击击退敌群，受召唤伤害与生命加成", "tag": "环绕·召唤·土",
@@ -402,7 +402,7 @@ const DEFS: Dictionary = {
 					"haojin_lun": {
 						"name": "昊金轮", "behavior": Behavior.DRONE,
 						"sfx": "orb_hit",
-						"damage": 22.0, "cooldown": 0.45, "range": 170.0,
+						"damage": 22.0, "cooldown": 0.45, "range": 200.0,
 						"knockback": 200.0,
 						"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
 						"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "环绕·召唤·金",
@@ -412,7 +412,7 @@ const DEFS: Dictionary = {
 					"lihuo_ya": {
 						"name": "离火鸦", "behavior": Behavior.DRONE,
 						"sfx": "drone_flutter",
-						"damage": 19.0, "cooldown": 0.50, "range": 170.0,
+						"damage": 19.0, "cooldown": 0.50, "range": 200.0,
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
 						"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "环绕·召唤·火",
@@ -453,7 +453,7 @@ const DEFS: Dictionary = {
 						"knockback": 100.0,
 						"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 						"tip": Vector2(22, -12),
-						"desc": "透骨钉贯穿4敌并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
+						"desc": "透骨钉穿透4敌并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
 					"bullet": "res://assets/art/bullet_bone_spike.png", "bullet_scale": 0.55, "bullet_spin": false,
 					"pierce": 4, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 					"tags": ["talisman", "wood"],
@@ -485,7 +485,7 @@ const DEFS: Dictionary = {
 					"xuanwu_pei": {
 						"name": "玄武佩", "behavior": Behavior.DRONE,
 						"sfx": "drone_chime",
-						"damage": 25.0, "cooldown": 0.54, "range": 175.0,
+						"damage": 25.0, "cooldown": 0.54, "range": 205.0,
 						"knockback": 420.0,
 						"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
 						"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "环绕·召唤·土",
@@ -567,7 +567,7 @@ const DEFS: Dictionary = {
 					"knockback": 160.0,
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
 					"tip": Vector2(12, 12),
-					"desc": "三昧真火符贯穿2敌烈焰灼烧，受元素与远程伤害加成", "tag": "远程·弹射·火",
+					"desc": "三昧真火符穿透2敌烈焰灼烧，受元素与远程伤害加成", "tag": "远程·弹射·火",
 					"bullet": "res://assets/art/bullet_true_fire_talisman.png", "bullet_scale": 0.65, "bullet_spin": true,
 					"pierce": 2, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
 					"tags": ["talisman", "fire"],
@@ -797,9 +797,11 @@ static func behavior_label(def: Dictionary) -> String:
 			return "机关"
 	return "近战"
 
-## 货架卡窄行用的紧凑特性串：只取数据表字段（穿透 / 段数 / 弹射 / 横扫），
+## 货架卡窄行用的紧凑特性串：只取数据表字段（穿透 / 发数 / 弹射 / 横扫），
 ## 不含 proc 类（desc 已覆盖）与全局羁绊加成（详情卡 StatsTipFactory.weapon_feats 才是完整口径）。
 ## 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 最多取 2 段、无空格，超宽必溢出卡面。
+## 量词用「发」不用「段」（2026-10-11 用户：看不懂）：projectile_count 是出膛弹丸数
+## （FloatingWeapon._volley_targets 逐发各咬一个目标），「3 段」会被读成三段连击。
 static func card_feats(def: Dictionary) -> String:
 	var out: Array[String] = []
 	var pierce := int(def.get("pierce", 0))
@@ -807,7 +809,7 @@ static func card_feats(def: Dictionary) -> String:
 		out.append("穿透%d" % pierce)
 	var count := int(def.get("projectile_count", 1))
 	if count > 1:
-		out.append("%d段" % count)
+		out.append("%d发" % count)
 	var bounce := int(def.get("bounce_count", 0))
 	if bounce > 0:
 		out.append("弹射%d" % bounce)

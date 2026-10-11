@@ -89,7 +89,6 @@ const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）�
 const CRIT_KILL_HITSTOP_SCALE := 0.06    ## 暴击击杀顿帧时间倍率
 const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
 const CRIT_KILL_OVERKILL_FLOOR := 0.45   ## 暴击击杀的死亡爆散规模保底（溢出伤害不足时也按此放大）
-const CRIT_FLASH_MIN_INTERVAL := 0.20    ## 暴击全屏金闪最小间隔（秒，高频暴击防频闪）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
 # ---------------- 妖狼系长扑：实冲位移 / 走廊扫掠几何 ----------------

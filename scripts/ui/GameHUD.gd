@@ -37,6 +37,19 @@ var _boss_bar_widget: HudBossBar = null
 ## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
 var wave_countdown: HudWaveCountdown = null
 
+## 升级动效句柄（_on_leveled_up）：连升多级时信号连发，tween 全部可杀可重播
+var _lv_tween: Tween = null
+var _lv_label_tween: Tween = null
+var _flash_tween: Tween = null
+## 徽记底色要动，但场景 stylebox 是共享资源 ⇒ 首次升级时换成私有副本再动色
+var _lv_badge_style: StyleBoxFlat = null
+var _lv_badge_base_bg := Color(0, 0, 0, 0)
+var _lv_badge_base_border := Color(0, 0, 0, 0)
+## 全屏升级金光（_ready 里代码创建，压在 HUD 控件之下）
+var _flash_rect: ColorRect = null
+## 镜头缩放冲击节流：连升多级 0.2s 内只顿一次
+var _last_zoom_ms := 0
+
 ## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
 var _skill_box: Control = null
 var _skill_btn: Button = null
@@ -95,6 +108,19 @@ func _ready() -> void:
 	_synergy_box.offset_bottom = 88.0
 	add_child(_synergy_box)
 	_build_pending_chip()
+	_build_level_flash()
+
+## 全屏升级金光：升级瞬间轻闪一下（对照受击红晕的反馈位，换金色、更短促）。
+## 挪到首个子节点 ⇒ 画在 HUD 所有控件之下、游戏画面之上，顶栏读数不被染色。
+func _build_level_flash() -> void:
+	_flash_rect = ColorRect.new()
+	_flash_rect.name = "LevelFlash"
+	_flash_rect.color = GameStyle.with_alpha(GameStyle.JADE, 0.14)
+	_flash_rect.modulate.a = 0.0
+	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_flash_rect)
+	move_child(_flash_rect, 0)
 
 # ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
 
@@ -286,13 +312,49 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	var low := GameBalance.hp_is_low(cur, max_v)
 	hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
 
+## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 斜切光环/星屑（HudLevelBadgeFx）。
+## 可重入：连升多级时 player_leveled_up 连发，先杀旧 tween、颜色复位，再整段重播。
 func _on_leveled_up(_lvl: int) -> void:
-	var badge := $TopContainer/LeftBox/LevelBadge
-	if badge != null:
-		badge.pivot_offset = badge.size * 0.5
-		badge.scale = Vector2(1.4, 1.4)
-		var tw := badge.create_tween()
-		tw.tween_property(badge, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var badge: PanelContainer = $TopContainer/LeftBox/LevelBadge
+	if badge == null:
+		return
+	if _lv_tween != null and _lv_tween.is_valid():
+		_lv_tween.kill()
+	if _lv_label_tween != null and _lv_label_tween.is_valid():
+		_lv_label_tween.kill()
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
+	# 底色金闪：场景 stylebox 是共享资源，首次先把私有副本挂上再动色
+	if _lv_badge_style == null:
+		_lv_badge_style = badge.get_theme_stylebox("panel").duplicate()
+		_lv_badge_base_bg = _lv_badge_style.bg_color
+		_lv_badge_base_border = _lv_badge_style.border_color
+		badge.add_theme_stylebox_override("panel", _lv_badge_style)
+	_lv_badge_style.bg_color = GameStyle.JADE
+	_lv_badge_style.border_color = GameStyle.JADE_DK
+	# squash & stretch：先压扁，再 TRANS_BACK 回弹过冲落位（比直线缩放更弹）
+	badge.pivot_offset = badge.size * 0.5
+	badge.scale = Vector2(0.8, 1.2)
+	_lv_tween = create_tween()
+	_lv_tween.tween_property(badge, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# 金色只驻留 0.26s 再渐回主蓝，杀出「跳了一下」的信号又不停在错误配色上
+	_lv_tween.parallel().tween_property(_lv_badge_style, "bg_color", _lv_badge_base_bg, 0.22).set_delay(0.26)
+	_lv_tween.parallel().tween_property(_lv_badge_style, "border_color", _lv_badge_base_border, 0.22).set_delay(0.26)
+	# 数字脉冲：Lv 数值从中心放大回弹，视线钉在「升了几级」上
+	level_label.pivot_offset = level_label.size * 0.5
+	level_label.scale = Vector2(1.5, 1.5)
+	_lv_label_tween = create_tween()
+	_lv_label_tween.tween_property(level_label, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	HudLevelBadgeFx.burst(self, badge)
+	if _flash_rect != null:
+		_flash_rect.modulate.a = 1.0
+		_flash_tween = create_tween()
+		_flash_tween.tween_property(_flash_rect, "modulate:a", 0.0, 0.28).set_delay(0.06)
+	# 震屏只给特殊场景：升级算一个，但只给最轻一档的缩放冲击，连升 0.2s 内只顿一次
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_zoom_ms >= 200:
+		_last_zoom_ms = now_ms
+		GameFeel.zoom_punch(GameManager, 0.025, 0.2)
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target

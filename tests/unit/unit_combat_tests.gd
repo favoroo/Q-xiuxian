@@ -108,13 +108,12 @@ func _test_screen_shake_budget() -> void:
 	_c.equals(SettingsManager.shake_level(), &"standard", "重新开启时落回有手感的默认档")
 	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
 
-	# 5. 暴击打击感常量口径（2026-10-11 暴击金闪/创伤/击杀特写）
+	# 5. 暴击打击感常量口径（2026-10-11 暴击创伤/击杀特写；全屏金闪已删——高频事件不发整屏脉冲）
 	_c.check(GameBalance.CRIT_TRAUMA_NORMAL > 0.0 and GameBalance.CRIT_TRAUMA_NORMAL < GameBalance.TRAUMA_BUDGET, "普通暴击创伤为正值且单笔不破每秒预算")
 	_c.check(GameBalance.CRIT_TRAUMA_ELITE > GameBalance.CRIT_TRAUMA_NORMAL, "精英暴击创伤大于普通暴击")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_DURATION > GameBalance.KILL_HITSTOP_DURATION, "暴击击杀顿帧比普通击杀更实")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL >= GameBalance.KILL_HITSTOP_MIN_INTERVAL, "暴击击杀顿帧限流不宽于普通击杀")
 	_c.check(GameBalance.CRIT_KILL_OVERKILL_FLOOR > 0.0 and GameBalance.CRIT_KILL_OVERKILL_FLOOR <= 1.5, "暴击击杀爆散保底在 overkill 量程内")
-	_c.check(GameBalance.CRIT_FLASH_MIN_INTERVAL >= 0.1 and GameBalance.CRIT_FLASH_MIN_INTERVAL <= 0.5, "暴击金闪限流窗在防频闪区间")
 
 func _test_knock_direction() -> void:
 	var p := Vector2.ZERO

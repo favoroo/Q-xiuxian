@@ -232,6 +232,34 @@ static func equip_from_stash(gm: Node, index: int) -> bool:
 	AudioManager.play_sfx("equip", 1.0)
 	return true
 
+## 从上阵 summary 摘下一件（灵宝摘 drones、悬浮法器摘节点实例）：unequip / 换装共用
+static func _remove_summary_item(gm: Node, item: Dictionary) -> bool:
+	if item.get("is_drone", false):
+		var di := int(item.get("drone_index", -1))
+		if di < 0 or di >= gm.drones.size():
+			return false
+		gm.drones.remove_at(di)
+		if gm.player != null and gm.player.has_method("sync_drones"):
+			gm.player.sync_drones()
+		return true
+	var node: Node = item.get("node")
+	if node == null or not is_instance_valid(node):
+		return false
+	gm.player.remove_weapon_instance(node)
+	return true
+
+## 上阵件 → 背包条目（卸下 / 换装共用同一种打包）
+static func _to_stash_entry(item: Dictionary) -> Dictionary:
+	var u_id: String = item.get("id", "")
+	var u_def := WeaponData.get_def(u_id)
+	return {
+		"id": u_id,
+		"name": item.get("name", u_def.get("name", "?")),
+		"star": int(item.get("star", 1)),
+		"icon": item.get("icon", u_def.get("icon", "")),
+		"tag": item.get("tag", u_def.get("tag", "")),
+	}
+
 ## 上阵 → 背包（summary 下标；背包有空位时）
 static func unequip_to_stash(gm: Node, index: int) -> bool:
 	var list := get_weapons_summary(gm)
@@ -242,29 +270,58 @@ static func unequip_to_stash(gm: Node, index: int) -> bool:
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	var item: Dictionary = list[index]
-	if item.get("is_drone", false):
-		var di := int(item.get("drone_index", -1))
-		if di < 0 or di >= gm.drones.size():
-			return false
-		gm.drones.remove_at(di)
+	if not _remove_summary_item(gm, item):
+		return false
+	gm.stash.append(_to_stash_entry(item))
+	gm.notify_weapons_updated(get_weapons_summary(gm))
+	AudioManager.play_sfx("unequip", 1.0)
+	return true
+
+## 背包 → 上阵「换装」：上阵未满时等同 equip_from_stash；已满时把 equipped_index 那件
+## 换下来、背包 stash_index 那件顶上。换下的一件回到背包里被腾出的那个位（stash_index）
+## —— 拖拽的落点语义是「与这一格互换」，不是「换下的排到队尾」。
+static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) -> bool:
+	if stash_index < 0 or stash_index >= gm.stash.size():
+		return false
+	var list := get_weapons_summary(gm)
+	if equipped_index < 0 or equipped_index >= list.size():
+		return false
+	if slots_used(gm) < gm.max_weapon_slots():
+		return equip_from_stash(gm, stash_index)
+	var entry: Dictionary = gm.stash[stash_index]
+	var e_def := WeaponData.get_def(entry.get("id", ""))
+	var as_drone: bool = e_def.get("behavior", -1) == WeaponData.Behavior.DRONE
+	# 悬浮法器要有玩家节点才接得住（headless/异常态）：先验完再动手，不做半截回滚
+	if not as_drone and (gm.player == null or not gm.player.has_method("add_weapon_instance")):
+		return false
+	var item: Dictionary = list[equipped_index]
+	if not _remove_summary_item(gm, item):
+		return false
+	gm.stash.remove_at(stash_index)
+	if as_drone:
+		gm.drones.append({"id": entry.get("id", ""), "star": int(entry.get("star", 1))})
 		if gm.player != null and gm.player.has_method("sync_drones"):
 			gm.player.sync_drones()
 	else:
-		var node: Node = item.get("node")
-		if node == null or not is_instance_valid(node):
-			return false
-		gm.player.remove_weapon_instance(node)
-	var u_id: String = item.get("id", "")
-	var u_def := WeaponData.get_def(u_id)
-	gm.stash.append({
-		"id": u_id,
-		"name": item.get("name", u_def.get("name", "?")),
-		"star": int(item.get("star", 1)),
-		"icon": item.get("icon", u_def.get("icon", "")),
-		"tag": item.get("tag", u_def.get("tag", "")),
-	})
+		gm.player.add_weapon_instance(entry.get("id", ""), int(entry.get("star", 1)))
+	gm.stash.insert(mini(stash_index, gm.stash.size()), _to_stash_entry(item))
 	gm.notify_weapons_updated(get_weapons_summary(gm))
-	AudioManager.play_sfx("unequip", 1.0)
+	AudioManager.play_sfx("equip", 1.0)
+	return true
+
+## 背包内拖拽排序：把 from 号移到 to 号（其余顺移）。to 允许给到 size（背包空位/分隔签的
+## 「挪到队尾」），夹进 [0, size-1] 后与 from 相同就是原地不动，返回 false 不算一次操作。
+static func reorder_stash(gm: Node, from: int, to: int) -> bool:
+	if from < 0 or from >= gm.stash.size():
+		return false
+	to = clampi(to, 0, gm.stash.size() - 1)
+	if from == to:
+		return false
+	var entry: Dictionary = gm.stash[from]
+	gm.stash.remove_at(from)
+	gm.stash.insert(to, entry)
+	gm.notify_weapons_updated(get_weapons_summary(gm))
+	AudioManager.play_sfx("ui_click", 1.0)
 	return true
 
 ## 按背包下标出售

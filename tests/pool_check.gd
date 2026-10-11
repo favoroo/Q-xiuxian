@@ -60,9 +60,11 @@ func _run() -> void:
 		e.free()
 
 	# ---------- 3. 跳字池：分配上限 + 完全复用 ----------
+	# 摆点收进可见矩形内（+20/+40 起步）：2026-10-11 起跳字/特效入口有视口兜底，
+	# 屏外位置 spawn 会被静音拦截，池化计数必须在屏内打点才准
 	var cap: int = DamageNumber.POOL_CAP
 	for i in range(60):
-		DamageNumber.spawn(world, Vector2(10 * i, 20), 10 + i)
+		DamageNumber.spawn(world, Vector2(20 + 10 * i, 40), 10 + i)
 	_check(DamageNumber.created_count() == 60, "首轮创建 60 个跳字节点 (%d)" % DamageNumber.created_count())
 	_check(DamageNumber.host_child_count() == 60, "跳字全部挂在池宿主下 (%d)" % DamageNumber.host_child_count())
 
@@ -70,24 +72,24 @@ func _run() -> void:
 	_check(DamageNumber.pool_size() == 60, "存活期结束后 60 个全部回池 (%d)" % DamageNumber.pool_size())
 
 	for i in range(60):
-		DamageNumber.spawn(world, Vector2(10 * i, 20), 20 + i, true)
+		DamageNumber.spawn(world, Vector2(20 + 10 * i, 40), 20 + i, true)
 	_check(DamageNumber.created_count() == 60, "第二轮零新建，全部复用 (%d)" % DamageNumber.created_count())
 
 	# 超出上限：溢出节点用完即释放，不把池撑大
 	for i in range(cap + 104):
-		DamageNumber.spawn(world, Vector2(i, 0), i)
+		DamageNumber.spawn(world, Vector2(20 + i, 40), i)
 	_check(DamageNumber.created_count() == cap, "常驻新建数不超过 POOL_CAP (%d/%d)" % [DamageNumber.created_count(), cap])
 	await get_tree().create_timer(1.0).timeout
 	_check(DamageNumber.host_child_count() <= cap, "溢出节点已释放，宿主子节点数回落 (%d)" % DamageNumber.host_child_count())
 
 	# ---------- 4. 特效池 ----------
 	for i in range(40):
-		JuiceEffect.spawn_hit_sparks(world, Vector2(i, i), Vector2.RIGHT, i % 5 == 0)
+		JuiceEffect.spawn_hit_sparks(world, Vector2(20 + i, 30 + i), Vector2.RIGHT, i % 5 == 0)
 	_check(JuiceEffect.created_count() == 40, "首轮创建 40 个特效节点 (%d)" % JuiceEffect.created_count())
 	await get_tree().create_timer(0.6).timeout
 	_check(JuiceEffect.pool_size() == 40, "特效全部回池 (%d)" % JuiceEffect.pool_size())
 	for i in range(40):
-		JuiceEffect.spawn_death_burst(world, Vector2(i, i), i % 10 == 0)
+		JuiceEffect.spawn_death_burst(world, Vector2(20 + i, 30 + i), i % 10 == 0)
 	_check(JuiceEffect.created_count() == 40, "第二轮特效零新建 (%d)" % JuiceEffect.created_count())
 
 	# ---------- 5. 特效并行数组：下标覆盖 + 复用归零 ----------
@@ -145,7 +147,7 @@ func _run() -> void:
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
 	_check(DamageNumber.created_count() == 0 and JuiceEffect.created_count() == 0, "clear_cache 归零计数")
-	DamageNumber.spawn(world, Vector2(0, 0), 1)
+	DamageNumber.spawn(world, Vector2(40, 40), 1)
 	_check(DamageNumber.created_count() == 1, "清理后可重新建池并继续工作")
 
 	world.free()

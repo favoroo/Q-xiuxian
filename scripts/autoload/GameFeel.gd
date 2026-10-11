@@ -69,18 +69,6 @@ static func crit_kill_hit_stop(gm: Node) -> void:
 	_last_crit_kill_hitstop_ms = now
 	hit_stop(gm, GameBalance.CRIT_KILL_HITSTOP_DURATION, GameBalance.CRIT_KILL_HITSTOP_SCALE)
 
-static var _last_crit_flash_ms: int = 0
-
-## 暴击全屏金闪（限流版）：复用受击红晕的同一条 HUD 脉冲管线换成鎏金色，
-## 让暴击在余光里也能感知。属视觉反馈而非震屏，不随震屏档位静默；
-## CRIT_FLASH_MIN_INTERVAL 保证高频暴击（多法器齐暴）不频闪。
-static func pulse_crit_flash(gm: Node) -> void:
-	var now := Time.get_ticks_msec()
-	if now - _last_crit_flash_ms < int(GameBalance.CRIT_FLASH_MIN_INTERVAL * 1000.0):
-		return
-	_last_crit_flash_ms = now
-	pulse_damage_vignette(gm, Color(1.0, 0.85, 0.35, 0.35), 0.12)
-
 static func feedback(gm: Node, tier: int) -> void:
 	match tier:
 		gm.FeedbackTier.SMALL:

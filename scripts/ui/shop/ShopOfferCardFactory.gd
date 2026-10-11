@@ -144,7 +144,11 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		# 方向反了；玩家想看的只是"本身多痛、加成后多痛"）。
 		# 卡面预算是硬的：BonusRows 行不换行、卡内宽最小 124px，且货架不许上下滑 —— 箭头只给
 		# 伤害这一行用，范围/间隔也带上箭头就把面板顶出屏、卡高顶到要滚动（LayoutCheck 当场红）。
-		# 「每秒」直接顶掉「攻击间隔」行：攻速信息本来就被它包含，还省一行给玩家验算。
+		# 「每秒伤害」直接顶掉「攻击间隔」行：攻速信息本来就被它包含，还省一行给玩家验算。
+		# 伤害那一行保留两字「伤害」不扩成「单发伤害」：卡内宽下限 124 而 BonusRows 不换行，
+		# 引擎实测「单发伤害」+ 最宽读数（"999 → 9999.9"）= 135 已破格，同一档两字行名是 111。
+		# 这条预算由单测「货架卡每一行都装得进 124 卡内宽」钉着，行名再长一档当场红；
+		# 全称「单发伤害」写在两张详情卡上（那里定宽 306，装得下）。
 		var slots_after := WeaponDamageReadout.slot_count_after_purchase()
 		stat_rows = [["伤害", WeaponDamageReadout.arrow_text(
 				WeaponData.damage_for(w_id, 1),

@@ -770,8 +770,6 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if not from_dot:
 			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
 			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
-			# 暴击全屏金闪（限流）：让暴击在余光里也能感知
-			GameFeel.pulse_crit_flash(GameManager)
 		GameManager.hit_stop(0.04, 0.08)
 		GameManager.kick_camera(knockback, 6.5)
 		GameFeel.zoom_punch(GameManager, 0.022, 0.12)

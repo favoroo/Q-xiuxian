@@ -281,8 +281,8 @@ func _draw_spirit_pellet() -> void:
 	var segs := 16
 	for i in range(segs + 1):
 		var t := float(i) / float(segs) * TAU
-	var pt := Vector2(cos(t) * 7.5, sin(t) * 3.0).rotated(ring_ang)
-	ring_pts.append(pt)
+		var pt := Vector2(cos(t) * 7.5, sin(t) * 3.0).rotated(ring_ang)
+		ring_pts.append(pt)
 	draw_polyline(ring_pts, Color(0.70, 1.0, 0.85, 0.65), 1.0, true)
 
 # ----------------- 7b. 浪里梭 (青碧流线纺锤 + 浪涛丝痕) -----------------

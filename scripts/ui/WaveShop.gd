@@ -176,10 +176,20 @@ var _screen: Vector2 = Vector2(960, 540)
 
 ## 当前点选的法器：{"pool": "equipped"/"stash", "index": int}
 var selected: Dictionary = {}
+## 拖拽换装手势控制器（按住拎起 → 拖到目标格放下）：陈列行的格子构建时经 drag_register 登记
+var drag_ctl: ShopDragDrop = null
+
+## ShopInventoryRow 静态工厂回调入口：把一格登记成拖拽源/落点（口径见 ShopDragDrop 头注）
+func drag_register(node: Control, src: Dictionary) -> void:
+	if drag_ctl != null:
+		drag_ctl.register_slot(node, src)
 
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	drag_ctl = ShopDragDrop.new(self)
+	drag_ctl.name = "DragDrop"
+	add_child(drag_ctl)
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	GameStyle.label(stones_label, 17, GameStyle.INK_TEXT)
@@ -276,6 +286,7 @@ func _open_usage_tip() -> void:
 	]
 	var notes: Array[String] = [
 		"点中一件武器（装备或背包里的）才能操作：三合一升星、装备卸下、出售换金币。",
+		"拖动换装：按住一件武器拎起来，拖到上阵格放下＝装备（上阵满则与那一格互换），拖回背包区＝卸下，背包内拖动＝整理顺序。",
 		"三合一：集齐三把同名同星，合成后升一星（最高 %s）。" % WeaponData.star_text(WeaponData.MAX_STAR),
 		"锁定：这一格留到下波，重掷与刷新都不会换掉它。",
 		"重掷货架：换一批候选；每波有免费次数，用完按价格扣金币。",
@@ -415,11 +426,11 @@ func _refresh_inventory() -> void:
 			owned_container.add_child(ShopInventoryRow.create_equipped_cap_chip(summary.size(), max_slots))
 		for i in range(summary.size()):
 			owned_container.add_child(ShopInventoryRow.create_inv_slot(self, summary[i], i, "equipped", tile))
-		owned_container.add_child(ShopInventoryRow.create_stash_divider())
+		owned_container.add_child(ShopInventoryRow.create_stash_divider(self))
 		for i in range(GameManager.stash.size()):
 			owned_container.add_child(ShopInventoryRow.create_inv_slot(self, GameManager.stash[i], i, "stash", tile))
 		for i in range(free_tiles):
-			owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(tile))
+			owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(self, tile))
 
 	# 已持有法宝（被动道具）陈列：小图标 + 点按查看说明，不参与点选操作
 	if not GameManager.items.is_empty():

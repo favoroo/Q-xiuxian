@@ -149,13 +149,19 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 			var cnt: int = GameManager.get_tag_count(String(t))
 			syn_parts.append("%s(%d/6)" % [sinfo.get("name", t), cnt])
 
-	# 逐行列出的乘区必须能乘回头条「单发伤害」，所以神识分流与机关羁绊两行不能省
+	# 逐行列出的乘区必须能乘回头条「单发伤害」，所以多法器分流与机关羁绊两行不能省
 	# （2026-10-11：以前这两档根本没进 per_hit，面板列出来的因子乘完比跳字高一大截）。
+	# 每个数前面都带上它自己的名字（2026-10-11 用户「看不懂」口径）：旧写法
+	# 「全局×羁绊    ×1.25 × ×1.20」两个乘号连排，玩家分不清哪个数是全局、哪个是羁绊；
+	# 行名也不再单写「神识」——这个词全游戏没任何一处解释过。
 	var split := WeaponDamageReadout.slot_split_mult()
 	var factor_rows: Array = [
-		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
-		["角色×元素", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
-		["神识分流", "%d 把 × %s" % [GameManager.slots_used(), _mul(split)], _c(split - 1.0)],
+		["全局与羁绊", "全局 %s · 羁绊 %s" % [_mul(gm_dmg), _mul(syn_dmg)],
+				_c(gm_dmg * syn_dmg - 1.0)],
+		["角色与五行", "角色 %s · 五行 %s" % [_mul(cult_dmg), _mul(elem_dmg)],
+				_c(cult_dmg * elem_dmg - 1.0)],
+		["多法器分流", "上阵 %d 把 · 每把 %s" % [GameManager.slots_used(), _mul(split)],
+				_c(split - 1.0)],
 	]
 	if WeaponDamageReadout.is_turret(def):
 		var contraption := WeaponDamageReadout.contraption_mult()
@@ -177,7 +183,10 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		rows.append(["特性", feats])
 
 	var notes: Array[String] = [
-		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局法伤 × 羁绊 × 角色 × 五行 × 神识分流；" \
+		# 公式句保持原有长度：详情卡定宽 306、notes 走 autowrap，多折一行就把卡底往下推
+		# （BenefitIconTapCheck 按「卡不许出屏」判）。行名换成「多法器分流」多的两个字，
+		# 用把「全局法伤」缩成「全局」抵平 —— 这两个乘区本来就有各自的行按名字列着，不丢信息。
+		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局 × 羁绊 × 角色 × 五行 × 多法器分流；" \
 				+ "暴击与斩将按目标另算。",
 		WeaponDamageReadout.bonus_bill_text(id, star),
 		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
@@ -215,7 +224,7 @@ static func weapon_feats(def: Dictionary) -> String:
 		out.append("穿透 %d" % (pierce + GameManager.bonus_pierce))
 	var count: int = int(def.get("projectile_count", 1))
 	if count > 1:
-		out.append("一次 %d 段" % count)
+		out.append("一次 %d 发" % count)
 	var bounce: int = int(def.get("bounce_count", 0))
 	if bounce > 0:
 		out.append("弹射 %d 次" % bounce)

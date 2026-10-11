@@ -417,13 +417,17 @@ func _perform_burst_attack() -> void:
 
 ## 引雷：锯齿闪电从法器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
 func _spawn_lightning(target_pos: Vector2) -> void:
-	var bolt = LightningBoltScript.new()
-	bolt.from = muzzle_point.global_position
-	bolt.to = target_pos
-	bolt.width_mult = 1.0 + 0.18 * float(star - 1)
-	if def.has("burst_tint"):
-		bolt.tint = def["burst_tint"]
-	get_tree().current_scene.add_child(bolt)
+	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
+	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
+	var player := GameManager.player
+	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
+		var bolt = LightningBoltScript.new()
+		bolt.from = muzzle_point.global_position
+		bolt.to = target_pos
+		bolt.width_mult = 1.0 + 0.18 * float(star - 1)
+		if def.has("burst_tint"):
+			bolt.tint = def["burst_tint"]
+		get_tree().current_scene.add_child(bolt)
 
 	# 落雷走对象池（2026-10-11 第 6 波卡顿优化）：acquire → 写字段 → activate 起爆
 	var burst = ThunderBurst.acquire(get_tree().current_scene, burst_scene)
@@ -524,6 +528,10 @@ func _perform_melee_attack() -> void:
 func _deal_melee_damage(aim_dir: Vector2) -> int:
 	var results := _query_enemies(_melee_arc_radius(), global_position + aim_dir * MELEE_LUNGE, 24)
 	var hit_count := 0
+	# 返回值语义 = 「可见命中数」：屏外目标的伤害/击退/异常照常结算，但不计入计数——
+	# 打击帧回调拿它门控月牙/材质声/反冲，咬到看不见的目标时不许在屏内亮刀光
+	var player := GameManager.player
+	var vp_center := player.global_position if player != null else global_position
 
 	for res in results:
 		var col = res["collider"]
@@ -537,7 +545,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
 			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
-			hit_count += 1
+			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
+				hit_count += 1
 			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
 				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
 			if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):

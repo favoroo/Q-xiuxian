@@ -149,8 +149,12 @@ func _check_card_rows() -> void:
 	_c.check(String(dmg_row[1]).contains("→"),
 			"首行印成「纸面 → 你现在」两数（实得「%s」）" % String(dmg_row[1]))
 	var ps_label := String(rows[1][0])
-	_c.check(ps_label == "每秒" or ps_label == "单座每秒",
-			"第二行是每秒伤害（实得「%s」）" % ps_label)
+	# 行名必须自带「伤害」两个字（2026-10-11 用户：光写「每秒」看不懂是什么的每秒）。
+	# 这里按后缀拦，不放行旧写法：将来谁再把它缩回「每秒」，这条当场红。
+	_c.check(ps_label.ends_with("每秒伤害"),
+			"第二行写成每秒伤害（实得「%s」）" % ps_label)
+	var turret_label := WeaponDamageReadout.per_second_label("jiguan_nu")
+	_c.equals(turret_label, "单座每秒伤害", "炮台类另标「单座」，不与整把法器的每秒伤害混成同一个词")
 	for key in WeaponData.DEFS.keys():
 		var w_id := String(key)
 		var d: Dictionary = ShopOfferCardFactory.resolve_offer_data({"kind": "weapon", "id": w_id})

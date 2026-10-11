@@ -56,6 +56,7 @@ const FIELD_FORM := {
 ## 文案中允许出现、但不被 apply 解释的数字（键为条目 id；百分比记整数值，平值记数值）
 const ORPHAN_ALLOW := {
 	"dodge_up": [60],        # 上限60%
+	"crit_up": [75],         # 上限75%
 	"lifesteal_up": [1, 3],  # 吸取1点生命（每秒最多3次）
 	"tisi_kuilei": [50],     # 免死并恢复50%生命
 	"huichun_hulu": [15],    # 兜底：波末回血由 wave_heal_pct 机制字段解释
