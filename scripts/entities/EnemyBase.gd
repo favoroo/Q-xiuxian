@@ -788,8 +788,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		else:
 			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
 	elif not from_dot:
-		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤
-		GameManager.kick_camera(knockback, 2.8)
+		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤。
+		# 走全局限流闸（2026-10-11 频闪治理）：远程穿透/弹射下每秒几十次命中逐刀微震会糊成持续抖屏
+		GameFeel.micro_kick(GameManager, knockback, 2.8)
 		var pitch: float = randf_range(0.94, 1.08) if not is_elite else 0.85
 		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
 		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
@@ -797,8 +798,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 
 	# 跳字与火花（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻不发火花（每 0.5s × N 敌堆得太多），跳字保留。
-	# 音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变
-	if not from_dot and not _offscreen and not lethal:
+	# 音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
+	# 火花走全局限流闸（2026-10-11 频闪治理）：普通命中按最小间隔放行，暴击直通
+	if not from_dot and not _offscreen and not lethal and GameFeel.hit_spark_gate(is_crit):
 		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
 	if not _offscreen:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
@@ -1131,8 +1133,10 @@ func _die() -> void:
 	_clear_bite_warning()
 	_clear_explode_ring()
 
-	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio, _death_crit_kill)
+	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）。
+	# 爆散走全局限流闸（2026-10-11 频闪治理）：尸潮里普通小怪逐只爆散同样会频闪，精英/Boss 直通
+	if is_elite or GameFeel.kill_burst_gate(is_elite):
+		JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio, _death_crit_kill)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, 8.5)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
@@ -1142,8 +1146,8 @@ func _die() -> void:
 			GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		# 普通妖物死亡给一记沿击飞方向的微冲量（2.5px），确认感极佳且不累加持续创伤
-		GameManager.kick_camera(knockback_velocity, 2.5)
+		# 普通妖物死亡给一记沿击飞方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
+		GameFeel.micro_kick(GameManager, knockback_velocity, 2.5)
 		AudioManager.play_sfx("enemy_death", 0.90)
 
 	var gem_count = 1 if not is_elite else 5

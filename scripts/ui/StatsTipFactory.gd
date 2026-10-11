@@ -160,9 +160,15 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 				_c(gm_dmg * syn_dmg - 1.0)],
 		["角色与五行", "角色 %s · 五行 %s" % [_mul(cult_dmg), _mul(elem_dmg)],
 				_c(cult_dmg * elem_dmg - 1.0)],
-		["多法器分流", "上阵 %d 把 · 每把 %s" % [GameManager.slots_used(), _mul(split)],
-				_c(split - 1.0)],
 	]
+	# 影层增伤是条件乘区（影者攒着影层才 >1），乘区链要能乘回单发伤害，所以有就列、没有就不列；
+	# 层数从乘区反推（amp == 1 + n×AMP_PER_STACK 严格成立，Player 只在这两处写）
+	if not is_equal_approx(GameManager.shadow_amp_mult, 1.0):
+		var amp_stacks := int(roundf((GameManager.shadow_amp_mult - 1.0) / ShadowStepData.AMP_PER_STACK))
+		factor_rows.append(["影层增伤", "%s（影 %d 层）" % [_mul(GameManager.shadow_amp_mult), amp_stacks],
+				_c(GameManager.shadow_amp_mult - 1.0)])
+	factor_rows.append(["多法器分流", "上阵 %d 把 · 每把 %s" % [GameManager.slots_used(), _mul(split)],
+			_c(split - 1.0)])
 	if WeaponDamageReadout.is_turret(def):
 		var contraption := WeaponDamageReadout.contraption_mult()
 		factor_rows.append(["机关羁绊", _mul(contraption), _c(contraption - 1.0)])

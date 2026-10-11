@@ -65,8 +65,10 @@ static func reset(gm: Node) -> void:
 	gm.shop_slots_bonus = 0
 	gm.pending_skill_id = "dash"
 	gm.active_skill_id = ""
+	gm.extra_skill_id = ""
 	gm.buff_move_speed_mult = 1.0
 	gm.buff_attack_speed_mult = 1.0
+	gm.shadow_amp_mult = 1.0
 	gm._exp_chain = GameBalance.EXP_FIRST_LEVEL
 	gm.stat_bonus_pierce = 0
 	gm.synergy_bonus_pierce = 0

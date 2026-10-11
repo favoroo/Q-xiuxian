@@ -124,10 +124,10 @@ func _dodge_ladder() -> Array:
 	return out
 
 func _table_survival() -> void:
-	var hp: float = _base_hp * 0.65      ## 影者气血
+	var hp: float = _base_hp * 1.30      ## 影者气血（2026-10-11 重做：高血高回复换输出，hp_mult ×1.30）
 	var raw := _raw(20)
 	var per_hit: float = GameBalance.incoming_damage(raw, 0.0)
-	print("DODGE 兑现率（影者气血 %.0f = 裸装 %.0f×0.65｜护甲 0（加点锁死）｜第 20 波单下 %.0f｜危险度 0）" % [
+	print("DODGE 兑现率（影者气血 %.0f = 裸装 %.0f×1.30｜护甲 0（加点锁死）｜第 20 波单下 %.0f｜危险度 0）" % [
 		hp, _base_hp, per_hit])
 	print("  读数 = 每秒实际挨几下（%.0fs × %d 种子均值，影者上限已抬到 %.0f%%）｜有效生命倍率 = 闪避0的挨打频率 ÷ 本档频率" % [
 		WINDOW, SEEDS, (GameManager.DODGE_CAP + 0.30) * 100.0])
@@ -151,7 +151,7 @@ func _table_survival() -> void:
 ## 机会成本：同样 8 点点在哪，影者在三种战场各得多少
 func _table_opportunity_cost() -> void:
 	var hp_per: float = _upgrade_apply("hp_up", "max_hp")
-	var hp: float = _base_hp * 0.65
+	var hp: float = _base_hp * 1.30
 	var raw := _raw(20)
 	var per_hit: float = GameBalance.incoming_damage(raw, 0.0)
 	var dodge_full: float = minf(0.90, 0.30 + _dodge_per * float(_dodge_stacks))

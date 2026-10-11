@@ -14,6 +14,21 @@ const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
 const Z_DUST := 5            ## 步伐微尘层级（贴近角色阴影）
 
+# —— 受击火花分档常量（2026-10-11 频闪治理）——
+# 远程穿透/弹射/多弹齐射下每秒命中可达几十次，普通命中原 9px 过曝核心 + 12 颗
+# 360px/s 长程粒子会糊成满屏白闪。普通档全面收敛（小、淡、短、贴敌）；
+# 暴击档保持原样，作为「值得看」的大花时刻。全局限流见 GameFeel.hit_spark_gate。
+const SPARK_CORE_R_NORMAL := 5.0      ## 普通命中闪光核半径（暴击 14）
+const SPARK_CORE_A_NORMAL := 0.55     ## 普通命中闪光核峰值α（暴击 0.95）
+const SPARK_SLASH_LEN_NORMAL := 14.0  ## 普通命中斩痕半长（暴击 34）
+const SPARK_SLASH_W_NORMAL := 2.2     ## 普通命中斩痕线宽（暴击 4.2）
+const SPARK_COUNT_NORMAL := 6         ## 普通命中粒子数（暴击 18）
+const SPARK_CONE_DEG_NORMAL := 45.0   ## 普通命中锥角半开角：贴敌飞溅不进空地（暴击 62）
+const SPARK_SPD_MIN_NORMAL := 110.0   ## 普通命中粒子速度下限（暴击 260）
+const SPARK_SPD_MAX_NORMAL := 200.0   ## 普通命中粒子速度上限（暴击 520）
+const SPARK_LEN_MIN_NORMAL := 6.0     ## 普通命中拖尾长度下限（暴击 14）
+const SPARK_LEN_MAX_NORMAL := 12.0    ## 普通命中拖尾长度上限（暴击 28）
+
 var effect_type: int = EffectType.HIT_SPARKS
 var lifetime: float = 0.2
 var elapsed: float = 0.0
@@ -194,16 +209,17 @@ func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
 
-	# 0. 受击瞬间中心高亮闪光核与锐利斩痕光刃（空洞骑士风：黑白/青金高对比度爆发）
+	# 0. 受击瞬间中心闪光核与锐利斩痕光刃（空洞骑士风：黑白/青金高对比度爆发）
+	# 普通命中降档：小而淡的核 + 短斩痕（防高频命中糊成满屏白闪）；暴击保留过曝大核心。
 	if effect_type == EffectType.HIT_SPARKS and progress < 0.42:
 		var flash_t := 1.0 - (progress / 0.42)
-		var core_r := (14.0 if is_crit else 9.0) * flash_t
-		var core_c := Color(1.5, 1.5, 1.35, flash_t * 0.95)
-		draw_circle(Vector2.ZERO, core_r, core_c)
+		var core_r := (14.0 if is_crit else SPARK_CORE_R_NORMAL) * flash_t
+		var core_a := (0.95 if is_crit else SPARK_CORE_A_NORMAL) * flash_t
+		draw_circle(Vector2.ZERO, core_r, Color(1.5, 1.5, 1.35, core_a))
 		var slash_dir := Vector2.RIGHT.rotated(_hit_angle + PI * 0.5)
-		var slash_len := (34.0 if is_crit else 22.0) * (0.35 + 0.65 * flash_t)
+		var slash_len := (34.0 if is_crit else SPARK_SLASH_LEN_NORMAL) * (0.35 + 0.65 * flash_t)
 		var slash_col := Color(1.0, 0.94, 0.68, flash_t * 0.95) if is_crit else Color(0.92, 0.98, 1.0, flash_t * 0.92)
-		draw_line(-slash_dir * slash_len, slash_dir * slash_len, slash_col, (4.2 if is_crit else 3.0) * flash_t, true)
+		draw_line(-slash_dir * slash_len, slash_dir * slash_len, slash_col, (4.2 if is_crit else SPARK_SLASH_W_NORMAL) * flash_t, true)
 		if is_crit:
 			var cross_dir := Vector2.RIGHT.rotated(_hit_angle)
 			draw_line(-cross_dir * (slash_len * 0.75), cross_dir * (slash_len * 1.15), Color(1.0, 0.42, 0.18, flash_t * 0.92), 3.4 * flash_t, true)
@@ -230,7 +246,9 @@ func _draw() -> void:
 
 # ----------------- 静态生成接口 -----------------
 
-## 受击灵芒火花：沿打击方向呈扇形爆开
+## 受击灵芒火花：沿打击方向呈扇形爆开。
+## 分档（2026-10-11 频闪治理）：普通命中小而贴敌（粒子少、射程短、锥角窄），
+## 暴击保留大花。高频命中下是否放行由调用方走 GameFeel.hit_spark_gate 限流。
 static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit: bool = false) -> void:
 	if not _ready_to_spawn(parent):
 		return
@@ -242,22 +260,22 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 	fx._begin(EffectType.HIT_SPARKS, pos, 0.22 if not crit else 0.28, Z_OVERLAY)
 	fx.is_crit = crit
 
-	var count := 12 if not crit else 18
+	var count := SPARK_COUNT_NORMAL if not crit else 18
 	var base_angle := hit_dir.angle() if hit_dir.length_squared() > 0.01 else randf() * TAU
 	fx._hit_angle = base_angle
-	var cone := deg_to_rad(62.0)
+	var cone := deg_to_rad(SPARK_CONE_DEG_NORMAL if not crit else 62.0)
 
 	var core_col := Color(0.95, 0.99, 1.0, 1.0) if not crit else Color(1.0, 0.96, 0.70, 1.0)
 	var glow_col := Color(0.35, 0.75, 1.0, 0.95) if not crit else Color(1.0, 0.60, 0.15, 0.95)
 
 	for i in range(count):
 		var a := base_angle + randf_range(-cone, cone)
-		var spd := randf_range(180.0, 360.0) if not crit else randf_range(260.0, 520.0)
+		var spd := randf_range(SPARK_SPD_MIN_NORMAL, SPARK_SPD_MAX_NORMAL) if not crit else randf_range(260.0, 520.0)
 		var col := core_col if randf() < 0.45 else glow_col
 		fx._add_particle(
 			Vector2.ZERO,
 			Vector2(cos(a), sin(a)) * spd,
-			randf_range(10.0, 20.0) if not crit else randf_range(14.0, 28.0),
+			randf_range(SPARK_LEN_MIN_NORMAL, SPARK_LEN_MAX_NORMAL) if not crit else randf_range(14.0, 28.0),
 			col,
 			3.0 if not crit else 4.0)
 

@@ -67,6 +67,7 @@ func _ready() -> void:
 	consistency._test_skill_desc_apply()
 	spiritbeast._test_spirit_beast_scaling()
 	spiritbeast._test_spirit_beast_constants()
+	combat._test_feel_gates()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)

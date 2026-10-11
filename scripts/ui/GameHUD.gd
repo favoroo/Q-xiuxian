@@ -29,8 +29,9 @@ const OBELISK_BTN_SIZE := HudObeliskButton.BTN_SIZE
 const OBELISK_BTN_TEXT := HudObeliskButton.BTN_TEXT
 const OBELISK_BTN_FONT := HudObeliskButton.BTN_FONT
 
-## 子控件（拆分自本文件）：技能键 / 祭坛键 / 魔君血条 / FPS 读数 / 待加点徽记
+## 子控件（拆分自本文件）：技能键 / 额外技能键 / 祭坛键 / 魔君血条 / FPS 读数 / 待加点徽记
 var _skill_widget: HudSkillButton = null
+var _extra_skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
 var _boss_bar_widget: HudBossBar = null
 ## 顶栏波次倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
@@ -53,6 +54,8 @@ var _last_zoom_ms := 0
 ## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
 var _skill_box: Control = null
 var _skill_btn: Button = null
+var _extra_skill_box: Control = null
+var _extra_skill_btn: Button = null
 var _obelisk_btn: Button = null
 ## 键面走针环：充能读数判据与出图台读它（拆分时漏了这一根，判据当场跑成 0 项空转）
 var _obelisk_ring: SkillButtonView.CircleProgressOverlay = null
@@ -151,7 +154,7 @@ static func safe_insets(safe: Rect2, win: Rect2, scale: float) -> Array[float]:
 
 # ---------------- 子控件构建与门面（判据 / 覆盖层 / Main 接线的兼容接口） ----------------
 
-## 构建四块子控件，add_child 顺序保持拆分前的树序（Boss 血条 → 祭坛键 → 技能键 → FPS）
+## 构建五块子控件，add_child 顺序保持拆分前的树序（Boss 血条 → 祭坛键 → 技能键 → 额外技能键 → FPS）
 func _build_widgets() -> void:
 	_boss_bar_widget = HudBossBar.new()
 	add_child(_boss_bar_widget)
@@ -163,6 +166,11 @@ func _build_widgets() -> void:
 	add_child(_skill_widget)
 	_skill_box = _skill_widget
 	_skill_btn = _skill_widget.get_btn()
+	# 额外技能键：随角色绑定（影者=影爆），没配额外技能的角色整颗隐藏；摆位/缩放独立持久化
+	_extra_skill_widget = HudSkillButton.new(true)
+	add_child(_extra_skill_widget)
+	_extra_skill_box = _extra_skill_widget
+	_extra_skill_btn = _extra_skill_widget.get_btn()
 	add_child(HudFpsCounter.new())
 	# 波次倒计时：作为 WaveChip 的第二个孩子铺进同一格内容矩形 —— PanelContainer 会把
 	# 所有子节点都摆成内容区，所以这颗零最小尺寸的 Control 既不改变芯片大小，又能拿到
@@ -181,6 +189,12 @@ func skill_btn_center_px() -> Vector2:
 func skill_btn_size_px() -> Vector2:
 	return _skill_widget.size_px()
 
+func extra_skill_btn_center_px() -> Vector2:
+	return _extra_skill_widget.center_px()
+
+func extra_skill_btn_size_px() -> Vector2:
+	return _extra_skill_widget.size_px()
+
 func obelisk_btn_center_px() -> Vector2:
 	return _obelisk_widget.center_px()
 
@@ -196,6 +210,7 @@ func _on_obelisk_btn_input(event: InputEvent) -> void:
 ## 全局输入拦截：触屏第二根手指直通（左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
 func _input(event: InputEvent) -> void:
 	_skill_widget.handle_engine_input(event)
+	_extra_skill_widget.handle_engine_input(event)
 
 ## 触发技能释放（判据从 HUD 门面调用）
 func _trigger_skill_press() -> void:
@@ -220,9 +235,10 @@ func on_obelisk_charge_cancelled(ob: BlessingObelisk) -> void:
 func on_obelisk_blessing_triggered(ob: BlessingObelisk) -> void:
 	_obelisk_widget.on_obelisk_blessing_triggered(ob)
 
-## 进入/退出按钮调整模式：强制亮出两颗键交给覆盖层拖动（树此时是暂停态）
+## 进入/退出按钮调整模式：强制亮出三颗键交给覆盖层拖动（树此时是暂停态）
 func set_btn_edit_mode(on: bool) -> void:
 	_skill_widget.set_edit_mode(on)
+	_extra_skill_widget.set_edit_mode(on)
 	_obelisk_widget.set_edit_mode(on)
 
 ## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
@@ -302,6 +318,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
 			if _skill_box != null and _skill_box.visible:
 				_skill_widget.trigger_press()
+				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_E:
+			if _extra_skill_box != null and _extra_skill_box.visible:
+				_extra_skill_widget.trigger_press()
 				get_viewport().set_input_as_handled()
 
 func _on_hp_changed(cur: float, max_v: float) -> void:

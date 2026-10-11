@@ -204,9 +204,10 @@ static func rules(id: String) -> Array[String]:
 			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
 			out.append(("闪避成功另给 %.2f 秒「残影」短无敌：不给这一段，怪群贴身时下一帧又是一次判定，"
 				+ "闪了只是把那一下推迟几帧，减不了挨打频率。") % ShadowStepData.GUARD_SEC)
-			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：下一次冲刺落地时踩碎，"
-				+ "把躲掉的伤害按 %.0f%% 还给周身敌人并推开一圈。") % [
-					ShadowStepData.MAX_STACKS, ShadowStepData.STORE_RATIO * 100.0])
+			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：影在身上时法器伤害每层 +%d%%，"
+				+ "点额外技能「影爆」随时踩碎，把躲掉的伤害按 %.0f%% 还给周身敌人并推开一圈。") % [
+					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0),
+					ShadowStepData.STORE_RATIO * 100.0])
 		"lifesteal":
 			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
 			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
@@ -427,8 +428,11 @@ static func stat_tip_rows(id: String) -> Array:
 				["换算增伤", "%+.0f%%" % float(s.get("damage_bonus_pct", 0.0)), _c(float(s.get("damage_bonus_pct", 0.0)))],
 				["升级·道具·角色", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
 				["流派羁绊", _mul(GameManager.synergy_damage_mult), _c(GameManager.synergy_damage_mult - 1.0)],
-				["暴击另算", "%.0f%% 概率 ×%.2f" % [float(s.get("crit_rate_pct", 0.0)), float(s.get("crit_dmg_pct", 150.0)) / 100.0]],
 			]
+			# 总乘区/换算增伤已含影层（StatBreakdown 同链），逐行账单也要能乘回去：攒着影层才列这一行
+			if not is_equal_approx(GameManager.shadow_amp_mult, 1.0):
+				rows.append(["影层增伤", _mul(GameManager.shadow_amp_mult), _c(GameManager.shadow_amp_mult - 1.0)])
+			rows.append(["暴击另算", "%.0f%% 概率 ×%.2f" % [float(s.get("crit_rate_pct", 0.0)), float(s.get("crit_dmg_pct", 150.0)) / 100.0]])
 		"melee_dmg":
 			var mv: float = float(s.get("melee_damage", 0.0))
 			rows = [

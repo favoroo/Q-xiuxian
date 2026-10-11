@@ -1,10 +1,16 @@
 class_name HudSkillButton
 extends Control
 
-## 随行神通按钮：圆形半透明浮动键 + 环形冷却遮罩 + 秒数读数，按下即放（快捷键与触屏双通道）。
-## 从 GameHUD 拆出：外观基准在 SkillButtonView，摆位算术在 HudButtonLayout，本层只管构建/输入/冷却轮询/释放反馈。
+## 随行神通 / 额外技能按钮：圆形半透明浮动键 + 环形冷却遮罩 + 秒数读数，按下即放（快捷键与触屏双通道）。
+## 一套类两颗键：主键读 active_skill_id（带冷却），额外键读 extra_skill_id（随角色绑定，如影爆——
+## 免冷却、由影层门控，影层角标「影 N」归它）。从 GameHUD 拆出：外观基准在 SkillButtonView，
+## 摆位算术在 HudButtonLayout，本层只管构建/输入/冷却轮询/释放反馈。
 
 const BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
+
+## 槽位绑定：false = 主随行神通键（读 active_skill_id）；true = 额外技能键（读 extra_skill_id，
+## 随角色绑定，如影者的影爆——免冷却、由影层层数门控，影层角标「影 N」也归这颗键）
+var bind_extra: bool = false
 
 var _btn: Button = null
 var _icon_rect: TextureRect = null
@@ -18,6 +24,9 @@ var _shaking: bool = false
 var _edit_mode: bool = false
 var _last_press_frame: int = -1
 
+func _init(extra_slot: bool = false) -> void:
+	bind_extra = extra_slot
+
 func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -25,9 +34,19 @@ func _ready() -> void:
 	_build_button()
 	_apply_layout()
 	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):
-		if sec == &"display" and key in [&"skill_btn_xy", &"skill_btn_scale"]:
+		if sec == &"display" and key in [_xy_key(), _scale_key()]:
 			_apply_layout()
 	)
+
+## 本键绑定的槽位 → 设置项/技能 id 的取数口径（主键与额外键各认各的，不串账）
+func _xy_key() -> StringName:
+	return &"extra_btn_xy" if bind_extra else &"skill_btn_xy"
+
+func _scale_key() -> StringName:
+	return &"extra_btn_scale" if bind_extra else &"skill_btn_scale"
+
+func _skill_id() -> String:
+	return GameManager.extra_skill_id if bind_extra else GameManager.active_skill_id
 
 ## 构建按钮：圆形键体 + 图标 + 环形冷却遮罩 + 秒数 + 神通名
 func _build_button() -> void:
@@ -109,7 +128,8 @@ func _is_point_on_btn(pos: Vector2) -> bool:
 	if _btn == null or not is_instance_valid(_btn) or not _btn.is_visible_in_tree():
 		return false
 	# 圆形热区跟随缩放，半径外扩 8px 触控容错
-	var r := BTN_SIZE * SettingsManager.skill_btn_scale() * 0.5 + 8.0
+	var scale_f: float = SettingsManager.extra_btn_scale() if bind_extra else SettingsManager.skill_btn_scale()
+	var r := BTN_SIZE * scale_f * 0.5 + 8.0
 	return pos.distance_to(center_px()) <= r
 
 ## 输入处理：触屏与鼠标统一支持，按下即放（0 延迟），解决双指拉摇杆时技能不响应问题
@@ -132,8 +152,12 @@ func trigger_press() -> void:
 
 	var player = GameManager.player
 	var cast_success := false
-	if player != null and player.has_method("try_activate_skill"):
-		cast_success = player.try_activate_skill()
+	if player != null:
+		# 主键走随行神通入口，额外键走额外技能入口（各自校验各自的门控）
+		if bind_extra:
+			cast_success = player.try_activate_extra_skill() if player.has_method("try_activate_extra_skill") else false
+		else:
+			cast_success = player.try_activate_skill() if player.has_method("try_activate_skill") else false
 
 	if cast_success:
 		_play_cast_fx()
@@ -169,12 +193,13 @@ func _play_reject_fx() -> void:
 ## 冷却与可见性轮询（每帧）
 func _process(_delta: float) -> void:
 	var player = GameManager.player
-	var show := _edit_mode or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
+	var sid := _skill_id()
+	var show := _edit_mode or (GameManager.run_started and not GameManager.is_game_over and not sid.is_empty())
 	if visible != show:
 		visible = show
 		if show:
 			_was_ready = false
-			var def := SkillData.get_def(GameManager.active_skill_id)
+			var def := SkillData.get_def(sid)
 			var icon_path: String = String(def.get("icon", ""))
 			var is_enhanced: bool = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
 			if _icon_rect != null:
@@ -196,8 +221,12 @@ func _process(_delta: float) -> void:
 	if not show or player == null:
 		return
 
-	var cd_left: float = player.skill_cd_left
-	var cd_total: float = maxf(0.01, player.skill_cd_total)
+	# 冷却只归主神通键：额外键（影爆类）免冷却、由影层门控，读主键的 CD 账就是串台
+	var cd_left: float = 0.0
+	var cd_total: float = 1.0
+	if not bind_extra:
+		cd_left = player.skill_cd_left
+		cd_total = maxf(0.01, player.skill_cd_total)
 	var on_cd := cd_left > 0.0
 	var ratio := clampf(cd_left / cd_total, 0.0, 1.0)
 
@@ -222,8 +251,12 @@ func _process(_delta: float) -> void:
 
 ## 影层角标：攒上才出现，攒满直接换成可释放的亮紫面（不靠闪一下提示——看不见等于没做）。
 ## 层数读的是 Player.shadow_ring 本身，不在这里另记一份账。
+## 只归额外技能键（影爆）：它是那颗键的充能读数，主神通键不再挂这颗角标。
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:
+		return
+	if not bind_extra:
+		_shadow_chip.visible = false
 		return
 	var stacks := 0
 	var ring = player.get("shadow_ring")
@@ -244,12 +277,12 @@ func _update_shadow_chip(player: Node) -> void:
 ## 进入/退出调整模式：强制亮出键体交给覆盖层拖动（树此时是暂停态）
 func set_edit_mode(on: bool) -> void:
 	_edit_mode = on
-	if on and GameManager.active_skill_id.is_empty():
-		# 主菜单阶段还没选神通：摆个占位字面，照样能拖
-		_btn.text = "技"
+	if on and _skill_id().is_empty():
+		# 还没进局/该槽位无技能：摆个占位字面，照样能拖
+		_btn.text = "extra" if bind_extra else "技"
 		_icon_rect.visible = false
 		_name_label.text = ""
-	visible = on or (GameManager.run_started and not GameManager.is_game_over and not GameManager.active_skill_id.is_empty())
+	visible = on or (GameManager.run_started and not GameManager.is_game_over and not _skill_id().is_empty())
 
 ## 按钮视觉中心（设计坐标，含缩放摆位）
 func center_px() -> Vector2:
@@ -266,7 +299,9 @@ func get_btn() -> Button:
 	return _btn
 
 func _apply_layout() -> void:
-	HudButtonLayout.apply(self, SettingsManager.skill_btn_xy(), SettingsManager.skill_btn_scale(), Vector2(BTN_SIZE, BTN_SIZE))
+	var xy: Vector2 = SettingsManager.extra_btn_xy() if bind_extra else SettingsManager.skill_btn_xy()
+	var scale_f: float = SettingsManager.extra_btn_scale() if bind_extra else SettingsManager.skill_btn_scale()
+	HudButtonLayout.apply(self, xy, scale_f, Vector2(BTN_SIZE, BTN_SIZE))
 
 func _on_btn_input(event: InputEvent) -> void:
 	handle_input(event)

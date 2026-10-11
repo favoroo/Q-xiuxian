@@ -367,7 +367,8 @@ func _test_cultivator_system() -> void:
 			bad.append("%s.sprite" % cid)
 	_c.check(bad.is_empty(), "修士元数据齐全（缺: %s）" % str(bad))
 
-	# 魅影（Ghost 原型）：闪避上限抬到 90%，锁死罡气护体
+	# 魅影（Ghost 原型）：闪避上限抬到 90%，锁死罡气护体；
+	# 重做后走「高血高回复换输出」：血量 ×1.3、回复 +1.5、全武器伤害 -20%（伤害来源交给影层）
 	GameManager.reset_run()
 	GameManager.cultivator_id = "meiying"
 	GameManager._apply_cultivator()
@@ -375,6 +376,21 @@ func _test_cultivator_system() -> void:
 	GameManager.dodge = 1.0
 	_c.near(GameManager.get_effective_dodge(), 0.9, EPS, "魅影闪避上限 90%（其余人 60%）")
 	_c.check("armor_up" in GameManager.locked_upgrades, "魅影锁死罡气护体")
+	_c.near(GameManager.hp_regen, 1.5, EPS, "魅影初始回复 +1.5/秒（高回复定位）")
+	_c.near(GameManager.weapon_damage_mult, 0.80, EPS, "魅影全武器伤害 -20%（负面代偿）")
+	if GameManager.player != null:
+		_c.near(GameManager.player.max_health, 120.0 * 1.30, EPS, "魅影最大生命 ×1.3（站得住怪堆）")
+	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "影层增伤乘区初始为 1.0（没攒层不加伤）")
+
+	# 额外技能槽：影者绑影爆，其余角色无；影爆免冷却、不走选择界面
+	_c.equals(CultivatorData.get_extra_skill_id("meiying"), "shadowburst", "影者绑定额外技能影爆（随角色，不走五选一）")
+	_c.check(CultivatorData.get_extra_skill_id("shiyue").is_empty(), "守卫无额外技能（extra_skill 缺省空串）")
+	var sb: Dictionary = SkillData.get_def("shadowburst")
+	_c.equals(int(sb.get("kind", -1)), SkillData.Kind.BURST, "影爆是 BURST 类（资源门控而非 CD）")
+	_c.near(float(sb.get("cooldown", -1.0)), 0.0, EPS, "影爆数据表免冷却")
+	_c.near(float(SkillData.final_stats("shadowburst", "meiying")["cooldown"]), 0.0, EPS,
+			"final_stats 不给影爆抬 1s 冷却下限（BURST 豁免）")
+	_c.check(not SkillData.OFFER_IDS.has("shadowburst"), "影爆不进选择界面候选池")
 
 	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害 ×1.65、施法更快
 	GameManager.reset_run()

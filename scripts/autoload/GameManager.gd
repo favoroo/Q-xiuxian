@@ -261,8 +261,10 @@ var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛�
 # 与加点/羁绊乘区隔离，到期由 Player 精确回 1.0，互不污染
 var pending_skill_id: String = "dash"  ## 选人流程里选定的技能（默认缩地成寸，直接 start_run 也有技能可用）
 var active_skill_id: String = ""       ## 本局生效的技能 id
+var extra_skill_id: String = ""        ## 本局生效的「额外技能」id（随角色绑定，影者=影爆；空 = 无额外技能，第二按钮隐藏）
 var buff_move_speed_mult: float = 1.0  ## 神行术短时移速乘区（Player._physics_process 消费）
 var buff_attack_speed_mult: float = 1.0 ## 疾风咒短时施法间隔乘区（FloatingWeapon._perform_attack 消费）
+var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就生效：Player 在攒层/兑现两写点按 ShadowStepData.amp_mult 维护，落地清空回 1.0）
 
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/法宝：弹丸额外穿透基础
@@ -616,6 +618,8 @@ func start_run(starter_id: String) -> void:
 	_apply_cultivator()
 	# 随行神通转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
+	# 额外技能随角色绑定（不走选择界面）：按道统查表，没有 extra_skill 键的角色保持空串
+	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
 	add_weapon(starter_id)
 	if endless_mode:
 		announcement_triggered.emit("✦ 无尽模式 · 战至终局 ✦")

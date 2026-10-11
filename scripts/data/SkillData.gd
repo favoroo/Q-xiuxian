@@ -2,6 +2,8 @@ class_name SkillData
 extends RefCounted
 
 ## 随行神通数据库：每局选定道统后择一携带，战斗右侧按钮手动释放，带冷却。
+## 另有一类「额外技能」：随角色绑定（CultivatorData 的 extra_skill 键）、不走选择界面，
+## 也登记在本表用 Kind 区分（如影爆——免冷却，由资源层门控而非 CD）。
 ## 角色专属强化写在 CultivatorData.DEFS[cid]["skill_mods"][skill_id]，
 ## 卡片文案与实战数值都走 final_stats() 合并结果（唯一真话），别处不抄数字。
 ## skill_mods 支持的键：
@@ -11,7 +13,7 @@ extends RefCounted
 ##   cooldown_mult —— 冷却乘算（多宝/符阵/夺舍：0.65）
 ## glyph: 占位符文单字（正式图标走 media-gen 生成后填 icon 路径替换）
 
-enum Kind { DASH, SPEED, HASTE, IFRAME, HEAL }
+enum Kind { DASH, SPEED, HASTE, IFRAME, HEAL, BURST }
 
 const DEFS: Dictionary = {
 		"dash": {
@@ -24,6 +26,15 @@ const DEFS: Dictionary = {
 			"iframe": 0.30,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量，落地贴脸啃不动
 			"distance": 150.0,    # 冲刺距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
 			"desc": "向当前方向冲刺，冲刺及落地后0.3秒内无敌",
+		},
+		"shadowburst": {
+			"name": "影爆",
+			"glyph": "爆",
+			"icon": "",           # 占位字面上键（正式图标走 media-gen 生成后填路径）
+			"kind": Kind.BURST,
+			"cooldown": 0.0,      # 免冷却：门控是影层本身——没攒上层按不动，攒上随时能放
+			"duration": 0.0,
+			"desc": "踩碎攒下的影层：把躲掉的伤害按比例还给周身敌人并推开，每层再加一段无敌",
 		},
 		"gale": {
 			"name": "加速",
@@ -103,7 +114,11 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
 	out["power"] = float(out["power"]) * float(mods.get("power_mult", 1.0))
 	out["distance"] = float(out["distance"]) * float(mods.get("distance_mult", 1.0))
-	out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)))
+	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限，也不吃角色 cooldown_mult
+	if int(out["kind"]) == Kind.BURST:
+		out["cooldown"] = 0.0
+	else:
+		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)))
 	return out
 
 ## 强化文案（卡片上的「✦ 道统契合：…」一行），未强化返回空串

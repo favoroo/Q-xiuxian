@@ -17,6 +17,8 @@ extends RefCounted
 ##   item_price                                 —— 法宝价格乘区（多宝道人：0.75）
 ##   shop_slots                                 —— 货架格数加成（多宝道人：+1）
 ## skill_mods: {skill_id: {...}}                —— 随行神通专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
+## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一神通，HUD 第二颗按钮释放；
+##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
 ## allowed_tags: 非空时商店大幅偏向这些流派的法器，但仍有少量其他法器漏出；locked_upgrades: 锁死的加点项
 ## sprite: 角色独立 8 方向行走图（5 行 × 5 列，192px/格，行序见 RunMotion.DIR_ROW）；缺图回退 pawn_blue_8dir
 ## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
@@ -110,16 +112,19 @@ const DEFS: Dictionary = {
 			"motion": "procedural",
 			"render_style": "hollow_knight",
 			"start_equip": "",
-			"pros": ["初始闪避 +30%", "闪避上限提升至 90%", "闪避攒「影」，冲刺落地把躲掉的伤害还回去"],
-			"cons": ["最大生命 -35%", "护甲加点锁定，无法提升"],
+			"pros": ["初始闪避 +30%", "闪避上限提升至 90%", "最大生命 ×1.3、每秒回复 +1.5", "闪避攒「影」：每层 +5% 法器伤害（至多 8 层），按「影爆」随时爆发还回去"],
+			"cons": ["全武器伤害 -20%", "护甲加点锁定，无法提升"],
 			"mods": {
 				"dodge": 0.30,
 				"dodge_cap": 0.30,
-				"hp_mult": 0.65,
+				"hp_mult": 1.30,
+				"hp_regen": 1.5,
+				"damage_mult": 0.80,
 			},
 			"allowed_tags": [],
 			"locked_upgrades": ["armor_up"],
 			"skill_mods": {"dash": {"distance_mult": 1.55}},
+			"extra_skill": "shadowburst",
 		},
 			"dubi": {
 				"name": "狂战士",
@@ -325,6 +330,10 @@ static func get_synergy_skill_id(id: String) -> String:
 	if s_mods.is_empty():
 		return ""
 	return String(s_mods.keys()[0])
+
+## 随角色绑定的额外技能 id（独立于五选一神通）；没配 extra_skill 的角色返回空串
+static func get_extra_skill_id(id: String) -> String:
+	return String(get_def(id).get("extra_skill", ""))
 
 static func get_visual_config(id: String) -> CultivatorVisualConfig:
 	return CultivatorVisualConfig.get_config(id)

@@ -61,6 +61,8 @@ static var _dmg_query: PhysicsShapeQueryParameters2D = null
 @onready var light: PointLight2D = $PointLight2D
 
 var _pooled: bool = false
+## 本次落雷是否劈到人：_deal_damage 结算后置位，_bloom_or_recycle 据此分档（劈空不演大闪）
+var _struck: bool = false
 
 func _ready() -> void:
 	# 常驻设施（FxSprite/PointLight2D）由场景给出；爆发行为全部在 activate()，
@@ -68,10 +70,12 @@ func _ready() -> void:
 	pass
 
 ## 起爆激活：视觉重置 → 雷柱/镇岳印 → 演出与结算。复用时 _ready 已跑过一次，
-## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx）
+## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx/_struck）
 func activate() -> void:
 	_pooled = false
 	visible = true
+	# 劈没劈到人由同帧 deferred 的 _deal_damage 置位（先于 _bloom_or_recycle 回调）
+	_struck = false
 	# 上一发的雷柱与镇岳印已在爆发中淡出，直接清掉再铺新的
 	for c in get_children():
 		if c is Line2D or (c is Sprite2D and c != fx_sprite):
@@ -82,6 +86,32 @@ func activate() -> void:
 	_spawn_sky_beam()
 	_spawn_impact_icon()
 
+	# 劈空收档（2026-10-11 频闪治理）：落点先只演「小印记」——低α小光环 + 窄雷柱 + 落点音。
+	# 同帧 deferred 的 _deal_damage 结算完战果后由 _bloom_or_recycle 分档：劈空快速收场，
+	# 劈到人再补全亮大闪（爆散环/震屏仍在 _deal_damage）。与 FloatingWeapon 近战 hits>0 门控同构。
+	var tw = create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(fx_sprite, "modulate:a", 0.45, 0.05)
+	tw.tween_property(fx_sprite, "scale", Vector2.ONE * (radius * 1.1 / 128.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(light, "energy", 0.9, 0.06)
+	tw.chain().tween_callback(_bloom_or_recycle)
+
+	_deal_damage.call_deferred()
+	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效。
+	# 落点音留在这儿无条件播 —— 「雷落下来了」是发生过的事，劈不劈空都响。
+	# 旧写法硬编码 obelisk_blessing（石碑的祝福铃），于是雷牌/巨印/宝灯落下全是一串铃铛。
+	AudioManager.play_sfx(sfx_impact_key if sfx_impact_key != "" else "thunder_strike", 1.0)
+
+## 落点分档：_deal_damage（同帧 deferred，必先于此回调跑完）已写好 _struck ——
+## 劈空快速淡出回收，劈到人补全亮大闪再回收。
+func _bloom_or_recycle() -> void:
+	if not _struck:
+		var ftw = create_tween()
+		ftw.set_parallel(true)
+		ftw.tween_property(fx_sprite, "modulate:a", 0.0, 0.10)
+		ftw.parallel().tween_property(light, "energy", 0.0, 0.12)
+		ftw.chain().tween_callback(_recycle)
+		return
 	var tw = create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(fx_sprite, "modulate:a", 0.95, 0.05)
@@ -90,12 +120,6 @@ func activate() -> void:
 	tw.chain().tween_property(fx_sprite, "modulate:a", 0.0, 0.18)
 	tw.parallel().tween_property(light, "energy", 0.0, 0.2)
 	tw.chain().tween_callback(_recycle)
-
-	_deal_damage.call_deferred()
-	# 爆散环挪到 _deal_damage 按战果发放：劈空的落雷不该在空地上炸一簇蓝白特效。
-	# 落点音留在这儿无条件播 —— 「雷落下来了」是发生过的事，劈不劈空都响。
-	# 旧写法硬编码 obelisk_blessing（石碑的祝福铃），于是雷牌/巨印/宝灯落下全是一串铃铛。
-	AudioManager.play_sfx(sfx_impact_key if sfx_impact_key != "" else "thunder_strike", 1.0)
 
 ## 回收入池（替代 queue_free）：灯光熄灭、池满或宿主失效才真释放
 func _recycle() -> void:
@@ -127,7 +151,7 @@ func _spawn_impact_icon() -> void:
 func _spawn_sky_beam() -> void:
 	var beam := Line2D.new()
 	beam.points = PackedVector2Array([Vector2(0.0, -200.0), Vector2(0.0, 0.0)])
-	beam.width = maxf(radius * 0.24, 16.0)
+	beam.width = maxf(radius * 0.12, 8.0)
 	beam.default_color = Color(1.0, 0.97, 0.8, 0.8)
 	beam.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	beam.end_cap_mode = Line2D.LINE_CAP_ROUND
@@ -182,9 +206,11 @@ func _deal_damage() -> void:
 				had_crit = true
 	if had_crit:
 		GameManager.hit_stop(0.04, 0.06)
-	# 劈空（hits==0）提前返回：不爆散、不震屏
+	# 劈空（hits==0）提前返回：不爆散、不震屏，落点小印记由 _bloom_or_recycle 走快速收场档
 	if hits == 0:
 		return
+	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档
+	_struck = true
 	# 只有真的劈到人才爆散蓝白环与灵尘
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码

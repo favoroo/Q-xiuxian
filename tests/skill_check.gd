@@ -195,9 +195,30 @@ func _run() -> void:
 	hud._trigger_skill_press()
 	_c.check(bool(hud.get("_skill_shaking")), "冷却中点击触发震颤反馈")
 
+	# ---- 额外技能按钮（影爆）：第二颗键独立触发、无冷却、随角色显隐 ----
+	var extra_box: Control = hud.get("_extra_skill_box")
+	var extra_btn: Button = hud.get("_extra_skill_btn")
+	_c.check(extra_box != null and extra_btn != null, "HUD 额外技能按钮节点已构建")
+	GameManager.extra_skill_id = "shadowburst"
+	player.shadow_ring = []
+	player.shadow_ring = ShadowStepData.push_ring(player.shadow_ring, 40.0)
+	GameManager.shadow_amp_mult = ShadowStepData.amp_mult(player.shadow_ring)
+	await get_tree().process_frame
+	_c.check(extra_box.visible, "有额外技能时额外按钮处于可见态")
+	_c.equals(extra_btn.text, "爆", "额外按钮键面用影爆字面（图标未出图时走字面兜底）")
+	var cd_before: float = player.skill_cd_left
+	_c.check(player.try_activate_extra_skill(), "影爆走额外技能入口释放成功")
+	_c.check(player.shadow_ring.is_empty(), "影爆兑现后影层清空")
+	_c.near(player.skill_cd_left, cd_before, 0.001, "影爆释放不动主键冷却账（资源门控而非 CD，两颗键各记各的）")
+	# 无额外技能的角色：额外按钮整颗隐藏
+	GameManager.extra_skill_id = ""
+	await get_tree().process_frame
+	_c.check(not extra_box.visible, "无额外技能时额外按钮隐藏（多数角色看不到这颗键）")
+
 	# ---- reset_run 清零 ----
 	GameManager.reset_run()
 	_c.equals(GameManager.active_skill_id, "", "reset_run 清空本局技能")
+	_c.equals(GameManager.extra_skill_id, "", "reset_run 清空本局额外技能")
 	_c.near(GameManager.buff_move_speed_mult, 1.0, 0.001, "reset_run 回滚移速 buff 乘区")
 	_c.near(GameManager.buff_attack_speed_mult, 1.0, 0.001, "reset_run 回滚攻速 buff 乘区")
 

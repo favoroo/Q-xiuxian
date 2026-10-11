@@ -41,10 +41,9 @@ var _dash_dir: Vector2 = Vector2.DOWN
 var _dash_speed: float = 0.0
 
 # ---------------- 踏影（闪避出口，数值全在 ShadowStepData） ----------------
-## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，冲刺落地时全部踩碎兑现。
-## 队列长度就是层数（HUD 角标与角色身上的残影都直接读这里，与 skill_cd_left 同一口径）。
+## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，影爆（额外技能）一键全部踩碎兑现。
+## 队列长度就是层数（HUD 影爆键角标与角色身上的残影都直接读这里）。
 var shadow_ring: Array = []
-var _shadow_landing: bool = false  ## 本次冲刺带着影层落地，需要在收速那一帧兑现影袭
 
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
@@ -337,6 +336,28 @@ func try_activate_skill() -> bool:
 			_do_renewal(st)
 	return true
 
+## HUD 额外技能按钮入口（随角色绑定，如影者的影爆）。false = 没放出来（无技能/战斗外/资源没攒上），调用方发拒绝反馈。
+## 免冷却类（BURST）的门控是资源本身（影层层数），所以这里不走 skill_cd_left 那道闸。
+func try_activate_extra_skill() -> bool:
+	var sid := GameManager.extra_skill_id
+	if sid.is_empty() or GameManager.is_game_over:
+		return false
+	var spawner: Node = GameManager.wave_spawner
+	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
+		return false
+	var st := SkillData.final_stats(sid, GameManager.cultivator_id)
+	if st.is_empty():
+		return false
+	match int(st["kind"]):
+		SkillData.Kind.BURST:
+			# 蓄能释放：没攒上层按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
+			if not ShadowStepData.has_charge(shadow_ring):
+				return false
+			play_squash(Vector2(1.18, 0.84), 0.18)
+			_release_shadow_step()
+			return true
+	return false
+
 func _tick_skill_buffs(delta: float) -> void:
 	var expired: Array = []
 	for key in _skill_buffs.keys():
@@ -379,8 +400,7 @@ func _do_dash(st: Dictionary) -> void:
 	_dash_time = float(st["duration"])
 	_dash_speed = float(st["distance"]) / maxf(0.05, _dash_time)
 	# 无敌覆盖位移全程 + 落地脱身余量（时长唯一真话在 SkillData 的 iframe 字段），落点瞬间不吃贴脸伤害
-	# 带着影层冲刺时：每层再加一段无敌，并预约落地那一帧兑现影袭（_release_shadow_step）
-	_shadow_landing = ShadowStepData.has_charge(shadow_ring)
+	# 影层被动：每层再加一段无敌（影在身上时冲刺更稳）——影层兑现不在这里，影爆是独立技能
 	invulnerable_time = maxf(invulnerable_time,
 		float(st.get("iframe", _dash_time + 0.04)) + ShadowStepData.iframe_bonus(shadow_ring))
 	play_squash(Vector2(1.3, 0.72), 0.2)
@@ -391,11 +411,10 @@ func _do_dash(st: Dictionary) -> void:
 		procedural_view.play_dash(_dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
 
-## 踏影落地：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
-## 环特效半径传的就是判定半径本身（画多大 == 判多大）；不加震屏——这一脚的因果由环、
-## 跳字与击退本身表达，冲刺起招那一下已经给过一次反馈，同帧再叠就是满屏乱晃。
+## 影爆（额外技能）：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
+## 环特效半径传的就是判定半径本身（画多大 == 判多大）；不加震屏——爆发的因果由环、
+## 跳字与击退本身表达，同帧再叠震屏就是满屏乱晃。
 func _release_shadow_step() -> void:
-	_shadow_landing = false
 	if not ShadowStepData.has_charge(shadow_ring):
 		return
 	var dmg := ShadowStepData.burst_damage(shadow_ring)
@@ -416,6 +435,7 @@ func _release_shadow_step() -> void:
 		GameStyle.SHADOW, 0.26)
 	AudioManager.play_sfx("whoosh_heavy", 1.0, 0.82)
 	shadow_ring = []
+	GameManager.shadow_amp_mult = 1.0
 	if skill_vfx != null:
 		skill_vfx.on_shadow_spent()
 
@@ -511,9 +531,6 @@ func _physics_process(delta: float) -> void:
 			# （约 1.5 个屏高）。收速后位移与数据表同源，只留一点前冲余量。
 			velocity = _dash_dir * minf(velocity.length(), target_speed * DASH_LANDING_SPEED_MUL)
 			target_velocity = dir * target_speed
-		if _shadow_landing:
-			# 落地这一帧才踩碎影层：冲过去那一脚踩在落点上，环特效与判定同一处同一尺寸
-			_release_shadow_step()
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
@@ -861,6 +878,8 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		AudioManager.play_sfx("dodge", 1.0)
 		invulnerable_time = maxf(invulnerable_time, ShadowStepData.GUARD_SEC)
 		shadow_ring = ShadowStepData.push_ring(shadow_ring, amount)
+		# 攒着就增伤：影层乘区跟着队列长度走（满层 ×1.40），落地兑现清空时回 1.0
+		GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
 		if skill_vfx != null:
 			skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
 		return

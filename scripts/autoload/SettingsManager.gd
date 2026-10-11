@@ -163,6 +163,22 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "layout",
 		"default": 1.0,
 	},
+	{
+		"section": "display",
+		"key": "extra_btn_xy",
+		"title": "额外技能按钮位置",
+		"desc": "额外技能键（随角色绑定）的归一化屏幕中心点",
+		"type": "layout",
+		"default": EXTRA_BTN_XY_DEFAULT,
+	},
+	{
+		"section": "display",
+		"key": "extra_btn_scale",
+		"title": "额外技能按钮大小",
+		"desc": "额外技能键的尺寸缩放倍率",
+		"type": "layout",
+		"default": 1.0,
+	},
 
 	# --------- 仙途指引（开局自动弹指南的偏好；开关本体在指南卡底部） ---------
 	{
@@ -300,12 +316,14 @@ func shake_level_next() -> StringName:
 const BTN_SCALE_MIN := 0.6
 const BTN_SCALE_MAX := 1.8
 ## 归一化中心点默认值 = 960×540 基准下旧的「右下」摆位
-## 两颗键同径（76 圆），默认上下叠成一列：技能键 816..892 × 392..468，
-## 祭坛键 816..892 × 292..368 —— 两圆之间留 BTN_DEFAULT_EDGE_GAP 的设计像素空隙。
-## 以前是 0 空隙（两圈描边正好相切），用户 2026-10-11 真机图：看着就是两颗键压在一起，
-## 且手指落在相切那条线上时拾取给谁全看运气。空隙口径由 UnitRunner 钉住。
+## 三颗键同径（76 圆），默认右下竖排成一列：额外键 816..892 × 192..268、
+## 祭坛键 816..892 × 292..368、技能键 816..892 × 392..468 —— 相邻两圆之间留
+## BTN_DEFAULT_EDGE_GAP 的设计像素空隙。以前祭坛与技能是 0 空隙（两圈描边正好相切），
+## 用户 2026-10-11 真机图：看着就是两颗键压在一起，且手指落在相切那条线上时拾取给谁全看
+## 运气。空隙口径由 UnitRunner 钉住。额外键多数角色没有，默认位只对有额外技能的角色生效。
 const SKILL_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 430.0 / 540.0)
 const OBELISK_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 330.0 / 540.0)
+const EXTRA_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 230.0 / 540.0)
 ## 默认摆位下两颗键圆边之间的最小间距（设计像素，按 960×540 基准算）
 const BTN_DEFAULT_EDGE_GAP := 24.0
 
@@ -333,12 +351,26 @@ func obelisk_btn_scale() -> float:
 func set_obelisk_btn_scale(scale_f: float, auto_save: bool = true) -> void:
 	set_val(&"display", &"obelisk_btn_scale", _btn_scale(scale_f), auto_save)
 
-## 恢复两个按钮的出厂摆位（位置 + 大小一起回默认）
+func extra_btn_xy() -> Vector2:
+	return _norm_xy(get_val(&"display", &"extra_btn_xy", EXTRA_BTN_XY_DEFAULT))
+
+func set_extra_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
+	set_val(&"display", &"extra_btn_xy", _norm_xy(norm), auto_save)
+
+func extra_btn_scale() -> float:
+	return _btn_scale(get_val(&"display", &"extra_btn_scale", 1.0))
+
+func set_extra_btn_scale(scale_f: float, auto_save: bool = true) -> void:
+	set_val(&"display", &"extra_btn_scale", _btn_scale(scale_f), auto_save)
+
+## 恢复三个按钮的出厂摆位（位置 + 大小一起回默认）
 func reset_button_layout() -> void:
 	set_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT)
 	set_val(&"display", &"skill_btn_scale", 1.0)
 	set_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT)
 	set_val(&"display", &"obelisk_btn_scale", 1.0)
+	set_val(&"display", &"extra_btn_xy", EXTRA_BTN_XY_DEFAULT)
+	set_val(&"display", &"extra_btn_scale", 1.0)
 
 ## v0.0.17 及更早的出厂摆位：祭坛键与技能键 0 空隙相切
 const OBELISK_BTN_XY_LEGACY := Vector2(854.0 / 960.0, 354.0 / 540.0)

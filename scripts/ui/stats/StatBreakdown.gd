@@ -18,7 +18,8 @@ static func breakdown(gm: Node) -> Dictionary:
 	var eff_haste: float = gm.attack_speed_mult * gm.synergy_haste_mult * gm.buff_attack_speed_mult
 	var cdr_pct: float = (1.0 - eff_haste) * 100.0
 	var eff_move: float = (gm.move_speed_mult + gm.synergy_move_speed_mult) * gm.buff_move_speed_mult
-	var eff_dmg: float = gm.weapon_damage_mult * gm.synergy_damage_mult
+	# 伤害读数同样与运行时同形：装备/加点层 × 羁绊层 × 影层（影者攒着影层时面板如实反映，非影者恒为 1.0）
+	var eff_dmg: float = gm.weapon_damage_mult * gm.synergy_damage_mult * gm.shadow_amp_mult
 	return {
 		"current_hp": cur_hp,
 		"max_hp": max_hp,

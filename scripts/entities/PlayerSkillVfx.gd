@@ -448,7 +448,8 @@ func _draw_shadow_pips() -> void:
 	var full := n >= ShadowStepData.MAX_STACKS
 	# 抬高到耳尖之上：影者是狐耳/角类头饰，读数压在耳朵上就半遮半掩（看不见等于没做）
 	var top_y := -38.0 * _body_scale.y
-	var gap := 7.0
+	# 上限提到 8 层后行宽按 7px 间距会横出耳外，层数多时收窄间距保住「一排读得清」
+	var gap := 7.0 if n <= 5 else 5.5
 	var start_x := -gap * float(n - 1) * 0.5
 	var col := GameStyle.SHADOW_EDGE if full else GameStyle.SHADOW
 	for i in range(n):

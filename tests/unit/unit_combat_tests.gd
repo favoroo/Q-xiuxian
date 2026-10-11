@@ -195,3 +195,27 @@ func _test_stat_breakdown_buff() -> void:
 	_c.near(float(buffed["move_speed"]) / float(base["move_speed"]), 1.6, EPS, "神行在身时面板移速等比 ×1.6")
 	_c.near(float(buffed["cdr_pct"]), (1.0 - 0.6) * 100.0, 0.01, "面板冷却缩减随攻速乘区同源")
 	GameManager.reset_run()
+
+# ---------------- 命中反馈全局限流闸：火花 / 死亡爆散 / 镜头微冲击 ----------------
+
+## 三道闸的判据（2026-10-11 频闪治理）：间隔内普通档拒绝、暴击/精英直通且不消耗普通档窗口、
+## 间隔过后放行。时间戳以真实 t0 为基注入，闸的窗口基线始终落在真实时间轴上，
+## 不污染后续走真实时钟的调用。
+func _test_feel_gates() -> void:
+	var t0 := Time.get_ticks_msec()
+	var spark_iv := int(GameBalance.HIT_SPARK_MIN_INTERVAL * 1000.0)
+	_c.check(GameFeel.hit_spark_gate(false, t0), "首个普通命中火花放行")
+	_c.check(not GameFeel.hit_spark_gate(false, t0 + spark_iv - 1), "间隔内的普通命中火花被拒")
+	_c.check(GameFeel.hit_spark_gate(false, t0 + spark_iv), "间隔过后火花重新放行")
+	_c.check(GameFeel.hit_spark_gate(true, t0 + spark_iv + 1), "暴击火花直通")
+	_c.check(not GameFeel.hit_spark_gate(false, t0 + spark_iv + 1), "暴击直通不重置普通档窗口")
+
+	var burst_iv := int(GameBalance.KILL_BURST_MIN_INTERVAL * 1000.0)
+	_c.check(GameFeel.kill_burst_gate(false, t0), "首个普通小怪死亡爆散放行")
+	_c.check(not GameFeel.kill_burst_gate(false, t0 + burst_iv - 1), "间隔内的普通死亡爆散被拒")
+	_c.check(GameFeel.kill_burst_gate(true, t0 + 1), "精英死亡爆散直通")
+
+	var kick_iv := int(GameBalance.MICRO_KICK_MIN_INTERVAL * 1000.0)
+	_c.check(GameFeel.micro_kick_gate(t0), "首个普通命中镜头微冲击放行")
+	_c.check(not GameFeel.micro_kick_gate(t0 + kick_iv - 1), "间隔内的镜头微冲击被拒")
+	_c.check(GameFeel.micro_kick_gate(t0 + kick_iv), "间隔过后微冲击重新放行")

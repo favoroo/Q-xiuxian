@@ -6,7 +6,7 @@ extends RefCounted
 ## 三处必须同数，所以谁都不许自己再乘一遍乘区。
 ##
 ## 乘区链与运行时逐项同形（判据 tests/WeaponPerHitCheck 拿真武器节点的 _final_damage 对账）：
-##   (基础 × 星级 + 属性加伤) × 全局法伤 × 流派羁绊 × 角色 × 五行 × 神识分流 [× 机关羁绊]
+##   (基础 × 星级 + 属性加伤) × 全局法伤 × 流派羁绊 × 影层 [影者攒层时 >1] × 角色 × 五行 × 神识分流 [× 机关羁绊]
 ## 暴击按概率另算、斩将按目标另算，都不进这个数。
 ## 只读 GameManager 状态，不写任何状态。
 
@@ -31,6 +31,7 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 		drone_n += 1
 	var raw: float = WeaponData.damage_for(w_id, s) + GameManager.get_weapon_stat_bonus(w_id, s)
 	var mult: float = GameManager.weapon_damage_mult * GameManager.synergy_damage_mult \
+			* GameManager.shadow_amp_mult \
 			* drone_mult(def) \
 			* GameManager.cultivator_damage_mult(w_id) * GameManager.element_damage_mult(w_id) \
 			* GameBalance.multi_weapon_damage_mult(n, drone_n)

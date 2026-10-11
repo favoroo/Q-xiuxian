@@ -1,7 +1,7 @@
 class_name HudEditOverlay
 extends Control
 
-## 按钮调整模式覆盖层：把技能键与祭坛键亮在真实位置上，手指自由拖动摆放。
+## 按钮调整模式覆盖层：把技能键 / 额外技能键 / 祭坛键亮在真实位置上，手指自由拖动摆放。
 ## 位置以归一化中心点写回 SettingsManager（拖动中不落盘，松手才存）；
 ## 大小在设置·操作页的滑杆调。代理钮每帧与真实按钮互相同步：
 ## 真实按钮是摆位真话（含屏内夹取），拖动写设置 → HUD 套用 → 代理跟着走。
@@ -11,10 +11,12 @@ signal finished
 const DRAG_NONE: int = -1
 const DRAG_SKILL: int = 0
 const DRAG_OBELISK: int = 1
+const DRAG_EXTRA: int = 2
 
 var _hud: GameHUD = null
 var _skill_proxy: Button = null
 var _obelisk_proxy: Button = null
+var _extra_proxy: Button = null
 var _built: bool = false
 
 ## 选中态：滑杆永远只调选中的那颗（按下代理钮即选中）
@@ -80,6 +82,16 @@ func _build() -> void:
 	_obelisk_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_OBELISK))
 	add_child(_obelisk_proxy)
 
+	# 额外技能键代理：与主技能键同款式（它就是 HudSkillButton 的额外槽位）
+	_extra_proxy = Button.new()
+	_extra_proxy.text = "extra"
+	_extra_proxy.custom_minimum_size = Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
+	_extra_proxy.mouse_filter = Control.MOUSE_FILTER_STOP
+	_extra_proxy.focus_mode = Control.FOCUS_NONE
+	SkillButtonView.style_circle_button(_extra_proxy)
+	_extra_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_EXTRA))
+	add_child(_extra_proxy)
+
 	var bottom_strip := CenterContainer.new()
 	bottom_strip.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bottom_strip.offset_top = -66.0
@@ -140,17 +152,62 @@ func _build() -> void:
 
 	_select(_selected)
 
+# ---------------- 槽位 → 设置项的取数口径（三颗键一张表，不再 if/else 串行） ----------------
+
+func _proxy_of(drag_id: int) -> Button:
+	match drag_id:
+		DRAG_SKILL:
+			return _skill_proxy
+		DRAG_OBELISK:
+			return _obelisk_proxy
+		DRAG_EXTRA:
+			return _extra_proxy
+	return null
+
+func _scale_getter(drag_id: int) -> float:
+	match drag_id:
+		DRAG_OBELISK:
+			return SettingsManager.obelisk_btn_scale()
+		DRAG_EXTRA:
+			return SettingsManager.extra_btn_scale()
+	return SettingsManager.skill_btn_scale()
+
+func _scale_setter(drag_id: int, v: float) -> void:
+	match drag_id:
+		DRAG_OBELISK:
+			SettingsManager.set_obelisk_btn_scale(v)
+		DRAG_EXTRA:
+			SettingsManager.set_extra_btn_scale(v)
+		_:
+			SettingsManager.set_skill_btn_scale(v)
+
+func _xy_setter(drag_id: int, norm: Vector2, auto_save: bool) -> void:
+	match drag_id:
+		DRAG_OBELISK:
+			SettingsManager.set_obelisk_btn_xy(norm, auto_save)
+		DRAG_EXTRA:
+			SettingsManager.set_extra_btn_xy(norm, auto_save)
+		_:
+			SettingsManager.set_skill_btn_xy(norm, auto_save)
+
+func _sel_name(drag_id: int) -> String:
+	match drag_id:
+		DRAG_OBELISK:
+			return "祭坛按钮"
+		DRAG_EXTRA:
+			return "额外技能按钮"
+	return "技能按钮"
+
 # ---------------- 每帧同步：真实按钮是摆位真话，代理钮贴上去 ----------------
 
 func _process(_delta: float) -> void:
 	if not visible or _hud == null:
 		return
-	if _drag_id == DRAG_SKILL:
-		_apply_drag(SettingsManager.set_skill_btn_xy)
-	elif _drag_id == DRAG_OBELISK:
-		_apply_drag(SettingsManager.set_obelisk_btn_xy)
+	if _drag_id != DRAG_NONE:
+		_apply_drag(_xy_setter.bind(_drag_id))
 	_sync_proxy(_skill_proxy, _hud.skill_btn_center_px(), SettingsManager.skill_btn_scale())
 	_sync_proxy(_obelisk_proxy, _hud.obelisk_btn_center_px(), SettingsManager.obelisk_btn_scale())
+	_sync_proxy(_extra_proxy, _hud.extra_skill_btn_center_px(), SettingsManager.extra_btn_scale())
 
 func _sync_proxy(p: Button, center: Vector2, scale_f: float) -> void:
 	if p == null:
@@ -201,7 +258,7 @@ func _on_proxy_input(event: InputEvent, drag_id: int) -> void:
 	if not pressed or _drag_id != DRAG_NONE:
 		return
 	_select(drag_id)
-	var p := _skill_proxy if drag_id == DRAG_SKILL else _obelisk_proxy
+	var p := _proxy_of(drag_id)
 	_drag_id = drag_id
 	_drag_off = (p.position + p.pivot_offset) - _pointer
 
@@ -214,7 +271,7 @@ func _select(drag_id: int) -> void:
 	_update_selection_visuals()
 
 func _sync_size_slider() -> void:
-	var v: float = SettingsManager.obelisk_btn_scale() if _selected == DRAG_OBELISK else SettingsManager.skill_btn_scale()
+	var v: float = _scale_getter(_selected)
 	if _size_slider != null:
 		_size_slider.set_value_no_signal(v * 100.0)
 	_update_size_ui()
@@ -223,30 +280,33 @@ func _update_size_ui() -> void:
 	if _size_lbl == null:
 		return
 	_size_lbl.text = "%d%%" % int(round(_size_slider.value))
-	_sel_label.text = "祭坛按钮" if _selected == DRAG_OBELISK else "技能按钮"
+	_sel_label.text = _sel_name(_selected)
 
 func _update_selection_visuals() -> void:
-	if _skill_proxy != null:
-		_skill_proxy.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == DRAG_SKILL else 0.5)
-	if _obelisk_proxy != null:
-		_obelisk_proxy.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == DRAG_OBELISK else 0.5)
+	for entry in [[DRAG_SKILL, _skill_proxy], [DRAG_OBELISK, _obelisk_proxy], [DRAG_EXTRA, _extra_proxy]]:
+		var p: Button = entry[1]
+		if p != null:
+			p.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == int(entry[0]) else 0.5)
 
 ## 滑杆只调当前选中的那颗
 func _on_size_slider_changed(v: float) -> void:
-	if _selected == DRAG_OBELISK:
-		SettingsManager.set_obelisk_btn_scale(v / 100.0)
-	else:
-		SettingsManager.set_skill_btn_scale(v / 100.0)
+	_scale_setter(_selected, v / 100.0)
 	_update_size_ui()
 
 func _end_drag() -> void:
 	# 与拖动中同一份值再 set 一次触发落盘 + setting_changed（HUD 套用夹取后的最终位）
-	if _drag_id == DRAG_SKILL:
-		SettingsManager.set_skill_btn_xy(SettingsManager.skill_btn_xy())
-	elif _drag_id == DRAG_OBELISK:
-		SettingsManager.set_obelisk_btn_xy(SettingsManager.obelisk_btn_xy())
+	if _drag_id != DRAG_NONE:
+		_xy_setter(_drag_id, _xy_getter(_drag_id), true)
 	_drag_id = DRAG_NONE
 	_drag_touch_idx = -100
+
+func _xy_getter(drag_id: int) -> Vector2:
+	match drag_id:
+		DRAG_OBELISK:
+			return SettingsManager.obelisk_btn_xy()
+		DRAG_EXTRA:
+			return SettingsManager.extra_btn_xy()
+	return SettingsManager.skill_btn_xy()
 
 func finish() -> void:
 	if not visible:

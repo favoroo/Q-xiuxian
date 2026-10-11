@@ -285,7 +285,7 @@ func _perform_turret_attack() -> void:
 
 func _final_damage() -> float:
 	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
+	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true

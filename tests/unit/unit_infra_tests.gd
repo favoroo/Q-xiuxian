@@ -127,7 +127,7 @@ func _test_settings_manager() -> void:
 	SettingsManager.set_val(&"display", &"damage_numbers", orig_dmg_num)
 	SettingsManager.set_val(&"display", &"screen_shake", orig_shake)
 
-## 两颗浮动键的出厂摆位与键面文案（用户 2026-10-11 真机图：祭坛键和技能键贴在一起，
+## 三颗浮动键的出厂摆位与键面文案（用户 2026-10-11 真机图：祭坛键和技能键贴在一起，
 ## 看着就是两颗压成一颗；键面只写「祭坛」也看不出按下去是干什么的）。
 ## 只在 reset_to_defaults() 之后跑：那时读到的就是出厂位，不受玩家自己拖过的存档影响。
 ## 位置是归一化的、键径是设计像素定值，所以两圆间距在 960×540 这一档最小
@@ -140,12 +140,19 @@ func _test_floating_btn_defaults() -> void:
 			"祭坛键出厂位取自 OBELISK_BTN_XY_DEFAULT（不是 SCHEMA 里另抄的一份）")
 	_c.equals(SettingsManager.skill_btn_xy(), SettingsManager.SKILL_BTN_XY_DEFAULT,
 			"技能键出厂位取自 SKILL_BTN_XY_DEFAULT")
-	# 二、两圆之间必须留得开：旧写法 0 空隙相切，量出来正好 0
+	_c.equals(SettingsManager.extra_btn_xy(), SettingsManager.EXTRA_BTN_XY_DEFAULT,
+			"额外技能键出厂位取自 EXTRA_BTN_XY_DEFAULT（不是 SCHEMA 里另抄的一份）")
+	# 二、相邻两圆之间必须留得开：旧写法 0 空隙相切，量出来正好 0（三键两两同列检查）
 	var gap := (SettingsManager.skill_btn_xy().y - SettingsManager.obelisk_btn_xy().y) * design_h - d
 	_c.check(gap >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
 			"出厂摆位两圆圆边之间留 %.1f 设计像素（要求 >= %.0f；0 空隙时两圈描边贴成一颗）" % [
 					gap, SettingsManager.BTN_DEFAULT_EDGE_GAP])
 	_c.check(gap <= d, "两圆也没开成一里地（%.1f <= 键径 %.0f，同列叠放还要一眼看出是一对）" % [gap, d])
+	var gap_extra := (SettingsManager.obelisk_btn_xy().y - SettingsManager.extra_btn_xy().y) * design_h - d
+	_c.check(gap_extra >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
+			"额外技能键与祭坛键出厂圆边间距 %.1f（要求 >= %.0f，第三颗键进同列不挤堆）" % [
+					gap_extra, SettingsManager.BTN_DEFAULT_EDGE_GAP])
+	_c.check(gap_extra <= d, "额外技能键与祭坛键也没开成一里地（%.1f <= 键径 %.0f）" % [gap_extra, d])
 	# 三、键面文案收在圆面之内：量的是「画出来的那一圈」——文案外接框的对角半径
 	#     要小于圆面内缘（键径一半再收掉 _circle_box 那 2 像素描边）
 	var f := GameStyle.display_font()

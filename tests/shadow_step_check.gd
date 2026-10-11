@@ -1,15 +1,18 @@
 extends Node
 
 ## 踏影（闪避出口）判据：闪避不再只是「这一下没掉血」，而是给一段残影无敌 + 攒一层影，
-## 下一次冲刺落地把躲掉的伤害还回去。数值全在 ShadowStepData，本判据从生产入口量兑现。
+## 额外技能「影爆」一键把躲掉的伤害还回去。数值全在 ShadowStepData，本判据从生产入口量兑现。
 ##
-## 钉住六件事：
+## 钉住八件事：
 ##   1. 闪避成功：不掉血 + 拿到 GUARD_SEC 无敌 + 影层 +1（走 Player.take_damage 真入口）
 ##   2. 被打中：掉血、无敌帧仍是 0.55s、影层不许涨（只有闪成才攒）
 ##   3. 满层 FIFO：超过上限后留的是最近那几刀，更早的让位（不白闪、也不无限攒）
-##   4. 带影层冲刺：无敌窗口 = SkillData.iframe + 层数 × IFRAME_PER_STACK（同源读表）
-##   5. 落地兑现：圈内敌人吃到 burst 伤害并被推开、圈外一点事没有；影层清零
+##   4. 带影层冲刺：无敌窗口 = SkillData.iframe + 层数 × IFRAME_PER_STACK（被动不消耗影层，
+##      影层兑现已独立成额外技能「影爆」，冲刺不再清层）
+##   5. 影爆兑现：圈内敌人吃到 burst 伤害并被推开、圈外一点事没有；影层清零
 ##   6. 视觉与判定同源：冲击环扫到的半径 == ShadowStepData.BURST_RADIUS == 判定用的那个数
+##   7. 攒层即增伤：GameManager.shadow_amp_mult == amp_mult(影层)，兑现后回 1.0
+##   8. 影爆门控：无冷却——0 层拒、有层可连放；空 extra_skill_id 直接拒
 ##
 ## 运行: godot --headless --path . res://tests/ShadowStepCheck.tscn
 ##       godot --headless --path . res://tests/ShadowStepCheck.tscn -- --selftest
@@ -34,6 +37,7 @@ func _ready() -> void:
 	await _test_dodge_delivers()
 	await _test_hit_does_not_stack()
 	await _test_fifo_cap()
+	await _test_amp_pure()
 	await _test_dash_iframe_bonus()
 	await _test_release_delivers()
 	if _selftest:
@@ -60,6 +64,8 @@ func _make_player(dodge: float) -> Player:
 	# 想让 dodge=1.0 真的每帧都闪，必须把上限一起抬上去
 	GameManager.dodge = dodge
 	GameManager.dodge_cap_bonus = maxf(0.0, dodge - GameManager.DODGE_CAP)
+	GameManager.shadow_amp_mult = 1.0
+	GameManager.extra_skill_id = ""
 	GameManager.rng = RandomNumberGenerator.new()
 	GameManager.rng.seed = 20261011
 	return p
@@ -90,6 +96,8 @@ func _test_dodge_delivers() -> void:
 	_c.check(_stacks(p) == 1, "闪避成功攒 1 层影（实得 %d 层）" % _stacks(p))
 	_c.near(ShadowStepData.stored_sum(p.shadow_ring), 23.0, EPS,
 		"影层存的是躲掉那一刀的原值（打多少存多少，波次缩放自动跟上）")
+	_c.near(GameManager.shadow_amp_mult, ShadowStepData.amp_mult(p.shadow_ring), EPS,
+		"攒层即增伤：乘区跟层数走（1 层 ×%.2f，生产 take_damage 写点维护）" % ShadowStepData.amp_mult(p.shadow_ring))
 	p.queue_free()
 
 # ---------------- 2. 被打中不涨层 ----------------
@@ -107,16 +115,28 @@ func _test_hit_does_not_stack() -> void:
 
 func _test_fifo_cap() -> void:
 	var p := _make_player(1.0)
-	for raw in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]:
+	for raw in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]:
 		p.invulnerable_time = 0.0
 		p.take_damage(float(raw))
 	_c.check(_stacks(p) == ShadowStepData.MAX_STACKS,
-		"闪 7 次后层数钉在上限 %d（实得 %d）" % [ShadowStepData.MAX_STACKS, _stacks(p)])
-	_c.near(ShadowStepData.stored_sum(p.shadow_ring), 30.0 + 40.0 + 50.0 + 60.0 + 70.0, EPS,
-		"满层后换掉最旧那一刀：留的是最近 5 刀（30/40/50/60/70）")
+		"闪 10 次后层数钉在上限 %d（实得 %d）" % [ShadowStepData.MAX_STACKS, _stacks(p)])
+	_c.near(ShadowStepData.stored_sum(p.shadow_ring),
+		30.0 + 40.0 + 50.0 + 60.0 + 70.0 + 80.0 + 90.0 + 100.0, EPS,
+		"满层后换掉最旧那一刀：留的是最近 %d 刀（30…100）" % ShadowStepData.MAX_STACKS)
+	_c.near(GameManager.shadow_amp_mult, ShadowStepData.amp_mult(p.shadow_ring), EPS,
+		"满层增伤 ×%.2f（每层 +%.0f%%，攒着就生效）" % [
+			ShadowStepData.amp_mult(p.shadow_ring), ShadowStepData.AMP_PER_STACK * 100.0])
 	p.queue_free()
 
-# ---------------- 4. 带影层冲刺：无敌窗口同源 ----------------
+# ---------------- 影层增伤：纯函数钉点 ----------------
+
+func _test_amp_pure() -> void:
+	_c.near(ShadowStepData.amp_mult([]), 1.0, EPS, "空影层不增伤（没攒层不加成）")
+	_c.near(ShadowStepData.amp_mult([10.0, 20.0, 30.0]),
+		1.0 + 3.0 * ShadowStepData.AMP_PER_STACK, EPS,
+		"3 层增伤 = 1 + 3 × 每层 %.0f%%" % [ShadowStepData.AMP_PER_STACK * 100.0])
+
+# ---------------- 4. 带影层冲刺：无敌被动同源，且不再消耗影层 ----------------
 
 func _test_dash_iframe_bonus() -> void:
 	var p := _make_player(1.0)
@@ -124,6 +144,7 @@ func _test_dash_iframe_bonus() -> void:
 		p.invulnerable_time = 0.0
 		p.take_damage(float(raw))
 	var stacks := _stacks(p)
+	var amp_before: float = GameManager.shadow_amp_mult
 	GameManager.active_skill_id = "dash"
 	p.skill_cd_left = 0.0
 	p.invulnerable_time = 0.0
@@ -132,22 +153,28 @@ func _test_dash_iframe_bonus() -> void:
 	var want: float = float(st["iframe"]) + float(stacks) * ShadowStepData.IFRAME_PER_STACK
 	_c.check(p.try_activate_skill(), "冲刺释放成功（走 HUD 同一入口 try_activate_skill）")
 	_c.near(p.invulnerable_time, want, 0.001,
-		"%d 层影的冲刺无敌 = 基础 %.2f + 每层 %.2f（实得 %.2f）" % [
+		"%d 层影的冲刺无敌 = 基础 %.2f + 每层 %.2f（实得 %.2f，被动不消耗影层）" % [
 			stacks, float(st["iframe"]), ShadowStepData.IFRAME_PER_STACK, p.invulnerable_time])
-	_c.check(stacks > 0 and p._shadow_landing, "带影层冲刺会预约落地影袭")
-	# 跑到落地：等冲刺段结束（生产 _process 驱动），层数必须被清空
+	# 跑完冲刺段：影层必须原封不动（兑现已独立成影爆，冲刺只是位移+无敌）
 	for i in range(40):
 		await get_tree().process_frame
-		if _stacks(p) == 0:
+		if p._dash_time <= 0.0:
 			break
-	_c.check(_stacks(p) == 0, "冲刺落地后影层清空（实得 %d 层）" % _stacks(p))
-	_c.check(not p._shadow_landing, "落地预约已消费，不会下一脚再补放一次")
+	_c.check(_stacks(p) == stacks, "冲刺落地后影层原样保留（实得 %d 层，攒的影不因冲刺丢失）" % _stacks(p))
+	_c.near(GameManager.shadow_amp_mult, amp_before, EPS, "冲刺全程增伤乘区不动（影在身上就持续加成）")
 	p.queue_free()
 
-# ---------------- 5+6. 落地兑现与同源半径 ----------------
+# ---------------- 5+6+8. 影爆兑现、同源半径与门控 ----------------
 
 func _test_release_delivers() -> void:
 	var p := _make_player(1.0)
+	# 门控：空 extra_skill_id 直接拒
+	GameManager.extra_skill_id = ""
+	_c.check(not p.try_activate_extra_skill(), "无额外技能时影爆入口直接拒（额外键隐藏的前提）")
+	GameManager.extra_skill_id = "shadowburst"
+	# 门控：0 层拒（免冷却，资源就是门票）
+	p.invulnerable_time = 0.0
+	_c.check(not p.try_activate_extra_skill(), "0 层影放影爆被拒（没攒上按不动）")
 	for raw in [10.0, 20.0, 30.0, 40.0, 50.0]:
 		p.invulnerable_time = 0.0
 		p.take_damage(float(raw))
@@ -160,13 +187,14 @@ func _test_release_delivers() -> void:
 	var stored: float = ShadowStepData.stored_sum(p.shadow_ring)
 	var want_dmg: float = ShadowStepData.burst_damage(p.shadow_ring)
 
-	p._release_shadow_step()
+	_c.check(p.try_activate_extra_skill(), "影爆走额外技能真入口释放成功（try_activate_extra_skill）")
 
 	_c.near(hp_in - inside.current_hp, want_dmg, 0.01,
-		"圈内敌人吃到影袭 %.1f 伤害（= 躲掉的 %.0f × %.0f%%，走 EnemyBase.take_damage）" % [
+		"圈内敌人吃到影爆 %.1f 伤害（= 躲掉的 %.0f × %.0f%%，走 EnemyBase.take_damage）" % [
 			want_dmg, stored, ShadowStepData.STORE_RATIO * 100.0])
 	_c.check(is_equal_approx(hp_out, outside.current_hp), "圈外敌人一格没掉（判定半径没被辉光糊大）")
 	_c.check(_stacks(p) == 0, "兑现后影层归零（不重复放）")
+	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "兑现后增伤乘区回 1.0（攒着的加成随爆发一起花掉）")
 
 	var ring_r := _shockwave_radius()
 	_c.near(ring_r, ShadowStepData.BURST_RADIUS, 0.01,
@@ -177,6 +205,14 @@ func _test_release_delivers() -> void:
 	_c.check(inside.global_position.distance_to(pos_in) > 1.0,
 		"圈内敌人被推开（实测位移 %.1f px）" % inside.global_position.distance_to(pos_in))
 	_c.check(outside.global_position.distance_to(pos_out) < 0.5, "圈外敌人纹丝不动")
+
+	# 门控：无冷却——重新攒上立即可再放（连放两脚不进 CD）
+	p.invulnerable_time = 0.0
+	p.take_damage(66.0)
+	_c.check(_stacks(p) == 1, "重攒 1 层（前置）")
+	_c.near(p.skill_cd_left, 0.0, EPS, "影爆释放不进冷却（资源门控而非 CD）")
+	_c.check(p.try_activate_extra_skill(), "攒上即可再放（无 CD 连放）")
+	_c.check(_stacks(p) == 0, "第二脚同样兑现归零")
 	inside.queue_free()
 	outside.queue_free()
 	p.queue_free()

@@ -2,7 +2,8 @@ class_name ShadowStepData
 extends RefCounted
 
 ## 踏影（闪避出口）数据表：闪避不再只是「这一下没掉血」，而是把躲掉的那一下存进影里，
-## 下一次冲刺踩碎它——还一口伤害、把贴身的怪推开、多一段无敌。
+## 点额外技能「影爆」随时踩碎它——还一口伤害、把贴身的怪推开、多一段无敌。
+## 带着影冲刺另有被动：每层加一段冲刺无敌（不消耗影层）。
 ##
 ## 为什么要它（2026-10-11 实测，见 tests/DodgeDeliveryProbe.tscn）：
 ##   Player.take_damage 里闪避成功不消耗 0.55s 无敌帧，而只有打中才设帧 ⇒ 怪群贴身时
@@ -15,13 +16,16 @@ extends RefCounted
 ## 1. 全 static 纯函数，不读 autoload、不碰节点（与 GameBalance 同规约），数值只在本表；
 ## 2. BURST_RADIUS 既是判定半径也是环特效半径——画多大 == 判多大，不许用辉光糊大；
 ## 3. 卡面与详解里出现的踏影数字一律现读本表，别处不抄（判据 ShadowStepCheck 钉同源）。
+## 4. amp_mult（攒层增伤）同样只认本表：层数在身上时法器伤害吃 amp_mult 乘区，
+##    由 Player 在攒层/清空两个写点同步进 GameManager.shadow_amp_mult，别处不许另算。
 
 const GUARD_SEC := 0.12        ## 闪避成功给的「残影」短无敌（秒）：不这么改，贴身时闪避等于白闪
-const MAX_STACKS := 5          ## 影层上限：攒满后再闪不涨层，但会把最旧那层换成这一刀
+const MAX_STACKS := 8          ## 影层上限：攒满后再闪不涨层，但会把最旧那层换成这一刀
 const STORE_RATIO := 0.55      ## 躲掉的那一下，有 55% 折成影袭伤害还回去
 const IFRAME_PER_STACK := 0.07 ## 踏影冲刺每层追加的无敌窗口（秒）
 const PUSH_PER_STACK := 110.0  ## 踏影冲刺每层追加的击退冲量（与法器击退同一条尺子）
 const BURST_RADIUS := 120.0    ## 影袭判定半径 = 落地环半径（像素）
+const AMP_PER_STACK := 0.05    ## 每层影给的法器伤害加成（攒着就生效，满层 ×1.40）
 
 ## 这一刀躲掉后存进影里的原始伤害（未打折，打折在兑现时算，便于改比例不动历史层）
 static func store_value(raw_damage: float) -> float:
@@ -44,6 +48,10 @@ static func stored_sum(ring: Array) -> float:
 	for v in ring:
 		total += float(v)
 	return total
+
+## 攒层增伤乘区：影在身上时法器每一刀都吃，落地兑现清空后回 1.0
+static func amp_mult(ring: Array) -> float:
+	return 1.0 + float(ring.size()) * AMP_PER_STACK
 
 ## 踏影落地时对每个圈内敌人造成的伤害
 static func burst_damage(ring: Array) -> float:
