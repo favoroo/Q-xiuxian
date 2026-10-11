@@ -177,3 +177,21 @@ func _test_charge_geometry() -> void:
 	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(500.0, 5.0)).is_equal_approx(head), "起跑点之外钳到线段起点")
 	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(-40.0, 5.0)).is_equal_approx(tail), "冲过头钳到线段终点（不许穿透继续判）")
 	_c.check(GameBalance.seg_closest_point(Vector2(50.0, 50.0), Vector2(50.0, 50.0), Vector2(50.0, 90.0)).is_equal_approx(Vector2(50.0, 50.0)), "零长线段退化成点距（贴边界 clamp 那一帧不炸）")
+
+# ---------------- 属性面板读数：与 Player 实际口径同源 ----------------
+
+## 疾风/神行在身时开面板，移速/攻速读数必须含神通 buff 层（2026-10-11 补漏：
+## 旧写法漏乘 buff_*，技能期间面板纹丝不动，报数与实际不符）
+
+func _test_stat_breakdown_buff() -> void:
+	GameManager.reset_run()
+	var base := StatBreakdown.breakdown(GameManager)
+	_c.near(float(base["attack_speed_mult"]), 1.0, EPS, "无 buff 时面板攻速乘区为 1.0")
+	GameManager.buff_attack_speed_mult = 0.6
+	GameManager.buff_move_speed_mult = 1.6
+	var buffed := StatBreakdown.breakdown(GameManager)
+	# 移速用比值断言：不依赖测试环境里 player 是否在场/加点残留
+	_c.near(float(buffed["attack_speed_mult"]), 0.6, EPS, "疾风在身时面板攻速乘区 0.6")
+	_c.near(float(buffed["move_speed"]) / float(base["move_speed"]), 1.6, EPS, "神行在身时面板移速等比 ×1.6")
+	_c.near(float(buffed["cdr_pct"]), (1.0 - 0.6) * 100.0, 0.01, "面板冷却缩减随攻速乘区同源")
+	GameManager.reset_run()

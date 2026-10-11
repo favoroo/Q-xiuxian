@@ -14,9 +14,10 @@ static func breakdown(gm: Node) -> Dictionary:
 		base_spd = float(gm.player.base_speed)
 	var total_armor: float = gm.armor + gm.synergy_armor
 	var dmg_reduction: float = GameBalance.armor_reduction(total_armor)
-	var eff_haste: float = gm.attack_speed_mult * gm.synergy_haste_mult
+	# 移速/攻速读数与 Player 实际口径同源：装备/加点层 × 羁绊层 × 神通 buff 层（疾风/神行在身时面板如实反映）
+	var eff_haste: float = gm.attack_speed_mult * gm.synergy_haste_mult * gm.buff_attack_speed_mult
 	var cdr_pct: float = (1.0 - eff_haste) * 100.0
-	var eff_move: float = gm.move_speed_mult + gm.synergy_move_speed_mult
+	var eff_move: float = (gm.move_speed_mult + gm.synergy_move_speed_mult) * gm.buff_move_speed_mult
 	var eff_dmg: float = gm.weapon_damage_mult * gm.synergy_damage_mult
 	return {
 		"current_hp": cur_hp,

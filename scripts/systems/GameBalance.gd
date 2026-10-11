@@ -143,6 +143,7 @@ const SPIRIT_DANGER_DIST := BalanceTargeting.SPIRIT_DANGER_DIST
 const SPIRIT_SECTOR_HALF_ANGLE := BalanceTargeting.SPIRIT_SECTOR_HALF_ANGLE
 const SPIRIT_BASE_ANGULAR_SPEED := BalanceTargeting.SPIRIT_BASE_ANGULAR_SPEED
 const SPIRIT_CONTACT_DUTY := BalanceTargeting.SPIRIT_CONTACT_DUTY
+const SPIRIT_CONTACT_DUTY_PER_STAR := BalanceTargeting.SPIRIT_CONTACT_DUTY_PER_STAR
 const MULTI_WEAPON_LOAD_PER_EXTRA := BalanceTargeting.MULTI_WEAPON_LOAD_PER_EXTRA
 
 # 祭坛灵兽 → BalanceSpiritBeast
@@ -210,6 +211,12 @@ static func item_tier_weights(luck: float, wave: int) -> Array:
 
 static func weighted_pick_index(weights: Array, roll: float) -> int:
 	return BalanceEconomy.weighted_pick_index(weights, roll)
+
+static func synergy_thresholds(thresholds: Array, threshold_shift: int = 0) -> Array:
+	return BalanceEconomy.synergy_thresholds(thresholds, threshold_shift)
+
+static func synergy_next_threshold(count: int, thresholds: Array, threshold_shift: int = 0) -> int:
+	return BalanceEconomy.synergy_next_threshold(count, thresholds, threshold_shift)
 
 static func synergy_level(count: int, thresholds: Array, threshold_shift: int = 0) -> int:
 	return BalanceEconomy.synergy_level(count, thresholds, threshold_shift)
@@ -370,5 +377,9 @@ static func compute_spirit_orbit(
 ) -> Dictionary:
 	return BalanceTargeting.compute_spirit_orbit(orb_angles, enemies_info, base_radius, min_radius, max_reach)
 
-static func multi_weapon_damage_mult(slot_count: int) -> float:
-	return BalanceTargeting.multi_weapon_damage_mult(slot_count)
+static func multi_weapon_damage_mult(slot_count: int, drone_count: int = 0) -> float:
+	return BalanceTargeting.multi_weapon_damage_mult(slot_count, drone_count)
+
+## 环绕灵宝接触结算占空比（按星级）：sustained_single_dps 与平衡仿真共用的实伤折算尺
+static func spirit_contact_duty(star: int = 1) -> float:
+	return BalanceTargeting.spirit_contact_duty(star)

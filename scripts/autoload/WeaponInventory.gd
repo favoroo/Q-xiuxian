@@ -277,16 +277,28 @@ static func unequip_to_stash(gm: Node, index: int) -> bool:
 	AudioManager.play_sfx("unequip", 1.0)
 	return true
 
-## 背包 → 上阵「换装」：上阵未满时等同 equip_from_stash；已满时把 equipped_index 那件
-## 换下来、背包 stash_index 那件顶上。换下的一件回到背包里被腾出的那个位（stash_index）
-## —— 拖拽的落点语义是「与这一格互换」，不是「换下的排到队尾」。
+## 背包 → 上阵「换装」（旧口径，保留给既有判据）：上阵未满时等同 equip_from_stash；
+## 已满时走 equip_stash_into_slot 的替换语义。
 static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) -> bool:
 	if stash_index < 0 or stash_index >= gm.stash.size():
 		return false
-	var list := get_weapons_summary(gm)
-	if equipped_index < 0 or equipped_index >= list.size():
-		return false
 	if slots_used(gm) < gm.max_weapon_slots():
+		return equip_from_stash(gm, stash_index)
+	return equip_stash_into_slot(gm, stash_index, equipped_index)
+
+## 背包 → 上阵指定格（拖拽落点语义，2026-10-11 用户：拖到已佩戴的武器上＝替换）：
+## 指向已占用格＝替换那一格（换下的一件回背包被腾出的原位 stash_index，不是排到队尾）；
+## 指向空格/越界＝直接装备（上阵次序固定「悬浮法器在前、灵宝在后」，新件落在队尾）。
+static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -> bool:
+	if stash_index < 0 or stash_index >= gm.stash.size():
+		return false
+	var list := get_weapons_summary(gm)
+	if slot_index < 0 or slot_index >= list.size():
+		# 空格＝直接装备；headless/异常态没有玩家节点时非灵宝接不住，先验后动
+		var e_def0 := WeaponData.get_def(String(gm.stash[stash_index].get("id", "")))
+		if e_def0.get("behavior", -1) != WeaponData.Behavior.DRONE \
+				and (gm.player == null or not gm.player.has_method("add_weapon_instance")):
+			return false
 		return equip_from_stash(gm, stash_index)
 	var entry: Dictionary = gm.stash[stash_index]
 	var e_def := WeaponData.get_def(entry.get("id", ""))
@@ -294,7 +306,7 @@ static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) 
 	# 悬浮法器要有玩家节点才接得住（headless/异常态）：先验完再动手，不做半截回滚
 	if not as_drone and (gm.player == null or not gm.player.has_method("add_weapon_instance")):
 		return false
-	var item: Dictionary = list[equipped_index]
+	var item: Dictionary = list[slot_index]
 	if not _remove_summary_item(gm, item):
 		return false
 	gm.stash.remove_at(stash_index)
@@ -307,6 +319,39 @@ static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) 
 	gm.stash.insert(mini(stash_index, gm.stash.size()), _to_stash_entry(item))
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	AudioManager.play_sfx("equip", 1.0)
+	return true
+
+## 上阵两格互换位置（summary 下标；拖拽换位用）：两件同为悬浮法器 ⇒ 换 weapon_holder
+## 子节点次序（环绕角度随次序重排，见 Player.reorder_weapons）；同为灵宝 ⇒ 换 drones
+## 数组次序。混池不换：summary 固定「悬浮法器在前、灵宝在后」，跨池次序没有可落的数据。
+static func swap_equipped_slots(gm: Node, i: int, j: int) -> bool:
+	if i < 0 or j < 0 or i == j:
+		return false
+	var list := get_weapons_summary(gm)
+	if i >= list.size() or j >= list.size():
+		return false
+	var a: Dictionary = list[i]
+	var b: Dictionary = list[j]
+	var a_drone: bool = a.get("is_drone", false)
+	var b_drone: bool = b.get("is_drone", false)
+	if a_drone != b_drone:
+		return false
+	if a_drone:
+		var ai := int(a.get("drone_index", -1))
+		var bi := int(b.get("drone_index", -1))
+		if ai < 0 or bi < 0 or ai >= gm.drones.size() or bi >= gm.drones.size():
+			return false
+		var tmp = gm.drones[ai]
+		gm.drones[ai] = gm.drones[bi]
+		gm.drones[bi] = tmp
+		if gm.player != null and gm.player.has_method("sync_drones"):
+			gm.player.sync_drones()
+	else:
+		if gm.player == null or not gm.player.has_method("reorder_weapons"):
+			return false
+		gm.player.reorder_weapons(i, j)
+	gm.notify_weapons_updated(get_weapons_summary(gm))
+	AudioManager.play_sfx("ui_click", 1.0)
 	return true
 
 ## 背包内拖拽排序：把 from 号移到 to 号（其余顺移）。to 允许给到 size（背包空位/分隔签的

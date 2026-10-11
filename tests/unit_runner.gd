@@ -59,6 +59,7 @@ func _ready() -> void:
 	infra._test_career_milestones()
 	combat._test_knock_direction()
 	combat._test_charge_geometry()
+	combat._test_stat_breakdown_buff()
 	targeting._test_spirit_orbit_dynamics()
 	content._test_turret_and_new_cultivators()
 	consistency._test_upgrade_desc_apply()

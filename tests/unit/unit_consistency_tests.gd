@@ -165,7 +165,15 @@ func _test_skill_desc_apply() -> void:
 		if d.has("duration") and "秒" in desc:
 			var re := RegEx.new()
 			re.compile("(\\d+(?:\\.\\d+)?)\\s*秒")
+			# 「N秒」可被 duration 或 iframe 解释（冲刺文案报的是无敌窗口，不是位移耗时）
+			var anchor := "duration=%s" % d["duration"]
+			if d.has("iframe"):
+				anchor += " 或 iframe=%s" % d["iframe"]
 			for m in re.search_all(desc):
-				if absf(float(m.get_string(1)) - float(d["duration"])) > 0.001:
-					probs.append("文案「%s秒」与 duration=%s 不一致" % [m.get_string(1), d["duration"]])
+				var v := float(m.get_string(1))
+				var explained := absf(v - float(d["duration"])) <= 0.001
+				if not explained and d.has("iframe"):
+					explained = absf(v - float(d["iframe"])) <= 0.001
+				if not explained:
+					probs.append("文案「%s秒」与 %s 不一致" % [m.get_string(1), anchor])
 		_c.check(probs.is_empty(), "SkillData/%s 文案与数值同源（问题: %s）" % [sid, "；".join(PackedStringArray(probs))])

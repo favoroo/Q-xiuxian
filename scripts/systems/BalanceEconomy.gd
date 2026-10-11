@@ -194,13 +194,29 @@ static func weighted_pick_index(weights: Array, roll: float) -> int:
 
 # ---------------- 流派羁绊 ----------------
 
+## 门槛下移后的阶梯表：逐档 -shift，下移后最低只到 1 件。
+## 「角色把某系门槛降低」这件事的唯一折算口——档位结算、卡面进度、徽记读数、推荐打分都必须走它，
+## 任何一处直接拿原表 thresholds 比大小，门槛 -1 的角色就会看到一套差一件的假进度。
+static func synergy_thresholds(thresholds: Array, threshold_shift: int = 0) -> Array:
+	var out: Array = []
+	for th in thresholds:
+		out.append(maxi(1, int(th) - threshold_shift))
+	return out
+
+## 下一档门槛（0 = 已到满档）：卡面「n/next」与「临门一档」高亮取这一个数
+static func synergy_next_threshold(count: int, thresholds: Array, threshold_shift: int = 0) -> int:
+	for th in synergy_thresholds(thresholds, threshold_shift):
+		if count < int(th):
+			return int(th)
+	return 0
+
 ## 羁绊档位：持有 count 件时达到的等级（0 = 未激活）。
-## threshold_shift 是角色对门槛的下移量（符阵灵童的御灵羁绊门槛），下移后最低只到 1 件。
+## threshold_shift 是角色对门槛的下移量（驯兽师的御灵羁绊门槛），下移后最低只到 1 件。
 static func synergy_level(count: int, thresholds: Array, threshold_shift: int = 0) -> int:
 	var level := 0
-	for i in range(thresholds.size()):
-		var th := maxi(1, int(thresholds[i]) - threshold_shift)
-		if count >= th:
+	var ths := synergy_thresholds(thresholds, threshold_shift)
+	for i in range(ths.size()):
+		if count >= int(ths[i]):
 			level = i + 1
 	return level
 

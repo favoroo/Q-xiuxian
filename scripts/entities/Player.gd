@@ -40,6 +40,12 @@ var _dash_time: float = 0.0        ## 冲刺剩余秒（>0 期间移动被冲刺
 var _dash_dir: Vector2 = Vector2.DOWN
 var _dash_speed: float = 0.0
 
+# ---------------- 踏影（闪避出口，数值全在 ShadowStepData） ----------------
+## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，冲刺落地时全部踩碎兑现。
+## 队列长度就是层数（HUD 角标与角色身上的残影都直接读这里，与 skill_cd_left 同一口径）。
+var shadow_ring: Array = []
+var _shadow_landing: bool = false  ## 本次冲刺带着影层落地，需要在收速那一帧兑现影袭
+
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
 
@@ -223,6 +229,19 @@ func _recalculate_weapon_slots() -> void:
 		w.spread_angle = (float(i) - float(count - 1) * 0.5) * deg_to_rad(28.0)
 		w.orbit_extents = Vector2(80.0, 58.0)
 
+## 上阵两把悬浮法器互换位置（商店拖拽换位用）：环绕角度按次序重排，换位即换环绕方位；
+## 灵宝（drones）的互换走 WeaponInventory.swap_equipped_slots，不经过这里
+func reorder_weapons(i: int, j: int) -> void:
+	equipped_cleanup()
+	var count := weapon_holder.get_child_count()
+	if i < 0 or j < 0 or i >= count or j >= count or i == j:
+		return
+	var ci := weapon_holder.get_child(i)
+	var cj := weapon_holder.get_child(j)
+	weapon_holder.move_child(ci, j)
+	weapon_holder.move_child(cj, i)
+	_recalculate_weapon_slots()
+
 func get_equipped_weapons_data() -> Array[Dictionary]:
 	equipped_cleanup()
 	var list: Array[Dictionary] = []
@@ -242,25 +261,36 @@ func get_equipped_weapons_data() -> Array[Dictionary]:
 
 func sync_drones() -> void:
 	var target: Array = GameManager.drones
+	# 期望具数 = 每条御灵按星级分身（★1=1 ★2=2 ★3=3，WeaponData.drone_orb_count）：
+	# 升星补上「召唤物数量」成长轴，单法器总纸面伤害不变，贴身覆盖与占空比抬升
+	var desired := 0
+	for d_entry in target:
+		desired += WeaponData.drone_orb_count(GameManager._drone_star(d_entry))
 	var current_count = sun_orb_container.get_child_count()
-	if current_count < target.size():
-		for i in range(target.size() - current_count):
+	if current_count < desired:
+		for i in range(desired - current_count):
 			var orb = sun_orb_scene.instantiate()
 			sun_orb_container.add_child(orb)
-	elif current_count > target.size():
-		var to_remove = current_count - target.size()
+	elif current_count > desired:
+		var to_remove = current_count - desired
 		for i in range(to_remove):
 			var last_idx = sun_orb_container.get_child_count() - 1
 			var child = sun_orb_container.get_child(last_idx)
 			sun_orb_container.remove_child(child)
 			child.queue_free()
-	for i in range(sun_orb_container.get_child_count()):
-		var orb = sun_orb_container.get_child(i) as SunOrb
-		if orb != null and i < target.size():
-			var d_entry = target[i]
-			var d_id: String = GameManager._drone_id(d_entry)
-			var d_star: int = GameManager._drone_star(d_entry)
-			orb.setup(d_star, d_id)
+	# 逐条御灵下发星级/法宝 id/分身具数；伤害均摊由 SunOrb.setup 自己结算
+	var orb_idx := 0
+	for d_entry in target:
+		var d_id: String = GameManager._drone_id(d_entry)
+		var d_star: int = GameManager._drone_star(d_entry)
+		var orbs := WeaponData.drone_orb_count(d_star)
+		for k in range(orbs):
+			if orb_idx >= sun_orb_container.get_child_count():
+				break
+			var orb = sun_orb_container.get_child(orb_idx) as SunOrb
+			if orb != null:
+				orb.setup(d_star, d_id, orbs)
+			orb_idx += 1
 
 func heal(amount: float, quiet: bool = false) -> void:
 	if amount <= 0.0:
@@ -348,8 +378,11 @@ func _do_dash(st: Dictionary) -> void:
 	_dash_dir = dir.normalized()
 	_dash_time = float(st["duration"])
 	_dash_speed = float(st["distance"]) / maxf(0.05, _dash_time)
-	# 冲刺无敌覆盖位移全程再多 2 帧余量，落点瞬间不吃贴脸伤害
-	invulnerable_time = maxf(invulnerable_time, _dash_time + 0.04)
+	# 无敌覆盖位移全程 + 落地脱身余量（时长唯一真话在 SkillData 的 iframe 字段），落点瞬间不吃贴脸伤害
+	# 带着影层冲刺时：每层再加一段无敌，并预约落地那一帧兑现影袭（_release_shadow_step）
+	_shadow_landing = ShadowStepData.has_charge(shadow_ring)
+	invulnerable_time = maxf(invulnerable_time,
+		float(st.get("iframe", _dash_time + 0.04)) + ShadowStepData.iframe_bonus(shadow_ring))
 	play_squash(Vector2(1.3, 0.72), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
 	if skill_vfx != null:
@@ -357,6 +390,34 @@ func _do_dash(st: Dictionary) -> void:
 	if is_procedural and procedural_view != null:
 		procedural_view.play_dash(_dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
+
+## 踏影落地：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
+## 环特效半径传的就是判定半径本身（画多大 == 判多大）；不加震屏——这一脚的因果由环、
+## 跳字与击退本身表达，冲刺起招那一下已经给过一次反馈，同帧再叠就是满屏乱晃。
+func _release_shadow_step() -> void:
+	_shadow_landing = false
+	if not ShadowStepData.has_charge(shadow_ring):
+		return
+	var dmg := ShadowStepData.burst_damage(shadow_ring)
+	var impulse: float = ShadowStepData.push_impulse(shadow_ring) * GameManager.knockback_mult
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var e := node as EnemyBase
+		if e == null or not is_instance_valid(e) or e.dying:
+			continue
+		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，不许被影袭推动或打到
+		if e.is_in_group("chests") or e.is_in_group("herbs"):
+			continue
+		var off: Vector2 = e.global_position - global_position
+		if off.length() > ShadowStepData.BURST_RADIUS:
+			continue
+		var dir := off.normalized() if off.length_squared() > 0.0001 else _dash_dir
+		e.take_damage(dmg, dir * impulse)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, ShadowStepData.BURST_RADIUS,
+		GameStyle.SHADOW, 0.26)
+	AudioManager.play_sfx("whoosh_heavy", 1.0, 0.82)
+	shadow_ring = []
+	if skill_vfx != null:
+		skill_vfx.on_shadow_spent()
 
 func _do_gale(st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
@@ -450,6 +511,9 @@ func _physics_process(delta: float) -> void:
 			# （约 1.5 个屏高）。收速后位移与数据表同源，只留一点前冲余量。
 			velocity = _dash_dir * minf(velocity.length(), target_speed * DASH_LANDING_SPEED_MUL)
 			target_velocity = dir * target_speed
+		if _shadow_landing:
+			# 落地这一帧才踩碎影层：冲过去那一脚踩在落点上，环特效与判定同一处同一尺寸
+			_release_shadow_step()
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
@@ -782,14 +846,23 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 				_orb_enemies_buf.append(od)
 				idx += 1
 
-func take_damage(amount: float) -> void:
+## 受创入口。source_pos = 伤害来源位置（Boss 震地/丹爆自爆等 AoE 传入），
+## 受击火花据此指向真实来向；未传（接触/弹丸等贴脸伤害本就有实体因果）时保持向上。
+func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	if invulnerable_time > 0.0 or GameManager.is_game_over:
 		return
 
-	# 流云身法：闪避成功不掉血、不消耗无敌帧
+	# 流云身法：闪避成功不掉血，换一段「残影」短无敌，并把躲掉的这一刀存进影里等着还回去。
+	# 为什么必须给这段无敌：不给的话下一帧又是一次判定，闪避只是把「这一下」推迟几帧，
+	# 落点频率仍被 0.55s 无敌帧钉死 ⇒ 加这段之前实测 86% 闪避在贴身怪群只兑现 ×1.25 有效生命
+	#（尺子见 tests/DodgeDeliveryProbe.tscn，机制判据见 tests/ShadowStepCheck.tscn）。
 	if GameManager.rng.randf() < GameManager.get_effective_dodge():
 		DamageNumber.spawn(get_parent(), global_position, 0, false, "闪避")
 		AudioManager.play_sfx("dodge", 1.0)
+		invulnerable_time = maxf(invulnerable_time, ShadowStepData.GUARD_SEC)
+		shadow_ring = ShadowStepData.push_ring(shadow_ring, amount)
+		if skill_vfx != null:
+			skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
 		return
 
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
@@ -805,7 +878,8 @@ func take_damage(amount: float) -> void:
 	play_squash(Vector2(1.35, 0.72), 0.22)
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.2)
-	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, false)
+	var spark_dir := (global_position - source_pos).normalized() if source_pos.is_finite() else Vector2.UP
+	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, spark_dir, false)
 	AudioManager.play_sfx("player_hurt", 0.9)
 
 	if hit_flash_mat != null:

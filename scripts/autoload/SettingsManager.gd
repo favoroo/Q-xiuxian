@@ -55,6 +55,8 @@ const SCHEMA: Array[Dictionary] = [
 	},
 	{
 		"section": "audio",
+		# 2026-10-11：开局那句 TTS 台词与游戏不搭已撤掉，设置页同步不再展示「语音音量」行。
+		# 键与 Voice 总线保留（AudioManager.play_voice 仍可用），日后有新台词直接加回那一行即可。
 		"key": "voice_volume",
 		"title": "语音音量",
 		"desc": "角色台词与提示语音 (Voice)",

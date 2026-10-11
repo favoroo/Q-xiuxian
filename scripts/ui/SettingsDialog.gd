@@ -105,7 +105,6 @@ func _build_audio_page() -> Control:
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
 	_add_audio_slider_row(vbox, &"BGM", "音乐音量", "背景音乐 (BGM)")
 	_add_audio_slider_row(vbox, &"SFX", "音效音量", "战斗与击杀音效 (SFX)")
-	_add_audio_slider_row(vbox, &"Voice", "语音音量", "角色台词与提示语音 (Voice)")
 
 	return scroll
 
@@ -499,7 +498,8 @@ func _on_setting_changed(section: StringName, key: StringName, _val: Variant) ->
 		_update_cycle_btn_ui(String(key))
 
 func _refresh_all_ui() -> void:
-	for bus in [&"Master", &"BGM", &"SFX", &"Voice"]:
+	# Voice 总线仍在引擎里，但这一页没有它的滑杆（开局台词已撤），故不刷该行
+	for bus in [&"Master", &"BGM", &"SFX"]:
 		_update_audio_row_ui(bus)
 	for k in _toggle_controls.keys():
 		_update_toggle_btn_ui(k)

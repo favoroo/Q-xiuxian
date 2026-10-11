@@ -36,6 +36,10 @@ const GREY := Color("7d8494")       # 暗部正文/禁用
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/增益绿/朱砂都不撞）
 const AURUM := Color("ffc94d")      # 暖金 = 金光护体椭球护罩主色（世界特效专用，与点缀黄 JADE 的货币语义区分）
 const AURUM_EDGE := Color("ffe9b0") # 暖金亮边（护罩描边/流光高光）
+const SHADOW := Color(0.78, 0.50, 1.0)      ## 幽夜紫 = 「踏影/影层」专用（闪避攒的层数读数、
+## 落地影袭环）：与暖金护罩、元素橙红、主蓝行动色都不撞，黑底上够亮才读得出层数
+const SHADOW_EDGE := Color(0.94, 0.84, 1.0) ## 影层亮边（攒满时的可释放高亮与环描边）
+const SHADOW_DK := Color("3a1f52")          ## 幽夜紫暗底（影层角标的芯片底色，配 SHADOW 亮字）
 
 # 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按黑底可读调亮
 const RARITY_COMMON := Color(0.72, 0.70, 0.62)
@@ -211,6 +215,21 @@ const CHIP_PAD := 6.0
 
 static func chip_pin_w(text: String, font: Font, font_size: int) -> float:
     return line_max_w(text, font, font_size) + CHIP_PAD
+
+## 色签 Label 工厂：斜切面 + 贴着字走的宽。商店货架卡行②、图鉴卡面三签、羁绊签
+## 都是「[文字, 面色, 字色]」这一形状，画法收在这一处 —— 否则两处各画一套，
+## 同一张流派签在商店是蓝的、在图鉴是灰的，玩家对不上号。
+## 面色由调用方给（色即功能，取色口径在业务侧），这里不猜语义。
+static func chip_label(text: String, face: Color, text_color: Color,
+        font_size: int = 11) -> Label:
+    var lbl := Label.new()
+    lbl.text = " %s " % text
+    lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    lbl.custom_minimum_size = Vector2(chip_pin_w(lbl.text, body_font(), font_size), 0)
+    lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    lbl.add_theme_stylebox_override("normal", chip(face))
+    label(lbl, font_size, text_color)
+    return lbl
 
 ## BBCode 版的硬换行：悟道候选那种 `[center]…\n• 武器总伤害 [b]+15%[/b][/color]…` 的文案，
 ## 标签零宽、可见字符才占宽，所以逐字走一遍、只在可见字符之间下刀。

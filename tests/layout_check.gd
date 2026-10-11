@@ -144,9 +144,18 @@ func _stress_hud(hud: Control) -> void:
 	var box: HBoxContainer = hud.get("_synergy_box")
 	if box == null:
 		return
-	for tag in ["剑系", "符箓", "雷法", "御灵", "广域"]:
+	# 徽记文案取表里最长的流派名 + 满档后缀：原先手写「剑系/符箓/雷法/御灵/广域」，
+	# 后四个名字在 SYNERGIES 表里早就不存在了 ⇒ 量到的比真机短，
+	# 「召唤 (6/MAX)」这种满档读数变宽一档没人拦。
+	var longest_name := ""
+	for k in WeaponData.SYNERGIES.keys():
+		var nm: String = String((WeaponData.SYNERGIES[k] as Dictionary).get("name", ""))
+		if nm.length() > longest_name.length():
+			longest_name = nm
+	_c.check(longest_name.length() >= 2, "羁绊名取到了（实得「%s」，空名等于这条应力没上）" % longest_name)
+	for i in range(5):
 		var chip := Label.new()
-		chip.text = " %s Lv.3 " % tag
+		chip.text = " %s (%d/MAX) " % [longest_name, WeaponData.MAX_SLOTS]
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
 		GameStyle.label(chip, 11, GameStyle.PAPER)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -290,6 +299,20 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		await get_tree().create_timer(0.4).timeout
 		await get_tree().process_frame
 		await get_tree().process_frame
+		# 羁绊签行的尺子要先确认活着：_stress_shop 灌的 6 只灵蝶必须真长出徽记，
+		# 且至少一枚是满档读数（最长的那一档文案）。空排 = 这一屏根本没量到徽记那一行，
+		# 出屏了也不会报红（同「ALL PASS（0 项）」那一类假绿）。
+		var syn_box := node.get("_synergy_box") as HBoxContainer
+		var chip_txts: Array[String] = []
+		if syn_box != null:
+			for ch in syn_box.get_children():
+				var lbl := ch as Label
+				if lbl != null:
+					chip_txts.append(lbl.text)
+		_c.check(not chip_txts.is_empty(), "%s · 羁绊签行真长出徽记（实得 %s）" % [
+			String(spec["tag"]), str(chip_txts)])
+		_c.check(chip_txts.any(func(s: String) -> bool: return s.contains("MAX)")),
+			"%s · 至少一枚满档徽记，量的是最长那一档读数" % String(spec["tag"]))
 	var bad := _walk(node, screen, float(spec.get("edge_gap", 0.0)))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))

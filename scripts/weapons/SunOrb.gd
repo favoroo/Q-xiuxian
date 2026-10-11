@@ -1,7 +1,8 @@
 class_name SunOrb
 extends Area2D
 
-## 环绕灵宝（灵蝶/寒泉玉莲/混元古钟）：接触伤害走 WeaponData 定义，星级影响伤害/冷却/体型
+## 环绕灵宝（灵蝶/寒泉玉莲/混元古钟）：接触伤害走 WeaponData 定义，星级影响伤害/冷却/体型；
+## ★2 起一具分身为二/为三（orb_count），单法器总纸面伤害不变，每具结算均摊、贴身覆盖更广
 
 ## 环绕半径与接触判定半径：只有这两个常数说了算，贴图与碰撞一起变。
 ## 旧写法是 .tscn 里钉 14px 碰撞 + Player 里写死 78px 轨道 ⇒ 距玩家 49px 以内是盲区，
@@ -13,6 +14,7 @@ const CONTACT_RADIUS: float = 33.0     ## 接触半径 33px：敌人受击圈 15
 
 var star: int = 1
 var drone_id: String = "lingdie"
+var orb_count: int = 1          ## 所属法器的分身具数（★1/★2/★3 = 1/2/3），伤害与属性折算按具均分
 var base_damage: float = 15.0
 var hit_cooldown: float = 0.35
 var current_radius: float = ORBIT_RADIUS ## 动态轨道当前平滑半径
@@ -28,10 +30,13 @@ var _pulse_tween: Tween = null
 var _drone_renderer: ProceduralDroneRenderer = null
 
 ## 由 Player.sync_drones 下发星级与法宝 id（必须在节点可用后调用）
-func setup(star_level: int, weapon_id: String = "lingdie") -> void:
+## orb_total：该法器分身出的灵宝具数（WeaponData.drone_orb_count）。总纸面 DPS 与单具版一致：
+## 每具结算 1/N 基础与 1/N 属性折算，多具同环扫掠换更高贴身覆盖（BalanceTargeting 占空比按星抬升）。
+func setup(star_level: int, weapon_id: String = "lingdie", orb_total: int = 1) -> void:
 	star = clampi(star_level, 1, WeaponData.MAX_STAR)
+	orb_count = maxi(1, orb_total)
 	drone_id = weapon_id if not weapon_id.is_empty() else "lingdie"
-	base_damage = WeaponData.damage_for(drone_id, star)
+	base_damage = WeaponData.damage_for(drone_id, star) / float(orb_count)
 	hit_cooldown = WeaponData.cooldown_for(drone_id, star)
 	var def := WeaponData.get_def(drone_id)
 	max_orbit_reach = maxf(150.0, float(def.get("range", 205.0)))
@@ -82,6 +87,18 @@ func _apply_star_visuals() -> void:
 			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.LIHUO_YA
 		"xuanwu_pei":
 			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.XUANWU_PEI
+		"jinming_ling":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.JINMING_LING
+		"muling_ou":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.MULING_OU
+		"bingpo_zhu":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.BINGPO_ZHU
+		"chiyan_ying":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.CHIYAN_YING
+		"tuling_shi":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.TULING_SHI
+		"jianling":
+			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.JIAN_LING
 		_:
 			_drone_renderer.kind = ProceduralDroneRenderer.DroneKind.LINGDIE
 
@@ -121,11 +138,11 @@ func _try_damage(area: Area2D) -> void:
 				if now - int(_hit_ms[k]) >= cd_ms:
 					_hit_ms.erase(k)
 		var def := WeaponData.get_def(drone_id)
-		var stat_bonus := GameManager.get_weapon_stat_bonus(drone_id, star)
+		var stat_bonus := GameManager.get_weapon_stat_bonus(drone_id, star) / float(orb_count)
 		var total_base := base_damage + stat_bonus
 		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.get_multi_weapon_damage_mult() * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
+		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.synergy_drone_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.get_multi_weapon_damage_mult() * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)

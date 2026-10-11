@@ -5,7 +5,7 @@ extends RefCounted
 ## 角色专属强化写在 CultivatorData.DEFS[cid]["skill_mods"][skill_id]，
 ## 卡片文案与实战数值都走 final_stats() 合并结果（唯一真话），别处不抄数字。
 ## skill_mods 支持的键：
-##   duration_add  —— 持续/无敌秒数加算（石岳：金光护体 +1.0s）
+##   duration_add  —— 持续/无敌秒数加算（石岳：金光护体 +1.0s；对冲刺 = 无敌窗口加时）
 ##   power_mult    —— 效果强度乘算（移速加成 / 间隔减免 / 回血比例）
 ##   distance_mult —— 冲刺距离乘算（魅影：+55%）
 ##   cooldown_mult —— 冷却乘算（多宝/符阵/夺舍：0.65）
@@ -19,10 +19,11 @@ const DEFS: Dictionary = {
 			"glyph": "冲",
 			"icon": "res://assets/art/skill_dash.png",
 			"kind": Kind.DASH,
-			"cooldown": 8.0,
-			"duration": 0.16,     # 冲刺位移耗时（秒），期间无敌
+			"cooldown": 6.0,      # 全技能最短冷却（其余 14/16/20/25），冲刺是走位主手段不是保命大招
+			"duration": 0.16,     # 冲刺位移耗时（秒）
+			"iframe": 0.30,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量，落地贴脸啃不动
 			"distance": 150.0,    # 冲刺距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
-			"desc": "向当前方向冲刺，冲刺过程中无敌",
+			"desc": "向当前方向冲刺，冲刺及落地后0.3秒内无敌",
 		},
 		"gale": {
 			"name": "加速",
@@ -49,8 +50,8 @@ const DEFS: Dictionary = {
 			"glyph": "盾",
 			"icon": "res://assets/art/skill_aegis.png",
 			"kind": Kind.IFRAME,
-			"cooldown": 20.0,
-			"duration": 1.6,
+			"cooldown": 16.0,
+			"duration": 2.0,
 			"desc": "短时间内不受任何伤害",
 		},
 		"renewal": {
@@ -59,8 +60,8 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/skill_renewal.png",
 			"kind": Kind.HEAL,
 			"cooldown": 25.0,
-			"power": 0.25,        # 回复最大气血比例
-			"desc": "立即回复25%最大生命",
+			"power": 0.35,        # 回复最大气血比例（单口须压过回气丹 50% 的体感线，商人/药王契合后 5 成以上）
+			"desc": "立即回复35%最大生命",
 		},
 }
 
@@ -89,12 +90,17 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		"kind": int(def.get("kind", 0)),
 		"cooldown": float(def.get("cooldown", 10.0)),
 		"duration": float(def.get("duration", 0.0)),
+		"iframe": float(def.get("iframe", 0.0)),
 		"power": float(def.get("power", 0.0)),
 		"distance": float(def.get("distance", 0.0)),
 	}
 	var cdef: Dictionary = CultivatorData.get_def(cid)
 	var mods: Dictionary = Dictionary(cdef.get("skill_mods", {})).get(skill_id, {})
-	out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
+	# 冲刺的 duration 只管位移耗时，duration_add 改走无敌窗口（对冲刺 = 无敌加时）
+	if int(out["kind"]) == Kind.DASH:
+		out["iframe"] = float(out["iframe"]) + float(mods.get("duration_add", 0.0))
+	else:
+		out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
 	out["power"] = float(out["power"]) * float(mods.get("power_mult", 1.0))
 	out["distance"] = float(out["distance"]) * float(mods.get("distance_mult", 1.0))
 	out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)))
@@ -111,7 +117,8 @@ static func enhance_desc(skill_id: String, cid: String) -> String:
 	if mods.has("distance_mult"):
 		parts.append("冲刺距离 +%d%%" % int(round((float(mods["distance_mult"]) - 1.0) * 100.0)))
 	if mods.has("duration_add"):
-		var unit := "无敌" if int(def.get("kind", 0)) == Kind.IFRAME else "持续"
+		var kind := int(def.get("kind", 0))
+		var unit := "无敌" if kind == Kind.IFRAME or kind == Kind.DASH else "持续"
 		parts.append("%s +%.1f 秒" % [unit, float(mods["duration_add"])])
 	if mods.has("power_mult"):
 		var base := float(def.get("power", 0.0)) * 100.0

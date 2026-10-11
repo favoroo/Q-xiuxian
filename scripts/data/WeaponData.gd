@@ -87,7 +87,8 @@ const DEFS: Dictionary = {
 					"baoyu_liuhuazhen": {
 						"name": "暴雨针", "behavior": Behavior.PROJECTILE,
 						"sfx": "metal_dart",
-						"damage": 12.0, "cooldown": 1.25, "range": 220.0,
+						# 2026-10-11 平衡校准：剑痴核心交叉件单体偏软，12→13 抬离群伤带下沿（★1 单体 20.8 仍带内）
+						"damage": 13.0, "cooldown": 1.25, "range": 220.0,
 						"knockback": 90.0,
 						"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
 						"tip": Vector2(22, -6),
@@ -377,7 +378,8 @@ const DEFS: Dictionary = {
 				"jinlei_zhui": {
 					"name": "金雷锥", "behavior": Behavior.BURST,
 					"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
-					"damage": 35.0, "cooldown": 1.35, "range": 230.0,
+					# 2026-10-11 平衡校准：单点重击定位（爆裂半径 55 全库最小）归位单体档，38/1.35≈28.1 入 26~32 带
+					"damage": 38.0, "cooldown": 1.35, "range": 230.0,
 					"knockback": 220.0,
 					"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
 					"tip": Vector2(22, 8), "upright": true,
@@ -686,6 +688,160 @@ const DEFS: Dictionary = {
 					"tags": ["contraption", "earth"],
 					"stat_scalings": {"engineering_damage": 1.0, "armor": 2.0},
 				},
+
+				# ==================== 2026-10-11 第二批新增 12 把 ====================
+				# 设计口径（用户）：召唤（御灵）搭不出来——御灵 6 把每五行仅 1 把、御灵∩土仅 2 把；
+				# "除了剑系其他的都要继续拓展"，且合理处上三标签（仿剑阵盘机关+剑系+金的双重身份逻辑）。
+				# 本批：御灵 +6（每五行交叉 ≥2，追平剑系）、雷法 +2、横扫 +2、符箓 +1、机关 +1；
+				# 三标签 3 把：剑灵 [spirit,sword,metal]、傀儡兽 [contraption,spirit,earth]（机关师
+				# 双器类交叉从 0→1）、惊蛰符 [talisman,thunder,wood]（雷法真君交叉第 2 把）。
+				# 御灵纸面 DPS 44~48（×SPIRIT_CONTACT_DUTY 0.75 ⇒ 有效 33~36 落御灵带 30~38）。
+				# tip 由 tools/fit_weapon_icon.py 实测回填。
+
+				# ---- 御灵 6 把（DRONE）：每五行交叉补到 2~3 把 ----
+				"jinming_ling": {
+					"name": "金鸣铃", "behavior": Behavior.DRONE,
+					"sfx": "drone_chime",
+					"damage": 22.0, "cooldown": 0.47, "range": 170.0,
+					"knockback": 210.0,
+					"price": 42, "icon": "res://assets/art/weapon_jinming_ling.png",
+					"desc": "金铃环绕震鸣切金，受召唤伤害与暴击率加成", "tag": "环绕·召唤·金",
+					"tags": ["spirit", "metal"],
+					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
+				},
+				"muling_ou": {
+					"name": "木灵偶", "behavior": Behavior.DRONE,
+					"sfx": "drone_flutter",
+					"damage": 24.0, "cooldown": 0.50, "range": 175.0,
+					"knockback": 180.0,
+					"price": 42, "icon": "res://assets/art/weapon_muling_ou.png",
+					"desc": "木偶人环绕护卫生生不息，受召唤伤害与生命回复加成", "tag": "环绕·召唤·木",
+					"tags": ["spirit", "wood"],
+					"stat_scalings": {"engineering_damage": 1.0, "hp_regen": 4.0},
+				},
+				"bingpo_zhu": {
+					"name": "冰魄珠", "behavior": Behavior.DRONE,
+					"sfx": "drone_chime",
+					"damage": 23.0, "cooldown": 0.48, "range": 175.0,
+					"knockback": 190.0,
+					"price": 42, "icon": "res://assets/art/weapon_bingpo_zhu.png",
+					"desc": "冰魄宝珠环绕冻缓来敌，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
+					"proc_chill": 0.40, "chill_dur": 2.5,
+					"tags": ["spirit", "water"],
+					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
+				},
+				"chiyan_ying": {
+					"name": "赤炎萤", "behavior": Behavior.DRONE,
+					"sfx": "drone_flutter",
+					"damage": 18.0, "cooldown": 0.42, "range": 170.0,
+					"knockback": 150.0,
+					"price": 42, "icon": "res://assets/art/weapon_chiyan_ying.png",
+					"desc": "火萤群环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "环绕·召唤·火",
+					"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
+					"tags": ["spirit", "fire"],
+					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
+				},
+				"tuling_shi": {
+					"name": "土灵石", "behavior": Behavior.DRONE,
+					"sfx": "orb_hit",
+					"damage": 25.0, "cooldown": 0.52, "range": 175.0,
+					"knockback": 330.0,
+					"price": 42, "icon": "res://assets/art/weapon_tuling_shi.png",
+					"desc": "符文灵石环绕撞击震退敌群，受召唤伤害与护甲加成", "tag": "环绕·召唤·土",
+					"tags": ["spirit", "earth"],
+					"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5},
+				},
+				"jianling": {
+					"name": "剑灵", "behavior": Behavior.DRONE,
+					# 三重共鸣（仿剑阵盘）：同时计入 御灵+剑系 两条器类羁绊与金系羁绊
+					"sfx": "drone_chime",
+					"damage": 21.0, "cooldown": 0.45, "range": 172.0,
+					"knockback": 170.0,
+					"price": 44, "icon": "res://assets/art/weapon_jianling.png",
+					"desc": "剑形精魂环绕飞斩，受召唤伤害与暴击率加成", "tag": "环绕·剑灵·金",
+					"tags": ["spirit", "sword", "metal"],
+					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
+				},
+
+				# ---- 三标签交叉 2 把 + 雷法/横扫/符箓/机关补强 ----
+				"kuilei_shou": {
+					"name": "傀儡兽", "behavior": Behavior.TURRET,
+					# 三重共鸣（仿剑阵盘）：同时计入 机关+御灵 两条器类羁绊与土系羁绊
+					"sfx": "impact_crack",
+					"damage": 12.0, "cooldown": 3.8, "range": 200.0,
+					"turret_fire_cd": 0.55, "turret_lifetime": 12.0, "turret_cap": 2,
+					"knockback": 150.0,
+					"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
+					"tip": Vector2(22, -2), "upright": true,
+					"desc": "布设符灯傀儡兽掷石守御，受召唤伤害与护甲加成", "tag": "机关·傀儡·土",
+					"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.55, "bullet_spin": true,
+					"pierce": 1,
+					"tags": ["contraption", "spirit", "earth"],
+					"stat_scalings": {"engineering_damage": 1.0, "armor": 2.0},
+				},
+				"lieshan_duo": {
+					"name": "裂山铎", "behavior": Behavior.BURST,
+					"sfx": "whoosh_heavy", "sfx_impact": "drum_boom",
+					"damage": 30.0, "cooldown": 1.40, "range": 225.0,
+					"knockback": 340.0,
+					"price": 45, "icon": "res://assets/art/weapon_lieshan_duo.png",
+					"tip": Vector2(20, 2), "upright": true,
+					"desc": "铎钟裂山震波轰击区域大力击退，受元素伤害与护甲加成", "tag": "区域·范围·土",
+					"burst_radius": 85.0, "burst_tint": Color(0.80, 0.66, 0.38),
+					"tags": ["thunder", "earth"],
+					"stat_scalings": {"elemental_damage": 1.2, "armor": 2.5},
+				},
+				"jingzhe_fu": {
+					"name": "惊蛰符", "behavior": Behavior.PROJECTILE,
+					# 三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与木系羁绊
+					"sfx": "talisman_throw",
+					"damage": 16.0, "cooldown": 1.0, "range": 230.0,
+					"knockback": 130.0,
+					"price": 36, "icon": "res://assets/art/weapon_jingzhe_fu.png",
+					"tip": Vector2(0, -22),
+					"desc": "惊蛰雷符弹射2次叠毒滋蔓，受远程与元素伤害加成", "tag": "远程·雷法·木",
+					"bullet": "res://assets/art/bullet_jingzhe_fu.png", "bullet_scale": 0.6, "bullet_spin": true,
+					"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
+					"tags": ["talisman", "thunder", "wood"],
+					"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.0},
+				},
+				"liaoyuan_shan": {
+					"name": "燎原扇", "behavior": Behavior.MELEE,
+					"sfx": "fan_gust", "sfx_impact": "impact_crack",
+					"damage": 20.0, "cooldown": 1.20, "range": 180.0,
+					"knockback": 300.0,
+					"price": 36, "icon": "res://assets/art/weapon_liaoyuan_shan.png",
+					"tip": Vector2(22, 0),
+					"desc": "扇出燎原火风宽幅引燃，受近战与元素伤害加成", "tag": "近战·横扫·火",
+					"arc_scale": 1.35, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
+					"tags": ["wide", "fire"],
+					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "move_speed_bonus": 25.0},
+				},
+				"kaishan_fu": {
+					"name": "开山斧", "behavior": Behavior.MELEE,
+					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+					"damage": 29.0, "cooldown": 1.35, "range": 175.0,
+					"knockback": 480.0,
+					"price": 38, "icon": "res://assets/art/weapon_kaishan_fu.png",
+					"tip": Vector2(22, 0),
+					"desc": "开山巨斧横劈大力震退，受近战伤害与护甲加成", "tag": "近战·横扫·土",
+					"arc_scale": 1.3,
+					"tags": ["wide", "earth"],
+					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
+				},
+				"gengjin_fu": {
+					"name": "庚金符", "behavior": Behavior.PROJECTILE,
+					"sfx": "metal_dart",
+					"damage": 9.0, "cooldown": 0.60, "range": 230.0,
+					"knockback": 85.0,
+					"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
+					"tip": Vector2(0, -22),
+					"desc": "连射2张金符高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
+					"bullet": "res://assets/art/bullet_gengjin_fu.png", "bullet_scale": 0.55, "bullet_spin": false,
+					"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
+					"tags": ["talisman", "metal"],
+					"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
+				},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
@@ -711,7 +867,9 @@ const SYNERGIES: Dictionary = {
 			"name": "召唤", "thresholds": [2, 4, 6],
 			"values": [15, 30, 50],
 			"eng_values": [2.0, 4.0, 7.0],
-			"desc": "最大生命 +15/30/50，召唤伤害 +2/4/7",
+			# 2026-10-11 平衡校准：仿机关羁绊补灵宝伤害乘区档（御灵流成型 Boss TTK 垫底根因）
+			"drone_values": [0.10, 0.20, 0.25],
+			"desc": "最大生命 +15/30/50，召唤伤害 +2/4/7，灵宝伤害 +10/20/25%",
 		},
 	"wide": {
 		"name": "横扫", "thresholds": [2, 4, 6],
@@ -733,7 +891,7 @@ const SYNERGIES: Dictionary = {
 	"wood": {
 		"name": "木系", "thresholds": [2, 4, 6],
 		"values": [1.0, 2.0, 3.5],
-		"desc": "生命回复 +1/2/3.5/秒，吸血 +2/4/7%",
+		"desc": "生命回复 +1/2/3.5/秒，吸血 +2/4/7%，武器伤害 +6/12/20%",
 	},
 	"water": {
 		"name": "水系", "thresholds": [2, 4, 6],
@@ -772,6 +930,9 @@ const SHOP_POOL: Array = [
 	"liuhuo_feijian", "zhenhuo_fu", "leihuo_fu",
 	"hanshuang_jian", "langli_suo", "hanquan_shou",
 	"gudu_fu", "tengluo_jiguan", "bengshan_jian", "leishi_jiguan",
+	# 2026-10-11 第二批 12 把：御灵全面加厚 + 三标签交叉（详见 DEFS 尾部设计注释）
+	"jinming_ling", "muling_ou", "bingpo_zhu", "chiyan_ying", "tuling_shi", "jianling",
+	"kuilei_shou", "lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu", "gengjin_fu",
 ]
 
 ## 回血丹（商店消耗品）
@@ -797,6 +958,66 @@ static func behavior_label(def: Dictionary) -> String:
 			return "机关"
 	return "近战"
 
+## 攻击方式的机制解释（点货架卡那颗「攻击方式」色签弹出，消费方 ShopChipTips）。
+## 三条口径：
+## ① 只写代码里真做了的事（出手条件 / 判定形状 / 伤害怎么结算），**数值一个都不写在这里**：
+##    范围、冷却、同时站几座、吃哪些属性，全部由 ShopChipTips 现读数据表与账单，
+##    改表不改文案 ⇒ 这段解释永远不会变成假话。
+## ② 短标与 behavior_label 同源。图鉴旧写法自有一套词（把 DRONE 叫「召唤」、BURST 叫「轰击」），
+##    而「召唤」同时是 spirit 羁绊的名字 ⇒ 同一排两颗色签，一颗说出手方式一颗说流派，
+##    玩家分不出来（2026-10-11 用户「标签看不懂，点一下要能解释」）。
+## ③ 新增 Behavior 必须同时补这一条，由单测「每种攻击方式都有机制解释」钉住。
+const BEHAVIOR_TIPS: Dictionary = {
+	Behavior.MELEE: {
+		"how": "锁到敌人后朝它突进一挥，身前一片扇形一起扫到",
+		"notes": [
+			"挥得多宽、打得到多远，就是卡上「攻击范围」那一行；特性带「横扫」的扇形更宽。",
+			"敌人必须在身前一挥够得着的地方，否则这一路法器不出手。",
+		],
+	},
+	Behavior.PROJECTILE: {
+		"how": "朝锁定的敌人发射弹丸，弹丸出膛后自己追上去",
+		"notes": [
+			"卡上「特性」那一行写的就是弹丸的行为：穿透几名、一次几发、弹射几次。",
+			"弹丸类最吃「弹射」羁绊（每档加穿透），也吃攻击范围（锁敌的圈更大）。",
+		],
+	},
+	Behavior.BURST: {
+		"how": "蓄力后在敌人脚下引雷爆发，落点周围一圈一起吃",
+		"notes": [
+			"打的是区域不是单体：挤成一团的敌群一次全中。",
+			"没有锁到目标时朝身前落，不会空转。",
+		],
+	},
+	Behavior.DRONE: {
+		"how": "绕着本体转圈，贴到的敌人持续掉血",
+		"notes": [
+			"不靠出手那一帧：同一个敌人各自有命中间隔，攻速越快贴得越疼。",
+			"打得到的是绕身那一圈，远处的敌人够不着 ⇒ 通常再配一把近战或远程补上。",
+			"升星会分身：★2 一化为二、★3 一化为三，每具独立贴身结算，总伤害不变但贴得更全。",
+		],
+	},
+	Behavior.TURRET: {
+		"how": "按冷却在脚下布设一座机关，它自己索敌开火、寿命到点消散",
+		"notes": [
+			"同时最多站那么几座，摆满就撤掉最旧的一座顶上；升星多站一座。",
+			"机关这一类独享「机关」羁绊的伤害档，别的法器不吃这一条。",
+		],
+	},
+}
+
+## 这一攻击方式的机制解释（缺条目返回空字典，由调用方决定要不要画）
+static func behavior_tip(behavior: int) -> Dictionary:
+	return BEHAVIOR_TIPS.get(behavior, {})
+
+## 全法器库里属于这一攻击方式的把数（解释卡上的「这一类共 N 把」）
+static func behavior_count(behavior: int) -> int:
+	var n := 0
+	for id in DEFS.keys():
+		if int((DEFS[id] as Dictionary).get("behavior", Behavior.MELEE)) == behavior:
+			n += 1
+	return n
+
 ## 货架卡窄行用的紧凑特性串：只取数据表字段（穿透 / 发数 / 弹射 / 横扫），
 ## 不含 proc 类（desc 已覆盖）与全局羁绊加成（详情卡 StatsTipFactory.weapon_feats 才是完整口径）。
 ## 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 最多取 2 段、无空格，超宽必溢出卡面。
@@ -818,6 +1039,11 @@ static func card_feats(def: Dictionary) -> String:
 	if out.size() > 2:
 		out.resize(2)
 	return "·".join(out)
+
+## 环绕灵宝的分身具数：★1 一具、★2 一分为二、★3 一分为三（Player.sync_drones 按此生成）。
+## 单法器总纸面伤害仍走 damage_for 的星级翻倍曲线，分身只均摊结算、抬贴身覆盖与占空比。
+static func drone_orb_count(star: int) -> int:
+	return clampi(star, 1, MAX_STAR)
 
 static func damage_for(id: String, star: int) -> float:
 	var def: Dictionary = DEFS.get(id, {})
@@ -929,9 +1155,10 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 		dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 3.0)) / cd)
 	if def.get("proc_poison", false):
 		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
-	# 环绕接触天生带"占空比税"：纸面 DPS × 接触占空比 = 有效单体 DPS（实伤口径）
+	# 环绕接触天生带"占空比税"：纸面 DPS × 接触占空比 = 有效单体 DPS（实伤口径）。
+	# ★2/★3 分身后多具同环扫掠，占空比随星抬升（★1 保持 0.75 实测基准，档带不漂移）。
 	if int(def.get("behavior", Behavior.MELEE)) == Behavior.DRONE:
-		dps *= GameBalance.SPIRIT_CONTACT_DUTY
+		dps *= GameBalance.spirit_contact_duty(star)
 	return dps
 
 ## 该法器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。

@@ -1,7 +1,7 @@
 class_name ShopInventoryRow
 extends RefCounted
 
-## 灵石阁陈列行（上阵 + 背包 + 法宝）的单格构建：槽位 / 容量签 / 分隔签 / 法宝徽记 / 空槽。
+## 灵石阁陈列行（上阵 + 背包 + 法宝）的单格构建：槽位 / 上阵空格 / 容量签 / 分隔签 / 法宝徽记 / 空槽。
 ## 从 WaveShop 拆出：整行的编排（_refresh_inventory）仍在 WaveShop，
 ## 点选回调经 shop 门面回流（选中态与悬浮详情卡都归 shop 管）。
 
@@ -81,6 +81,21 @@ static func create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	chip.add_child(lbl)
 	GameStyle.label(lbl, 11, GameStyle.JADE_EDGE)
 	return chip
+
+## 上阵空格：上阵区固定摆满上限格数（2026-10-11 用户：没佩戴的也要显示空格子），
+## 描边带一点上阵区的金，与背包凹槽区分；只作拖拽落点（背包件拖到空格＝装备），
+## 不吃输入（同背包空位：几何命中落点，gui_input 收不到也就不会被误拎起）
+static func create_empty_equipped_slot(shop: WaveShop, index: int, tile: float) -> Control:
+	var slot = PanelContainer.new()
+	slot.custom_minimum_size = Vector2(tile, tile)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := GameStyle.slot()
+	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
+	style.border_color = GameStyle.with_alpha(GameStyle.GOLD, 0.45)
+	slot.add_theme_stylebox_override("panel", style)
+	if shop != null:
+		shop.drag_register(slot, {"pool": "equipped", "index": index, "kind": "empty"})
+	return slot
 
 ## 背包分隔签：「背包 n/9」；兼作拖拽落点 —— 上阵件拖到这一签上＝卸入背包
 static func create_stash_divider(shop: WaveShop) -> Control:

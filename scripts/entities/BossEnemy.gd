@@ -21,7 +21,7 @@ var _phase2: bool = false
 var _tint: Color = Color.WHITE    ## 常态染色（二阶段转红，环弹演出后回染）
 var _slam_pending: bool = false
 var _slam_timer: float = 0.0
-var _slam_ring: Node2D = null
+var _slam_ring: AoeTelegraph = null
 
 ## 出招轮换表：保证三种特殊攻击都能见到，不靠纯随机
 var _patterns: Array = [Pattern.RING, Pattern.SLAM, Pattern.SUMMON]
@@ -31,16 +31,6 @@ var _minion_scenes: Array = [
 	preload("res://scenes/entities/FlowerEnemy.tscn"),
 	preload("res://scenes/entities/FengQunEnemy.tscn"),
 ]
-
-## 震地冲击预警圈：描边 + 半透明填充，alpha 由 Boss 每帧驱动闪烁
-class SlamRing:
-	extends Node2D
-	var radius: float = GameBalance.BOSS_SLAM_RADIUS
-	var alpha: float = 0.5
-	func _draw() -> void:
-		var c := Color(1.0, 0.32, 0.22, alpha)
-		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, c, 3.0, true)
-		draw_circle(Vector2.ZERO, radius, Color(1.0, 0.32, 0.22, alpha * 0.16))
 
 func _ready() -> void:
 	if final_boss:
@@ -64,12 +54,11 @@ func _process(delta: float) -> void:
 	if player == null:
 		return
 
-	# 震地冲击：预警圈闪烁倒计时 → 结算
+	# 震地冲击：预警圈「填满式」倒计时 → 结算（填充进度是唯一可读的时间语言）
 	if _slam_pending:
 		_slam_timer -= delta
 		if _slam_ring != null:
-			_slam_ring.alpha = 0.35 + 0.3 * sin(_slam_timer * 18.0)
-			_slam_ring.queue_redraw()
+			_slam_ring.progress = 1.0 - _slam_timer / GameBalance.BOSS_SLAM_WINDUP
 		if _slam_timer <= 0.0:
 			_resolve_slam(player)
 		return  # 预警期间不开新招
@@ -121,10 +110,14 @@ func _cast_slam() -> void:
 	_slam_pending = true
 	_slam_timer = GameBalance.BOSS_SLAM_WINDUP
 	if _slam_ring == null:
-		_slam_ring = SlamRing.new()
+		_slam_ring = AoeTelegraph.new()
+		# 视觉与判定同源：圈半径就是判定半径这一个常数
 		_slam_ring.radius = GameBalance.BOSS_SLAM_RADIUS
 		add_child(_slam_ring)
+	_slam_ring.progress = 0.0
 	_slam_ring.visible = true
+	# 预警起手给个「引信倒计时」音（与丹爆自爆共用一把，耳朵先于填充圈知道要炸）
+	AudioManager.play_sfx("enemy_fuse", 0.7)
 	play_squash(Vector2(0.82, 1.2), 0.4)
 
 func _resolve_slam(player: Node2D) -> void:
@@ -134,12 +127,14 @@ func _resolve_slam(player: Node2D) -> void:
 	if dying:
 		return
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
+	# 冲击波扫满判定圈：把「圈填满 = 炸、扫到我 = 掉血」的因果画出来（半径与判定同源）
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, GameBalance.BOSS_SLAM_RADIUS, GameStyle.BAD)
 	# 震地 = 全场最该抖一下的时刻，但它自己就是一个事件：
 	# 旧的 feedback(MEDIUM) + shake_camera(6.0) 是同一次落地发两遍，合为一记 HEAVY
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	AudioManager.play_sfx("enemy_slam", 1.1)   ## Boss 砸地是地裂级低频，不许借灵宝触体的暖金钟
 	if player.global_position.distance_to(global_position) <= GameBalance.BOSS_SLAM_RADIUS:
-		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT))
+		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT), global_position)
 
 ## 召唤妖群：Boss 战中持续供怪供经验，场面爆量时让位
 func _cast_summon(player: Node2D) -> void:

@@ -314,6 +314,19 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	rarity_lbl.add_theme_stylebox_override("normal", pill_style)
 	hbox_top.add_child(rarity_lbl)
 
+	# 「荐」推荐签（RecommendSystem 在 roll_alloc_offers 里按修士+构筑打分写入 offer）：
+	# 签是子节点，_select_card 重写卡体 stylebox 碰不到它；点按弹推荐理由，不影响选中逻辑
+	if bool(data.get("recommended", false)):
+		var rec_lbl := Label.new()
+		rec_lbl.name = "RecommendBadge"
+		rec_lbl.text = " 荐 "
+		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rec_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
+		hbox_top.add_child(rec_lbl)
+		GameStyle.label(rec_lbl, 11, GameStyle.INK_TEXT)
+		GameStyle.hotzone(rec_lbl)
+		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(rec_lbl, data))
+
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -460,6 +473,22 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 		"state_badge": state_badge,
 		"title_lbl": title_lbl,
 	}
+
+## 点「荐」签 = 看推荐理由：复用 DetailTip 一层卡（与受益装备详情同一宿主同一口径）。
+## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。
+func _open_recommend_tip(anchor: Control, data: Dictionary) -> void:
+	if not _can_interact or _is_confirming:
+		return
+	var notes: Array[String] = []
+	for r in data.get("recommend_reasons", []):
+		notes.append(String(r))
+	DetailTip.show_over(self, anchor, {
+		"title": "为什么推荐",
+		"chip": "推荐度 %d%%" % int(round(float(data.get("recommend_score", 0.0)) * 100.0)),
+		"chip_color": GameStyle.JADE,
+		"notes": notes,
+		"foot": "由当前修士、上阵法器与属性推算，仅供参考。",
+	})
 
 ## 点「受益装备」那一排的图标 = 看这件装备的详解，纯只读：不许顺手把这张卡选中
 ## （看东西这个动作不改写状态；选中仍要走卡体那一下 + 底部「确认选择」）。

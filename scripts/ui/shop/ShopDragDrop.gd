@@ -19,12 +19,15 @@ extends Node
 ##    头注：按下那一拍已被 OwnedScroll latch），真机上一划就滚走，拎不住；
 ##  · 内建 DnD 给不出「按住多久才算拖」的口径，触屏 + 滚动容器组合下真机行为也不稳。
 ##
-## 放下的口径：
-##  · 背包件 → 上阵格：上阵未满＝直接装备；已满＝与那一格换装（换下的一件回背包原位，
-##    见 WeaponInventory.swap_into_equipped）；
+## 放下的口径（2026-10-11 用户补口径：拖到已佩戴的武器上＝替换，上阵格之间＝换位）：
+##  · 背包件 → 上阵空格：直接装备（上阵区固定画满上限格数，空格也是落点）；
+##  · 背包件 → 已佩戴的武器格：替换那一格（换下的一件回背包被腾出的原位，
+##    见 WeaponInventory.equip_stash_into_slot）；
 ##  · 上阵件 → 背包区（背包格/空位/分隔签）＝卸入背包（背包满由 unequip_to_stash 播报）；
-##  · 背包件 → 背包区＝背包内排序（空位/分隔签＝挪到队尾）；
-##  · 上阵件 → 上阵格＝不挪（上阵顺序无玩法意义），松手原样飞回。
+##  · 上阵件 → 上阵另一格＝互换位置（同池才换：悬浮法器换悬浮法器、灵宝换灵宝，
+##    见 WeaponInventory.swap_equipped_slots；混池不挪 —— summary 固定
+##    「悬浮法器在前、灵宝在后」，跨池次序没有可落的数据）；上阵空格不接上阵件；
+##  · 背包件 → 背包区＝背包内排序（空位/分隔签＝挪到队尾）。
 
 ## 按住多久算拎起：Android 拖拽的长按阀，比系统长按（0.4s）短一截，比误触划动停顿长
 const HOLD_DELAY := 0.28
@@ -55,9 +58,10 @@ func _init(shop: WaveShop) -> void:
 
 # ---------------- 登记 ----------------
 
-## 陈列行的每一格在构建时登记：上阵/背包格是「可拎可落」，背包空位与分隔签只作落点。
+## 陈列行的每一格在构建时登记：上阵/背包格是「可拎可落」，上阵空格、背包空位与分隔签只作落点。
 ## src 口径与 shop.selected 同源：{pool: "equipped"/"stash", index: int}；
-## 背包空位/分隔签这类「只指区域不指件」的落点用 index = -1（kind = "end"＝挪到队尾）。
+## 背包空位/分隔签这类「只指区域不指件」的落点用 index = -1（kind = "end"＝挪到队尾）；
+## 上阵空格用 kind = "empty" 标记（index 是格位号）。
 func register_slot(node: Control, src: Dictionary) -> void:
 	if node == null:
 		return
@@ -223,7 +227,10 @@ func _droppable(src: Dictionary, ts: Dictionary) -> bool:
 	if sp == "stash":
 		return tp == "equipped" or tp == "stash"
 	if sp == "equipped":
-		return tp == "stash"
+		if tp == "stash":
+			return true
+		# 上阵 → 上阵＝互换位置；上阵空格不是一件武器，不接（松手原样飞回）
+		return tp == "equipped" and String(ts.get("kind", "")) != "empty"
 	return false
 
 func _set_hover(t: Dictionary) -> void:
@@ -274,13 +281,15 @@ func _apply(src: Dictionary, tgt: Dictionary) -> bool:
 	var sp := String(src.get("pool", ""))
 	var tp := String(tgt.get("pool", ""))
 	if sp == "stash" and tp == "equipped":
-		return GameManager.swap_into_equipped(int(src.get("index", -1)), int(tgt.get("index", -1)))
+		return GameManager.equip_stash_into_slot(int(src.get("index", -1)), int(tgt.get("index", -1)))
 	if sp == "stash" and tp == "stash":
 		if String(tgt.get("kind", "")) == "end":
 			return GameManager.reorder_stash(int(src.get("index", -1)), GameManager.stash.size() - 1)
 		return GameManager.reorder_stash(int(src.get("index", -1)), int(tgt.get("index", -1)))
 	if sp == "equipped" and tp == "stash":
 		return GameManager.unequip_to_stash(int(src.get("index", -1)))
+	if sp == "equipped" and tp == "equipped":
+		return GameManager.swap_equipped_slots(int(src.get("index", -1)), int(tgt.get("index", -1)))
 	return false
 
 ## 空手松开 / 操作失败：幽灵飞回原格（原格还在的话），原格的压暗还原

@@ -22,17 +22,21 @@ func _dismiss() -> void:
 func _check_data() -> void:
 	# 基础值
 	var dash := SkillData.final_stats("dash", "")
-	_c.near(float(dash["cooldown"]), 8.0, 0.001, "缩地成寸基础冷却 8 秒")
+	_c.near(float(dash["cooldown"]), 6.0, 0.001, "冲刺基础冷却 6 秒")
 	_c.near(float(dash["distance"]), 150.0, 0.001, "缩地成寸基础距离 150")
+	_c.near(float(dash["iframe"]), 0.30, 0.001, "缩地成寸无敌窗口 0.3 秒（位移全程+落地余量）")
+	_c.near(float(dash["duration"]), 0.16, 0.001, "冲刺位移耗时 0.16 秒（duration_add 不改位移时长）")
 	# 道统强化合并（抽查三个代表：加算/乘算/冷却）
 	var jianchi_haste := SkillData.final_stats("haste", "jianchi")
 	_c.near(float(jianchi_haste["duration"]), 7.5, 0.001, "剑痴疾风咒持续 5+2.5=7.5 秒")
 	var meiying_dash := SkillData.final_stats("dash", "meiying")
 	_c.near(float(meiying_dash["distance"]), 232.5, 0.5, "魅影缩地成寸距离 150×1.55=232.5")
 	var shiyue_aegis := SkillData.final_stats("aegis", "shiyue")
-	_c.near(float(shiyue_aegis["duration"]), 2.6, 0.001, "石岳金光护体 1.6+1.0=2.6 秒")
+	_c.near(float(shiyue_aegis["duration"]), 3.0, 0.001, "石岳金光护体 2.0+1.0=3.0 秒")
 	var duobao_aegis := SkillData.final_stats("aegis", "duobao")
-	_c.near(float(duobao_aegis["cooldown"]), 13.0, 0.001, "多宝金光护体冷却 20×0.65=13 秒")
+	_c.near(float(duobao_aegis["cooldown"]), 10.4, 0.001, "多宝金光护体冷却 16×0.65=10.4 秒")
+	var jinsuanpan_renewal := SkillData.final_stats("renewal", "jinsuanpan")
+	_c.near(float(jinsuanpan_renewal["power"]), 0.56, 0.001, "商人回春术回复 0.35×1.6=0.56")
 	# 契合判定：无强化的组合不许误判
 	_c.check(SkillData.is_enhanced_for_cultivator("haste", "jianchi"), "剑痴契合疾风咒")
 	_c.check(not SkillData.is_enhanced_for_cultivator("dash", "jianchi"), "剑痴不契合缩地成寸")
@@ -66,15 +70,13 @@ func _run() -> void:
 
 	var vfx: PlayerSkillVfx = player.skill_vfx
 	_c.check(vfx != null, "玩家 SkillVfx 特效控制器节点已挂载")
-	# 尺寸包裹判据：人物贴图实测高度 [-47, +17]、中心 y=-14；特效顶/底/宽必须完整罩住全身
-	var shield_top: float = PlayerSkillVfx.BODY_CENTER.y - PlayerSkillVfx.SHIELD_RY
-	var shield_bot: float = PlayerSkillVfx.BODY_CENTER.y + PlayerSkillVfx.SHIELD_RY
-	var haste_top: float = PlayerSkillVfx.BODY_CENTER.y - PlayerSkillVfx.HASTE_BODY_RY
-	var haste_bot: float = PlayerSkillVfx.BODY_CENTER.y + PlayerSkillVfx.HASTE_BODY_RY
-	_c.check(shield_top <= -58.0 and shield_bot >= 30.0 and PlayerSkillVfx.SHIELD_RX >= 36.0,
-		"金光护体大结界完整包裹角色头顶发冠至双足（Y:[%.0f, %.0f], RX:%.0f）" % [shield_top, shield_bot, PlayerSkillVfx.SHIELD_RX])
-	_c.check(haste_top <= -54.0 and haste_bot >= 28.0 and PlayerSkillVfx.HASTE_BODY_RX >= 32.0,
-		"疾风咒风暴气茧完整包裹角色全身（Y:[%.0f, %.0f], RX:%.0f）" % [haste_top, haste_bot, PlayerSkillVfx.HASTE_BODY_RX])
+	# 尺寸包裹判据：程序化角色实际身形宽 ±12、头顶 y≈-18、脚底 y≈+24（PlayerSkillVfx 常量区注释）
+	var shield_top: float = PlayerSkillVfx.SHIELD_CENTER.y - PlayerSkillVfx.SHIELD_RY
+	var shield_bot: float = PlayerSkillVfx.SHIELD_CENTER.y + PlayerSkillVfx.SHIELD_RY
+	_c.check(shield_top <= -18.0 and shield_bot >= 24.0 and PlayerSkillVfx.SHIELD_RX >= 12.0,
+		"金光护体椭球罩罩住程序化身形头顶至脚底（Y:[%.0f, %.0f], RX:%.0f）" % [shield_top, shield_bot, PlayerSkillVfx.SHIELD_RX])
+	_c.check(absf(PlayerSkillVfx.HASTE_FEET.y - 22.0) <= 4.0 and PlayerSkillVfx.HASTE_WHEEL_RX >= 20.0,
+		"疾风咒脚下风轮锚定真实脚底且覆盖身宽（feet y:%.0f, RX:%.0f）" % [PlayerSkillVfx.HASTE_FEET.y, PlayerSkillVfx.HASTE_WHEEL_RX])
 
 	# ---- 神行术：写入移速乘区 + CD 起转 + CD 中拒绝再放 ----
 	_c.check(player.try_activate_skill(), "神行术首次释放成功")
@@ -110,7 +112,7 @@ func _run() -> void:
 	player.skill_cd_left = 0.0
 	player.invulnerable_time = 0.0
 	_c.check(player.try_activate_skill(), "金光护体释放成功")
-	_c.near(player.invulnerable_time, 1.6, 0.1, "金光护体起 1.6 秒无敌")
+	_c.near(player.invulnerable_time, 2.0, 0.1, "金光护体起 2.0 秒无敌")
 	_c.check(vfx.aegis_active, "金光护体激活六方法印结界与金芒护罩")
 	vfx.aegis_timer = 0.02
 	for i in range(6):
@@ -123,7 +125,7 @@ func _run() -> void:
 	player.invulnerable_time = 0.0
 	player.current_health = player.max_health * 0.4
 	_c.check(player.try_activate_skill(), "回春术释放成功")
-	_c.near(player.current_health, player.max_health * 0.65, 1.0, "回春术回复 25% 最大气血")
+	_c.near(player.current_health, player.max_health * 0.75, 1.0, "回春术回复 35% 最大气血")
 	_c.check(vfx.renewal_progress >= 0.0, "回春术激活甘露莲花阵与旋升青芒光柱")
 
 	# ---- 缩地成寸：真实位移 + 途中无敌 + 落地即收速 + CD 归零可再放 ----
@@ -136,7 +138,7 @@ func _run() -> void:
 	var before: Vector2 = player.global_position
 	_c.check(player.try_activate_skill(), "缩地成寸释放成功")
 	_c.check(vfx.dash_flash_timer > 0.0, "缩地成寸激活瞬身刀光与破空灵芒锥")
-	_c.check(player.invulnerable_time > 0.0, "冲刺起即无敌（%.2f s）" % player.invulnerable_time)
+	_c.near(player.invulnerable_time, 0.30, 0.01, "冲刺起即无敌 0.30 秒（实测 %.2f s）" % player.invulnerable_time)
 	# 跑到冲刺段结束（逐帧盯 _dash_time，不靠猜帧数：headless 的 delta 不保证正好 1/60）
 	var dash_frames := 0
 	while player._dash_time > 0.0 and dash_frames < 40:
@@ -146,6 +148,7 @@ func _run() -> void:
 	var dash_moved: float = player.global_position.distance_to(before)
 	_c.near(dash_moved, dash_nominal * 0.94, dash_nominal * 0.14,
 			"冲刺段位移与数据表同源（实测 %.0f px，纸面 %.0f）" % [dash_moved, dash_nominal])
+	_c.check(player.invulnerable_time > 0.0, "冲刺落地后仍有无敌余量（剩余 %.2f s）" % player.invulnerable_time)
 	# 落地收速判据：旧写法这里会再滑出去 590px（峰值 1625px/s 慢慢掉回常速），纸面 260 实际 830+
 	for i in range(60):
 		await get_tree().physics_frame

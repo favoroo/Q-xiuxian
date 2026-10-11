@@ -323,6 +323,14 @@ static func spirit_orbit_angular_speed(
 ## WeaponData.sustained_single_dps 的 DRONE 分支按此折算，让平衡判据用"实伤口径"钉数值。
 const SPIRIT_CONTACT_DUTY := 0.75
 
+## 接触占空比按星级抬升：升星后一具灵宝分身为二/为三（Player.sync_drones 按星生数），
+## 多具同环扫掠让敌人处于可结算位置的占比更高。★1 保持实测基准 0.75，御灵 DPS 带 [30,38] 不动。
+const SPIRIT_CONTACT_DUTY_PER_STAR: Array[float] = [0.75, 0.81, 0.84]
+
+## 纯函数：某星级的环绕灵宝接触结算占空比（WeaponData.sustained_single_dps 与平衡仿真共用同一把尺）
+static func spirit_contact_duty(star: int = 1) -> float:
+	return float(SPIRIT_CONTACT_DUTY_PER_STAR[clampi(star, 1, 3) - 1])
+
 ## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
 ## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）
 ## enemies_info: Array[Dictionary]，每个敌人的信息 { "dist": float, "angle": float }
@@ -407,10 +415,17 @@ static func compute_spirit_orbit(
 # ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
 
 const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把法器的神识分流系数
+## 环绕灵宝的神识分流权重：召唤物自主作战、不占主人神识，按半权计入分流。
+## （机关炮台不半权：它已有多座并发 + 机关羁绊乘区两条成长线。2026-10-11 用户「全召唤打 Boss 磨血」）
+const MULTI_WEAPON_DRONE_WEIGHT := 0.5
 
 ## 纯函数：根据当前上阵法器总数（含悬浮法器与环绕灵物），计算单把法器的直击神识分流效率
 ## 1 把: 1.00 (100%), 2 把: ~0.893 (总 1.79x), 3 把: ~0.806 (总 2.42x), 4 把: ~0.735 (总 2.94x),
 ## 5 把: ~0.676 (总 3.38x), 6 把: ~0.625 (总 3.75x)。
 ## 每多买一把法器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
-static func multi_weapon_damage_mult(slot_count: int) -> float:
-	return 1.0 / (1.0 + MULTI_WEAPON_LOAD_PER_EXTRA * float(maxi(1, slot_count) - 1))
+## drone_count：其中环绕灵宝的把数，按 MULTI_WEAPON_DRONE_WEIGHT 半权折算
+##（纯御灵 6 把：有效 3 把 ⇒ 单把 ~0.806，总 4.83x —— 以多打少不再被神识分流拖死）。
+static func multi_weapon_damage_mult(slot_count: int, drone_count: int = 0) -> float:
+	var eff_slots := float(maxi(1, slot_count)) \
+		- MULTI_WEAPON_DRONE_WEIGHT * float(clampi(drone_count, 0, maxi(1, slot_count)))
+	return 1.0 / (1.0 + MULTI_WEAPON_LOAD_PER_EXTRA * (eff_slots - 1.0))

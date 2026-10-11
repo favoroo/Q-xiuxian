@@ -165,7 +165,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "dodge_up",
 		"apply": {"dodge": 0.07},
 		"title": "闪避率",
-		"desc": "闪避率上限 60%",
+		"desc": "闪避成功攒一层「影」；硬上限随角色而定",
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/icon_dodge.png",

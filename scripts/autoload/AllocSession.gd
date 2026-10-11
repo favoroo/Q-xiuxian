@@ -27,6 +27,8 @@ static func force_end_alloc(gm: Node, reason: String) -> void:
 
 static func roll_alloc_offers(gm: Node) -> void:
 	gm.alloc_offers = gm.roll_upgrades(gm.UPGRADE_OFFER_COUNT)
+	# 「荐」标：按当前修士+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
+	RecommendSystem.mark_alloc_offers(gm)
 
 static func take_alloc_upgrade(gm: Node, index: int) -> bool:
 	if index < 0 or index >= gm.alloc_offers.size():

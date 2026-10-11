@@ -21,6 +21,9 @@ static func roll_shop(gm: Node, new_wave: bool = false) -> void:
 	gm.reroll_cost = GameBalance.reroll_cost(wave, gm.reroll_count, gm.shop_price_mult)
 	if new_wave:
 		SynergySystem.apply_main_tag_pity(gm, wave)
+	# 「荐」标：在波首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；
+	# 锁定保留的旧货会被重新评分，重复调用幂等
+	RecommendSystem.mark_shop_offers(gm)
 
 ## 单个货架位：按概率分流 回气丹 / 法宝 / 法器
 static func gen_offer(gm: Node, wave: int) -> Dictionary:

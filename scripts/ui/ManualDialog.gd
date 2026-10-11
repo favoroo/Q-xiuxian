@@ -5,7 +5,7 @@ extends BaseModalDialog
 ## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
 ## 法宝/修士两页标注解锁条件，每次 open() 重建以反映最新解锁状态。
-## 武器页委托 WeaponCodexBuilder 构建：流派筛选条（类型/元素）+ 卡面关键数值行，
+## 武器页委托 WeaponCodexBuilder 构建：流派筛选条（类型/元素）+ 卡面三签与关键数值行，
 ## 商店羁绊详情卡「查看该流派法器」经 open_weapons_page() 深链直达并预选筛选。
 
 const PANEL_SIZE := Vector2(880, 470)
@@ -186,9 +186,11 @@ func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	return tex
 
-## 图鉴小卡：图标 + 名称（+ 可选副标签 + 可选关键数值行），点按开 DetailTip
+## 图鉴小卡：图标 + 名称（+ 可选色签行 / 副标签 + 可选关键数值行），点按开 DetailTip
+## chips = [[文字, 面色, 字色], ...]，与商店卡行②的 chip_defs 同形状、同一个
+## GameStyle.chip_label 画。给了 chips 就不画 sub 那行灰字（同一件事不印两遍）。
 func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
-		on_press: Callable, stat_line: String = "") -> PanelContainer:
+		on_press: Callable, stat_line: String = "", chips: Array = []) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(148, 0)
 	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
@@ -226,7 +228,17 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 	GameStyle.label(name_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(name_lbl)
 
-	if sub != "":
+	if not chips.is_empty():
+		# 色签成排：摆得下就一行，摆不下自动折第二行（图鉴卡窄，双器类法器有 4 签）
+		var flow := HFlowContainer.new()
+		flow.name = "TagFlow"
+		flow.alignment = FlowContainer.ALIGNMENT_CENTER
+		flow.add_theme_constant_override("h_separation", 4)
+		flow.add_theme_constant_override("v_separation", 3)
+		vbox.add_child(flow)
+		for cd in chips:
+			flow.add_child(GameStyle.chip_label(String(cd[0]), cd[1] as Color, cd[2] as Color))
+	elif sub != "":
 		var sub_lbl := Label.new()
 		sub_lbl.text = sub
 		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

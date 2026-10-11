@@ -3,13 +3,13 @@ extends Control
 ## tests/skill_vfx_preview.gd — 技能特效目检预览（非判据现场预览，不加 --headless）
 ##
 ## 用途：目检金光护体暖金椭球护罩 / 疾风咒脚下风轮+上升气流等五技能特效，无需进入真实战斗。
-## 交互模式：按 1-5 触发技能、B 循环体型（剑痴/狂战/石岳/驯兽师，验证护罩随体型缩放）、R 清除。
+## 交互模式：按 1-5 触发技能、B 循环体型（剑痴/狂战/石岳/驯兽师，验证护罩随体型缩放）、S 加一层影、R 清除。
 ##
 ## 跑法（需要真实窗口出图，headless 下 Viewport 不出图）：
 ##   G=/Applications/Godot.app/Contents/MacOS/Godot
 ##   $G --path . res://tests/SkillVfxPreview.tscn               # 交互目检
 ##   $G --path . res://tests/SkillVfxPreview.tscn -- --export   # 自动连拍导出拼条
-## 导出：tests/styles/skill_vfx_strip.png（8 帧：无敌基准/狂战/驯兽师三体型 + 碎散 + 攻速/移速/冲刺/治疗），
+## 导出：tests/styles/skill_vfx_strip.png（10 帧：无敌基准/狂战/驯兽师三体型 + 碎散 + 攻速/移速/冲刺/治疗 + 踏影两层与满层），
 ## 完成打印 SKILL_VFX_RESULT: ALL PASS 后自动退出。
 ##
 ## 几何与 Player 内一致：SkillVfx 无缩放、ProceduralCultivatorView scale=0.75，
@@ -37,7 +37,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "技能特效预览 | 1 无敌(椭球罩) · 2 攻速(风轮气流) · 3 移速 · 4 冲刺 · 5 治疗 · B 切体型 · R 清除"
+	title_lbl.text = "技能特效预览 | 1 无敌(椭球罩) · 2 攻速(风轮气流) · 3 移速 · 4 冲刺 · 5 治疗 · B 切体型 · S 加一层影 · R 清除"
 	title_lbl.position = Vector2(16, 10)
 	GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	add_child(title_lbl)
@@ -109,12 +109,18 @@ func _input(event: InputEvent) -> void:
 		KEY_B:
 			_body_idx = (_body_idx + 1) % BODY_IDS.size()
 			_apply_body(BODY_IDS[_body_idx])
+		KEY_S:
+			# 加一层影（到顶回到 1 层，便于逐帧看读数与满层底线）
+			var nxt: int = _vfx.shadow_stacks + 1
+			if nxt > ShadowStepData.MAX_STACKS:
+				nxt = 1
+			_vfx.on_shadow_gained(nxt)
 		KEY_R: _clear_all()
 
 func _cast(id: String) -> void:
-	# 时长与 SkillData.DEFS 对齐（aegis 1.6 / haste 5.0 / gale 4.0 / dash 0.16）
+	# 时长与 SkillData.DEFS 对齐（aegis 2.0 / haste 5.0 / gale 4.0 / dash 0.16）
 	match id:
-		"aegis": _vfx.on_aegis_start(1.6)
+		"aegis": _vfx.on_aegis_start(2.0)
 		"haste": _vfx.on_haste_start(5.0)
 		"gale": _vfx.on_gale_start(4.0)
 		"dash": _vfx.on_dash_start(Vector2.RIGHT, 150.0, 0.16)
@@ -130,6 +136,7 @@ func _clear_all() -> void:
 	_vfx.dash_flash_timer = 0.0
 	_vfx.renewal_progress = -1.0
 	_vfx.renewal_particles.clear()
+	_vfx.on_shadow_spent()
 	_vfx.queue_redraw()
 
 # ---------------- 自动连拍导出 ----------------
@@ -179,6 +186,15 @@ func _run_export(tree: SceneTree) -> void:
 	_cast("renewal")
 	await tree.create_timer(0.25).timeout
 	frames.append(await _snap(vp))
+	_clear_all()
+
+	# 7-8. 踏影影层读数（2 层 / 满层）：头顶幽夜紫菱形一层就是一刀，
+	#      满层换亮紫并压一条可释放底线（等弹跳回落再拍，量的是稳态读不读得清）
+	for n in [2, ShadowStepData.MAX_STACKS]:
+		for i in range(n):
+			_vfx.on_shadow_gained(i + 1)
+		await tree.create_timer(0.4).timeout
+		frames.append(await _snap(vp))
 	_clear_all()
 
 	_export_strip(frames)

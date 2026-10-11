@@ -6,16 +6,10 @@ extends RefCounted
 
 static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
-	var data: Dictionary = GameManager.active_synergies.get(tag, {"count": 0, "level": 0})
-	var n: int = int(data.get("count", 0))
-	var lv: int = int(data.get("level", 0))
-	var raw_th: Array = info.get("thresholds", [2, 4, 6])
-	var shift: int = 0
-	if tag == "spirit":
-		shift = GameManager.spirit_threshold_adj
-	elif tag == "contraption":
-		shift = GameManager.contraption_threshold_adj
-	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
+	var p: Dictionary = SynergyUI.progress(tag)
+	var n: int = int(p["count"])
+	var lv: int = int(p["level"])
+	var ths: Array = p["ths"]
 	var is_elem: bool = tag in WeaponData.ELEMENTS
 
 	var card := PanelContainer.new()
@@ -55,7 +49,7 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 	head.add_child(kind_lbl)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "%s (%d/%d)" % [info.get("name", tag), n, max_th]
+	title_lbl.text = SynergyUI.progress_text(tag)
 	# 黑底上的次级亮灰做未激活态标题字
 	var title_col: Color = (GameStyle.JADE if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
 	GameStyle.label(title_lbl, 13, title_col)
@@ -63,8 +57,8 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 
 	# 展开 3 档阶梯加成（参照土豆兄弟：(2) +15% 范围，达成的高亮，未达成的置灰）
 	var tier_lines: Array = SynergyUI.TIER_LINES.get(tag, [])
-	for idx in range(raw_th.size()):
-		var th_need: int = maxi(1, int(raw_th[idx]) - shift)
+	for idx in range(ths.size()):
+		var th_need: int = int(ths[idx])
 		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else String(info.get("desc", ""))
 		var reached: bool = n >= th_need
 		var is_current_tier: bool = (lv == idx + 1)

@@ -197,8 +197,16 @@ static func rules(id: String) -> Array[String]:
 			out.append("面板减伤不含「保底 %d 点」这一刀，所以高护甲挨小伤害时实际比面板略差。" % int(GameBalance.DAMAGE_FLOOR))
 			out.append("土系羁绊与道具「龟甲符」加在这条上；「狂血丹」用护甲换伤害，会倒扣。")
 		"dodge":
-			out.append("硬上限 %d%%：到顶之后再点这一条不会继续涨，多余的额度是浪费。" % int(GameManager.DODGE_CAP * 100.0))
+			# 上限必须现读「硬上限 + 角色抬升」：只读 DODGE_CAP 会对影者写出一句假话
+			#（她的卡面写着 90%，详解却劝她到 60% 就停手）。
+			out.append("硬上限 %.0f%%：到顶之后再点这一条不会继续涨，多余的额度是浪费。" % [
+				(GameManager.DODGE_CAP + GameManager.dodge_cap_bonus) * 100.0])
 			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
+			out.append(("闪避成功另给 %.2f 秒「残影」短无敌：不给这一段，怪群贴身时下一帧又是一次判定，"
+				+ "闪了只是把那一下推迟几帧，减不了挨打频率。") % ShadowStepData.GUARD_SEC)
+			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：下一次冲刺落地时踩碎，"
+				+ "把躲掉的伤害按 %.0f%% 还给周身敌人并推开一圈。") % [
+					ShadowStepData.MAX_STACKS, ShadowStepData.STORE_RATIO * 100.0])
 		"lifesteal":
 			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
 			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)

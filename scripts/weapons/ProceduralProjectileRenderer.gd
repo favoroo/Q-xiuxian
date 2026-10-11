@@ -15,6 +15,8 @@ enum ProjectileKind {
 	TALISMAN_THUNDER_FIRE, ## 雷火符：紫蓝雷弧缠橙红火舌符纸（2026-10-11 拓充）
 	TALISMAN_WOOD,    ## 万木灵符：碧翠玉灵符纸 + 生机灵文
 	TALISMAN_GU,      ## 蛊毒符：翠绿蛊虫符纸 + 幽绿毒雾（2026-10-11 拓充）
+	TALISMAN_JINGZHE, ## 惊蛰符：青碧春雷符纸 + 紫蓝雷弧（2026-10-11 第二批）
+	TALISMAN_GOLD,    ## 庚金符：月白锐金符纸 + 冷金符文（2026-10-11 第二批）
 	FIRE_FLAME,       ## 三昧真火：水墨烈焰火煞 + 炽金火核
 	SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
 	WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
@@ -57,6 +59,10 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 		return ProjectileKind.TALISMAN_WOOD
 	elif "bullet_gu_talisman" in tex_path:
 		return ProjectileKind.TALISMAN_GU
+	elif "bullet_jingzhe_fu" in tex_path:
+		return ProjectileKind.TALISMAN_JINGZHE
+	elif "bullet_gengjin_fu" in tex_path:
+		return ProjectileKind.TALISMAN_GOLD
 	elif "bullet_fire_flame" in tex_path:
 		return ProjectileKind.FIRE_FLAME
 	elif "bullet_spirit_pellet" in tex_path:
@@ -87,6 +93,10 @@ func _draw() -> void:
 			_draw_talisman(Color(0.20, 0.55, 0.38), Color(0.60, 0.95, 0.70))
 		ProjectileKind.TALISMAN_GU:
 			_draw_talisman(Color(0.28, 0.62, 0.16), Color(0.85, 1.0, 0.45))
+		ProjectileKind.TALISMAN_JINGZHE:
+			_draw_talisman(Color(0.20, 0.55, 0.60), Color(0.65, 1.0, 0.85))
+		ProjectileKind.TALISMAN_GOLD:
+			_draw_talisman(Color(0.82, 0.78, 0.62), Color(0.55, 0.48, 0.22))
 		ProjectileKind.FIRE_FLAME:
 			_draw_flame()
 		ProjectileKind.SPIRIT_PELLET:

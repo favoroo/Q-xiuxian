@@ -15,6 +15,10 @@ var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
 
 func _ready() -> void:
+	# 锁 60 帧（2026-10-11 性能优化）：不限帧时满载设备长时间发热降频反而更卡，
+	# 且 120Hz 屏全速渲染徒增功耗。headless 判据依赖稳定帧节奏（time_scale 竞态余量），跳过。
+	if DisplayServer.get_name() != "headless":
+		Engine.max_fps = 60
 	GameManager.reset_run()
 	GameManager.joystick = joystick
 	_setup_dust()

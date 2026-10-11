@@ -11,6 +11,8 @@ var _icon_rect: TextureRect = null
 var _cd_ring: SkillButtonView.SkillCdOverlay = null
 var _cd_label: Label = null
 var _name_label: Label = null
+var _shadow_chip: Label = null   ## 影层角标（踏影攒了几层，读数与角色头顶残影同一个数）
+var _shadow_shown: int = -1      ## 上一次画出去的层数：只在变了时重设样式，不每帧刷
 var _was_ready: bool = false
 var _shaking: bool = false
 var _edit_mode: bool = false
@@ -71,6 +73,20 @@ func _build_button() -> void:
 	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	GameStyle.label(_name_label, 10, GameStyle.JADE_EDGE, 2, GameStyle.INK)
 	_btn.add_child(_name_label)
+
+	# 影层角标：数字贴在键的右上角（拇指旁边看得见），角色头顶同时画等量残影——
+	# 两处同一个数，键上给准确层数、身上给"我攒了多少"的形状。
+	_shadow_chip = Label.new()
+	_shadow_chip.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_shadow_chip.offset_left = -46.0
+	_shadow_chip.offset_right = -1.0
+	_shadow_chip.offset_top = 1.0
+	_shadow_chip.offset_bottom = 21.0
+	_shadow_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shadow_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_shadow_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shadow_chip.visible = false
+	_btn.add_child(_shadow_chip)
 
 ## 引擎 _input 转发入口（由 GameHUD._input 调）：支持触屏第二根手指
 ## （左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
@@ -202,6 +218,28 @@ func _process(_delta: float) -> void:
 		var tw = create_tween()
 		tw.tween_property(_btn, "scale", Vector2(1.16, 1.16), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(_btn, "scale", Vector2.ONE, 0.14)
+	_update_shadow_chip(player)
+
+## 影层角标：攒上才出现，攒满直接换成可释放的亮紫面（不靠闪一下提示——看不见等于没做）。
+## 层数读的是 Player.shadow_ring 本身，不在这里另记一份账。
+func _update_shadow_chip(player: Node) -> void:
+	if _shadow_chip == null:
+		return
+	var stacks := 0
+	var ring = player.get("shadow_ring")
+	if ring is Array:
+		stacks = (ring as Array).size()
+	if stacks == _shadow_shown:
+		return
+	_shadow_shown = stacks
+	var full: bool = stacks >= ShadowStepData.MAX_STACKS
+	_shadow_chip.visible = stacks > 0
+	if stacks <= 0:
+		return
+	_shadow_chip.text = "影 %d" % stacks
+	_shadow_chip.add_theme_stylebox_override("normal",
+		GameStyle.chip(GameStyle.SHADOW if full else GameStyle.SHADOW_DK))
+	GameStyle.label(_shadow_chip, 10, GameStyle.INK_TEXT if full else GameStyle.SHADOW_EDGE)
 
 ## 进入/退出调整模式：强制亮出键体交给覆盖层拖动（树此时是暂停态）
 func set_edit_mode(on: bool) -> void:

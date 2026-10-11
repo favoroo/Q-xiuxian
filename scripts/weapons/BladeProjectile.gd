@@ -41,6 +41,7 @@ static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（tests/PerfProbe 断言用）
 static var reused_count: int = 0     ## 累计池复用数
 static var _lit_count: int = 0       ## 当前点亮的弹丸灯数
+static var active_count: int = 0     ## 当前在场（已激活未回收）弹丸数：HUD 性能面板消费
 ## 回收终值登记（launch_id -> {pierce,bounce}）：projectile_probe 结账用，读取后由探针清除
 static var _final_stats: Dictionary = {}
 
@@ -277,6 +278,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 ##   proc_poison/poison_dur/bullet_texture/bullet_scale/spin
 func activate() -> void:
 	_pooled = false
+	active_count += 1
 	launch_seq += 1
 	launch_id = launch_seq
 	visible = true
@@ -311,6 +313,7 @@ func _recycle() -> void:
 	if launch_id >= 0:
 		_final_stats[launch_id] = {"pierce": pierce_left, "bounce": bounce_left}
 	_pooled = true
+	active_count = maxi(0, active_count - 1)
 	homing_target = null
 	_release_light()
 	set_physics_process(false)

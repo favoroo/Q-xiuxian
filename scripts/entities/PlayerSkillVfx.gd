@@ -79,6 +79,12 @@ var _vector_ghosts: Array[Dictionary] = []
 # 8. 角色体型系数（X=scale×width_scale，Y=scale×height_scale），与渲染器 total_scale 同源
 var _body_scale := Vector2.ONE
 
+# 9. 踏影（闪避攒的影层）状态
+## 读数必须贴在主体上：影层是「我躲掉了几刀」，拇指正盖着技能键时那颗角标是看不见的，
+## 所以角色身后要同时拖出等量的残影点——键上给数字、身上给形状，两处同一个数。
+var shadow_stacks: int = 0
+var _shadow_pop: float = 0.0  ## 刚攒上一层时的弹跳余量（1→0）
+
 func _ready() -> void:
 	z_index = 2  ## 略高于角色精灵
 	_init_ghost_pool()
@@ -186,6 +192,18 @@ func on_renewal_cast() -> void:
 			"rot_speed": randf_range(3.2, 5.8),
 			"size": randf_range(1.5, 3.0)
 		})
+	queue_redraw()
+
+## 踏影：闪避成功攒下一层影（层数由 Player 持有，这里只跟着画，不另存一份账）
+func on_shadow_gained(stacks: int) -> void:
+	shadow_stacks = stacks
+	_shadow_pop = 1.0
+	queue_redraw()
+
+## 踏影落地兑现后清空（Player.shadow_ring 已空，读数跟着归零）
+func on_shadow_spent() -> void:
+	shadow_stacks = 0
+	_shadow_pop = 0.0
 	queue_redraw()
 
 # ---------------- 每帧逻辑更新 ----------------
@@ -324,6 +342,11 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 			renewal_particles.clear()
 			_notify_procedural_view("renewal", false)
 
+	# 8. 踏影影层：只在「刚攒上一层」的弹跳期重画，稳态靠 on_shadow_gained 那一次 queue_redraw
+	if _shadow_pop > 0.0:
+		needs_redraw = true
+		_shadow_pop = maxf(0.0, _shadow_pop - delta * 5.0)
+
 	if needs_redraw:
 		queue_redraw()
 
@@ -411,6 +434,37 @@ func _draw() -> void:
 	# 5. 回春术：九品青莲生机甘露阵与生机光羽
 	if renewal_progress >= 0.0:
 		_draw_renewal_fx()
+
+	# 6. 踏影影层读数（最后画：它是给人数的数，不许被任何特效压住）
+	if shadow_stacks > 0:
+		_draw_shadow_pips()
+
+## 绘制【踏影】影层读数：头顶一排幽夜紫菱形，一层就是一刀，攒满换成亮紫并压一条可释放底线。
+## 为什么画头顶而不是身后：身后那条已经被 dash/gale 的流光残影占用，同处叠两套形状数不出层数。
+func _draw_shadow_pips() -> void:
+	var n := shadow_stacks
+	if n <= 0:
+		return
+	var full := n >= ShadowStepData.MAX_STACKS
+	# 抬高到耳尖之上：影者是狐耳/角类头饰，读数压在耳朵上就半遮半掩（看不见等于没做）
+	var top_y := -38.0 * _body_scale.y
+	var gap := 7.0
+	var start_x := -gap * float(n - 1) * 0.5
+	var col := GameStyle.SHADOW_EDGE if full else GameStyle.SHADOW
+	for i in range(n):
+		var c := Vector2(start_x + float(i) * gap, top_y)
+		# 刚攒上的那一层弹一下（证明"这一刀收到了"），其余层稳态不动
+		var r := 3.0 * (1.0 + _shadow_pop * 0.35 if i == n - 1 else 1.0)
+		var pts := PackedVector2Array([
+			c + Vector2(0.0, -r), c + Vector2(r * 0.72, 0.0), c + Vector2(0.0, r), c + Vector2(-r * 0.72, 0.0)])
+		var alpha := 0.55 + 0.45 * float(i) / maxf(1.0, float(n - 1))
+		draw_colored_polygon(pts, Color(col.r, col.g, col.b, alpha))
+		pts.append(pts[0])
+		draw_polyline(pts, Color(GameStyle.CHALK.r, GameStyle.CHALK.g, GameStyle.CHALK.b, 0.32), 1.0)
+	if full:
+		# 满层底线画在行的上方：往下压会横穿耳尖，把读数切成两截
+		draw_line(Vector2(start_x - gap * 0.6, top_y - 7.0),
+			Vector2(start_x + gap * float(n - 1) + gap * 0.6, top_y - 7.0), GameStyle.SHADOW_EDGE, 1.6)
 
 ## 绘制程序化修仙角色的纯矢量流光身法虚影（彻底解决老版蓝衫小人残影 Bug）
 func _draw_vector_ghosts() -> void:

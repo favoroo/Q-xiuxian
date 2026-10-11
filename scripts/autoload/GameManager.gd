@@ -282,6 +282,7 @@ var synergy_burn_mult: float = 1.0    ## 离火羁绊：额外灼烧伤害倍率
 var synergy_armor: float = 0.0        ## 厚土羁绊：额外护甲
 var synergy_knockback_mult: float = 1.0 ## 厚土羁绊：额外受击震退力倍率
 var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关法器伤害乘区
+var synergy_drone_mult: float = 1.0 ## 召唤羁绊：环绕灵宝伤害乘区（仅 DRONE 行为吃这一档）
 
 var _lifesteal_procs: int = 0
 var _lifesteal_window: float = 0.0
@@ -468,9 +469,10 @@ func get_effective_dodge() -> float:
 func max_weapon_slots() -> int:
 	return weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
 
-## 多法器神识分流系数：按当前上阵法器总数（悬浮法器 + 环绕灵物）计算单把直击伤害折算
+## 多法器神识分流系数：按当前上阵法器总数（悬浮法器 + 环绕灵物）计算单把直击伤害折算。
+## 环绕灵宝按半权计入（召唤物自主作战不占神识），机关炮台仍按全额。
 func get_multi_weapon_damage_mult() -> float:
-	return GameBalance.multi_weapon_damage_mult(slots_used())
+	return GameBalance.multi_weapon_damage_mult(slots_used(), drones.size())
 
 ## 五行真解：某件法器吃到的元素伤害乘区（按 WeaponData.element_of 取对应元素加成）
 func element_damage_mult(w_id: String) -> float:
@@ -680,9 +682,18 @@ func equip_from_stash(index: int) -> bool:
 func unequip_to_stash(index: int) -> bool:
 	return WeaponInventory.unequip_to_stash(self, index)
 
-## 背包 → 上阵换装（上阵满时与该格互换，换下的回背包原位）：拖拽换装用
+## 背包 → 上阵「换装」旧口径（未满＝装备、满＝与该格互换）：保留给既有判据；
+## 拖拽落点走 equip_stash_into_slot（空格＝装备、已佩戴格＝替换）
 func swap_into_equipped(stash_index: int, equipped_index: int) -> bool:
 	return WeaponInventory.swap_into_equipped(self, stash_index, equipped_index)
+
+## 背包 → 上阵指定格（拖拽落点语义）：空格/越界＝直接装备，已占用格＝替换（换下的回背包原位）
+func equip_stash_into_slot(stash_index: int, slot_index: int) -> bool:
+	return WeaponInventory.equip_stash_into_slot(self, stash_index, slot_index)
+
+## 上阵两格互换位置（summary 下标；同池才换：悬浮法器换悬浮法器、灵宝换灵宝）
+func swap_equipped_slots(i: int, j: int) -> bool:
+	return WeaponInventory.swap_equipped_slots(self, i, j)
 
 ## 背包内拖拽排序
 func reorder_stash(from: int, to: int) -> bool:

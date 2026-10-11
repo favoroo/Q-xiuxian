@@ -226,7 +226,9 @@ func _chip_title(tag: String) -> String:
 		shift = GameManager.contraption_threshold_adj
 	var max_th: int = maxi(1, int(raw_th[raw_th.size() - 1]) - shift)
 	var n: int = int((GameManager.active_synergies[tag] as Dictionary).get("count", 0))
-	return "%s (%d/%d)" % [String(info.get("name", tag)), n, max_th]
+	# 满档后还能再多持有（第 7 件不升档），读数分母换成 MAX：写成「6/5」是拿件数去比一个作废的门槛
+	var denom: String = "MAX" if n >= max_th else str(max_th)
+	return "%s (%d/%s)" % [String(info.get("name", tag)), n, denom]
 
 ## 槽位卡的标题与 StatsTipFactory 同一套拼法（名字 + 星级 / 空槽 / 锁定槽）
 func _slot_title(summary: Array, i: int) -> String:

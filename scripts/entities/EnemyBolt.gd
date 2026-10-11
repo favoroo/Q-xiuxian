@@ -10,7 +10,7 @@ extends Area2D
 ## 	旧写法把 128px 的 light_radial 当「外焰」（additive + alpha 0.7）套在
 ## 	0.55 倍的橙红核心外面，视觉上糊开约 70~100px，而判定半径只有 8px ——
 ## 	玩家看到的威胁范围是真实范围的 4~8 倍（比施法者本人还大一圈），只能凭感觉躲。
-## 	同口径的既有先例：Boss 震地预警圈（BossEnemy.SlamRing 按半径画描边）、
+## 	同口径的既有先例：Boss 震地预警圈（AoeTelegraph 按判定半径画圈，填满即结算）、
 ## 	玩家法器弹丸（BladeProjectile 判定半径 7，刃的可见长度也就这个量级）。
 ## 	⇒ 要改火球大小只动 RADIUS 一个常数，外观与碰撞一起变，不许分开设。
 
@@ -29,6 +29,7 @@ static var _pool: Array[EnemyBolt] = []
 static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（PoolCheck 断言用）
 static var reused_count: int = 0     ## 累计池复用数
+static var active_count: int = 0     ## 当前在场（已激活未回收）火球数：HUD 性能面板消费
 
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
@@ -87,6 +88,7 @@ func _ready() -> void:
 ##   direction/speed/damage/lifetime/scale_factor ⇒ radius/碰撞圆/寿命
 func activate() -> void:
 	_pooled = false
+	active_count += 1
 	visible = true
 	rotation = 0.0
 	radius = RADIUS * maxf(scale_factor, 0.05)
@@ -105,6 +107,7 @@ func _recycle() -> void:
 	if _pooled:
 		return
 	_pooled = true
+	active_count = maxi(0, active_count - 1)
 	set_physics_process(false)
 	set_deferred("monitoring", false)
 	_shape_node.set_deferred("disabled", true)
@@ -128,6 +131,7 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node) -> void:
 	if body is Player:
+		# 受击火花/跳字统一由 Player.take_damage 发放（与 BladeProjectile 同一约定）：
+		# 弹体侧再发一份，闪避/无敌帧会在没掉血时凭空闪白光，真命中又和玩家侧双发
 		body.take_damage(damage)
-		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, direction, false)
 		_recycle()

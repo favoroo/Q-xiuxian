@@ -75,6 +75,8 @@ var _bite_dir: Vector2 = Vector2.ZERO
 var _bite_warning_line: Line2D = null
 var _bite_hit: bool = false        ## 这一跳已经咬到（一次起跳只结算一口）
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
+const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = 引信烧完 = 自爆结算
+var _explode_ring: AoeTelegraph = null  ## 丹爆引信预警圈（挂身上跟随，半径 = explode_radius 同源）
 var _no_drop: bool = false
 var _minion_timer: float = 0.0     ## 产卵计时
 var _teleport_timer: float = 0.0   ## 闪现计时
@@ -528,13 +530,16 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 	if explode_radius > 0.0:
 		if _fuse < 0.0:
 			if dist_sq < 1600.0:
-				_fuse = 0.8
+				_fuse = EXPLODE_FUSE
 				anim_sprite.modulate = Color(2.2, 0.9, 0.6)
 				play_squash(Vector2(1.2, 0.82), 0.3)
 				AudioManager.play_sfx("enemy_fuse", 1.0)   ## 引信是递进爆点的倒计时，不是灵宝触体的钟
+				_ignite_explode_ring()
 		else:
 			_fuse -= delta
 			_pp_target_vel = Vector2.ZERO
+			if _explode_ring != null:
+				_explode_ring.progress = 1.0 - _fuse / EXPLODE_FUSE
 			anim_sprite.position.x = GameManager.rng.randf_range(-1.6, 1.6)
 			if _fuse <= 0.0:
 				anim_sprite.position.x = 0.0
@@ -745,6 +750,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		_focus_hit_count += 1
 		_focus_hit_timer = GameBalance.FOCUS_FIRE_WINDOW
 	current_hp -= amount
+	# 致命一刀不再发命中火花：尸体 0.185s 就塌缩没，火花要放 0.22s，会在空处留一道白闪；
+	# 击杀点反馈由 _die() 的死亡爆散一力承担（视觉不丢，只是不再双发）
+	var lethal := current_hp <= 0.0
 
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
 	var elite_scale: float = 0.55 if is_elite else 1.0
@@ -790,7 +798,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 跳字与火花（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻不发火花（每 0.5s × N 敌堆得太多），跳字保留。
 	# 音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变
-	if not from_dot and not _offscreen:
+	if not from_dot and not _offscreen and not lethal:
 		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
 	if not _offscreen:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
@@ -820,7 +828,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			_flash_swap_t = 0.0
 		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
 
-	if current_hp <= 0.0:
+	if lethal:
 		# 斩杀加成：致命一刀击退放大（尸体随爆散朝打击方向飞出）；
 		# 溢出伤害比例留给死亡爆散放大规模 —— 大数字暴击能把妖物「打爆」
 		knockback_velocity *= GameBalance.KILL_KNOCKBACK_MULT
@@ -882,13 +890,31 @@ func apply_poison(dps: float, duration: float) -> void:
 func _explode(player: Node2D) -> void:
 	if dying:
 		return
+	_clear_explode_ring()
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
+	# 冲击波扫到 explode_radius 为止：扫过的范围就是受伤的范围（与判定同源）
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, explode_radius, GameStyle.BAD)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
-		player.take_damage(contact_damage * 2.0)
+		player.take_damage(contact_damage * 2.0, global_position)
 	_no_drop = true
 	_die()
+
+## 点燃丹爆引信预警圈：半径 = 判定半径（同源），引信烧完圈正好填满
+func _ignite_explode_ring() -> void:
+	if _explode_ring == null:
+		_explode_ring = AoeTelegraph.new()
+		_explode_ring.radius = explode_radius
+		add_child(_explode_ring)
+	_explode_ring.progress = 0.0
+	_explode_ring.visible = true
+
+## 清理丹爆预警圈（自爆结算 / 引信中途被杀时调用）
+func _clear_explode_ring() -> void:
+	if _explode_ring != null and is_instance_valid(_explode_ring):
+		_explode_ring.queue_free()
+	_explode_ring = null
 
 ## 开始冲刺（预警结束后调用）：方向到此锁死，之后不再追踪玩家
 # ---------------- 行为支路：长扑冲刺 ----------------
@@ -1103,6 +1129,7 @@ func _die() -> void:
 	# 清理预警线（如果存在）
 	_clear_charge_warning()
 	_clear_bite_warning()
+	_clear_explode_ring()
 
 	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio, _death_crit_kill)

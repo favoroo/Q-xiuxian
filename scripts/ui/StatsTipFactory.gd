@@ -154,7 +154,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	# 每个数前面都带上它自己的名字（2026-10-11 用户「看不懂」口径）：旧写法
 	# 「全局×羁绊    ×1.25 × ×1.20」两个乘号连排，玩家分不清哪个数是全局、哪个是羁绊；
 	# 行名也不再单写「神识」——这个词全游戏没任何一处解释过。
-	var split := WeaponDamageReadout.slot_split_mult()
+	var split := WeaponDamageReadout.slot_split_mult(-1, id)
 	var factor_rows: Array = [
 		["全局与羁绊", "全局 %s · 羁绊 %s" % [_mul(gm_dmg), _mul(syn_dmg)],
 				_c(gm_dmg * syn_dmg - 1.0)],
@@ -166,6 +166,11 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	if WeaponDamageReadout.is_turret(def):
 		var contraption := WeaponDamageReadout.contraption_mult()
 		factor_rows.append(["机关羁绊", _mul(contraption), _c(contraption - 1.0)])
+	elif int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE:
+		# 召唤羁绊灵宝乘区与运行时 SunOrb 伤害链逐项同形，这里不能少列
+		var drone_m := WeaponDamageReadout.drone_mult(def)
+		if not is_equal_approx(drone_m, 1.0):
+			factor_rows.append(["灵宝羁绊", _mul(drone_m), _c(drone_m - 1.0)])
 
 	var rows: Array = [
 		["攻击方式", WeaponData.behavior_label(def), behavior_color(def)],

@@ -8,7 +8,7 @@ extends Node2D
 ##   2) 粒子用并行数组而非「每颗粒子一个 Dictionary」；
 ##   3) 光环插值由 Tween.interpolate_value 改成 quad 缓出的闭式解。
 
-enum EffectType { HIT_SPARKS, DEATH_BURST, PICKUP_POP, STEP_DUST }
+enum EffectType { HIT_SPARKS, DEATH_BURST, PICKUP_POP, STEP_DUST, SHOCKWAVE }
 
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
@@ -45,6 +45,7 @@ var _overflow: bool = false
 static var _pool: Array[JuiceEffect] = []
 static var _host: Node2D = null
 static var _created: int = 0
+static var active_count: int = 0  ## 当前活跃特效数：HUD 性能面板消费
 
 # ----------------- 池管理 -----------------
 
@@ -76,6 +77,7 @@ static func _ensure_host(scene: Node) -> void:
 	scene.add_child(_host)
 
 static func _acquire() -> JuiceEffect:
+	active_count += 1
 	if not _pool.is_empty():
 		var reused: JuiceEffect = _pool.pop_back()
 		if is_instance_valid(reused):
@@ -90,6 +92,7 @@ static func _acquire() -> JuiceEffect:
 	return fx
 
 func _release() -> void:
+	active_count = maxi(0, active_count - 1)
 	set_process(false)
 	visible = false
 	if _overflow or not is_instance_valid(_host):
@@ -299,6 +302,20 @@ static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false, o
 			randf_range(6.0, 14.0),
 			col,
 			2.0 if not elite else 3.0)
+
+## AoE 结算冲击波：一道环从圆心扫到判定半径（Boss 震地 / 丹爆自爆的「伤害来源」读法）。
+## 与预警圈同源：max_radius 必须传判定半径本身——扫过的范围就是受伤的范围。
+static func spawn_shockwave(parent: Node, pos: Vector2, max_radius: float, col: Color, duration: float = 0.32) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	# 同爆散：结算点不在屏内就不放（屏外凭空一圈没有信息量）
+	if not _pos_in_viewport(parent, pos):
+		return
+	var fx := _acquire()
+	fx._begin(EffectType.SHOCKWAVE, pos, duration, Z_OVERLAY)
+	# 主环扫满判定半径；内亮环略滞后收窄，给扩散加一点层次
+	fx._add_ring(max_radius * 0.12, max_radius, col, 6.0)
+	fx._add_ring(max_radius * 0.06, max_radius * 0.9, col.lightened(0.45), 2.5)
 
 ## 灵石入体微缩流光
 static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) -> void:

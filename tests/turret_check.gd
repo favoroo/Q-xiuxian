@@ -46,6 +46,13 @@ func _run() -> void:
 	_c.near(t1._eff_range(), 220.0 * 1.5 * 1.2, 0.01, "机关台索敌范围吃到攻击范围词条与范围羁绊乘区")
 	GameManager.reset_run()
 
+	# 2.6 疾风咒 buff 口径（2026-10-11 补漏回归）：炮台开火间隔必须与法器/灵珠同乘疾风 buff 层，
+	# 漏乘则疾风期间机关台不加速（玩家直觉与实际不符）
+	_c.near(t1._eff_fire_cd(), 0.75, 0.01, "无 buff 时炮台开火间隔为表值 0.75s")
+	GameManager.buff_attack_speed_mult = 0.6
+	_c.near(t1._eff_fire_cd(), 0.45, 0.01, "疾风咒期间炮台开火间隔同乘 buff 层（0.75×0.6=0.45）")
+	GameManager.reset_run()
+
 	# 3. FloatingWeapon 布设机关与同屏上限
 	var fw: Node = load("res://scenes/weapons/FloatingWeapon.tscn").instantiate()
 	fw.setup("jiguan_nu", 1)

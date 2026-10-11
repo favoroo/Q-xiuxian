@@ -11,15 +11,19 @@ extends Node
 ##
 ## 尺子清单：
 ## ① 数据层：swap_into_equipped 上阵未满＝装备、已满＝互换（换下的一件回背包原位），
-##   非灵宝且无玩家节点时先验后动不拆半截；reorder_stash 顺移、越界夹取、原地不动＝false；
+##   非灵宝且无玩家节点时先验后动不拆半截；equip_stash_into_slot 拖拽落点语义
+##   （空格/越界＝直接装备、已占用格＝替换且不满员也替换）、swap_equipped_slots
+##   同池互换（i==j / 越界 / 混池＝false）；reorder_stash 顺移、越界夹取、原地不动＝false；
 ## ② 按住 HOLD_DELAY 才拎起：幽灵出现、原格压暗，且拎起时整排没被拖走；
 ## ③ 拖着走整排不许跟着滑（ OwnedScroll 已在按下那一拍 latch，拖动中的 motion 必须被截走）；
-## ④ 拖背包件到上阵格放下＝换装成功（上阵已满样本），数据对、选中清空、详情卡没残留；
+## ④ 拖背包件到已佩戴的武器格放下＝替换那一格（上阵已满样本），数据对、选中清空、详情卡没残留；
 ## ⑤ 拖上阵件到「背包」分隔签放下＝卸下成功；
 ## ⑥ 背包件拖到另一个背包格＝背包内排序；
+## ⑥b 上阵件拖到另一个上阵格＝互换位置（同池）；
+## ⑥c 背包件拖到上阵空格＝直接装备（上阵区固定画满上限格数，空格也是落点）；
 ## ⑦ 按住后先划出去＝横滑（不拎起、数据不动、motion 照常送到 OwnedScroll）；
 ## ⑧ 快速点按照旧选中弹卡（拖拽登记没把点按吃掉）。
-## 反例（--selftest）：按住不满时限拎不起来；上阵件拖到上阵格＝不挪（数据原样）。
+## 反例（--selftest）：按住不满时限拎不起来；上阵件拖到上阵空格＝不接（数据原样）。
 
 const VP := Vector2(1202, 540)
 const EPS := 1.5
@@ -78,6 +82,33 @@ func _test_inventory_ops() -> void:
 		"非灵宝件在无玩家节点时拒绝换装（headless 防线，不拆半截）")
 	_c.check(_stash_ids() == before, "拒绝路径背包原样不动")
 
+	# equip_stash_into_slot：拖拽落点语义 —— 已占用格＝替换（不满员也替换），换下的回背包原位
+	GameManager.drones = _fake_drones(2, "lingdie")
+	GameManager.stash = _fake_stash(["haojin_lun"])
+	_c.check(GameManager.equip_stash_into_slot(0, 1), "未满员拖到已佩戴格＝替换（equip_stash_into_slot）")
+	_c.check(GameManager.drones.size() == 2 and WeaponInventory.drone_id(GameManager.drones[1]) == "haojin_lun",
+		"被指中的那一格被替换（drones[1]=haojin_lun）")
+	_c.check(GameManager.stash.size() == 1 and String(GameManager.stash[0].get("id", "")) == "lingdie",
+		"换下的一件回背包被腾出的原位（stash[0]=lingdie），实得 %s" % str(_stash_ids()))
+
+	# equip_stash_into_slot：空格（下标到 summary 尾部之外）＝直接装备
+	GameManager.drones = _fake_drones(2, "lingdie")
+	GameManager.stash = _fake_stash(["lihuo_ya"])
+	_c.check(GameManager.equip_stash_into_slot(0, 5), "拖到空上阵格＝直接装备（越到 summary 之外）")
+	_c.check(GameManager.drones.size() == 3 and WeaponInventory.drone_id(GameManager.drones[2]) == "lihuo_ya",
+		"空格路径把背包件装上了（drones 第 3 件=lihuo_ya）")
+	_c.check(GameManager.stash.is_empty(), "装备后背包件离场")
+	_c.check(not GameManager.equip_stash_into_slot(9, 0), "背包下标越界＝false")
+
+	# swap_equipped_slots：两件灵宝互换位置；同格/越界＝false
+	GameManager.drones = _fake_drone_ids(["lingdie", "haojin_lun", "lihuo_ya", "lingdie"])
+	_c.check(GameManager.swap_equipped_slots(0, 2), "swap_equipped_slots(0,2) 成立")
+	_c.check(_drone_ids() == ["lihuo_ya", "haojin_lun", "lingdie", "lingdie"],
+		"上阵两格互换：drones[0] 与 drones[2] 对调，实得 %s" % str(_drone_ids()))
+	_c.check(not GameManager.swap_equipped_slots(1, 1), "同格互换＝false")
+	_c.check(not GameManager.swap_equipped_slots(-1, 0), "负下标＝false")
+	_c.check(not GameManager.swap_equipped_slots(0, 99), "上阵下标越界＝false")
+
 # ================================ 手势现场 ================================
 
 func _test_gesture() -> void:
@@ -106,6 +137,10 @@ func _test_gesture() -> void:
 	await _check_drag_reorder_stash()
 	await _check_fast_swipe_still_scroll()
 	await _check_tap_still_works()
+	# ⑥b/⑥c 各自重灌样本（上阵不满员才有空格、灵宝要有可分辨的 id），
+	# 排在 ⑦⑧ 之后不搅动它们认的「背包 9 件」现场
+	await _check_drag_equipped_swap()
+	await _check_drag_stash_to_empty_slot()
 
 	if "--selftest" in OS.get_cmdline_user_args():
 		await _selftest()
@@ -235,6 +270,47 @@ func _check_drag_reorder_stash() -> void:
 	want.insert(3, moved)
 	_c.check(_stash_ids() == want, "背包内拖动排序（0 → 3），实得 %s" % str(_stash_ids()))
 
+# ---------- ⑥b 上阵件 → 另一个上阵格＝互换位置 ----------
+
+func _check_drag_equipped_swap() -> void:
+	GameManager.drones = _fake_drone_ids(["lingdie", "haojin_lun", "lihuo_ya", "lingdie"])
+	GameManager.stash = _fake_stash(["wulei_paizi"])
+	GameManager.recalc_synergies()
+	_shop._refresh_inventory()
+	await _settle(6)
+	var a: Control = _find_tile("equipped", 0)
+	var b: Control = _find_tile("equipped", 2)
+	_c.check(a != null and b != null, "换位尺：找得到上阵第 0、2 格")
+	if a == null or b == null:
+		return
+	var from: Vector2 = await _bring_into_view(a)
+	var to: Vector2 = await _bring_into_view(b)
+	await _drag_hold(from, to)
+	_c.check(_drone_ids() == ["lihuo_ya", "haojin_lun", "lingdie", "lingdie"],
+		"上阵件拖到另一个上阵格＝互换位置，实得 %s" % str(_drone_ids()))
+	_c.check(GameManager.stash.size() == 1, "换位不动背包")
+
+# ---------- ⑥c 背包件 → 上阵空格＝直接装备 ----------
+
+func _check_drag_stash_to_empty_slot() -> void:
+	GameManager.drones = _fake_drones(4, "lingdie")
+	GameManager.stash = _fake_stash(["haojin_lun"])
+	GameManager.recalc_synergies()
+	_shop._refresh_inventory()
+	await _settle(6)
+	var src: Control = _find_tile("stash", 0)
+	var dst: Control = _find_tile("equipped", 4)
+	_c.check(src != null and dst != null, "空格尺：找得到背包第 0 格与上阵空格（第 4 格）")
+	if src == null or dst == null:
+		return
+	var from: Vector2 = await _bring_into_view(src)
+	var to: Vector2 = await _bring_into_view(dst)
+	await _drag_hold(from, to)
+	_c.check(GameManager.drones.size() == 5, "拖到空上阵格＝装备（上阵 4 → 5）")
+	_c.check(WeaponInventory.drone_id(GameManager.drones[4]) == "haojin_lun",
+		"装上的件落在队尾（drones[4]=haojin_lun），实得 %s" % str(_drone_ids()))
+	_c.check(GameManager.stash.is_empty(), "装备后背包件离场")
+
 # ---------- ⑦ 按住后先划出去＝横滑 ----------
 
 func _check_fast_swipe_still_scroll() -> void:
@@ -285,7 +361,11 @@ func _check_tap_still_works() -> void:
 # ================================ 反例 ================================
 
 func _selftest() -> void:
-	# 反例① 按住不满时限：不许拎起（拎起阀有牙齿）
+	# 反例① 按住不满时限：不许拎起（拎起阀有牙齿）。自灌满仓样本：selftest 可能跟在
+	# ⑥b/⑥c 的自留样本后面跑，不认前场留下的状态
+	_seed_row()
+	GameManager.stash.append(_fake_stash(["fantian_yin"])[0])
+	_shop._refresh_inventory()
 	_deselect()
 	await _settle(4)
 	var src: Control = _find_tile("stash", 4)
@@ -302,20 +382,23 @@ func _selftest() -> void:
 	DetailTip.close_all(_shop)
 	await _settle(2)
 
-	# 反例② 上阵件拖到上阵格＝不挪（上阵顺序无玩法意义，不许被误当成换装/排序）
+	# 反例② 上阵件拖到上阵空格＝不接（空格不是一件武器；数据原样，背包也没被牵连）
+	GameManager.drones = _fake_drone_ids(["lingdie", "haojin_lun", "lihuo_ya", "lingdie"])
+	GameManager.stash = _fake_stash(["wulei_paizi"])
+	GameManager.recalc_synergies()
+	_shop._refresh_inventory()
+	_deselect()
+	await _settle(4)
 	var a: Control = _find_tile("equipped", 0)
-	var b: Control = _find_tile("equipped", 2)
-	var ids: Array = []
-	for d in GameManager.drones:
-		ids.append(WeaponInventory.drone_id(d))
-	var from: Vector2 = await _bring_into_view(a)
-	var to: Vector2 = await _bring_into_view(b)
-	await _drag_hold(from, to)
-	var ids_after: Array = []
-	for d in GameManager.drones:
-		ids_after.append(WeaponInventory.drone_id(d))
-	_c.check(ids_after == ids, "反例② 上阵→上阵不挪（数据原样），实得 %s" % str(ids_after))
-	_c.check(GameManager.stash.size() == 9, "反例② 背包也没被牵连")
+	var b: Control = _find_tile("equipped", 4)
+	var ids: Array = _drone_ids()
+	_c.check(a != null and b != null, "反例② 现场里找得到上阵第 0 格与空格（第 4 格）")
+	if a != null and b != null:
+		var from: Vector2 = await _bring_into_view(a)
+		var to: Vector2 = await _bring_into_view(b)
+		await _drag_hold(from, to)
+		_c.check(_drone_ids() == ids, "反例② 上阵件拖到上阵空格＝不接（数据原样），实得 %s" % str(_drone_ids()))
+		_c.check(GameManager.stash.size() == 1, "反例② 背包也没被牵连")
 
 # ---------------- 道具与采样 ----------------
 
@@ -358,6 +441,19 @@ func _fake_drones(n: int, wid: String) -> Array:
 	var out: Array = []
 	for _i in range(n):
 		out.append({"id": wid, "star": 1})
+	return out
+
+## 可分辨 id 的上阵样本：互换/换位尺要看出「谁换了谁」
+func _fake_drone_ids(ids: Array) -> Array:
+	var out: Array = []
+	for wid in ids:
+		out.append({"id": String(wid), "star": 1})
+	return out
+
+func _drone_ids() -> Array:
+	var out: Array = []
+	for d in GameManager.drones:
+		out.append(WeaponInventory.drone_id(d))
 	return out
 
 func _deselect() -> void:

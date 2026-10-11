@@ -6,9 +6,15 @@ extends RefCounted
 
 # ---------------- 波次与刷怪 ----------------
 
-const WAVE_DURATION_BASE := 20.0
-const WAVE_DURATION_PER_WAVE := 2.0
-const WAVE_DURATION_MAX := 60.0
+# 2026-10-11 波次拉长：用户口径「每波时间好短、没打什么就结束了」。
+# 根因不在时长（旧曲线 W1=22s 已比土豆兄弟固定 20s 长），而在同屏敌人稀（间隔慢/批量小/
+# 预算低/小怪加厚 4.5×）——「时间够但没东西打」。直解是把刷怪密度顶上去，但 10-11 预算制
+# 正是为治高密度卡顿而设，峰值同屏数不能放。故取折中：波次拉长 + 预算同比例放大，
+# 总击杀数变多、单波更充实，而峰值同屏数（间隔/批量）不变 ⇒ 不重引入卡顿。
+# 新曲线：W1=30.5s / W5=40.5s / W10=53s / W15=65.5s / W17+ 封顶 70s，20 波总战斗 ≈17.8min（旧 ≈13.7min）。
+const WAVE_DURATION_BASE := 28.0
+const WAVE_DURATION_PER_WAVE := 2.5
+const WAVE_DURATION_MAX := 70.0
 # 2026-10-10 打击感重塑：刷怪放缓 + 批量收窄（小怪加血 3.5 倍后单敌活得更久，
 # 同屏密度由更少的刷入量维持，击杀成为「低频但每下都有读数」的事件）
 const SPAWN_INTERVAL_BASE := 1.60
@@ -20,11 +26,13 @@ const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 # 预算耗尽即停手。旧口径「杀几只补几只」会把同屏恒定顶到上限（第 6 波起整波满载，
 # 体感无限刷怪且是持续卡顿源）；预算制下越打越空，击杀速度重新变得有意义。
 # 绑定点对照（旧总量 = 时长/间隔 × 平均批量，见 tests/balance_sim_check.gd 第 5 节）：
-# W1~5 预算不触发（前期手感不变）；W6 39/54 ≈ -28%、W10 55/78 ≈ -30%、W12 起批量跳档后
-# 收得更狠（~-55%）、W20 95/364 ≈ -74%。危险度/角色的妖潮倍率由调用方乘。
-const WAVE_SPAWN_BUDGET_BASE := 15.0
-const WAVE_SPAWN_BUDGET_PER_WAVE := 4.0
-const WAVE_SPAWN_BUDGET_MAX := 110.0
+# W1~5 预算不触发（前期手感不变）；W6 54/73 ≈ -26%、W10 76/104 ≈ -27%、W12 起批量跳档后
+# 收得更狠（~-51%）、W15 103/230 ≈ -55%、W20 131/425 ≈ -69%。危险度/角色的妖潮倍率由调用方乘。
+# 2026-10-11 随波次拉长同比例放预算（21/5.5/150，约 +40%），与时长涨幅匹配 ⇒
+# 单位时间密度峰值不变，只是总击杀数与时长一起变多。前 5 波预算仍不触发。
+const WAVE_SPAWN_BUDGET_BASE := 21.0
+const WAVE_SPAWN_BUDGET_PER_WAVE := 5.5
+const WAVE_SPAWN_BUDGET_MAX := 150.0
 
 ## 波内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算
 static func wave_spawn_budget(wave: int) -> int:

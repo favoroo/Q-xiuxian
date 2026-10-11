@@ -286,7 +286,7 @@ func _open_usage_tip() -> void:
 	]
 	var notes: Array[String] = [
 		"点中一件武器（装备或背包里的）才能操作：三合一升星、装备卸下、出售换金币。",
-		"拖动换装：按住一件武器拎起来，拖到上阵格放下＝装备（上阵满则与那一格互换），拖回背包区＝卸下，背包内拖动＝整理顺序。",
+		"拖动换装：按住一件武器拎起来，拖到上阵空格＝装备；拖到已佩戴的武器上＝替换（换下的一件回背包）；上阵格之间拖动＝互换位置；拖回背包区＝卸下；背包内拖动＝整理顺序。",
 		"三合一：集齐三把同名同星，合成后升一星（最高 %s）。" % WeaponData.star_text(WeaponData.MAX_STAR),
 		"锁定：这一格留到下波，重掷与刷新都不会换掉它。",
 		"重掷货架：换一批候选；每波有免费次数，用完按价格扣金币。",
@@ -407,30 +407,30 @@ func _refresh_inventory() -> void:
 
 	var summary: Array = GameManager.get_weapons_summary()
 	var max_slots: int = GameManager.max_weapon_slots()
+	# 上阵区固定摆满上限格数（2026-10-11 用户：没佩戴的也要显示一个空格子在那里）——
+	# 格位本身就是容量口径，限件数角色（独臂刀圣 3 格）一眼看出还空几格、还差几件。
+	# summary 不会被顶破上限，maxi 只是防御：真超了就全画，不吞件。
+	var eq_count: int = maxi(max_slots, summary.size())
 	var slot_capped: bool = max_slots < WeaponData.MAX_SLOTS
-	# 背包空位画成凹槽提示容量；上阵较满时少画几个避免溢出
-	var empty_budget: int = clampi(10 - summary.size() - GameManager.stash.size(), 0, 3)
+	# 背包空位画成凹槽提示容量
+	var empty_budget: int = clampi(10 - eq_count - GameManager.stash.size(), 0, 3)
 	var free_tiles: int = mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)
 	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 法宝徽记）
-	var n_tile: int = summary.size() + GameManager.stash.size() + free_tiles + GameManager.items.size()
-	var n_chip: int = (0 if summary.is_empty() and GameManager.stash.is_empty() else (2 if slot_capped else 1)) \
-		+ (1 if not GameManager.items.is_empty() else 0)
+	var n_tile: int = eq_count + GameManager.stash.size() + free_tiles + GameManager.items.size()
+	var n_chip: int = (2 if slot_capped else 1) + (1 if not GameManager.items.is_empty() else 0)
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
-	if summary.is_empty() and GameManager.stash.is_empty():
-		var empty_lbl = Label.new()
-		empty_lbl.text = "（还没有装备武器）"
-		owned_container.add_child(empty_lbl)
-		GameStyle.label(empty_lbl, 13, GameStyle.GREY)
-	else:
-		if slot_capped:
-			owned_container.add_child(ShopInventoryRow.create_equipped_cap_chip(summary.size(), max_slots))
-		for i in range(summary.size()):
+	if slot_capped:
+		owned_container.add_child(ShopInventoryRow.create_equipped_cap_chip(summary.size(), max_slots))
+	for i in range(eq_count):
+		if i < summary.size():
 			owned_container.add_child(ShopInventoryRow.create_inv_slot(self, summary[i], i, "equipped", tile))
-		owned_container.add_child(ShopInventoryRow.create_stash_divider(self))
-		for i in range(GameManager.stash.size()):
-			owned_container.add_child(ShopInventoryRow.create_inv_slot(self, GameManager.stash[i], i, "stash", tile))
-		for i in range(free_tiles):
-			owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(self, tile))
+		else:
+			owned_container.add_child(ShopInventoryRow.create_empty_equipped_slot(self, i, tile))
+	owned_container.add_child(ShopInventoryRow.create_stash_divider(self))
+	for i in range(GameManager.stash.size()):
+		owned_container.add_child(ShopInventoryRow.create_inv_slot(self, GameManager.stash[i], i, "stash", tile))
+	for i in range(free_tiles):
+		owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(self, tile))
 
 	# 已持有法宝（被动道具）陈列：小图标 + 点按查看说明，不参与点选操作
 	if not GameManager.items.is_empty():

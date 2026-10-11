@@ -36,6 +36,10 @@ static var created_count: int = 0                  ## 累计实例化次数（Pe
 static var reused_count: int = 0                   ## 累计复用次数（PerfProbe 判据）
 static var _lit_count: int = 0                     ## 当前点亮灯数
 
+## 场上活宝石数（HUD 性能面板消费）
+static func active_gem_count() -> int:
+	return _active_gems.size()
+
 var _pooled: bool = false
 var _has_light: bool = false
 

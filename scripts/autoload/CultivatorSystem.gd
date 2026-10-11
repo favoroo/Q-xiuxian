@@ -48,8 +48,10 @@ static func apply_cultivator(gm: Node) -> void:
 			gm.player.current_health = gm.player.max_health
 			gm.player_hp_changed.emit(gm.player.current_health, gm.player.max_health)
 	var start_drones := int(mods.get("start_drones", 0))
+	var start_drone_star := maxi(1, int(mods.get("start_drone_star", 1)))
 	for i in range(start_drones):
-		gm.drones.append(1)
+		# 开局灵蝶支持指定星级（驯兽师 ★2 双生蝶）：统一走字典条目，_drone_id/_drone_star 都认
+		gm.drones.append({"id": "lingdie", "star": start_drone_star})
 	if start_drones > 0 and gm.player != null and gm.player.has_method("sync_drones"):
 		gm.player.sync_drones()
 

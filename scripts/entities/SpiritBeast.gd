@@ -12,7 +12,7 @@ extends CharacterBody2D
 ##
 ## 血量是它的寿命：受击有无敌帧（HIT_INVINCIBLE，敌人接触伤害逐帧结算，没它一秒被磨没），
 ## 血量耗尽即消散；没有波间回血 ——「血量没耗完就一直在场」。
-## 血量不挂血条：受击时把 hp_ratio 灌给渲染器，由灵狐本体传达（灵光/灵印转暗、濒死裂纹闪烁）。
+## 血量不挂血条：受击时把 hp_ratio 灌给渲染器，由玄鹤本体传达（灵光/丹顶/灵目转暗、濒死裂纹闪烁）。
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
 ## 索敌读 GameManager.live_enemies 登记表，不做物理查询（最多 3 只，10Hz 重索节流）。
 
@@ -26,6 +26,7 @@ var _attack_timer: float = 0.0
 var _search_timer: float = 0.0
 var _invincible_timer: float = 0.0
 var _hit_flash: float = 0.0
+var _face_sign: float = 1.0
 var _renderer: ProceduralDroneRenderer = null
 
 func _ready() -> void:
@@ -37,7 +38,7 @@ func _ready() -> void:
 	current_hp = max_hp
 
 	_renderer = ProceduralDroneRenderer.new()
-	_renderer.kind = ProceduralDroneRenderer.DroneKind.LING_HU
+	_renderer.kind = ProceduralDroneRenderer.DroneKind.XUAN_HE
 	add_child(_renderer)
 
 	GameManager.register_ally(self)
@@ -97,9 +98,14 @@ func _physics_process(delta: float) -> void:
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 	if _renderer != null:
-		if absf(move_dir.x) > 0.05:
-			_renderer.scale.x = signf(move_dir.x)
-		_renderer.move_blend = clampf(velocity.length() / GameBalance.SPIRIT_BEAST_MOVE_SPEED, 0.0, 1.0)
+		# 朝向翻转带滞回：只有走向明确与当前朝向相反（反向分量 > 0.25）才翻面，
+		# 竖直方向追击（move_dir.x≈0）与临界抖动都不翻
+		if move_dir.x * _face_sign < -0.25:
+			_face_sign = -_face_sign
+		_renderer.scale.x = _face_sign
+		_renderer.speed_ratio = clampf(velocity.length() / GameBalance.SPIRIT_BEAST_MOVE_SPEED, 0.0, 1.0)
+		# 悬浮侧倾：按朝向系下的横向走位 bank（与悬浮怪同款 ~6.5°），镜像由 scale.x 承担
+		_renderer.bank_angle = deg_to_rad(6.5) * clampf(velocity.x * _face_sign / GameBalance.SPIRIT_BEAST_MOVE_SPEED, -1.0, 1.0)
 
 ## 索敌：读 live_enemies 登记表取最近活体（含濒死未清的要跳过）
 func _find_target() -> Node2D:

@@ -44,6 +44,7 @@ static func recalc_synergies(gm: Node) -> void:
 	gm.synergy_armor = 0.0
 	gm.synergy_knockback_mult = 1.0
 	gm.synergy_contraption_mult = 1.0
+	gm.synergy_drone_mult = 1.0
 	gm.synergy_engineering_damage = 0.0
 	var hp_bonus: float = 0.0
 	var eng_bonus: float = 0.0
@@ -76,6 +77,12 @@ static func recalc_synergies(gm: Node) -> void:
 				var eng_list: Array = info.get("eng_values", [2.0, 4.0, 7.0])
 				if syn_level <= eng_list.size():
 					eng_bonus += float(eng_list[syn_level - 1])
+				# 2026-10-11 平衡校准：召唤羁绊此前只有平面召唤伤害、无伤害乘区（御灵流成型
+				# Boss TTK 垫底根因），仿机关羁绊补一条灵宝伤害乘区档（仅 DRONE 行为在 SunOrb 消费）
+				var drone_list: Array = info.get("drone_values", [0.10, 0.20, 0.25])
+				if syn_level <= drone_list.size():
+					# 乘区档位约定与机关/火系一致：表里存的是加成幅度，加到 1.0 基数上（1.10/1.20/1.25）
+					gm.synergy_drone_mult += float(drone_list[syn_level - 1])
 			"wide":
 				gm.synergy_damage_mult += float(v)
 			"metal":
@@ -86,6 +93,9 @@ static func recalc_synergies(gm: Node) -> void:
 				gm.synergy_hp_regen += float(v)
 				var ls_list: Array = [0.02, 0.04, 0.07]
 				gm.synergy_lifesteal += float(ls_list[syn_level - 1])
+				# 2026-10-11 平衡校准：木系羁绊此前零伤害乘区（剧毒流成型 TTK 垫底根因），仿火系补一条伤害档
+				var wd_list: Array = [0.06, 0.12, 0.20]
+				gm.synergy_damage_mult += float(wd_list[syn_level - 1])
 			"water":
 				gm.synergy_haste_mult *= float(v)
 				var spd_list: Array = [0.08, 0.16, 0.25]

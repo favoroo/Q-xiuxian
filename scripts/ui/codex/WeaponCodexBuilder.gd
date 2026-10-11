@@ -9,7 +9,8 @@ extends RefCounted
 ## 筛选口径与商店羁绊签同源：tag 命中 WeaponData.tags_of(wid) 即入选，
 ## 「机关·剑阵盘」这类双器类法器会同时出现在机关与剑系两组（与羁绊结算一致）。
 
-## 卡面关键数值行：不点也能横向对比，完整属性仍走点按详情卡
+## 卡面两件事都不点就能看见：三签（攻击方式·器类·五行）+ 关键数值行，
+## 完整属性/射程/异常仍走点按详情卡
 const STAT_LINE_FMT := "伤%d·%s秒·%d金"
 
 
@@ -149,8 +150,6 @@ static func _weapon_grid(dialog: ManualDialog, keep: Callable) -> GridContainer:
 
 
 static func _make_weapon_card(dialog: ManualDialog, wid: String, def: Dictionary) -> PanelContainer:
-	var cls := String(WeaponData.class_of(wid))
-	var cls_name := String(WeaponData.SYNERGIES.get(cls, {}).get("name", cls))
 	var stat_line := STAT_LINE_FMT % [
 		int(def.get("damage", 0)),
 		String.num(float(def.get("cooldown", 1.0)), 2),
@@ -158,11 +157,46 @@ static func _make_weapon_card(dialog: ManualDialog, wid: String, def: Dictionary
 	]
 	var card := dialog._make_entry_card(
 		String(def.get("icon", "")), String(def.get("name", wid)),
-		cls_name, GameStyle.PAPER_DIM,
+		"", GameStyle.PAPER_DIM,
 		func(anchor: Control): dialog._open_weapon_tip(wid, anchor),
-		stat_line)
+		stat_line, card_chips(wid, def))
+	card.set_meta("wid", wid)		# 判据按 id 现算期望签文，不从卡面文字反推
 	# 吃「元素伤害」属性加成的法器挂橙红角标（图鉴与商店/属性面板同一口径）
 	var icon_tex := card.get_meta("icon_tex") as TextureRect
 	if icon_tex != null and icon_tex.get_parent() != null:
 		GameStyle.maybe_add_element_badge(icon_tex.get_parent(), wid, 8)
 	return card
+
+
+## 卡面三签：攻击方式 + 器类（双器类法器如「机关·剑阵盘」给两枚）+ 五行。
+## 词表就是筛选 chip 那批名字（WeaponData.SYNERGIES[].name），取色与商店货架卡行②同源
+## （behavior 走 StatsTipFactory.behavior_color，五行走 GameStyle.ELEMENT_COLORS）——
+## 同一件事在商店/图鉴/详情卡必须是同一副样子（2026-10-11 用户：图鉴只有点开才看得到
+## 属性，横向比不了，「召唤/火系/水系」这种要一眼扫得出来）。
+## 器类/五行签先排，攻击方式签排队首，但**同词不插第二遍**：天灯的器类「范围」就是它的
+## 攻击方式、喷火兽的「机关」同理（两套词表共用这些人话），一张卡上并排两张同词签
+## 看着像画坏了；留器类那一枚，因为筛选与羁绊算的是它。
+static func card_chips(wid: String, def: Dictionary) -> Array:
+	var out: Array = []
+	for t in WeaponData.tags_of(wid):
+		var tag := String(t)
+		var syn: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+		if syn.is_empty():
+			continue
+		var nm := String(syn.get("name", tag))
+		if tag in WeaponData.ELEMENTS:
+			var elem_col: Color = GameStyle.ELEMENT_COLORS.get(tag, GameStyle.GOLD)
+			out.append([nm, elem_col, GameStyle.INK_TEXT])
+		else:
+			out.append([nm, GameStyle.NAVY2, GameStyle.PAPER])
+	var beh := WeaponData.behavior_label(def)
+	if not _chips_have(out, beh):
+		out.insert(0, [beh, StatsTipFactory.behavior_color(def), GameStyle.PAPER])
+	return out
+
+
+static func _chips_have(chips: Array, text: String) -> bool:
+	for cd in chips:
+		if String(cd[0]) == text:
+			return true
+	return false

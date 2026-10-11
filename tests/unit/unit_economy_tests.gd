@@ -162,6 +162,34 @@ func _test_synergy_levels() -> void:
 	_c.equals(int(GameManager.active_synergies["spirit"]["level"]), 1, "门槛下移后 2 只仍是一档")
 	GameManager.reset_run()
 
+	# 读数必须与结算同一把尺子：门槛下移后 UI 不许再拿原表 2/4/6 报进度
+	# （2026-10-11 商店顶栏「召唤 (6/5)」：满档只要 5 件，第 6 件照拿，件数比满了的分母还大，
+	#  看着像数值溢出；同一角色在货架卡上又被提示「5/6 再买一件」，两头都差一件）
+	GameManager.reset_run()
+	GameManager.spirit_threshold_adj = 1
+	GameManager.drones = [1, 1, 1, 1, 1]   # 5 只灵蝶：下移后正好满档
+	GameManager.recalc_synergies()
+	_c.equals(int(GameManager.active_synergies["spirit"]["level"]), 3, "门槛 -1 后 5 件即满档")
+	_c.equals(SynergyUI.progress("spirit")["max_th"], 5, "满档门槛取下移后的 5")
+	_c.equals(SynergyUI.progress("wood")["max_th"], 6, "没有门槛加成的流派仍是 6")
+	_c.equals(SynergyUI.progress_text("spirit"), "召唤 (5/MAX)", "满档徽记写 MAX，不写 5/5")
+	_c.equals(SynergyUI.badge("spirit", 5)["text"], "召唤 5/MAX", "货架卡：5 件已满档（旧写法报 5/6）")
+	_c.equals(SynergyUI.badge("spirit", 4)["text"], "召唤 4/5", "货架卡下一档取下移后的 5（旧写法报 4/6）")
+	_c.check(bool(SynergyUI.badge("spirit", 4)["hot"]), "4 件时买第 5 件正好满档 ⇒ 临门一档亮绿（旧写法不亮）")
+	_c.check(not bool(SynergyUI.badge("spirit", 5)["hot"]), "已满档不再亮临门一档")
+	GameManager.drones = [1, 1, 1, 1, 1, 1]   # 第 6 件：件数超过满档门槛，档位不再涨
+	GameManager.recalc_synergies()
+	_c.equals(int(GameManager.active_synergies["spirit"]["level"]), 3, "6 件仍是满档，不溢出")
+	_c.equals(SynergyUI.progress_text("spirit"), "召唤 (6/MAX)", "6 件不写成 6/5")
+	_c.check(not SynergyUI.progress_text("spirit").contains("/5)"), "读数里不再出现已作废的满档分母")
+	# 折算只留一处：整族流派的下移与「下一档」都由 GameBalance 这两个纯函数说
+	_c.check(GameBalance.synergy_thresholds([2, 4, 6], 1) == [1, 3, 5], "门槛表逐档 -1")
+	_c.check(GameBalance.synergy_thresholds([2, 4, 6], 3) == [1, 1, 3], "逐档各减 3，封在 1 件（前两档并档）")
+	_c.equals(GameBalance.synergy_next_threshold(4, [2, 4, 6], 1), 5, "下移后下一档是 5")
+	_c.equals(GameBalance.synergy_next_threshold(5, [2, 4, 6], 1), 0, "0 = 已满档")
+	_c.equals(GameBalance.synergy_next_threshold(3, [2, 4, 6]), 4, "无下移时下一档是 4")
+	GameManager.reset_run()
+
 func _test_shop_determinism() -> void:
 	GameManager.reset_run()
 	GameManager.wave_number = 6

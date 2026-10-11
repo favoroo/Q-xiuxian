@@ -20,6 +20,7 @@ static var _heal_settings: LabelSettings
 static var _pool: Array[DamageNumber] = []
 static var _host: Node2D = null
 static var _created: int = 0
+static var active_count: int = 0  ## 当前活跃跳字数：HUD 性能面板消费
 
 var _label: Label = null
 var _overflow: bool = false
@@ -87,6 +88,7 @@ static func _ensure_host(scene: Node) -> void:
 	scene.add_child(_host)
 
 static func _acquire() -> DamageNumber:
+	active_count += 1
 	if not _pool.is_empty():
 		var reused: DamageNumber = _pool.pop_back()
 		if is_instance_valid(reused):
@@ -214,6 +216,7 @@ func _process(delta: float) -> void:
 	modulate.a = 1.0 if _t < fade_at else 1.0 - clampf((_t - fade_at) / PHASE_FADE, 0.0, 1.0)
 
 func _release() -> void:
+	active_count = maxi(0, active_count - 1)
 	set_process(false)
 	visible = false
 	if _overflow or not is_instance_valid(_host):

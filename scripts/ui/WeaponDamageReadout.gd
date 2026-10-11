@@ -17,16 +17,23 @@ static func slot_count_after_purchase() -> int:
 	return used + 1 if used < GameManager.max_weapon_slots() else used
 
 ## 单发真实伤害（不含暴击、不含斩将）。slot_count 传 -1 表示按当前上阵数。
+## 御灵按半权计神识分流（与运行时 GameManager.get_multi_weapon_damage_mult 同口径）；
+## 货架预览「买下之后」时若预览的是御灵，御灵把数同步 +1，卡面数才不会到手就缩水。
 static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 	var def := WeaponData.get_def(w_id)
 	if def.is_empty():
 		return 0.0
 	var s := clampi(star, 1, WeaponData.MAX_STAR)
 	var n := slot_count if slot_count > 0 else GameManager.slots_used()
+	var drone_n := GameManager.drones.size()
+	if slot_count > 0 and int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE \
+			and GameManager.slots_used() < GameManager.max_weapon_slots():
+		drone_n += 1
 	var raw: float = WeaponData.damage_for(w_id, s) + GameManager.get_weapon_stat_bonus(w_id, s)
 	var mult: float = GameManager.weapon_damage_mult * GameManager.synergy_damage_mult \
+			* drone_mult(def) \
 			* GameManager.cultivator_damage_mult(w_id) * GameManager.element_damage_mult(w_id) \
-			* GameBalance.multi_weapon_damage_mult(n)
+			* GameBalance.multi_weapon_damage_mult(n, drone_n)
 	if is_turret(def):
 		mult *= GameManager.synergy_contraption_mult
 	return raw * mult
@@ -89,10 +96,20 @@ static func bonus_bill(w_id: String, star: int) -> Array:
 	rows.sort_custom(func(a, b): return float(a[1]) > float(b[1]))
 	return rows
 
-## 神识分流系数（详情面板要把每个乘区逐行列出来，必须从这里取，别自己再算一遍）
-static func slot_split_mult(slot_count: int = -1) -> float:
-	return GameBalance.multi_weapon_damage_mult(
-			GameManager.slots_used() if slot_count <= 0 else slot_count)
+## 神识分流系数（详情面板要把每个乘区逐行列出来，必须从这里取，别自己再算一遍）。
+## w_id 传御灵 id 时按半权口径（运行时 SunOrb 吃的就是这个数）。
+static func slot_split_mult(slot_count: int = -1, w_id: String = "") -> float:
+	var n := GameManager.slots_used() if slot_count <= 0 else slot_count
+	var drone_n := GameManager.drones.size()
+	if slot_count > 0 and int(WeaponData.get_def(w_id).get("behavior", -1)) == WeaponData.Behavior.DRONE \
+			and GameManager.slots_used() < GameManager.max_weapon_slots():
+		drone_n += 1
+	return GameBalance.multi_weapon_damage_mult(n, drone_n)
+
+## 灵宝伤害乘区：只有环绕灵宝吃召唤羁绊这一档，详情面板对别的法器不许列这一行
+static func drone_mult(def: Dictionary) -> float:
+	return GameManager.synergy_drone_mult \
+			if int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE else 1.0
 
 ## 机关羁绊：只有机关类法器吃这一档，详情面板对别的法器不许列这一行
 static func contraption_mult() -> float:

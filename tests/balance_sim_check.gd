@@ -35,7 +35,7 @@ func _ready() -> void:
 	else:
 		get_tree().quit(1)
 
-# ---------------- 1. 42 件非机关法器单体 DPS 分档与极差比（机关炮台不进档，与既有 3 把口径一致） ----------------
+# ---------------- 1. 54 件非机关法器单体 DPS 分档与极差比（机关炮台不进档，与既有口径一致） ----------------
 
 func _test_weapon_dps_normalization() -> void:
 	var single_target_weapons := [
@@ -43,16 +43,26 @@ func _test_weapon_dps_normalization() -> void:
 		"jinzhen_fu", "qingteng_jian",
 		# 2026-10-11 新增：近战剑 / 穿透飞剑（点杀位）
 		"hanshuang_jian", "bengshan_jian", "liuhuo_feijian",
+		# 2026-10-11 平衡校准：金雷锥爆裂半径 55 全库最小，单点重击定位归位单体档（damage 35→38）
+		"jinlei_zhui",
+		# 2026-10-11 第二批：庚金符双针速射（点杀位）
+		"gengjin_fu",
 	]
 	var aoe_utility_weapons := [
 		"qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin",
 		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun",
-		"xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "jinlei_zhui", "chunlei_gu",
+		"xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "chunlei_gu",
 		"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian",
 		# 2026-10-11 新增：弹射/群伤型
 		"zhenhuo_fu", "leihuo_fu", "langli_suo", "gudu_fu",
+		# 2026-10-11 第二批：群伤型
+		"lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu",
 	]
-	var drone_weapons := ["lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei"]
+	var drone_weapons := [
+		"lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei",
+		# 2026-10-11 第二批：御灵加厚 6 把
+		"jinming_ling", "muling_ou", "bingpo_zhu", "chiyan_ying", "tuling_shi", "jianling",
+	]
 
 	var min_dps: float = 9999.0
 	var max_dps: float = 0.0
@@ -75,7 +85,7 @@ func _test_weapon_dps_normalization() -> void:
 				"御灵环绕法器【%s】有效 DPS 落在 30~38 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
-	_c.check(ratio <= 2.0, "全库 48 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+	_c.check(ratio <= 2.0, "全库 60 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
 
 	# 御灵同档护栏（2026-10-10 用户口径：召唤打不动人）：御灵有效 DPS（已按接触占空比折算）
 	# 必须贴住青云剑单体 DPS 的 0.85 倍以上 —— 占空比一变、数值一飘，这里直接红。
@@ -194,6 +204,81 @@ func _test_reference_build_ttks() -> void:
 	_c.check(ext_w20_boss_ttk <= 20.0,
 		"极端 6 剑满配 Build 依然保留高爆发爽感：TTK <= 20.0s (实测 %.1fs)" % ext_w20_boss_ttk)
 
+	# 3.5 机关堡垒成型 Build TTK（2026-10-11 新增防护栏：机关炮台不入 DPS 档、cap = turret_cap + 星−1
+	# 且每把武器独立维持满并发，此前全库无判据看这个乘区。底线对齐极端 build 的「绝不秒杀」红线 ≥8.0s；
+	# 实测值打印供后续调参——若逼近 8s 或长期显著低于成型带 30s，再考虑压 turret_cap 或机关羁绊）
+	var turret_build_dps := _simulate_turret_build_dps(
+		["jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou", "hanquan_shou", "tengluo_jiguan", "leishi_jiguan"],
+		{
+			"weapon_damage_mult": 1.65, "engineering_damage": 6.0,
+			"crit_rate": 0.30, "crit_mult": 1.75, "attack_speed_mult": 0.72,
+			"elite_damage": 0.50, "synergy_contraption": 0.50,
+		}
+	)
+	var turret_w20_boss_ttk := GameBalance.boss_hp(20) / turret_build_dps
+	_c.check(turret_w20_boss_ttk >= 8.0,
+		"机关堡垒成型 Build（6 机关全★2 满并发）绝不秒杀魔尊：TTK >= 8.0s (实测 %.1fs, DPS=%.0f)" % [turret_w20_boss_ttk, turret_build_dps])
+	print("TURRET 机关堡垒成型 Build：DPS=%.0f，W20 魔尊 TTK=%.1fs（机关羁绊×1.5 + 攻速 + 满并发 cap=3 口径，炮台弹丸不带 DoT）" % [turret_build_dps, turret_w20_boss_ttk])
+
+	# 3.6 纯御灵 Build（2026-10-11 新增防护栏：用户口径「驯兽师全召唤打 Boss 磨血磨不动」）。
+	# 与既有成型断言的口径差异（全部是刻意的诚实化）：
+	#   ① Boss 无 is_elite ⇒ 斩将加成对 Boss 不生效：vs_elite=false、stats 不给 elite_damage
+	#     （既有 3.2/3.4 的 vs_elite=true 属已知乐观偏差，修正需整体重标定，另行立项）；
+	#   ② DRONE 乘接触占空比（随星抬升）——此前仿真漏乘，御灵真实 TTK 被低估 1.33 倍；
+	#   ③ 神识分流按御灵半权；④ 召唤羁绊灵宝乘区 + 驯兽师灵宝专精乘区计入 cult_dmg。
+	# 羁绊构成对齐编队：5 spirit ⇒ 召唤 t3（门槛 -1）；2 木（双护蝶）⇒ 木 t1 武器伤害 +6%；
+	# 水/土/金各 1 件不成分档 ⇒ 无疾风无锐金。攻速/暴击/法伤来自通用悟道加点。
+	var drone_stats_w10 := {
+		"weapon_damage_mult": 1.30, "engineering_damage": 6.0,
+		"crit_rate": 0.15, "crit_mult": 1.50, "attack_speed_mult": 0.88,
+		"synergy_damage_mult": 1.06, "synergy_haste_mult": 1.0,
+		"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+	}
+	var drone_w10_dps := _simulate_build_dps(
+		[{"id": "lingdie", "star": 2}, {"id": "lingdie", "star": 2},
+		 {"id": "hanquan_yulian", "star": 1}, {"id": "hunyuan_zhong", "star": 1}, {"id": "haojin_lun", "star": 1}],
+		drone_stats_w10, false
+	)
+	var drone_w10_boss_ttk := GameBalance.boss_hp(10) / drone_w10_dps
+	_c.check(drone_w10_boss_ttk >= 30.0 and drone_w10_boss_ttk <= 70.0,
+		"驯兽师成型御灵 Build 在第 10 波 Boss 战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [drone_w10_boss_ttk, drone_w10_dps])
+
+	# 羁绊构成对齐编队：6 spirit ⇒ 召唤 t3；2 木 ⇒ 木 t1 +6%；寒泉+冰魄 2 水 ⇒ 水 t1 疾风 ×0.92。
+	# 加点更真实：暴击/攻速/召唤伤害与生存档互相竞争（成型期不会全堆输出）。
+	var drone_stats_w20 := {
+		"weapon_damage_mult": 1.65, "engineering_damage": 12.0,
+		"crit_rate": 0.15, "crit_mult": 1.65, "attack_speed_mult": 0.78,
+		"synergy_damage_mult": 1.06, "synergy_haste_mult": 0.92,
+		"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+	}
+	var drone_w20_dps := _simulate_build_dps(
+		[{"id": "lingdie", "star": 3}, {"id": "lingdie", "star": 3},
+		 {"id": "hanquan_yulian", "star": 2}, {"id": "bingpo_zhu", "star": 2},
+		 {"id": "haojin_lun", "star": 2}, {"id": "xuanwu_pei", "star": 2}],
+		drone_stats_w20, false
+	)
+	var drone_w20_boss_ttk := GameBalance.boss_hp(20) / drone_w20_dps
+	_c.check(drone_w20_boss_ttk >= 30.0 and drone_w20_boss_ttk <= 70.0,
+		"驯兽师成型御灵 Build 在第 20 波魔尊战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [drone_w20_boss_ttk, drone_w20_dps])
+
+	# 3.7 极端 6 御灵满配 Build（全部金系御灵：metal 三档喂暴击、灵宝自带暴击率转化）
+	var drone_ext_dps := _simulate_build_dps(
+		[{"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3},
+		 {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}],
+		{
+			"weapon_damage_mult": 2.00, "engineering_damage": 30.0,
+			"crit_rate": 0.27, "crit_mult": 1.75, "attack_speed_mult": 0.60,
+			"synergy_crit_rate": 0.20, "synergy_crit_mult": 0.75,
+			"synergy_damage_mult": 1.0, "synergy_haste_mult": 1.0,
+			"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+		}, false
+	)
+	var drone_ext_w20_boss_ttk := GameBalance.boss_hp(20) / drone_ext_dps
+	_c.check(drone_ext_w20_boss_ttk >= 8.0,
+		"极端 6 御灵满配 Build 绝不秒杀魔尊：TTK 坚守 >= 8.0s (实测 %.1fs, DPS=%.0f)" % [drone_ext_w20_boss_ttk, drone_ext_dps])
+	print("DRONE 御灵成型 W10 TTK=%.1fs (DPS=%.0f) · W20 TTK=%.1fs (DPS=%.0f) · 极端满配 W20 TTK=%.1fs (DPS=%.0f)｜诚实口径：无斩将 × 占空比按星 × 御灵半权分流 × 灵宝乘区 1.25 × 驯兽师 1.12" % [
+		drone_w10_boss_ttk, drone_w10_dps, drone_w20_boss_ttk, drone_w20_dps, drone_ext_w20_boss_ttk, drone_ext_dps])
+
 # 纯静态链路仿真计算（含多法器神识分流与散射命中规则）
 func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> float:
 	var w_dmg_mult: float = float(stats.get("weapon_damage_mult", 1.0))
@@ -205,7 +290,13 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)) + float(stats.get("synergy_crit_rate", 0.0)))
 	var crit_m: float = float(stats.get("crit_mult", 1.5)) + float(stats.get("synergy_crit_mult", 0.0))
 	var elite_mult: float = (1.0 + float(stats.get("elite_damage", 0.0))) if vs_elite else 1.0
-	var multi_mult: float = GameBalance.multi_weapon_damage_mult(weapons.size())
+	var drone_m: float = float(stats.get("synergy_drone_mult", 1.0))
+	# 神识分流按御灵半权：数一下编队里的 DRONE 把数（2026-10-11 召唤流校准）
+	var drone_n := 0
+	for item in weapons:
+		if int(WeaponData.get_def(String(item["id"])).get("behavior", -1)) == WeaponData.Behavior.DRONE:
+			drone_n += 1
+	var multi_mult: float = GameBalance.multi_weapon_damage_mult(weapons.size(), drone_n)
 
 	var total_dps := 0.0
 	for item in weapons:
@@ -214,11 +305,13 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 		var def := WeaponData.get_def(wid)
 		var base_d := WeaponData.damage_for(wid, star)
 		var base_cd := WeaponData.cooldown_for(wid, star)
+		var beh := int(def.get("behavior", WeaponData.Behavior.MELEE))
 
 		var stat_bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, star)
 		var final_d := (base_d + stat_bonus) * w_dmg_mult * syn_dmg * cult_dmg * elem_dmg * multi_mult
+		if beh == WeaponData.Behavior.DRONE:
+			final_d *= drone_m
 
-		var beh := int(def.get("behavior", WeaponData.Behavior.MELEE))
 		var per_hit := final_d
 		if beh == WeaponData.Behavior.PROJECTILE:
 			var max_lock: int = 2 if vs_elite else 1
@@ -227,6 +320,9 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 		var eff_cd := maxf(0.08, base_cd * atk_spd * syn_haste)
 		var expected_crit := 1.0 + crit_r * (crit_m - 1.0)
 		var hit_dps := (per_hit * expected_crit / eff_cd) * elite_mult
+		# 御灵实伤口径：接触结算占空比按星抬升（★2/★3 分身后多具同环扫掠）
+		if beh == WeaponData.Behavior.DRONE:
+			hit_dps *= GameBalance.spirit_contact_duty(star)
 
 		if def.get("proc_burn", false):
 			hit_dps += final_d * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 3.0)) / eff_cd)
@@ -234,6 +330,32 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 			hit_dps += final_d * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / eff_cd)
 
 		total_dps += hit_dps
+	return total_dps
+
+## 机关堡垒 Build 专用仿真（2026-10-11）：TurretUnit 的吞吐口径与 _simulate_build_dps 的
+## 「冷却 = 布设间隔」不同——机关武器本体只负责布设，实际输出是 cap 座炮台按 turret_fire_cd 连射，
+## 且 fire_cd 不随星级缩放（TurretUnit.setup 只缩伤害）。满并发 = turret_cap + 星−1
+## （布设间隔 × 攻速 < 存在时长时恒可达）。炮台弹丸不带 proc（_perform_turret_attack 不设 proc_*），
+## 故不计灼烧/剧毒。只读静态表与入参，确定性。
+func _simulate_turret_build_dps(weapon_ids: Array, stats: Dictionary) -> float:
+	var w_dmg_mult: float = float(stats.get("weapon_damage_mult", 1.0))
+	var atk_spd: float = float(stats.get("attack_speed_mult", 1.0))
+	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)))
+	var crit_m: float = float(stats.get("crit_mult", 1.5))
+	var elite_mult: float = 1.0 + float(stats.get("elite_damage", 0.0))
+	var contraption_mult: float = 1.0 + float(stats.get("synergy_contraption", 0.0))
+	var multi_mult: float = GameBalance.multi_weapon_damage_mult(weapon_ids.size())
+	var expected_crit := 1.0 + crit_r * (crit_m - 1.0)
+
+	var total_dps := 0.0
+	for wid in weapon_ids:
+		var def := WeaponData.get_def(wid)
+		var stat_bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, 2)
+		var final_d := (WeaponData.damage_for(wid, 2) + stat_bonus) * w_dmg_mult \
+			* contraption_mult * multi_mult
+		var fire_cd := maxf(0.1, float(def.get("turret_fire_cd", 0.75))) * atk_spd
+		var cap := int(def.get("turret_cap", 2)) + 1   ## 全★2：cap = turret_cap + (star-1)
+		total_dps += final_d / fire_cd * float(cap) * expected_crit * elite_mult
 	return total_dps
 
 # ---------------- 5. 挨打侧生存余量（危险度 0 = 「简单」） ----------------

@@ -13,19 +13,20 @@ func _test_wave_scaling() -> void:
 	_c.near(GameBalance.enemy_dmg_mult(10), GameBalance.ENEMY_DMG_BASE_MULT * pow(1.06, 9), EPS, "第 10 波敌伤 = 基线 × 复利 1.69")
 	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "波间复利梯度不因基线下移而变")
 	_c.near(GameBalance.boss_contact_damage(1), ceilf(24.0 * GameBalance.ENEMY_DMG_BASE_MULT), EPS, "Boss 接触伤害与杂怪同一个总闸")
-	_c.near(GameBalance.wave_duration(1), 22.0, EPS, "第 1 波时长 22s")
-	_c.near(GameBalance.wave_duration(20), 60.0, EPS, "第 20 波封顶 60s")
-	_c.near(GameBalance.wave_duration(99), 60.0, EPS, "无尽波次也封顶 60s")
+	_c.near(GameBalance.wave_duration(1), 30.5, EPS, "第 1 波时长 30.5s（2026-10-11 波次拉长）")
+	_c.near(GameBalance.wave_duration(20), 70.0, EPS, "第 20 波封顶 70s")
+	_c.near(GameBalance.wave_duration(99), 70.0, EPS, "无尽波次也封顶 70s")
 	_c.near(GameBalance.spawn_interval(1), 1.555, EPS, "第 1 波刷怪间隔 1.555s")
 	_c.near(GameBalance.spawn_interval(40), GameBalance.SPAWN_INTERVAL_MIN, EPS, "刷怪间隔有下限")
 	_c.near(GameBalance.enemy_hp_mult(0), GameBalance.enemy_hp_mult(1), EPS, "非法波次 0 被夹到 1")
 	# 刷怪预算（2026-10-11 土豆兄弟式克制）：波内总刷入封顶，预算耗尽即停手，场上越打越空。
 	# 前期与旧总量相当（不触发），第 6 波起收紧 —— 旧口径会把同屏恒定顶满上限（持续卡顿源）。
-	_c.equals(GameBalance.wave_spawn_budget(1), 19, "第 1 波预算 19（旧总量 ~18，不触发，前期手感不变）")
-	_c.equals(GameBalance.wave_spawn_budget(5), 35, "第 5 波预算 35（旧总量 ~27，不触发）")
-	_c.equals(GameBalance.wave_spawn_budget(6), 39, "第 6 波预算 39（旧总量 ~54，砍 ~28%）")
-	_c.equals(GameBalance.wave_spawn_budget(10), 55, "第 10 波预算 55（旧总量 ~78，砍 ~30%）")
-	_c.equals(GameBalance.wave_spawn_budget(20), 95, "第 20 波预算 95（旧总量 ~364，后期砍更狠）")
+	# 2026-10-11 随波次拉长同比例放预算（21/5.5/150）：总击杀数与时长一起变多，密度峰值不变。
+	_c.equals(GameBalance.wave_spawn_budget(1), 26, "第 1 波预算 26（旧总量 ~25，不触发，前期手感不变）")
+	_c.equals(GameBalance.wave_spawn_budget(5), 48, "第 5 波预算 48（旧总量 ~37，不触发）")
+	_c.equals(GameBalance.wave_spawn_budget(6), 54, "第 6 波预算 54（旧总量 ~73，砍 ~26%）")
+	_c.equals(GameBalance.wave_spawn_budget(10), 76, "第 10 波预算 76（旧总量 ~104，砍 ~27%）")
+	_c.equals(GameBalance.wave_spawn_budget(20), 131, "第 20 波预算 131（旧总量 ~425，后期砍更狠）")
 	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.WAVE_SPAWN_BUDGET_MAX, "无尽波次预算封顶")
 	var budget_prev := 0
 	var budget_mono := true

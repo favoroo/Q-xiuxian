@@ -5,9 +5,9 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：48 把法器（含机关支路 6 把）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 48, "全武器库扩充至 48 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 48, "商店池覆盖全部 48 把法器")
+	# 1. 武器表完整性校验：60 把法器（含机关支路 7 把）且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 60, "全武器库扩充至 60 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 60, "商店池覆盖全部 60 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -30,12 +30,12 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "48 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "60 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 扩容后各系把数：金11/木9/水9/火10/土9（含机关 6 把，2026-10-11 拓充）
-	var elem_expect := {"metal": 11, "wood": 9, "water": 9, "fire": 10, "earth": 9}
+	# 扩容后各系把数：金14/木11/水10/火12/土13（含机关 7 把，2026-10-11 两批拓充）
+	var elem_expect := {"metal": 14, "wood": 11, "water": 10, "fire": 12, "earth": 13}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
@@ -52,7 +52,7 @@ func _test_five_elements_system() -> void:
 		# 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 紧凑特性最多两段（一个分隔点）
 		if WeaponData.card_feats(d2).count("·") > 1:
 			feats_over.append(String(w2))
-	_c.check(label_missing.is_empty(), "48 把法器的攻击方式短标全部就位（缺: %s）" % str(label_missing))
+	_c.check(label_missing.is_empty(), "60 把法器的攻击方式短标全部就位（缺: %s）" % str(label_missing))
 	_c.check(feats_over.is_empty(), "货架卡紧凑特性最多 2 段不溢卡宽（超宽: %s）" % str(feats_over))
 	_c.equals(label_of["qingyun_sword"], "近战", "青云剑标记近战")
 	_c.equals(label_of["gengjin_feijian"], "远程", "飞剑标记远程")
@@ -61,6 +61,29 @@ func _test_five_elements_system() -> void:
 	_c.equals(label_of["jiguan_nu"], "机关", "机关弩标记机关")
 	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透3·3发", "柳叶飞刀紧凑特性＝穿透3·3发（量词用「发」：projectile_count 是出膛弹丸数，不是连击段数）")
 	_c.equals(WeaponData.card_feats(WeaponData.get_def("qingyun_sword")), "", "青云剑无机械特性时不占卡面特性行")
+
+	# 1b-2. 色签解释的两条数据前提（货架卡点色签弹解释卡，2026-10-11 用户「加成怎么样加成哪些」）：
+	#       ① 表里用到的每一种攻击方式都得有机制解释，漏一种就是点开来一张空卡；
+	#       ② stat_scalings 的每个键都得有人话名，漏一个键解释卡上就露原始英文（同一把尺的
+	#           账单函数 GameBalance.stat_scaling_label 是唯一的名字来源）。
+	var tip_missing: Array = []
+	var used_behaviors: Array[int] = []
+	for w4 in WeaponData.SHOP_POOL:
+		var beh := int(WeaponData.get_def(String(w4)).get("behavior", WeaponData.Behavior.MELEE))
+		if not (beh in used_behaviors):
+			used_behaviors.append(beh)
+		var bt: Dictionary = WeaponData.behavior_tip(beh)
+		if String(bt.get("how", "")).is_empty() or (bt.get("notes", []) as Array).is_empty():
+			tip_missing.append(String(w4))
+	_c.check(tip_missing.is_empty(),
+			"%d 种攻击方式全都有机制解释（缺: %s）" % [used_behaviors.size(), str(tip_missing)])
+	_c.equals(used_behaviors.size(), 5, "商店池覆盖 5 种攻击方式（近战/远程/范围/环绕/机关）")
+	var raw_key: Array = []
+	for w5 in WeaponData.SHOP_POOL:
+		for k in WeaponData.get_def(String(w5)).get("stat_scalings", {}).keys():
+			if GameBalance.stat_scaling_label(String(k)) == String(k):
+				raw_key.append("%s:%s" % [String(w5), String(k)])
+	_c.check(raw_key.is_empty(), "每把法器的属性受益键都有人话名（露原始 key: %s）" % str(raw_key))
 
 	# 1c. 货架卡加成行的横向预算：卡内宽下限 124（CARD_W_MIN 148 − OFFER_PAD_X 12×2），
 	#     BonusRows 一行不换行 ⇒ 行名 + 数值超格就把整块面板顶出屏（LayoutCheck 量的是最坏屏，
@@ -477,6 +500,20 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.03, EPS, "受击 1 次增伤 +3%")
 	GameManager.reset_run()
 
+	# 7.5 驯兽师（fuzhen）本体强化：开局双生蝶 + 召唤伤害 + 灵宝专精乘区
+	GameManager.reset_run()
+	GameManager.cultivator_id = "fuzhen"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.drones.size(), 2, "驯兽师开局 2 条护蝶")
+	_c.equals(GameManager._drone_star(GameManager.drones[0]), 2, "驯兽师开局护蝶 ★2（分身为二）")
+	_c.near(GameManager.engineering_damage, 2.0, EPS, "驯兽师召唤伤害 +2")
+	_c.near(GameManager.cultivator_damage_mult("lingdie"), 1.12, EPS, "驯兽师灵宝专精 +12%")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 0.7, EPS, "驯兽师非召唤武器伤害 -30% 保留")
+	_c.equals(WeaponData.drone_orb_count(1), 1, "★1 灵宝单具")
+	_c.equals(WeaponData.drone_orb_count(2), 2, "★2 灵宝分身为二")
+	_c.equals(WeaponData.drone_orb_count(3), 3, "★3 灵宝分身为三")
+	GameManager.reset_run()
+
 	# 7. 数据表三件御灵装备属性强化验证（射程全面扩展至 >= 170px，伤害 >= 20）
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
 		var sdef := WeaponData.get_def(sid)
@@ -490,6 +527,7 @@ func _test_turret_and_new_cultivators() -> void:
 	SynergySystem.recalc_synergies(GameManager)
 	_c.near(GameManager.synergy_max_hp_bonus, 15.0, EPS, "2 召唤获得 +15 气血上限")
 	_c.near(GameManager.synergy_engineering_damage, 2.0, EPS, "2 召唤获得 +2 召唤伤害加成")
+	_c.near(GameManager.synergy_drone_mult, 1.10, EPS, "2 召唤获得灵宝伤害乘区 ×1.10（2026-10-11 补档）")
 	var stat_dict := GameManager.get_player_stat_dict()
 	_c.near(float(stat_dict.get("engineering_damage", 0.0)), 2.0, EPS, "角色属性表包含召唤羁绊工程伤害")
 	GameManager.reset_run()
@@ -505,6 +543,11 @@ func _test_turret_and_new_cultivators() -> void:
 			tot_monotonic = false
 		prev_tot = tot
 	_c.check(tot_monotonic, "1~6 把法器总有效倍率严格单调递增（多戴必正收益）")
+	# 2026-10-11 召唤流校准：御灵按半权计神识分流（召唤物自主作战不占主人神识）
+	_c.near(GameBalance.multi_weapon_damage_mult(6, 0), 1.0 / 1.6, EPS, "纯非召唤 6 把分流不受御灵半权影响（仍 62.5%）")
+	_c.near(GameBalance.multi_weapon_damage_mult(6, 6), 1.0 / 1.24, EPS, "6 御灵半权分流：有效 3 把 ⇒ 单把 ~80.6%（以多打少不再被拖死）")
+	_c.check(GameBalance.multi_weapon_damage_mult(6, 6) > GameBalance.multi_weapon_damage_mult(6, 0),
+		"同槽位下御灵半权分流系数高于全额口径")
 	_c.near(GameBalance.focus_fire_mult(0), 1.0, EPS, "短窗第 1 击全额 100%")
 	_c.near(GameBalance.focus_fire_mult(1), 0.70, EPS, "短窗第 2 击折算 70%")
 	_c.near(GameBalance.focus_fire_mult(2), 0.50, EPS, "短窗第 3 击折算 50%")

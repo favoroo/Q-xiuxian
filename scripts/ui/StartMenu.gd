@@ -2,10 +2,11 @@ class_name StartMenu
 extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
-##   ① 顶栏贴角级联徽章带（左：生涯最高危险度；右：快速静音 + 游戏设置）
-##   ② 居中斜切大匾标题（「渡 个 劫」）—— 贴顶栏，不跟着整组往下飘
-##   ③ 左 1 主方块（Hero「开始渡劫」，内嵌 6 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
-##   ④ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
+##   ① 顶栏贴角级联徽章带（右：快速静音 + 游戏设置）
+##   ② 左 1 主方块（Hero「开始渡劫」，内嵌 6 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
+##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
+##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
+##   ③ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
 ## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择道统（paused 链不中断）。
 
 signal settings_requested
@@ -18,40 +19,52 @@ const DANGER_NAMES := ["简单", "普通", "困难", "噩梦", "地狱", "极限
 const BRACKET_LEN := 48.0
 const BRACKET_INSET := 18.0
 
-## 核心矩阵基准尺寸（960×540 下）
+## 核心矩阵基准尺寸（960×540 下）。`*_BASE` 是「卡内排版」的起点档：
+## 卡片按屏现算的高度高于基准时，多出来的那一截由 `hero_metrics()` / `small_metrics()`
+## 摊给字号与键高，基准值只在这一处写死。
 const BASE_HERO_W := 348.0
 const BASE_SMALL_W := 248.0
 const BASE_GAP_HERO := 14.0
 const BASE_GAP_COL := 16.0
 const ROW_GAP := 14.0
-const HERO_H := 284.0
-const SMALL_H := 135.0
+const HERO_H_BASE := 284.0
+const SMALL_H_BASE := (HERO_H_BASE - ROW_GAP) / 2.0
 const CORNER_BTN_H := 26.0            # 右下角「检查更新」小按钮高
-const TITLE_H_BASE := 68.0           # 标题匾基准高：只给首帧没量到实得高时兜底用
 
-## 竖向这一列怎么贴（2026-10-10 用户真机：「标题上面怎么有那么大的空白间距」）。
-## 旧写法把「标题 + 矩阵 + 横幅」装进一个 VBox 整组居中 ⇒ 标题被推到 y=82，屏上半截全是空的，
-## 而眼睛看到的「空白」是屏顶→标题那 82 单位，不是组内那 12 单位缝隙。
-## 现在三段各贴各位：标题贴顶栏、检查更新按钮贴右下角；中间那点富余先当气口，气口撑到上限
-## （4:3 平板那种高屏）才让主块长高 —— 540 这一档富余刚好只够气口，方块密度不变。
+## 卡内基准排版（Hero 柱）
+const HERO_SEP_BASE := 7.0            # Hero 内各行间距
+const HERO_TITLE_FONT_BASE := 32
+const HERO_DANGER_HEAD_FONT_BASE := 11
+const ENDLESS_BTN_H_BASE := 28.0
+const DANGER_BTN_H_BASE := 28.0       # 危险度那一排六颗键的高
+const DANGER_PAD_BASE := 6.0          # 危险度衬板上下内距
+const START_BTN_H_BASE := 42.0        # 底部整条出战主按钮高
+
+## 卡内基准排版（右列 2×2）
+const SMALL_SEP_BASE := 4.0
+const SMALL_NAME_FONT_BASE := 24
+const SMALL_SUB_FONT_BASE := 12
+const SMALL_PAD_BASE := 12.0          # 卡片上下内距
+
+## 竖向这一列怎么贴（2026-10-11 撤掉标题大匾之后重算）。
+## 旧写法两段账：① 把「标题 + 矩阵 + 横幅」装进一个 VBox 整组居中 ⇒ 标题被推到 y=82，
+##    屏上半截全是空的；② 2026-10-10 改成三段各贴各位（标题贴顶栏、按钮贴右下角）。
+## 现在标题没了 ⇒ 顶栏底就是这一列的起算线，矩阵与屏底之间的富余先摊成气口
+## （≤BLOCK_GAP_MAX），顶到上限还有富余才让主块长高（≤HERO_H_MAX）。
 const TOP_BAR_INSET_TOP := 12.0        # 顶栏带离屏顶
 const TOP_BAR_H := 40.0                # 顶栏带高（徽章 36 + 余量）
-const TITLE_GAP_TOP := -12.0           # 顶栏底 → 标题顶（负值 = 匾顶提进顶栏带，与徽章齐平；2026-10-10 二次复核：10→0 用户仍觉没动，再提 12 压掉中上空档；匾居中与两侧徽章无横向冲突）
+const CONTENT_TOP_GAP := 14.0          # 顶栏底 → 矩阵可落位区顶
 ## 右下角那颗检查更新按钮的收边位（2026-10-10 用户：底部通宽横幅「不用搞这么长，保留右下角这一块就可以了」）。
 ## 底距 26 是让按钮连 4px 硬影都不盖住屏底那条装饰括号（括号在 BRACKET_INSET=18 处）。
 const CORNER_MARGIN_BOTTOM := 26.0
 const CORNER_MARGIN_RIGHT := 34.0
 const FOOT_BAND_H := CORNER_MARGIN_BOTTOM + CORNER_BTN_H   # 矩阵与屏底之间为按钮预留的收边带
-const BLOCK_GAP_MAX := 40.0            # 标题与矩阵、矩阵与横幅之间的气口上界，再空就让主块长高
-const HERO_H_MAX := 340.0              # 主块长高的封顶：再多只是把空白搬进卡里
-const BAND_TITLE_OFFSET := 14.0        # 装饰斜带顶边相对标题顶边的下移
+const BLOCK_GAP_MAX := 32.0            # 矩阵上/下气口上界，再空就让主块长高
+const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把空白搬进卡里
 
-var _decor_band: PanelContainer
 var _brackets: Array[Line2D] = []
 var _top_bar: HBoxContainer
-var _title_host: CenterContainer
 var _matrix_host: CenterContainer
-var _title_block: PanelContainer
 
 # 顶栏徽章控件
 var _sound_badge_btn: Button
@@ -59,12 +72,19 @@ var _top_set_btn: Button
 
 # Hero 大方块与内部控件
 var _hero_card: PanelContainer
+var _hero_vbox: VBoxContainer
+var _hero_title: Label
+var _danger_box: PanelContainer
+var _danger_vbox: VBoxContainer
+var _danger_head_lbl: Label
+var _hero_void: Control              # Hero 中间那根吃富余的弹簧（量「卡内空洞」用）
 var _danger_buttons: Array[Button] = []
 var _endless_btn: Button
 var _hero_start_btn: Button
 
 # 右侧 2×2 大方块与动态副文案
 var _small_cards: Array[PanelContainer] = []
+var _entry_blocks: Array[Dictionary] = []   # 每块 {card, vbox, name_lbl, sub_lbl, void}
 var _career_sub_lbl: Label
 var _manual_sub_lbl: Label
 var _settings_sub_lbl: Label
@@ -90,7 +110,7 @@ func _ready() -> void:
 	_build_top_bar()
 	_build_center_matrix()
 	_layout_responsive()
-	# 首帧的标题高要等容器排完才量得到：延一帧再贴一次，否则第一段排版用的是保底高度
+	# 首帧这一屏的实得尺寸还没定（挂在别的容器里时 size 可能是 0），延一帧再按窗口现算一次
 	call_deferred("_layout_responsive")
 	UpdateManager.update_available.connect(_on_update_available)
 	UpdateManager.no_update_found.connect(_on_no_update_found)
@@ -110,13 +130,6 @@ func _build_decor() -> void:
 	decor.set_anchors_preset(Control.PRESET_FULL_RECT)
 	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(decor)
-
-	# 横向斜切墨带（横穿标题与矩阵上方，有意比屏宽出血，判据放行）
-	_decor_band = PanelContainer.new()
-	_decor_band.add_theme_stylebox_override("panel", GameStyle.panel(GameStyle.NAVY, GameStyle.SLANT_BAND, Vector2.ZERO))
-	_decor_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_decor_band.set_meta("layout_bleed", true)
-	decor.add_child(_decor_band)
 
 	# 四角青玉括号
 	for i in range(4):
@@ -166,17 +179,10 @@ func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Colo
 	btn.pressed.connect(callback)
 	return btn
 
-## 中央主区：标题大匾（贴顶栏）+ 五块大色块矩阵（居中）+ 右下角检查更新按钮（贴屏底屏右）
-## 三块各挂各的容器，竖向落位由 `_layout_responsive()` 现算 —— 组内缝隙不再决定标题高低。
+## 中央主区：五块大色块矩阵（顶栏下方起算、上下气口居中）+ 右下角检查更新按钮（贴屏底屏右）
+## 两块各挂各的容器，竖向落位由 `_layout_responsive()` 现算 —— 组内缝隙不再决定矩阵高低。
 func _build_center_matrix() -> void:
-	# 1. 街机海报标题大匾
-	_title_host = CenterContainer.new()
-	_title_host.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_title_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_title_host)
-	_build_title_section(_title_host)
-
-	# 2. 五块实底大色块矩阵（左 Hero 整柱 + 右 2×2）
+	# 1. 五块实底大色块矩阵（左 Hero 整柱 + 右 2×2）
 	_matrix_host = CenterContainer.new()
 	_matrix_host.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_matrix_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -251,7 +257,7 @@ func _build_center_matrix() -> void:
 	_small_cards.append(guide_res["card"])
 	_anim_blocks.append(guide_res["card"])
 
-	# 3. 右下角一颗检查更新按钮
+	# 2. 右下角一颗检查更新按钮
 	_update_host = HBoxContainer.new()
 	_update_host.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_update_host.alignment = BoxContainer.ALIGNMENT_END
@@ -274,39 +280,10 @@ func _build_center_matrix() -> void:
 	_update_host.add_child(_update_btn)
 	_anim_blocks.append(_update_btn)
 
-func _build_title_section(parent: Control) -> void:
-	var title_row := HBoxContainer.new()
-	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	title_row.add_theme_constant_override("separation", 14)
-	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(title_row)
-
-	_title_block = PanelContainer.new()
-	_title_block.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var tstyle := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(6, 7))
-	tstyle.content_margin_left = 28.0
-	tstyle.content_margin_top = 4.0
-	tstyle.content_margin_right = 28.0
-	tstyle.content_margin_bottom = 8.0
-	_title_block.add_theme_stylebox_override("panel", tstyle)
-
-	var title_hbox := HBoxContainer.new()
-	title_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	title_hbox.add_theme_constant_override("separation", 14)
-	title_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_title_block.add_child(title_hbox)
-
-	var title := Label.new()
-	title.text = "渡 个 劫"
-	GameStyle.label(title, 42, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-	title_hbox.add_child(title)
-
-	title_row.add_child(_title_block)
-
 ## 左侧整柱 Hero 大方块：开始渡劫 + 6 档危险度 + 无尽试炼开关
 func _build_hero_block() -> PanelContainer:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H)
+	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H_BASE)
 	var sb := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(6, 7))
 	sb.content_margin_left = 18.0
 	sb.content_margin_right = 18.0
@@ -315,9 +292,10 @@ func _build_hero_block() -> PanelContainer:
 	card.add_theme_stylebox_override("panel", sb)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 7)
+	vbox.add_theme_constant_override("separation", int(HERO_SEP_BASE))
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(vbox)
+	_hero_vbox = vbox
 
 	# 顶部角签行 + 无尽试炼直通开关
 	var top_row := HBoxContainer.new()
@@ -339,52 +317,53 @@ func _build_hero_block() -> PanelContainer:
 
 	# 无尽模式切换开关（紧贴危险度上方/主块右上）
 	_endless_btn = Button.new()
-	_endless_btn.custom_minimum_size = Vector2(138, 28)
+	_endless_btn.custom_minimum_size = Vector2(138, ENDLESS_BTN_H_BASE)
 	_endless_btn.focus_mode = Control.FOCUS_NONE
 	_endless_btn.pressed.connect(_on_endless_toggle_pressed)
 	top_row.add_child(_endless_btn)
 
 	# 大标题
-	var hero_title := Label.new()
-	hero_title.text = "开 始 游 戏"
-	GameStyle.label(hero_title, 32, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-	vbox.add_child(hero_title)
+	_hero_title = Label.new()
+	_hero_title.text = "开 始 游 戏"
+	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
+	vbox.add_child(_hero_title)
 
 	# 危险度选择区（纯黑内嵌衬板，让 6 档按钮在金色大块上清晰醒目）
-	var danger_box := PanelContainer.new()
+	_danger_box = PanelContainer.new()
 	var d_sb := GameStyle.panel(GameStyle.with_alpha(Color.BLACK, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
 	d_sb.content_margin_left = 8.0
 	d_sb.content_margin_right = 8.0
-	d_sb.content_margin_top = 6.0
-	d_sb.content_margin_bottom = 6.0
-	danger_box.add_theme_stylebox_override("panel", d_sb)
-	danger_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(danger_box)
+	d_sb.content_margin_top = DANGER_PAD_BASE
+	d_sb.content_margin_bottom = DANGER_PAD_BASE
+	_danger_box.add_theme_stylebox_override("panel", d_sb)
+	_danger_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(_danger_box)
 
-	var danger_vbox := VBoxContainer.new()
-	danger_vbox.add_theme_constant_override("separation", 4)
-	danger_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	danger_box.add_child(danger_vbox)
+	_danger_vbox = VBoxContainer.new()
+	_danger_vbox.add_theme_constant_override("separation", 4)
+	_danger_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_danger_box.add_child(_danger_vbox)
 
 	var d_head := HBoxContainer.new()
 	d_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	danger_vbox.add_child(d_head)
+	_danger_vbox.add_child(d_head)
 
 	var d_lbl := Label.new()
 	d_lbl.text = "难度选择 · 通关当前最高档解锁下一档"
-	GameStyle.label(d_lbl, 11, GameStyle.PAPER_DIM)
+	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, GameStyle.PAPER_DIM)
+	_danger_head_lbl = d_lbl
 	d_head.add_child(d_lbl)
 
 	var d_row := HBoxContainer.new()
 	d_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	d_row.add_theme_constant_override("separation", 4)
 	d_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	danger_vbox.add_child(d_row)
+	_danger_vbox.add_child(d_row)
 
 	_danger_buttons.clear()
 	for d in range(GameBalance.DANGER_MAX + 1):
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(46, 28)
+		btn.custom_minimum_size = Vector2(46, DANGER_BTN_H_BASE)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.focus_mode = Control.FOCUS_NONE
 		var dd := d
@@ -392,15 +371,18 @@ func _build_hero_block() -> PanelContainer:
 		d_row.add_child(btn)
 		_danger_buttons.append(btn)
 
-	var mid_spacer := Control.new()
-	mid_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mid_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(mid_spacer)
+	# 吃富余的弹簧：卡片长高多出来的那一截本该全堆在这里 ⇒ 卡内一大片空洞，
+	# 看着像没画完（2026-10-10 定的口径）。现在富余先由 `_layout_responsive()` 摊给
+	# 字号/键高/内距，这里只留摊完剩下的那点。
+	_hero_void = Control.new()
+	_hero_void.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_hero_void.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(_hero_void)
 
 	# 底部整条出战主按钮
 	_hero_start_btn = Button.new()
 	_hero_start_btn.text = "开 始 游 戏  》"
-	_hero_start_btn.custom_minimum_size = Vector2(0, 42)
+	_hero_start_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE)
 	_hero_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hero_start_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
@@ -416,16 +398,16 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 		face_col: Color, ink_col: Color, chip_bg: Color, chip_fg: Color,
 		callback: Callable) -> Dictionary:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(BASE_SMALL_W, SMALL_H)
+	card.custom_minimum_size = Vector2(BASE_SMALL_W, SMALL_H_BASE)
 	var normal_sb := GameStyle.block(face_col, GameStyle.SLANT_BLOCK, Vector2(5, 6))
 	normal_sb.content_margin_left = 18.0
 	normal_sb.content_margin_right = 16.0
-	normal_sb.content_margin_top = 12.0
-	normal_sb.content_margin_bottom = 12.0
+	normal_sb.content_margin_top = SMALL_PAD_BASE
+	normal_sb.content_margin_bottom = SMALL_PAD_BASE
 	card.add_theme_stylebox_override("panel", normal_sb)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", int(SMALL_SEP_BASE))
 	card.add_child(vbox)
 
 	# 顶行：英文角签
@@ -442,9 +424,10 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	# 中行：大标题
 	var name_lbl := Label.new()
 	name_lbl.text = title_text
-	GameStyle.label(name_lbl, 24, ink_col, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, SMALL_NAME_FONT_BASE, ink_col, 0, GameStyle.INK, true)
 	vbox.add_child(name_lbl)
 
+	# 吃富余的弹簧（同 Hero 那一根：卡片长高先摊给字号与内距，剩下才归它）
 	var sp := Control.new()
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(sp)
@@ -458,7 +441,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	sub_lbl.text = sub_text
 	sub_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sub_col := GameStyle.with_alpha(ink_col, 0.78)
-	GameStyle.label(sub_lbl, 12, sub_col)
+	GameStyle.label(sub_lbl, SMALL_SUB_FONT_BASE, sub_col)
 	bot_row.add_child(sub_lbl)
 
 	var chev_lbl := Label.new()
@@ -485,10 +468,15 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 		tw.tween_property(card, "scale", Vector2.ONE, 0.1)
 	)
 
-	return {
+	var block := {
 		"card": card,
 		"sub_label": sub_lbl,
+		"vbox": vbox,
+		"name_label": name_lbl,
+		"void": sp,
 	}
+	_entry_blocks.append(block)
+	return block
 
 ## 响应式排版：适配 720（4:3）/ 960（16:9）/ 1204（20:9），保证斜切块画出来绝不出屏
 func _layout_responsive() -> void:
@@ -502,35 +490,25 @@ func _layout_responsive() -> void:
 	# 1. 四角括号贴角重排
 	_layout_brackets(vp)
 
-	# 2. 竖向三段落位：标题贴顶栏、检查更新按钮贴右下角，矩阵夹在中间。
-	#    中间富余先摊成气口（≤BLOCK_GAP_MAX），气口顶到上限还有富余才让主块长高（≤HERO_H_MAX）。
-	#    960×540 这一档算出来气口 34、主块 284 ⇒ 方块密度与旧版一致，只是不再往下飘。
-	var title_top := TOP_BAR_INSET_TOP + TOP_BAR_H + TITLE_GAP_TOP
-	var title_h := _title_h()
-	var title_bottom := title_top + title_h
+	# 2. 竖向两段落位：矩阵从顶栏下方起算，检查更新按钮贴右下角。
+	#    可落位的富余先摊成上下气口（≤BLOCK_GAP_MAX），气口顶到上限还有富余才让主块长高
+	#    （≤HERO_H_MAX）。960×540 这一档：可落位 422 → 气口 32、主块 358（撤标题前 300）。
+	var region_top := TOP_BAR_INSET_TOP + TOP_BAR_H + CONTENT_TOP_GAP
 	var foot_top := vp.y - FOOT_BAND_H
-	var mid_region := foot_top - title_bottom
-	var gap := minf(maxf((mid_region - HERO_H) / 2.0, 0.0), BLOCK_GAP_MAX)
-	var hero_h := clampf(mid_region - 2.0 * gap, HERO_H, HERO_H_MAX)
-	gap = maxf((mid_region - hero_h) / 2.0, 0.0)
+	var region := foot_top - region_top
+	var gap := minf(maxf((region - HERO_H_BASE) / 2.0, 0.0), BLOCK_GAP_MAX)
+	var hero_h := clampf(region - 2.0 * gap, HERO_H_BASE, HERO_H_MAX)
+	gap = maxf((region - hero_h) / 2.0, 0.0)
 	var small_h := (hero_h - ROW_GAP) / 2.0
-	if _title_host != null and is_instance_valid(_title_host):
-		_title_host.offset_top = title_top
-		_title_host.offset_bottom = title_top + title_h
 	if _matrix_host != null and is_instance_valid(_matrix_host):
-		_matrix_host.offset_top = title_bottom + gap
+		_matrix_host.offset_top = region_top + gap
 		_matrix_host.offset_bottom = -(vp.y - foot_top + gap)
 	if _update_host != null and is_instance_valid(_update_host):
 		_update_host.offset_top = -FOOT_BAND_H
 		_update_host.offset_bottom = -CORNER_MARGIN_BOTTOM
 		_update_host.offset_right = -CORNER_MARGIN_RIGHT
 
-	# 3. 装饰斜带跨屏重排（顶边跟着标题走，不再钉死像素）
-	if _decor_band != null and is_instance_valid(_decor_band):
-		_decor_band.custom_minimum_size = Vector2(vp.x + 180.0, 140.0)
-		_decor_band.position = Vector2(-90.0, title_top + BAND_TITLE_OFFSET)
-
-	# 4. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
+	# 3. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
 	var base_total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
 	var avail_w := maxf(640.0, vp.x - 44.0)
 	var f := clampf(avail_w / base_total_w, 0.74, 1.15)
@@ -545,18 +523,72 @@ func _layout_responsive() -> void:
 	for sc in _small_cards:
 		if is_instance_valid(sc):
 			sc.custom_minimum_size = Vector2(small_w, small_h)
+	_apply_hero_metrics(hero_h, hero_w)
+	_apply_small_metrics(small_h)
+
+## 卡高 → 卡内各件尺寸（纯函数，量尺直接喂数读比例，不抄第二份表）。
+## 为什么要有这一摊：撤掉标题大匾省出 108 单位竖向空间，全给卡片长高的话，多出来的那一截
+## 会被 VBox 里那根 expanding 弹簧一口吃掉 ⇒ 卡片中间出现一大片什么都没有的空洞
+## （2026-10-10 用户已否过一次「竖向空白会被当 bug」）。所以富余先按这一组系数摊给字号、
+## 键高与卡内距，各档上限就是「再大就顶破这一格」的量。
+static func hero_metrics(hero_h: float) -> Dictionary:
+	var extra := maxf(hero_h - HERO_H_BASE, 0.0)
+	return {
+		"sep": clampf(HERO_SEP_BASE + extra * 0.07, HERO_SEP_BASE, 12.0),
+		"title_font": clampi(HERO_TITLE_FONT_BASE + int(extra * 0.06), HERO_TITLE_FONT_BASE, 38),
+		"endless_h": clampf(ENDLESS_BTN_H_BASE + extra * 0.10, ENDLESS_BTN_H_BASE, 36.0),
+		"danger_h": clampf(DANGER_BTN_H_BASE + extra * 0.12, DANGER_BTN_H_BASE, 40.0),
+		"danger_pad": clampf(DANGER_PAD_BASE + extra * 0.06, DANGER_PAD_BASE, 11.0),
+		"danger_head_font": clampi(HERO_DANGER_HEAD_FONT_BASE + int(extra * 0.03),
+			HERO_DANGER_HEAD_FONT_BASE, 13),
+		"start_h": clampf(START_BTN_H_BASE + extra * 0.20, START_BTN_H_BASE, 58.0),
+	}
+
+static func small_metrics(small_h: float) -> Dictionary:
+	var extra := maxf(small_h - SMALL_H_BASE, 0.0)
+	return {
+		"sep": clampf(SMALL_SEP_BASE + extra * 0.10, SMALL_SEP_BASE, 9.0),
+		"name_font": clampi(SMALL_NAME_FONT_BASE + int(extra * 0.10), SMALL_NAME_FONT_BASE, 30),
+		"sub_font": clampi(SMALL_SUB_FONT_BASE + int(extra * 0.05), SMALL_SUB_FONT_BASE, 14),
+		"pad_y": clampf(SMALL_PAD_BASE + extra * 0.16, SMALL_PAD_BASE, 22.0),
+	}
+
+## 把 hero_metrics 落到节点上。字号只改 font_size 这一条 override（颜色与字体仍留在
+## 建卡时那一次 GameStyle.label 里），避免排版刷新顺手把取色口径改写一遍。
+func _apply_hero_metrics(hero_h: float, hero_w: float) -> void:
+	if _hero_vbox == null or not is_instance_valid(_hero_vbox):
+		return
+	var m := hero_metrics(hero_h)
+	_hero_vbox.add_theme_constant_override("separation", int(m["sep"]))
+	_hero_title.add_theme_font_size_override("font_size", int(m["title_font"]))
+	_danger_head_lbl.add_theme_font_size_override("font_size", int(m["danger_head_font"]))
+	_endless_btn.custom_minimum_size = Vector2(138.0, float(m["endless_h"]))
+	var d_sb := _danger_box.get_theme_stylebox("panel") as StyleBoxFlat
+	if d_sb != null:
+		d_sb.content_margin_top = float(m["danger_pad"])
+		d_sb.content_margin_bottom = float(m["danger_pad"])
+	_hero_start_btn.custom_minimum_size = Vector2(0, float(m["start_h"]))
 	for btn in _danger_buttons:
 		if is_instance_valid(btn):
-			btn.custom_minimum_size = Vector2(maxf(34.0, floorf((hero_w - 64.0) / 6.0)), 28.0)
+			btn.custom_minimum_size = Vector2(
+				maxf(34.0, floorf((hero_w - 64.0) / 6.0)), float(m["danger_h"]))
 
-## 标题匾这一行多高：量实得的最小高（字体 + stylebox 边距），量不到时（首帧还没排）
-## 用基准档兜一帧，`_ready` 里已 call_deferred 再贴一次。
-func _title_h() -> float:
-	if _title_block != null and is_instance_valid(_title_block):
-		var h := _title_block.get_combined_minimum_size().y
-		if h > 0.0:
-			return h
-	return TITLE_H_BASE
+func _apply_small_metrics(small_h: float) -> void:
+	var m := small_metrics(small_h)
+	for blk in _entry_blocks:
+		# 先验活再转类型：freed 实例直接赋给类型化变量会当场把这段脚本打断
+		# （#40 灵石阁拖拽踩过同一格），而这里每帧排版都要跑一遍。
+		if not is_instance_valid(blk["card"]):
+			continue
+		var card: PanelContainer = blk["card"]
+		var vbox: VBoxContainer = blk["vbox"]
+		vbox.add_theme_constant_override("separation", int(m["sep"]))
+		(blk["name_label"] as Label).add_theme_font_size_override("font_size", int(m["name_font"]))
+		(blk["sub_label"] as Label).add_theme_font_size_override("font_size", int(m["sub_font"]))
+		var sb := card.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb != null:
+			sb.content_margin_top = float(m["pad_y"])
+			sb.content_margin_bottom = float(m["pad_y"])
 
 func _layout_brackets(vp: Vector2) -> void:
 	var w := vp.x
@@ -667,14 +699,6 @@ func open() -> void:
 	await get_tree().process_frame
 	if not is_inside_tree():
 		return
-	if _title_block != null and is_instance_valid(_title_block):
-		_title_block.pivot_offset = _title_block.size * 0.5
-		_title_block.scale = Vector2(0.75, 0.75)
-		_title_block.modulate.a = 0.0
-		var ttw := _title_block.create_tween().set_parallel(true)
-		ttw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-		ttw.tween_property(_title_block, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(0.05)
-		ttw.tween_property(_title_block, "modulate:a", 1.0, 0.18).set_delay(0.05)
 
 	var idx := 0
 	for blk in _anim_blocks:
@@ -715,8 +739,6 @@ func _on_sound_toggle_pressed() -> void:
 
 func _on_start_pressed() -> void:
 	AudioManager.play_sfx("ui_confirm", 0.95)
-	if ResourceLoader.exists("res://assets/audio/vo_guide_start.wav"):
-		AudioManager.play_voice(load("res://assets/audio/vo_guide_start.wav"))
 	var tw := create_tween()
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)

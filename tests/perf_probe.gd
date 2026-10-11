@@ -18,6 +18,8 @@ extends Node
 ##    12 次 take_damage 全程 get_processed_tweens() 零增长（旧写法每次受击挤压+闪白各建一个 Tween），
 ##    且 0.3s 内闪白参数归零、juice_scale 回正（帧内计时衰减在跑）；
 ##    落雷 acquire 两轮，第二轮零新建全复用；敌人在屏外 0.5s 内 _offscreen 收敛为 true（10Hz 节流不失效）。
+## 6. 环绕灵宝重绘节流（2026-10-11 武器多卡顿优化）：单只灵宝 1 秒
+##    ProceduralDroneRenderer.redraw_count 增量 ≤ 25（20Hz 节流 + 错相首拍余量，未节流时 60）。
 ##
 ## 运行：godot --headless --path . res://tests/PerfProbe.tscn
 ## 注意：本判据依赖真实节拍，禁止 Engine.time_scale 加速（会破坏重绘节流计时）。
@@ -301,6 +303,22 @@ func _run() -> void:
 	await get_tree().process_frame
 	for tb in bursts2:
 		tb._recycle()
+
+	# ================= 6. 环绕灵宝渲染重绘节流（2026-10-11 武器多卡顿优化） =================
+	## 灵宝矢量 _draw 一帧几十条指令，武器多时曾每帧全量重绘。节流到 20Hz 后
+	## 1 秒重绘 ≤ 25（20 次节流拍 + 错相首拍余量，未节流时 60）。
+	var drone := ProceduralDroneRenderer.new()
+	drone.kind = ProceduralDroneRenderer.DroneKind.LINGDIE
+	drone.position = Vector2(480.0, 160.0)   # 屏内
+	world.add_child(drone)
+	await get_tree().process_frame
+	var drone_before: int = ProceduralDroneRenderer.redraw_count
+	await get_tree().create_timer(1.0).timeout
+	var drone_redraw: int = ProceduralDroneRenderer.redraw_count - drone_before
+	print("PERF: 灵宝 1s 重绘次数 = %d（阈值 ≤ 25）" % drone_redraw)
+	_check(drone_redraw <= 25,
+		"灵宝重绘节流生效：1s ≤ 25（实得 %d，未节流时 60）" % drone_redraw)
+	drone.queue_free()
 
 	# 清场（清场统一放文件尾）
 	for p in flying:

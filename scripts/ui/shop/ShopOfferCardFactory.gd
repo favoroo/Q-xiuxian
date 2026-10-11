@@ -23,7 +23,7 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	# 行①：图标与名号同行
 	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path))
 	# 行②：色签流 + 锁定开关同行
-	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip))
+	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.rec_reasons, data.tag_keys, data.w_id))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
 	var stat_rows: Array = data.stat_rows
 	if not stat_rows.is_empty():
@@ -61,6 +61,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var icon_path: String
 	var tag: String
 	var tag_parts: Array = []
+	var tag_keys: Array = []	# 与 tag_parts 同序的流派 key：色签点按时按它取羁绊详情
 	var part_hot: Array = []
 	var desc: String
 	var stat_rows: Array = []
@@ -69,6 +70,9 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var chip_text_color: Color = GameStyle.PAPER
 	var edge_color: Color = GameStyle.GOLD_DK
 	var behavior_chip: Array = []
+	# 「荐」推荐标（RecommendSystem 在 roll_shop 里打分写入 offer）：已售出的格子不再亮标
+	var recommended: bool = bool(offer.get("recommended", false)) and not bool(offer.get("sold", false))
+	var rec_reasons: Array = offer.get("recommend_reasons", [])
 
 	if is_potion:
 		title = "回复药"
@@ -110,18 +114,13 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 			var syn: Dictionary = WeaponData.SYNERGIES.get(t, {})
 			if syn.is_empty():
 				continue
-			var n := GameManager.get_tag_count(t)
-			var next := "MAX"
-			var hot := false
-			var th_arr: Array = syn.get("thresholds", [])
-			for th in th_arr:
-				if n < int(th):
-					next = str(th)
-					hot = (n + 1 == int(th))
-					break
-			tag_parts.append("%s %d/%s" % [syn.get("name", t), n, next])
-			part_hot.append(hot)
-			will_activate = will_activate or hot
+			# 卡面进度与「临门一档」共用 SynergyUI.badge 这一把尺子：它按角色下移后的门槛算，
+			# 原先直接比原表 2/4/6，驯兽师（召唤 -1）5 件已满档却仍提示「5/6 再买一件」、绿边也错一档
+			var prog: Dictionary = SynergyUI.badge(String(t), GameManager.get_tag_count(String(t)))
+			tag_parts.append(String(prog["text"]))
+			tag_keys.append(String(t))
+			part_hot.append(bool(prog["hot"]))
+			will_activate = will_activate or bool(prog["hot"])
 		if not tag_parts.is_empty():
 			tag = " · ".join(tag_parts)
 		if will_activate:
@@ -161,13 +160,46 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		if not card_feats.is_empty():
 			stat_rows.append(["特性", card_feats, GameStyle.PAPER_DIM])
 
+	# 推荐位亮边：只在没有更具体边色语义时把中性深蓝底边提亮一档
+	# （可合成/临门一档的 JADE 边、法宝档位边、药水边都保留原语义，「荐」签足以表达）
+	if recommended and edge_color == GameStyle.GOLD_DK:
+		edge_color = GameStyle.GOLD_EDGE
+
 	return {
 		"kind": kind, "is_potion": is_potion, "is_item": is_item, "def": def,
 		"title": title, "icon_path": icon_path, "tag": tag, "tag_parts": tag_parts,
+		"tag_keys": tag_keys, "w_id": w_id_of_offer(offer),
 		"part_hot": part_hot, "desc": desc, "stat_rows": stat_rows, "merge_ready": merge_ready,
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
 		"edge_color": edge_color, "behavior_chip": behavior_chip,
+		"recommended": recommended, "rec_reasons": rec_reasons,
 	}
+
+## 这张卡对应的法器 id（药水/法宝卡返回空串）：色签的解释卡要按它现读属性账单与件数
+static func w_id_of_offer(offer: Dictionary) -> String:
+	return String(offer.get("id", "")) if String(offer.get("kind", "weapon")) == "weapon" else ""
+
+## 点「荐」签 = 看推荐理由：与卡面其它详情卡同一宿主（WaveShop）同一 DetailTip 口径。
+## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。
+static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, offer: Dictionary) -> void:
+	var notes: Array[String] = []
+	for r in reasons:
+		notes.append(String(r))
+	DetailTip.show_over(host, anchor, {
+		"title": "为什么推荐",
+		"chip": "推荐度 %d%%" % int(round(float(offer.get("recommend_score", 0.0)) * 100.0)),
+		"chip_color": GameStyle.JADE,
+		"notes": notes,
+		"foot": "由当前修士、上阵法器与属性推算，仅供参考。",
+	})
+
+## 把一颗色签登记成「点得动、且判据认得出它该弹哪张卡」。
+## hotzone 负责收「按下」那一拍：外层 GameStyle.swipeable 随后会把它降成 PASS，
+## PASS 仍自己收事件、只是不再拦冒泡 ⇒ 货架照样划得动（见 GameStyle.swipeable 头注）。
+## meta 是给判据读的：代码建的 Label 同名会被引擎改名（@Label@N），按名字找就是静默拿 null。
+static func _mark_chip_tappable(node: Control, tip: Dictionary) -> void:
+	GameStyle.hotzone(node)
+	node.set_meta("chip_tip", tip)
 
 ## 卡体：斜切面板 + 四边内容边距（OFFER_PAD_X / CARD_PAD_Y 口径在 WaveShop，判据按它量）
 static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContainer:
@@ -220,8 +252,12 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	return head
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关
-## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）
-static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = []) -> HBoxContainer:
+## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）；
+## rec_reasons 非空时最先挂「荐」推荐签（点按弹推荐理由）
+## 每一颗色签都点得出解释（2026-10-11 用户：「点击也要弹出来对应的解释，加成怎么样加成哪些」）：
+## chip_tips 与 chip_defs 同序，{} 表示这颗没解释可看（药水/法宝的档位签）。
+## 热区挂在签上、锚点也回送签本身：这两件事在 HUD 那批徽记上栽过一次（lambda 按值捕获 null）。
+static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], rec_reasons: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -236,21 +272,41 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 	tag_flow.add_theme_constant_override("v_separation", 2)
 	tag_row.add_child(tag_flow)
 
+	# 「荐」推荐签：摆在整排色签最前（推荐是这张卡最要紧的一句话），点按看理由
+	if not rec_reasons.is_empty():
+		var rec_lbl := Label.new()
+		rec_lbl.name = "RecommendBadge"
+		rec_lbl.text = " 荐 "
+		rec_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(" 荐 ", GameStyle.body_font(), 11), 0)
+		rec_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		rec_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
+		tag_flow.add_child(rec_lbl)
+		GameStyle.label(rec_lbl, 11, GameStyle.INK_TEXT)
+		_mark_chip_tappable(rec_lbl, {"kind": "recommend"})
+		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(shop, rec_lbl, rec_reasons, offer))
+
 	var chip_defs: Array = []
+	var chip_tips: Array = []
 	if not behavior_chip.is_empty():
 		chip_defs.append(behavior_chip)
+		chip_tips.append({"kind": "behavior", "w_id": w_id})
 	if tag_parts.is_empty():
 		chip_defs.append([tag, chip_color, chip_text_color])
+		chip_tips.append({})	# 药水/法宝这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
 	else:
 		for i in range(tag_parts.size()):
 			var hot_i: bool = bool(part_hot[i])
 			chip_defs.append([tag_parts[i],
 				GameStyle.JADE if hot_i else chip_color,
 				GameStyle.INK_TEXT if hot_i else chip_text_color])
+			chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
 	# 「买下即凑齐三合一」角标：绿面墨字，与背包 mergeable 绿边同口径
 	if merge_ready:
 		chip_defs.append(["可合成", GameStyle.JADE, GameStyle.INK_TEXT])
-	for cd in chip_defs:
+		chip_tips.append({"kind": "merge", "w_id": w_id})
+	for ci in range(chip_defs.size()):
+		var cd: Array = chip_defs[ci]
 		var chip_txt: String = " %s " % cd[0]
 		var chip_lbl := Label.new()
 		chip_lbl.text = chip_txt
@@ -260,6 +316,11 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(cd[1]))
 		tag_flow.add_child(chip_lbl)
 		GameStyle.label(chip_lbl, 11, cd[2])
+		var tip: Dictionary = chip_tips[ci]
+		if tip.is_empty():
+			continue
+		_mark_chip_tappable(chip_lbl, tip)
+		GameStyle.tap(chip_lbl, func() -> void: ShopChipTips.open(shop, chip_lbl, tip))
 
 	if not sold:
 		var locked: bool = offer.get("locked", false)
