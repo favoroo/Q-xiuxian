@@ -74,6 +74,20 @@ func unregister_enemy(e: Node) -> void:
 	live_enemies.erase(e)
 	enemy_count = live_enemies.size()
 
+# 友军灵兽登记（2026-10-11 祭坛强化）：SpiritBeast 在 _ready/_exit_tree 进出。
+# 敌人嘲讽目标选择（EnemyBase._taunt_target）读这里；语义与 live_enemies 一致。
+# 灵兽只在 "allies" 组，绝不进 enemies/turrets/gems/chests —— 那四组波末会被清场。
+var live_allies: Array = []   ## 当前在场友方灵兽
+var ally_count: int = 0       ## live_allies.size() 的计数镜像
+
+func register_ally(a: Node) -> void:
+	live_allies.append(a)
+	ally_count = live_allies.size()
+
+func unregister_ally(a: Node) -> void:
+	live_allies.erase(a)
+	ally_count = live_allies.size()
+
 # 危险度（仿土豆兄弟 Danger 0~5）：通关当前最高档解锁下一档，落盘 user://progress.cfg
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
 var max_danger_unlocked: int = 0   ## 已解锁的最高危险度

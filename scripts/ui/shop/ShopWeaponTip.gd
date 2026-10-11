@@ -13,15 +13,14 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var in_stash := pool == "stash"
 	var mergeable: bool = star < WeaponData.MAX_STAR and GameManager.count_copies(id, star) >= 3
 
-	var base_dmg: float = float(def.get("damage", 0.0))
-	var star_mul: float = pow(WeaponData.STAR_DAMAGE_MULT, float(star - 1))
-	var bonus: float = GameManager.get_weapon_stat_bonus(id, star)
-	var gm_dmg: float = GameManager.weapon_damage_mult
-	var syn_dmg: float = GameManager.synergy_damage_mult
-	var cult_dmg: float = GameManager.cultivator_damage_mult(id)
-	var elem_dmg: float = GameManager.element_damage_mult(id)
-	var per_hit: float = (base_dmg * star_mul + bonus) * gm_dmg * syn_dmg * cult_dmg * elem_dmg
-	var cd: float = WeaponData.cooldown_for(id, star) * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
+	# 单发与节奏一律走 WeaponDamageReadout，与货架卡同一个数。
+	# Fixed: 这条乘区链以前在弹窗里自己乘了一遍，漏了神识分流与机关羁绊 —— 挂 6 把法器时
+	# 把实际的 32.5 报成 52（虚高 60%），玩家按面板数字判断"这把值不值"必然判错。
+	var slots_here := GameManager.slots_used()
+	if in_stash and slots_here < GameManager.max_weapon_slots():
+		slots_here += 1
+	var per_hit: float = WeaponDamageReadout.per_hit(id, star, slots_here)
+	var cd := WeaponDamageReadout.effective_cd(id, star)
 	var base_range: float = float(def.get("range", 0.0))
 	var eff_range: float = base_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
@@ -42,13 +41,16 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	if in_stash and slots_full:
 		loc_txt = "背包中（装备已满 %d/%d）" % [GameManager.slots_used(), max_slots]
 
-	var bonus_col: Color = GameStyle.GOOD if bonus > 0.0001 else (GameStyle.BAD if bonus < -0.0001 else GameStyle.PAPER)
+	# 「基础 × 星级」「属性转化」两行删掉：箭头行已经把"纸面 → 你现在"讲完，
+	# 系数从哪来改由下方账单句按伤害单位逐项交代（2026-10-11 用户：看不懂"属性加成"是什么）。
 	var rows: Array = [
 		["当前位置", loc_txt, GameStyle.PAPER_DIM if in_stash else GameStyle.GOOD],
-		["单发伤害", "%.1f" % per_hit, GameStyle.JADE],
+		["攻击方式", WeaponData.behavior_label(def), StatsTipFactory.behavior_color(def)],
+		["单发伤害", WeaponDamageReadout.arrow_text(WeaponData.damage_for(id, star), per_hit),
+				GameStyle.JADE],
+		[WeaponDamageReadout.per_second_label(id), BonusRows.fmt_num(
+				WeaponDamageReadout.per_second(id, star, slots_here)), GameStyle.JADE],
 		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
-		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
-		["属性转化", "+%.1f" % bonus, bonus_col],
 		["攻击间隔", "%.2f 秒" % cd],
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 	]
@@ -59,7 +61,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var copies_total := GameManager.count_copies(id, star)
 	var price := WeaponData.sell_price(id, star)
 	var notes: Array[String] = [
-		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
+		WeaponDamageReadout.bonus_bill_text(id, star),
 	]
 	if mergeable:
 		notes.append("已集齐 3 件同名同星，可点击下方【三合一】升至 %s！" % WeaponData.star_text(star + 1))

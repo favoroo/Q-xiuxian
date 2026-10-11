@@ -41,8 +41,16 @@ CORE_TESTS = [
 # --all 全量回归时跳过的场景：需要真实出声/出图的现场预览（headless 下无意义），以及明确不适合批量跑的
 ALL_SKIP_PATTERNS = ("Preview", "AudioGallery")
 # 名字不带 Preview 但同样 headless 跑不了的：WeaponHeadFusionCheck 要真实窗口出图（文件头有说明），
-# WeaponProbe 是"一件法器一进程"的手动实测台（非判据，必须带 -- --only <weapon> 参数）
-ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn"}
+# WeaponProbe 是"一件法器一进程"的手动实测台（非判据，必须带 -- --only <weapon> 参数），
+# ChestLookProbe 是把匣子三段画到 /tmp/chest_stages.png 的出图台（无像素时自己打 NO PIXELS 退 1）
+ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookProbe.tscn"}
+
+# 真在干活的慢判据：默认 25s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
+SLOW_TEST_LIMITS = {
+    "SmokeRunner": 45.0,          # 全流程冒烟
+    "ManualHotzoneCheck": 75.0,   # 88 张卡 × 12 取样点 = 1056 次真实点按（实测 ~39s）
+    "ProjectileProbe": 60.0,      # B 段真跑 18 秒尸潮（time_scale=1，实测 ~34s）
+}
 
 
 def discover_all_tests():
@@ -208,8 +216,11 @@ def main():
     all_ok = True
     total_start = time.time()
     for t_scene in targets:
-        # 为 SmokeRunner 额外留宽超时上限
-        t_limit = max(args.timeout, 45.0) if "SmokeRunner" in t_scene else args.timeout
+        # 慢判据按表留宽上限（其余仍吃 --timeout 默认值，防挂起的那道闸不松）
+        t_limit = args.timeout
+        for name, limit in SLOW_TEST_LIMITS.items():
+            if name in t_scene:
+                t_limit = max(t_limit, limit)
         ok = run_single_test(t_scene, unknown, timeout=t_limit)
         if not ok:
             all_ok = False

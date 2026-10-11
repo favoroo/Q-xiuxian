@@ -254,7 +254,9 @@ func _collect_scrolls(node: Node, out: Array[Control]) -> void:
 	for ch in node.get_children():
 		_collect_scrolls(ch, out)
 
-## 采样：每张内容卡片的中心（标记 on_content=true）+ 相邻卡片之间的缝隙中点，限在可视高度内
+## 采样：每张内容卡片在「与可视区的重叠带」里取点（标记 on_content=true）+ 相邻卡片之间的
+## 缝隙中点，限在可视高度内。长卡要按重叠带切三段：传道玉简·进阶心法那一页整页就是一张
+## 两千多单位高的长卡，只取中心等于一处滚动区只测了一个落点（判据自己据此判「等于没测」）。
 func _sample_points(sc: ScrollContainer, content: Control) -> Array:
 	var vis := sc.get_global_rect()
 	var out: Array = []
@@ -269,13 +271,31 @@ func _sample_points(sc: ScrollContainer, content: Control) -> Array:
 		if out.size() >= MAX_SAMPLES:
 			break
 		var r := rects[i]
-		if r.intersects(vis):
-			out.append([Vector2(cx, clampf(r.get_center().y, vis.position.y + 4.0, vis.end.y - 4.0)), true])
+		var band := r.intersection(vis)
+		if band.size.y > 0.0:
+			# 重叠带高过 0.8 屏才值得切三段，否则一个中心点就够（切多了纯浪费点按次数）
+			var cuts: Array = [0.5]
+			if band.size.y >= vis.size.y * 0.8:
+				cuts = [0.25, 0.5, 0.75]
+			for f in cuts:
+				if out.size() >= MAX_SAMPLES:
+					break
+				var y := clampf(band.position.y + band.size.y * f,
+					vis.position.y + 4.0, vis.end.y - 4.0)
+				if not _near_already(out, y):
+					out.append([Vector2(cx, y), true])
 		if i + 1 < rects.size():
 			var gap_y := (r.end.y + rects[i + 1].position.y) * 0.5
 			if gap_y > vis.position.y and gap_y < vis.end.y:
 				out.append([Vector2(cx, gap_y), false])
 	return out
+
+## 同一列上已经采过这个高度了吗（切三段时重叠带可能短到三点挤在一起）
+static func _near_already(points: Array, y: float) -> bool:
+	for pt in points:
+		if absf(((pt as Array)[0] as Vector2).y - y) < 6.0:
+			return true
+	return false
 
 ## 喂一次按下+拖动+抬起，返回 ScrollContainer 是否收到那一拍按下
 func _press_at(sc: ScrollContainer, host: Control, pos: Vector2) -> bool:

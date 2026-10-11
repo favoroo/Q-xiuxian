@@ -109,16 +109,38 @@ static func rarity_weights(luck: float) -> Dictionary:
 
 const POTION_CHANCE := 0.15            ## 每个货架位出回气丹的概率
 const ITEM_CHANCE := 0.30              ## 每个货架位出法宝（被动道具）的概率
-const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和
-const TAG_AFFINITY_MULT := 2.5
+const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和（第一档）
+const TAG_AFFINITY_MULT_L1 := 2.0      ## 梯度亲和第一档：持有 ≥MIN_COPIES 件 → ×L1
+const TAG_AFFINITY_TIER2_COPIES := 4   ## 梯度亲和第二档门槛：持有 ≥4 件 → ×L2（深专精吸力）
+const TAG_AFFINITY_MULT_L2 := 3.0
+const TAG_AFFINITY_COMBO_DAMP := 0.5   ## 双流派共鸣：第二流派的亲和按该比例折算后叠加
 const LUCK_SHOP_PER_POINT := 0.01      ## 福缘对法器权重的加法系数
 const MAIN_TAG_PITY_WAVES := 2         ## 连续几波没出主流派就强制塞一件
 const TAG_FILTER_BONUS := 4.0          ## 流派偏好软加权：命中角色限定 tag 的法器权重倍率
 const TAG_FILTER_LEAK := 0.2           ## 未命中限定 tag 的法器保留的小权重（漏出率）
 
-## 某流派的亲和倍率：持有不足 MIN_COPIES 件时恒为 1
+## 梯度亲和倍率：持有不足 MIN_COPIES 件时恒为 1；≥4 件进入第二档深专精吸力
 static func tag_affinity_mult(copies: int) -> float:
-	return TAG_AFFINITY_MULT if copies >= TAG_AFFINITY_MIN_COPIES else 1.0
+	if copies < TAG_AFFINITY_MIN_COPIES:
+		return 1.0
+	return TAG_AFFINITY_MULT_L2 if copies >= TAG_AFFINITY_TIER2_COPIES else TAG_AFFINITY_MULT_L1
+
+## 双流派共鸣：法器同时命中多个已激活亲和的流派（如剑系∩金系）时，
+## 最高档亲和全额生效，其余已激活流派按 COMBO_DAMP 半价叠加——
+## 玩家双修两流派后，交叉法器权重反超单流派，货架会主动把"正想要的那把"喂过来。
+static func tag_affinity_combo(counts: Dictionary, tags: Array) -> float:
+	var best := 1.0
+	var second := 1.0
+	for t in tags:
+		var m := tag_affinity_mult(int(counts.get(t, 0)))
+		if m <= 1.0:
+			continue
+		if m > best:
+			second = best
+			best = m
+		elif m > second:
+			second = m
+	return best * (1.0 + (second - 1.0) * TAG_AFFINITY_COMBO_DAMP)
 
 ## 流派偏好的软加权：角色限定流派非空时，命中 tag 的法器 ×BONUS，其余保留 LEAK 小权重。
 ## 替代旧版硬过滤——硬过滤在池中只有 1 件同名法器时会让货架坍缩为单一武器。

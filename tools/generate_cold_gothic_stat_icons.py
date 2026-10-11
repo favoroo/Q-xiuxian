@@ -676,6 +676,26 @@ def gen_pierce():
 
     save_and_downscale(img, "icon_pierce.png")
 
+def fit_from_raw(raw_path, target_art_name, target_size=128, margin=8):
+    im = Image.open(raw_path).convert("RGBA")
+    alpha = im.getchannel("A")
+    bbox = alpha.point(lambda v: 255 if v > 15 else 0).getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    inner_max = target_size - margin * 2
+    w, h = im.size
+    scale = min(inner_max / w, inner_max / h)
+    new_w = int(round(w * scale))
+    new_h = int(round(h * scale))
+    im_resized = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (target_size, target_size), (0, 0, 0, 0))
+    ox = (target_size - new_w) // 2
+    oy = (target_size - new_h) // 2
+    canvas.paste(im_resized, (ox, oy), im_resized)
+    dest_path = os.path.join(OUTPUT_DIR, target_art_name)
+    canvas.save(dest_path, "PNG")
+    print(f"[IconGen] 已从源图适配生成: {dest_path}")
+
 GENERATORS = {
     "icon_atk": gen_atk,
     "icon_armor": gen_armor,
@@ -706,5 +726,9 @@ if __name__ == "__main__":
         only = [x.strip() for x in argv[idx + 1].split(",") if x.strip()]
     targets = only if only else list(GENERATORS)
     for name in targets:
-        GENERATORS[name]()
+        raw_file = os.path.join("assets_raw/images", f"{name}.png")
+        if os.path.exists(raw_file):
+            fit_from_raw(raw_file, f"{name}.png")
+        elif name in GENERATORS:
+            GENERATORS[name]()
     print(f"属性图标生成完成：{len(targets)} 张 ({', '.join(targets)})")

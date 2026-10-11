@@ -5,8 +5,8 @@ extends Node
 ## 这些公式以前埋在 autoload / 刷怪器里，必须起整棵场景树才能碰；
 ## 现在它们都在 GameBalance（static 纯函数）、随机源可由 GameManager.rng 注入，所以能直接断言。
 ##
-## 拆分说明（2026-10-11）：测试体按主题拆到 tests/unit/ 七个模块
-## （wave / combat / economy / upgrade / targeting / content / infra，基类 UnitTestsBase）。
+## 拆分说明（2026-10-11）：测试体按主题拆到 tests/unit/ 九个模块
+## （wave / combat / economy / upgrade / targeting / content / infra / consistency / spiritbeast，基类 UnitTestsBase）。
 ## 本文件只保留两件事：**与拆分前完全一致的调用顺序**（模块间有共享的 GameManager 状态，
 ## 顺序本身是判据的一部分，别随手重排）与最终 report。改单测进对应模块文件，别往这里堆。
 
@@ -21,7 +21,8 @@ func _ready() -> void:
 	var content := UnitContentTests.new(_c)
 	var infra := UnitInfraTests.new(_c)
 	var consistency := UnitConsistencyTests.new(_c)
-	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra, consistency]:
+	var spiritbeast := UnitSpiritBeastTests.new(_c)
+	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast]:
 		add_child(m)
 
 	economy._test_exp_curve()
@@ -32,6 +33,7 @@ func _ready() -> void:
 	wave._test_enemy_mix()
 	combat._test_enemy_bolt()
 	economy._test_pricing()
+	economy._test_tag_affinity()
 	economy._test_harvest()
 	economy._test_rarity_weights()
 	economy._test_weighted_pick()
@@ -62,6 +64,8 @@ func _ready() -> void:
 	consistency._test_upgrade_desc_apply()
 	consistency._test_item_desc_apply()
 	consistency._test_skill_desc_apply()
+	spiritbeast._test_spirit_beast_scaling()
+	spiritbeast._test_spirit_beast_constants()
 
 	if _c.report("UNIT_RESULT"):
 		get_tree().quit(0)

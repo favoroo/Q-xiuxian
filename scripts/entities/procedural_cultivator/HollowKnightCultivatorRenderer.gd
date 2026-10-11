@@ -130,6 +130,50 @@ func set_visual_config(cfg: CultivatorVisualConfig) -> void:
 	_sync_config()
 	queue_redraw()
 
+# ==================== 布料动态：平滑状态与行波上下文 ====================
+
+var _wind_local: Vector2 = Vector2.ZERO  ## 平滑后的移动风压（世界系，绘制时按 flip_h 镜像到局部）
+var _speed_smooth: float = 0.0           ## 平滑后的移速比率：起停时斗篷风阻渐变，不突跳
+var _lean_smooth: float = 0.0            ## 平滑后的侧倾：衣摆滞后于身体 4.8° 弹性倾角
+
+## 行波上下文（_draw_modular_cloak 注入，供 _sway_x/_sway_y 消费）
+var _cw_amp: float = 0.0              ## 行波振幅基准（px）
+var _cw_t: float = 0.0                ## 行波相位基准（由各动作按自身频率给出）
+var _cw_wind: Vector2 = Vector2.ZERO  ## 局部空间风压（含镜像校正）
+var _cw_lean: float = 0.0             ## 侧倾滞后横推基准
+
+func _process(delta: float) -> void:
+	super(delta)
+	var running := current_action == CultivatorRendererBase.Action.RUN
+	var k := minf(delta * 6.0, 1.0)
+	_wind_local = _wind_local.lerp(move_dir if running else Vector2.ZERO, k)
+	_speed_smooth = lerpf(_speed_smooth, speed_ratio if running else 0.0, minf(delta * 8.0, 1.0))
+	_lean_smooth = lerpf(_lean_smooth, lean_angle if running else 0.0, k)
+
+## 下摆顶点行波偏移（x 方向）：相位随横向位置与下摆深度推进，越靠边、越靠下越滞后，
+## 振幅随深度增大——衣摆从躯干向外柔和传播，取代旧版整块共相位摆动。
+## 叠加项：高频微风轻颤 + 风压横推/侧倾滞后（含蓄 1~3px 级）。
+func _sway_x(x: float, y: float) -> float:
+	var depth := clampf((y - 8.0) / 24.0, 0.0, 1.0)
+	var travel := absf(x) * 0.14 + depth * 1.7
+	var sway := sin(_cw_t + travel) * _cw_amp * (0.35 + depth * 0.8)
+	var breeze := sin(_time * 11.0 + travel * 1.6) * _cw_amp * 0.22 * depth
+	var wind_x := (-_cw_wind.x * 1.2 + _cw_lean) * depth
+	return sway + breeze + wind_x
+
+## 下摆顶点风向掀升（y 方向）：向上移动衣摆向后下轻拖，向下移动衣摆轻扬收拢（2px 级）
+func _sway_y(y: float) -> float:
+	var depth := clampf((y - 8.0) / 24.0, 0.0, 1.0)
+	return -_cw_wind.y * 2.2 * depth
+
+## 斗篷纵向伪光照渐变：肩部提亮、下摆压暗（逐顶点颜色插值，零 shader 成本）
+func _cloak_gradient(pts: PackedVector2Array, base: Color) -> PackedColorArray:
+	var cols := PackedColorArray()
+	for p in pts:
+		var t := clampf((p.y + 6.0) / 36.0, 0.0, 1.0)
+		cols.append(base.lightened(0.10 * (1.0 - t)).darkened(0.30 * t))
+	return cols
+
 # ==================== 1. 待机 (IDLE) ====================
 
 func _draw_idle(angle: Angle) -> void:
@@ -137,7 +181,9 @@ func _draw_idle(angle: Angle) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	var float_y := sin(_time * 2.6) * 1.8
-	var cloak_wave := sin(_time * 3.0) * 1.5
+	# 待机布料呼吸：低频慢波（~0.25Hz），振幅克制 2px，站桩也有仙气吐纳感
+	var cloak_amp := 2.0
+	var cloak_t := _time * 1.6
 	var eye_pulse := sin(_time * 3.0) * 0.08
 
 	_draw_ground_shadow(Vector2(0, 32), 17.0 * width_scale, 4.8, 0.48)
@@ -146,14 +192,14 @@ func _draw_idle(angle: Angle) -> void:
 	match angle:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
-			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.FRONT)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, eye_pulse)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot), Angle.SIDE)
-			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.SIDE)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.SIDE)
 			_draw_head_side(float_y, eye_pulse)
 		Angle.BACK:
-			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.BACK)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
@@ -166,9 +212,11 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 
 	var wave_t := _time * 5.2
 	var float_y := sin(wave_t) * 2.4
-	# 风阻波动与双频斗篷衣摆，营造灵动御风感
-	var cloak_drag := clampf(speed_ratio, 0.4, 1.4) * 2.8
-	var cloak_wave := cos(wave_t) * 2.8 + sin(_time * 9.5) * 0.9
+	# 双频斗篷衣摆：主波相位滞后身体半拍（布料惯性），振幅随步频呼吸涨落，
+	# 风阻取平滑移速（起停渐变），高频微风在 _sway_x 内叠加
+	var cloak_drag := clampf(maxf(_speed_smooth, 0.2), 0.4, 1.4) * 2.8
+	var cloak_amp := 3.3 * (0.9 + 0.18 * sin(gait_phase * TAU))
+	var cloak_t := wave_t - 0.7
 
 	var shadow_alpha := 0.44 - sin(wave_t) * 0.07
 	var shadow_rx := (16.5 - sin(wave_t) * 1.1) * width_scale
@@ -178,15 +226,15 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	match angle:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y * 0.85), deg_to_rad(carry_front_rot + sin(wave_t) * 2.5), Angle.FRONT)
-			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.FRONT)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.FRONT)
 			_draw_head_front(float_y, 0.06)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot + 1.0), Angle.SIDE)
-			_draw_modular_cloak(float_y, cloak_wave, cloak_drag, Angle.SIDE)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.SIDE)
 			_draw_head_side(float_y, 0.05)
 			_draw_eye_trail(float_y)
 		Angle.BACK:
-			_draw_modular_cloak(float_y, cloak_wave, 0.0, Angle.BACK)
+			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.BACK)
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
@@ -198,6 +246,10 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	var dash_y := 4.0
+	# 冲刺风掀：风阻随进度增强、衣摆短促掀摆，收势回弹由 dash_progress 收尾驱动
+	var dash_drag := 5.0 + dash_progress * 2.5
+	var dash_amp := 1.4 + dash_progress * 1.2
+	var dash_t := _time * 9.0 + dash_progress * 4.0
 	for i in [1, 2]:
 		var lag := float(i) * 12.0
 		draw_filled_ellipse(Vector2(-lag, dash_y + 24), 16.0 * width_scale, 3.8, Color(col_cloak_outer.r, col_cloak_outer.g, col_cloak_outer.b, 0.16 / float(i)))
@@ -208,15 +260,15 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 	match angle:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(1.5, dash_y + 1.0), deg_to_rad(carry_front_rot + 12.0), Angle.FRONT)
-			_draw_modular_cloak(dash_y, 0.0, 6.0, Angle.FRONT)
+			_draw_modular_cloak(dash_y, dash_amp, dash_t, dash_drag, Angle.FRONT)
 			_draw_head_front(dash_y + 1, 0.3)
 		Angle.SIDE:
 			_draw_modular_weapon(Vector2(8, 7 + dash_y), deg_to_rad(65.0), Angle.SIDE)
-			_draw_cloak_dash_side(dash_y)
+			_draw_cloak_dash_side(dash_y, dash_progress)
 			_draw_head_side(dash_y + 2, 0.45)
 			draw_line(Vector2(8, -5 + dash_y), Vector2(-22, -5 + dash_y), col_eye_glow, 1.8)
 		Angle.BACK:
-			_draw_modular_cloak(dash_y, 0.0, 6.0, Angle.BACK)
+			_draw_modular_cloak(dash_y, dash_amp, dash_t, dash_drag, Angle.BACK)
 			_draw_modular_strap(dash_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(2.0, dash_y), deg_to_rad(carry_back_rot - 8.0), Angle.BACK)
 			_draw_head_back(dash_y + 1)
@@ -233,17 +285,17 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 	match angle:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
-			_draw_modular_cloak(float_y, 2.5, 0.0, Angle.FRONT)
+			_draw_modular_cloak(float_y, 2.2, _time * 5.2, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, 0.25)
 			_draw_slash_crescent(Vector2(0, 12 + float_y), deg_to_rad(90.0), 38.0, progress)
 		Angle.SIDE:
-			_draw_modular_cloak(float_y, 3.0, 2.0, Angle.SIDE)
+			_draw_modular_cloak(float_y, 2.4, _time * 5.2, 2.0, Angle.SIDE)
 			_draw_head_side(float_y, 0.25)
 			var slash_rot := lerpf(deg_to_rad(-40.0), deg_to_rad(50.0), progress)
 			_draw_modular_weapon(Vector2(14, 3 + float_y), slash_rot, Angle.SIDE)
 			_draw_slash_crescent(Vector2(18, 2 + float_y), deg_to_rad(15.0), 42.0, progress)
 		Angle.BACK:
-			_draw_modular_cloak(float_y, 2.5, 0.0, Angle.BACK)
+			_draw_modular_cloak(float_y, 2.2, _time * 5.2, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
@@ -261,14 +313,14 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 	match angle:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(0.5, -1.0), deg_to_rad(carry_front_rot - 6.0), Angle.FRONT)
-			_draw_modular_cloak(0.0, -2.0, 0.0, Angle.FRONT)
+			_draw_modular_cloak(0.0, -1.2, _time * 7.0, 0.0, Angle.FRONT)
 			_draw_head_front(0.0, 0.35)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, 3.0), deg_to_rad(carry_side_rot), Angle.SIDE)
-			_draw_modular_cloak(0.0, -2.0, -1.0, Angle.SIDE)
+			_draw_modular_cloak(0.0, -1.2, _time * 7.0, -1.0, Angle.SIDE)
 			_draw_head_side(0.0, 0.35)
 		Angle.BACK:
-			_draw_modular_cloak(0.0, -2.0, 0.0, Angle.BACK)
+			_draw_modular_cloak(0.0, -1.2, _time * 7.0, 0.0, Angle.BACK)
 			_draw_modular_strap(0.0)
 			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, 4.0), deg_to_rad(carry_back_rot + 12.0), Angle.BACK)
 			_draw_head_back(0.0)
@@ -920,6 +972,16 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 	var base_w := 1.2 + cloak_shimmer_intensity * 0.8
 	draw_polyline(pts, eff_edge, base_w, true)
 
+	# 常驻下摆微光：沿下摆顶点叠一条细亮线，随行波轻闪（技能流光叠加其上）
+	var hem := PackedVector2Array()
+	for p in pts:
+		if p.y >= 20.0:
+			hem.append(p)
+	if hem.size() >= 2:
+		var hem_a := 0.24 + 0.10 * sin(_time * 5.2 + hem[0].x * 0.2) + cloak_shimmer_intensity * 0.15
+		var hem_c := Color(eff_edge.r, eff_edge.g, eff_edge.b, clampf(hem_a, 0.0, 1.0)).lightened(0.25)
+		draw_polyline(hem, hem_c, base_w * 0.9, true)
+
 	if cloak_shimmer_intensity > 0.05:
 		var n := pts.size()
 		var phase := fmod(_time * 2.8, 1.0)
@@ -934,35 +996,41 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 			draw_polyline(s_pts, Color(shimmer_c.r, shimmer_c.g, shimmer_c.b, s_alpha * 0.85), base_w + 1.5, true)
 			draw_polyline(s_pts, Color(1.0, 1.0, 1.0, s_alpha * 0.95), base_w * 0.8, true)
 
-# ==================== 斗篷插槽绘制（端正挺拔躯干 + 水平齐整自然下摆） ====================
+# ==================== 斗篷插槽绘制（端正挺拔躯干 + 逐顶点行波衣摆） ====================
 
-func _draw_modular_cloak(float_y: float, wave: float, drag: float, angle: Angle) -> void:
+## amp=行波振幅基准（可负，负值仅反相），wave_t=行波相位基准，drag=风阻拉伸
+func _draw_modular_cloak(float_y: float, amp: float, wave_t: float, drag: float, angle: Angle) -> void:
 	if not _layer_on(Layer.CLOAK):
 		return
+	# 注入行波上下文；世界系风压按 flip_h 镜像到局部空间
+	_cw_amp = amp
+	_cw_t = wave_t
+	_cw_wind = Vector2(_wind_local.x * (-1.0 if flip_h else 1.0), _wind_local.y)
+	_cw_lean = -_lean_smooth * 22.0
 	match angle:
 		Angle.FRONT:
-			_draw_cloak_front_modular(float_y, wave, drag)
+			_draw_cloak_front_modular(float_y, amp, wave_t, drag)
 		Angle.SIDE:
-			_draw_cloak_side_modular(float_y, wave, drag)
+			_draw_cloak_side_modular(float_y, amp, wave_t, drag)
 		Angle.BACK:
-			_draw_cloak_back_modular(float_y, wave)
+			_draw_cloak_back_modular(float_y, amp, wave_t, drag)
 
 # ----------------- 正面斗篷 -----------------
 
-func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 0.0) -> void:
+func _draw_cloak_front_modular(float_y: float, _amp: float, _wave_t: float, extra_drag: float = 0.0) -> void:
 	var w := width_scale
 	var flare := extra_drag * 0.45
 
-	# 1. 内衬道袍底衬
+	# 1. 内衬道袍底衬（下摆随行波起伏）
 	var inner_pts: PackedVector2Array = [
 		Vector2(0, -4 + float_y),
 		Vector2((-15 - flare * 0.4) * w, 12 + float_y),
-		Vector2((-14 - flare) * w + wave * 0.4, 30 + float_y),
-		Vector2(wave * 0.15, 27 + float_y),
-		Vector2((14 + flare) * w - wave * 0.4, 30 + float_y),
+		Vector2((-14 - flare) * w + _sway_x(-14.0 * w, 30.0), 30 + float_y + _sway_y(30.0)),
+		Vector2(_sway_x(0.0, 27.0) * 0.5, 27 + float_y + _sway_y(27.0)),
+		Vector2((14 + flare) * w + _sway_x(14.0 * w, 30.0), 30 + float_y + _sway_y(30.0)),
 		Vector2((15 + flare * 0.4) * w, 12 + float_y)
 	]
-	draw_colored_polygon(inner_pts, col_cloak_inner)
+	draw_polygon(inner_pts, _cloak_gradient(inner_pts, col_cloak_inner))
 
 	# 胸前交领右衽领口（道门中衣与素雪白领）
 	var collar_outer: PackedVector2Array = [
@@ -975,7 +1043,7 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 	draw_line(Vector2(5.0 * w, -5 + float_y), Vector2(-1.0 * w, 2 + float_y), Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.4), 1.0)
 	draw_line(Vector2(0, 5 + float_y), Vector2(0, 11 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.6), 1.0)
 
-	# 2. 外袍款式
+	# 2. 外袍款式（下摆顶点走逐顶点行波）
 	var outer_pts: PackedVector2Array = []
 	match cloak_style:
 		"heavy_overcoat":
@@ -983,9 +1051,9 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 				Vector2(0, -6 + float_y),
 				Vector2(-11 * w, -2 + float_y),
 				Vector2((-16 - flare * 0.5) * w, 15 + float_y),
-				Vector2((-14 - flare) * w + wave * 0.35, 31 + float_y),
-				Vector2(wave * 0.2, 30 + float_y),
-				Vector2((14 + flare) * w - wave * 0.35, 31 + float_y),
+				Vector2((-14 - flare) * w + _sway_x(-14.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
+				Vector2(_sway_x(0.0, 30.0) * 0.5, 30 + float_y + _sway_y(30.0)),
+				Vector2((14 + flare) * w + _sway_x(14.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
 				Vector2((16 + flare * 0.5) * w, 15 + float_y),
 				Vector2(11 * w, -2 + float_y)
 			]
@@ -994,10 +1062,10 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
 				Vector2((-13 - flare * 0.5) * w, 12 + float_y),
-				Vector2((-10 - flare) * w + wave * 0.4, 22 + float_y),
-				Vector2(-4 * w + wave * 0.2, 25 + float_y),
-				Vector2(4 * w - wave * 0.2, 25 + float_y),
-				Vector2((10 + flare) * w - wave * 0.4, 22 + float_y),
+				Vector2((-10 - flare) * w + _sway_x(-10.0 * w, 22.0), 22 + float_y + _sway_y(22.0)),
+				Vector2(-4 * w + _sway_x(-4.0 * w, 25.0), 25 + float_y + _sway_y(25.0)),
+				Vector2(4 * w + _sway_x(4.0 * w, 25.0), 25 + float_y + _sway_y(25.0)),
+				Vector2((10 + flare) * w + _sway_x(10.0 * w, 22.0), 22 + float_y + _sway_y(22.0)),
 				Vector2((13 + flare * 0.5) * w, 12 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
@@ -1006,12 +1074,12 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
 				Vector2((-15 - flare * 0.5) * w, 15 + float_y),
-				Vector2((-13 - flare) * w + wave * 0.45, 27 + float_y),
-				Vector2((-9 - flare * 0.6) * w + wave * 0.3, 32 + float_y),
-				Vector2(-5 * w, 24 + float_y),
-				Vector2(wave * 0.2, 31 + float_y),
-				Vector2(6 * w, 23 + float_y),
-				Vector2((11 + flare * 0.8) * w - wave * 0.4, 32 + float_y),
+				Vector2((-13 - flare) * w + _sway_x(-13.0 * w, 27.0), 27 + float_y + _sway_y(27.0)),
+				Vector2((-9 - flare * 0.6) * w + _sway_x(-9.0 * w, 32.0), 32 + float_y + _sway_y(32.0)),
+				Vector2(-5 * w + _sway_x(-5.0 * w, 24.0), 24 + float_y + _sway_y(24.0)),
+				Vector2(_sway_x(0.0, 31.0) * 0.6, 31 + float_y + _sway_y(31.0)),
+				Vector2(6 * w + _sway_x(6.0 * w, 23.0), 23 + float_y + _sway_y(23.0)),
+				Vector2((11 + flare * 0.8) * w + _sway_x(11.0 * w, 32.0), 32 + float_y + _sway_y(32.0)),
 				Vector2((15 + flare * 0.5) * w, 15 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
@@ -1020,9 +1088,9 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
 				Vector2((-15 - flare * 0.5) * w, 14 + float_y),
-				Vector2((-12 - flare) * w + wave * 0.4, 29 + float_y),
-				Vector2(wave * 0.15, 27 + float_y),
-				Vector2((12 + flare) * w - wave * 0.4, 29 + float_y),
+				Vector2((-12 - flare) * w + _sway_x(-12.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
+				Vector2(_sway_x(0.0, 27.0) * 0.5, 27 + float_y + _sway_y(27.0)),
+				Vector2((12 + flare) * w + _sway_x(12.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
 				Vector2((15 + flare * 0.5) * w, 14 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
@@ -1031,43 +1099,44 @@ func _draw_cloak_front_modular(float_y: float, wave: float, extra_drag: float = 
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
 				Vector2((-14 - flare * 0.5) * w, 15 + float_y),
-				Vector2((-12 - flare) * w + wave * 0.5, 28 + float_y),
-				Vector2(-7 * w + wave * 0.2, 24 + float_y),
-				Vector2(-3 * w + wave * 0.3, 31 + float_y),
-				Vector2(2 * w - wave * 0.2, 26 + float_y),
-				Vector2((8 + flare) * w - wave * 0.4, 29 + float_y),
+				Vector2((-12 - flare) * w + _sway_x(-12.0 * w, 28.0), 28 + float_y + _sway_y(28.0)),
+				Vector2(-7 * w + _sway_x(-7.0 * w, 24.0), 24 + float_y + _sway_y(24.0)),
+				Vector2(-3 * w + _sway_x(-3.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
+				Vector2(2 * w + _sway_x(2.0 * w, 26.0), 26 + float_y + _sway_y(26.0)),
+				Vector2((8 + flare) * w + _sway_x(8.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
 				Vector2((14 + flare * 0.5) * w, 15 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
 
-	draw_colored_polygon(outer_pts, col_cloak_outer)
+	draw_polygon(outer_pts, _cloak_gradient(outer_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(outer_pts, col_cloak_edge)
 
-	draw_line(Vector2(-5 * w, 14 + float_y), Vector2(-4 * w, 26 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
-	draw_line(Vector2(5 * w, 14 + float_y), Vector2(4 * w, 26 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	# 内衬折痕线：底端跟随行波相位轻微摆动
+	draw_line(Vector2(-5 * w, 14 + float_y), Vector2(-4 * w + _sway_x(-4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	draw_line(Vector2(5 * w, 14 + float_y), Vector2(4 * w + _sway_x(4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 
 	if cloak_style == "royal_shawl":
 		draw_arc(Vector2(-7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
 		draw_arc(Vector2(7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
 
-# ----------------- 侧面斗篷（彻底重构：端正挺拔躯干 + 水平齐整自然下摆） -----------------
+# ----------------- 侧面斗篷（端正挺拔躯干 + 逐顶点行波下摆） -----------------
 
-func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) -> void:
+func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra_drag: float) -> void:
 	var w := width_scale
 	var d := extra_drag
 
-	# 1. 侧面内衬底色
+	# 1. 侧面内衬底色（下摆随行波起伏）
 	var inner_side: PackedVector2Array = [
 		Vector2(1.5, -5 + float_y),
 		Vector2(5.5 * w, 1 + float_y),
 		Vector2(5.0 * w, 14 + float_y),
-		Vector2(4.0 * w, 28 + float_y),
-		Vector2(-4.5 * w - d * 0.2, 28 + float_y),
+		Vector2(4.0 * w + _sway_x(4.0 * w, 28.0), 28 + float_y + _sway_y(28.0)),
+		Vector2(-4.5 * w - d * 0.2 + _sway_x(-4.5 * w, 28.0), 28 + float_y + _sway_y(28.0)),
 		Vector2(-4.0 * w, 12 + float_y)
 	]
-	draw_colored_polygon(inner_side, col_cloak_inner)
+	draw_polygon(inner_side, _cloak_gradient(inner_side, col_cloak_inner))
 
-	# 2. 侧面外袍主体（前摆与后摆水平高度完全对齐）
+	# 2. 侧面外袍主体（前摆与后摆水平高度完全对齐，下摆走逐顶点行波）
 	var side_pts: PackedVector2Array = []
 	match cloak_style:
 		"heavy_overcoat": # 厚重大氅（石岳、独臂刀圣）
@@ -1076,9 +1145,9 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 				Vector2(4.5 * w, -4 + float_y),
 				Vector2(7.5 * w, 2 + float_y),
 				Vector2(6.8 * w, 14 + float_y),
-				Vector2(5.2 * w, 29.5 + float_y),
-				Vector2(0.0, 30.0 + float_y),
-				Vector2(-6.8 * w - d * 0.35 + wave * 0.2, 29.5 + float_y),
+				Vector2(5.2 * w + _sway_x(5.2 * w, 29.5), 29.5 + float_y + _sway_y(29.5)),
+				Vector2(_sway_x(0.0, 30.0) * 0.5, 30.0 + float_y + _sway_y(30.0)),
+				Vector2(-6.8 * w - d * 0.35 + _sway_x(-6.8 * w, 29.5), 29.5 + float_y + _sway_y(29.5)),
 				Vector2(-7.5 * w, 14 + float_y),
 				Vector2(-6.5 * w, 2 + float_y),
 				Vector2(-3.5 * w, -5 + float_y)
@@ -1088,8 +1157,8 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 			var skirt_pts: PackedVector2Array = [
 				Vector2(1.5, 14 + float_y),
 				Vector2(5.2 * w, 15 + float_y),
-				Vector2(4.0 * w, 27.5 + float_y),
-				Vector2(-4.8 * w, 27.5 + float_y),
+				Vector2(4.0 * w + _sway_x(4.0 * w, 27.5), 27.5 + float_y + _sway_y(27.5)),
+				Vector2(-4.8 * w + _sway_x(-4.8 * w, 27.5), 27.5 + float_y + _sway_y(27.5)),
 				Vector2(-4.0 * w, 14 + float_y)
 			]
 			draw_colored_polygon(skirt_pts, col_cloak_inner)
@@ -1100,9 +1169,9 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 				Vector2(4.0 * w, -4 + float_y),
 				Vector2(6.2 * w, 2 + float_y),
 				Vector2(5.5 * w, 10 + float_y),
-				Vector2(3.5 * w, 18.0 + float_y),
-				Vector2(-1.0 * w, 18.5 + float_y),
-				Vector2(-6.5 * w - d * 0.3 + wave * 0.25, 18.0 + float_y),
+				Vector2(3.5 * w + _sway_x(3.5 * w, 18.0), 18.0 + float_y + _sway_y(18.0)),
+				Vector2(-1.0 * w + _sway_x(-1.0 * w, 18.5), 18.5 + float_y + _sway_y(18.5)),
+				Vector2(-6.5 * w - d * 0.3 + _sway_x(-6.5 * w, 18.0), 18.0 + float_y + _sway_y(18.0)),
 				Vector2(-6.0 * w, 10 + float_y),
 				Vector2(-5.0 * w, 1 + float_y),
 				Vector2(-3.0 * w, -5 + float_y)
@@ -1114,11 +1183,11 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 				Vector2(4.2 * w, -4 + float_y),
 				Vector2(7.0 * w, 2 + float_y),
 				Vector2(6.2 * w, 14 + float_y),
-				Vector2(4.8 * w, 29.0 + float_y),
-				Vector2(1.5 * w, 26.5 + float_y),
-				Vector2(-2.5 * w, 29.5 + float_y),
-				Vector2(-5.0 * w, 26.0 + float_y),
-				Vector2(-7.2 * w - d * 0.35 + wave * 0.3, 29.0 + float_y),
+				Vector2(4.8 * w + _sway_x(4.8 * w, 29.0), 29.0 + float_y + _sway_y(29.0)),
+				Vector2(1.5 * w + _sway_x(1.5 * w, 26.5), 26.5 + float_y + _sway_y(26.5)),
+				Vector2(-2.5 * w + _sway_x(-2.5 * w, 29.5), 29.5 + float_y + _sway_y(29.5)),
+				Vector2(-5.0 * w + _sway_x(-5.0 * w, 26.0), 26.0 + float_y + _sway_y(26.0)),
+				Vector2(-7.2 * w - d * 0.35 + _sway_x(-7.2 * w, 29.0), 29.0 + float_y + _sway_y(29.0)),
 				Vector2(-7.0 * w, 14 + float_y),
 				Vector2(-6.0 * w, 2 + float_y),
 				Vector2(-3.5 * w, -5 + float_y)
@@ -1130,9 +1199,9 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 				Vector2(4.5 * w, -4 + float_y),
 				Vector2(7.2 * w, 2 + float_y),
 				Vector2(6.5 * w, 14 + float_y),
-				Vector2(4.8 * w, 28.5 + float_y),
-				Vector2(0.0, 29.0 + float_y),
-				Vector2(-6.8 * w - d * 0.3 + wave * 0.2, 28.5 + float_y),
+				Vector2(4.8 * w + _sway_x(4.8 * w, 28.5), 28.5 + float_y + _sway_y(28.5)),
+				Vector2(_sway_x(0.0, 29.0) * 0.5, 29.0 + float_y + _sway_y(29.0)),
+				Vector2(-6.8 * w - d * 0.3 + _sway_x(-6.8 * w, 28.5), 28.5 + float_y + _sway_y(28.5)),
 				Vector2(-7.0 * w, 14 + float_y),
 				Vector2(-6.0 * w, 2 + float_y),
 				Vector2(-3.5 * w, -5 + float_y)
@@ -1144,45 +1213,49 @@ func _draw_cloak_side_modular(float_y: float, wave: float, extra_drag: float) ->
 				Vector2(4.0 * w, -4 + float_y),
 				Vector2(6.8 * w, 2 + float_y),
 				Vector2(6.0 * w, 14 + float_y),
-				Vector2(4.5 * w, 28.5 + float_y),
-				Vector2(0.0, 27.5 + float_y),
-				Vector2(-3.5 * w, 29.0 + float_y),
-				Vector2(-6.8 * w - d * 0.35 + wave * 0.25, 28.5 + float_y),
+				Vector2(4.5 * w + _sway_x(4.5 * w, 28.5), 28.5 + float_y + _sway_y(28.5)),
+				Vector2(_sway_x(0.0, 27.5) * 0.5, 27.5 + float_y + _sway_y(27.5)),
+				Vector2(-3.5 * w + _sway_x(-3.5 * w, 29.0), 29.0 + float_y + _sway_y(29.0)),
+				Vector2(-6.8 * w - d * 0.35 + _sway_x(-6.8 * w, 28.5), 28.5 + float_y + _sway_y(28.5)),
 				Vector2(-6.5 * w, 14 + float_y),
 				Vector2(-5.5 * w, 2 + float_y),
 				Vector2(-3.0 * w, -5 + float_y)
 			]
 
-	draw_colored_polygon(side_pts, col_cloak_outer)
+	draw_polygon(side_pts, _cloak_gradient(side_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(side_pts, col_cloak_edge)
 
 	draw_line(Vector2(1.8, -5 + float_y), Vector2(4.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.7), 1.1)
-	draw_line(Vector2(-1.5 * w, 3 + float_y), Vector2(-2.5 * w - d * 0.1, 24 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	draw_line(Vector2(-1.5 * w, 3 + float_y), Vector2(-2.5 * w - d * 0.1 + _sway_x(-2.5 * w, 24.0) * 0.6, 24 + float_y + _sway_y(24.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 
 	if cloak_style == "royal_shawl":
 		draw_arc(Vector2(0, 2 + float_y), 6.0 * w, 0, PI * 0.8, 14, col_gold, 1.2)
 
-func _draw_cloak_dash_side(dash_y: float) -> void:
+func _draw_cloak_dash_side(dash_y: float, progress: float = 1.0) -> void:
 	if not _layer_on(Layer.CLOAK):
 		return
 	var w := width_scale
+	# 冲刺长尾：尾梢随时间轻颤，随进度展开
+	var flap := sin(_time * 12.0) * 1.1 * progress
 	var dash_pts: PackedVector2Array = [
 		Vector2(2.0, -6 + dash_y),
 		Vector2(6.0 * w, -2 + dash_y),
 		Vector2(8.0 * w, 5 + dash_y),
-		Vector2(2.0 * w, 14 + dash_y),
-		Vector2(-18 * w, 8 + dash_y),
-		Vector2(-26 * w, 4 + dash_y),
-		Vector2(-14 * w, 0 + dash_y),
+		Vector2(2.0 * w, 14 + dash_y + flap * 0.4),
+		Vector2(-18 * w, 8 + dash_y + flap),
+		Vector2(-26 * w, 4 + dash_y + flap * 1.2),
+		Vector2(-14 * w, 0 + dash_y + flap * 0.6),
 		Vector2(-5 * w, -3 + dash_y)
 	]
-	draw_colored_polygon(dash_pts, col_cloak_outer)
+	draw_polygon(dash_pts, _cloak_gradient(dash_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(dash_pts, col_cloak_edge)
 
 # ----------------- 背面斗篷 -----------------
 
-func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
+func _draw_cloak_back_modular(float_y: float, _amp: float, _wave_t: float, extra_drag: float = 0.0) -> void:
 	var w := width_scale
+	var flare := extra_drag * 0.4
+
 	var back_pts: PackedVector2Array = []
 	match cloak_style:
 		"heavy_overcoat":
@@ -1190,9 +1263,9 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 				Vector2(0, -6 + float_y),
 				Vector2(-11 * w, -2 + float_y),
 				Vector2(-16 * w, 15 + float_y),
-				Vector2(-14 * w, 31 + float_y),
-				Vector2(0, 30 + float_y),
-				Vector2(14 * w, 31 + float_y),
+				Vector2((-14 - flare) * w + _sway_x(-14.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
+				Vector2(_sway_x(0.0, 30.0) * 0.5, 30 + float_y + _sway_y(30.0)),
+				Vector2((14 + flare) * w + _sway_x(14.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
 				Vector2(16 * w, 15 + float_y),
 				Vector2(11 * w, -2 + float_y)
 			]
@@ -1201,10 +1274,10 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
 				Vector2(-13 * w, 12 + float_y),
-				Vector2(-10 * w, 22 + float_y),
-				Vector2(-4 * w, 25 + float_y),
-				Vector2(4 * w, 25 + float_y),
-				Vector2(10 * w, 22 + float_y),
+				Vector2((-10 - flare) * w + _sway_x(-10.0 * w, 22.0), 22 + float_y + _sway_y(22.0)),
+				Vector2(-4 * w + _sway_x(-4.0 * w, 25.0), 25 + float_y + _sway_y(25.0)),
+				Vector2(4 * w + _sway_x(4.0 * w, 25.0), 25 + float_y + _sway_y(25.0)),
+				Vector2((10 + flare) * w + _sway_x(10.0 * w, 22.0), 22 + float_y + _sway_y(22.0)),
 				Vector2(13 * w, 12 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
@@ -1213,12 +1286,12 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
 				Vector2(-15 * w, 15 + float_y),
-				Vector2(-13 * w, 27 + float_y),
-				Vector2(-9 * w, 32 + float_y),
-				Vector2(-5 * w, 24 + float_y),
-				Vector2(0, 31 + float_y),
-				Vector2(6 * w, 23 + float_y),
-				Vector2(11 * w, 32 + float_y),
+				Vector2((-13 - flare * 0.6) * w + _sway_x(-13.0 * w, 27.0), 27 + float_y + _sway_y(27.0)),
+				Vector2((-9 - flare * 0.8) * w + _sway_x(-9.0 * w, 32.0), 32 + float_y + _sway_y(32.0)),
+				Vector2(-5 * w + _sway_x(-5.0 * w, 24.0), 24 + float_y + _sway_y(24.0)),
+				Vector2(_sway_x(0.0, 31.0) * 0.6, 31 + float_y + _sway_y(31.0)),
+				Vector2(6 * w + _sway_x(6.0 * w, 23.0), 23 + float_y + _sway_y(23.0)),
+				Vector2((11 + flare * 0.8) * w + _sway_x(11.0 * w, 32.0), 32 + float_y + _sway_y(32.0)),
 				Vector2(15 * w, 15 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
@@ -1227,9 +1300,9 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 				Vector2(0, -6 + float_y),
 				Vector2(-10 * w, -2 + float_y),
 				Vector2(-15 * w, 14 + float_y),
-				Vector2(-12 * w, 29 + float_y),
-				Vector2(0, 27 + float_y),
-				Vector2(12 * w, 29 + float_y),
+				Vector2((-12 - flare) * w + _sway_x(-12.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
+				Vector2(_sway_x(0.0, 27.0) * 0.5, 27 + float_y + _sway_y(27.0)),
+				Vector2((12 + flare) * w + _sway_x(12.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
 				Vector2(15 * w, 14 + float_y),
 				Vector2(10 * w, -2 + float_y)
 			]
@@ -1238,18 +1311,18 @@ func _draw_cloak_back_modular(float_y: float, wave: float) -> void:
 				Vector2(0, -6 + float_y),
 				Vector2(-9 * w, -2 + float_y),
 				Vector2(-14 * w, 15 + float_y),
-				Vector2(-12 * w + wave * 0.3, 28 + float_y),
-				Vector2(-7 * w, 24 + float_y),
-				Vector2(-3 * w, 31 + float_y),
-				Vector2(2 * w, 26 + float_y),
-				Vector2(8 * w + wave * 0.2, 29 + float_y),
+				Vector2((-12 - flare) * w + _sway_x(-12.0 * w, 28.0), 28 + float_y + _sway_y(28.0)),
+				Vector2(-7 * w + _sway_x(-7.0 * w, 24.0), 24 + float_y + _sway_y(24.0)),
+				Vector2(-3 * w + _sway_x(-3.0 * w, 31.0), 31 + float_y + _sway_y(31.0)),
+				Vector2(2 * w + _sway_x(2.0 * w, 26.0), 26 + float_y + _sway_y(26.0)),
+				Vector2((8 + flare) * w + _sway_x(8.0 * w, 29.0), 29 + float_y + _sway_y(29.0)),
 				Vector2(14 * w, 15 + float_y),
 				Vector2(9 * w, -2 + float_y)
 			]
 
-	draw_colored_polygon(back_pts, col_cloak_outer)
+	draw_polygon(back_pts, _cloak_gradient(back_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(back_pts, col_cloak_edge)
-	draw_line(Vector2(0, -2 + float_y), Vector2(0, 24 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
+	draw_line(Vector2(0, -2 + float_y), Vector2(_sway_x(0.0, 24.0) * 0.3, 24 + float_y + _sway_y(24.0) * 0.4), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
 
 # ==================== 背负本命法器插槽绘制 ====================
 

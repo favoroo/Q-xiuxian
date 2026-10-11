@@ -59,8 +59,11 @@ func _run() -> void:
 	_c.check(AIR_GAP < _player.pickup_radius() and AIR_GAP > _contact_dist(),
 		"布置成立：%.0f px 确实在摄灵圈（%.0f）里、身体接触线（%.0f）外" % [
 			AIR_GAP, _player.pickup_radius(), _contact_dist()])
-	_c.check(_orb_judge_radius() > 0.0 and _judge_radius(_player) > 0.0,
-		"尺子活着：珠子与玩家的判定圆都从节点读到了（读到 -1 就是量了个空）")
+	var orb_r := _orb_judge_radius()
+	var body_r := _judge_radius(_player)
+	_c.check(orb_r > 0.0 and body_r > 0.0,
+		"尺子活着：珠子与玩家的判定圆都从节点读到了（珠 %.0f / 身 %.0f，读到 -1 就是量了个空）" % [
+			orb_r, body_r])
 
 	if "--selftest" in OS.get_cmdline_user_args():
 		await _selftest()
@@ -234,11 +237,16 @@ func _step_on(orb: HealOrb) -> void:
 func _contact_dist() -> float:
 	return _judge_radius(_player) + _orb_judge_radius()
 
-## 临时建一颗珠子只为量它的判定圆：读数在 free 之前取走，量不到就报 -1（宁可判据红也别哑）
+## 临时建一颗珠子只为量它的判定圆：读数在 free 之前取走，量不到就报 -1（宁可判据红也别哑）。
+## 形状是 deferred 挂树的（池化契约：物理 flush 期同步挂会报 "flushing queries"），
+## 所以子节点遍历当拍量不到 —— 退一步读它自己那颗 _shape：仍然是从节点上读数，
+## 不是把常数抄第二遍；_shape 没建出来（真坏了）照样落 -1 报红。
 func _orb_judge_radius() -> float:
 	var probe := HealOrb.new()
 	add_child(probe)
 	var r := _judge_radius(probe)
+	if r <= 0.0 and probe._shape != null and probe._shape.shape is CircleShape2D:
+		r = (probe._shape.shape as CircleShape2D).radius
 	probe.free()
 	return r
 

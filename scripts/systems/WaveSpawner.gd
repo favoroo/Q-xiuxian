@@ -174,14 +174,17 @@ func end_wave() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
-		# 没砸开的藏宝匣同一口径收走：每波重刷 2~4 只，不留档否则场地越打越满是箱子
-		for chest in get_tree().get_nodes_in_group("chests"):
-			if chest is SpiritChest:
-				(chest as SpiritChest).dissolve()
-		# 波末收回场上机关炮台
-		for turret in get_tree().get_nodes_in_group("turrets"):
-			if turret is TurretUnit:
-				turret.dismiss()
+	# 没砸开的藏宝匣同一口径收走：每波重刷 2~4 只，不留档否则场地越打越满是箱子。
+	# 必须与上面那个 for 平级：这两轮循环原先缩进了 enemies 循环的体内 ⇒ 场上没怪时
+	# 匣子与炮台一个都不收（#24 刷怪预算把同屏顶满的旧口径改掉之后，波末清空成了常态，
+	# 这条静默路径才露出来：ChestTargetingCheck 第 5 组三条一起报红）。
+	for chest in get_tree().get_nodes_in_group("chests"):
+		if chest is SpiritChest:
+			(chest as SpiritChest).dissolve()
+	# 波末收回场上机关炮台
+	for turret in get_tree().get_nodes_in_group("turrets"):
+		if turret is TurretUnit:
+			turret.dismiss()
 	# 地上灵石全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折灵石）
 	var player = GameManager.player
 	if player != null:

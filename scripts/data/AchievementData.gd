@@ -4,8 +4,8 @@ extends RefCounted
 ## 成就里程碑与局外解锁数据库（仿土豆兄弟纯成就解锁机制）
 ## 全部 static 纯函数 —— 不读 autoload、不碰节点，保证单测可确定性断言。
 ## 设计原则：
-##   1. 零局外数值膨胀：成就只解锁新修士（道统）与高阶法宝入池，不破坏局内难度平衡；
-##   2. 初始开放 4 名代表性修士 + 11 件基础法宝，其余 5 名进阶修士与 4 件高阶法宝通过里程碑解锁。
+##   1. 零局外数值膨胀：成就只解锁新修士（道统）与少量法宝入池，不破坏局内难度平衡；
+##   2. 初始开放 6 名代表性修士 + 47 件基础法宝，其余 9 名进阶修士与 4 件高阶法宝通过里程碑解锁。
 
 ## 危险度档位名号（D0 ~ D5）
 const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
@@ -20,7 +20,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"leifa",
 ]
 
-## 初始默认进入灵石阁货架池的 18 件法宝
+## 初始默认进入灵石阁货架池的 47 件法宝（高阶出现节奏由 GameBalance.item_tier_weights 波次门槛控制）
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
@@ -40,6 +40,40 @@ const DEFAULT_ITEMS: Array[String] = [
 	"taiyi_jindan",
 	"luban_suo",
 	"jiguan_hexin",
+	# —— 2026-10-11 扩池：以下原为已定义未入池法宝（图鉴可见但货架抽不到），按档位补入 ——
+	# 凡品（tier 1）
+	"hupi_qun",
+	"lijian_shi",
+	"feihuang_shi",
+	"juling_fu",
+	"yuling_pai",
+	"manli_huwan",
+	# 良品（tier 2）
+	"jinjing_shi",
+	"chenxiang_mu",
+	"hantan_yu",
+	"dihuo_jing",
+	"houtu_he",
+	"liren_fu",
+	"yinxue_zhu",
+	"dingxing_pan",
+	"jucai_dai",
+	"poxu_lingfu",
+	"fanzhen_tongjia",
+	"lingbo_xue",
+	# 仙品（tier 3）
+	"potian_zhui",
+	"jingang_zhuo",
+	"shenxing_xue",
+	"leiling_zhu",
+	"juling_zhentu",
+	"hunyuan_yiqifu",
+	"jingang_fumo_jia",
+	# 传说（tier 4）
+	"zhuxian_sui",
+	"xuanwu_yin",
+	"tianji_pan",
+	"wuji_tianchuan_zhen",
 ]
 
 ## 成就里程碑定义表（顺序即「修仙志」展示顺序）

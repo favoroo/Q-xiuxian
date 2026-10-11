@@ -537,6 +537,155 @@ const DEFS: Dictionary = {
 					"tags": ["contraption", "fire"],
 					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.6},
 				},
+
+				# ==================== 2026-10-11 新增 10 把 ====================
+				# 设计口径（用户）：剑痴好玩的本质 = 剑系∩金系交叉武器够多（5 把），6 槽全放金剑
+				# 即可同时点亮剑系三档 + 金系三档双羁绊。本次给每个五行加厚一条"主打交叉格子"到 3 把，
+				# 配合商店梯度亲和 + 双流派共鸣（BalanceEconomy.tag_affinity_combo），让各流派都凑得出
+				# "6 件同交叉 = 双三档"的成装路线。机关补齐 木/水/土 三格（6 把 ⇒ 三档可达），
+				# 雷火符走剑阵盘式双器类三重共鸣（符箓+雷法+火），雷法升到 6 把。
+				# tip 均为 tools/fit_weapon_icon.py 实测打印值（2026-10-11 批次）。
+
+				# ---- 火 3 把：火∩剑成装路 + 火系第 10 把 ----
+				"liuhuo_feijian": {
+					"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
+					"sfx": "blade_shoot",
+					"damage": 20.0, "cooldown": 0.95, "range": 240.0,
+					"knockback": 150.0,
+					"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
+					"tip": Vector2(20, 2),
+					"desc": "炽炎飞剑自动追击并穿透2敌引燃，受元素与远程伤害加成", "tag": "远程·剑系·火",
+					"bullet": "res://assets/art/bullet_fire_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
+					"pierce": 2, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
+					"tags": ["sword", "fire"],
+					"stat_scalings": {"elemental_damage": 1.0, "ranged_damage": 0.6},
+				},
+				"zhenhuo_fu": {
+					"name": "真火符", "behavior": Behavior.PROJECTILE,
+					"sfx": "talisman_throw",
+					"damage": 17.0, "cooldown": 1.1, "range": 225.0,
+					"knockback": 160.0,
+					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
+					"tip": Vector2(12, 12),
+					"desc": "三昧真火符贯穿2敌烈焰灼烧，受元素与远程伤害加成", "tag": "远程·弹射·火",
+					"bullet": "res://assets/art/bullet_true_fire_talisman.png", "bullet_scale": 0.65, "bullet_spin": true,
+					"pierce": 2, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
+					"tags": ["talisman", "fire"],
+					"stat_scalings": {"elemental_damage": 1.2, "ranged_damage": 0.6},
+				},
+				"leihuo_fu": {
+					"name": "雷火符", "behavior": Behavior.PROJECTILE,
+					# 双器类三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与火系羁绊
+					"sfx": "talisman_throw",
+					"damage": 10.0, "cooldown": 0.95, "range": 235.0,
+					"knockback": 140.0,
+					"price": 40, "icon": "res://assets/art/weapon_leihuo_fu.png",
+					"tip": Vector2(16, -6),
+					"desc": "雷火双符扇射2张引燃爆裂，受元素与远程伤害加成", "tag": "远程·雷法·火",
+					"bullet": "res://assets/art/bullet_thunder_fire_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+					"pierce": 1, "projectile_count": 2, "spread_angle": 0.12,
+					"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
+					"tags": ["talisman", "thunder", "fire"],
+					"stat_scalings": {"elemental_damage": 1.2, "ranged_damage": 0.6},
+				},
+
+				# ---- 水 3 把：水∩剑/水∩横扫交叉格 + 机关补格 ----
+				"hanshuang_jian": {
+					"name": "寒霜剑", "behavior": Behavior.MELEE,
+					"sfx": "whoosh_light", "sfx_impact": "impact_blade",
+					"damage": 27.0, "cooldown": 1.0, "range": 160.0,
+					"knockback": 260.0,
+					"price": 32, "icon": "res://assets/art/weapon_hanshuang_jian.png",
+					"tip": Vector2(22, 0),
+					"desc": "霜刃挥砍冻缓敌人，受近战伤害与移速加成", "tag": "近战·剑系·水",
+					"arc_scale": 1.2, "proc_chill": 0.40, "chill_dur": 2.0,
+					"tags": ["sword", "water"],
+					"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
+				},
+				"langli_suo": {
+					"name": "浪里梭", "behavior": Behavior.PROJECTILE,
+					"sfx": "impact_crack",
+					"damage": 19.0, "cooldown": 0.95, "range": 225.0,
+					"knockback": 130.0,
+					"price": 34, "icon": "res://assets/art/weapon_langli_suo.png",
+					"tip": Vector2(22, 2),
+					"desc": "水梭连锁弹射3次冻缓敌群，受远程伤害与移速加成", "tag": "远程·横扫·水",
+					"bullet": "res://assets/art/bullet_water_shuttle.png", "bullet_scale": 0.6, "bullet_spin": true,
+					"pierce": 1, "bounce_count": 3, "proc_chill": 0.35, "chill_dur": 2.0,
+					"tags": ["wide", "water"],
+					"stat_scalings": {"ranged_damage": 0.8, "move_speed_bonus": 28.0},
+				},
+				"hanquan_shou": {
+					"name": "寒泉兽", "behavior": Behavior.TURRET,
+					"sfx": "metal_dart",
+					"damage": 9.0, "cooldown": 4.0, "range": 170.0,
+					"turret_fire_cd": 0.45, "turret_lifetime": 10.0, "turret_cap": 2,
+					"knockback": 90.0,
+					"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
+					"tip": Vector2(20, -6), "upright": true,
+					"desc": "布设寒泉机关兽连吐冰针冻缓敌群，受召唤伤害与冷却加成", "tag": "机关·召唤·水",
+					"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
+					"pierce": 2, "proc_chill": 0.30, "chill_dur": 1.5,
+					"tags": ["contraption", "water"],
+					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 20.0},
+				},
+
+				# ---- 木 2 把：木∩符箓第 3 把 + 机关补格 ----
+				"gudu_fu": {
+					"name": "蛊毒符", "behavior": Behavior.PROJECTILE,
+					"sfx": "talisman_throw",
+					"damage": 16.0, "cooldown": 1.0, "range": 230.0,
+					"knockback": 120.0,
+					"price": 34, "icon": "res://assets/art/weapon_gudu_fu.png",
+					"tip": Vector2(12, 10),
+					"desc": "蛊虫毒符连锁弹射3次剧毒蔓延，受远程与元素伤害加成", "tag": "远程·弹射·木",
+					"bullet": "res://assets/art/bullet_gu_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+					"pierce": 1, "bounce_count": 3, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
+					"tags": ["talisman", "wood"],
+					"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.0},
+				},
+				"tengluo_jiguan": {
+					"name": "藤萝机关", "behavior": Behavior.TURRET,
+					"sfx": "impact_crack",
+					"damage": 14.0, "cooldown": 3.6, "range": 210.0,
+					"turret_fire_cd": 0.65, "turret_lifetime": 12.0, "turret_cap": 2,
+					"knockback": 110.0,
+					"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
+					"tip": Vector2(22, -16), "upright": true,
+					"desc": "布设藤萝弹射器毒镖叠毒，受召唤伤害与生命回复加成", "tag": "机关·召唤·木",
+					"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
+					"pierce": 1, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
+					"tags": ["contraption", "wood"],
+					"stat_scalings": {"engineering_damage": 1.0, "hp_regen": 3.0},
+				},
+
+				# ---- 土 2 把：土∩剑第 3 把 + 机关补格（机关 6 把 ⇒ 三档可达） ----
+				"bengshan_jian": {
+					"name": "崩山剑", "behavior": Behavior.MELEE,
+					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+					"damage": 33.0, "cooldown": 1.2, "range": 170.0,
+					"knockback": 420.0,
+					"price": 38, "icon": "res://assets/art/weapon_bengshan_jian.png",
+					"tip": Vector2(22, 0),
+					"desc": "崩山重剑横扫大力震退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
+					"arc_scale": 1.3,
+					"tags": ["sword", "earth"],
+					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
+				},
+				"leishi_jiguan": {
+					"name": "垒石机关", "behavior": Behavior.TURRET,
+					"sfx": "impact_blunt",
+					"damage": 20.0, "cooldown": 4.5, "range": 190.0,
+					"turret_fire_cd": 0.9, "turret_lifetime": 10.0, "turret_cap": 2,
+					"knockback": 300.0,
+					"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
+					"tip": Vector2(22, 16), "upright": true,
+					"desc": "布设垒石投掷机抛石砸退敌群，受召唤伤害与护甲加成", "tag": "机关·召唤·土",
+					"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+					"pierce": 1,
+					"tags": ["contraption", "earth"],
+					"stat_scalings": {"engineering_damage": 1.0, "armor": 2.0},
+				},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
@@ -619,6 +768,10 @@ const SHOP_POOL: Array = [
 	"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian", "xuanwu_pei",
 	# 机关支路 3 把
 	"jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou",
+	# 2026-10-11 新增 10 把：加厚五行×器类交叉格子 + 补机关/雷法（详见 DEFS 尾部设计注释）
+	"liuhuo_feijian", "zhenhuo_fu", "leihuo_fu",
+	"hanshuang_jian", "langli_suo", "hanquan_shou",
+	"gudu_fu", "tengluo_jiguan", "bengshan_jian", "leishi_jiguan",
 ]
 
 ## 回血丹（商店消耗品）
@@ -627,6 +780,42 @@ const POTION_BASE_PRICE: int = 10
 
 static func get_def(id: String) -> Dictionary:
 	return DEFS.get(id, {})
+
+## 法器攻击方式短标（货架卡色签 / 详情卡「攻击方式」行共用）：
+## behavior 是结构真话，词汇与 def.tag 首段（"近战·剑系·金"）保持一致。
+static func behavior_label(def: Dictionary) -> String:
+	match int(def.get("behavior", Behavior.MELEE)):
+		Behavior.MELEE:
+			return "近战"
+		Behavior.PROJECTILE:
+			return "远程"
+		Behavior.BURST:
+			return "范围"
+		Behavior.DRONE:
+			return "环绕"
+		Behavior.TURRET:
+			return "机关"
+	return "近战"
+
+## 货架卡窄行用的紧凑特性串：只取数据表字段（穿透 / 段数 / 弹射 / 横扫），
+## 不含 proc 类（desc 已覆盖）与全局羁绊加成（详情卡 StatsTipFactory.weapon_feats 才是完整口径）。
+## 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 最多取 2 段、无空格，超宽必溢出卡面。
+static func card_feats(def: Dictionary) -> String:
+	var out: Array[String] = []
+	var pierce := int(def.get("pierce", 0))
+	if pierce > 0:
+		out.append("穿透%d" % pierce)
+	var count := int(def.get("projectile_count", 1))
+	if count > 1:
+		out.append("%d段" % count)
+	var bounce := int(def.get("bounce_count", 0))
+	if bounce > 0:
+		out.append("弹射%d" % bounce)
+	if float(def.get("arc_scale", 1.0)) > 1.001:
+		out.append("横扫")
+	if out.size() > 2:
+		out.resize(2)
+	return "·".join(out)
 
 static func damage_for(id: String, star: int) -> float:
 	var def: Dictionary = DEFS.get(id, {})
@@ -747,20 +936,4 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 ## 返回系数（0 = 不吃），供各界面挂角标与悟道加点提示共用。
 static func elemental_scaling_coef(id: String) -> float:
 	return float(get_def(id).get("stat_scalings", {}).get("elemental_damage", 0.0))
-
-## 仿土豆兄弟格式的属性加成说明文案：如 "受近战伤害(100%)、额外暴击率(40%)加成"
-static func scaling_desc(id: String) -> String:
-	var def := get_def(id)
-	var scalings: Dictionary = def.get("stat_scalings", {})
-	if scalings.is_empty():
-		return "无额外属性加成"
-	var parts: Array[String] = []
-	for key in scalings.keys():
-		var label: String = GameBalance.stat_scaling_label(key)
-		var coef: float = float(scalings[key])
-		if key in ["melee_damage", "ranged_damage", "elemental_damage", "engineering_damage"]:
-			parts.append("%s(%d%%)" % [label, int(round(coef * 100.0))])
-		else:
-			parts.append("%s(%+.0f%%)" % [label, coef])
-	return "加成：" + "、".join(parts)
 

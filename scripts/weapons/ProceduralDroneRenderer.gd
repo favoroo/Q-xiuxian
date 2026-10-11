@@ -10,11 +10,15 @@ enum DroneKind {
 	HUNYUAN_ZHONG,  ## 混元钟：玄铁青铜古钟、暗金饕餮符印、钟首盘龙纽
 	HAOJIN_LUN,     ## 昊金轮：旋转金轮、辐条流光（2026-10-10 新增）
 	LIHUO_YA,       ## 离火鸦：火羽扑翼、焰尾曳光（2026-10-10 新增）
-	XUANWU_PEI      ## 玄武佩：玄黄玉璧、云纹护身（2026-10-10 新增）
+	XUANWU_PEI,     ## 玄武佩：玄黄玉璧、云纹护身（2026-10-10 新增）
+	LING_HU         ## 灵狐：祭坛召唤灵兽，冷白狐形地面走兽（2026-10-11 新增）
 }
 
 @export var kind: DroneKind = DroneKind.LINGDIE
 @export var star: int = 1
+
+## 跑动权重（0=站立 1=全速）：仅地面走兽形态（LING_HU）消费，由宿主按实际移速灌入
+var move_blend: float = 0.0
 
 var _anim_time: float = 0.0
 
@@ -36,6 +40,8 @@ func _draw() -> void:
 			_draw_fire_crow()
 		DroneKind.XUANWU_PEI:
 			_draw_jade_pendant()
+		DroneKind.LING_HU:
+			_draw_spirit_fox()
 
 # ----------------- 1. 灵蝶 (生机碧翠灵羽 + 振翅扑动) -----------------
 func _draw_spirit_butterfly() -> void:
@@ -198,3 +204,64 @@ func _draw_jade_pendant() -> void:
 	draw_arc(off + Vector2(0, 2.5), 6.8, PI * 1.15, PI * 1.85, 10, Color(0.90, 0.84, 0.55, 0.8), 1.0, true)
 	# 顶部系绳结
 	draw_line(off + Vector2(0, -10.5), off + Vector2(0, -13.5), Color(0.70, 0.30, 0.20), 1.6, true)
+
+# ----------------- 7. 灵狐 (祭坛召唤灵兽：冷白狐形地面走兽) -----------------
+## 体型比御灵法宝大一圈（它是地面走兽，不是环绕小件），碰撞半径 14 与画幅同源。
+## 面朝 +x，朝向由宿主翻转 scale.x；四条腿按 move_blend 跑动交错，尾巴常时扫雪式摆动。
+func _draw_spirit_fox() -> void:
+	var body_col := Color(0.82, 0.88, 0.95)
+	var edge_col := Color(0.45, 0.80, 1.00)
+	var glow_col := Color(0.60, 0.95, 1.00)
+
+	# 大尾巴（身后，常时摆动）
+	var sway := sin(_anim_time * 3.2) * 2.5
+	var tail := PackedVector2Array([
+		Vector2(-10.0, -2.0),
+		Vector2(-22.0, -10.0 + sway),
+		Vector2(-26.0, -2.0 + sway),
+		Vector2(-20.0, 4.0 + sway * 0.5),
+		Vector2(-9.0, 4.0)
+	])
+	draw_colored_polygon(tail, body_col.darkened(0.15))
+	var tail_outline := tail.duplicate()
+	tail_outline.append(tail[0])
+	draw_polyline(tail_outline, edge_col, 1.2, true)
+
+	# 四条腿（跑动时前后交错摆）
+	var leg_phase := [0.0, PI, PI, 0.0]
+	var leg_x := [12.0, 9.0, -4.0, -7.0]
+	for i in range(4):
+		var swing: float = sin(_anim_time * 10.0 + leg_phase[i]) * 3.0 * move_blend
+		draw_line(Vector2(leg_x[i], 6.0), Vector2(leg_x[i] + swing, 14.0), body_col.darkened(0.25), 2.0, true)
+
+	# 躯干（横卧椭圆，16 边形）
+	var body := PackedVector2Array()
+	for i in range(16):
+		var a := float(i) / 16.0 * TAU
+		body.append(Vector2(cos(a) * 14.0, sin(a) * 8.0))
+	draw_colored_polygon(body, body_col)
+	var body_outline := body.duplicate()
+	body_outline.append(body[0])
+	draw_polyline(body_outline, edge_col, 1.2, true)
+
+	# 头（前上方）+ 吻部
+	draw_circle(Vector2(13.0, -8.0), 6.0, body_col)
+	draw_arc(Vector2(13.0, -8.0), 6.0, 0.0, TAU, 16, edge_col, 1.2, true)
+	var snout := PackedVector2Array([
+		Vector2(16.0, -8.0),
+		Vector2(21.0, -6.5),
+		Vector2(16.5, -4.5)
+	])
+	draw_colored_polygon(snout, body_col.darkened(0.1))
+
+	# 双耳（尖立）
+	var ear_l := PackedVector2Array([Vector2(10.0, -12.0), Vector2(9.0, -19.0), Vector2(13.0, -14.0)])
+	var ear_r := PackedVector2Array([Vector2(14.0, -13.0), Vector2(15.5, -20.0), Vector2(17.5, -12.5)])
+	draw_colored_polygon(ear_l, body_col)
+	draw_polyline(ear_l, edge_col, 1.0, true)
+	draw_colored_polygon(ear_r, body_col)
+	draw_polyline(ear_r, edge_col, 1.0, true)
+
+	# 霜蓝灵目（发光点）
+	draw_circle(Vector2(15.0, -9.0), 1.6, glow_col)
+	draw_circle(Vector2(15.0, -9.0), 0.7, Color.WHITE)

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cvkkxv4j3wkas"]
+
+[ext_resource type="Script" path="res://tests/spirit_beast_check.gd" id="1_chk"]
+
+[node name="SpiritBeastCheck" type="Node"]
+script = ExtResource("1_chk")

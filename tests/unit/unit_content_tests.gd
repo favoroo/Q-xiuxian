@@ -5,9 +5,9 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：38 把法器（含机关支路 3 把）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 38, "全武器库扩充至 38 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 38, "商店池覆盖全部 38 把法器")
+	# 1. 武器表完整性校验：48 把法器（含机关支路 6 把）且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 48, "全武器库扩充至 48 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 48, "商店池覆盖全部 48 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -30,14 +30,37 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "38 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "48 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 扩容后各系把数：金11/木7/水6/火7/土7（含机关 3 把）
-	var elem_expect := {"metal": 11, "wood": 7, "water": 6, "fire": 7, "earth": 7}
+	# 扩容后各系把数：金11/木9/水9/火10/土9（含机关 6 把，2026-10-11 拓充）
+	var elem_expect := {"metal": 11, "wood": 9, "water": 9, "fire": 10, "earth": 9}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
+
+	# 1b. 攻击方式短标与货架卡紧凑特性（商店近战/远程标记，2026-10-11 用户）
+	var label_missing: Array = []
+	var feats_over: Array = []
+	var label_of := {}
+	for w2 in WeaponData.SHOP_POOL:
+		var d2 := WeaponData.get_def(String(w2))
+		var lab := WeaponData.behavior_label(d2)
+		if lab.is_empty():
+			label_missing.append(String(w2))
+		label_of[String(w2)] = lab
+		# 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 紧凑特性最多两段（一个分隔点）
+		if WeaponData.card_feats(d2).count("·") > 1:
+			feats_over.append(String(w2))
+	_c.check(label_missing.is_empty(), "48 把法器的攻击方式短标全部就位（缺: %s）" % str(label_missing))
+	_c.check(feats_over.is_empty(), "货架卡紧凑特性最多 2 段不溢卡宽（超宽: %s）" % str(feats_over))
+	_c.equals(label_of["qingyun_sword"], "近战", "青云剑标记近战")
+	_c.equals(label_of["gengjin_feijian"], "远程", "飞剑标记远程")
+	_c.equals(label_of["fantian_yin"], "范围", "番天印标记范围")
+	_c.equals(label_of["lingdie"], "环绕", "灵蝶标记环绕")
+	_c.equals(label_of["jiguan_nu"], "机关", "机关弩标记机关")
+	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透3·3段", "柳叶飞刀紧凑特性＝穿透3·3段")
+	_c.equals(WeaponData.card_feats(WeaponData.get_def("qingyun_sword")), "", "青云剑无机械特性时不占卡面特性行")
 
 	# 2. 土豆兄弟式属性受益折算（GameBalance.weapon_stat_bonus 纯函数）
 	var earth_scalings := {"armor": 3.5}

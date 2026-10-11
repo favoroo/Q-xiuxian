@@ -41,6 +41,10 @@ var _linear: Dictionary = {}
 var _gem_combo_count: int = 0
 var _gem_combo_timer: float = 0.0
 
+# 命中连击升调状态（2026-10-11）：短时间内连续命中音高缓步攀升，听觉上卖「越砍越顺」
+var _hit_combo_count: int = 0
+var _hit_combo_timer: float = 0.0
+
 ## 高频音效同 key 最小间隔（毫秒）：群战同帧几十次命中/死亡时防「糊成一片+通道瞬间耗尽」。
 ## 只对战斗高频音生效，UI/阶段音不受限。未列出的 key 不节流。
 const SFX_GAP_MS := {
@@ -110,6 +114,10 @@ func _process(delta: float) -> void:
 		_gem_combo_timer -= delta
 		if _gem_combo_timer <= 0.0:
 			_gem_combo_count = 0
+	if _hit_combo_timer > 0.0:
+		_hit_combo_timer -= delta
+		if _hit_combo_timer <= 0.0:
+			_hit_combo_count = 0
 
 # ---------------- 音效注册表 ----------------
 
@@ -265,6 +273,12 @@ func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float 
 		p.pitch_scale = 0.94 + float(_gem_combo_count - 1) * 0.042
 	else:
 		p.pitch_scale = randf_range(0.92, 1.08)
+
+	# 命中连击升调：0.6s 连击窗内每次命中音高 +3%（封顶 8 层），叠在调用方基准音高之上
+	if sfx_key == "enemy_hit":
+		_hit_combo_count = mini(_hit_combo_count + 1, 8)
+		_hit_combo_timer = 0.6
+		p.pitch_scale *= 1.0 + float(_hit_combo_count - 1) * 0.03
 
 	p.play()
 

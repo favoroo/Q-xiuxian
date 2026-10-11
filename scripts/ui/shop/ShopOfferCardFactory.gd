@@ -23,7 +23,7 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	# 行①：图标与名号同行
 	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path))
 	# 行②：色签流 + 锁定开关同行
-	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready))
+	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
 	var stat_rows: Array = data.stat_rows
 	if not stat_rows.is_empty():
@@ -68,6 +68,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var chip_color: Color = GameStyle.GOLD
 	var chip_text_color: Color = GameStyle.PAPER
 	var edge_color: Color = GameStyle.GOLD_DK
+	var behavior_chip: Array = []
 
 	if is_potion:
 		title = "回复药"
@@ -135,19 +136,33 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		if merge_ready:
 			edge_color = GameStyle.JADE
 		desc = def.get("desc", "")
-		# 伤害置顶（土豆兄弟口径）：货架卡最显眼处就是这把武器的 1 星伤害
-		stat_rows = [["伤害", BonusRows.fmt_num(WeaponData.damage_for(w_id, 1)), GameStyle.JADE]]
-		# 玩家属性已经能喂给这把武器额外伤害时，亮一行加成额（买前就能看到这把有多吃属性）
-		var bonus_dmg := GameManager.get_weapon_stat_bonus(w_id, 1)
-		if bonus_dmg > 0.05:
-			stat_rows.append(["属性加成", "+%d" % int(round(bonus_dmg)), GameStyle.GOOD])
+		# 攻击方式色签（近战朱砂 / 非近战主蓝）：def.tag 首段会被流派进度覆盖，
+		# 货架上一直看不出近战远程（2026-10-11 用户），behavior 才是结构真话。
+		behavior_chip = [WeaponData.behavior_label(def), StatsTipFactory.behavior_color(def), GameStyle.PAPER]
+		# 卡面四行统一一条规则：左边纸面值、右边你现在拿到的值，两数相同就不画箭头。
+		# 伤害不再拆成「伤害 24 / 属性加成 +10」两行（2026-10-11 用户：那行读起来像武器送你属性，
+		# 方向反了；玩家想看的只是"本身多痛、加成后多痛"）。
+		# 卡面预算是硬的：BonusRows 行不换行、卡内宽最小 124px，且货架不许上下滑 —— 箭头只给
+		# 伤害这一行用，范围/间隔也带上箭头就把面板顶出屏、卡高顶到要滚动（LayoutCheck 当场红）。
+		# 「每秒」直接顶掉「攻击间隔」行：攻速信息本来就被它包含，还省一行给玩家验算。
+		var slots_after := WeaponDamageReadout.slot_count_after_purchase()
+		stat_rows = [["伤害", WeaponDamageReadout.arrow_text(
+				WeaponData.damage_for(w_id, 1),
+				WeaponDamageReadout.per_hit(w_id, 1, slots_after)), GameStyle.JADE]]
+		stat_rows.append([WeaponDamageReadout.per_second_label(w_id),
+				BonusRows.fmt_num(WeaponDamageReadout.per_second(w_id, 1, slots_after)),
+				GameStyle.JADE])
+		stat_rows.append(["攻击范围", "%.0f" % float(def.get("range", 0.0)), GameStyle.PAPER])
+		var card_feats := WeaponData.card_feats(def)
+		if not card_feats.is_empty():
+			stat_rows.append(["特性", card_feats, GameStyle.PAPER_DIM])
 
 	return {
 		"kind": kind, "is_potion": is_potion, "is_item": is_item, "def": def,
 		"title": title, "icon_path": icon_path, "tag": tag, "tag_parts": tag_parts,
 		"part_hot": part_hot, "desc": desc, "stat_rows": stat_rows, "merge_ready": merge_ready,
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
-		"edge_color": edge_color,
+		"edge_color": edge_color, "behavior_chip": behavior_chip,
 	}
 
 ## 卡体：斜切面板 + 四边内容边距（OFFER_PAD_X / CARD_PAD_Y 口径在 WaveShop，判据按它量）
@@ -201,7 +216,8 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	return head
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关
-static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false) -> HBoxContainer:
+## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）
+static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = []) -> HBoxContainer:
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -217,6 +233,8 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 	tag_row.add_child(tag_flow)
 
 	var chip_defs: Array = []
+	if not behavior_chip.is_empty():
+		chip_defs.append(behavior_chip)
 	if tag_parts.is_empty():
 		chip_defs.append([tag, chip_color, chip_text_color])
 	else:

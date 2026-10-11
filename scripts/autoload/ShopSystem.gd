@@ -49,7 +49,7 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 		"sold": false, "locked": false,
 	}
 
-## 标签亲和 + 流派偏好软加权抽法器
+## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权抽法器
 static func weighted_weapon_pick(gm: Node) -> String:
 	var pool: Array = WeaponData.SHOP_POOL
 	var counts := SynergySystem.tag_counts(gm)
@@ -57,10 +57,7 @@ static func weighted_weapon_pick(gm: Node) -> String:
 	var weights: Array = []
 	for w_id in pool:
 		var w := luck_mult
-		var best_aff := 1.0
-		for t in WeaponData.tags_of(w_id):
-			best_aff = maxf(best_aff, GameBalance.tag_affinity_mult(int(counts.get(t, 0))))
-		w *= best_aff
+		w *= GameBalance.tag_affinity_combo(counts, WeaponData.tags_of(w_id))
 		w *= GameBalance.tag_filter_mult(WeaponData.tags_of(w_id), gm.shop_tag_filter)
 		weights.append(w)
 	var idx := GameBalance.weighted_pick_index(weights, gm.rng.randf())

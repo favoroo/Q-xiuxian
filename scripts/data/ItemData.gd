@@ -97,6 +97,12 @@ const DEFS: Dictionary = {
 			"desc": "",
 			"apply": {"weapon_damage_mult": 0.22, "move_speed_mult": -0.06},
 		},
+		"lingbo_xue": {
+			"name": "凌波靴", "tier": 2, "price": 25,
+			"icon": "res://assets/art/item_lingbo_xue.png",
+			"desc": "",
+			"apply": {"dodge": 0.06, "armor": -1.0},
+		},
 
 		# ==================== 仙品（tier 3 · 第 9 波起） ====================
 		"wuxing_pei": {

@@ -15,6 +15,11 @@ extends Node
 ##
 ## 另外钉两条顺手修的同源问题：
 ## 4) 近战弧光的月牙外缘 == 那一帧查询圆的半径（画多大==判多大）。
+##    2026-10-11 起弧光改为"内缘贴剑尖出生 → 扫放到判定几何"（剑气出鞘），终态仍是这条，
+##    并新增出生帧两条：内缘压住剑尖 muzzle_len、出生缩放严格小于终态（扫放真的存在）。
+##    同日再补挥空门控：月牙只在挥砍真咬到肉时亮（判定圆内无可命中体 ⇒ 打击帧不亮）——
+##    旧写法先亮后结算，空挥会在空地上凭空冒出一整片剑气（用户报的「打击效果乱飘」主源）。
+##    为此本判据自带一个挂碰撞层 4 的桩敌：命中路径的几何断言靠它才走得到。
 ## 5) 弹丸转不转由表里的 bullet_spin 说了算（玄冰飞针写的是 false，旧代码按穿透数反推 ⇒ 在乱转）。
 ##
 ## 2026-10-09 庚金飞剑二次返工补的第 6 条 —— 前 1)/2) 条抓不到用户第二次报的那个问题：
@@ -43,6 +48,14 @@ class StubPlayer:
 	extends Node2D
 	var current_health: float = 120.0
 	var max_health: float = 120.0
+
+## 近战挥空的「肉」：_deal_melee_damage 的口径是「命中体父节点有 take_damage」，
+## 桩体只计数不做事 —— 让挥砍真的走进命中分支，弧光终态断言才有得量
+class StubEnemy:
+	extends Node2D
+	var hit_count: int = 0
+	func take_damage(_amount: float, _knockback: Vector2, _crit: bool = false, _from_dot: bool = false) -> void:
+		hit_count += 1
 
 var _selftest: bool = false
 var _c := TestCheck.new()
@@ -302,28 +315,81 @@ func _test_projectile_bay() -> void:
 
 # ---------------- 近战弧光与判定同源 ----------------
 
+## 桩敌：Area2D 挂碰撞层 4（敌人受击区，_query_enemies 的查询掩码），父节点带 take_damage。
+## 摆进判定圆（圆心 = 本体沿瞄准轴前突 MELEE_LUNGE）让挥砍真的咬到肉。
+func _make_stub_enemy(at: Vector2) -> StubEnemy:
+	var foe := StubEnemy.new()
+	foe.position = at
+	var area := Area2D.new()
+	area.collision_layer = 4
+	area.collision_mask = 0
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 20.0
+	cs.shape = circle
+	area.add_child(cs)
+	foe.add_child(area)
+	_world.add_child(foe)
+	return foe
+
 func _test_melee_arc() -> void:
 	for def_id in WeaponData.SHOP_POOL:
 		var def := WeaponData.get_def(def_id)
 		if int(def.get("behavior", -1)) != WeaponData.Behavior.MELEE:
 			continue
+		var label := "%s(%s)" % [String(def.get("name", "?")), def_id]
+
+		# —— 挥空门控（2026-10-11）：判定圆内没有可命中体时，打击帧过后月牙必须仍是隐藏的 ——
+		# 旧写法先亮月牙后结算，空挥会在空地上凭空冒出一整片剑气；现在没咬到肉不出剑气。
+		var whiff := _make(def_id)
+		await get_tree().process_frame
+		var bare := Node2D.new()
+		bare.position = TARGET_AT
+		_world.add_child(bare)
+		whiff.current_target = bare
+		whiff._perform_melee_attack()
+		# 0.15s 采样：已过 0.05s 前摇的打击帧（命中路径此刻必亮）、未到 0.05+0.10+0.08 的收招隐藏
+		await get_tree().create_timer(0.15).timeout
+		_c.check(not whiff.slash_sprite.visible and whiff.slash_sprite.modulate.a < 0.05,
+			"%s 挥空不亮月牙（打击帧已过，弧光仍隐藏）" % label)
+		whiff.free()
+		bare.free()
+
+		# —— 命中路径：判定圆内摆一个可命中靶，弧光几何照旧钉死 ——
 		var w := _make(def_id)
 		await get_tree().process_frame
 		var target := Node2D.new()
 		target.position = TARGET_AT
 		_world.add_child(target)
 		w.current_target = target
+		# 打击帧本体停在后撤 8px 的 windup 位，桩体碰撞圆 r=20 罩得住这点偏差
+		var aim := (TARGET_AT - w.position).normalized()
+		var foe := _make_stub_enemy(w.position + aim * FloatingWeapon.MELEE_LUNGE)
+		await get_tree().physics_frame
 		w._perform_melee_attack()
 		var judged := w._melee_arc_radius()
+		# 出生帧（打击帧 callback 之前同步可读）：月牙内缘贴剑尖、且严格小于终态 —— 剑气从剑上扫出去
+		var spawn_inner := w.slash_sprite.position.x + FloatingWeapon.SLASH_ART_INNER * w.slash_sprite.scale.x
+		_c.near(spawn_inner, w.muzzle_len + FloatingWeapon.SLASH_SPAWN_INSET, 0.5,
+			"%s 弧光出生内缘贴剑尖（剑尖 %.1fpx，内缘 %.1fpx）" % [label, w.muzzle_len, spawn_inner])
+		_c.check(FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x < judged,
+			"%s 弧光出生小于判定圆（%.1f < %.1f，扫放存在）" % [label, FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x, judged])
+		# 终态（扫放完成后）：外缘 == 判定半径、轴心 == 判定圆心 —— 画多大==判多大不因扫放而破
+		# （0.4s > 前摇 0.05 + 亮扫 0.10 + 淡出 0.08 的全程，慢帧环境也够走完）
+		await get_tree().create_timer(0.4).timeout
+		_c.check(foe.hit_count > 0,
+			"%s 挥砍咬到判定圆内的桩敌（命中 %d 次；门控后只有命中路径走得到弧光终态）" % [label, foe.hit_count])
 		var drawn := FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x
-		var label := "%s(%s)" % [String(def.get("name", "?")), def_id]
 		_c.near(drawn, judged, 0.5, "%s 弧光外缘 == 判定圆半径（判定 %.1fpx，画到 %.1fpx）" % [label, judged, drawn])
-		_c.equals(w.slash_sprite.position, Vector2(FloatingWeapon.MELEE_LUNGE, 0.0),
-			"%s 弧光轴心 == 判定圆心（本体前突 %s px）" % [label, str(FloatingWeapon.MELEE_LUNGE)])
+		_c.near(w.slash_sprite.position.x, FloatingWeapon.MELEE_LUNGE, 0.5,
+			"%s 弧光轴心 == 判定圆心（本体前突 %.0f px）" % [label, FloatingWeapon.MELEE_LUNGE])
 		# 月牙张角 ±70°：挥砍摆幅必须小于它，那一帧打出去的方向才始终被画出来的那一片罩住
 		var sweep := rad_to_deg(deg_to_rad(45.0) * w.arc_scale)
 		_c.check(sweep <= SLASH_ART_HALF_DEG,
 			"%s 挥砍摆幅 %.1f° 落在月牙张角 ±%.0f° 内（否则弧光罩不住判定方向）" % [label, sweep, SLASH_ART_HALF_DEG])
+		w.free()
+		foe.free()
+		target.free()
 
 # ---------------- 反例：证明第 1 条断言真的有牙齿 ----------------
 

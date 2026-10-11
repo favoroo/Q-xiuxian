@@ -127,15 +127,14 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	if def.is_empty():
 		return null
 	var star := clampi(int(w.get("star", 1)), 1, WeaponData.MAX_STAR)
-	var base_dmg: float = float(def.get("damage", 0.0))
-	var star_mul: float = pow(WeaponData.STAR_DAMAGE_MULT, float(star - 1))
 	var bonus: float = GameManager.get_weapon_stat_bonus(id, star)
 	var gm_dmg: float = GameManager.weapon_damage_mult
 	var syn_dmg: float = GameManager.synergy_damage_mult
 	var cult_dmg: float = GameManager.cultivator_damage_mult(id)
 	var elem_dmg: float = GameManager.element_damage_mult(id)
-	var per_hit: float = (base_dmg * star_mul + bonus) * gm_dmg * syn_dmg * cult_dmg * elem_dmg
-	var cd: float = WeaponData.cooldown_for(id, star) * GameManager.attack_speed_mult * GameManager.synergy_haste_mult
+	# Fixed: 单发以前在这里自己乘了一遍乘区，漏了神识分流与机关羁绊，与运行时跳字不符；
+	# 现在与货架卡、商店详情同读 WeaponDamageReadout 一个数。
+	var per_hit: float = WeaponDamageReadout.per_hit(id, star)
 	var base_range: float = float(def.get("range", 0.0))
 	var eff_range: float = base_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
@@ -150,24 +149,37 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 			var cnt: int = GameManager.get_tag_count(String(t))
 			syn_parts.append("%s(%d/6)" % [sinfo.get("name", t), cnt])
 
-	var rows: Array = [
-		["单发伤害", "%.1f" % per_hit, GameStyle.JADE],
-		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
-		["基础 × 星级", "%.0f × %.1f" % [base_dmg, star_mul]],
-		["属性转化", "+%.1f" % bonus, _c(bonus)],
+	# 逐行列出的乘区必须能乘回头条「单发伤害」，所以神识分流与机关羁绊两行不能省
+	# （2026-10-11：以前这两档根本没进 per_hit，面板列出来的因子乘完比跳字高一大截）。
+	var split := WeaponDamageReadout.slot_split_mult()
+	var factor_rows: Array = [
 		["全局×羁绊", "%s × %s" % [_mul(gm_dmg), _mul(syn_dmg)], _c(gm_dmg * syn_dmg - 1.0)],
 		["角色×元素", "%s × %s" % [_mul(cult_dmg), _mul(elem_dmg)], _c(cult_dmg * elem_dmg - 1.0)],
+		["神识分流", "%d 把 × %s" % [GameManager.slots_used(), _mul(split)], _c(split - 1.0)],
+	]
+	if WeaponDamageReadout.is_turret(def):
+		var contraption := WeaponDamageReadout.contraption_mult()
+		factor_rows.append(["机关羁绊", _mul(contraption), _c(contraption - 1.0)])
+
+	var rows: Array = [
+		["攻击方式", WeaponData.behavior_label(def), behavior_color(def)],
+		["单发伤害", WeaponDamageReadout.arrow_text(WeaponData.damage_for(id, star), per_hit),
+				GameStyle.JADE],
+		[WeaponDamageReadout.per_second_label(id),
+				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE],
+		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
+		["属性加伤", "+%s" % BonusRows.fmt_num(bonus), _c(bonus)],
+	] + factor_rows + [
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
-		["攻击间隔", "%.2f 秒" % cd],
 	]
 	var feats := weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])
 
 	var notes: Array[String] = [
-		"单发伤害 =（基础 × 星级 + 属性转化）× 全局法伤 × 流派羁绊 × 角色 × 元素；暴击另按 %.0f%% 概率 ×%.2f 结算。" % [
-			GameManager.get_crit_rate() * 100.0, GameManager.crit_mult + GameManager.synergy_crit_mult],
-		"%s（每星效率 +25%%）。" % WeaponData.scaling_desc(id),
+		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局法伤 × 羁绊 × 角色 × 五行 × 神识分流；" \
+				+ "暴击与斩将按目标另算。",
+		WeaponDamageReadout.bonus_bill_text(id, star),
 		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
@@ -188,6 +200,11 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		"notes": notes,
 		"foot": foot,
 	})
+
+## 攻击方式的类别色：近战朱砂 / 非近战主蓝（红蓝二值）——
+## 货架卡色签与详情卡「攻击方式」值色都走这里，改色只动这一处。
+static func behavior_color(def: Dictionary) -> Color:
+	return GameStyle.BAD if WeaponData.behavior_label(def) == "近战" else GameStyle.GOLD
 
 static func weapon_feats(def: Dictionary) -> String:
 	var out: Array[String] = []

@@ -23,6 +23,18 @@ const MELEE_LUNGE := 30.0
 const MELEE_ARC_RADIUS := 75.0
 const SLASH_ART_OUTER := 124.0
 
+## 剑气出鞘扫放（2026-10-11，用户口径：「范围叠高后，剑挥一下，很远才出现一道剑气，很怪」）：
+## 月牙不再出生即钉在判定外缘，而是内缘贴剑尖出生、SLASH_SWEEP_TIME 内扫放到判定几何再淡出
+## —— 剑气是从剑上劈出去的，不是凭空悬在远处。终态仍是上面那条"外缘==判定半径"的同源
+## 不变量，判定数值一字不动。月牙贴图的不透明带贴在外缘（0° 方向实测 102~127px、89px 起
+## 半透明淡入），出生缩放按"内缘压住剑尖屏上位置 muzzle_len"反解。
+const SLASH_ART_INNER := 100.0  ## 月牙内缘画布半径（贴图 0° 实测），出生"贴剑尖"反解用
+const SLASH_SPAWN_INSET := 2.0  ## 出生内缘再往前探 2px，让剑尖埋进剑气里
+const SLASH_SWEEP_TIME := 0.10  ## 剑气从剑尖扫放到判定外缘的时长（期间保持全亮）
+const SLASH_FADE_TIME := 0.08   ## 抵达判定外缘后的淡出时长 —— 落点先亮一拍再散
+const MELEE_THRUST := 26.0      ## 打击帧本体前突距离
+const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（只往前够，不缩水）
+
 ## 近战双层与雷法双层的相对响度（2026-10-10 音色重构）：
 ## 前摇破空是「动作」，无条件播、当铺垫层，所以压低；命中材质是「战果」，只在真打中时补一记。
 ## 旧写法只有一层，且写在打击帧 —— 一声纯空气破空挂在命中 moment，剑听上去就是棍子。
@@ -55,6 +67,7 @@ var dynamic_angle: float = 0.0     # 当前轨道角：有目标时滑向目标�
 var current_target: Node2D = null
 var is_attacking: bool = false
 var bob_phase: float = 0.0
+var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
 
 ## 脱程重查节流（2026-10-10 第 6 波卡顿优化）：15Hz + instance_id 错相
 const RETARGET_INTERVAL := 1.0 / 15.0
@@ -153,6 +166,10 @@ func _range_mult() -> float:
 ## 近战判定圆半径 —— 弧光外缘与 _deal_melee_damage 的查询圆共用这一个数
 func _melee_arc_radius() -> float:
 	return MELEE_ARC_RADIUS * arc_scale * _range_mult()
+
+## 打击帧前突倍数：范围叠得越高剑往前送得越远，剑才追得上外扩的剑气（上限 2 倍防乱飘）
+func _melee_thrust_mult() -> float:
+	return clampf(_range_mult(), 1.0, MELEE_STRETCH_MAX)
 
 ## 枪口闪光（远程法器开火反馈）：叠加发光的径向光斑
 func _setup_muzzle_flash() -> void:
@@ -438,17 +455,24 @@ func _perform_melee_attack() -> void:
 	var aim_angle = aim_dir.angle()
 	var orig_pos = position
 	var windup_pos = orig_pos - aim_dir * 8.0
-	var thrust_pos = orig_pos + aim_dir * 26.0
+	var thrust_pos = orig_pos + aim_dir * (MELEE_THRUST * _melee_thrust_mult())
 
-	# 挥砍弧光：月牙轴心摆在判定圆心、缩放取 判定半径/月牙外缘 ⇒ 月牙外缘 == 那一帧查询圆的边界。
+	# 挥砍弧光：终态 = 月牙轴心摆在判定圆心、缩放取 判定半径/月牙外缘 ⇒ 月牙外缘 == 那一帧查询圆的边界。
 	# 月牙自身张角 ±70°，本体从 aim-swing 扫到 aim+swing（swing ≤ 60°）时它一直罩着瞄准轴，
 	# 所以打出去的那一下和看得到的那一片是同一处。
+	# 出生几何反解成"内缘贴剑尖"（muzzle_len），打击帧再扫放到终态 —— 剑气出鞘，不是远处凭空冒出。
 	var swing := deg_to_rad(45.0) * arc_scale
 	_apply_facing(aim_angle - swing)
+	if _slash_tween != null and _slash_tween.is_valid():
+		_slash_tween.kill()  # 极速攻速下上一次扫放没走完就得让位，防新旧两个 tween 抢同一个节点
+	var slash_scale_end := _melee_arc_radius() / SLASH_ART_OUTER
+	var slash_scale_in := clampf(slash_scale_end * 0.35, 26.0 / SLASH_ART_OUTER, slash_scale_end)
+	var slash_pos_end := Vector2(MELEE_LUNGE, 0.0)
+	var slash_pos_in := Vector2(muzzle_len + SLASH_SPAWN_INSET - SLASH_ART_INNER * slash_scale_in, 0.0)
 	slash_sprite.visible = false
 	slash_sprite.modulate.a = 0.0
-	slash_sprite.position = Vector2(MELEE_LUNGE, 0.0)
-	slash_sprite.scale = Vector2.ONE * (_melee_arc_radius() / SLASH_ART_OUTER)
+	slash_sprite.position = slash_pos_in
+	slash_sprite.scale = Vector2.ONE * slash_scale_in
 	slash_sprite.rotation = 0.0
 
 	# 三段式近战节奏：前摇微撤蓄势 (0.05s) → 极速瞬扫涂抹 (0.04s) → 弹性卸力回正 (0.13s)
@@ -460,13 +484,26 @@ func _perform_melee_attack() -> void:
 	tw.tween_property(self, "position", windup_pos, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "scale", Vector2(0.92, 1.08), 0.05)
 
-	# 2. 打击瞬发（Active）：爆发极速横扫，点亮月牙刀光并结算伤害与材质音
+	# 2. 打击瞬发（Active）：爆发极速横扫，先结算伤害、再只在咬到肉时点亮月牙刀光
+	# 2026-10-11 挥空门控：旧写法先亮月牙后结算，于是一整片剑气先在空地上冒出来 ——
+	# 空挥时（目标在前摇 0.05s 里被另一把法器打死或击飞出判定圆，或 15Hz 脱程重查窗口里
+	# 仍锁着 1.2× 射程外的目标）月牙照样满亮扫放，「打空气」全在这一句。
+	# 判定几何一个字没动（画多大==判多大）：空挥保留完整突刺动作、器身闪光与破空声，
+	# 命中才补月牙/材质声/反冲。
 	tw.chain().tween_callback(func():
-		slash_sprite.visible = true
-		slash_sprite.modulate.a = 1.0
 		_flash_sprite(Color(1.5, 1.5, 1.5), 0.12)
 		var hits := _deal_melee_damage(aim_dir)
 		if hits > 0:
+			slash_sprite.visible = true
+			slash_sprite.modulate.a = 1.0
+			# 剑气出鞘：从剑尖处全亮扫放到判定几何（终态 == 查询圆边界），落点亮一拍再急速淡出；
+			# 显隐生命周期整段归这条 tween 管（收招回调不再代管隐藏，防把淡出拦腰截断）
+			_slash_tween = create_tween()
+			_slash_tween.set_parallel(true)
+			_slash_tween.tween_property(slash_sprite, "position", slash_pos_end, SLASH_SWEEP_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_slash_tween.tween_property(slash_sprite, "scale", Vector2.ONE * slash_scale_end, SLASH_SWEEP_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_slash_tween.chain().tween_property(slash_sprite, "modulate:a", 0.0, SLASH_FADE_TIME)
+			_slash_tween.chain().tween_callback(func(): slash_sprite.visible = false)
 			# 材质层只在真咬到肉时响；空挥只剩 50ms 前那一声破空
 			AudioManager.play_sfx(WeaponData.sfx_impact_for(weapon_def_id), MELEE_IMPACT_SCALE)
 			# 刀刃入肉阻力感：武器微反冲回弹
@@ -475,7 +512,6 @@ func _perform_melee_attack() -> void:
 	tw.tween_property(self, "position", thrust_pos, 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "rotation", aim_angle + swing, 0.04).set_trans(Tween.TRANS_EXPO)
 	tw.parallel().tween_property(self, "scale", Vector2(1.15, 0.92), 0.04)
-	tw.parallel().tween_property(slash_sprite, "modulate:a", 0.0, 0.14)
 
 	# 3. 卸力后摇（Recovery）：TRANS_BACK 弹性回正至环绕槽位
 	tw.chain().set_parallel(true)
@@ -483,7 +519,6 @@ func _perform_melee_attack() -> void:
 	tw.tween_property(self, "scale", Vector2.ONE, 0.13).set_trans(Tween.TRANS_SINE)
 	tw.chain().tween_callback(func():
 		is_attacking = false
-		slash_sprite.visible = false
 	)
 
 func _deal_melee_damage(aim_dir: Vector2) -> int:

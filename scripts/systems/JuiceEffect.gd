@@ -261,19 +261,24 @@ static func spawn_hit_sparks(parent: Node, pos: Vector2, hit_dir: Vector2, crit:
 ## 妖物死灭爆散：灵气崩解环 + 散逸灵尘。
 ## overkill_ratio = 致命一刀的溢出伤害 / 最大气血（0~1.5）：大数字暴击把妖物「打爆」，
 ## 爆散环径与灵尘量随溢出比例放大（2026-10-10 斩杀反馈）。
-static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false, overkill_ratio: float = 0.0) -> void:
+## crit_kill = 致命一刀是暴击：追加一圈暴击同款鎏金冲击环，暴击斩杀与普通伏诛一眼可辨（2026-10-11）。
+static func spawn_death_burst(parent: Node, pos: Vector2, elite: bool = false, overkill_ratio: float = 0.0, crit_kill: bool = false) -> void:
 	if not _ready_to_spawn(parent):
 		return
 	var boost := 1.0 + clampf(overkill_ratio, 0.0, 1.5) * 0.5
 	var fx := _acquire()
 	fx._begin(EffectType.DEATH_BURST, pos, 0.32 if not elite else 0.45, Z_OVERLAY)
 	fx.is_elite = elite
+	fx.is_crit = crit_kill
 
 	# 冲击扩散光环
 	var ring_col := Color(0.45, 0.8, 1.0, 0.8) if not elite else Color(1.0, 0.85, 0.3, 0.95)
 	fx._add_ring(6.0, (36.0 if not elite else 64.0) * boost, ring_col, (3.5 if not elite else 5.0) * lerpf(1.0, boost, 0.5))
 	if elite:
 		fx._add_ring(2.0, 42.0 * boost, Color(1.0, 1.0, 0.9, 0.9), 2.5)
+	# 暴击斩杀追加一记鎏金冲击环（比主环更锐更快，复用暴击火花的金环色温）
+	if crit_kill:
+		fx._add_ring(3.0, 48.0 * boost, Color(1.0, 0.88, 0.4, 0.9), 3.2)
 
 	# 崩散灵气粒子
 	var count := int(round((10.0 if not elite else 22.0) * boost))

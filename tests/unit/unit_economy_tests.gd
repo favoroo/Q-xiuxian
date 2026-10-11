@@ -62,6 +62,34 @@ func _test_pricing() -> void:
 	_c.check(GameBalance.hp_is_full(119.6, 120.0), "差半点在四舍五入内算满血")
 	_c.check(not GameBalance.hp_is_full(119.0, 120.0), "差 1 点不算满血")
 
+func _test_tag_affinity() -> void:
+	# 梯度亲和（2026-10-11 拓充）：不足门槛恒 1，≥2 件进一档 ×L1，≥4 件进二档 ×L2
+	_c.near(GameBalance.tag_affinity_mult(0), 1.0, EPS, "未持有 → 无亲和")
+	_c.near(GameBalance.tag_affinity_mult(1), 1.0, EPS, "1 件未达 MIN_COPIES → 无亲和")
+	_c.near(GameBalance.tag_affinity_mult(2), GameBalance.TAG_AFFINITY_MULT_L1, EPS, "2 件 → 一档 ×L1")
+	_c.near(GameBalance.tag_affinity_mult(3), GameBalance.TAG_AFFINITY_MULT_L1, EPS, "3 件仍是一档")
+	_c.near(GameBalance.tag_affinity_mult(4), GameBalance.TAG_AFFINITY_MULT_L2, EPS, "4 件 → 二档 ×L2")
+	_c.near(GameBalance.tag_affinity_mult(9), GameBalance.TAG_AFFINITY_MULT_L2, EPS, "更多件不超二档")
+	# 双流派共鸣：最高档全额，其余已激活流派按 COMBO_DAMP 半价叠加（剑系∩金系交叉吸力）
+	_c.near(GameBalance.tag_affinity_combo({}, ["sword", "metal"]), 1.0, EPS, "无持有 → 共鸣恒 1")
+	_c.near(GameBalance.tag_affinity_combo({"sword": 4}, ["sword", "metal"]), GameBalance.TAG_AFFINITY_MULT_L2, EPS, "单流派激活 → 只有该档，不凭空加成")
+	_c.near(GameBalance.tag_affinity_combo({"sword": 4, "metal": 4}, ["sword", "metal"]),
+		GameBalance.TAG_AFFINITY_MULT_L2 * (1.0 + (GameBalance.TAG_AFFINITY_MULT_L2 - 1.0) * GameBalance.TAG_AFFINITY_COMBO_DAMP),
+		EPS, "双流派均二档 → 交叉法器 ×6 反超单流派 ×3")
+	_c.near(GameBalance.tag_affinity_combo({"sword": 2, "metal": 4}, ["sword", "metal"]),
+		GameBalance.TAG_AFFINITY_MULT_L2 * (1.0 + (GameBalance.TAG_AFFINITY_MULT_L1 - 1.0) * GameBalance.TAG_AFFINITY_COMBO_DAMP),
+		EPS, "二档+一档 → 最高全额 + 次高档半价 = ×4.5")
+	_c.near(GameBalance.tag_affinity_combo({"sword": 2, "metal": 2}, ["sword", "metal"]),
+		GameBalance.TAG_AFFINITY_MULT_L1 * (1.0 + (GameBalance.TAG_AFFINITY_MULT_L1 - 1.0) * GameBalance.TAG_AFFINITY_COMBO_DAMP),
+		EPS, "双一档 → ×3")
+	# 雷火符三 tag（符箓+雷法+火）：两个流派已激活即触发，第三个未激活不掺和
+	_c.near(GameBalance.tag_affinity_combo({"thunder": 4, "fire": 4}, ["talisman", "thunder", "fire"]),
+		GameBalance.TAG_AFFINITY_MULT_L2 * (1.0 + (GameBalance.TAG_AFFINITY_MULT_L2 - 1.0) * GameBalance.TAG_AFFINITY_COMBO_DAMP),
+		EPS, "三 tag 只结算已激活的两个")
+	# 共鸣必须严格大于任何单一亲和，否则交叉武器吸不动
+	_c.check(GameBalance.tag_affinity_combo({"sword": 4, "metal": 4}, ["sword", "metal"]) > GameBalance.TAG_AFFINITY_MULT_L2,
+		"双二档共鸣 > 单二档亲和（交叉格子必须更吸）")
+
 func _test_harvest() -> void:
 	_c.equals(GameBalance.harvest_gain(7.6), 8, "灵韵发放四舍五入")
 	_c.equals(GameBalance.harvest_gain(0.4), 0, "不足 0.5 不发")

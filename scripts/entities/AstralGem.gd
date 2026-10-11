@@ -62,7 +62,14 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> AstralGem:
 			return g
 	var ng := scene.instantiate() as AstralGem
 	created_count += 1
-	_host.add_child(ng)
+	# 首建这一路可能在物理回调里（EnemyBase._die 掉宝石）：场景自带 CollisionShape2D，
+	# 正在 flush queries 时挂进树会报 "Can't change this state while flushing queries"
+	# 且当拍判定不生效 ⇒ 物理步里改 deferred 入场（调用方紧接着写 global_position /
+	# activate() 都不依赖已在树内：宿主与场景根都在原点，位置照旧）。
+	if Engine.is_in_physics_frame():
+		_host.add_child.call_deferred(ng)
+	else:
+		_host.add_child(ng)
 	return ng
 
 ## 软上限保险丝：场上宝石数到顶后，每次出膛让最旧的一颗飞向玩家。

@@ -14,8 +14,8 @@ extends Camera2D
 @export var follow_speed: float = 9.0
 @export var lookahead_factor: float = 0.04
 @export var trauma_decay: float = GameBalance.TRAUMA_DECAY
-@export var max_offset: Vector2 = Vector2(12.0, 9.0)
-@export var max_roll: float = 0.018
+@export var max_offset: Vector2 = Vector2(14.0, 10.0)  ## 2026-10-11 由 (12,9) 上调一档：单次事件峰值更可见，最坏稳态仍受每秒预算钉死
+@export var max_roll: float = 0.022                    ## 2026-10-11 由 0.018 上调一档
 
 var trauma: float = 0.0
 var _t: float = 0.0

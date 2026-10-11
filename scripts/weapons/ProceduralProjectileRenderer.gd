@@ -6,13 +6,18 @@ extends Node2D
 
 enum ProjectileKind {
 	SWORD_GOLD,       ## 庚金飞剑：修长冷银双刃古剑 + 庚金锋芒
+	SWORD_FIRE,       ## 流火飞剑：炽亮橙红烧刃飞剑 + 雪亮剑锋（2026-10-11 拓充）
 	DAGGER_LEAF,      ## 柳叶飞刀：弯月柳叶飞刃 + 青金光痕
 	NEEDLE_SILVER,    ## 暴雨银针：极细破空银针 + 针尖寒芒
 	NEEDLE_ICE,       ## 玄冰飞针：幽蓝冰晶细棱 + 冰晶碎屑
 	TALISMAN_FIRE,    ## 火焰符：炽朱离火符纸 + 暗红朱砂阵印
+	TALISMAN_TRUE_FIRE, ## 真火符：橙金三昧真火符纸 + 炽白火核（2026-10-11 拓充）
+	TALISMAN_THUNDER_FIRE, ## 雷火符：紫蓝雷弧缠橙红火舌符纸（2026-10-11 拓充）
 	TALISMAN_WOOD,    ## 万木灵符：碧翠玉灵符纸 + 生机灵文
+	TALISMAN_GU,      ## 蛊毒符：翠绿蛊虫符纸 + 幽绿毒雾（2026-10-11 拓充）
 	FIRE_FLAME,       ## 三昧真火：水墨烈焰火煞 + 炽金火核
 	SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
+	WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
 	GENERIC_BLADE     ## 通用法刃：虚空冷月气刃
 }
 
@@ -34,6 +39,8 @@ func _process(delta: float) -> void:
 static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 	if "bullet_gold_sword" in tex_path:
 		return ProjectileKind.SWORD_GOLD
+	elif "bullet_fire_sword" in tex_path:
+		return ProjectileKind.SWORD_FIRE
 	elif "bullet_leaf_dagger" in tex_path:
 		return ProjectileKind.DAGGER_LEAF
 	elif "bullet_silver_needle" in tex_path:
@@ -42,18 +49,28 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 		return ProjectileKind.NEEDLE_ICE
 	elif "bullet_fire_talisman" in tex_path:
 		return ProjectileKind.TALISMAN_FIRE
+	elif "bullet_true_fire_talisman" in tex_path:
+		return ProjectileKind.TALISMAN_TRUE_FIRE
+	elif "bullet_thunder_fire_talisman" in tex_path:
+		return ProjectileKind.TALISMAN_THUNDER_FIRE
 	elif "bullet_wood_talisman" in tex_path:
 		return ProjectileKind.TALISMAN_WOOD
+	elif "bullet_gu_talisman" in tex_path:
+		return ProjectileKind.TALISMAN_GU
 	elif "bullet_fire_flame" in tex_path:
 		return ProjectileKind.FIRE_FLAME
 	elif "bullet_spirit_pellet" in tex_path:
 		return ProjectileKind.SPIRIT_PELLET
+	elif "bullet_water_shuttle" in tex_path:
+		return ProjectileKind.WATER_SHUTTLE
 	return ProjectileKind.GENERIC_BLADE
 
 func _draw() -> void:
 	match kind:
 		ProjectileKind.SWORD_GOLD:
 			_draw_gengjin_sword()
+		ProjectileKind.SWORD_FIRE:
+			_draw_liuhuo_sword()
 		ProjectileKind.DAGGER_LEAF:
 			_draw_leaf_dagger()
 		ProjectileKind.NEEDLE_SILVER:
@@ -62,12 +79,20 @@ func _draw() -> void:
 			_draw_ice_needle()
 		ProjectileKind.TALISMAN_FIRE:
 			_draw_talisman(Color(0.85, 0.28, 0.20), Color(1.0, 0.82, 0.35))
+		ProjectileKind.TALISMAN_TRUE_FIRE:
+			_draw_talisman(Color(0.92, 0.45, 0.12), Color(1.0, 0.92, 0.55))
+		ProjectileKind.TALISMAN_THUNDER_FIRE:
+			_draw_talisman(Color(0.42, 0.34, 0.78), Color(1.0, 0.72, 0.30))
 		ProjectileKind.TALISMAN_WOOD:
 			_draw_talisman(Color(0.20, 0.55, 0.38), Color(0.60, 0.95, 0.70))
+		ProjectileKind.TALISMAN_GU:
+			_draw_talisman(Color(0.28, 0.62, 0.16), Color(0.85, 1.0, 0.45))
 		ProjectileKind.FIRE_FLAME:
 			_draw_flame()
 		ProjectileKind.SPIRIT_PELLET:
 			_draw_spirit_pellet()
+		ProjectileKind.WATER_SHUTTLE:
+			_draw_water_shuttle()
 		ProjectileKind.GENERIC_BLADE:
 			_draw_generic_blade()
 
@@ -108,6 +133,50 @@ func _draw_gengjin_sword() -> void:
 	draw_line(Vector2(-10.0, -3.5), Vector2(-10.0, 3.5), Color(0.20, 0.18, 0.25), 1.5, true)
 	draw_line(Vector2(-10.0, 0.0), Vector2(-15.0, 0.0), Color(0.12, 0.12, 0.16), 1.5, true)
 	draw_circle(Vector2(-15.5, 0.0), 1.2, Color(0.92, 0.76, 0.28))
+
+# ----------------- 1b. 流火飞剑 (炽亮橙红烧刃 + 雪亮剑锋 + 火尾) -----------------
+func _draw_liuhuo_sword() -> void:
+	# 火尾外晕（暖橙半透明，比庚金的冷金晕更亮）
+	var glow_poly := PackedVector2Array([
+		Vector2(17.0, 0.0),
+		Vector2(-3.0, -4.8),
+		Vector2(-14.0, -2.2),
+		Vector2(-18.0, 0.0),
+		Vector2(-14.0, 2.2),
+		Vector2(-3.0, 4.8)
+	])
+	draw_colored_polygon(glow_poly, Color(1.0, 0.45, 0.12, 0.25))
+
+	# 剑身上刃（炽亮橙红，阳面更亮）
+	var blade_top := PackedVector2Array([
+		Vector2(15.0, 0.0),
+		Vector2(-2.0, -3.4),
+		Vector2(-10.0, -3.0),
+		Vector2(-11.0, 0.0)
+	])
+	draw_colored_polygon(blade_top, Color(1.0, 0.62, 0.22))
+	# 剑身下刃（暗红烧刃阴面）
+	var blade_bot := PackedVector2Array([
+		Vector2(15.0, 0.0),
+		Vector2(-11.0, 0.0),
+		Vector2(-10.0, 3.0),
+		Vector2(-2.0, 3.4)
+	])
+	draw_colored_polygon(blade_bot, Color(0.82, 0.30, 0.10))
+
+	# 雪亮剑锋（剑尖最亮一点，右端高光楔）
+	var tip_poly := PackedVector2Array([
+		Vector2(15.0, 0.0),
+		Vector2(8.0, -1.2),
+		Vector2(8.0, 1.2)
+	])
+	draw_colored_polygon(tip_poly, Color(1.0, 0.96, 0.86))
+	# 中脊火线
+	draw_line(Vector2(14.0, 0.0), Vector2(-10.0, 0.0), Color(1.0, 0.85, 0.40), 1.0, true)
+	# 剑格剑柄（玄铁暗色收尾）
+	draw_line(Vector2(-9.5, -3.6), Vector2(-9.5, 3.6), Color(0.20, 0.14, 0.12), 1.5, true)
+	draw_line(Vector2(-9.5, 0.0), Vector2(-14.5, 0.0), Color(0.14, 0.10, 0.10), 1.5, true)
+	draw_circle(Vector2(-15.0, 0.0), 1.2, Color(1.0, 0.55, 0.18))
 
 # ----------------- 2. 柳叶飞刀 (流线柳叶弯刃 + 青金光痕) -----------------
 func _draw_leaf_dagger() -> void:
@@ -212,9 +281,39 @@ func _draw_spirit_pellet() -> void:
 	var segs := 16
 	for i in range(segs + 1):
 		var t := float(i) / float(segs) * TAU
-		var pt := Vector2(cos(t) * 7.5, sin(t) * 3.0).rotated(ring_ang)
-		ring_pts.append(pt)
+	var pt := Vector2(cos(t) * 7.5, sin(t) * 3.0).rotated(ring_ang)
+	ring_pts.append(pt)
 	draw_polyline(ring_pts, Color(0.70, 1.0, 0.85, 0.65), 1.0, true)
+
+# ----------------- 7b. 浪里梭 (青碧流线纺锤 + 浪涛丝痕) -----------------
+func _draw_water_shuttle() -> void:
+	# 水痕尾迹（两道青蓝丝线向后拖）
+	draw_line(Vector2(-6.0, -2.4), Vector2(-16.0, -4.2), Color(0.35, 0.75, 1.0, 0.55), 1.2, true)
+	draw_line(Vector2(-6.0, 2.4), Vector2(-16.0, 4.2), Color(0.35, 0.75, 1.0, 0.55), 1.2, true)
+	# 梭身上半（冷青阳面）
+	var body_top := PackedVector2Array([
+		Vector2(13.0, 0.0),
+		Vector2(2.0, -3.6),
+		Vector2(-9.0, -2.0),
+		Vector2(-11.0, 0.0)
+	])
+	draw_colored_polygon(body_top, Color(0.45, 0.85, 0.95))
+	# 梭身下半（玄青阴面）
+	var body_bot := PackedVector2Array([
+		Vector2(13.0, 0.0),
+		Vector2(-11.0, 0.0),
+		Vector2(-9.0, 2.0),
+		Vector2(2.0, 3.6)
+	])
+	draw_colored_polygon(body_bot, Color(0.16, 0.45, 0.62))
+	# 中线浪纹（银白波光线）
+	var wave := PackedVector2Array()
+	for i in range(7):
+		var t := -9.0 + float(i) * 3.4
+		wave.append(Vector2(t, 0.55 * sin(float(i) * 2.1)))
+	draw_polyline(wave, Color(0.85, 0.98, 1.0, 0.9), 0.9, true)
+	# 梭尖寒芒
+	draw_circle(Vector2(13.0, 0.0), 0.9, Color(0.92, 1.0, 1.0))
 
 # ----------------- 8. 通用法刃 (冷月气刃) -----------------
 func _draw_generic_blade() -> void:

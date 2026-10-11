@@ -2,7 +2,8 @@ class_name BlessingObelisk
 extends Node2D
 
 ## 聚灵阵 — 玩家主动长按激活的阵法节点。
-## 玩家进入范围后 HUD 显示激活按钮，长按充能，松手前完成则触发全屏灵气冲击；
+## 玩家进入范围后 HUD 显示激活按钮，长按充能，松手前完成则触发全屏灵气冲击
+## 并召唤一只灵兽助战（2026-10-11 强化：灵兽有血量、嘲讽附近敌人、跨波次存活直到战死）；
 ## 松手过早或离开范围则中断充能、进度归零。
 ## 触发后进入「耗尽灰相」：熄灯、光圈撤掉、石碑去色 —— 一眼看出这座已经用掉了
 ## （三座界碑共用同一份 .tscn，所以褪灰材质必须 resource_local_to_scene，见 .tscn）。
@@ -15,8 +16,8 @@ extends Node2D
 ##   ③ 碑顶百分比（Label）：环与灌光给「还剩多少」的形状，数字给准信
 ## HUD 那根条照旧留着（桌面/鼠标党看得见），它读的是同一条 charge_progress_updated。
 
-## 充能时长（秒）—— 比旧版 3s 短，手感更利落
-const CHARGE_TIME: float = 1.5
+## 充能时长（秒）—— 2026-10-11 由 1.5 压到 0.8：缩短站桩窗口，降低引导期间被集火的风险
+const CHARGE_TIME: float = 0.8
 ## 触发伤害
 const BLESSING_DAMAGE: float = 85.0
 ## 击退力度
@@ -66,6 +67,8 @@ var charge_time: float = 0.0
 @onready var stone_mat: ShaderMaterial = $Sprite2D.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
+## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，血量不耗尽跨波次一直在场
+var beast_scene: PackedScene = preload("res://scenes/entities/SpiritBeast.tscn")
 
 ## 程序化矢量阵台渲染器
 var _obelisk_renderer: ProceduralObeliskRenderer = null
@@ -187,6 +190,9 @@ func _build_charge_readout() -> void:
 	if stone_mat != null:
 		## 灌灵色仍从 GameStyle 取，不在着色器里留一份第二真话
 		stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
+		## fill_ratio/amount 先落成确定值：直接触发（判据不走充能）时 tween 读到 Nil 会报类型错
+		stone_mat.set_shader_parameter("fill_ratio", 0.0)
+		stone_mat.set_shader_parameter("amount", 0.0)
 
 ## 读数上屏（淡入）：淡的只是外观，进度真值由 _set_readout_ratio 单独维护
 func _show_readout() -> void:
@@ -303,8 +309,9 @@ func _trigger_blessing() -> void:
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
-	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 冲击波扫荡全场 ⚡")
+	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 灵兽现身助战 ⚡")
 	_spawn_shockwave_ring()
+	_summon_spirit_beast()
 	# 对范围内所有敌人造成伤害与击退
 	# 方向走 GameBalance.knock_dir（永不把敌人往玩家身上推）
 	var enemies = get_tree().get_nodes_in_group("enemies")
@@ -331,6 +338,19 @@ func _trigger_blessing() -> void:
 		tw.parallel().tween_property(stone_mat, ^"shader_parameter/amount", SPENT_DESATURATE, SPENT_FADE_TIME)
 		tw.parallel().tween_property(stone_mat, ^"shader_parameter/fill_ratio", 0.0, SPENT_FADE_TIME)
 	tw.tween_callback(_enter_spent_look)
+
+## 召唤灵兽助战（2026-10-11 祭坛强化）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
+## 灵兽挂 allies 组、不在波末清理四组里，血量不耗尽就跨波次一直在场；
+## 每座祭坛 is_triggered 只触发一次 ⇒ 天然「每座一只、全场最多三只」。
+func _summon_spirit_beast() -> void:
+	var host: Node = GameManager.player.get_parent() if GameManager.player != null else get_tree().current_scene
+	if host == null:
+		return
+	var beast := beast_scene.instantiate() as SpiritBeast
+	host.add_child(beast)
+	beast.global_position = global_position + Vector2(
+		GameManager.rng.randf_range(-36.0, 36.0),
+		GameManager.rng.randf_range(-36.0, 36.0))
 
 ## 灰相收口：灯直接关掉、范围环不再占位（看不见却还在的圈就是 bug）
 func _enter_spent_look() -> void:

@@ -1,11 +1,12 @@
 class_name GameBalance
 extends RefCounted
 
-## 数值公式门面：全部实现已按主题拆到同目录四个 static 类（2026-10-11 拆分，降低并行调参冲突面）：
+## 数值公式门面：全部实现已按主题拆到同目录五个 static 类（2026-10-11 拆分，降低并行调参冲突面）：
 ##   BalanceWave      波次/刷怪/精英Boss/危险度
 ##   BalanceEconomy   经验/商店定价/灵韵/残丹化灵/稀有度/货架抽取/法宝档位/羁绊档位/加点白名单
 ##   BalanceCombat    护甲受伤/镜头创伤/受击硬直击退/长扑几何/五行异常/震退方向/集火韧性
 ##   BalanceTargeting 索敌分流/藏宝匣/武器属性折算/御灵轨道/神识分流
+##   BalanceSpiritBeast 祭坛灵兽（气血成长/撕咬/嘲讽半径）
 ## 本文件只做转发：旧引用（GameBalance.xxx，22 个文件）零改动；新增公式直接进主题类，
 ## 需要旧入口时在这里补一行转发。两条硬性约束对四个主题类同样生效：
 ##   1. 需要随机数的地方由调用方传入 rng 或已经抽好的 roll，这样单测可以固定种子做确定性断言；
@@ -76,7 +77,10 @@ const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
 const POTION_HEAL_RATIO := BalanceEconomy.POTION_HEAL_RATIO
 const TAG_AFFINITY_MIN_COPIES := BalanceEconomy.TAG_AFFINITY_MIN_COPIES
-const TAG_AFFINITY_MULT := BalanceEconomy.TAG_AFFINITY_MULT
+const TAG_AFFINITY_MULT_L1 := BalanceEconomy.TAG_AFFINITY_MULT_L1
+const TAG_AFFINITY_TIER2_COPIES := BalanceEconomy.TAG_AFFINITY_TIER2_COPIES
+const TAG_AFFINITY_MULT_L2 := BalanceEconomy.TAG_AFFINITY_MULT_L2
+const TAG_AFFINITY_COMBO_DAMP := BalanceEconomy.TAG_AFFINITY_COMBO_DAMP
 const LUCK_SHOP_PER_POINT := BalanceEconomy.LUCK_SHOP_PER_POINT
 const MAIN_TAG_PITY_WAVES := BalanceEconomy.MAIN_TAG_PITY_WAVES
 const TAG_FILTER_BONUS := BalanceEconomy.TAG_FILTER_BONUS
@@ -108,6 +112,13 @@ const KILL_LAUNCH_MAX := BalanceCombat.KILL_LAUNCH_MAX
 const KILL_HITSTOP_DURATION := BalanceCombat.KILL_HITSTOP_DURATION
 const KILL_HITSTOP_SCALE := BalanceCombat.KILL_HITSTOP_SCALE
 const KILL_HITSTOP_MIN_INTERVAL := BalanceCombat.KILL_HITSTOP_MIN_INTERVAL
+const CRIT_TRAUMA_NORMAL := BalanceCombat.CRIT_TRAUMA_NORMAL
+const CRIT_TRAUMA_ELITE := BalanceCombat.CRIT_TRAUMA_ELITE
+const CRIT_KILL_HITSTOP_DURATION := BalanceCombat.CRIT_KILL_HITSTOP_DURATION
+const CRIT_KILL_HITSTOP_SCALE := BalanceCombat.CRIT_KILL_HITSTOP_SCALE
+const CRIT_KILL_HITSTOP_MIN_INTERVAL := BalanceCombat.CRIT_KILL_HITSTOP_MIN_INTERVAL
+const CRIT_KILL_OVERKILL_FLOOR := BalanceCombat.CRIT_KILL_OVERKILL_FLOOR
+const CRIT_FLASH_MIN_INTERVAL := BalanceCombat.CRIT_FLASH_MIN_INTERVAL
 const ZHUMU_MINION_CAP := BalanceCombat.ZHUMU_MINION_CAP
 const CHARGE_BRAKE_END_SPEED_PCT := BalanceCombat.CHARGE_BRAKE_END_SPEED_PCT
 const BURN_STACK_RATIO := BalanceCombat.BURN_STACK_RATIO
@@ -134,6 +145,16 @@ const SPIRIT_SECTOR_HALF_ANGLE := BalanceTargeting.SPIRIT_SECTOR_HALF_ANGLE
 const SPIRIT_BASE_ANGULAR_SPEED := BalanceTargeting.SPIRIT_BASE_ANGULAR_SPEED
 const SPIRIT_CONTACT_DUTY := BalanceTargeting.SPIRIT_CONTACT_DUTY
 const MULTI_WEAPON_LOAD_PER_EXTRA := BalanceTargeting.MULTI_WEAPON_LOAD_PER_EXTRA
+
+# 祭坛灵兽 → BalanceSpiritBeast
+const SPIRIT_BEAST_TAUNT_RADIUS := BalanceSpiritBeast.TAUNT_RADIUS
+const SPIRIT_BEAST_ATTACK_RANGE := BalanceSpiritBeast.ATTACK_RANGE
+const SPIRIT_BEAST_ATTACK_INTERVAL := BalanceSpiritBeast.ATTACK_INTERVAL
+const SPIRIT_BEAST_MOVE_SPEED := BalanceSpiritBeast.MOVE_SPEED
+const SPIRIT_BEAST_KNOCK_FORCE := BalanceSpiritBeast.KNOCK_FORCE
+const SPIRIT_BEAST_HIT_INVINCIBLE := BalanceSpiritBeast.HIT_INVINCIBLE
+const SPIRIT_BEAST_SEARCH_INTERVAL := BalanceSpiritBeast.SEARCH_INTERVAL
+const SPIRIT_BEAST_IDLE_FOLLOW_DIST := BalanceSpiritBeast.IDLE_FOLLOW_DIST
 
 # ---------------- 函数转发（签名原样，实现进主题类） ----------------
 
@@ -175,6 +196,9 @@ static func rarity_weights(luck: float) -> Dictionary:
 
 static func tag_affinity_mult(copies: int) -> float:
 	return BalanceEconomy.tag_affinity_mult(copies)
+
+static func tag_affinity_combo(counts: Dictionary, tags: Array) -> float:
+	return BalanceEconomy.tag_affinity_combo(counts, tags)
 
 static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 	return BalanceEconomy.tag_filter_mult(weapon_tags, filter_tags)
@@ -292,6 +316,13 @@ static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) 
 static func focus_fire_mult(recent_hits: int) -> float:
 	return BalanceCombat.focus_fire_mult(recent_hits)
 
+# 祭坛灵兽 → BalanceSpiritBeast
+static func spirit_beast_max_hp(wave: int) -> float:
+	return BalanceSpiritBeast.max_hp_for_wave(wave)
+
+static func spirit_beast_damage(wave: int) -> float:
+	return BalanceSpiritBeast.damage_for_wave(wave)
+
 # 索敌 / 藏宝匣 / 折算 / 御灵 / 神识分流 → BalanceTargeting
 static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:
 	return BalanceTargeting.elliptical_distance(offset, y_ratio)
@@ -307,6 +338,10 @@ static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array,
 
 static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> float:
 	return BalanceTargeting.weapon_stat_bonus(stat_scalings, player_stats, star)
+
+## 属性加伤的逐项明细（伤害单位），UI 的「属性加伤账单」读它，总额即上面那条
+static func weapon_stat_bonus_parts(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> Dictionary:
+	return BalanceTargeting.weapon_stat_bonus_parts(stat_scalings, player_stats, star)
 
 static func stat_scaling_label(key: String) -> String:
 	return BalanceTargeting.stat_scaling_label(key)

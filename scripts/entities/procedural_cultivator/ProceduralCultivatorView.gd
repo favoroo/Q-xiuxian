@@ -42,6 +42,16 @@ var flip_h: bool = false:
 
 var facing: String = "s"
 
+## 五方向动画后缀 → 归一化移动方向（世界系，"n"=向上 -y）
+## 供斗篷风向响应消费；水平扇区（e/ne/se）按 flip_h 镜像 x 分量
+const FACE_DIR_MAP := {
+	"s": Vector2(0.0, 1.0),
+	"n": Vector2(0.0, -1.0),
+	"e": Vector2(1.0, 0.0),
+	"ne": Vector2(0.707, -0.707),
+	"se": Vector2(0.707, 0.707),
+}
+
 func _ready() -> void:
 	_init_renderer()
 
@@ -158,6 +168,12 @@ func set_facing_dir(face_str: String, is_flip: bool) -> void:
 
 	renderer.current_angle = CultivatorRendererBase.Angle.FRONT
 
+	# 斗篷风向响应：把八扇区朝向后缀还原为移动方向向量（静止时渲染器按动作状态自行衰减）
+	var wind_dir: Vector2 = FACE_DIR_MAP.get(face_str, Vector2.ZERO)
+	if is_flip and face_str != "n" and face_str != "s":
+		wind_dir.x = -wind_dir.x
+	renderer.move_dir = wind_dir
+
 ## 换装/切换角色渲染器工厂接口（为后续其他角色扩展定好标准）
 func set_character(renderer_cls: GDScript, cfg: CultivatorVisualConfig = null) -> void:
 	renderer_script = renderer_cls
@@ -190,11 +206,12 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 	var g_gold := GameStyle.GOLD_EDGE
 	var g_jade := GameStyle.JADE_EDGE
 	var g_good := GameStyle.GOOD
+	var g_aurum := GameStyle.AURUM_EDGE  # 暖金（与金光护体椭球护罩同源）
 	match skill_id:
-		"aegis": # 金光护体：神圣纯金白芒眼眸、极亮鎏金斗篷流光反光、额印全亮、周天金芒
+		"aegis": # 金光护体：神圣纯金白芒眼眸、极亮暖金斗篷流光反光（与护罩同色）、额印全亮、周天金芒
 			_target_eye_color = Color(1.0, 0.92, 0.55, 0.95)
 			_target_eye_boost = 1.1 * intensity
-			_target_cloak_color = Color(g_gold.r, g_gold.g, g_gold.b, 1.0)
+			_target_cloak_color = Color(g_aurum.r, g_aurum.g, g_aurum.b, 1.0)
 			_target_cloak_shimmer = 1.1 * intensity
 			_target_sigil_boost = 1.0 * intensity
 			_target_motes_boost = 1.0 * intensity

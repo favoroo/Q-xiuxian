@@ -72,10 +72,16 @@ var _shape: CollisionShape2D = null
 
 func _ready() -> void:
 	add_to_group("gems")
-	collision_layer = 16  # loot：灵石那一层的账，别处若要吸灵仍能看到本珠
-	collision_mask = 2    # player：本珠只认身体，不吃隔空吸附
-	monitoring = true
-	monitorable = true
+	# 物理状态一律 deferred：池化之后这条路径可能在物理回调里被 add_child 触发
+	# （刀锋命中藏宝匣 → take_damage → _destroy → acquire_or_new 首建一颗新珠），
+	# 而 flushing queries 期间改层/掩码/monitoring、或往 Area 里挂 CollisionShape2D，
+	# 引擎报 "Can't change this state while flushing queries" 且这一拍的状态不生效
+	# （实测 ProjectileProbe 被这条错误刷屏拖到超时）。activate/recycle 早就走 deferred 了，
+	# 首建这一路得同一把尺。
+	set_deferred("collision_layer", 16)  # loot：灵石那一层的账，别处若要吸灵仍能看到本珠
+	set_deferred("collision_mask", 2)    # player：本珠只认身体，不吃隔空吸附
+	set_deferred("monitoring", true)
+	set_deferred("monitorable", true)
 
 	_sprite = Sprite2D.new()
 	_sprite.texture = load("res://assets/art/icon_hp.png")
@@ -92,8 +98,13 @@ func _ready() -> void:
 	var circle := CircleShape2D.new()
 	circle.radius = JUDGE_RADIUS
 	shape.shape = circle
-	add_child(shape)
 	_shape = shape
+	# 形状挂树只能 deferred：池化之后 _ready 可能在物理回调里被触发（刀锋打碎藏宝匣 →
+	# take_damage → _destroy → acquire_or_new 首建一颗新珠），而往一个正在 flush queries 的
+	# Area 里挂 CollisionShape2D，引擎报 "Can't change this state while flushing queries"
+	# 且这一拍的判定不生效（实测 ProjectileProbe 被这条错误刷屏拖到 25s 超时）。
+	# 判据要量这颗判定圆的，读 _shape 引用本身（见 heal_orb_check._orb_judge_radius）。
+	add_child.call_deferred(shape)
 
 	_start_bob()
 

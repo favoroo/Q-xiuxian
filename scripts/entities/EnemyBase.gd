@@ -55,6 +55,7 @@ var _hit_freeze_timer: float = 0.0 ## 局部受击卡肉定格（秒）：冻结
 var _hit_jiggle_offset: Vector2 = Vector2.ZERO  ## 受击瞬间视觉微反冲偏移
 var _skid_dust_timer: float = 0.0 ## 滑行擦地扬尘计时
 var _death_overkill_ratio: float = 0.0  ## 致命一刀的溢出伤害比例（死亡爆散规模放大用）
+var _death_crit_kill: bool = false      ## 致命一刀是否为暴击（暴击击杀特写：金环爆散 + 精英 HEAVY 反馈）
 var facing: String = "s"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
@@ -286,6 +287,10 @@ func _physics_process(delta: float) -> void:
 	if player == null:
 		return
 
+	# 灵兽嘲讽（2026-10-11 祭坛灵兽）：周身嘲讽圈内有友方灵兽时改追灵兽，替玩家分担火力。
+	# 追击方向、扑咬/冲刺/自爆/火球的瞄准与接触结算都改吃这个目标；Boss 出招大脑仍锁玩家。
+	var target: Node2D = _taunt_target(player)
+
 	# 屏外缓存（2026-10-10 第 6 波卡顿优化，2026-10-11 加 10Hz 节流）：take_damage 里
 	# 屏外只扣血跳过跳字与火花（音效/硬直/击退/闪白保留）。
 	# 敌人进出屏幕是秒级事件，10Hz 判定足够；每敌错相劈开 transform 查询
@@ -313,14 +318,14 @@ func _physics_process(delta: float) -> void:
 	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
 	_pp_stun = _tick_hit_stun(delta)
 
-	# 2. 追击玩家（平滑加速度 + 贴身防旋转抽搐）：期望速度与各行为支路推进
-	var to_player: Vector2 = player.global_position - global_position
+	# 2. 追击目标（平滑加速度 + 贴身防旋转抽搐）：期望速度与各行为支路推进
+	var to_player: Vector2 = target.global_position - global_position
 	var dist_sq: float = to_player.length_squared()
 	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
 	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
 	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
 	_pp_target_vel = Vector2.ZERO if _pp_stun else (dir * eff_speed)
-	if _tick_behaviors(delta, player, dir, dist_sq, eff_speed):
+	if _tick_behaviors(delta, target, dir, dist_sq, eff_speed):
 		return
 
 	# 位移解算（冲刺锁定段不插值）+ 界碑拦阻
@@ -332,7 +337,21 @@ func _physics_process(delta: float) -> void:
 
 	_tick_hit_visuals(delta)
 	_update_facing_and_anim(delta, dir, dist_sq)
-	_resolve_contact_damage(player, pos_before_move)
+	_resolve_contact_damage(target, pos_before_move)
+
+## 嘲讽目标选择（2026-10-11 祭坛灵兽）：嘲讽圈内有灵兽则追最近的灵兽，否则维持追玩家。
+## 灵兽最多 3 只（三座祭坛各召唤一只），全表扫描开销可忽略。
+func _taunt_target(player: Node2D) -> Node2D:
+	var best: Node2D = player
+	var best_sq: float = GameBalance.SPIRIT_BEAST_TAUNT_RADIUS * GameBalance.SPIRIT_BEAST_TAUNT_RADIUS
+	for ally in GameManager.live_allies:
+		if ally == null or not is_instance_valid(ally):
+			continue
+		var d: float = global_position.distance_squared_to(ally.global_position)
+		if d < best_sq:
+			best_sq = d
+			best = ally
+	return best
 
 func _update_offscreen_cull() -> void:
 	var vp := get_viewport()
@@ -678,27 +697,30 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		else:
 			procedural_view.special_state = 0.0
 
-## 冲刺走廊扫掠结算 + 玩家接触伤害判定（石岳反震与接触伤害同一把尺子）
-func _resolve_contact_damage(player: Node2D, pos_before_move: Vector2) -> void:
+	## 冲刺走廊扫掠结算 + 追击目标接触伤害判定（石岳反震只认玩家，灵兽无反震）
+func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 	# 3.6 冲刺走廊扫掠结算：判定走的是「狼身这一帧扫过的那一段」，独立于本体碰撞。
 	# 旧写法长扑只有下面那条身位滑碰（狼 19.5 + 玩家 14 = 33.5px）这一个出口，
 	# 而预警 0.8s 够玩家横移 168px ⇒ 只要动一下就必然躲开，整个技能形同虚设
 	#（2026-10-10 用户现场：「根本冲刺不到我」）。近战短咬反倒有 bite_hit_radius 那道口
 	# ⇒ 近距离打得人、远距离打不到，威胁段刚好落在最不需要威胁的地方。
-	# 伤害只走 player.take_damage 这一个口子：无敌帧/闪避/护甲/受创反馈全复用，
+	# 伤害只走目标自己的 take_damage 这一个口子：玩家侧的无敌帧/闪避/护甲/受创反馈全复用，
 	# 不在这里发第二次反馈（同短咬那处口径）；一个 flag 钉死「一次冲刺只碾一下」。
 	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
 	if charge_locked and not _charge_hit:
-		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, player.global_position)
-		if closest.distance_to(player.global_position) <= charge_hit_radius:
+		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, target.global_position)
+		if closest.distance_to(target.global_position) <= charge_hit_radius:
 			_charge_hit = true
-			var hp_before_charge: float = player.current_health
-			player.take_damage(contact_damage * charge_damage_mul)
-			# 石岳反震：与接触伤害同一个口径，实际被打中才反弹
-			if GameManager.thorns_pct > 0.0 and player.current_health < hp_before_charge:
-				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
+			if target is Player:
+				var hp_before_charge: float = target.current_health
+				target.take_damage(contact_damage * charge_damage_mul)
+				# 石岳反震：与接触伤害同一个口径，实际被打中才反弹
+				if GameManager.thorns_pct > 0.0 and target.current_health < hp_before_charge:
+					take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
+			elif target.has_method("take_damage"):
+				target.take_damage(contact_damage * charge_damage_mul)
 
-	# 4. 玩家接触伤害判定
+	# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
 	for i in range(get_slide_collision_count()):
 		var col = get_slide_collision(i)
 		var collider = col.get_collider()
@@ -708,6 +730,8 @@ func _resolve_contact_damage(player: Node2D, pos_before_move: Vector2) -> void:
 			# 石岳反震：实际被打中才反弹（闪避/无敌帧不触发）
 			if GameManager.thorns_pct > 0.0 and collider.current_health < hp_before:
 				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
+		elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
+			collider.take_damage(contact_damage)
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
@@ -746,12 +770,17 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if not from_dot:
 			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
 			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
+			# 暴击全屏金闪（限流）：让暴击在余光里也能感知
+			GameFeel.pulse_crit_flash(GameManager)
 		GameManager.hit_stop(0.04, 0.08)
 		GameManager.kick_camera(knockback, 6.5)
 		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
+		# 暴击从「只冲不摇」升级为可见摇晃：普通暴击也发一笔小额创伤（走每秒预算，稳态不变）
 		if is_elite:
-			GameManager.add_trauma(0.28)
+			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_ELITE)
 			GameFeel.vibrate(26, 0.65)
+		else:
+			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
 	elif not from_dot:
 		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤
 		GameManager.kick_camera(knockback, 2.8)
@@ -798,9 +827,17 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		# 溢出伤害比例留给死亡爆散放大规模 —— 大数字暴击能把妖物「打爆」
 		knockback_velocity *= GameBalance.KILL_KNOCKBACK_MULT
 		_death_overkill_ratio = clampf(-current_hp / maxf(max_hp, 1.0), 0.0, 1.5)
+		# 暴击击杀特写：爆散规模保底放大 + 更实的独立顿帧 + 一记缩放冲击（2026-10-11）
+		_death_crit_kill = is_crit and not from_dot
+		if _death_crit_kill:
+			_death_overkill_ratio = maxf(_death_overkill_ratio, GameBalance.CRIT_KILL_OVERKILL_FLOOR)
+			# 精英伏诛走 HEAVY 反馈自带更大顿帧/缩放，此处不重复发
+			if not is_elite:
+				GameFeel.crit_kill_hit_stop(GameManager)
+				GameFeel.zoom_punch(GameManager, 0.03, 0.14)
 		# 击杀微顿帧（GameFeel 限流）：减潮加肉后击杀是低频事件，这一记「确认感」值得给；
 		# DoT 跳死不发（那不是玩家亲手砍的一刀），精英伏诛走 LARGE 反馈自带顿帧不重复发
-		if not from_dot and not is_elite:
+		elif not from_dot and not is_elite:
 			GameManager.kill_hit_stop()
 		_die()
 
@@ -1070,10 +1107,14 @@ func _die() -> void:
 	_clear_bite_warning()
 
 	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio)
+	JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio, _death_crit_kill)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, 8.5)
-		GameManager.feedback(GameManager.FeedbackTier.LARGE)
+		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
+		if _death_crit_kill:
+			GameManager.feedback(GameManager.FeedbackTier.HEAVY)
+		else:
+			GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
 		# 普通妖物死亡给一记沿击飞方向的微冲量（2.5px），确认感极佳且不累加持续创伤

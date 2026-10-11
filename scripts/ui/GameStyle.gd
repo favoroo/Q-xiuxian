@@ -34,6 +34,8 @@ const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
 const GREY := Color("7d8494")       # 暗部正文/禁用
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/增益绿/朱砂都不撞）
+const AURUM := Color("ffc94d")      # 暖金 = 金光护体椭球护罩主色（世界特效专用，与点缀黄 JADE 的货币语义区分）
+const AURUM_EDGE := Color("ffe9b0") # 暖金亮边（护罩描边/流光高光）
 
 # 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按黑底可读调亮
 const RARITY_COMMON := Color(0.72, 0.70, 0.62)

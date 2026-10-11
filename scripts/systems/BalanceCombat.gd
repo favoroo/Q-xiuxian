@@ -83,6 +83,13 @@ const KILL_LAUNCH_MAX := 42.0            ## 尸体飞出位移上限（px，防�
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
 const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
+const CRIT_TRAUMA_NORMAL := 0.12         ## 普通暴击追加创伤（2026-10-11：暴击从「只冲不摇」升级为可见摇晃；走每秒预算，最坏稳态不变）
+const CRIT_TRAUMA_ELITE := 0.28          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
+const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」
+const CRIT_KILL_HITSTOP_SCALE := 0.06    ## 暴击击杀顿帧时间倍率
+const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
+const CRIT_KILL_OVERKILL_FLOOR := 0.45   ## 暴击击杀的死亡爆散规模保底（溢出伤害不足时也按此放大）
+const CRIT_FLASH_MIN_INTERVAL := 0.20    ## 暴击全屏金闪最小间隔（秒，高频暴击防频闪）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
 # ---------------- 妖狼系长扑：实冲位移 / 走廊扫掠几何 ----------------

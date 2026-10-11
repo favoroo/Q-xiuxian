@@ -35,18 +35,22 @@ func _ready() -> void:
 	else:
 		get_tree().quit(1)
 
-# ---------------- 1. 35 件法器单体 DPS 分档与极差比 ----------------
+# ---------------- 1. 42 件非机关法器单体 DPS 分档与极差比（机关炮台不进档，与既有 3 把口径一致） ----------------
 
 func _test_weapon_dps_normalization() -> void:
 	var single_target_weapons := [
 		"qingyun_sword", "gengjin_feijian", "huoyan_fu", "chiyan_dao", "xuanbing_feizhen",
 		"jinzhen_fu", "qingteng_jian",
+		# 2026-10-11 新增：近战剑 / 穿透飞剑（点杀位）
+		"hanshuang_jian", "bengshan_jian", "liuhuo_feijian",
 	]
 	var aoe_utility_weapons := [
 		"qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin",
 		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun",
 		"xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "jinlei_zhui", "chunlei_gu",
 		"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian",
+		# 2026-10-11 新增：弹射/群伤型
+		"zhenhuo_fu", "leihuo_fu", "langli_suo", "gudu_fu",
 	]
 	var drone_weapons := ["lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei"]
 
@@ -71,7 +75,7 @@ func _test_weapon_dps_normalization() -> void:
 				"御灵环绕法器【%s】有效 DPS 落在 30~38 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
-	_c.check(ratio <= 2.0, "全库 35 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+	_c.check(ratio <= 2.0, "全库 48 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
 
 	# 御灵同档护栏（2026-10-10 用户口径：召唤打不动人）：御灵有效 DPS（已按接触占空比折算）
 	# 必须贴住青云剑单体 DPS 的 0.85 倍以上 —— 占空比一变、数值一飘，这里直接红。

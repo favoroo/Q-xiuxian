@@ -24,7 +24,8 @@ extends Node
 ##             ② 把 _find_target 的匣子回退删掉 ⇒ 第 2 组报红；
 ##             ③ 把 _volley_targets 的 chest_cands 追加段删掉 ⇒ 第 3 组报红；
 ##             ④ 把 SpiritChest.take_damage 改回一击即碎 ⇒ 第 4 组报红；
-##             ⑤ 把 WaveSpawner.end_wave 的匣子消散段删掉 ⇒ 第 5 组报红。
+##             ⑤ 把 WaveSpawner.end_wave 的匣子消散段删掉 ⇒ 第 5 组报红；把这两轮循环
+##                缩进回 enemies 循环体内（零余怪时不收，即 2026-10-11 修掉的那一版）同样报红。
 
 var _c := TestCheck.new()
 
@@ -241,6 +242,14 @@ func _test_wave_end_dissolve() -> void:
 	var chest := _spawn_chest(Vector2(90.0, 0.0))
 	await get_tree().process_frame
 	var gems_before := get_tree().get_nodes_in_group("gems").size()
+	# 刻意先把余怪清光再收波：匣子/炮台那两轮循环曾经缩进在 enemies 循环的体内，
+	# 场上有怪时顺带执行、没怪时一个都不收（#24 刷怪预算上线后波末清空成了常态才露出来）。
+	# 这一组要钉的就是「零余怪」那一档，留着怪等于把这条路径绕过去测了个空。
+	_clear_enemies()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(get_tree().get_nodes_in_group("enemies").is_empty(),
+		"布置成立：收波时场上确实一只余妖都没有（量的是零余怪那一档）")
 
 	_spawner.end_wave()
 	_spawner.phase = WaveSpawner.Phase.ALLOC   # 别让它顺势开商店/弹面板

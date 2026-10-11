@@ -3,27 +3,36 @@ extends Node2D
 
 ## 角色随行神通（技能）视觉特效控制器与渲染器
 ## 负责表现角色在施放技能瞬间与增益持续期间的国风空灵修仙视觉效果：
-##   1. 金光护体 (aegis): 六合天罡护身法印 + 双向浑天星轨金线 + 脚底金莲大阵 + 粒子化崩解碎散
-##   2. 疾风咒 (haste): 身周三重高速风刃气刃 + 脚底八卦太极疾风阵 + 向上生腾的风丝灵气粒子
+##   1. 金光护体 (aegis): 贴合身形的暖金半透明椭球护罩（罩体填充 + 球面纬线 + 亮边高光 +
+##      公转能量流光 + 呼吸脉动 + 弹出登场 + 粒子化崩解碎散）——唯一允许低透明罩体填充的技能，
+##      填充 alpha 压在 0.12 以内保持通透，杜绝"死皮感"的大面积糊罩
+##   2. 疾风咒 (haste): 脚下双层疾风轮 + 贴身螺旋上升气流 + 向上生腾的风丝灵气粒子
+##      （不环身画法阵、不遮人物，与护罩构图彻底区分）
 ##   3. 神行术 (gale): 御风破空矢量身法虚影 + 脚底透视双层风轮 + 飘逸风灵飘带
 ##   4. 缩地成寸 (dash): 瞬身纯白剑意锋芒 + 破空剑气割裂裂痕 + 矢量残影
 ##   5. 回春术 (renewal): 地面九品青莲甘露阵 + 穿透升华的生机光羽与甘露灵丝
 ##
-## 取色严格源自 GameStyle，完全剔除粗暴的半透明多边形填充罩（死皮感根源），
+## 三色三形速查：无敌=暖金椭球罩 / 攻速=蓝色脚下风轮+升腾气流 / 移速=黄色脚下风轮+飘带。
+## 罩体/风轮几何随角色体型插槽（config.body 的 scale×width_scale / scale×height_scale）等比缩放，
+## 保证狂战（宽 1.54 倍）不穿模、驯兽师（宽 0.78 倍）不空荡；取色严格源自 GameStyle
+## （暖金为 AURUM/AURUM_EDGE），其余技能维持纯线条不填充，
 ## 全面联动角色矢量本体（眼睛变色爆芒、斗篷流光反光、道印激活），达到主机级高精仙侠观感。
 
 # ---------------- 常量与配置 ----------------
-const BODY_CENTER := Vector2(0.0, -14.0)    ## 角色身躯中心（高宽覆盖的核心基准）
-const FEET_CENTER := Vector2(0.0, 14.0)     ## 角色脚底地面中心
+const BODY_CENTER := Vector2(0.0, -14.0)    ## 角色身躯中心（dash/renewal 沿用的历史基准）
+const FEET_CENTER := Vector2(0.0, 14.0)     ## 角色脚底地面中心（gale/renewal 沿用的历史基准）
 
-## 金光护体星轨半径
-const SHIELD_RX := 36.0
-const SHIELD_RY := 46.0
+## 金光护体椭球护罩几何（对齐程序化角色实际身形：宽 ±12、头顶 y≈-18、脚底 y≈+24，
+## 兼容跑步 hover 弹性 ±7% 后留 ~6px 余量；SkillVfx 无缩放，坐标即 Player 本地）
+const SHIELD_CENTER := Vector2(0.0, 3.0)
+const SHIELD_RX := 18.0
+const SHIELD_RY := 28.0
+const AEGIS_APPEAR_DUR := 0.16              ## 护罩弹出登场时长
 
-## 疾风咒风刃回旋半径
-const HASTE_GROUND_RADIUS := 36.0
-const HASTE_BODY_RX := 32.0
-const HASTE_BODY_RY := 42.0
+## 疾风咒脚下疾风轮几何（锚定真实脚底 y≈22）
+const HASTE_FEET := Vector2(0.0, 22.0)
+const HASTE_WHEEL_RX := 26.0
+const HASTE_WHEEL_RY := 10.0
 
 const GHOST_POOL_CAP := 12                  ## 图集残影池上限
 
@@ -35,6 +44,7 @@ var aegis_active: bool = false
 var aegis_timer: float = 0.0
 var aegis_max_dur: float = 1.6
 var aegis_rot: float = 0.0
+var aegis_appear: float = 1.0  ## 罩体弹出登场进度 0→1（1 为稳态）
 var aegis_shatter_progress: float = -1.0  ## >=0 时播放消散碎裂动画
 var aegis_shatter_sparks: Array[Dictionary] = [] ## {pos, vel, alpha, size}
 
@@ -66,9 +76,32 @@ var _ghost_pool: Array[Sprite2D] = []
 # 7. 程序化角色纯矢量流光残影队列
 var _vector_ghosts: Array[Dictionary] = []
 
+# 8. 角色体型系数（X=scale×width_scale，Y=scale×height_scale），与渲染器 total_scale 同源
+var _body_scale := Vector2.ONE
+
 func _ready() -> void:
 	z_index = 2  ## 略高于角色精灵
 	_init_ghost_pool()
+	_refresh_body_scale()
+
+## 从程序化角色配置读取体型插槽，护罩/风轮几何按此等比缩放（图集角色保持 1:1）
+func _refresh_body_scale() -> void:
+	_body_scale = Vector2.ONE
+	if player == null:
+		return
+	var pv = player.get("procedural_view")
+	if pv == null:
+		return
+	var cfg = pv.get("config")
+	if cfg == null or not ("body" in cfg):
+		return
+	var body: Dictionary = cfg.body
+	if body.is_empty():
+		return
+	var s := float(body.get("scale", 1.0))
+	var w := float(body.get("width_scale", 1.0))
+	var h := float(body.get("height_scale", 1.0))
+	_body_scale = Vector2(s * w, s * h)
 
 func _init_ghost_pool() -> void:
 	for i in range(GHOST_POOL_CAP):
@@ -117,6 +150,7 @@ func on_gale_start(duration: float) -> void:
 
 ## 疾风咒激活
 func on_haste_start(duration: float) -> void:
+	_refresh_body_scale()
 	haste_active = true
 	haste_timer = duration
 	haste_rot = 0.0
@@ -126,9 +160,12 @@ func on_haste_start(duration: float) -> void:
 
 ## 金光护体激活
 func on_aegis_start(duration: float) -> void:
+	_refresh_body_scale()
 	aegis_active = true
 	aegis_max_dur = duration
 	aegis_timer = duration
+	aegis_rot = 0.0
+	aegis_appear = 0.0
 	aegis_shatter_progress = -1.0
 	aegis_shatter_sparks.clear()
 	_notify_procedural_view("aegis", true, 1.0)
@@ -184,19 +221,22 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 	if aegis_active:
 		needs_redraw = true
 		aegis_rot += delta * 2.5
+		if aegis_appear < 1.0:
+			aegis_appear = minf(1.0, aegis_appear + delta / AEGIS_APPEAR_DUR)
 		aegis_timer -= delta
 		if aegis_timer <= 0.0:
 			aegis_active = false
 			aegis_shatter_progress = 0.0  ## 启动消散碎裂动效
 			_notify_procedural_view("aegis", false)
-			# 生成崩散碎星粒子
+			# 生成崩散碎星粒子（从护罩轮廓向四周迸散，随体型缩放）
 			aegis_shatter_sparks.clear()
+			var bs := _body_scale
 			for i in range(12):
 				var a := float(i) * (TAU / 12.0) + randf_range(-0.15, 0.15)
 				var spd := randf_range(75.0, 140.0)
 				aegis_shatter_sparks.append({
-					"pos": BODY_CENTER + Vector2(cos(a) * SHIELD_RX, sin(a) * SHIELD_RY),
-					"vel": Vector2(cos(a) * spd, sin(a) * spd),
+					"pos": Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * bs.y) + Vector2(cos(a) * SHIELD_RX * bs.x, sin(a) * SHIELD_RY * bs.y),
+					"vel": Vector2(cos(a) * spd, sin(a) * spd * 0.8),
 					"size": randf_range(2.0, 3.8)
 				})
 	elif aegis_shatter_progress >= 0.0:
@@ -219,17 +259,17 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 			haste_sparks.clear()
 			_notify_procedural_view("haste", false)
 		else:
-			# 周期性散逸微风刃灵气（覆盖全身范围）
+			# 周期性散逸微风刃灵气（贴身窄幅随体型，随气流升腾）
 			haste_particle_timer -= delta
 			if haste_particle_timer <= 0.0:
 				haste_particle_timer = 0.05
 				if haste_sparks.size() < 16:
 					var p_ang := randf() * TAU
-					var spawn_y := randf_range(-38.0, 12.0)
-					var spawn_x := cos(p_ang) * randf_range(14.0, 30.0)
+					var spawn_y := randf_range(-34.0, 16.0) * _body_scale.y
+					var spawn_x := cos(p_ang) * randf_range(5.0, 15.0) * _body_scale.x
 					haste_sparks.append({
 						"pos": Vector2(spawn_x, spawn_y),
-						"vel": Vector2(randf_range(-15.0, 15.0), randf_range(-70.0, -125.0)),
+						"vel": Vector2(randf_range(-12.0, 12.0), randf_range(-80.0, -140.0)),
 						"life": 0.30,
 						"max_life": 0.30,
 					})
@@ -405,54 +445,60 @@ func _draw_vector_ghosts() -> void:
 		draw_colored_polygon(cloak_pts, Color(col.r, col.g, col.b, alpha * 0.40))
 		draw_polyline(cloak_pts, Color(1.0, 1.0, 1.0, alpha * 0.85), 1.2, true)
 
-## 绘制【疾风咒】：环身三道极速风刃切线 + 脚底太极疾风八卦大阵 + 升腾风丝
+## 绘制【疾风咒】：脚下双层疾风轮 + 贴身螺旋上升气流 + 升腾风丝
+## （不环身画法阵、不遮人物，与金光护体的椭球罩构图彻底区分）
 func _draw_haste_fx() -> void:
-	var col_main := Color(GameStyle.GOLD, 0.88)
-	var col_edge := Color(GameStyle.GOLD_EDGE, 0.98)
+	var col_main := Color(GameStyle.GOLD, 0.82)       # 主蓝
+	var col_edge := Color(GameStyle.GOLD_EDGE, 0.95)  # 霜华亮蓝
+	# 几何随角色体型插槽缩放（脚底锚点随身高、轮径/摆幅随体宽）
+	var bs := _body_scale
+	var feet := Vector2(0.0, HASTE_FEET.y * bs.y)
 
-	var pulse := sin(haste_rot * 1.2) * 1.5
-	var rx := HASTE_BODY_RX + pulse
-	var ry := HASTE_BODY_RY + pulse
-
-	# 1. 环绕全身的 3 道高速椭圆风刃大弧（纯粹金白切线，告别半透明色块覆盖）
-	for i in range(3):
-		var base_a := haste_rot + float(i) * (TAU / 3.0)
-		var arc_pts := PackedVector2Array()
-		var steps := 12
-		var span := 1.40
-		for s in range(steps + 1):
-			var a := base_a + span * (float(s) / float(steps))
-			arc_pts.append(BODY_CENTER + Vector2(cos(a) * rx, sin(a) * ry))
-		draw_polyline(arc_pts, col_edge, 2.4, true)
-		# 风刃弧头纯白凝光刃尖
-		var tip := arc_pts[arc_pts.size() - 1]
-		draw_circle(tip, 2.5, Color.WHITE)
-		draw_line(tip, tip - Vector2(-sin(base_a + span) * 6.0, cos(base_a + span) * 6.0), Color.WHITE, 1.5)
-
-	# 2. 内层反向交织的护身螺旋风流（立体包裹动势）
-	var inner_rx := rx * 0.78
-	var inner_ry := ry * 0.82
+	# 1. 脚下疾风轮：外层两段对置弧 + 内层一段弧，反向快转，轮缘纯白锋点
 	for i in range(2):
-		var base_a := -haste_rot * 1.25 + float(i) * PI
-		var inner_pts := PackedVector2Array()
-		var steps := 10
-		var span := 1.55
-		for s in range(steps + 1):
-			var a := base_a + span * (float(s) / float(steps))
-			inner_pts.append(BODY_CENTER + Vector2(cos(a) * inner_rx, sin(a) * inner_ry))
-		draw_polyline(inner_pts, col_main, 1.6, true)
+		var wheel_rx := (HASTE_WHEEL_RX - float(i) * 9.0) * bs.x
+		var wheel_ry := (HASTE_WHEEL_RY - float(i) * 3.5) * bs.x
+		var spin := haste_rot * (1.0 + float(i) * 0.45)
+		var base_a := -spin if i == 1 else spin
+		var seg_count := 2 if i == 0 else 1
+		for seg in range(seg_count):
+			var pts := PackedVector2Array()
+			var steps := 12
+			var span := 1.75
+			var a0 := base_a + float(seg) * PI
+			for s in range(steps + 1):
+				var a := a0 + span * (float(s) / float(steps))
+				pts.append(feet + Vector2(cos(a) * wheel_rx, sin(a) * wheel_ry))
+			draw_polyline(pts, col_edge, 2.0 if i == 0 else 1.4, true)
+			# 轮端纯白破空锋点
+			draw_circle(pts[steps], 2.2 if i == 0 else 1.6, Color.WHITE)
 
-	# 3. 脚底八卦太极疾风大阵（透视风轮 + 太极阴阳流转弧）
-	for i in range(4):
-		var g_a := haste_rot * 1.4 + float(i) * (TAU / 4.0)
-		draw_arc(FEET_CENTER, HASTE_GROUND_RADIUS, g_a, g_a + 0.95, 14, col_edge, 2.0, true)
-		# 四象金芒位点
-		var pt_pos := FEET_CENTER + Vector2(cos(g_a) * HASTE_GROUND_RADIUS, sin(g_a) * HASTE_GROUND_RADIUS * 0.45)
-		draw_circle(pt_pos, 2.0, Color.WHITE)
-	# 内层太极流光小环
-	draw_arc(FEET_CENTER, HASTE_GROUND_RADIUS * 0.52, -haste_rot * 2.0, -haste_rot * 2.0 + PI, 16, col_main, 1.5, true)
+	# 轮心贴地加速微弧（扁弧快转，蓄势感）
+	var hub_a := haste_rot * 2.2
+	var hub_pts := PackedVector2Array()
+	for s in range(9):
+		var a := hub_a + 1.5 * (float(s) / 8.0)
+		hub_pts.append(feet + Vector2(cos(a) * 11.0 * bs.x, sin(a) * 4.0 * bs.x))
+	draw_polyline(hub_pts, col_main, 1.3, true)
 
-	# 4. 向上飞升的金色风刃光丝（Sparks）
+	# 2. 贴身螺旋上升气流：3 条相位差 TAU/3 的流线从脚底绕升到头顶上方，逐段渐隐
+	var steps_c := 12
+	for i in range(3):
+		var phase := haste_rot * 1.5 + float(i) * (TAU / 3.0)
+		var prev_p := Vector2.ZERO
+		for s in range(steps_c + 1):
+			var t := float(s) / float(steps_c)
+			var y := lerpf(20.0 * bs.y, -34.0 * bs.y, t)
+			var wob := sin(phase + t * 4.6)
+			var p := Vector2(wob * (17.0 * (1.0 - t * 0.5) * bs.x), y)
+			if s > 0:
+				var seg_a := (1.0 - t) * 0.62 + 0.08
+				draw_line(prev_p, p, Color(col_main.r, col_main.g, col_main.b, seg_a), 1.8, true)
+			prev_p = p
+		# 流线顶端逸散微光
+		draw_circle(prev_p, 1.5, Color(1, 1, 1, 0.55))
+
+	# 3. 向上飞升的蓝色风刃光丝（Sparks）
 	for sp in haste_sparks:
 		var ratio := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0)
 		var p_col := Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, ratio * 0.95)
@@ -537,60 +583,82 @@ func _draw_dash_cone() -> void:
 		var spark_p := BODY_CENTER + cone_dir * (15.0 + float(i) * 9.0) + Vector2(-cone_dir.y, cone_dir.x) * (float(i % 2 * 2 - 1) * 8.0)
 		draw_circle(spark_p, 1.6 * ratio, Color.WHITE)
 
-## 绘制【金光护体】：浑天星轨金线 + 六合天罡法印 + 粒子崩散（彻底剔除半透明多边形死皮填充）
+## 绘制【金光护体】：暖金半透明椭球护罩（贴合身形，覆盖头顶到脚底）
+## 唯一允许克制罩体填充的技能（填充 alpha ≤ 0.12 保持通透）：
+## 罩体填充 + 球面纬线 + 双层亮边 + 左上高光 + 公转能量流光 + 脚底落地光晕；到期粒子化崩解碎散
 func _draw_aegis_shield() -> void:
-	var pulse := sin(aegis_rot * 2.5) * 1.5
+	var pulse := sin(aegis_rot * 2.5) * 1.2
 	var rx := SHIELD_RX + pulse
 	var ry := SHIELD_RY + pulse
 
 	if aegis_active:
-		var col_border := Color(GameStyle.GOLD_EDGE, 0.98)
-		var col_inner := Color(GameStyle.GOLD, 0.75)
-		var col_white := Color(1.0, 1.0, 1.0, 0.95)
+		# 登场弹出（back-out 过冲回弹）+ 淡入
+		var pop := lerpf(0.55, 1.0, _back_out(clampf(aegis_appear, 0.0, 1.0)))
+		var fade := clampf(aegis_appear * 1.4, 0.0, 1.0)
+		# 呼吸脉动（微幅缩放，罩体活着的感觉）；几何随角色体型插槽缩放
+		var breathe := 1.0 + sin(aegis_rot * 1.7) * 0.018
+		var s_rx := rx * pop * breathe * _body_scale.x
+		var s_ry := ry * pop * breathe * _body_scale.y
+		var c := Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y)
 
-		# 1. 双向立体浑天星轨金线（相向交织，空灵通透）
-		var ring1_pts := PackedVector2Array()
-		var ring2_pts := PackedVector2Array()
+		var col_edge := GameStyle.AURUM_EDGE   # 暖金亮边
+		var col_main := GameStyle.AURUM        # 暖金主色
+
+		# 1. 罩体半透明填充（极低 alpha，通透不糊人）
+		var body_pts := PackedVector2Array()
+		for i in range(33):
+			var a := float(i) * (TAU / 32.0)
+			body_pts.append(c + Vector2(cos(a) * s_rx, sin(a) * s_ry))
+		draw_colored_polygon(body_pts, Color(col_main.r, col_main.g, col_main.b, 0.10 * fade))
+
+		# 2. 球面纬线（3 条按椭球截面收窄的透视扁弧，撑起立体罩感）
+		for k in range(3):
+			var t := -0.42 + float(k) * 0.42
+			var ly := c.y + t * s_ry
+			var lw := s_rx * sqrt(maxf(0.04, 1.0 - t * t))
+			var lat_pts := PackedVector2Array()
+			for i in range(25):
+				var a := float(i) * (TAU / 24.0)
+				lat_pts.append(Vector2(c.x + cos(a) * lw, ly + sin(a) * s_ry * 0.20))
+			draw_polyline(lat_pts, Color(col_main.r, col_main.g, col_main.b, 0.20 * fade), 1.0, true)
+
+		# 3. 双层亮边：外圈暖金主描边 + 内衬白细线（能量壁质感）
+		var rim_pts := PackedVector2Array()
+		var rim_in_pts := PackedVector2Array()
+		for i in range(33):
+			var a := float(i) * (TAU / 32.0)
+			rim_pts.append(c + Vector2(cos(a) * s_rx, sin(a) * s_ry))
+			rim_in_pts.append(c + Vector2(cos(a) * (s_rx - 1.6), sin(a) * (s_ry - 1.6)))
+		draw_polyline(rim_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.95 * fade), 2.2, true)
+		draw_polyline(rim_in_pts, Color(1.0, 1.0, 1.0, 0.38 * fade), 1.0, true)
+
+		# 4. 左上高光弧（光源反射，强化球体受光）
+		var hl_pts := PackedVector2Array()
+		for i in range(13):
+			var a := deg_to_rad(lerpf(-155.0, -65.0, float(i) / 12.0))
+			hl_pts.append(c + Vector2(cos(a) * (s_rx - 3.2), sin(a) * (s_ry - 3.2)))
+		draw_polyline(hl_pts, Color(1.0, 1.0, 1.0, 0.5 * fade), 2.4, true)
+
+		# 5. 沿罩面公转的能量流光（4 枚能量光点 + 拖尾）
+		for i in range(4):
+			var fa := -aegis_rot * 1.6 + float(i) * (TAU / 4.0)
+			var fp := c + Vector2(cos(fa) * s_rx, sin(fa) * s_ry)
+			var fp_prev := c + Vector2(cos(fa - 0.26) * s_rx, sin(fa - 0.26) * s_ry)
+			draw_line(fp_prev, fp, Color(col_edge.r, col_edge.g, col_edge.b, 0.6 * fade), 1.6, true)
+			draw_circle(fp, 2.1, Color(col_edge.r, col_edge.g, col_edge.b, 0.92 * fade))
+			draw_circle(fp, 1.0, Color(1.0, 1.0, 1.0, 0.95 * fade))
+
+		# 6. 脚底落地光晕（罩体接地暗示，替代旧金莲大阵）
+		var ground_y := c.y + s_ry * 0.86
+		var glow_pts := PackedVector2Array()
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)
-			# 正向椭圆轨道
-			ring1_pts.append(BODY_CENTER + Vector2(cos(a + aegis_rot * 0.4) * rx, sin(a + aegis_rot * 0.4) * ry))
-			# 倾斜立体反向轨道
-			var tilted_a := a - aegis_rot * 0.5
-			var tx := cos(tilted_a) * (rx * 0.92)
-			var ty := sin(tilted_a) * (ry * 0.92)
-			ring2_pts.append(BODY_CENTER + Vector2(tx * 0.92 - ty * 0.12, tx * 0.12 + ty * 0.92))
-
-		draw_polyline(ring1_pts, col_border, 2.0, true)
-		draw_polyline(ring2_pts, col_inner, 1.4, true)
-
-		# 2. 六合天罡护身法印（6 枚精致菱形金符，沿星轨公转）
-		for i in range(6):
-			var bead_a := -aegis_rot * 1.4 + float(i) * (TAU / 6.0)
-			var bead_pos := BODY_CENTER + Vector2(cos(bead_a) * (rx + 4.0), sin(bead_a) * (ry + 4.0))
-			var d_size := 4.2
-			var diamond := PackedVector2Array([
-				bead_pos + Vector2(0, -d_size),
-				bead_pos + Vector2(d_size * 0.85, 0),
-				bead_pos + Vector2(0, d_size),
-				bead_pos + Vector2(-d_size * 0.85, 0)
-			])
-			# 金边法印 + 白心核心
-			draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), col_border, 1.5, true)
-			draw_circle(bead_pos, 1.8, col_white)
-			# 法印流光微尾
-			var tail_p := bead_pos - Vector2(-sin(bead_a), cos(bead_a)) * 5.0
-			draw_line(tail_p, bead_pos, Color(col_border.r, col_border.g, col_border.b, 0.65), 1.2)
-
-		# 3. 脚底天罡降魔金莲大阵（地面透视莲花阵盘）
-		draw_arc(FEET_CENTER, 32.0, aegis_rot, aegis_rot + TAU, 28, col_inner, 1.8, true)
-		for k in range(8):
-			var petal_a := aegis_rot + float(k) * (TAU / 8.0)
-			var petal_p := FEET_CENTER + Vector2(cos(petal_a) * 32.0, sin(petal_a) * 12.0)
-			draw_circle(petal_p, 1.8, Color.WHITE)
+			glow_pts.append(Vector2(c.x + cos(a) * s_rx * 1.05, ground_y + sin(a) * 4.5))
+		draw_colored_polygon(glow_pts, Color(col_main.r, col_main.g, col_main.b, 0.10 * fade))
+		draw_polyline(glow_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.30 * fade), 1.2, true)
 
 	elif aegis_shatter_progress >= 0.0:
-		# 结界到期破碎：纯粒子化向四周迸散（告别生硬大椭圆向外缩放）
+		# 结界到期破碎：纯粒子化向四周迸散（暖金碎星）
 		var p := aegis_shatter_progress
 		var alpha := 1.0 - p
 		for spk in aegis_shatter_sparks:
@@ -598,18 +666,26 @@ func _draw_aegis_shield() -> void:
 			var sp_sz: float = float(spk["size"]) * (1.0 - p * 0.4)
 			draw_circle(sp_pos, sp_sz, Color(1, 1, 1, alpha * 0.95))
 			var tail := sp_pos - Vector2(spk["vel"]).normalized() * (8.0 * (1.0 - p))
-			draw_line(tail, sp_pos, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, alpha * 0.85), 1.6)
+			draw_line(tail, sp_pos, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, alpha * 0.85), 1.6)
 
-		# 微细环形音爆裂纹（急速淡出）
+		# 微细环形音爆裂纹（急速淡出，暖金，随体型缩放）
 		if p < 0.4:
 			var ring_p := p / 0.4
-			var s_rx := rx + ring_p * 24.0
-			var s_ry := ry + ring_p * 24.0
+			var s_rx := (SHIELD_RX + ring_p * 18.0) * _body_scale.x
+			var s_ry := (SHIELD_RY + ring_p * 18.0) * _body_scale.y
+			var sc := Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y)
 			var shatter_pts := PackedVector2Array()
 			for i in range(25):
 				var a := float(i) * (TAU / 24.0)
-				shatter_pts.append(BODY_CENTER + Vector2(cos(a) * s_rx, sin(a) * s_ry))
-			draw_polyline(shatter_pts, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, (1.0 - ring_p) * 0.75), 1.8, true)
+				shatter_pts.append(sc + Vector2(cos(a) * s_rx, sin(a) * s_ry))
+			draw_polyline(shatter_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - ring_p) * 0.75), 1.8, true)
+
+## back-out 缓出（护罩登场弹出用，末端略过冲再回弹）
+func _back_out(t: float) -> float:
+	var c1 := 1.70158
+	var c3 := c1 + 1.0
+	var x := t - 1.0
+	return 1.0 + c3 * x * x * x + c1 * x * x
 
 ## 绘制【回春术】：地面九品青莲生机甘露阵 + 穿透升华的生机光羽（彻底剔除绿色大光罩覆盖）
 func _draw_renewal_fx() -> void:

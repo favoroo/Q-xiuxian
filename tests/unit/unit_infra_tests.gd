@@ -210,7 +210,7 @@ func _test_achievement_and_meta_save() -> void:
 			_c.check(not ItemData.get_def(rid).is_empty(), "成就 %s 奖励法宝 %s 在法宝表中存在" % [aid, rid])
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
 	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 6, "初始默认开放 6 名基础修士")
-	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 18, "初始默认开放 18 件基础法宝")
+	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 47, "初始默认开放 47 件基础法宝")
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()

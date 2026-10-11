@@ -69,6 +69,9 @@ var dash_progress: float = 0.0   # 0.0 到 1.0
 var attack_progress: float = 0.0 # 0.0 到 1.0
 var hit_progress: float = 0.0    # 0.0 到 1.0
 var lean_angle: float = 0.0
+## 归一化移动方向（世界系，"n"=向上远离镜头为 -y）。斗篷风向响应输入；
+## 渲染器仅在 RUN 状态消费它并向零平滑衰减，静止残留值无需外部清零。
+var move_dir: Vector2 = Vector2.ZERO
 
 ## 技能动态外观修饰参数（支持眼睛变色、斗篷反光流光、道印激活等）
 var skill_aura_type: String = ""

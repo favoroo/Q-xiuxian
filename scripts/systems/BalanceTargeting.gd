@@ -162,10 +162,20 @@ static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array,
 ## stat_scalings: { "armor": 3.5, "crit_rate": 40.0, ... }
 ## player_stats: { "armor": float, "crit_rate": float, "hp_regen": float, ... }
 ## star: 星级，每升一星该法器的属性转化效率提升 25%（★1: 1.0x, ★2: 1.25x, ★3: 1.5x）
+## 总额就是 weapon_stat_bonus_parts 各项之和 —— 只留一份折算实现，账单与总额不可能对不上。
 static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> float:
-	if stat_scalings.is_empty():
-		return 0.0
 	var bonus: float = 0.0
+	for v in weapon_stat_bonus_parts(stat_scalings, player_stats, star).values():
+		bonus += float(v)
+	return bonus
+
+## 纯函数：属性 → 这把法器的逐项裸伤明细 {stat_scalings 键: 该项加了多少裸伤}，已含星级效率。
+## 卡面与详情弹窗的「属性加伤账单」直接读它：玩家看到的是每项贡献的伤害数，不是系数百分比
+## （armor 3.5 这类系数按百分比印出来会显示成「护甲(+4%)」，max_hp_bonus 0.12 更是直接四舍五入成「+0%」）。
+static func weapon_stat_bonus_parts(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> Dictionary:
+	var parts: Dictionary = {}
+	if stat_scalings.is_empty():
+		return parts
 	var star_mult: float = 1.0 + 0.25 * float(clampi(star, 1, 3) - 1)
 	for key in stat_scalings.keys():
 		var coef: float = float(stat_scalings[key])
@@ -201,8 +211,8 @@ static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionar
 				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
 			"harvest":
 				val = maxf(0.0, float(player_stats.get("harvest", 0.0)))
-		bonus += val * coef
-	return bonus * star_mult
+		parts[String(key)] = val * coef * star_mult
+	return parts
 
 static func stat_scaling_label(key: String) -> String:
 	match key:
