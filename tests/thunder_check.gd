@@ -17,7 +17,7 @@ extends Node
 ##
 ## 坑（与 GuardStanceCheck 同）：特效视口终审要求落点在屏内，玩家必须摆在 (260,270) 附近；
 ## 受击顿帧会拖时间，跑前先关 hit_stop（auto_save=false，不落盘）。
-## 坑 2：灵田界碑 MAP_HALF_EXTENT=500（怪的钳制带 480），摆怪超出会被当帧钳回，位移读数全毁；
+## 坑 2：灵田界碑 MAP_HALF_EXTENT=440（怪的钳制带 420），摆怪超出会被当帧钳回，位移读数全毁；
 ## 坑 3：queue_free 的怪到帧末才出 enemies 组，跨场景段前要等一拍，否则尸体吃落雷。
 
 const EPS := 0.0001
@@ -84,7 +84,7 @@ func _test_strike_delivers() -> void:
 	# 雷法没有第二颗按钮：天雷必须全自动（计时器驱动，不存在「点开放」）
 	_c.check(CultivatorData.get_extra_skill_id("leifa").is_empty(), "雷法无 extra_skill（天雷全自动，不点按钮）")
 	# 目标 = 离玩家最近的妖兽；伴怪贴在落点圈内，远怪在圈外
-	# （远怪摆落点正上方：东侧 570px 会出灵田界碑（MAP_HALF_EXTENT 500，怪的钳制带 480）被瞬移钳回，污染位移读数）
+	# （远怪摆落点正上方：东侧 570px 会出灵田界碑（MAP_HALF_EXTENT 440，怪的钳制带 420）被瞬移钳回，污染位移读数）
 	var target := _make_enemy(SPAWN_AT + Vector2(150.0, 0.0))
 	var inside := _make_enemy(SPAWN_AT + Vector2(150.0 + ThunderData.RADIUS - 40.0, 0.0))
 	var outside := _make_enemy(SPAWN_AT + Vector2(150.0, -(ThunderData.RADIUS + 60.0)))

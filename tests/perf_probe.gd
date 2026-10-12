@@ -169,7 +169,7 @@ func _run() -> void:
 		if is_instance_valid(g):
 			g.recycle()
 	# 玩家挪离宝石网格（原点距 (60,40) 仅 ~72px，拾取圈会把判据宝石吃掉一颗）
-	player.global_position = Vector2(480.0, 500.0)
+	player.global_position = Vector2(380.0, 400.0)
 	var gem_scene: PackedScene = load("res://scenes/entities/AstralGem.tscn")
 	var gem_created0: int = AstralGem.created_count
 	var gem_reused0: int = AstralGem.reused_count
@@ -230,7 +230,7 @@ func _run() -> void:
 	# 软上限保险丝：场上 120 颗再补 21 颗 ⇒ 第 141 颗起最旧的被强制吸附
 	for i in range(21):
 		var g := AstralGem.acquire_or_new(gem_scene, world)
-		g.global_position = Vector2(-480.0 + float(i) * 8.0, 480.0)
+		g.global_position = Vector2(-380.0 + float(i) * 8.0, 380.0)
 		g.exp_value = 1
 		g.is_gold = false
 		g.activate()

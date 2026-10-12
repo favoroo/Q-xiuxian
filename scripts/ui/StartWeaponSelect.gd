@@ -57,7 +57,7 @@ func _setup_header_bar() -> void:
 	vbox.move_child(header_row, 0)
 
 	var back_btn := Button.new()
-	back_btn.text = "〈 重选角色"
+	back_btn.text = "〈 返 回"
 	back_btn.custom_minimum_size = Vector2(98, 34)
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP

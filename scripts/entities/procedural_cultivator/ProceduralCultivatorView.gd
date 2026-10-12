@@ -8,6 +8,12 @@ extends Node2D
 @export var config: CultivatorVisualConfig
 @export var renderer_script: GDScript = HollowKnightCultivatorRenderer
 
+var high_fps_mode: bool = false:
+	set(val):
+		high_fps_mode = val
+		if renderer != null:
+			renderer.high_fps_mode = val
+
 var renderer: CultivatorRendererBase
 
 # 动作计时器
@@ -64,11 +70,12 @@ func _init_renderer() -> void:
 	else:
 		renderer = HollowKnightCultivatorRenderer.new()
 
-	if config:
-		renderer.config = config
-		if renderer is HollowKnightCultivatorRenderer:
-			(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
-	add_child(renderer)
+		if config:
+			renderer.config = config
+			if renderer is HollowKnightCultivatorRenderer:
+				(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
+		renderer.high_fps_mode = high_fps_mode
+		add_child(renderer)
 
 func _process(delta: float) -> void:
 	if renderer == null:

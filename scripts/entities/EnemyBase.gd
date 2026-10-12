@@ -718,24 +718,26 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 			if target is Player:
 				var hp_before_charge: float = target.current_health
 				target.take_damage(contact_damage * charge_damage_mul)
-				# 石岳反震：与接触伤害同一个口径，实际被打中才反弹
-				if GameManager.thorns_pct > 0.0 and target.current_health < hp_before_charge:
-					take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
+				# 石岳/玄武反震：与接触伤害同一个口径，实际被打中才反弹
+				var eff_thorns: float = GameManager.get_effective_thorns()
+				if eff_thorns > 0.0 and target.current_health < hp_before_charge:
+					take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
 			elif target.has_method("take_damage"):
 				target.take_damage(contact_damage * charge_damage_mul)
 
-	# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var collider = col.get_collider()
-		if collider is Player:
-			var hp_before: float = collider.current_health
-			collider.take_damage(contact_damage)
-			# 石岳反震：实际被打中才反弹（闪避/无敌帧不触发）
-			if GameManager.thorns_pct > 0.0 and collider.current_health < hp_before:
-				take_damage(contact_damage * GameManager.thorns_pct, Vector2.ZERO, false)
-		elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
-			collider.take_damage(contact_damage)
+		# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
+		for i in range(get_slide_collision_count()):
+			var col = get_slide_collision(i)
+			var collider = col.get_collider()
+			if collider is Player:
+				var hp_before: float = collider.current_health
+				collider.take_damage(contact_damage)
+				# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
+				var eff_thorns: float = GameManager.get_effective_thorns()
+				if eff_thorns > 0.0 and collider.current_health < hp_before:
+					take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
+			elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
+				collider.take_damage(contact_damage)
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
@@ -1114,7 +1116,7 @@ func _die() -> void:
 	if dying:
 		return
 	dying = true
-	GameManager.register_kill(is_elite)
+	GameManager.register_kill(is_elite, _death_crit_kill)
 
 	# 血蛹系：临死分裂出幼体（自爆/波末消散不触发）
 	if split_count > 0 and split_scene != null and not _no_drop:

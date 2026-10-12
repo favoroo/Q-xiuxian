@@ -217,7 +217,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 15, "成就里程碑共配置 15 条")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 16, "成就里程碑共配置 16 条")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -464,6 +464,30 @@ func _test_modal_pause_buttons() -> void:
 	lvl_stats_btn.pressed.emit()
 	_c.equals(int(state["lvl_pause"]), 1, "点击加点面板暂停按钮触发 pause_requested")
 	_c.equals(int(state["lvl_stats"]), 1, "点击加点面板属性按钮触发 stats_requested")
+
+	# 1.1 LevelUpDialog 顶栏圆形待加点徽记与连升文案校验（2026-10-12）
+	var points_badge := lvl_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/TopBar/PointsBadge") as PanelContainer
+	_c.check(points_badge != null, "加点面板顶栏含待加点圆形徽记 PointsBadge")
+	var points_label := points_badge.get_node_or_null("PointsLabel") as Label if points_badge != null else null
+	_c.check(points_label != null, "徽记内含 PointsLabel 显示剩余点数")
+
+	var orig_pending := GameManager.pending_upgrade_points
+	var orig_total := GameManager.alloc_points_total
+	GameManager.pending_upgrade_points = 3
+	GameManager.alloc_points_total = 3
+	lvl_dlg._refresh_bars()
+	if points_label != null:
+		_c.equals(points_label.text, "3", "初始待加点徽记数字为 3")
+	_c.check("连升 3 级" in lvl_dlg.info_label.text, "连升多级时 InfoLabel 明确提示连升等级")
+	_c.check("剩余加点 3 次" in lvl_dlg.info_label.text, "连升多级时提示剩余加点 3 次")
+
+	GameManager.pending_upgrade_points = 2
+	lvl_dlg._refresh_bars()
+	if points_label != null:
+		_c.equals(points_label.text, "2", "加点后徽记数字扣减为 2")
+	_c.check("剩余加点 2 次" in lvl_dlg.info_label.text, "加点后提示剩余加点 2 次")
+	GameManager.pending_upgrade_points = orig_pending
+	GameManager.alloc_points_total = orig_total
 
 	# 2. WaveShop 顶栏暂停按钮与信号校验
 	_c.check(shop_dlg.has_signal("pause_requested"), "商店面板具备 pause_requested 信号")

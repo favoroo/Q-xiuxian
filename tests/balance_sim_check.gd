@@ -35,7 +35,7 @@ func _ready() -> void:
 	else:
 		get_tree().quit(1)
 
-# ---------------- 1. 54 件非机关法器单体 DPS 分档与极差比（机关炮台不进档，与既有口径一致） ----------------
+# ---------------- 1. 全库 68 件法器单体 DPS 分档与极差比 ----------------
 
 func _test_weapon_dps_normalization() -> void:
 	var single_target_weapons := [
@@ -57,11 +57,17 @@ func _test_weapon_dps_normalization() -> void:
 		"zhenhuo_fu", "leihuo_fu", "langli_suo", "gudu_fu",
 		# 2026-10-11 第二批：群伤型
 		"lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu",
+		# 2026-10-12 第三批：纳入群伤/功能带
+		"guishui_fu", "taomu_jian", "houtu_fu", "jinxiao_leiling", "xuanming_leizhu",
 	]
 	var drone_weapons := [
 		"lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei",
 		# 2026-10-11 第二批：御灵加厚 6 把
 		"jinming_ling", "muling_ou", "bingpo_zhu", "chiyan_ying", "tuling_shi", "jianling",
+	]
+	var turret_weapons := [
+		"jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou", "hanquan_shou", "tengluo_jiguan",
+		"leishi_jiguan", "kuilei_shou", "qingmu_pao", "ningbing_nu", "fenghuo_tai",
 	]
 
 	var min_dps: float = 9999.0
@@ -83,6 +89,11 @@ func _test_weapon_dps_normalization() -> void:
 			# 此带约束的是有效单体 DPS，而非纸面值；经数值强化后提升至 30~38 区间
 			_c.check(dps >= 30.0 and dps <= 38.0,
 				"御灵环绕法器【%s】有效 DPS 落在 30~38 区间 (实得 %.1f)" % [w_id, dps])
+		elif w_id in turret_weapons:
+			_c.check(dps >= 20.0 and dps <= 32.0,
+				"机关炮台【%s】基准 DPS 落在 20~32 区间 (实得 %.1f)" % [w_id, dps])
+		else:
+			_c.fail("法器【%s】未纳入任何平衡分档" % w_id)
 
 	var ratio := max_dps / maxf(0.1, min_dps)
 	_c.check(ratio <= 2.0, "全库 68 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])

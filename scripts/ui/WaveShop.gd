@@ -61,16 +61,16 @@ const CARD_W_MIN := 148.0
 const CARD_W_MAX := 220.0
 const CARD_GAP_MIN := 10.0
 const CARD_GAP_MAX := 16.0
-## 卡内摆位：内容边距 6、行距 3、图标 44、价格键 32、锁定角键 40×24。
+## 卡内摆位：内容边距 6、行距 3、图标 48、价格键 32、锁定角键 36×20。
 ## 这一组数一起决定「最坏文案下这张卡多高」，判据按现量的数说话（见头注 ③）。
 ## 左右边距不许再压：卡片是 3° 斜切的平行四边形，260 高时上下各挪出 6.8 单位，
 ## 边距压到 8 以下文字就贴上画出来的边框线（判据 LayoutCheck 的「离面板画出来的边」那把尺）。
 const CARD_PAD_Y := 6.0
 const CARD_SEP := 3.0
-const CARD_ICON := 44.0
+const CARD_ICON := 48.0
 const CARD_PRICE_H := 32.0
-const CARD_LOCK_W := 40.0
-const CARD_LOCK_H := 24.0
+const CARD_LOCK_W := 36.0
+const CARD_LOCK_H := 20.0
 ## 入场动画的支点参考高，同时是「卡高的设计上限」：卡高由内容决定，判据量出来最坏 256
 ## （6 格货架 + 最长那句说明）。滚动区两头的留白按这个上限算，超过它卡角就会被削。
 const CARD_H_REF := 280.0
@@ -386,14 +386,14 @@ func refresh(animate: bool = true) -> void:
 	var card_w := offer_card_w(_screen, count)
 	offers_container.add_theme_constant_override("separation", offer_separation(_screen))
 	for i in range(count):
-		var c := ShopOfferCardFactory.create_card(self, offers[i], i, count)
+		var c: Control = ShopOfferCardFactory.create_card(self, offers[i], i, count)
 		offers_container.add_child(c)
 		if not animate:
 			continue
 		c.pivot_offset = Vector2(card_w * 0.5, CARD_H_REF * 0.5)
 		c.scale = Vector2(0.82, 0.82)
 		c.modulate.a = 0.0
-		var ctw := c.create_tween()
+		var ctw: Tween = c.create_tween()
 		# 卡高由内容决定 ⇒ 支点要等布局出尺寸之后按实际那一格中心重设，
 		# 否则入场放大绕的是参考高的中心，落点会往一边偏（与 LevelUpDialog 同一处理）。
 		ctw.tween_callback(_center_pivot.bind(c))
@@ -430,9 +430,9 @@ func _refresh_inventory() -> void:
 	# 背包空位画成凹槽提示容量
 	var empty_budget: int = clampi(10 - eq_count - GameManager.stash.size(), 0, 3)
 	var free_tiles: int = mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)
-	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 法宝徽记）
-	var n_tile: int = eq_count + GameManager.stash.size() + free_tiles + GameManager.items.size()
-	var n_chip: int = (2 if slot_capped else 1) + (1 if not GameManager.items.is_empty() else 0)
+	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 法宝徽记 + 灵兽徽记）
+	var n_tile: int = eq_count + GameManager.stash.size() + free_tiles + GameManager.items.size() + GameManager.pets.size()
+	var n_chip: int = (2 if slot_capped else 1) + (1 if not GameManager.items.is_empty() else 0) + (1 if not GameManager.pets.is_empty() else 0)
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
 	if slot_capped:
 		owned_container.add_child(ShopInventoryRow.create_equipped_cap_chip(summary.size(), max_slots))
@@ -452,6 +452,12 @@ func _refresh_inventory() -> void:
 		owned_container.add_child(ShopInventoryRow.create_items_divider())
 		for item_id in GameManager.items:
 			owned_container.add_child(ShopInventoryRow.create_item_chip(self, item_id, tile))
+
+	# 已持有随行灵兽陈列：小圆球 + 点按查看详情与出售操作
+	if not GameManager.pets.is_empty():
+		owned_container.add_child(ShopInventoryRow.create_pets_divider())
+		for pet_id in GameManager.pets:
+			owned_container.add_child(ShopInventoryRow.create_pet_chip(self, pet_id, tile))
 
 	# 整排都要划得起来：装饰性 STOP 会把「按下」那一拍就地吃掉，卡住多大面积就滑不动多大面积
 	# （同一把尺见 GameStyle.swipeable 头注）。这一排的格子已经都不是 Button 了（见

@@ -4,8 +4,8 @@ extends RefCounted
 ## 成就里程碑与局外解锁数据库（仿土豆兄弟纯成就解锁机制）
 ## 全部 static 纯函数 —— 不读 autoload、不碰节点，保证单测可确定性断言。
 ## 设计原则：
-##   1. 零局外数值膨胀：成就只解锁新修士（道统）与少量法宝入池，不破坏局内难度平衡；
-##   2. 初始开放 6 名代表性修士 + 47 件基础法宝，其余 9 名进阶修士与 4 件高阶法宝通过里程碑解锁。
+##   1. 零局外数值膨胀：成就只解锁新角色（道统）与少量道具入池，不破坏局内难度平衡；
+##   2. 初始开放 6 名代表性角色 + 47 件基础道具，其余 9 名进阶角色与 4 件高阶道具通过里程碑解锁。
 
 ## 危险度档位名号（D0 ~ D5）
 const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
@@ -20,7 +20,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"leifa",
 ]
 
-## 初始默认进入灵石阁货架池的 47 件法宝（高阶出现节奏由 GameBalance.item_tier_weights 波次门槛控制）
+## 初始默认进入商店货架池的 47 件道具（高阶出现节奏由 GameBalance.item_tier_weights 波次门槛控制）
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
@@ -40,15 +40,15 @@ const DEFAULT_ITEMS: Array[String] = [
 	"taiyi_jindan",
 	"luban_suo",
 	"jiguan_hexin",
-	# —— 2026-10-11 扩池：以下原为已定义未入池法宝（图鉴可见但货架抽不到），按档位补入 ——
-	# 凡品（tier 1）
+	# —— 2026-10-11 扩池：以下原为已定义未入池道具（图鉴可见但货架抽不到），按档位补入 ——
+	# 普通（tier 1）
 	"hupi_qun",
 	"lijian_shi",
 	"feihuang_shi",
 	"juling_fu",
 	"yuling_pai",
 	"manli_huwan",
-	# 良品（tier 2）
+	# 稀有（tier 2）
 	"jinjing_shi",
 	"chenxiang_mu",
 	"hantan_yu",
@@ -61,7 +61,7 @@ const DEFAULT_ITEMS: Array[String] = [
 	"poxu_lingfu",
 	"fanzhen_tongjia",
 	"lingbo_xue",
-	# 仙品（tier 3）
+	# 史诗（tier 3）
 	"potian_zhui",
 	"jingang_zhuo",
 	"shenxing_xue",
@@ -123,7 +123,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_dubi",
 			"name": "极限挑战",
-			"cond_desc": "通关「困难」或更高难度",
+			"cond_desc": "通关「普通」或更高难度",
 			"reward_type": "cultivator",
 			"reward_id": "dubi",
 			"reward_name": "狂战士",
@@ -132,7 +132,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_jiguan",
 			"name": "巧夺天工",
-			"cond_desc": "单局同时上阵机关或御灵法器达到4件",
+			"cond_desc": "单局同时上阵机关或召唤类法器达到4件",
 			"reward_type": "cultivator",
 			"reward_id": "jiguan",
 			"reward_name": "机关师",
@@ -141,7 +141,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_yaowang",
 			"name": "悬壶济世",
-			"cond_desc": "单局累计气血回复达到200点",
+			"cond_desc": "单局累计生命回复达到200点",
 			"reward_type": "cultivator",
 			"reward_id": "yaowang",
 			"reward_name": "药王",
@@ -168,21 +168,30 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_fuxiu",
 			"name": "万符朝宗",
-			"cond_desc": "单局同时上阵符箓类法器达到4件",
+			"cond_desc": "单局同时上阵弹射类武器达到4件",
 			"reward_type": "cultivator",
 			"reward_id": "fuxiu",
 			"reward_name": "灵符子",
 			"icon": "res://assets/art/cultivator_fuxiu_icon.png",
 		},
-		{
-			"id": "ach_cult_bawang",
-			"name": "横扫千军",
-			"cond_desc": "单局同时上阵横扫类法器达到4件",
-			"reward_type": "cultivator",
-			"reward_id": "bawang",
-			"reward_name": "霸王",
-			"icon": "res://assets/art/cultivator_bawang_icon.png",
-		},
+			{
+				"id": "ach_cult_bawang",
+				"name": "横扫千军",
+				"cond_desc": "单局同时上阵横扫类武器达到4件",
+				"reward_type": "cultivator",
+				"reward_id": "bawang",
+				"reward_name": "霸王",
+				"icon": "res://assets/art/cultivator_bawang_icon.png",
+			},
+			{
+				"id": "ach_cult_juechen",
+				"name": "心剑通神",
+				"cond_desc": "单局同时上阵剑系武器达到4件",
+				"reward_type": "cultivator",
+				"reward_id": "juechen",
+				"reward_name": "绝尘",
+				"icon": "res://assets/art/cultivator_juechen_icon.png",
+			},
 	{
 		"id": "ach_item_pojia",
 		"name": "深入敌后",
@@ -195,7 +204,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	{
 		"id": "ach_item_wuxing",
 		"name": "五行齐聚",
-		"cond_desc": "单局等级达到Lv.15",
+		"cond_desc": "单局等级达到15级",
 		"reward_type": "item",
 		"reward_id": "wuxing_pei",
 		"reward_name": "五行石",
@@ -309,6 +318,8 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("talisman", 0)) >= 4
 		"ach_cult_bawang":
 			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("wide", 0)) >= 4
+		"ach_cult_juechen":
+			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("sword", 0)) >= 4
 		"ach_item_pojia":
 			return best_wave >= 15
 		"ach_item_wuxing":

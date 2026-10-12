@@ -1,8 +1,8 @@
 class_name UpgradeData
 extends RefCounted
 
-## 加点数据库：波后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从波间商店获取
-## 稀有度权重：凡品/良品/仙品基础 60/30/10，福缘每点 +1 仙品权重（从凡品中扣，见 GameBalance.rarity_weights）
+## 加点数据库：波后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从商店获取
+## 稀有度权重：普通/稀有/史诗基础 60/30/10，幸运每点 +1 史诗权重（从普通中扣，见 GameBalance.rarity_weights）
 ## 每项设 max_stacks 上限，叠满后从池中剔除，防数值线性失控
 ##
 ## "apply" 是该项的**实际生效幅度**（唯一事实来源）：悟道卡面的加成行由 BonusRows 从 apply
@@ -202,7 +202,7 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 8,
 	},
 	# 2026-10-11 寻宝流三项：生效幅度在这里，兑现点在 BalanceChest（数量/档次权重/击数）
-	# 与 WaveSpawner._spawn_chests、SpiritChest._destroy。图标与同名法宝配对（重掷令/破甲针同款先例）。
+	# 与 WaveSpawner._spawn_chests、SpiritChest._destroy。图标与同名道具配对（重掷令/破甲针同款先例）。
 	{
 		"id": "chest_count_up",
 		"apply": {"chest_count": 1},
@@ -217,7 +217,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "chest_quality_up",
 		"apply": {"chest_quality": 2.0},
 		"title": "宝箱品质",
-		"desc": "铜匣与玉匣更易出现，玉匣砸开必送法宝",
+		"desc": "铜匣与玉匣更易出现，玉匣砸开必送道具",
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/item_dianjin_jue.png",
@@ -285,7 +285,7 @@ const UPGRADES: Array[Dictionary] = [
 	},
 	{
 		"id": "wuxing_up",
-		"apply": {"element_damage_all": 0.06},
+		"apply": {"element_damage_all": 0.08},
 		"title": "全元素强化",
 		"desc": "提升全系武器的元素伤害",
 		"rarity": "epic",
@@ -293,7 +293,7 @@ const UPGRADES: Array[Dictionary] = [
 		"icon": "res://assets/art/item_wuxing_pei.png",
 		"max_stacks": 5,
 	},
-	# 2026-10-10 新增：单元素专精加点，与同名单元素法宝（金精石等）构成专精流双链路
+	# 2026-10-10 新增：单元素专精加点，与同名单元素道具（金精石等）构成专精流双链路
 	{
 		"id": "metal_up",
 		"apply": {"element_damage_metal": 0.10},
@@ -349,7 +349,7 @@ const UPGRADES: Array[Dictionary] = [
 	{
 		"id": "pierce_up",
 		"apply": {"bonus_pierce": 1.0},
-		"title": "破甲透劲",
+		"title": "穿透强化",
 		"desc": "弹丸可多穿透 1 名敌人（近战不生效）",
 		"rarity": "rare",
 		"rarity_label": "稀有",
@@ -416,44 +416,89 @@ const UPGRADES: Array[Dictionary] = [
 		"icon": "res://assets/art/weapon_earth_bell.png",
 		"max_stacks": 5,
 	},
-	{
-		"id": "grand_haste",
-		"apply": {"attack_speed_mult_mul": 0.82},
-		"title": "雷厉风行",
-		"desc": "",
-		"rarity": "epic",
-		"rarity_label": "史诗",
-		"icon": "res://assets/art/icon_haste.png",
-		"max_stacks": 3,
-	},
-]
+		{
+			"id": "grand_haste",
+			"apply": {"attack_speed_mult_mul": 0.82},
+			"title": "雷厉风行",
+			"desc": "",
+			"rarity": "epic",
+			"rarity_label": "史诗",
+			"icon": "res://assets/art/icon_haste.png",
+			"max_stacks": 3,
+		},
+		# ==================== 灵兽强化体系 ====================
+		{
+			"id": "pet_damage_up",
+			"apply": {"pet_damage_mult": 0.15},
+			"title": "灵兽淬炼",
+			"desc": "",
+			"rarity": "common",
+			"rarity_label": "普通",
+			"icon": "res://assets/art/icon_atk.png",
+			"max_stacks": 8,
+		},
+		{
+			"id": "pet_effect_up",
+			"apply": {"pet_effect_mult": 0.12},
+			"title": "灵兽通灵",
+			"desc": "",
+			"rarity": "common",
+			"rarity_label": "普通",
+			"icon": "res://assets/art/icon_hp.png",
+			"max_stacks": 8,
+		},
+		{
+			"id": "pet_haste_up",
+			"apply": {"pet_cooldown_mult_mul": 0.92},
+			"title": "灵兽疾行",
+			"desc": "",
+			"rarity": "rare",
+			"rarity_label": "稀有",
+			"icon": "res://assets/art/icon_speed.png",
+			"max_stacks": 5,
+		},
+		{
+			"id": "pet_slots_up",
+			"apply": {"pet_slots": 1.0},
+			"title": "万兽灵契",
+			"desc": "",
+			"rarity": "epic",
+			"rarity_label": "史诗",
+			"icon": "res://assets/art/item_wanshou_long.png",
+			"max_stacks": 2,
+		},
+	]
 
-## 稀有度加权抽取：过滤叠满项与角色锁死项，福缘提升仙品权重。
+## 稀有度加权抽取：过滤叠满项与角色锁死项，幸运提升史诗权重。
 ## 纯函数：一切上下文由 ctx 传入（luck / locked_upgrades / counts / rng），不读 GameManager 单例，
 ## 因此可以在不启动场景、不建 autoload 的情况下被单元测试直接断言。
 ## ctx 约定：
-##   luck: float                 福缘
+##   luck: float                 幸运
 ##   locked_upgrades: Array      角色锁死的加点 id
-##   counts: Dictionary          已领悟次数 {id: int}
+##   counts: Dictionary          已加点次数 {id: int}
 ##   rng: RandomNumberGenerator  随机源；缺省时用全局 randf()（单测里务必传入固定种子）
 static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[Dictionary]:
 	var luck: float = float(ctx.get("luck", 0.0))
 	var locked: Array = ctx.get("locked_upgrades", [])
 	var owned_counts: Dictionary = ctx.get("counts", {})
 	var rng: RandomNumberGenerator = ctx.get("rng", null)
+	var has_pets: bool = bool(ctx.get("has_pets", false))
 
-	var weights := GameBalance.rarity_weights(luck)
-	var epic_w: float = weights["epic"]
-	var rare_w: float = weights["rare"]
-	var common_w: float = weights["common"]
+	var weights_dict := GameBalance.rarity_weights(luck)
+	var common_w: float = weights_dict["common"]
+	var rare_w: float = weights_dict["rare"]
+	var epic_w: float = weights_dict["epic"]
 
-	var pool: Array = []
-	var pool_weights: Array = []
+	var pool: Array[Dictionary] = []
+	var pool_weights: Array[float] = []
 	for u in UPGRADES:
 		var uid: String = u.get("id", "")
 		if uid in locked:
 			continue
 		if int(owned_counts.get(uid, 0)) >= int(u.get("max_stacks", 99)):
+			continue
+		# 无随行灵兽且非御兽师时，不刷出灵兽强化项（防污染卡池）
+		if uid.begins_with("pet_") and not has_pets:
 			continue
 		var w: float = common_w
 		match u.get("rarity", "common"):

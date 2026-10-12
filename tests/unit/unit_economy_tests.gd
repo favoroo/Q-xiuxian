@@ -225,7 +225,7 @@ func _test_shop_determinism() -> void:
 	var first: Array = GameManager.shop_offers.duplicate(true)
 	_c.equals(GameManager.shop_offers.size(), GameManager.SHOP_BASE_SLOTS, "货架固定 %d 个位" % GameManager.SHOP_BASE_SLOTS)
 	for offer in first:
-		_c.check(offer.get("kind", "") in ["weapon", "potion", "item"], "货架项类型合法：%s" % str(offer.get("kind", "")))
+		_c.check(offer.get("kind", "") in ["weapon", "potion", "item", "pet"], "货架项类型合法：%s" % str(offer.get("kind", "")))
 		_c.check(int(offer.get("price", 0)) > 0, "货架项价格大于 0：%s" % str(offer.get("id", "")))
 
 	# 价格必须等于公式值，不能有第二套算法
@@ -237,6 +237,9 @@ func _test_shop_determinism() -> void:
 			"item":
 				var ibase := int(ItemData.get_def(offer["id"]).get("price", 20))
 				_c.equals(int(offer["price"]), GameBalance.item_price(ibase, 6, GameManager.shop_price_mult), "法宝价与 GameBalance 一致（%s）" % offer["id"])
+			"pet":
+				var pbase := int(PetData.get_def(offer["id"]).get("base_price", 35))
+				_c.equals(int(offer["price"]), GameBalance.pet_price(pbase, 6, GameManager.shop_price_mult), "灵兽价与 GameBalance 一致（%s）" % offer["id"])
 			_:
 				_c.equals(int(offer["price"]), GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, 6, GameManager.shop_price_mult), "回气丹价与 GameBalance 一致")
 

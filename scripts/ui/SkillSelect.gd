@@ -55,7 +55,7 @@ func _setup_header_bar() -> void:
 	vbox.move_child(header_row, 0)
 
 	var back_btn := Button.new()
-	back_btn.text = "〈 重选角色"
+	back_btn.text = "〈 返 回"
 	back_btn.custom_minimum_size = Vector2(98, 34)
 	back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	back_btn.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -120,8 +120,8 @@ func _desc_w() -> float:
 
 func _create_card(s_id: String) -> Control:
 	var def := SkillData.get_def(s_id)
-	var cid := GameManager.cultivator_id
-	var enhanced := SkillData.is_enhanced_for_cultivator(s_id, cid)
+	var cid: String = GameManager.cultivator_id
+	var enhanced: bool = SkillData.is_enhanced_for_cultivator(s_id, cid)
 	var st := SkillData.final_stats(s_id, cid)
 	var card = PanelContainer.new()
 	card.custom_minimum_size = Vector2(_card_w, CARD_H)
@@ -191,7 +191,7 @@ func _create_card(s_id: String) -> Control:
 
 	# 描述（换行切进文本，不交给引擎折行：见 GameStyle.wrap_cjk 头注）
 	var desc_text: String = String(def.get("desc", ""))
-	var enhance := SkillData.enhance_desc(s_id, cid)
+	var enhance: String = SkillData.enhance_desc(s_id, cid)
 	if not enhance.is_empty():
 		desc_text += "\n✦ 角色适配：" + enhance
 	var desc_lbl = Label.new()

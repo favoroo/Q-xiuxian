@@ -3,15 +3,15 @@ extends RefCounted
 
 ## 属性面板「点按看详解」的文案与字段对照表（纯数据 + 纯函数，不碰节点、不碰存档）。
 ##
-## 为什么单独一个文件：面板那 14 行原本只有「名字 + 一个数字」，玩家看不出噬元和气血回复有什么区别、
-## 灵韵涨到第几波为止、闪避为什么点满了不再动。这些规则散在 GameManager / GameBalance 的代码里，
+## 为什么单独一个文件：面板那 14 行原本只有「名字 + 一个数字」，玩家看不出吸血和生命回复有什么区别、
+## 收益涨到第几波为止、闪避为什么点满了不再动。这些规则散在 GameManager / GameBalance 的代码里，
 ## 抄一份进文案就会漂（调一次参数文案就变假话），所以本表只写「人话规则」：
 ## 凡是数字一律现读常量（GameManager.DODGE_CAP、GameBalance.ARMOR_COEF …），
 ## 来源拆解由 PlayerStatsDialog 现读 GameManager 字段，本表不参与任何结算。
 ##
 ## 三条口径：
 ## 1. INFO 的 key 与面板属性行一一对应，漏一条由 tests/StatsTipCheck 钉成红灯；
-## 2. FIELDS 是「加点字段 → 人话名 + 单位」的唯一对照表，悟道/法宝卡片与详情里的幅度文案都走它，
+## 2. FIELDS 是「加点字段 → 人话名 + 单位」的唯一对照表，悟道/道具卡片与详情里的幅度文案都走它，
 ##    新字段没登记就会在详情里露出原始 key（判据同样拦）；幅度数字仍只在 UpgradeData/ItemData 的 apply 里；
 ## 3. 单位换算规则（pct / pctmul / …）在这里定义，与 UpgradeData 各项 desc 里的手写百分号同源：
 ##    pct 是「增量 ×100」，pctmul 是「乘数 -1 再 ×100」（如攻速 ×0.88 → 攻击间隔 -12%）。
@@ -28,12 +28,12 @@ const FIELDS: Dictionary = {
 	"crit_rate": {"name": "暴击率", "unit": "pct"},
 	"crit_mult": {"name": "暴击伤害", "unit": "pct"},
 	"dodge": {"name": "闪避率", "unit": "pct"},
-	"lifesteal": {"name": "吸血概率", "unit": "pct"},
+	"lifesteal": {"name": "吸血", "unit": "pct"},
 	"luck": {"name": "幸运", "unit": "pt"},
 	"harvest": {"name": "收益", "unit": "pt"},
 	"spirit_stones": {"name": "金币", "unit": "stone"},
-	"max_hp": {"name": "最大生命", "unit": "pt"},
-	"hp_heal": {"name": "立即回血", "unit": "pt"},
+	"max_hp": {"name": "生命上限", "unit": "pt"},
+	"hp_heal": {"name": "回复生命", "unit": "pt"},
 	"xp_gain_mult": {"name": "经验获取", "unit": "pct"},
 	"knockback_mult": {"name": "击退力度", "unit": "pct"},
 	"free_rerolls": {"name": "免费重掷", "unit": "times"},
@@ -48,10 +48,14 @@ const FIELDS: Dictionary = {
 	"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
 	# 寻宝流三项：幅度来自 apply，兑现点在 WaveSpawner（数量）/ BalanceChest.tier_weights（品质）
 	# / BalanceChest.break_hits（省力）。单位一律 "pt"：读数只出「+1」，量词交给卡面 desc 说清。
-	"chest_count": {"name": "宝箱数量", "unit": "pt"},
-	"chest_quality": {"name": "宝箱品质", "unit": "pt"},
-	"chest_break": {"name": "开箱省击", "unit": "chest_break"},
-}
+		"chest_count": {"name": "宝箱数量", "unit": "pt"},
+		"chest_quality": {"name": "宝箱品质", "unit": "pt"},
+		"chest_break": {"name": "开箱省力", "unit": "chest_break"},
+		"pet_damage_mult": {"name": "灵兽伤害", "unit": "pct"},
+		"pet_effect_mult": {"name": "灵兽效果", "unit": "pct"},
+		"pet_cooldown_mult_mul": {"name": "灵兽冷却", "unit": "pctmul"},
+		"pet_slots": {"name": "灵兽栏位", "unit": "pt"},
+	}
 
 ## 五行名：element_damage_<key> 的人话名走它，与 WeaponData.ELEMENTS 同一批 key
 const ELEMENT_NAMES: Dictionary = {
@@ -103,7 +107,7 @@ const STAT_FIELDS: Dictionary = {
 
 ## 面板每一行的标题（与 PlayerStatsDialog 的行名同源，判据比对用）
 const STAT_TITLES: Dictionary = {
-	"hp": "生命值",
+	"hp": "生命",
 	"regen": "生命回复",
 	"armor": "护甲",
 	"dodge": "闪避率",
@@ -123,7 +127,7 @@ const STAT_TITLES: Dictionary = {
 	"xp_gain": "经验获取",
 	"shop_price": "商店物价",
 	"bonus_pierce": "穿透",
-	"thorns": "反震",
+	"thorns": "反震伤害",
 	"elite_dmg": "对精英伤害",
 	"knockback": "击退力度",
 	"free_rerolls": "免费重掷",
@@ -135,7 +139,7 @@ const STAT_TITLES: Dictionary = {
 const BRIEF: Dictionary = {
 	"hp": "角色的命线：归零即阵亡，本局结束。",
 	"regen": "每秒自动回复的生命值。",
-	"armor": "按百分比减免每次受击的伤害。",
+	"armor": "挨打时按护甲值渐近减免伤害，堆越高每点越不值钱。",
 	"dodge": "有概率完全闪避一次攻击，不掉血。",
 	"lifesteal": "命中时有概率吸取1点生命。",
 	"damage": "所有武器伤害的总乘区。",
@@ -192,7 +196,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("最大生命 = 角色基础 × 角色生命系数，再加升级与道具的增量、召唤羁绊的额外生命。")
 			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，且保底 %d 点：护甲再高也抹不平最后一击。" % [
 				_fmt(GameBalance.ARMOR_COEF), int(GameBalance.DAMAGE_FLOOR)])
-			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、波末结算（收益与回春葫芦）。")
+			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、波结束结算（收益与回复葫芦）。")
 		"regen":
 			out.append("每帧按「回复量 × 时间」累加，满血时不溢出、也不折抵成别的收益。")
 			out.append("木系羁绊额外加在这一条上，详情里单列一行。")
@@ -200,7 +204,7 @@ static func rules(id: String) -> Array[String]:
 		"armor":
 			out.append("减伤 = 1 − 1 ÷ (1 + 护甲 × %s)：收益递减但没有上限，堆得越高每点越不值钱。" % _fmt(GameBalance.ARMOR_COEF))
 			out.append("面板减伤不含「保底 %d 点」这一刀，所以高护甲挨小伤害时实际比面板略差。" % int(GameBalance.DAMAGE_FLOOR))
-			out.append("土系羁绊与道具「龟甲符」加在这条上；「狂血丹」用护甲换伤害，会倒扣。")
+			out.append("土系羁绊与道具「龟甲」加在这条上；「狂暴药」用护甲换伤害，会倒扣。")
 		"dodge":
 			# 上限必须现读「硬上限 + 角色抬升」：只读 DODGE_CAP 会对影者写出一句假话
 			#（她的卡面写着 90%，详解却劝她到 60% 就停手）。
@@ -209,7 +213,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
 			out.append(("闪避成功另给 %.2f 秒「残影」短无敌：不给这一段，怪群贴身时下一帧又是一次判定，"
 				+ "闪了只是把那一下推迟几帧，减不了挨打频率。") % ShadowStepData.GUARD_SEC)
-			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：影在身上时法器伤害每层 +%d%%，"
+			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：影在身上时武器伤害每层 +%d%%，"
 				+ "点额外技能「影爆」随时踩碎，把躲掉的伤害按 %.0f%% 还给周身敌人并推开一圈。") % [
 					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0),
 					ShadowStepData.STORE_RATIO * 100.0])
@@ -232,15 +236,15 @@ static func rules(id: String) -> Array[String]:
 			out.append("直接提升火符灼烧与毒符中毒的每秒跳字伤害，火系与木系角色首选。")
 		"engineering_dmg":
 			out.append("按点数直接增加所有环绕类召唤武器的基础接触伤害。")
-			out.append("护蝶、冰莲、古钟等召唤武器均享受全额加成，符阵灵童核心流派。")
+			out.append("护蝶、冰莲、古钟等召唤武器均享受全额加成，机关师核心流派。")
 		"haste":
 			out.append("攻击间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
 			out.append("下限 = 攻击间隔 ×%s：到下限后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
 			out.append("面板显示的是相对 1.00 的缩减量，所以 -12% 与 -14% 叠起来是 -23%，不是 -26%。")
 		"speed":
 			out.append("实际移速 = 角色基础移速 × (1 + 升级/道具加成 + 羁绊加成)。")
-			out.append("角色的负面代偿直接乘在这一条上，所以读数可能是负的（如石岳·体修 -15%）。")
-			out.append("个别角色会锁死某条升级（如石岳锁「神行符」），被锁的那条不再出现在候选里。")
+			out.append("角色的负面代偿直接乘在这一条上，所以读数可能是负的（如守卫 -15%）。")
+			out.append("个别角色会锁死某条升级（如守卫锁「移速提升」），被锁的那条不再出现在候选里。")
 		"pickup":
 			out.append("半径 = 基础拾取半径 × 倍率，只管金币与经验的吸附，不影响攻击距离。")
 			out.append("这条不够高时，金币会留在地上等人走过去捡，站得远就捡得慢。")
@@ -257,22 +261,22 @@ static func rules(id: String) -> Array[String]:
 			out.append("普通权重有地板 %s，所以幸运堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
 			out.append("对商店货架是按权重微调，不是必出；幸运低也不至于刷不出货。")
 		"harvest":
-			out.append("波末按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
+			out.append("波结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
 			out.append("每波自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
 			out.append("经验与金币同源，所以收益高 = 升级快 = 升级次数多。")
 		"xp_gain":
 			out.append("经验获取倍率：只放大吸收经验光球时的升级经验，不影响金币获取。")
-			out.append("主要由稀有升级「经验加成」与仙品道具「经验石」提供。")
+			out.append("主要由稀有升级「经验加成」与史诗道具「经验石」提供。")
 		"shop_price":
 			out.append("商店所有在售武器、道具及重掷费用的全局价格折算比例。")
 			out.append("角色自带八折特权，道具「折扣券」可进一步叠加折让。")
 		"bonus_pierce":
 			out.append("飞剑飞符穿透敌人数量的额外增量。")
-			out.append("弹射羁绊核心收益，升级「破甲透劲」与道具「破虚符」也可叠加。")
+			out.append("弹射羁绊核心收益，升级「穿透强化」与道具「破虚符」也可叠加。")
 		"thorns":
 			out.append("受到敌方近身碰撞掉血时，立刻按敌方碰撞伤害的该比例反弹给攻击者。")
-			out.append("守卫自带反震特权，升级「护体罡气」与法宝「反震铜甲」可不断累加。")
+			out.append("守卫自带反震特权，升级「护体罡气」与道具「反震铜甲」可不断累加。")
 		"elite_dmg":
 			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
 			out.append("升级「精英伤害」与道具「破甲针」生效，不影响寻常小怪。")
@@ -287,11 +291,11 @@ static func rules(id: String) -> Array[String]:
 			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
 		"stones":
 			out.append("来源四条：击杀掉落、收益波末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
-			out.append("余时赏：本波妖潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给修为）。")
+			out.append("余时赏：本波妖潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给经验）。")
 			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
 	return out
 
-## 这一行能被哪些途径抬高：扫悟道表与法宝表的 apply，命中本行吃的字段就报名字。
+## 这一行能被哪些途径抬高：扫悟道表与道具表的 apply，命中本行吃的字段就报名字。
 ## 只报名、不报数值——数值在各自卡片的详情里，避免同一个数字出现两处。
 static func sources(id: String) -> Array[String]:
 	var out: Array[String] = []
@@ -315,7 +319,7 @@ static func _apply_hits(apply: Dictionary, fields: Array) -> bool:
 	return false
 
 ## 把一条 apply 字典翻成人话幅度：{"weapon_damage_mult":0.15,"armor":-2.0}
-## → ["法器伤害 +15%", "护甲 -2"]。悟道、法宝、属性行详情共用这一把尺子。
+## → ["武器伤害 +15%", "护甲 -2"]。悟道、道具、属性行详情共用这一把尺子。
 static func format_apply(apply: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for key in apply.keys():

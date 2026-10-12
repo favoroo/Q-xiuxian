@@ -62,7 +62,9 @@ var muzzle_len: float = 11.0           # 出膛点离本体中心的屏上距离
 var cooldown_timer: float = 0.0
 var base_angle: float = 0.0        # 无目标时回归的基础槽位角（Player 下发）
 var spread_angle: float = 0.0      # 多把法器间的错开角，避免重叠（Player 下发）
-var orbit_extents: Vector2 = Vector2(80.0, 58.0)  # 环绕轨道半径（椭圆）
+## 默认环绕轨道半长轴/半短轴（椭圆）：贴身护体，避免脱节
+const DEFAULT_ORBIT_EXTENTS := Vector2(54.0, 40.0)
+var orbit_extents: Vector2 = DEFAULT_ORBIT_EXTENTS
 var dynamic_angle: float = 0.0     # 当前轨道角：有目标时滑向目标方位
 var current_target: Node2D = null
 var is_attacking: bool = false
@@ -165,7 +167,8 @@ func _range_mult() -> float:
 
 ## 近战判定圆半径 —— 弧光外缘与 _deal_melee_damage 的查询圆共用这一个数
 func _melee_arc_radius() -> float:
-	return MELEE_ARC_RADIUS * arc_scale * _range_mult()
+	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(weapon_def_id).has("wide") else 1.0
+	return MELEE_ARC_RADIUS * arc_scale * _range_mult() * wide_bonus
 
 ## 打击帧前突倍数：范围叠得越高剑往前送得越远，剑才追得上外扩的剑气（上限 2 倍防乱飘）
 func _melee_thrust_mult() -> float:
@@ -284,7 +287,7 @@ func _perform_turret_attack() -> void:
 	tw.tween_callback(func(): is_attacking = false)
 
 func _final_damage() -> float:
-	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
+	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
 	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.buff_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
 func _perform_projectile_attack() -> void:
@@ -318,6 +321,9 @@ func _perform_projectile_attack() -> void:
 	_flash_sprite(Color(1.35, 1.35, 1.35), 0.12)
 
 	var p_count: int = maxi(1, int(def.get("projectile_count", 1)))
+	var tags: Array = WeaponData.tags_of(weapon_def_id)
+	if tags.has("talisman") or int(def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
+		p_count += int(round(GameManager.item_hook_sum("projectile_count_bonus")))
 	var p_spread: float = float(def.get("spread_angle", 0.2))
 	var p_bounce: int = int(def.get("bounce_count", 0))
 	var final_dmg: float = _final_damage()
@@ -419,7 +425,7 @@ func _perform_burst_attack() -> void:
 func _spawn_lightning(target_pos: Vector2) -> void:
 	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
 	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
-	var player := GameManager.player
+	var player: Node2D = GameManager.player
 	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
 		var bolt = LightningBoltScript.new()
 		bolt.from = muzzle_point.global_position
@@ -530,8 +536,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 	var hit_count := 0
 	# 返回值语义 = 「可见命中数」：屏外目标的伤害/击退/异常照常结算，但不计入计数——
 	# 打击帧回调拿它门控月牙/材质声/反冲，咬到看不见的目标时不许在屏内亮刀光
-	var player := GameManager.player
-	var vp_center := player.global_position if player != null else global_position
+	var player: Node2D = GameManager.player
+	var vp_center: Vector2 = player.global_position if player != null else global_position
 
 	for res in results:
 		var col = res["collider"]
@@ -554,6 +560,10 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			if def.get("proc_poison", false) and enemy.has_method("apply_poison"):
 				enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
+			# 开山重刃谱：近战命中额外吸收生命
+			var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
+			if flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
+				player.heal(flat_ls, true)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
 	return hit_count

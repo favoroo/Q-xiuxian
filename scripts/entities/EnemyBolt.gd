@@ -66,6 +66,7 @@ var _shape_node: CollisionShape2D = null
 var _circle: CircleShape2D = null
 
 func _ready() -> void:
+	add_to_group("enemy_bolts")
 	collision_layer = 0
 	collision_mask = 2  # player
 	# 火球不旋转，保持圆形
@@ -101,6 +102,12 @@ func activate() -> void:
 	# 会在帧末 flush，直接赋值的 false 会被它覆盖（照 BladeProjectile.activate 同一条坑）
 	set_deferred("monitoring", true)
 	_shape_node.set_deferred("disabled", false)
+
+## 被友方/防御灵兽拦截：立刻回收入池
+func intercept() -> void:
+	if _pooled:
+		return
+	_recycle()
 
 ## 回收入池（替代 queue_free）：休眠物理与碰撞，池满或宿主失效才真释放
 func _recycle() -> void:

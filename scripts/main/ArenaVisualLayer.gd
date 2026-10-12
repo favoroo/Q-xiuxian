@@ -5,7 +5,7 @@ extends Node2D
 ## 涵盖中心太极四象大阵、四方灵脉刻槽、九幽边界锁灵结界光幕与四角镇魂阵角
 
 var _time: float = 0.0
-var half_extent: float = 500.0
+var half_extent: float = 440.0
 
 ## 重绘节流（2026-10-11 第 6 波卡顿优化）：本层是全场唯一每帧无条件 queue_redraw 的大矢量层，
 ## 而动画全是慢速量（灵脉 90s/圈自转 + 呼吸正弦），20Hz 重绘肉眼无感 —— 每帧全量重绘是白烧。
@@ -32,10 +32,10 @@ func _draw() -> void:
 # 1. 中心太极四象大阵（Central Taiji & Quad Array）
 # ==============================================================================
 func _draw_central_taiji_array() -> void:
-	# 三圈半径与灵脉刻槽端点随 2026-10-11 缩图（半场 680→500）等比收缩
-	var r_outer: float = 165.0
-	var r_mid: float = 105.0
-	var r_inner: float = 50.0
+	# 三圈半径与灵脉刻槽端点随 2026-10-12 缩图（半场 500→440）等比收缩
+	var r_outer: float = 145.0
+	var r_mid: float = 92.0
+	var r_inner: float = 44.0
 
 	# 柔和灵脉呼吸（低对比度，确保绝对不抢战斗视线）
 	var breath: float = sin(_time * 0.8) * 0.04 + 0.22
@@ -103,10 +103,10 @@ func _draw_array_conduits() -> void:
 
 	# 指向三座界碑大致方向的微暗地表槽纹（东北/西南端点与 Main.tscn 祭坛坐标严格一致）
 	var arms := [
-		[Vector2(0, -165), Vector2(0, -340)],        # 北向（中心碑）
-		[Vector2(165, 0), Vector2(340, -160)],       # 东北向（东碑）
-		[Vector2(-165, 0), Vector2(-340, 160)],      # 西南向（西碑）
-		[Vector2(0, 165), Vector2(0, 340)]           # 南向
+		[Vector2(0, -145), Vector2(0, -300)],        # 北向（中心碑）
+		[Vector2(145, 0), Vector2(300, -140)],       # 东北向（东碑）
+		[Vector2(-145, 0), Vector2(-300, 140)],      # 西南向（西碑）
+		[Vector2(0, 145), Vector2(0, 300)]           # 南向
 	]
 	for arm in arms:
 		var p1: Vector2 = arm[0]
@@ -151,7 +151,7 @@ func _draw_sanctum_barrier() -> void:
 	draw_polyline(PackedVector2Array(gold_rect), col_inner_gold, 1.2)
 
 	# 3.3 四角「青铜镇魂阵角」
-	var corner_len: float = 95.0
+	var corner_len: float = 82.0
 	var corners := [
 		[Vector2(-h + 12.0, -h + 12.0), Vector2(1, 1)],
 		[Vector2(h - 12.0, -h + 12.0), Vector2(-1, 1)],

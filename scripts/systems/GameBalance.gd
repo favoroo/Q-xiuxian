@@ -78,6 +78,7 @@ const RARITY_COMMON_FLOOR := BalanceEconomy.RARITY_COMMON_FLOOR
 const LUCK_EPIC_PER_POINT := BalanceEconomy.LUCK_EPIC_PER_POINT
 const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
+const PET_CHANCE := BalanceEconomy.PET_CHANCE
 const POTION_HEAL_RATIO := BalanceEconomy.POTION_HEAL_RATIO
 const TAG_AFFINITY_MIN_COPIES := BalanceEconomy.TAG_AFFINITY_MIN_COPIES
 const TAG_AFFINITY_MULT_L1 := BalanceEconomy.TAG_AFFINITY_MULT_L1
@@ -180,6 +181,9 @@ static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 
 static func item_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.item_price(base, wave, price_mult)
+
+static func pet_price(base: int, wave: int, price_mult: float) -> int:
+	return BalanceEconomy.pet_price(base, wave, price_mult)
 
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.potion_price(base, wave, price_mult)

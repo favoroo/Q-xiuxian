@@ -56,6 +56,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
 	var is_item: bool = kind == "item"
+	var is_pet: bool = kind == "pet"
 	var def := {}
 	var title: String
 	var icon_path: String
@@ -102,6 +103,16 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = ItemData.tier_color(tier).darkened(0.35)
+	elif is_pet:
+		def = PetData.get_def(offer.get("id", ""))
+		title = def.get("name", "灵兽")
+		icon_path = ""
+		tag = "灵兽·%s" % PetData.role_label(String(def.get("role", "")))
+		desc = def.get("desc", "")
+		stat_rows = []
+		chip_color = def.get("color", GameStyle.GOLD)
+		chip_text_color = GameStyle.INK_TEXT
+		edge_color = chip_color.darkened(0.35)
 	else:
 		var w_id: String = String(offer.get("id", ""))
 		def = WeaponData.get_def(w_id)
@@ -213,7 +224,7 @@ static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContai
 	card.add_theme_stylebox_override("panel", style)
 	return card
 
-## 行①：图标框（含五行角标）与名号同行，名号按 card_name_w 切硬换行
+## 行①：图标框（含元素高亮边框）与名号同行，名号按 card_name_w 切硬换行
 static func _create_card_head(offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String) -> HBoxContainer:
 	var head := HBoxContainer.new()
 	head.name = "CardHead"
@@ -224,31 +235,57 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	icon_box.custom_minimum_size = Vector2(WaveShop.CARD_ICON, WaveShop.CARD_ICON)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0))
-
-	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(icon_path):
-		icon_tex.texture = load(icon_path)
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(WaveShop.CARD_ICON - 10.0, WaveShop.CARD_ICON - 10.0)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_child(icon_tex)
-
+	# 元素武器边框高亮：吃元素加成的法器边框设为 ELEMENT 暖橙红，醒目且 100% 不遮挡武器图片；普通武器保持暗黑边框 LINE
+	var border_color: Color = GameStyle.LINE
 	if kind == "weapon":
-		GameStyle.maybe_add_element_badge(icon_box, String(offer.get("id", "")), 8)
+		var wid := String(offer.get("id", ""))
+		if WeaponData.elemental_scaling_coef(wid) > 0.0:
+			border_color = GameStyle.ELEMENT
+	elif kind == "pet":
+		var pdef := PetData.get_def(String(offer.get("id", "")))
+		border_color = pdef.get("color", GameStyle.GOLD)
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, border_color, 2, 0.0))
+
+	if kind == "pet":
+		var p_id: String = String(offer.get("id", ""))
+		var pet_preview := Control.new()
+		pet_preview.custom_minimum_size = Vector2(WaveShop.CARD_ICON - 4.0, WaveShop.CARD_ICON - 4.0)
+		pet_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pet_preview.draw.connect(func():
+			var pdef := PetData.get_def(p_id)
+			var c: Color = pdef.get("color", Color(0.9, 0.9, 0.9))
+			var halo: Color = pdef.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
+			var sz: Vector2 = pet_preview.size
+			var center := sz * 0.5
+			var r: float = sz.x * 0.28
+			pet_preview.draw_circle(center, r * 1.6, halo)
+			pet_preview.draw_circle(center, r, c)
+			pet_preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+		)
+		icon_box.add_child(pet_preview)
+	else:
+		var icon_tex := TextureRect.new()
+		if ResourceLoader.exists(icon_path):
+			icon_tex.texture = load(icon_path)
+		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		# 贴合框体尺寸（保留 2px 外框余量），使原始 48×48 素材以大尺寸点对点呈现，纹理清晰
+		icon_tex.custom_minimum_size = Vector2(WaveShop.CARD_ICON - 4.0, WaveShop.CARD_ICON - 4.0)
+		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(icon_tex)
+
 	head.add_child(icon_box)
 
 	var name_w: float = WaveShop.card_name_w(card_w)
 	var title_lbl := Label.new()
-	title_lbl.text = GameStyle.wrap_cjk(title, GameStyle.display_font(), 17, name_w)
+	title_lbl.text = GameStyle.wrap_cjk(title, GameStyle.display_font(), 16, name_w)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_lbl.custom_minimum_size = Vector2(name_w, 0)
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(title_lbl)
-	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
 	return head
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关
@@ -277,12 +314,12 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		var rec_lbl := Label.new()
 		rec_lbl.name = "RecommendBadge"
 		rec_lbl.text = " 荐 "
-		rec_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(" 荐 ", GameStyle.body_font(), 11), 0)
+		rec_lbl.custom_minimum_size = Vector2(GameStyle.compact_chip_pin_w(" 荐 ", GameStyle.body_font(), 10), 0)
 		rec_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rec_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
+		rec_lbl.add_theme_stylebox_override("normal", GameStyle.compact_chip(GameStyle.JADE))
 		tag_flow.add_child(rec_lbl)
-		GameStyle.label(rec_lbl, 11, GameStyle.INK_TEXT)
+		GameStyle.label(rec_lbl, 10, GameStyle.INK_TEXT)
 		_mark_chip_tappable(rec_lbl, {"kind": "recommend"})
 		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(shop, rec_lbl, rec_reasons, offer))
 
@@ -311,11 +348,11 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		var chip_lbl := Label.new()
 		chip_lbl.text = chip_txt
 		chip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		chip_lbl.custom_minimum_size = Vector2(GameStyle.chip_pin_w(chip_txt, GameStyle.body_font(), 11), 0)
+		chip_lbl.custom_minimum_size = Vector2(GameStyle.compact_chip_pin_w(chip_txt, GameStyle.body_font(), 10), 0)
 		chip_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(cd[1]))
+		chip_lbl.add_theme_stylebox_override("normal", GameStyle.compact_chip(cd[1]))
 		tag_flow.add_child(chip_lbl)
-		GameStyle.label(chip_lbl, 11, cd[2])
+		GameStyle.label(chip_lbl, 10, cd[2])
 		var tip: Dictionary = chip_tips[ci]
 		if tip.is_empty():
 			continue
@@ -331,8 +368,8 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		lock_btn.focus_mode = Control.FOCUS_NONE
 		lock_btn.text = "已锁" if locked else "锁定"
 		GameStyle.button(lock_btn, GameStyle.JADE if locked else GameStyle.NAVY2,
-			GameStyle.JADE_DK if locked else GameStyle.LINE, 11,
-			GameStyle.INK_TEXT if locked else GameStyle.PAPER_DIM, 4.0)
+			GameStyle.JADE_DK if locked else GameStyle.LINE, 10,
+			GameStyle.INK_TEXT if locked else GameStyle.PAPER_DIM, 3.0)
 		lock_btn.pressed.connect(func():
 			GameManager.toggle_lock(index)
 			shop.refresh(false)
@@ -359,8 +396,14 @@ static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int
 	elif is_item and bool(def.get("unique", false)) and GameManager.has_item(offer.get("id", "")):
 		btn.disabled = true
 		btn.text = "已 持 有"
+	elif kind == "pet" and GameManager.pets.size() >= GameManager.max_pet_slots():
+		btn.disabled = true
+		btn.text = "灵兽栏已满"
+	elif kind == "pet" and GameManager.has_pet(offer.get("id", "")):
+		btn.disabled = true
+		btn.text = "已 持 有"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots() \
-			and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
+		and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
 		btn.disabled = true
 		btn.text = "装备背包已满"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots():

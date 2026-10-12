@@ -77,6 +77,8 @@ static func reset(gm: Node) -> void:
 	gm.nearby_enemy_count = 0
 	gm.stone_damage_per_100 = 0.0
 	gm.stone_damage_cap = 0.0
+	gm.kill_cd_reduction_normal = 0.0
+	gm.kill_cd_reduction_elite = 0.0
 	gm.still_time = 0.0
 	gm.total_damage_taken_count = 0
 	gm.total_hp_healed = 0.0
@@ -135,6 +137,12 @@ static func reset(gm: Node) -> void:
 	gm.alloc_reroll_count = 0
 	gm.alloc_reroll_free_left = 0
 	gm.items = []
+	gm.pets = []
+	gm.pet_slots_bonus = 0
+	gm.pet_damage_mult = 1.0
+	gm.pet_effect_mult = 1.0
+	gm.pet_cooldown_mult = 1.0
+	gm.pet_offer_chance_bonus = 0.0
 	gm.drones = []
 	gm.stash = []
 	gm.upgrade_history.clear()

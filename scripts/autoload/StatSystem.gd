@@ -77,6 +77,14 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.chest_quality += v
 			"chest_break":
 				gm.chest_break_bonus += int(v)
+			"pet_damage_mult":
+				gm.pet_damage_mult += v
+			"pet_effect_mult":
+				gm.pet_effect_mult += v
+			"pet_cooldown_mult_mul":
+				gm.pet_cooldown_mult = maxf(0.2, gm.pet_cooldown_mult * v)
+			"pet_slots":
+				gm.pet_slots_bonus += int(v)
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
 					gm.element_damage[e] = float(gm.element_damage.get(e, 0.0)) + v

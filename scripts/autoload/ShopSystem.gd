@@ -45,6 +45,19 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 				"sold": false, "locked": false,
 			}
 		# 法宝池抽空 → 本格落回法器
+	var pet_bonus: float = float(gm.pet_offer_chance_bonus)
+	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE + GameBalance.PET_CHANCE + pet_bonus:
+		# 只有在灵兽栏未满且能抽出未拥有灵兽时才出灵兽，否则落回法器
+		if gm.pets.size() < gm.max_pet_slots():
+			var pet_id := PetData.pick_id(gm.pets, gm.rng)
+			if pet_id != "":
+				var pdef := PetData.get_def(pet_id)
+				var base_price := int(pdef.get("base_price", 35))
+				return {
+					"kind": "pet", "id": pet_id,
+					"price": GameBalance.pet_price(base_price, wave, gm.shop_price_mult),
+					"sold": false, "locked": false,
+				}
 	var w_id := weighted_weapon_pick(gm)
 	var base := int(WeaponData.get_def(w_id).get("price", 20))
 	return {
@@ -93,6 +106,21 @@ static func buy_offer(gm: Node, index: int) -> bool:
 			ok = gm.add_item(offer.get("id", ""))
 			if not ok:
 				gm.announcement_triggered.emit("此道具每局限购一件")
+				AudioManager.play_sfx("ui_error", 0.9)
+				return false
+		"pet":
+			var pet_id: String = String(offer.get("id", ""))
+			if gm.pets.size() >= gm.max_pet_slots():
+				gm.announcement_triggered.emit("灵兽栏已满，先出售一些吧")
+				AudioManager.play_sfx("ui_error", 0.9)
+				return false
+			if pet_id in gm.pets:
+				gm.announcement_triggered.emit("此灵兽已随行")
+				AudioManager.play_sfx("ui_error", 0.9)
+				return false
+			ok = gm.add_pet(pet_id)
+			if not ok:
+				gm.announcement_triggered.emit("契约灵兽失败")
 				AudioManager.play_sfx("ui_error", 0.9)
 				return false
 		_:

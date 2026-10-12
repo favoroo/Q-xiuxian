@@ -30,6 +30,10 @@ static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 static func item_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
 
+## 灵兽定价：基准价来自 PetData，与法宝同波次成长步长
+static func pet_price(base: int, wave: int, price_mult: float) -> int:
+	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
+
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + maxi(wave, 1)) * price_mult)
 
@@ -130,6 +134,7 @@ static func rarity_weights(luck: float) -> Dictionary:
 
 const POTION_CHANCE := 0.15            ## 每个货架位出回气丹的概率
 const ITEM_CHANCE := 0.30              ## 每个货架位出法宝（被动道具）的概率
+const PET_CHANCE := 0.12               ## 每个货架位出随行灵兽的概率
 const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和（第一档）
 const TAG_AFFINITY_MULT_L1 := 2.0      ## 梯度亲和第一档：持有 ≥MIN_COPIES 件 → ×L1
 const TAG_AFFINITY_TIER2_COPIES := 4   ## 梯度亲和第二档门槛：持有 ≥4 件 → ×L2（深专精吸力）
@@ -254,6 +259,7 @@ static func upgrade_fields() -> Array:
 		"melee_damage", "ranged_damage", "elemental_damage", "engineering_damage",
 		"element_damage_all", "element_damage_metal", "element_damage_wood",
 		"element_damage_water", "element_damage_fire", "element_damage_earth",
-		"bonus_pierce", "thorns",
-		"chest_count", "chest_quality", "chest_break",
-	]
+			"bonus_pierce", "thorns",
+			"chest_count", "chest_quality", "chest_break",
+			"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
+		]

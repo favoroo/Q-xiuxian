@@ -322,10 +322,14 @@ func _on_retry_pressed() -> void:
 		_retry_reset_tween.tween_callback(_reset_retry_confirm)
 		return
 	_reset_retry_confirm()
+	if is_instance_valid(_retry_btn):
+		_retry_btn.text = "正在重置..."
+		_retry_btn.disabled = true
 	get_tree().paused = false
 	# 带标记重载：Main._ready 消费后跳过主菜单，直落选角界面重开一把
 	GameManager.restart_to_select = true
 	GameManager.reset_run()
+	await get_tree().process_frame
 	get_tree().reload_current_scene()
 
 ## 返回主菜单：整场景重载，Main._ready 默认开主菜单；战场残留随场景重建一并清空

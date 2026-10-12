@@ -117,11 +117,13 @@ func _setup_sprite_frames() -> void:
 		anim_sprite.visible = false
 		if procedural_view == null:
 			procedural_view = ProceduralCultivatorView.new()
+			procedural_view.high_fps_mode = true
 			procedural_view.position = anim_sprite.position
 			procedural_view.scale = Vector2(1.2, 1.2)
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			add_child(procedural_view)
 		else:
+			procedural_view.high_fps_mode = true
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.visible = true
 	else:
@@ -234,7 +236,7 @@ func _recalculate_weapon_slots() -> void:
 		var w = weapon_holder.get_child(i) as FloatingWeapon
 		w.base_angle = float(i) * (TAU / float(count))
 		w.spread_angle = (float(i) - float(count - 1) * 0.5) * deg_to_rad(28.0)
-		w.orbit_extents = Vector2(80.0, 58.0)
+		w.orbit_extents = FloatingWeapon.DEFAULT_ORBIT_EXTENTS
 
 ## 上阵两把悬浮法器互换位置（商店拖拽换位用）：环绕角度按次序重排，换位即换环绕方位；
 ## 灵宝（drones）的互换走 WeaponInventory.swap_equipped_slots，不经过这里
@@ -314,6 +316,13 @@ func heal(amount: float, quiet: bool = false) -> void:
 	if gained <= 0.01:
 		return
 	GameManager.total_hp_healed += gained
+	# 灵髓丹气：回复气血后触发短时增伤与加速
+	var heal_dmg: float = GameManager.item_hook_sum("heal_buff_damage")
+	if heal_dmg > 0.0:
+		var dur: float = maxf(1.0, GameManager.item_hook_sum("heal_buff_dur"))
+		GameManager.buff_damage_mult = 1.0 + heal_dmg
+		GameManager.buff_move_speed_mult = 1.0 + GameManager.item_hook_sum("heal_buff_speed")
+		_skill_buffs["heal_buff"] = dur
 	if quiet:
 		return
 	play_squash(Vector2(0.88, 1.16), 0.18)
@@ -367,8 +376,21 @@ func _skill_active_duration(st: Dictionary) -> float:
 	return 0.0
 
 func _begin_skill_cooldown() -> void:
+	if _skill_pending_cd <= 0.0:
+		skill_cd_total = 1.0
+		skill_cd_left = 0.0
+		return
 	skill_cd_total = maxf(0.01, _skill_pending_cd)
 	skill_cd_left = skill_cd_total
+
+## 击杀或其他特质返还/预扣神通冷却（绝尘·斩灭凝神）
+func refund_skill_cooldown(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	if skill_cd_left > 0.0:
+		skill_cd_left = maxf(0.0, skill_cd_left - amount)
+	elif skill_active_left > 0.0:
+		_skill_pending_cd = maxf(0.0, _skill_pending_cd - amount)
 
 ## 效果活跃窗口走完：先做各类型收尾（回滚短时乘区），此刻才进冷却
 func _on_skill_effect_end() -> void:
@@ -425,6 +447,9 @@ func _tick_skill_buffs(delta: float) -> void:
 				GameManager.buff_attack_speed_mult = 1.0
 			"elixir":
 				GameManager.buff_damage_mult = 1.0
+			"heal_buff":
+				GameManager.buff_damage_mult = 1.0
+				GameManager.buff_move_speed_mult = 1.0
 
 ## 无输入时按当前朝向给冲刺方向（facing + flip_h 还原 8 方向单位向量）
 func _facing_vec() -> Vector2:
@@ -710,9 +735,13 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
 
-	# 不动明王印·站定账本：法宝在场才计时；脚底一动（输入或余速未消）立刻清零
-	if GameManager.item_hook_sum("still_damage") > 0.0:
+	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印任一法宝在场才计时；脚底一动立刻清零
+	if GameManager.has_still_mechanic():
 		GameManager.still_time = 0.0 if is_moving else GameManager.still_time + delta
+		if not is_moving:
+			var regen_pct: float = GameManager.item_hook_sum("still_regen_pct")
+			if regen_pct > 0.0 and current_health < max_health:
+				heal(max_health * regen_pct * delta, true)
 
 	# 蛮兵·陷阵：节流数感知圈内的妖兽（crowd_damage_radius = 0 时整块零开销）
 	if GameManager.crowd_damage_radius > 0.0:
@@ -999,7 +1028,7 @@ func _process_sun_orbs(delta: float) -> void:
 		GameManager.synergy_haste_mult,
 		in_combat,
 		max_star
-	)
+	) * (1.0 + GameManager.item_hook_sum("drone_spin_speed"))
 	sun_orb_angle += delta * angular_speed
 
 	for i in range(count):
@@ -1073,6 +1102,10 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
 		if skill_vfx != null:
 			skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
+		# 流云潜影玉：闪避成功概率回血
+		var dodge_heal_chance: float = GameManager.item_hook_sum("dodge_heal_chance")
+		if dodge_heal_chance > 0.0 and GameManager.rng.randf() < dodge_heal_chance:
+			heal(GameManager.item_hook_sum("dodge_heal_hp"))
 		return
 
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())

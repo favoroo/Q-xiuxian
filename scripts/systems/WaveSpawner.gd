@@ -127,13 +127,24 @@ func _process_fight(delta: float) -> void:
 
 ## 「妖潮已尽」：本波刷怪预算全部刷入 + 场上一个活妖都没有（含尸体：dying 的还在登记表里，
 ## 所以要等塌缩动画落定才算清干净）。精英/魔君还没到场的头 1.5 秒一律不算，
-## 否则第 5/10 波会在自己的关底威胁出现前就收掉。
+## 且若场上还有正在凝聚的妖气指示器（SpawnIndicator）也不算清场。
 func _tide_spent() -> bool:
 	if _budget_used <= 0 or _budget_used < _budget_total:
 		return false
 	if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
 		return false
+	if _indicators_pending():
+		return false
 	return GameManager.enemy_count <= 0
+
+func _indicators_pending() -> bool:
+	var p := get_parent()
+	if p == null:
+		return false
+	for child in p.get_children():
+		if child is SpawnIndicator:
+			return true
+	return false
 
 ## 波长曲线只是 GameBalance 的一层转发，保留本方法是因为 UI/内部多处按它排程
 func wave_duration(n: int) -> float:
@@ -185,15 +196,15 @@ func _spawn_chests() -> void:
 		return
 	var count := GameBalance.chest_count(wave_number, GameManager.chest_count_bonus)
 	var tier_w: Array[float] = GameBalance.chest_tier_weights(GameManager.chest_quality, GameManager.luck)
-	var lim := GameManager.MAP_HALF_EXTENT - 160.0
+	var lim := GameManager.MAP_HALF_EXTENT - 130.0
 	for i in range(count):
 		var chest := SpiritChest.new()
 		# tier 必须在 add_child 之前写好：_ready 靠它定贴图/体型/击数/配色
 		chest.tier = GameBalance.weighted_pick_index(tier_w, GameManager.rng.randf())
 		var pos := Vector2(GameManager.rng.randf_range(-lim, lim), GameManager.rng.randf_range(-lim, lim))
-		if pos.distance_to(player.global_position) < 150.0:
+		if pos.distance_to(player.global_position) < 130.0:
 			# 别贴脸刷：推开一段再夹回场内，数量堆上去后不顶出竞技场边界
-			pos = (pos + Vector2(220.0, 0.0)).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+			pos = (pos + Vector2(180.0, 0.0)).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 		chest.global_position = pos
 		get_parent().add_child(chest)
 
@@ -288,19 +299,48 @@ func _spawn_regular(player: Node2D) -> void:
 	var count := int(round(float(GameBalance.spawn_batch(wave_number, GameManager.rng.randf())) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
 	# 最后一轮允许部分兑现：预算剩几只刷几只，不整轮丢弃
 	count = mini(count, _budget_total - _budget_used)
+	var lim := GameManager.MAP_HALF_EXTENT - 45.0
+	var p_pos: Vector2 = player.global_position
 	for i in range(count):
-		var angle := GameManager.rng.randf() * TAU
-		var spawn_dist := GameManager.rng.randf_range(380.0, 480.0)
-		var pos = player.global_position + Vector2(cos(angle), sin(angle)) * spawn_dist
-		pos = pos.clamp(Vector2.ONE * -(GameManager.MAP_HALF_EXTENT - 40.0), Vector2.ONE * (GameManager.MAP_HALF_EXTENT - 40.0))
+		# 土豆兄弟式全图随机出生 + 远离玩家安全区保护（≥130px）
+		var pos := Vector2(
+			GameManager.rng.randf_range(-lim, lim),
+			GameManager.rng.randf_range(-lim, lim)
+		)
+		if pos.distance_to(p_pos) < 130.0:
+			var push_dir := (pos - p_pos).normalized()
+			if push_dir.is_zero_approx():
+				push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
+			pos = (p_pos + push_dir * 160.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-		var enemy = _pick_enemy_scene().instantiate() as EnemyBase
+		var enemy_scene: PackedScene = _pick_enemy_scene()
+		# 提前锁定预算名额与经验累计，防止 1.1s 预警延迟期间超额派发
+		_budget_used += 1
+		_schedule_enemy_spawn(enemy_scene, pos, false)
+
+func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var indicator := SpawnIndicator.new()
+	indicator.global_position = pos
+	indicator.is_elite = is_elite
+	indicator.spawn_callback = func():
+		if phase != Phase.FIGHT:
+			return
+		var enemy = scene.instantiate() as EnemyBase
+		if enemy == null:
+			return
 		enemy.global_position = pos
 		enemy.add_to_group("enemies")
 		_scale_to_wave(enemy)
-		get_parent().add_child(enemy)
-		_budget_used += 1
+		parent.add_child(enemy)
 		_budget_exp_sum += float(enemy.exp_reward)
+		# 出场弹性缩放动画 (0.4 -> 1.0)
+		enemy.scale = Vector2.ONE * 0.4
+		var tw := enemy.create_tween()
+		tw.tween_property(enemy, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	parent.add_child(indicator)
 
 ## 怪物配比表：随波次引入新威胁（雷兽冲锋 → 丹爆傀儡）。
 ## 邪修（放火球那颗）不再靠解锁波次登场 —— 第 1 波就有，占比按 MIX_XIEXIU_RAMP 爬坡，
@@ -389,21 +429,42 @@ func _pick_enemy_scene() -> PackedScene:
 var _elite_spawn_count: int = 0
 
 func _spawn_elite(player: Node2D) -> void:
-	var angle := GameManager.rng.randf() * TAU
-	var pos = player.global_position + Vector2(cos(angle), sin(angle)) * 420.0
-	pos = pos.clamp(Vector2.ONE * -(GameManager.MAP_HALF_EXTENT - 60.0), Vector2.ONE * (GameManager.MAP_HALF_EXTENT - 60.0))
+	var lim := GameManager.MAP_HALF_EXTENT - 60.0
+	var p_pos: Vector2 = player.global_position
+	var pos := Vector2(
+		GameManager.rng.randf_range(-lim, lim),
+		GameManager.rng.randf_range(-lim, lim)
+	)
+	if pos.distance_to(p_pos) < 180.0:
+		var push_dir := (pos - p_pos).normalized()
+		if push_dir.is_zero_approx():
+			push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
+		pos = (p_pos + push_dir * 220.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+
 	var pool: Array = [golem_scene, chilei_elite_scene, jiansha_elite_scene]
 	var scene: PackedScene = pool[_elite_spawn_count % pool.size()]
 	_elite_spawn_count += 1
-	var elite = scene.instantiate() as EnemyBase
-	elite.global_position = pos
-	elite.add_to_group("enemies")
-	_scale_to_wave(elite)
-	get_parent().add_child(elite)
 
-	var titles := {golem_scene: "铁甲巨怪", chilei_elite_scene: "烈雷兽", jiansha_elite_scene: "剑客亡灵"}
-	GameManager.announcement_triggered.emit("⚠ %s突入战场！" % titles.get(scene, "精英敌人"))
-	GameManager.shake_camera(5.0, 0.25)
+	var parent := get_parent()
+	if parent == null:
+		return
+	var indicator := SpawnIndicator.new()
+	indicator.global_position = pos
+	indicator.is_elite = true
+	indicator.spawn_callback = func():
+		if phase != Phase.FIGHT:
+			return
+		var elite = scene.instantiate() as EnemyBase
+		if elite == null:
+			return
+		elite.global_position = pos
+		elite.add_to_group("enemies")
+		_scale_to_wave(elite)
+		parent.add_child(elite)
+		var titles := {golem_scene: "铁甲巨怪", chilei_elite_scene: "烈雷兽", jiansha_elite_scene: "剑客亡灵"}
+		GameManager.announcement_triggered.emit("⚠ %s突入战场！" % titles.get(scene, "精英敌人"))
+		GameManager.shake_camera(5.0, 0.25)
+	parent.add_child(indicator)
 
 ## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻
 func _scale_to_wave(enemy: EnemyBase) -> void:
@@ -416,11 +477,24 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 
 ## 固定 Boss 关：血量/伤害按 GameBalance 波次公式注入，称号与演出随关卡推进
 func _spawn_boss(player: Node2D) -> void:
-	var angle := GameManager.rng.randf() * TAU
-	var pos = player.global_position + Vector2(cos(angle), sin(angle)) * 460.0
-	pos = pos.clamp(Vector2.ONE * -(GameManager.MAP_HALF_EXTENT - 60.0), Vector2.ONE * (GameManager.MAP_HALF_EXTENT - 60.0))
+	var lim := GameManager.MAP_HALF_EXTENT - 60.0
+	var p_pos: Vector2 = player.global_position
+	var pos := Vector2(
+		GameManager.rng.randf_range(-lim, lim),
+		GameManager.rng.randf_range(-lim, lim)
+	)
+	if pos.distance_to(p_pos) < 200.0:
+		var push_dir := (pos - p_pos).normalized()
+		if push_dir.is_zero_approx():
+			push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
+		pos = (p_pos + push_dir * 240.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
+	var parent := get_parent()
+	if parent == null:
+		return
 	var boss := boss_scene.instantiate() as BossEnemy
+	if boss == null:
+		return
 	boss.global_position = pos
 	boss.add_to_group("enemies")
 	boss.add_to_group("boss")
@@ -430,8 +504,7 @@ func _spawn_boss(player: Node2D) -> void:
 	boss.final_boss = wave_number >= GameManager.VICTORY_WAVE
 	boss.boss_title = _boss_title()
 	_boss_ref = boss
-	get_parent().add_child(boss)
-
+	parent.add_child(boss)
 	GameManager.announcement_triggered.emit(_boss_announcement())
 	GameManager.shake_camera(7.0, 0.35)
 

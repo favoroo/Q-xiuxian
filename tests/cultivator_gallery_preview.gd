@@ -8,7 +8,7 @@ const CHAR_IDS: Array[String] = [
 	"jianchi", "shiyue", "fuzhen",
 	"jinsuanpan", "meiying", "dubi",
 	"kuangzhan", "duoshe", "duobao",
-	"fuxiu", "bawang"
+	"fuxiu", "bawang", "juechen"
 ]
 
 const TITLES: Dictionary = {
@@ -23,7 +23,8 @@ const TITLES: Dictionary = {
 	"duoshe": "夺舍散人",
 	"duobao": "多宝道人",
 	"fuxiu": "灵符子·符修",
-	"bawang": "霸王·横扫"
+	"bawang": "霸王·横扫",
+	"juechen": "绝尘·心剑"
 }
 
 const DESCS: Dictionary = {
@@ -38,7 +39,8 @@ const DESCS: Dictionary = {
 	"duoshe": "尸青残袍·引魂灵幡",
 	"duobao": "紫金霞帔·乾坤宝匣",
 	"fuxiu": "赭黄霞帔·朱砂符剑",
-	"bawang": "玄黑赤金氅·兽骨战斧"
+	"bawang": "玄黑赤金氅·兽骨战斧",
+	"juechen": "天青仙袍·青冥飞剑"
 }
 
 var _time: float = 0.0

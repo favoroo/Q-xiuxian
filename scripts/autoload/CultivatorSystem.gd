@@ -50,6 +50,14 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.crowd_damage_radius = float(mods.get("crowd_damage_radius", 0.0))
 	gm.stone_damage_per_100 = float(mods.get("stone_damage_per_100", 0.0))
 	gm.stone_damage_cap = float(mods.get("stone_damage_cap", 0.0))
+	gm.kill_cd_reduction_normal = float(mods.get("kill_cd_reduction_normal", 0.0))
+	gm.kill_cd_reduction_elite = float(mods.get("kill_cd_reduction_elite", 0.0))
+	gm.pet_slots_bonus += int(mods.get("pet_slots", 0))
+	gm.pet_offer_chance_bonus = float(mods.get("pet_offer_chance_bonus", 0.0))
+	gm.pet_damage_mult += float(mods.get("pet_damage_mult", 0.0))
+	var start_pet: String = String(mods.get("start_pet", ""))
+	if not start_pet.is_empty():
+		gm.add_pet(start_pet)
 	# 需求倍率只折算判定值，修为门槛链保持原曲线（避免倍率逐层复利）
 	gm.experience_to_next = maxi(1, int(round(float(gm._exp_chain) * gm.xp_require_mult)))
 	gm.shop_tag_filter = def.get("allowed_tags", [])
@@ -90,6 +98,12 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 	var still: float = gm.item_hook_sum("still_damage")
 	if still > 0.0 and gm.still_time >= maxf(0.1, gm.item_hook_sum("still_seconds")):
 		m *= 1.0 + still
+	# 三昧归真：上阵法器少于 4 把时，每少 1 把加一份全伤害
+	var empty_slot_bonus: float = gm.item_hook_sum("dmg_per_empty_slot")
+	if empty_slot_bonus > 0.0:
+		var current_slots: int = gm.slots_used()
+		if current_slots < 4:
+			m *= 1.0 + float(4 - current_slots) * empty_slot_bonus
 	# 读气血的两条：玩家不在场（局外/单测空载）时跳过，不出 NaN
 	if gm.player != null and is_instance_valid(gm.player):
 		var cvt_hp: float = gm.item_hook_sum("dmg_per_max_hp")

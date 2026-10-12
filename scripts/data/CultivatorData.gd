@@ -28,6 +28,7 @@ extends RefCounted
 ##   crowd_damage_per_enemy / crowd_damage_cap / crowd_damage_radius
 ##                                              —— 蛮兵·陷阵：感知圈内每只妖兽的全伤害加成与上限（damage_mult 现算）
 ##   stone_damage_per_100 / stone_damage_cap    —— 守财奴·财可通神：每持 100 灵石的全伤害加成与上限（damage_mult 现算）
+##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的神通冷却秒数
 ## skill_mods: {skill_id: {...}}                —— 随行神通专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
 ## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一神通，HUD 第二颗按钮释放；
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
@@ -77,9 +78,9 @@ const DEFS: Dictionary = {
 			"locked_upgrades": ["speed_up"],
 			"skill_mods": {"aegis": {"duration_add": 1.0}},
 		},
-			"fuzhen": {
-				"name": "驯兽师",
-				"epithet": "以多打少，游刃有余",
+		"fuzhen": {
+			"name": "灵蝶使",
+			"epithet": "以多打少，游刃有余",
 				"icon": "res://assets/art/cultivator_fuzhen_icon.png",
 				"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 				"motion": "procedural",
@@ -363,24 +364,65 @@ const DEFS: Dictionary = {
 					"locked_upgrades": [],
 					"skill_mods": {"haste": {"cooldown_mult": 0.7}},
 				},
-				"bawang": {
-					"name": "霸王",
-					"epithet": "横扫千军，所向披靡",
-					"icon": "res://assets/art/cultivator_bawang_icon.png",
+					"bawang": {
+						"name": "霸王",
+						"epithet": "横扫千军，所向披靡",
+						"icon": "res://assets/art/cultivator_bawang_icon.png",
+						"sprite": "res://assets/art/pawn_blue_8dir.png",
+						"motion": "procedural",
+						"render_style": "hollow_knight",
+						"start_equip": "",
+						"pros": ["横扫类法器伤害 +30%", "初始护甲 +2"],
+						"cons": ["非横扫类法器伤害 -25%", "商店主要刷新横扫类法器"],
+						"mods": {
+							"armor": 2.0,
+							"tag_damage": {"wide": 0.30},
+							"non_tag_damage": {"wide": -0.25},
+						},
+						"allowed_tags": ["wide"],
+						"locked_upgrades": [],
+						"skill_mods": {"aegis": {"duration_add": 1.0}},
+					},
+				"juechen": {
+					"name": "绝尘",
+					"epithet": "一剑绝尘，万法无歇",
+					"icon": "res://assets/art/cultivator_juechen_icon.png",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["横扫类法器伤害 +30%", "初始护甲 +2"],
-					"cons": ["非横扫类法器伤害 -25%", "商店主要刷新横扫类法器"],
+					"pros": ["击杀妖兽减 0.4s 神通冷却（精英 -2.0s）", "神通持续期间击杀可预扣后续冷却"],
+					"cons": ["全武器基础伤害 -20%", "最大生命 -15%"],
 					"mods": {
-						"armor": 2.0,
-						"tag_damage": {"wide": 0.30},
-						"non_tag_damage": {"wide": -0.25},
+						"damage_mult": 0.80,
+						"hp_mult": 0.85,
+						"kill_cd_reduction_normal": 0.4,
+						"kill_cd_reduction_elite": 2.0,
 					},
-					"allowed_tags": ["wide"],
+					"allowed_tags": ["sword"],
 					"locked_upgrades": [],
-					"skill_mods": {"aegis": {"duration_add": 1.0}},
+					"skill_mods": {},
+				},
+				"yushou": {
+					"name": "御兽师",
+					"epithet": "万灵来朝，兽伴同行",
+					"icon": "res://assets/art/cultivator_yushou_icon.png",
+					"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
+					"motion": "procedural",
+					"render_style": "hollow_knight",
+					"start_equip": "焰灵狐（随行灵兽）",
+					"pros": ["开局自带随行灵兽（焰灵狐）", "灵兽栏位 +2（可同时配置 3 只）", "商店灵兽出现概率 +15%", "随行灵兽造成的伤害 +15%"],
+					"cons": ["本体法器伤害 -10%"],
+					"mods": {
+						"start_pet": "yanhu",
+						"pet_slots": 2,
+						"pet_offer_chance_bonus": 0.15,
+						"pet_damage_mult": 0.15,
+						"damage_mult": 0.90,
+					},
+					"allowed_tags": [],
+					"locked_upgrades": [],
+					"skill_mods": {"renewal": {"power_add": 0.10}},
 				},
 		}
 

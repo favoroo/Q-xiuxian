@@ -212,9 +212,13 @@ static func line_max_w(text: String, font: Font, font_size: int) -> float:
 ## 色签要钉的宽：贴着字走，再留一点余量（stylebox 的左右内边距与取整会吃掉几单位，
 ## 贴边就会被引擎再折一次，多出一行孤字）
 const CHIP_PAD := 6.0
+const COMPACT_CHIP_PAD := 4.0
 
 static func chip_pin_w(text: String, font: Font, font_size: int) -> float:
     return line_max_w(text, font, font_size) + CHIP_PAD
+
+static func compact_chip_pin_w(text: String, font: Font, font_size: int = 10) -> float:
+    return line_max_w(text, font, font_size) + COMPACT_CHIP_PAD
 
 ## 色签 Label 工厂：斜切面 + 贴着字走的宽。商店货架卡行②、图鉴卡面三签、羁绊签
 ## 都是「[文字, 面色, 字色]」这一形状，画法收在这一处 —— 否则两处各画一套，
@@ -390,6 +394,23 @@ static func bar_styles(track: Color, fill: Color) -> Array:
 ## 色签 chip：小面积斜切更陡才读得出形状
 static func chip(face: Color) -> StyleBoxFlat:
     return block(face, SLANT_BAND, Vector2(2, 3))
+
+## 紧凑型色签 compact_chip：专用于高信息密度卡片（如商店货架卡），收窄边框与投影，防膨胀高度
+static func compact_chip(face: Color) -> StyleBoxFlat:
+    var sb := panel(face, SLANT_BAND, Vector2(1, 1))
+    sb.border_width_left = 1
+    sb.border_width_top = 1
+    sb.border_width_right = 1
+    sb.border_width_bottom = 2
+    var edge := face.darkened(0.35)
+    if face.get_luminance() < 0.08:
+        edge = LINE
+    sb.border_color = edge
+    sb.content_margin_left = 3.0
+    sb.content_margin_right = 3.0
+    sb.content_margin_top = 1.0
+    sb.content_margin_bottom = 1.0
+    return sb
 
 ## 半调网点带：标题带上的印刷味装饰。一次性 _draw（retained），不进每帧路径，不参与交互。
 ## 只铺大标题带（主菜单/结算这种一屏一条的场合），小卡片上网点只会糊成脏点。

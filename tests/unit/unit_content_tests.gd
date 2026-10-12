@@ -352,8 +352,8 @@ func _test_item_system() -> void:
 	_c.check(GameBalance.HEAL_OVERFLOW_STONE_CAP <= 15, "折灵石单颗封顶不超过 15（不滚成巨款）")
 
 func _test_cultivator_system() -> void:
-	# 数据表完整性：17 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
-	_c.equals(CultivatorData.all_ids().size(), 17, "修士扩充至 17 名")
+	# 数据表完整性：19 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 19, "修士扩充至 19 名")
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
@@ -469,7 +469,7 @@ func _test_cultivator_system() -> void:
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
-	_c.equals(cs._roster_grid.get_child_count(), 17, "道统选择界面下半部分两排网格展示 17 张形象小卡片")
+	_c.equals(cs._roster_grid.get_child_count(), 19, "道统选择界面下半部分两排网格展示 19 张形象小卡片")
 	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
 	cs._select_cultivator("fuzhen")
 	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
@@ -612,6 +612,44 @@ func _test_turret_and_new_cultivators() -> void:
 		"无器类峰值账本时不达成【横扫千军】")
 	_c.equals(AchievementData.cultivator_unlock_achievement("fuxiu").get("id", ""), "ach_cult_fuxiu", "灵符子反查解锁成就一致")
 	_c.equals(AchievementData.cultivator_unlock_achievement("bawang").get("id", ""), "ach_cult_bawang", "霸王反查解锁成就一致")
+	_c.equals(AchievementData.cultivator_unlock_achievement("juechen").get("id", ""), "ach_cult_juechen", "绝尘反查解锁成就一致")
+	_c.check(AchievementData.is_condition_met("ach_cult_juechen", {"max_class_counts": {"sword": 4}}, {}),
+		"同时上阵 4 件剑类法器达成【心剑通神】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_juechen", {"max_class_counts": {"sword": 3}}, {}),
+		"3 件剑类法器不达成【心剑通神】")
+
+	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
+	GameManager.reset_run()
+	GameManager.cultivator_id = "juechen"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.weapon_damage_mult, 0.80, EPS, "绝尘全武器基础伤害 ×0.80")
+	_c.near(GameManager.kill_cd_reduction_normal, 0.4, EPS, "绝尘普通怪冷却返还 0.4s")
+	_c.near(GameManager.kill_cd_reduction_elite, 2.0, EPS, "绝尘精英怪冷却返还 2.0s")
+	var dummy_p := Player.new()
+	GameManager.player = dummy_p
+	dummy_p.skill_cd_left = 5.0
+	dummy_p.skill_active_left = 0.0
+	GameManager.register_kill(false)
+	_c.near(dummy_p.skill_cd_left, 4.6, EPS, "冷却中击杀普通怪直接扣减 0.4s CD")
+	GameManager.register_kill(true)
+	_c.near(dummy_p.skill_cd_left, 2.6, EPS, "冷却中击杀精英怪直接扣减 2.0s CD")
+	dummy_p.refund_skill_cooldown(10.0)
+	_c.near(dummy_p.skill_cd_left, 0.0, EPS, "冷却扣减下限钳在 0.0")
+	# 持续生效期间预扣后续冷却
+	dummy_p.skill_active_left = 3.0
+	dummy_p._skill_pending_cd = 3.0
+	GameManager.register_kill(false)
+	_c.near(dummy_p._skill_pending_cd, 2.6, EPS, "神通持续期间击杀预扣待进入冷却 0.4s")
+	GameManager.register_kill(true)
+	_c.near(dummy_p._skill_pending_cd, 0.6, EPS, "神通持续期间击杀精英预扣 2.0s")
+	GameManager.register_kill(true)
+	_c.near(dummy_p._skill_pending_cd, 0.0, EPS, "持续期间预扣至 0.0")
+	dummy_p._begin_skill_cooldown()
+	_c.near(dummy_p.skill_cd_left, 0.0, EPS, "预扣归零后结束持续期直接就绪，零延迟无缝连发")
+	GameManager.player = null
+	dummy_p.free()
+	GameManager.reset_run()
+	_c.near(GameManager.kill_cd_reduction_normal, 0.0, EPS, "reset_run 复位绝尘冷却返还参数")
 
 	# 7. 数据表三件御灵装备属性强化验证（射程全面扩展至 >= 170px，伤害 >= 20）
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:
@@ -897,4 +935,52 @@ func _test_conversion_items_and_hooks() -> void:
 	GameManager.nearby_enemy_count = 10
 	GameManager.spirit_stones = 1000
 	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.35, EPS, "剑痴无陷阵/财可通神（仍只有剑系 +35%）")
+	GameManager.reset_run()
+
+	# ==================== 2026-10-12 深度联动与站定流法宝（14 件）机制测试 ====================
+	# 1. 站定/入定流
+	_c.check(not GameManager.has_still_mechanic(), "开局无站定流法宝")
+	GameManager.add_item("ruding_xiang")
+	_c.check(GameManager.has_still_mechanic(), "购入入定香后激活站定判定")
+	GameManager.still_time = 0.0
+	_c.near(GameManager.get_effective_dodge(), 0.0, EPS, "移动中入定香无闪避")
+	_c.near(GameManager.get_effective_armor(), 0.0, EPS, "移动中入定香无护甲")
+	GameManager.still_time = 0.5
+	_c.near(GameManager.get_effective_dodge(), 0.25, EPS, "站定时入定香闪避 +25%")
+	_c.near(GameManager.get_effective_armor(), 3.0, EPS, "站定时入定香护甲 +3")
+
+	GameManager.add_item("xuanwu_fashan")
+	_c.near(GameManager.get_effective_thorns(), 0.6, EPS, "站定时玄武法坛反伤 +60%")
+	var base_kb := GameManager.knockback_force(100.0)
+	GameManager.still_time = 0.0
+	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "移动中击退力为基准")
+	GameManager.still_time = 1.0
+	_c.near(GameManager.knockback_force(100.0), 180.0, EPS, "站定时玄武法坛击退力 +80%")
+
+	GameManager.add_item("panshi_yin")
+	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 1.45, EPS, "磐石印站定 1 秒后全伤害 +45%")
+	GameManager.reset_run()
+
+	# 2. 角色联动：三昧归真少武器增伤
+	GameManager.add_item("sanmei_guizhen")
+	# 0 把上阵武器（空载）视为少 4 把，全伤害 +60%
+	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 1.60, EPS, "三昧归真 0 武器 → +60%")
+	GameManager.reset_run()
+
+	# 3. 随行神通冷却缩减：凝神符
+	var gale_base_cd := float(SkillData.final_stats("gale", "")["cooldown"])
+	_c.near(gale_base_cd, 9.0, EPS, "加速基准冷却 9.0s")
+	GameManager.add_item("ningshen_fu")
+	var gale_mod_cd := float(SkillData.final_stats("gale", "")["cooldown"])
+	_c.near(gale_mod_cd, 8.1, EPS, "凝神符：加速冷却缩减 10% (9.0 → 8.1s)")
+	GameManager.reset_run()
+
+	# 4. 波末永久成长：突破古玉
+	_c.check(GameManager.add_item("tupo_guyu"), "突破古玉首件购入")
+	_c.check(not GameManager.add_item("tupo_guyu"), "突破古玉 unique 限购一件")
+	var prev_regen := GameManager.hp_regen
+	var prev_ls := GameManager.lifesteal
+	GameManager.apply_harvest()
+	_c.near(GameManager.hp_regen, prev_regen + 0.5, EPS, "突破古玉波末 +0.5 回复")
+	_c.near(GameManager.lifesteal, prev_ls + 0.01, EPS, "突破古玉波末 +1% 吸血")
 	GameManager.reset_run()

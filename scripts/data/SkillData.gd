@@ -136,11 +136,13 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
 	out["power"] = float(out["power"]) * float(mods.get("power_mult", 1.0))
 	out["distance"] = float(out["distance"]) * float(mods.get("distance_mult", 1.0))
+	# 凝神符等法宝的神通冷却缩减
+	var cd_mult := 1.0 - GameManager.item_hook_sum("skill_cooldown_mult")
 	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限，也不吃角色 cooldown_mult
 	if int(out["kind"]) == Kind.BURST:
 		out["cooldown"] = 0.0
 	else:
-		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)))
+		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)) * maxf(0.2, cd_mult))
 	return out
 
 ## 强化文案（卡片上的「✦ 道统契合：…」一行），未强化返回空串

@@ -29,6 +29,8 @@ static func open(shop: WaveShop, anchor: Control, tip: Dictionary) -> void:
 			open_synergy(shop, anchor, String(tip.get("tag", "")), w_id)
 		"merge":
 			open_merge(shop, anchor, w_id)
+		"element":
+			open_element(shop, anchor, w_id)
 		_:
 			push_warning("ShopChipTips: 未知色签解释类型 %s" % str(tip.get("kind", "")))
 
@@ -97,6 +99,33 @@ static func open_merge(shop: WaveShop, anchor: Control, w_id: String) -> void:
 		"rows": rows,
 		"notes": notes,
 		"foot": "手里正好 2 把时这颗角标才亮：买下第三把就凑齐。",
+	})
+
+## 点「元素」色签：该法器吃「元素伤害」属性加成
+static func open_element(shop: WaveShop, anchor: Control, w_id: String) -> void:
+	var def := WeaponData.get_def(w_id)
+	if def.is_empty():
+		return
+	var coef := WeaponData.elemental_scaling_coef(w_id)
+	var stats := GameManager.get_player_stat_dict()
+	var edmg: float = float(stats.get("elemental_damage", 0.0))
+	var gain: float = edmg * coef
+	var rows: Array = [
+		["元素转化系数", "%.1f" % coef, GameStyle.ELEMENT],
+		["当前元素伤害", "%+.1f" % edmg, GameStyle.GOOD if edmg > 0.0 else (GameStyle.BAD if edmg < 0.0 else GameStyle.PAPER)],
+		["换算额外伤害", "%+.1f" % gain, GameStyle.GOOD if gain > 0.0 else (GameStyle.BAD if gain < 0.0 else GameStyle.PAPER)],
+	]
+	var notes: Array[String] = [
+		"该法器带有五行灵蕴，其单发与每秒伤害直接受修士【元素伤害】属性加成。",
+		"图标上的暖橙红边框代表具备元素特性，可与五行法宝或火/木/水等流派产生强联动。",
+	]
+	DetailTip.show_over(shop, anchor, {
+		"title": "元素法器 · %s" % String(def.get("name", "法器")),
+		"chip": "元素加成",
+		"chip_color": GameStyle.ELEMENT,
+		"rows": rows,
+		"notes": notes,
+		"foot": "受元素伤害加成的法器在商店与背包中均有高亮边框提示。",
 	})
 
 ## 买下这一把对这一路羁绊的效应（逐条人话，件数与门槛全部现读 SynergyUI 那把尺子）

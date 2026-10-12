@@ -195,3 +195,78 @@ static func create_empty_stash_slot(shop: WaveShop, tile: float) -> Control:
 	if shop != null:
 		shop.drag_register(slot, {"pool": "stash", "index": -1, "kind": "end"})
 	return slot
+
+## 灵兽分界条
+static func create_pets_divider() -> Control:
+	var chip = PanelContainer.new()
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var lbl = Label.new()
+	lbl.text = "灵兽 %d/%d" % [GameManager.pets.size(), GameManager.max_pet_slots()]
+	chip.add_child(lbl)
+	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
+	return chip
+
+## 已持有灵兽的小徽记：绘制光灵圆球，支持点按弹出 DetailTip 详解卡与出售操作
+static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Control:
+	var def := PetData.get_def(pet_id)
+	var chip = PanelContainer.new()
+	chip.custom_minimum_size = Vector2(tile, tile)
+	chip.set_meta("tip_title", String(def.get("name", pet_id)))
+	chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	var color: Color = def.get("color", GameStyle.GOLD)
+	chip.add_theme_stylebox_override("panel",
+		GameStyle.outlined_panel(GameStyle.NAVY2, color, 2, 0.0))
+
+	var preview := Control.new()
+	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.draw.connect(func():
+		var sz := preview.size
+		var center := sz * 0.5
+		var r: float = sz.x * 0.28
+		var halo: Color = def.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
+		preview.draw_circle(center, r * 1.5, halo)
+		preview.draw_circle(center, r, color)
+		preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+	)
+	chip.add_child(preview)
+
+	GameStyle.tap(chip, func(): open_pet_tip(shop, pet_id, chip))
+	return chip
+
+## 灵兽详情卡：包含定位/技能描述/出售返还按钮
+static func open_pet_tip(shop: WaveShop, pet_id: String, anchor: Control) -> void:
+	var def := PetData.get_def(pet_id)
+	if def.is_empty():
+		return
+	var color: Color = def.get("color", GameStyle.GOLD)
+	var refund := PetData.sell_price(pet_id)
+	var rows: Array = [
+		["定位", "灵兽 · %s" % PetData.role_label(String(def.get("role", ""))), color],
+		["原价", "%d 金币" % int(def.get("base_price", 0)), GameStyle.PAPER_DIM],
+		["出售返还", "%d 金币" % refund, GameStyle.JADE],
+	]
+	var on_sell := func():
+		if GameManager.sell_pet(pet_id):
+			shop.refresh(false)
+	var actions: Array = [
+		{
+			"text": "出售灵兽 (+%d 金币)" % refund,
+			"color": GameStyle.BAD,
+			"edge_color": GameStyle.BAD_DK,
+			"text_color": GameStyle.PAPER,
+			"callback": on_sell,
+		}
+	]
+	DetailTip.show_over(shop, anchor, {
+		"title": String(def.get("name", pet_id)),
+		"chip": "随行伙伴",
+		"chip_color": color,
+		"rows": rows,
+		"body": String(def.get("desc", "")),
+		"notes": ["随行伙伴：跟随主角战斗，无敌免死，跨波存活。", "出售后释放栏位，并可再次在商店刷出。"],
+		"foot": "当前灵兽栏位：%d/%d" % [GameManager.pets.size(), GameManager.max_pet_slots()],
+		"actions": actions,
+	})

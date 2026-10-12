@@ -35,6 +35,8 @@ var _roster_scroll: ScrollContainer
 var _roster_grid: GridContainer
 var _selected_id: String = "jianchi"
 var _transitioning: bool = false
+var _roster_cards: Dictionary = {}
+var _cached_roster_w: float = -1.0
 
 func _ready() -> void:
 	visible = false
@@ -215,8 +217,14 @@ func _select_cultivator(cid: String) -> void:
 	if _transitioning or cid == _selected_id:
 		return
 	AudioManager.play_sfx("ui_click")
+	var old_id := _selected_id
 	_selected_id = cid
-	_rebuild_all()
+	var vis_w := get_viewport().get_visible_rect().size.x
+	if vis_w <= 0.0:
+		vis_w = 960.0
+	_rebuild_detail_card(_selected_id, vis_w)
+	_update_small_card_selection(old_id)
+	_update_small_card_selection(_selected_id)
 
 func _rebuild_all() -> void:
 	var vis_w := get_viewport().get_visible_rect().size.x
@@ -518,15 +526,67 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 # ---------------- 右侧：全部修士纵向双列小卡片 ----------------
 
 func _rebuild_roster_cards(vis_w: float) -> void:
+	var ids: Array = CultivatorData.all_ids()
+	if _roster_cards.size() == ids.size() and absf(_cached_roster_w - vis_w) < 1.0:
+		for cid in ids:
+			_update_small_card_selection(String(cid))
+		return
+
 	for child in _roster_grid.get_children():
 		child.queue_free()
+	_roster_cards.clear()
+	_cached_roster_w = vis_w
 
-	var ids: Array = CultivatorData.all_ids()
 	_roster_grid.columns = 2
 	var inner_w := small_card_inner_w(vis_w, ids.size())
 	for cid in ids:
 		_roster_grid.add_child(_create_small_card(String(cid), inner_w))
 	GameStyle.swipeable(_roster_grid)
+
+func _update_small_card_selection(cid: String) -> void:
+	if not _roster_cards.has(cid):
+		return
+	var data: Dictionary = _roster_cards[cid]
+	var is_selected: bool = (cid == _selected_id)
+	var is_unlocked: bool = bool(data.get("is_unlocked", false))
+	var best_d: int = int(data.get("best_d", -1))
+	var style: StyleBoxFlat = data.get("style")
+	var icon_box: PanelContainer = data.get("icon_box")
+	var name_lbl: Label = data.get("name_lbl")
+	var tag_lbl: Label = data.get("tag_lbl")
+
+	var accent := GameStyle.JADE if is_selected else \
+			(GameStyle.GOLD.darkened(0.35) if is_unlocked else GameStyle.LINE)
+	if style != null:
+		style.border_color = accent
+		if is_selected:
+			style.bg_color = GameStyle.NAVY2.lightened(0.12)
+		elif not is_unlocked:
+			style.bg_color = GameStyle.INK.lightened(0.02)
+		else:
+			style.bg_color = GameStyle.NAVY2
+
+	if icon_box != null:
+		var ib_border := GameStyle.JADE if is_selected else (GameStyle.GOLD_EDGE if is_unlocked else GameStyle.LINE)
+		icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
+
+	if name_lbl != null:
+		var name_col := GameStyle.JADE if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+		name_lbl.add_theme_color_override("font_color", name_col)
+
+	if tag_lbl != null:
+		if is_selected:
+			tag_lbl.text = "◆"
+			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE)
+		elif not is_unlocked:
+			tag_lbl.text = "✖"
+			tag_lbl.add_theme_color_override("font_color", GameStyle.GREY)
+		elif best_d >= 0:
+			tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
+			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE)
+		else:
+			tag_lbl.text = " "
+			tag_lbl.add_theme_color_override("font_color", GameStyle.PAPER_DIM)
 
 func _create_small_card(cid: String, inner_w: float) -> Control:
 	var def: Dictionary = CultivatorData.get_def(cid)
@@ -631,6 +691,17 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 			_select_cultivator(cid)
 	)
 	GameStyle.hotzone(card)
+
+	_roster_cards[cid] = {
+		"card": card,
+		"style": style,
+		"icon_box": icon_box,
+		"name_lbl": name_lbl,
+		"tag_lbl": tag_lbl,
+		"is_unlocked": is_unlocked,
+		"best_d": best_d,
+	}
+
 	return card
 
 func _unhandled_input(event: InputEvent) -> void:

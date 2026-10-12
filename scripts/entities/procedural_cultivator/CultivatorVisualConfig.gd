@@ -118,6 +118,10 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 			return make_fuxiu()
 		"bawang":
 			return make_bawang()
+		"juechen":
+			return make_juechen()
+		"yushou":
+			return make_yushou()
 		"jianchi", _:
 			return make_jianchi()
 
@@ -609,6 +613,62 @@ static func make_bawang() -> CultivatorVisualConfig:
 		"col_shadow": Color(0.22, 0.17, 0.10),
 		"col_accent": Color(0.98, 0.65, 0.20),      # 赤金流光
 		"strap_style": "dual"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 18. 绝尘（一剑绝尘，轻灵出尘，逍遥仙道髻，冰青剑目，流云开衩仙袍，太乙青冥剑）
+static func make_juechen() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.04, "width_scale": 0.92, "height_scale": 1.05, "head_scale": 1.0 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "dao_bun",
+		"eye_style": "sharp_slit",
+		"eye_color": Color(0.40, 0.85, 1.0, 0.70),  # 冰青仙芒剑目
+		"eye_core_color": Color(0.95, 1.0, 1.0)
+	}
+	cfg.cloak = {
+		"cloak_style": "split_flowing",
+		"col_outer": Color(0.18, 0.35, 0.48),       # 冰魄天青
+		"col_inner": Color(0.82, 0.90, 0.96),       # 凝霜银白内衬
+		"col_edge": Color(0.45, 0.88, 1.0),        # 太乙青辉镶边
+		"chest_ornament": "bagua"
+	}
+	cfg.weapon = {
+		"weapon_type": "peach_sword",
+		"col_main": Color(0.85, 0.95, 1.0),        # 青冥寒光剑身
+		"col_shadow": Color(0.40, 0.55, 0.68),
+		"col_accent": Color(0.45, 0.90, 1.0),      # 冰青流光
+		"strap_style": "floating"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 19. 御兽师（万灵来朝，兽伴同行，灵动双髻，翡翠通灵目，墨绿玄青短披，驭兽灵杖）
+static func make_yushou() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 0.94, "width_scale": 0.96, "height_scale": 0.98, "head_scale": 1.04 }
+	cfg.face = {
+		"mask_style": "round_petite",
+		"horns_style": "twin_buns",
+		"eye_style": "round_bright",
+		"eye_color": Color(0.20, 0.88, 0.55, 0.70),  # 翡翠通灵目
+		"eye_core_color": Color(0.85, 1.0, 0.90)
+	}
+	cfg.cloak = {
+		"cloak_style": "short_cape",
+		"col_outer": Color(0.12, 0.28, 0.22),        # 墨绿玄袍
+		"col_inner": Color(0.82, 0.94, 0.86),        # 浅葱玉色
+		"col_edge": Color(0.95, 0.82, 0.35),         # 暖金符线
+		"chest_ornament": "bagua"
+	}
+	cfg.weapon = {
+		"weapon_type": "peach_sword",
+		"col_main": Color(0.35, 0.65, 0.55),         # 驭兽青玉笛
+		"col_shadow": Color(0.18, 0.36, 0.28),
+		"col_accent": Color(0.98, 0.85, 0.40),
+		"strap_style": "diagonal"
 	}
 	cfg._sync_palette()
 	return cfg

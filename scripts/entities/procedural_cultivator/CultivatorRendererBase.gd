@@ -40,25 +40,28 @@ func _layer_on(layer: int) -> bool:
 	set(val):
 		config = val
 		_on_config_changed()
+		_dirty = true
 		queue_redraw()
 
 func _on_config_changed() -> void:
 	pass
 
-
 var current_action: Action = Action.IDLE:
 	set(val):
 		current_action = val
+		_dirty = true
 		queue_redraw()
 
 var current_angle: Angle = Angle.FRONT:
 	set(val):
 		current_angle = val
+		_dirty = true
 		queue_redraw()
 
 var flip_h: bool = false:
 	set(val):
 		flip_h = val
+		_dirty = true
 		queue_redraw()
 
 ## 动画驱动物理参数（由 ProceduralCultivatorView 注入）
@@ -82,11 +85,37 @@ var cloak_shimmer_intensity: float = 0.0
 var sigil_boost: float = 0.0
 var motes_boost: float = 0.0
 
+# —— 重绘节流（参考敌人渲染器节流规范）——
+## 选角界面同屏 19 个程序化角色每帧全量重绘是严重卡顿热点。
+## 普通展示/UI 头像走 20Hz 节流 + 错相，玩家操作/高精度模式走每帧绘制。
+const REDRAW_INTERVAL := 0.05
+static var redraw_count: int = 0
+
+var high_fps_mode: bool = false:
+	set(val):
+		high_fps_mode = val
+		_dirty = true
+
 var _time: float = 0.0
+var _draw_phase: float = 0.0
+var _dirty: bool = true
+
+func _ready() -> void:
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 
 func _process(delta: float) -> void:
 	_time += delta
-	queue_redraw()
+	if high_fps_mode:
+		redraw_count += 1
+		queue_redraw()
+		return
+	if _dirty or _draw_phase <= 0.0:
+		_dirty = false
+		_draw_phase = REDRAW_INTERVAL
+		redraw_count += 1
+		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _draw() -> void:
 	# 根据动作状态机分发到具体绘制函数

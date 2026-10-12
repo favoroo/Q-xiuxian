@@ -146,10 +146,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _on_retry_pressed() -> void:
+	if is_instance_valid(retry_btn):
+		retry_btn.text = "正在重置..."
+		retry_btn.disabled = true
 	get_tree().paused = false
 	# 带标记重载：与暂停菜单「重新开始」同路，跳过主菜单直落选角界面
 	GameManager.restart_to_select = true
 	GameManager.reset_run()
+	await get_tree().process_frame
 	get_tree().reload_current_scene()
 
 func _on_menu_pressed() -> void:

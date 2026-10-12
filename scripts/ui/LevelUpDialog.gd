@@ -90,6 +90,12 @@ var _can_interact: bool = false
 var _is_confirming: bool = false
 var _card_w: float = CARD_W
 
+## 顶栏圆形剩余加点次数指示与动效
+var _points_badge: PanelContainer = null
+var _points_label: Label = null
+var _badge_tween: Tween = null
+var _last_pending: int = -1
+
 ## 保存每张卡片的组件引用以便切换选中/未选中视觉状态
 var _card_entries: Array[Dictionary] = []
 
@@ -181,6 +187,41 @@ func _setup_top_bar() -> void:
 	title_band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top_bar.add_child(title_band)
 
+	# 2026-10-12 圆形待加点次数徽记：紧贴标题右侧，不挤占操作区与卡片空间，连升多级时直观告知剩余次数
+	_points_badge = PanelContainer.new()
+	_points_badge.name = "PointsBadge"
+	_points_badge.custom_minimum_size = Vector2(28, 28)
+	_points_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_points_badge.mouse_filter = Control.MOUSE_FILTER_STOP
+	_points_badge.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
+	var badge_sb := StyleBoxFlat.new()
+	badge_sb.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.92)
+	badge_sb.border_color = GameStyle.JADE
+	badge_sb.border_width_left = 2
+	badge_sb.border_width_top = 2
+	badge_sb.border_width_right = 2
+	badge_sb.border_width_bottom = 2
+	var r := 14
+	badge_sb.corner_radius_top_left = r
+	badge_sb.corner_radius_top_right = r
+	badge_sb.corner_radius_bottom_right = r
+	badge_sb.corner_radius_bottom_left = r
+	_points_badge.add_theme_stylebox_override("panel", badge_sb)
+
+	_points_label = Label.new()
+	_points_label.name = "PointsLabel"
+	_points_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_points_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_points_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	GameStyle.label(_points_label, 14, GameStyle.JADE, 2, GameStyle.INK, true)
+	_points_badge.add_child(_points_label)
+
+	_points_badge.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
+			_show_points_tip()
+	)
+	top_bar.add_child(_points_badge)
+
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -206,12 +247,47 @@ func _setup_top_bar() -> void:
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	top_bar.add_child(pause_btn)
 
+func _show_points_tip() -> void:
+	if _points_badge == null:
+		return
+	var pending := GameManager.pending_upgrade_points
+	var total := GameManager.alloc_points_total
+	DetailTip.show_over(self, _points_badge, {
+		"title": "悟道点数",
+		"chip": "剩余 %d 次" % pending,
+		"chip_color": GameStyle.JADE,
+		"rows": [
+			["本波连升", "%d 级" % total, GameStyle.JADE],
+			["剩余加点", "%d 次" % pending, GameStyle.PAPER],
+			["每次消耗", "1 点", GameStyle.PAPER],
+		],
+		"body": "战斗中升级不打断节奏，升级点数暂存，回合结束后在此统一领悟加点。",
+		"notes": [
+			"每次确认选择一条属性消耗 1 点。",
+			"本波点数全部加完后即可前往灵石阁。",
+		],
+		"foot": "可随时按右上角「属 性」查看当前完整属性与加点。",
+	})
+
+func _pulse_points_badge() -> void:
+	if _points_badge == null or not is_inside_tree():
+		return
+	if _badge_tween != null and _badge_tween.is_valid():
+		_badge_tween.kill()
+	var p_sz := _points_badge.size if _points_badge.size.x > 0.0 else _points_badge.custom_minimum_size
+	_points_badge.pivot_offset = p_sz * 0.5
+	_points_badge.scale = Vector2(1.35, 1.35)
+	_badge_tween = create_tween()
+	_badge_tween.tween_property(_points_badge, "scale", Vector2.ONE, 0.22)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 ## 回合结束、有待加点：开面板并把这一屏的候选摆出来
 func _on_alloc_opened() -> void:
 	# 立即重置触屏摇杆状态，防止手指还压在摇杆上时误点卡片
 	if GameManager.joystick != null and GameManager.joystick.has_method("_stop_joystick"):
 		GameManager.joystick._stop_joystick()
 
+	_last_pending = -1
 	_can_interact = false
 	_is_confirming = false
 	_layout_for_viewport()
@@ -266,11 +342,18 @@ func _refresh() -> void:
 
 func _refresh_bars() -> void:
 	var pending: int = GameManager.pending_upgrade_points
+	var total: int = GameManager.alloc_points_total
+	if _points_label != null:
+		_points_label.text = str(maxi(pending, 0))
+		if _last_pending >= 0 and pending < _last_pending and pending > 0:
+			_pulse_points_badge()
+	_last_pending = pending
+
 	var head: String = "第 %d 波结束" % maxi(GameManager.wave_number, 1)
-	if pending > 1:
-		head += " · 待加点 %d/%d" % [pending, GameManager.alloc_points_total]
-	elif pending == 1:
-		head += " · 待加点 1"
+	if total > 1:
+		head += " · 本波连升 %d 级 · 剩余加点 %d 次" % [total, pending]
+	elif total == 1:
+		head += " · 待加点 1 次"
 	else:
 		head += " · 升级已完成"
 	title_label.text = "升 级 加 点"

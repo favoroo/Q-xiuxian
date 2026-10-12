@@ -21,6 +21,7 @@ signal screen_damage_pulsed(color: Color, duration: float)
 signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
 signal achievements_unlocked(ach_ids: Array)
+signal pets_updated(pets: Array)
 
 ## 打击感分级。顿帧/缩放冲击按档给，**震屏（创伤）只发给"值得看的节点"**：
 ## 玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中。
@@ -30,12 +31,13 @@ enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
-## 2026-10-11 缩图 680→500（面积约 -46%）：祭坛坐标/灵脉刻槽/太极阵半径为硬编码，需同步改 Main.tscn 与 ArenaVisualLayer
-const MAP_HALF_EXTENT: float = 500.0
+## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440（880×880，面积约 -23%）：祭坛坐标/灵脉刻槽/太极阵半径需同步改 Main.tscn 与 ArenaVisualLayer
+const MAP_HALF_EXTENT: float = 440.0
 
 ## 每次刷新给几个候选：悟道结算与灵石阁货架同一档（2026-10-09 用户指令「改成 5 个」）
 const UPGRADE_OFFER_COUNT: int = 5
 const SHOP_BASE_SLOTS: int = 5
+const PET_BASE_SLOTS: int = 1         ## 基础灵兽栏位：普通角色默认 1 只，御兽师通过特性加成
 ## 每回合悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣灵石
 const ALLOC_FREE_REROLLS: int = 1
 
@@ -245,6 +247,13 @@ var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权�
 var chest_break_bonus: int = 0   ## 开箱省力：宝箱砸开所需击数下调几许（BalanceChest.break_hits 消费）
 var chest_item_grants: int = 0   ## 本局玉匣已送出的法宝件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
 
+# 灵兽系统属性（随行伙伴）
+var pet_damage_mult: float = 1.0       ## 灵兽伤害倍率
+var pet_effect_mult: float = 1.0       ## 灵兽效果倍率（回复/磁吸/产出等）
+var pet_cooldown_mult: float = 1.0     ## 灵兽行为节拍缩减乘区
+var pet_slots_bonus: int = 0           ## 额外灵兽栏位加成
+var pet_offer_chance_bonus: float = 0.0 ## 商店灵兽刷出概率加成（御兽师专属）
+
 # 修士流派（角色）特性
 var cultivator_id: String = ""
 var thorns_pct: float = 0.0        ## 石岳反震：按敌方攻击力比例反弹
@@ -283,6 +292,8 @@ var crowd_damage_radius: float = 0.0     ## 蛮兵·陷阵：感知半径（0 = 
 var nearby_enemy_count: int = 0          ## 陷阵感知圈内的妖兽数（Player 按 0.2s 节流写入）
 var stone_damage_per_100: float = 0.0    ## 守财奴·财可通神：每持 100 灵石的全伤害加成
 var stone_damage_cap: float = 0.0        ## 守财奴·财可通神：加成总上限
+var kill_cd_reduction_normal: float = 0.0  ## 绝尘·斩灭凝神：击杀普通怪返还的神通冷却（秒）
+var kill_cd_reduction_elite: float = 0.0   ## 绝尘·斩灭凝神：击杀精英怪返还的神通冷却（秒）
 var still_time: float = 0.0              ## 连续站定秒数（不动明王印账本，Player._physics_process 维护）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
@@ -345,6 +356,9 @@ var alloc_reroll_free_left: int = 0
 
 ## 已持有法宝（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
+
+## 已持有灵兽（随行伙伴）的 id 列表：上限受 max_pet_slots() 约束，数据定义见 PetData
+var pets: Array = []
 
 # 武器库存：上阵 = 悬浮法器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
@@ -419,12 +433,22 @@ func add_spirit_stones(amount: int) -> void:
 	touch_peak_stones()
 	stats_updated.emit(kills, game_time, spirit_stones)
 
-func register_kill(is_elite: bool = false) -> void:
+func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	kills += 1
 	# 狂战士·战意：每次击杀 +1 层并把流失宽限计时归零（唯一攒点）
 	if frenzy_enabled > 0.0:
 		frenzy_stacks = FrenzyData.add_stack(frenzy_stacks)
 		frenzy_idle = 0.0
+	# 绝尘·斩灭凝神：击杀按怪物品级返还/预扣神通冷却
+	var cd_refund: float = kill_cd_reduction_elite if is_elite else kill_cd_reduction_normal
+	if cd_refund > 0.0 and player != null and is_instance_valid(player) and player.has_method("refund_skill_cooldown"):
+		player.refund_skill_cooldown(cd_refund)
+	# 金芒搜魂令：暴击击杀妖兽有概率吸收灵石
+	if is_crit:
+		var stone_chance: float = item_hook_sum("crit_kill_stone_chance")
+		if stone_chance > 0.0 and rng.randf() < stone_chance:
+			spirit_stones += 1
+			touch_peak_stones()
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
 		touch_peak_stones()
@@ -472,6 +496,7 @@ func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 		"locked_upgrades": locked_upgrades,
 		"counts": upgrade_counts,
 		"rng": rng,
+		"has_pets": (not pets.is_empty() or cultivator_id == "yushou"),
 	})
 
 # ---------------- 波后悟道结算（委托 AllocSession） ----------------
@@ -504,8 +529,20 @@ func can_reroll_alloc() -> bool:
 func get_stat_breakdown() -> Dictionary:
 	return StatBreakdown.breakdown(self)
 
+func has_still_mechanic() -> bool:
+	return item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
+		or item_hook_sum("still_dodge") > 0.0 or item_hook_sum("still_armor") > 0.0 \
+		or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0
+
 func get_effective_armor() -> float:
-	return armor + synergy_armor
+	var extra_still := item_hook_sum("still_armor") if still_time > 0.0 else 0.0
+	return armor + synergy_armor + extra_still
+
+func get_effective_thorns() -> float:
+	var t: float = thorns_pct
+	if still_time > 0.0:
+		t += item_hook_sum("still_thorns")
+	return t
 
 func get_crit_rate() -> float:
 	# 算式在 BalanceCombat.crit_rate（悟道卡面的「加后读数」预读共用同一条，不抄第二份）
@@ -521,7 +558,8 @@ func roll_crit() -> bool:
 
 func get_effective_dodge() -> float:
 	# 算式在 BalanceCombat.effective_dodge（与卡面预读同源）
-	return BalanceCombat.effective_dodge(dodge, buff_dodge, DODGE_CAP, dodge_cap_bonus)
+	var extra_still := item_hook_sum("still_dodge") if still_time > 0.0 else 0.0
+	return BalanceCombat.effective_dodge(dodge + extra_still, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
 ## 上阵法器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
 func max_weapon_slots() -> int:
@@ -538,9 +576,10 @@ func element_damage_mult(w_id: String) -> float:
 		return 1.0
 	return 1.0 + float(element_damage.get(WeaponData.element_of(w_id), 0.0))
 
-## 法器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率
+## 法器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率 × 站定加成
 func knockback_force(base: float) -> float:
-	return base * knockback_mult * synergy_knockback_mult * buff_knockback_mult
+	var still_kb := (1.0 + item_hook_sum("still_knockback")) if still_time > 0.0 else 1.0
+	return base * knockback_mult * synergy_knockback_mult * buff_knockback_mult * still_kb
 
 ## 法器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
 ## source = 施力点（落雷点 / 法器自身 / 灵宝自身），enemy_pos = 受击敌人位置。
@@ -579,6 +618,9 @@ func get_player_stat_dict() -> Dictionary:
 		"elemental_damage": elemental_damage,
 		"engineering_damage": engineering_damage + synergy_engineering_damage,
 		"harvest": harvest,
+		"pet_damage_mult": pet_damage_mult,
+		"pet_effect_mult": pet_effect_mult,
+		"pet_cooldown_mult": pet_cooldown_mult,
 	}
 
 func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
@@ -632,6 +674,36 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
 		player.heal(player.max_health * heal_pct)
+	# 突破古玉等法宝的波末永久成长 hook
+	var wave_hp := item_hook_sum("wave_end_max_hp")
+	var wave_reg := item_hook_sum("wave_end_regen")
+	var wave_ls := item_hook_sum("wave_end_lifesteal")
+	if wave_hp > 0.0 or wave_reg > 0.0 or wave_ls > 0.0:
+		var wave_apply: Dictionary = {}
+		if wave_hp > 0.0:
+			wave_apply["max_hp"] = wave_hp
+			wave_apply["hp_heal"] = wave_hp
+			if wave_reg > 0.0:
+				wave_apply["hp_regen"] = wave_reg
+			if wave_ls > 0.0:
+				wave_apply["lifesteal"] = wave_ls
+			_apply_stat_fields(wave_apply, "wave_end_growth")
+	# 随行灵兽波末收益（聚宝蟾献金币等）
+	PetSystem.on_wave_ended(self)
+
+# ---------------- 灵兽（随行伙伴） ----------------
+
+func max_pet_slots() -> int:
+	return PetSystem.max_pet_slots(self)
+
+func has_pet(pet_id: String) -> bool:
+	return pet_id in pets
+
+func add_pet(pet_id: String) -> bool:
+	return PetSystem.add_pet(self, pet_id)
+
+func sell_pet(pet_id: String) -> bool:
+	return PetSystem.sell_pet(self, pet_id)
 
 # ---------------- 法宝（被动道具） ----------------
 
