@@ -69,6 +69,9 @@ const BF_CELL_MAX := 30.0
 const BF_CELL_PAD := 3.0
 ## 格间缝（HFlowContainer 的 h/v_separation）
 const BF_CELL_GAP := 3
+## 幅度行下面那行「当前 X → Y」预读小字的字号：与「受益装备 · 点按看详情」同一档（11），
+## 是注脚不是正文。窄屏放不下时由 wrap_cjk 在箭头处切行，不砍字也不压字号。
+const FORECAST_FONT := 11
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
 ## 面板内容那一层：左右边距按「面板斜切从顶走到底挪的那一截」现调（见 chrome_x）
@@ -303,9 +306,11 @@ func _populate_cards() -> void:
 		child.queue_free()
 	_card_entries.clear()
 
+	# 一屏候选只抄一份「加之前」的属性影子：五张卡的预读都跟这一份对表，屏内不会自相矛盾
+	var forecast := StatForecast.open()
 	for i in range(GameManager.alloc_offers.size()):
 		var data: Dictionary = GameManager.alloc_offers[i]
-		var entry := _create_card_entry(data, i)
+		var entry := _create_card_entry(data, i, forecast)
 		_card_entries.append(entry)
 		var card_col: Control = entry["root"]
 		cards_container.add_child(card_col)
@@ -325,7 +330,7 @@ static func _center_pivot(c: Control) -> void:
 	if c.size.y > 0.0:
 		c.pivot_offset = c.size * 0.5
 
-func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
+func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) -> Dictionary:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(_card_w, CARD_MIN_H)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -425,8 +430,9 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 	#    不再有手写 BBCode 硬编码色（旧 #ffd24d/#6fd6ff/#7ce860 与 GameStyle 常量脱节，已废）。
 	#    表里的 desc 只写 apply 之外的机制说明（纯数值项为空串），非空才渲染、灰白小字。
 	#    行块不吸收余量：加成行与机制说明成组贴顶（土豆兄弟式内容排布），底部留白。
-	var rows_block := BonusRows.build_apply_block(data.get("apply", {}), 13, inner_w)
-	vbox.add_child(rows_block)
+	#    2026-10-12 用户指令：「加一条显示当前属性是多少，增加后是多少」⇒ 每条幅度行下面
+	#    再插一行「当前 X → Y」小字，读数走 StatForecast（属性面板同一份算式），见 _build_apply_block。
+	vbox.add_child(_build_apply_block(data.get("apply", {}), 13, inner_w, forecast))
 	var flavor := String(data.get("desc", ""))
 	if not flavor.is_empty():
 		var note_lbl := Label.new()
@@ -518,6 +524,44 @@ func _create_card_entry(data: Dictionary, index: int) -> Dictionary:
 		"state_badge": state_badge,
 		"title_lbl": title_lbl,
 	}
+
+## 加成行块 + 每行下面那条「当前 X → Y」（2026-10-12 用户指令：「加一条显示当前属性是多少，
+## 增加后是多少」）。幅度行仍由 BonusRows 出（与灵石阁货架卡、开局选武器同一长相、同一把尺），
+## 这里只在它下面插一行小字注脚，两者捆成一组：组内 1 单位、组间 4 单位，读得出谁是谁的注脚。
+## 注脚的数走 StatForecast —— 落地算式与聚合算式都是属性面板在用的那一份，卡面不许自己再算。
+## 面板没有对应行的机制项（宝箱数量/品质、开箱省击、单系元素伤）不插注脚：不硬凑一个
+## 玩家在属性面板里找不到的数字。加了等于没加（夹到上限、满血回血）照实写，且退成 GREY，
+## 与 desc 那句「到顶再加是白加」互相印证，而不是用一个跳动的数骗人点。
+func _build_apply_block(apply: Dictionary, font_size: int, row_w: float, forecast: StatForecast) -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "ApplyRowsBlock"
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 4)
+	var notes: Dictionary = {}
+	for line in forecast.lines_for(apply):
+		notes[String(line["key"])] = line
+	for key in apply.keys():
+		var k := String(key)
+		var v := float(apply[key])
+		var group := VBoxContainer.new()
+		group.name = "ApplyGroup_%s" % k
+		group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		group.add_theme_constant_override("separation", 1)
+		group.add_child(BonusRows.make_row(StatInfoData.field_name(k),
+			StatInfoData.format_amount(k, v), BonusRows.stat_color(k, v), font_size, row_w))
+		if notes.has(k):
+			var line: Dictionary = notes[k]
+			var note := Label.new()
+			note.name = "ForecastNote"
+			note.text = GameStyle.wrap_cjk(String(line["text"]), GameStyle.body_font(),
+				FORECAST_FONT, row_w)
+			note.custom_minimum_size = Vector2(row_w, 0)
+			note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			GameStyle.label(note, FORECAST_FONT,
+				GameStyle.PAPER_DIM if bool(line["changed"]) else GameStyle.GREY)
+			group.add_child(note)
+		box.add_child(group)
+	return box
 
 ## 点「荐」签 = 看推荐理由：复用 DetailTip 一层卡（与受益装备详情同一宿主同一口径）。
 ## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。

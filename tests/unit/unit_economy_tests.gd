@@ -107,6 +107,33 @@ func _test_harvest() -> void:
 	_c.equals(GameBalance.budget_compensation_exp(10, 1.5), 15, "均值生效：10 只 × 1.5")
 	_c.equals(GameBalance.budget_compensation_exp(7, 2.4), 17, "四舍五入：16.8 → 17")
 
+## 提前清场余时赏（2026-10-12 用户口径「提前杀完还在干等，余下的时间该多给点金币」）：
+## 按余秒折金币、向下取整、有封顶。只给金币这条不在这里量（是给账还是给账由
+## tests/EarlyClearCheck 从生产入口差分）。
+func _test_early_clear_bonus() -> void:
+	_c.equals(GameBalance.early_clear_stones(0.0), 0, "表走完（余 0 秒）不给余时赏")
+	_c.equals(GameBalance.early_clear_stones(-4.0), 0, "负余秒按 0 收")
+	_c.equals(GameBalance.early_clear_stones(0.9), 0, "不足 1 秒不凑整")
+	_c.equals(GameBalance.early_clear_stones(13.7), 13, "余 13.7 秒 = 13 枚（截图那一格 0:13）")
+	_c.equals(GameBalance.early_clear_stones(float(GameBalance.EARLY_CLEAR_STONES_MAX)),
+		GameBalance.EARLY_CLEAR_STONES_MAX, "余秒刚好触顶")
+	_c.equals(GameBalance.early_clear_stones(999.0), GameBalance.EARLY_CLEAR_STONES_MAX,
+		"封顶：无尽长波也不会滚成巨款")
+	var prev := 0
+	var mono := true
+	for s in range(0, 40):
+		var v := GameBalance.early_clear_stones(float(s))
+		if v < prev:
+			mono = false
+		prev = maxi(prev, v)
+	_c.check(mono, "余时赏随余秒单调不减（0~39 秒）")
+	_c.check(GameBalance.early_clear_stones(19) > GameBalance.early_clear_stones(5),
+		"多杀 14 秒确实多给钱（5 枚 → 19 枚）")
+	# 量级：一波提前 20s 收尾的那笔，要「一点点」而不是「再打半波」
+	_c.check(GameBalance.EARLY_CLEAR_STONES_MAX <= GameBalance.wave_spawn_budget(10),
+		"封顶不超过第 10 波的刷怪只数（%d ≤ %d）：余时赏是添头，不是第二条击杀收入" % [
+			GameBalance.EARLY_CLEAR_STONES_MAX, GameBalance.wave_spawn_budget(10)])
+
 func _test_rarity_weights() -> void:
 	var base: Dictionary = GameBalance.rarity_weights(0.0)
 	_c.near(base["epic"], 10.0, EPS, "无福缘时仙品权重 10")

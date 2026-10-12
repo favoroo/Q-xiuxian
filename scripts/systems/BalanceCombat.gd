@@ -34,6 +34,25 @@ static func hp_is_low(cur: float, max_v: float) -> bool:
 static func hp_is_full(cur: float, max_v: float) -> bool:
 	return max_v > 0.0 and cur >= max_v - 0.5
 
+# ---------------- 暴击 / 闪避：带上限的两条读数 ----------------
+## 这两条从 GameManager 的方法里抽出来（2026-10-12），因为悟道卡面要在玩家按下
+## 「确认选择」之前先读出「加后是多少」：那份预读走的是同一批算式，抄第二份就会漂
+## （调一次上限，卡面承诺与实际结算分家）。消费方：GameManager 的两个 getter、
+## StatShadow（属性影子，见 ui/stats/StatShadow.gd）。
+
+## 有效暴击率：加点/角色基础 + 锐金羁绊 + 幻影迷踪铃按有效闪避折算，夹软上限。
+## dodge_convert 是「每 10% 有效闪避折一份暴击」的系数合计（ItemData 的 crit_per_dodge）。
+static func crit_rate(base: float, synergy: float, dodge_convert: float,
+		dodge_eff: float, cap: float) -> float:
+	var rate := base + synergy
+	if dodge_convert > 0.0:
+		rate += dodge_convert * (dodge_eff / 0.1)
+	return minf(rate, cap)
+
+## 有效闪避：升级/道具累加 + 神通短时加成，夹在硬上限（含角色抬升的那一截）内。
+static func effective_dodge(dodge: float, buff_dodge: float, cap: float, cap_bonus: float) -> float:
+	return minf(dodge + buff_dodge, cap + cap_bonus)
+
 # ---------------- 打击感：镜头创伤（震屏） ----------------
 ## 震屏的唯一数学来源。口径（2026-10-08 用户口径：「一直摇不好，这效果要留给特殊场景」）：
 ##   1) 普通命中 / 普通小怪死亡 **一律不发创伤**，打击感交给挤压形变 + 受击火花 + 跳字 + 顿帧；

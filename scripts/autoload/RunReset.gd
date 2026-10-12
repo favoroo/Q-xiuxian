@@ -81,6 +81,7 @@ static func reset(gm: Node) -> void:
 	gm.total_damage_taken_count = 0
 	gm.total_hp_healed = 0.0
 	gm.max_concurrent_summons = 0
+	gm.max_class_counts = {}
 	gm.dodge_cap_bonus = 0.0
 	gm.weapon_slots_override = 0
 	gm.enemy_count_mult = 1.0

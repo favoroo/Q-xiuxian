@@ -136,7 +136,8 @@ func _run() -> void:
 	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
 
 	# ---- ⑧ 最长真实读数 == LayoutCheck 灌的那串样本 ----
-	_c.check(HudWaveCountdown.worst_case_text() == "第 99 波 · 1:00",
+	# 样本串里的秒数跟着波长封顶走（2026-10-11 WAVE_DURATION_MAX 60→70 ⇒ 尾巴是 1:10 不是 1:00）
+	_c.check(HudWaveCountdown.worst_case_text() == "第 99 波 · 1:10",
 		"最坏样本 = 最长真实读数（实得 %s；波长封顶 %.0fs）" % [
 			HudWaveCountdown.worst_case_text(), GameBalance.wave_duration(99)])
 

@@ -46,7 +46,7 @@ const DEFS: Dictionary = {
 			"qingyun_sword": {
 				"name": "长剑", "behavior": Behavior.MELEE,
 				"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-				"damage": 30.0, "cooldown": 1.05, "range": 150.0,
+				"damage": 30.0, "cooldown": 1.05, "range": 125.0,
 				"knockback": 240.0,
 				"price": 25, "icon": "res://assets/art/weapon_sword.png",
 				# 2026-10-10 素材返工（旧图为像素风白剑，与新画风脱节）：换空洞冷冽矢量风青云剑，
@@ -59,7 +59,7 @@ const DEFS: Dictionary = {
 				"gengjin_feijian": {
 					"name": "飞剑", "behavior": Behavior.PROJECTILE,
 					"sfx": "blade_shoot",
-					"damage": 26.0, "cooldown": 0.92, "range": 245.0,
+					"damage": 26.0, "cooldown": 0.92, "range": 330.0,
 					"knockback": 185.0,
 					"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
 					# 2026-10-09 素材返工（旧图是弯的、且旧标定 (20,-14) 落在剑首那头上）：
@@ -74,7 +74,7 @@ const DEFS: Dictionary = {
 				"liuye_feidao": {
 					"name": "飞刀", "behavior": Behavior.PROJECTILE,
 					"sfx": "metal_dart",
-					"damage": 12.0, "cooldown": 1.15, "range": 235.0,
+					"damage": 12.0, "cooldown": 1.15, "range": 295.0,
 					"knockback": 110.0,
 					"price": 35, "icon": "res://assets/art/weapon_dagger.png",
 					"tip": Vector2(21, -24),
@@ -88,7 +88,7 @@ const DEFS: Dictionary = {
 						"name": "暴雨针", "behavior": Behavior.PROJECTILE,
 						"sfx": "metal_dart",
 						# 2026-10-11 平衡校准：剑痴核心交叉件单体偏软，12→13 抬离群伤带下沿（★1 单体 20.8 仍带内）
-						"damage": 13.0, "cooldown": 1.25, "range": 220.0,
+						"damage": 13.0, "cooldown": 1.25, "range": 265.0,
 						"knockback": 90.0,
 						"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
 						"tip": Vector2(22, -6),
@@ -103,7 +103,7 @@ const DEFS: Dictionary = {
 				"qingmu_tengbian": {
 					"name": "藤鞭", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_light", "sfx_impact": "impact_crack",
-					"damage": 18.0, "cooldown": 1.20, "range": 175.0,
+					"damage": 18.0, "cooldown": 1.20, "range": 150.0,
 					"knockback": 260.0,
 					"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
 					"tip": Vector2(22, 0), "upright": true,
@@ -115,7 +115,7 @@ const DEFS: Dictionary = {
 				"wanmu_lingfu": {
 					"name": "毒符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 18.0, "cooldown": 1.05, "range": 230.0,
+					"damage": 18.0, "cooldown": 1.05, "range": 280.0,
 					"knockback": 140.0,
 					"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
 					"tip": Vector2(20, -18),
@@ -128,7 +128,7 @@ const DEFS: Dictionary = {
 					"lingdie": {
 						"name": "护蝶", "behavior": Behavior.DRONE,
 						"sfx": "drone_flutter",
-						"damage": 23.0, "cooldown": 0.48, "range": 205.0,
+						"damage": 23.0, "cooldown": 0.48, "range": 200.0,
 						"knockback": 160.0,
 						"price": 40, "icon": "res://assets/art/sun_orb.png",
 						"desc": "环绕周身触碰即伤，受召唤伤害与吸血加成", "tag": "环绕·召唤·木",
@@ -138,7 +138,7 @@ const DEFS: Dictionary = {
 				"lianhuan_lingdan": {
 					"name": "弹弓", "behavior": Behavior.PROJECTILE,
 					"sfx": "impact_crack",
-					"damage": 19.0, "cooldown": 0.95, "range": 230.0,
+					"damage": 19.0, "cooldown": 0.95, "range": 280.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_sling.png",
 					"tip": Vector2(20, -18),
@@ -154,7 +154,7 @@ const DEFS: Dictionary = {
 					"bajiao_fan": {
 						"name": "风扇", "behavior": Behavior.MELEE,
 						"sfx": "fan_gust", "sfx_impact": "impact_crack",
-						"damage": 25.0, "cooldown": 1.25, "range": 185.0,
+						"damage": 25.0, "cooldown": 1.25, "range": 155.0,
 						"knockback": 400.0,
 						"price": 20, "icon": "res://assets/art/weapon_fan.png",
 						"tip": Vector2(0, -15),
@@ -166,7 +166,7 @@ const DEFS: Dictionary = {
 				"xuanbing_feizhen": {
 					"name": "冰针", "behavior": Behavior.PROJECTILE,
 					"sfx": "metal_dart",
-					"damage": 14.0, "cooldown": 1.0, "range": 235.0,
+					"damage": 14.0, "cooldown": 1.0, "range": 295.0,
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
 				"tip": Vector2(-18, 12),
@@ -179,7 +179,7 @@ const DEFS: Dictionary = {
 				"hanquan_yulian": {
 					"name": "冰莲", "behavior": Behavior.DRONE,
 					"sfx": "drone_chime",
-					"damage": 24.0, "cooldown": 0.50, "range": 205.0,
+					"damage": 24.0, "cooldown": 0.50, "range": 200.0,
 					"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
 					"desc": "环绕护体触碰即减速，受召唤伤害与攻击间隔加成", "tag": "环绕·召唤·水",
@@ -190,7 +190,7 @@ const DEFS: Dictionary = {
 				"bihai_chaoyindi": {
 					"name": "音笛", "behavior": Behavior.BURST,
 					"sfx": "flute_wave", "sfx_impact": "flute_wave",
-					"damage": 31.0, "cooldown": 1.40, "range": 225.0,
+					"damage": 31.0, "cooldown": 1.40, "range": 255.0,
 					"knockback": 320.0,
 					"price": 44, "icon": "res://assets/art/weapon_flute.png",
 					"tip": Vector2(20, 0), "upright": true,
@@ -205,7 +205,7 @@ const DEFS: Dictionary = {
 				"huoyan_fu": {
 					"name": "火符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 11.0, "cooldown": 0.88, "range": 230.0,
+					"damage": 11.0, "cooldown": 0.88, "range": 280.0,
 					"knockback": 155.0,
 					"price": 30, "icon": "res://assets/art/weapon_staff.png",
 					"tip": Vector2(6, -24),
@@ -219,7 +219,7 @@ const DEFS: Dictionary = {
 					"chiyan_dao": {
 						"name": "烈焰刀", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-						"damage": 24.0, "cooldown": 1.15, "range": 165.0,
+						"damage": 24.0, "cooldown": 1.15, "range": 135.0,
 						"knockback": 320.0,
 						"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
 						"tip": Vector2(22, -14),
@@ -231,7 +231,7 @@ const DEFS: Dictionary = {
 				"fentian_baodeng": {
 					"name": "天灯", "behavior": Behavior.BURST,
 					"sfx": "whoosh_heavy", "sfx_impact": "flame_jet",
-					"damage": 20.0, "cooldown": 1.45, "range": 230.0,
+					"damage": 20.0, "cooldown": 1.45, "range": 265.0,
 					"knockback": 200.0,
 					"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
 					"tip": Vector2(22, 0), "upright": true,
@@ -244,7 +244,7 @@ const DEFS: Dictionary = {
 					"sanmei_huohu": {
 						"name": "火葫芦", "behavior": Behavior.PROJECTILE,
 						"sfx": "flame_jet",
-						"damage": 8.0, "cooldown": 0.42, "range": 170.0,
+						"damage": 8.0, "cooldown": 0.42, "range": 175.0,
 						"knockback": 95.0,
 						"price": 42, "icon": "res://assets/art/weapon_fire_calabash.png",
 						"tip": Vector2(22, -18),
@@ -260,7 +260,7 @@ const DEFS: Dictionary = {
 				"wulei_paizi": {
 					"name": "雷牌", "behavior": Behavior.BURST,
 					"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
-					"damage": 35.0, "cooldown": 1.50, "range": 225.0,
+					"damage": 35.0, "cooldown": 1.50, "range": 260.0,
 					"knockback": 280.0,
 					"price": 45, "icon": "res://assets/art/weapon_thunder.png",
 					"tip": Vector2(22, 0), "upright": true,
@@ -272,7 +272,7 @@ const DEFS: Dictionary = {
 				"fantian_yin": {
 					"name": "巨印", "behavior": Behavior.BURST,
 					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-					"damage": 38.0, "cooldown": 1.55, "range": 220.0,
+					"damage": 38.0, "cooldown": 1.55, "range": 240.0,
 					"knockback": 360.0,
 					"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
 					"tip": Vector2(20, 0), "upright": true,
@@ -285,7 +285,7 @@ const DEFS: Dictionary = {
 					"hunyuan_zhong": {
 						"name": "古钟", "behavior": Behavior.DRONE,
 						"sfx": "orb_hit",
-						"damage": 25.0, "cooldown": 0.52, "range": 210.0,
+						"damage": 25.0, "cooldown": 0.52, "range": 205.0,
 						"knockback": 340.0,
 						"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
 						"desc": "环绕周身撞击击退敌群，受召唤伤害与最大生命加成", "tag": "环绕·召唤·土",
@@ -295,7 +295,7 @@ const DEFS: Dictionary = {
 					"xuanwu_lingdun": {
 						"name": "重盾", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						"damage": 24.0, "cooldown": 1.20, "range": 170.0,
+						"damage": 24.0, "cooldown": 1.20, "range": 140.0,
 						"knockback": 350.0,
 						"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
 						"tip": Vector2(22, -12),
@@ -315,7 +315,7 @@ const DEFS: Dictionary = {
 				"jinzhen_fu": {
 					"name": "金针符", "behavior": Behavior.PROJECTILE,
 					"sfx": "metal_dart",
-					"damage": 9.0, "cooldown": 0.58, "range": 230.0,
+					"damage": 9.0, "cooldown": 0.58, "range": 280.0,
 					"knockback": 80.0,
 					"price": 34, "icon": "res://assets/art/weapon_jinzhen_fu.png",
 					"tip": Vector2(22, -6),
@@ -328,7 +328,7 @@ const DEFS: Dictionary = {
 				"xuanbing_fu": {
 					"name": "玄冰符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 20.0, "cooldown": 1.0, "range": 230.0,
+					"damage": 20.0, "cooldown": 1.0, "range": 280.0,
 					"knockback": 130.0,
 					"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
 					"tip": Vector2(22, -6),
@@ -341,7 +341,7 @@ const DEFS: Dictionary = {
 				"zhenshan_fu": {
 					"name": "镇山符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 38.0, "cooldown": 1.5, "range": 220.0,
+					"damage": 38.0, "cooldown": 1.5, "range": 250.0,
 					"knockback": 380.0,
 					"price": 38, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 					"tip": Vector2(22, 0),
@@ -354,7 +354,7 @@ const DEFS: Dictionary = {
 					"jinjiao_jian": {
 						"name": "金蛟剪", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-						"damage": 27.0, "cooldown": 1.25, "range": 185.0,
+						"damage": 27.0, "cooldown": 1.25, "range": 155.0,
 						"knockback": 300.0,
 						"price": 38, "icon": "res://assets/art/weapon_jinjiao_jian.png",
 						"tip": Vector2(22, 0),
@@ -366,7 +366,7 @@ const DEFS: Dictionary = {
 					"qingteng_jian": {
 						"name": "青藤剑", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_light", "sfx_impact": "impact_crack",
-						"damage": 21.0, "cooldown": 1.0, "range": 160.0,
+						"damage": 21.0, "cooldown": 1.0, "range": 130.0,
 						"knockback": 220.0,
 						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
 						"tip": Vector2(22, -12),
@@ -379,7 +379,7 @@ const DEFS: Dictionary = {
 					"name": "金雷锥", "behavior": Behavior.BURST,
 					"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
 					# 2026-10-11 平衡校准：单点重击定位（爆裂半径 55 全库最小）归位单体档，38/1.35≈28.1 入 26~32 带
-					"damage": 38.0, "cooldown": 1.35, "range": 230.0,
+					"damage": 38.0, "cooldown": 1.35, "range": 285.0,
 					"knockback": 220.0,
 					"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
 					"tip": Vector2(22, 8), "upright": true,
@@ -391,7 +391,7 @@ const DEFS: Dictionary = {
 				"chunlei_gu": {
 					"name": "春雷鼓", "behavior": Behavior.BURST,
 					"sfx": "drum_boom", "sfx_impact": "drum_boom",
-					"damage": 24.0, "cooldown": 1.4, "range": 225.0,
+					"damage": 24.0, "cooldown": 1.4, "range": 250.0,
 					"knockback": 200.0,
 					"price": 44, "icon": "res://assets/art/weapon_chunlei_gu.png",
 					"tip": Vector2(22, 0), "upright": true,
@@ -404,7 +404,7 @@ const DEFS: Dictionary = {
 					"haojin_lun": {
 						"name": "昊金轮", "behavior": Behavior.DRONE,
 						"sfx": "orb_hit",
-						"damage": 22.0, "cooldown": 0.45, "range": 200.0,
+						"damage": 22.0, "cooldown": 0.45, "range": 195.0,
 						"knockback": 200.0,
 						"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
 						"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "环绕·召唤·金",
@@ -414,7 +414,7 @@ const DEFS: Dictionary = {
 					"lihuo_ya": {
 						"name": "离火鸦", "behavior": Behavior.DRONE,
 						"sfx": "drone_flutter",
-						"damage": 19.0, "cooldown": 0.50, "range": 200.0,
+						"damage": 19.0, "cooldown": 0.50, "range": 195.0,
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
 						"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "环绕·召唤·火",
@@ -427,7 +427,7 @@ const DEFS: Dictionary = {
 				"xueyin_dao": {
 					"name": "血饮狂刀", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-					"damage": 14.0, "cooldown": 0.65, "range": 150.0,
+					"damage": 14.0, "cooldown": 0.65, "range": 120.0,
 					"knockback": 160.0,
 					"price": 36, "icon": "res://assets/art/weapon_xueyin_dao.png",
 					"tip": Vector2(-22, 20),
@@ -439,7 +439,7 @@ const DEFS: Dictionary = {
 					"jubao_chi": {
 						"name": "聚宝金尺", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_light", "sfx_impact": "impact_blunt",
-						"damage": 22.0, "cooldown": 1.15, "range": 175.0,
+						"damage": 22.0, "cooldown": 1.15, "range": 145.0,
 						"knockback": 260.0,
 						"price": 30, "icon": "res://assets/art/weapon_jubao_chi.png",
 						"tip": Vector2(22, -10),
@@ -451,7 +451,7 @@ const DEFS: Dictionary = {
 					"tougu_ding": {
 						"name": "透骨钉", "behavior": Behavior.PROJECTILE,
 						"sfx": "metal_dart",
-						"damage": 14.0, "cooldown": 0.9, "range": 240.0,
+						"damage": 14.0, "cooldown": 0.9, "range": 315.0,
 						"knockback": 100.0,
 						"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 						"tip": Vector2(22, -12),
@@ -464,7 +464,7 @@ const DEFS: Dictionary = {
 				"benlang_chui": {
 					"name": "崩浪锤", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-					"damage": 30.0, "cooldown": 1.4, "range": 180.0,
+					"damage": 30.0, "cooldown": 1.4, "range": 150.0,
 					"knockback": 520.0,
 					"price": 34, "icon": "res://assets/art/weapon_benlang_chui.png",
 					"tip": Vector2(22, 14), "upright": true,
@@ -476,7 +476,7 @@ const DEFS: Dictionary = {
 					"liuling_jian": {
 						"name": "六棱锏", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						"damage": 26.0, "cooldown": 1.2, "range": 165.0,
+						"damage": 26.0, "cooldown": 1.2, "range": 135.0,
 						"knockback": 330.0,
 						"price": 36, "icon": "res://assets/art/weapon_liuling_jian.png",
 						"tip": Vector2(22, -8), "upright": true,
@@ -487,7 +487,7 @@ const DEFS: Dictionary = {
 					"xuanwu_pei": {
 						"name": "玄武佩", "behavior": Behavior.DRONE,
 						"sfx": "drone_chime",
-						"damage": 25.0, "cooldown": 0.54, "range": 205.0,
+						"damage": 25.0, "cooldown": 0.54, "range": 200.0,
 						"knockback": 420.0,
 						"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
 						"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "环绕·召唤·土",
@@ -499,7 +499,7 @@ const DEFS: Dictionary = {
 				"jiguan_nu": {
 					"name": "机关弩", "behavior": Behavior.TURRET,
 					"sfx": "metal_dart",
-					"damage": 18.0, "cooldown": 3.5, "range": 220.0,
+					"damage": 18.0, "cooldown": 3.5, "range": 270.0,
 					"turret_fire_cd": 0.75, "turret_lifetime": 12.0, "turret_cap": 2,
 					"knockback": 120.0,
 					"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
@@ -514,7 +514,7 @@ const DEFS: Dictionary = {
 					"name": "剑阵盘", "behavior": Behavior.TURRET,
 					# 疾射飞剑 ⇒ 金属抛体离手族；whoosh_light 是近战前摇的铺垫层，当开火音发虚
 					"sfx": "blade_shoot",
-					"damage": 15.0, "cooldown": 4.0, "range": 200.0,
+					"damage": 15.0, "cooldown": 4.0, "range": 250.0,
 					"turret_fire_cd": 0.60, "turret_lifetime": 12.0, "turret_cap": 2,
 					"knockback": 140.0,
 					"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
@@ -552,7 +552,7 @@ const DEFS: Dictionary = {
 				"liuhuo_feijian": {
 					"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
 					"sfx": "blade_shoot",
-					"damage": 20.0, "cooldown": 0.95, "range": 240.0,
+					"damage": 20.0, "cooldown": 0.95, "range": 325.0,
 					"knockback": 150.0,
 					"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
 					"tip": Vector2(20, 2),
@@ -565,7 +565,7 @@ const DEFS: Dictionary = {
 				"zhenhuo_fu": {
 					"name": "真火符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 17.0, "cooldown": 1.1, "range": 225.0,
+					"damage": 17.0, "cooldown": 1.1, "range": 285.0,
 					"knockback": 160.0,
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
 					"tip": Vector2(12, 12),
@@ -579,7 +579,7 @@ const DEFS: Dictionary = {
 					"name": "雷火符", "behavior": Behavior.PROJECTILE,
 					# 双器类三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与火系羁绊
 					"sfx": "talisman_throw",
-					"damage": 10.0, "cooldown": 0.95, "range": 235.0,
+					"damage": 10.0, "cooldown": 0.95, "range": 290.0,
 					"knockback": 140.0,
 					"price": 40, "icon": "res://assets/art/weapon_leihuo_fu.png",
 					"tip": Vector2(16, -6),
@@ -595,7 +595,7 @@ const DEFS: Dictionary = {
 				"hanshuang_jian": {
 					"name": "寒霜剑", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-					"damage": 27.0, "cooldown": 1.0, "range": 160.0,
+					"damage": 27.0, "cooldown": 1.0, "range": 130.0,
 					"knockback": 260.0,
 					"price": 32, "icon": "res://assets/art/weapon_hanshuang_jian.png",
 					"tip": Vector2(22, 0),
@@ -607,7 +607,7 @@ const DEFS: Dictionary = {
 				"langli_suo": {
 					"name": "浪里梭", "behavior": Behavior.PROJECTILE,
 					"sfx": "impact_crack",
-					"damage": 19.0, "cooldown": 0.95, "range": 225.0,
+					"damage": 19.0, "cooldown": 0.95, "range": 290.0,
 					"knockback": 130.0,
 					"price": 34, "icon": "res://assets/art/weapon_langli_suo.png",
 					"tip": Vector2(22, 2),
@@ -620,7 +620,7 @@ const DEFS: Dictionary = {
 				"hanquan_shou": {
 					"name": "寒泉兽", "behavior": Behavior.TURRET,
 					"sfx": "metal_dart",
-					"damage": 9.0, "cooldown": 4.0, "range": 170.0,
+					"damage": 9.0, "cooldown": 4.0, "range": 210.0,
 					"turret_fire_cd": 0.45, "turret_lifetime": 10.0, "turret_cap": 2,
 					"knockback": 90.0,
 					"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
@@ -636,7 +636,7 @@ const DEFS: Dictionary = {
 				"gudu_fu": {
 					"name": "蛊毒符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 16.0, "cooldown": 1.0, "range": 230.0,
+					"damage": 16.0, "cooldown": 1.0, "range": 280.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_gudu_fu.png",
 					"tip": Vector2(12, 10),
@@ -649,7 +649,7 @@ const DEFS: Dictionary = {
 				"tengluo_jiguan": {
 					"name": "藤萝机关", "behavior": Behavior.TURRET,
 					"sfx": "impact_crack",
-					"damage": 14.0, "cooldown": 3.6, "range": 210.0,
+					"damage": 14.0, "cooldown": 3.6, "range": 255.0,
 					"turret_fire_cd": 0.65, "turret_lifetime": 12.0, "turret_cap": 2,
 					"knockback": 110.0,
 					"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
@@ -665,7 +665,7 @@ const DEFS: Dictionary = {
 				"bengshan_jian": {
 					"name": "崩山剑", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-					"damage": 33.0, "cooldown": 1.2, "range": 170.0,
+					"damage": 33.0, "cooldown": 1.2, "range": 140.0,
 					"knockback": 420.0,
 					"price": 38, "icon": "res://assets/art/weapon_bengshan_jian.png",
 					"tip": Vector2(22, 0),
@@ -677,7 +677,7 @@ const DEFS: Dictionary = {
 				"leishi_jiguan": {
 					"name": "垒石机关", "behavior": Behavior.TURRET,
 					"sfx": "impact_blunt",
-					"damage": 20.0, "cooldown": 4.5, "range": 190.0,
+					"damage": 20.0, "cooldown": 4.5, "range": 230.0,
 					"turret_fire_cd": 0.9, "turret_lifetime": 10.0, "turret_cap": 2,
 					"knockback": 300.0,
 					"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
@@ -768,7 +768,7 @@ const DEFS: Dictionary = {
 					"name": "傀儡兽", "behavior": Behavior.TURRET,
 					# 三重共鸣（仿剑阵盘）：同时计入 机关+御灵 两条器类羁绊与土系羁绊
 					"sfx": "impact_crack",
-					"damage": 12.0, "cooldown": 3.8, "range": 200.0,
+					"damage": 12.0, "cooldown": 3.8, "range": 240.0,
 					"turret_fire_cd": 0.55, "turret_lifetime": 12.0, "turret_cap": 2,
 					"knockback": 150.0,
 					"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
@@ -782,7 +782,7 @@ const DEFS: Dictionary = {
 				"lieshan_duo": {
 					"name": "裂山铎", "behavior": Behavior.BURST,
 					"sfx": "whoosh_heavy", "sfx_impact": "drum_boom",
-					"damage": 30.0, "cooldown": 1.40, "range": 225.0,
+					"damage": 30.0, "cooldown": 1.40, "range": 255.0,
 					"knockback": 340.0,
 					"price": 45, "icon": "res://assets/art/weapon_lieshan_duo.png",
 					"tip": Vector2(20, 2), "upright": true,
@@ -795,7 +795,7 @@ const DEFS: Dictionary = {
 					"name": "惊蛰符", "behavior": Behavior.PROJECTILE,
 					# 三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与木系羁绊
 					"sfx": "talisman_throw",
-					"damage": 16.0, "cooldown": 1.0, "range": 230.0,
+					"damage": 16.0, "cooldown": 1.0, "range": 285.0,
 					"knockback": 130.0,
 					"price": 36, "icon": "res://assets/art/weapon_jingzhe_fu.png",
 					"tip": Vector2(0, -22),
@@ -808,7 +808,7 @@ const DEFS: Dictionary = {
 				"liaoyuan_shan": {
 					"name": "燎原扇", "behavior": Behavior.MELEE,
 					"sfx": "fan_gust", "sfx_impact": "impact_crack",
-					"damage": 20.0, "cooldown": 1.20, "range": 180.0,
+					"damage": 20.0, "cooldown": 1.20, "range": 150.0,
 					"knockback": 300.0,
 					"price": 36, "icon": "res://assets/art/weapon_liaoyuan_shan.png",
 					"tip": Vector2(22, 0),
@@ -820,7 +820,7 @@ const DEFS: Dictionary = {
 				"kaishan_fu": {
 					"name": "开山斧", "behavior": Behavior.MELEE,
 					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-					"damage": 29.0, "cooldown": 1.35, "range": 175.0,
+					"damage": 29.0, "cooldown": 1.35, "range": 145.0,
 					"knockback": 480.0,
 					"price": 38, "icon": "res://assets/art/weapon_kaishan_fu.png",
 					"tip": Vector2(22, 0),
@@ -832,7 +832,7 @@ const DEFS: Dictionary = {
 					"gengjin_fu": {
 						"name": "庚金符", "behavior": Behavior.PROJECTILE,
 						"sfx": "metal_dart",
-						"damage": 9.0, "cooldown": 0.60, "range": 230.0,
+						"damage": 9.0, "cooldown": 0.60, "range": 285.0,
 						"knockback": 85.0,
 						"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
 						"tip": Vector2(0, -22),
@@ -851,7 +851,7 @@ const DEFS: Dictionary = {
 					"taomu_jian": {
 						"name": "桃木剑", "behavior": Behavior.MELEE,
 						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-						"damage": 20.0, "cooldown": 0.95, "range": 150.0,
+						"damage": 20.0, "cooldown": 0.95, "range": 125.0,
 						"knockback": 230.0,
 						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
 						"tip": Vector2(22, -12),
@@ -862,7 +862,7 @@ const DEFS: Dictionary = {
 					"guishui_fu": {
 						"name": "癸水符", "behavior": Behavior.PROJECTILE,
 						"sfx": "talisman_throw",
-						"damage": 21.0, "cooldown": 0.85, "range": 230.0,
+						"damage": 21.0, "cooldown": 0.85, "range": 285.0,
 						"knockback": 120.0,
 						"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
 						"tip": Vector2(22, -6),
@@ -875,7 +875,7 @@ const DEFS: Dictionary = {
 					"houtu_fu": {
 						"name": "厚土符", "behavior": Behavior.PROJECTILE,
 						"sfx": "talisman_throw",
-						"damage": 11.0, "cooldown": 1.10, "range": 220.0,
+						"damage": 11.0, "cooldown": 1.10, "range": 255.0,
 						"knockback": 200.0,
 						"price": 32, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 						"tip": Vector2(22, 0),
@@ -888,7 +888,7 @@ const DEFS: Dictionary = {
 					"jinxiao_leiling": {
 						"name": "金霄雷令", "behavior": Behavior.BURST,
 						"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
-						"damage": 30.0, "cooldown": 1.50, "range": 230.0,
+						"damage": 30.0, "cooldown": 1.50, "range": 270.0,
 						"knockback": 260.0,
 						"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
 						"tip": Vector2(22, 8), "upright": true,
@@ -900,7 +900,7 @@ const DEFS: Dictionary = {
 					"xuanming_leizhu": {
 						"name": "玄冥雷珠", "behavior": Behavior.BURST,
 						"sfx": "flute_wave", "sfx_impact": "thunder_strike",
-						"damage": 28.0, "cooldown": 1.45, "range": 225.0,
+						"damage": 28.0, "cooldown": 1.45, "range": 270.0,
 						"knockback": 300.0,
 						"price": 44, "icon": "res://assets/art/weapon_flute.png",
 						"tip": Vector2(20, 0), "upright": true,
@@ -913,7 +913,7 @@ const DEFS: Dictionary = {
 					"qingmu_pao": {
 						"name": "青木炮", "behavior": Behavior.TURRET,
 						"sfx": "impact_crack",
-						"damage": 14.0, "cooldown": 3.4, "range": 220.0,
+						"damage": 14.0, "cooldown": 3.4, "range": 280.0,
 						"turret_fire_cd": 0.70, "turret_lifetime": 12.0, "turret_cap": 2,
 						"knockback": 120.0,
 						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
@@ -927,7 +927,7 @@ const DEFS: Dictionary = {
 					"ningbing_nu": {
 						"name": "凝冰机弩", "behavior": Behavior.TURRET,
 						"sfx": "metal_dart",
-						"damage": 12.0, "cooldown": 4.0, "range": 260.0,
+						"damage": 12.0, "cooldown": 4.0, "range": 310.0,
 						"turret_fire_cd": 0.55, "turret_lifetime": 10.0, "turret_cap": 2,
 						"knockback": 95.0,
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",

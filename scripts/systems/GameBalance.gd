@@ -69,6 +69,8 @@ const REROLL_COUNT_STEP := BalanceEconomy.REROLL_COUNT_STEP
 const HARVEST_GROWTH := BalanceEconomy.HARVEST_GROWTH
 const HEAL_OVERFLOW_STONE_PER_HP := BalanceEconomy.HEAL_OVERFLOW_STONE_PER_HP
 const HEAL_OVERFLOW_STONE_CAP := BalanceEconomy.HEAL_OVERFLOW_STONE_CAP
+const EARLY_CLEAR_STONES_PER_SEC := BalanceEconomy.EARLY_CLEAR_STONES_PER_SEC
+const EARLY_CLEAR_STONES_MAX := BalanceEconomy.EARLY_CLEAR_STONES_MAX
 const RARITY_EPIC_BASE := BalanceEconomy.RARITY_EPIC_BASE
 const RARITY_RARE := BalanceEconomy.RARITY_RARE
 const RARITY_TOTAL := BalanceEconomy.RARITY_TOTAL
@@ -252,6 +254,10 @@ static func wave_spawn_budget(wave: int) -> int:
 ## 刷怪预算未花完部分的波末经验补差（减潮不减收入）
 static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	return BalanceEconomy.budget_compensation_exp(shortfall, avg_exp)
+
+## 提前清场（妖潮已尽）的波末余时赏：只给金币，按本波剩余秒数折
+static func early_clear_stones(remaining_secs: float) -> int:
+	return BalanceEconomy.early_clear_stones(remaining_secs)
 
 static func enemy_hp_mult(wave: int) -> float:
 	return BalanceWave.enemy_hp_mult(wave)

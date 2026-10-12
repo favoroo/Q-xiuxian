@@ -77,6 +77,27 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	var eff_avg := avg_exp if avg_exp > 0.0 else BUDGET_COMP_EXP_FALLBACK
 	return int(round(float(shortfall) * eff_avg))
 
+# ---------------- 提前清场余时赏 ----------------
+
+## 一波的结束条件有两条（WaveSpawner._process_fight）：表走完，或「妖潮已尽」——本波刷怪预算
+## 全部刷入且场上再无活妖。后者就是用户 2026-10-12 的口径「提前杀完还在干等」：预算制下第 7 波
+## 约 22s 就把 39 只刷完，之后场地是空的，只能看着表再走二十几秒。
+## 提前收尾省下的那截时间按秒折成金币，余得越多给得越多。
+## 只给金币、不给修为：与「收益」那条金币+经验双入账区分开，免得提前清场顺手把升级也加速。
+## 量级压在「一点点」：一波击杀进项约 2~5 枚/秒，余时赏 1 枚/秒 ≈ 其两到四成；封顶 20 枚 ⇒
+## 后期就算提前 40s 清场也就多拿 20，不会把经济顶歪（一波商店货 25~90 枚）。
+const EARLY_CLEAR_STONES_PER_SEC := 1.0
+const EARLY_CLEAR_STONES_MAX := 20
+
+## 余时赏金币数（纯函数）：余秒向下取整 × 每秒档位，封顶；余秒 ≤0 就是 0（表走完不给钱）
+static func early_clear_stones(remaining_secs: float) -> int:
+	if remaining_secs <= 0.0:
+		return 0
+	var secs := int(floor(remaining_secs))
+	if secs <= 0:
+		return 0
+	return mini(int(round(float(secs) * EARLY_CLEAR_STONES_PER_SEC)), EARLY_CLEAR_STONES_MAX)
+
 # ---------------- 残丹化灵（波末没贴上去吃掉的回复珠）----------------
 
 ## 回不上的那截气血折成灵石：每点 0.8。钉在藏宝匣另一路上 —— 满口 18 点 ×0.8 ≈ 14，

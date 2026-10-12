@@ -352,8 +352,8 @@ func _test_item_system() -> void:
 	_c.check(GameBalance.HEAL_OVERFLOW_STONE_CAP <= 15, "折灵石单颗封顶不超过 15（不滚成巨款）")
 
 func _test_cultivator_system() -> void:
-	# 数据表完整性：15 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
-	_c.equals(CultivatorData.all_ids().size(), 15, "修士扩充至 15 名")
+	# 数据表完整性：17 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 17, "修士扩充至 17 名")
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
@@ -469,7 +469,7 @@ func _test_cultivator_system() -> void:
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
-	_c.equals(cs._roster_grid.get_child_count(), 15, "道统选择界面下半部分两排网格展示 15 张形象小卡片")
+	_c.equals(cs._roster_grid.get_child_count(), 17, "道统选择界面下半部分两排网格展示 17 张形象小卡片")
 	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
 	cs._select_cultivator("fuzhen")
 	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
@@ -580,6 +580,38 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.equals(WeaponData.drone_orb_count(2), 2, "★2 灵宝分身为二")
 	_c.equals(WeaponData.drone_orb_count(3), 3, "★3 灵宝分身为三")
 	GameManager.reset_run()
+
+	# 7.6 灵符子（fuxiu）：符箓专精 +35%，非符箓 -25%（non_tag_damage 通用键首用）
+	GameManager.reset_run()
+	GameManager.cultivator_id = "fuxiu"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.elemental_damage, 2.0, EPS, "灵符子初始元素伤害 +2")
+	_c.near(GameManager.cultivator_damage_mult("huoyan_fu"), 1.35, EPS, "灵符子符箓法器伤害 +35%")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 0.75, EPS, "灵符子非符箓法器伤害 -25%")
+	_c.near(GameManager.cultivator_damage_mult("bajiao_fan"), 0.75, EPS, "灵符子横扫法器同样吃 -25% 代偿")
+	GameManager.reset_run()
+
+	# 7.7 霸王（bawang）：横扫专精 +30%，非横扫 -25%
+	GameManager.reset_run()
+	GameManager.cultivator_id = "bawang"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.armor, 2.0, EPS, "霸王初始护甲 +2")
+	_c.near(GameManager.cultivator_damage_mult("bajiao_fan"), 1.30, EPS, "霸王横扫法器伤害 +30%")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 0.75, EPS, "霸王非横扫法器伤害 -25%")
+	_c.near(GameManager.cultivator_damage_mult("huoyan_fu"), 0.75, EPS, "霸王符箓法器同样吃 -25% 代偿")
+	GameManager.reset_run()
+
+	# 7.8 两名专精修士的成就解锁判定（器类峰值账本 → run_ctx → is_condition_met）
+	_c.check(AchievementData.is_condition_met("ach_cult_fuxiu", {"max_class_counts": {"talisman": 4}}, {}),
+		"同时上阵 4 件符箓法器达成【万符朝宗】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_fuxiu", {"max_class_counts": {"talisman": 3}}, {}),
+		"3 件符箓法器不达成【万符朝宗】")
+	_c.check(AchievementData.is_condition_met("ach_cult_bawang", {"max_class_counts": {"wide": 4}}, {}),
+		"同时上阵 4 件横扫法器达成【横扫千军】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_bawang", {}, {}),
+		"无器类峰值账本时不达成【横扫千军】")
+	_c.equals(AchievementData.cultivator_unlock_achievement("fuxiu").get("id", ""), "ach_cult_fuxiu", "灵符子反查解锁成就一致")
+	_c.equals(AchievementData.cultivator_unlock_achievement("bawang").get("id", ""), "ach_cult_bawang", "霸王反查解锁成就一致")
 
 	# 7. 数据表三件御灵装备属性强化验证（射程全面扩展至 >= 170px，伤害 >= 20）
 	for sid in ["lingdie", "hanquan_yulian", "hunyuan_zhong"]:

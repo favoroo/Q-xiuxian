@@ -6,6 +6,7 @@ extends RefCounted
 ##   crit_rate / armor / harvest / thorns / dodge          —— 直接加算
 ##   speed_mult / damage_mult / hp_mult / shop_price / haste_mult —— 乘算系数
 ##   tag_damage: {tag: bonus}                   —— 指定流派法器伤害加成
+##   non_tag_damage: {tag: bonus}               —— 不带指定 tag 的法器伤害修正（负值为惩罚，符修/霸王的代偿）
 ##   non_drone_damage                           —— 非灵蝶法器伤害修正（负值为惩罚）
 ##   start_drones                               —— 开局自带灵蝶数
 ##   spirit_threshold_adj                       —— 御灵羁绊门槛下移
@@ -343,7 +344,45 @@ const DEFS: Dictionary = {
 				"locked_upgrades": [],
 				"skill_mods": {"haste": {"power_mult": 1.40}},
 			},
-	}
+				"fuxiu": {
+					"name": "灵符子",
+					"epithet": "万符归宗，弹射无影",
+					"icon": "res://assets/art/cultivator_fuxiu_icon.png",
+					"sprite": "res://assets/art/pawn_blue_8dir.png",
+					"motion": "procedural",
+					"render_style": "hollow_knight",
+					"start_equip": "",
+					"pros": ["符箓类法器伤害 +35%", "初始元素伤害 +2"],
+					"cons": ["非符箓类法器伤害 -25%", "商店主要刷新符箓类法器"],
+					"mods": {
+						"elemental": 2.0,
+						"tag_damage": {"talisman": 0.35},
+						"non_tag_damage": {"talisman": -0.25},
+					},
+					"allowed_tags": ["talisman"],
+					"locked_upgrades": [],
+					"skill_mods": {"haste": {"cooldown_mult": 0.7}},
+				},
+				"bawang": {
+					"name": "霸王",
+					"epithet": "横扫千军，所向披靡",
+					"icon": "res://assets/art/cultivator_bawang_icon.png",
+					"sprite": "res://assets/art/pawn_blue_8dir.png",
+					"motion": "procedural",
+					"render_style": "hollow_knight",
+					"start_equip": "",
+					"pros": ["横扫类法器伤害 +30%", "初始护甲 +2"],
+					"cons": ["非横扫类法器伤害 -25%", "商店主要刷新横扫类法器"],
+					"mods": {
+						"armor": 2.0,
+						"tag_damage": {"wide": 0.30},
+						"non_tag_damage": {"wide": -0.25},
+					},
+					"allowed_tags": ["wide"],
+					"locked_upgrades": [],
+					"skill_mods": {"aegis": {"duration_add": 1.0}},
+				},
+		}
 
 static func get_def(id: String) -> Dictionary:
 	return DEFS.get(id, {})

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 修仙幸存者 一键发布脚本（两阶段）：build（Godot CLI 导出+打包+SHA-256）/ publish（推送+双端 Release+验证+清理老附件）
+# 渡个劫 一键发布脚本（两阶段）：build（Godot CLI 导出+打包+SHA-256）/ publish（推送+双端 Release+验证+清理老附件）
 # 独立 prune 子命令：双端各保留最近 N 个版本的 APK 附件，防止超出 Gitee 配额
 # 仅用 Python 标准库，无第三方依赖。用法见 SKILL.md，或 python3 release.py --help
 
@@ -557,7 +557,7 @@ def prune_old_apks(keep: int, tokens: dict, dry_run: bool = False) -> None:
 def cmd_publish(args) -> None:
     target_ver = args.version.lstrip('vV')
     tag = f'v{target_ver}'
-    rel_name = f'修仙幸存者 {tag}'
+    rel_name = f'渡个劫 {tag}'
 
     tokens = {
         'gh': get_github_token(),
@@ -582,7 +582,7 @@ def cmd_publish(args) -> None:
         if notes_p.exists():
             notes = notes_p.read_text(encoding='utf-8')
     if not notes:
-        notes = f'## {rel_name}\n\n修仙幸存者发布版本 {tag}。\n\n**SHA-256**: `{meta["sha256"]}`'
+        notes = f'## {rel_name}\n\n渡个劫发布版本 {tag}。\n\n**SHA-256**: `{meta["sha256"]}`'
 
     rel_ids = create_release(tag, rel_name, notes, tokens)
     upload_apks(rel_ids, apk_path, apk_name, tokens)
@@ -599,7 +599,7 @@ def cmd_publish(args) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='修仙幸存者 两阶段一键发布工具')
+    parser = argparse.ArgumentParser(description='渡个劫 两阶段一键发布工具')
     sub = parser.add_subparsers(dest='subcmd', required=True)
 
     p_build = sub.add_parser('build', help='第一阶段：构建 Release APK 并写入元数据')

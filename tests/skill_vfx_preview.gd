@@ -93,7 +93,7 @@ func _sync_visuals() -> void:
 	_view.set_skill_visual("aegis", _vfx.aegis_active)
 	_view.set_skill_visual("haste", _vfx.haste_active)
 	_view.set_skill_visual("gale", _vfx.gale_active)
-	_view.set_skill_visual("dash", _vfx.dash_flash_timer > 0.0)
+	_view.set_skill_visual("dash", _vfx.dash_crit_timer > 0.0 or _vfx.dash_flash_timer > 0.0)
 	_view.set_skill_visual("renewal", _vfx.renewal_progress >= 0.0)
 
 func _input(event: InputEvent) -> void:
@@ -134,6 +134,7 @@ func _clear_all() -> void:
 	_vfx.haste_sparks.clear()
 	_vfx.gale_active = false
 	_vfx.dash_flash_timer = 0.0
+	_vfx.dash_crit_timer = 0.0
 	_vfx.renewal_progress = -1.0
 	_vfx.renewal_particles.clear()
 	_vfx.on_shadow_spent()

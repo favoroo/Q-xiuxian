@@ -287,6 +287,7 @@ var still_time: float = 0.0              ## 连续站定秒数（不动明王印
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
+var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
@@ -507,12 +508,10 @@ func get_effective_armor() -> float:
 	return armor + synergy_armor
 
 func get_crit_rate() -> float:
-	var rate := crit_rate + synergy_crit_rate
-	# 幻影迷踪铃：闪避转暴击（系数在 ItemData 额外字段 crit_per_dodge，每 10% 有效闪避折算一份）
-	var cvt := item_hook_sum("crit_per_dodge")
-	if cvt > 0.0:
-		rate += cvt * (get_effective_dodge() / 0.1)
-	return minf(rate, CRIT_RATE_CAP)
+	# 算式在 BalanceCombat.crit_rate（悟道卡面的「加后读数」预读共用同一条，不抄第二份）
+	return BalanceCombat.crit_rate(
+		crit_rate, synergy_crit_rate, item_hook_sum("crit_per_dodge"),
+		get_effective_dodge(), CRIT_RATE_CAP)
 
 ## 暴击判定唯一出口：冲刺必暴窗口内直接判暴，否则按有效暴击率掷 rng
 func roll_crit() -> bool:
@@ -521,7 +520,8 @@ func roll_crit() -> bool:
 	return rng.randf() < get_crit_rate()
 
 func get_effective_dodge() -> float:
-	return minf(dodge + buff_dodge, DODGE_CAP + dodge_cap_bonus)
+	# 算式在 BalanceCombat.effective_dodge（与卡面预读同源）
+	return BalanceCombat.effective_dodge(dodge, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
 ## 上阵法器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
 func max_weapon_slots() -> int:
@@ -602,12 +602,22 @@ func try_lifesteal() -> void:
 ## 波间灵韵结算：无偿发放等额灵石+修为；狂战蛮修的杀气让灵韵每波流失；随后灵韵自我复利（增长截止波次见常量区）
 ## budget_comp_exp：刷怪预算未花完部分的折算经验补差（WaveSpawner 传入，BalanceEconomy.budget_compensation_exp），
 ## 与灵韵一并到账、同一句播报 —— 减潮不减收入，购买力与旧口径持平
-func apply_harvest(budget_comp_exp: int = 0) -> void:
+## early_secs：本波提前收尾时还剩几秒（WaveSpawner 传入，0 = 表走完）。余时按
+## BalanceEconomy.early_clear_stones 折成金币，**只进金币不进修为**（提前清场不该顺手把升级也加速）。
+## 三笔并成一句播报：横幅只有一个 Label，同帧发两条只会留下后一条，等于把前一个数吞掉。
+func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 	var gain := GameBalance.harvest_gain(harvest)
 	var total_gain := gain + maxi(0, budget_comp_exp)
+	var early_stones := GameBalance.early_clear_stones(early_secs)
+	var clauses: Array[String] = []
 	if total_gain > 0:
 		add_experience(total_gain)
-		announcement_triggered.emit("✦ 收益到账 · 金币与经验 +%d ✦" % total_gain)
+		clauses.append("金币与经验 +%d" % total_gain)
+	if early_stones > 0:
+		add_spirit_stones(early_stones)
+		clauses.append("提前 %d 秒清场 +%d 金币" % [int(floor(maxf(0.0, early_secs))), early_stones])
+	if not clauses.is_empty():
+		announcement_triggered.emit("✦ 收益到账 · %s ✦" % " · ".join(clauses))
 	if harvest_decay > 0.0:
 		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
@@ -747,12 +757,20 @@ func get_weapons_summary() -> Array:
 func notify_weapons_updated(weapons: Array) -> void:
 	recalc_synergies()
 	var cur_summons: int = drones.size()
+	var cur_class_counts: Dictionary = {}
 	if player != null and player.has_method("get_equipped_weapons_data"):
 		for w in player.get_equipped_weapons_data():
-			var beh := int(WeaponData.get_def(w.get("id", "")).get("behavior", -1))
+			var wid := String(w.get("id", ""))
+			var beh := int(WeaponData.get_def(wid).get("behavior", -1))
 			if beh == WeaponData.Behavior.TURRET or beh == WeaponData.Behavior.DRONE:
 				cur_summons += 1
+			# 器类峰值账本：多 tag 武器只计入主器类（class_of 口径与羁绊/商店一致）
+			var cls := WeaponData.class_of(wid)
+			if not cls.is_empty():
+				cur_class_counts[cls] = int(cur_class_counts.get(cls, 0)) + 1
 	max_concurrent_summons = maxi(max_concurrent_summons, cur_summons)
+	for cls in cur_class_counts:
+		max_class_counts[cls] = maxi(int(max_class_counts.get(cls, 0)), int(cur_class_counts[cls]))
 	weapons_updated.emit(weapons)
 
 func sell_weapon(index: int) -> bool:

@@ -63,6 +63,7 @@ var gale_wind_phase: float = 0.0
 
 # 4. 缩地成寸状态
 var dash_flash_timer: float = 0.0
+var dash_crit_timer: float = 0.0
 var dash_total_dur: float = 0.16
 var dash_dir: Vector2 = Vector2.DOWN
 
@@ -136,10 +137,11 @@ func _notify_procedural_view(skill_id: String, active: bool, intensity: float = 
 # ---------------- 技能触发入口 ----------------
 
 ## 缩地成寸瞬间释放
-func on_dash_start(direction: Vector2, distance: float, duration: float) -> void:
+func on_dash_start(direction: Vector2, distance: float, duration: float, crit_window: float = 1.0) -> void:
 	dash_dir = direction.normalized()
 	dash_total_dur = maxf(duration, 0.05)
 	dash_flash_timer = dash_total_dur + 0.10
+	dash_crit_timer = maxf(crit_window, dash_flash_timer)
 	_notify_procedural_view("dash", true, 1.0)
 	# 生成瞬身残影
 	spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.85), 0.28)
@@ -327,7 +329,9 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		dash_flash_timer -= delta
 		if is_moving and fmod(dash_flash_timer, 0.04) < delta:
 			spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.65), 0.20)
-		if dash_flash_timer <= 0.0:
+	if dash_crit_timer > 0.0:
+		dash_crit_timer -= delta
+		if dash_crit_timer <= 0.0:
 			_notify_procedural_view("dash", false)
 
 	# 7. 回春术

@@ -217,7 +217,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 13, "成就里程碑共配置 13 条")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 15, "成就里程碑共配置 15 条")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)

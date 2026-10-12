@@ -1,13 +1,14 @@
 extends Control
 
-## 修仙幸存者 · 土豆兄弟式全道统角色插槽化画廊 (Cultivator Modular Gallery)
+## 渡个劫 · 土豆兄弟式全道统角色插槽化画廊 (Cultivator Modular Gallery)
 ## 验证统一修仙素体基底 + 4 大参数插槽（体型、面部、斗篷色彩款式、背负本命法器）的快速派生与视觉差异
 ## 适配桌面 960×540 完整一屏九宫格
 
 const CHAR_IDS: Array[String] = [
 	"jianchi", "shiyue", "fuzhen",
 	"jinsuanpan", "meiying", "dubi",
-	"kuangzhan", "duoshe", "duobao"
+	"kuangzhan", "duoshe", "duobao",
+	"fuxiu", "bawang"
 ]
 
 const TITLES: Dictionary = {
@@ -20,7 +21,9 @@ const TITLES: Dictionary = {
 	"duanbi": "独臂刀圣",
 	"kuangzhan": "狂战蛮修",
 	"duoshe": "夺舍散人",
-	"duobao": "多宝道人"
+	"duobao": "多宝道人",
+	"fuxiu": "灵符子·符修",
+	"bawang": "霸王·横扫"
 }
 
 const DESCS: Dictionary = {
@@ -33,7 +36,9 @@ const DESCS: Dictionary = {
 	"duanbi": "狂血大氅·厚背断刀",
 	"kuangzhan": "残破血袍·兽骨巨斧",
 	"duoshe": "尸青残袍·引魂灵幡",
-	"duobao": "紫金霞帔·乾坤宝匣"
+	"duobao": "紫金霞帔·乾坤宝匣",
+	"fuxiu": "赭黄霞帔·朱砂符剑",
+	"bawang": "玄黑赤金氅·兽骨战斧"
 }
 
 var _time: float = 0.0
@@ -91,7 +96,7 @@ func _build_gallery() -> void:
 	GameStyle.label(sub_lbl, 10, GameStyle.GOLD_EDGE)
 	header.add_child(sub_lbl)
 
-	# 3 × 3 角色网格 (约 480px 高)
+	# 3 列角色网格（11 名角色排 4 行，卡片压缩适配一屏）
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 8)
@@ -104,7 +109,7 @@ func _build_gallery() -> void:
 
 func _make_char_card(cid: String) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(304, 154)
+	panel.custom_minimum_size = Vector2(304, 116)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.08, 0.10, 0.15), Color(0.18, 0.24, 0.35), 1, 0.0))
@@ -137,40 +142,40 @@ func _make_char_card(cid: String) -> PanelContainer:
 	var viewport_box := HBoxContainer.new()
 	viewport_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	viewport_box.add_theme_constant_override("separation", 18)
-	viewport_box.custom_minimum_size = Vector2(0, 110)
+	viewport_box.custom_minimum_size = Vector2(0, 78)
 	vbox.add_child(viewport_box)
 
 	var cfg := CultivatorVisualConfig.get_config(cid)
 
 	# 1. 正面视角
 	var c_front := Control.new()
-	c_front.custom_minimum_size = Vector2(62, 90)
+	c_front.custom_minimum_size = Vector2(62, 62)
 	var r_front := HollowKnightCultivatorRenderer.new(cfg)
 	r_front.current_angle = CultivatorRendererBase.Angle.FRONT
-	r_front.position = Vector2(31, 55)
-	r_front.scale = Vector2(1.18, 1.18)
+	r_front.position = Vector2(31, 40)
+	r_front.scale = Vector2(0.92, 0.92)
 	c_front.add_child(r_front)
 	viewport_box.add_child(c_front)
 	_renderers.append(r_front)
 
 	# 2. 侧面视角
 	var c_side := Control.new()
-	c_side.custom_minimum_size = Vector2(62, 90)
+	c_side.custom_minimum_size = Vector2(62, 62)
 	var r_side := HollowKnightCultivatorRenderer.new(cfg)
 	r_side.current_angle = CultivatorRendererBase.Angle.SIDE
-	r_side.position = Vector2(31, 55)
-	r_side.scale = Vector2(1.18, 1.18)
+	r_side.position = Vector2(31, 40)
+	r_side.scale = Vector2(0.92, 0.92)
 	c_side.add_child(r_side)
 	viewport_box.add_child(c_side)
 	_renderers.append(r_side)
 
 	# 3. 背面视角
 	var c_back := Control.new()
-	c_back.custom_minimum_size = Vector2(62, 90)
+	c_back.custom_minimum_size = Vector2(62, 62)
 	var r_back := HollowKnightCultivatorRenderer.new(cfg)
 	r_back.current_angle = CultivatorRendererBase.Angle.BACK
-	r_back.position = Vector2(31, 55)
-	r_back.scale = Vector2(1.18, 1.18)
+	r_back.position = Vector2(31, 40)
+	r_back.scale = Vector2(0.92, 0.92)
 	c_back.add_child(r_back)
 	viewport_box.add_child(c_back)
 	_renderers.append(r_back)

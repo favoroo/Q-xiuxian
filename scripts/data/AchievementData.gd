@@ -165,6 +165,24 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 			"reward_name": "嗜血魔修",
 			"icon": "res://assets/art/cultivator_shixue_icon.png",
 		},
+		{
+			"id": "ach_cult_fuxiu",
+			"name": "万符朝宗",
+			"cond_desc": "单局同时上阵符箓类法器达到4件",
+			"reward_type": "cultivator",
+			"reward_id": "fuxiu",
+			"reward_name": "灵符子",
+			"icon": "res://assets/art/cultivator_fuxiu_icon.png",
+		},
+		{
+			"id": "ach_cult_bawang",
+			"name": "横扫千军",
+			"cond_desc": "单局同时上阵横扫类法器达到4件",
+			"reward_type": "cultivator",
+			"reward_id": "bawang",
+			"reward_name": "霸王",
+			"icon": "res://assets/art/cultivator_bawang_icon.png",
+		},
 	{
 		"id": "ach_item_pojia",
 		"name": "深入敌后",
@@ -251,7 +269,8 @@ static func item_unlock_achievement(item_id: String) -> Dictionary:
 
 ## 判定单条成就在当前局与生涯累计下是否达成
 ## run_ctx 字段：victory(bool), danger(int), wave(int), level(int), kills(int),
-##              max_stones(int), max_dodge(float), max_harvest(float)
+##              max_stones(int), max_dodge(float), max_harvest(float),
+##              max_class_counts(Dictionary {器类tag: 同时上阵峰值})
 ## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int)
 static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: Dictionary) -> bool:
 	var victory := bool(run_ctx.get("victory", false))
@@ -286,6 +305,10 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return max_stones >= 400
 		"ach_cult_shixue":
 			return int(run_ctx.get("damage_taken_count", 0)) >= 25
+		"ach_cult_fuxiu":
+			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("talisman", 0)) >= 4
+		"ach_cult_bawang":
+			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("wide", 0)) >= 4
 		"ach_item_pojia":
 			return best_wave >= 15
 		"ach_item_wuxing":

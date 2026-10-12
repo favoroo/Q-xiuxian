@@ -19,6 +19,8 @@ const CULTIVATORS := [
 	"yaowang",
 	"shoucainu",
 	"shixue",
+	"fuxiu",
+	"bawang",
 ]
 
 func _ready() -> void:

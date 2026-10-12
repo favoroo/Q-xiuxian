@@ -461,7 +461,7 @@ func _do_dash(st: Dictionary) -> void:
 	play_squash(Vector2(1.3, 0.72), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
 	if skill_vfx != null:
-		skill_vfx.on_dash_start(_dash_dir, float(st["distance"]), _dash_time)
+		skill_vfx.on_dash_start(_dash_dir, float(st["distance"]), _dash_time, float(st.get("crit_window", 1.0)))
 	if is_procedural and procedural_view != null:
 		procedural_view.play_dash(_dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)

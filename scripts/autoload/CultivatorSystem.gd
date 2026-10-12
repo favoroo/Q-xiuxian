@@ -114,6 +114,11 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 		m *= 1.0 + float(mods.get("non_drone_damage", 0.0))
 	if w_beh != WeaponData.Behavior.TURRET and w_beh != WeaponData.Behavior.DRONE:
 		m *= 1.0 + float(mods.get("non_contraption_damage", 0.0))
+	# 非专精器类惩罚（通用键）：武器不带指定 tag 时吃对应修正，符修/霸王的代偿代价走这里
+	var non_tag: Dictionary = mods.get("non_tag_damage", {})
+	for t in non_tag:
+		if not WeaponData.tags_of(w_id).has(String(t)):
+			m *= 1.0 + float(non_tag[t])
 	if gm.on_hit_damage_bonus > 0.0 and gm.on_hit_damage_stacks > 0:
 		m *= 1.0 + gm.on_hit_damage_bonus * float(gm.on_hit_damage_stacks)
 	# 收藏家·图鉴：每持有一种不同法宝全伤害加成（种数账本在 GameManager.add_item/consume_item 维护）

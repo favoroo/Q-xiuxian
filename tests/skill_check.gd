@@ -24,7 +24,7 @@ func _check_data() -> void:
 	# 基础值（2026-10-11 技能改版：冷却整体下调 + 效果结束才进冷却 + 弱技能附加效果）
 	var dash := SkillData.final_stats("dash", "")
 	_c.near(float(dash["cooldown"]), 4.0, 0.001, "冲刺基础冷却 4 秒")
-	_c.near(float(dash["crit_window"]), 2.0, 0.001, "冲刺必暴窗口 2 秒")
+	_c.near(float(dash["crit_window"]), 1.0, 0.001, "冲刺必暴窗口 1 秒")
 	_c.near(float(dash["distance"]), 150.0, 0.001, "缩地成寸基础距离 150")
 	_c.near(float(dash["iframe"]), 0.30, 0.001, "缩地成寸无敌窗口 0.3 秒（位移全程+落地余量）")
 	_c.near(float(dash["duration"]), 0.16, 0.001, "冲刺位移耗时 0.16 秒（duration_add 不改位移时长）")
@@ -187,8 +187,9 @@ func _run() -> void:
 	var before: Vector2 = player.global_position
 	_c.check(player.try_activate_skill(), "缩地成寸释放成功")
 	_c.check(vfx.dash_flash_timer > 0.0, "缩地成寸激活瞬身刀光与破空灵芒锥")
+	_c.check(vfx.dash_crit_timer > 0.0, "缩地成寸激活必暴期间双眸发光视觉")
 	_c.near(player.invulnerable_time, 0.30, 0.01, "冲刺起即无敌 0.30 秒（实测 %.2f s）" % player.invulnerable_time)
-	_c.near(GameManager.force_crit_left, 2.0, 0.1, "冲刺起跳开 2 秒必暴窗口")
+	_c.near(GameManager.force_crit_left, 1.0, 0.1, "冲刺起跳开 1 秒必暴窗口")
 	_c.check(GameManager.roll_crit(), "必暴窗口内 roll_crit 恒真")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "冲刺无敌窗口内冷却尚未起转")
 	# 跑到冲刺段结束（逐帧盯 _dash_time，不靠猜帧数：headless 的 delta 不保证正好 1/60）

@@ -3,6 +3,7 @@ extends Node2D
 
 ## 波次状态机：WAITING(选法器) → FIGHT → CLEARING(清场吸附) → ALLOC(波后悟道，有待加点才插队) → SHOP → 下一波
 ## 第 20 波通关「渡劫成功」（双精英心魔劫）；可继续无尽
+## FIGHT 的出口有两条（2026-10-12 起）：表走完，或「妖潮已尽」提前收尾 —— 判据见 _tide_spent()
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
@@ -17,6 +18,12 @@ enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 var _budget_total: int = 0      ## 本波预算总只数（已乘危险度/角色妖潮倍率）
 var _budget_used: int = 0       ## 本波已实际刷出只数
 var _budget_exp_sum: float = 0.0  ## 已刷出敌人 exp_reward 累计（补差均值用）
+
+# —— 提前清场（2026-10-12）——
+## 「妖潮已尽」要连续满足这么久才收尾：分裂/产卵/召唤的幼体是 call_deferred 入树的，
+## 留这一拍让下一只怪有机会落地，别让最后一只母体死亡的瞬间把整波掐掉。
+const EARLY_CLEAR_CONFIRM := 0.4
+var _clear_hold: float = 0.0    ## 本波已连续满足「妖潮已尽」的秒数
 
 var phase: int = Phase.WAITING
 ## 波次号的唯一来源是 GameManager.wave_number。
@@ -104,8 +111,29 @@ func _process_fight(delta: float) -> void:
 		elite_spawned = true
 		_spawn_boss(player)
 
+	# 提前清场：本波妖潮已全部刷入、且场上再无活妖 ⇒ 不等表走完就收尾，余下秒数折成金币。
+	# 闸只认「预算已尽」这一条：没刷完就提前收，等于把省下的那截时间对应的击杀进项一起收走，
+	# 那是扣钱不是奖励。曲线见 BalanceEconomy.early_clear_stones。
+	if _tide_spent():
+		_clear_hold += delta
+		if _clear_hold >= EARLY_CLEAR_CONFIRM:
+			end_wave(wave_timer)
+			return
+	else:
+		_clear_hold = 0.0
+
 	if wave_timer <= 0.0:
 		end_wave()
+
+## 「妖潮已尽」：本波刷怪预算全部刷入 + 场上一个活妖都没有（含尸体：dying 的还在登记表里，
+## 所以要等塌缩动画落定才算清干净）。精英/魔君还没到场的头 1.5 秒一律不算，
+## 否则第 5/10 波会在自己的关底威胁出现前就收掉。
+func _tide_spent() -> bool:
+	if _budget_used <= 0 or _budget_used < _budget_total:
+		return false
+	if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
+		return false
+	return GameManager.enemy_count <= 0
 
 ## 波长曲线只是 GameBalance 的一层转发，保留本方法是因为 UI/内部多处按它排程
 func wave_duration(n: int) -> float:
@@ -132,6 +160,7 @@ func start_wave(n: int) -> void:
 	_budget_total = int(round(float(GameBalance.wave_spawn_budget(n)) * GameBalance.danger_count_mult(GameManager.danger_level) * GameManager.enemy_count_mult))
 	_budget_used = 0
 	_budget_exp_sum = 0.0
+	_clear_hold = 0.0
 	_spawn_chests()
 	if _is_boss_wave(n):
 		GameManager.announcement_triggered.emit("✦ 第 %d 波 · Boss来袭 ✦" % n)
@@ -168,7 +197,7 @@ func _spawn_chests() -> void:
 		chest.global_position = pos
 		get_parent().add_child(chest)
 
-func end_wave() -> void:
+func end_wave(early_secs: float = 0.0) -> void:
 	phase = Phase.CLEARING
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
@@ -176,7 +205,16 @@ func end_wave() -> void:
 	# 灵韵结算：无偿灵石+修为，随后复利增长；刷怪预算没花完的部分折经验找平（击杀收入不因减潮缩水）
 	var budget_shortfall := maxi(0, _budget_total - _budget_used)
 	var avg_exp := (_budget_exp_sum / float(_budget_used)) if _budget_used > 0 else 0.0
-	GameManager.apply_harvest(GameBalance.budget_compensation_exp(budget_shortfall, avg_exp))
+	# 提前清场的余时赏与灵韵同一次到账、同一句播报：横幅只有一个 Label，同帧发两句只会留下
+	# 后一句 —— 分成两条等于把「收益到账」那个数吞掉。early_secs 传 0（表走完/判据直接调
+	# end_wave()）时这条一分不给，与改动前逐枚灵石等价。
+	var early_stones := GameBalance.early_clear_stones(early_secs)
+	GameManager.apply_harvest(GameBalance.budget_compensation_exp(budget_shortfall, avg_exp), early_secs)
+	if early_stones > 0:
+		var p: Node2D = GameManager.player
+		if p != null and is_instance_valid(p):
+			DamageNumber.spawn(get_parent(), p.global_position + Vector2(0.0, -34.0),
+				early_stones, false, "+%d 金币" % early_stones)
 	# 余怪消散（不掉落）
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:

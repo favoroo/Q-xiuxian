@@ -1,6 +1,6 @@
 extends Control
 
-## 修仙幸存者 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
+## 渡个劫 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
 ## 验证 14 大敌种（普通怪、精英怪、关卡魔将与心魔魔尊）的程序化矢量拟态与悬浮/飞行/爬行协调动作
 ## 适配桌面 960×540 完整一屏 5×3 矩阵
 

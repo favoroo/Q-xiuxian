@@ -35,6 +35,7 @@ func _ready() -> void:
 	economy._test_pricing()
 	economy._test_tag_affinity()
 	economy._test_harvest()
+	economy._test_early_clear_bonus()
 	economy._test_rarity_weights()
 	economy._test_weighted_pick()
 	economy._test_synergy_levels()

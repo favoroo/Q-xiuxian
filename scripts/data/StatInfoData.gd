@@ -286,7 +286,8 @@ static func rules(id: String) -> Array[String]:
 			out.append("只是读数：不吃任何加成，也不参与结算公式。")
 			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
 		"stones":
-			out.append("来源三条：击杀掉落、收益波末发放、升级「金币补给」当场给一笔。")
+			out.append("来源四条：击杀掉落、收益波末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
+			out.append("余时赏：本波妖潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给修为）。")
 			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
 	return out
 
@@ -580,5 +581,7 @@ static func stat_tip_rows(id: String) -> Array:
 			rows = [
 				["随身金币", "%d 枚" % GameManager.spirit_stones, GameStyle.JADE],
 				["下一波收益", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
+				["余时赏", "每秒 %d 枚 · 单波顶 %d 枚" % [
+					int(GameBalance.EARLY_CLEAR_STONES_PER_SEC), GameBalance.EARLY_CLEAR_STONES_MAX]],
 			]
 	return rows

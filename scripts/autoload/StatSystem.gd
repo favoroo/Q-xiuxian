@@ -5,8 +5,13 @@ extends RefCounted
 ## 悟道加点（apply_upgrade）与法宝（add_item）共用同一条链路，这里只规定「往哪个字段加、有没有上限」，
 ## 幅度全部来自 UpgradeData/ItemData 每项的 "apply" 表（数值与文案同源，调参只改数据表一处）。
 ## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露。
+##
+## 参数收 Object：target 除了 GameManager 真身，还可以是 StatShadow（属性影子，不挂树、
+## 不发信号的字段快照）。悟道卡面要在玩家点「确认选择」之前先算一遍「加后是多少」，
+## 走的必须就是这里这一份落地算式 —— 另写一份预读算术，卡面承诺与结算迟早分家。
+## 影子把 player 换成替身、add_spirit_stones 只加数不发信号，所以这一条链路对影子是安全的。
 
-static func apply_stat_fields(gm: Node, apply: Dictionary, source: String) -> void:
+static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> void:
 	for key in apply.keys():
 		var v: float = float(apply[key])
 		match key:

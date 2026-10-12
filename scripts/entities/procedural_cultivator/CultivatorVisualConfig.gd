@@ -114,6 +114,10 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 			return make_shoucainu()
 		"shixue":
 			return make_shixue()
+		"fuxiu":
+			return make_fuxiu()
+		"bawang":
+			return make_bawang()
 		"jianchi", _:
 			return make_jianchi()
 
@@ -549,6 +553,62 @@ static func make_shixue() -> CultivatorVisualConfig:
 		"strap_style": "diagonal",
 		"carry_front_pos": Vector2(10.0, 9.0), "carry_front_rot": 210.0,
 		"carry_side_pos": Vector2(-7.0, 8.0), "carry_side_rot": -10.0,
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 16. 灵符子·符修（万符归宗，黄符镇额，弹射无影，符剑诛邪）
+static func make_fuxiu() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 0.95, "width_scale": 0.90, "height_scale": 1.0, "head_scale": 1.05 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "talisman",
+		"eye_style": "sharp_slit",
+		"eye_color": Color(1.0, 0.80, 0.25, 0.60),  # 朱砂符光金
+		"eye_core_color": Color(1.0, 0.95, 0.70)
+	}
+	cfg.cloak = {
+		"cloak_style": "royal_shawl",
+		"col_outer": Color(0.48, 0.32, 0.10),       # 赭黄符纸
+		"col_inner": Color(0.90, 0.84, 0.62),       # 米白纸色
+		"col_edge": Color(0.85, 0.25, 0.15),        # 朱砂红
+		"chest_ornament": "bagua"
+	}
+	cfg.weapon = {
+		"weapon_type": "peach_sword",
+		"col_main": Color(0.70, 0.40, 0.22),        # 辟邪桃木
+		"col_shadow": Color(0.42, 0.22, 0.12),
+		"col_accent": Color(1.0, 0.35, 0.20),       # 朱砂符光
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 17. 霸王（横扫千军，怒面无饰自生威，玄黑赤金大氅，兽骨战斧）
+static func make_bawang() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.16, "width_scale": 1.22, "height_scale": 1.02, "head_scale": 0.95 }
+	cfg.face = {
+		"mask_style": "stout_brute",
+		"horns_style": "none",
+		"eye_style": "angry_slit",
+		"eye_color": Color(1.0, 0.55, 0.15, 0.70),  # 赤金怒目
+		"eye_core_color": Color(1.0, 0.90, 0.60)
+	}
+	cfg.cloak = {
+		"cloak_style": "heavy_overcoat",
+		"col_outer": Color(0.08, 0.07, 0.10),       # 玄黑
+		"col_inner": Color(0.42, 0.10, 0.08),       # 赤红内衬
+		"col_edge": Color(0.88, 0.60, 0.22),        # 赤金镶边
+		"chest_ornament": "skull"
+	}
+	cfg.weapon = {
+		"weapon_type": "bone_axe",
+		"col_main": Color(0.45, 0.35, 0.20),        # 玄铁暗金
+		"col_shadow": Color(0.22, 0.17, 0.10),
+		"col_accent": Color(0.98, 0.65, 0.20),      # 赤金流光
+		"strap_style": "dual"
 	}
 	cfg._sync_palette()
 	return cfg

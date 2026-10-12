@@ -1,9 +1,9 @@
 ---
 name: xiuxian-release
-description: 修仙幸存者游戏的 Git 提交存档、双平台推送与版本发布流程。当用户要求提交/commit/存档/git提交、推送/push/推送到平台/推送到云端/双端推送、发布/release/发版/打tag/创建release、版本号加一/apk版本号加一/版本号+1/升级版本/版本递增、构建APK/打apk包时使用。涵盖 Godot 4.7 Android APK 导出构建、一键发布脚本 release.py、双端 Tag 与 Release API 创建、令牌配置与发布后检查清单。位于 .agents/skills/xiuxian-release/SKILL.md。
+description: 渡个劫游戏的 Git 提交存档、双平台推送与版本发布流程。当用户要求提交/commit/存档/git提交、推送/push/推送到平台/推送到云端/双端推送、发布/release/发版/打tag/创建release、版本号加一/apk版本号加一/版本号+1/升级版本/版本递增、构建APK/打apk包时使用。涵盖 Godot 4.7 Android APK 导出构建、一键发布脚本 release.py、双端 Tag 与 Release API 创建、令牌配置与发布后检查清单。位于 .agents/skills/xiuxian-release/SKILL.md。
 ---
 
-# 修仙幸存者 Git 提交与双端版本发布
+# 渡个劫 Git 提交与双端版本发布
 
 ## Git 提交与双平台同步
 
@@ -58,7 +58,7 @@ description: 修仙幸存者游戏的 Git 提交存档、双平台推送与版�
 ① 自动算版本号并写回:  python3 .agents/skills/xiuxian-release/release.py bump --write
    —— 读 Version.gd → 查 tag → 不存在直接用当前版本(预升未发布);已存在则 +1 写回 Version.gd 与 export_presets.cfg
 ② 执行构建:           python3 .agents/skills/xiuxian-release/release.py build --version X.Y.Z
-③ 提交改动:           git add -A && git commit -m "feat(release): 发布修仙幸存者 vX.Y.Z"
+③ 提交改动:           git add -A && git commit -m "feat(release): 发布渡个劫 vX.Y.Z"
 ④ 撰写 Release 说明存为临时文件，执行发布:
    python3 .agents/skills/xiuxian-release/release.py publish --version X.Y.Z --notes-file /tmp/notes.md
 ⑤ 向用户汇报发布验证清单（含两端 URL、APK 附件状态与 SHA-256）
@@ -79,7 +79,7 @@ description: 修仙幸存者游戏的 Git 提交存档、双平台推送与版�
 **应用内更新弹窗显示说明**，文案务必精炼：**总条目 ≤5 条，每条 ≤25 字**。
 
 ```markdown
-## 修仙幸存者 vX.Y.Z
+## 渡个劫 vX.Y.Z
 
 ### 新增内容
 - 优化灵田战斗波次与出怪手感

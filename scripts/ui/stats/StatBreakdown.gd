@@ -3,8 +3,12 @@ extends RefCounted
 
 ## 属性面板聚合展示模型（2026-10-11 从 GameManager.get_stat_breakdown 迁入 ui/stats）：
 ## 只读 gm 现有属性与羁绊乘区，折算成属性面板/属性说明的展示口径。渲染层只读，不写状态。
+##
+## 参数收 Object 而不是 Node：同一个算式还要能读「属性影子」（ui/stats/StatShadow，
+## 一个不挂树、不发信号的字段快照），悟道卡面那句「当前 X → 加后 Y」就是把加完这一条的
+## 影子喂进来算出来的。两边共用这一份聚合，卡面承诺的数与实际长出来的数才不会分家。
 
-static func breakdown(gm: Node) -> Dictionary:
+static func breakdown(gm: Object) -> Dictionary:
 	var cur_hp: float = 120.0
 	var max_hp: float = 120.0
 	var base_spd: float = 210.0
