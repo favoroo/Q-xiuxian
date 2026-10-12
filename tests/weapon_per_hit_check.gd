@@ -59,6 +59,7 @@ func _setup_state() -> void:
 	GameManager.ranged_damage = 6.0
 	GameManager.elemental_damage = 5.0
 	GameManager.engineering_damage = 4.0
+	GameManager.contraption_damage = 4.0
 	GameManager.armor = 12.0
 	GameManager.harvest = 2.0
 	GameManager.attack_speed_mult = 0.9
@@ -127,7 +128,7 @@ func _check_bill_and_text() -> void:
 		if def.get("stat_scalings", {}).has("max_hp_bonus"):
 			hp_bill_found = false
 			for r in bill:
-				if String(r[0]) == "额外生命" and float(r[1]) > 0.05:
+				if (String(r[0]) == "额外生命" or String(r[0]) == "最大生命") and float(r[1]) > 0.05:
 					hp_bill_found = true
 	_c.check(hp_bill_found,
 			"吃额外生命的法器在账单里给出的是伤害数值，不是旧写法那个四舍五入成「+0%」的系数")

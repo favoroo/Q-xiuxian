@@ -83,7 +83,7 @@ static func rebuild(dialog: ManualDialog) -> void:
 
 
 ## 重涂全部筛选 chips：选中主蓝底墨字、未选灰蓝底暗字，与商店羁绊签/页签选中态同一套语言
-## （GOLD 常量现值就是主蓝 #55a0ff，历史名沿用；点缀黄是 JADE）
+## （GOLD 常量现值就是主蓝 #387ce6，历史名沿用；点缀黄是 JADE）
 static func restyle_chips(dialog: ManualDialog) -> void:
 	for tag in dialog._filter_chips.keys():
 		var chip_lbl: Label = dialog._filter_chips[tag]

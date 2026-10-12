@@ -3,7 +3,7 @@ extends Node2D
 
 ## 机关炮台/阵盘实体：由机关类法器（Behavior.TURRET）按冷却布设于地面
 ## 独立索敌、自动向射程内敌人开火，寿命结束后消散。
-## 伤害吃召唤伤害（engineering_damage）、机关羁绊（synergy_contraption_mult）与全套玩家乘区。
+## 伤害吃机关伤害（contraption_damage）、机关羁绊（synergy_contraption_mult）与全套玩家乘区。
 
 @export var weapon_def_id: String = "jiguan_nu"
 @export var star: int = 1
@@ -31,6 +31,8 @@ var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectil
 @onready var core_sprite: Sprite2D = $CoreSprite
 @onready var muzzle_point: Marker2D = $CoreSprite/MuzzlePoint
 @onready var base_ring: Node2D = $BaseRing
+
+var muzzle_flash: Sprite2D = null
 
 func setup(def_id: String, star_level: int) -> void:
 	weapon_def_id = def_id
@@ -60,6 +62,22 @@ func _ready() -> void:
 	tw.tween_property(self, "modulate:a", 1.0, 0.15)
 	# 布设：机关砸进地面那一记钝响。不许借用 orb_hit（那是灵宝触敌的暖金钟）
 	AudioManager.play_sfx("impact_blunt", 0.9)
+	_setup_muzzle_flash()
+
+func _setup_muzzle_flash() -> void:
+	if muzzle_point == null:
+		return
+	muzzle_flash = Sprite2D.new()
+	var tex := load("res://assets/art/light_radial.png") as Texture2D
+	if tex == null:
+		return
+	muzzle_flash.texture = tex
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	muzzle_flash.material = mat
+	muzzle_flash.z_index = 6
+	muzzle_flash.visible = false
+	muzzle_point.add_child(muzzle_flash)
 
 func _draw() -> void:
 	# 绘制冷冽几何八角机关阵盘底座
@@ -191,7 +209,22 @@ func _fire() -> void:
 
 	p.activate()
 
-	# 开火抖动与音效
+	# 开火反馈：枪口闪光 + 核心亮闪 + 后坐抖动与音效
+	if muzzle_flash != null:
+		muzzle_flash.rotation = randf() * TAU
+		muzzle_flash.scale = Vector2.ONE * randf_range(0.35, 0.45)
+		muzzle_flash.modulate = Color(1.0, 0.92, 0.65, 0.95)
+		muzzle_flash.visible = true
+		var mtw := create_tween()
+		mtw.set_parallel(true)
+		mtw.tween_property(muzzle_flash, "scale", Vector2.ONE * 0.75, 0.08)
+		mtw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
+		mtw.chain().tween_callback(func(): muzzle_flash.visible = false)
+
+	core_sprite.modulate = Color(1.4, 1.35, 1.2)
+	var ftw := create_tween()
+	ftw.tween_property(core_sprite, "modulate", Color.WHITE, 0.1)
+
 	core_sprite.position = -aim_dir * 3.5
 	var rtw := create_tween()
 	rtw.tween_property(core_sprite, "position", Vector2.ZERO, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

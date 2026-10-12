@@ -209,6 +209,8 @@ static func weapon_stat_bonus_parts(stat_scalings: Dictionary, player_stats: Dic
 				val = maxf(0.0, float(player_stats.get("elemental_damage", 0.0)))
 			"engineering_damage":
 				val = maxf(0.0, float(player_stats.get("engineering_damage", 0.0)))
+			"contraption_damage":
+				val = maxf(0.0, float(player_stats.get("contraption_damage", 0.0)))
 			"harvest":
 				val = maxf(0.0, float(player_stats.get("harvest", 0.0)))
 		parts[String(key)] = val * coef * star_mult
@@ -220,6 +222,7 @@ static func stat_scaling_label(key: String) -> String:
 		"ranged_damage": return "远程伤害"
 		"elemental_damage": return "元素伤害"
 		"engineering_damage": return "召唤伤害"
+		"contraption_damage": return "机关伤害"
 		"armor": return "护甲"
 		"max_hp_bonus": return "最大生命"
 		"hp_regen": return "生命回复"
@@ -241,6 +244,7 @@ const APPLY_WEAPON_STAT_MAP := {
 	"ranged_damage": "ranged_damage",
 	"elemental_damage": "elemental_damage",
 	"engineering_damage": "engineering_damage",
+	"contraption_damage": "contraption_damage",
 	"armor": "armor",
 	"max_hp": "max_hp_bonus",
 	"hp_regen": "hp_regen",

@@ -87,8 +87,8 @@ func _ready() -> void:
 	GameManager.player_hp_changed.emit(current_health, max_health)
 	GameManager.player_leveled_up.connect(_on_leveled_up)
 	GameManager.upgrade_applied.connect(_on_upgrade_applied)
-	_setup_sprite_frames()
 	anim_base_scale = anim_sprite.scale
+	_setup_sprite_frames()
 	# 浮游法器在 _process 里做轨道跟随（渲染帧率），父链开了物理插值会互相打架，关闭该分支插值
 	weapon_holder.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_search_phase = fposmod(float(get_instance_id() % 97) * 0.001, TARGET_SEARCH_INTERVAL)
@@ -115,16 +115,20 @@ func _setup_sprite_frames() -> void:
 	if _motion_mode == "procedural":
 		is_procedural = true
 		anim_sprite.visible = false
+		var init_scale := anim_base_scale * 1.5
 		if procedural_view == null:
 			procedural_view = ProceduralCultivatorView.new()
 			procedural_view.high_fps_mode = true
 			procedural_view.position = anim_sprite.position
-			procedural_view.scale = Vector2(1.2, 1.2)
+			procedural_view.scale = init_scale
 			procedural_view.setup_character_id(GameManager.cultivator_id)
+			procedural_view.play_idle()
 			add_child(procedural_view)
 		else:
 			procedural_view.high_fps_mode = true
+			procedural_view.scale = init_scale
 			procedural_view.setup_character_id(GameManager.cultivator_id)
+			procedural_view.play_idle()
 			procedural_view.visible = true
 	else:
 		is_procedural = false

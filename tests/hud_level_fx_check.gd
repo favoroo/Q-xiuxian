@@ -18,7 +18,7 @@ const BIG_EXP := 500
 ## 动画全家总时长（徽记 0.48s / 光效 0.5s / 金光 0.34s / 弹入 0.25s）之外再放宽
 const SETTLE_SEC := 1.5
 ## 徽记场景原配底色（GameHUD.tscn StyleBoxFlat_level_badge.bg_color）
-const BADGE_BASE_BG := Color(0.333, 0.627, 1, 1)
+const BADGE_BASE_BG := Color(0.22, 0.486, 0.902, 1)
 
 var _c := TestCheck.new()
 var _main: Node

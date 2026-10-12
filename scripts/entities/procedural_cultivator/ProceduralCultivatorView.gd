@@ -70,12 +70,12 @@ func _init_renderer() -> void:
 	else:
 		renderer = HollowKnightCultivatorRenderer.new()
 
-		if config:
-			renderer.config = config
-			if renderer is HollowKnightCultivatorRenderer:
-				(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
-		renderer.high_fps_mode = high_fps_mode
-		add_child(renderer)
+	if config:
+		renderer.config = config
+		if renderer is HollowKnightCultivatorRenderer:
+			(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
+	renderer.high_fps_mode = high_fps_mode
+	add_child(renderer)
 
 func _process(delta: float) -> void:
 	if renderer == null:

@@ -78,8 +78,8 @@ const DEFS: Dictionary = {
 		"role": "economy",
 		"base_price": 36,
 		"base_cooldown": 0.0, ## 波末触发
-		"base_value": 8.0,   ## 每波基准产出灵石
-		"desc": "每波结束献上灵石（随波次成长）",
+		"base_value": 8.0,   ## 每波基准产出金币
+		"desc": "每波结束献上金币（随波次成长）",
 		"color": Color(0.96, 0.82, 0.22),      # 金黄
 		"halo_color": Color(1.0, 0.88, 0.35, 0.4),
 		"decor": "toad_coin",

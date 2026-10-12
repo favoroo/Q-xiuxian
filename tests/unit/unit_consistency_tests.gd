@@ -42,6 +42,7 @@ const FIELD_FORM := {
 	"ranged_damage": FORM_FLAT,
 	"elemental_damage": FORM_FLAT,
 	"engineering_damage": FORM_FLAT,
+	"contraption_damage": FORM_FLAT,
 	"armor": FORM_FLAT,
 	"max_hp": FORM_FLAT,
 	"hp_heal": FORM_FLAT,

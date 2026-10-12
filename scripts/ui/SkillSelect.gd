@@ -1,10 +1,10 @@
 class_name SkillSelect
 extends Control
 
-## 随行神通五选一：选完道统后进入，选定后转本命法器六选一
+## 随行技能五选一：选完道统后进入，选定后转本命武器六选一
 ## 道统契合判定与强化文案全部走 SkillData（is_enhanced_for_cultivator / enhance_desc），本地不抄数值
 
-## 卡片宽按屏宽现算（与本命法器同一套算术）：5 卡写死 156 时 720 宽整排要 820，左右出屏。
+## 卡片宽按屏宽现算（与本命武器同一套算术）：5 卡写死 156 时 720 宽整排要 820，左右出屏。
 const CARD_H := 310.0
 const CARD_PAD_X := 10.0
 const CARD_SEP := 10.0

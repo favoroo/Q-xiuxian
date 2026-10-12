@@ -119,11 +119,26 @@ func _ready() -> void:
 	SettingsManager.setting_changed.connect(func(_s: StringName, _k: StringName, _v: Variant): _refresh_dynamic_texts())
 
 func _build_background() -> void:
+	# 1. 深邃墨色半透明暗底（约 65% 不透明度，使实战场地的太极自转、灵脉呼吸与石板暗纹清晰透出）
 	var bg := ColorRect.new()
-	bg.color = GameStyle.INK
+	bg.name = "BackgroundOverlay"
+	bg.color = Color(0.015, 0.02, 0.035, 0.65)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
+
+	# 2. 柔和暗角晕映（四周向内柔和压暗，将视觉重心锁在中央 Hero 与 2×2 功能矩阵）
+	var vig := ColorRect.new()
+	vig.name = "BackgroundVignette"
+	vig.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vig_mat := ShaderMaterial.new()
+	vig_mat.shader = preload("res://assets/shaders/vignette_soft.gdshader")
+	vig_mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.0))
+	vig_mat.set_shader_parameter("vignette_intensity", 0.45)
+	vig_mat.set_shader_parameter("vignette_opacity", 0.85)
+	vig.material = vig_mat
+	add_child(vig)
 
 func _build_decor() -> void:
 	var decor := Control.new()
@@ -686,6 +701,17 @@ func _refresh_dynamic_texts() -> void:
 # ---------------- 打开 / 关闭与入场动效 ----------------
 
 func open() -> void:
+	var parent_node = get_parent()
+	if parent_node != null:
+		var backdrop = parent_node.get_node_or_null("StageBackdrop")
+		if backdrop != null:
+			backdrop.visible = false
+		var hud = parent_node.get_node_or_null("GameHUD")
+		if hud != null:
+			hud.visible = false
+		var joy = parent_node.get_node_or_null("VirtualJoystick")
+		if joy != null:
+			joy.visible = false
 	_layout_responsive()
 	_refresh_danger_row()
 	_refresh_endless_toggle()

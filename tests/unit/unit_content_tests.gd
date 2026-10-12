@@ -525,11 +525,11 @@ func _test_turret_and_new_cultivators() -> void:
 	GameManager.reset_run()
 	_c.near(GameManager.synergy_contraption_mult, 1.0, EPS, "无机关法器时羁绊乘区为 1.0")
 
-	# 3. 机关师（jiguan）：机关门槛 -1，初始召唤伤害 +3
+	# 3. 机关师（jiguan）：机关门槛 -1，初始机关伤害 +3
 	GameManager.cultivator_id = "jiguan"
 	GameManager._apply_cultivator()
 	_c.equals(GameManager.contraption_threshold_adj, 1, "机关师机关门槛下移 1")
-	_c.near(GameManager.engineering_damage, 3.0, EPS, "机关师初始召唤伤害 +3")
+	_c.near(GameManager.contraption_damage, 3.0, EPS, "机关师初始机关伤害 +3")
 
 	# 4. 灵植夫（lingzhifu）：2026-10-11 身份重做「灵药滋生」——收益 +12、伤害 ×0.90、掉珠率与溢出倍率
 	GameManager.reset_run()

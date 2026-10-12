@@ -221,7 +221,7 @@ func _test_reference_build_ttks() -> void:
 	var turret_build_dps := _simulate_turret_build_dps(
 		["jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou", "hanquan_shou", "tengluo_jiguan", "leishi_jiguan"],
 		{
-			"weapon_damage_mult": 1.65, "engineering_damage": 6.0,
+			"weapon_damage_mult": 1.65, "contraption_damage": 6.0,
 			"crit_rate": 0.30, "crit_mult": 1.75, "attack_speed_mult": 0.72,
 			"elite_damage": 0.50, "synergy_contraption": 0.50,
 		}

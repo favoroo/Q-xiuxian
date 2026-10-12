@@ -25,6 +25,8 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.elemental_damage += v
 			"engineering_damage":
 				gm.engineering_damage += v
+			"contraption_damage":
+				gm.contraption_damage += v
 			"attack_speed_mult_mul":
 				gm.attack_speed_mult = maxf(gm.ATTACK_SPEED_FLOOR, gm.attack_speed_mult * v)
 			"armor":

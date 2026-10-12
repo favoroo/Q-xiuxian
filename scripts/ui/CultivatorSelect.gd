@@ -2,12 +2,12 @@ class_name CultivatorSelect
 extends Control
 
 ## 开局道统择选（左右分栏 Master-Detail 架构）：
-## - 左侧部分：当前选中修士的详解大卡片（固定高度、内容平滑滚动）
+## - 左侧部分：当前选中角色的详解大卡片（固定高度、内容平滑滚动）
 ##   * 顶部：形象大头像、名号、称号、通关勋章
-##   * 中部：滚动特性区（初始装备、独门天赋、额外技能、背负代价、契合神通）
+##   * 中部：滚动特性区（初始装备、独门天赋、额外技能、背负代价、契合技能）
 ##     精炼排版，默认纸白，仅在数值与专属机制处精准高亮（增益绿、代偿红、机制金）
 ##   * 底部：固定吸底的主行动按钮（选择此角色 / 解锁条件）
-## - 右侧部分：全部修士的形象小卡片纵向双列网格（40x40头像、名号、称号、通关勋章），上下平滑滚动
+## - 右侧部分：全部角色的形象小卡片纵向双列网格（40x40头像、名号、称号、通关勋章），上下平滑滚动
 ## 流程：StartMenu → CultivatorSelect → SkillSelect → StartWeaponSelect（全程保持 paused）
 
 const EDGE := 20.0          # 左右屏边留白
@@ -184,6 +184,11 @@ func _build_ui() -> void:
 
 func show_select() -> void:
 	_transitioning = false
+	var parent_node = get_parent()
+	if parent_node != null:
+		var backdrop = parent_node.get_node_or_null("StageBackdrop")
+		if backdrop != null:
+			backdrop.visible = true
 	var ids: Array = CultivatorData.all_ids()
 	if not GameManager.cultivator_id.is_empty() and GameManager.cultivator_id in ids:
 		_selected_id = GameManager.cultivator_id
@@ -389,7 +394,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var sname := String(sdef.get("name", syn_sid))
 		var enh := SkillData.enhance_desc(syn_sid, cid)
 		var syn_text := "✦ 契合「%s」：%s" % [sname, enh] if not enh.is_empty() else "✦ 专属契合「%s」" % sname
-		mid_col.add_child(_make_info_row("神通", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE,
+		mid_col.add_child(_make_info_row("技能", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE,
 				[syn_text], col_w))
 
 	GameStyle.swipeable(mid_col)
@@ -523,7 +528,7 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 
 	return row_panel
 
-# ---------------- 右侧：全部修士纵向双列小卡片 ----------------
+# ---------------- 右侧：全部角色纵向双列小卡片 ----------------
 
 func _rebuild_roster_cards(vis_w: float) -> void:
 	var ids: Array = CultivatorData.all_ids()
@@ -741,9 +746,14 @@ func _on_back_pressed() -> void:
 	tw.tween_callback(func():
 		visible = false
 		_transitioning = false
-		var start_menu = get_parent().get_node_or_null("StartMenu")
-		if start_menu != null and start_menu.has_method("open"):
-			start_menu.open()
+		var parent_node = get_parent()
+		if parent_node != null:
+			var backdrop = parent_node.get_node_or_null("StageBackdrop")
+			if backdrop != null:
+				backdrop.visible = false
+			var start_menu = parent_node.get_node_or_null("StartMenu")
+			if start_menu != null and start_menu.has_method("open"):
+				start_menu.open()
 	)
 
 func _choose(cid: String) -> void:

@@ -1,7 +1,7 @@
 class_name HudSkillButton
 extends Control
 
-## 随行神通 / 额外技能按钮：圆形半透明浮动键 + 环形冷却遮罩 + 秒数读数，按下即放（快捷键与触屏双通道）。
+## 随行技能 / 额外技能按钮：圆形半透明浮动键 + 环形冷却遮罩 + 秒数读数，按下即放（快捷键与触屏双通道）。
 ## 一套类两颗键：主键读 active_skill_id（带冷却），额外键读 extra_skill_id（随角色绑定，如影爆——
 ## 免冷却、由影层门控，影层角标「影 N」归它）。从 GameHUD 拆出：外观基准在 SkillButtonView，
 ## 摆位算术在 HudButtonLayout，本层只管构建/输入/冷却轮询/释放反馈。
@@ -15,7 +15,7 @@ const BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
 const EXTRA_BTN_TEXT := "额外\n技能"
 const EXTRA_BTN_FONT := 18
 
-## 槽位绑定：false = 主随行神通键（读 active_skill_id）；true = 额外技能键（读 extra_skill_id，
+## 槽位绑定：false = 主随行技能键（读 active_skill_id）；true = 额外技能键（读 extra_skill_id，
 ## 随角色绑定，如影者的影爆——免冷却、由影层层数门控，影层角标「影 N」也归这颗键）
 var bind_extra: bool = false
 
@@ -56,7 +56,7 @@ func _scale_key() -> StringName:
 func _skill_id() -> String:
 	return GameManager.extra_skill_id if bind_extra else GameManager.active_skill_id
 
-## 构建按钮：圆形键体 + 图标 + 环形冷却遮罩 + 秒数 + 神通名
+## 构建按钮：圆形键体 + 图标 + 环形冷却遮罩 + 秒数 + 技能名
 func _build_button() -> void:
 	_btn = Button.new()
 	_btn.custom_minimum_size = Vector2(BTN_SIZE, BTN_SIZE)
@@ -275,7 +275,7 @@ func _process(_delta: float) -> void:
 
 ## 额外技能充能角标：影爆读影层（Player.shadow_ring），服丹读药池存量（GameManager.elixir_pool）。
 ## 攒上才出现，攒满直接换成可释放的亮面（不靠闪一下提示——看不见等于没做）。
-## 读数都现读账本本身，不在这里另记一份。只归额外技能键：主神通键不挂这颗角标。
+## 读数都现读账本本身，不在这里另记一份。只归额外技能键：主技能键不挂这颗角标。
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:
 		return

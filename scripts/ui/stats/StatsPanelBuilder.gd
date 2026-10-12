@@ -87,6 +87,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._ranged_val_lbl = add_stat_row(dialog, atk_block, "ranged_dmg", "0")
 	dialog._elem_val_lbl = add_stat_row(dialog, atk_block, "elemental_dmg", "0")
 	dialog._eng_val_lbl = add_stat_row(dialog, atk_block, "engineering_dmg", "0")
+	dialog._contraption_val_lbl = add_stat_row(dialog, atk_block, "contraption_dmg", "0")
 	dialog._crit_val_lbl = add_stat_row(dialog, atk_block, "crit", "5% (1.5×)")
 	dialog._range_val_lbl = add_stat_row(dialog, atk_block, "range", "+0%")
 

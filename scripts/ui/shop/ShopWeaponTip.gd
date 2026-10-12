@@ -1,7 +1,7 @@
 class_name ShopWeaponTip
 extends RefCounted
 
-## 灵石阁法器悬浮详情卡：全部属性 + 流派进度 + 快捷操作（三合一 / 装备卸换 / 出售）。
+## 商店武器悬浮详情卡：全部属性 + 流派进度 + 快捷操作（三合一 / 装备卸换 / 出售）。
 ## 从 WaveShop 拆出：宿主仍是 shop（DetailTip 判据按宿主收卡），操作回调经 shop 门面刷新。
 
 static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anchor: Control) -> void:
@@ -95,7 +95,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var row_ops: Array = []
 	if in_stash:
 		var move_disabled := slots_full
-		var move_text := "装备已满(%d/%d)" % [GameManager.slots_used(), max_slots] if slots_full else "装  备"
+		var move_text := "装备已满(%d/%d)" % [GameManager.slots_used(), max_slots] if slots_full else "装 备"
 		row_ops.append({
 			"text": move_text,
 			"disabled": move_disabled,

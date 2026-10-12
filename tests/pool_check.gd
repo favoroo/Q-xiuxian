@@ -144,9 +144,28 @@ func _run() -> void:
 	_check(orb_b.is_in_group("gems") and orb_b.visible, "复用激活重新入组并可见")
 	orb_b.recycle()
 
+	# ---------- 5.7 引雷池（LightningBolt）：出膛 / 回收 / 复用 ----------
+	var l_bolt_a := LightningBolt.acquire(world)
+	l_bolt_a.activate(Vector2(20, 20), Vector2(100, 100), Color.CYAN, 1.0)
+	_check(l_bolt_a.visible, "引雷激活后可见")
+	l_bolt_a._recycle()
+	_check(not l_bolt_a.visible and LightningBolt._pool.size() == 1, "引雷回收后隐身并回池")
+	var l_bolt_b := LightningBolt.acquire(world)
+	_check(l_bolt_b == l_bolt_a, "引雷第二次 acquire 复用同一实例")
+	l_bolt_b.activate(Vector2(20, 20), Vector2(80, 80), Color.WHITE, 1.2)
+	_check(l_bolt_b.visible and l_bolt_b._line_glow.width == 12.0, "引雷复用激活按 width_mult 重置线宽")
+	l_bolt_b._recycle()
+
+	# ---------- 5.8 弹丸湮灭微闪（IMPACT_POP）与限流闸 ----------
+	var pop_pre := JuiceEffect.created_count()
+	for i in range(12):
+		JuiceEffect.spawn_impact_pop(world, Vector2(50 + i * 2, 50), Color.GOLD, Vector2.RIGHT)
+	_check(JuiceEffect.created_count() - pop_pre <= JuiceEffect.IMPACT_POP_FRAME_BUDGET, "湮灭微闪受单帧预算限流闸截断")
+
 	# ---------- 6. 缓存清理不影响运行中对象 ----------
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
+	LightningBolt.clear_cache()
 	_check(DamageNumber.created_count() == 0 and JuiceEffect.created_count() == 0, "clear_cache 归零计数")
 	DamageNumber.spawn(world, Vector2(40, 40), 1)
 	_check(DamageNumber.created_count() == 1, "清理后可重新建池并继续工作")

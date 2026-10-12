@@ -25,6 +25,7 @@ static func reset(gm: Node) -> void:
 	gm.ranged_damage = 0.0
 	gm.elemental_damage = 0.0
 	gm.engineering_damage = 0.0
+	gm.contraption_damage = 0.0
 	gm.attack_speed_mult = 1.0
 	gm.move_speed_mult = 1.0
 	gm.pickup_range_mult = 1.0

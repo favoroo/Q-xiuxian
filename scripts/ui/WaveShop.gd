@@ -1,8 +1,8 @@
 class_name WaveShop
 extends Control
 
-## 波间灵石阁：购买法器/回气丹、重掷货架；
-## 上阵 + 背包统一点选后操作：三合一合成 / 上阵卸下 / 出售换灵石
+## 商店：购买法器/回复药、重掷货架；
+## 上阵 + 背包统一点选后操作：三合一合成 / 上阵卸下 / 出售换金币
 ## 拆分说明：本体保留摆位口径（判据引用）、开面板/刷新编排与陈列行装配；
 ## 货架卡构建在 ShopOfferCardFactory、法器悬浮菜单在 ShopWeaponTip、陈列槽位在 ShopInventoryRow。
 
@@ -18,7 +18,7 @@ signal manual_requested(filter_tag: String)
 @onready var offers_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll
 @onready var offers_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll/OffersPad
 @onready var offers_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll/OffersPad/OffersContainer
-## 陈列行（上阵 + 背包 + 法宝）整排在 OwnedScroll 里：满仓 6 上阵 + 9 背包 + 15 法宝
+## 陈列行（上阵 + 背包 + 道具）整排在 OwnedScroll 里：满仓 6 上阵 + 9 背包 + 15 道具
 ## 一共 30 格，任何一档屏都摆不平 ⇒ 槽位先按件数压到 INV_SLOT_MIN，还摆不下就横着滑。
 ## 竖向禁用滚动：这一行只有一格高，上下滑没有意义，且会把货架的竖向预算再吃掉一条滑条。
 @onready var owned_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/OwnedScroll
@@ -42,7 +42,7 @@ signal manual_requested(filter_tag: String)
 ## ScrollContainer 仍留纵向 AUTO 作兜底：万一某档屏真放不下，宁可滑也不许切文案
 ## （不砍文案不压字号是硬口径），但三档测试屏上它必须用不上。
 ##
-## 「货架不许竖滑」不等于「这一屏哪儿都不许滑」：底下那排陈列（上阵 + 背包 + 法宝）满仓是
+## 「货架不许竖滑」不等于「这一屏哪儿都不许滑」：底下那排陈列（上阵 + 背包 + 道具）满仓是
 ## 6 + 9 + 15 = 30 格，槽位压到 36 见方也要 1400 宽，任何一档屏都摆不平 ⇒ 整排横滑
 ## （OwnedScroll，竖向禁用）。2026-10-09 用户真机：「装备太多了，可以左右滑动啊，
 ## 不然很多装备都操作不了了」。两处口径不同的道理在代价上：货架滑一次才能比一次价，比不了；
@@ -170,7 +170,7 @@ static func shelf_needs_h_slide(screen: Vector2, count: int) -> bool:
 ## 第二行：左羁绊、右「怎么用？」（原 OwnedLabel 那一整行提示搬进点按可得的详情卡）
 var _info_bar: HBoxContainer = null
 var _synergy_box: HBoxContainer = null
-## 顶栏气血徽记（见 ShopHpChip 头注）：买不买回复道具的依据就印在这一屏
+## 顶栏生命徽记（见 ShopHpChip 头注）：买不买回复道具的依据就印在这一屏
 var _hp_chip: ShopHpChip = null
 ## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
 var _screen: Vector2 = Vector2(960, 540)
@@ -282,7 +282,7 @@ func _refresh_synergy_bar() -> void:
 func _open_shop_synergy_tip(tag: String, anchor: Control) -> void:
 	# 详情卡底部给一键直达：跳图鉴武器页并按该流派筛选（DetailTip 会先收卡再回调）
 	SynergyUI.open_tip(self, anchor, tag, "", "", [], [
-		{"text": "查看该流派法器", "callback": func() -> void: manual_requested.emit(tag)},
+		{"text": "查看该流派武器", "callback": func() -> void: manual_requested.emit(tag)},
 	])
 
 ## 「怎么用？」：原先钉在货架下方那一整行的操作提示，收进点按可得的详情卡
@@ -308,7 +308,7 @@ func _open_usage_tip() -> void:
 		notes.insert(0, "本角色限装备 %d 件武器：超出上限的武器会收进背包，可用于三合一升星或先卸下当前武器再换装。" % max_slots)
 	DetailTip.show_over(self, help_btn, {
 		"title": "商店怎么用",
-		"chip": "波间商店",
+		"chip": "商店",
 		"chip_color": GameStyle.GOLD,
 		"rows": rows,
 		"body": "每波结束后来此购买武器：金币换武器与道具，摆不满的收进背包。",

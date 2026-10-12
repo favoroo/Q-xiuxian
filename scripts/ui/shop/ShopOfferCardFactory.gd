@@ -1,7 +1,7 @@
 class_name ShopOfferCardFactory
 extends RefCounted
 
-## 灵石阁货架卡工厂：单张货架卡的构建与数据装配（卡体 chrome / 头行 / 色签行 / 价格键）。
+## 商店货架卡工厂：单张货架卡的构建与数据装配（卡体 chrome / 头行 / 色签行 / 价格键）。
 ## 从 WaveShop 拆出：摆位口径与常量仍在 WaveShop（唯一真话，判据引用它们），
 ## 买入/锁定等操作回调经 shop 门面回流（refresh(false) 重排货架）。
 
@@ -50,7 +50,7 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	GameStyle.swipeable(card)
 	return card
 
-## 装配这张卡的全部数据（武器/道具/药水三种货）：名号、图标、色签、加成行、说明、边色与「可合成」角标
+## 装配这张卡的全部数据（武器/道具/回复药三种货）：名号、图标、色签、加成行、说明、边色与「可合成」角标
 ## stat_rows 是卡面加成行（[名字, 幅度, 颜色]），数字由 BonusRows 从数据表直接生成，不在 desc 里手抄
 static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var kind: String = offer.get("kind", "weapon")
@@ -78,7 +78,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	if is_potion:
 		title = "回复药"
 		icon_path = "res://assets/art/icon_hp.png"
-		tag = "药水"
+		tag = "回复药"
 		desc = ""
 		# 卡上印的是「现在买下这一口，真能回多少」：与 ShopSystem 喂给 heal() 同一条公式，
 		# 再按当前缺血截断 ⇒ 数字永远不会承诺一个兑现不了的量。
@@ -87,7 +87,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		var stats := GameManager.get_player_stat_dict()
 		var eff := GameBalance.potion_effective_heal(
 				float(stats.get("max_hp", 0.0)), float(stats.get("current_hp", 0.0)))
-		stat_rows = [["回复气血", "+%d" % int(round(eff)),
+		stat_rows = [["回复生命", "+%d" % int(round(eff)),
 				GameStyle.GOOD if eff > 0.5 else GameStyle.BAD]]
 		chip_color = GameStyle.GOOD
 		chip_text_color = GameStyle.INK_TEXT
@@ -201,7 +201,7 @@ static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, 
 		"chip": "推荐度 %d%%" % int(round(float(offer.get("recommend_score", 0.0)) * 100.0)),
 		"chip_color": GameStyle.JADE,
 		"notes": notes,
-		"foot": "由当前修士、上阵法器与属性推算，仅供参考。",
+		"foot": "由当前角色、上阵武器与属性推算，仅供参考。",
 	})
 
 ## 把一颗色签登记成「点得动、且判据认得出它该弹哪张卡」。
@@ -292,7 +292,7 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 ## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）；
 ## rec_reasons 非空时最先挂「荐」推荐签（点按弹推荐理由）
 ## 每一颗色签都点得出解释（2026-10-11 用户：「点击也要弹出来对应的解释，加成怎么样加成哪些」）：
-## chip_tips 与 chip_defs 同序，{} 表示这颗没解释可看（药水/法宝的档位签）。
+## chip_tips 与 chip_defs 同序，{} 表示这颗没解释可看（回复药/道具的档位签）。
 ## 热区挂在签上、锚点也回送签本身：这两件事在 HUD 那批徽记上栽过一次（lambda 按值捕获 null）。
 static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], rec_reasons: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
 	var tag_row := HBoxContainer.new()

@@ -5,9 +5,9 @@ extends RefCounted
 ## mods 支持的键：
 ##   crit_rate / armor / harvest / thorns / dodge          —— 直接加算
 ##   speed_mult / damage_mult / hp_mult / shop_price / haste_mult —— 乘算系数
-##   tag_damage: {tag: bonus}                   —— 指定流派法器伤害加成
-##   non_tag_damage: {tag: bonus}               —— 不带指定 tag 的法器伤害修正（负值为惩罚，符修/霸王的代偿）
-##   non_drone_damage                           —— 非灵蝶法器伤害修正（负值为惩罚）
+##   tag_damage: {tag: bonus}                   —— 指定流派武器伤害加成
+##   non_tag_damage: {tag: bonus}               —— 不带指定 tag 的武器伤害修正（负值为惩罚，符修/霸王的代偿）
+##   non_drone_damage                           —— 非灵蝶武器伤害修正（负值为惩罚）
 ##   start_drones                               —— 开局自带灵蝶数
 ##   spirit_threshold_adj                       —— 御灵羁绊门槛下移
 ##   dodge_cap                                  —— 闪避硬上限上移（魅影：0.6 → 0.9）
@@ -15,22 +15,22 @@ extends RefCounted
 ##   enemy_count_mult                           —— 妖潮规模倍率（狂战蛮修：1.5）
 ##   harvest_decay                              —— 每波灵韵流失点数（狂战蛮修：3）
 ##   xp_require_mult                            —— 升级修为需求倍率（夺舍散人：0.6）
-##   item_price                                 —— 法宝价格乘区（多宝道人：0.75）
+##   item_price                                 —— 道具价格乘区（多宝道人：0.75）
 ##   shop_slots                                 —— 货架格数加成（多宝道人：+1）
 ##   guard_stance                               —— 盾势机制开关（守卫：受击蓄能满自动爆发，数值全在 GuardStanceData）
-##   heal_orb_chance / heal_overflow_mult       —— 灵植夫：敌人额外掉回复珠概率 / 回复珠溢出折灵石倍率
+##   heal_orb_chance / heal_overflow_mult       —— 灵植夫：敌人额外掉回复珠概率 / 回复珠溢出折金币倍率
 ##   alloc_offer_bonus / alloc_free_reroll_bonus —— 学者：悟道候选数 / 每回合免费刷新加成
-##   collection_damage_per_unique               —— 收藏家：每持有一种不同法宝的全伤害加成
+##   collection_damage_per_unique               —— 收藏家：每持有一种不同道具的全伤害加成
 ##   frenzy                                     —— 战意机制开关（狂战士：击杀攒层增伤、停杀流失，数值全在 FrenzyData）
-##   free_rerolls                               —— 每波灵石阁免费重掷次数（商人：+1，走 ShopSystem 既有免单口径）
-##   reroll_price                               —— 灵石阁重掷费用乘区（商人：0.5 半价）
+##   free_rerolls                               —— 每波商店免费重掷次数（商人：+1，走 ShopSystem 既有免单口径）
+##   reroll_price                               —— 商店重掷费用乘区（商人：0.5 半价）
 ##   thunder_strike                             —— 天雷机制开关（雷法真君：周期落雷轰最近妖兽，数值全在 ThunderData）
 ##   crowd_damage_per_enemy / crowd_damage_cap / crowd_damage_radius
 ##                                              —— 蛮兵·陷阵：感知圈内每只妖兽的全伤害加成与上限（damage_mult 现算）
-##   stone_damage_per_100 / stone_damage_cap    —— 守财奴·财可通神：每持 100 灵石的全伤害加成与上限（damage_mult 现算）
-##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的神通冷却秒数
-## skill_mods: {skill_id: {...}}                —— 随行神通专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
-## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一神通，HUD 第二颗按钮释放；
+##   stone_damage_per_100 / stone_damage_cap    —— 守财奴·财可通神：每持 100 金币的全伤害加成与上限（damage_mult 现算）
+##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的技能冷却秒数
+## skill_mods: {skill_id: {...}}                —— 随行技能专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
+## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一技能，HUD 第二颗按钮释放；
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
 ##                                                 它的玩法说明不写在本表：get_extra_desc() 现读那张机制表，
 ##                                                 卡面上单独成一段（不并进 pros 列表）
@@ -86,8 +86,8 @@ const DEFS: Dictionary = {
 				"motion": "procedural",
 				"render_style": "hollow_knight",
 				"start_equip": "★2 双生护蝶 ×1",
-				"pros": ["开局自带 ★2 双生护蝶", "召唤类法器伤害 +12%", "召唤伤害属性 +2", "召唤羁绊门槛 -1（1/3/5 件成档）"],
-				"cons": ["非召唤类法器伤害 -30%"],
+				"pros": ["开局自带 ★2 双生护蝶", "召唤类武器伤害 +12%", "召唤伤害属性 +2", "召唤羁绊门槛 -1（1/3/5 件成档）"],
+				"cons": ["非召唤类武器伤害 -30%"],
 				"mods": {
 					"start_drones": 1,
 					"start_drone_star": 2,
@@ -173,7 +173,7 @@ const DEFS: Dictionary = {
 				"render_style": "hollow_knight",
 				"start_equip": "",
 				"pros": ["全武器伤害 +30%", "怪物数量 +50%（更多击杀与金币）", "陷阵：周身妖兽每只 +3% 全伤害（至多 +45%）"],
-				"cons": ["每波结算损失 3 点收益"],
+				"cons": ["每回合结算损失 3 点收益"],
 				"mods": {
 					"damage_mult": 1.3,
 					"enemy_count_mult": 1.5,
@@ -214,7 +214,7 @@ const DEFS: Dictionary = {
 				"motion": "procedural",
 				"render_style": "hollow_knight",
 				"start_equip": "",
-				"pros": ["商店槽位 +1（共 6 格）", "法宝价格永久 -25%", "每持有一种不同法宝，全伤害 +2%"],
+				"pros": ["商店槽位 +1（共 6 格）", "道具价格永久 -25%", "每持有一种不同道具，全伤害 +2%"],
 				"cons": ["全武器伤害 -20%"],
 				"mods": {
 					"shop_slots": 1,
@@ -265,25 +265,25 @@ const DEFS: Dictionary = {
 					"locked_upgrades": [],
 					"skill_mods": {"haste": {"power_mult": 1.3}},
 				},
-				"jiguan": {
-					"name": "机关师",
-					"epithet": "千机百炼，甲阵通神",
-					"icon": "res://assets/art/cultivator_jiguan_icon.png",
-					"sprite": "res://assets/art/pawn_blue_8dir.png",
-					"motion": "procedural",
-					"render_style": "hollow_knight",
-					"start_equip": "",
-					"pros": ["初始召唤伤害 +3", "机关羁绊门槛 -1（1/3/5 件成档）"],
-					"cons": ["非机关/非召唤武器伤害 -25%"],
-					"mods": {
-						"engineering": 3.0,
-						"contraption_threshold_adj": 1,
-						"non_contraption_damage": -0.25,
+					"jiguan": {
+						"name": "机关师",
+						"epithet": "千机百炼，甲阵通神",
+						"icon": "res://assets/art/cultivator_jiguan_icon.png",
+						"sprite": "res://assets/art/pawn_blue_8dir.png",
+						"motion": "procedural",
+						"render_style": "hollow_knight",
+						"start_equip": "",
+						"pros": ["初始机关伤害 +3", "机关羁绊门槛 -1（1/3/5 件成档）"],
+						"cons": ["非机关/非召唤武器伤害 -25%"],
+						"mods": {
+							"contraption": 3.0,
+							"contraption_threshold_adj": 1,
+							"non_contraption_damage": -0.25,
+						},
+						"allowed_tags": ["contraption", "spirit"],
+						"locked_upgrades": [],
+						"skill_mods": {"aegis": {"duration_add": 1.0}},
 					},
-					"allowed_tags": ["contraption", "spirit"],
-					"locked_upgrades": [],
-					"skill_mods": {"aegis": {"duration_add": 1.0}},
-				},
 				"yaowang": {
 					"name": "药王",
 					"epithet": "悬壶济世，金针度人",
@@ -353,8 +353,8 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["符箓类法器伤害 +35%", "初始元素伤害 +2"],
-					"cons": ["非符箓类法器伤害 -25%", "商店主要刷新符箓类法器"],
+					"pros": ["弹射类武器伤害 +35%", "初始元素伤害 +2"],
+					"cons": ["非弹射类武器伤害 -25%", "商店主要刷新弹射类法器"],
 					"mods": {
 						"elemental": 2.0,
 						"tag_damage": {"talisman": 0.35},
@@ -372,8 +372,8 @@ const DEFS: Dictionary = {
 						"motion": "procedural",
 						"render_style": "hollow_knight",
 						"start_equip": "",
-						"pros": ["横扫类法器伤害 +30%", "初始护甲 +2"],
-						"cons": ["非横扫类法器伤害 -25%", "商店主要刷新横扫类法器"],
+						"pros": ["横扫类武器伤害 +30%", "初始护甲 +2"],
+						"cons": ["非横扫类武器伤害 -25%", "商店主要刷新横扫类法器"],
 						"mods": {
 							"armor": 2.0,
 							"tag_damage": {"wide": 0.30},
@@ -391,7 +391,7 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["击杀妖兽减 0.4s 神通冷却（精英 -2.0s）", "神通持续期间击杀可预扣后续冷却"],
+					"pros": ["击杀妖兽减 0.4s 技能冷却（精英 -2.0s）", "技能持续期间击杀可预扣后续冷却"],
 					"cons": ["全武器基础伤害 -20%", "最大生命 -15%"],
 					"mods": {
 						"damage_mult": 0.80,
@@ -412,7 +412,7 @@ const DEFS: Dictionary = {
 					"render_style": "hollow_knight",
 					"start_equip": "焰灵狐（随行灵兽）",
 					"pros": ["开局自带随行灵兽（焰灵狐）", "灵兽栏位 +2（可同时配置 3 只）", "商店灵兽出现概率 +15%", "随行灵兽造成的伤害 +15%"],
-					"cons": ["本体法器伤害 -10%"],
+					"cons": ["本体武器伤害 -10%"],
 					"mods": {
 						"start_pet": "yanhu",
 						"pet_slots": 2,
@@ -441,7 +441,7 @@ static func get_synergy_skill_id(id: String) -> String:
 		return ""
 	return String(s_mods.keys()[0])
 
-## 随角色绑定的额外技能 id（独立于五选一神通）；没配 extra_skill 的角色返回空串
+## 随角色绑定的额外技能 id（独立于五选一技能）；没配 extra_skill 的角色返回空串
 static func get_extra_skill_id(id: String) -> String:
 	return String(get_def(id).get("extra_skill", ""))
 

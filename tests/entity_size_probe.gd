@@ -123,8 +123,8 @@ func _wanted(only: String, key: String) -> bool:
 
 func _make_player() -> Node2D:
 	var view := ProceduralCultivatorView.new()
-	# 与 Player.gd:104-107 同一处取值：程序化视图挂在 anim_sprite 位置上，整体 ×1.2
-	view.scale = Vector2(1.2, 1.2)
+	# 与 Player.gd 实际缩放一致 (anim_base_scale * 1.5 = 0.5 * 1.5 = 0.75)
+	view.scale = Vector2(0.75, 0.75)
 	view.setup_character_id(GameManager.cultivator_id)
 	return view
 

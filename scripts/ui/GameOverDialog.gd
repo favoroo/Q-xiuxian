@@ -67,7 +67,7 @@ func _on_game_over(victory: bool) -> void:
 	var dname: String = AchievementData.danger_name(GameManager.danger_level)
 	var eff_wave := maxi(GameManager.wave_number, GameManager.VICTORY_WAVE if victory else 1)
 	var cult_line: String = ("角色 %s · 难度「%s」· 第 %d 波\n" % [cname, dname, eff_wave]) if not cname.is_empty() else ("难度「%s」· 第 %d 波\n" % [dname, eff_wave])
-	stats_label.text = "%s生存时长 %02d:%02d · 等级 Lv.%d\n击杀 %d 只 · 囊中金币 %d 枚" % [
+	stats_label.text = "%s生存时长 %02d:%02d · 等级 %d\n击杀 %d 只 · 随身金币 %d 枚" % [
 		cult_line, mins, secs, GameManager.level, GameManager.kills, GameManager.spirit_stones
 	]
 	_refresh_unlocks()

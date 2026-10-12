@@ -1,11 +1,11 @@
 class_name ShopInventoryRow
 extends RefCounted
 
-## 灵石阁陈列行（上阵 + 背包 + 法宝）的单格构建：槽位 / 上阵空格 / 容量签 / 分隔签 / 法宝徽记 / 空槽。
+## 商店陈列行（上阵 + 背包 + 道具）的单格构建：槽位 / 上阵空格 / 容量签 / 分隔签 / 道具徽记 / 空槽。
 ## 从 WaveShop 拆出：整行的编排（_refresh_inventory）仍在 WaveShop，
 ## 点选回调经 shop 门面回流（选中态与悬浮详情卡都归 shop 管）。
 
-## 单格法器槽：不用 Button —— BaseButton 在自己的 gui_input 里 accept_event()，「按下」
+## 单格武器槽：不用 Button —— BaseButton 在自己的 gui_input 里 accept_event()，「按下」
 ## 那一拍不往父级冒泡 ⇒ 手指压在槽位上就划不动整排，而满仓 30 格里几乎全是槽位。
 ## 属性面板的槽位同一口径（PanelContainer + GameStyle.tap，见 PlayerStatsDialog._refresh_weapons）。
 static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: String, tile: float) -> Control:
@@ -112,7 +112,7 @@ static func create_stash_divider(shop: WaveShop) -> Control:
 		shop.drag_register(chip, {"pool": "stash", "index": -1, "kind": "end"})
 	return chip
 
-## 法宝分隔签：「道具 n」
+## 道具分隔签：「道具 n」
 static func create_items_divider() -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -124,7 +124,7 @@ static func create_items_divider() -> Control:
 	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return chip
 
-## 已持有法宝的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
+## 已持有道具的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
 static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Control:
 	var def := ItemData.get_def(item_id)
 	var chip = PanelContainer.new()
@@ -155,7 +155,7 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	GameStyle.tap(chip, func(): open_item_tip(shop, item_id, chip))
 	return chip
 
-## 法宝徽记的详情卡：品阶/价格 + 加成行（与货架卡同源） + 描述逐行
+## 道具徽记的详情卡：品阶/价格 + 加成行（与货架卡同源） + 描述逐行
 static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> void:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
@@ -262,11 +262,11 @@ static func open_pet_tip(shop: WaveShop, pet_id: String, anchor: Control) -> voi
 	]
 	DetailTip.show_over(shop, anchor, {
 		"title": String(def.get("name", pet_id)),
-		"chip": "随行伙伴",
+		"chip": "灵兽",
 		"chip_color": color,
 		"rows": rows,
 		"body": String(def.get("desc", "")),
-		"notes": ["随行伙伴：跟随主角战斗，无敌免死，跨波存活。", "出售后释放栏位，并可再次在商店刷出。"],
+		"notes": ["灵兽：跟随主角战斗，无敌免死，跨波存活。", "出售后释放栏位，并可再次在商店刷出。"],
 		"foot": "当前灵兽栏位：%d/%d" % [GameManager.pets.size(), GameManager.max_pet_slots()],
 		"actions": actions,
 	})

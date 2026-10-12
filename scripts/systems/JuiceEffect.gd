@@ -12,11 +12,15 @@ extends Node2D
 ##   2) 粒子用并行数组而非「每颗粒子一个 Dictionary」；
 ##   3) 光环插值由 Tween.interpolate_value 改成 quad 缓出的闭式解。
 
-enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE }
+enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP }
 
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
 const Z_DUST := 5            ## 步伐微尘层级（贴近角色阴影）
+
+const IMPACT_POP_FRAME_BUDGET := 6  ## 弹丸湮灭闪单物理帧预算限流闸，防止高穿透齐射糊屏
+static var _last_pop_frame: int = -1
+static var _pop_count_this_frame: int = 0
 
 var effect_type: int = EffectType.PICKUP_POP
 var lifetime: float = 0.2
@@ -255,6 +259,40 @@ static func spawn_step_dust(parent: Node, pos: Vector2, move_dir: Vector2) -> vo
 			0.0,
 			Color(0.7, 0.8, 0.92, 0.35),
 			randf_range(1.8, 3.2))
+
+## 弹丸湮灭微闪：弹丸因命中消亡时，在弹丸当前位置产生的冷冽灵光溃散（0.11s）。
+## 【设计铁律】不同于挂在怪物身上的旧受击火花：它严格锚定在弹丸自身碰撞位置，
+## 并受严格的单物理帧限流闸（<=6发/帧）与视口门控双重保护，绝不空地乱闪、绝不糊屏。
+static func spawn_impact_pop(parent: Node, pos: Vector2, col: Color, impact_dir: Vector2 = Vector2.ZERO) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+
+	var current_frame := Engine.get_physics_frames()
+	if current_frame != _last_pop_frame:
+		_last_pop_frame = current_frame
+		_pop_count_this_frame = 0
+	if _pop_count_this_frame >= IMPACT_POP_FRAME_BUDGET:
+		return
+	_pop_count_this_frame += 1
+
+	var fx := _acquire()
+	fx._begin(EffectType.IMPACT_POP, pos, 0.11, Z_OVERLAY)
+	# 极小光环消散 (2px -> 9px)
+	fx._add_ring(2.0, 9.0, col, 1.8)
+
+	# 2~3 颗细小灵气碎屑（沿命中反向轻微迸射）
+	var base_angle := (-impact_dir).angle() if impact_dir.length_squared() > 0.001 else randf() * TAU
+	for i in range(3):
+		var a := base_angle + randf_range(-0.6, 0.6)
+		var spd := randf_range(30.0, 65.0)
+		fx._add_particle(
+			Vector2.ZERO,
+			Vector2(cos(a), sin(a)) * spd,
+			3.0,
+			col,
+			1.2)
 
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:

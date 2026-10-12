@@ -8,6 +8,7 @@ extends Node2D
 @onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var dust_particles: CPUParticles2D
+var petal_particles: CPUParticles2D
 var _vignette_tween: Tween = null
 var _low_hp_phase: float = 0.0
 var _settings_return_to_pause: bool = false
@@ -21,8 +22,21 @@ func _ready() -> void:
 		Engine.max_fps = 60
 	GameManager.reset_run()
 	GameManager.joystick = joystick
-	_setup_dust()
+	_setup_atmosphere()
 	_setup_map_bounds()
+	_setup_map_props()
+	_setup_stage_backdrop()
+	# 开局在主菜单/选人阶段默认隐藏战斗 HUD 与虚拟摇杆，避免在主页背景中透出
+	$UILayer/GameHUD.visible = false
+	if joystick != null:
+		joystick.visible = false
+	GameManager.weapons_updated.connect(func(weapons: Array):
+		if not weapons.is_empty():
+			if $UILayer.has_node("GameHUD"):
+				$UILayer/GameHUD.visible = true
+			if joystick != null:
+				joystick.visible = true
+	)
 	$UILayer/GameHUD.pause_requested.connect(pause_menu.open)
 	$UILayer/GameHUD.stats_requested.connect(func():
 		_stats_return_to_pause = false
@@ -140,9 +154,12 @@ func _exit_tree() -> void:
 	EnemyBase.clear_frame_cache()
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
+	LightningBolt.clear_cache()
 
-func _setup_dust() -> void:
+func _setup_atmosphere() -> void:
+	# 1. 灵尘微光浮游粒子（跟随玩家，主菜单暂停时也持续飘动）
 	dust_particles = CPUParticles2D.new()
+	dust_particles.process_mode = Node.PROCESS_MODE_ALWAYS
 	dust_particles.amount = 26
 	dust_particles.lifetime = 3.2
 	dust_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
@@ -155,10 +172,53 @@ func _setup_dust() -> void:
 	dust_particles.color = Color(0.35, 0.85, 1.0, 0.28)
 	$AtmosphereLayer.add_child(dust_particles)
 
+	# 2. 飘落灵叶与霜露微粒（带微弱自转与左下斜倾飘风，主菜单暂停时也持续飘落）
+	petal_particles = CPUParticles2D.new()
+	petal_particles.process_mode = Node.PROCESS_MODE_ALWAYS
+	petal_particles.amount = 14
+	petal_particles.lifetime = 4.2
+	petal_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	petal_particles.emission_rect_extents = Vector2(480, 280)
+	petal_particles.gravity = Vector2(-7.0, 15.0)
+	petal_particles.initial_velocity_min = 5.0
+	petal_particles.initial_velocity_max = 15.0
+	petal_particles.angular_velocity_min = -25.0
+	petal_particles.angular_velocity_max = 25.0
+	petal_particles.scale_amount_min = 1.6
+	petal_particles.scale_amount_max = 2.8
+	petal_particles.color = Color(0.80, 0.92, 1.0, 0.30)
+	$AtmosphereLayer.add_child(petal_particles)
+
+	# 3. 极低对比度缓动薄雾片（增加深邃空间感，零 PointLight2D 开销）
+	_setup_ambient_mist()
+
+func _setup_ambient_mist() -> void:
+	var mist_tex: Texture2D = preload("res://assets/art/light_radial.png")
+	var atmo_layer: Node2D = $AtmosphereLayer
+	var mist_configs: Array[Dictionary] = [
+		{"pos": Vector2(-180.0, -150.0), "scale": Vector2(8.5, 7.0), "alpha": 0.045, "drift": Vector2(60.0, 30.0), "dur": 22.0},
+		{"pos": Vector2(200.0, 140.0), "scale": Vector2(10.0, 8.0), "alpha": 0.050, "drift": Vector2(-50.0, -40.0), "dur": 28.0},
+		{"pos": Vector2(0.0, 260.0), "scale": Vector2(9.0, 7.5), "alpha": 0.040, "drift": Vector2(40.0, -25.0), "dur": 18.0},
+	]
+	for cfg in mist_configs:
+		var sprite := Sprite2D.new()
+		sprite.texture = mist_tex
+		sprite.position = cfg.pos
+		sprite.scale = cfg.scale
+		sprite.modulate = Color(0.20, 0.65, 0.90, cfg.alpha)
+		atmo_layer.add_child(sprite)
+		var tw := create_tween().set_loops()
+		tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		tw.tween_property(sprite, "position", cfg.pos + cfg.drift, cfg.dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_property(sprite, "position", cfg.pos, cfg.dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
 func _process(delta: float) -> void:
 	if GameManager.player != null and is_instance_valid(GameManager.player):
+		var p_pos: Vector2 = GameManager.player.global_position
 		if dust_particles != null:
-			dust_particles.global_position = GameManager.player.global_position
+			dust_particles.global_position = p_pos
+		if petal_particles != null:
+			petal_particles.global_position = p_pos
 
 		# 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
 		var p = GameManager.player
@@ -217,7 +277,133 @@ func _setup_map_bounds() -> void:
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.add_child(rect)
 
-	# 2. 战台程序化矢量层：中心太极四象大阵 + 四方灵脉槽 + 锁灵结界光墙与青铜镇魂阵角
+	# 2. 地面程序化微细节层：石板裂缝、青苔暗斑、剑痕、碎石、阵外刻痕与深渊剪影（纯静态一次性 _draw）
+	var ground_decor := GroundDecorLayer.new()
+	ground_decor.half_extent = half
+	map.add_child(ground_decor)
+
+	# 3. 战台程序化矢量层：中心太极四象大阵 + 四方灵脉槽 + 锁灵结界光墙与青铜镇魂阵角
 	var arena_vis := ArenaVisualLayer.new()
 	arena_vis.half_extent = half
 	map.add_child(arena_vis)
+
+## 战台四周场景道具点缀（古刹残破石灯笼、插地断剑、崩裂古柱残段）
+## 挂于 EntitiesLayer 参与 y-sort 遮挡；纯装饰，无碰撞、无判定、零光照开销
+func _setup_map_props() -> void:
+	var entities: Node2D = $EntitiesLayer
+	var shadow_tex: Texture2D = preload("res://assets/art/shadow.png")
+	var radial_tex: Texture2D = preload("res://assets/art/light_radial.png")
+
+	var prop_defs: Array[Dictionary] = [
+		# 东北象限：古刹残破石灯笼
+		{
+			"tex": "res://assets/art/prop_stone_lantern.png",
+			"pos": Vector2(165.0, -260.0),
+			"scale": Vector2(0.42, 0.42),
+			"offset": Vector2(0.0, -26.0),
+			"shadow_scale": Vector2(0.85, 0.65),
+			"is_lantern": true,
+		},
+		# 西北象限：插地断剑
+		{
+			"tex": "res://assets/art/prop_broken_sword.png",
+			"pos": Vector2(-160.0, -220.0),
+			"scale": Vector2(0.35, 0.35),
+			"offset": Vector2(0.0, -16.0),
+			"shadow_scale": Vector2(0.75, 0.50),
+			"is_lantern": false,
+		},
+		# 西北偏远：崩裂残柱
+		{
+			"tex": "res://assets/art/prop_broken_pillar.png",
+			"pos": Vector2(-260.0, -200.0),
+			"scale": Vector2(0.44, 0.44),
+			"offset": Vector2(0.0, -18.0),
+			"shadow_scale": Vector2(1.10, 0.70),
+			"is_lantern": false,
+		},
+		# 西南象限：残破石灯笼
+		{
+			"tex": "res://assets/art/prop_stone_lantern.png",
+			"pos": Vector2(-230.0, 240.0),
+			"scale": Vector2(0.42, 0.42),
+			"offset": Vector2(0.0, -26.0),
+			"shadow_scale": Vector2(0.85, 0.65),
+			"is_lantern": true,
+		},
+		# 东南偏东：插地断剑
+		{
+			"tex": "res://assets/art/prop_broken_sword.png",
+			"pos": Vector2(240.0, 60.0),
+			"scale": Vector2(0.35, 0.35),
+			"offset": Vector2(0.0, -16.0),
+			"shadow_scale": Vector2(0.75, 0.50),
+			"is_lantern": false,
+		},
+		# 东南偏下：崩裂残柱
+		{
+			"tex": "res://assets/art/prop_broken_pillar.png",
+			"pos": Vector2(200.0, 260.0),
+			"scale": Vector2(0.44, 0.44),
+			"offset": Vector2(0.0, -18.0),
+			"shadow_scale": Vector2(1.10, 0.70),
+			"is_lantern": false,
+		},
+		# 南侧正中偏左：插地断剑
+		{
+			"tex": "res://assets/art/prop_broken_sword.png",
+			"pos": Vector2(-60.0, 280.0),
+			"scale": Vector2(0.35, 0.35),
+			"offset": Vector2(0.0, -16.0),
+			"shadow_scale": Vector2(0.75, 0.50),
+			"is_lantern": false,
+		},
+	]
+
+	for def in prop_defs:
+		if not ResourceLoader.exists(def.tex):
+			continue
+		var prop_node := Node2D.new()
+		prop_node.position = def.pos
+
+		# 地面投影
+		var shadow := Sprite2D.new()
+		shadow.texture = shadow_tex
+		shadow.scale = def.shadow_scale
+		shadow.modulate = Color(1.0, 1.0, 1.0, 0.55)
+		prop_node.add_child(shadow)
+
+		# 道具贴图主体
+		var sprite := Sprite2D.new()
+		sprite.texture = load(def.tex)
+		sprite.position = def.offset
+		sprite.scale = def.scale
+		prop_node.add_child(sprite)
+
+		# 石灯笼内室幽蓝假光晕（Sprite2D 混合，零 PointLight2D 开销）
+		if def.is_lantern:
+			var faux_glow := Sprite2D.new()
+			faux_glow.texture = radial_tex
+			faux_glow.position = def.offset + Vector2(0.0, 4.0)
+			faux_glow.scale = Vector2(0.32, 0.32)
+			faux_glow.modulate = Color(0.25, 0.75, 1.0, 0.22)
+			prop_node.add_child(faux_glow)
+
+		entities.add_child(prop_node)
+
+## 选人阶段黑幕托底
+## 链式对话框（选角 → 选技能 → 选武器）用「先淡出再淡入下一个」的非重叠时序，
+## 中间空帧会透过 0.88~0.90 的半透明遮罩露出底下冻结的战场（地砖/玩家/HUD），
+## 观感是「闪一下游戏场景」。此常驻纯黑幕布在选人期间盖住世界层 + GameHUD + VirtualJoystick，
+## 对话框在其上淡入淡出，中间帧是纯黑；选完武器在 StartWeaponSelect._choose 淡出回调里隐藏。
+func _setup_stage_backdrop() -> void:
+	var backdrop := ColorRect.new()
+	backdrop.name = "StageBackdrop"
+	backdrop.color = GameStyle.INK
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	backdrop.visible = false
+	var ui: CanvasLayer = $UILayer
+	ui.add_child(backdrop)
+	# 层级：GameHUD 之后、对话框之前 —— 盖住 VirtualJoystick + GameHUD，但被选人对话框盖在下面
+	ui.move_child(backdrop, ui.get_node("GameHUD").get_index() + 1)

@@ -32,7 +32,7 @@ const FIELDS: Dictionary = {
 	"luck": {"name": "幸运", "unit": "pt"},
 	"harvest": {"name": "收益", "unit": "pt"},
 	"spirit_stones": {"name": "金币", "unit": "stone"},
-	"max_hp": {"name": "生命上限", "unit": "pt"},
+	"max_hp": {"name": "最大生命", "unit": "pt"},
 	"hp_heal": {"name": "回复生命", "unit": "pt"},
 	"xp_gain_mult": {"name": "经验获取", "unit": "pct"},
 	"knockback_mult": {"name": "击退力度", "unit": "pct"},
@@ -43,9 +43,10 @@ const FIELDS: Dictionary = {
 	"thorns": {"name": "反震伤害", "unit": "pct"},
 	"melee_damage": {"name": "近战伤害", "unit": "pt"},
 	"ranged_damage": {"name": "远程伤害", "unit": "pt"},
-	"elemental_damage": {"name": "元素伤害", "unit": "pt"},
-	"engineering_damage": {"name": "召唤伤害", "unit": "pt"},
-	"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
+		"elemental_damage": {"name": "元素伤害", "unit": "pt"},
+		"engineering_damage": {"name": "召唤伤害", "unit": "pt"},
+		"contraption_damage": {"name": "机关伤害", "unit": "pt"},
+		"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
 	# 寻宝流三项：幅度来自 apply，兑现点在 WaveSpawner（数量）/ BalanceChest.tier_weights（品质）
 	# / BalanceChest.break_hits（省力）。单位一律 "pt"：读数只出「+1」，量词交给卡面 desc 说清。
 		"chest_count": {"name": "宝箱数量", "unit": "pt"},
@@ -65,8 +66,8 @@ const ELEMENT_NAMES: Dictionary = {
 ## 土豆兄弟式主要属性分组（核心战斗与经济属性）
 const PRIMARY_IDS: Array[String] = [
 	"hp", "regen", "lifesteal", "damage",
-	"melee_dmg", "ranged_dmg", "elemental_dmg", "engineering_dmg",
-	"haste", "crit", "range", "armor", "dodge", "speed", "luck", "harvest"
+		"melee_dmg", "ranged_dmg", "elemental_dmg", "engineering_dmg", "contraption_dmg",
+		"haste", "crit", "range", "armor", "dodge", "speed", "luck", "harvest"
 ]
 
 ## 土豆兄弟式次要属性分组（辅助、特殊效果与统计）
@@ -83,9 +84,10 @@ const STAT_FIELDS: Dictionary = {
 	"damage": ["weapon_damage_mult"],
 	"melee_dmg": ["melee_damage"],
 	"ranged_dmg": ["ranged_damage"],
-	"elemental_dmg": ["elemental_damage"],
-	"engineering_dmg": ["engineering_damage"],
-	"haste": ["attack_speed_mult_mul"],
+		"elemental_dmg": ["elemental_damage"],
+		"engineering_dmg": ["engineering_damage"],
+		"contraption_dmg": ["contraption_damage"],
+		"haste": ["attack_speed_mult_mul"],
 	"crit": ["crit_rate", "crit_mult"],
 	"range": ["attack_range_mult"],
 	"armor": ["armor"],
@@ -115,9 +117,10 @@ const STAT_TITLES: Dictionary = {
 	"damage": "武器伤害",
 	"melee_dmg": "近战伤害",
 	"ranged_dmg": "远程伤害",
-	"elemental_dmg": "元素伤害",
-	"engineering_dmg": "召唤伤害",
-	"haste": "攻击间隔",
+		"elemental_dmg": "元素伤害",
+		"engineering_dmg": "召唤伤害",
+		"contraption_dmg": "机关伤害",
+		"haste": "攻击间隔",
 	"speed": "移动速度",
 	"pickup": "拾取范围",
 	"range": "攻击范围",
@@ -145,9 +148,10 @@ const BRIEF: Dictionary = {
 	"damage": "所有武器伤害的总乘区。",
 	"melee_dmg": "加成近战类武器的基础伤害。",
 	"ranged_dmg": "加成远程类武器的基础伤害。",
-	"elemental_dmg": "加成元素伤害与灼烧、中毒等持续伤害。",
-	"engineering_dmg": "加成环绕类召唤武器的基础伤害。",
-	"haste": "缩短每件武器的攻击间隔。",
+		"elemental_dmg": "加成元素伤害与灼烧、中毒等持续伤害。",
+		"engineering_dmg": "加成环绕类召唤武器的基础伤害。",
+		"contraption_dmg": "加成机关炮台与地面阵盘的基础伤害。",
+		"haste": "缩短每件武器的攻击间隔。",
 	"speed": "角色的移动速度。",
 	"pickup": "金币与经验自动拾取的范围。",
 	"range": "武器索敌与攻击的距离。",
@@ -237,6 +241,9 @@ static func rules(id: String) -> Array[String]:
 		"engineering_dmg":
 			out.append("按点数直接增加所有环绕类召唤武器的基础接触伤害。")
 			out.append("护蝶、冰莲、古钟等召唤武器均享受全额加成，机关师核心流派。")
+		"contraption_dmg":
+			out.append("按点数直接增加所有地面机关炮台与阵盘的基础伤害。")
+			out.append("机关弩、剑阵盘、喷火兽等机关武器均享受全额加成，机关师核心流派。")
 		"haste":
 			out.append("攻击间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
 			out.append("下限 = 攻击间隔 ×%s：到下限后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
@@ -471,7 +478,14 @@ static func stat_tip_rows(id: String) -> Array:
 			rows = [
 				["召唤伤害加成", "%+.0f" % gv, _c(gv)],
 				["当前召唤武器", "%d 尊" % GameManager.drones.size()],
-				["受益武器", "护蝶 / 冰莲 / 古钟"],
+				["受益武器", "护蝶 / 冰莲 / 古钟等"],
+			]
+		"contraption_dmg":
+			var cv: float = float(s.get("contraption_damage", 0.0))
+			rows = [
+				["机关伤害加成", "%+.0f" % cv, _c(cv)],
+				["机关羁绊乘区", _mul(GameManager.synergy_contraption_mult), _c(GameManager.synergy_contraption_mult - 1.0)],
+				["受益武器", "机关弩 / 剑阵盘 / 喷火兽等"],
 			]
 		"haste":
 			rows = [

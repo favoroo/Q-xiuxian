@@ -54,7 +54,7 @@ const DEFS: Dictionary = {
 	"jubaopen": {
 		"name": "储蓄罐", "tier": 1, "price": 14,
 		"icon": "res://assets/art/item_jubaopen.png",
-		"desc": "每波结束白得金币与经验",
+		"desc": "每回合结束白得金币与经验",
 		"apply": {"harvest": 6.0},
 	},
 	"mibao_luopan": {
@@ -166,7 +166,7 @@ const DEFS: Dictionary = {
 		"huichun_hulu": {
 			"name": "回复葫芦", "tier": 3, "price": 48,
 			"icon": "res://assets/art/item_huichun_hulu.png",
-			"desc": "每波结束恢复15%生命",
+			"desc": "每回合结束恢复15%生命",
 			"apply": {"hp_regen": 0.5},
 			"wave_heal_pct": 0.15,
 		},
@@ -392,19 +392,19 @@ const DEFS: Dictionary = {
 				"apply": {"bonus_pierce": 2.0, "ranged_damage": 4.0},
 			},
 
-			# ---- 机关/召唤配套道具 ----
-			"luban_suo": {
-				"name": "鲁班锁", "tier": 2, "price": 28,
-				"icon": "res://assets/art/item_luban_suo.png",
-				"desc": "榫卯严丝合缝",
-				"apply": {"engineering_damage": 3.0},
-			},
-			"jiguan_hexin": {
-				"name": "机簧核心", "tier": 3, "price": 48,
-				"icon": "res://assets/art/item_jiguan_hexin.png",
-				"desc": "机括极速运转",
-				"apply": {"engineering_damage": 4.0, "attack_speed_mult_mul": 0.92},
-			},
+				# ---- 机关/召唤配套道具 ----
+				"luban_suo": {
+					"name": "鲁班锁", "tier": 2, "price": 28,
+					"icon": "res://assets/art/item_luban_suo.png",
+					"desc": "榫卯严丝合缝",
+					"apply": {"contraption_damage": 3.0},
+				},
+				"jiguan_hexin": {
+					"name": "机簧核心", "tier": 3, "price": 48,
+					"icon": "res://assets/art/item_jiguan_hexin.png",
+					"desc": "机括极速运转",
+					"apply": {"contraption_damage": 4.0, "attack_speed_mult_mul": 0.92},
+				},
 
 			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/开箱省力」同一条链路） ----
 			# 兑现点全在 BalanceChest + WaveSpawner._spawn_chests + SpiritChest._destroy；
@@ -623,7 +623,7 @@ const DEFS: Dictionary = {
 			"tupo_guyu": {
 				"name": "突破古玉", "tier": 4, "price": 95,
 				"icon": "res://assets/art/item_hunyuan_zhu.png",
-				"desc": "道果累进：每波结束时永久+3最大生命、+0.5生命回复、+1%吸血\n（每局限购一件）",
+				"desc": "道果累进：每回合结束时永久+3最大生命、+0.5生命回复、+1%吸血\n（每局限购一件）",
 				"apply": {},
 				"unique": true,
 				"wave_end_max_hp": 3.0, "wave_end_regen": 0.5, "wave_end_lifesteal": 0.01,

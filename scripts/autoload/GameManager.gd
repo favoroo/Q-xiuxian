@@ -1,6 +1,6 @@
 extends Node
 
-## 全局状态中枢：经济（灵石）、属性加点、武器持有与合成、波次推进、商店货架
+## 全局状态中枢：经济（金币）、属性加点、武器持有与合成、波次推进、商店货架
 
 signal player_hp_changed(current_hp: float, max_hp: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
@@ -34,11 +34,11 @@ const VICTORY_WAVE: int = 20
 ## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440（880×880，面积约 -23%）：祭坛坐标/灵脉刻槽/太极阵半径需同步改 Main.tscn 与 ArenaVisualLayer
 const MAP_HALF_EXTENT: float = 440.0
 
-## 每次刷新给几个候选：悟道结算与灵石阁货架同一档（2026-10-09 用户指令「改成 5 个」）
+## 每次刷新给几个候选：悟道结算与商店货架同一档（2026-10-09 用户指令「改成 5 个」）
 const UPGRADE_OFFER_COUNT: int = 5
 const SHOP_BASE_SLOTS: int = 5
 const PET_BASE_SLOTS: int = 1         ## 基础灵兽栏位：普通角色默认 1 只，御兽师通过特性加成
-## 每回合悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣灵石
+## 每波悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣金币
 const ALLOC_FREE_REROLLS: int = 1
 
 ## 属性上限（防数值失控）
@@ -46,7 +46,7 @@ const DODGE_CAP: float = 0.6          ## 身法闪避硬上限
 const CRIT_RATE_CAP: float = 0.75     ## 暴击率软上限
 const ATTACK_SPEED_FLOOR: float = 0.3 ## 施法间隔下限（攻速加点的地板，防止叠成连发）
 const LIFESTEAL_MAX_PER_SEC: int = 3  ## 噬元每秒最多触发次数（防高频武器无限续航）
-const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 灵韵复利增长截止波次
+const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 收益复利增长截止波次
 
 ## 可注入随机源：局内自动播种；单测里 `GameManager.rng.seed = N` 后商店/抽取即可确定性复现。
 ## 全项目凡是「玩法相关」的随机都必须走它，不要用全局 randf()，否则测试无法钉死结果。
@@ -99,7 +99,7 @@ const PROGRESS_PATH := "user://progress.cfg"
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
 var unlocked_cultivators: Array = []   ## 已解锁修士 ID 列表
-var unlocked_items: Array = []         ## 已解锁法宝 ID 列表
+var unlocked_items: Array = []         ## 已解锁道具 ID 列表
 var unlocked_achievements: Array = []  ## 已达成的成就 ID 列表
 var career_stats: Dictionary = {
 	"total_runs": 0,
@@ -162,7 +162,7 @@ func _save_progress() -> void:
 func is_cultivator_unlocked(cid: String) -> bool:
 	return cid in unlocked_cultivators
 
-## 检查法宝是否已解锁入池
+## 检查道具是否已解锁入池
 func is_item_unlocked(item_id: String) -> bool:
 	return item_id in unlocked_items
 
@@ -223,7 +223,8 @@ var weapon_damage_mult: float = 1.0
 var melee_damage: float = 0.0       ## 近战伤害：加成所有近战挥扫法器
 var ranged_damage: float = 0.0      ## 远程伤害：加成所有飞射弹道法器
 var elemental_damage: float = 0.0   ## 元素伤害：加成符箓、雷法及灼烧/剧毒跳字伤害
-var engineering_damage: float = 0.0 ## 御灵伤害：加成所有环绕护体灵宝
+var engineering_damage: float = 0.0 ## 召唤伤害：加成所有环绕护体灵宝
+var contraption_damage: float = 0.0 ## 机关伤害：加成所有地面机关炮台与阵盘
 var attack_speed_mult: float = 1.0
 var move_speed_mult: float = 1.0
 var pickup_range_mult: float = 1.0
@@ -234,9 +235,9 @@ var crit_rate: float = 0.05
 var crit_mult: float = 1.5
 var dodge: float = 0.0        ## 身法：闪避概率（硬上限 DODGE_CAP）
 var lifesteal: float = 0.0    ## 噬元：命中回复 1 点气血的概率
-var luck: float = 0.0         ## 福缘：提升高稀有度悟道与商店亲和权重
-var harvest: float = 0.0      ## 灵韵：每波结束无偿获得等额灵石+修为，并自我复利
-var xp_gain_mult: float = 1.0 ## 悟性：修为获取倍率（只放大修为，不放大灵石）
+var luck: float = 0.0         ## 幸运：提升高稀有度悟道与商店亲和权重
+var harvest: float = 0.0      ## 收益：每波结束无偿获得等额金币+经验，并自我复利
+var xp_gain_mult: float = 1.0 ## 经验获取倍率（只放大经验，不放大金币）
 var knockback_mult: float = 1.0 ## 震退：法器击退力度倍率
 var elite_damage: float = 0.0 ## 斩将：对精英/Boss 的额外伤害加成
 var free_rerolls: int = 0     ## 通玄：每波免费重掷货架次数
@@ -245,7 +246,7 @@ var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id�
 var chest_count_bonus: int = 0   ## 寻宝：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
 var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权重（BalanceChest.tier_weights 消费）
 var chest_break_bonus: int = 0   ## 开箱省力：宝箱砸开所需击数下调几许（BalanceChest.break_hits 消费）
-var chest_item_grants: int = 0   ## 本局玉匣已送出的法宝件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
+var chest_item_grants: int = 0   ## 本局玉匣已送出的道具件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
 
 # 灵兽系统属性（随行伙伴）
 var pet_damage_mult: float = 1.0       ## 灵兽伤害倍率
@@ -261,13 +262,13 @@ var spirit_threshold_adj: int = 0  ## 符阵灵童：御灵羁绊门槛下移
 var dodge_cap_bonus: float = 0.0   ## 魅影：闪避硬上限上移（上限 = DODGE_CAP + 本值）
 var weapon_slots_override: int = 0 ## 独臂刀圣：上阵槽位上限覆盖（0 = 用 WeaponData.MAX_SLOTS）
 var enemy_count_mult: float = 1.0  ## 狂战蛮修：妖潮规模倍率（WaveSpawner 消费）
-var harvest_decay: float = 0.0     ## 狂战蛮修：每波灵韵流失点数
-var xp_require_mult: float = 1.0   ## 夺舍散人：升级修为需求倍率
-var item_price_mult: float = 1.0   ## 多宝道人：法宝价格乘区（叠加在商店价格系数之上）
+var harvest_decay: float = 0.0     ## 蛮兵：每波收益流失点数
+var xp_require_mult: float = 1.0   ## 学者：升级经验需求倍率
+var item_price_mult: float = 1.0   ## 多宝道人：道具价格乘区（叠加在商店价格系数之上）
 var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
 var contraption_threshold_adj: int = 0  ## 机关师：机关羁绊门槛下移
-var stone_interest_rate: float = 0.0    ## 守财奴：波末灵石结息比率
-var stone_interest_cap: int = 15        ## 守财奴：波末灵石结息上限
+var stone_interest_rate: float = 0.0    ## 守财奴：波末金币结息比率
+var stone_interest_cap: int = 15        ## 守财奴：波末金币结息上限
 var on_hit_damage_bonus: float = 0.0    ## 嗜血魔修：受击单层增伤
 var on_hit_damage_cap_stacks: int = 10  ## 嗜血魔修：增伤最大层数
 var on_hit_damage_stacks: int = 0
@@ -276,11 +277,11 @@ var guard_stance: float = 0.0           ## 守卫：盾势机制开关（>0 启�
 var shield_charge: float = 0.0          ## 守卫：盾势槽当前蓄能（Player.take_damage 写入，蓄满当帧爆发清空）
 var elixir_pool: float = 0.0            ## 药王：药池当前存量（治疗溢出入池，服丹消耗；数值全在 ElixirData）
 var heal_orb_chance: float = 0.0        ## 灵植夫：敌人死亡额外掉回复珠概率（EnemyBase 掉落块消费）
-var heal_overflow_mult: float = 1.0     ## 灵植夫：回复珠溢出折灵石倍率（HealOrb._collect 消费）
+var heal_overflow_mult: float = 1.0     ## 灵植夫：回复珠溢出折金币倍率（HealOrb._collect 消费）
 var alloc_offer_bonus: int = 0          ## 学者：悟道候选数加成（AllocSession.roll_alloc_offers 消费）
 var alloc_free_reroll_bonus: int = 0    ## 学者：每回合悟道免费刷新加成（AllocSession.open_alloc_session 消费）
-var collection_damage_per_unique: float = 0.0  ## 收藏家：每持有一种不同法宝的全伤害加成
-var unique_item_count: int = 0          ## 当前持有不同法宝种数（add_item/consume_item 两写点维护）
+var collection_damage_per_unique: float = 0.0  ## 收藏家：每持有一种不同道具的全伤害加成
+var unique_item_count: int = 0          ## 当前持有不同道具种数（add_item/consume_item 两写点维护）
 var frenzy_enabled: float = 0.0       ## 狂战士：战意机制开关（>0 启用；每层幅度/上限/流失全在 FrenzyData）
 var frenzy_stacks: float = 0.0          ## 狂战士：战意当前层数（register_kill 攒，_process 计时流失）
 var frenzy_idle: float = 0.0            ## 距上次击杀的秒数（战意流失宽限计时）
@@ -290,7 +291,7 @@ var crowd_damage_per_enemy: float = 0.0  ## 蛮兵·陷阵：感知圈内每只�
 var crowd_damage_cap: float = 0.0        ## 蛮兵·陷阵：加成总上限
 var crowd_damage_radius: float = 0.0     ## 蛮兵·陷阵：感知半径（0 = 未启用，Player 不数怪）
 var nearby_enemy_count: int = 0          ## 陷阵感知圈内的妖兽数（Player 按 0.2s 节流写入）
-var stone_damage_per_100: float = 0.0    ## 守财奴·财可通神：每持 100 灵石的全伤害加成
+var stone_damage_per_100: float = 0.0    ## 守财奴·财可通神：每持 100 金币的全伤害加成
 var stone_damage_cap: float = 0.0        ## 守财奴·财可通神：加成总上限
 var kill_cd_reduction_normal: float = 0.0  ## 绝尘·斩灭凝神：击杀普通怪返还的神通冷却（秒）
 var kill_cd_reduction_elite: float = 0.0   ## 绝尘·斩灭凝神：击杀精英怪返还的神通冷却（秒）
@@ -299,7 +300,7 @@ var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔�
 var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
-var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的修为门槛链（xp_require_mult 只作用于显示/判定值）
+var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的经验门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
 # 与加点/羁绊乘区隔离，到期由 Player 精确回 1.0，互不污染
@@ -315,7 +316,7 @@ var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就�
 var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（FloatingWeapon._final_damage 消费，到期由 Player 精确回 1.0）
 
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
-var stat_bonus_pierce: int = 0      ## 升级/法宝：弹丸额外穿透基础
+var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础
 var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量
 var bonus_pierce: int = 0           ## 弹丸额外穿透合计（stat + synergy）
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
@@ -347,14 +348,14 @@ var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如
 var shop_tag_filter: Array = []    ## 非空时这些 tag 法器权重大幅提升，其余法器仍以低概率漏出（剑痴等流派偏好）
 var _no_main_tag_waves: int = 0    ## 连续未刷出主流派法器的波数（保底计数）
 
-# 波后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣灵石，价格随波次与已刷次数上升）
+# 波后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣金币，价格随波次与已刷次数上升）
 var alloc_offers: Array[Dictionary] = []
 var alloc_points_total: int = 0   ## 本次结算开局时攒下的点数（面板写「待加点 2/共 3」用）
 var alloc_reroll_cost: int = 2
 var alloc_reroll_count: int = 0
 var alloc_reroll_free_left: int = 0
 
-## 已持有法宝（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
+## 已持有道具（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
 
 ## 已持有灵兽（随行伙伴）的 id 列表：上限受 max_pet_slots() 约束，数据定义见 PetData
@@ -401,7 +402,7 @@ func _process(delta: float) -> void:
 func add_experience(amount: int) -> void:
 	if is_game_over:
 		return
-	# 悟性只放大修为，灵石始终按原价入账（否则经济会双重受益）
+	# 经验获取只放大经验，金币始终按原价入账（否则经济会双重受益）
 	experience += int(round(float(amount) * xp_gain_mult))
 	spirit_stones += amount
 	AudioManager.play_sfx("gem_pickup")
@@ -454,7 +455,7 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 		touch_peak_stones()
 	stats_updated.emit(kills, game_time, spirit_stones)
 
-## 单局灵石峰值记账（成就判定用）：所有改 spirit_stones 后想记峰值的地方都走这个
+## 单局金币峰值记账（成就判定用）：所有改 spirit_stones 后想记峰值的地方都走这个
 func touch_peak_stones() -> void:
 	if spirit_stones > peak_stones:
 		peak_stones = spirit_stones
@@ -483,7 +484,7 @@ func apply_upgrade(upgrade_id: String) -> void:
 	})
 	upgrade_applied.emit(upgrade_id)
 
-## 属性字段统一落地入口：悟道加点（apply_upgrade）与法宝（add_item）共用同一条链路，
+## 属性字段统一落地入口：悟道加点（apply_upgrade）与道具（add_item）共用同一条链路，
 ## 白名单与落地规则在 StatSystem（2026-10-11 抽离）
 func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 	StatSystem.apply_stat_fields(self, apply, source)
@@ -617,6 +618,7 @@ func get_player_stat_dict() -> Dictionary:
 		"ranged_damage": ranged_damage,
 		"elemental_damage": elemental_damage,
 		"engineering_damage": engineering_damage + synergy_engineering_damage,
+		"contraption_damage": contraption_damage,
 		"harvest": harvest,
 		"pet_damage_mult": pet_damage_mult,
 		"pet_effect_mult": pet_effect_mult,
@@ -641,11 +643,11 @@ func try_lifesteal() -> void:
 		_lifesteal_procs += 1
 		player.heal(1.0, true)
 
-## 波间灵韵结算：无偿发放等额灵石+修为；狂战蛮修的杀气让灵韵每波流失；随后灵韵自我复利（增长截止波次见常量区）
+## 波间收益结算：无偿发放等额金币+经验；蛮兵的杀气让收益每波流失；随后收益自我复利（增长截止波次见常量区）
 ## budget_comp_exp：刷怪预算未花完部分的折算经验补差（WaveSpawner 传入，BalanceEconomy.budget_compensation_exp），
-## 与灵韵一并到账、同一句播报 —— 减潮不减收入，购买力与旧口径持平
+## 与收益一并到账、同一句播报 —— 减潮不减收入，购买力与旧口径持平
 ## early_secs：本波提前收尾时还剩几秒（WaveSpawner 传入，0 = 表走完）。余时按
-## BalanceEconomy.early_clear_stones 折成金币，**只进金币不进修为**（提前清场不该顺手把升级也加速）。
+## BalanceEconomy.early_clear_stones 折成金币，**只进金币不进经验**（提前清场不该顺手把升级也加速）。
 ## 三笔并成一句播报：横幅只有一个 Label，同帧发两条只会留下后一条，等于把前一个数吞掉。
 func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 	var gain := GameBalance.harvest_gain(harvest)
@@ -669,12 +671,12 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 		if interest > 0:
 			spirit_stones += interest
 			stats_updated.emit(kills, game_time, spirit_stones)
-			announcement_triggered.emit("✦ 金山结息 · 获得 %d 枚金币 ✦" % interest)
-	# 回春葫芦等法宝的波末回血 hook
+			announcement_triggered.emit("✦ 金币结息 · 获得 %d 枚金币 ✦" % interest)
+	# 回复葫芦等道具的波末回血 hook
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
 		player.heal(player.max_health * heal_pct)
-	# 突破古玉等法宝的波末永久成长 hook
+	# 突破古玉等道具的波末永久成长 hook
 	var wave_hp := item_hook_sum("wave_end_max_hp")
 	var wave_reg := item_hook_sum("wave_end_regen")
 	var wave_ls := item_hook_sum("wave_end_lifesteal")
@@ -705,12 +707,12 @@ func add_pet(pet_id: String) -> bool:
 func sell_pet(pet_id: String) -> bool:
 	return PetSystem.sell_pet(self, pet_id)
 
-# ---------------- 法宝（被动道具） ----------------
+# ---------------- 道具（被动道具） ----------------
 
 func has_item(item_id: String) -> bool:
 	return item_id in items
 
-## 购入法宝：属性走 _apply_stat_fields（与悟道同一条链路）；unique 法宝重复购买会被拒绝
+## 购入道具：属性走 _apply_stat_fields（与悟道同一条链路）；unique 道具重复购买会被拒绝
 func add_item(item_id: String) -> bool:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
@@ -724,10 +726,10 @@ func add_item(item_id: String) -> bool:
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	return true
 
-## 玉匣破开送法宝：与灵石阁同一个 roller（ItemData.pick_id），档位权重、福缘、已持有 unique
+## 玉匣破开送道具：与商店同一个 roller（ItemData.pick_id），档位权重、幸运、已持有 unique
 ## 去重、未解锁不入池这些口径全部照旧 —— 白送的那件和花钱买的那件必须是同一种东西。
 ## 每局上限见 BalanceChest.JADE_ITEM_GRANT_CAP：到顶返回 false，由调用方落回退回奖励。
-## 公告必发：玩家得知道这口匣子开出了什么，不然"送法宝"这条兑现不出来就只能靠猜。
+## 公告必发：玩家得知道这口匣子开出了什么，不然"送道具"这条兑现不出来就只能靠猜。
 func chest_grant_item() -> bool:
 	if chest_item_grants >= GameBalance.CHEST_JADE_ITEM_GRANT_CAP:
 		return false
@@ -740,13 +742,13 @@ func chest_grant_item() -> bool:
 	announcement_triggered.emit("✦ 玉匣破开 · 得【%s】✦" % String(ItemData.get_def(id).get("name", id)))
 	return true
 
-## 消耗一件法宝（替死傀儡这类一次性机制用），返回是否真的消耗了
+## 消耗一件道具（替死傀儡这类一次性机制用），返回是否真的消耗了
 func consume_item(item_id: String) -> bool:
 	var i := items.find(item_id)
 	if i < 0:
 		return false
 	items.remove_at(i)
-	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种法宝，种数 -1
+	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种道具，种数 -1
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)
 	return true

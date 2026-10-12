@@ -80,11 +80,12 @@ var _retarget_phase: float = 0.0
 @onready var slash_sprite: Sprite2D = $SlashEffect
 
 var muzzle_flash: Sprite2D
+var aura_sprite: Sprite2D = null
+var _base_sprite_scale := Vector2(0.55, 0.55)
 
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
 var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
-const LightningBoltScript = preload("res://scripts/weapons/LightningBolt.gd")
 
 var active_turrets: Array[TurretUnit] = []
 
@@ -135,10 +136,40 @@ func _ready() -> void:
 	if def.has("icon"):
 		sprite.texture = load(def["icon"])
 	# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
-	muzzle_len = tip_local.length() * sprite.scale.x
-	muzzle_point.position = Vector2(muzzle_len, 0.0)
-	_apply_facing(rotation)
-	_setup_muzzle_flash()
+		muzzle_len = tip_local.length() * sprite.scale.x
+		muzzle_point.position = Vector2(muzzle_len, 0.0)
+		_apply_facing(rotation)
+		_setup_muzzle_flash()
+		_setup_aura()
+
+func _setup_aura() -> void:
+	aura_sprite = Sprite2D.new()
+	var tex := load("res://assets/art/light_radial.png") as Texture2D
+	if tex == null:
+		return
+	aura_sprite.texture = tex
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	aura_sprite.material = mat
+	aura_sprite.scale = Vector2.ONE * 0.42
+	aura_sprite.modulate = _get_aura_color()
+	aura_sprite.modulate.a = 0.12
+	aura_sprite.z_index = -1
+	add_child(aura_sprite)
+
+func _get_aura_color() -> Color:
+	var tags: Array = WeaponData.tags_of(weapon_def_id)
+	if tags.has("fire"):
+		return Color(1.0, 0.42, 0.15)
+	elif tags.has("ice"):
+		return Color(0.35, 0.75, 1.0)
+	elif tags.has("thunder"):
+		return Color(0.65, 0.45, 1.0)
+	elif tags.has("wood") or tags.has("poison"):
+		return Color(0.35, 0.85, 0.45)
+	elif tags.has("earth"):
+		return Color(0.85, 0.65, 0.35)
+	return Color(0.95, 0.85, 0.50)
 
 ## 朝向唯一入口：节点 rotation = 真实瞄准角（发射帧），贴图自己做补偿。
 ## - 会转的法器：贴图补掉 art_angle ⇒ 画出来的剑尖必然落在发射帧 +X 上。
@@ -189,11 +220,15 @@ func _setup_muzzle_flash() -> void:
 	muzzle_flash.visible = false
 	add_child(muzzle_flash)
 
-## 武器本体短促亮闪（近战挥砍/远程开火共用）
+## 武器本体短促亮闪（近战挥砍/远程开火共用，微光圈同步亮起）
 func _flash_sprite(color: Color, dur: float) -> void:
 	sprite.modulate = color
 	var ftw := create_tween()
 	ftw.tween_property(sprite, "modulate", Color.WHITE, dur)
+	if aura_sprite != null:
+		aura_sprite.modulate.a = 0.45
+		var atw := create_tween()
+		atw.tween_property(aura_sprite, "modulate:a", 0.12, dur)
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -217,18 +252,24 @@ func _process(delta: float) -> void:
 					_retarget_phase = RETARGET_INTERVAL
 					current_target = _find_target()
 
-	# 2. 动态轨道：有目标时沿轨道滑向目标方位（自动换位），无目标时回归基础槽位
-	if not is_attacking:
-		var player = GameManager.player
-		var desired_angle = base_angle
-		var track_speed = 4.0
-		if current_target != null and player != null:
-			desired_angle = (current_target.global_position - player.global_position).angle() + spread_angle
-			track_speed = 8.0
-		dynamic_angle = lerp_angle(dynamic_angle, desired_angle, minf(delta * track_speed, 1.0))
-		var orbit_pos = Vector2(cos(dynamic_angle) * orbit_extents.x, sin(dynamic_angle) * orbit_extents.y)
-		var bob_y = sin(bob_phase) * 3.0
-		position = position.lerp(orbit_pos + Vector2(0, bob_y), minf(delta * 14.0, 1.0))
+		# 2. 动态轨道：有目标时沿轨道滑向目标方位（自动换位），无目标时回归基础槽位
+		if not is_attacking:
+			player = GameManager.player
+			var desired_angle = base_angle
+			var track_speed = 4.0
+			if current_target != null and player != null:
+				desired_angle = (current_target.global_position - player.global_position).angle() + spread_angle
+				track_speed = 8.0
+			dynamic_angle = lerp_angle(dynamic_angle, desired_angle, minf(delta * track_speed, 1.0))
+			var orbit_pos = Vector2(cos(dynamic_angle) * orbit_extents.x, sin(dynamic_angle) * orbit_extents.y)
+			var bob_y = sin(bob_phase) * 3.0
+			position = position.lerp(orbit_pos + Vector2(0, bob_y), minf(delta * 14.0, 1.0))
+
+			# 待机器身微呼吸与灵光脉动
+			var breath := sin(bob_phase) * 0.02
+			sprite.scale = _base_sprite_scale * (1.0 + breath)
+			if aura_sprite != null:
+				aura_sprite.modulate.a = 0.12 + sin(bob_phase) * 0.05
 
 	# 3. 朝向：有目标面向目标；无目标朝轨道外（贴图补偿与镜像都在 _apply_facing 一处算）
 	if not is_attacking:
@@ -427,13 +468,10 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
 	var player: Node2D = GameManager.player
 	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
-		var bolt = LightningBoltScript.new()
-		bolt.from = muzzle_point.global_position
-		bolt.to = target_pos
-		bolt.width_mult = 1.0 + 0.18 * float(star - 1)
-		if def.has("burst_tint"):
-			bolt.tint = def["burst_tint"]
-		get_tree().current_scene.add_child(bolt)
+		var bolt := LightningBolt.acquire(get_tree().current_scene)
+		var w_mult := 1.0 + 0.18 * float(star - 1)
+		var b_tint: Color = def.get("burst_tint", LightningBolt.GLOW_COLOR)
+		bolt.activate(muzzle_point.global_position, target_pos, b_tint, w_mult)
 
 	# 落雷走对象池（2026-10-11 第 6 波卡顿优化）：acquire → 写字段 → activate 起爆
 	var burst = ThunderBurst.acquire(get_tree().current_scene, burst_scene)

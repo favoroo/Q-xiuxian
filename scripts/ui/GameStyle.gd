@@ -22,9 +22,9 @@ const INK_TEXT := Color("000000")   # 亮面/彩色面上的黑字
 const CHALK := Color("f2efe4")      # 暗底亮字（与 PAPER 同值；语义保留：用于世界空间/暗色块）
 
 # —— 角色色（色即功能，按黑底调亮）——
-const GOLD := Color("55a0ff")       # 主蓝 = 主行动/选中/标题带
-const GOLD_EDGE := Color("a9d3ff")  # 霜华亮蓝
-const GOLD_DK := Color("184888")    # 幽夜深蓝（立体厚底与阴影）
+const GOLD := Color("387ce6")       # 主蓝 = 霁蓝·青金宝石蓝（主行动/选中/标题带，通透扎实不发暗）
+const GOLD_EDGE := Color("8ab7fb")  # 霜华亮蓝（描边/高光流光）
+const GOLD_DK := Color("1a438c")    # 幽夜深蓝（立体厚底与阴影）
 const JADE := Color("ffd23f")       # 点缀黄 = 灵石货币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
 const JADE_EDGE := Color("ffe9a8")
 const JADE_DK := Color("8f6a14")

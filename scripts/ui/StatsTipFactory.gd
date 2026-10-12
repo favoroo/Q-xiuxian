@@ -2,7 +2,7 @@ class_name StatsTipFactory
 extends RefCounted
 
 ## 人物属性面板详情卡工厂
-## 从 PlayerStatsDialog 抽离，集中承载道统、法宝、空槽位、法器及悟道历史的 DetailTip 数据组装。
+## 从 PlayerStatsDialog 抽离，集中承载道统、道具、空槽位、武器及悟道历史的 DetailTip 数据组装。
 
 static func _c(v: float) -> Color:
 	if v > 0.0001:
@@ -67,7 +67,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 		"foot": "加成与代偿开局即生效、全程不变；具体数值已计入左侧属性行与各条详解。",
 	})
 
-## 法宝详情卡
+## 道具详情卡
 static func open_item_tip(host: Control, anchor: Control, item_id: String, count: int) -> Control:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
@@ -101,7 +101,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 		"foot": "在波间商店可继续购置更多奇珍。",
 	})
 
-## 空/封印法器位详情卡
+## 空/封印武器位详情卡
 static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> Control:
 	var max_slots: int = GameManager.max_weapon_slots()
 	var locked: bool = index >= max_slots
@@ -120,9 +120,9 @@ static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> C
 		"foot": "波间在商店买武器即可补上空槽。",
 	})
 
-## 法器详情卡
+## 武器详情卡
 ## benefit_note：从「受益装备」那一排图标点进来时带上的一句话（这条悟道走的哪条链路），
-## 其余入口（HUD 法器栏 / 属性面板 / 商店）留空，卡片内容一字不差是同一张。
+## 其余入口（HUD 武器栏 / 属性面板 / 商店）留空，卡片内容一字不差是同一张。
 static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_stash: bool,
 		benefit_note: String = "") -> Control:
 	var id: String = String(w.get("id", ""))
@@ -152,7 +152,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 			var cnt: int = GameManager.get_tag_count(String(t))
 			syn_parts.append("%s(%d/6)" % [sinfo.get("name", t), cnt])
 
-	# 逐行列出的乘区必须能乘回头条「单发伤害」，所以多法器分流与机关羁绊两行不能省
+	# 逐行列出的乘区必须能乘回头条「单发伤害」，所以多武器分流与机关羁绊两行不能省
 	# （2026-10-11：以前这两档根本没进 per_hit，面板列出来的因子乘完比跳字高一大截）。
 	# 每个数前面都带上它自己的名字（2026-10-11 用户「看不懂」口径）：旧写法
 	# 「全局×羁绊    ×1.25 × ×1.20」两个乘号连排，玩家分不清哪个数是全局、哪个是羁绊；
@@ -170,7 +170,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		var amp_stacks := int(roundf((GameManager.shadow_amp_mult - 1.0) / ShadowStepData.AMP_PER_STACK))
 		factor_rows.append(["影层增伤", "%s（影 %d 层）" % [_mul(GameManager.shadow_amp_mult), amp_stacks],
 				_c(GameManager.shadow_amp_mult - 1.0)])
-	factor_rows.append(["多法器分流", "上阵 %d 把 · 每把 %s" % [GameManager.slots_used(), _mul(split)],
+	factor_rows.append(["多武器分流", "上阵 %d 把 · 每把 %s" % [GameManager.slots_used(), _mul(split)],
 			_c(split - 1.0)])
 	if WeaponDamageReadout.is_turret(def):
 		var contraption := WeaponDamageReadout.contraption_mult()
@@ -195,10 +195,10 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 
 	var notes: Array[String] = [
 		# 公式句保持原有长度：详情卡定宽 306、notes 走 autowrap，多折一行就把卡底往下推
-		# （BenefitIconTapCheck 按「卡不许出屏」判）。行名换成「多法器分流」多的两个字，
-		# 用把「全局法伤」缩成「全局」抵平 —— 这两个乘区本来就有各自的行按名字列着，不丢信息。
-		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局 × 羁绊 × 角色 × 五行 × 多法器分流；" \
-				+ "暴击与斩将按目标另算。",
+		# （BenefitIconTapCheck 按「卡不许出屏」判）。行名换成「多武器分流」多的两个字，
+		# 用把「全局武器伤害」缩成「全局」抵平 —— 这两个乘区本来就有各自的行按名字列着，不丢信息。
+		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局 × 羁绊 × 角色 × 五行 × 多武器分流；" \
+				+ "暴击与对精英伤害按目标另算。",
 		WeaponDamageReadout.bonus_bill_text(id, star),
 		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],

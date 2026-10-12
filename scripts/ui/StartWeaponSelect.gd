@@ -1,7 +1,7 @@
 class_name StartWeaponSelect
 extends Control
 
-## 开局本命法器六选一：选择后才开始第一波
+## 开局本命武器六选一：选择后才开始第一波
 
 ## 卡片宽按屏宽现算：6 卡 + 间距 + 面板内边距必须在最窄屏（720）也摆得下。
 ## （旧版写死 130：720 宽整排要 830，左右出屏；判据量到的是入场动画中间帧缩了
@@ -45,7 +45,6 @@ func _ready() -> void:
 	_setup_header_bar()
 	GameStyle.label(title_label, 30, GameStyle.PAPER, 0, GameStyle.INK, true)
 	GameStyle.label(sub_label, 14, GameStyle.PAPER_DIM)
-	sub_label.text = "选择一件初始武器开始战斗"
 	GameStyle.label(hint_label, 12, GameStyle.GREY)
 	hint_label.text = "◆ 元素搭配、武器共鸣：集齐三把同名同星武器可在商店手动升星 ◆"
 
@@ -121,7 +120,7 @@ func show_select() -> void:
 func _desc_w() -> float:
 	return _card_w - CARD_PAD_X * 2.0
 
-## 判断某件法器是否契合当前所选道统（含 allowed_tags 或 tag_damage 加成）
+## 判断某件武器是否契合当前所选道统（含 allowed_tags 或 tag_damage 加成）
 static func is_recommended_for_cultivator(w_id: String, cid: String) -> bool:
 	var wdef: Dictionary = WeaponData.get_def(w_id)
 	var cdef: Dictionary = CultivatorData.get_def(cid)
@@ -277,5 +276,17 @@ func _choose(w_id: String) -> void:
 	tw.tween_callback(func():
 		visible = false
 		_transitioning = false
+		# 开局：隐藏选人阶段黑幕托底，显示战斗 HUD 与摇杆，与解暂停同帧，避免幕布残留盖住游戏画面
+		var parent_node = get_parent()
+		if parent_node != null:
+			var backdrop = parent_node.get_node_or_null("StageBackdrop")
+			if backdrop != null:
+				backdrop.visible = false
+			var hud = parent_node.get_node_or_null("GameHUD")
+			if hud != null:
+				hud.visible = true
+			var joy = parent_node.get_node_or_null("VirtualJoystick")
+			if joy != null:
+				joy.visible = true
 		get_tree().paused = false
 	)

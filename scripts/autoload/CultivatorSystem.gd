@@ -28,6 +28,7 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.on_hit_damage_cap_stacks = int(mods.get("on_hit_damage_cap_stacks", 10))
 	gm.elemental_damage += float(mods.get("elemental", 0.0))
 	gm.engineering_damage += float(mods.get("engineering", 0.0))
+	gm.contraption_damage += float(mods.get("contraption", 0.0))
 	gm.hp_regen += float(mods.get("hp_regen", 0.0))
 	gm.weapon_slots_override = int(mods.get("weapon_slots_max", 0))
 	gm.enemy_count_mult = float(mods.get("enemy_count_mult", 1.0))

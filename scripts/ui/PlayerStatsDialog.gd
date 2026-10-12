@@ -30,6 +30,7 @@ var _melee_val_lbl: Label
 var _ranged_val_lbl: Label
 var _elem_val_lbl: Label
 var _eng_val_lbl: Label
+var _contraption_val_lbl: Label
 var _haste_val_lbl: Label
 var _crit_val_lbl: Label
 var _range_val_lbl: Label
@@ -246,6 +247,11 @@ func refresh() -> void:
 	var eng_v: float = float(stats["engineering_damage"])
 	_eng_val_lbl.text = "%s%.0f" % ["+" if eng_v > 0 else "", eng_v]
 	_eng_val_lbl.add_theme_color_override("font_color", _c_row(eng_v))
+
+	if _contraption_val_lbl != null:
+		var contr_v: float = float(stats.get("contraption_damage", 0.0))
+		_contraption_val_lbl.text = "%s%.0f" % ["+" if contr_v > 0 else "", contr_v]
+		_contraption_val_lbl.add_theme_color_override("font_color", _c_row(contr_v))
 
 	var cdr: float = float(stats["cdr_pct"])
 	_haste_val_lbl.text = "%s%.1f%%" % ["+" if cdr > 0 else "", cdr]

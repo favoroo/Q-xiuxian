@@ -61,7 +61,7 @@ func _build_ui() -> void:
 	margin.add_child(vbox)
 
 	var title := GameStyle.label(Label.new(), 30, GameStyle.PAPER, 0, GameStyle.INK, true)
-	title.text = "暂  停"
+	title.text = "暂 停"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
@@ -81,7 +81,7 @@ func _build_ui() -> void:
 
 	# 六颗键分三排：整列排下去面板要 593 高 > 540 屏高，
 	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
-	var stats_btn := _mk_btn("人 物 属 性", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
+	var stats_btn := _mk_btn("角 色 属 性", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
 	var manual_btn := _mk_btn("教 程 手 册", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	manual_btn.pressed.connect(_on_manual_pressed)
@@ -176,7 +176,6 @@ func _on_check_update_pressed() -> void:
 		UpdateManager.show_update_dialog(UpdateManager.pending_update)
 		return
 	if UpdateManager.is_checking:
-		_update_btn.text = "正在检查更新..."
 		UpdateManager.show_toast("正在检查最新版本，请稍候...", GameStyle.GOLD)
 		return
 	_update_btn.text = "正在检查更新..."

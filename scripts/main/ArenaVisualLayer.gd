@@ -13,6 +13,7 @@ const REDRAW_INTERVAL := 0.05
 var _redraw_timer: float = 0.0
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	z_index = 1  # 位于地砖 TextureRect 之上，实体层与判定物之下
 
 func _process(delta: float) -> void:

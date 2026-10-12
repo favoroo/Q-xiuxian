@@ -90,6 +90,8 @@ static func simulate_stats(stats: Dictionary, element_damage: Dictionary, apply:
 				stats["elemental_damage"] = float(stats.get("elemental_damage", 0.0)) + v
 			"engineering_damage":
 				stats["engineering_damage"] = float(stats.get("engineering_damage", 0.0)) + v
+			"contraption_damage":
+				stats["contraption_damage"] = float(stats.get("contraption_damage", 0.0)) + v
 			"attack_speed_mult_mul":
 				stats["attack_speed_mult"] = maxf(aspd_floor, float(stats.get("attack_speed_mult", 1.0)) * v)
 			"armor":
@@ -267,10 +269,10 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 	if b_eco >= 0.04:
 		if d_harvest > 0.0:
 			reasons.append("收益 +%s/波 · 余 %d 波" % [_num(d_harvest), remaining])
-			elif d_luck > 0.0:
-				reasons.append("幸运 +%s" % _num(d_luck))
-			elif d_xp > 0.0:
-				reasons.append("经验获取 +%d%%" % _pct(d_xp))
+		elif d_luck > 0.0:
+			reasons.append("幸运 +%s" % _num(d_luck))
+		elif d_xp > 0.0:
+			reasons.append("经验获取 +%d%%" % _pct(d_xp))
 		elif d_chest_cnt > 0.0:
 			reasons.append("宝箱 +%d 口/波 · 余 %d 波" % [int(d_chest_cnt), remaining])
 		elif d_chest_q > 0.0:
@@ -460,9 +462,12 @@ static func preferred_keys(mods: Dictionary, allowed_tags: Array) -> Dictionary:
 		pref["harvest"] = w_harvest
 		pref["luck"] = w_harvest
 		pref["spirit_stones"] = w_harvest
-	if float(mods.get("engineering", 0.0)) > 0.0:
-		pref["engineering_damage"] = "他初始%s +%s" % [
-			StatInfoData.field_name("engineering_damage"), _num(float(mods["engineering"]))]
+		if float(mods.get("engineering", 0.0)) > 0.0:
+			pref["engineering_damage"] = "他初始%s +%s" % [
+				StatInfoData.field_name("engineering_damage"), _num(float(mods["engineering"]))]
+		if float(mods.get("contraption", 0.0)) > 0.0:
+			pref["contraption_damage"] = "他初始%s +%s" % [
+				StatInfoData.field_name("contraption_damage"), _num(float(mods["contraption"]))]
 	if float(mods.get("elemental", 0.0)) > 0.0:
 		var w_elem := "他初始%s +%s" % [
 			StatInfoData.field_name("elemental_damage"), _num(float(mods["elemental"]))]

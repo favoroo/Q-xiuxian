@@ -19,13 +19,14 @@ extends RefCounted
 const COPIED: Array[String] = [
 	# —— 加点直接落的字段（StatSystem 白名单）——
 	"weapon_damage_mult", "melee_damage", "ranged_damage", "elemental_damage",
-	"engineering_damage", "attack_speed_mult", "armor", "move_speed_mult",
+	"engineering_damage", "contraption_damage", "attack_speed_mult", "armor", "move_speed_mult",
 	"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
 	"dodge", "lifesteal", "luck", "harvest", "xp_gain_mult", "knockback_mult",
 	"elite_damage", "free_rerolls", "shop_price_mult", "stat_bonus_pierce",
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
-	"chest_break_bonus", "spirit_stones",
-	# —— 羁绊与神通乘区：影子不改它们，但读数要按同一式子合起来算 ——
+		"chest_break_bonus", "spirit_stones",
+		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
+		# —— 羁绊与神通乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
 	"synergy_move_speed_mult", "synergy_armor", "synergy_knockback_mult",
@@ -44,6 +45,7 @@ var melee_damage: float = 0.0
 var ranged_damage: float = 0.0
 var elemental_damage: float = 0.0
 var engineering_damage: float = 0.0
+var contraption_damage: float = 0.0
 var attack_speed_mult: float = 1.0
 var armor: float = 0.0
 var move_speed_mult: float = 1.0
@@ -68,6 +70,10 @@ var chest_count_bonus: int = 0
 var chest_quality: float = 0.0
 var chest_break_bonus: int = 0
 var spirit_stones: int = 0
+var pet_damage_mult: float = 1.0
+var pet_effect_mult: float = 1.0
+var pet_cooldown_mult: float = 1.0
+var pet_slots_bonus: int = 0
 
 # —— 羁绊 / 神通层 ——
 var synergy_damage_mult: float = 1.0

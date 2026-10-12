@@ -19,9 +19,10 @@ const ELEMENT_COLORS := GameStyle.ELEMENT_COLORS
 const SCALING_NAMES := {
 	"melee_damage": "近战伤害",
 	"ranged_damage": "远程伤害",
-	"elemental_damage": "元素伤害",
-	"engineering_damage": "召唤伤害",
-	"crit_rate": "暴击率",
+		"elemental_damage": "元素伤害",
+		"engineering_damage": "召唤伤害",
+		"contraption_damage": "机关伤害",
+		"crit_rate": "暴击率",
 	"crit_mult_bonus": "暴击伤害",
 	"armor": "护甲",
 	"max_hp": "最大生命",

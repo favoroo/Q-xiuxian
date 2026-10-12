@@ -196,11 +196,20 @@ func _on_area_entered(area: Area2D) -> void:
 				direction = (next_enemy.global_position - global_position).normalized()
 				rotation = direction.angle()
 				lifetime = 1.0
+				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
 				return
 
 		pierce_left -= 1
 		if pierce_left <= 0:
+			JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
 			_recycle()
+
+func _get_impact_color() -> Color:
+	if modulate != Color.WHITE:
+		return modulate
+	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
+		return _vector_renderer.elemental_tint
+	return Color(0.95, 0.90, 0.72)
 
 ## 就近找一个敌人。ahead_only = 只认弹头前方锥内的（丢目标重录用），false = 全向（弹射连锁用，历史行为）
 func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:

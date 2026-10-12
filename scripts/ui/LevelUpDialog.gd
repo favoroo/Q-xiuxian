@@ -5,9 +5,9 @@ signal stats_requested
 signal pause_requested
 
 ## 波后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
-## 回合结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
+## 波结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
 ## 2026-10-09 用户指令：「升级就会直接触发加点，在战斗过程中触发加点的体验不好 …
-##   改成每一回合结束后统一去加点 … 加点和商店物品要改成 5 个，技能加点也可以刷新一次」。
+##   改成每一波结束后统一去加点 … 加点和商店物品要改成 5 个，技能加点也可以刷新一次」。
 ##
 ## 摆位口径：5 张卡不按死宽度摆，按 viewport 现算（下面那几个 *_for() 是纯函数，
 ## 判据 LayoutCheck 用同一份算术量最窄那一档，别处不再抄数字）。
@@ -29,7 +29,7 @@ signal pause_requested
 ##   （卡#0 画出来 47.0 而滚动区左边界 53.4），卡角被削平成一条竖线；
 ## ③ 面板是平行四边形：底边整体会比顶边左移一个 lean（=skew·h/2≈13.4），所以右下角那颗
 ##   「确认领悟」离画出来的右边只剩 占位 - lean = 9.0 单位，压着边框线（顶栏反过来偏左）。
-## 现在按灵石阁那把尺子收口（与 WaveShop 同一口径）：`chrome_x()` 把 lean 算进占位、
+## 现在按商店那把尺子收口（与 WaveShop 同一口径）：`chrome_x()` 把 lean 算进占位、
 ## `card_pad_x()` 给滚动区里的卡角留白、卡间缝与卡内边距按用户口径收窄，省下的宽换成 ① 的呼吸量。
 ## 判据补两条尺：卡角不许被滚动区横向切掉、控件画出来那一圈离所属面板的画出来的边要留白。
 
@@ -264,7 +264,7 @@ func _show_points_tip() -> void:
 		"body": "战斗中升级不打断节奏，升级点数暂存，回合结束后在此统一领悟加点。",
 		"notes": [
 			"每次确认选择一条属性消耗 1 点。",
-			"本波点数全部加完后即可前往灵石阁。",
+			"本波点数全部加完后即可前往商店。",
 		],
 		"foot": "可随时按右上角「属 性」查看当前完整属性与加点。",
 	})
@@ -281,7 +281,7 @@ func _pulse_points_badge() -> void:
 	_badge_tween.tween_property(_points_badge, "scale", Vector2.ONE, 0.22)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-## 回合结束、有待加点：开面板并把这一屏的候选摆出来
+## 波结束、有待加点：开面板并把这一屏的候选摆出来
 func _on_alloc_opened() -> void:
 	# 立即重置触屏摇杆状态，防止手指还压在摇杆上时误点卡片
 	if GameManager.joystick != null and GameManager.joystick.has_method("_stop_joystick"):
@@ -301,7 +301,7 @@ func _on_alloc_opened() -> void:
 	tw.tween_interval(0.14)
 	tw.tween_callback(func(): _can_interact = true)
 
-## 点数加完：收面板（灵石阁由 WaveSpawner 接手，不在这里指挥流程）
+## 点数加完：收面板（商店由 WaveSpawner 接手，不在这里指挥流程）
 func _on_alloc_finished() -> void:
 	if not visible:
 		return
@@ -609,7 +609,7 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 	}
 
 ## 加成行块 + 每行下面那条「当前 X → Y」（2026-10-12 用户指令：「加一条显示当前属性是多少，
-## 增加后是多少」）。幅度行仍由 BonusRows 出（与灵石阁货架卡、开局选武器同一长相、同一把尺），
+## 增加后是多少」）。幅度行仍由 BonusRows 出（与商店货架卡、开局选武器同一长相、同一把尺），
 ## 这里只在它下面插一行小字注脚，两者捆成一组：组内 1 单位、组间 4 单位，读得出谁是谁的注脚。
 ## 注脚的数走 StatForecast —— 落地算式与聚合算式都是属性面板在用的那一份，卡面不许自己再算。
 ## 面板没有对应行的机制项（宝箱数量/品质、开箱省击、单系元素伤）不插注脚：不硬凑一个
@@ -659,12 +659,12 @@ func _open_recommend_tip(anchor: Control, data: Dictionary) -> void:
 		"chip": "推荐度 %d%%" % int(round(float(data.get("recommend_score", 0.0)) * 100.0)),
 		"chip_color": GameStyle.JADE,
 		"notes": notes,
-		"foot": "由当前修士、上阵法器与属性推算，仅供参考。",
+		"foot": "由当前角色、上阵武器与属性推算，仅供参考。",
 	})
 
 ## 点「受益装备」那一排的图标 = 看这件装备的详解，纯只读：不许顺手把这张卡选中
 ## （看东西这个动作不改写状态；选中仍要走卡体那一下 + 底部「确认选择」）。
-## 卡片与 HUD 法器栏 / 属性面板 / 灵石阁同一工厂出，这里只多带一句「这条悟道算到它头上走的是
+## 卡片与 HUD 法器栏 / 属性面板 / 商店同一工厂出，这里只多带一句「这条悟道算到它头上走的是
 ## 哪条链路」，链路名取自 GameBalance.upgrade_benefit_reasons —— 与「该不该挂这颗图标」同源。
 func _open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 	if not _can_interact or _is_confirming:
@@ -724,7 +724,7 @@ func _select_card(index: int) -> void:
 	_update_confirm_btn()
 	_update_gate_label()
 
-## 刷新这一屏候选：第一次吃本回合免费额度，之后按货架重掷同一条价格线扣灵石。
+## 刷新这一屏候选：第一次吃本波免费额度，之后按货架重掷同一条价格线扣灵石。
 ## 刷新只换候选、不动点数，所以刷新完要把选中态清掉（刚选的那张卡已经不在这屏了）。
 func _on_reroll() -> void:
 	if not _can_interact or _is_confirming:

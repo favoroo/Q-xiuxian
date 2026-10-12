@@ -127,7 +127,7 @@ func _build_level_flash() -> void:
 
 # ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
 
-## 顶栏整条往安全区里让：刘海会把最左那颗气血块与最右那颗暂停键吃掉一半 ——
+## 顶栏整条往安全区里让：刘海会把最左那颗生命块与最右那颗暂停键吃掉一半 ——
 ## 桌面预览里永远是整屏，只有真机看得见，所以这条算术做成纯函数交给判据喂假刘海。
 func _apply_safe_area() -> void:
 	var win := Rect2(Vector2(DisplayServer.window_get_position()), Vector2(DisplayServer.window_get_size()))

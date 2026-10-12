@@ -48,6 +48,14 @@ func _test_select_cultivator_visuals() -> void:
 
 	_c.check(p.is_procedural, "选定 jianchi 后进入 procedural 程序化渲染分支")
 	_c.check(p.procedural_view != null and p.procedural_view.visible, "procedural_view 正常创建并显示")
+	# 真正画像素的是 view 里面的 renderer 子节点：view 在树里但 renderer 没 add_child 时，
+	# 屏幕上人物与头像框全是空的（v0.0.24 曾因 _init_renderer 把 add_child 缩进进 else 分支而全黑）。
+	var view := p.procedural_view
+	var rdr = view.renderer if view != null else null
+	_c.check(rdr != null, "procedural_view 已创建 renderer 渲染器实例")
+	_c.check(rdr != null and rdr.is_inside_tree(), "renderer 已 add_child 挂进场景树（否则人物不显示）")
+	_c.check(rdr != null and view != null and view.get_child_count() >= 1, "view 下有渲染器子节点")
+	_c.check(rdr != null and rdr.config != null, "renderer 已按道统装配 CultivatorVisualConfig")
 	_c.check(not p.anim_sprite.visible, "旧 anim_sprite 保持隐藏不显示")
 	_c.check(p.shadow_sprite.visible, "选定角色后 shadow_sprite 正常显示")
 
