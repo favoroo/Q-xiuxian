@@ -5,8 +5,9 @@ extends RefCounted
 ##   BalanceWave      波次/刷怪/精英Boss/危险度
 ##   BalanceEconomy   经验/商店定价/灵韵/残丹化灵/稀有度/货架抽取/法宝档位/羁绊档位/加点白名单
 ##   BalanceCombat    护甲受伤/镜头创伤/受击硬直击退/长扑几何/五行异常/震退方向/集火韧性
-##   BalanceTargeting 索敌分流/藏宝匣/武器属性折算/御灵轨道/神识分流
+##   BalanceTargeting 索敌分流/藏宝匣两段式索敌/武器属性折算/御灵轨道/神识分流
 ##   BalanceSpiritBeast 祭坛灵兽（气血成长/撕咬/嘲讽半径）
+##   BalanceChest     藏宝匣（每波数量/三档权重/击数/掉落表/玉匣送法宝上限）
 ## 本文件只做转发：旧引用（GameBalance.xxx，22 个文件）零改动；新增公式直接进主题类，
 ## 需要旧入口时在这里补一行转发。两条硬性约束对四个主题类同样生效：
 ##   1. 需要随机数的地方由调用方传入 rng 或已经抽好的 roll，这样单测可以固定种子做确定性断言；
@@ -117,9 +118,6 @@ const CRIT_TRAUMA_ELITE := BalanceCombat.CRIT_TRAUMA_ELITE
 const CRIT_KILL_HITSTOP_DURATION := BalanceCombat.CRIT_KILL_HITSTOP_DURATION
 const CRIT_KILL_HITSTOP_SCALE := BalanceCombat.CRIT_KILL_HITSTOP_SCALE
 const CRIT_KILL_HITSTOP_MIN_INTERVAL := BalanceCombat.CRIT_KILL_HITSTOP_MIN_INTERVAL
-const CRIT_KILL_OVERKILL_FLOOR := BalanceCombat.CRIT_KILL_OVERKILL_FLOOR
-const HIT_SPARK_MIN_INTERVAL := BalanceCombat.HIT_SPARK_MIN_INTERVAL
-const KILL_BURST_MIN_INTERVAL := BalanceCombat.KILL_BURST_MIN_INTERVAL
 const MICRO_KICK_MIN_INTERVAL := BalanceCombat.MICRO_KICK_MIN_INTERVAL
 const ZHUMU_MINION_CAP := BalanceCombat.ZHUMU_MINION_CAP
 const CHARGE_BRAKE_END_SPEED_PCT := BalanceCombat.CHARGE_BRAKE_END_SPEED_PCT
@@ -137,7 +135,6 @@ const FOCUS_FIRE_HIT3_MULT := BalanceCombat.FOCUS_FIRE_HIT3_MULT
 const DANGER_ZONE_RADIUS := BalanceTargeting.DANGER_ZONE_RADIUS
 const TARGETING_ELLIPSE_Y_RATIO := BalanceTargeting.TARGETING_ELLIPSE_Y_RATIO
 const VIEWPORT_SAFE_HALF_EXTENTS := BalanceTargeting.VIEWPORT_SAFE_HALF_EXTENTS
-const CHEST_BREAK_HITS := BalanceTargeting.CHEST_BREAK_HITS
 const APPLY_WEAPON_STAT_MAP := BalanceTargeting.APPLY_WEAPON_STAT_MAP
 const SPIRIT_BASE_RADIUS := BalanceTargeting.SPIRIT_BASE_RADIUS
 const SPIRIT_MIN_RADIUS := BalanceTargeting.SPIRIT_MIN_RADIUS
@@ -151,13 +148,24 @@ const MULTI_WEAPON_LOAD_PER_EXTRA := BalanceTargeting.MULTI_WEAPON_LOAD_PER_EXTR
 
 # 祭坛灵兽 → BalanceSpiritBeast
 const SPIRIT_BEAST_TAUNT_RADIUS := BalanceSpiritBeast.TAUNT_RADIUS
-const SPIRIT_BEAST_ATTACK_RANGE := BalanceSpiritBeast.ATTACK_RANGE
 const SPIRIT_BEAST_ATTACK_INTERVAL := BalanceSpiritBeast.ATTACK_INTERVAL
+const SPIRIT_BEAST_PREFER_RANGE_MIN := BalanceSpiritBeast.PREFER_RANGE_MIN
+const SPIRIT_BEAST_PREFER_RANGE_MAX := BalanceSpiritBeast.PREFER_RANGE_MAX
+const SPIRIT_BEAST_PROJECTILE_SPEED := BalanceSpiritBeast.PROJECTILE_SPEED
+const SPIRIT_BEAST_STRAFE_SPEED_RATIO := BalanceSpiritBeast.STRAFE_SPEED_RATIO
+const SPIRIT_BEAST_CONTACT_RANGE := BalanceSpiritBeast.CONTACT_RANGE
 const SPIRIT_BEAST_MOVE_SPEED := BalanceSpiritBeast.MOVE_SPEED
-const SPIRIT_BEAST_KNOCK_FORCE := BalanceSpiritBeast.KNOCK_FORCE
 const SPIRIT_BEAST_HIT_INVINCIBLE := BalanceSpiritBeast.HIT_INVINCIBLE
 const SPIRIT_BEAST_SEARCH_INTERVAL := BalanceSpiritBeast.SEARCH_INTERVAL
 const SPIRIT_BEAST_IDLE_FOLLOW_DIST := BalanceSpiritBeast.IDLE_FOLLOW_DIST
+
+# 藏宝匣（宝箱）：数量 / 三档 / 击数 / 掉落 → BalanceChest
+const CHEST_BREAK_HITS := BalanceChest.CHEST_BREAK_HITS
+const CHEST_MIN_HITS := BalanceChest.CHEST_MIN_HITS
+const CHEST_COUNT_CAP := BalanceChest.CHEST_COUNT_CAP
+const CHEST_TIER_COUNT := BalanceChest.TIER_COUNT
+const CHEST_TIER_SCALE := BalanceChest.TIER_SCALE
+const CHEST_JADE_ITEM_GRANT_CAP := BalanceChest.JADE_ITEM_GRANT_CAP
 
 # ---------------- 函数转发（签名原样，实现进主题类） ----------------
 
@@ -331,6 +339,28 @@ static func spirit_beast_max_hp(wave: int) -> float:
 
 static func spirit_beast_damage(wave: int) -> float:
 	return BalanceSpiritBeast.damage_for_wave(wave)
+
+# 藏宝匣（宝箱）：数量 / 三档 / 击数 / 掉落 → BalanceChest
+static func chest_count(wave: int, bonus: int) -> int:
+	return BalanceChest.chest_count(wave, bonus)
+
+static func chest_tier_weights(quality: float, luck: float) -> Array[float]:
+	return BalanceChest.tier_weights(quality, luck)
+
+static func chest_break_hits(break_bonus: int) -> int:
+	return BalanceChest.break_hits(break_bonus)
+
+static func chest_tier_scale(tier: int) -> float:
+	return BalanceChest.tier_scale(tier)
+
+static func chest_tier_name(tier: int) -> String:
+	return BalanceChest.tier_name(tier)
+
+static func chest_reward(tier: int) -> Dictionary:
+	return BalanceChest.reward_of(tier)
+
+static func chest_jade_fallback_reward() -> Dictionary:
+	return BalanceChest.jade_fallback_reward()
 
 # 索敌 / 藏宝匣 / 折算 / 御灵 / 神识分流 → BalanceTargeting
 static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:

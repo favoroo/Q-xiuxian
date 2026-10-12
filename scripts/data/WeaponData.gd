@@ -182,7 +182,7 @@ const DEFS: Dictionary = {
 					"damage": 24.0, "cooldown": 0.50, "range": 205.0,
 					"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
-					"desc": "环绕护体触碰即减速，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
+					"desc": "环绕护体触碰即减速，受召唤伤害与攻击间隔加成", "tag": "环绕·召唤·水",
 					"proc_chill": 0.40, "chill_dur": 2.5,
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
@@ -235,7 +235,7 @@ const DEFS: Dictionary = {
 					"knockback": 200.0,
 					"price": 46, "icon": "res://assets/art/weapon_fire_lantern.png",
 					"tip": Vector2(22, 0), "upright": true,
-					"desc": "召唤火雨轰击区域并点燃火海，受元素伤害高额加成", "tag": "远程·范围·火",
+					"desc": "召唤火雨轰击区域并点燃火海，受元素伤害加成", "tag": "远程·范围·火",
 					"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
 					"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 					"tags": ["thunder", "fire"],
@@ -276,7 +276,7 @@ const DEFS: Dictionary = {
 					"knockback": 360.0,
 					"price": 48, "icon": "res://assets/art/weapon_earth_seal.png",
 					"tip": Vector2(20, 0), "upright": true,
-					"desc": "巨印从天砸下，受元素伤害与护甲高额加成", "tag": "区域·横扫·土",
+					"desc": "巨印从天砸下，受元素伤害与护甲加成", "tag": "区域·横扫·土",
 					"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
 					"burst_icon": "res://assets/art/weapon_earth_seal.png",
 					"tags": ["wide", "earth"],
@@ -288,7 +288,7 @@ const DEFS: Dictionary = {
 						"damage": 25.0, "cooldown": 0.52, "range": 210.0,
 						"knockback": 340.0,
 						"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
-						"desc": "环绕周身撞击击退敌群，受召唤伤害与生命加成", "tag": "环绕·召唤·土",
+						"desc": "环绕周身撞击击退敌群，受召唤伤害与最大生命加成", "tag": "环绕·召唤·土",
 						"tags": ["spirit", "earth"],
 						"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
 					},
@@ -299,7 +299,7 @@ const DEFS: Dictionary = {
 						"knockback": 350.0,
 						"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
 						"tip": Vector2(22, -12),
-						"desc": "厚盾横推大力击退，受近战伤害与护甲高额加成", "tag": "近战·剑系·土",
+						"desc": "厚盾横推大力击退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
 					"arc_scale": 1.35,
 					"tags": ["sword", "earth"],
 					"stat_scalings": {"melee_damage": 0.8, "armor": 3.0, "max_hp_bonus": 0.10},
@@ -625,7 +625,7 @@ const DEFS: Dictionary = {
 					"knockback": 90.0,
 					"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 					"tip": Vector2(20, -6), "upright": true,
-					"desc": "布设寒泉机关兽连吐冰针冻缓敌群，受召唤伤害与冷却加成", "tag": "机关·召唤·水",
+					"desc": "布设寒泉机关兽连吐冰针冻缓敌群，受召唤伤害与攻击间隔加成", "tag": "机关·召唤·水",
 					"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 					"pierce": 2, "proc_chill": 0.30, "chill_dur": 1.5,
 					"tags": ["contraption", "water"],
@@ -725,7 +725,7 @@ const DEFS: Dictionary = {
 					"damage": 23.0, "cooldown": 0.48, "range": 175.0,
 					"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_bingpo_zhu.png",
-					"desc": "冰魄宝珠环绕冻缓来敌，受召唤伤害与攻速加成", "tag": "环绕·召唤·水",
+					"desc": "冰魄宝珠环绕冻缓来敌，受召唤伤害与攻击间隔加成", "tag": "环绕·召唤·水",
 					"proc_chill": 0.40, "chill_dur": 2.5,
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
@@ -829,91 +829,268 @@ const DEFS: Dictionary = {
 					"tags": ["wide", "earth"],
 					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
 				},
-				"gengjin_fu": {
-					"name": "庚金符", "behavior": Behavior.PROJECTILE,
-					"sfx": "metal_dart",
-					"damage": 9.0, "cooldown": 0.60, "range": 230.0,
-					"knockback": 85.0,
-					"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
-					"tip": Vector2(0, -22),
-					"desc": "连射2张金符高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
-					"bullet": "res://assets/art/bullet_gengjin_fu.png", "bullet_scale": 0.55, "bullet_spin": false,
-					"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
-					"tags": ["talisman", "metal"],
-					"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
-				},
+					"gengjin_fu": {
+						"name": "庚金符", "behavior": Behavior.PROJECTILE,
+						"sfx": "metal_dart",
+						"damage": 9.0, "cooldown": 0.60, "range": 230.0,
+						"knockback": 85.0,
+						"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
+						"tip": Vector2(0, -22),
+						"desc": "连射2张金符高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
+						"bullet": "res://assets/art/bullet_gengjin_fu.png", "bullet_scale": 0.55, "bullet_spin": false,
+						"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
+						"tags": ["talisman", "metal"],
+						"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
+					},
+
+					# ==================== 2026-10-12 第三批 8 把：填满只剩 1 把的 器类×五行 交叉格 ====================
+					# 空洞格清单（各仅 1 把，羁绊 2 件档都凑不出）：剑-木、符-水、符-土、雷-金、雷-水、
+					# 机关-木/水/火。每把照同行为同格锚点法定数值，零新行为代码。
+					# 顺带把冷门 scaling 链接进新法器（吸血/冷却/暴击伤害/范围/额外生命），激活死链。
+					# 图标暂借同格锚点贴图占位，TODO(media-gen)：出专属图标后替换并补 manifest。
+					"taomu_jian": {
+						"name": "桃木剑", "behavior": Behavior.MELEE,
+						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
+						"damage": 20.0, "cooldown": 0.95, "range": 150.0,
+						"knockback": 230.0,
+						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
+						"tip": Vector2(22, -12),
+						"desc": "桃木辟邪之剑快斩汲血，受近战伤害与吸血加成", "tag": "近战·剑系·木",
+						"tags": ["sword", "wood"],
+						"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
+					},
+					"guishui_fu": {
+						"name": "癸水符", "behavior": Behavior.PROJECTILE,
+						"sfx": "talisman_throw",
+						"damage": 21.0, "cooldown": 0.85, "range": 230.0,
+						"knockback": 120.0,
+						"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
+						"tip": Vector2(22, -6),
+						"desc": "癸水阴符急速连发穿透2敌，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
+						"bullet": "res://assets/art/bullet_ice_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"pierce": 2,
+						"tags": ["talisman", "water"],
+						"stat_scalings": {"ranged_damage": 0.8, "cdr_bonus": 25.0},
+					},
+					"houtu_fu": {
+						"name": "厚土符", "behavior": Behavior.PROJECTILE,
+						"sfx": "talisman_throw",
+						"damage": 11.0, "cooldown": 1.10, "range": 220.0,
+						"knockback": 200.0,
+						"price": 32, "icon": "res://assets/art/weapon_zhenshan_fu.png",
+						"tip": Vector2(22, 0),
+						"desc": "三张厚土符扇形铺开各锁1敌，受远程伤害与护甲加成", "tag": "远程·弹射·土",
+						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"pierce": 1, "projectile_count": 3, "spread_angle": 0.22,
+						"tags": ["talisman", "earth"],
+						"stat_scalings": {"ranged_damage": 0.8, "armor": 2.0},
+					},
+					"jinxiao_leiling": {
+						"name": "金霄雷令", "behavior": Behavior.BURST,
+						"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
+						"damage": 30.0, "cooldown": 1.50, "range": 230.0,
+						"knockback": 260.0,
+						"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
+						"tip": Vector2(22, 8), "upright": true,
+						"desc": "金霄神雷轰击一片敌群，受元素伤害与暴击伤害加成", "tag": "区域·范围·金",
+						"burst_radius": 78.0, "burst_tint": Color(1.0, 0.88, 0.45),
+						"tags": ["thunder", "metal"],
+						"stat_scalings": {"elemental_damage": 1.0, "crit_mult_bonus": 30.0},
+					},
+					"xuanming_leizhu": {
+						"name": "玄冥雷珠", "behavior": Behavior.BURST,
+						"sfx": "flute_wave", "sfx_impact": "thunder_strike",
+						"damage": 28.0, "cooldown": 1.45, "range": 225.0,
+						"knockback": 300.0,
+						"price": 44, "icon": "res://assets/art/weapon_flute.png",
+						"tip": Vector2(20, 0), "upright": true,
+						"desc": "玄冥阴雷炸开冻缓敌群，受元素伤害与移速加成", "tag": "区域·范围·水",
+						"burst_radius": 70.0, "burst_tint": Color(0.45, 0.75, 1.0),
+						"proc_chill": 0.40, "chill_dur": 2.0,
+						"tags": ["thunder", "water"],
+						"stat_scalings": {"elemental_damage": 1.0, "move_speed_bonus": 28.0},
+					},
+					"qingmu_pao": {
+						"name": "青木炮", "behavior": Behavior.TURRET,
+						"sfx": "impact_crack",
+						"damage": 14.0, "cooldown": 3.4, "range": 220.0,
+						"turret_fire_cd": 0.70, "turret_lifetime": 12.0, "turret_cap": 2,
+						"knockback": 120.0,
+						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
+						"tip": Vector2(22, -16), "upright": true,
+						"desc": "布设青木灵炮贯穿敌阵，受召唤伤害与生命回复加成", "tag": "机关·召唤·木",
+						"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
+						"pierce": 2,
+						"tags": ["contraption", "wood"],
+						"stat_scalings": {"engineering_damage": 1.0, "hp_regen": 4.0},
+					},
+					"ningbing_nu": {
+						"name": "凝冰机弩", "behavior": Behavior.TURRET,
+						"sfx": "metal_dart",
+						"damage": 12.0, "cooldown": 4.0, "range": 260.0,
+						"turret_fire_cd": 0.55, "turret_lifetime": 10.0, "turret_cap": 2,
+						"knockback": 95.0,
+						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
+						"tip": Vector2(20, -6), "upright": true,
+						"desc": "布设凝冰机弩远程点杀冻缓敌人，受召唤伤害与攻击范围加成", "tag": "机关·召唤·水",
+						"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
+						"pierce": 1, "proc_chill": 0.25, "chill_dur": 1.5,
+						"tags": ["contraption", "water"],
+						"stat_scalings": {"engineering_damage": 1.0, "range_bonus": 25.0},
+					},
+					"fenghuo_tai": {
+						"name": "烽火台", "behavior": Behavior.TURRET,
+						"sfx": "flame_jet",
+						"damage": 10.0, "cooldown": 4.4, "range": 175.0,
+						"turret_fire_cd": 0.50, "turret_lifetime": 11.0, "turret_cap": 2,
+						"knockback": 100.0,
+						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
+						"tip": Vector2(22, -10), "upright": true,
+						"desc": "布设烽火台持续喷焰引燃敌群，受召唤伤害与最大生命加成", "tag": "机关·召唤·火",
+						"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
+						"pierce": 2, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
+						"tags": ["contraption", "fire"],
+						"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.10},
+					},
 }
 
 ## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
 ## 涵盖器类 6 系 + 五行 5 系，共 11 种流派羁绊
+##
+## 本表是羁绊的**唯一真话**，数值和文案都只从这里出：
+##   · 数值 —— 每档幅度只有 `values` 与 effects 声明的 side 列表这一份；
+##     SynergySystem 按 effects 逐条结算进 GameManager 的 `field`，代码里不许再抄字面量。
+##   · 文案 —— SynergyUI.tier_line() / synergy_desc() 由 effects 生成。
+##     **表里不许手写 "desc"**（UnitRunner 断言它不存在）：2026-10-11 火系局内写「法伤」
+##     而属性表根本没有这条、木系与召唤当天补的伤害乘区漏在局内文案外，
+##     根因都是「同一事实抄了三份」，抄的那一份永远不会跟着改。
+##   · 判据 —— tests/unit/unit_consistency_tests.gd 走 apply_counts 真结算，
+##     把 field 增量与生成文案里的数字逐个对账，并断言没一条隐性加成绕过 effects。
+##
+## effects 每条：
+##   field  —— 被改写的 GameManager 属性名（恒 synergy_* 前缀；气血那条再经 apply_synergy_hp 落到 player）
+##   list   —— 取数用的列表 key，主效果恒为 "values"
+##   op     —— "add"：field += v（1.0 基数的乘区存加成幅度，0.08 即 +8%）；"mul"：field *= v（攻速存 0.92 这类系数）
+##   label  —— 给人看的属性名；局内阶梯行与图鉴共用同一个词，不许一处简称一处全称
+##   form   —— 展示折算："pct" 0.08→+8%、"pct_down" 0.92→-8%、"flat" 3→+3、"flat1" 1.0→+1.0
+##   suffix —— 展示后缀，如 "/秒"
 const SYNERGIES: Dictionary = {
 	# ---- 器类羁绊 ----
 	"sword": {
-		"name": "剑系", "thresholds": [2, 4, 6],
-		"values": [0.15, 0.30, 0.50],
-		"desc": "攻击范围 +15/30/50%",
+		"name": "剑系", "thresholds": [2, 4, 6], "values": [0.15, 0.30, 0.50],
+		"effects": [
+			{"field": "synergy_range_mult", "list": "values", "op": "add", "label": "攻击范围", "form": "pct"},
+		],
 	},
 	"talisman": {
-		"name": "弹射", "thresholds": [2, 4, 6],
-		"values": [1, 2, 3],
-		"desc": "弹丸穿透 +1/2/3",
+		"name": "弹射", "thresholds": [2, 4, 6], "values": [1, 2, 3],
+		"effects": [
+			{"field": "synergy_bonus_pierce", "list": "values", "op": "add", "label": "弹丸穿透", "form": "flat"},
+		],
 	},
 	"thunder": {
-		"name": "范围", "thresholds": [2, 4, 6],
-		"values": [0.92, 0.85, 0.75],
-		"desc": "攻击间隔 -8/15/25%",
+		# 名字与武器 def.tag 里的「雷法」对齐；效果给的是攻速（攻击间隔），不是范围
+		"name": "雷法", "thresholds": [2, 4, 6], "values": [0.92, 0.85, 0.75],
+		"effects": [
+			{"field": "synergy_haste_mult", "list": "values", "op": "mul", "label": "攻击间隔", "form": "pct_down"},
+		],
 	},
-		"spirit": {
-			"name": "召唤", "thresholds": [2, 4, 6],
-			"values": [15, 30, 50],
-			"eng_values": [2.0, 4.0, 7.0],
-			# 2026-10-11 平衡校准：仿机关羁绊补灵宝伤害乘区档（御灵流成型 Boss TTK 垫底根因）
-			"drone_values": [0.10, 0.20, 0.25],
-			"desc": "最大生命 +15/30/50，召唤伤害 +2/4/7，灵宝伤害 +10/20/25%",
-		},
+	"spirit": {
+		"name": "召唤", "thresholds": [2, 4, 6], "values": [15, 30, 50],
+		# 2026-10-11：这一档只给「生命 + 召唤伤害」两条。当天曾另立过一条环绕专属伤害乘区
+		# （局内叫「灵宝伤害」），玩家看不懂那个词，且它和已有的「武器伤害」是第三种伤害词，
+		# 已按用户决定撤销，幅度全部折进下面这条召唤伤害（环绕/机关炮台/灵兽共用这一条属性链路）。
+		# 幅度由 tests/BalanceSimCheck 的御灵 W10/W20 TTK 带（30~70s）标定，改数要重跑那条判据。
+		"eng_values": [4.0, 9.0, 16.0],
+		"effects": [
+			{"field": "synergy_max_hp_bonus", "list": "values", "op": "add", "label": "生命", "form": "flat"},
+			{"field": "synergy_engineering_damage", "list": "eng_values", "op": "add", "label": "召唤伤害", "form": "flat"},
+		],
+	},
 	"wide": {
-		"name": "横扫", "thresholds": [2, 4, 6],
-		"values": [0.10, 0.20, 0.30],
-		"desc": "武器伤害 +10/20/30%",
+		"name": "横扫", "thresholds": [2, 4, 6], "values": [0.10, 0.20, 0.30],
+		"effects": [
+			{"field": "synergy_damage_mult", "list": "values", "op": "add", "label": "武器伤害", "form": "pct"},
+		],
 	},
 	"contraption": {
-		"name": "机关", "thresholds": [2, 4, 6],
-		"values": [0.15, 0.30, 0.50],
-		"desc": "机关伤害 +15/30/50%",
+		"name": "机关", "thresholds": [2, 4, 6], "values": [0.15, 0.30, 0.50],
+		"effects": [
+			{"field": "synergy_contraption_mult", "list": "values", "op": "add", "label": "机关伤害", "form": "pct"},
+		],
 	},
 
 	# ---- 五行羁绊 ----
 	"metal": {
-		"name": "金系", "thresholds": [2, 4, 6],
-		"values": [0.06, 0.12, 0.20],
-		"desc": "暴击率 +6/12/20%，暴击伤害 +20/40/75%",
+		"name": "金系", "thresholds": [2, 4, 6], "values": [0.06, 0.12, 0.20],
+		"crit_mult_values": [0.20, 0.40, 0.75],
+		"effects": [
+			{"field": "synergy_crit_rate", "list": "values", "op": "add", "label": "暴击率", "form": "pct"},
+			{"field": "synergy_crit_mult", "list": "crit_mult_values", "op": "add", "label": "暴击伤害", "form": "pct"},
+		],
 	},
 	"wood": {
-		"name": "木系", "thresholds": [2, 4, 6],
-		"values": [1.0, 2.0, 3.5],
-		"desc": "生命回复 +1/2/3.5/秒，吸血 +2/4/7%，武器伤害 +6/12/20%",
+		"name": "木系", "thresholds": [2, 4, 6], "values": [1.0, 2.0, 3.5],
+		"ls_values": [0.02, 0.04, 0.07],
+		# 2026-10-11 平衡校准：此前零伤害乘区（剧毒流成型 TTK 垫底根因），仿火系补一条伤害档
+		"dmg_values": [0.06, 0.12, 0.20],
+		"effects": [
+			{"field": "synergy_hp_regen", "list": "values", "op": "add", "label": "回复", "form": "flat1", "suffix": "/秒"},
+			{"field": "synergy_lifesteal", "list": "ls_values", "op": "add", "label": "吸血", "form": "pct"},
+			{"field": "synergy_damage_mult", "list": "dmg_values", "op": "add", "label": "武器伤害", "form": "pct"},
+		],
 	},
 	"water": {
-		"name": "水系", "thresholds": [2, 4, 6],
-		"values": [0.94, 0.88, 0.80],
-		"desc": "攻击间隔 -6/12/20%，移动速度 +8/16/25%",
+		"name": "水系", "thresholds": [2, 4, 6], "values": [0.94, 0.88, 0.80],
+		"spd_values": [0.08, 0.16, 0.25],
+		"effects": [
+			{"field": "synergy_haste_mult", "list": "values", "op": "mul", "label": "攻击间隔", "form": "pct_down"},
+			{"field": "synergy_move_speed_mult", "list": "spd_values", "op": "add", "label": "移动速度", "form": "pct"},
+		],
 	},
 	"fire": {
-		"name": "火系", "thresholds": [2, 4, 6],
-		"values": [0.08, 0.16, 0.26],
-		"desc": "武器伤害 +8/16/26%，灼烧伤害 +30/60/100%",
+		"name": "火系", "thresholds": [2, 4, 6], "values": [0.08, 0.16, 0.26],
+		"burn_values": [0.30, 0.60, 1.00],
+		"effects": [
+			{"field": "synergy_damage_mult", "list": "values", "op": "add", "label": "武器伤害", "form": "pct"},
+			{"field": "synergy_burn_mult", "list": "burn_values", "op": "add", "label": "灼烧", "form": "pct"},
+		],
 	},
 	"earth": {
-		"name": "土系", "thresholds": [2, 4, 6],
-		"values": [3.0, 6.0, 10.0],
-		"desc": "护甲 +3/6/10，受击震退力 +25/50/80%",
+		"name": "土系", "thresholds": [2, 4, 6], "values": [3.0, 6.0, 10.0],
+		"kb_values": [0.25, 0.50, 0.80],
+		"effects": [
+			{"field": "synergy_armor", "list": "values", "op": "add", "label": "护甲", "form": "flat"},
+			{"field": "synergy_knockback_mult", "list": "kb_values", "op": "add", "label": "击退力度", "form": "pct"},
+		],
 	},
+}
+
+## 羁绊可改写的 GameManager 属性全集：SynergySystem 每轮结算前按它清零，
+## 判据按它比对增量。新增 synergy_* 属性必须同时进这张表与某条 effects，
+## 否则 UnitRunner 报红（漏进清零表 = 跨波累加的隐形 Bug，漏进 effects = 白送不显示）。
+const SYNERGY_FIELDS: Array[String] = [
+	"synergy_bonus_pierce", "synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
+	"synergy_max_hp_bonus", "synergy_engineering_damage", "synergy_crit_rate", "synergy_crit_mult",
+	"synergy_hp_regen", "synergy_lifesteal", "synergy_move_speed_mult", "synergy_burn_mult",
+	"synergy_armor", "synergy_knockback_mult", "synergy_contraption_mult",
+]
+
+## 某属性的羁绊基数（"add" 从基数起算，"mul" 从 1.0 起算）：与 GameManager 声明初值同源
+## 基数写成 int 的字段（穿透次数）＝ 声明该属性是整数，SynergySystem 结算后按它回截类型，
+## 往 int 属性 set 一个 float 会被引擎打回「Invalid assignment」并静默留旧值。
+const SYNERGY_BASE := {
+	"synergy_bonus_pierce": 0, "synergy_damage_mult": 1.0, "synergy_range_mult": 1.0,
+	"synergy_haste_mult": 1.0, "synergy_max_hp_bonus": 0.0, "synergy_engineering_damage": 0.0,
+	"synergy_crit_rate": 0.0, "synergy_crit_mult": 0.0, "synergy_hp_regen": 0.0,
+	"synergy_lifesteal": 0.0, "synergy_move_speed_mult": 0.0, "synergy_burn_mult": 1.0,
+	"synergy_armor": 0.0, "synergy_knockback_mult": 1.0, "synergy_contraption_mult": 1.0,
 }
 
 ## 开局六选一：金木水火土五种代表性本命法器 + 御灵入门「灵蝶」
 const STARTER_IDS: Array = ["qingyun_sword", "wanmu_lingfu", "bajiao_fan", "huoyan_fu", "fantian_yin", "lingdie"]
 
-## 商店武器池（全部 38 把法器）
+## 商店武器池（全部法器，分批新增记录见各段注释）
 const SHOP_POOL: Array = [
 	"qingyun_sword", "gengjin_feijian", "liuye_feidao", "baoyu_liuhuazhen",
 	"qingmu_tengbian", "wanmu_lingfu", "lingdie", "lianhuan_lingdan",
@@ -933,6 +1110,9 @@ const SHOP_POOL: Array = [
 	# 2026-10-11 第二批 12 把：御灵全面加厚 + 三标签交叉（详见 DEFS 尾部设计注释）
 	"jinming_ling", "muling_ou", "bingpo_zhu", "chiyan_ying", "tuling_shi", "jianling",
 	"kuilei_shou", "lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu", "gengjin_fu",
+	# 2026-10-12 第三批 8 把：填满只剩 1 把的 器类×五行 交叉格（详见 DEFS 尾部设计注释）
+	"taomu_jian", "guishui_fu", "houtu_fu", "jinxiao_leiling",
+	"xuanming_leizhu", "qingmu_pao", "ningbing_nu", "fenghuo_tai",
 ]
 
 ## 回血丹（商店消耗品）

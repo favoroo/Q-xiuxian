@@ -31,6 +31,9 @@ var _manual: ManualDialog
 var _taps := 0
 
 func _ready() -> void:
+	# 本判据真在干活：法器 + 法宝两张图鉴逐卡 ×12 取样点（2026-10-11 已到 115 张卡 ≈ 1380 次
+	# 真实点按，实测 ~55s），默认 45s 无头守护会把它当挂起打死 —— 在这里申报时长。
+	GameManager.headless_guard_sec = 150.0
 	if "--selftest" in OS.get_cmdline_user_args():
 		await _selftest()
 		get_tree().quit(0 if _c.report("HOTZONE_SELFTEST_RESULT") else 1)

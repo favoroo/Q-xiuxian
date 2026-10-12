@@ -23,7 +23,7 @@ extends Node
 ## 几十分钟，跑前先关 hit_stop 设置项（auto_save=false，不落盘）。
 
 const EPS := 0.0001
-const SPAWN_AT := Vector2(480.0, 270.0)   ## 屏内摆位：视口终审要求（见文件头坑）
+const SPAWN_AT := Vector2(260.0, 270.0)   ## 视口内且远离右边界（480）：冲击波不被视口丢弃，怪也不被界碑 clamp 弹回
 
 var _c := TestCheck.new()
 var _selftest: bool = false
@@ -147,6 +147,7 @@ func _test_dash_iframe_bonus() -> void:
 	var amp_before: float = GameManager.shadow_amp_mult
 	GameManager.active_skill_id = "dash"
 	p.skill_cd_left = 0.0
+	p.skill_active_left = 0.0
 	p.invulnerable_time = 0.0
 	p.velocity = Vector2.ZERO
 	var st := SkillData.final_stats("dash", "")

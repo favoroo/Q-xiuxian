@@ -68,6 +68,12 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	GameStyle.label(dialog._cult_pros_lbl, 11, GameStyle.GOOD)
 	cult_text.add_child(dialog._cult_pros_lbl)
 
+	# 额外技能单独一段（幽夜紫）：没配额外技能的角色这一行隐藏，不占位
+	dialog._cult_extra_lbl = Label.new()
+	GameStyle.label(dialog._cult_extra_lbl, 11, GameStyle.SHADOW)
+	dialog._cult_extra_lbl.visible = false
+	cult_text.add_child(dialog._cult_extra_lbl)
+
 	dialog._cult_cons_lbl = Label.new()
 	GameStyle.label(dialog._cult_cons_lbl, 11, GameStyle.BAD)
 	cult_text.add_child(dialog._cult_cons_lbl)

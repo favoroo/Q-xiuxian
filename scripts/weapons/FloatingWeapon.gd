@@ -285,7 +285,7 @@ func _perform_turret_attack() -> void:
 
 func _final_damage() -> float:
 	var stat_bonus := GameManager.get_weapon_stat_bonus(weapon_def_id, star)
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
+	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.buff_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -538,7 +538,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
 			var dmg = _final_damage()
-			var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
+			var is_crit: bool = GameManager.roll_crit()
 			if is_crit:
 				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
 			dmg *= GameManager.elite_damage_mult_for(enemy)

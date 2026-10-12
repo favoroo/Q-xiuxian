@@ -22,6 +22,7 @@ CHANGELOG.md
 tests/styles/*.png
 tests/styles/*.png.import
 /tmp_*.png
+/tmp_*.png.import
 
 # macOS 文件系统元数据
 .DS_Store

@@ -5,31 +5,105 @@ extends RefCounted
 ## 消除 PlayerStatsDialog、WaveShop、GameHUD 三处完全同构的 ~40 行组装代码。
 ## 门槛读数唯一真话在 progress()/badge()：徽记、详情卡、属性面板、货架卡都从这里取，
 ## 谁都不许再自己拿 WeaponData.SYNERGIES.thresholds 比大小（角色门槛下移会漏减）。
+##
+## 文案口径（2026-10-11）：**这里不再存任何手写字符串**。
+## 阶梯行 tier_line() 与图鉴长句 synergy_desc() 都由 WeaponData.SYNERGIES[tag].effects 生成，
+## 与 SynergySystem.apply_counts 结算读的是同一张表、同一批数字。
+## 以前 TIER_LINES 手抄一遍 desc 手抄一遍、SynergySystem 再硬编码一份 side list，
+## 结果火系局内写「法伤」（属性表里根本没这条）、木系与召唤当天补的伤害乘区漏在局内文案外。
 
-## 各流派每一档的阶梯文案（与 WeaponData.SYNERGIES 数值严格同源）
-const TIER_LINES: Dictionary = {
-	"sword": ["攻击范围 +15%", "攻击范围 +30%", "攻击范围 +50%"],
-	"talisman": ["弹丸穿透 +1", "弹丸穿透 +2", "弹丸穿透 +3"],
-	"thunder": ["攻击间隔 -8%", "攻击间隔 -15%", "攻击间隔 -25%"],
-	"spirit": ["生命+15 · 灵宝伤+10%", "生命+30 · 灵宝伤+20%", "生命+50 · 灵宝伤+25%"],
-	"wide": ["武器伤害 +10%", "武器伤害 +20%", "武器伤害 +30%"],
-	"contraption": ["机关伤害 +15%", "机关伤害 +30%", "机关伤害 +50%"],
-	"metal": ["暴击率+6% · 暴伤+20%", "暴击率+12% · 暴伤+40%", "暴击率+20% · 暴伤+75%"],
-	"wood": ["回复+1.0/秒 · 吸血+2%", "回复+2.0/秒 · 吸血+4%", "回复+3.5/秒 · 吸血+7%"],
-	"water": ["攻击间隔-6% · 移速+8%", "攻击间隔-12% · 移速+16%", "攻击间隔-20% · 移速+25%"],
-	"fire": ["法伤+8% · 灼烧+30%", "法伤+16% · 灼烧+60%", "法伤+26% · 灼烧+100%"],
-	"earth": ["护甲+3 · 击退+25%", "护甲+6 · 击退+50%", "护甲+10 · 击退+80%"],
-}
+const FORM_PCT := "pct"          ## 存分数：0.08 → +8%
+const FORM_PCT_DOWN := "pct_down" ## 存系数：0.92 → -8%（攻击间隔这类越小越好的档位）
+const FORM_FLAT := "flat"        ## 平值：3 → +3
+const FORM_FLAT1 := "flat1"      ## 一位小数的平值：1.0 → +1.0（每秒回复）
+
+## 某流派的效果声明表（唯一取数口；SynergySystem 结算与本文案生成共用）
+static func effects_for(tag: String) -> Array:
+	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+	return info.get("effects", [])
+
+## 第 tier 档（1 起）某条效果的原始数值；档位越界返回 NAN（调用方跳过该条）
+static func effect_value(tag: String, eff: Dictionary, tier: int) -> float:
+	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+	var vals: Array = info.get(String(eff.get("list", "values")), [])
+	if tier < 1 or tier > vals.size():
+		return NAN
+	return float(vals[tier - 1])
+
+## 原始数值 → 展示数值（带符号，单位已折算）
+## pct_down 必须落成负数：攻击间隔 0.94 是「缩短 6%」，取绝对值就成了「间隔 +6%」，
+## 玩家读到的方向正好反了（2026-10-11 生成器第一版就栽在这里，被负例判据抓出来）
+static func displayed_number(raw: float, form: String) -> float:
+	match form:
+		FORM_PCT:
+			return raw * 100.0
+		FORM_PCT_DOWN:
+			return (raw - 1.0) * 100.0
+		_:
+			return raw
+
+## 「+8%」「-8%」「+15」「+1.0」——阶梯行里的单个读数
+static func _signed(raw: float, form: String) -> String:
+	var d := displayed_number(raw, form)
+	var sign := "-" if d < 0.0 else "+"
+	return "%s%s%s" % [sign, _magnitude(d, form), unit_for(form)]
+
+## 展示单位：百分比档恒带 %，flat 档不带。阶梯行与说明句共用这一条规则
+## （2026-10-11 生成器第一版只在说明句拼了 suffix 没拼 %，「武器伤害 +10/20/25」读着像加 25 点）
+static func unit_for(form: String) -> String:
+	return "%" if form == FORM_PCT or form == FORM_PCT_DOWN else ""
+
+## 绝对值部分：整数不写小数点，flat1 恒留一位
+static func _magnitude(d: float, form: String) -> String:
+	var a := absf(d)
+	if form == FORM_FLAT1:
+		return "%.1f" % a
+	if absf(a - round(a)) <= 0.0001:
+		return str(int(round(a)))
+	return "%g" % a
+
+## 某流派第 tier 档（1 起）的阶梯文案：「武器伤害+8% · 灼烧+30%」
+## 分隔符与紧凑写法沿用原 TIER_LINES 口径，长度由 UnitRunner 的量尺判据兜（详情卡定宽 306）
+static func tier_line(tag: String, tier: int) -> String:
+	var parts: Array[String] = []
+	for eff in effects_for(tag):
+		var raw := effect_value(tag, eff, tier)
+		if is_nan(raw):
+			continue
+		parts.append("%s%s%s" % [String(eff.get("label", "")),
+				_signed(raw, String(eff.get("form", FORM_FLAT))), String(eff.get("suffix", ""))])
+	return " · ".join(parts)
+
+## 图鉴与详情卡通用长句：「武器伤害 +8/16/26%，灼烧 +30/60/100%」
+## 符号只写在首档前，与改前手抄的 desc 写法一致；数值仍逐档取自 effects，不另写一遍
+static func synergy_desc(tag: String) -> String:
+	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
+	var tiers: int = (info.get("thresholds", []) as Array).size()
+	var parts: Array[String] = []
+	for eff in effects_for(tag):
+		var form := String(eff.get("form", FORM_FLAT))
+		var nums: Array[String] = []
+		var sign := "+"
+		for t in range(1, tiers + 1):
+			var raw := effect_value(tag, eff, t)
+			if is_nan(raw):
+				continue
+			var d := displayed_number(raw, form)
+			if nums.is_empty():
+				sign = "-" if d < 0.0 else "+"
+			nums.append(_magnitude(d, form))
+		if nums.is_empty():
+			continue
+		parts.append("%s %s%s%s%s" % [String(eff.get("label", "")), sign,
+				"/".join(nums), unit_for(form), String(eff.get("suffix", ""))])
+	return "，".join(parts)
 
 # ---------------- 门槛与进度读数（唯一取数口） ----------------
 
 ## 角色对某流派门槛的下移量：只有召唤/机关两条道统会改，其余流派恒为 0
+## 折算与结算同一真话（SynergySystem.shift_for），局内门槛显示与角色门槛下移不会各算一套
 static func shift_for(tag: String) -> int:
-	if tag == "spirit":
-		return GameManager.spirit_threshold_adj
-	if tag == "contraption":
-		return GameManager.contraption_threshold_adj
-	return 0
+	return SynergySystem.shift_for(tag)
 
 ## 某流派的下移后三档门槛（与 GameBalance.synergy_level 同一条折算）
 static func thresholds_for(tag: String) -> Array:
@@ -92,10 +166,9 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 		["羁绊状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, int(ths[0]) - n),
 			GameStyle.GOOD if lv > 0 else GameStyle.GREY],
 	]
-	var tier_lines: Array = TIER_LINES.get(tag, [])
 	for idx in range(ths.size()):
 		var th_need: int = int(ths[idx])
-		var tier_txt: String = String(tier_lines[idx]) if idx < tier_lines.size() else ""
+		var tier_txt: String = tier_line(tag, idx + 1)
 		var reached: bool = n >= th_need
 		rows.append([
 			"%d 件档" % th_need,
@@ -113,7 +186,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 			step_txt += (" / " if idx > 0 else "") + str(int(ths[idx]))
 		notes = [
 			"同标签武器上阵达到 %s 件时依次激活阶梯加成。" % step_txt,
-			String(info.get("desc", "")),
+			synergy_desc(tag),
 		]
 
 	var body_txt := custom_body if not custom_body.is_empty() else "羁绊：持有越多同类武器，加成越强。"

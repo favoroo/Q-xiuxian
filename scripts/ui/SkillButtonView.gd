@@ -5,20 +5,30 @@ extends RefCounted
 ## 从 GameHUD 抽离，负责圆形冷却绘制遮罩、半透明墨蓝/流金样式以及按偏好设置定位。
 
 const SKILL_BTN_SIZE := 76.0
+## 圆键键面字号基准：一颗字（"技"）用 28；四字占位文案要降到 18 才收得进圆面
+## （口径同 HudObeliskButton.BTN_FONT，由 UnitRunner 那条「文案外接框角半径 <= 内缘」钉住）
+const SKILL_BTN_FONT := 28
 
-## 圆形冷却绘制遮罩：暗色半透明圆面 + 顺时针环形冷却进度弧
+## 圆形冷却/活跃绘制遮罩：冷却态 = 暗色半透明圆面 + 顺时针环形冷却进度弧；
+## 活跃态 = 键面不压暗，只画一圈点缀黄剩余环（效果进行中、冷却尚未开始）
 class SkillCdOverlay extends Control:
 	var cd_ratio: float = 0.0
+	var active_ratio: float = 0.0  ## >0 = 技能效果活跃中：画点缀黄剩余环，忽略冷却账
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	func _draw() -> void:
-		if cd_ratio <= 0.001:
-			return
 		var center := size * 0.5
 		var radius := minf(center.x, center.y)
+		if active_ratio > 0.001:
+			# 效果活跃中：点缀黄环顺时针消耗，弧长 = 剩余效果比例（与冷却弧同一根轨道）
+			var sweep_a := TAU * clampf(active_ratio, 0.0, 1.0)
+			draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep_a, 36, GameStyle.with_alpha(GameStyle.JADE, 0.95), 3.0, true)
+			return
+		if cd_ratio <= 0.001:
+			return
 		draw_circle(center, radius, GameStyle.dim_overlay(0.70))
 		var sweep := TAU * clampf(1.0 - cd_ratio, 0.0, 1.0)
 		draw_arc(center, maxf(2.0, radius - 2.5), -PI * 0.5, -PI * 0.5 + sweep, 36, GameStyle.with_alpha(GameStyle.COOLDOWN_ARC, 0.95), 3.0, true)
@@ -58,7 +68,7 @@ class CircleProgressOverlay extends Control:
 		draw_arc(center, radius, start, end, points, progress_color, width, true)
 		draw_circle(center + Vector2.RIGHT.rotated(end) * radius, width * 0.82, head_color)
 
-static func style_circle_button(btn: Button) -> void:
+static func style_circle_button(btn: Button, font_size: int = SKILL_BTN_FONT) -> void:
 	var r := int(SKILL_BTN_SIZE * 0.5)
 	var is_enhanced := false
 	if not GameManager.active_skill_id.is_empty():
@@ -106,7 +116,7 @@ static func style_circle_button(btn: Button) -> void:
 	btn.add_theme_stylebox_override("pressed", pressed)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_font_override("font", GameStyle.display_font())
-	btn.add_theme_font_size_override("font_size", 28)
+	btn.add_theme_font_size_override("font_size", font_size)
 	btn.add_theme_color_override("font_color", GameStyle.CHALK)
 	btn.add_theme_color_override("font_hover_color", GameStyle.JADE)
 	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)

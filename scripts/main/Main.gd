@@ -32,11 +32,27 @@ func _ready() -> void:
 		_stats_return_to_pause = true
 		stats_dialog.open(false)
 	)
+	if $UILayer.has_node("LevelUpDialog"):
+		var lvl_dialog: Control = $UILayer/LevelUpDialog
+		if lvl_dialog.has_signal("pause_requested"):
+			lvl_dialog.pause_requested.connect(func():
+				pause_menu.open(false)
+			)
+		if lvl_dialog.has_signal("stats_requested"):
+			lvl_dialog.stats_requested.connect(func():
+				_stats_return_to_pause = false
+				stats_dialog.open(false)
+			)
 	if $UILayer.has_node("WaveShop"):
-		$UILayer/WaveShop.stats_requested.connect(func():
+		var wave_shop: Control = $UILayer/WaveShop
+		wave_shop.stats_requested.connect(func():
 			_stats_return_to_pause = false
 			stats_dialog.open(false)
 		)
+		if wave_shop.has_signal("pause_requested"):
+			wave_shop.pause_requested.connect(func():
+				pause_menu.open(false)
+			)
 	stats_dialog.closed.connect(func():
 		if _stats_return_to_pause:
 			_stats_return_to_pause = false

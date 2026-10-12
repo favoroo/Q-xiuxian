@@ -6,9 +6,9 @@ extends Node2D
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
-## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 再随「波内总刷入预算」下调至 28
-## —— 小怪加血 3.5 倍后单敌存活更久，密度由「少而硬」维持；总刷入量另由预算封顶（见下）
-@export var max_enemies: int = 28
+## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 随「波内总刷入预算」下调至 28，
+## 2026-10-11 缩图（半场 680→500）后再下调至 18 —— 地图更小、单怪更厚，密度由「少而硬」维持
+@export var max_enemies: int = 18
 
 # —— 波内总刷入预算（2026-10-11 土豆兄弟式克制，曲线见 BalanceWave.wave_spawn_budget）——
 ## 预算只闸 _spawn_regular 的常规刷怪；精英/Boss 登场与分裂·产卵·召唤等衍生怪各有自己的上限，不占预算。
@@ -146,18 +146,25 @@ func start_wave(n: int) -> void:
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 
-## 藏宝匣：每波在竞技场随机位置刷 2~4 只，诱导玩家为补给冒险走位
+## 藏宝匣：每波在竞技场随机位置刷一批，诱导玩家为补给冒险走位。
+## 数量 = 基础曲线 + 「宝箱数量」（加点/法宝同一字段，见 BalanceChest.chest_count），
+## 每口匣子单独抽档（木/铜/玉），权重吃「宝箱品质」与已有的福缘 —— 抽档走 GameManager.rng，
+## 全局 randf() 会让判据钉不住同一批匣子（铁律 3）。
 func _spawn_chests() -> void:
 	var player = GameManager.player
 	if player == null:
 		return
-	var count := mini(2 + int(wave_number / 6.0), 4)
+	var count := GameBalance.chest_count(wave_number, GameManager.chest_count_bonus)
+	var tier_w: Array[float] = GameBalance.chest_tier_weights(GameManager.chest_quality, GameManager.luck)
 	var lim := GameManager.MAP_HALF_EXTENT - 160.0
 	for i in range(count):
 		var chest := SpiritChest.new()
+		# tier 必须在 add_child 之前写好：_ready 靠它定贴图/体型/击数/配色
+		chest.tier = GameBalance.weighted_pick_index(tier_w, GameManager.rng.randf())
 		var pos := Vector2(GameManager.rng.randf_range(-lim, lim), GameManager.rng.randf_range(-lim, lim))
 		if pos.distance_to(player.global_position) < 150.0:
-			pos += Vector2(220.0, 0.0)
+			# 别贴脸刷：推开一段再夹回场内，数量堆上去后不顶出竞技场边界
+			pos = (pos + Vector2(220.0, 0.0)).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 		chest.global_position = pos
 		get_parent().add_child(chest)
 
@@ -174,7 +181,7 @@ func end_wave() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
-	# 没砸开的藏宝匣同一口径收走：每波重刷 2~4 只，不留档否则场地越打越满是箱子。
+	# 没砸开的藏宝匣同一口径收走：每波重刷一批（数量曲线见 BalanceChest），不留档否则场地越打越满是箱子。
 	# 必须与上面那个 for 平级：这两轮循环原先缩进了 enemies 循环的体内 ⇒ 场上没怪时
 	# 匣子与炮台一个都不收（#24 刷怪预算把同屏顶满的旧口径改掉之后，波末清空成了常态，
 	# 这条静默路径才露出来：ChestTargetingCheck 第 5 组三条一起报红）。

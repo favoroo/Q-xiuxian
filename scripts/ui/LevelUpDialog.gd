@@ -1,6 +1,9 @@
 class_name LevelUpDialog
 extends Control
 
+signal stats_requested
+signal pause_requested
+
 ## 波后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
 ## 回合结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
 ## 2026-10-09 用户指令：「升级就会直接触发加点，在战斗过程中触发加点的体验不好 …
@@ -148,6 +151,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
+	_setup_top_bar()
 	GameStyle.label(title_label, 22, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(info_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
@@ -157,6 +161,47 @@ func _ready() -> void:
 	confirm_btn.pressed.connect(_on_confirm_pick)
 	GameManager.alloc_opened.connect(_on_alloc_opened)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
+
+## 顶栏：左侧标题色块，右侧「属性」与「暂停」按钮（与灵石阁同一布局口径）
+func _setup_top_bar() -> void:
+	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
+	var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
+	var top_bar := HBoxContainer.new()
+	top_bar.name = "TopBar"
+	top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bar.add_theme_constant_override("separation", 10)
+	vbox.add_child(top_bar)
+	vbox.move_child(top_bar, 0)
+
+	vbox.remove_child(title_band)
+	title_band.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	title_band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top_bar.add_child(title_band)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bar.add_child(spacer)
+
+	var stats_btn := Button.new()
+	stats_btn.name = "StatsButton"
+	stats_btn.text = "属 性"
+	stats_btn.custom_minimum_size = Vector2(72, 32)
+	stats_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stats_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(stats_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	stats_btn.pressed.connect(func(): stats_requested.emit())
+	top_bar.add_child(stats_btn)
+
+	var pause_btn := Button.new()
+	pause_btn.name = "PauseButton"
+	pause_btn.text = "暂 停"
+	pause_btn.custom_minimum_size = Vector2(72, 32)
+	pause_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pause_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	pause_btn.pressed.connect(func(): pause_requested.emit())
+	top_bar.add_child(pause_btn)
 
 ## 回合结束、有待加点：开面板并把这一屏的候选摆出来
 func _on_alloc_opened() -> void:
@@ -593,7 +638,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		# 详解卡开着 → 返回键先收卡（与 BaseModalDialog 同一口径）；面板本身不许退：
-		# 点数没加完不许走（用户指令「必须加完才能出战」）
-		DetailTip.close_all(self)
+		# 详解卡开着 → 返回键先收卡；无详解卡则唤出暂停菜单（面板本身不直接关，点数没加完不许走）
+		if DetailTip.close_all(self):
+			get_viewport().set_input_as_handled()
+			return
+		pause_requested.emit()
 		get_viewport().set_input_as_handled()

@@ -2,13 +2,20 @@ class_name SpiritChest
 extends Node2D
 
 ## 藏宝匣：竞技场内随机刷新的可破坏宝箱（Brotato 树木的修仙版）
-## 挨够 GameBalance.CHEST_BREAK_HITS 下砸开：60% 掉回春葫芦（回 15% 气血），40% 掉 3 颗金灵石
+## 挨够 GameBalance.chest_break_hits() 下砸开，掉什么按档位查 BalanceChest.reward_of（三档）：
+##   木匣 —— 约六成掉回春葫芦（回 15% 气血），约四成掉 3 颗金灵石
+##   铜匣 —— 同样的葫芦概率但回得更多，掉 6 颗金灵石 + 一笔金币
+##   玉匣 —— 必送一件随机法宝（与灵石阁同一个 roller），另有金币与灵石；每局送出件数有顶，
+##           到顶后退回铜匣奖励 ×1.5（见 BalanceChest.jade_fallback_reward）
 ## 掉出的葫芦在满血时不会被吃掉，会压在灰相留在原地等玩家掉血（见 HealOrb）
+## 持有「纳灵盘」法宝时，砸开掉的金灵石当场飞进袖中（heal orb 仍需贴身，引擎没有它的磁吸口）
 ## 挂在 4 号层（enemies）让武器判定能碰到；加入 chests 组 = 「可砸但不是威胁」的标记：
 ## 索敌按两段式走（见 GameBalance.assign_targets_with_chests）—— 场上还有活妖时法器不会
 ## 甩开妖来砸匣子，只有闲着的法器与多出来的弹道才流向它。
 ## 耐久按「几下」计而不按血量：伤害数值随星级/属性涨几十倍，若匣子跟着敌方 hp 曲线走，
 ## 后期会变成打不动的石头或一碰就没，两种都读不出「砸」这个动作。
+## 档位（tier）由 WaveSpawner 在 add_child 之前写入：_ready 里贴图/体型/击数/配色全读它，
+## 挂树后再改 tier 不会重建这些件，所以构造顺序是契约的一部分。
 
 ## 剩余击数读数：只在受损后出现，一格一下，从右往左熄灭
 class HitPips:
@@ -47,12 +54,27 @@ const PIP_LIFT := 40.0 * SIZE_MULT
 const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
 
+## 三档贴图（下标 == BalanceChest.TIER_*）：木=玄铁匣（2026-10-10 换稿那张）、铜=青铜古匣、
+## 玉=青玉镶板匣。三张源图同为 256 宽、产物同为 96 宽，所以 BASE_SCALE 这一把尺通用；
+## 档位之间的体型差由 BalanceChest.TIER_SCALE 同倍乘在精灵与判定圆上（画多大 == 判多大）。
+const TIER_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/art/prop_chest.png"),
+	preload("res://assets/art/prop_chest_bronze.png"),
+	preload("res://assets/art/prop_chest_jade.png"),
+]
+## 耐久格配色分档（取色只从 GameStyle）：木=灵石黄、铜=霜金、玉=青碧
+const TIER_PIP_COLORS: Array[Color] = [GameStyle.JADE, GameStyle.RARITY_EPIC, GameStyle.RARITY_RARE]
+
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 
 ## 与 EnemyBase 同名：ThunderBurst 按 get("dying") 判断这一件是否已结算过
 var dying: bool = false
+## 档位（0 木 / 1 铜 / 2 玉）：必须在 add_child 之前由 WaveSpawner 写好，_ready 才读得到。
+## 默认木匣 —— 直接 new() 出来摆上场的测试与预览工具拿到的就是改版前那口匣子。
+var tier: int = BalanceChest.TIER_WOOD
 var max_hits: int = GameBalance.CHEST_BREAK_HITS
 var remaining_hits: int = GameBalance.CHEST_BREAK_HITS
+var _tier_scale: float = 1.0   ## 本档体型倍率（精灵与判定圆同乘）
 
 var _sprite: Sprite2D
 var _pips: HitPips
@@ -66,35 +88,40 @@ var _entrance_tw: Tween
 func _ready() -> void:
 	add_to_group("chests")
 
+	# 档位先落地成一等公民：击数、体型、贴图、读数配色全部由它派生（曲线见 BalanceChest）
+	_tier_scale = GameBalance.chest_tier_scale(tier)
+	max_hits = GameBalance.chest_break_hits(GameManager.chest_break_bonus)
+	remaining_hits = max_hits
+
 	_box = Area2D.new()
 	_box.collision_layer = 4
 	_box.collision_mask = 0
 	add_child(_box)
 	_box_shape = CollisionShape2D.new()
 	var circle := CircleShape2D.new()
-	circle.radius = 17.0 * SIZE_MULT
+	circle.radius = 17.0 * SIZE_MULT * _tier_scale
 	_box_shape.shape = circle
 	_box.add_child(_box_shape)
 
 	_sprite = Sprite2D.new()
-	_sprite.texture = preload("res://assets/art/prop_chest.png")
+	_sprite.texture = TIER_TEXTURES[clampi(tier, 0, TIER_TEXTURES.size() - 1)]
 	# 0.2 倍微缩显示，全局 Nearest 会碎边出洞 —— 单节点开 Linear（SlashEffect 同款先例）
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_sprite.scale = Vector2.ZERO
 	add_child(_sprite)
 
 	_pips = HitPips.new()
-	_pips.position = Vector2(0.0, -PIP_LIFT)
+	_pips.position = Vector2(0.0, -PIP_LIFT * _tier_scale)
 	_pips.total = max_hits
 	_pips.left = remaining_hits
-	_pips.kept_color = GameStyle.JADE
+	_pips.kept_color = TIER_PIP_COLORS[clampi(tier, 0, TIER_PIP_COLORS.size() - 1)]
 	_pips.spent_color = GameStyle.NAVY2
 	_pips.edge_color = GameStyle.INK
 	add_child(_pips)
 
-	# 砸落登场 + 匣内灵气吞吐，两者都落在 SIZE_MULT 这一档体型上。
+	# 砸落登场 + 匣内灵气吞吐，两者都落在 SIZE_MULT×档位 这一档体型上。
 	# 呼吸必须等登场落定再接手：两条 tween 同写 _sprite.scale 时谁后写谁赢。
-	var rest := BASE_SCALE * SIZE_MULT
+	var rest := BASE_SCALE * SIZE_MULT * _tier_scale
 	_entrance_tw = create_tween()
 	_entrance_tw.tween_property(_sprite, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_entrance_tw.tween_callback(_start_breathe)
@@ -103,7 +130,7 @@ func _ready() -> void:
 func _start_breathe() -> void:
 	if _sprite == null or not is_instance_valid(_sprite):
 		return
-	var rest := BASE_SCALE * SIZE_MULT
+	var rest := BASE_SCALE * SIZE_MULT * _tier_scale
 	_breathe = create_tween().set_loops()
 	_breathe.tween_property(_sprite, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
 	_breathe.tween_property(_sprite, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
@@ -122,7 +149,6 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false) -> vo
 	remaining_hits -= 1
 	# 匣子不是威胁，不值得震屏与顿帧：只给"木裂"这一层反馈（高频事件按重要性稀缺发放）
 	AudioManager.play_sfx("chest_hit", 0.9)
-	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
 	_flash()
 	_jiggle(knockback)
 	_pips.left = remaining_hits
@@ -150,24 +176,44 @@ func _destroy() -> void:
 	if dying or is_queued_for_deletion():
 		return
 	dying = true
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, false)
 	AudioManager.play_sfx("chest_open", 0.9)
-	if GameManager.rng.randf() < 0.6:
-		# 回复珠走对象池（2026-10-11，与宝石同一条路）
-		var fruit := HealOrb.acquire_or_new(get_parent())
-		fruit.global_position = global_position
-		fruit.heal_pct = 0.15
-		fruit.activate()
+	var reward: Dictionary = GameBalance.chest_reward(tier)
+	# 玉匣的头奖就是那件法宝；每局送满上限后退回铜匣量级，不许空口白牙（口径见 BalanceChest）
+	if bool(reward.get("grant_item", false)) and not GameManager.chest_grant_item():
+		reward = GameBalance.chest_jade_fallback_reward()
+	var stones := int(reward.get("stones", 0))
+	if stones > 0:
+		GameManager.add_spirit_stones(stones)
+	if GameManager.rng.randf() < float(reward.get("heal_chance", 0.0)):
+		_drop_heal(float(reward.get("heal_pct", 0.0)))
 	else:
-		for i in range(3):
-			# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
-			var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-			gem.global_position = global_position + Vector2(
-				GameManager.rng.randf_range(-20.0, 20.0), GameManager.rng.randf_range(-20.0, 20.0))
-			gem.is_gold = true
-			gem.exp_value = 5
-			gem.activate()
+		_drop_gems(int(reward.get("gem_count", 0)), int(reward.get("gem_exp", 1)))
 	queue_free()
+
+## 回春葫芦：满血时不会被吃掉，压在灰相原地等玩家掉血（这套等待逻辑在 HealOrb 自己手里）
+func _drop_heal(pct: float) -> void:
+	if pct <= 0.0:
+		return
+	# 回复珠走对象池（2026-10-11，与宝石同一条路）
+	var fruit := HealOrb.acquire_or_new(get_parent())
+	fruit.global_position = global_position
+	fruit.heal_pct = pct
+	fruit.activate()
+
+## 一捧金灵石：撒在匣心周围。持有「纳灵盘」时当场全部飞向玩家 —— 砸匣子不必再绕一趟走位
+func _drop_gems(count: int, exp_each: int) -> void:
+	var magnet: bool = GameManager.item_hook_sum("chest_magnet") > 0.0
+	var player: Node2D = GameManager.player
+	for i in range(count):
+		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
+		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
+		gem.global_position = global_position + Vector2(
+			GameManager.rng.randf_range(-20.0, 20.0), GameManager.rng.randf_range(-20.0, 20.0))
+		gem.is_gold = true
+		gem.exp_value = exp_each
+		gem.activate()
+		if magnet and player != null and is_instance_valid(player):
+			gem.magnet_to(player)
 
 ## 波末还没砸开的匣子随余怪一起消散（不掉落）—— 与 EnemyBase.dissolve 同一口径。
 ## 每波重刷 2~4 只，留着不收会把场地堆成箱子阵；而"要不要为它多花几发"本来就是这只匣子的玩法。

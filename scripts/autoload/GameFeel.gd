@@ -70,33 +70,9 @@ static func crit_kill_hit_stop(gm: Node) -> void:
 	hit_stop(gm, GameBalance.CRIT_KILL_HITSTOP_DURATION, GameBalance.CRIT_KILL_HITSTOP_SCALE)
 
 # ---------------- 命中反馈全局限流（2026-10-11 频闪治理） ----------------
-## 远程穿透/弹射/多弹齐射下每秒命中可达几十次，逐刀全量「火花+微震」会糊成满屏频闪与持续抖屏。
-## 口径与 kill_hit_stop 一致：普通命中按最小间隔放行（到点才收下一发，持续高频下是匀速节奏而非全量），
-## 暴击/精英作为「值得看」的节点直通且不消耗间隔窗口。now_ms 可注入以便单测钉时间。
-
-static var _last_hit_spark_ms: int = 0
-
-## 普通命中火花闸：间隔内拒绝，暴击直通。被拒的那次命中仍有闪白/挤压/跳字兜底。
-static func hit_spark_gate(crit: bool, now_ms: int = -1) -> bool:
-	if crit:
-		return true
-	var now: int = Time.get_ticks_msec() if now_ms < 0 else now_ms
-	if now - _last_hit_spark_ms < int(GameBalance.HIT_SPARK_MIN_INTERVAL * 1000.0):
-		return false
-	_last_hit_spark_ms = now
-	return true
-
-static var _last_kill_burst_ms: int = 0
-
-## 普通小怪死亡爆散闸：间隔内拒绝，精英/Boss 直通（不消耗普通档窗口）。
-static func kill_burst_gate(elite: bool, now_ms: int = -1) -> bool:
-	if elite:
-		return true
-	var now: int = Time.get_ticks_msec() if now_ms < 0 else now_ms
-	if now - _last_kill_burst_ms < int(GameBalance.KILL_BURST_MIN_INTERVAL * 1000.0):
-		return false
-	_last_kill_burst_ms = now
-	return true
+## 远程穿透/弹射/多弹齐射下每秒命中可达几十次，逐刀全量「爆散+微震」会糊成满屏频闪与持续抖屏。
+## 口径与 kill_hit_stop 一致：普通档按最小间隔放行（到点才收下一发，持续高频下是匀速节奏而非全量），
+## （受击火花 / 死亡爆散已整体下线，其 hit_spark_gate / kill_burst_gate 一并移除；重构替代品时另起新闸。）
 
 static var _last_micro_kick_ms: int = 0
 

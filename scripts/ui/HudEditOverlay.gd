@@ -82,13 +82,13 @@ func _build() -> void:
 	_obelisk_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_OBELISK))
 	add_child(_obelisk_proxy)
 
-	# 额外技能键代理：与主技能键同款式（它就是 HudSkillButton 的额外槽位）
+	# 额外技能键代理：与真实键同款式同文案（它就是 HudSkillButton 的额外槽位）
 	_extra_proxy = Button.new()
-	_extra_proxy.text = "extra"
+	_extra_proxy.text = HudSkillButton.EXTRA_BTN_TEXT
 	_extra_proxy.custom_minimum_size = Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
 	_extra_proxy.mouse_filter = Control.MOUSE_FILTER_STOP
 	_extra_proxy.focus_mode = Control.FOCUS_NONE
-	SkillButtonView.style_circle_button(_extra_proxy)
+	SkillButtonView.style_circle_button(_extra_proxy, HudSkillButton.EXTRA_BTN_FONT)
 	_extra_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_EXTRA))
 	add_child(_extra_proxy)
 
@@ -195,7 +195,8 @@ func _sel_name(drag_id: int) -> String:
 		DRAG_OBELISK:
 			return "祭坛按钮"
 		DRAG_EXTRA:
-			return "额外技能按钮"
+			# 用户 2026-10-11：「额外技能按钮」太长，chip 里写「额外技能」就够指认这颗键
+			return "额外技能"
 	return "技能按钮"
 
 # ---------------- 每帧同步：真实按钮是摆位真话，代理钮贴上去 ----------------
@@ -204,7 +205,7 @@ func _process(_delta: float) -> void:
 	if not visible or _hud == null:
 		return
 	if _drag_id != DRAG_NONE:
-		_apply_drag(_xy_setter.bind(_drag_id))
+		_apply_drag(_drag_id)
 	_sync_proxy(_skill_proxy, _hud.skill_btn_center_px(), SettingsManager.skill_btn_scale())
 	_sync_proxy(_obelisk_proxy, _hud.obelisk_btn_center_px(), SettingsManager.obelisk_btn_scale())
 	_sync_proxy(_extra_proxy, _hud.extra_skill_btn_center_px(), SettingsManager.extra_btn_scale())
@@ -217,14 +218,20 @@ func _sync_proxy(p: Button, center: Vector2, scale_f: float) -> void:
 	p.scale = Vector2(scale_f, scale_f)
 	p.position = center - p.size * 0.5
 
-func _apply_drag(setter: Callable) -> void:
+## 拖动中把指针位置写进槽位对应的设置项（不落盘，松手由 _end_drag 统一存）。
+## 参数顺序：槽位 id 在前、坐标在后 —— 这里必须是普通调用。
+## （用户 2026-10-11 真机：三颗键一颗都拖不动。旧写法 `_apply_drag(_xy_setter.bind(id))`
+##  配 `setter.call(norm, false)`，而 Callable.bind() 是把绑定参数**追加到实参表末尾**，
+##  于是每帧调成 `_xy_setter(norm, false, id)`：第一个形参要 int 却收到 Vector2，
+##  GDScript 直接报 "Cannot convert argument 1 from Vector2 to int" 并放弃这次调用
+##  ⇒ 设置项一次都没写进去，真实按钮原地不动，代理钮每帧又被贴回原处，看着就是"按住了拖不走"。）
+func _apply_drag(drag_id: int) -> void:
 	var vp := get_viewport_rect().size
 	var c := _pointer + _drag_off
 	var norm := Vector2(
 		clampf(c.x / maxf(1.0, vp.x), 0.0, 1.0),
 		clampf(c.y / maxf(1.0, vp.y), 0.0, 1.0))
-	# 拖动中不落盘（避免每帧写 settings.cfg），松手统一存
-	setter.call(norm, false)
+	_xy_setter(drag_id, norm, false)
 
 # ---------------- 指针追踪与拖动生命周期 ----------------
 

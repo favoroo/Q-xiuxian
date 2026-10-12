@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
 const DASH_LANDING_SPEED_MUL: float = 1.35  ## 冲刺落地那帧的残留速度上限（× 常速）：只留一点前冲，不许拖出隐形滑行
+const SPIRIT_HEALER_SCENE: PackedScene = preload("res://scenes/entities/SpiritHealer.tscn")  ## 治疗灵兽（renewal 附带召唤）
 
 @export var max_health: float = 120.0
 var current_health: float = 120.0
@@ -33,12 +34,20 @@ var is_procedural: bool = false
 var gait_phase_counter: float = 0.0
 
 # ---------------- 随行神通（技能）运行时 ----------------
+## 冷却账本两段式：施放先开「效果活跃窗口」（skill_active_*），窗口走完才进冷却（skill_cd_*）。
+## 窗口时长按技能类型取值：加速/急速/无敌 = duration，冲刺 = iframe 无敌时长，治疗瞬发 = 0（按下即进 CD）。
 var skill_cd_left: float = 0.0     ## 技能冷却剩余秒（HUD 冷却遮罩轮询这个）
 var skill_cd_total: float = 1.0    ## 本次释放进入的总冷却（算遮罩比例用）
+var skill_active_left: float = 0.0 ## 效果活跃窗口剩余秒（>0 = 效果进行中、冷却未开始，HUD 亮黄环）
+var skill_active_total: float = 1.0 ## 本次活跃窗口总时长（HUD 活跃环比例用）
+var _skill_active_kind: int = -1   ## 活跃窗口对应的技能 Kind（收尾钩子用，-1 = 无活跃技能）
+var _skill_pending_cd: float = 0.0 ## 效果结束后要进入的冷却值（施放时暂存）
 var _skill_buffs: Dictionary = {}  ## 进行中的短时增益：buff id -> 剩余秒（gale / haste）
 var _dash_time: float = 0.0        ## 冲刺剩余秒（>0 期间移动被冲刺接管）
 var _dash_dir: Vector2 = Vector2.DOWN
 var _dash_speed: float = 0.0
+var _thunder_cd: float = 1.5       ## 天雷倒计时（雷法真君；开局 1.5s 首雷见面礼，之后按 ThunderData.INTERVAL）
+var _crowd_tick: float = 0.0       ## 蛮兵·陷阵感知节流（0.2s 一数，与 HUD 读数同频）
 
 # ---------------- 踏影（闪避出口，数值全在 ShadowStepData） ----------------
 ## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，影爆（额外技能）一键全部踩碎兑现。
@@ -182,7 +191,6 @@ func pickup_radius() -> float:
 
 func _on_leveled_up(_lvl: int) -> void:
 	play_squash(Vector2(0.72, 1.38), 0.28)
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 
 # ---------------- 武器管理 ----------------
 
@@ -299,6 +307,10 @@ func heal(amount: float, quiet: bool = false) -> void:
 	GameManager.player_hp_changed.emit(current_health, max_health)
 	# 只报真正回上来的那部分；顶满时一口没回，不发挤压/音效/+X（报了就是假账）
 	var gained := current_health - before
+	# 药王·药池：顶满溢出的那部分折算入池（所有治疗出口共用这一把尺子；数值全在 ElixirData）
+	var overflow := amount - gained
+	if overflow > 0.0:
+		GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, overflow, max_health)
 	if gained <= 0.01:
 		return
 	GameManager.total_hp_healed += gained
@@ -310,10 +322,10 @@ func heal(amount: float, quiet: bool = false) -> void:
 
 # ---------------- 随行神通（技能） ----------------
 
-## HUD 技能按钮入口。false = 没放出来（CD 中 / 战斗外 / 无技能），调用方不发反馈
+## HUD 技能按钮入口。false = 没放出来（CD 中 / 效果活跃中 / 战斗外 / 无技能），调用方不发反馈
 func try_activate_skill() -> bool:
 	var sid := GameManager.active_skill_id
-	if sid.is_empty() or GameManager.is_game_over or skill_cd_left > 0.0:
+	if sid.is_empty() or GameManager.is_game_over or skill_cd_left > 0.0 or skill_active_left > 0.0:
 		return false
 	var spawner: Node = GameManager.wave_spawner
 	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
@@ -321,8 +333,17 @@ func try_activate_skill() -> bool:
 	var st := SkillData.final_stats(sid, GameManager.cultivator_id)
 	if st.is_empty():
 		return false
-	skill_cd_total = float(st["cooldown"])
-	skill_cd_left = skill_cd_total
+	# 冷却两段式：先开效果活跃窗口，窗口走完（_on_skill_effect_end）才进冷却；
+	# 瞬发（治疗）窗口为 0，按下当帧直接进冷却
+	_skill_pending_cd = float(st["cooldown"])
+	_skill_active_kind = int(st["kind"])
+	var active_dur := _skill_active_duration(st)
+	if active_dur <= 0.0:
+		_skill_active_kind = -1
+		_begin_skill_cooldown()
+	else:
+		skill_active_total = active_dur
+		skill_active_left = active_dur
 	match int(st["kind"]):
 		SkillData.Kind.DASH:
 			_do_dash(st)
@@ -335,6 +356,28 @@ func try_activate_skill() -> bool:
 		SkillData.Kind.HEAL:
 			_do_renewal(st)
 	return true
+
+## 效果活跃窗口时长（秒）：冲刺按无敌窗口，持续型按 duration，其余（瞬发）为 0
+func _skill_active_duration(st: Dictionary) -> float:
+	match int(st["kind"]):
+		SkillData.Kind.DASH:
+			return float(st.get("iframe", 0.0))
+		SkillData.Kind.SPEED, SkillData.Kind.HASTE, SkillData.Kind.IFRAME:
+			return float(st["duration"])
+	return 0.0
+
+func _begin_skill_cooldown() -> void:
+	skill_cd_total = maxf(0.01, _skill_pending_cd)
+	skill_cd_left = skill_cd_total
+
+## 效果活跃窗口走完：先做各类型收尾（回滚短时乘区），此刻才进冷却
+func _on_skill_effect_end() -> void:
+	skill_active_left = 0.0
+	match _skill_active_kind:
+		SkillData.Kind.IFRAME:
+			GameManager.buff_knockback_mult = 1.0
+	_skill_active_kind = -1
+	_begin_skill_cooldown()
 
 ## HUD 额外技能按钮入口（随角色绑定，如影者的影爆）。false = 没放出来（无技能/战斗外/资源没攒上），调用方发拒绝反馈。
 ## 免冷却类（BURST）的门控是资源本身（影层层数），所以这里不走 skill_cd_left 那道闸。
@@ -350,7 +393,14 @@ func try_activate_extra_skill() -> bool:
 		return false
 	match int(st["kind"]):
 		SkillData.Kind.BURST:
-			# 蓄能释放：没攒上层按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
+			# 蓄能释放：没攒上按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
+			if sid == "elixir":
+				# 服丹：门控是药池（ElixirData），池空按不动
+				if not ElixirData.has_charge(GameManager.elixir_pool):
+					return false
+				play_squash(Vector2(1.18, 0.84), 0.18)
+				_release_elixir()
+				return true
 			if not ShadowStepData.has_charge(shadow_ring):
 				return false
 			play_squash(Vector2(1.18, 0.84), 0.18)
@@ -370,8 +420,11 @@ func _tick_skill_buffs(delta: float) -> void:
 		match String(key):
 			"gale":
 				GameManager.buff_move_speed_mult = 1.0
+				GameManager.buff_dodge = 0.0
 			"haste":
 				GameManager.buff_attack_speed_mult = 1.0
+			"elixir":
+				GameManager.buff_damage_mult = 1.0
 
 ## 无输入时按当前朝向给冲刺方向（facing + flip_h 还原 8 方向单位向量）
 func _facing_vec() -> Vector2:
@@ -403,6 +456,8 @@ func _do_dash(st: Dictionary) -> void:
 	# 影层被动：每层再加一段无敌（影在身上时冲刺更稳）——影层兑现不在这里，影爆是独立技能
 	invulnerable_time = maxf(invulnerable_time,
 		float(st.get("iframe", _dash_time + 0.04)) + ShadowStepData.iframe_bonus(shadow_ring))
+	# 冲刺攻势：起跳即开必暴窗口（roll_crit 消费，覆盖冲刺与落地追击的两拍输出）
+	GameManager.force_crit_left = maxf(GameManager.force_crit_left, float(st.get("crit_window", 0.0)))
 	play_squash(Vector2(1.3, 0.72), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
 	if skill_vfx != null:
@@ -439,8 +494,83 @@ func _release_shadow_step() -> void:
 	if skill_vfx != null:
 		skill_vfx.on_shadow_spent()
 
+## 盾势爆发（守卫·全自动）：把槽里蓄的「被护甲挡下的伤害」按比例折成一次周身震荡还回去并震开。
+## 与影爆同一把尺子：环特效半径传的就是判定半径；不加震屏——爆发由环、跳字与击退本身表达。
+## 唯一触发点是 take_damage 蓄满当帧（攒/放同一写点），槽先清零再结算，爆发期间挨的刀计入下一槽。
+func _release_guard_stance() -> void:
+	var charge := GameManager.shield_charge
+	GameManager.shield_charge = 0.0
+	var dmg := GuardStanceData.burst_damage(charge)
+	var impulse: float = GuardStanceData.PUSH_IMPULSE * GameManager.knockback_mult
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var e := node as EnemyBase
+		if e == null or not is_instance_valid(e) or e.dying:
+			continue
+		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，不许被盾势推动或打到
+		if e.is_in_group("chests") or e.is_in_group("herbs"):
+			continue
+		var off: Vector2 = e.global_position - global_position
+		if off.length() > GuardStanceData.BURST_RADIUS:
+			continue
+		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
+		e.take_damage(dmg, dir * impulse)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, GuardStanceData.BURST_RADIUS,
+		GameStyle.AURUM, 0.26)
+	AudioManager.play_sfx("whoosh_heavy", 0.9, 0.72)
+
+## 天雷（雷法真君·全自动）：引雷劈向索敌圈内最近的妖兽，落点小范围震荡。
+## 与盾势同一把尺子：环特效半径传的就是判定半径；不加震屏——落雷由环、跳字与击退本身表达。
+## 伤害只随元素伤害成长（ThunderData.bolt_damage）× 短时增益乘区——不吃武器 tag 乘区，
+## 它是道统神通不是法器；返回 false = 索敌圈内无怪（调用方走短间隔重试，不空耗整轮冷却）。
+func _call_thunder() -> bool:
+	var best: EnemyBase = null
+	var best_d := ThunderData.SEEK_RANGE
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var e := node as EnemyBase
+		if e == null or not is_instance_valid(e) or e.dying:
+			continue
+		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，天雷不劈它们
+		if e.is_in_group("chests") or e.is_in_group("herbs"):
+			continue
+		var d: float = global_position.distance_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	if best == null:
+		return false
+	var strike_pos: Vector2 = best.global_position
+	var dmg: float = ThunderData.bolt_damage(GameManager.elemental_damage) * GameManager.buff_damage_mult
+	var impulse: float = ThunderData.PUSH_IMPULSE * GameManager.knockback_mult
+	for node in get_tree().get_nodes_in_group("enemies"):
+		var e := node as EnemyBase
+		if e == null or not is_instance_valid(e) or e.dying:
+			continue
+		if e.is_in_group("chests") or e.is_in_group("herbs"):
+			continue
+		var off: Vector2 = e.global_position - strike_pos
+		if off.length() > ThunderData.RADIUS:
+			continue
+		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
+		e.take_damage(dmg, dir * impulse)
+	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
+		GameStyle.GOLD_EDGE, 0.3)
+	AudioManager.play_sfx("thunder_strike", 0.9, 1.0)
+	return true
+
+## 服丹（药王·额外技能）：一口喝掉药池——按池量回血，余下几秒全伤害增益（ElixirData 数值）。
+## 池量在 heal 之后再清零：满血服丹时 heal 的溢出会回灌半池，那是「喝剩的底子」，不当新账留下。
+func _release_elixir() -> void:
+	var pool := GameManager.elixir_pool
+	heal(pool)
+	GameManager.elixir_pool = 0.0
+	GameManager.buff_damage_mult = ElixirData.buff_mult()
+	_skill_buffs["elixir"] = ElixirData.BUFF_DURATION
+	AudioManager.play_sfx("heal", 1.0, 1.15)
+
 func _do_gale(st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
+	# 罡风护身：加速期间身法闪避大幅提升（到期与移速乘区同帧精确归零）
+	GameManager.buff_dodge = float(st.get("dodge_add", 0.0))
 	_skill_buffs["gale"] = float(st["duration"])
 	play_squash(Vector2(0.85, 1.2), 0.2)
 	if skill_vfx != null:
@@ -458,8 +588,9 @@ func _do_haste(st: Dictionary) -> void:
 func _do_aegis(st: Dictionary) -> void:
 	var dur: float = float(st["duration"])
 	invulnerable_time = maxf(invulnerable_time, dur)
+	# 金光罡风：无敌期间法器击退力度大幅提升（活跃窗口走完由 _on_skill_effect_end 回 1.0）
+	GameManager.buff_knockback_mult = float(st.get("knockback_boost", 1.0))
 	play_squash(Vector2(0.82, 1.22), 0.24)
-	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, Vector2.UP, true)
 	if skill_vfx != null:
 		skill_vfx.on_aegis_start(dur)
 	AudioManager.play_sfx("skill_aegis", 1.0)
@@ -468,9 +599,30 @@ func _do_renewal(st: Dictionary) -> void:
 	heal(max_health * float(st["power"]), true)
 	play_squash(Vector2(0.88, 1.16), 0.18)
 	DamageNumber.spawn(get_parent(), global_position, int(max_health * float(st["power"])), false, "+" + str(int(max_health * float(st["power"]))) + " HP")
+	_summon_spirit_healer(st)
 	if skill_vfx != null:
 		skill_vfx.on_renewal_cast()
 	AudioManager.play_sfx("skill_heal", 1.0)
+
+## 治疗灵兽：治疗技能附带召唤（SkillData renewal 的 pet_* 字段），跟随玩家周期回血；重施按组替换旧灵
+func _summon_spirit_healer(st: Dictionary) -> void:
+	var pet_pct := float(st.get("pet_heal_pct", 0.0))
+	var pet_life := float(st.get("pet_duration", 0.0))
+	if pet_pct <= 0.0 or pet_life <= 0.0:
+		return
+	var old := get_tree().get_first_node_in_group("spirit_healers")
+	if old != null:
+		# 先出组再销毁：queue_free 要到帧末才真正释放，同帧重施必须立刻能拿到新灵
+		old.remove_from_group("spirit_healers")
+		old.queue_free()
+	var pet := SPIRIT_HEALER_SCENE.instantiate() as SpiritHealer
+	if pet == null:
+		return
+	pet.heal_pct = pet_pct
+	pet.lifetime = pet_life
+	pet.target = self
+	get_parent().add_child(pet)
+	pet.global_position = global_position + Vector2(0, -SpiritHealer.HEIGHT_OFFSET)
 
 # ---------------- 主循环 ----------------
 
@@ -478,11 +630,24 @@ func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
 
-	# 技能冷却与短时增益倒计时（与加点乘区隔离，到期精确回滚）
+	# 技能冷却两段式：先走效果活跃窗口（归零即收尾+进冷却），再走冷却与短时增益倒计时
+	# （与加点乘区隔离，到期精确回滚）
+	if skill_active_left > 0.0:
+		skill_active_left -= delta
+		if skill_active_left <= 0.0:
+			_on_skill_effect_end()
 	if skill_cd_left > 0.0:
 		skill_cd_left -= delta
 	if not _skill_buffs.is_empty():
 		_tick_skill_buffs(delta)
+	if GameManager.force_crit_left > 0.0:
+		GameManager.force_crit_left -= delta
+
+	# 雷法真君·天雷：周期落雷（有怪才落，落完按 ThunderData.INTERVAL 重计；无怪短间隔重试）
+	if GameManager.thunder_strike > 0.0:
+		_thunder_cd -= delta
+		if _thunder_cd <= 0.0:
+			_thunder_cd = ThunderData.INTERVAL if _call_thunder() else ThunderData.RETRY_INTERVAL
 
 	# 受击无敌帧倒计时与频闪反馈
 	if invulnerable_time > 0.0:
@@ -505,7 +670,12 @@ func _physics_process(delta: float) -> void:
 	if total_regen > 0.0 and current_health < max_health:
 		var before_regen := current_health
 		current_health = minf(max_health, current_health + total_regen * delta)
-		GameManager.total_hp_healed += maxf(0.0, current_health - before_regen)
+		var regen_gained := current_health - before_regen
+		GameManager.total_hp_healed += maxf(0.0, regen_gained)
+		# 药王·药池：顶满那一拍的溢出部分同样折算入池（与 heal() 同一把尺子）
+		var regen_overflow := total_regen * delta - regen_gained
+		if regen_overflow > 0.0:
+			GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, regen_overflow, max_health)
 		regen_tick += delta
 	if regen_tick >= 0.5:
 		regen_tick = 0.0
@@ -539,6 +709,27 @@ func _physics_process(delta: float) -> void:
 	var accel := 2200.0 if input_moving else 2800.0
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
+
+	# 不动明王印·站定账本：法宝在场才计时；脚底一动（输入或余速未消）立刻清零
+	if GameManager.item_hook_sum("still_damage") > 0.0:
+		GameManager.still_time = 0.0 if is_moving else GameManager.still_time + delta
+
+	# 蛮兵·陷阵：节流数感知圈内的妖兽（crowd_damage_radius = 0 时整块零开销）
+	if GameManager.crowd_damage_radius > 0.0:
+		_crowd_tick -= delta
+		if _crowd_tick <= 0.0:
+			_crowd_tick = 0.2
+			var crowd_n := 0
+			var crowd_r2 := GameManager.crowd_damage_radius * GameManager.crowd_damage_radius
+			for node in get_tree().get_nodes_in_group("enemies"):
+				var ce := node as EnemyBase
+				if ce == null or not is_instance_valid(ce) or ce.dying:
+					continue
+				if ce.is_in_group("chests") or ce.is_in_group("herbs"):
+					continue
+				if global_position.distance_squared_to(ce.global_position) <= crowd_r2:
+					crowd_n += 1
+			GameManager.nearby_enemy_count = crowd_n
 
 	# 灵田界碑边界
 	var lim: float = GameManager.MAP_HALF_EXTENT - 26.0
@@ -888,6 +1079,14 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	current_health = maxf(0.0, current_health - reduced)
 	invulnerable_time = 0.55
 	GameManager.on_player_hit(reduced)
+
+	# 守卫·盾势：被护甲挡下的那部分伤害存进盾势槽，蓄满当帧自动爆发（全自动，不用学操作）。
+	# 蓄能天然被 0.55s 受击无敌帧节流，贴身怪群也不会超频连炸；数值全在 GuardStanceData。
+	if GameManager.guard_stance > 0.0:
+		GameManager.shield_charge = GuardStanceData.add_charge(
+			GameManager.shield_charge, amount - reduced, max_health)
+		if GuardStanceData.is_full(GameManager.shield_charge, max_health):
+			_release_guard_stance()
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
 	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压 + 触觉震感
@@ -897,8 +1096,6 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	play_squash(Vector2(1.35, 0.72), 0.22)
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.2)
-	var spark_dir := (global_position - source_pos).normalized() if source_pos.is_finite() else Vector2.UP
-	JuiceEffect.spawn_hit_sparks(get_parent(), global_position, spark_dir, false)
 	AudioManager.play_sfx("player_hurt", 0.9)
 
 	if hit_flash_mat != null:

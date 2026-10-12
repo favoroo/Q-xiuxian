@@ -99,5 +99,4 @@ static func build_ctx(gm: Node) -> Dictionary:
 		"dodge_cap": float(gm.DODGE_CAP) + float(gm.dodge_cap_bonus),
 		"aspd_floor": float(gm.ATTACK_SPEED_FLOOR),
 		"contraption_mult": float(gm.synergy_contraption_mult),
-		"drone_mult": float(gm.synergy_drone_mult),
 	}

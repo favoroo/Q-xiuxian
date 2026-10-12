@@ -21,7 +21,7 @@ extends Node
 ## 防假 PASS：
 ##  ① 先断言「带解释的色签数 == 画出来的色签数」且不少于 15 颗 —— 采到 0 颗时后面每一条
 ##     都会静默变成空判（"ALL PASS 零项" 就是没测）；
-##  ② 每颗签的期望标题与期望文案由本文件按 WeaponData / SynergyUI.TIER_LINES 现算，
+##  ② 每颗签的期望标题与期望文案由本文件按 WeaponData / SynergyUI.tier_line() 现算，
 ##     不叫被测代码报数；
 ##  ③ 弹出的 payload 在收卡之前先取成字典再验内容：DetailTip 是淡出 0.1 秒才 free 的，
 ##     收完再 live() 就读到 null，那一段就成了零项空判；
@@ -170,9 +170,11 @@ func _check_content(payload: Dictionary, tip: Dictionary, label: String) -> void
 			_c.check(joined.contains("上阵达到"), "%s 的卡上印了阶梯规则" % label)
 			_c.check(joined.contains("属于这一路") or joined.contains("不计入羁绊"),
 					"%s 的卡上讲清买下这一把之后会怎样（当前 %d 件）" % [label, n])
-			var tiers: Array = SynergyUI.TIER_LINES.get(tag, [])
-			_c.check(not tiers.is_empty() and joined.contains(String(tiers[0])),
-					"%s 的卡上印了第一档给什么（期望含「%s」）" % [label, str(tiers)])
+			# 阶梯文案现在由 WeaponData.effects 生成（手抄的 TIER_LINES 已删），这里只验
+			# 「第一档给什么有没有上卡」；数字对不对另由 UnitRunner 的 apply_counts 对账判据管
+			var tier1 := SynergyUI.tier_line(tag, 1)
+			_c.check(not tier1.is_empty() and joined.contains(tier1),
+					"%s 的卡上印了第一档给什么（期望含「%s」）" % [label, tier1])
 		"merge":
 			_c.check(joined.contains("3 件换 1 件"),
 					"%s 的卡上印了三合一会掉羁绊件数这件事" % label)

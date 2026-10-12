@@ -26,15 +26,15 @@ const SCALING_NAMES := {
 	"armor": "护甲",
 	"max_hp": "最大生命",
 	"move_speed_mult": "移动速度",
-	"attack_speed_mult": "攻击速度",
+	"attack_speed_mult": "攻击间隔",
 	"lifesteal": "吸血",
 }
 
 const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.MELEE: "近战",
 	WeaponData.Behavior.PROJECTILE: "远程",
-	WeaponData.Behavior.BURST: "轰击",
-	WeaponData.Behavior.DRONE: "召唤",
+	WeaponData.Behavior.BURST: "范围",
+	WeaponData.Behavior.DRONE: "环绕",
 	WeaponData.Behavior.TURRET: "机关",
 }
 
@@ -481,6 +481,12 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 		pro_lbl.text = "＋ " + String(pro)
 		GameStyle.label(pro_lbl, 12, GameStyle.GOOD)
 		text_col.add_child(pro_lbl)
+	# 额外技能单独一段（幽夜紫）：与选角界面同一份文案、同一个色语义（数字现读机制表）
+	for x_line in CultivatorData.get_extra_desc(cid):
+		var x_lbl := Label.new()
+		x_lbl.text = String(x_line)
+		GameStyle.label(x_lbl, 12, GameStyle.SHADOW)
+		text_col.add_child(x_lbl)
 	for con in def.get("cons", []):
 		var con_lbl := Label.new()
 		con_lbl.text = "－ " + String(con)
@@ -569,7 +575,9 @@ func _make_synergy_card() -> Control:
 				0, GameStyle.INK, true)
 			line.add_child(name_lbl)
 			var desc_lbl := Label.new()
-			desc_lbl.text = String(syn.get("desc", ""))
+			# 阶梯文案由 WeaponData.SYNERGIES.effects 生成，与局内商店详情卡同一张表同一个口径
+			desc_lbl.text = GameStyle.wrap_cjk(SynergyUI.synergy_desc(tag),
+				GameStyle.body_font(), 12, TEXT_W - 74.0)
 			GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
 			line.add_child(desc_lbl)
 	return card

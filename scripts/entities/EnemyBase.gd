@@ -54,8 +54,7 @@ var hit_stun_resist: float = 1.0  ## 受击硬直倍率（小怪 1.0，精英 0.
 var _hit_freeze_timer: float = 0.0 ## 局部受击卡肉定格（秒）：冻结位移吸附在刀尖，随后释放击退冲量
 var _hit_jiggle_offset: Vector2 = Vector2.ZERO  ## 受击瞬间视觉微反冲偏移
 var _skid_dust_timer: float = 0.0 ## 滑行擦地扬尘计时
-var _death_overkill_ratio: float = 0.0  ## 致命一刀的溢出伤害比例（死亡爆散规模放大用）
-var _death_crit_kill: bool = false      ## 致命一刀是否为暴击（暴击击杀特写：金环爆散 + 精英 HEAVY 反馈）
+var _death_crit_kill: bool = false      ## 致命一刀是否为暴击（暴击击杀：独立顿帧 + 缩放冲击 + 精英 HEAVY 反馈）
 var facing: String = "s"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
@@ -796,12 +795,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
 			AudioManager.play_sfx("enemy_hit_heavy", 1.00, randf_range(0.92, 1.06))
 
-	# 跳字与火花（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
-	# DoT tick 常驻不发火花（每 0.5s × N 敌堆得太多），跳字保留。
-	# 音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
-	# 火花走全局限流闸（2026-10-11 频闪治理）：普通命中按最小间隔放行，暴击直通
-	if not from_dot and not _offscreen and not lethal and GameFeel.hit_spark_gate(is_crit):
-		JuiceEffect.spawn_hit_sparks(get_parent(), global_position, knockback, is_crit)
+	# 跳字（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
+	# DoT tick 常驻发跳字。音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
+	# 受击火花已整体下线（2026-10-11 用户拍板：远程高频命中下仍「空白处乱闪」，待重构替代品）
 	if not _offscreen:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
 	var squash_target := _calculate_hit_squash(knockback, is_crit)
@@ -831,14 +827,11 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
 
 	if lethal:
-		# 斩杀加成：致命一刀击退放大（尸体随爆散朝打击方向飞出）；
-		# 溢出伤害比例留给死亡爆散放大规模 —— 大数字暴击能把妖物「打爆」
+		# 斩杀加成：致命一刀击退放大（尸体随击杀反馈朝打击方向飞出）
 		knockback_velocity *= GameBalance.KILL_KNOCKBACK_MULT
-		_death_overkill_ratio = clampf(-current_hp / maxf(max_hp, 1.0), 0.0, 1.5)
-		# 暴击击杀特写：爆散规模保底放大 + 更实的独立顿帧 + 一记缩放冲击（2026-10-11）
+		# 暴击击杀特写：更实的独立顿帧 + 一记缩放冲击（2026-10-11；爆散规模放大于 2026-10-12 随爆散下线移除）
 		_death_crit_kill = is_crit and not from_dot
 		if _death_crit_kill:
-			_death_overkill_ratio = maxf(_death_overkill_ratio, GameBalance.CRIT_KILL_OVERKILL_FLOOR)
 			# 精英伏诛走 HEAVY 反馈自带更大顿帧/缩放，此处不重复发
 			if not is_elite:
 				GameFeel.crit_kill_hit_stop(GameManager)
@@ -893,7 +886,6 @@ func _explode(player: Node2D) -> void:
 	if dying:
 		return
 	_clear_explode_ring()
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	# 冲击波扫到 explode_radius 为止：扫过的范围就是受伤的范围（与判定同源）
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, explode_radius, GameStyle.BAD)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
@@ -1133,10 +1125,7 @@ func _die() -> void:
 	_clear_bite_warning()
 	_clear_explode_ring()
 
-	# 击杀视觉爆散与分级震屏（溢出伤害比例放大爆散规模：大数字暴击一刀「打爆」）。
-	# 爆散走全局限流闸（2026-10-11 频闪治理）：尸潮里普通小怪逐只爆散同样会频闪，精英/Boss 直通
-	if is_elite or GameFeel.kill_burst_gate(is_elite):
-		JuiceEffect.spawn_death_burst(get_parent(), global_position, is_elite, _death_overkill_ratio, _death_crit_kill)
+	# 击杀反馈分级震屏（死亡爆散视觉已于 2026-10-12 整体下线：击杀反馈 = 尸体塌缩 + 跳字 + 音效）
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, 8.5)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
@@ -1160,6 +1149,32 @@ func _die() -> void:
 		orb.global_position = global_position
 		orb.heal_amount = float(heal_orb_drop)
 		orb.activate()
+	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占灵石位）
+	if GameManager.heal_orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < GameManager.heal_orb_chance:
+		var extra_orb := HealOrb.acquire_or_new(get_parent())
+		extra_orb.global_position = global_position + Vector2(
+			GameManager.rng.randf_range(-16.0, 16.0), GameManager.rng.randf_range(-16.0, 16.0))
+		extra_orb.heal_amount = HealOrb.BASE_HEAL
+		extra_orb.activate()
+	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
+	# 波末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
+	var ex_base := GameManager.item_hook_sum("kill_explode")
+	if ex_base > 0.0 and not _no_drop:
+		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
+		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
+		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
+		for node in get_tree().get_nodes_in_group("enemies"):
+			var e := node as EnemyBase
+			if e == null or not is_instance_valid(e) or e.dying or e == self:
+				continue
+			if e.is_in_group("chests") or e.is_in_group("herbs"):
+				continue
+			var ex_off: Vector2 = e.global_position - global_position
+			if ex_off.length() > ex_radius:
+				continue
+			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
+			e.take_damage(ex_dmg, ex_dir * ex_impulse)
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)

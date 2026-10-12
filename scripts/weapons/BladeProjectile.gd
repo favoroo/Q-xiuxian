@@ -161,7 +161,7 @@ func _steer(delta: float) -> void:
 func _on_area_entered(area: Area2D) -> void:
 	var enemy = area.get_parent()
 	if enemy and enemy.has_method("take_damage"):
-		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
+		var is_crit: bool = GameManager.roll_crit()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
 		var actual_dmg = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
 		var knock := GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)

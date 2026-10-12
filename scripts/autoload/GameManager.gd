@@ -30,7 +30,8 @@ enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
-const MAP_HALF_EXTENT: float = 680.0
+## 2026-10-11 缩图 680→500（面积约 -46%）：祭坛坐标/灵脉刻槽/太极阵半径为硬编码，需同步改 Main.tscn 与 ArenaVisualLayer
+const MAP_HALF_EXTENT: float = 500.0
 
 ## 每次刷新给几个候选：悟道结算与灵石阁货架同一档（2026-10-09 用户指令「改成 5 个」）
 const UPGRADE_OFFER_COUNT: int = 5
@@ -127,6 +128,12 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless" and not Engine.is_editor_hint():
 		call_deferred("_setup_headless_guard")
 
+## 无头守护时长（秒）：兜底抓「真挂起」，不该顺手把「真在干活的慢判据」一起打死。
+## 判据卡数涨上来后 45s 会变成误杀线（ManualHotzoneCheck 115 张卡 × 12 取样点实测 ~55s），
+## 所以慢判据在自己的 _ready 里把本值调大即可 —— autoload 的 call_deferred 在场景 _ready
+## 之后才冲刷，这条赋值赶得上。默认 45s 不变：不申报的判据仍按老时长兜底。
+var headless_guard_sec: float = 45.0
+
 ## 无头模式守护：防止测试或工具场景因语法错误/遗漏 quit() 导致 Godot 进程永久挂起
 func _setup_headless_guard() -> void:
 	var tree := get_tree()
@@ -137,10 +144,10 @@ func _setup_headless_guard() -> void:
 		printerr("[HEADLESS_GUARD] 场景根脚本加载失败 (%s)，已自动终止无头进程以防死循环。" % cs.scene_file_path)
 		tree.quit(1)
 		return
-	await tree.create_timer(45.0, true, false, true).timeout
+	await tree.create_timer(headless_guard_sec, true, false, true).timeout
 	var cur := tree.current_scene
 	var path := cur.scene_file_path if cur != null else "unknown"
-	printerr("[HEADLESS_GUARD] 无头模式运行超过 45s 未退出 (%s)，自动强制终止。" % path)
+	printerr("[HEADLESS_GUARD] 无头模式运行超过 %ds 未退出 (%s)，自动强制终止。" % [int(headless_guard_sec), path])
 	tree.quit(124)
 
 func _load_progress() -> void:
@@ -233,6 +240,10 @@ var elite_damage: float = 0.0 ## 斩将：对精英/Boss 的额外伤害加成
 var free_rerolls: int = 0     ## 通玄：每波免费重掷货架次数
 var element_damage: Dictionary = {}  ## 五行真解：{元素 tag(String): 伤害加成(float)}
 var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id（UpgradeData 过滤用）
+var chest_count_bonus: int = 0   ## 寻宝：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
+var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权重（BalanceChest.tier_weights 消费）
+var chest_break_bonus: int = 0   ## 开箱省力：宝箱砸开所需击数下调几许（BalanceChest.break_hits 消费）
+var chest_item_grants: int = 0   ## 本局玉匣已送出的法宝件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
 
 # 修士流派（角色）特性
 var cultivator_id: String = ""
@@ -252,6 +263,27 @@ var on_hit_damage_bonus: float = 0.0    ## 嗜血魔修：受击单层增伤
 var on_hit_damage_cap_stacks: int = 10  ## 嗜血魔修：增伤最大层数
 var on_hit_damage_stacks: int = 0
 var on_hit_damage_timer: float = 0.0
+var guard_stance: float = 0.0           ## 守卫：盾势机制开关（>0 启用；蓄能/爆发数值全在 GuardStanceData）
+var shield_charge: float = 0.0          ## 守卫：盾势槽当前蓄能（Player.take_damage 写入，蓄满当帧爆发清空）
+var elixir_pool: float = 0.0            ## 药王：药池当前存量（治疗溢出入池，服丹消耗；数值全在 ElixirData）
+var heal_orb_chance: float = 0.0        ## 灵植夫：敌人死亡额外掉回复珠概率（EnemyBase 掉落块消费）
+var heal_overflow_mult: float = 1.0     ## 灵植夫：回复珠溢出折灵石倍率（HealOrb._collect 消费）
+var alloc_offer_bonus: int = 0          ## 学者：悟道候选数加成（AllocSession.roll_alloc_offers 消费）
+var alloc_free_reroll_bonus: int = 0    ## 学者：每回合悟道免费刷新加成（AllocSession.open_alloc_session 消费）
+var collection_damage_per_unique: float = 0.0  ## 收藏家：每持有一种不同法宝的全伤害加成
+var unique_item_count: int = 0          ## 当前持有不同法宝种数（add_item/consume_item 两写点维护）
+var frenzy_enabled: float = 0.0       ## 狂战士：战意机制开关（>0 启用；每层幅度/上限/流失全在 FrenzyData）
+var frenzy_stacks: float = 0.0          ## 狂战士：战意当前层数（register_kill 攒，_process 计时流失）
+var frenzy_idle: float = 0.0            ## 距上次击杀的秒数（战意流失宽限计时）
+var thunder_strike: float = 0.0         ## 雷法真君：天雷机制开关（>0 启用；数值全在 ThunderData，计时器在 Player）
+# ---- 角色轻钩子（2026-10-12，照嗜血 on_hit 先例：不建机制表，apply 时从 mods 落字段，damage_mult 现算） ----
+var crowd_damage_per_enemy: float = 0.0  ## 蛮兵·陷阵：感知圈内每只妖兽的全伤害加成
+var crowd_damage_cap: float = 0.0        ## 蛮兵·陷阵：加成总上限
+var crowd_damage_radius: float = 0.0     ## 蛮兵·陷阵：感知半径（0 = 未启用，Player 不数怪）
+var nearby_enemy_count: int = 0          ## 陷阵感知圈内的妖兽数（Player 按 0.2s 节流写入）
+var stone_damage_per_100: float = 0.0    ## 守财奴·财可通神：每持 100 灵石的全伤害加成
+var stone_damage_cap: float = 0.0        ## 守财奴·财可通神：加成总上限
+var still_time: float = 0.0              ## 连续站定秒数（不动明王印账本，Player._physics_process 维护）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
@@ -264,7 +296,11 @@ var active_skill_id: String = ""       ## 本局生效的技能 id
 var extra_skill_id: String = ""        ## 本局生效的「额外技能」id（随角色绑定，影者=影爆；空 = 无额外技能，第二按钮隐藏）
 var buff_move_speed_mult: float = 1.0  ## 神行术短时移速乘区（Player._physics_process 消费）
 var buff_attack_speed_mult: float = 1.0 ## 疾风咒短时施法间隔乘区（FloatingWeapon._perform_attack 消费）
+var buff_dodge: float = 0.0            ## 神行术短时闪避加成（get_effective_dodge 消费，到期归零）
+var buff_knockback_mult: float = 1.0   ## 金光护体短时击退乘区（knockback_force 消费，到期回 1.0）
+var force_crit_left: float = 0.0       ## 冲刺必暴剩余秒（roll_crit 消费，Player 每帧递减，>0 时所有攻击必暴）
 var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就生效：Player 在攒层/兑现两写点按 ShadowStepData.amp_mult 维护，落地清空回 1.0）
+var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（FloatingWeapon._final_damage 消费，到期由 Player 精确回 1.0）
 
 # 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/法宝：弹丸额外穿透基础
@@ -284,7 +320,6 @@ var synergy_burn_mult: float = 1.0    ## 离火羁绊：额外灼烧伤害倍率
 var synergy_armor: float = 0.0        ## 厚土羁绊：额外护甲
 var synergy_knockback_mult: float = 1.0 ## 厚土羁绊：额外受击震退力倍率
 var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关法器伤害乘区
-var synergy_drone_mult: float = 1.0 ## 召唤羁绊：环绕灵宝伤害乘区（仅 DRONE 行为吃这一档）
 
 var _lifesteal_procs: int = 0
 var _lifesteal_window: float = 0.0
@@ -293,6 +328,7 @@ var _hud_tick: float = 0.0  ## HUD 计时刷新节流：只走时间显示，事
 # 商店
 var shop_offers: Array = []
 var reroll_cost: int = 2
+var reroll_price_mult: float = 1.0 ## 商人：重掷费用乘区（ShopSystem.roll_shop 在纯函数结果上乘算）
 var reroll_count: int = 0          ## 本波已重掷次数（费用递增，跨波重置）
 var reroll_free_left: int = 0      ## 本波剩余免费重掷次数（roll_shop(new_wave) 时按 free_rerolls 重置）
 var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如散修 8 折）
@@ -326,6 +362,11 @@ func _process(delta: float) -> void:
 		on_hit_damage_timer -= delta
 		if on_hit_damage_timer <= 0.0:
 			on_hit_damage_stacks = 0
+
+	# 狂战士·战意流失：击杀把宽限计时归零，停杀超过宽限后按 FrenzyData 速率泄层
+	if frenzy_enabled > 0.0 and frenzy_stacks > 0.0:
+		frenzy_idle += delta
+		frenzy_stacks = FrenzyData.decay(frenzy_stacks, frenzy_idle, delta)
 
 	if not is_game_over and not get_tree().paused and player != null:
 		game_time += delta
@@ -379,6 +420,10 @@ func add_spirit_stones(amount: int) -> void:
 
 func register_kill(is_elite: bool = false) -> void:
 	kills += 1
+	# 狂战士·战意：每次击杀 +1 层并把流失宽限计时归零（唯一攒点）
+	if frenzy_enabled > 0.0:
+		frenzy_stacks = FrenzyData.add_stack(frenzy_stacks)
+		frenzy_idle = 0.0
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
 		touch_peak_stones()
@@ -462,10 +507,21 @@ func get_effective_armor() -> float:
 	return armor + synergy_armor
 
 func get_crit_rate() -> float:
-	return minf(crit_rate + synergy_crit_rate, CRIT_RATE_CAP)
+	var rate := crit_rate + synergy_crit_rate
+	# 幻影迷踪铃：闪避转暴击（系数在 ItemData 额外字段 crit_per_dodge，每 10% 有效闪避折算一份）
+	var cvt := item_hook_sum("crit_per_dodge")
+	if cvt > 0.0:
+		rate += cvt * (get_effective_dodge() / 0.1)
+	return minf(rate, CRIT_RATE_CAP)
+
+## 暴击判定唯一出口：冲刺必暴窗口内直接判暴，否则按有效暴击率掷 rng
+func roll_crit() -> bool:
+	if force_crit_left > 0.0:
+		return true
+	return rng.randf() < get_crit_rate()
 
 func get_effective_dodge() -> float:
-	return minf(dodge, DODGE_CAP + dodge_cap_bonus)
+	return minf(dodge + buff_dodge, DODGE_CAP + dodge_cap_bonus)
 
 ## 上阵法器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
 func max_weapon_slots() -> int:
@@ -482,9 +538,9 @@ func element_damage_mult(w_id: String) -> float:
 		return 1.0
 	return 1.0 + float(element_damage.get(WeaponData.element_of(w_id), 0.0))
 
-## 法器击退力度：玩家震退属性 × 厚土羁绊倍率
+## 法器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率
 func knockback_force(base: float) -> float:
-	return base * knockback_mult * synergy_knockback_mult
+	return base * knockback_mult * synergy_knockback_mult * buff_knockback_mult
 
 ## 法器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
 ## source = 施力点（落雷点 / 法器自身 / 灵宝自身），enemy_pos = 受击敌人位置。
@@ -561,7 +617,7 @@ func apply_harvest(budget_comp_exp: int = 0) -> void:
 		if interest > 0:
 			spirit_stones += interest
 			stats_updated.emit(kills, game_time, spirit_stones)
-			announcement_triggered.emit("✦ 金山结息 · 获得 %d 枚灵石 ✦" % interest)
+			announcement_triggered.emit("✦ 金山结息 · 获得 %d 枚金币 ✦" % interest)
 	# 回春葫芦等法宝的波末回血 hook
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
@@ -579,8 +635,27 @@ func add_item(item_id: String) -> bool:
 		return false
 	if bool(def.get("unique", false)) and has_item(item_id):
 		return false
+	# 图鉴种数账本（收藏家）：新种类 +1，重复购买不涨（consume_item 那一路对应回退）
+	if not has_item(item_id):
+		unique_item_count += 1
 	items.append(item_id)
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
+	return true
+
+## 玉匣破开送法宝：与灵石阁同一个 roller（ItemData.pick_id），档位权重、福缘、已持有 unique
+## 去重、未解锁不入池这些口径全部照旧 —— 白送的那件和花钱买的那件必须是同一种东西。
+## 每局上限见 BalanceChest.JADE_ITEM_GRANT_CAP：到顶返回 false，由调用方落回退回奖励。
+## 公告必发：玩家得知道这口匣子开出了什么，不然"送法宝"这条兑现不出来就只能靠猜。
+func chest_grant_item() -> bool:
+	if chest_item_grants >= GameBalance.CHEST_JADE_ITEM_GRANT_CAP:
+		return false
+	var id := ItemData.pick_id(luck, wave_number, items, rng, unlocked_items)
+	if id.is_empty():
+		return false
+	if not add_item(id):
+		return false
+	chest_item_grants += 1
+	announcement_triggered.emit("✦ 玉匣破开 · 得【%s】✦" % String(ItemData.get_def(id).get("name", id)))
 	return true
 
 ## 消耗一件法宝（替死傀儡这类一次性机制用），返回是否真的消耗了
@@ -589,6 +664,9 @@ func consume_item(item_id: String) -> bool:
 	if i < 0:
 		return false
 	items.remove_at(i)
+	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种法宝，种数 -1
+	if not has_item(item_id):
+		unique_item_count = maxi(0, unique_item_count - 1)
 	return true
 
 ## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）

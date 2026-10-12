@@ -31,6 +31,9 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	var cons: Array = def.get("cons", [])
 	for i in range(cons.size()):
 		rows.append(["代偿 %d" % (i + 1), String(cons[i]), GameStyle.BAD])
+	# 额外技能单独一行一段（与选角界面同读机制表，不再混在「加成 N」里）
+	for x_line in CultivatorData.get_extra_desc(GameManager.cultivator_id):
+		rows.append(["额外技能", String(x_line), GameStyle.SHADOW])
 	var skill_id := CultivatorData.get_synergy_skill_id(GameManager.cultivator_id)
 	if not skill_id.is_empty():
 		var sdef := SkillData.get_def(skill_id)
@@ -172,11 +175,8 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	if WeaponDamageReadout.is_turret(def):
 		var contraption := WeaponDamageReadout.contraption_mult()
 		factor_rows.append(["机关羁绊", _mul(contraption), _c(contraption - 1.0)])
-	elif int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE:
-		# 召唤羁绊灵宝乘区与运行时 SunOrb 伤害链逐项同形，这里不能少列
-		var drone_m := WeaponDamageReadout.drone_mult(def)
-		if not is_equal_approx(drone_m, 1.0):
-			factor_rows.append(["灵宝羁绊", _mul(drone_m), _c(drone_m - 1.0)])
+	# 环绕类不再单列一行乘区：召唤羁绊那档伤害 2026-10-11 起并在全局「武器伤害」里，
+	# 上面「全局与羁绊」那行的羁绊数就是它实际吃的数（与 SunOrb 伤害链同形）。
 
 	var rows: Array = [
 		["攻击方式", WeaponData.behavior_label(def), behavior_color(def)],

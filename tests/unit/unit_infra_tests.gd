@@ -154,24 +154,37 @@ func _test_floating_btn_defaults() -> void:
 					gap_extra, SettingsManager.BTN_DEFAULT_EDGE_GAP])
 	_c.check(gap_extra <= d, "额外技能键与祭坛键也没开成一里地（%.1f <= 键径 %.0f）" % [gap_extra, d])
 	# 三、键面文案收在圆面之内：量的是「画出来的那一圈」——文案外接框的对角半径
-	#     要小于圆面内缘（键径一半再收掉 _circle_box 那 2 像素描边）
+	#     要小于圆面内缘（键径一半再收掉 _circle_box 那 2 像素描边）。
+	#     三颗浮动键的文案进同一张表，用同一把尺子（额外技能键的占位字面也走这里，
+	#     用户 2026-10-11：原先写英文 "extra"，改中文四字后必须证明它收得进圆面不漏字）
 	var f := GameStyle.display_font()
-	var box: Vector2 = f.get_multiline_string_size(HudObeliskButton.BTN_TEXT,
-			HORIZONTAL_ALIGNMENT_CENTER, -1.0, HudObeliskButton.BTN_FONT)
-	var corner := box.length() * 0.5
 	var inner_r := d * 0.5 - 2.0
-	_c.check(HudObeliskButton.BTN_TEXT.contains("\n"),
-			"文案「%s」分行排（单行「激活祭祀」22 号宽 88，圆面只有 72 可用）" % HudObeliskButton.BTN_TEXT)
-	_c.check(corner <= inner_r,
-			"键面文案收在圆键之内（%.0f×%.0f 外接框角半径 %.1f <= 内缘 %.1f）" % [
-					box.x, box.y, corner, inner_r])
-	# 四、也不许压在走针那一圈上：按住充能时那一圈正是拇指盯着的读数
-	var ov := SkillButtonView.CircleProgressOverlay.new()
-	ov.size = HudObeliskButton.BTN_SIZE
-	var arc_r := ov.arc_radius()
-	ov.free()
-	_c.check(corner <= arc_r,
-			"键面文案收在走针环之内（角半径 %.1f <= 走针半径 %.1f，按住时那一圈不压在字上）" % [corner, arc_r])
+	var faces: Array[Array] = [
+		["祭坛键", HudObeliskButton.BTN_TEXT, HudObeliskButton.BTN_FONT],
+		["额外技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT],
+	]
+	for face in faces:
+		var label: String = String(face[1])
+		var font_px: int = int(face[2])
+		var box: Vector2 = f.get_multiline_string_size(label,
+				HORIZONTAL_ALIGNMENT_CENTER, -1.0, font_px)
+		var corner := box.length() * 0.5
+		_c.check(not label.contains("extra"),
+				"%s：键面不再写英文占位「%s」（玩家看不出那是颗什么键）" % [face[0], label])
+		_c.check(box.x <= inner_r * 2.0,
+				"%s：文案「%s」每一行都收得进圆面（最长行 %.0f <= 内切宽 %.0f，一行排下去字会探出圆面）" % [
+						face[0], label, box.x, inner_r * 2.0])
+		_c.check(corner <= inner_r,
+				"%s：键面文案收在圆键之内（%.0f×%.0f 外接框角半径 %.1f <= 内缘 %.1f）" % [
+						face[0], box.x, box.y, corner, inner_r])
+		# 四、也不许压在走针那一圈上：按住充能时那一圈正是拇指盯着的读数
+		var ov := SkillButtonView.CircleProgressOverlay.new()
+		ov.size = Vector2(d, d)   # 三颗键同径（外观基准钉在 SKILL_BTN_SIZE 一个数上）
+		var arc_r := ov.arc_radius()
+		ov.free()
+		_c.check(corner <= arc_r,
+				"%s：键面文案收在走针环之内（角半径 %.1f <= 走针半径 %.1f，按住时那一圈不压在字上）" % [
+						face[0], corner, arc_r])
 
 # ---------------- 震屏：创伤预算与强度档位 ----------------
 
@@ -217,7 +230,7 @@ func _test_achievement_and_meta_save() -> void:
 			_c.check(not ItemData.get_def(rid).is_empty(), "成就 %s 奖励法宝 %s 在法宝表中存在" % [aid, rid])
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
 	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 6, "初始默认开放 6 名基础修士")
-	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 47, "初始默认开放 47 件基础法宝")
+	_c.equals(AchievementData.DEFAULT_ITEMS.size(), 51, "初始默认开放 51 件基础法宝（含 2026-10-11 寻宝流四件）")
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()
@@ -419,12 +432,69 @@ func _test_career_milestones() -> void:
 	GameManager._save_progress()
 	GameManager.reset_run()
 
-# ---------------- 远程「点杀位」档：单发咬不住几个敌人的法器必须啃得动硬目标 ----------------
+## 加点与商店顶栏暂停/属性入口及暂停状态恢复防偷跑校验（2026-10-12）
+func _test_modal_pause_buttons() -> void:
+	var holder := Control.new()
+	add_child(holder)
 
-## 背景（2026-10-08 用户口径：「一些远程且只能击中一个敌人的武器需要加强一下，火符比其他武器弱很多」）：
-## 近战弧扫与环绕法宝是当帧结算 / 接触即伤，天生没有"打不中"这笔税；弹丸过去直线飞行，
-## 远距对横移目标的实测命中率只有 11~33%（见 tests/ProjectileProbe.tscn）。
-## 追踪上线后纸面 DPS 才等于真 DPS，于是这里把两类档位的相对关系钉死：
-##   · 点杀位（单发最多结算 2 个敌人的弹丸）：单体 DPS 必须站上"非远程法器单体 DPS 中位数"；
-##   · 全体弹丸：单体 DPS 不得低于该中位的 0.8 倍。
-## 参照点是现算的，不做魔法数字 —— 以后近战/环绕改数值，这条下限跟着一起走。
+	var lvl_dlg: LevelUpDialog = (load("res://scenes/ui/LevelUpDialog.tscn") as PackedScene).instantiate() as LevelUpDialog
+	lvl_dlg.name = "LevelUpDialog"
+	holder.add_child(lvl_dlg)
+
+	var shop_dlg: WaveShop = (load("res://scenes/ui/WaveShop.tscn") as PackedScene).instantiate() as WaveShop
+	shop_dlg.name = "WaveShop"
+	holder.add_child(shop_dlg)
+
+	var pause_menu := PauseMenu.new()
+	pause_menu.name = "PauseMenu"
+	holder.add_child(pause_menu)
+
+	# 1. LevelUpDialog 顶栏按钮与信号校验
+	_c.check(lvl_dlg.has_signal("pause_requested"), "加点面板具备 pause_requested 信号")
+	_c.check(lvl_dlg.has_signal("stats_requested"), "加点面板具备 stats_requested 信号")
+	var lvl_stats_btn := lvl_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/TopBar/StatsButton") as Button
+	var lvl_pause_btn := lvl_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/TopBar/PauseButton") as Button
+	_c.check(lvl_stats_btn != null and lvl_stats_btn.text == "属 性", "加点面板顶栏含「属 性」按钮")
+	_c.check(lvl_pause_btn != null and lvl_pause_btn.text == "暂 停", "加点面板顶栏含「暂 停」按钮")
+
+	var state := {"lvl_pause": 0, "lvl_stats": 0, "shop_pause": 0}
+	lvl_dlg.pause_requested.connect(func(): state["lvl_pause"] += 1)
+	lvl_dlg.stats_requested.connect(func(): state["lvl_stats"] += 1)
+	lvl_pause_btn.pressed.emit()
+	lvl_stats_btn.pressed.emit()
+	_c.equals(int(state["lvl_pause"]), 1, "点击加点面板暂停按钮触发 pause_requested")
+	_c.equals(int(state["lvl_stats"]), 1, "点击加点面板属性按钮触发 stats_requested")
+
+	# 2. WaveShop 顶栏暂停按钮与信号校验
+	_c.check(shop_dlg.has_signal("pause_requested"), "商店面板具备 pause_requested 信号")
+	var shop_pause_btn := shop_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/TopBar/PauseButton") as Button
+	_c.check(shop_pause_btn != null and shop_pause_btn.text == "暂 停", "商店面板顶栏含「暂 停」按钮")
+	shop_dlg.pause_requested.connect(func(): state["shop_pause"] += 1)
+	shop_pause_btn.pressed.emit()
+	_c.equals(int(state["shop_pause"]), 1, "点击商店面板暂停按钮触发 pause_requested")
+
+	# 3. PauseMenu 暂停状态恢复互斥校验（防止加点/商店背后战斗偷跑）
+	lvl_dlg.visible = false
+	shop_dlg.visible = false
+	_c.check(not pause_menu._has_paused_modal_behind(), "普通战斗下背后无模态暂停窗")
+	pause_menu.open()
+	_c.check(pause_menu._unpause_on_close, "普通战斗打开暂停菜单后关闭应解暂停")
+	pause_menu.visible = false
+
+	lvl_dlg.visible = true
+	_c.check(pause_menu._has_paused_modal_behind(), "加点面板显示时识别出背后有模态暂停窗")
+	pause_menu.open()
+	_c.check(not pause_menu._unpause_on_close, "加点面板下打开暂停菜单关闭时保持暂停")
+	pause_menu.visible = false
+	lvl_dlg.visible = false
+
+	shop_dlg.visible = true
+	_c.check(pause_menu._has_paused_modal_behind(), "商店面板显示时识别出背后有模态暂停窗")
+	pause_menu.open(false)
+	_c.check(not pause_menu._unpause_on_close, "商店面板下打开暂停菜单关闭时保持暂停")
+	pause_menu.visible = false
+	shop_dlg.visible = false
+
+	get_tree().paused = false
+	holder.free()
+

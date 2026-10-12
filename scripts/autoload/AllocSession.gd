@@ -9,7 +9,8 @@ static func open_alloc_session(gm: Node) -> void:
 		return
 	gm.alloc_points_total = gm.pending_upgrade_points
 	gm.alloc_reroll_count = 0
-	gm.alloc_reroll_free_left = gm.ALLOC_FREE_REROLLS
+	# 学者·博学：每回合免费刷新在基准之上加成（alloc_free_reroll_bonus，缺省 0）
+	gm.alloc_reroll_free_left = gm.ALLOC_FREE_REROLLS + gm.alloc_free_reroll_bonus
 	gm.alloc_reroll_cost = GameBalance.reroll_cost(gm.wave_number, gm.alloc_reroll_count, gm.shop_price_mult)
 	roll_alloc_offers(gm)
 	if gm.alloc_offers.is_empty():
@@ -26,7 +27,8 @@ static func force_end_alloc(gm: Node, reason: String) -> void:
 	gm.alloc_finished.emit()
 
 static func roll_alloc_offers(gm: Node) -> void:
-	gm.alloc_offers = gm.roll_upgrades(gm.UPGRADE_OFFER_COUNT)
+	# 学者·博学：候选数在基准之上加成（alloc_offer_bonus，缺省 0）
+	gm.alloc_offers = gm.roll_upgrades(gm.UPGRADE_OFFER_COUNT + gm.alloc_offer_bonus)
 	# 「荐」标：按当前修士+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
 	RecommendSystem.mark_alloc_offers(gm)
 

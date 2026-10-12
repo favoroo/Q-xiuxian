@@ -83,19 +83,20 @@ func _run() -> void:
 	_check(DamageNumber.host_child_count() <= cap, "溢出节点已释放，宿主子节点数回落 (%d)" % DamageNumber.host_child_count())
 
 	# ---------- 4. 特效池 ----------
+	# （2026-10-12 死亡爆散整体下线，池回收判据改由结算冲击环承担——同一套 acquire/_release 通路）
 	for i in range(40):
-		JuiceEffect.spawn_hit_sparks(world, Vector2(20 + i, 30 + i), Vector2.RIGHT, i % 5 == 0)
+		JuiceEffect.spawn_shockwave(world, Vector2(20 + i, 30 + i), 24.0, Color.WHITE, 0.2)
 	_check(JuiceEffect.created_count() == 40, "首轮创建 40 个特效节点 (%d)" % JuiceEffect.created_count())
 	await get_tree().create_timer(0.6).timeout
 	_check(JuiceEffect.pool_size() == 40, "特效全部回池 (%d)" % JuiceEffect.pool_size())
 	for i in range(40):
-		JuiceEffect.spawn_death_burst(world, Vector2(20 + i, 30 + i), i % 10 == 0)
+		JuiceEffect.spawn_shockwave(world, Vector2(20 + i, 30 + i), 24.0, Color.WHITE, 0.2)
 	_check(JuiceEffect.created_count() == 40, "第二轮特效零新建 (%d)" % JuiceEffect.created_count())
 
 	# ---------- 5. 特效并行数组：下标覆盖 + 复用归零 ----------
 	var fx := JuiceEffect.new()
 	world.add_child(fx)
-	fx._begin(JuiceEffect.EffectType.HIT_SPARKS, Vector2.ZERO, 0.2, JuiceEffect.Z_OVERLAY)
+	fx._begin(JuiceEffect.EffectType.SHOCKWAVE, Vector2.ZERO, 0.2, JuiceEffect.Z_OVERLAY)
 	_check(fx._p_pos.size() == JuiceEffect.PARTICLE_SLOTS, "入树后一次性开好常驻容量 (%d)" % fx._p_pos.size())
 	for i in range(12):
 		fx._add_particle(Vector2.ZERO, Vector2.RIGHT, 10.0, Color.WHITE, 2.0)

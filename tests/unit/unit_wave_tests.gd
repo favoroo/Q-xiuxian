@@ -20,14 +20,14 @@ func _test_wave_scaling() -> void:
 	_c.near(GameBalance.spawn_interval(40), GameBalance.SPAWN_INTERVAL_MIN, EPS, "刷怪间隔有下限")
 	_c.near(GameBalance.enemy_hp_mult(0), GameBalance.enemy_hp_mult(1), EPS, "非法波次 0 被夹到 1")
 	# 刷怪预算（2026-10-11 土豆兄弟式克制）：波内总刷入封顶，预算耗尽即停手，场上越打越空。
-	# 前期与旧总量相当（不触发），第 6 波起收紧 —— 旧口径会把同屏恒定顶满上限（持续卡顿源）。
-	# 2026-10-11 随波次拉长同比例放预算（21/5.5/150）：总击杀数与时长一起变多，密度峰值不变。
-	_c.equals(GameBalance.wave_spawn_budget(1), 26, "第 1 波预算 26（旧总量 ~25，不触发，前期手感不变）")
-	_c.equals(GameBalance.wave_spawn_budget(5), 48, "第 5 波预算 48（旧总量 ~37，不触发）")
-	_c.equals(GameBalance.wave_spawn_budget(6), 54, "第 6 波预算 54（旧总量 ~73，砍 ~26%）")
-	_c.equals(GameBalance.wave_spawn_budget(10), 76, "第 10 波预算 76（旧总量 ~104，砍 ~27%）")
-	_c.equals(GameBalance.wave_spawn_budget(20), 131, "第 20 波预算 131（旧总量 ~425，后期砍更狠）")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.WAVE_SPAWN_BUDGET_MAX, "无尽波次预算封顶")
+	# 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90），
+	# 单怪血量基数同步 +33% 补压力，预算缺口由经验补差兜底（见 balance_sim_check 绑定契约）。
+	_c.equals(GameBalance.wave_spawn_budget(1), 17, "第 1 波预算 17（缩图后全程收紧）")
+	_c.equals(GameBalance.wave_spawn_budget(5), 32, "第 5 波预算 32")
+	_c.equals(GameBalance.wave_spawn_budget(6), 35, "第 6 波预算 35")
+	_c.equals(GameBalance.wave_spawn_budget(10), 50, "第 10 波预算 50")
+	_c.equals(GameBalance.wave_spawn_budget(20), 86, "第 20 波预算 86")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.WAVE_SPAWN_BUDGET_MAX, "无尽波次预算封顶 90")
 	var budget_prev := 0
 	var budget_mono := true
 	for w in range(1, 21):

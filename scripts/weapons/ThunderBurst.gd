@@ -183,7 +183,7 @@ func _deal_damage() -> void:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			var is_crit: bool = GameManager.rng.randf() < GameManager.get_crit_rate()
+			var is_crit: bool = GameManager.roll_crit()
 			var crit_m: float = GameManager.crit_mult + GameManager.synergy_crit_mult
 			var dmg: float = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
 			# 震退方向走统一出口：落雷点常在玩家外侧，纯径向会把落点内侧那圈敌人往玩家身上拱
@@ -211,8 +211,6 @@ func _deal_damage() -> void:
 		return
 	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档
 	_struck = true
-	# 只有真的劈到人才爆散蓝白环与灵尘
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
 	var trauma := 0.16
 	if kills >= 3:

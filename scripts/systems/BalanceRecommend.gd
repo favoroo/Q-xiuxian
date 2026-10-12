@@ -64,6 +64,10 @@ const REF_LUCK := 10.0         ## 福缘 +10 打满（按剩余波数折价再 �
 const REF_XP := 0.25           ## 悟性 +25% 打满（按剩余波数折价）
 const REF_STONES := 40.0       ## 即时灵石 +40 打满（即时收益天然弱）
 const REF_REROLLS := 2.0       ## 免费刷新 +2 打满（上限 0.3 分）
+## 寻宝流三项（2026-10-11）：一口匣子≈一次白拿补给，所以按「还能刷几波」折价，与灵韵同一把尺
+const REF_CHEST_COUNT_WAVES := 6.0  ## Δ宝箱数量 × 剩余波数 ≥ 6 口打满
+const REF_CHEST_QUALITY := 8.0      ## 宝箱品质 +8 打满（约两把点金诀，铜/玉占比明显抬起来）
+const REF_CHEST_BREAK := 2.0        ## 开箱省力 +2 下打满（3 下砸到 1 下，兑现率翻三倍）
 
 # ---------------- 属性模拟（镜像 StatSystem 落地语义） ----------------
 
@@ -127,7 +131,7 @@ static func simulate_stats(stats: Dictionary, element_damage: Dictionary, apply:
 				if k.begins_with("element_damage_") and k.trim_prefix("element_damage_") in WeaponData.ELEMENTS:
 					var elem: String = k.trim_prefix("element_damage_")
 					element_damage[elem] = float(element_damage.get(elem, 0.0)) + v
-				# 其余（hp_heal/spirit_stones/free_rerolls/shop_price_mul/bonus_pierce）不进属性轴
+				# 其余（hp_heal/spirit_stones/free_rerolls/shop_price_mul/bonus_pierce/宝箱三项）不进属性轴
 
 # ---------------- 法器期望每秒伤害（与 WeaponDamageReadout 同源的纯函数版） ----------------
 
@@ -142,7 +146,7 @@ static func element_mult(element_damage: Dictionary, w_id: String) -> float:
 ##    边际收益，两边各守各的口径，不混用；② cult_mult 由 ctx 显式传入（纯函数不读 GM）。
 static func weapon_expected_dps(w_id: String, star: int, stats: Dictionary, element_damage: Dictionary,
 		cult_mult: float, slots: int, contraption_mult: float,
-		drone_slots: int = -1, drone_mult_val: float = 1.0) -> float:
+		drone_slots: int = -1) -> float:
 	var def := WeaponData.get_def(w_id)
 	if def.is_empty():
 		return 0.0
@@ -154,12 +158,12 @@ static func weapon_expected_dps(w_id: String, star: int, stats: Dictionary, elem
 	if haste <= 0.0:
 		return 0.0
 	var bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, s)
+	# stats["weapon_damage_mult"] 已含羁绊的「武器伤害」乘区（get_player_stat_dict 里两者相乘），
+	# 环绕类不再另有一档专属乘区 ⇒ 这一条链与 SunOrb 运行时逐项同形。
 	var mult := float(stats.get("weapon_damage_mult", 1.0)) * cult_mult \
 			* element_mult(element_damage, w_id) * GameBalance.multi_weapon_damage_mult(slots, maxi(0, drone_slots))
 	if int(def.get("behavior", WeaponData.Behavior.MELEE)) == WeaponData.Behavior.TURRET:
 		mult *= contraption_mult
-	if int(def.get("behavior", WeaponData.Behavior.MELEE)) == WeaponData.Behavior.DRONE:
-		mult *= drone_mult_val
 	var per_hit := (base + bonus) * mult
 	var crit_expect := 1.0 + maxf(0.0, float(stats.get("crit_rate", 0.05))) \
 			* (float(stats.get("crit_mult", 1.5)) - 1.0)
@@ -169,13 +173,13 @@ static func weapon_expected_dps(w_id: String, star: int, stats: Dictionary, elem
 ## drone_slots 缺省自动数编队里的 DRONE 把数（御灵半权分流）；投影「买下之后」时显式传入。
 static func total_dps(weapons: Array, stats: Dictionary, element_damage: Dictionary,
 		cult_mults: Dictionary, slots: int, contraption_mult: float,
-		drone_slots: int = -1, drone_mult_val: float = 1.0) -> float:
+		drone_slots: int = -1) -> float:
 	var drone_n := count_drones(weapons) if drone_slots < 0 else drone_slots
 	var total := 0.0
 	for w in weapons:
 		var wid := String(w.get("id", ""))
 		total += weapon_expected_dps(wid, int(w.get("star", 1)), stats, element_damage,
-				float(cult_mults.get(wid, 1.0)), slots, contraption_mult, drone_n, drone_mult_val)
+				float(cult_mults.get(wid, 1.0)), slots, contraption_mult, drone_n)
 	return total
 
 ## 编队里 DRONE 法器的把数（御灵半权分流口径用）
@@ -205,9 +209,8 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 	var reasons: Array[String] = []
 
 	# ---- B1 伤害轴：上阵总伤加成前后对比 ----
-	var drone_mult_v := float(ctx.get("drone_mult", 1.0))
-	var dps0 := total_dps(weapons, stats, elem, cult_mults, slots, contr, -1, drone_mult_v)
-	var dps1 := total_dps(weapons, stats2, elem2, cult_mults, slots, contr, -1, drone_mult_v)
+	var dps0 := total_dps(weapons, stats, elem, cult_mults, slots, contr, -1)
+	var dps1 := total_dps(weapons, stats2, elem2, cult_mults, slots, contr, -1)
 	var dmg_gain := (dps1 - dps0) / maxf(dps0, 1.0)
 	var b_dmg := clampf(dmg_gain / REF_DMG, 0.0, 1.0)
 	if b_dmg >= 0.04:
@@ -246,12 +249,19 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 	var d_harvest := float(stats2.get("harvest", 0.0)) - float(stats.get("harvest", 0.0))
 	var d_luck := float(stats2.get("luck", 0.0)) - float(stats.get("luck", 0.0))
 	var d_xp := float(stats2.get("xp_gain_mult", 1.0)) - float(stats.get("xp_gain_mult", 1.0))
+	# 寻宝流三项直接读 apply（与即时灵石/免费刷新同一类：兑现的是场面上的东西，不是属性乘区）
+	var d_chest_cnt := float(apply.get("chest_count", 0.0))
+	var d_chest_q := float(apply.get("chest_quality", 0.0))
+	var d_chest_brk := float(apply.get("chest_break", 0.0))
 	var eco_subs: Array[float] = [
 		clampf(d_harvest * float(remaining) / REF_HARVEST_WAVES, 0.0, 1.0),
 		clampf(d_luck / REF_LUCK, 0.0, 1.0) * (0.5 + 0.5 * wave_ratio) * 0.6,
 		clampf(d_xp / REF_XP, 0.0, 1.0) * wave_ratio,
 		clampf(float(apply.get("spirit_stones", 0.0)) / REF_STONES, 0.0, 1.0) * (0.4 + 0.6 * wave_ratio),
 		clampf(absf(float(apply.get("free_rerolls", 0.0))) / REF_REROLLS, 0.0, 1.0) * 0.3,
+		clampf(d_chest_cnt * float(remaining) / REF_CHEST_COUNT_WAVES, 0.0, 1.0) * (0.4 + 0.6 * wave_ratio),
+		clampf(d_chest_q / REF_CHEST_QUALITY, 0.0, 1.0) * (0.5 + 0.5 * wave_ratio) * 0.8,
+		clampf(d_chest_brk / REF_CHEST_BREAK, 0.0, 1.0) * 0.7,
 	]
 	var b_eco := _max_of(eco_subs)
 	if b_eco >= 0.04:
@@ -261,6 +271,12 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 			reasons.append("福缘 +%s" % _num(d_luck))
 		elif d_xp > 0.0:
 			reasons.append("悟性 +%d%%" % _pct(d_xp))
+		elif d_chest_cnt > 0.0:
+			reasons.append("宝箱 +%d 口/波 · 余 %d 波" % [int(d_chest_cnt), remaining])
+		elif d_chest_q > 0.0:
+			reasons.append("铜匣玉匣更易出现")
+		elif d_chest_brk > 0.0:
+			reasons.append("宝箱少挨 %d 下砸开" % int(d_chest_brk))
 
 	# ---- B4 功能轴（移动/拾取/范围/斩将等，给小基线不压过主轴） ----
 	var d_pickup := float(stats2.get("pickup_range_mult", 1.0)) - float(stats.get("pickup_range_mult", 1.0))
@@ -311,16 +327,15 @@ static func score_weapon(w_id: String, ctx: Dictionary) -> Dictionary:
 	var cult_mult := float(cult_mults.get(w_id, 1.0))
 	var is_drone := int(WeaponData.get_def(w_id).get("behavior", -1)) == WeaponData.Behavior.DRONE
 	var drone_now := count_drones(ctx.get("weapons", []))
-	var drone_mult_v := float(ctx.get("drone_mult", 1.0))
-	var total0 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, -1, drone_mult_v)
+	var total0 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, -1)
 	var merge_ready := int(ctx.get("copies1", {}).get(w_id, 0)) == 2
 	var full := slots_used >= slots_max
 	var b := 0.0
 	if merge_ready:
 		# 三合一：3×★1 变 1×★2，净收益 = 升星单件增量（还腾 2 个槽位，协同因子另给满分）
 		var drone_after_merge := maxi(0, drone_now - 2) if is_drone else drone_now
-		var dps1 := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now, drone_mult_v)
-		var dps2 := weapon_expected_dps(w_id, 2, stats, elem, cult_mult, maxi(1, slots_used - 1), contr, drone_after_merge, drone_mult_v)
+		var dps1 := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now)
+		var dps2 := weapon_expected_dps(w_id, 2, stats, elem, cult_mult, maxi(1, slots_used - 1), contr, drone_after_merge)
 		b = clampf((dps2 - dps1) / maxf(total0, 1.0) / REF_DMG, 0.0, 1.0)
 		if dps1 > 0.0:
 			reasons.append("买下即可三合一升星（单件伤害 ×%.1f）" % (dps2 / dps1))
@@ -328,17 +343,17 @@ static func score_weapon(w_id: String, ctx: Dictionary) -> Dictionary:
 		# 直接入阵：现有法器按「买下之后」的槽位数重算分流税，新件按同口径投影
 		var slots_after := mini(slots_used + 1, slots_max)
 		var drone_after := drone_now + (1 if is_drone else 0)
-		var total1 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_after, contr, drone_after, drone_mult_v) \
-				+ weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after, drone_mult_v)
+		var total1 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_after, contr, drone_after) \
+				+ weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after)
 		var gain := total1 / maxf(total0, 1.0) - 1.0
 		b = clampf(gain / REF_DMG, 0.0, 1.0)
 		reasons.append("到手每秒约 %s（上阵总伤 %s%d%%）" % [
-			_num(weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after, drone_mult_v)),
+			_num(weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after)),
 			"+" if gain >= 0.0 else "-", _pct(absf(gain))])
 	else:
 		# 槽位满：只能进背包，不即时生效——给个「可替换」评估而不是零分
-		var weakest := _weakest_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, drone_now, drone_mult_v)
-		var dps_new := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now, drone_mult_v)
+		var weakest := _weakest_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, drone_now)
+		var dps_new := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now)
 		b = 0.20 if dps_new >= 0.8 * weakest else 0.05
 		reasons.append("槽位已满 · 入背包（可替换现役最弱）")
 
@@ -377,7 +392,7 @@ static func score_offer(offer: Dictionary, ctx: Dictionary) -> Dictionary:
 		out["score"] = float(out["score"]) * UNAFFORDABLE_MULT
 		var reasons: Array = out["reasons"]
 		if reasons.size() < 3:
-			reasons.append("灵石不足 · 可先攒钱")
+			reasons.append("金币不足 · 可先攒钱")
 	return out
 
 # ---------------- 标记（动态 1~3 颗「荐」） ----------------
@@ -420,60 +435,92 @@ static func mark_offers(offers: Array, scored: Array) -> void:
 
 # ---------------- 修士契合（从 CultivatorData 程序化推导，不手抄角色表） ----------------
 
-## 道统偏好 apply 键：① mods 正收益键映射；② allowed_tags 流派偏好法器吃的属性
-## （stat_scalings 键经 APPLY_WEAPON_STAT_MAP 反查回 apply 键）。
+## 道统偏好 apply 键 → **「为什么偏好它」的一句话来源**（旧版只回 key→true，契合理由只能喊
+## 「契合【剑客】护甲取向」却答不出剑客哪一点要护甲，玩家对着角色卡找不到这条，故来源必须随偏好一起出）。
+## 两种来源，话术与角色卡的「初始X +N」同一套词：
+##   ① mods 正收益键映射 →「他初始暴击率 +15%」（幅度现读 CultivatorData.mods）；
+##   ② allowed_tags 流派偏好法器吃的属性（stat_scalings 键经 APPLY_WEAPON_STAT_MAP 反查回 apply 键）
+##      →「剑系有 3 把按护甲加伤」（把数现数 SHOP_POOL，不手抄）。
+## 空串 = 只登记偏好、给不出人话来源（如反震这类非面板字段）。
 static func preferred_keys(mods: Dictionary, allowed_tags: Array) -> Dictionary:
 	var pref := {}
+	# ---- ① 修士自身就带的属性 ----
 	if float(mods.get("crit_rate", 0.0)) > 0.0:
-		pref["crit_rate"] = true
-		pref["crit_mult"] = true
+		var w_crit := _own_why("crit_rate", mods)
+		pref["crit_rate"] = w_crit
+		pref["crit_mult"] = w_crit
 	if float(mods.get("armor", 0.0)) > 0.0 or float(mods.get("thorns", 0.0)) > 0.0:
-		pref["armor"] = true
+		pref["armor"] = _own_why("armor", mods)
 	if float(mods.get("thorns", 0.0)) > 0.0:
-		pref["thorns"] = true
+		pref["thorns"] = _own_why("thorns", mods)
 	if float(mods.get("dodge", 0.0)) > 0.0:
-		pref["dodge"] = true
+		pref["dodge"] = _own_why("dodge", mods)
 	if float(mods.get("harvest", 0.0)) > 0.0:
-		pref["harvest"] = true
-		pref["luck"] = true
-		pref["spirit_stones"] = true
+		var w_harvest := _own_why("harvest", mods)
+		pref["harvest"] = w_harvest
+		pref["luck"] = w_harvest
+		pref["spirit_stones"] = w_harvest
 	if float(mods.get("engineering", 0.0)) > 0.0:
-		pref["engineering_damage"] = true
+		pref["engineering_damage"] = "他初始%s +%s" % [
+			StatInfoData.field_name("engineering_damage"), _num(float(mods["engineering"]))]
 	if float(mods.get("elemental", 0.0)) > 0.0:
-		pref["elemental_damage"] = true
-		pref["element_damage_all"] = true
+		var w_elem := "他初始%s +%s" % [
+			StatInfoData.field_name("elemental_damage"), _num(float(mods["elemental"]))]
+		pref["elemental_damage"] = w_elem
+		pref["element_damage_all"] = w_elem
 	if float(mods.get("hp_regen", 0.0)) > 0.0:
-		pref["hp_regen"] = true
+		pref["hp_regen"] = _own_why("hp_regen", mods)
 	if float(mods.get("hp_mult", 1.0)) > 1.0:
-		pref["max_hp"] = true
+		pref["max_hp"] = "他最大生命 ×%s" % String.num(float(mods["hp_mult"]), 3)
 	if float(mods.get("speed_mult", 1.0)) > 1.0:
-		pref["move_speed_mult"] = true
+		pref["move_speed_mult"] = "他移动速度 ×%s" % String.num(float(mods["speed_mult"]), 3)
 	if float(mods.get("damage_mult", 1.0)) > 1.0:
-		## 全域增伤道统：所有输出向键都算偏好
-		pref["weapon_damage_mult"] = true
-		pref["melee_damage"] = true
-		pref["ranged_damage"] = true
-		pref["elemental_damage"] = true
-		pref["engineering_damage"] = true
-		pref["attack_speed_mult_mul"] = true
-		pref["crit_rate"] = true
-		pref["crit_mult"] = true
+		## 全域增伤道统：所有输出向键都算偏好，来源是同一条「全武器伤害」
+		var w_all := "他全武器伤害 ×%s" % String.num(float(mods["damage_mult"]), 3)
+		for k in ["weapon_damage_mult", "melee_damage", "ranged_damage", "elemental_damage",
+				"engineering_damage", "attack_speed_mult_mul", "crit_rate", "crit_mult"]:
+			pref[k] = w_all
+	if float(mods.get("haste_mult", 1.0)) < 1.0:
+		# 他自己就带攻击间隔缩减（狂战士），这条比「全武器伤害」更直接，写在它后面覆盖
+		pref["attack_speed_mult_mul"] = "他攻击间隔 %s" % StatInfoData.format_amount(
+				"attack_speed_mult_mul", float(mods["haste_mult"]))
+	# ---- ② 流派偏好法器吃的那些属性 ----
 	if not allowed_tags.is_empty():
 		var rev := {}
 		for k in GameBalance.APPLY_WEAPON_STAT_MAP:
 			rev[GameBalance.APPLY_WEAPON_STAT_MAP[k]] = String(k)
+		var counts := {}
+		var from_tag := {}
 		for w_id in WeaponData.SHOP_POOL:
-			var hit := false
+			var hit_tag := ""
 			for t in WeaponData.tags_of(w_id):
 				if t in allowed_tags:
-					hit = true
+					hit_tag = String(t)
 					break
-			if not hit:
+			if hit_tag.is_empty():
 				continue
-			for sk in WeaponData.get_def(w_id).get("stat_scalings", {}).keys():
-				if rev.has(String(sk)):
-					pref[String(rev[sk])] = true
+			var scalings: Dictionary = WeaponData.get_def(w_id).get("stat_scalings", {})
+			for sk in scalings.keys():
+				if not rev.has(String(sk)) or float(scalings[sk]) <= 0.0:
+					continue
+				var ak := String(rev[sk])
+				counts[ak] = int(counts.get(ak, 0)) + 1
+				if not from_tag.has(ak):
+					from_tag[ak] = hit_tag
+		for ak in counts.keys():
+			# 自身属性那条更直接，流派推导只补它没覆盖到的键（空串那条等于没覆盖）
+			if pref.has(ak) and not String(pref[ak]).is_empty():
+				continue
+			pref[ak] = "%s有 %d 把按%s加伤" % [
+				tag_display(String(from_tag[ak])), int(counts[ak]), StatInfoData.field_name(ak)]
 	return pref
+
+## 「他自己就有这条」话术：字段名与幅度都现读 mods（与角色卡同一份数，改数不改文案）
+static func _own_why(key: String, mods: Dictionary) -> String:
+	var v := float(mods.get(key, 0.0))
+	if v <= 0.0:
+		return ""
+	return "他初始%s %s" % [StatInfoData.field_name(key), StatInfoData.format_amount(key, v)]
 
 ## 加点/法宝候选的修士契合：正收益幅度里落在偏好键上的占比
 static func _apply_fit(apply: Dictionary, ctx: Dictionary, reasons: Array[String]) -> float:
@@ -483,6 +530,7 @@ static func _apply_fit(apply: Dictionary, ctx: Dictionary, reasons: Array[String
 	var pos_mass := 0.0
 	var pref_mass := 0.0
 	var hit_names: Array[String] = []
+	var whys: Array[String] = []
 	for key in apply.keys():
 		var v := float(apply[key])
 		if v <= 0.0:
@@ -494,11 +542,17 @@ static func _apply_fit(apply: Dictionary, ctx: Dictionary, reasons: Array[String
 				var nm := StatInfoData.field_name(String(key))
 				if not nm.is_empty() and not hit_names.has(nm):
 					hit_names.append(nm)
+			var wy := String(pref[key])
+			if not wy.is_empty() and not whys.has(wy) and whys.size() < 2:
+				whys.append(wy)
 	if pos_mass <= 0.0 or pref.is_empty():
 		return 0.5
 	var a := 0.35 + 0.65 * (pref_mass / pos_mass)
 	if a >= 0.7 and not cult.is_empty():
 		reasons.append("契合【%s】%s取向" % [String(cult.get("name", "?")), "、".join(hit_names)])
+		# 「契合」二字不能只喊结论：跟着写一句它是从角色哪条属性/哪个流派推出来的
+		if not whys.is_empty():
+			reasons.append("因为%s" % "，".join(whys))
 	return clampf(a, 0.0, 1.0)
 
 ## 法器候选的修士契合：tag 专精/流派偏好 + 行为惩罚（非灵蝶/非机关代偿）
@@ -516,9 +570,6 @@ static func _weapon_fit(w_id: String, ctx: Dictionary, reasons: Array[String]) -
 			tag_hit = t
 			break
 	var cname := String(cult.get("name", "?"))
-	if not tag_hit.is_empty():
-		a = 0.9
-		reasons.append("契合【%s】%s取向" % [cname, tag_display(tag_hit)])
 	var tag_bonus := ""
 	var tag_neg := ""
 	var td: Dictionary = mods.get("tag_damage", {})
@@ -528,6 +579,12 @@ static func _weapon_fit(w_id: String, ctx: Dictionary, reasons: Array[String]) -
 			tag_bonus = t
 		if tb <= -0.15:
 			tag_neg = t
+	# 「流派偏好」与「tag 专精」经常命中同一个签（剑客买长剑），两句只差两个字说的是同一件事；
+	# 专精那句更强，只留它，别让详情卡看着像凑行数。
+	if not tag_hit.is_empty():
+		a = 0.9
+		if tag_hit != tag_bonus:
+			reasons.append("契合【%s】%s取向" % [cname, tag_display(tag_hit)])
 	if not tag_bonus.is_empty():
 		a = maxf(a, 0.95)
 		reasons.append("契合【%s】%s专精" % [cname, tag_display(tag_bonus)])
@@ -537,9 +594,13 @@ static func _weapon_fit(w_id: String, ctx: Dictionary, reasons: Array[String]) -
 	var beh := int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE))
 	if float(mods.get("non_drone_damage", 0.0)) < -0.05 and beh != WeaponData.Behavior.DRONE:
 		a *= 0.6
+		reasons.append("【%s】非召唤类法器伤害 %s" % [cname,
+				StatInfoData.format_amount("weapon_damage_mult", float(mods["non_drone_damage"]))])
 	if float(mods.get("non_contraption_damage", 0.0)) < -0.05 \
 			and beh != WeaponData.Behavior.TURRET and beh != WeaponData.Behavior.DRONE:
 		a *= 0.6
+		reasons.append("【%s】非机关类法器伤害 %s" % [cname,
+				StatInfoData.format_amount("weapon_damage_mult", float(mods["non_contraption_damage"]))])
 	return clampf(a, 0.0, 1.0)
 
 # ---------------- 流派协同 ----------------
@@ -607,12 +668,12 @@ static func _weapon_syn(w_id: String, ctx: Dictionary, merge_ready: bool, full: 
 
 static func _weakest_dps(weapons: Array, stats: Dictionary, element_damage: Dictionary,
 		cult_mults: Dictionary, slots: int, contraption_mult: float,
-		drone_slots: int = -1, drone_mult_val: float = 1.0) -> float:
+		drone_slots: int = -1) -> float:
 	var weakest := -1.0
 	for w in weapons:
 		var wid := String(w.get("id", ""))
 		var d := weapon_expected_dps(wid, int(w.get("star", 1)), stats, element_damage,
-				float(cult_mults.get(wid, 1.0)), slots, contraption_mult, drone_slots, drone_mult_val)
+				float(cult_mults.get(wid, 1.0)), slots, contraption_mult, drone_slots)
 		weakest = d if weakest < 0.0 else minf(weakest, d)
 	return maxf(weakest, 0.0)
 

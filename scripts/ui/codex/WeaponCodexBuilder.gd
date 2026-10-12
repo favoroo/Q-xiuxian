@@ -11,7 +11,7 @@ extends RefCounted
 
 ## 卡面两件事都不点就能看见：三签（攻击方式·器类·五行）+ 关键数值行，
 ## 完整属性/射程/异常仍走点按详情卡
-const STAT_LINE_FMT := "伤%d·%s秒·%d金"
+const STAT_LINE_FMT := "伤%d·%s秒·%d价"
 
 
 ## 组装整页：两行筛选 chips + 滚动网格区（写回 dialog._weapons_box）。返回页根（进 dialog._pages）。
@@ -69,11 +69,11 @@ static func rebuild(dialog: ManualDialog) -> void:
 	if tag in WeaponData.ELEMENTS:
 		head_col = GameStyle.ELEMENT_COLORS.get(tag, GameStyle.GOLD)
 	box.add_child(_group_header("── %s · %d 把 ──" % [String(syn.get("name", tag)), count], head_col))
-	# 羁绊阶梯与进阶攻略页同源（SYNERGIES.thresholds/desc），图鉴口径不随局内门槛调整变化
+	# 羁绊阶梯与进阶攻略页同源（SYNERGIES.thresholds + SynergyUI.synergy_desc），图鉴口径不随局内门槛调整变化
 	var th: Array = syn.get("thresholds", [2, 4, 6])
 	var desc_lbl := Label.new()
 	desc_lbl.text = GameStyle.wrap_cjk(
-		"上阵集齐 %d / %d / %d 件激活羁绊：%s" % [int(th[0]), int(th[1]), int(th[2]), String(syn.get("desc", ""))],
+		"上阵集齐 %d / %d / %d 件激活羁绊：%s" % [int(th[0]), int(th[1]), int(th[2]), SynergyUI.synergy_desc(tag)],
 		GameStyle.body_font(), 12, ManualDialog.TEXT_W)
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)

@@ -126,7 +126,6 @@ func _resolve_slam(player: Node2D) -> void:
 		_slam_ring.visible = false
 	if dying:
 		return
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	# 冲击波扫满判定圈：把「圈填满 = 炸、扫到我 = 掉血」的因果画出来（半径与判定同源）
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, GameBalance.BOSS_SLAM_RADIUS, GameStyle.BAD)
 	# 震地 = 全场最该抖一下的时刻，但它自己就是一个事件：

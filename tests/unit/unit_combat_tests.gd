@@ -113,7 +113,6 @@ func _test_screen_shake_budget() -> void:
 	_c.check(GameBalance.CRIT_TRAUMA_ELITE > GameBalance.CRIT_TRAUMA_NORMAL, "精英暴击创伤大于普通暴击")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_DURATION > GameBalance.KILL_HITSTOP_DURATION, "暴击击杀顿帧比普通击杀更实")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL >= GameBalance.KILL_HITSTOP_MIN_INTERVAL, "暴击击杀顿帧限流不宽于普通击杀")
-	_c.check(GameBalance.CRIT_KILL_OVERKILL_FLOOR > 0.0 and GameBalance.CRIT_KILL_OVERKILL_FLOOR <= 1.5, "暴击击杀爆散保底在 overkill 量程内")
 
 func _test_knock_direction() -> void:
 	var p := Vector2.ZERO
@@ -196,24 +195,13 @@ func _test_stat_breakdown_buff() -> void:
 	_c.near(float(buffed["cdr_pct"]), (1.0 - 0.6) * 100.0, 0.01, "面板冷却缩减随攻速乘区同源")
 	GameManager.reset_run()
 
-# ---------------- 命中反馈全局限流闸：火花 / 死亡爆散 / 镜头微冲击 ----------------
+# ---------------- 命中反馈全局限流闸：死亡爆散 / 镜头微冲击 ----------------
 
-## 三道闸的判据（2026-10-11 频闪治理）：间隔内普通档拒绝、暴击/精英直通且不消耗普通档窗口、
-## 间隔过后放行。时间戳以真实 t0 为基注入，闸的窗口基线始终落在真实时间轴上，
-## 不污染后续走真实时钟的调用。
+## 微冲击闸判据（2026-10-11 频闪治理）：间隔内普通档拒绝、间隔过后放行。
+## 时间戳以真实 t0 为基注入，闸的窗口基线始终落在真实时间轴上，不污染后续走真实时钟的调用。
+## （受击火花 / 死亡爆散已整体下线，其 hit_spark_gate / kill_burst_gate 判据随之移除。）
 func _test_feel_gates() -> void:
 	var t0 := Time.get_ticks_msec()
-	var spark_iv := int(GameBalance.HIT_SPARK_MIN_INTERVAL * 1000.0)
-	_c.check(GameFeel.hit_spark_gate(false, t0), "首个普通命中火花放行")
-	_c.check(not GameFeel.hit_spark_gate(false, t0 + spark_iv - 1), "间隔内的普通命中火花被拒")
-	_c.check(GameFeel.hit_spark_gate(false, t0 + spark_iv), "间隔过后火花重新放行")
-	_c.check(GameFeel.hit_spark_gate(true, t0 + spark_iv + 1), "暴击火花直通")
-	_c.check(not GameFeel.hit_spark_gate(false, t0 + spark_iv + 1), "暴击直通不重置普通档窗口")
-
-	var burst_iv := int(GameBalance.KILL_BURST_MIN_INTERVAL * 1000.0)
-	_c.check(GameFeel.kill_burst_gate(false, t0), "首个普通小怪死亡爆散放行")
-	_c.check(not GameFeel.kill_burst_gate(false, t0 + burst_iv - 1), "间隔内的普通死亡爆散被拒")
-	_c.check(GameFeel.kill_burst_gate(true, t0 + 1), "精英死亡爆散直通")
 
 	var kick_iv := int(GameBalance.MICRO_KICK_MIN_INTERVAL * 1000.0)
 	_c.check(GameFeel.micro_kick_gate(t0), "首个普通命中镜头微冲击放行")

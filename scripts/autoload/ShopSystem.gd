@@ -18,7 +18,8 @@ static func roll_shop(gm: Node, new_wave: bool = false) -> void:
 		else:
 			new_offers.append(gen_offer(gm, wave))
 	gm.shop_offers = new_offers
-	gm.reroll_cost = GameBalance.reroll_cost(wave, gm.reroll_count, gm.shop_price_mult)
+	# 商人·老主顾：重掷费用在纯函数结果上乘角色系数（GameBalance 保持纯函数，下限 1 灵石）
+	gm.reroll_cost = maxi(1, int(round(GameBalance.reroll_cost(wave, gm.reroll_count, gm.shop_price_mult) * gm.reroll_price_mult)))
 	if new_wave:
 		SynergySystem.apply_main_tag_pity(gm, wave)
 	# 「荐」标：在波首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；

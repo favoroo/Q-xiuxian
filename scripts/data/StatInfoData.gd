@@ -46,6 +46,11 @@ const FIELDS: Dictionary = {
 	"elemental_damage": {"name": "元素伤害", "unit": "pt"},
 	"engineering_damage": {"name": "召唤伤害", "unit": "pt"},
 	"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
+	# 寻宝流三项：幅度来自 apply，兑现点在 WaveSpawner（数量）/ BalanceChest.tier_weights（品质）
+	# / BalanceChest.break_hits（省力）。单位一律 "pt"：读数只出「+1」，量词交给卡面 desc 说清。
+	"chest_count": {"name": "宝箱数量", "unit": "pt"},
+	"chest_quality": {"name": "宝箱品质", "unit": "pt"},
+	"chest_break": {"name": "开箱省击", "unit": "chest_break"},
 }
 
 ## 五行名：element_damage_<key> 的人话名走它，与 WeaponData.ELEMENTS 同一批 key
@@ -258,10 +263,10 @@ static func rules(id: String) -> Array[String]:
 			out.append("经验与金币同源，所以收益高 = 升级快 = 升级次数多。")
 		"xp_gain":
 			out.append("经验获取倍率：只放大吸收经验光球时的升级经验，不影响金币获取。")
-			out.append("主要由稀有升级「悟性通明」与史诗道具「悟剑石」提供。")
+			out.append("主要由稀有升级「经验加成」与仙品道具「经验石」提供。")
 		"shop_price":
 			out.append("商店所有在售武器、道具及重掷费用的全局价格折算比例。")
-			out.append("角色自带八折特权，道具「折扣玉符」可进一步叠加折让。")
+			out.append("角色自带八折特权，道具「折扣券」可进一步叠加折让。")
 		"bonus_pierce":
 			out.append("飞剑飞符穿透敌人数量的额外增量。")
 			out.append("弹射羁绊核心收益，升级「破甲透劲」与道具「破虚符」也可叠加。")
@@ -270,10 +275,10 @@ static func rules(id: String) -> Array[String]:
 			out.append("守卫自带反震特权，升级「护体罡气」与法宝「反震铜甲」可不断累加。")
 		"elite_dmg":
 			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
-			out.append("升级「对精英夺旗」与道具「破甲锥」生效，不影响寻常小怪。")
+			out.append("升级「精英伤害」与道具「破甲针」生效，不影响寻常小怪。")
 		"knockback":
 			out.append("武器击退敌人的推力与距离加成倍率。")
-			out.append("土系羁绊与道具「雷引针」加在这条上，防高密度敌潮近身。")
+			out.append("土系羁绊与道具「雷击针」加在这条上，防高密度敌潮近身。")
 		"free_rerolls":
 			out.append("每波进入商店时无需花费金币即可免费重掷货架的次数。")
 			out.append("道具「重掷令」提供，用完后重掷费用才开始按正常递增结算。")
@@ -347,6 +352,8 @@ static func format_amount(key: String, v: float) -> String:
 			return "%s%d 枚" % [sgn, int(absf(v))]
 		"times":
 			return "%s%d 次" % [sgn, int(absf(v))]
+		"chest_break":
+			return "%s%d 击" % [sgn, int(absf(v))]
 		_:
 			return "%s%s" % [sgn, _fmt(absf(v))]
 

@@ -8,6 +8,13 @@ extends Control
 
 const BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
 
+## 额外技能键的键面占位文案：还没进局、或该角色没配额外技能时，这颗键平时是隐藏的，
+## 只有「按钮调整模式」要把它亮出来当拖动靶子。用户 2026-10-11：原先写英文 "extra"，
+## 看不出那是颗什么键 ⇒ 改成「额外技能」。四个字一行收不进 76 圆面（28 号四汉字宽约 112，
+## 圆面去掉描边只剩 72），按祭坛键同一口径分两行 + 18 号；口径由 UnitRunner 钉。
+const EXTRA_BTN_TEXT := "额外\n技能"
+const EXTRA_BTN_FONT := 18
+
 ## 槽位绑定：false = 主随行神通键（读 active_skill_id）；true = 额外技能键（读 extra_skill_id，
 ## 随角色绑定，如影者的影爆——免冷却、由影层层数门控，影层角标「影 N」也归这颗键）
 var bind_extra: bool = false
@@ -17,9 +24,10 @@ var _icon_rect: TextureRect = null
 var _cd_ring: SkillButtonView.SkillCdOverlay = null
 var _cd_label: Label = null
 var _name_label: Label = null
-var _shadow_chip: Label = null   ## 影层角标（踏影攒了几层，读数与角色头顶残影同一个数）
+var _shadow_chip: Label = null   ## 充能角标（影爆=影层读数，服丹=药池读数；读数与账本同源）
 var _shadow_shown: int = -1      ## 上一次画出去的层数：只在变了时重设样式，不每帧刷
 var _was_ready: bool = false
+var _face_state: int = -1  ## 键面读数态：-1 就绪 / 0 冷却 / 1 效果活跃（只在变化时刷读数配色）
 var _shaking: bool = false
 var _edit_mode: bool = false
 var _last_press_frame: int = -1
@@ -221,23 +229,39 @@ func _process(_delta: float) -> void:
 	if not show or player == null:
 		return
 
-	# 冷却只归主神通键：额外键（影爆类）免冷却、由影层门控，读主键的 CD 账就是串台
+	# 冷却/活跃账本只归主神通键：额外键（影爆类）免冷却、由影层门控，读主键的账就是串台
 	var cd_left: float = 0.0
 	var cd_total: float = 1.0
+	var active_left: float = 0.0
+	var active_total: float = 1.0
 	if not bind_extra:
+		active_left = player.skill_active_left
+		active_total = maxf(0.01, player.skill_active_total)
 		cd_left = player.skill_cd_left
 		cd_total = maxf(0.01, player.skill_cd_total)
+	var on_active := active_left > 0.0
 	var on_cd := cd_left > 0.0
-	var ratio := clampf(cd_left / cd_total, 0.0, 1.0)
 
-	_cd_ring.visible = on_cd
-	_cd_ring.cd_ratio = ratio
+	# 三态键面：效果活跃（点缀黄环倒数、图标全亮，冷却还没开始）→ 冷却（暗环倒数、图标压暗）→ 就绪
+	_cd_ring.visible = on_active or on_cd
+	_cd_ring.active_ratio = clampf(active_left / active_total, 0.0, 1.0) if on_active else 0.0
+	_cd_ring.cd_ratio = clampf(cd_left / cd_total, 0.0, 1.0) if on_cd else 0.0
 	_cd_ring.queue_redraw()
 
-	_cd_label.visible = on_cd
+	var state := 1 if on_active else (0 if on_cd else -1)
+	if state != _face_state:
+		_face_state = state
+		if _cd_label != null:
+			# 活跃读数走点缀黄，与冷却纸白区分：同一颗读数，两种账
+			_cd_label.add_theme_color_override("font_color", GameStyle.JADE if state == 1 else GameStyle.CHALK)
+
+	_cd_label.visible = on_active or on_cd
 	if _icon_rect != null and _icon_rect.visible:
 		_icon_rect.modulate.a = 0.35 if on_cd else 1.0
-	if on_cd:
+	if on_active:
+		_cd_label.text = str(int(ceil(active_left)))
+		_was_ready = false
+	elif on_cd:
 		_cd_label.text = str(int(ceil(cd_left)))
 		_was_ready = false
 	elif not _was_ready:
@@ -249,15 +273,36 @@ func _process(_delta: float) -> void:
 		tw.tween_property(_btn, "scale", Vector2.ONE, 0.14)
 	_update_shadow_chip(player)
 
-## 影层角标：攒上才出现，攒满直接换成可释放的亮紫面（不靠闪一下提示——看不见等于没做）。
-## 层数读的是 Player.shadow_ring 本身，不在这里另记一份账。
-## 只归额外技能键（影爆）：它是那颗键的充能读数，主神通键不再挂这颗角标。
+## 额外技能充能角标：影爆读影层（Player.shadow_ring），服丹读药池存量（GameManager.elixir_pool）。
+## 攒上才出现，攒满直接换成可释放的亮面（不靠闪一下提示——看不见等于没做）。
+## 读数都现读账本本身，不在这里另记一份。只归额外技能键：主神通键不挂这颗角标。
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:
 		return
 	if not bind_extra:
 		_shadow_chip.visible = false
 		return
+	# 服丹：药池读数（绿系，与影层的幽夜紫区分开）
+	if GameManager.extra_skill_id == "elixir":
+		var max_hp := 1.0
+		var hp_val = player.get("max_health")
+		if hp_val is float or hp_val is int:
+			max_hp = float(hp_val)
+		var pool := GameManager.elixir_pool
+		var shown_pool := int(round(pool))
+		if shown_pool == _shadow_shown:
+			return
+		_shadow_shown = shown_pool
+		var pool_full: bool = pool >= ElixirData.cap_of(max_hp) - 0.01
+		_shadow_chip.visible = shown_pool > 0
+		if shown_pool <= 0:
+			return
+		_shadow_chip.text = "药 %d" % shown_pool
+		_shadow_chip.add_theme_stylebox_override("normal",
+			GameStyle.chip(GameStyle.GOOD if pool_full else GameStyle.GOOD_DK))
+		GameStyle.label(_shadow_chip, 10, GameStyle.INK_TEXT if pool_full else GameStyle.GOOD)
+		return
+	# 影爆：影层读数
 	var stacks := 0
 	var ring = player.get("shadow_ring")
 	if ring is Array:
@@ -279,7 +324,8 @@ func set_edit_mode(on: bool) -> void:
 	_edit_mode = on
 	if on and _skill_id().is_empty():
 		# 还没进局/该槽位无技能：摆个占位字面，照样能拖
-		_btn.text = "extra" if bind_extra else "技"
+		_btn.text = EXTRA_BTN_TEXT if bind_extra else "技"
+		SkillButtonView.style_circle_button(_btn, EXTRA_BTN_FONT if bind_extra else SkillButtonView.SKILL_BTN_FONT)
 		_icon_rect.visible = false
 		_name_label.text = ""
 	visible = on or (GameManager.run_started and not GameManager.is_game_over and not _skill_id().is_empty())

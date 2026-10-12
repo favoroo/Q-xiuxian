@@ -11,6 +11,17 @@ extends RefCounted
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
 ##   wave_heal_pct —— 波末按气血上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本法宝免死并回半血（GameManager.try_revive）
+##   chest_magnet  —— 砸开宝箱掉出的灵石当场飞向玩家（SpiritChest._drop_gems 消费，可叠多件）
+## 2026-10-12 土豆兄弟式「属性转化」核心件（同样走额外字段，item_hook_sum 现算，多件叠系数）：
+##   dmg_per_move_speed  —— 疾风刃：移速每超基础 10% 折算一份全伤害（CultivatorSystem.damage_mult）
+##   crit_per_dodge      —— 幻影迷踪铃：每 10% 有效闪避折算一份暴击率（GameManager.get_crit_rate）
+##   dmg_per_armor       —— 山岳战甲：每点有效护甲折算一份全伤害（damage_mult）
+##   dmg_per_max_hp      —— 血盘古玉：每 50 点最大气血折算一份全伤害（damage_mult）
+##   dmg_per_100_stones + stone_dmg_cap —— 聚宝盆：每持 100 灵石一份全伤害，带总上限（damage_mult）
+##   dmg_per_missing_hp  —— 燃血符：每损失 10% 气血折算一份全伤害（damage_mult）
+##   still_damage + still_seconds —— 不动明王印：站定 N 秒后全伤害乘区（damage_mult 读 still_time）
+##   kill_explode + kill_explode_radius —— 裂魂铃：击杀爆炸（EnemyBase._die，半径 = 判定同源）
+## 转化件的机制数字写在 desc（同回春葫芦/替身娃娃先例）；apply 留空，卡面加成行不冒第二份数字。
 ## unique: true 时每局限购一件，买后即从货架池剔除
 
 const TIER_LABELS := {1: "普通", 2: "稀有", 3: "史诗", 4: "传说"}
@@ -32,7 +43,7 @@ const DEFS: Dictionary = {
 	"mibao_luopan": {
 		"name": "寻宝罗盘", "tier": 1, "price": 12,
 		"icon": "res://assets/art/item_mibao_luopan.png",
-		"desc": "高稀有度升级与道具更易出现",
+		"desc": "高稀有度的悟道候选与法宝更易出现",
 		"apply": {"luck": 5.0},
 	},
 	"qiankun_dai": {
@@ -58,7 +69,7 @@ const DEFS: Dictionary = {
 	"zhekou_yufu": {
 		"name": "折扣券", "tier": 2, "price": 26,
 		"icon": "res://assets/art/item_zhekou_yufu.png",
-		"desc": "可叠加",
+		"desc": "商店全场 8 折，可叠加",
 		"apply": {"shop_price_mul": 0.92},
 	},
 	"kuangxue_dan": {
@@ -352,6 +363,128 @@ const DEFS: Dictionary = {
 				"desc": "机括极速运转",
 				"apply": {"engineering_damage": 3.0, "attack_speed_mult_mul": 0.92},
 			},
+
+			# ---- 2026-10-11 寻宝流法宝（与悟道「宝箱数量/宝箱品质/开箱省力」同一条链路） ----
+			# 兑现点全在 BalanceChest + WaveSpawner._spawn_chests + SpiritChest._destroy；
+			# 藏宝图刻意做进凡品第 1 波就能刷到 —— 寻宝流得让人在第一波就撞见料。
+			"cangbao_tu": {
+				"name": "藏宝图", "tier": 1, "price": 15,
+				"icon": "res://assets/art/item_cangbao_tu.png",
+				"desc": "每波场上多刷几口宝箱",
+				"apply": {"chest_count": 1},
+			},
+			"naling_zhuo": {
+				"name": "纳灵盘", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_naling_zhuo.png",
+				"desc": "宝箱砸开时掉出的金币直接飞进袖中，回春葫芦仍需贴身",
+				"apply": {"pickup_range_mult": 0.2},
+				"chest_magnet": true,
+			},
+			"liexia_zhui": {
+				"name": "卸匣锥", "tier": 2, "price": 28,
+				"icon": "res://assets/art/item_liexia_zhui.png",
+				"desc": "砸开宝箱所需击数减少；法器攻击间隔 +5%",
+				"apply": {"chest_break": 1, "attack_speed_mult_mul": 1.05},
+			},
+		"dianjin_jue": {
+			"name": "点金诀", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_dianjin_jue.png",
+			"desc": "铜匣与玉匣更易出现，玉匣砸开必送法宝",
+			"apply": {"chest_quality": 4.0},
+		},
+
+		# ---- 2026-10-12 土豆兄弟式「属性转化」核心件 + 单元素仙品 ----
+		# 转化件全部走额外字段（item_hook_sum 现算，机制数字写在 desc）；图标暂借同系现有贴图占位，
+		# TODO(media-gen)：这批法宝待 media-gen 出专属图标后替换并补 manifest。
+		"jifeng_ren": {
+			"name": "疾风刃", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_shenxing_xue.png",
+			"desc": "身法越快刃越利：移速每超基础10%，全伤害+4%",
+			"apply": {},
+			"dmg_per_move_speed": 0.04,
+		},
+		"huanying_ling": {
+			"name": "幻影迷踪铃", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_lingbo_xue.png",
+			"desc": "铃声扰敌心神的刹那即是破绽：每10%闪避化为+5%暴击率",
+			"apply": {},
+			"crit_per_dodge": 0.05,
+		},
+		"shanyue_jia": {
+			"name": "山岳战甲", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_guijia_fu.png",
+			"desc": "甲越厚势越沉：每点护甲+1.5%全伤害",
+			"apply": {},
+			"dmg_per_armor": 0.015,
+		},
+		"xuepan_guyu": {
+			"name": "血盘古玉", "tier": 4, "price": 88,
+			"icon": "res://assets/art/item_hupi_qun.png",
+			"desc": "气血如炉：每50点最大生命+1%全伤害",
+			"apply": {},
+			"dmg_per_max_hp": 0.01,
+		},
+		"jubao_pen": {
+			"name": "聚宝盆", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_jubaopen.png",
+			"desc": "财大气粗：每持100金币+3%全伤害（至多+30%）",
+			"apply": {},
+			"dmg_per_100_stones": 0.03, "stone_dmg_cap": 0.30,
+		},
+		"ranxue_fu": {
+			"name": "燃血符", "tier": 3, "price": 44,
+			"icon": "res://assets/art/item_xiuluo_pei.png",
+			"desc": "以血为引：每损失10%生命+2.5%全伤害",
+			"apply": {},
+			"dmg_per_missing_hp": 0.025,
+		},
+		"budong_yin": {
+			"name": "不动明王印", "tier": 3, "price": 48,
+			"icon": "res://assets/art/item_xuanwu_yin.png",
+			"desc": "站定1秒后全伤害+30%，脚底一动即失效",
+			"apply": {},
+			"still_damage": 0.30, "still_seconds": 1.0,
+		},
+		"liehun_ling": {
+			"name": "裂魂铃", "tier": 4, "price": 92,
+			"icon": "res://assets/art/item_leiyin_zhen.png",
+			"desc": "被杀的妖兽当场爆开，伤及周身同伴（伤害随元素成长）\n（每局限购一件）",
+			"apply": {},
+			"kill_explode": 40.0, "kill_explode_radius": 90.0,
+			"unique": true,
+		},
+
+		# ---- 单元素仙品（tier 3）：专精流后期核心，幅度是良品单元素石的近两倍 ----
+		"taijin_jing": {
+			"name": "太白金精", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_jinjing_shi.png",
+			"desc": "",
+			"apply": {"element_damage_metal": 0.15},
+		},
+		"yimu_sui": {
+			"name": "乙木灵髓", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_chenxiang_mu.png",
+			"desc": "",
+			"apply": {"element_damage_wood": 0.15},
+		},
+		"xuanshui_po": {
+			"name": "玄水精魄", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_hantan_yu.png",
+			"desc": "",
+			"apply": {"element_damage_water": 0.15},
+		},
+		"lihuo_shenjing": {
+			"name": "离火神晶", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_dihuo_jing.png",
+			"desc": "",
+			"apply": {"element_damage_fire": 0.15},
+		},
+		"houtu_shenyuan": {
+			"name": "后土神源", "tier": 3, "price": 46,
+			"icon": "res://assets/art/item_houtu_he.png",
+			"desc": "",
+			"apply": {"element_damage_earth": 0.15},
+		},
 }
 
 static func get_def(id: String) -> Dictionary:

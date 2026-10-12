@@ -49,7 +49,7 @@ func _run() -> void:
 	GameManager.start_run("qingyun_sword")
 	get_tree().paused = false
 	_check(GameManager.run_started, "道统 fuzhen 开局")
-	_check(GameManager.drones.size() == 2, "符阵灵童自带 2 灵蝶 (实际 %d)" % GameManager.drones.size())
+	_check(GameManager.drones.size() == 1, "符阵灵童自带 1 只★2 护蝶（分身为二具）(实际 %d)" % GameManager.drones.size())
 	var p_frame: Texture2D = GameManager.player.anim_sprite.sprite_frames.get_frame_texture("idle_s", 0)
 	var p_atlas_path: String = (p_frame as AtlasTexture).atlas.resource_path if p_frame is AtlasTexture else ""
 	_check(p_atlas_path == "res://assets/art/cultivator_fuzhen_8dir.png", "选角后玩家外观切为符阵灵童图集 (实际 %s)" % p_atlas_path)

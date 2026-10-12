@@ -31,6 +31,11 @@ const MARGIN := 10.0
 ## 于是容器按那个宽度算「最小高」⇒ 一个词一行、卡高直接冲到两千多像素（判据 ③ 量出来过）。
 const INNER_W := 276.0
 
+## 读数行（GridContainer 两列）的字号与列间距：值列折行宽度由这两个数推出来，
+## 改字号必须一起改，否则折行按老宽度切、画出来会差半行
+const ROW_FONT := 12
+const ROW_SEP := 12
+
 ## 收起那一刻发一次：让触发方把自己那一行的高亮撤掉（卡与它指的那行是同一条信息，得一起亮一起灭）
 signal closed
 
@@ -191,11 +196,21 @@ func _build_rows(vbox: VBoxContainer, payload: Dictionary) -> void:
 		return
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("h_separation", ROW_SEP)
 	grid.add_theme_constant_override("v_separation", 3)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(grid)
+
+	# 值列可用宽 = 卡内宽 − 名字列最宽那条 − 列间距。值 Label 不折行时它的「最小宽」就是整条文本，
+	# 一条长值（羁绊阶梯「生命+50 · 召唤伤害+7 · 武器伤害+25%」）会把定宽 306 的卡顶宽、斜切伸出卡外。
+	# wrap_cjk 只在真装不下时才切，短值原样一行，所以这一句对所有详情卡都是无害的。
+	var name_w := 0.0
+	for r in rows:
+		var cells: Array = r
+		if cells.size() >= 2:
+			name_w = maxf(name_w, GameStyle.line_max_w(String(cells[0]), GameStyle.body_font(), ROW_FONT))
+	var value_w: float = maxf(64.0, INNER_W - name_w - ROW_SEP)
 
 	for r in rows:
 		var cells: Array = r
@@ -205,17 +220,17 @@ func _build_rows(vbox: VBoxContainer, payload: Dictionary) -> void:
 		k.text = String(cells[0])
 		k.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		k.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		GameStyle.label(k, 12, GameStyle.GREY)
+		GameStyle.label(k, ROW_FONT, GameStyle.GREY)
 		grid.add_child(k)
 
 		var v := Label.new()
-		v.text = String(cells[1])
+		v.text = GameStyle.wrap_cjk(String(cells[1]), GameStyle.body_font(), ROW_FONT, value_w)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var vcol: Color = cells[2] if cells.size() > 2 else GameStyle.PAPER
-		GameStyle.label(v, 12, vcol)
+		GameStyle.label(v, ROW_FONT, vcol)
 		grid.add_child(v)
 
 func _build_body(vbox: VBoxContainer, payload: Dictionary) -> void:
@@ -247,9 +262,11 @@ func _build_notes(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var sep := _sep()
 	if sep != null:
 		vbox.add_child(sep)
+	# 中文长句在真机上不能指望引擎折行（AGENTS.md 坑 4），按卡内可用宽切硬换行。
+	# 预算必须等于 INNER_W：折窄一档，整张卡就多长一行，受益详情那几张会顶出视口。
 	for n in notes:
 		var lbl := Label.new()
-		lbl.text = "· " + String(n)
+		lbl.text = "· " + GameStyle.wrap_cjk(String(n), GameStyle.body_font(), 12, INNER_W)
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lbl.custom_minimum_size = Vector2(INNER_W, 0)

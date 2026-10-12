@@ -1,8 +1,8 @@
 class_name UnitSpiritBeastTests
 extends UnitTestsBase
 
-## 祭坛灵兽数值单测（2026-10-11 祭坛强化）：钉 BalanceSpiritBeast 纯函数与 GameBalance 转发。
-## 行为判据（召唤/嘲讽/撕咬/跨波存活）在 tests/SpiritBeastCheck.tscn。
+## 祭坛灵兽数值单测（2026-10-11 远程吐息重做）：钉 BalanceSpiritBeast 纯函数与 GameBalance 转发。
+## 行为判据（召唤/嘲讽/吐息/承伤/跨波存活）在 tests/SpiritBeastCheck.tscn。
 
 func _test_spirit_beast_scaling() -> void:
 	# 气血/伤害成长：单调递增、1 波取基准值、0 波钳到 1 波（不出 NaN/回落）
@@ -18,7 +18,12 @@ func _test_spirit_beast_scaling() -> void:
 func _test_spirit_beast_constants() -> void:
 	# 嘲讽半径/受击无敌帧是机制成立的前提：没了它们灵兽既不扛伤也瞬间蒸发
 	_c.check(GameBalance.SPIRIT_BEAST_TAUNT_RADIUS > 0.0, "嘲讽半径为正")
-	_c.check(GameBalance.SPIRIT_BEAST_HIT_INVINCIBLE > 0.0, "受击无敌帧为正（敌人接触逐帧结算，没它一秒磨没）")
-	_c.check(GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL > 0.0, "撕咬冷却为正")
-	_c.check(GameBalance.SPIRIT_BEAST_ATTACK_RANGE > 0.0, "撕咬出手距离为正")
-	_c.check(GameBalance.SPIRIT_BEAST_MOVE_SPEED > 110.0, "灵兽移速快过小怪基准（追得上）")
+	_c.check(GameBalance.SPIRIT_BEAST_HIT_INVINCIBLE > 0.0, "受击无敌帧为正（近身啃咬逐帧结算，没它一秒磨没）")
+	_c.check(GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL > 0.0, "吐息冷却为正")
+	# 风筝甜区：下沿必须严格小于上沿，且上沿大于敌人身位（甜区才有得站）
+	_c.check(GameBalance.SPIRIT_BEAST_PREFER_RANGE_MIN > 0.0, "风筝甜区下沿为正")
+	_c.check(GameBalance.SPIRIT_BEAST_PREFER_RANGE_MIN < GameBalance.SPIRIT_BEAST_PREFER_RANGE_MAX, "风筝甜区下沿小于上沿")
+	_c.check(GameBalance.SPIRIT_BEAST_PROJECTILE_SPEED > 0.0, "丹弹飞行速度为正")
+	_c.check(GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO > 0.0 and GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO < 1.0, "环绕移速占比在 (0,1)")
+	_c.check(GameBalance.SPIRIT_BEAST_CONTACT_RANGE > 0.0, "近身啃咬判定距离为正")
+	_c.check(GameBalance.SPIRIT_BEAST_MOVE_SPEED > 110.0, "灵兽移速快过小怪基准（风筝甩得开近战怪）")

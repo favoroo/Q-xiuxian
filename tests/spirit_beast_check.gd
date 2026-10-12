@@ -1,9 +1,9 @@
 extends Node
 
-## 祭坛灵兽判据（2026-10-11 祭坛强化，真实 Main 场景，不打 mock）：
+## 祭坛灵兽判据（2026-10-11 远程吐息重做，真实 Main 场景，不打 mock）：
 ##   ① 祭坛触发即召唤：_trigger_blessing 后 allies 登记 +1，气血按当前波次取表
 ##   ② 嘲讽：玩家在反方向远处，敌人仍改追嘲讽圈内的灵兽（替玩家分担火力的牙齿）
-##   ③ 撕咬与承伤：贴身后敌人掉血（灵兽在战斗）、灵兽也掉血（敌人真咬得到它）
+##   ③ 吐息与承伤：丹弹打得敌人掉血（灵兽在战斗）；敌人贴近后灵兽也掉血（近身啃咬真咬得到它）
 ##   ④ 受击无敌帧 + 战死注销：同帧两刀只结算一刀；血量耗尽消散并从 allies 注销
 ##   ⑤ 跨波存活：end_wave 清场（敌人消散）后灵兽仍在场 —— 血量没耗完就一直在
 ## 运行: godot --headless --path . res://tests/SpiritBeastCheck.tscn
@@ -92,7 +92,7 @@ func _case_summon() -> void:
 	_c.near(_beast.current_hp, GameBalance.spirit_beast_max_hp(maxi(GameManager.wave_number, 1)), EPS,
 		"① 气血按当前波次取表（%.0f）" % GameBalance.spirit_beast_max_hp(maxi(GameManager.wave_number, 1)))
 
-## ② 嘲讽 + ③ 撕咬与承伤
+## ② 嘲讽 + ③ 吐息与承伤
 func _case_taunt_and_bite() -> void:
 	# 玩家挪到灵兽反方向远处：敌人若还往玩家走，读数会当场反掉
 	_player.global_position = _beast.global_position + Vector2(-400.0, 0.0)
@@ -100,12 +100,12 @@ func _case_taunt_and_bite() -> void:
 	_c.check(slime != null, "② 前置：妖物已生成")
 	if slime == null:
 		return
-	slime.max_hp = 99999.0     ## 挡住撕咬致死，只观察走位与承伤
+	slime.max_hp = 99999.0     ## 挡住吐息致死，只观察走位与承伤
 	slime.current_hp = 99999.0
 	_c.check(150.0 < GameBalance.SPIRIT_BEAST_TAUNT_RADIUS, "② 布置成立：敌人在嘲讽圈内")
 	await _settle(2)
 	var x_before: float = slime.global_position.x
-	# 双方接近窗口：150px 间距、合计 ~260px/s，0.33 秒（20 帧）内还没贴上，走位读数干净
+	# 嘲讽观察窗：妖物朝灵兽追（x 减小）。灵兽风筝后撤的方向与妖物来向一致，窗口内读数稳定
 	await _settle(20)
 	_c.check(is_instance_valid(slime), "② 观察窗内妖物还在")
 	if not is_instance_valid(slime):
@@ -113,12 +113,17 @@ func _case_taunt_and_bite() -> void:
 	_c.check(slime.global_position.x < x_before - 5.0,
 		"② 嘲讽：玩家在 -400 方向，妖物仍朝灵兽（x 减小方向）追（%.0f → %.0f）" % [x_before, slime.global_position.x])
 
-	# ③ 继续跑到贴身：敌人被咬掉血（灵兽在战斗），灵兽也被接触咬掉血（承伤真实存在）
+	# ③ 吐息：灵兽远程丹弹打得妖物掉血（弹速 380 + 追踪，风筝走位下命中率有保障）
 	await _settle(150)
 	_c.check(is_instance_valid(slime), "③ 观察窗内妖物还在")
 	if is_instance_valid(slime):
-		_c.check(slime.current_hp < 99999.0, "③ 撕咬：妖物被灵兽咬掉血（%.0f）" % slime.current_hp)
-	_c.check(_beast.current_hp < _beast.max_hp, "③ 承伤：灵兽被妖物接触咬掉血（%.0f / %.0f）" % [_beast.current_hp, _beast.max_hp])
+		_c.check(slime.current_hp < 99999.0, "③ 吐息：妖物被灵兽丹弹打掉血（%.0f）" % slime.current_hp)
+	# ③ 承伤：灵兽 150 移速风筝甩得开 110 的小怪，自然追不上——
+	# 直接把妖物贴脸传送进近身啃咬圈，验证「无碰撞体积后敌人贴近仍咬得到灵兽」
+	if is_instance_valid(slime):
+		slime.global_position = _beast.global_position + Vector2(10.0, 0.0)
+		await _settle(4)
+	_c.check(_beast.current_hp < _beast.max_hp, "③ 承伤：妖物贴近后灵兽被近身啃咬掉血（%.0f / %.0f）" % [_beast.current_hp, _beast.max_hp])
 
 ## ④ 受击无敌帧 + 战死注销（另召一只干净的，不与 ① 那只的承伤读数打架）
 func _case_invincible_and_death() -> void:

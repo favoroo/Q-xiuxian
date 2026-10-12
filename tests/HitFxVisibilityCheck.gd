@@ -9,8 +9,10 @@ extends Node
 ##      由 FloatingWeapon._spawn_lightning 的 is_in_viewport 门控修）；
 ##   ③ 近战月牙只看命中数，扫中屏外边缘目标时亮在屏内（WeaponAimCheck 第 4 条补段钉死）；
 ##   ④ EnemyBase._offscreen 是 10Hz 采样（最多 100ms 陈旧）+ 64px 边缘带，拦不住刚出屏的。
-## 本次修复 = JuiceEffect.spawn_hit_sparks / spawn_death_burst 与 DamageNumber.spawn
-## 三处入口用实时画布变换做视口终审：位置不在可见矩形内（收 8px 防边缘露半截）一律不生成。
+## 本次修复 = JuiceEffect.spawn_death_burst 与 DamageNumber.spawn
+## 两处入口用实时画布变换做视口终审：位置不在可见矩形内（收 8px 防边缘露半截）一律不生成。
+## （2026-10-11 受击火花整体下线后，命中类视口兜底判据由死亡爆散承担——同一份 _pos_in_viewport。）
+## （2026-10-12 死亡爆散整体下线后，视口兜底判据改由结算冲击环承担——仍是同一份 _pos_in_viewport。）
 ##
 ## 本判据不建真实敌人/匣子（场景依赖重），直接打三个入口本身，断言：
 ##   - 屏内位置照常生成（门控不许误杀正常反馈）；
@@ -20,7 +22,7 @@ extends Node
 ##
 ## 运行: godot --headless --path . res://tests/HitFxVisibilityCheck.tscn
 ## 反例（判据的牙齿，改动后跑本场景必须报红）：
-##   ① 把 JuiceEffect._pos_in_viewport 整体改成 return true ⇒ 屏外/贴边火花与屏外爆散报红；
+##   ① 把 JuiceEffect._pos_in_viewport 整体改成 return true ⇒ 屏外/贴边爆散报红；
 ##   ② 只把 grow(-8.0) 放宽成 grow(8.0) ⇒ 贴边 4px 条报红（收边口径松了 16px）；
 ##   ③ 把 DamageNumber.spawn 的视口兜底删掉 ⇒ 屏外跳字条报红。
 
@@ -40,24 +42,19 @@ func _run() -> void:
 	# 测试场景无相机 ⇒ 画布变换恒等，visible_rect 即世界可见范围；取矩形外右下方一点
 	var outside := rect.position + rect.size + Vector2(220.0, 180.0)
 
-	# —— 受击火花（白色斩痕+扇形火花，截图里「凭空刀光」的本体）——
+	# —— 结算冲击环：AoE 落点 0.3s 的光环，屏外结算的环最像「空地凭空特效」——
+	# （受击火花/死亡爆散已整体下线，视口兜底判据改由冲击环承担：同一份 _pos_in_viewport）
 	_c.equals(_visible_count("JuiceEffectPool"), 0, "开场池内无可见特效")
-	JuiceEffect.spawn_hit_sparks(_world, inside, Vector2.RIGHT, false)
-	_c.equals(_visible_count("JuiceEffectPool"), 1, "屏内命中火花照常生成（门控不误杀）")
-	JuiceEffect.spawn_hit_sparks(_world, outside, Vector2.RIGHT, false)
-	_c.equals(_visible_count("JuiceEffectPool"), 1, "屏外位置发火花不生成（匣子/敌人屏外命中的公共兜底）")
-	# 贴边带：中心落在可见矩形内 4px 的也不生成（收 8px 防火花半径在边缘露半截；同时钉住收边口径）
+	JuiceEffect.spawn_shockwave(_world, inside, 40.0, Color.WHITE)
+	_c.equals(_visible_count("JuiceEffectPool"), 1, "屏内冲击环照常生成（门控不误杀）")
+	JuiceEffect.spawn_shockwave(_world, outside, 64.0, Color.WHITE)
+	_c.equals(_visible_count("JuiceEffectPool"), 1, "屏外冲击环不生成（屏外 AoE 同口径）")
+	# 贴边带：中心落在可见矩形内 4px 的也不生成（收 8px 防特效半径在边缘露半截；同时钉住收边口径）
 	var edge := rect.position + Vector2(4.0, 4.0)
-	JuiceEffect.spawn_hit_sparks(_world, edge, Vector2.RIGHT, false)
-	_c.equals(_visible_count("JuiceEffectPool"), 1, "贴边 4px 内的火花不生成（grow(-8) 收边口径有牙齿）")
-	JuiceEffect.spawn_hit_sparks(_world, inside, Vector2.RIGHT, true)
-	_c.equals(_visible_count("JuiceEffectPool"), 2, "屏内暴击火花照常生成")
-
-	# —— 死亡爆散：尸体塌缩 0.14s 就没、爆散要放 0.4s，屏外击杀的爆散最像「空地凭空特效」——
-	JuiceEffect.spawn_death_burst(_world, inside, false, 0.0, false)
-	_c.equals(_visible_count("JuiceEffectPool"), 3, "屏内死亡爆散照常生成")
-	JuiceEffect.spawn_death_burst(_world, outside, true, 1.2, true)
-	_c.equals(_visible_count("JuiceEffectPool"), 3, "屏外死亡爆散不生成（精英/暴击斩杀同口径）")
+	JuiceEffect.spawn_shockwave(_world, edge, 40.0, Color.WHITE)
+	_c.equals(_visible_count("JuiceEffectPool"), 1, "贴边 4px 内的冲击环不生成（grow(-8) 收边口径有牙齿）")
+	JuiceEffect.spawn_shockwave(_world, inside, 40.0, Color.WHITE)
+	_c.equals(_visible_count("JuiceEffectPool"), 2, "屏内第二记冲击环照常生成")
 
 	# —— 跳字：截图里无敌人处的「52!」——调用方 _offscreen 的陈旧窗口由入口终审补上——
 	if bool(SettingsManager.get_val(&"display", &"damage_numbers", true)):
@@ -72,9 +69,9 @@ func _run() -> void:
 
 	# —— 拾取流光不吃门控：跟随玩家拾取（宝石/回复珠必须在玩家脚边拿），永远屏内 ——
 	JuiceEffect.spawn_pickup_pop(_world, outside, true)
-	_c.equals(_visible_count("JuiceEffectPool"), 4, "拾取流光不吃视口门控（口径独立于命中/爆散两类）")
+	_c.equals(_visible_count("JuiceEffectPool"), 3, "拾取流光不吃视口门控（口径独立于命中/爆散两类）")
 
-	# —— 放完归池：火花 0.28s / 爆散 0.45s / 跳字 0.9s，1.2s 后必须全部休眠 ——
+	# —— 放完归池：爆散 0.45s / 跳字 0.9s，1.2s 后必须全部休眠 ——
 	await get_tree().create_timer(1.2).timeout
 	_c.equals(_visible_count("JuiceEffectPool"), 0, "1.2s 后特效全部归池（无节点泄漏）")
 	_c.equals(_visible_count("DamageNumberPool"), 0, "1.2s 后跳字全部归池（无节点泄漏）")

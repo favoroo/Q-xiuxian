@@ -32,7 +32,6 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 	var raw: float = WeaponData.damage_for(w_id, s) + GameManager.get_weapon_stat_bonus(w_id, s)
 	var mult: float = GameManager.weapon_damage_mult * GameManager.synergy_damage_mult \
 			* GameManager.shadow_amp_mult \
-			* drone_mult(def) \
 			* GameManager.cultivator_damage_mult(w_id) * GameManager.element_damage_mult(w_id) \
 			* GameBalance.multi_weapon_damage_mult(n, drone_n)
 	if is_turret(def):
@@ -107,11 +106,6 @@ static func slot_split_mult(slot_count: int = -1, w_id: String = "") -> float:
 		drone_n += 1
 	return GameBalance.multi_weapon_damage_mult(n, drone_n)
 
-## 灵宝伤害乘区：只有环绕灵宝吃召唤羁绊这一档，详情面板对别的法器不许列这一行
-static func drone_mult(def: Dictionary) -> float:
-	return GameManager.synergy_drone_mult \
-			if int(def.get("behavior", -1)) == WeaponData.Behavior.DRONE else 1.0
-
 ## 机关羁绊：只有机关类法器吃这一档，详情面板对别的法器不许列这一行
 static func contraption_mult() -> float:
 	return GameManager.synergy_contraption_mult
@@ -126,7 +120,7 @@ static func bonus_bill_text(w_id: String, star: int) -> String:
 	for r in bill:
 		parts.append("%s +%s" % [String(r[0]), BonusRows.fmt_num(float(r[1]))])
 	var total: float = GameManager.get_weapon_stat_bonus(w_id, star)
-	return "每下多打 +%s：%s（★ 越高吃得越多，每星 +25%%）" % [
+	return "每下多打 +%s：%s（★ 越高吃得越多，属性加伤每星 +25%%）" % [
 		BonusRows.fmt_num(total), "、".join(parts)]
 
 static func is_turret(def: Dictionary) -> bool:

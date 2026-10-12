@@ -65,6 +65,18 @@ static func iframe_bonus(ring: Array) -> float:
 static func push_impulse(ring: Array) -> float:
 	return float(ring.size()) * PUSH_PER_STACK
 
+## 卡面文案：选角界面单独一段「额外技能」，图鉴 / 属性面板 / 角色详解同读这一份。
+## 攒与放各一行，每行都要在最窄那一档（详解卡列宽 404）里就是一行：加字先量宽，
+## 撑成两行会把详解卡顶出屏（判据 LayoutCheck 的「道统选择·影者」那一档在管这件事）。
+## 数字一律现读本表（口径 3）：改每层幅度、层数上限、还伤比例，这几行跟着走，别处不抄。
+static func card_lines() -> Array[String]:
+	return [
+		"攒：闪避成功 +1 层影，每层法器伤害 +%d%%（至多 %d 层）" % [
+			int(roundf(AMP_PER_STACK * 100.0)), MAX_STACKS],
+		"放：随时点「影爆」踩碎，把躲掉的伤害按 %d%% 还给周身敌人并推开" % [
+			int(roundf(STORE_RATIO * 100.0))],
+	]
+
 ## 有没有东西可兑现：空影层时冲刺保持原样，不放环、不查怪
 static func has_charge(ring: Array) -> bool:
 	return not ring.is_empty()

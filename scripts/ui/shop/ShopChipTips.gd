@@ -114,9 +114,8 @@ static func _purchase_lines(tag: String, w_id: String) -> Array[String]:
 			tier_idx = i
 			break
 	var tier_txt := ""
-	var tiers: Array = SynergyUI.TIER_LINES.get(tag, [])
-	if tier_idx >= 0 and tier_idx < tiers.size():
-		tier_txt = String(tiers[tier_idx])
+	if tier_idx >= 0:
+		tier_txt = SynergyUI.tier_line(tag, tier_idx + 1)
 	# 武器槽满了这一把进背包，而背包不计入羁绊（tag_counts 只数上阵与环绕件）——
 	# 不写这一句，色签上的「差 1 件」就成了按下去不会兑现的承诺
 	if GameManager.slots_used() >= GameManager.max_weapon_slots():

@@ -88,14 +88,11 @@ const CRIT_TRAUMA_ELITE := 0.28          ## 精英暴击创伤（既有口径，
 const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」
 const CRIT_KILL_HITSTOP_SCALE := 0.06    ## 暴击击杀顿帧时间倍率
 const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
-const CRIT_KILL_OVERKILL_FLOOR := 0.45   ## 暴击击杀的死亡爆散规模保底（溢出伤害不足时也按此放大）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
 # —— 命中反馈全局限流（2026-10-11 频闪治理）——
 ## 远程穿透/弹射/多弹齐射下每秒命中可达几十次，逐刀全量反馈会糊成满屏频闪+持续抖屏。
-## 普通命中按最小间隔放行；暴击/精英作为「值得看」的节点直通（闸不消耗）。
-const HIT_SPARK_MIN_INTERVAL := 0.08     ## 普通命中火花全局限流最小间隔（秒，≈12 次/秒封顶）
-const KILL_BURST_MIN_INTERVAL := 0.10    ## 普通小怪死亡爆散全局限流最小间隔（秒，精英/Boss 直通）
+## 普通档按最小间隔放行；精英/暴击作为「值得看」的节点直通（闸不消耗）。
 const MICRO_KICK_MIN_INTERVAL := 0.09    ## 普通命中/普通击杀镜头微冲击全局限流最小间隔（秒）
 
 # ---------------- 妖狼系长扑：实冲位移 / 走廊扫掠几何 ----------------
@@ -146,6 +143,15 @@ static func burn_tick_damage(burn_dps: float, elemental_damage: float, synergy_b
 static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> float:
 	var base_tick := maxf(0.0, poison_dps) * DOT_TICK_INTERVAL + maxf(0.0, elemental_damage) * POISON_ELEM_TICK_COEF
 	return maxf(1.0, base_tick)
+
+# ---------------- 裂魂铃·击杀爆炸（2026-10-12） ----------------
+
+const KILL_EXPLODE_IMPULSE := 110.0     ## 爆炸震退冲量基数（再乘玩家击退属性）
+const KILL_EXPLODE_ELEM_COEF := 1.5     ## 元素伤害对爆炸的成长系数
+
+## 击杀爆炸伤害 = 法宝基数（ItemData 额外字段 kill_explode）+ 元素成长；半径在 kill_explode_radius
+static func kill_explode_damage(base: float, elemental_damage: float) -> float:
+	return maxf(0.0, base) + maxf(0.0, elemental_damage) * KILL_EXPLODE_ELEM_COEF
 
 # ---------------- 震退方向 ----------------
 

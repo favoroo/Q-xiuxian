@@ -3,6 +3,7 @@ extends Node
 ## 推荐系统判据（「荐」标打分）：
 ##   1. simulate_stats 与 StatSystem 落地语义同源：暴击/闪避到帽、攻速乘算带地板、五行真解分发
 ##   2. 修士契合程序化推导：正收益 mods 键 → apply 键偏好；法器 tag 专精与非灵蝶/非机关代偿
+##      （扣分与契合都必须写出一句人话来源，不许只给结论）
 ##   3. 构建边际收益量化：暴击临上限收益归零、近战加成对剑客可打分、经济类按剩余波数折价
 ##   4. 法器候选：三合一升星、槽位满入背包、羁绊临门
 ##   5. 回气丹：缺血才值钱，满血零分
@@ -48,6 +49,7 @@ func _fake_cultivator(mods: Dictionary, allowed: Array = []) -> Dictionary:
 func _run() -> void:
 	_check_simulate()
 	_check_fit()
+	_check_fit_reason_is_explained()
 	_check_build_gain()
 	_check_weapon_offer()
 	_check_potion()
@@ -114,6 +116,47 @@ func _check_fit() -> void:
 			CultivatorData.get_def("shiyue").get("allowed_tags", []))
 	_c.check(sp.has("max_hp"), "真实守卫偏好表含气血上限")
 
+## 「契合」不许只喊结论：每个偏好键都得带得出「为什么」，且这条要随理由一起出现在详情卡里。
+## 反例就是 2026-10-11 那张截图——剑客买护甲被写成「契合【剑客】护甲取向」，
+## 而角色卡上剑客只有「剑系伤害 +35%」「初始暴击率 +15%」，玩家对着卡找不到这条。
+func _check_fit_reason_is_explained() -> void:
+	# ① 流派推导（allowed_tags）：真实剑客 + 真实「护甲提升」，走生产同款入口
+	var ctx := _base_ctx()
+	ctx["cultivator"] = CultivatorData.get_def("jianchi")
+	var r_armor := BalanceRecommend.score_apply(
+			UpgradeData.get_upgrade_def("armor_up").get("apply", {}), ctx)
+	var fit := ""
+	var why := ""
+	for r in r_armor["reasons"]:
+		var s := String(r)
+		if s.contains("取向"):
+			fit = s
+		elif s.begins_with("因为"):
+			why = s
+	_c.check(not fit.is_empty(), "真实剑客买护甲仍标「契合取向」")
+	_c.check(why.contains("剑系") and why.contains("护甲"),
+			"契合理由跟着一句「因为…」点明流派推导（实得「%s」）" % why)
+	# ② 自身属性推导（mods）：话术里的幅度必须现读角色表，不许与角色卡两套数
+	var ctx2 := _base_ctx()
+	ctx2["cultivator"] = _fake_cultivator({"crit_rate": 0.15})
+	var r_crit := BalanceRecommend.score_apply({"crit_rate": 0.08}, ctx2)
+	var why2 := ""
+	for r in r_crit["reasons"]:
+		if String(r).begins_with("因为"):
+			why2 = String(r)
+	_c.check(why2.contains("15%"), "自身来源那句带真实幅度（实得「%s」）" % why2)
+	# ③ 给不出人话来源时不许硬编一句假话（armor=0 只由反震带出的护甲偏好）
+	var ctx3 := _base_ctx()
+	ctx3["cultivator"] = _fake_cultivator({"thorns": 1.0})
+	var r3 := BalanceRecommend.score_apply({"armor": 2.0}, ctx3)
+	var fit3 := false
+	for r in r3["reasons"]:
+		var s3 := String(r)
+		if s3.contains("取向"):
+			fit3 = true  # 先坐实「这句确实该出来源」，否则下面那条否定断言是空转
+		_c.check(not s3.begins_with("因为"), "无来源时不编「因为…」句（实得「%s」）" % s3)
+	_c.check(fit3, "反震带出的护甲偏好仍标「契合取向」")
+
 # ---------------- 3. 构建边际收益 ----------------
 
 func _check_build_gain() -> void:
@@ -157,9 +200,16 @@ func _check_weapon_offer() -> void:
 	var fu := _fake_cultivator({"non_drone_damage": -0.3})
 	var ctx_f := _base_ctx()
 	ctx_f["cultivator"] = fu
+	var r_melee := BalanceRecommend.score_weapon("qingyun_sword", ctx_f)
 	var a_drone := float(BalanceRecommend.score_weapon("lingdie", ctx_f)["a"])
-	var a_melee := float(BalanceRecommend.score_weapon("qingyun_sword", ctx_f)["a"])
+	var a_melee := float(r_melee["a"])
 	_c.check(a_drone > a_melee, "驯兽师对环绕法器契合高于近战（%.2f > %.2f）" % [a_drone, a_melee])
+	# 这一刀扣在分数上就得写在理由里，否则玩家只看到一颗不亮的「荐」
+	var pen := ""
+	for r in r_melee["reasons"]:
+		if String(r).contains("非召唤类"):
+			pen = String(r)
+	_c.check(pen.contains("-30%"), "非召唤惩罚那句带真实幅度（实得「%s」）" % pen)
 	# 三合一：手里 2 件同名 1 星 → 协同满分 + 提「三合一」
 	var ctx_m := _base_ctx()
 	ctx_m["copies1"] = {"qingyun_sword": 2}

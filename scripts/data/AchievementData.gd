@@ -74,6 +74,11 @@ const DEFAULT_ITEMS: Array[String] = [
 	"xuanwu_yin",
 	"tianji_pan",
 	"wuji_tianchuan_zhen",
+	# —— 2026-10-11 寻宝流四件（ProgressStore 末尾的 DEFAULT_ITEMS 回灌会让老档也拿到）——
+	"cangbao_tu",
+	"naling_zhuo",
+	"liexia_zhui",
+	"dianjin_jue",
 ]
 
 ## 成就里程碑定义表（顺序即「修仙志」展示顺序）

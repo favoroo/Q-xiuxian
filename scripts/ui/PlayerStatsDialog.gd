@@ -59,6 +59,7 @@ var _cult_icon: TextureRect
 var _cult_name_lbl: Label
 var _cult_epi_lbl: Label
 var _cult_pros_lbl: Label
+var _cult_extra_lbl: Label   ## 额外技能单独一段（幽夜紫），不并进「加成」那串
 var _cult_cons_lbl: Label
 var _stash_box: HBoxContainer
 var _stash_section: HBoxContainer
@@ -73,9 +74,6 @@ var _history_scroll: ScrollContainer
 var _history_list: VBoxContainer
 var _history_count_lbl: Label
 var _current_bottom_tab: int = 0 # 0 = 随身法宝, 1 = 悟道历程
-
-## 各流派每一档的阶梯文案（与 WeaponData.SYNERGIES 数值严格同源，集中收拢至 SynergyUI）
-const SYNERGY_TIER_LINES: Dictionary = SynergyUI.TIER_LINES
 
 func _get_title_text() -> String:
 	return "等 级  ·  属 性 面 板"
@@ -356,6 +354,16 @@ func _refresh_cultivator() -> void:
 		var pros_txt := "加成：" + "；".join(PackedStringArray(pros))
 		_cult_pros_lbl.text = GameStyle.wrap_cjk(pros_txt, font, 11, w)
 		_cult_pros_lbl.visible = not pros.is_empty()
+	# 额外技能单独一行：与选角界面同读机制表那一段，两行各自切完再叠，不并进「加成」那串
+	if _cult_extra_lbl != null:
+		var extra_lines := CultivatorData.get_extra_desc(GameManager.cultivator_id)
+		var extra_txt := ""
+		for xl in extra_lines:
+			if not extra_txt.is_empty():
+				extra_txt += "\n"
+			extra_txt += GameStyle.wrap_cjk(String(xl), font, 11, w)
+		_cult_extra_lbl.text = extra_txt
+		_cult_extra_lbl.visible = not extra_lines.is_empty()
 	if _cult_cons_lbl != null:
 		var cons_txt := "代偿：" + "；".join(PackedStringArray(cons))
 		_cult_cons_lbl.text = GameStyle.wrap_cjk(cons_txt, font, 11, w)
@@ -416,7 +424,7 @@ func _open_synergy_tip(tag: String, anchor: Control) -> void:
 		"本流派武器：" + "、".join(match_weapons) + "。",
 	]
 	var tip := SynergyUI.open_tip(self, anchor, tag,
-		"流派总加成：" + String(info.get("desc", "")),
+		"流派总加成：" + SynergyUI.synergy_desc(tag),
 		"背包中的备用武器不计入上阵数量。",
 		notes
 	)

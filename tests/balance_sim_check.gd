@@ -85,7 +85,7 @@ func _test_weapon_dps_normalization() -> void:
 				"御灵环绕法器【%s】有效 DPS 落在 30~38 区间 (实得 %.1f)" % [w_id, dps])
 
 	var ratio := max_dps / maxf(0.1, min_dps)
-	_c.check(ratio <= 2.0, "全库 60 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
+	_c.check(ratio <= 2.0, "全库 68 把法器基准 DPS 极差比 ≤ 2.0（实测最高 %.1f / 最低 %.1f = %.2fx，拒绝 5 倍失衡）" % [max_dps, min_dps, ratio])
 
 	# 御灵同档护栏（2026-10-10 用户口径：召唤打不动人）：御灵有效 DPS（已按接触占空比折算）
 	# 必须贴住青云剑单体 DPS 的 0.85 倍以上 —— 占空比一变、数值一飘，这里直接红。
@@ -225,14 +225,15 @@ func _test_reference_build_ttks() -> void:
 	#   ① Boss 无 is_elite ⇒ 斩将加成对 Boss 不生效：vs_elite=false、stats 不给 elite_damage
 	#     （既有 3.2/3.4 的 vs_elite=true 属已知乐观偏差，修正需整体重标定，另行立项）；
 	#   ② DRONE 乘接触占空比（随星抬升）——此前仿真漏乘，御灵真实 TTK 被低估 1.33 倍；
-	#   ③ 神识分流按御灵半权；④ 召唤羁绊灵宝乘区 + 驯兽师灵宝专精乘区计入 cult_dmg。
+	#   ③ 神识分流按御灵半权；④ 召唤羁绊那一档现在是纯加法（+16 召唤伤害，走 stats 的
+	#     engineering_damage 进 stat_bonus），羁绊不再另给伤害乘区；驯兽师召唤类专精计入 cult_dmg。
 	# 羁绊构成对齐编队：5 spirit ⇒ 召唤 t3（门槛 -1）；2 木（双护蝶）⇒ 木 t1 武器伤害 +6%；
 	# 水/土/金各 1 件不成分档 ⇒ 无疾风无锐金。攻速/暴击/法伤来自通用悟道加点。
 	var drone_stats_w10 := {
-		"weapon_damage_mult": 1.30, "engineering_damage": 6.0,
+		"weapon_damage_mult": 1.30, "engineering_damage": 22.0,
 		"crit_rate": 0.15, "crit_mult": 1.50, "attack_speed_mult": 0.88,
 		"synergy_damage_mult": 1.06, "synergy_haste_mult": 1.0,
-		"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+		"cultivator_damage_mult": 1.12,
 	}
 	var drone_w10_dps := _simulate_build_dps(
 		[{"id": "lingdie", "star": 2}, {"id": "lingdie", "star": 2},
@@ -243,13 +244,13 @@ func _test_reference_build_ttks() -> void:
 	_c.check(drone_w10_boss_ttk >= 30.0 and drone_w10_boss_ttk <= 70.0,
 		"驯兽师成型御灵 Build 在第 10 波 Boss 战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [drone_w10_boss_ttk, drone_w10_dps])
 
-	# 羁绊构成对齐编队：6 spirit ⇒ 召唤 t3；2 木 ⇒ 木 t1 +6%；寒泉+冰魄 2 水 ⇒ 水 t1 疾风 ×0.92。
+	# 羁绊构成对齐编队：6 spirit ⇒ 召唤 t3（+16 召唤伤害）；2 木 ⇒ 木 t1 +6%；寒泉+冰魄 2 水 ⇒ 水 t1 疾风 ×0.92。
 	# 加点更真实：暴击/攻速/召唤伤害与生存档互相竞争（成型期不会全堆输出）。
 	var drone_stats_w20 := {
-		"weapon_damage_mult": 1.65, "engineering_damage": 12.0,
+		"weapon_damage_mult": 1.65, "engineering_damage": 28.0,
 		"crit_rate": 0.15, "crit_mult": 1.65, "attack_speed_mult": 0.78,
 		"synergy_damage_mult": 1.06, "synergy_haste_mult": 0.92,
-		"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+		"cultivator_damage_mult": 1.12,
 	}
 	var drone_w20_dps := _simulate_build_dps(
 		[{"id": "lingdie", "star": 3}, {"id": "lingdie", "star": 3},
@@ -261,22 +262,22 @@ func _test_reference_build_ttks() -> void:
 	_c.check(drone_w20_boss_ttk >= 30.0 and drone_w20_boss_ttk <= 70.0,
 		"驯兽师成型御灵 Build 在第 20 波魔尊战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [drone_w20_boss_ttk, drone_w20_dps])
 
-	# 3.7 极端 6 御灵满配 Build（全部金系御灵：metal 三档喂暴击、灵宝自带暴击率转化）
+	# 3.7 极端 6 御灵满配 Build（全部金系御灵：metal 三档喂暴击、环绕法器自带暴击率转化）
 	var drone_ext_dps := _simulate_build_dps(
 		[{"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3},
 		 {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}, {"id": "haojin_lun", "star": 3}],
 		{
-			"weapon_damage_mult": 2.00, "engineering_damage": 30.0,
+			"weapon_damage_mult": 2.00, "engineering_damage": 46.0,
 			"crit_rate": 0.27, "crit_mult": 1.75, "attack_speed_mult": 0.60,
 			"synergy_crit_rate": 0.20, "synergy_crit_mult": 0.75,
 			"synergy_damage_mult": 1.0, "synergy_haste_mult": 1.0,
-			"synergy_drone_mult": 1.25, "cultivator_damage_mult": 1.12,
+			"cultivator_damage_mult": 1.12,
 		}, false
 	)
 	var drone_ext_w20_boss_ttk := GameBalance.boss_hp(20) / drone_ext_dps
 	_c.check(drone_ext_w20_boss_ttk >= 8.0,
 		"极端 6 御灵满配 Build 绝不秒杀魔尊：TTK 坚守 >= 8.0s (实测 %.1fs, DPS=%.0f)" % [drone_ext_w20_boss_ttk, drone_ext_dps])
-	print("DRONE 御灵成型 W10 TTK=%.1fs (DPS=%.0f) · W20 TTK=%.1fs (DPS=%.0f) · 极端满配 W20 TTK=%.1fs (DPS=%.0f)｜诚实口径：无斩将 × 占空比按星 × 御灵半权分流 × 灵宝乘区 1.25 × 驯兽师 1.12" % [
+	print("DRONE 御灵成型 W10 TTK=%.1fs (DPS=%.0f) · W20 TTK=%.1fs (DPS=%.0f) · 极端满配 W20 TTK=%.1fs (DPS=%.0f)｜诚实口径：无斩将 × 占空比按星 × 御灵半权分流 × 召唤羁绊 t3 给 +16 召唤伤害 × 驯兽师 1.12" % [
 		drone_w10_boss_ttk, drone_w10_dps, drone_w20_boss_ttk, drone_w20_dps, drone_ext_w20_boss_ttk, drone_ext_dps])
 
 # 纯静态链路仿真计算（含多法器神识分流与散射命中规则）
@@ -290,7 +291,6 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)) + float(stats.get("synergy_crit_rate", 0.0)))
 	var crit_m: float = float(stats.get("crit_mult", 1.5)) + float(stats.get("synergy_crit_mult", 0.0))
 	var elite_mult: float = (1.0 + float(stats.get("elite_damage", 0.0))) if vs_elite else 1.0
-	var drone_m: float = float(stats.get("synergy_drone_mult", 1.0))
 	# 神识分流按御灵半权：数一下编队里的 DRONE 把数（2026-10-11 召唤流校准）
 	var drone_n := 0
 	for item in weapons:
@@ -309,8 +309,6 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 
 		var stat_bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, star)
 		var final_d := (base_d + stat_bonus) * w_dmg_mult * syn_dmg * cult_dmg * elem_dmg * multi_mult
-		if beh == WeaponData.Behavior.DRONE:
-			final_d *= drone_m
 
 		var per_hit := final_d
 		if beh == WeaponData.Behavior.PROJECTILE:
@@ -447,10 +445,12 @@ func _test_survivability() -> void:
 
 ## 5. 刷怪预算绑定点对照（2026-10-11 土豆兄弟式克制）：旧口径的波内总刷入
 ## （时长/间隔 × 平均批量，含 25% 追加概率）与预算 wave_spawn_budget 逐波对照。
-## 钉死两条意图：前 5 波预算不触发（前期手感不变），第 6 波起预算收紧且越到后期收得越狠；
+## 2026-10-11 缩图+减怪后契约改写：预算全程收紧（W1 起即触发），
+## 被闸掉的刷入量由 budget_compensation_exp 折经验足额补差 ⇒ 只减压力不减经济；
 ## 打印表即调参时的校准尺。
 func _test_spawn_budget_binding() -> void:
 	var table: Array[String] = []
+	var avg_exp := 4.0  # 混合怪均经验代表值（史莱姆 3 ~ 雷兽 6 的中位）
 	for w in range(1, 21):
 		var rounds := GameBalance.wave_duration(w) / GameBalance.spawn_interval(w)
 		# 平均批量 = 基础批量 ×(1-p) + (基础+1)×p（25% 追加概率只加这一只）
@@ -459,12 +459,13 @@ func _test_spawn_budget_binding() -> void:
 			+ (batch_base + 1.0) * GameBalance.SPAWN_BATCH_BONUS_CHANCE
 		var old_total := rounds * batch_avg
 		var budget := float(GameBalance.wave_spawn_budget(w))
-		if w <= 5:
-			_c.check(budget >= old_total - 0.5,
-				"前 5 波预算不触发（W%d 旧总量 %.0f ≤ 预算 %.0f）" % [w, old_total, budget])
-		else:
-			_c.check(budget < old_total,
-				"第 %d 波预算收紧（旧总量 %.0f → 预算 %.0f）" % [w, old_total, budget])
+		_c.check(budget < old_total,
+			"第 %d 波预算收紧（旧总量 %.0f → 预算 %.0f）" % [w, old_total, budget])
+		# 经济守恒：预算缺口 × 怪均经验 = 补差经验（±1 取整容差）
+		var shortfall := int(roundf(old_total - budget))
+		var comp := float(GameBalance.budget_compensation_exp(shortfall, avg_exp))
+		_c.check(absf(comp - float(shortfall) * avg_exp) <= 1.0,
+			"第 %d 波经验补差足额覆盖预算缺口（缺口 %d 只 → 补 %.0f 经验）" % [w, shortfall, comp])
 		table.append("W%-2d 旧%5.0f → 预算%4.0f（%+3.0f%%）" % [w, old_total, budget, (budget / old_total - 1.0) * 100.0])
 	print("BUDGET 刷怪预算对照（危险度 0）:")
 	for line in table:

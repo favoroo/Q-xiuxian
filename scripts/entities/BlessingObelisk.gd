@@ -308,7 +308,6 @@ func _trigger_blessing() -> void:
 	blessing_triggered.emit(self)
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	JuiceEffect.spawn_death_burst(get_parent(), global_position, true)
 	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 灵兽现身助战 ⚡")
 	_spawn_shockwave_ring()
 	_summon_spirit_beast()

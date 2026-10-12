@@ -59,8 +59,8 @@ func _process(delta: float) -> void:
 		_lunge_cd -= delta
 		if _lunge_cd <= 0.0:
 			_lunge_cd = 1.6
-			# 复现 SpiritBeast._try_attack 的扑咬小凑身（渲染器位置前扑再弹回）
-			_lunge.position = _lunge_base + Vector2(6.0, -2.0)
+			# 复现 SpiritBeast._try_fire 的吐息小后坐（渲染器逆弹道顿一下再弹回）
+			_lunge.position = _lunge_base + Vector2(-5.0, -2.0)
 			var tw := create_tween()
 			tw.tween_property(_lunge, "position", _lunge_base, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 

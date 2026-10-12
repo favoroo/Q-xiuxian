@@ -128,8 +128,8 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 	return result
 
 # ---------------- 藏宝匣：可砸，但不算威胁 ----------------
-
-const CHEST_BREAK_HITS := 3   ## 藏宝匣挨几下砸开。只数"打到了几下"，与伤害数值无关
+## 匣子本身的数值（刷几口 / 三档权重 / 击数 / 掉落表）在 BalanceChest，2026-10-11 寻宝流改版
+## 时迁出；这里只留索敌分配 —— 两段式那半条链路仍然归本类管。
 
 ## 纯函数：两段式分配 —— 先按原有规则把法器派给妖怪，剩下确实无事可做的法器再去砸匣子。
 ## 为什么分两段而不是把匣子混进 enemies_info 一起排：匣子和妖怪在同一条成本函数里
@@ -221,9 +221,9 @@ static func stat_scaling_label(key: String) -> String:
 		"elemental_damage": return "元素伤害"
 		"engineering_damage": return "召唤伤害"
 		"armor": return "护甲"
-		"max_hp_bonus": return "额外生命"
+		"max_hp_bonus": return "最大生命"
 		"hp_regen": return "生命回复"
-		"lifesteal": return "吸血率"
+		"lifesteal": return "吸血概率"
 		"crit_rate": return "额外暴击率"
 		"crit_mult_bonus": return "额外暴击伤害"
 		"move_speed_bonus": return "移速加成"

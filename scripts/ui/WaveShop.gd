@@ -7,6 +7,7 @@ extends Control
 ## 货架卡构建在 ShopOfferCardFactory、法器悬浮菜单在 ShopWeaponTip、陈列槽位在 ShopInventoryRow。
 
 signal stats_requested
+signal pause_requested
 ## 查流派法器总表：filter_tag 为 "" 时打开武器图鉴不筛选（顶栏按钮），
 ## 否则直达并预选该流派（羁绊详情卡「查看该流派法器」）；Main 接线到 ManualDialog
 signal manual_requested(filter_tag: String)
@@ -204,9 +205,10 @@ func _ready() -> void:
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm)
 
-	# 顶栏右侧添加「属性」按钮，方便随时查看主要/次要面板
+	# 顶栏右侧添加「属性」与「暂停」按钮，方便随时查看面板或唤出暂停菜单
 	var top_bar: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/TopBar
 	var stats_btn := Button.new()
+	stats_btn.name = "StatsButton"
 	stats_btn.text = "属 性"
 	stats_btn.custom_minimum_size = Vector2(72, 32)
 	stats_btn.focus_mode = Control.FOCUS_NONE
@@ -214,9 +216,19 @@ func _ready() -> void:
 	stats_btn.pressed.connect(func(): stats_requested.emit())
 	top_bar.add_child(stats_btn)
 
+	var pause_btn := Button.new()
+	pause_btn.name = "PauseButton"
+	pause_btn.text = "暂 停"
+	pause_btn.custom_minimum_size = Vector2(72, 32)
+	pause_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+	pause_btn.pressed.connect(func(): pause_requested.emit())
+	top_bar.add_child(pause_btn)
+
 	# 「图鉴」插在「属性」左边：买武器的间隙随时查流派法器总表；
 	# 更顺的一条路是点上面羁绊签（如「召唤 (6/5)」）详情卡里的直达按钮（见 _open_shop_synergy_tip）
 	var manual_btn := Button.new()
+	manual_btn.name = "ManualButton"
 	manual_btn.text = "图 鉴"
 	manual_btn.custom_minimum_size = Vector2(72, 32)
 	manual_btn.focus_mode = Control.FOCUS_NONE
@@ -286,7 +298,7 @@ func _open_usage_tip() -> void:
 	]
 	var notes: Array[String] = [
 		"点中一件武器（装备或背包里的）才能操作：三合一升星、装备卸下、出售换金币。",
-		"拖动换装：按住一件武器拎起来，拖到上阵空格＝装备；拖到已佩戴的武器上＝替换（换下的一件回背包）；上阵格之间拖动＝互换位置；拖回背包区＝卸下；背包内拖动＝整理顺序。",
+		"拖动换装：按住一件武器拎起来，图标抬到手指上方，图标压到哪一格就是哪一格（格子被手挡住也认得准）。拖到上阵空格＝装备；拖到已佩戴的武器上＝替换那一格（换下的一件回背包原位）；把上阵的武器拖到背包里的某一件上＝两件互换（背包满也换得动）；拖到背包空位或「背包」签＝卸下；上阵格之间拖动＝互换位置；背包内拖动＝整理顺序。",
 		"三合一：集齐三把同名同星，合成后升一星（最高 %s）。" % WeaponData.star_text(WeaponData.MAX_STAR),
 		"锁定：这一格留到下波，重掷与刷新都不会换掉它。",
 		"重掷货架：换一批候选；每波有免费次数，用完按价格扣金币。",
@@ -310,6 +322,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		if DetailTip.close_all(self):
 			get_viewport().set_input_as_handled()
+			return
+		pause_requested.emit()
+		get_viewport().set_input_as_handled()
 
 func _on_shop_opened() -> void:
 	DetailTip.close_all(self)

@@ -50,6 +50,7 @@ func _measure(main: Node, hold: bool, cid: String) -> Dictionary:
 	var dash_seen := false
 	var dash_ended := false
 	player.skill_cd_left = 0.0
+	player.skill_active_left = 0.0
 	_c.check(player.try_activate_skill(), "%s：冲刺释放成功（生产入口）" % (cid if not cid.is_empty() else "默认"))
 	for i in range(300):
 		await get_tree().physics_frame

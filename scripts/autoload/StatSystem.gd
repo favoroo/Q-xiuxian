@@ -66,6 +66,12 @@ static func apply_stat_fields(gm: Node, apply: Dictionary, source: String) -> vo
 				gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
 			"thorns":
 				gm.thorns_pct += v
+			"chest_count":
+				gm.chest_count_bonus += int(v)
+			"chest_quality":
+				gm.chest_quality += v
+			"chest_break":
+				gm.chest_break_bonus += int(v)
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
 					gm.element_damage[e] = float(gm.element_damage.get(e, 0.0)) + v

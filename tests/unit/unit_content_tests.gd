@@ -5,9 +5,9 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：60 把法器（含机关支路 7 把）且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 60, "全武器库扩充至 60 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 60, "商店池覆盖全部 60 把法器")
+	# 1. 武器表完整性校验：68 把法器且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 68, "全武器库扩充至 68 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 68, "商店池覆盖全部 68 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -30,12 +30,12 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "60 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "68 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 扩容后各系把数：金14/木11/水10/火12/土13（含机关 7 把，2026-10-11 两批拓充）
-	var elem_expect := {"metal": 14, "wood": 11, "water": 10, "fire": 12, "earth": 13}
+	# 扩容后各系把数：金15/木13/水13/火13/土14（2026-10-12 第三批 8 把填满交叉空洞格）
+	var elem_expect := {"metal": 15, "wood": 13, "water": 13, "fire": 13, "earth": 14}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
@@ -52,7 +52,7 @@ func _test_five_elements_system() -> void:
 		# 卡内宽最小 124px 且 BonusRows 行不换行 ⇒ 紧凑特性最多两段（一个分隔点）
 		if WeaponData.card_feats(d2).count("·") > 1:
 			feats_over.append(String(w2))
-	_c.check(label_missing.is_empty(), "60 把法器的攻击方式短标全部就位（缺: %s）" % str(label_missing))
+	_c.check(label_missing.is_empty(), "68 把法器的攻击方式短标全部就位（缺: %s）" % str(label_missing))
 	_c.check(feats_over.is_empty(), "货架卡紧凑特性最多 2 段不溢卡宽（超宽: %s）" % str(feats_over))
 	_c.equals(label_of["qingyun_sword"], "近战", "青云剑标记近战")
 	_c.equals(label_of["gengjin_feijian"], "远程", "飞剑标记远程")
@@ -392,12 +392,34 @@ func _test_cultivator_system() -> void:
 			"final_stats 不给影爆抬 1s 冷却下限（BURST 豁免）")
 	_c.check(not SkillData.OFFER_IDS.has("shadowburst"), "影爆不进选择界面候选池")
 
-	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害 ×1.65、施法更快
+	# 卡面分段（用户 2026-10-11：攒影/影爆的说明单独开一段，不和其他天赋放在一块）。
+	# 从生产入口量：真建一遍选角界面、读那几段渲染出来的文字，不看表读表。
+	GameManager.cultivator_id = "meiying"
+	var cs_mei := CultivatorSelect.new()
+	add_child(cs_mei)
+	cs_mei.show_select()   # 一次成型：不再 _select_cultivator，免得 queue_free 的旧一代混进计数
+	var card_rows := _detail_info_rows(cs_mei._detail_panel)
+	_c.check(card_rows.has("绝技"), "选角卡面：额外技能自己成一段（实得分段 %s）" % str(card_rows.keys()))
+	_c.equals(card_rows.get("天赋", []).size(), 2, "影者天赋段只显示两条角色天赋，专属机制独立列出")
+	_c.check(not str(card_rows.get("天赋", [])).contains("影"), "天赋段里不再夹带攒影/影爆那一句")
+	# 渲染出来的行带 BBCode 与 wrap_cjk 硬换行；比较解析后的文字，避免复抄机制文案。
+	var rendered: Array[String] = []
+	for r in card_rows.get("绝技", []):
+		rendered.append(String(r).replace("\n", ""))
+	var want: Array[String] = []
+	for w in ShadowStepData.card_lines():
+		want.append(String(w))
+	_c.equals(str(rendered), str(want), "绝技段逐行 == ShadowStepData.card_lines（数字现读机制表，别处不抄）")
+	_c.check(str(card_rows.get("绝技", [])).contains("+%d%%" % int(roundf(ShadowStepData.AMP_PER_STACK * 100.0))),
+			"段内每层增伤数与本表 AMP_PER_STACK 同源")
+	cs_mei.queue_free()
+
+	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害 ×1.5（2026-10-12 战意重做后下调）、施法更快
 	GameManager.reset_run()
 	GameManager.cultivator_id = "dubi"
 	GameManager._apply_cultivator()
 	_c.equals(GameManager.max_weapon_slots(), 3, "独臂刀圣上阵槽上限为 3")
-	_c.near(GameManager.weapon_damage_mult, 1.65, EPS, "独臂刀圣伤害 ×1.65")
+	_c.near(GameManager.weapon_damage_mult, 1.5, EPS, "独臂刀圣伤害 ×1.5（战意乘区另算）")
 	_c.near(GameManager.attack_speed_mult, 0.7, EPS, "独臂刀圣施法间隔 ×0.7")
 
 	# 狂战蛮修（Loud 原型）：妖潮 +50%，灵韵每波流失 3 点再复利；流失下限为 0
@@ -455,6 +477,35 @@ func _test_cultivator_system() -> void:
 
 	GameManager.reset_run()
 
+## 走一遍详解卡中列，返回 {分类色签: [该段正文各行]}。
+## 认的是渲染出来的形状（色签 + 正文盒），不认节点名：代码建的控件名带 @N 后缀，按名取会拿到空。
+func _detail_info_rows(host: Control) -> Dictionary:
+	var out: Dictionary = {}
+	var pending: Array = [host]
+	while not pending.is_empty():
+		var n: Node = pending.pop_back()
+		for c in n.get_children():
+			pending.append(c)
+		if not (n is HBoxContainer) or n.get_child_count() < 2:
+			continue
+		var hb := n as HBoxContainer
+		var tag_lbl := hb.get_child(0) as Label
+		var vb := hb.get_child(1) as VBoxContainer
+		if tag_lbl == null or vb == null:
+			continue
+		var lines: Array[String] = []
+		for l in vb.get_children():
+			if l is RichTextLabel:
+				var plain := String((l as RichTextLabel).text).replace("[lb]", "\n")
+				var regex := RegEx.new()
+				regex.compile("\\[/?(?:color|b|i|u|s|font_size|font|outline_size|outline_color)(?:=[^\\]]*)?\\]")
+				lines.append(regex.sub(plain, "", true))
+			elif l is Label:
+				lines.append(String((l as Label).text))
+		if not lines.is_empty():
+			out[String(tag_lbl.text).strip_edges()] = lines
+	return out
+
 # ---------------- 震退方向 ----------------
 
 ## 法器震退的方向判据：以落点径向为主，但任何一次震退都不许带「朝玩家」的分量。
@@ -480,12 +531,12 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.equals(GameManager.contraption_threshold_adj, 1, "机关师机关门槛下移 1")
 	_c.near(GameManager.engineering_damage, 3.0, EPS, "机关师初始召唤伤害 +3")
 
-	# 4. 灵植夫（lingzhifu）：收益 +12，全武器伤害 ×0.85
+	# 4. 灵植夫（lingzhifu）：2026-10-11 身份重做「灵药滋生」——收益 +12、伤害 ×0.90、掉珠率与溢出倍率
 	GameManager.reset_run()
 	GameManager.cultivator_id = "lingzhifu"
 	GameManager._apply_cultivator()
 	_c.near(GameManager.harvest, 12.0, EPS, "灵植夫初始收益 +12")
-	_c.near(GameManager.weapon_damage_mult, 0.85, EPS, "灵植夫全武器伤害 ×0.85")
+	_c.near(GameManager.weapon_damage_mult, 0.90, EPS, "灵植夫全武器伤害 ×0.90（重做后放宽）")
 
 	# 5. 雷法真君（leifa）：元素伤害 +3，雷系/符箓加成，剑系减伤
 	GameManager.reset_run()
@@ -520,7 +571,7 @@ func _test_turret_and_new_cultivators() -> void:
 	GameManager.reset_run()
 	GameManager.cultivator_id = "fuzhen"
 	GameManager._apply_cultivator()
-	_c.equals(GameManager.drones.size(), 2, "驯兽师开局 2 条护蝶")
+	_c.equals(GameManager.drones.size(), 1, "驯兽师开局 1 条护蝶（2026-10-11 收：原 2 条★2 白送三波收入）")
 	_c.equals(GameManager._drone_star(GameManager.drones[0]), 2, "驯兽师开局护蝶 ★2（分身为二）")
 	_c.near(GameManager.engineering_damage, 2.0, EPS, "驯兽师召唤伤害 +2")
 	_c.near(GameManager.cultivator_damage_mult("lingdie"), 1.12, EPS, "驯兽师灵宝专精 +12%")
@@ -537,15 +588,19 @@ func _test_turret_and_new_cultivators() -> void:
 		_c.check(float(sdef.get("damage", 0.0)) >= 20.0, "御灵法器 %s 基础伤害 >= 20（当前 %.0f）" % [sid, float(sdef.get("damage", 0.0))])
 		_c.check(float(sdef.get("knockback", 0.0)) >= 160.0, "御灵法器 %s 击退强化至 >= 160（当前 %.0f）" % [sid, float(sdef.get("knockback", 0.0))])
 
-	# 8. 召唤羁绊工程伤害与气血双收益验证
+	# 8. 召唤羁绊两收益验证（气血 / 召唤伤害）
+	#    2026-10-11 撤销了那条环绕专属伤害乘区（局内曾叫「灵宝伤害」），幅度全折进召唤伤害这条加法。
 	GameManager.reset_run()
 	GameManager.drones = [1, 1]  # 2 件护蝶
 	SynergySystem.recalc_synergies(GameManager)
 	_c.near(GameManager.synergy_max_hp_bonus, 15.0, EPS, "2 召唤获得 +15 气血上限")
-	_c.near(GameManager.synergy_engineering_damage, 2.0, EPS, "2 召唤获得 +2 召唤伤害加成")
-	_c.near(GameManager.synergy_drone_mult, 1.10, EPS, "2 召唤获得灵宝伤害乘区 ×1.10（2026-10-11 补档）")
+	_c.near(GameManager.synergy_engineering_damage, 4.0, EPS, "2 召唤获得 +4 召唤伤害（幅度折自原环绕乘区档）")
 	var stat_dict := GameManager.get_player_stat_dict()
-	_c.near(float(stat_dict.get("engineering_damage", 0.0)), 2.0, EPS, "角色属性表包含召唤羁绊工程伤害")
+	_c.near(float(stat_dict.get("engineering_damage", 0.0)), 4.0, EPS, "角色属性表包含召唤羁绊召唤伤害")
+	# 召唤不许再往全局武器伤害里写：护蝶同带木标签，这里实得 1.06 全部来自木系第 1 档
+	_c.near(GameManager.synergy_damage_mult, 1.06, EPS, "召唤不给武器伤害乘区（1.06 全是木系那档）")
+	SynergySystem.apply_counts(GameManager, {"spirit": 2})
+	_c.near(GameManager.synergy_damage_mult, 1.0, EPS, "单算召唤第 1 档：武器伤害乘区纹丝不动")
 	GameManager.reset_run()
 
 	# 8. 多法器神识分流与同目标短窗集火韧性验证
@@ -568,3 +623,246 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.near(GameBalance.focus_fire_mult(1), 0.70, EPS, "短窗第 2 击折算 70%")
 	_c.near(GameBalance.focus_fire_mult(2), 0.50, EPS, "短窗第 3 击折算 50%")
 	_c.near(GameBalance.focus_fire_mult(5), 0.50, EPS, "短窗后续连击保底 50%")
+
+## 五弱修士机制重做（2026-10-11）：盾势/服丹/灵药滋生/博学/图鉴五组新 mod 键的钉点。
+## 运行时链路（受击蓄能、服丹回血）由 tests/GuardStanceCheck / tests/ElixirCheck 钉，这里只钉
+## 数据表 → apply 落地 → 乘区兑现这一路的数字同源。
+func _test_cultivator_new_mechanics() -> void:
+	# —— 守卫·盾势：纯函数同源（槽上限/蓄能钳制/满判定/爆发系数）——
+	_c.near(GuardStanceData.cap_of(200.0), 200.0 * GuardStanceData.CAP_HP_RATIO, EPS, "盾势槽 = 气血 × %.0f%%" % (GuardStanceData.CAP_HP_RATIO * 100.0))
+	_c.near(GuardStanceData.add_charge(0.0, 30.0, 200.0), 30.0 * GuardStanceData.STORE_RATIO, EPS, "挡下 30 按比率蓄能")
+	_c.near(GuardStanceData.add_charge(90.0, 30.0, 200.0), GuardStanceData.cap_of(200.0), EPS, "蓄能顶到上限为止")
+	_c.check(GuardStanceData.is_full(GuardStanceData.cap_of(200.0), 200.0), "到上限判满")
+	_c.near(GuardStanceData.burst_damage(100.0), 100.0 * GuardStanceData.BURST_RATIO, EPS, "爆发 = 蓄能 × %.1f" % GuardStanceData.BURST_RATIO)
+	# 守卫 apply 落地
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shiyue"
+	GameManager._apply_cultivator()
+	_c.check(GameManager.guard_stance > 0.0, "守卫盾势开关落地")
+	_c.near(GameManager.shield_charge, 0.0, EPS, "开局盾势为空")
+
+	# —— 药王·药池/服丹：纯函数 + 绑定 + 免冷却 ——
+	_c.near(ElixirData.cap_of(200.0), 200.0 * ElixirData.CAP_HP_RATIO, EPS, "药池 = 气血 × %.0f%%" % (ElixirData.CAP_HP_RATIO * 100.0))
+	_c.near(ElixirData.add_pool(0.0, 20.0, 200.0), 20.0 * ElixirData.STORE_RATIO, EPS, "溢出 20 按 50%% 入池")
+	_c.near(ElixirData.add_pool(59.0, 20.0, 200.0), ElixirData.cap_of(200.0), EPS, "入池顶到上限为止")
+	_c.check(not ElixirData.has_charge(0.0), "空池按不动（门控是资源本身）")
+	_c.check(ElixirData.has_charge(5.0), "有存量随时能喝")
+	_c.near(ElixirData.buff_mult(), 1.0 + ElixirData.BUFF_DAMAGE, EPS, "服丹增伤乘区与本表同源")
+	_c.equals(CultivatorData.get_extra_skill_id("yaowang"), "elixir", "药王绑定额外技能服丹（随角色，不走五选一）")
+	var el: Dictionary = SkillData.get_def("elixir")
+	_c.equals(int(el.get("kind", -1)), SkillData.Kind.BURST, "服丹是 BURST 类（资源门控而非 CD）")
+	_c.near(float(SkillData.final_stats("elixir", "yaowang")["cooldown"]), 0.0, EPS, "final_stats 不给服丹抬冷却下限（BURST 豁免）")
+	_c.check(not SkillData.OFFER_IDS.has("elixir"), "服丹不进选择界面候选池")
+	_c.equals(str(CultivatorData.get_extra_desc("yaowang")), str(ElixirData.card_lines()), "服丹卡面说明现读 ElixirData（别处不抄）")
+
+	# —— 灵植夫·灵药滋生：掉珠率与溢出折灵石倍率落地 ——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "lingzhifu"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.heal_orb_chance, 0.15, EPS, "灵植夫敌人 15% 额外掉回复珠")
+	_c.near(GameManager.heal_overflow_mult, 2.0, EPS, "灵植夫回复珠溢出折灵石 ×2")
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.heal_orb_chance, 0.0, EPS, "非灵植夫不掉额外回复珠（数据门控，非 id 门控）")
+	_c.near(GameManager.heal_overflow_mult, 1.0, EPS, "非灵植夫溢出折灵石倍率 1.0")
+
+	# —— 学者·博学：候选 +1、免费刷新 +1，开会话真兑现 ——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duoshe"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.alloc_offer_bonus, 1, "学者悟道候选 +1 落地")
+	_c.equals(GameManager.alloc_free_reroll_bonus, 1, "学者每回合免费刷新 +1 落地")
+	GameManager.pending_upgrade_points = 1
+	GameManager.open_alloc_session()
+	_c.equals(GameManager.alloc_offers.size(), GameManager.UPGRADE_OFFER_COUNT + 1, "学者悟道一屏 %d 张卡" % (GameManager.UPGRADE_OFFER_COUNT + 1))
+	_c.equals(GameManager.alloc_reroll_free_left, GameManager.ALLOC_FREE_REROLLS + 1, "学者每回合 %d 次免费刷新" % (GameManager.ALLOC_FREE_REROLLS + 1))
+	GameManager.pending_upgrade_points = 0
+
+	# —— 收藏家·图鉴：每种不同法宝全伤害 +2%，种数账本两写点维护 ——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duobao"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.collection_damage_per_unique, 0.02, EPS, "收藏家图鉴每件加成落地")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "空收藏无加成")
+	GameManager.add_item("jubaopen")
+	GameManager.add_item("jubaopen")
+	_c.equals(GameManager.unique_item_count, 1, "重复购买同种法宝种数不涨")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.02, EPS, "1 种法宝 +2%")
+	GameManager.add_item("qiankun_dai")
+	_c.equals(GameManager.unique_item_count, 2, "新种法宝种数 +1")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.04, EPS, "2 种法宝 +4%")
+	GameManager.consume_item("jubaopen")
+	_c.equals(GameManager.unique_item_count, 2, "还有一件同种时种数不掉")
+	GameManager.consume_item("jubaopen")
+	_c.equals(GameManager.unique_item_count, 1, "消耗掉最后一件同种，种数 -1")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.02, EPS, "图鉴加成跟着种数回落")
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	GameManager.add_item("jubaopen")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.35, EPS, "非收藏家买法宝不给图鉴加成（剑痴仍只有剑系 +35%）")
+	GameManager.reset_run()
+
+func _test_cultivator_frenzy_thunder_shop() -> void:
+	# —— 狂战士·战意：纯函数同源（攒层/上限/乘区/宽限/流失/保底）——
+	_c.near(FrenzyData.add_stack(0.0), 1.0, EPS, "击杀 +1 层")
+	_c.near(FrenzyData.add_stack(float(FrenzyData.MAX_STACKS)), float(FrenzyData.MAX_STACKS), EPS, "层数顶到上限为止")
+	_c.near(FrenzyData.damage_mult(0.0), 1.0, EPS, "0 层无加成")
+	_c.near(FrenzyData.damage_mult(float(FrenzyData.MAX_STACKS)), 1.0 + float(FrenzyData.MAX_STACKS) * FrenzyData.PER_STACK, EPS, "满层 +%d%%" % int(roundf(float(FrenzyData.MAX_STACKS) * FrenzyData.PER_STACK * 100.0)))
+	_c.near(FrenzyData.decay(10.0, FrenzyData.DECAY_DELAY - 0.1, 1.0), 10.0, EPS, "宽限内不流失")
+	_c.near(FrenzyData.decay(10.0, FrenzyData.DECAY_DELAY + 0.1, 1.0), 10.0 - FrenzyData.DECAY_PER_SEC, EPS, "过宽限按速率流失")
+	_c.near(FrenzyData.decay(1.0, FrenzyData.DECAY_DELAY + 0.1, 1.0), 0.0, EPS, "流失保底归零不为负")
+	# 狂战士 apply 落地 + 击杀攒层（register_kill 唯一攒点）
+	GameManager.reset_run()
+	GameManager.cultivator_id = "dubi"
+	GameManager._apply_cultivator()
+	_c.check(GameManager.frenzy_enabled > 0.0, "狂战士战意开关落地")
+	_c.near(GameManager.frenzy_stacks, 0.0, EPS, "开局战意为 0")
+	GameManager.register_kill()
+	GameManager.register_kill()
+	_c.near(GameManager.frenzy_stacks, 2.0, EPS, "两次击杀攒 2 层")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), FrenzyData.damage_mult(2.0), EPS, "2 层战意全伤害 +%d%%" % int(roundf(FrenzyData.PER_STACK * 200.0)))
+	for i in range(FrenzyData.MAX_STACKS + 5):
+		GameManager.register_kill()
+	_c.near(GameManager.frenzy_stacks, float(FrenzyData.MAX_STACKS), EPS, "连杀封顶 %d 层" % FrenzyData.MAX_STACKS)
+	_c.near(GameManager.frenzy_idle, 0.0, EPS, "每次击杀把流失宽限计时归零")
+	# 流失走 GameManager._process（直接拨时钟，不烧真秒）
+	GameManager._process(FrenzyData.DECAY_DELAY - 0.2)
+	_c.near(GameManager.frenzy_stacks, float(FrenzyData.MAX_STACKS), EPS, "宽限内时钟空转不掉层")
+	GameManager._process(1.0)   # 这一拍越过宽限 → 当拍开始泄
+	_c.check(GameManager.frenzy_stacks < float(FrenzyData.MAX_STACKS), "越过宽限开始流失")
+	# 非狂战士：击杀不攒层（数据门控，非 id 门控）
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	GameManager.register_kill()
+	_c.near(GameManager.frenzy_stacks, 0.0, EPS, "非狂战士击杀不攒战意")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.35, EPS, "非狂战士无战意乘区（剑痴仍只有剑系 +35%）")
+
+	# —— 雷法真君·天雷：纯函数同源 + 开关落地 ——
+	_c.near(ThunderData.bolt_damage(0.0), ThunderData.BASE_DAMAGE, EPS, "0 元素雷伤 = 基础值")
+	_c.near(ThunderData.bolt_damage(3.0), ThunderData.BASE_DAMAGE + 3.0 * ThunderData.ELEMENTAL_RATIO, EPS, "雷伤随元素成长")
+	GameManager.reset_run()
+	GameManager.cultivator_id = "leifa"
+	GameManager._apply_cultivator()
+	_c.check(GameManager.thunder_strike > 0.0, "雷法天雷开关落地")
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.thunder_strike, 0.0, EPS, "非雷法不落雷（数据门控）")
+
+	# —— 商人·老主顾：每波首掷免费 + 重掷半价，走 ShopSystem 既有免单口径 ——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jinsuanpan"
+	GameManager._apply_cultivator()
+	_c.equals(GameManager.free_rerolls, 1, "商人每波免费重掷 +1 落地")
+	_c.near(GameManager.reroll_price_mult, 0.5, EPS, "商人重掷半价落地")
+	GameManager.wave_number = 1
+	GameManager.roll_shop(true)
+	_c.equals(GameManager.reroll_free_left, 1, "开波货架重置出 1 次免费重掷")
+	var want_cost: int = maxi(1, int(round(GameBalance.reroll_cost(1, 0, GameManager.shop_price_mult) * 0.5)))
+	_c.equals(GameManager.reroll_cost, want_cost, "重掷价 = 纯函数结果 × 0.5（GameBalance 不掺角色）")
+	GameManager.spirit_stones = 100
+	GameManager.reroll_shop()
+	_c.equals(GameManager.spirit_stones, 100, "首掷走免费次数，一枚不花")
+	_c.equals(GameManager.reroll_count, 0, "免费重掷不推进计费次数")
+	GameManager.reroll_shop()
+	_c.equals(GameManager.spirit_stones, 100 - want_cost, "第二掷付半价 %d 灵石" % want_cost)
+	# 非商人：无免费次数、全价
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	GameManager.wave_number = 1
+	GameManager.roll_shop(true)
+	_c.equals(GameManager.reroll_free_left, 0, "非商人无免费重掷")
+	_c.equals(GameManager.reroll_cost, GameBalance.reroll_cost(1, 0, 1.0), "非商人重掷全价（乘区 1.0）")
+	GameManager.reset_run()
+
+## 2026-10-12 流派闭环：法宝转化件（item_hook_sum 现算）+ 武器交叉格补洞 + 蛮兵陷阵/守财奴财可通神
+func _test_conversion_items_and_hooks() -> void:
+	# —— 新内容在库：13 件法宝 + 8 把法器进池 ——
+	for iid in ["jifeng_ren", "huanying_ling", "shanyue_jia", "xuepan_guyu", "jubao_pen",
+			"ranxue_fu", "budong_yin", "liehun_ling",
+			"taijin_jing", "yimu_sui", "xuanshui_po", "lihuo_shenjing", "houtu_shenyuan"]:
+		_c.check(not ItemData.get_def(iid).is_empty(), "法宝在库：%s" % iid)
+	for wid in ["taomu_jian", "guishui_fu", "houtu_fu", "jinxiao_leiling",
+			"xuanming_leizhu", "qingmu_pao", "ningbing_nu", "fenghuo_tai"]:
+		_c.check(not WeaponData.get_def(wid).is_empty(), "新法器在库：%s" % wid)
+		_c.check(wid in WeaponData.SHOP_POOL, "新法器进商店池：%s" % wid)
+	# 交叉格补齐：原 8 个空洞格（各仅 1 把）现在都凑得出羁绊 2 件档
+	for pair in [["sword", "wood"], ["talisman", "water"], ["talisman", "earth"], ["thunder", "metal"],
+			["thunder", "water"], ["contraption", "wood"], ["contraption", "water"], ["contraption", "fire"]]:
+		var cell_n := 0
+		for id in WeaponData.DEFS.keys():
+			var tags: Array = WeaponData.get_def(id).get("tags", [])
+			if pair[0] in tags and pair[1] in tags:
+				cell_n += 1
+		_c.check(cell_n >= 2, "交叉格 %s×%s 至少 2 把（实得 %d）" % [pair[0], pair[1], cell_n])
+
+	# —— 转化乘区：与角色无关，裸局也生效（def 早退之前结算）——
+	GameManager.reset_run()
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "裸局无转化乘区")
+	GameManager.add_item("shanyue_jia")
+	GameManager.armor = 10.0
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0 + 10.0 * 0.015, EPS, "山岳战甲：每点护甲 +1.5%")
+	GameManager.reset_run()
+	GameManager.add_item("jifeng_ren")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "疾风刃：基础移速无加成")
+	GameManager.move_speed_mult = 1.3
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0 + 0.3 * 10.0 * 0.04, EPS, "疾风刃：移速 +30% → 伤害 +12%")
+	GameManager.reset_run()
+	GameManager.add_item("jubao_pen")
+	GameManager.spirit_stones = 500
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0 + 5.0 * 0.03, EPS, "聚宝盆：500 灵石 → +15%")
+	GameManager.spirit_stones = 99999
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.30, EPS, "聚宝盆：封顶 +30%")
+	GameManager.reset_run()
+	GameManager.add_item("budong_yin")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "明王印：未站定不生效")
+	GameManager.still_time = 1.0
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.30, EPS, "明王印：站定 1 秒 → +30%")
+	GameManager.reset_run()
+	GameManager.add_item("ranxue_fu")
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0, EPS, "燃血符：无玩家空载安全跳过（不出 NaN）")
+	# 幻影迷踪铃：闪避转暴击（get_crit_rate 兑现；在基础暴击率上看增量）
+	GameManager.reset_run()
+	var base_crit := GameManager.get_crit_rate()
+	GameManager.add_item("huanying_ling")
+	GameManager.dodge = 0.3
+	_c.near(GameManager.get_crit_rate(), base_crit + 0.15, EPS, "迷踪铃：30% 闪避 → +15% 暴击率")
+	# 裂魂铃：爆炸公式同源 + unique 限购 + 账本
+	_c.near(BalanceCombat.kill_explode_damage(40.0, 0.0), 40.0, EPS, "裂魂铃 0 元素 = 基数")
+	_c.near(BalanceCombat.kill_explode_damage(40.0, 10.0), 40.0 + 10.0 * BalanceCombat.KILL_EXPLODE_ELEM_COEF, EPS, "裂魂铃伤害随元素成长")
+	GameManager.reset_run()
+	_c.check(GameManager.add_item("liehun_ling"), "裂魂铃首件购入")
+	_c.check(not GameManager.add_item("liehun_ling"), "裂魂铃 unique 限购一件")
+	_c.near(GameManager.item_hook_sum("kill_explode"), 40.0, EPS, "裂魂铃爆炸基数入 item_hook 账本")
+	GameManager.reset_run()
+
+	# —— 蛮兵·陷阵：mods 落地 + 按圈内线敌数乘区（注意 damage_mult 不进本函数，只有钩子乘区）——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "kuangzhan"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.crowd_damage_per_enemy, 0.03, EPS, "蛮兵陷阵系数落地")
+	_c.near(GameManager.crowd_damage_radius, 260.0, EPS, "蛮兵陷阵感知半径落地")
+	GameManager.nearby_enemy_count = 5
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.0 + 5.0 * 0.03, EPS, "5 敌在圈 → +15%")
+	GameManager.nearby_enemy_count = 100
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.45, EPS, "陷阵封顶 +45%")
+	# —— 守财奴·财可通神：持币增伤 + 封顶 ——
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shoucainu"
+	GameManager._apply_cultivator()
+	GameManager.spirit_stones = 1000
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.20, EPS, "财可通神：1000 灵石 → +20%")
+	GameManager.spirit_stones = 99999
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.50, EPS, "财可通神封顶 +50%")
+	# 对照：剑痴两钩子全关（数据门控，非 id 门控）
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager._apply_cultivator()
+	GameManager.nearby_enemy_count = 10
+	GameManager.spirit_stones = 1000
+	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.35, EPS, "剑痴无陷阵/财可通神（仍只有剑系 +35%）")
+	GameManager.reset_run()

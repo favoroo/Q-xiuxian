@@ -10,6 +10,7 @@ signal stats_requested
 signal settings_requested
 signal manual_requested
 
+var _unpause_on_close: bool = true
 var _closing: bool = false
 var _retry_armed: bool = false
 var _retry_btn: Button
@@ -205,18 +206,59 @@ func _on_check_failed(err_msg: String) -> void:
 				_update_btn.text = "检 查 更 新"
 		)
 
+## 检查背后是否有加点、商店或局前选人等需要保持暂停的弹窗
+func _has_paused_modal_behind() -> bool:
+	var p := get_parent()
+	if p == null:
+		return false
+	for name_str in ["LevelUpDialog", "WaveShop", "StartMenu", "CultivatorSelect", "SkillSelect", "StartWeaponSelect", "GameOverDialog"]:
+		var n := p.get_node_or_null(name_str) as Control
+		if n != null and n.visible:
+			return true
+	return false
+
+## 检查当前是否处于不应响应全局暂停的局前/结算状态
+func _is_pregame_or_settlement() -> bool:
+	if GameManager.is_game_over:
+		return true
+	var p := get_parent()
+	if p == null:
+		return false
+	for name_str in ["StartMenu", "CultivatorSelect", "SkillSelect", "StartWeaponSelect", "GameOverDialog"]:
+		var n := p.get_node_or_null(name_str) as Control
+		if n != null and n.visible:
+			return true
+	return false
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel"):
 		return
 	if visible:
 		close()
-	elif not get_tree().paused and not GameManager.is_game_over:
-		open()
+		get_viewport().set_input_as_handled()
+		return
+	if _is_pregame_or_settlement():
+		# 局前选人选武器或结算界面，不拦截 ESC，留给各界面自己的返回逻辑
+		return
+	# 战斗中或加点/商店中：若有展开的气泡详情卡则先收起气泡
+	var p := get_parent()
+	if p != null:
+		for name_str in ["LevelUpDialog", "WaveShop", "GameHUD"]:
+			var n := p.get_node_or_null(name_str) as Control
+			if n != null and n.visible and DetailTip.close_all(n):
+				get_viewport().set_input_as_handled()
+				return
+	open()
 	get_viewport().set_input_as_handled()
 
-func open() -> void:
+func open(unpause_on_close: Variant = null) -> void:
 	if visible or GameManager.is_game_over:
 		return
+	var behind := _has_paused_modal_behind()
+	if unpause_on_close != null:
+		_unpause_on_close = bool(unpause_on_close) and not behind
+	else:
+		_unpause_on_close = not behind
 	_closing = false
 	_reset_retry_confirm()
 	visible = true
@@ -230,11 +272,12 @@ func close(unpause: bool = true) -> void:
 		return
 	_closing = true
 	_reset_retry_confirm()
+	var should_unpause := unpause and _unpause_on_close and not _has_paused_modal_behind()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func():
 		visible = false
-		if unpause:
+		if should_unpause:
 			get_tree().paused = false
 		_closing = false
 	)

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b1pbh1p0mqer4"
-path="res://.godot/imported/tmp_codex_all.png-25445d1088dcdaa282a6460f9d00ad32.ctex"
+uid="uid://owfalivlg2q0"
+path="res://.godot/imported/item_liexia_zhui.png-bfe45d9c6f709e59b2f1d9fe18cdbdda.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tmp_codex_all.png"
-dest_files=["res://.godot/imported/tmp_codex_all.png-25445d1088dcdaa282a6460f9d00ad32.ctex"]
+source_file="res://assets/art/item_liexia_zhui.png"
+dest_files=["res://.godot/imported/item_liexia_zhui.png-bfe45d9c6f709e59b2f1d9fe18cdbdda.ctex"]
 
 [params]
 

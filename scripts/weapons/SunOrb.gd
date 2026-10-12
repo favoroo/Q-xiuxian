@@ -140,9 +140,9 @@ func _try_damage(area: Area2D) -> void:
 		var def := WeaponData.get_def(drone_id)
 		var stat_bonus := GameManager.get_weapon_stat_bonus(drone_id, star) / float(orb_count)
 		var total_base := base_damage + stat_bonus
-		var is_crit = GameManager.rng.randf() < GameManager.get_crit_rate()
+		var is_crit: bool = GameManager.roll_crit()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.synergy_drone_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.get_multi_weapon_damage_mult() * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
+		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.get_multi_weapon_damage_mult() * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)

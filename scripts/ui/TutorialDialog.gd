@@ -29,7 +29,7 @@ const PAGES: Array[Dictionary] = [
 		"image": "res://assets/art/tutorial/shot_synergy.png",
 	},
 	{
-		"title": "灵石阁与升星",
+		"title": "商店与升星",
 		"body": "波间商店刷 5 格货架：看中的点卡上「锁定」留到下波；不满意点左下「重掷货架」，费用逐次递增。\n背包陈列槽里集齐 3 把同名同星法器可合成升星，每星伤害翻倍——看到同名先买下囤着。",
 		"image": "res://assets/art/tutorial/shot_shop.png",
 	},
@@ -40,7 +40,7 @@ const PAGES: Array[Dictionary] = [
 	},
 	{
 		"title": "场景交互物",
-		"body": "场上三座聚灵阵（图中顶部发光的阵）：走入光圈长按「激活祭祀」约 1.5 秒，全屏冲击重创敌人并散落金币——每座只能用一次，留给 Boss 波或绝境。\n场上的宝箱挨 3 下砸开，掉回复或金币。",
+		"body": "场上三座聚灵阵（图中顶部发光的阵）：走入光圈长按「激活祭祀」约 1.5 秒，全屏冲击重创敌人并散落金币——每座只能用一次，留给 Boss 波或绝境。\n场上的宝箱挨 3 下砸开，掉回复或金币；分木匣、铜匣、玉匣三档，越稀有的档掉得越多，玉匣砸开直接送一件法宝。",
 		"image": "res://assets/art/tutorial/shot_field.png",
 	},
 ]

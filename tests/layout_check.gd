@@ -61,7 +61,12 @@ func _run() -> void:
 		var screen: Vector2 = get_tree().root.get_visible_rect().size
 		print("\n===== 窗口 %dx540 → 设计可视 %s =====" % [w, str(screen)])
 		for spec in _screens():
+			# 同一屏按不同角色各量一遍：详解卡中列的高矮是角色决定的（段数最多的那个才是最坏情况）
+			var prev_cult: String = GameManager.cultivator_id
+			if spec.has("cultivator"):
+				GameManager.cultivator_id = String(spec["cultivator"])
 			await _check_screen(spec, screen)
+			GameManager.cultivator_id = prev_cult
 		get_tree().paused = false
 	Engine.time_scale = 1.0
 	_check_all_table_texts()
@@ -115,6 +120,11 @@ func _check_all_table_texts() -> void:
 				var t := GameStyle.wrap_cjk(String(raw), body, CultivatorSelect.TXT, col_w)
 				if GameStyle.line_max_w(t, body, CultivatorSelect.TXT) > col_w + EPS:
 					bad.append("修士 %s 的 %s 超列宽 %d：「%s」" % [cid, key, int(col_w), String(raw)])
+		# 额外技能那一段单独成行，文案由机制表现读（不在 pros/cons 里）⇒ 同样要按列宽量
+		for raw_x in CultivatorData.get_extra_desc(String(cid)):
+			var tx := GameStyle.wrap_cjk(String(raw_x), body, CultivatorSelect.TXT, col_w)
+			if GameStyle.line_max_w(tx, body, CultivatorSelect.TXT) > col_w + EPS:
+				bad.append("修士 %s 的额外技能段超列宽 %d：「%s」" % [cid, int(col_w), String(raw_x)])
 		var seq: String = String(cdef.get("start_equip", ""))
 		if not seq.is_empty():
 			var t_seq := GameStyle.wrap_cjk(seq, body, CultivatorSelect.TXT, col_w)
@@ -219,6 +229,9 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "顶栏 HUD", "path": "res://scenes/ui/GameHUD.tscn", "open": "none"},
 		{"tag": "开始菜单", "path": "res://scenes/ui/StartMenu.tscn", "open": "open"},
 		{"tag": "道统选择", "path": "res://scripts/ui/CultivatorSelect.gd", "open": "show_select"},
+		# 段数最多的那个角色才是详解卡的最坏情况（影者：天赋 3 + 额外技能 2 + 代价 2 + 适配 1）
+		{"tag": "道统选择·影者", "path": "res://scripts/ui/CultivatorSelect.gd", "open": "show_select",
+			"cultivator": "meiying"},
 		{"tag": "本命法器", "path": "res://scenes/ui/StartWeaponSelect.tscn", "open": "show_select",
 			"settle": 0.6},
 		{"tag": "波后悟道结算", "path": "res://scenes/ui/LevelUpDialog.tscn",
@@ -228,6 +241,8 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "灵石阁·6格", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
 			"shop_select": true, "shelf_slots": GameManager.SHOP_BASE_SLOTS + 1},
 		{"tag": "属性面板", "path": "res://scripts/ui/PlayerStatsDialog.gd", "open": "open"},
+		{"tag": "属性面板·影者", "path": "res://scripts/ui/PlayerStatsDialog.gd", "open": "open",
+			"cultivator": "meiying"},
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
 			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
 			{"tag": "修仙志", "path": "res://scripts/ui/CareerDialog.gd", "open": "open"},

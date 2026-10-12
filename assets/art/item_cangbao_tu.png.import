@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://odys65kggc8"
-path="res://.godot/imported/tmp_codex_spirit.png-df7854d4d59b320539f741cb939b4f8e.ctex"
+uid="uid://b4b1lymd5p68s"
+path="res://.godot/imported/item_cangbao_tu.png-2b86664c29cd9c635098e586c096fdde.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tmp_codex_spirit.png"
-dest_files=["res://.godot/imported/tmp_codex_spirit.png-df7854d4d59b320539f741cb939b4f8e.ctex"]
+source_file="res://assets/art/item_cangbao_tu.png"
+dest_files=["res://.godot/imported/item_cangbao_tu.png-2b86664c29cd9c635098e586c096fdde.ctex"]
 
 [params]
 

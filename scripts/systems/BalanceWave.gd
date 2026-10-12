@@ -28,11 +28,11 @@ const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 # 绑定点对照（旧总量 = 时长/间隔 × 平均批量，见 tests/balance_sim_check.gd 第 5 节）：
 # W1~5 预算不触发（前期手感不变）；W6 54/73 ≈ -26%、W10 76/104 ≈ -27%、W12 起批量跳档后
 # 收得更狠（~-51%）、W15 103/230 ≈ -55%、W20 131/425 ≈ -69%。危险度/角色的妖潮倍率由调用方乘。
-# 2026-10-11 随波次拉长同比例放预算（21/5.5/150，约 +40%），与时长涨幅匹配 ⇒
-# 单位时间密度峰值不变，只是总击杀数与时长一起变多。前 5 波预算仍不触发。
-const WAVE_SPAWN_BUDGET_BASE := 21.0
-const WAVE_SPAWN_BUDGET_PER_WAVE := 5.5
-const WAVE_SPAWN_BUDGET_MAX := 150.0
+# 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90 ⇒
+# W1=17 / W5=32 / W10=50 / W20=86），单怪血量基数同步 +33% 补上压力，预算缺口照旧走经验补差。
+const WAVE_SPAWN_BUDGET_BASE := 14.0
+const WAVE_SPAWN_BUDGET_PER_WAVE := 3.6
+const WAVE_SPAWN_BUDGET_MAX := 90.0
 
 ## 波内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算
 static func wave_spawn_budget(wave: int) -> int:
@@ -40,7 +40,8 @@ static func wave_spawn_budget(wave: int) -> int:
 const ENEMY_HP_GROWTH := 1.16             ## 每波气血复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础血量整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
 ## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
-const MOB_HP_BASE_MULT := 4.5
+## 2026-10-11 缩图减怪：刷入量 -33% 后单怪 +33% 血（4.5→6.0）补上压力，「少而硬」。
+const MOB_HP_BASE_MULT := 6.0
 const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 ## 敌伤整体基线倍率：所有敌人伤害的唯一总闸。
 ## 折进 enemy_dmg_mult 这一个出口 ⇒ 接触 / 冲刺 / 短咬 / 自爆 / 火球 / Boss 接触·环弹·震地
@@ -52,7 +53,8 @@ const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（�
 ## 最低档没有试错空间，故把基线降到 0.65（W1 单下 10 = 8.3% 气血、活 6.6s；W5 活 5.5s）。
 ## 尺子与档位口径见 tests/balance_sim_check.gd 第 5 节「挨打侧生存余量」。
 ## 六档危险度的 +12%/档梯度（danger_dmg_mult）不受影响，整条梯子一起下移。
-const ENEMY_DMG_BASE_MULT := 0.65
+## 2026-10-11 缩图减怪：刷入量 -33% 后基线微回 0.65→0.68（W1 单下 ≈8.5% 气血，仍在 ≤9% 窗内）。
+const ENEMY_DMG_BASE_MULT := 0.68
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
 

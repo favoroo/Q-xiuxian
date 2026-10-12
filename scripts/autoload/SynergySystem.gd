@@ -3,11 +3,16 @@ extends RefCounted
 
 ## 流派羁绊阶梯计算与主标签保底子系统
 ## 从 GameManager 抽离，负责统计上阵法器标签、重算各流派阶梯加成、差值更新御灵气血及商店主标签保底。
+##
+## 结算口径（2026-10-11 收拢）：本文件不再持有任何羁绊幅度字面量。
+## 每档加多少、写进 GameManager 哪个属性、乘还是加，全部读 WeaponData.SYNERGIES[tag].effects；
+## 局内阶梯文案与图鉴长句由 SynergyUI 从同一份 effects 生成，
+## UnitRunner 再走本文件的 apply_counts 把两者对账 —— 数值改一处，文案跟着变，改文案不改数值会报红。
 
 ## 上阵法器（含灵蝶）的 tag 计数——构筑方向判定的依据
 static func tag_counts(gm: Node) -> Dictionary:
 	var counts: Dictionary = {}
-	if gm.player != null and gm.player.has_method("get_equipped_weapons_data"):
+	if gm.player != null and is_instance_valid(gm.player) and gm.player.has_method("get_equipped_weapons_data"):
 		for w in gm.player.get_equipped_weapons_data():
 			for t in WeaponData.tags_of(w.get("id", "")):
 				counts[t] = int(counts.get(t, 0)) + 1
@@ -15,6 +20,15 @@ static func tag_counts(gm: Node) -> Dictionary:
 		for t in WeaponData.tags_of(WeaponInventory.drone_id(s)):
 			counts[t] = int(counts.get(t, 0)) + 1
 	return counts
+
+## 角色对某流派门槛的下移量：只有召唤/机关两条道统会改，其余流派恒为 0
+## 门槛折算的唯一真话在此（SynergyUI 与判据都走它，不各自比原表）
+static func shift_for(tag: String) -> int:
+	if tag == "spirit":
+		return GameManager.spirit_threshold_adj
+	if tag == "contraption":
+		return GameManager.contraption_threshold_adj
+	return 0
 
 ## 主流派：当前持有数最多且 ≥2 件的 tag
 static func main_tag(gm: Node) -> String:
@@ -29,89 +43,40 @@ static func main_tag(gm: Node) -> String:
 
 ## 按上阵法器（含灵蝶）重算羁绊加成
 static func recalc_synergies(gm: Node) -> void:
-	var counts := tag_counts(gm)
+	apply_counts(gm, tag_counts(gm))
+
+## 按「tag → 件数」结算羁绊（生产入口，判据也从这里进：不建 Player 也能钉住某一档）
+## 先按 WeaponData.SYNERGY_FIELDS 全量清零再累加，漏登记的新字段会在 UnitRunner 报红
+static func apply_counts(gm: Node, counts: Dictionary) -> void:
 	gm.active_synergies.clear()
-	gm.synergy_bonus_pierce = 0
-	gm.synergy_damage_mult = 1.0
-	gm.synergy_range_mult = 1.0
-	gm.synergy_haste_mult = 1.0
-	gm.synergy_crit_rate = 0.0
-	gm.synergy_crit_mult = 0.0
-	gm.synergy_hp_regen = 0.0
-	gm.synergy_lifesteal = 0.0
-	gm.synergy_move_speed_mult = 0.0
-	gm.synergy_burn_mult = 1.0
-	gm.synergy_armor = 0.0
-	gm.synergy_knockback_mult = 1.0
-	gm.synergy_contraption_mult = 1.0
-	gm.synergy_drone_mult = 1.0
-	gm.synergy_engineering_damage = 0.0
-	var hp_bonus: float = 0.0
-	var eng_bonus: float = 0.0
+	for f in WeaponData.SYNERGY_FIELDS:
+		gm.set(f, WeaponData.SYNERGY_BASE.get(f, 0.0))
 	for tag in counts.keys():
 		var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 		if info.is_empty():
 			continue
 		var n := int(counts[tag])
-		var shift: int = 0
-		if tag == "spirit":
-			shift = gm.spirit_threshold_adj
-		elif tag == "contraption":
-			shift = gm.contraption_threshold_adj
-		var syn_level := GameBalance.synergy_level(n, info.get("thresholds", []), shift)
+		var syn_level := GameBalance.synergy_level(n, info.get("thresholds", []), shift_for(tag))
 		gm.active_synergies[tag] = {"count": n, "level": syn_level}
 		if syn_level == 0:
 			continue
-		var v = info["values"][syn_level - 1]
-		match tag:
-			"contraption":
-				gm.synergy_contraption_mult += float(v)
-			"sword":
-				gm.synergy_range_mult += float(v)
-			"talisman":
-				gm.synergy_bonus_pierce += int(v)
-			"thunder":
-				gm.synergy_haste_mult *= float(v)
-			"spirit":
-				hp_bonus += float(v)
-				var eng_list: Array = info.get("eng_values", [2.0, 4.0, 7.0])
-				if syn_level <= eng_list.size():
-					eng_bonus += float(eng_list[syn_level - 1])
-				# 2026-10-11 平衡校准：召唤羁绊此前只有平面召唤伤害、无伤害乘区（御灵流成型
-				# Boss TTK 垫底根因），仿机关羁绊补一条灵宝伤害乘区档（仅 DRONE 行为在 SunOrb 消费）
-				var drone_list: Array = info.get("drone_values", [0.10, 0.20, 0.25])
-				if syn_level <= drone_list.size():
-					# 乘区档位约定与机关/火系一致：表里存的是加成幅度，加到 1.0 基数上（1.10/1.20/1.25）
-					gm.synergy_drone_mult += float(drone_list[syn_level - 1])
-			"wide":
-				gm.synergy_damage_mult += float(v)
-			"metal":
-				gm.synergy_crit_rate += float(v)
-				var cm_list: Array = [0.20, 0.40, 0.75]
-				gm.synergy_crit_mult += float(cm_list[syn_level - 1])
-			"wood":
-				gm.synergy_hp_regen += float(v)
-				var ls_list: Array = [0.02, 0.04, 0.07]
-				gm.synergy_lifesteal += float(ls_list[syn_level - 1])
-				# 2026-10-11 平衡校准：木系羁绊此前零伤害乘区（剧毒流成型 TTK 垫底根因），仿火系补一条伤害档
-				var wd_list: Array = [0.06, 0.12, 0.20]
-				gm.synergy_damage_mult += float(wd_list[syn_level - 1])
-			"water":
-				gm.synergy_haste_mult *= float(v)
-				var spd_list: Array = [0.08, 0.16, 0.25]
-				gm.synergy_move_speed_mult += float(spd_list[syn_level - 1])
-			"fire":
-				gm.synergy_damage_mult += float(v)
-				var burn_list: Array = [0.30, 0.60, 1.00]
-				gm.synergy_burn_mult += float(burn_list[syn_level - 1])
-			"earth":
-				gm.synergy_armor += float(v)
-				var kb_list: Array = [0.25, 0.50, 0.80]
-				gm.synergy_knockback_mult += float(kb_list[syn_level - 1])
+		for eff in info.get("effects", []):
+			var vals: Array = info.get(String(eff.get("list", "values")), [])
+			if syn_level > vals.size():
+				continue
+			var field := String(eff.get("field", ""))
+			if not WeaponData.SYNERGY_FIELDS.has(field):
+				continue
+			var v := float(vals[syn_level - 1])
+			var next := float(gm.get(field)) * v if String(eff.get("op", "add")) == "mul" \
+					else float(gm.get(field)) + v
+			# synergy_bonus_pierce 是 int 属性，按基数类型回截，别把 float 塞进 int setter
+			if typeof(WeaponData.SYNERGY_BASE.get(field, 0.0)) == TYPE_INT:
+				gm.set(field, int(round(next)))
+			else:
+				gm.set(field, next)
 	gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
-	gm.synergy_max_hp_bonus = hp_bonus
-	gm.synergy_engineering_damage = eng_bonus
-	apply_synergy_hp(gm, hp_bonus)
+	apply_synergy_hp(gm, gm.synergy_max_hp_bonus)
 
 ## 御灵羁绊直接增减气血上限（差值法，避免叠加误差）
 static func apply_synergy_hp(gm: Node, new_bonus: float) -> void:

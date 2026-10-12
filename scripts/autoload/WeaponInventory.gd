@@ -175,7 +175,7 @@ static func get_weapons_summary(gm: Node) -> Array:
 		var d_star := drone_star(gm.drones[i])
 		var def := WeaponData.get_def(d_id)
 		list.append({
-			"id": d_id, "name": def.get("name", "灵宝"),
+			"id": d_id, "name": def.get("name", "法器"),
 			"star": d_star,
 			"icon": def.get("icon", ""), "is_drone": true,
 			"tag": def.get("tag", ""), "node": null, "drone_index": i,
@@ -289,6 +289,11 @@ static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) 
 ## 背包 → 上阵指定格（拖拽落点语义，2026-10-11 用户：拖到已佩戴的武器上＝替换）：
 ## 指向已占用格＝替换那一格（换下的一件回背包被腾出的原位 stash_index，不是排到队尾）；
 ## 指向空格/越界＝直接装备（上阵次序固定「悬浮法器在前、灵宝在后」，新件落在队尾）。
+## 反方向（上阵件拖到背包里的某一件上）走这同一个函数：互换的两个半边本来就是一件事。
+## 同池替换认「位置」（2026-10-11 用户：替换要落在原来那一格，不是把整排顺序打乱）：
+## 灵宝顶灵宝＝原地改 drones[di]（环绕方位不动）；悬浮法器顶悬浮法器＝新实例挂在 holder
+## 队尾，再 reorder_weapons 换回被顶掉的那一格。跨池（灵宝换悬浮法器）没有可落的位置，
+## 新件按 summary 口径落在自己那一池的队尾。
 static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -> bool:
 	if stash_index < 0 or stash_index >= gm.stash.size():
 		return false
@@ -301,21 +306,37 @@ static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -
 			return false
 		return equip_from_stash(gm, stash_index)
 	var entry: Dictionary = gm.stash[stash_index]
-	var e_def := WeaponData.get_def(entry.get("id", ""))
+	var entry_id: String = String(entry.get("id", ""))
+	var entry_star: int = int(entry.get("star", 1))
+	var e_def := WeaponData.get_def(entry_id)
 	var as_drone: bool = e_def.get("behavior", -1) == WeaponData.Behavior.DRONE
 	# 悬浮法器要有玩家节点才接得住（headless/异常态）：先验完再动手，不做半截回滚
 	if not as_drone and (gm.player == null or not gm.player.has_method("add_weapon_instance")):
 		return false
 	var item: Dictionary = list[slot_index]
-	if not _remove_summary_item(gm, item):
-		return false
-	gm.stash.remove_at(stash_index)
-	if as_drone:
-		gm.drones.append({"id": entry.get("id", ""), "star": int(entry.get("star", 1))})
+	var was_drone: bool = item.get("is_drone", false)
+	if was_drone and as_drone:
+		var di := int(item.get("drone_index", -1))
+		if di < 0 or di >= gm.drones.size():
+			return false
+		gm.drones[di] = {"id": entry_id, "star": entry_star}
 		if gm.player != null and gm.player.has_method("sync_drones"):
 			gm.player.sync_drones()
 	else:
-		gm.player.add_weapon_instance(entry.get("id", ""), int(entry.get("star", 1)))
+		if not _remove_summary_item(gm, item):
+			return false
+		if as_drone:
+			gm.drones.append({"id": entry_id, "star": entry_star})
+			if gm.player != null and gm.player.has_method("sync_drones"):
+				gm.player.sync_drones()
+		else:
+			gm.player.add_weapon_instance(entry_id, entry_star)
+			if not was_drone and gm.player.has_method("reorder_weapons"):
+				# 新实例在 holder 队尾：换回被顶掉的那一格（summary 里悬浮法器在前，
+				# 所以上阵下标就是 holder 下标）
+				var n: int = gm.player.get_weapon_count()
+				gm.player.reorder_weapons(n - 1, clampi(slot_index, 0, n - 1))
+	gm.stash.remove_at(stash_index)
 	gm.stash.insert(mini(stash_index, gm.stash.size()), _to_stash_entry(item))
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	AudioManager.play_sfx("equip", 1.0)
