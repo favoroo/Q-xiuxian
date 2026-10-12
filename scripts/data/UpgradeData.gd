@@ -211,8 +211,10 @@ const UPGRADES: Array[Dictionary] = [
 		"icon": "res://assets/art/icon_harvest.png",
 		"max_stacks": 8,
 	},
-	# 2026-10-11 寻宝流三项：生效幅度在这里，兑现点在 BalanceChest（数量/档次权重/击数）
+	# 2026-10-11 寻宝流三项：生效幅度在这里，兑现点在 BalanceChest（数量 / 档次权重 / 开箱收益）
 	# 与 WaveSpawner._spawn_chests、SpiritChest._destroy。图标与同名道具配对（重掷令/破甲针同款先例）。
+	# 2026-10-12：第三条腿从「开箱省力（砍砸开击数）」换成「宝箱掉落（抬兑现量）」——
+	# 匣子只吃闲着那几法，少挨几下省的是本来就要浪费的零头，读数还反着看（口径见 BalanceChest 头）。
 	{
 		"id": "chest_count_up",
 		"apply": {"chest_count": 1},
@@ -234,14 +236,14 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 4,
 	},
 	{
-		"id": "chest_break_up",
-		"apply": {"chest_break": 1},
-		"title": "开箱省力",
-		"desc": "砸开宝箱所需击数减少（不会减到砸不开）",
+		"id": "chest_reward_up",
+		"apply": {"chest_reward": 0.35},
+		"title": "宝箱掉落",
+		"desc": "砸开的宝箱掉得更多（金币/灵石颗数/回复量同涨）",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_liexia_zhui.png",
-		"max_stacks": 2,
+		"icon": "res://assets/art/item_manxia_jue.png",
+		"max_stacks": 3,
 	},
 	{
 		"id": "range_up",

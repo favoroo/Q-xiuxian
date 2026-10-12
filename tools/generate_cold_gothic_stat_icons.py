@@ -676,6 +676,56 @@ def gen_pierce():
 
     save_and_downscale(img, "icon_pierce.png")
 
+# 18. 灵兽节拍 (icon_speed.png): 疾兽三重爪痕 —— 灵狐前扑掠风撕出的斜向爪痕与疾行残影
+#      供悟道加点「灵兽疾行」(pet_haste_up) 使用，与同组 icon_atk / icon_hp 同管线同尺寸
+def gen_pet_haste():
+    img, d, s = create_super_canvas()
+    cx, cy = 64 * s, 64 * s
+
+    def slash(sx, sy, dx, dy, bow, w0, color, edge=COL_WHITE):
+        """一记爪痕：从 (sx,sy) 沿 (dx,dy) 撕出 hypot(dx,dy) 长，中段外弓 bow，尾宽 w0 → 尖端收束 0。
+        入参一律是 128 逻辑像素（含位移向量），函数内部统一乘 s 超采样，别在外面先乘。"""
+        n = math.hypot(dx, dy)
+        ux, uy = dx / n, dy / n          # 前进方向
+        px_, py_ = -uy, ux               # 左法线（外弓方向）
+        steps = 34
+        left, right = [], []
+        for i in range(steps + 1):
+            t = i / steps
+            # 外弓用正弦拱形：两端不弯、中段最鼓，撕痕才有「甩出去」的弧度
+            b = bow * math.sin(math.pi * t)
+            hw = w0 * (1.0 - t) ** 1.35  # 幂次收束：钝尾 + 极锐尖
+            bx = sx + ux * n * t + px_ * b
+            by = sy + uy * n * t + py_ * b
+            left.append(((bx + px_ * hw) * s, (by + py_ * hw) * s))
+            right.append(((bx - px_ * hw) * s, (by - py_ * hw) * s))
+        d.polygon(left + right[::-1], fill=color)
+        d.line(left[:int(steps * 0.72)], fill=edge, width=int(1.1 * s))
+
+    # 四道同一把尺子的平行斜撕：同方向、同弧、同长，只沿法线平移排布 ⇒ 读作一记耙痕而非四片草叶
+    ux, uy = 86.0, -62.0
+    n = math.hypot(ux, uy)
+    ux, uy = ux / n, uy / n
+    px_, py_ = -uy, ux                      # 法线（指向右下），沿它平移排爪距
+    base_x, base_y = 30.0, 86.0
+    # (爪距, 尾宽, 颜色, 刃口色)：最上一爪是领爪（骨白最宽），往下渐暗渐窄成叠影
+    rake = [(-20.0, 11.0, COL_PAPER, COL_WHITE),
+            (-7.0, 9.5, COL_JADE, COL_PAPER_DIM),
+            (7.0, 8.0, COL_JADE_DIM, COL_JADE),
+            (20.0, 6.5, (45, 130, 95, 165), COL_JADE_DIM)]
+    for off, w0, col, edge in rake:
+        slash(base_x + px_ * off, base_y + py_ * off, ux * 96, uy * 96, 13.0, w0, col, edge)
+
+    # 破风灵息：领爪尖出处迸出的暗金菱形火星
+    d.polygon([(cx + 44 * s, cy - 40 * s), (cx + 49 * s, cy - 35 * s),
+               (cx + 44 * s, cy - 30 * s), (cx + 39 * s, cy - 35 * s)], fill=COL_GOLD)
+
+    # 尾端御风横纹：左下两道短促疾风痕，说明这记爪痕是「冲过来的」
+    d.line([(cx - 52 * s, cy + 44 * s), (cx - 28 * s, cy + 27 * s)], fill=(90, 215, 165, 130), width=int(2.4 * s))
+    d.line([(cx - 46 * s, cy + 54 * s), (cx - 32 * s, cy + 44 * s)], fill=(90, 215, 165, 70), width=int(2.0 * s))
+
+    save_and_downscale(img, "icon_speed.png")
+
 def fit_from_raw(raw_path, target_art_name, target_size=128, margin=8):
     im = Image.open(raw_path).convert("RGBA")
     alpha = im.getchannel("A")
@@ -714,6 +764,7 @@ GENERATORS = {
     "icon_range": gen_range,
     "icon_thorns": gen_thorns,
     "icon_pierce": gen_pierce,
+    "icon_speed": gen_pet_haste,
 }
 
 if __name__ == "__main__":

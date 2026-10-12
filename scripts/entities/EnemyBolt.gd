@@ -103,10 +103,12 @@ func activate() -> void:
 	set_deferred("monitoring", true)
 	_shape_node.set_deferred("disabled", false)
 
-## 被友方/防御灵兽拦截：立刻回收入池
+## 被友方/防御灵兽拦截：立刻回收入池（产生湮灭灵光碎屑，平滑消散）
 func intercept() -> void:
 	if _pooled:
 		return
+	if is_inside_tree() and get_parent() != null:
+		JuiceEffect.spawn_impact_pop(get_parent(), global_position, RIM_COLOR, direction)
 	_recycle()
 
 ## 回收入池（替代 queue_free）：休眠物理与碰撞，池满或宿主失效才真释放

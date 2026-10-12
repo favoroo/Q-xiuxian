@@ -691,11 +691,25 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		GameStyle.label(tag_lbl, 10, GameStyle.PAPER_DIM)
 	badge_box.add_child(tag_lbl)
 
-	card.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
-			_select_cultivator(cid)
-	)
+	# 整块热区 + 「按下与抬起都留在原地」才算点（尺子在 GameStyle.tap 头注）。
+	# 旧写法在这里认「按下」那一枪，两个后果都落在「拖列表」这个动作上：
+	# ① 手指一落到卡片上就换人 —— 想滑动却点中了某个英雄；
+	# ② 换人要重建左侧整栏详情（实测单次平均 4.0ms、最坏 6.0ms，全是文本重排与节点重建，
+	#    真机 CPU 更慢），而这一下正好卡在 ScrollContainer 起手锁定拖动的那一帧 ⇒ 滑动发涩。
+	# 改成认完整手势后，点按仍在抬起那一刻兑现（与全项目其余卡片同一把尺子），
+	# 拖动过程中谁都不重建，那一帧的预算全给滚动。
 	GameStyle.hotzone(card)
+	# 按下立刻亮一下：反馈不等抬手，样式在抬起时按「当前选中态」交还给唯一真话（_update_small_card_selection）
+	card.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb == null or mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mb.pressed:
+			style.bg_color = GameStyle.NAVY2.lightened(0.22)
+		else:
+			_update_small_card_selection(cid)
+	)
+	GameStyle.tap(card, func() -> void: _select_cultivator(cid))
 
 	_roster_cards[cid] = {
 		"card": card,

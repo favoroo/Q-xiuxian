@@ -35,8 +35,8 @@ static func build_page(dialog: ManualDialog, parent: Control) -> Control:
 	box.add_theme_constant_override("separation", 8)
 	scroll.add_child(box)
 	dialog._weapons_box = box
-
-	rebuild(dialog)
+	# 这里只搭壳不填卡：内容交给 dialog._ensure_page(1)（第一次切到武器页才建），
+	# 否则图鉴一加载就把 38 张卡铺出来、打开时又重铺一遍。
 	return page
 
 
@@ -161,10 +161,14 @@ static func _make_weapon_card(dialog: ManualDialog, wid: String, def: Dictionary
 		func(anchor: Control): dialog._open_weapon_tip(wid, anchor),
 		stat_line, card_chips(wid, def))
 	card.set_meta("wid", wid)		# 判据按 id 现算期望签文，不从卡面文字反推
-	# 吃「元素伤害」属性加成的法器挂橙红角标（图鉴与商店/属性面板同一口径）
+	# 元素件 = 图标框那一圈暖橙红描边（图鉴与商店/属性面板同一口径）。
+	# 原先贴右上角的「元素」色块已撤：48 见方的图标框上它要遮掉一角，而这一屏是要人扫着比的。
 	var icon_tex := card.get_meta("icon_tex") as TextureRect
-	if icon_tex != null and icon_tex.get_parent() != null:
-		GameStyle.maybe_add_element_badge(icon_tex.get_parent(), wid, 8)
+	if icon_tex != null and GameStyle.is_elemental(wid):
+		var icon_box := icon_tex.get_parent() as Control
+		if icon_box != null:
+			icon_box.add_theme_stylebox_override("panel",
+					GameStyle.outlined_panel(GameStyle.INK, GameStyle.ELEMENT, 1, 0.0))
 	return card
 
 

@@ -24,7 +24,7 @@ const COPIED: Array[String] = [
 	"dodge", "lifesteal", "luck", "harvest", "xp_gain_mult", "knockback_mult",
 	"elite_damage", "free_rerolls", "shop_price_mult", "stat_bonus_pierce",
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
-		"chest_break_bonus", "spirit_stones",
+		"chest_reward_mult", "spirit_stones",
 		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
 		# —— 羁绊与神通乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
@@ -68,7 +68,7 @@ var bonus_pierce: int = 0
 var thorns_pct: float = 0.0
 var chest_count_bonus: int = 0
 var chest_quality: float = 0.0
-var chest_break_bonus: int = 0
+var chest_reward_mult: float = 1.0
 var spirit_stones: int = 0
 var pet_damage_mult: float = 1.0
 var pet_effect_mult: float = 1.0

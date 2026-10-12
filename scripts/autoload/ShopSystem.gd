@@ -36,7 +36,9 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 			"sold": false, "locked": false,
 		}
 	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE:
-		var item_id := ItemData.pick_id(gm.luck, wave, gm.items, gm.rng, gm.unlocked_items)
+		# 池子按「本局已购入」排重 unique 道具：卖掉的那件也不解禁（详情卡上那句
+		# 「出售后本局不再出现」与这里是同一个账本），非 unique 的照旧可以反复上架。
+		var item_id := ItemData.pick_id(gm.luck, wave, gm.items_bought, gm.rng, gm.unlocked_items)
 		if item_id != "":
 			var idef := ItemData.get_def(item_id)
 			return {

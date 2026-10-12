@@ -57,6 +57,12 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var feats := StatsTipFactory.weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])
+	# 元素件这一行就是那圈暖橙红描边的解释（2026-10-12 用户：角标遮图，改用边框颜色说这件事）。
+	# 描边是这一屏唯一的提示，点开必须还能读到字，否则颜色就成了没人教的暗号（同 GameStyle.is_elemental）。
+	if GameStyle.is_elemental(id):
+		var e_coef := WeaponData.elemental_scaling_coef(id)
+		var e_edmg: float = float(GameManager.get_player_stat_dict().get("elemental_damage", 0.0))
+		rows.append(["元素加成", "系数 ×%.1f · 当前元素伤害 %+.1f" % [e_coef, e_edmg], GameStyle.ELEMENT])
 
 	var copies_total := GameManager.count_copies(id, star)
 	var price := WeaponData.sell_price(id, star)

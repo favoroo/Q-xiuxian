@@ -33,7 +33,7 @@ const PROBE: Dictionary = {
 	"dodge": 0.18, "lifesteal": 0.09, "luck": 4.0, "harvest": 7.0, "xp_gain_mult": 1.35,
 	"knockback_mult": 1.5, "elite_damage": 0.25, "free_rerolls": 2, "shop_price_mult": 0.85,
 	"stat_bonus_pierce": 2, "bonus_pierce": 3, "thorns_pct": 0.15,
-	"chest_count_bonus": 1, "chest_quality": 0.5, "chest_break_bonus": 1,
+	"chest_count_bonus": 1, "chest_quality": 0.5, "chest_reward_mult": 1.75,
 	"spirit_stones": 233,
 	"synergy_damage_mult": 1.18, "synergy_range_mult": 1.12, "synergy_haste_mult": 1.06,
 	"synergy_crit_rate": 0.07, "synergy_crit_mult": 0.11, "synergy_hp_regen": 1.5,

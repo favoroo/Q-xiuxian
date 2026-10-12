@@ -45,6 +45,16 @@ extends CharacterBody2D
 @export var spawn_minion_interval: float = 0.0  ## >0：蛛母系——每隔 N 秒产一只幼体（minion_scene）
 @export var minion_scene: PackedScene = null
 @export var teleport_interval: float = 0.0 ## >0：影魅系——每隔 N 秒闪现到玩家侧翼
+@export var charge_side_bolts: int = 0     ## >0：冲刺起步时向左右两侧各放 N 发火球（烈雷兽变异，犀牛同款）
+@export var slam_interval: float = 0.0     ## >0：每隔 N 秒以自身为中心震地（铁甲巨怪变异后启用）
+@export var slam_radius: float = 0.0       ## 震地半径：预警圈 = 判定圈（同源）
+@export var slam_windup: float = 0.8       ## 震地预警时长
+@export var slam_dmg_mult: float = 1.2     ## 震地伤害 = contact_damage × 它
+@export var heal_interval: float = 0.0     ## >0：灵医系——每隔 N 秒治疗范围内同伴
+@export var heal_radius: float = 0.0       ## 治疗光环半径
+@export var heal_amount: float = 0.0       ## 每跳治疗量（WaveSpawner 按波次注入，见 BalanceWave.healer_amount）
+@export var always_flee: bool = false      ## true：金蟾系——恒背离玩家逃窜（土豆兄弟 Looter 对应位）
+@export var stone_reward: int = 0          ## >0：击杀额外掉金币（WaveSpawner 按波次注入，见 BalanceWave.looter_stone_reward）
 
 # ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
@@ -84,6 +94,14 @@ var _aura_speed_mult: float = 1.0  ## 被鼓妖光环覆盖时的移速加成
 var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
+
+# 精英变异（2026-10-12，仿土豆兄弟 Elite Mutation：过血线一次性切换行为参数）
+var _eid: String = ""              ## 解析后的敌种标识（_ready 落定，变异分发的依据）
+var _mutated: bool = false         ## 变异只触发一次
+var _elite_slam_timer: float = 0.0       ## 震地周期计时
+var _elite_slam_windup_t: float = -1.0   ## >=0 表示震地预警中
+var _elite_slam_ring: AoeTelegraph = null
+var _heal_timer: float = 0.0       ## 灵医治疗跳计时
 
 # 五行元素异常状态（灼烧/冰缓/剧毒）
 var burn_timer: float = 0.0
@@ -139,6 +157,7 @@ func _ready() -> void:
 	var eid := enemy_id
 	if eid.is_empty():
 		eid = _deduce_enemy_id()
+	_eid = eid
 	_init_procedural_view(eid)
 
 	# 妖物出生时的弹性跃出感
@@ -154,6 +173,8 @@ func _ready() -> void:
 	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval
+	_elite_slam_timer = slam_interval
+	_heal_timer = heal_interval
 
 	# 活体登记（2026-10-11）：鼓妖光环/产卵上限/召唤上限改走 GameManager.live_enemies，
 	# 不再每脉冲 get_nodes_in_group("enemies") 造全组数组；_exit_tree 注销，语义与组一致
@@ -194,6 +215,10 @@ func _deduce_enemy_id() -> String:
 		return "yingmei"
 	elif n.begins_with("zhumu"):
 		return "zhumu"
+	elif n.begins_with("lingyi"):
+		return "lingyi"
+	elif n.begins_with("jinchan"):
+		return "jinchan"
 	return "slime"
 
 func _init_procedural_view(eid: String) -> void:
@@ -424,8 +449,12 @@ func _tick_hit_stun(delta: float) -> bool:
 ## 行为支路推进：远程风筝 / 扑咬状态机 / 自爆引信 / 火球 / 产卵 / 光环 / 闪现。
 ## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
 func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
+	# 金蟾系：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）
+	if always_flee and not _pp_stun:
+		_pp_target_vel = -dir * eff_speed
+
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
-	if not _pp_stun and preferred_range > 0.0:
+	if not always_flee and not _pp_stun and preferred_range > 0.0:
 		var dist := sqrt(dist_sq)
 		if dist < preferred_range - 30.0:
 			_pp_target_vel = -dir * eff_speed * 0.8
@@ -573,6 +602,28 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		if _teleport_timer <= 0.0:
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
+
+	# 铁甲巨怪变异·震地：预警圈「填满式」倒计时 → 结算（与 Boss 震地同一套视觉语言）
+	if slam_interval > 0.0 and _fuse < 0.0:
+		if _elite_slam_windup_t >= 0.0:
+			_elite_slam_windup_t -= delta
+			_pp_target_vel = Vector2.ZERO
+			if _elite_slam_ring != null:
+				_elite_slam_ring.progress = 1.0 - _elite_slam_windup_t / maxf(slam_windup, 0.001)
+			if _elite_slam_windup_t <= 0.0:
+				_resolve_elite_slam(player)
+		else:
+			_elite_slam_timer -= delta
+			if _elite_slam_timer <= 0.0 and dist_sq < slam_radius * slam_radius * 2.25:
+				_elite_slam_timer = slam_interval
+				_start_elite_slam()
+
+	# 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）
+	if heal_interval > 0.0 and _fuse < 0.0:
+		_heal_timer -= delta
+		if _heal_timer <= 0.0:
+			_heal_timer = heal_interval
+			_pulse_heal()
 
 	return false
 
@@ -751,6 +802,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		_focus_hit_count += 1
 		_focus_hit_timer = GameBalance.FOCUS_FIRE_WINDOW
 	current_hp -= amount
+	# 精英变异血线检查（只触发一次；Boss 走自己的二阶段，_enter_mutation 内部按敌种分发）
+	if not _mutated and is_elite and current_hp > 0.0 and current_hp <= max_hp * GameBalance.ELITE_MUTATION_HP_PCT:
+		_enter_mutation()
 	# 致命一刀不再发命中火花：尸体 0.185s 就塌缩没，火花要放 0.22s，会在空处留一道白闪；
 	# 击杀点反馈由 _die() 的死亡爆散一力承担（视觉不丢，只是不再双发）
 	var lethal := current_hp <= 0.0
@@ -924,6 +978,16 @@ func _start_charge(dir: Vector2) -> void:
 	play_squash(Vector2(0.78, 1.24), 0.2)
 	# 起步扬尘：位移是瞬时满速，视觉就得卖「蹬地弹射」而不是「匀速滑出去」
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), dir)
+	# 烈雷兽变异：冲刺起步向左右两侧各放一排火球（犀牛 Mutation 同款）
+	if charge_side_bolts > 0:
+		var base_ang := dir.angle()
+		for side in [-1.0, 1.0]:
+			for i in range(charge_side_bolts):
+				var bolt := EnemyBolt.acquire(get_parent())
+				bolt.global_position = global_position
+				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
+				bolt.damage = bolt_damage * (contact_damage / 13.0)
+				bolt.activate()
 	_clear_charge_warning()
 
 ## 收势落空判定：要等整段承诺（冲刺 + 刹车）的扫掠都结算完才许罚站。
@@ -1032,7 +1096,7 @@ func receive_aura(mult: float, duration_ms: int) -> void:
 	_aura_speed_mult = maxf(_aura_speed_mult, mult)
 	_aura_until_ms = Time.get_ticks_msec() + duration_ms
 
-## 蛛母产卵：幼体在自身周围落点，血量/伤害按当前波次同公式缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
+## 蛛母产卵：幼体在自身周围落点，血量/伤害按当前波次 × 危险度缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
 # ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
 
 func _spawn_minion() -> void:
@@ -1041,8 +1105,8 @@ func _spawn_minion() -> void:
 		return
 	var angle := GameManager.rng.randf() * TAU
 	m.global_position = global_position + Vector2(cos(angle), sin(angle)) * 34.0
-	m.max_hp = ceilf(m.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number))
-	m.contact_damage = ceilf(m.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number))
+	m.max_hp = ceilf(m.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
+	m.contact_damage = ceilf(m.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
 	m.add_to_group("enemies")
 	get_parent().call_deferred("add_child", m)
 	play_squash(Vector2(1.22, 0.78), 0.2)
@@ -1080,7 +1144,7 @@ func _spawn_teleport_ghost() -> void:
 	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
 	tw.chain().tween_callback(ghost.queue_free)
 
-## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前波次缩放；自爆/消散不触发）
+## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前波次 × 危险度缩放；自爆/消散不触发）
 func _split_offspring() -> void:
 	for i in range(split_count):
 		var child := split_scene.instantiate() as EnemyBase
@@ -1088,10 +1152,93 @@ func _split_offspring() -> void:
 			continue
 		var angle := TAU * float(i) / float(split_count) + GameManager.rng.randf() * 0.5
 		child.global_position = global_position + Vector2(cos(angle), sin(angle)) * 26.0
-		child.max_hp = ceilf(child.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number))
-		child.contact_damage = ceilf(child.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number))
+		child.max_hp = ceilf(child.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
+		child.contact_damage = ceilf(child.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
 		child.add_to_group("enemies")
 		get_parent().call_deferred("add_child", child)
+
+# ---------------- 行为支路：精英变异·震地（铁甲巨怪） ----------------
+
+func _start_elite_slam() -> void:
+	_elite_slam_windup_t = slam_windup
+	if _elite_slam_ring == null:
+		_elite_slam_ring = AoeTelegraph.new()
+		_elite_slam_ring.radius = slam_radius
+		add_child(_elite_slam_ring)
+	_elite_slam_ring.progress = 0.0
+	_elite_slam_ring.visible = true
+	AudioManager.play_sfx("enemy_fuse", 0.6)
+	play_squash(Vector2(0.82, 1.2), 0.4)
+
+func _resolve_elite_slam(player: Node2D) -> void:
+	_elite_slam_windup_t = -1.0
+	if _elite_slam_ring != null:
+		_elite_slam_ring.visible = false
+	if dying:
+		return
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, slam_radius, GameStyle.BAD)
+	AudioManager.play_sfx("enemy_slam", 0.8)
+	if player == null or player.global_position.distance_to(global_position) > slam_radius:
+		return
+	var slam_dmg := maxf(1.0, contact_damage * slam_dmg_mult)
+	if player is Player:
+		player.take_damage(slam_dmg, global_position)
+	elif player.has_method("take_damage"):
+		player.take_damage(slam_dmg)
+
+# ---------------- 行为支路：灵医治疗 ----------------
+
+func _pulse_heal() -> void:
+	var radius_sq := heal_radius * heal_radius
+	var healed_any := false
+	for e in GameManager.live_enemies:
+		if e == self or not (e is EnemyBase) or e.dying:
+			continue
+		if global_position.distance_squared_to(e.global_position) > radius_sq:
+			continue
+		if e.current_hp >= e.max_hp:
+			continue
+		e.receive_heal(heal_amount)
+		healed_any = true
+	if healed_any:
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
+		AudioManager.play_sfx("drone_chime", 0.5)
+		play_squash(Vector2(1.18, 0.84), 0.18)
+
+func receive_heal(amount: float) -> void:
+	if dying:
+		return
+	current_hp = minf(max_hp, current_hp + amount)
+	if not _offscreen:
+		DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+%d" % int(amount))
+	play_squash(Vector2(1.1, 0.9), 0.14)
+
+# ---------------- 精英变异（Mutation） ----------------
+
+func _enter_mutation() -> void:
+	match _eid:
+		"golem":
+			move_speed *= GameBalance.MUT_GOLEM_SPEED_MULT
+			slam_interval = GameBalance.MUT_GOLEM_SLAM_INTERVAL
+			slam_radius = GameBalance.MUT_GOLEM_SLAM_RADIUS
+			slam_windup = GameBalance.MUT_GOLEM_SLAM_WINDUP
+			slam_dmg_mult = GameBalance.MUT_GOLEM_SLAM_DMG_MULT
+			_elite_slam_timer = 1.2
+		"chilei_elite":
+			charge_interval *= GameBalance.MUT_CHILEI_INTERVAL_MULT
+			charge_side_bolts = GameBalance.MUT_CHILEI_SIDE_BOLTS
+		"jiansha_elite":
+			bolt_count = GameBalance.MUT_JIANSHA_BOLT_COUNT
+			bolt_interval *= GameBalance.MUT_JIANSHA_INTERVAL_MULT
+			preferred_range = GameBalance.MUT_JIANSHA_RANGE
+		_:
+			return
+	_mutated = true
+	anim_sprite.modulate = Color(1.5, 0.65, 0.6)
+	play_squash(Vector2(1.3, 0.75), 0.3)
+	GameManager.announcement_triggered.emit("⚠ 精英狂暴化 ⚠")
+	AudioManager.play_sfx("boss_raid", 0.9, 0.85)
+	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 
 ## 波次结束时的消散：不掉落、不计数
 # ---------------- 死亡与清场 ----------------
@@ -1126,6 +1273,15 @@ func _die() -> void:
 	_clear_charge_warning()
 	_clear_bite_warning()
 	_clear_explode_ring()
+	if _elite_slam_ring != null and is_instance_valid(_elite_slam_ring):
+		_elite_slam_ring.queue_free()
+	_elite_slam_ring = null
+
+	# 金蟾系：击杀额外爆金币（波末消散/自爆不算战果）
+	if stone_reward > 0 and not _no_drop:
+		GameManager.add_spirit_stones(stone_reward)
+		DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -30.0), stone_reward, false, "+%d 金币" % stone_reward)
+		AudioManager.play_sfx("gem_pickup", 0.9)
 
 	# 击杀反馈分级震屏（死亡爆散视觉已于 2026-10-12 整体下线：击杀反馈 = 尸体塌缩 + 跳字 + 音效）
 	if is_elite:

@@ -84,20 +84,20 @@ const DEFS: Dictionary = {
 					"tags": ["sword", "metal"],
 					"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
 				},
-					"baoyu_liuhuazhen": {
-						"name": "暴雨针", "behavior": Behavior.PROJECTILE,
-						"sfx": "metal_dart",
-						# 2026-10-11 平衡校准：剑痴核心交叉件单体偏软，12→13 抬离群伤带下沿（★1 单体 20.8 仍带内）
-						"damage": 13.0, "cooldown": 1.25, "range": 265.0,
-						"knockback": 90.0,
-						"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
-						"tip": Vector2(22, -6),
-						"desc": "连射5发追踪细针，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
-					"bullet": "res://assets/art/bullet_silver_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
-					"pierce": 1, "projectile_count": 5, "spread_angle": 0.32,
-					"tags": ["sword", "metal"],
-					"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
-				},
+						"baoyu_liuhuazhen": {
+							"name": "暴雨针", "behavior": Behavior.PROJECTILE,
+							"sfx": "metal_dart",
+							# 机制差异化重构：暴雨梨花式瞬间倾泻 8 发细针，与飞刀割草拉开差异
+							"damage": 13.0, "cooldown": 1.25, "range": 250.0,
+							"knockback": 85.0,
+							"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
+							"tip": Vector2(22, -6),
+							"desc": "倾泻8发密如暴雨的追踪细针，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
+						"bullet": "res://assets/art/bullet_silver_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
+						"pierce": 1, "projectile_count": 8, "spread_angle": 0.42,
+						"tags": ["sword", "metal"],
+						"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
+					},
 
 				# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
 				"qingmu_tengbian": {
@@ -292,18 +292,19 @@ const DEFS: Dictionary = {
 							"tags": ["spirit", "earth"],
 							"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
 						},
-					"xuanwu_lingdun": {
-						"name": "重盾", "behavior": Behavior.MELEE,
-						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						"damage": 24.0, "cooldown": 1.20, "range": 140.0,
-						"knockback": 350.0,
-						"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
-						"tip": Vector2(22, -12),
-						"desc": "厚盾横推大力击退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
-					"arc_scale": 1.35,
-					"tags": ["sword", "earth"],
-					"stat_scalings": {"melee_damage": 0.8, "armor": 3.0, "max_hp_bonus": 0.10},
-				},
+						"xuanwu_lingdun": {
+							"name": "重盾", "behavior": Behavior.MELEE,
+							"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+							# 机制差异化重构：超宽半圆护壁推进（arc 1.55），480 顶级强力击飞，与重剑/锏区分
+							"damage": 28.0, "cooldown": 1.35, "range": 145.0,
+							"knockback": 480.0,
+							"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
+							"tip": Vector2(22, -12),
+							"desc": "厚重大盾超宽弧面横推强力击飞来敌，受护甲与生命加成", "tag": "近战·剑系·土",
+						"arc_scale": 1.55,
+						"tags": ["sword", "earth"],
+						"stat_scalings": {"melee_damage": 0.8, "armor": 3.0, "max_hp_bonus": 0.15},
+					},
 
 				# ==================== 2026-10-10 新增 15 把 ====================
 				# 目的有二：
@@ -473,17 +474,18 @@ const DEFS: Dictionary = {
 					"tags": ["wide", "water"],
 					"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
 				},
-						"liuling_jian": {
-							"name": "六棱锏", "behavior": Behavior.MELEE,
-							"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-							"damage": 26.0, "cooldown": 1.2, "range": 135.0,
-							"knockback": 330.0,
-							"price": 36, "icon": "res://assets/art/weapon_liuling_jian.png",
-							"tip": Vector2(22, -8), "upright": true,
-						"desc": "六棱重锏以守为攻，受近战伤害与护甲加成", "tag": "近战·剑系·土",
-					"tags": ["sword", "earth"],
-					"stat_scalings": {"melee_damage": 1.0, "armor": 3.0},
-				},
+							"liuling_jian": {
+								"name": "六棱锏", "behavior": Behavior.MELEE,
+								"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+								# 机制差异化重构：缩短冷却至 0.85s 疾速破阵砸击，吃更高护甲加成，专攻重击破防
+								"damage": 18.0, "cooldown": 0.85, "range": 120.0,
+								"knockback": 280.0,
+								"price": 36, "icon": "res://assets/art/weapon_liuling_jian.png",
+								"tip": Vector2(22, -8), "upright": true,
+							"desc": "六棱重锏疾速重砸破阵制敌，受近战伤害与极高护甲加成", "tag": "近战·剑系·土",
+						"tags": ["sword", "earth"],
+						"stat_scalings": {"melee_damage": 1.0, "armor": 3.5},
+					},
 						"xuanwu_pei": {
 							"name": "玄武佩", "behavior": Behavior.DRONE,
 							"sfx": "drone_chime",
@@ -548,20 +550,22 @@ const DEFS: Dictionary = {
 				# 雷火符走剑阵盘式双器类三重共鸣（符箓+雷法+火），雷法升到 6 把。
 				# tip 均为 tools/fit_weapon_icon.py 实测打印值（2026-10-11 批次）。
 
-				# ---- 火 3 把：火∩剑成装路 + 火系第 10 把 ----
-					"liuhuo_feijian": {
-						"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
-						"sfx": "blade_shoot",
-						"damage": 19.0, "cooldown": 0.95, "range": 305.0,
-						"knockback": 150.0,
-						"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
-						"tip": Vector2(20, 2),
-						"desc": "炽炎飞剑自动追击并穿透2敌引燃，受元素与远程伤害加成", "tag": "远程·剑系·火",
-						"bullet": "res://assets/art/bullet_fire_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
-						"pierce": 2, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
-						"tags": ["sword", "fire"],
-						"stat_scalings": {"elemental_damage": 1.0, "ranged_damage": 0.6},
-					},
+					# ---- 火 3 把：火∩剑成装路 + 火系第 10 把 ----
+						"liuhuo_feijian": {
+							"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
+							"sfx": "blade_shoot",
+							# 机制差异化重构：双柄飞剑交错齐射（2发×穿透1各引燃），与单柄飞剑穿透2拉开手感
+							"damage": 11.5, "cooldown": 0.95, "range": 305.0,
+							"knockback": 150.0,
+							"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
+							"tip": Vector2(20, 2),
+							"desc": "双柄炽炎飞剑交错射出各引燃敌人，受元素与远程伤害加成", "tag": "远程·剑系·火",
+							"bullet": "res://assets/art/bullet_fire_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
+							"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
+							"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
+							"tags": ["sword", "fire"],
+							"stat_scalings": {"elemental_damage": 1.0, "ranged_damage": 0.6},
+						},
 				"zhenhuo_fu": {
 					"name": "真火符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
@@ -848,17 +852,19 @@ const DEFS: Dictionary = {
 					# 机关-木/水/火。每把照同行为同格锚点法定数值，零新行为代码。
 					# 顺带把冷门 scaling 链接进新法器（吸血/冷却/暴击伤害/范围/额外生命），激活死链。
 					# 图标暂借同格锚点贴图占位，TODO(media-gen)：出专属图标后替换并补 manifest。
-					"taomu_jian": {
-						"name": "桃木剑", "behavior": Behavior.MELEE,
-						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-						"damage": 20.0, "cooldown": 0.95, "range": 125.0,
-						"knockback": 230.0,
-						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
-						"tip": Vector2(22, -12),
-						"desc": "桃木辟邪之剑快斩汲血，受近战伤害与吸血加成", "tag": "近战·剑系·木",
-						"tags": ["sword", "wood"],
-						"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
-					},
+						"taomu_jian": {
+							"name": "桃木剑", "behavior": Behavior.MELEE,
+							"sfx": "whoosh_light", "sfx_impact": "impact_blade",
+							# 机制差异化重构：辟邪纯阳剑芒，中远距离宽弧远扫（range 175/arc 1.25）+ 强力震退，吃范围加成
+							"damage": 24.0, "cooldown": 1.10, "range": 175.0,
+							"knockback": 340.0,
+							"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
+							"tip": Vector2(22, -12),
+							"desc": "辟邪纯阳剑芒宽弧远扫强力击退，受近战伤害与范围加成", "tag": "近战·剑系·木",
+							"arc_scale": 1.25,
+							"tags": ["sword", "wood"],
+							"stat_scalings": {"melee_damage": 1.0, "range_bonus": 25.0},
+						},
 					"guishui_fu": {
 						"name": "癸水符", "behavior": Behavior.PROJECTILE,
 						"sfx": "talisman_throw",

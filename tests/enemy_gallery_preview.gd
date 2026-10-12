@@ -1,8 +1,8 @@
 extends Control
 
 ## 渡个劫 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
-## 验证 14 大敌种（普通怪、精英怪、关卡魔将与心魔魔尊）的程序化矢量拟态与悬浮/飞行/爬行协调动作
-## 适配桌面 960×540 完整一屏 5×3 矩阵
+## 验证 16 大敌种（普通怪、精英怪、关卡魔将与心魔魔尊）的程序化矢量拟态与悬浮/飞行/爬行协调动作
+## 适配桌面 960×540 完整一屏 6×3 矩阵（17 张卡片：含重复 boss 终局形态）
 
 const ENEMY_ENTRIES: Array[Dictionary] = [
 	# 第一排：基础小怪（5 种）
@@ -16,16 +16,20 @@ const ENEMY_ENTRIES: Array[Dictionary] = [
 	{"id": "xueyong", "name": "九幽血茧", "motion": "拱动", "desc": "封灵符带·心跳脉动裂变", "elite": false, "boss": false, "final": false},
 	{"id": "guyao", "name": "白骨摄魂鼓", "motion": "律动", "desc": "太极魔纹·双骨槌敲击光环", "elite": false, "boss": false, "final": false},
 	{"id": "yingmei", "name": "幽冥影魅", "motion": "飘掠", "desc": "雾化暗影·双角闪现厉鬼", "elite": false, "boss": false, "final": false},
-	{"id": "zhumu", "name": "千目邪母", "motion": "浮游", "desc": "深紫魔核·多魔目轮流眨眼", "elite": false, "boss": false, "final": false},
-	{"id": "leibeast", "name": "冥雷煞兽", "motion": "巡游", "desc": "狼首獠牙·背棘长扑短咬", "elite": false, "boss": false, "final": false},
+		{"id": "zhumu", "name": "千目邪母", "motion": "浮游", "desc": "深紫魔核·多魔目轮流眨眼", "elite": false, "boss": false, "final": false},
+		{"id": "leibeast", "name": "冥雷煞兽", "motion": "巡游", "desc": "狼首獠牙·背棘长扑短咬", "elite": false, "boss": false, "final": false},
 
-	# 第三排：三大精英与两大魔君（5 种）
-	{"id": "golem", "name": "铁甲魔傀", "motion": "悬浮", "desc": "精英坦克·浮空磁链阵眼", "elite": true, "boss": false, "final": false},
-	{"id": "chilei_elite", "name": "赤雷巨兽", "motion": "巡弋", "desc": "精英突进·赤金雷角刀羽", "elite": true, "boss": false, "final": false},
-	{"id": "jiansha_elite", "name": "剑煞邪尊", "motion": "齐御", "desc": "精英法修·扇形飞剑齐射", "elite": true, "boss": false, "final": false},
-	{"id": "boss", "name": "赤炎魔将", "motion": "御空", "desc": "关卡魔将·魔刃煞气法轮", "elite": false, "boss": true, "final": false},
-	{"id": "boss", "name": "心魔魔尊", "motion": "降世", "desc": "终局魔尊·八符文紫焰神轮", "elite": false, "boss": true, "final": true},
-]
+		# 第三排：三大精英与两大魔君（5 种）
+		{"id": "golem", "name": "铁甲魔傀", "motion": "悬浮", "desc": "精英坦克·浮空磁链阵眼", "elite": true, "boss": false, "final": false},
+		{"id": "chilei_elite", "name": "赤雷巨兽", "motion": "巡弋", "desc": "精英突进·赤金雷角刀羽", "elite": true, "boss": false, "final": false},
+		{"id": "jiansha_elite", "name": "剑煞邪尊", "motion": "齐御", "desc": "精英法修·扇形飞剑齐射", "elite": true, "boss": false, "final": false},
+		{"id": "boss", "name": "赤炎魔将", "motion": "御空", "desc": "关卡魔将·魔刃煞气法轮", "elite": false, "boss": true, "final": false},
+		{"id": "boss", "name": "心魔魔尊", "motion": "降世", "desc": "终局魔尊·八符文紫焰神轮", "elite": false, "boss": true, "final": true},
+
+		# 第四排：特殊生态（2026-10-12 新增，仿土豆兄弟 Healer / Looter）
+		{"id": "lingyi", "name": "青囊药灵", "motion": "悬浮", "desc": "回春光环·治疗同伴的优先目标", "elite": false, "boss": false, "final": false},
+		{"id": "jinchan", "name": "衔宝金蟾", "motion": "蹦跳", "desc": "衔钱宝兽·见人就跑击杀爆金币", "elite": false, "boss": false, "final": false},
+	]
 
 var _time: float = 0.0
 
@@ -77,13 +81,13 @@ func _build_gallery() -> void:
 	header.add_child(title_lbl)
 
 	var sub_lbl := Label.new()
-	sub_lbl.text = "全 14 敌种拟态 · 纯矢量 CanvasItem 绘制 · 悬浮·飞行·爬行流体非复杂动作"
+	sub_lbl.text = "全 16 敌种拟态 · 纯矢量 CanvasItem 绘制 · 悬浮·飞行·爬行流体非复杂动作"
 	GameStyle.label(sub_lbl, 10, GameStyle.GREY)
 	header.add_child(sub_lbl)
 
-	# 5 列 × 3 行 矩阵网格
+	# 6 列 × 3 行 矩阵网格（17 张卡片）
 	var grid := GridContainer.new()
-	grid.columns = 5
+	grid.columns = 6
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -95,7 +99,7 @@ func _build_gallery() -> void:
 
 func _create_enemy_card(info: Dictionary) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(180, 150)
+	panel.custom_minimum_size = Vector2(148, 150)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -140,7 +144,7 @@ func _create_enemy_card(info: Dictionary) -> Control:
 
 	# 中间视界展示区（居中悬浮/飞行/爬行矢量图元）
 	var viewport_box := Control.new()
-	viewport_box.custom_minimum_size = Vector2(170, 88)
+	viewport_box.custom_minimum_size = Vector2(138, 88)
 	viewport_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(viewport_box)
 
@@ -148,7 +152,7 @@ func _create_enemy_card(info: Dictionary) -> Control:
 	var renderer := HollowKnightEnemyRenderer.new()
 	renderer.config = cfg
 	var is_boss_type: bool = info.get("boss", false)
-	renderer.position = Vector2(85, 54 if is_boss_type else 46)
+	renderer.position = Vector2(69, 54 if is_boss_type else 46)
 	# 缩放微调保证同屏舒适度
 	renderer.scale = Vector2.ONE * (0.68 if is_boss_type else 0.92)
 	viewport_box.add_child(renderer)

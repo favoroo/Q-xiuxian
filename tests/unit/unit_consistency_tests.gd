@@ -52,10 +52,11 @@ const FIELD_FORM := {
 	"free_rerolls": FORM_FLAT,
 	"bonus_pierce": FORM_FLAT,
 	"luck": FORM_FLAT,
-		# 2026-10-11 寻宝流：三项都是「几口 / 几点 / 几下」的平值，卡面数字由 BonusRows 从 apply 生成
+		# 2026-10-11 寻宝流：数量与品质是「几口 / 几点」的平值；2026-10-12 第三条腿改抬兑现量，
+		# 宝箱掉落是乘区分数（0.35 → +35%），与 StatInfoData.FIELDS 的 "pct" 口径同源
 		"chest_count": FORM_FLAT,
 		"chest_quality": FORM_FLAT,
-		"chest_break": FORM_FLAT,
+		"chest_reward": FORM_PCT,
 		# 2026-10-12 灵兽系统加点与法宝属性
 		"pet_damage_mult": FORM_PCT,
 		"pet_effect_mult": FORM_PCT,
@@ -174,6 +175,63 @@ static func _check_desc_matches_apply(_c: TestCheck, table: String, id: String, 
 func _test_upgrade_desc_apply() -> void:
 	for u in UpgradeData.UPGRADES:
 		_check_desc_matches_apply(_c, "UpgradeData", String(u.get("id", "")), String(u.get("desc", "")), u.get("apply", {}))
+
+## ---------------- 图标断链守卫（2026-10-12） ----------------
+## 根因：悟道加点「灵兽疾行」「万兽灵契」的 icon 指向从未生成过的 assets/art/*.png，
+## 而 LevelUpDialog 用 `ResourceLoader.exists()` 兜底 ⇒ 文件不在就静默不贴图，卡片只剩一个
+## 空墨底框，不报错不报红，跟着 v0.0.24 一路上线。这里把「表里写了路径 ⇒ 文件必须在」钉成判据。
+## 空 icon 是设计内占位（神通影爆/服丹用 glyph 字面显示），但白名单外多一条空路径同样报红——
+## 那意味着新条目压根没配图，玩家看到的还是一样露白。
+const ICON_PLACEHOLDER := {
+	"SkillData:shadowburst": true,  ## 影爆：glyph「爆」
+	"SkillData:elixir": true,       ## 服丹：glyph「丹」
+}
+## 扫到的非空 icon 路径条数下限：骤降说明遍历自己炸了（零记账不等于绿灯）
+const ICON_FLOOR := 150
+
+## 表名 → 该表所有条目的 {id, icon}；新增带 icon 的数据表要来这里挂上，否则守卫漏表
+static func icon_rows() -> Array[Array]:
+	var rows: Array[Array] = []
+	for u in UpgradeData.UPGRADES:
+		rows.append(["UpgradeData", String(u.get("id", "")), String(u.get("icon", ""))])
+	for tid in ItemData.all_ids():
+		rows.append(["ItemData", String(tid), String(ItemData.get_def(tid).get("icon", ""))])
+	for wid in WeaponData.DEFS.keys():
+		rows.append(["WeaponData", String(wid), String(WeaponData.get_def(String(wid)).get("icon", ""))])
+	for cid in CultivatorData.all_ids():
+		rows.append(["CultivatorData", String(cid), String(CultivatorData.get_def(cid).get("icon", ""))])
+	for sid in SkillData.all_ids():
+		rows.append(["SkillData", String(sid), String(SkillData.get_def(sid).get("icon", ""))])
+	return rows
+
+func _test_icon_assets_exist() -> void:
+	var rows := icon_rows()
+	var checked := 0
+	var empties: Array[String] = []
+	var broken: Array[String] = []
+	var by_table := {}
+	for row in rows:
+		var table := String(row[0])
+		var key := "%s:%s" % [table, String(row[1])]
+		var path := String(row[2])
+		by_table[table] = int(by_table.get(table, 0)) + 1
+		if path.is_empty():
+			empties.append(key)
+			continue
+		checked += 1
+		if not ResourceLoader.exists(path):
+			broken.append("%s → %s" % [key, path])
+	_c.check(not by_table.is_empty(), "图标守卫扫到了条目（各表条数：%s）" % str(by_table))
+	_c.check(checked >= ICON_FLOOR,
+			"图标守卫扫到 %d 条 icon 路径，不低于下限 %d（骤降=遍历空转）" % [checked, ICON_FLOOR])
+	_c.check(broken.is_empty(), "全部 %d 条 icon 路径都指向真实文件（断链：%s）" % [
+			checked, "; ".join(PackedStringArray(broken))])
+	# 空 icon 只许是白名单里那几条占位；新条目漏配图=玩家看见露白框，同样要拦
+	var unlisted: Array[String] = []
+	for empty_key in empties:
+		if not ICON_PLACEHOLDER.has(empty_key):
+			unlisted.append(String(empty_key))
+	_c.check(unlisted.is_empty(), "空 icon 条目未超出占位白名单（白名单外：%s）" % "; ".join(PackedStringArray(unlisted)))
 
 func _test_item_desc_apply() -> void:
 	for item_id in ItemData.all_ids():

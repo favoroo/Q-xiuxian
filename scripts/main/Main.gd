@@ -24,7 +24,6 @@ func _ready() -> void:
 	GameManager.joystick = joystick
 	_setup_atmosphere()
 	_setup_map_bounds()
-	_setup_map_props()
 	_setup_stage_backdrop()
 	# 开局在主菜单/选人阶段默认隐藏战斗 HUD 与虚拟摇杆，避免在主页背景中透出
 	$UILayer/GameHUD.visible = false
@@ -287,110 +286,6 @@ func _setup_map_bounds() -> void:
 	arena_vis.half_extent = half
 	map.add_child(arena_vis)
 
-## 战台四周场景道具点缀（古刹残破石灯笼、插地断剑、崩裂古柱残段）
-## 挂于 EntitiesLayer 参与 y-sort 遮挡；纯装饰，无碰撞、无判定、零光照开销
-func _setup_map_props() -> void:
-	var entities: Node2D = $EntitiesLayer
-	var shadow_tex: Texture2D = preload("res://assets/art/shadow.png")
-	var radial_tex: Texture2D = preload("res://assets/art/light_radial.png")
-
-	var prop_defs: Array[Dictionary] = [
-		# 东北象限：古刹残破石灯笼
-		{
-			"tex": "res://assets/art/prop_stone_lantern.png",
-			"pos": Vector2(165.0, -260.0),
-			"scale": Vector2(0.42, 0.42),
-			"offset": Vector2(0.0, -26.0),
-			"shadow_scale": Vector2(0.85, 0.65),
-			"is_lantern": true,
-		},
-		# 西北象限：插地断剑
-		{
-			"tex": "res://assets/art/prop_broken_sword.png",
-			"pos": Vector2(-160.0, -220.0),
-			"scale": Vector2(0.35, 0.35),
-			"offset": Vector2(0.0, -16.0),
-			"shadow_scale": Vector2(0.75, 0.50),
-			"is_lantern": false,
-		},
-		# 西北偏远：崩裂残柱
-		{
-			"tex": "res://assets/art/prop_broken_pillar.png",
-			"pos": Vector2(-260.0, -200.0),
-			"scale": Vector2(0.44, 0.44),
-			"offset": Vector2(0.0, -18.0),
-			"shadow_scale": Vector2(1.10, 0.70),
-			"is_lantern": false,
-		},
-		# 西南象限：残破石灯笼
-		{
-			"tex": "res://assets/art/prop_stone_lantern.png",
-			"pos": Vector2(-230.0, 240.0),
-			"scale": Vector2(0.42, 0.42),
-			"offset": Vector2(0.0, -26.0),
-			"shadow_scale": Vector2(0.85, 0.65),
-			"is_lantern": true,
-		},
-		# 东南偏东：插地断剑
-		{
-			"tex": "res://assets/art/prop_broken_sword.png",
-			"pos": Vector2(240.0, 60.0),
-			"scale": Vector2(0.35, 0.35),
-			"offset": Vector2(0.0, -16.0),
-			"shadow_scale": Vector2(0.75, 0.50),
-			"is_lantern": false,
-		},
-		# 东南偏下：崩裂残柱
-		{
-			"tex": "res://assets/art/prop_broken_pillar.png",
-			"pos": Vector2(200.0, 260.0),
-			"scale": Vector2(0.44, 0.44),
-			"offset": Vector2(0.0, -18.0),
-			"shadow_scale": Vector2(1.10, 0.70),
-			"is_lantern": false,
-		},
-		# 南侧正中偏左：插地断剑
-		{
-			"tex": "res://assets/art/prop_broken_sword.png",
-			"pos": Vector2(-60.0, 280.0),
-			"scale": Vector2(0.35, 0.35),
-			"offset": Vector2(0.0, -16.0),
-			"shadow_scale": Vector2(0.75, 0.50),
-			"is_lantern": false,
-		},
-	]
-
-	for def in prop_defs:
-		if not ResourceLoader.exists(def.tex):
-			continue
-		var prop_node := Node2D.new()
-		prop_node.position = def.pos
-
-		# 地面投影
-		var shadow := Sprite2D.new()
-		shadow.texture = shadow_tex
-		shadow.scale = def.shadow_scale
-		shadow.modulate = Color(1.0, 1.0, 1.0, 0.55)
-		prop_node.add_child(shadow)
-
-		# 道具贴图主体
-		var sprite := Sprite2D.new()
-		sprite.texture = load(def.tex)
-		sprite.position = def.offset
-		sprite.scale = def.scale
-		prop_node.add_child(sprite)
-
-		# 石灯笼内室幽蓝假光晕（Sprite2D 混合，零 PointLight2D 开销）
-		if def.is_lantern:
-			var faux_glow := Sprite2D.new()
-			faux_glow.texture = radial_tex
-			faux_glow.position = def.offset + Vector2(0.0, 4.0)
-			faux_glow.scale = Vector2(0.32, 0.32)
-			faux_glow.modulate = Color(0.25, 0.75, 1.0, 0.22)
-			prop_node.add_child(faux_glow)
-
-		entities.add_child(prop_node)
-
 ## 选人阶段黑幕托底
 ## 链式对话框（选角 → 选技能 → 选武器）用「先淡出再淡入下一个」的非重叠时序，
 ## 中间空帧会透过 0.88~0.90 的半透明遮罩露出底下冻结的战场（地砖/玩家/HUD），
@@ -402,7 +297,9 @@ func _setup_stage_backdrop() -> void:
 	backdrop.color = GameStyle.INK
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	backdrop.visible = false
+	# 开局即显示：从首帧起盖住冻结的战场，消除「先闪一下地图再淡入菜单」的观感。
+	# 选人链路（CultivatorSelect）会在玩家进入选人时显式接管其显隐。
+	backdrop.visible = true
 	var ui: CanvasLayer = $UILayer
 	ui.add_child(backdrop)
 	# 层级：GameHUD 之后、对话框之前 —— 盖住 VirtualJoystick + GameHUD，但被选人对话框盖在下面

@@ -11,9 +11,9 @@ extends Node
 ##     不到 10dp，既按不动也按不准。
 ##  ② 卡片本体吃「左键松开 = 选中」，热区一旦嵌进卡里，最坏的结果不是点不着，而是「看一眼详情
 ##     顺手把这张卡选了」= 替玩家做了决定（触屏无 hover，没有第二条路可退）。所以「只读」单独钉。
-##  ③ 格子按触控下限放大后，窄卡上会换行、卡于是变高；卡体是 STOP 的，这一屏一旦要竖滑就等于
-##     划不动、下半截永远看不见。LayoutCheck 在「滑得动」时豁免竖向越界，抓不到这一档 ⇒ 这里钉
-##     「这一屏不许需要竖滑」，并把每颗格的边长钉在下限之上。
+##  ③ 格子按触控下限放大后，窄卡上会换行、卡于是变高。这一屏是五张卡横向比价用的，
+##     要竖滑才看得完就已经很难受（2026-10-12 起卡体降成 PASS、划得动了，滑不再是「永远看不见
+##     下半截」，但仍是兜底不是设计）⇒ 这里钉「这一屏不许需要竖滑」，并把每颗格的边长钉在下限之上。
 ##
 ## 尺子只认引擎拾取：按下-微动-抬起真发（root.push_input），绝不 emit_signal（emit 绕过拾取，
 ## 热区是死的也照样全绿）。弹出的卡读 DetailTip.live().payload，不另抄一份热区表。
@@ -147,7 +147,12 @@ func _run() -> void:
 			"卡「%s」长出 %d 颗受益格（数据表算出 %d：%s）" % [
 				String(offer.get("title", "?")), cells.size(), want_ids.size(), str(want_ids)])
 		for cell in cells:
-			_c.check(cell.mouse_filter == Control.MOUSE_FILTER_STOP,
+			# 只要求「本体收得到事件」：STOP 与 PASS 都收，IGNORE 才是死图。
+			# 2026-10-12 起整行卡过一遍 GameStyle.swipeable（卡与卡内热区一律降成 PASS，手指压在
+			# 格子上也拖得动列表），这里再钉 STOP 就把修法本身判成 bug。原本靠 STOP 拦冒泡才成立的
+			# 「点格子不许顺手选卡」，改由 GameStyle.tap 的认领（_TAP_CLAIM_META）兑现，
+			# 那条硬口径仍由 ② 与反例② 钉着。
+			_c.check(cell.mouse_filter != Control.MOUSE_FILTER_IGNORE,
 				"受益格本体收事件（实得 %d，2 就是 IGNORE = 死图）" % cell.mouse_filter)
 			_c.check(cell.gui_input.get_connections().size() > 0,
 				"受益格真挂了点按回调（尺子活着，不是回退值）")
@@ -453,21 +458,26 @@ func _selftest() -> void:
 	_c.check(_dlg.selected_index == sel_before,
 		"正例 点格子没改选中态（%d → %d）" % [sel_before, _dlg.selected_index])
 
-	# 反例②：格体降成 PASS —— 事件冒泡到卡，看一眼详情就把这张卡选了
+	# 反例②：格体收事件、却**不认完整手势也不认领**（修复前的写法：裸 gui_input 认「左键松开」）
+	# —— 那一枪顺着冒泡链走到卡体，看一眼详情就把这张卡选了。
+	# 2026-10-12 起这一枪不能再靠 mouse_filter 造：格体与卡体都是 PASS，拦住选中的是
+	# GameStyle.tap 的认领标记，不是 STOP 拦冒泡 ⇒ 反例照旧写法自己发松开那一枪。
 	var leaky := PanelContainer.new()
 	leaky.name = "DecoyLeaky"
 	leaky.custom_minimum_size = Vector2(LevelUpDialog.BF_CELL_MIN, LevelUpDialog.BF_CELL_MIN)
 	row.add_child(leaky)
 	GameStyle.hotzone(leaky)
 	leaky.mouse_filter = Control.MOUSE_FILTER_PASS
-	GameStyle.tap(leaky, func() -> void:
-		DetailTip.show_over(_dlg, leaky, {"title": "反例② 会漏的格"})
+	leaky.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb != null and mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			DetailTip.show_over(_dlg, leaky, {"title": "反例② 会漏的格"})
 	)
 	await _settle(3)
 	_dlg.selected_index = -1
-	var got_leak := await _tap_decoy(leaky)
+	var got_leak := await _tap_decoy(leaky, false)
 	_c.check(got_leak == "反例② 会漏的格" and _dlg.selected_index == 0,
-		"反例② 格体不收事件时：卡弹了但选中态被那一枪改掉（弹「%s」selected=%d）—— 尺子抓得住「只读」这条" % [
+		"反例② 格体不认领那一枪时：卡弹了但选中态被那一枪改掉（弹「%s」selected=%d）—— 尺子抓得住「只读」这条" % [
 			got_leak, _dlg.selected_index])
 	old_icon.queue_free()
 	good.queue_free()
@@ -475,7 +485,9 @@ func _selftest() -> void:
 	await _settle(3)
 
 ## 反例专用落点：先自证送到了，再读弹出结果（选中态留给调用方判）
-func _tap_decoy(node: Control) -> String:
+## prove_by_meta=false 给「不认完整手势」的旧写法用：它身上没有 GameStyle.tap 的按下记账可查，
+## 送达与否由调用方那条「弹出了哪张卡」自己证明（没送到就什么也弹不出来）。
+func _tap_decoy(node: Control, prove_by_meta := true) -> String:
 	var pos := _center(node)
 	await _wait_tips_gone()
 	await _press(pos)
@@ -483,7 +495,8 @@ func _tap_decoy(node: Control) -> String:
 			or node.mouse_filter == Control.MOUSE_FILTER_IGNORE
 	await _motion(pos + Vector2(0, -JITTER))
 	await _release(pos + Vector2(0, -JITTER))
-	_c.check(landed, "反例落点：这一枪真送到了 %s 身上（否则「没弹卡」不算判定）" % node.name)
+	if prove_by_meta:
+		_c.check(landed, "反例落点：这一枪真送到了 %s 身上（否则「没弹卡」不算判定）" % node.name)
 	var got := ""
 	var tip := DetailTip.live(_dlg)
 	if tip != null:

@@ -47,6 +47,7 @@ static func reset(gm: Node) -> void:
 	gm.chest_count_bonus = 0
 	gm.chest_quality = 0.0
 	gm.chest_break_bonus = 0
+	gm.chest_reward_mult = 1.0
 	gm.chest_item_grants = 0
 	gm.cultivator_id = ""
 	gm.thorns_pct = 0.0
@@ -85,6 +86,7 @@ static func reset(gm: Node) -> void:
 	gm.total_hp_healed = 0.0
 	gm.max_concurrent_summons = 0
 	gm.max_class_counts = {}
+	gm.max_element_spread = 0
 	gm.dodge_cap_bonus = 0.0
 	gm.weapon_slots_override = 0
 	gm.enemy_count_mult = 1.0
@@ -138,6 +140,7 @@ static func reset(gm: Node) -> void:
 	gm.alloc_reroll_count = 0
 	gm.alloc_reroll_free_left = 0
 	gm.items = []
+	gm.items_bought = []
 	gm.pets = []
 	gm.pet_slots_bonus = 0
 	gm.pet_damage_mult = 1.0

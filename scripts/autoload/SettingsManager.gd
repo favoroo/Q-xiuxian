@@ -222,6 +222,17 @@ const SHAKE_LEVEL_MULT := {
 }
 const SHAKE_DEFAULT_LEVEL := &"standard"
 
+## 跳字模式表（智能合并 / 全部显示 / 仅暴击 / 关闭）
+## 与历史遗留的 damage_numbers 布尔开关严格同源（见 _sync_damage_number_pair）
+const DAMAGE_NUMBER_MODE_ORDER: Array[StringName] = [&"smart", &"all", &"crit_only", &"off"]
+const DAMAGE_NUMBER_MODE_LABELS := {
+	"smart": "智能合并",
+	"all": "全部显示",
+	"crit_only": "仅暴击",
+	"off": "关闭",
+}
+const DAMAGE_NUMBER_DEFAULT_MODE := &"smart"
+
 ## 内存设置字典: section -> { key: value }
 var _settings: Dictionary = {}
 
@@ -285,6 +296,7 @@ func set_val(section: StringName, key: StringName, val: Variant, auto_save: bool
 			break
 
 	_sync_shake_pair(sec_str, key_str)
+	_sync_damage_number_pair(sec_str, key_str)
 
 	if auto_save:
 		_save_settings()
@@ -309,6 +321,26 @@ func shake_level_label() -> String:
 func shake_level_next() -> StringName:
 	var i := SHAKE_LEVEL_ORDER.find(shake_level())
 	return SHAKE_LEVEL_ORDER[(i + 1) % SHAKE_LEVEL_ORDER.size()]
+
+# ----------------- 伤害跳字模式便捷接口 -----------------
+
+## 当前跳字模式：智能合并 / 全部显示 / 仅暴击 / 关闭
+func damage_number_mode() -> StringName:
+	if not bool(get_val(&"display", &"damage_numbers", true)):
+		return &"off"
+	return StringName(str(get_val(&"display", &"damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
+
+## 跳字模式文本
+func damage_number_mode_label() -> String:
+	return String(DAMAGE_NUMBER_MODE_LABELS.get(str(damage_number_mode()), "智能合并"))
+
+## 循环到下一档跳字模式
+func damage_number_mode_next() -> StringName:
+	var cur := damage_number_mode()
+	var i := DAMAGE_NUMBER_MODE_ORDER.find(cur)
+	if i < 0:
+		i = 0
+	return DAMAGE_NUMBER_MODE_ORDER[(i + 1) % DAMAGE_NUMBER_MODE_ORDER.size()]
 
 # ----------------- 操作按钮布局（技能键 / 祭坛键自由拖动） -----------------
 
@@ -429,6 +461,31 @@ func _sync_shake_pair(sec_str: String, key_str: String) -> void:
 		elif enabled and lv == &"off":
 			display["shake_intensity"] = SHAKE_DEFAULT_LEVEL
 			setting_changed.emit(&"display", &"shake_intensity", SHAKE_DEFAULT_LEVEL)
+
+## 伤害跳字模式与旧布尔开关保持双向同步：
+## 1. 改变 damage_number_mode: 若为 off 则 damage_numbers 置 false；否则置 true
+## 2. 改变 damage_numbers: 若置 false 则 mode 置 off；若置 true 且 mode 原为 off 则恢复 smart
+func _sync_damage_number_pair(sec_str: String, key_str: String) -> void:
+	if sec_str != "display" or not _settings.has("display"):
+		return
+	if key_str != "damage_numbers" and key_str != "damage_number_mode":
+		return
+	var disp_sec: Dictionary = _settings["display"]
+	if key_str == "damage_number_mode":
+		var mode_val := StringName(str(disp_sec.get("damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
+		var should_be_on := mode_val != &"off"
+		if bool(disp_sec.get("damage_numbers", true)) != should_be_on:
+			disp_sec["damage_numbers"] = should_be_on
+			setting_changed.emit(&"display", &"damage_numbers", should_be_on)
+	else:
+		var enabled := bool(disp_sec.get("damage_numbers", true))
+		var mode_val := StringName(str(disp_sec.get("damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
+		if not enabled and mode_val != &"off":
+			disp_sec["damage_number_mode"] = &"off"
+			setting_changed.emit(&"display", &"damage_number_mode", &"off")
+		elif enabled and mode_val == &"off":
+			disp_sec["damage_number_mode"] = DAMAGE_NUMBER_DEFAULT_MODE
+			setting_changed.emit(&"display", &"damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)
 
 # ----------------- 音频便捷接口 -----------------
 

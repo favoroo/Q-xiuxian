@@ -102,6 +102,10 @@ func _draw() -> void:
 			_draw_leibeast(true)
 		"jiansha_elite":
 			_draw_jiansha_elite()
+		"lingyi":
+			_draw_lingyi()
+		"jinchan":
+			_draw_jinchan()
 		"boss":
 			_draw_boss(config.is_final_boss)
 		_:
@@ -740,3 +744,77 @@ func _draw_boss(final_boss: bool) -> void:
 	# 燃烧神魔双目
 	draw_sharp_eye(head_pos + Vector2(-4, 0), 4.2, 2.0, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(4, 0), 4.2, 2.0, config.col_glow, Color.WHITE)
+
+## 15. 灵医：青囊药灵 (悬浮治疗者，背悬回春光环)
+func _draw_lingyi() -> void:
+	var float_y := sin(_time * 3.0) * 2.0
+	var center := Vector2(0, -4 + float_y)
+
+	# 地影
+	draw_filled_ellipse(Vector2(0, 15), 12.0, 3.6, Color(0.04, 0.05, 0.08, 0.4))
+
+	# 背后缓慢旋转的回春光环（治疗者的身份标识）
+	var halo_rot := _time * 0.9
+	draw_soft_glow(center, 16.0, config.col_glow * Color(1, 1, 1, 0.35), 2)
+	draw_arc(center, 13.0, 0, TAU, 24, config.col_accent, 1.4, true)
+	for i in range(4):
+		var ang := halo_rot + float(i) * (TAU / 4.0)
+		var r_pos := center + Vector2(cos(ang), sin(ang)) * 13.0
+		draw_circle(r_pos, 1.8, config.col_glow)
+
+	# 药童袍躯（上窄下宽的斗篷轮廓）
+	var robe_pts := PackedVector2Array([
+		center + Vector2(-6, -6),
+		center + Vector2(6, -6),
+		center + Vector2(10, 12),
+		center + Vector2(0, 16),
+		center + Vector2(-10, 12)
+	])
+	draw_stroked_polygon(robe_pts, config.col_primary, config.col_accent, 1.8)
+
+	# 胸前绷带十字（月白布条）
+	draw_line(center + Vector2(-4, 2), center + Vector2(4, 2), config.col_secondary, 2.4, true)
+	draw_line(center + Vector2(0, -2), center + Vector2(0, 6), config.col_secondary, 2.4, true)
+
+	# 头面与温润圆眸
+	var head_pos := center + Vector2(0, -10)
+	draw_filled_ellipse(head_pos, 5.5, 5.0, config.col_void)
+	draw_circle(head_pos + Vector2(-2.2, 0), 1.6, config.col_glow)
+	draw_circle(head_pos + Vector2(2.2, 0), 1.6, config.col_glow)
+
+## 16. 金蟾：衔宝金蟾 (胖圆宝兽，口衔铜钱)
+func _draw_jinchan() -> void:
+	var float_y := sin(_time * 4.0) * 2.4
+	var hop := absf(sin(_time * 4.0)) * (1.0 + speed_ratio * 0.6)
+	var center := Vector2(0, -2 + float_y - hop * 2.0)
+
+	# 地影随跳跃缩放
+	var shadow_w := 14.0 - hop * 3.0
+	draw_filled_ellipse(Vector2(0, 15), shadow_w, 4.0, Color(0.04, 0.05, 0.08, 0.4))
+
+	# 宝气金光罩
+	draw_soft_glow(center, 18.0, config.col_glow * Color(1, 1, 1, 0.4), 2)
+
+	# 胖圆蟾躯与腹甲
+	draw_filled_ellipse(center, 13.5, 11.0, config.col_primary)
+	draw_filled_ellipse(center + Vector2(0, 3), 8.5, 6.0, config.col_secondary)
+	draw_arc(center, 13.5, 0, TAU, 26, config.col_accent, 1.6, true)
+
+	# 背后三枚古铜钱纹（方孔钱）
+	for i in range(3):
+		var c_pos := center + Vector2(float(i - 1) * 7.0, -6.0)
+		draw_circle(c_pos, 3.0, config.col_accent)
+		draw_rect(Rect2(c_pos - Vector2(1.0, 1.0), Vector2(2.0, 2.0)), config.col_primary)
+
+	# 口衔大宝钱（身份标识：会转动的方孔金币）
+	var coin_pos := center + Vector2(0, 5.5)
+	var coin_squish := 0.55 + absf(sin(_time * 2.2)) * 0.45
+	draw_filled_ellipse(coin_pos, 5.0, 5.0 * coin_squish, config.col_glow)
+	draw_rect(Rect2(coin_pos - Vector2(1.4, 1.4 * coin_squish), Vector2(2.8, 2.8 * coin_squish)), config.col_primary)
+
+	# 圆润鼓眼
+	var head_pos := center + Vector2(0, -7)
+	draw_circle(head_pos + Vector2(-4, 0), 2.6, config.col_void)
+	draw_circle(head_pos + Vector2(4, 0), 2.6, config.col_void)
+	draw_circle(head_pos + Vector2(-4, -0.5), 1.1, config.col_glow)
+	draw_circle(head_pos + Vector2(4, -0.5), 1.1, config.col_glow)

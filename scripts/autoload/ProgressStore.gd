@@ -40,6 +40,17 @@ static func load_into(gm: Node) -> void:
 		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
 		gm.cultivator_best_danger = cbd.duplicate() if cbd is Dictionary else {}
 
+		var cdc = cfg.get_value("records", "cultivator_danger_clears", {})
+		gm.cultivator_danger_clears = cdc.duplicate() if cdc is Dictionary else {}
+		# 老档无位掩码字段：按已有最高通关难度回填低位封印
+		# （难度线性解锁，能通关 Dk 意味着该角色实力覆盖 D0~Dk，2026-10-12 迁移）
+		for cid in gm.cultivator_best_danger:
+			if gm.cultivator_danger_clears.has(cid):
+				continue
+			var best_d := int(gm.cultivator_best_danger[cid])
+			if best_d >= 0:
+				gm.cultivator_danger_clears[cid] = (1 << (best_d + 1)) - 1
+
 		var crec = cfg.get_value("records", "cultivator_records", {})
 		gm.cultivator_records = crec.duplicate() if crec is Dictionary else {}
 
@@ -53,6 +64,7 @@ static func load_into(gm: Node) -> void:
 		gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
 		gm.unlocked_achievements = []
 		gm.cultivator_best_danger = {}
+		gm.cultivator_danger_clears = {}
 		gm.cultivator_records = {}
 		gm.victory_log = []
 		gm.run_history = []
@@ -64,6 +76,11 @@ static func load_into(gm: Node) -> void:
 	for iid in AchievementData.DEFAULT_ITEMS:
 		if not (iid in gm.unlocked_items):
 			gm.unlocked_items.append(iid)
+	# 剔除已不在道具表里的旧 id（改版删件时会有，如 2026-10-12 的卸匣锥）：
+	# 留着它「道具 N/M」会多算一件不存在的法宝，且玉匣白送时可能抽到空定义。
+	for i in range(gm.unlocked_items.size() - 1, -1, -1):
+		if not ItemData.DEFS.has(String(gm.unlocked_items[i])):
+			gm.unlocked_items.remove_at(i)
 
 static func save_from(gm: Node) -> void:
 	var cfg := ConfigFile.new()
@@ -82,6 +99,7 @@ static func save_from(gm: Node) -> void:
 	cfg.set_value("stats", "total_time", float(gm.career_stats.get("total_time", 0.0)))
 
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
+	cfg.set_value("records", "cultivator_danger_clears", gm.cultivator_danger_clears)
 	cfg.set_value("records", "cultivator_records", gm.cultivator_records)
 	cfg.set_value("records", "victory_log", gm.victory_log)
 	# 新手指南「下次不弹出」是玩家偏好，2026-10-11 起落 user://settings.cfg
@@ -128,8 +146,31 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		})
 		while gm.run_history.size() > MAX_HISTORY_ENTRIES:
 			gm.run_history.pop_back()
+		# 无尽终局也判定成就（无尽行者这类只在无尽路径能达成；累计类照常兜底）
+		var run_ctx_e := {
+			"victory": false,
+			"endless": true,
+			"danger": gm.danger_level,
+			"wave": gm.wave_number,
+			"level": gm.level,
+			"kills": gm.kills,
+			"max_stones": maxi(gm.spirit_stones, gm.peak_stones),
+			"max_dodge": maxf(gm.get_effective_dodge(), gm.peak_dodge),
+			"max_harvest": maxf(gm.harvest, gm.peak_harvest),
+			"damage_taken_count": gm.total_damage_taken_count,
+			"hp_healed": gm.total_hp_healed,
+			"max_summons": gm.max_concurrent_summons,
+			"max_class_counts": gm.max_class_counts,
+			"max_element_spread": gm.max_element_spread,
+		}
 		gm.last_run_new_achievements = []
+		for aid in AchievementData.evaluate_new_unlocks(run_ctx_e, gm.career_stats, gm.unlocked_achievements):
+			gm.unlocked_achievements.append(aid)
+			gm.last_run_new_achievements.append(aid)
+			_apply_achievement_reward(gm, aid)
 		save_from(gm)
+		if not gm.last_run_new_achievements.is_empty():
+			gm.achievements_unlocked.emit(gm.last_run_new_achievements)
 		return
 
 	# ---------- 路径 2：正常结算 ----------
@@ -155,6 +196,13 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		var prev_d := int(gm.cultivator_best_danger.get(gm.cultivator_id, -1))
 		if gm.danger_level > prev_d:
 			gm.cultivator_best_danger[gm.cultivator_id] = gm.danger_level
+			# 境界突破提示（该角色首次通关此难度 → 境界称号升档，纯荣誉不发奖励）
+			var cdef_r := CultivatorData.get_def(gm.cultivator_id)
+			gm.last_run_new_records.append("境界突破 · %s 晋入「%s」" % [
+				String(cdef_r.get("name", "角色")), AchievementData.realm_for_danger(gm.danger_level)])
+		# 难度封印位掩码：点亮本局通关的这一档
+		var mask := int(gm.cultivator_danger_clears.get(gm.cultivator_id, 0))
+		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
 
 	# 每角色生涯档案累加
 	var rec: Dictionary = gm.cultivator_records.get(cid_rec, {})
@@ -191,13 +239,10 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	if victory and prev_wins == 0:
 		var cdef := CultivatorData.get_def(cid_rec)
 		gm.last_run_new_records.append("角色首胜 · %s" % String(cdef.get("name", "角色")))
-	# 里程碑达标提示（称号即时点亮，不发放任何奖励）
-	for m in AchievementData.MILESTONES:
-		if prev_wins < int(m["wins"]) and int(rec["wins"]) >= int(m["wins"]):
-			gm.last_run_new_records.append("里程碑达成 · 称号「%s」" % String(m["title"]))
 
 	var run_ctx := {
 		"victory": victory,
+		"endless": false,
 		"danger": gm.danger_level,
 		"wave": eff_wave,
 		"level": gm.level,
@@ -209,22 +254,27 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		"hp_healed": gm.total_hp_healed,
 		"max_summons": gm.max_concurrent_summons,
 		"max_class_counts": gm.max_class_counts,
+		"max_element_spread": gm.max_element_spread,
 	}
 	var newly := AchievementData.evaluate_new_unlocks(run_ctx, gm.career_stats, gm.unlocked_achievements)
 	gm.last_run_new_achievements = []
 	for aid in newly:
 		gm.unlocked_achievements.append(aid)
 		gm.last_run_new_achievements.append(aid)
-		var adef := AchievementData.get_def(aid)
-		var rtype := String(adef.get("reward_type", ""))
-		var rid := String(adef.get("reward_id", ""))
-		if rtype == "cultivator" and not rid.is_empty() and not (rid in gm.unlocked_cultivators):
-			gm.unlocked_cultivators.append(rid)
-		elif rtype == "item" and not rid.is_empty() and not (rid in gm.unlocked_items):
-			gm.unlocked_items.append(rid)
+		_apply_achievement_reward(gm, aid)
 	save_from(gm)
 	if not gm.last_run_new_achievements.is_empty():
 		gm.achievements_unlocked.emit(gm.last_run_new_achievements)
+
+## 发放成就奖励："none" 纯荣誉型只点亮成就本身，不动角色/道具池
+static func _apply_achievement_reward(gm: Node, aid: String) -> void:
+	var adef := AchievementData.get_def(aid)
+	var rtype := String(adef.get("reward_type", ""))
+	var rid := String(adef.get("reward_id", ""))
+	if rtype == "cultivator" and not rid.is_empty() and not (rid in gm.unlocked_cultivators):
+		gm.unlocked_cultivators.append(rid)
+	elif rtype == "item" and not rid.is_empty() and not (rid in gm.unlocked_items):
+		gm.unlocked_items.append(rid)
 
 ## 渡劫成功战报快照：只取可序列化的白名单字段（name/star/icon 等纯数据，绝不带节点引用）
 static func _make_victory_snapshot(gm: Node, cid: String, wave: int) -> Dictionary:

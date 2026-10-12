@@ -345,12 +345,24 @@ func _tile_at(pos: Vector2) -> Control:
 			return t
 	return null
 
-## 把某一格滑到可视框正中，返回它落定后的中心（满仓时最右那几件在屏外，不滑进来就打不到）
+## 把某一格滑到可视框正中，返回它落定后的中心（满仓时最右那几件在屏外，不滑进来就打不到）。
+## 要「写进去并且真落在框里」才收枪，不能只写一次等固定帧数：刚划完那几帧里 ScrollContainer
+## 还在收上一次拖动的落点，此时写进去的 scroll_horizontal 会被顶回去 —— 格子越小、要划的距离
+## 越短，3 帧内就落定了；2026-10-12 陈列行图标从 36 抬到 56 之后内容宽到 6360，同一处写一次
+## 读回来还是 0，于是取到的「中心」落在可视框外，打中的是面板本体（报成「点了徽位没弹详解」，
+## 其实是没点到）。每轮按现读的格子位置重算再写一次，收敛到哪算哪。
 func _bring_into_view(ctl: Control) -> Vector2:
 	var vis := _scroll.get_global_rect()
-	var want: float = ctl.global_position.x - vis.position.x - (vis.size.x - ctl.size.x) * 0.5
-	_scroll.scroll_horizontal = int(maxf(0.0, want))
-	await _settle(3)
+	var prev := -1
+	for i in range(12):
+		var want: float = ctl.global_position.x - vis.position.x - (vis.size.x - ctl.size.x) * 0.5
+		_scroll.scroll_horizontal = int(maxf(0.0, want))
+		await _settle(1)
+		var now := _scroll.scroll_horizontal
+		var r: Rect2 = ctl.get_global_rect()
+		if now == prev and r.position.x >= vis.position.x - EPS and r.end.x <= vis.end.x + EPS:
+			break
+		prev = now
 	return ctl.get_global_rect().get_center()
 
 ## 反例道具插进行首：同一个滚动区、同一个冒泡链，且 scroll=0 时就在眼前

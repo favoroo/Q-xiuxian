@@ -111,6 +111,7 @@ var career_stats: Dictionary = {
 	"total_time": 0.0,
 }
 var cultivator_best_danger: Dictionary = {}  ## 每位修士通关过的最高危险度 {cultivator_id: danger_int}
+var cultivator_danger_clears: Dictionary = {}  ## 每位修士各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
 var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
 
@@ -173,6 +174,14 @@ func is_achievement_unlocked(ach_id: String) -> bool:
 ## 查询某位修士已通关的最高危险度（未通关返回 -1）
 func get_cultivator_best_danger(cid: String) -> int:
 	return int(cultivator_best_danger.get(cid, -1))
+
+## 查询某位修士各难度通关位掩码（位 d = 通关过难度 d）
+func get_cultivator_danger_mask(cid: String) -> int:
+	return int(cultivator_danger_clears.get(cid, 0))
+
+## 某位修士是否通关过指定难度
+func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
+	return (get_cultivator_danger_mask(cid) & (1 << d)) != 0
 
 ## 查询某位修士的生涯档案（无记录返回零值字典）
 func get_cultivator_record(cid: String) -> Dictionary:
@@ -243,9 +252,10 @@ var elite_damage: float = 0.0 ## 斩将：对精英/Boss 的额外伤害加成
 var free_rerolls: int = 0     ## 通玄：每波免费重掷货架次数
 var element_damage: Dictionary = {}  ## 五行真解：{元素 tag(String): 伤害加成(float)}
 var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id（UpgradeData 过滤用）
-var chest_count_bonus: int = 0   ## 寻宝：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
+var chest_count_bonus: int = 0   ## 宝箱数量：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
 var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权重（BalanceChest.tier_weights 消费）
-var chest_break_bonus: int = 0   ## 开箱省力：宝箱砸开所需击数下调几许（BalanceChest.break_hits 消费）
+var chest_break_bonus: int = 0   ## 开箱省力兼容字段
+var chest_reward_mult: float = 1.0  ## 宝箱掉落：砸开的匣子掉得更多的乘区（BalanceChest.scale_reward 消费）
 var chest_item_grants: int = 0   ## 本局玉匣已送出的道具件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
 
 # 灵兽系统属性（随行伙伴）
@@ -300,6 +310,7 @@ var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔�
 var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
+var max_element_spread: int = 0         ## 单局同时上阵的五行元素种数峰值（五行同阵成就判定）
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的经验门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
@@ -357,6 +368,9 @@ var alloc_reroll_free_left: int = 0
 
 ## 已持有道具（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
+## 本局购入（或被玉匣送过）的道具 id 账本：出售后 items 里没了这一件，但 unique 道具的
+## 「每局限购一件」不许因为退货就解禁 —— 详情卡上「出售后本局不再出现」由这里兑现。
+var items_bought: Array = []
 
 ## 已持有灵兽（随行伙伴）的 id 列表：上限受 max_pet_slots() 约束，数据定义见 PetData
 var pets: Array = []
@@ -712,28 +726,58 @@ func sell_pet(pet_id: String) -> bool:
 func has_item(item_id: String) -> bool:
 	return item_id in items
 
-## 购入道具：属性走 _apply_stat_fields（与悟道同一条链路）；unique 道具重复购买会被拒绝
+## 购入道具：属性走 _apply_stat_fields（与悟道同一条链路）；unique 道具本局限一件（卖了也不解禁）
 func add_item(item_id: String) -> bool:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
 		return false
-	if bool(def.get("unique", false)) and has_item(item_id):
+	if bool(def.get("unique", false)) and item_id in items_bought:
 		return false
 	# 图鉴种数账本（收藏家）：新种类 +1，重复购买不涨（consume_item 那一路对应回退）
 	if not has_item(item_id):
 		unique_item_count += 1
+	if not (item_id in items_bought):
+		items_bought.append(item_id)
 	items.append(item_id)
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	return true
 
-## 玉匣破开送道具：与商店同一个 roller（ItemData.pick_id），档位权重、幸运、已持有 unique
+## 出售一件道具（2026-10-12 用户：「商店里的这些道具，如果有买到不想要的，也可以卖掉」）：
+## 回收金币 + 把这一件加过的属性原样退回去。与 consume_item 的区别是那条只「碎掉」（替身娃娃，
+## 不给钱也不回属性，因为它的 apply 是空的），这一条是「退货」，必须回退，否则卖一件
+## 全伤害 −18% 的道具反而涨了伤害。
+## 灵兽上限这类「退了当场超编」的账先算清楚：不许按下去把灵兽栏搞成 3/2 那种读数为假。
+func sell_item(item_id: String) -> bool:
+	var def := ItemData.get_def(item_id)
+	if def.is_empty():
+		return false
+	var i: int = items.find(item_id)
+	if i < 0:
+		return false
+	var apply: Dictionary = def.get("apply", {})
+	var slots_given := int(apply.get("pet_slots", 0))
+	if slots_given > 0 and pets.size() > max_pet_slots() - slots_given:
+		announcement_triggered.emit("灵兽栏已超编，先出售灵兽再退【%s】" % String(def.get("name", item_id)))
+		AudioManager.play_sfx("ui_error", 0.9)
+		return false
+	items.remove_at(i)
+	# 图鉴种数账本（收藏家）：卖掉最后一件同种，种数 −1（与 consume_item 同一条回退）
+	if not has_item(item_id):
+		unique_item_count = maxi(0, unique_item_count - 1)
+	StatSystem.revert_stat_fields(self, apply, "item:" + item_id)
+	spirit_stones += ItemData.sell_price(item_id)
+	stats_updated.emit(kills, game_time, spirit_stones)
+	AudioManager.play_sfx("sell", 1.0)
+	return true
+
+## 玉匣破开送道具：与商店同一个 roller（ItemData.pick_id），档位权重、幸运、本局已购 unique
 ## 去重、未解锁不入池这些口径全部照旧 —— 白送的那件和花钱买的那件必须是同一种东西。
 ## 每局上限见 BalanceChest.JADE_ITEM_GRANT_CAP：到顶返回 false，由调用方落回退回奖励。
 ## 公告必发：玩家得知道这口匣子开出了什么，不然"送道具"这条兑现不出来就只能靠猜。
 func chest_grant_item() -> bool:
 	if chest_item_grants >= GameBalance.CHEST_JADE_ITEM_GRANT_CAP:
 		return false
-	var id := ItemData.pick_id(luck, wave_number, items, rng, unlocked_items)
+	var id := ItemData.pick_id(luck, wave_number, items_bought, rng, unlocked_items)
 	if id.is_empty():
 		return false
 	if not add_item(id):
@@ -819,6 +863,12 @@ func add_weapon(w_id: String, star: int = 1) -> bool:
 func count_copies(w_id: String, star: int) -> int:
 	return WeaponInventory.count_copies(self, w_id, star)
 
+func get_weapon_star_distribution(w_id: String) -> Dictionary:
+	return WeaponInventory.star_distribution(self, w_id)
+
+func get_weapon_owned_summary(w_id: String) -> String:
+	return WeaponInventory.format_owned_summary(self, w_id)
+
 func _count_mergeable_copies(w_id: String, star: int, keep: Dictionary) -> int:
 	return WeaponInventory.count_mergeable_copies(self, w_id, star, keep)
 
@@ -832,6 +882,7 @@ func notify_weapons_updated(weapons: Array) -> void:
 	recalc_synergies()
 	var cur_summons: int = drones.size()
 	var cur_class_counts: Dictionary = {}
+	var cur_elements: Dictionary = {}
 	if player != null and player.has_method("get_equipped_weapons_data"):
 		for w in player.get_equipped_weapons_data():
 			var wid := String(w.get("id", ""))
@@ -842,9 +893,14 @@ func notify_weapons_updated(weapons: Array) -> void:
 			var cls := WeaponData.class_of(wid)
 			if not cls.is_empty():
 				cur_class_counts[cls] = int(cur_class_counts.get(cls, 0)) + 1
+			# 五行同阵账本：当前同时上阵的元素种数（element_of 口径与五行真解一致）
+			var elem := WeaponData.element_of(wid)
+			if not elem.is_empty():
+				cur_elements[elem] = true
 	max_concurrent_summons = maxi(max_concurrent_summons, cur_summons)
 	for cls in cur_class_counts:
 		max_class_counts[cls] = maxi(int(max_class_counts.get(cls, 0)), int(cur_class_counts[cls]))
+	max_element_spread = maxi(max_element_spread, cur_elements.size())
 	weapons_updated.emit(weapons)
 
 func sell_weapon(index: int) -> bool:

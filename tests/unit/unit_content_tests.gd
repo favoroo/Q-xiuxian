@@ -618,6 +618,32 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.check(not AchievementData.is_condition_met("ach_cult_juechen", {"max_class_counts": {"sword": 3}}, {}),
 		"3 件剑类法器不达成【心剑通神】")
 
+	# 7.8.1 2026-10-12 新增流派/试炼成就判定（纯荣誉型，不发奖励）
+	_c.check(AchievementData.is_condition_met("ach_style_thunder", {"max_class_counts": {"thunder": 4}}, {}),
+		"同时上阵 4 件雷法法器达成【五雷正法】")
+	_c.check(not AchievementData.is_condition_met("ach_style_thunder", {"max_class_counts": {"thunder": 3}}, {}),
+		"3 件雷法法器不达成【五雷正法】")
+	_c.check(AchievementData.is_condition_met("ach_style_wuxing", {"max_element_spread": 5}, {}),
+		"五行同阵（5 元素齐聚）达成【五行同阵】")
+	_c.check(not AchievementData.is_condition_met("ach_style_wuxing", {"max_element_spread": 4}, {}),
+		"4 种元素不达成【五行同阵】")
+	_c.check(AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 3}, {}),
+		"通关噩梦达成【征服噩梦】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 2}, {}),
+		"通关困难不达成【征服噩梦】")
+	_c.check(AchievementData.is_condition_met("ach_feat_extreme", {"victory": true, "danger": 5}, {}),
+		"通关极限达成【征服极限】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 25}, {}),
+		"无尽第 25 波达成【无尽行者】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 24}, {}),
+		"无尽第 24 波不达成【无尽行者】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"victory": true, "wave": 25}, {}),
+		"非无尽路径抵达 25 波不达成【无尽行者】")
+	_c.check(AchievementData.is_condition_met("ach_grind_kills", {}, {"total_kills": 5000}),
+		"累计击杀 5000 达成【千杀灭生】")
+	_c.check(AchievementData.is_condition_met("ach_grind_wins", {}, {"total_wins": 10}),
+		"累计通关 10 次达成【十渡天劫】")
+
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()
 	GameManager.cultivator_id = "juechen"
@@ -983,4 +1009,21 @@ func _test_conversion_items_and_hooks() -> void:
 	GameManager.apply_harvest()
 	_c.near(GameManager.hp_regen, prev_regen + 0.5, EPS, "突破古玉波末 +0.5 回复")
 	_c.near(GameManager.lifesteal, prev_ls + 0.01, EPS, "突破古玉波末 +1% 吸血")
+	GameManager.reset_run()
+
+	# 5. 武器持有分布统计与卡面展示文案
+	_test_weapon_owned_summary()
+
+func _test_weapon_owned_summary() -> void:
+	GameManager.reset_run()
+	_c.check(GameManager.get_weapon_owned_summary("changjian") == "", "空载时无拥有文案")
+	_c.check(GameManager.get_weapon_star_distribution("changjian").is_empty(), "空载时分布字典为空")
+
+	# 模拟背包持有 2把1星、1把2星
+	GameManager.stash.append({"id": "changjian", "star": 1})
+	GameManager.stash.append({"id": "changjian", "star": 1})
+	GameManager.stash.append({"id": "changjian", "star": 2})
+	var dist := GameManager.get_weapon_star_distribution("changjian")
+	_c.check(int(dist.get(1, 0)) == 2 and int(dist.get(2, 0)) == 1, "统计2把1星1把2星")
+	_c.check(GameManager.get_weapon_owned_summary("changjian") == "★1×2  ★2×1", "持有摘要格式化为 ★1×2  ★2×1")
 	GameManager.reset_run()

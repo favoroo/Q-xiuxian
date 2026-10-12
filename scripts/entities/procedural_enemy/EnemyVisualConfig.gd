@@ -271,6 +271,38 @@ static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
 	cfg.eye_type = "twin_slits"
 	return cfg
 
+## 15. 灵医：青囊药灵 (HOVER) —— 治疗同伴的辅助怪
+static func make_lingyi() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "lingyi"
+	cfg.display_name = "青囊药灵"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.body_radius = 13.0
+	cfg.scale_factor = 1.0
+	cfg.col_primary = Color(0.10, 0.22, 0.16, 1.0)     # 墨青药童袍
+	cfg.col_secondary = Color(0.90, 0.94, 0.86, 1.0)   # 月白绷带布
+	cfg.col_accent = Color(0.30, 0.70, 0.45, 0.9)      # 青碧药草纹
+	cfg.col_glow = Color(0.35, 1.0, 0.60, 1.0)         # 回春翠绿灵辉
+	cfg.eye_type = "round"
+	cfg.ornament_type = "halo"
+	return cfg
+
+## 16. 金蟾：衔宝金蟾 (HOVER) —— 见人就跑的宝藏怪
+static func make_jinchan() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "jinchan"
+	cfg.display_name = "衔宝金蟾"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.body_radius = 15.0
+	cfg.scale_factor = 1.1
+	cfg.col_primary = Color(0.55, 0.38, 0.08, 1.0)     # 鎏金蟾躯
+	cfg.col_secondary = Color(0.95, 0.85, 0.55, 1.0)   # 赤金宝币与腹甲
+	cfg.col_accent = Color(0.80, 0.55, 0.15, 0.9)      # 古铜钱纹
+	cfg.col_glow = Color(1.0, 0.85, 0.30, 1.0)         # 宝气金光
+	cfg.eye_type = "round"
+	cfg.ornament_type = "coin"
+	return cfg
+
 ## 通用查找入口
 static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: bool = false, is_final: bool = false) -> EnemyVisualConfig:
 	if is_boss_flag or eid == "boss":
@@ -302,6 +334,10 @@ static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: b
 			return make_chilei_elite()
 		"jiansha_elite":
 			return make_jiansha_elite()
+		"lingyi":
+			return make_lingyi()
+		"jinchan":
+			return make_jinchan()
 		_:
 			# 兜底：如果是精英则优先转入对应精英或通用
 			if is_elite_flag:

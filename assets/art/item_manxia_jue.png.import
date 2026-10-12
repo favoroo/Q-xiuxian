@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cspqh782vmqut"
-path="res://.godot/imported/prop_stone_lantern.png-d920c6149e87bcb086aee6519ec50d21.ctex"
+uid="uid://ddr1gx3s26bwp"
+path="res://.godot/imported/item_manxia_jue.png-b2610a2980c211f9046b63b214c1a50c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/prop_stone_lantern.png"
-dest_files=["res://.godot/imported/prop_stone_lantern.png-d920c6149e87bcb086aee6519ec50d21.ctex"]
+source_file="res://assets/art/item_manxia_jue.png"
+dest_files=["res://.godot/imported/item_manxia_jue.png-b2610a2980c211f9046b63b214c1a50c.ctex"]
 
 [params]
 

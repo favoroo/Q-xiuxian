@@ -103,25 +103,27 @@ func _test_enemy_mix() -> void:
 	for w in range(1, 25):
 		for i in range(100):
 			seen[WaveSpawner.pick_scene_key(w, float(i) / 100.0)] = true
-	_c.equals(seen.keys().size(), 10, "十种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
+	_c.equals(seen.keys().size(), 11, "十一种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
 
 	# 批三新敌种：高 roll 段从史莱姆的保底份额里切走，逐波解锁
 	_c.equals(WaveSpawner.pick_scene_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
 	_c.equals(WaveSpawner.pick_scene_key(3, 0.80), "fengqun", "第 3 波蜂群精解锁")
-	_c.equals(WaveSpawner.pick_scene_key(6, 0.88), "xueyong", "第 6 波血蛹解锁（死亡分裂）")
+	_c.equals(WaveSpawner.pick_scene_key(6, 0.90), "xueyong", "第 6 波血蛹解锁（死亡分裂，带 [0.88,0.92)）")
 	_c.equals(WaveSpawner.pick_scene_key(7, 0.93), "yingmei", "第 7 波影魅解锁（闪现侧翼）")
+	_c.equals(WaveSpawner.pick_scene_key(7, 0.85), "fengqun", "第 7 波灵医未解锁，roll 0.85 落回蜂群带（闸门让位）")
+	_c.equals(WaveSpawner.pick_scene_key(8, 0.85), "lingyi", "第 8 波灵医解锁（治疗同伴，带 [0.83,0.88)）")
 	_c.equals(WaveSpawner.pick_scene_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
 	_c.equals(WaveSpawner.pick_scene_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
 	_c.equals(WaveSpawner.pick_scene_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
 
 func _test_danger_system() -> void:
 	# 公式钉线
-	_c.near(GameBalance.danger_hp_mult(0), 1.0, EPS, "危险度 0 血量不变")
-	_c.near(GameBalance.danger_hp_mult(5), 2.1, EPS, "危险度 5 血量 ×2.1")
-	_c.near(GameBalance.danger_dmg_mult(5), 1.6, EPS, "危险度 5 伤害 ×1.6")
-	_c.near(GameBalance.danger_count_mult(5), 1.75, EPS, "危险度 5 妖潮 ×1.75")
+	_c.near(GameBalance.danger_hp_mult(0), 1.08, EPS, "危险度 0 简单基线 ×1.08")
+	_c.near(GameBalance.danger_hp_mult(5), 2.58, EPS, "危险度 5 血量 ×2.58")
+	_c.near(GameBalance.danger_dmg_mult(5), 1.84, EPS, "危险度 5 伤害 ×1.84")
+	_c.near(GameBalance.danger_count_mult(5), 2.08, EPS, "危险度 5 妖潮 ×2.08")
 	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(5), EPS, "超档夹到 5")
-	_c.near(GameBalance.danger_hp_mult(-1), 1.0, EPS, "负档夹到 0")
+	_c.near(GameBalance.danger_hp_mult(-1), 1.08, EPS, "负档夹到 0")
 
 	# 选择器不许越权选未解锁档
 	var orig_unlocked := GameManager.max_danger_unlocked
@@ -157,6 +159,19 @@ func _test_danger_system() -> void:
 
 	# 还原测试前的玩家进度，不弄脏真实存档
 	GameManager.max_danger_unlocked = orig_unlocked
+
+# 2026-10-12 新机制数值钉线：精英变异阈值 / 灵医奶量曲线 / 金蟾金币曲线 / 移速方差
+func _test_new_enemy_mechanics() -> void:
+	_c.near(GameBalance.ELITE_MUTATION_HP_PCT, 0.6, EPS, "精英变异血线 60%")
+	_c.near(GameBalance.ENEMY_SPEED_VARIANCE, 0.12, EPS, "个体移速方差 ±12%（快慢梯队）")
+	_c.near(GameBalance.healer_amount(1), 6.0, EPS, "灵医第 1 波每跳奶 6")
+	_c.near(GameBalance.healer_amount(10), 6.0 * pow(1.16, 9), EPS, "灵医奶量与敌人血量同一条复利曲线")
+	_c.check(GameBalance.healer_amount(20) > GameBalance.healer_amount(10), "灵医奶量随波次递增")
+	_c.equals(GameBalance.looter_stone_reward(3), 19, "金蟾第 3 波击杀金币 19")
+	_c.check(GameBalance.looter_stone_reward(20) > GameBalance.looter_stone_reward(3), "金蟾金币随波次递增")
+	# 变异倍率档位合理性：精英震地不许达到 Boss 档
+	_c.check(GameBalance.MUT_GOLEM_SLAM_RADIUS < GameBalance.BOSS_SLAM_RADIUS, "精英震地半径小于 Boss 档")
+	_c.check(GameBalance.MUT_JIANSHA_BOLT_COUNT > 3, "剑客亡灵变异后剑气更多")
 	GameManager._save_progress()
 	GameManager.danger_level = 0
 	GameManager.reset_run()

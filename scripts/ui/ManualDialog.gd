@@ -4,7 +4,9 @@ extends BaseModalDialog
 ## 教程手册（传道玉简）：玩法入门、聚灵阵用法、法器/法宝/修士图鉴、进阶流派攻略。
 ## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
-## 法宝/修士两页标注解锁条件，每次 open() 重建以反映最新解锁状态。
+## 法宝/修士两页标注解锁条件，按页懒建、并在每次 open() 后标脏（切到那一页才重建），
+## 以反映最新解锁状态。五页全量约 1900 节点：一次 open 只碰当前页、同筛选不重铺、
+## 铺卡晚一帧（淡入先亮）—— 商店顶栏点「图鉴」不再顿一下才弹出来，见 _ensure_page。
 ## 武器页委托 WeaponCodexBuilder 构建：流派筛选条（类型/元素）+ 卡面三签与关键数值行，
 ## 商店羁绊详情卡「查看该流派法器」经 open_weapons_page() 深链直达并预选筛选。
 
@@ -44,10 +46,19 @@ const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison
 var _items_box: VBoxContainer
 var _cult_box: VBoxContainer
 var _weapons_box: VBoxContainer
+var _basics_box: VBoxContainer
+var _advanced_box: VBoxContainer
 ## 武器图鉴当前流派筛选（"" = 全部；tag 取 WeaponData.CLASSES / ELEMENTS）
 var weapon_filter: String = ""
 ## 筛选 chips（tag → Label），build_page 建一次常驻，rebuild 时只重涂不重建
 var _filter_chips: Dictionary = {}
+## open() 时要直接落到哪一页（-1 = 留在当前页）。深链入口用：省掉「先建当前页、再切页重建」
+var _open_tab: int = -1
+## 每页内容「建过没有」「还要不要再建」——懒建与去重复建的两把锁，见 _ensure_page
+var _page_built: Array[bool] = []
+var _page_dirty: Array[bool] = []
+## open 那一拍只翻页不铺卡（铺卡排到下一帧），期间压住 _ensure_page
+var _defer_build: bool = false
 
 func _get_title_text() -> String:
 	return "图 鉴"
@@ -87,6 +98,10 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	content_panel.add_theme_stylebox_override("panel", cont_sb)
 	root_vbox.add_child(content_panel)
 
+	# 只建五页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
+	for i in range(5):
+		_page_built.append(false)
+		_page_dirty.append(false)
 	_pages.append(_build_basics_page(content_panel))
 	_pages.append(_build_weapons_page(content_panel))
 	_pages.append(_build_items_page(content_panel))
@@ -96,23 +111,83 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	switch_tab(0)
 
 func _on_opened() -> void:
-	# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选，
-	# 深链（open_weapons_page）在 open() 之后才设筛选，不受这里影响。
-	weapon_filter = ""
-	if _weapons_box != null:
-		_rebuild_weapons_page()
-	_refresh_dynamic_pages()
+	# 打开这一拍只翻页 + 标脏，铺卡推到下一帧（见 _schedule_page）：面板先亮起来
+	# 开始淡入，手指按下到看见响应之间不留主线程空档。
+	_defer_build = true
+	if _open_tab >= 0:
+		# 深链（商店顶栏「图鉴」/「查看该流派武器」）：筛选已在 open() 前设好，
+		# 直接落那一页，不再先建当前页、切页后又整页重建一遍。
+		switch_tab(_open_tab)
+		_open_tab = -1
+	else:
+		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
+		_set_weapon_filter("")
+	# 法宝/修士两页受解锁状态影响：标脏，切到那一页时才重建
+	_page_dirty[2] = true
+	_page_dirty[3] = true
+	var target := _current_tab
+	_defer_build = false
+	_schedule_page(target)
 
 ## 深链入口：商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派法器」直达武器页并预选筛选。
 func open_weapons_page(filter_tag: String = "") -> void:
+	var tag := String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
+	_set_weapon_filter(tag)
+	if visible:
+		switch_tab(1)
+		return
+	_open_tab = 1
 	open()
-	weapon_filter = String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
-	switch_tab(1)
-	_rebuild_weapons_page()
 
 func _on_filter_chip_tapped(tag: String) -> void:
-	weapon_filter = "" if String(tag) == weapon_filter else String(tag)
-	_rebuild_weapons_page()
+	_set_weapon_filter("" if String(tag) == weapon_filter else String(tag))
+	_ensure_page(1)
+
+## 换筛选 = 武器页欠一次重建；筛选没变则整页照用（卡面全是 WeaponData 里的静态值）
+func _set_weapon_filter(tag: String) -> void:
+	if tag == weapon_filter:
+		return
+	weapon_filter = tag
+	if _page_dirty.size() > 1:
+		_page_dirty[1] = true
+
+func _on_tab_switched(index: int) -> void:
+	_ensure_page(index)
+
+## 分页内容懒建：一页只在「第一次被看到」或「被标脏」时才构建。
+## 为什么：五页全量约 1900 个节点，旧写法一次 open 就把整本手册重铺一遍
+## （武器页还重复建两次：open() 里一次、open_weapons_page() 里一次），
+## 实测按下商店「图鉴」后主线程同步占住 124~181 ms（M 系 Mac，真机更久）
+## ⇒ 先顿一下才淡入。现在一次 open 只碰当前页，同筛选不重铺，铺卡晚一帧。
+func _ensure_page(index: int) -> void:
+	if _defer_build:
+		return                      # 打开流程末尾统一排一帧去建
+	_build_page(index)
+
+## 把铺卡推到下一帧：淡入第一帧 alpha 还近乎 0，内容晚一拍到，
+## 玩家看到的是「立刻弹出来、内容随即填上」，不是按下后卡住。
+func _schedule_page(index: int) -> void:
+	if not is_inside_tree():
+		_build_page(index)
+		return
+	get_tree().process_frame.connect(_build_page.bind(index), CONNECT_ONE_SHOT)
+
+func _build_page(index: int) -> void:
+	if index < 0 or index >= _pages.size():
+		return
+	if _page_built[index] and not _page_dirty[index]:
+		return
+	match index:
+		0: _fill_basics_page()
+		1: _rebuild_weapons_page()
+		2: _rebuild_items_page()
+		3: _rebuild_cultivators_page()
+		4: _fill_advanced_page()
+	_page_built[index] = true
+	_page_dirty[index] = false
+	# 整页子树建过就要重挂滚动拖动锁（头注「灰色卡片滑不动」坑）；
+	# 筛选 chips 在滚动区外也一起过一遍——PASS 不影响它们收点按。
+	GameStyle.swipeable(_pages[index] as Control)
 
 func _rebuild_weapons_page() -> void:
 	if _weapons_box == null:
@@ -121,10 +196,6 @@ func _rebuild_weapons_page() -> void:
 		c.queue_free()
 	WeaponCodexBuilder.rebuild(self)
 	WeaponCodexBuilder.restyle_chips(self)
-	# 整页子树重建过，滚动拖动锁要重挂（头注「灰色卡片滑不动」坑）；
-	# 筛选 chips 在滚动区外也一起过一遍——PASS 不影响它们收点按。
-	if _pages.size() > 1:
-		GameStyle.swipeable(_pages[1] as Control)
 
 # ----------------- 通用小件 -----------------
 
@@ -263,15 +334,20 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 
 func _build_basics_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
-	var box := _new_scroll_vbox(scroll)
+	_basics_box = _new_scroll_vbox(scroll)
+	return scroll
+
+## 静态内容，一辈子建一次（_ensure_page 里不标脏）
+func _fill_basics_page() -> void:
+	if _basics_box == null:
+		return
 	for sec in ManualData.BASICS_SECTIONS:
-		box.add_child(_make_text_card(
+		_basics_box.add_child(_make_text_card(
 			String(sec.get("title", "")),
 			String(sec.get("body", "")),
 			String(sec.get("image", "")),
 			float(sec.get("image_h", 80.0))
 		))
-	return scroll
 
 # ----------------- 分页 2：法器图鉴 -----------------
 
@@ -337,6 +413,8 @@ func _build_items_page(parent: Control) -> Control:
 	return scroll
 
 func _rebuild_items_page() -> void:
+	if _items_box == null:
+		return
 	for c in _items_box.get_children():
 		c.queue_free()
 	_items_box.add_child(_make_text_card("道具规则",
@@ -378,7 +456,10 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 	var tier_col := ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
+		# 词与商店那张详情卡对齐（2026-10-12 道具可出售）：这一行是数据表里的基准价，
+		# 当波上架价每波还要 +2，写「买入价格」会让人以为自己付的就是这个数。
+		["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM],
+		["出售返还", "%d 金币" % ItemData.sell_price(iid), GameStyle.JADE],
 	]
 	# 加成行（2026-10-11 土豆兄弟式改版）：与商店卡面同源同色，BonusRows 从 apply 直接生成
 	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
@@ -412,6 +493,8 @@ func _build_cultivators_page(parent: Control) -> Control:
 	return scroll
 
 func _rebuild_cultivators_page() -> void:
+	if _cult_box == null:
+		return
 	for c in _cult_box.get_children():
 		c.queue_free()
 	_cult_box.add_child(_make_text_card("角色规则",
@@ -520,15 +603,19 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 
 func _build_advanced_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
-	var box := _new_scroll_vbox(scroll)
-
-	box.add_child(_make_synergy_card())
-	box.add_child(_make_stat_guide_card())
-	for guide in ManualData.BUILD_GUIDES:
-		box.add_child(_make_build_card(guide))
-	for sec in ManualData.ADVANCED_SECTIONS:
-		box.add_child(_make_text_card(String(sec.get("title", "")), String(sec.get("body", ""))))
+	_advanced_box = _new_scroll_vbox(scroll)
 	return scroll
+
+## 静态内容，一辈子建一次（_ensure_page 里不标脏）
+func _fill_advanced_page() -> void:
+	if _advanced_box == null:
+		return
+	_advanced_box.add_child(_make_synergy_card())
+	_advanced_box.add_child(_make_stat_guide_card())
+	for guide in ManualData.BUILD_GUIDES:
+		_advanced_box.add_child(_make_build_card(guide))
+	for sec in ManualData.ADVANCED_SECTIONS:
+		_advanced_box.add_child(_make_text_card(String(sec.get("title", "")), String(sec.get("body", ""))))
 
 ## 流派羁绊一览：现读 WeaponData.SYNERGIES，器类 5 行 + 五行 5 行
 func _make_synergy_card() -> Control:
@@ -675,15 +762,3 @@ func _make_build_card(guide: Dictionary) -> Control:
 	GameStyle.label(tips_lbl, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tips_lbl)
 	return card
-
-## 每次打开重建受解锁状态影响的两页
-func _refresh_dynamic_pages() -> void:
-	if is_instance_valid(_items_box):
-		_rebuild_items_page()
-	if is_instance_valid(_cult_box):
-		_rebuild_cultivators_page()
-	# 五页都过一遍：卡片是 PanelContainer（默认 STOP），会把「按下」那一拍吃掉，
-	# 外层 ScrollContainer 收不到按下就锁不住手指拖动 → 真机上灰色卡片区域滑不动。
-	# 放在这里而不是 _build_ui 末尾：法宝/修士两页每次 open 都重建子树，得重刷一遍。
-	for p in _pages:
-		GameStyle.swipeable(p as Control)

@@ -48,10 +48,11 @@ const FIELDS: Dictionary = {
 		"contraption_damage": {"name": "机关伤害", "unit": "pt"},
 		"element_damage_all": {"name": "全元素伤害", "unit": "pct"},
 	# 寻宝流三项：幅度来自 apply，兑现点在 WaveSpawner（数量）/ BalanceChest.tier_weights（品质）
-	# / BalanceChest.break_hits（省力）。单位一律 "pt"：读数只出「+1」，量词交给卡面 desc 说清。
+	# / BalanceChest.scale_reward（掉落）。数量与品质是"几口/权重几点"，单位 "pt" 只出整数、
+	# 量词交给卡面 desc；掉落是乘区，单位 "pct" 直接印成百分比。
 		"chest_count": {"name": "宝箱数量", "unit": "pt"},
 		"chest_quality": {"name": "宝箱品质", "unit": "pt"},
-		"chest_break": {"name": "开箱省力", "unit": "chest_break"},
+		"chest_reward": {"name": "宝箱掉落", "unit": "pct"},
 		"pet_damage_mult": {"name": "灵兽伤害", "unit": "pct"},
 		"pet_effect_mult": {"name": "灵兽效果", "unit": "pct"},
 		"pet_cooldown_mult_mul": {"name": "灵兽冷却", "unit": "pctmul"},
@@ -364,8 +365,6 @@ static func format_amount(key: String, v: float) -> String:
 			return "%s%d 枚" % [sgn, int(absf(v))]
 		"times":
 			return "%s%d 次" % [sgn, int(absf(v))]
-		"chest_break":
-			return "%s%d 击" % [sgn, int(absf(v))]
 		_:
 			return "%s%s" % [sgn, _fmt(absf(v))]
 

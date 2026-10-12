@@ -71,7 +71,12 @@ static func sync_pet_instances(gm: Node) -> void:
 
 	# 1. 移除不在 gm.pets 中的实体
 	for p in existing:
-		var p_id: String = String(p.get("pet_id", ""))
+		# Fixed: Object.get() 只收一个参数 —— 旧写法 p.get("pet_id", "") 当场抛
+		# 「Invalid call to function 'get'」并中断整个 sync，后半段（补生成缺失的那只、
+		# 重排环绕序号）永远跑不到：场上已有一只时再买第二只（御兽师 3 格、万兽笼 +1）
+		# 只多一条数据，第二只灵兽根本不出现在世界里。
+		var pid: Variant = p.get("pet_id")
+		var p_id: String = String(pid) if pid != null else ""
 		if p_id not in gm.pets:
 			if p.has_method("dissolve"):
 				p.dissolve()
@@ -113,4 +118,7 @@ static func on_wave_ended(gm: Node) -> void:
 	if tree != null:
 		for p in tree.get_nodes_in_group("spirit_pets"):
 			if is_instance_valid(p) and p.get("pet_id") == "juchan":
-				p.set("_action_fx", 0.0)
+				if p.has_method("trigger_wave_harvest_fx"):
+					p.trigger_wave_harvest_fx()
+				else:
+					p.set("_action_fx", 0.0)

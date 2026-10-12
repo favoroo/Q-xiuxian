@@ -3,18 +3,23 @@ extends Node
 ## 藏宝匣「寻宝流」经济链路判据（2026-10-11）
 ##
 ## 用户口径：「针对宝箱再加些玩法，在技能加点或商店里加物品，提高刷宝箱的数量和概率」。
+## 2026-10-12 用户口径（本轮改版）：「砸开宝箱受击数减一这算什么加成，这个加成不要；
+## 商店里那件砍击数还要带个 debuff 的，太蠢了」⇒ 砍击数那条腿（悟道「开箱省力」+ 法宝「卸匣锥」）
+## 整条删掉，换成抬兑现量的「宝箱掉落」（悟道 chest_reward_up + 法宝 manxia_jue）。
 ## 这条链路横跨 数据表 → 属性字段 → 刷怪口 → 匣子本体 → 掉落兑现，任何一环写歪都会变成
 ## 「卡面上写了 +1，场上还是 2 口」的假加成（历史上这类静默无效踩过多次），所以判据分三层，
 ## 每一层都从**生产入口**进去量，不在测试里另算一套：
 ##
 ## 1) 纯函数层（BalanceChest 经 GameBalance 门面）：数量曲线与硬顶、三档权重的单调与
-##    「品质为 0 时铜/玉仍有正权重」（第 1 波就该见到高档匣）、击数地板、
+##    「品质为 0 时铜/玉仍有正权重」（第 1 波就该见到高档匣）、击数是定值、
+##    开箱收益乘区的放大与两条例外（每颗灵石修为值不放大 / 回复量有顶）、
 ##    奖励表与改版前木匣口径一致（防偷偷改掉基准档）。
 ## 2) 来源层：apply_upgrade / add_item 走真实落地链路后，GameManager 字段确实吃到幅度，
 ##    并且下一次 _spawn_chests 刷出的匣子数、击数、体型就是那些幅度（字段追到消费方）。
 ## 3) 现场层：Main 场景 + start_run，冻住波次状态机，量
 ##    刷出口数 / 上限 / 档位判定半径与体型同源 / 玉匣真多一件法宝 / 送满上限后退回仍有掉落 /
-##    纳灵盘开与关时掉出的灵石 target_player 不同（磁吸真的接上了）。
+##    同一口铜匣在 ×1 与 ×2 两档下到账数不同（开箱收益真的兑现）/
+##    纳灵盘开与关时掉出的经验球 target_player 不同（磁吸真的接上了）。
 ##
 ## 运行: godot --headless --path . res://tests/ChestEconomyCheck.tscn
 ##       godot --headless --path . res://tests/ChestEconomyCheck.tscn -- --selftest
@@ -22,7 +27,7 @@ extends Node
 ## 反例（--selftest 逐条钉住，证明上面三层不是白给的）：
 ##   ① 旧数量口径恒 mini(2+wave/6,4)，不吃加成 ⇒ 与「设了 +3 就该刷 5 口」这条判据冲突；
 ##   ② 旧代码只有木匣一档（铜/玉权重 0）⇒ 「品质为 0 也见得到高档匣」这条会红；
-##   ③ 旧击数恒 GameBalance.CHEST_BREAK_HITS，不随「开箱省力」变 ⇒ 击数判据会红；
+##   ③ 旧写法按档位表原样发掉落、不吃「宝箱掉落」乘区 ⇒ ×2 到账翻倍那条会红；
 ##   ④ 奖励表若没有 grant_item，玉匣送法宝那条判据无从成立；
 ##   ⑤ 磁吸判据要求「关/开两种状态读数不同」，同值即空转，selftest 里按这个形状验一次。
 
@@ -79,12 +84,27 @@ func _test_pure() -> void:
 	_c.check(float(w_luck[BalanceChest.TIER_JADE]) > float(w0[BalanceChest.TIER_JADE]),
 		"福缘也抬玉匣（与悟道稀有度、货架档位同一把「缘」尺）")
 
-	# 击数：曲线与地板
-	_c.equals(GameBalance.chest_break_hits(0), GameBalance.CHEST_BREAK_HITS, "不吃加成时仍是 3 下")
-	_c.equals(GameBalance.chest_break_hits(1), 2, "开箱省力 +1 ⇒ 2 下")
-	_c.equals(GameBalance.chest_break_hits(2), 1, "开箱省力 +2 ⇒ 1 下")
-	_c.equals(GameBalance.chest_break_hits(9), GameBalance.CHEST_MIN_HITS,
-		"击数有地板：再多的省力也不会把「砸」这个动作抹掉")
+	# 击数：定值，没有任何来源能砍它（2026-10-12 改版：这条腿换成抬兑现量）
+	_c.equals(GameBalance.CHEST_BREAK_HITS, 3, "匣子固定挨 3 下砸开（基准档口径没被偷偷改掉）")
+
+	# 开箱收益乘区：放大什么、不放大什么，两条例外要钉住
+	var s1: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_WOOD), 1.0)
+	_c.equals(int(s1["gem_count"]), 3, "×1 就是表上那份：木匣仍掉 3 颗经验球")
+	_c.near(float(s1["heal_pct"]), 0.15, 0.001, "×1 时葫芦仍回 15% 气血")
+	var s2: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_WOOD), 2.0)
+	_c.equals(int(s2["gem_count"]), 6, "×2 ⇒ 经验球颗数翻倍")
+	_c.near(float(s2["heal_pct"]), 0.30, 0.001, "×2 ⇒ 葫芦回复翻倍")
+	_c.equals(int(s2["gem_exp"]), int(s1["gem_exp"]), "每颗经验球值多少经验不放大（不顺手吹经验曲线）")
+	var s_cop: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 2.0)
+	_c.equals(int(s_cop["stones"]), 12, "×2 ⇒ 铜匣那笔金币翻倍")
+	var s_cap: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 9.0)
+	_c.near(float(s_cap["heal_pct"]), GameBalance.CHEST_REWARD_HEAL_CAP, 0.001,
+		"回复量有顶：堆满一条寻宝流也不许一口匣子回满血")
+	var s_jade: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_JADE), 2.0)
+	_c.check(bool(s_jade["grant_item"]), "玉匣那件法宝是「必送」不是「送得多」，缩放不动它")
+	var s_floor: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 0.5)
+	_c.equals(int(s_floor["stones"]), int(GameBalance.chest_reward(BalanceChest.TIER_COPPER)["stones"]),
+		"乘区只抬不罚：字段被回退到 1.0 以下也不许把掉落砍下去")
 
 	# 体型：档位递增（判定与精灵同乘这件事在现场层量）
 	_c.check(GameBalance.chest_tier_scale(BalanceChest.TIER_WOOD)
@@ -129,6 +149,7 @@ func _test_live() -> void:
 
 	await _test_sources_reach_spawner()
 	await _test_count_delivery()
+	await _test_reward_delivery()
 	await _test_tier_geometry()
 	await _test_jade_grants_item()
 	await _test_jade_cap_fallback()
@@ -146,12 +167,14 @@ func _test_sources_reach_spawner() -> void:
 
 	GameManager.apply_upgrade("chest_count_up")
 	_c.equals(GameManager.chest_count_bonus, 1, "悟道「宝箱数量」落地到字段")
-	GameManager.apply_upgrade("chest_break_up")
-	_c.equals(GameManager.chest_break_bonus, 1, "悟道「开箱省力」落地到字段")
+	GameManager.apply_upgrade("chest_reward_up")
+	_c.near(GameManager.chest_reward_mult, 1.35, 0.001, "悟道「宝箱掉落」落地到乘区字段")
 	GameManager.apply_upgrade("chest_quality_up")
 	_c.near(GameManager.chest_quality, 2.0, 0.001, "悟道「宝箱品质」落地到字段")
 	GameManager.add_item("cangbao_tu")
 	_c.equals(GameManager.chest_count_bonus, 2, "法宝「藏宝图」与加点共用同一条字段链路")
+	GameManager.add_item("manxia_jue")
+	_c.near(GameManager.chest_reward_mult, 1.75, 0.001, "法宝「满匣诀」与加点共用同一条字段链路")
 
 	_spawner._spawn_chests()
 	await get_tree().process_frame
@@ -159,13 +182,14 @@ func _test_sources_reach_spawner() -> void:
 	_c.equals(_chests().size(), GameBalance.chest_count(wave, 2),
 		"设了加成 ⇒ 生产入口 _spawn_chests 真刷出这么多口（波 %d，实得 %d）" % [wave, _chests().size()])
 	var any_chest: SpiritChest = _chests()[0]
-	_c.equals(any_chest.max_hits, GameBalance.chest_break_hits(1),
-		"新刷出的匣子击数就是「开箱省力」之后的值（实得 %d）" % any_chest.max_hits)
+	_c.equals(any_chest.max_hits, GameBalance.CHEST_BREAK_HITS,
+		"匣子击数是定值（抬掉落不抬/不砍耐久，实得 %d）" % any_chest.max_hits)
 	await _clear_chests()
 
 ## 数量兑现与硬顶：走生产入口，不读公式
 func _test_count_delivery() -> void:
 	GameManager.chest_count_bonus = 0
+	GameManager.chest_reward_mult = 1.0   # 上一节把乘区堆到 1.75 了，这里回到基准档
 	_spawner._spawn_chests()
 	await get_tree().process_frame
 	var base_n := _chests().size()
@@ -178,6 +202,32 @@ func _test_count_delivery() -> void:
 	_c.equals(_chests().size(), GameBalance.CHEST_COUNT_CAP,
 		"加成爆表时按硬顶收（场地只有半场，再多就成箱子阵）")
 	await _clear_chests()
+
+## 开箱收益兑现：同一口铜匣在 ×1 与 ×2 两档下到账金币数必须不同（走砸开这条生产路径量）
+## 铜匣那笔金币是确定性的（先入账，再掷掉落分支），所以拿它当尺子；
+## 经验球颗数与葫芦二选一由 rng 决定，不在这里赌。
+func _test_reward_delivery() -> void:
+	GameManager.chest_reward_mult = 1.0
+	var base_gain := await _break_copper_stones()
+	var table := int(GameBalance.chest_reward(BalanceChest.TIER_COPPER)["stones"])
+	_c.equals(base_gain, table, "不吃加成时铜匣到账就是表上那笔（+%d）" % base_gain)
+
+	GameManager.chest_reward_mult = 2.0
+	var boosted := await _break_copper_stones()
+	_c.equals(boosted, table * 2, "宝箱掉落 ×2 ⇒ 同一口铜匣到账翻倍（%d → %d）" % [base_gain, boosted])
+
+	GameManager.chest_reward_mult = 1.0
+
+## 砸开一口铜匣，返回这一口给GameManager加了几枚金币
+func _break_copper_stones() -> int:
+	var chest := _make_chest(BalanceChest.TIER_COPPER)
+	await get_tree().process_frame
+	var before := GameManager.spirit_stones
+	_break(chest)
+	await get_tree().process_frame
+	var gain := GameManager.spirit_stones - before
+	await _clear_chests()
+	return gain
 
 ## 档位与判定同源：玉匣的判定圆确实比木匣大，且就是公式那个数
 func _test_tier_geometry() -> void:
@@ -336,9 +386,11 @@ func _run_selftest() -> void:
 	var flat: Array[float] = [100.0, 0.0, 0.0]
 	_c.check(not (flat[BalanceChest.TIER_COPPER] > 0.0 and flat[BalanceChest.TIER_JADE] > 0.0),
 		"反例②成立：铜/玉权重为 0 的旧写法会被「品质为 0 也见得到高档匣」抓住")
-	# ③ 旧击数：不随加成变
-	_c.check(GameBalance.CHEST_BREAK_HITS != GameBalance.chest_break_hits(2),
-		"反例③成立：击数恒 3 的旧写法会被「开箱省力 +2 ⇒ 1 下」抓住")
+	# ③ 旧写法：掉落按档位表原样发，不吃「宝箱掉落」乘区
+	var old_drop := GameBalance.chest_reward(BalanceChest.TIER_COPPER)
+	var new_drop := GameBalance.chest_reward_scaled(old_drop, 2.0)
+	_c.check(int(old_drop["stones"]) != int(new_drop["stones"]),
+		"反例③成立：不吃乘区的旧写法（两档同值 %d）会被「×2 ⇒ 到账翻倍」抓住" % int(old_drop["stones"]))
 	# ④ 奖励表没有 grant_item 时，玉匣送法宝那条判据无从成立
 	_c.check(not GameBalance.chest_reward(BalanceChest.TIER_WOOD).get("grant_item", false)
 		and bool(GameBalance.chest_reward(BalanceChest.TIER_JADE).get("grant_item", false)),

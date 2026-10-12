@@ -51,6 +51,8 @@ var yingmei_scene: PackedScene = preload("res://scenes/entities/YingMeiEnemy.tsc
 var zhumu_scene: PackedScene = preload("res://scenes/entities/ZhuMuEnemy.tscn")
 var chilei_elite_scene: PackedScene = preload("res://scenes/entities/ChileiEliteEnemy.tscn")
 var jiansha_elite_scene: PackedScene = preload("res://scenes/entities/JianshaEliteEnemy.tscn")
+var lingyi_scene: PackedScene = preload("res://scenes/entities/LingYiEnemy.tscn")
+var jinchan_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
 
 var _boss_ref: BossEnemy = null  ## 本波魔君引用（Boss 波超时锁关轮询用）
 var _overtime_noted: bool = false
@@ -110,6 +112,11 @@ func _process_fight(delta: float) -> void:
 	if _is_boss_wave(wave_number) and not elite_spawned and wave_timer < wave_duration(wave_number) - 1.5:
 		elite_spawned = true
 		_spawn_boss(player)
+
+	# 金蟾：波中限时刷出的逃跑宝藏怪（土豆兄弟 Looter 对应位）
+	if _looter_pending and not _looter_done and wave_timer <= wave_duration(wave_number) * LOOTER_AT_PCT:
+		_looter_done = true
+		_spawn_looter(player)
 
 	# 提前清场：本波妖潮已全部刷入、且场上再无活妖 ⇒ 不等表走完就收尾，余下秒数折成金币。
 	# 闸只认「预算已尽」这一条：没刷完就提前收，等于把省下的那截时间对应的击杀进项一起收走，
@@ -172,6 +179,9 @@ func start_wave(n: int) -> void:
 	_budget_used = 0
 	_budget_exp_sum = 0.0
 	_clear_hold = 0.0
+	# 金蟾档期：每波开场抽定（35%），波中 60% 处登场
+	_looter_pending = n >= LOOTER_MIN_WAVE and GameManager.rng.randf() < LOOTER_CHANCE
+	_looter_done = false
 	_spawn_chests()
 	if _is_boss_wave(n):
 		GameManager.announcement_triggered.emit("✦ 第 %d 波 · Boss来袭 ✦" % n)
@@ -364,14 +374,23 @@ const MIX_FLOWER_STEP := 0.58      ## 花妖占比折算
 # 新敌种占的是史莱姆的保底份额（高 roll 段，roll ≥ 下沿才命中；越晚解锁越稀有）
 const MIX_FENGQUN_WAVE := 3        ## 蜂群精最早出现波次（廉价群怪，填充密度）
 const MIX_FENGQUN_LO := 0.78
+const MIX_LINGYI_WAVE := 8         ## 灵医（治疗同伴，土豆兄弟 Healer 对应位：优先击杀目标）
+const MIX_LINGYI_LO := 0.83
 const MIX_XUEYONG_WAVE := 6        ## 血蛹（死亡分裂）
-const MIX_XUEYONG_LO := 0.86
+const MIX_XUEYONG_LO := 0.88
 const MIX_YINGMEI_WAVE := 7        ## 影魅（闪现侧翼）
-const MIX_YINGMEI_LO := 0.91
+const MIX_YINGMEI_LO := 0.92
 const MIX_GUYAO_WAVE := 9          ## 鼓妖（同伴加速光环）
-const MIX_GUYAO_LO := 0.95
+const MIX_GUYAO_LO := 0.955
 const MIX_ZHUMU_WAVE := 14         ## 百目妖（产卵孵化群怪，原蛛母换悬浮系怪种）
 const MIX_ZHUMU_LO := 0.98
+
+# 金蟾（土豆兄弟 Looter 对应位）：波中限时刷出的逃跑宝藏怪，不占刷怪预算、不吃同屏上限
+const LOOTER_MIN_WAVE := 3         ## 最早出现波次
+const LOOTER_CHANCE := 0.35        ## 每波出现概率
+const LOOTER_AT_PCT := 0.4         ## 波长剩余 40% 时登场（中场插曲，不打断开场节奏）
+var _looter_pending: bool = false  ## 本波是否有金蟾档期（start_wave 抽定）
+var _looter_done: bool = false     ## 本波金蟾是否已刷
 
 ## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线）
 static func xiexiu_edge(wave: int) -> float:
@@ -398,6 +417,8 @@ static func pick_scene_key(wave: int, roll: float) -> String:
 		return "yingmei"
 	if w >= MIX_XUEYONG_WAVE and roll >= MIX_XUEYONG_LO:
 		return "xueyong"
+	if w >= MIX_LINGYI_WAVE and roll >= MIX_LINGYI_LO:
+		return "lingyi"
 	if w >= MIX_FENGQUN_WAVE and roll >= MIX_FENGQUN_LO:
 		return "fengqun"
 	return "slime"
@@ -420,6 +441,8 @@ func _pick_enemy_scene() -> PackedScene:
 			return yingmei_scene
 		"xueyong":
 			return xueyong_scene
+		"lingyi":
+			return lingyi_scene
 		"fengqun":
 			return fengqun_scene
 		_:
@@ -466,7 +489,26 @@ func _spawn_elite(player: Node2D) -> void:
 		GameManager.shake_camera(5.0, 0.25)
 	parent.add_child(indicator)
 
-## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻
+## 金蟾：在远离玩家的位置刷一只携宝金蟾（击杀爆金币，见 EnemyBase.stone_reward）。
+## 不占刷怪预算、不吃同屏上限；它活着时「提前清场」会等它（它是活体敌人），
+## 追不上也没关系——波表走完照常收尾，金蟾只是中场彩蛋。
+func _spawn_looter(player: Node2D) -> void:
+	var lim := GameManager.MAP_HALF_EXTENT - 60.0
+	var p_pos: Vector2 = player.global_position
+	var pos := Vector2(
+		GameManager.rng.randf_range(-lim, lim),
+		GameManager.rng.randf_range(-lim, lim)
+	)
+	if pos.distance_to(p_pos) < 180.0:
+		var push_dir := (pos - p_pos).normalized()
+		if push_dir.is_zero_approx():
+			push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
+		pos = (p_pos + push_dir * 220.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	_schedule_enemy_spawn(jinchan_scene, pos, false)
+	GameManager.announcement_triggered.emit("✦ 金蟾携宝现身 · 击杀爆金币 ✦")
+
+## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻。
+## 移速也吃 ±12% 方差（2026-10-12，土豆兄弟式快慢梯队：同屏同种怪不再整齐划一）。
 func _scale_to_wave(enemy: EnemyBase) -> void:
 	var variance: float = GameManager.rng.randf_range(
 		1.0 - GameBalance.ENEMY_STAT_VARIANCE,
@@ -474,6 +516,15 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 	)
 	enemy.max_hp = ceilf(enemy.max_hp * GameBalance.enemy_hp_mult(wave_number) * variance * GameBalance.danger_hp_mult(GameManager.danger_level))
 	enemy.contact_damage = ceilf(enemy.contact_damage * GameBalance.enemy_dmg_mult(wave_number) * variance * GameBalance.danger_dmg_mult(GameManager.danger_level))
+	enemy.move_speed *= GameManager.rng.randf_range(
+		1.0 - GameBalance.ENEMY_SPEED_VARIANCE,
+		1.0 + GameBalance.ENEMY_SPEED_VARIANCE
+	)
+	# 灵医奶量 / 金蟾金币与波次曲线同源（BalanceWave），场景里只占位
+	if enemy.heal_interval > 0.0:
+		enemy.heal_amount = GameBalance.healer_amount(wave_number)
+	if enemy.stone_reward > 0:
+		enemy.stone_reward = GameBalance.looter_stone_reward(wave_number)
 
 ## 固定 Boss 关：血量/伤害按 GameBalance 波次公式注入，称号与演出随关卡推进
 func _spawn_boss(player: Node2D) -> void:

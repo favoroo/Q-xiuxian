@@ -11,7 +11,7 @@ extends RefCounted
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
 ##   wave_heal_pct —— 波末按气血上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本道具免死并回半血（GameManager.try_revive）
-##   chest_magnet  —— 砸开宝箱掉出的灵石当场飞向玩家（SpiritChest._drop_gems 消费，可叠多件）
+##   chest_magnet  —— 砸开宝箱掉出的经验球当场飞向玩家（SpiritChest._drop_gems 消费，可叠多件）
 ## 2026-10-12 土豆兄弟式「属性转化」核心件（同样走额外字段，item_hook_sum 现算，多件叠系数）：
 ##   dmg_per_move_speed  —— 疾风刃：移速每超基础 10% 折算一份全伤害（CultivatorSystem.damage_mult）
 ##   crit_per_dodge      —— 幻影迷踪铃：每 10% 有效闪避折算一份暴击率（GameManager.get_crit_rate）
@@ -39,9 +39,15 @@ extends RefCounted
 ##   skill_cooldown_mult —— 凝神符：随行技能冷却缩减比例（SkillData.final_stats）
 ##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：波结束永久成长（GameManager.apply_harvest）
 ## 转化件的机制数字写在 desc（同回复葫芦/替身娃娃先例）；apply 留空，卡面加成行不冒第二份数字。
-## unique: true 时每局限购一件，买后即从货架池剔除
+## unique: true 时每局限购一件：本局买过（或被玉匣送过）就再不进货架池，出售也不解禁
+##
+## 出售（2026-10-12 用户：「商店里的这些道具，如果有买到不想要的，也可以卖掉」）：
+## 回收价与法器、灵兽同一条口径 —— 基准价 × SELL_RATIO，不跟着波次加价涨。
+## 上架价 = 基准价 + 2×(波次−1)（BalanceEconomy.ITEM_WAVE_STEP），所以后期那件退货是亏的：
+## 亏多少由详情卡上「原价 / 出售返还」两行自己摆出来，不藏。
 
 const TIER_LABELS := {1: "普通", 2: "稀有", 3: "史诗", 4: "传说"}
+const SELL_RATIO: float = 0.5  ## 出售回收比例（对齐 WeaponData.SELL_RATIO / PetData.SELL_RATIO）
 const TIER_COLORS := {
 	1: GameStyle.RARITY_COMMON,
 	2: GameStyle.RARITY_RARE,
@@ -406,7 +412,7 @@ const DEFS: Dictionary = {
 					"apply": {"contraption_damage": 4.0, "attack_speed_mult_mul": 0.92},
 				},
 
-			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/开箱省力」同一条链路） ----
+			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/宝箱掉落」同一条链路） ----
 			# 兑现点全在 BalanceChest + WaveSpawner._spawn_chests + SpiritChest._destroy；
 			# 藏宝图刻意做进凡品第 1 波就能刷到 —— 寻宝流得让人在第一波就撞见料。
 			"cangbao_tu": {
@@ -416,17 +422,17 @@ const DEFS: Dictionary = {
 				"apply": {"chest_count": 1},
 			},
 			"naling_zhuo": {
-				"name": "纳灵盘", "tier": 2, "price": 26,
+				"name": "纳灵盘", "tier": 2, "price": 22,
 				"icon": "res://assets/art/item_naling_zhuo.png",
-				"desc": "宝箱砸开时掉出的金币直接飞进袖中，回复葫芦仍需贴身",
-				"apply": {"pickup_range_mult": 0.2},
+				"desc": "宝箱砸开时掉的经验球当场飞进袖中，不必再绕一趟走位（回复珠仍需贴身）",
+				"apply": {},
 				"chest_magnet": true,
 			},
-			"liexia_zhui": {
-				"name": "卸匣锥", "tier": 2, "price": 28,
-				"icon": "res://assets/art/item_liexia_zhui.png",
-				"desc": "砸开宝箱所需击数减少；法器攻击间隔 +5%",
-				"apply": {"chest_break": 1, "attack_speed_mult_mul": 1.05},
+			"manxia_jue": {
+				"name": "满匣诀", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_manxia_jue.png",
+				"desc": "砸开的宝箱掉得更多（金币/灵石颗数/回复量同涨）",
+				"apply": {"chest_reward": 0.4},
 			},
 		"dianjin_jue": {
 			"name": "点金诀", "tier": 3, "price": 46,
@@ -648,9 +654,19 @@ static func tier_label(tier: int) -> String:
 static func tier_color(tier: int) -> Color:
 	return TIER_COLORS.get(clampi(tier, 1, 4), TIER_COLORS[1])
 
+## 出售回收价：基准价 × SELL_RATIO（与 WeaponData.sell_price / PetData.sell_price 同一条口径：
+## 按数据表里的基准价折半，不按当波上架价 —— 上架价每波 +2，回收不跟着涨，详情卡两行并排印出来）。
+static func sell_price(id: String) -> int:
+	var def: Dictionary = get_def(id)
+	if def.is_empty():
+		return 0
+	return maxi(1, int(ceil(float(int(def.get("price", 20))) * SELL_RATIO)))
+
 ## 抽一件道具上货架：按档位权重抽取（公式见 GameBalance.item_tier_weights），
-## 已持有的 unique 道具从池中剔除；若传入 unlocked_items，则未解锁道具不入池；池空返回 ""，调用方落回武器位
-static func pick_id(luck: float, wave: int, owned: Array, rng: RandomNumberGenerator, unlocked_items: Array = []) -> String:
+## bought = 本局已购入过的道具（含已出售的那件）：unique 道具只要买过一次就再不进池，
+## 详情卡上「出售后本局不再出现」那句承诺由这里兑现。若传入 unlocked_items，则未解锁道具不入池；
+## 池空返回 ""，调用方落回武器位
+static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator, unlocked_items: Array = []) -> String:
 	var tier_w: Array = GameBalance.item_tier_weights(luck, wave)
 	var pool: Array = []
 	var weights: Array = []
@@ -658,7 +674,7 @@ static func pick_id(luck: float, wave: int, owned: Array, rng: RandomNumberGener
 		if not unlocked_items.is_empty() and not (id in unlocked_items):
 			continue
 		var d: Dictionary = DEFS[id]
-		if bool(d.get("unique", false)) and id in owned:
+		if bool(d.get("unique", false)) and id in bought:
 			continue
 		var tier := clampi(int(d.get("tier", 1)), 1, 4)
 		var w := float(tier_w[tier - 1])

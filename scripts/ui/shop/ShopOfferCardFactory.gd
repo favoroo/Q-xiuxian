@@ -20,8 +20,8 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	var sold: bool = offer.get("sold", false)
 	var price: int = int(offer.get("price", 0))
 
-	# 行①：图标与名号同行
-	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path))
+	# 行①：图标与名号同行（附拥有数量/星级分布）
+	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", ""))))
 	# 行②：色签流 + 锁定开关同行
 	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.rec_reasons, data.tag_keys, data.w_id))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
@@ -71,6 +71,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var chip_text_color: Color = GameStyle.PAPER
 	var edge_color: Color = GameStyle.GOLD_DK
 	var behavior_chip: Array = []
+	var owned_text := ""
 	# 「荐」推荐标（RecommendSystem 在 roll_shop 里打分写入 offer）：已售出的格子不再亮标
 	var recommended: bool = bool(offer.get("recommended", false)) and not bool(offer.get("sold", false))
 	var rec_reasons: Array = offer.get("recommend_reasons", [])
@@ -93,7 +94,8 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = GameStyle.JADE_DK
 	elif is_item:
-		def = ItemData.get_def(offer.get("id", ""))
+		var item_id := String(offer.get("id", ""))
+		def = ItemData.get_def(item_id)
 		var tier := int(def.get("tier", 1))
 		title = def.get("name", "?")
 		icon_path = def.get("icon", "")
@@ -103,8 +105,12 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = ItemData.tier_color(tier).darkened(0.35)
+		var owned_count: int = GameManager.items.count(item_id)
+		if owned_count > 0:
+			owned_text = "拥有 ×%d" % owned_count
 	elif is_pet:
-		def = PetData.get_def(offer.get("id", ""))
+		var pet_id := String(offer.get("id", ""))
+		def = PetData.get_def(pet_id)
 		title = def.get("name", "灵兽")
 		icon_path = ""
 		tag = "灵兽·%s" % PetData.role_label(String(def.get("role", "")))
@@ -113,12 +119,15 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		chip_color = def.get("color", GameStyle.GOLD)
 		chip_text_color = GameStyle.INK_TEXT
 		edge_color = chip_color.darkened(0.35)
+		if GameManager.has_pet(pet_id):
+			owned_text = "已拥有"
 	else:
 		var w_id: String = String(offer.get("id", ""))
 		def = WeaponData.get_def(w_id)
 		title = def.get("name", "?")
 		icon_path = def.get("icon", "")
 		tag = def.get("tag", "")
+		owned_text = WeaponInventory.format_owned_summary(GameManager, w_id)
 		var wtags: Array = def.get("tags", [])
 		var will_activate := false
 		for t in wtags:
@@ -184,6 +193,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
 		"edge_color": edge_color, "behavior_chip": behavior_chip,
 		"recommended": recommended, "rec_reasons": rec_reasons,
+		"owned_text": owned_text,
 	}
 
 ## 这张卡对应的法器 id（药水/法宝卡返回空串）：色签的解释卡要按它现读属性账单与件数
@@ -224,8 +234,8 @@ static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContai
 	card.add_theme_stylebox_override("panel", style)
 	return card
 
-## 行①：图标框（含元素高亮边框）与名号同行，名号按 card_name_w 切硬换行
-static func _create_card_head(offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String) -> HBoxContainer:
+## 行①：图标框（含元素高亮边框）与名号同行（右侧上下排列名号与持有信息），名号按 card_name_w 切硬换行
+static func _create_card_head(offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "") -> HBoxContainer:
 	var head := HBoxContainer.new()
 	head.name = "CardHead"
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -277,15 +287,39 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	head.add_child(icon_box)
 
 	var name_w: float = WaveShop.card_name_w(card_w)
+	var title_box := VBoxContainer.new()
+	title_box.name = "TitleBox"
+	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	title_box.add_theme_constant_override("separation", 1)
+	title_box.custom_minimum_size = Vector2(name_w, 0)
+	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
 	var title_lbl := Label.new()
+	title_lbl.name = "TitleLabel"
 	title_lbl.text = GameStyle.wrap_cjk(title, GameStyle.display_font(), 16, name_w)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_lbl.custom_minimum_size = Vector2(name_w, 0)
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	head.add_child(title_lbl)
+	title_box.add_child(title_lbl)
 	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
+
+	if not owned_text.is_empty():
+		var owned_lbl := Label.new()
+		owned_lbl.name = "OwnedLabel"
+		owned_lbl.text = owned_text
+		owned_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		owned_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		owned_lbl.custom_minimum_size = Vector2(name_w, 0)
+		owned_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		owned_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		title_box.add_child(owned_lbl)
+		GameStyle.label(owned_lbl, 10, GameStyle.JADE, 0, GameStyle.INK, true)
+
+	head.add_child(title_box)
 	return head
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关

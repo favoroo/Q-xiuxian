@@ -1,24 +1,28 @@
 class_name CareerDialog
 extends BaseModalDialog
 
-## 修仙志（生涯功绩簿）三页签：天道功绩 / 道统功名 / 渡劫实录
-## 道统功名：每角色渡劫成功次数、无尽最高波数、最高危险度、称号里程碑进度
-## 渡劫实录：每次渡劫成功的完整战报快照（上阵法器/法宝/关键属性），点击行展开回看
+## 修仙志（生涯功绩簿）三页签：成就 / 角色 / 战斗记录
+## 成就页：四分类（试炼/流派/历练/机缘）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
+## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 六难度封印格），
+##         封印按 GameManager.cultivator_danger_clears 位掩码点亮，境界按最高通关难度晋升
 ## 滚动区内的展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
-## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 第 5 步）
+## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 末尾）
 
 # 顶部概览数据标签（5 卡）
 var _runs_val_lbl: Label
 var _wins_val_lbl: Label
 var _kills_val_lbl: Label
 var _wave_val_lbl: Label
-var _title_val_lbl: Label
+var _ach_val_lbl: Label
 
 # 各页列表容器
 var _ach_list_box: VBoxContainer
 var _cult_list_box: VBoxContainer
 var _log_list_box: VBoxContainer
 var _expanded_log_idx: int = -1  ## 渡劫实录当前展开的快照下标（-1 = 全部收起）
+
+## 六难度封印格的单字（与 AchievementData.DANGER_NAMES 对位）
+const SEAL_CHARS: Array[String] = ["简", "普", "困", "噩", "狱", "极"]
 
 func _get_title_text() -> String:
 	return "战 绩  ·  游 戏 记 录"
@@ -47,7 +51,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_wins_val_lbl = _add_summary_card(stats_row, "通关", "0 胜")
 	_kills_val_lbl = _add_summary_card(stats_row, "累计击杀", "0 只")
 	_wave_val_lbl = _add_summary_card(stats_row, "最高波数", "第 0 波")
-	_title_val_lbl = _add_summary_card(stats_row, "已获称号", "0/0")
+	_ach_val_lbl = _add_summary_card(stats_row, "成就", "0/0")
 
 	# 3. 内容分页面板
 	var content_panel := PanelContainer.new()
@@ -99,7 +103,7 @@ func _add_summary_card(parent: HBoxContainer, title: String, init_val: String) -
 	parent.add_child(card)
 	return v_lbl
 
-# ----------------- 分页 1：天道功绩列表 -----------------
+# ----------------- 分页 1：成就（分类大色块卡） -----------------
 
 func _build_achievements_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
@@ -113,7 +117,7 @@ func _build_achievements_page(parent: Control) -> Control:
 	scroll.add_child(_ach_list_box)
 	return scroll
 
-# ----------------- 分页 2：道统功名（每角色档案 + 称号进度） -----------------
+# ----------------- 分页 2：角色（大色块卡 + 六难度封印） -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
@@ -123,7 +127,7 @@ func _build_cultivators_page(parent: Control) -> Control:
 
 	_cult_list_box = VBoxContainer.new()
 	_cult_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cult_list_box.add_theme_constant_override("separation", 6)
+	_cult_list_box.add_theme_constant_override("separation", 8)
 	scroll.add_child(_cult_list_box)
 	return scroll
 
@@ -155,33 +159,57 @@ func _refresh_data() -> void:
 	_wins_val_lbl.text = "%d 胜 (%.0f%%)" % [wins, win_rate]
 	_kills_val_lbl.text = "%d 只" % kills
 	_wave_val_lbl.text = "第 %d 波" % b_wave
+	_ach_val_lbl.text = "%d/%d" % [GameManager.unlocked_achievements.size(), AchievementData.ACHIEVEMENTS.size()]
 
-	# 已获称号数：有渡劫成功的角色数 / 角色总数
-	var total_c := CultivatorData.DEFS.size()
-	var titled_c := 0
-	for cid in CultivatorData.DEFS.keys():
-		if AchievementData.title_for_wins(GameManager.get_cultivator_record(String(cid))["wins"]) != "":
-			titled_c += 1
-	_title_val_lbl.text = "%d/%d" % [titled_c, total_c]
-
-	# 2. 刷新成就列表
+	# 2. 重建成就页（分类分节 + 3 列卡网格）
 	for c in _ach_list_box.get_children():
 		c.queue_free()
-	for a in AchievementData.ACHIEVEMENTS:
-		_ach_list_box.add_child(_create_achievement_row(a))
+	for cat in AchievementData.CATEGORY_ORDER:
+		var defs: Array = AchievementData.ACHIEVEMENTS.filter(
+			func(a: Dictionary) -> bool: return String(a.get("category", "")) == cat)
+		if defs.is_empty():
+			continue
+		var done := 0
+		for a in defs:
+			if GameManager.is_achievement_unlocked(String(a.get("id", ""))):
+				done += 1
+		_ach_list_box.add_child(_section_header("✦ %s · %d/%d" % [
+			String(AchievementData.CATEGORY_NAMES.get(cat, cat)), done, defs.size()],
+			_category_color(cat)))
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		for a in defs:
+			grid.add_child(_create_achievement_card(a))
+		_ach_list_box.add_child(grid)
+		_ach_list_box.add_child(_spacer(4))
 
-	# 3. 刷新道统功名列表
+	# 3. 重建角色页（2 列大卡网格）
 	for c in _cult_list_box.get_children():
 		c.queue_free()
+	var unlocked_n := 0
 	for cid in CultivatorData.DEFS.keys():
-		_cult_list_box.add_child(_create_cultivator_row(String(cid)))
+		if GameManager.is_cultivator_unlocked(String(cid)):
+			unlocked_n += 1
+	_cult_list_box.add_child(_section_header("✦ 角色 · 已解锁 %d/%d · 通关对应难度即可点亮该档封印" % [
+		unlocked_n, CultivatorData.DEFS.size()], GameStyle.GOLD))
+	var cgrid := GridContainer.new()
+	cgrid.columns = 2
+	cgrid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cgrid.add_theme_constant_override("h_separation", 8)
+	cgrid.add_theme_constant_override("v_separation", 8)
+	for cid in CultivatorData.DEFS.keys():
+		cgrid.add_child(_create_cultivator_card(String(cid)))
+	_cult_list_box.add_child(cgrid)
 
 	# 4. 刷新渡劫实录列表
 	_rebuild_log_list()
 
-	# 5. 三页整棵子树放开「按下」冒泡：行卡是 PanelContainer（mouse_filter 默认 STOP），
+	# 5. 三页整棵子树放开「按下」冒泡：卡片是 PanelContainer（mouse_filter 默认 STOP），
 	#    会把外层 ScrollContainer 起手锁定手指拖动要的那一拍就地吃掉 —— 卡片盖住多大面积
-	#    就滑不动多大面积，只有卡片缝隙能划（用户 2026-10-10 真机：天道功绩簿「只有手碰到
+	#    就滑不动多大面积，只有卡片缝隙能划（用户 2026-10-10 真机：「只有手碰到
 	#    黑色间隔才能滑动」）。列表每次刷新都重建，所以在这里补刷，不在 _build_body 里补。
 	for p in _pages:
 		GameStyle.swipeable(p as Control)
@@ -189,131 +217,215 @@ func _refresh_data() -> void:
 func _fmt_time(t: float) -> String:
 	return "%02d:%02d" % [int(t / 60.0), int(t) % 60]
 
+## 成就分类色（试炼朱砂 / 流派主蓝 / 历练增益绿 / 机缘点缀黄）
+func _category_color(cat: String) -> Color:
+	match cat:
+		"trial":
+			return GameStyle.BAD
+		"style":
+			return GameStyle.GOLD
+		"grind":
+			return GameStyle.GOOD
+		_:
+			return GameStyle.JADE
+
+## 难度档色（封印格与境界 chip 共用：难度越高色越烈）
+func _danger_color(d: int) -> Color:
+	match d:
+		0:
+			return GameStyle.GOOD
+		1:
+			return GameStyle.GOLD
+		2:
+			return GameStyle.JADE
+		3:
+			return GameStyle.ELEMENT
+		4:
+			return GameStyle.BAD
+		_:
+			return GameStyle.RARITY_LEGEND
+
 ## 小节标题条
-func _section_header(text: String) -> Control:
+func _section_header(text: String, color: Color = GameStyle.GOLD) -> Control:
 	var lbl := Label.new()
 	lbl.text = text
-	GameStyle.label(lbl, 13, GameStyle.GOLD, 0, GameStyle.INK, true)
+	GameStyle.label(lbl, 13, color, 0, GameStyle.INK, true)
 	return lbl
 
-# ----------------- 天道功绩行 -----------------
+# ----------------- 成就大色块卡 -----------------
 
-func _create_achievement_row(adef: Dictionary) -> Control:
+func _create_achievement_card(adef: Dictionary) -> Control:
 	var aid := String(adef.get("id", ""))
 	var is_done: bool = GameManager.is_achievement_unlocked(aid)
-	var row := PanelContainer.new()
-	var style := GameStyle.side_card(GameStyle.JADE if is_done else GameStyle.LINE)
-	if not is_done:
-		style.bg_color = GameStyle.INK.lightened(0.02)
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 6.0
-	style.content_margin_bottom = 6.0
-	row.add_theme_stylebox_override("panel", style)
+	var cat := String(adef.get("category", "luck"))
+	var cat_col := _category_color(cat)
 
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	row.add_child(hbox)
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(240, 128)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 已达成 = 分类色实底大色块（奖章）；未达成 = 墨底灰线描边
+	var sb: StyleBoxFlat
+	if is_done:
+		sb = GameStyle.block(cat_col, GameStyle.SLANT_BLOCK, Vector2(2, 3))
+	else:
+		sb = GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, GameStyle.SLANT_BLOCK)
+	sb.content_margin_left = 10.0
+	sb.content_margin_right = 10.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	card.add_theme_stylebox_override("panel", sb)
 
-	# 图标
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	card.add_child(vbox)
+
+	# 顶行：图标 + 状态签
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	vbox.add_child(top)
+
 	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(36, 36)
+	icon_box.custom_minimum_size = Vector2(40, 40)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	icon_box.add_theme_stylebox_override("panel",
+		GameStyle.outlined_panel(GameStyle.INK, cat_col.darkened(0.55) if is_done else GameStyle.LINE, 1, 0.0))
 	var icon_tex := TextureRect.new()
 	if ResourceLoader.exists(String(adef.get("icon", ""))):
 		icon_tex.texture = load(String(adef["icon"]))
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(30, 30)
+	icon_tex.custom_minimum_size = Vector2(32, 32)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if not is_done:
 		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)
-	hbox.add_child(icon_box)
+	top.add_child(icon_box)
 
-	# 成就名与条件
-	var text_col := VBoxContainer.new()
-	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_col.add_theme_constant_override("separation", 2)
-	hbox.add_child(text_col)
-
-	var name_lbl := Label.new()
-	name_lbl.text = String(adef.get("name", "未命名成就"))
-	# 未达成行是暗底（INK 压暗），字走暗底亮字；已达成行同底，名字走纸白
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if is_done else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
-	text_col.add_child(name_lbl)
-
-	var cond_lbl := Label.new()
-	cond_lbl.text = String(adef.get("cond_desc", ""))
-	GameStyle.label(cond_lbl, 11, GameStyle.JADE if is_done else GameStyle.PAPER_DIM)
-	text_col.add_child(cond_lbl)
-
-	# 奖励说明
-	var rtype := String(adef.get("reward_type", ""))
-	var rprefix := "解锁角色：" if rtype == "cultivator" else "解锁道具："
-	var rname := String(adef.get("reward_name", ""))
-	var reward_lbl := Label.new()
-	reward_lbl.text = "%s%s" % [rprefix, rname]
-	reward_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	reward_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-	GameStyle.label(reward_lbl, 11, GameStyle.PAPER_DIM)
-	hbox.add_child(reward_lbl)
-
-	# 状态色签
 	var status_lbl := Label.new()
 	status_lbl.text = " 已达成 " if is_done else " 未达成 "
+	status_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK if is_done else GameStyle.LINE))
-	# 深绿徽章底（GOOD_DK）配亮字，状态一眼可读
-	GameStyle.label(status_lbl, 12, GameStyle.CHALK if is_done else GameStyle.GREY)
-	hbox.add_child(status_lbl)
+	status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.INK if is_done else GameStyle.LINE))
+	# 已达成：黑签配分类色字（色块卡上再压一块亮签会糊）；未达成：灰签灰字
+	GameStyle.label(status_lbl, 11, cat_col if is_done else GameStyle.GREY)
+	top.add_child(status_lbl)
 
-	return row
+	# 成就名
+	var name_lbl := Label.new()
+	name_lbl.text = String(adef.get("name", "未命名成就"))
+	GameStyle.label(name_lbl, 14, GameStyle.INK_TEXT if is_done else GameStyle.PAPER, 0, GameStyle.INK, true)
+	vbox.add_child(name_lbl)
 
-# ----------------- 道统功名行 -----------------
+	# 达成条件（硬换行，最多 2 行，全文进 DetailTip）
+	var cond_lbl := Label.new()
+	cond_lbl.text = _wrap2(String(adef.get("cond_desc", "")), 218.0)
+	cond_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	GameStyle.label(cond_lbl, 11,
+		GameStyle.with_alpha(GameStyle.INK_TEXT, 0.75) if is_done else GameStyle.PAPER_DIM)
+	vbox.add_child(cond_lbl)
 
-func _create_cultivator_row(cid: String) -> Control:
+	# 奖励签
+	var reward_lbl := Label.new()
+	var rtype := String(adef.get("reward_type", ""))
+	if rtype == "cultivator":
+		reward_lbl.text = " 解锁角色：%s " % String(adef.get("reward_name", ""))
+	elif rtype == "item":
+		reward_lbl.text = " 解锁道具：%s " % String(adef.get("reward_name", ""))
+	else:
+		reward_lbl.text = " 荣誉 "
+	reward_lbl.add_theme_stylebox_override("normal",
+		GameStyle.chip(GameStyle.INK if is_done else GameStyle.NAVY2))
+	GameStyle.label(reward_lbl, 10, GameStyle.CHALK if is_done else GameStyle.PAPER_DIM)
+	vbox.add_child(reward_lbl)
+
+	# 卡面点按 → 「这是什么」详情
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	GameStyle.tap(card, func() -> void: _open_achievement_tip(adef, card))
+	return card
+
+## 条件文案硬换行并截到 2 行（卡片高有限，全文走点按详情）
+func _wrap2(text: String, max_w: float) -> String:
+	var wrapped := GameStyle.wrap_cjk(text, GameStyle.body_font(), 11, max_w)
+	var lines := wrapped.split("\n")
+	if lines.size() <= 2:
+		return wrapped
+	var cut := lines[1]
+	if cut.length() > 0:
+		cut = cut.substr(0, cut.length() - 1) + "…"
+	return lines[0] + "\n" + cut
+
+## 成就卡点按详情
+func _open_achievement_tip(adef: Dictionary, anchor: Control) -> void:
+	var is_done: bool = GameManager.is_achievement_unlocked(String(adef.get("id", "")))
+	var cat := String(adef.get("category", "luck"))
+	var rtype := String(adef.get("reward_type", ""))
+	var reward_txt := "纯荣誉纪念"
+	if rtype == "cultivator":
+		reward_txt = "解锁角色：%s" % String(adef.get("reward_name", ""))
+	elif rtype == "item":
+		reward_txt = "解锁道具：%s" % String(adef.get("reward_name", ""))
+	DetailTip.show_over(self, anchor, {
+		"title": String(adef.get("name", "成就")),
+		"chip": String(AchievementData.CATEGORY_NAMES.get(cat, cat)),
+		"chip_color": _category_color(cat),
+		"rows": [
+			["状态", "已达成" if is_done else "未达成", GameStyle.GOOD if is_done else GameStyle.GREY],
+			["奖励", reward_txt, GameStyle.JADE],
+		],
+		"body": String(adef.get("cond_desc", "")),
+		"foot": "成就只作记录与解锁，不提供局内数值加成。",
+	})
+
+# ----------------- 角色大色块卡（境界 + 六难度封印） -----------------
+
+func _create_cultivator_card(cid: String) -> Control:
 	var unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var rec := GameManager.get_cultivator_record(cid)
 	var wins := int(rec["wins"])
-	var title := AchievementData.title_for_wins(wins)
 	var best_danger := GameManager.get_cultivator_best_danger(cid)
+	var mask := GameManager.get_cultivator_danger_mask(cid)
+	var has_realm := unlocked and best_danger >= 0
+	var realm_col := _danger_color(best_danger) if has_realm else GameStyle.LINE
 
-	var row := PanelContainer.new()
-	var style := GameStyle.side_card(GameStyle.JADE if (unlocked and wins > 0) else GameStyle.LINE)
-	if not unlocked:
-		style.bg_color = GameStyle.INK.lightened(0.02)
-	style.content_margin_left = 10.0
-	style.content_margin_right = 10.0
-	style.content_margin_top = 6.0
-	style.content_margin_bottom = 6.0
-	row.add_theme_stylebox_override("panel", style)
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(380, 116)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 卡框即境界色：通关过的角色一眼能看出打到了什么高度
+	var sb := GameStyle.outlined_panel(GameStyle.INK, realm_col if has_realm else GameStyle.LINE, 2, GameStyle.SLANT_BLOCK)
+	sb.content_margin_left = 10.0
+	sb.content_margin_right = 10.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	card.add_theme_stylebox_override("panel", sb)
 
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 10)
-	row.add_child(hbox)
+	card.add_child(hbox)
 
-	# 头像
+	# 左侧头像大色块：有境界 = 境界色实底，未通关/未解锁 = 墨底
 	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(44, 44)
+	icon_box.custom_minimum_size = Vector2(84, 84)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	if has_realm:
+		icon_box.add_theme_stylebox_override("panel", GameStyle.block(realm_col, 0.0, Vector2(2, 3)))
+	else:
+		icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
 	var cdef := CultivatorData.get_def(cid)
 	var icon_tex := TextureRect.new()
 	if ResourceLoader.exists(String(cdef.get("icon", ""))):
 		icon_tex.texture = load(String(cdef["icon"]))
 	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(38, 38)
+	icon_tex.custom_minimum_size = Vector2(72, 72)
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if not unlocked:
 		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)
 	hbox.add_child(icon_box)
 
-	# 名字 + 称号 / 生涯摘要
+	# 右侧信息列
 	var text_col := VBoxContainer.new()
 	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_col.add_theme_constant_override("separation", 2)
+	text_col.add_theme_constant_override("separation", 4)
 	hbox.add_child(text_col)
 
 	var name_row := HBoxContainer.new()
@@ -322,52 +434,70 @@ func _create_cultivator_row(cid: String) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(cdef.get("name", "未知角色"))
-	GameStyle.label(name_lbl, 14, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
-	var title_lbl := Label.new()
+	var realm_lbl := Label.new()
 	if not unlocked:
-		title_lbl.text = " 未解锁 "
-		title_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
-		GameStyle.label(title_lbl, 11, GameStyle.GREY)
-	elif title != "":
-		title_lbl.text = " %s " % title
-		title_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
-		GameStyle.label(title_lbl, 11, GameStyle.INK_TEXT)
+		realm_lbl.text = " 未解锁 "
+		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
+		GameStyle.label(realm_lbl, 11, GameStyle.GREY)
+	elif has_realm:
+		realm_lbl.text = " %s " % AchievementData.realm_for_danger(best_danger)
+		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(realm_col))
+		GameStyle.label(realm_lbl, 11, GameStyle.INK_TEXT)
 	else:
-		title_lbl.text = "待解锁"
-		title_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-		GameStyle.label(title_lbl, 11, GameStyle.PAPER_DIM)
-	title_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	name_row.add_child(title_lbl)
+		realm_lbl.text = " 未通关 "
+		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
+		GameStyle.label(realm_lbl, 11, GameStyle.PAPER_DIM)
+	realm_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_row.add_child(realm_lbl)
 
-	var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"
-	var danger_txt := "最高「%s」" % AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关"
+	# 六难度封印格：通关过该档即点亮（未解锁角色全灭）
+	var seals := HBoxContainer.new()
+	seals.add_theme_constant_override("separation", 4)
+	seals.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text_col.add_child(seals)
+	for d in range(SEAL_CHARS.size()):
+		var lit := unlocked and (mask & (1 << d)) != 0
+		var seal := Label.new()
+		seal.text = SEAL_CHARS[d]
+		seal.custom_minimum_size = Vector2(24, 24)
+		seal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		seal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		if lit:
+			seal.add_theme_stylebox_override("normal", GameStyle.panel(_danger_color(d), 0.0, Vector2.ZERO))
+			GameStyle.label(seal, 11, GameStyle.INK_TEXT)
+		else:
+			seal.add_theme_stylebox_override("normal", GameStyle.slot())
+			GameStyle.label(seal, 11, GameStyle.GREY)
+		seals.add_child(seal)
+	# 封印格图例
+	var legend := Label.new()
+	legend.text = " 简→极"
+	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	GameStyle.label(legend, 10, GameStyle.GREY)
+	seals.add_child(legend)
+
+	# 生涯摘要行
 	var detail_lbl := Label.new()
-	detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d · %s" % [wins, endless_txt, int(rec["best_kills"]), danger_txt]
-	# 解锁行走纸白亮字（PAPER_DIM 次级），锁定行更暗一档（GREY）
-	GameStyle.label(detail_lbl, 12, GameStyle.PAPER_DIM if unlocked else GameStyle.GREY)
+	if not unlocked:
+		var adef := AchievementData.cultivator_unlock_achievement(cid)
+		var aname := String(adef.get("name", ""))
+		detail_lbl.text = "达成成就「%s」后解锁" % aname if aname != "" else "达成对应成就后解锁"
+		GameStyle.label(detail_lbl, 11, GameStyle.GREY)
+	else:
+		var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"
+		detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d" % [wins, endless_txt, int(rec["best_kills"])]
+		GameStyle.label(detail_lbl, 11, GameStyle.PAPER_DIM)
 	text_col.add_child(detail_lbl)
 
-	# 里程碑 4 档进度签（1/3/5/10 胜）：达标即点亮对应称号，纯展示、不挂任何奖励
-	var pips := HBoxContainer.new()
-	pips.add_theme_constant_override("separation", 4)
-	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hbox.add_child(pips)
-	for m in AchievementData.MILESTONES:
-		var reached := wins >= int(m["wins"])
-		var pip := Label.new()
-		pip.text = " %d胜 " % int(m["wins"])
-		pip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if reached else GameStyle.LINE))
-		GameStyle.label(pip, 10, GameStyle.INK_TEXT if reached else GameStyle.GREY)
-		pips.add_child(pip)
+	# 卡面点按 → 「这是什么」详情（生涯档案 / 解锁条件）
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	GameStyle.tap(card, func() -> void: _open_cultivator_tip(cid, card))
+	return card
 
-	# 行点按 → 「这是什么」详情（生涯档案 / 解锁条件）
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	GameStyle.tap(row, func() -> void: _open_cultivator_tip(cid, row))
-	return row
-
-## 道统行点按详情：已解锁看生涯档案，未解锁看达成条件
+## 角色卡点按详情：已解锁看生涯档案与封印进度，未解锁看达成条件
 func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 	var cdef := CultivatorData.get_def(cid)
 	var cname := String(cdef.get("name", "未知角色"))
@@ -386,20 +516,27 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 		return
 	var rec := GameManager.get_cultivator_record(cid)
 	var wins := int(rec["wins"])
+	var best_danger := GameManager.get_cultivator_best_danger(cid)
+	var mask := GameManager.get_cultivator_danger_mask(cid)
+	var lit_n := 0
+	for d in range(SEAL_CHARS.size()):
+		if (mask & (1 << d)) != 0:
+			lit_n += 1
 	var rows: Array = [
 		["游戏局数", "%d 局" % int(rec["runs"]), GameStyle.PAPER],
 		["通关", "%d 次" % wins, GameStyle.JADE],
+		["难度封印", "已点亮 %d/%d" % [lit_n, SEAL_CHARS.size()], GameStyle.GOLD],
 		["无尽最高", ("第 %d 波" % int(rec["endless_best_wave"])) if int(rec["endless_best_wave"]) > 0 else "未入无尽", GameStyle.PAPER],
 		["最高击杀", "%d 只" % int(rec["best_kills"]), GameStyle.PAPER],
-		["最高难度", AchievementData.danger_name(GameManager.get_cultivator_best_danger(cid)) if GameManager.get_cultivator_best_danger(cid) >= 0 else "未通关", GameStyle.GOLD],
+		["最高难度", AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关", GameStyle.GOLD],
 	]
 	DetailTip.show_over(self, anchor, {
 		"title": "%s · 角色记录" % cname,
 		"chip": "档案",
 		"chip_color": GameStyle.JADE,
 		"rows": rows,
-		"body": "称号「%s」" % AchievementData.title_for_wins(wins) if AchievementData.title_for_wins(wins) != "" else "尚未获得称号",
-		"foot": "称号按通关 1/3/5/10 次自动点亮，仅作记录、不发奖励。",
+		"body": "境界「%s」" % AchievementData.realm_for_danger(best_danger) if best_danger >= 0 else "尚未通关，未入境界",
+		"foot": "通关对应难度即点亮该档封印；境界按通关过的最高难度晋升，仅作记录、不发奖励。",
 	})
 
 # ----------------- 渡劫实录行 -----------------

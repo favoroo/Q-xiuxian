@@ -488,56 +488,20 @@ static func slash_wipe(host: Control, col: Color = GOLD) -> void:
     tw.parallel().tween_property(band, "modulate:a", 0.0, 0.18).set_delay(0.34)
     tw.tween_callback(band.queue_free)
 
-## 「元素」角标：贴武器图标右上角的纯色小方块（吃「元素伤害」属性加成的法器专用，
-## 判定走 WeaponData.elemental_scaling_coef）。
-## 为什么不用 chip()：斜切吃宽度、厚底边+错位投影在 10px 高的尺度上全是废高度
-## （2026-10-09 用户反馈「下面还有这么大的空间距」）——这里用零斜切/零边框/零投影的平色块。
-## 为什么包一层 Control：图标容器多为 PanelContainer，会把直接子节点【铺满整个容器】——
-## 直接给 Label 挂底色，色块会跟着拉满盖住整格图标（同日另一处踩坑）。
-## Control 不是容器、不重排自己的子节点，所以外壳吃满布局，角标本体靠锚点缩在右上角、只占文字大小。
-static func element_badge(font_size: int) -> Control:
-    var holder := Control.new()
-    holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+## 「元素」怎么说这件事：吃「元素伤害」属性加成的法器，把它的图标框描边换成暖橙红 ELEMENT
+## （判定唯一真话：WeaponData.elemental_scaling_coef）。
+## 2026-10-12 用户真机：陈列行格子本来就只有 44 见方，右上角那枚「元素」色块把图标遮掉一角，
+## 越小的格子越该把地方让给图 ⇒ 角标整套撤掉，改用边框颜色。
+## 为什么是边框：货架大卡的图标框早就是这一副语言（ShopOfferCardFactory._create_card_head），
+## 同一屏里小格跟大卡说同一句话，玩家不用学第二遍。
+## 边框被更高优先级的状态占用时（选中/可合成/推荐）谁赢，由各调用点自己排；
+## 元素是「这件的固有属性」，状态是「这一刻能对它做什么」，后者盖前者。
+static func is_elemental(weapon_id: String) -> bool:
+    return not weapon_id.is_empty() and WeaponData.elemental_scaling_coef(weapon_id) > 0.0
 
-    var sb := StyleBoxFlat.new()
-    sb.bg_color = ELEMENT
-    sb.skew = Vector2.ZERO
-    sb.shadow_color = Color(0, 0, 0, 0)
-    sb.content_margin_left = 2.0
-    sb.content_margin_right = 2.0
-    sb.content_margin_top = 0.0
-    sb.content_margin_bottom = 0.0
-
-    var lbl := Label.new()
-    lbl.text = "元素"
-    lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    lbl.add_theme_stylebox_override("normal", sb)
-    label(lbl, font_size, INK_TEXT)
-    holder.add_child(lbl)
-    # 零尺寸矩形钉在右上角，生长方向朝左/向下：入树前 get_combined_minimum_size() 拿到的是
-    # 兜底字体的偏大度量（badge_probe 实测 32×22 vs 真值 20×12），预采尺寸会把标签撑大糊住图标。
-    # 让引擎在入树后按真实 min size 自己从角落撑开——永远贴右上角、永远只有文字大小。
-    lbl.anchor_left = 1.0
-    lbl.anchor_right = 1.0
-    lbl.anchor_top = 0.0
-    lbl.anchor_bottom = 0.0
-    lbl.offset_left = -1.0
-    lbl.offset_right = -1.0
-    lbl.offset_top = 1.0
-    lbl.offset_bottom = 1.0
-    lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-    lbl.grow_vertical = Control.GROW_DIRECTION_END
-    return holder
-
-## 如果法器吃「元素伤害」加成，在 parent 槽位挂上元素角标
-static func maybe_add_element_badge(parent: Control, weapon_id: String, font_size: int = 8) -> Control:
-    if weapon_id.is_empty():
-        return null
-    if WeaponData.elemental_scaling_coef(weapon_id) > 0.0:
-        var badge := element_badge(font_size)
-        parent.add_child(badge)
-        return badge
-    return null
+## 图标框描边色：元素件给暖橙红，其余沿用调用方原本那一款（不改变非元素件的长相）
+static func element_border(weapon_id: String, fallback: Color) -> Color:
+    return ELEMENT if is_elemental(weapon_id) else fallback
 
 ## 法器星级 Label（统一字号、描边、右下角对齐）
 static func star_label(parent: Control, star: int, font_size: int = 11) -> Label:
@@ -640,6 +604,17 @@ const _TAP_DOWN_META := "_gs_tap_down"
 const _TAP_SCROLL_META := "_gs_tap_scroll"
 ## 本次手势里「划出去过」的最大距离：手指离按下点的最大距离，与列表被拖走的最大距离，取大的
 const _TAP_REACH_META := "_gs_tap_reach"
+## 盖在**事件对象**上的认领标记：同一次松开沿冒泡链向上，最里层兑现过的热区先盖戳，
+## 外层热区见到就不再重复兑现（点卡里的受益装备图标不许顺手把这张卡选了）。
+## 为什么不用 accept_event()：它会把这一枪从链上摘掉，外层 ScrollContainer 就收不到松开、
+## drag_touching 复位不了（手指抬走了列表还跟着走）。事件对象本身是冒泡链上唯一的公共载体，
+## 给它盖 meta 既不影响别人收事件，又只在这一次手势内有效。
+const _TAP_CLAIM_META := "_gs_tap_claimed"
+
+static func _tap_reset(node: Control) -> void:
+    node.remove_meta(_TAP_DOWN_META)
+    node.remove_meta(_TAP_SCROLL_META)
+    node.remove_meta(_TAP_REACH_META)
 
 ## 挂一次「真点按」：按下与抬起都留在原地才算点，中途划出去（拖列表）就不触发。
 ## 为什么必须显式做：滚动区里的卡片为了让手指拖得起列表，mouse_filter 已从 STOP 降成 PASS
@@ -654,6 +629,7 @@ const _TAP_REACH_META := "_gs_tap_reach"
 ##    阈值 0.5 判成「被拖走过」⇒ 满仓时每一格都点不动）。
 ## 所以中途的每一次 motion 都要记账，容差用同一个 TAP_SLACK：手指微动仍算点，有意划必超。
 ## 都没按下过的松开不算点按 —— 按下在别处，这一枪不该由这块热区兑现。
+## 热区套热区（卡体里嵌图标）时只兑现最里那一层：见 _TAP_CLAIM_META。
 ## 判据 tests/TapSwipeCheck.tscn 与 tests/ShopRowScrollCheck.tscn（真发按下-移动-抬起，
 ## 逐处验「划动不弹、点按照弹」）。
 static func tap(node: Control, on_tap: Callable) -> void:
@@ -665,19 +641,23 @@ static func tap(node: Control, on_tap: Callable) -> void:
                 node.set_meta(_TAP_SCROLL_META, _scroll_offset_above(node))
                 node.set_meta(_TAP_REACH_META, 0.0)
                 return
+            # 这一枪已被更里一层的热区兑现（点卡里的图标/角标）→ 外层卡体不再重复兑现，
+            # 但要清掉自己那半截记账，否则下一次「只收到松开」会拿旧按下点算距离。
+            if mb.has_meta(_TAP_CLAIM_META):
+                _tap_reset(node)
+                return
             if not node.has_meta(_TAP_DOWN_META):
                 return                      # 没在本节点上按下过 → 这一枪不算点
             var down: Vector2 = node.get_meta(_TAP_DOWN_META)
             var scroll0: Vector2 = node.get_meta(_TAP_SCROLL_META, NO_SCROLL_ABOVE)
             var reach: float = node.get_meta(_TAP_REACH_META, 0.0)
-            node.remove_meta(_TAP_DOWN_META)
-            node.remove_meta(_TAP_SCROLL_META)
-            node.remove_meta(_TAP_REACH_META)
+            _tap_reset(node)
             reach = maxf(reach, down.distance_to(mb.global_position))
             if scroll0 != NO_SCROLL_ABOVE:
                 reach = maxf(reach, scroll0.distance_to(_scroll_offset_above(node)))
             if reach > TAP_SLACK:
                 return
+            mb.set_meta(_TAP_CLAIM_META, true)
             on_tap.call()
             return
         var mm := ev as InputEventMouseMotion

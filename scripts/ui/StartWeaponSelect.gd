@@ -164,7 +164,10 @@ func _create_card(w_id: String) -> Control:
 	icon_box.custom_minimum_size = Vector2(icon_size, icon_size)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE if rec else GameStyle.GOLD_EDGE, 2, 0.0))
+	# 边框一色三用，优先级：契合本道统（黄）> 元素件（暖橙红，与商店/图鉴同一语言）> 默认（霜华蓝）。
+	# 「元素」角标已撤 —— 它贴在图标右上角遮图，同一件事货架卡本来就是用边框说的。
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK,
+			GameStyle.JADE if rec else GameStyle.element_border(w_id, GameStyle.GOLD_EDGE), 2, 0.0))
 	var icon_tex = TextureRect.new()
 	if ResourceLoader.exists(def.get("icon", "")):
 		icon_tex.texture = load(def["icon"])
@@ -173,8 +176,6 @@ func _create_card(w_id: String) -> Control:
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_box.add_child(icon_tex)
-	# 吃「元素伤害」属性加成的法器挂橙红角标（与商店/属性面板同一口径）
-	GameStyle.maybe_add_element_badge(icon_box, w_id, 8)
 	vbox.add_child(icon_box)
 
 	# 名称 + 星

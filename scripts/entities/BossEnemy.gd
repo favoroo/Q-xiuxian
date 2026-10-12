@@ -140,8 +140,8 @@ func _cast_summon(player: Node2D) -> void:
 	if GameManager.enemy_count >= GameBalance.BOSS_SUMMON_CAP:
 		return
 	var count: int = GameBalance.BOSS_SUMMON_COUNT + (1 if _phase2 else 0)
-	var hp_mult := GameBalance.enemy_hp_mult(GameManager.wave_number)
-	var dmg_mult := GameBalance.enemy_dmg_mult(GameManager.wave_number)
+	var hp_mult := GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level)
+	var dmg_mult := GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
 	for i in range(count):
 		var scene: PackedScene = _minion_scenes[i % _minion_scenes.size()]
 		var minion := scene.instantiate() as EnemyBase

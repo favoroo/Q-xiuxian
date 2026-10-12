@@ -32,6 +32,13 @@ signal pause_requested
 ## 现在按商店那把尺子收口（与 WaveShop 同一口径）：`chrome_x()` 把 lean 算进占位、
 ## `card_pad_x()` 给滚动区里的卡角留白、卡间缝与卡内边距按用户口径收窄，省下的宽换成 ① 的呼吸量。
 ## 判据补两条尺：卡角不许被滚动区横向切掉、控件画出来那一圈离所属面板的画出来的边要留白。
+##
+## 2026-10-12 用户真机（第 8 波结束那屏）：「手压在卡片上滑不动，要挪到侧面没有卡片遮挡的
+## 地方才能滑，这不合理呀」。根因不在滚动没做，在「按下那一拍被谁吃了」：卡体是 PanelContainer
+## （默认 STOP），按下就地吃掉不冒泡 ⇒ CardScroll 锁不住手指拖动，卡盖多大就滑不动多大。
+## 现在整行建完过一遍 GameStyle.swipeable（卡与卡内图标/角标降成 PASS），并把「松开=选中」
+## 换成 GameStyle.tap 的完整手势识别（否则能滑之后，划一下列表就换一张选中）。
+## 判据：tests/ScrollSwipeCheck.tscn（逐落点验按下能起手）+ tests/TapSwipeCheck.tscn（划动不误选）。
 
 ## 旧 CARD_W 留作「宽屏上限」：判据的文案表按 card_inner_w() 现算，不直接读它
 const CARD_W := 262.0
@@ -166,6 +173,9 @@ func _ready() -> void:
 	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER)
 	GameStyle.button(confirm_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 16, GameStyle.INK_TEXT, 6.0)
+	# 这一屏现在真的要靠手指划（卡高超出滚动区）⇒ 那根滚动条得看得见、像游戏里的东西：
+	# 引擎默认那根浅灰在深蓝底上像系统控件，且 ScrollContainer 只吃 modulate（GameStyle 头注）
+	GameStyle.scrollable(card_scroll)
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm_pick)
 	GameManager.alloc_opened.connect(_on_alloc_opened)
@@ -407,6 +417,13 @@ func _populate_cards() -> void:
 		ctw.set_parallel(true)
 		ctw.tween_property(card_col, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		ctw.tween_property(card_col, "modulate:a", 1.0, 0.16)
+	# 整行建完再放开「按下」冒泡（必须在子树建完之后，见 GameStyle.swipeable 头注）：
+	# 卡体是 PanelContainer（mouse_filter 默认 STOP），会把 CardScroll 起手锁定手指拖动要的
+	# 那一拍就地吃掉、不再向上冒泡 ⇒ 卡盖住多大面积就滑不动多大面积。
+	# 用户 2026-10-12 真机：「手在卡片上面去滑动是滑不动的，要挪到侧面没有卡片遮挡的地方才能滑」。
+	# 卡里那排受益装备图标与「荐」签也一起降成 PASS（否则它们各自是一小块划不动的死区）：
+	# 点它们仍只弹详解、不选卡，靠的是 GameStyle.tap 的「只兑现最里一层」认领，见那里。
+	GameStyle.swipeable(cards_container)
 
 ## 支点 = 这一格自己的中心。不居中则放大时上下不对称（选中卡会往一边多顶出一截）。
 static func _center_pivot(c: Control) -> void:
@@ -538,12 +555,13 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 	# + GameStyle.tap，详情卡复用 StatsTipFactory.open_weapon_tip（HUD 法器栏/属性面板/灵石阁
 	# 同一张卡，不另编文案），再带一句「这条悟道走的哪条链路」（GameBalance.upgrade_benefit_reasons）。
 	# 三条硬口径，判据 tests/BenefitIconTapCheck.tscn 逐条量：
-	# ① 只读 —— 点图标不许顺手把这张卡选中（看东西这个动作不改写状态）。格体 STOP 把按下与
-	#    抬起都收在自己这一格，不再冒泡到卡体，所以卡片的「松开=选中」收不到这一枪。
+	# ① 只读 —— 点图标不许顺手把这张卡选中（看东西这个动作不改写状态）。格体与卡体都是 PASS
+	#    （要拖得起列表，见 _populate_cards 末尾），拦住选中的是 GameStyle.tap 的「一次手势只
+	#    兑现最里那一层」认领，不是 STOP 拦冒泡。
 	# ② 划得起来 —— 识别器用 GameStyle.tap：中途划过 TAP_SLACK 就不算点，不许一划弹一张卡。
 	# ③ 摆得下 —— 格子按卡内宽现算并夹在 [BF_CELL_MIN, BF_CELL_MAX]，摊不开就换行而不是缩成
-	#    按不动的点（HFlowContainer 的最小宽只有一颗格，绝不把卡顶宽）。卡体是 STOP 的，这一屏
-	#    一旦要竖滑就等于划不动、下半截永远看不见 ⇒ 整卡高仍要留在滚动区给的高之内。
+	#    按不动的点（HFlowContainer 的最小宽只有一颗格，绝不把卡顶宽）。整卡高仍优先留在滚动区
+	#    给的高之内：这一屏是五张卡横向比价用的，竖滑现在划得动了，但仍只当兜底。
 	var benefited: Array = []
 	for w in GameManager.get_weapons_summary():
 		if GameBalance.upgrade_benefits_weapon(data.get("apply", {}), String(w.get("id", ""))):
@@ -591,11 +609,12 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 
 	card.add_child(vbox)
 
-	# 点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认领悟」
-	card.gui_input.connect(func(event: InputEvent):
-		if not _can_interact or _is_confirming:
-			return
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+	# 点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认选择」。
+	# 认「按下与抬起都留在原地」的完整手势，而不是旧写法那句「左键松开 = 选中」：
+	# 卡体已从 STOP 降成 PASS（见 _populate_cards 末尾），按下同时被 CardScroll 拿去锁拖动，
+	# 只认松开的话，手指在卡上划一下列表就换一张选中 —— 与「滑不动」是同一处手势的两面。
+	GameStyle.tap(card, func() -> void:
+		if _can_interact and not _is_confirming:
 			_select_card(index)
 	)
 

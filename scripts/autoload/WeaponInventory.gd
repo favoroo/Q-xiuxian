@@ -62,6 +62,26 @@ static func count_copies(gm: Node, w_id: String, star: int) -> int:
 			n += 1
 	return n
 
+## 统计一件武器各星级当前持有量字典：{1: c1, 2: c2, 3: c3}
+static func star_distribution(gm: Node, w_id: String) -> Dictionary:
+	var dist := {}
+	for s in range(1, WeaponData.MAX_STAR + 1):
+		var c := count_copies(gm, w_id, s)
+		if c > 0:
+			dist[s] = c
+	return dist
+
+## 简短格式化拥有数量与星级分布（如 "★1×2  ★2×1"，若未拥有则返回空串）
+static func format_owned_summary(gm: Node, w_id: String) -> String:
+	var dist := star_distribution(gm, w_id)
+	if dist.is_empty():
+		return ""
+	var parts: Array[String] = []
+	for s in range(1, WeaponData.MAX_STAR + 1):
+		if dist.has(s):
+			parts.append("★%d×%d" % [s, int(dist[s])])
+	return "  ".join(parts)
+
 ## 按 merge_weapon 的消耗顺序统计「可被消耗的副本数」（排除 keep 指定的保留件）
 static func count_mergeable_copies(gm: Node, w_id: String, star: int, keep: Dictionary) -> int:
 	var n := 0

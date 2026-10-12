@@ -56,7 +56,31 @@ const ENEMY_DMG_GROWTH := 1.06            ## 每波接触伤害复利倍率（�
 ## 2026-10-11 缩图减怪：刷入量 -33% 后基线微回 0.65→0.68（W1 单下 ≈8.5% 气血，仍在 ≤9% 窗内）。
 const ENEMY_DMG_BASE_MULT := 0.68
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
+const ENEMY_SPEED_VARIANCE := 0.12           ## 敌人移速 ±12% 随机浮动（土豆兄弟式快慢梯队：同屏同种怪不再整齐划一）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外灵石
+
+# ---------------- 精英变异（2026-10-12，仿土豆兄弟 Elite Mutation） ----------------
+## 精英过血线触发一次性行为变异：坦克出震地、突进加侧射、远程压近身。
+## 阈值与倍率集中在此（铁律 1），EnemyBase._enter_mutation() 只读不写。
+const ELITE_MUTATION_HP_PCT := 0.6           ## 精英变异触发血线（≤60%）
+const MUT_GOLEM_SPEED_MULT := 1.35           ## 铁甲巨怪变异：移速提升
+const MUT_GOLEM_SLAM_INTERVAL := 3.2         ## 铁甲巨怪变异：震地周期（秒）
+const MUT_GOLEM_SLAM_RADIUS := 130.0         ## 铁甲巨怪变异：震地半径（Boss 175 的精英档）
+const MUT_GOLEM_SLAM_WINDUP := 0.8           ## 铁甲巨怪变异：震地预警时长
+const MUT_GOLEM_SLAM_DMG_MULT := 1.2         ## 铁甲巨怪变异：震地伤害 = 接触伤害 × 系数
+const MUT_CHILEI_INTERVAL_MULT := 0.55       ## 烈雷兽变异：长扑周期缩短倍率
+const MUT_CHILEI_SIDE_BOLTS := 1             ## 烈雷兽变异：冲刺起步向左右各放的火球数
+const MUT_JIANSHA_BOLT_COUNT := 5            ## 剑客亡灵变异：剑气 3→5 连
+const MUT_JIANSHA_INTERVAL_MULT := 0.7       ## 剑客亡灵变异：剑气间隔缩短倍率
+const MUT_JIANSHA_RANGE := 180.0             ## 剑客亡灵变异：风筝距离 280→180（压近身）
+
+## 灵医每跳治疗量：随波次复利成长（与敌人伤害同一条 dmg 曲线，保治疗与输出同量级对抗）
+static func healer_amount(wave: int) -> float:
+	return 6.0 * pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
+
+## 金蟾击杀金币：随波次成长（与灵石经济同量级）
+static func looter_stone_reward(wave: int) -> int:
+	return 12 + int(2.5 * float(maxi(wave, 1)))
 
 static func wave_duration(wave: int) -> float:
 	return minf(WAVE_DURATION_BASE + float(maxi(wave, 1)) * WAVE_DURATION_PER_WAVE, WAVE_DURATION_MAX)
@@ -119,15 +143,18 @@ static func boss_contact_damage(wave: int) -> float:
 # ---------------- 危险度（通关解锁的难度梯度，仿土豆兄弟 Danger 0~5） ----------------
 
 const DANGER_MAX := 5
-const DANGER_HP_PER := 0.22     ## 每档妖兽气血 +22%
-const DANGER_DMG_PER := 0.12    ## 每档妖兽伤害 +12%
-const DANGER_COUNT_PER := 0.15  ## 每档妖潮规模 +15%
+const DANGER_HP_BASE := 1.08    ## 简单档基线气血（不再是 ×1.0 纯裸，给入门档一点压力）
+const DANGER_HP_PER := 0.30    ## 每档妖兽气血 +30%
+const DANGER_DMG_BASE := 1.04  ## 简单档基线伤害
+const DANGER_DMG_PER := 0.16   ## 每档妖兽伤害 +16%
+const DANGER_COUNT_BASE := 1.08  ## 简单档基线妖潮规模
+const DANGER_COUNT_PER := 0.20  ## 每档妖潮规模 +20%
 
 static func danger_hp_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER
+	return DANGER_HP_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER
 
 static func danger_dmg_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_DMG_PER
+	return DANGER_DMG_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_DMG_PER
 
 static func danger_count_mult(danger: int) -> float:
-	return 1.0 + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER
+	return DANGER_COUNT_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER

@@ -31,7 +31,19 @@ const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
 const ENEMY_DMG_BASE_MULT := BalanceWave.ENEMY_DMG_BASE_MULT
 const ENEMY_STAT_VARIANCE := BalanceWave.ENEMY_STAT_VARIANCE
+const ENEMY_SPEED_VARIANCE := BalanceWave.ENEMY_SPEED_VARIANCE
 const ELITE_STONE_BONUS := BalanceWave.ELITE_STONE_BONUS
+const ELITE_MUTATION_HP_PCT := BalanceWave.ELITE_MUTATION_HP_PCT
+const MUT_GOLEM_SPEED_MULT := BalanceWave.MUT_GOLEM_SPEED_MULT
+const MUT_GOLEM_SLAM_INTERVAL := BalanceWave.MUT_GOLEM_SLAM_INTERVAL
+const MUT_GOLEM_SLAM_RADIUS := BalanceWave.MUT_GOLEM_SLAM_RADIUS
+const MUT_GOLEM_SLAM_WINDUP := BalanceWave.MUT_GOLEM_SLAM_WINDUP
+const MUT_GOLEM_SLAM_DMG_MULT := BalanceWave.MUT_GOLEM_SLAM_DMG_MULT
+const MUT_CHILEI_INTERVAL_MULT := BalanceWave.MUT_CHILEI_INTERVAL_MULT
+const MUT_CHILEI_SIDE_BOLTS := BalanceWave.MUT_CHILEI_SIDE_BOLTS
+const MUT_JIANSHA_BOLT_COUNT := BalanceWave.MUT_JIANSHA_BOLT_COUNT
+const MUT_JIANSHA_INTERVAL_MULT := BalanceWave.MUT_JIANSHA_INTERVAL_MULT
+const MUT_JIANSHA_RANGE := BalanceWave.MUT_JIANSHA_RANGE
 const ELITE_WAVES := BalanceWave.ELITE_WAVES
 const BOSS_WAVES := BalanceWave.BOSS_WAVES
 const BOSS_HP_BASE := BalanceWave.BOSS_HP_BASE
@@ -53,8 +65,11 @@ const BOSS_PHASE2_SPEED_MULT := BalanceWave.BOSS_PHASE2_SPEED_MULT
 const BOSS_KNOCKBACK_RESIST := BalanceWave.BOSS_KNOCKBACK_RESIST
 const BOSS_STONE_REWARD := BalanceWave.BOSS_STONE_REWARD
 const DANGER_MAX := BalanceWave.DANGER_MAX
+const DANGER_HP_BASE := BalanceWave.DANGER_HP_BASE
 const DANGER_HP_PER := BalanceWave.DANGER_HP_PER
+const DANGER_DMG_BASE := BalanceWave.DANGER_DMG_BASE
 const DANGER_DMG_PER := BalanceWave.DANGER_DMG_PER
+const DANGER_COUNT_BASE := BalanceWave.DANGER_COUNT_BASE
 const DANGER_COUNT_PER := BalanceWave.DANGER_COUNT_PER
 
 # 经验 / 定价 / 灵韵 / 稀有度 / 货架 / 法宝档位 / 白名单 → BalanceEconomy
@@ -268,6 +283,12 @@ static func enemy_hp_mult(wave: int) -> float:
 
 static func enemy_dmg_mult(wave: int) -> float:
 	return BalanceWave.enemy_dmg_mult(wave)
+
+static func healer_amount(wave: int) -> float:
+	return BalanceWave.healer_amount(wave)
+
+static func looter_stone_reward(wave: int) -> int:
+	return BalanceWave.looter_stone_reward(wave)
 
 static func is_boss_wave(n: int) -> bool:
 	return BalanceWave.is_boss_wave(n)

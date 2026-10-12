@@ -24,6 +24,14 @@ var _dying: bool = false
 var _action_fx: float = -1.0        ## 脉冲/动作特效进度（0~1，<0 为无）
 var _lightning_target_pos: Vector2 = Vector2.ZERO ## 雷击特效终点（相对本地坐标）
 
+# --- 增强视觉表现字段 ---
+var _flash_timer: float = 0.0       ## 触发/受激闪白计时（秒）
+var _scale_punch: Vector2 = Vector2.ONE ## 施法挤压回弹（Squash & Stretch）
+var _tether_target_pos: Vector2 = Vector2.ZERO ## 法力连线目标点（相对本地坐标，如玄甲龟拦截）
+var _tether_progress: float = -1.0  ## 连线动画进度（0~1，<0 为无）
+var _spin_angle: float = 0.0        ## 灵兽专属旋转姿态（如灵风貂旋转）
+var _custom_fx_type: String = ""    ## 专属特效类型标记
+
 func _ready() -> void:
 	add_to_group("spirit_pets")
 	if pet_id != "":
@@ -67,6 +75,28 @@ func _physics_process(delta: float) -> void:
 		if _action_fx > 1.0:
 			_action_fx = -1.0
 			_lightning_target_pos = Vector2.ZERO
+			_custom_fx_type = ""
+
+	# 闪白与挤压回弹推进
+	if _flash_timer > 0.0:
+		_flash_timer = maxf(0.0, _flash_timer - delta)
+	if _scale_punch != Vector2.ONE:
+		_scale_punch = _scale_punch.lerp(Vector2.ONE, minf(1.0, 14.0 * delta))
+	scale = _scale_punch
+
+	# 连线特效推进（如玄甲龟连线拦截点）
+	if _tether_progress >= 0.0:
+		_tether_progress += delta * 4.5
+		if _tether_progress > 1.0:
+			_tether_progress = -1.0
+			_tether_target_pos = Vector2.ZERO
+
+	# 专属自转衰减（如灵风貂磁吸自转）
+	if absf(_spin_angle) > 0.001:
+		_spin_angle = lerpf(_spin_angle, 0.0, minf(1.0, 10.0 * delta))
+		rotation = _spin_angle
+	else:
+		rotation = 0.0
 
 	# 战斗行为（非终局、非暂停时按冷却心跳推进）
 	if not GameManager.is_game_over and not get_tree().paused:
@@ -99,6 +129,13 @@ func _trigger_action() -> void:
 		"shiyuan":
 			_act_shiyuan()
 
+## 通用触发高光脉冲与形变回弹
+func pulse_trigger_fx(squash_stretch: Vector2 = Vector2(1.35, 1.35), flash_duration: float = 0.14) -> void:
+	_action_fx = 0.0
+	_flash_timer = flash_duration
+	_scale_punch = squash_stretch
+	queue_redraw()
+
 ## 焰灵狐：追踪火丹
 func _act_yanhu() -> void:
 	var nearest := _find_nearest_enemy(320.0)
@@ -120,7 +157,11 @@ func _act_yanhu() -> void:
 	p.spin = false
 	p.activate()
 	p.lifetime = 1.0
-	_action_fx = 0.0
+
+	# 后坐形变 + 灵狐吐火星屑
+	pulse_trigger_fx(Vector2(0.8, 1.3), 0.12)
+	if is_inside_tree() and get_parent() != null:
+		JuiceEffect.spawn_impact_pop(get_parent(), global_position, Color(1.0, 0.45, 0.15), -dir)
 	AudioManager.play_sfx("blade_shoot", 0.35, 1.15)
 
 ## 雷灵雀：高伤雷击
@@ -132,8 +173,11 @@ func _act_leique() -> void:
 	if nearest.has_method("take_damage"):
 		nearest.take_damage(dmg, Vector2.ZERO, true)
 	_lightning_target_pos = to_local(nearest.global_position)
-	_action_fx = 0.0
-	AudioManager.play_sfx("hit_thunder", 0.45, 1.2)
+	pulse_trigger_fx(Vector2(1.4, 0.75), 0.16)
+	# 落雷点击打火花
+	if is_inside_tree() and get_parent() != null:
+		JuiceEffect.spawn_impact_pop(get_parent(), nearest.global_position, Color(0.68, 0.58, 1.0))
+	AudioManager.play_sfx("thunder_strike", 0.45, 1.2)
 
 ## 玄甲龟：拦截飞行物
 func _act_xuangui() -> void:
@@ -144,7 +188,7 @@ func _act_xuangui() -> void:
 	var radius_sq := radius * radius
 	# 以玩家或玄龟为中心，优先拦截威胁最大的飞行物
 	var center := target.global_position if target != null else global_position
-	var candidate: Node = null
+	var candidate: Node2D = null
 	var min_d: float = radius_sq
 	for b in bolts:
 		if not is_instance_valid(b) or not (b is Node2D):
@@ -155,14 +199,37 @@ func _act_xuangui() -> void:
 		var d := center.distance_squared_to(n2d.global_position)
 		if d < min_d:
 			min_d = d
-			candidate = b
+			candidate = n2d
 	if candidate != null:
+		var bolt_pos: Vector2 = candidate.global_position
+		var b_dir: Vector2 = Vector2.ZERO
+		var raw_dir: Variant = candidate.get("direction")
+		if raw_dir is Vector2:
+			b_dir = raw_dir as Vector2
+
+		# 拦截并触发飞行物湮灭火花
 		if candidate.has_method("intercept"):
 			candidate.intercept()
 		elif candidate.has_method("_recycle"):
 			candidate._recycle()
-		_action_fx = 0.0
-		AudioManager.play_sfx("parry", 0.4, 1.1)
+
+		# 1. 灵龟本体闪白与护甲回弹
+		pulse_trigger_fx(Vector2(1.4, 1.4), 0.18)
+		# 2. 从灵龟朝向被拦截弹丸射出一道御灵连线
+		_tether_target_pos = to_local(bolt_pos)
+		_tether_progress = 0.0
+
+		var scene_parent: Node = get_parent()
+		if is_inside_tree() and scene_parent != null:
+			# 3. 拦截点绽放青金相间的护盾光环（与玄甲防御半径契合）
+			var shield_color: Color = GameStyle.AURUM
+			JuiceEffect.spawn_shockwave(scene_parent, bolt_pos, radius * 0.65, shield_color, 0.28)
+			JuiceEffect.spawn_impact_pop(scene_parent, bolt_pos, Color(0.35, 0.85, 0.95), -b_dir)
+			# 4. 浮现青金风格的“抵挡”飘字
+			DamageNumber.spawn(scene_parent, bolt_pos + Vector2(0, -14), 0, false, "抵挡")
+
+		# 5. 清脆有力的防御音效（使用已注册的 impact_blunt）
+		AudioManager.play_sfx("impact_blunt", 0.5, 1.35)
 
 ## 玉露鹿：气血回复
 func _act_yulu() -> void:
@@ -174,14 +241,19 @@ func _act_yulu() -> void:
 	target.heal(heal_amt, true)
 	var gained := target.current_health - before
 	if gained > 0.01:
-		_action_fx = 0.0
-		DamageNumber.spawn(get_parent(), target.global_position + Vector2(0, -22), int(gained), false, "+" + str(int(gained)))
+		pulse_trigger_fx(Vector2(0.9, 1.35), 0.15)
+		var scene_parent: Node = get_parent()
+		if is_inside_tree() and scene_parent != null:
+			# 玩家脚下甘霖回春护环
+			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, 36.0, GameStyle.GOOD, 0.26)
+			DamageNumber.spawn(scene_parent, target.global_position + Vector2(0, -22), int(gained), false, "+" + str(int(gained)))
+		AudioManager.play_sfx("heal", 0.4, 1.25)
 
 ## 灵风貂：磁吸掉落物
 func _act_fengdiao() -> void:
 	var radius := BalanceSpiritPet.magnet_radius(GameManager.pet_effect_mult)
 	var gems := get_tree().get_nodes_in_group("gems")
-	var pulled := 0
+	var pulled: int = 0
 	for g in gems:
 		if not is_instance_valid(g) or not (g is Node2D):
 			continue
@@ -191,18 +263,21 @@ func _act_fengdiao() -> void:
 				g.magnet_to(target)
 				pulled += 1
 	if pulled > 0:
-		_action_fx = 0.0
-		AudioManager.play_sfx("pickup_gem", 0.3, 1.25)
+		pulse_trigger_fx(Vector2(1.25, 1.25), 0.15)
+		_spin_angle = TAU * 2.0  # 旋转 720 度呼啸而过
+		_custom_fx_type = "wind_vortex"
+		var scene_parent: Node = get_parent()
+		if is_inside_tree() and scene_parent != null:
+			JuiceEffect.spawn_shockwave(scene_parent, global_position, radius * 0.45, Color(0.85, 0.92, 1.0, 0.75), 0.3)
+		AudioManager.play_sfx("gem_pickup", 0.35, 1.25)
 
 ## 磐石猿：击退与震击
 func _act_shiyuan() -> void:
 	var dmg := BalanceSpiritPet.smash_damage(GameManager.wave_number, GameManager.pet_damage_mult)
 	var radius := 110.0 * maxf(0.5, GameManager.pet_effect_mult)
-	var hit := false
+	var hit: bool = false
 	for e in GameManager.live_enemies:
 		if not is_instance_valid(e) or not (e is Node2D):
-			continue
-		if e.get("dying") == true:
 			continue
 		var n2d := e as Node2D
 		var diff := n2d.global_position - global_position
@@ -212,18 +287,22 @@ func _act_shiyuan() -> void:
 				e.take_damage(dmg, kb_dir * 180.0, false)
 				hit = true
 	if hit:
-		_action_fx = 0.0
-		AudioManager.play_sfx("hit_heavy", 0.4, 0.95)
+		pulse_trigger_fx(Vector2(1.4, 0.7), 0.16)
+		var scene_parent: Node = get_parent()
+		if is_inside_tree() and scene_parent != null:
+			# 岩土撼地波
+			JuiceEffect.spawn_shockwave(scene_parent, global_position, radius, Color(0.72, 0.62, 0.45, 0.85), 0.32)
+			JuiceEffect.spawn_step_dust(scene_parent, global_position, Vector2.DOWN)
+		AudioManager.play_sfx("enemy_hit_heavy", 0.4, 0.95)
 
-## 聚宝蟾：波末产出灵石（由波末信号调用）
-func harvest_wave_end() -> int:
-	if pet_id != "juchan":
-		return 0
-	var stones := BalanceSpiritPet.harvest_stones(GameManager.wave_number, GameManager.pet_effect_mult)
-	GameManager.add_spirit_stones(stones)
-	_action_fx = 0.0
-	AudioManager.play_sfx("chest_open", 0.4, 1.2)
-	return stones
+## 聚宝蟾：波末产出灵石触发视觉动效
+func trigger_wave_harvest_fx() -> void:
+	pulse_trigger_fx(Vector2(1.5, 0.8), 0.22)
+	var scene_parent: Node = get_parent()
+	if is_inside_tree() and scene_parent != null:
+		# 金蟾喷吐金色灵髓流光
+		JuiceEffect.spawn_pickup_pop(scene_parent, global_position, true)
+		JuiceEffect.spawn_shockwave(scene_parent, global_position, 48.0, GameStyle.JADE, 0.35)
 
 func _find_nearest_enemy(max_range: float) -> Node2D:
 	var nearest: Node2D = null
@@ -255,39 +334,65 @@ func dissolve() -> void:
 # ---------------- 程序化绘制 ----------------
 
 func _draw() -> void:
-	var pulse := 0.5 + 0.5 * sin(_age * 3.0 + float(orbit_index))
-	var core_r: float = 7.5 + 1.2 * pulse
-	var color: Color = pet_def.get("color", Color(0.9, 0.9, 0.9))
-	var halo: Color = pet_def.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
+	var pulse: float = 0.5 + 0.5 * sin(_age * 3.0 + float(orbit_index))
+	var flash_ratio: float = clampf(_flash_timer / 0.15, 0.0, 1.0)
+	var core_r: float = (7.5 + 1.2 * pulse) * (1.0 + 0.35 * flash_ratio)
+	var base_color: Color = pet_def.get("color", Color(0.9, 0.9, 0.9))
+	var base_halo: Color = pet_def.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
 
-	# 1. 外晕
-	draw_circle(Vector2.ZERO, core_r * 2.4, Color(halo.r, halo.g, halo.b, halo.a * (0.6 + 0.4 * pulse)))
+	# 闪白提亮：受激/触发时瞬间过曝至乳白流光
+	var color: Color = base_color.lerp(Color.WHITE, flash_ratio * 0.85)
+	var halo: Color = base_halo.lerp(Color(1.0, 1.0, 1.0, 0.75), flash_ratio * 0.7)
+
+	# 1. 外晕（触发时爆发扩张）
+	var halo_scale: float = 2.4 + 1.2 * flash_ratio
+	draw_circle(Vector2.ZERO, core_r * halo_scale, Color(halo.r, halo.g, halo.b, halo.a * (0.6 + 0.4 * pulse + 0.4 * flash_ratio)))
 	# 2. 中晕
-	draw_circle(Vector2.ZERO, core_r * 1.5, Color(color.r, color.g, color.b, 0.35))
+	draw_circle(Vector2.ZERO, core_r * 1.5, Color(color.r, color.g, color.b, 0.35 + 0.3 * flash_ratio))
 	# 3. 核心
 	draw_circle(Vector2.ZERO, core_r, color)
 	# 4. 高光
-	draw_circle(Vector2(-1.8, -2.5), core_r * 0.4, Color(1.0, 1.0, 1.0, 0.85))
+	draw_circle(Vector2(-1.8, -2.5) * (1.0 + 0.2 * flash_ratio), core_r * 0.4, Color(1.0, 1.0, 1.0, 0.85))
 
 	# 5. 特征部件
 	var decor: String = String(pet_def.get("decor", ""))
 	_draw_decor(decor, core_r, color)
 
-	# 6. 行动特效（波纹或雷弧）
+	# 6. 法力连线（如玄甲龟拦截弹丸时的御灵连线）
+	if _tether_progress >= 0.0 and _tether_target_pos != Vector2.ZERO:
+		var tether_alpha: float = 1.0 - _tether_progress
+		var tether_col: Color = GameStyle.AURUM
+		tether_col.a = tether_alpha * 0.9
+		# 主护身光束
+		draw_line(Vector2.ZERO, _tether_target_pos, tether_col, 2.8 * tether_alpha)
+		# 内芯白光
+		draw_line(Vector2.ZERO, _tether_target_pos, Color(1.0, 1.0, 1.0, tether_alpha * 0.95), 1.2 * tether_alpha)
+		# 连线中继符文节点
+		draw_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
+		draw_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
+
+	# 7. 行动特效（波纹、雷弧或风灵气旋）
 	if _action_fx >= 0.0:
 		if _lightning_target_pos != Vector2.ZERO:
-			# 雷弧短闪
-			var points := PackedVector2Array([
-				Vector2.ZERO,
-				_lightning_target_pos * 0.35 + Vector2(randf_range(-6, 6), randf_range(-6, 6)),
-				_lightning_target_pos * 0.7 + Vector2(randf_range(-6, 6), randf_range(-6, 6)),
-				_lightning_target_pos
-			])
-			draw_polyline(points, Color(0.85, 0.82, 1.0, 1.0 - _action_fx), 2.5)
+			# 雷弧短闪（折线电弧 + 主白内芯）
+			var p1: Vector2 = _lightning_target_pos * 0.35 + Vector2(randf_range(-6, 6), randf_range(-6, 6))
+			var p2: Vector2 = _lightning_target_pos * 0.7 + Vector2(randf_range(-6, 6), randf_range(-6, 6))
+			var points: PackedVector2Array = PackedVector2Array([Vector2.ZERO, p1, p2, _lightning_target_pos])
+			var arc_alpha: float = 1.0 - _action_fx
+			draw_polyline(points, Color(0.68, 0.58, 1.0, arc_alpha), 3.0)
+			draw_polyline(points, Color(1.0, 1.0, 1.0, arc_alpha * 0.9), 1.2)
+		elif _custom_fx_type == "wind_vortex":
+			# 灵风气旋双螺旋
+			var wind_r: float = lerpf(core_r * 1.5, core_r * 4.5, _action_fx)
+			var wind_alpha: float = (1.0 - _action_fx) * 0.8
+			draw_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.2)
+			draw_arc(Vector2.ZERO, wind_r * 0.7, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.7), 1.6)
 		else:
-			# 扩散波纹环
-			var ring_r := lerpf(core_r, core_r * 3.4, _action_fx)
-			draw_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(color.r, color.g, color.b, 1.0 - _action_fx), 1.8)
+			# 扩散波纹环（双重能量环：主环 + 亮白内圈）
+			var ring_r: float = lerpf(core_r, core_r * 3.8, _action_fx)
+			var ring_alpha: float = 1.0 - _action_fx
+			draw_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(color.r, color.g, color.b, ring_alpha * 0.85), 2.4)
+			draw_arc(Vector2.ZERO, ring_r * 0.82, 0.0, TAU, 28, Color(1.0, 1.0, 1.0, ring_alpha * 0.6), 1.4)
 
 func _draw_decor(decor: String, r: float, color: Color) -> void:
 	match decor:

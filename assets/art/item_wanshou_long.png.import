@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://qwd38w6fa81p"
-path="res://.godot/imported/prop_broken_pillar.png-697e07f4a89aa2790bc31db9d502004c.ctex"
+uid="uid://dkl04fmmxte7d"
+path="res://.godot/imported/item_wanshou_long.png-015838055b14345735622874ea92bd37.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/prop_broken_pillar.png"
-dest_files=["res://.godot/imported/prop_broken_pillar.png-697e07f4a89aa2790bc31db9d502004c.ctex"]
+source_file="res://assets/art/item_wanshou_long.png"
+dest_files=["res://.godot/imported/item_wanshou_long.png-015838055b14345735622874ea92bd37.ctex"]
 
 [params]
 

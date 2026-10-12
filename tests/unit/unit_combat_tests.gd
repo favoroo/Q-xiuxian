@@ -114,6 +114,21 @@ func _test_screen_shake_budget() -> void:
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_DURATION > GameBalance.KILL_HITSTOP_DURATION, "暴击击杀顿帧比普通击杀更实")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL >= GameBalance.KILL_HITSTOP_MIN_INTERVAL, "暴击击杀顿帧限流不宽于普通击杀")
 
+	# 6. 跳字模式档位：智能合并 / 全部显示 / 仅暴击 / 关闭，且与布尔总开关双向同步
+	var orig_num_mode: StringName = SettingsManager.damage_number_mode()
+	SettingsManager.set_val(&"display", &"damage_number_mode", &"off")
+	_c.equals(SettingsManager.damage_number_mode(), &"off", "跳字模式「关闭」设置成功")
+	_c.equals(bool(SettingsManager.get_val(&"display", &"damage_numbers", true)), false, "关闭跳字模式带动布尔开关关闭")
+	SettingsManager.set_val(&"display", &"damage_number_mode", &"smart")
+	_c.equals(SettingsManager.damage_number_mode_label(), "智能合并", "智能合并人话标签正确")
+	_c.equals(bool(SettingsManager.get_val(&"display", &"damage_numbers", false)), true, "非关闭跳字模式带动布尔开关开启")
+	SettingsManager.set_val(&"display", &"damage_numbers", false)
+	_c.equals(SettingsManager.damage_number_mode(), &"off", "关闭布尔开关带动跳字模式切为 off")
+	SettingsManager.set_val(&"display", &"damage_numbers", true)
+	_c.equals(SettingsManager.damage_number_mode(), &"smart", "开启布尔开关时恢复智能合并模式")
+	_c.equals(SettingsManager.damage_number_mode_next(), &"all", "智能合并下一档为全部显示")
+	SettingsManager.set_val(&"display", &"damage_number_mode", orig_num_mode)
+
 func _test_knock_direction() -> void:
 	var p := Vector2.ZERO
 	var src := Vector2(300.0, 0.0)                 # 落点：玩家正东 300 的敌人（正是分配位，不是最近位）

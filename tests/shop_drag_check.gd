@@ -632,11 +632,23 @@ func _deselect() -> void:
 	_shop._refresh_inventory()
 
 ## 把某一格滑到可视框正中，返回它落定后的中心（溢出的整排不滑进来就打不到）
+## 把某一格划进可视框并返回落定后的中心。
+## 与 ShopRowScrollCheck 同一把尺：写一次不算数，要「连续两帧读数没再动、且这一格真在框里」
+## 才算落定 —— 刚划完那几帧 ScrollContainer 还在收上一次拖动的落点，此时写进去的
+## scroll_horizontal 会被顶回去；格子越大（内容越宽、要划的越远）越容易读到还没落地的旧位置，
+## 下一枪的「拖前读数」就成了假基准（2026-10-12 陈列行图标从 36 抬到 56 后暴露）。
 func _bring_into_view(ctl: Control) -> Vector2:
 	var vis := _scroll.get_global_rect()
-	var want: float = ctl.global_position.x - vis.position.x - (vis.size.x - ctl.size.x) * 0.5
-	_scroll.scroll_horizontal = int(maxf(0.0, want))
-	await _settle(3)
+	var prev := -1
+	for i in range(12):
+		var want: float = ctl.global_position.x - vis.position.x - (vis.size.x - ctl.size.x) * 0.5
+		_scroll.scroll_horizontal = int(maxf(0.0, want))
+		await _settle(1)
+		var now := _scroll.scroll_horizontal
+		var r: Rect2 = ctl.get_global_rect()
+		if now == prev and r.position.x >= vis.position.x - EPS and r.end.x <= vis.end.x + EPS:
+			break
+		prev = now
 	return ctl.get_global_rect().get_center()
 
 ## 一次把两格都摆进可视框（取它们的中点居中），返回两格落定后的中心。

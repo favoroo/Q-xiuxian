@@ -1157,6 +1157,14 @@ func increase_max_hp(amount: float, heal_amount: float) -> void:
 	play_squash(Vector2(0.82, 1.25), 0.24)
 	DamageNumber.spawn(get_parent(), global_position, int(heal_amount), false, "+" + str(int(heal_amount)) + " HP")
 
+## 出售回退上限（StatSystem.revert_stat_fields 的 max_hp 分支）：只把上限缩回去、当前血截平。
+## 买的时候那一口治疗不退回来 —— 血已经回了；但超出新上限的那一截必须削平，
+## 否则顶栏与商店那颗气血徽记会读出「145/120」这种假数（读数必须与判定同源）。
+func decrease_max_hp(amount: float) -> void:
+	max_health = maxf(1.0, max_health - amount)
+	current_health = minf(current_health, max_health)
+	GameManager.player_hp_changed.emit(current_health, max_health)
+
 func _on_pickup_area_area_entered(area: Area2D) -> void:
 	# 只认实现了 magnet_to 的掉落物（灵石）。残丹/回春葫芦故意不实现它：那颗要人贴上去才入口。
 	if area.has_method("magnet_to"):

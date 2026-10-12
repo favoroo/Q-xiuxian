@@ -271,6 +271,10 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 		var filled := i < summary.size()
 		var locked := i >= max_slots
 		var border_col: Color = GameStyle.GOLD if filled else GameStyle.LINE
+		# 元素件 = 暖橙红描边（与商店陈列行/货架卡同一语言；原先贴右上角的「元素」色块已撤，
+		# 44 见方的格子上它会遮掉图标一角 —— 2026-10-12 用户）
+		if filled:
+			border_col = GameStyle.element_border(String(summary[i].get("id", "")), border_col)
 		var bg_col: Color = GameStyle.NAVY if filled else GameStyle.with_alpha(GameStyle.INK, 0.45)
 		var sb_off := GameStyle.outlined_panel(bg_col, border_col, 2, 0.0)
 		slot.add_theme_stylebox_override("panel", sb_off)
@@ -288,8 +292,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(tex_rect)
 
-			# 吃「元素伤害」属性加成的法器挂橙红角标（判定与详情弹窗加成文案同源 stat_scalings）
-			GameStyle.maybe_add_element_badge(slot, String(w.get("id", "")), 8)
+			# 元素件靠上面那圈描边说话（判定与详情弹窗加成文案同源 stat_scalings）
 			GameStyle.star_label(slot, int(w.get("star", 1)), 11)
 
 			GameStyle.tap(slot, func() -> void: dialog._open_weapon_tip(w, false, slot))
@@ -313,7 +316,9 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			var def: Dictionary = WeaponData.get_def(item.get("id", ""))
 			var s_slot := PanelContainer.new()
 			s_slot.custom_minimum_size = Vector2(36, 36)
-			var s_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+			# 元素件 = 暖橙红描边（与上阵件/商店同一口径；36 见方的格子上，原先那枚角标会把图标整个盖住）
+			var s_sb := GameStyle.outlined_panel(GameStyle.NAVY2,
+					GameStyle.element_border(String(item.get("id", "")), GameStyle.LINE), 1, 0.0)
 			s_slot.add_theme_stylebox_override("panel", s_sb)
 
 			var s_icon_path: String = item.get("icon", def.get("icon", ""))
@@ -328,9 +333,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			s_slot.set_meta("sb_flat", s_sb)
 			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.JADE, 1, 0.0))
 
-			# 吃「元素伤害」属性加成的法器挂橙红角标（仓库件与上阵件同一口径）
-			if not def.is_empty():
-				GameStyle.maybe_add_element_badge(s_slot, String(item.get("id", "")), 8)
+			# 元素件的暖橙红描边在上面 s_sb 里给好了，这里只补星级
 			GameStyle.star_label(s_slot, int(item.get("star", 1)), 10)
 
 			if not def.is_empty():

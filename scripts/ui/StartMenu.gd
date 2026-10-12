@@ -119,10 +119,10 @@ func _ready() -> void:
 	SettingsManager.setting_changed.connect(func(_s: StringName, _k: StringName, _v: Variant): _refresh_dynamic_texts())
 
 func _build_background() -> void:
-	# 1. 深邃墨色半透明暗底（约 65% 不透明度，使实战场地的太极自转、灵脉呼吸与石板暗纹清晰透出）
+	# 1. 纯黑不透明暗底
 	var bg := ColorRect.new()
 	bg.name = "BackgroundOverlay"
-	bg.color = Color(0.015, 0.02, 0.035, 0.65)
+	bg.color = GameStyle.INK
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -705,7 +705,9 @@ func open() -> void:
 	if parent_node != null:
 		var backdrop = parent_node.get_node_or_null("StageBackdrop")
 		if backdrop != null:
-			backdrop.visible = false
+			# 菜单显示期间让纯黑幕布常驻：既消除开局淡入时透过半透明菜单露出战场的闪现，
+			# 也保证从结算页返回菜单时背景仍是纯黑。选人链路会自行接管其显隐。
+			backdrop.visible = true
 		var hud = parent_node.get_node_or_null("GameHUD")
 		if hud != null:
 			hud.visible = false

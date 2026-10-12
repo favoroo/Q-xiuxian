@@ -260,6 +260,6 @@ static func upgrade_fields() -> Array:
 		"element_damage_all", "element_damage_metal", "element_damage_wood",
 		"element_damage_water", "element_damage_fire", "element_damage_earth",
 			"bonus_pierce", "thorns",
-			"chest_count", "chest_quality", "chest_break",
+			"chest_count", "chest_quality", "chest_reward",
 			"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
 		]

@@ -67,7 +67,7 @@ const REF_REROLLS := 2.0       ## 免费刷新 +2 打满（上限 0.3 分）
 ## 寻宝流三项（2026-10-11）：一口匣子≈一次白拿补给，所以按「还能刷几波」折价，与收益同一把尺
 const REF_CHEST_COUNT_WAVES := 6.0  ## Δ宝箱数量 × 剩余波数 ≥ 6 口打满
 const REF_CHEST_QUALITY := 8.0      ## 宝箱品质 +8 打满（约两把点金诀，铜/玉占比明显抬起来）
-const REF_CHEST_BREAK := 2.0        ## 开箱省力 +2 下打满（3 下砸到 1 下，兑现率翻三倍）
+const REF_CHEST_REWARD := 1.0       ## 宝箱掉落 +100% 打满（悟道叠 3 层 ≈ 1.05，再加一件满匣诀就顶到）
 
 # ---------------- 属性模拟（镜像 StatSystem 落地语义） ----------------
 
@@ -254,7 +254,7 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 	# 寻宝流三项直接读 apply（与即时金币/免费刷新同一类：兑现的是场面上的东西，不是属性乘区）
 	var d_chest_cnt := float(apply.get("chest_count", 0.0))
 	var d_chest_q := float(apply.get("chest_quality", 0.0))
-	var d_chest_brk := float(apply.get("chest_break", 0.0))
+	var d_chest_reward := float(apply.get("chest_reward", 0.0))
 	var eco_subs: Array[float] = [
 		clampf(d_harvest * float(remaining) / REF_HARVEST_WAVES, 0.0, 1.0),
 		clampf(d_luck / REF_LUCK, 0.0, 1.0) * (0.5 + 0.5 * wave_ratio) * 0.6,
@@ -263,7 +263,7 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 		clampf(absf(float(apply.get("free_rerolls", 0.0))) / REF_REROLLS, 0.0, 1.0) * 0.3,
 		clampf(d_chest_cnt * float(remaining) / REF_CHEST_COUNT_WAVES, 0.0, 1.0) * (0.4 + 0.6 * wave_ratio),
 		clampf(d_chest_q / REF_CHEST_QUALITY, 0.0, 1.0) * (0.5 + 0.5 * wave_ratio) * 0.8,
-		clampf(d_chest_brk / REF_CHEST_BREAK, 0.0, 1.0) * 0.7,
+		clampf(d_chest_reward / REF_CHEST_REWARD, 0.0, 1.0) * (0.5 + 0.5 * wave_ratio) * 0.8,
 	]
 	var b_eco := _max_of(eco_subs)
 	if b_eco >= 0.04:
@@ -277,8 +277,8 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 			reasons.append("宝箱 +%d 口/波 · 余 %d 波" % [int(d_chest_cnt), remaining])
 		elif d_chest_q > 0.0:
 			reasons.append("铜匣玉匣更易出现")
-		elif d_chest_brk > 0.0:
-			reasons.append("宝箱少挨 %d 下砸开" % int(d_chest_brk))
+		elif d_chest_reward > 0.0:
+			reasons.append("宝箱掉落 +%d%%" % _pct(d_chest_reward))
 
 	# ---- B4 功能轴（移动/拾取/范围/对精英伤害等，给小基线不压过主轴） ----
 	var d_pickup := float(stats2.get("pickup_range_mult", 1.0)) - float(stats.get("pickup_range_mult", 1.0))

@@ -18,22 +18,32 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	slot.custom_minimum_size = Vector2(tile, tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_PASS
 
-	var border: Color = GameStyle.LINE
+	# 两个通道各说各的：底色说「这件在哪一格池子里」，描边说「它是什么属性 / 这一刻能对它做什么」。
+	# 为什么底色要现调：GameStyle 里 NAVY 与 NAVY2 早在 #29/#31 那轮色彩校准里一起翻成纯黑，
+	# 拿它们当池子区分等于没区分 —— 元素件把描边让给暖橙红之后，上阵件与背包件会撞成同一副
+	# 长相（2026-10-12 出图验收抓到，故给上阵位压一层主蓝薄底）。
 	var bg: Color = GameStyle.NAVY2
+	var border: Color = GameStyle.LINE
 	if pool == "equipped":
 		border = GameStyle.GOLD
-		bg = GameStyle.NAVY
+		bg = GameStyle.with_alpha(GameStyle.GOLD, 0.14)
+	# 元素件 = 暖橙红描边（与货架大卡的图标框同一语言，判定见 GameStyle.is_elemental）。
+	# 描边一色五用要有明确优先级，从低到高：背包位 → 上阵位 → 元素件 → 可合成 → 已选中。
+	# 元素是这件法器的固有属性，但「此刻能对它做什么」（凑齐三件 / 正要点它）压得过它，
+	# 否则最该按的那颗键会丢颜色。
+	border = GameStyle.element_border(id, border)
 	if mergeable:
 		border = GameStyle.JADE
 	if is_sel:
 		border = GameStyle.PAPER
-		bg = GameStyle.NAVY.lightened(0.08)
+		bg = bg.lightened(0.12)
 	var sb := GameStyle.outlined_panel(bg, border, 2, 0.0)
-	# 图标与星角共用的内缩：PanelContainer 把每个子节点都铺满内容区，内缩只能给在 stylebox 上
-	sb.content_margin_left = 3.0
-	sb.content_margin_top = 3.0
-	sb.content_margin_right = 3.0
-	sb.content_margin_bottom = 3.0
+	# 图标与星角共用的内缩：PanelContainer 把每个子节点都铺满内容区，内缩只能给在 stylebox 上。
+	# 2026-10-12 用户真机：这一排图标「都看不清」⇒ 格子放大后内缩按比例收，把地方让给图。
+	sb.content_margin_left = 2.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_right = 2.0
+	sb.content_margin_bottom = 2.0
 	slot.add_theme_stylebox_override("panel", sb)
 
 	var icon_path: String = item.get("icon", "")
@@ -48,9 +58,8 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(icon_tex)
 
-	# 吃「元素伤害」属性加成的法器挂橙红角标（与属性面板/图鉴同一口径）
-	GameStyle.maybe_add_element_badge(slot, id, 8)
-	GameStyle.star_label(slot, star, 11)
+	# 星级跟着格子长：44 格上 11 号字还行，60 格上就缩成灰了
+	GameStyle.star_label(slot, star, int(round(clampf(tile * 0.24, 12.0, 16.0))))
 
 	# 点选认「按下与抬起都留在原地」，不认松开：划列表时格子跟着内容一起走，手指自始至终压在
 	# 同一格内 ⇒ 按旧写法（BaseButton.pressed）每划一下都顺手多选一件。
@@ -155,16 +164,21 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	GameStyle.tap(chip, func(): open_item_tip(shop, item_id, chip))
 	return chip
 
-## 道具徽记的详情卡：品阶/价格 + 加成行（与货架卡同源） + 描述逐行
+## 道具徽记的详情卡：品阶/原价/出售返还 + 加成行（与货架卡同源） + 描述逐行 + 【出售】那颗键。
+## 2026-10-12 用户：「商店里的这些道具啊，如果有买到不想要的，也可以卖掉」—— 法器与灵兽一直
+## 卖得掉，法宝这一类原先点进去只有读数没有操作：买错了整局背着（被动道具不占槽、没法卸），
+## 这一屏是唯一能反悔的地方。出售走 GameManager.sell_item，加过的属性同一条链路退回。
 static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> void:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
 		return
 	var tier_num: int = int(def.get("tier", 1))
 	var tier_col: Color = ItemData.tier_color(tier_num)
+	var refund := ItemData.sell_price(item_id)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
+		["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM],
+		["出售返还", "%d 金币" % refund, GameStyle.JADE],
 	]
 	# 加成行（2026-10-11 土豆兄弟式改版）：BonusRows 从 apply 生成，与货架卡同一把尺子
 	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
@@ -174,6 +188,28 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		var s := String(line).strip_edges()
 		if not s.is_empty():
 			notes.append(s)
+	notes.append("出售按原价一半回收金币，加过的属性当场退回（与法器、灵兽同一条口径）。")
+	var unique := bool(def.get("unique", false))
+	var foot := "每波商店会刷新更多道具。"
+	if unique:
+		foot = "本局限购一件：出售后这一件不再上架。"
+	# 万兽笼这类「退了当场灵兽栏超编」的：键摆着但按不动，理由印在键上
+	# （与法器详情卡「装备已满」「背包已满」那颗灰键同一条口径 —— 不许按下去什么也没发生）
+	var slots_given := int((def.get("apply", {}) as Dictionary).get("pet_slots", 0))
+	var over_pets := slots_given > 0 and GameManager.pets.size() > GameManager.max_pet_slots() - slots_given
+	if over_pets:
+		foot = "灵兽栏已超编：先出售灵兽再退这一件。"
+	var on_sell := func():
+		if GameManager.sell_item(item_id):
+			shop.refresh(false)
+	var actions: Array = [[{
+		"text": "先出售灵兽" if over_pets else "出售 (+%d 金币)" % refund,
+		"disabled": over_pets,
+		"color": GameStyle.BAD,
+		"edge_color": GameStyle.BAD_DK,
+		"text_color": GameStyle.PAPER,
+		"callback": on_sell,
+	}]]
 	DetailTip.show_over(shop, anchor, {
 		"title": String(def.get("name", item_id)),
 		"chip": "被动道具",
@@ -181,7 +217,8 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		"rows": rows,
 		"body": "被动道具：自动生效，不占武器槽，整局持续有效。",
 		"notes": notes,
-		"foot": "每波商店会刷新更多道具。",
+		"foot": foot,
+		"actions": actions,
 	})
 
 ## 背包空位：凹槽提示容量；兼作拖拽落点（拖到空位＝卸到队尾 / 背包件挪到队尾）

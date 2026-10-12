@@ -43,6 +43,8 @@ const ENEMY_SCENES = [
 	"res://scenes/entities/ChileiEliteEnemy.tscn",
 	"res://scenes/entities/JianshaEliteEnemy.tscn",
 	"res://scenes/entities/BossEnemy.tscn",
+	"res://scenes/entities/LingYiEnemy.tscn",
+	"res://scenes/entities/JinChanEnemy.tscn",
 ]
 
 var _world: Node2D
