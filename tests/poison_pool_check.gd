@@ -79,22 +79,29 @@ func _case_radius_same_source() -> void:
 	await get_tree().process_frame
 
 ## ② 圈内掉血、圈外不掉血
-## 注意：进圈那一下走 body_entered 信号，派发要等一个物理帧；把玩家先摆到位、
-## 过两帧再读数，否则读到的是「还没碰上」的旧血量。
+## 注意：玩家是「走」出圈的，出去前那一跳已经吃掉 ⇒ 读「出去后是否还在掉」才对，
+## 拿出去瞬间的血量对比会把自己的上一跳算成bug。
 func _case_inside_outside() -> void:
+	await _clear_all_pools()
 	_player.global_position = Vector2(300, 0)
 	var p := _spawn_pool(_world, Vector2(300, 0), 5.0, 3.0)   # 玩家正踩在圈心
-	await get_tree().physics_frame
-	await get_tree().physics_frame
+	# 等 4 个物理帧：monitoring  deferred 开启 + overlap 缓存刷新要 2~3 帧才认到已存在的重叠体
+	# （Area2D 的 overlap 不是 add_child 当帧就算好的），少于 3 帧会读到「还没碰上」的旧血量。
+	for i in range(4):
+		await get_tree().physics_frame
 	var hp_inside: float = _player.current_health
 	_c.check(hp_inside < 99999.0, "玩家在圈内掉血（%d < 99999）" % int(hp_inside))
+	_player.current_health = 99999.0
 
-	# 移到判定圆外一点（RADIUS 60 + 8px）
+	# 移到判定圆外一点（RADIUS 60 + 8px）：先让无敌帧走完，再确认血量不再掉
 	_player.global_position = Vector2(300 + PoisonPool.RADIUS + 8.0, 0)
 	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var hp_outside: float = _player.current_health
-	_c.near(hp_outside, 99999.0, 0.01, "玩家在判定圆外不掉血（边界与判定同源）")
+	_player.current_health = 99999.0   # 清零读数基准：只看出去之后还掉不掉
+	var t := 0.0
+	while t < 0.4:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0 * 8.0
+	_c.near(_player.current_health, 99999.0, 0.01, "玩家在判定圆外不掉血（边界与判定同源）")
 
 	# 正踩边界内侧（RADIUS - 2）要掉
 	_player.global_position = Vector2(300 + PoisonPool.RADIUS - 2.0, 0)
@@ -193,7 +200,9 @@ func _case_duyao_windup() -> void:
 	# 裸世界不跑 WaveSpawner._scale_to_wave，毒潭半径停在场景初值；这里钉「预警圈与毒潭
 	# 判定半径同源」这件事本身（曲线注入由 unit_wave_tests 的 poison_radius 公式钉）
 	_c.near(duyao.poison_radius, 62.0, 0.01, "毒潭半径取场景初值 62（_scale_to_wave 未跑的裸世界）")
-	_c.near(GameBalance.poison_radius(6), 65.0, 0.01, "回合曲线口径：第 6 波半径 65（62+0×1.5）")
+	_c.near(GameBalance.poison_radius(6), 62.0, 0.01, "回合曲线口径：第 6 波半径 62（解锁波不膨胀）")
+	_c.near(GameBalance.poison_radius(14), 74.0, 0.01, "回合曲线口径：第 14 波半径 74（62+8×1.5）")
+	_c.near(GameBalance.poison_radius(30), 84.0, 0.01, "回合曲线口径：第 30 波封顶 84（防后期地面糊满）")
 
 	# 起手：落点锁定在玩家当前位置，预警圈亮起且半径 = 判定半径
 	duyao._poison_target = _player.global_position

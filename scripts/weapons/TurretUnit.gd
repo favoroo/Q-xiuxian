@@ -33,6 +33,8 @@ var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectil
 @onready var base_ring: Node2D = $BaseRing
 
 var muzzle_flash: Sprite2D = null
+## 机关元素（_ready 时从 WeaponData 推导）：底座阵缘配色/形态与枪口闪光都按它分化
+var _elem: String = "metal"
 
 func setup(def_id: String, star_level: int) -> void:
 	weapon_def_id = def_id
@@ -49,8 +51,11 @@ func setup(def_id: String, star_level: int) -> void:
 
 func _ready() -> void:
 	add_to_group("turrets")
-	queue_redraw()
 	var def := WeaponData.get_def(weapon_def_id)
+	_elem = WeaponData.element_of(weapon_def_id)
+	if _elem == "":
+		_elem = "metal"
+	queue_redraw()
 	if def.has("icon") and ResourceLoader.exists(def["icon"]):
 		core_sprite.texture = load(def["icon"])
 	# 出场微小弹起动画
@@ -80,9 +85,11 @@ func _setup_muzzle_flash() -> void:
 	muzzle_point.add_child(muzzle_flash)
 
 func _draw() -> void:
-	# 绘制冷冽几何八角机关阵盘底座
+	# 冷冽几何八角机关阵盘底座：阵缘配色与形态按元素分化（2026-10-13，
+	# 旧写法 10 把机关共用同一金边八角盘，喷火兽和凝冰弩摆下去长得一模一样）
 	var r_outer := 18.0
 	var r_inner := 13.0
+	var edge_col: Color = _elem_edge_color()
 	var pts_outer := PackedVector2Array()
 	var pts_inner := PackedVector2Array()
 	for i in range(8):
@@ -91,9 +98,73 @@ func _draw() -> void:
 		pts_inner.append(Vector2(cos(ang), sin(ang)) * r_inner)
 	draw_colored_polygon(pts_outer, Color(0.08, 0.10, 0.14, 0.85))
 	pts_outer.append(pts_outer[0])
-	draw_polyline(pts_outer, Color(0.88, 0.74, 0.42, 0.9), 2.0)
+	draw_polyline(pts_outer, edge_col, 2.0)
 	pts_inner.append(pts_inner[0])
-	draw_polyline(pts_inner, Color(0.45, 0.82, 0.85, 0.65), 1.2)
+	draw_polyline(pts_inner, Color(edge_col.r, edge_col.g, edge_col.b, 0.55), 1.2)
+	_draw_elem_accents(r_outer, edge_col)
+
+## 阵缘元素色（黑底上要够亮才读得出）
+func _elem_edge_color() -> Color:
+	match _elem:
+		"fire":
+			return Color(1.0, 0.52, 0.22, 0.9)
+		"water":
+			return Color(0.45, 0.78, 1.0, 0.9)
+		"wood":
+			return Color(0.45, 0.88, 0.50, 0.9)
+		"earth":
+			return Color(0.88, 0.68, 0.38, 0.9)
+		_:
+			return Color(0.88, 0.74, 0.42, 0.9)
+
+## 阵缘元素形态点缀：金=弩机弦线 火=三处喷口 水=四枚晶刺 木=缠藤弧 土=方形垛口
+func _draw_elem_accents(r_outer: float, edge_col: Color) -> void:
+	match _elem:
+		"fire":
+			# 三处喷口：外缘缺口里的火舌小三角
+			for deg in [30.0, 150.0, 270.0]:
+				var a := deg_to_rad(deg)
+				var dir := Vector2(cos(a), sin(a))
+				var tan := Vector2(-sin(a), cos(a))
+				var base := dir * (r_outer + 1.0)
+				draw_colored_polygon(PackedVector2Array([
+					base + tan * 3.0, base - tan * 3.0, dir * (r_outer + 7.0)]),
+					Color(1.0, 0.6, 0.25, 0.85))
+		"water":
+			# 四枚晶刺立在外缘
+			for deg in [45.0, 135.0, 225.0, 315.0]:
+				var a := deg_to_rad(deg)
+				var dir := Vector2(cos(a), sin(a))
+				var tan := Vector2(-sin(a), cos(a))
+				var base := dir * r_outer
+				draw_colored_polygon(PackedVector2Array([
+					base + tan * 2.2, base - tan * 2.2, dir * (r_outer + 6.0)]),
+					Color(0.75, 0.92, 1.0, 0.85))
+		"wood":
+			# 两段缠藤弧攀在阵缘上
+			for start_deg in [100.0, 280.0]:
+				var arc := PackedVector2Array()
+				for k in 7:
+					var a := deg_to_rad(start_deg + float(k) * 8.0)
+					arc.append(Vector2(cos(a), sin(a)) * (r_outer + 1.5 + sin(float(k) * 1.8) * 1.2))
+				draw_polyline(arc, Color(0.5, 0.9, 0.5, 0.7), 1.2)
+		"earth":
+			# 方形垛口：四角的垒石齿
+			for deg in [0.0, 90.0, 180.0, 270.0]:
+				var a := deg_to_rad(deg)
+				var dir := Vector2(cos(a), sin(a))
+				var tan := Vector2(-sin(a), cos(a))
+				var base := dir * (r_outer + 1.5)
+				draw_colored_polygon(PackedVector2Array([
+					base + tan * 2.5, base - tan * 2.5,
+					base - tan * 2.5 + dir * 3.5, base + tan * 2.5 + dir * 3.5]),
+					Color(0.8, 0.62, 0.35, 0.85))
+		_:
+			# 金系弩机：两道弦线交叉在盘面
+			draw_line(Vector2(-r_outer + 3.0, 0), Vector2(r_outer - 3.0, 0),
+				Color(edge_col.r, edge_col.g, edge_col.b, 0.35), 0.9)
+			draw_line(Vector2(0, -r_outer + 3.0), Vector2(0, r_outer - 3.0),
+				Color(edge_col.r, edge_col.g, edge_col.b, 0.35), 0.9)
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -209,11 +280,12 @@ func _fire() -> void:
 
 	p.activate()
 
-	# 开火反馈：枪口闪光 + 核心亮闪 + 后坐抖动与音效
+	# 开火反馈：枪口闪光（染元素色） + 核心亮闪 + 后坐抖动与音效
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
 		muzzle_flash.scale = Vector2.ONE * randf_range(0.35, 0.45)
-		muzzle_flash.modulate = Color(1.0, 0.92, 0.65, 0.95)
+		var flash_col := _elem_edge_color()
+		muzzle_flash.modulate = Color(flash_col.r, flash_col.g, flash_col.b, 0.95)
 		muzzle_flash.visible = true
 		var mtw := create_tween()
 		mtw.set_parallel(true)

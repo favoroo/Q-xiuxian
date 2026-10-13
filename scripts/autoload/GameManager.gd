@@ -545,6 +545,7 @@ func _apply_stat_fields(apply: Dictionary, source: String) -> void:
 func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 	return UpgradeData.get_random_upgrades(count, {
 		"luck": luck,
+		"wave": wave_number,
 		"locked_upgrades": locked_upgrades,
 		"counts": upgrade_counts,
 		"rng": rng,

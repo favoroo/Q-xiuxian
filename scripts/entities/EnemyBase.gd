@@ -60,6 +60,10 @@ extends CharacterBody2D
 @export var poison_windup: float = 0.6     ## 投毒预警时长：落点先亮圈，圈填满 = 毒潭落下
 @export var poison_damage: float = 4.0     ## 毒潭每跳伤害（跳的节奏由玩家受击无敌帧钉住）
 @export var poison_duration: float = 5.0   ## 毒潭持续时长（秒）
+@export var death_bolt_count: int = 0      ## >0：丹爆系——引信中途被击杀时向四周环形放 N 发弹幕（土豆兄弟 Pufferfish 型）
+@export var death_bolt_dmg_mult: float = 0.6  ## 死亡弹幕伤害 = bolt_damage × 它（比活体火球软一档）
+@export var charge_aim_lead: float = 0.0   ## >0：长扑锁向冲向「玩家当前位置 + 玩家速度 × 它」（土豆兄弟 Goblin Shark 预判位）
+@export var bolt_windup: float = 0.0       ## >0：火球出手前的蓄力预告时长（站定 + 变色，出手瞬间锁向）；0 = 不蓄力直接发
 
 # ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
@@ -87,6 +91,10 @@ var _anim_has_run: bool = false
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var _bolt_timer: float = 1.2
+var _bolt_windup_t: float = -1.0    ## >=0 表示火球蓄力中（站定 + 变色预告，出手瞬间锁向）
+var _bolt_windup_dir: Vector2 = Vector2.ZERO  ## 蓄力期实时朝向玩家（只用于预警读法，出手那帧才锁死）
+var _bolt_base_tint: Color = Color.WHITE  ## 蓄力前本体色（精英变异染色等），蓄力结束/被打断时还原
+var _death_bolts_spent: bool = false  ## 死亡弹幕一命只发一次闸（防自爆与击杀路径双发）
 var _charge_timer: float = 0.0
 var _charge_active: float = 0.0
 var _charge_dir: Vector2 = Vector2.ZERO
@@ -110,6 +118,7 @@ var _teleport_timer: float = 0.0   ## 闪现计时
 var _buff_timer: float = 0.0       ## 光环脉冲计时（每 0.25s 刷新一次范围内同伴）
 var _aura_speed_mult: float = 1.0  ## 被鼓妖光环覆盖时的移速加成
 var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
+var _aura_shown: bool = false      ## 光环标记是否已点亮（边沿触发：从无到有时才发一次 shockwave）
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
 
@@ -257,7 +266,10 @@ func _capture_base_stats() -> void:
 		"max_hp": max_hp, "contact_damage": contact_damage, "move_speed": move_speed,
 		"heal_amount": heal_amount, "stone_reward": stone_reward,
 		"charge_interval": charge_interval, "charge_side_bolts": charge_side_bolts,
+		"charge_aim_lead": charge_aim_lead,
 		"bolt_count": bolt_count, "bolt_interval": bolt_interval, "preferred_range": preferred_range,
+		"bolt_windup": bolt_windup,
+		"death_bolt_count": death_bolt_count, "death_bolt_dmg_mult": death_bolt_dmg_mult,
 		"slam_interval": slam_interval, "slam_radius": slam_radius,
 		"slam_windup": slam_windup, "slam_dmg_mult": slam_dmg_mult,
 		"poison_interval": poison_interval, "poison_radius": poison_radius,
@@ -281,9 +293,13 @@ func reset_for_reuse() -> void:
 	stone_reward = _base_stats["stone_reward"]
 	charge_interval = _base_stats["charge_interval"]
 	charge_side_bolts = _base_stats["charge_side_bolts"]
+	charge_aim_lead = _base_stats["charge_aim_lead"]
 	bolt_count = _base_stats["bolt_count"]
 	bolt_interval = _base_stats["bolt_interval"]
 	preferred_range = _base_stats["preferred_range"]
+	bolt_windup = _base_stats["bolt_windup"]
+	death_bolt_count = _base_stats["death_bolt_count"]
+	death_bolt_dmg_mult = _base_stats["death_bolt_dmg_mult"]
 	slam_interval = _base_stats["slam_interval"]
 	slam_radius = _base_stats["slam_radius"]
 	slam_windup = _base_stats["slam_windup"]
@@ -306,6 +322,9 @@ func reset_for_reuse() -> void:
 	_rebuild_anim_name_cache()
 	juice_scale = Vector2.ONE
 	_bolt_timer = 1.2
+	_bolt_windup_t = -1.0
+	_bolt_base_tint = Color.WHITE
+	_death_bolts_spent = false
 	_charge_active = 0.0
 	_charge_dir = Vector2.ZERO
 	_charge_windup = -1.0
@@ -321,6 +340,7 @@ func reset_for_reuse() -> void:
 	_buff_timer = 0.0
 	_aura_speed_mult = 1.0
 	_aura_until_ms = 0
+	_aura_shown = false
 	_focus_hit_timer = 0.0
 	_focus_hit_count = 0
 	_mutated = false
@@ -601,6 +621,9 @@ func _physics_process(delta: float) -> void:
 
 	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
 	_pp_stun = _tick_hit_stun(delta)
+	# 硬直打断火球蓄力：起手是承诺段的前摇，被钉着还发弹，「定身」成空话（同短咬/长扑的起手纪律）
+	if _pp_stun:
+		_cancel_bolt_windup()
 
 	# 2. 追击目标（平滑加速度 + 贴身防旋转抽搐）：期望速度与各行为支路推进
 	var to_player: Vector2 = target.global_position - global_position
@@ -691,9 +714,12 @@ func _effective_speed(delta: float) -> float:
 			chill_slow = 0.0
 			if _fuse < 0.0:
 				anim_sprite.modulate = Color.WHITE
-	# 鼓妖光环：被覆盖期间加速，过期待遇自动失效
+	# 鼓妖光环：被覆盖期间加速，过期待遇自动失效（脚下琥珀标记同步熄灭）
 	if _aura_speed_mult != 1.0 and Time.get_ticks_msec() > _aura_until_ms:
 		_aura_speed_mult = 1.0
+		_aura_shown = false
+		if procedural_view != null:
+			procedural_view.aura_level = 0.0
 	return eff_speed * _aura_speed_mult
 
 ## 受击卡肉/硬直计时与击退急刹擦地扬尘；返回硬直是否仍在
@@ -781,7 +807,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 					_clear_charge_warning()
 					_launch_bite(dir)
 				else:
-					_start_charge(dir)
+					_start_charge(_charge_aim_dir(player, dir))
 
 		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
 		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
@@ -836,6 +862,9 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		if charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq and not _pp_stun:
 			_charge_timer = charge_interval
 			_charge_windup = charge_windup_time
+			# 起手反馈：下蹲蓄势 + 低音量哨声（全预警体系里原本唯一「静默起手」的，现在齐了）
+			play_squash(Vector2(0.82, 1.2), 0.24)
+			AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
 
 		# 空闲：冷却到 + 玩家已贴进 bite_range → 短咬下蹲（同样只挡「起手」，不夺已承诺段）
 		# （bite_range 与 charge_min_range 取同值 ⇒ 两带互补，中间不留"谁都不出手"的缝）
@@ -853,6 +882,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		if _fuse < 0.0:
 			if dist_sq < 1600.0:
 				_fuse = EXPLODE_FUSE
+				_hit_jiggle_offset = Vector2.ZERO  # 引信颤抖要独占位移抖动，受击微反冲残量先归位
 				anim_sprite.modulate = Color(2.2, 0.9, 0.6)
 				play_squash(Vector2(1.2, 0.82), 0.3)
 				AudioManager.play_sfx("enemy_fuse", 1.0)   ## 引信是递进爆点的倒计时，不是灵宝触体的钟
@@ -862,18 +892,33 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_pp_target_vel = Vector2.ZERO
 			if _explode_ring != null:
 				_explode_ring.progress = 1.0 - _fuse / EXPLODE_FUSE
-			anim_sprite.position.x = GameManager.rng.randf_range(-1.6, 1.6)
+			# 引信颤抖：旧写法只抖 anim_sprite，程序化白模下它是隐藏节点（视图藏在 procedural_view），
+			# 玩家看到的白模一动不动。两套载体同拍抖，哪套在用都读得到。
+			var fuse_jitter := GameManager.rng.randf_range(-1.6, 1.6)
+			anim_sprite.position.x = fuse_jitter
+			if procedural_view != null:
+				procedural_view.position.x = fuse_jitter
 			if _fuse <= 0.0:
 				anim_sprite.position.x = 0.0
+				if procedural_view != null:
+					procedural_view.position.x = 0.0
 				_explode(player)
 				return true
 
-	# 御剑邪修：保持距离的同时周期性发射火球
+	# 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）
 	if bolt_interval > 0.0 and _fuse < 0.0:
-		_bolt_timer -= delta
-		if _bolt_timer <= 0.0 and dist_sq < 396900.0:
-			_bolt_timer = bolt_interval
-			_fire_bolt(player)
+		if _bolt_windup_t >= 0.0:
+			# 蓄力段：站定 + 本体提亮变色，出手方向每帧跟玩家（只作读法，出手那帧才锁死）
+			_bolt_windup_t -= delta
+			_pp_target_vel = Vector2.ZERO
+			_bolt_windup_dir = (player.global_position - global_position).normalized()
+			if _bolt_windup_t <= 0.0:
+				_fire_bolt(player)
+		else:
+			_bolt_timer -= delta
+			if _bolt_timer <= 0.0 and dist_sq < 396900.0 and not _pp_stun:
+				_bolt_timer = bolt_interval
+				_start_bolt_windup()
 
 	# 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）
 	if spawn_minion_interval > 0.0 and minion_scene != null and _fuse < 0.0:
@@ -1304,6 +1349,16 @@ func _explode(player: Node2D) -> void:
 	_no_drop = true
 	_die()
 
+## 死亡弹幕：引信中途被击杀时向四周环形溅射（伤害走 bolt_damage 同一把回合缩放尺，幅度软一档）
+func _fire_death_bolts() -> void:
+	for i in range(maxi(1, death_bolt_count)):
+		var bolt := EnemyBolt.acquire(get_parent())
+		bolt.global_position = global_position
+		bolt.direction = Vector2.from_angle(TAU * float(i) / float(maxi(1, death_bolt_count)))
+		bolt.damage = bolt_damage * death_bolt_dmg_mult * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)
+		bolt.activate()
+	AudioManager.play_sfx("enemy_bolt", 0.6, 0.8)
+
 ## 点燃丹爆引信预警圈：半径 = 判定半径（同源），引信烧完圈正好填满
 func _ignite_explode_ring() -> void:
 	if _explode_ring == null:
@@ -1321,6 +1376,16 @@ func _clear_explode_ring() -> void:
 
 ## 开始冲刺（预警结束后调用）：方向到此锁死，之后不再追踪玩家
 # ---------------- 行为支路：长扑冲刺 ----------------
+
+## 长扑锁向：charge_aim_lead > 0 时冲向「玩家当前位置 + 玩家速度 × lead」的预判点
+## （土豆兄弟 Goblin Shark 型：匀速直线跑位会被算进来，急停/变向则让它冲空）。
+## 玩家静止或无速度输入时退化为正对玩家的原方向，不引入额外误差。
+func _charge_aim_dir(player: Node2D, fallback: Vector2) -> Vector2:
+	if charge_aim_lead <= 0.0:
+		return fallback
+	var predicted: Vector2 = player.global_position + player.velocity * charge_aim_lead
+	var to_pred: Vector2 = predicted - global_position
+	return to_pred.normalized() if to_pred.length_squared() > 1.0 else fallback
 
 func _start_charge(dir: Vector2) -> void:
 	_charge_active = charge_duration
@@ -1366,16 +1431,22 @@ func _update_charge_warning(player: Node2D) -> void:
 	# 旧写法线恒等于当前距离，玩家站在 450px 时线长 450、而冲刺只有 ~307px
 	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）。
 	# 线长与扫掠判定、与判据 ⑧ 的实测位移，三处都取自 GameBalance.charge_reach 这一个式子。
+	# 预判型（charge_aim_lead>0）画预判点方向：玩家看线就能读出「它在算我的跑位」，
+	# 每帧跟玩家速度更新，出手那帧在 _start_charge 里锁死 —— 线始终就是真冲刺路径。
 	_charge_warning_line.clear_points()
 	_charge_warning_line.add_point(Vector2.ZERO)
-	var local_target: Vector2 = player.global_position - global_position
+	# 端点方向：预判型冲向预判点（方向每帧跟玩家速度），普通型正对玩家。
+	# 线长仍被 clamp 到 charge_reach 真实可达距离 —— 画出来的永远就是冲得到的那段。
+	var aim_target: Vector2 = player.global_position + player.velocity * charge_aim_lead
+	var local_target: Vector2 = aim_target - global_position
 	var reach: float = GameBalance.charge_reach(move_speed * charge_speed_mul, charge_duration, charge_brake_time)
 	if local_target.length() > reach:
 		local_target = local_target.normalized() * reach
 	_charge_warning_line.add_point(local_target)
 
-	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）
-	var alpha: float = 0.15 + 0.10 * sin(_charge_windup * 12.0)
+	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）。
+	# 基线从 0.15 提到 0.20：0.05~0.25 的旧区间在亮地面/密集弹幕里几乎读不出来。
+	var alpha: float = 0.20 + 0.12 * sin(_charge_windup * 12.0)
 	_charge_warning_line.default_color.a = alpha
 
 ## 清理预警线
@@ -1430,7 +1501,29 @@ func _clear_bite_warning() -> void:
 ## 发射火球（御剑邪修；bolt_count>1 时按 bolt_spread 扇形展开，剑煞邪修三连击）
 # ---------------- 行为支路：远程火球 ----------------
 
+const BOLT_WINDUP_TINT := Color(1.9, 1.35, 0.85)  ## 蓄力本体暖色提亮（比自爆引信的 2.2 档淡，一读是「要出手」不是「要炸了」）
+
+## 起手蓄力：站定 + 变色 + 形变 + 低音量引信声。方向不在此锁（出手那帧才锁，蓄力期只作预告读法）
+func _start_bolt_windup() -> void:
+	_bolt_windup_t = maxf(bolt_windup, 0.05)
+	_bolt_base_tint = anim_sprite.modulate
+	anim_sprite.modulate = BOLT_WINDUP_TINT
+	play_squash(Vector2(1.14, 0.88), _bolt_windup_t)
+	AudioManager.play_sfx("enemy_fuse", 0.4)
+
+## 蓄力被打断（受击硬直等）时还原本体色，蓄力作废不补发（硬直窗口就是玩家的反打奖励）
+func _cancel_bolt_windup() -> void:
+	if _bolt_windup_t < 0.0:
+		return
+	_bolt_windup_t = -1.0
+	anim_sprite.modulate = _bolt_base_tint
+	if procedural_view != null:
+		procedural_view.position.x = 0.0
+
 func _fire_bolt(player: Node2D) -> void:
+	_bolt_windup_t = -1.0
+	anim_sprite.modulate = _bolt_base_tint
+	# 出手方向最后锁死：蓄力期玩家已看过预告，锁死的是「预告过的那个方向」
 	var base_dir: Vector2 = (player.global_position - global_position).normalized()
 	for i in range(maxi(1, bolt_count)):
 		# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
@@ -1456,12 +1549,18 @@ func _pulse_buff_aura() -> void:
 		if global_position.distance_squared_to(e.global_position) <= radius_sq:
 			e.receive_aura(buff_speed_mult, 400)
 
-## 被鼓妖光环覆盖：取最高倍率，过期待遇由 _physics_process 自动清除
+## 被鼓妖光环覆盖：取最高倍率，过期待遇由 _physics_process 自动清除。
+## 首次被罩到（边沿）发一圈冲击波提示「它被加速了」；常驻脉冲只续期不再发，防刷屏。
 func receive_aura(mult: float, duration_ms: int) -> void:
 	if dying:
 		return
 	_aura_speed_mult = maxf(_aura_speed_mult, mult)
 	_aura_until_ms = Time.get_ticks_msec() + duration_ms
+	if not _aura_shown:
+		_aura_shown = true
+		if procedural_view != null:
+			procedural_view.aura_level = 1.0
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, 22.0, GameStyle.JADE, 0.24)
 
 ## 蛛母产卵：幼体在自身周围落点，生命/伤害按当前回合 × 危险度缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
 # ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
@@ -1705,6 +1804,12 @@ func _die() -> void:
 		return
 	dying = true
 	GameManager.register_kill(is_elite, _death_crit_kill)
+	# 死亡弹幕（土豆兄弟 Pufferfish 型）：引信中途被击杀的丹爆傀儡溅射一圈丹火。
+	# 只认「被提前击杀」（_fuse > 0，引信还没烧完）；自己烧完的自爆走 _explode 已有 AoE 结算，
+	# 再补一圈弹就是同一次死亡惩罚两回。回合末消散（dissolve）不经过这里，天然不触发。
+	if death_bolt_count > 0 and _fuse > 0.0 and not _death_bolts_spent and not _no_drop:
+		_death_bolts_spent = true
+		_fire_death_bolts()
 
 	# 血蛹系：临死分裂出幼体（自爆/回合末消散不触发）
 	if split_count > 0 and split_scene != null and not _no_drop:
@@ -1726,6 +1831,10 @@ func _die() -> void:
 		AudioManager.play_sfx("gem_pickup", 0.9)
 
 	# 击杀反馈分级震屏（死亡爆散视觉已于 2026-10-12 整体下线：击杀反馈 = 尸体塌缩 + 跳字 + 音效）
+	# 2026-10-13 轻量重建：一小撮敌种主色碎屑 + 微环（JuiceEffect 侧有帧预算闸 + 视口门控，
+	# 不与尸体塌缩抢戏），只在伤害击杀路径放；回合末消散走 dissolve 不经过这里
+	if procedural_view != null and procedural_view.config != null:
+		JuiceEffect.spawn_death_burst(get_parent(), global_position, procedural_view.config.col_primary, is_elite)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击

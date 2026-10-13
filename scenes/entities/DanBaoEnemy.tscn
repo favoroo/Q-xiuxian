@@ -27,6 +27,8 @@ exp_reward = 3
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 locomotion_mode = "hover"
 explode_radius = 90.0
+death_bolt_count = 5
+death_bolt_dmg_mult = 0.6
 heal_orb_drop = 3
 
 [node name="Shadow" type="Sprite2D" parent="."]

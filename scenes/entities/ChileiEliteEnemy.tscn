@@ -38,6 +38,7 @@ charge_brake_time = 0.28
 charge_hit_radius = 35.0
 charge_damage_mul = 1.0
 charge_whiff_stagger = 0.6
+charge_aim_lead = 0.32
 bite_range = 110.0
 bite_interval = 2.0
 bite_windup_time = 0.32

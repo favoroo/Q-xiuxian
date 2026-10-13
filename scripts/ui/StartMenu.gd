@@ -296,7 +296,7 @@ func _build_hero_block() -> PanelContainer:
 	vbox.add_child(top_row)
 
 	var tag_chip := Label.new()
-	tag_chip.text = " DAO TRIAL "
+	tag_chip.text = " PLAY "
 	tag_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tag_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 	GameStyle.label(tag_chip, 11, GameStyle.JADE)

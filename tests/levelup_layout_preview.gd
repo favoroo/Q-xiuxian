@@ -70,7 +70,7 @@ func _ready() -> void:
 	print("\nALLOC_LAYOUT_DONE")
 	get_tree().quit(0)
 
-## 钉成最坏样本：desc 最长的那 5 条，且凡/良/仙各有（边框色不同、良品那枚色签更宽）
+## 钉成最坏样本：desc 最长的那 5 条，且史诗/稀有/普通各有（边框色不同、稀有那枚色签更宽）
 func _pin_worst_offers() -> void:
 	var scored: Array = []
 	for u in UpgradeData.UPGRADES:

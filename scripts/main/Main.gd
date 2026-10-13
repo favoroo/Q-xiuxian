@@ -151,6 +151,7 @@ func _exit_tree() -> void:
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
 	EnemyBase.clear_pools()
+	PoisonPool.clear_pool()
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()

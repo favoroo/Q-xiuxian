@@ -2,7 +2,8 @@ class_name UpgradeData
 extends RefCounted
 
 ## 加点数据库：回合后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从商店获取
-## 稀有度权重：普通/稀有/史诗基础 60/30/10，幸运每点 +1 史诗权重（从普通中扣，见 GameBalance.rarity_weights）
+## 稀有度四档 common/rare/epic/legendary（普通/稀有/史诗/传说，与道具 tier 同一套词表与颜色）：
+## 权重随波次递进、乘福缘、各档封顶（见 GameBalance.rarity_weights）
 ## 每项设 max_stacks 上限，叠满后从池中剔除，防数值线性失控
 ##
 ## "apply" 是该项的**实际生效幅度**（唯一事实来源）：悟道卡面的加成行由 BonusRows 从 apply
@@ -18,6 +19,7 @@ const RARITY_COLORS := {
 	"common": GameStyle.RARITY_COMMON,
 	"rare": GameStyle.RARITY_RARE,
 	"epic": GameStyle.RARITY_EPIC,
+	"legendary": GameStyle.RARITY_LEGEND,
 }
 
 const UPGRADES: Array[Dictionary] = [
@@ -433,8 +435,8 @@ const UPGRADES: Array[Dictionary] = [
 				"apply": {"attack_speed_mult_mul": 0.82},
 				"title": "雷厉风行",
 				"desc": "",
-				"rarity": "epic",
-				"rarity_label": "史诗",
+				"rarity": "legendary",
+				"rarity_label": "传说",
 				"icon": "res://assets/art/icon_haste.png",
 				"max_stacks": 3,
 			},
@@ -443,8 +445,8 @@ const UPGRADES: Array[Dictionary] = [
 				"apply": {"weapon_damage_mult": 0.15},
 				"title": "仙兵奥义",
 				"desc": "全系兵刃威能大幅跃升；武器伤害超过 +100% 后收益减半",
-				"rarity": "epic",
-				"rarity_label": "史诗",
+				"rarity": "legendary",
+				"rarity_label": "传说",
 				"icon": "res://assets/art/icon_atk.png",
 				"max_stacks": 3,
 			},
@@ -484,32 +486,35 @@ const UPGRADES: Array[Dictionary] = [
 			"apply": {"pet_slots": 1.0},
 			"title": "万兽灵契",
 			"desc": "",
-			"rarity": "epic",
-			"rarity_label": "史诗",
+			"rarity": "legendary",
+			"rarity_label": "传说",
 			"icon": "res://assets/art/item_wanshou_long.png",
 			"max_stacks": 2,
 		},
 	]
 
-## 稀有度加权抽取：过滤叠满项与角色锁死项，幸运提升史诗权重。
-## 纯函数：一切上下文由 ctx 传入（luck / locked_upgrades / counts / rng），不读 GameManager 单例，
+## 稀有度加权抽取：过滤叠满项与角色锁死项，高稀有权重随波次递进、随幸运放大。
+## 纯函数：一切上下文由 ctx 传入（luck / wave / locked_upgrades / counts / rng），不读 GameManager 单例，
 ## 因此可以在不启动场景、不建 autoload 的情况下被单元测试直接断言。
 ## ctx 约定：
 ##   luck: float                 幸运
+##   wave: int                   当前波次（缺省 1；高稀有档未解锁时权重为 0）
 ##   locked_upgrades: Array      角色锁死的加点 id
 ##   counts: Dictionary          已加点次数 {id: int}
 ##   rng: RandomNumberGenerator  随机源；缺省时用全局 randf()（单测里务必传入固定种子）
 static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[Dictionary]:
 	var luck: float = float(ctx.get("luck", 0.0))
+	var wave: int = int(ctx.get("wave", 1))
 	var locked: Array = ctx.get("locked_upgrades", [])
 	var owned_counts: Dictionary = ctx.get("counts", {})
 	var rng: RandomNumberGenerator = ctx.get("rng", null)
 	var has_pets: bool = bool(ctx.get("has_pets", false))
 
-	var weights_dict := GameBalance.rarity_weights(luck)
+	var weights_dict := GameBalance.rarity_weights(luck, wave)
 	var common_w: float = weights_dict["common"]
 	var rare_w: float = weights_dict["rare"]
 	var epic_w: float = weights_dict["epic"]
+	var legendary_w: float = weights_dict["legendary"]
 
 	var pool: Array[Dictionary] = []
 	var pool_weights: Array[float] = []
@@ -528,6 +533,8 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 				w = rare_w
 			"epic":
 				w = epic_w
+			"legendary":
+				w = legendary_w
 		pool.append(u)
 		pool_weights.append(w)
 

@@ -60,6 +60,7 @@ func _ready() -> void:
 	collision_layer = 0
 	collision_mask = 2  # player
 	rotation = 0.0    # 毒潭是圆，不随节点旋转
+	# 判定结算只走 _physics_process 的 overlap 扫描，不接 body_entered —— 原因见那里的注释
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
 	circle.radius = radius
@@ -67,7 +68,6 @@ func _ready() -> void:
 	add_child(shape)
 	_shape_node = shape
 	_circle = circle
-	body_entered.connect(_on_body_entered)
 
 ## 出膛激活：池化后 _ready 只在首建时跑过，半径/寿命必须按当前字段重铺
 func activate() -> void:

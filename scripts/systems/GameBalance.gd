@@ -154,7 +154,7 @@ const WEAVE_WAVE_STEP := BalanceEconomy.WEAVE_WAVE_STEP
 const ITEM_WAVE_STEP := BalanceEconomy.ITEM_WAVE_STEP
 const REROLL_BASE := BalanceEconomy.REROLL_BASE
 const REROLL_WAVE_STEP := BalanceEconomy.REROLL_WAVE_STEP
-const REROLL_COUNT_STEP := BalanceEconomy.REROLL_COUNT_STEP
+const REROLL_COUNT_WAVE_SCALE := BalanceEconomy.REROLL_COUNT_WAVE_SCALE
 const HARVEST_GROWTH := BalanceEconomy.HARVEST_GROWTH
 const HEAL_OVERFLOW_STONE_PER_HP := BalanceEconomy.HEAL_OVERFLOW_STONE_PER_HP
 const HEAL_OVERFLOW_STONE_CAP := BalanceEconomy.HEAL_OVERFLOW_STONE_CAP
@@ -164,12 +164,18 @@ const GEM_SHARD_START_WAVE := BalanceEconomy.GEM_SHARD_START_WAVE
 const GEM_SHARD_CHANCE_CAP := BalanceEconomy.GEM_SHARD_CHANCE_CAP
 const EARLY_CLEAR_STONES_PER_SEC := BalanceEconomy.EARLY_CLEAR_STONES_PER_SEC
 const EARLY_CLEAR_STONES_MAX := BalanceEconomy.EARLY_CLEAR_STONES_MAX
-const RARITY_EPIC_BASE := BalanceEconomy.RARITY_EPIC_BASE
-const RARITY_RARE := BalanceEconomy.RARITY_RARE
 const RARITY_TOTAL := BalanceEconomy.RARITY_TOTAL
 const RARITY_COMMON_FLOOR := BalanceEconomy.RARITY_COMMON_FLOOR
-const LUCK_EPIC_PER_POINT := BalanceEconomy.LUCK_EPIC_PER_POINT
-const LUCK_RARE_PER_POINT := BalanceEconomy.LUCK_RARE_PER_POINT
+const RARITY_LUCK_PER_POINT := BalanceEconomy.RARITY_LUCK_PER_POINT
+const RARITY_RARE_BASE := BalanceEconomy.RARITY_RARE_BASE
+const RARITY_RARE_PER_WAVE := BalanceEconomy.RARITY_RARE_PER_WAVE
+const RARITY_RARE_CAP := BalanceEconomy.RARITY_RARE_CAP
+const RARITY_EPIC_WAVE := BalanceEconomy.RARITY_EPIC_WAVE
+const RARITY_EPIC_PER_WAVE := BalanceEconomy.RARITY_EPIC_PER_WAVE
+const RARITY_EPIC_CAP := BalanceEconomy.RARITY_EPIC_CAP
+const RARITY_LEGEND_WAVE := BalanceEconomy.RARITY_LEGEND_WAVE
+const RARITY_LEGEND_PER_WAVE := BalanceEconomy.RARITY_LEGEND_PER_WAVE
+const RARITY_LEGEND_CAP := BalanceEconomy.RARITY_LEGEND_CAP
 const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
 const PET_CHANCE := BalanceEconomy.PET_CHANCE
@@ -184,10 +190,14 @@ const MAIN_TAG_PITY_WAVES := BalanceEconomy.MAIN_TAG_PITY_WAVES
 const TAG_FILTER_BONUS := BalanceEconomy.TAG_FILTER_BONUS
 const TAG_FILTER_LEAK := BalanceEconomy.TAG_FILTER_LEAK
 const ITEM_TIER_WAVES := BalanceEconomy.ITEM_TIER_WAVES
-const ITEM_TIER_BASE := BalanceEconomy.ITEM_TIER_BASE
-const LUCK_ITEM_EPIC_PER_POINT := BalanceEconomy.LUCK_ITEM_EPIC_PER_POINT
-const LUCK_ITEM_LEGEND_PER_POINT := BalanceEconomy.LUCK_ITEM_LEGEND_PER_POINT
-const LUCK_ITEM_RARE_PER_POINT := BalanceEconomy.LUCK_ITEM_RARE_PER_POINT
+const ITEM_TIER_COMMON_FLOOR := BalanceEconomy.ITEM_TIER_COMMON_FLOOR
+const LUCK_ITEM_MULT_PER_POINT := BalanceEconomy.LUCK_ITEM_MULT_PER_POINT
+const ITEM_TIER_RARE_PER_WAVE := BalanceEconomy.ITEM_TIER_RARE_PER_WAVE
+const ITEM_TIER_RARE_CAP := BalanceEconomy.ITEM_TIER_RARE_CAP
+const ITEM_TIER_EPIC_PER_WAVE := BalanceEconomy.ITEM_TIER_EPIC_PER_WAVE
+const ITEM_TIER_EPIC_CAP := BalanceEconomy.ITEM_TIER_EPIC_CAP
+const ITEM_TIER_LEGEND_PER_WAVE := BalanceEconomy.ITEM_TIER_LEGEND_PER_WAVE
+const ITEM_TIER_LEGEND_CAP := BalanceEconomy.ITEM_TIER_LEGEND_CAP
 
 # 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
 const ARMOR_COEF := BalanceCombat.ARMOR_COEF
@@ -303,8 +313,8 @@ static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> flo
 static func heal_overflow_stones(overflow_hp: float) -> int:
 	return BalanceEconomy.heal_overflow_stones(overflow_hp)
 
-static func rarity_weights(luck: float) -> Dictionary:
-	return BalanceEconomy.rarity_weights(luck)
+static func rarity_weights(luck: float, wave: int = 1) -> Dictionary:
+	return BalanceEconomy.rarity_weights(luck, wave)
 
 static func tag_affinity_mult(copies: int) -> float:
 	return BalanceEconomy.tag_affinity_mult(copies)

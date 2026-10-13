@@ -1338,10 +1338,6 @@ func _draw_cloak_front_modular(float_y: float, _amp: float, _wave_t: float, extr
 	draw_line(Vector2(-5 * w, 14 + float_y), Vector2(-4 * w + _sway_x(-4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 	draw_line(Vector2(5 * w, 14 + float_y), Vector2(4 * w + _sway_x(4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 
-	if cloak_style == "royal_shawl":
-		draw_arc(Vector2(-7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
-		draw_arc(Vector2(7 * w, 4 + float_y), 5.0, 0, PI, 16, col_gold, 1.3)
-
 # ----------------- 侧面斗篷（端正挺拔躯干 + 逐顶点行波下摆） -----------------
 
 func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra_drag: float) -> void:
@@ -1450,9 +1446,6 @@ func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra
 
 	draw_line(Vector2(1.8, -5 + float_y), Vector2(4.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.7), 1.1)
 	draw_line(Vector2(-1.5 * w, 3 + float_y), Vector2(-2.5 * w - d * 0.1 + _sway_x(-2.5 * w, 24.0) * 0.6, 24 + float_y + _sway_y(24.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
-
-	if cloak_style == "royal_shawl":
-		draw_arc(Vector2(0, 2 + float_y), 6.0 * w, 0, PI * 0.8, 14, col_gold, 1.2)
 
 func _draw_cloak_dash_side(dash_y: float, progress: float = 1.0) -> void:
 	if not _layer_on(Layer.CLOAK):

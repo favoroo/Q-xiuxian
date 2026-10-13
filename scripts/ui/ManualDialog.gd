@@ -40,6 +40,8 @@ const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.DRONE: "环绕",
 	WeaponData.Behavior.TURRET: "机关",
 	WeaponData.Behavior.SWEEP: "横扫",
+	WeaponData.Behavior.BEAM: "光束",
+	WeaponData.Behavior.CONE: "喷吐",
 }
 
 const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison": "中毒"}

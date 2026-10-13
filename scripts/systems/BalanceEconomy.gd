@@ -20,8 +20,8 @@ static func exp_to_next(prev_needed: int) -> int:
 const WEAVE_WAVE_STEP := 2      ## 武器每回合加价
 const ITEM_WAVE_STEP := 2       ## 道具每回合加价（与武器同一步调）
 const REROLL_BASE := 2
-const REROLL_WAVE_STEP := 1     ## 重掷价随回合上升
-const REROLL_COUNT_STEP := 3    ## 本回合每重掷一次再涨
+const REROLL_WAVE_STEP := 1             ## 重掷价随回合上升
+const REROLL_COUNT_WAVE_SCALE := 0.4    ## 本回合每重掷一次的递增量 = 波次 × 0.4（至少 1），对齐土豆兄弟重掷曲线
 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
@@ -51,7 +51,9 @@ static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
 	return minf(potion_heal_amount(max_hp), maxf(0.0, max_hp - cur_hp))
 
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
-	return int(float(REROLL_BASE + maxi(wave, 1) * REROLL_WAVE_STEP + maxi(reroll_count, 0) * REROLL_COUNT_STEP) * price_mult)
+	var w := maxi(wave, 1)
+	var count_step := maxi(1, int(floor(float(w) * REROLL_COUNT_WAVE_SCALE)))
+	return int(float(REROLL_BASE + w * REROLL_WAVE_STEP + maxi(reroll_count, 0) * count_step) * price_mult)
 
 # ---------------- 收益（回合末无偿发放并自我复利）----------------
 
@@ -138,20 +140,41 @@ static func heal_overflow_stones(overflow_hp: float) -> int:
 
 # ---------------- 悟道候选的稀有度权重 ----------------
 
-const RARITY_EPIC_BASE := 8.0
-const RARITY_RARE := 30.0
+## 四档稀有度模型（2026-10-13 对齐土豆兄弟：普通/稀有/史诗/传说，与道具 tier 同一套词表与颜色）：
+## 高档权重 = min(上限, 每波步长 × (波次 − 解锁波)) × 福缘乘区；普通取 100 减去其余三档（有地板）。
+## 波次递进让高稀有「后期稳定可及但永远稀有」，上限封顶防福缘堆叠失控。
 const RARITY_TOTAL := 100.0
-const RARITY_COMMON_FLOOR := 10.0
-const LUCK_EPIC_PER_POINT := 0.5
-const LUCK_RARE_PER_POINT := 0.3
+const RARITY_COMMON_FLOOR := 10.0       ## 普通档权重地板，防归零
+const RARITY_LUCK_PER_POINT := 0.01     ## 福缘乘区：每点使高稀有概率 ×(1+1%)（土豆兄弟同款）
+# 稀有档：第 1 波起基础 30，随波缓升
+const RARITY_RARE_WAVE := 1
+const RARITY_RARE_BASE := 30.0
+const RARITY_RARE_PER_WAVE := 0.8
+const RARITY_RARE_CAP := 45.0
+# 史诗档：第 5 波解锁
+const RARITY_EPIC_WAVE := 5
+const RARITY_EPIC_PER_WAVE := 2.0
+const RARITY_EPIC_CAP := 28.0
+# 传说档：第 11 波解锁
+const RARITY_LEGEND_WAVE := 11
+const RARITY_LEGEND_PER_WAVE := 1.2
+const RARITY_LEGEND_CAP := 12.0
 
-## 幸运抬高史诗与稀有权重，差额从普通里扣；稀有不再恒定，随幸运缓慢成长
-static func rarity_weights(luck: float) -> Dictionary:
-	var l := maxf(0.0, luck)
-	var epic: float = RARITY_EPIC_BASE + l * LUCK_EPIC_PER_POINT
-	var rare: float = RARITY_RARE + l * LUCK_RARE_PER_POINT
-	var common: float = maxf(RARITY_COMMON_FLOOR, RARITY_TOTAL - rare - epic)
-	return {"common": common, "rare": rare, "epic": epic}
+## 单档权重：解锁波之前为 0，之后按步长线性增长、乘福缘后封顶
+static func _rarity_growth(base: float, per_wave: float, cap: float, unlock_wave: int, wave: int, luck_mult: float) -> float:
+	var w := maxi(wave, 1)
+	if w < unlock_wave:
+		return 0.0
+	return minf(cap, (base + per_wave * float(w - unlock_wave)) * luck_mult)
+
+## 悟道稀有度权重：返回 {common, rare, epic, legendary}，四档之和恒为 100（普通取余）
+static func rarity_weights(luck: float, wave: int = 1) -> Dictionary:
+	var lm := 1.0 + maxf(0.0, luck) * RARITY_LUCK_PER_POINT
+	var legendary := _rarity_growth(0.0, RARITY_LEGEND_PER_WAVE, RARITY_LEGEND_CAP, RARITY_LEGEND_WAVE, wave, lm)
+	var epic := _rarity_growth(0.0, RARITY_EPIC_PER_WAVE, RARITY_EPIC_CAP, RARITY_EPIC_WAVE, wave, lm)
+	var rare := _rarity_growth(RARITY_RARE_BASE, RARITY_RARE_PER_WAVE, RARITY_RARE_CAP, RARITY_RARE_WAVE, wave, lm)
+	var common := maxf(RARITY_COMMON_FLOOR, RARITY_TOTAL - rare - epic - legendary)
+	return {"common": common, "rare": rare, "epic": epic, "legendary": legendary}
 
 # ---------------- 货架抽取 ----------------
 
@@ -207,25 +230,33 @@ static func shop_luck_mult(luck: float) -> float:
 # ---------------- 道具（被动道具）档位权重 ----------------
 
 ## 各档位最早出现的回合（下标 1~4 对应 tier 1~4，0 为占位）：高档道具随回合解锁
+## 2026-10-13 对齐土豆兄弟：解锁后概率按步长随波次线性增长、乘福缘后封顶，普通档取余托底。
 const ITEM_TIER_WAVES := [0, 1, 4, 9, 14]
-const ITEM_TIER_BASE := [0.0, 63.0, 30.0, 7.0, 0.8]   ## 无幸运时的档位基础权重
-const LUCK_ITEM_EPIC_PER_POINT := 0.22   ## 幸运每点抬高史诗档权重
-const LUCK_ITEM_LEGEND_PER_POINT := 0.08 ## 幸运每点抬高传说档权重
-const LUCK_ITEM_RARE_PER_POINT := 0.15  ## 幸运每点抬高稀有权重（不再恒定）
+const ITEM_TIER_COMMON_FLOOR := 10.0     ## 普通档权重地板，防归零
+const LUCK_ITEM_MULT_PER_POINT := 0.01   ## 福缘乘区：每点使高档概率 ×(1+1%)
+const ITEM_TIER_RARE_PER_WAVE := 3.0     ## 稀有档每波步长
+const ITEM_TIER_RARE_CAP := 40.0
+const ITEM_TIER_EPIC_PER_WAVE := 2.0     ## 史诗档每波步长
+const ITEM_TIER_EPIC_CAP := 25.0
+const ITEM_TIER_LEGEND_PER_WAVE := 0.8   ## 传说档每波步长
+const ITEM_TIER_LEGEND_CAP := 8.0
 
-## 道具档位权重：返回长度 4 的数组（tier1~4）。幸运抬高高档权重（差额从普通扣），
-## 未到解锁回合的档位权重清零；普通有权重地板防归零
+## 单档概率：未达解锁波为 0，之后 步长 ×(波次 − 解锁波) 线性增长，乘福缘后封顶
+static func _item_tier_growth(per_wave: float, cap: float, unlock_wave: int, wave: int, luck_mult: float) -> float:
+	var w := maxi(wave, 1)
+	if w < unlock_wave:
+		return 0.0
+	return minf(cap, per_wave * float(w - unlock_wave) * luck_mult)
+
+## 道具档位权重：返回长度 4 的数组（tier1~4），四档之和恒为 100（普通取余）。
+## 高档 = 波次递进 × 福缘乘区后封顶；未到解锁回合的档位权重为 0。
 static func item_tier_weights(luck: float, wave: int) -> Array:
-	var l := maxf(0.0, luck)
-	var w := [ITEM_TIER_BASE[1], ITEM_TIER_BASE[2], ITEM_TIER_BASE[3], ITEM_TIER_BASE[4]]
-	w[3] += l * LUCK_ITEM_LEGEND_PER_POINT
-	w[2] += l * LUCK_ITEM_EPIC_PER_POINT
-	w[1] += l * LUCK_ITEM_RARE_PER_POINT
-	w[0] = maxf(10.0, w[0] - l * (LUCK_ITEM_EPIC_PER_POINT + LUCK_ITEM_LEGEND_PER_POINT + LUCK_ITEM_RARE_PER_POINT))
-	for i in range(4):
-		if maxi(wave, 1) < int(ITEM_TIER_WAVES[i + 1]):
-			w[i] = 0.0
-	return w
+	var lm := 1.0 + maxf(0.0, luck) * LUCK_ITEM_MULT_PER_POINT
+	var legendary := _item_tier_growth(ITEM_TIER_LEGEND_PER_WAVE, ITEM_TIER_LEGEND_CAP, int(ITEM_TIER_WAVES[4]), wave, lm)
+	var epic := _item_tier_growth(ITEM_TIER_EPIC_PER_WAVE, ITEM_TIER_EPIC_CAP, int(ITEM_TIER_WAVES[3]), wave, lm)
+	var rare := _item_tier_growth(ITEM_TIER_RARE_PER_WAVE, ITEM_TIER_RARE_CAP, int(ITEM_TIER_WAVES[2]), wave, lm)
+	var common := maxf(ITEM_TIER_COMMON_FLOOR, 100.0 - rare - epic - legendary)
+	return [common, rare, epic, legendary]
 
 ## 权重抽奖：给定等长权重表与 [0,1) 的 roll，返回命中下标；权重全 0 或表空返回 0。
 ## 用「累加到 target 之前」的判定而不是「减到 ≤0」，否则权重为 0 的项在 roll 恰好为 0 时会被选中。

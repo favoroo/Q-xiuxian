@@ -28,9 +28,11 @@ extends RefCounted
 ##   转圈（旧写法会把印玺横过来对着人）。此时 tip 只取长度，发射点落在"朝目标那一侧的器口"。
 ## - 环绕类（DRONE）走 SunOrb，本体不旋转，不需要这两个字段。
 
-## 攻击方式六种：近战=突进一挥（360° 圆判定）；横扫=蓄力大横扫（前方真扇形判定，
-## 2026-10-13 从 MELEE 拆出——原先横扫只是近战的一个 arc_scale 乘区，手感与近战零差异）。
-enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET, SWEEP }
+## 攻击方式八种：近战=突进一挥（360° 圆判定）；横扫=蓄力大横扫（前方真扇形判定，
+## 2026-10-13 从 MELEE 拆出——原先横扫只是近战的一个 arc_scale 乘区，手感与近战零差异）；
+## 光束=持续激光（2026-10-13 新增：锁定即照出，射线截断长度即判定长度，按 tick 结算）；
+## 喷吐=锥形火焰（2026-10-13 新增：器口前方锥形持续灼烧，tick 折算保证纸面 DPS 即实伤）。
+enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET, SWEEP, BEAM, CONE }
 
 const MAX_STAR: int = 3
 const MAX_SLOTS: int = 6
@@ -200,6 +202,7 @@ const DEFS: Dictionary = {
 					"tip": Vector2(20, 0), "upright": true,
 					"desc": "音波震荡大范围强减速，受元素伤害与移速加成", "tag": "范围·雷法·水",
 					"burst_radius": 88.0, "burst_tint": Color(0.35, 0.75, 1.0),
+					"burst_kind": "sonic",
 					"proc_chill": 0.50, "chill_dur": 2.8,
 					"tags": ["thunder", "water"],
 					"stat_scalings": {"elemental_damage": 1.0, "move_speed_bonus": 30.0, "cdr_bonus": 25.0},
@@ -241,20 +244,19 @@ const DEFS: Dictionary = {
 						"tip": Vector2(22, 0), "upright": true,
 						"desc": "召唤火雨轰击区域并点燃火海，受元素伤害加成", "tag": "范围·雷法·火",
 						"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
+						"burst_kind": "fire_rain",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 						"tags": ["thunder", "fire"],
 						"stat_scalings": {"elemental_damage": 1.5, "damage_bonus": 25.0},
 					},
-						"sanmei_huohu": {
-							"name": "火葫芦", "behavior": Behavior.PROJECTILE,
-							"sfx": "flame_jet",
-							"damage": 9.0, "cooldown": 0.42, "range": 190.0,
-							"knockback": 95.0,
-							"price": 36, "icon": "res://assets/art/weapon_fire_calabash.png",
-							"tip": Vector2(22, -18),
-							"desc": "近距离喷射火焰持续灼烧，受元素与远程伤害加成", "tag": "远程·横扫·火",
-						"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
-						"pierce": 3, "projectile_count": 1,
+					"sanmei_huohu": {
+						"name": "火葫芦", "behavior": Behavior.CONE,
+						"sfx": "flame_jet",
+						"damage": 9.0, "cooldown": 0.42, "range": 190.0,
+						"knockback": 95.0,
+						"price": 36, "icon": "res://assets/art/weapon_fire_calabash.png",
+						"tip": Vector2(22, -18),
+						"desc": "持续喷吐火焰点燃前方敌群，受元素与远程伤害加成", "tag": "喷吐·火",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["wide", "fire"],
 						"stat_scalings": {"elemental_damage": 1.2, "ranged_damage": 0.6, "damage_bonus": 20.0},
@@ -283,6 +285,7 @@ const DEFS: Dictionary = {
 						"desc": "巨印从天砸下，受元素伤害与护甲加成", "tag": "范围·横扫·土",
 						"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
 						"burst_icon": "res://assets/art/weapon_earth_seal.png",
+						"burst_kind": "seal",
 						"tags": ["wide", "earth"],
 						"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
 					},
@@ -403,6 +406,7 @@ const DEFS: Dictionary = {
 					"tip": Vector2(22, 0), "upright": true,
 					"desc": "春雷滚滚落点范围叠毒，受元素伤害与生命回复加成", "tag": "范围·雷法·木",
 					"burst_radius": 90.0, "burst_tint": Color(0.5, 0.85, 0.5),
+					"burst_kind": "drum",
 					"proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
 					"tags": ["thunder", "wood"],
 					"stat_scalings": {"elemental_damage": 1.0, "hp_regen": 4.0},
@@ -799,6 +803,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(20, 2), "upright": true,
 						"desc": "铎钟裂山震波轰击区域大力击退，受元素伤害与护甲加成", "tag": "范围·雷法·土",
 						"burst_radius": 85.0, "burst_tint": Color(0.80, 0.66, 0.38),
+						"burst_kind": "earth",
 						"tags": ["thunder", "earth"],
 						"stat_scalings": {"elemental_damage": 1.2, "armor": 2.5},
 					},
@@ -882,7 +887,7 @@ const DEFS: Dictionary = {
 						"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
 						"tip": Vector2(22, -6),
 						"desc": "癸水阴符急速连发穿透2敌，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
-						"bullet": "res://assets/art/bullet_ice_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"bullet": "res://assets/art/bullet_frost_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 2,
 						"tags": ["talisman", "water"],
 						"stat_scalings": {"ranged_damage": 0.8, "cdr_bonus": 25.0},
@@ -895,7 +900,7 @@ const DEFS: Dictionary = {
 						"price": 32, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 						"tip": Vector2(22, 0),
 						"desc": "三张厚土符扇形铺开各锁1敌，受远程伤害与护甲加成", "tag": "远程·弹射·土",
-						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"bullet": "res://assets/art/bullet_stone_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 1, "projectile_count": 3, "spread_angle": 0.22,
 						"tags": ["talisman", "earth"],
 						"stat_scalings": {"ranged_damage": 0.8, "armor": 2.0},
@@ -921,9 +926,22 @@ const DEFS: Dictionary = {
 							"tip": Vector2(20, 0), "upright": true,
 							"desc": "玄冥阴雷炸开冻缓敌群，受元素伤害与移速加成", "tag": "范围·雷法·水",
 							"burst_radius": 70.0, "burst_tint": Color(0.45, 0.75, 1.0),
+							"burst_kind": "frost",
 							"proc_chill": 0.40, "chill_dur": 2.0,
 							"tags": ["thunder", "water"],
 							"stat_scalings": {"elemental_damage": 1.0, "move_speed_bonus": 28.0},
+						},
+						"zihong_jing": {
+							"name": "紫虹镜", "behavior": Behavior.BEAM,
+							"sfx": "flute_wave",
+							"damage": 22.0, "cooldown": 1.15, "range": 300.0,
+							"knockback": 80.0,
+							# 图标暂借同格锚点贴图占位，TODO(media-gen)
+							"price": 42, "icon": "res://assets/art/weapon_jinlei_zhui.png",
+							"tip": Vector2(22, 8), "upright": true,
+							"desc": "持续照出紫电光束贯穿一线敌群，受元素伤害与暴击率加成", "tag": "光束·雷法·金",
+							"tags": ["thunder", "metal"],
+							"stat_scalings": {"elemental_damage": 1.2, "crit_rate": 25.0},
 						},
 						"qingmu_pao": {
 							"name": "青木炮", "behavior": Behavior.TURRET,
@@ -1128,6 +1146,8 @@ const SHOP_POOL: Array = [
 	# 2026-10-12 第三批 8 把：填满只剩 1 把的 器类×五行 交叉格（详见 DEFS 尾部设计注释）
 	"taomu_jian", "guishui_fu", "houtu_fu", "jinxiao_leiling",
 	"xuanming_leizhu", "qingmu_pao", "ningbing_nu", "fenghuo_tai",
+	# 2026-10-13 束流支路：首把光束法器（喷吐支路由火葫芦改造承担）
+	"zihong_jing",
 ]
 
 ## 回血丹（商店消耗品）
@@ -1153,6 +1173,10 @@ static func behavior_label(def: Dictionary) -> String:
 			return "机关"
 		Behavior.SWEEP:
 			return "横扫"
+		Behavior.BEAM:
+			return "光束"
+		Behavior.CONE:
+			return "喷吐"
 	return "近战"
 
 ## 攻击方式的机制解释（点货架卡那颗「攻击方式」色签弹出，消费方 ShopChipTips）。
@@ -1206,6 +1230,20 @@ const BEHAVIOR_TIPS: Dictionary = {
 		"notes": [
 			"横扫是扇形判定：只打正前方弧面里的敌人，身后的漏网——站位朝向比近战更讲究。",
 			"比近战更沉更慢：单下伤害更高、击退更猛，一扫一片，适合正面压住怪群。",
+		],
+	},
+	Behavior.BEAM: {
+		"how": "锁定敌人后持续照出一道光束，被光束压住的敌人持续掉血",
+		"notes": [
+			"光束会被第一个碰到的敌人挡住，但线上擦到的敌人一起结算——怪群站成一线时一串全中。",
+			"光束跟着目标缓慢扫动；拉开距离脱离射程就收束。",
+		],
+	},
+	Behavior.CONE: {
+		"how": "朝锁定方向持续喷吐火焰，锥形里的敌人一起挨打并被点燃",
+		"notes": [
+			"喷吐射程短，要贴近怪群才喷得到——站位比远程更讲究。",
+			"被喷到的敌人会点燃，跑出火焰后还要再烧一会儿。",
 		],
 	},
 }

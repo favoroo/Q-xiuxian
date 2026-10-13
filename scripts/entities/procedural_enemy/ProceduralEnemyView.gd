@@ -50,6 +50,19 @@ var special_state: float = 0.0:
 		if renderer:
 			renderer.special_state = val
 
+## 鼓妖光环标记（0/1）：脚下琥珀细环，读出「这只怪被加速了、先杀鼓妖」（土豆兄弟 Buffer 红描边同思路）
+var aura_level: float = 0.0:
+	set(val):
+		if aura_level == val:
+			return
+		aura_level = val
+		queue_redraw()
+
+func _draw() -> void:
+	# 画在视图容器自身（y=0 是敌人身体中心），脚下偏移对齐 renderer 的地面阴影带（y≈14~16）
+	if aura_level > 0.0:
+		draw_arc(Vector2(0.0, 15.0), 18.0, 0.0, TAU, 24, GameStyle.JADE, 2.0, true)
+
 func _ready() -> void:
 	if renderer == null:
 		_init_renderer()

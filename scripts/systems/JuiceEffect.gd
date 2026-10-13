@@ -12,7 +12,7 @@ extends Node2D
 ##   2) 粒子用并行数组而非「每颗粒子一个 Dictionary」；
 ##   3) 光环插值由 Tween.interpolate_value 改成 quad 缓出的闭式解。
 
-enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP }
+enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST }
 
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
@@ -21,6 +21,10 @@ const Z_DUST := 5            ## 步伐微尘层级（贴近角色阴影）
 const IMPACT_POP_FRAME_BUDGET := 6  ## 弹丸湮灭闪单物理帧预算限流闸，防止高穿透齐射糊屏
 static var _last_pop_frame: int = -1
 static var _pop_count_this_frame: int = 0
+
+const DEATH_BURST_FRAME_BUDGET := 3  ## 死亡爆散单物理帧预算闸：群杀同帧爆开时最多 3 处，宁缺勿糊
+static var _last_burst_frame: int = -1
+static var _burst_count_this_frame: int = 0
 
 var effect_type: int = EffectType.PICKUP_POP
 var lifetime: float = 0.2
@@ -293,6 +297,40 @@ static func spawn_impact_pop(parent: Node, pos: Vector2, col: Color, impact_dir:
 			3.0,
 			col,
 			1.2)
+
+## 死亡爆散（轻量重建版，2026-10-13）：敌人死亡点迸出一小撮本种主色碎屑 + 微环。
+## 【与旧死亡爆散的区别】旧版「尸体塌缩后独留空地乱闪」被整体下线；这版只做一小撮
+## 带颜色信息的碎屑（碎屑色 = 敌种主色，读得出「死的是什么」），且严格受单物理帧
+## 预算闸（<=3 处/帧，群杀同帧宁缺勿糊）与视口门控双重保护，不与尸体塌缩抢戏。
+static func spawn_death_burst(parent: Node, pos: Vector2, col: Color, elite: bool = false) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+
+	var current_frame := Engine.get_physics_frames()
+	if current_frame != _last_burst_frame:
+		_last_burst_frame = current_frame
+		_burst_count_this_frame = 0
+	if _burst_count_this_frame >= DEATH_BURST_FRAME_BUDGET:
+		return
+	_burst_count_this_frame += 1
+
+	var fx := _acquire()
+	fx._begin(EffectType.DEATH_BURST, pos, 0.22, Z_OVERLAY)
+	# 微环：从尸体塌缩尺寸向外淡出一小圈，给「这一下打死了」一个落点
+	fx._add_ring(4.0, 16.0 if not elite else 24.0, col, 2.0)
+	# 4~6 颗碎屑（精英加倍）：全向迸射 + 轻微向上偏置（受重力直觉的假象，比纯圆形更「爆」）
+	var count := 8 if elite else 5
+	for i in range(count):
+		var a := randf() * TAU
+		var spd := randf_range(60.0, 130.0)
+		fx._add_particle(
+			Vector2(randf_range(-2, 2), randf_range(-2, 2)),
+			Vector2(cos(a), sin(a)) * spd + Vector2(0.0, -30.0),
+			0.0,
+			Color(col.r, col.g, col.b, randf_range(0.65, 0.95)),
+			randf_range(1.5, 2.8))
 
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:

@@ -1,0 +1,6 @@
+[gd_scene uid="uid://bfxpreview01" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/fx_preview.gd" id="1_fx"]
+
+[node name="FxPreview" type="Node2D"]
+script = ExtResource("1_fx")

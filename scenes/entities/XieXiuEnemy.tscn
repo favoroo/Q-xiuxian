@@ -29,6 +29,7 @@ locomotion_mode = "hover"
 preferred_range = 260.0
 bolt_interval = 2.5
 bolt_damage = 15.0
+bolt_windup = 0.35
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 21.0)

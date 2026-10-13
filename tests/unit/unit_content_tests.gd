@@ -5,9 +5,9 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：68 把法器且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 68, "全武器库扩充至 68 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 68, "商店池覆盖全部 68 把法器")
+	# 1. 武器表完整性校验：69 把法器且图标资源齐全
+	_c.equals(WeaponData.DEFS.size(), 69, "全武器库扩充至 69 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 69, "商店池覆盖全部 69 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -34,8 +34,8 @@ func _test_five_elements_system() -> void:
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 扩容后各系把数：金15/木13/水13/火13/土14（2026-10-12 第三批 8 把填满交叉空洞格）
-	var elem_expect := {"metal": 15, "wood": 13, "water": 13, "fire": 13, "earth": 14}
+	# 扩容后各系把数：金16/木13/水13/火13/土14（2026-10-13 束流支路紫虹镜入金系）
+	var elem_expect := {"metal": 16, "wood": 13, "water": 13, "fire": 13, "earth": 14}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
@@ -77,7 +77,7 @@ func _test_five_elements_system() -> void:
 			tip_missing.append(String(w4))
 	_c.check(tip_missing.is_empty(),
 			"%d 种攻击方式全都有机制解释（缺: %s）" % [used_behaviors.size(), str(tip_missing)])
-	_c.equals(used_behaviors.size(), 6, "商店池覆盖 6 种攻击方式（近战/远程/范围/环绕/机关/横扫）")
+	_c.equals(used_behaviors.size(), 8, "商店池覆盖 8 种攻击方式（近战/远程/范围/环绕/机关/横扫/光束/喷吐）")
 	var raw_key: Array = []
 	for w5 in WeaponData.SHOP_POOL:
 		for k in WeaponData.get_def(String(w5)).get("stat_scalings", {}).keys():
@@ -271,13 +271,20 @@ func _test_item_system() -> void:
 	_c.check(bad_keys.is_empty(), "法宝 apply 字段都在白名单内（非法: %s）" % str(bad_keys))
 	_c.check(bad_meta.is_empty(), "法宝 档位/价格/图标 元数据齐全（异常: %s）" % str(bad_meta))
 
-	# 档位权重：第 1 波只有凡品，传说第 14 波才解锁；福缘抬高高档
+	# 档位权重：第 1 波只有普通，传说第 14 波才解锁；福缘乘区抬高高档
 	var w1: Array = GameBalance.item_tier_weights(0.0, 1)
-	_c.check(float(w1[0]) > 0.0 and float(w1[1]) == 0.0 and float(w1[3]) == 0.0, "第 1 波只出凡品法宝")
+	_c.check(float(w1[0]) > 0.0 and float(w1[1]) == 0.0 and float(w1[3]) == 0.0, "第 1 波只出普通法宝")
 	var w15: Array = GameBalance.item_tier_weights(0.0, 15)
 	_c.check(float(w15[3]) > 0.0, "第 15 波传说法宝解锁")
 	var w_luck: Array = GameBalance.item_tier_weights(40.0, 15)
 	_c.check(float(w_luck[3]) > float(w15[3]), "福缘抬高传说权重")
+	# 波次递进与封顶：高档随波次增长、不越上限；四档之和恒为 100
+	var w20: Array = GameBalance.item_tier_weights(0.0, 20)
+	_c.near(float(w20[1]), GameBalance.ITEM_TIER_RARE_CAP, EPS, "第 20 波稀有触顶")
+	_c.near(float(w20[2]), 22.0, EPS, "第 20 波史诗 2.0×11=22（未触顶 25）")
+	_c.check(float(w20[3]) <= GameBalance.ITEM_TIER_LEGEND_CAP, "传说不越上限")
+	_c.near(float(w20[0]) + float(w20[1]) + float(w20[2]) + float(w20[3]), 100.0, EPS, "四档之和恒为 100")
+	_c.check(float(GameBalance.item_tier_weights(0.0, 19)[3]) > float(w15[3]), "传说权重随波次递进")
 
 	# 抽取确定性 + unique 剔除
 	var rng := RandomNumberGenerator.new()
@@ -340,7 +347,7 @@ func _test_item_system() -> void:
 	GameManager.reset_run()
 
 	# 法宝定价与公式同源
-	_c.equals(GameBalance.item_price(45, 9, 1.0), 45 + 8 * 2, "仙品法宝第 9 波 +16")
+	_c.equals(GameBalance.item_price(45, 9, 1.0), 45 + 8 * 2, "史诗法宝第 9 波 +16")
 	_c.equals(GameBalance.item_price(45, 9, 0.8), int((45.0 + 16.0) * 0.8), "法宝价吃商店折扣")
 
 	# 残丹化灵：回不上的那截气血折灵石（汇率与藏宝匣金灵石那一路同档，单颗封顶）

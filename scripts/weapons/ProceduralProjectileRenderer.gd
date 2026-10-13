@@ -21,6 +21,8 @@ enum ProjectileKind {
 	TALISMAN_GOLD,    ## 庚金符：月白锐金符纸 + 冷金符文（2026-10-11 第二批）
 	TALISMAN_EARTH,   ## 厚土符：黄褐重岩符纸 + 赭石地煞灵纹
 	TALISMAN_ICE,     ## 玄冰符：霜蓝透寒符纸 + 极寒冰魄灵纹
+	TALISMAN_FROST,   ## 癸水符：玄青阴水滴形符纸 + 水波灵纹（2026-10-13 与玄冰符分家）
+	TALISMAN_STONE,   ## 厚土符：灰岩碑形符纸 + 山纹刻痕（2026-10-13 与镇山符分家）
 	FIRE_FLAME,       ## 三昧真火：水墨烈焰火煞 + 炽金火核
 	SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
 	WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
@@ -81,6 +83,10 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 		return ProjectileKind.TALISMAN_EARTH
 	elif "bullet_ice_talisman" in tex_path:
 		return ProjectileKind.TALISMAN_ICE
+	elif "bullet_frost_talisman" in tex_path:
+		return ProjectileKind.TALISMAN_FROST
+	elif "bullet_stone_talisman" in tex_path:
+		return ProjectileKind.TALISMAN_STONE
 	elif "bullet_fire_flame" in tex_path:
 		return ProjectileKind.FIRE_FLAME
 	elif "bullet_spirit_pellet" in tex_path:
@@ -106,23 +112,27 @@ func _draw() -> void:
 		ProjectileKind.BONE_SPIKE:
 			_draw_bone_spike()
 		ProjectileKind.TALISMAN_FIRE:
-			_draw_talisman(Color(0.85, 0.28, 0.20), Color(1.0, 0.82, 0.35))
+			_draw_talisman(Color(0.85, 0.28, 0.20), Color(1.0, 0.82, 0.35), TalismanShape.JAGGED)
 		ProjectileKind.TALISMAN_TRUE_FIRE:
-			_draw_talisman(Color(0.92, 0.45, 0.12), Color(1.0, 0.92, 0.55))
+			_draw_talisman(Color(0.92, 0.45, 0.12), Color(1.0, 0.92, 0.55), TalismanShape.RECT)
 		ProjectileKind.TALISMAN_THUNDER_FIRE:
-			_draw_talisman(Color(0.42, 0.34, 0.78), Color(1.0, 0.72, 0.30))
+			_draw_talisman(Color(0.42, 0.34, 0.78), Color(1.0, 0.72, 0.30), TalismanShape.JAGGED)
 		ProjectileKind.TALISMAN_WOOD:
-			_draw_talisman(Color(0.20, 0.55, 0.38), Color(0.60, 0.95, 0.70))
+			_draw_talisman(Color(0.20, 0.55, 0.38), Color(0.60, 0.95, 0.70), TalismanShape.LEAF)
 		ProjectileKind.TALISMAN_GU:
-			_draw_talisman(Color(0.28, 0.62, 0.16), Color(0.85, 1.0, 0.45))
+			_draw_talisman(Color(0.28, 0.62, 0.16), Color(0.85, 1.0, 0.45), TalismanShape.STRIP)
 		ProjectileKind.TALISMAN_JINGZHE:
-			_draw_talisman(Color(0.20, 0.55, 0.60), Color(0.65, 1.0, 0.85))
+			_draw_talisman(Color(0.20, 0.55, 0.60), Color(0.65, 1.0, 0.85), TalismanShape.STRIP)
 		ProjectileKind.TALISMAN_GOLD:
-			_draw_talisman(Color(0.82, 0.78, 0.62), Color(0.55, 0.48, 0.22))
+			_draw_talisman(Color(0.82, 0.78, 0.62), Color(0.55, 0.48, 0.22), TalismanShape.RECT)
 		ProjectileKind.TALISMAN_EARTH:
-			_draw_talisman(Color(0.72, 0.50, 0.22), Color(0.95, 0.80, 0.45))
+			_draw_talisman(Color(0.72, 0.50, 0.22), Color(0.95, 0.80, 0.45), TalismanShape.CHUNK)
 		ProjectileKind.TALISMAN_ICE:
-			_draw_talisman(Color(0.28, 0.65, 0.95), Color(0.85, 0.98, 1.0))
+			_draw_talisman(Color(0.28, 0.65, 0.95), Color(0.85, 0.98, 1.0), TalismanShape.CRYSTAL)
+		ProjectileKind.TALISMAN_FROST:
+			_draw_talisman(Color(0.20, 0.45, 0.72), Color(0.70, 0.95, 1.0), TalismanShape.DROPLET)
+		ProjectileKind.TALISMAN_STONE:
+			_draw_talisman(Color(0.55, 0.52, 0.46), Color(0.85, 0.78, 0.60), TalismanShape.STELE)
 		ProjectileKind.FIRE_FLAME:
 			_draw_flame()
 		ProjectileKind.SPIRIT_PELLET:
@@ -282,13 +292,16 @@ func _draw_silver_needle() -> void:
 	# 针尖锐芒光点
 	draw_circle(Vector2(10.0, 0.0), 1.1, Color.WHITE)
 
-# ----------------- 3b. 庚金金针 (冷金破空锐针) -----------------
+# ----------------- 3b. 庚金金针 (冷金破空锐针 + 环首倒刺) -----------------
 func _draw_gold_needle() -> void:
 	# 破空金色丝痕
 	draw_line(Vector2(10.0, 0.0), Vector2(-32.0, 0.0), Color(0.95, 0.82, 0.35, 0.22), 2.2, true)
 	draw_line(Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(1.0, 0.92, 0.55, 0.55), 1.2, true)
 	# 针体核心 (冷金锐锋)
 	draw_line(Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(1.0, 0.94, 0.70), 1.0, true)
+	# 环首（针尾金环，与暴雨银针的纯细线拉开剪影）+ 倒刺
+	draw_arc(Vector2(-9.0, 0.0), 2.0, 0.0, TAU, 10, Color(0.95, 0.82, 0.35, 0.9), 1.0)
+	draw_line(Vector2(2.0, 0.0), Vector2(-1.0, -1.8), Color(1.0, 0.90, 0.55, 0.85), 0.9, true)
 	# 针尖锐芒
 	draw_circle(Vector2(10.0, 0.0), 1.1, Color(1.0, 0.98, 0.88))
 
@@ -350,8 +363,13 @@ func _draw_bone_spike() -> void:
 	# 骨刺中脊
 	draw_line(Vector2(13.0, 0.0), Vector2(-8.0, 0.0), Color(0.40, 0.45, 0.44), 1.0, true)
 
-# ----------------- 5. 神符 (长方形古朴符纸 + 朱砂/五行灵文 + 灵光飘带) -----------------
-func _draw_talisman(border_col: Color, rune_col: Color) -> void:
+# ----------------- 5. 神符 (符纸形态 × 五行灵文 + 灵光飘带) -----------------
+## 符纸形态（2026-10-13 形态分化）：9+ 种符箓旧写法清一色 16×10 长方形只换边框色，
+## 拆成 7 种剪影 —— 方符/长条/叶形/晶棱/锯齿火边/厚岩八角/水滴/碑形，
+## 灵文跟着形态走（叶脉/晶心/雷纹/山刻/水波），飘带与呼吸相位全形制共用。
+enum TalismanShape { RECT, STRIP, LEAF, CRYSTAL, JAGGED, CHUNK, DROPLET, STELE }
+
+func _draw_talisman(border_col: Color, rune_col: Color, shape: TalismanShape = TalismanShape.RECT) -> void:
 	var wave_t := _lifetime_acc * 14.0
 	var wave_y := sin(wave_t) * 1.2
 
@@ -359,19 +377,96 @@ func _draw_talisman(border_col: Color, rune_col: Color) -> void:
 	draw_line(Vector2(-8.0, -3.0), Vector2(-24.0, -4.5 + wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
 	draw_line(Vector2(-8.0, 3.0), Vector2(-24.0, 4.5 - wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
 
-	# 符纸底板 (16x10px 长方形，居中偏左以便视觉朝向)
-	var rect := Rect2(-8.0, -5.0, 16.0, 10.0)
-	# 符纸骨黄质感
-	draw_rect(rect, Color(0.92, 0.88, 0.78), true)
-	# 边框勾勒
-	draw_rect(rect, border_col, false, 1.0)
-	# 符头朱砂印
-	draw_circle(Vector2(5.0, 0.0), 1.8, border_col)
-	# 符胆灵文线条 (朱砂/青灵阵纹，带轻微呼吸)
+	var paper := Color(0.92, 0.88, 0.78)
 	var rune_pulse: Color = rune_col * (0.95 + 0.15 * sin(wave_t * 0.7))
-	draw_line(Vector2(3.0, 0.0), Vector2(-5.0, 0.0), rune_pulse, 1.2, true)
-	draw_line(Vector2(-1.0, -2.5), Vector2(-1.0, 2.5), rune_pulse, 1.0, true)
-	draw_line(Vector2(-4.0, -2.0), Vector2(-4.0, 2.0), rune_pulse, 0.8, true)
+	match shape:
+		TalismanShape.RECT:
+			# 方符：16×10 正气符纸
+			var rect := Rect2(-8.0, -5.0, 16.0, 10.0)
+			draw_rect(rect, paper, true)
+			draw_rect(rect, border_col, false, 1.0)
+			draw_circle(Vector2(5.0, 0.0), 1.8, border_col)
+			draw_line(Vector2(3.0, 0.0), Vector2(-5.0, 0.0), rune_pulse, 1.2, true)
+			draw_line(Vector2(-1.0, -2.5), Vector2(-1.0, 2.5), rune_pulse, 1.0, true)
+			draw_line(Vector2(-4.0, -2.0), Vector2(-4.0, 2.0), rune_pulse, 0.8, true)
+		TalismanShape.STRIP:
+			# 长条符：20×6 狭长令签
+			var rect := Rect2(-10.0, -3.0, 20.0, 6.0)
+			draw_rect(rect, paper, true)
+			draw_rect(rect, border_col, false, 1.0)
+			draw_circle(Vector2(7.0, 0.0), 1.4, border_col)
+			draw_line(Vector2(4.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
+			draw_line(Vector2(-3.0, -1.5), Vector2(-3.0, 1.5), rune_pulse, 0.8, true)
+		TalismanShape.LEAF:
+			# 叶形符：前尖后圆的灵叶
+			var leaf := PackedVector2Array([
+				Vector2(10.0, 0.0), Vector2(3.0, -5.0), Vector2(-6.0, -4.0),
+				Vector2(-9.0, 0.0), Vector2(-6.0, 4.0), Vector2(3.0, 5.0)])
+			draw_colored_polygon(leaf, paper)
+			leaf.append(leaf[0])
+			draw_polyline(leaf, border_col, 1.0, true)
+			# 叶脉灵文
+			draw_line(Vector2(8.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
+			draw_line(Vector2(2.0, 0.0), Vector2(-2.0, -2.6), rune_pulse, 0.8, true)
+			draw_line(Vector2(2.0, 0.0), Vector2(-2.0, 2.6), rune_pulse, 0.8, true)
+		TalismanShape.CRYSTAL:
+			# 晶棱符：六棱冰晶
+			var hex := PackedVector2Array([
+				Vector2(10.0, 0.0), Vector2(4.0, -4.5), Vector2(-5.0, -4.5),
+				Vector2(-9.0, 0.0), Vector2(-5.0, 4.5), Vector2(4.0, 4.5)])
+			draw_colored_polygon(hex, paper)
+			hex.append(hex[0])
+			draw_polyline(hex, border_col, 1.0, true)
+			# 晶心灵纹（内小菱形）
+			var core := PackedVector2Array([
+				Vector2(4.0, 0.0), Vector2(0.0, -2.0), Vector2(-4.0, 0.0), Vector2(0.0, 2.0), Vector2(4.0, 0.0)])
+			draw_polyline(core, rune_pulse, 1.0, true)
+		TalismanShape.JAGGED:
+			# 锯齿火边符：符尾撕出火焰卷边
+			var jag := PackedVector2Array([
+				Vector2(9.0, -4.5), Vector2(-7.0, -5.0), Vector2(-10.0, -2.5),
+				Vector2(-7.5, 0.0), Vector2(-10.0, 2.5), Vector2(-7.0, 5.0), Vector2(9.0, 4.5)])
+			draw_colored_polygon(jag, paper)
+			jag.append(jag[0])
+			draw_polyline(jag, border_col, 1.0, true)
+			draw_circle(Vector2(5.5, 0.0), 1.6, border_col)
+			# 火纹灵文（三折跃动）
+			draw_polyline(PackedVector2Array([
+				Vector2(3.0, -1.5), Vector2(0.0, 1.5), Vector2(-3.0, -1.5), Vector2(-5.5, 1.0)]),
+				rune_pulse, 1.0, true)
+		TalismanShape.CHUNK:
+			# 厚岩八角符：镇山的厚重手感
+			var oct := PackedVector2Array([
+				Vector2(6.0, -5.0), Vector2(-4.0, -6.0), Vector2(-9.0, -2.5), Vector2(-9.0, 2.5),
+				Vector2(-4.0, 6.0), Vector2(6.0, 5.0), Vector2(9.0, 2.0), Vector2(9.0, -2.0)])
+			draw_colored_polygon(oct, paper)
+			oct.append(oct[0])
+			draw_polyline(oct, border_col, 1.4, true)
+			# 山形灵纹
+			draw_polyline(PackedVector2Array([
+				Vector2(-5.0, 2.5), Vector2(-1.5, -2.0), Vector2(1.5, 1.0), Vector2(4.5, -2.5)]),
+				rune_pulse, 1.2, true)
+		TalismanShape.DROPLET:
+			# 水滴符：阴水前悬一滴
+			var drop := PackedVector2Array([
+				Vector2(10.0, 0.0), Vector2(3.0, -5.5), Vector2(-4.0, -5.0),
+				Vector2(-8.0, -1.5), Vector2(-8.0, 1.5), Vector2(-4.0, 5.0), Vector2(3.0, 5.5)])
+			draw_colored_polygon(drop, paper)
+			drop.append(drop[0])
+			draw_polyline(drop, border_col, 1.0, true)
+			# 水波灵纹（圆心 + 半弧）
+			draw_circle(Vector2(0.0, 0.0), 1.3, rune_pulse)
+			draw_arc(Vector2(0.0, 0.0), 3.2, -1.2, 1.2, 8, rune_pulse, 0.9)
+		TalismanShape.STELE:
+			# 碑形符：上窄下宽的小石碑
+			var stele := PackedVector2Array([
+				Vector2(8.0, -4.0), Vector2(-6.0, -5.5), Vector2(-8.0, 5.5), Vector2(6.0, 4.5)])
+			draw_colored_polygon(stele, paper)
+			stele.append(stele[0])
+			draw_polyline(stele, border_col, 1.2, true)
+			# 碑额横刻 + 竖纹
+			draw_line(Vector2(5.0, -2.5), Vector2(-4.0, -3.0), rune_pulse, 1.0, true)
+			draw_line(Vector2(0.0, -1.0), Vector2(-1.0, 3.5), rune_pulse, 1.0, true)
 
 # ----------------- 6. 三昧真火 (流光火核与烈火水滴 + 喷射焰尾) -----------------
 func _draw_flame() -> void:

@@ -35,13 +35,13 @@ func _run() -> void:
 # ---------------- ① 数据表对账 ----------------
 func _test_data() -> void:
 	var ids: Array = EnemyGuideData.catalog_ids()
-	_c.equals(ids.size(), 16, "catalog 收录 16 种（11 常规 + 3 精英 + 魔君 + 金蟾）")
-	_c.equals(ids.slice(0, 11), EnemyData.mob_keys(), "常规 11 种与 EnemyData.MOBS 表序一致")
+	_c.equals(ids.size(), 17, "catalog 收录 17 种（12 常规 + 3 精英 + 魔君 + 金蟾）")
+	_c.equals(ids.slice(0, 12), EnemyData.mob_keys(), "常规 12 种与 EnemyData.MOBS 表序一致")
 	var elite_ids: Array = []
 	for e in EnemyData.ELITE_POOL:
 		elite_ids.append(String(e["id"]))
-	_c.equals(ids.slice(11, 14), elite_ids, "精英 3 种与 EnemyData.ELITE_POOL 对账")
-	_c.check(ids[14] == "boss" and ids[15] == "jinchan", "魔君/金蟾在表尾")
+	_c.equals(ids.slice(12, 15), elite_ids, "精英 3 种与 EnemyData.ELITE_POOL 对账")
+	_c.check(ids[15] == "boss" and ids[16] == "jinchan", "魔君/金蟾在表尾")
 	var missing: Array[String] = []
 	for eid in ids:
 		if not EnemyGuideData.GUIDE.has(eid):

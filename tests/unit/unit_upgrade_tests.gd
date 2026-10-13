@@ -105,10 +105,10 @@ func _test_upgrade_roll_filters() -> void:
 	_c.equals(rest.size(), 1, "只剩 1 项可选时不硬凑 3 项")
 	_c.equals(rest[0].get("id", ""), "atk_up", "剩下的正是未叠满那项")
 
-	# 福缘把仙品概率抬上去：固定样本量下仙品数量应随福缘增加
-	var epic_low := _count_epic(0.0)
-	var epic_high := _count_epic(40.0)
-	_c.check(epic_high >= epic_low, "福缘 40 的仙品数量不少于福缘 0（%d → %d）" % [epic_low, epic_high])
+	# 福缘把高稀有（史诗+传说）概率抬上去：固定样本量下数量应随福缘增加
+	var epic_low := _count_high_rarity(0.0)
+	var epic_high := _count_high_rarity(40.0)
+	_c.check(epic_high >= epic_low, "福缘 40 的史诗+传说数量不少于福缘 0（%d → %d）" % [epic_low, epic_high])
 
 func _test_alloc_session() -> void:
 	GameManager.reset_run()
@@ -202,13 +202,14 @@ func _test_alloc_session() -> void:
 
 var _alloc_probe_count: int = 0
 
-func _count_epic(luck: float) -> int:
+## 第 12 波采样：史诗/传说均已解锁且未触顶，福缘乘区的差异能在计数上显出来
+func _count_high_rarity(luck: float) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 777
 	var n := 0
 	for i in range(400):
-		for p in UpgradeData.get_random_upgrades(1, {"luck": luck, "rng": rng}):
-			if p.get("rarity", "") == "epic":
+		for p in UpgradeData.get_random_upgrades(1, {"luck": luck, "wave": 12, "rng": rng}):
+			if p.get("rarity", "") in ["epic", "legendary"]:
 				n += 1
 	return n
 

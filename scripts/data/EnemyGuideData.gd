@@ -26,28 +26,28 @@ const GUIDE: Dictionary = {
 		"counter": "顺手清掉，别攒成堆",
 	},
 	"danbao": {
-		"desc": "贴近会点燃【引信】【自爆】，看到地上【预警圈】立刻离开。",
+		"desc": "贴近会点燃【引信】【自爆】，看到地上【预警圈】立刻离开。引信中途点碎它会【溅射一圈丹火】。",
 		"tags": ["自爆", "预警圈"],
-		"attack": "贴身自爆",
+		"attack": "贴身自爆·被杀溅射",
 		"tough": "普通",
 		"swift": "快",
-		"counter": "预警圈亮起就走，或拉开等它炸完",
+		"counter": "预警圈亮起就走；要在远处打它，打完记得躲开溅出的丹火",
 	},
 	"xiexiu": {
-		"desc": "远远扔【火球】的邪修，别让它安心【站桩】。",
+		"desc": "远远扔【火球】的邪修，出手前会【提亮蓄力】，别让它安心【站桩】。",
 		"tags": ["远程"],
 		"attack": "远程火弹",
 		"tough": "普通",
 		"swift": "寻常",
-		"counter": "贴身打断站桩，别吃直线火球",
+		"counter": "它发亮就是要出手，横向走两步就躲开；贴身打断更稳",
 	},
 	"leibeast": {
-		"desc": "蓄势后【直线猛冲】，侧身躲掉冲撞再反击。",
-		"tags": ["冲撞"],
+		"desc": "蓄势后【直线猛冲】，冲的方向会【算上你的跑位】，匀速直线跑要吃亏。",
+		"tags": ["冲撞", "预判"],
 		"attack": "冲撞撕咬",
 		"tough": "厚",
 		"swift": "寻常",
-		"counter": "侧身躲冲撞，从背后打",
+		"counter": "看预警带亮起就【急停或变向】，它冲的是你刚才的路线",
 	},
 	"flower": {
 		"desc": "跑得快的花妖，成群【黏人】。",
@@ -97,6 +97,14 @@ const GUIDE: Dictionary = {
 		"swift": "慢",
 		"counter": "先杀它，敌潮速度立刻掉下来",
 	},
+	"duyao": {
+		"desc": "往你脚下扔【毒潭】的毒妖，站进去会持续掉血。",
+		"tags": ["持续伤害", "地面区域"],
+		"attack": "投毒·持续伤害区域",
+		"tough": "普通",
+		"swift": "慢",
+		"counter": "看到绿圈预告就走开，别站在毒里打",
+	},
 	"zhumu": {
 		"desc": "不断【产卵】的百目妖，拖久了场地全是小怪。",
 		"tags": ["召唤"],
@@ -115,12 +123,12 @@ const GUIDE: Dictionary = {
 		"counter": "慢慢磨，残血变异后注意离地",
 	},
 	"chilei": {
-		"desc": "频繁【长距离突进】的赤雷兽，冲撞伤害极高。",
-		"tags": ["精英", "冲撞"],
+		"desc": "频繁【长距离突进】的赤雷兽，冲的方向会【算上你的跑位】，冲撞伤害极高。",
+		"tags": ["精英", "冲撞", "预判"],
 		"attack": "长距突进",
 		"tough": "极厚",
 		"swift": "寻常",
-		"counter": "躲开突进线，间隙再输出",
+		"counter": "预警带亮起就急停变向，别沿直线跑",
 	},
 	"jiansha": {
 		"desc": "【三连剑气】压场的剑煞邪修，别站直线。",
@@ -152,8 +160,10 @@ const GUIDE: Dictionary = {
 
 ## 图鉴展示顺序：常规 → 精英 → 魔君 → 金蟾
 static func catalog_ids() -> Array:
+	# 顺序必须与 EnemyData.MOBS 表序一致（判据 EnemyCodexCheck 钉这条：图鉴与配比表漂移
+	# 会让新怪静默不出现在图鉴里）
 	return ["slime", "danbao", "xiexiu", "leibeast", "flower", "fengqun",
-		"xueyong", "yingmei", "lingyi", "guyao", "zhumu",
+		"xueyong", "yingmei", "lingyi", "guyao", "duyao", "zhumu",
 		"golem", "chilei", "jiansha", "boss", "jinchan"]
 
 ## 卡面名称：与播报/数据表同一个词，图鉴不另起花名

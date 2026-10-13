@@ -60,6 +60,8 @@ func _test_weapon_dps_normalization() -> void:
 		"lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu",
 		# 2026-10-12 第三批：纳入群伤/功能带
 		"guishui_fu", "taomu_jian", "houtu_fu", "jinxiao_leiling", "xuanming_leizhu",
+		# 2026-10-13 束流支路：光束法器紫虹镜入群伤带（线上一串全中）
+		"zihong_jing",
 	]
 	var drone_weapons := [
 		"lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei",

@@ -7,6 +7,11 @@ extends Node
 ##   ④ 精英变异只触发一次：铁甲巨怪获得震地、烈雷兽获得冲刺侧射、剑客亡灵剑气加密
 ##   ⑤ 铁甲巨怪变异震地：圈内玩家掉血、圈外不掉血
 ##   ⑥ 未登记敌种（Boss）走自己的二阶段，不被变异钩子截胡
+## 2026-10-13 追加（仿土豆兄弟 Pufferfish / Goblin Shark / Spitter telegraph）。钉死四件事：
+##   ⑦ 死亡弹幕：引信中途被杀的丹爆环形放弹；自爆炸完不放（已有 AoE，不双罚）
+##   ⑧ 预判冲锋：charge_aim_lead>0 时锁向冲向「玩家位置 + 玩家速度 × lead」预判点
+##   ⑨ 火球蓄力：起手进蓄力站定段，蓄力满才发射；受击硬直打断蓄力不发弹
+##   ⑩ 死亡爆散：JuiceEffect.spawn_death_burst 受单物理帧预算闸（≤3 处/帧）
 ## 运行: godot --headless --path . res://tests/EnemyNewMechanicsCheck.tscn
 ## 只摆一个裸 world + 真 Player + 按需单只妖物，不跑波次（别的怪会污染读数）。
 
@@ -52,6 +57,10 @@ func _run() -> void:
 	await _case_mutation_once()
 	await _case_golem_slam()
 	_case_boss_not_mutated()
+	await _case_death_bolts()
+	await _case_charge_aim_lead()
+	await _case_bolt_windup()
+	_case_death_burst_budget()
 
 	print("ENEMY_NEW_MECHANICS 判据跑完")
 	Engine.time_scale = 1.0
@@ -202,3 +211,110 @@ func _case_boss_not_mutated() -> void:
 	boss.take_damage(1.0, Vector2.ZERO)
 	_c.check(not boss._mutated, "Boss 过 60% 血线不走精英变异（自己的二阶段照旧）")
 	boss.queue_free()
+
+## ⑦ 死亡弹幕（Pufferfish 型）：引信中途被杀的丹爆环形放弹；自爆炸完不放（已有 AoE 不双罚）
+func _case_death_bolts() -> void:
+	var danbao := _spawn_enemy("res://scenes/entities/DanBaoEnemy.tscn", Vector2(5000, 5000))
+	await get_tree().process_frame
+	_c.check(danbao.death_bolt_count == 5, "前置：丹爆场景配了 5 发死亡弹幕")
+
+	# 引信未点燃（远距斩杀）：_fuse<0 → 不放弹
+	EnemyBolt.active_count = 0
+	danbao.take_damage(99999.0, Vector2.ZERO)
+	await get_tree().process_frame
+	_c.equals(EnemyBolt.active_count, 0, "引信未点燃被杀：不放死亡弹幕")
+	danbao.queue_free()
+	await get_tree().process_frame
+
+	# 引信点燃中途被杀：_fuse>0 → 环形 5 发
+	var danbao2 := _spawn_enemy("res://scenes/entities/DanBaoEnemy.tscn", Vector2(5000, 5000))
+	await get_tree().process_frame
+	danbao2._fuse = 0.4  # 直接点燃（绕开贴近判定），引信还剩一半
+	EnemyBolt.active_count = 0
+	danbao2.take_damage(99999.0, Vector2.ZERO)
+	await get_tree().process_frame
+	_c.equals(EnemyBolt.active_count, 5, "引信中途被杀：环形溅射 5 发弹幕")
+	danbao2.queue_free()
+	await get_tree().process_frame
+
+	# 自己烧完的自爆走 _explode → _no_drop=true → 不补弹（不与 AoE 双罚）
+	var danbao3 := _spawn_enemy("res://scenes/entities/DanBaoEnemy.tscn", Vector2(5000, 5000))
+	await get_tree().process_frame
+	danbao3._fuse = 0.0001
+	EnemyBolt.active_count = 0
+	# 模拟引信走完：直接调 _explode（真实路径里它已在玩家身边）
+	danbao3._explode(_player)
+	await get_tree().process_frame
+	_c.equals(EnemyBolt.active_count, 0, "自爆炸完的死亡：不再补死亡弹幕（AoE 已结算）")
+	await get_tree().process_frame
+
+## ⑧ 预判冲锋（Goblin Shark 型）：锁向冲向「玩家位置 + 玩家速度 × lead」
+func _case_charge_aim_lead() -> void:
+	var beast := _spawn_enemy("res://scenes/entities/LeiBeastEnemy.tscn", Vector2(-5000, -5000))
+	await get_tree().process_frame
+	_c.near(beast.charge_aim_lead, 0.28, 0.001, "前置：雷兽场景配了 0.28s 预判")
+
+	# 玩家向 +x 匀速跑：预判方向应偏向玩家速度前方
+	_player.global_position = beast.global_position + Vector2(300, 0)
+	_player.velocity = Vector2(400, 0)
+	var aim: Vector2 = beast._charge_aim_dir(_player, Vector2.RIGHT)
+	_c.check(absf(aim.angle()) < 0.05 and aim.angle() >= 0.0, "预判方向偏向玩家速度前方（角度 %.2f rad）" % aim.angle())
+	# 退化路径：玩家静止 → 正对玩家
+	_player.velocity = Vector2.ZERO
+	var aim2: Vector2 = beast._charge_aim_dir(_player, Vector2.RIGHT)
+	_c.check(absf(aim2.angle()) < 0.001, "玩家静止时退化为正对玩家方向")
+	# lead=0 的怪永远走 fallback
+	beast.charge_aim_lead = 0.0
+	_player.velocity = Vector2(400, 0)
+	var aim3: Vector2 = beast._charge_aim_dir(_player, Vector2.DOWN)
+	_c.check(aim3 == Vector2.DOWN, "lead=0 时走原方向（不预判）")
+	beast.queue_free()
+	_player.velocity = Vector2.ZERO
+	await get_tree().process_frame
+
+## ⑨ 火球蓄力：起手进蓄力站定段 → 蓄力满才发射；受击硬直打断不发弹
+func _case_bolt_windup() -> void:
+	var xiexiu := _spawn_enemy("res://scenes/entities/XieXiuEnemy.tscn", Vector2(400, 0))
+	await get_tree().process_frame
+	_c.near(xiexiu.bolt_windup, 0.35, 0.001, "前置：邪修场景配了 0.35s 蓄力")
+	_player.global_position = Vector2(0, 0)
+
+	# 起手蓄力：进入蓄力段、站定（不直接发射）
+	EnemyBolt.active_count = 0
+	xiexiu._bolt_timer = 0.0
+	xiexiu._start_bolt_windup()
+	_c.check(xiexiu._bolt_windup_t > 0.0, "起手后进入蓄力段")
+	_c.equals(EnemyBolt.active_count, 0, "蓄力期间不发弹")
+
+	# 蓄力满 → 发射
+	xiexiu._bolt_windup_t = 0.0001
+	xiexiu._fire_bolt(_player)
+	_c.equals(EnemyBolt.active_count, 1, "蓄力满发射 1 发火球")
+	_c.check(xiexiu._bolt_windup_t < 0.0, "发射后蓄力段关闭")
+	xiexiu._cancel_bolt_windup()
+
+	# 硬直打断：起手后立刻硬直 → 蓄力作废不发弹
+	EnemyBolt.active_count = 0
+	xiexiu._start_bolt_windup()
+	xiexiu.hit_stun_timer = 0.2  # 人为置硬直（模拟受击）
+	xiexiu._cancel_bolt_windup()
+	_c.check(xiexiu._bolt_windup_t < 0.0, "硬直打断后蓄力段作废")
+	_c.equals(EnemyBolt.active_count, 0, "打断路径全程零发射（作废 ≠ 补发）")
+	xiexiu.queue_free()
+	await get_tree().process_frame
+
+## ⑩ 死亡爆散：spawn_death_burst 受单物理帧预算闸（≤3 处/帧），超额静默丢弃
+func _case_death_burst_budget() -> void:
+	var parent := _world
+	var pos := Vector2(3000, 3000)  # 屏外点：视口门控会拦 → 先在屏内测预算，再验屏外拦截
+	var player_screen := _player.global_position
+	JuiceEffect.spawn_death_burst(parent, player_screen + Vector2(50, 0), Color.RED, false)
+	JuiceEffect.spawn_death_burst(parent, player_screen + Vector2(-50, 0), Color.RED, false)
+	JuiceEffect.spawn_death_burst(parent, player_screen + Vector2(0, 50), Color.RED, false)
+	var before := JuiceEffect.active_count
+	JuiceEffect.spawn_death_burst(parent, player_screen + Vector2(0, -50), Color.RED, false)  # 同帧第 4 发：预算闸拦下
+	_c.equals(JuiceEffect.active_count - before, 0, "同帧第 4 发死亡爆散被预算闸拦截（≤3/帧）")
+	# 屏外点不放（视口门控）
+	var outside := player_screen + Vector2(9999, 9999)
+	JuiceEffect.spawn_death_burst(parent, outside, Color.RED, false)
+	_c.equals(JuiceEffect.active_count - before, 0, "屏外死亡爆散被视口门控拦截")

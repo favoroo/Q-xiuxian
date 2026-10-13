@@ -15,6 +15,9 @@ var knockback_base: float = 200.0
 var tint: Color = Color(1.0, 0.95, 0.6)
 ## 落点"砸下来的东西"（番天镇岳印 = 玄石大印）；空字符串 = 只留光环与光柱
 var icon_path: String = ""
+## 落点形态（由 FloatingWeapon 从 WeaponData.burst_kind 下发，须在 activate() 前赋值）：
+## thunder（默认，天雷柱）/ fire_rain 火雨 / frost 冰刺 / sonic 音波 / drum 鼓震 / earth 地裂 / seal 坠印扬尘
+var burst_kind: String = "thunder"
 ## 落点音 key（由 FloatingWeapon 从 WeaponData.sfx_impact 下发，须在 activate() 前赋值）
 var sfx_impact_key: String = ""
 var proc_burn: bool = false
@@ -63,6 +66,8 @@ static var _dmg_query: PhysicsShapeQueryParameters2D = null
 var _pooled: bool = false
 ## 本次落雷是否劈到人：_deal_damage 结算后置位，_bloom_or_recycle 据此分档（劈空不演大闪）
 var _struck: bool = false
+## 落点形态渲染器：常驻子节点随池复用（activate 重铺字段），不随每发 instantiate
+var _kind_fx: BurstKindFx = null
 
 func _ready() -> void:
 	# 常驻设施（FxSprite/PointLight2D）由场景给出；爆发行为全部在 activate()，
@@ -70,7 +75,7 @@ func _ready() -> void:
 	pass
 
 ## 起爆激活：视觉重置 → 雷柱/镇岳印 → 演出与结算。复用时 _ready 已跑过一次，
-## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx/_struck）
+## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx/_struck/burst_kind）
 func activate() -> void:
 	_pooled = false
 	visible = true
@@ -83,8 +88,16 @@ func activate() -> void:
 	fx_sprite.scale = Vector2.ONE * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
 	light.color = tint
-	_spawn_sky_beam()
+	# 天雷柱只给雷系（fire_rain/frost/earth 等的落点形态由 BurstKindFx 各自交代，
+	# 火雨再立一根雷柱就是「文案说火雨画面是闪电」的旧错位）
+	if burst_kind == "thunder" or burst_kind == "":
+		_spawn_sky_beam()
 	_spawn_impact_icon()
+	if _kind_fx == null:
+		_kind_fx = BurstKindFx.new()
+		_kind_fx.name = "KindFx"
+		add_child(_kind_fx)
+	_kind_fx.activate_fx(burst_kind, radius, tint)
 
 	# 劈空收档（2026-10-11 频闪治理）：落点先只演「小印记」——低α小光环 + 窄雷柱 + 落点音。
 	# 同帧 deferred 的 _deal_damage 结算完战果后由 _bloom_or_recycle 分档：劈空快速收场，
@@ -128,6 +141,8 @@ func _recycle() -> void:
 	_pooled = true
 	visible = false
 	light.energy = 0.0
+	if _kind_fx != null:
+		_kind_fx.deactivate()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
 		return

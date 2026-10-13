@@ -265,9 +265,9 @@ static func rules(id: String) -> Array[String]:
 			out.append("暴击伤害按倍率相加，只影响会心那一刀，普通攻击完全不吃。")
 			out.append("金系羁绊同时抬这两处；部分武器还会把暴击率直接折成额外伤害。")
 		"luck":
-			out.append("每点把史诗权重抬 %s、稀有权重抬 %s，差额从普通里扣。" % [_fmt(GameBalance.LUCK_EPIC_PER_POINT), _fmt(GameBalance.LUCK_RARE_PER_POINT)])
-			out.append("普通权重有地板 %s，所以幸运堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
-			out.append("对商店货架是按权重微调，不是必出；幸运低也不至于刷不出货。")
+			out.append("每点使高稀有（稀有/史诗/传说）概率 ×(1+%s%%)，先乘后封顶。" % _fmt(GameBalance.RARITY_LUCK_PER_POINT * 100.0))
+			out.append("高稀有概率随波次递进、各有上限；普通取余且有地板 %s，幸运堆到极高后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
+			out.append("对商店货架与悟道候选同时生效，是按权重微调，不是必出；幸运低也不至于刷不出货。")
 		"harvest":
 			out.append("回合结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
 			out.append("每回合自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
@@ -537,9 +537,10 @@ static func stat_tip_rows(id: String) -> Array:
 				["软上限", "%.0f%%" % (GameManager.CRIT_RATE_CAP * 100.0), GameStyle.GREY],
 			]
 		"luck":
-			var rw: Dictionary = GameBalance.rarity_weights(GameManager.luck)
+			var rw: Dictionary = GameBalance.rarity_weights(GameManager.luck, GameManager.wave_number)
 			rows = [
 				["幸运", "%.0f" % float(s.get("luck", 0.0)), _c(GameManager.luck)],
+				["传说权重", "%.0f / %.0f" % [float(rw.get("legendary", 0.0)), GameBalance.RARITY_TOTAL]],
 				["史诗权重", "%.0f / %.0f" % [float(rw.get("epic", 0.0)), GameBalance.RARITY_TOTAL]],
 				["稀有权重", "%.0f / %.0f" % [float(rw.get("rare", 0.0)), GameBalance.RARITY_TOTAL]],
 				["普通权重", "%.0f / %.0f" % [float(rw.get("common", 0.0)), GameBalance.RARITY_TOTAL]],

@@ -188,7 +188,7 @@ func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 	# 6 格（多宝道人 +1）才是竖向最坏情况，两档都要量。
 	GameManager.shop_slots_bonus = maxi(0, count - GameManager.SHOP_BASE_SLOTS)
 	GameManager.roll_shop(true)
-	# 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「凡品·法宝」。
+	# 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「普通·法宝」。
 	# 这两枚正是「贴着字走的色签被引擎再折一次、多出一行孤字」的现场（框 29、字也要 29）。
 	var offers: Array = GameManager.shop_offers
 	if offers.size() >= 2:

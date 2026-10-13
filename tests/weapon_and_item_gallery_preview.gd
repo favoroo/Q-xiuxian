@@ -103,7 +103,7 @@ func _build_ui() -> void:
 	item_panel.add_child(item_vbox)
 
 	var item_title := Label.new()
-	item_title.text = "二十件灵阁法宝（凡品 · 良品 · 仙品 · 传说）"
+	item_title.text = "二十件灵阁法宝（普通 · 稀有 · 史诗 · 传说）"
 	GameStyle.label(item_title, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	item_vbox.add_child(item_title)
 

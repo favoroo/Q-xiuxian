@@ -90,7 +90,7 @@ var current_target: Node2D = null
 var is_attacking: bool = false
 var bob_phase: float = 0.0
 var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
-var sweep_sprite: Sprite2D = null  # 横扫专属金色扇面（top_level 世界坐标，SWEEP 才建）
+var sweep_sprite: WeaponArcRenderer = null  # 横扫专属元素扇面（top_level 世界坐标，SWEEP 才建）
 var _sweep_slash_tween: Tween = null
 
 # ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
@@ -120,9 +120,32 @@ var _muzzle_scale0: float = 0.5
 const RETARGET_INTERVAL := 1.0 / 15.0
 var _retarget_phase: float = 0.0
 
+# ---------------- 持续束流（BEAM 光束 / CONE 喷吐，2026-10-13） ----------------
+## 与六段式攻击不同：束流不设 is_attacking（不冻结轨道与朝向），起喷后由 _tick_channel
+## 逐帧续命 —— 朝向本身 15rad/s 追踪目标，光束/火锥自然跟着缓慢扫动。
+## 每 TICK 结算一次，tick 伤害 = 整管伤害 × TICK / 有效冷却 ⇒ 纸面 DPS（damage/cd）即实伤。
+## 冷却循环到期自动续喷（CHANNEL_HOLD > 冷却 ⇒ 目标在程内连续不断）；目标死亡/脱程即收束。
+const CHANNEL_HOLD := 1.6      ## 一次起喷持续时间（秒），冷却每转一圈回来续喷
+const BEAM_TICK := 0.15        ## 光束结算间隔
+const CONE_TICK := 0.21        ## 喷吐结算间隔（火葫芦 0.42 冷却 = 每周期 2 跳）
+const CONE_HALF_ANGLE := 28.0  ## 喷吐锥形半角（度），视觉锥宽同源
+const BEAM_HALF_WIDTH := 5.0   ## 光束判定半宽（视觉束宽同源）
+## 光束判定在截断点后再探出一段：射线停在挡束者表面，不补这段则挡住光束的敌人自己
+## 反而打不到（判定只到它表皮）；补段长约一个敌人受击半径，只盖挡束者、不穿墙打后排。
+const BEAM_HIT_OVERHANG := 24.0
+var _channel_on: bool = false
+var _channel_left: float = 0.0
+var _channel_tick: float = 0.0
+var _beam_len: float = 0.0     ## 本 tick 光束判定长度（射线命中截断，渲染同源）
+var beam_renderer: BeamRenderer = null
+var cone_renderer: FlameConeRenderer = null
+## 光束判定矩形静态复用（照 _search_shape 模式，单线程安全，每次查询现写尺寸）
+static var _beam_shape: RectangleShape2D = null
+static var _beam_query: PhysicsShapeQueryParameters2D = null
+
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var muzzle_point: Marker2D = $MuzzlePoint
-@onready var slash_sprite: Sprite2D = $SlashEffect
+@onready var slash_sprite: WeaponArcRenderer = $SlashEffect
 
 var muzzle_flash: Sprite2D
 var aura_sprite: Sprite2D = null
@@ -131,7 +154,6 @@ var _base_sprite_scale := Vector2(0.55, 0.55)
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
 var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
-const SWEEP_TEX: Texture2D = preload("res://assets/art/sweep_effect.png")
 
 var active_turrets: Array[TurretUnit] = []
 
@@ -179,6 +201,7 @@ func _ready() -> void:
 	dynamic_angle = base_angle
 	if def.is_empty():
 		setup(weapon_def_id, star)
+	slash_sprite.configure(WeaponArcRenderer.ArcMode.MELEE, _arc_element())
 	if def.has("icon"):
 		sprite.texture = load(def["icon"])
 	# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
@@ -189,17 +212,43 @@ func _ready() -> void:
 		_setup_aura()
 		if behavior == WeaponData.Behavior.SWEEP:
 			_setup_sweep_sprite()
+		elif behavior == WeaponData.Behavior.BEAM:
+			_setup_beam_renderer()
+		elif behavior == WeaponData.Behavior.CONE:
+			_setup_cone_renderer()
 
-## 横扫金色扇面（top_level = 世界坐标）：扇面钉在挥出那一帧的方位与地点，
+## 横扫元素扇面（top_level = 世界坐标）：扇面钉在挥出那一帧的方位与地点，
 ## 本体收势/回轨都不会拖着它走 —— 这是「画多大==判多大」在横扫上的落点。
 func _setup_sweep_sprite() -> void:
-	sweep_sprite = Sprite2D.new()
-	sweep_sprite.texture = SWEEP_TEX
-	sweep_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sweep_sprite = WeaponArcRenderer.new()
+	sweep_sprite.configure(WeaponArcRenderer.ArcMode.SWEEP, _arc_element())
 	sweep_sprite.top_level = true
 	sweep_sprite.visible = false
 	sweep_sprite.modulate.a = 0.0
 	add_child(sweep_sprite)
+
+## 刀光元素：五行标签优先，无五行但有雷标签的走紫电（如雷系法器）
+func _arc_element() -> String:
+	var e := WeaponData.element_of(weapon_def_id)
+	if e == "" and WeaponData.tags_of(weapon_def_id).has("thunder"):
+		e = "thunder"
+	return e
+
+## 光束渲染器挂在器口（MuzzlePoint 与发射帧 +X 同轴，本体转向即光束转向）
+func _setup_beam_renderer() -> void:
+	beam_renderer = BeamRenderer.new()
+	beam_renderer.name = "BeamRenderer"
+	beam_renderer.position = muzzle_point.position
+	beam_renderer.z_index = 5
+	add_child(beam_renderer)
+
+## 火锥渲染器同上：锚在器口，锥长 = 射程 − 器口距（判定同源由 _tick_channel 下发）
+func _setup_cone_renderer() -> void:
+	cone_renderer = FlameConeRenderer.new()
+	cone_renderer.name = "FlameConeRenderer"
+	cone_renderer.position = muzzle_point.position
+	cone_renderer.z_index = 5
+	add_child(cone_renderer)
 
 func _setup_aura() -> void:
 	aura_sprite = Sprite2D.new()
@@ -220,7 +269,7 @@ func _get_aura_color() -> Color:
 	var tags: Array = WeaponData.tags_of(weapon_def_id)
 	if tags.has("fire"):
 		return Color(1.0, 0.42, 0.15)
-	elif tags.has("ice"):
+	elif tags.has("water"):
 		return Color(0.35, 0.75, 1.0)
 	elif tags.has("thunder"):
 		return Color(0.65, 0.45, 1.0)
@@ -397,6 +446,10 @@ func _process(delta: float) -> void:
 			if behavior == WeaponData.Behavior.TURRET or current_target != null:
 				_perform_attack()
 
+	# 5. 束流推进（BEAM/CONE）：几何随朝向逐帧走，结算按 TICK 节拍
+	if _channel_on:
+		_tick_channel(delta)
+
 func _perform_attack() -> void:
 	cooldown_timer = attack_cooldown * GameManager.get_effective_attack_speed_mult()
 	match behavior:
@@ -410,6 +463,10 @@ func _perform_attack() -> void:
 			_perform_turret_attack()
 		WeaponData.Behavior.SWEEP:
 			_perform_sweep_attack()
+		WeaponData.Behavior.BEAM:
+			_perform_channel_attack()
+		WeaponData.Behavior.CONE:
+			_perform_channel_attack()
 
 func _perform_turret_attack() -> void:
 	is_attacking = true
@@ -437,6 +494,123 @@ func _perform_turret_attack() -> void:
 	# 召唤沉身演出：下沉 + 金光亮闪 → 弹性回正（帧内状态机，零 Tween）
 	_begin_lunge(TURRET_DIP, 0.08, 0.12, true)
 	_flash_sprite(Color(1.4, 1.3, 0.8), 0.12)
+
+# ==================== 持续束流（BEAM 光束 / CONE 喷吐） ====================
+
+## 束流起喷：不冻结轨道（不设 is_attacking），挂上持续时长与起手反馈；
+## 冷却循环每转一圈回来续喷，所以起手音只在从收束态点燃时放（连续喷不叠音）
+func _perform_channel_attack() -> void:
+	if not _channel_on:
+		_channel_on = true
+		AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 0.9)
+		_flash_sprite(Color(1.4, 1.25, 1.5), 0.14)
+	_channel_left = CHANNEL_HOLD
+
+func _channel_stop() -> void:
+	_channel_on = false
+	_channel_left = 0.0
+	if beam_renderer != null:
+		beam_renderer.beam_off()
+	if cone_renderer != null:
+		cone_renderer.cone_off()
+
+func _tick_channel(delta: float) -> void:
+	_channel_left -= delta
+	if _channel_left <= 0.0 or current_target == null or not is_instance_valid(current_target):
+		_channel_stop()
+		return
+	var reach := attack_range * _range_mult()
+	_channel_tick -= delta
+	if behavior == WeaponData.Behavior.BEAM:
+		_beam_len = _beam_cast_length(reach)
+		var w_mult := 1.0 + 0.18 * float(star - 1)
+		beam_renderer.beam_on(_beam_len, BEAM_HALF_WIDTH * 2.0 * w_mult, _get_aura_color())
+		if _channel_tick <= 0.0:
+			_channel_tick = BEAM_TICK
+			_beam_deal_damage()
+	else:
+		# 锥长从器口起算：判定圆心 == 器口、半径 == 锥长，渲染器同源下发
+		var cone_len := maxf(40.0, reach - muzzle_len)
+		cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(CONE_HALF_ANGLE)))
+		if _channel_tick <= 0.0:
+			_channel_tick = CONE_TICK
+			_cone_deal_damage(cone_len)
+
+## 光束长度：从器口沿发射帧 +X 打射线，命中首个受击区即截断（光束被第一个敌人挡住），
+## 否则打满射程。返回值为判定与渲染的唯一真话（画多远==判多远）。
+func _beam_cast_length(reach: float) -> float:
+	var max_len := maxf(40.0, reach - muzzle_len)
+	var from := muzzle_point.global_position
+	var dir := Vector2.RIGHT.rotated(global_rotation)
+	var qp := PhysicsRayQueryParameters2D.create(from, from + dir * max_len, 4, [])
+	qp.collide_with_areas = true
+	qp.hit_from_inside = true
+	var hit := get_world_2d().direct_space_state.intersect_ray(qp)
+	if hit.is_empty():
+		return max_len
+	return maxf(8.0, from.distance_to(hit["position"]))
+
+## 光束 tick 结算：矩形沿束查询，线上敌人一起吃；tick 伤害 = 整管 × TICK/有效冷却
+func _beam_deal_damage() -> void:
+	if _beam_shape == null or _beam_query == null:
+		_beam_shape = RectangleShape2D.new()
+		_beam_query = PhysicsShapeQueryParameters2D.new()
+		_beam_query.shape = _beam_shape
+		_beam_query.collision_mask = 4
+		_beam_query.collide_with_areas = true
+	var from := muzzle_point.global_position
+	var dir := Vector2.RIGHT.rotated(global_rotation)
+	var judge_len := _beam_len + BEAM_HIT_OVERHANG
+	_beam_shape.size = Vector2(judge_len, BEAM_HALF_WIDTH * 2.0)
+	_beam_query.transform = Transform2D(global_rotation, from + dir * judge_len * 0.5)
+	var results := get_world_2d().direct_space_state.intersect_shape(_beam_query, 16)
+	var eff_cd: float = maxf(0.05, attack_cooldown * GameManager.get_effective_attack_speed_mult())
+	var tick_dmg := _final_damage() * BEAM_TICK / eff_cd
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 60.0) * 0.15  # 持续束只留一点点推感
+	for res in results:
+		var col = res["collider"]
+		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
+			var enemy = col.get_parent()
+			var dmg := tick_dmg
+			var is_crit: bool = GameManager.roll_crit()
+			if is_crit:
+				dmg *= GameManager.get_crit_mult()
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
+			enemy.take_damage(dmg, knock, is_crit)
+			GameManager.try_lifesteal()
+
+## 喷吐 tick 结算：器口为圆心查锥长半径的圆，再按半角过滤（贴脸宽容与横扫同口径），
+## 命中挂灼烧。tick 伤害同源折算 ⇒ 纸面 dmg/cd + 常驻灼烧即实伤。
+func _cone_deal_damage(cone_len: float) -> void:
+	var from := muzzle_point.global_position
+	var aim_dir := Vector2.RIGHT.rotated(global_rotation)
+	var half_ang := deg_to_rad(CONE_HALF_ANGLE)
+	var results := _query_enemies(cone_len, from, 24)
+	var eff_cd: float = maxf(0.05, attack_cooldown * GameManager.get_effective_attack_speed_mult())
+	var cycle_dmg := _final_damage()
+	var tick_dmg := cycle_dmg * CONE_TICK / eff_cd
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 95.0) * 0.25
+	var proc_burn: bool = def.get("proc_burn", false)
+	var burn_dps := cycle_dmg * float(def.get("burn_ratio", 0.4))
+	var burn_dur := float(def.get("burn_dur", 2.5))
+	for res in results:
+		var col = res["collider"]
+		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
+			var enemy = col.get_parent()
+			var to_enemy: Vector2 = enemy.global_position - from
+			if to_enemy.length() > SWEEP_CLOSE_GRACE and absf(aim_dir.angle_to(to_enemy)) > half_ang:
+				continue
+			var dmg := tick_dmg
+			var is_crit: bool = GameManager.roll_crit()
+			if is_crit:
+				dmg *= GameManager.get_crit_mult()
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
+			enemy.take_damage(dmg, knock, is_crit)
+			if proc_burn and enemy.has_method("apply_burn"):
+				enemy.apply_burn(burn_dps, burn_dur)
+			GameManager.try_lifesteal()
 
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
@@ -585,6 +759,7 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
 	burst.tint = def.get("burst_tint", burst.tint)
 	burst.icon_path = String(def.get("burst_icon", ""))
+	burst.burst_kind = String(def.get("burst_kind", "thunder"))
 	# 落点音必须在 activate() 之前下发：activate 里就播它
 	burst.sfx_impact_key = WeaponData.sfx_impact_for(weapon_def_id)
 	if def.get("proc_burn", false):

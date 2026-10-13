@@ -2,7 +2,7 @@ class_name ItemData
 extends RefCounted
 
 ## 道具（被动道具）数据库：独立于武器的被动物品，买即生效、无限持有、无栏位限制
-## 档位 tier 1~4（凡品/良品/仙品/传说，仿土豆兄弟道具档位）：决定基准价与出现权重，
+## 档位 tier 1~4（普通/稀有/史诗/传说，对齐土豆兄弟道具档位）：决定基准价与出现权重，
 ## 档位解锁回合与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
@@ -57,7 +57,7 @@ const TIER_COLORS := {
 }
 
 const DEFS: Dictionary = {
-	# ==================== 凡品（tier 1 · 第 1 波起） ====================
+	# ==================== 普通（tier 1 · 第 1 波起） ====================
 	"jubaopen": {
 		"name": "储蓄罐", "tier": 1, "price": 14,
 		"icon": "res://assets/art/item_jubaopen.png",
@@ -95,7 +95,7 @@ const DEFS: Dictionary = {
 				"apply": {"pet_effect_mult": 0.20},
 			},
 
-		# ==================== 良品（tier 2 · 第 4 波起） ====================
+		# ==================== 稀有（tier 2 · 第 4 波起） ====================
 	"zhekou_yufu": {
 		"name": "折扣券", "tier": 2, "price": 26,
 		"icon": "res://assets/art/item_zhekou_yufu.png",
@@ -157,7 +157,7 @@ const DEFS: Dictionary = {
 			"apply": {"dodge": 0.06, "armor": -1.0},
 		},
 
-		# ==================== 仙品（tier 3 · 第 9 波起） ====================
+		# ==================== 史诗（tier 3 · 第 9 波起） ====================
 		"wuxing_pei": {
 			"name": "五行石", "tier": 3, "price": 45,
 			"icon": "res://assets/art/item_wuxing_pei.png",
@@ -224,7 +224,7 @@ const DEFS: Dictionary = {
 		# 补四条伤害链路（近战/远程/元素/召唤）的物品支撑，首次启用单元素加成字段
 		# element_damage_<五行>（专精流核心），并加一批「有得有失」的交易式道具。
 
-		# ---- 凡品（tier 1 · 第 1 波起） ----
+		# ---- 普通（tier 1 · 第 1 波起） ----
 		"lijian_shi": {
 			"name": "砺剑石", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_lijian_shi.png",
@@ -262,7 +262,7 @@ const DEFS: Dictionary = {
 			"apply": {"weapon_damage_mult": 0.10, "attack_speed_mult_mul": 1.04},
 		},
 
-		# ---- 良品（tier 2 · 第 4 波起） ----
+		# ---- 稀有（tier 2 · 第 4 波起） ----
 		"jinjing_shi": {
 			"name": "金精石", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_jinjing_shi.png",
@@ -330,7 +330,7 @@ const DEFS: Dictionary = {
 			"apply": {"thorns": 0.40, "armor": 2.0, "move_speed_mult": -0.04},
 		},
 
-		# ---- 仙品（tier 3 · 第 9 波起） ----
+		# ---- 史诗（tier 3 · 第 9 波起） ----
 		"potian_zhui": {
 			"name": "破天锥", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_potian_zhui.png",
@@ -418,7 +418,7 @@ const DEFS: Dictionary = {
 
 			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/宝箱掉落」同一条链路） ----
 			# 兑现点全在 BalanceChest + WaveSpawner._spawn_chests + SpiritChest._destroy；
-			# 藏宝图刻意做进凡品第 1 波就能刷到 —— 寻宝流得让人在第一波就撞见料。
+			# 藏宝图刻意做进普通档第 1 波就能刷到 —— 寻宝流得让人在第一波就撞见料。
 			"cangbao_tu": {
 				"name": "藏宝图", "tier": 1, "price": 15,
 				"icon": "res://assets/art/item_cangbao_tu.png",
@@ -445,7 +445,7 @@ const DEFS: Dictionary = {
 			"apply": {"chest_quality": 4.0},
 		},
 
-		# ---- 2026-10-12 土豆兄弟式「属性转化」核心件 + 单元素仙品 ----
+		# ---- 2026-10-12 土豆兄弟式「属性转化」核心件 + 单元素史诗 ----
 		# 转化件全部走额外字段（item_hook_sum 现算，机制数字写在 desc）；图标暂借同系现有贴图占位，
 		# TODO(media-gen)：这批道具待 media-gen 出专属图标后替换并补 manifest。
 		"jifeng_ren": {
@@ -506,7 +506,7 @@ const DEFS: Dictionary = {
 			"unique": true,
 		},
 
-		# ---- 单元素仙品（tier 3）：专精流后期核心，幅度是良品单元素石的近两倍 ----
+		# ---- 单元素史诗（tier 3）：专精流后期核心，幅度是稀有单元素石的近两倍 ----
 		"taijin_jing": {
 			"name": "太白金精", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_jinjing_shi.png",
