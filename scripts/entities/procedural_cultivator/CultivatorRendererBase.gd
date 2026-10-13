@@ -24,7 +24,7 @@ enum Angle {
 enum Layer {
 	SHADOW = 1,   ## 地影
 	MOTES  = 2,   ## 周天灵气/眼尾拖影
-	WEAPON = 4,   ## 背负本命法器
+	WEAPON = 4,   ## 背负本命武器
 	CLOAK  = 8,   ## 斗篷与胸饰
 	HEAD   = 16,  ## 面壳 + 首服 + 眼
 	FX     = 32,  ## 斩痕/受击闪光

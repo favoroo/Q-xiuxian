@@ -1,0 +1,6 @@
+[gd_scene uid="uid://efcheck0k2x8" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/enemy_filter_check.gd" id="1_efc"]
+
+[node name="EnemyFilterCheck" type="Node"]
+script = ExtResource("1_efc")

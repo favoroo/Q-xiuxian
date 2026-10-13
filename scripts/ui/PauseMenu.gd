@@ -14,6 +14,7 @@ var _unpause_on_close: bool = true
 var _closing: bool = false
 var _retry_armed: bool = false
 var _retry_btn: Button
+var _menu_btn: Button
 var _retry_reset_tween: Tween
 var _update_btn: Button
 var _ver_label: Label
@@ -95,9 +96,9 @@ func _build_ui() -> void:
 
 	_retry_btn = _mk_btn("重 新 开 始", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER)
 	_retry_btn.pressed.connect(_on_retry_pressed)
-	var menu_btn := _mk_btn("返 回 主 菜 单", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
-	menu_btn.pressed.connect(_on_menu_pressed)
-	_add_row(vbox, [_retry_btn, menu_btn])
+	_menu_btn = _mk_btn("返 回 主 菜 单", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
+	_menu_btn.pressed.connect(_on_menu_pressed)
+	_add_row(vbox, [_retry_btn, _menu_btn])
 
 	# 快捷音量微调（与 SettingsManager 双向同步）
 	var vol_title := GameStyle.label(Label.new(), 12, GameStyle.GREY)
@@ -162,8 +163,13 @@ func _add_volume_row(parent: VBoxContainer, title: String, bus: StringName) -> v
 	row.add_child(val_lbl)
 
 	slider.value_changed.connect(func(v: float) -> void:
-		AudioManager.set_bus_linear(bus, v / 100.0)
+		# 拖动途中只改内存与总线（persist=false），松手才落盘，避免每 5% 步长同步写文件
+		AudioManager.set_bus_linear(bus, v / 100.0, false)
 		val_lbl.text = "%d%%" % int(v)
+	)
+	slider.drag_ended.connect(func(value_changed: bool) -> void:
+		if value_changed:
+			AudioManager.set_bus_linear(bus, slider.value / 100.0, true)
 	)
 	SettingsManager.audio_volume_changed.connect(func(b: StringName, linear_val: float, _muted: bool) -> void:
 		if b == bus and is_instance_valid(slider) and not slider.has_focus():
@@ -332,7 +338,14 @@ func _on_retry_pressed() -> void:
 	get_tree().reload_current_scene()
 
 ## 返回主菜单：整场景重载，Main._ready 默认开主菜单；战场残留随场景重建一并清空
+## 与「重新开始」同规格：先禁用按钮 + 画出一帧「正在返回」再同步重载整树，
+## 否则 press 当帧直接重建场景（实测同级操作 124~181ms），用户看到的是冻死无反馈
 func _on_menu_pressed() -> void:
+	_reset_retry_confirm()
+	if is_instance_valid(_menu_btn):
+		_menu_btn.text = "正在返回..."
+		_menu_btn.disabled = true
 	get_tree().paused = false
 	GameManager.reset_run()
+	await get_tree().process_frame
 	get_tree().reload_current_scene()

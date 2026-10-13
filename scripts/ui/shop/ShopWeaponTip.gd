@@ -14,7 +14,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var mergeable: bool = star < WeaponData.MAX_STAR and GameManager.count_copies(id, star) >= 3
 
 	# 单发与节奏一律走 WeaponDamageReadout，与货架卡同一个数。
-	# Fixed: 这条乘区链以前在弹窗里自己乘了一遍，漏了神识分流与机关羁绊 —— 挂 6 把法器时
+	# Fixed: 这条乘区链以前在弹窗里自己乘了一遍，漏了神识分流与机关羁绊 —— 挂 6 把武器时
 	# 把实际的 32.5 报成 52（虚高 60%），玩家按面板数字判断"这把值不值"必然判错。
 	var slots_here := GameManager.slots_used()
 	if in_stash and slots_here < GameManager.max_weapon_slots():

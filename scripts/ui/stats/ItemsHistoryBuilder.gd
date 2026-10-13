@@ -1,11 +1,11 @@
 class_name ItemsHistoryBuilder
 extends RefCounted
 
-## 属性面板下半区的单件构建：随身法宝徽记（同名合并计数）与悟道历程行。
+## 属性面板下半区的单件构建：随身道具徽记（同名合并计数）与悟道历程行。
 ## 从 PlayerStatsDialog 拆出：填充编排在 dialog._refresh_items_and_history，
 ## 点按回调经 dialog 门面（_open_item_tip / _open_history_tip）。
 
-## 随身法宝徽记：档位描边 + 图标 + 「名号 ×n」，点按弹道具详解
+## 随身道具徽记：档位描边 + 图标 + 「名号 ×n」，点按弹道具详解
 static func create_item_badge(dialog: PlayerStatsDialog, item_id: String, count: int) -> Control:
 	var def := ItemData.get_def(item_id)
 	var tier_num: int = int(def.get("tier", 1))

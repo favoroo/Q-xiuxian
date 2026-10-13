@@ -1,14 +1,14 @@
 class_name BladeProjectile
 extends Area2D
 
-## 法器弹丸：伤害由 FloatingWeapon 计算好后直接传入，支持锁定追踪、穿透、弹射连锁与五行异常
+## 武器弹丸：伤害由 FloatingWeapon 计算好后直接传入，支持锁定追踪、穿透、弹射连锁与五行异常
 
 ## 追踪转向速率（rad/s）。弹速 470 ÷ 3.6 ⇒ 最小转弯半径约 130px：看得见符在拐，但不是制导导弹。
 ## 为什么要追踪（2026-10-08 用户口径：「火符比其他武器要弱很多」）：
 ## 旧写法直线飞行、不预判不锁敌，弹丸飞 0.5 秒的时间里敌人已经横移七八十个像素，
 ## 而判定只有 7px + 敌人受击圈 15px —— 离线仿真（弹速/判定/寿命全取运行时真值）给出
 ## 200px 命中 33%、350px 以上只剩 11%、雷兽横切冲刺 0%。
-## 近战挥扫是当帧结算、环绕法宝是接触即伤，都没有这笔隐形税 —— 远程纸面 DPS 打不出来就是假的。
+## 近战挥扫是当帧结算、环绕道具是接触即伤，都没有这笔隐形税 —— 远程纸面 DPS 打不出来就是假的。
 ## 留白的部分：400px 外打冲刺中的雷兽仍只有三成命中，高速怪的走位克制要保住。
 const HOMING_TURN_RATE := 3.6
 ## 锁定目标中途暴毙后「另找最近的生气」的选择半径；只认弹头前方锥内的敌人，不许掉头 180° 追人
@@ -25,7 +25,7 @@ static var query_alloc_count: int = 0
 static var query_reuse_count: int = 0
 
 # —— 对象池（2026-10-10 性能优化）——
-## 三发齐射 × 多件远程法器每秒 instantiate/free 十几次节点（Area2D + 碰撞体 + 矢量渲染器
+## 三发齐射 × 多件远程武器每秒 instantiate/free 十几次节点（Area2D + 碰撞体 + 矢量渲染器
 ## 全套生命周期）是「剑一多就卡」的分配压力来源。照 JuiceEffect/DamageNumber 池模式：
 ## 死亡不再 queue_free 而是回池休眠，复用由 activate() 全量重置（字段清单见 activate 注释）。
 const POOL_CAP := 64
@@ -53,10 +53,10 @@ var lifetime: float = 1.6
 var pierce_left: int = 1
 var bounce_left: int = 0
 var spin: bool = true
-## 这一发咬定的敌人：开火时由 FloatingWeapon 逐发分配（一次三发的法器各锁一个，不扎堆）
+## 这一发咬定的敌人：开火时由 FloatingWeapon 逐发分配（一次三发的武器各锁一个，不扎堆）
 var homing_target: Node2D = null
-## 弹丸外观按法器归位（2026-10-08 用户口径：「发出来一个不知道什么样的东西，火焰符就发出火」）：
-## 旧写法五把远程法器共用 BladeProjectile.tscn 里那张 blade.png（一张燃烧的符箓）——
+## 弹丸外观按武器归位（2026-10-08 用户口径：「发出来一个不知道什么样的东西，火焰符就发出火」）：
+## 旧写法五把远程武器共用 BladeProjectile.tscn 里那张 blade.png（一张燃烧的符箓）——
 ## 飞剑、飞刀、冰针打出去的全是火符。现在由 WeaponData 的 bullet / bullet_scale / bullet_spin 逐件指定。
 ## 画布尺寸 == 屏上像素（Nearest、不缩放），贴图一律朝右，飞行时随 direction 转向。
 var bullet_texture: Texture2D = null
@@ -170,7 +170,9 @@ func _on_area_entered(area: Area2D) -> void:
 		enemy.take_damage(actual_dmg, knock, is_crit)
 		GameManager.try_lifesteal()
 
-		# 施加五行异常
+		# 施加五行异常。保持 has_method 鸭类型：武器/弹丸脚本绝不能硬引用 EnemyBase——
+		# 实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成空 PackedScene
+		# （循环类依赖解析坑），弹丸 instantiate 全返回 null。proc 开关恒假时 has_method 不会执行，零成本
 		if proc_burn and enemy.has_method("apply_burn"):
 			enemy.apply_burn(burn_dps, burn_dur)
 		if proc_chill > 0.0 and enemy.has_method("apply_chill"):

@@ -47,9 +47,9 @@ const UNAFFORDABLE_MULT := 0.85  ## 买不起的货架候选折价
 
 ## 各轴「打满 1.0」的参照增量（超过即满分，不足按比例）
 const REF_DMG := 0.35          ## 上阵总伤 +35% 打满
-const REF_HP := 0.25           ## 气血上限 +25% 打满
+const REF_HP := 0.25           ## 生命上限 +25% 打满
 const REF_ARMOR := 0.15        ## 实际承伤相对下降 15% 打满
-const REF_REGEN := 0.02        ## 每秒回复达最大气血 2% 打满
+const REF_REGEN := 0.02        ## 每秒回复达最大生命 2% 打满
 const REF_DODGE := 0.10        ## 闪避 +10% 打满
 const REF_LIFESTEAL := 0.05    ## 吸血 +5% 打满
 const REF_PICKUP := 0.30       ## 拾取范围 +30% 打满
@@ -375,7 +375,7 @@ static func score_potion(offer: Dictionary, ctx: Dictionary) -> Dictionary:
 	var need := clampf((0.80 - ratio) / 0.55, 0.0, 1.0)  ## ≤25% 血打满，≥80% 血为零
 	var reasons: Array[String] = []
 	if need >= 0.04:
-		reasons.append("气血 %d%% · 回复约 %d" % [_pct(ratio),
+		reasons.append("生命 %d%% · 回复约 %d" % [_pct(ratio),
 				int(round(GameBalance.potion_effective_heal(max_hp, cur)))])
 	return {"score": W_BUILD * need, "b": need, "a": 0.0, "c": 0.0, "reasons": reasons}
 
@@ -692,7 +692,7 @@ static func _max_of(arr: Array[float]) -> float:
 static func _def_reason(hp0: float, d_hp: float, d_armor: float, d_regen: float,
 		d_dodge: float, d_ls: float) -> String:
 	var regen_ref := maxf(hp0 * REF_REGEN, 0.1)
-	var best := "气血上限 +%d%%" % _pct(d_hp)
+	var best := "生命上限 +%d%%" % _pct(d_hp)
 	var best_v := d_hp / REF_HP
 	if d_armor / REF_ARMOR > best_v:
 		best = "承伤约 -%d%%" % _pct(d_armor)

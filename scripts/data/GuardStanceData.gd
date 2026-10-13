@@ -12,13 +12,13 @@ extends RefCounted
 ## 蓄能账单在 GameManager.shield_charge（单局字段，RunReset 复位），由 Player.take_damage
 ## 在受击点写入、蓄满当帧兑现清空——判定窗口与受击 0.55s 无敌帧同源，不会超频连炸。
 
-const CAP_HP_RATIO := 0.5   ## 盾势槽上限 = 最大气血 ×50%：血越厚槽越深，与守卫 hp_mult×1.8 天然同向
+const CAP_HP_RATIO := 0.5   ## 盾势槽上限 = 最大生命 ×50%：血越厚槽越深，与守卫 hp_mult×1.8 天然同向
 const STORE_RATIO := 1.0    ## 被护甲挡下的那部分伤害 100% 存进盾势（护甲越厚存得越快，叠甲有第二重回报）
 const BURST_RATIO := 1.2    ## 爆发伤害 = 蓄能 ×1.2：存得多还得更多，挨打有红利
 const BURST_RADIUS := 140.0 ## 震荡判定半径 = 环特效半径（像素）
-const PUSH_IMPULSE := 260.0 ## 震退冲量（调用方乘玩家震退乘区，与法器击退同一把尺子）
+const PUSH_IMPULSE := 260.0 ## 震退冲量（调用方乘玩家震退乘区，与武器击退同一把尺子）
 
-## 槽上限（气血变化时现算，不缓存——加点/法宝提血后下一刀自动按新上限走）
+## 槽上限（生命变化时现算，不缓存——加点/道具提血后下一刀自动按新上限走）
 static func cap_of(max_health: float) -> float:
 	return maxf(1.0, max_health * CAP_HP_RATIO)
 
@@ -38,7 +38,7 @@ static func burst_damage(charge: float) -> float:
 ## 每条一行，按详解卡最窄列宽（404）量过：加字先量宽。
 static func card_lines() -> Array[String]:
 	return [
-		"攒：护甲挡下的伤害 %d%% 存入盾势（至多 %d%% 气血）" % [
+		"攒：护甲挡下的伤害 %d%% 存入盾势（至多 %d%% 生命）" % [
 			int(roundf(STORE_RATIO * 100.0)), int(roundf(CAP_HP_RATIO * 100.0))],
 		"放：蓄满自动爆发，按 %d%% 还给周身敌人并震开" % [
 			int(roundf(BURST_RATIO * 100.0))],

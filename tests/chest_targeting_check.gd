@@ -178,7 +178,7 @@ func _test_idle_then_target_chest() -> void:
 
 ## 3) 有妖时匣子不许抢目标 —— 匣子摆在 40px、妖摆在 120px，两者都在射程内
 func _test_enemy_outranks_chest() -> void:
-	var enemy := _spawner.slime_scene.instantiate() as Node2D
+	var enemy := (_spawner._mob_scenes["slime"] as PackedScene).instantiate() as Node2D
 	enemy.global_position = GameManager.player.global_position + Vector2(120.0, 0.0)
 	_spawner.get_parent().add_child(enemy)
 	var chest := _spawn_chest(Vector2(40.0, 0.0))

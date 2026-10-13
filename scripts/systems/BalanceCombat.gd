@@ -18,11 +18,11 @@ static func armor_reduction(armor: float) -> float:
 static func incoming_damage(raw: float, armor: float) -> float:
 	return maxf(DAMAGE_FLOOR, raw / (1.0 + maxf(0.0, armor) * ARMOR_COEF))
 
-# ---------------- 玩家气血档位（读数取色的唯一一把尺）----------------
-## 「什么时候算危险」只许有一处定义：HUD 那行血字的颜色、灵石阁顶栏气血徽记的底色、
+# ---------------- 玩家生命档位（读数取色的唯一一把尺）----------------
+## 「什么时候算危险」只许有一处定义：HUD 那行血字的颜色、金币阁顶栏生命徽记的底色、
 ## 详情卡里的提示，全部走 hp_is_low。以前 0.28 只写在 GameHUD 里，
 ## 商店要跟着变色就得手抄一遍 —— 抄的那一份永远不会跟着改。
-const HP_LOW_RATIO := 0.28      ## 剩余气血占上限低于此档 = 危险（朱砂）
+const HP_LOW_RATIO := 0.28      ## 剩余生命占上限低于此档 = 危险（朱砂）
 
 ## 剩余比例（0~1）；上限为 0（玩家还没生成 / 单测空载）按满血算，不许出 NaN 与除零
 static func hp_ratio(cur: float, max_v: float) -> float:
@@ -49,7 +49,7 @@ static func crit_rate(base: float, synergy: float, dodge_convert: float,
 		rate += dodge_convert * (dodge_eff / 0.1)
 	return minf(rate, cap)
 
-## 有效闪避：升级/道具累加 + 神通短时加成，夹在硬上限（含角色抬升的那一截）内。
+## 有效闪避：升级/道具累加 + 技能短时加成，夹在硬上限（含角色抬升的那一截）内。
 static func effective_dodge(dodge: float, buff_dodge: float, cap: float, cap_bonus: float) -> float:
 	return minf(dodge + buff_dodge, cap + cap_bonus)
 
@@ -95,7 +95,7 @@ const KNOCKBACK_DECAY_FREE := 24.0       ## 硬直结束后残余击退极速清
 const KNOCKBACK_MAX_SPEED_NORMAL := 620.0 ## 普通受击初速上限（px/s）：单次击退位移严格封顶（~50px以内）
 const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）：暴击击退封顶（~65px以内）
 const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
-const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把怪物甩出半屏）
+const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把敌人甩出半屏）
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
 const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
@@ -165,7 +165,7 @@ static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> fl
 const KILL_EXPLODE_IMPULSE := 110.0     ## 爆炸震退冲量基数（再乘玩家击退属性）
 const KILL_EXPLODE_ELEM_COEF := 1.5     ## 元素伤害对爆炸的成长系数
 
-## 击杀爆炸伤害 = 法宝基数（ItemData 额外字段 kill_explode）+ 元素成长；半径在 kill_explode_radius
+## 击杀爆炸伤害 = 道具基数（ItemData 额外字段 kill_explode）+ 元素成长；半径在 kill_explode_radius
 static func kill_explode_damage(base: float, elemental_damage: float) -> float:
 	return maxf(0.0, base) + maxf(0.0, elemental_damage) * KILL_EXPLODE_ELEM_COEF
 
@@ -173,12 +173,12 @@ static func kill_explode_damage(base: float, elemental_damage: float) -> float:
 
 const KNOCK_DIR_EPS := 0.0001   ## 方向退化为零向量的判定阈值（比的是长度平方）
 
-## 法器震退的单位方向：以「受击点 − 施力点」的径向为主，但绝不把敌人往玩家身上推。
-## 为什么要另算一支：BURST 类法器的落点是索敌分配（BalanceTargeting.assign_weapon_targets）
+## 武器震退的单位方向：以「受击点 − 施力点」的径向为主，但绝不把敌人往玩家身上推。
+## 为什么要另算一支：BURST 类武器的落点是索敌分配（BalanceTargeting.assign_weapon_targets）
 ## 按角度扇区分的，常常砸在离玩家两三百像素的另一侧敌人上 —— 纯径向就会把「落点与玩家之间」
 ## 那圈敌人往玩家脸上拱（用户 2026-10-08：镇岳印「震一下，把敌人一波一波推到我身边来」）。
 ## 改法：径向带朝玩家的分量时把那一支投影掉 ⇒ 敌人侧身滑开；三点共线的纯对撞退化为直接外推。
-## 输出恒为单位向量，所以各法器的击退力度数值一个字都不改。纯函数：入参出参只用值类型。
+## 输出恒为单位向量，所以各武器的击退力度数值一个字都不改。纯函数：入参出参只用值类型。
 static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) -> Vector2:
 	var radial := enemy_pos - source
 	if radial.length_squared() < KNOCK_DIR_EPS:

@@ -38,12 +38,12 @@ extends Resource
 	"chest_ornament": "pearl"
 }
 
-## 4. 背负本命法器插槽 (Back Artifact / Weapon)
+## 4. 背负本命武器插槽 (Back Artifact / Weapon)
 ## weapon_type: "bone_nail" (骨钉剑), "stone_pillar" (玄石尺/碑), "peach_sword" (桃木剑), "golden_abacus" (金算盘),
 ##              "shadow_daggers" (暗影双刃), "broken_blade" (厚背断刀), "bone_axe" (巨兽骨斧), "soul_banner" (招魂幡), "treasure_chest" (多宝匣)
 ## carry_front_pos / carry_front_rot / carry_side_pos / carry_side_rot / carry_back_pos / carry_back_rot:
-##              可选的背负位姿覆盖。头饰宽大（蛮修双角、刀圣斗笠）或法器填充色接近骨白时，
-##              要用它把法器挪到头部轮廓之外，否则会画成"法器长在脸上"。缺省值见渲染器 CARRY_* 常量。
+##              可选的背负位姿覆盖。头饰宽大（蛮修双角、刀圣斗笠）或武器填充色接近骨白时，
+##              要用它把武器挪到头部轮廓之外，否则会画成"武器长在脸上"。缺省值见渲染器 CARRY_* 常量。
 @export var weapon: Dictionary = {
 	"weapon_type": "bone_nail",
 	"col_main": Color(0.95, 0.97, 1.0),
@@ -303,7 +303,7 @@ static func make_duanbi() -> CultivatorVisualConfig:
 static func make_dubi() -> CultivatorVisualConfig:
 	return make_duanbi()
 
-# 7. 狂战蛮修（嗜血狂暴，妖潮战神，双角擎天，力拔山兮）
+# 7. 狂战蛮修（嗜血狂暴，敌潮战神，双角擎天，力拔山兮）
 static func make_kuangzhan() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.22, "width_scale": 1.26, "height_scale": 1.04, "head_scale": 0.94 }
@@ -363,7 +363,7 @@ static func make_duoshe() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 9. 多宝道人（法宝齐出，锦绣华贵，七彩霞帔，福禄双全）
+# 9. 多宝道人（道具齐出，锦绣华贵，七彩霞帔，福禄双全）
 static func make_duobao() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.10, "width_scale": 1.16, "height_scale": 1.0, "head_scale": 1.0 }

@@ -161,7 +161,7 @@ func trigger_press() -> void:
 	var player = GameManager.player
 	var cast_success := false
 	if player != null:
-		# 主键走随行神通入口，额外键走额外技能入口（各自校验各自的门控）
+		# 主键走随行技能入口，额外键走额外技能入口（各自校验各自的门控）
 		if bind_extra:
 			cast_success = player.try_activate_extra_skill() if player.has_method("try_activate_extra_skill") else false
 		else:
@@ -229,7 +229,7 @@ func _process(_delta: float) -> void:
 	if not show or player == null:
 		return
 
-	# 冷却/活跃账本只归主神通键：额外键（影爆类）免冷却、由影层门控，读主键的账就是串台
+	# 冷却/活跃账本只归主技能键：额外键（影爆类）免冷却、由影层门控，读主键的账就是串台
 	var cd_left: float = 0.0
 	var cd_total: float = 1.0
 	var active_left: float = 0.0

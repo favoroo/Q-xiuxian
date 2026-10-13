@@ -1,7 +1,7 @@
 extends Node
 
 ## 全局音频管理：总线分层（Master/BGM/SFX/Voice）+ 16 通道并发池
-## + 灵石连续拾取音阶攀升（Combo Pitch Climbing）+ BGM 状态机交叉淡化 + 音量设置持久化
+## + 金币连续拾取音阶攀升（Combo Pitch Climbing）+ BGM 状态机交叉淡化 + 音量设置持久化
 ##
 ## 约定：音效 key 与短音效文件的对应关系只在这里声明；文件由 tools/bake_sfx.py 烘焙
 ## （assets_raw/sfx 是源，assets/audio/sfx 是产物）。注册了但文件不在的路径会记进
@@ -37,7 +37,7 @@ var sfx_dict: Dictionary = {}
 var _missing_paths: Array[String] = []
 var _linear: Dictionary = {}
 
-# 灵石拾取连击升调状态
+# 金币拾取连击升调状态
 var _gem_combo_count: int = 0
 var _gem_combo_timer: float = 0.0
 
@@ -176,7 +176,7 @@ func _load_audio_assets() -> void:
 	_register_sfx("defeat", _sfx_paths("defeat", 1))
 	_register_sfx("obelisk_blessing", _sfx_paths("obelisk_blessing", 2))
 	_register_sfx("level_up", _sfx_paths("level_up", 2))
-	# 随行神通
+	# 随行技能
 	_register_sfx("skill_dash", _sfx_paths("skill_dash", 2))
 	_register_sfx("skill_buff", _sfx_paths("skill_buff", 2))
 	_register_sfx("skill_aegis", _sfx_paths("skill_aegis", 2))
@@ -220,7 +220,7 @@ func sfx_keys() -> Array:
 
 # ---------------- 判据录音口 ----------------
 ## 只在 tests/ 的判据场景里显式开启；不开启时 play_sfx 一行分支都不多走。
-## 捕获态不进播放器池、不查节流表、不消耗灵石连击状态 —— 量的是"想播什么"，不是"播出什么"。
+## 捕获态不进播放器池、不查节流表、不消耗金币连击状态 —— 量的是"想播什么"，不是"播出什么"。
 
 var _capturing: bool = false
 var _captured: Array[Dictionary] = []
@@ -267,7 +267,7 @@ func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float 
 	if pitch_override > 0.0:
 		p.pitch_scale = pitch_override
 	elif sfx_key == "gem_pickup":
-		# 灵石连收音阶递进：短时间内连续拾取音高步步攀升，营造清脆爽感
+		# 金币连收音阶递进：短时间内连续拾取音高步步攀升，营造清脆爽感
 		_gem_combo_count = mini(_gem_combo_count + 1, 16)
 		_gem_combo_timer = 0.6
 		p.pitch_scale = 0.94 + float(_gem_combo_count - 1) * 0.042
@@ -364,17 +364,21 @@ func play_bgm(stream: AudioStream) -> void:
 
 # ---------------- 音量设置（总线级，安卓用户能单独压 BGM） ----------------
 
-func set_bus_linear(bus_name: StringName, value: float) -> void:
+## 有 SettingsManager 时整链委托给它一处：应用总线 + 落盘 settings.cfg 一次完成。
+## 此前这里自己再 apply 一遍并另写一份 audio.cfg——拖一格音量同步写两个文件
+func set_bus_linear(bus_name: StringName, value: float, persist: bool = true) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx < 0:
 		return
 	var v := clampf(value, 0.0, 1.0)
 	_linear[bus_name] = v
+	if Engine.get_main_loop() != null and has_node("/root/SettingsManager"):
+		SettingsManager.set_bus_volume(bus_name, v, persist)
+		return
 	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, v)))
 	AudioServer.set_bus_mute(idx, v <= 0.001)
-	if Engine.get_main_loop() != null and has_node("/root/SettingsManager"):
-		SettingsManager.set_bus_volume(bus_name, v)
-	_save_settings()
+	if persist:
+		_save_settings()
 
 func get_bus_linear(bus_name: StringName) -> float:
 	if Engine.get_main_loop() != null and has_node("/root/SettingsManager"):

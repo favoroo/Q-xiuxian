@@ -1,8 +1,8 @@
 class_name ShopSystem
 extends RefCounted
 
-## 波间商店（灵石阁）子系统
-## 从 GameManager 抽离，负责货架生成、标签亲和加权抽法器、锁定保留、购买结算与重掷。
+## 回合间商店（金币阁）子系统
+## 从 GameManager 抽离，负责货架生成、标签亲和加权抽武器、锁定保留、购买结算与重掷。
 
 ## 生成货架：new_wave=true 时重置重掷计数；锁定且未售出的商品原样保留
 static func roll_shop(gm: Node, new_wave: bool = false) -> void:
@@ -18,15 +18,15 @@ static func roll_shop(gm: Node, new_wave: bool = false) -> void:
 		else:
 			new_offers.append(gen_offer(gm, wave))
 	gm.shop_offers = new_offers
-	# 商人·老主顾：重掷费用在纯函数结果上乘角色系数（GameBalance 保持纯函数，下限 1 灵石）
+	# 商人·老主顾：重掷费用在纯函数结果上乘角色系数（GameBalance 保持纯函数，下限 1 金币）
 	gm.reroll_cost = maxi(1, int(round(GameBalance.reroll_cost(wave, gm.reroll_count, gm.shop_price_mult) * gm.reroll_price_mult)))
 	if new_wave:
 		SynergySystem.apply_main_tag_pity(gm, wave)
-	# 「荐」标：在波首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；
+	# 「荐」标：在回合首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；
 	# 锁定保留的旧货会被重新评分，重复调用幂等
 	RecommendSystem.mark_shop_offers(gm)
 
-## 单个货架位：按概率分流 回气丹 / 法宝 / 法器
+## 单个货架位：按概率分流 回气丹 / 道具 / 武器
 static func gen_offer(gm: Node, wave: int) -> Dictionary:
 	var roll: float = gm.rng.randf()
 	if roll < GameBalance.POTION_CHANCE:
@@ -46,10 +46,10 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 				"price": GameBalance.item_price(int(idef.get("price", 20)), wave, gm.shop_price_mult * gm.item_price_mult),
 				"sold": false, "locked": false,
 			}
-		# 法宝池抽空 → 本格落回法器
+		# 道具池抽空 → 本格落回武器
 	var pet_bonus: float = float(gm.pet_offer_chance_bonus)
 	if roll < GameBalance.POTION_CHANCE + GameBalance.ITEM_CHANCE + GameBalance.PET_CHANCE + pet_bonus:
-		# 只有在灵兽栏未满且能抽出未拥有灵兽时才出灵兽，否则落回法器
+		# 只有在灵兽栏未满且能抽出未拥有灵兽时才出灵兽，否则落回武器
 		if gm.pets.size() < gm.max_pet_slots():
 			var pet_id := PetData.pick_id(gm.pets, gm.rng)
 			if pet_id != "":
@@ -68,7 +68,7 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 		"sold": false, "locked": false,
 	}
 
-## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权抽法器
+## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权抽武器
 static func weighted_weapon_pick(gm: Node) -> String:
 	var pool: Array = WeaponData.SHOP_POOL
 	var counts := SynergySystem.tag_counts(gm)

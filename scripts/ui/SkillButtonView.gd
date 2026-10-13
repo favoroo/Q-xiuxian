@@ -1,7 +1,7 @@
 class_name SkillButtonView
 extends RefCounted
 
-## 随行神通按钮外观与位置布局辅助
+## 随行技能按钮外观与位置布局辅助
 ## 从 GameHUD 抽离，负责圆形冷却绘制遮罩、半透明墨蓝/流金样式以及按偏好设置定位。
 
 const SKILL_BTN_SIZE := 76.0

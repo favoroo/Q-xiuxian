@@ -83,7 +83,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		desc = ""
 		# 卡上印的是「现在买下这一口，真能回多少」：与 ShopSystem 喂给 heal() 同一条公式，
 		# 再按当前缺血截断 ⇒ 数字永远不会承诺一个兑现不了的量。
-		# 只写「50% 生命」判断不了要不要买（2026-10-11 用户：「商店界面也要显示血量，
+		# 只写「50% 生命」判断不了要不要买（2026-10-11 用户：「商店界面也要显示生命，
 		# 不然也不知道回复道具要不要买」）。满血时就是 +0，红字，别花这个钱。
 		var stats := GameManager.get_player_stat_dict()
 		var eff := GameBalance.potion_effective_heal(
@@ -181,7 +181,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 			stat_rows.append(["特性", card_feats, GameStyle.PAPER_DIM])
 
 	# 推荐位亮边：只在没有更具体边色语义时把中性深蓝底边提亮一档
-	# （可合成/临门一档的 JADE 边、法宝档位边、药水边都保留原语义，「荐」签足以表达）
+	# （可合成/临门一档的 JADE 边、道具档位边、药水边都保留原语义，「荐」签足以表达）
 	if recommended and edge_color == GameStyle.GOLD_DK:
 		edge_color = GameStyle.GOLD_EDGE
 
@@ -196,7 +196,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		"owned_text": owned_text,
 	}
 
-## 这张卡对应的法器 id（药水/法宝卡返回空串）：色签的解释卡要按它现读属性账单与件数
+## 这张卡对应的武器 id（药水/道具卡返回空串）：色签的解释卡要按它现读属性账单与件数
 static func w_id_of_offer(offer: Dictionary) -> String:
 	return String(offer.get("id", "")) if String(offer.get("kind", "weapon")) == "weapon" else ""
 
@@ -245,7 +245,7 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	icon_box.custom_minimum_size = Vector2(WaveShop.CARD_ICON, WaveShop.CARD_ICON)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# 元素武器边框高亮：吃元素加成的法器边框设为 ELEMENT 暖橙红，醒目且 100% 不遮挡武器图片；普通武器保持暗黑边框 LINE
+	# 元素武器边框高亮：吃元素加成的武器边框设为 ELEMENT 暖橙红，醒目且 100% 不遮挡武器图片；普通武器保持暗黑边框 LINE
 	var border_color: Color = GameStyle.LINE
 	if kind == "weapon":
 		var wid := String(offer.get("id", ""))
@@ -364,7 +364,7 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		chip_tips.append({"kind": "behavior", "w_id": w_id})
 	if tag_parts.is_empty():
 		chip_defs.append([tag, chip_color, chip_text_color])
-		chip_tips.append({})	# 药水/法宝这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
+		chip_tips.append({})	# 药水/道具这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
 	else:
 		for i in range(tag_parts.size()):
 			var hot_i: bool = bool(part_hot[i])

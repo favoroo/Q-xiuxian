@@ -173,7 +173,12 @@ func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String
 	_update_audio_row_ui(bus)
 
 	slider.value_changed.connect(func(v: float):
-		SettingsManager.set_bus_volume(bus, v / 100.0)
+		# 拖动途中只改内存与总线（persist=false），松手才落盘，避免每 5% 步长同步写文件
+		SettingsManager.set_bus_volume(bus, v / 100.0, false)
+	)
+	slider.drag_ended.connect(func(value_changed: bool):
+		if value_changed:
+			SettingsManager.set_bus_volume(bus, slider.value / 100.0, true)
 	)
 
 	mute_btn.pressed.connect(func():

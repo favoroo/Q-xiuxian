@@ -102,7 +102,7 @@ func _ready() -> void:
 				_manual_return_to_pause = false
 				pause_menu.open()
 		)
-		# 商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派法器」：直达武器图鉴并预选流派筛选；
+		# 商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派武器」：直达武器图鉴并预选流派筛选；
 		# 关闭后回落到仍开着的商店，不走暂停菜单回退
 		if $UILayer.has_node("WaveShop"):
 			$UILayer/WaveShop.manual_requested.connect(func(tag: String):
@@ -128,13 +128,13 @@ func _ready() -> void:
 			ob.charge_cancelled.connect(hud.on_obelisk_charge_cancelled)
 			ob.blessing_triggered.connect(hud.on_obelisk_blessing_triggered)
 
-	# BGM 交给 AudioManager 的状态机：开局在主菜单与选人阶段播放 menu，进入波次后由 WaveSpawner 切 battle/trial
+	# BGM 交给 AudioManager 的状态机：开局在主菜单与选人阶段播放 menu，进入回合后由 WaveSpawner 切 battle/trial
 	AudioManager.play_bgm_key("menu")
 
 	# 静默检查更新（带24小时节流）
 	UpdateManager.check_for_update(false)
 
-	# 开局暂停：默认先显示开始界面，点「开始游戏」后再选本命法器；
+	# 开局暂停：默认先显示开始界面，点「开始游戏」后再选本命武器；
 	# 局内「重新开始 / 再战一局」重载场景带 restart_to_select 标记时，跳过主菜单直落选角
 	get_tree().paused = true
 	var go_select: bool = GameManager.restart_to_select
@@ -146,9 +146,10 @@ func _ready() -> void:
 		start_menu.open()
 
 func _exit_tree() -> void:
-	# 静态缓存（敌人共享帧集 / 跳字池 / 特效池与样式表）随场景释放，
+	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
+	EnemyBase.clear_pools()
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()
@@ -217,7 +218,7 @@ func _process(delta: float) -> void:
 		if petal_particles != null:
 			petal_particles.global_position = p_pos
 
-			# 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
+			# 濒死生命警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
 			var p = GameManager.player
 			var in_low_hp: bool = bool(SettingsManager.get_val(&"display", &"screen_flash", true)) and p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28
 			if in_low_hp:

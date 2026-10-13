@@ -17,6 +17,16 @@ var _time_left: float = DURATION
 var _redraw_timer: float = 0.0
 var _clock: float = 0.0
 
+## 在树实例计数：WaveSpawner._tide_spent 每帧查「是否还有凝聚中的指示器」，
+## 原来每帧全量遍历战斗层全部子节点（100+），改走 O(1) 计数
+static var active_count: int = 0
+
+func _enter_tree() -> void:
+	active_count += 1
+
+func _exit_tree() -> void:
+	active_count -= 1
+
 func _ready() -> void:
 	z_index = 2  # 位于地面与结界之上，实体与弹丸之下
 	if is_elite:

@@ -648,7 +648,7 @@ func _create_log_row(snap: Dictionary, idx: int) -> Control:
 	d_vbox.add_theme_constant_override("separation", 6)
 	detail.add_child(d_vbox)
 
-	# 上阵法器
+	# 上阵武器
 	var weapons: Array = snap.get("weapons", [])
 	d_vbox.add_child(_kit_section("装备武器", weapons, false))
 	# 道具

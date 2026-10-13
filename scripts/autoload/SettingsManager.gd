@@ -522,7 +522,8 @@ func get_bus_volume(bus_name: StringName) -> float:
 		return db_to_linear(AudioServer.get_bus_volume_db(idx))
 	return 1.0
 
-func set_bus_volume(bus_name: StringName, linear_val: float) -> void:
+## persist=false 用于滑杆拖动途中：只改内存与总线，不落盘；松手（drag_ended）再 true 写一次
+func set_bus_volume(bus_name: StringName, linear_val: float, persist: bool = true) -> void:
 	var v := clampf(linear_val, 0.0, 1.0)
 	var key = BUS_KEY_MAP.get(bus_name, "")
 	if key != "":
@@ -533,7 +534,8 @@ func set_bus_volume(bus_name: StringName, linear_val: float) -> void:
 			if mute_key != "":
 				set_val(&"audio", StringName(mute_key), false, false)
 	_apply_bus_audio(bus_name)
-	_save_settings()
+	if persist:
+		_save_settings()
 	audio_volume_changed.emit(bus_name, v, is_bus_muted(bus_name))
 
 func is_bus_muted(bus_name: StringName) -> bool:

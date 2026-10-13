@@ -1,7 +1,7 @@
 class_name StatsTipFactory
 extends RefCounted
 
-## 人物属性面板详情卡工厂
+## 角色属性面板详情卡工厂
 ## 从 PlayerStatsDialog 抽离，集中承载道统、道具、空槽位、武器及悟道历史的 DetailTip 数据组装。
 
 static func _c(v: float) -> Color:
@@ -98,7 +98,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 		"rows": rows,
 		"body": "稀有道具：属性加成与升级同源叠加。",
 		"notes": notes,
-		"foot": "在波间商店可继续购置更多奇珍。",
+		"foot": "在回合间商店可继续购置更多道具。",
 	})
 
 ## 空/封印武器位详情卡
@@ -117,7 +117,7 @@ static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> C
 			"上阵 %d 格全满之后，新买的武器进背包，只用于合成与出售。" % max_slots,
 			"上阵武器的数量（如 2/6、4/6、6/6）决定流派羁绊的激活档位。",
 		],
-		"foot": "波间在商店买武器即可补上空槽。",
+		"foot": "回合间在商店买武器即可补上空槽。",
 	})
 
 ## 武器详情卡
@@ -267,7 +267,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
 
 	var notes: Array[String] = [
-		"升级只攒点数，每波敌潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
+		"升级只攒点数，每回合敌潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
 		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
 	]
 	var stat_id := ""

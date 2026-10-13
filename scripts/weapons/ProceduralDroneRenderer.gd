@@ -2,7 +2,7 @@ class_name ProceduralDroneRenderer
 extends Node2D
 
 ## 纯矢量环绕灵宝渲染器（冷冽国风）
-## 为御灵系法宝（灵蝶、寒泉玉莲、混元钟）提供细腻的自转、振翅与流光视觉
+## 为御灵系道具（灵蝶、寒泉玉莲、混元钟）提供细腻的自转、振翅与流光视觉
 
 enum DroneKind {
 	LINGDIE,        ## 灵蝶：碧翠灵羽、生机透光羽翼、双翅轻盈扑动
@@ -31,8 +31,8 @@ var speed_ratio: float = 0.0
 ## 宿主按 velocity.x * 朝向符号 归一灌入，左右镜像由 scale.x 承担
 var bank_angle: float = 0.0
 
-## 血量比（0..1）：仅玄鹤消费，由宿主（SpiritBeast）灌入 —— 灵兽不挂血条，
-## 血量全由本体传达：驱动灵光晕圈/丹顶/灵目明暗，低于 30% 浮现裂纹与灵息闪烁
+## 生命比（0..1）：仅玄鹤消费，由宿主（SpiritBeast）灌入 —— 灵兽不挂血条，
+## 生命全由本体传达：驱动灵光晕圈/丹顶/灵目明暗，低于 30% 浮现裂纹与灵息闪烁
 var hp_ratio: float = 1.0
 
 var _anim_time: float = 0.0
@@ -255,7 +255,7 @@ func _draw_jade_pendant() -> void:
 ## 与足下灵雾传达，绝不做地面步态。画幅与旧灵狐同档（碰撞半径 14 与画幅同源）。
 ## 面朝 +x，朝向由宿主翻转 scale.x；speed_ratio 驱动展翼/扑翼频率/尾羽拖曳与尾后灵尘；
 ## bank_angle 只倾躯体组（晕圈/足雾不随动）。
-## 血量由本体传达（hp_ratio）：满血灵光充盈；血少晕圈/丹顶/灵目转暗；低于 30%
+## 生命由本体传达（hp_ratio）：满血灵光充盈；血少晕圈/丹顶/灵目转暗；低于 30%
 ## 躯干浮现霜蓝裂纹、灵息闪烁 —— 灵兽不挂血条。
 func _draw_xuan_he() -> void:
 	var body_col := Color(0.90, 0.94, 0.98)
@@ -264,7 +264,7 @@ func _draw_xuan_he() -> void:
 	var edge_col := Color(0.45, 0.78, 1.00)
 	var glow_col := Color(0.60, 0.95, 1.00)
 	var gold_col := Color(0.95, 0.80, 0.38)
-	# 灵息强度：满血 1.0，随血量衰减（保底 0.25 不致全熄）
+	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）
 	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
 	# 濒死程度与灵息闪烁
 	var low: float = clampf((0.30 - hp_ratio) / 0.30, 0.0, 1.0)
@@ -280,7 +280,7 @@ func _draw_xuan_he() -> void:
 	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 14.0, 3.2, 14), Color(0.55, 0.85, 1.0, mist_a))
 	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 8.0, 2.0, 12), Color(0.75, 0.92, 1.0, mist_a * 0.8))
 
-	# 周身灵光晕圈（血量的第一语言）：柔光为主，环线只留一点若有若无的轮廓
+	# 周身灵光晕圈（生命的第一语言）：柔光为主，环线只留一点若有若无的轮廓
 	var aura_a: float = (0.85 + 0.15 * sin(_anim_time * 3.0)) * spirit * flicker
 	_soft_glow(Vector2(0.0, -3.0), 21.0, Color(0.50, 0.85, 1.0, 0.10 * aura_a))
 	draw_arc(Vector2(0.0, -3.0), 20.0, 0.0, TAU, 28, Color(0.60, 0.92, 1.0, 0.11 * aura_a), 1.0, true)
@@ -367,7 +367,7 @@ func _draw_xuan_he() -> void:
 	])
 	draw_colored_polygon(beak, Color(0.72, 0.58, 0.30))
 	draw_polyline(_closed(beak), Color(0.45, 0.36, 0.18), 0.8, true)
-	# 丹顶（血量指示之一：随 hp_ratio 明暗）
+	# 丹顶（生命指示之一：随 hp_ratio 明暗）
 	var crown_a: float = (0.35 + 0.65 * clampf(hp_ratio, 0.0, 1.0)) * flicker
 	draw_circle(head_pos + Vector2(-0.4, -3.6), 2.8, Color(gold_col, 0.30 * crown_a))
 	draw_circle(head_pos + Vector2(-0.4, -3.6), 1.4, Color(gold_col, crown_a))

@@ -1,8 +1,8 @@
 class_name WeaponInventory
 extends RefCounted
 
-## 武器/法器持有、背包（纳戒）、三合一合成与出售子系统
-## 从 GameManager 抽离，负责上阵悬浮法器、御灵（drones）与背包（stash）的统一调度。
+## 武器/武器持有、背包（纳戒）、三合一合成与出售子系统
+## 从 GameManager 抽离，负责上阵悬浮武器、御灵（drones）与背包（stash）的统一调度。
 
 static func drone_id(item) -> String:
 	if item is Dictionary:
@@ -20,7 +20,7 @@ static func slots_used(gm: Node) -> int:
 		used += gm.player.get_weapon_count()
 	return used
 
-## 获得一件法器：上阵栏位有空则上阵，否则进背包；两处都满返回 false
+## 获得一件武器：上阵栏位有空则上阵，否则进背包；两处都满返回 false
 static func add_weapon(gm: Node, w_id: String, star: int = 1) -> bool:
 	var def := WeaponData.get_def(w_id)
 	if def.is_empty():
@@ -47,7 +47,7 @@ static func add_weapon(gm: Node, w_id: String, star: int = 1) -> bool:
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	return true
 
-## (id, star) 的持有总数：上阵悬浮法器 + 灵蝶 + 背包
+## (id, star) 的持有总数：上阵悬浮武器 + 灵蝶 + 背包
 static func count_copies(gm: Node, w_id: String, star: int) -> int:
 	var n := 0
 	if gm.player != null and gm.player.has_method("get_equipped_weapons_data"):
@@ -155,7 +155,7 @@ static func merge_weapon(gm: Node, w_id: String, star: int, keep: Dictionary) ->
 		if gm.player != null and gm.player.has_method("sync_drones"):
 			gm.player.sync_drones()
 
-	# 3. 消耗上阵悬浮法器（按节点引用移除，keeper 原地升级）
+	# 3. 消耗上阵悬浮武器（按节点引用移除，keeper 原地升级）
 	var keeper_node: Node = null
 	if gm.player != null and gm.player.has_method("get_equipped_weapons_data"):
 		var equipped: Array = gm.player.get_equipped_weapons_data()
@@ -185,7 +185,7 @@ static func merge_weapon(gm: Node, w_id: String, star: int, keep: Dictionary) ->
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	return true
 
-## HUD/商店通用的上阵列表（悬浮法器在前，灵宝在后）
+## HUD/商店通用的上阵列表（悬浮武器在前，灵宝在后）
 static func get_weapons_summary(gm: Node) -> Array:
 	var list: Array = []
 	if gm.player != null and gm.player.has_method("get_equipped_weapons_data"):
@@ -195,14 +195,14 @@ static func get_weapons_summary(gm: Node) -> Array:
 		var d_star := drone_star(gm.drones[i])
 		var def := WeaponData.get_def(d_id)
 		list.append({
-			"id": d_id, "name": def.get("name", "法器"),
+			"id": d_id, "name": def.get("name", "武器"),
 			"star": d_star,
 			"icon": def.get("icon", ""), "is_drone": true,
 			"tag": def.get("tag", ""), "node": null, "drone_index": i,
 		})
 	return list
 
-## 按上阵 summary 下标出售（悬浮法器与灵蝶统一处理）
+## 按上阵 summary 下标出售（悬浮武器与灵蝶统一处理）
 static func sell_weapon(gm: Node, index: int) -> bool:
 	var list := get_weapons_summary(gm)
 	if index < 0 or index >= list.size():
@@ -252,7 +252,7 @@ static func equip_from_stash(gm: Node, index: int) -> bool:
 	AudioManager.play_sfx("equip", 1.0)
 	return true
 
-## 从上阵 summary 摘下一件（灵宝摘 drones、悬浮法器摘节点实例）：unequip / 换装共用
+## 从上阵 summary 摘下一件（灵宝摘 drones、悬浮武器摘节点实例）：unequip / 换装共用
 static func _remove_summary_item(gm: Node, item: Dictionary) -> bool:
 	if item.get("is_drone", false):
 		var di := int(item.get("drone_index", -1))
@@ -308,11 +308,11 @@ static func swap_into_equipped(gm: Node, stash_index: int, equipped_index: int) 
 
 ## 背包 → 上阵指定格（拖拽落点语义，2026-10-11 用户：拖到已佩戴的武器上＝替换）：
 ## 指向已占用格＝替换那一格（换下的一件回背包被腾出的原位 stash_index，不是排到队尾）；
-## 指向空格/越界＝直接装备（上阵次序固定「悬浮法器在前、灵宝在后」，新件落在队尾）。
+## 指向空格/越界＝直接装备（上阵次序固定「悬浮武器在前、灵宝在后」，新件落在队尾）。
 ## 反方向（上阵件拖到背包里的某一件上）走这同一个函数：互换的两个半边本来就是一件事。
 ## 同池替换认「位置」（2026-10-11 用户：替换要落在原来那一格，不是把整排顺序打乱）：
-## 灵宝顶灵宝＝原地改 drones[di]（环绕方位不动）；悬浮法器顶悬浮法器＝新实例挂在 holder
-## 队尾，再 reorder_weapons 换回被顶掉的那一格。跨池（灵宝换悬浮法器）没有可落的位置，
+## 灵宝顶灵宝＝原地改 drones[di]（环绕方位不动）；悬浮武器顶悬浮武器＝新实例挂在 holder
+## 队尾，再 reorder_weapons 换回被顶掉的那一格。跨池（灵宝换悬浮武器）没有可落的位置，
 ## 新件按 summary 口径落在自己那一池的队尾。
 static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -> bool:
 	if stash_index < 0 or stash_index >= gm.stash.size():
@@ -330,7 +330,7 @@ static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -
 	var entry_star: int = int(entry.get("star", 1))
 	var e_def := WeaponData.get_def(entry_id)
 	var as_drone: bool = e_def.get("behavior", -1) == WeaponData.Behavior.DRONE
-	# 悬浮法器要有玩家节点才接得住（headless/异常态）：先验完再动手，不做半截回滚
+	# 悬浮武器要有玩家节点才接得住（headless/异常态）：先验完再动手，不做半截回滚
 	if not as_drone and (gm.player == null or not gm.player.has_method("add_weapon_instance")):
 		return false
 	var item: Dictionary = list[slot_index]
@@ -352,7 +352,7 @@ static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -
 		else:
 			gm.player.add_weapon_instance(entry_id, entry_star)
 			if not was_drone and gm.player.has_method("reorder_weapons"):
-				# 新实例在 holder 队尾：换回被顶掉的那一格（summary 里悬浮法器在前，
+				# 新实例在 holder 队尾：换回被顶掉的那一格（summary 里悬浮武器在前，
 				# 所以上阵下标就是 holder 下标）
 				var n: int = gm.player.get_weapon_count()
 				gm.player.reorder_weapons(n - 1, clampi(slot_index, 0, n - 1))
@@ -362,9 +362,9 @@ static func equip_stash_into_slot(gm: Node, stash_index: int, slot_index: int) -
 	AudioManager.play_sfx("equip", 1.0)
 	return true
 
-## 上阵两格互换位置（summary 下标；拖拽换位用）：两件同为悬浮法器 ⇒ 换 weapon_holder
+## 上阵两格互换位置（summary 下标；拖拽换位用）：两件同为悬浮武器 ⇒ 换 weapon_holder
 ## 子节点次序（环绕角度随次序重排，见 Player.reorder_weapons）；同为灵宝 ⇒ 换 drones
-## 数组次序。混池不换：summary 固定「悬浮法器在前、灵宝在后」，跨池次序没有可落的数据。
+## 数组次序。混池不换：summary 固定「悬浮武器在前、灵宝在后」，跨池次序没有可落的数据。
 static func swap_equipped_slots(gm: Node, i: int, j: int) -> bool:
 	if i < 0 or j < 0 or i == j:
 		return false

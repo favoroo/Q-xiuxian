@@ -150,7 +150,7 @@ static func badge(tag: String, count: int) -> Dictionary:
 	}
 
 ## 组装流派羁绊详情数据字典（供 DetailTip.show_over 使用）
-## extra_actions：追加到底部的操作按钮（DetailTip actions 口径），如商店的「查看该流派法器」
+## extra_actions：追加到底部的操作按钮（DetailTip actions 口径），如商店的「查看该流派武器」
 static func build_tip_data(tag: String, custom_body: String = "", custom_foot: String = "", custom_notes: Array = [], extra_actions: Array = []) -> Dictionary:
 	var info: Dictionary = WeaponData.SYNERGIES.get(tag, {})
 	if info.is_empty():
@@ -190,7 +190,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 		]
 
 	var body_txt := custom_body if not custom_body.is_empty() else "羁绊：持有越多同类武器，加成越强。"
-	var foot_txt := custom_foot if not custom_foot.is_empty() else "在波间商店挑选同标签武器可继续提升阶位。"
+	var foot_txt := custom_foot if not custom_foot.is_empty() else "在回合间商店挑选同标签武器可继续提升阶位。"
 
 	var payload: Dictionary = {
 		"title": progress_text(tag),

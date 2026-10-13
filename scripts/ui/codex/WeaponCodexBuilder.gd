@@ -7,7 +7,7 @@ extends RefCounted
 ## 触发 dialog._rebuild_weapons_page() 重建网格；chips 选中态由 restyle_chips() 统一重涂。
 ##
 ## 筛选口径与商店羁绊签同源：tag 命中 WeaponData.tags_of(wid) 即入选，
-## 「机关·剑阵盘」这类双器类法器会同时出现在机关与剑系两组（与羁绊结算一致）。
+## 「机关·剑阵盘」这类双器类武器会同时出现在机关与剑系两组（与羁绊结算一致）。
 
 ## 卡面两件事都不点就能看见：三签（攻击方式·器类·五行）+ 关键数值行，
 ## 完整属性/射程/异常仍走点按详情卡
@@ -48,7 +48,7 @@ static func rebuild(dialog: ManualDialog) -> void:
 	var tag := dialog.weapon_filter
 	if tag == "":
 		box.add_child(dialog._make_text_card("武器规则",
-			"武器只能在波间「商店」购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意武器卡查看射程、冷却与属性受益。" % [
+			"武器只能在回合间「商店」购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可手动合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点按任意武器卡查看射程、冷却与属性受益。" % [
 				WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
 				String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
 				WeaponData.MAX_STAR]))
@@ -172,7 +172,7 @@ static func _make_weapon_card(dialog: ManualDialog, wid: String, def: Dictionary
 	return card
 
 
-## 卡面三签：攻击方式 + 器类（双器类法器如「机关·剑阵盘」给两枚）+ 五行。
+## 卡面三签：攻击方式 + 器类（双器类武器如「机关·剑阵盘」给两枚）+ 五行。
 ## 词表就是筛选 chip 那批名字（WeaponData.SYNERGIES[].name），取色与商店货架卡行②同源
 ## （behavior 走 StatsTipFactory.behavior_color，五行走 GameStyle.ELEMENT_COLORS）——
 ## 同一件事在商店/图鉴/详情卡必须是同一副样子（2026-10-11 用户：图鉴只有点开才看得到

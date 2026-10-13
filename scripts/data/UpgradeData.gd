@@ -1,7 +1,7 @@
 class_name UpgradeData
 extends RefCounted
 
-## 加点数据库：波后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从商店获取
+## 加点数据库：回合后悟道结算一次给 5 个候选（GameManager.UPGRADE_OFFER_COUNT），武器一律从商店获取
 ## 稀有度权重：普通/稀有/史诗基础 60/30/10，幸运每点 +1 史诗权重（从普通中扣，见 GameBalance.rarity_weights）
 ## 每项设 max_stacks 上限，叠满后从池中剔除，防数值线性失控
 ##
@@ -135,7 +135,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "coins_up",
 		"apply": {"spirit_stones": 12.0},
 		"title": "金币补给",
-		"desc": "波间商店购物使用",
+		"desc": "回合间商店购物使用",
 		"rarity": "common",
 		"rarity_label": "普通",
 		"icon": "res://assets/art/icon_coin.png",
@@ -219,7 +219,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "chest_count_up",
 		"apply": {"chest_count": 1},
 		"title": "宝箱数量",
-		"desc": "每波场上多刷几口宝箱",
+		"desc": "每回合场上多刷几口宝箱",
 		"rarity": "common",
 		"rarity_label": "普通",
 		"icon": "res://assets/art/prop_chest.png",
@@ -239,7 +239,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "chest_reward_up",
 		"apply": {"chest_reward": 0.35},
 		"title": "宝箱掉落",
-		"desc": "砸开的宝箱掉得更多（金币/灵石颗数/回复量同涨）",
+		"desc": "砸开的宝箱掉得更多（金币与回复量同涨）",
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/item_manxia_jue.png",
@@ -279,7 +279,7 @@ const UPGRADES: Array[Dictionary] = [
 		"id": "tongxuan_up",
 		"apply": {"free_rerolls": 1.0},
 		"title": "免费重掷",
-		"desc": "波间商店免费重掷次数",
+		"desc": "回合间商店免费重掷次数",
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/item_tongxuan_ling.png",

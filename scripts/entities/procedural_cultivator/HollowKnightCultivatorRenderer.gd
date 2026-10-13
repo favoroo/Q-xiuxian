@@ -31,13 +31,13 @@ var width_scale: float = 1.0
 var height_scale: float = 1.0
 var head_scale: float = 1.0
 
-# ----------------- 背负法器位姿基准 -----------------
+# ----------------- 背负武器位姿基准 -----------------
 ## 正面：斜背，柄与剑首从右肩外探出、剑尖朝下收进斗篷后。
 ## 锚点刻意压在面具轮廓（oval_chin 左右 x=±9.5、下巴 y=-5）之外——
 ## 骨钉剑/厚背断刀/兽骨斧的填充色与骨白面壳色差不到 0.17，一贴脸就画成"剑长在脸上"。
 const CARRY_FRONT_POS := Vector2(10.5, 0.0)
 const CARRY_FRONT_ROT := 205.0
-## 侧面：法器负于后背中下方，端头向后上轻挑，下端收于斗篷内
+## 侧面：武器负于后背中下方，端头向后上轻挑，下端收于斗篷内
 const CARRY_SIDE_POS := Vector2(-6.5, 4.5)
 const CARRY_SIDE_ROT := -18.0
 ## 背面：横贯背部中下方，上端留足离后脑的空白
@@ -1324,7 +1324,7 @@ func _draw_cloak_back_modular(float_y: float, _amp: float, _wave_t: float, extra
 	_draw_cloak_rim_shimmer(back_pts, col_cloak_edge)
 	draw_line(Vector2(0, -2 + float_y), Vector2(_sway_x(0.0, 24.0) * 0.3, 24 + float_y + _sway_y(24.0) * 0.4), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
 
-# ==================== 背负本命法器插槽绘制 ====================
+# ==================== 背负本命武器插槽绘制 ====================
 
 func _draw_modular_strap(float_y: float) -> void:
 	if not _layer_on(Layer.CLOAK):
@@ -1353,7 +1353,7 @@ func _draw_modular_strap(float_y: float) -> void:
 			draw_circle(center, 1.2, col_void)
 			draw_circle(center, 0.6, col_gold)
 
-## 绘制法器（正面探出右肩上方、下半部藏于斗篷后绝不露底，侧面贴背，背面外挂最表层）
+## 绘制武器（正面探出右肩上方、下半部藏于斗篷后绝不露底，侧面贴背，背面外挂最表层）
 func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 	if not _layer_on(Layer.WEAPON):
 		return

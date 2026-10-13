@@ -3,7 +3,7 @@ extends Node2D
 
 ## 聚灵阵 — 玩家主动长按激活的阵法节点。
 ## 玩家进入范围后 HUD 显示激活按钮，长按充能，松手前完成则触发全屏灵气冲击
-## 并召唤一只灵兽助战（2026-10-11 强化：灵兽有血量、嘲讽附近敌人、跨波次存活直到战死）；
+## 并召唤一只灵兽助战（2026-10-11 强化：灵兽有生命、嘲讽附近敌人、跨回合存活直到战死）；
 ## 松手过早或离开范围则中断充能、进度归零。
 ## 触发后进入「耗尽灰相」：熄灯、光圈撤掉、石碑去色 —— 一眼看出这座已经用掉了
 ## （三座界碑共用同一份 .tscn，所以褪灰材质必须 resource_local_to_scene，见 .tscn）。
@@ -22,7 +22,7 @@ const CHARGE_TIME: float = 0.8
 const BLESSING_DAMAGE: float = 85.0
 ## 击退力度
 const KNOCK_FORCE: float = 320.0
-## 掉落金色灵石数量
+## 掉落金色金币数量
 const GEM_COUNT: int = 5
 ## 爆闪之后转入灰相的时长（秒）
 const SPENT_FADE_TIME: float = 0.55
@@ -67,7 +67,7 @@ var charge_time: float = 0.0
 @onready var stone_mat: ShaderMaterial = $Sprite2D.material as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
-## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，血量不耗尽跨波次一直在场
+## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，生命不耗尽跨回合一直在场
 var beast_scene: PackedScene = preload("res://scenes/entities/SpiritBeast.tscn")
 
 ## 程序化矢量阵台渲染器
@@ -159,7 +159,7 @@ func _build_charge_readout() -> void:
 	_readout = Node2D.new()
 	_readout.name = "ChargeReadout"
 	_readout.visible = false
-	## 压在碑身之上（同一 MapLayer 内），仍在人物/妖物之下 —— 环是地上的东西
+	## 压在碑身之上（同一 MapLayer 内），仍在角色/敌人之下 —— 环是地上的东西
 	_readout.z_index = 2
 	add_child(_readout)
 
@@ -253,8 +253,8 @@ func _process(delta: float) -> void:
 	if is_triggered:
 		return
 	if is_charging:
-		# 波次结束守门：敌潮平息后再充满 = 空场释放，白白耗掉这座跨波共用的碑。
-		# 波次一离开 FIGHT 阶段立即按取消处理（进度归零，碑保留到下一波）。
+		# 回合结束守门：敌潮平息后再充满 = 空场释放，白白耗掉这座跨回合共用的碑。
+		# 回合一离开 FIGHT 阶段立即按取消处理（进度归零，碑保留到下一回合）。
 		var spawner = GameManager.wave_spawner
 		if spawner != null and spawner.phase != WaveSpawner.Phase.FIGHT:
 			stop_charge()
@@ -311,15 +311,13 @@ func _trigger_blessing() -> void:
 	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 灵兽现身助战 ⚡")
 	_spawn_shockwave_ring()
 	_summon_spirit_beast()
-	# 对范围内所有敌人造成伤害与击退
-	# 方向走 GameBalance.knock_dir（永不把敌人往玩家身上推）
-	var enemies = get_tree().get_nodes_in_group("enemies")
+	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，
+	# radius 传 INF 即「全场」；方向走 GameBalance.knock_dir，永不把敌人往玩家身上推）
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
-	for enemy in enemies:
-		if is_instance_valid(enemy) and enemy.has_method("take_damage"):
-			var knock = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * KNOCK_FORCE
-			enemy.take_damage(BLESSING_DAMAGE, knock, true)
-	# 掉落金色灵石
+	for enemy in EnemyFilter.collect(get_tree(), global_position, INF):
+		var knock = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * KNOCK_FORCE
+		enemy.take_damage(BLESSING_DAMAGE, knock, true)
+	# 掉落金色金币
 	for i in range(GEM_COUNT):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
@@ -339,7 +337,7 @@ func _trigger_blessing() -> void:
 	tw.tween_callback(_enter_spent_look)
 
 ## 召唤灵兽助战（2026-10-11 祭坛强化）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
-## 灵兽挂 allies 组、不在波末清理四组里，血量不耗尽就跨波次一直在场；
+## 灵兽挂 allies 组、不在回合末清理四组里，生命不耗尽就跨回合一直在场；
 ## 每座祭坛 is_triggered 只触发一次 ⇒ 天然「每座一只、全场最多三只」。
 func _summon_spirit_beast() -> void:
 	var host: Node = GameManager.player.get_parent() if GameManager.player != null else get_tree().current_scene

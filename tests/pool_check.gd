@@ -169,6 +169,48 @@ func _run() -> void:
 		JuiceEffect.spawn_impact_pop(world, Vector2(50 + i * 2, 50), Color.GOLD, Vector2.RIGHT)
 	_check(JuiceEffect.created_count() - pop_pre <= JuiceEffect.IMPACT_POP_FRAME_BUDGET, "湮灭微闪受单帧预算限流闸截断")
 
+	# ---------- 5.9 敌人对象池（2026-10-13）：出怪 / 回收 / 复用 / 复用整备归零 ----------
+	# 敌人是全项目最重的节点图，池化验收钉四条：回收出树退组注销、复用零新建、
+	# reset_for_reuse 把「成长/变异/异常/形变」污染全滚回出厂、activate 血量公式不重算错。
+	var e_created0: int = EnemyBase.pool_created_count
+	var e_reused0: int = EnemyBase.pool_reused_count
+	var mob_a := EnemyBase.acquire_or_new(slime_scene)
+	mob_a.reset_for_reuse()  # 新实例空转（_assembled=false）
+	mob_a.add_to_group("enemies")
+	mob_a.global_position = Vector2(100, 100)
+	world.add_child(mob_a)   # 首次入树：_ready 装配 + activate
+	mob_a.activate()         # 幂等闸空转
+	_check(EnemyBase.pool_created_count == e_created0 + 1, "敌人池首轮新建 1 只 (%d)" % (EnemyBase.pool_created_count - e_created0))
+	_check(GameManager.live_enemies.has(mob_a), "入树即在活体登记表")
+	var mob_base_hp: float = mob_a._base_stats["max_hp"]
+	# 弄脏：成长后的血量 / 燃烧 / 变异 / 击退 / 出生缩放 / 变异染色
+	mob_a.max_hp = 9999.0
+	mob_a.burn_timer = 2.0
+	mob_a._mutated = true
+	mob_a.knockback_velocity = Vector2(99, 0)
+	mob_a.scale = Vector2(0.4, 0.4)
+	mob_a.anim_sprite.modulate = Color(1.5, 0.65, 0.6)
+	EnemyBase._recycle(mob_a)
+	_check(mob_a.get_parent() == null and not mob_a.is_in_group("enemies"), "回收后出树并退 enemies 组")
+	_check(not GameManager.live_enemies.has(mob_a), "回收后注销活体登记表")
+	_check(EnemyBase.pool_idle_count() == 1, "池内休眠 1 只 (%d)" % EnemyBase.pool_idle_count())
+	var mob_b := EnemyBase.acquire_or_new(slime_scene)
+	_check(mob_b == mob_a and EnemyBase.pool_created_count == e_created0 + 1, "第二次 acquire 复用同一实例零新建")
+	_check(EnemyBase.pool_reused_count == e_reused0 + 1, "复用计数 +1 (%d)" % (EnemyBase.pool_reused_count - e_reused0))
+	mob_b.reset_for_reuse()
+	_check(mob_b.max_hp == mob_base_hp, "复用整备回滚出厂血量（成长污染清零，实际 %.1f vs %.1f）" % [mob_b.max_hp, mob_base_hp])
+	_check(mob_b.burn_timer == 0.0 and not mob_b._mutated and mob_b.knockback_velocity == Vector2.ZERO, "复用整备清零异常/变异/击退")
+	_check(mob_b.scale == Vector2.ONE and mob_b.anim_sprite.modulate == Color.WHITE, "复用整备还原出生缩放与染色")
+	world.add_child(mob_b)
+	mob_b.activate()
+	var expect_hp: float = ceilf(mob_base_hp * GameBalance.MOB_HP_BASE_MULT)
+	_check(mob_b.max_hp == expect_hp and mob_b.current_hp == expect_hp,
+		"复用激活血量 = 出厂 × 小怪血量系数（实际 %.1f vs %.1f）" % [mob_b.max_hp, expect_hp])
+	_check(GameManager.live_enemies.has(mob_b), "复用入树重新登记")
+	EnemyBase._recycle(mob_b)
+	EnemyBase.clear_pools()
+	_check(EnemyBase.pool_idle_count() == 0, "clear_pools 清空休眠体")
+
 	# ---------- 6. 缓存清理不影响运行中对象 ----------
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()

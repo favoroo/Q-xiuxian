@@ -147,7 +147,7 @@ func _build_ui() -> void:
 	_detail_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	detail_margin.add_child(_detail_content)
 
-	# 2.2 右侧：全部修士纵向网格列表
+	# 2.2 右侧：全部角色纵向网格列表
 	_roster_panel = PanelContainer.new()
 	_roster_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_roster_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -387,7 +387,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		mid_col.add_child(_make_info_row("代价", GameStyle.BAD_DK, GameStyle.BAD,
 				cons_lines, col_w))
 
-	# (e) 契合神通
+	# (e) 契合技能
 	var syn_sid := CultivatorData.get_synergy_skill_id(cid)
 	if not syn_sid.is_empty():
 		var sdef := SkillData.get_def(syn_sid)
@@ -693,7 +693,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 
 	# 整块热区 + 「按下与抬起都留在原地」才算点（尺子在 GameStyle.tap 头注）。
 	# 旧写法在这里认「按下」那一枪，两个后果都落在「拖列表」这个动作上：
-	# ① 手指一落到卡片上就换人 —— 想滑动却点中了某个英雄；
+	# ① 手指一落到卡片上就换人 —— 想滑动却点中了某个角色；
 	# ② 换人要重建左侧整栏详情（实测单次平均 4.0ms、最坏 6.0ms，全是文本重排与节点重建，
 	#    真机 CPU 更慢），而这一下正好卡在 ScrollContainer 起手锁定拖动的那一帧 ⇒ 滑动发涩。
 	# 改成认完整手势后，点按仍在抬起那一刻兑现（与全项目其余卡片同一把尺子），

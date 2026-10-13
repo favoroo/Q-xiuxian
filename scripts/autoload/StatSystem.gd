@@ -2,7 +2,7 @@ class_name StatSystem
 extends RefCounted
 
 ## 属性字段统一落地子系统（2026-10-11 从 GameManager._apply_stat_fields 抽离）：
-## 悟道加点（apply_upgrade）与法宝（add_item）共用同一条链路，这里只规定「往哪个字段加、有没有上限」，
+## 悟道加点（apply_upgrade）与道具（add_item）共用同一条链路，这里只规定「往哪个字段加、有没有上限」，
 ## 幅度全部来自 UpgradeData/ItemData 每项的 "apply" 表（数值与文案同源，调参只改数据表一处）。
 ## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露。
 ##
@@ -110,7 +110,7 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 ## ② 被上限/地板夹过的项，只在「能证明这一份完整落地了」的时候才扣：正向 min(x+v, cap) 之后读数
 ##    还停在 cap 上，就说明这一份被上限吃掉过、吃掉多少无从得知 ⇒ 一分不扣。
 ##    宁可少扣，也不许把没兑现的加回去的东西再收回（按下没给到的，不该收代价）。
-## ③ 新增 apply 字段必须在这里补一条反向分支：tests/ItemSellCheck 逐件法宝「买入 → 卖出 →
+## ③ 新增 apply 字段必须在这里补一条反向分支：tests/ItemSellCheck 逐件道具「买入 → 卖出 →
 ##    全字段回到原值」，漏一条就报红，不靠人记得。
 static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) -> void:
 	for key in apply.keys():

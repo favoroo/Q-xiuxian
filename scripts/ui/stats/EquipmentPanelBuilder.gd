@@ -1,8 +1,8 @@
 class_name EquipmentPanelBuilder
 extends RefCounted
 
-## 属性面板右栏构建与上阵/仓库槽位刷新：道统卡速览、上阵法器槽、纳戒仓库、
-## 羁绊区容器、随身法宝/悟道历程双标签容器。
+## 属性面板右栏构建与上阵/仓库槽位刷新：道统卡速览、上阵武器槽、纳戒仓库、
+## 羁绊区容器、随身道具/悟道历程双标签容器。
 ## 从 PlayerStatsDialog 拆出：构建结果直接写回 dialog 成员（_weapons_box / _stash_box /
 ## _history_list 等名字被判据引用，原样保留），点按回调经 dialog 门面。
 
@@ -81,7 +81,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	GameStyle.tap(dialog._cult_card, func() -> void: dialog._open_cultivator_tip(dialog._cult_card))
 	right_vbox.add_child(dialog._cult_card)
 
-	# 1. 上半区：上阵法器与纳戒仓库
+	# 1. 上半区：上阵武器与纳戒仓库
 	var wp_panel := PanelContainer.new()
 	var wp_st := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
 	wp_st.content_margin_left = 12.0
@@ -179,7 +179,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 
 	right_vbox.add_child(syn_panel)
 
-	# 3. 下半区：随身法宝 / 悟道历程（双标签切换）
+	# 3. 下半区：随身道具 / 悟道历程（双标签切换）
 	var bot_panel := PanelContainer.new()
 	bot_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var bot_st := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
@@ -221,7 +221,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	bot_header.add_child(dialog._history_count_lbl)
 	bot_vbox.add_child(bot_header)
 
-	# 随身法宝滚动区
+	# 随身道具滚动区
 	dialog._items_scroll = ScrollContainer.new()
 	dialog._items_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dialog._items_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -307,7 +307,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 
 		dialog._weapons_box.add_child(slot)
 
-	# 仓库法器
+	# 仓库武器
 	var has_stash: bool = not GameManager.stash.is_empty()
 	dialog._stash_section.visible = has_stash
 	if has_stash:

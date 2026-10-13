@@ -1,15 +1,15 @@
 class_name WaveShop
 extends Control
 
-## 商店：购买法器/回复药、重掷货架；
+## 商店：购买武器/回复药、重掷货架；
 ## 上阵 + 背包统一点选后操作：三合一合成 / 上阵卸下 / 出售换金币
 ## 拆分说明：本体保留摆位口径（判据引用）、开面板/刷新编排与陈列行装配；
-## 货架卡构建在 ShopOfferCardFactory、法器悬浮菜单在 ShopWeaponTip、陈列槽位在 ShopInventoryRow。
+## 货架卡构建在 ShopOfferCardFactory、武器悬浮菜单在 ShopWeaponTip、陈列槽位在 ShopInventoryRow。
 
 signal stats_requested
 signal pause_requested
-## 查流派法器总表：filter_tag 为 "" 时打开武器图鉴不筛选（顶栏按钮），
-## 否则直达并预选该流派（羁绊详情卡「查看该流派法器」）；Main 接线到 ManualDialog
+## 查流派武器总表：filter_tag 为 "" 时打开武器图鉴不筛选（顶栏按钮），
+## 否则直达并预选该流派（羁绊详情卡「查看该流派武器」）；Main 接线到 ManualDialog
 signal manual_requested(filter_tag: String)
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
@@ -27,7 +27,7 @@ signal manual_requested(filter_tag: String)
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/BottomBar/ConfirmButton
 
-## 摆位口径与波后悟道面板同一把尺子（LevelUpDialog 里同名同形的 *_for()）：
+## 摆位口径与回合后悟道面板同一把尺子（LevelUpDialog 里同名同形的 *_for()）：
 ## 面板高按 viewport 钉死、卡宽按可用宽均分、两头给斜切画出来的角留出呼吸量。
 ##
 ## 2026-10-09 用户真机：「这个界面优化一下，尽量在一个界面下显示，不要去上下滑动，
@@ -74,15 +74,15 @@ const CARD_LOCK_H := 20.0
 ## 入场动画的支点参考高，同时是「卡高的设计上限」：卡高由内容决定，判据量出来最坏 256
 ## （6 格货架 + 最长那句说明）。滚动区两头的留白按这个上限算，超过它卡角就会被削。
 const CARD_H_REF := 280.0
-## 陈列槽（上阵/背包/法宝）边长的上下限：按件数现算夹在 [52, 60]，压到 52 还摆不下就横滑。
-## 2026-10-12 用户真机（第 10 波，6 上阵 + 9 背包 + 13 法宝）：「下面这一排武器啊，物品啊，
+## 陈列槽（上阵/背包/道具）边长的上下限：按件数现算夹在 [52, 60]，压到 52 还摆不下就横滑。
+## 2026-10-12 用户真机（第 10 波，6 上阵 + 9 背包 + 13 道具）：「下面这一排武器啊，物品啊，
 ## 这些图片显示得再大一点，目前都看不清」—— 那一屏件数一多，槽边长早就撞在旧下限 36 上，
 ## 图标实际只有 34 见方，像素画糊成一团。这一排的竖向代价按【下限】付（件多时才用到），
 ## 横滑的代价按【上限】付，而它本来就是可滑列表（头注：划一下就把最右那件点到手里），
 ## 所以两头一起抬：图标 ≥ 44 见方才认得出是刀是剑，宁可多划两下。
 const INV_SLOT := 64.0
 const INV_SLOT_MIN := 56.0
-## 一枚色签（「背包 n/9」「法宝 n」）占的宽：最长读数 + 描边与内容边距
+## 一枚色签（「背包 n/9」「道具 n」）占的宽：最长读数 + 描边与内容边距
 const INV_CHIP_W := 96.0
 ## 陈列行里控件之间的缝隙（与 .tscn 的 OwnedContainer separation 同源）
 const INV_GAP := 10.0
@@ -141,7 +141,7 @@ static func card_name_w(card_w: float) -> float:
 	return maxf(48.0, card_inner_w(card_w) - CARD_ICON - 6.0)
 
 ## 陈列槽边长：先按件数把这一行压到摆得下（夹在 [INV_SLOT_MIN, INV_SLOT]，与货架卡同一
-## 口径、不抄死数）。压到下限还摆不下时（满仓 6 上阵 + 9 背包 + 15 法宝 = 30 格，任何一档
+## 口径、不抄死数）。压到下限还摆不下时（满仓 6 上阵 + 9 背包 + 15 道具 = 30 格，任何一档
 ## 屏都给不起 30×36 的宽）整排横着滑：全留 + 可滑到，不砍件数、不再压字号
 ## （2026-10-09 用户真机：「装备太多了，可以左右滑动啊，不然很多装备都操作不了了」）。
 static func inv_slot_for(avail: float, count: int, chips: int = 0) -> float:
@@ -180,7 +180,7 @@ var _hp_chip: ShopHpChip = null
 ## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
 var _screen: Vector2 = Vector2(960, 540)
 
-## 当前点选的法器：{"pool": "equipped"/"stash", "index": int}
+## 当前点选的武器：{"pool": "equipped"/"stash", "index": int}
 var selected: Dictionary = {}
 ## 拖拽换装手势控制器（按住拎起 → 拖到目标格放下）：陈列行的格子构建时经 drag_register 登记
 var drag_ctl: ShopDragDrop = null
@@ -230,7 +230,7 @@ func _ready() -> void:
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	top_bar.add_child(pause_btn)
 
-	# 「图鉴」插在「属性」左边：买武器的间隙随时查流派法器总表；
+	# 「图鉴」插在「属性」左边：买武器的间隙随时查流派武器总表；
 	# 更顺的一条路是点上面羁绊签（如「召唤 (6/5)」）详情卡里的直达按钮（见 _open_shop_synergy_tip）
 	var manual_btn := Button.new()
 	manual_btn.name = "ManualButton"
@@ -242,7 +242,7 @@ func _ready() -> void:
 	top_bar.add_child(manual_btn)
 	top_bar.move_child(manual_btn, stats_btn.get_index())
 
-	# 气血徽记插在「金币」左边：这两颗是同一类东西（这一屏上仅有的两个资源读数），
+	# 生命徽记插在「金币」左边：这两颗是同一类东西（这一屏上仅有的两个资源读数），
 	# 买回气丹要在它们之间来回比 —— 隔成一左一右就得靠记忆算账（见 ShopHpChip 头注）。
 	_hp_chip = ShopHpChip.new(self)
 	top_bar.add_child(_hp_chip)
@@ -304,12 +304,12 @@ func _open_usage_tip() -> void:
 	var notes: Array[String] = [
 		"点中一件武器（装备或背包里的）才能操作：三合一升星、装备卸下、出售换金币。",
 		"格子那一圈边框的颜色各有意思：蓝＝已上阵，灰＝在背包，黄＝凑满三件可合成，白＝当前选中；暖橙红＝这把武器吃【元素伤害】加成，货架上武器图标的边框是同一个颜色。",
-		"买错的法宝与灵兽也能反悔：点陈列行里的道具徽记（或灵兽光球），详情卡底部有【出售】，按原价一半回收金币、加过的属性当场退回。",
+		"买错的道具与灵兽也能反悔：点陈列行里的道具徽记（或灵兽光球），详情卡底部有【出售】，按原价一半回收金币、加过的属性当场退回。",
 		"拖动换装：按住一件武器拎起来，图标抬到手指上方，图标压到哪一格就是哪一格（格子被手挡住也认得准）。拖到上阵空格＝装备；拖到已佩戴的武器上＝替换那一格（换下的一件回背包原位）；把上阵的武器拖到背包里的某一件上＝两件互换（背包满也换得动）；拖到背包空位或「背包」签＝卸下；上阵格之间拖动＝互换位置；背包内拖动＝整理顺序。",
 		"三合一：集齐三把同名同星，合成后升一星（最高 %s）。" % WeaponData.star_text(WeaponData.MAX_STAR),
-		"锁定：这一格留到下波，重掷与刷新都不会换掉它。",
-		"重掷货架：换一批候选；每波有免费次数，用完按价格扣金币。",
-		"已售出的格子本波不会补货，出战后货架重开。",
+		"锁定：这一格留到下回合，重掷与刷新都不会换掉它。",
+		"重掷货架：换一批候选；每回合有免费次数，用完按价格扣金币。",
+		"已售出的格子本回合不会补货，出战后货架重开。",
 	]
 	if max_slots < WeaponData.MAX_SLOTS:
 		notes.insert(0, "本角色限装备 %d 件武器：超出上限的武器会收进背包，可用于三合一升星或先卸下当前武器再换装。" % max_slots)
@@ -318,7 +318,7 @@ func _open_usage_tip() -> void:
 		"chip": "商店",
 		"chip_color": GameStyle.GOLD,
 		"rows": rows,
-		"body": "每波结束后来此购买武器：金币换武器与道具，摆不满的收进背包。",
+		"body": "每回合结束后来此购买武器：金币换武器与道具，摆不满的收进背包。",
 		"notes": notes,
 		"foot": "武器槽满时再买，新武器会自动进背包。",
 	})
@@ -363,7 +363,7 @@ func _layout_for_viewport() -> void:
 	offers_pad.add_theme_constant_override("margin_right", pad)
 	offers_scroll.scroll_vertical = 0
 	offers_scroll.scroll_horizontal = 0
-	# 每次开面板陈列行回到最左：上一波划到哪里不该带到这一波
+	# 每次开面板陈列行回到最左：上一波划到哪里不该带到这一回合
 	owned_scroll.scroll_horizontal = 0
 
 ## animate=false 时卡片直接就位、不重播入场动画：买入一件/切换锁定这类操作型刷新
@@ -373,7 +373,7 @@ func refresh(animate: bool = true) -> void:
 	DetailTip.close_all(self)
 	stones_label.text = "金币 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
-	# 气血读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
+	# 生命读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
 	var hp_stats: Dictionary = GameManager.get_player_stat_dict()
 	_hp_chip.set_value(float(hp_stats.get("current_hp", 0.0)), float(hp_stats.get("max_hp", 0.0)))
 	if GameManager.reroll_free_left > 0:
@@ -421,7 +421,7 @@ static func _center_pivot(c: Control) -> void:
 func _refresh_inventory() -> void:
 	if selected.is_empty():
 		DetailTip.close_all(self)
-	# 点一件法器会重建整行（选中描边/合成高亮都要重画）：不记着滑到的位置，视野会跳回最左，
+	# 点一件武器会重建整行（选中描边/合成高亮都要重画）：不记着滑到的位置，视野会跳回最左，
 	# 刚点的那一格从眼前跑掉 —— 满仓时等于逼玩家每点一次就重新划一遍。
 	var keep_x: float = owned_scroll.scroll_horizontal
 	for child in owned_container.get_children():
@@ -437,7 +437,7 @@ func _refresh_inventory() -> void:
 	# 背包空位画成凹槽提示容量
 	var empty_budget: int = clampi(10 - eq_count - GameManager.stash.size(), 0, 3)
 	var free_tiles: int = mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)
-	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 法宝徽记 + 灵兽徽记）
+	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 道具徽记 + 灵兽徽记）
 	var n_tile: int = eq_count + GameManager.stash.size() + free_tiles + GameManager.items.size() + GameManager.pets.size()
 	var n_chip: int = (2 if slot_capped else 1) + (1 if not GameManager.items.is_empty() else 0) + (1 if not GameManager.pets.is_empty() else 0)
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
@@ -454,7 +454,7 @@ func _refresh_inventory() -> void:
 	for i in range(free_tiles):
 		owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(self, tile))
 
-	# 已持有法宝（被动道具）陈列：小图标 + 点按查看说明与【出售】，不参与点选换装那套操作
+	# 已持有道具（被动道具）陈列：小图标 + 点按查看说明与【出售】，不参与点选换装那套操作
 	if not GameManager.items.is_empty():
 		owned_container.add_child(ShopInventoryRow.create_items_divider())
 		for item_id in GameManager.items:
@@ -486,7 +486,7 @@ func _keep_row_scroll(x: float) -> void:
 func _refresh_action_bar() -> void:
 	for child in action_bar.get_children():
 		child.queue_free()
-	# 法器详情与操作已收归悬浮菜单（DetailTip），底部横条常驻收起，把高度让给货架
+	# 武器详情与操作已收归悬浮菜单（DetailTip），底部横条常驻收起，把高度让给货架
 	action_bar.visible = false
 
 func _on_reroll() -> void:

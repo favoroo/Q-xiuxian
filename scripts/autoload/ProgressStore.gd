@@ -80,7 +80,7 @@ static func load_into(gm: Node) -> void:
 		if not (iid in gm.unlocked_items):
 			gm.unlocked_items.append(iid)
 	# 剔除已不在道具表里的旧 id（改版删件时会有，如 2026-10-12 的卸匣锥）：
-	# 留着它「道具 N/M」会多算一件不存在的法宝，且玉匣白送时可能抽到空定义。
+	# 留着它「道具 N/M」会多算一件不存在的道具，且玉匣白送时可能抽到空定义。
 	for i in range(gm.unlocked_items.size() - 1, -1, -1):
 		if not ItemData.DEFS.has(String(gm.unlocked_items[i])):
 			gm.unlocked_items.remove_at(i)

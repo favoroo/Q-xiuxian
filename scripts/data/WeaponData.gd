@@ -1,17 +1,17 @@
 class_name WeaponData
 extends RefCounted
 
-## 武器静态数据库：所有法器的数值/行为/价格/五行/属性受益唯一定义处
-## 星级：集齐 3 把同名同星，在波间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
+## 武器静态数据库：所有武器的数值/行为/价格/五行/属性受益唯一定义处
+## 星级：集齐 3 把同名同星，在回合间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
 ## 双标签系统：器类（剑系/符箓/雷法/御灵/广域）+ 五行（锐金/青木/玄水/离火/厚土）
 ## 器类归属口径（2026-10-10 定，用户：「柳叶飞刀怎么是符箓啊？不应该是剑系吗」）：
 ##   剑系 = 金属锋刃器，近战白刃与远程飞射都算（剑/刀/针 ⇒ 庚金飞剑、柳叶飞刀、暴雨梨花针、玄冰飞针都在内）；
 ##   符箓 = 符纸（万木灵符、火焰符），该羁绊给弹丸穿透。
-## 归属唯一真话是各法器的 "tags"（"tag" 只是展示文案），器类签/图鉴/商店/羁绊结算全从 tags 取，改归属两处一起改。
-## 弹丸类（PROJECTILE）另带 bullet / bullet_scale / bullet_spin 三个外观字段：打出去的东西按法器各自不同
+## 归属唯一真话是各武器的 "tags"（"tag" 只是展示文案），器类签/图鉴/商店/羁绊结算全从 tags 取，改归属两处一起改。
+## 弹丸类（PROJECTILE）另带 bullet / bullet_scale / bullet_spin 三个外观字段：打出去的东西按武器各自不同
 ## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 × bullet_scale == 屏上像素；缺 bullet 时回退 blade.png。
 ## bullet_scale 那把尺子（2026-10-09，用户口径：「飞行物太大了，其他几个也挺大」）：
-## 弹丸屏上长轴不许大过发射它的法器本体（本体 = 48×48 画布 × FloatingWeapon 的 0.55 ⇒ 26.4px）。
+## 弹丸屏上长轴不许大过发射它的武器本体（本体 = 48×48 画布 × FloatingWeapon 的 0.55 ⇒ 26.4px）。
 ## 符箓是块面状贴图、细长兵器是 40px 长条，按 1.0 出图全都在本体的 1.5 倍 ⇒ 满屏飞招牌。
 ## bullet_spin 2026-10-09 起才真正生效：以前代码按穿透数反推朝向（pierce<=1 就转），
 ## 结果表里明明写了"不转"的玄冰飞针，打出去仍在原地打圈。
@@ -309,7 +309,7 @@ const DEFS: Dictionary = {
 				# ==================== 2026-10-10 新增 15 把 ====================
 				# 目的有二：
 				#  1) 补齐 器类×五行 5×5 格子的 9 个空格——符箓(原仅2把)/雷法(3)/御灵(3)凑不齐羁绊 4/6 档；
-				#  2) 按土豆兄弟属性加成模式补流派专武（吸血/收益/护甲加成），配合新法宝撑起各流派。
+				#  2) 按土豆兄弟属性加成模式补流派专武（吸血/收益/护甲加成），配合新道具撑起各流派。
 				# tip 由 tools/fit_weapon_icon.py 实测回填。
 
 				# ---- 补格子 9 把 ----
@@ -850,7 +850,7 @@ const DEFS: Dictionary = {
 					# ==================== 2026-10-12 第三批 8 把：填满只剩 1 把的 器类×五行 交叉格 ====================
 					# 空洞格清单（各仅 1 把，羁绊 2 件档都凑不出）：剑-木、符-水、符-土、雷-金、雷-水、
 					# 机关-木/水/火。每把照同行为同格锚点法定数值，零新行为代码。
-					# 顺带把冷门 scaling 链接进新法器（吸血/冷却/暴击伤害/范围/额外生命），激活死链。
+					# 顺带把冷门 scaling 链接进新武器（吸血/冷却/暴击伤害/范围/额外生命），激活死链。
 					# 图标暂借同格锚点贴图占位，TODO(media-gen)：出专属图标后替换并补 manifest。
 						"taomu_jian": {
 							"name": "桃木剑", "behavior": Behavior.MELEE,
@@ -960,7 +960,7 @@ const DEFS: Dictionary = {
 						},
 }
 
-## 流派羁绊：同 tag 法器持有多件时激活阶梯加成（重复同名法器也计数）
+## 流派羁绊：同 tag 武器持有多件时激活阶梯加成（重复同名武器也计数）
 ## 涵盖器类 6 系 + 五行 5 系，共 11 种流派羁绊
 ##
 ## 本表是羁绊的**唯一真话**，数值和文案都只从这里出：
@@ -974,7 +974,7 @@ const DEFS: Dictionary = {
 ##     把 field 增量与生成文案里的数字逐个对账，并断言没一条隐性加成绕过 effects。
 ##
 ## effects 每条：
-##   field  —— 被改写的 GameManager 属性名（恒 synergy_* 前缀；气血那条再经 apply_synergy_hp 落到 player）
+##   field  —— 被改写的 GameManager 属性名（恒 synergy_* 前缀；生命那条再经 apply_synergy_hp 落到 player）
 ##   list   —— 取数用的列表 key，主效果恒为 "values"
 ##   op     —— "add"：field += v（1.0 基数的乘区存加成幅度，0.08 即 +8%）；"mul"：field *= v（攻速存 0.92 这类系数）
 ##   label  —— 给人看的属性名；局内阶梯行与图鉴共用同一个词，不许一处简称一处全称
@@ -1074,7 +1074,7 @@ const SYNERGIES: Dictionary = {
 
 ## 羁绊可改写的 GameManager 属性全集：SynergySystem 每轮结算前按它清零，
 ## 判据按它比对增量。新增 synergy_* 属性必须同时进这张表与某条 effects，
-## 否则 UnitRunner 报红（漏进清零表 = 跨波累加的隐形 Bug，漏进 effects = 白送不显示）。
+## 否则 UnitRunner 报红（漏进清零表 = 跨回合累加的隐形 Bug，漏进 effects = 白送不显示）。
 const SYNERGY_FIELDS: Array[String] = [
 	"synergy_bonus_pierce", "synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_max_hp_bonus", "synergy_engineering_damage", "synergy_crit_rate", "synergy_crit_mult",
@@ -1093,10 +1093,10 @@ const SYNERGY_BASE := {
 	"synergy_armor": 0.0, "synergy_knockback_mult": 1.0, "synergy_contraption_mult": 1.0,
 }
 
-## 开局六选一：金木水火土五种代表性本命法器 + 御灵入门「灵蝶」
+## 开局六选一：金木水火土五种代表性本命武器 + 御灵入门「灵蝶」
 const STARTER_IDS: Array = ["qingyun_sword", "wanmu_lingfu", "bajiao_fan", "huoyan_fu", "fantian_yin", "lingdie"]
 
-## 商店武器池（全部法器，分批新增记录见各段注释）
+## 商店武器池（全部武器，分批新增记录见各段注释）
 const SHOP_POOL: Array = [
 	"qingyun_sword", "gengjin_feijian", "liuye_feidao", "baoyu_liuhuazhen",
 	"qingmu_tengbian", "wanmu_lingfu", "lingdie", "lianhuan_lingdan",
@@ -1128,7 +1128,7 @@ const POTION_BASE_PRICE: int = 10
 static func get_def(id: String) -> Dictionary:
 	return DEFS.get(id, {})
 
-## 法器攻击方式短标（货架卡色签 / 详情卡「攻击方式」行共用）：
+## 武器攻击方式短标（货架卡色签 / 详情卡「攻击方式」行共用）：
 ## behavior 是结构真话，词汇与 def.tag 首段（"近战·剑系·金"）保持一致。
 static func behavior_label(def: Dictionary) -> String:
 	match int(def.get("behavior", Behavior.MELEE)):
@@ -1196,7 +1196,7 @@ const BEHAVIOR_TIPS: Dictionary = {
 static func behavior_tip(behavior: int) -> Dictionary:
 	return BEHAVIOR_TIPS.get(behavior, {})
 
-## 全法器库里属于这一攻击方式的把数（解释卡上的「这一类共 N 把」）
+## 全武器库里属于这一攻击方式的把数（解释卡上的「这一类共 N 把」）
 static func behavior_count(behavior: int) -> int:
 	var n := 0
 	for id in DEFS.keys():
@@ -1227,7 +1227,7 @@ static func card_feats(def: Dictionary) -> String:
 	return "·".join(out)
 
 ## 环绕灵宝的分身具数：★1 一具、★2 一分为二、★3 一分为三（Player.sync_drones 按此生成）。
-## 单法器总纸面伤害仍走 damage_for 的星级翻倍曲线，分身只均摊结算、抬贴身覆盖与占空比。
+## 单武器总纸面伤害仍走 damage_for 的星级翻倍曲线，分身只均摊结算、抬贴身覆盖与占空比。
 static func drone_orb_count(star: int) -> int:
 	return clampi(star, 1, MAX_STAR)
 
@@ -1282,19 +1282,19 @@ static func element_of(id: String) -> String:
 			return tag
 	return ""
 
-## 该法器的开火音 key（缺省回落到通用的 blade_shoot，保证老调用不会哑）
+## 该武器的开火音 key（缺省回落到通用的 blade_shoot，保证老调用不会哑）
 static func sfx_for(id: String) -> String:
 	return String(DEFS.get(id, {}).get("sfx", "blade_shoot"))
 
-## 该法器的「第二层」音 key：MELEE=命中材质声（只在真打中时播），BURST=落点爆发声。
+## 该武器的「第二层」音 key：MELEE=命中材质声（只在真打中时播），BURST=落点爆发声。
 static func sfx_impact_for(id: String) -> String:
 	return String(DEFS.get(id, {}).get("sfx_impact", ""))
 
 ## 弹丸从 2026-10-08 起带有限转向追踪（BladeProjectile.HOMING_TURN_RATE）：
-## 场上只剩一个敌人时，一次三发的法器每一发最终都归它 ⇒ 单体口径按发数求和才与运行时一致。
+## 场上只剩一个敌人时，一次三发的武器每一发最终都归它 ⇒ 单体口径按发数求和才与运行时一致。
 ## 下面两个纯函数是给"档位体检"当尺子用的（判据见 tests/unit_runner.gd::_test_ranged_focus_dps），
-## 口径：★star、不吃玩家属性/羁绊/暴击/危险度，只比较法器自身的设计强度。
-const FOCUS_RANGED_MAX_TARGETS := 2   ## 单发最多结算这么几个敌人的远程法器 = 「点杀位」
+## 口径：★star、不吃玩家属性/羁绊/暴击/危险度，只比较武器自身的设计强度。
+const FOCUS_RANGED_MAX_TARGETS := 2   ## 单发最多结算这么几个敌人的远程武器 = 「点杀位」
 
 ## 单发（一次开火）最多能结算几个敌人。近战横扫 / 区域落雷 / 环绕接触天生打一片，按"群体"给档；
 ## 弹丸按 发数 ×（穿透 + 弹射）计，穿透与弹射都各自吃一个独立敌人。
@@ -1311,7 +1311,7 @@ static func targets_per_shot(id: String) -> int:
 	if behavior == Behavior.TURRET:
 		return 4      ## 机关炮台独立索敌
 	return 6          ## 近战弧扫 / 落雷圆形：天生群体
-## 「点杀位」远程法器：弹丸类里单发最多只结算 FOCUS_RANGED_MAX_TARGETS 个敌人的那些。
+## 「点杀位」远程武器：弹丸类里单发最多只结算 FOCUS_RANGED_MAX_TARGETS 个敌人的那些。
 ## 这一档必须在"啃硬目标"上赢过贴脸与环绕，否则就是纯下位（用户 2026-10-08 的火符投诉）。
 static func is_focus_ranged(id: String) -> bool:
 	var def: Dictionary = DEFS.get(id, {})
@@ -1347,7 +1347,7 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 		dps *= GameBalance.spirit_contact_duty(star)
 	return dps
 
-## 该法器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。
+## 该武器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。
 ## 返回系数（0 = 不吃），供各界面挂角标与悟道加点提示共用。
 static func elemental_scaling_coef(id: String) -> float:
 	return float(get_def(id).get("stat_scalings", {}).get("elemental_damage", 0.0))

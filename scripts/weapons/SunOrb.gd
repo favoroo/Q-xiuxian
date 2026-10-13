@@ -2,7 +2,7 @@ class_name SunOrb
 extends Area2D
 
 ## 环绕灵宝（灵蝶/寒泉玉莲/混元古钟）：接触伤害走 WeaponData 定义，星级影响伤害/冷却/体型；
-## ★2 起一具分身为二/为三（orb_count），单法器总纸面伤害不变，每具结算均摊、贴身覆盖更广
+## ★2 起一具分身为二/为三（orb_count），单武器总纸面伤害不变，每具结算均摊、贴身覆盖更广
 
 ## 环绕半径与接触判定半径：只有这两个常数说了算，贴图与碰撞一起变。
 ## 旧写法是 .tscn 里钉 14px 碰撞 + Player 里写死 78px 轨道 ⇒ 距玩家 49px 以内是盲区，
@@ -14,7 +14,7 @@ const CONTACT_RADIUS: float = 33.0     ## 接触半径 33px：敌人受击圈 15
 
 var star: int = 1
 var drone_id: String = "lingdie"
-var orb_count: int = 1          ## 所属法器的分身具数（★1/★2/★3 = 1/2/3），伤害与属性折算按具均分
+var orb_count: int = 1          ## 所属武器的分身具数（★1/★2/★3 = 1/2/3），伤害与属性折算按具均分
 var base_damage: float = 15.0
 var hit_cooldown: float = 0.35
 var current_radius: float = ORBIT_RADIUS ## 动态轨道当前平滑半径
@@ -29,8 +29,8 @@ var _pulse_tween: Tween = null
 @onready var _base_sprite_scale: Vector2 = sprite.scale
 var _drone_renderer: ProceduralDroneRenderer = null
 
-## 由 Player.sync_drones 下发星级与法宝 id（必须在节点可用后调用）
-## orb_total：该法器分身出的灵宝具数（WeaponData.drone_orb_count）。总纸面 DPS 与单具版一致：
+## 由 Player.sync_drones 下发星级与道具 id（必须在节点可用后调用）
+## orb_total：该武器分身出的灵宝具数（WeaponData.drone_orb_count）。总纸面 DPS 与单具版一致：
 ## 每具结算 1/N 基础与 1/N 属性折算，多具同环扫掠换更高贴身覆盖（BalanceTargeting 占空比按星抬升）。
 func setup(star_level: int, weapon_id: String = "lingdie", orb_total: int = 1) -> void:
 	star = clampi(star_level, 1, WeaponData.MAX_STAR)
@@ -158,7 +158,7 @@ func _try_damage(area: Area2D) -> void:
 		_play_hit_pulse()
 		AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.0)
 
-## 触敌反馈：法宝扑闪一下（压扁弹回 + 亮闪）
+## 触敌反馈：道具扑闪一下（压扁弹回 + 亮闪）
 func _play_hit_pulse() -> void:
 	if _pulse_tween != null and _pulse_tween.is_valid():
 		_pulse_tween.kill()

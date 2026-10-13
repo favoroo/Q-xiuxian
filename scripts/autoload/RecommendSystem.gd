@@ -21,13 +21,13 @@ static func mark_alloc_offers(gm: Node) -> void:
 		scored.append({"index": i, "score": float(r["score"]), "reasons": r["reasons"]})
 	BalanceRecommend.mark_offers(offers, scored)
 
-## 灵石阁货架打标（roll_shop 末尾调用：开商店/重掷/锁定保留三条路都汇在这里）
+## 金币阁货架打标（roll_shop 末尾调用：开商店/重掷/锁定保留三条路都汇在这里）
 static func mark_shop_offers(gm: Node) -> void:
 	var offers: Array = gm.shop_offers
 	if offers.is_empty():
 		return
 	var ctx := build_ctx(gm)
-	# 候选法器的修士特性系数先补进 cult_mults（上阵件的在 build_ctx 里已备好）
+	# 候选武器的角色特性系数先补进 cult_mults（上阵件的在 build_ctx 里已备好）
 	var mults: Dictionary = ctx["cult_mults"]
 	for off in offers:
 		if String(off.get("kind", "")) != "weapon" or off.get("sold", false):

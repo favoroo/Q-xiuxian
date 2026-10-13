@@ -1,12 +1,12 @@
 class_name PlayerStatsDialog
 extends BaseModalDialog
 
-## 人物属性详情面板：仿《土豆兄弟》构筑总览界面
+## 角色属性详情面板：仿《土豆兄弟》构筑总览界面
 ## 左侧：主要/次要属性 Tab 切换（覆盖全部 25 项属性，点按看详解与来源拆解）
-## 右侧：上阵法器槽 + 流派羁绊阶梯加成卡（直观显示 2/6 持有进度与各级加成激活状态）+ 随身法宝/悟道历程双标签
+## 右侧：上阵武器槽 + 流派羁绊阶梯加成卡（直观显示 2/6 持有进度与各级加成激活状态）+ 随身道具/悟道历程双标签
 ## 拆分说明：本体保留成员声明、open/close/refresh 编排、Tab 切换与全部点按详解口；
 ## 左栏构建在 StatsPanelBuilder、右栏构建与槽位刷新在 EquipmentPanelBuilder、
-## 羁绊卡在 SynergyCardBuilder、法宝徽记/历史行在 ItemsHistoryBuilder（builder 直接写回成员）。
+## 羁绊卡在 SynergyCardBuilder、道具徽记/历史行在 ItemsHistoryBuilder（builder 直接写回成员）。
 
 var _unpause_on_close: bool = true
 
@@ -51,7 +51,7 @@ var _free_rerolls_val_lbl: Label
 var _stones_val_lbl: Label
 var _kills_val_lbl: Label
 
-# 右侧法器、羁绊、法宝与历史节点（保留测试依赖变量名 _weapons_box / _stash_box / _history_list）
+# 右侧武器、羁绊、道具与历史节点（保留测试依赖变量名 _weapons_box / _stash_box / _history_list）
 var _wp_title_lbl: Label
 var _weapons_box: HBoxContainer
 # 顶部道统卡：当前角色的正面加成 / 负面代偿速览
@@ -74,7 +74,7 @@ var _items_flow: HFlowContainer
 var _history_scroll: ScrollContainer
 var _history_list: VBoxContainer
 var _history_count_lbl: Label
-var _current_bottom_tab: int = 0 # 0 = 随身法宝, 1 = 悟道历程
+var _current_bottom_tab: int = 0 # 0 = 随身道具, 1 = 悟道历程
 
 func _get_title_text() -> String:
 	return "等 级  ·  属 性 面 板"
@@ -283,7 +283,7 @@ func refresh() -> void:
 	_luck_val_lbl.add_theme_color_override("font_color", _c_row(luck_v))
 
 	var harvest_v: float = float(stats["harvest"])
-	_harvest_val_lbl.text = "%.0f (波末 +%d)" % [harvest_v, GameBalance.harvest_gain(harvest_v)]
+	_harvest_val_lbl.text = "%.0f (回合末 +%d)" % [harvest_v, GameBalance.harvest_gain(harvest_v)]
 	_harvest_val_lbl.add_theme_color_override("font_color", _c_row(harvest_v))
 
 	# 2. 左侧次要属性刷新
@@ -326,7 +326,7 @@ func refresh() -> void:
 	_kills_val_lbl.text = "%d 杀" % GameManager.kills
 	_kills_val_lbl.add_theme_color_override("font_color", GameStyle.PAPER if GameManager.kills > 0 else GameStyle.PAPER_DIM)
 
-	# 3. 右侧道统卡、法器、流派羁绊、法宝与历史刷新
+	# 3. 右侧道统卡、武器、流派羁绊、道具与历史刷新
 	_refresh_cultivator()
 	_refresh_weapons()
 	_refresh_synergies()
@@ -375,7 +375,7 @@ func _refresh_cultivator() -> void:
 		_cult_cons_lbl.text = GameStyle.wrap_cjk(cons_txt, font, 11, w)
 		_cult_cons_lbl.visible = not cons.is_empty()
 
-## 道统详解：正面加成、负面代偿、随行神通契合、开局自带与商店/加点限制（委托 StatsTipFactory）
+## 道统详解：正面加成、负面代偿、随行技能契合、开局自带与商店/加点限制（委托 StatsTipFactory）
 func _open_cultivator_tip(anchor: Control) -> void:
 	var tip := StatsTipFactory.open_cultivator_tip(self, anchor)
 	_highlight_while_open(anchor, tip)
@@ -449,18 +449,18 @@ func _refresh_items_and_history() -> void:
 	if _bottom_tab_hist_btn != null:
 		_bottom_tab_hist_btn.text = "✦ 升级记录 (%d)" % history.size()
 
-	# 若法宝为空但已有悟道记录，自动展示悟道历程避免空面板；反之有法宝时优先展示法宝
+	# 若道具为空但已有悟道记录，自动展示悟道历程避免空面板；反之有道具时优先展示道具
 	if item_list.is_empty() and not history.is_empty() and _current_bottom_tab == 0:
 		_switch_bottom_tab(1)
 
-	# 1. 填充随身法宝
+	# 1. 填充随身道具
 	if item_list.is_empty():
 		var empty_item_lbl := Label.new()
-		empty_item_lbl.text = "尚未购入携带道具。在波间商店可购置各类被动奇珍。"
+		empty_item_lbl.text = "尚未购入携带道具。在回合间商店可购置各类被动道具。"
 		GameStyle.label(empty_item_lbl, 12, GameStyle.PAPER_DIM)
 		_items_flow.add_child(empty_item_lbl)
 	else:
-		# 合并同名法宝计数展示，如「聚宝盆 ×2」
+		# 合并同名道具计数展示，如「聚宝盆 ×2」
 		var counts: Dictionary = {}
 		var order: Array[String] = []
 		for raw_id in item_list:
@@ -476,7 +476,7 @@ func _refresh_items_and_history() -> void:
 	# 2. 填充历史悟道记录
 	if history.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "尚未有升级加成，每波平息后可根据等级提升领悟天地法则。"
+		empty_lbl.text = "尚未有升级加成，每回合平息后可根据等级提升领悟天地法则。"
 		GameStyle.label(empty_lbl, 12, GameStyle.PAPER_DIM)
 		_history_list.add_child(empty_lbl)
 		return
@@ -548,7 +548,7 @@ func _c(v: float) -> Color:
 	return StatsTipFactory._c(v)
 
 ## 面板行专用判色（2026-10-11 土豆兄弟式口径）：非零走正绿负红，零值压暗灰白——
-## 一眼只看见「有修炼成果」的那几行； stones 灵石与暴击等特殊口径在 refresh 里单独处理
+## 一眼只看见「有修炼成果」的那几行； stones 金币与暴击等特殊口径在 refresh 里单独处理
 func _c_row(v: float) -> Color:
 	if absf(v) < 0.0001:
 		return GameStyle.PAPER_DIM

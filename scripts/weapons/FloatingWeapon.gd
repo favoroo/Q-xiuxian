@@ -1,12 +1,12 @@
 class_name FloatingWeapon
 extends Node2D
 
-## 环绕玩家的悬浮法器：数值/行为全部来自 WeaponData，星级影响伤害与冷却
+## 环绕玩家的悬浮武器：数值/行为全部来自 WeaponData，星级影响伤害与冷却
 ##
 ## 朝向的唯一真话（2026-10-09，用户口径：「庚金飞剑发射时朝向不对，没朝敌人；不知道从哪里发射的」）：
 ## 本体节点 rotation == 真实瞄准方向（下称"发射帧"），贴图自己按 art_angle 反向补偿，
 ## 于是"剑尖指向"和"弹丸出膛方向"和"这一发的 aim_dir"三者必然同轴 —— 不再靠贴图天生朝右。
-## 出膛点 = 发射帧 +X 上 muzzle_len 处，即 WeaponData 里每件法器标定的剑尖/器口。
+## 出膛点 = 发射帧 +X 上 muzzle_len 处，即 WeaponData 里每件武器标定的剑尖/器口。
 ## 旧写法是 sprite.rotation 不动、节点转成瞄准角 ⇒ 天生朝右上 35° 的飞剑，剑尖永远偏着 35°，
 ## 而 MuzzlePoint 又钉在贴图坐标 (20,0)（×0.55 缩放 = 11px 处，正落在剑格上），
 ## 所以看着就是"从剑柄附近不知道哪儿冒出来一发"。
@@ -61,7 +61,7 @@ var muzzle_len: float = 11.0           # 出膛点离本体中心的屏上距离
 
 var cooldown_timer: float = 0.0
 var base_angle: float = 0.0        # 无目标时回归的基础槽位角（Player 下发）
-var spread_angle: float = 0.0      # 多把法器间的错开角，避免重叠（Player 下发）
+var spread_angle: float = 0.0      # 多把武器间的错开角，避免重叠（Player 下发）
 ## 默认环绕轨道半长轴/半短轴（椭圆）：贴身护体，避免脱节
 const DEFAULT_ORBIT_EXTENTS := Vector2(54.0, 40.0)
 var orbit_extents: Vector2 = DEFAULT_ORBIT_EXTENTS
@@ -172,7 +172,7 @@ func _get_aura_color() -> Color:
 	return Color(0.95, 0.85, 0.50)
 
 ## 朝向唯一入口：节点 rotation = 真实瞄准角（发射帧），贴图自己做补偿。
-## - 会转的法器：贴图补掉 art_angle ⇒ 画出来的剑尖必然落在发射帧 +X 上。
+## - 会转的武器：贴图补掉 art_angle ⇒ 画出来的剑尖必然落在发射帧 +X 上。
 ##   朝左时再沿瞄准轴竖直镜像（flip_v）避免刀剑倒挂 —— 镜像会把 art_angle 变号，补偿角跟着变号。
 ## - upright 的重器（宝灯/法牌/大印/灵藤）：贴图反向补掉本体转角，世界坐标里始终竖直，
 ##   雷只从"朝目标那一侧的器口"引出（旧写法会把印玺横过来对着人）。
@@ -205,7 +205,7 @@ func _melee_arc_radius() -> float:
 func _melee_thrust_mult() -> float:
 	return clampf(_range_mult(), 1.0, MELEE_STRETCH_MAX)
 
-## 枪口闪光（远程法器开火反馈）：叠加发光的径向光斑
+## 枪口闪光（远程武器开火反馈）：叠加发光的径向光斑
 func _setup_muzzle_flash() -> void:
 	muzzle_flash = Sprite2D.new()
 	var tex := load("res://assets/art/light_radial.png") as Texture2D
@@ -238,10 +238,14 @@ func _process(delta: float) -> void:
 	bob_phase += delta * 3.5
 
 	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
-	# 脱程重查降到 15Hz + 错相（2026-10-10 第 6 波卡顿优化）：目标连续移动，
-	# 逐帧重查浪费；失效回退保留即时，防打空
+	# 空目标与脱程重查统一走 15Hz + 错相：空目标分支曾逐渲染帧跑宽相位查询
+	# （8 法器 × 60fps ≈ 480 次/秒，武器一多就掉帧的头号热点）；
+	# 15Hz 仍快于 Player 10Hz 统筹分配，不影响开火节奏
 	if current_target == null or not is_instance_valid(current_target):
-		current_target = _find_target()
+		_retarget_phase -= delta
+		if _retarget_phase <= 0.0:
+			_retarget_phase = RETARGET_INTERVAL
+			current_target = _find_target()
 	else:
 		var player = GameManager.player
 		if player != null:
@@ -368,8 +372,8 @@ func _perform_projectile_attack() -> void:
 	var p_spread: float = float(def.get("spread_angle", 0.2))
 	var p_bounce: int = int(def.get("bounce_count", 0))
 	var final_dmg: float = _final_damage()
-	# 弹丸外观按法器归位（2026-10-09 才真正接上）：WeaponData 的 bullet / bullet_scale / bullet_spin
-	# 三个字段 2026-10-08 就写进表里了，但出膛那一圈从来没读它 —— 运行时五把远程法器
+	# 弹丸外观按武器归位（2026-10-09 才真正接上）：WeaponData 的 bullet / bullet_scale / bullet_spin
+	# 三个字段 2026-10-08 就写进表里了，但出膛那一圈从来没读它 —— 运行时五把远程武器
 	# 打出去的全是 BladeProjectile.tscn 里那张公共火符（用户口径：「不知道从哪里发射出来的」）。
 	var bullet_tex: Texture2D = null
 	var bullet_path: String = String(def.get("bullet", ""))
@@ -377,7 +381,7 @@ func _perform_projectile_attack() -> void:
 		bullet_tex = load(bullet_path) as Texture2D
 	var bullet_scale: float = float(def.get("bullet_scale", 1.0))
 	var bullet_spins: bool = bool(def.get("bullet_spin", false))
-	# 逐发锁定：一次三发的法器，每一发各咬一个最近的敌人。
+	# 逐发锁定：一次三发的武器，每一发各咬一个最近的敌人。
 	# 旧写法三发全按同一个 aim_dir 扇形散开 ⇒ 只剩一个敌人时两边那两发飞过头顶（仿真：350px
 	# 处散布侧偏 70+px，而判定只有 7px + 受击圈 15px），群怪时又因为不追踪而大量空放。
 	# 现在"扇形疾射…贯穿群敌"按文案兑现：出膛照旧扇形错开，各自追上自己咬定的那一个；
@@ -446,7 +450,7 @@ func _perform_burst_attack() -> void:
 
 	# 施法演出：法牌升起蓄力、金光微颤 → 引雷落于目标 → 前突回落
 	# 旧写法在这儿硬编码 orb_hit（钟），把表里配的 thunder_strike 整个架空了 ——
-	# 六把落雷系法器听起来全是「敲钟 + 祝福铃」。取音一律回表。
+	# 六把落雷系武器听起来全是「敲钟 + 祝福铃」。取音一律回表。
 	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), BURST_CAST_SCALE)
 	var tw = create_tween()
 	tw.tween_property(self, "position", cast_pos, 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -462,7 +466,7 @@ func _perform_burst_attack() -> void:
 	tw.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.18)
 	tw.tween_callback(func(): is_attacking = false)
 
-## 引雷：锯齿闪电从法器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
+## 引雷：锯齿闪电从武器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
 func _spawn_lightning(target_pos: Vector2) -> void:
 	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
 	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
@@ -534,7 +538,7 @@ func _perform_melee_attack() -> void:
 
 	# 2. 打击瞬发（Active）：爆发极速横扫，先结算伤害、再只在咬到肉时点亮月牙刀光
 	# 2026-10-11 挥空门控：旧写法先亮月牙后结算，于是一整片剑气先在空地上冒出来 ——
-	# 空挥时（目标在前摇 0.05s 里被另一把法器打死或击飞出判定圆，或 15Hz 脱程重查窗口里
+	# 空挥时（目标在前摇 0.05s 里被另一把武器打死或击飞出判定圆，或 15Hz 脱程重查窗口里
 	# 仍锁着 1.2× 射程外的目标）月牙照样满亮扫放，「打空气」全在这一句。
 	# 判定几何一个字没动（画多大==判多大）：空挥保留完整突刺动作、器身闪光与破空声，
 	# 命中才补月牙/材质声/反冲。
@@ -579,6 +583,15 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 	# 整刀属性管线只算一次：同刀乘区为常量（最多 24 目标共享），避免逐目标重算 _final_damage（9-13 次 item_hook_sum + 20 键 dict + equipped_cleanup 全子节点遍历）
 	var base_dmg := _final_damage()
 	var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
+	# 五行异常开关与近战吸血同为整刀常量：原来逐目标 item_hook_sum 全量遍历 items，
+	# 24 目标 × 8 武器每挥砍近千次字典查找。注意异常施加保持 has_method 鸭类型——
+	# 武器脚本硬引用 EnemyBase（as EnemyBase）实测会把弹丸 preload 打成空 PackedScene（循环类依赖坑）
+	var proc_burn: bool = def.get("proc_burn", false)
+	var proc_chill: float = float(def.get("proc_chill", 0.0))
+	var proc_poison: bool = def.get("proc_poison", false)
+	var any_proc: bool = proc_burn or proc_chill > 0.0 or proc_poison
+	var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
+	var can_flat_heal: bool = flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal")
 
 	for res in results:
 		var col = res["collider"]
@@ -593,16 +606,16 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			enemy.take_damage(dmg, knock, is_crit)
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
 				hit_count += 1
-			if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
-				enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
-			if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):
-				enemy.apply_chill(float(def.get("proc_chill", 0.35)), float(def.get("chill_dur", 2.5)))
-			if def.get("proc_poison", false) and enemy.has_method("apply_poison"):
-				enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
+			if any_proc:
+				if proc_burn and enemy.has_method("apply_burn"):
+					enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
+				if proc_chill > 0.0 and enemy.has_method("apply_chill"):
+					enemy.apply_chill(proc_chill, float(def.get("chill_dur", 2.5)))
+				if proc_poison and enemy.has_method("apply_poison"):
+					enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
 			# 开山重刃谱：近战命中额外吸收生命
-			var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
-			if flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
+			if can_flat_heal:
 				player.heal(flat_ls, true)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
@@ -642,7 +655,7 @@ func _find_target() -> Node2D:
 				min_dist = d
 				nearest_on_screen = on_scr
 				nearest = enemy
-	# 射程内还有活妖就不去砸匣子：匣子只补"这一件法器本来要打空气"的那个空
+	# 射程内还有活妖就不去砸匣子：匣子只补"这一件武器本来要打空气"的那个空
 	return nearest if nearest != null else chest
 
 ## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按同屏优先 + 离炮口的远近补齐。

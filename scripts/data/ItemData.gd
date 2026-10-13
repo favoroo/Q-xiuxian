@@ -3,47 +3,47 @@ extends RefCounted
 
 ## 道具（被动道具）数据库：独立于武器的被动物品，买即生效、无限持有、无栏位限制
 ## 档位 tier 1~4（凡品/良品/仙品/传说，仿土豆兄弟道具档位）：决定基准价与出现权重，
-## 档位解锁波次与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
+## 档位解锁回合与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
 ## 与悟道加点共用同一条属性链路。卡面/详情卡的加成行由 BonusRows 从 apply 直接生成（正绿负红），
 ## desc 只写 apply 之外的机制说明，不再手抄数值——数字与生效幅度天然同源。
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
-##   wave_heal_pct —— 波末按气血上限百分比回血（GameManager.apply_harvest 结算）
+##   wave_heal_pct —— 回合末按生命上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本道具免死并回半血（GameManager.try_revive）
 ##   chest_magnet  —— 砸开宝箱掉出的经验球当场飞向玩家（SpiritChest._drop_gems 消费，可叠多件）
 ## 2026-10-12 土豆兄弟式「属性转化」核心件（同样走额外字段，item_hook_sum 现算，多件叠系数）：
 ##   dmg_per_move_speed  —— 疾风刃：移速每超基础 10% 折算一份全伤害（CultivatorSystem.damage_mult）
 ##   crit_per_dodge      —— 幻影迷踪铃：每 10% 有效闪避折算一份暴击率（GameManager.get_crit_rate）
 ##   dmg_per_armor       —— 山岳战甲：每点有效护甲折算一份全伤害（damage_mult）
-##   dmg_per_max_hp      —— 血盘古玉：每 50 点最大气血折算一份全伤害（damage_mult）
-##   dmg_per_100_stones + stone_dmg_cap —— 聚宝盆：每持 100 灵石一份全伤害，带总上限（damage_mult）
-##   dmg_per_missing_hp  —— 燃血符：每损失 10% 气血折算一份全伤害（damage_mult）
+##   dmg_per_max_hp      —— 血盘古玉：每 50 点最大生命折算一份全伤害（damage_mult）
+##   dmg_per_100_stones + stone_dmg_cap —— 聚宝盆：每持 100 金币一份全伤害，带总上限（damage_mult）
+##   dmg_per_missing_hp  —— 燃血符：每损失 10% 生命折算一份全伤害（damage_mult）
 ##   still_damage + still_seconds —— 不动明王印/磐石印：站定 N 秒后全伤害乘区（damage_mult 读 still_time）
 ##   kill_explode + kill_explode_radius —— 裂魂铃：击杀爆炸（EnemyBase._die，半径 = 判定同源）
 ## 2026-10-12 深度联动与站定流道具核心件（额外字段，item_hook_sum 现算）：
-##   still_regen_pct     —— 打坐蒲团：站定每秒回复最大气血比例（Player.gd 消费）
+##   still_regen_pct     —— 打坐蒲团：站定每秒回复最大生命比例（Player.gd 消费）
 ##   still_dodge         —— 入定香：站定闪避率加成（GameManager.get_effective_dodge）
 ##   still_armor         —— 入定香：站定护甲加成（GameManager.get_effective_armor）
 ##   still_knockback     —— 玄武法坛：站定击退倍率加成（BalanceCombat.knockback_impulse）
 ##   still_thorns        —— 玄武法坛：站定反伤比例加成（EnemyBase._resolve_contact_damage）
-##   dmg_per_empty_slot  —— 三昧归真：法器少于 4 把时每少 1 把全伤害加成（CultivatorSystem.damage_mult）
+##   dmg_per_empty_slot  —— 三昧归真：武器少于 4 把时每少 1 把全伤害加成（CultivatorSystem.damage_mult）
 ##   heal_buff_damage / heal_buff_speed / heal_buff_dur —— 灵髓丹气：吃药/回复珠后短时爆发（Player.heal）
 ##   dodge_heal_chance / dodge_heal_hp —— 流云潜影玉：闪避成功概率回血（Player.take_damage）
-##   crit_kill_stone_chance —— 金芒搜魂令：暴击击杀概率额外得灵石（GameManager.register_kill）
+##   crit_kill_stone_chance —— 金芒搜魂令：暴击击杀概率额外得金币（GameManager.register_kill）
 ##   turret_haste        —— 天工发条：机关炮台攻击间隔缩减（TurretUnit.gd）
 ##   drone_spin_speed    —— 天工发条：环绕物旋转速度加成（SunOrb.gd）
-##   projectile_count_bonus —— 千符连环印：符箓与远程弹丸法器额外弹丸数（FloatingWeapon.gd）
-##   wide_range_mult     —— 开山重刃谱：横扫类法器范围加成（FloatingWeapon.gd）
+##   projectile_count_bonus —— 千符连环印：符箓与远程弹丸武器额外弹丸数（FloatingWeapon.gd）
+##   wide_range_mult     —— 开山重刃谱：横扫类武器范围加成（FloatingWeapon.gd）
 ##   melee_lifesteal_flat —— 开山重刃谱：近战命中吸血固定值（FloatingWeapon.gd）
 ##   skill_cooldown_mult —— 凝神符：随行技能冷却缩减比例（SkillData.final_stats）
-##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：波结束永久成长（GameManager.apply_harvest）
+##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：回合结束永久成长（GameManager.apply_harvest）
 ## 转化件的机制数字写在 desc（同回复葫芦/替身娃娃先例）；apply 留空，卡面加成行不冒第二份数字。
 ## unique: true 时每局限购一件：本局买过（或被玉匣送过）就再不进货架池，出售也不解禁
 ##
 ## 出售（2026-10-12 用户：「商店里的这些道具，如果有买到不想要的，也可以卖掉」）：
-## 回收价与法器、灵兽同一条口径 —— 基准价 × SELL_RATIO，不跟着波次加价涨。
-## 上架价 = 基准价 + 2×(波次−1)（BalanceEconomy.ITEM_WAVE_STEP），所以后期那件退货是亏的：
+## 回收价与武器、灵兽同一条口径 —— 基准价 × SELL_RATIO，不跟着回合加价涨。
+## 上架价 = 基准价 + 2×(回合−1)（BalanceEconomy.ITEM_WAVE_STEP），所以后期那件退货是亏的：
 ## 亏多少由详情卡上「原价 / 出售返还」两行自己摆出来，不藏。
 
 const TIER_LABELS := {1: "普通", 2: "稀有", 3: "史诗", 4: "传说"}
@@ -418,7 +418,7 @@ const DEFS: Dictionary = {
 			"cangbao_tu": {
 				"name": "藏宝图", "tier": 1, "price": 15,
 				"icon": "res://assets/art/item_cangbao_tu.png",
-				"desc": "每波场上多刷几口宝箱",
+				"desc": "每回合场上多刷几口宝箱",
 				"apply": {"chest_count": 1},
 			},
 			"naling_zhuo": {
@@ -431,7 +431,7 @@ const DEFS: Dictionary = {
 			"manxia_jue": {
 				"name": "满匣诀", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_manxia_jue.png",
-				"desc": "砸开的宝箱掉得更多（金币/灵石颗数/回复量同涨）",
+				"desc": "砸开的宝箱掉得更多（金币与回复量同涨）",
 				"apply": {"chest_reward": 0.4},
 			},
 		"dianjin_jue": {
@@ -468,7 +468,7 @@ const DEFS: Dictionary = {
 		"xuepan_guyu": {
 			"name": "血盘古玉", "tier": 4, "price": 88,
 			"icon": "res://assets/art/item_hupi_qun.png",
-			"desc": "气血如炉：每50点最大生命+1%全伤害",
+			"desc": "生命如炉：每50点最大生命+1%全伤害",
 			"apply": {},
 			"dmg_per_max_hp": 0.01,
 		},
@@ -496,7 +496,7 @@ const DEFS: Dictionary = {
 		"liehun_ling": {
 			"name": "裂魂铃", "tier": 4, "price": 92,
 			"icon": "res://assets/art/item_leiyin_zhen.png",
-			"desc": "被杀的妖兽当场爆开，伤及周身同伴（伤害随元素成长）\n（每局限购一件）",
+			"desc": "被杀的敌人当场爆开，伤及周身同伴（伤害随元素成长）\n（每局限购一件）",
 			"apply": {},
 			"kill_explode": 40.0, "kill_explode_radius": 90.0,
 			"unique": true,
@@ -553,7 +553,7 @@ const DEFS: Dictionary = {
 			"xuanwu_fashan": {
 				"name": "玄武法坛", "tier": 3, "price": 46,
 				"icon": "res://assets/art/item_fanzhen_tongjia.png",
-				"desc": "阵起玄武：站定不动时受击反伤+60%，法器击退力度+80%",
+				"desc": "阵起玄武：站定不动时受击反伤+60%，武器击退力度+80%",
 				"apply": {"attack_range_mult": -0.10},
 				"still_knockback": 0.8, "still_thorns": 0.6,
 			},
@@ -569,7 +569,7 @@ const DEFS: Dictionary = {
 			"sanmei_guizhen": {
 				"name": "三昧归真", "tier": 3, "price": 48,
 				"icon": "res://assets/art/item_lijian_shi.png",
-				"desc": "残缺即圆满：上阵法器少于4把时，每少1把全伤害+15%（狂战士绝配）",
+				"desc": "残缺即圆满：上阵武器少于4把时，每少1把全伤害+15%（狂战士绝配）",
 				"apply": {},
 				"dmg_per_empty_slot": 0.15,
 			},
@@ -590,7 +590,7 @@ const DEFS: Dictionary = {
 			"jinmang_souhun": {
 				"name": "金芒搜魂令", "tier": 3, "price": 45,
 				"icon": "res://assets/art/item_jinjing_shi.png",
-				"desc": "剑芒截气：暴击击杀妖兽时，有30%概率额外吸收1枚金币",
+				"desc": "剑芒截气：暴击击杀敌人时，有30%概率额外吸收1枚金币",
 				"apply": {"weapon_damage_mult": -0.06},
 				"crit_kill_stone_chance": 0.30,
 			},
@@ -606,14 +606,14 @@ const DEFS: Dictionary = {
 			"qianfu_lianhuan": {
 				"name": "千符连环印", "tier": 3, "price": 50,
 				"icon": "res://assets/art/item_juling_fu.png",
-				"desc": "万符齐发：符箓与远程弹丸法器发射弹丸数+1，弹丸散布角略微增加",
+				"desc": "万符齐发：符箓与远程弹丸武器发射弹丸数+1，弹丸散布角略微增加",
 				"apply": {"attack_range_mult": -0.10},
 				"projectile_count_bonus": 1,
 			},
 			"kaishan_jianyi": {
 				"name": "开山重刃谱", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_manli_huwan.png",
-				"desc": "大巧不工：横扫类法器挥砍范围+25%，近身挥砍命中时吸收1点生命（每秒至多2次）",
+				"desc": "大巧不工：横扫类武器挥砍范围+25%，近身挥砍命中时吸收1点生命（每秒至多2次）",
 				"apply": {"move_speed_mult": -0.05},
 				"wide_range_mult": 0.25, "melee_lifesteal_flat": 1.0,
 			},
@@ -655,7 +655,7 @@ static func tier_color(tier: int) -> Color:
 	return TIER_COLORS.get(clampi(tier, 1, 4), TIER_COLORS[1])
 
 ## 出售回收价：基准价 × SELL_RATIO（与 WeaponData.sell_price / PetData.sell_price 同一条口径：
-## 按数据表里的基准价折半，不按当波上架价 —— 上架价每波 +2，回收不跟着涨，详情卡两行并排印出来）。
+## 按数据表里的基准价折半，不按当回合上架价 —— 上架价每回合 +2，回收不跟着涨，详情卡两行并排印出来）。
 static func sell_price(id: String) -> int:
 	var def: Dictionary = get_def(id)
 	if def.is_empty():

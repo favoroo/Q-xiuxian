@@ -2,11 +2,11 @@ class_name PetSystem
 extends RefCounted
 
 ## 灵兽（随行伙伴）统一管理子系统
-## 职责：栏位上限、购买、出售、场上实体增删同步、波末收益触发。
+## 职责：栏位上限、购买、出售、场上实体增删同步、回合末收益触发。
 
 const SPIRIT_PET_SCENE = preload("res://scenes/entities/SpiritPet.tscn")
 
-## 当前灵兽栏位上限：基础 1 格 + 角色/法宝/悟道加成
+## 当前灵兽栏位上限：基础 1 格 + 角色/道具/悟道加成
 static func max_pet_slots(gm: Node) -> int:
 	var bonus: int = int(gm.get("pet_slots_bonus")) if gm.get("pet_slots_bonus") != null else 0
 	return maxi(1, gm.PET_BASE_SLOTS + bonus)
@@ -29,7 +29,7 @@ static func add_pet(gm: Node, pet_id: String) -> bool:
 	gm.pets_updated.emit(gm.pets)
 	return true
 
-## 出售灵兽：回收 50% 灵石，场上消散，释放栏位，可再次刷出
+## 出售灵兽：回收 50% 金币，场上消散，释放栏位，可再次刷出
 static func sell_pet(gm: Node, pet_id: String) -> bool:
 	var idx: int = gm.pets.find(pet_id)
 	if idx == -1:
@@ -107,7 +107,7 @@ static func sync_pet_instances(gm: Node) -> void:
 					p.orbit_index = i
 					p.total_pets = total
 
-## 波末触发灵兽收益（聚宝蟾献灵石）
+## 回合末触发灵兽收益（聚宝蟾献金币）
 static func on_wave_ended(gm: Node) -> void:
 	for pet_id in gm.pets:
 		if pet_id == "juchan":

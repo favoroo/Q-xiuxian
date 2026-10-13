@@ -3,9 +3,9 @@ extends CharacterBody2D
 
 ## 祭坛灵兽（2026-10-11 远程吐息重做）：祭坛激活时召唤的风筝型远程友军。
 ##
-## 组与碰撞（两条铁律，动了会被全场武器追着打 / 波末被清场）：
+## 组与碰撞（两条铁律，动了会被全场武器追着打 / 回合末被清场）：
 ##   - 只挂 "allies" 组 —— 绝不进 enemies/turrets/gems/chests，那四组 WaveSpawner.end_wave 全清；
-##     正因为它不在那四组里，血量不耗尽就跨波次一直在场。
+##     正因为它不在那四组里，生命不耗尽就跨回合一直在场。
 ##   - 本体 collision_layer/mask 全 0：与敌人无任何物理碰撞体积（旧版挂 player 层会被敌人
 ##     move_and_slide 双向推挤，「撞着敌人跑」）；玩家武器索敌全走 mask=4（enemies 层），
 ##     也打不到它。移动直接积分 global_position，不走 move_and_slide。
@@ -15,9 +15,9 @@ extends CharacterBody2D
 ## 被嘲讽追它的敌人天然被它拖着绕圈。
 ## 丹弹复用 BladeProjectile 对象池（player_projectiles 层），命中/击杀反馈全走敌人那一条；
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
-## 血量是它的寿命：无碰撞后敌人 slide 接触咬不到它，改为灵兽自判近身啃咬
-## （CONTACT_RANGE 内取敌人 contact_damage，同一把尺子、同一无敌帧）；血量耗尽即消散。
-## 血量不挂血条：受击时把 hp_ratio 灌给渲染器，由玄鹤本体传达（灵光/丹顶/灵目转暗、濒死裂纹闪烁）。
+## 生命是它的寿命：无碰撞后敌人 slide 接触咬不到它，改为灵兽自判近身啃咬
+## （CONTACT_RANGE 内取敌人 contact_damage，同一把尺子、同一无敌帧）；生命耗尽即消散。
+## 生命不挂血条：受击时把 hp_ratio 灌给渲染器，由玄鹤本体传达（灵光/丹顶/灵目转暗、濒死裂纹闪烁）。
 ## 索敌读 GameManager.live_enemies 登记表，不做物理查询（最多 3 只，10Hz 重索节流）。
 
 const BULLET_TEXTURE: Texture2D = preload("res://assets/art/bullet_spirit_pellet.png")
@@ -115,7 +115,7 @@ func _physics_process(delta: float) -> void:
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 近身啃咬结算：敌人贴到 CONTACT_RANGE 内仍咬得到它（血量即寿命的承伤口）
+	# 近身啃咬结算：敌人贴到 CONTACT_RANGE 内仍咬得到它（生命即寿命的承伤口）
 	_resolve_contact_bites()
 
 	if _renderer != null:

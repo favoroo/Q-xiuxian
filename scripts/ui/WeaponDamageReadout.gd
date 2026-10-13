@@ -1,7 +1,7 @@
 class_name WeaponDamageReadout
 extends RefCounted
 
-## 法器伤害与节奏读数的唯一出口：回答玩家唯一关心的两个数 —— 这把法器本身多痛、我现在拿它多痛。
+## 武器伤害与节奏读数的唯一出口：回答玩家唯一关心的两个数 —— 这把武器本身多痛、我现在拿它多痛。
 ## 消费方：货架卡 ShopOfferCardFactory、商店详情 ShopWeaponTip、属性面板详情 StatsTipFactory。
 ## 三处必须同数，所以谁都不许自己再乘一遍乘区。
 ##
@@ -10,7 +10,7 @@ extends RefCounted
 ## 暴击按概率另算、斩将按目标另算，都不进这个数。
 ## 只读 GameManager 状态，不写任何状态。
 
-## 神识分流口径：买下一把并上阵后所有法器的分流都会变差，货架卡要按「买下之后」的槽位数算，
+## 神识分流口径：买下一把并上阵后所有武器的分流都会变差，货架卡要按「买下之后」的槽位数算，
 ## 否则卡上承诺的数在到手那一刻就兑现不了。槽位已满会进背包、不上阵，则维持现状。
 static func slot_count_after_purchase() -> int:
 	var used := GameManager.slots_used()
@@ -38,7 +38,7 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 		mult *= GameManager.synergy_contraption_mult
 	return raw * mult
 
-## 三个攻速乘区：悟道/羁绊是常驻的，疾风咒是短时施法间隔（商店在波间恒为 1.0）。
+## 三个攻速乘区：悟道/羁绊是常驻的，疾风咒是短时施法间隔（商店在回合间恒为 1.0）。
 static func haste_product() -> float:
 	return GameManager.attack_speed_mult * GameManager.synergy_haste_mult \
 			* GameManager.buff_attack_speed_mult
@@ -62,13 +62,13 @@ static func per_second(w_id: String, star: int, slot_count: int = -1) -> float:
 	if base <= 0.0 or haste <= 0.0:
 		return 0.0
 	## sustained_single_dps 按数据表间隔算，攻速乘区把节奏整体提快 1/haste 倍
-	## （机关法器同理：炮台开火间隔吃的是同一条攻速）
+	## （机关武器同理：炮台开火间隔吃的是同一条攻速）
 	return WeaponData.sustained_single_dps(w_id, s) * (per_hit(w_id, s, slot_count) / base) / haste
 
-## 机关法器的炮台是「多座各自开火」，平衡判据本身就不给它进 DPS 档，这里也不替它聚合，
-## 所以那一行必须叫「单座每秒伤害」，不能和别的法器的「每秒伤害」混成同一个词。
+## 机关武器的炮台是「多座各自开火」，平衡判据本身就不给它进 DPS 档，这里也不替它聚合，
+## 所以那一行必须叫「单座每秒伤害」，不能和别的武器的「每秒伤害」混成同一个词。
 ## 行名一律带「伤害」两字收尾（2026-10-11 用户：光写「每秒」没人知道是什么的每秒）：
-## 卡面上「伤害 26 → 31.1」与「每秒伤害 31.6」是同一把法器的两个不同口径，
+## 卡面上「伤害 26 → 31.1」与「每秒伤害 31.6」是同一把武器的两个不同口径，
 ## 少了名词这两行看着像同一个数写了两遍。
 static func per_second_label(w_id: String) -> String:
 	return "单座每秒伤害" if is_turret(WeaponData.get_def(w_id)) else "每秒伤害"
@@ -106,7 +106,7 @@ static func slot_split_mult(slot_count: int = -1, w_id: String = "") -> float:
 		drone_n += 1
 	return GameBalance.multi_weapon_damage_mult(n, drone_n)
 
-## 机关羁绊：只有机关类法器吃这一档，详情面板对别的法器不许列这一行
+## 机关羁绊：只有机关类武器吃这一档，详情面板对别的武器不许列这一行
 static func contraption_mult() -> float:
 	return GameManager.synergy_contraption_mult
 

@@ -1,7 +1,7 @@
 class_name CultivatorData
 extends RefCounted
 
-## 修士流派数据库：不对称设计——每名修士都是「超能力 + 严苛负面代偿」（仿土豆兄弟角色设计）
+## 角色流派数据库：不对称设计——每名角色都是「超能力 + 严苛负面代偿」（仿土豆兄弟角色设计）
 ## mods 支持的键：
 ##   crit_rate / armor / harvest / thorns / dodge          —— 直接加算
 ##   speed_mult / damage_mult / hp_mult / shop_price / haste_mult —— 乘算系数
@@ -11,10 +11,10 @@ extends RefCounted
 ##   start_drones                               —— 开局自带灵蝶数
 ##   spirit_threshold_adj                       —— 御灵羁绊门槛下移
 ##   dodge_cap                                  —— 闪避硬上限上移（魅影：0.6 → 0.9）
-##   weapon_slots_max                           —— 上阵法器槽位上限覆盖（独臂刀圣：3）
-##   enemy_count_mult                           —— 妖潮规模倍率（狂战蛮修：1.5）
-##   harvest_decay                              —— 每波灵韵流失点数（狂战蛮修：3）
-##   xp_require_mult                            —— 升级修为需求倍率（夺舍散人：0.6）
+##   weapon_slots_max                           —— 上阵武器槽位上限覆盖（独臂刀圣：3）
+##   enemy_count_mult                           —— 敌潮规模倍率（狂战蛮修：1.5）
+##   harvest_decay                              —— 每回合灵韵流失点数（狂战蛮修：3）
+##   xp_require_mult                            —— 升级经验需求倍率（夺舍散人：0.6）
 ##   item_price                                 —— 道具价格乘区（多宝道人：0.75）
 ##   shop_slots                                 —— 货架格数加成（多宝道人：+1）
 ##   guard_stance                               —— 盾势机制开关（守卫：受击蓄能满自动爆发，数值全在 GuardStanceData）
@@ -22,11 +22,11 @@ extends RefCounted
 ##   alloc_offer_bonus / alloc_free_reroll_bonus —— 学者：悟道候选数 / 每回合免费刷新加成
 ##   collection_damage_per_unique               —— 收藏家：每持有一种不同道具的全伤害加成
 ##   frenzy                                     —— 战意机制开关（狂战士：击杀攒层增伤、停杀流失，数值全在 FrenzyData）
-##   free_rerolls                               —— 每波商店免费重掷次数（商人：+1，走 ShopSystem 既有免单口径）
+##   free_rerolls                               —— 每回合商店免费重掷次数（商人：+1，走 ShopSystem 既有免单口径）
 ##   reroll_price                               —— 商店重掷费用乘区（商人：0.5 半价）
-##   thunder_strike                             —— 天雷机制开关（雷法真君：周期落雷轰最近妖兽，数值全在 ThunderData）
+##   thunder_strike                             —— 天雷机制开关（雷法真君：周期落雷轰最近敌人，数值全在 ThunderData）
 ##   crowd_damage_per_enemy / crowd_damage_cap / crowd_damage_radius
-##                                              —— 蛮兵·陷阵：感知圈内每只妖兽的全伤害加成与上限（damage_mult 现算）
+##                                              —— 蛮兵·陷阵：感知圈内每只敌人的全伤害加成与上限（damage_mult 现算）
 ##   stone_damage_per_100 / stone_damage_cap    —— 守财奴·财可通神：每持 100 金币的全伤害加成与上限（damage_mult 现算）
 ##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的技能冷却秒数
 ## skill_mods: {skill_id: {...}}                —— 随行技能专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
@@ -34,7 +34,7 @@ extends RefCounted
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
 ##                                                 它的玩法说明不写在本表：get_extra_desc() 现读那张机制表，
 ##                                                 卡面上单独成一段（不并进 pros 列表）
-## allowed_tags: 非空时商店大幅偏向这些流派的法器，但仍有少量其他法器漏出；locked_upgrades: 锁死的加点项
+## allowed_tags: 非空时商店大幅偏向这些流派的武器，但仍有少量其他武器漏出；locked_upgrades: 锁死的加点项
 ## sprite: 角色独立 8 方向行走图（5 行 × 5 列，192px/格，行序见 RunMotion.DIR_ROW）；缺图回退 pawn_blue_8dir
 ## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
 
@@ -108,7 +108,7 @@ const DEFS: Dictionary = {
 				"motion": "procedural",
 				"render_style": "hollow_knight",
 				"start_equip": "",
-				"pros": ["初始收益 +16（每波得更多金币与经验）", "商店全场永久 8 折", "每波首次重掷免费，后续重掷半价"],
+				"pros": ["初始收益 +16（每回合得更多金币与经验）", "商店全场永久 8 折", "每回合首次重掷免费，后续重掷半价"],
 				"cons": ["全武器伤害 -25%", "最大生命 -25%"],
 				"mods": {
 					"harvest": 16.0,
@@ -172,7 +172,7 @@ const DEFS: Dictionary = {
 				"motion": "procedural",
 				"render_style": "hollow_knight",
 				"start_equip": "",
-				"pros": ["全武器伤害 +30%", "怪物数量 +50%（更多击杀与金币）", "陷阵：周身妖兽每只 +3% 全伤害（至多 +45%）"],
+				"pros": ["全武器伤害 +30%", "敌人数量 +50%（更多击杀与金币）", "陷阵：周身敌人每只 +3% 全伤害（至多 +45%）"],
 				"cons": ["每回合结算损失 3 点收益"],
 				"mods": {
 					"damage_mult": 1.3,
@@ -312,7 +312,7 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["每波按持有的金币额外得 8% 金币（至多 +15）", "财可通神：每持 100 金币 +2% 全伤害（至多 +50%）"],
+					"pros": ["每回合按持有的金币额外得 8% 金币（至多 +15）", "财可通神：每持 100 金币 +2% 全伤害（至多 +50%）"],
 					"cons": ["全武器伤害 -10%", "初始收益 -5"],
 					"mods": {
 						"stone_interest_rate": 0.08,
@@ -354,7 +354,7 @@ const DEFS: Dictionary = {
 					"render_style": "hollow_knight",
 					"start_equip": "",
 					"pros": ["弹射类武器伤害 +35%", "初始元素伤害 +2"],
-					"cons": ["非弹射类武器伤害 -25%", "商店主要刷新弹射类法器"],
+					"cons": ["非弹射类武器伤害 -25%", "商店主要刷新弹射类武器"],
 					"mods": {
 						"elemental": 2.0,
 						"tag_damage": {"talisman": 0.35},
@@ -373,7 +373,7 @@ const DEFS: Dictionary = {
 						"render_style": "hollow_knight",
 						"start_equip": "",
 						"pros": ["横扫类武器伤害 +30%", "初始护甲 +2"],
-						"cons": ["非横扫类武器伤害 -25%", "商店主要刷新横扫类法器"],
+						"cons": ["非横扫类武器伤害 -25%", "商店主要刷新横扫类武器"],
 						"mods": {
 							"armor": 2.0,
 							"tag_damage": {"wide": 0.30},
@@ -391,7 +391,7 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["击杀妖兽减 0.4s 技能冷却（精英 -2.0s）", "技能持续期间击杀可预扣后续冷却"],
+					"pros": ["击杀敌人减 0.4s 技能冷却（精英 -2.0s）", "技能持续期间击杀可预扣后续冷却"],
 					"cons": ["全武器基础伤害 -20%", "最大生命 -15%"],
 					"mods": {
 						"damage_mult": 0.80,

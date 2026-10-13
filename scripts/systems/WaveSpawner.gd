@@ -1,32 +1,32 @@
 class_name WaveSpawner
 extends Node2D
 
-## 波次状态机：WAITING(选法器) → FIGHT → CLEARING(清场吸附) → ALLOC(波后悟道，有待加点才插队) → SHOP → 下一波
+## 回合状态机：WAITING(选武器) → FIGHT → CLEARING(清场吸附) → ALLOC(回合后悟道，有待加点才插队) → SHOP → 下一回合
 ## 第 20 波通关「渡劫成功」（双精英心魔劫）；可继续无尽
-## FIGHT 的出口有两条（2026-10-12 起）：表走完，或「妖潮已尽」提前收尾 —— 判据见 _tide_spent()
+## FIGHT 的出口有两条（2026-10-12 起）：表走完，或「敌潮已尽」提前收尾 —— 判据见 _tide_spent()
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
-## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 随「波内总刷入预算」下调至 28，
+## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 随「回合内总刷入预算」下调至 28，
 ## 2026-10-11 缩图（半场 680→500）后再下调至 18 —— 地图更小、单怪更厚，密度由「少而硬」维持
 @export var max_enemies: int = 18
 
-# —— 波内总刷入预算（2026-10-11 土豆兄弟式克制，曲线见 BalanceWave.wave_spawn_budget）——
+# —— 回合内总刷入预算（2026-10-11 土豆兄弟式克制，曲线见 BalanceWave.wave_spawn_budget）——
 ## 预算只闸 _spawn_regular 的常规刷怪；精英/Boss 登场与分裂·产卵·召唤等衍生怪各有自己的上限，不占预算。
-## 波末把「预算 − 实际刷出」的差额交给灵韵结算折经验补差（BalanceEconomy.budget_compensation_exp），
+## 回合末把「预算 − 实际刷出」的差额交给灵韵结算折经验补差（BalanceEconomy.budget_compensation_exp），
 ## 击杀收入与旧口径基本持平 —— 只减压力不减经济。
-var _budget_total: int = 0      ## 本波预算总只数（已乘危险度/角色妖潮倍率）
-var _budget_used: int = 0       ## 本波已实际刷出只数
+var _budget_total: int = 0      ## 本回合预算总只数（已乘危险度/角色敌潮倍率）
+var _budget_used: int = 0       ## 本回合已实际刷出只数
 var _budget_exp_sum: float = 0.0  ## 已刷出敌人 exp_reward 累计（补差均值用）
 
 # —— 提前清场（2026-10-12）——
-## 「妖潮已尽」要连续满足这么久才收尾：分裂/产卵/召唤的幼体是 call_deferred 入树的，
-## 留这一拍让下一只怪有机会落地，别让最后一只母体死亡的瞬间把整波掐掉。
+## 「敌潮已尽」要连续满足这么久才收尾：分裂/产卵/召唤的幼体是 call_deferred 入树的，
+## 留这一拍让下一只怪有机会落地，别让最后一只母体死亡的瞬间把整回合掐掉。
 const EARLY_CLEAR_CONFIRM := 0.4
-var _clear_hold: float = 0.0    ## 本波已连续满足「妖潮已尽」的秒数
+var _clear_hold: float = 0.0    ## 本回合已连续满足「敌潮已尽」的秒数
 
 var phase: int = Phase.WAITING
-## 波次号的唯一来源是 GameManager.wave_number。
+## 回合号的唯一来源是 GameManager.wave_number。
 ## 这里只留一个只读访问器：以前本地也存了一份，只有 start_wave 会同步写，
 ## 「继续无尽」等路径只改单例那份，两边会悄悄漂移，所以改成同一份数据。
 var wave_number: int:
@@ -37,30 +37,24 @@ var clear_timer: float = 0.0
 var spawn_timer: float = 0.0
 var elite_spawned: bool = false
 
-var slime_scene: PackedScene = preload("res://scenes/entities/SlimeEnemy.tscn")
-var flower_scene: PackedScene = preload("res://scenes/entities/FlowerEnemy.tscn")
-var golem_scene: PackedScene = preload("res://scenes/entities/GolemEnemy.tscn")
-var leibeast_scene: PackedScene = preload("res://scenes/entities/LeiBeastEnemy.tscn")
-var xiexiu_scene: PackedScene = preload("res://scenes/entities/XieXiuEnemy.tscn")
-var danbao_scene: PackedScene = preload("res://scenes/entities/DanBaoEnemy.tscn")
-var boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
-var fengqun_scene: PackedScene = preload("res://scenes/entities/FengQunEnemy.tscn")
-var xueyong_scene: PackedScene = preload("res://scenes/entities/XueYongEnemy.tscn")
-var guyao_scene: PackedScene = preload("res://scenes/entities/GuYaoEnemy.tscn")
-var yingmei_scene: PackedScene = preload("res://scenes/entities/YingMeiEnemy.tscn")
-var zhumu_scene: PackedScene = preload("res://scenes/entities/ZhuMuEnemy.tscn")
-var chilei_elite_scene: PackedScene = preload("res://scenes/entities/ChileiEliteEnemy.tscn")
-var jiansha_elite_scene: PackedScene = preload("res://scenes/entities/JianshaEliteEnemy.tscn")
-var lingyi_scene: PackedScene = preload("res://scenes/entities/LingYiEnemy.tscn")
-var jinchan_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
+# —— 敌人场景：怪种名单/配比/精英/金蟾的真话在 EnemyData（scripts/data/EnemyData.gd）——
+## 这里只留按 scene_path 的运行时缓存（load 一次后复用），不再各自 preload 一份名单。
+var _mob_scenes := {}            ## mob key -> PackedScene（_ready 时按 EnemyData.MOBS 构建）
+var _elite_scenes: Array = []    ## 精英池场景，顺序 = EnemyData.ELITE_POOL 轮换顺序
+var _boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
+var _looter_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
 
-var _boss_ref: BossEnemy = null  ## 本波魔君引用（Boss 波超时锁关轮询用）
+var _boss_ref: BossEnemy = null  ## 本回合魔君引用（Boss 回合超时锁关轮询用）
 var _overtime_noted: bool = false
 
 func _ready() -> void:
 	GameManager.wave_spawner = self
 	GameManager.shop_closed.connect(_on_shop_closed)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
+	for key in EnemyData.mob_keys():
+		_mob_scenes[key] = load(EnemyData.MOBS[key]["scene_path"])
+	for elite_def in EnemyData.ELITE_POOL:
+		_elite_scenes.append(load(elite_def["scene_path"]))
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -88,7 +82,7 @@ func _process_fight(delta: float) -> void:
 	wave_timer -= delta
 	spawn_timer -= delta
 
-	# Boss 波超时锁关：魔君未死则妖潮不退（停表停刷，等 Boss 伏诛再进结算）
+	# Boss 回合超时锁关：魔君未死则敌潮不退（停表停刷，等 Boss 伏诛再进结算）
 	if GameBalance.is_boss_wave(wave_number) and wave_timer <= 0.0:
 		if _boss_still_alive():
 			if not _overtime_noted:
@@ -102,23 +96,23 @@ func _process_fight(delta: float) -> void:
 		spawn_timer = GameBalance.spawn_interval(wave_number)
 		_spawn_regular(player)
 
-	# 精英波：第 5/15 波；Boss 波（第 10/20 波）改由魔君登场
+	# 精英回合：第 5/15 波；Boss 回合（第 10/20 波）改由魔君登场
 	var is_elite_wave := _is_elite_wave(wave_number)
 	if not _is_boss_wave(wave_number) and is_elite_wave and not elite_spawned and wave_timer < wave_duration(wave_number) - 1.5:
 		elite_spawned = true
 		_spawn_elite(player)
 
-	# 固定 Boss 波：开场 1.5s 后魔君破阵（血条同步上屏）
+	# 固定 Boss 回合：开场 1.5s 后魔君破阵（血条同步上屏）
 	if _is_boss_wave(wave_number) and not elite_spawned and wave_timer < wave_duration(wave_number) - 1.5:
 		elite_spawned = true
 		_spawn_boss(player)
 
-	# 金蟾：波中限时刷出的逃跑宝藏怪（土豆兄弟 Looter 对应位）
-	if _looter_pending and not _looter_done and wave_timer <= wave_duration(wave_number) * LOOTER_AT_PCT:
+	# 金蟾：回合中限时刷出的逃跑宝藏怪（土豆兄弟 Looter 对应位）
+	if _looter_pending and not _looter_done and wave_timer <= wave_duration(wave_number) * EnemyData.LOOTER_DEF["at_pct"]:
 		_looter_done = true
 		_spawn_looter(player)
 
-	# 提前清场：本波妖潮已全部刷入、且场上再无活妖 ⇒ 不等表走完就收尾，余下秒数折成金币。
+	# 提前清场：本回合敌潮已全部刷入、且场上再无活妖 ⇒ 不等表走完就收尾，余下秒数折成金币。
 	# 闸只认「预算已尽」这一条：没刷完就提前收，等于把省下的那截时间对应的击杀进项一起收走，
 	# 那是扣钱不是奖励。曲线见 BalanceEconomy.early_clear_stones。
 	if _tide_spent():
@@ -132,7 +126,7 @@ func _process_fight(delta: float) -> void:
 	if wave_timer <= 0.0:
 		end_wave()
 
-## 「妖潮已尽」：本波刷怪预算全部刷入 + 场上一个活妖都没有（含尸体：dying 的还在登记表里，
+## 「敌潮已尽」：本回合刷怪预算全部刷入 + 场上一个活妖都没有（含尸体：dying 的还在登记表里，
 ## 所以要等塌缩动画落定才算清干净）。精英/魔君还没到场的头 1.5 秒一律不算，
 ## 且若场上还有正在凝聚的妖气指示器（SpawnIndicator）也不算清场。
 func _tide_spent() -> bool:
@@ -145,23 +139,17 @@ func _tide_spent() -> bool:
 	return GameManager.enemy_count <= 0
 
 func _indicators_pending() -> bool:
-	var p := get_parent()
-	if p == null:
-		return false
-	for child in p.get_children():
-		if child is SpawnIndicator:
-			return true
-	return false
+	return SpawnIndicator.active_count > 0
 
 ## 波长曲线只是 GameBalance 的一层转发，保留本方法是因为 UI/内部多处按它排程
 func wave_duration(n: int) -> float:
 	return GameBalance.wave_duration(n)
 
-## 精英波判定（曲线在 GameBalance）：第 5/15 波，无尽模式 20 波后每 3 波（Boss 波让位）
+## 精英回合判定（曲线在 GameBalance）：第 5/15 波，无尽模式 20 回合后每 3 波（Boss 回合让位）
 func _is_elite_wave(n: int) -> bool:
 	return GameBalance.is_elite_wave(n, GameManager.endless_mode)
 
-## Boss 波判定（固定关卡）：第 10/20 波，无尽每 10 波
+## Boss 回合判定（固定关卡）：第 10/20 波，无尽每 10 波
 func _is_boss_wave(n: int) -> bool:
 	return GameBalance.is_boss_wave(n)
 
@@ -174,13 +162,13 @@ func start_wave(n: int) -> void:
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
 	phase = Phase.FIGHT
-	# 本波刷怪预算：危险度与角色妖潮倍率与同屏上限同源同乘
+	# 本回合刷怪预算：危险度与角色敌潮倍率与同屏上限同源同乘
 	_budget_total = int(round(float(GameBalance.wave_spawn_budget(n)) * GameBalance.danger_count_mult(GameManager.danger_level) * GameManager.enemy_count_mult))
 	_budget_used = 0
 	_budget_exp_sum = 0.0
 	_clear_hold = 0.0
-	# 金蟾档期：每波开场抽定（35%），波中 60% 处登场
-	_looter_pending = n >= LOOTER_MIN_WAVE and GameManager.rng.randf() < LOOTER_CHANCE
+	# 金蟾档期：每回合开场抽定（EnemyData.LOOTER_DEF），回合中 60% 处登场
+	_looter_pending = n >= EnemyData.LOOTER_DEF["min_wave"] and GameManager.rng.randf() < EnemyData.LOOTER_DEF["chance"]
 	_looter_done = false
 	_spawn_chests()
 	if _is_boss_wave(n):
@@ -196,8 +184,8 @@ func start_wave(n: int) -> void:
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 
-## 藏宝匣：每波在竞技场随机位置刷一批，诱导玩家为补给冒险走位。
-## 数量 = 基础曲线 + 「宝箱数量」（加点/法宝同一字段，见 BalanceChest.chest_count），
+## 藏宝匣：每回合在竞技场随机位置刷一批，诱导玩家为补给冒险走位。
+## 数量 = 基础曲线 + 「宝箱数量」（加点/道具同一字段，见 BalanceChest.chest_count），
 ## 每口匣子单独抽档（木/铜/玉），权重吃「宝箱品质」与已有的福缘 —— 抽档走 GameManager.rng，
 ## 全局 randf() 会让判据钉不住同一批匣子（铁律 3）。
 func _spawn_chests() -> void:
@@ -223,12 +211,12 @@ func end_wave(early_secs: float = 0.0) -> void:
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
 	GameManager.announcement_triggered.emit("第 %d 波敌潮平息" % wave_number)
-	# 灵韵结算：无偿灵石+修为，随后复利增长；刷怪预算没花完的部分折经验找平（击杀收入不因减潮缩水）
+	# 灵韵结算：无偿金币+经验，随后复利增长；刷怪预算没花完的部分折经验找平（击杀收入不因减潮缩水）
 	var budget_shortfall := maxi(0, _budget_total - _budget_used)
 	var avg_exp := (_budget_exp_sum / float(_budget_used)) if _budget_used > 0 else 0.0
 	# 提前清场的余时赏与灵韵同一次到账、同一句播报：横幅只有一个 Label，同帧发两句只会留下
 	# 后一句 —— 分成两条等于把「收益到账」那个数吞掉。early_secs 传 0（表走完/判据直接调
-	# end_wave()）时这条一分不给，与改动前逐枚灵石等价。
+	# end_wave()）时这条一分不给，与改动前逐枚金币等价。
 	var early_stones := GameBalance.early_clear_stones(early_secs)
 	GameManager.apply_harvest(GameBalance.budget_compensation_exp(budget_shortfall, avg_exp), early_secs)
 	if early_stones > 0:
@@ -240,18 +228,18 @@ func end_wave(early_secs: float = 0.0) -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
-	# 没砸开的藏宝匣同一口径收走：每波重刷一批（数量曲线见 BalanceChest），不留档否则场地越打越满是箱子。
+	# 没砸开的藏宝匣同一口径收走：每回合重刷一批（数量曲线见 BalanceChest），不留档否则场地越打越满是箱子。
 	# 必须与上面那个 for 平级：这两轮循环原先缩进了 enemies 循环的体内 ⇒ 场上没怪时
-	# 匣子与炮台一个都不收（#24 刷怪预算把同屏顶满的旧口径改掉之后，波末清空成了常态，
+	# 匣子与炮台一个都不收（#24 刷怪预算把同屏顶满的旧口径改掉之后，回合末清空成了常态，
 	# 这条静默路径才露出来：ChestTargetingCheck 第 5 组三条一起报红）。
 	for chest in get_tree().get_nodes_in_group("chests"):
 		if chest is SpiritChest:
 			(chest as SpiritChest).dissolve()
-	# 波末收回场上机关炮台
+	# 回合末收回场上机关炮台
 	for turret in get_tree().get_nodes_in_group("turrets"):
 		if turret is TurretUnit:
 			turret.dismiss()
-	# 地上灵石全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折灵石）
+	# 地上金币全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折金币）
 	var player = GameManager.player
 	if player != null:
 		for gem in get_tree().get_nodes_in_group("gems"):
@@ -272,7 +260,7 @@ func open_shop() -> void:
 	if phase == Phase.SHOP:
 		_enter_wave_break()
 
-## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到灵石阁。
+## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到金币阁。
 ## 战斗中的升级只攒点不弹面板（2026-10-09 用户指令：「在战斗过程中触发加点的体验不好」）。
 func _enter_wave_break() -> void:
 	if GameManager.has_pending_upgrades():
@@ -298,10 +286,10 @@ func _on_shop_closed() -> void:
 	start_wave(wave_number + 1)
 
 func _spawn_regular(player: Node2D) -> void:
-	# 波内总刷入预算：耗尽即停手（波次时长照常跑满，场上越打越空）
+	# 回合内总刷入预算：耗尽即停手（回合时长照常跑满，场上越打越空）
 	if _budget_used >= _budget_total:
 		return
-	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每轮刷怪量
+	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每回合刷怪量
 	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
 	if GameManager.enemy_count >= enemy_cap:
 		return
@@ -338,12 +326,15 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 	indicator.spawn_callback = func():
 		if phase != Phase.FIGHT:
 			return
-		var enemy = scene.instantiate() as EnemyBase
+		# 敌人走对象池（2026-10-13）：死亡/清场出树休眠的个体优先复用，刷怪不再 instantiate
+		var enemy := EnemyBase.acquire_or_new(scene)
 		if enemy == null:
 			return
+		enemy.reset_for_reuse()
 		enemy.global_position = pos
 		enemy.add_to_group("enemies")
 		_scale_to_wave(enemy)
+		enemy.activate()
 		parent.add_child(enemy)
 		_budget_exp_sum += float(enemy.exp_reward)
 		# 出场弹性缩放动画 (0.4 -> 1.0)
@@ -352,103 +343,26 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 		tw.tween_property(enemy, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	parent.add_child(indicator)
 
-## 怪物配比表：随波次引入新威胁（雷兽冲锋 → 丹爆傀儡）。
-## 邪修（放火球那颗）不再靠解锁波次登场 —— 第 1 波就有，占比按 MIX_XIEXIU_RAMP 爬坡，
-## 2026-10-08 用户指令：「这个放火球的敌人怎么要到七八波才出来？不一开始就应该有吗」。
-## 旧写法是「累计带 + 波次闸门」：闸门一开，邪修直接把 [0, 0.27) 整段吃掉 = 第 8 波突然
-## 27% 刷火球怪；而同一结构下雷兽在第 5~7 波也白捡了 42%（它上面那格是空的）。
-## 现在火球怪从第 1 波就占自己那一格，雷兽/花妖/史莱姆回到各自该有的份额。
-const MIX_DANBAO_EDGE := 0.12      ## 丹爆傀儡累计带上沿
-const MIX_DANBAO_WAVE := 3         ## 丹爆傀儡最早出现波次
-const MIX_XIEXIU_EDGE := 0.27      ## 邪修累计带上沿（第 8 波占满）
-const MIX_XIEXIU_START := 0.06     ## 邪修第 1 波的占比
-const MIX_XIEXIU_RAMP := 0.03      ## 邪修每波多刷 3%，到上沿为止
-const MIX_LEIBEAST_EDGE := 0.42    ## 雷兽累计带上沿
-const MIX_LEIBEAST_WAVE := 5       ## 雷兽最早出现波次
-const MIX_FLOWER_BASE := 0.42      ## 花妖带下沿
-const MIX_FLOWER_MIN_WAVE := 2     ## 花妖最早出现波次
-const MIX_FLOWER_SLOPE := 0.06     ## 花妖占比随波次增长
-const MIX_FLOWER_GROWTH := 0.25    ## 花妖占比基数
-const MIX_FLOWER_CAP := 0.6        ## 花妖增长封顶
-const MIX_FLOWER_STEP := 0.58      ## 花妖占比折算
-# 新敌种占的是史莱姆的保底份额（高 roll 段，roll ≥ 下沿才命中；越晚解锁越稀有）
-const MIX_FENGQUN_WAVE := 3        ## 蜂群精最早出现波次（廉价群怪，填充密度）
-const MIX_FENGQUN_LO := 0.78
-const MIX_LINGYI_WAVE := 8         ## 灵医（治疗同伴，土豆兄弟 Healer 对应位：优先击杀目标）
-const MIX_LINGYI_LO := 0.83
-const MIX_XUEYONG_WAVE := 6        ## 血蛹（死亡分裂）
-const MIX_XUEYONG_LO := 0.88
-const MIX_YINGMEI_WAVE := 7        ## 影魅（闪现侧翼）
-const MIX_YINGMEI_LO := 0.92
-const MIX_GUYAO_WAVE := 9          ## 鼓妖（同伴加速光环）
-const MIX_GUYAO_LO := 0.955
-const MIX_ZHUMU_WAVE := 14         ## 百目妖（产卵孵化群怪，原蛛母换悬浮系怪种）
-const MIX_ZHUMU_LO := 0.98
+## 敌人配比：真话在 EnemyData（怪种行 + 爬坡/闸门 + 金蟾档期），这里只留状态位与调度。
+## 口径沿革（2026-10-08）：旧写法是「累计带 + 回合闸门」，闸门一开邪修直接吃掉整段
+## （第 8 波突然 27% 刷火球怪），而闸门未开时下一格白捡（第 5~7 波雷兽 42%）；
+## 现在火球怪从第 1 波就占自己那一格、按爬坡线涨到上沿，雷兽/花妖/史莱姆回到各自该有的份额。
+var _looter_pending: bool = false  ## 本回合是否有金蟾档期（start_wave 抽定）
+var _looter_done: bool = false     ## 本回合金蟾是否已刷
 
-# 金蟾（土豆兄弟 Looter 对应位）：波中限时刷出的逃跑宝藏怪，不占刷怪预算、不吃同屏上限
-const LOOTER_MIN_WAVE := 3         ## 最早出现波次
-const LOOTER_CHANCE := 0.35        ## 每波出现概率
-const LOOTER_AT_PCT := 0.4         ## 波长剩余 40% 时登场（中场插曲，不打断开场节奏）
-var _looter_pending: bool = false  ## 本波是否有金蟾档期（start_wave 抽定）
-var _looter_done: bool = false     ## 本波金蟾是否已刷
-
-## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线）
+## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线；转发 EnemyData）
 static func xiexiu_edge(wave: int) -> float:
-	var w := maxi(wave, 1)
-	return minf(MIX_XIEXIU_EDGE, MIX_XIEXIU_START + MIX_XIEXIU_RAMP * float(w - 1))
+	return EnemyData.xiexiu_edge(wave)
 
-## 配比判定：纯函数（给定波次与 roll ∈ [0,1) 返回怪种 key），被闸门锁住的种把份额让给下一格
-## 低 roll 段是 丹爆/邪修/雷兽/花妖 的累计带；高 roll 段（≥0.78）由新敌种从史莱姆的保底份额里切走
+## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key）；转发 EnemyData
 static func pick_scene_key(wave: int, roll: float) -> String:
-	var w := maxi(wave, 1)
-	if w >= MIX_DANBAO_WAVE and roll < MIX_DANBAO_EDGE:
-		return "danbao"
-	if roll < xiexiu_edge(w):
-		return "xiexiu"
-	if w >= MIX_LEIBEAST_WAVE and roll < MIX_LEIBEAST_EDGE:
-		return "leibeast"
-	if w >= MIX_FLOWER_MIN_WAVE and roll < MIX_FLOWER_BASE + minf(MIX_FLOWER_GROWTH + w * MIX_FLOWER_SLOPE, MIX_FLOWER_CAP) * MIX_FLOWER_STEP:
-		return "flower"
-	if w >= MIX_ZHUMU_WAVE and roll >= MIX_ZHUMU_LO:
-		return "zhumu"
-	if w >= MIX_GUYAO_WAVE and roll >= MIX_GUYAO_LO:
-		return "guyao"
-	if w >= MIX_YINGMEI_WAVE and roll >= MIX_YINGMEI_LO:
-		return "yingmei"
-	if w >= MIX_XUEYONG_WAVE and roll >= MIX_XUEYONG_LO:
-		return "xueyong"
-	if w >= MIX_LINGYI_WAVE and roll >= MIX_LINGYI_LO:
-		return "lingyi"
-	if w >= MIX_FENGQUN_WAVE and roll >= MIX_FENGQUN_LO:
-		return "fengqun"
-	return "slime"
+	return EnemyData.pick_scene_key(wave, roll)
 
 func _pick_enemy_scene() -> PackedScene:
-	match pick_scene_key(wave_number, GameManager.rng.randf()):
-		"danbao":
-			return danbao_scene
-		"xiexiu":
-			return xiexiu_scene
-		"leibeast":
-			return leibeast_scene
-		"flower":
-			return flower_scene
-		"zhumu":
-			return zhumu_scene
-		"guyao":
-			return guyao_scene
-		"yingmei":
-			return yingmei_scene
-		"xueyong":
-			return xueyong_scene
-		"lingyi":
-			return lingyi_scene
-		"fengqun":
-			return fengqun_scene
-		_:
-			return slime_scene
+	return _mob_scenes.get(EnemyData.pick_scene_key(wave_number, GameManager.rng.randf()), _mob_scenes["slime"])
 
 ## 精英池轮换：铁甲魔傀（坦克）→ 赤雷兽（突进）→ 剑煞邪修（三连剑气），依次登场
+## （池顺序与称号都在 EnemyData.ELITE_POOL，这里只按出场次数取模）
 var _elite_spawn_count: int = 0
 
 func _spawn_elite(player: Node2D) -> void:
@@ -464,8 +378,10 @@ func _spawn_elite(player: Node2D) -> void:
 			push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
 		pos = (p_pos + push_dir * 220.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	var pool: Array = [golem_scene, chilei_elite_scene, jiansha_elite_scene]
-	var scene: PackedScene = pool[_elite_spawn_count % pool.size()]
+	var pool: Array = _elite_scenes
+	var elite_idx := _elite_spawn_count % pool.size()
+	var scene: PackedScene = pool[elite_idx]
+	var elite_title: String = EnemyData.ELITE_POOL[elite_idx]["title"]
 	_elite_spawn_count += 1
 
 	var parent := get_parent()
@@ -477,21 +393,22 @@ func _spawn_elite(player: Node2D) -> void:
 	indicator.spawn_callback = func():
 		if phase != Phase.FIGHT:
 			return
-		var elite = scene.instantiate() as EnemyBase
+		var elite := EnemyBase.acquire_or_new(scene)
 		if elite == null:
 			return
+		elite.reset_for_reuse()
 		elite.global_position = pos
 		elite.add_to_group("enemies")
 		_scale_to_wave(elite)
+		elite.activate()
 		parent.add_child(elite)
-		var titles := {golem_scene: "铁甲巨怪", chilei_elite_scene: "烈雷兽", jiansha_elite_scene: "剑客亡灵"}
-		GameManager.announcement_triggered.emit("⚠ %s突入战场！" % titles.get(scene, "精英敌人"))
+		GameManager.announcement_triggered.emit("⚠ %s突入战场！" % elite_title)
 		GameManager.shake_camera(5.0, 0.25)
 	parent.add_child(indicator)
 
 ## 金蟾：在远离玩家的位置刷一只携宝金蟾（击杀爆金币，见 EnemyBase.stone_reward）。
 ## 不占刷怪预算、不吃同屏上限；它活着时「提前清场」会等它（它是活体敌人），
-## 追不上也没关系——波表走完照常收尾，金蟾只是中场彩蛋。
+## 追不上也没关系——回合表走完照常收尾，金蟾只是中场彩蛋。
 func _spawn_looter(player: Node2D) -> void:
 	var lim := GameManager.MAP_HALF_EXTENT - 60.0
 	var p_pos: Vector2 = player.global_position
@@ -504,7 +421,7 @@ func _spawn_looter(player: Node2D) -> void:
 		if push_dir.is_zero_approx():
 			push_dir = Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU)
 		pos = (p_pos + push_dir * 220.0).clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	_schedule_enemy_spawn(jinchan_scene, pos, false)
+	_schedule_enemy_spawn(_looter_scene, pos, false)
 	GameManager.announcement_triggered.emit("✦ 金蟾携宝现身 · 击杀爆金币 ✦")
 
 ## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻。
@@ -520,13 +437,13 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 		1.0 - GameBalance.ENEMY_SPEED_VARIANCE,
 		1.0 + GameBalance.ENEMY_SPEED_VARIANCE
 	)
-	# 灵医奶量 / 金蟾金币与波次曲线同源（BalanceWave），场景里只占位
+	# 灵医奶量 / 金蟾金币与回合曲线同源（BalanceWave），场景里只占位
 	if enemy.heal_interval > 0.0:
 		enemy.heal_amount = GameBalance.healer_amount(wave_number)
 	if enemy.stone_reward > 0:
 		enemy.stone_reward = GameBalance.looter_stone_reward(wave_number)
 
-## 固定 Boss 关：血量/伤害按 GameBalance 波次公式注入，称号与演出随关卡推进
+## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进
 func _spawn_boss(player: Node2D) -> void:
 	var lim := GameManager.MAP_HALF_EXTENT - 60.0
 	var p_pos: Vector2 = player.global_position
@@ -543,7 +460,7 @@ func _spawn_boss(player: Node2D) -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	var boss := boss_scene.instantiate() as BossEnemy
+	var boss := _boss_scene.instantiate() as BossEnemy
 	if boss == null:
 		return
 	boss.global_position = pos
@@ -559,20 +476,20 @@ func _spawn_boss(player: Node2D) -> void:
 	GameManager.announcement_triggered.emit(_boss_announcement())
 	GameManager.shake_camera(7.0, 0.35)
 
-## 本波魔君存活与否（Boss 波超时锁关的判据）
+## 本回合魔君存活与否（Boss 回合超时锁关的判据）
 func _boss_still_alive() -> bool:
 	return _boss_ref != null and is_instance_valid(_boss_ref) and not _boss_ref.dying
 
 func _boss_title() -> String:
 	if wave_number > GameManager.VICTORY_WAVE:
-		return "回响Boss"     ## 无尽波次的轮回魔君
+		return "回响Boss"     ## 无尽回合的轮回魔君
 	if wave_number >= GameManager.VICTORY_WAVE:
 		return "最终Boss"     ## 第 20 波最终关
-	return "火焰Boss"         ## 第 10 波首个 Boss 关
+	return "火焰Boss"         ## 第 10 回合首个 Boss 关
 
 func _boss_announcement() -> String:
 	if wave_number == GameManager.VICTORY_WAVE:
 		return "⚠ 最终Boss战 · 最终Boss出现！"
 	if wave_number > GameManager.VICTORY_WAVE:
 		return "⚠ 回响Boss · 再次出现！"
-	return "⚠ Boss波 · 火焰Boss突入战场！"
+	return "⚠ Boss回合 · 火焰Boss突入战场！"

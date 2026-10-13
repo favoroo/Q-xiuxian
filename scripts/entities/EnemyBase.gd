@@ -35,7 +35,7 @@ extends CharacterBody2D
 @export var bite_hit_radius: float = 40.0    ## 咬合判定半径（狼嘴够得到的距离）
 @export var bite_damage_mul: float = 1.0     ## 咬合伤害 = contact_damage × 它（与接触伤害同一条尺子，别另起一档）
 @export var explode_radius: float = 0.0    ## >0：贴近玩家 40px 后点燃 0.8s 引信自爆
-@export var heal_orb_drop: int = 0         ## >0：死亡掉「残丹」回血珠而非灵石
+@export var heal_orb_drop: int = 0         ## >0：死亡掉「残丹」回血珠而非金币
 @export var bolt_count: int = 1            ## 火球扇射数量（>1 时按 bolt_spread 扇形展开）
 @export var bolt_spread: float = 0.18      ## 扇射间隔角（弧度）
 @export var split_count: int = 0           ## >0：血蛹系——死亡时分裂出 N 只幼体（split_scene）
@@ -52,9 +52,9 @@ extends CharacterBody2D
 @export var slam_dmg_mult: float = 1.2     ## 震地伤害 = contact_damage × 它
 @export var heal_interval: float = 0.0     ## >0：灵医系——每隔 N 秒治疗范围内同伴
 @export var heal_radius: float = 0.0       ## 治疗光环半径
-@export var heal_amount: float = 0.0       ## 每跳治疗量（WaveSpawner 按波次注入，见 BalanceWave.healer_amount）
+@export var heal_amount: float = 0.0       ## 每跳治疗量（WaveSpawner 按回合注入，见 BalanceWave.healer_amount）
 @export var always_flee: bool = false      ## true：金蟾系——恒背离玩家逃窜（土豆兄弟 Looter 对应位）
-@export var stone_reward: int = 0          ## >0：击杀额外掉金币（WaveSpawner 按波次注入，见 BalanceWave.looter_stone_reward）
+@export var stone_reward: int = 0          ## >0：击杀额外掉金币（WaveSpawner 按回合注入，见 BalanceWave.looter_stone_reward）
 
 # ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
@@ -120,7 +120,7 @@ var chill_slow: float = 0.0
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 # —— 受击视觉零 Tween 分配化（2026-10-11 第 6 波卡顿优化）——
 ## 旧写法每次受击 create_tween ×2（挤压回弹 + 闪白），DoT 每 0.5s×N 敌也在持续触发；
-## 35 怪高频命中的波次里 Tween 生命周期管理是实打实的分配热点。改帧内计时衰减，
+## 35 怪高频命中的回合里 Tween 生命周期管理是实打实的分配热点。改帧内计时衰减，
 ## 曲线与原 Tween 一致（挤压 TRANS_BACK EASE_OUT；闪白 0.02s 拉满段在 60fps 下只有
 ## 1~2 帧，命中瞬间直接置峰，视觉无差）。衰减统一在 _tick_hit_fx 逐帧做。
 var _squash_from: Vector2 = Vector2.ONE  ## 挤压起点（目标形变）
@@ -139,36 +139,72 @@ var _cull_timer: float = 0.0        ## 错相初值在 _ready 按 instance_id �
 var dying: bool = false
 var procedural_view: ProceduralEnemyView = null
 
+# —— 敌人对象池（2026-10-13）——
+## 敌人是全项目最重的节点图（双碰撞体 + 程序化视图 + local_to_scene 材质），原先每刷一只
+## instantiate、每死一只 queue_free——刷怪尖峰与长局 GC 压力主要来自这里。照 BladeProjectile
+## 池模式：死亡/波末消散不再 queue_free 而是出树休眠回池；桶键 = 场景路径（普通/精英天然分桶）。
+## 关键约束：
+##   - 池体完全出树（remove_child，不挂池宿主）——在树、登记表、"enemies" 组三者同拍，
+##     池体绝不进组（否则回合末清场/get_nodes_in_group 会摸到池里的休眠体）
+##   - Boss 不入池：每局只出几次，重置复杂度高，_poolable 恒 false 走老路 queue_free
+##   - 出场基准快照必须在 instantiate 当刻拍（_capture_base_stats），晚一拍就被
+##     _scale_to_wave / 精英变异原地改过的字段污染
+const POOL_CAP_PER_KIND := 40  ## 每种敌的池上限；溢出个体直接释放（项目惯例：不把池撑大）
+static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
+static var pool_created_count: int = 0 ## 探针断言用：复用两轮零增长
+static var pool_reused_count: int = 0
+var _poolable: bool = false            ## 是否可回池（仅 acquire_or_new 出的个体为 true）
+var _pooled: bool = false              ## 当前是否泡在池里
+var _pool_key: String = ""
+var _active: bool = false              ## activate() 幂等闸
+var _assembled: bool = false           ## _ready 一次性装配闸（复用个体 _ready 不重跑）
+var _base_stats: Dictionary = {}       ## instantiate 当刻的出厂字段快照（空 = 尚未拍过）
+
+func _enter_tree() -> void:
+	# 活体登记从 _ready 挪到这里：池化复用时 _ready 不重跑，登记必须与进出树严格同拍
+	GameManager.register_enemy(self)
+
 # ---------------- 生命周期与程序化外观初始化 ----------------
 func _ready() -> void:
+	# 一次性装配（池化复用时 _ready 不重跑，由 reset_for_reuse + activate 接管每命初始化）
+	if not _assembled:
+		_assembled = true
+		anim_base_scale = anim_sprite.scale
+		var eid := enemy_id
+		if eid.is_empty():
+			eid = _deduce_enemy_id()
+		_eid = eid
+		# 程序化矢量视图先装配 —— 它决定图集还要不要加载（见下）
+		var has_procedural: bool = _init_procedural_view(eid)
+
+		# 图集腿帧只在「没有程序化配置」时才加载。EnemyVisualConfig.get_config 对全部敌种
+		# 都有配置（含 _ 兜底分支），所以当前一只怪都不会走这里：20 张 960×960 图集解码后
+		# 单张 3.5MB、合计约 70MB 常驻，是全项目最大的一块内存/显存开销，而屏上角色实际
+		# 只有约 121px（192px 格 × 0.63 缩放）。spritesheet_path 与 _setup_frames 保留为兜底。
+		# 注意：anim_sprite 节点不能删 —— 它不再是渲染器，而是 RunMotion 的形变状态载体
+		# （步态/悬浮/蠕动的 scale·rotation·offset 写在它身上，再由 _update_facing_and_anim
+		# 转发给 procedural_view），LingYi/JinChan 无图集却动画正常即是这条路径的现成反证。
+		if not has_procedural:
+			if spritesheet_path != "" and ResourceLoader.exists(spritesheet_path):
+				_setup_frames(spritesheet_path)
+			elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
+				anim_sprite.play("idle")
+	activate()
+
+## 每命初始化：新实例由 _ready 调入；池化复用实例由刷怪口在配置完字段后显式调入（幂等）。
+## 注意只放「每命都要重来」的事，一次性装配（视图/帧集/基准快照）在 _ready 的 _assembled 闸内。
+func activate() -> void:
+	if _active:
+		return
+	_active = true
 	# 小怪整体加血（GameBalance.MOB_HP_BASE_MULT）：精英/Boss 不吃这条，它们的厚度由基础值拉开。
-	# 放在 _ready 这一唯一收口：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
+	# 收口在 activate 这一处：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
 	# 不用在四个刷怪口各乘一遍。2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」。
 	if not is_elite:
 		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
-	anim_base_scale = anim_sprite.scale
-	var eid := enemy_id
-	if eid.is_empty():
-		eid = _deduce_enemy_id()
-	_eid = eid
-	# 程序化矢量视图先装配 —— 它决定图集还要不要加载（见下）
-	var has_procedural: bool = _init_procedural_view(eid)
 
-	# 图集腿帧只在「没有程序化配置」时才加载。EnemyVisualConfig.get_config 对全部敌种
-	# 都有配置（含 _ 兜底分支），所以当前一只怪都不会走这里：20 张 960×960 图集解码后
-	# 单张 3.5MB、合计约 70MB 常驻，是全项目最大的一块内存/显存开销，而屏上角色实际
-	# 只有约 121px（192px 格 × 0.63 缩放）。spritesheet_path 与 _setup_frames 保留为兜底。
-	# 注意：anim_sprite 节点不能删 —— 它不再是渲染器，而是 RunMotion 的形变状态载体
-	# （步态/悬浮/蠕动的 scale·rotation·offset 写在它身上，再由 _update_facing_and_anim
-	# 转发给 procedural_view），LingYi/JinChan 无图集却动画正常即是这条路径的现成反证。
-	if not has_procedural:
-		if spritesheet_path != "" and ResourceLoader.exists(spritesheet_path):
-			_setup_frames(spritesheet_path)
-		elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
-			anim_sprite.play("idle")
-
-	# 妖物出生时的弹性跃出感
+	# 敌人出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
 
@@ -184,11 +220,190 @@ func _ready() -> void:
 	_elite_slam_timer = slam_interval
 	_heal_timer = heal_interval
 
-	# 活体登记（2026-10-11）：鼓妖光环/产卵上限/召唤上限改走 GameManager.live_enemies，
-	# 不再每脉冲 get_nodes_in_group("enemies") 造全组数组；_exit_tree 注销，语义与组一致
-	GameManager.register_enemy(self)
 	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
 	_cull_timer = float(get_instance_id() % 6) * (CULL_INTERVAL / 6.0)
+
+## 出厂字段快照：必须赶在刷怪口 _scale_to_wave / 精英变异原地改数之前拍（acquire 当刻调用）。
+## 清单口径 = 所有「出场后会被原地改写」的导出字段：_scale_to_wave 四项 + 变异十二项 + 根节点变换。
+func _capture_base_stats() -> void:
+	_base_stats = {
+		"max_hp": max_hp, "contact_damage": contact_damage, "move_speed": move_speed,
+		"heal_amount": heal_amount, "stone_reward": stone_reward,
+		"charge_interval": charge_interval, "charge_side_bolts": charge_side_bolts,
+		"bolt_count": bolt_count, "bolt_interval": bolt_interval, "preferred_range": preferred_range,
+		"slam_interval": slam_interval, "slam_radius": slam_radius,
+		"slam_windup": slam_windup, "slam_dmg_mult": slam_dmg_mult,
+		"root_scale": scale, "root_modulate": modulate,
+	}
+
+## 池化复用的整备：出厂字段回滚 + 战斗运行时清零 + 视觉/物理节点归位。
+## 新实例（_assembled=false，尚未进过树）直接跳过——出厂值本就干净，
+## 且 @onready 变量（anim_sprite/hit_flash_mat）在 _ready 前还是 null，碰了会崩。
+## 调用时机：刷怪口 acquire 之后、_scale_to_wave 之前。
+func reset_for_reuse() -> void:
+	if not _assembled:
+		return
+	# 1) 出厂基准回滚
+	max_hp = _base_stats["max_hp"]
+	contact_damage = _base_stats["contact_damage"]
+	move_speed = _base_stats["move_speed"]
+	heal_amount = _base_stats["heal_amount"]
+	stone_reward = _base_stats["stone_reward"]
+	charge_interval = _base_stats["charge_interval"]
+	charge_side_bolts = _base_stats["charge_side_bolts"]
+	bolt_count = _base_stats["bolt_count"]
+	bolt_interval = _base_stats["bolt_interval"]
+	preferred_range = _base_stats["preferred_range"]
+	slam_interval = _base_stats["slam_interval"]
+	slam_radius = _base_stats["slam_radius"]
+	slam_windup = _base_stats["slam_windup"]
+	slam_dmg_mult = _base_stats["slam_dmg_mult"]
+	scale = _base_stats["root_scale"]
+	modulate = _base_stats["root_modulate"]
+	# 2) 战斗运行时状态清零
+	knockback_velocity = Vector2.ZERO
+	hit_stun_timer = 0.0
+	_hit_freeze_timer = 0.0
+	_hit_jiggle_offset = Vector2.ZERO
+	_skid_dust_timer = 0.0
+	_death_crit_kill = false
+	facing = "s"
+	juice_scale = Vector2.ONE
+	_bolt_timer = 1.2
+	_charge_active = 0.0
+	_charge_dir = Vector2.ZERO
+	_charge_windup = -1.0
+	_charge_brake = 0.0
+	_charge_stagger = 0.0
+	_charge_hit = false
+	_bite_windup = -1.0
+	_bite_active = 0.0
+	_bite_dir = Vector2.ZERO
+	_bite_hit = false
+	_fuse = -1.0
+	_no_drop = false
+	_buff_timer = 0.0
+	_aura_speed_mult = 1.0
+	_aura_until_ms = 0
+	_focus_hit_timer = 0.0
+	_focus_hit_count = 0
+	_mutated = false
+	_elite_slam_windup_t = -1.0
+	burn_timer = 0.0
+	burn_dps = 0.0
+	_burn_tick = 0.0
+	poison_timer = 0.0
+	poison_dps = 0.0
+	_poison_tick = 0.0
+	chill_timer = 0.0
+	chill_slow = 0.0
+	_squash_t = 0.0
+	_flash_t = 0.0
+	_flash_swap_t = 0.0
+	_hit_tilt = 0.0
+	_offscreen = false
+	_pp_stun = false
+	_pp_target_vel = Vector2.ZERO
+	dying = false
+	velocity = Vector2.ZERO
+	rotation = 0.0
+	# 3) 挂在身上的预警节点兜底清掉（dissolve 清场路径不经过 _die 的 _clear_*，复用前必须收）
+	if is_instance_valid(_charge_warning_line):
+		_charge_warning_line.queue_free()
+	_charge_warning_line = null
+	if is_instance_valid(_bite_warning_line):
+		_bite_warning_line.queue_free()
+	_bite_warning_line = null
+	if is_instance_valid(_explode_ring):
+		_explode_ring.queue_free()
+	_explode_ring = null
+	if is_instance_valid(_elite_slam_ring):
+		_elite_slam_ring.queue_free()
+	_elite_slam_ring = null
+	# 4) 视觉/物理节点归位（死亡塌缩 tween 会把 scale 收到 0、modulate 收到透明，必须还原）
+	visible = true
+	anim_sprite.scale = anim_base_scale
+	anim_sprite.modulate = Color.WHITE
+	anim_sprite.position = Vector2.ZERO
+	anim_sprite.rotation = 0.0
+	anim_sprite.offset = Vector2.ZERO
+	if procedural_view != null:
+		procedural_view.scale = anim_base_scale
+		procedural_view.modulate = Color.WHITE
+		procedural_view.position = Vector2.ZERO
+	if hit_flash_mat != null:
+		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
+		hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
+	set_physics_process(true)
+	set_process(true)
+	$CollisionShape2D.disabled = false
+	$Hurtbox/CollisionShape2D.disabled = false
+
+## 取一只敌人：池里有同种休眠体就复用，没有 instantiate 新的（出厂快照在离开池口前拍好）。
+## 调用方随后 reset_for_reuse() → 配位置/成长字段 → activate() → add_child。
+static func acquire_or_new(scene: PackedScene) -> EnemyBase:
+	if scene == null:
+		return null
+	var key := scene.resource_path
+	var bucket: Array = _pools.get(key, [])
+	while not bucket.is_empty():
+		var e := bucket.pop_back() as EnemyBase
+		if is_instance_valid(e) and e._pooled:
+			e._pooled = false
+			pool_reused_count += 1
+			return e
+	var fresh := scene.instantiate() as EnemyBase
+	if fresh == null:
+		return null
+	fresh._poolable = true
+	fresh._pool_key = key
+	fresh._capture_base_stats()
+	pool_created_count += 1
+	return fresh
+
+## 回收一只敌人进池休眠：出树（_exit_tree 自动注销登记表）+ 退组 + 停表。
+## 池满直接释放，不把池撑大（项目通行口径）。
+static func _recycle(e: EnemyBase) -> void:
+	if not is_instance_valid(e) or e._pooled:
+		return
+	e._pooled = true
+	e._active = false
+	e.remove_from_group("enemies")
+	if e.get_parent() != null:
+		e.get_parent().remove_child(e)
+	e.set_physics_process(false)
+	e.set_process(false)
+	e.set_process_input(false)
+	e.visible = false
+	var bucket: Array = _pools.get(e._pool_key, [])
+	if bucket.size() >= POOL_CAP_PER_KIND:
+		e.free()
+		return
+	bucket.append(e)
+	_pools[e._pool_key] = bucket
+
+## 尸体动画终点回调（_die / dissolve 的 tween 末尾）：池化个体回池，Boss 等未入池个体照旧释放
+func _recycle_or_free() -> void:
+	if _poolable:
+		EnemyBase._recycle(self)
+	else:
+		queue_free()
+
+## 释放池内全部休眠个体（Main._exit_tree 随场景清）：池体出树常驻，不主动放开
+## 会被退出检查报成 "resources still in use at exit" 假泄漏（与 _frames_cache 同一条坑）
+static func clear_pools() -> void:
+	for key in _pools.keys():
+		for e in _pools[key]:
+			if is_instance_valid(e):
+				e.free()
+	_pools.clear()
+
+## 池内休眠体总数（探针/判据用）
+static func pool_idle_count() -> int:
+	var n := 0
+	for key in _pools.keys():
+		n += (_pools[key] as Array).size()
+	return n
 
 func _exit_tree() -> void:
 	GameManager.unregister_enemy(self)
@@ -565,7 +780,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_bite_dir = dir
 			_show_bite_warning(dir)
 			play_squash(Vector2(1.24, 0.76), bite_windup_time)
-			# 起手是妖物自己的扑咬声，不许借玩家法器的挥砍（旧写法播 sword_swing，战场上分不清谁在打）
+			# 起手是敌人自己的扑咬声，不许借玩家武器的挥砍（旧写法播 sword_swing，战场上分不清谁在打）
 			AudioManager.play_sfx("enemy_claw", 0.5, GameManager.rng.randf_range(0.92, 1.08))
 
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
@@ -700,7 +915,7 @@ func _tick_hit_visuals(delta: float) -> void:
 ## 朝向迟滞 + 三档步态动画（步态腿帧 / 悬浮 / 蠕动）+ 程序化矢量视图同步
 func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void:
 	# 3. Sprite 方向 & 动画（带迟滞滤波 + 贴近锁定 + 移速步频自适应）
-	# 当怪物与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
+	# 当敌人与玩家极度贴近（小于 18px）时锁定原有朝向，避免围绕玩家中心旋转时的抽风风扇效应
 	if dist_sq > 324.0 and dir.length_squared() > 0.01:
 		var face: Array = RunMotion.facing_stable(dir, facing, anim_sprite.flip_h, 32.0)
 		if face[0] != "":
@@ -813,7 +1028,7 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
-	# 普通小怪同目标短窗集火保护：防多把法器同帧命中瞬间蒸发，保证受击硬直/击退/闪白充分展现
+	# 普通小怪同目标短窗集火保护：防多把武器同帧命中瞬间蒸发，保证受击硬直/击退/闪白充分展现
 	if not from_dot and not is_elite:
 		if _focus_hit_timer <= 0.0:
 			_focus_hit_count = 0
@@ -1119,7 +1334,7 @@ func _fire_bolt(player: Node2D) -> void:
 		if bolt_count > 1:
 			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
 		bolt.direction = base_dir.rotated(offset_ang)
-		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随波次缩放比例与接触伤害一致（基准取邪修基础值 13）
+		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
 		bolt.activate()
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
@@ -1142,7 +1357,7 @@ func receive_aura(mult: float, duration_ms: int) -> void:
 	_aura_speed_mult = maxf(_aura_speed_mult, mult)
 	_aura_until_ms = Time.get_ticks_msec() + duration_ms
 
-## 蛛母产卵：幼体在自身周围落点，血量/伤害按当前波次 × 危险度缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
+## 蛛母产卵：幼体在自身周围落点，生命/伤害按当前回合 × 危险度缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
 # ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
 
 func _spawn_minion() -> void:
@@ -1215,17 +1430,19 @@ func _spawn_vector_ghost() -> void:
 	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
 	tw.chain().tween_callback(ghost.queue_free)
 
-## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前波次 × 危险度缩放；自爆/消散不触发）
+## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前回合 × 危险度缩放；自爆/消散不触发）
 func _split_offspring() -> void:
 	for i in range(split_count):
-		var child := split_scene.instantiate() as EnemyBase
+		var child := EnemyBase.acquire_or_new(split_scene)
 		if child == null:
 			continue
+		child.reset_for_reuse()
 		var angle := TAU * float(i) / float(split_count) + GameManager.rng.randf() * 0.5
 		child.global_position = global_position + Vector2(cos(angle), sin(angle)) * 26.0
 		child.max_hp = ceilf(child.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
 		child.contact_damage = ceilf(child.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
 		child.add_to_group("enemies")
+		child.activate()
 		get_parent().call_deferred("add_child", child)
 
 # ---------------- 行为支路：精英变异·震地（铁甲巨怪） ----------------
@@ -1311,7 +1528,7 @@ func _enter_mutation() -> void:
 	AudioManager.play_sfx("boss_raid", 0.9, 0.85)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 
-## 波次结束时的消散：不掉落、不计数
+## 回合结束时的消散：不掉落、不计数
 # ---------------- 死亡与清场 ----------------
 
 func dissolve() -> void:
@@ -1328,7 +1545,8 @@ func dissolve() -> void:
 	if procedural_view != null:
 		tw.tween_property(procedural_view, "modulate:a", 0.0, 0.4)
 		tw.tween_property(procedural_view, "scale", procedural_view.scale * 0.6, 0.4)
-	tw.chain().tween_callback(queue_free)
+	tw.chain().tween_callback(_recycle_or_free)
+	## （池化：原 queue_free——尸体塌缩落定后出树回池，下一波同种怪零 instantiate 复用）
 
 func _die() -> void:
 	if dying:
@@ -1336,7 +1554,7 @@ func _die() -> void:
 	dying = true
 	GameManager.register_kill(is_elite, _death_crit_kill)
 
-	# 血蛹系：临死分裂出幼体（自爆/波末消散不触发）
+	# 血蛹系：临死分裂出幼体（自爆/回合末消散不触发）
 	if split_count > 0 and split_scene != null and not _no_drop:
 		_split_offspring()
 
@@ -1348,7 +1566,7 @@ func _die() -> void:
 		_elite_slam_ring.queue_free()
 	_elite_slam_ring = null
 
-	# 金蟾系：击杀额外爆金币（波末消散/自爆不算战果）
+	# 金蟾系：击杀额外爆金币（回合末消散/自爆不算战果）
 	if stone_reward > 0 and not _no_drop:
 		GameManager.add_spirit_stones(stone_reward)
 		DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -30.0), stone_reward, false, "+%d 金币" % stone_reward)
@@ -1364,7 +1582,7 @@ func _die() -> void:
 			GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		# 普通妖物死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
+		# 普通敌人死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
 		GameFeel.micro_kick(GameManager, knockback_velocity, 2.5)
 		AudioManager.play_sfx("enemy_death", 0.90)
 
@@ -1378,7 +1596,7 @@ func _die() -> void:
 		orb.global_position = global_position
 		orb.heal_amount = float(heal_orb_drop)
 		orb.activate()
-	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占灵石位）
+	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占金币位）
 	if GameManager.heal_orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < GameManager.heal_orb_chance:
 		var extra_orb := HealOrb.acquire_or_new(get_parent())
 		extra_orb.global_position = global_position + Vector2(
@@ -1386,7 +1604,7 @@ func _die() -> void:
 		extra_orb.heal_amount = HealOrb.BASE_HEAL
 		extra_orb.activate()
 	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
-	# 波末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
+	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
 	var ex_base := GameManager.item_hook_sum("kill_explode")
 	if ex_base > 0.0 and not _no_drop:
 		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
@@ -1414,8 +1632,8 @@ func _die() -> void:
 		if is_elite:
 			gem.exp_value = 8
 		else:
-			# 碎晶档（2026-10-13 经济优化）：普通怪按波次概率掉最低面额小水晶 ——
-			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，稀释后期灵石通胀。
+			# 碎晶档（2026-10-13 经济优化）：普通怪按回合概率掉最低面额小水晶 ——
+			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，稀释后期金币通胀。
 			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎晶率见 BalanceEconomy。
 			if GameManager.rng.randf() < GameBalance.gem_shard_chance(GameManager.wave_number):
 				gem.is_shard = true
@@ -1453,4 +1671,4 @@ func _die() -> void:
 			tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
 		# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
 		# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
-		tw.chain().tween_callback(queue_free)
+		tw.chain().tween_callback(_recycle_or_free)

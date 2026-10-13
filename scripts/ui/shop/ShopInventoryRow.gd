@@ -29,7 +29,7 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 		bg = GameStyle.with_alpha(GameStyle.GOLD, 0.14)
 	# 元素件 = 暖橙红描边（与货架大卡的图标框同一语言，判定见 GameStyle.is_elemental）。
 	# 描边一色五用要有明确优先级，从低到高：背包位 → 上阵位 → 元素件 → 可合成 → 已选中。
-	# 元素是这件法器的固有属性，但「此刻能对它做什么」（凑齐三件 / 正要点它）压得过它，
+	# 元素是这件武器的固有属性，但「此刻能对它做什么」（凑齐三件 / 正要点它）压得过它，
 	# 否则最该按的那颗键会丢颜色。
 	border = GameStyle.element_border(id, border)
 	if mergeable:
@@ -63,7 +63,7 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 
 	# 点选认「按下与抬起都留在原地」，不认松开：划列表时格子跟着内容一起走，手指自始至终压在
 	# 同一格内 ⇒ 按旧写法（BaseButton.pressed）每划一下都顺手多选一件。
-	# 点击已持有的法器弹出悬浮详情卡：展示全部属性、流派与说明，并提供快捷操作（合成/换装/出售）。
+	# 点击已持有的武器弹出悬浮详情卡：展示全部属性、流派与说明，并提供快捷操作（合成/换装/出售）。
 	GameStyle.tap(slot, func():
 		if is_sel:
 			shop.selected = {}
@@ -140,7 +140,7 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	chip.custom_minimum_size = Vector2(tile, tile)
 	# 与图鉴卡/属性行同一约定：登记一下这颗徽位弹的是谁，判据不必再抄一份对照表
 	chip.set_meta("tip_title", String(def.get("name", item_id)))
-	# 与槽位同一口径：PASS，让「按下」那一拍冒泡到 OwnedScroll，压在法宝徽位上也划得动整排
+	# 与槽位同一口径：PASS，让「按下」那一拍冒泡到 OwnedScroll，压在道具徽位上也划得动整排
 	chip.mouse_filter = Control.MOUSE_FILTER_PASS
 	var tier_num: int = int(def.get("tier", 1))
 	var tier_col: Color = ItemData.tier_color(tier_num)
@@ -165,8 +165,8 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	return chip
 
 ## 道具徽记的详情卡：品阶/原价/出售返还 + 加成行（与货架卡同源） + 描述逐行 + 【出售】那颗键。
-## 2026-10-12 用户：「商店里的这些道具啊，如果有买到不想要的，也可以卖掉」—— 法器与灵兽一直
-## 卖得掉，法宝这一类原先点进去只有读数没有操作：买错了整局背着（被动道具不占槽、没法卸），
+## 2026-10-12 用户：「商店里的这些道具啊，如果有买到不想要的，也可以卖掉」—— 武器与灵兽一直
+## 卖得掉，道具这一类原先点进去只有读数没有操作：买错了整局背着（被动道具不占槽、没法卸），
 ## 这一屏是唯一能反悔的地方。出售走 GameManager.sell_item，加过的属性同一条链路退回。
 static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> void:
 	var def := ItemData.get_def(item_id)
@@ -188,13 +188,13 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		var s := String(line).strip_edges()
 		if not s.is_empty():
 			notes.append(s)
-	notes.append("出售按原价一半回收金币，加过的属性当场退回（与法器、灵兽同一条口径）。")
+	notes.append("出售按原价一半回收金币，加过的属性当场退回（与武器、灵兽同一条口径）。")
 	var unique := bool(def.get("unique", false))
-	var foot := "每波商店会刷新更多道具。"
+	var foot := "每回合商店会刷新更多道具。"
 	if unique:
 		foot = "本局限购一件：出售后这一件不再上架。"
 	# 万兽笼这类「退了当场灵兽栏超编」的：键摆着但按不动，理由印在键上
-	# （与法器详情卡「装备已满」「背包已满」那颗灰键同一条口径 —— 不许按下去什么也没发生）
+	# （与武器详情卡「装备已满」「背包已满」那颗灰键同一条口径 —— 不许按下去什么也没发生）
 	var slots_given := int((def.get("apply", {}) as Dictionary).get("pet_slots", 0))
 	var over_pets := slots_given > 0 and GameManager.pets.size() > GameManager.max_pet_slots() - slots_given
 	if over_pets:
@@ -303,7 +303,7 @@ static func open_pet_tip(shop: WaveShop, pet_id: String, anchor: Control) -> voi
 		"chip_color": color,
 		"rows": rows,
 		"body": String(def.get("desc", "")),
-		"notes": ["灵兽：跟随主角战斗，无敌免死，跨波存活。", "出售后释放栏位，并可再次在商店刷出。"],
+		"notes": ["灵兽：跟随主角战斗，无敌免死，跨回合存活。", "出售后释放栏位，并可再次在商店刷出。"],
 		"foot": "当前灵兽栏位：%d/%d" % [GameManager.pets.size(), GameManager.max_pet_slots()],
 		"actions": actions,
 	})

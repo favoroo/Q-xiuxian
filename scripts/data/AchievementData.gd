@@ -24,7 +24,7 @@ const CATEGORY_NAMES: Dictionary = {
 	"luck": "机缘",
 }
 
-## 初始默认解锁的 6 名修士
+## 初始默认解锁的 6 名角色
 const DEFAULT_CULTIVATORS: Array[String] = [
 	"jianchi",
 	"shiyue",
@@ -34,7 +34,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"leifa",
 ]
 
-## 初始默认进入商店货架池的 51 件道具（高阶出现节奏由 GameBalance.item_tier_weights 波次门槛控制）
+## 初始默认进入商店货架池的 51 件道具（高阶出现节奏由 GameBalance.item_tier_weights 回合门槛控制）
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
@@ -97,7 +97,7 @@ const DEFAULT_ITEMS: Array[String] = [
 ]
 
 ## 成就定义表（按 category 聚组排布；UI 按 CATEGORY_ORDER 分节展示）
-## reward_type: "cultivator"（解锁新道统） | "item"（解锁新法宝入池） | "none"（纯荣誉，不发奖励）
+## reward_type: "cultivator"（解锁新道统） | "item"（解锁新道具入池） | "none"（纯荣誉，不发奖励）
 const ACHIEVEMENTS: Array[Dictionary] = [
 	# ---------------- 试炼：通关与难度挑战 ----------------
 	{
@@ -204,7 +204,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	{
 		"id": "ach_cult_jiguan",
 		"name": "巧夺天工",
-		"cond_desc": "单局同时上阵机关或召唤类法器达到4件",
+		"cond_desc": "单局同时上阵机关或召唤类武器达到4件",
 		"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "jiguan",
@@ -284,7 +284,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	},
 	{
 		"id": "ach_item_wuxing",
-		"name": "道行日深",
+		"name": "经验日深",
 		"cond_desc": "单局等级达到15级",
 		"category": "grind",
 		"reward_type": "item",
@@ -366,14 +366,14 @@ static func get_def(ach_id: String) -> Dictionary:
 			return a
 	return {}
 
-## 反查某名修士对应的解锁成就（初始默认解锁的修士返回空字典）
+## 反查某名角色对应的解锁成就（初始默认解锁的角色返回空字典）
 static func cultivator_unlock_achievement(cid: String) -> Dictionary:
 	for a in ACHIEVEMENTS:
 		if a.get("reward_type", "") == "cultivator" and a.get("reward_id", "") == cid:
 			return a
 	return {}
 
-## 反查某件法宝对应的解锁成就（初始默认入池的法宝返回空字典）
+## 反查某件道具对应的解锁成就（初始默认入池的道具返回空字典）
 static func item_unlock_achievement(item_id: String) -> Dictionary:
 	for a in ACHIEVEMENTS:
 		if a.get("reward_type", "") == "item" and a.get("reward_id", "") == item_id:

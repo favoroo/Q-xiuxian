@@ -678,7 +678,7 @@ func _draw_jiansha_elite() -> void:
 	draw_sharp_eye(head_pos + Vector2(-3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 
-## 13. 妖潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
+## 13. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
 func _draw_boss(final_boss: bool) -> void:
 	var float_y := sin(_time * 2.2) * 2.8
 	var center := Vector2(0, -4 + float_y)

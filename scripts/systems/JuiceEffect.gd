@@ -233,7 +233,7 @@ static func spawn_shockwave(parent: Node, pos: Vector2, max_radius: float, col: 
 	fx._add_ring(max_radius * 0.12, max_radius, col, 6.0)
 	fx._add_ring(max_radius * 0.06, max_radius * 0.9, col.lightened(0.45), 2.5)
 
-## 灵石入体微缩流光
+## 金币入体微缩流光
 static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) -> void:
 	if not _ready_to_spawn(parent):
 		return
@@ -261,7 +261,7 @@ static func spawn_step_dust(parent: Node, pos: Vector2, move_dir: Vector2) -> vo
 			randf_range(1.8, 3.2))
 
 ## 弹丸湮灭微闪：弹丸因命中消亡时，在弹丸当前位置产生的冷冽灵光溃散（0.11s）。
-## 【设计铁律】不同于挂在怪物身上的旧受击火花：它严格锚定在弹丸自身碰撞位置，
+## 【设计铁律】不同于挂在敌人身上的旧受击火花：它严格锚定在弹丸自身碰撞位置，
 ## 并受严格的单物理帧限流闸（<=6发/帧）与视口门控双重保护，绝不空地乱闪、绝不糊屏。
 static func spawn_impact_pop(parent: Node, pos: Vector2, col: Color, impact_dir: Vector2 = Vector2.ZERO) -> void:
 	if not _ready_to_spawn(parent):

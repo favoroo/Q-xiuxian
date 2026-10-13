@@ -1,13 +1,13 @@
 class_name BossEnemy
 extends EnemyBase
 
-## 关卡 Boss：固定 Boss 波（第 10/20 波、无尽每 10 波）登场，参考土豆兄弟的大 Boss 设计。
-## 与普通妖物的区别：
+## 关卡 Boss：固定 Boss 回合（第 10/20 波、无尽每 10 波）登场，参考土豆兄弟的大 Boss 设计。
+## 与普通敌人的区别：
 ##   1. 超厚血条，顶部 HUD 专设 Boss 血条（boss_hp_changed / boss_defeated 信号驱动）
 ##   2. 周期性特殊攻击轮换：环弹齐射 → 震地冲击 → 召唤妖群
 ##   3. 半血进入二阶段「魔焰滔天」：出招更频繁、环弹更密、移动更快
-## 数值（血量/接触伤害/攻击周期/称号）由 WaveSpawner 按 GameBalance 公式注入，
-## 波次缩放后直接覆盖 max_hp / contact_damage，本脚本不自带第二套曲线。
+## 数值（生命/接触伤害/攻击周期/称号）由 WaveSpawner 按 GameBalance 公式注入，
+## 回合缩放后直接覆盖 max_hp / contact_damage，本脚本不自带第二套曲线。
 
 enum Pattern { RING, SLAM, SUMMON }
 
@@ -144,12 +144,17 @@ func _cast_summon(player: Node2D) -> void:
 	var dmg_mult := GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
 	for i in range(count):
 		var scene: PackedScene = _minion_scenes[i % _minion_scenes.size()]
-		var minion := scene.instantiate() as EnemyBase
+		# 召唤妖群同样走敌人对象池（Boss 波密集刷怪是 instantiate 尖峰的高发区）
+		var minion := EnemyBase.acquire_or_new(scene)
+		if minion == null:
+			continue
+		minion.reset_for_reuse()
 		var ang := GameManager.rng.randf() * TAU
 		minion.global_position = global_position + Vector2(cos(ang), sin(ang)) * 110.0
 		minion.add_to_group("enemies")
 		minion.max_hp = ceilf(minion.max_hp * hp_mult)
 		minion.contact_damage = ceilf(minion.contact_damage * dmg_mult)
+		minion.activate()
 		get_parent().add_child(minion)
 	play_squash(Vector2(1.18, 0.85), 0.25)
 	AudioManager.play_sfx("wave_start", 0.7)

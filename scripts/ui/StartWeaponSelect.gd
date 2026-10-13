@@ -252,7 +252,7 @@ func _on_back_pressed() -> void:
 	tw.tween_callback(func():
 		visible = false
 		_transitioning = false
-		# 返回链与前进链互为镜像：法器 ← 神通 ← 道统；旧档缺 SkillSelect 节点时回退到道统
+		# 返回链与前进链互为镜像：武器 ← 技能 ← 道统；旧档缺 SkillSelect 节点时回退到道统
 		var skill_select = get_parent().get_node_or_null("SkillSelect")
 		if skill_select != null and skill_select.has_method("show_select"):
 			skill_select.show_select()

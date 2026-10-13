@@ -4,7 +4,7 @@ extends Node2D
 ## 治疗灵兽（治疗技能附带召唤，2026-10-11 技能改版）：跟随玩家缓飘的光灵，每秒一拍把
 ## SkillData.renewal 的 pet_heal_pct 比例灌回玩家，pet_duration 秒后消散；重施治疗按组替换旧灵。
 ## 组别铁律对齐 SpiritBeast 头注：只挂自己的 spirit_healers 组（重施替换按组找旧灵），
-## 绝不进 enemies/turrets/gems/chests 四个波末清场组，也无任何碰撞体积——纯跟随渲染体，
+## 绝不进 enemies/turrets/gems/chests 四个回合末清场组，也无任何碰撞体积——纯跟随渲染体，
 ## 敌人打不到它、玩家的武器也索敌不到它。
 ## 视觉：程序化光灵（增益绿光核 + 呼吸光环 + 治疗脉冲扩散环），纯 _draw 不挂粒子（移动端零开销）。
 ## 满血一拍不空跳：回不上血就不飘假数字、不放空脉冲，光灵只是安静飘着等下一拍。
@@ -14,7 +14,7 @@ const FOLLOW_DIST: float = 34.0    ## 跟随绕飘半径（px）
 const HEIGHT_OFFSET: float = 30.0  ## 悬在玩家头顶上方（px，负 Y 向上）
 const DISSOLVE_SEC: float = 0.35   ## 消散动画时长（秒）
 
-var heal_pct: float = 0.02  ## 每拍回复玩家最大气血比例（Player._do_renewal 按 SkillData 写入）
+var heal_pct: float = 0.02  ## 每拍回复玩家最大生命比例（Player._do_renewal 按 SkillData 写入）
 var lifetime: float = 8.0   ## 存活时长（秒），耗尽即消散
 var target: Player = null   ## 跟随与治疗目标（召唤者）
 

@@ -33,7 +33,7 @@ var procedural_view: ProceduralCultivatorView = null
 var is_procedural: bool = false
 var gait_phase_counter: float = 0.0
 
-# ---------------- 随行神通（技能）运行时 ----------------
+# ---------------- 随行技能运行时 ----------------
 ## 冷却账本两段式：施放先开「效果活跃窗口」（skill_active_*），窗口走完才进冷却（skill_cd_*）。
 ## 窗口时长按技能类型取值：加速/急速/无敌 = duration，冲刺 = iframe 无敌时长，治疗瞬发 = 0（按下即进 CD）。
 var skill_cd_left: float = 0.0     ## 技能冷却剩余秒（HUD 冷却遮罩轮询这个）
@@ -89,7 +89,7 @@ func _ready() -> void:
 	GameManager.upgrade_applied.connect(_on_upgrade_applied)
 	anim_base_scale = anim_sprite.scale
 	_setup_sprite_frames()
-	# 浮游法器在 _process 里做轨道跟随（渲染帧率），父链开了物理插值会互相打架，关闭该分支插值
+	# 浮游武器在 _process 里做轨道跟随（渲染帧率），父链开了物理插值会互相打架，关闭该分支插值
 	weapon_holder.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_search_phase = fposmod(float(get_instance_id() % 97) * 0.001, TARGET_SEARCH_INTERVAL)
 	sync_drones()
@@ -107,7 +107,7 @@ func _setup_sprite_frames() -> void:
 	if shadow_sprite != null:
 		shadow_sprite.visible = true
 
-	# 角色独立形象：按道统读 CultivatorData.sprite 的 8 方向图集，缺图回退默认青衫修士
+	# 角色独立形象：按道统读 CultivatorData.sprite 的 8 方向图集，缺图回退默认青衫角色
 	var sheet_path := "res://assets/art/pawn_blue_8dir.png"
 	var cdef := CultivatorData.get_def(GameManager.cultivator_id)
 	_motion_mode = String(cdef.get("motion", "gait"))
@@ -130,7 +130,7 @@ func _setup_sprite_frames() -> void:
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			procedural_view.visible = true
-		# 程序化角色不加载图集：全部 19 位修士都是 procedural，而每张 960×960 图集
+		# 程序化角色不加载图集：全部 19 位角色都是 procedural，而每张 960×960 图集
 		# 解码后占 3.5MB，屏上实际只有约 144px（192px 格 × 0.75）。图集路径保留给
 		# 将来新增的 gait 道统 —— 那种情况下面的分支会照常构建 SpriteFrames。
 		anim_sprite.sprite_frames = null
@@ -247,7 +247,7 @@ func _recalculate_weapon_slots() -> void:
 		w.spread_angle = (float(i) - float(count - 1) * 0.5) * deg_to_rad(28.0)
 		w.orbit_extents = FloatingWeapon.DEFAULT_ORBIT_EXTENTS
 
-## 上阵两把悬浮法器互换位置（商店拖拽换位用）：环绕角度按次序重排，换位即换环绕方位；
+## 上阵两把悬浮武器互换位置（商店拖拽换位用）：环绕角度按次序重排，换位即换环绕方位；
 ## 灵宝（drones）的互换走 WeaponInventory.swap_equipped_slots，不经过这里
 func reorder_weapons(i: int, j: int) -> void:
 	equipped_cleanup()
@@ -280,7 +280,7 @@ func get_equipped_weapons_data() -> Array[Dictionary]:
 func sync_drones() -> void:
 	var target: Array = GameManager.drones
 	# 期望具数 = 每条御灵按星级分身（★1=1 ★2=2 ★3=3，WeaponData.drone_orb_count）：
-	# 升星补上「召唤物数量」成长轴，单法器总纸面伤害不变，贴身覆盖与占空比抬升
+	# 升星补上「召唤物数量」成长轴，单武器总纸面伤害不变，贴身覆盖与占空比抬升
 	var desired := 0
 	for d_entry in target:
 		desired += WeaponData.drone_orb_count(GameManager._drone_star(d_entry))
@@ -296,7 +296,7 @@ func sync_drones() -> void:
 			var child = sun_orb_container.get_child(last_idx)
 			sun_orb_container.remove_child(child)
 			child.queue_free()
-	# 逐条御灵下发星级/法宝 id/分身具数；伤害均摊由 SunOrb.setup 自己结算
+	# 逐条御灵下发星级/道具 id/分身具数；伤害均摊由 SunOrb.setup 自己结算
 	var orb_idx := 0
 	for d_entry in target:
 		var d_id: String = GameManager._drone_id(d_entry)
@@ -325,7 +325,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 	if gained <= 0.01:
 		return
 	GameManager.total_hp_healed += gained
-	# 灵髓丹气：回复气血后触发短时增伤与加速
+	# 灵髓丹气：回复生命后触发短时增伤与加速
 	var heal_dmg: float = GameManager.item_hook_sum("heal_buff_damage")
 	if heal_dmg > 0.0:
 		var dur: float = maxf(1.0, GameManager.item_hook_sum("heal_buff_dur"))
@@ -338,7 +338,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 	AudioManager.play_sfx("heal", 0.9)
 	DamageNumber.spawn(get_parent(), global_position, int(gained), false, "+" + str(int(gained)))
 
-# ---------------- 随行神通（技能） ----------------
+# ---------------- 随行技能 ----------------
 
 ## HUD 技能按钮入口。false = 没放出来（CD 中 / 效果活跃中 / 战斗外 / 无技能），调用方不发反馈
 func try_activate_skill() -> bool:
@@ -392,7 +392,7 @@ func _begin_skill_cooldown() -> void:
 	skill_cd_total = maxf(0.01, _skill_pending_cd)
 	skill_cd_left = skill_cd_total
 
-## 击杀或其他特质返还/预扣神通冷却（绝尘·斩灭凝神）
+## 击杀或其他特质返还/预扣技能冷却（绝尘·斩灭凝神）
 func refund_skill_cooldown(amount: float) -> void:
 	if amount <= 0.0:
 		return
@@ -508,16 +508,9 @@ func _release_shadow_step() -> void:
 		return
 	var dmg := ShadowStepData.burst_damage(shadow_ring)
 	var impulse: float = ShadowStepData.push_impulse(shadow_ring) * GameManager.knockback_mult
-	for node in get_tree().get_nodes_in_group("enemies"):
-		var e := node as EnemyBase
-		if e == null or not is_instance_valid(e) or e.dying:
-			continue
-		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，不许被影袭推动或打到
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
-			continue
+	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
+	for e in EnemyFilter.collect(get_tree(), global_position, ShadowStepData.BURST_RADIUS):
 		var off: Vector2 = e.global_position - global_position
-		if off.length() > ShadowStepData.BURST_RADIUS:
-			continue
 		var dir := off.normalized() if off.length_squared() > 0.0001 else _dash_dir
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, ShadowStepData.BURST_RADIUS,
@@ -536,54 +529,29 @@ func _release_guard_stance() -> void:
 	GameManager.shield_charge = 0.0
 	var dmg := GuardStanceData.burst_damage(charge)
 	var impulse: float = GuardStanceData.PUSH_IMPULSE * GameManager.knockback_mult
-	for node in get_tree().get_nodes_in_group("enemies"):
-		var e := node as EnemyBase
-		if e == null or not is_instance_valid(e) or e.dying:
-			continue
-		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，不许被盾势推动或打到
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
-			continue
+	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
+	for e in EnemyFilter.collect(get_tree(), global_position, GuardStanceData.BURST_RADIUS):
 		var off: Vector2 = e.global_position - global_position
-		if off.length() > GuardStanceData.BURST_RADIUS:
-			continue
 		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, GuardStanceData.BURST_RADIUS,
 		GameStyle.AURUM, 0.26)
 	AudioManager.play_sfx("whoosh_heavy", 0.9, 0.72)
 
-## 天雷（雷法真君·全自动）：引雷劈向索敌圈内最近的妖兽，落点小范围震荡。
+## 天雷（雷法真君·全自动）：引雷劈向索敌圈内最近的敌人，落点小范围震荡。
 ## 与盾势同一把尺子：环特效半径传的就是判定半径；不加震屏——落雷由环、跳字与击退本身表达。
 ## 伤害只随元素伤害成长（ThunderData.bolt_damage）× 短时增益乘区——不吃武器 tag 乘区，
-## 它是道统神通不是法器；返回 false = 索敌圈内无怪（调用方走短间隔重试，不空耗整轮冷却）。
+## 它是道统技能不是武器；返回 false = 索敌圈内无怪（调用方走短间隔重试，不空耗整轮冷却）。
 func _call_thunder() -> bool:
-	var best: EnemyBase = null
-	var best_d := ThunderData.SEEK_RANGE
-	for node in get_tree().get_nodes_in_group("enemies"):
-		var e := node as EnemyBase
-		if e == null or not is_instance_valid(e) or e.dying:
-			continue
-		# 与御灵感知圈同一份过滤口径：藏宝匣与灵草不算敌人，天雷不劈它们
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
-			continue
-		var d: float = global_position.distance_to(e.global_position)
-		if d < best_d:
-			best_d = d
-			best = e
+	# 索敌：过滤口径统一走 EnemyFilter，取 SEEK_RANGE 内最近的一只
+	var best := EnemyFilter.nearest(get_tree(), global_position, ThunderData.SEEK_RANGE)
 	if best == null:
 		return false
 	var strike_pos: Vector2 = best.global_position
 	var dmg: float = ThunderData.bolt_damage(GameManager.elemental_damage) * GameManager.buff_damage_mult
 	var impulse: float = ThunderData.PUSH_IMPULSE * GameManager.knockback_mult
-	for node in get_tree().get_nodes_in_group("enemies"):
-		var e := node as EnemyBase
-		if e == null or not is_instance_valid(e) or e.dying:
-			continue
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
-			continue
+	for e in EnemyFilter.collect(get_tree(), strike_pos, ThunderData.RADIUS):
 		var off: Vector2 = e.global_position - strike_pos
-		if off.length() > ThunderData.RADIUS:
-			continue
 		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
@@ -622,7 +590,7 @@ func _do_haste(st: Dictionary) -> void:
 func _do_aegis(st: Dictionary) -> void:
 	var dur: float = float(st["duration"])
 	invulnerable_time = maxf(invulnerable_time, dur)
-	# 金光罡风：无敌期间法器击退力度大幅提升（活跃窗口走完由 _on_skill_effect_end 回 1.0）
+	# 金光罡风：无敌期间武器击退力度大幅提升（活跃窗口走完由 _on_skill_effect_end 回 1.0）
 	GameManager.buff_knockback_mult = float(st.get("knockback_boost", 1.0))
 	play_squash(Vector2(0.82, 1.22), 0.24)
 	if skill_vfx != null:
@@ -744,7 +712,7 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
 
-	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印任一法宝在场才计时；脚底一动立刻清零
+	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印任一道具在场才计时；脚底一动立刻清零
 	if GameManager.has_still_mechanic():
 		GameManager.still_time = 0.0 if is_moving else GameManager.still_time + delta
 		if not is_moving:
@@ -752,22 +720,13 @@ func _physics_process(delta: float) -> void:
 			if regen_pct > 0.0 and current_health < max_health:
 				heal(max_health * regen_pct * delta, true)
 
-	# 蛮兵·陷阵：节流数感知圈内的妖兽（crowd_damage_radius = 0 时整块零开销）
+	# 蛮兵·陷阵：节流数感知圈内的敌人（crowd_damage_radius = 0 时整块零开销）
 	if GameManager.crowd_damage_radius > 0.0:
 		_crowd_tick -= delta
 		if _crowd_tick <= 0.0:
 			_crowd_tick = 0.2
-			var crowd_n := 0
-			var crowd_r2 := GameManager.crowd_damage_radius * GameManager.crowd_damage_radius
-			for node in get_tree().get_nodes_in_group("enemies"):
-				var ce := node as EnemyBase
-				if ce == null or not is_instance_valid(ce) or ce.dying:
-					continue
-				if ce.is_in_group("chests") or ce.is_in_group("herbs"):
-					continue
-				if global_position.distance_squared_to(ce.global_position) <= crowd_r2:
-					crowd_n += 1
-			GameManager.nearby_enemy_count = crowd_n
+			GameManager.nearby_enemy_count = EnemyFilter.count_in_range(
+				get_tree(), global_position, GameManager.crowd_damage_radius)
 
 	# 灵田界碑边界
 	var lim: float = GameManager.MAP_HALF_EXTENT - 26.0
@@ -842,11 +801,11 @@ func _physics_process(delta: float) -> void:
 	# 4. 灵蝶环绕运算
 	_process_sun_orbs(delta)
 
-	# 5. 随行神通（技能）角色身上动效更新
+	# 5. 随行技能角色身上动效更新
 	if skill_vfx != null:
 		skill_vfx.update_vfx(delta, is_moving, velocity)
 
-	# 6. 统一调度各法器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
+	# 6. 统一调度各武器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
 	# 10Hz 节流 + 错相（2026-10-10 第 6 波卡顿优化）：敌人位置连续，索敌无需逐帧
 	# intersect_shape；新目标入射程最多延迟 100ms 锁定，肉眼无感
 	_search_phase -= delta
@@ -915,7 +874,7 @@ func _update_weapon_targets() -> void:
 			if not is_instance_valid(enemy):
 				continue
 			var is_chest := enemy.is_in_group("chests")
-			# 匣子与妖怪共用 4 号层，同一圈查询两个都捞得到；匣子另册登记，只接闲着的法器
+			# 匣子与妖怪共用 4 号层，同一圈查询两个都捞得到；匣子另册登记，只接闲着的武器
 			if is_chest and not _candidate_chests_buf.has(enemy):
 				_candidate_chests_buf.append(enemy)
 				continue
@@ -966,13 +925,13 @@ func _update_weapon_targets() -> void:
 		cd["on_screen"] = GameBalance.is_in_viewport(c.global_position, global_position)
 		_chests_info_buf.append(cd)
 
-	# 两段式：妖怪先分完，剩下无事可做的法器才去砸匣子（见 GameBalance.assign_targets_with_chests）
+	# 两段式：妖怪先分完，剩下无事可做的武器才去砸匣子（见 GameBalance.assign_targets_with_chests）
 	var assignments: Array = GameBalance.assign_targets_with_chests(_weapons_info_buf, _enemies_info_buf, _chests_info_buf)
 	_candidate_targets_buf.clear()
 	_candidate_targets_buf.append_array(_candidate_enemies_buf)
 	_candidate_targets_buf.append_array(_candidate_chests_buf)
 
-	# 按实际共享同一目标的法器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
+	# 按实际共享同一目标的武器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
 	_target_groups_buf.clear()
 	for i in range(_weapons_buf.size()):
 		var t_idx := int(assignments[i])
@@ -1164,14 +1123,14 @@ func increase_max_hp(amount: float, heal_amount: float) -> void:
 
 ## 出售回退上限（StatSystem.revert_stat_fields 的 max_hp 分支）：只把上限缩回去、当前血截平。
 ## 买的时候那一口治疗不退回来 —— 血已经回了；但超出新上限的那一截必须削平，
-## 否则顶栏与商店那颗气血徽记会读出「145/120」这种假数（读数必须与判定同源）。
+## 否则顶栏与商店那颗生命徽记会读出「145/120」这种假数（读数必须与判定同源）。
 func decrease_max_hp(amount: float) -> void:
 	max_health = maxf(1.0, max_health - amount)
 	current_health = minf(current_health, max_health)
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
 func _on_pickup_area_area_entered(area: Area2D) -> void:
-	# 只认实现了 magnet_to 的掉落物（灵石）。残丹/回春葫芦故意不实现它：那颗要人贴上去才入口。
+	# 只认实现了 magnet_to 的掉落物（金币）。残丹/回春葫芦故意不实现它：那颗要人贴上去才入口。
 	if area.has_method("magnet_to"):
 		area.magnet_to(self)
 	elif area.get_parent() and area.get_parent().has_method("magnet_to"):

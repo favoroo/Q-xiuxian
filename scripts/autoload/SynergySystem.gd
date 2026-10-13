@@ -2,14 +2,14 @@ class_name SynergySystem
 extends RefCounted
 
 ## 流派羁绊阶梯计算与主标签保底子系统
-## 从 GameManager 抽离，负责统计上阵法器标签、重算各流派阶梯加成、差值更新御灵气血及商店主标签保底。
+## 从 GameManager 抽离，负责统计上阵武器标签、重算各流派阶梯加成、差值更新御灵生命及商店主标签保底。
 ##
 ## 结算口径（2026-10-11 收拢）：本文件不再持有任何羁绊幅度字面量。
 ## 每档加多少、写进 GameManager 哪个属性、乘还是加，全部读 WeaponData.SYNERGIES[tag].effects；
 ## 局内阶梯文案与图鉴长句由 SynergyUI 从同一份 effects 生成，
 ## UnitRunner 再走本文件的 apply_counts 把两者对账 —— 数值改一处，文案跟着变，改文案不改数值会报红。
 
-## 上阵法器（含灵蝶）的 tag 计数——构筑方向判定的依据
+## 上阵武器（含灵蝶）的 tag 计数——构筑方向判定的依据
 static func tag_counts(gm: Node) -> Dictionary:
 	var counts: Dictionary = {}
 	if gm.player != null and is_instance_valid(gm.player) and gm.player.has_method("get_equipped_weapons_data"):
@@ -41,7 +41,7 @@ static func main_tag(gm: Node) -> String:
 			best_tag = t
 	return best_tag
 
-## 按上阵法器（含灵蝶）重算羁绊加成
+## 按上阵武器（含灵蝶）重算羁绊加成
 static func recalc_synergies(gm: Node) -> void:
 	apply_counts(gm, tag_counts(gm))
 
@@ -78,7 +78,7 @@ static func apply_counts(gm: Node, counts: Dictionary) -> void:
 	gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
 	apply_synergy_hp(gm, gm.synergy_max_hp_bonus)
 
-## 御灵羁绊直接增减气血上限（差值法，避免叠加误差）
+## 御灵羁绊直接增减生命上限（差值法，避免叠加误差）
 static func apply_synergy_hp(gm: Node, new_bonus: float) -> void:
 	var delta: float = new_bonus - gm._applied_hp_bonus
 	gm._applied_hp_bonus = new_bonus
@@ -87,7 +87,7 @@ static func apply_synergy_hp(gm: Node, new_bonus: float) -> void:
 		gm.player.current_health = clampf(gm.player.current_health, 0.0, gm.player.max_health)
 		gm.player_hp_changed.emit(gm.player.current_health, gm.player.max_health)
 
-## 保底：连续 2 波货架没出现主流派法器时，第 3 波强制塞入一件
+## 保底：连续 2 波货架没出现主流派武器时，第 3 波强制塞入一件
 static func apply_main_tag_pity(gm: Node, wave: int) -> void:
 	var main := main_tag(gm)
 	if main == "":

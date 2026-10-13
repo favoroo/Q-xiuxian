@@ -1,6 +1,6 @@
 extends Node
 
-## 全局状态中枢：经济（金币）、属性加点、武器持有与合成、波次推进、商店货架
+## 全局状态中枢：经济（金币）、属性加点、武器持有与合成、回合推进、商店货架
 
 signal player_hp_changed(current_hp: float, max_hp: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
@@ -13,7 +13,7 @@ signal weapons_updated(weapons: Array)
 signal wave_changed(wave_number: int)
 signal shop_opened
 signal shop_closed
-## 波后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
+## 回合后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
 signal alloc_opened
 signal alloc_finished
 signal pending_points_changed(pending: int)
@@ -38,7 +38,7 @@ const MAP_HALF_EXTENT: float = 440.0
 const UPGRADE_OFFER_COUNT: int = 5
 const SHOP_BASE_SLOTS: int = 5
 const PET_BASE_SLOTS: int = 1         ## 基础灵兽栏位：普通角色默认 1 只，御兽师通过特性加成
-## 每波悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣金币
+## 每回合悟道结算的免费刷新次数，用完按商店重掷同一条价格线扣金币
 const ALLOC_FREE_REROLLS: int = 1
 
 ## 属性上限（防数值失控）
@@ -46,7 +46,7 @@ const DODGE_CAP: float = 0.6          ## 身法闪避硬上限
 const CRIT_RATE_CAP: float = 0.75     ## 暴击率软上限
 const ATTACK_SPEED_FLOOR: float = 0.3 ## 施法间隔下限（攻速加点的地板，防止叠成连发）
 const LIFESTEAL_MAX_PER_SEC: int = 3  ## 噬元每秒最多触发次数（防高频武器无限续航）
-const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 收益复利增长截止波次
+const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 收益复利增长截止回合
 
 ## 可注入随机源：局内自动播种；单测里 `GameManager.rng.seed = N` 后商店/抽取即可确定性复现。
 ## 全项目凡是「玩法相关」的随机都必须走它，不要用全局 randf()，否则测试无法钉死结果。
@@ -79,7 +79,7 @@ func unregister_enemy(e: Node) -> void:
 
 # 友军灵兽登记（2026-10-11 祭坛强化）：SpiritBeast 在 _ready/_exit_tree 进出。
 # 敌人嘲讽目标选择（EnemyBase._taunt_target）读这里；语义与 live_enemies 一致。
-# 灵兽只在 "allies" 组，绝不进 enemies/turrets/gems/chests —— 那四组波末会被清场。
+# 灵兽只在 "allies" 组，绝不进 enemies/turrets/gems/chests —— 那四组回合末会被清场。
 var live_allies: Array = []   ## 当前在场友方灵兽
 var ally_count: int = 0       ## live_allies.size() 的计数镜像
 
@@ -98,7 +98,7 @@ var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（res
 const PROGRESS_PATH := "user://progress.cfg"
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
-var unlocked_cultivators: Array = []   ## 已解锁修士 ID 列表
+var unlocked_cultivators: Array = []   ## 已解锁角色 ID 列表
 var unlocked_items: Array = []         ## 已解锁道具 ID 列表
 var unlocked_achievements: Array = []  ## 已达成的成就 ID 列表
 var career_stats: Dictionary = {
@@ -110,13 +110,13 @@ var career_stats: Dictionary = {
 	"total_stones": 0,
 	"total_time": 0.0,
 }
-var cultivator_best_danger: Dictionary = {}  ## 每位修士通关过的最高危险度 {cultivator_id: danger_int}
-var cultivator_danger_clears: Dictionary = {}  ## 每位修士各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
+var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高危险度 {cultivator_id: danger_int}
+var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
 var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
 
 # 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
-var cultivator_records: Dictionary = {}   ## 每位修士生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
+var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
 var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
 const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
@@ -159,7 +159,7 @@ func _load_progress() -> void:
 func _save_progress() -> void:
 	ProgressStore.save_from(self)
 
-## 检查修士是否已解锁
+## 检查角色是否已解锁
 func is_cultivator_unlocked(cid: String) -> bool:
 	return cid in unlocked_cultivators
 
@@ -171,19 +171,19 @@ func is_item_unlocked(item_id: String) -> bool:
 func is_achievement_unlocked(ach_id: String) -> bool:
 	return ach_id in unlocked_achievements
 
-## 查询某位修士已通关的最高危险度（未通关返回 -1）
+## 查询某位角色已通关的最高危险度（未通关返回 -1）
 func get_cultivator_best_danger(cid: String) -> int:
 	return int(cultivator_best_danger.get(cid, -1))
 
-## 查询某位修士各难度通关位掩码（位 d = 通关过难度 d）
+## 查询某位角色各难度通关位掩码（位 d = 通关过难度 d）
 func get_cultivator_danger_mask(cid: String) -> int:
 	return int(cultivator_danger_clears.get(cid, 0))
 
-## 某位修士是否通关过指定难度
+## 某位角色是否通关过指定难度
 func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
 	return (get_cultivator_danger_mask(cid) & (1 << d)) != 0
 
-## 查询某位修士的生涯档案（无记录返回零值字典）
+## 查询某位角色的生涯档案（无记录返回零值字典）
 func get_cultivator_record(cid: String) -> Dictionary:
 	var rec: Dictionary = cultivator_records.get(cid, {})
 	return {
@@ -218,7 +218,7 @@ var is_game_over: bool = false
 ## 待加点数：升几级攒几点，回合结束统一结算（战斗中不弹面板）
 var pending_upgrade_points: int = 0
 
-# 波次
+# 回合
 var wave_number: int = 0
 var endless_mode: bool = false
 var run_started: bool = false
@@ -229,8 +229,8 @@ var restart_to_select: bool = false
 
 # 玩家属性（加点系统）
 var weapon_damage_mult: float = 1.0
-var melee_damage: float = 0.0       ## 近战伤害：加成所有近战挥扫法器
-var ranged_damage: float = 0.0      ## 远程伤害：加成所有飞射弹道法器
+var melee_damage: float = 0.0       ## 近战伤害：加成所有近战挥扫武器
+var ranged_damage: float = 0.0      ## 远程伤害：加成所有飞射弹道武器
 var elemental_damage: float = 0.0   ## 元素伤害：加成符箓、雷法及灼烧/剧毒跳字伤害
 var engineering_damage: float = 0.0 ## 召唤伤害：加成所有环绕护体灵宝
 var contraption_damage: float = 0.0 ## 机关伤害：加成所有地面机关炮台与阵盘
@@ -243,16 +243,16 @@ var hp_regen: float = 0.0
 var crit_rate: float = 0.05
 var crit_mult: float = 1.5
 var dodge: float = 0.0        ## 身法：闪避概率（硬上限 DODGE_CAP）
-var lifesteal: float = 0.0    ## 噬元：命中回复 1 点气血的概率
+var lifesteal: float = 0.0    ## 噬元：命中回复 1 点生命的概率
 var luck: float = 0.0         ## 幸运：提升高稀有度悟道与商店亲和权重
-var harvest: float = 0.0      ## 收益：每波结束无偿获得等额金币+经验，并自我复利
+var harvest: float = 0.0      ## 收益：每回合结束无偿获得等额金币+经验，并自我复利
 var xp_gain_mult: float = 1.0 ## 经验获取倍率（只放大经验，不放大金币）
-var knockback_mult: float = 1.0 ## 震退：法器击退力度倍率
+var knockback_mult: float = 1.0 ## 震退：武器击退力度倍率
 var elite_damage: float = 0.0 ## 斩将：对精英/Boss 的额外伤害加成
-var free_rerolls: int = 0     ## 通玄：每波免费重掷货架次数
+var free_rerolls: int = 0     ## 通玄：每回合免费重掷货架次数
 var element_damage: Dictionary = {}  ## 五行真解：{元素 tag(String): 伤害加成(float)}
 var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id（UpgradeData 过滤用）
-var chest_count_bonus: int = 0   ## 宝箱数量：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
+var chest_count_bonus: int = 0   ## 宝箱数量：每回合额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
 var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权重（BalanceChest.tier_weights 消费）
 var chest_break_bonus: int = 0   ## 开箱省力兼容字段
 var chest_reward_mult: float = 1.0  ## 宝箱掉落：砸开的匣子掉得更多的乘区（SpiritChest._destroy 经 GameBalance.chest_reward_scaled 消费）
@@ -265,20 +265,20 @@ var pet_cooldown_mult: float = 1.0     ## 灵兽行为节拍缩减乘区
 var pet_slots_bonus: int = 0           ## 额外灵兽栏位加成
 var pet_offer_chance_bonus: float = 0.0 ## 商店灵兽刷出概率加成（御兽师专属）
 
-# 修士流派（角色）特性
+# 角色流派（角色）特性
 var cultivator_id: String = ""
 var thorns_pct: float = 0.0        ## 石岳反震：按敌方攻击力比例反弹
 var spirit_threshold_adj: int = 0  ## 符阵灵童：御灵羁绊门槛下移
 var dodge_cap_bonus: float = 0.0   ## 魅影：闪避硬上限上移（上限 = DODGE_CAP + 本值）
 var weapon_slots_override: int = 0 ## 独臂刀圣：上阵槽位上限覆盖（0 = 用 WeaponData.MAX_SLOTS）
-var enemy_count_mult: float = 1.0  ## 狂战蛮修：妖潮规模倍率（WaveSpawner 消费）
-var harvest_decay: float = 0.0     ## 蛮兵：每波收益流失点数
+var enemy_count_mult: float = 1.0  ## 狂战蛮修：敌潮规模倍率（WaveSpawner 消费）
+var harvest_decay: float = 0.0     ## 蛮兵：每回合收益流失点数
 var xp_require_mult: float = 1.0   ## 学者：升级经验需求倍率
 var item_price_mult: float = 1.0   ## 多宝道人：道具价格乘区（叠加在商店价格系数之上）
 var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
 var contraption_threshold_adj: int = 0  ## 机关师：机关羁绊门槛下移
-var stone_interest_rate: float = 0.0    ## 守财奴：波末金币结息比率
-var stone_interest_cap: int = 15        ## 守财奴：波末金币结息上限
+var stone_interest_rate: float = 0.0    ## 守财奴：回合末金币结息比率
+var stone_interest_cap: int = 15        ## 守财奴：回合末金币结息上限
 var on_hit_damage_bonus: float = 0.0    ## 嗜血魔修：受击单层增伤
 var on_hit_damage_cap_stacks: int = 10  ## 嗜血魔修：增伤最大层数
 var on_hit_damage_stacks: int = 0
@@ -297,23 +297,23 @@ var frenzy_stacks: float = 0.0          ## 狂战士：战意当前层数（regi
 var frenzy_idle: float = 0.0            ## 距上次击杀的秒数（战意流失宽限计时）
 var thunder_strike: float = 0.0         ## 雷法真君：天雷机制开关（>0 启用；数值全在 ThunderData，计时器在 Player）
 # ---- 角色轻钩子（2026-10-12，照嗜血 on_hit 先例：不建机制表，apply 时从 mods 落字段，damage_mult 现算） ----
-var crowd_damage_per_enemy: float = 0.0  ## 蛮兵·陷阵：感知圈内每只妖兽的全伤害加成
+var crowd_damage_per_enemy: float = 0.0  ## 蛮兵·陷阵：感知圈内每只敌人的全伤害加成
 var crowd_damage_cap: float = 0.0        ## 蛮兵·陷阵：加成总上限
 var crowd_damage_radius: float = 0.0     ## 蛮兵·陷阵：感知半径（0 = 未启用，Player 不数怪）
-var nearby_enemy_count: int = 0          ## 陷阵感知圈内的妖兽数（Player 按 0.2s 节流写入）
+var nearby_enemy_count: int = 0          ## 陷阵感知圈内的敌人数（Player 按 0.2s 节流写入）
 var stone_damage_per_100: float = 0.0    ## 守财奴·财可通神：每持 100 金币的全伤害加成
 var stone_damage_cap: float = 0.0        ## 守财奴·财可通神：加成总上限
-var kill_cd_reduction_normal: float = 0.0  ## 绝尘·斩灭凝神：击杀普通怪返还的神通冷却（秒）
-var kill_cd_reduction_elite: float = 0.0   ## 绝尘·斩灭凝神：击杀精英怪返还的神通冷却（秒）
+var kill_cd_reduction_normal: float = 0.0  ## 绝尘·斩灭凝神：击杀普通怪返还的技能冷却（秒）
+var kill_cd_reduction_elite: float = 0.0   ## 绝尘·斩灭凝神：击杀精英怪返还的技能冷却（秒）
 var still_time: float = 0.0              ## 连续站定秒数（不动明王印账本，Player._physics_process 维护）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
-var total_hp_healed: float = 0.0        ## 单局累计回复气血量（药王解锁判定）
+var total_hp_healed: float = 0.0        ## 单局累计回复生命量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
 var max_element_spread: int = 0         ## 单局同时上阵的五行元素种数峰值（五行同阵成就判定）
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的经验门槛链（xp_require_mult 只作用于显示/判定值）
 
-# 随行神通（技能）：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
+# 随行技能：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
 # 与加点/羁绊乘区隔离，到期由 Player 精确回 1.0，互不污染
 var pending_skill_id: String = "dash"  ## 选人流程里选定的技能（默认缩地成寸，直接 start_run 也有技能可用）
 var active_skill_id: String = ""       ## 本局生效的技能 id
@@ -326,24 +326,24 @@ var force_crit_left: float = 0.0       ## 冲刺必暴剩余秒（roll_crit 消�
 var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就生效：Player 在攒层/兑现两写点按 ShadowStepData.amp_mult 维护，落地清空回 1.0）
 var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（FloatingWeapon._final_damage 消费，到期由 Player 精确回 1.0）
 
-# 武器羁绊加成（由 recalc_synergies 每波/换装时重算）
+# 武器羁绊加成（由 recalc_synergies 每回合/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础
 var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量
 var bonus_pierce: int = 0           ## 弹丸额外穿透合计（stat + synergy）
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
 var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
 var synergy_haste_mult: float = 1.0   ## 雷法/玄水羁绊：额外攻速乘区
-var synergy_max_hp_bonus: float = 0.0 ## 御灵羁绊：额外气血上限
+var synergy_max_hp_bonus: float = 0.0 ## 御灵羁绊：额外生命上限
 var synergy_engineering_damage: float = 0.0 ## 御灵羁绊：额外召唤伤害
 var synergy_crit_rate: float = 0.0    ## 锐金羁绊：额外暴击率
 var synergy_crit_mult: float = 0.0    ## 锐金羁绊：额外暴击伤害
-var synergy_hp_regen: float = 0.0     ## 青木羁绊：额外气血回复
+var synergy_hp_regen: float = 0.0     ## 青木羁绊：额外生命回复
 var synergy_lifesteal: float = 0.0    ## 青木羁绊：额外吸血
 var synergy_move_speed_mult: float = 0.0 ## 玄水羁绊：额外移速加成
 var synergy_burn_mult: float = 1.0    ## 离火羁绊：额外灼烧伤害倍率
 var synergy_armor: float = 0.0        ## 厚土羁绊：额外护甲
 var synergy_knockback_mult: float = 1.0 ## 厚土羁绊：额外受击震退力倍率
-var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关法器伤害乘区
+var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关武器伤害乘区
 
 var _lifesteal_procs: int = 0
 var _lifesteal_window: float = 0.0
@@ -353,13 +353,13 @@ var _hud_tick: float = 0.0  ## HUD 计时刷新节流：只走时间显示，事
 var shop_offers: Array = []
 var reroll_cost: int = 2
 var reroll_price_mult: float = 1.0 ## 商人：重掷费用乘区（ShopSystem.roll_shop 在纯函数结果上乘算）
-var reroll_count: int = 0          ## 本波已重掷次数（费用递增，跨波重置）
-var reroll_free_left: int = 0      ## 本波剩余免费重掷次数（roll_shop(new_wave) 时按 free_rerolls 重置）
+var reroll_count: int = 0          ## 本回合已重掷次数（费用递增，跨回合重置）
+var reroll_free_left: int = 0      ## 本回合剩余免费重掷次数（roll_shop(new_wave) 时按 free_rerolls 重置）
 var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如散修 8 折）
-var shop_tag_filter: Array = []    ## 非空时这些 tag 法器权重大幅提升，其余法器仍以低概率漏出（剑痴等流派偏好）
-var _no_main_tag_waves: int = 0    ## 连续未刷出主流派法器的波数（保底计数）
+var shop_tag_filter: Array = []    ## 非空时这些 tag 武器权重大幅提升，其余武器仍以低概率漏出（剑痴等流派偏好）
+var _no_main_tag_waves: int = 0    ## 连续未刷出主流派武器的波数（保底计数）
 
-# 波后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣金币，价格随波次与已刷次数上升）
+# 回合后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣金币，价格随回合与已刷次数上升）
 var alloc_offers: Array[Dictionary] = []
 var alloc_points_total: int = 0   ## 本次结算开局时攒下的点数（面板写「待加点 2/共 3」用）
 var alloc_reroll_cost: int = 2
@@ -378,7 +378,7 @@ var items_bought: Array = []
 ## 已持有灵兽（随行伙伴）的 id 列表：上限受 max_pet_slots() 约束，数据定义见 PetData
 var pets: Array = []
 
-# 武器库存：上阵 = 悬浮法器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
+# 武器库存：上阵 = 悬浮武器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
 var stash: Array = []    # 背包，元素 {id: String, star: int}
 
@@ -407,14 +407,14 @@ func _process(delta: float) -> void:
 		if _lifesteal_window >= 1.0:
 			_lifesteal_window = 0.0
 			_lifesteal_procs = 0
-		# HUD 只关心「斩妖/灵石/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
+		# HUD 只关心「斩妖/金币/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
 		# 数值真正变化时由各事件函数自己 emit，不必每帧重画 60 次。
 		_hud_tick += delta
 		if _hud_tick >= 0.2:
 			_hud_tick = 0.0
 			stats_updated.emit(kills, game_time, spirit_stones)
 
-# ---------------- 经验 / 灵石 ----------------
+# ---------------- 经验 / 金币 ----------------
 
 func add_experience(amount: int, stone_amount: int = -1) -> void:
 	if is_game_over:
@@ -459,11 +459,11 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	if frenzy_enabled > 0.0:
 		frenzy_stacks = FrenzyData.add_stack(frenzy_stacks)
 		frenzy_idle = 0.0
-	# 绝尘·斩灭凝神：击杀按怪物品级返还/预扣神通冷却
+	# 绝尘·斩灭凝神：击杀按敌人品级返还/预扣技能冷却
 	var cd_refund: float = kill_cd_reduction_elite if is_elite else kill_cd_reduction_normal
 	if cd_refund > 0.0 and player != null and is_instance_valid(player) and player.has_method("refund_skill_cooldown"):
 		player.refund_skill_cooldown(cd_refund)
-	# 金芒搜魂令：暴击击杀妖兽有概率吸收灵石
+	# 金芒搜魂令：暴击击杀敌人有概率吸收金币
 	if is_crit:
 		var stone_chance: float = item_hook_sum("crit_kill_stone_chance")
 		if stone_chance > 0.0 and rng.randf() < stone_chance:
@@ -519,7 +519,7 @@ func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 		"has_pets": (not pets.is_empty() or cultivator_id == "yushou"),
 	})
 
-# ---------------- 波后悟道结算（委托 AllocSession） ----------------
+# ---------------- 回合后悟道结算（委托 AllocSession） ----------------
 
 func has_pending_upgrades() -> bool:
 	return pending_upgrade_points > 0
@@ -584,35 +584,35 @@ func get_effective_dodge() -> float:
 	var extra_still := item_hook_sum("still_dodge") if still_time > 0.0 else 0.0
 	return BalanceCombat.effective_dodge(dodge + extra_still, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
-## 上阵法器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
+## 上阵武器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
 func max_weapon_slots() -> int:
 	return weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
 
-## 多法器神识分流系数：按当前上阵法器总数（悬浮法器 + 环绕灵物）计算单把直击伤害折算。
+## 多武器神识分流系数：按当前上阵武器总数（悬浮武器 + 环绕灵物）计算单把直击伤害折算。
 ## 环绕灵宝按半权计入（召唤物自主作战不占神识），机关炮台仍按全额。
 func get_multi_weapon_damage_mult() -> float:
 	return GameBalance.multi_weapon_damage_mult(slots_used(), drones.size())
 
-## 五行真解：某件法器吃到的元素伤害乘区（按 WeaponData.element_of 取对应元素加成）
+## 五行真解：某件武器吃到的元素伤害乘区（按 WeaponData.element_of 取对应元素加成）
 func element_damage_mult(w_id: String) -> float:
 	if element_damage.is_empty():
 		return 1.0
 	return 1.0 + float(element_damage.get(WeaponData.element_of(w_id), 0.0))
 
-## 法器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率 × 站定加成
+## 武器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率 × 站定加成
 func knockback_force(base: float) -> float:
 	var still_kb := (1.0 + item_hook_sum("still_knockback")) if still_time > 0.0 else 1.0
 	return base * knockback_mult * synergy_knockback_mult * buff_knockback_mult * still_kb
 
-## 法器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
-## source = 施力点（落雷点 / 法器自身 / 灵宝自身），enemy_pos = 受击敌人位置。
+## 武器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
+## source = 施力点（落雷点 / 武器自身 / 灵宝自身），enemy_pos = 受击敌人位置。
 ## 玩家不在场（单测、局外预览）时把玩家位置退回施力点 = 纯径向旧行为，不会出 NaN。
-## 各法器只许经这一个出口拿方向，别再自己写 (enemy - source).normalized()。
+## 各武器只许经这一个出口拿方向，别再自己写 (enemy - source).normalized()。
 func knockback_vec(source: Vector2, enemy_pos: Vector2, base: float) -> Vector2:
 	var player_pos: Vector2 = source if player == null else player.global_position
 	return GameBalance.knock_dir(source, enemy_pos, player_pos) * knockback_force(base)
 
-## 斩将：对精英/Boss（is_elite 标记）的额外伤害乘区，普通妖兽不受影响
+## 斩将：对精英/Boss（is_elite 标记）的额外伤害乘区，普通敌人不受影响
 func elite_damage_mult_for(enemy: Variant) -> float:
 	if elite_damage <= 0.0 or enemy == null:
 		return 1.0
@@ -665,10 +665,10 @@ func try_lifesteal() -> void:
 		_lifesteal_procs += 1
 		player.heal(1.0, true)
 
-## 波间收益结算：无偿发放等额金币+经验；蛮兵的杀气让收益每波流失；随后收益自我复利（增长截止波次见常量区）
+## 回合间收益结算：无偿发放等额金币+经验；蛮兵的杀气让收益每回合流失；随后收益自我复利（增长截止回合见常量区）
 ## budget_comp_exp：刷怪预算未花完部分的折算经验补差（WaveSpawner 传入，BalanceEconomy.budget_compensation_exp），
 ## 与收益一并到账、同一句播报 —— 减潮不减收入，购买力与旧口径持平
-## early_secs：本波提前收尾时还剩几秒（WaveSpawner 传入，0 = 表走完）。余时按
+## early_secs：本回合提前收尾时还剩几秒（WaveSpawner 传入，0 = 表走完）。余时按
 ## BalanceEconomy.early_clear_stones 折成金币，**只进金币不进经验**（提前清场不该顺手把升级也加速）。
 ## 三笔并成一句播报：横幅只有一个 Label，同帧发两条只会留下后一条，等于把前一个数吞掉。
 func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
@@ -694,11 +694,11 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 			spirit_stones += interest
 			stats_updated.emit(kills, game_time, spirit_stones)
 			announcement_triggered.emit("✦ 金币结息 · 获得 %d 枚金币 ✦" % interest)
-	# 回复葫芦等道具的波末回血 hook
+	# 回复葫芦等道具的回合末回血 hook
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
 		player.heal(player.max_health * heal_pct)
-	# 突破古玉等道具的波末永久成长 hook
+	# 突破古玉等道具的回合末永久成长 hook
 	var wave_hp := item_hook_sum("wave_end_max_hp")
 	var wave_reg := item_hook_sum("wave_end_regen")
 	var wave_ls := item_hook_sum("wave_end_lifesteal")
@@ -712,7 +712,7 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 			if wave_ls > 0.0:
 				wave_apply["lifesteal"] = wave_ls
 			_apply_stat_fields(wave_apply, "wave_end_growth")
-	# 随行灵兽波末收益（聚宝蟾献金币等）
+	# 随行灵兽回合末收益（聚宝蟾献金币等）
 	PetSystem.on_wave_ended(self)
 
 # ---------------- 灵兽（随行伙伴） ----------------
@@ -833,7 +833,7 @@ func start_run(starter_id: String) -> void:
 	run_started = true
 	endless_mode = start_in_endless
 	_apply_cultivator()
-	# 随行神通转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
+	# 随行技能转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	# 额外技能随角色绑定（不走选择界面）：按道统查表，没有 extra_skill 键的角色保持空串
 	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
@@ -843,11 +843,11 @@ func start_run(starter_id: String) -> void:
 	else:
 		announcement_triggered.emit("✦ 生存战斗 · 击杀敌人 ✦")
 
-## 开局应用修士流派的正负代偿（规则在 CultivatorSystem，2026-10-11 抽离）
+## 开局应用角色流派的正负代偿（规则在 CultivatorSystem，2026-10-11 抽离）
 func _apply_cultivator() -> void:
 	CultivatorSystem.apply_cultivator(self)
 
-## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
+## 角色特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
 func cultivator_damage_mult(w_id: String) -> float:
 	return CultivatorSystem.damage_mult(self, w_id)
 
@@ -932,7 +932,7 @@ func swap_into_equipped(stash_index: int, equipped_index: int) -> bool:
 func equip_stash_into_slot(stash_index: int, slot_index: int) -> bool:
 	return WeaponInventory.equip_stash_into_slot(self, stash_index, slot_index)
 
-## 上阵两格互换位置（summary 下标；同池才换：悬浮法器换悬浮法器、灵宝换灵宝）
+## 上阵两格互换位置（summary 下标；同池才换：悬浮武器换悬浮武器、灵宝换灵宝）
 func swap_equipped_slots(i: int, j: int) -> bool:
 	return WeaponInventory.swap_equipped_slots(self, i, j)
 
@@ -954,7 +954,7 @@ func recalc_synergies() -> void:
 func _apply_synergy_hp(new_bonus: float) -> void:
 	SynergySystem.apply_synergy_hp(self, new_bonus)
 
-# ---------------- 波间商店（委托 ShopSystem） ----------------
+# ---------------- 回合间商店（委托 ShopSystem） ----------------
 
 func roll_shop(new_wave: bool = false) -> void:
 	ShopSystem.roll_shop(self, new_wave)

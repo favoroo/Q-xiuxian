@@ -1,15 +1,15 @@
 class_name BalanceChest
 extends RefCounted
 
-## 藏宝匣（宝箱）一条链路的数值（2026-10-11 寻宝流改版）：每波刷几口、各档匣子的出现权重、
-## 挨几下砸开、砸开兑现什么、玉匣每局最多送几件法宝。全部 static 纯函数，与 GameBalance 同规约：
+## 藏宝匣（宝箱）一条链路的数值（2026-10-11 寻宝流改版）：每回合刷几口、各档匣子的出现权重、
+## 挨几下砸开、砸开兑现什么、玉匣每局最多送几件道具。全部 static 纯函数，与 GameBalance 同规约：
 ## 不读 autoload、不碰节点、不调全局 randf() —— 随机一律由调用方（WaveSpawner / SpiritChest）
 ## 传 GameManager.rng 已经抽好的 roll，判据可以钉住种子复现同一批匣子。
 ##
 ## 三档口径（玩家看到的名字在 ManualData，这里只管数值）：
 ##   木匣 0 —— 基准档，就是改版前那口匣子，出现权重恒最高
 ##   铜匣 1 —— 掉落量约两倍，另给一笔金币
-##   玉匣 2 —— 必送一件法宝（与灵石阁同一个 roller，见 ItemData.pick_id），另有金币与灵石
+##   玉匣 2 —— 必送一件道具（与金币阁同一个 roller，见 ItemData.pick_id），另有金币
 ##
 ## 为什么分档不加击数：高档匣若更耐砸，玩家堆「宝箱品质」反而换来更难兑现的目标，
 ## 砸不开就等于零收益（2026-10-11 量兑现率的口径）。击数只由「开箱省力」这一个来源往下压。
@@ -33,22 +33,22 @@ static func tier_name(tier: int) -> String:
 static func tier_scale(tier: int) -> float:
 	return TIER_SCALE[clampi(tier, 0, TIER_SCALE.size() - 1)]
 
-# ---------------- 每波刷几口 ----------------
+# ---------------- 每回合刷几口 ----------------
 
 const CHEST_COUNT_BASE := 2       ## 第 1 波就刷 2 口：寻宝流的料得在场，不能等
 const CHEST_COUNT_PER_WAVES := 6  ## 每这么多波基础档 +1
 const CHEST_COUNT_BASE_CAP := 4   ## 不吃加成时最多刷几口（改版前的旧口径）
 const CHEST_COUNT_CAP := 8        ## 含加成的硬顶：场地只有半场 500，再多就成箱子阵
 
-## 每波刷出的匣子只数：基础曲线 + 「宝箱数量」加成，夹在硬顶内。
-## bonus 是 GameManager.chest_count_bonus（加点与法宝共用同一条字段）。
+## 每回合刷出的匣子只数：基础曲线 + 「宝箱数量」加成，夹在硬顶内。
+## bonus 是 GameManager.chest_count_bonus（加点与道具共用同一条字段）。
 static func chest_count(wave: int, bonus: int) -> int:
 	var base := mini(CHEST_COUNT_BASE + int(float(maxi(wave, 1)) / float(CHEST_COUNT_PER_WAVES)), CHEST_COUNT_BASE_CAP)
 	return clampi(base + maxi(0, bonus), 0, CHEST_COUNT_CAP)
 
 # ---------------- 各档出现权重 ----------------
 
-## 抽档权重 [木, 铜, 玉]：只吃「宝箱品质」与已有的福缘，不吃波次。
+## 抽档权重 [木, 铜, 玉]：只吃「宝箱品质」与已有的福缘，不吃回合。
 ## 底子里铜/玉在品质为 0 时也有正权重 —— 第 1 波就可能刷出铜匣，堆品质只是把占比抬上去。
 const WOOD_W := 100.0
 const COPPER_W_BASE := 18.0
@@ -79,11 +79,11 @@ static func break_hits(break_bonus: int) -> int:
 # ---------------- 砸开兑现什么 ----------------
 
 ## 奖励表（唯一真话，SpiritChest 逐项消费，卡面/图鉴文案与它同源）：
-##   heal_chance —— 掉回春葫芦的概率，否则掉一捧金灵石
-##   heal_pct    —— 葫芦按气血上限的回复比例
-##   gem_count   —— 金灵石颗数，gem_exp 每颗修为
+##   heal_chance —— 掉回春葫芦的概率，否则掉一捧金币
+##   heal_pct    —— 葫芦按生命上限的回复比例
+##   gem_count   —— 金币颗数，gem_exp 每颗经验
 ##   stones      —— 直接进袖的金币（0 = 不掉金币）
-##   grant_item  —— 是否必送一件随机法宝（只有玉匣）
+##   grant_item  —— 是否必送一件随机道具（只有玉匣）
 const REWARD_WOOD := {
 	"heal_chance": 0.4, "heal_pct": 0.15, "gem_count": 3, "gem_exp": 5,
 	"stones": 0, "grant_item": false,
@@ -106,15 +106,15 @@ static func reward_of(tier: int) -> Dictionary:
 		_:
 			return REWARD_WOOD
 
-## 玉匣每局最多送出几件法宝：一件法宝值 15~90 金币，白送到 2 件已经是一条 build，
-## 再往上会把灵石阁掏空成背景板。超上限的玉匣退回铜匣奖励 ×jade_fallback_mult。
+## 玉匣每局最多送出几件道具：一件道具值 15~90 金币，白送到 2 件已经是一条 build，
+## 再往上会把金币阁掏空成背景板。超上限的玉匣退回铜匣奖励 ×jade_fallback_mult。
 const JADE_ITEM_GRANT_CAP := 2
 const JADE_FALLBACK_MULT := 1.5
 
-## 单口匣子回复量上限：堆满一条寻宝流（悟道「宝箱掉落」+法宝「满匣诀」）也不许一口回满血。
+## 单口匣子回复量上限：堆满一条寻宝流（悟道「宝箱掉落」+道具「满匣诀」）也不许一口回满血。
 const REWARD_HEAL_CAP := 0.60
 
-## 上限满后玉匣退回的量：按铜匣奖励整体放缩（葫芦概率/回复、灵石颗数、金币都算上）
+## 上限满后玉匣退回的量：按铜匣奖励整体放缩（葫芦概率/回复、金币颗数、金币都算上）
 static func jade_fallback_reward() -> Dictionary:
 	var base: Dictionary = REWARD_COPPER.duplicate()
 	base["heal_chance"] = minf(1.0, float(base["heal_chance"]) * JADE_FALLBACK_MULT)
@@ -126,9 +126,9 @@ static func jade_fallback_reward() -> Dictionary:
 
 # ---------------- 开箱收益乘区 ----------------
 
-## 悟道「宝箱掉落」与法宝「满匣诀」把同一口匣子的兑现量整体放大（GameManager.chest_reward_mult）。
-##   放大：gem_count（灵石颗数）、stones（金币）、heal_pct（葫芦回复比例，封顶 REWARD_HEAL_CAP）
-##   不放大：heal_chance（掉葫芦的概率——那条由危险度乘区单独管）、gem_exp（每颗灵石经验，不吹经验曲线）、grant_item
+## 悟道「宝箱掉落」与道具「满匣诀」把同一口匣子的兑现量整体放大（GameManager.chest_reward_mult）。
+##   放大：gem_count（金币颗数）、stones（金币）、heal_pct（葫芦回复比例，封顶 REWARD_HEAL_CAP）
+##   不放大：heal_chance（掉葫芦的概率——那条由危险度乘区单独管）、gem_exp（每颗金币经验，不吹经验曲线）、grant_item
 ##   只抬不罚：mult < 1.0 按 1.0 算，字段被回退到 1.0 以下也不许把掉落砍下去。
 static func scale_reward(reward: Dictionary, mult: float) -> Dictionary:
 	var m := maxf(1.0, mult)

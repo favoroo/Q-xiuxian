@@ -34,7 +34,7 @@ var _skill_widget: HudSkillButton = null
 var _extra_skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
 var _boss_bar_widget: HudBossBar = null
-## 顶栏波次倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
+## 顶栏回合倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
 ## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
 var wave_countdown: HudWaveCountdown = null
 
@@ -99,7 +99,7 @@ func _ready() -> void:
 	_build_widgets()
 	# 羁绊徽记单独一排，摆在顶栏之下。
 	# 挂在顶栏里 = 左组要 755 宽 > 它在 960 屏上只分到的 389 ⇒ 整条顶栏被撑到 1125 宽、
-	# 两头各出屏 82（气血块少半截、「暂停」整个没了，用户 2026-10-08 说的「顶部的一些 UI
+	# 两头各出屏 82（生命块少半截、「暂停」整个没了，用户 2026-10-08 说的「顶部的一些 UI
 	# 都显示到外面去了」就是这个）。判据 LayoutCheck 灌最宽读数样本量的就是这一格。
 	_synergy_box = HBoxContainer.new()
 	_synergy_box.add_theme_constant_override("separation", 6)
@@ -172,7 +172,7 @@ func _build_widgets() -> void:
 	_extra_skill_box = _extra_skill_widget
 	_extra_skill_btn = _extra_skill_widget.get_btn()
 	add_child(HudFpsCounter.new())
-	# 波次倒计时：作为 WaveChip 的第二个孩子铺进同一格内容矩形 —— PanelContainer 会把
+	# 回合倒计时：作为 WaveChip 的第二个孩子铺进同一格内容矩形 —— PanelContainer 会把
 	# 所有子节点都摆成内容区，所以这颗零最小尺寸的 Control 既不改变芯片大小，又能拿到
 	# 与文字同样宽的底边去画那根线（不改 .tscn、不给顶栏添新格子）。
 	wave_countdown = HudWaveCountdown.new(wave_label)
@@ -391,7 +391,7 @@ func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
 
 func _on_wave_changed(n: int) -> void:
 	wave_label.get_parent().visible = n >= 1
-	# 文案交给波次倒计时控件写（它与剩余时间同一条读数、同一次取值）；
+	# 文案交给回合倒计时控件写（它与剩余时间同一条读数、同一次取值）；
 	# _ready 里这一次调用发生在控件建好之前，所以留一条纯波号的兜底。
 	if wave_countdown != null:
 		wave_countdown.refresh_now()
@@ -434,7 +434,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 		GameStyle.hotzone(slot)
 		# 槽不是按钮，摇杆的自动收口认不出 ⇒ 自己登记，否则点一下脚下就长出一根摇杆
 		slot.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-		# 详情卡与属性面板/灵石阁同一工厂出，不另编一套文案
+		# 详情卡与属性面板/金币阁同一工厂出，不另编一套文案
 		if filled:
 			GameStyle.tap(slot, func() -> void:
 				StatsTipFactory.open_weapon_tip(self, slot, w, false)

@@ -1,11 +1,11 @@
 class_name BalanceSpiritPet
 extends RefCounted
 
-## 灵兽（随行伙伴）数值与波次成长公式
+## 灵兽（随行伙伴）数值与回合成长公式
 ## 规约：全 static 纯函数，不读 autoload、不碰节点、不调全局 randf()
 
-const DAMAGE_GROWTH: float = 1.09   ## 攻击类灵兽伤害每波复利成长（9%）
-const ECONOMY_GROWTH: float = 1.10  ## 聚宝蟾产出每波复利成长（10%）
+const DAMAGE_GROWTH: float = 1.09   ## 攻击类灵兽伤害每回合复利成长（9%）
+const ECONOMY_GROWTH: float = 1.10  ## 聚宝蟾产出每回合复利成长（10%）
 const SEARCH_INTERVAL: float = 0.12 ## 索敌节流（秒）
 
 ## 焰灵狐火丹伤害：base_value(18) × wave复利 × 灵兽伤害乘区
@@ -27,7 +27,7 @@ static func smash_damage(wave: int, damage_mult: float) -> float:
 static func heal_ratio(effect_mult: float) -> float:
 	return maxf(0.005, 0.012 * maxf(0.2, effect_mult))
 
-## 聚宝蟾波末产出灵石：base(8) × wave复利 × 灵兽效果乘区
+## 聚宝蟾回合末产出金币：base(8) × wave复利 × 灵兽效果乘区
 static func harvest_stones(wave: int, effect_mult: float) -> int:
 	var base := 8.0 * pow(ECONOMY_GROWTH, float(maxi(wave, 1) - 1))
 	return maxi(3, int(round(base * maxf(0.2, effect_mult))))

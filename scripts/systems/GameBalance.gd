@@ -2,12 +2,12 @@ class_name GameBalance
 extends RefCounted
 
 ## 数值公式门面：全部实现已按主题拆到同目录五个 static 类（2026-10-11 拆分，降低并行调参冲突面）：
-##   BalanceWave      波次/刷怪/精英Boss/危险度
-##   BalanceEconomy   经验/商店定价/灵韵/残丹化灵/稀有度/货架抽取/法宝档位/羁绊档位/加点白名单
+##   BalanceWave      回合/刷怪/精英Boss/危险度
+##   BalanceEconomy   经验/商店定价/灵韵/残丹化灵/稀有度/货架抽取/道具档位/羁绊档位/加点白名单
 ##   BalanceCombat    护甲受伤/镜头创伤/受击硬直击退/长扑几何/五行异常/震退方向/集火韧性
 ##   BalanceTargeting 索敌分流/藏宝匣两段式索敌/武器属性折算/御灵轨道/神识分流
-##   BalanceSpiritBeast 祭坛灵兽（气血成长/撕咬/嘲讽半径）
-##   BalanceChest     藏宝匣（每波数量/三档权重/击数/掉落表/玉匣送法宝上限）
+##   BalanceSpiritBeast 祭坛灵兽（生命成长/撕咬/嘲讽半径）
+##   BalanceChest     藏宝匣（每回合数量/三档权重/击数/掉落表/玉匣送道具上限）
 ## 本文件只做转发：旧引用（GameBalance.xxx，22 个文件）零改动；新增公式直接进主题类，
 ## 需要旧入口时在这里补一行转发。两条硬性约束对四个主题类同样生效：
 ##   1. 需要随机数的地方由调用方传入 rng 或已经抽好的 roll，这样单测可以固定种子做确定性断言；
@@ -16,7 +16,7 @@ extends RefCounted
 
 # ---------------- 常量转发（调参改主题类，别改这里） ----------------
 
-# 波次 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
+# 回合 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
 const WAVE_DURATION_BASE := BalanceWave.WAVE_DURATION_BASE
 const WAVE_DURATION_PER_WAVE := BalanceWave.WAVE_DURATION_PER_WAVE
 const WAVE_DURATION_MAX := BalanceWave.WAVE_DURATION_MAX
@@ -72,7 +72,7 @@ const DANGER_DMG_PER := BalanceWave.DANGER_DMG_PER
 const DANGER_COUNT_BASE := BalanceWave.DANGER_COUNT_BASE
 const DANGER_COUNT_PER := BalanceWave.DANGER_COUNT_PER
 
-# 经验 / 定价 / 灵韵 / 稀有度 / 货架 / 法宝档位 / 白名单 → BalanceEconomy
+# 经验 / 定价 / 灵韵 / 稀有度 / 货架 / 道具档位 / 白名单 → BalanceEconomy
 const EXP_FIRST_LEVEL := BalanceEconomy.EXP_FIRST_LEVEL
 const EXP_GROWTH := BalanceEconomy.EXP_GROWTH
 const EXP_FLAT := BalanceEconomy.EXP_FLAT
@@ -204,11 +204,11 @@ static func pet_price(base: int, wave: int, price_mult: float) -> int:
 static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.potion_price(base, wave, price_mult)
 
-## 回气丹这一口回多少：货架卡、气血详情卡与 ShopSystem 的 heal() 共用这一条
+## 回气丹这一口回多少：货架卡、生命详情卡与 ShopSystem 的 heal() 共用这一条
 static func potion_heal_amount(max_hp: float) -> float:
 	return BalanceEconomy.potion_heal_amount(max_hp)
 
-## 这一口实际回得上多少（按当前缺血截断）：货架卡与气血详情卡的读数出口
+## 这一口实际回得上多少（按当前缺血截断）：货架卡与生命详情卡的读数出口
 static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
 	return BalanceEconomy.potion_effective_heal(max_hp, cur_hp)
 
@@ -257,7 +257,7 @@ static func synergy_level(count: int, thresholds: Array, threshold_shift: int = 
 static func upgrade_fields() -> Array:
 	return BalanceEconomy.upgrade_fields()
 
-# 波次 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
+# 回合 / 刷怪 / 精英 Boss / 危险度 → BalanceWave
 static func wave_duration(wave: int) -> float:
 	return BalanceWave.wave_duration(wave)
 
@@ -267,15 +267,15 @@ static func spawn_interval(wave: int) -> float:
 static func spawn_batch(wave: int, roll: float) -> int:
 	return BalanceWave.spawn_batch(wave, roll)
 
-## 波内总刷入预算（土豆兄弟式克制）：预算耗尽即停手，场上越打越空
+## 回合内总刷入预算（土豆兄弟式克制）：预算耗尽即停手，场上越打越空
 static func wave_spawn_budget(wave: int) -> int:
 	return BalanceWave.wave_spawn_budget(wave)
 
-## 刷怪预算未花完部分的波末经验补差（减潮不减收入）
+## 刷怪预算未花完部分的回合末经验补差（减潮不减收入）
 static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	return BalanceEconomy.budget_compensation_exp(shortfall, avg_exp)
 
-## 提前清场（妖潮已尽）的波末余时赏：只给金币，按本波剩余秒数折
+## 提前清场（敌潮已尽）的回合末余时赏：只给金币，按本回合剩余秒数折
 static func early_clear_stones(remaining_secs: float) -> int:
 	return BalanceEconomy.early_clear_stones(remaining_secs)
 
@@ -323,7 +323,7 @@ static func armor_reduction(armor: float) -> float:
 static func incoming_damage(raw: float, armor: float) -> float:
 	return BalanceCombat.incoming_damage(raw, armor)
 
-## 玩家气血读数分档：HUD 血字与灵石阁气血徽记同一把尺（0 = 空载，按满血放行）
+## 玩家生命读数分档：HUD 血字与金币阁生命徽记同一把尺（0 = 空载，按满血放行）
 static func hp_ratio(cur: float, max_v: float) -> float:
 	return BalanceCombat.hp_ratio(cur, max_v)
 
@@ -430,7 +430,7 @@ static func stat_scaling_label(key: String) -> String:
 static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
 	return BalanceTargeting.upgrade_benefits_weapon(apply, w_id)
 
-## 这条加点通过哪些属性链路强化某件法器（受益判定同源，只多回一份「为什么是它」）
+## 这条加点通过哪些属性链路强化某件武器（受益判定同源，只多回一份「为什么是它」）
 static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[String]:
 	return BalanceTargeting.upgrade_benefit_reasons(apply, w_id)
 

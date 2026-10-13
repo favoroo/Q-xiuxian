@@ -11,7 +11,7 @@ extends Area2D
 ## 	0.55 倍的橙红核心外面，视觉上糊开约 70~100px，而判定半径只有 8px ——
 ## 	玩家看到的威胁范围是真实范围的 4~8 倍（比施法者本人还大一圈），只能凭感觉躲。
 ## 	同口径的既有先例：Boss 震地预警圈（AoeTelegraph 按判定半径画圈，填满即结算）、
-## 	玩家法器弹丸（BladeProjectile 判定半径 7，刃的可见长度也就这个量级）。
+## 	玩家武器弹丸（BladeProjectile 判定半径 7，刃的可见长度也就这个量级）。
 ## 	⇒ 要改火球大小只动 RADIUS 一个常数，外观与碰撞一起变，不许分开设。
 
 const RADIUS := 8.0                  ## 基准判定半径（不含 scale_factor）：外观与碰撞的唯一来源
@@ -21,7 +21,7 @@ const RIM_COLOR := Color(0.42, 0.07, 0.04)   ## 硬描边，压在判定圆内�
 
 # —— 对象池（2026-10-11，照 AstralGem/BladeProjectile 模式）——
 ## 御剑邪修周期直射 + 魔君环弹齐射（一圈 18+ 发）每次 new()+queue_free，Area2D + 碰撞体
-## 全套生命周期分配是波次卡顿源。死亡/到期回池休眠，activate() 全量重置。
+## 全套生命周期分配是回合卡顿源。死亡/到期回池休眠，activate() 全量重置。
 ## 兼容约定：裸 new() + add_child 的旧路径（预览/单测）保持原行为不受影响。
 const POOL_CAP := 96
 const BASE_LIFETIME := 3.0   ## 场景默认寿命：activate 复用时重置的基准

@@ -1,7 +1,7 @@
 class_name AllocSession
 extends RefCounted
 
-## 波后悟道结算会话子系统
+## 回合后悟道结算会话子系统
 ## 从 GameManager 抽离，负责待加点消费、每回合免费刷新与付费重掷。
 
 static func open_alloc_session(gm: Node) -> void:
@@ -29,7 +29,7 @@ static func force_end_alloc(gm: Node, reason: String) -> void:
 static func roll_alloc_offers(gm: Node) -> void:
 	# 学者·博学：候选数在基准之上加成（alloc_offer_bonus，缺省 0）
 	gm.alloc_offers = gm.roll_upgrades(gm.UPGRADE_OFFER_COUNT + gm.alloc_offer_bonus)
-	# 「荐」标：按当前修士+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
+	# 「荐」标：按当前角色+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
 	RecommendSystem.mark_alloc_offers(gm)
 
 static func take_alloc_upgrade(gm: Node, index: int) -> bool:

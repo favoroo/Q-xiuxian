@@ -2,7 +2,7 @@ class_name HealOrb
 extends Area2D
 
 ## 残丹/回春葫芦：贴上去才入口的回复珠（2026-10-09 用户三条指令）
-##   ①「不会靠近就被吸附拾取，要人物贴上去才会拾取」—— 本珠不实现 magnet_to，
+##   ①「不会靠近就被吸附拾取，要角色贴上去才会拾取」—— 本珠不实现 magnet_to，
 ##      96 px 摄灵圈（Player.PickupArea 只认 loot 层上的 magnet_to）拿它没办法；
 ##      入口靠自己的 Area2D 认玩家身体那一层，判定圆 = 画出来的那颗珠子（半径 10）；
 ##      画幅与晶石同档（≈24 px），两颗掉在地上的东西一般大（2026-10-09 用户指令「葫芦再小一点」）。
@@ -10,13 +10,13 @@ extends Area2D
 ##      接触名单，所以「压着葫芦挨一刀」不必重新踩上去也算数。灰相是「你正压着它、且现在满血」
 ##      的实时读数而非作废印章：身体一离开就恢复可入口相（2026-10-10 用户口径），否则玩家掉血
 ##      之后回头看那颗早就试过的葫芦，会顶着一张「已经没用」的脸被白白绕开。
-##   ③「回合结束时未拾取的葫芦，溢出生命值部分变成灵石」—— WaveSpawner.end_wave 把场上的
+##   ③「回合结束时未拾取的葫芦，溢出生命值部分变成金币」—— WaveSpawner.end_wave 把场上的
 ##      珠子请进袖中结算：按当前缺血回血，回不上的那一截走 GameBalance.heal_overflow_stones
-##      折灵石并当场飘字。既不白丢治疗，也不留一颗永远躺在地上的珠子。
-## 纯代码构建，无需场景文件；加入 gems 组（波末按组遍历结算）。
+##      折金币并当场飘字。既不白丢治疗，也不留一颗永远躺在地上的珠子。
+## 纯代码构建，无需场景文件；加入 gems 组（回合末按组遍历结算）。
 
 const FULL_HP_EPS := 0.01            ## 视为满血的容差（每秒回血顶到上限时的浮点毛刺）
-const ARRIVE_DIST := 22.0            ## 波末结算飞抵距离
+const ARRIVE_DIST := 22.0            ## 回合末结算飞抵距离
 const SPRITE_SCALE := Vector2(0.375, 0.375)  ## 128 图源缩到 ≈48 px 画幅：与 AstralGem（48×48 图 ×1）同档大小
 const JUDGE_RADIUS := 10.0           ## 判定圆跟着画幅一起收：与 AstralGem 那颗的半径 10 同一把尺子
 const TINT_READY := Color(0.65, 1.35, 0.7)    ## 可入口
@@ -24,10 +24,10 @@ const TINT_WAITING := Color(0.50, 0.60, 0.53) ## 满血待命：看得见，但�
 
 # —— 对象池（2026-10-11，照 AstralGem 模式）——
 ## 残丹掉落/藏宝匣葫芦每次 new()+queue_free；掉落频率低于宝石但同属击杀路径，顺手同池化。
-## 回收时必须 remove_from_group("gems")：波末结算按组请珠，池里休眠的假珠不能入账。
+## 回收时必须 remove_from_group("gems")：回合末结算按组请珠，池里休眠的假珠不能入账。
 ## 兼容约定：裸 new() + add_child 的旧路径（HealOrbCheck/预览）保持原行为不受影响。
 const POOL_CAP := 64
-const BASE_HEAL := 3.0        ## 默认回血量：activate 复用时重置的基准（与字段初值同源）
+const BASE_HEAL := 3.0        ## 默认回生命：activate 复用时重置的基准（与字段初值同源）
 static var _pool: Array[HealOrb] = []
 static var _host: Node2D = null
 static var created_count: int = 0
@@ -55,9 +55,9 @@ static func acquire_or_new(parent: Node) -> HealOrb:
 	return no
 
 var heal_amount: float = 3.0
-var heal_pct: float = 0.0   ## >0 时按玩家气血上限百分比恢复（回春葫芦用）
+var heal_pct: float = 0.0   ## >0 时按玩家生命上限百分比恢复（回春葫芦用）
 
-var target_player: Node2D = null   ## 仅波末结算的飞行途中非空
+var target_player: Node2D = null   ## 仅回合末结算的飞行途中非空
 var waiting_full_hp: bool = false  ## true = 此刻正被满血的身体压着，这一拍不入口；身体一离开就转回 false
 var current_speed: float = -40.0
 var max_speed: float = 680.0
@@ -66,7 +66,7 @@ var acceleration: float = 850.0
 var _sprite: Sprite2D
 var _loot_renderer: ProceduralLootRenderer
 var _bob_tween: Tween = null
-var _settling: bool = false        ## 波末结算中（不再被满血闸拦下）
+var _settling: bool = false        ## 回合末结算中（不再被满血闸拦下）
 var _pooled: bool = false          ## 池状态标记：true = 已回池休眠（防双重回收）
 var _shape: CollisionShape2D = null
 
@@ -78,7 +78,7 @@ func _ready() -> void:
 	# 引擎报 "Can't change this state while flushing queries" 且这一拍的状态不生效
 	# （实测 ProjectileProbe 被这条错误刷屏拖到超时）。activate/recycle 早就走 deferred 了，
 	# 首建这一路得同一把尺。
-	set_deferred("collision_layer", 16)  # loot：灵石那一层的账，别处若要吸灵仍能看到本珠
+	set_deferred("collision_layer", 16)  # loot：金币那一层的账，别处若要吸灵仍能看到本珠
 	set_deferred("collision_mask", 2)    # player：本珠只认身体，不吃隔空吸附
 	set_deferred("monitoring", true)
 	set_deferred("monitorable", true)
@@ -183,7 +183,7 @@ func _touching_player() -> Player:
 			return body as Player
 	return null
 
-## 波末结算：这一路不再等玩家走过来，请进袖中；回不上的那截折灵石
+## 回合末结算：这一路不再等玩家走过来，请进袖中；回不上的那截折金币
 func settle_for_wave_end(player: Node2D) -> void:
 	if _settling or is_queued_for_deletion() or not (player is Player):
 		return
@@ -210,7 +210,7 @@ func _fly_to_settle(delta: float) -> void:
 	if dist < ARRIVE_DIST:
 		_collect(p)
 
-## 落袋：回得上的回血，回不上的溢出折灵石 —— 贴身与波末两条入口共用这一把尺子
+## 落袋：回得上的回血，回不上的溢出折金币 —— 贴身与回合末两条入口共用这一把尺子
 func _collect(p: Player) -> void:
 	var intended := heal_amount
 	if heal_pct > 0.0:
@@ -226,7 +226,7 @@ func _collect(p: Player) -> void:
 	if overflow > 0.0:
 		GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, overflow, p.max_health)
 	var stones := GameBalance.heal_overflow_stones(overflow)
-	# 灵植夫·灵药滋生：溢出折灵石倍率（GameBalance 保持纯函数，角色乘区在调用侧兑现）
+	# 灵植夫·灵药滋生：溢出折金币倍率（GameBalance 保持纯函数，角色乘区在调用侧兑现）
 	if stones > 0 and GameManager.heal_overflow_mult != 1.0:
 		stones = int(round(float(stones) * GameManager.heal_overflow_mult))
 	if stones > 0:

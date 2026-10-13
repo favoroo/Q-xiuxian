@@ -2,7 +2,7 @@ class_name BalanceTargeting
 extends RefCounted
 
 ## 索敌与折算数值：多武器智能索敌分流、藏宝匣两段式分配、武器属性受益折算、
-## 御灵（环绕法宝）动态轨道、多武器神识分流。全部 static 纯函数。
+## 御灵（环绕道具）动态轨道、多武器神识分流。全部 static 纯函数。
 ## 与 GameBalance 同规约：不读 autoload、不碰节点、不调全局 randf()；只读 WeaponData 静态表。
 
 # ---------------- 多武器智能索敌与分流分配 ----------------
@@ -22,7 +22,7 @@ static func is_in_viewport(pos: Vector2, center: Vector2, half_extents: Vector2 
 	var diff := (pos - center).abs()
 	return diff.x <= half_extents.x and diff.y <= half_extents.y
 
-## 为多把在场法器智能分配攻击目标（纯函数：无副作用、无节点依赖、确定性回归）
+## 为多把在场武器智能分配攻击目标（纯函数：无副作用、无节点依赖、确定性回归）
 ## weapons_info: Array[Dictionary]，每项包含 { "base_angle": float, "range": float, "prev_id": int }
 ## enemies_info: Array[Dictionary]，每项包含 { "id": int, "dist": float, "angle": float, "on_screen": bool (可选) }
 ## 返回 Array[int]，长度等于 weapons_info.size()，每项对应 enemies_info 的下标（-1 为无目标）
@@ -131,10 +131,10 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 ## 匣子本身的数值（刷几口 / 三档权重 / 击数 / 掉落表）在 BalanceChest，2026-10-11 寻宝流改版
 ## 时迁出；这里只留索敌分配 —— 两段式那半条链路仍然归本类管。
 
-## 纯函数：两段式分配 —— 先按原有规则把法器派给妖怪，剩下确实无事可做的法器再去砸匣子。
+## 纯函数：两段式分配 —— 先按原有规则把武器派给妖怪，剩下确实无事可做的武器再去砸匣子。
 ## 为什么分两段而不是把匣子混进 enemies_info 一起排：匣子和妖怪在同一条成本函数里
-## 只比"角度 + 距离"，一个脚边的匣子会把法器从还没人管的妖怪身上拽走（匣子不会打你，会打你的妖会）。
-## 两段式保证：妖怪永远优先，匣子只吃闲着的法器与多出来的弹道。
+## 只比"角度 + 距离"，一个脚边的匣子会把武器从还没人管的妖怪身上拽走（匣子不会打你，会打你的妖会）。
+## 两段式保证：妖怪永远优先，匣子只吃闲着的武器与多出来的弹道。
 ## enemies_info / chests_info 同构：{ "id": int, "dist": float, "angle": float }
 ## 返回 Array[int]，下标落在 enemies_info ++ chests_info 这条拼接数组上（-1 = 无事可做）
 static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array, chests_info: Array) -> Array:
@@ -161,7 +161,7 @@ static func assign_targets_with_chests(weapons_info: Array, enemies_info: Array,
 ## 纯函数：根据武器设定的 stat_scalings 与玩家当前属性状态，计算出附加在基础伤害上的数值增量
 ## stat_scalings: { "armor": 3.5, "crit_rate": 40.0, ... }
 ## player_stats: { "armor": float, "crit_rate": float, "hp_regen": float, ... }
-## star: 星级，每升一星该法器的属性转化效率提升 25%（★1: 1.0x, ★2: 1.25x, ★3: 1.5x）
+## star: 星级，每升一星该武器的属性转化效率提升 25%（★1: 1.0x, ★2: 1.25x, ★3: 1.5x）
 ## 总额就是 weapon_stat_bonus_parts 各项之和 —— 只留一份折算实现，账单与总额不可能对不上。
 static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> float:
 	var bonus: float = 0.0
@@ -169,7 +169,7 @@ static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionar
 		bonus += float(v)
 	return bonus
 
-## 纯函数：属性 → 这把法器的逐项裸伤明细 {stat_scalings 键: 该项加了多少裸伤}，已含星级效率。
+## 纯函数：属性 → 这把武器的逐项裸伤明细 {stat_scalings 键: 该项加了多少裸伤}，已含星级效率。
 ## 卡面与详情弹窗的「属性加伤账单」直接读它：玩家看到的是每项贡献的伤害数，不是系数百分比
 ## （armor 3.5 这类系数按百分比印出来会显示成「护甲(+4%)」，max_hp_bonus 0.12 更是直接四舍五入成「+0%」）。
 static func weapon_stat_bonus_parts(stat_scalings: Dictionary, player_stats: Dictionary, star: int = 1) -> Dictionary:
@@ -236,8 +236,8 @@ static func stat_scaling_label(key: String) -> String:
 		"harvest": return "收益"
 	return key
 
-## 加点 apply 字段 → 法器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
-## 与上面 weapon_stat_bonus 的折算 match 同源：法器 stat_scalings 里配了这个键才真吃这条属性。
+## 加点 apply 字段 → 武器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
+## 与上面 weapon_stat_bonus 的折算 match 同源：武器 stat_scalings 里配了这个键才真吃这条属性。
 ## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。
 const APPLY_WEAPON_STAT_MAP := {
 	"melee_damage": "melee_damage",
@@ -255,7 +255,7 @@ const APPLY_WEAPON_STAT_MAP := {
 	"harvest": "harvest",
 }
 
-## 这条加点通过**哪些属性链路**让某件法器变强（返回命中的 apply 键，顺序同 apply 表）。
+## 这条加点通过**哪些属性链路**让某件武器变强（返回命中的 apply 键，顺序同 apply 表）。
 ## 与 upgrade_benefits_weapon 同一份判定，只多回一份「为什么是它」：悟道卡片下方那排
 ## 「受益装备」图标点开后的详情卡用它写清这条链路，不再另抄一套口径（改判定只改这里）。
 ## 纯函数：只读 WeaponData 静态表，不读 autoload。
@@ -285,23 +285,23 @@ static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[St
 						out.append(k)
 	return out
 
-## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件法器变强（悟道卡片下方挂受益法器图标用）。
+## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件武器变强（悟道卡片下方挂受益武器图标用）。
 ## 口径与伤害结算逐条对齐：
-##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体法器受益；
+##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体武器受益；
 ##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
 ##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
-##   stat_scalings 键 → 法器配了该属性转化系数才算；
-##   其余（闪避/拾取/灵石/幸运/修为/重掷/反伤等玩家功能属性）→ 不作用于法器。
+##   stat_scalings 键 → 武器配了该属性转化系数才算；
+##   其余（闪避/拾取/金币/幸运/经验/重掷/反伤等玩家功能属性）→ 不作用于武器。
 ## 判据与 upgrade_benefit_reasons 同一条链：有链路才算受益，不另写一遍分支。
 static func upgrade_benefits_weapon(apply: Dictionary, w_id: String) -> bool:
 	return not upgrade_benefit_reasons(apply, w_id).is_empty()
 
-# ---------------- 御灵（环绕法宝）动态轨道与战斗感知 ----------------
+# ---------------- 御灵（环绕道具）动态轨道与战斗感知 ----------------
 
 const SPIRIT_BASE_RADIUS := 80.0         ## 巡航基准半径（无威胁时的平稳环绕距离）
 const SPIRIT_MIN_RADIUS := 28.0          ## 极限收缩半径（完全覆盖 24~40px 贴身盲区）
 const SPIRIT_MAX_REACH := 185.0          ## 默认最大扑击外扩极限
-const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距离法宝迅速内收护体）
+const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距离道具迅速内收护体）
 const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
 const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
 
@@ -418,15 +418,15 @@ static func compute_spirit_orbit(
 
 # ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
 
-const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把法器的神识分流系数
+const MULTI_WEAPON_LOAD_PER_EXTRA := 0.12  ## 每多御使一把武器的神识分流系数
 ## 环绕灵宝的神识分流权重：召唤物自主作战、不占主人神识，按半权计入分流。
 ## （机关炮台不半权：它已有多座并发 + 机关羁绊乘区两条成长线。2026-10-11 用户「全召唤打 Boss 磨血」）
 const MULTI_WEAPON_DRONE_WEIGHT := 0.5
 
-## 纯函数：根据当前上阵法器总数（含悬浮法器与环绕灵物），计算单把法器的直击神识分流效率
+## 纯函数：根据当前上阵武器总数（含悬浮武器与环绕灵物），计算单把武器的直击神识分流效率
 ## 1 把: 1.00 (100%), 2 把: ~0.893 (总 1.79x), 3 把: ~0.806 (总 2.42x), 4 把: ~0.735 (总 2.94x),
 ## 5 把: ~0.676 (总 3.38x), 6 把: ~0.625 (总 3.75x)。
-## 每多买一把法器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
+## 每多买一把武器总输出稳步提升，但杜绝 6 把 ★1 武器无脑 6~8 倍直接秒杀，同时抬高三合一升星腾槽位的收益。
 ## drone_count：其中环绕灵宝的把数，按 MULTI_WEAPON_DRONE_WEIGHT 半权折算
 ##（纯御灵 6 把：有效 3 把 ⇒ 单把 ~0.806，总 4.83x —— 以多打少不再被神识分流拖死）。
 static func multi_weapon_damage_mult(slot_count: int, drone_count: int = 0) -> float:

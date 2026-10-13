@@ -1,19 +1,19 @@
 class_name AstralGem
 extends Area2D
 
-## 掉落灵石：拾取后转化为经验值。2026-10-10 第 6 波卡顿优化改造：
+## 掉落金币：拾取后转化为经验值。2026-10-10 第 6 波卡顿优化改造：
 ## 1. 对象池（照 BladeProjectile 模式）——击杀高频 instantiate/queue_free 归零；
 ## 2. 动态灯名额 GEM_LIGHT_CAP——一场战斗地上可堆积一两百颗，灯数曾随击杀线性上涨，
 ##    是 Forward+ 2D 光照 pass 的最大成本项；超限灯灭（矢量辉光多边形仍在，视觉不空）；
 ## 3. 去 set_loops 常驻 Tween——浮动改由 ProceduralLootRenderer._process 手写 sin 驱动；
 ## 4. 软上限保险丝 GEM_SOFT_CAP——超过后最旧宝石被强制磁吸给玩家，不消失、无经验损失。
 
-const POOL_CAP := 160          ## 池上限：单波同存远小于此值
+const POOL_CAP := 160          ## 池上限：单回合同存远小于此值
 const GEM_LIGHT_CAP := 8       ## 动态灯名额（与 BladeProjectile.LIGHT_CAP=6 独立计数）
 const GEM_SOFT_CAP := 140      ## 场上软上限：超过后强制最旧宝石磁吸给玩家（保险丝）
 
 @export var exp_value: int = 1
-## 金币腿入账值：-1 = 与 exp_value 同值（普通灵石原口径）；>=0 = 按此值入账。
+## 金币腿入账值：-1 = 与 exp_value 同值（普通金币原口径）；>=0 = 按此值入账。
 ## 碎晶档专用：经验足额、金币折低（见 BalanceEconomy 碎晶段）。
 @export var stone_value: int = -1
 @export var is_gold: bool = false:
@@ -87,7 +87,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> AstralGem:
 	return ng
 
 ## 软上限保险丝：场上宝石数到顶后，每次出膛让最旧的一颗飞向玩家。
-## 只触发磁吸不凭空消失，经验一颗不少，只是把「堆到波末」变成「滚进兜里」。
+## 只触发磁吸不凭空消失，经验一颗不少，只是把「堆到回合末」变成「滚进兜里」。
 static func _try_release_fuse() -> void:
 	if _active_gems.size() < GEM_SOFT_CAP:
 		return

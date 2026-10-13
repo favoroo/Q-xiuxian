@@ -11,7 +11,7 @@
 - **平台** Android APK（`export_presets.cfg` arm64-v8a，包名 `com.favo.qxiuxian`），桌面调试 960×540
 - **版本** 见 [Version.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/Version.gd)，远端 GitHub `favoroo/Q-xiuxian` + Gitee `favo9/q-xiuxian`
 - **物理** Jolt，6 层碰撞层（1 world / 2 player / 3 enemies / 4 player_projectiles / 5 loot / 6 interactables），勿改
-- **核心循环** 选人 → 选武器 → 20 波战斗（`GameManager.VICTORY_WAVE`）→ 波后统一悟道加点（一屏 `UPGRADE_OFFER_COUNT`=5 个候选、每回合 1 次免费刷新）→ 波间灵石阁（`SHOP_BASE_SLOTS`=5 格）→ 胜负结算
+- **核心循环** 选人 → 选武器 → 20 波战斗（`GameManager.VICTORY_WAVE`）→ 回合后统一悟道加点（一屏 `UPGRADE_OFFER_COUNT`=5 个候选、每回合 1 次免费刷新）→ 回合间金币阁（`SHOP_BASE_SLOTS`=5 格）→ 胜负结算
 
 ## 快速定位
 
@@ -20,12 +20,12 @@
 | 调数值/公式 | [GameBalance.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/GameBalance.gd)（全 `static` 纯函数） |
 | 调全局状态/上限常量 | [GameManager.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/GameManager.gd) 顶部常量区 |
 | 调悟道加点表 | [UpgradeData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/UpgradeData.gd)（`"apply"` 字典是生效幅度唯一真话） |
-| 改武器/角色/法宝/神通数据 | `scripts/data/`（[WeaponData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/WeaponData.gd) / [CultivatorData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/CultivatorData.gd) / [ItemData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/ItemData.gd) / [SkillData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/SkillData.gd)） |
+| 改武器/角色/道具/技能数据 | `scripts/data/`（[WeaponData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/WeaponData.gd) / [CultivatorData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/CultivatorData.gd) / [ItemData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/ItemData.gd) / [SkillData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/SkillData.gd)） |
 | 改图鉴/成就/属性说明数据 | `scripts/data/`（[ManualData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/ManualData.gd) / [AchievementData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/AchievementData.gd) / [StatInfoData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/StatInfoData.gd)） |
-| 改波后加点/商店节奏 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) `_enter_wave_break` + [LevelUpDialog.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/LevelUpDialog.gd) + [WaveShop.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/WaveShop.gd) |
-| 改刷怪/波次配比 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) |
+| 改回合后加点/商店节奏 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) `_enter_wave_break` + [LevelUpDialog.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/LevelUpDialog.gd) + [WaveShop.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/WaveShop.gd) |
+| 改刷怪/回合配比 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) |
 | 改玩家/敌人/Boss/场景交互物 | `scripts/entities/`（[Player.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/Player.gd) / [EnemyBase.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/EnemyBase.gd) / [BossEnemy.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/BossEnemy.gd) / [BlessingObelisk.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/BlessingObelisk.gd) / [SpiritChest.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/SpiritChest.gd)） |
-| 改法器/弹丸追踪 | `scripts/weapons/`（[FloatingWeapon.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/FloatingWeapon.gd) / [BladeProjectile.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/BladeProjectile.gd)） |
+| 改武器/弹丸追踪 | `scripts/weapons/`（[FloatingWeapon.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/FloatingWeapon.gd) / [BladeProjectile.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/BladeProjectile.gd)） |
 | 改打击感/震屏 | [JuiceEffect.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/JuiceEffect.gd) + GameBalance 镜头创伤段 + [SmoothCamera.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/controllers/SmoothCamera.gd) |
 | 改 UI 样式/配色/字体 | [GameStyle.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/GameStyle.gd)（**唯一取色入口**） |
 | 改音效/BGM | [AudioManager.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/AudioManager.gd) |
@@ -53,7 +53,7 @@
   ```bash
   $G --headless --path . --editor --quit
   ```
-- 升级项生效幅度在 `UpgradeData` 的 `"apply"` 字典，文案数字与它同源；法宝与升级共用同一条属性链路。
+- 升级项生效幅度在 `UpgradeData` 的 `"apply"` 字典，文案数字与它同源；道具与升级共用同一条属性链路。
 - 像素对齐已开（`snap_2d_vertices` + Nearest 过滤）。
 
 ## UI 规范
@@ -88,12 +88,12 @@ $G --headless --path . res://tests/SmokeRunner.tscn       # 全流程冒烟
 $G --headless --path . res://tests/PoolCheck.tscn         # 帧缓存/对象池
 $G --headless --path . res://tests/LayoutCheck.tscn       # UI 摆位（自检可带 -- --selftest）
 $G --headless --path . res://tests/FontCoverageCheck.tscn # 字体子集覆盖
-$G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与血量平衡仿真
+$G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与生命平衡仿真
 ```
 
 ### 专项测试与预览工具（按改动模块选跑）
 
-- **专项判据（`tests/*Check.tscn` / `tests/*Probe.tscn`）**：覆盖 AI、神通、法器朝向、弹丸命中、震退、回复珠、聚灵阵、藏宝匣、手势/滚动等专项逻辑。具体参数（如 `-- --selftest`）见对应 `tests/*.gd` 文件头注释。`LayoutCheck` 报红时可跑 `res://tests/LayoutBleedProbe.tscn` 查看边界诊断数据。
+- **专项判据（`tests/*Check.tscn` / `tests/*Probe.tscn`）**：覆盖 AI、技能、武器朝向、弹丸命中、震退、回复珠、聚灵阵、藏宝匣、手势/滚动等专项逻辑。具体参数（如 `-- --selftest`）见对应 `tests/*.gd` 文件头注释。`LayoutCheck` 报红时可跑 `res://tests/LayoutBleedProbe.tscn` 查看边界诊断数据。
 - **非判据现场预览（`tests/*Preview.tscn` / `AudioGallery.tscn`）**：需要真实出声/出图，运行时**不加 `--headless`**。
 - **约定**：新增测试直接放入 `tests/` 即可，**禁止将新增测试命令追加到本文件**。
 
@@ -103,7 +103,7 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与血量平�
 
 - **共享串行文件**（同一时间全局只允许一个 Agent 改，改前先 `git status --short` 看是否已被占用）：`export_presets.cfg`、`project.godot`、`scripts/autoload/Version.gd`、`assets_raw/manifest.jsonl`、`tools/font_charset.txt` + `fonts/MiSans-*.woff2`、`scripts/ui/GameStyle.gd`（唯一取色入口）。
 - **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd` / `tests/unit_runner.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。
-- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 灵石阁卡工厂与槽位；`scripts/ui/stats/` 属性面板 builder；`scripts/systems/Balance*.gd` 数值公式；`tests/unit/` 单测主题模块。
+- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 金币阁卡工厂与槽位；`scripts/ui/stats/` 属性面板 builder；`scripts/systems/Balance*.gd` 数值公式；`tests/unit/` 单测主题模块。
 - `CHANGELOG.md` 为追加式，正常往上加即可，冲突面小。
 
 ## 变更日志（每次改代码必读必写）

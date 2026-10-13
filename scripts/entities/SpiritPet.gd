@@ -1,8 +1,8 @@
 class_name SpiritPet
 extends Node2D
 
-## 灵兽（随行伙伴）实体：纯 _draw 程序化光灵 + 小部件区分，无碰撞体，跨波存活
-## 铁律：只挂 "spirit_pets" 组，绝不进 enemies/turrets/gems/chests 四个波末清场组。
+## 灵兽（随行伙伴）实体：纯 _draw 程序化光灵 + 小部件区分，无碰撞体，跨回合存活
+## 铁律：只挂 "spirit_pets" 组，绝不进 enemies/turrets/gems/chests 四个回合末清场组。
 ## 多个灵兽通过 orbit_index 均分绕飘相位，视觉各自舒展不重叠。
 
 const FOLLOW_DIST: float = 38.0     ## 跟随绕飘半径（px）
@@ -231,7 +231,7 @@ func _act_xuangui() -> void:
 		# 5. 清脆有力的防御音效（使用已注册的 impact_blunt）
 		AudioManager.play_sfx("impact_blunt", 0.5, 1.35)
 
-## 玉露鹿：气血回复
+## 玉露鹿：生命回复
 func _act_yulu() -> void:
 	if target == null:
 		return
@@ -324,7 +324,7 @@ func _act_shiyuan() -> void:
 			JuiceEffect.spawn_step_dust(scene_parent, global_position, Vector2.DOWN)
 		AudioManager.play_sfx("enemy_hit_heavy", 0.4, 0.95)
 
-## 聚宝蟾：波末产出灵石触发视觉动效
+## 聚宝蟾：回合末产出金币触发视觉动效
 func trigger_wave_harvest_fx() -> void:
 	pulse_trigger_fx(Vector2(1.5, 0.8), 0.22)
 	var scene_parent: Node = get_parent()

@@ -36,6 +36,7 @@ CORE_TESTS = [
     "res://tests/LayoutCheck.tscn",
     "res://tests/FontCoverageCheck.tscn",
     "res://tests/BalanceSimCheck.tscn",
+    "res://tests/SoakCheck.tscn",
 ]
 
 # --all 全量回归时跳过的场景：需要真实出声/出图的现场预览（headless 下无意义），以及明确不适合批量跑的
@@ -50,6 +51,7 @@ SLOW_TEST_LIMITS = {
     "SmokeRunner": 45.0,          # 全流程冒烟
     "ManualHotzoneCheck": 75.0,   # 88 张卡 × 12 取样点 = 1056 次真实点按（实测 ~39s）
     "ProjectileProbe": 60.0,      # B 段真跑 18 秒尸潮（time_scale=1，实测 ~34s）
+    "SoakCheck": 300.0,           # 连续 20 波长局 + 重开一局再战 3 波（首跑实测后收紧）
 }
 
 

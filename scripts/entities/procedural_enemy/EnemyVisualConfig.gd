@@ -245,7 +245,7 @@ static func make_jiansha_elite() -> EnemyVisualConfig:
 	cfg.ornament_type = "tri_swords"
 	return cfg
 
-## 14. 妖潮魔君 & 心魔魔尊 (BOSS / HOVER)
+## 14. 敌潮魔君 & 心魔魔尊 (BOSS / HOVER)
 static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "boss"

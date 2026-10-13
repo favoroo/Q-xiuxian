@@ -158,14 +158,14 @@ const BRIEF: Dictionary = {
 	"range": "武器索敌与攻击的距离。",
 	"crit": "暴击的概率与倍率。",
 	"luck": "提高高稀有度升级与道具的出现概率。",
-	"harvest": "每波结束白得金币与经验，且有复利增长。",
+	"harvest": "每回合结束白得金币与经验，且有复利增长。",
 	"xp_gain": "每颗经验光球提供的经验倍率。",
 	"shop_price": "商店商品的物价折算。",
 	"bonus_pierce": "远程弹丸类武器的额外穿透次数。",
 	"thorns": "受到近身攻击时，按比例反弹伤害给敌方。",
 	"elite_dmg": "对精英与Boss的额外伤害。",
 	"knockback": "击中敌人时的击退距离与力度。",
-	"free_rerolls": "每波商店开始时免费重掷的次数。",
+	"free_rerolls": "每回合商店开始时免费重掷的次数。",
 	"kills": "本局击杀敌人的总数，含精英与Boss。",
 	"stones": "本局货币：买武器、道具、重掷都花它。",
 }
@@ -201,7 +201,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("最大生命 = 角色基础 × 角色生命系数，再加升级与道具的增量、召唤羁绊的额外生命。")
 			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，且保底 %d 点：护甲再高也抹不平最后一击。" % [
 				_fmt(GameBalance.ARMOR_COEF), int(GameBalance.DAMAGE_FLOOR)])
-			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、波结束结算（收益与回复葫芦）。")
+			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、回合结束结算（收益与回复葫芦）。")
 		"regen":
 			out.append("每帧按「回复量 × 时间」累加，满血时不溢出、也不折抵成别的收益。")
 			out.append("木系羁绊额外加在这一条上，详情里单列一行。")
@@ -269,8 +269,8 @@ static func rules(id: String) -> Array[String]:
 			out.append("普通权重有地板 %s，所以幸运堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
 			out.append("对商店货架是按权重微调，不是必出；幸运低也不至于刷不出货。")
 		"harvest":
-			out.append("波结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
-			out.append("每波自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
+			out.append("回合结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
+			out.append("每回合自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
 			out.append("经验与金币同源，所以收益高 = 升级快 = 升级次数多。")
 		"xp_gain":
@@ -292,14 +292,14 @@ static func rules(id: String) -> Array[String]:
 			out.append("武器击退敌人的推力与距离加成倍率。")
 			out.append("土系羁绊与道具「雷击针」加在这条上，防高密度敌潮近身。")
 		"free_rerolls":
-			out.append("每波进入商店时无需花费金币即可免费重掷货架的次数。")
+			out.append("每回合进入商店时无需花费金币即可免费重掷货架的次数。")
 			out.append("道具「重掷令」提供，用完后重掷费用才开始按正常递增结算。")
 		"kills":
 			out.append("只是读数：不吃任何加成，也不参与结算公式。")
 			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
 		"stones":
-			out.append("来源四条：击杀掉落、收益波末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
-			out.append("余时赏：本波妖潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给经验）。")
+			out.append("来源四条：击杀掉落、收益回合末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
+			out.append("余时赏：本回合敌潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给经验）。")
 			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
 	return out
 
@@ -539,8 +539,8 @@ static func stat_tip_rows(id: String) -> Array:
 			var gain: int = GameBalance.harvest_gain(hv)
 			rows = [
 				["收益", "%.0f" % hv, _c(hv)],
-				["本波末发放", "+%d 金币 / +%d 经验" % [gain, gain], GameStyle.JADE],
-				["每波复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
+				["本回合末发放", "+%d 金币 / +%d 经验" % [gain, gain], GameStyle.JADE],
+				["每回合复利", _mul(GameBalance.HARVEST_GROWTH), GameStyle.GREY],
 				["增长截止", "第 %d 波（当前第 %d 波）" % [GameManager.HARVEST_GROWTH_WAVE_CAP, maxi(GameManager.wave_number, 1)]],
 			]
 		"xp_gain":
@@ -585,8 +585,8 @@ static func stat_tip_rows(id: String) -> Array:
 		"free_rerolls":
 			var fr: int = int(s.get("free_rerolls", 0))
 			rows = [
-				["每波免费重掷", "%d 次" % fr, _c(float(fr))],
-				["本波剩余免费", "%d 次" % GameManager.reroll_free_left],
+				["每回合免费重掷", "%d 次" % fr, _c(float(fr))],
+				["本回合剩余免费", "%d 次" % GameManager.reroll_free_left],
 			]
 		"kills":
 			var mins: float = maxf(GameManager.game_time, 1.0) / 60.0
@@ -597,8 +597,8 @@ static func stat_tip_rows(id: String) -> Array:
 		"stones":
 			rows = [
 				["随身金币", "%d 枚" % GameManager.spirit_stones, GameStyle.JADE],
-				["下一波收益", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
-				["余时赏", "每秒 %d 枚 · 单波顶 %d 枚" % [
+				["下一回合收益", "+%d 枚" % GameBalance.harvest_gain(float(s.get("harvest", 0.0)))],
+				["余时赏", "每秒 %d 枚 · 单回合顶 %d 枚" % [
 					int(GameBalance.EARLY_CLEAR_STONES_PER_SEC), GameBalance.EARLY_CLEAR_STONES_MAX]],
 			]
 	return rows

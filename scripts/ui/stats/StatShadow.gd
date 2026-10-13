@@ -26,7 +26,7 @@ const COPIED: Array[String] = [
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
 		"chest_reward_mult", "spirit_stones",
 		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
-		# —— 羁绊与神通乘区：影子不改它们，但读数要按同一式子合起来算 ——
+		# —— 羁绊与技能乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
 	"synergy_move_speed_mult", "synergy_armor", "synergy_knockback_mult",
@@ -75,7 +75,7 @@ var pet_effect_mult: float = 1.0
 var pet_cooldown_mult: float = 1.0
 var pet_slots_bonus: int = 0
 
-# —— 羁绊 / 神通层 ——
+# —— 羁绊 / 技能层 ——
 var synergy_damage_mult: float = 1.0
 var synergy_range_mult: float = 1.0
 var synergy_haste_mult: float = 1.0
@@ -93,14 +93,14 @@ var buff_move_speed_mult: float = 1.0
 var buff_dodge: float = 0.0
 var dodge_cap_bonus: float = 0.0
 
-## 气血与基础移速的载体：真身是 Player 节点，影子换成替身（见 PlayerMirror）
+## 生命与基础移速的载体：真身是 Player 节点，影子换成替身（见 PlayerMirror）
 var player: Object = null
 ## 五行真解：Dictionary 按引用抄会让影子改到真身头上，from_gm 里单独 duplicate
 var element_damage: Dictionary = {}
-## 真身引用：只为借「法宝钩子」这一类不随悟道变化的读数，影子自己不改它
+## 真身引用：只为借「道具钩子」这一类不随悟道变化的读数，影子自己不改它
 var _real: Object = null
 
-## 气血替身：只被当数读（current_health / max_health / base_speed），
+## 生命替身：只被当数读（current_health / max_health / base_speed），
 ## 外加 increase_max_hp 这一枪 —— 算式与 Player.increase_max_hp 同两行，
 ## 但不发 player_hp_changed、不挤压形变、不 spawn 跳字（那些是真身的事）。
 class PlayerMirror extends RefCounted:
@@ -139,7 +139,7 @@ func get_crit_rate() -> float:
 		crit_rate, synergy_crit_rate, item_hook_sum("crit_per_dodge"),
 		get_effective_dodge(), CRIT_RATE_CAP)
 
-## 法宝不会因为一条悟道而增减：这一项直接借真身读数，影子不另存一份清单
+## 道具不会因为一条悟道而增减：这一项直接借真身读数，影子不另存一份清单
 func item_hook_sum(hook: String) -> float:
 	if _real == null:
 		return 0.0

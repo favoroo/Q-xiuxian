@@ -1,7 +1,7 @@
 class_name ThunderData
 extends RefCounted
 
-## 天雷（雷法真君被动出口）数据表：每隔数秒自动引一道天雷劈向最近的妖兽，
+## 天雷（雷法真君被动出口）数据表：每隔数秒自动引一道天雷劈向最近的敌人，
 ## 落点小范围震荡——伤害随元素伤害成长，给「堆元素」一个看得见的兑现口。
 ## 全自动索敌，不用学操作；与雷法雷系/符箓亲和同向：元素越高，天雷越疼。
 ##
@@ -17,7 +17,7 @@ const SEEK_RANGE := 460.0     ## 索敌半径：约半屏，劈得到就要看�
 const RADIUS := 100.0         ## 落点震荡判定半径 = 环特效半径（像素）
 const BASE_DAMAGE := 12.0     ## 基础雷伤（开局元素 3 时一雷 18，打得动第 1 波小怪）
 const ELEMENTAL_RATIO := 2.0  ## 元素伤害转化率：每点元素伤害 +2 雷伤（堆元素的第二生命）
-const PUSH_IMPULSE := 140.0   ## 落点震退冲量（调用方乘玩家震退乘区，与法器击退同一把尺子）
+const PUSH_IMPULSE := 140.0   ## 落点震退冲量（调用方乘玩家震退乘区，与武器击退同一把尺子）
 
 ## 单雷伤害（未吃任何乘区；调用方自行乘短时增益乘区 buff_damage_mult）
 static func bolt_damage(elemental_damage: float) -> float:
@@ -27,6 +27,6 @@ static func bolt_damage(elemental_damage: float) -> float:
 ## 每条一行，按详解卡最窄列宽（404）量过：加字先量宽。
 static func card_lines() -> Array[String]:
 	return [
-		"天雷：每 %d 秒劈向最近妖兽，落点 %d 像素震荡" % [int(roundf(INTERVAL)), int(roundf(RADIUS))],
+		"天雷：每 %d 秒劈向最近敌人，落点 %d 像素震荡" % [int(roundf(INTERVAL)), int(roundf(RADIUS))],
 		"天雷：伤害 %d + 元素伤害 ×%.1f" % [int(roundf(BASE_DAMAGE)), ELEMENTAL_RATIO],
 	]

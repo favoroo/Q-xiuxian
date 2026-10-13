@@ -17,11 +17,11 @@ static func exp_to_next(prev_needed: int) -> int:
 
 # ---------------- 商店定价 ----------------
 
-const WEAVE_WAVE_STEP := 2      ## 法器每波加价
-const ITEM_WAVE_STEP := 2       ## 道具每波加价（与武器同一步调）
+const WEAVE_WAVE_STEP := 2      ## 武器每回合加价
+const ITEM_WAVE_STEP := 2       ## 道具每回合加价（与武器同一步调）
 const REROLL_BASE := 2
-const REROLL_WAVE_STEP := 1     ## 重掷价随波次上升
-const REROLL_COUNT_STEP := 2    ## 本波每重掷一次再涨
+const REROLL_WAVE_STEP := 1     ## 重掷价随回合上升
+const REROLL_COUNT_STEP := 2    ## 本回合每重掷一次再涨
 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
@@ -30,7 +30,7 @@ static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 static func item_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
 
-## 灵兽定价：基准价来自 PetData，与道具同波次成长步长
+## 灵兽定价：基准价来自 PetData，与道具同回合成长步长
 static func pet_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
 
@@ -38,7 +38,7 @@ static func potion_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + maxi(wave, 1)) * price_mult)
 
 ## 回复药回复量：按生命上限的比例。货架卡上印的数、生命详情卡里说的数、ShopSystem 真喂给
-## heal() 的数，三处都从这一个出口拿（2026-10-11 用户：「商店界面也要显示血量，
+## heal() 的数，三处都从这一个出口拿（2026-10-11 用户：「商店界面也要显示生命，
 ## 不然也不知道回复道具要不要买」——要能判断，卡面上的数就必须是真会兑现的那个数）。
 const POTION_HEAL_RATIO := 0.5
 
@@ -53,7 +53,7 @@ static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return int(float(REROLL_BASE + maxi(wave, 1) * REROLL_WAVE_STEP + maxi(reroll_count, 0) * REROLL_COUNT_STEP) * price_mult)
 
-# ---------------- 收益（波末无偿发放并自我复利）----------------
+# ---------------- 收益（回合末无偿发放并自我复利）----------------
 
 const HARVEST_GROWTH := 1.05
 
@@ -66,12 +66,12 @@ static func harvest_next(harvest: float, wave: int, growth_wave_cap: int) -> flo
 		return harvest * HARVEST_GROWTH
 	return harvest
 
-# ---------------- 妖潮预算补差 ----------------
+# ---------------- 敌潮预算补差 ----------------
 
-## 波内总刷入预算（BalanceWave.wave_spawn_budget）收紧后，被预算拦下的怪不再掉宝石，
-## 经验收入随之下滑。波末按「未刷出只数 × 均值」折成经验找平，商店/加点购买力不变。
-## 均值优先用本波实际刷出敌人的 exp_reward 均值（WaveSpawner 现场统计），
-## 一只都没刷出来的极端波次才落兜底值。
+## 回合内总刷入预算（BalanceWave.wave_spawn_budget）收紧后，被预算拦下的怪不再掉宝石，
+## 经验收入随之下滑。回合末按「未刷出只数 × 均值」折成经验找平，商店/加点购买力不变。
+## 均值优先用本回合实际刷出敌人的 exp_reward 均值（WaveSpawner 现场统计），
+## 一只都没刷出来的极端回合才落兜底值。
 const BUDGET_COMP_EXP_FALLBACK := 2.0
 
 ## 补差经验 = 未刷出只数 × 每只期望经验（未刷出 ≤0 就是 0）
@@ -81,20 +81,20 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	var eff_avg := avg_exp if avg_exp > 0.0 else BUDGET_COMP_EXP_FALLBACK
 	return int(round(float(shortfall) * eff_avg))
 
-# ---------------- 灵石碎晶档（后期金币腿稀释） ----------------
+# ---------------- 金币碎晶档（后期金币腿稀释） ----------------
 
-## 2026-10-13 经济优化：灵石与经验是同一个球（add_experience 双入账），怪面额固定、
-## 商店价格只按波次加法增长，后期每波净结余 200+ 灵石花不完。对策：普通怪死亡按概率
+## 2026-10-13 经济优化：金币与经验是同一个球（add_experience 双入账），怪面额固定、
+## 商店价格只按回合加法增长，后期每回合净结余 200+ 金币花不完。对策：普通怪死亡按概率
 ## 掉「碎晶」——经验腿足额给（升级节奏与经验曲线不动），只有金币腿折到 1 枚。
-## 碎晶率随波次上升：前期几乎不掉（保持现有手感），后期占比走高、按比例稀释通胀。
+## 碎晶率随回合上升：前期几乎不掉（保持现有手感），后期占比走高、按比例稀释通胀。
 ## 随机由调用方拿 GameManager.rng 比对，本函数保持纯。
 
 const GEM_SHARD_STONE_VALUE := 1        ## 碎晶金币面额
 const GEM_SHARD_START_WAVE := 5         ## 碎晶率自第 5 波起抬升（起点当波概率为 0，第 6 波才真正掉）
-const GEM_SHARD_RISE_PER_WAVE := 0.035  ## 起点之后每波碎晶率抬升
+const GEM_SHARD_RISE_PER_WAVE := 0.035  ## 起点之后每回合碎晶率抬升
 const GEM_SHARD_CHANCE_CAP := 0.45      ## 碎晶率上限：再多就把高光掉落的爽感掏空了
 
-## 本波普通怪掉落为碎晶的概率（波次 ≤ 起点为 0，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
+## 本回合普通怪掉落为碎晶的概率（回合 ≤ 起点为 0，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
 static func gem_shard_chance(wave: int) -> float:
 	var w := maxi(wave, 1)
 	if w < GEM_SHARD_START_WAVE:
@@ -103,7 +103,7 @@ static func gem_shard_chance(wave: int) -> float:
 
 # ---------------- 提前清场余时赏 ----------------
 
-## 一波的结束条件有两条（WaveSpawner._process_fight）：表走完，或「妖潮已尽」——本波刷怪预算
+## 一波的结束条件有两条（WaveSpawner._process_fight）：表走完，或「敌潮已尽」——本回合刷怪预算
 ## 全部刷入且场上再无活妖。后者就是用户 2026-10-12 的口径「提前杀完还在干等」：预算制下第 7 波
 ## 约 22s 就把 39 只刷完，之后场地是空的，只能看着表再走二十几秒。
 ## 提前收尾省下的那截时间按秒折成金币，余得越多给得越多。
@@ -122,7 +122,7 @@ static func early_clear_stones(remaining_secs: float) -> int:
 		return 0
 	return mini(int(round(float(secs) * EARLY_CLEAR_STONES_PER_SEC)), EARLY_CLEAR_STONES_MAX)
 
-# ---------------- 残丹化灵（波末没贴上去吃掉的回复珠）----------------
+# ---------------- 残丹化灵（回合末没贴上去吃掉的回复珠）----------------
 
 ## 回不上的那截生命折成金币：每点 0.8。钉在藏宝匣另一路上 —— 满口 18 点 ×0.8 ≈ 14，
 ## 与「约四成掉 3 颗金币（各 5 经验/金币）」同档，砸匣子两条路不等价也不悬殊。
@@ -162,8 +162,8 @@ const TAG_AFFINITY_MULT_L2 := 3.0
 const TAG_AFFINITY_COMBO_DAMP := 0.5   ## 双流派共鸣：第二流派的亲和按该比例折算后叠加
 const LUCK_SHOP_PER_POINT := 0.01      ## 幸运对武器权重的加法系数
 const MAIN_TAG_PITY_WAVES := 2         ## 连续几波没出主流派就强制塞一件
-const TAG_FILTER_BONUS := 4.0          ## 流派偏好软加权：命中角色限定 tag 的法器权重倍率
-const TAG_FILTER_LEAK := 0.2           ## 未命中限定 tag 的法器保留的小权重（漏出率）
+const TAG_FILTER_BONUS := 4.0          ## 流派偏好软加权：命中角色限定 tag 的武器权重倍率
+const TAG_FILTER_LEAK := 0.2           ## 未命中限定 tag 的武器保留的小权重（漏出率）
 
 ## 梯度亲和倍率：持有不足 MIN_COPIES 件时恒为 1；≥4 件进入第二档深专精吸力
 static func tag_affinity_mult(copies: int) -> float:
@@ -171,9 +171,9 @@ static func tag_affinity_mult(copies: int) -> float:
 		return 1.0
 	return TAG_AFFINITY_MULT_L2 if copies >= TAG_AFFINITY_TIER2_COPIES else TAG_AFFINITY_MULT_L1
 
-## 双流派共鸣：法器同时命中多个已激活亲和的流派（如剑系∩金系）时，
+## 双流派共鸣：武器同时命中多个已激活亲和的流派（如剑系∩金系）时，
 ## 最高档亲和全额生效，其余已激活流派按 COMBO_DAMP 半价叠加——
-## 玩家双修两流派后，交叉法器权重反超单流派，货架会主动把"正想要的那把"喂过来。
+## 玩家双修两流派后，交叉武器权重反超单流派，货架会主动把"正想要的那把"喂过来。
 static func tag_affinity_combo(counts: Dictionary, tags: Array) -> float:
 	var best := 1.0
 	var second := 1.0
@@ -188,8 +188,8 @@ static func tag_affinity_combo(counts: Dictionary, tags: Array) -> float:
 			second = m
 	return best * (1.0 + (second - 1.0) * TAG_AFFINITY_COMBO_DAMP)
 
-## 流派偏好的软加权：角色限定流派非空时，命中 tag 的法器 ×BONUS，其余保留 LEAK 小权重。
-## 替代旧版硬过滤——硬过滤在池中只有 1 件同名法器时会让货架坍缩为单一武器。
+## 流派偏好的软加权：角色限定流派非空时，命中 tag 的武器 ×BONUS，其余保留 LEAK 小权重。
+## 替代旧版硬过滤——硬过滤在池中只有 1 件同名武器时会让货架坍缩为单一武器。
 static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 	if filter_tags.is_empty():
 		return 1.0
@@ -203,12 +203,12 @@ static func shop_luck_mult(luck: float) -> float:
 
 # ---------------- 道具（被动道具）档位权重 ----------------
 
-## 各档位最早出现的波次（下标 1~4 对应 tier 1~4，0 为占位）：高档道具随波次解锁
+## 各档位最早出现的回合（下标 1~4 对应 tier 1~4，0 为占位）：高档道具随回合解锁
 const ITEM_TIER_WAVES := [0, 1, 4, 9, 14]
 const ITEM_TIER_BASE := [0.0, 60.0, 30.0, 9.0, 1.0]   ## 无幸运时的档位基础权重
 
 ## 道具档位权重：返回长度 4 的数组（tier1~4）。幸运抬高高档权重（差额从普通扣），
-## 未到解锁波次的档位权重清零；普通有权重地板防归零
+## 未到解锁回合的档位权重清零；普通有权重地板防归零
 static func item_tier_weights(luck: float, wave: int) -> Array:
 	var l := maxf(0.0, luck)
 	var w := [ITEM_TIER_BASE[1], ITEM_TIER_BASE[2], ITEM_TIER_BASE[3], ITEM_TIER_BASE[4]]

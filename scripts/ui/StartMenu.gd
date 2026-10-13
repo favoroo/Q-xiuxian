@@ -592,7 +592,7 @@ func _apply_small_metrics(small_h: float) -> void:
 	var m := small_metrics(small_h)
 	for blk in _entry_blocks:
 		# 先验活再转类型：freed 实例直接赋给类型化变量会当场把这段脚本打断
-		# （#40 灵石阁拖拽踩过同一格），而这里每帧排版都要跑一遍。
+		# （#40 金币阁拖拽踩过同一格），而这里每帧排版都要跑一遍。
 		if not is_instance_valid(blk["card"]):
 			continue
 		var card: PanelContainer = blk["card"]
@@ -680,7 +680,7 @@ func _refresh_dynamic_texts() -> void:
 		else:
 			_career_sub_lbl.text = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
 
-	# 2. 传道玉简副行（显示已解锁修士/法宝数）
+	# 2. 传道玉简副行（显示已解锁角色/道具数）
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
 		var c_cnt := GameManager.unlocked_cultivators.size()
 		var i_cnt := GameManager.unlocked_items.size()

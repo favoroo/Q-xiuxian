@@ -1,7 +1,7 @@
 class_name ShopDragDrop
 extends Node
 
-## 灵石阁陈列行「按住拎起 → 拖到目标格放下」的换装手势（2026-10-11 用户：背包里的装备
+## 金币阁陈列行「按住拎起 → 拖到目标格放下」的换装手势（2026-10-11 用户：背包里的装备
 ## 和已佩戴的装备要能拖动换位，拖到背包＝卸下、拖到上阵格＝佩戴）。
 ## 陈列行的格子（上阵格/背包格/背包空位/「背包 n/9」分隔签）在构建时经 register_slot 登记，
 ## 手势状态机归这一个节点管；数据操作回流 GameManager（equip_stash_into_slot / unequip_to_stash
@@ -30,9 +30,9 @@ extends Node
 ##     旧口径把这一枪当成卸下，背包满时更是当场拒绝，换不了；现在认到具体一件就是互换。）
 ##  · 上阵件 → 背包空位/「背包」分隔签＝卸入背包（这两处只指区域不指件，背包满由
 ##    unequip_to_stash 播报）；
-##  · 上阵件 → 上阵另一格＝互换位置（同池才换：悬浮法器换悬浮法器、灵宝换灵宝，
+##  · 上阵件 → 上阵另一格＝互换位置（同池才换：悬浮武器换悬浮武器、灵宝换灵宝，
 ##    见 WeaponInventory.swap_equipped_slots；混池不挪 —— summary 固定
-##    「悬浮法器在前、灵宝在后」，跨池次序没有可落的数据）；上阵空格不接上阵件；
+##    「悬浮武器在前、灵宝在后」，跨池次序没有可落的数据）；上阵空格不接上阵件；
 ##  · 背包件 → 背包区＝背包内排序（空位/分隔签＝挪到队尾）。
 ##
 ## 落点认图标，不认手指（2026-10-11 用户：「按手指位置判定的话我会遮挡住要替换的那个图标，
@@ -478,7 +478,7 @@ func _restore_src() -> void:
 		_src_node.modulate = Color.WHITE
 	_src_node = null
 
-## 商店已关/换波等异常收场：一切复位，不吐操作
+## 商店已关/换回合等异常收场：一切复位，不吐操作
 func _cancel_all() -> void:
 	_press_cancel()
 	_drag = {}
@@ -493,7 +493,7 @@ func _cancel_all() -> void:
 # ---------------- 数据读数 ----------------
 
 ## 按登记的 src 取当下那一件（拎起那一刻的数据，拿图标与星级用）：
-## 上阵池现读 get_weapons_summary（悬浮法器 + 灵宝），背包池读 stash
+## 上阵池现读 get_weapons_summary（悬浮武器 + 灵宝），背包池读 stash
 func _item_of(src: Dictionary) -> Dictionary:
 	var i := int(src.get("index", -1))
 	if String(src.get("pool", "")) == "stash":

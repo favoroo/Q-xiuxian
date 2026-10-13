@@ -2,7 +2,7 @@ class_name PetData
 extends RefCounted
 
 ## 灵兽（随行伙伴）数据库：商店购买、永久随行、圆球光灵形象
-## 获取渠道：灵石阁货架（offer kind: "pet"）
+## 获取渠道：金币阁货架（offer kind: "pet"）
 ## 规则：每种灵兽同时限持一只，出售后可再次在商店刷出。
 ## 普通角色默认上限 1 只，御兽师默认上限 3 只。
 
@@ -77,9 +77,9 @@ const DEFS: Dictionary = {
 		"name": "聚宝蟾",
 		"role": "economy",
 		"base_price": 36,
-		"base_cooldown": 0.0, ## 波末触发
-		"base_value": 8.0,   ## 每波基准产出金币
-		"desc": "每波结束献上金币（随波次成长）",
+		"base_cooldown": 0.0, ## 回合末触发
+		"base_value": 8.0,   ## 每回合基准产出金币
+		"desc": "每回合结束献上金币（随回合成长）",
 		"color": Color(0.96, 0.82, 0.22),      # 金黄
 		"halo_color": Color(1.0, 0.88, 0.35, 0.4),
 		"decor": "toad_coin",

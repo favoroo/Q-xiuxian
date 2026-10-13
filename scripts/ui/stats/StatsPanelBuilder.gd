@@ -1,7 +1,7 @@
 class_name StatsPanelBuilder
 extends RefCounted
 
-## 属性面板左栏构建：主要/次要属性 Tab、常驻气血条、25 项属性行与分组块（攻击/生存/机动…）。
+## 属性面板左栏构建：主要/次要属性 Tab、常驻生命条、25 项属性行与分组块（攻击/生存/机动…）。
 ## 从 PlayerStatsDialog 拆出：构建结果直接写回 dialog 成员（refresh 按原名刷新），
 ## 点按回调经 dialog 门面（_open_stat_tip / _switch_stat_tab）。
 
@@ -45,7 +45,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._stat_tab_secondary_btn.pressed.connect(func(): dialog._switch_stat_tab(1))
 	tab_bar.add_child(dialog._stat_tab_secondary_btn)
 
-	# 常驻气血条（整行可点）
+	# 常驻生命条（整行可点）
 	var hp_box := HBoxContainer.new()
 	hp_box.add_theme_constant_override("separation", 6)
 	var hp_title := Label.new()
@@ -59,7 +59,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dialog._hp_bar.show_percentage = false
 	# 纯显示件也要让开「按下」那一拍：ProgressBar 的 mouse_filter 默认是 STOP，它自己不处理
-	# 输入却照样把事件吃掉 → 气血值那一整行里最显眼的血条成了死点（点名字弹卡、点血条没反应）。
+	# 输入却照样把事件吃掉 → 生命值那一整行里最显眼的血条成了死点（点名字弹卡、点血条没反应）。
 	dialog._hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bar_st := GameStyle.bar_styles(GameStyle.with_alpha(Color(0.04, 0.06, 0.1), 0.85), GameStyle.GOOD)
 	dialog._hp_bar.add_theme_stylebox_override("background", bar_st[0])
@@ -75,7 +75,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	sep1.add_theme_stylebox_override("separator", _create_line_style(GameStyle.LINE))
 	vbox.add_child(sep1)
 
-	# 主要属性页（15 行，加上顶端常驻气血共 16 项）——按 攻击/生存/机动 分三块
+	# 主要属性页（15 行，加上顶端常驻生命共 16 项）——按 攻击/生存/机动 分三块
 	dialog._primary_stats_box = VBoxContainer.new()
 	dialog._primary_stats_box.add_theme_constant_override("separation", 2)
 	dialog._primary_stats_box.size_flags_vertical = Control.SIZE_EXPAND_FILL

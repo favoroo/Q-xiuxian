@@ -3,16 +3,16 @@ extends Node2D
 
 ## 藏宝匣：竞技场内随机刷新的可破坏宝箱（Brotato 树木的修仙版）
 ## 挨够 GameBalance.chest_break_hits() 下砸开，掉什么按档位查 BalanceChest.reward_of（三档）：
-##   木匣 —— 约六成掉回春葫芦（回 15% 气血），约四成掉 3 颗金灵石
-##   铜匣 —— 同样的葫芦概率但回得更多，掉 6 颗金灵石 + 一笔金币
-##   玉匣 —— 必送一件随机法宝（与灵石阁同一个 roller），另有金币与灵石；每局送出件数有顶，
+##   木匣 —— 约六成掉回春葫芦（回 15% 生命），约四成掉 3 颗金币
+##   铜匣 —— 同样的葫芦概率但回得更多，掉 6 颗金币
+##   玉匣 —— 必送一件随机道具（与金币阁同一个 roller），另有金币；每局送出件数有顶，
 ##           到顶后退回铜匣奖励 ×1.5（见 BalanceChest.jade_fallback_reward）
 ## 掉出的葫芦在满血时不会被吃掉，会压在灰相留在原地等玩家掉血（见 HealOrb）
-## 持有「纳灵盘」法宝时，砸开掉的金灵石当场飞进袖中（heal orb 仍需贴身，引擎没有它的磁吸口）
+## 持有「纳灵盘」道具时，砸开掉的金币当场飞进袖中（heal orb 仍需贴身，引擎没有它的磁吸口）
 ## 挂在 4 号层（enemies）让武器判定能碰到；加入 chests 组 = 「可砸但不是威胁」的标记：
-## 索敌按两段式走（见 GameBalance.assign_targets_with_chests）—— 场上还有活妖时法器不会
-## 甩开妖来砸匣子，只有闲着的法器与多出来的弹道才流向它。
-## 耐久按「几下」计而不按血量：伤害数值随星级/属性涨几十倍，若匣子跟着敌方 hp 曲线走，
+## 索敌按两段式走（见 GameBalance.assign_targets_with_chests）—— 场上还有活妖时武器不会
+## 甩开妖来砸匣子，只有闲着的武器与多出来的弹道才流向它。
+## 耐久按「几下」计而不按生命：伤害数值随星级/属性涨几十倍，若匣子跟着敌方 hp 曲线走，
 ## 后期会变成打不动的石头或一碰就没，两种都读不出「砸」这个动作。
 ## 档位（tier）由 WaveSpawner 在 add_child 之前写入：_ready 里贴图/体型/击数/配色全读它，
 ## 挂树后再改 tier 不会重建这些件，所以构造顺序是契约的一部分。
@@ -62,7 +62,7 @@ const TIER_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/art/prop_chest_bronze.png"),
 	preload("res://assets/art/prop_chest_jade.png"),
 ]
-## 耐久格配色分档（取色只从 GameStyle）：木=灵石黄、铜=霜金、玉=青碧
+## 耐久格配色分档（取色只从 GameStyle）：木=金币黄、铜=霜金、玉=青碧
 const TIER_PIP_COLORS: Array[Color] = [GameStyle.JADE, GameStyle.RARITY_EPIC, GameStyle.RARITY_RARE]
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
@@ -178,10 +178,10 @@ func _destroy() -> void:
 	dying = true
 	AudioManager.play_sfx("chest_open", 0.9)
 	var reward: Dictionary = GameBalance.chest_reward(tier)
-	# 玉匣的头奖就是那件法宝；每局送满上限后退回铜匣量级，不许空口白牙（口径见 BalanceChest）
+	# 玉匣的头奖就是那件道具；每局送满上限后退回铜匣量级，不许空口白牙（口径见 BalanceChest）
 	if bool(reward.get("grant_item", false)) and not GameManager.chest_grant_item():
 		reward = GameBalance.chest_jade_fallback_reward()
-	# 开箱收益乘区：悟道「宝箱掉落」+法宝「满匣诀」放大这一口的灵石颗数/金币/回复量
+	# 开箱收益乘区：悟道「宝箱掉落」+道具「满匣诀」放大这一口的金币颗数/金币/回复量
 	reward = GameBalance.chest_reward_scaled(reward, GameManager.chest_reward_mult)
 	var stones := int(reward.get("stones", 0))
 	if stones > 0:
@@ -204,7 +204,7 @@ func _drop_heal(pct: float) -> void:
 	fruit.heal_pct = pct
 	fruit.activate()
 
-## 一捧金灵石：撒在匣心周围。持有「纳灵盘」时当场全部飞向玩家 —— 砸匣子不必再绕一趟走位
+## 一捧金币：撒在匣心周围。持有「纳灵盘」时当场全部飞向玩家 —— 砸匣子不必再绕一趟走位
 func _drop_gems(count: int, exp_each: int) -> void:
 	var magnet: bool = GameManager.item_hook_sum("chest_magnet") > 0.0
 	var player: Node2D = GameManager.player
@@ -219,8 +219,8 @@ func _drop_gems(count: int, exp_each: int) -> void:
 		if magnet and player != null and is_instance_valid(player):
 			gem.magnet_to(player)
 
-## 波末还没砸开的匣子随余怪一起消散（不掉落）—— 与 EnemyBase.dissolve 同一口径。
-## 每波重刷 2~4 只，留着不收会把场地堆成箱子阵；而"要不要为它多花几发"本来就是这只匣子的玩法。
+## 回合末还没砸开的匣子随余怪一起消散（不掉落）—— 与 EnemyBase.dissolve 同一口径。
+## 每回合重刷 2~4 只，留着不收会把场地堆成箱子阵；而"要不要为它多花几发"本来就是这只匣子的玩法。
 func dissolve() -> void:
 	if dying:
 		return

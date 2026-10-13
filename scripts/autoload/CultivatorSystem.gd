@@ -1,10 +1,10 @@
 class_name CultivatorSystem
 extends RefCounted
 
-## 修士流派（角色）特性子系统（2026-10-11 从 GameManager._apply_cultivator 抽离）：
+## 角色流派（角色）特性子系统（2026-10-11 从 GameManager._apply_cultivator 抽离）：
 ## 开局应用正负代偿 mods，以及流派化的单武器伤害系数。
 
-## 开局应用修士流派的正负代偿
+## 开局应用角色流派的正负代偿
 static func apply_cultivator(gm: Node) -> void:
 	var def := CultivatorData.get_def(gm.cultivator_id)
 	if def.is_empty():
@@ -59,7 +59,7 @@ static func apply_cultivator(gm: Node) -> void:
 	var start_pet: String = String(mods.get("start_pet", ""))
 	if not start_pet.is_empty():
 		gm.add_pet(start_pet)
-	# 需求倍率只折算判定值，修为门槛链保持原曲线（避免倍率逐层复利）
+	# 需求倍率只折算判定值，经验门槛链保持原曲线（避免倍率逐层复利）
 	gm.experience_to_next = maxi(1, int(round(float(gm._exp_chain) * gm.xp_require_mult)))
 	gm.shop_tag_filter = def.get("allowed_tags", [])
 	gm.locked_upgrades = def.get("locked_upgrades", [])
@@ -79,10 +79,10 @@ static func apply_cultivator(gm: Node) -> void:
 	if start_drones > 0 and gm.player != null and gm.player.has_method("sync_drones"):
 		gm.player.sync_drones()
 
-## 修士特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
+## 角色特性的单武器伤害系数（tag 加成 × 非灵蝶/非机关惩罚 + 受击增伤）
 static func damage_mult(gm: Node, w_id: String) -> float:
 	var m := 1.0
-	# ---- 法宝·属性转化乘区（2026-10-12 土豆兄弟式转化件：系数全在 ItemData 额外字段，
+	# ---- 道具·属性转化乘区（2026-10-12 土豆兄弟式转化件：系数全在 ItemData 额外字段，
 	# item_hook_sum 现算；与角色无关，无角色时同样生效，所以必须在 def 早退之前结算） ----
 	var cvt_speed: float = gm.item_hook_sum("dmg_per_move_speed")
 	if cvt_speed > 0.0:
@@ -99,13 +99,13 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 	var still: float = gm.item_hook_sum("still_damage")
 	if still > 0.0 and gm.still_time >= maxf(0.1, gm.item_hook_sum("still_seconds")):
 		m *= 1.0 + still
-	# 三昧归真：上阵法器少于 4 把时，每少 1 把加一份全伤害
+	# 三昧归真：上阵武器少于 4 把时，每少 1 把加一份全伤害
 	var empty_slot_bonus: float = gm.item_hook_sum("dmg_per_empty_slot")
 	if empty_slot_bonus > 0.0:
 		var current_slots: int = gm.slots_used()
 		if current_slots < 4:
 			m *= 1.0 + float(4 - current_slots) * empty_slot_bonus
-	# 读气血的两条：玩家不在场（局外/单测空载）时跳过，不出 NaN
+	# 读生命的两条：玩家不在场（局外/单测空载）时跳过，不出 NaN
 	if gm.player != null and is_instance_valid(gm.player):
 		var cvt_hp: float = gm.item_hook_sum("dmg_per_max_hp")
 		if cvt_hp > 0.0:
@@ -136,13 +136,13 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 			m *= 1.0 + float(non_tag[t])
 	if gm.on_hit_damage_bonus > 0.0 and gm.on_hit_damage_stacks > 0:
 		m *= 1.0 + gm.on_hit_damage_bonus * float(gm.on_hit_damage_stacks)
-	# 收藏家·图鉴：每持有一种不同法宝全伤害加成（种数账本在 GameManager.add_item/consume_item 维护）
+	# 收藏家·图鉴：每持有一种不同道具全伤害加成（种数账本在 GameManager.add_item/consume_item 维护）
 	if gm.collection_damage_per_unique > 0.0 and gm.unique_item_count > 0:
 		m *= 1.0 + gm.collection_damage_per_unique * float(gm.unique_item_count)
 	# 狂战士·战意：击杀攒的层数全伤害加成（攒/流失账本在 GameManager，幅度在 FrenzyData）
 	if gm.frenzy_enabled > 0.0 and gm.frenzy_stacks > 0.0:
 		m *= FrenzyData.damage_mult(gm.frenzy_stacks)
-	# 蛮兵·陷阵：感知圈内的妖兽每只一份全伤害加成（敌潮 ×1.5 的闭环：围得越密砍得越狠）
+	# 蛮兵·陷阵：感知圈内的敌人每只一份全伤害加成（敌潮 ×1.5 的闭环：围得越密砍得越狠）
 	if gm.crowd_damage_per_enemy > 0.0 and gm.nearby_enemy_count > 0:
 		m *= 1.0 + minf(gm.nearby_enemy_count * gm.crowd_damage_per_enemy, gm.crowd_damage_cap)
 	# 守财奴·财可通神：随身金币每 100 枚一份全伤害加成（与结息闭环：攒钱就是攒刀）

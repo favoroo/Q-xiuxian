@@ -4,10 +4,10 @@ extends Control
 signal stats_requested
 signal pause_requested
 
-## 波后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
-## 波结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
+## 回合后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
+## 回合结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
 ## 2026-10-09 用户指令：「升级就会直接触发加点，在战斗过程中触发加点的体验不好 …
-##   改成每一波结束后统一去加点 … 加点和商店物品要改成 5 个，技能加点也可以刷新一次」。
+##   改成每一回合结束后统一去加点 … 加点和商店物品要改成 5 个，技能加点也可以刷新一次」。
 ##
 ## 摆位口径：5 张卡不按死宽度摆，按 viewport 现算（下面那几个 *_for() 是纯函数，
 ## 判据 LayoutCheck 用同一份算术量最窄那一档，别处不再抄数字）。
@@ -33,7 +33,7 @@ signal pause_requested
 ## `card_pad_x()` 给滚动区里的卡角留白、卡间缝与卡内边距按用户口径收窄，省下的宽换成 ① 的呼吸量。
 ## 判据补两条尺：卡角不许被滚动区横向切掉、控件画出来那一圈离所属面板的画出来的边要留白。
 ##
-## 2026-10-12 用户真机（第 8 波结束那屏）：「手压在卡片上滑不动，要挪到侧面没有卡片遮挡的
+## 2026-10-12 用户真机（第 8 回合结束那屏）：「手压在卡片上滑不动，要挪到侧面没有卡片遮挡的
 ## 地方才能滑，这不合理呀」。根因不在滚动没做，在「按下那一拍被谁吃了」：卡体是 PanelContainer
 ## （默认 STOP），按下就地吃掉不冒泡 ⇒ CardScroll 锁不住手指拖动，卡盖多大就滑不动多大。
 ## 现在整行建完过一遍 GameStyle.swipeable（卡与卡内图标/角标降成 PASS），并把「松开=选中」
@@ -69,7 +69,7 @@ const SEL_SCALE := 1.03
 const DIM_SCALE := 0.97
 ## 受益装备那一排的格子（2026-10-11 用户指令：「点击这个受益装备的图标，也可以弹窗显示
 ## 这个对应装备的信息」）：图标从「贴图」升成「键」，格子就是那颗键的面。
-## 下限 22 与 HUD 法器槽（36）同量级——再小真机上按不准；上限 30 是别盖过卡片主图。
+## 下限 22 与 HUD 武器槽（36）同量级——再小真机上按不准；上限 30 是别盖过卡片主图。
 const BF_CELL_MIN := 22.0
 const BF_CELL_MAX := 30.0
 ## 格内边距：图在格子里留一圈呼吸，描边才读得出是「一颗键」而不是一张贴纸
@@ -181,7 +181,7 @@ func _ready() -> void:
 	GameManager.alloc_opened.connect(_on_alloc_opened)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
 
-## 顶栏：左侧标题色块，右侧「属性」与「暂停」按钮（与灵石阁同一布局口径）
+## 顶栏：左侧标题色块，右侧「属性」与「暂停」按钮（与金币阁同一布局口径）
 func _setup_top_bar() -> void:
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
 	var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
@@ -267,14 +267,14 @@ func _show_points_tip() -> void:
 		"chip": "剩余 %d 次" % pending,
 		"chip_color": GameStyle.JADE,
 		"rows": [
-			["本波连升", "%d 级" % total, GameStyle.JADE],
+			["本回合连升", "%d 级" % total, GameStyle.JADE],
 			["剩余加点", "%d 次" % pending, GameStyle.PAPER],
 			["每次消耗", "1 点", GameStyle.PAPER],
 		],
 		"body": "战斗中升级不打断节奏，升级点数暂存，回合结束后在此统一领悟加点。",
 		"notes": [
 			"每次确认选择一条属性消耗 1 点。",
-			"本波点数全部加完后即可前往商店。",
+			"本回合点数全部加完后即可前往商店。",
 		],
 		"foot": "可随时按右上角「属 性」查看当前完整属性与加点。",
 	})
@@ -291,7 +291,7 @@ func _pulse_points_badge() -> void:
 	_badge_tween.tween_property(_points_badge, "scale", Vector2.ONE, 0.22)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-## 波结束、有待加点：开面板并把这一屏的候选摆出来
+## 回合结束、有待加点：开面板并把这一屏的候选摆出来
 func _on_alloc_opened() -> void:
 	# 立即重置触屏摇杆状态，防止手指还压在摇杆上时误点卡片
 	if GameManager.joystick != null and GameManager.joystick.has_method("_stop_joystick"):
@@ -359,9 +359,9 @@ func _refresh_bars() -> void:
 			_pulse_points_badge()
 	_last_pending = pending
 
-	var head: String = "第 %d 波结束" % maxi(GameManager.wave_number, 1)
+	var head: String = "第 %d 回合结束" % maxi(GameManager.wave_number, 1)
 	if total > 1:
-		head += " · 本波连升 %d 级 · 剩余加点 %d 次" % [total, pending]
+		head += " · 本回合连升 %d 级 · 剩余加点 %d 次" % [total, pending]
 	elif total == 1:
 		head += " · 待加点 1 次"
 	else:
@@ -464,7 +464,7 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 	rarity_lbl.add_theme_stylebox_override("normal", pill_style)
 	hbox_top.add_child(rarity_lbl)
 
-	# 「荐」推荐签（RecommendSystem 在 roll_alloc_offers 里按修士+构筑打分写入 offer）：
+	# 「荐」推荐签（RecommendSystem 在 roll_alloc_offers 里按角色+构筑打分写入 offer）：
 	# 签是子节点，_select_card 重写卡体 stylebox 碰不到它；点按弹推荐理由，不影响选中逻辑
 	if bool(data.get("recommended", false)):
 		var rec_lbl := Label.new()
@@ -544,15 +544,15 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 		GameStyle.label(note_lbl, 12, GameStyle.PAPER_DIM)
 		vbox.add_child(note_lbl)
 
-	# 受益法器图标行（2026-10-10 用户指令：「把当前佩戴的装备里对这个加点有增益的那个装备
-	# 也显示在这个卡片下方」）：这条悟道会让当前上阵的哪些法器变强，把它们的图标摆在卡片底部。
+	# 受益武器图标行（2026-10-10 用户指令：「把当前佩戴的装备里对这个加点有增益的那个装备
+	# 也显示在这个卡片下方」）：这条悟道会让当前上阵的哪些武器变强，把它们的图标摆在卡片底部。
 	# 判定走 GameBalance.upgrade_benefits_weapon 纯函数，与伤害结算的属性映射同源
 	# （stat_scalings / 五行 tags / 全局乘区），不写死升级 id，以后加同类升级自动带上。
-	# 图标与 HUD 法器栏/商店同源，玩家能直接对上号；无受益时不显示（功能类加点保持卡片干净）。
+	# 图标与 HUD 武器栏/商店同源，玩家能直接对上号；无受益时不显示（功能类加点保持卡片干净）。
 	#   ——取代旧版「✦ 当前 N 把武器受此加成」纯文字提示（只覆盖元素伤一类的老口径）。
 	# 2026-10-11 用户真机图：「点击这个受益装备的图标，也可以弹窗显示这个对应装备的信息」。
-	# 于是每颗图标套一格描边盒（与 HUD 法器槽同一长相 = 一眼知道按得动），走 GameStyle.hotzone
-	# + GameStyle.tap，详情卡复用 StatsTipFactory.open_weapon_tip（HUD 法器栏/属性面板/灵石阁
+	# 于是每颗图标套一格描边盒（与 HUD 武器槽同一长相 = 一眼知道按得动），走 GameStyle.hotzone
+	# + GameStyle.tap，详情卡复用 StatsTipFactory.open_weapon_tip（HUD 武器栏/属性面板/金币阁
 	# 同一张卡，不另编文案），再带一句「这条悟道走的哪条链路」（GameBalance.upgrade_benefit_reasons）。
 	# 三条硬口径，判据 tests/BenefitIconTapCheck.tscn 逐条量：
 	# ① 只读 —— 点图标不许顺手把这张卡选中（看东西这个动作不改写状态）。格体与卡体都是 PASS
@@ -683,7 +683,7 @@ func _open_recommend_tip(anchor: Control, data: Dictionary) -> void:
 
 ## 点「受益装备」那一排的图标 = 看这件装备的详解，纯只读：不许顺手把这张卡选中
 ## （看东西这个动作不改写状态；选中仍要走卡体那一下 + 底部「确认选择」）。
-## 卡片与 HUD 法器栏 / 属性面板 / 商店同一工厂出，这里只多带一句「这条悟道算到它头上走的是
+## 卡片与 HUD 武器栏 / 属性面板 / 商店同一工厂出，这里只多带一句「这条悟道算到它头上走的是
 ## 哪条链路」，链路名取自 GameBalance.upgrade_benefit_reasons —— 与「该不该挂这颗图标」同源。
 func _open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 	if not _can_interact or _is_confirming:
@@ -743,7 +743,7 @@ func _select_card(index: int) -> void:
 	_update_confirm_btn()
 	_update_gate_label()
 
-## 刷新这一屏候选：第一次吃本波免费额度，之后按货架重掷同一条价格线扣灵石。
+## 刷新这一屏候选：第一次吃本回合免费额度，之后按货架重掷同一条价格线扣金币。
 ## 刷新只换候选、不动点数，所以刷新完要把选中态清掉（刚选的那张卡已经不在这屏了）。
 func _on_reroll() -> void:
 	if not _can_interact or _is_confirming:
@@ -762,7 +762,7 @@ func _on_confirm_pick() -> void:
 		return
 	_is_confirming = true
 	_can_interact = false
-	# take_alloc_upgrade 内部发属性、扣点数；点数清零时同步发 alloc_finished（灵石阁由波次状态机接手）
+	# take_alloc_upgrade 内部发属性、扣点数；点数清零时同步发 alloc_finished（金币阁由回合状态机接手）
 	var ok := GameManager.take_alloc_upgrade(selected_index)
 	_is_confirming = false
 	if not ok:

@@ -1,23 +1,23 @@
 class_name ManualDialog
 extends BaseModalDialog
 
-## 教程手册（传道玉简）：玩法入门、聚灵阵用法、法器/法宝/修士图鉴、进阶流派攻略。
+## 教程手册（传道玉简）：玩法入门、聚灵阵用法、武器/道具/角色图鉴、进阶流派攻略。
 ## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
-## 法宝/修士两页标注解锁条件，按页懒建、并在每次 open() 后标脏（切到那一页才重建），
+## 道具/角色两页标注解锁条件，按页懒建、并在每次 open() 后标脏（切到那一页才重建），
 ## 以反映最新解锁状态。五页全量约 1900 节点：一次 open 只碰当前页、同筛选不重铺、
 ## 铺卡晚一帧（淡入先亮）—— 商店顶栏点「图鉴」不再顿一下才弹出来，见 _ensure_page。
 ## 武器页委托 WeaponCodexBuilder 构建：流派筛选条（类型/元素）+ 卡面三签与关键数值行，
-## 商店羁绊详情卡「查看该流派法器」经 open_weapons_page() 深链直达并预选筛选。
+## 商店羁绊详情卡「查看该流派武器」经 open_weapons_page() 深链直达并预选筛选。
 
 const PANEL_SIZE := Vector2(880, 470)
 ## 正文排版宽度：880 面板 − 外边距 40 − 内容面板内边距 28 − 卡片内边距 24，再留余量
 const TEXT_W := 756.0
 
-## 五行配色（法器卡 chip 用，与 GameStyle.ELEMENT_COLORS 同源）
+## 五行配色（武器卡 chip 用，与 GameStyle.ELEMENT_COLORS 同源）
 const ELEMENT_COLORS := GameStyle.ELEMENT_COLORS
 
-## 法器 stat_scalings 的 key → 人话名（优先查 StatInfoData，这里补面板没有的行）
+## 武器 stat_scalings 的 key → 人话名（优先查 StatInfoData，这里补面板没有的行）
 const SCALING_NAMES := {
 	"melee_damage": "近战伤害",
 	"ranged_damage": "远程伤害",
@@ -122,14 +122,14 @@ func _on_opened() -> void:
 	else:
 		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
 		_set_weapon_filter("")
-	# 法宝/修士两页受解锁状态影响：标脏，切到那一页时才重建
+	# 道具/角色两页受解锁状态影响：标脏，切到那一页时才重建
 	_page_dirty[2] = true
 	_page_dirty[3] = true
 	var target := _current_tab
 	_defer_build = false
 	_schedule_page(target)
 
-## 深链入口：商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派法器」直达武器页并预选筛选。
+## 深链入口：商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派武器」直达武器页并预选筛选。
 func open_weapons_page(filter_tag: String = "") -> void:
 	var tag := String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
 	_set_weapon_filter(tag)
@@ -301,7 +301,7 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 	vbox.add_child(name_lbl)
 
 	if not chips.is_empty():
-		# 色签成排：摆得下就一行，摆不下自动折第二行（图鉴卡窄，双器类法器有 4 签）
+		# 色签成排：摆得下就一行，摆不下自动折第二行（图鉴卡窄，双器类武器有 4 签）
 		var flow := HFlowContainer.new()
 		flow.name = "TagFlow"
 		flow.alignment = FlowContainer.ALIGNMENT_CENTER
@@ -349,7 +349,7 @@ func _fill_basics_page() -> void:
 			float(sec.get("image_h", 80.0))
 		))
 
-# ----------------- 分页 2：法器图鉴 -----------------
+# ----------------- 分页 2：武器图鉴 -----------------
 
 ## 筛选条 + 网格的构建与重建全在 WeaponCodexBuilder（本类只持状态与深链入口）
 func _build_weapons_page(parent: Control) -> Control:
@@ -402,10 +402,10 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 		"rows": rows,
 		"body": String(def.get("desc", "")),
 		"notes": notes,
-		"foot": "武器仅在波间商店有售",
+		"foot": "武器仅在回合间商店有售",
 	})
 
-# ----------------- 分页 3：法宝图鉴 -----------------
+# ----------------- 分页 3：道具图鉴 -----------------
 
 func _build_items_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -418,7 +418,7 @@ func _rebuild_items_page() -> void:
 	for c in _items_box.get_children():
 		c.queue_free()
 	_items_box.add_child(_make_text_card("道具规则",
-		"道具是买即生效的被动奇珍，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随波次陆续现身。\n加成读数认颜色：绿色是增益、红色是代偿，数值与实际生效幅度同源。\n点按任意道具卡查看效果与入手价。"))
+		"道具是买即生效的被动道具，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随回合陆续现身。\n加成读数认颜色：绿色是增益、红色是代偿，数值与实际生效幅度同源。\n点按任意道具卡查看效果与入手价。"))
 
 	for tier in [1, 2, 3, 4]:
 		var tier_col: Color = ItemData.tier_color(tier)
@@ -442,7 +442,7 @@ func _rebuild_items_page() -> void:
 			var unlocked := GameManager.is_item_unlocked(iid)
 			var card := _make_entry_card(
 				String(def.get("icon", "")), String(def.get("name", iid)),
-				"" if unlocked else "未入阁", GameStyle.GREY,
+				"" if unlocked else "未收录", GameStyle.GREY,
 				func(anchor: Control): _open_item_tip(iid, anchor))
 			if not unlocked:
 				(card.get_meta("icon_tex") as TextureRect).modulate = GameStyle.disabled_modulate()
@@ -457,7 +457,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
 		# 词与商店那张详情卡对齐（2026-10-12 道具可出售）：这一行是数据表里的基准价，
-		# 当波上架价每波还要 +2，写「买入价格」会让人以为自己付的就是这个数。
+		# 当回合上架价每回合还要 +2，写「买入价格」会让人以为自己付的就是这个数。
 		["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM],
 		["出售返还", "%d 金币" % ItemData.sell_price(iid), GameStyle.JADE],
 	]
@@ -472,7 +472,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 	if not GameManager.is_item_unlocked(iid):
 		var ach := AchievementData.item_unlock_achievement(iid)
 		if not ach.is_empty():
-			foot = "入阁条件：" + String(ach.get("cond_desc", ""))
+			foot = "收录条件：" + String(ach.get("cond_desc", ""))
 	elif bool(def.get("unique", false)):
 		foot = "每局限购一件"
 
@@ -485,7 +485,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 		"foot": foot,
 	})
 
-# ----------------- 分页 4：修士图鉴 -----------------
+# ----------------- 分页 4：角色图鉴 -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)

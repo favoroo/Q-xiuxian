@@ -133,7 +133,7 @@ func _recycle() -> void:
 		return
 	_pool.append(self)
 
-## 落点之物：把法器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
+## 落点之物：把武器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
 func _spawn_impact_icon() -> void:
 	if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
 		return

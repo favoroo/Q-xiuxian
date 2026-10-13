@@ -13,11 +13,11 @@ extends RefCounted
 ## 服丹是免冷却 BURST（SkillData），门控是药池本身——池空按不动（按钮侧给拒绝抖动）。
 
 const STORE_RATIO := 0.5    ## 溢出治疗入池比例：回血珠顶满部分、自然回血顶满部分都按此折算
-const CAP_HP_RATIO := 0.30  ## 药池上限 = 最大气血 ×30%：攒得动但不至于一口回满翻盘
+const CAP_HP_RATIO := 0.30  ## 药池上限 = 最大生命 ×30%：攒得动但不至于一口回满翻盘
 const BUFF_DURATION := 5.0  ## 服丹后全伤害增益持续（秒）
 const BUFF_DAMAGE := 0.25   ## 服丹后全伤害加成（服丹=反打信号，不只是奶瓶）
 
-## 池上限（气血变化时现算，不缓存）
+## 池上限（生命变化时现算，不缓存）
 static func cap_of(max_health: float) -> float:
 	return maxf(1.0, max_health * CAP_HP_RATIO)
 
@@ -37,7 +37,7 @@ static func buff_mult() -> float:
 ## 每条一行，按详解卡最窄列宽（404）量过：加字先量宽。
 static func card_lines() -> Array[String]:
 	return [
-		"攒：治疗溢出的部分 %d%% 存入药池（至多 %d%% 气血）" % [
+		"攒：治疗溢出的部分 %d%% 存入药池（至多 %d%% 生命）" % [
 			int(roundf(STORE_RATIO * 100.0)), int(roundf(CAP_HP_RATIO * 100.0))],
 		"放：随时点「服丹」按药池回血，%d 秒内全伤害 +%d%%" % [
 			int(roundf(BUFF_DURATION)), int(roundf(BUFF_DAMAGE * 100.0))],

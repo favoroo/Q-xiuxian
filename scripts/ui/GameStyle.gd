@@ -3,7 +3,7 @@ extends RefCounted
 
 ## 「墨阑玉简」斜切版画 UI 统一样式工厂（纯黑舞台 × 纯黑面板 × 主蓝强调，斜切语言移植自 dudu-cocos）。
 ## 规则：无圆角、无渐变、无柔光；斜切平行四边形四档斜率；同色压暗厚底边（近黑底自动改灰线勾轮廓）。
-## 色即功能：主蓝 = 主行动/选中，点缀黄 = 灵石货币/星级/选中强调，朱砂 = 危险，增益绿 = 治疗。
+## 色即功能：主蓝 = 主行动/选中，点缀黄 = 金币/星级/选中强调，朱砂 = 危险，增益绿 = 治疗。
 ## ⚠ 2026-10-10 二次换肤（纯黑主题）：用户拍板「底一律纯黑，不要深蓝/深灰」——弃纸白面板方案，
 ##    INK/NAVY/NAVY2 三层底统一 #000000，层次全靠 accent 描边 + LINE 灰线勾轮廓；
 ##    PAPER 值翻回纸白亮字，CHALK 与 PAPER 同值（「暗底亮字」语义保留，调用点不必改）；
@@ -25,7 +25,7 @@ const CHALK := Color("f2efe4")      # 暗底亮字（与 PAPER 同值；语义�
 const GOLD := Color("387ce6")       # 主蓝 = 霁蓝·青金宝石蓝（主行动/选中/标题带，通透扎实不发暗）
 const GOLD_EDGE := Color("8ab7fb")  # 霜华亮蓝（描边/高光流光）
 const GOLD_DK := Color("1a438c")    # 幽夜深蓝（立体厚底与阴影）
-const JADE := Color("ffd23f")       # 点缀黄 = 灵石货币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
+const JADE := Color("ffd23f")       # 点缀黄 = 金币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
 const JADE_EDGE := Color("ffe9a8")
 const JADE_DK := Color("8f6a14")
 const GOOD := Color("2fd271")       # 增益绿 = 治疗/增益（黑底可读）
@@ -126,7 +126,7 @@ static func _is_word_char(ch: String) -> bool:
 ## 按可用宽把一段文字切成硬换行，返回可直接塞进 Label.text 的字符串。
 ## `reserve` = 从可用宽里再扣掉的安全量（描边/斜切会占宽度）。默认留 2 单位不贴边：
 ## 贴边那一行引擎会判成「装不下」而自己再折一次，色签上就多出一行孤字
-## （灵石阁那枚「丹/药」竖排就是这个）。
+## （金币阁那枚「丹/药」竖排就是这个）。
 static func wrap_cjk(text: String, font: Font, font_size: int, max_w: float,
         reserve: float = 2.0) -> String:
     if text == "" or max_w <= 0.0:
@@ -449,7 +449,7 @@ static func halftone(parent: Control, col := Color(0.95, 0.94, 0.89, 0.10)) -> C
 
 ## 入场动效：微缩 + 淡入回弹。容器管布局，position 动不得，所以走 pivot 缩放 + 透明度；
 ## pivot 在布局前是零，挂一次 resized 持续跟随（之后卡片自身的选中缩放也受益）。
-## PROCESS 模式：悟道/灵石阁这些屏开着时游戏树是暂停的，暂停下 tween 默认不走。
+## PROCESS 模式：悟道/金币阁这些屏开着时游戏树是暂停的，暂停下 tween 默认不走。
 static func enter_anim(node: Control, delay: float = 0.0) -> void:
     node.modulate = Color(1, 1, 1, 0)
     node.scale = Vector2(0.96, 0.96)
@@ -488,7 +488,7 @@ static func slash_wipe(host: Control, col: Color = GOLD) -> void:
     tw.parallel().tween_property(band, "modulate:a", 0.0, 0.18).set_delay(0.34)
     tw.tween_callback(band.queue_free)
 
-## 「元素」怎么说这件事：吃「元素伤害」属性加成的法器，把它的图标框描边换成暖橙红 ELEMENT
+## 「元素」怎么说这件事：吃「元素伤害」属性加成的武器，把它的图标框描边换成暖橙红 ELEMENT
 ## （判定唯一真话：WeaponData.elemental_scaling_coef）。
 ## 2026-10-12 用户真机：陈列行格子本来就只有 44 见方，右上角那枚「元素」色块把图标遮掉一角，
 ## 越小的格子越该把地方让给图 ⇒ 角标整套撤掉，改用边框颜色。
@@ -503,7 +503,7 @@ static func is_elemental(weapon_id: String) -> bool:
 static func element_border(weapon_id: String, fallback: Color) -> Color:
     return ELEMENT if is_elemental(weapon_id) else fallback
 
-## 法器星级 Label（统一字号、描边、右下角对齐）
+## 武器星级 Label（统一字号、描边、右下角对齐）
 static func star_label(parent: Control, star: int, font_size: int = 11) -> Label:
     var lbl := Label.new()
     lbl.text = "★%d" % star
@@ -541,7 +541,7 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
     btn.add_theme_stylebox_override("hover", hover)
     btn.add_theme_stylebox_override("pressed", block(hover_bg.darkened(0.15), skew_deg, Vector2(1, 1)))
     # 禁用态也要看得见：引擎默认那套 disabled 与纯黑面板几乎同色，「按不动」在真机上看起来
-    # 像「这里根本没有按钮」（用户 2026-10-11 真机：灵石阁里金币不够的商品）。
+    # 像「这里根本没有按钮」（用户 2026-10-11 真机：金币阁里金币不够的商品）。
     # 口径 = 一颗比面板亮一档的灰键 + 纸暗字：形状、价格、差多少全在，只是按不动。
     btn.add_theme_stylebox_override("disabled", block(LINE, skew_deg, Vector2(3, 4)))
     btn.add_theme_color_override("font_disabled_color", PAPER_DIM)
@@ -561,7 +561,7 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
 ## 为什么需要它：PanelContainer / Control / ColorRect 的 mouse_filter 默认是 STOP，
 ## 卡片里再套一层图框（48×48 的描边底）就会在热区中间挖出一个「点了没反应」的洞 ——
 ## 触屏没有 hover，洞是静默的：代码看着整块可点，真机上只有文字那一小块有反应
-## （用户 2026-10-09 真机：法宝图鉴点名字弹卡、点图片没反应）。
+## （用户 2026-10-09 真机：道具图鉴点名字弹卡、点图片没反应）。
 ## 卡内装饰节点不参与交互，所以整棵子树压成 IGNORE 是安全的；
 ## 若日后卡里真要放按钮，那层自己改回 STOP 并单独接事件。
 static func hotzone(node: Control) -> Control:
@@ -625,7 +625,7 @@ static func _tap_reset(node: Control) -> void:
 ## 尺子取「本次手势划出去过的最大距离」，手指与列表两个来源取大：
 ## ① 只比按下点与抬起点会漏判 —— 列表跟着手指走，抬起点与按下点可以挨得很近；
 ## ② 只比按下与抬起那一刻的列表读数会**误杀** —— 手指按在原地的微动（真机必然有）同样
-##    会把列表拖走几单位（2026-10-09 灵石阁陈列行实测：微动 4 单位 → 列表动了 4 → 旧尺子
+##    会把列表拖走几单位（2026-10-09 金币阁陈列行实测：微动 4 单位 → 列表动了 4 → 旧尺子
 ##    阈值 0.5 判成「被拖走过」⇒ 满仓时每一格都点不动）。
 ## 所以中途的每一次 motion 都要记账，容差用同一个 TAP_SLACK：手指微动仍算点，有意划必超。
 ## 都没按下过的松开不算点按 —— 按下在别处，这一枪不该由这块热区兑现。
@@ -677,7 +677,7 @@ const NO_SCROLL_ABOVE := Vector2(-1.0, -1.0)
 
 ## 往上找第一个会滚的父容器，取它此刻的滚动位置（横滑列表读 scroll_horizontal、
 ## 竖滑读 scroll_vertical；两头都能滚就一起带上）。没有滚动父级返回 NO_SCROLL_ABOVE。
-## 为什么两个轴都要：只盯竖滑的话，横滑那一排（灵石阁陈列行）划完一松手照样算点按 ——
+## 为什么两个轴都要：只盯竖滑的话，横滑那一排（金币阁陈列行）划完一松手照样算点按 ——
 ## 手指跟着内容走了 200 单位，抬起点与按下点的距离却被内容的位移抵消了一部分。
 static func _scroll_offset_above(node: Node) -> Vector2:
     var p := node.get_parent()
@@ -692,7 +692,7 @@ static func _scroll_offset_above(node: Node) -> Vector2:
 ## 滚动条：引擎默认那根浅灰与深蓝面板不搭（真机上像系统控件，不像游戏界面），而且吃掉
 ## 一整条竖向预算。统一成「轨道不画、滑块一根主蓝细条」：只有内容真摆不下时
 ## 才露脸（ScrollContainer 的 AUTO 模式已经管「该不该露」，这里只管「露出来长什么样」）。
-## 谁在用：灵石阁的货架排与陈列行（WaveShop._ready）。其余滚动面板沿用默认，
+## 谁在用：金币阁的货架排与陈列行（WaveShop._ready）。其余滚动面板沿用默认，
 ## 等谁再动那一屏时一并收口。
 static func scrollable(sc: ScrollContainer) -> void:
     if sc == null:

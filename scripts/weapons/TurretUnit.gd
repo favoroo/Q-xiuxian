@@ -1,7 +1,7 @@
 class_name TurretUnit
 extends Node2D
 
-## 机关炮台/阵盘实体：由机关类法器（Behavior.TURRET）按冷却布设于地面
+## 机关炮台/阵盘实体：由机关类武器（Behavior.TURRET）按冷却布设于地面
 ## 独立索敌、自动向射程内敌人开火，寿命结束后消散。
 ## 伤害吃机关伤害（contraption_damage）、机关羁绊（synergy_contraption_mult）与全套玩家乘区。
 

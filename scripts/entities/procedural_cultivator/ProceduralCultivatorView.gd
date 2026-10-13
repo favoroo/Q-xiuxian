@@ -3,7 +3,7 @@ extends Node2D
 
 ## 程序化修仙角色动作视图节点
 ## 统一管理动作状态机（Idle/Run/Dash/Attack/Hit）、朝向解算、物理插值与打击感形变
-## 为后续所有道统人物提供标准驱动容器
+## 为后续所有道统角色提供标准驱动容器
 
 @export var config: CultivatorVisualConfig
 @export var renderer_script: GDScript = HollowKnightCultivatorRenderer

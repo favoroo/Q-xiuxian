@@ -78,8 +78,8 @@ func _test_enemy_mix() -> void:
 	# 旧配比是「累计带 + 波次闸门」，闸门一开邪修直接吃掉整段（第 8 波突然 27%），
 	# 而闸门未开时下一格白捡（第 5~7 波雷兽 42%）。现在火球怪第 1 波就在场内、按占比爬坡。
 	_c.near(WaveSpawner.xiexiu_edge(1), 0.06, EPS, "邪修第 1 波占比 6%（一开始就有，但只是零星）")
-	_c.near(WaveSpawner.xiexiu_edge(8), WaveSpawner.MIX_XIEXIU_EDGE, EPS, "邪修第 8 波爬到上沿 27%")
-	_c.near(WaveSpawner.xiexiu_edge(20), WaveSpawner.MIX_XIEXIU_EDGE, EPS, "上沿封顶，后期不再无限涨")
+	_c.near(WaveSpawner.xiexiu_edge(8), EnemyData.MOBS["xiexiu"]["ramp_cap"], EPS, "邪修第 8 波爬到上沿 27%")
+	_c.near(WaveSpawner.xiexiu_edge(20), EnemyData.MOBS["xiexiu"]["ramp_cap"], EPS, "上沿封顶，后期不再无限涨")
 	var prev := 0.0
 	var monotonic := true
 	for w in range(1, 21):

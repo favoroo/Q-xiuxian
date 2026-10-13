@@ -1,7 +1,7 @@
 class_name LightningBolt
 extends Node2D
 
-## 五雷法牌引雷演出：从法器射向落雷点的锯齿闪电（细亮芯 + 宽光晕 + 分支电弧）
+## 五雷法牌引雷演出：从武器射向落雷点的锯齿闪电（细亮芯 + 宽光晕 + 分支电弧）
 ## 已接入静态对象池（POOL_CAP=16），零动态 new/queue_free 分配。
 
 const CORE_COLOR := Color(1.0, 0.98, 0.85, 1.0)

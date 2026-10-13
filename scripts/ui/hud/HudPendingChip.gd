@@ -3,7 +3,7 @@ extends PanelContainer
 
 ## 顶栏「悟道 ×N」待加点徽记：只在攒了点数时出现，点按弹详情卡讲清规则。
 ## 为什么非要这颗：战斗中的升级不再当场弹面板，玩家只看见 Lv 跳了一下 ——
-## 不告诉他「这波结束能补几点」，就会当成加点没生效（看不见的控件就是 bug）。
+## 不告诉他「这回合结束能补几点」，就会当成加点没生效（看不见的控件就是 bug）。
 ## 从 GameHUD 拆出：host = 详情卡宿主（GameHUD），「上阵刷新收旧卡」判据按宿主匹配。
 
 var _label: Label = null
@@ -43,7 +43,7 @@ func _open_tip() -> void:
 		"chip_color": GameStyle.JADE,
 		"rows": [
 			["本回合攒下", "%d 点" % pending, GameStyle.JADE],
-			["什么时候加", "每波敌潮平息后统一结算", GameStyle.PAPER],
+			["什么时候加", "每回合敌潮平息后统一结算", GameStyle.PAPER],
 			["每次给几个", "%d 个候选，可刷新" % GameManager.UPGRADE_OFFER_COUNT, GameStyle.PAPER],
 		],
 		"body": "战斗中升级不再打断操作：升 1 级攒 1 点，回合结束一次性加完。",

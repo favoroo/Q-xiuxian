@@ -161,8 +161,13 @@ func _on_retry_pressed() -> void:
 	get_tree().reload_current_scene()
 
 func _on_menu_pressed() -> void:
+	# 与「重新开始」同规格：先画出一帧「正在返回」再同步重载整树，避免按下即冻死（ESC 同路）
+	if is_instance_valid(_menu_btn):
+		_menu_btn.text = "正在返回..."
+		_menu_btn.disabled = true
 	get_tree().paused = false
 	GameManager.reset_run()
+	await get_tree().process_frame
 	get_tree().reload_current_scene()
 
 func _on_endless_pressed() -> void:

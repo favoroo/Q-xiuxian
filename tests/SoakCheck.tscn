@@ -1,0 +1,6 @@
+[gd_scene uid="uid://soak0check0k1" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/soak_check.gd" id="1_soak"]
+
+[node name="SoakCheck" type="Node"]
+script = ExtResource("1_soak")
