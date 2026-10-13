@@ -123,7 +123,8 @@ func _round_trip_every_item() -> void:
 
 ## 回收金币 = 原价一半：期望值本文件按 ItemData.DEFS 现算，不叫被测代码报数。
 func _refund_matches_base_price() -> void:
-	var samples: Array[String] = ["jubaopen", "jucai_dai", "taiyi_jindan", "panshi_yin"]
+	# 样本必须是非 unique：unique 件在 ① 全量往返里进过 items_bought，这里再买会被限购拦下
+	var samples: Array[String] = ["jubaopen", "jucai_dai", "hunyuan_zhu", "panshi_yin"]
 	var bad: Array[String] = []
 	for id in samples:
 		var base := int(ItemData.get_def(id).get("price", 0))

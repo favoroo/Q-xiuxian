@@ -119,20 +119,17 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, POOL_EDGE, 2.0, true)
 
 func _physics_process(delta: float) -> void:
-	# 玩家进圈即招呼：take_damage 自己按受击无敌帧节流 ⇒ 站圈里是稳定一跳一跳的掉血，
-	# 而不是每帧一刀（伤害读数仍由玩家的护甲/闪避/免伤统一收口）
+	# 玩家在圈内就招呼：take_damage 自己按受击无敌帧节流 ⇒ 站圈里是稳定一跳一跳的掉血，
+	# 而不是每帧一刀（伤害读数仍由玩家的护甲/闪避/免伤统一收口）。
+	# 只走 overlap 扫描、不接 body_entered 信号：Area2D 的进入信号对「起手前就已经在圈里」
+	## 的玩家不触发（毒潭多是砸在玩家脚下落成的），两条路径必须同一口径 —— 都在第一帧
+	## 物理扫描里结算，先摆人后放潭与先放潭后摆人吃到的第一跳完全一致。
 	var player := GameManager.player
-	if player == null or not is_instance_valid(player) or player.current_health <= 0.0:
-		return
-	for body in get_overlapping_bodies():
-		if body == player:
-			body.take_damage(damage, global_position)
+	if player != null and is_instance_valid(player) and player.current_health > 0.0:
+		for body in get_overlapping_bodies():
+			if body == player:
+				body.take_damage(damage, global_position)
+				break
 	duration -= delta
 	if duration <= 0.0:
 		recycle()
-
-func _on_body_entered(body: Node) -> void:
-	# 进圈那一下立即招呼一次：否则「刚踩进去要等一帧」会让快进快出的玩家白捡一跳
-	var player := GameManager.player
-	if body == player and is_instance_valid(player) and player.current_health > 0.0:
-		body.take_damage(damage, global_position)
