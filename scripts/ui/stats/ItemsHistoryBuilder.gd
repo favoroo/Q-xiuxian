@@ -35,12 +35,7 @@ static func create_item_badge(dialog: PlayerStatsDialog, item_id: String, count:
 
 	var icon_path: String = def.get("icon", "")
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-		var tex := TextureRect.new()
-		tex.texture = load(icon_path)
-		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tex.custom_minimum_size = Vector2(28, 28)
-		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tex := GameStyle.icon_texture_rect(icon_path, Vector2(28, 28))
 		hbox.add_child(tex)
 
 	var name_lbl := Label.new()
@@ -81,12 +76,7 @@ static func create_history_row(dialog: PlayerStatsDialog, item: Dictionary, idx:
 	hbox.add_child(num_lbl)
 
 	if item.has("icon") and ResourceLoader.exists(item["icon"]):
-		var tex := TextureRect.new()
-		tex.texture = load(item["icon"])
-		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tex.custom_minimum_size = Vector2(20, 20)
-		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tex := GameStyle.icon_texture_rect(String(item["icon"]), Vector2(20, 20))
 		hbox.add_child(tex)
 
 	var pill := Label.new()

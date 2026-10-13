@@ -98,7 +98,7 @@ func _build_button() -> void:
 	_name_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_name_label.offset_bottom = -7.0
 	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(_name_label, 10, GameStyle.JADE_EDGE, 2, GameStyle.INK)
+	GameStyle.label(_name_label, 10, GameStyle.with_alpha(GameStyle.CHALK, 0.75), 1, GameStyle.with_alpha(GameStyle.INK, 0.70))
 	_btn.add_child(_name_label)
 
 	# 影层角标：数字贴在键的右上角（拇指旁边看得见），角色头顶同时画等量残影——
@@ -262,15 +262,15 @@ func _process(_delta: float) -> void:
 			# 活跃读数走点缀黄，与冷却纸白区分：同一颗读数，两种账
 			_cd_label.add_theme_color_override("font_color", GameStyle.JADE if state == 1 else GameStyle.CHALK)
 
-	_cd_label.visible = on_active or on_cd
-	if _icon_rect != null and _icon_rect.visible:
-		_icon_rect.modulate.a = 0.35 if on_cd else 1.0
-	if on_active:
-		_cd_label.text = str(int(ceil(active_left)))
-		_was_ready = false
-	elif on_cd:
-		_cd_label.text = str(int(ceil(cd_left)))
-		_was_ready = false
+		_cd_label.visible = on_active or on_cd
+		if _icon_rect != null and _icon_rect.visible:
+			_icon_rect.modulate.a = 0.35 if on_cd else 0.85
+		if on_active:
+			_cd_label.text = str(int(ceil(active_left)))
+			_was_ready = false
+		elif on_cd:
+			_cd_label.text = str(int(ceil(cd_left)))
+			_was_ready = false
 	elif not _was_ready:
 		# 冷却转好：亮一下 + 弹性放大，提醒可以再放
 		_was_ready = true

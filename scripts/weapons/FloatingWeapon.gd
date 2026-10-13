@@ -688,7 +688,6 @@ func _perform_projectile_attack() -> void:
 		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
 		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
-		p.lifetime *= _range_mult()
 		p.bullet_texture = bullet_tex
 		p.bullet_scale = bullet_scale
 		p.spin = bullet_spins
@@ -705,6 +704,9 @@ func _perform_projectile_attack() -> void:
 			p.poison_dur = float(def.get("poison_dur", 2.5))
 		# 池化后 _ready 先于字段赋值跑过，由 activate 按当前字段值统一铺视觉与物理状态
 		p.activate()
+		# 射程倍率必须在 activate 之后乘：activate 会把 lifetime 重置回 BASE_LIFETIME，
+		# 之前乘会被覆盖成死代码
+		p.lifetime *= _range_mult()
 
 	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id))
 

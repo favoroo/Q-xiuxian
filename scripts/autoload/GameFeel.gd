@@ -91,8 +91,9 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 		return
 	gm._hitstop_token += 1
 	var token: int = gm._hitstop_token
-	# 限制最低时间缩放地板为 0.12，防止极端近 0 停顿引发物理与渲染交换链丢帧/黑帧
-	Engine.time_scale = clampf(target_scale, 0.12, 1.0)
+	# 时间缩放不得低于安全地板（GameBalance.HITSTOP_TIMESCALE_FLOOR）：
+	# 极端近 0 停顿引发物理与渲染交换链丢帧/黑帧（真机整屏闪一下的元凶之一）
+	Engine.time_scale = clampf(target_scale, GameBalance.HITSTOP_TIMESCALE_FLOOR, 1.0)
 	gm.get_tree().create_timer(duration, true, false, true).timeout.connect(func():
 		if gm._hitstop_token == token:
 			Engine.time_scale = 1.0

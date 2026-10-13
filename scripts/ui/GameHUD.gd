@@ -453,13 +453,10 @@ func _on_weapons_updated(weapons: Array) -> void:
 		slot.add_theme_stylebox_override("panel", style)
 
 		if filled:
-			var tex_rect = TextureRect.new()
-			if w.has("icon") and ResourceLoader.exists(w["icon"]):
-				tex_rect.texture = load(w["icon"])
-			tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tex_rect.custom_minimum_size = Vector2(26, 26)
-			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var tex_rect := GameStyle.icon_texture_rect(
+				String(w.get("icon", "")),
+				Vector2(26, 26)
+			)
 			slot.add_child(tex_rect)
 
 			GameStyle.star_label(slot, int(w.get("star", 1)), 10)

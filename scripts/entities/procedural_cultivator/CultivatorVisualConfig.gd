@@ -17,7 +17,7 @@ extends Resource
 
 ## 2. 面部与首服插槽 (Face & Head Gear)
 ## mask_style: "oval_chin" (鹅蛋尖), "square_rock" (方岩), "round_petite" (娇小圆), "sharp_fox" (敏锐狐), "stout_brute" (粗犷蛮)
-## horns_style: "butterfly" (蝶角), "dao_bun" (道髻木簪), "twin_buns" (童子双丫髻), "bamboo_hat" (斗笠), "talisman" (悬符), "gold_crown" (金冠), "bull_horns" (牛角), "fox_ears" (狐耳), "none" (光洁)
+## horns_style: "butterfly" (蝶角), "dao_bun" (道髻木簪), "twin_buns" (童子双丫髻), "bamboo_hat" (斗笠), "talisman" (悬符), "gold_crown" (金冠), "bull_horns" (牛角), "barbarian_horns" (蛮荒重战角), "fox_ears" (狐耳), "none" (光洁)
 ## eye_style: "hollow_oval" (经典深渊), "sharp_slit" (冷眸细线), "round_pupil" (道童圆目), "round_bright" (童子亮眼), "angry_slit" (怒目)
 @export var face: Dictionary = {
 	"mask_style": "oval_chin",
@@ -305,29 +305,29 @@ static func make_duanbi() -> CultivatorVisualConfig:
 static func make_dubi() -> CultivatorVisualConfig:
 	return make_duanbi()
 
-# 7. 狂战蛮修（嗜血狂暴，敌潮战神，双角擎天，力拔山兮）
+# 7. 蛮兵（荒古狂战，陷阵无双，铜金战角，金芒怒目，兽皮深褐百衲袍，蛮荒兽骨巨斧）
 static func make_kuangzhan() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.22, "width_scale": 1.26, "height_scale": 1.04, "head_scale": 0.94 }
 	cfg.face = {
 		"mask_style": "stout_brute",
-		"horns_style": "bull_horns",
+		"horns_style": "barbarian_horns",
 		"eye_style": "angry_slit",
-		"eye_color": Color(1.0, 0.22, 0.18, 0.65), # 暴怒嗜血猩红
-		"eye_core_color": Color(1.0, 0.85, 0.85)
+		"eye_color": Color(1.0, 0.72, 0.16, 0.85), # 陷阵狂战炽金怒眸（彻底区分魔修猩红）
+		"eye_core_color": Color(1.0, 0.96, 0.78)
 	}
 	cfg.cloak = {
 		"cloak_style": "tattered_rags",
-		"col_outer": Color(0.24, 0.08, 0.08),     # 暗赤血污
-		"col_inner": Color(0.15, 0.05, 0.05),     # 焦骨黑
-		"col_edge": Color(0.85, 0.25, 0.20),      # 狂暴战意
+		"col_outer": Color(0.24, 0.16, 0.10),     # 荒原兽皮深棕褐
+		"col_inner": Color(0.38, 0.24, 0.14),     # 焦土赭黄内衬
+		"col_edge": Color(0.96, 0.76, 0.24),      # 陷阵战意炽金光辉
 		"chest_ornament": "skull"
 	}
 	cfg.weapon = {
 		"weapon_type": "bone_axe",
 		"col_main": Color(0.92, 0.90, 0.85),      # 蛮荒巨兽头骨双刃斧
 		"col_shadow": Color(0.62, 0.58, 0.52),
-		"col_accent": Color(0.95, 0.20, 0.20),
+		"col_accent": Color(0.98, 0.78, 0.25),    # 战痕金铜光
 		"strap_style": "diagonal",
 		# 骨斧同样近骨白，而蛮修双角横挑到 x=±26：把斧子整体压到下巴以下横躺，
 		# 斧刃朝上从右肩外探出，避开双角与面具那两圈白

@@ -254,7 +254,6 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	var def: Dictionary = CultivatorData.get_def(cid)
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
-	var best_d: int = GameManager.get_cultivator_best_danger(cid)
 
 	var p_style := GameStyle.card(GameStyle.JADE if is_unlocked else GameStyle.LINE,
 			GameStyle.SLANT_PLATE, Vector2(4, 5))
@@ -262,7 +261,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		p_style.bg_color = GameStyle.INK.lightened(0.03)
 	_detail_panel.add_theme_stylebox_override("panel", p_style)
 
-	# 1. 顶部概览行（大头像 + 名号 + 称号 + 通关勋章）- 固定高约 68
+	# 1. 顶部概览行（大头像 + 名号 + 称号 + 解锁状态签）- 固定高约 68
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 10)
 	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -327,12 +326,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var status_chip := Label.new()
 	status_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_chip.size_flags_horizontal = Control.SIZE_SHRINK_END
-	if is_unlocked and best_d >= 0:
-		var d_name: String = AchievementData.danger_name(best_d)
-		status_chip.text = " ★ 通关·%s " % d_name
-		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
-		GameStyle.label(status_chip, 10, GameStyle.JADE)
-	elif is_unlocked:
+	if is_unlocked:
 		status_chip.text = " ✦ 已解锁 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
 		GameStyle.label(status_chip, 10, GameStyle.GOOD)
@@ -554,7 +548,6 @@ func _update_small_card_selection(cid: String) -> void:
 	var data: Dictionary = _roster_cards[cid]
 	var is_selected: bool = (cid == _selected_id)
 	var is_unlocked: bool = bool(data.get("is_unlocked", false))
-	var best_d: int = int(data.get("best_d", -1))
 	var style: StyleBoxFlat = data.get("style")
 	var icon_box: PanelContainer = data.get("icon_box")
 	var name_lbl: Label = data.get("name_lbl")
@@ -586,9 +579,6 @@ func _update_small_card_selection(cid: String) -> void:
 		elif not is_unlocked:
 			tag_lbl.text = "✖"
 			tag_lbl.add_theme_color_override("font_color", GameStyle.GREY)
-		elif best_d >= 0:
-			tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
-			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE)
 		else:
 			tag_lbl.text = " "
 			tag_lbl.add_theme_color_override("font_color", GameStyle.PAPER_DIM)
@@ -597,7 +587,6 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var def: Dictionary = CultivatorData.get_def(cid)
 	var is_selected: bool = (cid == _selected_id)
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
-	var best_d: int = GameManager.get_cultivator_best_danger(cid)
 
 	var card := PanelContainer.new()
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -683,9 +672,6 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	elif not is_unlocked:
 		tag_lbl.text = "✖"
 		GameStyle.label(tag_lbl, 10, GameStyle.GREY)
-	elif best_d >= 0:
-		tag_lbl.text = "★%s" % AchievementData.danger_name(best_d)
-		GameStyle.label(tag_lbl, 10, GameStyle.JADE)
 	else:
 		tag_lbl.text = " "
 		GameStyle.label(tag_lbl, 10, GameStyle.PAPER_DIM)
@@ -718,7 +704,6 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		"name_lbl": name_lbl,
 		"tag_lbl": tag_lbl,
 		"is_unlocked": is_unlocked,
-		"best_d": best_d,
 	}
 
 	return card

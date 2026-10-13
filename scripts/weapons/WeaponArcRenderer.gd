@@ -13,10 +13,10 @@ extends Node2D
 enum ArcMode { MELEE, SWEEP }
 
 const OUTER := 124.0            ## 外缘画布半径 == FloatingWeapon.SLASH_ART_OUTER / SWEEP_ART_OUTER
-const MELEE_INNER := 100.0      ## 月牙内缘 == FloatingWeapon.SLASH_ART_INNER（出生"贴剑尖"反解用）
-const MELEE_HALF := deg_to_rad(70.0)   ## 月牙张角，与 slash 旧贴图同源
-const SWEEP_HALF := deg_to_rad(80.0)   ## 扇面张角 == FloatingWeapon.SWEEP_HALF_ANGLE
-const SWEEP_INNER := 20.0       ## 扇面内缘（顶点留空，别糊住武器本体）
+const MELEE_INNER := 100.0      ## 近战月牙内缘 == FloatingWeapon.SLASH_ART_INNER（出生"贴剑尖"反解用）
+const MELEE_HALF := deg_to_rad(70.0)   ## 近战月牙张角，与 slash 旧贴图同源
+const SWEEP_HALF := deg_to_rad(80.0)   ## 横扫月牙张角 == FloatingWeapon.SWEEP_HALF_ANGLE
+const SWEEP_INNER := 88.0       ## 横扫月牙内缘（宽度 36px，比近战 24px 大 50%，雄浑大月牙）
 
 const _ARC_STEPS := 30          ## 外缘采样段数
 
@@ -99,7 +99,7 @@ func _draw() -> void:
 	if mode == ArcMode.MELEE:
 		_draw_crescent(main, core, glow)
 	else:
-		_draw_fan(main, core, glow)
+		_draw_sweep_crescent(main, core, glow)
 	_draw_accents(main, core, glow)
 
 ## 近战月牙：内缘 MELEE_INNER、外缘 OUTER 的一弯细刃，三层同形叠画（晕/主刃/亮芯）
@@ -111,22 +111,18 @@ func _draw_crescent(main: Color, core: Color, glow: Color) -> void:
 	core.a = 0.95
 	_arc_line((MELEE_INNER + OUTER) * 0.5, MELEE_HALF, core, 3.0)
 
-## 横扫扇面：填充扇形 + 外缘亮带 + 放射速线（内低透明度填充，杜绝死皮糊罩）
-func _draw_fan(main: Color, core: Color, glow: Color) -> void:
-	glow.a = 0.08
-	_band(SWEEP_INNER - 4.0, OUTER, SWEEP_HALF, glow, true)
-	main.a = 0.20
-	_band(SWEEP_INNER, OUTER, SWEEP_HALF, main, false)
+## 横扫月牙：与近战月牙同源同构，但张角更开阔（±80° vs ±70°）、刃带更宽（36px vs 24px），
+## 呈现厚重有力的凌厉大月牙斩波，彻底告别死板夸张的实心折扇。
+func _draw_sweep_crescent(main: Color, core: Color, glow: Color) -> void:
+	# 1. 柔和外晕：向外微扩，给刀气镀上一层元素气芒
+	glow.a = 0.12
+	_band(SWEEP_INNER - 5.0, OUTER, SWEEP_HALF, glow, true)
+	# 2. 主刃厚带：饱满厚重的月牙刃体
 	main.a = 0.88
-	_band(OUTER - 26.0, OUTER, SWEEP_HALF, main, true)
-	core.a = 0.9
-	_arc_line(OUTER - 10.0, SWEEP_HALF, core, 3.5)
-	# 放射速线：从扇顶指向外缘，拉开横扫的速度感
-	core.a = 0.30
-	for i in 5:
-		var a := -SWEEP_HALF + SWEEP_HALF * 2.0 * float(i) / 4.0
-		var dir := Vector2(cos(a), sin(a))
-		draw_line(dir * (SWEEP_INNER + 8.0), dir * (OUTER - 30.0), core, 1.6)
+	_band(SWEEP_INNER, OUTER, SWEEP_HALF, main, true)
+	# 3. 耀眼亮芯：贯穿月牙弧身的高亮破空刀芒
+	core.a = 0.95
+	_arc_line((SWEEP_INNER + OUTER) * 0.5, SWEEP_HALF, core, 3.8)
 
 ## 元素形态点缀（全部收在 OUTER 以内）
 func _draw_accents(main: Color, core: Color, glow: Color) -> void:

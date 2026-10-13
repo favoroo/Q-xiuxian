@@ -21,8 +21,8 @@ const UI_PRESS_HOLD_PAD := 8.0
 ## （金币阁曾经 1124×521 撑出屏外）仍是一颗要护住的键，不该被当成遮罩放行。
 const UI_HOLD_BACKDROP_RATIO := 0.98
 
-@onready var base: TextureRect = $Base
-@onready var knob: TextureRect = $Base/Knob
+@onready var base: Control = $Base
+@onready var knob: Control = $Base/Knob
 
 var touch_id: int = -1
 var is_active: bool = false
@@ -61,6 +61,8 @@ func is_press_on_ui_hold(pos: Vector2) -> bool:
 func _ready() -> void:
     modulate.a = 0.0
     base.visible = false
+    base.draw.connect(_on_base_draw)
+    knob.draw.connect(_on_knob_draw)
     # 收口：全项目所有按钮都算「长按键」，不靠每个界面自己登记 —— 逐颗登记早晚会有人忘，
     # 忘了就是「点按钮同时长出一根摇杆」。两趟缺一不可：
     # ① 入树时整树扫一遍，接住场景里比摇杆先存在的按钮（对话框、菜单、商店底板）；
@@ -68,6 +70,35 @@ func _ready() -> void:
     #    更新浮层还挂在 UpdateManager 而不是本层，所以不能只扫自己这个 CanvasLayer）。
     _adopt_buttons(get_tree().root)
     get_tree().node_added.connect(_on_ui_node_added)
+
+## 极简仙侠风底盘绘制：通透暗底 + 纤细冷蓝轮廓 + 四向微光道点
+func _on_base_draw() -> void:
+    var center := base.size * 0.5
+    var r := center.x
+    # 1. 通透暗底：极薄的墨渊通透圆形底色
+    base.draw_circle(center, r, GameStyle.with_alpha(GameStyle.INK, 0.16))
+    # 2. 极简外环：1.5px 纤细微透冷蓝仙气光环
+    base.draw_arc(center, r - 1.0, 0.0, TAU, 64, GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.42), 1.5, true)
+    # 3. 内层极淡导向轻环（半径约 0.45r）
+    base.draw_arc(center, r * 0.45, 0.0, TAU, 48, GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.15), 1.0, true)
+    # 4. 道蕴十字微印：四向（上下左右）微光刻度点，极简素雅
+    var tick_dist := r - 6.0
+    var dot_col := GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.35)
+    base.draw_circle(center + Vector2(0, -tick_dist), 1.5, dot_col)
+    base.draw_circle(center + Vector2(0, tick_dist), 1.5, dot_col)
+    base.draw_circle(center + Vector2(-tick_dist, 0), 1.5, dot_col)
+    base.draw_circle(center + Vector2(tick_dist, 0), 1.5, dot_col)
+
+## 极简仙侠风操纵杆绘制：半透明冷流内盘 + 细致冷冽蓝环 + 核心凝光点
+func _on_knob_draw() -> void:
+    var center := knob.size * 0.5
+    var kr := 20.0
+    # 1. 灵核内盘：半透明冷流圆盘
+    knob.draw_circle(center, kr, GameStyle.with_alpha(GameStyle.GOLD, 0.28))
+    # 2. 外缘光圈：1.5px 细致冷冽蓝环
+    knob.draw_arc(center, kr, 0.0, TAU, 48, GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.60), 1.5, true)
+    # 3. 核心道点：半径 2.0px 纸白凝光点
+    knob.draw_circle(center, 2.0, GameStyle.with_alpha(GameStyle.PAPER, 0.85))
 
 ## 按钮入组：组内成员随节点释放自动移除，重开一局不必清理
 func _on_ui_node_added(node: Node) -> void:
@@ -107,7 +138,7 @@ func _start_joystick(pos: Vector2, id: int) -> void:
     base.visible = true
     
     var tw = create_tween()
-    tw.tween_property(self, "modulate:a", 1.0, 0.12)
+    tw.tween_property(self, "modulate:a", 0.65, 0.12)
     output = Vector2.ZERO
     joystick_updated.emit(output)
 

@@ -49,12 +49,7 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	if icon_path.is_empty():
 		icon_path = WeaponData.get_def(id).get("icon", "")
 
-	var icon_tex := TextureRect.new()
-	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-		icon_tex.texture = load(icon_path)
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon_tex := GameStyle.icon_texture_rect(icon_path)
 	slot.add_child(icon_tex)
 
 	# 元素武器底部暖橙红下边框（吃「元素伤害」属性加成）：恒定显示，不与可合成/选中争抢外框
@@ -149,13 +144,8 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 	var tier_col: Color = ItemData.tier_color(tier_num)
 	chip.add_theme_stylebox_override("panel",
 		GameStyle.outlined_panel(GameStyle.NAVY2, tier_col, 2, 0.0))
-	var icon_tex = TextureRect.new()
 	var icon_path: String = def.get("icon", "")
-	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-		icon_tex.texture = load(icon_path)
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon_tex := GameStyle.icon_texture_rect(icon_path)
 	icon_tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon_tex.offset_left = 5
 	icon_tex.offset_top = 5

@@ -83,6 +83,9 @@ static func _ensure_host(scene: Node) -> void:
 	_created = 0
 	_host = Node2D.new()
 	_host.name = "JuiceEffectPool"
+	# 特效在 _process 里推进（渲染时钟），宿主开着物理插值会与插值中的实体错相位
+	# ——真机帧率抖动时特效落点与画面上的实体错位乱闪（同 Player 关 WeaponHolder 插值一条坑）
+	_host.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	scene.add_child(_host)
 
 static func _acquire() -> JuiceEffect:
@@ -266,14 +269,16 @@ static func spawn_step_dust(parent: Node, pos: Vector2, move_dir: Vector2) -> vo
 
 ## 弹丸湮灭微闪：弹丸因命中消亡时，在弹丸当前位置产生的冷冽灵光溃散（0.11s）。
 ## 【设计铁律】不同于挂在敌人身上的旧受击火花：它严格锚定在弹丸自身碰撞位置，
-## 并受严格的单物理帧限流闸（<=6发/帧）与视口门控双重保护，绝不空地乱闪、绝不糊屏。
+## 并受严格的单渲染帧限流闸（<=6发/帧）与视口门控双重保护，绝不空地乱闪、绝不糊屏。
+## 限流闸用渲染帧计数（特效本体在 _process 里推进），不再用物理帧——双钟混用在真机
+## 帧率抖动时会让预算闸与玩家实际看到的帧对不上。
 static func spawn_impact_pop(parent: Node, pos: Vector2, col: Color, impact_dir: Vector2 = Vector2.ZERO) -> void:
 	if not _ready_to_spawn(parent):
 		return
 	if not _pos_in_viewport(parent, pos):
 		return
 
-	var current_frame := Engine.get_physics_frames()
+	var current_frame := Engine.get_frames_drawn()
 	if current_frame != _last_pop_frame:
 		_last_pop_frame = current_frame
 		_pop_count_this_frame = 0
@@ -300,7 +305,7 @@ static func spawn_impact_pop(parent: Node, pos: Vector2, col: Color, impact_dir:
 
 ## 死亡爆散（轻量重建版，2026-10-13）：敌人死亡点迸出一小撮本种主色碎屑 + 微环。
 ## 【与旧死亡爆散的区别】旧版「尸体塌缩后独留空地乱闪」被整体下线；这版只做一小撮
-## 带颜色信息的碎屑（碎屑色 = 敌种主色，读得出「死的是什么」），且严格受单物理帧
+## 带颜色信息的碎屑（碎屑色 = 敌种主色，读得出「死的是什么」），且严格受单渲染帧
 ## 预算闸（<=3 处/帧，群杀同帧宁缺勿糊）与视口门控双重保护，不与尸体塌缩抢戏。
 static func spawn_death_burst(parent: Node, pos: Vector2, col: Color, elite: bool = false) -> void:
 	if not _ready_to_spawn(parent):
@@ -308,7 +313,7 @@ static func spawn_death_burst(parent: Node, pos: Vector2, col: Color, elite: boo
 	if not _pos_in_viewport(parent, pos):
 		return
 
-	var current_frame := Engine.get_physics_frames()
+	var current_frame := Engine.get_frames_drawn()
 	if current_frame != _last_burst_frame:
 		_last_burst_frame = current_frame
 		_burst_count_this_frame = 0

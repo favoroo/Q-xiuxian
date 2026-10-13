@@ -121,12 +121,16 @@ const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）�
 const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
 const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把敌人甩出半屏）
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
-const KILL_HITSTOP_SCALE := 0.20         ## 击杀微顿帧时间倍率（清脆微顿，高于安全地板 0.12）
+const KILL_HITSTOP_SCALE := 0.20         ## 击杀微顿帧时间倍率（清脆微顿，高于安全地板 0.15）
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
+## 顿帧时间倍率安全地板：极端近 0 的停顿会让物理步与渲染交换链抢相位，真机 vsync 下
+## 呈送黑帧（整屏含 UI 闪一下的元凶之一）。0.12 → 0.15（2026-10-13 真机闪屏治理），
+## 再深会明显削弱最重两档（HEAVY / 暴击击杀）的顿挫层次。
+const HITSTOP_TIMESCALE_FLOOR := 0.15
 const CRIT_TRAUMA_NORMAL := 0.20         ## 普通暴击追加创伤（从 0.12 上调：平方后产生可见轻颤，稳态仍严格受每秒预算保护）
 const CRIT_TRAUMA_ELITE := 0.32          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
 const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」
-const CRIT_KILL_HITSTOP_SCALE := 0.12    ## 暴击击杀顿帧时间倍率（扎实顿挫，刚好落于安全地板）
+const CRIT_KILL_HITSTOP_SCALE := 0.12    ## 暴击击杀顿帧时间倍率（扎实顿挫，落地时被安全地板钳到 0.15）
 const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 

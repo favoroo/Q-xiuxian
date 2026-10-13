@@ -73,6 +73,8 @@ func _ready() -> void:
 func activate() -> void:
 	_pooled = false
 	active_count += 1
+	# 池化复用是从回收点瞬移到新毒点：不重置物理插值，真机帧率抖动时首帧会渲染旧位置滑行
+	reset_physics_interpolation()
 	visible = true
 	rotation = 0.0
 	radius = RADIUS * maxf(scale_factor, 0.05)

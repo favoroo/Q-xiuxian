@@ -28,11 +28,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	cult_row.add_theme_constant_override("separation", 10)
 	dialog._cult_card.add_child(cult_row)
 
-	dialog._cult_icon = TextureRect.new()
-	dialog._cult_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	dialog._cult_icon.custom_minimum_size = Vector2(40, 40)
-	dialog._cult_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	dialog._cult_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dialog._cult_icon = GameStyle.icon_texture_rect("", Vector2(40, 40))
 	cult_row.add_child(dialog._cult_icon)
 
 	var cult_text := VBoxContainer.new()
@@ -284,13 +280,10 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 		if filled:
 			var w_wid := String(summary[i].get("id", ""))
 			var w: Dictionary = summary[i]
-			var tex_rect := TextureRect.new()
-			if w.has("icon") and ResourceLoader.exists(w["icon"]):
-				tex_rect.texture = load(w["icon"])
-			tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tex_rect.custom_minimum_size = Vector2(34, 34)
-			tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var tex_rect := GameStyle.icon_texture_rect(
+				String(w.get("icon", "")),
+				Vector2(34, 34)
+			)
 			slot.add_child(tex_rect)
 
 			# 元素武器底部暖橙红下边框
@@ -328,13 +321,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 
 			var s_wid := String(item.get("id", ""))
 			var s_icon_path: String = item.get("icon", def.get("icon", ""))
-			var s_tex := TextureRect.new()
-			if not s_icon_path.is_empty() and ResourceLoader.exists(s_icon_path):
-				s_tex.texture = load(s_icon_path)
-			s_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			s_tex.custom_minimum_size = Vector2(26, 26)
-			s_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			s_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var s_tex := GameStyle.icon_texture_rect(s_icon_path, Vector2(26, 26))
 			s_slot.add_child(s_tex)
 			s_slot.set_meta("sb_flat", s_sb)
 			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.JADE, 1, 0.0))

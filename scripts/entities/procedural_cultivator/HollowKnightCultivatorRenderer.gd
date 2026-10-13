@@ -573,11 +573,22 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 				draw_line(head_center + Vector2(2.5 * hs, -5 * hs), head_center + Vector2(2.5 * hs, -2 * hs), col_eye_glow, 1.0)
 
 		"stout_brute":
-			if angle == Angle.FRONT:
-				draw_line(head_center + Vector2(-2.5 * hs, -6 * hs), head_center + Vector2(2.5 * hs, -2 * hs), col_tassel_red, 1.2)
-				draw_line(head_center + Vector2(2.5 * hs, -6 * hs), head_center + Vector2(-2.5 * hs, -2 * hs), col_tassel_red, 1.2)
+			var brute_col := col_gold if horns_style == "barbarian_horns" else col_tassel_red
+			if horns_style == "barbarian_horns":
+				# 蛮兵专属：额心三道炽金战气裂痕，展现陷阵凶蛮
+				if angle == Angle.FRONT:
+					draw_line(head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-1.5 * hs, -2.0 * hs), brute_col, 1.3)
+					draw_line(head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -1.8 * hs), brute_col, 1.4)
+					draw_line(head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(1.5 * hs, -2.0 * hs), brute_col, 1.3)
+				else:
+					draw_line(head_center + Vector2(1.5 * hs, -5.5 * hs), head_center + Vector2(3.5 * hs, -2.0 * hs), brute_col, 1.3)
+					draw_line(head_center + Vector2(3.2 * hs, -5.0 * hs), head_center + Vector2(5.2 * hs, -1.5 * hs), brute_col, 1.2)
 			else:
-				draw_line(head_center + Vector2(1.0 * hs, -5 * hs), head_center + Vector2(4.0 * hs, -2 * hs), col_tassel_red, 1.1)
+				if angle == Angle.FRONT:
+					draw_line(head_center + Vector2(-2.5 * hs, -6 * hs), head_center + Vector2(2.5 * hs, -2 * hs), brute_col, 1.2)
+					draw_line(head_center + Vector2(2.5 * hs, -6 * hs), head_center + Vector2(-2.5 * hs, -2 * hs), brute_col, 1.2)
+				else:
+					draw_line(head_center + Vector2(1.0 * hs, -5 * hs), head_center + Vector2(4.0 * hs, -2 * hs), brute_col, 1.1)
 
 		"oval_chin", _:
 			if angle == Angle.FRONT:
@@ -598,6 +609,64 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 	var hs := head_scale
 	match horns_style:
+		"barbarian_horns":
+			# 蛮兵专属：蛮荒重甲战角（根部裹粗犷铜金骨环，双角厚重横展微前倾，粗砺战痕）
+			var l_bhorn := [
+				head_center + Vector2(-5.5 * hs, -4.5 * hs),
+				head_center + Vector2(-14.0 * hs, -10.5 * hs),
+				head_center + Vector2(-20.0 * hs, -21.0 * hs),
+				head_center + Vector2(-13.0 * hs, -18.5 * hs),
+				head_center + Vector2(-4.0 * hs, -7.5 * hs)
+			]
+			var r_bhorn := [
+				head_center + Vector2(4.0 * hs, -7.5 * hs),
+				head_center + Vector2(13.0 * hs, -18.5 * hs),
+				head_center + Vector2(20.0 * hs, -21.0 * hs),
+				head_center + Vector2(14.0 * hs, -10.5 * hs),
+				head_center + Vector2(5.5 * hs, -4.5 * hs)
+			]
+			if angle == Angle.FRONT:
+				draw_colored_polygon(l_bhorn, col_bone)
+				draw_colored_polygon(r_bhorn, col_bone)
+				# 角身暗面阴影
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-5.5 * hs, -4.5 * hs),
+					head_center + Vector2(-14.0 * hs, -10.5 * hs),
+					head_center + Vector2(-20.0 * hs, -21.0 * hs),
+					head_center + Vector2(-15.0 * hs, -14.0 * hs)
+				]), col_bone_shadow)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(5.5 * hs, -4.5 * hs),
+					head_center + Vector2(14.0 * hs, -10.5 * hs),
+					head_center + Vector2(20.0 * hs, -21.0 * hs),
+					head_center + Vector2(15.0 * hs, -14.0 * hs)
+				]), col_bone_shadow)
+				draw_polyline(l_bhorn, col_bone_shadow, 1.3, true)
+				draw_polyline(r_bhorn, col_bone_shadow, 1.3, true)
+				# 根部粗狂铜金护箍环（加粗明显，形成强辨识度）
+				draw_line(head_center + Vector2(-4.5 * hs, -6.0 * hs), head_center + Vector2(-9.5 * hs, -9.5 * hs), col_gold, 2.4)
+				draw_line(head_center + Vector2(4.5 * hs, -6.0 * hs), head_center + Vector2(9.5 * hs, -9.5 * hs), col_gold, 2.4)
+				# 角尖战纹金芒
+				draw_line(head_center + Vector2(-12.0 * hs, -15.0 * hs), head_center + Vector2(-18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+				draw_line(head_center + Vector2(12.0 * hs, -15.0 * hs), head_center + Vector2(18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+			elif angle == Angle.SIDE:
+				var side_bhorn := [
+					head_center + Vector2(-2.0 * hs, -5.5 * hs),
+					head_center + Vector2(-11.0 * hs, -13.5 * hs),
+					head_center + Vector2(-16.0 * hs, -23.0 * hs),
+					head_center + Vector2(-8.0 * hs, -18.0 * hs),
+					head_center + Vector2(2.5 * hs, -7.5 * hs)
+				]
+				draw_colored_polygon(side_bhorn, col_bone)
+				draw_polyline(side_bhorn, col_bone_shadow, 1.3, true)
+				draw_line(head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-6.5 * hs, -11.0 * hs), col_gold, 2.4)
+				draw_line(head_center + Vector2(-8.0 * hs, -14.0 * hs), head_center + Vector2(-14.5 * hs, -21.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+			else:
+				draw_colored_polygon(l_bhorn, col_bone_shadow)
+				draw_colored_polygon(r_bhorn, col_bone_shadow)
+				draw_polyline(l_bhorn, col_bone, 1.0, true)
+				draw_polyline(r_bhorn, col_bone, 1.0, true)
+
 		"bull_horns":
 			var l_horn := [
 				head_center + Vector2(-6 * hs, -5 * hs),

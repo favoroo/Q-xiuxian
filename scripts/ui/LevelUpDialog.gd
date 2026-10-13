@@ -497,13 +497,10 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
 	icon_box.add_theme_stylebox_override("panel", icon_panel_style)
 
-	var icon_tex := TextureRect.new()
-	if data.has("icon") and ResourceLoader.exists(data["icon"]):
-		icon_tex.texture = load(data["icon"])
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(42, 42)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon_tex := GameStyle.icon_texture_rect(
+		String(data.get("icon", "")),
+		Vector2(42, 42)
+	)
 	icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 
@@ -593,12 +590,10 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 			cell.custom_minimum_size = Vector2(cell_sz, cell_sz)
 			cell.add_theme_stylebox_override("panel",
 				GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
-			var w_icon := TextureRect.new()
-			if ResourceLoader.exists(String(wd.get("icon", ""))):
-				w_icon.texture = load(wd["icon"])
-			w_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			w_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			w_icon.custom_minimum_size = Vector2(glyph_sz, glyph_sz)
+			var w_icon := GameStyle.icon_texture_rect(
+				String(wd.get("icon", "")),
+				Vector2(glyph_sz, glyph_sz)
+			)
 			cell.add_child(w_icon)
 			icon_row.add_child(cell)
 			# 整格都是热区：图是显示件，留着 STOP 会在格面中间挖一个按不动的洞

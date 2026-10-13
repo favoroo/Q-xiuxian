@@ -321,3 +321,9 @@ func _setup_stage_backdrop() -> void:
 	ui.add_child(backdrop)
 	# 层级：GameHUD 之后、对话框之前 —— 盖住 VirtualJoystick + GameHUD，但被选人对话框盖在下面
 	ui.move_child(backdrop, ui.get_node("GameHUD").get_index() + 1)
+	# 审计：幕布只许出现在选人链路，开局后（run_started）任何复亮都是整屏黑闪的元凶，
+	# debug 包直接打警告定位翻转点（真机「玩着玩着全屏闪一下」排查通道）
+	backdrop.visibility_changed.connect(func():
+		if OS.is_debug_build() and backdrop.visible and GameManager.run_started:
+			push_warning("StageBackdrop 在对局中被点亮——整屏黑闪嫌疑，请检查选人链路的显隐接管")
+	)

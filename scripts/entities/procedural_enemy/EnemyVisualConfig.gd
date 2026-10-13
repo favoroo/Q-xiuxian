@@ -350,9 +350,9 @@ static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: b
 			return make_leibeast()
 		"golem":
 			return make_golem()
-		"chilei_elite":
+		"chilei_elite", "chilei":
 			return make_chilei_elite()
-		"jiansha_elite":
+		"jiansha_elite", "jiansha":
 			return make_jiansha_elite()
 		"lingyi":
 			return make_lingyi()

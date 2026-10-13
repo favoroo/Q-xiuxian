@@ -94,7 +94,7 @@ def generate_asset(name, prompt_content):
     print(f"[Success] {name} 生成完成: {png_path}")
     return png_path
 
-def fit_to_target(png_path, target_art_path, size=48):
+def fit_to_target(png_path, target_art_path, size=128):
     if not os.path.exists(png_path):
         return
     im = Image.open(png_path).convert("RGBA")
@@ -130,13 +130,13 @@ def main():
     for item_id, prompt in ITEMS:
         png = generate_asset(item_id, prompt)
         if png:
-            fit_to_target(png, f"assets/art/{item_id}.png", 48)
+            fit_to_target(png, f"assets/art/{item_id}.png", 128)
 
     print("\n=== 开始批量生成冷冽国风纯矢量法器武器 ===")
     for wep_id, prompt in WEAPONS:
         png = generate_asset(wep_id, prompt)
         if png:
-            fit_to_target(png, f"assets/art/{wep_id}.png", 48)
+            fit_to_target(png, f"assets/art/{wep_id}.png", 128)
 
     print("\n=== 全部法器与法宝素材生成处理完毕！ ===")
 

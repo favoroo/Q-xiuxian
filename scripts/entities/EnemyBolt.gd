@@ -33,6 +33,7 @@ static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（PoolCheck 断言用）
 static var reused_count: int = 0     ## 累计池复用数
 static var active_count: int = 0     ## 当前在场（已激活未回收）火球数：HUD 性能面板消费
+static var interp_reset_count: int = 0  ## 累计插值重置次数（PoolCheck 断言 activate 重置了物理插值用）
 
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
@@ -120,6 +121,9 @@ func _ready() -> void:
 func activate() -> void:
 	_pooled = false
 	active_count += 1
+	# 池化复用是从回收点瞬移到出膛点：不重置物理插值，真机帧率抖动时首帧会渲染旧位置滑行
+	reset_physics_interpolation()
+	interp_reset_count += 1
 	visible = true
 	rotation = 0.0
 	radius = RADIUS * maxf(scale_factor, 0.05)

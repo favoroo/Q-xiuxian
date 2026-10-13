@@ -7,7 +7,7 @@ extends Control
 const CHAR_IDS: Array[String] = [
 	"jianchi", "shiyue", "fuzhen",
 	"jinsuanpan", "meiying", "dubi",
-	"kuangzhan", "duoshe", "duobao",
+	"kuangzhan", "shixue", "duobao",
 	"shoucainu", "bawang", "juechen"
 ]
 
@@ -19,7 +19,8 @@ const TITLES: Dictionary = {
 	"meiying": "魅影·幽娘",
 	"dubi": "独臂刀圣",
 	"duanbi": "独臂刀圣",
-	"kuangzhan": "狂战蛮修",
+	"kuangzhan": "蛮兵·狂战",
+	"shixue": "嗜血魔修",
 	"duoshe": "夺舍散人",
 	"duobao": "收藏家·多宝",
 	"fuxiu": "灵符子·符修",
@@ -36,7 +37,8 @@ const DESCS: Dictionary = {
 	"meiying": "魅紫飞扬·淬毒双刺",
 	"dubi": "狂血大氅·厚背断刀",
 	"duanbi": "狂血大氅·厚背断刀",
-	"kuangzhan": "残破血袍·兽骨巨斧",
+	"kuangzhan": "兽皮深褐·铜金战角·兽骨巨斧",
+	"shixue": "幽黑血煞·刺目猩红·厚背断刀",
 	"duoshe": "尸青残袍·引魂灵幡",
 	"duobao": "紫金霞帔·重宝双叠骨羽角",
 	"fuxiu": "赭黄霞帔·朱砂符剑",

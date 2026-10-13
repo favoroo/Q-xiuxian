@@ -74,6 +74,9 @@ func _run() -> void:
 		DamageNumber.spawn(world, Vector2(20 + 10 * i, 40), 10 + i)
 	_check(DamageNumber.created_count() == 60, "首轮创建 60 个跳字节点 (%d)" % DamageNumber.created_count())
 	_check(DamageNumber.host_child_count() == 60, "跳字全部挂在池宿主下 (%d)" % DamageNumber.host_child_count())
+	# 跳字走 _process（渲染时钟），宿主必须关闭物理插值，否则真机帧率抖动时数字悬在错位上
+	_check(DamageNumber._host.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_OFF,
+		"跳字池宿主已关闭物理插值（真机错位乱闪治理）")
 
 	await get_tree().create_timer(1.0).timeout
 	_check(DamageNumber.pool_size() == 60, "存活期结束后 60 个全部回池 (%d)" % DamageNumber.pool_size())
@@ -94,6 +97,8 @@ func _run() -> void:
 	for i in range(40):
 		JuiceEffect.spawn_shockwave(world, Vector2(20 + i, 30 + i), 24.0, Color.WHITE, 0.2)
 	_check(JuiceEffect.created_count() == 40, "首轮创建 40 个特效节点 (%d)" % JuiceEffect.created_count())
+	_check(JuiceEffect._host.physics_interpolation_mode == Node.PHYSICS_INTERPOLATION_MODE_OFF,
+		"特效池宿主已关闭物理插值（真机错位乱闪治理）")
 	await get_tree().create_timer(0.6).timeout
 	_check(JuiceEffect.pool_size() == 40, "特效全部回池 (%d)" % JuiceEffect.pool_size())
 	for i in range(40):
@@ -127,8 +132,14 @@ func _run() -> void:
 	var bolt_b := EnemyBolt.acquire(world)
 	_check(bolt_b == bolt_a and EnemyBolt.created_count == bolt_created, "第二次 acquire 复用同一实例不新建")
 	bolt_b.scale_factor = GameBalance.BOSS_BOLT_SCALE
+	# 复用出膛是从回收点瞬移：activate 必须重置物理插值，否则插值把首帧渲染成
+	# 「从旧位置滑过来」（真机旧位置闪一下的元凶）。headless 读不到插值矩阵，用计数钩子钉住调用。
+	var interp_resets_before := EnemyBolt.interp_reset_count
+	bolt_b.global_position = Vector2(10000, 10000)
 	bolt_b.activate()
 	_check(bolt_b.visible and not bolt_b._pooled, "复用出膛后可见且激活")
+	_check(EnemyBolt.interp_reset_count == interp_resets_before + 1,
+		"复用出膛重置了物理插值（无旧位置滑行）")
 	_check((bolt_b._circle as CircleShape2D).radius == EnemyBolt.RADIUS * GameBalance.BOSS_BOLT_SCALE,
 		"复用激活按 scale_factor 重铺判定圆")
 	_check(bolt_b.lifetime == EnemyBolt.BASE_LIFETIME, "复用激活重置寿命（残值不清会出膛即逝）")

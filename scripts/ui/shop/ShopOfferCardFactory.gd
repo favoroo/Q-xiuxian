@@ -277,14 +277,11 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 		)
 		icon_box.add_child(pet_preview)
 	else:
-		var icon_tex := TextureRect.new()
-		if ResourceLoader.exists(icon_path):
-			icon_tex.texture = load(icon_path)
-		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		# 贴合框体尺寸（保留 2px 外框余量），使原始 48×48 素材以大尺寸点对点呈现，纹理清晰
-		icon_tex.custom_minimum_size = Vector2(WaveShop.CARD_ICON - 4.0, WaveShop.CARD_ICON - 4.0)
-		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 贴合框体尺寸（保留 2px 外框余量），统一走 GameStyle.icon_texture_rect 启用线性滤波平滑
+		var icon_tex := GameStyle.icon_texture_rect(
+			icon_path,
+			Vector2(WaveShop.CARD_ICON - 4.0, WaveShop.CARD_ICON - 4.0)
+		)
 		icon_box.add_child(icon_tex)
 
 	# 元素武器底部暖橙红下边框装饰条

@@ -557,6 +557,20 @@ static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
         l.add_theme_color_override("font_outline_color", outline_col)
     return l
 
+## UI 图标工厂：统一设置 EXPAND_IGNORE_SIZE + STRETCH_KEEP_ASPECT_CENTERED，
+## 并显式启用 TEXTURE_FILTER_LINEAR（双线性插值滤波），消除全局 Nearest 缩放时的锯齿像素感。
+static func icon_texture_rect(texture_path: String = "", min_size: Vector2 = Vector2.ZERO) -> TextureRect:
+    var tex_rect := TextureRect.new()
+    if not texture_path.is_empty() and ResourceLoader.exists(texture_path):
+        tex_rect.texture = load(texture_path)
+    tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+    tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    if min_size != Vector2.ZERO:
+        tex_rect.custom_minimum_size = min_size
+    return tex_rect
+
 ## 按钮四态（normal / hover / pressed / disabled）：禁用态在这里统一给灰面，
 ## 每个界面不再自己补 disabled stylebox（漏一处就是一颗看不见的死键）。
 static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,

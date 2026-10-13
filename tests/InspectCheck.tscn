@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://ci0inspectchk01"]
+
+[ext_resource type="Script" path="res://tests/inspect_check.gd" id="1_inspect_chk"]
+
+[node name="InspectCheck" type="Node"]
+script = ExtResource("1_inspect_chk")

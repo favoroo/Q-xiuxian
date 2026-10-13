@@ -57,18 +57,23 @@ func _draw() -> void:
 		var pos := Vector2(l * p, w * 0.6 * sin(float(i) * 2.3 + p * 5.0) * p)
 		draw_circle(pos, 2.0 * (1.0 - p) + 0.8, Color(1.0, 0.75, 0.35, 0.8 * (1.0 - p)))
 
-## 锥面：根部窄口、沿程按 x^0.75 外扩、远缘带火舌凸齿（jag 控制抖动幅度）
+## 锥面：根部窄口、沿程按 x^0.75 外扩、侧缘带火舌凸齿（jag 抖动作用于侧缘宽度，绝不自相交）
 func _cone_poly(l: float, w: float, col: Color, jag: float) -> void:
 	var pts := PackedVector2Array()
-	var steps := 8
+	var steps := 10
+	# 上侧缘：从根部 (0,0) 向末端 (l, -w)
 	for i in steps + 1:
-		var x := l * float(i) / float(steps)
-		var half := w * pow(x / l, 0.75)
-		var j := 1.0 + jag * 0.10 * sin(_anim * 22.0 + float(i) * 2.1)
-		pts.append(Vector2(x * j, -half))
-	for i in steps + 1:
-		var x := l * float(steps - i) / float(steps)
-		var half := w * pow(x / l, 0.75)
-		var j := 1.0 + jag * 0.10 * sin(_anim * 19.0 + float(i) * 1.7 + 2.0)
-		pts.append(Vector2(x * j, half))
-	draw_colored_polygon(pts, col)
+		var t := float(i) / float(steps)
+		var x := l * t
+		var wave := 1.0 + jag * 0.12 * sin(_anim * 22.0 + float(i) * 2.1)
+		var h := w * pow(t, 0.75) * wave
+		pts.append(Vector2(x, -h))
+	# 下侧缘：从末端 (l, w) 回到根部
+	for i in range(steps, 0, -1):
+		var t := float(i) / float(steps)
+		var x := l * t
+		var wave := 1.0 + jag * 0.12 * sin(_anim * 19.0 + float(i) * 1.7 + 2.0)
+		var h := w * pow(t, 0.75) * wave
+		pts.append(Vector2(x, h))
+	if pts.size() >= 3:
+		draw_colored_polygon(pts, col)

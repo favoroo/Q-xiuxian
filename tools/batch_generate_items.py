@@ -57,17 +57,17 @@ def main():
             else:
                 print(f"[Success] {item_id} 生成完成")
 
-        # 压制进 assets/art，等比缩放到 64x64/48x48 保持最佳分辨率与清晰度
+        # 压制进 assets/art，等比缩放到 128x128 保持矢量高清分辨率与细腻描边
         if os.path.exists(png_out):
             im = Image.open(png_out)
-            # 保持 64x64 高清方正，四周留出安全边距
-            im.thumbnail((48, 48), Image.Resampling.LANCZOS)
-            # 贴在 48x48 画布中央
-            canvas = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
-            offset = ((48 - im.size[0]) // 2, (48 - im.size[1]) // 2)
+            # 保持 128x128 高清方正，四周留出安全边距
+            im.thumbnail((120, 120), Image.Resampling.LANCZOS)
+            # 贴在 128x128 画布中央
+            canvas = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+            offset = ((128 - im.size[0]) // 2, (128 - im.size[1]) // 2)
             canvas.paste(im, offset, im)
             canvas.save(target_art, "PNG")
-            print(f"    -> 部署至 {target_art} (48x48)")
+            print(f"    -> 部署至 {target_art} (128x128)")
 
 if __name__ == "__main__":
     main()

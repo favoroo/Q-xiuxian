@@ -292,6 +292,10 @@ func activate() -> void:
 	active_count += 1
 	launch_seq += 1
 	launch_id = launch_seq
+	# 池化节点回收时留在树里停在死亡点，复用出膛是从旧位置瞬移到枪口：
+	# 全局物理插值开着时，不重置的话前一两帧会渲染成「从死亡点滑到枪口」——
+	# 桌面 60fps 恰好对齐 60Hz 物理帧使插值退化为空操作看不出，真机帧率抖动时就闪
+	reset_physics_interpolation()
 	visible = true
 	# 残值清零：lifetime（FloatingWeapon 出膛时是乘 range_mult 的，复用弹丸若带着上一发
 	# 的残值会「出膛即逝」——ProjectileProbe B 段贴脸 100% 落空的元凶）与 acquire_left

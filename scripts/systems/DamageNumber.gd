@@ -94,6 +94,9 @@ static func _ensure_host(scene: Node) -> void:
 	_host = Node2D.new()
 	_host.name = "DamageNumberPool"
 	_host.z_index = 50
+	# 跳字在 _process 里推进（渲染时钟），宿主开着物理插值会与插值中的敌人/弹丸错相位
+	# ——真机帧率抖动时数字悬在偏移位置上乱闪（同 Player 关 WeaponHolder 插值一条坑）
+	_host.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	scene.add_child(_host)
 
 static func _acquire() -> DamageNumber:

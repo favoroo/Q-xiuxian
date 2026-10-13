@@ -99,6 +99,8 @@ static func _try_release_fuse() -> void:
 
 func activate() -> void:
 	_pooled = false
+	# 池化复用是从回收点瞬移到掉落点：不重置物理插值，真机帧率抖动时首帧会渲染旧位置滑行
+	reset_physics_interpolation()
 	visible = true
 	target_player = null
 	current_speed = -40.0
