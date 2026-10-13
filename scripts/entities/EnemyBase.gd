@@ -55,6 +55,11 @@ extends CharacterBody2D
 @export var heal_amount: float = 0.0       ## 每跳治疗量（WaveSpawner 按回合注入，见 BalanceWave.healer_amount）
 @export var always_flee: bool = false      ## true：金蟾系——恒背离玩家逃窜（土豆兄弟 Looter 对应位）
 @export var stone_reward: int = 0          ## >0：击杀额外掉金币（WaveSpawner 按回合注入，见 BalanceWave.looter_stone_reward）
+@export var poison_interval: float = 0.0   ## >0：每隔 N 秒朝玩家所在地投一片毒潭（毒妖系）
+@export var poison_radius: float = 0.0     ## 毒潭半径：预警圈 = 判定圈（同源，画多大判多大）
+@export var poison_windup: float = 0.6     ## 投毒预警时长：落点先亮圈，圈填满 = 毒潭落下
+@export var poison_damage: float = 4.0     ## 毒潭每跳伤害（跳的节奏由玩家受击无敌帧钉住）
+@export var poison_duration: float = 5.0   ## 毒潭持续时长（秒）
 
 # ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
@@ -107,6 +112,13 @@ var _aura_speed_mult: float = 1.0  ## 被鼓妖光环覆盖时的移速加成
 var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
+
+# 投毒支路运行时状态（毒妖系；预警圈 = 判定圈同源，真话源在本类）
+var _poison_timer: float = 0.0        ## 投毒冷却计时
+var _poison_windup_t: float = -1.0    ## >=0 表示投毒预警中
+var _poison_target: Vector2 = Vector2.ZERO  ## 锁定的落点（预警期间不追踪玩家，否则 0.6s 躲不开）
+var _poison_ring: AoeTelegraph = null ## 落点预警圈
+var _poison_pool_scene: PackedScene = preload("res://scenes/entities/PoisonPool.tscn")
 
 # 精英变异（2026-10-12，仿土豆兄弟 Elite Mutation：过血线一次性切换行为参数）
 var _eid: String = ""              ## 解析后的敌种标识（_ready 落定，变异分发的依据）
@@ -233,6 +245,7 @@ func activate() -> void:
 	_teleport_timer = teleport_interval
 	_elite_slam_timer = slam_interval
 	_heal_timer = heal_interval
+	_poison_timer = poison_interval
 
 	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
 	_cull_timer = float(get_instance_id() % 6) * (CULL_INTERVAL / 6.0)
@@ -247,6 +260,9 @@ func _capture_base_stats() -> void:
 		"bolt_count": bolt_count, "bolt_interval": bolt_interval, "preferred_range": preferred_range,
 		"slam_interval": slam_interval, "slam_radius": slam_radius,
 		"slam_windup": slam_windup, "slam_dmg_mult": slam_dmg_mult,
+		"poison_interval": poison_interval, "poison_radius": poison_radius,
+		"poison_windup": poison_windup, "poison_damage": poison_damage,
+		"poison_duration": poison_duration,
 		"root_scale": scale, "root_modulate": modulate,
 	}
 
@@ -272,6 +288,11 @@ func reset_for_reuse() -> void:
 	slam_radius = _base_stats["slam_radius"]
 	slam_windup = _base_stats["slam_windup"]
 	slam_dmg_mult = _base_stats["slam_dmg_mult"]
+	poison_interval = _base_stats["poison_interval"]
+	poison_radius = _base_stats["poison_radius"]
+	poison_windup = _base_stats["poison_windup"]
+	poison_damage = _base_stats["poison_damage"]
+	poison_duration = _base_stats["poison_duration"]
 	scale = _base_stats["root_scale"]
 	modulate = _base_stats["root_modulate"]
 	# 2) 战斗运行时状态清零
@@ -304,6 +325,9 @@ func reset_for_reuse() -> void:
 	_focus_hit_count = 0
 	_mutated = false
 	_elite_slam_windup_t = -1.0
+	_poison_timer = 0.0
+	_poison_windup_t = -1.0
+	_poison_target = Vector2.ZERO
 	burn_timer = 0.0
 	burn_dps = 0.0
 	_burn_tick = 0.0
@@ -335,6 +359,9 @@ func reset_for_reuse() -> void:
 	if is_instance_valid(_elite_slam_ring):
 		_elite_slam_ring.queue_free()
 	_elite_slam_ring = null
+	if is_instance_valid(_poison_ring):
+		_poison_ring.queue_free()
+	_poison_ring = null
 	# 4) 视觉/物理节点归位（死亡塌缩 tween 会把 scale 收到 0、modulate 收到透明，必须还原）
 	visible = true
 	anim_sprite.scale = anim_base_scale
@@ -514,10 +541,16 @@ func _rebuild_anim_name_cache() -> void:
 	_anim_has_run = anim_sprite != null and anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation(_anim_run)
 
 ## 挤压与拉伸形变回弹（Squash & Stretch）——零 Tween 分配版：记录起点与时长，
-## 回弹插值在 _tick_hit_fx 逐帧做（TRANS_BACK EASE_OUT 同款过冲曲线）
+## 回弹插值在 _tick_hit_fx 逐帧做（TRANS_BACK EASE_OUT 同款过冲曲线）。
+## 连续命中时平滑从当前形变过渡，避免起点硬跳打断回弹视觉。
 func play_squash(target: Vector2, duration: float = 0.16) -> void:
-	juice_scale = target
-	_squash_from = target
+	if _squash_t > 0.0:
+		# 已经在回弹形变中：从当前实时视觉姿态平滑承接，向 target 靠近
+		_squash_from = juice_scale
+		juice_scale = juice_scale.lerp(target, 0.7)
+	else:
+		juice_scale = target
+		_squash_from = target
 	_squash_t = maxf(duration, 0.001)
 	_squash_dur = _squash_t
 
@@ -886,16 +919,38 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_heal_timer = heal_interval
 			_pulse_heal()
 
+	# 毒妖系：周期性朝玩家所在地投一片毒潭（持续伤害区域，进入即按周期掉血）
+	if poison_interval > 0.0 and _fuse < 0.0:
+		if _poison_windup_t >= 0.0:
+			# 预警阶段：原地不动，落点圈填满 = 毒潭落下。
+			# 落点在起手那一帧锁死、之后不追踪玩家 —— 0.6s 还追踪的话玩家永远躲不开（同短咬口径）
+			_poison_windup_t -= delta
+			_pp_target_vel = Vector2.ZERO
+			if _poison_ring != null:
+				_poison_ring.progress = 1.0 - _poison_windup_t / maxf(poison_windup, 0.001)
+			if _poison_windup_t <= 0.0:
+				_drop_poison()
+		else:
+			_poison_timer -= delta
+			if _poison_timer <= 0.0 and dist_sq < poison_radius * poison_radius * 6.25:
+				_poison_timer = poison_interval
+				_poison_target = player.global_position
+				_start_poison_cast()
+
 	return false
 
 ## 速度解算：冲刺/收势锁定段由状态机逐帧写死（不交给插值、不被硬直夺走）；
-## 硬直期间位移纯由击退主导并快速衰减；平时吸附插值追击
+## 受击卡肉定格期完全静止且保持击退冲量；硬直期间位移纯由击退主导并快速衰减；平时吸附插值追击
 func _resolve_velocity(delta: float) -> void:
 	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
 	if charge_locked:
 		# velocity 已由状态机逐帧写死 ⇒ 既不交给吸附插值去改，
 		# 也不被受击硬直夺走（commit-through，与旧写法「硬直期间冲刺照冲」同一条口径）
 		pass
+	elif _hit_freeze_timer > 0.0:
+		# 受击卡肉定格（空洞骑士/死亡细胞风格）：冻结位移吸附在刀尖，
+		# 期间速度归零且不衰减 knockback_velocity，定格计时结束后才释放并衰减击退冲量
+		velocity = Vector2.ZERO
 	elif _pp_stun and _bite_active <= 0.0:
 		velocity = knockback_velocity
 		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
@@ -1132,21 +1187,28 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-	# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
-	# 命中瞬间拉满 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
-	# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）
-	if hit_flash_mat != null:
-		if is_crit:
-			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
-			_flash_t = 0.12
-			_flash_down_dur = 0.12
-			_flash_swap_t = 0.02
-		else:
-			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
-			_flash_t = 0.11
-			_flash_down_dur = 0.11
-			_flash_swap_t = 0.0
-		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
+		# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
+		# 命中瞬间设置 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
+		# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）；
+		# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满 1.0，避免持续集火下糊成全白剪影；
+		# 处于集火窗内重叠命中时峰值适度收束到 0.70，透出纹理层次。
+		if hit_flash_mat != null:
+			var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
+			if is_fresh_flash:
+				var peak_flash: float = 1.0
+				if not is_crit and _focus_hit_count > 1:
+					peak_flash = 0.70
+				if is_crit:
+					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
+					_flash_t = 0.12
+					_flash_down_dur = 0.12
+					_flash_swap_t = 0.02
+				else:
+					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
+					_flash_t = 0.11
+					_flash_down_dur = 0.11
+					_flash_swap_t = 0.0
+				hit_flash_mat.set_shader_parameter("flash_modifier", peak_flash)
 
 	if lethal:
 		# 致命一刀不做任何位移：knockback_velocity 只作死亡镜头反馈的方向读数，
@@ -1334,13 +1396,27 @@ func _launch_bite(dir: Vector2) -> void:
 
 ## 画短咬预告线：长度 = 这一跳真跳得出去的位移（bite_hit_radius 是终点附近的咬合半径，
 ## 不另画圈 —— 判定就落在看得见这条线的落点上，"特效范围 = 判定范围"）
+## 旧写法是 5px 等宽实心亮黄线，贴脸时读起来是一根插在怪身上的"棍子"，看不出方向预告。
+## 本构建的 Line2D 无虚线属性，改走 width_curve + gradient 的半透明风痕楔形：
+## 根部（怪脚下）收细收淡、朝落点加宽加亮、末端圆帽亮点 —— 玩家要读的就是嘴落在哪。
+## 峰值不透明度压在 ~0.5，同屏几十只也不糊战场（稀缺反馈预算，与长扑宽带同一纪律）。
 func _show_bite_warning(dir: Vector2) -> void:
 	_clear_bite_warning()
 	if dir.length_squared() < 0.01:
 		return
 	_bite_warning_line = Line2D.new()
-	_bite_warning_line.width = 5.0
-	_bite_warning_line.default_color = Color(1.0, 0.72, 0.15, 0.8)
+	_bite_warning_line.width = 7.0
+	var wcurve := Curve.new()
+	wcurve.add_point(Vector2(0.0, 0.22))
+	wcurve.add_point(Vector2(1.0, 1.0))
+	_bite_warning_line.width_curve = wcurve
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 1.0])
+	grad.colors = PackedColorArray([Color(1, 1, 1, 0.12), Color(1, 1, 1, 1.0)])
+	_bite_warning_line.gradient = grad
+	_bite_warning_line.default_color = Color(1.0, 0.72, 0.15, 0.5)
+	_bite_warning_line.begin_cap_mode = Line2D.LINE_CAP_NONE
+	_bite_warning_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	add_child(_bite_warning_line)
 	_bite_warning_line.add_point(Vector2.ZERO)
 	_bite_warning_line.add_point(dir * (bite_duration * move_speed * bite_speed_mul))
@@ -1535,6 +1611,48 @@ func receive_heal(amount: float) -> void:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+%d" % int(amount))
 	play_squash(Vector2(1.1, 0.9), 0.14)
 
+# ---------------- 行为支路：投毒（持续伤害区域） ----------------
+
+## 起手投毒：锁定落点、亮预警圈、发蓄力形变与音效。
+## 预警圈（AoeTelegraph）半径 = poison_radius 本身 ⇒ 圈画多大，落下的毒潭就判多大。
+func _start_poison_cast() -> void:
+	_poison_windup_t = poison_windup
+	if _poison_ring == null:
+		_poison_ring = AoeTelegraph.new()
+		_poison_ring.radius = poison_radius
+		add_child(_poison_ring)
+	_poison_ring.progress = 0.0
+	_poison_ring.visible = true
+	play_squash(Vector2(0.86, 1.18), poison_windup)
+	AudioManager.play_sfx("enemy_fuse", 0.55)
+
+## 落潭：预警结束，在锁定落点铺一片毒潭（走对象池，见 PoisonPool）。
+## 伤害按回合 × 危险度缩放（与接触伤害同一条尺子：WaveSpawner 在 _scale_to_wave 里注入）。
+func _drop_poison() -> void:
+	_poison_windup_t = -1.0
+	if _poison_ring != null:
+		_poison_ring.visible = false
+	if dying or get_parent() == null:
+		return
+	var pool_node: Node = _poison_pool_scene.instantiate()
+	if pool_node == null:
+		return
+	var pool := pool_node as PoisonPool
+	pool.global_position = _poison_target
+	pool.damage = maxf(1.0, poison_damage)
+	pool.duration = poison_duration
+	get_parent().add_child(pool)
+	pool.activate()
+	JuiceEffect.spawn_shockwave(get_parent(), _poison_target, poison_radius, GameStyle.POISON, 0.28)
+	AudioManager.play_sfx("enemy_poison", 1.0, GameManager.rng.randf_range(0.92, 1.08))
+	play_squash(Vector2(1.2, 0.8), 0.16)
+
+## 清理投毒预警圈（死亡 / 池化复用前调用）
+func _clear_poison_ring() -> void:
+	if _poison_ring != null and is_instance_valid(_poison_ring):
+		_poison_ring.queue_free()
+	_poison_ring = null
+
 # ---------------- 精英变异（Mutation） ----------------
 
 func _enter_mutation() -> void:
@@ -1596,6 +1714,7 @@ func _die() -> void:
 	_clear_charge_warning()
 	_clear_bite_warning()
 	_clear_explode_ring()
+	_clear_poison_ring()
 	if _elite_slam_ring != null and is_instance_valid(_elite_slam_ring):
 		_elite_slam_ring.queue_free()
 	_elite_slam_ring = null
@@ -1671,9 +1790,9 @@ func _die() -> void:
 		if is_elite:
 			gem.exp_value = GameBalance.ELITE_GEM_EXP
 		else:
-			# 碎晶档（2026-10-13 经济优化）：普通怪按回合概率掉最低面额小水晶 ——
-			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，稀释后期金币通胀。
-			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎晶率见 BalanceEconomy。
+			# 碎金档（2026-10-13 体验重塑）：普通怪按回合概率掉基础碎金/金砂片 ——
+			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，符合小怪掉零钱直觉且平抑后期通胀。
+			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎金率见 BalanceEconomy。
 			if GameManager.rng.randf() < GameBalance.gem_shard_chance(GameManager.wave_number):
 				gem.is_shard = true
 				gem.stone_value = GameBalance.GEM_SHARD_STONE_VALUE

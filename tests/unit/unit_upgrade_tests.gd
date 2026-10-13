@@ -20,7 +20,7 @@ func _test_upgrade_table() -> void:
 
 	# 逐项落地：加点确实改到了对应属性，且幅度就是表里的数
 	var deltas := {
-		"atk_up": 0.10, "armor_up": 2.0, "speed_up": 0.08, "pickup_up": 0.4,
+		"atk_up": 0.08, "armor_up": 2.0, "speed_up": 0.08, "pickup_up": 0.4,
 		"regen_up": 1.2, "critdmg_up": 0.25, "lifesteal_up": 0.04, "luck_up": 6.0,
 		"harvest_up": 8.0, "range_up": 0.12,
 	}

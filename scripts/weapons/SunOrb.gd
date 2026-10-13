@@ -141,7 +141,7 @@ func _try_damage(area: Area2D) -> void:
 	if enemy and enemy.has_method("take_damage"):
 		var id: int = enemy.get_instance_id()
 		var now: int = Time.get_ticks_msec()
-		var eff_cd: float = maxf(0.08, hit_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult)
+		var eff_cd: float = maxf(0.08, hit_cooldown * GameManager.get_effective_attack_speed_mult())
 		var cd_ms: int = maxi(1, int(round(eff_cd * 1000.0)))
 		if _hit_ms.has(id) and now - int(_hit_ms[id]) < cd_ms:
 			return
@@ -156,8 +156,8 @@ func _try_damage(area: Area2D) -> void:
 			_refresh_dmg_cache()
 		var total_base := base_damage + _cached_stat_bonus
 		var is_crit: bool = GameManager.roll_crit()
-		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
+		var crit_m := GameManager.get_crit_mult()
+		var dmg = total_base * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)

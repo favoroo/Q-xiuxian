@@ -34,6 +34,30 @@ static func hp_is_low(cur: float, max_v: float) -> bool:
 static func hp_is_full(cur: float, max_v: float) -> bool:
 	return max_v > 0.0 and cur >= max_v - 0.5
 
+# ---------------- 软顶递减（对标土豆兄弟攻速递减收益：过膝点后每份投入只兑现一半） ----------------
+## 软顶不在 apply 时夹（保住 StatSystem apply/revert 对称性，卖道具能精确回退），
+## 统一在读出口折算：伤害结算走 GameManager.get_weapon_damage_mult()，
+## 面板与悟道卡面预读走 StatBreakdown（两边共用这一份，卡面承诺与到账不分家）。
+
+const WDM_SOFT_KNEE := 2.0    ## 武器伤害乘区膝点：raw ≤ 2.0 全额兑现
+const WDM_SOFT_RATIO := 0.5   ## 超过膝点的部分按 50% 折算
+const REGEN_SOFT_KNEE := 8.0  ## 生命回复膝点（/秒）
+const REGEN_SOFT_RATIO := 0.5
+
+## 通用软顶：膝点内原值，超出部分打折
+static func soft_diminish(v: float, knee: float, ratio: float) -> float:
+	if v <= knee:
+		return v
+	return knee + (v - knee) * ratio
+
+## 武器伤害乘区有效值（raw 是 GameManager.weapon_damage_mult 的累加原值）
+static func effective_weapon_damage_mult(raw: float) -> float:
+	return soft_diminish(raw, WDM_SOFT_KNEE, WDM_SOFT_RATIO)
+
+## 生命回复有效值（入参是加点层+羁绊层合计）
+static func effective_hp_regen(raw: float) -> float:
+	return soft_diminish(raw, REGEN_SOFT_KNEE, REGEN_SOFT_RATIO)
+
 # ---------------- 暴击 / 闪避：带上限的两条读数 ----------------
 ## 这两条从 GameManager 的方法里抽出来（2026-10-12），因为悟道卡面要在玩家按下
 ## 「确认选择」之前先读出「加后是多少」：那份预读走的是同一批算式，抄第二份就会漂
@@ -97,12 +121,12 @@ const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）�
 const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
 const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把敌人甩出半屏）
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
-const KILL_HITSTOP_SCALE := 0.10         ## 击杀微顿帧时间倍率
+const KILL_HITSTOP_SCALE := 0.20         ## 击杀微顿帧时间倍率（清脆微顿，高于安全地板 0.12）
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
-const CRIT_TRAUMA_NORMAL := 0.12         ## 普通暴击追加创伤（2026-10-11：暴击从「只冲不摇」升级为可见摇晃；走每秒预算，最坏稳态不变）
-const CRIT_TRAUMA_ELITE := 0.28          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
+const CRIT_TRAUMA_NORMAL := 0.20         ## 普通暴击追加创伤（从 0.12 上调：平方后产生可见轻颤，稳态仍严格受每秒预算保护）
+const CRIT_TRAUMA_ELITE := 0.32          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
 const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」
-const CRIT_KILL_HITSTOP_SCALE := 0.06    ## 暴击击杀顿帧时间倍率
+const CRIT_KILL_HITSTOP_SCALE := 0.12    ## 暴击击杀顿帧时间倍率（扎实顿挫，刚好落于安全地板）
 const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 

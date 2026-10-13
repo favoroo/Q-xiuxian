@@ -7,17 +7,13 @@ extends Control
 ##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
 ##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
 ##   ③ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
-## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择道统（paused 链不中断）。
+## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
 
 signal settings_requested
 signal career_requested
 signal manual_requested
 
 const DANGER_NAMES := ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
-
-## 四角括号是「贴着屏角」的装饰：坐标跟着这一屏的实得尺寸走
-const BRACKET_LEN := 48.0
-const BRACKET_INSET := 18.0
 
 ## 核心矩阵基准尺寸（960×540 下）。`*_BASE` 是「卡内排版」的起点档：
 ## 卡片按屏现算的高度高于基准时，多出来的那一截由 `hero_metrics()` / `small_metrics()`
@@ -55,14 +51,13 @@ const TOP_BAR_INSET_TOP := 12.0        # 顶栏带离屏顶
 const TOP_BAR_H := 40.0                # 顶栏带高（徽章 36 + 余量）
 const CONTENT_TOP_GAP := 14.0          # 顶栏底 → 矩阵可落位区顶
 ## 右下角那颗检查更新按钮的收边位（2026-10-10 用户：底部通宽横幅「不用搞这么长，保留右下角这一块就可以了」）。
-## 底距 26 是让按钮连 4px 硬影都不盖住屏底那条装饰括号（括号在 BRACKET_INSET=18 处）。
+## 底距 26 是按钮与屏底之间的视觉留白（连同 4px 硬影也收在内）。
 const CORNER_MARGIN_BOTTOM := 26.0
 const CORNER_MARGIN_RIGHT := 34.0
 const FOOT_BAND_H := CORNER_MARGIN_BOTTOM + CORNER_BTN_H   # 矩阵与屏底之间为按钮预留的收边带
 const BLOCK_GAP_MAX := 32.0            # 矩阵上/下气口上界，再空就让主块长高
 const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把空白搬进卡里
 
-var _brackets: Array[Line2D] = []
 var _top_bar: HBoxContainer
 var _matrix_host: CenterContainer
 
@@ -106,7 +101,6 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_background()
-	_build_decor()
 	_build_top_bar()
 	_build_center_matrix()
 	_layout_responsive()
@@ -139,23 +133,6 @@ func _build_background() -> void:
 	vig_mat.set_shader_parameter("vignette_opacity", 0.85)
 	vig.material = vig_mat
 	add_child(vig)
-
-func _build_decor() -> void:
-	var decor := Control.new()
-	decor.set_anchors_preset(Control.PRESET_FULL_RECT)
-	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(decor)
-
-	# 四角青玉括号
-	for i in range(4):
-		var bracket := Line2D.new()
-		bracket.width = 4.0
-		bracket.default_color = GameStyle.with_alpha(GameStyle.JADE, 0.45)
-		bracket.joint_mode = Line2D.LINE_JOINT_ROUND
-		bracket.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		bracket.end_cap_mode = Line2D.LINE_CAP_ROUND
-		decor.add_child(bracket)
-		_brackets.append(bracket)
 
 ## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
@@ -502,10 +479,7 @@ func _layout_responsive() -> void:
 		else:
 			vp = Vector2(960, 540)
 
-	# 1. 四角括号贴角重排
-	_layout_brackets(vp)
-
-	# 2. 竖向两段落位：矩阵从顶栏下方起算，检查更新按钮贴右下角。
+	# 1. 竖向两段落位：矩阵从顶栏下方起算，检查更新按钮贴右下角。
 	#    可落位的富余先摊成上下气口（≤BLOCK_GAP_MAX），气口顶到上限还有富余才让主块长高
 	#    （≤HERO_H_MAX）。960×540 这一档：可落位 422 → 气口 32、主块 358（撤标题前 300）。
 	var region_top := TOP_BAR_INSET_TOP + TOP_BAR_H + CONTENT_TOP_GAP
@@ -523,7 +497,7 @@ func _layout_responsive() -> void:
 		_update_host.offset_bottom = -CORNER_MARGIN_BOTTOM
 		_update_host.offset_right = -CORNER_MARGIN_RIGHT
 
-	# 3. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
+	# 2. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
 	var base_total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
 	var avail_w := maxf(640.0, vp.x - 44.0)
 	var f := clampf(avail_w / base_total_w, 0.74, 1.15)
@@ -604,26 +578,6 @@ func _apply_small_metrics(small_h: float) -> void:
 		if sb != null:
 			sb.content_margin_top = float(m["pad_y"])
 			sb.content_margin_bottom = float(m["pad_y"])
-
-func _layout_brackets(vp: Vector2) -> void:
-	var w := vp.x
-	var h := vp.y
-	if w <= 0.0 or h <= 0.0 or _brackets.is_empty():
-		return
-	var corners := [
-		Vector2(BRACKET_INSET, BRACKET_INSET), Vector2(1, 1),
-		Vector2(w - BRACKET_INSET, BRACKET_INSET), Vector2(-1, 1),
-		Vector2(w - BRACKET_INSET, h - BRACKET_INSET), Vector2(-1, -1),
-		Vector2(BRACKET_INSET, h - BRACKET_INSET), Vector2(1, -1),
-	]
-	for i in range(_brackets.size()):
-		var origin: Vector2 = corners[i * 2]
-		var sgn: Vector2 = corners[i * 2 + 1]
-		_brackets[i].points = PackedVector2Array([
-			origin + Vector2(-sgn.x * BRACKET_LEN, 0),
-			origin,
-			origin + Vector2(0, -sgn.y * BRACKET_LEN),
-		])
 
 # ---------------- 状态刷新 ----------------
 

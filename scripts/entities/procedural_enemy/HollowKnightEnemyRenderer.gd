@@ -108,6 +108,8 @@ func _draw() -> void:
 			_draw_xueyong()
 		"guyao":
 			_draw_guyao()
+		"duyao":
+			_draw_duyao()
 		"yingmei":
 			_draw_yingmei()
 		"zhumu":
@@ -409,7 +411,63 @@ func _draw_xueyong() -> void:
 	# 朱砂封灵符线
 	draw_line(center + Vector2(-rx * 0.6, -3), center + Vector2(rx * 0.5, 5), Color(0.85, 0.15, 0.2), 1.2, true)
 
-## 7. 鼓妖：白骨摄魂鼓 (律动悬浮敲击)
+## 7. 毒妖：腐沼毒蟾 (浮沉 + 背负腐毒囊)
+## 特殊状态（special_state > 0）时毒囊胀大、囊内磷火转亮 —— 与投毒预警同源可读：
+## 玩家看到它「鼓起来」就知道脚下要出毒潭了（预警圈负责精确落点，这里负责身份预告）。
+func _draw_duyao() -> void:
+	var float_y := sin(_time * 2.4) * 2.0
+	var casting: bool = special_state > 0.0
+	var sac_pulse: float = 1.0 + (0.35 if casting else 0.0) * absf(sin(_time * 9.0))
+
+	# 腐沼地影（比鼓妖更湿更扁）
+	draw_filled_ellipse(Vector2(0, 16), 15.5, 4.0, Color(0.04, 0.07, 0.05, 0.45))
+
+	var body_c := Vector2(0, float_y)
+
+	# 厚皮躯体：矮壮梨形，前宽后窄
+	var body_pts := PackedVector2Array([
+		body_c + Vector2(-9, -8),
+		body_c + Vector2(9, -8),
+		body_c + Vector2(12, 4),
+		body_c + Vector2(7, 12),
+		body_c + Vector2(-8, 11),
+		body_c + Vector2(-12, 0)
+	])
+	draw_stroked_polygon(body_pts, config.col_primary, config.col_accent, 1.8)
+
+	# 苔痕皮瘤（背上一串）
+	for i in range(3):
+		var bx: float = -6.0 + float(i) * 6.0
+		draw_circle(body_c + Vector2(bx, -7.5), 1.6, config.col_accent)
+
+	# 脓黄斑块（侧腹两团）
+	draw_filled_ellipse(body_c + Vector2(-7.5, 2), 3.0, 2.2, config.col_secondary)
+	draw_filled_ellipse(body_c + Vector2(7.5, 2), 3.0, 2.2, config.col_secondary)
+
+	# 背负腐毒囊：鼓胀囊体 + 囊内核。蓄力时整囊胀大，玩家一眼读出「要投毒了」
+	var sac_c := body_c + Vector2(-2.0, -14.0)
+	var sac_r: float = 7.5 * sac_pulse
+	draw_filled_ellipse(sac_c, sac_r, sac_r * 0.92, config.col_secondary)
+	draw_arc(sac_c, sac_r, 0, TAU, 24, config.col_accent, 2.0, true)
+	var core_alpha: float = 0.5 + (0.45 if casting else 0.0)
+	draw_soft_glow(sac_c, sac_r * 0.8, config.col_glow * Color(1, 1, 1, core_alpha), 2)
+	draw_circle(sac_c, sac_r * 0.38, config.col_glow)
+	# 囊体与躯体之间的毒液导管
+	draw_line(sac_c + Vector2(3.0, sac_r * 0.7), body_c + Vector2(4.0, -7.0), config.col_secondary, 2.0, true)
+
+	# 竖瞳（毒磷火色）：蓄力时亮度提一档
+	var eye_glow: Color = config.col_glow if not casting else config.col_glow.lightened(0.5)
+	draw_sharp_eye(body_c + Vector2(-4.0, -3.0), 1.5, 3.2, eye_glow, Color.WHITE)
+	draw_sharp_eye(body_c + Vector2(4.0, -3.0), 1.5, 3.2, eye_glow, Color.WHITE)
+
+	# 口缝与垂涎（滴落感用相位错开的两颗）
+	var mouth_y: float = body_c.y + 5.0
+	draw_line(body_c + Vector2(-4.0, mouth_y), body_c + Vector2(4.0, mouth_y), config.col_secondary, 1.6, true)
+	var drip := fposmod(_time * 1.6, 1.0)
+	draw_circle(body_c + Vector2(-3.0, mouth_y + drip * 6.0), 1.2, config.col_glow)
+	draw_circle(body_c + Vector2(3.0, mouth_y + fposmod(_time * 1.6 + 0.5, 1.0) * 6.0), 1.0, config.col_glow)
+
+## 8. 鼓妖：白骨摄魂鼓 (律动悬浮敲击)
 func _draw_guyao() -> void:
 	var float_y := sin(_time * 2.6) * 2.2
 	var drum_center := Vector2(0, float_y)
@@ -445,7 +503,7 @@ func _draw_guyao() -> void:
 	draw_line(mallet_r, mallet_r + Vector2(6, -6), config.col_secondary, 2.2, true)
 	draw_circle(mallet_r, 2.4, config.col_secondary)
 
-## 8. 影魅：幽冥影煞 (流体暗影飘掠)
+## 9. 影魅：幽冥影煞 (流体暗影飘掠)
 func _draw_yingmei() -> void:
 	var float_y := sin(_time * 3.5) * 1.8
 	var wave := sin(_time * 5.5) * 2.5
@@ -483,7 +541,7 @@ func _draw_yingmei() -> void:
 	draw_sharp_eye(head_pos + Vector2(-2.5, 0), 2.8, 1.5, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(2.5, 0), 2.8, 1.5, config.col_glow, Color.WHITE)
 
-## 9. 百目妖：千目邪母 (多目微眨沉重悬浮)
+## 10. 百目妖：千目邪母 (多目微眨沉重悬浮)
 func _draw_zhumu() -> void:
 	var float_y := sin(_time * 1.8) * 2.2
 	var center := Vector2(0, float_y)
@@ -524,7 +582,7 @@ func _draw_zhumu() -> void:
 			draw_circle(ep, 1.6, config.col_void)
 			draw_circle(ep, 0.8, config.col_glow)
 
-## 10. 雷兽 / 赤雷兽 (低伏巡游与雷煞暴突)
+## 11. 雷兽 / 赤雷兽 (低伏巡游与雷煞暴突)
 func _draw_leibeast(is_elite: bool) -> void:
 	var float_y := sin(_time * 3.6) * 1.5
 	var crouch := special_state * 2.0 # 蓄力下蹲形变
@@ -582,7 +640,7 @@ func _draw_leibeast(is_elite: bool) -> void:
 	# 暴虐电弧双眸
 	draw_sharp_eye(head_pos + Vector2(0, -1), 3.0, 1.4, config.col_glow, Color.WHITE)
 
-## 11. 铁甲魔傀（精英）：幽冥玄铁巨傀 (重力悬浮磁场)
+## 12. 铁甲魔傀（精英）：幽冥玄铁巨傀 (重力悬浮磁场)
 func _draw_golem() -> void:
 	var float_y := sin(_time * 2.0) * 1.8
 	var center := Vector2(0, -2 + float_y)
@@ -633,7 +691,7 @@ func _draw_golem() -> void:
 	draw_stroked_polygon(head_pts, config.col_primary, config.col_secondary, 2.0)
 	draw_line(center + Vector2(-4, -16), center + Vector2(4, -16), config.col_glow, 1.8, true)
 
-## 12. 剑煞邪修（精英）：万剑煞宗残魂 (三剑齐御悬浮)
+## 13. 剑煞邪修（精英）：万剑煞宗残魂 (三剑齐御悬浮)
 func _draw_jiansha_elite() -> void:
 	var float_y := sin(_time * 2.8) * 2.2
 	var center := Vector2(0, float_y)
@@ -682,7 +740,7 @@ func _draw_jiansha_elite() -> void:
 	draw_sharp_eye(head_pos + Vector2(-3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 
-## 13. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
+## 14. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
 func _draw_boss(final_boss: bool) -> void:
 	var float_y := sin(_time * 2.2) * 2.8
 	var center := Vector2(0, -4 + float_y)

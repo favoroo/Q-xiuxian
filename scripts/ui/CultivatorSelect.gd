@@ -92,7 +92,7 @@ func _build_ui() -> void:
 	header_row.add_child(title_box)
 
 	_title_label = Label.new()
-	_title_label.text = "选 择 道 统"
+	_title_label.text = "选 择 角 色"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_box.add_child(_title_label)
 	GameStyle.label(_title_label, 20, GameStyle.CHALK, 0, GameStyle.INK, true)

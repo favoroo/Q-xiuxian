@@ -47,11 +47,11 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 			"crit_rate":
 				gm.crit_rate = minf(gm.crit_rate + v, gm.CRIT_RATE_CAP)
 			"crit_mult":
-				gm.crit_mult += v
+				gm.crit_mult = minf(gm.crit_mult + v, gm.CRIT_MULT_CAP)
 			"dodge":
 				gm.dodge = minf(gm.dodge + v, gm.DODGE_CAP + gm.dodge_cap_bonus)
 			"lifesteal":
-				gm.lifesteal += v
+				gm.lifesteal = minf(gm.lifesteal + v, gm.LIFESTEAL_CAP)
 			"luck":
 				gm.luck += v
 			"harvest":
@@ -68,11 +68,12 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 			"knockback_mult":
 				gm.knockback_mult += v
 			"elite_damage":
-				gm.elite_damage += v
+				gm.elite_damage = minf(gm.elite_damage + v, gm.ELITE_DAMAGE_CAP)
 			"free_rerolls":
 				gm.free_rerolls += int(v)
 			"shop_price_mul":
-				gm.shop_price_mult *= v
+				# 道具折扣腿带地板（对标土豆 Coupon 叠顶）：角色价格乘区在别处结算、不夹
+				gm.shop_price_mult = maxf(gm.SHOP_PRICE_FLOOR, gm.shop_price_mult * v)
 			"bonus_pierce":
 				gm.stat_bonus_pierce += int(v)
 				gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
@@ -94,12 +95,12 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.pet_slots_bonus += int(v)
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
-					gm.element_damage[e] = float(gm.element_damage.get(e, 0.0)) + v
+					gm.element_damage[e] = minf(float(gm.element_damage.get(e, 0.0)) + v, gm.ELEMENT_DAMAGE_CAP)
 			_:
 				# element_damage_metal / _wood / _water / _fire / _earth：单元素加成
 				if key.begins_with("element_damage_") and key.trim_prefix("element_damage_") in WeaponData.ELEMENTS:
 					var elem: String = key.trim_prefix("element_damage_")
-					gm.element_damage[elem] = float(gm.element_damage.get(elem, 0.0)) + v
+					gm.element_damage[elem] = minf(float(gm.element_damage.get(elem, 0.0)) + v, gm.ELEMENT_DAMAGE_CAP)
 				else:
 					push_warning("apply_stat_fields: 未知加点字段 %s（来自 %s）" % [key, source])
 
@@ -143,11 +144,11 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 			"crit_rate":
 				gm.crit_rate = undo_capped_add(gm.crit_rate, v, gm.CRIT_RATE_CAP)
 			"crit_mult":
-				gm.crit_mult -= v
+				gm.crit_mult = undo_capped_add(gm.crit_mult, v, gm.CRIT_MULT_CAP)
 			"dodge":
 				gm.dodge = undo_capped_add(gm.dodge, v, gm.DODGE_CAP + gm.dodge_cap_bonus)
 			"lifesteal":
-				gm.lifesteal -= v
+				gm.lifesteal = undo_capped_add(gm.lifesteal, v, gm.LIFESTEAL_CAP)
 			"luck":
 				gm.luck -= v
 			"harvest":
@@ -165,12 +166,12 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 			"knockback_mult":
 				gm.knockback_mult -= v
 			"elite_damage":
-				gm.elite_damage -= v
+				gm.elite_damage = undo_capped_add(gm.elite_damage, v, gm.ELITE_DAMAGE_CAP)
 			"free_rerolls":
 				gm.free_rerolls -= int(v)
 			"shop_price_mul":
 				if v > 0.0:
-					gm.shop_price_mult /= v
+					gm.shop_price_mult = undo_mult(gm.shop_price_mult, v, gm.SHOP_PRICE_FLOOR)
 			"bonus_pierce":
 				gm.stat_bonus_pierce -= int(v)
 				gm.bonus_pierce = gm.stat_bonus_pierce + gm.synergy_bonus_pierce
@@ -192,12 +193,12 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 				gm.pet_slots_bonus -= int(v)
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
-					gm.element_damage[e] = float(gm.element_damage.get(e, 0.0)) - v
+					gm.element_damage[e] = undo_capped_add(float(gm.element_damage.get(e, 0.0)), v, gm.ELEMENT_DAMAGE_CAP)
 			_:
 				# element_damage_metal / _wood / _water / _fire / _earth：单元素加成
 				if key.begins_with("element_damage_") and key.trim_prefix("element_damage_") in WeaponData.ELEMENTS:
 					var elem: String = key.trim_prefix("element_damage_")
-					gm.element_damage[elem] = float(gm.element_damage.get(elem, 0.0)) - v
+					gm.element_damage[elem] = undo_capped_add(float(gm.element_damage.get(elem, 0.0)), v, gm.ELEMENT_DAMAGE_CAP)
 				else:
 					push_warning("revert_stat_fields: 未知字段 %s（来自 %s）—— 出售回退漏了这一项" % [key, source])
 

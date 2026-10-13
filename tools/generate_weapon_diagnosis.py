@@ -133,7 +133,7 @@ def render_diagnosis():
     text_font = get_font(14)
     sol_font = get_font(14)
 
-    draw.text((40, 30), "渡个劫 · 武器辨识度与相似度专项诊断对比看板", fill=(245, 247, 250, 255), font=title_font)
+    draw.text((40, 30), "剑士 · 武器辨识度与相似度专项诊断对比看板", fill=(245, 247, 250, 255), font=title_font)
     draw.text((40, 75), "诊断原则：① 严禁同名共用贴图 ② 剑系长剑与飞剑必须一眼可分 ③ 符箓类杜绝千人一面长条纸片", fill=(140, 160, 185, 255), font=text_font)
 
     curr_y = 120

@@ -38,7 +38,7 @@ func _test_audio_wiring() -> void:
 			bad_table.append("%s→%s" % [w_id, k])
 		var beh := int(WeaponData.DEFS[w_id].get("behavior", -1))
 		var ik: String = WeaponData.sfx_impact_for(w_id)
-		if beh == WeaponData.Behavior.MELEE or beh == WeaponData.Behavior.BURST:
+		if beh == WeaponData.Behavior.MELEE or beh == WeaponData.Behavior.BURST or beh == WeaponData.Behavior.SWEEP:
 			if ik == "":
 				missing_impact.append(w_id)
 			elif not AudioManager.has_sfx(ik):
@@ -254,8 +254,8 @@ func _test_achievement_and_meta_save() -> void:
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
 		else:
 			_c.equals(rtype, "none", "成就 %s 非角色/法宝奖励时必须为纯荣誉 none 型" % aid)
-		_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 6, "初始默认开放 6 名基础修士")
-		_c.equals(AchievementData.DEFAULT_ITEMS.size(), 82, "初始默认开放 82 件基础法宝（全 86 件除去 4 件成就解锁）")
+			_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 7, "初始默认开放 7 名基础修士")
+		_c.equals(AchievementData.DEFAULT_ITEMS.size(), 83, "初始默认开放 83 件基础法宝（全 87 件除去 4 件成就解锁）")
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()

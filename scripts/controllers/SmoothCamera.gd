@@ -126,7 +126,9 @@ func zoom_punch(punch_scale: float = 0.05, duration: float = 0.18) -> void:
 	_zoom_tween.tween_property(self, "zoom", _base_zoom, duration)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
-## 兼容旧接口：按强度折算为 trauma 叠加
+## 兼容旧接口：按强度折算为 trauma 叠加。
+## 注意：在 Trauma 创伤模型下，振动时长由衰减率自然派生（duration = trauma / TRAUMA_DECAY），
+## 故 _duration 仅作保留入参，时长完全服从创伤衰减物理曲线。
 func shake(intensity: float = 4.0, _duration: float = 0.15) -> void:
 	var mapped := clampf(intensity / 10.0, 0.08, 0.85)
 	add_trauma(mapped)

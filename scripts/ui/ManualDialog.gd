@@ -39,9 +39,19 @@ const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.BURST: "范围",
 	WeaponData.Behavior.DRONE: "环绕",
 	WeaponData.Behavior.TURRET: "机关",
+	WeaponData.Behavior.SWEEP: "横扫",
 }
 
 const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison": "中毒"}
+
+## 敌人图鉴详情卡：皮实度/移速档位 → 语义色（档位词表见 EnemyGuideData.TOUGH_TIERS/SPEED_TIERS）。
+## 越危险越红（BAD 朱砂）、越温和越绿（GOOD），中档走纸白——与「敌人」chip 同一套危险语义。
+const TOUGH_COLORS := {
+	"脆": GameStyle.GOOD, "普通": GameStyle.PAPER, "厚": GameStyle.ELEMENT, "极厚": GameStyle.BAD,
+}
+const SPEED_COLORS := {
+	"极快": GameStyle.BAD, "快": GameStyle.ELEMENT, "寻常": GameStyle.PAPER, "慢": GameStyle.GOOD,
+}
 
 var _items_box: VBoxContainer
 var _cult_box: VBoxContainer
@@ -683,18 +693,59 @@ func _open_enemy_tip(eid: String, anchor: Control) -> void:
 	if def.is_empty():
 		return
 	var seen := EnemyCodex.is_seen(eid)
-	var rows: Array = [
-		["出没", EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), GameStyle.PAPER],
-		["收录", "已遭遇" if seen else "未遭遇", GameStyle.GOOD if seen else GameStyle.GREY],
-	]
+	var desc := String(def.get("desc", ""))
+	var rows: Array = []
+	var body := ""
+	var notes: Array[String] = []
+	if seen:
+		# 遭遇过才给强度行：没见过的东西只露「出没/收录」，与卡面不放威胁签同一口径。
+		# 攻击方式固定朱砂（它就是「它会怎么打你」），皮实度/移速按档位取色（越极端越红）。
+		rows.append(["攻击方式", String(def.get("attack", "")), GameStyle.BAD])
+		var tough := String(def.get("tough", ""))
+		rows.append(["皮实度", tough, TOUGH_COLORS.get(tough, GameStyle.PAPER)])
+		var swift := String(def.get("swift", ""))
+		rows.append(["移速", swift, SPEED_COLORS.get(swift, GameStyle.PAPER)])
+		# 正文两行：威胁句（【】机制词染朱砂）+「应对」灰标签配纸白建议。
+		# 中文长句在真机上不能指望引擎折行（AGENTS.md 坑 4），按卡内可用宽预切硬换行。
+		var text := _danger_bbcode(desc)
+		var counter := String(def.get("counter", ""))
+		if not counter.is_empty():
+			text += "\n" + _bbcode_text("应对", GameStyle.GREY) + " " \
+				+ _bbcode_text(counter, GameStyle.PAPER)
+		body = GameStyle.wrap_bbcode(text, GameStyle.body_font(), 13, DetailTip.INNER_W)
+	else:
+		notes.append(_desc_plain(desc))
+	rows.append(["出没", EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), GameStyle.PAPER])
+	rows.append(["收录", "已遭遇" if seen else "未遭遇", GameStyle.GOOD if seen else GameStyle.GREY])
 	DetailTip.show_over(self, anchor, {
 		"title": EnemyGuideData.display_name(eid),
 		"chip": " 敌人 ",
 		"chip_color": GameStyle.BAD,
 		"rows": rows,
-		"notes": [String(def.get("desc", ""))],
+		"body": body,
+		"notes": notes,
 		"foot": "收录途径：实战中遭遇" if not seen else "",
 	})
+
+## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文染朱砂。
+## 与 CultivatorSelect.highlight_bbcode 同一手法，只是这里只认一种强调色。
+static func _danger_bbcode(raw: String) -> String:
+	var re := RegEx.new()
+	re.compile("【([^】]+)】")
+	return re.sub(raw, _bbcode_open(GameStyle.BAD) + "$1" + BB_COLOR_CLOSE, true)
+
+## 未收录只给纯文本：括号是排版记号，不该在玩家面前露出来
+static func _desc_plain(raw: String) -> String:
+	return raw.replace("【", "").replace("】", "")
+
+const BB_COLOR_CLOSE := "[/color]"
+
+static func _bbcode_open(col: Color) -> String:
+	return "[color=#" + col.to_html(false) + "]"
+
+static func _bbcode_text(s: String, col: Color) -> String:
+	return _bbcode_open(col) + s + BB_COLOR_CLOSE
+
 
 # ----------------- 分页 6：进阶心法 -----------------
 

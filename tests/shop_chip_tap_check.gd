@@ -43,7 +43,7 @@ const SAMPLE_IDS: Array[String] = [
 ]
 ## 攻击方式短标：本判据自带一份，与 WeaponData.behavior_label 对不上就是词漂了
 ## （图鉴旧写法把 DRONE 叫「召唤」，与 spirit 羁绊同名 ⇒ 同一排两颗签分不出来）
-const BEH_LABEL := {0: "近战", 1: "远程", 2: "范围", 3: "环绕", 4: "机关"}
+const BEH_LABEL := {0: "近战", 1: "远程", 2: "范围", 3: "环绕", 4: "机关", 5: "横扫"}
 
 var _c := TestCheck.new()
 var _main: Node

@@ -67,7 +67,7 @@ const CASES: Array[Dictionary] = [
 	{
 		# 开局择选：右侧 19 张修士卡（hotzone 把整块压成热区后必须还能拖）+ 左侧详情特性列。
 		# 入口不是 open 而是 show_select（它不是 BaseModalDialog，走自己的显隐）
-		"cls": "CultivatorSelect", "name": "选择道统", "entry": "show_select",
+		"cls": "CultivatorSelect", "name": "选择角色", "entry": "show_select",
 		"switch": "", "pages": ["左右两栏"],
 	},
 	{

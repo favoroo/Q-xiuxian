@@ -8,8 +8,8 @@ extends RefCounted
 # ---------------- 经验 / 等级 ----------------
 
 const EXP_FIRST_LEVEL := 10   ## 1→2 级所需经验
-const EXP_GROWTH := 1.35      ## 每级需求的环比
-const EXP_FLAT := 5           ## 每级需求的固定加值
+const EXP_GROWTH := 1.42      ## 每级需求的环比（2026-10-13 由 1.35 上调：一局悟道点数压向 18~22，对齐仿真目标态）
+const EXP_FLAT := 6           ## 每级需求的固定加值
 
 ## 下一级所需经验（截断方式与历史实现保持一致）
 static func exp_to_next(prev_needed: int) -> int:
@@ -81,25 +81,25 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	var eff_avg := avg_exp if avg_exp > 0.0 else BUDGET_COMP_EXP_FALLBACK
 	return int(round(float(shortfall) * eff_avg))
 
-# ---------------- 金币碎晶档（后期金币腿稀释） ----------------
+# ---------------- 金币碎金档（常态基础掉落与通胀稀释） ----------------
 
-## 2026-10-13 经济优化：金币与经验是同一个球（add_experience 双入账），怪面额固定、
-## 商店价格只按回合加法增长，后期每回合净结余 200+ 金币花不完。对策：普通怪死亡按概率
-## 掉「碎晶」——经验腿足额给（升级节奏与经验曲线不动），只有金币腿折到 1 枚。
-## 碎晶率随回合上升：前期几乎不掉（保持现有手感），后期占比走高、按比例稀释通胀。
+## 碎金掉落机制（2026-10-13 体验重塑）：
+## 普通怪最容易掉落细碎的金砂/碎金片——经验腿足额给（升级节奏与经验曲线不动），
+## 金币腿按 1 枚入账。从第 1 波起即作为最常见的基准掉落（50% 起步），
+## 随波次平滑成长至 70% 封顶，既符合小怪掉零钱直觉，又自然平抑后期金币通胀。
 ## 随机由调用方拿 GameManager.rng 比对，本函数保持纯。
 
-const GEM_SHARD_STONE_VALUE := 1        ## 碎晶金币面额
-const GEM_SHARD_START_WAVE := 5         ## 碎晶率自第 5 波起抬升（起点当波概率为 0，第 6 波才真正掉）
-const GEM_SHARD_RISE_PER_WAVE := 0.040  ## 起点之后每回合碎晶率抬升
-const GEM_SHARD_CHANCE_CAP := 0.50      ## 碎晶率上限：再多就把高光掉落的爽感掏空了
+const GEM_SHARD_STONE_VALUE := 1        ## 碎金金币面额
+const GEM_SHARD_BASE_CHANCE := 0.50     ## 首波基准概率（最容易掉落：过半为碎金）
+const GEM_SHARD_START_WAVE := 1         ## 自第 1 波直接生效
+const GEM_SHARD_RISE_PER_WAVE := 0.012  ## 随波次递增步长（约在 W18 达到封顶）
+const GEM_SHARD_CHANCE_CAP := 0.70      ## 碎金率上限：保住约三成普通灵石与精英大金石的高光
 
-## 本回合普通怪掉落为碎晶的概率（回合 ≤ 起点为 0，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
+## 本回合普通怪掉落为碎金的概率（第 1 波从基准起步，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
 static func gem_shard_chance(wave: int) -> float:
-	var w := maxi(wave, 1)
-	if w < GEM_SHARD_START_WAVE:
+	if wave <= 0:
 		return 0.0
-	return minf(GEM_SHARD_CHANCE_CAP, float(w - GEM_SHARD_START_WAVE) * GEM_SHARD_RISE_PER_WAVE)
+	return minf(GEM_SHARD_CHANCE_CAP, GEM_SHARD_BASE_CHANCE + float(wave - 1) * GEM_SHARD_RISE_PER_WAVE)
 
 # ---------------- 提前清场余时赏 ----------------
 
@@ -138,23 +138,26 @@ static func heal_overflow_stones(overflow_hp: float) -> int:
 
 # ---------------- 悟道候选的稀有度权重 ----------------
 
-const RARITY_EPIC_BASE := 10.0
+const RARITY_EPIC_BASE := 8.0
 const RARITY_RARE := 30.0
 const RARITY_TOTAL := 100.0
 const RARITY_COMMON_FLOOR := 10.0
-const LUCK_EPIC_PER_POINT := 1.0
+const LUCK_EPIC_PER_POINT := 0.5
+const LUCK_RARE_PER_POINT := 0.3
 
-## 幸运每点抬高史诗权重 1，差额从普通里扣 —— 三档之和恒定，不会整体变史诗
+## 幸运抬高史诗与稀有权重，差额从普通里扣；稀有不再恒定，随幸运缓慢成长
 static func rarity_weights(luck: float) -> Dictionary:
-	var epic: float = RARITY_EPIC_BASE + maxf(0.0, luck) * LUCK_EPIC_PER_POINT
-	var common: float = maxf(RARITY_COMMON_FLOOR, RARITY_TOTAL - RARITY_RARE - epic)
-	return {"common": common, "rare": RARITY_RARE, "epic": epic}
+	var l := maxf(0.0, luck)
+	var epic: float = RARITY_EPIC_BASE + l * LUCK_EPIC_PER_POINT
+	var rare: float = RARITY_RARE + l * LUCK_RARE_PER_POINT
+	var common: float = maxf(RARITY_COMMON_FLOOR, RARITY_TOTAL - rare - epic)
+	return {"common": common, "rare": rare, "epic": epic}
 
 # ---------------- 货架抽取 ----------------
 
-const POTION_CHANCE := 0.15            ## 每个货架位出回复药的概率
-const ITEM_CHANCE := 0.30              ## 每个货架位出道具（被动道具）的概率
-const PET_CHANCE := 0.12               ## 每个货架位出随行灵兽的概率
+const POTION_CHANCE := 0.05            ## 每个货架位出回复药的概率（特供：约4波见1次）
+const ITEM_CHANCE := 0.35              ## 每个货架位出道具的概率（2026-10-13 由 0.45 下调：道具无栏位硬顶，过供会滚属性）
+const PET_CHANCE := 0.05               ## 每个货架位出随行灵兽的概率（御兽师有额外加成）
 const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和（第一档）
 const TAG_AFFINITY_MULT_L1 := 2.0      ## 梯度亲和第一档：持有 ≥MIN_COPIES 件 → ×L1
 const TAG_AFFINITY_TIER2_COPIES := 4   ## 梯度亲和第二档门槛：持有 ≥4 件 → ×L2（深专精吸力）
@@ -205,16 +208,20 @@ static func shop_luck_mult(luck: float) -> float:
 
 ## 各档位最早出现的回合（下标 1~4 对应 tier 1~4，0 为占位）：高档道具随回合解锁
 const ITEM_TIER_WAVES := [0, 1, 4, 9, 14]
-const ITEM_TIER_BASE := [0.0, 60.0, 30.0, 9.0, 1.0]   ## 无幸运时的档位基础权重
+const ITEM_TIER_BASE := [0.0, 63.0, 30.0, 7.0, 0.8]   ## 无幸运时的档位基础权重
+const LUCK_ITEM_EPIC_PER_POINT := 0.22   ## 幸运每点抬高史诗档权重
+const LUCK_ITEM_LEGEND_PER_POINT := 0.08 ## 幸运每点抬高传说档权重
+const LUCK_ITEM_RARE_PER_POINT := 0.15  ## 幸运每点抬高稀有权重（不再恒定）
 
 ## 道具档位权重：返回长度 4 的数组（tier1~4）。幸运抬高高档权重（差额从普通扣），
 ## 未到解锁回合的档位权重清零；普通有权重地板防归零
 static func item_tier_weights(luck: float, wave: int) -> Array:
 	var l := maxf(0.0, luck)
 	var w := [ITEM_TIER_BASE[1], ITEM_TIER_BASE[2], ITEM_TIER_BASE[3], ITEM_TIER_BASE[4]]
-	w[3] += l * 0.15
-	w[2] += l * 0.35
-	w[0] = maxf(10.0, w[0] - l * 0.5)
+	w[3] += l * LUCK_ITEM_LEGEND_PER_POINT
+	w[2] += l * LUCK_ITEM_EPIC_PER_POINT
+	w[1] += l * LUCK_ITEM_RARE_PER_POINT
+	w[0] = maxf(10.0, w[0] - l * (LUCK_ITEM_EPIC_PER_POINT + LUCK_ITEM_LEGEND_PER_POINT + LUCK_ITEM_RARE_PER_POINT))
 	for i in range(4):
 		if maxi(wave, 1) < int(ITEM_TIER_WAVES[i + 1]):
 			w[i] = 0.0

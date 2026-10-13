@@ -20,7 +20,7 @@ const GEM_SOFT_CAP := 140      ## 场上软上限：超过后强制最旧宝石�
 	set(val):
 		is_gold = val
 		_update_visual()
-## 碎晶档：最低面额的小水晶（淡青色、体型更小）。与 is_gold 互斥，金档优先。
+## 碎金档：高频掉落的基础碎金/金砂片（暖金色、不规则小金片）。与 is_gold 互斥，金档优先。
 @export var is_shard: bool = false:
 	set(val):
 		is_shard = val
@@ -175,15 +175,15 @@ func _update_visual() -> void:
 			loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_SHARD
 		else:
 			loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_BLUE
-	var light = get_node_or_null("PointLight2D") as PointLight2D
-	if light != null:
-		# 碎晶最低档：淡青、亮度压低一档，与"面额小"视觉语义一致
-		if is_gold:
-			light.color = Color(1.0, 0.85, 0.35)
-		elif is_shard:
-			light.color = Color(0.55, 0.95, 0.85)
-		else:
-			light.color = Color(0.4, 0.8, 1.0)
+		var light = get_node_or_null("PointLight2D") as PointLight2D
+		if light != null:
+			# 碎金档：暖金细芒、亮度压低一档，与精英耀金大光区别开
+			if is_gold:
+				light.color = Color(1.0, 0.85, 0.35)
+			elif is_shard:
+				light.color = Color(0.95, 0.80, 0.35)
+			else:
+				light.color = Color(0.4, 0.8, 1.0)
 
 func magnet_to(player: Node2D) -> void:
 	if target_player == null:

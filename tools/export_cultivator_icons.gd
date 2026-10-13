@@ -23,6 +23,7 @@ const CULTIVATORS := [
 		"bawang",
 		"juechen",
 		"yushou",
+		"kuxingseng",
 	]
 
 func _ready() -> void:

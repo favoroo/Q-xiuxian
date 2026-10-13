@@ -29,6 +29,8 @@ extends RefCounted
 ##                                              —— 蛮兵·陷阵：感知圈内每只敌人的全伤害加成与上限（damage_mult 现算）
 ##   stone_damage_per_100 / stone_damage_cap    —— 守财奴·财可通神：每持 100 金币的全伤害加成与上限（damage_mult 现算）
 ##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的技能冷却秒数
+##   kuxingseng_mode / still_damage_bonus / still_haste_bonus / still_armor_bonus / still_pickup_bonus
+##   / move_damage_penalty / move_haste_penalty —— 苦行僧：站定与移动不对称收益/惩罚
 ## skill_mods: {skill_id: {...}}                —— 随行技能专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
 ## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一技能，HUD 第二颗按钮释放；
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
@@ -403,28 +405,60 @@ const DEFS: Dictionary = {
 					"locked_upgrades": [],
 					"skill_mods": {},
 				},
-				"yushou": {
-					"name": "御兽师",
-					"epithet": "万灵来朝，兽伴同行",
-					"icon": "res://assets/art/cultivator_yushou_icon.png",
-					"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
-					"motion": "procedural",
-					"render_style": "hollow_knight",
-					"start_equip": "焰灵狐（随行灵兽）",
-					"pros": ["开局自带随行灵兽（焰灵狐）", "灵兽栏位 +2（可同时配置 3 只）", "商店灵兽出现概率 +15%", "随行灵兽造成的伤害 +15%"],
-					"cons": ["本体武器伤害 -10%"],
-					"mods": {
-						"start_pet": "yanhu",
-						"pet_slots": 2,
-						"pet_offer_chance_bonus": 0.15,
-						"pet_damage_mult": 0.15,
-						"damage_mult": 0.90,
+					"yushou": {
+						"name": "御兽师",
+						"epithet": "万灵来朝，兽伴同行",
+						"icon": "res://assets/art/cultivator_yushou_icon.png",
+						"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
+						"motion": "procedural",
+						"render_style": "hollow_knight",
+						"start_equip": "焰灵狐（随行灵兽）",
+						"pros": ["开局自带随行灵兽（焰灵狐）", "灵兽栏位 +2（可同时配置 3 只）", "商店灵兽出现概率 +15%", "随行灵兽造成的伤害 +15%"],
+						"cons": ["本体武器伤害 -10%"],
+						"mods": {
+							"start_pet": "yanhu",
+							"pet_slots": 2,
+							"pet_offer_chance_bonus": 0.15,
+							"pet_damage_mult": 0.15,
+							"damage_mult": 0.90,
+						},
+						"allowed_tags": [],
+						"locked_upgrades": [],
+						"skill_mods": {"renewal": {"power_add": 0.10}},
 					},
-					"allowed_tags": [],
-					"locked_upgrades": [],
-					"skill_mods": {"renewal": {"power_add": 0.10}},
-				},
-		}
+					"kuxingseng": {
+						"name": "苦行僧",
+						"epithet": "心如止水，金刚怒目",
+						"icon": "res://assets/art/cultivator_kuxingseng_icon.png",
+						"sprite": "res://assets/art/pawn_blue_8dir.png",
+						"motion": "procedural",
+						"render_style": "hollow_knight",
+						"start_equip": "",
+						"pros": [
+							"站定不动时全伤害 +50%",
+							"站定不动时攻击间隔 -35%",
+							"站定不动时护甲 +5、拾取范围 +100%",
+						],
+						"cons": [
+							"移动中全伤害 -60%",
+							"移动中攻击间隔 +60%",
+							"基础移动速度 -10%",
+						],
+						"mods": {
+							"speed_mult": 0.90,
+							"kuxingseng_mode": 1.0,
+							"still_damage_bonus": 0.50,
+							"still_haste_bonus": 0.35,
+							"still_armor_bonus": 5.0,
+							"still_pickup_bonus": 1.0,
+							"move_damage_penalty": -0.60,
+							"move_haste_penalty": 0.60,
+						},
+						"allowed_tags": [],
+						"locked_upgrades": [],
+						"skill_mods": {"aegis": {"duration_add": 1.5}},
+					},
+			}
 
 static func get_def(id: String) -> Dictionary:
 	return DEFS.get(id, {})

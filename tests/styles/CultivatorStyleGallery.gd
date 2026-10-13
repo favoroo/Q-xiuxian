@@ -28,7 +28,7 @@ func _ready() -> void:
 
 	# 3. 顶部总标题与副标题
 	var title_lbl := Label.new()
-	title_lbl.text = "渡个劫 · 四大画风定制人设全景对比看板 (纯代码绘制)"
+	title_lbl.text = "剑士 · 四大画风定制人设全景对比看板 (纯代码绘制)"
 	title_lbl.position = Vector2(24, 8)
 	title_lbl.add_theme_font_size_override("font_size", 16)
 	title_lbl.add_theme_color_override("font_color", Color(0.96, 0.85, 0.40))

@@ -84,6 +84,19 @@ const MOBS: Dictionary = {
 		"unlock_wave": 9,
 		"band_lo": 0.955,      ## 同伴加速光环
 	},
+	"duyao": {
+		"display": "毒妖",
+		"scene_path": "res://scenes/entities/DuYaoEnemy.tscn",
+		# 走低 roll 段：它是功能怪不是稀有怪，占比要随基础怪潮一起铺开。
+		# 高 roll 段 [0.78, 1.0) 已被六种怪按稀有度切满，硬插会整段吃掉影魅/鼓妖的份额
+		#（判据：W14 全解锁下每种怪都必须真的选到，见 unit_wave_tests 的十一种怪断言）。
+		# 而花妖累计带从 0.42 涨到 0.768 封顶，中段也没有固定空位 ⇒ 与花妖共用一个
+		# 上沿（flower_edge），在下沿 0.42 ~ flower_edge 之间切走固定 35% 给毒妖，
+		# 判序上排在花妖之前（见 pick_scene_key）。W6 起毒妖占 [0.42, 0.54) 一档，
+		# 花妖拿剩下的 [0.54, flower_edge)，两边都随回合增长、都不消失。
+		"unlock_wave": 6,
+		"band_share": 0.35,    ## 与花妖共段时切走给自己的比例
+	},
 	"zhumu": {
 		"display": "百目妖",
 		"scene_path": "res://scenes/entities/ZhuMuEnemy.tscn",
@@ -147,6 +160,7 @@ const ID_PREFIXES: Dictionary = {
 	"fengqun": "fengqun",
 	"xueyong": "xueyong",
 	"guyao": "guyao",
+	"duyao": "duyao",
 	"yingmei": "yingmei",
 	"zhumu": "zhumu",
 	"lingyi": "lingyi",
@@ -165,6 +179,11 @@ static func pick_scene_key(wave: int, roll: float) -> String:
 		return "xiexiu"
 	if w >= MOBS["leibeast"]["unlock_wave"] and roll < MOBS["leibeast"]["edge"]:
 		return "leibeast"
+	# 毒妖与花妖共段（[0.42, flower_edge)），毒妖判在前面 ⇒ 切走下沿一档给自己的固定比例。
+	# 共段而不是另开段的原因见 MOBS["duyao"] 注释：高 roll 段已切满、花妖带涨到封顶，
+	# 中段没有固定空位。两边共享同一条增长曲线，回合推进时一起变宽、谁也不消失。
+	if w >= MOBS["duyao"]["unlock_wave"] and roll < duyao_edge(w):
+		return "duyao"
 	if w >= MOBS["flower"]["unlock_wave"] and roll < flower_edge(w):
 		return "flower"
 	# 高 roll 段：从最稀有往回判（百目妖 0.98 → … → 蜂群 0.78），闸门未开自动让位给下一格
@@ -193,3 +212,11 @@ static func flower_edge(wave: int) -> float:
 	var f := MOBS["flower"]
 	var w := maxi(wave, 1)
 	return f["edge_base"] + minf(f["edge_growth"] + w * f["edge_slope"], f["edge_cap"]) * f["edge_step"]
+
+## 毒妖在第 wave 波占到的累计带上沿（切走 0.42 到 flower_edge 之间的 band_share 份额）
+static func duyao_edge(wave: int) -> float:
+	var fe := flower_edge(wave)
+	var lo := float(MOBS["leibeast"]["edge"])
+	if fe <= lo:
+		return lo
+	return lo + (fe - lo) * float(MOBS["duyao"]["band_share"])

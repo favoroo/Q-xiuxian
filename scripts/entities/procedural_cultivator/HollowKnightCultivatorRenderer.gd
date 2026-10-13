@@ -741,16 +741,239 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 			var crown_c := head_center + Vector2(0, -11 * hs)
 			if angle == Angle.SIDE:
 				crown_c = head_center + Vector2(1 * hs, -11 * hs)
-				draw_circle(crown_c + Vector2(-3 * hs, 0), 3.0 * hs, Color(0.88, 0.72, 0.18))
-				draw_circle(crown_c + Vector2(2 * hs, -2 * hs), 3.8 * hs, Color(1.0, 0.88, 0.32))
+				draw_circle(crown_c + Vector2(-3 * hs, 0), 3.0 * hs, col_gold_shadow)
+				draw_circle(crown_c + Vector2(2 * hs, -2 * hs), 3.8 * hs, col_gold)
 				draw_circle(crown_c + Vector2(2 * hs, -2 * hs), 1.5 * hs, col_void)
 				draw_rect(Rect2(crown_c + Vector2(1.2 * hs, -2.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
 			else:
-				draw_circle(crown_c + Vector2(-6 * hs, 0), 3.2 * hs, Color(0.92, 0.78, 0.20))
-				draw_circle(crown_c + Vector2(6 * hs, 0), 3.2 * hs, Color(0.92, 0.78, 0.20))
-				draw_circle(crown_c + Vector2(0, -3 * hs), 4.4 * hs, Color(1.0, 0.88, 0.32))
+				draw_circle(crown_c + Vector2(-6 * hs, 0), 3.2 * hs, col_gold_shadow)
+				draw_circle(crown_c + Vector2(6 * hs, 0), 3.2 * hs, col_gold_shadow)
+				draw_circle(crown_c + Vector2(0, -3 * hs), 4.4 * hs, col_gold)
 				draw_circle(crown_c + Vector2(0, -3 * hs), 1.7 * hs, col_void)
 				draw_rect(Rect2(crown_c + Vector2(-0.8 * hs, -3.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
+
+		"butterfly_horns_petite":
+			# 灵蝶使专属：轻灵小蝶羽仙角（剑士骨角 0.68x 简约微型版，天青灵蓝流光）
+			if angle == Angle.SIDE:
+				var side_horn: PackedVector2Array = [
+					head_center + Vector2(-2.0 * hs, -5.0 * hs),
+					head_center + Vector2(-7.5 * hs, -13.0 * hs),
+					head_center + Vector2(-9.5 * hs, -20.0 * hs),
+					head_center + Vector2(-3.5 * hs, -15.0 * hs),
+					head_center + Vector2(1.5 * hs, -6.5 * hs)
+				]
+				draw_colored_polygon(side_horn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-2.0 * hs, -5.0 * hs),
+					head_center + Vector2(-7.5 * hs, -13.0 * hs),
+					head_center + Vector2(-9.5 * hs, -20.0 * hs),
+					head_center + Vector2(-5.0 * hs, -13.0 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-8.0 * hs, -18.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
+			else:
+				var l_horn: PackedVector2Array = [
+					head_center + Vector2(-4.2 * hs, -3.5 * hs),
+					head_center + Vector2(-9.8 * hs, -13.0 * hs),
+					head_center + Vector2(-8.4 * hs, -20.0 * hs),
+					head_center + Vector2(-4.2 * hs, -14.0 * hs),
+					head_center + Vector2(-2.0 * hs, -6.0 * hs)
+				]
+				var r_horn: PackedVector2Array = [
+					head_center + Vector2(2.0 * hs, -6.0 * hs),
+					head_center + Vector2(4.2 * hs, -14.0 * hs),
+					head_center + Vector2(8.4 * hs, -20.0 * hs),
+					head_center + Vector2(9.8 * hs, -13.0 * hs),
+					head_center + Vector2(4.2 * hs, -3.5 * hs)
+				]
+				draw_colored_polygon(l_horn, col_bone)
+				draw_colored_polygon(r_horn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-4.2 * hs, -3.5 * hs),
+					head_center + Vector2(-9.8 * hs, -13.0 * hs),
+					head_center + Vector2(-8.4 * hs, -20.0 * hs),
+					head_center + Vector2(-6.3 * hs, -13.0 * hs)
+				]), col_bone_shadow)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(2.0 * hs, -6.0 * hs),
+					head_center + Vector2(4.2 * hs, -14.0 * hs),
+					head_center + Vector2(8.4 * hs, -20.0 * hs),
+					head_center + Vector2(6.3 * hs, -13.0 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-2.8 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				draw_line(head_center + Vector2(2.8 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+
+		"merchant_horns":
+			# 商人专属：平展从容玉骨角（角底束简金环，温润平缓横展）
+			if angle == Angle.SIDE:
+				var m_horn: PackedVector2Array = [
+					head_center + Vector2(-2.5 * hs, -5.5 * hs),
+					head_center + Vector2(-8.5 * hs, -14.0 * hs),
+					head_center + Vector2(-12.5 * hs, -21.0 * hs),
+					head_center + Vector2(-6.0 * hs, -17.0 * hs),
+					head_center + Vector2(1.5 * hs, -7.0 * hs)
+				]
+				draw_colored_polygon(m_horn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-2.5 * hs, -5.5 * hs),
+					head_center + Vector2(-8.5 * hs, -14.0 * hs),
+					head_center + Vector2(-12.5 * hs, -21.0 * hs),
+					head_center + Vector2(-7.5 * hs, -15.0 * hs)
+				]), col_bone_shadow)
+				# 根部简约金环带
+				draw_line(head_center + Vector2(-1.5 * hs, -6.0 * hs), head_center + Vector2(-4.5 * hs, -10.0 * hs), col_gold, 1.8)
+				draw_line(head_center + Vector2(-2.0 * hs, -7.0 * hs), head_center + Vector2(-10.5 * hs, -19.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+			else:
+				var l_mhorn: PackedVector2Array = [
+					head_center + Vector2(-5.0 * hs, -4.0 * hs),
+					head_center + Vector2(-13.0 * hs, -13.5 * hs),
+					head_center + Vector2(-13.5 * hs, -21.0 * hs),
+					head_center + Vector2(-7.0 * hs, -15.5 * hs),
+					head_center + Vector2(-2.5 * hs, -6.5 * hs)
+				]
+				var r_mhorn: PackedVector2Array = [
+					head_center + Vector2(2.5 * hs, -6.5 * hs),
+					head_center + Vector2(7.0 * hs, -15.5 * hs),
+					head_center + Vector2(13.5 * hs, -21.0 * hs),
+					head_center + Vector2(13.0 * hs, -13.5 * hs),
+					head_center + Vector2(5.0 * hs, -4.0 * hs)
+				]
+				draw_colored_polygon(l_mhorn, col_bone)
+				draw_colored_polygon(r_mhorn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-5.0 * hs, -4.0 * hs),
+					head_center + Vector2(-13.0 * hs, -13.5 * hs),
+					head_center + Vector2(-13.5 * hs, -21.0 * hs),
+					head_center + Vector2(-9.5 * hs, -14.5 * hs)
+				]), col_bone_shadow)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(2.5 * hs, -6.5 * hs),
+					head_center + Vector2(7.0 * hs, -15.5 * hs),
+					head_center + Vector2(13.5 * hs, -21.0 * hs),
+					head_center + Vector2(9.5 * hs, -14.5 * hs)
+				]), col_bone_shadow)
+				# 根部简约金环束角
+				draw_line(head_center + Vector2(-3.5 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -9.5 * hs), col_gold, 1.8)
+				draw_line(head_center + Vector2(3.5 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -9.5 * hs), col_gold, 1.8)
+				draw_line(head_center + Vector2(-4.0 * hs, -7.0 * hs), head_center + Vector2(-11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+				draw_line(head_center + Vector2(4.0 * hs, -7.0 * hs), head_center + Vector2(11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+
+		"collector_horns":
+			# 收藏家专属：重宝双叠骨羽角（主挺拔 + 外侧微小副羽剪影，紫金灵光中脊）
+			if angle == Angle.SIDE:
+				var main_h: PackedVector2Array = [
+					head_center + Vector2(-2.5 * hs, -6.0 * hs),
+					head_center + Vector2(-9.0 * hs, -16.0 * hs),
+					head_center + Vector2(-11.5 * hs, -24.0 * hs),
+					head_center + Vector2(-4.5 * hs, -18.0 * hs),
+					head_center + Vector2(1.5 * hs, -7.5 * hs)
+				]
+				var sub_h: PackedVector2Array = [
+					head_center + Vector2(-5.0 * hs, -8.0 * hs),
+					head_center + Vector2(-11.0 * hs, -14.0 * hs),
+					head_center + Vector2(-7.5 * hs, -11.0 * hs)
+				]
+				draw_colored_polygon(sub_h, col_bone_shadow)
+				draw_colored_polygon(main_h, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-2.5 * hs, -6.0 * hs),
+					head_center + Vector2(-9.0 * hs, -16.0 * hs),
+					head_center + Vector2(-11.5 * hs, -24.0 * hs),
+					head_center + Vector2(-6.5 * hs, -16.5 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-1.5 * hs, -7.5 * hs), head_center + Vector2(-9.5 * hs, -21.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
+			else:
+				var l_sub: PackedVector2Array = [
+					head_center + Vector2(-6.0 * hs, -6.0 * hs),
+					head_center + Vector2(-13.0 * hs, -14.0 * hs),
+					head_center + Vector2(-8.5 * hs, -12.0 * hs)
+				]
+				var r_sub: PackedVector2Array = [
+					head_center + Vector2(6.0 * hs, -6.0 * hs),
+					head_center + Vector2(13.0 * hs, -14.0 * hs),
+					head_center + Vector2(8.5 * hs, -12.0 * hs)
+				]
+				var l_main: PackedVector2Array = [
+					head_center + Vector2(-5.0 * hs, -4.5 * hs),
+					head_center + Vector2(-11.5 * hs, -16.0 * hs),
+					head_center + Vector2(-10.0 * hs, -25.0 * hs),
+					head_center + Vector2(-5.0 * hs, -17.5 * hs),
+					head_center + Vector2(-2.5 * hs, -7.0 * hs)
+				]
+				var r_main: PackedVector2Array = [
+					head_center + Vector2(2.5 * hs, -7.0 * hs),
+					head_center + Vector2(5.0 * hs, -17.5 * hs),
+					head_center + Vector2(10.0 * hs, -25.0 * hs),
+					head_center + Vector2(11.5 * hs, -16.0 * hs),
+					head_center + Vector2(5.0 * hs, -4.5 * hs)
+				]
+				draw_colored_polygon(l_sub, col_bone_shadow)
+				draw_colored_polygon(r_sub, col_bone_shadow)
+				draw_colored_polygon(l_main, col_bone)
+				draw_colored_polygon(r_main, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-5.0 * hs, -4.5 * hs),
+					head_center + Vector2(-11.5 * hs, -16.0 * hs),
+					head_center + Vector2(-10.0 * hs, -25.0 * hs),
+					head_center + Vector2(-7.5 * hs, -16.0 * hs)
+				]), col_bone_shadow)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(2.5 * hs, -7.0 * hs),
+					head_center + Vector2(5.0 * hs, -17.5 * hs),
+					head_center + Vector2(10.0 * hs, -25.0 * hs),
+					head_center + Vector2(7.5 * hs, -16.0 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-3.5 * hs, -6.5 * hs), head_center + Vector2(-8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				draw_line(head_center + Vector2(3.5 * hs, -6.5 * hs), head_center + Vector2(8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+
+		"miser_horns":
+			# 守财奴专属：内敛月牙骨角（内扣挺拔，精瘦锐利，冷光中脊）
+			if angle == Angle.SIDE:
+				var s_horn: PackedVector2Array = [
+					head_center + Vector2(-2.5 * hs, -5.5 * hs),
+					head_center + Vector2(-7.0 * hs, -14.0 * hs),
+					head_center + Vector2(-8.0 * hs, -23.0 * hs),
+					head_center + Vector2(-3.5 * hs, -16.5 * hs),
+					head_center + Vector2(1.5 * hs, -7.0 * hs)
+				]
+				draw_colored_polygon(s_horn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-2.5 * hs, -5.5 * hs),
+					head_center + Vector2(-7.0 * hs, -14.0 * hs),
+					head_center + Vector2(-8.0 * hs, -23.0 * hs),
+					head_center + Vector2(-5.0 * hs, -15.0 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-1.5 * hs, -7.0 * hs), head_center + Vector2(-6.5 * hs, -20.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
+			else:
+				var l_shorn: PackedVector2Array = [
+					head_center + Vector2(-4.5 * hs, -4.0 * hs),
+					head_center + Vector2(-8.5 * hs, -14.5 * hs),
+					head_center + Vector2(-6.0 * hs, -23.5 * hs),
+					head_center + Vector2(-3.2 * hs, -15.5 * hs),
+					head_center + Vector2(-2.0 * hs, -6.5 * hs)
+				]
+				var r_shorn: PackedVector2Array = [
+					head_center + Vector2(2.0 * hs, -6.5 * hs),
+					head_center + Vector2(3.2 * hs, -15.5 * hs),
+					head_center + Vector2(6.0 * hs, -23.5 * hs),
+					head_center + Vector2(8.5 * hs, -14.5 * hs),
+					head_center + Vector2(4.5 * hs, -4.0 * hs)
+				]
+				draw_colored_polygon(l_shorn, col_bone)
+				draw_colored_polygon(r_shorn, col_bone)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(-4.5 * hs, -4.0 * hs),
+					head_center + Vector2(-8.5 * hs, -14.5 * hs),
+					head_center + Vector2(-6.0 * hs, -23.5 * hs),
+					head_center + Vector2(-5.0 * hs, -14.5 * hs)
+				]), col_bone_shadow)
+				draw_colored_polygon(PackedVector2Array([
+					head_center + Vector2(2.0 * hs, -6.5 * hs),
+					head_center + Vector2(3.2 * hs, -15.5 * hs),
+					head_center + Vector2(6.0 * hs, -23.5 * hs),
+					head_center + Vector2(5.0 * hs, -14.5 * hs)
+				]), col_bone_shadow)
+				draw_line(head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
+				draw_line(head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
 
 		"fox_ears":
 			if angle == Angle.SIDE:

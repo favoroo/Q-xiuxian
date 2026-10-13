@@ -131,7 +131,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		return null
 	var star := clampi(int(w.get("star", 1)), 1, WeaponData.MAX_STAR)
 	var bonus: float = GameManager.get_weapon_stat_bonus(id, star)
-	var gm_dmg: float = GameManager.weapon_damage_mult
+	var gm_dmg: float = GameManager.get_weapon_damage_mult()
 	var syn_dmg: float = GameManager.synergy_damage_mult
 	var cult_dmg: float = GameManager.cultivator_damage_mult(id)
 	var elem_dmg: float = GameManager.element_damage_mult(id)
@@ -221,10 +221,15 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		"foot": foot,
 	})
 
-## 攻击方式的类别色：近战朱砂 / 非近战主蓝（红蓝二值）——
-## 货架卡色签与详情卡「攻击方式」值色都走这里，改色只动这一处。
+## 攻击方式的类别色：近战朱砂 / 横扫琥珀金 / 其他主蓝（2026-10-13 横扫独立成 Behavior.SWEEP 后
+## 由二值改三档）——货架卡色签与详情卡「攻击方式」值色都走这里，改色只动这一处。
 static func behavior_color(def: Dictionary) -> Color:
-	return GameStyle.BAD if WeaponData.behavior_label(def) == "近战" else GameStyle.GOLD
+	match int(def.get("behavior", -1)):
+		WeaponData.Behavior.MELEE:
+			return GameStyle.BAD
+		WeaponData.Behavior.SWEEP:
+			return GameStyle.SWEEP
+	return GameStyle.GOLD
 
 static func weapon_feats(def: Dictionary) -> String:
 	var out: Array[String] = []
@@ -241,7 +246,8 @@ static func weapon_feats(def: Dictionary) -> String:
 		out.append("弹射 %d 次" % bounce)
 	var arc: float = float(def.get("arc_scale", 1.0))
 	if arc > 1.001:
-		out.append("横扫 ×%s" % _num(arc))
+		# 「宽扫」= 摆幅更宽的近战剑族；与攻击方式「横扫」（Behavior.SWEEP 扇形判定）不是一个词
+		out.append("宽扫 ×%s" % _num(arc))
 	if bool(def.get("proc_poison", false)):
 		out.append("附毒")
 	if bool(def.get("proc_burn", false)):

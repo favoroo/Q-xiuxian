@@ -77,7 +77,7 @@ func _test_five_elements_system() -> void:
 			tip_missing.append(String(w4))
 	_c.check(tip_missing.is_empty(),
 			"%d 种攻击方式全都有机制解释（缺: %s）" % [used_behaviors.size(), str(tip_missing)])
-	_c.equals(used_behaviors.size(), 5, "商店池覆盖 5 种攻击方式（近战/远程/范围/环绕/机关）")
+	_c.equals(used_behaviors.size(), 6, "商店池覆盖 6 种攻击方式（近战/远程/范围/环绕/机关/横扫）")
 	var raw_key: Array = []
 	for w5 in WeaponData.SHOP_POOL:
 		for k in WeaponData.get_def(String(w5)).get("stat_scalings", {}).keys():
@@ -352,8 +352,8 @@ func _test_item_system() -> void:
 	_c.check(GameBalance.HEAL_OVERFLOW_STONE_CAP <= 15, "折灵石单颗封顶不超过 15（不滚成巨款）")
 
 func _test_cultivator_system() -> void:
-	# 数据表完整性：19 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
-	_c.equals(CultivatorData.all_ids().size(), 19, "修士扩充至 19 名")
+	# 数据表完整性：20 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 20, "修士扩充至 20 名")
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
@@ -454,6 +454,25 @@ func _test_cultivator_system() -> void:
 	_c.equals(GameManager.shop_offers.size(), GameManager.SHOP_BASE_SLOTS + 1, "多宝道人货架 %d 格" % (GameManager.SHOP_BASE_SLOTS + 1))
 	_c.near(GameManager.item_price_mult, 0.75, EPS, "多宝道人法宝 75 折")
 
+	# 苦行僧：站定伤害 +50% / 攻速 +54% / 护甲 +5；移动伤害 -60% / 攻速大减 / 移速 -10%
+	GameManager.reset_run()
+	GameManager.cultivator_id = "kuxingseng"
+	GameManager._apply_cultivator()
+	_c.near(GameManager.move_speed_mult, 0.90, EPS, "苦行僧基础移速 -10%")
+	_c.check(GameManager.has_still_mechanic(), "苦行僧天生激活站定机制")
+	# 移动中状态
+	GameManager.still_time = 0.0
+	GameManager.player_is_moving = true
+	_c.near(GameManager.get_effective_armor(), 0.0, EPS, "苦行僧移动中无额外护甲")
+	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 0.40, EPS, "苦行僧移动中全伤害 -60% (1.0 → 0.40)")
+	_c.near(GameManager.get_effective_attack_speed_mult(), 1.60, EPS, "苦行僧移动中攻击间隔 +60% (1.0 → 1.60)")
+	# 站定中状态
+	GameManager.still_time = 0.5
+	GameManager.player_is_moving = false
+	_c.near(GameManager.get_effective_armor(), 5.0, EPS, "苦行僧站定时护甲 +5")
+	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 1.50, EPS, "苦行僧站定时全伤害 +50% (1.0 → 1.50)")
+	_c.near(GameManager.get_effective_attack_speed_mult(), 0.65, EPS, "苦行僧站定时攻击间隔 -35% (1.0 → 0.65)")
+
 	# 回归：常规修士不污染通用机制
 	GameManager.reset_run()
 	GameManager.cultivator_id = "jianchi"
@@ -469,7 +488,7 @@ func _test_cultivator_system() -> void:
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
-	_c.equals(cs._roster_grid.get_child_count(), 19, "道统选择界面下半部分两排网格展示 19 张形象小卡片")
+	_c.equals(cs._roster_grid.get_child_count(), 20, "道统选择界面下半部分两排网格展示 20 张形象小卡片")
 	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
 	cs._select_cultivator("fuzhen")
 	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
@@ -737,19 +756,16 @@ func _test_cultivator_new_mechanics() -> void:
 	_c.check(GameManager.guard_stance > 0.0, "守卫盾势开关落地")
 	_c.near(GameManager.shield_charge, 0.0, EPS, "开局盾势为空")
 
-	# —— 药王·药池/服丹：纯函数 + 绑定 + 免冷却 ——
-	_c.near(ElixirData.cap_of(200.0), 200.0 * ElixirData.CAP_HP_RATIO, EPS, "药池 = 气血 × %.0f%%" % (ElixirData.CAP_HP_RATIO * 100.0))
-	_c.near(ElixirData.add_pool(0.0, 20.0, 200.0), 20.0 * ElixirData.STORE_RATIO, EPS, "溢出 20 按 50%% 入池")
-	_c.near(ElixirData.add_pool(59.0, 20.0, 200.0), ElixirData.cap_of(200.0), EPS, "入池顶到上限为止")
-	_c.check(not ElixirData.has_charge(0.0), "空池按不动（门控是资源本身）")
-	_c.check(ElixirData.has_charge(5.0), "有存量随时能喝")
-	_c.near(ElixirData.buff_mult(), 1.0 + ElixirData.BUFF_DAMAGE, EPS, "服丹增伤乘区与本表同源")
-	_c.equals(CultivatorData.get_extra_skill_id("yaowang"), "elixir", "药王绑定额外技能服丹（随角色，不走五选一）")
+	# —— 药王·药爆：纯函数 + 绑定 + 带冷却 ——
+	_c.near(ElixirData.heal_amount(200.0), 200.0 * ElixirData.HEAL_HP_RATIO, EPS, "药爆回血 = 气血 × %.0f%%" % (ElixirData.HEAL_HP_RATIO * 100.0))
+	_c.near(ElixirData.burst_damage(3.0), ElixirData.BASE_DAMAGE + 3.0 * ElixirData.ELEMENTAL_RATIO, EPS, "药爆毒伤 = 基础 + 元素 × %.1f" % ElixirData.ELEMENTAL_RATIO)
+	_c.near(ElixirData.buff_mult(), 1.0 + ElixirData.BUFF_DAMAGE, EPS, "药爆增伤乘区与本表同源")
+	_c.equals(CultivatorData.get_extra_skill_id("yaowang"), "elixir", "药王绑定额外技能药爆（随角色，不走五选一）")
 	var el: Dictionary = SkillData.get_def("elixir")
-	_c.equals(int(el.get("kind", -1)), SkillData.Kind.BURST, "服丹是 BURST 类（资源门控而非 CD）")
-	_c.near(float(SkillData.final_stats("elixir", "yaowang")["cooldown"]), 0.0, EPS, "final_stats 不给服丹抬冷却下限（BURST 豁免）")
-	_c.check(not SkillData.OFFER_IDS.has("elixir"), "服丹不进选择界面候选池")
-	_c.equals(str(CultivatorData.get_extra_desc("yaowang")), str(ElixirData.card_lines()), "服丹卡面说明现读 ElixirData（别处不抄）")
+	_c.equals(int(el.get("kind", -1)), SkillData.Kind.HEAL, "药爆是 HEAL 类（治疗+毒雾爆发）")
+	_c.near(float(SkillData.final_stats("elixir", "yaowang")["cooldown"]), ElixirData.COOLDOWN, EPS, "final_stats 读取药爆冷却 %.1fs" % ElixirData.COOLDOWN)
+	_c.check(not SkillData.OFFER_IDS.has("elixir"), "药爆不进选择界面候选池")
+	_c.equals(str(CultivatorData.get_extra_desc("yaowang")), str(ElixirData.card_lines()), "药爆卡面说明现读 ElixirData（别处不抄）")
 
 	# —— 灵植夫·灵药滋生：掉珠率与溢出折灵石倍率落地 ——
 	GameManager.reset_run()
@@ -983,7 +999,18 @@ func _test_conversion_items_and_hooks() -> void:
 	GameManager.still_time = 1.0
 	_c.near(GameManager.knockback_force(100.0), 180.0, EPS, "站定时玄武法坛击退力 +80%")
 
+	GameManager.add_item("jingang_shenxiang")
+	GameManager.still_time = 0.0
+	_c.near(GameManager.get_effective_attack_speed_mult(), 1.0, EPS, "移动中金刚神像不缩短攻击间隔")
+	_c.near(GameManager.move_speed_mult, 0.92, EPS, "金刚神像常驻移速 -8%")
+	GameManager.still_time = 0.5
+	_c.near(GameManager.get_effective_attack_speed_mult(), 0.70, EPS, "站定时金刚神像攻击间隔缩短 30% (1.0 → 0.70)")
+	GameManager.attack_speed_mult = 0.35
+	_c.near(GameManager.get_effective_attack_speed_mult(), GameManager.ATTACK_SPEED_FLOOR, EPS, "金刚神像站定攻速不跌破 ATTACK_SPEED_FLOOR 地板")
+	GameManager.attack_speed_mult = 1.0
+
 	GameManager.add_item("panshi_yin")
+	GameManager.still_time = 1.0
 	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 1.45, EPS, "磐石印站定 1 秒后全伤害 +45%")
 	GameManager.reset_run()
 

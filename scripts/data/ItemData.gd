@@ -27,6 +27,7 @@ extends RefCounted
 ##   still_armor         —— 入定香：站定护甲加成（GameManager.get_effective_armor）
 ##   still_knockback     —— 玄武法坛：站定击退倍率加成（BalanceCombat.knockback_impulse）
 ##   still_thorns        —— 玄武法坛：站定反伤比例加成（EnemyBase._resolve_contact_damage）
+##   still_attack_speed  —— 金刚神像：站定不动时攻击间隔缩减（GameManager.get_effective_attack_speed_mult）
 ##   dmg_per_empty_slot  —— 三昧归真：武器少于 4 把时每少 1 把全伤害加成（CultivatorSystem.damage_mult）
 ##   heal_buff_damage / heal_buff_speed / heal_buff_dur —— 灵髓丹气：吃药/回复珠后短时爆发（Player.heal）
 ##   dodge_heal_chance / dodge_heal_hp —— 流云潜影玉：闪避成功概率回血（Player.take_damage）
@@ -98,7 +99,7 @@ const DEFS: Dictionary = {
 	"zhekou_yufu": {
 		"name": "折扣券", "tier": 2, "price": 26,
 		"icon": "res://assets/art/item_zhekou_yufu.png",
-		"desc": "商店全场 8 折，可叠加",
+		"desc": "商店全场 8 折，最多叠到 7 折",
 		"apply": {"shop_price_mul": 0.92},
 	},
 	"kuangxue_dan": {
@@ -161,7 +162,7 @@ const DEFS: Dictionary = {
 			"name": "五行石", "tier": 3, "price": 45,
 			"icon": "res://assets/art/item_wuxing_pei.png",
 			"desc": "",
-			"apply": {"element_damage_all": 0.07},
+			"apply": {"element_damage_all": 0.07, "move_speed_mult": -0.04},
 		},
 		"wujian_shi": {
 			"name": "经验石", "tier": 3, "price": 42,
@@ -180,7 +181,7 @@ const DEFS: Dictionary = {
 			"name": "破甲针", "tier": 3, "price": 40,
 			"icon": "res://assets/art/item_pojia_zhui.png",
 			"desc": "",
-			"apply": {"elite_damage": 0.25},
+			"apply": {"elite_damage": 0.25, "armor": -1.0},
 		},
 			"xiuluo_pei": {
 				"name": "嗜血石", "tier": 3, "price": 46,
@@ -214,8 +215,9 @@ const DEFS: Dictionary = {
 		"taiyi_jindan": {
 			"name": "极效药丸", "tier": 4, "price": 88,
 			"icon": "res://assets/art/item_taiyi_jindan.png",
-			"desc": "",
-			"apply": {"max_hp": 25.0, "hp_heal": 25.0, "weapon_damage_mult": 0.15, "armor": 2.0, "move_speed_mult": 0.05},
+			"desc": "（每局限购一件）",
+			"apply": {"max_hp": 25.0, "hp_heal": 25.0, "weapon_damage_mult": 0.15, "armor": 2.0, "move_speed_mult": 0.05, "attack_speed_mult_mul": 1.04},
+			"unique": true,
 		},
 
 		# ==================== 2026-10-10 新增 24 件（参考土豆兄弟道具池） ====================
@@ -332,8 +334,9 @@ const DEFS: Dictionary = {
 		"potian_zhui": {
 			"name": "破天锥", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_potian_zhui.png",
-			"desc": "",
-			"apply": {"crit_mult": 0.35},
+			"desc": "（每局限购一件）",
+			"apply": {"crit_mult": 0.35, "move_speed_mult": -0.04},
+			"unique": true,
 		},
 		"jingang_zhuo": {
 			"name": "金刚琢", "tier": 3, "price": 44,
@@ -357,13 +360,13 @@ const DEFS: Dictionary = {
 			"name": "聚灵阵图", "tier": 3, "price": 48,
 			"icon": "res://assets/art/item_juling_zhentu.png",
 			"desc": "",
-			"apply": {"engineering_damage": 4.0, "max_hp": 10.0, "hp_heal": 10.0},
+			"apply": {"engineering_damage": 4.0, "max_hp": 10.0, "hp_heal": 10.0, "move_speed_mult": -0.04},
 		},
 		"hunyuan_yiqifu": {
 			"name": "混元一气符", "tier": 3, "price": 50,
 			"icon": "res://assets/art/item_hunyuan_yiqifu.png",
 			"desc": "",
-			"apply": {"element_damage_all": 0.09},
+			"apply": {"element_damage_all": 0.09, "luck": -3.0},
 		},
 		"jingang_fumo_jia": {
 			"name": "降魔宝甲", "tier": 3, "price": 48,
@@ -376,8 +379,9 @@ const DEFS: Dictionary = {
 		"zhuxian_sui": {
 			"name": "诛仙剑穗", "tier": 4, "price": 92,
 			"icon": "res://assets/art/item_zhuxian_sui.png",
-			"desc": "",
+			"desc": "（每局限购一件）",
 			"apply": {"weapon_damage_mult": 0.30, "crit_rate": 0.08, "armor": -2.0},
+			"unique": true,
 		},
 		"xuanwu_yin": {
 			"name": "玄武印", "tier": 4, "price": 90,
@@ -550,14 +554,21 @@ const DEFS: Dictionary = {
 				"apply": {},
 				"still_dodge": 0.25, "still_armor": 3.0,
 			},
-			"xuanwu_fashan": {
-				"name": "玄武法坛", "tier": 3, "price": 46,
-				"icon": "res://assets/art/item_fanzhen_tongjia.png",
-				"desc": "阵起玄武：站定不动时受击反伤+60%，武器击退力度+80%",
-				"apply": {"attack_range_mult": -0.10},
-				"still_knockback": 0.8, "still_thorns": 0.6,
-			},
-			"panshi_yin": {
+				"xuanwu_fashan": {
+					"name": "玄武法坛", "tier": 3, "price": 46,
+					"icon": "res://assets/art/item_fanzhen_tongjia.png",
+					"desc": "阵起玄武：站定不动时受击反伤+60%，武器击退力度+80%",
+					"apply": {"attack_range_mult": -0.10},
+					"still_knockback": 0.8, "still_thorns": 0.6,
+				},
+				"jingang_shenxiang": {
+					"name": "金刚神像", "tier": 3, "price": 46,
+					"icon": "res://assets/art/item_xuanwu_yin.png",
+					"desc": "金刚怒目：站定不动时攻击间隔-30%；身法略受拘束",
+					"apply": {"move_speed_mult": -0.08},
+					"still_attack_speed": 0.30,
+				},
+				"panshi_yin": {
 				"name": "磐石印", "tier": 4, "price": 92,
 				"icon": "res://assets/art/item_xuanwu_yin.png",
 				"desc": "气沉丹田：站定1秒后全伤害+45%",
@@ -576,7 +587,7 @@ const DEFS: Dictionary = {
 			"lingsui_danqi": {
 				"name": "灵髓丹气", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_qingxin_cha.png",
-				"desc": "药力发作：拾取回复珠或服丹后3秒内，全伤害+25%、移速+15%",
+					"desc": "药力发作：拾取回复珠或药爆后3秒内，全伤害+25%、移速+15%",
 				"apply": {"hp_regen": -0.2},
 				"heal_buff_damage": 0.25, "heal_buff_speed": 0.15, "heal_buff_dur": 3.0,
 			},
@@ -629,7 +640,7 @@ const DEFS: Dictionary = {
 			"tupo_guyu": {
 				"name": "突破古玉", "tier": 4, "price": 95,
 				"icon": "res://assets/art/item_hunyuan_zhu.png",
-				"desc": "道果累进：每回合结束时永久+3最大生命、+0.5生命回复、+1%吸血\n（每局限购一件）",
+				"desc": "道果累进：每回合结束时永久+3最大生命、+0.5生命回复、+1%吸血\n（每局限购一件，成长累计上限 +30 生命 / +5 回复 / +10% 吸血）",
 				"apply": {},
 				"unique": true,
 				"wave_end_max_hp": 3.0, "wave_end_regen": 0.5, "wave_end_lifesteal": 0.01,

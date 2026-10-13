@@ -7,8 +7,8 @@ extends UnitTestsBase
 func _test_exp_curve() -> void:
 	GameManager.reset_run()
 	_c.equals(GameManager.experience_to_next, GameBalance.EXP_FIRST_LEVEL, "1 级起始修为取自 GameBalance")
-	_c.equals(GameBalance.exp_to_next(10), 18, "exp_to_next(10)=int(13.5)+5")
-	_c.equals(GameBalance.exp_to_next(18), 29, "exp_to_next(18)=int(24.3)+5")
+	_c.equals(GameBalance.exp_to_next(10), 20, "exp_to_next(10)=int(14.2)+6")
+	_c.equals(GameBalance.exp_to_next(20), 34, "exp_to_next(20)=int(28.4)+6")
 	var prev := 1
 	var monotonic := true
 	for i in range(20):
@@ -134,16 +134,14 @@ func _test_early_clear_bonus() -> void:
 		"封顶不超过第 10 波的刷怪只数（%d ≤ %d）：余时赏是添头，不是第二条击杀收入" % [
 			GameBalance.EARLY_CLEAR_STONES_MAX, GameBalance.wave_spawn_budget(10)])
 
-## 碎晶档（2026-10-13 经济优化）：普通怪按波次概率掉最低面额小水晶，
-## 只砍金币腿不砍经验腿。碎晶率纯函数单调/起点/封顶；入账分离走生产入口差分。
+## 碎金档（2026-10-13 体验重塑）：普通怪按波次概率掉基础碎金/金砂片，
+## 只砍金币腿不砍经验腿。第 1 波起步 50% 成为最常掉落物品，平滑递增至 70% 封顶。
 func _test_gem_shard() -> void:
-	# 碎晶率曲线：起点前为 0（前期保持现有手感），起点后单调上升，封顶不越过
-	_c.near(GameBalance.gem_shard_chance(0), 0.0, EPS, "第 0 波（选人/结算态）不 roll 碎晶")
-	_c.near(GameBalance.gem_shard_chance(1), 0.0, EPS, "第 1 波不掉碎晶")
-	_c.near(GameBalance.gem_shard_chance(GameBalance.GEM_SHARD_START_WAVE - 1), 0.0, EPS, "起点前一波仍为 0")
-	_c.check(GameBalance.gem_shard_chance(GameBalance.GEM_SHARD_START_WAVE) == 0.0,
-		"起点当波从 0 起抬（波 5 = 起点 → 概率恰 0，第 6 波起才掉）")
-	_c.check(GameBalance.gem_shard_chance(6) > GameBalance.gem_shard_chance(5), "起点后随波次抬升")
+	# 碎金率曲线：第 0 波（选人/结算态）为 0；第 1 波起从基准 50% 起步（最常见掉落），随后单调上升，封顶 70%
+	_c.near(GameBalance.gem_shard_chance(0), 0.0, EPS, "第 0 波（选人/结算态）不 roll 碎金")
+	_c.near(GameBalance.gem_shard_chance(1), GameBalance.GEM_SHARD_BASE_CHANCE, EPS,
+		"第 1 波起步 %.2f（碎金最容易掉落）" % GameBalance.GEM_SHARD_BASE_CHANCE)
+	_c.check(GameBalance.gem_shard_chance(2) > GameBalance.gem_shard_chance(1), "第 2 波概率高于第 1 波")
 	var prev := -1.0
 	var mono := true
 	for w in range(1, 60):
@@ -151,11 +149,18 @@ func _test_gem_shard() -> void:
 		if p < prev:
 			mono = false
 		prev = p
-	_c.check(mono, "碎晶率 1~59 波单调不减")
+	_c.check(mono, "碎金率 1~59 波单调不减")
 	_c.near(GameBalance.gem_shard_chance(999), GameBalance.GEM_SHARD_CHANCE_CAP, EPS,
-		"无尽波次封顶 %.2f：最多四成半掉碎晶，不许把高光掉落掏空" % GameBalance.GEM_SHARD_CHANCE_CAP)
-	# 量级钉：第 20 波的碎晶率约四成半（通胀稀释主要发生在后期）
-	_c.check(GameBalance.gem_shard_chance(20) > 0.3, "W20 碎晶率已超三成（实测 %.2f）" % GameBalance.gem_shard_chance(20))
+		"无尽波次封顶 %.2f：保留约三成大灵石/高光" % GameBalance.GEM_SHARD_CHANCE_CAP)
+	# 量级钉：第 20 波的碎金率在六成半以上
+	_c.check(GameBalance.gem_shard_chance(20) > 0.65, "W20 碎金率已超六成五（实测 %.2f）" % GameBalance.gem_shard_chance(20))
+
+	# 购买力硬护栏：第 1 波击杀期望金币必须能买得起首波基础武器（原价 25）
+	# W1 预算 17~18 只，小怪 exp_reward 基准为 3，50% 碎金(1) + 50% 蓝灵石(3) = 均值 2
+	var w1_kills: int = GameBalance.wave_spawn_budget(1)
+	var w1_expected_stones: float = float(w1_kills) * ((1.0 - GameBalance.gem_shard_chance(1)) * 3.0 + GameBalance.gem_shard_chance(1) * 1.0)
+	_c.check(w1_expected_stones >= 25.0,
+		"W1 击杀期望金币 %.1f ≥ 25（确保首回合稳买基础武器）" % w1_expected_stones)
 
 	# 入账分离：stone_amount 缺省 = 旧行为（灵石=经验原价）；显式传值只改金币腿。
 	# 每段单独 reset + 4×1.5=6 低于升级门槛 10，不触发扣减（与 unit_content 悟性判据同一口径）。
@@ -171,8 +176,8 @@ func _test_gem_shard() -> void:
 	var xp1 := GameManager.experience
 	var st1 := GameManager.spirit_stones
 	GameManager.add_experience(4, GameBalance.GEM_SHARD_STONE_VALUE)
-	_c.equals(GameManager.experience - xp1, 6, "碎晶：经验腿仍足额 ×悟性（升级节奏不动）")
-	_c.equals(GameManager.spirit_stones - st1, GameBalance.GEM_SHARD_STONE_VALUE, "碎晶：金币腿只进 1 枚")
+	_c.equals(GameManager.experience - xp1, 6, "碎金：经验腿仍足额 ×悟性（升级节奏不动）")
+	_c.equals(GameManager.spirit_stones - st1, GameBalance.GEM_SHARD_STONE_VALUE, "碎金：金币腿只进 1 枚")
 	GameManager.reset_run()
 	var st2 := GameManager.spirit_stones
 	GameManager.add_experience(4, -3)
@@ -182,16 +187,17 @@ func _test_gem_shard() -> void:
 
 func _test_rarity_weights() -> void:
 	var base: Dictionary = GameBalance.rarity_weights(0.0)
-	_c.near(base["epic"], 10.0, EPS, "无福缘时仙品权重 10")
-	_c.near(base["common"], 60.0, EPS, "无福缘时凡品权重 60")
-	_c.near(base["rare"], 30.0, EPS, "良品权重恒为 30")
+	_c.near(base["epic"], 8.0, EPS, "无福缘时仙品权重 8")
+	_c.near(base["common"], 62.0, EPS, "无福缘时凡品权重 62")
+	_c.near(base["rare"], 30.0, EPS, "无福缘时良品权重 30")
 	var lucky: Dictionary = GameBalance.rarity_weights(20.0)
-	_c.near(lucky["epic"], 30.0, EPS, "20 点福缘把仙品抬到 30")
-	_c.near(lucky["common"], 40.0, EPS, "差额从凡品扣")
+	_c.near(lucky["epic"], 18.0, EPS, "20 点福缘把仙品抬到 18")
+	_c.near(lucky["rare"], 36.0, EPS, "20 点福缘把良品抬到 36")
+	_c.near(lucky["common"], 46.0, EPS, "差额从凡品扣")
 	_c.near(float(lucky["common"]) + float(lucky["rare"]) + float(lucky["epic"]), 100.0, EPS, "三档之和仍是 100")
 	var maxed: Dictionary = GameBalance.rarity_weights(999.0)
 	_c.near(maxed["common"], GameBalance.RARITY_COMMON_FLOOR, EPS, "凡品有权重地板不会归零")
-	_c.near(GameBalance.rarity_weights(-5.0)["epic"], 10.0, EPS, "负福缘不会倒扣仙品")
+	_c.near(GameBalance.rarity_weights(-5.0)["epic"], 8.0, EPS, "负福缘不会倒扣仙品")
 
 func _test_weighted_pick() -> void:
 	_c.equals(GameBalance.weighted_pick_index([1.0, 1.0], 0.25), 0, "前半段命中第 0 项")

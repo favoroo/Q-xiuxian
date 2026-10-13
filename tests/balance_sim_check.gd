@@ -27,6 +27,7 @@ func _ready() -> void:
 	_test_reference_build_ttks()
 	_test_survivability()
 	_test_spawn_budget_binding()
+	_test_stat_caps_and_pacing()
 	if _selftest:
 		_test_selftest_guard()
 
@@ -196,14 +197,15 @@ func _test_reference_build_ttks() -> void:
 		"第 5 波精英战时长 5~25s (实测 %.1fs)" % w5_elite_ttk)
 
 	# 3.4 极端 6 把青云剑纯输出 Build（用户报的秒杀场景）
-	# 4把★3 + 2把★2, 8次攻击加点 + 6次近战加点 + 狂血丹 + 破甲锥 + 金系满档
+	# 4把★3 + 2把★2, 攻击加点叠满 + 近战加点 + 狂血丹 + 破甲锥 + 金系满档
+	# 2026-10-13 上限体系后：elite 顶 1.0（elite_up×4），wdm raw 2.38 过软顶折成 2.19
 	var extreme_w20_dps := _simulate_build_dps(
 		[{"id": "qingyun_sword", "star": 3}, {"id": "qingyun_sword", "star": 3},
 		 {"id": "qingyun_sword", "star": 3}, {"id": "qingyun_sword", "star": 3},
 		 {"id": "qingyun_sword", "star": 2}, {"id": "qingyun_sword", "star": 2}],
 		{
 			"weapon_damage_mult": 2.38, "melee_damage": 12.0, "crit_rate": 0.37,
-			"crit_mult": 1.75, "attack_speed_mult": 0.60, "elite_damage": 1.25,
+			"crit_mult": 1.75, "attack_speed_mult": 0.60, "elite_damage": 1.0,
 			"synergy_damage_mult": 1.0, "synergy_haste_mult": 1.0,
 			"synergy_crit_rate": 0.20, "synergy_crit_mult": 0.75,
 		},
@@ -292,16 +294,20 @@ func _test_reference_build_ttks() -> void:
 		drone_w10_boss_ttk, drone_w10_dps, drone_w20_boss_ttk, drone_w20_dps, drone_ext_w20_boss_ttk, drone_ext_dps])
 
 # 纯静态链路仿真计算（含多法器神识分流与散射命中规则）
+# 与运行时同口径（2026-10-13 上限体系）：weapon_damage_mult 过软顶折算、crit_mult 合计夹总上限，
+# stats 透传给 weapon_stat_bonus 前先把 wdm 换成「有效值 × 羁绊」（= get_player_stat_dict 的口径）。
 func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> float:
-	var w_dmg_mult: float = float(stats.get("weapon_damage_mult", 1.0))
+	var w_dmg_mult: float = BalanceCombat.effective_weapon_damage_mult(float(stats.get("weapon_damage_mult", 1.0)))
 	var syn_dmg: float = float(stats.get("synergy_damage_mult", 1.0))
 	var cult_dmg: float = float(stats.get("cultivator_damage_mult", 1.0))
 	var elem_dmg: float = float(stats.get("element_damage_mult", 1.0))
 	var atk_spd: float = float(stats.get("attack_speed_mult", 1.0))
 	var syn_haste: float = float(stats.get("synergy_haste_mult", 1.0))
 	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)) + float(stats.get("synergy_crit_rate", 0.0)))
-	var crit_m: float = float(stats.get("crit_mult", 1.5)) + float(stats.get("synergy_crit_mult", 0.0))
-	var elite_mult: float = (1.0 + float(stats.get("elite_damage", 0.0))) if vs_elite else 1.0
+	var crit_m: float = minf(GameManager.CRIT_MULT_CAP, float(stats.get("crit_mult", 1.5)) + float(stats.get("synergy_crit_mult", 0.0)))
+	var elite_mult: float = (1.0 + minf(GameManager.ELITE_DAMAGE_CAP, float(stats.get("elite_damage", 0.0)))) if vs_elite else 1.0
+	stats = stats.duplicate()
+	stats["weapon_damage_mult"] = w_dmg_mult * syn_dmg
 	# 神识分流按御灵半权：数一下编队里的 DRONE 把数（2026-10-11 召唤流校准）
 	var drone_n := 0
 	for item in weapons:
@@ -347,14 +353,16 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 ## （布设间隔 × 攻速 < 存在时长时恒可达）。炮台弹丸不带 proc（_perform_turret_attack 不设 proc_*），
 ## 故不计灼烧/剧毒。只读静态表与入参，确定性。
 func _simulate_turret_build_dps(weapon_ids: Array, stats: Dictionary) -> float:
-	var w_dmg_mult: float = float(stats.get("weapon_damage_mult", 1.0))
+	var w_dmg_mult: float = BalanceCombat.effective_weapon_damage_mult(float(stats.get("weapon_damage_mult", 1.0)))
 	var atk_spd: float = float(stats.get("attack_speed_mult", 1.0))
 	var crit_r: float = minf(0.75, float(stats.get("crit_rate", 0.05)))
-	var crit_m: float = float(stats.get("crit_mult", 1.5))
-	var elite_mult: float = 1.0 + float(stats.get("elite_damage", 0.0))
+	var crit_m: float = minf(GameManager.CRIT_MULT_CAP, float(stats.get("crit_mult", 1.5)))
+	var elite_mult: float = 1.0 + minf(GameManager.ELITE_DAMAGE_CAP, float(stats.get("elite_damage", 0.0)))
 	var contraption_mult: float = 1.0 + float(stats.get("synergy_contraption", 0.0))
 	var multi_mult: float = GameBalance.multi_weapon_damage_mult(weapon_ids.size())
 	var expected_crit := 1.0 + crit_r * (crit_m - 1.0)
+	stats = stats.duplicate()
+	stats["weapon_damage_mult"] = w_dmg_mult
 
 	var total_dps := 0.0
 	for wid in weapon_ids:
@@ -372,8 +380,8 @@ func _simulate_turret_build_dps(weapon_ids: Array, stats: Dictionary) -> float:
 ## 常用杂怪基础接触伤中位（scenes/entities：Slime 12 / XieXiu 13 / YingMei 13 / XueYong 14 / Flower 15）
 const MIXED_MOB_CONTACT := 14.0
 
-## 每秒进伤上限 = 单下实伤 ÷ 玩家无敌帧。小怪厚度 4.5 倍后怪在场久、挨打频率顶到这个上限，
-## 所以「容易死」的尺子就是单下伤害，而不是每秒理论输出。
+## 每秒进伤上限 = 单下实伤 ÷ 玩家无敌帧。小怪厚度 6.0 倍后怪在场久、挨打频率顶到这个上限，
+## 所以「容易死/死不了」的尺子就是单下伤害，而不是每秒理论输出。
 func _measure_player_runtime() -> Dictionary:
 	var scene: PackedScene = load("res://scenes/entities/Player.tscn")
 	var p := scene.instantiate() as Player
@@ -419,31 +427,31 @@ func _test_survivability() -> void:
 	var meta_hp := base_hp + 6.0 * hp_per
 	var meta_armor := 5.0 * armor_per
 
-	# 5.1 最低档前段必须留试错空间（用户口径：简单难度都很容易死）
+	# 5.1 最低档前段仍留反应空间但不许无脑站桩（2026-10-13 口径反转：0.68 下死不了→提至 0.80）
 	var w1_raw := _raw_contact(MIXED_MOB_CONTACT, 1, 0)
 	var w1_pct := GameBalance.incoming_damage(w1_raw, 0.0) / base_hp
-	_c.check(w1_pct <= 0.09,
-		"危险度 0 第 1 波单下掉裸装气血 %.1f%%（≤9%%：吃两下不慌）" % (w1_pct * 100.0))
+	_c.check(w1_pct <= 0.11,
+		"危险度 0 第 1 波单下掉裸装气血 %.1f%%（≤11%%：挨两下有痛感但不秒杀）" % (w1_pct * 100.0))
 	var w1_sec := _survive_sec(base_hp, 0.0, w1_raw, iframe)
-	_c.check(w1_sec >= 6.0, "危险度 0 裸装第 1 波站进怪群活 %.1fs（≥6.0s）" % w1_sec)
+	_c.check(w1_sec >= 5.0, "危险度 0 裸装第 1 波站进怪群活 %.1fs（≥5.0s）" % w1_sec)
 	var w5_sec := _survive_sec(base_hp, 0.0, _raw_contact(MIXED_MOB_CONTACT, 5, 0), iframe)
-	_c.check(w5_sec >= 5.0, "危险度 0 裸装第 5 波站进怪群活 %.1fs（≥5.0s）" % w5_sec)
+	_c.check(w5_sec >= 4.0, "危险度 0 裸装第 5 波站进怪群活 %.1fs（≥4.0s）" % w5_sec)
 
 	# 5.2 中段与后段：肯点生存就不该被怪群秒躺
 	var w10_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, 0), iframe)
-	_c.check(w10_sec >= 8.5, "半肉 Build（气血 %.0f/护甲 %.0f）第 10 波站进怪群活 %.1fs（≥8.5s）" % [half_hp, half_armor, w10_sec])
+	_c.check(w10_sec >= 7.5, "半肉 Build（气血 %.0f/护甲 %.0f）第 10 波站进怪群活 %.1fs（≥7.5s）" % [half_hp, half_armor, w10_sec])
 	var w20_sec := _survive_sec(meta_hp, meta_armor, _raw_contact(MIXED_MOB_CONTACT, 20, 0), iframe)
-	_c.check(w20_sec >= 8.0, "成型 Build（气血 %.0f/护甲 %.0f）第 20 波站进怪群活 %.1fs（≥8.0s）" % [meta_hp, meta_armor, w20_sec])
+	_c.check(w20_sec >= 7.0, "成型 Build（气血 %.0f/护甲 %.0f）第 20 波站进怪群活 %.1fs（≥7.0s）" % [meta_hp, meta_armor, w20_sec])
 
 	# 5.3 单发最重的那一下（Boss 震地）不许一口糊掉三成血
 	var slam := GameBalance.incoming_damage(_raw_contact(GameBalance.BOSS_CONTACT_BASE, 10, 0) * GameBalance.BOSS_SLAM_DMG_MULT, half_armor)
-	_c.check(slam <= half_hp * 0.15,
-		"第 10 波魔君震地单发掉半肉 Build %.1f%%（≤15%%：一口糊半血就是白给）" % (slam / half_hp * 100.0))
+	_c.check(slam <= half_hp * 0.17,
+		"第 10 波魔君震地单发掉半肉 Build %.1f%%（≤17%%：一口糊半血就是白给）" % (slam / half_hp * 100.0))
 
 	# 5.4 六档梯度不许因为整体下调而倒挂
 	var d5_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, GameBalance.DANGER_MAX), iframe)
 	_c.check(d5_sec < w10_sec, "危险度 %d 生存 %.1fs 仍短于危险度 0 的 %.1fs（梯子还在）" % [GameBalance.DANGER_MAX, d5_sec, w10_sec])
-	_c.check(d5_sec >= 5.0, "极限档半肉 Build 第 10 波也至少活 %.1fs（≥5.0s：最高档该难，但不该没有反应时间）" % d5_sec)
+	_c.check(d5_sec >= 4.0, "极限档半肉 Build 第 10 波也至少活 %.1fs（≥4.0s：最高档该难，但不该没有反应时间）" % d5_sec)
 
 	print("SURVIVAL 危险度0 裸装(%.0f血/0甲)：" % base_hp)
 	for w in [1, 3, 5, 8, 10, 15, 20]:
@@ -482,6 +490,76 @@ func _test_spawn_budget_binding() -> void:
 	for line in table:
 		print("  " + line)
 
+# ---------------- 6. 输出上限与投放节奏（2026-10-13 反通胀体系钉点） ----------------
+## 钉的是「属性不许无限叠」这一结构本身：软顶函数读数、硬顶经 StatSystem 真落地、
+## 突破古玉成长到账账本、经验曲线一局点数带。改曲线/改上限时这里先红。
+
+## 经验链模拟：把总经验喂进 GameBalance.exp_to_next 链，数能升几级（= 一局悟道点数的上限口径）
+func _levels_for_xp(xp_total: int) -> int:
+	var lvl := 0
+	var xp := 0
+	var need := GameBalance.EXP_FIRST_LEVEL
+	while xp + need <= xp_total:
+		xp += need
+		lvl += 1
+		need = GameBalance.exp_to_next(need)
+	return lvl
+
+func _test_stat_caps_and_pacing() -> void:
+	# 6.1 软顶函数读数（BalanceCombat 唯一算式）
+	_c.near(BalanceCombat.effective_weapon_damage_mult(1.5), 1.5, EPS, "武器伤害软顶：膝点内原值（1.5 → 1.5）")
+	_c.near(BalanceCombat.effective_weapon_damage_mult(2.0), 2.0, EPS, "武器伤害软顶：膝点本点（2.0 → 2.0）")
+	_c.near(BalanceCombat.effective_weapon_damage_mult(2.38), 2.19, EPS, "武器伤害软顶：过膝减半（2.38 → 2.19）")
+	_c.near(BalanceCombat.effective_weapon_damage_mult(3.0), 2.5, EPS, "武器伤害软顶：3.0 → 2.5")
+	_c.near(BalanceCombat.effective_hp_regen(6.0), 6.0, EPS, "生命回复软顶：膝点内原值（6 → 6）")
+	_c.near(BalanceCombat.effective_hp_regen(12.0), 10.0, EPS, "生命回复软顶：过膝减半（12 → 10）")
+
+	# 6.2 硬顶经 StatSystem 真落地（不是只写在常量里没人夹）
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"crit_mult": 9.9}, "test")
+	_c.near(GameManager.crit_mult, GameManager.CRIT_MULT_CAP, EPS, "暴击伤害落地夹总上限 %.2f" % GameManager.CRIT_MULT_CAP)
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"lifesteal": 9.9}, "test")
+	_c.near(GameManager.lifesteal, GameManager.LIFESTEAL_CAP, EPS, "噬元落地夹上限 %.2f" % GameManager.LIFESTEAL_CAP)
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"elite_damage": 9.9}, "test")
+	_c.near(GameManager.elite_damage, GameManager.ELITE_DAMAGE_CAP, EPS, "斩将落地夹上限 %.2f" % GameManager.ELITE_DAMAGE_CAP)
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"element_damage_fire": 9.9, "element_damage_all": 9.9}, "test")
+	_c.near(float(GameManager.element_damage.get("fire", 0.0)), GameManager.ELEMENT_DAMAGE_CAP, EPS, "五行真解单系夹上限 %.2f" % GameManager.ELEMENT_DAMAGE_CAP)
+	_c.near(float(GameManager.element_damage.get("metal", 0.0)), GameManager.ELEMENT_DAMAGE_CAP, EPS, "全元素加成逐系夹上限 %.2f" % GameManager.ELEMENT_DAMAGE_CAP)
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"shop_price_mul": 0.1}, "test")
+	_c.near(GameManager.shop_price_mult, GameManager.SHOP_PRICE_FLOOR, EPS, "道具折扣腿夹地板 %.2f" % GameManager.SHOP_PRICE_FLOOR)
+	# 暴击合计出口：加点层 + 羁绊层超过总上限时 getter 也要夹
+	GameManager.reset_run()
+	GameManager.crit_mult = 2.2
+	GameManager.synergy_crit_mult = 0.75
+	_c.near(GameManager.get_crit_mult(), GameManager.CRIT_MULT_CAP, EPS, "暴击伤害合计出口夹上限（2.2 + 0.75 → %.2f）" % GameManager.CRIT_MULT_CAP)
+
+	# 6.3 突破古玉成长到账账本：20 回合全买也顶到 WAVE_END_*_CAP 为止
+	GameManager.reset_run()
+	GameManager.items.append("tupo_guyu")
+	for i in range(20):
+		GameManager.apply_harvest()
+	_c.check(float(GameManager._wave_end_growth["max_hp"]) <= GameManager.WAVE_END_HP_CAP + EPS,
+		"突破古玉生命成长到账 ≤ %.0f（实得 %.1f）" % [GameManager.WAVE_END_HP_CAP, float(GameManager._wave_end_growth["max_hp"])])
+	_c.check(float(GameManager._wave_end_growth["hp_regen"]) <= GameManager.WAVE_END_REGEN_CAP + EPS,
+		"突破古玉回复成长到账 ≤ %.1f（实得 %.2f）" % [GameManager.WAVE_END_REGEN_CAP, float(GameManager._wave_end_growth["hp_regen"])])
+	_c.check(float(GameManager._wave_end_growth["lifesteal"]) <= GameManager.WAVE_END_LIFESTEAL_CAP + EPS,
+		"突破古玉吸血成长到账 ≤ %.2f（实得 %.3f）" % [GameManager.WAVE_END_LIFESTEAL_CAP, float(GameManager._wave_end_growth["lifesteal"])])
+	GameManager.reset_run()
+
+	# 6.4 经验曲线投放带：典型一局经验（6k~12k）落在 12~16 级，重肝局（24k）不许破 20
+	# （判据元数据目标态：W20 成型 = 18 项加点；曲线若漂到「随便 25 级」，上限体系就白搭）
+	var l6 := _levels_for_xp(6000)
+	var l12 := _levels_for_xp(12000)
+	var l24 := _levels_for_xp(24000)
+	_c.check(l6 >= 11 and l6 <= 15, "经验曲线：6k 经验 %d 级（带 11~15）" % l6)
+	_c.check(l12 >= 13 and l12 <= 17, "经验曲线：12k 经验 %d 级（带 13~17）" % l12)
+	_c.check(l24 <= 20, "经验曲线：24k 经验 %d 级（≤20，上限体系要对点数有意义）" % l24)
+	print("PACING 经验曲线：6k→%d 级 / 12k→%d 级 / 24k→%d 级" % [l6, l12, l24])
+
 func _test_selftest_guard() -> void:
 	# 验证反例：如果把 Boss 基础血量误改成旧版的 1000，极端 build 的 TTK 会跌破 8 秒
 	var old_boss_hp_w20 := 1000.0 * GameBalance.enemy_hp_mult(20)
@@ -494,5 +572,5 @@ func _test_selftest_guard() -> void:
 	var base_hp: float = rt["hp"]
 	var old_w1_raw := ceilf(MIXED_MOB_CONTACT * 1.0)
 	var old_w1_sec := _survive_sec(base_hp, 0.0, old_w1_raw, iframe)
-	_c.check(old_w1_sec < 6.0,
+	_c.check(old_w1_sec < 5.0,
 		"自检证实：旧敌伤基线 ×1.0 下第 1 波裸装仅活 %.1fs，会直接报红（现基线 ×%.2f）" % [old_w1_sec, GameBalance.ENEMY_DMG_BASE_MULT])

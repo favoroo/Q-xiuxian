@@ -168,13 +168,13 @@ func _find_target() -> Node2D:
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
 	var syn_contraption := float(GameManager.get("synergy_contraption_mult")) if GameManager.get("synergy_contraption_mult") != null else 1.0
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * syn_contraption * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
+	return (base_damage + stat_bonus) * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * syn_contraption * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
-## 开火间隔有效值：与 FloatingWeapon/SunOrb 同口径——装备/加点层 × 羁绊层 × 疾风咒 buff 层
+## 开火间隔有效值：与 FloatingWeapon/SunOrb 同口径——装备/加点层 × 羁绊层 × 疾风咒 buff 层 × 站定神像
 ## （漏乘 buff 层则疾风期间炮台不加速，玩家直觉与实际不符）
 func _eff_fire_cd() -> float:
 	var turret_haste: float = 1.0 - GameManager.item_hook_sum("turret_haste")
-	return fire_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult * maxf(0.2, turret_haste)
+	return fire_cooldown * GameManager.get_effective_attack_speed_mult() * maxf(0.2, turret_haste)
 
 func _fire() -> void:
 	_cooldown_timer = maxf(0.12, _eff_fire_cd())

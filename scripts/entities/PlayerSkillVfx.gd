@@ -86,6 +86,32 @@ var _body_scale := Vector2.ONE
 var shadow_stacks: int = 0
 var _shadow_pop: float = 0.0  ## 刚攒上一层时的弹跳余量（1→0）
 
+# 10. 药爆状态（药王：摔药罐）
+var elixir_progress: float = -1.0  ## >=0 播放药爆摔碎药瓶动效 (0.0 -> 1.0)
+var elixir_shards: Array[Dictionary] = [] ## 药雾飞沫与草木微粒 {pos, vel, size, is_leaf}
+
+# 11. 天雷引动状态（雷法真君）
+var thunder_flash_timer: float = 0.0
+var thunder_sparks: Array[Dictionary] = []
+
+# 12. 盾势罡气状态（守卫）
+var guard_charge_ratio: float = 0.0
+var guard_rot: float = 0.0
+var _guard_pop: float = 0.0
+var guard_burst_timer: float = 0.0
+
+# 13. 战意气焰状态（狂战士）
+var frenzy_stacks: float = 0.0
+var frenzy_particle_timer: float = 0.0
+var frenzy_sparks: Array[Dictionary] = []
+var frenzy_burst_timer: float = 0.0
+
+# 14. 斩灭凝神回溯状态（绝尘）
+var cd_refund_timer: float = 0.0
+
+# 15. 陷阵煞环状态（蛮兵）
+var crowd_aura_alpha: float = 0.0
+
 func _ready() -> void:
 	z_index = 2  ## 略高于角色精灵
 	_init_ghost_pool()
@@ -206,6 +232,74 @@ func on_shadow_gained(stacks: int) -> void:
 func on_shadow_spent() -> void:
 	shadow_stacks = 0
 	_shadow_pop = 0.0
+	queue_redraw()
+
+## 药爆施放（摔碎药罐：自身回血甘霖 + 毒雾飞沫四溅）
+func on_elixir_cast() -> void:
+	elixir_progress = 0.0
+	elixir_shards.clear()
+	_notify_procedural_view("renewal", true, 1.0)
+	for i in range(16):
+		var ang := float(i) * (TAU / 16.0) + randf_range(-0.18, 0.18)
+		var spd := randf_range(90.0, 180.0)
+		elixir_shards.append({
+			"pos": FEET_CENTER,
+			"vel": Vector2(cos(ang) * spd, sin(ang) * (spd * 0.72)),
+			"size": randf_range(1.8, 3.4),
+			"is_leaf": (i % 2 == 0),
+		})
+	queue_redraw()
+
+## 天雷引动（雷法真君）：周身电芒激荡 + 法相爆闪
+func on_thunder_cast() -> void:
+	_refresh_body_scale()
+	thunder_flash_timer = 0.28
+	_notify_procedural_view("thunder", true, 1.0)
+	thunder_sparks.clear()
+	for i in range(6):
+		var ang := randf() * TAU
+		var spd := randf_range(35.0, 80.0)
+		thunder_sparks.append({
+			"pos": BODY_CENTER * _body_scale.y + Vector2(cos(ang) * 10.0, sin(ang) * 10.0),
+			"vel": Vector2(cos(ang) * spd, sin(ang) * spd),
+			"life": randf_range(0.12, 0.24),
+			"max_life": 0.24,
+		})
+	queue_redraw()
+
+## 盾势受击蓄能更新（守卫）：玄金护体残弧渐显
+func on_guard_charge_updated(charge: float, max_charge: float) -> void:
+	_refresh_body_scale()
+	guard_charge_ratio = clampf(charge / maxf(1.0, max_charge), 0.0, 1.0)
+	_guard_pop = 1.0
+	_notify_procedural_view("guard", guard_charge_ratio > 0.0, guard_charge_ratio)
+	queue_redraw()
+
+## 盾势蓄满爆发（守卫）：罡气炸开
+func on_guard_burst() -> void:
+	guard_charge_ratio = 0.0
+	guard_burst_timer = 0.24
+	_notify_procedural_view("guard", false)
+	queue_redraw()
+
+## 同步狂战士战意层数
+func sync_frenzy(stacks: float, max_stacks: float) -> void:
+	var prev := frenzy_stacks
+	frenzy_stacks = maxf(0.0, stacks)
+	var ratio := clampf(frenzy_stacks / maxf(1.0, max_stacks), 0.0, 1.0)
+	if frenzy_stacks > 0.0:
+		_notify_procedural_view("frenzy", true, clampf(ratio * 1.2, 0.35, 1.0))
+	elif prev > 0.0:
+		_notify_procedural_view("frenzy", false)
+
+## 狂战士战意满层爆气
+func on_frenzy_max_burst() -> void:
+	frenzy_burst_timer = 0.28
+	queue_redraw()
+
+## 斩灭凝神返还技能冷却（绝尘）
+func on_cd_refunded() -> void:
+	cd_refund_timer = 0.24
 	queue_redraw()
 
 # ---------------- 每帧逻辑更新 ----------------
@@ -351,6 +445,96 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		needs_redraw = true
 		_shadow_pop = maxf(0.0, _shadow_pop - delta * 5.0)
 
+	# 9. 药爆动效更新（摔药罐四溅飞沫与药雾）
+	if elixir_progress >= 0.0:
+		needs_redraw = true
+		elixir_progress += delta * 2.2  ## 约 0.45s 走完
+		for s in elixir_shards:
+			s["pos"] = Vector2(s["pos"]) + Vector2(s["vel"]) * delta
+			s["vel"] = Vector2(s["vel"]) * 0.90
+		if elixir_progress >= 1.0:
+			elixir_progress = -1.0
+			elixir_shards.clear()
+			_notify_procedural_view("renewal", false)
+
+	# 10. 天雷引动电芒（雷法真君）
+	if thunder_flash_timer > 0.0:
+		needs_redraw = true
+		thunder_flash_timer -= delta
+		if thunder_flash_timer <= 0.0:
+			_notify_procedural_view("thunder", false)
+			thunder_sparks.clear()
+		else:
+			var ti := thunder_sparks.size() - 1
+			while ti >= 0:
+				var tsp: Dictionary = thunder_sparks[ti]
+				tsp["life"] = float(tsp["life"]) - delta
+				if float(tsp["life"]) <= 0.0:
+					thunder_sparks.remove_at(ti)
+				else:
+					tsp["pos"] = Vector2(tsp["pos"]) + Vector2(tsp["vel"]) * delta
+				ti -= 1
+
+	# 11. 盾势罡气更新（守卫）
+	if guard_charge_ratio > 0.0:
+		needs_redraw = true
+		guard_rot += delta * (1.6 + guard_charge_ratio * 2.2)
+		if _guard_pop > 0.0:
+			_guard_pop = maxf(0.0, _guard_pop - delta * 4.5)
+	if guard_burst_timer > 0.0:
+		needs_redraw = true
+		guard_burst_timer -= delta
+
+	# 12. 战意气焰与煞火微粒（狂战士）
+	if frenzy_stacks > 0.0:
+		needs_redraw = true
+		frenzy_particle_timer -= delta
+		if frenzy_particle_timer <= 0.0:
+			var spawn_interval := lerpf(0.12, 0.035, clampf(frenzy_stacks / 20.0, 0.0, 1.0))
+			frenzy_particle_timer = spawn_interval
+			var max_particles := int(lerpf(4.0, 18.0, clampf(frenzy_stacks / 20.0, 0.0, 1.0)))
+			if frenzy_sparks.size() < max_particles:
+				var p_x := randf_range(-14.0, 14.0) * _body_scale.x
+				var p_y := (FEET_CENTER.y + randf_range(-6.0, 4.0)) * _body_scale.y
+				var spd_y := randf_range(-50.0, -110.0)
+				frenzy_sparks.append({
+					"pos": Vector2(p_x, p_y),
+					"vel": Vector2(randf_range(-10.0, 10.0), spd_y),
+					"life": randf_range(0.22, 0.38),
+					"max_life": 0.35,
+					"size": randf_range(1.6, 3.2),
+				})
+	if not frenzy_sparks.is_empty():
+		needs_redraw = true
+		var fi := frenzy_sparks.size() - 1
+		while fi >= 0:
+			var fsp: Dictionary = frenzy_sparks[fi]
+			fsp["life"] = float(fsp["life"]) - delta
+			if float(fsp["life"]) <= 0.0:
+				frenzy_sparks.remove_at(fi)
+			else:
+				fsp["pos"] = Vector2(fsp["pos"]) + Vector2(fsp["vel"]) * delta
+				fsp["vel"] = Vector2(fsp["vel"]) * 0.94
+			fi -= 1
+	if frenzy_burst_timer > 0.0:
+		needs_redraw = true
+		frenzy_burst_timer -= delta
+
+	# 13. 斩灭凝神回溯光丝（绝尘）
+	if cd_refund_timer > 0.0:
+		needs_redraw = true
+		cd_refund_timer -= delta
+
+	# 14. 陷阵煞环平滑淡入淡出（蛮兵）
+	var target_crowd_alpha := 0.0
+	if GameManager.crowd_damage_radius > 0.0 and GameManager.nearby_enemy_count >= 2:
+		target_crowd_alpha = clampf(float(GameManager.nearby_enemy_count) / 10.0, 0.25, 0.85)
+	if not is_equal_approx(crowd_aura_alpha, target_crowd_alpha):
+		crowd_aura_alpha = move_toward(crowd_aura_alpha, target_crowd_alpha, delta * 3.0)
+		needs_redraw = true
+	elif crowd_aura_alpha > 0.0:
+		needs_redraw = true
+
 	if needs_redraw:
 		queue_redraw()
 
@@ -439,7 +623,30 @@ func _draw() -> void:
 	if renewal_progress >= 0.0:
 		_draw_renewal_fx()
 
-	# 6. 踏影影层读数（最后画：它是给人数的数，不许被任何特效压住）
+	# 6. 药爆：摔碎药罐的地面药液波纹、四散飞沫与升华药气
+	if elixir_progress >= 0.0:
+		_draw_elixir_fx()
+	# 7. 陷阵煞环（蛮兵）：脚底破阵刻印
+	if crowd_aura_alpha > 0.0:
+		_draw_crowd_aura_fx()
+
+	# 8. 战意气焰（狂战士）：血煞腾空火星与战圈
+	if frenzy_stacks > 0.0 or frenzy_burst_timer > 0.0:
+		_draw_frenzy_fx()
+
+	# 9. 盾势罡气（守卫）：玄金护体残弧
+	if guard_charge_ratio > 0.0 or guard_burst_timer > 0.0:
+		_draw_guard_stance_fx()
+
+	# 10. 天雷引动（雷法真君）：周身雷弧火花
+	if thunder_flash_timer > 0.0:
+		_draw_thunder_sparks()
+
+	# 11. 斩灭凝神（绝尘）：剑意返照十字星光
+	if cd_refund_timer > 0.0:
+		_draw_cd_refund_fx()
+
+	# 12. 踏影影层读数（最后画：它是给人数的数，不许被任何特效压住）
 	if shadow_stacks > 0:
 		_draw_shadow_pips()
 
@@ -778,3 +985,172 @@ func _draw_renewal_fx() -> void:
 		# 向上拖曳的甘霖光丝
 		var tail_p := pos + Vector2(0.0, float(pt["speed_y"]) * 0.06 * (1.0 - p))
 		draw_line(tail_p, pos, Color(GameStyle.GOOD.r, GameStyle.GOOD.g, GameStyle.GOOD.b, p_alpha * 0.65), 1.2)
+
+## 绘制【药爆】：摔碎药罐的地面药液波纹、四散飞沫与升华药气
+func _draw_elixir_fx() -> void:
+	var p := elixir_progress
+	var alpha := 1.0 - p
+
+	# 1. 地面药罐碎裂波纹：两层透视椭圆（脚底展开）
+	var col_good := GameStyle.GOOD
+	var col_edge := GameStyle.GOOD  # TODO(药爆作者): 原写 GOOD_EDGE 并不存在，先以 GOOD 顶替编译
+	var ring_rx := 24.0 + p * 38.0
+	var ring_ry := 10.0 + p * 16.0
+	var ring_pts := PackedVector2Array()
+	for i in range(25):
+		var a := float(i) * (TAU / 24.0)
+		ring_pts.append(FEET_CENTER + Vector2(cos(a) * ring_rx, sin(a) * ring_ry))
+	draw_polyline(ring_pts, Color(col_good.r, col_good.g, col_good.b, alpha * 0.85), 2.0, true)
+
+	# 内圈白细光环
+	if p < 0.6:
+		var in_p := p / 0.6
+		var in_rx := ring_rx * 0.65
+		var in_ry := ring_ry * 0.65
+		var in_pts := PackedVector2Array()
+		for i in range(25):
+			var a := float(i) * (TAU / 24.0)
+			in_pts.append(FEET_CENTER + Vector2(cos(a) * in_rx, sin(a) * in_ry))
+		draw_polyline(in_pts, Color(1.0, 1.0, 1.0, (1.0 - in_p) * 0.75), 1.2, true)
+
+	# 2. 四散飞溅的药沫与药液微滴
+	for spk in elixir_shards:
+		var sp_pos: Vector2 = spk["pos"]
+		var sp_sz: float = float(spk["size"]) * (1.0 - p * 0.4)
+		var is_leaf: bool = bool(spk.get("is_leaf", false))
+		var col := col_edge if is_leaf else col_good
+		draw_circle(sp_pos, sp_sz, Color(col.r, col.g, col.b, alpha * 0.95))
+		draw_circle(sp_pos, sp_sz * 0.5, Color(1.0, 1.0, 1.0, alpha * 0.95))
+		# 飞溅短拖尾
+		var vel: Vector2 = spk["vel"]
+		if vel.length_squared() > 100.0:
+			var tail := sp_pos - vel.normalized() * (6.0 * (1.0 - p))
+			draw_line(tail, sp_pos, Color(col.r, col.g, col.b, alpha * 0.65), 1.2)
+
+	# 3. 自身周围升华的药香甘气（6 缕青碧药气，代表自身治疗）
+	for k in range(6):
+		var ka := float(k) * (TAU / 6.0) + p * 2.5
+		var kr := 10.0 + sin(p * PI + float(k)) * 6.0
+		var ky := lerpf(FEET_CENTER.y, BODY_CENTER.y - 12.0, p) + sin(float(k) * 1.5) * 4.0
+		var kp := Vector2(cos(ka) * kr, ky)
+		draw_circle(kp, 1.6 * (1.0 - p * 0.3), Color(col_good.r, col_good.g, col_good.b, alpha * 0.8))
+		draw_circle(kp, 0.8, Color(1.0, 1.0, 1.0, alpha * 0.9))
+
+## 绘制【天雷】周身雷弧火花（雷法真君）
+func _draw_thunder_sparks() -> void:
+	var alpha := clampf(thunder_flash_timer / 0.28, 0.0, 1.0)
+	var bc := BODY_CENTER * _body_scale.y
+	for i in range(2):
+		var a1 := float(i) * PI + randf_range(-0.4, 0.4)
+		var r1 := randf_range(12.0, 22.0) * _body_scale.x
+		var p1 := bc + Vector2(cos(a1) * r1, sin(a1) * r1 * 0.8)
+		var mid := bc + Vector2(cos(a1 + 0.6) * (r1 * 1.3), sin(a1 + 0.6) * (r1 * 0.9))
+		var a2 := a1 + 1.2
+		var p2 := bc + Vector2(cos(a2) * r1, sin(a2) * r1 * 0.8)
+		var pts := PackedVector2Array([p1, mid, p2])
+		draw_polyline(pts, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, alpha * 0.85), 1.6)
+		draw_polyline(pts, Color(1.0, 1.0, 1.0, alpha * 0.95), 0.8)
+	for sp in thunder_sparks:
+		var sp_alpha := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0) * alpha
+		draw_circle(sp["pos"], 1.5, Color(1.0, 1.0, 1.0, sp_alpha))
+		draw_circle(sp["pos"], 2.4, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, sp_alpha * 0.6))
+
+## 绘制【盾势】玄金护体残弧（守卫）
+func _draw_guard_stance_fx() -> void:
+	var sc := Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y)
+	if guard_charge_ratio > 0.0:
+		var pop_scale := 1.0 + _guard_pop * 0.22
+		var rx := SHIELD_RX * _body_scale.x * pop_scale
+		var ry := SHIELD_RY * _body_scale.y * pop_scale
+		var alpha := clampf(0.22 + guard_charge_ratio * 0.62, 0.0, 0.85)
+		var width := 1.8 + guard_charge_ratio * 1.2
+		var col_edge := GameStyle.AURUM_EDGE
+
+		# 绘制 4 段环绕罡气弧
+		var a_span := (TAU * 0.25) * 0.65
+		for i in range(4):
+			var a_start := guard_rot + float(i) * (TAU * 0.25)
+			var arc_pts := PackedVector2Array()
+			var steps := 8
+			for s in range(steps + 1):
+				var ang := a_start + a_span * (float(s) / float(steps))
+				arc_pts.append(sc + Vector2(cos(ang) * rx, sin(ang) * ry))
+			draw_polyline(arc_pts, Color(col_edge.r, col_edge.g, col_edge.b, alpha), width, true)
+			draw_polyline(arc_pts, Color(1.0, 1.0, 1.0, alpha * 0.4), maxf(1.0, width * 0.4), true)
+
+		# 接近蓄满时（>=90%）在四极闪烁蓄力标示
+		if guard_charge_ratio >= 0.90:
+			var pip_alpha := (0.6 + sin(guard_rot * 6.0) * 0.4) * alpha
+			for i in range(4):
+				var pa := guard_rot + float(i) * (TAU * 0.25) + a_span * 0.5
+				var pp := sc + Vector2(cos(pa) * (rx + 2.5), sin(pa) * (ry + 2.5))
+				draw_circle(pp, 2.0, Color(col_edge.r, col_edge.g, col_edge.b, pip_alpha))
+				draw_circle(pp, 1.0, Color(1.0, 1.0, 1.0, pip_alpha))
+
+	# 蓄满爆发当帧扩散冲击
+	if guard_burst_timer > 0.0:
+		var bp := 1.0 - guard_burst_timer / 0.24
+		var b_rx := lerpf(SHIELD_RX * _body_scale.x, 48.0 * _body_scale.x, bp)
+		var b_ry := lerpf(SHIELD_RY * _body_scale.y, 48.0 * _body_scale.y, bp)
+		var b_pts := PackedVector2Array()
+		for i in range(25):
+			var a := float(i) * (TAU / 24.0)
+			b_pts.append(sc + Vector2(cos(a) * b_rx, sin(a) * b_ry))
+		draw_polyline(b_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - bp) * 0.8), 2.2, true)
+
+## 绘制【战意】血煞腾空火星与战圈（狂战士）
+func _draw_frenzy_fx() -> void:
+	# 1. 升腾的血煞煞气星芒
+	for sp in frenzy_sparks:
+		var ratio := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0)
+		var p_pos: Vector2 = sp["pos"]
+		var sz: float = float(sp.get("size", 2.0))
+		var col := Color(0.95, 0.22, 0.16, ratio * 0.85)
+		var tail := p_pos + Vector2(0.0, 4.0 * ratio)
+		draw_line(tail, p_pos, col, sz, true)
+		draw_circle(p_pos, sz * 0.5, Color(1.0, 0.7, 0.4, ratio * 0.95))
+
+	# 2. 战意达到 10 层以上时在脚底绘制旋转血煞战印
+	if frenzy_stacks >= 10.0:
+		var f_ratio := clampf(frenzy_stacks / 20.0, 0.0, 1.0)
+		var r := 16.0 * _body_scale.x
+		var fc := FEET_CENTER * _body_scale.y
+		var col_ring := Color(0.92, 0.18, 0.15, 0.28 * f_ratio)
+		draw_arc(fc, r, 0.0, TAU, 20, col_ring, 1.2, true)
+		for i in range(4):
+			var a := float(i) * (TAU * 0.25)
+			var p1 := fc + Vector2(cos(a) * r, sin(a) * r)
+			var p2 := fc + Vector2(cos(a) * (r + 3.5), sin(a) * (r + 3.5))
+			draw_line(p1, p2, col_ring, 1.2)
+
+	# 3. 满层（20层）瞬时爆气光环
+	if frenzy_burst_timer > 0.0:
+		var p := 1.0 - frenzy_burst_timer / 0.28
+		var bc := BODY_CENTER * _body_scale.y
+		var r_burst := lerpf(12.0, 36.0, p) * _body_scale.x
+		draw_arc(bc, r_burst, 0.0, TAU, 24, Color(1.0, 0.25, 0.18, (1.0 - p) * 0.9), 2.4, true)
+
+## 绘制【斩灭凝神】剑意返照十字星芒（绝尘）
+func _draw_cd_refund_fx() -> void:
+	var alpha := clampf(cd_refund_timer / 0.24, 0.0, 1.0)
+	var bc := BODY_CENTER * _body_scale.y
+	var s_len := 9.0 * alpha * _body_scale.x
+	var col_jade := GameStyle.JADE_EDGE
+	draw_line(bc - Vector2(s_len, 0.0), bc + Vector2(s_len, 0.0), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
+	draw_line(bc - Vector2(0.0, s_len), bc + Vector2(0.0, s_len), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
+	draw_circle(bc, 2.2 * alpha, Color(1.0, 1.0, 1.0, alpha * 0.95))
+
+## 绘制【陷阵】脚底破阵刻印（蛮兵）
+func _draw_crowd_aura_fx() -> void:
+	var r := 26.0 * _body_scale.x
+	var fc := FEET_CENTER * _body_scale.y
+	var col := Color(0.88, 0.62, 0.30, crowd_aura_alpha * 0.45)
+	for i in range(4):
+		var a_start := float(i) * (TAU * 0.25) + 0.18
+		var a_span := (TAU * 0.25) * 0.64
+		draw_arc(fc, r, a_start, a_start + a_span, 10, col, 1.4, true)
+		var tick_a := float(i) * (TAU * 0.25)
+		var p1 := fc + Vector2(cos(tick_a) * r, sin(tick_a) * r)
+		var p2 := fc + Vector2(cos(tick_a) * (r + 4.5), sin(tick_a) * (r + 4.5))
+		draw_line(p1, p2, col, 1.4)
+

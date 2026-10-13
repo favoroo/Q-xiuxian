@@ -110,7 +110,7 @@ func _header_text() -> String:
 func _has_stat_line() -> bool:
 	for lbl in _labels_of(_manual._weapons_box):
 		var t := String(lbl.text)
-		if t.begins_with("伤") and t.contains("秒") and t.contains("金"):
+		if t.begins_with("伤") and t.contains("秒") and (t.contains("金") or t.contains("价")):
 			return true
 	return false
 

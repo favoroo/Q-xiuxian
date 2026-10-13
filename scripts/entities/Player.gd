@@ -58,6 +58,8 @@ var skill_cd_left: float = 0.0     ## 技能冷却剩余秒（HUD 冷却遮罩�
 var skill_cd_total: float = 1.0    ## 本次释放进入的总冷却（算遮罩比例用）
 var skill_active_left: float = 0.0 ## 效果活跃窗口剩余秒（>0 = 效果进行中、冷却未开始，HUD 亮黄环）
 var skill_active_total: float = 1.0 ## 本次活跃窗口总时长（HUD 活跃环比例用）
+var extra_skill_cd_left: float = 0.0  ## 额外技能冷却剩余秒（药爆等带 CD 的额外技能用）
+var extra_skill_cd_total: float = 1.0 ## 额外技能总冷却（算遮罩比例用）
 var _skill_active_kind: int = -1   ## 活跃窗口对应的技能 Kind（收尾钩子用，-1 = 无活跃技能）
 var _skill_pending_cd: float = 0.0 ## 效果结束后要进入的冷却值（施放时暂存）
 var _skill_buffs: Dictionary = {}  ## 进行中的短时增益：buff id -> 剩余秒（gale / haste）
@@ -211,18 +213,21 @@ func _sync_pickup_radius() -> void:
 	var shape_node = $PickupArea/CollisionShape2D
 	if shape_node != null and shape_node.shape is CircleShape2D:
 		var c_shape = shape_node.shape.duplicate() as CircleShape2D
-		c_shape.radius = BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
+		var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
+		c_shape.radius = BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
 		shape_node.shape = c_shape
 
 ## 当前拾取半径：真话只有 PickupArea 那一圈碰撞形状。
 ## 满血待命的回复珠要问它（别抄常数），否则「圈内掉血自动飞来」会和热区不一致。
 func pickup_radius() -> float:
 	if pickup_area == null:
-		return BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
+		var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
+		return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
 	var shape_node: Node = pickup_area.get_node_or_null("CollisionShape2D")
 	if shape_node != null and shape_node.shape is CircleShape2D:
 		return (shape_node.shape as CircleShape2D).radius
-	return BASE_PICKUP_RADIUS * GameManager.pickup_range_mult
+	var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
+	return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
 
 func _on_leveled_up(_lvl: int) -> void:
 	play_squash(Vector2(0.72, 1.38), 0.28)
@@ -341,10 +346,6 @@ func heal(amount: float, quiet: bool = false) -> void:
 	current_health = minf(max_health, current_health + amount)
 	# 只报真正回上来的那部分；顶满时一口没回，不发挤压/音效/+X（报了就是假账）
 	var gained := current_health - before
-	# 药王·药池：顶满溢出的那部分折算入池（所有治疗出口共用这一把尺子；数值全在 ElixirData）
-	var overflow := amount - gained
-	if overflow > 0.0:
-		GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, overflow, max_health)
 	if gained <= 0.01:
 		return
 	# 满血吸血命中极频繁，信号必须过了 gained 闸再发，否则 HUD 每次命中都重建血条补间（2026-10-13 掉帧根因）
@@ -421,10 +422,15 @@ func _begin_skill_cooldown() -> void:
 func refund_skill_cooldown(amount: float) -> void:
 	if amount <= 0.0:
 		return
+	var refunded := false
 	if skill_cd_left > 0.0:
 		skill_cd_left = maxf(0.0, skill_cd_left - amount)
+		refunded = true
 	elif skill_active_left > 0.0:
 		_skill_pending_cd = maxf(0.0, _skill_pending_cd - amount)
+		refunded = true
+	if refunded and skill_vfx != null:
+		skill_vfx.on_cd_refunded()
 
 ## 效果活跃窗口走完：先做各类型收尾（回滚短时乘区），此刻才进冷却
 func _on_skill_effect_end() -> void:
@@ -435,11 +441,11 @@ func _on_skill_effect_end() -> void:
 	_skill_active_kind = -1
 	_begin_skill_cooldown()
 
-## HUD 额外技能按钮入口（随角色绑定，如影者的影爆）。false = 没放出来（无技能/战斗外/资源没攒上），调用方发拒绝反馈。
-## 免冷却类（BURST）的门控是资源本身（影层层数），所以这里不走 skill_cd_left 那道闸。
+## HUD 额外技能按钮入口（随角色绑定，如影者的影爆、药王的药爆）。false = 没放出来（无技能/战斗外/CD中/资源没攒上），调用方发拒绝反馈。
+## 免冷却类（BURST）由资源层门控，带冷却类（如药爆 HEAL）由 extra_skill_cd_left 门控。
 func try_activate_extra_skill() -> bool:
 	var sid := GameManager.extra_skill_id
-	if sid.is_empty() or GameManager.is_game_over:
+	if sid.is_empty() or GameManager.is_game_over or extra_skill_cd_left > 0.0:
 		return false
 	var spawner: Node = GameManager.wave_spawner
 	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
@@ -448,15 +454,17 @@ func try_activate_extra_skill() -> bool:
 	if st.is_empty():
 		return false
 	match int(st["kind"]):
+		SkillData.Kind.HEAL:
+			# 带冷却治疗/爆发类（药爆）：冷却门控，按下进 CD 并释放
+			var cd := float(st.get("cooldown", 12.0))
+			extra_skill_cd_total = maxf(0.01, cd)
+			extra_skill_cd_left = extra_skill_cd_total
+			play_squash(Vector2(1.18, 0.84), 0.18)
+			if sid == "elixir":
+				_release_elixir()
+			return true
 		SkillData.Kind.BURST:
 			# 蓄能释放：没攒上按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
-			if sid == "elixir":
-				# 服丹：门控是药池（ElixirData），池空按不动
-				if not ElixirData.has_charge(GameManager.elixir_pool):
-					return false
-				play_squash(Vector2(1.18, 0.84), 0.18)
-				_release_elixir()
-				return true
 			if not ShadowStepData.has_charge(shadow_ring):
 				return false
 			play_squash(Vector2(1.18, 0.84), 0.18)
@@ -552,6 +560,8 @@ func _release_shadow_step() -> void:
 func _release_guard_stance() -> void:
 	var charge := GameManager.shield_charge
 	GameManager.shield_charge = 0.0
+	if skill_vfx != null:
+		skill_vfx.on_guard_burst()
 	var dmg := GuardStanceData.burst_damage(charge)
 	var impulse: float = GuardStanceData.PUSH_IMPULSE * GameManager.knockback_mult
 	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
@@ -581,18 +591,48 @@ func _call_thunder() -> bool:
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
 		GameStyle.GOLD_EDGE, 0.3)
+	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
+	if get_tree() != null:
+		var scene: Node = get_tree().current_scene if get_tree().current_scene != null else get_parent()
+		if scene != null:
+			var bolt := LightningBolt.acquire(scene)
+			var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
+			var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
+			bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
+	if skill_vfx != null:
+		skill_vfx.on_thunder_cast()
+	play_squash(Vector2(1.08, 0.92), 0.12)
 	AudioManager.play_sfx("thunder_strike", 0.9, 1.0)
 	return true
 
-## 服丹（药王·额外技能）：一口喝掉药池——按池量回血，余下几秒全伤害增益（ElixirData 数值）。
-## 池量在 heal 之后再清零：满血服丹时 heal 的溢出会回灌半池，那是「喝剩的底子」，不当新账留下。
+## 药爆（药王·额外技能）：摔碎药罐——自身回复一截生命（ElixirData.HEAL_HP_RATIO），
+## 药力向周身炸开对敌人造成一次性毒伤（不挂 DoT）并推开，随附短时增伤反打窗口。
 func _release_elixir() -> void:
-	var pool := GameManager.elixir_pool
-	heal(pool)
-	GameManager.elixir_pool = 0.0
+	# 1. 自身回血（小治疗，直接按当前最大生命比例回复）
+	var heal_val := ElixirData.heal_amount(max_health)
+	heal(heal_val)
+
+	# 2. 周身一次性毒雾伤害（走毒系口径：随元素伤害成长 × 短时增益乘区）
+	var dmg := ElixirData.burst_damage(GameManager.elemental_damage) * GameManager.buff_damage_mult
+	var impulse := ElixirData.PUSH_IMPULSE * GameManager.knockback_mult
+	for e in EnemyFilter.collect(get_tree(), global_position, ElixirData.BURST_RADIUS):
+		var off: Vector2 = e.global_position - global_position
+		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
+		e.take_damage(dmg, dir * impulse)
+
+	# 3. 药力反打短时增伤（ElixirData 数值）
 	GameManager.buff_damage_mult = ElixirData.buff_mult()
 	_skill_buffs["elixir"] = ElixirData.BUFF_DURATION
-	AudioManager.play_sfx("heal", 1.0, 1.15)
+
+	# 4. 视觉与音效：冲击环（画多大==判多大，GOOD 翠绿药雾色）+ 随行药爆药雾粒子
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, ElixirData.BURST_RADIUS,
+		GameStyle.GOOD, 0.28)
+	if skill_vfx != null:
+		skill_vfx.on_elixir_cast()
+	if is_procedural and procedural_view != null:
+		procedural_view.set_skill_visual("renewal", true, 1.0)
+	AudioManager.play_sfx("skill_heal", 1.05, 1.1)
+	AudioManager.play_sfx("whoosh_heavy", 0.85, 1.25)
 
 func _do_gale(st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
@@ -665,6 +705,8 @@ func _physics_process(delta: float) -> void:
 			_on_skill_effect_end()
 	if skill_cd_left > 0.0:
 		skill_cd_left -= delta
+	if extra_skill_cd_left > 0.0:
+		extra_skill_cd_left -= delta
 	if not _skill_buffs.is_empty():
 		_tick_skill_buffs(delta)
 	if GameManager.force_crit_left > 0.0:
@@ -692,17 +734,13 @@ func _physics_process(delta: float) -> void:
 		if is_procedural and procedural_view != null:
 			procedural_view.modulate = Color.WHITE
 
-	# 灵愈心法 + 青木羁绊：持续回血
-	var total_regen := GameManager.hp_regen + GameManager.synergy_hp_regen
+	# 灵愈心法 + 青木羁绊：持续回血（软顶折算与面板读数同源，BalanceCombat 唯一算式）
+	var total_regen := BalanceCombat.effective_hp_regen(GameManager.hp_regen + GameManager.synergy_hp_regen)
 	if total_regen > 0.0 and current_health < max_health:
 		var before_regen := current_health
 		current_health = minf(max_health, current_health + total_regen * delta)
 		var regen_gained := current_health - before_regen
 		GameManager.total_hp_healed += maxf(0.0, regen_gained)
-		# 药王·药池：顶满那一拍的溢出部分同样折算入池（与 heal() 同一把尺子）
-		var regen_overflow := total_regen * delta - regen_gained
-		if regen_overflow > 0.0:
-			GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, regen_overflow, max_health)
 		regen_tick += delta
 	if regen_tick >= 0.5:
 		regen_tick = 0.0
@@ -737,13 +775,20 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
 
-	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印任一道具在场才计时；脚底一动立刻清零
+	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印、金刚神像或苦行僧在场才计时；脚底一动立刻清零
 	if GameManager.has_still_mechanic():
+		var was_still := GameManager.still_time > 0.0
+		GameManager.player_is_moving = is_moving
 		GameManager.still_time = 0.0 if is_moving else GameManager.still_time + delta
+		var is_now_still := GameManager.still_time > 0.0
+		if was_still != is_now_still and GameManager.still_pickup_bonus > 0.0:
+			_sync_pickup_radius()
 		if not is_moving:
 			var regen_pct: float = GameManager.item_hook_sum("still_regen_pct")
 			if regen_pct > 0.0 and current_health < max_health:
 				heal(max_health * regen_pct * delta, true)
+	else:
+		GameManager.player_is_moving = is_moving
 
 	# 蛮兵·陷阵：节流数感知圈内的敌人（crowd_damage_radius = 0 时整块零开销）
 	if GameManager.crowd_damage_radius > 0.0:
@@ -826,6 +871,8 @@ func _physics_process(delta: float) -> void:
 
 	# 5. 随行技能角色身上动效更新
 	if skill_vfx != null:
+		if GameManager.frenzy_enabled > 0.0:
+			skill_vfx.sync_frenzy(GameManager.frenzy_stacks, FrenzyData.MAX_STACKS)
 		skill_vfx.update_vfx(delta, is_moving, velocity)
 
 	# 6. 统一调度各武器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
@@ -1088,11 +1135,14 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		DamageNumber.spawn(get_parent(), global_position, 0, false, "闪避")
 		AudioManager.play_sfx("dodge", 1.0)
 		invulnerable_time = maxf(invulnerable_time, ShadowStepData.GUARD_SEC)
-		shadow_ring = ShadowStepData.push_ring(shadow_ring, amount)
-		# 攒着就增伤：影层乘区跟着队列长度走（满层 ×1.40），落地兑现清空时回 1.0
-		GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
-		if skill_vfx != null:
-			skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
+		# 影层是影者专属机制（闸=是否绑定影爆额外技能，与 HUD 额外按钮显隐同一把尺）：
+		# 其他角色靠加点/道具/神行术也能闪，但没处兑现影爆，只涨层等于白送 ×1.40 永久增伤。
+		if GameManager.extra_skill_id == "shadowburst":
+			shadow_ring = ShadowStepData.push_ring(shadow_ring, amount)
+			# 攒着就增伤：影层乘区跟着队列长度走（满层 ×1.40），落地兑现清空时回 1.0
+			GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
+			if skill_vfx != null:
+				skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
 		# 流云潜影玉：闪避成功概率回血
 		var dodge_heal_chance: float = GameManager.item_hook_sum("dodge_heal_chance")
 		if dodge_heal_chance > 0.0 and GameManager.rng.randf() < dodge_heal_chance:
@@ -1109,6 +1159,8 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	if GameManager.guard_stance > 0.0:
 		GameManager.shield_charge = GuardStanceData.add_charge(
 			GameManager.shield_charge, amount - reduced, max_health)
+		if skill_vfx != null and skill_vfx.has_method("on_guard_charge_updated"):
+			skill_vfx.on_guard_charge_updated(GameManager.shield_charge, GuardStanceData.cap_of(max_health))
 		if GuardStanceData.is_full(GameManager.shield_charge, max_health):
 			_release_guard_stance()
 	GameManager.player_hp_changed.emit(current_health, max_health)

@@ -265,7 +265,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("暴击伤害按倍率相加，只影响会心那一刀，普通攻击完全不吃。")
 			out.append("金系羁绊同时抬这两处；部分武器还会把暴击率直接折成额外伤害。")
 		"luck":
-			out.append("每点把史诗权重抬 %s，差额从普通里扣：三档之和恒定，不会整体变稀有。" % _fmt(GameBalance.LUCK_EPIC_PER_POINT))
+			out.append("每点把史诗权重抬 %s、稀有权重抬 %s，差额从普通里扣。" % [_fmt(GameBalance.LUCK_EPIC_PER_POINT), _fmt(GameBalance.LUCK_RARE_PER_POINT)])
 			out.append("普通权重有地板 %s，所以幸运堆到极高之后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
 			out.append("对商店货架是按权重微调，不是必出；幸运低也不至于刷不出货。")
 		"harvest":
@@ -407,12 +407,16 @@ static func stat_tip_rows(id: String) -> Array:
 		"regen":
 			var rate: float = float(s.get("hp_regen", 0.0))
 			var need: float = float(s.get("max_hp", 0.0)) - float(s.get("current_hp", 0.0))
+			var raw_regen: float = GameManager.hp_regen + GameManager.synergy_hp_regen
 			rows = [
 				["每秒回复", "%.1f / 秒" % rate],
 				["升级·道具·角色", "%.1f" % GameManager.hp_regen, _c(GameManager.hp_regen)],
 				["木系羁绊", "+%.1f" % GameManager.synergy_hp_regen, _c(GameManager.synergy_hp_regen)],
 				["回满已损需要", "%.1f 秒" % (need / rate) if rate > 0.0 and need > 0.0 else "—"],
 			]
+			# 软顶膝点过后如实交代：raw 已超 8/秒的部分只兑现一半（BalanceCombat.effective_hp_regen）
+			if raw_regen > BalanceCombat.REGEN_SOFT_KNEE:
+				rows.append(["收益递减", "超过 %.0f/秒 的部分效果减半" % BalanceCombat.REGEN_SOFT_KNEE, GameStyle.GREY])
 		"armor":
 			var arm: float = float(s.get("armor", 0.0))
 			var nxt: float = GameBalance.armor_reduction(arm + 1.0) * 100.0
@@ -444,9 +448,12 @@ static func stat_tip_rows(id: String) -> Array:
 			rows = [
 				["总乘区", "%d%%" % int(float(s.get("damage_mult", 1.0)) * 100.0)],
 				["换算增伤", "%+.0f%%" % float(s.get("damage_bonus_pct", 0.0)), _c(float(s.get("damage_bonus_pct", 0.0)))],
-				["升级·道具·角色", _mul(GameManager.weapon_damage_mult), _c(GameManager.weapon_damage_mult - 1.0)],
+				["升级·道具·角色", _mul(GameManager.get_weapon_damage_mult()), _c(GameManager.get_weapon_damage_mult() - 1.0)],
 				["流派羁绊", _mul(GameManager.synergy_damage_mult), _c(GameManager.synergy_damage_mult - 1.0)],
 			]
+			# 软顶膝点过后如实交代：raw 超过 +100% 的部分只兑现一半（BalanceCombat.effective_weapon_damage_mult）
+			if GameManager.weapon_damage_mult > BalanceCombat.WDM_SOFT_KNEE:
+				rows.append(["收益递减", "超过 +%.0f%% 的部分效果减半" % ((BalanceCombat.WDM_SOFT_KNEE - 1.0) * 100.0), GameStyle.GREY])
 			# 总乘区/换算增伤已含影层（StatBreakdown 同链），逐行账单也要能乘回去：攒着影层才列这一行
 			if not is_equal_approx(GameManager.shadow_amp_mult, 1.0):
 				rows.append(["影层增伤", _mul(GameManager.shadow_amp_mult), _c(GameManager.shadow_amp_mult - 1.0)])
@@ -492,8 +499,11 @@ static func stat_tip_rows(id: String) -> Array:
 				["实际攻击间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
 				["升级·道具·角色", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
 				["范围·水系羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
-				["间隔下限", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY],
 			]
+			if GameManager.still_time > 0.0 and GameManager.item_hook_sum("still_attack_speed") > 0.0:
+				var st_haste := GameManager.item_hook_sum("still_attack_speed")
+				rows.append(["站定神像加成", _mul(1.0 - st_haste), _c(st_haste)])
+			rows.append(["间隔下限", _mul(GameManager.ATTACK_SPEED_FLOOR), GameStyle.GREY])
 		"speed":
 			var eff: float = GameManager.move_speed_mult + GameManager.synergy_move_speed_mult
 			var spd: float = float(s.get("move_speed", 0.0))
@@ -518,7 +528,7 @@ static func stat_tip_rows(id: String) -> Array:
 				["剑系羁绊", _mul(GameManager.synergy_range_mult), _c(GameManager.synergy_range_mult - 1.0)],
 			]
 		"crit":
-			var cmul: float = GameManager.crit_mult + GameManager.synergy_crit_mult
+			var cmul: float = GameManager.get_crit_mult()
 			rows = [
 				["面板暴击率", "%.0f%%" % float(s.get("crit_rate_pct", 0.0)), GameStyle.JADE],
 				["升级·道具·角色", "%.0f%%（含基础）" % (GameManager.crit_rate * 100.0)],

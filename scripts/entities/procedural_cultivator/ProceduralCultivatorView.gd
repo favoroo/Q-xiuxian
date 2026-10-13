@@ -250,6 +250,27 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 			_target_cloak_shimmer = 0.85 * intensity
 			_target_sigil_boost = 0.95 * intensity
 			_target_motes_boost = 0.95 * intensity
+		"thunder": # 天雷：耀金神雷电芒眼眸、金电流光斗篷、道印激亮
+			_target_eye_color = Color(1.0, 0.88, 0.35, 0.95)
+			_target_eye_boost = 1.2 * intensity
+			_target_cloak_color = Color(g_gold.r, g_gold.g, g_gold.b, 0.95)
+			_target_cloak_shimmer = 1.0 * intensity
+			_target_sigil_boost = 1.1 * intensity
+			_target_motes_boost = 0.9 * intensity
+		"frenzy": # 战意：血煞猩红杀意眼眸、赤血流光斗篷、煞气升腾
+			_target_eye_color = Color(1.0, 0.22, 0.18, 0.95)
+			_target_eye_boost = 1.15 * intensity
+			_target_cloak_color = Color(0.92, 0.18, 0.15, 0.9)
+			_target_cloak_shimmer = 0.95 * intensity
+			_target_sigil_boost = 1.0 * intensity
+			_target_motes_boost = 1.1 * intensity
+		"guard": # 盾势：玄武不动暖金眼眸、磐石罡气斗篷反光
+			_target_eye_color = Color(1.0, 0.85, 0.45, 0.9)
+			_target_eye_boost = 0.8 * intensity
+			_target_cloak_color = Color(g_aurum.r, g_aurum.g, g_aurum.b, 0.85)
+			_target_cloak_shimmer = 0.8 * intensity
+			_target_sigil_boost = 0.85 * intensity
+			_target_motes_boost = 0.7 * intensity
 		_:
 			_target_eye_color = Color.TRANSPARENT
 			_target_eye_boost = 0.0

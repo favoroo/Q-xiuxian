@@ -282,6 +282,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 		slot.set_meta("sb_on", GameStyle.outlined_panel(bg_col, GameStyle.JADE, 2, 0.0))
 
 		if filled:
+			var w_wid := String(summary[i].get("id", ""))
 			var w: Dictionary = summary[i]
 			var tex_rect := TextureRect.new()
 			if w.has("icon") and ResourceLoader.exists(w["icon"]):
@@ -292,7 +293,11 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(tex_rect)
 
-			# 元素件靠上面那圈描边说话（判定与详情弹窗加成文案同源 stat_scalings）
+			# 元素武器底部暖橙红下边框
+			if GameStyle.is_elemental(w_wid):
+				GameStyle.apply_elemental_bottom_bar(slot, true, 2.5)
+
+			# 星级
 			GameStyle.star_label(slot, int(w.get("star", 1)), 11)
 
 			GameStyle.tap(slot, func() -> void: dialog._open_weapon_tip(w, false, slot))
@@ -321,6 +326,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 					GameStyle.element_border(String(item.get("id", "")), GameStyle.LINE), 1, 0.0)
 			s_slot.add_theme_stylebox_override("panel", s_sb)
 
+			var s_wid := String(item.get("id", ""))
 			var s_icon_path: String = item.get("icon", def.get("icon", ""))
 			var s_tex := TextureRect.new()
 			if not s_icon_path.is_empty() and ResourceLoader.exists(s_icon_path):
@@ -333,7 +339,11 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			s_slot.set_meta("sb_flat", s_sb)
 			s_slot.set_meta("sb_on", GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.JADE, 1, 0.0))
 
-			# 元素件的暖橙红描边在上面 s_sb 里给好了，这里只补星级
+			# 元素武器底部暖橙红下边框
+			if GameStyle.is_elemental(s_wid):
+				GameStyle.apply_elemental_bottom_bar(s_slot, true, 2.0)
+
+			# 补星级
 			GameStyle.star_label(s_slot, int(item.get("star", 1)), 10)
 
 			if not def.is_empty():

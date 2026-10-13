@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-生成渡个劫全部 68 把法器的全景视觉走廊检视看板 (tests/styles/weapon_hall_review_all68.png)
+生成剑士全部 68 把法器的全景视觉走廊检视看板 (tests/styles/weapon_hall_review_all68.png)
 按器类与五行清晰排列，标记 ID、名称、标签、行为以及是否占位复用。
 """
 
@@ -91,7 +91,7 @@ def render_weapon_hall():
     warn_font = get_font(11)
 
     # 绘制顶部标题
-    draw.text((margin_left, 24), "渡个劫 · 全部 68 把法器全景视觉走廊检视看板", fill=(245, 247, 250, 255), font=title_font)
+    draw.text((margin_left, 24), "剑士 · 全部 68 把法器全景视觉走廊检视看板", fill=(245, 247, 250, 255), font=title_font)
     sub_text = "核对对象：法器名 · 图标剪影 · 辨识度/重复占位诊断 · 五行(金木水火土)与器类(剑/符/扫/雷/灵/机)匹配度"
     draw.text((margin_left, 68), sub_text, fill=(138, 155, 180, 255), font=subtitle_font)
 

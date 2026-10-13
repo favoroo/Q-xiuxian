@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""渡个劫 (Dao Trial) 品牌素材加工管线（借鉴 dudu-cocos tools/ 做法）。
+"""剑士 (Swordsman) 品牌素材加工管线（借鉴 dudu-cocos tools/ 做法）。
 
 输入（media-gen --keyout 产出的透明底概念图）：
   assets_raw/images/app_icon_concept.png       青衫小修士头像

@@ -145,29 +145,30 @@ func _burst_layer_ok(seq: PackedStringArray, fire: String, impact: String) -> bo
 		return false
 	return seq.has(fire) and seq.has(impact)
 
-# ---------------- ① 近战双层 ----------------
+# ---------------- ① 近战双层（含横扫：2026-10-13 横扫从近战拆出，双层口径同规） ----------------
 
 func _test_melee_layers() -> void:
-	for def_id in _ids_of(WeaponData.Behavior.MELEE):
-		var fire := WeaponData.sfx_for(def_id)
-		var impact := WeaponData.sfx_impact_for(def_id)
-		_c.check(fire != "sword_swing", "%s 的第一层音不再是通用破空 sword_swing" % def_id)
-		_c.check(impact != "" and impact != fire, "%s 命中层与起手层是两把不同的声" % def_id)
+	for pair in [[WeaponData.Behavior.MELEE, "_perform_melee_attack"], [WeaponData.Behavior.SWEEP, "_perform_sweep_attack"]]:
+		for def_id in _ids_of(pair[0]):
+			var fire := WeaponData.sfx_for(def_id)
+			var impact := WeaponData.sfx_impact_for(def_id)
+			_c.check(fire != "sword_swing", "%s 的第一层音不再是通用破空 sword_swing" % def_id)
+			_c.check(impact != "" and impact != fire, "%s 命中层与起手层是两把不同的声" % def_id)
 
-		var w := _make(def_id)
-		await get_tree().process_frame
-		var target := _enemy_at(w.position + ENEMY_OFFSET)
-		var hit_seq := await _capture(w, w._perform_melee_attack, WAIT_MELEE)
-		_c.check(_melee_layer_ok(hit_seq, fire, impact, true),
-			"%s 打中时：破空在前、材质在后（实收 %s）" % [def_id, str(hit_seq)])
-		w.queue_free(); target.queue_free()
+			var w := _make(def_id)
+			await get_tree().process_frame
+			var target := _enemy_at(w.position + ENEMY_OFFSET)
+			var hit_seq := await _capture(w, Callable(w, String(pair[1])), WAIT_MELEE)
+			_c.check(_melee_layer_ok(hit_seq, fire, impact, true),
+				"%s 打中时：破空在前、材质在后（实收 %s）" % [def_id, str(hit_seq)])
+			w.queue_free(); target.queue_free()
 
-		var w2 := _make(def_id)
-		await get_tree().process_frame
-		var whiff_seq := await _capture(w2, w2._perform_melee_attack, WAIT_MELEE)
-		_c.check(_melee_layer_ok(whiff_seq, fire, impact, false),
-			"%s 挥空时只有破空，不许补材质声（实收 %s）" % [def_id, str(whiff_seq)])
-		w2.queue_free()
+			var w2 := _make(def_id)
+			await get_tree().process_frame
+			var whiff_seq := await _capture(w2, Callable(w2, String(pair[1])), WAIT_MELEE)
+			_c.check(_melee_layer_ok(whiff_seq, fire, impact, false),
+				"%s 挥空时只有破空，不许补材质声（实收 %s）" % [def_id, str(whiff_seq)])
+			w2.queue_free()
 
 # ---------------- ② 雷法去硬编码 ----------------
 

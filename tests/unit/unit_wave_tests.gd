@@ -9,7 +9,7 @@ func _test_wave_scaling() -> void:
 	_c.near(GameBalance.enemy_hp_mult(10), pow(1.16, 9), EPS, "第 10 波血量复利 ×3.80")
 	_c.near(GameBalance.enemy_hp_mult(20), pow(1.16, 19), EPS, "第 20 波血量复利 ×16.89")
 	# 敌伤总闸：基线倍率只许出现在 enemy_dmg_mult 这一处出口
-	_c.near(GameBalance.enemy_dmg_mult(1), GameBalance.ENEMY_DMG_BASE_MULT, EPS, "第 1 波敌伤倍率 = 整体基线（2026-10-11 降至 0.65）")
+	_c.near(GameBalance.enemy_dmg_mult(1), GameBalance.ENEMY_DMG_BASE_MULT, EPS, "第 1 波敌伤倍率 = 整体基线（2026-10-13 提至 0.80）")
 	_c.near(GameBalance.enemy_dmg_mult(10), GameBalance.ENEMY_DMG_BASE_MULT * pow(1.06, 9), EPS, "第 10 波敌伤 = 基线 × 复利 1.69")
 	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "波间复利梯度不因基线下移而变")
 	_c.near(GameBalance.boss_contact_damage(1), ceilf(24.0 * GameBalance.ENEMY_DMG_BASE_MULT), EPS, "Boss 接触伤害与杂怪同一个总闸")
@@ -27,15 +27,48 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.wave_spawn_budget(6), 35, "第 6 波预算 35")
 	_c.equals(GameBalance.wave_spawn_budget(10), 50, "第 10 波预算 50")
 	_c.equals(GameBalance.wave_spawn_budget(20), 86, "第 20 波预算 86")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.WAVE_SPAWN_BUDGET_MAX, "无尽波次预算封顶 90")
+	# 2026-10-13 深层三涨：>20 波预算自 W20=86 续 +4/波，封顶 DEEP_BUDGET_MAX（180）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 90, "深层第 21 波预算 90（续涨 +4）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 126, "深层第 30 波预算 126")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 180")
 	var budget_prev := 0
-	var budget_mono := true
-	for w in range(1, 21):
+	var budget_nondecreasing := true
+	for w in range(1, 61):
 		var b := GameBalance.wave_spawn_budget(w)
-		if b <= budget_prev:
-			budget_mono = false
+		if b < budget_prev:
+			budget_nondecreasing = false
 		budget_prev = b
-	_c.check(budget_mono, "预算曲线逐波严格递增")
+	_c.check(budget_nondecreasing, "预算曲线逐波不降（触顶后持平，不回落）")
+	# 深层段在封顶前必须每波都真的多刷（否则「敌潮随深层涨」落空）
+	var deep_rises := 0
+	for w in range(21, 44):
+		if GameBalance.wave_spawn_budget(w) > GameBalance.wave_spawn_budget(w - 1):
+			deep_rises += 1
+	_c.equals(deep_rises, 23, "深层 21~43 波逐波续涨（封顶前不提前持平）")
+
+	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
+	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.09")
+	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "20 波段梯度仍为 1.06 复利（正常局零回归）")
+	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH, EPS, "第 21 波血量梯度 = 深层复利 1.18")
+	# 深层复利必须真的比旧梯子快，否则三涨名存实亡
+	_c.check(GameBalance.enemy_dmg_mult(30) > GameBalance.ENEMY_DMG_BASE_MULT * pow(GameBalance.ENEMY_DMG_GROWTH, 29), "深层敌伤快于旧 1.06 外推")
+	_c.check(GameBalance.enemy_hp_mult(30) > pow(GameBalance.ENEMY_HP_GROWTH, 29), "深层血量快于旧 1.16 外推")
+	var dmg_prev := 0.0
+	var hp_prev := 0.0
+	var deep_monotonic := true
+	for w in range(1, 61):
+		var d := GameBalance.enemy_dmg_mult(w)
+		var h := GameBalance.enemy_hp_mult(w)
+		if d <= dmg_prev or h <= hp_prev:
+			deep_monotonic = false
+		dmg_prev = d
+		hp_prev = h
+	_c.check(deep_monotonic, "伤害/生命倍率全程严格递增（分段处无塌陷、不读 autoload 的纯函数单调）")
+	# 深层同屏密度：≤20 波恒 1.0，此后 +6%/波、封顶 2.0
+	_c.near(GameBalance.endless_swarm_mult(20), 1.0, EPS, "20 波前同屏密度不放大")
+	_c.near(GameBalance.endless_swarm_mult(1), 1.0, EPS, "第 1 波同屏密度不放大（正常局零影响）")
+	_c.near(GameBalance.endless_swarm_mult(21), 1.06, EPS, "深层第 21 波同屏密度 +6%")
+	_c.near(GameBalance.endless_swarm_mult(99), GameBalance.DEEP_SWARM_MAX, EPS, "同屏密度放大封顶 ×2.0")
 
 func _test_boss_waves() -> void:
 	_c.check(GameBalance.is_boss_wave(10), "第 10 波是固定 Boss 关")
@@ -44,9 +77,14 @@ func _test_boss_waves() -> void:
 	_c.check(not GameBalance.is_boss_wave(15), "第 15 波仍是精英不是 Boss")
 	_c.check(not GameBalance.is_boss_wave(9), "非 Boss 波次不错判")
 	_c.check(GameBalance.is_boss_wave(30), "无尽 30 波再逢魔君")
-	_c.check(not GameBalance.is_boss_wave(25), "无尽 25 波不是 Boss")
+	# 2026-10-13 深层 Boss 加密：20 波后每 5 波一场（25/30/35…），非 5 倍数波次不是 Boss
+	_c.check(GameBalance.is_boss_wave(25), "无尽 25 波起每 5 波逢魔君")
+	_c.check(GameBalance.is_boss_wave(35), "无尽 35 波是 Boss")
+	_c.check(GameBalance.is_boss_wave(45), "无尽 45 波是 Boss")
+	_c.check(not GameBalance.is_boss_wave(26), "无尽 26 波不是 Boss")
+	_c.check(not GameBalance.is_boss_wave(28), "无尽 28 波不是 Boss")
 
-	# 10/20 波让位给魔君，精英退守 5/15 与无尽每 3 波
+	# 10/20 波让位给魔君，精英退守 5/15 与无尽每 3 波（Boss 波让位）
 	_c.check(GameBalance.is_elite_wave(5), "第 5 波精英保留")
 	_c.check(GameBalance.is_elite_wave(15), "第 15 波精英保留")
 	_c.check(not GameBalance.is_elite_wave(10), "第 10 波不再刷精英（Boss 关）")
@@ -54,6 +92,8 @@ func _test_boss_waves() -> void:
 	_c.check(not GameBalance.is_elite_wave(21), "非无尽模式 21 波不是精英")
 	_c.check(GameBalance.is_elite_wave(21, true), "无尽 21 波恢复每 3 波精英")
 	_c.check(not GameBalance.is_elite_wave(30, true), "无尽 30 波是 Boss 不是精英")
+	_c.check(GameBalance.is_elite_wave(27, true), "无尽 27 波精英（非 Boss 的 3 倍数）")
+	_c.check(not GameBalance.is_elite_wave(25, true), "无尽 25 波是 Boss 不是精英（每 5 波逢魔君后让位）")
 
 	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距
 	_c.near(GameBalance.boss_hp(10) / GameBalance.boss_hp(1), GameBalance.enemy_hp_mult(10), EPS, "Boss 血量与敌人同一条成长曲线")
@@ -103,7 +143,7 @@ func _test_enemy_mix() -> void:
 	for w in range(1, 25):
 		for i in range(100):
 			seen[WaveSpawner.pick_scene_key(w, float(i) / 100.0)] = true
-	_c.equals(seen.keys().size(), 11, "十一种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
+	_c.equals(seen.keys().size(), 12, "十二种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
 
 	# 批三新敌种：高 roll 段从史莱姆的保底份额里切走，逐波解锁
 	_c.equals(WaveSpawner.pick_scene_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
@@ -115,6 +155,14 @@ func _test_enemy_mix() -> void:
 	_c.equals(WaveSpawner.pick_scene_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
 	_c.equals(WaveSpawner.pick_scene_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
 	_c.equals(WaveSpawner.pick_scene_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
+
+	# 毒妖（2026-10-13 投毒）：与花妖共段 [0.42, flower_edge)，判序在前切走 35%。
+	# 共段的代价是必须同时钉住「两边都还在」——只断言解锁会让花妖被悄悄整段吃掉而不被发现
+	_c.equals(WaveSpawner.pick_scene_key(6, 0.50), "duyao", "第 6 波毒妖解锁（投毒持续伤害区域，占 [0.42,0.54)）")
+	_c.equals(WaveSpawner.pick_scene_key(6, 0.60), "flower", "毒妖共段后花妖仍占自己的份额（不被整段吃掉）")
+	_c.equals(WaveSpawner.pick_scene_key(5, 0.50), "flower", "第 5 波毒妖未解锁，[0.42,0.54) 整段落回花妖")
+	_c.near(WaveSpawner.duyao_edge(6), 0.5418, EPS, "毒妖第 6 波上沿 0.5418（0.42 + (0.768-0.42)×0.35）")
+	_c.near(WaveSpawner.duyao_edge(14), WaveSpawner.duyao_edge(6), EPS, "花妖带封顶后毒妖份额不再增长（同一条曲线封顶）")
 
 func _test_danger_system() -> void:
 	# 公式钉线

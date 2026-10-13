@@ -117,7 +117,7 @@ static func open_element(shop: WaveShop, anchor: Control, w_id: String) -> void:
 	]
 	var notes: Array[String] = [
 		"该武器带有五行灵蕴，其单发与每秒伤害直接受角色【元素伤害】属性加成。",
-		"图标上的暖橙红边框代表具备元素特性，可与五行道具或火/木/水等流派产生强联动。",
+		"图标底部的暖橙红下边框代表具备元素特性，可与五行道具或火/木/水等流派产生强联动。",
 	]
 	DetailTip.show_over(shop, anchor, {
 		"title": "元素武器 · %s" % String(def.get("name", "武器")),
@@ -125,7 +125,7 @@ static func open_element(shop: WaveShop, anchor: Control, w_id: String) -> void:
 		"chip_color": GameStyle.ELEMENT,
 		"rows": rows,
 		"notes": notes,
-		"foot": "受元素伤害加成的武器在商店与背包中均有高亮边框提示。",
+		"foot": "受元素伤害加成的武器在商店与背包图标底部均有暖橙红下边框提示。",
 	})
 
 ## 买下这一把对这一路羁绊的效应（逐条人话，件数与门槛全部现读 SynergyUI 那把尺子）

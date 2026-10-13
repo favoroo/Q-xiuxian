@@ -1,6 +1,6 @@
 extends Control
 
-## 渡个劫 · 土豆兄弟式全道统角色插槽化画廊 (Cultivator Modular Gallery)
+## 剑士 · 土豆兄弟式全道统角色插槽化画廊 (Cultivator Modular Gallery)
 ## 验证统一修仙素体基底 + 4 大参数插槽（体型、面部、斗篷色彩款式、背负本命法器）的快速派生与视觉差异
 ## 适配桌面 960×540 完整一屏九宫格
 
@@ -8,21 +8,22 @@ const CHAR_IDS: Array[String] = [
 	"jianchi", "shiyue", "fuzhen",
 	"jinsuanpan", "meiying", "dubi",
 	"kuangzhan", "duoshe", "duobao",
-	"fuxiu", "bawang", "juechen"
+	"shoucainu", "bawang", "juechen"
 ]
 
 const TITLES: Dictionary = {
 	"jianchi": "青云剑修·独孤",
 	"shiyue": "石岳·体修",
-	"fuzhen": "符阵灵童",
-	"jinsuanpan": "散修·金算盘",
+	"fuzhen": "灵蝶使",
+	"jinsuanpan": "商人·金算盘",
 	"meiying": "魅影·幽娘",
 	"dubi": "独臂刀圣",
 	"duanbi": "独臂刀圣",
 	"kuangzhan": "狂战蛮修",
 	"duoshe": "夺舍散人",
-	"duobao": "多宝道人",
+	"duobao": "收藏家·多宝",
 	"fuxiu": "灵符子·符修",
+	"shoucainu": "守财奴",
 	"bawang": "霸王·横扫",
 	"juechen": "绝尘·心剑"
 }
@@ -30,15 +31,16 @@ const TITLES: Dictionary = {
 const DESCS: Dictionary = {
 	"jianchi": "墨绿长披·骨钉飞剑",
 	"shiyue": "赭石大氅·玄重石尺",
-	"fuzhen": "朱砂短披·辟邪桃剑",
-	"jinsuanpan": "宝蓝云肩·乾坤金算",
+	"fuzhen": "朱砂短披·轻灵蝶羽仙角",
+	"jinsuanpan": "宝蓝云肩·平展金环玉骨角",
 	"meiying": "魅紫飞扬·淬毒双刺",
 	"dubi": "狂血大氅·厚背断刀",
 	"duanbi": "狂血大氅·厚背断刀",
 	"kuangzhan": "残破血袍·兽骨巨斧",
 	"duoshe": "尸青残袍·引魂灵幡",
-	"duobao": "紫金霞帔·乾坤宝匣",
+	"duobao": "紫金霞帔·重宝双叠骨羽角",
 	"fuxiu": "赭黄霞帔·朱砂符剑",
+	"shoucainu": "残破百衲袍·精干内敛月牙角",
 	"bawang": "玄黑赤金氅·兽骨战斧",
 	"juechen": "天青仙袍·青冥飞剑"
 }
@@ -89,7 +91,7 @@ func _build_gallery() -> void:
 	root_vbox.add_child(header)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "渡个劫 · 土豆兄弟式全道统角色插槽化画廊"
+	title_lbl.text = "剑士 · 土豆兄弟式全道统角色插槽化画廊"
 	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
 	header.add_child(title_lbl)
 

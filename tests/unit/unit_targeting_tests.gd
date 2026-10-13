@@ -103,7 +103,7 @@ func _test_ranged_focus_dps() -> void:
 	_c.equals(WeaponData.targets_per_shot("gengjin_feijian"), 2, "庚金飞剑贯穿两敌")
 	_c.equals(WeaponData.targets_per_shot("wanmu_lingfu"), 3, "万木灵符 1 穿透 + 2 弹射 = 单发 3 敌")
 	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 9, "柳叶飞刀 3 发 × 3 穿透 = 单发 9 敌")
-	_c.equals(WeaponData.targets_per_shot("bajiao_fan"), 6, "近战横扫天生群体，不进点杀位")
+	_c.equals(WeaponData.targets_per_shot("bajiao_fan"), 6, "横扫扇形天生群体，不进点杀位")
 	# 火焰符 ★1：damage × 发数 ÷ 冷却 + 单张灼烧（冷却 < 灼烧时长 ⇒ 常驻）。数字全从表里取，
 	# 这三条验的是"公式的语义"，不是某一次的数值快照 —— 以后调伤害不用回来改断言
 	var hf := WeaponData.get_def("huoyan_fu")

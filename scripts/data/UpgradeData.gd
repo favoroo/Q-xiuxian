@@ -23,13 +23,13 @@ const RARITY_COLORS := {
 const UPGRADES: Array[Dictionary] = [
 		{
 			"id": "atk_up",
-			"apply": {"weapon_damage_mult": 0.10},
+			"apply": {"weapon_damage_mult": 0.08},
 			"title": "武器强化",
-			"desc": "",
+			"desc": "武器伤害超过 +100% 后收益减半",
 			"rarity": "common",
 			"rarity_label": "普通",
 			"icon": "res://assets/art/icon_atk.png",
-			"max_stacks": 8,
+			"max_stacks": 6,
 		},
 		{
 			"id": "melee_up",
@@ -39,7 +39,7 @@ const UPGRADES: Array[Dictionary] = [
 			"rarity": "common",
 			"rarity_label": "普通",
 			"icon": "res://assets/art/weapon_sword.png",
-			"max_stacks": 10,
+			"max_stacks": 6,
 		},
 		{
 			"id": "ranged_up",
@@ -49,7 +49,7 @@ const UPGRADES: Array[Dictionary] = [
 			"rarity": "common",
 			"rarity_label": "普通",
 			"icon": "res://assets/art/weapon_gold_sword.png",
-			"max_stacks": 10,
+			"max_stacks": 6,
 		},
 		{
 			"id": "elemental_up",
@@ -59,7 +59,7 @@ const UPGRADES: Array[Dictionary] = [
 			"rarity": "common",
 			"rarity_label": "普通",
 			"icon": "res://assets/art/weapon_fire_lantern.png",
-			"max_stacks": 10,
+			"max_stacks": 6,
 		},
 			{
 				"id": "engineering_up",
@@ -69,7 +69,7 @@ const UPGRADES: Array[Dictionary] = [
 				"rarity": "common",
 				"rarity_label": "普通",
 				"icon": "res://assets/art/weapon_earth_bell.png",
-				"max_stacks": 10,
+				"max_stacks": 6,
 			},
 			{
 				"id": "contraption_up",
@@ -79,7 +79,7 @@ const UPGRADES: Array[Dictionary] = [
 				"rarity": "common",
 				"rarity_label": "普通",
 				"icon": "res://assets/art/item_luban_suo.png",
-				"max_stacks": 10,
+				"max_stacks": 6,
 			},
 	{
 		"id": "haste_up",
@@ -99,7 +99,7 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "common",
 		"rarity_label": "普通",
 		"icon": "res://assets/art/icon_armor.png",
-		"max_stacks": 10,
+		"max_stacks": 6,
 	},
 	{
 		"id": "speed_up",
@@ -119,7 +119,7 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/icon_hp.png",
-		"max_stacks": 10,
+		"max_stacks": 6,
 	},
 	{
 		"id": "pickup_up",
@@ -139,7 +139,7 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "common",
 		"rarity_label": "普通",
 		"icon": "res://assets/art/icon_coin.png",
-		"max_stacks": 99,
+		"max_stacks": 8,
 	},
 	{
 		"id": "regen_up",
@@ -159,17 +159,17 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/icon_crit.png",
-		"max_stacks": 8,
+		"max_stacks": 6,
 	},
 	{
 		"id": "critdmg_up",
 		"apply": {"crit_mult": 0.25},
 		"title": "暴击伤害",
-		"desc": "打出暴击时伤害额外提升",
+		"desc": "打出暴击时伤害额外提升，上限 250%",
 		"rarity": "epic",
 		"rarity_label": "史诗",
 		"icon": "res://assets/art/icon_critdmg.png",
-		"max_stacks": 6,
+		"max_stacks": 4,
 	},
 	{
 		"id": "dodge_up",
@@ -179,7 +179,7 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/icon_dodge.png",
-		"max_stacks": 8,
+		"max_stacks": 6,
 	},
 	{
 		"id": "lifesteal_up",
@@ -209,7 +209,7 @@ const UPGRADES: Array[Dictionary] = [
 		"rarity": "rare",
 		"rarity_label": "稀有",
 		"icon": "res://assets/art/icon_harvest.png",
-		"max_stacks": 8,
+		"max_stacks": 6,
 	},
 	# 2026-10-11 寻宝流三项：生效幅度在这里，兑现点在 BalanceChest（数量 / 档次权重 / 开箱收益）
 	# 与 WaveSpawner._spawn_chests、SpiritChest._destroy。图标与同名道具配对（重掷令/破甲针同款先例）。
@@ -440,9 +440,9 @@ const UPGRADES: Array[Dictionary] = [
 			},
 			{
 				"id": "grand_atk",
-				"apply": {"weapon_damage_mult": 0.20},
+				"apply": {"weapon_damage_mult": 0.15},
 				"title": "仙兵奥义",
-				"desc": "全系兵刃威能大幅跃升",
+				"desc": "全系兵刃威能大幅跃升；武器伤害超过 +100% 后收益减半",
 				"rarity": "epic",
 				"rarity_label": "史诗",
 				"icon": "res://assets/art/icon_atk.png",

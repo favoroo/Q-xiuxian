@@ -122,6 +122,8 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 			return make_juechen()
 		"yushou":
 			return make_yushou()
+		"kuxingseng":
+			return make_kuxingseng()
 		"jianchi", _:
 			return make_jianchi()
 
@@ -185,13 +187,13 @@ static func make_shiyue() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 3. 驯兽师（御蝶驱兽，以众凌寡，娇小玲珑，道法自然）
+# 3. 灵蝶使（御蝶驱兽，以众凌寡，娇小玲珑，道法自然）
 static func make_fuzhen() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 0.85, "width_scale": 0.92, "height_scale": 0.95, "head_scale": 1.10 }
 	cfg.face = {
 		"mask_style": "round_petite",
-		"horns_style": "twin_buns",
+		"horns_style": "butterfly_horns_petite",
 		"eye_style": "round_bright",
 		"eye_color": Color(0.35, 0.85, 1.0, 0.65), # 清澈灵动天青蓝
 		"eye_core_color": Color(0.85, 0.98, 1.0)
@@ -213,13 +215,13 @@ static func make_fuzhen() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 4. 散修·金算盘（灵田生金，富态圆润，以利证道，满面财光）
+# 4. 商人·金算盘（灵田生金，富态圆润，以利证道，满面财光）
 static func make_jinsuanpan() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.06, "width_scale": 1.20, "height_scale": 0.98, "head_scale": 1.02 }
 	cfg.face = {
 		"mask_style": "round_petite",
-		"horns_style": "gold_crown",
+		"horns_style": "merchant_horns",
 		"eye_style": "sharp_slit",
 		"eye_color": Color(1.0, 0.82, 0.20, 0.6), # 聚宝黄金财光
 		"eye_core_color": Color(1.0, 0.98, 0.75)
@@ -363,13 +365,13 @@ static func make_duoshe() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 9. 多宝道人（道具齐出，锦绣华贵，七彩霞帔，福禄双全）
+# 9. 收藏家·多宝（道具齐出，锦绣华贵，七彩霞帔，福禄双全）
 static func make_duobao() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.10, "width_scale": 1.16, "height_scale": 1.0, "head_scale": 1.0 }
 	cfg.face = {
 		"mask_style": "round_petite",
-		"horns_style": "gold_crown",
+		"horns_style": "collector_horns",
 		"eye_style": "round_pupil",
 		"eye_color": Color(0.95, 0.75, 1.0, 0.55), # 紫金宝气祥光
 		"eye_core_color": Color(1.0, 0.95, 1.0)
@@ -509,7 +511,7 @@ static func make_shoucainu() -> CultivatorVisualConfig:
 	cfg.body = { "scale": 0.94, "width_scale": 1.15, "height_scale": 0.92, "head_scale": 1.06 }
 	cfg.face = {
 		"mask_style": "round_petite",
-		"horns_style": "gold_crown",
+		"horns_style": "miser_horns",
 		"eye_style": "sharp_slit",
 		"eye_color": Color(1.0, 0.85, 0.15, 0.7),
 		"eye_core_color": Color(1.0, 0.98, 0.80)
@@ -668,6 +670,34 @@ static func make_yushou() -> CultivatorVisualConfig:
 		"col_main": Color(0.35, 0.65, 0.55),         # 驭兽青玉笛
 		"col_shadow": Color(0.18, 0.36, 0.28),
 		"col_accent": Color(0.98, 0.85, 0.40),
+		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 20. 苦行僧（心如止水，金刚怒目，光洁僧首，怒目金刚眸，赭褐破衲法衣，降魔玄石法杖）
+static func make_kuxingseng() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.06, "width_scale": 1.12, "height_scale": 1.0, "head_scale": 1.0 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "none",
+		"eye_style": "angry_slit",
+		"eye_color": Color(1.0, 0.78, 0.25, 0.85),  # 佛门怒目金刚眸
+		"eye_core_color": Color(1.0, 0.96, 0.80)
+	}
+	cfg.cloak = {
+		"cloak_style": "tattered_rags",
+		"col_outer": Color(0.32, 0.22, 0.14),        # 赭褐深苦修僧袍
+		"col_inner": Color(0.55, 0.38, 0.22),        # 土褐中衲
+		"col_edge": Color(0.92, 0.76, 0.32),         # 佛门金纹
+		"chest_ornament": "pearl"
+	}
+	cfg.weapon = {
+		"weapon_type": "stone_pillar",
+		"col_main": Color(0.48, 0.40, 0.32),         # 降魔降妖金刚石柱/法杖
+		"col_shadow": Color(0.28, 0.24, 0.20),
+		"col_accent": Color(0.95, 0.80, 0.35),
 		"strap_style": "diagonal"
 	}
 	cfg._sync_palette()

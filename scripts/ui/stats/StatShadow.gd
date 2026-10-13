@@ -38,6 +38,11 @@ const COPIED: Array[String] = [
 var DODGE_CAP: float = 0.0
 var CRIT_RATE_CAP: float = 0.0
 var ATTACK_SPEED_FLOOR: float = 0.3
+var CRIT_MULT_CAP: float = 2.5
+var LIFESTEAL_CAP: float = 0.5
+var ELITE_DAMAGE_CAP: float = 1.0
+var ELEMENT_DAMAGE_CAP: float = 0.6
+var SHOP_PRICE_FLOOR: float = 0.7
 
 # —— 加点直接落的字段 ——
 var weapon_damage_mult: float = 1.0
@@ -122,6 +127,11 @@ static func from_gm(gm: Object) -> StatShadow:
 	s.DODGE_CAP = gm.DODGE_CAP
 	s.CRIT_RATE_CAP = gm.CRIT_RATE_CAP
 	s.ATTACK_SPEED_FLOOR = gm.ATTACK_SPEED_FLOOR
+	s.CRIT_MULT_CAP = gm.CRIT_MULT_CAP
+	s.LIFESTEAL_CAP = gm.LIFESTEAL_CAP
+	s.ELITE_DAMAGE_CAP = gm.ELITE_DAMAGE_CAP
+	s.ELEMENT_DAMAGE_CAP = gm.ELEMENT_DAMAGE_CAP
+	s.SHOP_PRICE_FLOOR = gm.SHOP_PRICE_FLOOR
 	var mir := PlayerMirror.new()
 	if gm.player != null and is_instance_valid(gm.player):
 		mir.current_health = float(gm.player.current_health)
@@ -134,10 +144,25 @@ static func from_gm(gm: Object) -> StatShadow:
 func get_effective_dodge() -> float:
 	return BalanceCombat.effective_dodge(dodge, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
+## 与真身同式：暴击伤害合计夹总上限
+func get_crit_mult() -> float:
+	return minf(crit_mult + synergy_crit_mult, CRIT_MULT_CAP)
+
 func get_crit_rate() -> float:
 	return BalanceCombat.crit_rate(
 		crit_rate, synergy_crit_rate, item_hook_sum("crit_per_dodge"),
 		get_effective_dodge(), CRIT_RATE_CAP)
+
+## 与真身同式：最终施法间隔乘区
+func get_effective_attack_speed_mult() -> float:
+	var base := attack_speed_mult * synergy_haste_mult * buff_attack_speed_mult
+	if _real != null and _real.still_time > 0.0:
+		var still_haste: float = item_hook_sum("still_attack_speed") + float(_real.still_haste_bonus)
+		if still_haste > 0.0:
+			base *= maxf(0.1, 1.0 - still_haste)
+	elif _real != null and _real.player_is_moving and float(_real.move_haste_penalty) > 0.0:
+		base *= (1.0 + float(_real.move_haste_penalty))
+	return maxf(ATTACK_SPEED_FLOOR, base)
 
 ## 道具不会因为一条悟道而增减：这一项直接借真身读数，影子不另存一份清单
 func item_hook_sum(hook: String) -> float:

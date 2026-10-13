@@ -44,6 +44,7 @@ const TOL_DEG := 2.0        ## 剑尖指向与瞄准轴的允许误差
 const TOL_PX := 1.0         ## 出膛点与"画出来的剑尖"的允许误差
 const TARGET_AT := Vector2(300.0, 120.0)   ## 开火台的目标：斜向，八方向里最容易露馅的那种
 const SLASH_ART_HALF_DEG := 70.0    ## slash_effect.png 那弯月牙自身的张角（极坐标量出来 ±70°，256px 高清版外缘半径 124px）
+const SWEEP_ART_HALF_DEG := 80.0    ## sweep_effect.png 金色扇面的满亮张角（与 FloatingWeapon.SWEEP_HALF_ANGLE 同源）
 
 ## 只带 GameManager 要读的那两个字段：get_player_stat_dict() 会去 player 身上取血量算词条
 class StubPlayer:
@@ -84,6 +85,7 @@ func _run() -> void:
 	await _test_facing()
 	await _test_projectile_bay()
 	await _test_melee_arc()
+	await _test_sweep_arc()
 	if _selftest:
 		_run_selftest()
 		return
@@ -411,6 +413,87 @@ func _test_melee_arc() -> void:
 			"%s 屏外桩敌伤害照结（命中 %d 次，只静音演出不动结算）" % [label, far_foe.hit_count])
 		_c.check(not far_w.slash_sprite.visible and far_w.slash_sprite.modulate.a < 0.05,
 			"%s 咬到屏外目标不亮月牙（打击帧已过，弧光仍隐藏）" % label)
+		GameManager.player.position = Vector2.ZERO
+		far_w.free()
+		far_foe.free()
+		far_target.free()
+
+# ---------------- 横扫扇形（2026-10-13 横扫从近战拆出：真扇形判定 + 金色扇面） ----------------
+
+## 横扫的四条判据，与近战弧光同一把尺：
+## ① 挥空门控：扇形内没有可命中体时扇面不亮；
+## ② 命中几何：扇面终态外缘 == 判定半径、终态朝向 == 瞄准轴（画多大==判多大）；
+## ③ 扇形过滤：半径内但【身后】的桩敌不挨打 —— 横扫与近战 360° 圆判定的本质差异就钉在这条；
+## ④ 屏外命中静音：伤害照结、扇面不亮。
+func _test_sweep_arc() -> void:
+	for def_id in WeaponData.SHOP_POOL:
+		var def := WeaponData.get_def(def_id)
+		if int(def.get("behavior", -1)) != WeaponData.Behavior.SWEEP:
+			continue
+		var label := "%s(%s)" % [String(def.get("name", "?")), def_id]
+
+		# —— 挥空门控 ——
+		var whiff := _make(def_id)
+		await get_tree().process_frame
+		var bare := Node2D.new()
+		bare.position = TARGET_AT
+		_world.add_child(bare)
+		whiff.current_target = bare
+		whiff._perform_sweep_attack()
+		# 0.2s 采样：已过 0.09s 蓄力的打击帧（命中路径此刻必亮）、未到扫放+淡出的收招隐藏
+		await get_tree().create_timer(0.2).timeout
+		_c.check(whiff.sweep_sprite != null, "%s 横扫法器建了扇面节点" % label)
+		_c.check(not whiff.sweep_sprite.visible and whiff.sweep_sprite.modulate.a < 0.05,
+			"%s 挥空不亮扇面（打击帧已过，扇面仍隐藏）" % label)
+		whiff.free()
+		bare.free()
+
+		# —— 命中 + 扇形过滤 + 终态几何：前方桩敌挨打、身后桩敌不挨打 ——
+		var w := _make(def_id)
+		await get_tree().process_frame
+		var target := Node2D.new()
+		target.position = TARGET_AT
+		_world.add_child(target)
+		w.current_target = target
+		var aim := (TARGET_AT - w.position).normalized()
+		# 打击帧本体停在后撤 12px 的蓄力位，桩体碰撞圆 r=20 罩得住这点偏差；
+		# 两个桩敌都在判定半径内，唯一差别是「在不在前方扇形里」
+		var front_foe := _make_stub_enemy(w.position + aim * 60.0)
+		var back_foe := _make_stub_enemy(w.position - aim * 60.0)
+		await get_tree().physics_frame
+		w._perform_sweep_attack()
+		await get_tree().create_timer(0.45).timeout   # 蓄力 0.09 + 扫放 0.09 + 淡出 0.09 全程走完
+		_c.check(front_foe.hit_count > 0,
+			"%s 横扫打中前方扇形内的桩敌（命中 %d 次）" % [label, front_foe.hit_count])
+		_c.equals(back_foe.hit_count, 0,
+			"%s 横扫打不着身后的桩敌（扇形判定，不是近战那种 360° 圆）" % label)
+		var reach := w._sweep_arc_radius()
+		var drawn := FloatingWeapon.SWEEP_ART_OUTER * w.sweep_sprite.scale.x
+		_c.near(drawn, reach, 0.5, "%s 扇面外缘 == 判定半径（判定 %.1fpx，画到 %.1fpx）" % [label, reach, drawn])
+		var aim_ang := aim.angle()
+		_c.near(rad_to_deg(absf(angle_difference(w.sweep_sprite.global_rotation, aim_ang))), 0.0, 2.0,
+			"%s 扇面终态正对瞄准轴（画出来的扇形 == 打出去的扇形）" % label)
+		w.free()
+		front_foe.free()
+		back_foe.free()
+		target.free()
+
+		# —— 屏外命中门控：咬到视口外的目标伤害照结、扇面不亮 ——
+		var far_w := _make(def_id)
+		await get_tree().process_frame
+		var far_target := Node2D.new()
+		far_target.position = far_w.position + Vector2(40.0, 0.0)
+		_world.add_child(far_target)
+		far_w.current_target = far_target
+		var far_foe := _make_stub_enemy(far_w.position + Vector2(50.0, 0.0))
+		GameManager.player.position = Vector2(4000.0, 4000.0)
+		await get_tree().physics_frame
+		far_w._perform_sweep_attack()
+		await get_tree().create_timer(0.2).timeout
+		_c.check(far_foe.hit_count > 0,
+			"%s 屏外桩敌伤害照结（命中 %d 次，只静音演出不动结算）" % [label, far_foe.hit_count])
+		_c.check(not far_w.sweep_sprite.visible and far_w.sweep_sprite.modulate.a < 0.05,
+			"%s 咬到屏外目标不亮扇面（打击帧已过，扇面仍隐藏）" % label)
 		GameManager.player.position = Vector2.ZERO
 		far_w.free()
 		far_foe.free()

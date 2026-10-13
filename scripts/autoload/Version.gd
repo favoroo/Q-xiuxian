@@ -3,8 +3,8 @@ extends Node
 ## 游戏版本定义与语义化版本比较工具
 ## 对应 dudu-cocos 的 core/version.ts
 
-const APP_NAME: String = "渡个劫"
-const APP_NAME_EN: String = "Dao Trial"
+const APP_NAME: String = "剑士"
+const APP_NAME_EN: String = "Swordsman"
 const APP_VERSION: String = "0.0.29"
 const APP_VERSION_NAME: String = "v" + APP_VERSION
 

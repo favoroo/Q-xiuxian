@@ -53,6 +53,13 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.stone_damage_cap = float(mods.get("stone_damage_cap", 0.0))
 	gm.kill_cd_reduction_normal = float(mods.get("kill_cd_reduction_normal", 0.0))
 	gm.kill_cd_reduction_elite = float(mods.get("kill_cd_reduction_elite", 0.0))
+	gm.kuxingseng_mode = float(mods.get("kuxingseng_mode", 0.0))
+	gm.still_damage_bonus = float(mods.get("still_damage_bonus", 0.0))
+	gm.still_haste_bonus = float(mods.get("still_haste_bonus", 0.0))
+	gm.still_armor_bonus = float(mods.get("still_armor_bonus", 0.0))
+	gm.still_pickup_bonus = float(mods.get("still_pickup_bonus", 0.0))
+	gm.move_damage_penalty = float(mods.get("move_damage_penalty", 0.0))
+	gm.move_haste_penalty = float(mods.get("move_haste_penalty", 0.0))
 	gm.pet_slots_bonus += int(mods.get("pet_slots", 0))
 	gm.pet_offer_chance_bonus = float(mods.get("pet_offer_chance_bonus", 0.0))
 	gm.pet_damage_mult += float(mods.get("pet_damage_mult", 0.0))
@@ -148,4 +155,10 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 	# 守财奴·财可通神：随身金币每 100 枚一份全伤害加成（与结息闭环：攒钱就是攒刀）
 	if gm.stone_damage_per_100 > 0.0:
 		m *= 1.0 + minf(gm.spirit_stones / 100.0 * gm.stone_damage_per_100, gm.stone_damage_cap)
+	# 苦行僧：站定全伤害 +50% / 移动中全伤害 -60%
+	if gm.kuxingseng_mode > 0.0:
+		if gm.still_time > 0.0:
+			m *= 1.0 + gm.still_damage_bonus
+		elif gm.player_is_moving:
+			m *= maxf(0.1, 1.0 + gm.move_damage_penalty)
 	return m

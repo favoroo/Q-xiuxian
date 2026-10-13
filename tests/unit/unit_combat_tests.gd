@@ -109,10 +109,12 @@ func _test_screen_shake_budget() -> void:
 	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
 
 	# 5. 暴击打击感常量口径（2026-10-11 暴击创伤/击杀特写；全屏金闪已删——高频事件不发整屏脉冲）
-	_c.check(GameBalance.CRIT_TRAUMA_NORMAL > 0.0 and GameBalance.CRIT_TRAUMA_NORMAL < GameBalance.TRAUMA_BUDGET, "普通暴击创伤为正值且单笔不破每秒预算")
+	_c.check(GameBalance.CRIT_TRAUMA_NORMAL >= 0.18 and GameBalance.CRIT_TRAUMA_NORMAL < GameBalance.TRAUMA_BUDGET, "普通暴击创伤大于等于 0.18 保证轻颤可见且不破每秒预算")
 	_c.check(GameBalance.CRIT_TRAUMA_ELITE > GameBalance.CRIT_TRAUMA_NORMAL, "精英暴击创伤大于普通暴击")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_DURATION > GameBalance.KILL_HITSTOP_DURATION, "暴击击杀顿帧比普通击杀更实")
 	_c.check(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL >= GameBalance.KILL_HITSTOP_MIN_INTERVAL, "暴击击杀顿帧限流不宽于普通击杀")
+	_c.check(GameBalance.CRIT_KILL_HITSTOP_SCALE <= GameBalance.KILL_HITSTOP_SCALE, "暴击击杀顿帧时间倍率更强/更凝滞")
+	_c.check(GameBalance.CRIT_KILL_HITSTOP_SCALE >= 0.12 and GameBalance.KILL_HITSTOP_SCALE >= 0.12, "各级顿帧时间倍率均不低于 0.12 安全地板")
 
 	# 6. 跳字模式档位：智能合并 / 全部显示 / 仅暴击 / 关闭，且与布尔总开关双向同步
 	var orig_num_mode: StringName = SettingsManager.damage_number_mode()

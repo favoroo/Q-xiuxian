@@ -6,6 +6,7 @@ extends Node
 ## 钉住八件事：
 ##   1. 闪避成功：不掉血 + 拿到 GUARD_SEC 无敌 + 影层 +1（走 Player.take_damage 真入口）
 ##   2. 被打中：掉血、无敌帧仍是 0.55s、影层不许涨（只有闪成才攒）
+##   2b. 非影者闪避不攒影：残影无敌是通用兜底，影层/增伤乘区只归绑了影爆的影者
 ##   3. 满层 FIFO：超过上限后留的是最近那几刀，更早的让位（不白闪、也不无限攒）
 ##   4. 带影层冲刺：无敌窗口 = SkillData.iframe + 层数 × IFRAME_PER_STACK（被动不消耗影层，
 ##      影层兑现已独立成额外技能「影爆」，冲刺不再清层）
@@ -42,6 +43,7 @@ func _ready() -> void:
 	GameManager.reset_run()
 	await _test_dodge_delivers()
 	await _test_hit_does_not_stack()
+	await _test_non_shadow_no_stack()
 	await _test_fifo_cap()
 	await _test_amp_pure()
 	await _test_dash_iframe_bonus()
@@ -71,7 +73,8 @@ func _make_player(dodge: float) -> Player:
 	GameManager.dodge = dodge
 	GameManager.dodge_cap_bonus = maxf(0.0, dodge - GameManager.DODGE_CAP)
 	GameManager.shadow_amp_mult = 1.0
-	GameManager.extra_skill_id = ""
+	# 影层是影者专属（闸=绑定影爆额外技能）：本判据量的是影者机制，默认摆成影者身份
+	GameManager.extra_skill_id = "shadowburst"
 	GameManager.rng = RandomNumberGenerator.new()
 	GameManager.rng.seed = 20261011
 	return p
@@ -115,6 +118,20 @@ func _test_hit_does_not_stack() -> void:
 	_c.check(p.current_health < hp_before, "闪避 0% 时这一刀真的掉血（前置）")
 	_c.near(p.invulnerable_time, 0.55, 0.001, "打中后的无敌帧仍是 0.55s（踏影没改动它）")
 	_c.check(_stacks(p) == 0, "被打中不涨影层（实得 %d 层）：只有闪成才攒" % _stacks(p))
+	p.queue_free()
+
+# ---------------- 2b. 非影者闪避不攒影（闸=绑定影爆额外技能） ----------------
+
+func _test_non_shadow_no_stack() -> void:
+	# 其他角色靠加点/道具/神行术也能闪：闪避兜底兑现（残影无敌）人人有，影层只归影者
+	var p := _make_player(1.0)
+	GameManager.extra_skill_id = ""
+	var hp_before: float = p.current_health
+	p.take_damage(23.0)
+	_c.check(p.current_health >= hp_before - EPS, "非影者闪避照样不掉血（流云身法通用兜底）")
+	_c.near(p.invulnerable_time, ShadowStepData.GUARD_SEC, 0.001, "非影者闪避仍拿残影短无敌")
+	_c.check(_stacks(p) == 0, "非影者闪避不攒影层（实得 %d 层）：没有影爆键，攒了无处兑现" % _stacks(p))
+	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "非影者闪避不动增伤乘区（防白拿 ×1.40 永久增伤）")
 	p.queue_free()
 
 # ---------------- 3. 满层 FIFO ----------------

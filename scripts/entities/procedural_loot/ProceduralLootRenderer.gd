@@ -12,7 +12,7 @@ enum LootType {
 	GEM_BLUE,     ## 普通八面菱形幽蓝水晶
 	GEM_GOLD,     ## 特殊八面菱形耀金水晶
 	HEAL_ORB,     ## 碧翠灵心玉 / 生机回春魄
-	GEM_SHARD     ## 碎晶：最低面额的小水晶（淡青白、体型更小；见 BalanceEconomy 碎晶段）
+	GEM_SHARD     ## 碎金：基础高频掉落的暖金细屑/金砂片（面额 1 金币；见 BalanceEconomy 碎金段）
 }
 
 ## 重绘节流间隔（20Hz）：闪烁类动画低于此频率肉眼无感，敌人渲染器已验证
@@ -91,7 +91,7 @@ func _draw() -> void:
 		LootType.GEM_GOLD:
 			_draw_rhombus_crystal(true)
 		LootType.GEM_SHARD:
-			_draw_rhombus_crystal(false, true)
+			_draw_gold_shard()
 		LootType.HEAL_ORB:
 			_draw_heal_orb()
 
@@ -178,6 +178,90 @@ func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
 	if flare_alpha > 0.4:
 		var flare_col := Color(1.0, 1.0, 1.0, (flare_alpha - 0.4) * 1.6)
 		draw_circle(core, 1.4 * (0.62 if is_shard else 1.0), flare_col)
+
+# ==============================================================================
+# 1b. 碎金片 / 碎金屑（Gold Shard Nugget）
+# ==============================================================================
+func _draw_gold_shard() -> void:
+	# 不规则金属碎块：打破菱形对称，按 instance_id 确定 3 种自然金砂/金片切面造型
+	var var_idx: int = get_instance_id() % 3
+
+	var p_top: Vector2
+	var p_right: Vector2
+	var p_bottom: Vector2
+	var p_left: Vector2
+	var p_mid: Vector2
+	var p_notch: Vector2
+
+	match var_idx:
+		0:
+			# 造型 1：斜切多棱金片
+			p_top = Vector2(0.5, -6.5)
+			p_right = Vector2(4.5, -0.5)
+			p_bottom = Vector2(-0.5, 6.0)
+			p_left = Vector2(-4.5, 1.5)
+			p_mid = Vector2(0.0, 0.2)
+			p_notch = Vector2(2.5, 4.0)
+		1:
+			# 造型 2：微扁平金屑
+			p_top = Vector2(-1.0, -5.5)
+			p_right = Vector2(5.5, 0.5)
+			p_bottom = Vector2(1.0, 5.5)
+			p_left = Vector2(-5.0, -0.5)
+			p_mid = Vector2(-0.5, -0.5)
+			p_notch = Vector2(-2.5, 4.0)
+		_:
+			# 造型 3：角锥碎金粒
+			p_top = Vector2(1.5, -6.0)
+			p_right = Vector2(4.8, 1.5)
+			p_bottom = Vector2(-1.5, 5.8)
+			p_left = Vector2(-4.2, -1.5)
+			p_mid = Vector2(0.5, -0.2)
+			p_notch = Vector2(3.0, -3.5)
+
+	# 暖金金属色系（明快黄铜金，不同于精英的刺眼大金石，呈现细碎精炼金砂质感）
+	var col_glow := Color(0.95, 0.75, 0.22, 0.14)
+	var col_hi := Color(1.0, 0.95, 0.65, 0.96)
+	var col_mid := Color(0.92, 0.70, 0.18, 0.95)
+	var col_dark := Color(0.44, 0.26, 0.06, 0.95)
+	var col_edge := Color(0.98, 0.86, 0.42, 0.85)
+
+	# 微弱暖金外晕
+	var pulse: float = sin(_time * 3.5) * 0.08 + 1.0
+	var glow_poly := PackedVector2Array([
+		p_top * 1.35 * pulse,
+		p_right * 1.35 * pulse,
+		p_notch * 1.35 * pulse,
+		p_bottom * 1.35 * pulse,
+		p_left * 1.35 * pulse
+	])
+	draw_colored_polygon(glow_poly, col_glow)
+
+	# 金属切面：受光强光面、中调黄铜面、背阴暗面与转折面
+	var face_bright := PackedVector2Array([p_top, p_right, p_mid])
+	draw_colored_polygon(face_bright, col_hi)
+
+	var face_mid := PackedVector2Array([p_top, p_mid, p_left])
+	draw_colored_polygon(face_mid, col_mid)
+
+	var face_dark := PackedVector2Array([p_left, p_mid, p_bottom])
+	draw_colored_polygon(face_dark, col_dark)
+
+	var face_notch := PackedVector2Array([p_mid, p_right, p_notch, p_bottom])
+	draw_colored_polygon(face_notch, col_mid.darkened(0.20))
+
+	# 内部金属棱线与高光外轮廓
+	draw_line(p_top, p_bottom, col_hi, 1.0, true)
+	draw_line(p_left, p_right, col_edge.darkened(0.15), 0.9, true)
+
+	var outline := PackedVector2Array([p_top, p_right, p_notch, p_bottom, p_left, p_top])
+	draw_polyline(outline, col_edge, 1.0, true)
+
+	# 顶点微小金属反光星芒
+	var flare_alpha: float = (sin(_time * 4.2) * 0.5 + 0.5) * 0.85
+	if flare_alpha > 0.45:
+		var flare_col := Color(1.0, 1.0, 0.85, (flare_alpha - 0.45) * 1.6)
+		draw_circle(p_mid, 1.0, flare_col)
 
 # ==============================================================================
 # 2. 碧翠灵心玉 / 生机回春魄（Emerald Soul Gem）

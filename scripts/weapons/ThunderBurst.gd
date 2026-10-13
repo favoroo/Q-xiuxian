@@ -184,7 +184,7 @@ func _deal_damage() -> void:
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
 			var is_crit: bool = GameManager.roll_crit()
-			var crit_m: float = GameManager.crit_mult + GameManager.synergy_crit_mult
+			var crit_m: float = GameManager.get_crit_mult()
 			var dmg: float = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
 			# 震退方向走统一出口：落雷点常在玩家外侧，纯径向会把落点内侧那圈敌人往玩家身上拱
 			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)

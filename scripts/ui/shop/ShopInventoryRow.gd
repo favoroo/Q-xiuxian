@@ -23,15 +23,14 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	# 拿它们当池子区分等于没区分 —— 元素件把描边让给暖橙红之后，上阵件与背包件会撞成同一副
 	# 长相（2026-10-12 出图验收抓到，故给上阵位压一层主蓝薄底）。
 	var bg: Color = GameStyle.NAVY2
-	var border: Color = GameStyle.LINE
+	# 外边框：背包位默认五行属性色（与货架大卡同源：金银/木绿/水蓝/火红/土黄），上阵位给 GOLD 主蓝
+	var border: Color = GameStyle.weapon_element_color(id, GameStyle.LINE)
 	if pool == "equipped":
 		border = GameStyle.GOLD
 		bg = GameStyle.with_alpha(GameStyle.GOLD, 0.14)
-	# 元素件 = 暖橙红描边（与货架大卡的图标框同一语言，判定见 GameStyle.is_elemental）。
-	# 描边一色五用要有明确优先级，从低到高：背包位 → 上阵位 → 元素件 → 可合成 → 已选中。
-	# 元素是这件武器的固有属性，但「此刻能对它做什么」（凑齐三件 / 正要点它）压得过它，
-	# 否则最该按的那颗键会丢颜色。
-	border = GameStyle.element_border(id, border)
+		# 描边一色五用独立拆分：
+	# 元素特性不再侵占整圈外框，改由底部 3px 暖橙红下边框恒定指示（GameStyle.apply_elemental_bottom_bar）；
+	# 外边框专职表达交互与池位状态，优先级从低到高：五行基础/上阵位 → 可合成 → 已选中。
 	if mergeable:
 		border = GameStyle.JADE
 	if is_sel:
@@ -57,6 +56,10 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(icon_tex)
+
+	# 元素武器底部暖橙红下边框（吃「元素伤害」属性加成）：恒定显示，不与可合成/选中争抢外框
+	if GameStyle.is_elemental(id):
+		GameStyle.apply_elemental_bottom_bar(slot, true, 3.0)
 
 	# 星级跟着格子长：44 格上 11 号字还行，60 格上就缩成灰了
 	GameStyle.star_label(slot, star, int(round(clampf(tile * 0.24, 12.0, 16.0))))

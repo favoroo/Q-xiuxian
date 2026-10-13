@@ -1,6 +1,6 @@
 extends Control
 
-## 渡个劫 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
+## 剑士 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
 ## 验证 16 大敌种（普通怪、精英怪、关卡魔将与心魔魔尊）的程序化矢量拟态与悬浮/飞行/爬行协调动作
 ## 适配桌面 960×540 完整一屏 6×3 矩阵（17 张卡片：含重复 boss 终局形态）
 
@@ -76,7 +76,7 @@ func _build_gallery() -> void:
 	root_vbox.add_child(header)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "渡个劫 · 空洞冷冽国风全妖魔画廊"
+	title_lbl.text = "剑士 · 空洞冷冽国风全妖魔画廊"
 	GameStyle.label(title_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	header.add_child(title_lbl)
 

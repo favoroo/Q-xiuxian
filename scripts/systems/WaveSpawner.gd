@@ -172,7 +172,7 @@ func wave_duration(n: int) -> float:
 func _is_elite_wave(n: int) -> bool:
 	return GameBalance.is_elite_wave(n, GameManager.endless_mode)
 
-## Boss 回合判定（固定关卡）：第 10/20 波，无尽每 10 波
+## Boss 回合判定（固定关卡）：第 10/20 波，无尽每 5 波
 func _is_boss_wave(n: int) -> bool:
 	return GameBalance.is_boss_wave(n)
 
@@ -332,8 +332,9 @@ func _spawn_regular(player: Node2D) -> void:
 	# 回合内总刷入预算：耗尽即停手（回合时长照常跑满，场上越打越空）
 	if _budget_used >= _budget_total:
 		return
-	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每回合刷怪量
-	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
+	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每回合刷怪量；
+	# 无尽深层（>20 波）再乘 endless_swarm_mult（曲线在 BalanceWave，正常局恒 1.0）
+	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
 	if GameManager.enemy_count >= enemy_cap:
 		return
 
@@ -389,6 +390,10 @@ var _looter_done: bool = false     ## 本回合金蟾是否已刷
 ## 邪修在第 wave 波占到的累计带上沿（纯函数，单测直接钉这条爬坡线；转发 EnemyData）
 static func xiexiu_edge(wave: int) -> float:
 	return EnemyData.xiexiu_edge(wave)
+
+## 毒妖在第 wave 波占到的累计带上沿（与花妖共段切走固定比例；转发 EnemyData）
+static func duyao_edge(wave: int) -> float:
+	return EnemyData.duyao_edge(wave)
 
 ## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key）；转发 EnemyData
 static func pick_scene_key(wave: int, roll: float) -> String:
@@ -459,6 +464,10 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 		enemy.heal_amount = GameBalance.healer_amount(wave_number)
 	if enemy.stone_reward > 0:
 		enemy.stone_reward = GameBalance.looter_stone_reward(wave_number)
+		# 毒妖投毒：每跳伤害与半径跟着回合曲线走（场景里只占位）
+		if enemy.poison_interval > 0.0:
+			enemy.poison_damage = GameBalance.poison_area_damage(wave_number)
+			enemy.poison_radius = GameBalance.poison_radius(wave_number)
 
 ## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进
 func _spawn_boss(player: Node2D) -> void:

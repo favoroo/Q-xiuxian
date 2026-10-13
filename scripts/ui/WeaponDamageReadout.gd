@@ -30,7 +30,7 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 			and GameManager.slots_used() < GameManager.max_weapon_slots():
 		drone_n += 1
 	var raw: float = WeaponData.damage_for(w_id, s) + GameManager.get_weapon_stat_bonus(w_id, s)
-	var mult: float = GameManager.weapon_damage_mult * GameManager.synergy_damage_mult \
+	var mult: float = GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult \
 			* GameManager.shadow_amp_mult \
 			* GameManager.cultivator_damage_mult(w_id) * GameManager.element_damage_mult(w_id) \
 			* GameBalance.multi_weapon_damage_mult(n, drone_n)
@@ -38,10 +38,9 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 		mult *= GameManager.synergy_contraption_mult
 	return raw * mult
 
-## 三个攻速乘区：悟道/羁绊是常驻的，疾风咒是短时施法间隔（商店在回合间恒为 1.0）。
+## 攻速乘区：悟道/羁绊常驻、疾风咒短时施法间隔、站定神像。与 FloatingWeapon 的 cooldown_timer 同一条式子。
 static func haste_product() -> float:
-	return GameManager.attack_speed_mult * GameManager.synergy_haste_mult \
-			* GameManager.buff_attack_speed_mult
+	return GameManager.get_effective_attack_speed_mult()
 
 ## 你现在的实际攻击间隔（数据表值 × 攻速乘区）。与 FloatingWeapon 的 cooldown_timer 同一条式子。
 static func effective_cd(w_id: String, star: int) -> float:

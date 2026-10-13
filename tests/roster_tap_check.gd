@@ -1,6 +1,6 @@
 extends Node
 
-## 判据：开局「选择道统」右侧修士列表 —— 划一下不许换人，点一下必须换对人。
+## 判据：开局「选择角色」右侧修士列表 —— 划一下不许换人，点一下必须换对人。
 ## 运行: $G --headless --path . res://tests/RosterTapCheck.tscn
 ##       $G --headless --path . res://tests/RosterTapCheck.tscn -- --selftest  （验判据有牙齿）
 ##

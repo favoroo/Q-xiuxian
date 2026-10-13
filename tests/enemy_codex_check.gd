@@ -63,6 +63,21 @@ func _test_data() -> void:
 		if d.length() < 6:
 			thin.append(String(eid))
 	_c.check(thin.is_empty(), "威胁描述都是完整一句话（过短 %s）" % str(thin))
+	# 详情卡强度行（2026-10-13）：attack/tough/swift/counter 四字段必须齐，
+	# 且 tough/swift 必须落在档位词表里 —— 造新词会把 ManualDialog 的色档字典打穿（取不到色走兜底纸白，等于档位撒谎）
+	var missing_field: Array[String] = []
+	var bad_tier: Array[String] = []
+	for eid in ids:
+		var g: Dictionary = EnemyGuideData.GUIDE[eid]
+		for key in ["attack", "tough", "swift", "counter"]:
+			if String(g.get(key, "")).is_empty():
+				missing_field.append("%s.%s" % [eid, key])
+		if not g.get("tough", "") in EnemyGuideData.TOUGH_TIERS:
+			bad_tier.append("%s.tough=%s" % [eid, g.get("tough", "")])
+		if not g.get("swift", "") in EnemyGuideData.SPEED_TIERS:
+			bad_tier.append("%s.swift=%s" % [eid, g.get("swift", "")])
+	_c.check(missing_field.is_empty(), "每种都有攻击方式/皮实度/移速/应对（缺 %s）" % str(missing_field))
+	_c.check(bad_tier.is_empty(), "强度档位都在词表内（越界 %s）" % str(bad_tier))
 
 # ---------------- ② 收录存档往返 ----------------
 func _test_persistence() -> void:

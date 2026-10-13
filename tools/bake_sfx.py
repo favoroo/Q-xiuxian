@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bake_sfx.py —— 渡个劫 (Dao Trial) 音效离线烘焙（纯标准库，零模型依赖）
+"""bake_sfx.py —— 剑士 (Swordsman) 音效离线烘焙（纯标准库，零模型依赖）
 
 移植自 dudu-cocos/tools/bake-audio.ts 的合成内核，用数学而不是录音生成音效：
     tone  = 振荡器(sine/square/sawtooth/triangle + 频率指数/线性斜坡) × 指数包络 [可选 lowpass]
@@ -552,6 +552,17 @@ SFX = {
         lambda b: (noise(b, dur=0.09, peak=0.15, ftype="bandpass", f0=3100, f1=800, q=1.0),
                    shimmer(b, f0=2600, f1=1200, dur=0.11, peak=0.045, t0=0.035)),
     ],
+    # 毒妖投毒落潭：黏稠「啪唧」落地 + 低频腐水余响。带通噪声压低中心频率（900→320Hz）
+    # 出「稠液」而不是「水花」——高频清脆水花与 metal_dart 的嗤声频段打架；
+    # 尾上一小口 120Hz 下潜是「毒潭砸开」的质量感，与 enemy_slam 的地裂低频错开时长（短一半）
+    "enemy_poison": [
+        lambda b: (noise(b, dur=0.09, peak=0.26, ftype="bandpass", f0=900, f1=320, q=1.1),
+                   tone(b, wtype="sine", f0=150, f1=62, dur=0.13, peak=0.16, t0=0.012),
+                   shimmer(b, f0=1400, f1=900, dur=0.09, peak=0.028, t0=0.03)),
+        lambda b: (noise(b, dur=0.10, peak=0.25, ftype="bandpass", f0=820, f1=300, q=1.0),
+                   tone(b, wtype="triangle", f0=132, f1=54, dur=0.14, peak=0.15, t0=0.014),
+                   shimmer(b, f0=1250, f1=820, dur=0.10, peak=0.026, t0=0.032)),
+    ],
     # 灵石清脆晶响：双叮 + 高频灵光（引擎端保留连拾升调，清脆爽感翻倍）——替换赌场硬币
     "gem_pickup": [
         lambda b: (fm_tone(b, f0=1568, dur=0.13, peak=0.17, ratio=3.5, idx0=1.3, idx1=0.1),
@@ -818,6 +829,7 @@ TARGET_PEAK = {
     "enemy_fuse": 0.45,
     "enemy_slam": 0.60,
     "enemy_blink": 0.30,
+    "enemy_poison": 0.40,
     "gem_pickup": 0.26,
     "chest_hit": 0.34,
     "chest_open": 0.40,
@@ -997,7 +1009,7 @@ def print_cand_table(rows) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="烘焙渡个劫音效")
+    ap = argparse.ArgumentParser(description="烘焙剑士音效")
     ap.add_argument("--only", help="只烘这些 key，逗号分隔")
     ap.add_argument("--ogg", action="store_true", help="转成 ogg 进包体（需要 ffmpeg 有 libvorbis）")
     ap.add_argument("--list", action="store_true", help="列出全部 key 与变体数")

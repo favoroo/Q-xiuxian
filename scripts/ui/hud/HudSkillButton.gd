@@ -229,7 +229,7 @@ func _process(_delta: float) -> void:
 	if not show or player == null:
 		return
 
-	# 冷却/活跃账本只归主技能键：额外键（影爆类）免冷却、由影层门控，读主键的账就是串台
+	# 冷却/活跃账本：主键读 skill_cd_*，额外键读 extra_skill_cd_*（药爆等带 CD 的额外技能）
 	var cd_left: float = 0.0
 	var cd_total: float = 1.0
 	var active_left: float = 0.0
@@ -239,6 +239,13 @@ func _process(_delta: float) -> void:
 		active_total = maxf(0.01, player.skill_active_total)
 		cd_left = player.skill_cd_left
 		cd_total = maxf(0.01, player.skill_cd_total)
+	else:
+		var e_cd = player.get("extra_skill_cd_left")
+		if e_cd is float or e_cd is int:
+			cd_left = float(e_cd)
+		var e_tot = player.get("extra_skill_cd_total")
+		if e_tot is float or e_tot is int:
+			cd_total = maxf(0.01, float(e_tot))
 	var on_active := active_left > 0.0
 	var on_cd := cd_left > 0.0
 
@@ -273,34 +280,14 @@ func _process(_delta: float) -> void:
 		tw.tween_property(_btn, "scale", Vector2.ONE, 0.14)
 	_update_shadow_chip(player)
 
-## 额外技能充能角标：影爆读影层（Player.shadow_ring），服丹读药池存量（GameManager.elixir_pool）。
+## 额外技能充能角标：影爆读影层（Player.shadow_ring）。
 ## 攒上才出现，攒满直接换成可释放的亮面（不靠闪一下提示——看不见等于没做）。
 ## 读数都现读账本本身，不在这里另记一份。只归额外技能键：主技能键不挂这颗角标。
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:
 		return
-	if not bind_extra:
+	if not bind_extra or GameManager.extra_skill_id != "shadowburst":
 		_shadow_chip.visible = false
-		return
-	# 服丹：药池读数（绿系，与影层的幽夜紫区分开）
-	if GameManager.extra_skill_id == "elixir":
-		var max_hp := 1.0
-		var hp_val = player.get("max_health")
-		if hp_val is float or hp_val is int:
-			max_hp = float(hp_val)
-		var pool := GameManager.elixir_pool
-		var shown_pool := int(round(pool))
-		if shown_pool == _shadow_shown:
-			return
-		_shadow_shown = shown_pool
-		var pool_full: bool = pool >= ElixirData.cap_of(max_hp) - 0.01
-		_shadow_chip.visible = shown_pool > 0
-		if shown_pool <= 0:
-			return
-		_shadow_chip.text = "药 %d" % shown_pool
-		_shadow_chip.add_theme_stylebox_override("normal",
-			GameStyle.chip(GameStyle.GOOD if pool_full else GameStyle.GOOD_DK))
-		GameStyle.label(_shadow_chip, 10, GameStyle.INK_TEXT if pool_full else GameStyle.GOOD)
 		return
 	# 影爆：影层读数
 	var stacks := 0

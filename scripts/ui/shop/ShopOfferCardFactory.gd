@@ -21,7 +21,7 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	var price: int = int(offer.get("price", 0))
 
 	# 行①：图标与名号同行（附拥有数量/星级分布）
-	vbox.add_child(_create_card_head(offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", ""))))
+	vbox.add_child(_create_card_head(shop, offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", "")), data.w_id))
 	# 行②：色签流 + 锁定开关同行
 	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.rec_reasons, data.tag_keys, data.w_id))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
@@ -234,8 +234,8 @@ static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContai
 	card.add_theme_stylebox_override("panel", style)
 	return card
 
-## 行①：图标框（含元素高亮边框）与名号同行（右侧上下排列名号与持有信息），名号按 card_name_w 切硬换行
-static func _create_card_head(offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "") -> HBoxContainer:
+## 行①：图标框（五行外框 + 元素特性下边框）与名号同行（右侧上下排列名号与持有信息），名号按 card_name_w 切硬换行
+static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "", w_id: String = "") -> HBoxContainer:
 	var head := HBoxContainer.new()
 	head.name = "CardHead"
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -245,12 +245,15 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 	icon_box.custom_minimum_size = Vector2(WaveShop.CARD_ICON, WaveShop.CARD_ICON)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# 元素武器边框高亮：吃元素加成的武器边框设为 ELEMENT 暖橙红，醒目且 100% 不遮挡武器图片；普通武器保持暗黑边框 LINE
+	# 边框双通道正交设计：
+	# 1. 外边框（四周）：五行属性统一色（金银/木绿/水蓝/火红/土黄），无属性武器走 LINE
+	# 2. 下边框：吃「元素伤害」属性加成的武器，底部挂 3px 暖橙红 ELEMENT 光带，与五行外框互不干扰
 	var border_color: Color = GameStyle.LINE
+	var is_elem := false
 	if kind == "weapon":
-		var wid := String(offer.get("id", ""))
-		if WeaponData.elemental_scaling_coef(wid) > 0.0:
-			border_color = GameStyle.ELEMENT
+		var wid := w_id if not w_id.is_empty() else String(offer.get("id", ""))
+		border_color = GameStyle.weapon_element_color(wid, GameStyle.LINE)
+		is_elem = GameStyle.is_elemental(wid)
 	elif kind == "pet":
 		var pdef := PetData.get_def(String(offer.get("id", "")))
 		border_color = pdef.get("color", GameStyle.GOLD)
@@ -283,6 +286,14 @@ static func _create_card_head(offer: Dictionary, card_w: float, kind: String, ti
 		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_box.add_child(icon_tex)
+
+	# 元素武器底部暖橙红下边框装饰条
+	if is_elem:
+		GameStyle.apply_elemental_bottom_bar(icon_box, true, 3.0)
+		# 元素特性点按解释：点击图标框也能查看元素武器加成账单（接通 ShopChipTips.open_element）
+		var wid := w_id if not w_id.is_empty() else String(offer.get("id", ""))
+		icon_box.mouse_filter = Control.MOUSE_FILTER_PASS
+		GameStyle.tap(icon_box, func() -> void: ShopChipTips.open(shop, icon_box, {"kind": "element", "w_id": wid}))
 
 	head.add_child(icon_box)
 

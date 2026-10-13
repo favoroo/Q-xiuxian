@@ -52,20 +52,23 @@ const FIELD_FORM := {
 	"free_rerolls": FORM_FLAT,
 	"bonus_pierce": FORM_FLAT,
 	"luck": FORM_FLAT,
-		# 2026-10-11 寻宝流：数量与品质是「几口 / 几点」的平值；2026-10-12 第三条腿改抬兑现量，
-		# 宝箱掉落是乘区分数（0.35 → +35%），与 StatInfoData.FIELDS 的 "pct" 口径同源
-		"chest_count": FORM_FLAT,
-		"chest_quality": FORM_FLAT,
-		"chest_reward": FORM_PCT,
-		# 2026-10-12 灵兽系统加点与法宝属性
-		"pet_damage_mult": FORM_PCT,
-		"pet_effect_mult": FORM_PCT,
-		"pet_cooldown_mult_mul": FORM_MUL,
-		"pet_slots": FORM_FLAT,
-	}
+	# 2026-10-11 寻宝流：数量与品质是「几口 / 几点」的平值；2026-10-12 第三条腿改抬兑现量，
+	# 宝箱掉落是乘区分数（0.35 → +35%），与 StatInfoData.FIELDS 的 "pct" 口径同源
+	"chest_count": FORM_FLAT,
+	"chest_quality": FORM_FLAT,
+	"chest_reward": FORM_PCT,
+	# 2026-10-12 灵兽系统加点与法宝属性
+	"pet_damage_mult": FORM_PCT,
+	"pet_effect_mult": FORM_PCT,
+	"pet_cooldown_mult_mul": FORM_MUL,
+	"pet_slots": FORM_FLAT,
+}
 
 ## 文案中允许出现、但不被 apply 解释的数字（键为条目 id；百分比记整数值，平值记数值）
 const ORPHAN_ALLOW := {
+	"atk_up": [100],         # 超过100%后收益减半
+	"critdmg_up": [250],     # 上限250%
+	"grand_atk": [100],      # 超过100%后收益减半
 	"dodge_up": [60],        # 上限60%
 	"crit_up": [75],         # 上限75%
 	"lifesteal_up": [1, 3],  # 吸取1点生命（每秒最多3次）
@@ -78,23 +81,24 @@ const ORPHAN_ALLOW := {
 	"xuepan_guyu": [50, 1],        # 每50点最大生命+1%（dmg_per_max_hp 0.01）
 	"jubao_pen": [100, 3, 30],     # 每100灵石+3%，至多+30%（dmg_per_100_stones 0.03 / stone_dmg_cap 0.30）
 	"ranxue_fu": [10, 2],          # 每损失10%生命+2.5%（dmg_per_missing_hp 0.025；扫描截整为 2）
-		"budong_yin": [1, 30],         # 站定1秒+30%（still_seconds 1.0 / still_damage 0.30）
-		"zhekou_yufu": [8],            # 商店全场 8 折（shop_price_mul 0.92 → 折扣以「折」表述）
-		# 2026-10-12 深度联动与站定流法宝（14 件）
-		"dazuo_putuan": [2],
-		"ruding_xiang": [25, 3],
-		"xuanwu_fashan": [60, 80],
-		"panshi_yin": [1, 45],
-		"sanmei_guizhen": [4, 1, 15],
-		"lingsui_danqi": [3, 25, 15],
-		"liuyun_qianyin": [50, 3],
-		"jinmang_souhun": [30, 1],
-		"tiangong_fatiao": [20, 30],
-		"qianfu_lianhuan": [1],
-		"kaishan_jianyi": [25, 1, 2],
-		"ningshen_fu": [10],
-		"tupo_guyu": [3, 0.5, 1],
-	}
+	"budong_yin": [1, 30],         # 站定1秒+30%（still_seconds 1.0 / still_damage 0.30）
+	"zhekou_yufu": [8, 7],         # 商店全场 8 折，最多叠到 7 折（shop_price_mul 0.92 → 折扣以「折」表述）
+	# 2026-10-12 深度联动与站定流法宝（14 件）
+	"dazuo_putuan": [2],
+	"ruding_xiang": [25, 3],
+	"xuanwu_fashan": [60, 80],
+	"jingang_shenxiang": [-30, 30],
+	"panshi_yin": [1, 45],
+	"sanmei_guizhen": [4, 1, 15],
+	"lingsui_danqi": [3, 25, 15],
+	"liuyun_qianyin": [50, 3],
+	"jinmang_souhun": [30, 1],
+	"tiangong_fatiao": [20, 30],
+	"qianfu_lianhuan": [1],
+	"kaishan_jianyi": [25, 1, 2],
+	"ningshen_fu": [10],
+	"tupo_guyu": [3, 0.5, 1, 30, 5, 10],
+}
 
 static func _strip_bbcode(s: String) -> String:
 	var re := RegEx.new()

@@ -26,6 +26,13 @@ const SPAWN_INTERVAL_PER_WAVE := BalanceWave.SPAWN_INTERVAL_PER_WAVE
 const SPAWN_BATCH_EVERY_WAVES := BalanceWave.SPAWN_BATCH_EVERY_WAVES
 const SPAWN_BATCH_BONUS_CHANCE := BalanceWave.SPAWN_BATCH_BONUS_CHANCE
 const WAVE_SPAWN_BUDGET_MAX := BalanceWave.WAVE_SPAWN_BUDGET_MAX
+const DEEP_WAVE_THRESHOLD := BalanceWave.DEEP_WAVE_THRESHOLD
+const DEEP_BUDGET_PER_WAVE := BalanceWave.DEEP_BUDGET_PER_WAVE
+const DEEP_BUDGET_MAX := BalanceWave.DEEP_BUDGET_MAX
+const DEEP_DMG_GROWTH := BalanceWave.DEEP_DMG_GROWTH
+const DEEP_HP_GROWTH := BalanceWave.DEEP_HP_GROWTH
+const DEEP_SWARM_PER_WAVE := BalanceWave.DEEP_SWARM_PER_WAVE
+const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
@@ -152,6 +159,7 @@ const HARVEST_GROWTH := BalanceEconomy.HARVEST_GROWTH
 const HEAL_OVERFLOW_STONE_PER_HP := BalanceEconomy.HEAL_OVERFLOW_STONE_PER_HP
 const HEAL_OVERFLOW_STONE_CAP := BalanceEconomy.HEAL_OVERFLOW_STONE_CAP
 const GEM_SHARD_STONE_VALUE := BalanceEconomy.GEM_SHARD_STONE_VALUE
+const GEM_SHARD_BASE_CHANCE := BalanceEconomy.GEM_SHARD_BASE_CHANCE
 const GEM_SHARD_START_WAVE := BalanceEconomy.GEM_SHARD_START_WAVE
 const GEM_SHARD_CHANCE_CAP := BalanceEconomy.GEM_SHARD_CHANCE_CAP
 const EARLY_CLEAR_STONES_PER_SEC := BalanceEconomy.EARLY_CLEAR_STONES_PER_SEC
@@ -161,6 +169,7 @@ const RARITY_RARE := BalanceEconomy.RARITY_RARE
 const RARITY_TOTAL := BalanceEconomy.RARITY_TOTAL
 const RARITY_COMMON_FLOOR := BalanceEconomy.RARITY_COMMON_FLOOR
 const LUCK_EPIC_PER_POINT := BalanceEconomy.LUCK_EPIC_PER_POINT
+const LUCK_RARE_PER_POINT := BalanceEconomy.LUCK_RARE_PER_POINT
 const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
 const PET_CHANCE := BalanceEconomy.PET_CHANCE
@@ -176,6 +185,9 @@ const TAG_FILTER_BONUS := BalanceEconomy.TAG_FILTER_BONUS
 const TAG_FILTER_LEAK := BalanceEconomy.TAG_FILTER_LEAK
 const ITEM_TIER_WAVES := BalanceEconomy.ITEM_TIER_WAVES
 const ITEM_TIER_BASE := BalanceEconomy.ITEM_TIER_BASE
+const LUCK_ITEM_EPIC_PER_POINT := BalanceEconomy.LUCK_ITEM_EPIC_PER_POINT
+const LUCK_ITEM_LEGEND_PER_POINT := BalanceEconomy.LUCK_ITEM_LEGEND_PER_POINT
+const LUCK_ITEM_RARE_PER_POINT := BalanceEconomy.LUCK_ITEM_RARE_PER_POINT
 
 # 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
 const ARMOR_COEF := BalanceCombat.ARMOR_COEF
@@ -356,11 +368,21 @@ static func enemy_hp_mult(wave: int) -> float:
 static func enemy_dmg_mult(wave: int) -> float:
 	return BalanceWave.enemy_dmg_mult(wave)
 
+## 无尽深层同屏密度倍率（≤20 波恒 1.0，曲线在 BalanceWave）
+static func endless_swarm_mult(wave: int) -> float:
+	return BalanceWave.endless_swarm_mult(wave)
+
 static func healer_amount(wave: int) -> float:
 	return BalanceWave.healer_amount(wave)
 
 static func looter_stone_reward(wave: int) -> int:
 	return BalanceWave.looter_stone_reward(wave)
+
+static func poison_area_damage(wave: int) -> float:
+	return BalanceWave.poison_area_damage(wave)
+
+static func poison_radius(wave: int) -> float:
+	return BalanceWave.poison_radius(wave)
 
 static func is_boss_wave(n: int) -> bool:
 	return BalanceWave.is_boss_wave(n)

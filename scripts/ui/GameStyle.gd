@@ -34,12 +34,15 @@ const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
 const GREY := Color("7d8494")       # 暗部正文/禁用
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/增益绿/朱砂都不撞）
+const SWEEP := Color("f5a83d")      # 琥珀金 = 「横扫」攻击方式专用（近战朱砂/横扫琥珀/其他主蓝三档，与元素橙红拉开明度）
 const AURUM := Color("ffc94d")      # 暖金 = 金光护体椭球护罩主色（世界特效专用，与点缀黄 JADE 的货币语义区分）
 const AURUM_EDGE := Color("ffe9b0") # 暖金亮边（护罩描边/流光高光）
 const SHADOW := Color(0.78, 0.50, 1.0)      ## 幽夜紫 = 「踏影/影层」专用（闪避攒的层数读数、
 ## 落地影袭环）：与暖金护罩、元素橙红、主蓝行动色都不撞，黑底上够亮才读得出层数
 const SHADOW_EDGE := Color(0.94, 0.84, 1.0) ## 影层亮边（攒满时的可释放高亮与环描边）
 const SHADOW_DK := Color("3a1f52")          ## 幽夜紫暗底（影层角标的芯片底色，配 SHADOW 亮字）
+const POISON := Color(0.35, 0.75, 0.45)     ## 剧毒绿 = 敌方投毒毒潭/持续伤害区域专用（与增益绿 GOOD 的语义
+## 相反：GOOD 是给玩家的治疗，POISON 是敌人放的地面持续伤害，黑底上同档亮度但只用于世界空间危险区）
 
 # 稀有度 / 品阶统一色值（凡品暖灰 / 良品玉 / 仙品霜金 / 传说紫）——均按黑底可读调亮
 const RARITY_COMMON := Color(0.72, 0.70, 0.62)
@@ -502,6 +505,30 @@ static func is_elemental(weapon_id: String) -> bool:
 ## 图标框描边色：元素件给暖橙红，其余沿用调用方原本那一款（不改变非元素件的长相）
 static func element_border(weapon_id: String, fallback: Color) -> Color:
     return ELEMENT if is_elemental(weapon_id) else fallback
+
+## 武器对应的五行代表色（金银/木绿/水蓝/火红/土黄），无对应或空则回退 fallback
+static func weapon_element_color(weapon_id: String, fallback: Color = Color("3a3a42")) -> Color:
+    if weapon_id.is_empty():
+        return fallback
+    var elem := WeaponData.element_of(weapon_id)
+    if elem.is_empty():
+        return fallback
+    return ELEMENT_COLORS.get(elem, fallback)
+
+## 元素特性下边框装饰条：在图标框底部叠一层暖橙红 ELEMENT 水平亮条（吃「元素伤害」属性加成），
+## 宽度自适应铺满底部，高度默认 3px，不拦截输入事件。
+static func apply_elemental_bottom_bar(parent: Control, is_elem: bool, height: float = 3.0) -> ColorRect:
+    if not is_elem or parent == null:
+        return null
+    var bar := ColorRect.new()
+    bar.name = "ElementBottomBar"
+    bar.color = ELEMENT
+    bar.custom_minimum_size = Vector2(0.0, height)
+    bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    bar.size_flags_vertical = Control.SIZE_SHRINK_END
+    bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(bar)
+    return bar
 
 ## 武器星级 Label（统一字号、描边、右下角对齐）
 static func star_label(parent: Control, star: int, font_size: int = 11) -> Label:

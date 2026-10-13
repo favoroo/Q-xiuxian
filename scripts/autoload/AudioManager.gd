@@ -79,6 +79,7 @@ const SFX_GAP_MS := {
 	"enemy_fuse": 100,     ## 引信本身 0.3s 长嘶，间隔太小会把一条嘶鸣切成碎片
 	"enemy_slam": 150,
 	"enemy_blink": 80,
+	"enemy_poison": 120,   ## 投毒是周期技（数秒一发），同族同帧齐射合并成一声落地
 	"gem_pickup": 25,
 	"chest_hit": 30,
 	"ui_click": 30,
@@ -152,6 +153,7 @@ func _load_audio_assets() -> void:
 	_register_sfx("enemy_fuse", _sfx_paths("enemy_fuse", 2))
 	_register_sfx("enemy_slam", _sfx_paths("enemy_slam", 2))
 	_register_sfx("enemy_blink", _sfx_paths("enemy_blink", 2))
+	_register_sfx("enemy_poison", _sfx_paths("enemy_poison", 2))
 	_register_sfx("gem_pickup", _sfx_paths("gem_pickup", 2))
 	_register_sfx("chest_hit", _sfx_paths("chest_hit", 2))
 	_register_sfx("chest_open", _sfx_paths("chest_open", 2))

@@ -33,10 +33,26 @@ const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 const WAVE_SPAWN_BUDGET_BASE := 14.0
 const WAVE_SPAWN_BUDGET_PER_WAVE := 3.6
 const WAVE_SPAWN_BUDGET_MAX := 90.0
+# 2026-10-13 无尽深层三涨：正常局 20 波通关，故「波数 > 20」即等价无尽深层，曲线分段
+# 无需读 endless_mode（保持纯函数）。深层段预算不再封顶 90，从 W20 的 86 只起每波 +4，
+# 到 180 硬顶（约 W44 饱和）；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
+# 走 endless_swarm_mult。四个成长率是独立旋钮，试玩后可单独回调。
+const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（正常局通关波，> 此值走深层曲线）
+const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 86 续算）
+const DEEP_BUDGET_MAX := 180.0           ## 深层预算硬顶（约 W44 饱和）
+const DEEP_DMG_GROWTH := 1.09            ## 深层每波伤害复利（20 波段是 1.06；W40 单下 ≈11.5×基线）
+const DEEP_HP_GROWTH := 1.18             ## 深层每波生命复利（20 波段是 1.16；W40 血 ≈225×基线）
+const DEEP_SWARM_PER_WAVE := 0.06        ## 深层每波同屏密度增量（+6%/波，随危险度/角色倍率同乘）
+const DEEP_SWARM_MAX := 2.0              ## 深层同屏密度放大硬顶（约 W37 触顶）
 
-## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算
+## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算。
+## ≤20 波走旧曲线封顶 90；深层从 W20=86 续 +4/波，封顶 DEEP_BUDGET_MAX。
 static func wave_spawn_budget(wave: int) -> int:
-	return int(minf(WAVE_SPAWN_BUDGET_BASE + float(maxi(wave, 1)) * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX))
+	var w := float(maxi(wave, 1))
+	if w <= float(DEEP_WAVE_THRESHOLD):
+		return int(minf(WAVE_SPAWN_BUDGET_BASE + w * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX))
+	return int(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
+		+ (w - float(DEEP_WAVE_THRESHOLD)) * DEEP_BUDGET_PER_WAVE, DEEP_BUDGET_MAX))
 const ENEMY_HP_GROWTH := 1.16             ## 每回合生命复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础生命整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
 ## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
@@ -54,7 +70,10 @@ const ENEMY_DMG_GROWTH := 1.06            ## 每回合接触伤害复利倍率�
 ## 尺子与档位口径见 tests/balance_sim_check.gd 第 5 节「挨打侧生存余量」。
 ## 六档危险度的 +12%/档梯度（danger_dmg_mult）不受影响，整条梯子一起下移。
 ## 2026-10-11 缩图减怪：刷入量 -33% 后基线微回 0.65→0.68（W1 单下 ≈8.5% 生命，仍在 ≤9% 窗内）。
-const ENEMY_DMG_BASE_MULT := 0.68
+## 2026-10-13 用户真机口径反转：「简单模式伤害好低，死都死不了」。0.68 下 W1 站进怪群
+## 活 6.6s、W10 半肉 Build 活 9.3s，配合走位/回血实际不可能死。基线提至 0.80（+18%），
+## W1 单下 12 = 10% 生命、站进怪群活 5.5s；W10 半肉活 7.9s——仍远低于旧 1.0 的"太痛"口径。
+const ENEMY_DMG_BASE_MULT := 0.80
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ENEMY_SPEED_VARIANCE := 0.12           ## 敌人移速 ±12% 随机浮动（土豆兄弟式快慢梯队：同屏同种怪不再整齐划一）
 const ELITE_STONE_BONUS := 25             ## 精英击杀额外金币
@@ -74,9 +93,22 @@ const MUT_JIANSHA_BOLT_COUNT := 5            ## 剑客亡灵变异：剑气 3→
 const MUT_JIANSHA_INTERVAL_MULT := 0.7       ## 剑客亡灵变异：剑气间隔缩短倍率
 const MUT_JIANSHA_RANGE := 180.0             ## 剑客亡灵变异：风筝距离 280→180（压近身）
 
-## 灵医每跳治疗量：随回合复利成长（与敌人伤害同一条 dmg 曲线，保治疗与输出同量级对抗）
+## 灵医每跳治疗量：随回合复利成长（与敌人伤害同一条 dmg 曲线，保治疗与输出同量级对抗。
+## 2026-10-13 改走 enemy_hp_mult 同源出口，深层复利提档自动跟涨）
 static func healer_amount(wave: int) -> float:
-	return 6.0 * pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
+	return 6.0 * enemy_hp_mult(wave)
+
+## 毒妖投毒每跳伤害：随回合成长（与接触伤害同一条 dmg 曲线）。
+## 口径说明：毒潭是持续区域伤害，玩家在圈内按受击无敌帧（0.55s）节流 ⇒ 站满 5 秒约 9 跳。
+## 每跳伤害对齐「接触伤害 × 0.5」档位（比蹭一下轻、比站着挨打疼），随回合复利自动跟涨。
+## 命名与 BalanceCombat.poison_tick_damage（玩家剧毒 DoT 的两参版）刻意区分：那是玩家侧
+## 异常状态的跳字公式，这里是敌人投放区域的每跳伤害，同一个词在两条链上语义不同。
+static func poison_area_damage(wave: int) -> float:
+	return 3.0 * enemy_dmg_mult(wave)
+
+## 毒潭半径：随回合小幅扩张（前期 62 → 后期封顶 84，控制后期地面覆盖面积）
+static func poison_radius(wave: int) -> float:
+	return minf(62.0 + float(maxi(wave, 1) - 6) * 1.5, 84.0)
 
 ## 金蟾击杀金币：随回合成长（与金币经济同量级）
 static func looter_stone_reward(wave: int) -> int:
@@ -94,13 +126,32 @@ static func spawn_batch(wave: int, roll: float) -> int:
 	return 1 + int(float(maxi(wave, 1)) / SPAWN_BATCH_EVERY_WAVES) + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
 
 static func enemy_hp_mult(wave: int) -> float:
-	return pow(ENEMY_HP_GROWTH, float(maxi(wave, 1) - 1))
+	var w := maxi(wave, 1)
+	if w <= DEEP_WAVE_THRESHOLD:
+		return pow(ENEMY_HP_GROWTH, float(w - 1))
+	## 深层从 W20 值续算，复利提档至 DEEP_HP_GROWTH（分段处连续、单调）
+	return pow(ENEMY_HP_GROWTH, float(DEEP_WAVE_THRESHOLD - 1)) * pow(DEEP_HP_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
 
 ## 敌人伤害的唯一倍率出口：整体基线 × 每回合复利。
 ## 调用方（WaveSpawner 刷怪/Boss 注入、EnemyBase 产卵·分裂·召唤小怪）只乘这一条，
 ## 敌弹伤害按 contact_damage/BOLT_DMG_BASE_REF 反推、Boss 环弹与震地按系数派生，全链路同源。
+## 2026-10-13 深层分段：正常局（≤20 波）走 ENEMY_DMG_GROWTH 旧梯子不动；>20 波从
+## W20 值续按 DEEP_DMG_GROWTH 复利（分段处连续），治「无尽后期挨打不痛」。
 static func enemy_dmg_mult(wave: int) -> float:
-	return ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
+	var w := maxi(wave, 1)
+	var base := ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(mini(w, DEEP_WAVE_THRESHOLD) - 1))
+	if w <= DEEP_WAVE_THRESHOLD:
+		return base
+	return base * pow(DEEP_DMG_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
+
+## 无尽深层同屏密度倍率：≤20 波恒 1.0（正常局零影响），深层每波 +6%、封顶 ×2.0。
+## 调用方 WaveSpawner._spawn_regular 乘在同屏上限上，与 danger_count_mult、
+## 角色敌潮倍率同乘——只放天花板，刷入量仍由 wave_spawn_budget 闸住。
+static func endless_swarm_mult(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w <= DEEP_WAVE_THRESHOLD:
+		return 1.0
+	return minf(1.0 + DEEP_SWARM_PER_WAVE * float(w - DEEP_WAVE_THRESHOLD), DEEP_SWARM_MAX)
 
 ## 敌弹（火球）伤害缩放基准：bolt_damage × (contact_damage / 本值)，让火球跟着回合复利走。
 ## 这个分母就是 XieXiuEnemy.tscn 的 contact_damage 初值（13.0），而消费它的不止邪修一家：
@@ -207,9 +258,10 @@ const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
 const BOSS_KNOCKBACK_RESIST := 0.18      ## Boss 击退系数（越低越推不动）
 const BOSS_STONE_REWARD := 150           ## Boss 击杀额外金币奖励
 
-## 固定 Boss 回合：10/20 波，20 回合后（无尽）每 10 波再逢魔君
+## 固定 Boss 回合：10/20 波，20 回合后（无尽）每 5 波再逢魔君
+## （2026-10-13：用户口径深层 Boss 战要保留且加密，10 → 5 波一场：25/30/35…）
 static func is_boss_wave(n: int) -> bool:
-	return n in BOSS_WAVES or (n > BOSS_WAVES.max() and n % 10 == 0)
+	return n in BOSS_WAVES or (n > BOSS_WAVES.max() and n % 5 == 0)
 
 ## 精英回合：5/15 波；无尽模式 20 回合后每 3 波一次（Boss 回合让位）
 static func is_elite_wave(n: int, endless: bool = false) -> bool:

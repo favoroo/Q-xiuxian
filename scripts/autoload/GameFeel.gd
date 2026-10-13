@@ -161,14 +161,14 @@ static func feedback(gm: Node, tier: int) -> void:
 			add_trauma(gm, 0.08)
 		gm.FeedbackTier.MEDIUM:
 			add_trauma(gm, 0.18)
-			hit_stop(gm, 0.035, 0.08)
+			hit_stop(gm, 0.035, 0.22)
 		gm.FeedbackTier.LARGE:
 			add_trauma(gm, 0.38)
-			hit_stop(gm, 0.065, 0.04)
+			hit_stop(gm, 0.065, 0.16)
 			zoom_punch(gm, 0.035, 0.15)
 		gm.FeedbackTier.HEAVY:
 			add_trauma(gm, 0.70)
-			hit_stop(gm, 0.09, 0.02)
+			hit_stop(gm, 0.09, 0.12)
 			zoom_punch(gm, 0.06, 0.22)
 
 static func pulse_damage_vignette(gm: Node, color: Color = Color(0.85, 0.12, 0.12, 0.65), duration: float = 0.22) -> void:

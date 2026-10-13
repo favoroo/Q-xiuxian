@@ -24,7 +24,7 @@ const CATEGORY_NAMES: Dictionary = {
 	"luck": "机缘",
 }
 
-## 初始默认解锁的 6 名角色
+## 初始默认解锁的 7 名角色
 const DEFAULT_CULTIVATORS: Array[String] = [
 	"jianchi",
 	"shiyue",
@@ -32,6 +32,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"jinsuanpan",
 	"lingzhifu",
 	"leifa",
+	"kuxingseng",
 ]
 
 ## 初始默认进入商店货架池的 51 件道具（高阶出现节奏由 GameBalance.item_tier_weights 回合门槛控制）
@@ -119,8 +120,9 @@ const DEFAULT_ITEMS: Array[String] = [
 		"xuanshui_po",
 		"lihuo_shenjing",
 		"houtu_shenyuan",
-		"xuanwu_fashan",
-		"sanmei_guizhen",
+			"xuanwu_fashan",
+			"jingang_shenxiang",
+			"sanmei_guizhen",
 		"liuyun_qianyin",
 		"jinmang_souhun",
 		"qianfu_lianhuan",

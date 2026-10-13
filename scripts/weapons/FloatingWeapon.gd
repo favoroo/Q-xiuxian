@@ -35,6 +35,26 @@ const SLASH_FADE_TIME := 0.08   ## 抵达判定外缘后的淡出时长 —— �
 const MELEE_THRUST := 26.0      ## 打击帧本体前突距离
 const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（只往前够，不缩水）
 
+## 横扫（SWEEP）与近战分家（2026-10-13，用户口径：「横扫和近战玩起来没区别」）：
+## 判定是「前方真扇形」——以本体为圆心查 _sweep_arc_radius() 的圆，再按角度过滤，
+## 只结算 aim_dir ±SWEEP_HALF_ANGLE 里的敌人（身后的漏网，这是与近战 360° 圆判定最本质的手感差异）；
+## 刀光是独立的琥珀金扇面 sweep_effect.png（满亮 ±80° 与判定半角同源、外缘 124px 与近战月牙同画布约定），
+## top_level 贴世界坐标 —— 扇面钉在挥出那一帧的方位上，不随本体收势转走，扇面几何 == 判定扇形。
+## 节奏全面比近战沉：蓄力更深更久、前突更远、收势更慢、命中音低沉一档。
+const SWEEP_ARC_RADIUS := 88.0    ## 横扫扇形基础半径（近战圆 75，横扫手更长）
+const SWEEP_HALF_ANGLE := 80.0    ## 扇形半角（度）—— 与 sweep_effect.png 满亮张角同源，改图要同步改这里
+const SWEEP_ART_OUTER := 124.0    ## sweep_effect.png 扇面外缘画布半径
+const SWEEP_SLASH_IN_TIME := 0.09 ## 扇面扫放（扩张 + 转正）时长
+const SWEEP_SLASH_FADE := 0.09    ## 扇面淡出时长
+const SWEEP_WINDUP := 0.09        ## 蓄力前摇（近战 0.05）
+const SWEEP_STRIKE := 0.06        ## 横扫瞬发（近战 0.04）
+const SWEEP_RECOVER := 0.17       ## 沉重收势（近战 0.13）
+const SWEEP_THRUST := 30.0        ## 打击帧本体前突（近战 26）
+const SWEEP_RECOIL := 6.0         ## 入肉反冲（近战 4.5）
+const SWEEP_CLOSE_GRACE := 26.0   ## 贴脸宽容：距离小于它不看角度（敌人受击圈 15px，扇形顶点不许漏贴身的）
+const SWEEP_ANGLE_SLACK := 6.0    ## 角度宽容（度）：扇面 80°→88° 羽化边里擦到的也算中
+const SWEEP_IMPACT_PITCH := 0.9   ## 横扫命中音低沉一档，与近战的亮脆分层
+
 ## 近战双层与雷法双层的相对响度（2026-10-10 音色重构）：
 ## 前摇破空是「动作」，无条件播、当铺垫层，所以压低；命中材质是「战果」，只在真打中时补一记。
 ## 旧写法只有一层，且写在打击帧 —— 一声纯空气破空挂在命中 moment，剑听上去就是棍子。
@@ -70,6 +90,8 @@ var current_target: Node2D = null
 var is_attacking: bool = false
 var bob_phase: float = 0.0
 var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
+var sweep_sprite: Sprite2D = null  # 横扫专属金色扇面（top_level 世界坐标，SWEEP 才建）
+var _sweep_slash_tween: Tween = null
 
 # ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
 ## 每次开火原建 3~4 个局部 Tween（后坐 1 + 枪口闪光 1 + 本体亮闪 1 + 光晕 1），
@@ -109,6 +131,7 @@ var _base_sprite_scale := Vector2(0.55, 0.55)
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
 var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
+const SWEEP_TEX: Texture2D = preload("res://assets/art/sweep_effect.png")
 
 var active_turrets: Array[TurretUnit] = []
 
@@ -164,6 +187,19 @@ func _ready() -> void:
 		_apply_facing(rotation)
 		_setup_muzzle_flash()
 		_setup_aura()
+		if behavior == WeaponData.Behavior.SWEEP:
+			_setup_sweep_sprite()
+
+## 横扫金色扇面（top_level = 世界坐标）：扇面钉在挥出那一帧的方位与地点，
+## 本体收势/回轨都不会拖着它走 —— 这是「画多大==判多大」在横扫上的落点。
+func _setup_sweep_sprite() -> void:
+	sweep_sprite = Sprite2D.new()
+	sweep_sprite.texture = SWEEP_TEX
+	sweep_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sweep_sprite.top_level = true
+	sweep_sprite.visible = false
+	sweep_sprite.modulate.a = 0.0
+	add_child(sweep_sprite)
 
 func _setup_aura() -> void:
 	aura_sprite = Sprite2D.new()
@@ -362,7 +398,7 @@ func _process(delta: float) -> void:
 				_perform_attack()
 
 func _perform_attack() -> void:
-	cooldown_timer = attack_cooldown * GameManager.attack_speed_mult * GameManager.synergy_haste_mult * GameManager.buff_attack_speed_mult
+	cooldown_timer = attack_cooldown * GameManager.get_effective_attack_speed_mult()
 	match behavior:
 		WeaponData.Behavior.MELEE:
 			_perform_melee_attack()
@@ -372,6 +408,8 @@ func _perform_attack() -> void:
 			_perform_burst_attack()
 		WeaponData.Behavior.TURRET:
 			_perform_turret_attack()
+		WeaponData.Behavior.SWEEP:
+			_perform_sweep_attack()
 
 func _perform_turret_attack() -> void:
 	is_attacking = true
@@ -402,7 +440,7 @@ func _perform_turret_attack() -> void:
 
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
-	return (base_damage + stat_bonus) * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.buff_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
+	return (base_damage + stat_bonus) * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.buff_damage_mult * GameManager.cultivator_damage_mult(weapon_def_id) * GameManager.element_damage_mult(weapon_def_id) * GameManager.get_multi_weapon_damage_mult()
 
 func _perform_projectile_attack() -> void:
 	is_attacking = true
@@ -661,7 +699,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			var dmg := base_dmg
 			var is_crit: bool = GameManager.roll_crit()
 			if is_crit:
-				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
+				dmg *= GameManager.get_crit_mult()
 			dmg *= GameManager.elite_damage_mult_for(enemy)
 			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
@@ -680,6 +718,122 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 				player.heal(flat_ls, true)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
+	return hit_count
+
+# ==================== 横扫（SWEEP）：前方真扇形，沉重三段 ====================
+
+## 横扫扇形半径 —— 扇面外缘与 _deal_sweep_damage 的查询半径共用这一个数（画多大==判多大）
+func _sweep_arc_radius() -> float:
+	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(weapon_def_id).has("wide") else 1.0
+	return SWEEP_ARC_RADIUS * arc_scale * _range_mult() * wide_bonus
+
+## 横扫三段：深蓄力（0.09s）→ 大幅扫出（0.06s，本体扫过整片 160° 扇形）→ 沉重收势（0.17s）。
+## 挥空门控与近战同口径：扇面/材质声/反冲只在真咬到肉时发，空挥保留完整动作与破空声。
+func _perform_sweep_attack() -> void:
+	is_attacking = true
+
+	var aim_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
+	if current_target != null:
+		aim_dir = (Vector2(current_target.global_position) - global_position).normalized()
+	var aim_angle := aim_dir.angle()
+	var orig_pos := position
+	var windup_pos: Vector2 = orig_pos - aim_dir * 12.0
+	var thrust_pos: Vector2 = orig_pos + aim_dir * (SWEEP_THRUST * _melee_thrust_mult())
+
+	# 起手预置到扇形前缘，打击帧扫到后缘 —— 横扫本体真的扫过整片扇形
+	var half_ang := deg_to_rad(SWEEP_HALF_ANGLE)
+	_apply_facing(aim_angle - half_ang)
+	if _sweep_slash_tween != null and _sweep_slash_tween.is_valid():
+		_sweep_slash_tween.kill()  # 与 _slash_tween 同一防抢道约定
+	var reach := _sweep_arc_radius()
+	if sweep_sprite != null:
+		sweep_sprite.visible = false
+		sweep_sprite.modulate.a = 0.0
+
+	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), MELEE_WHOOSH_SCALE)
+	var tw = create_tween()
+	# 1. 蓄力前摇：重器后撤更深、压扁拉长更夸张（横扫的「沉」先在蓄力里交代）
+	tw.tween_property(self, "position", windup_pos, SWEEP_WINDUP).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(self, "scale", Vector2(0.88, 1.12), SWEEP_WINDUP)
+	# 2. 横扫瞬发：先结算扇形判定，咬到肉才亮金色扇面 + 低沉材质声 + 反冲
+	tw.chain().tween_callback(func():
+		_flash_sprite(Color(1.5, 1.5, 1.5), 0.14)
+		var hits := _deal_sweep_damage(aim_dir)
+		if hits > 0 and sweep_sprite != null:
+			# 扇面从判定几何的 50% 扩张扫放到 100%、同时从偏前缘 18° 转正到瞄准轴 ——
+			# 「一扫一大片」的拖扫感；终态外缘 == 判定半径、张角 == 判定半角（同源不变量）
+			sweep_sprite.global_position = global_position
+			sweep_sprite.global_rotation = aim_angle - deg_to_rad(18.0)
+			sweep_sprite.scale = Vector2.ONE * (reach / SWEEP_ART_OUTER) * 0.5
+			sweep_sprite.visible = true
+			sweep_sprite.modulate.a = 1.0
+			_sweep_slash_tween = create_tween()
+			_sweep_slash_tween.set_parallel(true)
+			_sweep_slash_tween.tween_property(sweep_sprite, "scale", Vector2.ONE * (reach / SWEEP_ART_OUTER), SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_sweep_slash_tween.tween_property(sweep_sprite, "global_rotation", aim_angle, SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_sweep_slash_tween.chain().tween_property(sweep_sprite, "modulate:a", 0.0, SWEEP_SLASH_FADE)
+			_sweep_slash_tween.chain().tween_callback(func(): sweep_sprite.visible = false)
+			AudioManager.play_sfx(WeaponData.sfx_impact_for(weapon_def_id), MELEE_IMPACT_SCALE, SWEEP_IMPACT_PITCH)
+			position -= aim_dir * SWEEP_RECOIL
+	)
+	tw.tween_property(self, "position", thrust_pos, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(self, "rotation", aim_angle + half_ang, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO)
+	tw.parallel().tween_property(self, "scale", Vector2(1.22, 0.85), SWEEP_STRIKE)
+	# 3. 沉重收势：回弹时间比近战长一档
+	tw.chain().set_parallel(true)
+	tw.tween_property(self, "position", orig_pos, SWEEP_RECOVER).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "scale", Vector2.ONE, SWEEP_RECOVER).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_callback(func():
+		is_attacking = false
+	)
+
+## 横扫扇形结算：圆形查询后按角度过滤 —— 只结算 aim_dir ±（半角+宽容）内的敌人
+## （贴脸 SWEEP_CLOSE_GRACE 不看角度），身后的怪这一扫够不着。返回值语义同近战 = 可见命中数，
+## 打击帧回调拿它门控扇面/材质声/反冲。属性管线、暴击、异常、吸血与近战同一份代码形状。
+func _deal_sweep_damage(aim_dir: Vector2) -> int:
+	var origin := global_position
+	var half_ang := deg_to_rad(SWEEP_HALF_ANGLE + SWEEP_ANGLE_SLACK)
+	var results := _query_enemies(_sweep_arc_radius(), origin, 24)
+	var hit_count := 0
+	var player: Node2D = GameManager.player
+	var vp_center: Vector2 = player.global_position if player != null else global_position
+	var base_dmg := _final_damage()
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
+	var proc_burn: bool = def.get("proc_burn", false)
+	var proc_chill: float = float(def.get("proc_chill", 0.0))
+	var proc_poison: bool = def.get("proc_poison", false)
+	var any_proc: bool = proc_burn or proc_chill > 0.0 or proc_poison
+	var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
+	var can_flat_heal: bool = flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal")
+
+	for res in results:
+		var col = res["collider"]
+		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
+			var enemy = col.get_parent()
+			# 扇形过滤：横扫只打正前方弧面（身后的漏网是横扫与近战的本质差异）
+			var to_enemy: Vector2 = enemy.global_position - origin
+			if to_enemy.length() > SWEEP_CLOSE_GRACE and absf(aim_dir.angle_to(to_enemy)) > half_ang:
+				continue
+			var dmg := base_dmg
+			var is_crit: bool = GameManager.roll_crit()
+			if is_crit:
+				dmg *= GameManager.get_crit_mult()
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
+			enemy.take_damage(dmg, knock, is_crit)
+			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
+				hit_count += 1
+			if any_proc:
+				if proc_burn and enemy.has_method("apply_burn"):
+					enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
+				if proc_chill > 0.0 and enemy.has_method("apply_chill"):
+					enemy.apply_chill(proc_chill, float(def.get("chill_dur", 2.5)))
+				if proc_poison and enemy.has_method("apply_poison"):
+					enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
+			GameManager.try_lifesteal()
+			# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
+			if can_flat_heal:
+				player.heal(flat_ls, true)
 	return hit_count
 
 func _find_target() -> Node2D:

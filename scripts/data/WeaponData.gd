@@ -28,7 +28,9 @@ extends RefCounted
 ##   转圈（旧写法会把印玺横过来对着人）。此时 tip 只取长度，发射点落在"朝目标那一侧的器口"。
 ## - 环绕类（DRONE）走 SunOrb，本体不旋转，不需要这两个字段。
 
-enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET }
+## 攻击方式六种：近战=突进一挥（360° 圆判定）；横扫=蓄力大横扫（前方真扇形判定，
+## 2026-10-13 从 MELEE 拆出——原先横扫只是近战的一个 arc_scale 乘区，手感与近战零差异）。
+enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET, SWEEP }
 
 const MAX_STAR: int = 3
 const MAX_SLOTS: int = 6
@@ -101,13 +103,14 @@ const DEFS: Dictionary = {
 
 				# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
 				"qingmu_tengbian": {
-					"name": "藤鞭", "behavior": Behavior.MELEE,
-					"sfx": "whoosh_light", "sfx_impact": "impact_crack",
-					"damage": 18.0, "cooldown": 1.20, "range": 150.0,
-					"knockback": 260.0,
+					"name": "藤鞭", "behavior": Behavior.SWEEP,
+					"sfx": "whoosh_heavy", "sfx_impact": "impact_crack",
+					# 2026-10-13 横扫独立：18/1.20 → 23/1.40，更沉更痛（群伤带 24.5）
+					"damage": 23.0, "cooldown": 1.40, "range": 150.0,
+					"knockback": 340.0,
 					"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
 					"tip": Vector2(22, 0), "upright": true,
-					"desc": "大范围横扫并附带中毒，受近战与元素伤害加成", "tag": "近战·横扫·木",
+					"desc": "横扫前方大片敌群并附带中毒，受近战与元素伤害加成", "tag": "横扫·木",
 					"arc_scale": 1.35, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
 					"tags": ["wide", "wood"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.6, "hp_regen": 4.5},
@@ -152,13 +155,14 @@ const DEFS: Dictionary = {
 
 				# ==================== 水系 (Water: 极寒·缓速·迅捷) ====================
 						"bajiao_fan": {
-							"name": "风扇", "behavior": Behavior.MELEE,
+							"name": "风扇", "behavior": Behavior.SWEEP,
 							"sfx": "fan_gust", "sfx_impact": "impact_crack",
-							"damage": 25.0, "cooldown": 1.25, "range": 155.0,
-							"knockback": 400.0,
+							# 2026-10-13 横扫独立：25/1.25 → 31/1.40，更沉更痛（群伤带 22.1）
+							"damage": 31.0, "cooldown": 1.40, "range": 155.0,
+							"knockback": 520.0,
 							"price": 26, "icon": "res://assets/art/weapon_fan.png",
 							"tip": Vector2(0, -15),
-							"desc": "扇出宽大风刃减速敌人，受近战伤害与移速加成", "tag": "近战·横扫·水",
+							"desc": "横扫扇出寒冰风刃减速敌群，受近战伤害与移速加成", "tag": "横扫·水",
 						"arc_scale": 1.35, "proc_chill": 0.35, "chill_dur": 2.5,
 						"tags": ["wide", "water"],
 						"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
@@ -353,13 +357,14 @@ const DEFS: Dictionary = {
 					"stat_scalings": {"ranged_damage": 0.8, "armor": 2.5},
 				},
 					"jinjiao_jian": {
-						"name": "金蛟剪", "behavior": Behavior.MELEE,
-						"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-						"damage": 27.0, "cooldown": 1.25, "range": 155.0,
-						"knockback": 300.0,
+						"name": "金蛟剪", "behavior": Behavior.SWEEP,
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_blade",
+						# 2026-10-13 横扫独立：27/1.25 → 34/1.40，更沉更痛（群伤带 24.3）
+						"damage": 34.0, "cooldown": 1.40, "range": 155.0,
+						"knockback": 390.0,
 						"price": 38, "icon": "res://assets/art/weapon_jinjiao_jian.png",
 						"tip": Vector2(22, 0),
-						"desc": "金蛟大剪横扫一片，受近战伤害与暴击率加成", "tag": "近战·横扫·金",
+						"desc": "横扫金蛟大剪剪开敌阵，受近战伤害与暴击率加成", "tag": "横扫·金",
 						"arc_scale": 1.45,
 						"tags": ["wide", "metal"],
 						"stat_scalings": {"melee_damage": 1.0, "crit_rate": 35.0},
@@ -438,13 +443,14 @@ const DEFS: Dictionary = {
 					"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
 				},
 					"jubao_chi": {
-						"name": "聚宝金尺", "behavior": Behavior.MELEE,
-						"sfx": "whoosh_light", "sfx_impact": "impact_blunt",
-						"damage": 22.0, "cooldown": 1.15, "range": 145.0,
-						"knockback": 260.0,
+						"name": "聚宝金尺", "behavior": Behavior.SWEEP,
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+						# 2026-10-13 横扫独立：22/1.15 → 28/1.35，更沉更痛（群伤带 20.7）
+						"damage": 28.0, "cooldown": 1.35, "range": 145.0,
+						"knockback": 340.0,
 						"price": 30, "icon": "res://assets/art/weapon_jubao_chi.png",
 						"tip": Vector2(22, -10),
-						"desc": "财气越旺打得越狠，受近战伤害与收益加成", "tag": "近战·横扫·金",
+						"desc": "横扫财气金尺越旺打得越狠，受近战伤害与收益加成", "tag": "横扫·金",
 						"arc_scale": 1.3,
 						"tags": ["wide", "metal"],
 						"stat_scalings": {"melee_damage": 0.8, "harvest": 1.2},
@@ -463,17 +469,18 @@ const DEFS: Dictionary = {
 						"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.6},
 					},
 					"benlang_chui": {
-						"name": "崩浪锤", "behavior": Behavior.MELEE,
+						"name": "崩浪锤", "behavior": Behavior.SWEEP,
 						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						"damage": 30.0, "cooldown": 1.4, "range": 150.0,
-						"knockback": 520.0,
+						# 2026-10-13 横扫独立：30/1.40 → 37/1.55，更沉更痛（群伤带 23.9）
+						"damage": 37.0, "cooldown": 1.55, "range": 150.0,
+						"knockback": 680.0,
 						"price": 34, "icon": "res://assets/art/weapon_benlang_chui.png",
 						"tip": Vector2(22, 14), "upright": true,
-						"desc": "崩浪重锤击飞敌群并冰缓，受近战伤害与移速加成", "tag": "近战·横扫·水",
-					"arc_scale": 1.35, "proc_chill": 0.40, "chill_dur": 2.5,
-					"tags": ["wide", "water"],
-					"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
-				},
+						"desc": "横扫崩浪重锤击飞敌群并冰缓，受近战伤害与移速加成", "tag": "横扫·水",
+						"arc_scale": 1.35, "proc_chill": 0.40, "chill_dur": 2.5,
+						"tags": ["wide", "water"],
+						"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
+					},
 							"liuling_jian": {
 								"name": "六棱锏", "behavior": Behavior.MELEE,
 								"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
@@ -810,25 +817,27 @@ const DEFS: Dictionary = {
 					"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.0},
 				},
 				"liaoyuan_shan": {
-					"name": "燎原扇", "behavior": Behavior.MELEE,
+					"name": "燎原扇", "behavior": Behavior.SWEEP,
 					"sfx": "fan_gust", "sfx_impact": "impact_crack",
-					"damage": 20.0, "cooldown": 1.20, "range": 150.0,
-					"knockback": 300.0,
+					# 2026-10-13 横扫独立：20/1.20 → 23/1.45，更沉更痛（群伤带 25.1 含灼烧）
+					"damage": 23.0, "cooldown": 1.45, "range": 150.0,
+					"knockback": 390.0,
 					"price": 36, "icon": "res://assets/art/weapon_liaoyuan_shan.png",
 					"tip": Vector2(22, 0),
-					"desc": "扇出燎原火风宽幅引燃，受近战与元素伤害加成", "tag": "近战·横扫·火",
+					"desc": "横扫燎原火风焚烧前方敌群，受近战与元素伤害加成", "tag": "横扫·火",
 					"arc_scale": 1.35, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 					"tags": ["wide", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "move_speed_bonus": 25.0},
 				},
 				"kaishan_fu": {
-					"name": "开山斧", "behavior": Behavior.MELEE,
+					"name": "开山斧", "behavior": Behavior.SWEEP,
 					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-					"damage": 29.0, "cooldown": 1.35, "range": 145.0,
-					"knockback": 480.0,
+					# 2026-10-13 横扫独立：29/1.35 → 36/1.50，更沉更痛（群伤带 24.0）
+					"damage": 36.0, "cooldown": 1.50, "range": 145.0,
+					"knockback": 620.0,
 					"price": 38, "icon": "res://assets/art/weapon_kaishan_fu.png",
 					"tip": Vector2(22, 0),
-					"desc": "开山巨斧横劈大力震退，受近战伤害与护甲加成", "tag": "近战·横扫·土",
+					"desc": "横扫开山巨斧劈退正面敌群，受近战伤害与护甲加成", "tag": "横扫·土",
 					"arc_scale": 1.3,
 					"tags": ["wide", "earth"],
 					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
@@ -1142,6 +1151,8 @@ static func behavior_label(def: Dictionary) -> String:
 			return "环绕"
 		Behavior.TURRET:
 			return "机关"
+		Behavior.SWEEP:
+			return "横扫"
 	return "近战"
 
 ## 攻击方式的机制解释（点货架卡那颗「攻击方式」色签弹出，消费方 ShopChipTips）。
@@ -1190,6 +1201,13 @@ const BEHAVIOR_TIPS: Dictionary = {
 			"机关这一类独享「机关」羁绊的伤害档，别的武器不吃这一条。",
 		],
 	},
+	Behavior.SWEEP: {
+		"how": "蓄力后朝前方大幅横扫，扇形弧面内的敌人一起挨打",
+		"notes": [
+			"横扫是扇形判定：只打正前方弧面里的敌人，身后的漏网——站位朝向比近战更讲究。",
+			"比近战更沉更慢：单下伤害更高、击退更猛，一扫一片，适合正面压住怪群。",
+		],
+	},
 }
 
 ## 这一攻击方式的机制解释（缺条目返回空字典，由调用方决定要不要画）
@@ -1221,7 +1239,9 @@ static func card_feats(def: Dictionary) -> String:
 	if bounce > 0:
 		out.append("弹射%d" % bounce)
 	if float(def.get("arc_scale", 1.0)) > 1.001:
-		out.append("横扫")
+		# 近战里摆幅更宽的剑（烈焰刀/重盾这一族）叫「宽扫」——2026-10-13 横扫独立成
+		# Behavior.SWEEP 后，卡面特性不许再与攻击方式短标「横扫」撞词
+		out.append("宽扫")
 	if out.size() > 2:
 		out.resize(2)
 	return "·".join(out)
@@ -1310,6 +1330,8 @@ static func targets_per_shot(id: String) -> int:
 		return 3      ## 环绕接触：同时贴身的一般是两三尊
 	if behavior == Behavior.TURRET:
 		return 4      ## 机关炮台独立索敌
+	if behavior == Behavior.SWEEP:
+		return 6      ## 横扫扇形：一扫一片，天生群体
 	return 6          ## 近战弧扫 / 落雷圆形：天生群体
 ## 「点杀位」远程武器：弹丸类里单发最多只结算 FOCUS_RANGED_MAX_TARGETS 个敌人的那些。
 ## 这一档必须在"啃硬目标"上赢过贴脸与环绕，否则就是纯下位（用户 2026-10-08 的火符投诉）。

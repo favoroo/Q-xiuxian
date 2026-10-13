@@ -236,9 +236,6 @@ func _collect(p: Player) -> void:
 	JuiceEffect.spawn_pickup_pop(get_parent(), global_position, false)
 	if landed > 0.0 and p.has_method("heal"):
 		p.heal(landed)
-	# 药王·药池：珠子顶满溢出的部分同样折算入池（与 Player.heal 同一把尺子；药王之外的角色池子空转无害）
-	if overflow > 0.0:
-		GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, overflow, p.max_health)
 	var stones := GameBalance.heal_overflow_stones(overflow)
 	# 灵植夫·灵药滋生：溢出折金币倍率（GameBalance 保持纯函数，角色乘区在调用侧兑现）
 	if stones > 0 and GameManager.heal_overflow_mult != 1.0:

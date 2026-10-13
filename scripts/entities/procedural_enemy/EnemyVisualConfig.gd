@@ -130,7 +130,25 @@ static func make_xueyong() -> EnemyVisualConfig:
 	cfg.ornament_type = "talisman_straps"
 	return cfg
 
-## 7. 鼓妖：白骨摄魂鼓 / 丧钟怨灵 (HOVER)
+## 7. 毒妖：腐沼毒蟾 / 碧瘴蟾主 (HOVER)
+## 投毒支路专属外观（poison_interval > 0）：背负一只鼓胀的腐毒囊，投毒蓄力时囊体胀大。
+## 配色与鼓妖/花妖刻意拉开：暗沼腐绿 + 脓黄斑 + 毒磷火，跟 BAD 朱砂、GOOD 增益绿都不同色相。
+static func make_duyao() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "duyao"
+	cfg.display_name = "腐沼毒蟾"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.body_radius = 14.0
+	cfg.scale_factor = 1.05
+	cfg.col_primary = Color(0.14, 0.26, 0.16, 1.0)     # 腐沼暗绿厚皮
+	cfg.col_secondary = Color(0.78, 0.82, 0.60, 1.0)   # 脓黄斑块与齿列
+	cfg.col_accent = Color(0.32, 0.55, 0.30, 0.9)      # 苔痕斑斑的皮瘤
+	cfg.col_glow = Color(0.45, 0.95, 0.45, 1.0)        # 毒磷火瞳与囊内核
+	cfg.eye_type = "twin_slits"
+	cfg.ornament_type = "venom_sac"
+	return cfg
+
+## 8. 鼓妖：白骨摄魂鼓 / 丧钟怨灵 (HOVER)
 static func make_guyao() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "guyao"
@@ -146,7 +164,7 @@ static func make_guyao() -> EnemyVisualConfig:
 	cfg.ornament_type = "drum"
 	return cfg
 
-## 8. 影魅：幽冥影煞 / 虚空厉鬼 (HOVER)
+## 9. 影魅：幽冥影煞 / 虚空厉鬼 (HOVER)
 static func make_yingmei() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "yingmei"
@@ -162,7 +180,7 @@ static func make_yingmei() -> EnemyVisualConfig:
 	cfg.ornament_type = "horns"
 	return cfg
 
-## 9. 百目妖：千目邪母 / 万瞳魔核 (HOVER)
+## 10. 百目妖：千目邪母 / 万瞳魔核 (HOVER)
 static func make_zhumu() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "zhumu"
@@ -178,7 +196,7 @@ static func make_zhumu() -> EnemyVisualConfig:
 	cfg.ornament_type = "tentacles"
 	return cfg
 
-## 10. 雷兽：幽都凶兽 / 冥雷煞兽 (CRAWL)
+## 11. 雷兽：幽都凶兽 / 冥雷煞兽 (CRAWL)
 static func make_leibeast() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "leibeast"
@@ -194,7 +212,7 @@ static func make_leibeast() -> EnemyVisualConfig:
 	cfg.ornament_type = "back_spikes"
 	return cfg
 
-## 11. 铁甲魔傀（精英）：幽冥玄铁巨傀 (HOVER)
+## 12. 铁甲魔傀（精英）：幽冥玄铁巨傀 (HOVER)
 static func make_golem() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "golem"
@@ -211,7 +229,7 @@ static func make_golem() -> EnemyVisualConfig:
 	cfg.ornament_type = "floating_shields"
 	return cfg
 
-## 12. 赤雷兽（精英）：九幽赤煞雷帝兽 (CRAWL)
+## 13. 赤雷兽（精英）：九幽赤煞雷帝兽 (CRAWL)
 static func make_chilei_elite() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "chilei_elite"
@@ -228,7 +246,7 @@ static func make_chilei_elite() -> EnemyVisualConfig:
 	cfg.ornament_type = "grand_horns"
 	return cfg
 
-## 13. 剑煞邪修（精英）：万剑煞宗残魂 (HOVER)
+## 14. 剑煞邪修（精英）：万剑煞宗残魂 (HOVER)
 static func make_jiansha_elite() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "jiansha_elite"
@@ -245,7 +263,7 @@ static func make_jiansha_elite() -> EnemyVisualConfig:
 	cfg.ornament_type = "tri_swords"
 	return cfg
 
-## 14. 敌潮魔君 & 心魔魔尊 (BOSS / HOVER)
+## 15. 敌潮魔君 & 心魔魔尊 (BOSS / HOVER)
 static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "boss"
@@ -271,7 +289,7 @@ static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
 	cfg.eye_type = "twin_slits"
 	return cfg
 
-## 15. 灵医：青囊药灵 (HOVER) —— 治疗同伴的辅助怪
+## 16. 灵医：青囊药灵 (HOVER) —— 治疗同伴的辅助怪
 static func make_lingyi() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "lingyi"
@@ -287,7 +305,7 @@ static func make_lingyi() -> EnemyVisualConfig:
 	cfg.ornament_type = "halo"
 	return cfg
 
-## 16. 金蟾：衔宝金蟾 (HOVER) —— 见人就跑的宝藏怪
+## 17. 金蟾：衔宝金蟾 (HOVER) —— 见人就跑的宝藏怪
 static func make_jinchan() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "jinchan"
@@ -322,6 +340,8 @@ static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: b
 			return make_xueyong()
 		"guyao":
 			return make_guyao()
+		"duyao":
+			return make_duyao()
 		"yingmei":
 			return make_yingmei()
 		"zhumu":

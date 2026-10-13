@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/run_test.py — 渡个劫自动化测试与防挂起运行器
+tools/run_test.py — 剑士自动化测试与防挂起运行器
 
 功能：
 1. 运行单个或批量测试，支持别名（如 UnitRunner、SmokeRunner）
@@ -184,7 +184,7 @@ def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="渡个劫安全测试运行工具")
+    parser = argparse.ArgumentParser(description="剑士安全测试运行工具")
     parser.add_argument("tests", nargs="*", help="要运行的测试名称或场景路径")
     parser.add_argument("--core", action="store_true", help="运行 6 大核心基线测试")
     parser.add_argument("--all", action="store_true", help="扫描 tests/*.tscn 全量回归（跳过需真实出声出图的 Preview/Gallery）")

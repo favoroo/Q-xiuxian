@@ -47,6 +47,16 @@ const CRIT_RATE_CAP: float = 0.75     ## 暴击率软上限
 const ATTACK_SPEED_FLOOR: float = 0.3 ## 施法间隔下限（攻速加点的地板，防止叠成连发）
 const LIFESTEAL_MAX_PER_SEC: int = 3  ## 噬元每秒最多触发次数（防高频武器无限续航）
 const HARVEST_GROWTH_WAVE_CAP: int = 16  ## 收益复利增长截止回合
+# 2026-10-13 输出侧上限补全（对标土豆兄弟：生存侧早就有顶，输出侧此前全敞开）：
+const CRIT_MULT_CAP: float = 2.5      ## 暴击伤害总上限（加点层 + 锐金羁绊合计，1.5 基础 +1.0 头）
+const LIFESTEAL_CAP: float = 0.5      ## 噬元概率上限（频次另有 LIFESTEAL_MAX_PER_SEC 限）
+const ELITE_DAMAGE_CAP: float = 1.0   ## 斩将加成上限（elite_up 4 层正好到顶）
+const ELEMENT_DAMAGE_CAP: float = 0.6 ## 五行真解单系上限（同时扎住直击/灼烧/剧毒/击杀爆炸四个兑现口）
+const SHOP_PRICE_FLOOR: float = 0.7   ## 道具折扣腿地板（对标土豆 Coupon 叠顶；角色价格乘区另算不夹）
+## 突破古玉回合末永久成长的累计封顶（绕过 max_stacks 治理体系的口子，钉在 apply_harvest 消费处）
+const WAVE_END_HP_CAP: float = 30.0
+const WAVE_END_REGEN_CAP: float = 5.0
+const WAVE_END_LIFESTEAL_CAP: float = 0.10
 
 ## 可注入随机源：局内自动播种；单测里 `GameManager.rng.seed = N` 后商店/抽取即可确定性复现。
 ## 全项目凡是「玩法相关」的随机都必须走它，不要用全局 randf()，否则测试无法钉死结果。
@@ -306,11 +316,21 @@ var stone_damage_cap: float = 0.0        ## 守财奴·财可通神：加成总�
 var kill_cd_reduction_normal: float = 0.0  ## 绝尘·斩灭凝神：击杀普通怪返还的技能冷却（秒）
 var kill_cd_reduction_elite: float = 0.0   ## 绝尘·斩灭凝神：击杀精英怪返还的技能冷却（秒）
 var still_time: float = 0.0              ## 连续站定秒数（不动明王印账本，Player._physics_process 维护）
+var player_is_moving: bool = false       ## 玩家当前是否处于移动中（Player._physics_process 维护）
+var kuxingseng_mode: float = 0.0         ## 苦行僧：专属站定/移动机制开关
+var still_damage_bonus: float = 0.0      ## 苦行僧：站定时额外全伤害加成（+0.50）
+var still_haste_bonus: float = 0.0       ## 苦行僧：站定时攻击间隔缩减（0.35）
+var still_armor_bonus: float = 0.0       ## 苦行僧：站定时护甲加成（+5）
+var still_pickup_bonus: float = 0.0      ## 苦行僧：站定时拾取范围倍率加成（+1.0）
+var move_damage_penalty: float = 0.0     ## 苦行僧：移动中全伤害衰减（-0.60）
+var move_haste_penalty: float = 0.0      ## 苦行僧：移动中攻击间隔增加（+0.60）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复生命量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
 var max_element_spread: int = 0         ## 单局同时上阵的五行元素种数峰值（五行同阵成就判定）
+## 突破古玉回合末永久成长的累计到账账本（封顶常量 WAVE_END_HP/REGEN/LIFESTEAL_CAP，apply_harvest 消费）
+var _wave_end_growth: Dictionary = {"max_hp": 0.0, "hp_regen": 0.0, "lifesteal": 0.0}
 var _exp_chain: int = GameBalance.EXP_FIRST_LEVEL  ## 未折算的经验门槛链（xp_require_mult 只作用于显示/判定值）
 
 # 随行技能：选技能界面写 pending，start_run 转正；buff_* 是技能短时增益乘区，
@@ -461,8 +481,15 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	kills += 1
 	# 狂战士·战意：每次击杀 +1 层并把流失宽限计时归零（唯一攒点）
 	if frenzy_enabled > 0.0:
+		var prev_stacks := frenzy_stacks
 		frenzy_stacks = FrenzyData.add_stack(frenzy_stacks)
 		frenzy_idle = 0.0
+		if prev_stacks < float(FrenzyData.MAX_STACKS) and frenzy_stacks >= float(FrenzyData.MAX_STACKS):
+			announcement_triggered.emit("✦ 战意沸腾 ✦")
+			if player != null and is_instance_valid(player):
+				var pvfx = player.get("skill_vfx")
+				if pvfx != null and pvfx.has_method("on_frenzy_max_burst"):
+					pvfx.on_frenzy_max_burst()
 	# 绝尘·斩灭凝神：击杀按敌人品级返还/预扣技能冷却
 	var cd_refund: float = kill_cd_reduction_elite if is_elite else kill_cd_reduction_normal
 	if cd_refund > 0.0 and player != null and is_instance_valid(player) and player.has_method("refund_skill_cooldown"):
@@ -556,14 +583,36 @@ func get_stat_breakdown() -> Dictionary:
 
 func has_still_mechanic() -> bool:
 	if not _still_cache_valid:
-		_still_cached = item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
+		_still_cached = kuxingseng_mode > 0.0 \
+			or item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
 			or item_hook_sum("still_dodge") > 0.0 or item_hook_sum("still_armor") > 0.0 \
-			or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0
+			or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0 \
+			or item_hook_sum("still_attack_speed") > 0.0
 		_still_cache_valid = true
 	return _still_cached
 
+## 武器伤害乘区有效值：加点/道具/角色累加的 raw 过软顶膝点后收益减半（BalanceCombat 唯一算式）。
+## 所有伤害结算与伤害读数都走这里，不许直接乘 raw 字段 weapon_damage_mult。
+func get_weapon_damage_mult() -> float:
+	return BalanceCombat.effective_weapon_damage_mult(weapon_damage_mult)
+
+## 暴击伤害有效值：加点层 + 锐金羁绊合计后夹总上限（与 get_crit_rate 同款的「合计再夹」口径）
+func get_crit_mult() -> float:
+	return minf(crit_mult + synergy_crit_mult, CRIT_MULT_CAP)
+
+## 最终施法间隔乘区：装备/加点层 × 羁绊层 × 技能 buff 层 × 站定神像/苦行僧加成（受 ATTACK_SPEED_FLOOR 保底，< 1.0 为更快）。
+func get_effective_attack_speed_mult() -> float:
+	var base := attack_speed_mult * synergy_haste_mult * buff_attack_speed_mult
+	if still_time > 0.0:
+		var still_haste: float = item_hook_sum("still_attack_speed") + still_haste_bonus
+		if still_haste > 0.0:
+			base *= maxf(0.1, 1.0 - still_haste)
+	elif player_is_moving and move_haste_penalty > 0.0:
+		base *= (1.0 + move_haste_penalty)
+	return maxf(ATTACK_SPEED_FLOOR, base)
+
 func get_effective_armor() -> float:
-	var extra_still := item_hook_sum("still_armor") if still_time > 0.0 else 0.0
+	var extra_still := (item_hook_sum("still_armor") + still_armor_bonus) if still_time > 0.0 else 0.0
 	return armor + synergy_armor + extra_still
 
 func get_effective_thorns() -> float:
@@ -640,7 +689,7 @@ func get_player_stat_dict() -> Dictionary:
 		"crit_mult": crit_mult + synergy_crit_mult,
 		"attack_speed_mult": attack_speed_mult * synergy_haste_mult,
 		"move_speed_mult": move_speed_mult + synergy_move_speed_mult,
-		"weapon_damage_mult": weapon_damage_mult * synergy_damage_mult,
+		"weapon_damage_mult": get_weapon_damage_mult() * synergy_damage_mult,
 		"attack_range_mult": attack_range_mult * synergy_range_mult,
 		"melee_damage": melee_damage,
 		"ranged_damage": ranged_damage,
@@ -722,19 +771,27 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
 		player.heal(player.max_health * heal_pct)
-	# 突破古玉等道具的回合末永久成长 hook
+	# 突破古玉等道具的回合末永久成长 hook：它不是悟道加点、天然绕过 max_stacks，
+	# 累计到账按 WAVE_END_*_CAP 封口（2026-10-13：+3血/回合 × 20 回合无对价滚出 +60 血的口子）
 	var wave_hp := item_hook_sum("wave_end_max_hp")
 	var wave_reg := item_hook_sum("wave_end_regen")
 	var wave_ls := item_hook_sum("wave_end_lifesteal")
 	if wave_hp > 0.0 or wave_reg > 0.0 or wave_ls > 0.0:
 		var wave_apply: Dictionary = {}
-		if wave_hp > 0.0:
-			wave_apply["max_hp"] = wave_hp
-			wave_apply["hp_heal"] = wave_hp
-			if wave_reg > 0.0:
-				wave_apply["hp_regen"] = wave_reg
-			if wave_ls > 0.0:
-				wave_apply["lifesteal"] = wave_ls
+		var hp_eff := minf(wave_hp, maxf(0.0, WAVE_END_HP_CAP - float(_wave_end_growth["max_hp"])))
+		var reg_eff := minf(wave_reg, maxf(0.0, WAVE_END_REGEN_CAP - float(_wave_end_growth["hp_regen"])))
+		var ls_eff := minf(wave_ls, maxf(0.0, WAVE_END_LIFESTEAL_CAP - float(_wave_end_growth["lifesteal"])))
+		if hp_eff > 0.0:
+			wave_apply["max_hp"] = hp_eff
+			wave_apply["hp_heal"] = hp_eff
+			_wave_end_growth["max_hp"] = float(_wave_end_growth["max_hp"]) + hp_eff
+		if reg_eff > 0.0:
+			wave_apply["hp_regen"] = reg_eff
+			_wave_end_growth["hp_regen"] = float(_wave_end_growth["hp_regen"]) + reg_eff
+		if ls_eff > 0.0:
+			wave_apply["lifesteal"] = ls_eff
+			_wave_end_growth["lifesteal"] = float(_wave_end_growth["lifesteal"]) + ls_eff
+		if not wave_apply.is_empty():
 			_apply_stat_fields(wave_apply, "wave_end_growth")
 	# 随行灵兽回合末收益（聚宝蟾献金币等）
 	PetSystem.on_wave_ended(self)
