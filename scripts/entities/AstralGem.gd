@@ -13,9 +13,17 @@ const GEM_LIGHT_CAP := 8       ## 动态灯名额（与 BladeProjectile.LIGHT_CA
 const GEM_SOFT_CAP := 140      ## 场上软上限：超过后强制最旧宝石磁吸给玩家（保险丝）
 
 @export var exp_value: int = 1
+## 金币腿入账值：-1 = 与 exp_value 同值（普通灵石原口径）；>=0 = 按此值入账。
+## 碎晶档专用：经验足额、金币折低（见 BalanceEconomy 碎晶段）。
+@export var stone_value: int = -1
 @export var is_gold: bool = false:
 	set(val):
 		is_gold = val
+		_update_visual()
+## 碎晶档：最低面额的小水晶（淡青色、体型更小）。与 is_gold 互斥，金档优先。
+@export var is_shard: bool = false:
+	set(val):
+		is_shard = val
 		_update_visual()
 
 var target_player: Node2D = null
@@ -28,7 +36,9 @@ var loot_renderer: ProceduralLootRenderer = null
 
 # ---------------- 对象池（照 BladeProjectile.gd 模式） ----------------
 ## activate 契约（出膛方必须逐项设置，缺一会出现「金色蓝灯」类脏状态）：
-##   exp_value / is_gold（普宝也要显式置 false）/ global_position，随后调 activate()。
+##   exp_value / stone_value（非碎晶置回 -1）/ global_position，随后调 activate()。
+##   is_gold / is_shard 允许沿用场景默认——recycle() 入池即复位三态，
+##   但新档出现时仍建议显式设（照 SpiritChest._drop_gems 的金宝口径）。
 static var _pool: Array[AstralGem] = []
 static var _host: Node2D = null                    ## 池宿主，挂场景根下常驻
 static var _active_gems: Array[AstralGem] = []     ## 场上活宝石（按出生序），保险丝用
@@ -106,6 +116,10 @@ func recycle() -> void:
 		return
 	_pooled = true
 	target_player = null
+	# 入池先清档色：池里的实例不许带着上一颗的金/碎晶状态见下一个调用方
+	is_gold = false
+	is_shard = false
+	stone_value = -1
 	_release_light()
 	_active_gems.erase(self)
 	remove_from_group("gems")
@@ -155,10 +169,21 @@ func _ready() -> void:
 
 func _update_visual() -> void:
 	if loot_renderer != null:
-		loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_GOLD if is_gold else ProceduralLootRenderer.LootType.GEM_BLUE
+		if is_gold:
+			loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_GOLD
+		elif is_shard:
+			loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_SHARD
+		else:
+			loot_renderer.loot_type = ProceduralLootRenderer.LootType.GEM_BLUE
 	var light = get_node_or_null("PointLight2D") as PointLight2D
 	if light != null:
-		light.color = Color(1.0, 0.85, 0.35) if is_gold else Color(0.4, 0.8, 1.0)
+		# 碎晶最低档：淡青、亮度压低一档，与"面额小"视觉语义一致
+		if is_gold:
+			light.color = Color(1.0, 0.85, 0.35)
+		elif is_shard:
+			light.color = Color(0.55, 0.95, 0.85)
+		else:
+			light.color = Color(0.4, 0.8, 1.0)
 
 func magnet_to(player: Node2D) -> void:
 	if target_player == null:
@@ -178,6 +203,13 @@ func _physics_process(delta: float) -> void:
 	if dist < 22.0:
 		JuiceEffect.spawn_pickup_pop(get_parent(), global_position, is_gold)
 		if target_player.has_method("play_squash"):
-			target_player.play_squash(Vector2(0.96, 1.05), 0.12)
-		GameManager.add_experience(exp_value)
+			# 碎晶轻一档的 squash，给最低档一个更小的入口反馈
+			_player_squash(target_player)
+		GameManager.add_experience(exp_value, stone_value)
 		recycle()
+
+func _player_squash(player: Node2D) -> void:
+	if is_shard:
+		player.play_squash(Vector2(0.98, 1.03), 0.09)
+	else:
+		player.play_squash(Vector2(0.96, 1.05), 0.12)

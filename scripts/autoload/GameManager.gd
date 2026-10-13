@@ -255,7 +255,7 @@ var locked_upgrades: Array = []  ## 被角色负面代偿锁死的加点项 id�
 var chest_count_bonus: int = 0   ## 宝箱数量：每波额外刷几口宝箱（WaveSpawner._spawn_chests 消费）
 var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权重（BalanceChest.tier_weights 消费）
 var chest_break_bonus: int = 0   ## 开箱省力兼容字段
-var chest_reward_mult: float = 1.0  ## 宝箱掉落：砸开的匣子掉得更多的乘区（BalanceChest.scale_reward 消费）
+var chest_reward_mult: float = 1.0  ## 宝箱掉落：砸开的匣子掉得更多的乘区（SpiritChest._destroy 经 GameBalance.chest_reward_scaled 消费）
 var chest_item_grants: int = 0   ## 本局玉匣已送出的道具件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
 
 # 灵兽系统属性（随行伙伴）
@@ -368,6 +368,9 @@ var alloc_reroll_free_left: int = 0
 
 ## 已持有道具（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
+## has_still_mechanic 缓存：结果只在道具变化时变，每物理帧调一次不重算 6 次 item_hook_sum
+var _still_cache_valid: bool = false
+var _still_cached: bool = false
 ## 本局购入（或被玉匣送过）的道具 id 账本：出售后 items 里没了这一件，但 unique 道具的
 ## 「每局限购一件」不许因为退货就解禁 —— 详情卡上「出售后本局不再出现」由这里兑现。
 var items_bought: Array = []
@@ -413,12 +416,14 @@ func _process(delta: float) -> void:
 
 # ---------------- 经验 / 灵石 ----------------
 
-func add_experience(amount: int) -> void:
+func add_experience(amount: int, stone_amount: int = -1) -> void:
 	if is_game_over:
 		return
-	# 经验获取只放大经验，金币始终按原价入账（否则经济会双重受益）
+	# 经验获取只放大经验，金币始终按原价入账（否则经济会双重受益）；
+	# stone_amount >= 0 时金币腿改按传入值入账（碎晶档：经验足额、金币折低，见 BalanceEconomy 碎晶段）
 	experience += int(round(float(amount) * xp_gain_mult))
-	spirit_stones += amount
+	spirit_stones += amount if stone_amount < 0 else maxi(0, stone_amount)
+	touch_peak_stones()
 	AudioManager.play_sfx("gem_pickup")
 
 	# 连升音阶：一次吃大经验球跨多级时音高逐级抬升（同 gem_pickup 的连击升调手感）；
@@ -545,9 +550,12 @@ func get_stat_breakdown() -> Dictionary:
 	return StatBreakdown.breakdown(self)
 
 func has_still_mechanic() -> bool:
-	return item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
-		or item_hook_sum("still_dodge") > 0.0 or item_hook_sum("still_armor") > 0.0 \
-		or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0
+	if not _still_cache_valid:
+		_still_cached = item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
+			or item_hook_sum("still_dodge") > 0.0 or item_hook_sum("still_armor") > 0.0 \
+			or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0
+		_still_cache_valid = true
+	return _still_cached
 
 func get_effective_armor() -> float:
 	var extra_still := item_hook_sum("still_armor") if still_time > 0.0 else 0.0
@@ -739,6 +747,7 @@ func add_item(item_id: String) -> bool:
 	if not (item_id in items_bought):
 		items_bought.append(item_id)
 	items.append(item_id)
+	_still_cache_valid = false
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	return true
 
@@ -761,6 +770,7 @@ func sell_item(item_id: String) -> bool:
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	items.remove_at(i)
+	_still_cache_valid = false
 	# 图鉴种数账本（收藏家）：卖掉最后一件同种，种数 −1（与 consume_item 同一条回退）
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)
@@ -792,6 +802,7 @@ func consume_item(item_id: String) -> bool:
 	if i < 0:
 		return false
 	items.remove_at(i)
+	_still_cache_valid = false
 	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种道具，种数 -1
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)

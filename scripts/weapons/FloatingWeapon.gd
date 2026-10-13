@@ -576,17 +576,19 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 	# 打击帧回调拿它门控月牙/材质声/反冲，咬到看不见的目标时不许在屏内亮刀光
 	var player: Node2D = GameManager.player
 	var vp_center: Vector2 = player.global_position if player != null else global_position
+	# 整刀属性管线只算一次：同刀乘区为常量（最多 24 目标共享），避免逐目标重算 _final_damage（9-13 次 item_hook_sum + 20 键 dict + equipped_cleanup 全子节点遍历）
+	var base_dmg := _final_damage()
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
 
 	for res in results:
 		var col = res["collider"]
 		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
 			var enemy = col.get_parent()
-			var dmg = _final_damage()
+			var dmg := base_dmg
 			var is_crit: bool = GameManager.roll_crit()
 			if is_crit:
 				dmg *= GameManager.crit_mult + GameManager.synergy_crit_mult
 			dmg *= GameManager.elite_damage_mult_for(enemy)
-			var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
 			var knock = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):

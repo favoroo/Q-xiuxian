@@ -11,7 +11,8 @@ extends Node2D
 enum LootType {
 	GEM_BLUE,     ## 普通八面菱形幽蓝水晶
 	GEM_GOLD,     ## 特殊八面菱形耀金水晶
-	HEAL_ORB      ## 碧翠灵心玉 / 生机回春魄
+	HEAL_ORB,     ## 碧翠灵心玉 / 生机回春魄
+	GEM_SHARD     ## 碎晶：最低面额的小水晶（淡青白、体型更小；见 BalanceEconomy 碎晶段）
 }
 
 ## 重绘节流间隔（20Hz）：闪烁类动画低于此频率肉眼无感，敌人渲染器已验证
@@ -43,6 +44,12 @@ var _time: float = 0.0
 var _draw_phase: float = 0.0    ## 错相余量：到相才重绘，避免同帧百颗一齐翻 _draw
 var _offscreen: bool = false
 var _dirty: bool = false
+## 屏外剔除变换缓存：全屏掉落物共享同一个 canvas_transform + visible_rect，
+## 每帧只查一次引擎接口，避免百颗宝石每渲染帧 3 次冗余调用。
+static var _cull_frame: int = -1
+static var _cull_transform: Transform2D
+static var _cull_limit: Vector2
+static var _cull_valid: bool = false
 
 func _ready() -> void:
 	# 错开每颗晶石的时间相位，避免全场完全同频机械闪烁
@@ -53,11 +60,17 @@ func _process(delta: float) -> void:
 	_time += delta
 	if self_bob:
 		position.y = sin(_time * BOB_SPEED) * BOB_AMP
-	var vp := get_viewport()
-	if vp != null:
-		var sp: Vector2 = vp.get_canvas_transform() * global_position
-		var lim: Vector2 = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
-		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > lim.x or sp.y > lim.y
+	var frame := Engine.get_frames_drawn()
+	if frame != _cull_frame:
+		_cull_frame = frame
+		var vp := get_viewport()
+		_cull_valid = vp != null
+		if _cull_valid:
+			_cull_transform = vp.get_canvas_transform()
+			_cull_limit = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+	if _cull_valid:
+		var sp: Vector2 = _cull_transform * global_position
+		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > _cull_limit.x or sp.y > _cull_limit.y
 		if _offscreen:
 			return   # 屏外连浮动计时都不重绘；_dirty 保留，回屏第一帧补铺状态
 	_draw_phase -= delta
@@ -73,18 +86,21 @@ func _draw() -> void:
 			_draw_rhombus_crystal(false)
 		LootType.GEM_GOLD:
 			_draw_rhombus_crystal(true)
+		LootType.GEM_SHARD:
+			_draw_rhombus_crystal(false, true)
 		LootType.HEAL_ORB:
 			_draw_heal_orb()
 
 # ==============================================================================
 # 1. 八面立体菱形水晶（Octahedral Crystal）
 # ==============================================================================
-func _draw_rhombus_crystal(is_gold: bool) -> void:
-	var w: float = 12.0
-	var h: float = 20.0
+func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
+	# 碎晶：最低面额档，体型 0.62×、辉光/耀斑减半——判定不变只缩视觉（碰撞形状在场景里）
+	var w: float = 12.0 * (0.62 if is_shard else 1.0)
+	var h: float = 20.0 * (0.62 if is_shard else 1.0)
 	var half_w: float = w * 0.5
 	var half_h: float = h * 0.5
-	var center_y: float = 1.0  # 晶心微凸顶点
+	var center_y: float = 1.0 * (0.62 if is_shard else 1.0)  # 晶心微凸顶点
 
 	# 颜色定义
 	var col_glow: Color
@@ -99,6 +115,13 @@ func _draw_rhombus_crystal(is_gold: bool) -> void:
 		col_mid = Color(0.98, 0.75, 0.20, 0.95)
 		col_dark = Color(0.48, 0.32, 0.06, 0.95)
 		col_edge = Color(1.0, 0.90, 0.50, 0.9)
+	elif is_shard:
+		# 更淡的青白色：与普通蓝水晶同色系但低饱和、低明度差，读得出"更小更便宜"
+		col_glow = Color(0.55, 0.95, 0.88, 0.12)
+		col_hi = Color(0.92, 1.0, 0.98, 0.9)
+		col_mid = Color(0.55, 0.88, 0.82, 0.85)
+		col_dark = Color(0.16, 0.38, 0.36, 0.85)
+		col_edge = Color(0.75, 0.96, 0.92, 0.75)
 	else:
 		col_glow = Color(0.25, 0.80, 1.0, 0.22)
 		col_hi = Color(0.85, 0.96, 1.0, 0.98)
@@ -150,7 +173,7 @@ func _draw_rhombus_crystal(is_gold: bool) -> void:
 	var flare_alpha: float = (sin(_time * 4.0) * 0.5 + 0.5) * 0.8
 	if flare_alpha > 0.4:
 		var flare_col := Color(1.0, 1.0, 1.0, (flare_alpha - 0.4) * 1.6)
-		draw_circle(core, 1.4, flare_col)
+		draw_circle(core, 1.4 * (0.62 if is_shard else 1.0), flare_col)
 
 # ==============================================================================
 # 2. 碧翠灵心玉 / 生机回春魄（Emerald Soul Gem）

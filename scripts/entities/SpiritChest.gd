@@ -181,10 +181,14 @@ func _destroy() -> void:
 	# 玉匣的头奖就是那件法宝；每局送满上限后退回铜匣量级，不许空口白牙（口径见 BalanceChest）
 	if bool(reward.get("grant_item", false)) and not GameManager.chest_grant_item():
 		reward = GameBalance.chest_jade_fallback_reward()
+	# 开箱收益乘区：悟道「宝箱掉落」+法宝「满匣诀」放大这一口的灵石颗数/金币/回复量
+	reward = GameBalance.chest_reward_scaled(reward, GameManager.chest_reward_mult)
 	var stones := int(reward.get("stones", 0))
 	if stones > 0:
 		GameManager.add_spirit_stones(stones)
-	if GameManager.rng.randf() < float(reward.get("heal_chance", 0.0)):
+	# 葫芦概率 = 奖励表基准（简单档口径）× 危险度乘区：越难葫芦越稀少
+	var heal_chance := float(reward.get("heal_chance", 0.0)) * GameBalance.danger_heal_chance_mult(GameManager.danger_level)
+	if GameManager.rng.randf() < heal_chance:
 		_drop_heal(float(reward.get("heal_pct", 0.0)))
 	else:
 		_drop_gems(int(reward.get("gem_count", 0)), int(reward.get("gem_exp", 1)))

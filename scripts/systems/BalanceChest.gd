@@ -85,11 +85,11 @@ static func break_hits(break_bonus: int) -> int:
 ##   stones      —— 直接进袖的金币（0 = 不掉金币）
 ##   grant_item  —— 是否必送一件随机法宝（只有玉匣）
 const REWARD_WOOD := {
-	"heal_chance": 0.6, "heal_pct": 0.15, "gem_count": 3, "gem_exp": 5,
+	"heal_chance": 0.4, "heal_pct": 0.15, "gem_count": 3, "gem_exp": 5,
 	"stones": 0, "grant_item": false,
 }
 const REWARD_COPPER := {
-	"heal_chance": 0.6, "heal_pct": 0.30, "gem_count": 6, "gem_exp": 5,
+	"heal_chance": 0.4, "heal_pct": 0.30, "gem_count": 6, "gem_exp": 5,
 	"stones": 6, "grant_item": false,
 }
 const REWARD_JADE := {
@@ -111,6 +111,9 @@ static func reward_of(tier: int) -> Dictionary:
 const JADE_ITEM_GRANT_CAP := 2
 const JADE_FALLBACK_MULT := 1.5
 
+## 单口匣子回复量上限：堆满一条寻宝流（悟道「宝箱掉落」+法宝「满匣诀」）也不许一口回满血。
+const REWARD_HEAL_CAP := 0.60
+
 ## 上限满后玉匣退回的量：按铜匣奖励整体放缩（葫芦概率/回复、灵石颗数、金币都算上）
 static func jade_fallback_reward() -> Dictionary:
 	var base: Dictionary = REWARD_COPPER.duplicate()
@@ -120,3 +123,29 @@ static func jade_fallback_reward() -> Dictionary:
 	base["stones"] = int(round(float(base["stones"]) * JADE_FALLBACK_MULT))
 	base["grant_item"] = false
 	return base
+
+# ---------------- 开箱收益乘区 ----------------
+
+## 悟道「宝箱掉落」与法宝「满匣诀」把同一口匣子的兑现量整体放大（GameManager.chest_reward_mult）。
+##   放大：gem_count（灵石颗数）、stones（金币）、heal_pct（葫芦回复比例，封顶 REWARD_HEAL_CAP）
+##   不放大：heal_chance（掉葫芦的概率——那条由危险度乘区单独管）、gem_exp（每颗灵石经验，不吹经验曲线）、grant_item
+##   只抬不罚：mult < 1.0 按 1.0 算，字段被回退到 1.0 以下也不许把掉落砍下去。
+static func scale_reward(reward: Dictionary, mult: float) -> Dictionary:
+	var m := maxf(1.0, mult)
+	var out: Dictionary = reward.duplicate()
+	out["gem_count"] = int(round(float(out.get("gem_count", 0)) * m))
+	out["stones"] = int(round(float(out.get("stones", 0)) * m))
+	out["heal_pct"] = minf(float(out.get("heal_pct", 0.0)) * m, REWARD_HEAL_CAP)
+	return out
+
+# ---------------- 危险度乘区 ----------------
+
+## 葫芦掉落概率随危险度递减：高难度治疗更稀缺，让难档更难。
+## 与 BalanceWave.danger_*_mult 同模式——纯函数，danger 由调用方（SpiritChest）传
+## GameManager.danger_level，乘在奖励表 heal_chance 上。奖励表 heal_chance 是简单档基准，
+## 简单(0)=×1.0 → 极限(5)=×0.375（即 0.40 基准压到 0.15）。
+const DANGER_HEAL_MULT_BASE := 1.0     ## 简单档葫芦概率乘区基线
+const DANGER_HEAL_MULT_PER := -0.125   ## 每档危险度葫芦概率 -12.5%
+
+static func danger_heal_chance_mult(danger: int) -> float:
+	return maxf(0.0, DANGER_HEAL_MULT_BASE + float(clampi(danger, 0, BalanceWave.DANGER_MAX)) * DANGER_HEAL_MULT_PER)

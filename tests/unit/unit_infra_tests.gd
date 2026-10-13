@@ -120,6 +120,7 @@ func _test_settings_manager() -> void:
 	_c.equals(bool(SettingsManager.get_val(&"display", &"damage_numbers", false)), true, "重置默认后伤害跳字恢复开启")
 	_c.equals(bool(SettingsManager.get_val(&"display", &"screen_shake", false)), true, "重置默认后屏幕震动恢复开启")
 	_test_floating_btn_defaults()
+	_test_settings_and_reset_robustness()
 
 	# 5. 还原测试前状态
 	SettingsManager.set_bus_volume(&"Master", orig_master)
@@ -185,6 +186,26 @@ func _test_floating_btn_defaults() -> void:
 		_c.check(corner <= arc_r,
 				"%s：键面文案收在走针环之内（角半径 %.1f <= 走针半径 %.1f，按住时那一圈不压在字上）" % [
 						face[0], corner, arc_r])
+
+## 存档损坏容错与 RunReset 清理契约（2026-10-13 健壮性优化）：
+## 钉住非法类型不崩、_btn_scale 非数值回退 1.0、RunReset 对 live_allies/ally_count/last_run_new_records 清零。
+func _test_settings_and_reset_robustness() -> void:
+	var fb := SettingsManager.SKILL_BTN_XY_DEFAULT
+	_c.equals(SettingsManager._norm_xy("corrupt_str", fb), fb, "非法字符串传入 _norm_xy 安全回退默认值")
+	_c.equals(SettingsManager._norm_xy(999, fb), fb, "整数传入 _norm_xy 安全回退默认值")
+	_c.near(SettingsManager._btn_scale("corrupt_scale"), 1.0, 0.001, "非法文本传入 _btn_scale 回落 1.0")
+	_c.equals(SettingsManager._to_bool("corrupt_bool", false), false, "非法文本传入 _to_bool 回退默认 false")
+	_c.equals(SettingsManager._to_bool("true", false), true, "文本 'true' 传入 _to_bool 解析为 true")
+
+	var dummy := Node2D.new()
+	add_child(dummy)
+	GameManager.register_ally(dummy)
+	GameManager.last_run_new_records.append("测试残留纪录")
+	GameManager.reset_run()
+	_c.check(GameManager.live_allies.is_empty(), "reset_run 清空 live_allies")
+	_c.equals(GameManager.ally_count, 0, "reset_run 清零 ally_count")
+	_c.check(GameManager.last_run_new_records.is_empty(), "reset_run 清空 last_run_new_records")
+	dummy.queue_free()
 
 # ---------------- 震屏：创伤预算与强度档位 ----------------
 

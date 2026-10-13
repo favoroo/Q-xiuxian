@@ -134,6 +134,52 @@ func _test_early_clear_bonus() -> void:
 		"封顶不超过第 10 波的刷怪只数（%d ≤ %d）：余时赏是添头，不是第二条击杀收入" % [
 			GameBalance.EARLY_CLEAR_STONES_MAX, GameBalance.wave_spawn_budget(10)])
 
+## 碎晶档（2026-10-13 经济优化）：普通怪按波次概率掉最低面额小水晶，
+## 只砍金币腿不砍经验腿。碎晶率纯函数单调/起点/封顶；入账分离走生产入口差分。
+func _test_gem_shard() -> void:
+	# 碎晶率曲线：起点前为 0（前期保持现有手感），起点后单调上升，封顶不越过
+	_c.near(GameBalance.gem_shard_chance(0), 0.0, EPS, "第 0 波（选人/结算态）不 roll 碎晶")
+	_c.near(GameBalance.gem_shard_chance(1), 0.0, EPS, "第 1 波不掉碎晶")
+	_c.near(GameBalance.gem_shard_chance(GameBalance.GEM_SHARD_START_WAVE - 1), 0.0, EPS, "起点前一波仍为 0")
+	_c.check(GameBalance.gem_shard_chance(GameBalance.GEM_SHARD_START_WAVE) == 0.0,
+		"起点当波从 0 起抬（波 5 = 起点 → 概率恰 0，第 6 波起才掉）")
+	_c.check(GameBalance.gem_shard_chance(6) > GameBalance.gem_shard_chance(5), "起点后随波次抬升")
+	var prev := -1.0
+	var mono := true
+	for w in range(1, 60):
+		var p := GameBalance.gem_shard_chance(w)
+		if p < prev:
+			mono = false
+		prev = p
+	_c.check(mono, "碎晶率 1~59 波单调不减")
+	_c.near(GameBalance.gem_shard_chance(999), GameBalance.GEM_SHARD_CHANCE_CAP, EPS,
+		"无尽波次封顶 %.2f：最多四成半掉碎晶，不许把高光掉落掏空" % GameBalance.GEM_SHARD_CHANCE_CAP)
+	# 量级钉：第 20 波的碎晶率约四成半（通胀稀释主要发生在后期）
+	_c.check(GameBalance.gem_shard_chance(20) > 0.3, "W20 碎晶率已超三成（实测 %.2f）" % GameBalance.gem_shard_chance(20))
+
+	# 入账分离：stone_amount 缺省 = 旧行为（灵石=经验原价）；显式传值只改金币腿。
+	# 每段单独 reset + 4×1.5=6 低于升级门槛 10，不触发扣减（与 unit_content 悟性判据同一口径）。
+	GameManager.reset_run()
+	GameManager.xp_gain_mult = 1.5
+	var xp0 := GameManager.experience
+	var st0 := GameManager.spirit_stones
+	GameManager.add_experience(4)
+	_c.equals(GameManager.experience - xp0, 6, "缺省入参：经验 ×悟性 1.5 → 4×1.5=6")
+	_c.equals(GameManager.spirit_stones - st0, 4, "缺省入参：灵石按原价入账（旧契约不破坏）")
+	GameManager.reset_run()
+	GameManager.xp_gain_mult = 1.5
+	var xp1 := GameManager.experience
+	var st1 := GameManager.spirit_stones
+	GameManager.add_experience(4, GameBalance.GEM_SHARD_STONE_VALUE)
+	_c.equals(GameManager.experience - xp1, 6, "碎晶：经验腿仍足额 ×悟性（升级节奏不动）")
+	_c.equals(GameManager.spirit_stones - st1, GameBalance.GEM_SHARD_STONE_VALUE, "碎晶：金币腿只进 1 枚")
+	GameManager.reset_run()
+	var st2 := GameManager.spirit_stones
+	GameManager.add_experience(4, -3)
+	_c.equals(GameManager.spirit_stones - st2, 4, "负 stone_amount 回落原价口径（-1 约定不破坏）")
+	GameManager.xp_gain_mult = 1.0
+	GameManager.reset_run()
+
 func _test_rarity_weights() -> void:
 	var base: Dictionary = GameBalance.rarity_weights(0.0)
 	_c.near(base["epic"], 10.0, EPS, "无福缘时仙品权重 10")

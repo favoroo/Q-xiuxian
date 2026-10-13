@@ -303,13 +303,27 @@ func set_val(section: StringName, key: StringName, val: Variant, auto_save: bool
 
 # ----------------- 震屏便捷接口 -----------------
 
+## 安全转换布尔值：兼容 bool、数值（0/1）及常用文本串，避免非 bool 传入 bool() 构造子触发异常
+static func _to_bool(v: Variant, fallback: bool = false) -> bool:
+	if v is bool:
+		return v
+	if v is int or v is float:
+		return bool(v)
+	if v is String or v is StringName:
+		var s := String(v).strip_edges().to_lower()
+		if s in ["true", "1", "yes", "on"]:
+			return true
+		if s in ["false", "0", "no", "off"]:
+			return false
+	return fallback
+
 ## 当前震屏档位。ConfigFile 存取会把 StringName 变成 String，这里统一归一化
 func shake_level() -> StringName:
 	return StringName(str(get_val(&"display", &"shake_intensity", SHAKE_DEFAULT_LEVEL)))
 
 ## 震屏幅度倍率：0 = 完全不震。总开关（screen_shake）关掉时档位再高也是 0
 func shake_mult() -> float:
-	if not bool(get_val(&"display", &"screen_shake", true)):
+	if not _to_bool(get_val(&"display", &"screen_shake", true), true):
 		return 0.0
 	return float(SHAKE_LEVEL_MULT.get(str(shake_level()), 1.0))
 
@@ -326,7 +340,7 @@ func shake_level_next() -> StringName:
 
 ## 当前跳字模式：智能合并 / 全部显示 / 仅暴击 / 关闭
 func damage_number_mode() -> StringName:
-	if not bool(get_val(&"display", &"damage_numbers", true)):
+	if not _to_bool(get_val(&"display", &"damage_numbers", true), true):
 		return &"off"
 	return StringName(str(get_val(&"display", &"damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
 
@@ -360,10 +374,10 @@ const EXTRA_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 230.0 / 540.0)
 const BTN_DEFAULT_EDGE_GAP := 24.0
 
 func skill_btn_xy() -> Vector2:
-	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT))
+	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT), SKILL_BTN_XY_DEFAULT)
 
 func set_skill_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
-	set_val(&"display", &"skill_btn_xy", _norm_xy(norm), auto_save)
+	set_val(&"display", &"skill_btn_xy", _norm_xy(norm, SKILL_BTN_XY_DEFAULT), auto_save)
 
 func skill_btn_scale() -> float:
 	return _btn_scale(get_val(&"display", &"skill_btn_scale", 1.0))
@@ -372,10 +386,10 @@ func set_skill_btn_scale(scale_f: float, auto_save: bool = true) -> void:
 	set_val(&"display", &"skill_btn_scale", _btn_scale(scale_f), auto_save)
 
 func obelisk_btn_xy() -> Vector2:
-	return _norm_xy(get_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT))
+	return _norm_xy(get_val(&"display", &"obelisk_btn_xy", OBELISK_BTN_XY_DEFAULT), OBELISK_BTN_XY_DEFAULT)
 
 func set_obelisk_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
-	set_val(&"display", &"obelisk_btn_xy", _norm_xy(norm), auto_save)
+	set_val(&"display", &"obelisk_btn_xy", _norm_xy(norm, OBELISK_BTN_XY_DEFAULT), auto_save)
 
 func obelisk_btn_scale() -> float:
 	return _btn_scale(get_val(&"display", &"obelisk_btn_scale", 1.0))
@@ -384,10 +398,10 @@ func set_obelisk_btn_scale(scale_f: float, auto_save: bool = true) -> void:
 	set_val(&"display", &"obelisk_btn_scale", _btn_scale(scale_f), auto_save)
 
 func extra_btn_xy() -> Vector2:
-	return _norm_xy(get_val(&"display", &"extra_btn_xy", EXTRA_BTN_XY_DEFAULT))
+	return _norm_xy(get_val(&"display", &"extra_btn_xy", EXTRA_BTN_XY_DEFAULT), EXTRA_BTN_XY_DEFAULT)
 
 func set_extra_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
-	set_val(&"display", &"extra_btn_xy", _norm_xy(norm), auto_save)
+	set_val(&"display", &"extra_btn_xy", _norm_xy(norm, EXTRA_BTN_XY_DEFAULT), auto_save)
 
 func extra_btn_scale() -> float:
 	return _btn_scale(get_val(&"display", &"extra_btn_scale", 1.0))
@@ -426,18 +440,28 @@ func _follow_legacy_layout_default() -> void:
 ## 只影响自动弹这一条路径；主菜单/设置页的手动入口永远能翻（见 StartMenu._on_guide_pressed、
 ## SettingsDialog 底部「新手指南」按钮），所以勾掉之后玩家还能自己点开并取消勾选。
 func tutorial_muted() -> bool:
-	return bool(get_val(&"ui", &"tutorial_muted", false))
+	return _to_bool(get_val(&"ui", &"tutorial_muted", false), false)
 
 ## 写入勾选态并即时落盘 user://settings.cfg（偏好，不进 progress.cfg）
 func set_tutorial_muted(muted: bool) -> void:
 	set_val(&"ui", &"tutorial_muted", muted)
 
-func _norm_xy(v: Variant) -> Vector2:
-	var p := v as Vector2
-	return Vector2(clampf(p.x, 0.0, 1.0), clampf(p.y, 0.0, 1.0))
+func _norm_xy(v: Variant, fallback: Vector2 = SKILL_BTN_XY_DEFAULT) -> Vector2:
+	if v is Vector2:
+		var p: Vector2 = v
+		return Vector2(clampf(p.x, 0.0, 1.0), clampf(p.y, 0.0, 1.0))
+	if v is Vector2i:
+		return Vector2(clampf(float(v.x), 0.0, 1.0), clampf(float(v.y), 0.0, 1.0))
+	return Vector2(clampf(fallback.x, 0.0, 1.0), clampf(fallback.y, 0.0, 1.0))
 
 func _btn_scale(v: Variant) -> float:
-	return clampf(float(v), BTN_SCALE_MIN, BTN_SCALE_MAX)
+	if v is float or v is int:
+		return clampf(float(v), BTN_SCALE_MIN, BTN_SCALE_MAX)
+	if v is String or v is StringName:
+		var s := String(v).strip_edges()
+		if s.is_valid_float():
+			return clampf(s.to_float(), BTN_SCALE_MIN, BTN_SCALE_MAX)
+	return 1.0
 
 ## 档位与旧布尔总开关保持同源：老存档里只有 screen_shake，而界面只暴露一个循环控件，
 ## 两者不同步就会出现「显示标准、实际不震」这类看不见对不上的读数
@@ -449,11 +473,11 @@ func _sync_shake_pair(sec_str: String, key_str: String) -> void:
 	var display: Dictionary = _settings["display"]
 	if key_str == "shake_intensity":
 		var should_be_on := shake_level() != &"off"
-		if bool(display.get("screen_shake", true)) != should_be_on:
+		if _to_bool(display.get("screen_shake", true), true) != should_be_on:
 			display["screen_shake"] = should_be_on
 			setting_changed.emit(&"display", &"screen_shake", should_be_on)
 	else:
-		var enabled := bool(display.get("screen_shake", true))
+		var enabled := _to_bool(display.get("screen_shake", true), true)
 		var lv := shake_level()
 		if not enabled and lv != &"off":
 			display["shake_intensity"] = &"off"
@@ -474,11 +498,11 @@ func _sync_damage_number_pair(sec_str: String, key_str: String) -> void:
 	if key_str == "damage_number_mode":
 		var mode_val := StringName(str(disp_sec.get("damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
 		var should_be_on := mode_val != &"off"
-		if bool(disp_sec.get("damage_numbers", true)) != should_be_on:
+		if _to_bool(disp_sec.get("damage_numbers", true), true) != should_be_on:
 			disp_sec["damage_numbers"] = should_be_on
 			setting_changed.emit(&"display", &"damage_numbers", should_be_on)
 	else:
-		var enabled := bool(disp_sec.get("damage_numbers", true))
+		var enabled := _to_bool(disp_sec.get("damage_numbers", true), true)
 		var mode_val := StringName(str(disp_sec.get("damage_number_mode", DAMAGE_NUMBER_DEFAULT_MODE)))
 		if not enabled and mode_val != &"off":
 			disp_sec["damage_number_mode"] = &"off"
@@ -515,7 +539,7 @@ func set_bus_volume(bus_name: StringName, linear_val: float) -> void:
 func is_bus_muted(bus_name: StringName) -> bool:
 	var mute_key = BUS_MUTE_MAP.get(bus_name, "")
 	if mute_key != "":
-		return bool(get_val(&"audio", StringName(mute_key), false))
+		return _to_bool(get_val(&"audio", StringName(mute_key), false), false)
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx >= 0:
 		return AudioServer.is_bus_mute(idx)
@@ -565,10 +589,48 @@ func _load_settings() -> void:
 			if not _settings.has(sec):
 				_settings[sec] = {}
 			for k in cfg.get_section_keys(sec):
-				_settings[sec][k] = cfg.get_value(sec, k)
+				var raw_val = cfg.get_value(sec, k)
+				_settings[sec][k] = _validate_loaded_value(sec, k, raw_val)
 	else:
 		# 尝试从历史 user://audio.cfg 迁移
 		_try_migrate_legacy_audio()
+
+## 对读盘获得的配置做轻量类型与范围校验，坏值回退默认，阻止非法类型污染内存与后续解引用
+func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
+	if key.ends_with("_btn_xy"):
+		if val is Vector2:
+			return Vector2(clampf(val.x, 0.0, 1.0), clampf(val.y, 0.0, 1.0))
+		if val is Vector2i:
+			return Vector2(clampf(float(val.x), 0.0, 1.0), clampf(float(val.y), 0.0, 1.0))
+		if key == "obelisk_btn_xy":
+			return OBELISK_BTN_XY_DEFAULT
+		elif key == "extra_btn_xy":
+			return EXTRA_BTN_XY_DEFAULT
+		return SKILL_BTN_XY_DEFAULT
+	if key.ends_with("_btn_scale"):
+		return _btn_scale(val)
+	if sec == "audio" and key.ends_with("_volume"):
+		if val is float or val is int:
+			return clampf(float(val), 0.0, 1.0)
+		return 1.0
+	if sec == "audio" and key.ends_with("_muted"):
+		return _to_bool(val, false)
+	if key == "tutorial_muted":
+		return _to_bool(val, false)
+	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
+			or key == "haptics" or key == "screen_flash" or key == "show_fps":
+		return _to_bool(val, key != "show_fps")
+	if key == "shake_intensity":
+		var s := StringName(str(val))
+		if SHAKE_LEVEL_ORDER.has(s):
+			return s
+		return SHAKE_DEFAULT_LEVEL
+	if key == "damage_number_mode":
+		var s := StringName(str(val))
+		if DAMAGE_NUMBER_MODE_ORDER.has(s):
+			return s
+		return DAMAGE_NUMBER_DEFAULT_MODE
+	return val
 
 func _try_migrate_legacy_audio() -> void:
 	var leg_cfg := ConfigFile.new()
@@ -580,10 +642,13 @@ func _try_migrate_legacy_audio() -> void:
 				_settings["audio"][key] = clampf(float(v), 0.0, 1.0)
 		_save_settings()
 
-func _save_settings() -> void:
+func _save_settings() -> Error:
 	var cfg := ConfigFile.new()
 	for sec in _settings.keys():
 		var sec_dict: Dictionary = _settings[sec]
 		for k in sec_dict.keys():
 			cfg.set_value(sec, k, sec_dict[k])
-	cfg.save(SETTINGS_PATH)
+	var err := cfg.save(SETTINGS_PATH)
+	if err != OK:
+		push_warning("SettingsManager: 保存设置失败 err=%d path=%s" % [err, SETTINGS_PATH])
+	return err

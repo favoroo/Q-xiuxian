@@ -84,6 +84,9 @@ const REROLL_COUNT_STEP := BalanceEconomy.REROLL_COUNT_STEP
 const HARVEST_GROWTH := BalanceEconomy.HARVEST_GROWTH
 const HEAL_OVERFLOW_STONE_PER_HP := BalanceEconomy.HEAL_OVERFLOW_STONE_PER_HP
 const HEAL_OVERFLOW_STONE_CAP := BalanceEconomy.HEAL_OVERFLOW_STONE_CAP
+const GEM_SHARD_STONE_VALUE := BalanceEconomy.GEM_SHARD_STONE_VALUE
+const GEM_SHARD_START_WAVE := BalanceEconomy.GEM_SHARD_START_WAVE
+const GEM_SHARD_CHANCE_CAP := BalanceEconomy.GEM_SHARD_CHANCE_CAP
 const EARLY_CLEAR_STONES_PER_SEC := BalanceEconomy.EARLY_CLEAR_STONES_PER_SEC
 const EARLY_CLEAR_STONES_MAX := BalanceEconomy.EARLY_CLEAR_STONES_MAX
 const RARITY_EPIC_BASE := BalanceEconomy.RARITY_EPIC_BASE
@@ -181,6 +184,7 @@ const CHEST_COUNT_CAP := BalanceChest.CHEST_COUNT_CAP
 const CHEST_TIER_COUNT := BalanceChest.TIER_COUNT
 const CHEST_TIER_SCALE := BalanceChest.TIER_SCALE
 const CHEST_JADE_ITEM_GRANT_CAP := BalanceChest.JADE_ITEM_GRANT_CAP
+const CHEST_REWARD_HEAL_CAP := BalanceChest.REWARD_HEAL_CAP
 
 # ---------------- 函数转发（签名原样，实现进主题类） ----------------
 
@@ -274,6 +278,10 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 ## 提前清场（妖潮已尽）的波末余时赏：只给金币，按本波剩余秒数折
 static func early_clear_stones(remaining_secs: float) -> int:
 	return BalanceEconomy.early_clear_stones(remaining_secs)
+
+## 普通怪掉落为碎晶的概率（后期稀释金币腿，经验腿不砍；见 BalanceEconomy 碎晶段）
+static func gem_shard_chance(wave: int) -> float:
+	return BalanceEconomy.gem_shard_chance(wave)
 
 static func enemy_hp_mult(wave: int) -> float:
 	return BalanceWave.enemy_hp_mult(wave)
@@ -389,6 +397,12 @@ static func chest_reward(tier: int) -> Dictionary:
 
 static func chest_jade_fallback_reward() -> Dictionary:
 	return BalanceChest.jade_fallback_reward()
+
+static func chest_reward_scaled(reward: Dictionary, mult: float) -> Dictionary:
+	return BalanceChest.scale_reward(reward, mult)
+
+static func danger_heal_chance_mult(danger: int) -> float:
+	return BalanceChest.danger_heal_chance_mult(danger)
 
 # 索敌 / 藏宝匣 / 折算 / 御灵 / 神识分流 → BalanceTargeting
 static func elliptical_distance(offset: Vector2, y_ratio: float = TARGETING_ELLIPSE_Y_RATIO) -> float:

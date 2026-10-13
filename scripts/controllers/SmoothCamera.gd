@@ -111,12 +111,17 @@ func trauma_budget_left() -> float:
 	return _budget_left
 
 ## 镜头瞬时缩放冲击（Zoom Punch），用于聚灵阵爆发、精英击杀、大招等高潮时刻
+## 同帧/连续 zoom punch 合并：已有活跃 Tween 时，新冲击幅值不超过当前 zoom 则跳过，
+## 避免穿透/弹射多目标同帧暴击狂建 Tween；更大的事件（如击杀）仍能覆盖更小的。
 func zoom_punch(punch_scale: float = 0.05, duration: float = 0.18) -> void:
 	if _intensity <= 0.0:
 		return
+	var target_zoom := _base_zoom * (1.0 + punch_scale * _intensity)
 	if _zoom_tween != null and _zoom_tween.is_valid():
+		if target_zoom <= zoom:
+			return
 		_zoom_tween.kill()
-	zoom = _base_zoom * (1.0 + punch_scale * _intensity)
+	zoom = target_zoom
 	_zoom_tween = create_tween()
 	_zoom_tween.tween_property(self, "zoom", _base_zoom, duration)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)

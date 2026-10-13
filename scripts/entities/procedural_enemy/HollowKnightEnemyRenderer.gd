@@ -42,6 +42,13 @@ var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相�
 var _redraw_interval: float = REDRAW_INTERVAL_MOB
 var _offscreen: bool = false
 var _dirty: bool = false            ## 状态翻转（镜像/换装）时插队重绘
+## 屏外剔除变换缓存：全屏敌人共享同一个 canvas_transform + visible_rect，
+## 每帧只查一次引擎接口（get_viewport / get_canvas_transform / get_visible_rect），
+## 避免每敌每渲染帧 3 次冗余调用。
+static var _cull_frame: int = -1
+static var _cull_transform: Transform2D
+static var _cull_limit: Vector2
+static var _cull_valid: bool = false
 
 func _ready() -> void:
 	# 错相：用 instance_id 派生初值（不碰玩法随机），把 35 只怪的重绘摊到不同帧，
@@ -50,12 +57,19 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	var vp := get_viewport()
-	if vp != null:
-		var sp: Vector2 = vp.get_canvas_transform() * global_position
-		var limit := vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+	# 每帧首只怪刷新缓存，后续直接复用（get_viewport 等返回值在同一渲染帧内对所有节点相同）
+	var frame := Engine.get_frames_drawn()
+	if frame != _cull_frame:
+		_cull_frame = frame
+		var vp := get_viewport()
+		_cull_valid = vp != null
+		if _cull_valid:
+			_cull_transform = vp.get_canvas_transform()
+			_cull_limit = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+	if _cull_valid:
+		var sp: Vector2 = _cull_transform * global_position
 		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN \
-			or sp.x > limit.x or sp.y > limit.y
+			or sp.x > _cull_limit.x or sp.y > _cull_limit.y
 		if _offscreen:
 			return
 	if _dirty or _draw_phase <= 0.0:

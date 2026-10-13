@@ -112,7 +112,7 @@ func _test_pure() -> void:
 
 	# 奖励表：木匣与改版前逐字一致，玉匣才是要新增的东西
 	var r0: Dictionary = GameBalance.chest_reward(BalanceChest.TIER_WOOD)
-	_c.near(float(r0["heal_chance"]), 0.6, 0.001, "木匣仍约六成掉葫芦（基准档口径没漂）")
+	_c.near(float(r0["heal_chance"]), 0.4, 0.001, "木匣基准档 40% 掉葫芦（原 60% 已下调）")
 	_c.near(float(r0["heal_pct"]), 0.15, 0.001, "木匣葫芦仍回 15% 气血")
 	_c.equals(int(r0["gem_count"]), 3, "木匣仍掉 3 颗金灵石")
 	_c.check(not bool(r0["grant_item"]), "木匣不送法宝")
@@ -127,6 +127,16 @@ func _test_pure() -> void:
 	_c.check(int(fb["gem_count"]) > int(r1["gem_count"]) and int(fb["stones"]) > int(r1["stones"]),
 		"退回量比铜匣还厚：堆上去的档位不许越堆越亏")
 	_c.equals(GameBalance.CHEST_JADE_ITEM_GRANT_CAP, 2, "每局玉匣最多送 2 件法宝（掏空灵石阁的保险丝）")
+
+	# 危险度乘区：越难越稀少，极限档葫芦概率压到基准的 37.5%
+	_c.near(GameBalance.danger_heal_chance_mult(0), 1.0, 0.001, "简单档乘区 = 1.0（基准）")
+	_c.near(GameBalance.danger_heal_chance_mult(5), 0.375, 0.001, "极限档乘区 = 0.375（0.4×0.375=0.15）")
+	_c.check(GameBalance.danger_heal_chance_mult(5) < GameBalance.danger_heal_chance_mult(0),
+		"乘区随危险度单调递减")
+	_c.near(GameBalance.danger_heal_chance_mult(9), GameBalance.danger_heal_chance_mult(5), 0.001,
+		"危险度 >5 clamp 到 DANGER_MAX，不溢出")
+	_c.near(float(r0["heal_chance"]) * GameBalance.danger_heal_chance_mult(5), 0.15, 0.001,
+		"极限档木匣实掉葫芦概率 = 0.15")
 
 # ---------------- 2+3) 来源层与现场层 ----------------
 

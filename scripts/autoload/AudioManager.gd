@@ -397,15 +397,20 @@ func _load_settings() -> void:
 	for bus_name in DEFAULT_LINEAR.keys():
 		var v: float = float(DEFAULT_LINEAR[bus_name])
 		if err == OK:
-			v = float(cfg.get_value("audio", bus_name, v))
+			var raw = cfg.get_value("audio", bus_name, v)
+			if raw is float or raw is int:
+				v = clampf(float(raw), 0.0, 1.0)
 		var idx := AudioServer.get_bus_index(StringName(bus_name))
 		if idx >= 0:
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, v)))
 			AudioServer.set_bus_mute(idx, v <= 0.001)
 			_linear[bus_name] = v
 
-func _save_settings() -> void:
+func _save_settings() -> Error:
 	var cfg := ConfigFile.new()
 	for bus_name in _linear.keys():
 		cfg.set_value("audio", bus_name, _linear[bus_name])
-	cfg.save(SETTINGS_PATH)
+	var err := cfg.save(SETTINGS_PATH)
+	if err != OK:
+		push_warning("AudioManager: 保存音频设置失败 err=%d path=%s" % [err, SETTINGS_PATH])
+	return err

@@ -10,7 +10,8 @@ const MAX_HISTORY_ENTRIES: int = 10
 
 static func load_into(gm: Node) -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(PROGRESS_PATH) == OK:
+	var load_err := cfg.load(PROGRESS_PATH)
+	if load_err == OK:
 		var _ver := int(cfg.get_value("meta", "save_version", 1))
 		gm.max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
 
@@ -60,6 +61,8 @@ static func load_into(gm: Node) -> void:
 		var hist = cfg.get_value("history", "recent_runs", [])
 		gm.run_history = hist.duplicate() if hist is Array else []
 	else:
+		if FileAccess.file_exists(PROGRESS_PATH):
+			push_warning("ProgressStore: 读取局外进度失败 err=%d path=%s，已回落默认" % [load_err, PROGRESS_PATH])
 		gm.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
 		gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
 		gm.unlocked_achievements = []
@@ -82,7 +85,7 @@ static func load_into(gm: Node) -> void:
 		if not ItemData.DEFS.has(String(gm.unlocked_items[i])):
 			gm.unlocked_items.remove_at(i)
 
-static func save_from(gm: Node) -> void:
+static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	var cfg := ConfigFile.new()
 	cfg.set_value("meta", "save_version", SAVE_VERSION)
 	cfg.set_value("progress", "max_danger", gm.max_danger_unlocked)
@@ -105,7 +108,18 @@ static func save_from(gm: Node) -> void:
 	# 新手指南「下次不弹出」是玩家偏好，2026-10-11 起落 user://settings.cfg
 	# （SettingsManager.tutorial_muted），不再占用局外进度存档的 tutorial_seen 位。
 	cfg.set_value("history", "recent_runs", gm.run_history)
-	cfg.save(PROGRESS_PATH)
+	var err := cfg.save(target_path)
+	if err != OK:
+		push_warning("ProgressStore: 保存局外进度失败 err=%d path=%s，尝试重试" % [err, target_path])
+		err = cfg.save(target_path)
+		if err != OK:
+			push_warning("ProgressStore: 重试保存局外进度仍失败 err=%d path=%s" % [err, target_path])
+			var tree := Engine.get_main_loop() as SceneTree
+			if tree != null and tree.root != null and tree.root.has_node("UpdateManager"):
+				var um = tree.root.get_node("UpdateManager")
+				if um != null and um.has_method("show_toast"):
+					um.show_toast("进度保存失败（存储空间不足或权限受限）", GameStyle.BAD, 3.5)
+	return err
 
 ## 结算时汇总生涯统计、记录战报、判定新成就解锁并统一落盘
 ## 两条路径：

@@ -81,6 +81,26 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	var eff_avg := avg_exp if avg_exp > 0.0 else BUDGET_COMP_EXP_FALLBACK
 	return int(round(float(shortfall) * eff_avg))
 
+# ---------------- 灵石碎晶档（后期金币腿稀释） ----------------
+
+## 2026-10-13 经济优化：灵石与经验是同一个球（add_experience 双入账），怪面额固定、
+## 商店价格只按波次加法增长，后期每波净结余 200+ 灵石花不完。对策：普通怪死亡按概率
+## 掉「碎晶」——经验腿足额给（升级节奏与经验曲线不动），只有金币腿折到 1 枚。
+## 碎晶率随波次上升：前期几乎不掉（保持现有手感），后期占比走高、按比例稀释通胀。
+## 随机由调用方拿 GameManager.rng 比对，本函数保持纯。
+
+const GEM_SHARD_STONE_VALUE := 1        ## 碎晶金币面额
+const GEM_SHARD_START_WAVE := 5         ## 碎晶率自第 5 波起抬升（起点当波概率为 0，第 6 波才真正掉）
+const GEM_SHARD_RISE_PER_WAVE := 0.035  ## 起点之后每波碎晶率抬升
+const GEM_SHARD_CHANCE_CAP := 0.45      ## 碎晶率上限：再多就把高光掉落的爽感掏空了
+
+## 本波普通怪掉落为碎晶的概率（波次 ≤ 起点为 0，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
+static func gem_shard_chance(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w < GEM_SHARD_START_WAVE:
+		return 0.0
+	return minf(GEM_SHARD_CHANCE_CAP, float(w - GEM_SHARD_START_WAVE) * GEM_SHARD_RISE_PER_WAVE)
+
 # ---------------- 提前清场余时赏 ----------------
 
 ## 一波的结束条件有两条（WaveSpawner._process_fight）：表走完，或「妖潮已尽」——本波刷怪预算

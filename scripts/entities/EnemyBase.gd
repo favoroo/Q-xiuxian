@@ -848,12 +848,14 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			_hit_tilt = -knockback.normalized().x * deg_to_rad(14.0)
 
 	# 1. 声音与震动（分层听觉：入肉撕裂+低频下潜 + 肉眼可见的方向性顿挫冲击）
-		if is_crit:
-			if not from_dot:
-				AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
-				AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
-			GameManager.crit_hit_stop()
-			GameManager.kick_camera(knockback, 6.5)
+	# 暴击：声音+暴击顿帧+方向冲撞+zoom punch+创伤；DoT 暴击不出声但仍给镜头反馈
+	# 普通命中（非 DoT）：方向性微冲击 + 入肉声，走全局限流闸
+	if is_crit:
+		if not from_dot:
+			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
+			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
+		GameManager.crit_hit_stop()
+		GameManager.kick_camera(knockback, 6.5)
 		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
 		# 暴击从「只冲不摇」升级为可见摇晃：普通暴击也发一笔小额创伤（走每秒预算，稳态不变）
 		if is_elite:
@@ -1411,6 +1413,13 @@ func _die() -> void:
 		gem.is_gold = is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
 		if is_elite:
 			gem.exp_value = 8
+		else:
+			# 碎晶档（2026-10-13 经济优化）：普通怪按波次概率掉最低面额小水晶 ——
+			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，稀释后期灵石通胀。
+			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎晶率见 BalanceEconomy。
+			if GameManager.rng.randf() < GameBalance.gem_shard_chance(GameManager.wave_number):
+				gem.is_shard = true
+				gem.stone_value = GameBalance.GEM_SHARD_STONE_VALUE
 		gem.activate()
 
 	set_physics_process(false)

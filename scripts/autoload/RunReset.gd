@@ -140,6 +140,7 @@ static func reset(gm: Node) -> void:
 	gm.alloc_reroll_count = 0
 	gm.alloc_reroll_free_left = 0
 	gm.items = []
+	gm._still_cache_valid = false
 	gm.items_bought = []
 	gm.pets = []
 	gm.pet_slots_bonus = 0
@@ -152,9 +153,12 @@ static func reset(gm: Node) -> void:
 	gm.upgrade_history.clear()
 	gm.upgrade_counts.clear()
 	gm.last_run_new_achievements = []
+	gm.last_run_new_records = []
 	gm.peak_stones = 0
 	gm.peak_dodge = 0.0
 	gm.peak_harvest = 0.0
-	# 敌人活体登记跟着清：旧场敌人随后 _exit_tree 注销是安全空操作
+	# 敌人与友军活体登记跟着清：旧场敌人/灵兽随后 _exit_tree 注销是安全空操作
 	gm.live_enemies.clear()
 	gm.enemy_count = 0
+	gm.live_allies.clear()
+	gm.ally_count = 0

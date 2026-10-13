@@ -14,9 +14,11 @@ extends Node
 ##    全员移出屏幕 0.5 秒，重绘增量 ≤ 2（屏外剔除）；120 颗在场只点亮 GEM_LIGHT_CAP 盏灯；
 ##    回收再取两轮，第二轮 created 零增长、reused 等量增长（对象池）；
 ##    场上宝石数超 GEM_SOFT_CAP 后，最旧一颗被强制 magnet_to（软上限保险丝，无经验损失）。
-## 5. 受击视觉零分配 + 落雷池 + 屏外判定节流（2026-10-11 第 6 波卡顿优化）：
-##    12 次 take_damage 全程 get_processed_tweens() 零增长（旧写法每次受击挤压+闪白各建一个 Tween），
-##    且 0.3s 内闪白参数归零、juice_scale 回正（帧内计时衰减在跑）；
+## 5. 受击视觉零分配 + zoom punch 合并 + 落雷池 + 屏外判定节流：
+##    挂上真 SmoothCamera 后，12 次普通命中（is_crit=false）全程 get_processed_tweens() 零增长
+##    （含 zoom_punch 路径覆盖：camera 就位后不再 null-shortcut）；
+##    12 次暴击命中（is_crit=true）因 SmoothCamera 幅值合并只允许 ≤1 个 zoom tween；
+##    0.3s 内闪白参数归零、juice_scale 回正（帧内计时衰减在跑）；
 ##    落雷 acquire 两轮，第二轮零新建全复用；敌人在屏外 0.5s 内 _offscreen 收敛为 true（10Hz 节流不失效）。
 ## 6. 环绕灵宝重绘节流（2026-10-11 武器多卡顿优化）：单只灵宝 1 秒
 ##    ProceduralDroneRenderer.redraw_count 增量 ≤ 25（20Hz 节流 + 错相首拍余量，未节流时 60）。
@@ -242,24 +244,39 @@ func _run() -> void:
 	_check(fused >= 1, "软上限保险丝：超 GEM_SOFT_CAP 后最旧宝石被强制吸附（吸附中 %d 颗）" % fused)
 
 	# ================= 5. 受击视觉零分配 + 落雷池 + 屏外判定节流 =================
-	# 5a. 受击零 Tween 分配：旧写法每次 take_damage 建 2 个 Tween（挤压+闪白）；
-	#     现在衰减走帧内计时 —— 命中全程 get_processed_tweens() 零增长，
-	#     且 0.3s 内 flash_modifier 归零、juice_scale 回正（衰减确实在跑，不是压根没触发）
+	# 5a. 受击零 Tween 分配 + zoom punch 路径覆盖：
+	#     旧写法每次 take_damage 建 2 个 Tween（挤压+闪白）；现在衰减走帧内计时。
+	#     挂上真 SmoothCamera 后，普通命中（is_crit=false）不应产生任何 Tween（zoom_punch 只在暴击分支内）；
+	#     12 次暴击命中（is_crit=true）因幅值合并只允许 ≤1 个 zoom tween。
+	var cam := SmoothCamera.new()
+	world.add_child(cam)
+	await get_tree().process_frame
+	# 5a-1. 普通命中零 Tween（含 zoom_punch 路径：camera 就位后 zoom_punch 不再 null-shortcut）
 	var hit_e := slime_scene.instantiate() as EnemyBase
 	hit_e.position = Vector2(300.0, 300.0)
+	# 防止小怪 12 刀直接死掉，影响暴击段断言
+	hit_e.max_hp = 9999.0
+	hit_e.current_hp = 9999.0
 	world.add_child(hit_e)
 	await get_tree().process_frame
 	var tweens_before: int = get_tree().get_processed_tweens().size()
 	for i in range(12):
 		hit_e.take_damage(5.0, Vector2(30.0, 0.0), false)
 	var tween_delta: int = get_tree().get_processed_tweens().size() - tweens_before
-	_check(tween_delta == 0, "受击零 Tween 分配：12 次受击 Tween 计数零增长（实得 %+d）" % tween_delta)
+	_check(tween_delta == 0, "普通命中零 Tween（含 zoom_punch 路径覆盖）：12 次受击 Tween 零增长（实得 %+d）" % tween_delta)
 	await get_tree().create_timer(0.3).timeout
 	var flash_val: float = float(hit_e.hit_flash_mat.get_shader_parameter("flash_modifier"))
 	_check(flash_val <= 0.001, "闪白帧内计时衰减归零（实得 %.3f）" % flash_val)
 	_check(hit_e.juice_scale.distance_to(Vector2.ONE) < 0.02, "挤压回弹帧内计时归位")
+	# 5a-2. 暴击命中 zoom punch 合并：12 次同帧暴击最多只建 1 个 zoom tween
+	var crit_tweens_before: int = get_tree().get_processed_tweens().size()
+	for i in range(12):
+		hit_e.take_damage(5.0, Vector2(30.0, 0.0), true)
+	var crit_tween_delta: int = get_tree().get_processed_tweens().size() - crit_tweens_before
+	_check(crit_tween_delta <= 1, "暴击 zoom punch 幅值合并：12 次暴击 ≤1 Tween（实得 %d）" % crit_tween_delta)
 	world.remove_child(hit_e)
 	hit_e.free()
+	cam.queue_free()
 
 	# 5b. 屏外判定 10Hz 节流不失效：出屏 0.5s 内 _offscreen 必须收敛为 true
 	var cull_e := slime_scene.instantiate() as EnemyBase
