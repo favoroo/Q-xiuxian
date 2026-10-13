@@ -22,7 +22,10 @@ func _run() -> void:
 
 	_check(DamageNumber._scene_root_for(world) != null, "前置：池宿主可定位到场景根")
 
-	# ---------- 1. 同种敌人共享 SpriteFrames ----------
+	# ---------- 1. 帧集共享缓存（显式构建路径） ----------
+	# 2026-10-13 起程序化敌种不再自动加载图集（AtlasSkipCheck 钉那条不变量），
+	# 所以这里不再靠「刷怪顺带建帧集」取样，改为直接走 _shared_frames 显式构建，
+	# 验的仍是同一个东西：同键共享、异键分槽、缓存命中不重建。
 	var slime_scene: PackedScene = load("res://scenes/entities/SlimeEnemy.tscn")
 	var danbao_scene: PackedScene = load("res://scenes/entities/DanBaoEnemy.tscn")
 	var e1 := slime_scene.instantiate() as EnemyBase
@@ -32,11 +35,15 @@ func _run() -> void:
 	world.add_child(e2)
 	world.add_child(e3)
 
-	var f1 := e1.anim_sprite.sprite_frames
-	var f2 := e2.anim_sprite.sprite_frames
-	var f3 := e3.anim_sprite.sprite_frames
+	# 前置反证：程序化敌种自身不该建帧集（省内存的核心，异常时这里先报红）
+	_check(e1.anim_sprite.sprite_frames == null, "前置：程序化敌人自身不建帧集")
+	_check(EnemyBase.cache_size() == 0, "前置：刷怪未顺带解码图集 (实际 %d)" % EnemyBase.cache_size())
+
+	var f1 := EnemyBase._shared_frames("res://assets/art/pawn_red_8dir.png", false)
+	var f2 := EnemyBase._shared_frames("res://assets/art/pawn_red_8dir.png", false)
+	var f3 := EnemyBase._shared_frames("res://assets/art/pawn_red_8dir.png", false)
 	_check(f1 != null and f2 != null, "敌人帧集已构建")
-	_check(f1.get_instance_id() == f2.get_instance_id(), "两只史莱姆共享同一 SpriteFrames")
+	_check(f1.get_instance_id() == f2.get_instance_id(), "同一贴图共享同一 SpriteFrames")
 	# pawn_red_8dir 同时是史莱姆与丹宝的贴图 → 也应命中同一份缓存
 	_check(f1.get_instance_id() == f3.get_instance_id(), "同贴图的不同怪种也共享帧集")
 	_check(EnemyBase.cache_size() == 1, "一张图只缓存一份 (实际 %d)" % EnemyBase.cache_size())

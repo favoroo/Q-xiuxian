@@ -16,10 +16,8 @@ var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
 
 func _ready() -> void:
-	# 锁 60 帧（2026-10-11 性能优化）：不限帧时满载设备长时间发热降频反而更卡，
-	# 且 120Hz 屏全速渲染徒增功耗。headless 判据依赖稳定帧节奏（time_scale 竞态余量），跳过。
-	if DisplayServer.get_name() != "headless":
-		Engine.max_fps = 60
+	# 依从显示驱动与原生垂直同步节奏，避免 Engine.max_fps 触发 OS 级线程休眠与 time_scale 顿帧相位冲突导致交换链丢帧
+	Engine.max_fps = 0
 	GameManager.reset_run()
 	GameManager.joystick = joystick
 	_setup_atmosphere()
@@ -219,16 +217,24 @@ func _process(delta: float) -> void:
 		if petal_particles != null:
 			petal_particles.global_position = p_pos
 
-		# 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
-		var p = GameManager.player
-		if bool(SettingsManager.get_val(&"display", &"screen_flash", true)) and p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28:
-			_low_hp_phase += delta * 4.5
-			var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
-			if vignette_rect != null and vignette_rect.material is ShaderMaterial:
-				var mat = vignette_rect.material as ShaderMaterial
-				if _vignette_tween == null or not _vignette_tween.is_valid():
-					mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
-					mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
+			# 濒死血量警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
+			var p = GameManager.player
+			var in_low_hp: bool = bool(SettingsManager.get_val(&"display", &"screen_flash", true)) and p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28
+			if in_low_hp:
+				_low_hp_phase += delta * 4.5
+				var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
+				if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+					var mat = vignette_rect.material as ShaderMaterial
+					if _vignette_tween == null or not _vignette_tween.is_valid():
+						mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
+						mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
+			elif _low_hp_phase > 0.0:
+				_low_hp_phase = 0.0
+				if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+					var mat = vignette_rect.material as ShaderMaterial
+					if _vignette_tween == null or not _vignette_tween.is_valid():
+						mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
+						mat.set_shader_parameter("vignette_opacity", 0.5)
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if not bool(SettingsManager.get_val(&"display", &"screen_flash", true)):

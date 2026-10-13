@@ -249,27 +249,56 @@ func _act_yulu() -> void:
 			DamageNumber.spawn(scene_parent, target.global_position + Vector2(0, -22), int(gained), false, "+" + str(int(gained)))
 		AudioManager.play_sfx("heal", 0.4, 1.25)
 
-## 灵风貂：磁吸掉落物
+## 灵风貂：罡风卷定 —— 把风涡半径内的敌人卷到玩家身前的定身环并钉住
+## 落环沿索敌椭圆（x:MELEE_RING, y:×0.65）：卷定的目标就是「被近战自动锁到」，
+## 圆环会在正上/正下方骗过椭圆索敌（长剑竖向有效距离 120÷0.65≈185>125 打不了）。
+## 与磐石猿（外推解围）配成「推/拉」一对控制。
 func _act_fengdiao() -> void:
-	var radius := BalanceSpiritPet.magnet_radius(GameManager.pet_effect_mult)
-	var gems := get_tree().get_nodes_in_group("gems")
-	var pulled: int = 0
-	for g in gems:
-		if not is_instance_valid(g) or not (g is Node2D):
+	if target == null or not is_instance_valid(target):
+		return
+	var radius := BalanceSpiritPet.vortex_radius(GameManager.pet_effect_mult)
+	var radius_sq := radius * radius
+	var dmg := BalanceSpiritPet.vortex_damage(GameManager.wave_number, GameManager.pet_damage_mult)
+	var scene_parent: Node = get_parent()
+	var affected: int = 0
+	for e in GameManager.live_enemies:
+		if not is_instance_valid(e) or not (e is EnemyBase):
 			continue
-		var n2d := g as Node2D
-		if global_position.distance_to(n2d.global_position) <= radius:
-			if g.has_method("magnet_to") and target != null:
-				g.magnet_to(target)
-				pulled += 1
-	if pulled > 0:
+		var en := e as EnemyBase
+		if en.dying:
+			continue
+		var diff := en.global_position - target.global_position
+		var dist_sq := diff.length_squared()
+		if dist_sq > radius_sq:
+			continue
+		# 收拢沿径向：环外往内卷、贴脸的往外送到环（风涡眼），12px 死区内只定不挪
+		var dist := sqrt(dist_sq)
+		var out_dir := diff / dist if dist > 0.001 else Vector2.DOWN
+		var ring_pt := Vector2(out_dir.x, out_dir.y * GameBalance.TARGETING_ELLIPSE_Y_RATIO) * BalanceSpiritPet.MELEE_RING
+		var pull_vec := target.global_position + ring_pt - en.global_position
+		var travel := pull_vec.length()
+		# 牵引/定身的抗性折扣与 take_damage 击退同一把尺：精英 0.55，Boss 位移 0.18 / 钉身 ×0.25
+		var is_boss := en is BossEnemy
+		var elite_scale := 0.55 if en.is_elite else 1.0
+		if travel > 12.0:
+			pull_vec = pull_vec.normalized() * BalanceSpiritPet.pull_impulse(travel) * elite_scale * (GameBalance.BOSS_KNOCKBACK_RESIST if is_boss else 1.0)
+		else:
+			pull_vec = Vector2.ZERO
+		# 先伤害后卷定：take_damage 传零击退会把 knockback_velocity 清零，顺序反了就卷不动
+		en.take_damage(dmg, Vector2.ZERO)
+		en.apply_vortex_pin(pull_vec, BalanceSpiritPet.pin_duration(elite_scale * en.hit_stun_resist * (0.25 if is_boss else 1.0)))
+		affected += 1
+		# 「定」飘字限量：满屏小怪被卷时防字海，口径同玄甲龟「抵挡」
+		if affected <= 6 and scene_parent != null:
+			DamageNumber.spawn(scene_parent, en.global_position + Vector2(0, -14), 0, false, "定")
+	if affected > 0:
 		pulse_trigger_fx(Vector2(1.25, 1.25), 0.15)
 		_spin_angle = TAU * 2.0  # 旋转 720 度呼啸而过
 		_custom_fx_type = "wind_vortex"
-		var scene_parent: Node = get_parent()
 		if is_inside_tree() and scene_parent != null:
-			JuiceEffect.spawn_shockwave(scene_parent, global_position, radius * 0.45, Color(0.85, 0.92, 1.0, 0.75), 0.3)
-		AudioManager.play_sfx("gem_pickup", 0.35, 1.25)
+			# 光环画在玩家位置、半径=定身环横轴：怪被卷到哪一圈，光就亮哪一圈
+			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, BalanceSpiritPet.MELEE_RING, Color(0.85, 0.92, 1.0, 0.75), 0.3)
+		AudioManager.play_sfx("fan_gust", 0.5, 0.85)
 
 ## 磐石猿：击退与震击
 func _act_shiyuan() -> void:

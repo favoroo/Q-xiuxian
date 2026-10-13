@@ -148,17 +148,25 @@ func _ready() -> void:
 		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
 	anim_base_scale = anim_sprite.scale
-	if spritesheet_path != "" and ResourceLoader.exists(spritesheet_path):
-		_setup_frames(spritesheet_path)
-	else:
-		if anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
-			anim_sprite.play("idle")
-
 	var eid := enemy_id
 	if eid.is_empty():
 		eid = _deduce_enemy_id()
 	_eid = eid
-	_init_procedural_view(eid)
+	# 程序化矢量视图先装配 —— 它决定图集还要不要加载（见下）
+	var has_procedural: bool = _init_procedural_view(eid)
+
+	# 图集腿帧只在「没有程序化配置」时才加载。EnemyVisualConfig.get_config 对全部敌种
+	# 都有配置（含 _ 兜底分支），所以当前一只怪都不会走这里：20 张 960×960 图集解码后
+	# 单张 3.5MB、合计约 70MB 常驻，是全项目最大的一块内存/显存开销，而屏上角色实际
+	# 只有约 121px（192px 格 × 0.63 缩放）。spritesheet_path 与 _setup_frames 保留为兜底。
+	# 注意：anim_sprite 节点不能删 —— 它不再是渲染器，而是 RunMotion 的形变状态载体
+	# （步态/悬浮/蠕动的 scale·rotation·offset 写在它身上，再由 _update_facing_and_anim
+	# 转发给 procedural_view），LingYi/JinChan 无图集却动画正常即是这条路径的现成反证。
+	if not has_procedural:
+		if spritesheet_path != "" and ResourceLoader.exists(spritesheet_path):
+			_setup_frames(spritesheet_path)
+		elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
+			anim_sprite.play("idle")
 
 	# 妖物出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
@@ -221,20 +229,25 @@ func _deduce_enemy_id() -> String:
 		return "jinchan"
 	return "slime"
 
-func _init_procedural_view(eid: String) -> void:
+## 装配程序化矢量视图。返回 true = 已挂上渲染器（调用方据此跳过图集加载）。
+## EnemyVisualConfig.get_config 对全部敌种都有配置（含 _ 兜底），当前恒返回 true。
+func _init_procedural_view(eid: String) -> bool:
 	if procedural_view != null:
 		procedural_view.queue_free()
 	procedural_view = ProceduralEnemyView.new()
 	var is_boss_enemy: bool = (eid == "boss" or self.get("final_boss") != null)
 	var is_final: bool = bool(self.get("final_boss")) if self.get("final_boss") != null else false
 	procedural_view.setup(eid, is_elite, is_boss_enemy, is_final)
-	if anim_sprite != null:
+	var ok: bool = procedural_view.config != null
+	if anim_sprite != null and ok:
+		# 只在确实有矢量外观时才藏旧精灵 —— 否则「图集没加载 + 精灵被藏」= 场上出现隐形怪
 		anim_sprite.visible = false
 		procedural_view.position = anim_sprite.position
 		procedural_view.scale = anim_sprite.scale
 		if hit_flash_mat != null:
 			procedural_view.material = hit_flash_mat
 	add_child(procedural_view)
+	return ok
 
 ## 同种敌人的帧集合逐字节相同，按「贴图路径|是否精英」缓存：
 ## 原先每只敌人在 _ready 里新建一套 SpriteFrames + 8 方向 ×6 帧 AtlasTexture，
@@ -538,14 +551,15 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			if _bite_active <= 0.0:
 				_clear_bite_warning()
 
-		# 空闲：冷却到 + 跑道够 → 长扑预警
-		elif charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq:
+		# 空闲：冷却到 + 跑道够 → 长扑预警（硬直中不起手：预警/起跳是冲刺的蓄力段，
+		# 被钉着还起手，后续 _bite_active/_start_charge 会从硬直滑行分支夺走位移，「定身」成空话）
+		if charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq and not _pp_stun:
 			_charge_timer = charge_interval
 			_charge_windup = charge_windup_time
 
-		# 空闲：冷却到 + 玩家已贴进 bite_range → 短咬下蹲
+		# 空闲：冷却到 + 玩家已贴进 bite_range → 短咬下蹲（同样只挡「起手」，不夺已承诺段）
 		# （bite_range 与 charge_min_range 取同值 ⇒ 两带互补，中间不留"谁都不出手"的缝）
-		elif bite_range > 0.0 and _bite_timer <= 0.0 and dist_sq > 16.0 and dist_sq <= bite_range * bite_range:
+		elif bite_range > 0.0 and _bite_timer <= 0.0 and dist_sq > 16.0 and dist_sq <= bite_range * bite_range and not _pp_stun:
 			_bite_timer = bite_interval
 			_bite_windup = bite_windup_time
 			_bite_dir = dir
@@ -718,16 +732,21 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		# 蠕动：贴地行进波（scale 伸缩），无悬浮无前倾
 		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
 		RunMotion.apply_slither(anim_sprite, current_base, is_moving, delta, speed_ratio, shadow_sprite)
-	elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing):
-		if is_moving:
+	else:
+		# 步态腿帧：有图集才切腿帧；程序化敌种没有帧集，但形变链路照走
+		#（RunMotion.apply 对 null 帧集内部按 4 帧 / 10fps 默认推进步态相位）
+		var has_run_frames := anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing)
+		if has_run_frames and is_moving:
 			var run_anim: String = "run_" + facing
 			RunMotion.select_anim(anim_sprite, run_anim, true)
 			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
-		else:
+		elif has_run_frames:
 			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
 			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, 0.0, shadow_sprite)
-	else:
-		RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
+		elif is_moving:
+			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
+		else:
+			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
 
 	# 3.5 同步程序化矢量视图
 	if procedural_view != null:
@@ -829,12 +848,12 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			_hit_tilt = -knockback.normalized().x * deg_to_rad(14.0)
 
 	# 1. 声音与震动（分层听觉：入肉撕裂+低频下潜 + 肉眼可见的方向性顿挫冲击）
-	if is_crit:
-		if not from_dot:
-			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
-			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
-		GameManager.hit_stop(0.04, 0.08)
-		GameManager.kick_camera(knockback, 6.5)
+		if is_crit:
+			if not from_dot:
+				AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
+				AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
+			GameManager.crit_hit_stop()
+			GameManager.kick_camera(knockback, 6.5)
 		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
 		# 暴击从「只冲不摇」升级为可见摇晃：普通暴击也发一笔小额创伤（走每秒预算，稳态不变）
 		if is_elite:
@@ -883,8 +902,8 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
 
 	if lethal:
-		# 斩杀加成：致命一刀击退放大（尸体随击杀反馈朝打击方向飞出）
-		knockback_velocity *= GameBalance.KILL_KNOCKBACK_MULT
+		# 致命一刀不做任何位移：knockback_velocity 只作死亡镜头反馈的方向读数，
+		# 精英 kick_camera / 小怪 micro_kick 内部都只 normalized() 取方向，不读模长。
 		# 暴击击杀特写：更实的独立顿帧 + 一记缩放冲击（2026-10-11；爆散规模放大于 2026-10-12 随爆散下线移除）
 		_death_crit_kill = is_crit and not from_dot
 		if _death_crit_kill:
@@ -934,6 +953,31 @@ func apply_poison(dps: float, duration: float) -> void:
 	var active_dps: float = poison_dps if poison_timer > 0.0 else 0.0
 	poison_dps = GameBalance.stack_poison_dps(active_dps, dps)
 	poison_timer = maxf(poison_timer, duration)
+
+## 施加【罡风卷定】（灵兽·灵风貂）：牵引初速 + 钉身 + 吹散在途扑咬蓄力。
+## 位移复用受击硬直滑行段（_resolve_velocity：velocity = knockback_velocity 后按
+## KNOCKBACK_DECAY_STUN 指数急刹），调用方用 BalanceSpiritPet.pull_impulse 反解出
+## 「恰好刹停在定身环」的初速，本函数不再过 take_damage 的击退限速（那是武器刀的尺子，
+## 卷位移的目标是到环，不是推多远）。伤害由调用方另走 take_damage（复用飘字/集火保护）。
+## 长扑承诺段不夺（项目口径：冲刺一旦起步 commit-through，wolf_ai_check 判据在守）；
+## 但预警站桩与短咬起跳直接吹散 —— 挂着「定身」还把人扑出去咬一口，文案就是假的。
+## 哨兵注意：_charge_windup/_bite_windup 的「不在该阶段」是 -1.0 而不是 0.0，
+## 写 0.0 会让本帧末的预警到点分支照常发射。冷却无需重置：进蓄力时 _charge_timer/
+## _bite_timer 已按整周期回满，吹散不会导致立刻再扑。
+func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
+	if dying:
+		return
+	hit_stun_timer = maxf(hit_stun_timer, pin_sec)
+	knockback_velocity = pull_velocity
+	if _charge_windup > 0.0:
+		_charge_windup = -1.0
+		_clear_charge_warning()
+	if _bite_windup > 0.0:
+		_bite_windup = -1.0
+		_clear_bite_warning()
+	if _bite_active > 0.0:
+		_bite_active = 0.0
+		_clear_bite_warning()
 
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
 # ---------------- 行为支路：自爆 ----------------
@@ -1122,8 +1166,13 @@ func _teleport_near_player(player: Node2D) -> void:
 	play_squash(Vector2(1.3, 0.7), 0.2)
 	AudioManager.play_sfx("enemy_blink", 0.8)   ## 妖异残影是「下坠」，不许借玩家缩地成寸的 dodge
 
-## 闪现残影：在旧位置生成一个本体当前帧的半透明剪影，快速淡出（区别于命中火花）
+## 闪现残影：在旧位置生成一个本体的半透明剪影，快速淡出（区别于命中火花）
+## 程序化视图走矢量剪影（复用同一份 EnemyVisualConfig）；无程序化配置才回退图集帧。
+## 2026-10-13：图集在程序化敌种下不再加载，这条回退分支当前不会命中，保留为兜底。
 func _spawn_teleport_ghost() -> void:
+	if procedural_view != null and procedural_view.config != null:
+		_spawn_vector_ghost()
+		return
 	if anim_sprite == null or anim_sprite.sprite_frames == null:
 		return
 	var tex := anim_sprite.sprite_frames.get_frame_texture(anim_sprite.animation, anim_sprite.frame)
@@ -1135,6 +1184,26 @@ func _spawn_teleport_ghost() -> void:
 	ghost.flip_h = anim_sprite.flip_h
 	ghost.offset = anim_sprite.offset
 	ghost.scale = anim_sprite.global_scale
+	ghost.z_index = anim_sprite.z_index
+	ghost.modulate = Color(0.55, 0.75, 1.0, 0.5)
+	get_parent().add_child(ghost)
+	var tw := ghost.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
+	tw.chain().tween_callback(ghost.queue_free)
+
+## 矢量残影：复制本体当前姿态的渲染器，染成妖异蓝后淡出。
+## 不继承受击闪白材质（残影要的是剪影，不是再闪一下）。
+func _spawn_vector_ghost() -> void:
+	var ghost := HollowKnightEnemyRenderer.new()
+	ghost.config = procedural_view.config
+	ghost.facing = procedural_view.facing
+	ghost.flip_h = procedural_view.flip_h
+	ghost.is_moving = procedural_view.is_moving
+	ghost.speed_ratio = procedural_view.speed_ratio
+	ghost.position = position
+	ghost.scale = procedural_view.scale
 	ghost.z_index = anim_sprite.z_index
 	ghost.modulate = Color(0.55, 0.75, 1.0, 0.5)
 	get_parent().add_child(ghost)
@@ -1293,7 +1362,7 @@ func _die() -> void:
 			GameManager.feedback(GameManager.FeedbackTier.LARGE)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		# 普通妖物死亡给一记沿击飞方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
+		# 普通妖物死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
 		GameFeel.micro_kick(GameManager, knockback_velocity, 2.5)
 		AudioManager.play_sfx("enemy_death", 0.90)
 
@@ -1347,11 +1416,16 @@ func _die() -> void:
 	set_physics_process(false)
 	$CollisionShape2D.set_deferred("disabled", true)
 	$Hurtbox/CollisionShape2D.set_deferred("disabled", true)
-	# 尸体停帧后 _tick_hit_fx 不再跑：闪白与挤压就地归位，别让尸体挂着半截闪白消散
+	# 尸体停帧后 _tick_hit_fx / _tick_hit_visuals 都不再跑：闪白、挤压、受击微反冲一律就地归位，
+	# 别让尸体挂着半截闪白或歪着半格消散
 	_squash_t = 0.0
 	juice_scale = Vector2.ONE
 	_flash_t = 0.0
 	_flash_swap_t = 0.0
+	_hit_jiggle_offset = Vector2.ZERO
+	anim_sprite.position = Vector2.ZERO
+	if procedural_view != null:
+		procedural_view.position = Vector2.ZERO
 	if hit_flash_mat != null:
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 
@@ -1368,11 +1442,6 @@ func _die() -> void:
 		if procedural_view != null:
 			tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 			tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
-		# 斩杀击飞：尸体沿致命一刀的击退方向滑出（与塌缩淡出同拍；DoT 跳死无击退自然不动）
-		var launch := knockback_velocity * GameBalance.KILL_LAUNCH_DURATION
-		if launch.length() > GameBalance.KILL_LAUNCH_MAX:
-			launch = launch.normalized() * GameBalance.KILL_LAUNCH_MAX
-		if launch.length_squared() > 1.0:
-			tw.tween_property(self, "global_position", global_position + launch, GameBalance.KILL_LAUNCH_DURATION)\
-				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
+		# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
 		tw.chain().tween_callback(queue_free)

@@ -23,7 +23,13 @@ extends Node
 ## 几十分钟，跑前先关 hit_stop 设置项（auto_save=false，不落盘）。
 
 const EPS := 0.0001
-const SPAWN_AT := Vector2(260.0, 270.0)   ## 视口内且远离右边界（480）：冲击波不被视口丢弃，怪也不被界碑 clamp 弹回
+## 摆位受两条硬约束，改这里前先把算式核一遍：
+##   ① 视口内 —— 玩家位置就是冲击波生成点，屏外会被 _pos_in_viewport 静默丢弃，同源半径那条会假绿；
+##   ② 圈外怪（SPAWN_AT.x + BURST_RADIUS + 60）必须落在界碑收口内 —— EnemyBase._physics_process
+##      每帧 clamp 到 ±(MAP_HALF_EXTENT - 20) = ±420，越界的怪会被拖回，读成「圈外敌人动了」。
+##      旧值 260 让圈外怪落在 x=440 ⇒ 每帧被钳回 420，漂 20px 报红（v0.0.24 把 MAP_HALF_EXTENT
+##      从 500 缩到 440 时翻的车）。180 + 120 + 60 = 360，留 60px 余量。
+const SPAWN_AT := Vector2(180.0, 270.0)
 
 var _c := TestCheck.new()
 var _selftest: bool = false

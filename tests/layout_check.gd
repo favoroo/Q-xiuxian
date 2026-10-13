@@ -149,8 +149,8 @@ func _stress_hud(hud: Control) -> void:
 		hud.wave_countdown.show_as_worst_case()
 	else:
 		hud.wave_label.text = "第 20 波"
-	hud.kills_label.text = "斩妖 12847"
-	hud.shards_label.text = "灵石 99999"
+	hud.kills_label.text = "击杀 12847"
+	hud.shards_label.text = "金币 99999"
 	var box: HBoxContainer = hud.get("_synergy_box")
 	if box == null:
 		return

@@ -40,11 +40,24 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 		return
 	gm._hitstop_token += 1
 	var token: int = gm._hitstop_token
-	Engine.time_scale = target_scale
+	# 限制最低时间缩放地板为 0.12，防止极端近 0 停顿引发物理与渲染交换链丢帧/黑帧
+	Engine.time_scale = clampf(target_scale, 0.12, 1.0)
 	gm.get_tree().create_timer(duration, true, false, true).timeout.connect(func():
 		if gm._hitstop_token == token:
 			Engine.time_scale = 1.0
 	)
+
+static var _last_crit_hitstop_ms: int = 0
+const CRIT_HITSTOP_MIN_INTERVAL := 0.10
+
+## 暴击命中顿帧（限流版）：普通暴击命中顿帧走独立最小间隔闸，
+## 防止多穿透/高攻速/连击下每秒十几发暴击连续把时间轴压死。
+static func crit_hit_stop(gm: Node) -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_crit_hitstop_ms < int(CRIT_HITSTOP_MIN_INTERVAL * 1000.0):
+		return
+	_last_crit_hitstop_ms = now
+	hit_stop(gm, 0.038, 0.16)
 
 static var _last_kill_hitstop_ms: int = 0
 

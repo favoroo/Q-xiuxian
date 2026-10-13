@@ -204,9 +204,9 @@ func _deal_damage() -> void:
 				hit_elite = true
 			if is_crit:
 				had_crit = true
-	if had_crit:
-		GameManager.hit_stop(0.04, 0.06)
-	# 劈空（hits==0）提前返回：不爆散、不震屏，落点小印记由 _bloom_or_recycle 走快速收场档
+		if had_crit:
+			GameManager.crit_hit_stop()
+		# 劈空（hits==0）提前返回：不爆散、不震屏，落点小印记由 _bloom_or_recycle 走快速收场档
 	if hits == 0:
 		return
 	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档

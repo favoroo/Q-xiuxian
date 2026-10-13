@@ -11,6 +11,6 @@ void fragment() {
     float vignette = smoothstep(0.55, 1.42, dist * (1.0 + vignette_intensity));
     
     vec4 col = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(0.04, 0.05, 0.08, vignette_opacity), vignette);
-    col = mix(col, tint_color, tint_color.a);
+    col = mix(col, tint_color, tint_color.a * vignette);
     COLOR = col;
 }

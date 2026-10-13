@@ -212,7 +212,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_kills_chip")
 
 [node name="KillsLabel" type="Label" parent="TopContainer/RightBox/KillsChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_color = Color(0.949, 0.937, 0.894, 1)
 theme_override_font_sizes/font_size = 15
 text = "击杀 0"
 

@@ -81,7 +81,7 @@ func _ready() -> void:
 	GameStyle.label(level_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(time_label, 24, GameStyle.CHALK, 0, GameStyle.INK, true)
 	GameStyle.label(wave_label, 15, GameStyle.GOLD)
-	GameStyle.label(kills_label, 15, GameStyle.INK_TEXT)
+	GameStyle.label(kills_label, 15, GameStyle.PAPER)
 	GameStyle.label(shards_label, 15, GameStyle.INK_TEXT)
 	GameStyle.label(banner_label, 17, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 

@@ -997,6 +997,10 @@ func kick_camera(dir: Vector2, strength: float = 3.0) -> void:
 func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
 	GameFeel.hit_stop(self, duration, target_scale)
 
+## 暴击命中的微顿帧（GameFeel 内部限流）：防高频暴击锁死节奏
+func crit_hit_stop() -> void:
+	GameFeel.crit_hit_stop(self)
+
 ## 小怪伏诛的微顿帧（GameFeel 内部限流）：只在 EnemyBase 判定致命一刀时调用
 func kill_hit_stop() -> void:
 	GameFeel.kill_hit_stop(self)

@@ -87,11 +87,11 @@ const DEFS: Dictionary = {
 	"fengdiao": {
 		"id": "fengdiao",
 		"name": "灵风貂",
-		"role": "support",
-		"base_price": 34,
-		"base_cooldown": 7.0,
-		"base_value": 220.0, ## 磁吸半径 px
-		"desc": "每 7 秒将周围 220px 内灵髓与回复珠吸附过来",
+		"role": "control",
+		"base_price": 38,
+		"base_cooldown": 6.0,
+		"base_value": 220.0, ## 风涡半径 px（定身环半径唯一真话在 BalanceSpiritPet.MELEE_RING）
+		"desc": "每 6 秒将周围 220px 内敌人卷至身前 120px 处定身 1.5 秒",
 		"color": Color(0.85, 0.88, 0.95),      # 月白
 		"halo_color": Color(0.92, 0.94, 1.0, 0.35),
 		"decor": "mink_tail",

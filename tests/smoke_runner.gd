@@ -50,9 +50,17 @@ func _run() -> void:
 	get_tree().paused = false
 	_check(GameManager.run_started, "道统 fuzhen 开局")
 	_check(GameManager.drones.size() == 1, "符阵灵童自带 1 只★2 护蝶（分身为二具）(实际 %d)" % GameManager.drones.size())
-	var p_frame: Texture2D = GameManager.player.anim_sprite.sprite_frames.get_frame_texture("idle_s", 0)
-	var p_atlas_path: String = (p_frame as AtlasTexture).atlas.resource_path if p_frame is AtlasTexture else ""
-	_check(p_atlas_path == "res://assets/art/cultivator_fuzhen_8dir.png", "选角后玩家外观切为符阵灵童图集 (实际 %s)" % p_atlas_path)
+	# 外观切换口径（2026-10-13）：程序化道统不再加载图集，改为比对矢量配置。
+	# 取「披风外色」这一槽：fuzhen 是明朱红短披，与兜底道统 jianchi 的深邃墨绿不同，
+	# 能真正区分「换成了 fuzhen」而不是「停在默认形象」。
+	var pv = GameManager.player.procedural_view
+	_check(pv != null and pv.config != null, "选角后玩家已挂程序化外观")
+	var fuzhen_cfg := CultivatorVisualConfig.get_config("fuzhen")
+	var jianchi_cfg := CultivatorVisualConfig.get_config("jianchi")
+	var p_outer: Color = pv.config.cloak.get("col_outer", Color.BLACK) if pv != null and pv.config != null else Color.BLACK
+	_check(p_outer == fuzhen_cfg.cloak["col_outer"], "选角后玩家外观切为符阵灵童配色 (实际 %s)" % p_outer)
+	_check(p_outer != jianchi_cfg.cloak["col_outer"], "外观确实离开默认道统，未停在兜底形象")
+	_check(GameManager.player.anim_sprite.sprite_frames == null, "程序化玩家不加载八方向图集（内存优化）")
 
 	# 等第一只敌人刷出（条件达成即走，不再写死 sleep）
 	var wait_spawn := 0

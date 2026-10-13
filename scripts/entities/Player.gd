@@ -130,11 +130,16 @@ func _setup_sprite_frames() -> void:
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			procedural_view.visible = true
-	else:
-		is_procedural = false
-		anim_sprite.visible = true
-		if procedural_view != null:
-			procedural_view.visible = false
+		# 程序化角色不加载图集：全部 19 位修士都是 procedural，而每张 960×960 图集
+		# 解码后占 3.5MB，屏上实际只有约 144px（192px 格 × 0.75）。图集路径保留给
+		# 将来新增的 gait 道统 —— 那种情况下面的分支会照常构建 SpriteFrames。
+		anim_sprite.sprite_frames = null
+		return
+
+	is_procedural = false
+	anim_sprite.visible = true
+	if procedural_view != null:
+		procedural_view.visible = false
 
 	var char_sprite := String(cdef.get("sprite", ""))
 	if char_sprite != "" and ResourceLoader.exists(char_sprite):

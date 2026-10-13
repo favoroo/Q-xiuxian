@@ -22,7 +22,8 @@ func _ready() -> void:
 	var infra := UnitInfraTests.new(_c)
 	var consistency := UnitConsistencyTests.new(_c)
 	var spiritbeast := UnitSpiritBeastTests.new(_c)
-	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast]:
+	var spiritpet := UnitSpiritPetTests.new(_c)
+	for m: Node in [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast, spiritpet]:
 		add_child(m)
 
 	economy._test_exp_curve()
@@ -75,6 +76,9 @@ func _ready() -> void:
 	consistency._test_synergy_effects_text()
 	spiritbeast._test_spirit_beast_scaling()
 	spiritbeast._test_spirit_beast_constants()
+	spiritpet._test_fengdiao_vortex_formulas()
+	spiritpet._test_fengdiao_ring_geometry()
+	spiritpet._test_fengdiao_data_desc_consistency()
 	combat._test_feel_gates()
 
 	if _c.report("UNIT_RESULT"):
