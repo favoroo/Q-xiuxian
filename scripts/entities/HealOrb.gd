@@ -32,6 +32,7 @@ static var _pool: Array[HealOrb] = []
 static var _host: Node2D = null
 static var created_count: int = 0
 static var reused_count: int = 0
+static var active_count: int = 0  ## 当前在场回复珠数：HUD「宝」计数与宝石合并统计
 
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
@@ -92,6 +93,7 @@ func _ready() -> void:
 
 	_loot_renderer = ProceduralLootRenderer.new()
 	_loot_renderer.loot_type = ProceduralLootRenderer.LootType.HEAL_ORB
+	_loot_renderer.self_bob = true   ## 对齐 AstralGem：浮动交由渲染器手写 sin，不挂常驻 set_loops Tween
 	add_child(_loot_renderer)
 
 	var shape := CollisionShape2D.new()
@@ -105,12 +107,14 @@ func _ready() -> void:
 	# 且这一拍的判定不生效（实测 ProjectileProbe 被这条错误刷屏拖到 25s 超时）。
 	# 判据要量这颗判定圆的，读 _shape 引用本身（见 heal_orb_check._orb_judge_radius）。
 	add_child.call_deferred(shape)
-
+	active_count += 1
 	_start_bob()
 
 ## 出膛激活：池化后 _ready 只在首建时跑过，全部运行时状态在这里重铺
 ##（改字段签名时对照这里）。heal_amount/heal_pct 先归默认，调用方按需覆盖。
 func activate() -> void:
+	if _pooled:
+		active_count += 1
 	_pooled = false
 	visible = true
 	heal_amount = BASE_HEAL
@@ -136,6 +140,7 @@ func recycle() -> void:
 	if _pooled:
 		return
 	_pooled = true
+	active_count = maxi(0, active_count - 1)
 	target_player = null
 	_settling = false
 	if _bob_tween != null and _bob_tween.is_valid():
@@ -176,8 +181,14 @@ func _physics_process(delta: float) -> void:
 	_set_waiting(false)
 	_collect(touching)
 
-## 现在压着本珠的玩家身体（没有就 null）
+## 现在压着本珠的玩家身体（没有就 null）。
+## 先做 40px 距离平方门控（接触线仅 24px），玩家不在近旁时不调 get_overlapping_bodies()，
+## 省掉全场每颗葫芦每物理帧一次 Array 分配与物理空间查询（2026-10-13 优化）。
 func _touching_player() -> Player:
+	var p := GameManager.player
+	if p != null and is_instance_valid(p):
+		if global_position.distance_squared_to(p.global_position) > 1600.0:
+			return null
 	for body in get_overlapping_bodies():
 		if body is Player:
 			return body as Player
@@ -191,6 +202,9 @@ func settle_for_wave_end(player: Node2D) -> void:
 	_settling = true
 	target_player = player
 	current_speed = -50.0
+	if _loot_renderer != null:
+		_loot_renderer.self_bob = false
+		_loot_renderer.position.y = 0.0
 	if _bob_tween != null and _bob_tween.is_valid():
 		_bob_tween.kill()
 
@@ -249,9 +263,11 @@ func _set_waiting(value: bool) -> void:
 func _start_bob() -> void:
 	if _bob_tween != null and _bob_tween.is_valid():
 		_bob_tween.kill()
-	var target_node = _loot_renderer if _loot_renderer != null else _sprite
-	if target_node == null:
-		return
-	_bob_tween = create_tween().set_loops()
-	_bob_tween.tween_property(target_node, "position:y", -3.0, 0.45).set_trans(Tween.TRANS_SINE)
-	_bob_tween.tween_property(target_node, "position:y", 3.0, 0.45).set_trans(Tween.TRANS_SINE)
+	# 浮动已交由 ProceduralLootRenderer.self_bob 手写 sin 驱动（对齐 AstralGem），
+	# 不再每颗珠子挂一个常驻 set_loops() Tween（2026-10-13 优化）。
+	if _loot_renderer != null:
+		_loot_renderer.self_bob = true
+
+func _exit_tree() -> void:
+	if not _pooled:
+		active_count = maxi(0, active_count - 1)

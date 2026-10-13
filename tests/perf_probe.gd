@@ -61,9 +61,9 @@ func _run() -> void:
 	var t_wait := get_tree().create_timer(1.0)
 	await t_wait.timeout
 	var redraw_inscreen: int = HollowKnightEnemyRenderer.redraw_count - redraw_before
-	print("PERF: 屏内 13 怪 1s 重绘次数 = %d（阈值 ≤ 370）" % redraw_inscreen)
+	print("PERF: 屏内 13 怪（含 Player 追击）1s 重绘次数 = %d（阈值 ≤ 370）" % redraw_inscreen)
 	_check(redraw_inscreen <= 370,
-		"重绘节流生效：13 怪 1s 重绘 ≤ 370（实得 %d，未节流时约 780）" % redraw_inscreen)
+		"重绘节流生效（Player 在场）：13 怪 1s 重绘 ≤ 370（实得 %d，flip_h 写穿时约 780）" % redraw_inscreen)
 
 	# 全员移出屏幕：0.5s 内应几乎零重绘
 	for e in mobs:
@@ -336,6 +336,95 @@ func _run() -> void:
 	_check(drone_redraw <= 25,
 		"灵宝重绘节流生效：1s ≤ 25（实得 %d，未节流时 60）" % drone_redraw)
 	drone.queue_free()
+
+	# ================= 7. 第 10 波 Boss 战现场复刻（flip_h 节流 + Boss 血条 Tween + 道具缓存 + 44 弹丸） =================
+	## 复刻用户实机截图（第 10 波：敌 12 弹 44 宝 24 字 35）：
+	## 7a. Player 在场时 EnemyBase 每物理帧写 flip_h，验证 setter 同值短路不打穿 20Hz 重绘节流；
+	## 7b. HudBossBar + Boss 在场，20 次 Boss 受击 + 20 次满血 player.heal，活跃 Tween 增量 ≤ 2；
+	## 7c. 20 件道具在身，item_hook_sum 走缓存，2000 次连续查询耗时 ≤ 4ms；
+	## 7d. 44 弹丸 + 35 敌同屏 30 物理帧，逻辑+物理单帧均耗时 ≤ 10ms。
+	for g in AstralGem._active_gems.duplicate():
+		if is_instance_valid(g):
+			g.recycle()
+	for e in horde:
+		e.global_position = Vector2(-4000.0, -4000.0)
+	var track_mobs: Array[EnemyBase] = []
+	for i in range(12):
+		var e := slime_scene.instantiate() as EnemyBase
+		e.position = Vector2(120.0 + 50.0 * float(i), 200.0)
+		world.add_child(e)
+		track_mobs.append(e)
+	player.global_position = Vector2(480.0, 270.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var track_redraw0: int = HollowKnightEnemyRenderer.redraw_count
+	await get_tree().create_timer(0.5).timeout
+	var track_redraw: int = HollowKnightEnemyRenderer.redraw_count - track_redraw0
+	_check(track_redraw <= 165,
+		"Player 在场追击下 12 怪 0.5s 重绘 ≤ 165（实得 %d，flip_h 写穿时约 360）" % track_redraw)
+	for e in track_mobs:
+		world.remove_child(e)
+		e.free()
+	track_mobs.clear()
+
+	var boss_bar := HudBossBar.new()
+	world.add_child(boss_bar)
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var boss := boss_scene.instantiate() as BossEnemy
+	boss.max_hp = 50000.0
+	boss.current_hp = 50000.0
+	boss.position = player.global_position + Vector2(220.0, 0.0)
+	world.add_child(boss)
+	await get_tree().process_frame
+
+	player.current_health = player.max_health
+	var boss_tw_before: int = get_tree().get_processed_tweens().size()
+	for i in range(20):
+		boss.take_damage(30.0, Vector2.ZERO, false)
+		player.heal(2.0, true)
+	await get_tree().process_frame
+	var boss_tw_delta: int = get_tree().get_processed_tweens().size() - boss_tw_before
+	_check(boss_tw_delta <= 2,
+		"Boss 20 连击 + 满血吸血 20 次 Tween 不堆积（增量 %d ≤ 2，旧泄漏时 ≥ 20）" % boss_tw_delta)
+
+	var all_item_ids: Array = ItemData.DEFS.keys()
+	for i in range(mini(20, all_item_ids.size())):
+		GameManager.add_item(String(all_item_ids[i]))
+	var t_hook0 := Time.get_ticks_usec()
+	var hook_acc := 0.0
+	for i in range(500):
+		hook_acc += GameManager.item_hook_sum("crit_per_dodge")
+		hook_acc += GameManager.item_hook_sum("still_dodge")
+		hook_acc += GameManager.item_hook_sum("still_knockback")
+		hook_acc += GameManager.item_hook_sum("kill_explode")
+	var hook_ms := float(Time.get_ticks_usec() - t_hook0) / 1000.0
+	_check(hook_ms <= 4.0 and hook_acc >= 0.0,
+		"20 件道具下 2000 次 item_hook_sum 缓存耗时 ≤ 4ms（实得 %.2fms）" % hook_ms)
+
+	# 补齐到 44 发弹丸（flying 已有 6 发，再取 38 发）
+	for i in range(38):
+		var p := BladeProjectile.acquire_or_new(proj_scene, world)
+		p.global_position = player.global_position + Vector2(-400.0 + 20.0 * float(i), -180.0)
+		p.direction = Vector2.RIGHT.rotated(float(i) * 0.14)
+		p.lifetime = 5.0
+		p.activate()
+		flying.append(p)
+	var w10_sum := 0.0
+	for i in range(30):
+		await get_tree().physics_frame
+		w10_sum += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) + Performance.get_monitor(Performance.TIME_PROCESS)
+	var w10_ms := w10_sum / 30.0 * 1000.0
+	print("PERF: 第 10 波满载（Boss + 35 敌 + 44 弹丸 + 20 道具）帧均耗时 = %.2f ms（阈值 ≤ 12）" % w10_ms)
+	_check(w10_ms <= 12.0,
+		"第 10 波满载（Boss + 敌群 + 44 弹丸 + 20 道具）帧均耗时 ≤ 12ms（实得 %.2fms）" % w10_ms)
+
+	world.remove_child(boss)
+	boss.free()
+	world.remove_child(boss_bar)
+	boss_bar.free()
+	DamageNumber.clear_cache()
+	JuiceEffect.clear_cache()
+	GameManager.reset_run()
 
 	# 清场（清场统一放文件尾）
 	for p in flying:

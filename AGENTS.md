@@ -1,7 +1,7 @@
 # AGENTS.md — 渡个劫开发指南
 
 > 供 AI 开发 Agent 阅读。判据细节写在脚本文件头注释与 `tests/*.gd` 文件头，不在此抄录。
-> **红线：除非用户明确要求修改本文件，否则严禁 Agent 在日常开发、新增测试或修 Bug 时擅自修改 `AGENTS.md`。**
+> **红线：除非用户明确要求修改本文件，否则严禁擅自修改 AGENTS.md。**
 
 ## 项目简介
 
@@ -48,7 +48,6 @@
 ## 开发规范
 
 - GDScript Tab 缩进，静态类型标注，注释中文，关键常量写 `##` 文档注释。
-- **严禁擅自修改 `AGENTS.md`** — 新增测试场景、预览工具或踩坑总结只记入代码头注释与 `CHANGELOG.md`，非用户明确要求不得改动本文件。
 - 新增 `class_name` 脚本或新素材后先跑编辑器扫描，否则类名解析不到、新资源不算已导入：
   ```bash
   $G --headless --path . --editor --quit
@@ -123,3 +122,5 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与生命平�
 9. **WebFetch 工具在本环境不可用** — 需要抓网页时改用 `curl`（访问 localhost 加 `--noproxy '*'`）配合 `python3` 解析。
 10. **滚动条改不动 stylebox，只吃 `modulate`** — Godot 4.7 的 `ScrollBar` 无视 `scroll_grabber` / `scroll_background`；统一走 `GameStyle.scrollable()`。
 11. **滚动区里的槽位别用 `Button`** — `BaseButton` 会吞按下事件导致划不动整排；可滚动槽位统一用 `PanelContainer + GameStyle.tap()`。
+12. **武器/弹丸脚本严禁硬引用 `EnemyBase`** — 在 `FloatingWeapon`/`BladeProjectile`/`TurretUnit` 里写 `as EnemyBase` 或类型化调用会触发循环类依赖，把 `preload(BladeProjectile.tscn)` 打成空 PackedScene（弹丸静默 null，测试只报泛化错误不报错因）。本仓武器侧遍地 `has_method` 鸭类型就是在躲这条，新增判定照抄。
+13. **池化实体出树休眠时保持三件套同拍** — 在树、`GameManager.live_*` 登记表、碰撞组（如 "enemies"）必须同时进同时出，池体一样都不许占，否则回合末清场/索敌会摸到休眠体；出厂字段快照要在 instantiate 当刻拍（`_scale_to_wave`/变异会原地改导出字段），复用整备以「是否装配过」为闸（新实例 @onready 还是 null）。

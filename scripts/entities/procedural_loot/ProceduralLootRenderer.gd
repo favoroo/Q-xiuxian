@@ -28,12 +28,16 @@ static var redraw_count: int = 0
 
 @export var loot_type: LootType = LootType.GEM_BLUE:
 	set(val):
+		if val == loot_type:
+			return
 		loot_type = val
 		_dirty = true
 
 ## 灵玉状态：true 时为满血待命灰相
 @export var is_waiting: bool = false:
 	set(val):
+		if val == is_waiting:
+			return
 		is_waiting = val
 		_dirty = true
 

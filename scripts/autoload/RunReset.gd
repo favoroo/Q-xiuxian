@@ -141,6 +141,8 @@ static func reset(gm: Node) -> void:
 	gm.alloc_reroll_free_left = 0
 	gm.items = []
 	gm._still_cache_valid = false
+	gm._hook_cache.clear()
+	gm._hook_cache_items_size = -1
 	gm.items_bought = []
 	gm.pets = []
 	gm.pet_slots_bonus = 0

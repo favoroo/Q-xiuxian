@@ -368,9 +368,12 @@ var alloc_reroll_free_left: int = 0
 
 ## 已持有道具（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
-## has_still_mechanic 缓存：结果只在道具变化时变，每物理帧调一次不重算 6 次 item_hook_sum
+## has_still_mechanic 与 item_hook_sum 缓存：结果只在道具变化时变，
+## 每物理帧/每命中不重复 O(items) 全表扫描（2026-10-13 掉帧根因之一）
 var _still_cache_valid: bool = false
 var _still_cached: bool = false
+var _hook_cache: Dictionary = {}
+var _hook_cache_items_size: int = -1
 ## 本局购入（或被玉匣送过）的道具 id 账本：出售后 items 里没了这一件，但 unique 道具的
 ## 「每局限购一件」不许因为退货就解禁 —— 详情卡上「出售后本局不再出现」由这里兑现。
 var items_bought: Array = []
@@ -748,6 +751,7 @@ func add_item(item_id: String) -> bool:
 		items_bought.append(item_id)
 	items.append(item_id)
 	_still_cache_valid = false
+	_hook_cache.clear()
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	return true
 
@@ -771,6 +775,7 @@ func sell_item(item_id: String) -> bool:
 		return false
 	items.remove_at(i)
 	_still_cache_valid = false
+	_hook_cache.clear()
 	# 图鉴种数账本（收藏家）：卖掉最后一件同种，种数 −1（与 consume_item 同一条回退）
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)
@@ -803,16 +808,25 @@ func consume_item(item_id: String) -> bool:
 		return false
 	items.remove_at(i)
 	_still_cache_valid = false
+	_hook_cache.clear()
 	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种道具，种数 -1
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)
 	return true
 
-## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）
+## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）。
+## 走 _hook_cache 避免每次弹丸命中 3~4 次 O(items) 全表扫描；items 增删时失效，
+## 另对 items.size() 兜底以兼容测试里直接 items.clear() 的写法。
 func item_hook_sum(hook: String) -> float:
+	if items.size() != _hook_cache_items_size:
+		_hook_cache.clear()
+		_hook_cache_items_size = items.size()
+	if _hook_cache.has(hook):
+		return float(_hook_cache[hook])
 	var total := 0.0
 	for item_id in items:
 		total += float(ItemData.get_def(item_id).get(hook, 0.0))
+	_hook_cache[hook] = total
 	return total
 
 ## 替死傀儡：致死一击时消耗它免死并回半血。Player.take_damage 在扣血归零后调用

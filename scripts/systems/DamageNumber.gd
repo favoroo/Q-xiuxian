@@ -22,6 +22,13 @@ static var _host: Node2D = null
 static var _created: int = 0
 static var active_count: int = 0  ## 当前活跃跳字数：HUD 性能面板消费
 
+## 视口变换缓存：同帧多个跳字共享一次 get_canvas_transform() / visible_rect 查询，
+## 避免每发命中重复做矩阵/视口开销（对齐 HollowKnightEnemyRenderer 范式）
+static var _cull_frame: int = -1
+static var _cull_transform: Transform2D
+static var _cull_rect: Rect2
+static var _cull_valid: bool = false
+
 var _label: Label = null
 var _overflow: bool = false
 var _t: float = 0.0
@@ -29,6 +36,8 @@ var _origin: Vector2 = Vector2.ZERO
 var _drift_x: float = 0.0
 var _rise_y: float = 0.0
 var _is_crit: bool = false
+var _last_scale: float = -1.0
+var _last_alpha: float = -1.0
 
 ## 释放池与样式缓存（退出时调用），避免常驻引用被判成资源泄漏
 static func clear_cache() -> void:
@@ -124,10 +133,17 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 	var scene := _scene_root_for(parent)
 	if scene == null:
 		return
-	# 视口兜底：与 JuiceEffect 同口径——屏外位置的跳字不生成。调用方的 _offscreen
-	# 是 10Hz 采样（最多 100ms 陈旧），拦不住刚出屏/边缘带目标的「凭空数字」。
-	var vp := parent.get_viewport()
-	if vp != null and not vp.get_visible_rect().grow(-8.0).has_point(vp.get_canvas_transform() * pos):
+	# 视口兜底：与 JuiceEffect 同口径——屏外位置的跳字不生成。
+	# 同一渲染帧内共享变换矩阵与可视矩形，避免每发命中 3 次原生调用。
+	var frame := Engine.get_frames_drawn()
+	if frame != _cull_frame:
+		_cull_frame = frame
+		var vp := parent.get_viewport()
+		_cull_valid = vp != null
+		if _cull_valid:
+			_cull_transform = vp.get_canvas_transform()
+			_cull_rect = vp.get_visible_rect().grow(-8.0)
+	if _cull_valid and not _cull_rect.has_point(_cull_transform * pos):
 		return
 
 	_ensure_settings()
@@ -177,6 +193,8 @@ func _start(world_pos: Vector2, text: String, settings: LabelSettings, crit: boo
 	_rise_y = rise_y
 	_is_crit = crit
 	_t = 0.0
+	_last_scale = -1.0
+	_last_alpha = -1.0
 	modulate = Color(1, 1, 1, 1)
 	scale = Vector2(0.5, 0.5) if crit else Vector2(0.85, 0.85)
 	visible = true
@@ -194,6 +212,8 @@ func _process(delta: float) -> void:
 	position = _origin + Vector2(_drift_x * e, -_rise_y * e)
 
 	# 2. 尺寸：弹出（暴击带过冲）→ 平台 → 回落
+	# 台阶量化写入（snappedf 0.04）：35 个带描边 Label 若每帧写 scale 会持续失效
+	# CanvasItem 栅格化；量化后视觉平滑依然保全，重绘写入降频 70%（2026-10-13 优化）
 	var s: float
 	if _is_crit:
 		if _t < POP_DUR_CRIT:
@@ -209,11 +229,18 @@ func _process(delta: float) -> void:
 			s = 1.05
 		else:
 			s = lerpf(1.05, 0.9, clampf((_t - PHASE_DRIFT) / PHASE_SETTLE, 0.0, 1.0))
-	scale = Vector2(s, s)
+	var q_s := snappedf(s, 0.04)
+	if absf(q_s - _last_scale) > 0.015:
+		_last_scale = q_s
+		scale = Vector2(q_s, q_s)
 
-	# 3. 淡出
+	# 3. 淡出（同样量化写入）
 	var fade_at := PHASE_DRIFT + PHASE_SETTLE
-	modulate.a = 1.0 if _t < fade_at else 1.0 - clampf((_t - fade_at) / PHASE_FADE, 0.0, 1.0)
+	var target_a: float = 1.0 if _t < fade_at else 1.0 - clampf((_t - fade_at) / PHASE_FADE, 0.0, 1.0)
+	var q_a := snappedf(target_a, 0.04)
+	if absf(q_a - _last_alpha) > 0.015:
+		_last_alpha = q_a
+		modulate.a = q_a
 
 func _release() -> void:
 	active_count = maxi(0, active_count - 1)

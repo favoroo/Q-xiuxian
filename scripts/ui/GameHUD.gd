@@ -42,6 +42,9 @@ var wave_countdown: HudWaveCountdown = null
 var _lv_tween: Tween = null
 var _lv_label_tween: Tween = null
 var _flash_tween: Tween = null
+var _hp_tween: Tween = null     ## 血条补间持久句柄：命中/吸血每帧都可能发信号，局部 tween 不 kill 会堆积（2026-10-13 掉帧根因）
+var _exp_tween: Tween = null    ## 经验条补间持久句柄：拾宝连发同因
+var _banner_tween: Tween = null ## 横幅补间持久句柄
 ## 徽记底色要动，但场景 stylebox 是共享资源 ⇒ 首次升级时换成私有副本再动色
 var _lv_badge_style: StyleBoxFlat = null
 var _lv_badge_base_bg := Color(0, 0, 0, 0)
@@ -326,8 +329,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v
-	var tw = create_tween()
-	tw.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if _hp_tween != null and _hp_tween.is_valid():
+		_hp_tween.kill()
+	_hp_tween = create_tween()
+	_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	hp_label.text = str(int(cur)) + "/" + str(int(max_v))
 	var low := GameBalance.hp_is_low(cur, max_v)
 	hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
@@ -378,8 +383,10 @@ func _on_leveled_up(_lvl: int) -> void:
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target
-	var tw = create_tween()
-	tw.tween_property(exp_bar, "value", float(cur), 0.12)
+	if _exp_tween != null and _exp_tween.is_valid():
+		_exp_tween.kill()
+	_exp_tween = create_tween()
+	_exp_tween.tween_property(exp_bar, "value", float(cur), 0.12)
 	level_label.text = "Lv." + str(lvl)
 
 func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
@@ -447,7 +454,10 @@ func _on_weapons_updated(weapons: Array) -> void:
 func show_announcement(msg: String) -> void:
 	banner_label.text = msg
 	banner.pivot_offset = banner.size / 2.0
-	var tw = create_tween()
+	if _banner_tween != null and _banner_tween.is_valid():
+		_banner_tween.kill()
+	_banner_tween = create_tween()
+	var tw := _banner_tween
 	tw.tween_property(banner, "modulate:a", 1.0, 0.18)
 	tw.parallel().tween_property(banner, "scale", Vector2(1.08, 1.08), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(banner, "scale", Vector2.ONE, 0.1)

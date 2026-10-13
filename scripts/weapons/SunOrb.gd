@@ -110,16 +110,30 @@ func _apply_star_visuals() -> void:
 ## 而伤害独立冷却下限 80ms —— 不会漏掉任何一次本该发生的结算。
 const POLL_INTERVAL := 0.066
 var _poll_timer: float = 0.0
+var _cached_stat_bonus: float = 0.0
+var _cached_multi_mult: float = 1.0
+var _dmg_cache_valid: bool = false
+
+func _refresh_dmg_cache() -> void:
+	_cached_stat_bonus = GameManager.get_weapon_stat_bonus(drone_id, star) / float(orb_count)
+	_cached_multi_mult = GameManager.get_multi_weapon_damage_mult()
+	_dmg_cache_valid = true
 
 func _physics_process(delta: float) -> void:
 	_poll_timer -= delta
 	if _poll_timer > 0.0:
 		return
 	_poll_timer = POLL_INTERVAL
-	for area in get_overlapping_areas():
+	var areas := get_overlapping_areas()
+	if areas.is_empty():
+		return
+	_refresh_dmg_cache()
+	for area in areas:
 		_try_damage(area)
 
 func _on_area_entered(area: Area2D) -> void:
+	if not _dmg_cache_valid:
+		_refresh_dmg_cache()
 	_try_damage(area)
 
 func _try_damage(area: Area2D) -> void:
@@ -138,11 +152,12 @@ func _try_damage(area: Area2D) -> void:
 				if now - int(_hit_ms[k]) >= cd_ms:
 					_hit_ms.erase(k)
 		var def := WeaponData.get_def(drone_id)
-		var stat_bonus := GameManager.get_weapon_stat_bonus(drone_id, star) / float(orb_count)
-		var total_base := base_damage + stat_bonus
+		if not _dmg_cache_valid:
+			_refresh_dmg_cache()
+		var total_base := base_damage + _cached_stat_bonus
 		var is_crit: bool = GameManager.roll_crit()
 		var crit_m := GameManager.crit_mult + GameManager.synergy_crit_mult
-		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * GameManager.get_multi_weapon_damage_mult() * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
+		var dmg = total_base * GameManager.weapon_damage_mult * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)
@@ -158,10 +173,10 @@ func _try_damage(area: Area2D) -> void:
 		_play_hit_pulse()
 		AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.0)
 
-## 触敌反馈：道具扑闪一下（压扁弹回 + 亮闪）
+## 触敌反馈：道具扑闪一下（压扁弹回 + 亮闪）；0.16s 内连扫多敌不重复分配 Tween
 func _play_hit_pulse() -> void:
-	if _pulse_tween != null and _pulse_tween.is_valid():
-		_pulse_tween.kill()
+	if _pulse_tween != null and _pulse_tween.is_running():
+		return
 	sprite.modulate = Color(1.7, 1.7, 1.35)
 	sprite.scale = _base_sprite_scale * Vector2(1.25, 0.8) * (1.0 + 0.14 * float(star - 1))
 	_pulse_tween = create_tween()

@@ -108,12 +108,52 @@ const ELITE_WAVES := [5, 15]             ## 精英回合：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
 const BOSS_HP_BASE := 6500.0             ## Boss 基础生命（适配神识分流与新武器基数：W10≈2.5万 / W20≈11万；成型 ~45s、极端 6 剑 ~12s）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
-const BOSS_ATTACK_INTERVAL := 4.6        ## 特殊攻击循环间隔（秒）
+const BOSS_ATTACK_INTERVAL := 3.8        ## 特殊攻击循环间隔（秒）
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量
 const BOSS_RING_COUNT_P2 := 8            ## 二阶段环弹增量
 const BOSS_RING_DMG_MULT := 0.55         ## 环弹伤害 = 接触伤害 × 系数
+const BOSS_RING_CURVE_ANG := 0.85        ## 双层交错环弹弧线偏转角速度（rad/s）
+const BOSS_RING_LAYER_DELAY := 0.28      ## 双层环弹第 2 层发射间隔（秒）
 const BOSS_BOLT_SPEED := 235.0           ## 环弹飞行速度
 const BOSS_BOLT_SCALE := 1.5             ## 环弹视觉/碰撞放大
+const BOSS_FAN_WAVES := 3                ## 扇形连射狙击波数
+const BOSS_FAN_WAVES_P2 := 4             ## 二阶段扇形连射波数
+const BOSS_FAN_COUNT := 5                ## 每波扇形火球数
+const BOSS_FAN_SPREAD := 0.18            ## 扇形相邻弹夹角（rad）
+const BOSS_FAN_WAVE_INTERVAL := 0.22     ## 扇形连射波间间隔（秒）
+const BOSS_FAN_BASE_SPEED := 250.0       ## 扇形首波弹速（逐波 +45）
+const BOSS_FAN_DMG_MULT := 0.50          ## 扇形弹伤害 = 接触伤害 × 系数
+const BOSS_SPIRAL_DURATION := 1.2        ## 螺旋风暴持续时长（秒）
+const BOSS_SPIRAL_INTERVAL := 0.09       ## 螺旋风暴喷射步进间隔（秒）
+const BOSS_SPIRAL_ARMS := 2              ## 基础螺旋臂数
+const BOSS_SPIRAL_ARMS_FINAL := 4        ## 魔尊/狂暴螺旋臂数
+const BOSS_SPIRAL_ROT_SPEED := 3.6       ## 螺旋旋转角速度（rad/s）
+const BOSS_SPIRAL_BOLT_SPEED := 240.0    ## 螺旋弹飞行速度
+const BOSS_SPIRAL_ANGULAR := 0.48        ## 螺旋弹自身微弧偏转（rad/s）
+const BOSS_SPIRAL_DMG_MULT := 0.45       ## 螺旋弹伤害 = 接触伤害 × 系数
+const BOSS_SPLIT_BOMB_COUNT := 2         ## 分裂子母弹：母弹颗数
+const BOSS_SPLIT_BOMB_COUNT_FINAL := 3   ## 狂暴/魔尊母弹颗数
+const BOSS_SPLIT_BOMB_SPEED := 135.0     ## 母弹飞行速度（慢速压迫）
+const BOSS_SPLIT_BOMB_SCALE := 2.2       ## 母弹视觉/碰撞放大倍数（半径同源）
+const BOSS_SPLIT_BOMB_FUSE := 0.95       ## 母弹飞行分裂引信（秒）
+const BOSS_SPLIT_BOMB_CHILD_COUNT := 8   ## 母弹分裂出的子火球数
+const BOSS_SPLIT_BOMB_CHILD_SPEED := 275.0 ## 子火球扩散速度
+const BOSS_SPLIT_BOMB_CHILD_SCALE := 1.0 ## 子火球缩放
+const BOSS_SPLIT_BOMB_DMG_MULT := 0.70   ## 母弹直击伤害系数
+const BOSS_SPLIT_CHILD_DMG_MULT := 0.45  ## 子火球伤害系数
+const BOSS_CHARGE_WINDUP := 0.75         ## Boss 破阵冲锋预警时长（秒）
+const BOSS_CHARGE_DURATION := 0.55       ## Boss 破阵冲锋持续时长（秒）
+const BOSS_CHARGE_BRAKE := 0.20          ## Boss 破阵冲锋收势刹车时长（秒）
+const BOSS_CHARGE_SPEED_MUL := 3.4       ## Boss 破阵冲锋移速倍率
+const BOSS_CHARGE_HIT_RADIUS := 36.0     ## Boss 破阵冲锋走廊判定半径（与预警线宽同源）
+const BOSS_CHARGE_DMG_MULT := 1.25       ## Boss 破阵冲锋伤害系数
+const BOSS_CHARGE_SIDE_BOLTS := 2        ## 冲锋起步向两侧各洒出的封路火球数
+const BOSS_SKY_FIRE_COUNT := 3           ## 追踪天火连环轰炸落点数
+const BOSS_SKY_FIRE_COUNT_P2 := 4        ## 二阶段追踪天火落点数
+const BOSS_SKY_FIRE_INTERVAL := 0.32     ## 天火落点生成间隔（秒）
+const BOSS_SKY_FIRE_WINDUP := 0.85       ## 单处天火预警时长（秒）
+const BOSS_SKY_FIRE_RADIUS := 95.0       ## 天火轰炸半径（预警圈与结算同源）
+const BOSS_SKY_FIRE_DMG_MULT := 1.15     ## 天火轰炸伤害 = 接触伤害 × 系数
 const BOSS_SLAM_WINDUP := 0.9            ## 震地冲击预警时长
 const BOSS_SLAM_RADIUS := 175.0          ## 震地冲击半径
 const BOSS_SLAM_DMG_MULT := 1.35         ## 震地伤害 = 接触伤害 × 系数

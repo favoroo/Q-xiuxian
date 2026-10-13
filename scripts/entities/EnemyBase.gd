@@ -1010,19 +1010,19 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 			elif target.has_method("take_damage"):
 				target.take_damage(contact_damage * charge_damage_mul)
 
-		# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
-		for i in range(get_slide_collision_count()):
-			var col = get_slide_collision(i)
-			var collider = col.get_collider()
-			if collider is Player:
-				var hp_before: float = collider.current_health
-				collider.take_damage(contact_damage)
-				# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
-				var eff_thorns: float = GameManager.get_effective_thorns()
-				if eff_thorns > 0.0 and collider.current_health < hp_before:
-					take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
-			elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
-				collider.take_damage(contact_damage)
+	# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var collider = col.get_collider()
+		if collider is Player:
+			var hp_before: float = collider.current_health
+			collider.take_damage(contact_damage)
+			# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
+			var eff_thorns: float = GameManager.get_effective_thorns()
+			if eff_thorns > 0.0 and collider.current_health < hp_before:
+				take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
+		elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
+			collider.take_damage(contact_damage)
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
@@ -1605,23 +1605,25 @@ func _die() -> void:
 		extra_orb.activate()
 	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
 	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
-	var ex_base := GameManager.item_hook_sum("kill_explode")
-	if ex_base > 0.0 and not _no_drop:
-		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
-		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
-		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
-		for node in get_tree().get_nodes_in_group("enemies"):
-			var e := node as EnemyBase
-			if e == null or not is_instance_valid(e) or e.dying or e == self:
-				continue
-			if e.is_in_group("chests") or e.is_in_group("herbs"):
-				continue
-			var ex_off: Vector2 = e.global_position - global_position
-			if ex_off.length() > ex_radius:
-				continue
-			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
-			e.take_damage(ex_dmg, ex_dir * ex_impulse)
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
+		var ex_base := GameManager.item_hook_sum("kill_explode")
+		if ex_base > 0.0 and not _no_drop:
+			var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
+			var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
+			var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
+			# 改用 GameManager.live_enemies 快照（避免 get_nodes_in_group 每次击杀 new Array，
+			# duplicate 防止链式 take_damage 递归改动 live_enemies 数组）：
+			var enemies_snapshot := GameManager.live_enemies.duplicate()
+			for e in enemies_snapshot:
+				if e == null or not is_instance_valid(e) or e.dying or e == self:
+					continue
+				if e.is_in_group("chests") or e.is_in_group("herbs"):
+					continue
+				var ex_off: Vector2 = e.global_position - global_position
+				if ex_off.length() > ex_radius:
+					continue
+				var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
+				e.take_damage(ex_dmg, ex_dir * ex_impulse)
+			JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)

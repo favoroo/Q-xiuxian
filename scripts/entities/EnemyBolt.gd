@@ -15,15 +15,18 @@ extends Area2D
 ## 	⇒ 要改火球大小只动 RADIUS 一个常数，外观与碰撞一起变，不许分开设。
 
 const RADIUS := 8.0                  ## 基准判定半径（不含 scale_factor）：外观与碰撞的唯一来源
-const BODY_COLOR := Color(1.0, 0.45, 0.12)   ## 球体
+const BODY_COLOR := Color(1.0, 0.45, 0.12)   ## 球体（烈焰橙）
 const CORE_COLOR := Color(1.0, 0.87, 0.45)   ## 高光芯
 const RIM_COLOR := Color(0.42, 0.07, 0.04)   ## 硬描边，压在判定圆内侧
+const BODY_COLOR_PURPLE := Color(0.72, 0.28, 1.0)   ## 魔尊/子母弹球体（幽紫魔焰）
+const CORE_COLOR_PURPLE := Color(0.94, 0.78, 1.0)   ## 幽紫高光芯
+const RIM_COLOR_PURPLE := Color(0.24, 0.05, 0.38)   ## 幽紫硬描边
 
 # —— 对象池（2026-10-11，照 AstralGem/BladeProjectile 模式）——
-## 御剑邪修周期直射 + 魔君环弹齐射（一圈 18+ 发）每次 new()+queue_free，Area2D + 碰撞体
+## 御剑邪修周期直射 + 魔君环弹/螺旋/子母弹每次 new()+queue_free，Area2D + 碰撞体
 ## 全套生命周期分配是回合卡顿源。死亡/到期回池休眠，activate() 全量重置。
 ## 兼容约定：裸 new() + add_child 的旧路径（预览/单测）保持原行为不受影响。
-const POOL_CAP := 96
+const POOL_CAP := 160
 const BASE_LIFETIME := 3.0   ## 场景默认寿命：activate 复用时重置的基准
 static var _pool: Array[EnemyBolt] = []
 static var _host: Node2D = null
@@ -47,6 +50,7 @@ static func acquire(parent: Node) -> EnemyBolt:
 		var b: EnemyBolt = _pool.pop_back()
 		if is_instance_valid(b):
 			reused_count += 1
+			b._reset_defaults()
 			return b
 	var nb := EnemyBolt.new()
 	created_count += 1
@@ -57,13 +61,39 @@ var direction: Vector2 = Vector2.RIGHT
 var speed: float = 300.0
 var damage: float = 6.0
 var lifetime: float = 3.0
-var scale_factor: float = 1.0  ## 整体缩放（Boss 环弹比普通火球大），外观与碰撞一起缩
-var radius: float = RADIUS     ## 实际判定半径 = RADIUS × scale_factor，_ready 里定一次
+var scale_factor: float = 1.0  ## 整体缩放（Boss 环弹/母弹比普通火球大），外观与碰撞一起缩
+var radius: float = RADIUS     ## 实际判定半径 = RADIUS × scale_factor，_ready / activate 里更新
+
+## 进阶弹幕运动与分裂属性（2026-10-13 Boss 招式重做扩展）
+var angular_speed: float = 0.0   ## 弧线/螺旋偏转角速度（rad/s，正顺时针、负逆时针）
+var accel: float = 0.0           ## 变速推进加速度（px/s²）
+var min_speed: float = 60.0      ## 减速下限，防弹丸停滞
+var split_timer: float = -1.0    ## >0 时启用子母弹倒计时，归零时原地分裂为子火球
+var split_count: int = 0         ## 子母弹分裂颗数
+var split_speed: float = 275.0   ## 子火球飞行速度
+var split_scale: float = 1.0     ## 子火球缩放系数
+var split_damage: float = 0.0    ## 子火球伤害（≤0 时按母弹 65% 折算）
+var purple_style: bool = false   ## 幽紫魔焰配色（第 20 波最终 Boss 及子母弹专属）
 
 ## 池状态与 _ready 建好的节点引用（复用时 activate 重铺要用）
 var _pooled: bool = false
 var _shape_node: CollisionShape2D = null
 var _circle: CircleShape2D = null
+
+func _reset_defaults() -> void:
+	direction = Vector2.RIGHT
+	speed = 300.0
+	damage = 6.0
+	scale_factor = 1.0
+	angular_speed = 0.0
+	accel = 0.0
+	min_speed = 60.0
+	split_timer = -1.0
+	split_count = 0
+	split_speed = 275.0
+	split_scale = 1.0
+	split_damage = 0.0
+	purple_style = false
 
 func _ready() -> void:
 	add_to_group("enemy_bolts")
@@ -107,9 +137,39 @@ func activate() -> void:
 func intercept() -> void:
 	if _pooled:
 		return
+	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
 	if is_inside_tree() and get_parent() != null:
-		JuiceEffect.spawn_impact_pop(get_parent(), global_position, RIM_COLOR, direction)
+		JuiceEffect.spawn_impact_pop(get_parent(), global_position, rim_c, direction)
 	_recycle()
+
+## 子母弹到期分裂：母弹先回池腾位，再在原地呈环形散射出 split_count 颗高速子火球
+func _explode_split() -> void:
+	if _pooled:
+		return
+	var host_parent := get_parent()
+	var cur_pos := global_position
+	var count := split_count
+	var child_spd := split_speed
+	var child_scl := split_scale
+	var child_dmg := split_damage if split_damage > 0.0 else maxf(1.0, damage * 0.65)
+	var is_purple := purple_style
+	var rim_c := RIM_COLOR_PURPLE if is_purple else RIM_COLOR
+	if is_inside_tree() and host_parent != null:
+		JuiceEffect.spawn_impact_pop(host_parent, cur_pos, rim_c, direction)
+	AudioManager.play_sfx("enemy_bolt", 0.75, 1.18)
+	_recycle()
+	if host_parent == null or not is_instance_valid(host_parent) or count <= 0:
+		return
+	for i in range(count):
+		var ang := TAU * float(i) / float(count)
+		var child_bolt := EnemyBolt.acquire(host_parent)
+		child_bolt.global_position = cur_pos
+		child_bolt.direction = Vector2(cos(ang), sin(ang))
+		child_bolt.speed = child_spd
+		child_bolt.damage = child_dmg
+		child_bolt.scale_factor = child_scl
+		child_bolt.purple_style = is_purple
+		child_bolt.activate()
 
 ## 回收入池（替代 queue_free）：休眠物理与碰撞，池满或宿主失效才真释放
 func _recycle() -> void:
@@ -121,20 +181,33 @@ func _recycle() -> void:
 	set_deferred("monitoring", false)
 	_shape_node.set_deferred("disabled", true)
 	visible = false
+	_reset_defaults()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
 		return
 	_pool.append(self)
 
 func _draw() -> void:
+	var body_c := BODY_COLOR_PURPLE if purple_style else BODY_COLOR
+	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
+	var core_c := CORE_COLOR_PURPLE if purple_style else CORE_COLOR
 	# 描边中心放在 radius - 1、线宽 2 ⇒ 最外沿正好压在判定圆上，视觉永不超过实际范围
-	draw_circle(Vector2.ZERO, radius, BODY_COLOR)
-	draw_arc(Vector2.ZERO, maxf(radius - 1.0, 1.0), 0.0, TAU, 24, RIM_COLOR, 2.0, true)
-	draw_circle(Vector2.ZERO, radius * 0.45, CORE_COLOR)
+	draw_circle(Vector2.ZERO, radius, body_c)
+	draw_arc(Vector2.ZERO, maxf(radius - 1.0, 1.0), 0.0, TAU, 24, rim_c, 2.0, true)
+	draw_circle(Vector2.ZERO, radius * 0.45, core_c)
 
 func _physics_process(delta: float) -> void:
+	if angular_speed != 0.0:
+		direction = direction.rotated(angular_speed * delta)
+	if accel != 0.0:
+		speed = maxf(min_speed, speed + accel * delta)
 	position += direction * speed * delta
 	lifetime -= delta
+	if split_timer > 0.0:
+		split_timer -= delta
+		if split_timer <= 0.0:
+			_explode_split()
+			return
 	if lifetime <= 0.0:
 		_recycle()
 

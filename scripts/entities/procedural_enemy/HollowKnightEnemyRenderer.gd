@@ -16,6 +16,10 @@ extends Node2D
 # 运动驱动状态
 var flip_h: bool = false:
 	set(val):
+		# EnemyBase 每物理帧都会同步本值，不判新旧会把 _dirty 打真、
+		# 把下面 20Hz 重绘节流整个废掉（2026-10-13 掉帧根因）
+		if val == flip_h:
+			return
 		flip_h = val
 		_dirty = true
 

@@ -315,7 +315,6 @@ func heal(amount: float, quiet: bool = false) -> void:
 		return
 	var before := current_health
 	current_health = minf(max_health, current_health + amount)
-	GameManager.player_hp_changed.emit(current_health, max_health)
 	# 只报真正回上来的那部分；顶满时一口没回，不发挤压/音效/+X（报了就是假账）
 	var gained := current_health - before
 	# 药王·药池：顶满溢出的那部分折算入池（所有治疗出口共用这一把尺子；数值全在 ElixirData）
@@ -324,6 +323,8 @@ func heal(amount: float, quiet: bool = false) -> void:
 		GameManager.elixir_pool = ElixirData.add_pool(GameManager.elixir_pool, overflow, max_health)
 	if gained <= 0.01:
 		return
+	# 满血吸血命中极频繁，信号必须过了 gained 闸再发，否则 HUD 每次命中都重建血条补间（2026-10-13 掉帧根因）
+	GameManager.player_hp_changed.emit(current_health, max_health)
 	GameManager.total_hp_healed += gained
 	# 灵髓丹气：回复生命后触发短时增伤与加速
 	var heal_dmg: float = GameManager.item_hook_sum("heal_buff_damage")

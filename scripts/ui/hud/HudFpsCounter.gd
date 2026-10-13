@@ -47,7 +47,7 @@ func _process(delta: float) -> void:
 	var bolts := BladeProjectile.active_count + EnemyBolt.active_count
 	text = "FPS: %d\n逻辑 %.1fms  物理 %.1fms\n绘制 %d  图元 %s\n敌 %d  弹 %d  宝 %d  特 %d  字 %d" % [
 		fps, proc_ms, phys_ms, draws, prims,
-		GameManager.enemy_count, bolts, AstralGem.active_gem_count(),
+		GameManager.enemy_count, bolts, AstralGem.active_gem_count() + HealOrb.active_count,
 		JuiceEffect.active_count, DamageNumber.active_count,
 	]
 

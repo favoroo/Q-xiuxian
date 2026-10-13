@@ -7,6 +7,10 @@ extends PanelContainer
 var _title_label: Label = null
 var _bar: ProgressBar = null
 var _active: bool = false
+## 补间持久句柄：Boss 每次命中都发信号，局部 tween 不 kill 会每秒堆几十个（2026-10-13 掉帧根因）。
+## 血条值与登场/退场特效分两个句柄：血条 tween 不许杀到登场的 scale 回弹，否则条会停在半大。
+var _fx_tween: Tween = null
+var _bar_tween: Tween = null
 
 func _ready() -> void:
 	visible = false
@@ -52,18 +56,24 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 		modulate.a = 1.0
 		visible = true
 		# 登场弹跳：与 banner / 等级徽章同款 BACK 缓动
-		var tw := create_tween()
-		tw.tween_property(self, "scale", Vector2.ONE, 0.22)\
+		if _fx_tween != null and _fx_tween.is_valid():
+			_fx_tween.kill()
+		_fx_tween = create_tween()
+		_fx_tween.tween_property(self, "scale", Vector2.ONE, 0.22)\
 			.from(Vector2(0.6, 0.6)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	elif absf(_bar.value - cur) > 0.5:
-		var tw := create_tween()
-		tw.tween_property(_bar, "value", cur, 0.15)
+		if _bar_tween != null and _bar_tween.is_valid():
+			_bar_tween.kill()
+		_bar_tween = create_tween()
+		_bar_tween.tween_property(_bar, "value", cur, 0.15)
 
 func _on_boss_defeated(_title: String) -> void:
 	_active = false
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.3)
-	tw.tween_callback(func():
+	if _fx_tween != null and _fx_tween.is_valid():
+		_fx_tween.kill()
+	_fx_tween = create_tween()
+	_fx_tween.tween_property(self, "modulate:a", 0.0, 0.3)
+	_fx_tween.tween_callback(func():
 		visible = false
 		modulate.a = 1.0)
 

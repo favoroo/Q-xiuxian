@@ -18,6 +18,9 @@ func _run() -> void:
 	await _test_boss_slam_inside()
 	await _test_boss_slam_outside()
 	await _test_danbao_explode()
+	await _test_boss_sky_fire()
+	await _test_boss_split_bomb_and_curve()
+	await _test_boss_patterns_and_charge()
 
 	if not _c.all_passed():
 		print("BOSS_TELEGRAPH_CHECK_RESULT: FAILED (%d failures)" % _c.failures.size())
@@ -138,3 +141,127 @@ func _test_danbao_explode() -> void:
 	p.queue_free()
 	e.queue_free()
 	GameManager.player = null
+
+func _test_boss_sky_fire() -> void:
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var boss := boss_scene.instantiate() as BossEnemy
+	add_child(boss)
+	boss.global_position = Vector2(480.0, 270.0)
+	boss.move_speed = 0.0
+	boss._attack_timer = 999.0
+
+	var p := _make_player()
+	p.global_position = Vector2(620.0, 270.0)
+	p.velocity = Vector2.ZERO
+
+	boss._cast_sky_fire(p)
+	boss._process(0.01)  # 首颗天火立即落地预警
+	_c.check(boss._active_sky_fires.size() == 1, "天火连环首枚预警圈已创建")
+	var fire0: Dictionary = boss._active_sky_fires[0]
+	var tg0: AoeTelegraph = fire0.telegraph
+	_c.check(tg0 != null and is_instance_valid(tg0), "天火预警圈实例有效")
+	_c.near(tg0.radius, GameBalance.BOSS_SKY_FIRE_RADIUS, 0.01, "天火预警圈半径与判定半径同源（BOSS_SKY_FIRE_RADIUS）")
+
+	var waves_before := _count_shockwaves()
+	var hp_before := p.current_health
+	p.invulnerable_time = 0.0
+	# 推进 0.86s 使第 1 颗天火结算炸开
+	boss._process(0.86)
+	_c.check(p.current_health < hp_before, "天火圈内玩家被炸中掉血")
+	_c.check(_count_shockwaves() > waves_before, "天火结算生成 SHOCKWAVE 扩散冲击波")
+
+	await get_tree().process_frame
+	p.queue_free()
+	boss._die()
+	boss.queue_free()
+	GameManager.player = null
+
+func _test_boss_split_bomb_and_curve() -> void:
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var boss := boss_scene.instantiate() as BossEnemy
+	boss.final_boss = true
+	add_child(boss)
+	boss.global_position = Vector2(480.0, 270.0)
+	boss.move_speed = 0.0
+	boss._attack_timer = 999.0
+
+	var p := _make_player()
+	p.global_position = Vector2(700.0, 270.0)
+
+	# 1. 测试分裂子母弹
+	var active_before := EnemyBolt.active_count
+	boss._cast_split_bomb(p)
+	var mother_count := GameBalance.BOSS_SPLIT_BOMB_COUNT_FINAL
+	_c.equals(EnemyBolt.active_count - active_before, mother_count, "魔尊子母弹发射 %d 颗母弹" % mother_count)
+
+	# 取一颗刚激活的母弹校验半径同源与分裂
+	var mother_bolt: EnemyBolt = null
+	if EnemyBolt._host != null:
+		for child in EnemyBolt._host.get_children():
+			if child is EnemyBolt and not child._pooled and child.split_count > 0:
+				mother_bolt = child
+				break
+	_c.check(mother_bolt != null, "池宿主中存在已激活的子母弹母体")
+	if mother_bolt != null:
+		_c.near(mother_bolt.radius, EnemyBolt.RADIUS * GameBalance.BOSS_SPLIT_BOMB_SCALE, 0.01, "母弹视觉半径与碰撞半径严格同源")
+		_c.check(mother_bolt.purple_style, "母弹启用幽紫魔焰配色")
+		var count_before_split := EnemyBolt.active_count
+		# 推进引信触发原地分裂（母弹 -1，子火球 +8 ⇒ 净增 7）
+		mother_bolt._physics_process(GameBalance.BOSS_SPLIT_BOMB_FUSE + 0.05)
+		_c.equals(EnemyBolt.active_count - count_before_split, GameBalance.BOSS_SPLIT_BOMB_CHILD_COUNT - 1,
+			"母弹到期分裂为 %d 颗子火球并回收母弹" % GameBalance.BOSS_SPLIT_BOMB_CHILD_COUNT)
+
+	# 2. 测试弧线弹偏转与对象池重置
+	var curve_bolt := EnemyBolt.acquire(self)
+	curve_bolt.global_position = Vector2(200.0, 200.0)
+	curve_bolt.direction = Vector2.RIGHT
+	curve_bolt.angular_speed = 1.0
+	curve_bolt.purple_style = true
+	curve_bolt.activate()
+	curve_bolt._physics_process(0.5)
+	_c.check(curve_bolt.direction.y > 0.3, "弧线火球按 angular_speed 发生顺时针方向旋转")
+	curve_bolt._recycle()
+
+	var reused_bolt := EnemyBolt.acquire(self)
+	_c.near(reused_bolt.angular_speed, 0.0, 0.001, "火球回池复用后 angular_speed 已归零")
+	_c.equals(reused_bolt.split_count, 0, "火球回池复用后 split_count 已归零")
+	_c.check(not reused_bolt.purple_style, "火球回池复用后 purple_style 已重置")
+	reused_bolt._recycle()
+
+	# 清理在场弹丸
+	if EnemyBolt._host != null:
+		for child in EnemyBolt._host.get_children():
+			if child is EnemyBolt and not child._pooled:
+				child._recycle()
+
+	p.queue_free()
+	boss.queue_free()
+	GameManager.player = null
+
+func _test_boss_patterns_and_charge() -> void:
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var boss := boss_scene.instantiate() as BossEnemy
+	add_child(boss)
+	boss.global_position = Vector2(480.0, 270.0)
+	boss._attack_timer = 999.0
+
+	var p := _make_player()
+	p.global_position = Vector2(720.0, 270.0)
+
+	_c.check(not (BossEnemy.Pattern.SKY_FIRE in boss._patterns), "第 10 波一阶段暂不开放天火轰炸")
+	boss._enter_phase2()
+	_c.check(BossEnemy.Pattern.SKY_FIRE in boss._patterns and BossEnemy.Pattern.SPIRAL in boss._patterns,
+		"半血狂暴解锁追踪天火与螺旋风暴")
+
+	# 测试破阵冲锋预警线宽度与判定同源
+	boss._cast_charge(p)
+	_c.check(boss._charge_warning_line != null, "Boss 破阵冲锋已生成胶囊预警带")
+	if boss._charge_warning_line != null:
+		_c.near(boss._charge_warning_line.width, GameBalance.BOSS_CHARGE_HIT_RADIUS * 2.0, 0.01,
+			"Boss 冲锋预警带线宽 == 2 × BOSS_CHARGE_HIT_RADIUS（视觉与扫掠同源）")
+
+	p.queue_free()
+	boss._die()
+	boss.queue_free()
+	GameManager.player = null
+
