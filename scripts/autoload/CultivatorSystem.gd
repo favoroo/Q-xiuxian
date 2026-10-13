@@ -23,7 +23,7 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
 	gm.contraption_threshold_adj = int(mods.get("contraption_threshold_adj", 0))
 	gm.stone_interest_rate = float(mods.get("stone_interest_rate", 0.0))
-	gm.stone_interest_cap = int(mods.get("stone_interest_cap", 15))
+	gm.stone_interest_cap = int(mods.get("stone_interest_cap", 30))
 	gm.on_hit_damage_bonus = float(mods.get("on_hit_damage_bonus", 0.0))
 	gm.on_hit_damage_cap_stacks = int(mods.get("on_hit_damage_cap_stacks", 10))
 	gm.elemental_damage += float(mods.get("elemental", 0.0))

@@ -484,7 +484,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	if not unlocked:
 		var adef := AchievementData.cultivator_unlock_achievement(cid)
 		var aname := String(adef.get("name", ""))
-		detail_lbl.text = "达成成就「%s」后解锁" % aname if aname != "" else "达成对应成就后解锁"
+		detail_lbl.text = "达成成就「%s」后解锁" % aname if aname != "" else AchievementData.NO_UNLOCK_HINT
 		GameStyle.label(detail_lbl, 11, GameStyle.GREY)
 	else:
 		var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"

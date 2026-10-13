@@ -175,3 +175,41 @@ func _test_new_enemy_mechanics() -> void:
 	GameManager._save_progress()
 	GameManager.danger_level = 0
 	GameManager.reset_run()
+
+# enemy_id 推导注册表（2026-10-13）：EnemyBase._deduce_enemy_id 的 16 分支 begins_with 链
+# 已改为遍历 EnemyData.ID_PREFIXES。这条钉三件事，防新增怪种时漏登记：
+# ① MOBS 每种普通怪都在 ID_PREFIXES 里有前缀（否则新怪会静默降级成史莱姆外观）；
+# ② ID_PREFIXES 相对 MOBS 多出来的恰好是 chilei_elite / jiansha_elite 两个精英 id；
+# ③ 前缀互不为前缀（否则遍历顺序会决定猜哪个，改表序就换结果）。
+func _test_enemy_id_prefixes() -> void:
+	var missing: Array = []
+	for key in EnemyData.MOBS:
+		if not EnemyData.ID_PREFIXES.has(String(key)):
+			missing.append(String(key))
+	_c.check(missing.is_empty(), "MOBS 每种怪都在 ID_PREFIXES 登记了前缀（漏登记会静默降级成史莱姆外观）：%s" % str(missing))
+
+	# ID_PREFIXES 相对 MOBS 多出来的必须是「已知非 MOBS 来源」四类：Boss、精英池两个（id 不带
+	# 后缀，与 _eid 的 _elite 后缀有意不同形）、金蟾（LOOTER_DEF）。冒出第五类就是漏登记或写错。
+	var non_mobs: Array = []
+	for id in EnemyData.ID_PREFIXES:
+		if not EnemyData.MOBS.has(String(id)):
+			non_mobs.append(String(id))
+	non_mobs.sort()
+	_c.equals(non_mobs, ["boss", "chilei_elite", "golem", "jiansha_elite", "jinchan"],
+		"ID_PREFIXES 比 MOBS 多的恰好是 boss / 两个精英 id / 金蟾（冒出别的就是漏登记）")
+	# 反向：精英池与 Boss/金蟾的前缀也必须在表里，否则它们的怪会静默降级成史莱姆外观
+	for row in EnemyData.ELITE_POOL:
+		var eid := String(row.get("id", ""))
+		_c.check(EnemyData.ID_PREFIXES.has(eid) or EnemyData.ID_PREFIXES.has(eid + "_elite"),
+			"精英 %s 在前缀表里有登记（带或不带 _elite 后缀）" % eid)
+	_c.check(EnemyData.ID_PREFIXES.has("boss") and EnemyData.ID_PREFIXES.has("jinchan"),
+		"Boss 与金蟾在前缀表里有登记")
+
+	var overlapping: Array = []
+	for a in EnemyData.ID_PREFIXES:
+		for b in EnemyData.ID_PREFIXES:
+			if String(a) == String(b):
+				continue
+			if String(b).begins_with(String(a)):
+				overlapping.append("%s 是 %s 的前缀" % [String(a), String(b)])
+	_c.check(overlapping.is_empty(), "前缀互不为前缀（否则遍历顺序决定猜哪个）：%s" % str(overlapping))

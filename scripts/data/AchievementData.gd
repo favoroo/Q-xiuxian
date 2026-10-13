@@ -89,12 +89,48 @@ const DEFAULT_ITEMS: Array[String] = [
 	"tianji_pan",
 	"wuji_tianchuan_zhen",
 	# —— 2026-10-11 寻宝流四件（ProgressStore 末尾的 DEFAULT_ITEMS 回灌会让老档也拿到）——
-	# 2026-10-12：卸匣锥（砍砸开击数）换成满匣诀（抬开箱掉落），旧 id 由 ProgressStore 读档时剔除。
-	"cangbao_tu",
-	"naling_zhuo",
-	"manxia_jue",
-	"dianjin_jue",
-]
+		# 2026-10-12：卸匣锥（砍砸开击数）换成满匣诀（抬开箱掉落），旧 id 由 ProgressStore 读档时剔除。
+		"cangbao_tu",
+		"naling_zhuo",
+		"manxia_jue",
+		"dianjin_jue",
+		# —— 2026-10-13 扩池：补齐灵兽系与 10-12 转化/站定/联动体系，彻底消灭未入池死卡 ——
+		# 普通（tier 1）
+		"lingshou_kouliang",
+		"dazuo_putuan",
+		# 稀有（tier 2）
+		"yushou_ling",
+		"jifeng_shoufu",
+		"ruding_xiang",
+		"lingsui_danqi",
+		"tiangong_fatiao",
+		"kaishan_jianyi",
+		"ningshen_fu",
+		# 史诗（tier 3）
+		"wanshou_long",
+		"jifeng_ren",
+		"huanying_ling",
+		"shanyue_jia",
+		"jubao_pen",
+		"ranxue_fu",
+		"budong_yin",
+		"taijin_jing",
+		"yimu_sui",
+		"xuanshui_po",
+		"lihuo_shenjing",
+		"houtu_shenyuan",
+		"xuanwu_fashan",
+		"sanmei_guizhen",
+		"liuyun_qianyin",
+		"jinmang_souhun",
+		"qianfu_lianhuan",
+		"liekong_zhui",
+		# 传说（tier 4）
+		"xuepan_guyu",
+		"liehun_ling",
+		"panshi_yin",
+		"tupo_guyu",
+	]
 
 ## 成就定义表（按 category 聚组排布；UI 按 CATEGORY_ORDER 分节展示）
 ## reward_type: "cultivator"（解锁新道统） | "item"（解锁新道具入池） | "none"（纯荣誉，不发奖励）
@@ -379,6 +415,19 @@ static func item_unlock_achievement(item_id: String) -> Dictionary:
 		if a.get("reward_type", "") == "item" and a.get("reward_id", "") == item_id:
 			return a
 	return {}
+
+## 无收录途径条目的兜底文案：定义在数据表但没有任何解锁成就/不入商店池时，
+## 图鉴与战绩卡不许静默无提示——「暂无收录途径」是全项目唯一口径。
+## const 与函数共用，前缀由各调用方传入（ManualDialog 用「收录条件：」、CareerDialog 用「达成成就」句式）。
+const NO_UNLOCK_HINT := "暂无收录途径"
+
+## 统一收录条件文案：有反查成就则 prefix + cond_desc，否则兜底 NO_UNLOCK_HINT。
+## is_item=true 走道具反查、false 走角色反查；ManualDialog/CareerDialog 共用，判空只写一遍。
+static func unlock_hint_text(id: String, is_item: bool, prefix: String) -> String:
+	var ach := item_unlock_achievement(id) if is_item else cultivator_unlock_achievement(id)
+	if not ach.is_empty():
+		return prefix + String(ach.get("cond_desc", ""))
+	return NO_UNLOCK_HINT
 
 ## 判定单条成就在当前局与生涯累计下是否达成
 ## run_ctx 字段：victory(bool), endless(bool), danger(int), wave(int), level(int), kills(int),

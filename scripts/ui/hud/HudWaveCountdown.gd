@@ -38,6 +38,7 @@ var _ratio: float = 0.0
 var _urgent: bool = false
 var _has_bar: bool = false
 var _text_shown: String = ""
+var _last_urgent: bool = false  ## 配色守卫：仅在 _urgent 翻转时写一次 override，不每帧刷
 
 func _init(target: Label) -> void:
 	_label = target
@@ -69,7 +70,11 @@ func refresh_now() -> void:
 	if t != _text_shown:
 		_text_shown = t
 		_label.text = t
-	_label.add_theme_color_override("font_color", shown_color())
+	# 配色仅在告急翻转时写一次：每帧调 add_theme_color_override 即使值相同
+	# 也触发 NOTIFICATION_THEME_CHANGED → update_minimum_size + queue_redraw，是无谓开销
+	if _urgent != _last_urgent:
+		_last_urgent = _urgent
+		_label.add_theme_color_override("font_color", shown_color())
 	queue_redraw()
 
 ## 只有「正在打、且不是 Boss 回合」这一格才发倒计时：清场/悟道/商店阶段表是停着的，

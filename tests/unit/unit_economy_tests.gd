@@ -29,9 +29,9 @@ func _test_pricing() -> void:
 	_c.equals(GameBalance.weapon_price(25, 5, 0.8), 26, "散修 8 折取整")
 	_c.equals(GameBalance.potion_price(WeaponData.POTION_BASE_PRICE, 5, 1.0), 15, "回气丹随波加价")
 	_c.equals(GameBalance.reroll_cost(5, 0, 1.0), 7, "首次重掷 = 2+波次")
-	_c.equals(GameBalance.reroll_cost(5, 2, 1.0), 11, "本波第 3 次重掷再 +4")
-	_c.equals(GameBalance.reroll_cost(5, 1, 1.0), 9, "第 2 次重掷 = 2+5+2")
-	_c.equals(GameBalance.reroll_cost(5, 1, 0.8), 7, "重掷价也吃折扣（9×0.8 取整）")
+	_c.equals(GameBalance.reroll_cost(5, 2, 1.0), 13, "本波第 3 次重掷再 +6")
+	_c.equals(GameBalance.reroll_cost(5, 1, 1.0), 10, "第 2 次重掷 = 2+5+3")
+	_c.equals(GameBalance.reroll_cost(5, 1, 0.8), 8, "重掷价也吃折扣（10×0.8 取整）")
 
 	# GameManager 必须真的用这条公式，而不是自己再写一遍
 	GameManager.reset_run()

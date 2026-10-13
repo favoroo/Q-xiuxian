@@ -65,7 +65,20 @@ var _hit_freeze_timer: float = 0.0 ## 局部受击卡肉定格（秒）：冻结
 var _hit_jiggle_offset: Vector2 = Vector2.ZERO  ## 受击瞬间视觉微反冲偏移
 var _skid_dust_timer: float = 0.0 ## 滑行擦地扬尘计时
 var _death_crit_kill: bool = false      ## 致命一刀是否为暴击（暴击击杀：独立顿帧 + 缩放冲击 + 精英 HEAVY 反馈）
-var facing: String = "s"
+var facing: String = "s":
+	set(val):
+		# 同值短路：_update_facing_and_anim 每物理帧都写本字段，不判新旧会把
+		# 动画名重建打成每帧执行，白烧缓存（照 HollowKnightEnemyRenderer.flip_h 先例）
+		if val == facing:
+			return
+		facing = val
+		_rebuild_anim_name_cache()
+## 动画名缓存：facing 极少变化，但朝向/步态分支每物理帧都要 "idle_"+facing /
+## "run_"+facing 拼接 + has_animation 重查（35 敌 ≈ 每秒数千次 String 分配，
+## Android 稳态 GC 停顿来源），改为 facing 变更时一次性重建。
+var _anim_idle: String = "idle_s"
+var _anim_run: String = "run_s"
+var _anim_has_run: bool = false
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var _bolt_timer: float = 1.2
@@ -189,6 +202,7 @@ func _ready() -> void:
 				_setup_frames(spritesheet_path)
 			elif anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("idle"):
 				anim_sprite.play("idle")
+		_rebuild_anim_name_cache()
 	activate()
 
 ## 每命初始化：新实例由 _ready 调入；池化复用实例由刷怪口在配置完字段后显式调入（幂等）。
@@ -268,6 +282,7 @@ func reset_for_reuse() -> void:
 	_skid_dust_timer = 0.0
 	_death_crit_kill = false
 	facing = "s"
+	_rebuild_anim_name_cache()
 	juice_scale = Vector2.ONE
 	_bolt_timer = 1.2
 	_charge_active = 0.0
@@ -408,40 +423,16 @@ static func pool_idle_count() -> int:
 func _exit_tree() -> void:
 	GameManager.unregister_enemy(self)
 
+## 由场景根节点名推导 enemy_id：遍历 EnemyData.ID_PREFIXES 的前缀表。
+## 原先这里是 16 分支 begins_with 链 —— 加一种怪要同时改 EnemyData 与 EnemyBase 两处，
+## 漏改这边就静默降级成史莱姆外观。现在新增怪种只需在 ID_PREFIXES 登记一行。
+## 表序即优先级（先命中先返回），故 boss / 精英这类易混前缀必须排在通用前缀之前；
+## 前缀表本就互不为前缀，顺序实际无歧义。兜底仍是 slime（与旧链行为一致）。
 func _deduce_enemy_id() -> String:
 	var n := name.to_lower()
-	if n.begins_with("boss"):
-		return "boss"
-	elif n.begins_with("chilei"):
-		return "chilei_elite"
-	elif n.begins_with("jiansha"):
-		return "jiansha_elite"
-	elif n.begins_with("golem"):
-		return "golem"
-	elif n.begins_with("slime"):
-		return "slime"
-	elif n.begins_with("flower"):
-		return "flower"
-	elif n.begins_with("leibeast"):
-		return "leibeast"
-	elif n.begins_with("xiexiu"):
-		return "xiexiu"
-	elif n.begins_with("danbao"):
-		return "danbao"
-	elif n.begins_with("fengqun"):
-		return "fengqun"
-	elif n.begins_with("xueyong"):
-		return "xueyong"
-	elif n.begins_with("guyao"):
-		return "guyao"
-	elif n.begins_with("yingmei"):
-		return "yingmei"
-	elif n.begins_with("zhumu"):
-		return "zhumu"
-	elif n.begins_with("lingyi"):
-		return "lingyi"
-	elif n.begins_with("jinchan"):
-		return "jinchan"
+	for id in EnemyData.ID_PREFIXES:
+		if n.begins_with(String(EnemyData.ID_PREFIXES[id])):
+			return String(id)
 	return "slime"
 
 ## 装配程序化矢量视图。返回 true = 已挂上渲染器（调用方据此跳过图集加载）。
@@ -516,6 +507,12 @@ func _setup_frames(path: String) -> void:
 	anim_sprite.sprite_frames = sf
 	anim_sprite.play("run_s")
 
+## 按 facing 重建 idle/run 动画名缓存（装配完成与朝向变更时各调一次）
+func _rebuild_anim_name_cache() -> void:
+	_anim_idle = "idle_" + facing
+	_anim_run = "run_" + facing
+	_anim_has_run = anim_sprite != null and anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation(_anim_run)
+
 ## 挤压与拉伸形变回弹（Squash & Stretch）——零 Tween 分配版：记录起点与时长，
 ## 回弹插值在 _tick_hit_fx 逐帧做（TRANS_BACK EASE_OUT 同款过冲曲线）
 func play_squash(target: Vector2, duration: float = 0.16) -> void:
@@ -588,6 +585,15 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	# 触界时清零越界速度分量，避免原地满速跑步动画（只清越界方向，保留沿墙切向）
+	if global_position.x >= lim and velocity.x > 0.0:
+		velocity.x = 0.0
+	elif global_position.x <= -lim and velocity.x < 0.0:
+		velocity.x = 0.0
+	if global_position.y >= lim and velocity.y > 0.0:
+		velocity.y = 0.0
+	elif global_position.y <= -lim and velocity.y < 0.0:
+		velocity.y = 0.0
 
 	_tick_hit_visuals(delta)
 	_update_facing_and_anim(delta, dir, dist_sq)
@@ -678,8 +684,34 @@ func _tick_hit_stun(delta: float) -> bool:
 ## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
 func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
 	# 金蟾系：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）
+	# 墙感知：贴边时清掉指向墙外的逃离分量改为沿墙滑行；两轴同时触界（角落死锁）
+	# 取朝场中心方向的切向逃离，避免被硬 clamp 永久钉死在角落。
 	if always_flee and not _pp_stun:
-		_pp_target_vel = -dir * eff_speed
+		var flee_vel := -dir * eff_speed
+		var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
+		var wall_margin: float = 28.0
+		var blocked_x := false
+		var blocked_y := false
+		if global_position.x > wall_lim - wall_margin and flee_vel.x > 0.0:
+			flee_vel.x = 0.0
+			blocked_x = true
+		elif global_position.x < -(wall_lim - wall_margin) and flee_vel.x < 0.0:
+			flee_vel.x = 0.0
+			blocked_x = true
+		if global_position.y > wall_lim - wall_margin and flee_vel.y > 0.0:
+			flee_vel.y = 0.0
+			blocked_y = true
+		elif global_position.y < -(wall_lim - wall_margin) and flee_vel.y < 0.0:
+			flee_vel.y = 0.0
+			blocked_y = true
+		if blocked_x and blocked_y:
+			# 角落死锁：沿更贴墙的那堵墙切向逃离（朝场中心方向）
+			var to_center := -global_position
+			if absf(to_center.x) >= absf(to_center.y):
+				flee_vel = Vector2(0.0, signf(to_center.y)) * eff_speed
+			else:
+				flee_vel = Vector2(signf(to_center.x), 0.0) * eff_speed
+		_pp_target_vel = flee_vel
 
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
 	if not always_flee and not _pp_stun and preferred_range > 0.0:
@@ -941,22 +973,20 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		var advance := 0.0
 		if not _pp_stun:
 			advance = vel_dir.dot(dir)
-		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+		RunMotion.select_anim(anim_sprite, _anim_idle, false)
 		RunMotion.apply_hover(anim_sprite, current_base, is_moving, vel_dir, delta, speed_ratio, shadow_sprite, advance)
 	elif locomotion_mode == "slither":
 		# 蠕动：贴地行进波（scale 伸缩），无悬浮无前倾
-		RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+		RunMotion.select_anim(anim_sprite, _anim_idle, false)
 		RunMotion.apply_slither(anim_sprite, current_base, is_moving, delta, speed_ratio, shadow_sprite)
 	else:
 		# 步态腿帧：有图集才切腿帧；程序化敌种没有帧集，但形变链路照走
 		#（RunMotion.apply 对 null 帧集内部按 4 帧 / 10fps 默认推进步态相位）
-		var has_run_frames := anim_sprite.sprite_frames != null and anim_sprite.sprite_frames.has_animation("run_" + facing)
-		if has_run_frames and is_moving:
-			var run_anim: String = "run_" + facing
-			RunMotion.select_anim(anim_sprite, run_anim, true)
+		if _anim_has_run and is_moving:
+			RunMotion.select_anim(anim_sprite, _anim_run, true)
 			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
-		elif has_run_frames:
-			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+		elif _anim_has_run:
+			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, 0.0, shadow_sprite)
 		elif is_moving:
 			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
@@ -1247,7 +1277,7 @@ func _start_charge(dir: Vector2) -> void:
 				var bolt := EnemyBolt.acquire(get_parent())
 				bolt.global_position = global_position
 				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
-				bolt.damage = bolt_damage * (contact_damage / 13.0)
+				bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 缩放基准见 BalanceWave.BOLT_DMG_BASE_REF（邪修基础接触伤，四类怪共用）
 				bolt.activate()
 	_clear_charge_warning()
 
@@ -1334,7 +1364,7 @@ func _fire_bolt(player: Node2D) -> void:
 		if bolt_count > 1:
 			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
 		bolt.direction = base_dir.rotated(offset_ang)
-		bolt.damage = bolt_damage * (contact_damage / 13.0)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
+		bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
 		bolt.activate()
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
@@ -1361,14 +1391,18 @@ func receive_aura(mult: float, duration_ms: int) -> void:
 # ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
 
 func _spawn_minion() -> void:
-	var m := minion_scene.instantiate() as EnemyBase
+	if minion_scene == null:
+		return
+	var m := EnemyBase.acquire_or_new(minion_scene)
 	if m == null:
 		return
+	m.reset_for_reuse()
 	var angle := GameManager.rng.randf() * TAU
-	m.global_position = global_position + Vector2(cos(angle), sin(angle)) * 34.0
+	m.global_position = global_position + Vector2(cos(angle), sin(angle)) * GameBalance.MINION_SCATTER_RADIUS
 	m.max_hp = ceilf(m.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
 	m.contact_damage = ceilf(m.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
 	m.add_to_group("enemies")
+	m.activate()
 	get_parent().call_deferred("add_child", m)
 	play_squash(Vector2(1.22, 0.78), 0.2)
 	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
@@ -1377,8 +1411,8 @@ func _spawn_minion() -> void:
 func _teleport_near_player(player: Node2D) -> void:
 	_spawn_teleport_ghost()
 	var angle := GameManager.rng.randf() * TAU
-	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * 210.0
-	var lim: float = GameManager.MAP_HALF_EXTENT - 40.0
+	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * GameBalance.BLINK_DISTANCE
+	var lim: float = GameManager.MAP_HALF_EXTENT - GameBalance.BLINK_MAP_INSET
 	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 	play_squash(Vector2(1.3, 0.7), 0.2)
 	AudioManager.play_sfx("enemy_blink", 0.8)   ## 妖异残影是「下坠」，不许借玩家缩地成寸的 dodge
@@ -1438,7 +1472,7 @@ func _split_offspring() -> void:
 			continue
 		child.reset_for_reuse()
 		var angle := TAU * float(i) / float(split_count) + GameManager.rng.randf() * 0.5
-		child.global_position = global_position + Vector2(cos(angle), sin(angle)) * 26.0
+		child.global_position = global_position + Vector2(cos(angle), sin(angle)) * GameBalance.SPLIT_SCATTER_RADIUS
 		child.max_hp = ceilf(child.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
 		child.contact_damage = ceilf(child.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
 		child.add_to_group("enemies")
@@ -1569,12 +1603,12 @@ func _die() -> void:
 	# 金蟾系：击杀额外爆金币（回合末消散/自爆不算战果）
 	if stone_reward > 0 and not _no_drop:
 		GameManager.add_spirit_stones(stone_reward)
-		DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -30.0), stone_reward, false, "+%d 金币" % stone_reward)
+		DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -GameBalance.STONE_FLOAT_OFFSET), stone_reward, false, "+%d 金币" % stone_reward)
 		AudioManager.play_sfx("gem_pickup", 0.9)
 
 	# 击杀反馈分级震屏（死亡爆散视觉已于 2026-10-12 整体下线：击杀反馈 = 尸体塌缩 + 跳字 + 音效）
 	if is_elite:
-		GameManager.kick_camera(knockback_velocity, 8.5)
+		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
 		if _death_crit_kill:
 			GameManager.feedback(GameManager.FeedbackTier.HEAVY)
@@ -1583,10 +1617,10 @@ func _die() -> void:
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
 		# 普通敌人死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
-		GameFeel.micro_kick(GameManager, knockback_velocity, 2.5)
+		GameFeel.micro_kick(GameManager, knockback_velocity, GameBalance.DEATH_MICRO_KICK)
 		AudioManager.play_sfx("enemy_death", 0.90)
 
-	var gem_count = 1 if not is_elite else 5
+	var gem_count = 1 if not is_elite else GameBalance.ELITE_GEM_COUNT
 	if _no_drop:
 		gem_count = 0
 	if heal_orb_drop > 0 and gem_count > 0:
@@ -1600,39 +1634,42 @@ func _die() -> void:
 	if GameManager.heal_orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < GameManager.heal_orb_chance:
 		var extra_orb := HealOrb.acquire_or_new(get_parent())
 		extra_orb.global_position = global_position + Vector2(
-			GameManager.rng.randf_range(-16.0, 16.0), GameManager.rng.randf_range(-16.0, 16.0))
+			GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS),
+				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS))
 		extra_orb.heal_amount = HealOrb.BASE_HEAL
 		extra_orb.activate()
 	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
 	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
-		var ex_base := GameManager.item_hook_sum("kill_explode")
-		if ex_base > 0.0 and not _no_drop:
-			var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
-			var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
-			var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
-			# 改用 GameManager.live_enemies 快照（避免 get_nodes_in_group 每次击杀 new Array，
-			# duplicate 防止链式 take_damage 递归改动 live_enemies 数组）：
-			var enemies_snapshot := GameManager.live_enemies.duplicate()
-			for e in enemies_snapshot:
-				if e == null or not is_instance_valid(e) or e.dying or e == self:
-					continue
-				if e.is_in_group("chests") or e.is_in_group("herbs"):
-					continue
-				var ex_off: Vector2 = e.global_position - global_position
-				if ex_off.length() > ex_radius:
-					continue
-				var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
-				e.take_damage(ex_dmg, ex_dir * ex_impulse)
-			JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
+	var ex_base := GameManager.item_hook_sum("kill_explode")
+	if ex_base > 0.0 and not _no_drop:
+		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
+		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
+		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
+		# 改用 GameManager.live_enemies 快照（避免 get_nodes_in_group 每次击杀 new Array，
+		# duplicate 防止链式 take_damage 递归改动 live_enemies 数组）：
+		var enemies_snapshot := GameManager.live_enemies.duplicate()
+		for e in enemies_snapshot:
+			if e == null or not is_instance_valid(e) or e.dying or e == self:
+				continue
+			if e.is_in_group("chests") or e.is_in_group("herbs"):
+				continue
+			var ex_off: Vector2 = e.global_position - global_position
+			if ex_off.length() > ex_radius:
+				continue
+			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
+			e.take_damage(ex_dmg, ex_dir * ex_impulse)
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-		var offset = Vector2.ZERO if gem_count == 1 else Vector2(GameManager.rng.randf_range(-24.0, 24.0), GameManager.rng.randf_range(-24.0, 24.0))
+		var offset = Vector2.ZERO if gem_count == 1 else Vector2(
+				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS),
+				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS))
 		gem.global_position = global_position + offset
 		gem.exp_value = exp_reward
 		gem.is_gold = is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
 		if is_elite:
-			gem.exp_value = 8
+			gem.exp_value = GameBalance.ELITE_GEM_EXP
 		else:
 			# 碎晶档（2026-10-13 经济优化）：普通怪按回合概率掉最低面额小水晶 ——
 			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，稀释后期金币通胀。
@@ -1658,19 +1695,19 @@ func _die() -> void:
 	if hit_flash_mat != null:
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 
-		# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
-		var tw = create_tween()
-		tw.tween_property(anim_sprite, "scale", anim_base_scale * Vector2(1.28, 1.28), 0.045)\
+	# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
+	var tw = create_tween()
+	tw.tween_property(anim_sprite, "scale", anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE), 0.045)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if procedural_view != null:
+		tw.parallel().tween_property(procedural_view, "scale", anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE), 0.045)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		if procedural_view != null:
-			tw.parallel().tween_property(procedural_view, "scale", anim_base_scale * Vector2(1.28, 1.28), 0.045)\
-				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.set_parallel(true)
-		tw.tween_property(anim_sprite, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-		tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.14)
-		if procedural_view != null:
-			tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-			tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
-		# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
-		# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
-		tw.chain().tween_callback(_recycle_or_free)
+	tw.set_parallel(true)
+	tw.tween_property(anim_sprite, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.14)
+	if procedural_view != null:
+		tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
+	# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
+	# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
+	tw.chain().tween_callback(_recycle_or_free)

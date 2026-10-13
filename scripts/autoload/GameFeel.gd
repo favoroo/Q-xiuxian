@@ -5,38 +5,89 @@ extends RefCounted
 ## 从 GameManager 抽离，负责镜头创伤震屏、缩放冲击、顿帧（Hit-Stop）与受击红晕脉冲。
 
 static func add_trauma(gm: Node, amount: float) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
+	if shake_mult_memo() <= 0.0:
 		return
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("add_trauma"):
 		gm.main_camera.add_trauma(amount)
 
 static func zoom_punch(gm: Node, scale_amount: float = 0.05, duration: float = 0.18) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
+	if shake_mult_memo() <= 0.0:
 		return
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("zoom_punch"):
 		gm.main_camera.zoom_punch(scale_amount, duration)
 
 static func shake_camera(gm: Node, intensity: float = 3.5, duration: float = 0.12) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
+	if shake_mult_memo() <= 0.0:
 		return
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("shake"):
 		gm.main_camera.shake(intensity, duration)
 
 static func kick_camera(gm: Node, dir: Vector2, strength: float = 3.0) -> void:
-	if SettingsManager.shake_mult() <= 0.0:
+	if shake_mult_memo() <= 0.0:
 		return
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("kick_directional"):
 		gm.main_camera.kick_directional(dir, strength)
 
+# ---------------- 设置每帧 memo（Android 稳态 GC 治理） ----------------
+## get_val 每次调用分配 2 个 String（StringName→String 转换），shake_mult 一次 ≈ 6 个分配；
+## 单次暴击命中链原来要穿透读 8 次 get_val（16 String），高频命中下是稳态 GC 停顿来源。
+## 这里按帧号缓存本帧读过的开关值：同一帧内首次读取穿透 SettingsManager，之后全帧吃 memo。
+## 设置变更最迟下一帧生效——一帧滞后玩家不可感，免接 setting_changed 信号。
+## 测试需要同帧生效时调 invalidate_memo()。
+static var _memo_frame: int = -1
+static var _memo_shake_mult: float = 1.0
+static var _memo_hit_stop: bool = true
+static var _memo_haptics: bool = true
+static var _memo_damage_numbers: bool = true
+static var _memo_screen_flash: bool = true
+
+static func _refresh_memo() -> void:
+	var f := Engine.get_process_frames()
+	if f == _memo_frame:
+		return
+	_memo_frame = f
+	_memo_shake_mult = SettingsManager.shake_mult()
+	_memo_hit_stop = bool(SettingsManager.get_val(&"display", &"hit_stop", true))
+	_memo_haptics = bool(SettingsManager.get_val(&"display", &"haptics", true))
+	_memo_damage_numbers = bool(SettingsManager.get_val(&"display", &"damage_numbers", true))
+	_memo_screen_flash = bool(SettingsManager.get_val(&"display", &"screen_flash", true))
+
+## 本帧的震屏幅度倍率（shake_mult 的每帧 memo 版）
+static func shake_mult_memo() -> float:
+	_refresh_memo()
+	return _memo_shake_mult
+
+static func hit_stop_enabled() -> bool:
+	_refresh_memo()
+	return _memo_hit_stop
+
+static func haptics_enabled() -> bool:
+	_refresh_memo()
+	return _memo_haptics
+
+## 跳字开关（DamageNumber.spawn 每次命中读取，走 memo 免 String 分配）
+static func damage_numbers_enabled() -> bool:
+	_refresh_memo()
+	return _memo_damage_numbers
+
+## 红屏/濒死脉冲开关（Main 每帧读取）
+static func screen_flash_enabled() -> bool:
+	_refresh_memo()
+	return _memo_screen_flash
+
+## 强制下帧首读重新穿透（测试或特殊同步场景用；正常游戏流一帧 TTL 自然过期）
+static func invalidate_memo() -> void:
+	_memo_frame = -1
+
 ## 零延迟触觉反馈（Android 真机马达振动，桌面端静默忽略）
 static func vibrate(duration_ms: int = 18, amplitude: float = 0.5) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"haptics", true)):
+	if not haptics_enabled():
 		return
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(duration_ms, amplitude)
 
 static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.05) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"hit_stop", true)):
+	if not hit_stop_enabled():
 		return
 	gm._hitstop_token += 1
 	var token: int = gm._hitstop_token

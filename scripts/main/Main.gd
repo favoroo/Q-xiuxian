@@ -27,13 +27,8 @@ func _ready() -> void:
 	$UILayer/GameHUD.visible = false
 	if joystick != null:
 		joystick.visible = false
-	GameManager.weapons_updated.connect(func(weapons: Array):
-		if not weapons.is_empty():
-			if $UILayer.has_node("GameHUD"):
-				$UILayer/GameHUD.visible = true
-			if joystick != null:
-				joystick.visible = true
-	)
+	if not GameManager.weapons_updated.is_connected(_on_weapons_updated):
+		GameManager.weapons_updated.connect(_on_weapons_updated)
 	$UILayer/GameHUD.pause_requested.connect(pause_menu.open)
 	$UILayer/GameHUD.stats_requested.connect(func():
 		_stats_return_to_pause = false
@@ -114,7 +109,8 @@ func _ready() -> void:
 			_settings_return_to_pause = false
 			pause_menu.open()
 	)
-	GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
+	if not GameManager.screen_damage_pulsed.is_connected(_on_screen_damage_pulsed):
+		GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
 
 	# 聚灵阵信号接线：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
 	var hud: GameHUD = $UILayer/GameHUD
@@ -146,6 +142,11 @@ func _ready() -> void:
 		start_menu.open()
 
 func _exit_tree() -> void:
+	# 归还 autoload 引用槽：场景释放后 Player / WaveSpawner / Joystick 已被释放，
+	# 留着悬空引用会让 knockback_vec 等消费点 deref freed object 崩溃。
+	GameManager.player = null
+	GameManager.wave_spawner = null
+	GameManager.joystick = null
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
@@ -218,9 +219,10 @@ func _process(delta: float) -> void:
 		if petal_particles != null:
 			petal_particles.global_position = p_pos
 
-			# 濒死生命警示脉冲（生命值低于 28% 时边缘微红呼吸跳动）
+			# 濒死生命警示脉冲（阈值走 GameBalance.hp_is_low：与 HUD 血字、灵石阁徽记同一把尺）
 			var p = GameManager.player
-			var in_low_hp: bool = bool(SettingsManager.get_val(&"display", &"screen_flash", true)) and p.max_health > 0.0 and (p.current_health / p.max_health) < 0.28
+			# 开关走 GameFeel 每帧 memo：本分支每渲染帧执行，原 get_val 每帧 2 个 String 分配
+			var in_low_hp: bool = GameFeel.screen_flash_enabled() and GameBalance.hp_is_low(p.current_health, p.max_health)
 			if in_low_hp:
 				_low_hp_phase += delta * 4.5
 				var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
@@ -236,6 +238,13 @@ func _process(delta: float) -> void:
 					if _vignette_tween == null or not _vignette_tween.is_valid():
 						mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
 						mat.set_shader_parameter("vignette_opacity", 0.5)
+
+func _on_weapons_updated(weapons: Array) -> void:
+	if not weapons.is_empty():
+		if $UILayer.has_node("GameHUD"):
+			$UILayer/GameHUD.visible = true
+		if joystick != null:
+			joystick.visible = true
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if not bool(SettingsManager.get_val(&"display", &"screen_flash", true)):

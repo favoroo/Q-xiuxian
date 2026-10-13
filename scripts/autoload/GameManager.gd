@@ -278,7 +278,7 @@ var item_price_mult: float = 1.0   ## 多宝道人：道具价格乘区（叠加
 var shop_slots_bonus: int = 0      ## 多宝道人：货架格数加成
 var contraption_threshold_adj: int = 0  ## 机关师：机关羁绊门槛下移
 var stone_interest_rate: float = 0.0    ## 守财奴：回合末金币结息比率
-var stone_interest_cap: int = 15        ## 守财奴：回合末金币结息上限
+var stone_interest_cap: int = 30        ## 守财奴：回合末金币结息上限
 var on_hit_damage_bonus: float = 0.0    ## 嗜血魔修：受击单层增伤
 var on_hit_damage_cap_stacks: int = 10  ## 嗜血魔修：增伤最大层数
 var on_hit_damage_stacks: int = 0
@@ -392,6 +392,7 @@ var upgrade_counts: Dictionary = {}
 func reset_run() -> void:
 	# 70+ 单局成员的清零表在 RunReset（显式类型化赋值），新增成员记得去那边补默认值
 	RunReset.reset(self)
+	_stat_dict_frame = -1  # 属性字典 memo 随之作废，防止同帧后续读旧属性
 
 func _process(delta: float) -> void:
 	if on_hit_damage_timer > 0.0:
@@ -489,6 +490,7 @@ func touch_peak_stones() -> void:
 func apply_upgrade(upgrade_id: String) -> void:
 	var def := UpgradeData.get_upgrade_def(upgrade_id)
 	_apply_stat_fields(def.get("apply", {}), upgrade_id)
+	_stat_dict_frame = -1  # 属性字典 memo 立即作废：加点当帧武器就得吃到新数值
 
 	var prev_count: int = int(upgrade_counts.get(upgrade_id, 0)) + 1
 	upgrade_counts[upgrade_id] = prev_count
@@ -612,7 +614,7 @@ func knockback_force(base: float) -> float:
 ## 玩家不在场（单测、局外预览）时把玩家位置退回施力点 = 纯径向旧行为，不会出 NaN。
 ## 各武器只许经这一个出口拿方向，别再自己写 (enemy - source).normalized()。
 func knockback_vec(source: Vector2, enemy_pos: Vector2, base: float) -> Vector2:
-	var player_pos: Vector2 = source if player == null else player.global_position
+	var player_pos: Vector2 = source if player == null or not is_instance_valid(player) else player.global_position
 	return GameBalance.knock_dir(source, enemy_pos, player_pos) * knockback_force(base)
 
 ## 斩将：对精英/Boss（is_elite 标记）的额外伤害乘区，普通敌人不受影响
@@ -622,8 +624,9 @@ func elite_damage_mult_for(enemy: Variant) -> float:
 	return 1.0 + elite_damage if enemy.get("is_elite") == true else 1.0
 
 func get_player_stat_dict() -> Dictionary:
-	var cur_hp := 120.0
-	var max_hp := 120.0
+	# 玩家未生成时的兜底读数一律取 Player 的基础常量，不许再写一份字面量
+	var cur_hp := Player.BASE_MAX_HEALTH
+	var max_hp := Player.BASE_MAX_HEALTH
 	if player != null and is_instance_valid(player):
 		cur_hp = player.current_health
 		max_hp = player.max_health
@@ -650,12 +653,30 @@ func get_player_stat_dict() -> Dictionary:
 		"pet_cooldown_mult": pet_cooldown_mult,
 	}
 
+## 属性字典每物理帧 memo：武器攻击路径（FloatingWeapon 每把每次开火、TurretUnit 每台
+## 每次开火）都要经 get_weapon_stat_bonus 构建这份 20 键字典，多武器齐射时同一物理帧
+## 内重复构建。这里按物理帧号缓存一份，同帧内多武器共享；UI 直接调 get_player_stat_dict
+## 的调用点不走 memo，保证 current_hp 永远实时。
+var _stat_dict_frame: int = -1
+var _stat_dict_memo: Dictionary = {}
+
+## 武器折算专用的属性快照（每物理帧重建一次，同帧共享）
+func _stat_dict_for_weapons() -> Dictionary:
+	var f := Engine.get_physics_frames()
+	if f != _stat_dict_frame:
+		_stat_dict_frame = f
+		_stat_dict_memo = get_player_stat_dict()
+	return _stat_dict_memo
+
 func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
 	var def := WeaponData.get_def(w_id)
-	var scalings: Dictionary = def.get("stat_scalings", {})
+	# 先判键存在再 get 默认值：默认值 {} 字面量每次调用都要分配一个空字典
+	if not def.has("stat_scalings"):
+		return 0.0
+	var scalings: Dictionary = def["stat_scalings"]
 	if scalings.is_empty():
 		return 0.0
-	return GameBalance.weapon_stat_bonus(scalings, get_player_stat_dict(), star)
+	return GameBalance.weapon_stat_bonus(scalings, _stat_dict_for_weapons(), star)
 
 ## 命中时尝试噬元回血（每秒最多触发 LIFESTEAL_MAX_PER_SEC 次，防高频武器无限续航）
 func try_lifesteal() -> void:
@@ -752,6 +773,7 @@ func add_item(item_id: String) -> bool:
 	items.append(item_id)
 	_still_cache_valid = false
 	_hook_cache.clear()
+	_stat_dict_frame = -1  # 属性字典 memo 立即作废：道具当帧就得生效
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	return true
 
@@ -776,6 +798,7 @@ func sell_item(item_id: String) -> bool:
 	items.remove_at(i)
 	_still_cache_valid = false
 	_hook_cache.clear()
+	_stat_dict_frame = -1  # 属性字典 memo 立即作废：退货当帧就得回退数值
 	# 图鉴种数账本（收藏家）：卖掉最后一件同种，种数 −1（与 consume_item 同一条回退）
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)

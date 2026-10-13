@@ -4,10 +4,18 @@ extends CharacterBody2D
 const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
 const DASH_LANDING_SPEED_MUL: float = 1.35  ## 冲刺落地那帧的残留速度上限（× 常速）：只留一点前冲，不许拖出隐形滑行
 const SPIRIT_HEALER_SCENE: PackedScene = preload("res://scenes/entities/SpiritHealer.tscn")  ## 治疗灵兽（renewal 附带召唤）
+## 玩家基础属性三件套：全项目「玩家没生成时」的兜底读数一律引用这三个常量，
+## 不许再各写一份字面量（改一个数要同步七处的旧病）。
+const BASE_MAX_HEALTH: float = 120.0      ## 基础生命：CultivatorData 只有 hp_mult 乘区，这里是唯一权威基线
+const BASE_SPEED: float = 210.0           ## 基础移速（乘区/技能 buff 在此之上叠加）
+## 受击无敌帧（秒）。它同时是挨打频率的饱和线：1/0.55 ≈ 1.82 下/秒，
+## GuardStanceData 的蓄能节流、ShadowStepData 的有效生命兑现、BalanceWave 的挨打生存论证都锚这个数 ——
+## 改它之前先把那三处的注释推导一起重算，否则平衡文档会静默失真。
+const BASE_INVULNERABLE_TIME: float = 0.55
 
-@export var max_health: float = 120.0
-var current_health: float = 120.0
-var base_speed: float = 210.0
+@export var max_health: float = BASE_MAX_HEALTH
+var current_health: float = BASE_MAX_HEALTH
+var base_speed: float = BASE_SPEED
 var invulnerable_time: float = 0.0
 
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -20,7 +28,17 @@ var invulnerable_time: float = 0.0
 
 var sun_orb_angle: float = 0.0
 var idle_bob_phase: float = 0.0
-var facing: String = "s"
+var facing: String = "s":
+	set(val):
+		# 同值短路：_physics_process 每帧都会写本字段（照 EnemyBase 同款缓存）
+		if val == facing:
+			return
+		facing = val
+		_rebuild_anim_name_cache()
+## 动画名缓存：facing 极少变化，但朝向/步态分支每物理帧都要拼接 + has_animation
+## 重查，改为 facing 变更时一次性重建（与 EnemyBase 同口径）
+var _anim_idle: String = "idle_s"
+var _anim_run: String = "run_s"
 # 移动方式：gait=步态腿帧（默认）/ hover=御剑悬浮（单姿势图集 + RunMotion.apply_hover 程序驱动）
 var _motion_mode: String = "gait"
 var anim_base_scale: Vector2 = Vector2.ONE
@@ -163,6 +181,12 @@ func _setup_sprite_frames() -> void:
 
 	anim_sprite.sprite_frames = sf
 	anim_sprite.play("idle_s")
+	_rebuild_anim_name_cache()
+
+## 按 facing 重建 idle/run 动画名缓存（帧集装配与朝向变更时各调一次）
+func _rebuild_anim_name_cache() -> void:
+	_anim_idle = "idle_" + facing
+	_anim_run = "run_" + facing
 
 func _cell_tex(tex: Texture2D, col: int, row: int) -> AtlasTexture:
 	var at = AtlasTexture.new()
@@ -774,16 +798,14 @@ func _physics_process(delta: float) -> void:
 				shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + 0.15 * speed_ratio) * shadow_pulse
 		elif _motion_mode == "hover":
 			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
-			RunMotion.select_anim(anim_sprite, "idle_" + facing, false)
+			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
 		else:
-			var run_anim: String = "run_" + facing
-			RunMotion.select_anim(anim_sprite, run_anim, true)
+			RunMotion.select_anim(anim_sprite, _anim_run, true)
 
 			var lean_axis: float = absf(effective_dir.x)
 			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 	else:
-		var idle_anim: String = "idle_" + facing
 		if is_procedural and procedural_view != null:
 			procedural_view.scale = current_base * 1.5
 			procedural_view.rotation = lerp_angle(procedural_view.rotation, 0.0, minf(delta * 10.0, 1.0))
@@ -792,10 +814,10 @@ func _physics_process(delta: float) -> void:
 			if shadow_sprite != null:
 				shadow_sprite.scale = Vector2(0.85, 0.85)
 		elif _motion_mode == "hover":
-			RunMotion.select_anim(anim_sprite, idle_anim, false)
+			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
 		else:
-			RunMotion.select_anim(anim_sprite, idle_anim, false)
+			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			idle_bob_phase += delta * 2.2
 			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
@@ -1079,11 +1101,11 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
 	current_health = maxf(0.0, current_health - reduced)
-	invulnerable_time = 0.55
+	invulnerable_time = BASE_INVULNERABLE_TIME
 	GameManager.on_player_hit(reduced)
 
 	# 守卫·盾势：被护甲挡下的那部分伤害存进盾势槽，蓄满当帧自动爆发（全自动，不用学操作）。
-	# 蓄能天然被 0.55s 受击无敌帧节流，贴身怪群也不会超频连炸；数值全在 GuardStanceData。
+	# 蓄能天然被受击无敌帧（BASE_INVULNERABLE_TIME）节流，贴身怪群也不会超频连炸；数值全在 GuardStanceData。
 	if GameManager.guard_stance > 0.0:
 		GameManager.shield_charge = GuardStanceData.add_charge(
 			GameManager.shield_charge, amount - reduced, max_health)

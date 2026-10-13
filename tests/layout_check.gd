@@ -149,6 +149,9 @@ func _stress_hud(hud: Control) -> void:
 		hud.wave_countdown.show_as_worst_case()
 	else:
 		hud.wave_label.text = "第 20 波"
+	# 余妖芯片同一约定：样本走控件自己的 worst_case_text，锁刷新由控件自己做
+	if hud.wave_left != null:
+		hud.wave_left.show_as_worst_case()
 	hud.kills_label.text = "击杀 12847"
 	hud.shards_label.text = "金币 99999"
 	var box: HBoxContainer = hud.get("_synergy_box")

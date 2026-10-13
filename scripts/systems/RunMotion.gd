@@ -53,12 +53,19 @@ const SECTOR_TABLE := [
 static func facing(dir: Vector2) -> Array:
 	return facing_stable(dir, "", false)
 
+## 结果暂存数组：facing_stable 每敌人每物理帧调一次（35 敌 ≈ 2100 次/秒），
+## 每次返回新 Array 会成为 Android 稳态 GC 停顿的来源，故复用同一实例。
+## 调用方必须当帧立即消费（读下标），不得持有引用跨帧使用。
+static var _face_out: Array = ["", false]
+
 ## 带迟滞滤波（Hysteresis）的 8 方向判定：
 ## 当输入角度仍在当前扇区中心 ±HYSTERESIS_DEG (29°) 范围内时保持原方向不变，
 ## 彻底根治摇杆或追击向量在 22.5° 象限交界处引起的朝向/flip_h 每帧高频抽搐。
 static func facing_stable(dir: Vector2, cur_facing: String, cur_flip: bool, threshold_deg: float = HYSTERESIS_DEG) -> Array:
 	if dir.length_squared() < 0.0025:
-		return [cur_facing, cur_flip]
+		_face_out[0] = cur_facing
+		_face_out[1] = cur_flip
+		return _face_out
 
 	var angle_deg := rad_to_deg(dir.angle())
 
@@ -69,11 +76,15 @@ static func facing_stable(dir: Vector2, cur_facing: String, cur_flip: bool, thre
 			var center_deg: float = SECTOR_TABLE[cur_sector][2]
 			var diff := absf(_angle_diff_deg(angle_deg, center_deg))
 			if diff <= threshold_deg:
-				return [cur_facing, cur_flip]
+				_face_out[0] = cur_facing
+				_face_out[1] = cur_flip
+				return _face_out
 
 	var sector := wrapi(int(floor((angle_deg + 22.5) / 45.0)), 0, 8)
 	var entry: Array = SECTOR_TABLE[sector]
-	return [entry[0], entry[1]]
+	_face_out[0] = entry[0]
+	_face_out[1] = entry[1]
+	return _face_out
 
 static func _find_sector(anim_dir: String, flip_h: bool) -> int:
 	for i in range(8):

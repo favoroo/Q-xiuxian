@@ -533,7 +533,9 @@ func _enter_phase2() -> void:
 	play_squash(Vector2(1.3, 0.75), 0.35)
 	GameManager.announcement_triggered.emit("⚠ %s · 狂暴形态 ⚠" % boss_title)
 	AudioManager.play_sfx("boss_raid", 1.15)
-	GameManager.feedback(GameManager.FeedbackTier.LARGE)
+	# 狂暴是全游戏最高光的瞬间之一，给最强档（HEAVY 自带更大创伤/顿帧/缩放，内部单发，
+	# 不再叠第二处反馈 —— 「同一次事件只许一处发反馈」口径）。
+	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:

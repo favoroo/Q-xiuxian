@@ -33,6 +33,7 @@ func _ready() -> void:
 	wave._test_spawn_shape()
 	wave._test_enemy_mix()
 	wave._test_new_enemy_mechanics()
+	wave._test_enemy_id_prefixes()
 	combat._test_enemy_bolt()
 	economy._test_pricing()
 	economy._test_tag_affinity()

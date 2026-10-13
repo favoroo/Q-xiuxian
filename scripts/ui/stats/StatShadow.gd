@@ -104,9 +104,9 @@ var _real: Object = null
 ## 外加 increase_max_hp 这一枪 —— 算式与 Player.increase_max_hp 同两行，
 ## 但不发 player_hp_changed、不挤压形变、不 spawn 跳字（那些是真身的事）。
 class PlayerMirror extends RefCounted:
-	var current_health: float = 120.0
-	var max_health: float = 120.0
-	var base_speed: float = 210.0
+	var current_health: float = Player.BASE_MAX_HEALTH
+	var max_health: float = Player.BASE_MAX_HEALTH
+	var base_speed: float = Player.BASE_SPEED
 
 	func increase_max_hp(amount: float, heal_amount: float) -> void:
 		max_health += amount

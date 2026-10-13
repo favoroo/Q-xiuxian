@@ -126,7 +126,8 @@ static func _scene_root_for(node: Node) -> Node:
 
 ## 生成一条跳字。parent 仅用于定位场景树，节点实际挂在池宿主下（保持既有调用签名）
 static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false, custom_text: String = "") -> void:
-	if not bool(SettingsManager.get_val(&"display", &"damage_numbers", true)):
+	# 开关走 GameFeel 每帧 memo：spawn 每次命中都调，原 get_val 每发 2 个 String 分配
+	if not GameFeel.damage_numbers_enabled():
 		return
 	if parent == null or not is_instance_valid(parent):
 		return

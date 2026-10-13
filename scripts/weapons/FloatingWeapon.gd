@@ -71,6 +71,29 @@ var is_attacking: bool = false
 var bob_phase: float = 0.0
 var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
 
+# ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
+## 每次开火原建 3~4 个局部 Tween（后坐 1 + 枪口闪光 1 + 本体亮闪 1 + 光晕 1），
+## 高攻速齐射下是每秒几十个 Tween 分配。改照 EnemyBase._tick_hit_fx 的帧内状态机范式：
+## 起火时记初值，_tick_fire_fx 逐帧闭式插值回位，曲线与原 Tween 等价（EXPO 急退 + BACK 弹回）。
+const RECOIL_DIST := 8.0        ## 远程后坐距离（px，沿 aim_dir 反向）
+const RECOIL_BACK_TIME := 0.04  ## 后坐急退段时长
+const RECOIL_RETURN_TIME := 0.12 ## 后坐弹回段时长
+const TURRET_DIP := Vector2(0, 8)  ## 召唤炮台时本体下沉量
+const MUZZLE_TIME := 0.09      ## 枪口闪光消退时长
+const AURA_BASE_A := 0.12      ## 光晕常驻透明度（与待机脉动基线一致）
+const AURA_FLASH_A := 0.45     ## 光晕点亮峰值
+var _lunge_t: float = -1.0     ## >=0 表示后坐/沉身进行中；走完释放 is_attacking
+var _lunge_total: float = 0.0
+var _lunge_out_time: float = 0.0
+var _lunge_orig: Vector2 = Vector2.ZERO
+var _lunge_out: Vector2 = Vector2.ZERO
+var _lunge_ends_attack: bool = false  ## 演出走完是否代释放 is_attacking
+var _flash_t: float = 0.0      ## 本体亮闪剩余时间
+var _flash_total: float = 0.0001
+var _flash_from: Color = Color.WHITE
+var _muzzle_t: float = 0.0     ## 枪口闪光剩余时间
+var _muzzle_scale0: float = 0.5
+
 ## 脱程重查节流（2026-10-10 第 6 波卡顿优化）：15Hz + instance_id 错相
 const RETARGET_INTERVAL := 1.0 / 15.0
 var _retarget_phase: float = 0.0
@@ -220,20 +243,70 @@ func _setup_muzzle_flash() -> void:
 	muzzle_flash.visible = false
 	add_child(muzzle_flash)
 
-## 武器本体短促亮闪（近战挥砍/远程开火共用，微光圈同步亮起）
+## 本体短促亮闪（近战挥砍/远程开火共用，微光圈同步亮起）——零 Tween 分配版：
+## 记下起点色，衰减在 _tick_fire_fx 逐帧插值回白/回基线
 func _flash_sprite(color: Color, dur: float) -> void:
 	sprite.modulate = color
-	var ftw := create_tween()
-	ftw.tween_property(sprite, "modulate", Color.WHITE, dur)
+	_flash_from = color
+	_flash_total = maxf(dur, 0.0001)
+	_flash_t = _flash_total
 	if aura_sprite != null:
-		aura_sprite.modulate.a = 0.45
-		var atw := create_tween()
-		atw.tween_property(aura_sprite, "modulate:a", 0.12, dur)
+		aura_sprite.modulate.a = AURA_FLASH_A
+
+## 开火视觉帧内状态机推进（后坐/沉身、本体亮闪、枪口闪光、光晕回位）
+## 在 _process 每渲染帧调用；全部闭式插值，不再创建 Tween
+func _tick_fire_fx(delta: float) -> void:
+	# 1. 后坐（EXPO 急退 + BACK 弹回，曲线与原双段 Tween 等价）
+	if _lunge_t >= 0.0:
+		_lunge_t += delta
+		var t: float = _lunge_t
+		if t <= _lunge_out_time:
+			# 急退段：EXPO EASE_OUT
+			var k: float = t / _lunge_out_time
+			position = _lunge_orig.lerp(_lunge_out, 1.0 - pow(2.0, -10.0 * k))
+		elif t < _lunge_total:
+			# 弹回段：TRANS_BACK EASE_OUT 过冲回位
+			var k2: float = (t - _lunge_out_time) / (_lunge_total - _lunge_out_time)
+			const BACK_S := 1.70158
+			var e: float = 1.0 + (BACK_S + 1.0) * pow(k2 - 1.0, 3.0) + BACK_S * pow(k2 - 1.0, 2.0)
+			position = _lunge_out.lerp(_lunge_orig, e)
+		else:
+			position = _lunge_orig
+			_lunge_t = -1.0
+			if _lunge_ends_attack:
+				is_attacking = false
+	# 2. 本体亮闪回白
+	if _flash_t > 0.0:
+		_flash_t = maxf(_flash_t - delta, 0.0)
+		var fk := 1.0 - _flash_t / _flash_total
+		sprite.modulate = _flash_from.lerp(Color.WHITE, fk)
+	# 3. 光晕回基线（回位后由待机呼吸脉动接管）
+	if aura_sprite != null and aura_sprite.modulate.a > AURA_BASE_A and _lunge_t < 0.0:
+		aura_sprite.modulate.a = maxf(aura_sprite.modulate.a - delta * (AURA_FLASH_A - AURA_BASE_A) / MUZZLE_TIME, AURA_BASE_A)
+	# 4. 枪口闪光：放大 + 淡出 + 到点隐藏
+	if _muzzle_t > 0.0:
+		_muzzle_t = maxf(_muzzle_t - delta, 0.0)
+		var mk := 1.0 - _muzzle_t / MUZZLE_TIME
+		muzzle_flash.scale = Vector2.ONE * lerpf(_muzzle_scale0, 0.85, mk)
+		muzzle_flash.modulate.a = lerpf(0.95, 0.0, mk)
+		if _muzzle_t <= 0.0:
+			muzzle_flash.visible = false
+
+## 发起一次后坐/沉身演出（_perform_projectile_attack 与 _perform_turret_attack 共用）
+## ends_attack=true 时演出走完代释放 is_attacking（替代原 Tween 的收尾回调）
+func _begin_lunge(out_offset: Vector2, out_time: float, back_time: float, ends_attack: bool) -> void:
+	_lunge_orig = position
+	_lunge_out = _lunge_orig + out_offset
+	_lunge_out_time = out_time
+	_lunge_total = out_time + back_time
+	_lunge_t = 0.0
+	_lunge_ends_attack = ends_attack
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
 
+	_tick_fire_fx(delta)
 	cooldown_timer -= delta
 	bob_phase += delta * 3.5
 
@@ -323,13 +396,9 @@ func _perform_turret_attack() -> void:
 	get_tree().current_scene.add_child(turret)
 	active_turrets.append(turret)
 
-	var orig_pos := position
-	var tw := create_tween()
-	tw.tween_property(self, "position", orig_pos + Vector2(0, 8), 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(sprite, "modulate", Color(1.4, 1.3, 0.8), 0.08)
-	tw.tween_property(self, "position", orig_pos, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.12)
-	tw.tween_callback(func(): is_attacking = false)
+	# 召唤沉身演出：下沉 + 金光亮闪 → 弹性回正（帧内状态机，零 Tween）
+	_begin_lunge(TURRET_DIP, 0.08, 0.12, true)
+	_flash_sprite(Color(1.4, 1.3, 0.8), 0.12)
 
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
@@ -344,25 +413,17 @@ func _perform_projectile_attack() -> void:
 		# 开火这一帧就把发射帧拧到目标方位：贴图补偿跟着走，剑尖与出膛方向同轴
 		_apply_facing(aim_dir.angle())
 
-	# 后坐动画：极速后座冲击（0.03s）+ 弹性回正，凸显远程出膛爆发力
-	var orig_pos = position
-	var recoil_pos = orig_pos - aim_dir * 8.0
-	var tw = create_tween()
-	tw.tween_property(self, "position", recoil_pos, 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "position", orig_pos, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_callback(func(): is_attacking = false)
+	# 后坐动画：极速后座冲击（0.04s）+ 弹性回正，凸显远程出膛爆发力（帧内状态机，零 Tween）
+	_begin_lunge(-aim_dir * RECOIL_DIST, RECOIL_BACK_TIME, RECOIL_RETURN_TIME, true)
 
-	# 开火反馈：枪口闪光 + 本体亮闪
+	# 开火反馈：枪口闪光 + 本体亮闪（状态机版本：起火时记初值，_tick_fire_fx 推进）
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
-		muzzle_flash.scale = Vector2.ONE * randf_range(0.42, 0.52)
+		_muzzle_scale0 = randf_range(0.42, 0.52)
+		muzzle_flash.scale = Vector2.ONE * _muzzle_scale0
 		muzzle_flash.modulate = Color(1.0, 0.9, 0.55, 0.95)
 		muzzle_flash.visible = true
-		var ftw = create_tween()
-		ftw.set_parallel(true)
-		ftw.tween_property(muzzle_flash, "scale", Vector2.ONE * 0.85, 0.09)
-		ftw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.09)
-		ftw.chain().tween_callback(func(): muzzle_flash.visible = false)
+		_muzzle_t = MUZZLE_TIME
 	_flash_sprite(Color(1.35, 1.35, 1.35), 0.12)
 
 	var p_count: int = maxi(1, int(def.get("projectile_count", 1)))

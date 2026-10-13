@@ -177,6 +177,15 @@ func _destroy() -> void:
 		return
 	dying = true
 	AudioManager.play_sfx("chest_open", 0.9)
+	if tier == BalanceChest.TIER_JADE:
+		# 玉匣是全场最高档匣子，破开给一次专属镜头语言（青碧金环 + 缩放冲击 + 击杀级轻顿，
+		# 全走限流原语，受 display 设置总闸约束）。木/铜保持原样：每回合 2~4 口匣子，全发会把高光糊成常态
+		# （「震屏只给特殊场景」口径）。环画在 parent 池层，不延后 queue_free ——
+		# 匣子多活一拍会撑破「chests」组的计数判据。
+		# 受击侧旧注释「匣子不值得震屏与顿帧」只管逐下锤的木裂反馈，不管破匣这一口高光。
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, 72.0, GameStyle.JADE, 0.32)
+		GameFeel.zoom_punch(GameManager, 0.05, 0.18)
+		GameFeel.kill_hit_stop(GameManager)
 	var reward: Dictionary = GameBalance.chest_reward(tier)
 	# 玉匣的头奖就是那件道具；每局送满上限后退回铜匣量级，不许空口白牙（口径见 BalanceChest）
 	if bool(reward.get("grant_item", false)) and not GameManager.chest_grant_item():

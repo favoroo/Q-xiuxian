@@ -37,11 +37,16 @@ var _boss_bar_widget: HudBossBar = null
 ## 顶栏回合倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
 ## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
 var wave_countdown: HudWaveCountdown = null
+## 顶栏本波剩余敌数「余妖 N/M」：数据源 WaveSpawner.wave_left_count/wave_total_count，
+## 与提前清场判定同源；只有 FIGHT 阶段上屏
+var wave_left: HudWaveLeft = null
 
 ## 升级动效句柄（_on_leveled_up）：连升多级时信号连发，tween 全部可杀可重播
 var _lv_tween: Tween = null
 var _lv_label_tween: Tween = null
 var _flash_tween: Tween = null
+var _flash_queued: bool = false  ## 升级闪屏防重入：上一闪没淡完时排队等淡完再补，不跳峰
+var _last_hp_low: bool = false  ## 血量告急色守卫：仅状态翻转时写一次 override，不每次信号都刷
 var _hp_tween: Tween = null     ## 血条补间持久句柄：命中/吸血每帧都可能发信号，局部 tween 不 kill 会堆积（2026-10-13 掉帧根因）
 var _exp_tween: Tween = null    ## 经验条补间持久句柄：拾宝连发同因
 var _banner_tween: Tween = null ## 横幅补间持久句柄
@@ -180,6 +185,10 @@ func _build_widgets() -> void:
 	# 与文字同样宽的底边去画那根线（不改 .tscn、不给顶栏添新格子）。
 	wave_countdown = HudWaveCountdown.new(wave_label)
 	$TopContainer/CenterBox/WaveChip.add_child(wave_countdown)
+	# 本波剩余敌数：第二排右缘自锚定芯片（顶栏最坏样本已零余量，见 HudWaveLeft 头注），
+	# 只读 spawner 两个 int，5Hz 轮询
+	wave_left = HudWaveLeft.new()
+	add_child(wave_left)
 
 ## 供冒烟测试与调试断言：血条当前是否上屏
 func is_boss_bar_visible() -> bool:
@@ -335,7 +344,11 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	hp_label.text = str(int(cur)) + "/" + str(int(max_v))
 	var low := GameBalance.hp_is_low(cur, max_v)
-	hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
+	# 仅在告急状态翻转时写 override：战斗中挨打/吸血每秒十几次信号，
+	# 每次都调 add_theme_color_override 触发 NOTIFICATION_THEME_CHANGED 是无谓开销
+	if low != _last_hp_low:
+		_last_hp_low = low
+		hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
 
 ## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 斜切光环/星屑（HudLevelBadgeFx）。
 ## 可重入：连升多级时 player_leveled_up 连发，先杀旧 tween、颜色复位，再整段重播。
@@ -371,15 +384,30 @@ func _on_leveled_up(_lvl: int) -> void:
 	_lv_label_tween = create_tween()
 	_lv_label_tween.tween_property(level_label, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	HudLevelBadgeFx.burst(self, badge)
+	# 全屏金光：防重入——上一闪没淡完时排队，等淡完再补一次，避免 alpha 跳峰造成按钮闪
 	if _flash_rect != null:
-		_flash_rect.modulate.a = 1.0
-		_flash_tween = create_tween()
-		_flash_tween.tween_property(_flash_rect, "modulate:a", 0.0, 0.28).set_delay(0.06)
+		if _flash_tween != null and _flash_tween.is_valid():
+			_flash_queued = true
+		else:
+			_play_level_flash()
 	# 震屏只给特殊场景：升级算一个，但只给最轻一档的缩放冲击，连升 0.2s 内只顿一次
 	var now_ms := Time.get_ticks_msec()
 	if now_ms - _last_zoom_ms >= 200:
 		_last_zoom_ms = now_ms
 		GameFeel.zoom_punch(GameManager, 0.025, 0.2)
+
+## 升级金光实际播放：alpha 跳峰→淡出，结束后检查排队标记补一次
+func _play_level_flash() -> void:
+	if _flash_rect == null:
+		return
+	_flash_rect.modulate.a = 1.0
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_flash_rect, "modulate:a", 0.0, 0.28).set_delay(0.06)
+	_flash_tween.tween_callback(func():
+		if _flash_queued:
+			_flash_queued = false
+			_play_level_flash()
+	)
 
 func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target

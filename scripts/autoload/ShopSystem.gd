@@ -155,3 +155,6 @@ static func reroll_shop(gm: Node) -> bool:
 static func confirm_shop(gm: Node) -> void:
 	gm.get_tree().paused = false
 	gm.shop_closed.emit()
+	# 悟道/金币阁整段回合间流程都在暂停，镜头原语在恢复的这一拍才吃得到：
+	# 一记轻 punch 给「回场开打」一个可感的起点（幅度小，不与下一波开场的刷怪音/震屏抢戏）
+	GameFeel.zoom_punch(gm, 0.025, 0.12)

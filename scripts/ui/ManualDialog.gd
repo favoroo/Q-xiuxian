@@ -48,6 +48,7 @@ var _cult_box: VBoxContainer
 var _weapons_box: VBoxContainer
 var _basics_box: VBoxContainer
 var _advanced_box: VBoxContainer
+var _enemies_box: VBoxContainer
 ## 武器图鉴当前流派筛选（"" = 全部；tag 取 WeaponData.CLASSES / ELEMENTS）
 var weapon_filter: String = ""
 ## 筛选 chips（tag → Label），build_page 建一次常驻，rebuild 时只重涂不重建
@@ -86,7 +87,8 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	add_tab_button(1, "武器图鉴", 96.0)
 	add_tab_button(2, "道具图鉴", 96.0)
 	add_tab_button(3, "角色图鉴", 96.0)
-	add_tab_button(4, "进阶攻略", 96.0)
+	add_tab_button(4, "敌人图鉴", 96.0)
+	add_tab_button(5, "进阶攻略", 96.0)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -98,14 +100,15 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	content_panel.add_theme_stylebox_override("panel", cont_sb)
 	root_vbox.add_child(content_panel)
 
-	# 只建五页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
-	for i in range(5):
+	# 只建六页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
+	for i in range(6):
 		_page_built.append(false)
 		_page_dirty.append(false)
 	_pages.append(_build_basics_page(content_panel))
 	_pages.append(_build_weapons_page(content_panel))
 	_pages.append(_build_items_page(content_panel))
 	_pages.append(_build_cultivators_page(content_panel))
+	_pages.append(_build_enemies_page(content_panel))
 	_pages.append(_build_advanced_page(content_panel))
 
 	switch_tab(0)
@@ -122,9 +125,10 @@ func _on_opened() -> void:
 	else:
 		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
 		_set_weapon_filter("")
-	# 道具/角色两页受解锁状态影响：标脏，切到那一页时才重建
+	# 道具/角色/敌人三页受解锁（收录）状态影响：标脏，切到那一页时才重建
 	_page_dirty[2] = true
 	_page_dirty[3] = true
+	_page_dirty[4] = true
 	var target := _current_tab
 	_defer_build = false
 	_schedule_page(target)
@@ -182,7 +186,8 @@ func _build_page(index: int) -> void:
 		1: _rebuild_weapons_page()
 		2: _rebuild_items_page()
 		3: _rebuild_cultivators_page()
-		4: _fill_advanced_page()
+		4: _rebuild_enemies_page()
+		5: _fill_advanced_page()
 	_page_built[index] = true
 	_page_dirty[index] = false
 	# 整页子树建过就要重挂滚动拖动锁（头注「灰色卡片滑不动」坑）；
@@ -470,9 +475,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 			notes.append(line.strip_edges())
 	var foot := ""
 	if not GameManager.is_item_unlocked(iid):
-		var ach := AchievementData.item_unlock_achievement(iid)
-		if not ach.is_empty():
-			foot = "收录条件：" + String(ach.get("cond_desc", ""))
+		foot = AchievementData.unlock_hint_text(iid, true, "收录条件：")
 	elif bool(def.get("unique", false)):
 		foot = "每局限购一件"
 
@@ -589,17 +592,111 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 		status_lbl.text = " 未解锁 "
 		status_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
 		GameStyle.label(status_lbl, 12, GameStyle.GREY)
-		var ach := AchievementData.cultivator_unlock_achievement(cid)
-		if not ach.is_empty():
-			var cond_lbl := Label.new()
-			cond_lbl.text = "解锁条件：" + String(ach.get("cond_desc", ""))
-			GameStyle.label(cond_lbl, 11, GameStyle.JADE)
-			text_col.add_child(cond_lbl)
+		var cond_lbl := Label.new()
+		cond_lbl.text = AchievementData.unlock_hint_text(cid, false, "解锁条件：")
+		GameStyle.label(cond_lbl, 11, GameStyle.JADE)
+		text_col.add_child(cond_lbl)
 	hbox.add_child(status_lbl)
 
 	return row
 
-# ----------------- 分页 5：进阶心法 -----------------
+# ----------------- 分页 5：敌人图鉴 -----------------
+
+func _build_enemies_page(parent: Control) -> Control:
+	var scroll := _new_scroll(parent)
+	_enemies_box = _new_scroll_vbox(scroll)
+	return scroll
+
+## 分组重建：常规妖物 → 精英劫 → 魔君 → 金蟾。未遭遇的种灰显「未收录」，
+## 与道具页同款待遇；收录口径 = 实战里刷出过（EnemyCodex），追不上的金蟾也算。
+## 图标现渲捕获（EnemyIconCapture）：先铺占位，捕完逐张回填，页不卡在建图上。
+func _rebuild_enemies_page() -> void:
+	if _enemies_box == null:
+		return
+	for c in _enemies_box.get_children():
+		c.queue_free()
+	_enemies_box.add_child(_make_text_card("敌人图鉴",
+		"妖物在实战中刷出过一次即自动收录。\n点按任意妖物卡查看威胁与出没波次。"))
+
+	var groups: Array = [
+		["常规妖物", EnemyGuideData.catalog_ids().slice(0, 11), false],
+		["精英劫", EnemyGuideData.catalog_ids().slice(11, 14), true],
+		["魔君劫", ["boss"], false],
+		["招财金蟾", ["jinchan"], false],
+	]
+	for g in groups:
+		var header := Label.new()
+		header.text = "── %s ──" % String(g[0])
+		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(header, 13, GameStyle.JADE, 0, GameStyle.INK, true)
+		_enemies_box.add_child(header)
+
+		var grid := GridContainer.new()
+		grid.columns = 5
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_enemies_box.add_child(grid)
+
+		for eid_v in g[1] as Array:
+			var eid := String(eid_v)
+			var is_elite := bool(g[2])
+			var seen := EnemyCodex.is_seen(eid)
+			# chips 非空时 _make_entry_card 不画 sub 行 ⇒ 未遭遇干脆不放威胁签
+			# （没见过就该什么都不知道），空 chips 让「未收录」副标照常显示，与道具页同款待遇
+			var chips: Array = []
+			if seen:
+				for tag in EnemyGuideData.GUIDE[eid].get("tags", []):
+					chips.append([String(tag), GameStyle.GOLD_DK, GameStyle.CHALK])
+			var card := _make_entry_card(
+				"", EnemyGuideData.display_name(eid),
+				"" if seen else "未收录", GameStyle.GREY,
+				func(anchor: Control): _open_enemy_tip(eid, anchor),
+				EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), chips)
+			if not seen:
+				# 未遭遇不捕图不剧透形象：灰显的是空占位框（与道具页「图标压暗」同理——
+				# 没见过的东西不该在图鉴里先亮出来）
+				(card.get_meta("icon_tex") as TextureRect).modulate = GameStyle.disabled_modulate()
+			else:
+				_fill_enemy_icon(card, eid, is_elite)
+			grid.add_child(card)
+
+## 图标异步回填：已捕过直接同步给图（重开页不重捕）；没捕过排队现渲。
+## 卡片可能在捕获期间被整页重建拆走 —— 回填前过 is_instance_valid。
+func _fill_enemy_icon(card: Control, eid: String, is_elite: bool) -> void:
+	var tex := card.get_meta("icon_tex") as TextureRect
+	if tex == null:
+		return
+	var cached := EnemyIconCapture.peek(eid, is_elite)
+	if cached != null:
+		tex.texture = cached
+		return
+	_apply_icon_async(tex, eid, is_elite)
+
+func _apply_icon_async(tex: TextureRect, eid: String, is_elite: bool) -> void:
+	var got := await EnemyIconCapture.capture(eid, is_elite)
+	if got != null and is_instance_valid(tex):
+		tex.texture = got
+
+func _open_enemy_tip(eid: String, anchor: Control) -> void:
+	var def: Dictionary = EnemyGuideData.GUIDE.get(eid, {})
+	if def.is_empty():
+		return
+	var seen := EnemyCodex.is_seen(eid)
+	var rows: Array = [
+		["出没", EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), GameStyle.PAPER],
+		["收录", "已遭遇" if seen else "未遭遇", GameStyle.GOOD if seen else GameStyle.GREY],
+	]
+	DetailTip.show_over(self, anchor, {
+		"title": EnemyGuideData.display_name(eid),
+		"chip": " 敌人 ",
+		"chip_color": GameStyle.BAD,
+		"rows": rows,
+		"notes": [String(def.get("desc", ""))],
+		"foot": "收录途径：实战中遭遇" if not seen else "",
+	})
+
+# ----------------- 分页 6：进阶心法 -----------------
 
 func _build_advanced_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)

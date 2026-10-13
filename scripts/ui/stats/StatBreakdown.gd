@@ -9,9 +9,10 @@ extends RefCounted
 ## 影子喂进来算出来的。两边共用这一份聚合，卡面承诺的数与实际长出来的数才不会分家。
 
 static func breakdown(gm: Object) -> Dictionary:
-	var cur_hp: float = 120.0
-	var max_hp: float = 120.0
-	var base_spd: float = 210.0
+	# 玩家未生成时的兜底读数一律取 Player 的基础常量，不许再写一份字面量
+	var cur_hp: float = Player.BASE_MAX_HEALTH
+	var max_hp: float = Player.BASE_MAX_HEALTH
+	var base_spd: float = Player.BASE_SPEED
 	if gm.player != null and is_instance_valid(gm.player):
 		cur_hp = float(gm.player.current_health)
 		max_hp = float(gm.player.max_health)

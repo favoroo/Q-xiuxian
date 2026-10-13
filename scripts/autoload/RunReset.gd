@@ -54,7 +54,7 @@ static func reset(gm: Node) -> void:
 	gm.spirit_threshold_adj = 0
 	gm.contraption_threshold_adj = 0
 	gm.stone_interest_rate = 0.0
-	gm.stone_interest_cap = 15
+	gm.stone_interest_cap = 30
 	gm.on_hit_damage_bonus = 0.0
 	gm.on_hit_damage_cap_stacks = 10
 	gm.on_hit_damage_stacks = 0

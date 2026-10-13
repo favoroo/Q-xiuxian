@@ -12,7 +12,12 @@ static func load_into(gm: Node) -> void:
 	var cfg := ConfigFile.new()
 	var load_err := cfg.load(PROGRESS_PATH)
 	if load_err == OK:
-		var _ver := int(cfg.get_value("meta", "save_version", 1))
+		# 版本号只作诊断：向前兼容靠下方各字段的 additive 默认值兜底，没有迁移分支。
+		# 读到高于当前版本的存档（降级安装）时提示一句但不拒绝加载 —— 老档回落默认值
+		# 比读不了档更可接受，真要做迁移时这里就是入口。
+		var saved_ver := int(cfg.get_value("meta", "save_version", 1))
+		if saved_ver > SAVE_VERSION:
+			push_warning("ProgressStore: 存档版本 %d 高于当前 %d，缺字段将按默认值加载" % [saved_ver, SAVE_VERSION])
 		gm.max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
 
 		var cults = cfg.get_value("progress", "unlocked_cultivators", [])

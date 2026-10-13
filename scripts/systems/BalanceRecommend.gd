@@ -117,7 +117,7 @@ static func simulate_stats(stats: Dictionary, element_damage: Dictionary, apply:
 			"harvest":
 				stats["harvest"] = float(stats.get("harvest", 0.0)) + v
 			"max_hp":
-				stats["max_hp"] = float(stats.get("max_hp", 120.0)) + v
+				stats["max_hp"] = float(stats.get("max_hp", Player.BASE_MAX_HEALTH)) + v
 			"xp_gain_mult":
 				stats["xp_gain_mult"] = float(stats.get("xp_gain_mult", 1.0)) + v
 			"knockback_mult":
@@ -219,7 +219,7 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 		reasons.append("上阵武器总伤约 +%d%%" % _pct(dmg_gain))
 
 	# ---- B2 生存轴（各子项取最大，负代偿单独记罚） ----
-	var hp0 := maxf(float(stats.get("max_hp", 120.0)), 1.0)
+	var hp0 := maxf(float(stats.get("max_hp", Player.BASE_MAX_HEALTH)), 1.0)
 	var d_hp := (float(stats2.get("max_hp", hp0)) - hp0) / hp0
 	var red0 := GameBalance.armor_reduction(float(stats.get("armor", 0.0)))
 	var red1 := GameBalance.armor_reduction(float(stats2.get("armor", 0.0)))
@@ -369,7 +369,7 @@ static func score_weapon(w_id: String, ctx: Dictionary) -> Dictionary:
 ## 回气丹：按缺血程度单独计（满血就是不值钱，别花这个钱）
 static func score_potion(offer: Dictionary, ctx: Dictionary) -> Dictionary:
 	var stats: Dictionary = ctx.get("stats", {})
-	var max_hp := maxf(float(stats.get("max_hp", 120.0)), 1.0)
+	var max_hp := maxf(float(stats.get("max_hp", Player.BASE_MAX_HEALTH)), 1.0)
 	var cur := clampf(float(stats.get("current_hp", max_hp)), 0.0, max_hp)
 	var ratio := cur / max_hp
 	var need := clampf((0.80 - ratio) / 0.55, 0.0, 1.0)  ## ≤25% 血打满，≥80% 血为零

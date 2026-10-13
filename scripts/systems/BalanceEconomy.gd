@@ -21,7 +21,7 @@ const WEAVE_WAVE_STEP := 2      ## 武器每回合加价
 const ITEM_WAVE_STEP := 2       ## 道具每回合加价（与武器同一步调）
 const REROLL_BASE := 2
 const REROLL_WAVE_STEP := 1     ## 重掷价随回合上升
-const REROLL_COUNT_STEP := 2    ## 本回合每重掷一次再涨
+const REROLL_COUNT_STEP := 3    ## 本回合每重掷一次再涨
 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
@@ -91,8 +91,8 @@ static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 
 const GEM_SHARD_STONE_VALUE := 1        ## 碎晶金币面额
 const GEM_SHARD_START_WAVE := 5         ## 碎晶率自第 5 波起抬升（起点当波概率为 0，第 6 波才真正掉）
-const GEM_SHARD_RISE_PER_WAVE := 0.035  ## 起点之后每回合碎晶率抬升
-const GEM_SHARD_CHANCE_CAP := 0.45      ## 碎晶率上限：再多就把高光掉落的爽感掏空了
+const GEM_SHARD_RISE_PER_WAVE := 0.040  ## 起点之后每回合碎晶率抬升
+const GEM_SHARD_CHANCE_CAP := 0.50      ## 碎晶率上限：再多就把高光掉落的爽感掏空了
 
 ## 本回合普通怪掉落为碎晶的概率（回合 ≤ 起点为 0，单调递增，封顶 GEM_SHARD_CHANCE_CAP）
 static func gem_shard_chance(wave: int) -> float:

@@ -169,7 +169,7 @@ func _act_leique() -> void:
 	var nearest := _find_nearest_enemy(280.0)
 	if nearest == null:
 		return
-	var dmg := BalanceSpiritPet.thunder_damage(GameManager.wave_number, GameManager.pet_damage_mult)
+	var dmg := BalanceSpiritPet.thunder_damage(GameManager.wave_number, GameManager.pet_damage_mult) * GameManager.elite_damage_mult_for(nearest)
 	if nearest.has_method("take_damage"):
 		nearest.take_damage(dmg, Vector2.ZERO, true)
 	_lightning_target_pos = to_local(nearest.global_position)
@@ -285,7 +285,7 @@ func _act_fengdiao() -> void:
 		else:
 			pull_vec = Vector2.ZERO
 		# 先伤害后卷定：take_damage 传零击退会把 knockback_velocity 清零，顺序反了就卷不动
-		en.take_damage(dmg, Vector2.ZERO)
+		en.take_damage(dmg * GameManager.elite_damage_mult_for(en), Vector2.ZERO)
 		en.apply_vortex_pin(pull_vec, BalanceSpiritPet.pin_duration(elite_scale * en.hit_stun_resist * (0.25 if is_boss else 1.0)))
 		affected += 1
 		# 「定」飘字限量：满屏小怪被卷时防字海，口径同玄甲龟「抵挡」
@@ -313,7 +313,7 @@ func _act_shiyuan() -> void:
 		if diff.length() <= radius:
 			var kb_dir := diff.normalized() if diff.length() > 0.1 else Vector2.RIGHT
 			if e.has_method("take_damage"):
-				e.take_damage(dmg, kb_dir * 180.0, false)
+				e.take_damage(dmg * GameManager.elite_damage_mult_for(e), kb_dir * 180.0, false)
 				hit = true
 	if hit:
 		pulse_trigger_fx(Vector2(1.4, 0.7), 0.16)

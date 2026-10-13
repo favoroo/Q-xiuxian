@@ -312,11 +312,11 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["每回合按持有的金币额外得 8% 金币（至多 +15）", "财可通神：每持 100 金币 +2% 全伤害（至多 +50%）"],
+					"pros": ["每回合按持有的金币额外得 8% 金币（至多 +30）", "财可通神：每持 100 金币 +2% 全伤害（至多 +50%）"],
 					"cons": ["全武器伤害 -10%", "初始收益 -5"],
 					"mods": {
 						"stone_interest_rate": 0.08,
-						"stone_interest_cap": 15,
+						"stone_interest_cap": 30,
 						"damage_mult": 0.90,
 						"harvest": -5.0,
 						"stone_damage_per_100": 0.02,

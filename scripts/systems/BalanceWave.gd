@@ -98,9 +98,51 @@ static func enemy_hp_mult(wave: int) -> float:
 
 ## 敌人伤害的唯一倍率出口：整体基线 × 每回合复利。
 ## 调用方（WaveSpawner 刷怪/Boss 注入、EnemyBase 产卵·分裂·召唤小怪）只乘这一条，
-## 敌弹伤害按 contact_damage/13 反推、Boss 环弹与震地按系数派生，全链路同源。
+## 敌弹伤害按 contact_damage/BOLT_DMG_BASE_REF 反推、Boss 环弹与震地按系数派生，全链路同源。
 static func enemy_dmg_mult(wave: int) -> float:
 	return ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(maxi(wave, 1) - 1))
+
+## 敌弹（火球）伤害缩放基准：bolt_damage × (contact_damage / 本值)，让火球跟着回合复利走。
+## 这个分母就是 XieXiuEnemy.tscn 的 contact_damage 初值（13.0），而消费它的不止邪修一家：
+## 影魅、剑煞精英（26.0）、烈雷兽变异（18.0）全都借它当标尺。所以改任何一方的 .tscn
+## 接触伤害前先看这里 —— 分母不动而分子被调，火球伤害会静默漂移（改 13→16 即 +23%），
+## 且没有任何编译期或运行期提示。
+const BOLT_DMG_BASE_REF := 13.0
+
+# ---------------- 掉落与死亡反馈几何（铁律 1：调掉落只改这里，不翻 EnemyBase） ----------------
+## 这一组原先散在 EnemyBase._die / _teleport_near_player / _split_offspring / _spawn_minion 里，
+## 调「掉几颗、散多远、闪多远」得翻逻辑文件。现在与 ELITE_STONE_BONUS、碎晶率同属一个文件，
+## 同一个「掉落经济」不再被拆在两处。
+const ELITE_GEM_COUNT := 5              ## 精英宝石数（普通怪恒 1 颗）
+const GEM_SCATTER_RADIUS := 24.0        ## 多颗宝石的方形散布半径（±px；单颗不散）
+const ELITE_GEM_EXP := 8                ## 精英单颗宝石经验（普通怪吃自己的 exp_reward）
+const BLINK_DISTANCE := 210.0           ## 影魅闪现距离：绕玩家侧翼落到这个半径上
+const BLINK_MAP_INSET := 40.0           ## 闪现落点的边界内缩（不许闪出竞技场）
+const SPLIT_SCATTER_RADIUS := 26.0      ## 血蛆死亡分裂幼体的散布半径
+const MINION_SCATTER_RADIUS := 34.0     ## 蛛母产卵落点半径
+const HEAL_ORB_SCATTER_RADIUS := 16.0   ## 灵药滋生额外回复珠的偏移半径（±px）
+const DEATH_KICK_CAMERA := 8.5          ## 精英伏诛震屏强度
+const DEATH_MICRO_KICK := 2.5           ## 普通怪死亡微冲量（px，确认感；走全局限流闸）
+const STONE_FLOAT_OFFSET := 30.0        ## 金蟾金币飘字相对尸体的上抬量
+const CORPSE_SWELL_SCALE := 1.28        ## 死灭膨胀幅度（Anticipation 那一下）
+
+# ---------------- 刷怪出生点几何（铁律 1：五处刷怪口共用，调出生安全距离只改这里） ----------------
+## 土豆兄弟式全图随机出生 + 远离玩家安全区：随机抽一点，距玩家太近就沿径向推开再夹回场内。
+## 原先这段十行样板在 WaveSpawner 里内联了五份，参数各自漂移（常规怪能比精英贴边界 15px 更近），
+## 调「出生安全距离」一件事要同步改 4~5 处。现在实现收敛为 WaveSpawner._spawn_pos_away_from_player，
+## 三档参数在此登记：常规怪 / 精英系（精英·金蟾）/ Boss。藏宝匣是第四档（推开不走径向）。
+const SPAWN_INSET_MOB := 45.0           ## 常规怪：竞技场边界内缩
+const SPAWN_MIN_DIST_MOB := 130.0       ## 常规怪：距玩家的最小安全距离
+const SPAWN_PUSH_MOB := 160.0           ## 常规怪：太近时沿径向推开的距离
+const SPAWN_INSET_ELITE := 60.0         ## 精英系：边界内缩（比常规怪少贴 15px 边）
+const SPAWN_MIN_DIST_ELITE := 180.0     ## 精英系：最小安全距离
+const SPAWN_PUSH_ELITE := 220.0         ## 精英系：推开距离
+const SPAWN_INSET_BOSS := 60.0          ## Boss：边界内缩
+const SPAWN_MIN_DIST_BOSS := 200.0      ## Boss：最小安全距离（登场更要面子）
+const SPAWN_PUSH_BOSS := 240.0          ## Boss：推开距离
+const SPAWN_INSET_CHEST := 130.0        ## 藏宝匣：边界内缩（诱玩家走位，别贴边）
+const SPAWN_MIN_DIST_CHEST := 130.0     ## 藏宝匣：最小安全距离
+const SPAWN_PUSH_CHEST := 180.0         ## 藏宝匣：推开距离（不走径向，固定向右）
 
 # ---------------- 精英 / Boss 回合（固定关卡） ----------------
 

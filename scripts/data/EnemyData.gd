@@ -130,6 +130,31 @@ const LOOTER_DEF: Dictionary = {
 static func mob_keys() -> Array:
 	return MOBS.keys()
 
+## enemy_id 推导前缀表：EnemyBase._deduce_enemy_id 遍历它，新增怪种只需在此登记一行。
+## 原先 EnemyBase 里是 16 分支 begins_with 链，加一种怪要同时改这里和 EnemyBase 两处，
+## 漏改 EnemyBase 那处就静默降级成史莱姆外观（无任何报错）。
+## key = enemy_id，value = 场景根节点名/文件名的前缀（两者一致，池化复用不改名）。
+## 精英两个 id 带 _elite 后缀（EnemyBase._enter_mutation 与外观派发都认这个后缀），
+## 故 ELITE_POOL 的 id 字段与这里的 key 不同形 —— 单测钉住这个差集恰好是这两个。
+const ID_PREFIXES: Dictionary = {
+	"boss": "boss",
+	"golem": "golem",
+	"slime": "slime",
+	"flower": "flower",
+	"leibeast": "leibeast",
+	"xiexiu": "xiexiu",
+	"danbao": "danbao",
+	"fengqun": "fengqun",
+	"xueyong": "xueyong",
+	"guyao": "guyao",
+	"yingmei": "yingmei",
+	"zhumu": "zhumu",
+	"lingyi": "lingyi",
+	"jinchan": "jinchan",
+	"chilei_elite": "chilei",
+	"jiansha_elite": "jiansha",
+}
+
 ## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key），被闸门锁住的种把份额让给下一格。
 ## 与旧 WaveSpawner.pick_scene_key 逐行等价；判定顺序写死在这里，表序变化不影响它。
 static func pick_scene_key(wave: int, roll: float) -> String:
