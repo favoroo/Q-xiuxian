@@ -428,14 +428,15 @@ func _act_shiyuan() -> void:
 			if e.has_method("apply_chill"):
 				e.apply_chill(BalanceSpiritPet.SMASH_SLOW_PCT, BalanceSpiritPet.SMASH_SLOW_DURATION)
 
-	if hit:
-		pulse_trigger_fx(Vector2(1.45, 0.65), 0.18)
-		_custom_fx_type = "earth_smash"
-		var scene_parent: Node = get_parent()
-		if is_inside_tree() and scene_parent != null:
-			JuiceEffect.spawn_shockwave(scene_parent, center, radius, Color(0.72, 0.62, 0.45, 0.9), 0.35)
-			JuiceEffect.spawn_step_dust(scene_parent, center, Vector2.DOWN)
-		AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
+		if hit:
+			pulse_trigger_fx(Vector2(1.45, 0.65), 0.18)
+			_custom_fx_type = "earth_smash"
+			var scene_parent: Node = get_parent()
+			if is_inside_tree() and scene_parent != null:
+				JuiceEffect.spawn_shockwave(scene_parent, center, radius, Color(0.72, 0.62, 0.45, 0.9), 0.35)
+				JuiceEffect.spawn_step_dust(scene_parent, center, Vector2.DOWN)
+				GroundDecal.spawn(scene_parent, center, GroundDecal.Kind.CRACK, radius)
+			AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
 
 ## 聚宝蟾：回合末产出金币触发视觉动效
 func trigger_wave_harvest_fx() -> void:

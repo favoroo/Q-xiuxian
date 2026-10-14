@@ -469,7 +469,9 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 			enemy.poison_damage = GameBalance.poison_area_damage(wave_number)
 			enemy.poison_radius = GameBalance.poison_radius(wave_number)
 
-## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进
+## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进。
+## 登场演出（2026-10-14）：2 秒魔轮凝聚异象 → 破阵弹入，血条随本体 _ready 上屏。
+## 旧写法直接 add_child，只有横幅 + 震屏，连小怪的凝聚符印都没有。
 func _spawn_boss(player: Node2D) -> void:
 	var pos := _spawn_pos_away_from_player(player,
 		GameBalance.SPAWN_INSET_BOSS, GameBalance.SPAWN_MIN_DIST_BOSS, GameBalance.SPAWN_PUSH_BOSS)
@@ -477,22 +479,34 @@ func _spawn_boss(player: Node2D) -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	var boss := _boss_scene.instantiate() as BossEnemy
-	if boss == null:
-		return
-	boss.global_position = pos
-	boss.add_to_group("enemies")
-	boss.add_to_group("boss")
-	boss.max_hp = GameBalance.boss_hp(wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level)
-	boss.contact_damage = GameBalance.boss_contact_damage(wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
-	boss.attack_interval = GameBalance.BOSS_ATTACK_INTERVAL
-	boss.final_boss = wave_number >= GameManager.VICTORY_WAVE
-	boss.boss_title = _boss_title()
-	_boss_ref = boss
-	EnemyCodex.record_seen("boss")
-	parent.add_child(boss)
-	GameManager.announcement_triggered.emit(_boss_announcement())
-	GameManager.shake_camera(7.0, 0.35)
+
+	var indicator := SpawnIndicator.new()
+	indicator.global_position = pos
+	indicator.is_boss = true
+	indicator.spawn_callback = func():
+		if phase != Phase.FIGHT:
+			return
+		var boss := _boss_scene.instantiate() as BossEnemy
+		if boss == null:
+			return
+		boss.global_position = pos
+		boss.add_to_group("enemies")
+		boss.add_to_group("boss")
+		boss.max_hp = GameBalance.boss_hp(wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level)
+		boss.contact_damage = GameBalance.boss_contact_damage(wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
+		boss.attack_interval = GameBalance.BOSS_ATTACK_INTERVAL
+		boss.final_boss = wave_number >= GameManager.VICTORY_WAVE
+		boss.boss_title = _boss_title()
+		_boss_ref = boss
+		EnemyCodex.record_seen("boss")
+		parent.add_child(boss)
+		# 破阵弹入：与精英/小怪同款出生弹性，但幅度更大收得更沉
+		boss.scale = Vector2.ONE * 0.3
+		var tw := boss.create_tween()
+		tw.tween_property(boss, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		GameManager.announcement_triggered.emit(_boss_announcement())
+		GameManager.shake_camera(7.0, 0.35)
+	parent.add_child(indicator)
 
 ## 本回合魔君存活与否（Boss 回合超时锁关的判据）
 func _boss_still_alive() -> bool:

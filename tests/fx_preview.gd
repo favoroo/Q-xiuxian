@@ -42,6 +42,13 @@ func _ready() -> void:
 		fx.position = Vector2(620 + (i % 3) * 130, 400 + (i / 3) * 110)
 		add_child(fx)
 		fx.activate_fx(kinds[i], 48.0, tints[i])
+		# 镇魔封印格：dust 环之外补上程序化印体（游戏内由 ThunderBurst 同格下发）
+		if kinds[i] == "seal":
+			var seal := SealImpactFx.new()
+			seal.size = 48.0 * 1.4
+			seal.tint = tints[i]
+			seal.position = fx.position
+			add_child(seal)
 
 func _process(_delta: float) -> void:
 	_frame += 1

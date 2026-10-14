@@ -43,8 +43,8 @@ const DIRS_DEG := [0.0, 45.0, 90.0, 135.0, 180.0, -135.0, -90.0, -45.0]
 const TOL_DEG := 2.0        ## 剑尖指向与瞄准轴的允许误差
 const TOL_PX := 1.0         ## 出膛点与"画出来的剑尖"的允许误差
 const TARGET_AT := Vector2(300.0, 120.0)   ## 开火台的目标：斜向，八方向里最容易露馅的那种
-const SLASH_ART_HALF_DEG := 70.0    ## slash_effect.png 那弯月牙自身的张角（极坐标量出来 ±70°，256px 高清版外缘半径 124px）
-const SWEEP_ART_HALF_DEG := 80.0    ## sweep_effect.png 金色扇面的满亮张角（与 FloatingWeapon.SWEEP_HALF_ANGLE 同源）
+const SLASH_ART_HALF_DEG := 70.0    ## 近战月牙自身的张角（WeaponArcRenderer 纯矢量刀光 ±70°，外缘半径 124px）
+const SWEEP_ART_HALF_DEG := 80.0    ## 横扫扇面的满亮张角（与 FloatingWeapon.SWEEP_HALF_ANGLE 同源）
 
 ## 只带 GameManager 要读的那两个字段：get_player_stat_dict() 会去 player 身上取血量算词条
 class StubPlayer:

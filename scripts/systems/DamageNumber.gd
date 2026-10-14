@@ -12,6 +12,18 @@ const PHASE_FADE := 0.16
 const POP_DUR_NORMAL := 0.10
 const POP_DUR_CRIT := 0.12
 const POOL_CAP := 96      ## 常驻池上限，超出时临时新建并在用完后释放
+## 同目标伤害跳字聚合窗（秒）：同一敌人窗口内的连续伤害并入同一条（累计值 + ×N），
+## 新伤到来时窗口滑动续期；束流/喷吐/DoT 高频命中不再刷屏顶字，池溢出 new+free 抖动消失。
+const COMBO_WINDOW := 0.25
+
+## 聚合判定纯函数（单测钉判据用）：只有带 combo_key 且非文字类的伤害跳字参与聚合；
+## DoT tick 与暴击同样并入（暴击把整条升到鎏金样式），文字类读数保持逐条独立
+static func can_merge(combo_key: int, is_text_number: bool) -> bool:
+	return combo_key != 0 and not is_text_number
+
+## 聚合条文本：单发就是数字；2 连及以上显示累计值与 ×N 后缀（128×3）
+static func format_combo(sum: int, count: int) -> String:
+	return str(sum) if count <= 1 else "%d×%d" % [sum, count]
 
 static var _normal_settings: LabelSettings
 static var _crit_settings: LabelSettings
@@ -21,6 +33,10 @@ static var _pool: Array[DamageNumber] = []
 static var _host: Node2D = null
 static var _created: int = 0
 static var active_count: int = 0  ## 当前活跃跳字数：HUD 性能面板消费
+
+## 同目标聚合表：combo_key（敌人 instance_id）→ {n, sum, count, crit, expire_ms}。
+## 窗口内伤害并入同一条；过期/归池时清除，不阻碍下一条新窗口。
+static var _combos: Dictionary = {}
 
 ## 视口变换缓存：同帧多个跳字共享一次 get_canvas_transform() / visible_rect 查询，
 ## 避免每发命中重复做矩阵/视口开销（对齐 HollowKnightEnemyRenderer 范式）
@@ -38,10 +54,15 @@ var _rise_y: float = 0.0
 var _is_crit: bool = false
 var _last_scale: float = -1.0
 var _last_alpha: float = -1.0
+## 聚合身份：本条跳字绑定的 combo_key（0 = 独立条）与已累计值/次数，用于并入时重算文本
+var _combo_key: int = 0
+var _combo_sum: int = 0
+var _combo_hits: int = 0
 
 ## 释放池与样式缓存（退出时调用），避免常驻引用被判成资源泄漏
 static func clear_cache() -> void:
 	_pool.clear()
+	_combos.clear()
 	_host = null
 	_created = 0
 	_normal_settings = null
@@ -54,6 +75,9 @@ static func pool_size() -> int:
 
 static func created_count() -> int:
 	return _created
+
+static func combo_count() -> int:
+	return _combos.size()
 
 static func host_child_count() -> int:
 	return 0 if (_host == null or not is_instance_valid(_host)) else _host.get_child_count()
@@ -90,6 +114,7 @@ static func _ensure_host(scene: Node) -> void:
 		return
 	# 换局（Main 重建）后旧宿主连同池内节点一起被释放，必须清空引用防止拿到野对象
 	_pool.clear()
+	_combos.clear()
 	_created = 0
 	_host = Node2D.new()
 	_host.name = "DamageNumberPool"
@@ -127,8 +152,10 @@ static func _scene_root_for(node: Node) -> Node:
 		cur = cur.get_parent()
 	return cur
 
-## 生成一条跳字。parent 仅用于定位场景树，节点实际挂在池宿主下（保持既有调用签名）
-static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false, custom_text: String = "") -> void:
+## 生成一条跳字。parent 仅用于定位场景树，节点实际挂在池宿主下（保持既有调用签名）。
+## combo_key 非 0 且为数字类（无 custom_text）时参与同目标窗口聚合：
+## 同一敌人 COMBO_WINDOW 内的伤害并入同一条（累计 + ×N），高频集火不再刷屏顶字。
+static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false, custom_text: String = "", combo_key: int = 0) -> void:
 	# 开关走 GameFeel 每帧 memo：spawn 每次命中都调，原 get_val 每发 2 个 String 分配
 	if not GameFeel.damage_numbers_enabled():
 		return
@@ -153,6 +180,11 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 	_ensure_settings()
 	_ensure_host(scene)
 
+	# 同目标窗口聚合：命中已绑定的活跃跳字 → 累计值 + ×N 后缀，当前位置原地重播弹出。
+	# 只吞 _acquire（少一条节点），不吞伤害数值 —— EnemyBase 的集火保护仍按每发计。
+	if can_merge(combo_key, custom_text != "") and _try_merge(combo_key, amount, is_crit, pos):
+		return
+
 	var text := custom_text
 	var settings := _heal_settings
 	if custom_text == "":
@@ -172,6 +204,47 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 		randf_range(-26.0, 26.0),
 		randf_range(32.0, 42.0) if not is_crit else randf_range(40.0, 52.0)
 	)
+	if can_merge(combo_key, custom_text != ""):
+		n._combo_key = combo_key
+		n._combo_sum = amount
+		n._combo_hits = 1
+		_combos[combo_key] = {
+			"n": n, "sum": amount, "count": 1, "crit": is_crit,
+			"expire_ms": Time.get_ticks_msec() + int(COMBO_WINDOW * 1000.0),
+		}
+
+## 同目标并入：窗口内已有活跃跳字 → 累计值/计数/暴击标记更新，窗口滑动续期，
+## 当前位置原地重播弹出（数字跟住移动中的敌人）。返回 false = 窗口外/表已失效，走新发。
+## 闸口口径：n._combo_key 必须仍指向本 key（池复用后同一节点可能已改挂别的聚合身份）
+static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2) -> bool:
+	if not _combos.has(combo_key):
+		return false
+	var e: Dictionary = _combos[combo_key]
+	var n: DamageNumber = e["n"]
+	if n == null or not is_instance_valid(n) or not n.visible or n._combo_key != combo_key:
+		_combos.erase(combo_key)
+		return false
+	var now := Time.get_ticks_msec()
+	if now >= int(e["expire_ms"]):
+		_combos.erase(combo_key)
+		return false
+	var sum := int(e["sum"]) + amount
+	var count := int(e["count"]) + 1
+	var crit := bool(e["crit"]) or is_crit
+	e["sum"] = sum
+	e["count"] = count
+	e["crit"] = crit
+	e["expire_ms"] = now + int(COMBO_WINDOW * 1000.0)
+	n._combo_sum = sum
+	n._combo_hits = count
+	var text := format_combo(sum, count) + ("!" if crit else "")
+	n._start(
+		pos + Vector2(randf_range(-12.0, 12.0), -12.0),
+		text, _crit_settings if crit else _normal_settings, crit,
+		randf_range(-26.0, 26.0),
+		randf_range(40.0, 52.0) if crit else randf_range(32.0, 42.0)
+	)
+	return true
 
 func _ready() -> void:
 	if _label == null:
@@ -250,6 +323,12 @@ func _release() -> void:
 	active_count = maxi(0, active_count - 1)
 	set_process(false)
 	visible = false
+	# 聚合表只登记「正在显示」的跳字：归池即摘牌，下次命中自然开新窗口
+	if _combo_key != 0:
+		DamageNumber.drop_combo(_combo_key, self)
+		_combo_key = 0
+		_combo_sum = 0
+		_combo_hits = 0
 	if _overflow or not is_instance_valid(_host):
 		queue_free()
 		return
@@ -257,3 +336,10 @@ func _release() -> void:
 		_pool.append(self)
 	else:
 		queue_free()
+
+## 归池清表：仅当表项仍指向本节点才摘除（同 key 可能已被更新窗口的新条接管）
+static func drop_combo(combo_key: int, node: DamageNumber) -> void:
+	if not _combos.has(combo_key):
+		return
+	if _combos[combo_key]["n"] == node:
+		_combos.erase(combo_key)

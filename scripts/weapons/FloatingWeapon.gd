@@ -15,9 +15,9 @@ extends Node2D
 const FALLBACK_TIP := Vector2(20, 0)
 
 ## 近战"画多大==判多大"（2026-10-09）：判定是一个圆 —— 圆心在本体前突 MELEE_LUNGE、
-## 半径 MELEE_ARC_RADIUS × arc_scale × 射程乘区。弧光贴图 slash_effect.png（256px 高清直出，
-## 2026-10-10 重烘：细月牙 + 白锋外缘，压掉旧 64px 版放大后的马赛克）围绕自身轴心、
-## 半径 124 画布像素、张角 ±70° 的一弯细月牙，所以把月牙轴心摆到判定圆心、缩放取
+## 半径 MELEE_ARC_RADIUS × arc_scale × 射程乘区。弧光由 WeaponArcRenderer 纯矢量绘制
+## （2026-10-13 取代 slash_effect.png 贴图）：围绕自身轴心、半径 124 画布像素、张角 ±70°
+## 的一弯细月牙，所以把月牙轴心摆到判定圆心、缩放取
 ## 判定半径 / SLASH_ART_OUTER ⇒ 月牙外缘正好压在判定圆的边界上。
 const MELEE_LUNGE := 30.0
 const MELEE_ARC_RADIUS := 75.0
@@ -38,12 +38,12 @@ const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（
 ## 横扫（SWEEP）与近战分家（2026-10-13，用户口径：「横扫和近战玩起来没区别」）：
 ## 判定是「前方真扇形」——以本体为圆心查 _sweep_arc_radius() 的圆，再按角度过滤，
 ## 只结算 aim_dir ±SWEEP_HALF_ANGLE 里的敌人（身后的漏网，这是与近战 360° 圆判定最本质的手感差异）；
-## 刀光是独立的琥珀金扇面 sweep_effect.png（满亮 ±80° 与判定半角同源、外缘 124px 与近战月牙同画布约定），
+## 刀光是 WeaponArcRenderer 画的元素扇面（满亮 ±80° 与判定半角同源、外缘 124px 与近战月牙同画布约定），
 ## top_level 贴世界坐标 —— 扇面钉在挥出那一帧的方位上，不随本体收势转走，扇面几何 == 判定扇形。
 ## 节奏全面比近战沉：蓄力更深更久、前突更远、收势更慢、命中音低沉一档。
 const SWEEP_ARC_RADIUS := 88.0    ## 横扫扇形基础半径（近战圆 75，横扫手更长）
-const SWEEP_HALF_ANGLE := 80.0    ## 扇形半角（度）—— 与 sweep_effect.png 满亮张角同源，改图要同步改这里
-const SWEEP_ART_OUTER := 124.0    ## sweep_effect.png 扇面外缘画布半径
+const SWEEP_HALF_ANGLE := 80.0    ## 扇形半角（度）—— 与 WeaponArcRenderer 扇面满亮张角同源，改渲染要同步改这里
+const SWEEP_ART_OUTER := 124.0    ## 扇面外缘画布半径（WeaponArcRenderer.OUTER）
 const SWEEP_SLASH_IN_TIME := 0.09 ## 扇面扫放（扩张 + 转正）时长
 const SWEEP_SLASH_FADE := 0.09    ## 扇面淡出时长
 const SWEEP_WINDUP := 0.09        ## 蓄力前摇（近战 0.05）
@@ -92,6 +92,7 @@ var bob_phase: float = 0.0
 var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
 var sweep_sprite: WeaponArcRenderer = null  # 横扫专属元素扇面（top_level 世界坐标，SWEEP 才建）
 var _sweep_slash_tween: Tween = null
+var _ground_decal_cd: float = 0.0  ## 土系重击地面贴花生成节流（秒，防高攻速铺满屏幕）
 
 # ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
 ## 每次开火原建 3~4 个局部 Tween（后坐 1 + 枪口闪光 1 + 本体亮闪 1 + 光晕 1），
@@ -198,6 +199,9 @@ func _ready() -> void:
 	slash_sprite.modulate.a = 0.0
 	bob_phase = randf() * TAU
 	_retarget_phase = fposmod(float(get_instance_id() % 97) * 0.001, RETARGET_INTERVAL)
+	## 首跳错相：同帧进树的多把武器错开首击，否则同型号武器冷却完全同相、永久齐挥
+	## （放 _ready 只跑一次；setup() 会被升星重调，不能打断既有节奏）
+	cooldown_timer = GameManager.rng.randf_range(0.1, 0.5)
 	dynamic_angle = base_angle
 	if def.is_empty():
 		setup(weapon_def_id, star)
@@ -394,6 +398,8 @@ func _process(delta: float) -> void:
 
 	_tick_fire_fx(delta)
 	cooldown_timer -= delta
+	if _ground_decal_cd > 0.0:
+		_ground_decal_cd -= delta
 	bob_phase += delta * 3.5
 
 	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
@@ -761,7 +767,7 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.damage = final_dmg
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
 	burst.tint = def.get("burst_tint", burst.tint)
-	burst.icon_path = String(def.get("burst_icon", ""))
+	burst.show_seal = bool(def.get("burst_seal", false))
 	burst.burst_kind = String(def.get("burst_kind", "thunder"))
 	# 落点音必须在 activate() 之前下发：activate 里就播它
 	burst.sfx_impact_key = WeaponData.sfx_impact_for(weapon_def_id)
@@ -823,6 +829,7 @@ func _perform_melee_attack() -> void:
 		_flash_sprite(Color(1.5, 1.5, 1.5), 0.12)
 		var hits := _deal_melee_damage(aim_dir)
 		if hits > 0:
+			_try_spawn_earth_crack(global_position + aim_dir * MELEE_LUNGE, _melee_arc_radius() * 0.85)
 			slash_sprite.visible = true
 			slash_sprite.modulate.a = 1.0
 			# 剑气出鞘：从剑尖处全亮扫放到判定几何（终态 == 查询圆边界），落点亮一拍再急速淡出；
@@ -937,22 +944,24 @@ func _perform_sweep_attack() -> void:
 	tw.chain().tween_callback(func():
 		_flash_sprite(Color(1.5, 1.5, 1.5), 0.14)
 		var hits := _deal_sweep_damage(aim_dir)
-		if hits > 0 and sweep_sprite != null:
-			# 扇面从判定几何的 50% 扩张扫放到 100%、同时从偏前缘 18° 转正到瞄准轴 ——
-			# 「一扫一大片」的拖扫感；终态外缘 == 判定半径、张角 == 判定半角（同源不变量）
-			sweep_sprite.global_position = global_position
-			sweep_sprite.global_rotation = aim_angle - deg_to_rad(18.0)
-			sweep_sprite.scale = Vector2.ONE * (reach / SWEEP_ART_OUTER) * 0.5
-			sweep_sprite.visible = true
-			sweep_sprite.modulate.a = 1.0
-			_sweep_slash_tween = create_tween()
-			_sweep_slash_tween.set_parallel(true)
-			_sweep_slash_tween.tween_property(sweep_sprite, "scale", Vector2.ONE * (reach / SWEEP_ART_OUTER), SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			_sweep_slash_tween.tween_property(sweep_sprite, "global_rotation", aim_angle, SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			_sweep_slash_tween.chain().tween_property(sweep_sprite, "modulate:a", 0.0, SWEEP_SLASH_FADE)
-			_sweep_slash_tween.chain().tween_callback(func(): sweep_sprite.visible = false)
-			AudioManager.play_sfx(WeaponData.sfx_impact_for(weapon_def_id), MELEE_IMPACT_SCALE, SWEEP_IMPACT_PITCH)
-			position -= aim_dir * SWEEP_RECOIL
+		if hits > 0:
+			_try_spawn_earth_crack(global_position + aim_dir * (reach * 0.55), reach * 0.75)
+			if sweep_sprite != null:
+				# 扇面从判定几何的 50% 扩张扫放到 100%、同时从偏前缘 18° 转正到瞄准轴 ——
+				# 「一扫一大片」的拖扫感；终态外缘 == 判定半径、张角 == 判定半角（同源不变量）
+				sweep_sprite.global_position = global_position
+				sweep_sprite.global_rotation = aim_angle - deg_to_rad(18.0)
+				sweep_sprite.scale = Vector2.ONE * (reach / SWEEP_ART_OUTER) * 0.5
+				sweep_sprite.visible = true
+				sweep_sprite.modulate.a = 1.0
+				_sweep_slash_tween = create_tween()
+				_sweep_slash_tween.set_parallel(true)
+				_sweep_slash_tween.tween_property(sweep_sprite, "scale", Vector2.ONE * (reach / SWEEP_ART_OUTER), SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				_sweep_slash_tween.tween_property(sweep_sprite, "global_rotation", aim_angle, SWEEP_SLASH_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				_sweep_slash_tween.chain().tween_property(sweep_sprite, "modulate:a", 0.0, SWEEP_SLASH_FADE)
+				_sweep_slash_tween.chain().tween_callback(func(): sweep_sprite.visible = false)
+				AudioManager.play_sfx(WeaponData.sfx_impact_for(weapon_def_id), MELEE_IMPACT_SCALE, SWEEP_IMPACT_PITCH)
+				position -= aim_dir * SWEEP_RECOIL
 	)
 	tw.tween_property(self, "position", thrust_pos, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "rotation", aim_angle + half_ang, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO)
@@ -1105,8 +1114,21 @@ func _volley_targets(n: int) -> Array[Node2D]:
 		out.append(e)
 	# 场上妖不够分的时候，多出来的那几发不许往同一个活物身上重复招呼：
 	# 脚边有匣子就顺手砸匣子（匣子掉补给，重复的那发只掉一个"过量"）
-	for e in chest_cands:
+	for c in chest_cands:
 		if out.size() >= n:
 			break
-		out.append(e)
+		out.append(c)
 	return out
+
+## 土系重击地面贴花接入（开山斧/崩山剑/奔浪锤等命中敌群时克制留痕）
+func _try_spawn_earth_crack(hit_pos: Vector2, hit_radius: float) -> void:
+	if _ground_decal_cd > 0.0:
+		return
+	var tags: Array = WeaponData.tags_of(weapon_def_id)
+	if not tags.has("earth"):
+		return
+	_ground_decal_cd = 0.85
+	var scene_parent := get_parent()
+	if scene_parent != null and is_inside_tree():
+		GroundDecal.spawn(scene_parent, hit_pos, GroundDecal.Kind.CRACK, hit_radius)
+

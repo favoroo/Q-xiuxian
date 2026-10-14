@@ -13,8 +13,8 @@ var damage: float = 35.0
 var knockback_base: float = 200.0
 ## 落点闪光色（由 FloatingWeapon 从 WeaponData.burst_tint 下发）：光环直径仍 == 判定直径，只换色相
 var tint: Color = Color(1.0, 0.95, 0.6)
-## 落点"砸下来的东西"（番天镇岳印 = 玄石大印）；空字符串 = 只留光环与光柱
-var icon_path: String = ""
+## 落点"砸下来的东西"（番天镇岳印 = 程序化玄石大印 SealImpactFx）；false = 只留光环与光柱
+var show_seal: bool = false
 ## 落点形态（由 FloatingWeapon 从 WeaponData.burst_kind 下发，须在 activate() 前赋值）：
 ## thunder（默认，天雷柱）/ fire_rain 火雨 / frost 冰刺 / sonic 音波 / drum 鼓震 / earth 地裂 / seal 坠印扬尘
 var burst_kind: String = "thunder"
@@ -75,7 +75,7 @@ func _ready() -> void:
 	pass
 
 ## 起爆激活：视觉重置 → 雷柱/镇岳印 → 演出与结算。复用时 _ready 已跑过一次，
-## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/icon_path/sfx/_struck/burst_kind）
+## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/show_seal/sfx/_struck/burst_kind）
 func activate() -> void:
 	_pooled = false
 	visible = true
@@ -83,7 +83,7 @@ func activate() -> void:
 	_struck = false
 	# 上一发的雷柱与镇岳印已在爆发中淡出，直接清掉再铺新的
 	for c in get_children():
-		if c is Line2D or (c is Sprite2D and c != fx_sprite):
+		if c is Line2D or c is SealImpactFx or (c is Sprite2D and c != fx_sprite):
 			c.queue_free()
 	fx_sprite.scale = Vector2.ONE * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
@@ -92,7 +92,7 @@ func activate() -> void:
 	# 火雨再立一根雷柱就是「文案说火雨画面是闪电」的旧错位）
 	if burst_kind == "thunder" or burst_kind == "":
 		_spawn_sky_beam()
-	_spawn_impact_icon()
+	_spawn_impact_seal()
 	if _kind_fx == null:
 		_kind_fx = BurstKindFx.new()
 		_kind_fx.name = "KindFx"
@@ -149,18 +149,20 @@ func _recycle() -> void:
 	_pool.append(self)
 
 ## 落点之物：把武器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
-func _spawn_impact_icon() -> void:
-	if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
+## 巨印的印体是纯矢量 SealImpactFx（2026-10-14 取代 AI 位图 weapon_earth_seal.png）
+func _spawn_impact_seal() -> void:
+	if not show_seal:
 		return
-	var icon := Sprite2D.new()
-	icon.texture = load(icon_path)
-	var tex_size: float = maxf(1.0, float(icon.texture.get_width()))
-	icon.scale = Vector2.ONE * (radius * 1.4 / tex_size)
-	icon.z_index = 21
-	icon.modulate = Color(tint.r, tint.g, tint.b, 0.95)
-	add_child(icon)
+	var seal := SealImpactFx.new()
+	seal.size = radius * 1.4
+	seal.tint = tint
+	seal.z_index = 21
+	seal.modulate = Color(1.0, 1.0, 1.0, 0.95)
+	add_child(seal)
 	var tw := create_tween()
-	tw.tween_property(icon, "modulate:a", 0.0, 0.34).set_delay(0.06)
+	tw.set_parallel(true)
+	tw.tween_property(seal, "scale", Vector2.ONE, 0.08).from(Vector2.ONE * 1.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(seal, "modulate:a", 0.0, 0.34).set_delay(0.06)
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
 func _spawn_sky_beam() -> void:

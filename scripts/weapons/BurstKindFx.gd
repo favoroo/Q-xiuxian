@@ -182,7 +182,7 @@ func _draw_earth() -> void:
 			pos + Vector2(-s, s * 0.5), pos + Vector2(0, -s), pos + Vector2(s, s * 0.4)]),
 			Color(tint.r * 0.85, tint.g * 0.8, tint.b * 0.7, 0.85 * fade))
 
-## 坠印扬尘：印玺砸落扬起的一圈低尘环（巨印专属，印体走 burst_icon）
+## 坠印扬尘：印玺砸落扬起的一圈低尘环（巨印专属，印体走 SealImpactFx）
 func _draw_seal_dust() -> void:
 	var p: float = clampf(_t / 0.3, 0.0, 1.0)
 	var a := 0.4 * (1.0 - p)

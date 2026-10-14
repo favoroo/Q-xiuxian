@@ -11,11 +11,15 @@ enum Kind { CRACK, SCORCH }
 
 const HOLD_TIME := 1.6   ## 全亮留存时长（秒）
 const FADE_TIME := 0.7   ## 渐隐时长（秒）
+const GROW_TIME := 0.12  ## 裂纹向外爆开生长时间（秒）
 const GROUND_SORT_Y := -100000.0  ## 宿主 Y 排序钉死键：恒排在角色之前（同 PoisonPool.GROUND_SORT_Y）
 
-const CRACK_SHADOW := Color(0.03, 0.05, 0.08, 0.60)  ## 裂口阴影（同 GroundDecorLayer 石板裂缝色系）
-const CRACK_RIM := Color(0.20, 0.40, 0.55, 0.14)     ## 裂缝冷月反光边
-const CRACK_DENT := Color(0.03, 0.05, 0.08, 0.20)    ## 落点中心压痕
+const CRACK_SHADOW := Color(0.02, 0.03, 0.05, 0.85)  ## 裂口深沉阴影底（线宽 2.8px）
+const CRACK_CORE := Color(0.65, 0.82, 0.95, 0.60)    ## 裂缝冷月反光亮芯（线宽 1.2px，石质断层高光）
+const CRACK_RIM := CRACK_CORE                         ## 兼容旧别名
+const CRACK_DENT := Color(0.02, 0.04, 0.06, 0.42)    ## 落点中心凹痕（暗面扩展）
+const CRACK_DEBRIS := Color(0.55, 0.68, 0.78, 0.70)  ## 迸溅微碎石亮面
+const CRACK_DEBRIS_SHADOW := Color(0.02, 0.03, 0.05, 0.60) ## 碎石落影
 const SCORCH_BODY := Color(0.05, 0.04, 0.04, 0.50)   ## 焦痕炭黑
 const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.28)  ## 余烬暗橙（渐隐时同步熄灭）
 
@@ -60,8 +64,10 @@ var kind: int = Kind.CRACK
 var radius: float = 100.0   ## 视觉包络半径：贴花内容永不超出此圈
 
 var _pooled: bool = false
+var _age: float = 0.0
 var _time_left: float = 0.0
 var _cracks: Array[PackedVector2Array] = []   ## 裂纹折线（震裂用）
+var _debris: Array[Vector3] = []               ## 碎石颗粒：x/y = 偏移，z = 半径（震裂用）
 var _blobs: Array[Vector3] = []               ## 子圆聚合：x/y = 偏移，z = 半径（焦痕用）
 
 ## 出膛激活：按 kind 预生成形态，随后进入「留存→渐隐→回收」计时
@@ -71,6 +77,7 @@ func activate() -> void:
 	# 池化复用是从回收点瞬移到新落点：不重置物理插值会渲染「从旧位置滑过来」（PoisonPool 同一条坑）
 	reset_physics_interpolation()
 	visible = true
+	_age = 0.0
 	_time_left = HOLD_TIME + FADE_TIME
 	_generate_shape()
 	set_process(true)
@@ -102,6 +109,7 @@ static func pool_idle_count() -> int:
 ## 形态预生成：种子取位置哈希 —— 同一落点形态可复现，且不消耗 GameManager.rng 的玩法随机流
 func _generate_shape() -> void:
 	_cracks.clear()
+	_debris.clear()
 	_blobs.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(absf(global_position.x) * 738.5) ^ int(absf(global_position.y) * 1934.9) ^ (created_count + reused_count)
@@ -126,6 +134,15 @@ func _generate_shape() -> void:
 					pts.append(curr)
 				if pts.size() >= 2:
 					_cracks.append(pts)
+			# 伴随碎石：沿裂口附近点缀 6~8 颗微碎石（均收在包络圈内）
+			var debris_count := rng.randi_range(6, 8)
+			for _d in range(debris_count):
+				var d_dir := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU))
+				var d_dist := rng.randf_range(radius * 0.15, radius * 0.75)
+				var d_pos := d_dir * d_dist
+				var d_size := rng.randf_range(1.2, 2.4)
+				if d_pos.length() + d_size <= radius * 0.90:
+					_debris.append(Vector3(d_pos.x, d_pos.y, d_size))
 		Kind.SCORCH:
 			var blob_count := rng.randi_range(7, 9)
 			for _i in range(blob_count):
@@ -136,21 +153,63 @@ func _generate_shape() -> void:
 					_blobs.append(Vector3(off.x, off.y, sub_r))
 
 func _process(delta: float) -> void:
+	_age += delta
 	_time_left -= delta
 	if _time_left <= 0.0:
 		recycle()
 		return
 	queue_redraw()
 
+## 沿折线按生长进度截取子折线（0.12s 蔓延爆裂）
+static func _sample_crack_growth(pts: PackedVector2Array, grow: float) -> PackedVector2Array:
+	if grow >= 0.999 or pts.size() <= 1:
+		return pts
+	var total_len: float = 0.0
+	for i in range(1, pts.size()):
+		total_len += pts[i - 1].distance_to(pts[i])
+	var target_len: float = total_len * grow
+	var res := PackedVector2Array()
+	res.append(pts[0])
+	var cur_len: float = 0.0
+	for i in range(1, pts.size()):
+		var seg_len := pts[i - 1].distance_to(pts[i])
+		if cur_len + seg_len <= target_len:
+			res.append(pts[i])
+			cur_len += seg_len
+		else:
+			var remain := target_len - cur_len
+			var frac := remain / maxf(seg_len, 0.001)
+			res.append(pts[i - 1].lerp(pts[i], frac))
+			break
+	if res.size() < 2 and pts.size() >= 2:
+		res.append(pts[0].lerp(pts[1], maxf(grow, 0.08)))
+	return res
+
 func _draw() -> void:
 	# 渐隐系数：留存期恒 1，末段线性降到 0
 	var a := clampf(_time_left / FADE_TIME, 0.0, 1.0)
 	match kind:
 		Kind.CRACK:
-			draw_circle(Vector2.ZERO, radius * 0.42, Color(CRACK_DENT, CRACK_DENT.a * a))
+			# 0~0.12s 快速爆裂展开（平滑开方缓动，第 1 帧即见雏形）
+			var raw_grow := clampf(_age / GROW_TIME, 0.0, 1.0) if GROW_TIME > 0.0 else 1.0
+			var grow := sqrt(raw_grow)
+			var dent_r := radius * 0.42 * grow
+			draw_circle(Vector2.ZERO, dent_r, Color(CRACK_DENT, CRACK_DENT.a * a))
+			draw_circle(Vector2.ZERO, dent_r * 0.45, Color(CRACK_DENT, CRACK_DENT.a * a * 1.3))
 			for pts in _cracks:
-				draw_polyline(pts, Color(CRACK_SHADOW, CRACK_SHADOW.a * a), 1.6)
-				draw_polyline(pts, Color(CRACK_RIM, CRACK_RIM.a * a), 0.8)
+				var draw_pts := _sample_crack_growth(pts, grow)
+				if draw_pts.size() >= 2:
+					# 底层粗黑崩口阴影（2.8px，拉开与地砖缝隙的粗细反差）
+					draw_polyline(draw_pts, Color(CRACK_SHADOW, CRACK_SHADOW.a * a), 2.8)
+					# 表层断层冷光亮芯（1.2px，石质断层冷月高光）
+					draw_polyline(draw_pts, Color(CRACK_CORE, CRACK_CORE.a * a), 1.2)
+			# 伴随碎石随爆开向外就位并显现
+			if grow > 0.35:
+				var deb_a := a * clampf((grow - 0.35) / 0.65, 0.0, 1.0)
+				for deb in _debris:
+					var dpos := Vector2(deb.x, deb.y) * grow
+					draw_circle(dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a))
+					draw_circle(dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a))
 		Kind.SCORCH:
 			for b in _blobs:
 				draw_circle(Vector2(b.x, b.y), b.z, Color(SCORCH_BODY, SCORCH_BODY.a * a))

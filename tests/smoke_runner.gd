@@ -223,8 +223,10 @@ func _run() -> void:
 	GameManager.player.current_health = 99999.0
 	spawner.start_wave(10)
 	var hud: Node = main.get_node_or_null("UILayer/GameHUD")
+	# 登场时序：开场 1.5s 发起凝聚 + SpawnIndicator 魔君长版 2.0s 凝聚演出，之后本体才入组
+	# （2026-10-14 Boss 登场演出：旧写法直接 add_child 无凝聚，等待窗 120 帧不够）
 	var wait_boss_spawn := 0
-	while (get_tree().get_nodes_in_group("boss").is_empty() or (hud != null and not hud.is_boss_bar_visible())) and wait_boss_spawn < 120:
+	while (get_tree().get_nodes_in_group("boss").is_empty() or (hud != null and not hud.is_boss_bar_visible())) and wait_boss_spawn < 300:
 		await get_tree().physics_frame
 		_dismiss_dialogs()
 		wait_boss_spawn += 1

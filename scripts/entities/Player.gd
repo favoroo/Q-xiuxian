@@ -44,8 +44,10 @@ var _motion_mode: String = "gait"
 var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var regen_tick: float = 0.0
-var flash_tween: Tween = null
 var squash_tween: Tween = null
+var _flash_t: float = 0.0  ## 受击闪白剩余秒（帧内衰减，材质已转接程序化视图）
+## 玩家受击闪白衰减总时长：与敌人暖白衰减（0.11s）同档，无敌帧 0.55s 内必然归零
+const PLAYER_FLASH_DOWN_DUR: float = 0.11
 var dust_timer: float = 0.0
 var procedural_view: ProceduralCultivatorView = null
 var is_procedural: bool = false
@@ -73,6 +75,10 @@ var _crowd_tick: float = 0.0       ## 蛮兵·陷阵感知节流（0.2s 一数�
 ## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，影爆（额外技能）一键全部踩碎兑现。
 ## 队列长度就是层数（HUD 影爆键角标与角色身上的残影都直接读这里）。
 var shadow_ring: Array = []
+
+## 阵亡谢幕进行中（演出窗口挡移动/技能/再受创）；结算触发后的收尾全走 is_game_over。
+## 演出约 1s：塌伏 → 沉没消散 → trigger_game_over（结算面板自带 paused + defeat BGM）。
+var _dying: bool = false
 
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
@@ -136,17 +142,21 @@ func _setup_sprite_frames() -> void:
 		is_procedural = true
 		anim_sprite.visible = false
 		var init_scale := anim_base_scale * 1.5
+		# 受击闪白材质真话只有一份：挂在程序化视图上吃（渲染器 use_parent_material 继承）。
+		# 旧写法 tween 到已隐藏的 anim_sprite 上，玩家本体从不闪白（v0.0.33 及之前一直失效）。
 		if procedural_view == null:
 			procedural_view = ProceduralCultivatorView.new()
 			procedural_view.high_fps_mode = true
 			procedural_view.position = anim_sprite.position
 			procedural_view.scale = init_scale
+			procedural_view.material = hit_flash_mat
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			add_child(procedural_view)
 		else:
 			procedural_view.high_fps_mode = true
 			procedural_view.scale = init_scale
+			procedural_view.material = hit_flash_mat
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			procedural_view.visible = true
@@ -369,7 +379,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 ## HUD 技能按钮入口。false = 没放出来（CD 中 / 效果活跃中 / 战斗外 / 无技能），调用方不发反馈
 func try_activate_skill() -> bool:
 	var sid := GameManager.active_skill_id
-	if sid.is_empty() or GameManager.is_game_over or skill_cd_left > 0.0 or skill_active_left > 0.0:
+	if sid.is_empty() or GameManager.is_game_over or _dying or skill_cd_left > 0.0 or skill_active_left > 0.0:
 		return false
 	var spawner: Node = GameManager.wave_spawner
 	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
@@ -445,7 +455,7 @@ func _on_skill_effect_end() -> void:
 ## 免冷却类（BURST）由资源层门控，带冷却类（如药爆 HEAL）由 extra_skill_cd_left 门控。
 func try_activate_extra_skill() -> bool:
 	var sid := GameManager.extra_skill_id
-	if sid.is_empty() or GameManager.is_game_over or extra_skill_cd_left > 0.0:
+	if sid.is_empty() or GameManager.is_game_over or _dying or extra_skill_cd_left > 0.0:
 		return false
 	var spawner: Node = GameManager.wave_spawner
 	if spawner != null and int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
@@ -697,6 +707,10 @@ func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
 
+	# 阵亡谢幕期：不再推进移动/技能，只剩演出 tween 在跑
+	if _dying:
+		return
+
 	# 技能冷却两段式：先走效果活跃窗口（归零即收尾+进冷却），再走冷却与短时增益倒计时
 	# （与加点乘区隔离，到期精确回滚）
 	if skill_active_left > 0.0:
@@ -733,6 +747,11 @@ func _physics_process(delta: float) -> void:
 		anim_sprite.modulate = Color.WHITE
 		if is_procedural and procedural_view != null:
 			procedural_view.modulate = Color.WHITE
+
+	# 受击闪白衰减：材质已转接给程序化视图（渲染器继承父材质），逐帧拉回 0
+	if _flash_t > 0.0 and hit_flash_mat != null:
+		_flash_t = maxf(0.0, _flash_t - delta)
+		hit_flash_mat.set_shader_parameter("flash_modifier", clampf(_flash_t / PLAYER_FLASH_DOWN_DUR, 0.0, 1.0))
 
 	# 灵愈心法 + 青木羁绊：持续回血（软顶折算与面板读数同源，BalanceCombat 唯一算式）
 	var total_regen := BalanceCombat.effective_hp_regen(GameManager.hp_regen + GameManager.synergy_hp_regen)
@@ -866,7 +885,8 @@ func _physics_process(delta: float) -> void:
 			idle_bob_phase += delta * 2.2
 			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
-	# 4. 灵蝶环绕运算
+	# 4. 攻击本体联动 + 灵蝶环绕运算
+	_tick_attack_react()
 	_process_sun_orbs(delta)
 
 	# 5. 随行技能角色身上动效更新
@@ -1025,6 +1045,32 @@ func _update_weapon_targets() -> void:
 			if not w.is_attacking:
 				w.current_target = null
 
+## 攻击本体联动（2026-10-14）：开火全由 FloatingWeapon 完成，本体原先完全静止，像「武器自己在打」。
+## 武器文件在并行协作热区不动它：这里每物理帧轮询各武器 is_attacking 边沿（0→1 即开火帧），
+## 朝开火武器的瞄准方向给本体直接叠一记 3.5° 侧倾；跑步/待机分支每帧的 lerp 回正
+## （target_bank / 0.0）就是天然衰减通道，脉冲叠加一次即被缓慢拉回，无需自管状态。
+const ATTACK_REACT_BANK := deg_to_rad(3.5)   ## 开火脉冲侧倾角
+var _weapons_attacking_buf: Array[bool] = [] ## 上一帧各武器 is_attacking 快照（边沿检测）
+
+func _tick_attack_react() -> void:
+	if not is_procedural or procedural_view == null:
+		return
+	var count := weapon_holder.get_child_count()
+	_weapons_attacking_buf.resize(count)
+	for i in range(count):
+		var w := weapon_holder.get_child(i) as FloatingWeapon
+		if w == null or not is_instance_valid(w):
+			_weapons_attacking_buf[i] = false
+			continue
+		var now_attacking: bool = w.is_attacking
+		if now_attacking and not _weapons_attacking_buf[i]:
+			# 开火边沿：武器本体 rotation == 真实瞄准方向（FloatingWeapon 侧铁律），
+			# 水平分量定左右侧倾；垂直开火不倾斜（正面朝相机下看不出意义，免得乱晃）
+			var aim_x := cos(w.rotation)
+			if absf(aim_x) > 0.2:
+				procedural_view.rotation += ATTACK_REACT_BANK * signf(aim_x)
+		_weapons_attacking_buf[i] = now_attacking
+
 func _process_sun_orbs(delta: float) -> void:
 	var count := sun_orb_container.get_child_count()
 	if count == 0:
@@ -1124,7 +1170,7 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 ## 受创入口。source_pos = 伤害来源位置（Boss 震地/丹爆自爆等 AoE 传入），
 ## 受击火花据此指向真实来向；未传（接触/弹丸等贴脸伤害本就有实体因果）时保持向上。
 func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
-	if invulnerable_time > 0.0 or GameManager.is_game_over:
+	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying:
 		return
 
 	# 流云身法：闪避成功不掉血，换一段「残影」短无敌，并把躲掉的这一刀存进影里等着还回去。
@@ -1174,12 +1220,11 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		procedural_view.play_hit(0.2)
 	AudioManager.play_sfx("player_hurt", 0.9)
 
+	# 受击闪白：帧内衰减（零 Tween 分配，与 EnemyBase 同款）。材质已转接给程序化视图
+	# （渲染器 use_parent_material 继承），旧写法 tween 到已隐藏的 anim_sprite 上从不生效。
 	if hit_flash_mat != null:
-		if flash_tween != null and flash_tween.is_valid():
-			flash_tween.kill()
-		flash_tween = create_tween()
-		flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 1.0, 0.03)
-		flash_tween.tween_property(hit_flash_mat, ^"shader_parameter/flash_modifier", 0.0, 0.1)
+		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
+		_flash_t = PLAYER_FLASH_DOWN_DUR
 
 	DamageNumber.spawn(get_parent(), global_position, int(reduced), false)
 
@@ -1187,7 +1232,38 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		# 替死傀儡挡劫：消耗一件免死回半血，挡不了才真正倒下
 		if GameManager.try_revive():
 			return
-		GameManager.trigger_game_over(false)
+		_play_death_sequence()
+
+## 阵亡演出（2026-10-14）：塌落消散约 1s 后才弹结算。
+## 期间 _dying 挡住移动/技能/再受创，敌人照常行动（不暂停整场，只谢幕玩家本体）；
+## 演出结束才 trigger_game_over（结算面板自带 paused + defeat BGM，此处不发重复音）。
+func _play_death_sequence() -> void:
+	if _dying:
+		return
+	_dying = true
+	_dash_time = 0.0
+	velocity = Vector2.ZERO
+	invulnerable_time = 9999.0  # 谢幕期不再吃任何判定
+	play_squash(Vector2(1.32, 0.62), 0.5)
+	if is_procedural and procedural_view != null:
+		procedural_view.play_hit(0.5)
+	# 灵气散逸：一圈纸白微环 + 落点微尘（走 JuiceEffect 池，带帧预算闸与视口门控）
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 30.0, GameStyle.PAPER, 0.5)
+	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), Vector2.UP * 30.0)
+	GameFeel.vibrate(80, 1.0)
+	var tw := create_tween()
+	# 先塌伏（前倾倒地姿态由 squash 承担），后半段整体沉入地面消散
+	tw.tween_interval(0.45)
+	var fade_target: Node2D = anim_sprite
+	if is_procedural and procedural_view != null:
+		fade_target = procedural_view
+	tw.tween_property(fade_target, "modulate:a", 0.0, 0.4)
+	tw.tween_property(fade_target, "scale", Vector2(0.4, 0.18), 0.4)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(shadow_sprite, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(func():
+		if not GameManager.is_game_over:
+			GameManager.trigger_game_over(false))
 
 func increase_max_hp(amount: float, heal_amount: float) -> void:
 	max_health += amount

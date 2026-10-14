@@ -42,7 +42,7 @@ extends RefCounted
 
 const DEFS: Dictionary = {
 			"jianchi": {
-				"name": "剑客",
+				"name": "剑士",
 				"epithet": "一剑在手，所向披靡",
 				"icon": "res://assets/art/cultivator_jianchi_icon.png",
 				"sprite": "res://assets/art/pawn_blue_8dir.png",

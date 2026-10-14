@@ -70,6 +70,10 @@ func _init_renderer() -> void:
 	else:
 		renderer = HollowKnightCultivatorRenderer.new()
 
+	# 闪白材质挂在 view 上（Player 转接 hit_flash_mat），自绘像素要吃同一份 shader 闪白
+	# 就必须继承父材质 —— 与敌人侧 ProceduralEnemyView 同款接法
+	renderer.use_parent_material = true
+
 	if config:
 		renderer.config = config
 		if renderer is HollowKnightCultivatorRenderer:

@@ -184,6 +184,13 @@ func _test_vfx_integrity() -> void:
 			burst_ok = false
 		b.free()
 	_c.check(burst_ok, "BurstKindFx 完整支持 6 种法印爆发形态")
+
+	# 巨印落点印体：纯矢量 SealImpactFx（取代 AI 位图 weapon_earth_seal.png 当动态特效）
+	var seal := SealImpactFx.new()
+	seal.size = 90.0 * 1.4
+	seal.tint = Color(0.88, 0.74, 0.46)
+	_c.check(seal.size > 0.0, "SealImpactFx 程序化镇印可配置（画幅 %.0fpx）" % seal.size)
+	seal.free()
 	
 	var beam := BeamRenderer.new()
 	beam.beam_on(200.0, 10.0, Color.PURPLE)

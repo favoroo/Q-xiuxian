@@ -284,7 +284,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(20, 0), "upright": true,
 						"desc": "巨印从天砸下，受元素伤害与护甲加成", "tag": "范围·横扫·土",
 						"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
-						"burst_icon": "res://assets/art/weapon_earth_seal.png",
+						"burst_seal": true,
 						"burst_kind": "seal",
 						"tags": ["wide", "earth"],
 						"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
