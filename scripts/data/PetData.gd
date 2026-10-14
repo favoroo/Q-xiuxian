@@ -30,8 +30,8 @@ const DEFS: Dictionary = {
 		"role": "attack",
 		"base_price": 38,
 		"base_cooldown": 2.2,
-		"base_value": 18.0,  ## 基础火丹伤害
-		"desc": "每 2.2 秒向最近敌人发射追踪火丹",
+		"base_value": 32.0,  ## 基础火丹伤害
+		"desc": "每 2.2 秒向最近敌人发射穿透三昧火弹，附带灼烧与 15% 烈焰易伤",
 		"color": Color(0.98, 0.42, 0.16),      # 橙红
 		"halo_color": Color(1.0, 0.55, 0.2, 0.35),
 		"decor": "fox_ears_tail",
@@ -41,9 +41,9 @@ const DEFS: Dictionary = {
 		"name": "雷灵雀",
 		"role": "attack",
 		"base_price": 42,
-		"base_cooldown": 3.0,
-		"base_value": 36.0,  ## 单发高伤雷击
-		"desc": "每 3.0 秒雷击最近敌人（单发高伤）",
+		"base_cooldown": 2.8,
+		"base_value": 58.0,  ## 单发高伤雷击
+		"desc": "每 2.8 秒召唤连锁神雷，造成高伤并麻痹打断敌人",
 		"color": Color(0.55, 0.45, 0.98),      # 蓝紫
 		"halo_color": Color(0.68, 0.58, 1.0, 0.35),
 		"decor": "bird_crest_beak",
@@ -53,9 +53,9 @@ const DEFS: Dictionary = {
 		"name": "玄甲龟",
 		"role": "defense",
 		"base_price": 46,
-		"base_cooldown": 1.6,
-		"base_value": 95.0,  ## 拦截半径 px
-		"desc": "每 1.6 秒拦截周身 95px 内一发敌方飞行物",
+		"base_cooldown": 2.5,
+		"base_value": 120.0, ## 拒马与清弹幕半径 px
+		"desc": "每 2.5 秒周身消除敌方弹丸并震退近身敌人，濒危附加玄甲护符",
 		"color": Color(0.24, 0.62, 0.68),      # 青黛
 		"halo_color": Color(0.35, 0.75, 0.82, 0.35),
 		"decor": "turtle_shell",
@@ -65,9 +65,9 @@ const DEFS: Dictionary = {
 		"name": "玉露鹿",
 		"role": "support",
 		"base_price": 40,
-		"base_cooldown": 2.0,
-		"base_value": 0.012, ## 每跳回复 1.2% 最大生命
-		"desc": "每 2.0 秒为主角回复 1.2% 最大生命",
+		"base_cooldown": 2.5,
+		"base_value": 20.0,  ## 基础回血量
+		"desc": "每 2.5 秒降下甘霖回血，并赋予 2 秒移速与拾取范围加成",
 		"color": Color(0.35, 0.85, 0.55),      # 玉绿
 		"halo_color": Color(0.48, 0.95, 0.65, 0.35),
 		"decor": "deer_horns",
@@ -77,9 +77,9 @@ const DEFS: Dictionary = {
 		"name": "聚宝蟾",
 		"role": "economy",
 		"base_price": 36,
-		"base_cooldown": 0.0, ## 回合末触发
+		"base_cooldown": 3.0, ## 战中金舌吸宝周期（秒）
 		"base_value": 8.0,   ## 每回合基准产出金币
-		"desc": "每回合结束献上金币（随回合成长）",
+		"desc": "每 3.0 秒金舌卷回远处掉落物，回合结束献上金币",
 		"color": Color(0.96, 0.82, 0.22),      # 金黄
 		"halo_color": Color(1.0, 0.88, 0.35, 0.4),
 		"decor": "toad_coin",
@@ -89,9 +89,9 @@ const DEFS: Dictionary = {
 		"name": "灵风貂",
 		"role": "control",
 		"base_price": 38,
-		"base_cooldown": 6.0,
+		"base_cooldown": 4.5,
 		"base_value": 220.0, ## 风涡半径 px（定身环半径唯一真话在 BalanceSpiritPet.MELEE_RING）
-		"desc": "每 6 秒将周围 220px 内敌人卷至身前 120px 处定身 1.5 秒",
+		"desc": "每 4.5 秒将周围 220px 内敌人卷至身前 120px 处定身 1.5 秒并减速",
 		"color": Color(0.85, 0.88, 0.95),      # 月白
 		"halo_color": Color(0.92, 0.94, 1.0, 0.35),
 		"decor": "mink_tail",
@@ -101,9 +101,9 @@ const DEFS: Dictionary = {
 		"name": "磐石猿",
 		"role": "control",
 		"base_price": 38,
-		"base_cooldown": 5.0,
-		"base_value": 110.0, ## 震退半径 px，伤害为基础 12.0
-		"desc": "每 5 秒震退 110px 内敌人并造成伤害",
+		"base_cooldown": 3.5,
+		"base_value": 160.0, ## 震地半径 px，伤害为基础 28.0
+		"desc": "每 3.5 秒重砸地面击退 160px 内敌人并留下减速岩沼",
 		"color": Color(0.65, 0.58, 0.52),      # 岩灰
 		"halo_color": Color(0.78, 0.72, 0.66, 0.35),
 		"decor": "ape_brows",

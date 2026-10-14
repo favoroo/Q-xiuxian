@@ -10,8 +10,10 @@ tools/inspect_asset.py — 游戏美术视觉检视统一调度 CLI
     python3 tools/inspect.py vfx <id|--all>          # 攻击特效特写 / 12 款刀光扇面+光束+火锥+爆发画廊
     python3 tools/inspect.py projectile <id|--all>   # 飞行物特写 / 21 种纯矢量弹道画廊 (别名 bullet)
     python3 tools/inspect.py ui [--all]              # 界面 GameStyle 规范样张与面板画廊
+    python3 tools/inspect.py screen <id|--all>       # 核心游戏界面/战斗视口抓拍 (battle/levelup/shop/start/select/records)
+    python3 tools/inspect.py lint                    # 资产合规体检 (检测抠底安全边距、尺寸、防场景图误入)
     python3 tools/inspect.py report                  # 重新打包生成交互式 HTML 看板
-    python3 tools/inspect.py all                     # 一键刷新全部 7 大画廊并打包 HTML 看板
+    python3 tools/inspect.py all                     # 一键刷新全部画廊并打包 HTML 看板
 """
 
 import os
@@ -23,6 +25,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from inspector.html_report import generate_html_report
+from inspector.asset_lint import run_asset_lint
 
 GODOT_CANDIDATES = [
     os.environ.get("GODOT_BIN", ""),
@@ -401,11 +404,27 @@ def main():
     elif cmd == "ui":
         run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
 
+    elif cmd == "screen":
+        arg = sys.argv[2] if len(sys.argv) >= 3 else "all"
+        screens = ["battle", "levelup", "shop", "start_menu", "cultivator_select", "records"]
+        if arg == "all" or arg == "--all":
+            for s in screens:
+                run_godot_inspector("screen", s, f"tests/inspect/screen_{s}.png", is_gallery=False)
+        else:
+            run_godot_inspector("screen", arg, f"tests/inspect/screen_{arg}.png", is_gallery=False)
+
+    elif cmd == "lint":
+        ok = run_asset_lint(verbose=True)
+        sys.exit(0 if ok else 1)
+
     elif cmd == "report":
         generate_html_report()
 
     elif cmd == "all":
-        print("[CLI] 开始执行全量 7 大视觉画廊矩阵与看板更新...")
+        print("[CLI] 开始执行全量视觉画廊矩阵、界面快照与看板更新...")
+        ok = run_asset_lint(verbose=True)
+        if not ok:
+            print("[Warning] 资产体检未全部通过，请注意上方异常项！")
         run_godot_inspector("cultivator", "all", "tests/inspect/cultivator_gallery_all.png", is_gallery=True)
         hall_script = "tools/generate_weapon_hall.py"
         if os.path.exists(hall_script):
@@ -417,8 +436,10 @@ def main():
         run_godot_inspector("vfx", "all", "tests/inspect/vfx_gallery_all.png", is_gallery=True)
         run_godot_inspector("projectile", "all", "tests/inspect/projectile_gallery_all.png", is_gallery=True)
         run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
+        for s in ["battle", "levelup", "shop", "start_menu", "cultivator_select", "records"]:
+            run_godot_inspector("screen", s, f"tests/inspect/screen_{s}.png", is_gallery=False)
         generate_html_report()
-        print("★ 全部 7 大画廊图与 HTML 交互看板更新完毕！")
+        print("★ 全部画廊图、实景界面截图与 HTML 交互看板更新完毕！")
 
     else:
         print(f"[Error] 未知指令: {cmd}")

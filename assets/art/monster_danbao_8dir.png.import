@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b13w81x4s3y1v"
-path="res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.ctex"
+path.bptc="res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.bptc.ctex"
+path.astc="res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/monster_danbao_8dir.png"
-dest_files=["res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.ctex"]
+dest_files=["res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.bptc.ctex", "res://.godot/imported/monster_danbao_8dir.png-eb8bb1619ab0ad7d61f95bc18b34300e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

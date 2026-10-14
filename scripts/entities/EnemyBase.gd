@@ -127,7 +127,6 @@ var _poison_timer: float = 0.0        ## 投毒冷却计时
 var _poison_windup_t: float = -1.0    ## >=0 表示投毒预警中
 var _poison_target: Vector2 = Vector2.ZERO  ## 锁定的落点（预警期间不追踪玩家，否则 0.6s 躲不开）
 var _poison_ring: AoeTelegraph = null ## 落点预警圈
-var _poison_pool_scene: PackedScene = preload("res://scenes/entities/PoisonPool.tscn")
 
 # 精英变异（2026-10-12，仿土豆兄弟 Elite Mutation：过血线一次性切换行为参数）
 var _eid: String = ""              ## 解析后的敌种标识（_ready 落定，变异分发的依据）
@@ -1342,6 +1341,8 @@ func _explode(player: Node2D) -> void:
 	_clear_explode_ring()
 	# 冲击波扫到 explode_radius 为止：扫过的范围就是受伤的范围（与判定同源）
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, explode_radius, GameStyle.BAD)
+	# 爆点留焦痕（纯视觉贴花，判定已在上方结算）
+	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
@@ -1674,6 +1675,8 @@ func _resolve_elite_slam(player: Node2D) -> void:
 	if dying:
 		return
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, slam_radius, GameStyle.BAD)
+	# 落点留震裂（纯视觉贴花，判定已在下方结算）
+	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.CRACK, slam_radius)
 	AudioManager.play_sfx("enemy_slam", 0.8)
 	if player == null or player.global_position.distance_to(global_position) > slam_radius:
 		return
@@ -1733,14 +1736,12 @@ func _drop_poison() -> void:
 		_poison_ring.visible = false
 	if dying or get_parent() == null:
 		return
-	var pool_node: Node = _poison_pool_scene.instantiate()
-	if pool_node == null:
-		return
-	var pool := pool_node as PoisonPool
+	var pool := PoisonPool.acquire(get_parent())
 	pool.global_position = _poison_target
 	pool.damage = maxf(1.0, poison_damage)
 	pool.duration = poison_duration
-	get_parent().add_child(pool)
+	# 预警圈半径 = poison_radius ⇒ 落潭判定必须同源：scale_factor 驱动外观与碰撞一起缩
+	pool.scale_factor = poison_radius / PoisonPool.RADIUS
 	pool.activate()
 	JuiceEffect.spawn_shockwave(get_parent(), _poison_target, poison_radius, GameStyle.POISON, 0.28)
 	AudioManager.play_sfx("enemy_poison", 1.0, GameManager.rng.randf_range(0.92, 1.08))

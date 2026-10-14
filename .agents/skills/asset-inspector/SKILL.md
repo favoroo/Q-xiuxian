@@ -88,11 +88,24 @@ description: 游戏美术与全域视觉资产（修仙真身角色、法器武�
   - 产物：`tests/inspect/ui_gallery_all.png` (960×540)
   - 涵盖 GameStyle 标题大匾、五档色带卡（普通/稀有/史诗/传说/已选）、三大按钮体系（主行动/次要/危险）、侧签行与进度条。
 
-### 8. 交互式 HTML 离线画廊与一键全量构建
+### 8. 核心界面视口与实景截图 (Screen View)
+- **单界面抓拍**：`python3 tools/inspect.py screen <id>`
+  - 选项：`battle`（战斗实景+HUD+妖魔）、`levelup`（悟道结算5选1）、`shop`（灵石阁货架）、`cultivator_select`（全道统选角）、`start_menu`（主界面道途）
+  - 示例：`python3 tools/inspect.py screen battle`
+  - 产物：`tests/inspect/screen_<id>.png` (960×540)
+- **全界面抓拍**：`python3 tools/inspect.py screen --all`
+  - 一键导出全部 5 大核心界面视口。
+
+### 9. 资产规范与防呆体检 (Asset Lint)
+- **全域合规体检**：`python3 tools/inspect.py lint`
+  - 毫秒级检测：分辨率（道具 128×128、武器 48×48）、四周安全边距透明抠底、严禁带背景的 16:9 场景图混入。
+  - 挂载进 `tests/InspectCheck.tscn` 核心基线，自动拦截不合格资产。
+
+### 10. 交互式 HTML 离线画廊与一键全量构建
 - **生成 HTML 报告**：`python3 tools/inspect.py report`
-  - 产物：`tests/inspect/index.html`（单文件自包含、内嵌 Base64 图、7 大分类 Tab、支持点击大图弹窗）。
+  - 产物：`tests/inspect/index.html`（单文件自包含、内嵌 Base64 图、8 大分类 Tab、支持点击大图弹窗）。
 - **一键全量更新**：`python3 tools/inspect.py all`
-  - 自动重新生成所有 7 大画廊图并打包 HTML 报告。
+  - 自动执行资产体检，重新生成所有画廊图、实景界面截图并打包 HTML 看板。
 
 ---
 

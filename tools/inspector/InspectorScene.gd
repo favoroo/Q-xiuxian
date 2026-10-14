@@ -42,6 +42,8 @@ func _ready() -> void:
 				_build_projectile_gallery()
 			"ui":
 				_build_ui_gallery()
+			"screen":
+				_build_screen_gallery()
 			"cultivator", _:
 				_build_cultivator_gallery()
 	else:
@@ -54,6 +56,8 @@ func _ready() -> void:
 				_build_projectile_closeup(target_id)
 			"ui":
 				_build_ui_gallery()
+			"screen":
+				_build_screen_view(target_id)
 			"cultivator", _:
 				_build_cultivator_closeup(target_id)
 	
@@ -338,7 +342,7 @@ func _build_cultivator_gallery() -> void:
 	for i in keys.size():
 		var cid: String = String(keys[i])
 		var c := i % cols
-		var r := i / cols
+		var r := int(float(i) / float(cols))
 		var pos := Vector2(start_x + c * (card_w + pad_x), start_y + r * (card_h + pad_y))
 		
 		var card := _build_cultivator_gallery_card(cid, card_w, card_h)
@@ -578,7 +582,7 @@ func _build_enemy_gallery() -> void:
 	for i in all_enemy_ids.size():
 		var eid: String = String(all_enemy_ids[i])
 		var c := i % cols
-		var r := i / cols
+		var r := int(float(i) / float(cols))
 		var pos := Vector2(start_x + c * (card_w + pad_x), start_y + r * (card_h + pad_y))
 		
 		var card := _build_enemy_gallery_card(eid, card_w, card_h)
@@ -736,7 +740,7 @@ func _build_vfx_gallery() -> void:
 	
 	for i in burst_kinds.size():
 		var bx := 370 + (i % 3) * 185
-		var by := 390 + (i / 3) * 85
+		var by := 390 + int(float(i) / 3.0) * 85
 		var fx := BurstKindFx.new()
 		fx.position = Vector2(bx, by)
 		root.add_child(fx)
@@ -856,7 +860,7 @@ func _build_projectile_gallery() -> void:
 	
 	for i in kinds.size():
 		var c := i % cols
-		var r := i / cols
+		var r := int(float(i) / float(cols))
 		var pos := Vector2(start_x + c * (card_w + pad_x), start_y + r * (card_h + pad_y))
 		
 		var panel := PanelContainer.new()
@@ -1063,3 +1067,139 @@ func _make_kv_label(category: String, content: String) -> VBoxContainer:
 	GameStyle.label(val_lbl, 9, GameStyle.PAPER)
 	box.add_child(val_lbl)
 	return box
+
+# ==============================================================================
+# 6. 游戏完整界面与视口实景 (Screen View / Gallery)
+# ==============================================================================
+
+func _build_screen_view(sid: String) -> void:
+	var bg := ColorRect.new()
+	bg.color = GameStyle.INK
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+	
+	match sid:
+		"battle", "hud":
+			_build_screen_battle_mock()
+		"levelup", "upgrade":
+			_build_screen_levelup_mock()
+		"shop", "waveshop":
+			_build_screen_shop_mock()
+		"cultivator_select", "select":
+			_build_screen_cultivator_select_mock()
+		"records", "career":
+			_build_screen_records_mock()
+		"start_menu", "start":
+			_build_screen_start_menu_mock()
+		_:
+			_build_screen_battle_mock()
+
+func _build_screen_gallery() -> void:
+	# 综合实景走廊：默认展示波后加点界面
+	_build_screen_levelup_mock()
+
+func _build_screen_start_menu_mock() -> void:
+	var start_scn := load("res://scenes/ui/StartMenu.tscn")
+	if start_scn:
+		var inst = start_scn.instantiate()
+		add_child(inst)
+		if inst.has_method("open"):
+			inst.open()
+
+func _build_screen_cultivator_select_mock() -> void:
+	var script_res := load("res://scripts/ui/CultivatorSelect.gd")
+	if script_res:
+		var inst: Control = script_res.new()
+		add_child(inst)
+		if inst.has_method("show_select"):
+			inst.show_select()
+
+func _build_screen_records_mock() -> void:
+	# 修仙志弹窗（默认切到"角色"页 —— 头像资产事故页面，验收图鉴卡与头像显示）
+	var script_res := load("res://scripts/ui/CareerDialog.gd")
+	if script_res:
+		var inst: Control = script_res.new()
+		add_child(inst)
+		if inst.has_method("open"):
+			inst.open()
+		if inst.has_method("switch_tab"):
+			inst.switch_tab(1)
+
+func _build_screen_levelup_mock() -> void:
+	GameManager.cultivator_id = "jianchi"
+	GameManager.start_run("qingyun_sword")
+	GameManager.pending_upgrade_points = 2
+	GameManager.open_alloc_session()
+	var level_scn := load("res://scenes/ui/LevelUpDialog.tscn")
+	if level_scn:
+		var inst = level_scn.instantiate()
+		add_child(inst)
+		if inst.has_method("_on_alloc_opened"):
+			inst._on_alloc_opened()
+
+func _build_screen_shop_mock() -> void:
+	GameManager.cultivator_id = "jianchi"
+	GameManager.start_run("qingyun_sword")
+	GameManager.add_spirit_stones(500)
+	for i in range(5):
+		GameManager.apply_upgrade("melee_up")
+	GameManager.roll_shop(true)
+	var shop_scn := load("res://scenes/ui/WaveShop.tscn")
+	if shop_scn:
+		var inst = shop_scn.instantiate()
+		add_child(inst)
+		if inst.has_method("_on_shop_opened"):
+			inst._on_shop_opened()
+
+func _build_screen_battle_mock() -> void:
+	GameManager.cultivator_id = "jianchi"
+	GameManager.start_run("qingyun_sword")
+	GameManager.add_weapon("huoyan_fu")
+	GameManager.add_weapon("chiyan_dao")
+	
+	# 1. 模拟战场地面
+	var ground := ColorRect.new()
+	ground.color = Color(0.08, 0.10, 0.15)
+	ground.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(ground)
+	
+	# 2. 模拟玩家修士居中站位与背负法器
+	var player_cfg := CultivatorVisualConfig.get_config("jianchi")
+	var player_node := HollowKnightCultivatorRenderer.new(player_cfg)
+	player_node.current_angle = CultivatorRendererBase.Angle.FRONT
+	player_node.position = Vector2(480, 270)
+	player_node.scale = Vector2.ONE * 2.5
+	add_child(player_node)
+	_cultivator_renderers.append(player_node)
+	
+	# 3. 模拟环绕敌人
+	var e1_cfg := EnemyVisualConfig.get_config("wolf")
+	var e1 := HollowKnightEnemyRenderer.new()
+	e1.config = e1_cfg
+	e1.is_moving = true
+	e1.position = Vector2(320, 250)
+	e1.scale = Vector2.ONE * 2.2
+	add_child(e1)
+	_enemy_renderers.append(e1)
+	
+	var e2_cfg := EnemyVisualConfig.get_config("ghost")
+	var e2 := HollowKnightEnemyRenderer.new()
+	e2.config = e2_cfg
+	e2.is_moving = false
+	e2.position = Vector2(620, 220)
+	e2.scale = Vector2.ONE * 2.2
+	add_child(e2)
+	_enemy_renderers.append(e2)
+	
+	# 4. 真实顶栏 HUD 实装
+	var hud_scn := load("res://scenes/ui/GameHUD.tscn")
+	if hud_scn:
+		var hud = hud_scn.instantiate()
+		add_child(hud)
+		hud.hp_label.text = "120/120"
+		hud.level_label.text = "Lv.3"
+		hud.time_label.text = "01:25"
+		hud.wave_label.text = "第 1 波"
+		hud.kills_label.text = "击杀 18"
+		hud.shards_label.text = "金币 54"
+		hud.call_deferred("rebuild_synergies")

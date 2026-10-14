@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b6pk0rjt4h5s5"
-path="res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.ctex"
+path.bptc="res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.bptc.ctex"
+path.astc="res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/cultivator_meiying_8dir.png"
-dest_files=["res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.ctex"]
+dest_files=["res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.bptc.ctex", "res://.godot/imported/cultivator_meiying_8dir.png-f636eead50875aafad4972d917910dcb.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

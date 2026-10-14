@@ -152,6 +152,7 @@ func _exit_tree() -> void:
 	EnemyBase.clear_frame_cache()
 	EnemyBase.clear_pools()
 	PoisonPool.clear_pool()
+	GroundDecal.clear_pool()
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()

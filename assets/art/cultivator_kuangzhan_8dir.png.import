@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bt784pck7scrg"
-path="res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.ctex"
+path.bptc="res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.bptc.ctex"
+path.astc="res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/cultivator_kuangzhan_8dir.png"
-dest_files=["res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.ctex"]
+dest_files=["res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.bptc.ctex", "res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

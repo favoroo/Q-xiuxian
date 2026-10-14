@@ -335,6 +335,17 @@ func _recycle() -> void:
 	set_deferred("monitoring", false)
 	$CollisionShape2D.set_deferred("disabled", true)
 	visible = false
+	# 清理可能残留的异常与战斗字段，防止池化复用时污染
+	proc_burn = false
+	burn_dps = 0.0
+	burn_dur = 0.0
+	proc_chill = 0.0
+	chill_dur = 0.0
+	proc_poison = false
+	poison_dps = 0.0
+	poison_dur = 0.0
+	bounce_left = 0
+	pierce_left = 0
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
 		return

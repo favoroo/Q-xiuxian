@@ -429,6 +429,8 @@ func _resolve_single_sky_fire(pos: Vector2, player: Node2D) -> void:
 		return
 	var c := Color(0.85, 0.35, 0.95) if final_boss else GameStyle.BAD
 	JuiceEffect.spawn_shockwave(get_parent(), pos, GameBalance.BOSS_SKY_FIRE_RADIUS, c)
+	# 落点留焦痕（纯视觉贴花，判定已在下方结算）
+	GroundDecal.spawn(get_parent(), pos, GroundDecal.Kind.SCORCH, GameBalance.BOSS_SKY_FIRE_RADIUS * 0.6)
 	AudioManager.play_sfx("enemy_slam", 0.9)
 	if player != null and is_instance_valid(player) and player.global_position.distance_to(pos) <= GameBalance.BOSS_SKY_FIRE_RADIUS:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SKY_FIRE_DMG_MULT), pos)
@@ -455,6 +457,8 @@ func _resolve_slam(player: Node2D = null) -> void:
 		return
 	var c := Color(0.85, 0.35, 0.95) if final_boss else GameStyle.BAD
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, GameBalance.BOSS_SLAM_RADIUS, c)
+	# 落点留震裂（纯视觉贴花，判定已在下方结算）
+	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.CRACK, GameBalance.BOSS_SLAM_RADIUS)
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	AudioManager.play_sfx("enemy_slam", 1.1)
 	if player == null:

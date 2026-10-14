@@ -74,6 +74,13 @@ func _case_radius_same_source() -> void:
 	var big := _spawn_pool(_world, Vector2(400, 200), 3.0, 5.0, 1.3)
 	await get_tree().process_frame
 	_c.near(big._circle.radius, PoisonPool.RADIUS * 1.3, 0.001, "放大缩放下判定圆跟着放大（画多大判多大）")
+	# 不规则摊形：所有液面子圆（含暗晕外扩）收在判定圈内 ⇒ 摊形再野，视觉也不超出判定
+	var contained := true
+	for b in big._blobs:
+		if Vector2(b.x, b.y).length() + b.z * 1.08 > big.radius * 0.98 + 0.01:
+			contained = false
+	_c.check(contained, "液面子圆收在判定圈内（摊形不规则但视觉永不超出判定）")
+	_c.check(big._blobs.size() >= 5, "液面是多子圆聚合的不规则摊（不是规则同心圆）")
 	p.recycle()
 	big.recycle()
 	await get_tree().process_frame
@@ -179,11 +186,21 @@ func _case_pool_reuse() -> void:
 	await get_tree().process_frame
 
 ## 收掉场上全部毒潭（判据专用，不碰池内休眠体）
+## 注意：毒潭经 acquire 挂在 PoisonPoolHost 下，不是 _world 直接子节点，要递归找
 func _clear_all_pools() -> void:
-	for child in _world.get_children():
-		if child is PoisonPool:
-			(child as PoisonPool).recycle()
+	for pl in _find_all_pools():
+		pl.recycle()
 	await get_tree().process_frame
+
+func _find_all_pools() -> Array[PoisonPool]:
+	var out: Array[PoisonPool] = []
+	var stack: Array[Node] = [_world]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is PoisonPool:
+			out.append(n)
+		stack.append_array(n.get_children())
+	return out
 
 ## ⑥⑦⑧ 毒妖支路：预警圈同源、落点锁死、到点才落潭
 func _case_duyao_windup() -> void:
@@ -232,15 +249,23 @@ func _case_duyao_windup() -> void:
 	_c.check(hp < 99999.0, "落潭后圈内玩家掉血")
 	_c.check(duyao._poison_windup_t < 0.0, "落潭后退出预警阶段")
 
+	# 落潭半径与预警圈同源：scale_factor = poison_radius / RADIUS ⇒ 判定圆 == 预警圈
+	# （回归钉：曾经 _drop_poison 不设 scale_factor，预警圈画 62 判定永远 60，画大判小）
+	var dropped := _find_all_pools().filter(func(pl): return not pl._pooled)
+	_c.equals(dropped.size(), 1, "落潭后场上有且只有一滩活跃毒潭")
+	if dropped.size() == 1:
+		_c.near(dropped[0].radius, duyao.poison_radius, 0.01,
+			"落潭判定半径 = 预警圈半径（scale_factor 同源）")
+		_c.near(dropped[0]._circle.radius, duyao.poison_radius, 0.01, "碰撞圆同步（画多大判多大）")
+
 	# 冷却期不起手：_poison_timer 置正后直接推进一次 tick 不应立刻起手
 	duyao._poison_timer = duyao.poison_interval
 	duyao._tick_behaviors(0.016, _player, Vector2.DOWN, 40000.0, duyao.move_speed)
 	_c.check(duyao._poison_windup_t < 0.0, "冷却未到不起手（周期由 poison_interval 钉住）")
 
 	# 场上毒潭清场（避免污染后续判据的内存读数）
-	var pools := _world.get_children().filter(func(n): return n is PoisonPool)
-	for pl in pools:
-		(pl as PoisonPool).recycle()
+	for pl in _find_all_pools():
+		pl.recycle()
 	duyao.queue_free()
 	_player.current_health = 99999.0
 	await get_tree().process_frame

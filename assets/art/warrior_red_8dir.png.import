@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c4fqycjgxr7q4"
-path="res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.ctex"
+path.bptc="res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.bptc.ctex"
+path.astc="res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/warrior_red_8dir.png"
-dest_files=["res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.ctex"]
+dest_files=["res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.bptc.ctex", "res://.godot/imported/warrior_red_8dir.png-27b3425ff518eb54b5b02432176bfec7.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

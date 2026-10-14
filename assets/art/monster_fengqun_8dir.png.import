@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcmiishcq3tfe"
-path="res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.ctex"
+path.bptc="res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.bptc.ctex"
+path.astc="res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/monster_fengqun_8dir.png"
-dest_files=["res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.ctex"]
+dest_files=["res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.bptc.ctex", "res://.godot/imported/monster_fengqun_8dir.png-cc9ac0b27fcbdbc344da60f6c9b0a3c4.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

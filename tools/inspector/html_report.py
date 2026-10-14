@@ -169,6 +169,17 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
     ui_gallery = "tests/inspect/ui_gallery_all.png"
     ui_gallery_b64 = get_base64_image(ui_gallery)
 
+    # 8 大核心实景视口截图
+    screens = [
+        {"id": "battle", "name": "核心战斗与实时 HUD", "desc": "修士站位、背负神兵、环绕妖魔与顶栏血条状态"},
+        {"id": "levelup", "name": "波后悟道结算加点", "desc": "五选一卡牌矩阵、稀有度边框与机制描述展示"},
+        {"id": "shop", "name": "灵石阁商店交易货架", "desc": "货架商品锁定、售罄态、持有陈列与交互栏"},
+        {"id": "cultivator_select", "name": "全道统修仙真身名册", "desc": "左右分栏角色详解、天赋代价与 3D 渲染头像框"},
+        {"id": "start_menu", "name": "主界面与道途启航", "desc": "开局背景、道印徽记与主行动按钮阵列"},
+    ]
+    for sc in screens:
+        sc["b64"] = get_base64_image(f"tests/inspect/screen_{sc['id']}.png")
+
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -281,6 +292,7 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
   <button class="tab-btn" onclick="openTab('vfx', this)">武器攻击特效 (12刀光+光束+火锥+6法印)</button>
   <button class="tab-btn" onclick="openTab('projectiles', this)">飞行物弹道 (21纯矢量+飞弹)</button>
   <button class="tab-btn" onclick="openTab('ui', this)">界面规范组件 (GameStyle)</button>
+  <button class="tab-btn" onclick="openTab('screens', this)">核心界面视口 (5大实景)</button>
 </div>
 
 <!-- 1. 修仙者 -->
@@ -405,6 +417,28 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
 <!-- 7. 界面组件规范 -->
 <div id="tab-ui" class="content-section">
   {"<div class='gallery-banner'><h3>◆ UI 视觉设计与组件规范样张 (点击放大)</h3><img class='gallery-img' src='" + ui_gallery_b64 + "' onclick='viewImage(this.src)' alt='UI样张'></div>" if ui_gallery_b64 else ""}
+</div>
+
+<!-- 8. 核心界面视口 -->
+<div id="tab-screens" class="content-section">
+  <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));">
+"""
+    for sc in screens:
+        img_src = sc["b64"]
+        html += f"""
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">{sc['name']}</span>
+        <span class="card-id">{sc['id']}</span>
+      </div>
+      <div class="card-desc">{sc['desc']}</div>
+      <div class="img-wrap" style="min-height: 236px;">
+        {"<img src='" + img_src + "' onclick='viewImage(this.src)' alt='" + sc['name'] + "'>" if img_src else "<span style='color:var(--text-grey);font-size:12px;'>运行 inspect screen " + sc['id'] + " 生成截图</span>"}
+      </div>
+    </div>
+"""
+    html += """
+  </div>
 </div>
 
 <div id="modal" class="modal" onclick="closeModal()">

@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ckbujui5t5s3c"
-path="res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.ctex"
+path.bptc="res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.bptc.ctex"
+path.astc="res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/art/cultivator_fuzhen_8dir.png"
-dest_files=["res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.ctex"]
+dest_files=["res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.bptc.ctex", "res://.godot/imported/cultivator_fuzhen_8dir.png-8623e6265bb8aa49db51e81940e510d3.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

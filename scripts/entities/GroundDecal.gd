@@ -1,0 +1,156 @@
+class_name GroundDecal
+extends Node2D
+
+## 地面贴花：震地落点的「震裂」与火焰/爆炸落点的「焦痕」。
+## 纯视觉、无判定 —— 判定在持有者侧结算完毕后才调用本组件留痕（照 AoeTelegraph「只画不判」铁律）。
+## 形态在 activate() 用本地 RNG 预生成（种子 = 位置哈希，不走 GameManager.rng，不污染玩法随机流），
+## _draw() 只画不随机：裂纹折线算法复用 GroundDecorLayer §3.2，焦痕聚合复用 §3.1 青苔模式。
+## 生命周期：HOLD 全亮 → FADE 渐隐 → 回收入池（对象池照 PoisonPool 范式）。
+
+enum Kind { CRACK, SCORCH }
+
+const HOLD_TIME := 1.6   ## 全亮留存时长（秒）
+const FADE_TIME := 0.7   ## 渐隐时长（秒）
+
+const CRACK_SHADOW := Color(0.03, 0.05, 0.08, 0.60)  ## 裂口阴影（同 GroundDecorLayer 石板裂缝色系）
+const CRACK_RIM := Color(0.20, 0.40, 0.55, 0.14)     ## 裂缝冷月反光边
+const CRACK_DENT := Color(0.03, 0.05, 0.08, 0.20)    ## 落点中心压痕
+const SCORCH_BODY := Color(0.05, 0.04, 0.04, 0.50)   ## 焦痕炭黑
+const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.28)  ## 余烬暗橙（渐隐时同步熄灭）
+
+# —— 对象池（照 PoisonPool 范式）——
+const POOL_CAP := 16
+static var _pool: Array[GroundDecal] = []
+static var _host: Node2D = null
+static var created_count: int = 0   ## 累计 new 数（PoolCheck 断言用）
+static var reused_count: int = 0
+static var active_count: int = 0    ## 当前在场贴花数
+
+## 取一枚贴花（优先复用）：调用方随后写 global_position / kind / radius，最后 activate()
+static func acquire(parent: Node) -> GroundDecal:
+	if _host == null or not is_instance_valid(_host):
+		_pool.clear()
+		_host = Node2D.new()
+		_host.name = "GroundDecalHost"
+		parent.add_child(_host)
+	while not _pool.is_empty():
+		var d: GroundDecal = _pool.pop_back()
+		if is_instance_valid(d):
+			reused_count += 1
+			return d
+	var nd := GroundDecal.new()
+	created_count += 1
+	_host.add_child(nd)
+	return nd
+
+## 一步出膛：持有者结算完伤害后在落点留痕
+static func spawn(parent: Node, pos: Vector2, p_kind: int, p_radius: float) -> GroundDecal:
+	var d := acquire(parent)
+	d.global_position = pos
+	d.kind = p_kind
+	d.radius = p_radius
+	d.activate()
+	return d
+
+var kind: int = Kind.CRACK
+var radius: float = 100.0   ## 视觉包络半径：贴花内容永不超出此圈
+
+var _pooled: bool = false
+var _time_left: float = 0.0
+var _cracks: Array[PackedVector2Array] = []   ## 裂纹折线（震裂用）
+var _blobs: Array[Vector3] = []               ## 子圆聚合：x/y = 偏移，z = 半径（焦痕用）
+
+## 出膛激活：按 kind 预生成形态，随后进入「留存→渐隐→回收」计时
+func activate() -> void:
+	_pooled = false
+	active_count += 1
+	# 池化复用是从回收点瞬移到新落点：不重置物理插值会渲染「从旧位置滑过来」（PoisonPool 同一条坑）
+	reset_physics_interpolation()
+	visible = true
+	_time_left = HOLD_TIME + FADE_TIME
+	_generate_shape()
+	set_process(true)
+	queue_redraw()
+
+## 回收入池：休眠绘制与计时，池满或宿主失效才真释放
+func recycle() -> void:
+	if _pooled:
+		return
+	_pooled = true
+	active_count = maxi(0, active_count - 1)
+	set_process(false)
+	visible = false
+	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
+		queue_free()
+		return
+	_pool.append(self)
+
+## 释放池内全部休眠个体（Main._exit_tree 随场景清）
+static func clear_pool() -> void:
+	_pool.clear()
+	_host = null
+	created_count = 0
+
+## 池内休眠体总数（探针/判据用）
+static func pool_idle_count() -> int:
+	return _pool.size()
+
+## 形态预生成：种子取位置哈希 —— 同一落点形态可复现，且不消耗 GameManager.rng 的玩法随机流
+func _generate_shape() -> void:
+	_cracks.clear()
+	_blobs.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(absf(global_position.x) * 738.5) ^ int(absf(global_position.y) * 1934.9) ^ (created_count + reused_count)
+	match kind:
+		Kind.CRACK:
+			var branch_count := rng.randi_range(5, 7)
+			for _i in range(branch_count):
+				var pts := PackedVector2Array()
+				pts.append(Vector2.ZERO)
+				var curr := Vector2.ZERO
+				# 主方向沿圆周均布 + 抖动，避免裂纹全挤向一侧
+				var dir := Vector2.RIGHT.rotated(TAU * float(_i) / float(branch_count) + rng.randf_range(-0.4, 0.4))
+				var traveled := 0.0
+				var seg_count := rng.randi_range(3, 5)
+				for _k in range(seg_count):
+					dir = dir.rotated(rng.randf_range(-0.5, 0.5))
+					var seg_len: float = minf(rng.randf_range(0.18, 0.30) * radius, radius * 0.95 - traveled)
+					if seg_len <= 1.0:
+						break
+					curr += dir * seg_len
+					traveled += seg_len
+					pts.append(curr)
+				if pts.size() >= 2:
+					_cracks.append(pts)
+		Kind.SCORCH:
+			var blob_count := rng.randi_range(7, 9)
+			for _i in range(blob_count):
+				var off := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * rng.randf_range(0.0, radius * 0.55)
+				# 子圆边缘不超出包络圈：视觉永不超出名义半径（与判定同源铁律的贴花版）
+				var sub_r: float = minf(rng.randf_range(0.28, 0.50) * radius, radius * 0.95 - off.length())
+				if sub_r > 2.0:
+					_blobs.append(Vector3(off.x, off.y, sub_r))
+
+func _process(delta: float) -> void:
+	_time_left -= delta
+	if _time_left <= 0.0:
+		recycle()
+		return
+	queue_redraw()
+
+func _draw() -> void:
+	# 渐隐系数：留存期恒 1，末段线性降到 0
+	var a := clampf(_time_left / FADE_TIME, 0.0, 1.0)
+	match kind:
+		Kind.CRACK:
+			draw_circle(Vector2.ZERO, radius * 0.42, Color(CRACK_DENT, CRACK_DENT.a * a))
+			for pts in _cracks:
+				draw_polyline(pts, Color(CRACK_SHADOW, CRACK_SHADOW.a * a), 1.6)
+				draw_polyline(pts, Color(CRACK_RIM, CRACK_RIM.a * a), 0.8)
+		Kind.SCORCH:
+			for b in _blobs:
+				draw_circle(Vector2(b.x, b.y), b.z, Color(SCORCH_BODY, SCORCH_BODY.a * a))
+			# 余烬核：比焦黑更快熄灭（×a²），读「火刚烧过」
+			var ember := Color(SCORCH_EMBER, SCORCH_EMBER.a * a * a)
+			for b in _blobs:
+				draw_circle(Vector2(b.x, b.y), b.z * 0.45, ember)

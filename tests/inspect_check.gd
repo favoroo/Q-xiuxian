@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_cultivator_visual_configs()
 	_test_weapon_asset_integrity()
 	_test_item_asset_integrity()
+	_test_item_and_upgrade_icon_quality()
 	_test_enemy_visual_configs()
 	_test_vfx_integrity()
 	_test_projectile_integrity()
@@ -88,6 +89,65 @@ func _test_item_asset_integrity() -> void:
 			missing_icons.append("%s -> %s" % [iid, icon_path])
 			
 	_c.check(missing_icons.is_empty(), "所有道具 icon 均在磁盘中存在 (缺失: %s)" % str(missing_icons))
+
+func _test_item_and_upgrade_icon_quality() -> void:
+	var bad_icons: Array[String] = []
+	var checked_paths: Dictionary = {}
+	
+	# 1. 检查所有道具法宝图标
+	for iid in ItemData.DEFS.keys():
+		var icon_res: String = ItemData.DEFS[iid].get("icon", "")
+		if not icon_res.is_empty() and not checked_paths.has(icon_res):
+			checked_paths[icon_res] = "ItemData: " + iid
+			
+	# 2. 检查所有加点升级图标
+	for up in UpgradeData.UPGRADES:
+		var icon_res: String = up.get("icon", "")
+		var uid: String = up.get("id", "")
+		if not icon_res.is_empty() and not checked_paths.has(icon_res):
+			checked_paths[icon_res] = "UpgradeData: " + uid
+	
+	for icon_res in checked_paths.keys():
+		var real_path: String = ProjectSettings.globalize_path(icon_res)
+		var img := Image.load_from_file(real_path)
+		if img == null:
+			bad_icons.append("%s (无法加载)" % icon_res)
+			continue
+			
+		var sz := img.get_size()
+		var used := img.get_used_rect()
+		var bw := used.size.x
+		var bh := used.size.y
+		var aspect := float(bw) / float(bh) if bh > 0 else 0.0
+		
+		# 针对 128x128 UI 图标的防呆规则：
+		# ① 严禁混入 120x66 等 16:9 场景背景图 (典型平切场景宽高比 > 1.35 且左右撑满)
+		if sz.x >= 128 and bw >= sz.x * 0.85 and aspect > 1.35:
+			var top_dense := 0
+			var bot_dense := 0
+			var samples := 20
+			for s in range(samples):
+				var sample_x := used.position.x + int(float(bw) * float(s) / float(samples))
+				if img.get_pixel(sample_x, used.position.y).a > 0.8:
+					top_dense += 1
+				if img.get_pixel(sample_x, used.end.y - 1).a > 0.8:
+					bot_dense += 1
+			if float(top_dense) / float(samples) > 0.6 and float(bot_dense) / float(samples) > 0.6:
+				bad_icons.append("%s (疑似横向平切场景图: rect=%s aspect=%.2f, 引自 %s)" % [
+					icon_res, str(used), aspect, checked_paths[icon_res]
+				])
+				continue
+		
+		# ② 严禁四角未抠底 (四角 2x2 区域不透明度)
+		if sz.x >= 128:
+			var c1 := img.get_pixel(0, 0).a
+			var c2 := img.get_pixel(sz.x - 1, 0).a
+			var c3 := img.get_pixel(0, sz.y - 1).a
+			var c4 := img.get_pixel(sz.x - 1, sz.y - 1).a
+			if c1 > 0.2 or c2 > 0.2 or c3 > 0.2 or c4 > 0.2:
+				bad_icons.append("%s (四角未抠底或未留安全边距, 引自 %s)" % [icon_res, checked_paths[icon_res]])
+				
+	_c.check(bad_icons.is_empty(), "所有道具与加点图标抠底与防呆质检合格 (异常: %s)" % str(bad_icons))
 
 func _test_enemy_visual_configs() -> void:
 	var catalog: Array = EnemyGuideData.catalog_ids()
