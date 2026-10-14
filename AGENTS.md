@@ -82,6 +82,10 @@
 ### 核心基线（每次改动必跑）
 
 ```bash
+# 推荐一键运行全量核心基线（~18s，内置看门狗防无头死锁）：
+python3 tools/run_test.py --core
+
+# 亦可单独运行各判据场景（优先用 python3 tools/run_test.py <测试名>，或直接调 Godot）：
 $G --headless --path . res://tests/UnitRunner.tscn        # 数值与公式单测
 $G --headless --path . res://tests/SmokeRunner.tscn       # 全流程冒烟
 $G --headless --path . res://tests/PoolCheck.tscn         # 帧缓存/对象池
@@ -124,3 +128,6 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与生命平�
 11. **滚动区里的槽位别用 `Button`** — `BaseButton` 会吞按下事件导致划不动整排；可滚动槽位统一用 `PanelContainer + GameStyle.tap()`。
 12. **武器/弹丸脚本严禁硬引用 `EnemyBase`** — 在 `FloatingWeapon`/`BladeProjectile`/`TurretUnit` 里写 `as EnemyBase` 或类型化调用会触发循环类依赖，把 `preload(BladeProjectile.tscn)` 打成空 PackedScene（弹丸静默 null，测试只报泛化错误不报错因）。本仓武器侧遍地 `has_method` 鸭类型就是在躲这条，新增判定照抄。
 13. **池化实体出树休眠时保持三件套同拍** — 在树、`GameManager.live_*` 登记表、碰撞组（如 "enemies"）必须同时进同时出，池体一样都不许占，否则回合末清场/索敌会摸到休眠体；出厂字段快照要在 instantiate 当刻拍（`_scale_to_wave`/变异会原地改导出字段），复用整备以「是否装配过」为闸（新实例 @onready 还是 null）。
+14. **Godot headless 遇 Parse Error 不退出与后台任务止损铁律** — 
+    - **无头死锁根因**：Godot `--headless` 依赖脚本显式 `get_tree().quit()`。若遇到未声明类名、语法解析错误或资源缺失，引擎会抛错但主循环不会退出，而是在后台无限空转（nanosleep）。严禁在缺少 `.godot/imported` 缓存的裸目录（如 git worktree）直接跑测试；跑测试一律优先使用自带看门狗的 `python3 tools/run_test.py`。
+    - **严禁对后台任务连续调用 `TaskOutput(block=true)` 死等**：当命令进入后台执行时，若单次等待超时（30s）或无有效进展，**严禁再次重复阻塞等待**！必须立即调用 `TaskStop` 终止卡死任务，并用 `ps aux | grep Godot` 排查。优先通过 `Read` 查看 output-file，绝不允许原地轮询等待十几分钟。

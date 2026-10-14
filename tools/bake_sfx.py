@@ -617,7 +617,7 @@ SFX = {
     ],
     "sell": [
         lambda b: (tone(b, wtype="triangle", f0=1180, f1=880, dur=0.09, peak=0.10),
-                   noise(b, dur=0.10, peak=0.07, ftype="lowpass", f0=1300, f1=420, q=0.9, t0=0.05)),
+                   fm_tone(b, f0=1480, dur=0.10, peak=0.06, ratio=2.5, idx0=1.0, idx1=0.1, t0=0.03)),
     ],
     "equip": [
         lambda b: (fm_tone(b, f0=880, dur=0.18, peak=0.13, ratio=2.0, idx0=2.2, idx1=0.3),
@@ -625,9 +625,11 @@ SFX = {
         lambda b: (fm_tone(b, f0=740, dur=0.16, peak=0.12, ratio=2.3, idx0=2.0, idx1=0.3),
                    noise(b, dur=0.05, peak=0.05, ftype="highpass", f0=3200, t0=0.04)),
     ],
+    # 卸下法器：equip 的下行镜像 —— FM 铃下行 + 微灵光，与 equip 同族但方向反
     "unequip": [
-        lambda b: (tone(b, wtype="triangle", f0=720, f1=470, dur=0.09, peak=0.09),
-                   noise(b, dur=0.06, peak=0.04, ftype="lowpass", f0=1000, f1=380, q=0.9, t0=0.02)),
+        lambda b: (fm_tone(b, f0=988, f1=659, dur=0.12, peak=0.13, ratio=2.0, idx0=2.2, idx1=0.2),
+                   noise(b, dur=0.02, peak=0.05, ftype="highpass", f0=4000, t0=0.01),
+                   shimmer(b, f0=2400, f1=1800, dur=0.09, peak=0.025, t0=0.02)),
     ],
     "merge_success": [
         lambda b: (_arp(b, [523, 659, 784, 1047], t_step=0.075, dur=0.24, peak=0.14, echo=0.04),
@@ -637,14 +639,15 @@ SFX = {
                    noise(b, dur=0.12, peak=0.05, ftype="highpass", f0=3600, f1=2000, t0=0.2),
                    space(b, delay=0.11, fb=0.32, mix=0.15)),
     ],
-    # UI：玉叩质感，去街机方波味
+    # UI：玉叩清音 —— FM 短铃（高调制指数出亮音头）+ 微灵光尾。
+    # 旧版 35ms 纯 FM + 噪点太短太闷，与 gem_pickup / stat_alloc 同族但更短更克制。
     "ui_click": [
-        lambda b: (fm_tone(b, f0=1250, dur=0.035, peak=0.08, ratio=3.2, idx0=1.1, idx1=0.05),
-                   noise(b, dur=0.012, peak=0.045, ftype="highpass", f0=5000)),
-        lambda b: (fm_tone(b, f0=1400, dur=0.032, peak=0.075, ratio=3.0, idx0=1.0, idx1=0.05),
-                   noise(b, dur=0.012, peak=0.040, ftype="highpass", f0=5200)),
-        lambda b: (fm_tone(b, f0=1120, dur=0.038, peak=0.08, ratio=3.4, idx0=1.2, idx1=0.05),
-                   noise(b, dur=0.012, peak=0.045, ftype="highpass", f0=4800)),
+        lambda b: (fm_tone(b, f0=1318, dur=0.065, peak=0.12, ratio=3.0, idx0=2.0, idx1=0.15),
+                   shimmer(b, f0=2800, f1=3600, dur=0.08, peak=0.025, t0=0.01)),
+        lambda b: (fm_tone(b, f0=1480, dur=0.060, peak=0.11, ratio=3.2, idx0=1.8, idx1=0.12),
+                   shimmer(b, f0=3100, f1=3900, dur=0.075, peak=0.022, t0=0.01)),
+        lambda b: (fm_tone(b, f0=1175, dur=0.070, peak=0.12, ratio=2.8, idx0=2.2, idx1=0.15),
+                   shimmer(b, f0=2600, f1=3400, dur=0.085, peak=0.025, t0=0.012)),
     ],
     # 应允/选定确认：上行两连音 + 微光 —— 从 level_up 手里接管 4 处选人/选武器滥用
     "ui_confirm": [
@@ -655,15 +658,19 @@ SFX = {
                    tone(b, wtype="triangle", f0=880, dur=0.10, peak=0.10, t0=0.07),
                    shimmer(b, f0=1760, f1=2200, dur=0.15, peak=0.028, t0=0.07)),
     ],
+    # 返回/撤销：FM 下行短铃 + 微灵光（与 ui_click 同族但下行，区分"回退"与"确认"）
     "ui_back": [
-        lambda b: (tone(b, wtype="triangle", f0=520, f1=360, dur=0.075, peak=0.07),),
+        lambda b: (fm_tone(b, f0=880, f1=587, dur=0.08, peak=0.10, ratio=2.5, idx0=1.6, idx1=0.1),
+                   shimmer(b, f0=2200, f1=1500, dur=0.07, peak=0.022, t0=0.01)),
     ],
+    # 不可操作反馈：低频下行"否定"双音 + 高频 FM 蜂鸣给轮廓（旧版纯低频正弦暗到像故障）
     "ui_error": [
-        lambda b: (tone(b, wtype="sine", f0=170, f1=120, dur=0.09, peak=0.17),
-                   tone(b, wtype="sine", f0=150, f1=105, dur=0.11, peak=0.15, t0=0.11),
-                   tone(b, wtype="sawtooth", f0=225, f1=190, dur=0.08, peak=0.045, lp=900)),
-        lambda b: (tone(b, wtype="sine", f0=185, f1=130, dur=0.08, peak=0.15),
-                   tone(b, wtype="sine", f0=160, f1=112, dur=0.10, peak=0.14, t0=0.10)),
+        lambda b: (tone(b, wtype="sine", f0=170, f1=120, dur=0.09, peak=0.15),
+                   tone(b, wtype="sine", f0=150, f1=105, dur=0.11, peak=0.13, t0=0.11),
+                   fm_tone(b, f0=620, f1=466, dur=0.10, peak=0.08, ratio=2.0, idx0=1.2, idx1=0.15, t0=0.04)),
+        lambda b: (tone(b, wtype="sine", f0=185, f1=130, dur=0.08, peak=0.13),
+                   tone(b, wtype="sine", f0=160, f1=112, dur=0.10, peak=0.12, t0=0.10),
+                   fm_tone(b, f0=660, f1=494, dur=0.09, peak=0.075, ratio=2.0, idx0=1.1, idx1=0.14, t0=0.04)),
     ],
     # 悟道加点：玉磬轻叩（替换 handleCoins 硬币声，跟灵石拾取区分开）
     "stat_alloc": [

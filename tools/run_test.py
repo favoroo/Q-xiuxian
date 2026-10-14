@@ -7,14 +7,17 @@ tools/run_test.py — 剑士自动化测试与防挂起运行器
 2. 进程组级别超时强杀（预防 Godot 无头进程挂起或变成僵尸进程）
 3. 提取结果关键词与错误堆栈，清晰输出测试摘要
 4. 支持一键清理后台遗留的无头 Godot 僵尸进程 (--clean-zombies)
-5. 支持一键跑通 6 大核心基线测试 (--core)
-6. 全量回归：扫描 tests/*.tscn 全跑，跳过现场预览类 (--all)
-7. 秒级门禁：仅跑 UnitRunner 数值单测 (--quick，pre-commit 钩子用)
+5. 支持一键跑通 6 大核心基线测试 (--core，总耗时 ~18s，严禁混入长程浸泡)
+6. 独立支持长程浸泡回归测试 (--soak，涵盖 20 波长局，超时上限 240s)
+7. 环境预检防死锁：拦截无 .godot 导入缓存的裸目录（如 git worktree），支持 --auto-import
+8. 全量回归：扫描 tests/*.tscn 全跑，跳过现场预览类 (--all)
+9. 秒级门禁：仅跑 UnitRunner 数值单测 (--quick，pre-commit 钩子用)
 
 用法示例：
   python3 tools/run_test.py UnitRunner
-  python3 tools/run_test.py --quick     # 秒级数值门禁
-  python3 tools/run_test.py --core      # 6 大核心基线
+  python3 tools/run_test.py --core      # 6 大核心基线（日常改动必跑）
+  python3 tools/run_test.py --quick     # 秒级数值单测
+  python3 tools/run_test.py --soak      # 长程浸泡长局测试
   python3 tools/run_test.py --all       # 全量判据回归
   python3 tools/run_test.py --clean-zombies
 """
@@ -36,7 +39,6 @@ CORE_TESTS = [
     "res://tests/LayoutCheck.tscn",
     "res://tests/FontCoverageCheck.tscn",
     "res://tests/BalanceSimCheck.tscn",
-    "res://tests/SoakCheck.tscn",
 ]
 
 # --all 全量回归时跳过的场景：需要真实出声/出图的现场预览（headless 下无意义），以及明确不适合批量跑的
@@ -46,12 +48,12 @@ ALL_SKIP_PATTERNS = ("Preview", "AudioGallery")
 # ChestLookProbe 是把匣子三段画到 /tmp/chest_stages.png 的出图台（无像素时自己打 NO PIXELS 退 1）
 ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookProbe.tscn"}
 
-# 真在干活的慢判据：默认 25s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
+# 真在干活的慢判据：默认 35s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
 SLOW_TEST_LIMITS = {
-    "SmokeRunner": 45.0,          # 全流程冒烟
+    "SmokeRunner": 60.0,          # 全流程冒烟（实测 ~8.2s，给 60s 留 7 倍裕量）
     "ManualHotzoneCheck": 75.0,   # 88 张卡 × 12 取样点 = 1056 次真实点按（实测 ~39s）
     "ProjectileProbe": 60.0,      # B 段真跑 18 秒尸潮（time_scale=1，实测 ~34s）
-    "SoakCheck": 300.0,           # 连续 20 波长局 + 重开一局再战 3 波（首跑实测后收紧）
+    "SoakCheck": 240.0,           # 连续 20 波长局 + 重开一局再战 3 波（实测 ~122s）
 }
 
 
@@ -115,12 +117,42 @@ def resolve_scene_path(name: str) -> str:
             return c
     return f"res://tests/{name}.tscn"
 
-def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float = 20.0) -> bool:
+def check_project_environment(project_path: str, auto_import: bool = False) -> bool:
+    """预检 Godot 工程环境，防止在缺少 .godot 缓存的裸目录（如 git worktree）中运行导致死锁"""
+    proj_cfg = os.path.join(project_path, "project.godot")
+    if not os.path.exists(proj_cfg):
+        print(f"❌ [PRECHECK ERROR] 路径 '{project_path}' 不是有效的 Godot 工程（缺少 project.godot）。")
+        return False
+
+    imported_dir = os.path.join(project_path, ".godot", "imported")
+    if not os.path.exists(imported_dir) or not os.listdir(imported_dir):
+        print(f"⚠️  [PRECHECK WARN] 路径 '{project_path}' 缺少 .godot 导入缓存！")
+        print("    Godot 在无头模式下若缺少资源/类名索引，会抛出 Parse Error 并挂死空转（不自动退出）。")
+        if auto_import:
+            print("    正在自动执行编辑器预扫描导入 ($G --headless --editor --quit)...")
+            try:
+                subprocess.run(
+                    [GODOT_PATH, "--headless", "--path", project_path, "--editor", "--quit"],
+                    timeout=45.0,
+                    check=True,
+                )
+                print("    ✅ 导入缓存构建完成。")
+                return True
+            except Exception as e:
+                print(f"    ❌ 自动导入失败: {e}")
+                return False
+        else:
+            print("    【拦截保护】请先在目标目录执行编辑器扫描建立缓存，或带上 --auto-import 参数:")
+            print(f"    $G --headless --path '{project_path}' --editor --quit")
+            return False
+    return True
+
+def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float = 35.0, project_path: str = ".") -> bool:
     if not os.path.exists(GODOT_PATH):
         print(f"[ERROR] Godot 可执行文件未找到: {GODOT_PATH}")
         return False
 
-    cmd = [GODOT_PATH, "--headless", "--path", ".", scene_res]
+    cmd = [GODOT_PATH, "--headless", "--path", project_path, scene_res]
     if extra_args:
         cmd.extend(extra_args)
 
@@ -153,6 +185,7 @@ def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float
 
     if timed_out:
         print(f"❌ [TIMEOUT] 测试运行超时 ({dt:.2f}s > {timeout}s)，已安全终止进程。")
+        print("💡 [根因提醒] Godot --headless 遇到 Parse Error 或资源缺失时不会自动调用 quit()，导致进程死循环。已由看门狗强杀止损。")
         if stderr_data:
             print("--- STDERR 摘要 ---")
             print("\n".join(stderr_data.splitlines()[-10:]))
@@ -187,21 +220,30 @@ def main():
     parser = argparse.ArgumentParser(description="剑士安全测试运行工具")
     parser.add_argument("tests", nargs="*", help="要运行的测试名称或场景路径")
     parser.add_argument("--core", action="store_true", help="运行 6 大核心基线测试")
+    parser.add_argument("--soak", action="store_true", help="运行长局浸泡回归测试 (SoakCheck)")
     parser.add_argument("--all", action="store_true", help="扫描 tests/*.tscn 全量回归（跳过需真实出声出图的 Preview/Gallery）")
     parser.add_argument("--quick", action="store_true", help="秒级门禁：仅跑 UnitRunner 数值单测（pre-commit 用）")
     parser.add_argument("--clean-zombies", action="store_true", help="清理后台挂起的无头 Godot 进程")
-    parser.add_argument("--timeout", type=float, default=25.0, help="单项测试超时秒数（默认 25s）")
+    parser.add_argument("--timeout", type=float, default=35.0, help="单项测试超时秒数（默认 35s，慢测试自动按表放宽）")
+    parser.add_argument("--path", type=str, default=".", help="目标 Godot 工程目录（默认当前目录）")
+    parser.add_argument("--auto-import", action="store_true", help="如果缺少 .godot 导入缓存，自动跑编辑器扫描预构建")
 
     args, unknown = parser.parse_known_args()
 
     if args.clean_zombies:
         sys.exit(clean_zombies())
 
+    # 环境预检：防止在缺少 .godot 导入缓存的裸目录（如临时 worktree）中运行导致死锁
+    if not check_project_environment(args.path, auto_import=args.auto_import):
+        sys.exit(1)
+
     targets = []
     if args.quick:
         targets.append("res://tests/UnitRunner.tscn")
     if args.core:
         targets.extend(CORE_TESTS)
+    if args.soak:
+        targets.append("res://tests/SoakCheck.tscn")
     if args.all:
         all_targets, skipped = discover_all_tests()
         targets.extend(all_targets)
@@ -223,7 +265,7 @@ def main():
         for name, limit in SLOW_TEST_LIMITS.items():
             if name in t_scene:
                 t_limit = max(t_limit, limit)
-        ok = run_single_test(t_scene, unknown, timeout=t_limit)
+        ok = run_single_test(t_scene, unknown, timeout=t_limit, project_path=args.path)
         if not ok:
             all_ok = False
 

@@ -972,6 +972,8 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_pp_target_vel = Vector2.ZERO
 			if _poison_ring != null:
 				_poison_ring.progress = 1.0 - _poison_windup_t / maxf(poison_windup, 0.001)
+				# 预警圈每帧钉回落点：预警期间被击退/位移也不把圈带跑（落点早已锁死）
+				_poison_ring.global_position = _poison_target
 			if _poison_windup_t <= 0.0:
 				_drop_poison()
 		else:
@@ -1724,6 +1726,7 @@ func _start_poison_cast() -> void:
 		_poison_ring.radius = poison_radius
 		add_child(_poison_ring)
 	_poison_ring.progress = 0.0
+	_poison_ring.global_position = _poison_target  ## 预警圈挂在锁定落点（毒潭将落于此，而非施法者脚下）
 	_poison_ring.visible = true
 	play_squash(Vector2(0.86, 1.18), poison_windup)
 	AudioManager.play_sfx("enemy_fuse", 0.55)

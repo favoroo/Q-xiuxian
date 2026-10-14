@@ -670,6 +670,22 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.check(AchievementData.is_condition_met("ach_grind_wins", {}, {"total_wins": 10}),
 		"累计通关 10 次达成【十渡天劫】")
 
+	# 7.8.2 成就进度短句（选人页解锁提示数据源，口径 = career_stats 单局生涯最佳）
+	_c.equals(AchievementData.progress_text("ach_cult_bawang", {"best_class_counts": {"wide": 2}}),
+		"单局最佳 2/4 件", "【横扫千军】进度随器类峰值推进")
+	_c.equals(AchievementData.progress_text("ach_cult_bawang", {}),
+		"单局最佳 0/4 件", "无峰值记录时【横扫千军】进度从 0 起")
+	_c.equals(AchievementData.progress_text("ach_cult_kuangzhan", {"total_kills": 1230}),
+		"累计击杀 1230/1500", "【百战不殆】进度读累计击杀")
+	_c.equals(AchievementData.progress_text("ach_cult_duoshe", {"total_wins": 3}),
+		"已通关 3 次", "【初次通关】进度读累计通关")
+	_c.equals(AchievementData.progress_text("ach_cult_dubi", {"best_danger_cleared": 1}),
+		"最高通关「普通」", "【极限挑战】进度读最高通关难度")
+	_c.equals(AchievementData.progress_text("ach_cult_dubi", {}),
+		"尚未通关任意难度", "从未通关时【极限挑战】显示兜底文案")
+	_c.equals(AchievementData.progress_text("ach_feat_endless", {}),
+		"", "无量化口径的成就返回空串（调用方不显示进度行）")
+
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()
 	GameManager.cultivator_id = "juechen"

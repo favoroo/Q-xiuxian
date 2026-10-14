@@ -417,12 +417,36 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		lock_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bottom_bar.add_child(lock_row)
 
+		# 左：解锁条件 + 当前进度（可点卡，点按出成就详解浮卡 —— 「这是什么」点按可得）
+		var cond_card := PanelContainer.new()
+		cond_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cond_card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var c_sb := GameStyle.side_card(GameStyle.GOLD_DK)
+		c_sb.content_margin_left = 10.0
+		c_sb.content_margin_right = 10.0
+		c_sb.content_margin_top = 4.0
+		c_sb.content_margin_bottom = 4.0
+		cond_card.add_theme_stylebox_override("panel", c_sb)
+
+		var cond_box := VBoxContainer.new()
+		cond_box.add_theme_constant_override("separation", 1)
+		cond_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		cond_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cond_card.add_child(cond_box)
+
 		var cond_lbl := Label.new()
 		cond_lbl.text = "达成成就【%s】解锁" % ach_name
-		cond_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cond_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(cond_lbl, 12, GameStyle.PAPER_DIM)
-		lock_row.add_child(cond_lbl)
+		cond_box.add_child(cond_lbl)
+
+		var prog_txt := AchievementData.progress_text(String(ach.get("id", "")), GameManager.career_stats)
+		var prog_lbl := Label.new()
+		prog_lbl.text = ("当前进度：%s · 点看详情" % prog_txt) if not prog_txt.is_empty() else "点看解锁详情"
+		GameStyle.label(prog_lbl, 10, GameStyle.GOLD)
+		cond_box.add_child(prog_lbl)
+
+		lock_row.add_child(cond_card)
+		GameStyle.tap(cond_card, func() -> void: _open_lock_tip(ach, cond_card))
 
 		var lock_btn := Button.new()
 		lock_btn.text = "未 解 锁"
@@ -432,6 +456,37 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		lock_btn.focus_mode = Control.FOCUS_NONE
 		GameStyle.button(lock_btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, 6.0)
 		lock_row.add_child(lock_btn)
+
+## 锁定条点按详情浮卡：解锁条件 + 当前进度 + 奖励（进度口径 = career_stats 单局生涯最佳）
+func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
+	var aid := String(ach.get("id", ""))
+	var done := GameManager.is_achievement_unlocked(aid)
+	var cat := String(ach.get("category", "style"))
+	var cat_col: Color
+	match cat:
+		"trial":
+			cat_col = GameStyle.BAD
+		"style":
+			cat_col = GameStyle.GOLD
+		"grind":
+			cat_col = GameStyle.GOOD
+		_:
+			cat_col = GameStyle.JADE
+	var rows: Array = [
+		["状态", "已达成" if done else "未达成", GameStyle.GOOD if done else GameStyle.GREY],
+		["奖励", "解锁角色：%s" % String(ach.get("reward_name", "")), GameStyle.JADE],
+	]
+	var prog := AchievementData.progress_text(aid, GameManager.career_stats)
+	if not prog.is_empty():
+		rows.append(["当前进度", prog, GameStyle.GOOD if done else GameStyle.GOLD])
+	DetailTip.show_over(self, anchor, {
+		"title": String(ach.get("name", "成就")),
+		"chip": String(AchievementData.CATEGORY_NAMES.get(cat, cat)),
+		"chip_color": cat_col,
+		"rows": rows,
+		"body": String(ach.get("cond_desc", "")),
+		"foot": "进度取生涯单局最佳记录，达成后自动解锁该角色。",
+	})
 
 ## 将文本中的核心数值与机制名精准高亮（其余正文走 PAPER 纸白色）
 static func highlight_bbcode(raw: String) -> String:

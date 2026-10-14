@@ -8,6 +8,27 @@ const PROGRESS_PATH := "user://progress.cfg"
 const SAVE_VERSION: int = 2
 const MAX_HISTORY_ENTRIES: int = 10
 
+## 读取 best_class_counts（器类峰值生涯最佳），容错非字典存档
+static func _load_best_class_counts(cfg: ConfigFile) -> Dictionary:
+	var bcc = cfg.get_value("stats", "best_class_counts", {})
+	return (bcc as Dictionary).duplicate() if bcc is Dictionary else {}
+
+## 把本局各峰值并入「单局生涯最佳」（成就进度展示的数据源；成就判定仍用本局 run_ctx，口径互不影响）
+static func _merge_best_run_stats(gm: Node) -> void:
+	var cs: Dictionary = gm.career_stats
+	var bcc: Dictionary = cs.get("best_class_counts", {})
+	for cls in gm.max_class_counts:
+		bcc[cls] = maxi(int(bcc.get(cls, 0)), int(gm.max_class_counts[cls]))
+	cs["best_class_counts"] = bcc
+	cs["best_summons"] = maxi(int(cs.get("best_summons", 0)), int(gm.max_concurrent_summons))
+	cs["best_element_spread"] = maxi(int(cs.get("best_element_spread", 0)), int(gm.max_element_spread))
+	cs["best_stones"] = maxi(int(cs.get("best_stones", 0)), maxi(gm.spirit_stones, gm.peak_stones))
+	cs["best_dodge"] = maxf(float(cs.get("best_dodge", 0.0)), maxf(gm.get_effective_dodge(), gm.peak_dodge))
+	cs["best_harvest"] = maxf(float(cs.get("best_harvest", 0.0)), maxf(gm.harvest, gm.peak_harvest))
+	cs["best_healed"] = maxf(float(cs.get("best_healed", 0.0)), gm.total_hp_healed)
+	cs["best_hits_taken"] = maxi(int(cs.get("best_hits_taken", 0)), int(gm.total_damage_taken_count))
+	cs["best_level"] = maxi(int(cs.get("best_level", 0)), int(gm.level))
+
 static func load_into(gm: Node) -> void:
 	var cfg := ConfigFile.new()
 	var load_err := cfg.load(PROGRESS_PATH)
@@ -42,6 +63,17 @@ static func load_into(gm: Node) -> void:
 		gm.career_stats["best_kills"] = int(cfg.get_value("stats", "best_kills", 0))
 		gm.career_stats["total_stones"] = int(cfg.get_value("stats", "total_stones", 0))
 		gm.career_stats["total_time"] = float(cfg.get_value("stats", "total_time", 0.0))
+		# 单局生涯最佳（成就进度展示数据源，2026-10-14 新增；老档缺字段按默认值回落）
+		gm.career_stats["best_class_counts"] = _load_best_class_counts(cfg)
+		gm.career_stats["best_summons"] = int(cfg.get_value("stats", "best_summons", 0))
+		gm.career_stats["best_element_spread"] = int(cfg.get_value("stats", "best_element_spread", 0))
+		gm.career_stats["best_stones"] = int(cfg.get_value("stats", "best_stones", 0))
+		gm.career_stats["best_dodge"] = float(cfg.get_value("stats", "best_dodge", 0.0))
+		gm.career_stats["best_harvest"] = float(cfg.get_value("stats", "best_harvest", 0.0))
+		gm.career_stats["best_healed"] = float(cfg.get_value("stats", "best_healed", 0.0))
+		gm.career_stats["best_hits_taken"] = int(cfg.get_value("stats", "best_hits_taken", 0))
+		gm.career_stats["best_level"] = int(cfg.get_value("stats", "best_level", 0))
+		gm.career_stats["best_danger_cleared"] = int(cfg.get_value("stats", "best_danger_cleared", -1))
 
 		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
 		gm.cultivator_best_danger = cbd.duplicate() if cbd is Dictionary else {}
@@ -59,6 +91,14 @@ static func load_into(gm: Node) -> void:
 
 		var crec = cfg.get_value("records", "cultivator_records", {})
 		gm.cultivator_records = crec.duplicate() if crec is Dictionary else {}
+
+		# 老档回填：best_danger_cleared 字段晚于每角色通关难度出现（2026-10-14），
+		# 存档里没有时按各角色最高通关难度推一个，避免老玩家解锁提示误显「尚未通关」。
+		if not cfg.has_section_key("stats", "best_danger_cleared"):
+			var bd := -1
+			for v in gm.cultivator_best_danger.values():
+				bd = maxi(bd, int(v))
+			gm.career_stats["best_danger_cleared"] = bd
 
 		var vlog = cfg.get_value("records", "victory_log", [])
 		gm.victory_log = vlog.duplicate() if vlog is Array else []
@@ -105,6 +145,17 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("stats", "best_kills", int(gm.career_stats.get("best_kills", 0)))
 	cfg.set_value("stats", "total_stones", int(gm.career_stats.get("total_stones", 0)))
 	cfg.set_value("stats", "total_time", float(gm.career_stats.get("total_time", 0.0)))
+	# 单局生涯最佳（成就进度展示数据源）
+	cfg.set_value("stats", "best_class_counts", gm.career_stats.get("best_class_counts", {}))
+	cfg.set_value("stats", "best_summons", int(gm.career_stats.get("best_summons", 0)))
+	cfg.set_value("stats", "best_element_spread", int(gm.career_stats.get("best_element_spread", 0)))
+	cfg.set_value("stats", "best_stones", int(gm.career_stats.get("best_stones", 0)))
+	cfg.set_value("stats", "best_dodge", float(gm.career_stats.get("best_dodge", 0.0)))
+	cfg.set_value("stats", "best_harvest", float(gm.career_stats.get("best_harvest", 0.0)))
+	cfg.set_value("stats", "best_healed", float(gm.career_stats.get("best_healed", 0.0)))
+	cfg.set_value("stats", "best_hits_taken", int(gm.career_stats.get("best_hits_taken", 0)))
+	cfg.set_value("stats", "best_level", int(gm.career_stats.get("best_level", 0)))
+	cfg.set_value("stats", "best_danger_cleared", int(gm.career_stats.get("best_danger_cleared", -1)))
 
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
 	cfg.set_value("records", "cultivator_danger_clears", gm.cultivator_danger_clears)
@@ -151,6 +202,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		gm.cultivator_records[cid_rec] = rec_e
 		gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), gm.wave_number)
 		gm.career_stats["best_kills"] = maxi(int(gm.career_stats.get("best_kills", 0)), gm.kills)
+		_merge_best_run_stats(gm)
 		if rec_e["endless_best_wave"] > prev_rec_e["endless_best_wave"]:
 			gm.last_run_new_records.append("角色新纪录 · 无尽第 %d 波" % gm.wave_number)
 		gm.run_history.push_front({
@@ -196,6 +248,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	var eff_stones := maxi(gm.spirit_stones, gm.peak_stones)
 	var eff_dodge := maxf(gm.get_effective_dodge(), gm.peak_dodge)
 	var eff_harvest := maxf(gm.harvest, gm.peak_harvest)
+	_merge_best_run_stats(gm)
 
 	# 新纪录判定基准：结算前的旧值
 	var prev_best_kills := int(gm.career_stats.get("best_kills", 0))
@@ -222,6 +275,10 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		# 难度封印位掩码：点亮本局通关的这一档
 		var mask := int(gm.cultivator_danger_clears.get(gm.cultivator_id, 0))
 		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
+	if victory:
+		# 生涯最高通关难度（成就进度「最高通关 X」口径，难度达成型成就判定不受它影响）
+		gm.career_stats["best_danger_cleared"] = maxi(
+			int(gm.career_stats.get("best_danger_cleared", -1)), gm.danger_level)
 
 	# 每角色生涯档案累加
 	var rec: Dictionary = gm.cultivator_records.get(cid_rec, {})
@@ -281,7 +338,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		gm.unlocked_achievements.append(aid)
 		gm.last_run_new_achievements.append(aid)
 		_apply_achievement_reward(gm, aid)
-	save_from(gm)
+		save_from(gm)
 	if not gm.last_run_new_achievements.is_empty():
 		gm.achievements_unlocked.emit(gm.last_run_new_achievements)
 

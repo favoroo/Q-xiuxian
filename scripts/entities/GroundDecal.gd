@@ -11,6 +11,7 @@ enum Kind { CRACK, SCORCH }
 
 const HOLD_TIME := 1.6   ## 全亮留存时长（秒）
 const FADE_TIME := 0.7   ## 渐隐时长（秒）
+const GROUND_SORT_Y := -100000.0  ## 宿主 Y 排序钉死键：恒排在角色之前（同 PoisonPool.GROUND_SORT_Y）
 
 const CRACK_SHADOW := Color(0.03, 0.05, 0.08, 0.60)  ## 裂口阴影（同 GroundDecorLayer 石板裂缝色系）
 const CRACK_RIM := Color(0.20, 0.40, 0.55, 0.14)     ## 裂缝冷月反光边
@@ -33,6 +34,9 @@ static func acquire(parent: Node) -> GroundDecal:
 		_host = Node2D.new()
 		_host.name = "GroundDecalHost"
 		parent.add_child(_host)
+		# 地面贴花层级钉（同 PoisonPoolHost）：开 Y 排序的战层里宿主恒排最前，
+		# 震裂/焦痕无论落在哪都画在角色脚下，不会盖到玩家/敌人身上
+		_host.position = Vector2(0.0, GROUND_SORT_Y)
 	while not _pool.is_empty():
 		var d: GroundDecal = _pool.pop_back()
 		if is_instance_valid(d):

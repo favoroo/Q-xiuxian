@@ -247,6 +247,16 @@ func _check_hold_pickup() -> void:
 	_c.check(_shop.drag_ctl.is_dragging(), "按住 %.2f 秒后拎起（is_dragging）" % (ShopDragDrop.HOLD_DELAY + 0.15))
 	var gr: Rect2 = _shop.drag_ctl.ghost_rect()
 	_c.check(gr.size.x > 0.0 and gr.size.y > 0.0, "拎起后幽灵图标画出来了 %s" % str(gr))
+	# 幽灵必须真的带贴图：2026-10-14 用户真机，icon 非空时 add_child 缩错进 if 分支，
+	# 幽灵只剩纯黑底 PanelContainer（拖动预览全黑）
+	var ghost := _shop.drag_ctl._ghost
+	var has_icon_tex := false
+	if ghost != null and is_instance_valid(ghost):
+		for ch in ghost.get_children():
+			var tr := ch as TextureRect
+			if tr != null and tr.texture != null:
+				has_icon_tex = true
+	_c.check(has_icon_tex, "幽灵卡片里有图标贴图（不是黑框）")
 	_c.check(src.modulate.a < 0.9, "原格压暗（拿在手里的那件）")
 	_btn(p, false)
 	await _settle(2)

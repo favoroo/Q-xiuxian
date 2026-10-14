@@ -220,8 +220,8 @@ func _build_ghost(item: Dictionary, tile: float) -> void:
 	var icon_path: String = item.get("icon", "")
 	if icon_path.is_empty():
 		icon_path = WeaponData.get_def(item.get("id", "")).get("icon", "")
-		var icon := GameStyle.icon_texture_rect(icon_path)
-		ghost.add_child(icon)
+	var icon := GameStyle.icon_texture_rect(icon_path)
+	ghost.add_child(icon)
 	GameStyle.star_label(ghost, int(item.get("star", 1)), 12)
 	_shop.add_child(ghost)
 	ghost.custom_minimum_size = Vector2(gsize, gsize)

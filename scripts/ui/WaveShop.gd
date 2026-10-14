@@ -437,7 +437,7 @@ func _refresh_inventory() -> void:
 	# 背包空位画成凹槽提示容量
 	var empty_budget: int = clampi(10 - eq_count - GameManager.stash.size(), 0, 3)
 	var free_tiles: int = mini(WeaponData.MAX_STASH_SLOTS - GameManager.stash.size(), empty_budget)
-	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 道具徽记 + 灵兽徽记）
+	# 槽边长按件数现算，压到下限还摆不下就由 OwnedScroll 横滑（满仓 6 上阵 + 9 背包 + 灵兽徽记 + 道具徽记）
 	var n_tile: int = eq_count + GameManager.stash.size() + free_tiles + GameManager.items.size() + GameManager.pets.size()
 	var n_chip: int = (2 if slot_capped else 1) + (1 if not GameManager.items.is_empty() else 0) + (1 if not GameManager.pets.is_empty() else 0)
 	var tile := inv_slot_for(panel_inner_w(_screen), n_tile, n_chip)
@@ -454,17 +454,17 @@ func _refresh_inventory() -> void:
 	for i in range(free_tiles):
 		owned_container.add_child(ShopInventoryRow.create_empty_stash_slot(self, tile))
 
+	# 已持有随行灵兽陈列：小圆球 + 点按查看详情与出售操作（2026-10-14 用户：灵兽排到道具前面）
+	if not GameManager.pets.is_empty():
+		owned_container.add_child(ShopInventoryRow.create_pets_divider())
+		for pet_id in GameManager.pets:
+			owned_container.add_child(ShopInventoryRow.create_pet_chip(self, pet_id, tile))
+
 	# 已持有道具（被动道具）陈列：小图标 + 点按查看说明与【出售】，不参与点选换装那套操作
 	if not GameManager.items.is_empty():
 		owned_container.add_child(ShopInventoryRow.create_items_divider())
 		for item_id in GameManager.items:
 			owned_container.add_child(ShopInventoryRow.create_item_chip(self, item_id, tile))
-
-	# 已持有随行灵兽陈列：小圆球 + 点按查看详情与出售操作
-	if not GameManager.pets.is_empty():
-		owned_container.add_child(ShopInventoryRow.create_pets_divider())
-		for pet_id in GameManager.pets:
-			owned_container.add_child(ShopInventoryRow.create_pet_chip(self, pet_id, tile))
 
 	# 整排都要划得起来：装饰性 STOP 会把「按下」那一拍就地吃掉，卡住多大面积就滑不动多大面积
 	# （同一把尺见 GameStyle.swipeable 头注）。这一排的格子已经都不是 Button 了（见

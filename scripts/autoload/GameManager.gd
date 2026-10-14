@@ -119,6 +119,17 @@ var career_stats: Dictionary = {
 	"best_kills": 0,
 	"total_stones": 0,
 	"total_time": 0.0,
+	# —— 单局生涯最佳（成就进度展示数据源，ProgressStore 结算时并入并落盘）——
+	"best_class_counts": {},       ## {器类tag: 单局同时上阵峰值生涯最佳}
+	"best_summons": 0,             ## 单局同时召唤峰值生涯最佳
+	"best_element_spread": 0,      ## 单局五行同阵种数峰值生涯最佳
+	"best_stones": 0,              ## 单局持有金币峰值生涯最佳
+	"best_dodge": 0.0,             ## 单局有效闪避峰值生涯最佳
+	"best_harvest": 0.0,           ## 单局收益峰值生涯最佳
+	"best_healed": 0.0,            ## 单局累计回复峰值生涯最佳
+	"best_hits_taken": 0,          ## 单局承受伤害次数峰值生涯最佳
+	"best_level": 0,               ## 单局最高等级生涯最佳
+	"best_danger_cleared": -1,     ## 生涯最高通关难度（-1 = 尚未通关）
 }
 var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高危险度 {cultivator_id: danger_int}
 var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）

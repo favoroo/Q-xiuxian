@@ -20,17 +20,16 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 
 	# 两个通道各说各的：底色说「这件在哪一格池子里」，描边说「它是什么属性 / 这一刻能对它做什么」。
 	# 为什么底色要现调：GameStyle 里 NAVY 与 NAVY2 早在 #29/#31 那轮色彩校准里一起翻成纯黑，
-	# 拿它们当池子区分等于没区分 —— 元素件把描边让给暖橙红之后，上阵件与背包件会撞成同一副
-	# 长相（2026-10-12 出图验收抓到，故给上阵位压一层主蓝薄底）。
+	# 拿它们当池子区分等于没区分 —— 上阵位压一层主蓝薄底，与纯黑背包位拉开（2026-10-12 出图验收）。
+	# 2026-10-14 用户：上阵/背包的武器要与货架大卡同一副语言 ⇒ 外边框统一五行属性色，
+	# 池位区分只交给底色，边框不再表达池位。
 	var bg: Color = GameStyle.NAVY2
-	# 外边框：背包位默认五行属性色（与货架大卡同源：金银/木绿/水蓝/火红/土黄），上阵位给 GOLD 主蓝
 	var border: Color = GameStyle.weapon_element_color(id, GameStyle.LINE)
 	if pool == "equipped":
-		border = GameStyle.GOLD
 		bg = GameStyle.with_alpha(GameStyle.GOLD, 0.14)
-		# 描边一色五用独立拆分：
-	# 元素特性不再侵占整圈外框，改由底部 3px 暖橙红下边框恒定指示（GameStyle.apply_elemental_bottom_bar）；
-	# 外边框专职表达交互与池位状态，优先级从低到高：五行基础/上阵位 → 可合成 → 已选中。
+	# 描边双通道独立拆分：
+	# 元素特性不侵占外框，由底部 3px 暖橙红下边框恒定指示（GameStyle.apply_elemental_bottom_bar）；
+	# 外边框优先级从低到高：五行基础 → 可合成 → 已选中。
 	if mergeable:
 		border = GameStyle.JADE
 	if is_sel:

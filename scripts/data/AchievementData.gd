@@ -503,6 +503,70 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return int(run_ctx.get("damage_taken_count", 0)) >= 25
 	return false
 
+## 成就进度短句：按生涯统计给出「当前进度」一句，供选人页解锁提示与成就卡点按详情复用。
+## 纯函数 —— 只读入参 career_stats，不碰 autoload，与 is_condition_met 同一套数值口径。
+## 读的 career_stats["best_*"] 是「单局生涯最佳」，由 ProgressStore 结算时并入并落盘；
+## 无量化口径的成就（如无尽行者）返回空串，调用方不显示进度行。
+static func progress_text(aid: String, career_stats: Dictionary) -> String:
+	var cc: Dictionary = career_stats.get("best_class_counts", {})
+	var stones := int(career_stats.get("best_stones", 0))
+	var dodge := float(career_stats.get("best_dodge", 0.0))
+	var harvest := float(career_stats.get("best_harvest", 0.0))
+	var healed := float(career_stats.get("best_healed", 0.0))
+	var hits := int(career_stats.get("best_hits_taken", 0))
+	var summons := int(career_stats.get("best_summons", 0))
+	var spread := int(career_stats.get("best_element_spread", 0))
+	var level := int(career_stats.get("best_level", 0))
+	var dg := int(career_stats.get("best_danger_cleared", -1))
+	var runs := int(career_stats.get("total_runs", 0))
+	var wins := int(career_stats.get("total_wins", 0))
+	var kills := int(career_stats.get("total_kills", 0))
+	var best_wave := int(career_stats.get("best_wave", 0))
+	match aid:
+		"ach_cult_duoshe":
+			return "已通关 %d 次" % wins
+		"ach_cult_dubi":
+			if dg >= 0:
+				return "最高通关「%s」" % danger_name(dg)
+			return "尚未通关任意难度"
+		"ach_cult_juechen":
+			return "单局最佳 %d/4 件" % int(cc.get("sword", 0))
+		"ach_cult_fuxiu":
+			return "单局最佳 %d/4 件" % int(cc.get("talisman", 0))
+		"ach_cult_bawang":
+			return "单局最佳 %d/4 件" % int(cc.get("wide", 0))
+		"ach_cult_jiguan":
+			return "单局最佳 %d/4 个" % summons
+		"ach_style_thunder":
+			return "单局最佳 %d/4 件" % int(cc.get("thunder", 0))
+		"ach_style_wuxing":
+			return "单局最佳 %d/5 行" % spread
+		"ach_cult_meiying":
+			return "闪避峰值 %d%% · 击杀 %d/500" % [int(dodge * 100.0), kills]
+		"ach_cult_kuangzhan":
+			return "累计击杀 %d/1500" % kills
+		"ach_grind_kills":
+			return "累计击杀 %d/5000" % kills
+		"ach_grind_wins":
+			return "累计通关 %d/10" % wins
+		"ach_item_kuilei":
+			return "已玩 %d/5 局 · 通关 %d 次" % [runs, wins]
+		"ach_item_wuxing":
+			return "单局最高 Lv.%d/15" % level
+		"ach_item_pojia":
+			return "最高抵达第 %d 波" % best_wave
+		"ach_cult_duobao":
+			return "单局最佳 %d/250 金币" % stones
+		"ach_cult_shoucainu":
+			return "单局最佳 %d/400 金币" % stones
+		"ach_item_hunyuan":
+			return "单局最佳 %.0f/30 收益" % harvest
+		"ach_cult_yaowang":
+			return "单局最佳 %.0f/200 回复" % healed
+		"ach_cult_shixue":
+			return "单局承伤 %d/25 次" % hits
+	return ""
+
 ## 评估本局新达成的成就 ID 列表（已在 already_unlocked 中的不重复返回）
 static func evaluate_new_unlocks(run_ctx: Dictionary, career_stats: Dictionary, already_unlocked: Array) -> Array[String]:
 	var newly: Array[String] = []
