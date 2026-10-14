@@ -20,6 +20,11 @@ func _test_spirit_beast_constants() -> void:
 	_c.check(GameBalance.SPIRIT_BEAST_TAUNT_RADIUS > 0.0, "嘲讽半径为正")
 	_c.check(GameBalance.SPIRIT_BEAST_HIT_INVINCIBLE > 0.0, "受击无敌帧为正（近身啃咬逐帧结算，没它一秒磨没）")
 	_c.check(GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL > 0.0, "吐息冷却为正")
+	# 三连灵羽弹（2026-10-15 重做）：连发数 >1 才有「三连」、连发间隔必须小于一轮冷却、蓄力时间为正
+	_c.check(GameBalance.SPIRIT_BEAST_BURST_COUNT >= 2, "三连灵羽弹：一轮至少两发")
+	_c.check(GameBalance.SPIRIT_BEAST_BURST_GAP > 0.0 and GameBalance.SPIRIT_BEAST_BURST_GAP < GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL, "连发间隔在 (0, 一轮冷却) 内")
+	_c.check(GameBalance.SPIRIT_BEAST_CHARGE_TIME > 0.0 and GameBalance.SPIRIT_BEAST_CHARGE_TIME < GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL, "蓄力时间在 (0, 一轮冷却) 内")
+	_c.check(GameBalance.SPIRIT_BEAST_MOVE_ACCEL > 0.0, "走位加速度为正（三段风筝平滑过渡）")
 	# 风筝甜区：下沿必须严格小于上沿，且上沿大于敌人身位（甜区才有得站）
 	_c.check(GameBalance.SPIRIT_BEAST_PREFER_RANGE_MIN > 0.0, "风筝甜区下沿为正")
 	_c.check(GameBalance.SPIRIT_BEAST_PREFER_RANGE_MIN < GameBalance.SPIRIT_BEAST_PREFER_RANGE_MAX, "风筝甜区下沿小于上沿")

@@ -1,7 +1,7 @@
 class_name SpiritBeast
 extends CharacterBody2D
 
-## 祭坛灵兽（2026-10-11 远程吐息重做）：祭坛激活时召唤的风筝型远程友军。
+## 祭坛灵兽（2026-10-15 三连灵羽弹 + 圆团玄鹤重做）：祭坛激活时召唤的风筝型远程友军。
 ##
 ## 组与碰撞（两条铁律，动了会被全场武器追着打 / 回合末被清场）：
 ##   - 只挂 "allies" 组 —— 绝不进 enemies/turrets/gems/chests，那四组 WaveSpawner.end_wave 全清；
@@ -11,9 +11,12 @@ extends CharacterBody2D
 ##     也打不到它。移动直接积分 global_position，不走 move_and_slide。
 ##
 ## 行为：嘲讽（EnemyBase 走 live_allies 登记表，与碰撞无关，仍然生效）引怪后风筝——
-## 目标进甜区（PREFER_RANGE_MIN~MAX）就切向环绕着吐丹弹，太近后退拉开，太远追近；
-## 被嘲讽追它的敌人天然被它拖着绕圈。
-## 丹弹复用 BladeProjectile 对象池（player_projectiles 层），命中/击杀反馈全走敌人那一条；
+## 目标进甜区（PREFER_RANGE_MIN~MAX）就切向环绕着输出，太近边退边打（倒退也面朝目标），
+## 太远追近；被嘲讽追它的敌人天然被它拖着绕圈。三段走位速度用 MOVE_ACCEL 平滑过渡、
+## 侧倾 bank 一阶跟随带死区（2026-10-15 抽搐修复：旧版朝向随后退 180° 翻面 + bank 每帧直写）。
+## 攻击为「三连灵羽弹」：冷却到 → 蓄力 CHARGE_TIME（嘴边灵光球涨大，渲染器 charge_ratio 0→1）
+## → BURST_GAP 间隔连吐 BURST_COUNT 发追踪灵羽（每发后坐、音调递进，余辉随剩余发数递减）。
+## 灵羽复用 BladeProjectile 对象池（player_projectiles 层），命中/击杀反馈全走敌人那一条；
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
 ## 生命是它的寿命：无碰撞后敌人 slide 接触咬不到它，改为灵兽自判近身啃咬
 ## （CONTACT_RANGE 内取敌人 contact_damage，同一把尺子、同一无敌帧）；生命耗尽即消散。
@@ -34,7 +37,12 @@ var _search_timer: float = 0.0
 var _invincible_timer: float = 0.0
 var _hit_flash: float = 0.0
 var _face_sign: float = 1.0
-var _orbit_sign: float = 1.0   ## 甜区环绕方向（每只灵兽固定一边，避免临界抖动）
+var _bank: float = 0.0           ## 平滑后的侧倾角（bank 一阶跟随的状态载体）
+var _orbit_sign: float = 1.0     ## 甜区环绕方向（每只灵兽固定一边，避免临界抖动）
+var _aim_dir: Vector2 = Vector2.RIGHT  ## 最近一拍瞄准方向（连发时每发重取）
+var _charge_timer: float = 0.0   ## >0 = 吐息蓄力中（嘴边灵光球涨大）
+var _burst_left: int = 0         ## >0 = 三连连发中剩余发数
+var _burst_timer: float = 0.0    ## 连发间隔计时
 var _renderer: ProceduralDroneRenderer = null
 
 func _ready() -> void:
@@ -73,7 +81,6 @@ func _physics_process(delta: float) -> void:
 		_hit_flash -= delta
 		if _hit_flash <= 0.0:
 			modulate = Color.WHITE
-	_attack_timer -= delta
 
 	# 索敌节流：目标死了不当帧重查，下一节拍再找
 	_search_timer -= delta
@@ -82,35 +89,35 @@ func _physics_process(delta: float) -> void:
 		if current_target == null or not is_instance_valid(current_target) or current_target.dying:
 			current_target = _find_target()
 
-	var move_dir := Vector2.ZERO
+	# face_dir：朝向依据（有目标跟目标方向，倒退也面朝目标；无目标跟走向）
+	# desired_vel：本拍想要的速度，三段风筝之间用 MOVE_ACCEL 平滑过渡，不硬切
+	var face_dir := Vector2.ZERO
+	var desired_vel := Vector2.ZERO
 	if current_target != null and is_instance_valid(current_target):
 		var to_target: Vector2 = current_target.global_position - global_position
 		var dist := to_target.length()
 		var dir_to := Vector2.ZERO
 		if dist > 0.001:
 			dir_to = to_target / dist
-		# 风筝三段：远追近、近拉开、甜区切向环绕着输出
+			_aim_dir = dir_to
+		face_dir = dir_to
+		# 风筝三段：远追近、近边退边打（面朝不变）、甜区切向环绕着输出
 		if dist > GameBalance.SPIRIT_BEAST_PREFER_RANGE_MAX:
-			move_dir = dir_to
-			velocity = dir_to * GameBalance.SPIRIT_BEAST_MOVE_SPEED
+			desired_vel = dir_to * GameBalance.SPIRIT_BEAST_MOVE_SPEED
 		elif dist < GameBalance.SPIRIT_BEAST_PREFER_RANGE_MIN:
-			move_dir = -dir_to
-			velocity = -dir_to * GameBalance.SPIRIT_BEAST_MOVE_SPEED
+			desired_vel = -dir_to * GameBalance.SPIRIT_BEAST_MOVE_SPEED
 		else:
-			move_dir = dir_to   # 面朝目标吐息，身子绕切向漂
 			var tangent := Vector2(-dir_to.y, dir_to.x) * _orbit_sign
-			velocity = tangent * GameBalance.SPIRIT_BEAST_MOVE_SPEED * GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO
-		_try_fire(dir_to, dist)
+			desired_vel = tangent * GameBalance.SPIRIT_BEAST_MOVE_SPEED * GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO
 	else:
 		# 无敌人时巡游回玩家身边站着
 		var p := GameManager.player
 		if p != null and global_position.distance_to(p.global_position) > GameBalance.SPIRIT_BEAST_IDLE_FOLLOW_DIST:
-			move_dir = (p.global_position - global_position).normalized()
-			velocity = move_dir * GameBalance.SPIRIT_BEAST_MOVE_SPEED * 0.8
-		else:
-			velocity = velocity.move_toward(Vector2.ZERO, 600.0 * delta)
+			face_dir = (p.global_position - global_position).normalized()
+			desired_vel = face_dir * GameBalance.SPIRIT_BEAST_MOVE_SPEED * 0.8
 
-	# 无碰撞体积：直接积分位置（move_and_slide 无可撞之物，白走一遍管线）
+	# 速度平滑过渡 + 无碰撞体积直接积分位置（move_and_slide 无可撞之物，白走一遍管线）
+	velocity = velocity.move_toward(desired_vel, GameBalance.SPIRIT_BEAST_MOVE_ACCEL * delta)
 	global_position += velocity * delta
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
@@ -118,15 +125,23 @@ func _physics_process(delta: float) -> void:
 	# 近身啃咬结算：敌人贴到 CONTACT_RANGE 内仍咬得到它（生命即寿命的承伤口）
 	_resolve_contact_bites()
 
+	# 蓄力 → 三连 → 冷却的攻击状态机
+	_update_attack(delta)
+
 	if _renderer != null:
-		# 朝向翻转带滞回：只有走向明确与当前朝向相反（反向分量 > 0.25）才翻面，
-		# 竖直方向追击（move_dir.x≈0）与临界抖动都不翻
-		if move_dir.x * _face_sign < -0.25:
+		# 朝向翻转带滞回：只有朝向依据明确与当前朝向相反（反向分量 > 0.35）才翻面，
+		# 竖直方向追击（face_dir.x≈0）与临界抖动都不翻
+		if face_dir != Vector2.ZERO and face_dir.x * _face_sign < -0.35:
 			_face_sign = -_face_sign
 		_renderer.scale.x = _face_sign
 		_renderer.speed_ratio = clampf(velocity.length() / GameBalance.SPIRIT_BEAST_MOVE_SPEED, 0.0, 1.0)
-		# 悬浮侧倾：按朝向系下的横向走位 bank（与悬浮怪同款 ~6.5°），镜像由 scale.x 承担
-		_renderer.bank_angle = deg_to_rad(6.5) * clampf(velocity.x * _face_sign / GameBalance.SPIRIT_BEAST_MOVE_SPEED, -1.0, 1.0)
+		# 悬浮侧倾：按朝向系下的横向走位 bank，一阶跟随 + 死区（环绕边界上不抖）
+		var bank_target := 0.0
+		var lateral: float = velocity.x * _face_sign / GameBalance.SPIRIT_BEAST_MOVE_SPEED
+		if absf(lateral) > 0.18:
+			bank_target = deg_to_rad(6.5) * clampf(lateral, -1.0, 1.0)
+		_bank = lerpf(_bank, bank_target, minf(delta * 10.0, 1.0))
+		_renderer.bank_angle = _bank
 
 ## 索敌：读 live_enemies 登记表取最近活体（含濒死未清的要跳过）
 func _find_target() -> Node2D:
@@ -141,20 +156,58 @@ func _find_target() -> Node2D:
 			nearest = e
 	return nearest
 
-## 吐息：冷却到且目标进了甜区上沿就吐丹弹；伤害吃召唤伤害乘区，
-## 追踪小幅修正（homing_target）配风筝走位，命中/击杀掉落全走敌人 take_damage 那一条
-func _try_fire(dir_to: Vector2, dist: float) -> void:
-	if _attack_timer > 0.0:
+## 攻击状态机：待机冷却 → 蓄力（灵光球涨大）→ 三连连发 → 回冷却。
+## 目标在蓄力/连发途中没了：蓄力散掉进短冷却，连发直接终止本轮
+func _update_attack(delta: float) -> void:
+	var target_ok: bool = current_target != null and is_instance_valid(current_target) and not current_target.dying
+	if _burst_left > 0:
+		_burst_timer -= delta
+		if _burst_timer <= 0.0:
+			if not target_ok:
+				_burst_left = 0
+				_attack_timer = GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL * 0.5
+				if _renderer != null:
+					_renderer.charge_ratio = 0.0
+				return
+			_burst_timer = GameBalance.SPIRIT_BEAST_BURST_GAP
+			_burst_left -= 1
+			_fire_one()
+			if _burst_left <= 0:
+				_attack_timer = GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL
 		return
-	if current_target == null or not is_instance_valid(current_target):
+	if _charge_timer > 0.0:
+		if not target_ok:
+			_charge_timer = 0.0
+			_attack_timer = 0.3
+			if _renderer != null:
+				_renderer.charge_ratio = 0.0
+			return
+		_charge_timer -= delta
+		if _renderer != null:
+			_renderer.charge_ratio = clampf(1.0 - _charge_timer / GameBalance.SPIRIT_BEAST_CHARGE_TIME, 0.0, 1.0)
+		if _charge_timer <= 0.0:
+			_burst_left = GameBalance.SPIRIT_BEAST_BURST_COUNT
+			_burst_timer = 0.0
 		return
-	if dir_to == Vector2.ZERO or dist > GameBalance.SPIRIT_BEAST_PREFER_RANGE_MAX:
-		return
-	_attack_timer = GameBalance.SPIRIT_BEAST_ATTACK_INTERVAL
+	_attack_timer -= delta
+	if _attack_timer <= 0.0:
+		if target_ok and global_position.distance_to(current_target.global_position) <= GameBalance.SPIRIT_BEAST_PREFER_RANGE_MAX:
+			_charge_timer = GameBalance.SPIRIT_BEAST_CHARGE_TIME
+		else:
+			_attack_timer = 0.1   # 不在射程/无目标，下一拍再看
+
+## 吐一发灵羽：追踪小幅修正（homing_target）配风筝走位，命中/击杀掉落全走敌人 take_damage 那一条；
+## 每发后坐 + 音调递进，蓄力余辉随剩余发数递减（charge_ratio 1→0）
+func _fire_one() -> void:
 	var dmg: float = GameBalance.spirit_beast_damage(_wave) * (1.0 + GameManager.engineering_damage + GameManager.synergy_engineering_damage)
+	var dir := _aim_dir
+	if current_target != null and is_instance_valid(current_target):
+		var to_target: Vector2 = current_target.global_position - global_position
+		if to_target.length() > 0.001:
+			dir = to_target.normalized()
 	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, get_tree().current_scene)
-	p.global_position = global_position + dir_to * 12.0
-	p.direction = dir_to
+	p.global_position = global_position + dir * 12.0
+	p.direction = dir
 	p.speed = GameBalance.SPIRIT_BEAST_PROJECTILE_SPEED
 	p.damage = dmg
 	p.knockback_base = 60.0          # 轻推即可：别一发把敌人推出嘲讽圈
@@ -162,16 +215,18 @@ func _try_fire(dir_to: Vector2, dist: float) -> void:
 	p.bounce_left = 0
 	p.homing_target = current_target
 	p.bullet_texture = BULLET_TEXTURE
-	p.bullet_scale = 0.6
+	p.bullet_scale = 0.8
 	p.spin = false
 	p.activate()
 	p.lifetime = 0.9                 # activate 会把 lifetime 重置回 BASE_LIFETIME，必须在其后覆盖；覆盖甜区上沿 ×1.5 的飞行时长
-	# 吐息小后坐（纯视觉，不改判定）
+	# 吐息小后坐（纯视觉，不改判定）+ 余辉随剩余发数递减
 	if _renderer != null:
-		_renderer.position = -dir_to * 4.0
+		_renderer.charge_ratio = float(_burst_left) / float(maxi(GameBalance.SPIRIT_BEAST_BURST_COUNT, 1))
+		_renderer.position = -dir * 5.0
 		var recoil := create_tween()
 		recoil.tween_property(_renderer, "position", Vector2.ZERO, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	AudioManager.play_sfx("blade_shoot", 0.4, GameManager.rng.randf_range(0.95, 1.1))
+	var shot_idx: int = GameBalance.SPIRIT_BEAST_BURST_COUNT - _burst_left
+	AudioManager.play_sfx("blade_shoot", 0.45, 0.92 + 0.09 * float(shot_idx))
 
 ## 近身啃咬：无碰撞体积后敌人 slide 接触够不到灵兽，改由灵兽自判——
 ## 敌人贴进 CONTACT_RANGE 就按它自己的 contact_damage 咬一口（无敌帧挡逐帧结算）

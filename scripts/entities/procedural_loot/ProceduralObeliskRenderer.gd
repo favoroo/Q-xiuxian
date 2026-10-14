@@ -4,20 +4,28 @@ extends Node2D
 ## 九天锁灵悬晶大阵 · 程序化矢量渲染器（空洞冷冽国风）
 ## 涵盖半径 85px 八卦外环阵盘、中央悬浮三段玄晶柱、充能聚灵流光与耗尽灰相
 
+## 重绘节流（2026-10-15 性能优化）：全场 3 座界碑常驻，原 _process 每帧无条件 queue_redraw()，
+## 且 BlessingObelisk 每帧写 ring_rotation 在 setter 又 queue_redraw()（一帧两度标脏）。
+## 阵盘慢速旋转、浮动与呼吸全是平滑慢速量，20Hz 节流 + 错相完全足够，消灭每帧无谓重绘。
+const REDRAW_INTERVAL := 0.05
+var _draw_phase: float = 0.0
+var _dirty: bool = true
+
 @export var is_spent: bool = false:
 	set(val):
-		is_spent = val
-		queue_redraw()
+		if is_spent != val:
+			is_spent = val
+			_dirty = true
 
 @export var fill_ratio: float = 0.0:
 	set(val):
 		fill_ratio = clampf(val, 0.0, 1.0)
-		queue_redraw()
+		# 灌灵进度平滑累加，由 20Hz 节流自然呈现，不再每帧直接 queue_redraw
 
 @export var ring_rotation: float = 0.0:
 	set(val):
 		ring_rotation = val
-		queue_redraw()
+		# 阵盘自转由 20Hz 节流自然呈现，不再每帧直接 queue_redraw
 
 @export var is_charging: bool = false
 @export var is_player_inside: bool = false
@@ -26,10 +34,16 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	_time = randf() * 10.0
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 
 func _process(delta: float) -> void:
 	_time += delta
-	queue_redraw()
+	if _dirty or _draw_phase <= 0.0:
+		_dirty = false
+		_draw_phase = REDRAW_INTERVAL
+		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _draw() -> void:
 	if is_spent:
@@ -58,11 +72,11 @@ func _draw_altar_ground_runes() -> void:
 	# 1.1 旋转阵环（受 ring_rotation 驱动）
 	draw_set_transform(Vector2.ZERO, ring_rotation, Vector2.ONE)
 
-	# 外同心双环
-	draw_arc(Vector2.ZERO, r_outer, 0, TAU, 64, col_rune_main, 1.8, true)
-	draw_arc(Vector2.ZERO, r_outer - 4.0, 0, TAU, 64, col_line_dim, 1.0, true)
-	draw_arc(Vector2.ZERO, r_inner, 0, TAU, 48, col_rune_gold, 1.4, true)
-	draw_arc(Vector2.ZERO, r_center, 0, TAU, 32, col_line_dim, 1.0, true)
+	# 外同心双环（弧段自适应：85px 36 段、52px 24 段、24px 16 段，取代原 64/48/32 段）
+	draw_arc(Vector2.ZERO, r_outer, 0, TAU, 36, col_rune_main, 1.8, true)
+	draw_arc(Vector2.ZERO, r_outer - 4.0, 0, TAU, 36, col_line_dim, 1.0, true)
+	draw_arc(Vector2.ZERO, r_inner, 0, TAU, 24, col_rune_gold, 1.4, true)
+	draw_arc(Vector2.ZERO, r_center, 0, TAU, 16, col_line_dim, 1.0, true)
 
 	# 8 方位星宿卦爻刻印与引线
 	var num_nodes := 8
@@ -189,9 +203,9 @@ func _draw_mini_floating_gem(pos: Vector2, c_main: Color, c_ridge: Color) -> voi
 # 3. 耗尽沉寂态（Spent / Inactive Look）
 # ==============================================================================
 func _draw_spent_look() -> void:
-	# 阵盘残痕（极暗冷灰）
-	draw_arc(Vector2.ZERO, 85.0, 0, TAU, 48, Color(0.18, 0.22, 0.26, 0.2), 1.2, true)
-	draw_arc(Vector2.ZERO, 52.0, 0, TAU, 36, Color(0.18, 0.22, 0.26, 0.15), 1.0, true)
+	# 阵盘残痕（极暗冷灰，弧段自适应修剪）
+	draw_arc(Vector2.ZERO, 85.0, 0, TAU, 36, Color(0.18, 0.22, 0.26, 0.2), 1.2, true)
+	draw_arc(Vector2.ZERO, 52.0, 0, TAU, 24, Color(0.18, 0.22, 0.26, 0.15), 1.0, true)
 
 	# 基座与落座残石
 	var base_poly := PackedVector2Array([

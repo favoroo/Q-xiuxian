@@ -7,9 +7,9 @@ extends Node2D
 var _time: float = 0.0
 var half_extent: float = 440.0
 
-## 重绘节流（2026-10-11 第 6 波卡顿优化）：本层是全场唯一每帧无条件 queue_redraw 的大矢量层，
-## 而动画全是慢速量（灵脉 90s/圈自转 + 呼吸正弦），20Hz 重绘肉眼无感 —— 每帧全量重绘是白烧。
-const REDRAW_INTERVAL := 0.05
+## 重绘节流（2026-10-11 第 6 波卡顿优化，2026-10-14 再降）：本层动画全是慢速量
+## （灵脉 90s/圈自转 + 呼吸正弦 + 结界脉冲），10Hz 重绘肉眼无感 —— 高频重绘是白烧。
+const REDRAW_INTERVAL := 0.1
 var _redraw_timer: float = 0.0
 
 func _ready() -> void:
@@ -50,9 +50,9 @@ func _draw_central_taiji_array() -> void:
 	var rot: float = _time * 0.07
 	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
 
-	# 外同心双环
-	draw_arc(Vector2.ZERO, r_outer, 0.0, TAU, 72, col_cyan, 1.8, true)
-	draw_arc(Vector2.ZERO, r_outer - 8.0, 0.0, TAU, 72, col_dark, 1.0, true)
+	# 外同心双环（弧段按半径自适应修剪：145px 半径 48 段已远超肉眼分辨）
+	draw_arc(Vector2.ZERO, r_outer, 0.0, TAU, 48, col_cyan, 1.8, true)
+	draw_arc(Vector2.ZERO, r_outer - 8.0, 0.0, TAU, 48, col_dark, 1.0, true)
 
 	# 12 方位天干地支刻印点
 	for i in range(12):
@@ -61,7 +61,7 @@ func _draw_central_taiji_array() -> void:
 		draw_circle(p_node, 1.8, col_gold)
 
 	# 中阵环（四象象限与八卦爻刻）
-	draw_arc(Vector2.ZERO, r_mid, 0.0, TAU, 64, col_dark, 1.2, true)
+	draw_arc(Vector2.ZERO, r_mid, 0.0, TAU, 40, col_dark, 1.2, true)
 	for j in range(8):
 		var b := (TAU / 8.0) * float(j)
 		var dir := Vector2(cos(b), sin(b))
@@ -71,11 +71,11 @@ func _draw_central_taiji_array() -> void:
 		draw_line(p_mid - dir.orthogonal() * 4.0, p_mid + dir.orthogonal() * 4.0, col_gold, 1.4)
 
 	# 内阵核：太极双鱼图腾
-	draw_arc(Vector2.ZERO, r_inner, 0.0, TAU, 48, col_cyan, 1.5, true)
+	draw_arc(Vector2.ZERO, r_inner, 0.0, TAU, 28, col_cyan, 1.5, true)
 
 	# 阴阳鱼 S 曲线刻线
 	var s_pts := PackedVector2Array()
-	var s_steps := 20
+	var s_steps := 14
 	for k in range(s_steps + 1):
 		var t := float(k) / float(s_steps)
 		var ang := -PI * 0.5 + PI * t

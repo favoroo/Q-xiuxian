@@ -99,21 +99,14 @@ def deploy_to_ghpages() -> None:
     if wt_exists:
         run(['git', 'worktree', 'remove', '--force', str(worktree_path)])
 
+    # 每次部署都重建孤儿分支，使 gh-pages 始终只有 1 个提交（80MB 导出产物不累积历史）
     ghpages_exists = run(['git', 'rev-parse', '--verify', 'refs/heads/gh-pages']).returncode == 0
     if ghpages_exists:
-        log('用独立 worktree 检出 gh-pages...')
-        run(['git', 'worktree', 'add', str(worktree_path), 'gh-pages'])
-        # worktree 里只留导出产物：清掉旧内容（worktree 树是纯产物，无未提交风险）
-        for item in worktree_path.iterdir():
-            if item.name == '.git':
-                continue
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
+        log('删除旧 gh-pages 分支，重建孤儿分支...')
+        run(['git', 'branch', '-D', 'gh-pages'])
     else:
         log('创建 gh-pages 孤儿分支（独立 worktree）...')
-        run(['git', 'worktree', 'add', '--orphan', '-b', 'gh-pages', str(worktree_path)])
+    run(['git', 'worktree', 'add', '--orphan', '-b', 'gh-pages', str(worktree_path)])
 
     try:
         # 复制 Web 导出产物到 worktree 根
@@ -131,8 +124,8 @@ def deploy_to_ghpages() -> None:
         if r.returncode != 0 and 'nothing to commit' not in (r.stdout or ''):
             log(f'git commit 输出: {r.stdout}')
 
-        log('推送到 origin gh-pages...')
-        r = run(['git', 'push', 'origin', 'gh-pages'])
+        log('推送到 origin gh-pages（覆盖远端历史）...')
+        r = run(['git', 'push', 'origin', 'gh-pages', '--force-with-lease'])
         if r.returncode != 0:
             if 'up-to-date' in (r.stderr or '') or 'up to date' in (r.stderr or ''):
                 log('gh-pages 已是最新，无需推送')

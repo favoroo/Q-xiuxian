@@ -24,7 +24,7 @@ func _draw_front() -> void:
 
 	# 1. 虚空冷雾与脚底地影
 	draw_filled_ellipse(Vector2(0, 33), 18.0, 5.0, Color(0.04, 0.05, 0.08, 0.55))
-	draw_arc(Vector2(0, 33), 20.0, 0, TAU, 32, Color(0.40, 0.80, 0.68, 0.18 + sin(_time * 3.0) * 0.08), 1.4, true)
+	_arc(Vector2(0, 33), 20.0, 0, TAU, 32, Color(0.40, 0.80, 0.68, 0.18 + sin(_time * 3.0) * 0.08), 1.4, true)
 
 	# 2. 背后背负之纯白月光长骨钉（大角度斜贯背负，剑柄探出右肩，剑尖探出左腰）
 	_draw_deluxe_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
@@ -60,8 +60,8 @@ func _draw_front() -> void:
 	# 4. 胸前骨质锁扣与聚灵珠
 	var chest_pos := Vector2(0, -3 + float_y)
 	draw_soft_glow(chest_pos, 7.0, Color(0.40, 0.90, 0.75, 0.4), 2)
-	draw_circle(chest_pos, 3.2, BONE_WHITE)
-	draw_circle(chest_pos, 1.5, Color(0.20, 0.85, 0.65))
+	_circle(chest_pos, 3.2, BONE_WHITE)
+	_circle(chest_pos, 1.5, Color(0.20, 0.85, 0.65))
 
 	# 5. 冷白骨玉蝶面头部与修长仙角
 	var head_center := Vector2(0, -15 + float_y)
@@ -210,16 +210,16 @@ func _draw_back() -> void:
 	draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 3.0)
 	draw_line(p_top, p_bot, CLOAK_EDGE, 1.0)
 	var center := (p_top + p_bot) * 0.5
-	draw_circle(center, 3.0, BONE_WHITE)
-	draw_circle(center, 1.5, VOID_BLACK)
+	_circle(center, 3.0, BONE_WHITE)
+	_circle(center, 1.5, VOID_BLACK)
 
 	# 4. 在斗篷最外层绘制斜跨背负的长骨钉！
 	_draw_deluxe_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 5. 后脑骨玉冠与双角
 	var head_center := Vector2(0, -15 + float_y)
-	draw_circle(head_center, 9.5, BONE_WHITE)
-	draw_arc(head_center, 9.5, 0, TAU, 24, BONE_SHADOW, 1.2, true)
+	_circle(head_center, 9.5, BONE_WHITE)
+	_arc(head_center, 9.5, 0, TAU, 24, BONE_SHADOW, 1.2, true)
 
 	# 双角对称刺空
 	var l_horn: PackedVector2Array = [
@@ -262,5 +262,5 @@ func _draw_deluxe_nail(pos: Vector2, rot: float) -> void:
 	]
 	draw_colored_polygon(guard_pts, BONE_SHADOW)
 	draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), BONE_WHITE, 2.0)
-	draw_circle(t * Vector2(0, 11), 1.6, BONE_WHITE)
-	draw_circle(t * Vector2(0, 11), 0.8, BONE_SHADOW)
+	_circle(t * Vector2(0, 11), 1.6, BONE_WHITE)
+	_circle(t * Vector2(0, 11), 0.8, BONE_SHADOW)

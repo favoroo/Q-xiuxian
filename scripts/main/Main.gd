@@ -16,8 +16,10 @@ var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
 
 func _ready() -> void:
-	# 依从显示驱动与原生垂直同步节奏，避免 Engine.max_fps 触发 OS 级线程休眠与 time_scale 顿帧相位冲突导致交换链丢帧
-	Engine.max_fps = 0
+	# 帧率上限（2026-10-14 性能优化）：默认锁 30（物理同步 30Hz，靠插值保持平滑）；
+	# 设置里可开「高帧率模式」升 60。headless 判据依赖自由帧节奏（time_scale 竞态余量），跳过。
+	_apply_fps_limit()
+	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
 	GameManager.joystick = joystick
 	_setup_atmosphere()
@@ -81,6 +83,9 @@ func _ready() -> void:
 		# 修仙志关闭后回刷主菜单顶栏与卡片副行文案
 		if career_dialog.has_signal("closed") and start_menu.has_method("_refresh_dynamic_texts"):
 			career_dialog.closed.connect(start_menu._refresh_dynamic_texts)
+	# 中断续玩：主菜单「继续游戏」按钮 → 按存档重建整局
+	if start_menu.has_signal("resume_requested"):
+		start_menu.resume_requested.connect(resume_from_save)
 	if $UILayer.has_node("ManualDialog"):
 		var manual_dialog: Control = $UILayer/ManualDialog
 		if start_menu.has_signal("manual_requested"):
@@ -140,6 +145,70 @@ func _ready() -> void:
 		cult_select.show_select()
 	else:
 		start_menu.open()
+
+## 中断续玩入口（StartMenu「继续游戏」按钮 resume_requested 消费）：
+## 灌回整局状态 → 重建玩家实体 → 按存档阶段分发（FIGHT 重开本波 / ALLOC 复现候选卡 / SHOP 复现货架）。
+## 树从 _ready 起就是暂停态，全程保持暂停直到 FIGHT 路径显式解暂停——
+## 否则 WaveSpawner 的 WAITING 分支会抢跑 start_wave(1)。
+func resume_from_save() -> void:
+	var saved_phase := RunSave.load_into(GameManager)
+	if saved_phase < 0:
+		# 坏档降级：按没有存档处理，回落主菜单
+		RunSave.clear_save()
+		start_menu.open()
+		return
+	RunSave.apply_player(GameManager)
+	var backdrop = get_node_or_null("UILayer/StageBackdrop")
+	if backdrop != null:
+		backdrop.visible = false
+	$UILayer/GameHUD.visible = true
+	if joystick != null:
+		joystick.visible = true
+	# 瞬态归位（对玩家有利）：顿帧时间轴、技能 buff/战意/盾势在 _fill 未覆盖即默认零值，
+	# 这里只兜 Engine.time_scale 与存档计时器
+	Engine.time_scale = 1.0
+	GameManager._autosave_cd = GameManager.AUTOSAVE_INTERVAL
+	# HUD 无 _ready 全量兜底的几路读数补发对齐信号（波次/武器由 start_wave 与
+	# notify_weapons_updated 触发，血量/经验/三读数/待加点角标必须手动补）
+	GameManager.player_hp_changed.emit(GameManager.player.current_health, GameManager.player.max_health)
+	GameManager.player_exp_changed.emit(GameManager.experience, GameManager.experience_to_next, GameManager.level)
+	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
+	GameManager.pending_points_changed.emit(GameManager.pending_upgrade_points)
+	start_menu.visible = false
+	var spawner := $MapLayer/EntitiesLayer/WaveSpawner as WaveSpawner
+	match saved_phase:
+		WaveSpawner.Phase.ALLOC:
+			spawner.phase = WaveSpawner.Phase.ALLOC
+			# 面板从存档 alloc_offers 原样重建卡片（_on_alloc_opened 不重 roll），
+			# 绝不能走 open_alloc_session —— 那会把候选卡换成新一批
+			GameManager.alloc_opened.emit()
+			AudioManager.play_bgm_key("shop")
+		WaveSpawner.Phase.SHOP:
+			spawner.phase = WaveSpawner.Phase.SHOP
+			AudioManager.play_bgm_key("shop")
+			GameManager.shop_opened.emit()
+		_:
+			# FIGHT/CLEARING：本波从头重打，金币/经验/血量以最后一次自动存档为准
+			_run_resumed_fight(spawner)
+
+## FIGHT 恢复路径单独一拍：start_wave 会按存档波次重建（预算/匣子/金蟾抽定 + HUD 对齐），
+## 解暂停后 WaveSpawner._process 才接管刷怪。defer 到下一帧，让本帧先跳过 WAITING 分支。
+func _run_resumed_fight(spawner: WaveSpawner) -> void:
+	await get_tree().process_frame
+	if not is_inside_tree() or GameManager.is_game_over:
+		return
+	get_tree().paused = false
+	spawner.start_wave(GameManager.wave_number)
+
+## 帧率上限落地：高帧率模式开 = 60，关 = 30；无头判据不锁帧
+func _apply_fps_limit() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	Engine.max_fps = 60 if bool(SettingsManager.get_val(&"display", &"fps_60", false)) else 30
+
+func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
+	if section == &"display" and key == &"fps_60":
+		_apply_fps_limit()
 
 func _exit_tree() -> void:
 	# 归还 autoload 引用槽：场景释放后 Player / WaveSpawner / Joystick 已被释放，

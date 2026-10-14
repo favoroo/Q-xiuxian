@@ -103,7 +103,7 @@ func _test_ranged_focus_dps() -> void:
 	_c.equals(WeaponData.targets_per_shot("huoyan_fu"), 2, "火焰符双符齐掷 = 单发最多结算 2 敌，仍属点杀位")
 	_c.equals(WeaponData.targets_per_shot("gengjin_feijian"), 2, "庚金飞剑贯穿两敌")
 	_c.equals(WeaponData.targets_per_shot("wanmu_lingfu"), 3, "万木灵符 1 穿透 + 2 弹射 = 单发 3 敌")
-	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 9, "柳叶飞刀 3 发 × 3 穿透 = 单发 9 敌")
+	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 6, "柳叶飞刀 3 发 × 2 穿透 = 单发 6 敌（2026-10-14 穿透 3→2 收敛群体雪球）")
 	_c.equals(WeaponData.targets_per_shot("bajiao_fan"), 6, "横扫扇形天生群体，不进点杀位")
 	# 火焰符 ★1：damage × 发数 ÷ 冷却 + 单张灼烧（冷却 < 灼烧时长 ⇒ 常驻）。数字全从表里取，
 	# 这三条验的是"公式的语义"，不是某一次的数值快照 —— 以后调伤害不用回来改断言
@@ -134,13 +134,23 @@ func _test_ranged_focus_dps() -> void:
 			focus.append(w_id)
 	_c.check(focus.size() >= 2, "点杀位远程法器至少两把（实得 %d 把：%s）" % [focus.size(), str(focus)])
 
-	# 3. 档位下限：点杀位 ≥ 中位，全体弹丸 ≥ 0.8 × 中位
-	var worst_focus: float = 1e9
+	# 3. 风险溢价护栏（2026-10-14 按用户口径反转）：贴脸近战必须比放风筝的点杀远程打得快。
+	#    旧档「点杀远程 ≥ 0.95×非远程中位」让近战远程同档，贴身风险没有补偿，已废弃。
+	var melee_dps: Array[float] = []
+	for m_id in WeaponData.SHOP_POOL:
+		if int(WeaponData.get_def(m_id).get("behavior", -1)) == WeaponData.Behavior.MELEE:
+			melee_dps.append(WeaponData.sustained_single_dps(m_id, 1))
+	melee_dps.sort()
+	@warning_ignore("integer_division")
+	var melee_med: float = melee_dps[melee_dps.size() / 2] if not melee_dps.is_empty() else 0.0
+	var focus_dps: Array[float] = []
 	for w_id in focus:
-		worst_focus = minf(worst_focus, WeaponData.sustained_single_dps(w_id, 1))
-	# 下限取 0.95× 而不是 1.0×：留一点余量，免得别人把近战/环绕往上抬 3% 就把远程表逼着跟着改
-	_c.check(worst_focus >= med * 0.95,
-		"点杀位单体 DPS %.1f ≥ 0.95×非远程中位 %.1f（贴脸与环绕必须被啃硬目标的速度反超）" % [worst_focus, med * 0.95])
+		focus_dps.append(WeaponData.sustained_single_dps(w_id, 1))
+	focus_dps.sort()
+	@warning_ignore("integer_division")
+	var focus_med: float = focus_dps[focus_dps.size() / 2] if not focus_dps.is_empty() else 0.0
+	_c.check(melee_med >= focus_med * 1.10,
+		"近战单体中位 %.1f ≥ 1.10×点杀远程中位 %.1f（射程安全必须拿伤害来换）" % [melee_med, focus_med * 1.10])
 	var worst_ranged: float = 1e9
 	var worst_id: String = ""
 	for w_id in ranged:
@@ -148,8 +158,8 @@ func _test_ranged_focus_dps() -> void:
 		if v < worst_ranged:
 			worst_ranged = v
 			worst_id = w_id
-	_c.check(worst_ranged >= med * 0.75,
-		"最弱弹丸【%s】单体 DPS %.1f ≥ 0.75×中位 %.1f" % [worst_id, worst_ranged, med * 0.75])
+	_c.check(worst_ranged >= med * 0.70,
+		"最弱弹丸【%s】单体 DPS %.1f ≥ 0.70×非远程中位 %.1f（下限防塌方）" % [worst_id, worst_ranged, med * 0.70])
 
 	# 4. 群体档不许反过来吃掉单体档：弹丸单发结算的敌人越多，单价就该越便宜
 	_c.check(int(WeaponData.get_def("huoyan_fu").get("price", 0)) <= int(WeaponData.get_def("liuye_feidao").get("price", 0)),

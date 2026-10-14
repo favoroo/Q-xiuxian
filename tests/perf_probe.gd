@@ -517,20 +517,21 @@ func _run() -> void:
 	world.remove_child(cr)
 	cr.free()
 
-	# 9b. 预警圈 30Hz 节流：原每渲染帧无条件 queue_redraw（2 条 48 段弧/帧）。
+	# 9b. 预警圈 20Hz 节流：原每渲染帧无条件 queue_redraw（2 条 48 段弧/帧）。
+	#     （2026-10-14 锁 30 帧后 30Hz 节流 = 帧长即每帧重绘，降为 20Hz 保持真实节流收益）
 	var tg := AoeTelegraph.new()
 	tg.progress = 0.5
 	world.add_child(tg)
 	var tg_before: int = AoeTelegraph.redraw_count
 	await get_tree().create_timer(1.0).timeout
 	var tg_delta: int = AoeTelegraph.redraw_count - tg_before
-	print("PERF: 预警圈 1s 重绘 = %d（阈值 ≤ 38）" % tg_delta)
-	_check(tg_delta <= 38, "AoeTelegraph 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧写法约 60+）" % tg_delta)
-	_check(tg_delta >= 20, "AoeTelegraph 仍在重绘（下限 20）")
+	print("PERF: 预警圈 1s 重绘 = %d（阈值 ≤ 28）" % tg_delta)
+	_check(tg_delta <= 28, "AoeTelegraph 20Hz 节流：1s 重绘 ≤ 28（实得 %d，旧写法约 60+）" % tg_delta)
+	_check(tg_delta >= 15, "AoeTelegraph 仍在重绘（下限 15）")
 	world.remove_child(tg)
 	tg.free()
 
-	# 9c. 元素刀光 30Hz 节流：亮起窗口内原每帧重绘。
+	# 9c. 元素刀光 20Hz 节流：亮起窗口内原每帧重绘。
 	#     先隐后显逼出 VISIBILITY_CHANGED（默认 visible=true 直接 add 不会触发通知，
 	#     _process 会被 _ready 的 set_process(false) 关掉）
 	var arc := WeaponArcRenderer.new()
@@ -541,9 +542,9 @@ func _run() -> void:
 	var arc_before: int = WeaponArcRenderer.redraw_count
 	await get_tree().create_timer(1.0).timeout
 	var arc_delta: int = WeaponArcRenderer.redraw_count - arc_before
-	print("PERF: 元素刀光 1s 重绘 = %d（阈值 ≤ 38）" % arc_delta)
-	_check(arc_delta <= 38, "WeaponArcRenderer 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧写法约 60+）" % arc_delta)
-	_check(arc_delta >= 20, "WeaponArcRenderer 仍在重绘（下限 20）")
+	print("PERF: 元素刀光 1s 重绘 = %d（阈值 ≤ 28）" % arc_delta)
+	_check(arc_delta <= 28, "WeaponArcRenderer 20Hz 节流：1s 重绘 ≤ 28（实得 %d，旧写法约 60+）" % arc_delta)
+	_check(arc_delta >= 15, "WeaponArcRenderer 仍在重绘（下限 15）")
 	world.remove_child(arc)
 	arc.free()
 

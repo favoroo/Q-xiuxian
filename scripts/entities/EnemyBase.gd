@@ -111,8 +111,10 @@ var _bite_warning_line: Line2D = null
 var _bite_hit: bool = false        ## 这一跳已经咬到（一次起跳只结算一口）
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
 const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = 引信烧完 = 自爆结算
+const FLEE_WALL_BAND := 80.0       ## 金蟾软墙警告带（px）：带内背离墙外的逃离分量清零改沿墙滑行；贴墙滑行向锁存防角落抖振
 var _explode_ring: AoeTelegraph = null  ## 丹爆引信预警圈（挂身上跟随，半径 = explode_radius 同源）
 var _no_drop: bool = false
+var _flee_slide := Vector2.ZERO    ## 金蟾贴墙滑行方向锁存：x=贴上下墙的滑行向、y=贴左右墙的滑行向（0=未贴墙）
 var _minion_timer: float = 0.0     ## 产卵计时
 var _teleport_timer: float = 0.0   ## 闪现计时
 var _buff_timer: float = 0.0       ## 光环脉冲计时（每 0.25s 刷新一次范围内同伴）
@@ -237,6 +239,7 @@ func activate() -> void:
 	if not is_elite:
 		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
+	_flee_slide = Vector2.ZERO
 
 	# 敌人出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
@@ -747,34 +750,46 @@ func _tick_hit_stun(delta: float) -> bool:
 ## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
 func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
 	# 金蟾系：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）
-	# 墙感知：贴边时清掉指向墙外的逃离分量改为沿墙滑行；两轴同时触界（角落死锁）
-	# 取朝场中心方向的切向逃离，避免被硬 clamp 永久钉死在角落。
+	# 软墙绕场滑行（2026-10-15 行为优化）：旧版只「清零朝墙外分量改沿墙滑行」，滑行方向
+	# 每帧按玩家相对位置重算、恰在墙中线随位置翻号 ⇒ 玩家一偏离场心，金蟾被径向逃推一路
+	# 楔进角落趴窝（角落死锁分支要两轴同时触界才救，太晚；墙中段翻向还会抖振失速）。
+	# 现在贴墙瞬间把滑行方向锁进 _flee_slide（选「远离近端墙角」的环流侧），沿墙期间保持
+	# 锁存不随玩家翻向；被推抵相邻墙带时原地转 90° 接下一面墙（绕场环流）；只有被击退
+	# 脱离墙带才释放回径向逃离。观感：贴边界带绕场流窜，不进角、不贴墙原地抽搐。
 	if always_flee and not _pp_stun:
-		var flee_vel := -dir * eff_speed
 		var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
-		var wall_margin: float = 28.0
-		var blocked_x := false
-		var blocked_y := false
-		if global_position.x > wall_lim - wall_margin and flee_vel.x > 0.0:
-			flee_vel.x = 0.0
-			blocked_x = true
-		elif global_position.x < -(wall_lim - wall_margin) and flee_vel.x < 0.0:
-			flee_vel.x = 0.0
-			blocked_x = true
-		if global_position.y > wall_lim - wall_margin and flee_vel.y > 0.0:
-			flee_vel.y = 0.0
-			blocked_y = true
-		elif global_position.y < -(wall_lim - wall_margin) and flee_vel.y < 0.0:
-			flee_vel.y = 0.0
-			blocked_y = true
-		if blocked_x and blocked_y:
-			# 角落死锁：沿更贴墙的那堵墙切向逃离（朝场中心方向）
-			var to_center := -global_position
-			if absf(to_center.x) >= absf(to_center.y):
-				flee_vel = Vector2(0.0, signf(to_center.y)) * eff_speed
+		var t_edge: float = wall_lim - FLEE_WALL_BAND
+		var flee_dir := -dir
+		if _flee_slide != Vector2.ZERO:
+			# 环流保持：仍贴着约束它的那面墙就照锁存方向流；抵上相邻墙带即转 90° 接下一面
+			if _flee_slide.x == 0.0:
+				if absf(global_position.x) <= t_edge:
+					_flee_slide = Vector2.ZERO
+				elif absf(global_position.y) >= t_edge and signf(_flee_slide.y) == signf(global_position.y):
+					_flee_slide = Vector2(-signf(global_position.x), 0.0)
 			else:
-				flee_vel = Vector2(signf(to_center.x), 0.0) * eff_speed
-		_pp_target_vel = flee_vel
+				if absf(global_position.y) <= t_edge:
+					_flee_slide = Vector2.ZERO
+				elif absf(global_position.x) >= t_edge and signf(_flee_slide.x) == signf(global_position.x):
+					_flee_slide = Vector2(0.0, -signf(global_position.y))
+			if _flee_slide != Vector2.ZERO:
+				flee_dir = _flee_slide
+		if _flee_slide == Vector2.ZERO and flee_dir.length_squared() > 0.0001:
+			# 径向逃离触墙：锁存为「远离近端墙角」的环流方向（贴墙恰在中线上的罕见退化取顺时针）
+			if flee_dir.x > 0.0 and global_position.x > t_edge:
+				_flee_slide = Vector2(0.0, -signf(global_position.y) if global_position.y != 0.0 else 1.0)
+			elif flee_dir.x < 0.0 and global_position.x < -t_edge:
+				_flee_slide = Vector2(0.0, -signf(global_position.y) if global_position.y != 0.0 else 1.0)
+			elif flee_dir.y > 0.0 and global_position.y > t_edge:
+				_flee_slide = Vector2(-signf(global_position.x) if global_position.x != 0.0 else 1.0, 0.0)
+			elif flee_dir.y < 0.0 and global_position.y < -t_edge:
+				_flee_slide = Vector2(-signf(global_position.x) if global_position.x != 0.0 else 1.0, 0.0)
+			if _flee_slide != Vector2.ZERO:
+				flee_dir = _flee_slide
+		if flee_dir.length_squared() < 0.0001:
+			# 退化兜底（玩家与金蟾重合等罕见情形）：朝场心走，绝不原地钉死
+			flee_dir = (-global_position).normalized() if global_position.length_squared() > 0.0001 else Vector2.UP
+		_pp_target_vel = flee_dir.normalized() * eff_speed
 
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
 	if not always_flee and not _pp_stun and preferred_range > 0.0:

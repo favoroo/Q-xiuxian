@@ -126,6 +126,14 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
+	{
+		"section": "display",
+		"key": "fps_60",
+		"title": "高帧率模式",
+		"desc": "开启后帧率上限 60（更流畅但更耗电发热）；关闭为 30（省电稳定）",
+		"type": "toggle",
+		"default": false,
+	},
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
 	# 归一化中心点（相对设计视口 0..1），换屏比不漂移；缩放为底尺寸倍率

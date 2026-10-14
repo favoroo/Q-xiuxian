@@ -204,7 +204,7 @@ func _draw_back() -> void:
 	draw_filled_ellipse(hat_center, 18.0, 10.0, PALETTE["hat_mid"])
 	draw_filled_ellipse(hat_center, 9.0, 5.0, PALETTE["hat_light"])
 	draw_stroked_ellipse(hat_center, 18.0, 10.0, PALETTE["hat_mid"], OUTLINE, 1.4)
-	draw_arc(hat_center, 13.0, 0, TAU, 24, PALETTE["hat_dark"], 1.2, true)
+	_arc(hat_center, 13.0, 0, TAU, 24, PALETTE["hat_dark"], 1.2, true)
 
 func _px_rect(pos: Vector2, sz: Vector2, col: Color) -> void:
 	draw_rect(Rect2(pos, sz), col)
@@ -226,8 +226,8 @@ func _draw_peach_sword(pos: Vector2, rot: float) -> void:
 
 	# 桃花五瓣金剑格
 	var guard_pos := t * Vector2(0, 6)
-	draw_circle(guard_pos, 4.0, PALETTE["gold"])
-	draw_circle(guard_pos, 2.0, Color(1.0, 0.75, 0.85)) # 粉白桃花心
+	_circle(guard_pos, 4.0, PALETTE["gold"])
+	_circle(guard_pos, 2.0, Color(1.0, 0.75, 0.85)) # 粉白桃花心
 
 	# 剑柄与真丝金红流苏
 	draw_line(t * Vector2(0, 8), t * Vector2(0, 14), PALETTE["belt"], 2.0)

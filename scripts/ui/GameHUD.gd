@@ -7,8 +7,8 @@ signal stats_requested
 
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
 @onready var hp_label: Label = $TopContainer/LeftBox/HPBlock/HBox/HPLabel
-@onready var level_label: Label = $TopContainer/LeftBox/LevelBadge/LevelLabel
-@onready var exp_bar: ProgressBar = $ExpBar
+@onready var level_label: Label = $TopContainer/LeftBox/LevelBadge/VBox/LevelLabel
+@onready var exp_bar: ProgressBar = $TopContainer/LeftBox/LevelBadge/VBox/ExpBar
 @onready var time_label: Label = $TopContainer/CenterBox/TimeBlock/TimeLabel
 @onready var wave_label: Label = $TopContainer/CenterBox/WaveChip/WaveLabel
 @onready var kills_label: Label = $TopContainer/RightBox/KillsChip/KillsLabel
@@ -56,6 +56,9 @@ var _hp_low_tween: Tween = null
 var _lv_badge_style: StyleBoxFlat = null
 var _lv_badge_base_bg := Color(0, 0, 0, 0)
 var _lv_badge_base_border := Color(0, 0, 0, 0)
+## 经验条填充色同理：升级金闪与徽记底色同拍，先换私有副本再动色
+var _exp_fill_style: StyleBoxFlat = null
+var _exp_fill_base := Color(0, 0, 0, 0)
 ## 全屏升级金光（_ready 里代码创建，压在 HUD 控件之下）
 var _flash_rect: ColorRect = null
 ## 镜头缩放冲击节流：连升多级 0.2s 内只顿一次
@@ -407,6 +410,13 @@ func _on_leveled_up(_lvl: int) -> void:
 	# 金色只驻留 0.26s 再渐回主蓝，杀出「跳了一下」的信号又不停在错误配色上
 	_lv_tween.parallel().tween_property(_lv_badge_style, "bg_color", _lv_badge_base_bg, 0.22).set_delay(0.26)
 	_lv_tween.parallel().tween_property(_lv_badge_style, "border_color", _lv_badge_base_border, 0.22).set_delay(0.26)
+	# 经验条金闪：与徽记底色同拍（同时驻留 0.26s、同时渐回），升级信号在条子上也读得出
+	if _exp_fill_style == null:
+		_exp_fill_style = exp_bar.get_theme_stylebox("fill").duplicate()
+		_exp_fill_base = _exp_fill_style.bg_color
+		exp_bar.add_theme_stylebox_override("fill", _exp_fill_style)
+	_exp_fill_style.bg_color = GameStyle.JADE
+	_lv_tween.parallel().tween_property(_exp_fill_style, "bg_color", _exp_fill_base, 0.22).set_delay(0.26)
 	# 数字脉冲：Lv 数值从中心放大回弹，视线钉在「升了几级」上
 	level_label.pivot_offset = level_label.size * 0.5
 	level_label.scale = Vector2(1.5, 1.5)

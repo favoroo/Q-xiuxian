@@ -26,6 +26,12 @@ const DEATH_BURST_FRAME_BUDGET := 3  ## 死亡爆散单物理帧预算闸：群�
 static var _last_burst_frame: int = -1
 static var _burst_count_this_frame: int = 0
 
+## 重绘节流（2026-10-14 性能优化）：原 _process 每帧无条件 queue_redraw，
+## 15 个活跃特效就是 15 次/帧重绘；粒子/光环数学每帧照跑（并行数组零分配很便宜），
+## 只有重绘降 20Hz 并按 instance_id 错相，短促特效视觉上无感。
+## （锁 30 帧后 30Hz 节流 = 帧长，等于每帧重绘，故取 20Hz 保持真实节流收益）
+const REDRAW_INTERVAL := 0.05
+
 var effect_type: int = EffectType.PICKUP_POP
 var lifetime: float = 0.2
 var elapsed: float = 0.0
@@ -50,6 +56,7 @@ var _r_col: Array[Color] = []
 var _r_w: Array[float] = []
 
 var _overflow: bool = false
+var _draw_phase: float = 0.0  ## 距下次重绘的剩余时间（错相载体）
 
 static var _pool: Array[JuiceEffect] = []
 static var _host: Node2D = null
@@ -126,6 +133,7 @@ func _begin(type: int, pos: Vector2, life: float, z: int) -> void:
 	global_position = pos
 	modulate = Color(1, 1, 1, 1)
 	visible = true
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 	set_process(true)
 	queue_redraw()
 
@@ -198,18 +206,22 @@ func _process(delta: float) -> void:
 		_p_pos[i] = _p_pos[i] + _p_vel[i] * delta
 		_p_vel[i] = _p_vel[i] * decay
 
-	queue_redraw()
+	if _draw_phase <= 0.0:
+		_draw_phase = REDRAW_INTERVAL
+		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
 
-	# 0. 冲击光环
+	# 0. 冲击光环（弧段数随半径自适应，小环不付 32 段的钱）
 	for i in range(_r_count):
 		var col: Color = _r_col[i]
 		col.a *= alpha
 		var width: float = maxf(1.0, _r_w[i] * (1.0 - progress * 0.6))
-		draw_arc(Vector2.ZERO, _r_cur[i], 0.0, TAU, 32, col, width, true)
+		draw_arc(Vector2.ZERO, _r_cur[i], 0.0, TAU, clampi(int(_r_cur[i] * 1.2), 10, 32), col, width, true)
 
 	# 1. 灵尘：仍有速度时画成拖尾线段，静止后收成一个点
 	for i in range(_p_count):

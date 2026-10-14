@@ -526,13 +526,13 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		cd_refund_timer -= delta
 
 	# 14. 陷阵煞环平滑淡入淡出（蛮兵）
+	# 稳态不重绘（2026-10-14 性能优化）：光环是静态图形（无 _time 动画），
+	# 淡入淡出过渡走完之后画面不再变化，原 elif 分支让它常驻期间每帧白重绘
 	var target_crowd_alpha := 0.0
 	if GameManager.crowd_damage_radius > 0.0 and GameManager.nearby_enemy_count >= 2:
 		target_crowd_alpha = clampf(float(GameManager.nearby_enemy_count) / 10.0, 0.25, 0.85)
 	if not is_equal_approx(crowd_aura_alpha, target_crowd_alpha):
 		crowd_aura_alpha = move_toward(crowd_aura_alpha, target_crowd_alpha, delta * 3.0)
-		needs_redraw = true
-	elif crowd_aura_alpha > 0.0:
 		needs_redraw = true
 
 	if needs_redraw:

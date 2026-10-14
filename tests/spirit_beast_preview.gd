@@ -11,6 +11,7 @@ const BG_COL := Color(0.07, 0.10, 0.16)
 var _t: float = 0.0
 var _cruise: ProceduralDroneRenderer = null
 var _lunge: ProceduralDroneRenderer = null
+var _charge: ProceduralDroneRenderer = null
 var _lunge_base: Vector2 = Vector2.ZERO
 var _lunge_cd: float = 1.0
 
@@ -31,6 +32,7 @@ func _ready() -> void:
 	_cell("濒死 hp=20%", Vector2(570, 210), 1.0, 0.2)
 	_lunge_base = Vector2(790, 210)
 	_lunge = _cell("扑击（周期 lunge）", _lunge_base, 1.0, 1.0)
+	_charge = _cell("蓄力 charge 脉动", Vector2(130, 410), 1.0, 1.0)
 	_cell("左朝向镜像", Vector2(350, 410), -1.0, 1.0)
 	_cell("濒死 35% + 巡航混合", Vector2(570, 410), -1.0, 0.35)
 
@@ -54,6 +56,8 @@ func _process(delta: float) -> void:
 	if _cruise != null:
 		_cruise.speed_ratio = 0.65 + 0.35 * sin(_t * 2.2)
 		_cruise.bank_angle = deg_to_rad(6.5) * 0.6 * sin(_t * 0.9)
+	if _charge != null:
+		_charge.charge_ratio = 0.5 + 0.5 * sin(_t * 2.5)
 	if _lunge != null:
 		_lunge.speed_ratio = 0.4
 		_lunge_cd -= delta

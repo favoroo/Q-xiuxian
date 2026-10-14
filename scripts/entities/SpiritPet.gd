@@ -35,8 +35,30 @@ var _spin_angle: float = 0.0        ## 灵兽专属旋转姿态（如灵风貂�
 var _custom_fx_type: String = ""    ## 专属特效类型标记
 var _yulu_buff_timer: float = 0.0   ## 玉露鹿生机加速计时器（秒）
 
+## 重绘节流（2026-10-15 性能优化）：全场最多 3 只灵兽，原 _physics_process 每帧无条件 queue_redraw()，
+## 55 处矢量 draw 指令。环绕跟随与呼吸均为平滑慢速量，降至 20Hz 节流 + 错相，动作爆发（pulse_trigger_fx）
+## 打 dirty 插队，保证灵敏反馈同时削减 33%~66% 冗余重绘。
+const REDRAW_INTERVAL := 0.05
+var _draw_phase: float = 0.0
+var _dirty: bool = true
+
+static var _circle_buf := PackedVector2Array()
+
+func _circle(center: Vector2, radius: float, col: Color) -> void:
+	var seg := clampi(int(radius * 1.4), 6, 28)
+	_circle_buf.resize(seg)
+	for i in range(seg):
+		var ang := float(i) * TAU / float(seg)
+		_circle_buf[i] = center + Vector2(cos(ang), sin(ang)) * radius
+	draw_colored_polygon(_circle_buf, col)
+
+func _arc(center: Vector2, radius: float, start_angle: float, end_angle: float, _point_count: int, color: Color, width: float = 1.0, antialiased: bool = false) -> void:
+	var seg := clampi(int(radius * absf(end_angle - start_angle) * 0.22), 6, 32)
+	draw_arc(center, radius, start_angle, end_angle, seg, color, width, antialiased)
+
 func _ready() -> void:
 	add_to_group("spirit_pets")
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 	if pet_id != "":
 		_apply_def()
 
@@ -49,6 +71,7 @@ func setup(p_id: String, idx: int, total: int, owner_player: Player) -> void:
 
 func _apply_def() -> void:
 	pet_def = PetData.get_def(pet_id)
+	_dirty = true
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
@@ -111,7 +134,12 @@ func _physics_process(delta: float) -> void:
 	if not GameManager.is_game_over and not get_tree().paused:
 		_tick_behavior(delta)
 
-	queue_redraw()
+	if _dirty or _draw_phase <= 0.0:
+		_dirty = false
+		_draw_phase = REDRAW_INTERVAL
+		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _tick_behavior(delta: float) -> void:
 	var base_cd: float = float(pet_def.get("base_cooldown", 0.0))
@@ -154,6 +182,7 @@ func pulse_trigger_fx(squash_stretch: Vector2 = Vector2(1.35, 1.35), flash_durat
 	_action_fx = 0.0
 	_flash_timer = flash_duration
 	_scale_punch = squash_stretch
+	_dirty = true
 	queue_redraw()
 
 ## 焰灵狐：三昧真火与烈焰易伤
@@ -489,14 +518,14 @@ func _draw() -> void:
 
 	# 1. 外层灵光晕（触发时爆发扩张）
 	var halo_scale: float = 2.2 + 0.8 * flash_ratio
-	draw_circle(Vector2.ZERO, core_r * halo_scale, Color(halo.r, halo.g, halo.b, halo.a * (0.6 + 0.4 * pulse + 0.4 * flash_ratio)))
+	_circle(Vector2.ZERO, core_r * halo_scale, Color(halo.r, halo.g, halo.b, halo.a * (0.6 + 0.4 * pulse + 0.4 * flash_ratio)))
 	# 2. 中层光魄
-	draw_circle(Vector2.ZERO, core_r * 1.45, Color(color.r, color.g, color.b, 0.32 + 0.3 * flash_ratio))
+	_circle(Vector2.ZERO, core_r * 1.45, Color(color.r, color.g, color.b, 0.32 + 0.3 * flash_ratio))
 	# 3. 核心真身
-	draw_circle(Vector2.ZERO, core_r, color)
+	_circle(Vector2.ZERO, core_r, color)
 	# 4. 高光灵瞳/光斑
-	draw_circle(Vector2(-core_r * 0.28, -core_r * 0.32) * (1.0 + 0.2 * flash_ratio), core_r * 0.36, Color(1.0, 1.0, 1.0, 0.88))
-	draw_circle(Vector2(core_r * 0.32, -core_r * 0.15), core_r * 0.2, Color(1.0, 1.0, 1.0, 0.55))
+	_circle(Vector2(-core_r * 0.28, -core_r * 0.32) * (1.0 + 0.2 * flash_ratio), core_r * 0.36, Color(1.0, 1.0, 1.0, 0.88))
+	_circle(Vector2(core_r * 0.32, -core_r * 0.15), core_r * 0.2, Color(1.0, 1.0, 1.0, 0.55))
 
 	# 5. 特征部件（精细化绘制）
 	var decor: String = String(pet_def.get("decor", ""))
@@ -509,8 +538,8 @@ func _draw() -> void:
 		tether_col.a = tether_alpha * 0.9
 		draw_line(Vector2.ZERO, _tether_target_pos, tether_col, 2.8 * tether_alpha)
 		draw_line(Vector2.ZERO, _tether_target_pos, Color(1.0, 1.0, 1.0, tether_alpha * 0.95), 1.2 * tether_alpha)
-		draw_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
-		draw_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
+		_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
+		_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
 
 	# 7. 行动与专属特效（雷弧、风涡、火芒或波纹）
 	if _action_fx >= 0.0:
@@ -524,14 +553,14 @@ func _draw() -> void:
 			# 灵风气旋双螺旋
 			var wind_r: float = lerpf(core_r * 1.5, core_r * 4.2, _action_fx)
 			var wind_alpha: float = (1.0 - _action_fx) * 0.85
-			draw_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
-			draw_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
+			_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
+			_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
 		else:
 			# 扩散波纹环（双重能量环：主环 + 亮白内圈）
 			var ring_r: float = lerpf(core_r, core_r * 3.5, _action_fx)
 			var ring_alpha: float = 1.0 - _action_fx
-			draw_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(color.r, color.g, color.b, ring_alpha * 0.85), 2.2)
-			draw_arc(Vector2.ZERO, ring_r * 0.82, 0.0, TAU, 28, Color(1.0, 1.0, 1.0, ring_alpha * 0.65), 1.4)
+			_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(color.r, color.g, color.b, ring_alpha * 0.85), 2.2)
+			_arc(Vector2.ZERO, ring_r * 0.82, 0.0, TAU, 28, Color(1.0, 1.0, 1.0, ring_alpha * 0.65), 1.4)
 
 func _draw_lightning_arc(start_pt: Vector2, end_pt: Vector2, alpha: float) -> void:
 	var mid := (start_pt + end_pt) * 0.5
@@ -558,10 +587,10 @@ func _draw_decor(decor: String, r: float, color: Color) -> void:
 			# 灵动长尾（随时间左右轻柔摇晃）
 			var tail_swing := sin(_age * 3.5) * (r * 0.22)
 			var tail_c := Vector2(r * 0.95, r * 0.55 + tail_swing)
-			draw_circle(tail_c, r * 0.48, color.lightened(0.15))
-			draw_circle(tail_c + Vector2(r * 0.35, -r * 0.15), r * 0.32, Color(1.0, 0.85, 0.35))
+			_circle(tail_c, r * 0.48, color.lightened(0.15))
+			_circle(tail_c + Vector2(r * 0.35, -r * 0.15), r * 0.32, Color(1.0, 0.85, 0.35))
 			# 额前朱砂焰火印
-			draw_circle(Vector2(0, -r * 0.4), r * 0.16, Color(1.0, 0.25, 0.15))
+			_circle(Vector2(0, -r * 0.4), r * 0.16, Color(1.0, 0.25, 0.15))
 
 		"bird_crest_beak":
 			# 雷灵雀：羽冠 + 展翼弧线 + 锐利喙
@@ -570,19 +599,19 @@ func _draw_decor(decor: String, r: float, color: Color) -> void:
 			draw_line(Vector2(3, -r), Vector2(6, -r * 1.45), Color(1.0, 0.85, 0.35), 1.8)
 			# 灵雀双翼轮廓
 			var wing_flap := sin(_age * 5.0) * (r * 0.15)
-			draw_arc(Vector2(-r * 0.6, 0), r * 0.65, PI * 0.7, PI * 1.4, 12, Color(0.8, 0.75, 1.0), 2.0)
-			draw_arc(Vector2(r * 0.6, 0), r * 0.65, -PI * 0.4, PI * 0.3, 12, Color(0.8, 0.75, 1.0), 2.0)
+			_arc(Vector2(-r * 0.6, 0), r * 0.65, PI * 0.7, PI * 1.4, 12, Color(0.8, 0.75, 1.0), 2.0)
+			_arc(Vector2(r * 0.6, 0), r * 0.65, -PI * 0.4, PI * 0.3, 12, Color(0.8, 0.75, 1.0), 2.0)
 			# 金喙
 			draw_colored_polygon(PackedVector2Array([Vector2(r * 0.5, -2), Vector2(r * 1.15, 0), Vector2(r * 0.5, 2)]), Color(1.0, 0.85, 0.2))
 
 		"turtle_shell":
 			# 玄甲龟：青甲八卦背壳 + 金色六边形环纹 + 四小足
-			draw_arc(Vector2.ZERO, r * 0.75, 0.0, TAU, 8, color.darkened(0.4), 2.2)
-			draw_arc(Vector2.ZERO, r * 0.45, 0.0, TAU, 6, Color(1.0, 0.85, 0.35, 0.75), 1.8)
+			_arc(Vector2.ZERO, r * 0.75, 0.0, TAU, 8, color.darkened(0.4), 2.2)
+			_arc(Vector2.ZERO, r * 0.45, 0.0, TAU, 6, Color(1.0, 0.85, 0.35, 0.75), 1.8)
 			draw_line(Vector2(-r * 0.75, 0), Vector2(r * 0.75, 0), color.darkened(0.35), 1.4)
 			draw_line(Vector2(0, -r * 0.75), Vector2(0, r * 0.75), color.darkened(0.35), 1.4)
 			# 头部微凸
-			draw_circle(Vector2(r * 0.9, -r * 0.3), r * 0.3, color.lightened(0.1))
+			_circle(Vector2(r * 0.9, -r * 0.3), r * 0.3, color.lightened(0.1))
 
 		"deer_horns":
 			# 玉露鹿：珊瑚玉角 + 水滴灵珠
@@ -591,28 +620,28 @@ func _draw_decor(decor: String, r: float, color: Color) -> void:
 			draw_line(Vector2(r * 0.5, -r * 0.6), Vector2(r * 0.85, -r * 1.55), color.darkened(0.2), 2.2)
 			draw_line(Vector2(r * 0.7, -r * 1.1), Vector2(r * 1.1, -r * 1.25), color.darkened(0.2), 1.8)
 			# 角尖发光玉珠
-			draw_circle(Vector2(-r * 0.85, -r * 1.55), 2.2, Color(1.0, 0.88, 0.9))
-			draw_circle(Vector2(r * 0.85, -r * 1.55), 2.2, Color(1.0, 0.88, 0.9))
-			draw_circle(Vector2(-r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
-			draw_circle(Vector2(r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
+			_circle(Vector2(-r * 0.85, -r * 1.55), 2.2, Color(1.0, 0.88, 0.9))
+			_circle(Vector2(r * 0.85, -r * 1.55), 2.2, Color(1.0, 0.88, 0.9))
+			_circle(Vector2(-r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
+			_circle(Vector2(r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
 
 		"toad_coin":
 			# 聚宝蟾：头顶灿金小元宝 + 金色方孔铜钱 + 金肚
-			draw_circle(Vector2(0, -r * 1.05), r * 0.45, Color(1.0, 0.88, 0.25))
+			_circle(Vector2(0, -r * 1.05), r * 0.45, Color(1.0, 0.88, 0.25))
 			draw_rect(Rect2(-2.0, -r * 1.05 - 2.0, 4.0, 4.0), color.darkened(0.4))
 			# 招财金圆肚弧线
-			draw_arc(Vector2(0, r * 0.2), r * 0.6, 0.1 * PI, 0.9 * PI, 12, Color(1.0, 0.92, 0.4), 2.0)
+			_arc(Vector2(0, r * 0.2), r * 0.6, 0.1 * PI, 0.9 * PI, 12, Color(1.0, 0.92, 0.4), 2.0)
 
 		"mink_tail":
 			# 灵风貂：蓬松修长的风灵流线长尾
 			var sway := sin(_age * 4.0) * (r * 0.2)
-			draw_circle(Vector2(-r * 0.8, r * 0.5 + sway), r * 0.52, color.lightened(0.12))
-			draw_circle(Vector2(-r * 1.35, r * 0.35 + sway * 1.3), r * 0.42, color.lightened(0.2))
-			draw_circle(Vector2(-r * 1.8, r * 0.15 + sway * 1.6), r * 0.3, Color(1.0, 1.0, 1.0, 0.9))
+			_circle(Vector2(-r * 0.8, r * 0.5 + sway), r * 0.52, color.lightened(0.12))
+			_circle(Vector2(-r * 1.35, r * 0.35 + sway * 1.3), r * 0.42, color.lightened(0.2))
+			_circle(Vector2(-r * 1.8, r * 0.15 + sway * 1.6), r * 0.3, Color(1.0, 1.0, 1.0, 0.9))
 
 		"ape_brows":
 			# 磐石猿：威猛红纹石眉 + 古代护额金刚箍
-			draw_arc(Vector2(0, -r * 0.5), r * 0.75, PI * 1.1, PI * 1.9, 12, Color(1.0, 0.85, 0.35), 2.4)
+			_arc(Vector2(0, -r * 0.5), r * 0.75, PI * 1.1, PI * 1.9, 12, Color(1.0, 0.85, 0.35), 2.4)
 			# 刚劲重眉
 			draw_line(Vector2(-r * 0.7, -r * 0.2), Vector2(-0.8, -r * 0.4), color.darkened(0.45), 2.6)
 			draw_line(Vector2(0.8, -r * 0.4), Vector2(r * 0.7, -r * 0.2), color.darkened(0.45), 2.6)

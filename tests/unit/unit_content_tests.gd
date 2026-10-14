@@ -59,7 +59,7 @@ func _test_five_elements_system() -> void:
 	_c.equals(label_of["fantian_yin"], "范围", "番天印标记范围")
 	_c.equals(label_of["lingdie"], "环绕", "灵蝶标记环绕")
 	_c.equals(label_of["jiguan_nu"], "机关", "机关弩标记机关")
-	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透3·3发", "柳叶飞刀紧凑特性＝穿透3·3发（量词用「发」：projectile_count 是出膛弹丸数，不是连击段数）")
+	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透2·3发", "柳叶飞刀紧凑特性＝穿透2·3发（量词用「发」：projectile_count 是出膛弹丸数，不是连击段数；2026-10-14 穿透 3→2）")
 	_c.equals(WeaponData.card_feats(WeaponData.get_def("qingyun_sword")), "", "青云剑无机械特性时不占卡面特性行")
 
 	# 1b-2. 色签解释的两条数据前提（货架卡点色签弹解释卡，2026-10-11 用户「加成怎么样加成哪些」）：
@@ -388,6 +388,17 @@ func _test_cultivator_system() -> void:
 	if GameManager.player != null:
 		_c.near(GameManager.player.max_health, 120.0 * 1.30, EPS, "魅影最大生命 ×1.3（站得住怪堆）")
 	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "影层增伤乘区初始为 1.0（没攒层不加伤）")
+
+	# 加成技能是「移速那个」神行术：闪避加成 ×2 = +100%，释放期间真的每下都闪
+	# （用户口径「加成技能应该是加移速那个，释放后可以百分百闪避」）
+	_c.equals(CultivatorData.get_synergy_skill_id("meiying"), "gale",
+			"影者契合的加成技能是神行术（移速那个），不再是缩地成寸")
+	var mei_gale: Dictionary = SkillData.final_stats("gale", "meiying")
+	_c.near(float(mei_gale["dodge_add"]), 1.0, EPS, "影者神行术闪避加成 +50%×2=+100%")
+	_c.near(float(mei_gale["power"]), 0.60, EPS, "影者神行术移速仍是 +60%（只改闪避加成）")
+	_c.near(float(mei_gale["duration"]), 4.0, EPS, "影者神行术持续仍是 4 秒")
+	_c.equals(CultivatorData.get_def("meiying").get("skill_mods", {}).get("dash", null), null,
+			"影者不再强化缩地成寸（冲刺回归基础距离，加成技能只此一个")
 
 	# 额外技能槽：影者绑影爆，其余角色无；影爆免冷却、不走选择界面
 	_c.equals(CultivatorData.get_extra_skill_id("meiying"), "shadowburst", "影者绑定额外技能影爆（随角色，不走五选一）")

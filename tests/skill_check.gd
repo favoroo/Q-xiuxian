@@ -44,8 +44,13 @@ func _check_data() -> void:
 	# 道统强化合并（抽查三个代表：加算/乘算/冷却）
 	var jianchi_haste := SkillData.final_stats("haste", "jianchi")
 	_c.near(float(jianchi_haste["duration"]), 7.5, 0.001, "剑痴疾风咒持续 5+2.5=7.5 秒")
-	var meiying_dash := SkillData.final_stats("dash", "meiying")
-	_c.near(float(meiying_dash["distance"]), 95.0 * 1.55, 0.5, "魅影缩地成寸距离 95×1.55=147.25")
+	# 影者契合加成技能神行术：闪避加成 ×2 = +100%（用户口径「释放后百分百闪避」）
+	var meiying_gale := SkillData.final_stats("gale", "meiying")
+	_c.near(float(meiying_gale["dodge_add"]), 1.0, 0.001, "影者神行术闪避加成 +50%×2=+100%")
+	_c.near(float(meiying_gale["duration"]), 4.0, 0.001, "影者神行术持续仍是 4 秒（dodge_add_mult 不动时长）")
+	_c.near(float(SkillData.final_stats("gale", "")["dodge_add"]), 0.50, 0.001, "其余角色神行术闪避加成仍 +50%")
+	_c.near(float(SkillData.final_stats("dash", "meiying")["distance"]), 95.0, 0.001,
+			"影者不再强化缩地成寸（加成技能就是她加的移速那个，冲刺回归基础距离）")
 	var shiyue_aegis := SkillData.final_stats("aegis", "shiyue")
 	_c.near(float(shiyue_aegis["duration"]), 3.0, 0.001, "石岳金光护体 2.0+1.0=3.0 秒")
 	var duobao_aegis := SkillData.final_stats("aegis", "duobao")
@@ -57,6 +62,9 @@ func _check_data() -> void:
 	_c.check(not SkillData.is_enhanced_for_cultivator("dash", "jianchi"), "剑痴不契合缩地成寸")
 	_c.check(not SkillData.enhance_desc("haste", "dubi").is_empty(), "独臂刀圣疾风咒有强化文案")
 	_c.check(SkillData.enhance_desc("gale", "jianchi").is_empty(), "剑痴神行术无强化文案")
+	# 命中加成技能的卡面文案：增幅按「基础 → 合并后」现读，别处不抄
+	_c.check(SkillData.enhance_desc("gale", "meiying").contains("50%→100%"),
+			"影者神行术强化文案报出 50%%→100%%（实得「%s」）" % SkillData.enhance_desc("gale", "meiying"))
 
 func _run() -> void:
 	_check_data()
@@ -112,6 +120,40 @@ func _run() -> void:
 	_c.check(not vfx.gale_active, "神行术到期后角色足底御风特效关闭")
 	_c.check(player._skill_buffs.is_empty(), "buff 表已清空")
 	_c.near(player.skill_cd_left, 9.0, 0.3, "效果结束此刻才进冷却（9 秒档）")
+
+	# ---- 影者契合神行术：闪避加成 ×2 = +100% ⇒ 期间真的每下都闪（用户口径「百分百闪避」） ----
+	# 这里量的是「加成技能是移速那个」，且 90% 的硬上限不许把它截回 90%
+	# 注意本判据默认以剑痴开局，所以先把影者的角色抬升 0.3 手动带上（走 CultivatorSystem 同一条路）
+	GameManager.cultivator_id = "meiying"
+	GameManager.dodge = 0.30
+	GameManager.dodge_cap_bonus = 0.30
+	GameManager.active_skill_id = "gale"
+	player.skill_cd_left = 0.0
+	player.skill_active_left = 0.0
+	_c.check(player.try_activate_skill(), "影者神行术释放成功")
+	_c.near(GameManager.buff_dodge, 1.0, 0.001, "影者神行术写入闪避加成 1.0（+50%×2）")
+	_c.near(GameManager.get_effective_dodge(), 1.0, 0.001,
+			"影者期间有效闪避钉在 100%：硬上限被临时抬到 1.0，没被 90% 截断")
+	_c.near(GameManager.dodge_cap_bonus, 0.4, 0.001, "上限临时抬到 100%（0.6 + 0.4，角色自身的 0.3 也在内）")
+	# 判定真的兑现：复现 take_damage 的那一发（不掺护甲，只闻闪避）
+	var hp_before: float = player.current_health
+	player.invulnerable_time = 0.0
+	player.take_damage(37.0)
+	_c.check(player.current_health >= hp_before - 0.001, "100% 闪避下这一刀真的没掉血（走生产 take_damage 入口）")
+	# 到期精确回滚：闪避加成与临时上限同帧归位，上限退回角色档，闪避率回到 0（buff 不再顶）
+	player._skill_buffs["gale"] = 0.02
+	vfx.gale_timer = 0.02
+	player.skill_active_left = 0.02
+	for i in range(6):
+		await get_tree().physics_frame
+	_c.near(GameManager.buff_dodge, 0.0, 0.001, "影者神行术到期后闪避加成精确归零")
+	_c.near(GameManager.dodge_cap_bonus, 0.30, 0.001, "临时那 0.1 同帧退回角色档 0.90（不留 100% 残留）")
+	_c.near(GameManager.get_effective_dodge(), 0.30, 0.001,
+			"到期后有效闪避回到角色基础 30%（影者开局值，上限仍 90%）")
+	# 收尾：把本段手动摆的角色档退回判据默认态，别污染后面的副技能按钮判据
+	GameManager.cultivator_id = "jianchi"
+	GameManager.dodge = 0.0
+	GameManager.dodge_cap_bonus = 0.0
 
 	# ---- 疾风咒：写入攻速乘区（剑痴契合 → 持续 7.5 秒） ----
 	GameManager.active_skill_id = "haste"

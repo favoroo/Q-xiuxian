@@ -5,7 +5,7 @@ extends Node
 
 const APP_NAME: String = "剑士"
 const APP_NAME_EN: String = "Swordsman"
-const APP_VERSION: String = "0.0.35"
+const APP_VERSION: String = "0.0.36"
 const APP_VERSION_NAME: String = "v" + APP_VERSION
 
 const GITHUB_OWNER: String = "favoroo"

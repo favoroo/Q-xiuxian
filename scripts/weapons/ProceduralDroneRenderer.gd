@@ -11,7 +11,7 @@ enum DroneKind {
 	HAOJIN_LUN,     ## 昊金轮：旋转金轮、辐条流光（2026-10-10 新增）
 	LIHUO_YA,       ## 离火鸦：火羽扑翼、焰尾曳光（2026-10-10 新增）
 	XUANWU_PEI,     ## 玄武佩：玄黄玉璧、云纹护身（2026-10-10 新增）
-	XUAN_HE,        ## 玄鹤：祭坛召唤灵兽，冷白无腿悬浮灵鹤（2026-10-11 由地面走狐重做）
+	XUAN_HE,        ## 玄鹤：祭坛召唤灵兽，圆团冷白悬浮灵鹤（2026-10-15 由长梭滑翔鹤重做）
 	JINMING_LING,   ## 金鸣铃：悬空金铃、铃舌摆鸣、云雷符纹（2026-10-11 第二批）
 	MULING_OU,      ## 木灵偶：青木偶人、灵藤关节、生机符印（2026-10-11 第二批）
 	BINGPO_ZHU,     ## 冰魄珠：寒冰宝珠、冰晶棱片、雪亮冰核（2026-10-11 第二批）
@@ -34,6 +34,10 @@ var bank_angle: float = 0.0
 ## 生命比（0..1）：仅玄鹤消费，由宿主（SpiritBeast）灌入 —— 灵兽不挂血条，
 ## 生命全由本体传达：驱动灵光晕圈/丹顶/灵目明暗，低于 30% 浮现裂纹与灵息闪烁
 var hp_ratio: float = 1.0
+
+## 蓄力比（0..1）：仅玄鹤消费，由宿主（SpiritBeast）三连灵羽弹蓄力灌入 ——
+## 嘴边灵光球随蓄力涨大发亮，连发时随剩余发数递减（余辉）
+var charge_ratio: float = 0.0
 
 var _anim_time: float = 0.0
 
@@ -250,13 +254,14 @@ func _draw_jade_pendant() -> void:
 	# 顶部系绳结
 	draw_line(off + Vector2(0, -10.5), off + Vector2(0, -13.5), Color(0.70, 0.30, 0.20), 1.6, true)
 
-# ----------------- 7. 玄鹤 (祭坛召唤灵兽：冷白无腿悬浮灵鹤) -----------------
-## 悬浮滑翔姿态：修长颈线 + 双层滑翔翼 + 飘带尾羽，无腿 —— 悬浮感由常时浮沉 bob
-## 与足下灵雾传达，绝不做地面步态。画幅与旧灵狐同档（碰撞半径 14 与画幅同源）。
-## 面朝 +x，朝向由宿主翻转 scale.x；speed_ratio 驱动展翼/扑翼频率/尾羽拖曳与尾后灵尘；
-## bank_angle 只倾躯体组（晕圈/足雾不随动）。
+# ----------------- 7. 玄鹤 (祭坛召唤灵兽：圆团冷白悬浮灵鹤) -----------------
+## 圆团悬浮姿态（2026-10-15 由长梭滑翔鹤重做）：头身一体的圆胖躯干 + 两侧小翅膀扑翼 +
+## 短飘带尾羽 + 环绕自转灵尘星点，无腿 —— 悬浮感由常时浮沉 bob 与足下灵雾传达。
+## 面朝 +x，朝向由宿主翻转 scale.x；speed_ratio 驱动扑翼频率/幅度、尾羽拖曳与尾后灵尘；
+## bank_angle 只倾躯体组（晕圈/足雾/灵尘不随动）。
 ## 生命由本体传达（hp_ratio）：满血灵光充盈；血少晕圈/丹顶/灵目转暗；低于 30%
-## 躯干浮现霜蓝裂纹、灵息闪烁 —— 灵兽不挂血条。
+## 圆身浮现霜蓝裂纹、灵息闪烁 —— 灵兽不挂血条。
+## charge_ratio（0..1，宿主三连灵羽弹蓄力灌入）：嘴边灵光球随蓄力涨大发亮。
 func _draw_xuan_he() -> void:
 	var body_col := Color(0.90, 0.94, 0.98)
 	var belly_col := Color(0.97, 0.99, 1.00)
@@ -269,140 +274,137 @@ func _draw_xuan_he() -> void:
 	# 濒死程度与灵息闪烁
 	var low: float = clampf((0.30 - hp_ratio) / 0.30, 0.0, 1.0)
 	var flicker: float = 1.0 - low * (0.5 + 0.5 * sin(_anim_time * 14.0)) * 0.45
-	# 悬浮浮沉（只作用躯体组）；滑翔扑翼：慢频小摆，移动随速度加快加深；展翼比随速度张开
+	# 悬浮浮沉（只作用躯体组）；扑翼：慢频小摆，移动随速度加快加深
 	var bob: float = sin(_anim_time * 2.6) * 1.8
-	var flap: float = sin(_anim_time * (2.6 + 4.2 * speed_ratio)) * (1.2 + 2.6 * speed_ratio)
-	var spread: float = 0.35 + 0.65 * clampf(speed_ratio, 0.0, 1.0)
+	var flap: float = sin(_anim_time * (3.0 + 5.0 * speed_ratio)) * (1.0 + 2.2 * speed_ratio)
 	var pivot := Vector2(0.0, -2.0 + bob)
 
 	# 足下灵雾（贴地，不随 bank/bob —— 悬浮高度的语言）
 	var mist_a: float = (0.10 + 0.04 * sin(_anim_time * 2.4)) * spirit * flicker
-	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 14.0, 3.2, 14), Color(0.55, 0.85, 1.0, mist_a))
-	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 8.0, 2.0, 12), Color(0.75, 0.92, 1.0, mist_a * 0.8))
+	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 15.0, 3.4, 14), Color(0.55, 0.85, 1.0, mist_a))
+	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.0), 9.0, 2.2, 12), Color(0.75, 0.92, 1.0, mist_a * 0.8))
 
 	# 周身灵光晕圈（生命的第一语言）：柔光为主，环线只留一点若有若无的轮廓
 	var aura_a: float = (0.85 + 0.15 * sin(_anim_time * 3.0)) * spirit * flicker
-	_soft_glow(Vector2(0.0, -3.0), 21.0, Color(0.50, 0.85, 1.0, 0.10 * aura_a))
-	draw_arc(Vector2(0.0, -3.0), 20.0, 0.0, TAU, 28, Color(0.60, 0.92, 1.0, 0.11 * aura_a), 1.0, true)
+	_soft_glow(Vector2(0.0, -2.0), 23.0, Color(0.50, 0.85, 1.0, 0.10 * aura_a))
+	draw_arc(Vector2(0.0, -2.0), 21.5, 0.0, TAU, 28, Color(0.60, 0.92, 1.0, 0.11 * aura_a), 1.0, true)
 
-	# 飘带尾羽三条（相位错摆，移动时向后拉长），尾尖霜白灵光
-	for i in range(3):
-		var fi := float(i - 1)
-		var sway := sin(_anim_time * 3.0 + fi * 0.9) * (2.0 + 2.0 * speed_ratio)
-		var seg_len: float = 11.0 + 6.0 * speed_ratio
-		var tail_base := Vector2(-10.0, -1.0 + fi * 1.8)
+	# 环绕灵尘星点四粒（压扁轨道自转 + 各自闪烁，不随 bank —— 环境灵光）
+	for i in range(4):
+		var ang := _anim_time * 0.9 + float(i) * TAU / 4.0
+		var mp := Vector2(cos(ang) * 18.5, -2.0 + sin(ang) * 10.5)
+		var twk := 0.5 + 0.5 * sin(_anim_time * 3.2 + float(i) * 1.7)
+		draw_circle(mp, 1.2 + 0.5 * twk, Color(0.70, 0.94, 1.0, (0.16 + 0.30 * twk) * spirit * flicker))
+
+	# 飘带尾羽两条（相位错摆，移动时向后拉长），尾尖霜白灵光
+	for i in range(2):
+		var fi := float(i) - 0.5
+		var sway := sin(_anim_time * 3.0 + float(i) * 1.1) * (1.6 + 1.8 * speed_ratio)
+		var seg_len: float = 9.0 + 5.0 * speed_ratio
+		var tail_base := Vector2(-10.5, -0.5 + fi * 3.0)
 		var ribbon := PackedVector2Array([
 			tail_base,
-			tail_base + Vector2(-seg_len * 0.4, -1.5 + fi * 1.0 + sway * 0.4),
-			tail_base + Vector2(-seg_len * 0.75, fi * 2.0 + sway * 0.8),
-			tail_base + Vector2(-seg_len, fi * 2.8 + sway * 1.3)
+			tail_base + Vector2(-seg_len * 0.4, fi * 1.2 + sway * 0.4),
+			tail_base + Vector2(-seg_len * 0.75, fi * 2.2 + sway * 0.8),
+			tail_base + Vector2(-seg_len, fi * 3.0 + sway * 1.2)
 		])
 		var tip := ribbon[ribbon.size() - 1]
-		_draw_ribbon(_rot_pts(ribbon, pivot, bank_angle), 2.8, 0.7, Color(0.62, 0.86, 1.0, 0.68 * spirit * flicker))
-		draw_circle(_rot_one(tip, pivot, bank_angle), 2.4, Color(0.70, 0.94, 1.0, 0.22 * spirit * flicker))
-		draw_circle(_rot_one(tip, pivot, bank_angle), 1.2, Color(0.95, 0.98, 1.0, 0.5 * spirit * flicker))
+		_draw_ribbon(_rot_pts(ribbon, pivot, bank_angle), 2.4, 0.6, Color(0.62, 0.86, 1.0, 0.68 * spirit * flicker))
+		draw_circle(_rot_one(tip, pivot, bank_angle), 2.0, Color(0.70, 0.94, 1.0, 0.22 * spirit * flicker))
+		draw_circle(_rot_one(tip, pivot, bank_angle), 1.0, Color(0.95, 0.98, 1.0, 0.5 * spirit * flicker))
 
-	# 远翼（背层，暗色小一号，反相微摆）
-	var wr := Vector2(2.5, -7.0)
+	# 远侧小翅膀（背层，暗色，从背顶探出，反相扑动）
 	var far_wing := PackedVector2Array([
-		wr + Vector2(3.0, -1.8),
-		wr + Vector2(-1.5 - 4.5 * spread, -8.5 - flap * 0.8),
-		wr + Vector2(-7.0 - 6.0 * spread, -8.0 - flap * 0.5),
-		wr + Vector2(-5.5 - 5.5 * spread, -3.5 - flap * 0.25),
-		wr + Vector2(-1.5, 0.2)
+		Vector2(-1.0, -8.5),
+		Vector2(-4.5, -13.5 + flap * 0.8),
+		Vector2(-9.0, -13.0 + flap * 1.0),
+		Vector2(-7.5, -8.0 + flap * 0.4),
+		Vector2(-3.0, -6.0)
 	])
 	draw_colored_polygon(_rot_pts(far_wing, pivot, bank_angle), far_col)
 	draw_polyline(_closed(_rot_pts(far_wing, pivot, bank_angle)), edge_col.darkened(0.25), 1.0, true)
 
-	# 躯干（流线长梭）+ 腹部亮层
-	var body_pts := PackedVector2Array([
-		Vector2(-12.0, -0.5),
-		Vector2(-9.0, -5.0),
-		Vector2(-3.0, -7.8),
-		Vector2(4.0, -7.0),
-		Vector2(8.5, -4.0),
-		Vector2(9.2, -0.5),
-		Vector2(4.5, 2.6),
-		Vector2(-2.5, 3.4),
-		Vector2(-9.5, 2.4)
-	])
-	var body_rot := _rot_pts(body_pts, pivot, bank_angle)
+	# 圆胖躯干（头身一体的蛋形圆身）+ 腹部亮层
+	var body_rot := _rot_pts(_ellipse_polygon(Vector2(0.0, -2.0), 12.5, 10.5, 20), pivot, bank_angle)
 	draw_colored_polygon(body_rot, body_col)
 	draw_polyline(_closed(body_rot), edge_col, 1.2, true)
-	var belly_pts := PackedVector2Array([
-		Vector2(7.0, -0.2),
-		Vector2(4.0, 2.2),
-		Vector2(-2.5, 2.9),
-		Vector2(-8.5, 1.8),
-		Vector2(-5.5, -1.2),
-		Vector2(2.0, -1.6)
-	])
-	draw_colored_polygon(_rot_pts(belly_pts, pivot, bank_angle), Color(belly_col, 0.85))
+	draw_colored_polygon(_rot_pts(_ellipse_polygon(Vector2(2.0, 1.0), 7.5, 5.5, 16), pivot, bank_angle), Color(belly_col, 0.85))
+	# 背顶高光弧 + 羽毛纹理两道（胸背霜蓝细弧）
+	draw_polyline(_rot_pts(PackedVector2Array([
+		Vector2(-6.0, -9.5), Vector2(-2.0, -11.3), Vector2(2.5, -11.0)
+	]), pivot, bank_angle), Color(belly_col, 0.6), 1.2, true)
+	draw_polyline(_rot_pts(PackedVector2Array([
+		Vector2(-6.5, -5.5), Vector2(-3.0, -3.8), Vector2(0.5, -4.6)
+	]), pivot, bank_angle), Color(edge_col, 0.35), 0.9, true)
+	draw_polyline(_rot_pts(PackedVector2Array([
+		Vector2(-7.0, -1.5), Vector2(-3.5, 0.2), Vector2(0.0, -0.8)
+	]), pivot, bank_angle), Color(edge_col, 0.28), 0.9, true)
 
 	# 濒死裂纹（霜蓝发光折线，随 low 显影）
 	if low > 0.0:
 		var crack_col := Color(0.55, 0.92, 1.0, (0.35 + 0.45 * low) * flicker)
-		draw_polyline(_rot_pts(PackedVector2Array([Vector2(-5.0, -4.5), Vector2(-2.0, -1.0), Vector2(-4.5, 2.2)]), pivot, bank_angle), crack_col, 1.1, true)
-		draw_polyline(_rot_pts(PackedVector2Array([Vector2(3.0, -5.0), Vector2(5.0, -1.5), Vector2(3.5, 1.8)]), pivot, bank_angle), crack_col, 0.9, true)
+		draw_polyline(_rot_pts(PackedVector2Array([Vector2(-5.0, -6.0), Vector2(-2.0, -2.5), Vector2(-4.5, 1.5)]), pivot, bank_angle), crack_col, 1.1, true)
+		draw_polyline(_rot_pts(PackedVector2Array([Vector2(2.5, -7.0), Vector2(4.5, -3.0), Vector2(3.5, 0.8)]), pivot, bank_angle), crack_col, 0.9, true)
 
-	# 颈部 S 曲线（渐宽带状）+ 中线高光
-	var neck_pts := PackedVector2Array([
-		Vector2(6.5, -4.5),
-		Vector2(10.0, -5.8),
-		Vector2(13.0, -8.2),
-		Vector2(15.0, -10.8),
-		Vector2(16.0, -12.2)
-	])
-	_draw_ribbon(_rot_pts(neck_pts, pivot, bank_angle), 5.0, 2.8, body_col)
-	draw_polyline(_rot_pts(neck_pts, pivot, bank_angle), Color(belly_col, 0.7), 1.0, true)
-
-	# 头 + 尖长的嘴 + 丹顶 + 冠羽 + 灵目
-	var head_pos := _rot_one(Vector2(16.0, -12.6), pivot, bank_angle)
-	draw_circle(head_pos, 3.1, body_col)
-	draw_arc(head_pos, 3.1, 0.0, TAU, 14, edge_col, 1.0, true)
+	# 头（叠在圆身前上，头身一体）+ 小尖喙 + 丹顶 + 冠羽 + 灵目
+	var head_pos := _rot_one(Vector2(8.5, -8.0), pivot, bank_angle)
+	draw_circle(head_pos, 5.4, body_col)
+	# 头轮廓只描露出圆身的外弧（埋进身子的内弧不描，否则头身分家像雪人）
+	draw_arc(head_pos, 5.4, 3.83, 7.50, 14, edge_col, 1.0, true)
 	var beak := PackedVector2Array([
-		head_pos + Vector2(2.0, -1.1),
-		head_pos + Vector2(9.2, 0.9),
-		head_pos + Vector2(1.9, 0.9)
+		Vector2(12.8, -9.2),
+		Vector2(19.0, -6.8),
+		Vector2(12.6, -5.6)
 	])
-	draw_colored_polygon(beak, Color(0.72, 0.58, 0.30))
-	draw_polyline(_closed(beak), Color(0.45, 0.36, 0.18), 0.8, true)
+	draw_colored_polygon(_rot_pts(beak, pivot, bank_angle), Color(0.72, 0.58, 0.30))
+	draw_polyline(_closed(_rot_pts(beak, pivot, bank_angle)), Color(0.45, 0.36, 0.18), 0.8, true)
 	# 丹顶（生命指示之一：随 hp_ratio 明暗）
 	var crown_a: float = (0.35 + 0.65 * clampf(hp_ratio, 0.0, 1.0)) * flicker
-	draw_circle(head_pos + Vector2(-0.4, -3.6), 2.8, Color(gold_col, 0.30 * crown_a))
-	draw_circle(head_pos + Vector2(-0.4, -3.6), 1.4, Color(gold_col, crown_a))
+	var crown_pos := _rot_one(Vector2(8.2, -13.2), pivot, bank_angle)
+	draw_circle(crown_pos, 2.6, Color(gold_col, 0.30 * crown_a))
+	draw_circle(crown_pos, 1.3, Color(gold_col, crown_a))
 	# 冠羽后拂两缕（偶发飘动）
 	var crest_sway := sin(_anim_time * 3.7) * 1.2
 	draw_polyline(_rot_pts(PackedVector2Array([
-		Vector2(14.6, -13.8), Vector2(11.8, -14.6 + crest_sway * 0.5), Vector2(10.0, -13.2 + crest_sway)
+		Vector2(7.0, -12.8), Vector2(4.0, -14.8 + crest_sway * 0.5), Vector2(1.5, -13.5 + crest_sway)
 	]), pivot, bank_angle), Color(edge_col, 0.75), 1.1, true)
 	draw_polyline(_rot_pts(PackedVector2Array([
-		Vector2(14.2, -13.0), Vector2(11.0, -12.6 + crest_sway * 0.4), Vector2(9.2, -10.8 + crest_sway * 0.8)
+		Vector2(6.2, -12.0), Vector2(3.0, -12.8 + crest_sway * 0.4), Vector2(1.0, -11.0 + crest_sway * 0.8)
 	]), pivot, bank_angle), Color(edge_col, 0.5), 0.9, true)
-	# 霜蓝灵目（晕圈 + 瞳 + 高光，随 hp_ratio 明暗）
-	var eye_pos := head_pos + Vector2(1.2, -0.7)
+	# 霜蓝灵目（大圆瞳：晕圈 + 深蓝瞳底 + 亮芯 + 高光，白底上靠深瞳读出来，随 hp_ratio 明暗）
+	var eye_pos := _rot_one(Vector2(10.4, -8.8), pivot, bank_angle)
 	var eye_a: float = (0.30 + 0.70 * clampf(hp_ratio, 0.0, 1.0)) * flicker
-	draw_circle(eye_pos, 2.4, Color(glow_col, 0.22 * eye_a))
-	draw_circle(eye_pos, 1.2, Color(glow_col, eye_a))
-	draw_circle(eye_pos + Vector2(-0.3, -0.4), 0.5, Color(1.0, 1.0, 1.0, eye_a))
+	draw_circle(eye_pos, 2.8, Color(glow_col, 0.22 * eye_a))
+	draw_circle(eye_pos, 1.5, Color(0.10, 0.30, 0.55, 0.9 * eye_a))
+	draw_circle(eye_pos, 0.8, Color(glow_col, eye_a))
+	draw_circle(eye_pos + Vector2(-0.4, -0.5), 0.5, Color(1.0, 1.0, 1.0, eye_a))
 
-	# 近翼（顶层大滑翔翼：后掠翼面 + 两枚分叉羽尖夹 V 形缺口 + 前缘高光 + 羽枝）
+	# 近侧小翅膀（顶层圆叶形：扑翼摆尖 + 羽枝两道）
 	var near_wing := PackedVector2Array([
-		wr + Vector2(1.5, -1.0),
-		wr + Vector2(-2.5 - 4.5 * spread, -9.5 - flap),
-		wr + Vector2(-8.5 - 7.5 * spread, -10.5 - flap * 0.65),
-		wr + Vector2(-6.5 - 6.5 * spread, -6.0 - flap * 0.4),
-		wr + Vector2(-10.5 - 8.0 * spread, -4.0 - flap * 0.2),
-		wr + Vector2(-5.5, -0.5)
+		Vector2(2.0, -3.5),
+		Vector2(-2.0, -8.5 - flap),
+		Vector2(-8.0, -10.0 - flap * 1.2),
+		Vector2(-7.0, -4.5 - flap * 0.4),
+		Vector2(-1.0, 0.8)
 	])
 	var near_rot := _rot_pts(near_wing, pivot, bank_angle)
-	draw_colored_polygon(near_rot, Color(0.84, 0.91, 0.97, 0.82))
+	draw_colored_polygon(near_rot, Color(0.84, 0.91, 0.97, 0.92))
 	draw_polyline(_closed(near_rot), edge_col, 1.1, true)
-	# 前缘高光
-	draw_polyline(_rot_pts(PackedVector2Array([near_wing[0], near_wing[1]]), pivot, bank_angle), Color(belly_col, 0.9), 1.2, true)
-	# 羽枝两道（向两枚羽尖收拢的霜蓝细线）
-	draw_polyline(_rot_pts(PackedVector2Array([wr + Vector2(-1.5, -1.0), near_wing[2] + Vector2(1.0, 0.8)]), pivot, bank_angle), Color(edge_col, 0.40), 0.9, true)
-	draw_polyline(_rot_pts(PackedVector2Array([wr + Vector2(-1.8, -0.4), near_wing[4] + Vector2(1.2, 0.6)]), pivot, bank_angle), Color(edge_col, 0.32), 0.9, true)
+	# 羽枝两道（向翼尖收拢的霜蓝细线）
+	draw_polyline(_rot_pts(PackedVector2Array([Vector2(-0.5, -2.5), Vector2(-6.5, -8.5 - flap)]), pivot, bank_angle), Color(edge_col, 0.40), 0.9, true)
+	draw_polyline(_rot_pts(PackedVector2Array([Vector2(-0.5, -1.0), Vector2(-6.0, -5.0 - flap * 0.5)]), pivot, bank_angle), Color(edge_col, 0.32), 0.9, true)
+
+	# 嘴边蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 涨大发亮，绕球星点三粒）
+	if charge_ratio > 0.01:
+		var cp := _rot_one(Vector2(17.5, -7.0), pivot, bank_angle)
+		var cr: float = 1.6 + 4.2 * charge_ratio
+		var ca: float = charge_ratio * spirit * flicker
+		_soft_glow(cp, cr * 1.9, Color(0.55, 0.90, 1.0, 0.16 * ca))
+		draw_circle(cp, cr, Color(0.75, 0.95, 1.0, 0.55 * ca))
+		draw_circle(cp, cr * 0.5, Color(1.0, 1.0, 1.0, 0.85 * ca))
+		for i in range(3):
+			var sa := _anim_time * 6.0 + float(i) * TAU / 3.0
+			draw_circle(cp + Vector2(cos(sa), sin(sa)) * (cr + 2.5), 0.9, Color(0.85, 0.98, 1.0, 0.6 * ca))
 
 	# 移动灵尘（尾后三粒，随速度显隐）
 	if speed_ratio > 0.25:

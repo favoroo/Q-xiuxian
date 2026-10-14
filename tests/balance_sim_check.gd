@@ -39,29 +39,28 @@ func _ready() -> void:
 # ---------------- 1. 全库 68 件法器单体 DPS 分档与极差比 ----------------
 
 func _test_weapon_dps_normalization() -> void:
-	var single_target_weapons := [
-		"qingyun_sword", "gengjin_feijian", "huoyan_fu", "chiyan_dao", "xuanbing_feizhen",
-		"jinzhen_fu", "qingteng_jian",
-		# 2026-10-11 新增：近战剑 / 穿透飞剑（点杀位）
-		"hanshuang_jian", "bengshan_jian", "liuhuo_feijian",
-		# 2026-10-11 平衡校准：金雷锥爆裂半径 55 全库最小，单点重击定位归位单体档（damage 35→38）
+	# 2026-10-14 风险溢价重排（用户口径：远程安全 ⇒ 伤害就该低；近战贴脸 ⇒ 伤害与击退必须更强）：
+	# 档位按贴脸风险排序 —— 近战 28~36 > 横扫 26~34 > 点杀远程 22~28 > 群伤/功能 18~26。
+	# 御灵 30~38 为半自动贴身特例（环绕半径 80~185，承担同等近身风险）；机关 20~32 不动。
+	var melee_weapons := [
+		"qingyun_sword", "chiyan_dao", "xuanwu_lingdun", "qingteng_jian", "xueyin_dao",
+		"liuling_jian", "hanshuang_jian", "bengshan_jian", "taomu_jian",
+	]
+	var sweep_weapons := [
+		"qingmu_tengbian", "bajiao_fan", "jinjiao_jian", "jubao_chi",
+		"benlang_chui", "liaoyuan_shan", "kaishan_fu",
+	]
+	var focus_ranged_weapons := [
+		"gengjin_feijian", "huoyan_fu", "jinzhen_fu", "gengjin_fu", "zhenshan_fu", "guishui_fu",
+		"liuhuo_feijian", "zhenhuo_fu", "leihuo_fu", "xuanbing_feizhen", "houtu_fu",
+		# 金雷锥爆裂半径 55 全库最小，单点重击定位归位点杀档
 		"jinlei_zhui",
-		# 2026-10-11 第二批：庚金符双针速射（点杀位）
-		"gengjin_fu",
 	]
 	var aoe_utility_weapons := [
-		"qingmu_tengbian", "bajiao_fan", "wanmu_lingfu", "liuye_feidao", "fentian_baodeng", "wulei_paizi", "fantian_yin",
-		"baoyu_liuhuazhen", "lianhuan_lingdan", "bihai_chaoyindi", "sanmei_huohu", "xuanwu_lingdun",
-		"xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "chunlei_gu",
-		"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian",
-		# 2026-10-11 新增：弹射/群伤型
-		"zhenhuo_fu", "leihuo_fu", "langli_suo", "gudu_fu",
-		# 2026-10-11 第二批：群伤型
-		"lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu",
-		# 2026-10-12 第三批：纳入群伤/功能带
-		"guishui_fu", "taomu_jian", "houtu_fu", "jinxiao_leiling", "xuanming_leizhu",
-		# 2026-10-13 束流支路：光束法器紫虹镜入群伤带（线上一串全中）
-		"zihong_jing",
+		"wanmu_lingfu", "liuye_feidao", "baoyu_liuhuazhen", "lianhuan_lingdan", "xuanbing_fu",
+		"tougu_ding", "jingzhe_fu", "gudu_fu", "langli_suo", "sanmei_huohu", "zihong_jing",
+		"bihai_chaoyindi", "fentian_baodeng", "wulei_paizi", "fantian_yin",
+		"chunlei_gu", "lieshan_duo", "jinxiao_leiling", "xuanming_leizhu",
 	]
 	var drone_weapons := [
 		"lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei",
@@ -81,9 +80,15 @@ func _test_weapon_dps_normalization() -> void:
 		min_dps = minf(min_dps, dps)
 		max_dps = maxf(max_dps, dps)
 
-		if w_id in single_target_weapons:
-			_c.check(dps >= 26.0 and dps <= 32.0,
-				"单体专注法器【%s】DPS 落在 26~32 区间 (实得 %.1f)" % [w_id, dps])
+		if w_id in melee_weapons:
+			_c.check(dps >= 28.0 and dps <= 36.0,
+				"近战贴脸法器【%s】DPS 落在 28~36 区间 (实得 %.1f)" % [w_id, dps])
+		elif w_id in sweep_weapons:
+			_c.check(dps >= 26.0 and dps <= 34.0,
+				"横扫贴脸法器【%s】DPS 落在 26~34 区间 (实得 %.1f)" % [w_id, dps])
+		elif w_id in focus_ranged_weapons:
+			_c.check(dps >= 22.0 and dps <= 28.0,
+				"点杀远程法器【%s】DPS 落在 22~28 区间 (实得 %.1f)" % [w_id, dps])
 		elif w_id in aoe_utility_weapons:
 			_c.check(dps >= 18.0 and dps <= 26.0,
 				"群伤/功能法器【%s】DPS 落在 18~26 区间 (实得 %.1f)" % [w_id, dps])

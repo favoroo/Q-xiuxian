@@ -28,7 +28,7 @@ const SLASH_ART_OUTER := 124.0
 ## —— 剑气是从剑上劈出去的，不是凭空悬在远处。终态仍是上面那条"外缘==判定半径"的同源
 ## 不变量，判定数值一字不动。月牙贴图的不透明带贴在外缘（0° 方向实测 102~127px、89px 起
 ## 半透明淡入），出生缩放按"内缘压住剑尖屏上位置 muzzle_len"反解。
-const SLASH_ART_INNER := 100.0  ## 月牙内缘画布半径（贴图 0° 实测），出生"贴剑尖"反解用
+const SLASH_ART_INNER := 110.0  ## 月牙中心内缘画布半径（== WeaponArcRenderer.MELEE_INNER，锥形月牙中心厚度 14px），出生"贴剑尖"反解用
 const SLASH_SPAWN_INSET := 2.0  ## 出生内缘再往前探 2px，让剑尖埋进剑气里
 const SLASH_SWEEP_TIME := 0.10  ## 剑气从剑尖扫放到判定外缘的时长（期间保持全亮）
 const SLASH_FADE_TIME := 0.08   ## 抵达判定外缘后的淡出时长 —— 落点先亮一拍再散
@@ -794,7 +794,6 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	burst.damage = final_dmg
 	burst.knockback_base = WeaponData.knockback_for(weapon_def_id, 200.0)
 	burst.tint = def.get("burst_tint", burst.tint)
-	burst.show_seal = bool(def.get("burst_seal", false))
 	burst.burst_kind = String(def.get("burst_kind", "thunder"))
 	# 落点音必须在 activate() 之前下发：activate 里就播它
 	burst.sfx_impact_key = WeaponData.sfx_impact_for(weapon_def_id)
@@ -893,7 +892,8 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 	var vp_center: Vector2 = player.global_position if player != null else global_position
 	# 整刀属性管线只算一次：同刀乘区为常量（最多 24 目标共享），避免逐目标重算 _final_damage（9-13 次 item_hook_sum + 20 键 dict + equipped_cleanup 全子节点遍历）
 	var base_dmg := _final_damage()
-	var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
+	# 2026-10-14 风险溢价：近战击退兜底 240→280（贴脸换控场），弹丸仍 140
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 280.0)
 	# 五行异常开关与近战吸血同为整刀常量：原来逐目标 item_hook_sum 全量遍历 items，
 	# 24 目标 × 8 武器每挥砍近千次字典查找。注意异常施加保持 has_method 鸭类型——
 	# 武器脚本硬引用 EnemyBase（as EnemyBase）实测会把弹丸 preload 打成空 PackedScene（循环类依赖坑）
@@ -1012,7 +1012,8 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 	var player: Node2D = GameManager.player
 	var vp_center: Vector2 = player.global_position if player != null else global_position
 	var base_dmg := _final_damage()
-	var kb_force := WeaponData.knockback_for(weapon_def_id, 240.0)
+	# 2026-10-14 风险溢价：横扫击退兜底 240→300（重控场分支，与表内 340~680 一致）
+	var kb_force := WeaponData.knockback_for(weapon_def_id, 300.0)
 	var proc_burn: bool = def.get("proc_burn", false)
 	var proc_chill: float = float(def.get("proc_chill", 0.0))
 	var proc_poison: bool = def.get("proc_poison", false)

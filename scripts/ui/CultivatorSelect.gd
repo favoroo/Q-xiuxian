@@ -115,7 +115,7 @@ func _build_ui() -> void:
 	_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_progress_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_progress_label.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
-	GameStyle.label(_progress_label, 11, GameStyle.JADE)
+	GameStyle.label(_progress_label, 11, GameStyle.INK)
 	header_row.add_child(_progress_label)
 
 	# 2. 主体左右分栏
@@ -516,9 +516,9 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 	var cur_idx := GameManager.get_selected_skin(cid)
 	var base_cfg := CultivatorVisualConfig.get_config(cid)
 
-	# 原色槽：色块取角色本相斗篷配色，一眼认出「这是本来的样子」
+	# 原色槽：底色取角色本相斗篷内衬，迷你小人直观展示「本来的样子」
 	strip.add_child(_make_skin_slot(cid, -1,
-			Color(base_cfg.cloak.get("col_outer", GameStyle.NAVY2)),
+			Color(base_cfg.cloak.get("col_inner", GameStyle.NAVY2)),
 			Color(base_cfg.cloak.get("col_edge", GameStyle.LINE)),
 			is_unlocked, cur_idx == -1))
 
@@ -526,7 +526,7 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 		var t := SkinData.get_theme(i)
 		var slot_open := is_unlocked and GameManager.is_skin_unlocked(cid, i)
 		strip.add_child(_make_skin_slot(cid, i,
-				Color(t.get("cloak_outer", GameStyle.NAVY2)),
+				Color(t.get("cloak_inner", GameStyle.NAVY2)),
 				Color(t.get("cloak_edge", GameStyle.LINE)),
 				slot_open, is_unlocked and cur_idx == i))
 
@@ -541,17 +541,30 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 
 	return strip
 
-## 单个皮肤槽：主色块 + 边缘点缀色描边；选中金框高亮；未解锁灰化加「锁」
+## 单个皮肤槽：迷你小人实况预览 + 内衬色底 + 缘色描边；选中金框高亮；未解锁灰化加「锁」
 func _make_skin_slot(cid: String, skin_idx: int,
 		main_col: Color, edge_col: Color, open: bool, selected: bool) -> PanelContainer:
 	var slot := PanelContainer.new()
-	slot.custom_minimum_size = Vector2(34, 34)
+	slot.custom_minimum_size = Vector2(40, 40)
 	slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slot.clip_contents = true
 	slot.mouse_filter = Control.MOUSE_FILTER_STOP
-	var bg := main_col if open else main_col.darkened(0.55).lerp(GameStyle.INK, 0.35)
+	# 底色用斗篷内衬（比外袍亮一档），未解锁降饱和压暗但仍可辨认主题色调
+	# （引擎 Color 无 desaturated()，用向中性灰 lerp 实现降饱和）
+	var bg := main_col if open else main_col.darkened(0.30).lerp(Color(0.5, 0.5, 0.5), 0.45)
 	var border := GameStyle.JADE if selected else (edge_col if open else GameStyle.LINE)
 	slot.add_theme_stylebox_override("panel",
 			GameStyle.outlined_panel(bg, border, 2 if selected else 1, 0.0))
+
+	# 迷你小人所见即所得：原色槽钉 -1 本相，主题槽钉各自 skin_idx
+	var pv := ProceduralCultivatorView.new()
+	pv.position = Vector2(20, 31)
+	pv.scale = Vector2(0.55, 0.55)
+	pv.setup_character_id(cid, skin_idx)
+	if not open:
+		pv.modulate = GameStyle.disabled_modulate()
+	slot.add_child(pv)
+
 	if not open:
 		var lock_lbl := Label.new()
 		lock_lbl.text = "锁"

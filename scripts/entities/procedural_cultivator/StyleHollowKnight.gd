@@ -23,7 +23,7 @@ func _draw_front() -> void:
 
 	# 1. 虚空幽白地影与清气
 	draw_filled_ellipse(Vector2(0, 32), 16.0, 4.5, Color(0.04, 0.06, 0.08, 0.45))
-	draw_arc(Vector2(0, 32), 18.0, 0, TAU, 24, Color(0.35, 0.75, 0.60, 0.18 + sin(_time * 3.0) * 0.05), 1.2, true)
+	_arc(Vector2(0, 32), 18.0, 0, TAU, 24, Color(0.35, 0.75, 0.60, 0.18 + sin(_time * 3.0) * 0.05), 1.2, true)
 
 	# 2. 背后大角度斜贯背负之纯白骨钉（剑柄探出右肩，剑尖探出左下摆）
 	_draw_hollow_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
@@ -53,7 +53,7 @@ func _draw_front() -> void:
 
 	# 4. 纯黑玄面头部
 	var head_center := Vector2(0, -14 + float_y)
-	draw_circle(head_center, 9.5, VOID_BLACK)
+	_circle(head_center, 9.5, VOID_BLACK)
 
 	# 5. 昆虫角质与飞天髻融合的修长双角（向左右上挑）
 	var left_horn: PackedVector2Array = [
@@ -109,7 +109,7 @@ func _draw_side() -> void:
 
 	# 3. 纯黑玄面侧颜
 	var head_center := Vector2(2, -14 + float_y)
-	draw_circle(head_center, 9.0, VOID_BLACK)
+	_circle(head_center, 9.0, VOID_BLACK)
 
 	# 4. 后挑双角（侧视重叠后仰，锋芒毕露）
 	var horn_pts: PackedVector2Array = [
@@ -153,15 +153,15 @@ func _draw_back() -> void:
 	draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 3.0)
 	draw_line(p_top, p_bot, CLOAK_EDGE, 1.0)
 	var center := (p_top + p_bot) * 0.5
-	draw_circle(center, 2.8, NAIL_WHITE)
-	draw_circle(center, 1.4, VOID_BLACK)
+	_circle(center, 2.8, NAIL_WHITE)
+	_circle(center, 1.4, VOID_BLACK)
 
 	# 4. 在斗篷最外层绘制斜跨背负的长骨钉！
 	_draw_hollow_nail(Vector2(1, -2 + float_y), deg_to_rad(152.0))
 
 	# 5. 纯黑后脑与双角
 	var head_center := Vector2(0, -14 + float_y)
-	draw_circle(head_center, 9.5, VOID_BLACK)
+	_circle(head_center, 9.5, VOID_BLACK)
 
 	var left_horn: PackedVector2Array = [
 		head_center + Vector2(-6, -4),
@@ -203,5 +203,5 @@ func _draw_hollow_nail(pos: Vector2, rot: float) -> void:
 	]
 	draw_colored_polygon(guard_pts, NAIL_SHADOW)
 	draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), NAIL_WHITE, 2.0)
-	draw_circle(t * Vector2(0, 11), 1.6, NAIL_WHITE)
-	draw_circle(t * Vector2(0, 11), 0.8, NAIL_SHADOW)
+	_circle(t * Vector2(0, 11), 1.6, NAIL_WHITE)
+	_circle(t * Vector2(0, 11), 0.8, NAIL_SHADOW)

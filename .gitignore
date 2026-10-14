@@ -24,6 +24,21 @@ tests/styles/*.png.import
 /tmp_*.png
 /tmp_*.png.import
 
+# 走廊图/画廊看板 HTML 产物（由 tools/inspector/html_report.py 生成，内嵌 Base64 图体积大）
+tests/inspect/index.html
+
+# 全量字体源（项目仅引用 fonts/ 下 625KB 子集版；subset_fonts.py 需要时手动放回）
+assets_raw/fonts/
+
+# 原始 BGM 源（已有 128k CBR 压缩版在 assets/audio/；未压缩独有曲目不受影响）
+assets_raw/music/bgm_cultivation.mp3
+assets_raw/music/bgm_defeat.mp3
+assets_raw/music/bgm_menu.mp3
+assets_raw/music/bgm_shop.mp3
+assets_raw/music/bgm_trial.mp3
+assets_raw/music/bgm_victory.mp3
+assets_raw/music/probe_sfx_click.mp3
+
 # macOS 文件系统元数据
 .DS_Store
 

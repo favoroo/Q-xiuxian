@@ -162,13 +162,10 @@ func _create_card(w_id: String) -> Control:
 	# 「元素」角标已撤 —— 它贴在图标右上角遮图，同一件事货架卡本来就是用边框说的。
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK,
 			GameStyle.JADE if rec else GameStyle.element_border(w_id, GameStyle.GOLD_EDGE), 2, 0.0))
-	var icon_tex = TextureRect.new()
-	if ResourceLoader.exists(def.get("icon", "")):
-		icon_tex.texture = load(def["icon"])
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(icon_size - 14.0, icon_size - 14.0)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 走统一图标工厂：武器图标自动换 assets/art/ui/ 的 128px 高清变体（手写 load 只会
+	# 拿到 48px 战斗画布，放大到 60px 显示必糊），并带 LINEAR 过滤兜底。
+	var icon_tex := GameStyle.icon_texture_rect(
+			String(def.get("icon", "")), Vector2(icon_size - 14.0, icon_size - 14.0))
 	icon_box.add_child(icon_tex)
 	vbox.add_child(icon_box)
 

@@ -346,7 +346,7 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 
 	if hit_flash > 0.05 and _layer_on(Layer.FX):
 		draw_soft_glow(Vector2(0, 0), 22.0, Color(1.0, 1.0, 1.0, hit_flash * 0.4), 2)
-		draw_circle(Vector2(0, -10), 11.0, Color(1.0, 1.0, 1.0, hit_flash * 0.35))
+		_circle(Vector2(0, -10), 11.0, Color(1.0, 1.0, 1.0, hit_flash * 0.35))
 
 # ==================== 辅助效果：地影与道韵灵气 ====================
 
@@ -358,7 +358,7 @@ func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> vo
 	var edge_col := col_cloak_edge
 	if cloak_shimmer_intensity > 0.05 and cloak_shimmer_color.a > 0.01:
 		edge_col = col_cloak_edge.lerp(cloak_shimmer_color, clampf(cloak_shimmer_intensity, 0.0, 1.0))
-	draw_arc(pos, rx + 1.8, 0, TAU, 28, Color(edge_col.r, edge_col.g, edge_col.b, alpha * 0.28), 1.0, true)
+	_arc(pos, rx + 1.8, 0, TAU, 28, Color(edge_col.r, edge_col.g, edge_col.b, alpha * 0.28), 1.0, true)
 
 func _draw_immortal_motes(float_y: float) -> void:
 	if not _layer_on(Layer.MOTES):
@@ -375,13 +375,13 @@ func _draw_immortal_motes(float_y: float) -> void:
 	var mx1 := sin(t1) * (14.0 * width_scale)
 	var my1 := cos(t1 * 1.2) * 8.0 + float_y + 8.0
 	var alpha1 := (sin(_time * 2.2 * speed_mul) * 0.5 + 0.5) * (0.35 + motes_boost * 0.45)
-	draw_circle(Vector2(mx1, my1), 1.0 + motes_boost * 0.6, Color(eff_col.r, eff_col.g, eff_col.b, alpha1))
+	_circle(Vector2(mx1, my1), 1.0 + motes_boost * 0.6, Color(eff_col.r, eff_col.g, eff_col.b, alpha1))
 
 	var t2 := _time * 2.3 * speed_mul + 2.1
 	var mx2 := cos(t2) * (12.0 * width_scale)
 	var my2 := sin(t2 * 1.4) * 7.0 + float_y - 2.0
 	var alpha2 := (cos(_time * 2.5 * speed_mul) * 0.5 + 0.5) * (0.28 + motes_boost * 0.45)
-	draw_circle(Vector2(mx2, my2), 0.9 + motes_boost * 0.6, Color(eff_eye.r, eff_eye.g, eff_eye.b, alpha2))
+	_circle(Vector2(mx2, my2), 0.9 + motes_boost * 0.6, Color(eff_eye.r, eff_eye.g, eff_eye.b, alpha2))
 
 	# 技能爆发/法力激荡时，额外环绕 3 颗周天流光微粒子
 	if motes_boost > 0.1:
@@ -390,7 +390,7 @@ func _draw_immortal_motes(float_y: float) -> void:
 			var ex := sin(extra_t) * (18.0 * width_scale)
 			var ey := cos(extra_t * 1.2) * 11.0 + float_y + 4.0
 			var extra_a := (sin(extra_t * 2.4) * 0.35 + 0.65) * clampf(motes_boost, 0.0, 1.0) * 0.8
-			draw_circle(Vector2(ex, ey), 1.2, Color(1.0, 1.0, 1.0, extra_a))
+			_circle(Vector2(ex, ey), 1.2, Color(1.0, 1.0, 1.0, extra_a))
 			var tail_dir := -Vector2(cos(extra_t) * 18.0, -sin(extra_t * 1.2) * 13.2).normalized()
 			draw_line(Vector2(ex, ey), Vector2(ex, ey) + tail_dir * 5.0, Color(eff_col.r, eff_col.g, eff_col.b, extra_a * 0.65), 1.2)
 
@@ -429,9 +429,9 @@ func _draw_head_back(float_y: float) -> void:
 	if not _layer_on(Layer.HEAD):
 		return
 	var head_center := Vector2(0, -15 + float_y)
-	draw_circle(head_center, 9.5 * head_scale, col_bone)
-	draw_arc(head_center, 9.5 * head_scale, 0, TAU, 24, col_bone_shadow, 1.2, true)
-	draw_arc(head_center, 7.5 * head_scale, PI * 0.2, PI * 0.8, 16, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.35), 1.0)
+	_circle(head_center, 9.5 * head_scale, col_bone)
+	_arc(head_center, 9.5 * head_scale, 0, TAU, 24, col_bone_shadow, 1.2, true)
+	_arc(head_center, 7.5 * head_scale, PI * 0.2, PI * 0.8, 16, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.35), 1.0)
 	_draw_modular_headwear(head_center, Angle.BACK)
 
 ## 插槽 1：面壳轮廓绘制
@@ -580,9 +580,9 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 		"round_petite":
 			var sigil_col := col_tassel_red if horns_style == "dao_bun" or horns_style == "twin_buns" else col_gold
 			if angle == Angle.FRONT:
-				draw_circle(head_center + Vector2(0, -4.0 * hs), 1.1 * hs, sigil_col)
+				_circle(head_center + Vector2(0, -4.0 * hs), 1.1 * hs, sigil_col)
 			else:
-				draw_circle(head_center + Vector2(2.8 * hs, -3.5 * hs), 1.0 * hs, sigil_col)
+				_circle(head_center + Vector2(2.8 * hs, -3.5 * hs), 1.0 * hs, sigil_col)
 
 		"sharp_fox":
 			if angle == Angle.FRONT:
@@ -613,7 +613,7 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 			if angle == Angle.FRONT:
 				draw_line(head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -2.5 * hs), col_eye_glow, 1.2)
 				draw_line(head_center + Vector2(-1.5 * hs, -5.0 * hs), head_center + Vector2(1.5 * hs, -5.0 * hs), col_eye_glow, 0.9)
-				draw_circle(head_center + Vector2(0, -2.5 * hs), 0.7 * hs, col_eye_core)
+				_circle(head_center + Vector2(0, -2.5 * hs), 0.7 * hs, col_eye_core)
 			else:
 				draw_line(head_center + Vector2(2.6 * hs, -5.5 * hs), head_center + Vector2(2.6 * hs, -2.5 * hs), col_eye_glow, 1.1)
 
@@ -622,7 +622,7 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 		var sigil_pos := head_center + (Vector2(0, -4.2 * hs) if angle == Angle.FRONT else Vector2(2.4 * hs, -3.8 * hs))
 		var sigil_glow_col := cloak_shimmer_color if cloak_shimmer_color.a > 0.01 else col_gold
 		draw_soft_glow(sigil_pos, 4.2 * hs * (1.0 + sigil_boost * 0.5), Color(sigil_glow_col.r, sigil_glow_col.g, sigil_glow_col.b, 0.45 * sigil_boost), 2)
-		draw_circle(sigil_pos, 1.0 * hs, Color(1, 1, 1, 0.8 * sigil_boost))
+		_circle(sigil_pos, 1.0 * hs, Color(1, 1, 1, 0.8 * sigil_boost))
 
 ## 插槽 2：头部首服与角冠绘制
 func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
@@ -727,16 +727,16 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 
 		"dao_bun":
 			var bun_c: Vector2 = head_center + Vector2(-1.5 * hs, -12 * hs) if angle == Angle.SIDE else head_center + Vector2(0, -12 * hs)
-			draw_circle(bun_c, 5.2 * hs, col_bone)
-			draw_circle(bun_c, 3.0 * hs, col_bone_shadow)
-			draw_arc(bun_c, 4.0 * hs, -0.4, 2.8, 12, col_bone_shadow, 1.1)
+			_circle(bun_c, 5.2 * hs, col_bone)
+			_circle(bun_c, 3.0 * hs, col_bone_shadow)
+			_arc(bun_c, 4.0 * hs, -0.4, 2.8, 12, col_bone_shadow, 1.1)
 			if angle == Angle.SIDE:
 				draw_line(bun_c + Vector2(-6 * hs, -1 * hs), bun_c + Vector2(7 * hs, 1 * hs), col_weapon_main, 1.8)
-				draw_circle(bun_c + Vector2(7 * hs, 1 * hs), 1.6, col_jade)
+				_circle(bun_c + Vector2(7 * hs, 1 * hs), 1.6, col_jade)
 				draw_line(bun_c + Vector2(-5 * hs, -1 * hs), bun_c + Vector2(-7 * hs, 3 * hs), col_tassel_red, 1.2)
 			else:
 				draw_line(bun_c + Vector2(-8 * hs, 0), bun_c + Vector2(8 * hs, 0), col_weapon_main, 1.8)
-				draw_circle(bun_c + Vector2(8 * hs, 0), 1.6, col_jade)
+				_circle(bun_c + Vector2(8 * hs, 0), 1.6, col_jade)
 				draw_line(bun_c + Vector2(-7 * hs, 0), bun_c + Vector2(-9 * hs, 4 * hs), col_tassel_red, 1.2)
 
 		"twin_buns":
@@ -746,17 +746,17 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 			if angle == Angle.SIDE:
 				bun_l = head_center + Vector2(-3.5 * hs, -11 * hs)   # 后髻（衬垫）
 				bun_r = head_center + Vector2(2.5 * hs, -11.5 * hs)  # 前髻
-				draw_circle(bun_l, 2.8 * hs, col_bone_shadow)
-				draw_circle(bun_r, 3.2 * hs, col_bone)
-				draw_arc(bun_r, 2.4 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
+				_circle(bun_l, 2.8 * hs, col_bone_shadow)
+				_circle(bun_r, 3.2 * hs, col_bone)
+				_arc(bun_r, 2.4 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
 				draw_line(bun_r + Vector2(-2.2 * hs, 1.8 * hs), bun_r + Vector2(2.2 * hs, 1.8 * hs), col_tassel_red, 1.2)
 			else:
 				bun_l = head_center + Vector2(-6.5 * hs, -10 * hs)
 				bun_r = head_center + Vector2(6.5 * hs, -10 * hs)
-				draw_circle(bun_l, 3.4 * hs, col_bone)
-				draw_circle(bun_r, 3.4 * hs, col_bone)
-				draw_arc(bun_l, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
-				draw_arc(bun_r, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
+				_circle(bun_l, 3.4 * hs, col_bone)
+				_circle(bun_r, 3.4 * hs, col_bone)
+				_arc(bun_l, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
+				_arc(bun_r, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
 				draw_line(bun_l + Vector2(-2.4 * hs, 2.0 * hs), bun_l + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
 				draw_line(bun_r + Vector2(-2.4 * hs, 2.0 * hs), bun_r + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
 
@@ -783,7 +783,7 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				]
 				draw_colored_polygon(hat_pts, Color(0.32, 0.26, 0.17))
 				draw_polyline(hat_pts, Color(0.62, 0.52, 0.35), 1.2, true)
-				draw_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.24, 0.19, 0.12), 1.2)
+				_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.24, 0.19, 0.12), 1.2)
 			else:
 				var hat_pts: PackedVector2Array = [
 					hat_c + Vector2(-17 * hs, 3 * hs),
@@ -793,9 +793,9 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				]
 				draw_colored_polygon(hat_pts, Color(0.38, 0.32, 0.22))
 				draw_polyline(hat_pts, Color(0.68, 0.58, 0.40), 1.2, true)
-				draw_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.28, 0.22, 0.15), 1.2)
+				_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.28, 0.22, 0.15), 1.2)
 				draw_line(hat_c + Vector2(0, -11 * hs), hat_c + Vector2(0, -2 * hs), Color(0.24, 0.20, 0.14), 1.4)
-				draw_circle(hat_c + Vector2(0, 0), 1.2, Color(0.12, 0.10, 0.08))
+				_circle(hat_c + Vector2(0, 0), 1.2, Color(0.12, 0.10, 0.08))
 
 		"talisman":
 			if angle == Angle.FRONT:
@@ -823,21 +823,21 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				draw_line(t_pos + Vector2(0.8 * hs, 2 * hs), t_pos + Vector2(0, 10 * hs), Color(0.85, 0.20, 0.15), 1.2)
 			else:
 				draw_line(head_center + Vector2(-5 * hs, -8 * hs), head_center + Vector2(5 * hs, -8 * hs), Color(0.85, 0.20, 0.15), 1.3)
-				draw_circle(head_center + Vector2(0, -8 * hs), 1.4, Color(0.85, 0.20, 0.15))
+				_circle(head_center + Vector2(0, -8 * hs), 1.4, Color(0.85, 0.20, 0.15))
 
 		"gold_crown":
 			var crown_c := head_center + Vector2(0, -11 * hs)
 			if angle == Angle.SIDE:
 				crown_c = head_center + Vector2(1 * hs, -11 * hs)
-				draw_circle(crown_c + Vector2(-3 * hs, 0), 3.0 * hs, col_gold_shadow)
-				draw_circle(crown_c + Vector2(2 * hs, -2 * hs), 3.8 * hs, col_gold)
-				draw_circle(crown_c + Vector2(2 * hs, -2 * hs), 1.5 * hs, col_void)
+				_circle(crown_c + Vector2(-3 * hs, 0), 3.0 * hs, col_gold_shadow)
+				_circle(crown_c + Vector2(2 * hs, -2 * hs), 3.8 * hs, col_gold)
+				_circle(crown_c + Vector2(2 * hs, -2 * hs), 1.5 * hs, col_void)
 				draw_rect(Rect2(crown_c + Vector2(1.2 * hs, -2.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
 			else:
-				draw_circle(crown_c + Vector2(-6 * hs, 0), 3.2 * hs, col_gold_shadow)
-				draw_circle(crown_c + Vector2(6 * hs, 0), 3.2 * hs, col_gold_shadow)
-				draw_circle(crown_c + Vector2(0, -3 * hs), 4.4 * hs, col_gold)
-				draw_circle(crown_c + Vector2(0, -3 * hs), 1.7 * hs, col_void)
+				_circle(crown_c + Vector2(-6 * hs, 0), 3.2 * hs, col_gold_shadow)
+				_circle(crown_c + Vector2(6 * hs, 0), 3.2 * hs, col_gold_shadow)
+				_circle(crown_c + Vector2(0, -3 * hs), 4.4 * hs, col_gold)
+				_circle(crown_c + Vector2(0, -3 * hs), 1.7 * hs, col_void)
 				draw_rect(Rect2(crown_c + Vector2(-0.8 * hs, -3.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
 
 		"butterfly_horns_petite":
@@ -1190,24 +1190,24 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				draw_line(r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), eff_core, 1.5)
 
 			"round_pupil":
-				draw_circle(l_eye, 3.8 * hs, col_void)
-				draw_circle(r_eye, 3.8 * hs, col_void)
+				_circle(l_eye, 3.8 * hs, col_void)
+				_circle(r_eye, 3.8 * hs, col_void)
 				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
 				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
-				draw_circle(l_eye + Vector2(0.4, -0.4), 1.7 * hs, eff_core)
-				draw_circle(r_eye + Vector2(-0.4, -0.4), 1.7 * hs, eff_core)
-				draw_circle(l_eye + Vector2(-0.6, 0.6), 0.7 * hs, Color(1, 1, 1, 0.65))
+				_circle(l_eye + Vector2(0.4, -0.4), 1.7 * hs, eff_core)
+				_circle(r_eye + Vector2(-0.4, -0.4), 1.7 * hs, eff_core)
+				_circle(l_eye + Vector2(-0.6, 0.6), 0.7 * hs, Color(1, 1, 1, 0.65))
 
 			"round_bright":
 				# 童子亮眼：小黑瞳大高光，去"空洞眼窝"感（驯兽师专属）
-				draw_circle(l_eye, 2.7 * hs, col_void)
-				draw_circle(r_eye, 2.7 * hs, col_void)
+				_circle(l_eye, 2.7 * hs, col_void)
+				_circle(r_eye, 2.7 * hs, col_void)
 				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
 				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
-				draw_circle(l_eye + Vector2(0.5, -0.5), 1.5 * hs, eff_core)
-				draw_circle(r_eye + Vector2(-0.5, -0.5), 1.5 * hs, eff_core)
-				draw_circle(l_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
-				draw_circle(r_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
+				_circle(l_eye + Vector2(0.5, -0.5), 1.5 * hs, eff_core)
+				_circle(r_eye + Vector2(-0.5, -0.5), 1.5 * hs, eff_core)
+				_circle(l_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
+				_circle(r_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
 
 			"angry_slit":
 				var l_poly: PackedVector2Array = [l_eye + Vector2(-3.5 * hs, 2 * hs), l_eye + Vector2(3.5 * hs, -1.5 * hs), l_eye + Vector2(3 * hs, 1.5 * hs)]
@@ -1216,8 +1216,8 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				draw_colored_polygon(r_poly, col_void)
 				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 2)
 				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 2)
-				draw_circle(l_eye, 1.6 * hs, eff_core)
-				draw_circle(r_eye, 1.6 * hs, eff_core)
+				_circle(l_eye, 1.6 * hs, eff_core)
+				_circle(r_eye, 1.6 * hs, eff_core)
 
 			"hollow_oval", _:
 				draw_filled_ellipse(l_eye, 3.8 * hs, 5.2 * hs, col_void)
@@ -1228,8 +1228,8 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 
 		if eye_glow_boost > 0.15:
-			draw_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
-			draw_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
+			_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
+			_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
 	else:
 		var eye_pos := head_center + Vector2(4.2 * hs, 1.0 * hs)
@@ -1252,18 +1252,18 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				]
 				draw_colored_polygon(angry_pts, col_void)
 				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				draw_circle(eye_pos + Vector2(0.4 * hs, 0.2 * hs), 1.5 * hs, eff_core)
+				_circle(eye_pos + Vector2(0.4 * hs, 0.2 * hs), 1.5 * hs, eff_core)
 
 			"round_pupil":
-				draw_circle(eye_pos, 3.2 * hs, col_void)
+				_circle(eye_pos, 3.2 * hs, col_void)
 				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				draw_circle(eye_pos + Vector2(0.3, -0.3), 1.7 * hs, eff_core)
+				_circle(eye_pos + Vector2(0.3, -0.3), 1.7 * hs, eff_core)
 
 			"round_bright":
-				draw_circle(eye_pos, 2.4 * hs, col_void)
+				_circle(eye_pos, 2.4 * hs, col_void)
 				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				draw_circle(eye_pos + Vector2(0.4, -0.4), 1.4 * hs, eff_core)
-				draw_circle(eye_pos + Vector2(-0.4, -0.5), 0.7 * hs, Color(1, 1, 1, 0.9))
+				_circle(eye_pos + Vector2(0.4, -0.4), 1.4 * hs, eff_core)
+				_circle(eye_pos + Vector2(-0.4, -0.5), 0.7 * hs, Color(1, 1, 1, 0.9))
 
 			"hollow_oval", _:
 				draw_filled_ellipse(eye_pos, 3.6 * hs, 5.0 * hs, col_void)
@@ -1271,7 +1271,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2), 2.2 * hs, 3.6 * hs, eff_core)
 
 		if eye_glow_boost > 0.15:
-			draw_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
+			_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
 ## 绘制斗篷轮廓描边与法力流动反光（仙侠高精流光反光感）
 func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> void:
@@ -1641,21 +1641,21 @@ func _draw_modular_strap(float_y: float) -> void:
 			var r_bot := Vector2(4, 14 + float_y)
 			draw_line(l_top, l_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
 			draw_line(r_top, r_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
-			draw_circle(Vector2(0, 4 + float_y), 2.8, col_bone)
-			draw_circle(Vector2(0, 4 + float_y), 1.4, col_void)
-			draw_circle(Vector2(0, 4 + float_y), 0.7, col_gold)
+			_circle(Vector2(0, 4 + float_y), 2.8, col_bone)
+			_circle(Vector2(0, 4 + float_y), 1.4, col_void)
+			_circle(Vector2(0, 4 + float_y), 0.7, col_gold)
 		"floating":
-			draw_arc(Vector2(0, 4 + float_y), 9.0, 0, TAU, 20, Color(col_cloak_edge.r, col_cloak_edge.g, col_cloak_edge.b, 0.45), 1.2)
-			draw_circle(Vector2(cos(_time * 3.0) * 9.0, 4 + float_y + sin(_time * 3.0) * 9.0), 1.2, col_eye_core)
+			_arc(Vector2(0, 4 + float_y), 9.0, 0, TAU, 20, Color(col_cloak_edge.r, col_cloak_edge.g, col_cloak_edge.b, 0.45), 1.2)
+			_circle(Vector2(cos(_time * 3.0) * 9.0, 4 + float_y + sin(_time * 3.0) * 9.0), 1.2, col_eye_core)
 		"diagonal", _:
 			var p_top := Vector2(7, -6 + float_y)
 			var p_bot := Vector2(-5, 12 + float_y)
 			draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 2.4)
 			draw_line(p_top, p_bot, col_cloak_edge, 0.8)
 			var center := (p_top + p_bot) * 0.5
-			draw_circle(center, 2.4, col_bone)
-			draw_circle(center, 1.2, col_void)
-			draw_circle(center, 0.6, col_gold)
+			_circle(center, 2.4, col_bone)
+			_circle(center, 1.2, col_void)
+			_circle(center, 0.6, col_gold)
 
 ## 绘制武器（正面探出右肩上方、下半部藏于斗篷后绝不露底，侧面贴背，背面外挂最表层）
 func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
@@ -1680,8 +1680,8 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 			draw_line(t * Vector2(-1.5, -5), t * Vector2(1.5, -5), col_weapon_accent, 1.2)
 			draw_line(t * Vector2(-1.5, 0), t * Vector2(1.5, 0), col_weapon_accent, 1.2)
 			draw_line(t * Vector2(0, 5), t * Vector2(0, 11), col_weapon_shadow, 2.6)
-			draw_circle(t * Vector2(0, 11.5), 1.8, col_weapon_main)
-			draw_circle(t * Vector2(0, 11.5), 0.9, col_void)
+			_circle(t * Vector2(0, 11.5), 1.8, col_weapon_main)
+			_circle(t * Vector2(0, 11.5), 0.9, col_void)
 
 		"peach_sword": # 辟邪千年桃木剑（符阵灵童）
 			var s_pts: PackedVector2Array = [
@@ -1694,10 +1694,10 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(1.8, 3), t * Vector2(0, 3)
 			]), col_weapon_shadow)
 			draw_line(t * Vector2(-3.2, 3), t * Vector2(3.2, 3), col_weapon_accent, 2.0)
-			draw_circle(t * Vector2(-1.2, 3), 0.6, col_void)
-			draw_circle(t * Vector2(1.2, 3), 0.6, col_eye_core)
+			_circle(t * Vector2(-1.2, 3), 0.6, col_void)
+			_circle(t * Vector2(1.2, 3), 0.6, col_eye_core)
 			draw_line(t * Vector2(0, 3), t * Vector2(0, 9.5), col_weapon_main, 1.8)
-			draw_circle(t * Vector2(0, 10), 1.4, col_weapon_accent)
+			_circle(t * Vector2(0, 10), 1.4, col_weapon_accent)
 			if angle != Angle.FRONT:
 				draw_line(t * Vector2(0, 10), t * Vector2(-2.5, 14), Color(0.95, 0.85, 0.3), 1.2)
 
@@ -1710,9 +1710,9 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 			draw_polyline(ab_pts, col_weapon_shadow, 1.2, true)
 			draw_line(t * Vector2(-5, -6), t * Vector2(5, -6), col_weapon_shadow, 1.4)
 			for b in [-3.2, 0, 3.2]:
-				draw_circle(t * Vector2(b, -9), 1.0, col_weapon_accent)
-				draw_circle(t * Vector2(b, -1), 1.0, col_weapon_accent)
-				draw_circle(t * Vector2(b, 2.5), 1.0, col_weapon_accent)
+				_circle(t * Vector2(b, -9), 1.0, col_weapon_accent)
+				_circle(t * Vector2(b, -1), 1.0, col_weapon_accent)
+				_circle(t * Vector2(b, 2.5), 1.0, col_weapon_accent)
 			draw_line(t * Vector2(0, 6), t * Vector2(0, 11), col_weapon_shadow, 2.0)
 
 		"shadow_daggers": # 阴煞双刃短刺（魅影幽娘）
@@ -1729,7 +1729,7 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				]), col_weapon_shadow)
 				draw_line(dt * Vector2(0, -12), dt * Vector2(0, 1), col_weapon_accent, 1.0)
 				draw_line(dt * Vector2(0, 2), dt * Vector2(0, 7.5), col_weapon_shadow, 1.6)
-				draw_circle(dt * Vector2(0, 8), 1.2, col_weapon_accent)
+				_circle(dt * Vector2(0, 8), 1.2, col_weapon_accent)
 
 		"broken_blade": # 厚背断马狂刀（独臂刀圣）
 			var b_pts: PackedVector2Array = [
@@ -1739,9 +1739,9 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 			draw_colored_polygon(b_pts, col_weapon_main)
 			draw_line(t * Vector2(-2.5, -14), t * Vector2(-2.5, 4), col_weapon_shadow, 1.8)
 			draw_line(t * Vector2(0, -11), t * Vector2(0, 2), Color(0.85, 0.25, 0.20), 1.1)
-			draw_circle(t * Vector2(0, 4.5), 2.8, col_weapon_shadow)
+			_circle(t * Vector2(0, 4.5), 2.8, col_weapon_shadow)
 			draw_line(t * Vector2(0, 5), t * Vector2(0, 11.5), Color(0.9, 0.88, 0.84), 2.2)
-			draw_circle(t * Vector2(0, 12), 1.8, col_weapon_main)
+			_circle(t * Vector2(0, 12), 1.8, col_weapon_main)
 
 		"bone_axe": # 巨兽头骨双刃战斧（狂战蛮修）
 			var h_pts: PackedVector2Array = [
@@ -1757,7 +1757,7 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(3, -7), t * Vector2(1, 0)
 			]), col_weapon_shadow)
 			draw_line(t * Vector2(0, -14), t * Vector2(0, 11), col_weapon_shadow, 2.4)
-			draw_circle(t * Vector2(0, 11.5), 1.8, col_weapon_accent)
+			_circle(t * Vector2(0, 11.5), 1.8, col_weapon_accent)
 
 		"soul_banner": # 墨竹引魂冥幡（夺舍散人）
 			draw_line(t * Vector2(0, -16), t * Vector2(0, 11), Color(0.18, 0.20, 0.22), 2.0)
@@ -1767,7 +1767,7 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(5.5, 4), t * Vector2(1, 2)
 			]
 			draw_colored_polygon(banner_pts, col_weapon_main)
-			draw_circle(t * Vector2(3.5, -5), 1.5, col_weapon_accent)
+			_circle(t * Vector2(3.5, -5), 1.5, col_weapon_accent)
 			draw_line(t * Vector2(3.5, -8), t * Vector2(3.5, -2), col_eye_core, 1.0)
 
 		"treasure_chest": # 紫金百宝乾坤匣（多宝道人）
@@ -1779,8 +1779,8 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 			draw_polyline(box_pts, col_weapon_shadow, 1.2, true)
 			draw_line(t * Vector2(-6.5, 0), t * Vector2(6.5, 0), col_weapon_accent, 1.6)
 			draw_line(t * Vector2(0, -9), t * Vector2(0, 7), col_weapon_accent, 1.6)
-			draw_circle(t * Vector2(0, 0), 2.4, Color(1.0, 0.88, 0.35))
-			draw_circle(t * Vector2(0, 0), 1.2, col_jade)
+			_circle(t * Vector2(0, 0), 2.4, Color(1.0, 0.88, 0.35))
+			_circle(t * Vector2(0, 0), 1.2, col_jade)
 
 		"bone_nail", _: # 纯白月光骨钉/长剑（青云剑修独孤）
 			var nail_pts: PackedVector2Array = [
@@ -1801,10 +1801,10 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(2.2, 5.5), t * Vector2(-2.2, 5.5)
 			]
 			draw_colored_polygon(guard_pts, col_bone_shadow)
-			draw_circle(t * Vector2(0, 4.2), 0.9, col_jade)
+			_circle(t * Vector2(0, 4.2), 0.9, col_jade)
 			draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), col_weapon_main, 2.0)
-			draw_circle(t * Vector2(0, 11), 1.6, col_weapon_main)
-			draw_circle(t * Vector2(0, 11), 0.8, col_bone_shadow)
+			_circle(t * Vector2(0, 11), 1.6, col_weapon_main)
+			_circle(t * Vector2(0, 11), 0.8, col_bone_shadow)
 
 ## 绘制月牙斩痕
 func _draw_slash_crescent(pos: Vector2, rot: float, radius: float, progress: float) -> void:

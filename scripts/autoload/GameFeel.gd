@@ -86,6 +86,11 @@ static func vibrate(duration_ms: int = 18, amplitude: float = 0.5) -> void:
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(duration_ms, amplitude)
 
+## 顿帧时长 30fps 补偿（2026-10-14）：顿帧的感知强度由「连续冻结的渲染帧数」决定，
+## 锁 30 帧后 33.3ms 帧长使击杀微顿帧 0.03s 只剩 ~1 帧（≈一帧正常画面，趋近无感），
+## 统一乘 1.5 恢复等效感知（0.03s→45ms≈1.4 帧）。切回 60 帧模式时顿帧略沉，属可接受权衡。
+const HITSTOP_FPS_COMPENSATION := 1.5
+
 static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.05) -> void:
 	if not hit_stop_enabled():
 		return
@@ -95,7 +100,7 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 	Engine.time_scale = clampf(target_scale, GameBalance.HITSTOP_TIMESCALE_FLOOR, 1.0)
 	# 零分配恢复（2026-10-14）：只写真实毫秒截止时刻，GameManager._process 到点还原；
 	# 原实现每次顿帧 create_timer 分配 SceneTreeTimer + 闭包。重复顿帧天然延期（覆写更晚时刻）。
-	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * 1000.0)
+	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * HITSTOP_FPS_COMPENSATION * 1000.0)
 
 static var _last_crit_hitstop_ms: int = 0
 const CRIT_HITSTOP_MIN_INTERVAL := 0.10

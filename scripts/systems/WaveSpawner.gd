@@ -206,6 +206,8 @@ func start_wave(n: int) -> void:
 		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 敌潮来袭 ✦" % n)
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
+	# 中断续玩：波次边界快照（新开局第一波 + 商店关进下一波共用这条）
+	RunSave.autosave_current(GameManager)
 
 ## 远离玩家出生点采样：全图随机抽一点，距玩家太近就沿径向推开再夹回场内。
 ## 五处刷怪口（常规怪/精英/金蟾/Boss/藏宝匣）共用这一份实现，参数（内缩/安全距离/推开）
@@ -309,6 +311,8 @@ func _enter_wave_break() -> void:
 	if GameManager.has_pending_upgrades():
 		phase = Phase.ALLOC
 		GameManager.open_alloc_session()
+		# 中断续玩：悟道面板开着时退出，恢复时原样重建候选卡（不重 roll）
+		RunSave.autosave_current(GameManager)
 		return
 	phase = Phase.SHOP
 	_open_shop_inner()
@@ -323,6 +327,8 @@ func _on_alloc_finished() -> void:
 func _open_shop_inner() -> void:
 	AudioManager.play_bgm_key("shop")
 	GameManager.roll_shop(true)
+	# 中断续玩：货架 roll 定格后快照（含锁定项），商店开着退出恢复时原样重建
+	RunSave.autosave_current(GameManager)
 	GameManager.shop_opened.emit()
 
 func _on_shop_closed() -> void:

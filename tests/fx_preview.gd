@@ -39,16 +39,9 @@ func _ready() -> void:
 		Color(0.5, 0.85, 0.5), Color(0.80, 0.66, 0.38), Color(0.88, 0.74, 0.46)]
 	for i in kinds.size():
 		var fx := BurstKindFx.new()
-		fx.position = Vector2(620 + (i % 3) * 130, 400 + (i / 3) * 110)
+		fx.position = Vector2(620 + (i % 3) * 130, 400 + int(i / 3.0) * 110)
 		add_child(fx)
 		fx.activate_fx(kinds[i], 48.0, tints[i])
-		# 镇魔封印格：dust 环之外补上程序化印体（游戏内由 ThunderBurst 同格下发）
-		if kinds[i] == "seal":
-			var seal := SealImpactFx.new()
-			seal.size = 48.0 * 1.4
-			seal.tint = tints[i]
-			seal.position = fx.position
-			add_child(seal)
 
 func _process(_delta: float) -> void:
 	_frame += 1

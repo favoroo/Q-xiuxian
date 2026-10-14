@@ -118,7 +118,7 @@ func _run() -> void:
 	var meiying := await _measure(main, true, "meiying")
 	_report("默认道统·摇杆推着不放", held)
 	_report("默认道统·松手站着放", idle)
-	_report("魅影 ×1.55·摇杆推着不放", meiying)
+	_report("影者·摇杆推着不放（加成技能已改神行术，冲刺回归基础距离）", meiying)
 
 	for r in [held, idle]:
 		if r.is_empty():

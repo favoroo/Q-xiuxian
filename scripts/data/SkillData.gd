@@ -13,6 +13,8 @@ extends RefCounted
 ##   power_mult    —— 效果强度乘算（移速加成 / 间隔减免 / 回血比例）
 ##   distance_mult —— 闪避距离乘算（魅影：+55%）
 ##   cooldown_mult —— 冷却乘算（多宝/符阵/夺舍：0.65）
+##   dodge_add_mult —— 期间闪避加成乘算（影者：神行术 +50% → +100%）
+##   force_full_dodge —— 期间闪避加成钉到 100%（无视基础值）
 ## glyph: 占位符文单字（正式图标走 media-gen 生成后填 icon 路径替换）
 
 enum Kind { DASH, SPEED, HASTE, IFRAME, HEAL, BURST }
@@ -136,6 +138,12 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
 	out["power"] = float(out["power"]) * float(mods.get("power_mult", 1.0))
 	out["distance"] = float(out["distance"]) * float(mods.get("distance_mult", 1.0))
+	# 神行术的闪避加成：整到 100% 可二选一 —— dodge_add_mult 乘算（影者 ×2），
+	# force_full_dodge 直接钉 1.0（无视基础幅度）
+	if bool(mods.get("force_full_dodge", false)):
+		out["dodge_add"] = 1.0
+	else:
+		out["dodge_add"] = float(out["dodge_add"]) * float(mods.get("dodge_add_mult", 1.0))
 	# 凝神符等道具的技能冷却缩减
 	var cd_mult := 1.0 - GameManager.item_hook_sum("skill_cooldown_mult")
 	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限，也不吃角色 cooldown_mult
@@ -155,6 +163,10 @@ static func enhance_desc(skill_id: String, cid: String) -> String:
 	var parts: Array[String] = []
 	if mods.has("distance_mult"):
 			parts.append("闪避距离 +%d%%" % int(round((float(mods["distance_mult"]) - 1.0) * 100.0)))
+	if mods.has("dodge_add_mult"):
+		var d_base := float(def.get("dodge_add", 0.0)) * 100.0
+		var d_final := d_base * float(mods["dodge_add_mult"])
+		parts.append("闪避加成 %d%%→%d%%" % [int(round(d_base)), int(round(d_final))])
 	if mods.has("duration_add"):
 		var kind := int(def.get("kind", 0))
 		var unit := "无敌" if kind == Kind.IFRAME or kind == Kind.DASH else "持续"

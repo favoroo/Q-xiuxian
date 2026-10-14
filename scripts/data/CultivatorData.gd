@@ -146,7 +146,7 @@ const DEFS: Dictionary = {
 			},
 			"allowed_tags": [],
 			"locked_upgrades": ["armor_up"],
-			"skill_mods": {"dash": {"distance_mult": 1.55}},
+			"skill_mods": {"gale": {"dodge_add_mult": 2.0}},
 			"extra_skill": "shadowburst",
 		},
 				"dubi": {

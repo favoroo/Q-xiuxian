@@ -4,6 +4,7 @@ extends Node2D
 ## 伤害跳字：扇形抛物线漂移 + 暴击弹性过冲（先冲过头再回落）。
 ## 高频命中下走节点池：一次命中不再 new Node2D + Label + Tween，
 ## 运动曲线改由 _process 手写（时序与原来的并行 Tween 完全对齐），命中峰值时零分配。
+## 文本由 _draw 直绘（draw_string_outline + draw_string），不经 Label 排版。
 
 ## 时序（秒）：漂移阶段 → 回落阶段 → 淡出阶段
 const PHASE_DRIFT := 0.52
@@ -15,9 +16,9 @@ const POOL_CAP := 96      ## 常驻池上限，超出时临时新建并在用完
 ## 同目标伤害跳字聚合窗（秒）：同一敌人窗口内的连续伤害并入同一条（累计值 + ×N），
 ## 新伤到来时窗口滑动续期；束流/喷吐/DoT 高频命中不再刷屏顶字，池溢出 new+free 抖动消失。
 const COMBO_WINDOW := 0.25
-## 聚合窗内文本重排节流（2026-10-14）：合并命中每次重写带描边 Label.text 会触发
-## 完整文本排版 + 描边栅格化，束流/DoT 集火时每秒几十次。sum/count 照常即时累计，
-## 仅 Label 重排降频到 12.5Hz，文本滞后 ≤80ms 肉眼无感；暴击升级样式不受闸限。
+## 聚合窗内文本变更节流（2026-10-14）：合并命中每次重写文本会触发一次重绘 +
+## 字形缓存查找，束流/DoT 集火时每秒几十次。sum/count 照常即时累计，
+## 仅文本刷新降频到 12.5Hz，文本滞后 ≤80ms 肉眼无感；暴击升级样式不受闸限。
 const COMBO_TEXT_INTERVAL := 0.08
 
 ## 聚合判定纯函数（单测钉判据用）：只有带 combo_key 且非文字类的伤害跳字参与聚合；
@@ -49,7 +50,8 @@ static var _cull_transform: Transform2D
 static var _cull_rect: Rect2
 static var _cull_valid: bool = false
 
-var _label: Label = null
+var _text: String = ""
+var _settings: LabelSettings = null
 var _overflow: bool = false
 var _t: float = 0.0
 var _origin: Vector2 = Vector2.ZERO
@@ -244,15 +246,15 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	n._combo_sum = sum
 	n._combo_hits = count
 	var settings := _crit_settings if crit else _normal_settings
-	# 排版节流：窗口内数值照常累计（上方 e/n 字段已是真话），但带描边 Label 重排
-	# 降频到 12.5Hz；暴击把样式升鎏金时必须立即重排（样式升级是即时反馈）
-	var style_changed := n._label.label_settings != settings
+	# 排版节流：窗口内数值照常累计（上方 e/n 字段已是真话），但文本变更
+	# 降频到 12.5Hz；暴击把样式升鎏金时必须立即刷新（样式升级是即时反馈）
+	var style_changed := n._settings != settings
 	var text: String
 	if style_changed or now - n._last_text_layout_ms >= int(COMBO_TEXT_INTERVAL * 1000.0):
 		text = format_combo(sum, count) + ("!" if crit else "")
 	else:
-		# 闸内：只重播弹出动画与跟随位置，沿用当前 Label 文本（_start 的文本/样式去重保证零排版）
-		text = n._label.text
+		# 闸内：只重播弹出动画与跟随位置，沿用当前文本（_start 的文本/样式去重保证零重绘）
+		text = n._text
 	n._start(
 		pos + Vector2(randf_range(-12.0, 12.0), -12.0),
 		text, settings, crit,
@@ -262,12 +264,6 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	return true
 
 func _ready() -> void:
-	if _label == null:
-		_label = Label.new()
-		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_label.position = Vector2(-35.0, -12.0)
-		_label.custom_minimum_size = Vector2(70.0, 24.0)
-		add_child(_label)
 	visible = false
 	set_process(false)
 
@@ -276,15 +272,30 @@ static func _back_out(x: float) -> float:
 	x = clampf(x, 0.0, 1.0) - 1.0
 	return 1.0 + 2.70158 * x * x * x + 1.70158 * x * x
 
+## 直绘跳字（2026-10-14 性能优化）：取代原 Label 子节点。带 4px 描边的 Label 每次文本变更
+## 触发完整文本排版 + 描边栅格化，集火时每秒几十次；draw_string 只查共享字体字形缓存，
+## 文本/样式不变更时零重绘，scale/modulate 动画走节点变换不打断重绘。
+func _draw() -> void:
+	if _settings == null or _text.is_empty():
+		return
+	var font: Font = _settings.font
+	var fs: int = _settings.font_size
+	var w := font.get_string_size(_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var pos := Vector2(-w * 0.5, (font.get_ascent(fs) - font.get_descent(fs)) * 0.5)
+	draw_string_outline(font, pos, _text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, _settings.outline_size, _settings.outline_color)
+	draw_string(font, pos, _text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, _settings.font_color)
+
 func _start(world_pos: Vector2, text: String, settings: LabelSettings, crit: bool, drift_x: float, rise_y: float) -> void:
-	# 文本/样式去重（2026-10-14）：Label.text 赋值作废字体缓存并重排版，
-	# 闸内合并重播传入的是旧文本，此处挡住即零排版
-	if _label.text != text:
-		_label.text = text
+	# 文本/样式去重：draw_string 直绘无 Label 排版，文本变更只是一次 queue_redraw +
+	# 共享字体字形缓存查找（0-9/×/! 十二个字符开局即热）；闸内合并重播传入旧文本时零重绘
+	if _text != text:
+		_text = text
 		_last_text_layout_ms = Time.get_ticks_msec()
-	if _label.label_settings != settings:
-		_label.label_settings = settings
+		queue_redraw()
+	if _settings != settings:
+		_settings = settings
 		_last_text_layout_ms = Time.get_ticks_msec()
+		queue_redraw()
 	global_position = world_pos
 	_origin = position
 	_drift_x = drift_x
@@ -310,8 +321,8 @@ func _process(delta: float) -> void:
 	position = _origin + Vector2(_drift_x * e, -_rise_y * e)
 
 	# 2. 尺寸：弹出（暴击带过冲）→ 平台 → 回落
-	# 台阶量化写入（snappedf 0.04）：35 个带描边 Label 若每帧写 scale 会持续失效
-	# CanvasItem 栅格化；量化后视觉平滑依然保全，重绘写入降频 70%（2026-10-13 优化）
+	# 台阶量化写入（snappedf 0.04）：35 条跳字若每帧写 scale 会持续打断 CanvasItem
+	# 变换批处理；量化后视觉平滑依然保全，重绘写入降频 70%（2026-10-13 优化）
 	var s: float
 	if _is_crit:
 		if _t < POP_DUR_CRIT:

@@ -55,6 +55,10 @@ var _mute_chk: CheckBox
 func _get_title_text() -> String:
 	return "修 仙 指 南"
 
+## 标题块是浅色底，黑字对比更清楚
+func _get_title_color() -> Color:
+	return GameStyle.INK_TEXT
+
 func _get_close_btn_text() -> String:
 	return "跳 过"
 

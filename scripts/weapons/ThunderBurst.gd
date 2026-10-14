@@ -4,7 +4,7 @@ extends Node2D
 ## 五雷法牌的落雷爆发：命中范围内所有敌人一次，短暂闪光后回池休眠
 ##
 ## 对象池（2026-10-11 第 6 波卡顿优化，照 EnemyBolt/AstralGem 模式）：雷法连发时
-## Node2D + PointLight2D + 雷柱/镇岳印子节点整套 instantiate/queue_free 归零，灯体随复用免重建。
+## Node2D + PointLight2D + 雷柱子节点整套 instantiate/queue_free 归零，灯体随复用免重建。
 ## 兼容约定：出膛方必须走 acquire(parent, scene) → 逐项写字段 → activate()（唯一调用方
 ## FloatingWeapon._spawn_lightning）；_ready 只建常驻设施不触发爆发，裸 add_child 不再自动起爆。
 
@@ -13,8 +13,6 @@ var damage: float = 35.0
 var knockback_base: float = 200.0
 ## 落点闪光色（由 FloatingWeapon 从 WeaponData.burst_tint 下发）：光环直径仍 == 判定直径，只换色相
 var tint: Color = Color(1.0, 0.95, 0.6)
-## 落点"砸下来的东西"（番天镇岳印 = 程序化玄石大印 SealImpactFx）；false = 只留光环与光柱
-var show_seal: bool = false
 ## 落点形态（由 FloatingWeapon 从 WeaponData.burst_kind 下发，须在 activate() 前赋值）：
 ## thunder（默认，天雷柱）/ fire_rain 火雨 / frost 冰刺 / sonic 音波 / drum 鼓震 / earth 地裂 / seal 坠印扬尘
 var burst_kind: String = "thunder"
@@ -75,16 +73,16 @@ func _ready() -> void:
 	# 池化首建时字段尚未写入，_ready 不读任何业务字段
 	pass
 
-## 起爆激活：视觉重置 → 雷柱/镇岳印 → 演出与结算。复用时 _ready 已跑过一次，
-## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/show_seal/sfx/_struck/burst_kind）
+## 起爆激活：视觉重置 → 雷柱 → 演出与结算。复用时 _ready 已跑过一次，
+## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/sfx/_struck/burst_kind）
 func activate() -> void:
 	_pooled = false
 	visible = true
 	# 劈没劈到人由同帧 deferred 的 _deal_damage 置位（先于 _bloom_or_recycle 回调）
 	_struck = false
-	# 上一发的雷柱与镇岳印已在爆发中淡出，直接清掉再铺新的
+	# 上一发的雷柱与印尘环已在爆发中淡出，直接清掉再铺新的
 	for c in get_children():
-		if c is Line2D or c is SealImpactFx or (c is Sprite2D and c != fx_sprite):
+		if c is Line2D or (c is Sprite2D and c != fx_sprite):
 			c.queue_free()
 	fx_sprite.scale = Vector2.ONE * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
@@ -93,7 +91,6 @@ func activate() -> void:
 	# 火雨再立一根雷柱就是「文案说火雨画面是闪电」的旧错位）
 	if burst_kind == "thunder" or burst_kind == "":
 		_spawn_sky_beam()
-	_spawn_impact_seal()
 	if _kind_fx == null:
 		_kind_fx = BurstKindFx.new()
 		_kind_fx.name = "KindFx"
@@ -148,22 +145,6 @@ func _recycle() -> void:
 		queue_free()
 		return
 	_pool.append(self)
-
-## 落点之物：把武器真正砸下去的那件东西画在爆心（尺寸由 radius 一个量决定，与判定同源）
-## 巨印的印体是纯矢量 SealImpactFx（2026-10-14 取代 AI 位图 weapon_earth_seal.png）
-func _spawn_impact_seal() -> void:
-	if not show_seal:
-		return
-	var seal := SealImpactFx.new()
-	seal.size = radius * 1.4
-	seal.tint = tint
-	seal.z_index = 0
-	seal.modulate = Color(1.0, 1.0, 1.0, 0.95)
-	add_child(seal)
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(seal, "scale", Vector2.ONE, 0.08).from(Vector2.ONE * 1.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(seal, "modulate:a", 0.0, 0.34).set_delay(0.06)
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
 func _spawn_sky_beam() -> void:

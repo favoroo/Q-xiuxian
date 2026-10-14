@@ -20,8 +20,8 @@ const SONIC_RINGS := 3     ## 音波环数
 const EARTH_CRACKS := 6    ## 地裂条数
 
 var _t: float = 0.0
-## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 30Hz 足够流畅
-const REDRAW_INTERVAL := 0.0333
+## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 20Hz 足够流畅
+const REDRAW_INTERVAL := 0.05
 var _draw_phase: float = 0.0
 
 func _ready() -> void:
@@ -189,16 +189,26 @@ func _draw_earth() -> void:
 			pos + Vector2(-s, s * 0.5), pos + Vector2(0, -s), pos + Vector2(s, s * 0.4)]),
 			Color(tint.r * 0.85, tint.g * 0.8, tint.b * 0.7, 0.85 * fade))
 
-## 坠印扬尘：印玺砸落扬起的一圈低尘环（巨印专属，印体走 SealImpactFx）
+## 坠印扬尘（巨印落点形态，2026-10-15 重构）：大印不再画实体——旧 SealImpactFx 方印
+## 是一张糊在爆心的大图，违和。改读「砸下去之后地面发生什么」：一记快速砸开的
+## 重冲击环压场 + 一圈低扬尘环 + 尘点四溅，全部几何由 radius 派生（画多大==判多大）
 func _draw_seal_dust() -> void:
+	var fade := 1.0 - clampf((_t - 0.22) / (DUR - 0.22), 0.0, 1.0)
+	# 重冲击环：0.16s 内从爆心砸到判定内缘，粗→细快速收细，给出「重物落地的第一拍」
+	var slam_p: float = clampf(_t / 0.16, 0.0, 1.0)
+	if slam_p > 0.0 and slam_p < 1.0:
+		var slam_r := radius * (0.15 + 0.75 * slam_p)
+		var slam_a := 0.75 * (1.0 - slam_p) * maxf(fade, 0.35)
+		draw_arc(Vector2.ZERO, slam_r, 0.0, TAU, 44,
+			Color(tint.r, tint.g, tint.b, slam_a), 6.5 - 4.5 * slam_p)
+	# 低扬尘环：冲击环过后贴地翻起，慢速外扩
 	var p: float = clampf(_t / 0.3, 0.0, 1.0)
 	var a := 0.4 * (1.0 - p)
-	if a <= 0.0:
-		return
-	var dust := Color(tint.r * 0.7, tint.g * 0.65, tint.b * 0.55, a)
-	draw_arc(Vector2.ZERO, radius * (0.4 + 0.6 * p), 0.0, TAU, 40, dust, 3.0 - p)
-	for k in 10:
-		var ang := float(k) * TAU / 10.0 + 0.15
-		var dir := Vector2(cos(ang), sin(ang))
-		var r := radius * (0.35 + 0.55 * p)
-		draw_circle(dir * r, 2.0, dust)
+	if a > 0.0:
+		var dust := Color(tint.r * 0.7, tint.g * 0.65, tint.b * 0.55, a)
+		draw_arc(Vector2.ZERO, radius * (0.4 + 0.6 * p), 0.0, TAU, 40, dust, 3.0 - p)
+		for k in 10:
+			var ang := float(k) * TAU / 10.0 + 0.15
+			var dir := Vector2(cos(ang), sin(ang))
+			var r := radius * (0.35 + 0.55 * p)
+			draw_circle(dir * r, 2.0, dust)

@@ -153,6 +153,24 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless" and not Engine.is_editor_hint():
 		call_deferred("_setup_headless_guard")
 
+# ---------------- 中断续玩（2026-10-15，落盘与恢复在 RunSave） ----------------
+
+## 战斗中自动存档间隔（秒）：波内金币/经验/血量以最后一次快照为准，本波从头重打
+const AUTOSAVE_INTERVAL: float = 3.0
+var _autosave_cd: float = AUTOSAVE_INTERVAL
+
+## 应用生命周期兜底：Android 上滑杀进程/Home 键、系统返回键、桌面关窗 ——
+## 这些路径没有别的存档点，同步写一份。通知不受树暂停门控，商店/悟道面板开着也收得到；
+## 非局内态（没开局/已结算）由 RunSave.save_from 自行拒绝，无需在此判断。
+## （Godot 4.7 无 APPLICATION_TERMINATING 通知；Android 划掉应用也不发任何通知，
+## 兜底靠 PAUSED 这一根 —— 3 秒自动存已把窗口收窄到可接受）
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_PAUSED, \
+		NOTIFICATION_WM_CLOSE_REQUEST, \
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			RunSave.autosave_current(self)
+
 ## 无头守护时长（秒）：兜底抓「真挂起」，不该顺手把「真在干活的慢判据」一起打死。
 ## 判据卡数涨上来后 45s 会变成误杀线（ManualHotzoneCheck 115 张卡 × 12 取样点实测 ~55s），
 ## 所以慢判据在自己的 _ready 里把本值调大即可 —— autoload 的 call_deferred 在场景 _ready
@@ -451,6 +469,7 @@ func reset_run() -> void:
 	# 70+ 单局成员的清零表在 RunReset（显式类型化赋值），新增成员记得去那边补默认值
 	RunReset.reset(self)
 	_stat_dict_frame = -1  # 属性字典 memo 随之作废，防止同帧后续读旧属性
+	_autosave_cd = AUTOSAVE_INTERVAL  # 自动存档计时归位，新开局头几秒不落盘
 
 func _process(delta: float) -> void:
 	# 顿帧恢复（零分配轮询）：GameFeel.hit_stop 只写下恢复时刻，到点还原时间轴
@@ -468,18 +487,24 @@ func _process(delta: float) -> void:
 		frenzy_idle += delta
 		frenzy_stacks = FrenzyData.decay(frenzy_stacks, frenzy_idle, delta)
 
-	if not is_game_over and not get_tree().paused and player != null:
-		game_time += delta
-		_lifesteal_window += delta
-		if _lifesteal_window >= 1.0:
-			_lifesteal_window = 0.0
-			_lifesteal_procs = 0
-		# HUD 只关心「斩妖/金币/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
-		# 数值真正变化时由各事件函数自己 emit，不必每帧重画 60 次。
-		_hud_tick += delta
-		if _hud_tick >= 0.2:
-			_hud_tick = 0.0
-			stats_updated.emit(kills, game_time, spirit_stones)
+		if not is_game_over and not get_tree().paused and player != null:
+			game_time += delta
+			_lifesteal_window += delta
+			if _lifesteal_window >= 1.0:
+				_lifesteal_window = 0.0
+				_lifesteal_procs = 0
+			# HUD 只关心「斩妖/金币/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
+			# 数值真正变化时由各事件函数自己 emit，不必每帧重画 60 次。
+			_hud_tick += delta
+			if _hud_tick >= 0.2:
+				_hud_tick = 0.0
+				stats_updated.emit(kills, game_time, spirit_stones)
+			# 中断续玩自动存档：只在 FIGHT 计时（树一暂停就轮不到这里——ALLOC/SHOP 各有
+			# 阶段边界钩子），headless 下 RunSave 自拒，判据测试不落盘
+			_autosave_cd += delta
+			if _autosave_cd >= AUTOSAVE_INTERVAL:
+				_autosave_cd = 0.0
+				RunSave.autosave_current(self)
 
 # ---------------- 经验 / 金币 ----------------
 
@@ -1174,6 +1199,8 @@ func trigger_game_over(victory: bool = false) -> void:
 	_hitstop_token += 1
 	_hitstop_deadline_ms = 0
 	is_game_over = true
+	# 本局已终结、战报已录入局外进度：中断续玩档随之作废
+	RunSave.clear_save()
 	if victory:
 		_maybe_unlock_danger()
 	_record_run_and_check_achievements(victory)

@@ -64,6 +64,8 @@ var extra_skill_cd_total: float = 1.0 ## 额外技能总冷却（算遮罩比例
 var _skill_active_kind: int = -1   ## 活跃窗口对应的技能 Kind（收尾钩子用，-1 = 无活跃技能）
 var _skill_pending_cd: float = 0.0 ## 效果结束后要进入的冷却值（施放时暂存）
 var _skill_buffs: Dictionary = {}  ## 进行中的短时增益：buff id -> 剩余秒（gale / haste）
+var _gale_cap_forced: bool = false ## 神行术这轮是否把闪避上限临时抬到 1.0（影者 100% 闪避专属）
+var _gale_cap_before: float = 0.0  ## 抬上限前那一帧的角色抬升值（回滚按它还原，别拿算式反推）
 var _dash_time: float = 0.0        ## 冲刺剩余秒（>0 期间移动被冲刺接管）
 var _dash_dir: Vector2 = Vector2.DOWN
 var _dash_speed: float = 0.0
@@ -506,6 +508,13 @@ func _tick_skill_buffs(delta: float) -> void:
 			"gale":
 				GameManager.buff_move_speed_mult = 1.0
 				GameManager.buff_dodge = 0.0
+				# 100% 闪避抬的那段上限一并还原到抬升前的角色档（90%）：只回 buff 不回上限，闪避率会
+				# 停在 90%+ 而加成早已归零 ⇒ 面板读一个比实际高的数（铁律 6：渲染层只读状态）。
+				# 按 cast 前快照还原而不是拿算式反推：角色抬升可能被 reset_run/换装中途改过，
+				# 减去固定增量会把别人的账算到自己头上。
+				if _gale_cap_forced:
+					GameManager.dodge_cap_bonus = _gale_cap_before
+					_gale_cap_forced = false
 			"haste":
 				GameManager.buff_attack_speed_mult = 1.0
 			"elixir":
@@ -657,7 +666,15 @@ func _release_elixir() -> void:
 func _do_gale(st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
 	# 罡风护身：加速期间身法闪避大幅提升（到期与移速乘区同帧精确归零）
-	GameManager.buff_dodge = float(st.get("dodge_add", 0.0))
+	var dodge_add: float = float(st.get("dodge_add", 0.0))
+	GameManager.buff_dodge = dodge_add
+	# 100% 闪避（影者契合）：角色抬升只到 90% 的硬上限会把它截成 90% ⇒ 期间把上限临时
+	# 抬到 1.0，buff 走完由 _tick_skill_buffs 按抬升前的原值精确还原（与 buff_dodge 同帧，不留残留）
+	const FULL_DODGE_EPS := 0.0001
+	_gale_cap_forced = dodge_add >= 1.0 - FULL_DODGE_EPS
+	if _gale_cap_forced:
+		_gale_cap_before = GameManager.dodge_cap_bonus
+		GameManager.dodge_cap_bonus = maxf(GameManager.dodge_cap_bonus, 1.0 - GameManager.DODGE_CAP)
 	_skill_buffs["gale"] = float(st["duration"])
 	play_squash(Vector2(0.85, 1.2), 0.2)
 	if skill_vfx != null:

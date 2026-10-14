@@ -41,16 +41,16 @@ func _draw_front() -> void:
 	])
 	draw_stroked_polygon(body_pts, ROBE_YELLOW, OUTLINE, OUTLINE_W)
 	# 底部饱满立体阴影
-	draw_arc(Vector2(0, 11 + bob), 13.0, 0.15, PI - 0.15, 16, ROBE_SHADOW, 4.2)
+	_arc(Vector2(0, 11 + bob), 13.0, 0.15, PI - 0.15, 16, ROBE_SHADOW, 4.2)
 
 	# 5. 胸前八卦太极徽标
 	var bagua_center := Vector2(0, -4 + bob)
 	draw_stroked_circle(bagua_center, 6.0, Color.WHITE, OUTLINE, 1.8)
 	# 太极黑白鱼
-	draw_circle(bagua_center + Vector2(0, -2.5), 2.8, BELT_BLACK)
-	draw_circle(bagua_center + Vector2(0, 2.5), 2.8, Color.WHITE)
-	draw_circle(bagua_center + Vector2(0, -2.5), 1.0, Color.WHITE)
-	draw_circle(bagua_center + Vector2(0, 2.5), 1.0, BELT_BLACK)
+	_circle(bagua_center + Vector2(0, -2.5), 2.8, BELT_BLACK)
+	_circle(bagua_center + Vector2(0, 2.5), 2.8, Color.WHITE)
+	_circle(bagua_center + Vector2(0, -2.5), 1.0, Color.WHITE)
+	_circle(bagua_center + Vector2(0, 2.5), 1.0, BELT_BLACK)
 
 	# 7. 头部发髻、朱砂降魔抹额与小木簪
 	var bun_y := -25.0 + bob
@@ -59,24 +59,24 @@ func _draw_front() -> void:
 	# 红色抹额横跨前额
 	draw_line(Vector2(-12, bun_y + 7), Vector2(12, bun_y + 7), OUTLINE, OUTLINE_W + 2.0)
 	draw_line(Vector2(-12, bun_y + 7), Vector2(12, bun_y + 7), ROBE_INNER_RED, OUTLINE_W)
-	draw_circle(Vector2(0, bun_y + 7), 2.0, Color(1.0, 0.85, 0.20)) # 抹额金扣
+	_circle(Vector2(0, bun_y + 7), 2.0, Color(1.0, 0.85, 0.20)) # 抹额金扣
 
 	# 8. 招牌狡黠大白眼 + 嘴叼灵草
 	var eye_y := -11.0 + bob
 	# 左眼（稍大）
 	draw_stroked_ellipse(Vector2(-6.5, eye_y), 5.8, 6.2, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(Vector2(-5.5, eye_y + 0.5), 2.4, OUTLINE)
-	draw_circle(Vector2(-6.2, eye_y - 1.2), 1.0, Color.WHITE)
+	_circle(Vector2(-5.5, eye_y + 0.5), 2.4, OUTLINE)
+	_circle(Vector2(-6.2, eye_y - 1.2), 1.0, Color.WHITE)
 	# 右眼（微眯，体现自信狡黠）
 	draw_stroked_ellipse(Vector2(6.5, eye_y), 5.2, 5.8, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(Vector2(7.2, eye_y + 0.5), 2.2, OUTLINE)
-	draw_circle(Vector2(6.5, eye_y - 1.0), 0.9, Color.WHITE)
+	_circle(Vector2(7.2, eye_y + 0.5), 2.2, OUTLINE)
+	_circle(Vector2(6.5, eye_y - 1.0), 0.9, Color.WHITE)
 
 	# 嘴角微扬与叼着的青翠灵草
-	draw_arc(Vector2(1, eye_y + 7.0), 3.0, 0.2, PI - 0.2, 8, OUTLINE, 2.0)
+	_arc(Vector2(1, eye_y + 7.0), 3.0, 0.2, PI - 0.2, 8, OUTLINE, 2.0)
 	# 嘴边叼着的一根灵草叶
 	draw_line(Vector2(3, eye_y + 6.5), Vector2(11, eye_y + 4.5), Color(0.25, 0.80, 0.45), 2.0)
-	draw_circle(Vector2(11, eye_y + 4.5), 1.5, Color(0.40, 0.95, 0.60))
+	_circle(Vector2(11, eye_y + 4.5), 1.5, Color(0.40, 0.95, 0.60))
 
 	# 9. 玄黑护腕双手
 	draw_stroked_circle(Vector2(-16, 7 + bob), 4.2, BELT_BLACK, OUTLINE, OUTLINE_W)
@@ -125,8 +125,8 @@ func _draw_side() -> void:
 	# 6. 单颗特大专注大白眼
 	var eye_pos := Vector2(9, -11 + bob)
 	draw_stroked_ellipse(eye_pos, 6.8, 7.2, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(eye_pos + Vector2(3.0, 0), 2.8, OUTLINE)
-	draw_circle(eye_pos + Vector2(2.0, -2.0), 1.2, Color.WHITE)
+	_circle(eye_pos + Vector2(3.0, 0), 2.8, OUTLINE)
+	_circle(eye_pos + Vector2(2.0, -2.0), 1.2, Color.WHITE)
 
 	# 侧面叼着的灵草向前伸展
 	draw_line(eye_pos + Vector2(4, 8), eye_pos + Vector2(15, 6), Color(0.25, 0.80, 0.45), 2.2)
@@ -160,8 +160,8 @@ func _draw_back() -> void:
 	# 后背大太极印纹
 	var bagua_center := Vector2(0, -2 + bob)
 	draw_stroked_circle(bagua_center, 7.5, Color.WHITE, OUTLINE, 2.0)
-	draw_circle(bagua_center + Vector2(0, -3.2), 3.5, BELT_BLACK)
-	draw_circle(bagua_center + Vector2(0, 3.2), 3.5, Color.WHITE)
+	_circle(bagua_center + Vector2(0, -3.2), 3.5, BELT_BLACK)
+	_circle(bagua_center + Vector2(0, 3.2), 3.5, Color.WHITE)
 
 	# 5. 后脑发髻与木簪
 	var bun_y := -25.0 + bob

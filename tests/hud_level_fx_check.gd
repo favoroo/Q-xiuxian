@@ -68,8 +68,11 @@ func _run() -> void:
 	_c.check(badge.scale.is_equal_approx(Vector2.ONE), "徽记缩放复位（squash 回弹不留残形）")
 	var after_bg: Color = badge.get_theme_stylebox("panel").bg_color
 	_c.check(after_bg.is_equal_approx(pre_bg), "徽记底色复位回主蓝（金色闪变不停在错误配色上）")
-	var label: Label = badge.get_node("LevelLabel")
+	var label: Label = badge.get_node("VBox/LevelLabel")
 	_c.check(label.scale.is_equal_approx(Vector2.ONE), "Lv 数字脉冲复位")
+	# 经验条金闪与徽记底色同拍，动画结束必须复位回场景原配绿（私有副本停在金色就是状态损坏）
+	var fill_style: StyleBoxFlat = badge.get_node("VBox/ExpBar").get_theme_stylebox("fill")
+	_c.check(fill_style.bg_color.is_equal_approx(Color(0.31, 0.82, 0.647, 1)), "经验条填充色金闪后复位回绿")
 	if flash != null:
 		_c.near(flash.modulate.a, 0.0, 0.001, "全屏金光熄灭（不留常亮色块）")
 	else:

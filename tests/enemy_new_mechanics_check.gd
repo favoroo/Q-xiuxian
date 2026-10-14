@@ -12,6 +12,8 @@ extends Node
 ##   ⑧ 预判冲锋：charge_aim_lead>0 时锁向冲向「玩家位置 + 玩家速度 × lead」预判点
 ##   ⑨ 火球蓄力：起手进蓄力站定段，蓄力满才发射；受击硬直打断蓄力不发弹
 ##   ⑩ 死亡爆散：JuiceEffect.spawn_death_burst 受单物理帧预算闸（≤3 处/帧）
+## 2026-10-15 追加（金蟾逃窜行为优化：软墙绕场，不再楔角落趴窝）。钉死一件事：
+##   ②b 金蟾被逼向角落时沿墙反流离场：仍在动、离角落越来越远（软墙绕场回归）
 ## 运行: godot --headless --path . res://tests/EnemyNewMechanicsCheck.tscn
 ## 只摆一个裸 world + 真 Player + 按需单只妖物，不跑波次（别的怪会污染读数）。
 
@@ -53,6 +55,7 @@ func _run() -> void:
 
 	await _case_healer()
 	await _case_looter_flee()
+	await _case_looter_corner()
 	await _case_looter_stones()
 	await _case_mutation_once()
 	await _case_golem_slam()
@@ -115,6 +118,23 @@ func _case_looter_flee() -> void:
 	var to_player: Vector2 = (_player.global_position - jinchan.global_position).normalized()
 	_c.check(jinchan.velocity.dot(to_player) < 0.0, "金蟾速度背离玩家（点积 %.2f < 0）" % jinchan.velocity.dot(to_player))
 	_c.check(jinchan.velocity.length() > 50.0, "金蟾真的在跑（不是站着不动）")
+	jinchan.queue_free()
+	await get_tree().process_frame
+
+## ②b 金蟾：被逼墙角不楔入（软墙绕场：沿墙反流、离角落越来越远）
+func _case_looter_corner() -> void:
+	# 玩家在 (0,0) 场心，金蟾放右上角软墙带内：纯径向逃离正指角落（旧版会楔进去趴窝）
+	var jinchan := _spawn_enemy("res://scenes/entities/JinChanEnemy.tscn", Vector2(390, 380))
+	await get_tree().process_frame
+	var corner := Vector2(GameManager.MAP_HALF_EXTENT - 20.0, GameManager.MAP_HALF_EXTENT - 20.0)
+	var dist_start: float = jinchan.global_position.distance_squared_to(corner)
+	var t := 0.0
+	while t < 1.0:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0 * 8.0
+	var dist_end: float = jinchan.global_position.distance_squared_to(corner)
+	_c.check(jinchan.velocity.length() > 50.0, "金蟾被逼墙角仍在流动（速度 %.0f）" % jinchan.velocity.length())
+	_c.check(dist_end > dist_start, "金蟾贴墙绕场远离角落（d² %.0f → %.0f）" % [dist_start, dist_end])
 	jinchan.queue_free()
 	await get_tree().process_frame
 

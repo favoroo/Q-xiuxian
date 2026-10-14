@@ -72,8 +72,8 @@ func _draw_front() -> void:
 	# 凌厉两道青光目芒
 	draw_line(Vector2(-5.0, -12), Vector2(-1.5, -11.5), EYE_CYAN, 2.0)
 	draw_line(Vector2(1.5, -11.5), Vector2(5.0, -12), EYE_CYAN, 2.0)
-	draw_circle(Vector2(-3.2, -12), 1.0, Color.WHITE)
-	draw_circle(Vector2(3.2, -12), 1.0, Color.WHITE)
+	_circle(Vector2(-3.2, -12), 1.0, Color.WHITE)
+	_circle(Vector2(3.2, -12), 1.0, Color.WHITE)
 
 	# 7. 武士零灵魂所在：狂暴飞舞的荧光翡翠长围巾/飘带
 	var scarf_pts: PackedVector2Array = [
@@ -118,8 +118,8 @@ func _draw_side() -> void:
 
 	# 4. 瞬杀拔刀！前方挥出的耀眼霓虹青斩击弧线
 	var arc_center := Vector2(14, 4)
-	draw_arc(arc_center, 24.0, deg_to_rad(-70.0), deg_to_rad(45.0), 20, NEON_JADE, 3.6, true)
-	draw_arc(arc_center, 24.0, deg_to_rad(-65.0), deg_to_rad(40.0), 20, Color.WHITE, 1.6, true)
+	_arc(arc_center, 24.0, deg_to_rad(-70.0), deg_to_rad(45.0), 20, NEON_JADE, 3.6, true)
+	_arc(arc_center, 24.0, deg_to_rad(-65.0), deg_to_rad(40.0), 20, Color.WHITE, 1.6, true)
 	draw_soft_glow(arc_center + Vector2(18, -10), 16.0, NEON_JADE_GLOW, 4)
 
 	# 5. 身后笔直向后暴烈撕裂的荧光围巾
@@ -159,12 +159,12 @@ func _draw_back() -> void:
 	draw_polyline(sheath_pts, HIGHLIGHT_EDGE, 1.0, true)
 	# 剑鞘上的荧光青绿道法符文点线
 	draw_line(Vector2(-1, 14), Vector2(9, -6), NEON_JADE, 2.2)
-	draw_circle(Vector2(4, 4), 2.4, NEON_JADE)
+	_circle(Vector2(4, 4), 2.4, NEON_JADE)
 	draw_soft_glow(Vector2(4, 4), 6.0, NEON_JADE_GLOW, 2)
 
 	# 4. 后脑束发与发簪
-	draw_circle(Vector2(0, -14), 8.5, SHADOW_BODY)
-	draw_arc(Vector2(0, -14), 8.5, 0, TAU, 24, HIGHLIGHT_EDGE, 1.2, true)
+	_circle(Vector2(0, -14), 8.5, SHADOW_BODY)
+	_arc(Vector2(0, -14), 8.5, 0, TAU, 24, HIGHLIGHT_EDGE, 1.2, true)
 	draw_line(Vector2(-9, -15), Vector2(9, -15), Color(0.85, 0.72, 0.25), 1.8)
 
 	# 5. 向左右两侧暴烈吹卷的荧光围巾

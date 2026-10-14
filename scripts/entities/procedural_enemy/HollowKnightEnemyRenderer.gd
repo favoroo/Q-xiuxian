@@ -99,11 +99,11 @@ func _draw() -> void:
 		var ring_pulse := sin(_time * 2.4) * 0.06 + 0.94
 		if config.is_boss:
 			var boss_col := Color(0.85, 0.22, 0.28, 0.55 * ring_pulse)
-			draw_arc(Vector2(0, 15), ring_r + 3.0, 0.0, TAU, 40, boss_col, 3.2, true)
-			draw_arc(Vector2(0, 15), ring_r * 0.8, 0.0, TAU, 40, Color(boss_col.r, boss_col.g, boss_col.b, 0.30), 1.4, true)
+			_arc(Vector2(0, 15), ring_r + 3.0, 0.0, TAU, 40, boss_col, 3.2, true)
+			_arc(Vector2(0, 15), ring_r * 0.8, 0.0, TAU, 40, Color(boss_col.r, boss_col.g, boss_col.b, 0.30), 1.4, true)
 		else:
 			var elite_col := Color(0.92, 0.86, 0.70, 0.50 * ring_pulse)
-			draw_arc(Vector2(0, 15), ring_r, 0.0, TAU, 32, elite_col, 2.4, true)
+			_arc(Vector2(0, 15), ring_r, 0.0, TAU, 32, elite_col, 2.4, true)
 
 	# 根据敌种 ID 派发专属绘制管线
 	match config.enemy_id:
@@ -151,30 +151,50 @@ func _draw() -> void:
 
 # ==================== 1. 基础几何与空洞风图元绘制工具 ====================
 
+## 自适应圆/弧段数（2026-10-14 性能优化）：内置 draw_circle 固定 64 段，
+## 小至 1px 的眸光点也付 64 三角形的钱；本渲染器的 draw_circle/draw_arc 统一走这两个包装，
+## 按半径与弧角张量自适应 6~32 段。静态缓冲复用，_draw 在主线程串行执行，无重入风险。
+static var _circle_buf := PackedVector2Array()
+static var _stroke_buf := PackedVector2Array()
+
+func _circle(center: Vector2, radius: float, col: Color) -> void:
+	var seg := clampi(int(radius * 1.4), 6, 28)
+	_circle_buf.resize(seg)
+	for i in range(seg):
+		var ang := float(i) * TAU / float(seg)
+		_circle_buf[i] = center + Vector2(cos(ang), sin(ang)) * radius
+	draw_colored_polygon(_circle_buf, col)
+
+func _arc(center: Vector2, radius: float, start_angle: float, end_angle: float, _point_count: int, color: Color, width: float = 1.0, antialiased: bool = false) -> void:
+	var seg := clampi(int(radius * absf(end_angle - start_angle) * 0.22), 6, 32)
+	draw_arc(center, radius, start_angle, end_angle, seg, color, width, antialiased)
+
 func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: Color, stroke_w: float = 1.8) -> void:
 	if pts.size() < 3:
 		return
 	draw_colored_polygon(pts, fill_col)
-	var closed := pts.duplicate()
-	closed.append(pts[0])
-	draw_polyline(closed, stroke_col, stroke_w, true)
+	var n := pts.size()
+	_stroke_buf.resize(n + 1)
+	for i in range(n):
+		_stroke_buf[i] = pts[i]
+	_stroke_buf[n] = pts[0]
+	draw_polyline(_stroke_buf, stroke_col, stroke_w, true)
 
 func draw_filled_ellipse(pos: Vector2, rx: float, ry: float, col: Color) -> void:
 	if rx <= 0.01 or ry <= 0.01:
 		return
-	var segments := 24
-	var pts := PackedVector2Array()
-	pts.resize(segments)
+	var segments := clampi(int(maxf(rx, ry) * 1.2), 10, 24)
+	_circle_buf.resize(segments)
 	for i in range(segments):
 		var ang := float(i) * TAU / float(segments)
-		pts[i] = pos + Vector2(cos(ang) * rx, sin(ang) * ry)
-	draw_colored_polygon(pts, col)
+		_circle_buf[i] = pos + Vector2(cos(ang) * rx, sin(ang) * ry)
+	draw_colored_polygon(_circle_buf, col)
 
 func draw_soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) -> void:
 	for i in range(layers, 0, -1):
 		var r := radius * (float(i) / float(layers))
 		var a := col.a * (0.28 / float(i))
-		draw_circle(pos, r, Color(col.r, col.g, col.b, a))
+		_circle(pos, r, Color(col.r, col.g, col.b, a))
 
 func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, col_core: Color) -> void:
 	# 绘制狭长冷眸（外层幽光 + 内层锐核）
@@ -246,7 +266,7 @@ func _draw_xiexiu() -> void:
 	if casting:
 		# 剑尖聚光：出膛方向的前端一点暖白亮核，读「火球将从此处出」
 		var tip_pos := t_sword * Vector2(19, 0)
-		draw_circle(tip_pos, 2.6 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
+		_circle(tip_pos, 2.6 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
 	var blade_pts := PackedVector2Array([
 		t_sword * Vector2(-16, -2),
 		t_sword * Vector2(14, -1),
@@ -299,8 +319,8 @@ func _draw_danbao() -> void:
 	var urn_r := 11.0 + boil_pulse
 
 	# 鼎炉外壳
-	draw_circle(urn_center, urn_r, config.col_primary)
-	draw_arc(urn_center, urn_r, 0, TAU, 24, config.col_secondary, 2.0, true)
+	_circle(urn_center, urn_r, config.col_primary)
+	_arc(urn_center, urn_r, 0, TAU, 24, config.col_secondary, 2.0, true)
 
 	# 炉身灼热地火裂纹
 	var glow_c := config.col_glow if not is_critical else Color(1.2, 0.2, 0.1)
@@ -311,7 +331,7 @@ func _draw_danbao() -> void:
 
 	# 炉顶青铜小盖与炉耳
 	draw_filled_ellipse(urn_center + Vector2(0, -urn_r + 1), 7.0, 3.2, config.col_secondary)
-	draw_circle(urn_center + Vector2(0, -urn_r - 2), 2.2, config.col_accent)
+	_circle(urn_center + Vector2(0, -urn_r - 2), 2.2, config.col_accent)
 	draw_line(urn_center + Vector2(-urn_r - 2, -2), urn_center + Vector2(-urn_r + 1, 2), config.col_secondary, 2.2, true)
 	draw_line(urn_center + Vector2(urn_r - 1, 2), urn_center + Vector2(urn_r + 2, -2), config.col_secondary, 2.2, true)
 
@@ -364,8 +384,8 @@ func _draw_fengqun() -> void:
 	# 剧毒磷光复眼
 	draw_soft_glow(body_pos + Vector2(-2.5, -4), 4.0, config.col_glow, 2)
 	draw_soft_glow(body_pos + Vector2(2.5, -4), 4.0, config.col_glow, 2)
-	draw_circle(body_pos + Vector2(-2.5, -4), 1.6, Color.WHITE)
-	draw_circle(body_pos + Vector2(2.5, -4), 1.6, Color.WHITE)
+	_circle(body_pos + Vector2(-2.5, -4), 1.6, Color.WHITE)
+	_circle(body_pos + Vector2(2.5, -4), 1.6, Color.WHITE)
 
 	# 下垂毒针尾囊
 	var stinger_pts := PackedVector2Array([
@@ -404,7 +424,7 @@ func _draw_flower() -> void:
 		draw_stroked_polygon(petal_pts, config.col_primary, config.col_secondary, 1.4)
 
 	# 花心深渊虚空与噬灵邪眼
-	draw_circle(center, 5.5, config.col_void)
+	_circle(center, 5.5, config.col_void)
 	draw_sharp_eye(center, 4.2, 2.5, config.col_glow, Color.WHITE)
 
 ## 6. 血蛹：九幽血茧 (贴地拱动与心跳搏动)
@@ -422,7 +442,7 @@ func _draw_xueyong() -> void:
 
 	# 暗红血晶茧体
 	draw_filled_ellipse(center, rx, ry, config.col_primary)
-	draw_arc(center, rx, 0, TAU, 28, config.col_accent, 2.0, true)
+	_arc(center, rx, 0, TAU, 28, config.col_accent, 2.0, true)
 
 	# 内部幽微血光核心（心跳明暗）
 	var core_alpha := 0.4 + sin(_time * 3.0) * 0.25
@@ -461,7 +481,7 @@ func _draw_duyao() -> void:
 	# 苔痕皮瘤（背上一串）
 	for i in range(3):
 		var bx: float = -6.0 + float(i) * 6.0
-		draw_circle(body_c + Vector2(bx, -7.5), 1.6, config.col_accent)
+		_circle(body_c + Vector2(bx, -7.5), 1.6, config.col_accent)
 
 	# 脓黄斑块（侧腹两团）
 	draw_filled_ellipse(body_c + Vector2(-7.5, 2), 3.0, 2.2, config.col_secondary)
@@ -471,10 +491,10 @@ func _draw_duyao() -> void:
 	var sac_c := body_c + Vector2(-2.0, -14.0)
 	var sac_r: float = 7.5 * sac_pulse
 	draw_filled_ellipse(sac_c, sac_r, sac_r * 0.92, config.col_secondary)
-	draw_arc(sac_c, sac_r, 0, TAU, 24, config.col_accent, 2.0, true)
+	_arc(sac_c, sac_r, 0, TAU, 24, config.col_accent, 2.0, true)
 	var core_alpha: float = 0.5 + (0.45 if casting else 0.0)
 	draw_soft_glow(sac_c, sac_r * 0.8, config.col_glow * Color(1, 1, 1, core_alpha), 2)
-	draw_circle(sac_c, sac_r * 0.38, config.col_glow)
+	_circle(sac_c, sac_r * 0.38, config.col_glow)
 	# 囊体与躯体之间的毒液导管
 	draw_line(sac_c + Vector2(3.0, sac_r * 0.7), body_c + Vector2(4.0, -7.0), config.col_secondary, 2.0, true)
 
@@ -487,8 +507,8 @@ func _draw_duyao() -> void:
 	var mouth_y: float = body_c.y + 5.0
 	draw_line(body_c + Vector2(-4.0, mouth_y), body_c + Vector2(4.0, mouth_y), config.col_secondary, 1.6, true)
 	var drip := fposmod(_time * 1.6, 1.0)
-	draw_circle(body_c + Vector2(-3.0, mouth_y + drip * 6.0), 1.2, config.col_glow)
-	draw_circle(body_c + Vector2(3.0, mouth_y + fposmod(_time * 1.6 + 0.5, 1.0) * 6.0), 1.0, config.col_glow)
+	_circle(body_c + Vector2(-3.0, mouth_y + drip * 6.0), 1.2, config.col_glow)
+	_circle(body_c + Vector2(3.0, mouth_y + fposmod(_time * 1.6 + 0.5, 1.0) * 6.0), 1.0, config.col_glow)
 
 ## 8. 鼓妖：白骨摄魂鼓 (律动悬浮敲击)
 func _draw_guyao() -> void:
@@ -500,12 +520,12 @@ func _draw_guyao() -> void:
 
 	# 煞铜重鼓鼓身（略扁椭圆）
 	draw_filled_ellipse(drum_center, 14.5, 12.0, config.col_primary)
-	draw_arc(drum_center, 14.5, 0, TAU, 28, config.col_secondary, 2.2, true)
+	_arc(drum_center, 14.5, 0, TAU, 28, config.col_secondary, 2.2, true)
 
 	# 鼓面太极魔纹与灵玉核心
-	draw_arc(drum_center, 8.5, 0, TAU, 20, config.col_accent, 1.4, true)
+	_arc(drum_center, 8.5, 0, TAU, 20, config.col_accent, 1.4, true)
 	draw_soft_glow(drum_center, 8.0, config.col_glow * Color(1, 1, 1, 0.6), 2)
-	draw_circle(drum_center, 3.2, config.col_glow)
+	_circle(drum_center, 3.2, config.col_glow)
 
 	# 鼓框两侧咬合的白骨獠牙
 	for i in [-1, 1]:
@@ -522,9 +542,9 @@ func _draw_guyao() -> void:
 	var mallet_l := drum_center + Vector2(-18.0 + strike_l * 3.0, -4)
 	var mallet_r := drum_center + Vector2(18.0 - strike_r * 3.0, -4)
 	draw_line(mallet_l, mallet_l + Vector2(-6, -6), config.col_secondary, 2.2, true)
-	draw_circle(mallet_l, 2.4, config.col_secondary)
+	_circle(mallet_l, 2.4, config.col_secondary)
 	draw_line(mallet_r, mallet_r + Vector2(6, -6), config.col_secondary, 2.2, true)
-	draw_circle(mallet_r, 2.4, config.col_secondary)
+	_circle(mallet_r, 2.4, config.col_secondary)
 
 ## 9. 影魅：幽冥影煞 (流体暗影飘掠)
 func _draw_yingmei() -> void:
@@ -574,7 +594,7 @@ func _draw_zhumu() -> void:
 
 	# 巨大深紫魔核躯体
 	draw_filled_ellipse(center, 18.0, 15.0, config.col_primary)
-	draw_arc(center, 18.0, 0, TAU, 32, config.col_accent, 2.2, true)
+	_arc(center, 18.0, 0, TAU, 32, config.col_accent, 2.2, true)
 
 	# 下方蠕动的微弱触手
 	for i in range(-2, 3):
@@ -601,9 +621,9 @@ func _draw_zhumu() -> void:
 		var blink := sin(_time * 4.0 + float(idx) * 1.8)
 		if blink > -0.6: # 未眨眼时睁开
 			var ep := center + offset
-			draw_circle(ep, 2.8, config.col_secondary)
-			draw_circle(ep, 1.6, config.col_void)
-			draw_circle(ep, 0.8, config.col_glow)
+			_circle(ep, 2.8, config.col_secondary)
+			_circle(ep, 1.6, config.col_void)
+			_circle(ep, 0.8, config.col_glow)
 
 ## 11. 雷兽 / 赤雷兽 (低伏巡游与雷煞暴突)
 func _draw_leibeast(is_elite: bool) -> void:
@@ -744,7 +764,7 @@ func _draw_jiansha_elite() -> void:
 		if special_state > 0.0 and i == 1:
 			# 中间主剑剑尖聚光：火球出膛方位预告
 			var tip := t_sw * Vector2(21, 0)
-			draw_circle(tip, 2.4 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
+			_circle(tip, 2.4 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
 
 	# 墨黑金纹魔袍
 	var robe_pts := PackedVector2Array([
@@ -784,7 +804,7 @@ func _draw_boss(final_boss: bool) -> void:
 	var blade_count := 8 if final_boss else 4
 	var wheel_radius := 26.0 if not final_boss else 32.0
 	draw_soft_glow(center, wheel_radius * 1.1, config.col_glow * Color(1, 1, 1, 0.4), 2)
-	draw_arc(center, wheel_radius * 0.8, 0, TAU, 32, config.col_accent, 2.0, true)
+	_arc(center, wheel_radius * 0.8, 0, TAU, 32, config.col_accent, 2.0, true)
 
 	for i in range(blade_count):
 		var ang := wheel_rot + float(i) * (TAU / float(blade_count))
@@ -863,11 +883,11 @@ func _draw_lingyi() -> void:
 	# 背后缓慢旋转的回春光环（治疗者的身份标识）
 	var halo_rot := _time * 0.9
 	draw_soft_glow(center, 16.0, config.col_glow * Color(1, 1, 1, 0.35), 2)
-	draw_arc(center, 13.0, 0, TAU, 24, config.col_accent, 1.4, true)
+	_arc(center, 13.0, 0, TAU, 24, config.col_accent, 1.4, true)
 	for i in range(4):
 		var ang := halo_rot + float(i) * (TAU / 4.0)
 		var r_pos := center + Vector2(cos(ang), sin(ang)) * 13.0
-		draw_circle(r_pos, 1.8, config.col_glow)
+		_circle(r_pos, 1.8, config.col_glow)
 
 	# 药童袍躯（上窄下宽的斗篷轮廓）
 	var robe_pts := PackedVector2Array([
@@ -886,8 +906,8 @@ func _draw_lingyi() -> void:
 	# 头面与温润圆眸
 	var head_pos := center + Vector2(0, -10)
 	draw_filled_ellipse(head_pos, 5.5, 5.0, config.col_void)
-	draw_circle(head_pos + Vector2(-2.2, 0), 1.6, config.col_glow)
-	draw_circle(head_pos + Vector2(2.2, 0), 1.6, config.col_glow)
+	_circle(head_pos + Vector2(-2.2, 0), 1.6, config.col_glow)
+	_circle(head_pos + Vector2(2.2, 0), 1.6, config.col_glow)
 
 ## 16. 金蟾：衔宝金蟾 (胖圆宝兽，口衔铜钱)
 func _draw_jinchan() -> void:
@@ -905,12 +925,12 @@ func _draw_jinchan() -> void:
 	# 胖圆蟾躯与腹甲
 	draw_filled_ellipse(center, 13.5, 11.0, config.col_primary)
 	draw_filled_ellipse(center + Vector2(0, 3), 8.5, 6.0, config.col_secondary)
-	draw_arc(center, 13.5, 0, TAU, 26, config.col_accent, 1.6, true)
+	_arc(center, 13.5, 0, TAU, 26, config.col_accent, 1.6, true)
 
 	# 背后三枚古铜钱纹（方孔钱）
 	for i in range(3):
 		var c_pos := center + Vector2(float(i - 1) * 7.0, -6.0)
-		draw_circle(c_pos, 3.0, config.col_accent)
+		_circle(c_pos, 3.0, config.col_accent)
 		draw_rect(Rect2(c_pos - Vector2(1.0, 1.0), Vector2(2.0, 2.0)), config.col_primary)
 
 	# 口衔大宝钱（身份标识：会转动的方孔金币）
@@ -921,7 +941,7 @@ func _draw_jinchan() -> void:
 
 	# 圆润鼓眼
 	var head_pos := center + Vector2(0, -7)
-	draw_circle(head_pos + Vector2(-4, 0), 2.6, config.col_void)
-	draw_circle(head_pos + Vector2(4, 0), 2.6, config.col_void)
-	draw_circle(head_pos + Vector2(-4, -0.5), 1.1, config.col_glow)
-	draw_circle(head_pos + Vector2(4, -0.5), 1.1, config.col_glow)
+	_circle(head_pos + Vector2(-4, 0), 2.6, config.col_void)
+	_circle(head_pos + Vector2(4, 0), 2.6, config.col_void)
+	_circle(head_pos + Vector2(-4, -0.5), 1.1, config.col_glow)
+	_circle(head_pos + Vector2(4, -0.5), 1.1, config.col_glow)

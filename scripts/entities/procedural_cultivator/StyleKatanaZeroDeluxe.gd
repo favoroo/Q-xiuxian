@@ -32,9 +32,9 @@ func _draw_front() -> void:
 
 	# 2. 双腿站姿（紧绷战靴配冷钢护膝）
 	draw_line(Vector2(-7, 20), Vector2(-8, 28), SUIT_BLACK, 4.5)
-	draw_circle(Vector2(-7.5, 23), 2.2, ARMOR_STEEL) # 护膝
+	_circle(Vector2(-7.5, 23), 2.2, ARMOR_STEEL) # 护膝
 	draw_line(Vector2(7, 20), Vector2(8, 28), SUIT_BLACK, 4.5)
-	draw_circle(Vector2(7.5, 23), 2.2, ARMOR_STEEL)
+	_circle(Vector2(7.5, 23), 2.2, ARMOR_STEEL)
 
 	# 3. 破损流浪者风衣下裳（利落硬折角）
 	var coat_pts: PackedVector2Array = [
@@ -84,8 +84,8 @@ func _draw_front() -> void:
 	# 激光冷芒双目（青蓝与洋红交相辉映）
 	draw_line(Vector2(-5.5, -13), Vector2(-1.5, -12.5), NEON_CYAN, 2.2)
 	draw_line(Vector2(1.5, -12.5), Vector2(5.5, -13), NEON_MAGENTA, 2.2)
-	draw_circle(Vector2(-3.5, -13), 1.1, Color.WHITE)
-	draw_circle(Vector2(3.5, -13), 1.1, Color.WHITE)
+	_circle(Vector2(-3.5, -13), 1.1, Color.WHITE)
+	_circle(Vector2(3.5, -13), 1.1, Color.WHITE)
 
 	# 7. 武士零灵魂所在：狂暴飞舞的双色能量流光长围巾
 	# 双层渐变光带（内层青碧，外层洋红拖尾）
@@ -139,10 +139,10 @@ func _draw_side() -> void:
 	# 4. 瞬杀拔刀！前方挥出的双色霓虹半月斩裂空弧光
 	var arc_center := Vector2(16, 4)
 	# 外层洋红烈芒
-	draw_arc(arc_center, 28.0, deg_to_rad(-75.0), deg_to_rad(50.0), 24, NEON_MAGENTA, 4.2, true)
+	_arc(arc_center, 28.0, deg_to_rad(-75.0), deg_to_rad(50.0), 24, NEON_MAGENTA, 4.2, true)
 	# 内层电光青核心
-	draw_arc(arc_center, 27.0, deg_to_rad(-70.0), deg_to_rad(45.0), 24, NEON_CYAN, 2.8, true)
-	draw_arc(arc_center, 27.0, deg_to_rad(-65.0), deg_to_rad(40.0), 24, Color.WHITE, 1.5, true)
+	_arc(arc_center, 27.0, deg_to_rad(-70.0), deg_to_rad(45.0), 24, NEON_CYAN, 2.8, true)
+	_arc(arc_center, 27.0, deg_to_rad(-65.0), deg_to_rad(40.0), 24, Color.WHITE, 1.5, true)
 	draw_soft_glow(arc_center + Vector2(20, -10), 18.0, NEON_GLOW_CYAN, 4)
 
 	# 5. 身后撕裂拖曳的超长能量围巾
@@ -181,8 +181,8 @@ func _draw_back() -> void:
 
 	# 3. 后背发光的赛博八卦电路阵
 	var hex_center := Vector2(0, 5)
-	draw_arc(hex_center, 6.0, 0, TAU, 6, NEON_CYAN, 1.5, true) # 六角符文
-	draw_circle(hex_center, 2.0, NEON_MAGENTA)
+	_arc(hex_center, 6.0, 0, TAU, 6, NEON_CYAN, 1.5, true) # 六角符文
+	_circle(hex_center, 2.0, NEON_MAGENTA)
 	draw_line(hex_center + Vector2(0, -6), hex_center + Vector2(0, -12), NEON_CYAN, 1.2) # 能量导线
 	draw_soft_glow(hex_center, 8.0, NEON_GLOW_CYAN, 2)
 
@@ -193,11 +193,11 @@ func _draw_back() -> void:
 	draw_colored_polygon(sheath_pts, Color(0.22, 0.28, 0.36))
 	draw_polyline(sheath_pts, RIM_HIGHLIGHT, 1.0, true)
 	draw_line(Vector2(-2, 14), Vector2(10, -6), NEON_CYAN, 2.4)
-	draw_circle(Vector2(5, 4), 2.6, NEON_MAGENTA)
+	_circle(Vector2(5, 4), 2.6, NEON_MAGENTA)
 
 	# 5. 后脑长发与向两侧暴烈吹卷的能量围巾
-	draw_circle(Vector2(0, -15), 9.0, SUIT_BLACK)
-	draw_arc(Vector2(0, -15), 9.0, 0, TAU, 24, RIM_HIGHLIGHT, 1.2, true)
+	_circle(Vector2(0, -15), 9.0, SUIT_BLACK)
+	_arc(Vector2(0, -15), 9.0, 0, TAU, 24, RIM_HIGHLIGHT, 1.2, true)
 
 	var scarf_pts: PackedVector2Array = [
 		Vector2(-5, -9), Vector2(5, -9),

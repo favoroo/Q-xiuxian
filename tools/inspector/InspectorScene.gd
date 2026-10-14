@@ -746,15 +746,7 @@ func _build_vfx_gallery() -> void:
 		root.add_child(fx)
 		fx.activate_fx(burst_kinds[i], 32.0, tints[i])
 		_vfx_nodes.append(fx)
-		# 镇魔封印格：dust 环之外补上程序化印体（游戏内由 ThunderBurst 同格下发）
-		if burst_kinds[i] == "seal":
-			var seal := SealImpactFx.new()
-			seal.size = 32.0 * 1.4
-			seal.tint = tints[i]
-			seal.position = Vector2(bx, by)
-			root.add_child(seal)
-			_vfx_nodes.append(seal)
-		
+
 		var blbl := Label.new()
 		blbl.text = burst_names[i]
 		blbl.position = Vector2(bx - 26, by + 30)
@@ -807,12 +799,6 @@ func _build_vfx_closeup(vfx_id: String) -> void:
 		fx.position = center
 		add_child(fx)
 		fx.activate_fx(vfx_id, 90.0, Color(1.0, 0.65, 0.25))
-		if vfx_id == "seal":
-			var seal := SealImpactFx.new()
-			seal.size = 90.0 * 1.4
-			seal.tint = Color(0.88, 0.74, 0.46)
-			seal.position = center
-			add_child(seal)
 
 # ==============================================================================
 # 4. 飞行物与弹丸 (Projectile Gallery & Closeup)

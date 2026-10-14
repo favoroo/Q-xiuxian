@@ -38,7 +38,7 @@ func _draw_front() -> void:
 	])
 	draw_stroked_polygon(body_pts, ROBE_GREEN, OUTLINE, OUTLINE_W)
 	# 身体下部暗色弧面（增加饱满体积感）
-	draw_arc(Vector2(0, 10 + bob), 12.0, 0.2, PI - 0.2, 16, ROBE_SHADOW, 4.0)
+	_arc(Vector2(0, 10 + bob), 12.0, 0.2, PI - 0.2, 16, ROBE_SHADOW, 4.0)
 
 	# 4. 头顶发髻、红头绳与小木簪
 	var bun_y := -24.0 + bob
@@ -50,14 +50,14 @@ func _draw_front() -> void:
 	var eye_y := -10.0 + bob
 	# 左眼
 	draw_stroked_ellipse(Vector2(-6, eye_y), 5.5, 6.0, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(Vector2(-5.0, eye_y + 0.5), 2.2, OUTLINE) # 偏心黑瞳
-	draw_circle(Vector2(-5.8, eye_y - 1.0), 0.9, Color.WHITE) # 高光
+	_circle(Vector2(-5.0, eye_y + 0.5), 2.2, OUTLINE) # 偏心黑瞳
+	_circle(Vector2(-5.8, eye_y - 1.0), 0.9, Color.WHITE) # 高光
 	# 右眼
 	draw_stroked_ellipse(Vector2(6, eye_y), 5.5, 6.0, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(Vector2(7.0, eye_y + 0.5), 2.2, OUTLINE) # 偏心黑瞳
-	draw_circle(Vector2(6.2, eye_y - 1.0), 0.9, Color.WHITE) # 高光
+	_circle(Vector2(7.0, eye_y + 0.5), 2.2, OUTLINE) # 偏心黑瞳
+	_circle(Vector2(6.2, eye_y - 1.0), 0.9, Color.WHITE) # 高光
 	# 呆萌小嘴（微弯黑线）
-	draw_arc(Vector2(0, eye_y + 6.0), 2.5, 0.1, PI - 0.1, 8, OUTLINE, 2.0)
+	_arc(Vector2(0, eye_y + 6.0), 2.5, 0.1, PI - 0.1, 8, OUTLINE, 2.0)
 
 	# 7. 左右小圆短手
 	draw_stroked_circle(Vector2(-15, 6 + bob), 4.0, SKIN_TONE, OUTLINE, OUTLINE_W)
@@ -94,8 +94,8 @@ func _draw_side() -> void:
 	# 5. 侧面单颗特大呆萌大眼（直勾勾瞪向前方）
 	var eye_pos := Vector2(8, -10 + bob)
 	draw_stroked_ellipse(eye_pos, 6.5, 7.0, Color.WHITE, OUTLINE, OUTLINE_W)
-	draw_circle(eye_pos + Vector2(2.5, 0), 2.8, OUTLINE) # 瞪向右前方的黑瞳
-	draw_circle(eye_pos + Vector2(1.8, -1.8), 1.1, Color.WHITE) # 高光
+	_circle(eye_pos + Vector2(2.5, 0), 2.8, OUTLINE) # 瞪向右前方的黑瞳
+	_circle(eye_pos + Vector2(1.8, -1.8), 1.1, Color.WHITE) # 高光
 	# 侧面坚毅/专注小嘴
 	draw_line(eye_pos + Vector2(1, 8), eye_pos + Vector2(6, 7), OUTLINE, 2.2)
 

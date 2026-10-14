@@ -12,6 +12,7 @@ extends Control
 signal settings_requested
 signal career_requested
 signal manual_requested
+signal resume_requested  ## 中断续玩：主菜单「继续游戏」按钮（Main.resume_from_save 消费）
 
 const DANGER_NAMES := ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
 
@@ -76,6 +77,7 @@ var _hero_void: Control              # Hero 中间那根吃富余的弹簧（量
 var _danger_buttons: Array[Button] = []
 var _endless_btn: Button
 var _hero_start_btn: Button
+var _resume_btn: Button
 
 # 右侧 2×2 大方块与动态副文案
 var _small_cards: Array[PanelContainer] = []
@@ -381,6 +383,16 @@ func _build_hero_block() -> PanelContainer:
 	_hero_start_btn.pressed.connect(_on_start_pressed)
 	vbox.add_child(_hero_start_btn)
 
+	# 中断续玩：有局内存档时插一条「继续游戏」（点按直达上次的局；文案由存档摘要现取）
+	_resume_btn = Button.new()
+	_resume_btn.text = "继 续 游 戏  》"
+	_resume_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE * 0.72)
+	_resume_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_resume_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_resume_btn, GameStyle.NAVY2, GameStyle.JADE, 14, GameStyle.PAPER, GameStyle.SLANT_BUTTON)
+	_resume_btn.pressed.connect(_on_resume_pressed)
+	vbox.add_child(_resume_btn)
+
 	_refresh_danger_row()
 	_refresh_endless_toggle()
 	return card
@@ -668,6 +680,17 @@ func open() -> void:
 		var joy = parent_node.get_node_or_null("VirtualJoystick")
 		if joy != null:
 			joy.visible = false
+	# 中断续玩：按存档有无决定「继续游戏」按钮的显隐与文案（无档藏按钮不留空位）
+	if _resume_btn != null and is_instance_valid(_resume_btn):
+		var summary := RunSave.peek_summary()
+		_resume_btn.visible = not summary.is_empty()
+		if not summary.is_empty():
+			var cid := String(summary.get("cid", ""))
+			var c_name := String(CultivatorData.get_def(cid).get("name", "修士"))
+			if bool(summary.get("endless", false)):
+				_resume_btn.text = "继续游戏 · %s无尽第%d波  》" % [c_name, int(summary.get("wave", 1))]
+			else:
+				_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(summary.get("wave", 1))]
 	_layout_responsive()
 	_refresh_danger_row()
 	_refresh_endless_toggle()
@@ -713,6 +736,17 @@ func _on_danger_pressed(d: int) -> void:
 func _on_endless_toggle_pressed() -> void:
 	GameManager.set_start_in_endless(not GameManager.start_in_endless)
 	_refresh_endless_toggle()
+
+## 中断续玩：淡出菜单后通知 Main 按存档重建整局（Main.resume_from_save）
+func _on_resume_pressed() -> void:
+	AudioManager.play_sfx("ui_confirm", 0.95)
+	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tw.tween_property(self, "modulate:a", 0.0, 0.2)
+	tw.tween_callback(func():
+		visible = false
+		resume_requested.emit()
+	)
 
 func _on_sound_toggle_pressed() -> void:
 	SettingsManager.toggle_bus_muted(&"Master")

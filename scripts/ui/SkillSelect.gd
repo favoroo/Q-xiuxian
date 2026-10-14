@@ -144,10 +144,8 @@ func _create_card(s_id: String) -> Control:
 
 	var icon_path: String = String(def.get("icon", ""))
 	if not icon_path.is_empty() and ResourceLoader.exists(icon_path):
-		var tex_rect = TextureRect.new()
-		tex_rect.texture = load(icon_path)
-		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		# 走统一图标工厂：命中 assets/art/ui/ 128px 高清变体 + LINEAR 过滤（手写 load 只吃低清图）。
+		var tex_rect = GameStyle.icon_texture_rect(icon_path)
 		tex_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 		tex_rect.offset_left = 6.0
 		tex_rect.offset_top = 6.0

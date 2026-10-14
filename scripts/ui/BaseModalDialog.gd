@@ -70,6 +70,10 @@ func _get_tab_bar_separation() -> int:
 func _get_title_font_size() -> int:
 	return 18
 
+## 子类覆写：标题字色（默认纸白；亮面标题块可覆写成黑字）
+func _get_title_color() -> Color:
+	return GameStyle.PAPER
+
 ## 子类覆写：关闭按钮尺寸
 func _get_close_btn_min_size() -> Vector2:
 	return Vector2(84, 34)
@@ -136,7 +140,7 @@ func _build_modal_chrome() -> void:
 	title_margin.add_theme_constant_override("margin_bottom", 4)
 	_title_label = Label.new()
 	_title_label.text = _get_title_text()
-	GameStyle.label(_title_label, _get_title_font_size(), GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(_title_label, _get_title_font_size(), _get_title_color(), 0, GameStyle.INK, true)
 	title_margin.add_child(_title_label)
 	_title_box.add_child(title_margin)
 	_top_bar.add_child(_title_box)
