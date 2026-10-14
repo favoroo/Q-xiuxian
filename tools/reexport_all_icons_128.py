@@ -32,25 +32,34 @@ def fit_to_128(src_path: str, dst_path: str, size: int = 128) -> bool:
 def main():
     os.makedirs("assets/art", exist_ok=True)
     count = 0
-    # 1. 道具法宝
+    # 1. 道具法宝（纯 UI 显示用途，保持 128x128 高清矢量插画）
+    # 优先选取 _cold_v3 / _cold_v2 等无场景背景的高清修仙风格版本
+    item_sources = {}
     for p in sorted(glob.glob("assets_raw/images/item_*.png")):
         base = os.path.basename(p)
-        if "_cold_v" in base: # 跳过中间版本命名
-            continue
-        dst = os.path.join("assets/art", base)
-        if fit_to_128(p, dst, 128):
-            count += 1
-            
-    # 2. 武器
-    for p in sorted(glob.glob("assets_raw/images/weapon_*.png")):
-        base = os.path.basename(p)
-        if "_v2" in base or "_v3" in base:
-            continue
-        dst = os.path.join("assets/art", base)
-        if fit_to_128(p, dst, 128):
+        clean_name = base
+        # 解析基础名
+        for suffix in ["_cold_v3", "_cold_v2", "_cold_v1"]:
+            if suffix in clean_name:
+                clean_name = clean_name.replace(suffix, "")
+                break
+        
+        # 优先级：cold_v3 > cold_v2 > cold_v1 > 基础名
+        if clean_name not in item_sources:
+            item_sources[clean_name] = p
+        else:
+            curr = item_sources[clean_name]
+            if "_cold_v3" in p:
+                item_sources[clean_name] = p
+            elif "_cold_v2" in p and "_cold_v3" not in curr:
+                item_sources[clean_name] = p
+
+    for clean_name, src_path in sorted(item_sources.items()):
+        dst = os.path.join("assets/art", clean_name)
+        if fit_to_128(src_path, dst, 128):
             count += 1
 
-    print(f"已成功将 {count} 个法宝与武器图标高清重烘焙至 assets/art/ (128x128)！")
+    print(f"已成功将 {count} 个法宝道具图标高清重烘焙至 assets/art/ (128x128)！")
 
 if __name__ == "__main__":
     main()

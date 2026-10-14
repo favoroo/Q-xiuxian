@@ -3,16 +3,15 @@
 """
 tools/inspect_asset.py — 游戏美术视觉检视统一调度 CLI
 用法:
-    python3 tools/inspect.py cultivator <id>       # 单角色 4 视角 3.5x 高清特写
-    python3 tools/inspect.py cultivator --all      # 全量修仙角色全景走廊图
-    python3 tools/inspect.py weapon <id>           # 单法器 8x 像素特写 + 器尖标定线
-    python3 tools/inspect.py weapon --all          # 68 把法器全景走廊图
-    python3 tools/inspect.py item <id>             # 单道具 8x 像素特写 + 品质色框
-    python3 tools/inspect.py item --all            # 全法宝道具走廊图
-    python3 tools/inspect.py enemy <id>            # 单妖魔 3 态高清特写
-    python3 tools/inspect.py enemy --all           # 全妖魔全景画廊
-    python3 tools/inspect.py report                # 重新生成交互式 HTML 看板
-    python3 tools/inspect.py all                   # 全量刷新走廊图并生成 HTML 看板
+    python3 tools/inspect.py cultivator <id|--all>   # 修仙者单角色 4 视角特写 / 全量 20 位画廊
+    python3 tools/inspect.py weapon <id|--all>       # 法器 8x 像素特写 + 器尖标定线 / 69 把法器走廊图
+    python3 tools/inspect.py item <id|--all>         # 道具 8x 像素特写 + 品质色框 / 全道具画廊
+    python3 tools/inspect.py enemy <id|--all>        # 妖魔 3 态特写 / 全量 17 种妖魔画廊
+    python3 tools/inspect.py vfx <id|--all>          # 攻击特效特写 / 12 款刀光扇面+光束+火锥+爆发画廊
+    python3 tools/inspect.py projectile <id|--all>   # 飞行物特写 / 21 种纯矢量弹道画廊 (别名 bullet)
+    python3 tools/inspect.py ui [--all]              # 界面 GameStyle 规范样张与面板画廊
+    python3 tools/inspect.py report                  # 重新打包生成交互式 HTML 看板
+    python3 tools/inspect.py all                     # 一键刷新全部 7 大画廊并打包 HTML 看板
 """
 
 import os
@@ -22,7 +21,6 @@ import shutil
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 
-# 确保导入同目录下的 html_report 模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from inspector.html_report import generate_html_report
 
@@ -92,17 +90,24 @@ def inspect_single_weapon(wid):
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    m = re.search(rf'\"{wid}\":\s*\{{([^}}]+)\}}', text)
-    if not m:
+    # 健壮匹配，避免被 stat_scalings 中的右大括号提前截断
+    defs_idx = text.find("const DEFS: Dictionary = {")
+    if defs_idx == -1:
+        defs_idx = 0
+    w_start = text.find(f'"{wid}":', defs_idx)
+    if w_start == -1:
         print(f"[Error] 未在 WeaponData.gd 中找到法器: {wid}")
         return
 
-    body = m.group(1)
-    name_m = re.search(r'\"name\":\s*\"([^\"]+)\"', body)
-    icon_m = re.search(r'\"icon\":\s*\"([^\"]+)\"', body)
-    tag_m = re.search(r'\"tag\":\s*\"([^\"]+)\"', body)
-    tip_m = re.search(r'\"tip\":\s*Vector2\(([-0-9.]+),\s*([-0-9.]+)\)', body)
-    desc_m = re.search(r'\"desc\":\s*\"([^\"]+)\"', body)
+    # 截取到下一个武器定义或字典结束
+    next_w = text.find('\n\t\t"', w_start + len(wid) + 3)
+    chunk = text[w_start:next_w] if next_w != -1 else text[w_start:w_start+1000]
+
+    name_m = re.search(r'\"name\":\s*\"([^\"]+)\"', chunk)
+    icon_m = re.search(r'\"icon\":\s*\"([^\"]+)\"', chunk)
+    tag_m = re.search(r'\"tag\":\s*\"([^\"]+)\"', chunk)
+    tip_m = re.search(r'\"tip\":\s*Vector2\(([-0-9.]+),\s*([-0-9.]+)\)', chunk)
+    desc_m = re.search(r'\"desc\":\s*\"([^\"]+)\"', chunk)
 
     name = name_m.group(1) if name_m else wid
     tag = tag_m.group(1) if tag_m else ""
@@ -114,21 +119,17 @@ def inspect_single_weapon(wid):
         print(f"[Error] 图标文件不存在: {icon_path}")
         return
 
-    # 生成 8x 像素特写看板
     src_img = Image.open(icon_path).convert("RGBA")
-    sw, sh = src_img.size # 48x48
+    sw, sh = src_img.size
     scale = 8
-    target_w, target_h = sw * scale, sh * scale # 384x384
+    target_w, target_h = sw * scale, sh * scale
 
-    # 48x48 像素按最近邻放大
     scaled = src_img.resize((target_w, target_h), Image.Resampling.NEAREST)
 
-    # 复合看板画布: 宽 720, 高 460
     canvas_w, canvas_h = 720, 460
     canvas = Image.new("RGBA", (canvas_w, canvas_h), (11, 15, 25, 255))
     draw = ImageDraw.Draw(canvas)
 
-    # 棋盘格暗底 (用于清晰查看半透明/透明抠底)
     pad_left = 32
     pad_top = 40
     tile_size = 16
@@ -137,31 +138,25 @@ def inspect_single_weapon(wid):
             col = (18, 24, 38, 255) if ((x // tile_size) + (y // tile_size)) % 2 == 0 else (14, 18, 28, 255)
             draw.rectangle([pad_left + x, pad_top + y, pad_left + x + tile_size, pad_top + y + tile_size], fill=col)
 
-    # 贴上图标
     canvas.paste(scaled, (pad_left, pad_top), scaled)
-    # 边框
     draw.rectangle([pad_left, pad_top, pad_left + target_w, pad_top + target_h], outline=(47, 67, 102, 255), width=2)
 
-    # 绘制中心十字准星 (24, 24)
     cx = pad_left + (sw // 2) * scale
     cy = pad_top + (sh // 2) * scale
     draw.line([cx, pad_top, cx, pad_top + target_h], fill=(70, 100, 150, 180), width=1)
     draw.line([pad_left, cy, pad_left + target_w, cy], fill=(70, 100, 150, 180), width=1)
 
-    # 标注器尖 tip 标定点
     tip_x, tip_y = None, None
     if tip_m:
         rx, ry = float(tip_m.group(1)), float(tip_m.group(2))
         tip_px = int(cx + rx * scale)
         tip_py = int(cy + ry * scale)
         tip_x, tip_y = rx, ry
-        # 画红金准星圆圈与连线
         draw.line([cx, cy, tip_px, tip_py], fill=(245, 158, 11, 200), width=2)
         r = 6
         draw.ellipse([tip_px - r, tip_py - r, tip_px + r, tip_py + r], outline=(239, 68, 68, 255), width=2)
         draw.ellipse([tip_px - 2, tip_py - 2, tip_px + 2, tip_py + 2], fill=(245, 158, 11, 255))
 
-    # 右侧参数栏
     info_x = pad_left + target_w + 32
     f_title = get_font(20)
     f_sub = get_font(13)
@@ -175,21 +170,18 @@ def inspect_single_weapon(wid):
     draw.text((info_x, pad_top + 85), tip_desc, font=f_body, fill=(245, 158, 11, 255))
 
     draw.line([info_x, pad_top + 120, canvas_w - 32, pad_top + 120], fill=(30, 42, 64, 255), width=1)
-
     draw.text((info_x, pad_top + 135), "机制说明:", font=f_sub, fill=(230, 236, 245, 255))
-    # 折行
+
     words = desc
     line_y = pad_top + 160
     for i in range(0, len(words), 16):
         draw.text((info_x, line_y), words[i:i+16], font=f_body, fill=(180, 195, 215, 255))
         line_y += 20
 
-    # 图标路径
     draw.text((info_x, pad_top + 280), "资产源路径:", font=f_sub, fill=(138, 153, 173, 255))
     draw.text((info_x, pad_top + 305), icon_path, font=f_body, fill=(90, 130, 180, 255))
-
     draw.text((info_x, pad_top + 345), "※ 橙色指示线指引法器真实器尖标定", font=f_body, fill=(245, 158, 11, 200))
-    draw.text((info_x, pad_top + 368), "※ 蓝色十字为法器旋转旋转中心轴", font=f_body, fill=(100, 140, 200, 200))
+    draw.text((info_x, pad_top + 368), "※ 蓝色十字为法器旋转中心轴", font=f_body, fill=(100, 140, 200, 200))
 
     out_file = f"tests/inspect/weapon_{wid}_closeup.png"
     canvas.save(out_file)
@@ -363,14 +355,12 @@ def main():
             sys.exit(1)
         arg = sys.argv[2]
         if arg == "--all":
-            # 调用既有 generate_weapon_hall.py 生成 68 把法器
             hall_script = "tools/generate_weapon_hall.py"
             if os.path.exists(hall_script):
                 subprocess.run(["python3", hall_script], check=True)
-                # 软链接/拷贝至 tests/inspect/
                 if os.path.exists("tests/styles/weapon_hall_review_all68.png"):
                     shutil.copy("tests/styles/weapon_hall_review_all68.png", "tests/inspect/weapon_gallery_all.png")
-                    print("✓ 成功同步 68 把法器全景走廊图至 tests/inspect/weapon_gallery_all.png")
+                    print("✓ 成功同步法器全景走廊图至 tests/inspect/weapon_gallery_all.png")
         else:
             inspect_single_weapon(arg)
 
@@ -394,11 +384,28 @@ def main():
         else:
             run_godot_inspector("enemy", arg, f"tests/inspect/enemy_{arg}_closeup.png", is_gallery=False)
 
+    elif cmd == "vfx":
+        arg = sys.argv[2] if len(sys.argv) >= 3 else "--all"
+        if arg == "--all":
+            run_godot_inspector("vfx", "all", "tests/inspect/vfx_gallery_all.png", is_gallery=True)
+        else:
+            run_godot_inspector("vfx", arg, f"tests/inspect/vfx_{arg}_closeup.png", is_gallery=False)
+
+    elif cmd in ["projectile", "bullet"]:
+        arg = sys.argv[2] if len(sys.argv) >= 3 else "--all"
+        if arg == "--all":
+            run_godot_inspector("projectile", "all", "tests/inspect/projectile_gallery_all.png", is_gallery=True)
+        else:
+            run_godot_inspector("projectile", arg, f"tests/inspect/projectile_{arg}_closeup.png", is_gallery=False)
+
+    elif cmd == "ui":
+        run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
+
     elif cmd == "report":
         generate_html_report()
 
     elif cmd == "all":
-        print("[CLI] 开始执行全量走廊画廊矩阵更新...")
+        print("[CLI] 开始执行全量 7 大视觉画廊矩阵与看板更新...")
         run_godot_inspector("cultivator", "all", "tests/inspect/cultivator_gallery_all.png", is_gallery=True)
         hall_script = "tools/generate_weapon_hall.py"
         if os.path.exists(hall_script):
@@ -407,8 +414,11 @@ def main():
                 shutil.copy("tests/styles/weapon_hall_review_all68.png", "tests/inspect/weapon_gallery_all.png")
         generate_all_items_gallery()
         run_godot_inspector("enemy", "all", "tests/inspect/enemy_gallery_all.png", is_gallery=True)
+        run_godot_inspector("vfx", "all", "tests/inspect/vfx_gallery_all.png", is_gallery=True)
+        run_godot_inspector("projectile", "all", "tests/inspect/projectile_gallery_all.png", is_gallery=True)
+        run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
         generate_html_report()
-        print("★ 全部走廊图与 HTML 交互看板更新完毕！")
+        print("★ 全部 7 大画廊图与 HTML 交互看板更新完毕！")
 
     else:
         print(f"[Error] 未知指令: {cmd}")

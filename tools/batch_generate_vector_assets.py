@@ -136,7 +136,7 @@ def main():
     for wep_id, prompt in WEAPONS:
         png = generate_asset(wep_id, prompt)
         if png:
-            fit_to_target(png, f"assets/art/{wep_id}.png", 128)
+            fit_to_target(png, f"assets/art/{wep_id}.png", 48)
 
     print("\n=== 全部法器与法宝素材生成处理完毕！ ===")
 

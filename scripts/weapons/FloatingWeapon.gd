@@ -204,7 +204,8 @@ func _ready() -> void:
 	slash_sprite.configure(WeaponArcRenderer.ArcMode.MELEE, _arc_element())
 	if def.has("icon"):
 		sprite.texture = load(def["icon"])
-	# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
 		muzzle_len = tip_local.length() * sprite.scale.x
 		muzzle_point.position = Vector2(muzzle_len, 0.0)
 		_apply_facing(rotation)

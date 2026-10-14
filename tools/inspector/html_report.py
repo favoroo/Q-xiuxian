@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 HTML 报告生成模块 (tools/inspector/html_report.py)
-聚合修仙者、法器、法宝道具、妖魔怪物的视觉卡片，输出单文件离线交互式画廊 (tests/inspect/index.html)。
-遵循 GameStyle 视觉规范（深蓝底 #0b0f19、纸白、主蓝、点缀金黄）。
+聚合修仙者、法器、法宝道具、妖魔怪物、武器特效、飞行物弹丸、界面规范 7 大视觉资产，
+输出单文件离线交互式全景画廊看板 (tests/inspect/index.html)。
+遵循 GameStyle 视觉规范（深蓝底 #07090e、纸白、主蓝、点缀金黄）。
 """
 
 import os
@@ -30,7 +31,6 @@ def parse_cultivators():
 
     blocks = re.findall(r'\"([a-zA-Z0-9_]+)\":\s*\{\s*\n\t+\"name\":\s*\"([^\"]+)\"', text)
     for cid, cname in blocks:
-        # 找 epithet
         m_ep = re.search(rf'\"{cid}\":\s*\{{[^}}]*\"epithet\":\s*\"([^\"]+)\"', text)
         epithet = m_ep.group(1) if m_ep else ""
         icon_path = f"assets/art/cultivator_{cid}_icon.png"
@@ -111,22 +111,26 @@ def parse_items():
 
 def parse_enemies():
     enemies = []
-    path = "scripts/entities/procedural_enemy/EnemyVisualConfig.gd"
+    # 动态拉取 EnemyGuideData 的 17 种怪物列表
+    path = "scripts/data/EnemyGuideData.gd"
     if not os.path.exists(path):
         return enemies
     with open(path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # 扫描预设
-    matches = re.findall(r'cfg\.enemy_id = \"([a-zA-Z0-9_]+)\"[^\n]*\n\s*cfg\.display_name = \"([^\"]+)\"', text)
-    seen = set()
-    for eid, ename in matches:
-        if eid in seen:
-            continue
-        seen.add(eid)
+    m = re.search(r'static func catalog_ids\(\) -> Array:\s*\n\t*return \[(.*?)\]', text, re.DOTALL)
+    if not m:
+        return enemies
+    ids = [i.strip().strip('"').strip("'") for i in m.group(1).split(",") if i.strip()]
+
+    # 扫描中文名
+    for eid in ids:
+        name_m = re.search(rf'\"{eid}\":\s*\{{[^}}]*\"desc\":\s*\"([^\"]+)\"', text)
+        desc = name_m.group(1) if name_m else ""
         enemies.append({
             "id": eid,
-            "name": ename,
+            "name": eid,
+            "desc": desc,
             "closeup": f"tests/inspect/enemy_{eid}_closeup.png"
         })
     return enemies
@@ -139,7 +143,7 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
     items = parse_items()
     enemies = parse_enemies()
 
-    # 检查是否有走廊图
+    # 7 大全景走廊图
     cultivator_gallery = "tests/inspect/cultivator_gallery_all.png"
     if not os.path.exists(cultivator_gallery):
         cultivator_gallery = "tests/styles/cultivator_modular_gallery.png"
@@ -150,11 +154,26 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
         weapon_gallery = "tests/styles/weapon_hall_review_all68.png"
     weapon_gallery_b64 = get_base64_image(weapon_gallery)
 
+    item_gallery = "tests/inspect/item_gallery_all.png"
+    item_gallery_b64 = get_base64_image(item_gallery)
+
+    enemy_gallery = "tests/inspect/enemy_gallery_all.png"
+    enemy_gallery_b64 = get_base64_image(enemy_gallery)
+
+    vfx_gallery = "tests/inspect/vfx_gallery_all.png"
+    vfx_gallery_b64 = get_base64_image(vfx_gallery)
+
+    projectile_gallery = "tests/inspect/projectile_gallery_all.png"
+    projectile_gallery_b64 = get_base64_image(projectile_gallery)
+
+    ui_gallery = "tests/inspect/ui_gallery_all.png"
+    ui_gallery_b64 = get_base64_image(ui_gallery)
+
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>剑士 · 游戏美术视觉检视看板 (Asset Inspector)</title>
+<title>剑士 · 游戏美术视觉检视全景看板 (Asset Inspector)</title>
 <style>
   :root {{
     --bg-main: #07090e;
@@ -187,13 +206,13 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
   }}
   h1 {{ font-size: 24px; font-weight: 700; color: var(--text-paper); display: flex; align-items: center; gap: 12px; }}
   .badge {{ background: var(--tag-bg); color: var(--accent-gold); font-size: 12px; padding: 3px 8px; border: 1px solid var(--border-highlight); }}
-  .tabs {{ display: flex; gap: 8px; margin-bottom: 24px; }}
+  .tabs {{ display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }}
   .tab-btn {{
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     color: var(--text-grey);
-    padding: 8px 20px;
-    font-size: 14px;
+    padding: 8px 18px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -206,7 +225,7 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     padding: 16px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }}
   .gallery-banner h3 {{ font-size: 15px; margin-bottom: 10px; color: var(--accent-gold); }}
   .gallery-img {{ width: 100%; height: auto; border: 1px solid var(--border-highlight); background: #000; cursor: pointer; }}
@@ -242,23 +261,26 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
     background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center;
   }}
   .modal.open {{ display: flex; }}
-  .modal-content {{ max-width: 90%; max-height: 90%; border: 1px solid var(--accent-blue); box-shadow: 0 0 20px rgba(0,0,0,0.8); }}
+  .modal-content {{ max-width: 92%; max-height: 92%; border: 1px solid var(--accent-blue); box-shadow: 0 0 24px rgba(0,0,0,0.9); }}
 </style>
 </head>
 <body>
 
 <header>
   <div>
-    <h1>剑士 · 游戏美术视觉检视看板 <span class="badge">Asset Inspector v1.0</span></h1>
-    <p style="color: var(--text-grey); font-size: 13px; margin-top: 6px;">全道统修仙素体 · 68 法器 · 法宝道具 · 妖魔万象 统一视觉对齐与质量审查平台</p>
+    <h1>剑士 · 游戏美术视觉检视全景看板 <span class="badge">Asset Inspector v2.0</span></h1>
+    <p style="color: var(--text-grey); font-size: 13px; margin-top: 6px;">全道统修仙真身 · 69 法器 · 87 法宝道具 · 17 种妖魔 · 12 款攻击特效 · 21 种纯矢量弹丸 · UI 规范全链路视觉质量平台</p>
   </div>
 </header>
 
 <div class="tabs">
   <button class="tab-btn active" onclick="openTab('cultivators', this)">修仙真身 ({len(cultivators)})</button>
-  <button class="tab-btn" onclick="openTab('weapons', this)">法器 ({len(weapons)})</button>
+  <button class="tab-btn" onclick="openTab('weapons', this)">法器神兵 ({len(weapons)})</button>
   <button class="tab-btn" onclick="openTab('items', this)">法宝道具 ({len(items)})</button>
   <button class="tab-btn" onclick="openTab('enemies', this)">妖魔拟态 ({len(enemies)})</button>
+  <button class="tab-btn" onclick="openTab('vfx', this)">武器攻击特效 (12刀光+光束+火锥+6法印)</button>
+  <button class="tab-btn" onclick="openTab('projectiles', this)">飞行物弹道 (21纯矢量+飞弹)</button>
+  <button class="tab-btn" onclick="openTab('ui', this)">界面规范组件 (GameStyle)</button>
 </div>
 
 <!-- 1. 修仙者 -->
@@ -277,7 +299,7 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
       </div>
       <div class="card-desc">「{c['epithet']}」</div>
       <div class="img-wrap">
-        {"<img src='" + img_src + "' onclick='viewImage(this.src)' alt='" + c['name'] + "'>" if img_src else "<span style='color:var(--text-grey);font-size:12px;'>暂无特写 (运行 inspect cultivator " + c['id'] + " 生成)</span>"}
+        {"<img src='" + img_src + "' onclick='viewImage(this.src)' alt='" + c['name'] + "'>" if img_src else "<span style='color:var(--text-grey);font-size:12px;'>暂无特写</span>"}
       </div>
     </div>
 """
@@ -290,7 +312,7 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
 <div id="tab-weapons" class="content-section">
 """
     if weapon_gallery_b64:
-        html += f"<div class='gallery-banner'><h3>◆ 68 把法器全景走廊看板 (点击放大)</h3><img class='gallery-img' src='{weapon_gallery_b64}' onclick='viewImage(this.src)' alt='法器走廊图'></div>"
+        html += f"<div class='gallery-banner'><h3>◆ 69 把法器全景走廊看板 (点击放大)</h3><img class='gallery-img' src='{weapon_gallery_b64}' onclick='viewImage(this.src)' alt='法器走廊图'></div>"
 
     html += """
   <div class="grid">
@@ -316,6 +338,11 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
 
 <!-- 3. 法宝道具 -->
 <div id="tab-items" class="content-section">
+"""
+    if item_gallery_b64:
+        html += f"<div class='gallery-banner'><h3>◆ 全量法宝道具画廊看板 (点击放大)</h3><img class='gallery-img' src='{item_gallery_b64}' onclick='viewImage(this.src)' alt='道具走廊图'></div>"
+
+    html += """
   <div class="grid">
 """
     for it in items:
@@ -339,6 +366,11 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
 
 <!-- 4. 妖魔拟态 -->
 <div id="tab-enemies" class="content-section">
+"""
+    if enemy_gallery_b64:
+        html += f"<div class='gallery-banner'><h3>◆ 妖魔万象动态全景画廊看板 (全量 17 种，点击放大)</h3><img class='gallery-img' src='{enemy_gallery_b64}' onclick='viewImage(this.src)' alt='妖魔走廊图'></div>"
+
+    html += """
   <div class="grid">
 """
     for e in enemies:
@@ -349,14 +381,30 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
         <span class="card-title">{e['name']}</span>
         <span class="card-id">{e['id']}</span>
       </div>
+      <div class="card-desc">{e['desc']}</div>
       <div class="img-wrap">
-        {"<img src='" + img_src + "' onclick='viewImage(this.src)' alt='" + e['name'] + "'>" if img_src else "<span style='color:var(--text-grey);font-size:12px;'>暂无特写 (运行 inspect enemy " + e['id'] + " 生成)</span>"}
+        {"<img src='" + img_src + "' onclick='viewImage(this.src)' alt='" + e['name'] + "'>" if img_src else "<span style='color:var(--text-grey);font-size:12px;'>运行 inspect enemy " + e['id'] + " 生成特写</span>"}
       </div>
     </div>
 """
 
-    html += """
+    html += f"""
   </div>
+</div>
+
+<!-- 5. 武器攻击特效 -->
+<div id="tab-vfx" class="content-section">
+  {"<div class='gallery-banner'><h3>◆ 武器攻击特效与元素法相全景画廊 (点击放大)</h3><img class='gallery-img' src='" + vfx_gallery_b64 + "' onclick='viewImage(this.src)' alt='特效走廊图'></div>" if vfx_gallery_b64 else ""}
+</div>
+
+<!-- 6. 飞行物与弹道 -->
+<div id="tab-projectiles" class="content-section">
+  {"<div class='gallery-banner'><h3>◆ 全量法器飞行物与弹道纯矢量画廊 (点击放大)</h3><img class='gallery-img' src='" + projectile_gallery_b64 + "' onclick='viewImage(this.src)' alt='弹道画廊图'></div>" if projectile_gallery_b64 else ""}
+</div>
+
+<!-- 7. 界面组件规范 -->
+<div id="tab-ui" class="content-section">
+  {"<div class='gallery-banner'><h3>◆ UI 视觉设计与组件规范样张 (点击放大)</h3><img class='gallery-img' src='" + ui_gallery_b64 + "' onclick='viewImage(this.src)' alt='UI样张'></div>" if ui_gallery_b64 else ""}
 </div>
 
 <div id="modal" class="modal" onclick="closeModal()">
@@ -364,21 +412,21 @@ def generate_html_report(out_html_path="tests/inspect/index.html"):
 </div>
 
 <script>
-function openTab(tabName, el) {
-  document.querySelectorAll('.content-section').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+function openTab(tabName, el) {{
+  document.querySelectorAll('.content-section').forEach(function(item) {{ item.classList.remove('active'); }});
+  document.querySelectorAll('.tab-btn').forEach(function(item) {{ item.classList.remove('active'); }});
   document.getElementById('tab-' + tabName).classList.add('active');
   el.classList.add('active');
-}
-function viewImage(src) {
-  const modal = document.getElementById('modal');
-  const img = document.getElementById('modal-img');
+}}
+function viewImage(src) {{
+  var modal = document.getElementById('modal');
+  var img = document.getElementById('modal-img');
   img.src = src;
   modal.classList.add('open');
-}
-function closeModal() {
+}}
+function closeModal() {{
   document.getElementById('modal').classList.remove('open');
-}
+}}
 </script>
 
 </body>
@@ -387,7 +435,7 @@ function closeModal() {
 
     with open(out_html_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"[HTML Report] 成功生成交互式画廊看板至: {out_html_path}")
+    print(f"[HTML Report] 成功生成 7 大分类全景离线画廊至: {out_html_path}")
     return out_html_path
 
 if __name__ == "__main__":

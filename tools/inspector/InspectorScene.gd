@@ -2,19 +2,13 @@ extends Control
 
 ## 剑士 · 视觉检视场景 (Asset Inspector Scene)
 ## 支持全游戏视觉资产：
-##   1. cultivator (修仙真身角色): 单体 4 视角特写 / 全量画廊
+##   1. cultivator (修仙真身角色): 单体 4 视角特写 / 全量 20 位全景画廊
 ##   2. enemy (妖魔拟态): 单体 3 态特写 / 全量 17 种画廊 (无遗漏)
 ##   3. vfx (武器攻击特效): 单体 / 12 款刀光扇面 + 光束 + 火锥 + 6 种爆发全景
 ##   4. projectile (飞行物与弹丸): 21 种纯矢量弹丸 + 敌方飞弹特写 / 画廊
 ##   5. ui (界面组件与样式): GameStyle 规范样张与面板画廊
 ##
-## 接收命令行参数:
-##   --target cultivator|enemy|vfx|projectile|ui
-##   --id <id>
-##   --scale <float>
-##   --out <filepath>
-##   --grid
-##   --gallery
+## 布局严格适配 960×540 核心视口规范，确保截图 100% 完整收录无截断。
 
 const BG_COLOR := Color(0.04, 0.05, 0.08)
 const GRID_COLOR := Color(0.12, 0.16, 0.24, 0.5)
@@ -35,32 +29,22 @@ func _ready() -> void:
 	
 	DirAccess.make_dir_recursive_absolute("tests/inspect")
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	custom_minimum_size = Vector2(960, 540)
+	size = Vector2(960, 540)
 	
 	if is_gallery_mode:
 		match target_type:
 			"enemy":
-				custom_minimum_size = Vector2(1200, 780)
-				size = Vector2(1200, 780)
 				_build_enemy_gallery()
 			"vfx":
-				custom_minimum_size = Vector2(1200, 780)
-				size = Vector2(1200, 780)
 				_build_vfx_gallery()
 			"projectile", "bullet":
-				custom_minimum_size = Vector2(1200, 720)
-				size = Vector2(1200, 720)
 				_build_projectile_gallery()
 			"ui":
-				custom_minimum_size = Vector2(1080, 640)
-				size = Vector2(1080, 640)
 				_build_ui_gallery()
 			"cultivator", _:
-				custom_minimum_size = Vector2(1200, 960)
-				size = Vector2(1200, 960)
 				_build_cultivator_gallery()
 	else:
-		custom_minimum_size = Vector2(960, 540)
-		size = Vector2(960, 540)
 		match target_type:
 			"enemy":
 				_build_enemy_closeup(target_id)
@@ -106,7 +90,6 @@ func _schedule_export() -> void:
 	if tree == null:
 		return
 	
-	# 等待 12 帧，让动画、爆发粒子与火锥充分张开
 	for _frame in range(12):
 		await tree.process_frame
 	
@@ -134,7 +117,7 @@ func _export_snapshot() -> void:
 	get_tree().quit(1)
 
 # ==============================================================================
-# 1. 修仙者单角色 4 视角特写
+# 1. 修仙者单角色 4 视角特写与全员画廊
 # ==============================================================================
 
 func _build_cultivator_closeup(cid: String) -> void:
@@ -327,73 +310,66 @@ func _build_cultivator_gallery() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	
-	var root_vbox := VBoxContainer.new()
-	root_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root_vbox.add_theme_constant_override("separation", 10)
-	root_vbox.offset_left = 20
-	root_vbox.offset_top = 16
-	root_vbox.offset_right = -20
-	root_vbox.offset_bottom = -16
-	add_child(root_vbox)
-	
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 16)
-	root_vbox.add_child(header)
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(root)
 	
 	var title_lbl := Label.new()
 	title_lbl.text = "剑士 · 全道统修仙角色动态全景走廊画廊 (全量 %d 位)" % CultivatorData.DEFS.size()
-	GameStyle.label(title_lbl, 20, GameStyle.PAPER, 0, GameStyle.INK, true)
-	header.add_child(title_lbl)
+	title_lbl.position = Vector2(24, 12)
+	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
+	root.add_child(title_lbl)
 	
 	var sub_lbl := Label.new()
 	sub_lbl.text = "纯代码参数化矢量驱动 · 正面 / 侧面背剑 / 背面全貌统一对齐"
-	GameStyle.label(sub_lbl, 11, GameStyle.GOLD_EDGE)
-	header.add_child(sub_lbl)
+	sub_lbl.position = Vector2(24, 34)
+	GameStyle.label(sub_lbl, 10, GameStyle.GOLD_EDGE)
+	root.add_child(sub_lbl)
 	
-	var grid := GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root_vbox.add_child(grid)
+	var cols := 5
+	var card_w := 174.0
+	var card_h := 106.0
+	var pad_x := 8.0
+	var pad_y := 6.0
+	var start_x := 25.0
+	var start_y := 56.0
 	
-	for cid in CultivatorData.DEFS.keys():
-		grid.add_child(_build_cultivator_gallery_card(cid))
+	var keys: Array = CultivatorData.DEFS.keys()
+	for i in keys.size():
+		var cid: String = String(keys[i])
+		var c := i % cols
+		var r := i / cols
+		var pos := Vector2(start_x + c * (card_w + pad_x), start_y + r * (card_h + pad_y))
+		
+		var card := _build_cultivator_gallery_card(cid, card_w, card_h)
+		card.position = pos
+		root.add_child(card)
 
-func _build_cultivator_gallery_card(cid: String) -> PanelContainer:
+func _build_cultivator_gallery_card(cid: String, cw: float, ch: float) -> PanelContainer:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(224, 195)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(cw, ch)
 	card.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.07, 0.09, 0.14), Color(0.18, 0.24, 0.35), 1, 0.0))
 	
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.offset_left = 6
-	vbox.offset_top = 6
-	vbox.offset_right = -6
-	vbox.offset_bottom = -6
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.offset_left = 4
+	vbox.offset_top = 4
+	vbox.offset_right = -4
+	vbox.offset_bottom = -4
 	card.add_child(vbox)
 	
 	var def: Dictionary = CultivatorData.DEFS.get(cid, {})
 	var cname: String = def.get("name", cid)
-	var ep: String = def.get("epithet", "")
 	
 	var title_lbl := Label.new()
 	title_lbl.text = "%s (%s)" % [cname, cid]
-	GameStyle.label(title_lbl, 11, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 10, GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
-	
-	var ep_lbl := Label.new()
-	ep_lbl.text = ep if not ep.is_empty() else " "
-	ep_lbl.clip_text = true
-	GameStyle.label(ep_lbl, 8, GameStyle.GREY)
-	vbox.add_child(ep_lbl)
 	
 	var vp_box := HBoxContainer.new()
 	vp_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	vp_box.add_theme_constant_override("separation", 8)
-	vp_box.custom_minimum_size = Vector2(0, 130)
+	vp_box.add_theme_constant_override("separation", 6)
+	vp_box.custom_minimum_size = Vector2(0, 78)
 	vbox.add_child(vp_box)
 	
 	var cfg := CultivatorVisualConfig.get_config(cid)
@@ -405,13 +381,13 @@ func _build_cultivator_gallery_card(cid: String) -> PanelContainer:
 	
 	for p in perspectives:
 		var c_view := Control.new()
-		c_view.custom_minimum_size = Vector2(62, 126)
+		c_view.custom_minimum_size = Vector2(48, 76)
 		c_view.clip_contents = true
 		
 		var ren := HollowKnightCultivatorRenderer.new(cfg)
 		ren.current_angle = p["angle"]
-		ren.position = Vector2(31, 75)
-		ren.scale = Vector2(1.2, 1.2)
+		ren.position = Vector2(24, 48)
+		ren.scale = Vector2(0.9, 0.9)
 		c_view.add_child(ren)
 		_cultivator_renderers.append(ren)
 		
@@ -573,72 +549,71 @@ func _build_enemy_gallery() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	
-	var root_vbox := VBoxContainer.new()
-	root_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root_vbox.add_theme_constant_override("separation", 10)
-	root_vbox.offset_left = 20
-	root_vbox.offset_top = 16
-	root_vbox.offset_right = -20
-	root_vbox.offset_bottom = -16
-	add_child(root_vbox)
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(root)
 	
 	var all_enemy_ids: Array = EnemyGuideData.catalog_ids()
 	
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 16)
-	root_vbox.add_child(header)
-	
 	var title_lbl := Label.new()
 	title_lbl.text = "剑士 · 妖魔万象动态全景画廊 (全量 %d 种)" % all_enemy_ids.size()
-	GameStyle.label(title_lbl, 20, GameStyle.PAPER, 0, GameStyle.INK, true)
-	header.add_child(title_lbl)
+	title_lbl.position = Vector2(24, 12)
+	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
+	root.add_child(title_lbl)
 	
 	var sub_lbl := Label.new()
 	sub_lbl.text = "空洞冷冽国风妖魔拟态 · 包含常规 12 妖、3 大精英、赤炎魔将与衔宝金蟾"
-	GameStyle.label(sub_lbl, 11, GameStyle.GOLD_EDGE)
-	header.add_child(sub_lbl)
+	sub_lbl.position = Vector2(24, 34)
+	GameStyle.label(sub_lbl, 10, GameStyle.GOLD_EDGE)
+	root.add_child(sub_lbl)
 	
-	var grid := GridContainer.new()
-	grid.columns = 6
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root_vbox.add_child(grid)
+	var cols := 6
+	var card_w := 145.0
+	var card_h := 142.0
+	var pad_x := 8.0
+	var pad_y := 6.0
+	var start_x := 25.0
+	var start_y := 56.0
 	
-	for eid in all_enemy_ids:
-		grid.add_child(_build_enemy_gallery_card(String(eid)))
+	for i in all_enemy_ids.size():
+		var eid: String = String(all_enemy_ids[i])
+		var c := i % cols
+		var r := i / cols
+		var pos := Vector2(start_x + c * (card_w + pad_x), start_y + r * (card_h + pad_y))
+		
+		var card := _build_enemy_gallery_card(eid, card_w, card_h)
+		card.position = pos
+		root.add_child(card)
 
-func _build_enemy_gallery_card(eid: String) -> PanelContainer:
+func _build_enemy_gallery_card(eid: String, cw: float, ch: float) -> PanelContainer:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(176, 185)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(cw, ch)
 	card.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.07, 0.09, 0.14), Color(0.18, 0.24, 0.35), 1, 0.0))
 	
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.offset_left = 6
-	vbox.offset_top = 6
-	vbox.offset_right = -6
-	vbox.offset_bottom = -6
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.offset_left = 4
+	vbox.offset_top = 4
+	vbox.offset_right = -4
+	vbox.offset_bottom = -4
 	card.add_child(vbox)
 	
 	var cfg := EnemyVisualConfig.get_config(eid)
 	var title_lbl := Label.new()
 	var dname: String = EnemyGuideData.display_name(eid)
 	title_lbl.text = "%s (%s)" % [dname, eid]
-	GameStyle.label(title_lbl, 11, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 10, GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 	
 	var vp := Control.new()
-	vp.custom_minimum_size = Vector2(164, 135)
+	vp.custom_minimum_size = Vector2(cw - 8, ch - 24)
 	vp.clip_contents = true
 	
 	var ren := HollowKnightEnemyRenderer.new()
 	ren.config = cfg
 	ren.is_moving = true
-	ren.position = Vector2(82, 75)
-	ren.scale = Vector2(1.35, 1.35)
+	ren.position = Vector2((cw - 8) / 2.0, (ch - 24) / 2.0 + 4)
+	ren.scale = Vector2(1.15, 1.15)
 	vp.add_child(ren)
 	_enemy_renderers.append(ren)
 	
@@ -661,32 +636,32 @@ func _build_vfx_gallery() -> void:
 	
 	var title_lbl := Label.new()
 	title_lbl.text = "剑士 · 武器攻击特效与元素法相全景画廊 (VFX Gallery)"
-	title_lbl.position = Vector2(24, 16)
-	GameStyle.label(title_lbl, 18, GameStyle.PAPER, 0, GameStyle.INK, true)
+	title_lbl.position = Vector2(24, 12)
+	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
 	root.add_child(title_lbl)
 	
 	var sub_lbl := Label.new()
-	sub_lbl.text = "纯代码 _draw 几何判定同源 · 六元素近战刀光 / 六元素横扫扇面 / 贯日紫光束 / 三昧真火锥 / 六道法阵爆发"
-	sub_lbl.position = Vector2(24, 42)
-	GameStyle.label(sub_lbl, 11, GameStyle.GOLD_EDGE)
+	sub_lbl.text = "纯代码 _draw 几何判定同源 · 六元素近战刀光 / 六元素横扫扇面 / 贯日紫光束 / 三昧真火锥 / 六道法印爆发"
+	sub_lbl.position = Vector2(24, 32)
+	GameStyle.label(sub_lbl, 10, GameStyle.GOLD_EDGE)
 	root.add_child(sub_lbl)
 	
 	var elems := ["metal", "fire", "water", "wood", "earth", "thunder"]
-	var elem_names := ["金 · 锐金寒芒", "火 · 炽焰卷舌", "水 · 玄冰霜棱", "木 · 荆棘藤刺", "土 · 重岩裂台", "雷 · 紫电雷弧"]
+	var elem_names := ["金·锐金", "火·炽焰", "水·玄冰", "木·荆棘", "土·重岩", "雷·紫电"]
 	
 	# 上排：六元素近战刀光 (MELEE)
 	var row1_lbl := Label.new()
-	row1_lbl.text = "◆ 六元素近战挥砍弧光 (MELEE ARCS)"
-	row1_lbl.position = Vector2(24, 70)
-	GameStyle.label(row1_lbl, 12, GameStyle.JADE, 0, GameStyle.INK, true)
+	row1_lbl.text = "◆ 六元素近战挥砍弧光 (MELEE)"
+	row1_lbl.position = Vector2(24, 52)
+	GameStyle.label(row1_lbl, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	root.add_child(row1_lbl)
 	
 	for i in elems.size():
-		var pos := Vector2(75 + i * 165, 140)
+		var pos := Vector2(65 + i * 148, 115)
 		var arc := WeaponArcRenderer.new()
 		arc.configure(WeaponArcRenderer.ArcMode.MELEE, elems[i])
 		arc.position = pos
-		arc.scale = Vector2.ONE * 0.52
+		arc.scale = Vector2.ONE * 0.44
 		arc.visible = true
 		arc.modulate.a = 1.0
 		root.add_child(arc)
@@ -694,23 +669,23 @@ func _build_vfx_gallery() -> void:
 		
 		var lbl := Label.new()
 		lbl.text = elem_names[i]
-		lbl.position = pos + Vector2(-55, 45)
-		GameStyle.label(lbl, 10, GameStyle.PAPER_DIM)
+		lbl.position = pos + Vector2(-36, 32)
+		GameStyle.label(lbl, 9, GameStyle.PAPER_DIM)
 		root.add_child(lbl)
 	
 	# 中排：六元素横扫扇面 (SWEEP)
 	var row2_lbl := Label.new()
-	row2_lbl.text = "◆ 六元素横扫大范围扇面 (SWEEP FANS)"
-	row2_lbl.position = Vector2(24, 230)
-	GameStyle.label(row2_lbl, 12, GameStyle.JADE, 0, GameStyle.INK, true)
+	row2_lbl.text = "◆ 六元素横扫大范围扇面 (SWEEP)"
+	row2_lbl.position = Vector2(24, 185)
+	GameStyle.label(row2_lbl, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	root.add_child(row2_lbl)
 	
 	for i in elems.size():
-		var pos := Vector2(75 + i * 165, 315)
+		var pos := Vector2(65 + i * 148, 250)
 		var fan := WeaponArcRenderer.new()
 		fan.configure(WeaponArcRenderer.ArcMode.SWEEP, elems[i])
 		fan.position = pos
-		fan.scale = Vector2.ONE * 0.52
+		fan.scale = Vector2.ONE * 0.44
 		fan.visible = true
 		fan.modulate.a = 1.0
 		root.add_child(fan)
@@ -718,39 +693,39 @@ func _build_vfx_gallery() -> void:
 		
 		var lbl := Label.new()
 		lbl.text = elem_names[i]
-		lbl.position = pos + Vector2(-55, 45)
-		GameStyle.label(lbl, 10, GameStyle.PAPER_DIM)
+		lbl.position = pos + Vector2(-36, 32)
+		GameStyle.label(lbl, 9, GameStyle.PAPER_DIM)
 		root.add_child(lbl)
 	
 	# 下排：持续攻击 (Beam & Cone) + 6 种 BURST 落地法阵
 	var row3_lbl := Label.new()
-	row3_lbl.text = "◆ 持续贯通攻击 (BEAM / CONE) 与 六道法印落点形态 (BURST FX)"
-	row3_lbl.position = Vector2(24, 410)
-	GameStyle.label(row3_lbl, 12, GameStyle.JADE, 0, GameStyle.INK, true)
+	row3_lbl.text = "◆ 持续贯通攻击 (BEAM/CONE) 与 六道法印落点形态 (BURST)"
+	row3_lbl.position = Vector2(24, 325)
+	GameStyle.label(row3_lbl, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	root.add_child(row3_lbl)
 	
-	# 1. 激光光束 (紫虹贯日)
+	# 1. 激光光束
 	var beam := BeamRenderer.new()
-	beam.position = Vector2(40, 480)
+	beam.position = Vector2(30, 395)
 	root.add_child(beam)
-	beam.beam_on(210.0, 9.0, Color(0.75, 0.55, 1.0))
+	beam.beam_on(150.0, 7.5, Color(0.75, 0.55, 1.0))
 	_vfx_nodes.append(beam)
 	var beam_lbl := Label.new()
-	beam_lbl.text = "紫虹镜 · 穿透光束 (BEAM)"
-	beam_lbl.position = Vector2(40, 515)
-	GameStyle.label(beam_lbl, 10, GameStyle.PAPER_DIM)
+	beam_lbl.text = "紫虹镜 · 光束"
+	beam_lbl.position = Vector2(30, 420)
+	GameStyle.label(beam_lbl, 9, GameStyle.PAPER_DIM)
 	root.add_child(beam_lbl)
 	
-	# 2. 喷火锥 (三昧真火)
+	# 2. 喷火锥
 	var cone := FlameConeRenderer.new()
-	cone.position = Vector2(280, 480)
+	cone.position = Vector2(210, 395)
 	root.add_child(cone)
-	cone.cone_on(140.0, 65.0)
+	cone.cone_on(110.0, 50.0)
 	_vfx_nodes.append(cone)
 	var cone_lbl := Label.new()
-	cone_lbl.text = "三昧真火 · 烈焰锥 (CONE)"
-	cone_lbl.position = Vector2(280, 515)
-	GameStyle.label(cone_lbl, 10, GameStyle.PAPER_DIM)
+	cone_lbl.text = "真火 · 烈焰锥"
+	cone_lbl.position = Vector2(210, 420)
+	GameStyle.label(cone_lbl, 9, GameStyle.PAPER_DIM)
 	root.add_child(cone_lbl)
 	
 	# 3. BURST 落地法相 6 种
@@ -760,18 +735,18 @@ func _build_vfx_gallery() -> void:
 		Color(0.5, 0.85, 0.5), Color(0.80, 0.66, 0.38), Color(0.88, 0.74, 0.46)]
 	
 	for i in burst_kinds.size():
-		var bx := 480 + (i % 3) * 190
-		var by := 480 + (i / 3) * 135
+		var bx := 370 + (i % 3) * 185
+		var by := 390 + (i / 3) * 85
 		var fx := BurstKindFx.new()
 		fx.position = Vector2(bx, by)
 		root.add_child(fx)
-		fx.activate_fx(burst_kinds[i], 40.0, tints[i])
+		fx.activate_fx(burst_kinds[i], 32.0, tints[i])
 		_vfx_nodes.append(fx)
 		
 		var blbl := Label.new()
 		blbl.text = burst_names[i]
-		blbl.position = Vector2(bx - 30, by + 45)
-		GameStyle.label(blbl, 10, GameStyle.PAPER_DIM)
+		blbl.position = Vector2(bx - 26, by + 30)
+		GameStyle.label(blbl, 9, GameStyle.PAPER_DIM)
 		root.add_child(blbl)
 
 func _build_vfx_closeup(vfx_id: String) -> void:
@@ -816,7 +791,6 @@ func _build_vfx_closeup(vfx_id: String) -> void:
 		add_child(cone)
 		cone.cone_on(350.0, 150.0)
 	else:
-		# burst 落地法阵
 		var fx := BurstKindFx.new()
 		fx.position = center
 		add_child(fx)
@@ -838,14 +812,14 @@ func _build_projectile_gallery() -> void:
 	
 	var title_lbl := Label.new()
 	title_lbl.text = "剑士 · 全量法器飞行物与弹道纯矢量画廊 (Projectile Gallery)"
-	title_lbl.position = Vector2(24, 16)
-	GameStyle.label(title_lbl, 18, GameStyle.PAPER, 0, GameStyle.INK, true)
+	title_lbl.position = Vector2(24, 12)
+	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
 	root.add_child(title_lbl)
 	
 	var sub_lbl := Label.new()
 	sub_lbl.text = "纯代码 CanvasItem 矢量绘制 · 高频无损旋转、精准物理咬合、动态流光与气刃尾迹"
-	sub_lbl.position = Vector2(24, 42)
-	GameStyle.label(sub_lbl, 11, GameStyle.GOLD_EDGE)
+	sub_lbl.position = Vector2(24, 32)
+	GameStyle.label(sub_lbl, 10, GameStyle.GOLD_EDGE)
 	root.add_child(sub_lbl)
 	
 	var kinds := [
@@ -873,12 +847,12 @@ func _build_projectile_gallery() -> void:
 	]
 	
 	var cols := 7
-	var card_w := 152.0
-	var card_h := 160.0
-	var pad_x := 10.0
-	var pad_y := 12.0
-	var start_x := 36.0
-	var start_y := 70.0
+	var card_w := 122.0
+	var card_h := 142.0
+	var pad_x := 6.0
+	var pad_y := 6.0
+	var start_x := 35.0
+	var start_y := 56.0
 	
 	for i in kinds.size():
 		var c := i % cols
@@ -892,33 +866,33 @@ func _build_projectile_gallery() -> void:
 		root.add_child(panel)
 		
 		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 4)
-		vbox.offset_left = 6
-		vbox.offset_top = 6
-		vbox.offset_right = -6
-		vbox.offset_bottom = -6
+		vbox.add_theme_constant_override("separation", 2)
+		vbox.offset_left = 4
+		vbox.offset_top = 4
+		vbox.offset_right = -4
+		vbox.offset_bottom = -4
 		panel.add_child(vbox)
 		
 		var name_lbl := Label.new()
 		name_lbl.text = kinds[i]["name"]
-		GameStyle.label(name_lbl, 11, GameStyle.PAPER, 0, GameStyle.INK, true)
+		GameStyle.label(name_lbl, 10, GameStyle.PAPER, 0, GameStyle.INK, true)
 		vbox.add_child(name_lbl)
 		
 		var tag_lbl := Label.new()
 		tag_lbl.text = kinds[i]["tag"]
-		GameStyle.label(tag_lbl, 9, GameStyle.JADE)
+		GameStyle.label(tag_lbl, 8, GameStyle.JADE)
 		vbox.add_child(tag_lbl)
 		
 		var stage := Control.new()
-		stage.custom_minimum_size = Vector2(card_w - 12, 100)
+		stage.custom_minimum_size = Vector2(card_w - 8, 92)
 		stage.clip_contents = true
 		vbox.add_child(stage)
 		
 		var pr := ProceduralProjectileRenderer.new()
 		pr.kind = kinds[i]["kind"]
-		pr.position = Vector2((card_w - 12) / 2.0, 50)
-		pr.rotation = -PI * 0.25 # 右上 45 度出膛姿态
-		pr.scale = Vector2.ONE * 2.2
+		pr.position = Vector2((card_w - 8) / 2.0, 46)
+		pr.rotation = -PI * 0.25
+		pr.scale = Vector2.ONE * 1.8
 		stage.add_child(pr)
 
 func _build_projectile_closeup(pid: String) -> void:
@@ -937,7 +911,7 @@ func _build_projectile_closeup(pid: String) -> void:
 	pr.kind = ProceduralProjectileRenderer.detect_kind_from_path(pid)
 	pr.position = Vector2(480, 270)
 	pr.rotation = -PI * 0.25
-	pr.scale = Vector2.ONE * 6.0
+	pr.scale = Vector2.ONE * 5.0
 	add_child(pr)
 
 # ==============================================================================
@@ -952,17 +926,17 @@ func _build_ui_gallery() -> void:
 	
 	# 标题大匾
 	var title := PanelContainer.new()
-	title.position = Vector2(240, 24)
+	title.position = Vector2(260, 16)
 	var tst := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(8, 9))
-	tst.content_margin_left = 30.0
-	tst.content_margin_top = 8.0
-	tst.content_margin_right = 30.0
-	tst.content_margin_bottom = 12.0
+	tst.content_margin_left = 24.0
+	tst.content_margin_top = 6.0
+	tst.content_margin_right = 24.0
+	tst.content_margin_bottom = 8.0
 	title.add_theme_stylebox_override("panel", tst)
 	GameStyle.halftone(title, Color(0.95, 0.98, 1.0, 0.14))
 	var tl := Label.new()
 	tl.text = "修 仙 幸 存 者 · UI 视 觉 规 范 样 张"
-	GameStyle.label(tl, 28, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
+	GameStyle.label(tl, 20, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	title.add_child(tl)
 	add_child(title)
 	
@@ -972,30 +946,30 @@ func _build_ui_gallery() -> void:
 	var names := ["普通 (Common)", "稀有 (Rare)", "史诗 (Epic)", "传说 (Legend)", "选中 (Selected ✦)"]
 	for i in range(accents.size()):
 		var c := PanelContainer.new()
-		c.position = Vector2(40 + i * 200.0, 110)
-		c.custom_minimum_size = Vector2(180, 140)
+		c.position = Vector2(40 + i * 178.0, 75)
+		c.custom_minimum_size = Vector2(166, 125)
 		var st := GameStyle.card(accents[i])
-		st.content_margin_left = 12.0
-		st.content_margin_top = 10.0
+		st.content_margin_left = 10.0
+		st.content_margin_top = 8.0
 		c.add_theme_stylebox_override("panel", st)
 		
 		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 6)
+		v.add_theme_constant_override("separation", 4)
 		var nl := Label.new()
 		nl.text = names[i]
-		GameStyle.label(nl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+		GameStyle.label(nl, 12, GameStyle.PAPER, 0, GameStyle.INK, true)
 		v.add_child(nl)
 		
 		var dl := Label.new()
 		dl.text = "无圆角无渐变\n斜切平行四边形\n深蓝底 + 纸白字"
-		GameStyle.label(dl, 11, GameStyle.PAPER_DIM)
+		GameStyle.label(dl, 10, GameStyle.PAPER_DIM)
 		v.add_child(dl)
 		
 		var chip := Label.new()
 		chip.text = " 剑系 · 金 "
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
-		GameStyle.label(chip, 10, GameStyle.JADE)
+		GameStyle.label(chip, 9, GameStyle.JADE)
 		v.add_child(chip)
 		
 		c.add_child(v)
@@ -1004,63 +978,63 @@ func _build_ui_gallery() -> void:
 	# 按钮组件体系
 	var btn_lbl := Label.new()
 	btn_lbl.text = "◆ 按钮规范：主行动灵金 / 次要墨底 / 危险朱砂"
-	btn_lbl.position = Vector2(40, 275)
-	GameStyle.label(btn_lbl, 12, GameStyle.JADE, 0, GameStyle.INK, true)
+	btn_lbl.position = Vector2(40, 220)
+	GameStyle.label(btn_lbl, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	add_child(btn_lbl)
 	
 	var b1 := Button.new()
 	b1.text = "主 行 动 按 钮"
-	b1.position = Vector2(40, 305)
-	b1.custom_minimum_size = Vector2(240, 48)
-	GameStyle.button(b1, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)
+	b1.position = Vector2(40, 245)
+	b1.custom_minimum_size = Vector2(200, 42)
+	GameStyle.button(b1, GameStyle.GOLD, GameStyle.GOLD_EDGE, 14, GameStyle.INK_TEXT)
 	add_child(b1)
 	
 	var b2 := Button.new()
 	b2.text = "次 要 功 能"
-	b2.position = Vector2(300, 305)
-	b2.custom_minimum_size = Vector2(200, 48)
-	GameStyle.button(b2, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
+	b2.position = Vector2(260, 245)
+	b2.custom_minimum_size = Vector2(170, 42)
+	GameStyle.button(b2, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER)
 	add_child(b2)
 	
 	var b3 := Button.new()
 	b3.text = "重 修 / 兵 解"
-	b3.position = Vector2(520, 305)
-	b3.custom_minimum_size = Vector2(180, 48)
-	GameStyle.button(b3, GameStyle.BAD, GameStyle.JADE, 15, GameStyle.PAPER)
+	b3.position = Vector2(450, 245)
+	b3.custom_minimum_size = Vector2(160, 42)
+	GameStyle.button(b3, GameStyle.BAD, GameStyle.JADE, 13, GameStyle.PAPER)
 	add_child(b3)
 	
 	# 弹窗、侧签与进度条
 	var dlg_lbl := Label.new()
 	dlg_lbl.text = "◆ 弹窗面板 (Dialog Panel)、侧签行 (Side Card) 与 进度条 (Progress Bar)"
-	dlg_lbl.position = Vector2(40, 385)
-	GameStyle.label(dlg_lbl, 12, GameStyle.JADE, 0, GameStyle.INK, true)
+	dlg_lbl.position = Vector2(40, 310)
+	GameStyle.label(dlg_lbl, 11, GameStyle.JADE, 0, GameStyle.INK, true)
 	add_child(dlg_lbl)
 	
 	var dlg := PanelContainer.new()
-	dlg.position = Vector2(40, 415)
-	dlg.custom_minimum_size = Vector2(480, 160)
+	dlg.position = Vector2(40, 335)
+	dlg.custom_minimum_size = Vector2(440, 150)
 	dlg.add_theme_stylebox_override("panel", GameStyle.dialog_panel())
 	
 	var dv := VBoxContainer.new()
-	dv.add_theme_constant_override("separation", 10)
-	dv.offset_left = 16
-	dv.offset_top = 16
-	dv.offset_right = -16
-	dv.offset_bottom = -16
+	dv.add_theme_constant_override("separation", 8)
+	dv.offset_left = 14
+	dv.offset_top = 14
+	dv.offset_right = -14
+	dv.offset_bottom = -14
 	
 	var row := PanelContainer.new()
-	row.custom_minimum_size = Vector2(440, 32)
+	row.custom_minimum_size = Vector2(410, 28)
 	var rst := GameStyle.side_card(GameStyle.JADE, 0.0)
-	rst.content_margin_left = 12.0
+	rst.content_margin_left = 10.0
 	row.add_theme_stylebox_override("panel", rst)
 	var rl := Label.new()
 	rl.text = "青玉侧签行 · 灵石 12847 · 悟道点数 5"
-	GameStyle.label(rl, 13, GameStyle.PAPER)
+	GameStyle.label(rl, 12, GameStyle.PAPER)
 	row.add_child(rl)
 	dv.add_child(row)
 	
 	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(440, 18)
+	bar.custom_minimum_size = Vector2(410, 16)
 	bar.max_value = 100
 	bar.value = 68
 	bar.show_percentage = false
