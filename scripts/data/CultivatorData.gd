@@ -424,7 +424,7 @@ const DEFS: Dictionary = {
 						},
 						"allowed_tags": [],
 						"locked_upgrades": [],
-						"skill_mods": {"renewal": {"power_add": 0.10}},
+							"skill_mods": {"renewal": {"power_mult": 1.30}},
 					},
 					"kuxingseng": {
 						"name": "苦行僧",

@@ -48,20 +48,8 @@ static func card_lines() -> Array[String]:
 		"毒伤 %d + 元素伤害 ×%.1f；%d 秒内全伤害 +%d%%（冷却 %d 秒）" % [
 			int(roundf(BASE_DAMAGE)), ELEMENTAL_RATIO, int(roundf(BUFF_DURATION)),
 			int(roundf(BUFF_DAMAGE * 100.0)), COOLDOWN],
-]
+	]
 
 const COOLDOWN := 12.0  ## 药爆冷却秒数（真话在 SkillData.DEFS.elixir.cooldown，此处仅为卡面显示）
 
-# ----------------- 兼容过渡存根（供各处编译通过） -----------------
-const STORE_RATIO := 0.5
-const CAP_HP_RATIO := 0.30
-
-static func cap_of(max_health: float) -> float:
-	return maxf(1.0, max_health * CAP_HP_RATIO)
-
-static func add_pool(pool: float, overflow: float, max_health: float) -> float:
-	return minf(cap_of(max_health), pool + maxf(0.0, overflow) * STORE_RATIO)
-
-static func has_charge(pool: float) -> bool:
-	return pool > 0.01
 

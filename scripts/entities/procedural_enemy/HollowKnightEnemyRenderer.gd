@@ -92,6 +92,19 @@ func _draw() -> void:
 	var root_scale_x := -1.0 if flip_h else 1.0
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(root_scale_x, 1.0) * config.scale_factor)
 
+	# 精英/魔君常驻识别环（2026-10-14 P2）：贴地呼吸骨环，满屏时一眼分出「这只厚」。
+	# 画在各敌种函数之前（垫底贴地层），所有敌型一次覆盖；Boss 用更宽的朱砂双环。
+	if config.is_boss or config.is_elite:
+		var ring_r := config.body_radius + 8.0
+		var ring_pulse := sin(_time * 2.4) * 0.06 + 0.94
+		if config.is_boss:
+			var boss_col := Color(0.85, 0.22, 0.28, 0.55 * ring_pulse)
+			draw_arc(Vector2(0, 15), ring_r + 3.0, 0.0, TAU, 40, boss_col, 3.2, true)
+			draw_arc(Vector2(0, 15), ring_r * 0.8, 0.0, TAU, 40, Color(boss_col.r, boss_col.g, boss_col.b, 0.30), 1.4, true)
+		else:
+			var elite_col := Color(0.92, 0.86, 0.70, 0.50 * ring_pulse)
+			draw_arc(Vector2(0, 15), ring_r, 0.0, TAU, 32, elite_col, 2.4, true)
+
 	# 根据敌种 ID 派发专属绘制管线
 	match config.enemy_id:
 		"slime":
@@ -215,15 +228,25 @@ func _draw_xiexiu() -> void:
 	var t_bank := bank_angle * 0.85
 	var adv_lean := deg_to_rad(advance * 4.0)
 
+	# 火球蓄力姿态（special_state 与 EnemyBase._bolt_windup_t 同源）：脚下幽剑后拉 3px + 剑尖聚光，
+	# 与毒妖毒囊胀大同一条「蓄力读法」通道——变色预告之外再给一个形体预告
+	var casting := special_state > 0.0
+	var cast_pull := 3.0 * special_state
+
 	# 地影（高度变化驱动影子呼吸）
 	var shadow_rx := 13.0 - float_y * 0.4
 	draw_filled_ellipse(Vector2(0, 16), maxf(shadow_rx, 6.0), 4.0, Color(0.04, 0.05, 0.08, 0.45))
 
 	# 脚下幽光残剑（斜横悬浮，剑身刻符文）
-	var sword_pos := Vector2(-2, 11 + float_y)
+	var sword_pos := Vector2(-2 - cast_pull, 11 + float_y)
 	var sword_rot := deg_to_rad(14.0) + t_bank * 0.5 - adv_lean * 0.5
 	var t_sword := Transform2D(sword_rot, sword_pos)
-	draw_soft_glow(sword_pos, 14.0, config.col_glow * Color(1, 1, 1, 0.4), 2)
+	var sword_glow_a := 0.4 + special_state * 0.45
+	draw_soft_glow(sword_pos, 14.0, config.col_glow * Color(1, 1, 1, sword_glow_a), 2)
+	if casting:
+		# 剑尖聚光：出膛方向的前端一点暖白亮核，读「火球将从此处出」
+		var tip_pos := t_sword * Vector2(19, 0)
+		draw_circle(tip_pos, 2.6 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
 	var blade_pts := PackedVector2Array([
 		t_sword * Vector2(-16, -2),
 		t_sword * Vector2(14, -1),
@@ -699,13 +722,17 @@ func _draw_jiansha_elite() -> void:
 	# 地影
 	draw_filled_ellipse(Vector2(0, 16), 16.0, 4.5, Color(0.04, 0.05, 0.08, 0.5))
 
+	# 火球蓄力姿态（special_state 同源）：三剑向身后收拢 3px 并提亮，读「聚气将发」
+	var cast_pull := 3.0 * special_state
+	var cast_bright := 0.4 + special_state * 0.45
+
 	# 背后呈扇形悬浮的 3 柄冷冽煞剑（主剑在中央，双侧副剑）
 	for i in range(3):
 		var ang_offset := deg_to_rad(-24.0 + float(i) * 24.0)
-		var sw_pos := center + Vector2(cos(ang_offset + PI * 0.5), sin(ang_offset + PI * 0.5) - 1.0) * -12.0
+		var sw_pos := center + Vector2(cos(ang_offset + PI * 0.5), sin(ang_offset + PI * 0.5) - 1.0) * (-12.0 - cast_pull)
 		var sw_rot := ang_offset + deg_to_rad(150.0)
 		var t_sw := Transform2D(sw_rot, sw_pos)
-		draw_soft_glow(sw_pos, 10.0, config.col_glow * Color(1, 1, 1, 0.4), 2)
+		draw_soft_glow(sw_pos, 10.0, config.col_glow * Color(1, 1, 1, cast_bright), 2)
 		var sw_pts := PackedVector2Array([
 			t_sw * Vector2(-15, -2),
 			t_sw * Vector2(16, -1),
@@ -714,6 +741,10 @@ func _draw_jiansha_elite() -> void:
 			t_sw * Vector2(-15, 2)
 		])
 		draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.6)
+		if special_state > 0.0 and i == 1:
+			# 中间主剑剑尖聚光：火球出膛方位预告
+			var tip := t_sw * Vector2(21, 0)
+			draw_circle(tip, 2.4 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
 
 	# 墨黑金纹魔袍
 	var robe_pts := PackedVector2Array([

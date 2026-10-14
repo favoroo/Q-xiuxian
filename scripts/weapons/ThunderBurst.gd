@@ -39,6 +39,7 @@ static func _ensure_host(parent: Node) -> void:
 	_pool.clear()   # 旧宿主已失效，残留池引用一并作废
 	_host = Node2D.new()
 	_host.name = "ThunderBurstPool"
+	_host.z_index = 0
 	parent.add_child(_host)
 
 ## 取一次落雷（优先复用）：调用方在调用后写 radius/damage/tint 等字段，最后调 activate() 起爆。
@@ -156,7 +157,7 @@ func _spawn_impact_seal() -> void:
 	var seal := SealImpactFx.new()
 	seal.size = radius * 1.4
 	seal.tint = tint
-	seal.z_index = 21
+	seal.z_index = 0
 	seal.modulate = Color(1.0, 1.0, 1.0, 0.95)
 	add_child(seal)
 	var tw := create_tween()

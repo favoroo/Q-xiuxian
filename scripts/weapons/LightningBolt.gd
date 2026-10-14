@@ -30,13 +30,11 @@ static func _ensure_host(scene: Node) -> void:
 	_pool.clear()
 	_host = Node2D.new()
 	_host.name = "LightningBoltPool"
-	_host.z_index = 25
+	_host.z_index = 0
 	scene.add_child(_host)
 
 static func acquire(parent: Node) -> LightningBolt:
-	var tree := parent.get_tree()
-	var scene := tree.current_scene if (tree != null and tree.current_scene != null) else parent
-	_ensure_host(scene)
+	_ensure_host(parent)
 
 	while not _pool.is_empty():
 		var reused: LightningBolt = _pool.pop_back()
@@ -78,7 +76,7 @@ func _create_line(w: float, col: Color) -> Line2D:
 	line.joint_mode = Line2D.LINE_JOINT_ROUND
 	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	line.z_index = 25
+	line.z_index = 0
 	add_child(line)
 	return line
 

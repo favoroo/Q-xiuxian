@@ -94,8 +94,8 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 			return make_jinsuanpan()
 		"meiying":
 			return make_meiying()
-		"dubi", "duanbi":
-			return make_duanbi()
+		"dubi":
+			return make_dubi()
 		"kuangzhan":
 			return make_kuangzhan()
 		"duoshe":
@@ -271,8 +271,8 @@ static func make_meiying() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-# 6. 独臂刀圣（断臂残躯，霸道无匹，江湖浪客，刀断天河）
-static func make_duanbi() -> CultivatorVisualConfig:
+# 6. 狂战士（断臂残躯，霸道无匹，江湖浪客，刀断天河）
+static func make_dubi() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
 	cfg.body = { "scale": 1.08, "width_scale": 1.08, "height_scale": 1.02, "head_scale": 0.94 }
 	cfg.face = {
@@ -302,8 +302,9 @@ static func make_duanbi() -> CultivatorVisualConfig:
 	cfg._sync_palette()
 	return cfg
 
-static func make_dubi() -> CultivatorVisualConfig:
-	return make_duanbi()
+## 向后兼容
+static func make_duanbi() -> CultivatorVisualConfig:
+	return make_dubi()
 
 # 7. 蛮兵（荒古狂战，陷阵无双，铜金战角，金芒怒目，兽皮深褐百衲袍，蛮荒兽骨巨斧）
 static func make_kuangzhan() -> CultivatorVisualConfig:

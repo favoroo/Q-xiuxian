@@ -494,6 +494,11 @@ func _init_procedural_view(eid: String) -> bool:
 	if anim_sprite != null and ok:
 		# 只在确实有矢量外观时才藏旧精灵 —— 否则「图集没加载 + 精灵被藏」= 场上出现隐形怪
 		anim_sprite.visible = false
+		# 双影子二选一（2026-10-14 P2）：矢量渲染器自画贴地影（含蓄力下蹲/浮沉呼吸联动），
+		# RunMotion 驱动的 sprite 影在此分支纯叠画（两层影高度还不同，上下叠成两道）——隐藏不删，
+		# 图集兜底路径（无矢量外观的怪）仍要靠它
+		if shadow_sprite != null:
+			shadow_sprite.visible = false
 		procedural_view.position = anim_sprite.position
 		procedural_view.scale = anim_sprite.scale
 		if hit_flash_mat != null:
@@ -1112,7 +1117,7 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			procedural_view.advance = vel_dir.dot(dir)
 		if _fuse >= 0.0:
 			procedural_view.special_state = 1.0
-		elif _charge_windup >= 0.0 or _bite_windup >= 0.0:
+		elif _charge_windup >= 0.0 or _bite_windup >= 0.0 or _bolt_windup_t >= 0.0:
 			procedural_view.special_state = 1.0
 		else:
 			procedural_view.special_state = 0.0
@@ -1209,6 +1214,13 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			GameFeel.vibrate(26, 0.65)
 		else:
 			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
+		# 暴击方向环（2026-10-14 受击火花「重构替代品」，只给暴击）：0.11s 极小光环，
+		# 补「这一刀从哪来」的方向读数。暴击本身低频，且入口有 JuiceEffect 帧预算（≤6/帧）
+		# 与视口双闸兜底，不会复现 2026-10-11 高频命中「空白处乱闪」的刷屏问题。
+		# 致命一刀不发：击杀点反馈由 _die 的死亡爆散一力承担（同一次事件只许一处发反馈）。
+		if not from_dot and not lethal:
+			JuiceEffect.spawn_impact_pop(get_parent(), global_position,
+				Color(1.0, 0.42, 0.22, 0.85), knockback)
 	elif not from_dot:
 		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤。
 		# 走全局限流闸（2026-10-11 频闪治理）：远程穿透/弹射下每秒几十次命中逐刀微震会糊成持续抖屏
@@ -1220,9 +1232,11 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 
 	# 跳字（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻发跳字。音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
-	# 受击火花已整体下线（2026-10-11 用户拍板：远程高频命中下仍「空白处乱闪」，待重构替代品）
+	# combo_key = 自身 instance_id：同一敌人短窗（0.25s）内的连续伤害由 DamageNumber 聚合成
+	# 一条（128×3），束流/喷吐/DoT 高频命中不再逐发刷屏、互顶看不清，池 96 溢出 new+free 抖动消失。
+	# 只合并显示条数，不合并伤害数值（集火保护仍按每发计）。
 	if not _offscreen:
-		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit)
+		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit, "", get_instance_id())
 	var squash_target := _calculate_hit_squash(knockback, is_crit)
 	play_squash(squash_target, 0.16)
 
@@ -1713,6 +1727,8 @@ func receive_heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	if not _offscreen:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+%d" % int(amount))
+		# 治疗可视出口（2026-10-14 P1）：受者身上升起青绿灵光，满屏也能读出「谁在被奶」
+		JuiceEffect.spawn_heal_rise(get_parent(), global_position)
 	play_squash(Vector2(1.1, 0.9), 0.14)
 
 # ---------------- 行为支路：投毒（持续伤害区域） ----------------
@@ -1839,6 +1855,10 @@ func _die() -> void:
 	# 不与尸体塌缩抢戏），只在伤害击杀路径放；回合末消散走 dissolve 不经过这里
 	if procedural_view != null and procedural_view.config != null:
 		JuiceEffect.spawn_death_burst(get_parent(), global_position, procedural_view.config.col_primary, is_elite)
+		# 击杀余韵（2026-10-14 P1）：敌种主色贴地残晕，给每秒多次的击杀留 0.55s 地面读数。
+		# 池容量 16 与寿命 0.55s 双重兜底，极高频击杀下自动复用最旧残晕，不会糊满地面
+		var glow_r: float = 26.0 if not is_elite else 38.0
+		GroundDecal.spawn_tinted(get_parent(), global_position, glow_r, procedural_view.config.col_primary)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击

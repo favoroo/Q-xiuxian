@@ -159,8 +159,8 @@ func _build_charge_readout() -> void:
 	_readout = Node2D.new()
 	_readout.name = "ChargeReadout"
 	_readout.visible = false
-	## 压在碑身之上（同一 MapLayer 内），仍在角色/敌人之下 —— 环是地上的东西
-	_readout.z_index = 2
+	## 位于地砖与碑身之上（树顺序后于碑身），但在角色/敌人之下（MapLayer 树序先于 EntitiesLayer，z=0）
+	_readout.z_index = 0
 	add_child(_readout)
 
 	_readout_arc = ChargeArc.new()
@@ -362,7 +362,7 @@ func _spawn_shockwave_ring() -> void:
 	ring.texture = circle_sprite.get_node("RingSprite").texture
 	ring.modulate = Color(0.45, 0.85, 1.0, 0.7)
 	ring.scale = Vector2(0.5, 0.5)
-	ring.z_index = 10
+	ring.z_index = 0
 	get_parent().add_child(ring)
 	ring.global_position = global_position
 	var tw = create_tween()

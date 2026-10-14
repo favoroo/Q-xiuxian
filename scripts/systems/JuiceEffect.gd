@@ -12,7 +12,7 @@ extends Node2D
 ##   2) 粒子用并行数组而非「每颗粒子一个 Dictionary」；
 ##   3) 光环插值由 Tween.interpolate_value 改成 quad 缓出的闭式解。
 
-enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST }
+enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST, HEAL_RISE }
 
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
@@ -248,6 +248,29 @@ static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) 
 	fx._begin(EffectType.PICKUP_POP, pos, 0.18, Z_OVERLAY)
 	var c := Color(0.35, 0.8, 1.0, 0.85) if not is_gold else Color(1.0, 0.88, 0.35, 0.95)
 	fx._add_ring(16.0, 2.0, c, 2.0)
+
+## 治疗上飘（2026-10-14 P1 灵医可视出口）：被治疗目标身上升起 3 颗青绿灵光。
+## 「谁在被奶」是玩家最该读到的信息（治疗者优先击杀的判断依据），灵医自己的
+## 治疗冲击环（EnemyBase._pulse_heal）只标施法者，这里标受者。
+static func spawn_heal_rise(parent: Node, pos: Vector2) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+	var fx := _acquire()
+	fx._begin(EffectType.HEAL_RISE, pos, 0.45, Z_OVERLAY)
+	var c := Color(0.45, 0.92, 0.62, 0.85)
+	# 收缩小环压住目标轮廓（从身位圈收到中心），读「灵气入体」
+	fx._add_ring(14.0, 4.0, c, 2.0)
+	# 三颗上浮微粒（错位错速，衰减拖出余韵）
+	for i in range(3):
+		var off_x := (float(i) - 1.0) * 5.0
+		fx._add_particle(
+			Vector2(off_x, 4.0),
+			Vector2(off_x * 0.6, -34.0 - float(i) * 9.0),
+			2.5,
+			c.lightened(0.25 if i == 1 else 0.0),
+			2.2 - float(i) * 0.3)
 
 ## 步伐轻尘（奔跑时的脚底微尘）
 static func spawn_step_dust(parent: Node, pos: Vector2, move_dir: Vector2) -> void:

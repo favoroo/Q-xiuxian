@@ -17,6 +17,11 @@ enum Angle {
 	SIDE,  ## 3/4 侧面视角
 	BACK   ## 背面视角
 }
+## 口径（2026-10-14 P2 钉死）：实机恒为 FRONT（土豆兄弟式纯正面朝相机，见
+## ProceduralCultivatorView.set_facing_dir 唯一赋值点），SIDE/BACK 两套绘制
+## 只被画廊预览（CultivatorGalleryPreview / CloakFramesPreview 的三向验收）消费。
+## 严禁当死代码删除——画廊导出与 SKILL.md 四步拓展流程的验收环节依赖它们；
+## 未来若恢复侧/背朝向切换，这两套几何直接复用。
 
 ## 分层渲染开关（仅供像素判据取掩码用，0 表示不过滤＝游戏内正常全画）
 ## 判据需要单独拿到「只有武器」「只有头部」这两圈真实画出来的像素，
@@ -99,9 +104,13 @@ var high_fps_mode: bool = false:
 var _time: float = 0.0
 var _draw_phase: float = 0.0
 var _dirty: bool = true
+## 待机个体错相 + 体型调频基准（2026-10-14 P1）：全角色同频同相的浮沉会让同屏待机
+## 的角色像拷贝；instance_id 错开相位，体型缩放反比调频率——大个子沉缓、小个子轻快
+var _idle_phase: float = 0.0
 
 func _ready() -> void:
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_idle_phase = fposmod(float(get_instance_id() % 61) * 0.173, TAU)
 
 func _process(delta: float) -> void:
 	_time += delta

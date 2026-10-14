@@ -100,14 +100,8 @@ func show_select() -> void:
 	for s_id in SkillData.OFFER_IDS:
 		var card = _create_card(s_id)
 		cards_container.add_child(card)
-		card.pivot_offset = Vector2(_card_w * 0.5, CARD_H * 0.5)
-		card.scale = Vector2(0.72, 0.72)
-		card.modulate.a = 0.0
-		var ctw = card.create_tween()
-		ctw.tween_interval(float(idx) * 0.05)
-		ctw.set_parallel(true)
-		ctw.tween_property(card, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		ctw.tween_property(card, "modulate:a", 1.0, 0.16)
+		# 统一卡片入场配方（GameStyle.pop_in，支点随布局自动归中）
+		GameStyle.pop_in(card, float(idx) * 0.05, 0.72)
 		idx += 1
 	visible = true
 	modulate.a = 0.0

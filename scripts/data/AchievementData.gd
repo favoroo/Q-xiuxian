@@ -5,7 +5,7 @@ extends RefCounted
 ## 全部 static 纯函数 —— 不读 autoload、不碰节点，保证单测可确定性断言。
 ## 设计原则：
 ##   1. 零局外数值膨胀：成就只解锁新角色（道统）与少量道具入池，不破坏局内难度平衡；
-##   2. 初始开放 6 名代表性角色 + 51 件基础道具，其余 12 名进阶角色与 4 件高阶道具通过里程碑解锁；
+##   2. 初始开放 8 名代表性角色 + 83 件基础道具，其余 11 名进阶角色与 4 件高阶道具通过里程碑解锁；
 ##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段），
 ##      纯荣誉成就 reward_type = "none"（只点亮、不发奖励，不碰解锁经济）。
 
@@ -24,7 +24,7 @@ const CATEGORY_NAMES: Dictionary = {
 	"luck": "机缘",
 }
 
-## 初始默认解锁的 7 名角色
+## 初始默认解锁的 8 名角色
 const DEFAULT_CULTIVATORS: Array[String] = [
 	"jianchi",
 	"shiyue",
@@ -33,6 +33,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"lingzhifu",
 	"leifa",
 	"kuxingseng",
+	"yushou",
 ]
 
 ## 初始默认进入商店货架池的 51 件道具（高阶出现节奏由 GameBalance.item_tier_weights 回合门槛控制）

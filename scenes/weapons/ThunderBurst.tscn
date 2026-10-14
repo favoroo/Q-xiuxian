@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="2_light"]
 
 [node name="ThunderBurst" type="Node2D"]
-z_index = 20
 script = ExtResource("1_burst")
 
 [node name="FxSprite" type="Sprite2D" parent="."]

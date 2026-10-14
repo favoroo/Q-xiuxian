@@ -93,12 +93,17 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 			_phase_tick.modulate = Color.WHITE
 		modulate.a = 1.0
 		visible = true
-		# 登场弹跳：与 banner / 等级徽章同款 BACK 缓动
+		# 登场：自屏顶压落 + 弹跳（与 banner / 等级徽章同款 BACK 缓动），配 boss_raid 低吼同拍
 		if _fx_tween != null and _fx_tween.is_valid():
 			_fx_tween.kill()
 		_fx_tween = create_tween()
+		_fx_tween.set_parallel()
 		_fx_tween.tween_property(self, "scale", Vector2.ONE, 0.22)\
 			.from(Vector2(0.6, 0.6)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_fx_tween.tween_property(self, "offset_top", 140.0, 0.25)\
+			.from(104.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_fx_tween.tween_property(self, "offset_bottom", 178.0, 0.25)\
+			.from(142.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		return
 	if not _phase2_marked and max_v > 0.0 and cur <= max_v * GameBalance.BOSS_PHASE2_AT:
 		_mark_phase2()

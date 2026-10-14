@@ -291,7 +291,7 @@ var cultivator_id: String = ""
 var thorns_pct: float = 0.0        ## 石岳反震：按敌方攻击力比例反弹
 var spirit_threshold_adj: int = 0  ## 符阵灵童：御灵羁绊门槛下移
 var dodge_cap_bonus: float = 0.0   ## 魅影：闪避硬上限上移（上限 = DODGE_CAP + 本值）
-var weapon_slots_override: int = 0 ## 独臂刀圣：上阵槽位上限覆盖（0 = 用 WeaponData.MAX_SLOTS）
+var weapon_slots_override: int = 0 ## 狂战士：上阵槽位上限覆盖（0 = 用 WeaponData.MAX_SLOTS）
 var enemy_count_mult: float = 1.0  ## 狂战蛮修：敌潮规模倍率（WaveSpawner 消费）
 var harvest_decay: float = 0.0     ## 蛮兵：每回合收益流失点数
 var xp_require_mult: float = 1.0   ## 学者：升级经验需求倍率
@@ -306,7 +306,6 @@ var on_hit_damage_stacks: int = 0
 var on_hit_damage_timer: float = 0.0
 var guard_stance: float = 0.0           ## 守卫：盾势机制开关（>0 启用；蓄能/爆发数值全在 GuardStanceData）
 var shield_charge: float = 0.0          ## 守卫：盾势槽当前蓄能（Player.take_damage 写入，蓄满当帧爆发清空）
-var elixir_pool: float = 0.0            ## 药王：药池当前存量（治疗溢出入池，服丹消耗；数值全在 ElixirData）
 var heal_orb_chance: float = 0.0        ## 灵植夫：敌人死亡额外掉回复珠概率（EnemyBase 掉落块消费）
 var heal_overflow_mult: float = 1.0     ## 灵植夫：回复珠溢出折金币倍率（HealOrb._collect 消费）
 var alloc_offer_bonus: int = 0          ## 学者：悟道候选数加成（AllocSession.roll_alloc_offers 消费）
@@ -490,6 +489,9 @@ func add_spirit_stones(amount: int) -> void:
 
 func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	kills += 1
+	# 击杀里程碑：每 50 杀一条横幅喜报（复用 GameHUD 横幅管线，不配新音，避免刷屏）
+	if kills % 50 == 0:
+		announcement_triggered.emit("✦ 连破 %d 敌 ✦" % kills)
 	# 狂战士·战意：每次击杀 +1 层并把流失宽限计时归零（唯一攒点）
 	if frenzy_enabled > 0.0:
 		var prev_stacks := frenzy_stacks

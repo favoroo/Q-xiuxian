@@ -57,7 +57,8 @@ func _test_select_cultivator_visuals() -> void:
 	_c.check(rdr != null and view != null and view.get_child_count() >= 1, "view 下有渲染器子节点")
 	_c.check(rdr != null and rdr.config != null, "renderer 已按道统装配 CultivatorVisualConfig")
 	_c.check(not p.anim_sprite.visible, "旧 anim_sprite 保持隐藏不显示")
-	_c.check(p.shadow_sprite.visible, "选定角色后 shadow_sprite 正常显示")
+	# 双影子二选一（2026-10-14 P2）：程序化模式下渲染器自画矢量地影，sprite 影隐藏防叠画
+	_c.check(not p.shadow_sprite.visible, "选定角色后 shadow_sprite 隐藏（矢量影接管，防双影叠画）")
 
 	p.queue_free()
 

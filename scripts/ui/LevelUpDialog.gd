@@ -306,7 +306,7 @@ func _on_alloc_opened() -> void:
 	get_tree().paused = true
 	modulate.a = 0.0
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.16)
+	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
 	# 入场防误触保护窗口：动画播放完后才允许交互
 	tw.tween_interval(0.14)
 	tw.tween_callback(func(): _can_interact = true)
@@ -319,7 +319,7 @@ func _on_alloc_finished() -> void:
 	# 详情卡是本面板的子节点：不收干净就是「隐藏后复活」——下次开面板它会带着上一局的旧读数亮出来
 	DetailTip.close_all(self)
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.14)
+	tw.tween_property(self, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
 	tw.tween_callback(func(): visible = false)
 
 func _layout_for_viewport() -> void:
@@ -407,16 +407,8 @@ func _populate_cards() -> void:
 		_card_entries.append(entry)
 		var card_col: Control = entry["root"]
 		cards_container.add_child(card_col)
-		card_col.pivot_offset = Vector2(_card_w * 0.5, CARD_MIN_H * 0.5)
-		card_col.scale = Vector2(0.8, 0.8)
-		card_col.modulate.a = 0.0
-		var ctw := card_col.create_tween()
-		# 缩放的支点要绕卡片自己的中心：布局出尺寸之前无从得知，动画第一帧（还是全透明）补上
-		ctw.tween_callback(_center_pivot.bind(card_col))
-		ctw.tween_interval(float(i) * 0.05)
-		ctw.set_parallel(true)
-		ctw.tween_property(card_col, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		ctw.tween_property(card_col, "modulate:a", 1.0, 0.16)
+		# 统一卡片入场配方（支点随布局自动归中，见 GameStyle.pop_in 头注）
+		GameStyle.pop_in(card_col, float(i) * 0.05, 0.8)
 	# 整行建完再放开「按下」冒泡（必须在子树建完之后，见 GameStyle.swipeable 头注）：
 	# 卡体是 PanelContainer（mouse_filter 默认 STOP），会把 CardScroll 起手锁定手指拖动要的
 	# 那一拍就地吃掉、不再向上冒泡 ⇒ 卡盖住多大面积就滑不动多大面积。

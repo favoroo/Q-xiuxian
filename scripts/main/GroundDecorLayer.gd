@@ -9,7 +9,8 @@ extends Node2D
 var half_extent: float = 440.0
 
 func _ready() -> void:
-	z_index = 0  # 位于地砖 TextureRect 之上，ArenaVisualLayer(z=1) 之下
+	# 位于 MapLayer 内，靠树顺序排在地砖之上、ArenaVisualLayer 之下；z_index 保持 0 不越过实体层
+	z_index = 0
 
 func _draw() -> void:
 	var rng := RandomNumberGenerator.new()

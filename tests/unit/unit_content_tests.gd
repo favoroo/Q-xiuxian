@@ -492,6 +492,13 @@ func _test_cultivator_system() -> void:
 	# 道统选择界面上下分层与开局装备验证
 	_c.check(not CultivatorData.get_start_equip("fuzhen").is_empty(), "符阵灵童明确说明开局额外自带装备")
 	_c.check(CultivatorData.get_start_equip("jianchi").is_empty(), "无额外装备的角色不标注开局装备")
+
+	# 御兽师契合技能加成有效性（修复 power_add 死键，强化文案正常渲染）
+	var yushou_syn_sid := CultivatorData.get_synergy_skill_id("yushou")
+	_c.equals(yushou_syn_sid, "renewal", "御兽师契合治疗技能")
+	var yushou_enh := SkillData.enhance_desc(yushou_syn_sid, "yushou")
+	_c.check(not yushou_enh.is_empty(), "御兽师契合治疗强化文案非空（实得: %s）" % yushou_enh)
+	_c.check(yushou_enh.contains("回复量"), "御兽师契合强化文案包含回复量加成")
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()

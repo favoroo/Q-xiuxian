@@ -48,7 +48,6 @@ var squash_tween: Tween = null
 var _flash_t: float = 0.0  ## 受击闪白剩余秒（帧内衰减，材质已转接程序化视图）
 ## 玩家受击闪白衰减总时长：与敌人暖白衰减（0.11s）同档，无敌帧 0.55s 内必然归零
 const PLAYER_FLASH_DOWN_DUR: float = 0.11
-var dust_timer: float = 0.0
 var procedural_view: ProceduralCultivatorView = null
 var is_procedural: bool = false
 var gait_phase_counter: float = 0.0
@@ -141,6 +140,11 @@ func _setup_sprite_frames() -> void:
 	if _motion_mode == "procedural":
 		is_procedural = true
 		anim_sprite.visible = false
+		# 双影子二选一（2026-10-14 P2）：渲染器自画矢量地影（_draw_ground_shadow，
+		# 带呼吸/姿态联动），sprite 影在此分支纯叠画冗余——隐藏而非删节点，
+		# 图集道统（gait/hover）回来时仍要用它（RunMotion._apply_shadow 驱动）
+		if shadow_sprite != null:
+			shadow_sprite.visible = false
 		var init_scale := anim_base_scale * 1.5
 		# 受击闪白材质真话只有一份：挂在程序化视图上吃（渲染器 use_parent_material 继承）。
 		# 旧写法 tween 到已隐藏的 anim_sprite 上，玩家本体从不闪白（v0.0.33 及之前一直失效）。
@@ -161,13 +165,20 @@ func _setup_sprite_frames() -> void:
 			procedural_view.play_idle()
 			procedural_view.visible = true
 		# 程序化角色不加载图集：全部 19 位角色都是 procedural，而每张 960×960 图集
-		# 解码后占 3.5MB，屏上实际只有约 144px（192px 格 × 0.75）。图集路径保留给
-		# 将来新增的 gait 道统 —— 那种情况下面的分支会照常构建 SpriteFrames。
+		# 解码后占 3.5MB，屏上实际只有约 144px（192px 格 × 0.75）
 		anim_sprite.sprite_frames = null
 		return
 
+	# ---- 图集道统（休眠代码，2026-10-14 P2 钉死口径）----
+	# 全员 procedural 的今天本段永不执行，但它是未来新道统（gait 腿帧步态 / hover
+	# 御剑悬浮）的即插即用路径：CultivatorData.sprite + motion 字段、RunMotion 的
+	# apply/apply_hover 分支、下方 SpriteFrames 构建与 RunMotion._apply_shadow 的
+	# sprite 影全链路一一配套。严禁当死代码顺手清除。
 	is_procedural = false
 	anim_sprite.visible = true
+	# 图集角色吃 RunMotion 驱动的 sprite 影（程序化角色用渲染器矢量影，二者互斥）
+	if shadow_sprite != null:
+		shadow_sprite.visible = true
 	if procedural_view != null:
 		procedural_view.visible = false
 
@@ -602,13 +613,12 @@ func _call_thunder() -> bool:
 	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
 		GameStyle.GOLD_EDGE, 0.3)
 	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
-	if get_tree() != null:
-		var scene: Node = get_tree().current_scene if get_tree().current_scene != null else get_parent()
-		if scene != null:
-			var bolt := LightningBolt.acquire(scene)
-			var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
-			var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-			bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
+	var bolt_parent: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
+	if bolt_parent != null:
+		var bolt := LightningBolt.acquire(bolt_parent)
+		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
+		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
+		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
 	if skill_vfx != null:
 		skill_vfx.on_thunder_cast()
 	play_squash(Vector2(1.08, 0.92), 0.12)
@@ -821,14 +831,8 @@ func _physics_process(delta: float) -> void:
 	var lim: float = GameManager.MAP_HALF_EXTENT - 26.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 2. 奔跑步伐微尘
-	if is_moving and actual_speed_sq > 1600.0:
-		dust_timer -= delta
-		if dust_timer <= 0.0:
-			dust_timer = 0.22
-			JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), velocity)
-	else:
-		dust_timer = 0.0
+	# 2. 奔跑步伐微尘：已在步相推进点（下方 procedural 分支）随「脚落地帧」同步放尘，
+	# 与身体垂直弹跳/影子脉冲三者同源 gait_phase_counter，不再用独立定时器错拍
 
 	# 3. Sprite 方向 & 动画（带迟滞滤波 + 移速步频自适应 + 统一形变插值流）
 	var current_base := anim_base_scale * juice_scale
@@ -845,8 +849,12 @@ func _physics_process(delta: float) -> void:
 
 		if is_procedural and procedural_view != null:
 			gait_phase_counter += delta * 2.4 * clampf(speed_ratio, 0.7, 1.4)
-			if gait_phase_counter > 1.0:
-				gait_phase_counter -= 1.0
+			# 步伐微尘与步相同拍（2026-10-14 P1）：一个步循环 0→1 跨两步，半循环过零点
+			# 即「脚落地帧」——身体垂直弹跳、影子脉冲、脚下尘三者同源不再错拍；
+			# 移速越快步频越快，放尘密度随之自适应（旧 0.22s 定时器删）
+			if gait_phase_counter >= 0.5:
+				gait_phase_counter -= 0.5
+				JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), velocity)
 			# 土豆兄弟式步态弹性（Squash & Stretch）：垂直弹跳与横向挤压形变
 			var bounce_amp := 0.065 * clampf(speed_ratio, 0.6, 1.25)
 			var hover_bob := sin(gait_phase_counter * TAU) * bounce_amp
@@ -856,10 +864,6 @@ func _physics_process(delta: float) -> void:
 			var target_bank := deg_to_rad(4.8) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.2)
 			procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 14.0, 1.0))
 			procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
-			if shadow_sprite != null:
-				# 影子跟随移速方向自然拉伸拖尾与呼吸
-				var shadow_pulse := 1.0 - sin(gait_phase_counter * TAU) * 0.08
-				shadow_sprite.scale = Vector2(0.85, 0.85) * (1.0 + 0.15 * speed_ratio) * shadow_pulse
 		elif _motion_mode == "hover":
 			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
@@ -875,8 +879,6 @@ func _physics_process(delta: float) -> void:
 			procedural_view.rotation = lerp_angle(procedural_view.rotation, 0.0, minf(delta * 10.0, 1.0))
 			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
 			procedural_view.play_idle()
-			if shadow_sprite != null:
-				shadow_sprite.scale = Vector2(0.85, 0.85)
 		elif _motion_mode == "hover":
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)

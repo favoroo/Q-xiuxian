@@ -64,6 +64,10 @@ const SLANT_BLOCK := 5.0
 const SLANT_BUTTON := 6.0
 const SLANT_BAND := 10.0
 
+# —— 弹窗进出时长收口（新代码一律从这两个常量取，不再各写一份 0.12~0.25 的魔法数）——
+const UI_FADE_IN := 0.2    # 弹窗/面板淡入
+const UI_FADE_OUT := 0.15  # 弹窗/面板淡出（退场比进场快半拍，等人才是重灾区）
+
 # —— 透明度组合（2026-10-11 收口：UI 层不再手写 Color(r,g,b,a)，统一从这几个入口取）——
 const DIM_BASE := Color(0.02, 0.02, 0.03)    # 弹窗/浮层遮罩基色（近黑微蓝）
 const COOLDOWN_ARC := Color(0.35, 0.75, 1.0) # 技能冷却环弧光蓝
@@ -450,16 +454,21 @@ static func halftone(parent: Control, col := Color(0.95, 0.94, 0.89, 0.10)) -> C
     parent.add_child(h)
     return h
 
+## 支点钉在控件中心并跟随尺寸变化：布局前调用也安全（布局出尺寸时 resized 会补正）。
+## 入场动效与「不淡入、只缩放」的 punch 演出共用这一根。
+static func pin_center_pivot(node: Control) -> void:
+    if node.size != Vector2.ZERO:
+        node.pivot_offset = node.size * 0.5
+    if not node.resized.is_connected(_recenter_pivot.bind(node)):
+        node.resized.connect(_recenter_pivot.bind(node))
+
 ## 入场动效：微缩 + 淡入回弹。容器管布局，position 动不得，所以走 pivot 缩放 + 透明度；
 ## pivot 在布局前是零，挂一次 resized 持续跟随（之后卡片自身的选中缩放也受益）。
 ## PROCESS 模式：悟道/金币阁这些屏开着时游戏树是暂停的，暂停下 tween 默认不走。
 static func enter_anim(node: Control, delay: float = 0.0) -> void:
     node.modulate = Color(1, 1, 1, 0)
     node.scale = Vector2(0.96, 0.96)
-    if node.size != Vector2.ZERO:
-        node.pivot_offset = node.size * 0.5
-    if not node.resized.is_connected(_recenter_pivot.bind(node)):
-        node.resized.connect(_recenter_pivot.bind(node))
+    pin_center_pivot(node)
     var tw := node.create_tween()
     tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
     if delay > 0.0:
@@ -472,9 +481,25 @@ static func _recenter_pivot(node: Control) -> void:
     if is_instance_valid(node):
         node.pivot_offset = node.size * 0.5
 
+## 卡片入场弹跳（货架卡/选卡/结算徽章的统一配方）：微缩 + 淡入 + TRANS_BACK 回弹，可错峰。
+## 与 enter_anim 的差别只在幅度（卡片要「拍上桌」的存在感，from_scale 更低、回弹更硬）；
+## pivot 挂 resized 持续跟随，布局前调用也安全（此前同一配方在 WaveShop / LevelUpDialog /
+## SkillSelect / StartWeaponSelect 各抄了一份，支点逻辑还各自打了补丁，新代码一律走这里）。
+static func pop_in(node: Control, delay: float = 0.0, from_scale: float = 0.82) -> void:
+    node.modulate = Color(1, 1, 1, 0)
+    node.scale = Vector2(from_scale, from_scale)
+    pin_center_pivot(node)
+    var tw := node.create_tween()
+    tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+    if delay > 0.0:
+        tw.tween_interval(delay)
+    tw.set_parallel()
+    tw.tween_property(node, "modulate:a", 1.0, 0.15)
+    tw.tween_property(node, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 ## 斜切扫屏：一条陡斜色带从屏左外扫到屏右外，结算/大胜场面的开场一笔。
-## 用完自己 queue_free。PROCESS 模式：结算屏开着时游戏树是暂停的。
-static func slash_wipe(host: Control, col: Color = GOLD) -> void:
+## delay 用于多条错峰（胜利双带）。用完自己 queue_free。PROCESS 模式：结算屏开着时游戏树是暂停的。
+static func slash_wipe(host: Control, col: Color = GOLD, delay: float = 0.0) -> void:
     var vp := host.get_viewport_rect().size
     if vp.x <= 0.0:
         return
@@ -487,6 +512,8 @@ static func slash_wipe(host: Control, col: Color = GOLD) -> void:
     host.add_child(band)
     var tw := band.create_tween()
     tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+    if delay > 0.0:
+        tw.tween_interval(delay)
     tw.tween_property(band, "position:x", vp.x * 1.25, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
     tw.parallel().tween_property(band, "modulate:a", 0.0, 0.18).set_delay(0.34)
     tw.tween_callback(band.queue_free)

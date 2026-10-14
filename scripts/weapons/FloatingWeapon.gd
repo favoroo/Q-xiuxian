@@ -267,8 +267,11 @@ func _setup_aura() -> void:
 	aura_sprite.scale = Vector2.ONE * 0.42
 	aura_sprite.modulate = _get_aura_color()
 	aura_sprite.modulate.a = 0.12
-	aura_sprite.z_index = -1
+	# 保持 z_index = 0：避免 z=-1 掉入不透明地砖（courtyard_tile.png 位于 MapLayer z=0）下方被整块遮蔽；
+	# move_child 置于首位，确保在同级武器 Sprite2D 之下正常衬底
+	aura_sprite.z_index = 0
 	add_child(aura_sprite)
+	move_child(aura_sprite, 0)
 
 func _get_aura_color() -> Color:
 	var tags: Array = WeaponData.tags_of(weapon_def_id)
@@ -495,7 +498,8 @@ func _perform_turret_attack() -> void:
 	var turret := turret_scene.instantiate() as TurretUnit
 	turret.setup(weapon_def_id, star)
 	turret.global_position = spawn_pos + Vector2(GameManager.rng.randf_range(-22, 22), GameManager.rng.randf_range(-16, 16))
-	get_tree().current_scene.add_child(turret)
+	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (get_tree().current_scene if get_tree() != null else self)
+	battle_layer.add_child(turret)
 	active_turrets.append(turret)
 
 	# 召唤沉身演出：下沉 + 金光亮闪 → 弹性回正（帧内状态机，零 Tween）
@@ -753,14 +757,15 @@ func _spawn_lightning(target_pos: Vector2) -> void:
 	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
 	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
 	var player: Node2D = GameManager.player
+	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (get_tree().current_scene if get_tree() != null else self)
 	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
-		var bolt := LightningBolt.acquire(get_tree().current_scene)
+		var bolt := LightningBolt.acquire(battle_layer)
 		var w_mult := 1.0 + 0.18 * float(star - 1)
 		var b_tint: Color = def.get("burst_tint", LightningBolt.GLOW_COLOR)
 		bolt.activate(muzzle_point.global_position, target_pos, b_tint, w_mult)
 
 	# 落雷走对象池（2026-10-11 第 6 波卡顿优化）：acquire → 写字段 → activate 起爆
-	var burst = ThunderBurst.acquire(get_tree().current_scene, burst_scene)
+	var burst = ThunderBurst.acquire(battle_layer, burst_scene)
 	burst.global_position = target_pos
 	burst.radius = burst_radius * _range_mult()
 	var final_dmg := _final_damage()
@@ -1128,7 +1133,8 @@ func _try_spawn_earth_crack(hit_pos: Vector2, hit_radius: float) -> void:
 	if not tags.has("earth"):
 		return
 	_ground_decal_cd = 0.85
-	var scene_parent := get_parent()
-	if scene_parent != null and is_inside_tree():
-		GroundDecal.spawn(scene_parent, hit_pos, GroundDecal.Kind.CRACK, hit_radius)
+	var player: Node2D = GameManager.player
+	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (get_tree().current_scene if get_tree() != null else self)
+	if battle_layer != null and is_inside_tree():
+		GroundDecal.spawn(battle_layer, hit_pos, GroundDecal.Kind.CRACK, hit_radius)
 

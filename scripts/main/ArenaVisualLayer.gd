@@ -14,7 +14,9 @@ var _redraw_timer: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	z_index = 1  # 位于地砖 TextureRect 之上，实体层与判定物之下
+	# 保持 z_index = 0：位于 MapLayer 内，靠树顺序排在地砖与地面微细节之上；
+	# 绝不设 >0（实体层 EntitiesLayer 及其角色默认为 z=0，设 >0 会直接盖在玩家身体上）
+	z_index = 0
 
 func _process(delta: float) -> void:
 	# _time 逐帧累计不节流，重绘触发时取到的是当前时刻，动画不会因节流变卡

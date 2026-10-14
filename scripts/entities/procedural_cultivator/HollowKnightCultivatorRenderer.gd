@@ -180,11 +180,21 @@ func _draw_idle(angle: Angle) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
-	var float_y := sin(_time * 2.6) * 1.8
+	# 待机差异化呼吸（2026-10-14 P1）：频率按体型反比调——石岳(1.18)沉缓、灵蝶使(0.85)轻快；
+	# 相位按 instance_id 错开，同屏待机的角色不再同步起落像拷贝
+	var idle_freq := 2.6 / maxf(body_scale, 0.6)
+	var idle_amp := 1.8 * clampf(body_scale, 0.8, 1.25)
+	var idle_t := _time * idle_freq + _idle_phase
+	var float_y := sin(idle_t) * idle_amp
 	# 待机布料呼吸：低频慢波（~0.25Hz），振幅克制 2px，站桩也有仙气吐纳感
 	var cloak_amp := 2.0
-	var cloak_t := _time * 1.6
-	var eye_pulse := sin(_time * 3.0) * 0.08
+	var cloak_t := idle_t * 0.62
+	# 偶发环视（每 6~10s 一次、持续约 0.8s 的视线偏移）：instance_id 错开时刻，
+	# 眼睛朝随机侧偏 1.4px 再荡回——待机也有生命感的廉价高级感
+	var gaze_cycle := fmod(_time * 0.145 + _idle_phase, 1.0)  # ~6.9s 一个周期
+	var gaze_t := clampf((gaze_cycle - 0.72) / 0.12, 0.0, 1.0)  # 末段 0.83s 内完成
+	var gaze_off := sin(gaze_t * PI) * 1.4 * (1.0 if fmod(_idle_phase, TAU) < PI else -1.0)
+	var eye_pulse := sin(idle_t * 1.15) * 0.08
 
 	_draw_ground_shadow(Vector2(0, 32), 17.0 * width_scale, 4.8, 0.48)
 	_draw_immortal_motes(float_y)
@@ -193,7 +203,7 @@ func _draw_idle(angle: Angle) -> void:
 		Angle.FRONT:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.FRONT)
-			_draw_head_front(float_y, eye_pulse)
+			_draw_head_front_gaze(float_y, eye_pulse, gaze_off)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.SIDE)
@@ -203,6 +213,15 @@ func _draw_idle(angle: Angle) -> void:
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
+
+## 待机专用：正面头部带偶发环视偏移（环视只在前视角有意义——实机恒为正面）
+func _draw_head_front_gaze(float_y: float, eye_pulse: float, gaze_off: float) -> void:
+	if not _layer_on(Layer.HEAD):
+		return
+	var head_center := Vector2(0, -15 + float_y)
+	_draw_modular_headwear(head_center, Angle.FRONT)
+	_draw_modular_mask(head_center, Angle.FRONT)
+	_draw_modular_eyes(head_center + Vector2(gaze_off, 0.0), Angle.FRONT, eye_pulse)
 
 # ==================== 2. 奔跑 / 御风飞行 (RUN / GLIDE) ====================
 

@@ -50,6 +50,8 @@ var _last_hp_low: bool = false  ## 血量告急色守卫：仅状态翻转时写
 var _hp_tween: Tween = null     ## 血条补间持久句柄：命中/吸血每帧都可能发信号，局部 tween 不 kill 会堆积（2026-10-13 掉帧根因）
 var _exp_tween: Tween = null    ## 经验条补间持久句柄：拾宝连发同因
 var _banner_tween: Tween = null ## 横幅补间持久句柄
+## 低血量血条呼吸脉冲（循环 tween，脱离告急时杀掉复位）
+var _hp_low_tween: Tween = null
 ## 徽记底色要动，但场景 stylebox 是共享资源 ⇒ 首次升级时换成私有副本再动色
 var _lv_badge_style: StyleBoxFlat = null
 var _lv_badge_base_bg := Color(0, 0, 0, 0)
@@ -349,6 +351,19 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	if low != _last_hp_low:
 		_last_hp_low = low
 		hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
+		# 告急期血条本体呼吸闪烁（与 Main 濒死红晕同一把阈值、同一个屏闪开关）：
+		# 只改字色在混战中扫一眼读不到「快死了」，整条血槽一起起伏才是警报
+		if _hp_low_tween != null and _hp_low_tween.is_valid():
+			_hp_low_tween.kill()
+			_hp_low_tween = null
+		if low and GameFeel.screen_flash_enabled():
+			_hp_low_tween = create_tween().set_loops()
+			_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			_hp_low_tween.tween_property(hp_bar, "modulate", Color.WHITE, 0.35)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		else:
+			hp_bar.modulate = Color.WHITE
 
 ## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 斜切光环/星屑（HudLevelBadgeFx）。
 ## 可重入：连升多级时 player_leveled_up 连发，先杀旧 tween、颜色复位，再整段重播。

@@ -224,3 +224,27 @@ func _test_feel_gates() -> void:
 	_c.check(GameFeel.micro_kick_gate(t0), "首个普通命中镜头微冲击放行")
 	_c.check(not GameFeel.micro_kick_gate(t0 + kick_iv - 1), "间隔内的镜头微冲击被拒")
 	_c.check(GameFeel.micro_kick_gate(t0 + kick_iv), "间隔过后微冲击重新放行")
+
+func _test_weapon_phase_stagger() -> void:
+	# 用户口径 2026-10-14：「配了多把近战，感觉不同武器攻击间隔一样，都是一起挥砍」。
+	# 根因：cooldown_timer 初值 0 且 setup() 不设相位，同型号武器从首击起永久锁相齐挥。
+	# 判据钉三件事：_ready 首跳错相落在 [0.1, 0.5]；固定 seed 下两把同型号武器错相不同；
+	# 错相不吃 setup() 重调（升星重整备不重掷相位，不打断既有节奏）。
+	GameManager.rng.seed = 20261014
+	var scene: PackedScene = load("res://scenes/weapons/FloatingWeapon.tscn")
+	var a: FloatingWeapon = scene.instantiate()
+	a.setup("qingyun_sword", 1)
+	add_child(a)
+	var b: FloatingWeapon = scene.instantiate()
+	b.setup("qingyun_sword", 1)
+	add_child(b)
+	for w: FloatingWeapon in [a, b]:
+		_c.check(w.cooldown_timer >= 0.1 and w.cooldown_timer <= 0.5,
+				"武器入场首跳冷却落在 [0.1, 0.5]（实得 %.3f）" % w.cooldown_timer)
+	_c.check(not is_equal_approx(a.cooldown_timer, b.cooldown_timer),
+			"同帧进树的两把同型号武器首跳错相不同（%.3f vs %.3f）" % [a.cooldown_timer, b.cooldown_timer])
+	var phase_before: float = a.cooldown_timer
+	a.setup("qingyun_sword", 2)
+	_c.near(a.cooldown_timer, phase_before, EPS, "升星重调 setup() 不重掷首跳相位（不打断既有节奏）")
+	a.free()
+	b.free()

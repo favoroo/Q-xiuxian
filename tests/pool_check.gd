@@ -172,6 +172,11 @@ func _run() -> void:
 	_check(l_bolt_b == l_bolt_a, "引雷第二次 acquire 复用同一实例")
 	l_bolt_b.activate(Vector2(20, 20), Vector2(80, 80), Color.WHITE, 1.2)
 	_check(l_bolt_b.visible and l_bolt_b._line_glow.width == 12.0, "引雷复用激活按 width_mult 重置线宽")
+	# 5.7b 引雷与地面大阵层级守卫：宿主与特效线不抬高全局 z_index 盖压角色
+	_check(LightningBolt._host.z_index <= 0, "引雷池宿主 z_index 不抬高压人")
+	_check(l_bolt_b._line_core.z_index <= 0, "引雷折线 z_index 不盖压角色")
+	if ThunderBurst._host != null:
+		_check(ThunderBurst._host.z_index <= 0, "落雷池宿主 z_index 不抬高压人")
 	l_bolt_b._recycle()
 
 	# ---------- 5.8 弹丸湮灭微闪（IMPACT_POP）与限流闸 ----------

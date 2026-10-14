@@ -41,6 +41,7 @@ var _tint: Color = Color.WHITE    ## 常态染色（二阶段转红/紫，演出
 # 血条信号节流
 var _hp_emit_acc: float = 0.0
 var _hp_emit_cd: float = 0.0
+var _heavy_hit_cd: float = 0.0   ## 大比例掉血镜头回应的独立冷却（take_damage 写入）
 
 # 震地状态机
 var _slam_pending: bool = false
@@ -139,6 +140,7 @@ func _process(delta: float) -> void:
 	if GameManager.is_game_over or dying:
 		return
 	_hp_emit_cd -= delta
+	_heavy_hit_cd = maxf(0.0, _heavy_hit_cd - delta)
 	var player = GameManager.player
 	if player == null:
 		return
@@ -548,6 +550,13 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit, from_dot)
 	if dying:
 		return
+	# 大比例掉血的镜头回应（2026-10-14）：Boss 挨一刀超过最大生命该比例时给一笔轻创伤，
+	# 让「砍疼 Boss」这件事有回响（此前 Boss 被打几乎 silent，只有自己的招式发反馈）。
+	# 冷却按 Boss 独立计时；trauma 仍受全局每秒预算闸保护，群攻刷伤不会变持续抖屏。
+	# 暴击走 EnemyBase 的暴击创伤，同一事件不双发（本闸排除暴击）。
+	if not from_dot and not is_crit and _heavy_hit_cd <= 0.0 and amount >= max_hp * GameBalance.BOSS_HEAVY_HIT_PCT:
+		_heavy_hit_cd = GameBalance.BOSS_HEAVY_HIT_COOLDOWN
+		GameManager.add_trauma(GameBalance.BOSS_HEAVY_HIT_TRAUMA)
 	if not _phase2 and current_hp <= max_hp * GameBalance.BOSS_PHASE2_AT:
 		_enter_phase2()
 	_hp_emit_acc += amount

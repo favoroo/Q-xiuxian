@@ -29,7 +29,9 @@ func _exit_tree() -> void:
 	active_count -= 1
 
 func _ready() -> void:
-	z_index = 2  # 位于地面与结界之上，实体与弹丸之下
+	# 保持 z_index = 0：在 EntitiesLayer 内，天然位于 MapLayer（地砖/地面装饰/结界）之上；
+	# 绝不设 >0（实体与弹丸默认为 z=0，设 >0 会直接盖在角色表面）
+	z_index = 0
 	if is_boss:
 		indicator_radius = 52.0
 		_time_left = BOSS_DURATION

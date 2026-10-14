@@ -182,6 +182,8 @@ var _screen: Vector2 = Vector2(960, 540)
 
 ## 当前点选的武器：{"pool": "equipped"/"stash", "index": int}
 var selected: Dictionary = {}
+## 出战确认退场防重入（淡出期间再点不重复 confirm_shop）
+var _confirming: bool = false
 ## 拖拽换装手势控制器（按住拎起 → 拖到目标格放下）：陈列行的格子构建时经 drag_register 登记
 var drag_ctl: ShopDragDrop = null
 
@@ -336,13 +338,15 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_shop_opened() -> void:
 	DetailTip.close_all(self)
 	selected = {}
+	_confirming = false
 	_layout_for_viewport()
 	refresh()
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
 	var tw = create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.2)
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
 
 ## 按这一档屏宽现算面板与货架卡：高钉成「屏幕高 - 呼吸量」，宽按格数均分可用宽。
 ## 货架卡高由内容决定 ⇒ 这一屏正常情况下竖着不需要滑（判据点名量那条）；
@@ -397,24 +401,10 @@ func refresh(animate: bool = true) -> void:
 		offers_container.add_child(c)
 		if not animate:
 			continue
-		c.pivot_offset = Vector2(card_w * 0.5, CARD_H_REF * 0.5)
-		c.scale = Vector2(0.82, 0.82)
-		c.modulate.a = 0.0
-		var ctw: Tween = c.create_tween()
-		# 卡高由内容决定 ⇒ 支点要等布局出尺寸之后按实际那一格中心重设，
-		# 否则入场放大绕的是参考高的中心，落点会往一边偏（与 LevelUpDialog 同一处理）。
-		ctw.tween_callback(_center_pivot.bind(c))
-		ctw.tween_interval(float(i) * 0.045)
-		ctw.set_parallel(true)
-		ctw.tween_property(c, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		ctw.tween_property(c, "modulate:a", 1.0, 0.15)
+		# 统一卡片入场配方（支点/回弹/错峰全在 GameStyle.pop_in 里，布局前调用安全）
+		GameStyle.pop_in(c, float(i) * 0.045)
 
 	_refresh_inventory()
-
-## 支点 = 这一格自己的中心（布局出尺寸之前无从得知，动画第一帧补上）
-static func _center_pivot(c: Control) -> void:
-	if c.size.y > 0.0:
-		c.pivot_offset = c.size * 0.5
 
 # ---------------- 上阵 + 背包栏位 ----------------
 
@@ -495,7 +485,16 @@ func _on_reroll() -> void:
 	refresh()
 
 func _on_confirm() -> void:
+	if _confirming:
+		return
+	_confirming = true
 	DetailTip.close_all(self)
 	AudioManager.play_sfx("ui_confirm", 0.9)
-	visible = false
-	GameManager.confirm_shop()
+	# 淡出后再交回流程（之前是 visible=false 硬切，与进场淡入不对称）
+	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tw.tween_property(self, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
+	tw.tween_callback(func():
+		_confirming = false
+		visible = false
+		GameManager.confirm_shop())

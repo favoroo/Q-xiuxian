@@ -7,11 +7,14 @@ extends Node2D
 ## _draw() 只画不随机：裂纹折线算法复用 GroundDecorLayer §3.2，焦痕聚合复用 §3.1 青苔模式。
 ## 生命周期：HOLD 全亮 → FADE 渐隐 → 回收入池（对象池照 PoisonPool 范式）。
 
-enum Kind { CRACK, SCORCH }
+enum Kind { CRACK, SCORCH, FADE_GLOW }
 
 const HOLD_TIME := 1.6   ## 全亮留存时长（秒）
 const FADE_TIME := 0.7   ## 渐隐时长（秒）
 const GROW_TIME := 0.12  ## 裂纹向外爆开生长时间（秒）
+## 击杀残晕寿命（FADE_GLOW）：高频击杀事件的贴地余韵，整体压短防糊屏
+const GLOW_HOLD_TIME := 0.15
+const GLOW_FADE_TIME := 0.40
 const GROUND_SORT_Y := -100000.0  ## 宿主 Y 排序钉死键：恒排在角色之前（同 PoisonPool.GROUND_SORT_Y）
 
 const CRACK_SHADOW := Color(0.02, 0.03, 0.05, 0.85)  ## 裂口深沉阴影底（线宽 2.8px）
@@ -22,6 +25,11 @@ const CRACK_DEBRIS := Color(0.55, 0.68, 0.78, 0.70)  ## 迸溅微碎石亮面
 const CRACK_DEBRIS_SHADOW := Color(0.02, 0.03, 0.05, 0.60) ## 碎石落影
 const SCORCH_BODY := Color(0.05, 0.04, 0.04, 0.50)   ## 焦痕炭黑
 const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.28)  ## 余烬暗橙（渐隐时同步熄灭）
+## 击杀残晕（FADE_GLOW）：色相由调用方按敌种主色传入 _tint，这里只给基准透明度
+const FADE_GLOW_CORE_A := 0.30   ## 中心亮核
+const FADE_GLOW_RIM_A := 0.16    ## 外圈柔晕
+
+var _tint: Color = Color.WHITE   ## FADE_GLOW 专用：敌种主色（spawn 时传入）
 
 # —— 对象池（照 PoisonPool 范式）——
 const POOL_CAP := 16
@@ -57,6 +65,18 @@ static func spawn(parent: Node, pos: Vector2, p_kind: int, p_radius: float) -> G
 	d.global_position = pos
 	d.kind = p_kind
 	d.radius = p_radius
+	d.activate()
+	return d
+
+## 带色出膛（FADE_GLOW 专用）：击杀余韵用敌种主色在原地留一记贴地淡出残晕。
+## 高频事件（每秒多次击杀）：寿命压到 0.55s，比震裂/焦痕短一个量级，不让地面糊满。
+static func spawn_tinted(parent: Node, pos: Vector2, p_radius: float, col: Color) -> GroundDecal:
+	var d := acquire(parent)
+	d.global_position = pos
+	d.kind = Kind.FADE_GLOW
+	d.radius = p_radius
+	d._tint = col
+	d._time_left = GLOW_HOLD_TIME + GLOW_FADE_TIME
 	d.activate()
 	return d
 
@@ -151,6 +171,8 @@ func _generate_shape() -> void:
 				var sub_r: float = minf(rng.randf_range(0.28, 0.50) * radius, radius * 0.95 - off.length())
 				if sub_r > 2.0:
 					_blobs.append(Vector3(off.x, off.y, sub_r))
+		Kind.FADE_GLOW:
+			pass  # 纯同心圆光晕，无随机形态要预生成
 
 func _process(delta: float) -> void:
 	_age += delta
@@ -217,3 +239,8 @@ func _draw() -> void:
 			var ember := Color(SCORCH_EMBER, SCORCH_EMBER.a * a * a)
 			for b in _blobs:
 				draw_circle(Vector2(b.x, b.y), b.z * 0.45, ember)
+		Kind.FADE_GLOW:
+			# 击杀余韵：敌种主色同心双圈贴地残晕，随时间整体淡出。
+			# 出生即最大（尸体塌缩那一帧脚下亮起），不再做生长动画——高频事件要的是轻
+			draw_circle(Vector2.ZERO, radius, Color(_tint.r, _tint.g, _tint.b, FADE_GLOW_RIM_A * a))
+			draw_circle(Vector2.ZERO, radius * 0.55, Color(_tint.r, _tint.g, _tint.b, FADE_GLOW_CORE_A * a))

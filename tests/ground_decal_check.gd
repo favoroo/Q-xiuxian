@@ -46,6 +46,8 @@ func _case_spawn() -> void:
 	_c.check(d != null and is_instance_valid(d), "spawn 返回有效贴花")
 	_c.check(d.visible and not d._pooled, "出膛后可见且不在池")
 	_c.equals(GroundDecal.active_count, before + 1, "active_count +1")
+	_c.check(GroundDecal._host.position.y == GroundDecal.GROUND_SORT_Y, "贴花宿主 Y 钉在角色之前（GROUND_SORT_Y）")
+	_c.check(GroundDecal._host.z_index <= 0, "贴花宿主 z_index 不抬高压人")
 	d.recycle()
 	await get_tree().process_frame
 
