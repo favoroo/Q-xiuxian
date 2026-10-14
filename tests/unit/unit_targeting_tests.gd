@@ -96,7 +96,8 @@ func _test_ranged_focus_dps() -> void:
 		else:
 			others.append(dps)
 	others.sort()
-	var med: float = others[int(others.size() / 2)] if not others.is_empty() else 0.0
+	@warning_ignore("integer_division")
+	var med: float = others[others.size() / 2] if not others.is_empty() else 0.0
 
 	# 1. 尺子本身先自证：口径与运行时逐条对齐，估计算错这里就红
 	_c.equals(WeaponData.targets_per_shot("huoyan_fu"), 2, "火焰符双符齐掷 = 单发最多结算 2 敌，仍属点杀位")
