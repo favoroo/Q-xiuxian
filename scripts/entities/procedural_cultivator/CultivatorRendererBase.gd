@@ -92,8 +92,11 @@ var motes_boost: float = 0.0
 
 # —— 重绘节流（参考敌人渲染器节流规范）——
 ## 选角界面同屏 19 个程序化角色每帧全量重绘是严重卡顿热点。
-## 普通展示/UI 头像走 20Hz 节流 + 错相，玩家操作/高精度模式走每帧绘制。
+## 普通展示/UI 头像走 20Hz 节流 + 错相；玩家等高精度个体走 30Hz 节流
+## （2026-10-14：原每帧全量重绘是逻辑帧最大单一开销——444 处 draw_ 调用
+## × 60fps，降为 30Hz 省一半，动画流畅度轻微可感，经用户确认接受）。
 const REDRAW_INTERVAL := 0.05
+const REDRAW_INTERVAL_HIGHFPS := 0.0333
 static var redraw_count: int = 0
 
 var high_fps_mode: bool = false:
@@ -114,13 +117,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	if high_fps_mode:
-		redraw_count += 1
-		queue_redraw()
-		return
 	if _dirty or _draw_phase <= 0.0:
 		_dirty = false
-		_draw_phase = REDRAW_INTERVAL
+		_draw_phase = REDRAW_INTERVAL_HIGHFPS if high_fps_mode else REDRAW_INTERVAL
 		redraw_count += 1
 		queue_redraw()
 	else:

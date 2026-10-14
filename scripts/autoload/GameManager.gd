@@ -133,6 +133,7 @@ var career_stats: Dictionary = {
 }
 var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高危险度 {cultivator_id: danger_int}
 var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
+var skin_selections: Dictionary = {}         ## 每位角色已选皮肤 {cultivator_id: skin_idx}（缺省/-1 = 原色）
 var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
 
@@ -203,6 +204,33 @@ func get_cultivator_danger_mask(cid: String) -> int:
 ## 某位角色是否通关过指定难度
 func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
 	return (get_cultivator_danger_mask(cid) & (1 << d)) != 0
+
+## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「最高通关难度 >= 皮肤 tier」判定，
+## 天然满足跨难度向下补齐（直接通关高难度 ⇒ 低档皮肤一并解锁）
+func is_skin_unlocked(cid: String, skin_idx: int) -> bool:
+	if skin_idx < 0:
+		return true
+	var t := SkinData.get_theme(skin_idx)
+	if t.is_empty():
+		return false
+	return get_cultivator_best_danger(cid) >= int(t.get("tier", 0))
+
+## 查询某角色当前选用的皮肤（-1 = 原色；已选皮肤若未解锁则惰性回落原色兜底）
+func get_selected_skin(cid: String) -> int:
+	var idx := int(skin_selections.get(cid, -1))
+	if idx >= 0 and not is_skin_unlocked(cid, idx):
+		return -1
+	return idx
+
+## 选用皮肤（未解锁的主题直接拒绝；原色用擦除键的方式落盘，保持存档干净）
+func set_selected_skin(cid: String, skin_idx: int) -> void:
+	if skin_idx >= 0 and not is_skin_unlocked(cid, skin_idx):
+		return
+	if skin_idx < 0:
+		skin_selections.erase(cid)
+	else:
+		skin_selections[cid] = skin_idx
+	_save_progress()
 
 ## 查询某位角色的生涯档案（无记录返回零值字典）
 func get_cultivator_record(cid: String) -> Dictionary:
@@ -425,6 +453,11 @@ func reset_run() -> void:
 	_stat_dict_frame = -1  # 属性字典 memo 随之作废，防止同帧后续读旧属性
 
 func _process(delta: float) -> void:
+	# 顿帧恢复（零分配轮询）：GameFeel.hit_stop 只写下恢复时刻，到点还原时间轴
+	if _hitstop_deadline_ms != 0 and Time.get_ticks_msec() >= _hitstop_deadline_ms:
+		_hitstop_deadline_ms = 0
+		Engine.time_scale = 1.0
+
 	if on_hit_damage_timer > 0.0:
 		on_hit_damage_timer -= delta
 		if on_hit_damage_timer <= 0.0:
@@ -1100,6 +1133,10 @@ func confirm_shop() -> void:
 # ---------------- 流程与打击感系统（委托 GameFeel 与 ProgressStore） ----------------
 
 var _hitstop_token: int = 0
+## hit_stop 恢复时刻（真实毫秒，Time.get_ticks_msec 口径）：GameFeel.hit_stop 只写这个字段，
+## 由 _process 轮询恢复 time_scale（2026-10-14：原实现每次顿帧 create_timer 分配
+## SceneTreeTimer + 闭包，受击/登场/落雷等未限流路径高频触发时有分配抖动）。
+var _hitstop_deadline_ms: int = 0
 
 func add_trauma(amount: float) -> void:
 	GameFeel.add_trauma(self, amount)
@@ -1135,6 +1172,7 @@ func trigger_game_over(victory: bool = false) -> void:
 		return
 	Engine.time_scale = 1.0
 	_hitstop_token += 1
+	_hitstop_deadline_ms = 0
 	is_game_over = true
 	if victory:
 		_maybe_unlock_danger()

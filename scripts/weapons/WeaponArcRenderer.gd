@@ -19,27 +19,38 @@ const SWEEP_HALF := deg_to_rad(80.0)   ## 横扫月牙张角 == FloatingWeapon.S
 const SWEEP_INNER := 88.0       ## 横扫月牙内缘（宽度 36px，比近战 24px 大 50%，雄浑大月牙）
 
 const _ARC_STEPS := 30          ## 外缘采样段数
+## 重绘节流（2026-10-14）：亮起窗口内原每帧无条件重绘，火舌/电弧微动 30Hz 足够
+const REDRAW_INTERVAL := 0.0333
+static var redraw_count: int = 0  ## 重绘计数（perf_probe 节流判据消费）
 
 var mode: ArcMode = ArcMode.MELEE
 var element: String = "metal"   ## metal/wood/water/fire/earth/thunder，空串回落 metal
 var _anim: float = 0.0          ## 亮起窗口内推相位：火舌/电弧微动
+var _draw_phase: float = 0.0
 
 func configure(p_mode: ArcMode, p_element: String) -> void:
 	mode = p_mode
 	element = p_element if p_element != "" else "metal"
 
 func _ready() -> void:
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 	set_process(false)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED:
 		set_process(visible)
-		if not visible:
+		if visible:
+			queue_redraw()
+		else:
 			_anim = 0.0
 
 func _process(delta: float) -> void:
 	_anim += delta
-	queue_redraw()
+	_draw_phase -= delta
+	if _draw_phase <= 0.0:
+		_draw_phase = REDRAW_INTERVAL
+		redraw_count += 1
+		queue_redraw()
 
 ## 元素调色板：main 主刃色 / core 近白亮芯 / glow 低透明外晕
 static func _palette(elem: String) -> Dictionary:

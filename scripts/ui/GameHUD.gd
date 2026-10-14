@@ -60,6 +60,10 @@ var _lv_badge_base_border := Color(0, 0, 0, 0)
 var _flash_rect: ColorRect = null
 ## 镜头缩放冲击节流：连升多级 0.2s 内只顿一次
 var _last_zoom_ms := 0
+## 血条/经验条 tween 创建最小间隔（2026-10-14）：高频信号闸外才补间，闸内直接写终值
+const HUD_TWEEN_MIN_INTERVAL := 0.05
+var _last_hp_tween_ms := 0
+var _last_exp_tween_ms := 0
 
 ## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
 var _skill_box: Control = null
@@ -342,9 +346,19 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v
 	if _hp_tween != null and _hp_tween.is_valid():
 		_hp_tween.kill()
-	_hp_tween = create_tween()
-	_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	hp_label.text = str(int(cur)) + "/" + str(int(max_v))
+		_hp_tween = null
+	# tween 创建闸（2026-10-14）：战斗中挨打/吸血每秒十几次信号，闸外才补间、
+	# 闸内直接写终值 —— kill+create 的 Tween 分配从每信号一次降到 20 次/秒上限以下
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_hp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
+		_last_hp_tween_ms = now_ms
+		_hp_tween = create_tween()
+		_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	else:
+		hp_bar.value = cur
+	var hp_text := str(int(cur)) + "/" + str(int(max_v))
+	if hp_label.text != hp_text:
+		hp_label.text = hp_text
 	var low := GameBalance.hp_is_low(cur, max_v)
 	# 仅在告急状态翻转时写 override：战斗中挨打/吸血每秒十几次信号，
 	# 每次都调 add_theme_color_override 触发 NOTIFICATION_THEME_CHANGED 是无谓开销
@@ -428,16 +442,32 @@ func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	exp_bar.max_value = target
 	if _exp_tween != null and _exp_tween.is_valid():
 		_exp_tween.kill()
-	_exp_tween = create_tween()
-	_exp_tween.tween_property(exp_bar, "value", float(cur), 0.12)
-	level_label.text = "Lv." + str(lvl)
+		_exp_tween = null
+	# 同血条闸：磁吸齐吃一帧几十次拾取信号，不再每发都新建 Tween
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_exp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
+		_last_exp_tween_ms = now_ms
+		_exp_tween = create_tween()
+		_exp_tween.tween_property(exp_bar, "value", float(cur), 0.12)
+	else:
+		exp_bar.value = float(cur)
+	var lv_text := "Lv." + str(lvl)
+	if level_label.text != lv_text:
+		level_label.text = lv_text
 
 func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
-	kills_label.text = "击杀 " + str(kills)
-	shards_label.text = "金币 " + str(stones)
+	# 文本去重：0.2s 节流信号里击杀/金币多数没变，相同文本不重排 Label
+	var kills_text := "击杀 " + str(kills)
+	if kills_label.text != kills_text:
+		kills_label.text = kills_text
+	var shards_text := "金币 " + str(stones)
+	if shards_label.text != shards_text:
+		shards_label.text = shards_text
 	var mins = int(g_time / 60.0)
 	var secs = int(g_time) % 60
-	time_label.text = "%02d:%02d" % [mins, secs]
+	var time_text := "%02d:%02d" % [mins, secs]
+	if time_label.text != time_text:
+		time_label.text = time_text
 
 func _on_wave_changed(n: int) -> void:
 	wave_label.get_parent().visible = n >= 1

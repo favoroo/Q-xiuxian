@@ -23,9 +23,22 @@ var radius: float = 100.0
 var progress: float = 0.0   ## 0→1，由持有者每帧赋值；到 1 即结算时刻
 var _clock: float = 0.0     ## 仅驱动呼吸闪烁的视觉时钟（不参与计时结算）
 
+## 重绘节流（2026-10-14）：原每渲染帧无条件 queue_redraw，每个圈 2 条 48 段弧，
+## Boss/精英/丹爆同屏蓄力时是矢量指令大户。30Hz 采样呼吸脉动（2.5Hz）无混叠。
+const REDRAW_INTERVAL := 0.0333
+static var redraw_count: int = 0  ## 重绘计数（perf_probe 节流判据消费）
+var _draw_phase: float = 0.0
+
+func _ready() -> void:
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+
 func _process(delta: float) -> void:
 	_clock += delta
-	queue_redraw()
+	_draw_phase -= delta
+	if _draw_phase <= 0.0:
+		_draw_phase = REDRAW_INTERVAL
+		redraw_count += 1
+		queue_redraw()
 
 func _draw() -> void:
 	var t := clampf(progress, 0.0, 1.0)

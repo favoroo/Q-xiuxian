@@ -20,8 +20,12 @@ const SONIC_RINGS := 3     ## 音波环数
 const EARTH_CRACKS := 6    ## 地裂条数
 
 var _t: float = 0.0
+## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 30Hz 足够流畅
+const REDRAW_INTERVAL := 0.0333
+var _draw_phase: float = 0.0
 
 func _ready() -> void:
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 	visible = false
 	set_process(false)
 
@@ -48,7 +52,10 @@ func _process(delta: float) -> void:
 	if _t >= DUR:
 		deactivate()
 		return
-	queue_redraw()
+	_draw_phase -= delta
+	if _draw_phase <= 0.0:
+		_draw_phase = REDRAW_INTERVAL
+		queue_redraw()
 
 func _draw() -> void:
 	match kind:

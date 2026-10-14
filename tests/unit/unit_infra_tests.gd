@@ -574,3 +574,74 @@ func _test_modal_pause_buttons() -> void:
 	get_tree().paused = false
 	holder.free()
 
+
+# ---------------- 换色皮肤系统（2026-10-14） ----------------
+
+## 覆盖：主题表完整性、跨难度向下补齐解锁（最高通关难度 >= tier 口径）、
+## apply_to_config 副本换色不污染原配置、选择与落盘往返、锁定皮肤惰性回落、视图装配换色生效
+func _test_skin_system() -> void:
+	# 1. 主题表完整性
+	_c.equals(SkinData.count(), 6, "皮肤主题共 6 套（对应 6 档难度）")
+	for i in range(SkinData.count()):
+		var t := SkinData.get_theme(i)
+		_c.equals(int(t.get("tier", -1)), i, "皮肤 %d tier 与难度档位一一对应" % i)
+		_c.check(not String(t.get("name", "")).is_empty(), "皮肤 %d 有名号" % i)
+		_c.check(t.get("cloak_outer") is Color and t.get("cloak_edge") is Color, "皮肤 %d 配色完整" % i)
+	_c.check(SkinData.get_theme(-1).is_empty() and SkinData.get_theme(99).is_empty(), "越界皮肤序号返回空")
+
+	# 备份玩家真实进度
+	var orig_records := GameManager.cultivator_best_danger.duplicate()
+	var orig_skins := GameManager.skin_selections.duplicate()
+
+	# 2. 跨难度向下补齐：直接通关 D4 ⇒ tier 0~4 全解锁，D5 仍锁
+	GameManager.cultivator_best_danger = {"shiyue": 4}
+	GameManager.skin_selections = {}
+	_c.check(GameManager.is_skin_unlocked("shiyue", -1), "原色皮肤恒可用")
+	for i in range(5):
+		_c.check(GameManager.is_skin_unlocked("shiyue", i), "通关 D4 ⇒ 皮肤 %d 解锁（跨档补齐）" % i)
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 5), "通关 D4 ⇒ D5 皮肤仍锁")
+	_c.check(not GameManager.is_skin_unlocked("meiying", 0), "未通关角色皮肤全锁")
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 99), "越界皮肤序号判锁")
+
+	# 3. apply_to_config：副本换色，原配置零污染，造型样式键不动
+	var base := CultivatorVisualConfig.get_config("jianchi")
+	var orig_outer: Color = base.cloak["col_outer"]
+	var skinned := SkinData.apply_to_config(base, 1)
+	_c.check(skinned != base, "换色返回副本而非原配置")
+	_c.equals(base.cloak["col_outer"], orig_outer, "原配置斗篷色未被污染")
+	_c.equals(skinned.cloak["col_outer"], SkinData.get_theme(1)["cloak_outer"], "副本斗篷外色已换为主题色")
+	_c.equals(skinned.cloak["col_edge"], SkinData.get_theme(1)["cloak_edge"], "副本斗篷缘色已换为主题色")
+	_c.equals(String(skinned.cloak.get("cloak_style", "")), String(base.cloak.get("cloak_style", "")), "造型样式键保持角色本相")
+	_c.equals(skinned.palette.get("cloak_outer"), skinned.cloak["col_outer"], "派生色盘已同步")
+	_c.check(SkinData.apply_to_config(base, -1) == base, "非法皮肤序号原样返回")
+
+	# 4. 选择与落盘往返 + 锁定皮肤惰性回落
+	GameManager.set_selected_skin("shiyue", 3)
+	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "皮肤选择生效")
+	GameManager.set_selected_skin("shiyue", 5)
+	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "锁定皮肤选择被拒绝")
+	GameManager._save_progress()
+	GameManager.skin_selections = {}
+	GameManager.cultivator_best_danger = {}
+	GameManager._load_progress()
+	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "读档后皮肤选择恢复")
+	GameManager.cultivator_best_danger = {"shiyue": 1}
+	_c.equals(GameManager.get_selected_skin("shiyue"), -1, "解锁记录回退 ⇒ 已选皮肤惰性回落原色")
+	GameManager.set_selected_skin("shiyue", -1)
+	_c.check(not GameManager.skin_selections.has("shiyue"), "选回原色后存档键擦除")
+
+	# 5. 视图装配：缺省走存档选择，显式 -1 回原色
+	var view := ProceduralCultivatorView.new()
+	add_child(view)
+	GameManager.cultivator_best_danger = {"shiyue": 4}
+	GameManager.skin_selections = {"shiyue": 2}
+	view.setup_character_id("shiyue")
+	_c.equals(view.renderer.config.cloak["col_outer"], SkinData.get_theme(2)["cloak_outer"], "视图按存档选择装配皮肤色")
+	view.setup_character_id("shiyue", -1)
+	_c.equals(view.renderer.config.cloak["col_outer"], CultivatorVisualConfig.get_config("shiyue").cloak["col_outer"], "显式 -1 回到原色")
+	view.queue_free()
+
+	# 还原玩家真实进度
+	GameManager.cultivator_best_danger = orig_records
+	GameManager.skin_selections = orig_skins
+	GameManager._save_progress()

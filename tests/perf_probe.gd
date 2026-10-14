@@ -29,6 +29,11 @@ extends Node
 ##    8c. 敌人动画名缓存正确（_anim_run == "run_" + facing，朝向变更后仍同源）；
 ##    8d. 武器连续开火窗口 get_processed_tweens() 增量 ≤ 2（开火视觉零 Tween 化）；
 ##    8e. 设置变更走 GameFeel 每帧 memo，下一帧生效。
+## 9. 重绘节流补网（2026-10-14 逻辑帧治理）：
+##    9a. 玩家级修士渲染器 high_fps_mode 1 秒 redraw_count 增量 ≤ 38（30Hz，旧每帧模式约 60+）；
+##    9b. AoeTelegraph 预警圈 1 秒重绘 ≤ 38（30Hz，旧每帧无条件 queue_redraw）；
+##    9c. WeaponArcRenderer 元素刀光亮起窗口 1 秒重绘 ≤ 38（30Hz）；
+##    9d. hit_stop 零分配：压下时间轴 + 写 _hitstop_deadline_ms，GameManager._process 到点还原。
 ##
 ## 运行：godot --headless --path . res://tests/PerfProbe.tscn
 ## 注意：本判据依赖真实节拍，禁止 Engine.time_scale 加速（会破坏重绘节流计时）。
@@ -215,7 +220,7 @@ func _run() -> void:
 	var gems: Array[AstralGem] = []
 	for i in range(120):
 		var g := AstralGem.acquire_or_new(gem_scene, world)
-		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + float(i / 20) * 44.0)
+		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + floorf(float(i) / 20.0) * 44.0)
 		g.exp_value = 1
 		g.is_gold = false
 		g.activate()
@@ -254,7 +259,7 @@ func _run() -> void:
 	var gems2: Array[AstralGem] = []
 	for i in range(120):
 		var g := AstralGem.acquire_or_new(gem_scene, world)
-		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + float(i / 20) * 44.0)
+		g.global_position = Vector2(60.0 + float(i % 20) * 44.0, 40.0 + floorf(float(i) / 20.0) * 44.0)
 		g.exp_value = 1
 		g.is_gold = (i % 30 == 0)   ## 混入金宝验证 activate 状态重铺
 		g.activate()
@@ -496,6 +501,61 @@ func _run() -> void:
 	SettingsManager.set_val(&"display", &"shake_intensity", &"standard")
 	GameFeel.invalidate_memo()
 	_check(GameFeel.shake_mult_memo() > 0.0, "恢复 standard 后 memo 读数 > 0")
+
+	# ================= 9. 重绘节流补网（2026-10-14 逻辑帧治理） =================
+	# 9a. 玩家级修士渲染器 30Hz：high_fps_mode 原每帧全量重绘（444 处 draw_ × 60fps
+	#     是逻辑帧最大单一开销），降频后 1 秒 redraw_count 增量应 ≈30（阈值 ≤ 38）。
+	var cr := HollowKnightCultivatorRenderer.new(CultivatorVisualConfig.get_config("jianchi"))
+	cr.high_fps_mode = true
+	world.add_child(cr)
+	var cr_before: int = CultivatorRendererBase.redraw_count
+	await get_tree().create_timer(1.0).timeout
+	var cr_delta: int = CultivatorRendererBase.redraw_count - cr_before
+	print("PERF: 玩家级修士渲染器 1s 重绘 = %d（阈值 ≤ 38）" % cr_delta)
+	_check(cr_delta <= 38, "玩家渲染器 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧每帧模式约 60+）" % cr_delta)
+	_check(cr_delta >= 20, "玩家渲染器仍在重绘（节流不能把动画卡死，下限 20）")
+	world.remove_child(cr)
+	cr.free()
+
+	# 9b. 预警圈 30Hz 节流：原每渲染帧无条件 queue_redraw（2 条 48 段弧/帧）。
+	var tg := AoeTelegraph.new()
+	tg.progress = 0.5
+	world.add_child(tg)
+	var tg_before: int = AoeTelegraph.redraw_count
+	await get_tree().create_timer(1.0).timeout
+	var tg_delta: int = AoeTelegraph.redraw_count - tg_before
+	print("PERF: 预警圈 1s 重绘 = %d（阈值 ≤ 38）" % tg_delta)
+	_check(tg_delta <= 38, "AoeTelegraph 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧写法约 60+）" % tg_delta)
+	_check(tg_delta >= 20, "AoeTelegraph 仍在重绘（下限 20）")
+	world.remove_child(tg)
+	tg.free()
+
+	# 9c. 元素刀光 30Hz 节流：亮起窗口内原每帧重绘。
+	#     先隐后显逼出 VISIBILITY_CHANGED（默认 visible=true 直接 add 不会触发通知，
+	#     _process 会被 _ready 的 set_process(false) 关掉）
+	var arc := WeaponArcRenderer.new()
+	arc.configure(WeaponArcRenderer.ArcMode.MELEE, "fire")
+	arc.visible = false
+	world.add_child(arc)
+	arc.visible = true
+	var arc_before: int = WeaponArcRenderer.redraw_count
+	await get_tree().create_timer(1.0).timeout
+	var arc_delta: int = WeaponArcRenderer.redraw_count - arc_before
+	print("PERF: 元素刀光 1s 重绘 = %d（阈值 ≤ 38）" % arc_delta)
+	_check(arc_delta <= 38, "WeaponArcRenderer 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧写法约 60+）" % arc_delta)
+	_check(arc_delta >= 20, "WeaponArcRenderer 仍在重绘（下限 20）")
+	world.remove_child(arc)
+	arc.free()
+
+	# 9d. 顿帧零分配：hit_stop 不再建 SceneTreeTimer（旧实现每次顿帧 create_timer + 闭包）。
+	#     恢复由 GameManager._process 按 _hitstop_deadline_ms 轮询。
+	SettingsManager.set_val(&"display", &"hit_stop", true, false)
+	GameFeel.invalidate_memo()
+	GameFeel.hit_stop(GameManager, 0.05, 0.2)
+	_check(Engine.time_scale < 1.0, "hit_stop 压下时间轴（time_scale < 1.0）")
+	_check(GameManager._hitstop_deadline_ms > 0, "hit_stop 写下恢复截止时刻（零 Timer 分配口径）")
+	await get_tree().create_timer(0.2).timeout
+	_check(absf(Engine.time_scale - 1.0) < 0.001, "GameManager._process 到点还原 time_scale = 1.0")
 
 	world.remove_child(boss)
 	boss.free()

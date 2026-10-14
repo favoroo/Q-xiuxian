@@ -92,6 +92,10 @@ static func load_into(gm: Node) -> void:
 		var crec = cfg.get_value("records", "cultivator_records", {})
 		gm.cultivator_records = crec.duplicate() if crec is Dictionary else {}
 
+		# 皮肤选择（换色皮肤，2026-10-14 新增；老档缺字段按空字典回落，全员原色）
+		var sksel = cfg.get_value("progress", "skin_selections", {})
+		gm.skin_selections = sksel.duplicate() if sksel is Dictionary else {}
+
 		# 老档回填：best_danger_cleared 字段晚于每角色通关难度出现（2026-10-14），
 		# 存档里没有时按各角色最高通关难度推一个，避免老玩家解锁提示误显「尚未通关」。
 		if not cfg.has_section_key("stats", "best_danger_cleared"):
@@ -116,6 +120,7 @@ static func load_into(gm: Node) -> void:
 		gm.cultivator_records = {}
 		gm.victory_log = []
 		gm.run_history = []
+		gm.skin_selections = {}
 
 	# 确保初始集合必在（防止旧档或异常数据丢失基础内容）
 	for cid in AchievementData.DEFAULT_CULTIVATORS:
@@ -137,6 +142,7 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("progress", "unlocked_cultivators", gm.unlocked_cultivators)
 	cfg.set_value("progress", "unlocked_items", gm.unlocked_items)
 	cfg.set_value("progress", "unlocked_achievements", gm.unlocked_achievements)
+	cfg.set_value("progress", "skin_selections", gm.skin_selections)
 
 	cfg.set_value("stats", "total_runs", int(gm.career_stats.get("total_runs", 0)))
 	cfg.set_value("stats", "total_wins", int(gm.career_stats.get("total_wins", 0)))

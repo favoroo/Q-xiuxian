@@ -8,6 +8,9 @@ extends RefCounted
 ##    INK/NAVY/NAVY2 三层底统一 #000000，层次全靠 accent 描边 + LINE 灰线勾轮廓；
 ##    PAPER 值翻回纸白亮字，CHALK 与 PAPER 同值（「暗底亮字」语义保留，调用点不必改）；
 ##    功能色按黑底重新调亮（JADE/GOOD/RARITY_* 从白底深色调回黑底亮调）。
+## ⚠ 2026-10-14 主蓝换色：用户拍板「天蓝」——主蓝三件套取 Material Light Blue 家族
+##    （GOLD=#4FC3F7 天蓝 / GOLD_EDGE=#B3E5FC 亮边 / GOLD_DK=#0277BD 同族压暗）；
+##    当日先试过 qnote accent #005BCB 经典蓝，用户仍嫌闷后终定天蓝。
 
 # —— 底色（纯黑舞台 × 纯黑面板：三层底同值，层次交给描边）——
 const INK := Color("000000")        # 舞台底/暗色块/暗徽章（纯黑）
@@ -22,9 +25,9 @@ const INK_TEXT := Color("000000")   # 亮面/彩色面上的黑字
 const CHALK := Color("f2efe4")      # 暗底亮字（与 PAPER 同值；语义保留：用于世界空间/暗色块）
 
 # —— 角色色（色即功能，按黑底调亮）——
-const GOLD := Color("387ce6")       # 主蓝 = 霁蓝·青金宝石蓝（主行动/选中/标题带，通透扎实不发暗）
-const GOLD_EDGE := Color("8ab7fb")  # 霜华亮蓝（描边/高光流光）
-const GOLD_DK := Color("1a438c")    # 幽夜深蓝（立体厚底与阴影）
+const GOLD := Color("4fc3f7")       # 主蓝 = 天蓝（主行动/选中/标题带，黑底亮、做底配黑字）
+const GOLD_EDGE := Color("b3e5fc")  # 天蓝亮边（描边/高光流光，Light Blue 100）
+const GOLD_DK := Color("0277bd")    # 天蓝压暗（立体厚底与阴影，Light Blue 800）
 const JADE := Color("ffd23f")       # 点缀黄 = 金币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
 const JADE_EDGE := Color("ffe9a8")
 const JADE_DK := Color("8f6a14")
@@ -50,13 +53,20 @@ const RARITY_RARE := Color(0.22, 0.78, 0.60)
 const RARITY_EPIC := Color("d9b356")  # 冷月霜金调亮：古金在纯黑上要够亮才读得出品阶
 const RARITY_LEGEND := Color(0.74, 0.42, 0.94)
 
-# 五行标签统一色值
+# 五行标签统一色值（2026-10-14 重定：金改金色，火/土随动拉开与状态色的距离，
+# 水随主蓝换天蓝随动压深 —— 主蓝 #4fc3f7 与旧水色只差 31，玄水必得是深蓝才分得出）
+# 这套色一色多用：图标外框描边、图鉴五行签面（签上是黑字）、羁绊行头签。
+# 挑值的硬约束（改前实测）：火 #e6734c 与「元素橙红下边框」#ff8a3d 只差 38 ——
+# 火系 13 把里 11 把带橙红下边框，两者在同一格上几乎糊成一条；金原为冷银白 #d9dbeb，
+# 与「当前选中」白框 #f2efe4 只差 33，金系 16 把（占比最大）选中时看不出外框变过色。
+# 故：金 → 古金（用户口径「金系就该是金色」），火 → 赤红（压暗收红，离橙红条 85），
+# 土 → 棕土（金变金后与土黄只差 50，同为暖黄会撞，必须一起往棕压）。
 const ELEMENT_COLORS := {
-	"metal": Color(0.85, 0.86, 0.92),
-	"wood": Color(0.35, 0.75, 0.45),
-	"water": Color(0.35, 0.65, 0.95),
-	"fire": Color(0.9, 0.45, 0.3),
-	"earth": Color(0.8, 0.65, 0.35),
+	"metal": Color("c9a227"),
+	"wood": Color("59bf73"),
+	"water": Color("1e88e5"),
+	"fire": Color("ec4018"),
+	"earth": Color("a97544"),
 }
 
 const SLANT_PLATE := 3.0
@@ -533,7 +543,7 @@ static func is_elemental(weapon_id: String) -> bool:
 static func element_border(weapon_id: String, fallback: Color) -> Color:
     return ELEMENT if is_elemental(weapon_id) else fallback
 
-## 武器对应的五行代表色（金银/木绿/水蓝/火红/土黄），无对应或空则回退 fallback
+## 武器对应的五行代表色（金古金/木绿/水蓝/火赤红/土棕土），无对应或空则回退 fallback
 static func weapon_element_color(weapon_id: String, fallback: Color = Color("3a3a42")) -> Color:
     if weapon_id.is_empty():
         return fallback
@@ -586,10 +596,14 @@ static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
 
 ## UI 图标工厂：统一设置 EXPAND_IGNORE_SIZE + STRETCH_KEEP_ASPECT_CENTERED，
 ## 并显式启用 TEXTURE_FILTER_LINEAR（双线性插值滤波），消除全局 Nearest 缩放时的锯齿像素感。
+## 武器图标走「UI 高清变体优先」：战斗画布 weapon_*.png 固定 48x48（tip 剑尖坐标系绑定，
+## 不能放大），UI 槽位 56~64px 放大显示会糊；assets/art/ui/ 下有同名 128px 变体则优先用，
+## 没有则原样回退（item_*/其他图标无变体，路径原样通过，行为不变）。
 static func icon_texture_rect(texture_path: String = "", min_size: Vector2 = Vector2.ZERO) -> TextureRect:
     var tex_rect := TextureRect.new()
-    if not texture_path.is_empty() and ResourceLoader.exists(texture_path):
-        tex_rect.texture = load(texture_path)
+    var path := _hd_icon_path(texture_path)
+    if not path.is_empty() and ResourceLoader.exists(path):
+        tex_rect.texture = load(path)
     tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -597,6 +611,22 @@ static func icon_texture_rect(texture_path: String = "", min_size: Vector2 = Vec
     if min_size != Vector2.ZERO:
         tex_rect.custom_minimum_size = min_size
     return tex_rect
+
+## UI 图标路径 → 高清变体路径：assets/art/ 下的武器图标在 assets/art/ui/ 找同名 128px 变体。
+## 变体只增不清：原路径不存在或无变体时原样返回，调用方 ResourceLoader.exists 兜底。
+## 缓存探测结果：商店一屏几十张图标逐张 is_file() 太浪费。
+static var _hd_icon_cache: Dictionary = {}
+static func _hd_icon_path(path: String) -> String:
+    if path.is_empty() or not path.begins_with("res://assets/art/"):
+        return path
+    if _hd_icon_cache.has(path):
+        return _hd_icon_cache[path]
+    var hd := path.replace("res://assets/art/", "res://assets/art/ui/")
+    if hd != path and FileAccess.file_exists(hd):
+        _hd_icon_cache[path] = hd
+    else:
+        _hd_icon_cache[path] = path
+    return _hd_icon_cache[path]
 
 ## 按钮四态（normal / hover / pressed / disabled）：禁用态在这里统一给灰面，
 ## 每个界面不再自己补 disabled stylebox（漏一处就是一颗看不见的死键）。

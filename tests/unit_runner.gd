@@ -65,6 +65,7 @@ func _ready() -> void:
 	infra._test_start_in_endless()
 	infra._test_achievement_and_meta_save()
 	infra._test_career_milestones()
+	infra._test_skin_system()
 	infra._test_modal_pause_buttons()
 	combat._test_knock_direction()
 	combat._test_charge_geometry()

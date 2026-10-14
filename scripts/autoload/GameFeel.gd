@@ -90,14 +90,12 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 	if not hit_stop_enabled():
 		return
 	gm._hitstop_token += 1
-	var token: int = gm._hitstop_token
 	# 时间缩放不得低于安全地板（GameBalance.HITSTOP_TIMESCALE_FLOOR）：
 	# 极端近 0 停顿引发物理与渲染交换链丢帧/黑帧（真机整屏闪一下的元凶之一）
 	Engine.time_scale = clampf(target_scale, GameBalance.HITSTOP_TIMESCALE_FLOOR, 1.0)
-	gm.get_tree().create_timer(duration, true, false, true).timeout.connect(func():
-		if gm._hitstop_token == token:
-			Engine.time_scale = 1.0
-	)
+	# 零分配恢复（2026-10-14）：只写真实毫秒截止时刻，GameManager._process 到点还原；
+	# 原实现每次顿帧 create_timer 分配 SceneTreeTimer + 闭包。重复顿帧天然延期（覆写更晚时刻）。
+	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * 1000.0)
 
 static var _last_crit_hitstop_ms: int = 0
 const CRIT_HITSTOP_MIN_INTERVAL := 0.10

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bt784pck7scrg"
-path="res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.ctex"
+uid="uid://dji45vqutgl6n"
+path="res://.godot/imported/weapon_wood_talisman.png-963845e2c81b7370e1af373795e9573f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cultivator_kuangzhan_8dir.png"
-dest_files=["res://.godot/imported/cultivator_kuangzhan_8dir.png-fc3b24ed2e141bdaa54108510fa7ff80.ctex"]
+source_file="res://assets/art/ui/weapon_wood_talisman.png"
+dest_files=["res://.godot/imported/weapon_wood_talisman.png-963845e2c81b7370e1af373795e9573f.ctex"]
 
 [params]
 

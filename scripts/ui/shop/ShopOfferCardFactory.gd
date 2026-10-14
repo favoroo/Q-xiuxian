@@ -246,7 +246,7 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# 边框双通道正交设计：
-	# 1. 外边框（四周）：五行属性统一色（金银/木绿/水蓝/火红/土黄），无属性武器走 LINE
+	# 1. 外边框（四周）：五行属性统一色（金古金/木绿/水蓝/火赤红/土棕土），无属性武器走 LINE
 	# 2. 下边框：吃「元素伤害」属性加成的武器，底部挂 3px 暖橙红 ELEMENT 光带，与五行外框互不干扰
 	var border_color: Color = GameStyle.LINE
 	var is_elem := false

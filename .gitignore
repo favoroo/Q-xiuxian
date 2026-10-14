@@ -27,3 +27,4 @@ tests/styles/*.png.import
 # macOS 文件系统元数据
 .DS_Store
 
+.gh-pages-work/

@@ -38,6 +38,9 @@ extends RefCounted
 ##                                                 卡面上单独成一段（不并进 pros 列表）
 ## allowed_tags: 非空时商店大幅偏向这些流派的武器，但仍有少量其他武器漏出；locked_upgrades: 锁死的加点项
 ## sprite: 角色独立 8 方向行走图（5 行 × 5 列，192px/格，行序见 RunMotion.DIR_ROW）；缺图回退 pawn_blue_8dir
+## ⚠ 发布包不含 *_8dir 帧集（export_presets.cfg exclude_filter 已排除，约 18MB 死重——
+## 全员 procedural 渲染不加载图集）。未来新角色若真要启用图集渲染，先把排除名单里的
+## *_8dir.png 两项移除，否则真机上 ResourceLoader.exists 直接失败、走 pawn_blue 兜底白模。
 ## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
 
 const DEFS: Dictionary = {

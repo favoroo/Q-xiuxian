@@ -138,6 +138,14 @@ var _channel_on: bool = false
 var _channel_left: float = 0.0
 var _channel_tick: float = 0.0
 var _beam_len: float = 0.0     ## 本 tick 光束判定长度（射线命中截断，渲染同源）
+## 束长射线节流（2026-10-14）：原每渲染帧 create 参数对象 + intersect_ray（60 次/秒），
+## 降到 10Hz 快照 + 参数对象复用（对齐 _search_query 范式），帧间 _beam_len 向快照缓动；
+## 起喷当帧强制立判（_beam_need_cast），首跳伤害长度不滞后。
+const BEAM_CAST_INTERVAL := 0.1
+var _beam_cast_phase: float = 0.0
+var _beam_len_target: float = 0.0
+var _beam_need_cast: bool = false
+static var _beam_ray_query: PhysicsRayQueryParameters2D = null
 var beam_renderer: BeamRenderer = null
 var cone_renderer: FlameConeRenderer = null
 ## 光束判定矩形静态复用（照 _search_shape 模式，单线程安全，每次查询现写尺寸）
@@ -513,6 +521,7 @@ func _perform_turret_attack() -> void:
 func _perform_channel_attack() -> void:
 	if not _channel_on:
 		_channel_on = true
+		_beam_need_cast = true
 		AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 0.9)
 		_flash_sprite(Color(1.4, 1.25, 1.5), 0.14)
 	_channel_left = CHANNEL_HOLD
@@ -533,7 +542,16 @@ func _tick_channel(delta: float) -> void:
 	var reach := attack_range * _range_mult()
 	_channel_tick -= delta
 	if behavior == WeaponData.Behavior.BEAM:
-		_beam_len = _beam_cast_length(reach)
+		_beam_cast_phase -= delta
+		if _beam_need_cast:
+			_beam_need_cast = false
+			_beam_cast_phase = BEAM_CAST_INTERVAL
+			_beam_len = _beam_cast_length(reach)
+			_beam_len_target = _beam_len
+		elif _beam_cast_phase <= 0.0:
+			_beam_cast_phase = BEAM_CAST_INTERVAL
+			_beam_len_target = _beam_cast_length(reach)
+		_beam_len = lerpf(_beam_len, _beam_len_target, minf(delta * 14.0, 1.0))
 		var w_mult := 1.0 + 0.18 * float(star - 1)
 		beam_renderer.beam_on(_beam_len, BEAM_HALF_WIDTH * 2.0 * w_mult, _get_aura_color())
 		if _channel_tick <= 0.0:
@@ -553,10 +571,14 @@ func _beam_cast_length(reach: float) -> float:
 	var max_len := maxf(40.0, reach - muzzle_len)
 	var from := muzzle_point.global_position
 	var dir := Vector2.RIGHT.rotated(global_rotation)
-	var qp := PhysicsRayQueryParameters2D.create(from, from + dir * max_len, 4, [])
-	qp.collide_with_areas = true
-	qp.hit_from_inside = true
-	var hit := get_world_2d().direct_space_state.intersect_ray(qp)
+	if _beam_ray_query == null:
+		_beam_ray_query = PhysicsRayQueryParameters2D.create(from, from + dir * max_len, 4, [])
+		_beam_ray_query.collide_with_areas = true
+		_beam_ray_query.hit_from_inside = true
+	else:
+		_beam_ray_query.from = from
+		_beam_ray_query.to = from + dir * max_len
+	var hit := get_world_2d().direct_space_state.intersect_ray(_beam_ray_query)
 	if hit.is_empty():
 		return max_len
 	return maxf(8.0, from.distance_to(hit["position"]))

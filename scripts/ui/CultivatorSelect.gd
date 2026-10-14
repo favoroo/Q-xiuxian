@@ -37,6 +37,8 @@ var _selected_id: String = "jianchi"
 var _transitioning: bool = false
 var _roster_cards: Dictionary = {}
 var _cached_roster_w: float = -1.0
+var _detail_pview: ProceduralCultivatorView = null  ## 详情卡大头像（皮肤切换实时预览用）
+var _skin_row: Control = null                     ## 详情卡皮肤切换栏（点选皮肤后局部重建用）
 
 func _ready() -> void:
 	visible = false
@@ -251,6 +253,8 @@ func _rebuild_all() -> void:
 func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	for child in _detail_content.get_children():
 		child.queue_free()
+	_detail_pview = null
+	_skin_row = null
 
 	var def: Dictionary = CultivatorData.get_def(cid)
 	var is_unlocked: bool = GameManager.is_cultivator_unlocked(cid)
@@ -284,6 +288,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		if not is_unlocked:
 			pview.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(pview)
+		_detail_pview = pview
 	else:
 		var icon_tex := TextureRect.new()
 		if ResourceLoader.exists(String(def.get("icon", ""))):
@@ -393,6 +398,10 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	GameStyle.swipeable(mid_col)
 
+	# 2.5 皮肤切换栏（通关难度解锁换色皮肤；未解锁角色整排置灰）
+	_skin_row = _make_skin_row(cid, is_unlocked)
+	_detail_content.add_child(_skin_row)
+
 	# 3. 底部操作栏（固定吸底，高度 46）
 	var bottom_bar := MarginContainer.new()
 	bottom_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -486,6 +495,121 @@ func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
 		"rows": rows,
 		"body": String(ach.get("cond_desc", "")),
 		"foot": "进度取生涯单局最佳记录，达成后自动解锁该角色。",
+	})
+
+# ---------------- 皮肤切换栏（通关难度解锁换色皮肤） ----------------
+
+## 皮肤栏：「皮肤」色签 + 原色槽 + 6 套主题色槽 + 当前皮肤名
+func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 6)
+	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var tag_lbl := Label.new()
+	tag_lbl.text = " 皮肤 "
+	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
+	GameStyle.label(tag_lbl, 11, GameStyle.CHALK)
+	strip.add_child(tag_lbl)
+
+	var cur_idx := GameManager.get_selected_skin(cid)
+	var base_cfg := CultivatorVisualConfig.get_config(cid)
+
+	# 原色槽：色块取角色本相斗篷配色，一眼认出「这是本来的样子」
+	strip.add_child(_make_skin_slot(cid, -1,
+			Color(base_cfg.cloak.get("col_outer", GameStyle.NAVY2)),
+			Color(base_cfg.cloak.get("col_edge", GameStyle.LINE)),
+			is_unlocked, cur_idx == -1))
+
+	for i in range(SkinData.count()):
+		var t := SkinData.get_theme(i)
+		var slot_open := is_unlocked and GameManager.is_skin_unlocked(cid, i)
+		strip.add_child(_make_skin_slot(cid, i,
+				Color(t.get("cloak_outer", GameStyle.NAVY2)),
+				Color(t.get("cloak_edge", GameStyle.LINE)),
+				slot_open, is_unlocked and cur_idx == i))
+
+	var cur_name := "原色"
+	if cur_idx >= 0:
+		cur_name = String(SkinData.get_theme(cur_idx).get("name", ""))
+	var name_lbl := Label.new()
+	name_lbl.text = cur_name
+	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	GameStyle.label(name_lbl, 11, GameStyle.JADE if cur_idx >= 0 else GameStyle.PAPER_DIM)
+	strip.add_child(name_lbl)
+
+	return strip
+
+## 单个皮肤槽：主色块 + 边缘点缀色描边；选中金框高亮；未解锁灰化加「锁」
+func _make_skin_slot(cid: String, skin_idx: int,
+		main_col: Color, edge_col: Color, open: bool, selected: bool) -> PanelContainer:
+	var slot := PanelContainer.new()
+	slot.custom_minimum_size = Vector2(34, 34)
+	slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bg := main_col if open else main_col.darkened(0.55).lerp(GameStyle.INK, 0.35)
+	var border := GameStyle.JADE if selected else (edge_col if open else GameStyle.LINE)
+	slot.add_theme_stylebox_override("panel",
+			GameStyle.outlined_panel(bg, border, 2 if selected else 1, 0.0))
+	if not open:
+		var lock_lbl := Label.new()
+		lock_lbl.text = "锁"
+		lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lock_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		GameStyle.label(lock_lbl, 10, GameStyle.GREY)
+		slot.add_child(lock_lbl)
+	GameStyle.tap(slot, func() -> void: _on_skin_slot_tapped(cid, skin_idx, slot))
+	return slot
+
+func _on_skin_slot_tapped(cid: String, skin_idx: int, anchor: Control) -> void:
+	if not GameManager.is_cultivator_unlocked(cid):
+		return
+	if not GameManager.is_skin_unlocked(cid, skin_idx):
+		AudioManager.play_sfx("ui_click")
+		_open_skin_lock_tip(cid, skin_idx, anchor)
+		return
+	if GameManager.get_selected_skin(cid) == skin_idx:
+		return
+	AudioManager.play_sfx("ui_confirm", 1.0)
+	GameManager.set_selected_skin(cid, skin_idx)
+	# 详情大头像与右侧网格缩略图实时换色；皮肤栏原位重建刷新高亮与当前皮肤名
+	if _detail_pview != null and is_instance_valid(_detail_pview):
+		_detail_pview.setup_character_id(cid)
+	_refresh_roster_skin(cid)
+	if _skin_row != null and is_instance_valid(_skin_row):
+		var at := _skin_row.get_index()
+		_skin_row.queue_free()
+		_skin_row = _make_skin_row(cid, true)
+		_detail_content.add_child(_skin_row)
+		_detail_content.move_child(_skin_row, at)
+
+## 右侧网格该角色缩略图同步换色
+func _refresh_roster_skin(cid: String) -> void:
+	if not _roster_cards.has(cid):
+		return
+	var pv: ProceduralCultivatorView = _roster_cards[cid].get("pview")
+	if pv != null and is_instance_valid(pv):
+		pv.setup_character_id(cid)
+
+## 未解锁皮肤点按详情浮卡：解锁条件 + 当前进度（「这是什么」点按可得）
+func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
+	var t := SkinData.get_theme(skin_idx)
+	var tier := int(t.get("tier", 0))
+	var dmax := AchievementData.DANGER_NAMES.size() - 1
+	var dname := AchievementData.DANGER_NAMES[clampi(tier, 0, dmax)]
+	var best := GameManager.get_cultivator_best_danger(cid)
+	var best_txt := "尚未通关" if best < 0 else "已通关「%s」" % AchievementData.DANGER_NAMES[clampi(best, 0, dmax)]
+	DetailTip.show_over(self, anchor, {
+		"title": "皮肤 · %s" % String(t.get("name", "")),
+		"chip": "未解锁",
+		"chip_color": GameStyle.GREY,
+		"rows": [
+			["解锁条件", "通关「%s」难度" % dname, GameStyle.GOLD],
+			["当前进度", best_txt, GameStyle.GOOD if best >= tier else GameStyle.GREY],
+		],
+		"body": "通关对应难度即可解锁该皮肤；通关更高难度时，低档皮肤将一并解锁。",
 	})
 
 ## 将文本中的核心数值与机制名精准高亮（其余正文走 PAPER 纸白色）
@@ -674,8 +798,9 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var ib_border := GameStyle.JADE if is_selected else (GameStyle.GOLD_EDGE if is_unlocked else GameStyle.LINE)
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
+	var pview: ProceduralCultivatorView = null
 	if String(def.get("motion", "")) == "procedural":
-		var pview := ProceduralCultivatorView.new()
+		pview = ProceduralCultivatorView.new()
 		pview.position = Vector2(20, 24)
 		pview.scale = Vector2(0.55, 0.55)
 		pview.setup_character_id(cid)
@@ -759,6 +884,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		"name_lbl": name_lbl,
 		"tag_lbl": tag_lbl,
 		"is_unlocked": is_unlocked,
+		"pview": pview,
 	}
 
 	return card

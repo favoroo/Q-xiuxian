@@ -15,6 +15,10 @@ const POOL_CAP := 96      ## 常驻池上限，超出时临时新建并在用完
 ## 同目标伤害跳字聚合窗（秒）：同一敌人窗口内的连续伤害并入同一条（累计值 + ×N），
 ## 新伤到来时窗口滑动续期；束流/喷吐/DoT 高频命中不再刷屏顶字，池溢出 new+free 抖动消失。
 const COMBO_WINDOW := 0.25
+## 聚合窗内文本重排节流（2026-10-14）：合并命中每次重写带描边 Label.text 会触发
+## 完整文本排版 + 描边栅格化，束流/DoT 集火时每秒几十次。sum/count 照常即时累计，
+## 仅 Label 重排降频到 12.5Hz，文本滞后 ≤80ms 肉眼无感；暴击升级样式不受闸限。
+const COMBO_TEXT_INTERVAL := 0.08
 
 ## 聚合判定纯函数（单测钉判据用）：只有带 combo_key 且非文字类的伤害跳字参与聚合；
 ## DoT tick 与暴击同样并入（暴击把整条升到鎏金样式），文字类读数保持逐条独立
@@ -54,6 +58,8 @@ var _rise_y: float = 0.0
 var _is_crit: bool = false
 var _last_scale: float = -1.0
 var _last_alpha: float = -1.0
+## 上次实际发生文本重排的时刻（聚合节流用）；_start 里文本真正变更才刷新
+var _last_text_layout_ms: int = 0
 ## 聚合身份：本条跳字绑定的 combo_key（0 = 独立条）与已累计值/次数，用于并入时重算文本
 var _combo_key: int = 0
 var _combo_sum: int = 0
@@ -237,10 +243,19 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	e["expire_ms"] = now + int(COMBO_WINDOW * 1000.0)
 	n._combo_sum = sum
 	n._combo_hits = count
-	var text := format_combo(sum, count) + ("!" if crit else "")
+	var settings := _crit_settings if crit else _normal_settings
+	# 排版节流：窗口内数值照常累计（上方 e/n 字段已是真话），但带描边 Label 重排
+	# 降频到 12.5Hz；暴击把样式升鎏金时必须立即重排（样式升级是即时反馈）
+	var style_changed := n._label.label_settings != settings
+	var text: String
+	if style_changed or now - n._last_text_layout_ms >= int(COMBO_TEXT_INTERVAL * 1000.0):
+		text = format_combo(sum, count) + ("!" if crit else "")
+	else:
+		# 闸内：只重播弹出动画与跟随位置，沿用当前 Label 文本（_start 的文本/样式去重保证零排版）
+		text = n._label.text
 	n._start(
 		pos + Vector2(randf_range(-12.0, 12.0), -12.0),
-		text, _crit_settings if crit else _normal_settings, crit,
+		text, settings, crit,
 		randf_range(-26.0, 26.0),
 		randf_range(40.0, 52.0) if crit else randf_range(32.0, 42.0)
 	)
@@ -262,8 +277,14 @@ static func _back_out(x: float) -> float:
 	return 1.0 + 2.70158 * x * x * x + 1.70158 * x * x
 
 func _start(world_pos: Vector2, text: String, settings: LabelSettings, crit: bool, drift_x: float, rise_y: float) -> void:
-	_label.text = text
-	_label.label_settings = settings
+	# 文本/样式去重（2026-10-14）：Label.text 赋值作废字体缓存并重排版，
+	# 闸内合并重播传入的是旧文本，此处挡住即零排版
+	if _label.text != text:
+		_label.text = text
+		_last_text_layout_ms = Time.get_ticks_msec()
+	if _label.label_settings != settings:
+		_label.label_settings = settings
+		_last_text_layout_ms = Time.get_ticks_msec()
 	global_position = world_pos
 	_origin = position
 	_drift_x = drift_x

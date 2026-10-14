@@ -32,8 +32,6 @@ GameManager="*res://scripts/autoload/GameManager.gd"
 
 [debug]
 
-gdscript/warnings/enable=true
-; 关键正确性警告按 ERROR（2）：存量已清零，新增即阻断加载，防回归
 gdscript/warnings/unassigned_variable=2
 gdscript/warnings/unassigned_variable_op_assign=2
 gdscript/warnings/unreachable_code=2
@@ -43,16 +41,6 @@ gdscript/warnings/standalone_ternary=2
 gdscript/warnings/incompatible_ternary=2
 gdscript/warnings/integer_division=2
 gdscript/warnings/narrowing_conversion=2
-; 风格类保持 WARN（1）：不阻断，仅提示
-gdscript/warnings/unused_variable=1
-gdscript/warnings/unused_parameter=1
-gdscript/warnings/unused_signal=1
-gdscript/warnings/shadowed_variable=1
-gdscript/warnings/confusable_identifier=1
-; 静态类型/unsafe 系列暂不启用（存量未全量标注，避免噪声）
-gdscript/warnings/untyped_declaration=0
-gdscript/warnings/return_value_discarded=0
-gdscript/warnings/missing_await=0
 
 [display]
 
@@ -87,8 +75,6 @@ common/physics_interpolation=true
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
-renderer/rendering_method.mobile="mobile"
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 textures/vram_compression/import_etc2_astc=true

@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+# 剑士 Web 版部署脚本：导出 HTML5 → 推送到 gh-pages 分支 → 打印访问 URL
+# 仅用 Python 标准库，无第三方依赖。用法见 .agents/skills/web-deploy/SKILL.md
+
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+BUILD_DIR = REPO_ROOT / 'build' / 'web'
+GODOT_BIN = '/Applications/Godot.app/Contents/MacOS/Godot'
+
+# GitHub Pages 地址（项目页面，非用户页面）
+GITHUB_OWNER, GITHUB_REPO = 'favoroo', 'Q-xiuxian'
+PAGES_URL = f'https://{GITHUB_OWNER.lower()}.github.io/{GITHUB_REPO}/'
+
+T0 = time.time()
+
+
+def log(msg: str) -> None:
+    print(f'[{time.time() - T0:7.1f}s] {msg}', flush=True)
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(f'✗ 错误: {msg}', file=sys.stderr, flush=True)
+    sys.exit(code)
+
+
+def run(cmd: list, **kw) -> subprocess.CompletedProcess:
+    kw.setdefault('cwd', REPO_ROOT)
+    kw.setdefault('capture_output', True)
+    kw.setdefault('text', True)
+    return subprocess.run(cmd, **kw)
+
+
+def export_web() -> None:
+    """调用 Godot CLI 导出 Web 版到 build/web/"""
+    if not Path(GODOT_BIN).exists():
+        die(f'Godot 执行程序不存在: {GODOT_BIN}')
+
+    # 清理旧产物
+    if BUILD_DIR.exists():
+        shutil.rmtree(BUILD_DIR)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
+    log('开始调用 Godot 导出 Web 版...')
+    cmd = [
+        GODOT_BIN,
+        '--headless',
+        '--export-release',
+        'Web',
+        str(BUILD_DIR / 'index.html'),
+    ]
+    r = run(cmd)
+    if r.returncode != 0:
+        detail = ((r.stderr or '') + '\n--- stdout ---\n' + (r.stdout or ''))[-3000:]
+        die(f'Godot CLI 导出 Web 版失败:\n{detail}')
+
+    if not (BUILD_DIR / 'index.html').exists():
+        die(f'未找到导出的 index.html: {BUILD_DIR / "index.html"}')
+
+    # 统计产物大小
+    total_size = sum(f.stat().st_size for f in BUILD_DIR.rglob('*') if f.is_file())
+    file_count = sum(1 for f in BUILD_DIR.rglob('*') if f.is_file())
+    log(f'导出完成: {file_count} 个文件, {total_size / 1024 / 1024:.1f} MB')
+
+
+def deploy_to_ghpages() -> None:
+    """将 build/web/ 内容推送到 gh-pages 孤儿分支
+
+    2026-10-14 事故修复：旧实现用 `git checkout --orphan gh-pages` + `git rm -rf .`
+    在主工作树上轮换分支 —— `git rm -rf .` 会把所有已跟踪文件（连同未提交改动）从磁盘
+    删光，且 .gitignore 一并被删，后续 `git add -A` 把 keystore/api.env 等机密文件全数
+    提交并推上公开仓库；若中途崩溃，主分支工作树就永远停在 gh-pages（本次事故实况）。
+    现改为独立 git worktree 承载 gh-pages：主工作树全程不被触碰，无 `--force` 恢复路径，
+    脏树直接拒绝部署。
+    """
+    # 脏树（未提交改动/未跟踪文件）禁部署：worktree 指向同一套对象库，提交虽不会
+    # 串到 main，但部署中途人工操作主树、或 push 失败后半途收尾，都容易再把状态搞混
+    r = run(['git', 'status', '--porcelain'])
+    if r.stdout.strip():
+        die('工作树有未提交改动（git status 非空），先 commit 或 stash 再部署。\n'
+            + r.stdout[:1500])
+
+    r = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+    original_branch = r.stdout.strip()
+    log(f'当前分支: {original_branch}')
+
+    # gh-pages worktree：固定放在 .gh-pages-work（gitignore 覆盖），随用随建随删
+    worktree_path = REPO_ROOT / '.gh-pages-work'
+    r = run(['git', 'worktree', 'list', '--porcelain'])
+    wt_exists = any(line == f'worktree {worktree_path}' for line in r.stdout.splitlines())
+    if wt_exists:
+        run(['git', 'worktree', 'remove', '--force', str(worktree_path)])
+
+    ghpages_exists = run(['git', 'rev-parse', '--verify', 'refs/heads/gh-pages']).returncode == 0
+    if ghpages_exists:
+        log('用独立 worktree 检出 gh-pages...')
+        run(['git', 'worktree', 'add', str(worktree_path), 'gh-pages'])
+        # worktree 里只留导出产物：清掉旧内容（worktree 树是纯产物，无未提交风险）
+        for item in worktree_path.iterdir():
+            if item.name == '.git':
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+    else:
+        log('创建 gh-pages 孤儿分支（独立 worktree）...')
+        run(['git', 'worktree', 'add', '--orphan', '-b', 'gh-pages', str(worktree_path)])
+
+    try:
+        # 复制 Web 导出产物到 worktree 根
+        log('复制 Web 导出产物到 gh-pages worktree...')
+        for item in BUILD_DIR.iterdir():
+            if item.is_file():
+                shutil.copy2(item, worktree_path / item.name)
+            else:
+                shutil.copytree(item, worktree_path / item.name)
+
+        # 提交并推送（cwd 指到 worktree，绝不在主树上做任何事）
+        run(['git', 'add', '-A'], cwd=worktree_path)
+        r = run(['git', 'commit', '-m', f'feat(web): 部署 Web 版 {time.strftime("%Y-%m-%d %H:%M")}', '--allow-empty'],
+                cwd=worktree_path)
+        if r.returncode != 0 and 'nothing to commit' not in (r.stdout or ''):
+            log(f'git commit 输出: {r.stdout}')
+
+        log('推送到 origin gh-pages...')
+        r = run(['git', 'push', 'origin', 'gh-pages'])
+        if r.returncode != 0:
+            if 'up-to-date' in (r.stderr or '') or 'up to date' in (r.stderr or ''):
+                log('gh-pages 已是最新，无需推送')
+            else:
+                die(f'git push 失败: {r.stderr}')
+
+    finally:
+        # 只拆 worktree，主工作树自始至终没被碰过，无需任何恢复动作
+        log('清理 gh-pages worktree...')
+        run(['git', 'worktree', 'remove', '--force', str(worktree_path)])
+        run(['git', 'worktree', 'prune'])
+        log(f'主分支保持: {original_branch}')
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='剑士 Web 版一键部署到 GitHub Pages')
+    parser.add_argument('--skip-export', action='store_true',
+                        help='跳过 Godot 导出步骤（使用已有的 build/web/ 产物）')
+    args = parser.parse_args()
+
+    if not args.skip_export:
+        export_web()
+
+    deploy_to_ghpages()
+
+    print('\n' + '=' * 60)
+    print(f'🎉 Web 版部署成功！')
+    print(f'• 访问地址: {PAGES_URL}')
+    print(f'• 首次生效需等待 1-2 分钟（GitHub Pages 缓存刷新）')
+    print(f'• 后续更新重跑本脚本即可，URL 不变')
+    print('=' * 60 + '\n')
+
+
+if __name__ == '__main__':
+    main()

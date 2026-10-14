@@ -61,5 +61,21 @@ def main():
 
     print(f"已成功将 {count} 个法宝道具图标高清重烘焙至 assets/art/ (128x128)！")
 
+    # 2. 武器 UI 变体（仅商店/加点/背包等 UI 显示用，输出到 assets/art/ui/）。
+    # 战斗画布 assets/art/weapon_*.png 必须保持 48x48——FloatingWeapon 的缩放与
+    # WeaponData.tip 剑尖坐标严格绑定 48 坐标系，动它就是「战场武器变大」回归。
+    # 只给战斗画布已存在的武器生成变体，避免把未引用素材打进包里。
+    ui_dir = os.path.join("assets", "art", "ui")
+    os.makedirs(ui_dir, exist_ok=True)
+    w_count = 0
+    for battle_png in sorted(glob.glob("assets/art/weapon_*.png")):
+        src = os.path.join("assets_raw/images", os.path.basename(battle_png))
+        if fit_to_128(src, os.path.join(ui_dir, os.path.basename(battle_png)), 128):
+            w_count += 1
+    # sun_orb（金乌法球）同样是 48px 战斗画布 + UI 槽位复用，一并出变体
+    if fit_to_128("assets_raw/images/sun_orb.png", os.path.join(ui_dir, "sun_orb.png"), 128):
+        w_count += 1
+    print(f"已成功将 {w_count} 个武器 UI 图标重烘焙至 assets/art/ui/ (128x128)！")
+
 if __name__ == "__main__":
     main()
