@@ -3,23 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c7gaywn2htpa2"
-path.bptc="res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.bptc.ctex"
-path.astc="res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.astc.ctex"
+path="res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc", "etc2_astc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
 source_file="res://assets/art/tutorial/shot_shop.png"
-dest_files=["res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.bptc.ctex", "res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.astc.ctex"]
+dest_files=["res://.godot/imported/shot_shop.png-3e79788503eac977a19023aa3bb6074a.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=true
-compress/lossy_quality=0.85
+compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1

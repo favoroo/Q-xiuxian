@@ -3,23 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dvg32thwynkl1"
-path.bptc="res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.bptc.ctex"
-path.astc="res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.astc.ctex"
+path="res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc", "etc2_astc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
 source_file="res://assets/art/tutorial/shot_synergy.png"
-dest_files=["res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.bptc.ctex", "res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.astc.ctex"]
+dest_files=["res://.godot/imported/shot_synergy.png-699d38e7696fd58d9d999ca7727e1665.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=true
-compress/lossy_quality=0.85
+compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
