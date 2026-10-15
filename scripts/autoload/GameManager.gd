@@ -573,9 +573,6 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 		if stone_chance > 0.0 and rng.randf() < stone_chance:
 			spirit_stones += 1
 			touch_peak_stones()
-		# 暴击击杀的屏幕级金白脉冲（GameFeel 闸限流）：质变反馈但防高暴击 build 刷屏
-		if GameFeel.screen_flash_gate(0.8):
-			pulse_damage_vignette(Color(1.0, 0.88, 0.55, 0.42), 0.16)
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
 		touch_peak_stones()

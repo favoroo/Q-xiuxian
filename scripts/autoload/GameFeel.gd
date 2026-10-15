@@ -154,19 +154,11 @@ static func crit_kill_hit_stop(gm: Node) -> void:
 # ---------------- 命中反馈全局限流（2026-10-11 频闪治理） ----------------
 ## 远程穿透/弹射/多弹齐射下每秒命中可达几十次，逐刀全量「爆散+微震」会糊成满屏频闪与持续抖屏。
 ## 口径与 kill_hit_stop 一致：普通档按最小间隔放行（到点才收下一发，持续高频下是匀速节奏而非全量），
-## （受击火花 / 死亡爆散已整体下线，其 hit_spark_gate / kill_burst_gate 一并移除；重构替代品时另起新闸。）
+## （受击火花 / 死亡爆散已整体下线，其 hit_spark_gate / kill_burst_gate 一并移除；重构替代品时另起新闸。
+## 2026-10-15：落雷/暴击击杀的全屏脉冲下线、screen_flash_gate 失去调用方一并移除——高频战斗事件一律不做全屏特效，
+## 全屏脉冲只保留玩家受击红晕与 Boss 伏诛这类低频大事件。）
 
 static var _last_micro_kick_ms: int = 0
-static var _last_screen_flash_ms: int = 0
-
-## 屏幕级脉冲闸：暴击击杀/落雷这类可能同帧多发的高频全屏反馈走这里排队，间隔内静默丢弃；
-## Boss 伏诛一局一次的大事件不走此闸，直接 pulse_damage_vignette。
-static func screen_flash_gate(min_interval: float = 0.6) -> bool:
-	var now := Time.get_ticks_msec()
-	if now - _last_screen_flash_ms < int(min_interval * 1000.0):
-		return false
-	_last_screen_flash_ms = now
-	return true
 
 ## 镜头微冲击闸：普通命中 2.8px / 普通击杀 2.5px 的方向性微冲击走这里排队，
 ## 间隔内静默丢弃；暴击 6.5px / 精英击杀 8.5px 不走此闸（调用方直接 kick_camera）。
