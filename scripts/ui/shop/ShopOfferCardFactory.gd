@@ -200,19 +200,9 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 static func w_id_of_offer(offer: Dictionary) -> String:
 	return String(offer.get("id", "")) if String(offer.get("kind", "weapon")) == "weapon" else ""
 
-## 点「荐」签 = 看推荐理由：与卡面其它详情卡同一宿主（WaveShop）同一 DetailTip 口径。
-## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。
+## 点「荐」签 = 看推荐理由：统一走 RecommendTip（与悟道卡同一张卡，不再各留一份实现）。
 static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, offer: Dictionary) -> void:
-	var notes: Array[String] = []
-	for r in reasons:
-		notes.append(String(r))
-	DetailTip.show_over(host, anchor, {
-		"title": "为什么推荐",
-		"chip": "推荐度 %d%%" % int(round(float(offer.get("recommend_score", 0.0)) * 100.0)),
-		"chip_color": GameStyle.JADE,
-		"notes": notes,
-		"foot": "由当前角色、上阵武器与属性推算，仅供参考。",
-	})
+	RecommendTip.open(host, anchor, reasons, float(offer.get("recommend_score", 0.0)))
 
 ## 把一颗色签登记成「点得动、且判据认得出它该弹哪张卡」。
 ## hotzone 负责收「按下」那一拍：外层 GameStyle.swipeable 随后会把它降成 PASS，

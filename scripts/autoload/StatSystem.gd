@@ -5,6 +5,8 @@ extends RefCounted
 ## 悟道加点（apply_upgrade）与道具（add_item）共用同一条链路，这里只规定「往哪个字段加、有没有上限」，
 ## 幅度全部来自 UpgradeData/ItemData 每项的 "apply" 表（数值与文案同源，调参只改数据表一处）。
 ## 字段白名单见 GameBalance.upgrade_fields()，表上写了不认得的键会在这里 push_warning 暴露。
+## 2026-10-15 追加读侧：item_hook_sum / has_still_mechanic / 属性投影三件套同步迁入，
+## GameManager 侧保留单行转发（调用点零改动），缓存字段仍留 gm 身上。
 ##
 ## 参数收 Object：target 除了 GameManager 真身，还可以是 StatShadow（属性影子，不挂树、
 ## 不发信号的字段快照）。悟道卡面要在玩家点「确认选择」之前先算一遍「加后是多少」，
@@ -217,3 +219,89 @@ static func undo_mult(cur: float, v: float, floor: float) -> float:
 	if cur <= floor + CLAMP_EPS:
 		return cur
 	return cur / v
+
+# ---------------- 读侧：道具 hook 求和与属性投影（2026-10-15 从 GameManager 迁出） ----------------
+## 写侧（上面的 apply/revert）与读侧（hook 求和、20 键属性字典）同住一文件：
+## 悟道卡面「当前 X → 加后 Y」= 影子 StatShadow 在同一份落地算式上预读，读侧投影
+## 与写侧落地共享字段名口径，拆开迟早漂移。缓存字段（_hook_cache / _stat_dict_frame）
+## 仍留在 gm 身上（RunReset/gm 自身三处失效点不动），这里只按 gm 的字段读写。
+
+## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）。
+## 走 _hook_cache 避免每次弹丸命中 3~4 次 O(items) 全表扫描；items 增删时失效，
+## 另对 items.size() 兜底以兼容测试里直接 items.clear() 的写法。
+static func item_hook_sum(gm: Object, hook: String) -> float:
+	if gm.items.size() != gm._hook_cache_items_size:
+		gm._hook_cache.clear()
+		gm._hook_cache_items_size = gm.items.size()
+	if gm._hook_cache.has(hook):
+		return float(gm._hook_cache[hook])
+	var total := 0.0
+	for item_id in gm.items:
+		total += float(ItemData.get_def(item_id).get(hook, 0.0))
+	gm._hook_cache[hook] = total
+	return total
+
+## 站定流机制是否激活：苦行僧模式或任一站定流法宝在场。
+## 结果只在道具变化时变，缓存随 item_hook_sum 同一套失效点。
+static func has_still_mechanic(gm: Object) -> bool:
+	if not gm._still_cache_valid:
+		gm._still_cached = gm.kuxingseng_mode > 0.0 \
+			or item_hook_sum(gm, "still_damage") > 0.0 or item_hook_sum(gm, "still_regen_pct") > 0.0 \
+			or item_hook_sum(gm, "still_dodge") > 0.0 or item_hook_sum(gm, "still_armor") > 0.0 \
+			or item_hook_sum(gm, "still_thorns") > 0.0 or item_hook_sum(gm, "still_knockback") > 0.0 \
+			or item_hook_sum(gm, "still_attack_speed") > 0.0
+		gm._still_cache_valid = true
+	return gm._still_cached
+
+## 20 键属性投影：武器折算与 UI 读数共用的快照（GameManager.get_player_stat_dict 转发到这里）。
+## 玩家未生成时的兜底读数一律取 Player 的基础常量，不许再写一份字面量。
+static func player_stat_dict(gm: Object) -> Dictionary:
+	var cur_hp := Player.BASE_MAX_HEALTH
+	var max_hp := Player.BASE_MAX_HEALTH
+	if gm.player != null and is_instance_valid(gm.player):
+		cur_hp = gm.player.current_health
+		max_hp = gm.player.max_health
+	return {
+		"armor": gm.armor + gm.synergy_armor,
+		"max_hp": max_hp,
+		"current_hp": cur_hp,
+		"hp_regen": gm.hp_regen + gm.synergy_hp_regen,
+		"lifesteal": gm.lifesteal + gm.synergy_lifesteal,
+		"crit_rate": gm.get_crit_rate(),
+		"crit_mult": gm.crit_mult + gm.synergy_crit_mult,
+		"attack_speed_mult": gm.attack_speed_mult * gm.synergy_haste_mult,
+		"move_speed_mult": gm.move_speed_mult + gm.synergy_move_speed_mult,
+		"weapon_damage_mult": gm.get_weapon_damage_mult() * gm.synergy_damage_mult,
+		"attack_range_mult": gm.attack_range_mult * gm.synergy_range_mult,
+		"melee_damage": gm.melee_damage,
+		"ranged_damage": gm.ranged_damage,
+		"elemental_damage": gm.elemental_damage,
+		"engineering_damage": gm.engineering_damage + gm.synergy_engineering_damage,
+		"contraption_damage": gm.contraption_damage,
+		"harvest": gm.harvest,
+		"pet_damage_mult": gm.pet_damage_mult,
+		"pet_effect_mult": gm.pet_effect_mult,
+		"pet_cooldown_mult": gm.pet_cooldown_mult,
+	}
+
+## 武器折算专用的属性快照（每物理帧重建一次，同帧共享）：
+## FloatingWeapon/TurretUnit 每次开火都经 get_weapon_stat_bonus 构建 20 键字典，
+## 多武器齐射时同一物理帧内重复构建，按物理帧号缓存一份。UI 直接调 player_stat_dict
+## 的调用点不走 memo，保证 current_hp 永远实时。
+static func stat_dict_for_weapons(gm: Object) -> Dictionary:
+	var f := Engine.get_physics_frames()
+	if f != gm._stat_dict_frame:
+		gm._stat_dict_frame = f
+		gm._stat_dict_memo = player_stat_dict(gm)
+	return gm._stat_dict_memo
+
+## 武器属性折算加成：weapon 表的 stat_scalings × 属性快照 × 星级（GameBalance 唯一算式）
+static func weapon_stat_bonus(gm: Object, w_id: String, star: int = 1) -> float:
+	var def := WeaponData.get_def(w_id)
+	# 先判键存在再 get 默认值：默认值 {} 字面量每次调用都要分配一个空字典
+	if not def.has("stat_scalings"):
+		return 0.0
+	var scalings: Dictionary = def["stat_scalings"]
+	if scalings.is_empty():
+		return 0.0
+	return GameBalance.weapon_stat_bonus(scalings, stat_dict_for_weapons(gm), star)

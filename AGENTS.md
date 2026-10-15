@@ -105,8 +105,8 @@ $G --headless --path . res://tests/BalanceSimCheck.tscn   # 伤害与生命平�
 本项目常由多个 Agent 并行修改，按此约定避让以减少文件冲突：
 
 - **共享串行文件**（同一时间全局只允许一个 Agent 改，改前先 `git status --short` 看是否已被占用）：`export_presets.cfg`、`project.godot`、`scripts/autoload/Version.gd`、`assets_raw/manifest.jsonl`、`tools/font_charset.txt` + `fonts/MiSans-*.woff2`、`scripts/ui/GameStyle.gd`（唯一取色入口）。
-- **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd` / `tests/unit_runner.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。
-- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 金币阁卡工厂与槽位；`scripts/ui/stats/` 属性面板 builder；`scripts/systems/Balance*.gd` 数值公式；`tests/unit/` 单测主题模块。
+- **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `FloatingWeapon.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。武器侧三件套（`FloatingWeapon` / `BladeProjectile` / `ThunderBurst` / `SunOrb`）是第二冲突区，五行异常施加一律走 `scripts/weapons/ProcStatus.gd`，不再手写 `has_method` 三行块。`tests/unit_runner.gd` 已拆成 91 行纯调度器，不再是热区；单测热区在 `tests/unit/unit_content_tests.gd` / `unit_infra_tests.gd`。
+- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 金币阁卡工厂与槽位；`scripts/ui/levelup/` 悟道卡工厂（`LevelUpCardFactory`，宿主 LevelUpDialog 只留面板流程）；`scripts/ui/stats/` 属性面板 builder；`scripts/systems/Balance*.gd` 数值公式；`scripts/autoload/StatSystem.gd` 属性落地与读侧投影（item_hook_sum / 属性字典）；`tests/unit/` 单测主题模块。
 - `CHANGELOG.md` 为追加式，正常往上加即可，冲突面小。
 
 ## 变更日志（每次改代码必读必写）

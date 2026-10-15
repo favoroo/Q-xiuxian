@@ -17,11 +17,10 @@ enum Angle {
 	SIDE,  ## 3/4 侧面视角
 	BACK   ## 背面视角
 }
-## 口径（2026-10-14 P2 钉死）：实机恒为 FRONT（土豆兄弟式纯正面朝相机，见
-## ProceduralCultivatorView.set_facing_dir 唯一赋值点），SIDE/BACK 两套绘制
-## 只被画廊预览（CultivatorGalleryPreview / CloakFramesPreview 的三向验收）消费。
-## 严禁当死代码删除——画廊导出与 SKILL.md 四步拓展流程的验收环节依赖它们；
-## 未来若恢复侧/背朝向切换，这两套几何直接复用。
+## 口径（2026-10-15 更新）：实机按移动方向切三向（s=FRONT / n=BACK / e·ne·se=SIDE，
+## 左右靠 flip_h 镜像），赋值点在 ProceduralCultivatorView.set_facing_dir（带新旧值缓存比较，
+## 同值不重赋，避免打穿重绘节流）。SIDE/BACK 同时仍被画廊预览
+## （CultivatorGalleryPreview / CloakFramesPreview 的三向验收）消费，严禁当死代码删除。
 
 ## 分层渲染开关（仅供像素判据取掩码用，0 表示不过滤＝游戏内正常全画）
 ## 判据需要单独拿到「只有武器」「只有头部」这两圈真实画出来的像素，

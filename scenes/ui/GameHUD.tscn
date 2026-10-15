@@ -32,6 +32,9 @@ bg_color = Color(0, 0, 0, 0.85)
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
 bg_color = Color(0.949, 0.937, 0.894, 1)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_ghost_fill"]
+bg_color = Color(1, 1, 1, 0.75)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_level_badge"]
 content_margin_left = 10.0
 content_margin_top = 4.0
@@ -134,6 +137,15 @@ size_flags_vertical = 4
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_hp_track")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
+value = 100.0
+show_percentage = false
+
+[node name="HPGhostBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox/HPBar"]
+custom_minimum_size = Vector2(130, 14)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_hp_track")
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_ghost_fill")
 value = 100.0
 show_percentage = false
 

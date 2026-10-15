@@ -143,6 +143,16 @@ static func crit_kill_hit_stop(gm: Node) -> void:
 ## （受击火花 / 死亡爆散已整体下线，其 hit_spark_gate / kill_burst_gate 一并移除；重构替代品时另起新闸。）
 
 static var _last_micro_kick_ms: int = 0
+static var _last_screen_flash_ms: int = 0
+
+## 屏幕级脉冲闸：暴击击杀/落雷这类可能同帧多发的高频全屏反馈走这里排队，间隔内静默丢弃；
+## Boss 伏诛一局一次的大事件不走此闸，直接 pulse_damage_vignette。
+static func screen_flash_gate(min_interval: float = 0.6) -> bool:
+	var now := Time.get_ticks_msec()
+	if now - _last_screen_flash_ms < int(min_interval * 1000.0):
+		return false
+	_last_screen_flash_ms = now
+	return true
 
 ## 镜头微冲击闸：普通命中 2.8px / 普通击杀 2.5px 的方向性微冲击走这里排队，
 ## 间隔内静默丢弃；暴击 6.5px / 精英击杀 8.5px 不走此闸（调用方直接 kick_camera）。

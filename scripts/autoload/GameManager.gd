@@ -105,7 +105,6 @@ func unregister_ally(a: Node) -> void:
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
 var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
 var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（reset_run 不动它）
-const PROGRESS_PATH := "user://progress.cfg"
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
 var unlocked_cultivators: Array = []   ## 已解锁角色 ID 列表
@@ -571,6 +570,9 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 		if stone_chance > 0.0 and rng.randf() < stone_chance:
 			spirit_stones += 1
 			touch_peak_stones()
+		# 暴击击杀的屏幕级金白脉冲（GameFeel 闸限流）：质变反馈但防高暴击 build 刷屏
+		if GameFeel.screen_flash_gate(0.8):
+			pulse_damage_vignette(Color(1.0, 0.88, 0.55, 0.42), 0.16)
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
 		touch_peak_stones()
@@ -653,15 +655,9 @@ func can_reroll_alloc() -> bool:
 func get_stat_breakdown() -> Dictionary:
 	return StatBreakdown.breakdown(self)
 
+## 站定流激活判定（算式在 StatSystem，2026-10-15 迁出；缓存字段留本类，失效点不动）
 func has_still_mechanic() -> bool:
-	if not _still_cache_valid:
-		_still_cached = kuxingseng_mode > 0.0 \
-			or item_hook_sum("still_damage") > 0.0 or item_hook_sum("still_regen_pct") > 0.0 \
-			or item_hook_sum("still_dodge") > 0.0 or item_hook_sum("still_armor") > 0.0 \
-			or item_hook_sum("still_thorns") > 0.0 or item_hook_sum("still_knockback") > 0.0 \
-			or item_hook_sum("still_attack_speed") > 0.0
-		_still_cache_valid = true
-	return _still_cached
+	return StatSystem.has_still_mechanic(self)
 
 ## 武器伤害乘区有效值：加点/道具/角色累加的 raw 过软顶膝点后收益减半（BalanceCombat 唯一算式）。
 ## 所有伤害结算与伤害读数都走这里，不许直接乘 raw 字段 weapon_damage_mult。
@@ -744,60 +740,21 @@ func elite_damage_mult_for(enemy: Variant) -> float:
 		return 1.0
 	return 1.0 + elite_damage if enemy.get("is_elite") == true else 1.0
 
+## 20 键属性投影（算式在 StatSystem.player_stat_dict，2026-10-15 迁出）：武器折算与 UI 读数共用
 func get_player_stat_dict() -> Dictionary:
-	# 玩家未生成时的兜底读数一律取 Player 的基础常量，不许再写一份字面量
-	var cur_hp := Player.BASE_MAX_HEALTH
-	var max_hp := Player.BASE_MAX_HEALTH
-	if player != null and is_instance_valid(player):
-		cur_hp = player.current_health
-		max_hp = player.max_health
-	return {
-		"armor": armor + synergy_armor,
-		"max_hp": max_hp,
-		"current_hp": cur_hp,
-		"hp_regen": hp_regen + synergy_hp_regen,
-		"lifesteal": lifesteal + synergy_lifesteal,
-		"crit_rate": get_crit_rate(),
-		"crit_mult": crit_mult + synergy_crit_mult,
-		"attack_speed_mult": attack_speed_mult * synergy_haste_mult,
-		"move_speed_mult": move_speed_mult + synergy_move_speed_mult,
-		"weapon_damage_mult": get_weapon_damage_mult() * synergy_damage_mult,
-		"attack_range_mult": attack_range_mult * synergy_range_mult,
-		"melee_damage": melee_damage,
-		"ranged_damage": ranged_damage,
-		"elemental_damage": elemental_damage,
-		"engineering_damage": engineering_damage + synergy_engineering_damage,
-		"contraption_damage": contraption_damage,
-		"harvest": harvest,
-		"pet_damage_mult": pet_damage_mult,
-		"pet_effect_mult": pet_effect_mult,
-		"pet_cooldown_mult": pet_cooldown_mult,
-	}
+	return StatSystem.player_stat_dict(self)
 
-## 属性字典每物理帧 memo：武器攻击路径（FloatingWeapon 每把每次开火、TurretUnit 每台
-## 每次开火）都要经 get_weapon_stat_bonus 构建这份 20 键字典，多武器齐射时同一物理帧
-## 内重复构建。这里按物理帧号缓存一份，同帧内多武器共享；UI 直接调 get_player_stat_dict
-## 的调用点不走 memo，保证 current_hp 永远实时。
+## 属性字典每物理帧 memo：缓存字段留本类（失效点 reset_run/add_item/sell_item 不动），
+## memo 重建算式在 StatSystem.stat_dict_for_weapons。
 var _stat_dict_frame: int = -1
 var _stat_dict_memo: Dictionary = {}
 
-## 武器折算专用的属性快照（每物理帧重建一次，同帧共享）
+## 武器折算专用的属性快照（每物理帧重建一次，同帧共享；算式在 StatSystem.stat_dict_for_weapons）
 func _stat_dict_for_weapons() -> Dictionary:
-	var f := Engine.get_physics_frames()
-	if f != _stat_dict_frame:
-		_stat_dict_frame = f
-		_stat_dict_memo = get_player_stat_dict()
-	return _stat_dict_memo
+	return StatSystem.stat_dict_for_weapons(self)
 
 func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
-	var def := WeaponData.get_def(w_id)
-	# 先判键存在再 get 默认值：默认值 {} 字面量每次调用都要分配一个空字典
-	if not def.has("stat_scalings"):
-		return 0.0
-	var scalings: Dictionary = def["stat_scalings"]
-	if scalings.is_empty():
-		return 0.0
-	return GameBalance.weapon_stat_bonus(scalings, _stat_dict_for_weapons(), star)
+	return StatSystem.weapon_stat_bonus(self, w_id, star)
 
 ## 命中时尝试噬元回血（每秒最多触发 LIFESTEAL_MAX_PER_SEC 次，防高频武器无限续航）
 func try_lifesteal() -> void:
@@ -966,20 +923,10 @@ func consume_item(item_id: String) -> bool:
 		unique_item_count = maxi(0, unique_item_count - 1)
 	return true
 
-## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）。
-## 走 _hook_cache 避免每次弹丸命中 3~4 次 O(items) 全表扫描；items 增删时失效，
-## 另对 items.size() 兜底以兼容测试里直接 items.clear() 的写法。
+## 同名字段 hook 的叠加求和（算式在 StatSystem.item_hook_sum，2026-10-15 迁出）。
+## 缓存字段 _hook_cache 留本类：items 增删与 RunReset 三处失效点不动。
 func item_hook_sum(hook: String) -> float:
-	if items.size() != _hook_cache_items_size:
-		_hook_cache.clear()
-		_hook_cache_items_size = items.size()
-	if _hook_cache.has(hook):
-		return float(_hook_cache[hook])
-	var total := 0.0
-	for item_id in items:
-		total += float(ItemData.get_def(item_id).get(hook, 0.0))
-	_hook_cache[hook] = total
-	return total
+	return StatSystem.item_hook_sum(self, hook)
 
 ## 替死傀儡：致死一击时消耗它免死并回半血。Player.take_damage 在扣血归零后调用
 func try_revive() -> bool:

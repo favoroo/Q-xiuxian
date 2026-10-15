@@ -8,8 +8,16 @@ extends CharacterBody2D
 @export var move_speed: float = 110.0
 @export var contact_damage: float = 12.0
 @export var is_elite: bool = false
+## 死亡演出分级开关（2026-10-15）：false=小怪快节奏塌缩；true=尸体滞留慢渐隐。
+## BossEnemy 置 true；不用 is BossEnemy 自判，避免基类反向引用子类（循环依赖坑）。
+## 精英不走这个开关，走 is_elite 分支（踉跄倾倒后照常塌缩回池）。
+var death_corpse_linger: bool = false
 @export var exp_reward: int = 1
 @export var enemy_id: String = ""          ## 敌种标识（为空时自动由节点名推导）
+## 死亡音音高基准（2026-10-15 击杀连击音阶）：敌种在这里定个性音高，连击阶梯在
+## AudioManager.register_kill_pitch 上叠层。默认 1.0 = 原素材音高；低音巨物 0.85、
+## 尖啸小怪 1.15 这类口径由各敌种场景/刷怪口按需覆盖。
+@export var die_pitch_base: float = 1.0
 @export var spritesheet_path: String = ""
 # 移动方式：gait=步态腿帧（默认）/ hover=悬浮（单姿势图集 + apply_hover 浮沉前倾）/ slither=蠕动（apply_slither 行进波）
 @export var locomotion_mode: String = "gait"
@@ -267,6 +275,7 @@ func _capture_base_stats() -> void:
 	_base_stats = {
 		"max_hp": max_hp, "contact_damage": contact_damage, "move_speed": move_speed,
 		"heal_amount": heal_amount, "stone_reward": stone_reward,
+		"die_pitch_base": die_pitch_base,
 		"charge_interval": charge_interval, "charge_side_bolts": charge_side_bolts,
 		"charge_aim_lead": charge_aim_lead,
 		"bolt_count": bolt_count, "bolt_interval": bolt_interval, "preferred_range": preferred_range,
@@ -293,6 +302,7 @@ func reset_for_reuse() -> void:
 	move_speed = _base_stats["move_speed"]
 	heal_amount = _base_stats["heal_amount"]
 	stone_reward = _base_stats["stone_reward"]
+	die_pitch_base = _base_stats["die_pitch_base"]
 	charge_interval = _base_stats["charge_interval"]
 	charge_side_bolts = _base_stats["charge_side_bolts"]
 	charge_aim_lead = _base_stats["charge_aim_lead"]
@@ -395,6 +405,7 @@ func reset_for_reuse() -> void:
 		procedural_view.scale = anim_base_scale
 		procedural_view.modulate = Color.WHITE
 		procedural_view.position = Vector2.ZERO
+		procedural_view.rotation = 0.0
 	if hit_flash_mat != null:
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 		hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
@@ -860,6 +871,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		elif _bite_windup > 0.0:
 			_bite_windup -= delta
 			_pp_target_vel = Vector2.ZERO
+			_update_bite_warning()
 			if _bite_windup <= 0.0:
 				_launch_bite(_bite_dir)
 
@@ -870,7 +882,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_pp_target_vel = _bite_dir * move_speed * bite_speed_mul
 			if not _bite_hit and dist_sq < bite_hit_radius * bite_hit_radius:
 				_bite_hit = true
-				player.take_damage(contact_damage * bite_damage_mul)
+				player.take_damage(contact_damage * bite_damage_mul, global_position)
 				# 不在这里再发一次反馈：player.take_damage 已经按「玩家受创」这个节点给过
 				# 大创伤 + 顿帧 + 红晕，两边都发就是同一下挨打震两回
 			if _bite_active <= 0.0:
@@ -1153,7 +1165,7 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 			_charge_hit = true
 			if target is Player:
 				var hp_before_charge: float = target.current_health
-				target.take_damage(contact_damage * charge_damage_mul)
+				target.take_damage(contact_damage * charge_damage_mul, global_position)
 				# 石岳/玄武反震：与接触伤害同一个口径，实际被打中才反弹
 				var eff_thorns: float = GameManager.get_effective_thorns()
 				if eff_thorns > 0.0 and target.current_health < hp_before_charge:
@@ -1167,7 +1179,7 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 		var collider = col.get_collider()
 		if collider is Player:
 			var hp_before: float = collider.current_health
-			collider.take_damage(contact_damage)
+			collider.take_damage(contact_damage, global_position)
 			# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
 			var eff_thorns: float = GameManager.get_effective_thorns()
 			if eff_thorns > 0.0 and collider.current_health < hp_before:
@@ -1218,8 +1230,8 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 普通命中（非 DoT）：方向性微冲击 + 入肉声，走全局限流闸
 	if is_crit:
 		if not from_dot:
-			AudioManager.play_sfx("enemy_hit", 1.25, randf_range(1.08, 1.22))
-			AudioManager.play_sfx("enemy_hit_crit", 1.35, randf_range(0.95, 1.05))
+			AudioManager.play_sfx("enemy_hit", 1.25, GameManager.rng.randf_range(1.08, 1.22))
+			AudioManager.play_sfx("enemy_hit_crit", 1.35, GameManager.rng.randf_range(0.95, 1.05))
 		GameManager.crit_hit_stop()
 		GameManager.kick_camera(knockback, 6.5)
 		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
@@ -1240,10 +1252,10 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤。
 		# 走全局限流闸（2026-10-11 频闪治理）：远程穿透/弹射下每秒几十次命中逐刀微震会糊成持续抖屏
 		GameFeel.micro_kick(GameManager, knockback, 2.8)
-		var pitch: float = randf_range(0.94, 1.08) if not is_elite else 0.85
+		var pitch: float = GameManager.rng.randf_range(0.94, 1.08) if not is_elite else 0.85
 		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
 		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
-			AudioManager.play_sfx("enemy_hit_heavy", 1.00, randf_range(0.92, 1.06))
+			AudioManager.play_sfx("enemy_hit_heavy", 1.00, GameManager.rng.randf_range(0.92, 1.06))
 
 	# 跳字（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻发跳字。音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
@@ -1252,7 +1264,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 只合并显示条数，不合并伤害数值（集火保护仍按每发计）。
 	if not _offscreen:
 		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit, "", get_instance_id())
-	var squash_target := _calculate_hit_squash(knockback, is_crit)
+	var squash_target := GameBalance.hit_squash_target(knockback, is_crit)
 	play_squash(squash_target, 0.16)
 
 	# 受击微反冲视觉位移（Jiggle Recoil）：受击当帧向击退方向微颤并同步至程序化视图
@@ -1301,19 +1313,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			GameManager.kill_hit_stop()
 		_die()
 
-## 根据受击方向计算定向挤压形变
-func _calculate_hit_squash(knockback: Vector2, is_crit: bool) -> Vector2:
-	if knockback.length_squared() < 10.0:
-		return Vector2(1.36, 0.70) if is_crit else Vector2(1.24, 0.80)
-	var k_norm := knockback.normalized()
-	if absf(k_norm.x) >= absf(k_norm.y):
-		# 水平冲击为主：水平压扁、竖直拉伸
-		return Vector2(0.68, 1.38) if is_crit else Vector2(0.76, 1.26)
-	else:
-		# 垂直冲击为主：竖直压扁、水平拉伸
-		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)
-
-## 施加【离火灼烧】：按秒持续扣血，受离火羁绊与元素伤害增伤，多源叠加共鸣
+	## 施加【离火灼烧】：按秒持续扣血，受离火羁绊与元素伤害增伤，多源叠加共鸣
 # ---------------- 五行异常施加（灼烧 / 冰缓 / 剧毒） ----------------
 
 func apply_burn(dps: float, duration: float) -> void:
@@ -1375,6 +1375,8 @@ func _explode(player: Node2D) -> void:
 	# 爆点留焦痕（纯视觉贴花，判定已在上方结算）
 	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
+	# 自爆也算战果：进击杀连击音阶（精英基准抬档同 _die 口径）
+	AudioManager.register_kill_pitch(die_pitch_base * 1.12)
 	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
 		player.take_damage(contact_damage * 2.0, global_position)
@@ -1494,37 +1496,33 @@ func _launch_bite(dir: Vector2) -> void:
 	_bite_active = bite_duration
 	_bite_dir = dir
 	_bite_hit = false
+	_clear_bite_warning()
 	play_squash(Vector2(0.72, 1.3), 0.18)
 	AudioManager.play_sfx("enemy_claw", 0.85, GameManager.rng.randf_range(0.92, 1.08))
 
-## 画短咬预告线：长度 = 这一跳真跳得出去的位移（bite_hit_radius 是终点附近的咬合半径，
-## 不另画圈 —— 判定就落在看得见这条线的落点上，"特效范围 = 判定范围"）
-## 旧写法是 5px 等宽实心亮黄线，贴脸时读起来是一根插在怪身上的"棍子"，看不出方向预告。
-## 本构建的 Line2D 无虚线属性，改走 width_curve + gradient 的半透明风痕楔形：
-## 根部（怪脚下）收细收淡、朝落点加宽加亮、末端圆帽亮点 —— 玩家要读的就是嘴落在哪。
-## 峰值不透明度压在 ~0.5，同屏几十只也不糊战场（稀缺反馈预算，与长扑宽带同一纪律）。
+## 画短咬预告线：胶囊带宽 = bite_hit_radius * 2.0（对齐长扑预警带与「画多大 == 判多大」铁律）
+## 长度 = 短咬真实位移。颜色与长扑同源走半透明朱砂红，并在蓄力期高频呼吸闪烁。
 func _show_bite_warning(dir: Vector2) -> void:
 	_clear_bite_warning()
 	if dir.length_squared() < 0.01:
 		return
 	_bite_warning_line = Line2D.new()
-	_bite_warning_line.width = 7.0
-	var wcurve := Curve.new()
-	wcurve.add_point(Vector2(0.0, 0.22))
-	wcurve.add_point(Vector2(1.0, 1.0))
-	_bite_warning_line.width_curve = wcurve
-	var grad := Gradient.new()
-	grad.offsets = PackedFloat32Array([0.0, 1.0])
-	grad.colors = PackedColorArray([Color(1, 1, 1, 0.12), Color(1, 1, 1, 1.0)])
-	_bite_warning_line.gradient = grad
-	_bite_warning_line.default_color = Color(1.0, 0.72, 0.15, 0.5)
-	_bite_warning_line.begin_cap_mode = Line2D.LINE_CAP_NONE
+	_bite_warning_line.width = bite_hit_radius * 2.0
+	_bite_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.22)
+	_bite_warning_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	_bite_warning_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	add_child(_bite_warning_line)
 	_bite_warning_line.add_point(Vector2.ZERO)
 	_bite_warning_line.add_point(dir * (bite_duration * move_speed * bite_speed_mul))
 
-## 清理短咬预告线（一次起跳只画一条，落点即结束）
+## 更新短咬预警线（预警期间高频呼吸闪烁，传达下蹲蓄势扑咬的危险感）
+func _update_bite_warning() -> void:
+	if _bite_warning_line == null:
+		return
+	var alpha: float = 0.22 + 0.14 * sin((bite_windup_time - _bite_windup) * 24.0)
+	_bite_warning_line.default_color.a = clampf(alpha, 0.08, 0.45)
+
+## 清理短咬预告线（起跳瞬间即消退，不随身拖带）
 func _clear_bite_warning() -> void:
 	if _bite_warning_line != null:
 		_bite_warning_line.queue_free()
@@ -1612,6 +1610,7 @@ func _spawn_minion() -> void:
 	m.activate()
 	get_parent().call_deferred("add_child", m)
 	play_squash(Vector2(1.22, 0.78), 0.2)
+	# 产卵不是击杀：pitch_override 直传，绕开击杀连击阶梯（也不推层）
 	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
 
 ## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一个淡出剪影当残影
@@ -1881,10 +1880,13 @@ func _die() -> void:
 			GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 		else:
 			GameManager.feedback(GameManager.FeedbackTier.LARGE)
+		# 击杀连击音阶：播音前登记本命音高基准并推阶梯（elite 基准抬半档与普通怪分层）
+		AudioManager.register_kill_pitch(die_pitch_base * 1.12)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
 		# 普通敌人死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
 		GameFeel.micro_kick(GameManager, knockback_velocity, GameBalance.DEATH_MICRO_KICK)
+		AudioManager.register_kill_pitch(die_pitch_base)
 		AudioManager.play_sfx("enemy_death", 0.90)
 
 	var gem_count = 1 if not is_elite else GameBalance.ELITE_GEM_COUNT
@@ -1962,19 +1964,48 @@ func _die() -> void:
 	if hit_flash_mat != null:
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 
-	# 死灭动画：先微幅膨胀（Anticipation）再塌缩消散
+	# 死灭动画分级（2026-10-15）：小怪保持「膨胀 0.045s → 塌缩 0.14s」快节奏（高频事件不宜加重）；
+	# 精英膨胀后多一段踉跄倾倒再塌缩（慢半拍，倒地有重量感）；Boss 倾倒后尸体滞留慢渐隐
+	#（不缩零，谢幕读数更足）。安全性：进本段前物理/碰撞已断，回合末 dissolve() 对 dying 短路，
+	# 拉长演出只多留几帧绘制，不影响回收与清场。
+	# 倾倒方向跟随致命一刀的受力侧（_hit_tilt 符号：后仰角与击退水平分量同号），垂直击杀默认右倾。
+	var topple_sign := signf(_hit_tilt) if _hit_tilt != 0.0 else 1.0
 	var tw = create_tween()
-	tw.tween_property(anim_sprite, "scale", anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE), 0.045)\
+	var swell_scale := anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE)
+	tw.tween_property(anim_sprite, "scale", swell_scale, 0.045)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if procedural_view != null:
-		tw.parallel().tween_property(procedural_view, "scale", anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE), 0.045)\
+		tw.parallel().tween_property(procedural_view, "scale", swell_scale, 0.045)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.set_parallel(true)
-	tw.tween_property(anim_sprite, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-	tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.14)
-	if procedural_view != null:
-		tw.tween_property(procedural_view, "scale", Vector2.ZERO, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-		tw.tween_property(procedural_view, "modulate:a", 0.0, 0.14)
+
+	if is_elite or death_corpse_linger:
+		# 踉跄/倾倒段：精英与 Boss 共有的「慢半拍」
+		var topple_rad: float = GameBalance.BOSS_DEATH_TOPPLE_RAD if death_corpse_linger else GameBalance.ELITE_DEATH_TOPPLE_RAD
+		var topple_dur: float = 0.15 if death_corpse_linger else GameBalance.ELITE_DEATH_STAGGER_DUR
+		tw.chain().tween_property(anim_sprite, "rotation", topple_sign * topple_rad, topple_dur)\
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		if procedural_view != null:
+			tw.parallel().tween_property(procedural_view, "rotation", topple_sign * topple_rad, topple_dur)\
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	if death_corpse_linger:
+		# Boss：倒地后尸体滞留一停，再只淡出不塌缩（「大妖伏诛」的遗体读数）
+		tw.chain().tween_interval(GameBalance.BOSS_DEATH_LINGER_DUR)
+		tw.set_parallel(true)
+		tw.tween_property(anim_sprite, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+		if procedural_view != null:
+			tw.tween_property(procedural_view, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+		if shadow_sprite != null and shadow_sprite.visible:
+			tw.tween_property(shadow_sprite, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+	else:
+		# 小怪/精英：原地塌缩消散（精英塌缩略慢）
+		var collapse_dur: float = GameBalance.ELITE_DEATH_COLLAPSE_DUR if is_elite else 0.14
+		tw.set_parallel(true)
+		tw.tween_property(anim_sprite, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.tween_property(anim_sprite, "modulate:a", 0.0, collapse_dur)
+		if procedural_view != null:
+			tw.tween_property(procedural_view, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+			tw.tween_property(procedural_view, "modulate:a", 0.0, collapse_dur)
 	# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
 	# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
 	tw.chain().tween_callback(_recycle_or_free)

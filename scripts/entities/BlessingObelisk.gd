@@ -321,7 +321,7 @@ func _trigger_blessing() -> void:
 	for i in range(GEM_COUNT):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-		var offset = Vector2(randf_range(-40.0, 40.0), randf_range(-40.0, 40.0))
+		var offset = Vector2(GameManager.rng.randf_range(-40.0, 40.0), GameManager.rng.randf_range(-40.0, 40.0))
 		gem.global_position = global_position + offset
 		gem.is_gold = true
 		gem.exp_value = 10

@@ -333,7 +333,10 @@ static func make_kuangzhan() -> CultivatorVisualConfig:
 		# 骨斧同样近骨白，而蛮修双角横挑到 x=±26：把斧子整体压到下巴以下横躺，
 		# 斧刃朝上从右肩外探出，避开双角与面具那两圈白
 		"carry_front_pos": Vector2(14.0, 12.0), "carry_front_rot": 8.0,
-		"carry_side_pos": Vector2(-8.0, 9.0), "carry_side_rot": -10.0,
+		"carry_side_pos": Vector2(-8.0, 10.0), "carry_side_rot": -10.0,
+		# 背面位姿（2026-10-15 实机三向启用后补齐）：狂战体型 1.22 放大，默认背位
+		# 斧刃会贴上后脑（穿模判据 kuangzhan/back 隔离带 0.83px < 2.0），整体再压低 2px
+		"carry_back_pos": Vector2(2.0, 13.0), "carry_back_rot": 158.0,
 	}
 	cfg._sync_palette()
 	return cfg

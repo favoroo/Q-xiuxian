@@ -316,8 +316,8 @@ func _sweep(host: Control, label: String, rows: Control = null, must_scroll := f
 			_areas_ok += 1
 		_c.check(all_ok, "%s：%s 内容 %.0f/%.0f，采样 %d 点（卡片上 %d）→ %s" % [
 			label, sc.name, content.size.y, sc.size.y, points.size(), on_content,
-			"每一处都能起手拖动" if all_ok else ("；".join(bad) if enough else
-				"落点太少（<%d 点或卡片上 <%d 个），等于没测" % [MIN_SAMPLES, MIN_ON_CONTENT])])
+			("每一处都能起手拖动" if all_ok else ("；".join(bad) if enough else
+				"落点太少（<%d 点或卡片上 <%d 个），等于没测" % [MIN_SAMPLES, MIN_ON_CONTENT])) as String])
 		print("CHECK %-22s 采样 %2d 点（卡片上 %2d），可起手拖动 %2d 点" % [
 			label, points.size(), on_content, got])
 	return counted
@@ -395,7 +395,7 @@ func _rows_of(sc: ScrollContainer, content: Control, rows: Control) -> Control:
 	var p: Node = rows.get_parent()
 	while p != null and p != content:
 		p = p.get_parent()
-	return rows as Control if p == content else content
+	return (rows as Control) if p == content else content
 
 ## 同一处已经采过点了吗（横排五张卡同高、卡缝与卡心重合、长卡切三段挤在一起都会撞）
 static func _near_already(points: Array, pos: Vector2) -> bool:
@@ -479,7 +479,10 @@ func _eater_at(root: Node, pos: Vector2) -> String:
 	if best == null:
 		return "非 STOP 控件"
 	var par := best.get_parent()
-	return "%s(父:%s)" % [best.get_class(), par.name if par else "?"]
+	# par.name 是 StringName，与 String 字面量在三元里类型不互容（4.7 告警即错误），拆开写
+	if par == null:
+		return "非 STOP 控件(无父)"
+	return "%s(父:%s)" % [best.get_class(), String(par.name)]
 
 func _settle(n: int) -> void:
 	for _i in range(n):

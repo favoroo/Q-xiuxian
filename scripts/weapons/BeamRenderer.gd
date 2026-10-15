@@ -58,7 +58,8 @@ func _draw() -> void:
 	var mid := tint
 	mid.a = 0.55
 	var core := tint.lerp(Color.WHITE, 0.75)
-	core.a = 0.95
+	# HDR 超白核心束：过辉光阈值起辉，外层 glow/mid 保持 LDR 不双辉
+	core = Color(core.r * 2.2, core.g * 2.2, core.b * 2.2, 0.95)
 	draw_polyline(pts, glow, beam_width)
 	draw_polyline(pts, mid, beam_width * 0.5)
 	draw_polyline(pts, core, beam_width * 0.18)

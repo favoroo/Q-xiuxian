@@ -4,7 +4,8 @@ extends Node2D
 ## 五雷法牌引雷演出：从武器射向落雷点的锯齿闪电（细亮芯 + 宽光晕 + 分支电弧）
 ## 已接入静态对象池（POOL_CAP=16），零动态 new/queue_free 分配。
 
-const CORE_COLOR := Color(1.0, 0.98, 0.85, 1.0)
+## HDR 超白核心：辉光阈值钉在 1.0，只有这条核心线溢出起辉，外层 alpha 假光晕保持 LDR 不双辉
+const CORE_COLOR := Color(2.4, 2.3, 1.9, 1.0)
 const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.42)
 const POOL_CAP := 16
 
@@ -95,7 +96,7 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	_line_glow.width = 10.0 * width_mult
 	_line_glow.default_color = tint_col
 
-	var core_c := CORE_COLOR if tint_col == GLOW_COLOR else Color(1.0, 0.97, 0.9, 1.0)
+	var core_c := CORE_COLOR if tint_col == GLOW_COLOR else Color(2.4, 2.3, 2.1, 1.0)
 	_line_core.points = main_points
 	_line_core.width = 3.2 * width_mult
 	_line_core.default_color = core_c

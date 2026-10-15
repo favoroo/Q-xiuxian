@@ -22,6 +22,19 @@ const BGM_TABLE := {
 	"defeat": {"path": "res://assets/audio/bgm_defeat.mp3", "db": -4.0},
 }
 const BGM_DEFAULT_KEY := "menu"
+
+## 战场环境音（深渊罡风）：挂在 BGM 总线垫在配乐下面，随 BGM 音量条一起缩放；
+## 不进 Voice 总线——那是角色语音专用，有独立音量设置。
+## ogg 优先、wav 兜底（烘焙机有无 libvorbis 决定产物），素材缺席时静默不播，不进 _missing_paths。
+const AMBIENCE_PATHS := ["res://assets/audio/ambience_wind.ogg", "res://assets/audio/ambience_wind.wav"]
+const AMBIENCE_DB := -14.0
+## 局内阶段才垫环境音：战斗/试炼/金币阁；菜单与胜负结算停掉
+const AMBIENCE_KEYS := {"battle": true, "trial": true, "shop": true}
+
+## Boss 战的 BGM 闷音（LowPass）：开场压闷制造紧张感，伏诛/转阶段即解除。
+## 截止 22050Hz 即 44.1k 输出的 Nyquist，等效直通，不做旁路开关省一次爆音风险。
+const MUFFLE_CUTOFF := 900.0
+const CLEAR_CUTOFF := 22050.0
 const SETTINGS_PATH := "user://audio.cfg"
 const DEFAULT_LINEAR := {"BGM": 1.0, "SFX": 1.0, "Voice": 1.0}
 
@@ -29,6 +42,10 @@ var bgm_players: Array[AudioStreamPlayer] = []
 var bgm_next: int = 0          ## 双 player 轮换，实现交叉淡化时不被「同一播放器换曲」打断
 var bgm_key: StringName = &""
 var bgm_tween: Tween = null
+var ambience_player: AudioStreamPlayer = null
+var _ambience_tween: Tween = null
+var _bgm_lowpass: AudioEffectLowPassFilter = null
+var _muffle_tween: Tween = null
 var voice_player: AudioStreamPlayer
 var sfx_players: Array[AudioStreamPlayer] = []
 var next_sfx_idx: int = 0
@@ -44,6 +61,14 @@ var _gem_combo_timer: float = 0.0
 # 命中连击升调状态（2026-10-11）：短时间内连续命中音高缓步攀升，听觉上卖「越砍越顺」
 var _hit_combo_count: int = 0
 var _hit_combo_timer: float = 0.0
+
+# 击杀连击升调状态（2026-10-15）：连杀窗内死亡音音高步步抬升；续窗计时直接读
+# GameManager.frenzy_idle（距上次击杀秒数，击杀时归零），不另立一套计时器
+const KILL_COMBO_WINDOW := 2.0   ## 连杀续窗：2 秒内再杀一层不断（幸存者类击杀节奏比命中稀）
+const KILL_COMBO_MAX := 12       ## 阶梯封顶层数
+const KILL_COMBO_STEP := 0.035   ## 每层音高步进
+var _kill_combo_count: int = 0
+var _kill_pitch_base: float = 1.0
 
 ## 高频音效同 key 最小间隔（毫秒）：群战同帧几十次命中/死亡时防「糊成一片+通道瞬间耗尽」。
 ## 只对战斗高频音生效，UI/阶段音不受限。未列出的 key 不节流。
@@ -101,6 +126,27 @@ func _ready() -> void:
 	voice_player.bus = BUS_VOICE
 	add_child(voice_player)
 
+	# 环境音：常驻一条循环 player，播不播由 play_bgm_key 的阶段 key 决定
+	ambience_player = AudioStreamPlayer.new()
+	ambience_player.bus = BUS_BGM
+	add_child(ambience_player)
+	for p in AMBIENCE_PATHS:
+		if ResourceLoader.exists(p):
+			var s = load(p) as AudioStream
+			if s is AudioStreamWAV:
+				s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			elif s != null and "loop" in s:
+				s.loop = true
+			ambience_player.stream = s
+			break
+
+	# Boss 闷音效果器常驻 BGM 总线（截止拉到 Nyquist 等效直通，不做热插拔）
+	var bgm_idx := AudioServer.get_bus_index(BUS_BGM)
+	if bgm_idx >= 0:
+		_bgm_lowpass = AudioEffectLowPassFilter.new()
+		_bgm_lowpass.cutoff_hz = CLEAR_CUTOFF
+		AudioServer.add_bus_effect(bgm_idx, _bgm_lowpass)
+
 	for i in range(SFX_PLAYER_COUNT):
 		var p := AudioStreamPlayer.new()
 		p.bus = BUS_SFX
@@ -119,7 +165,10 @@ func _process(delta: float) -> void:
 		_hit_combo_timer -= delta
 		if _hit_combo_timer <= 0.0:
 			_hit_combo_count = 0
-
+	# 击杀连击断窗兜底：register_kill_pitch 只在击杀时被调，开火间隙里把层数清零，
+	# 否则隔半分钟再杀一只会沿用旧阶梯高位（frenzy_idle 在游戏中才累计，菜单不涨）
+	if GameManager.frenzy_idle >= KILL_COMBO_WINDOW and _kill_combo_count != 0:
+		_kill_combo_count = 0
 # ---------------- 音效注册表 ----------------
 
 func _load_audio_assets() -> void:
@@ -273,6 +322,8 @@ func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float 
 		_gem_combo_count = mini(_gem_combo_count + 1, 16)
 		_gem_combo_timer = 0.6
 		p.pitch_scale = 0.94 + float(_gem_combo_count - 1) * 0.042
+	elif sfx_key == "enemy_death" or sfx_key == "enemy_death_elite":
+		p.pitch_scale = _kill_combo_pitch()
 	else:
 		p.pitch_scale = randf_range(0.92, 1.08)
 
@@ -283,6 +334,20 @@ func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float 
 		p.pitch_scale *= 1.0 + float(_hit_combo_count - 1) * 0.03
 
 	p.play()
+
+## 击杀连击音阶：2 秒续窗内连续击杀，死亡音音高沿 kill_pitch_base（敌种个性基准）步步抬升。
+func _kill_combo_pitch() -> float:
+	return clampf(_kill_pitch_base, 0.6, 1.6) * (1.0 + float(_kill_combo_count - 1) * KILL_COMBO_STEP)
+
+## 击杀方（EnemyBase）在播死亡音前登记本命音高基准并推阶梯：
+## 续窗判断在这里做（读 GameManager.frenzy_idle，与狂战士战意同一把击杀计时尺），
+## 音高换算在 _kill_combo_pitch。
+func register_kill_pitch(base: float) -> void:
+	_kill_pitch_base = base
+	if GameManager.frenzy_idle < KILL_COMBO_WINDOW:
+		_kill_combo_count = mini(_kill_combo_count + 1, KILL_COMBO_MAX)
+	else:
+		_kill_combo_count = 1
 
 func play_voice(stream: AudioStream) -> void:
 	if stream:
@@ -297,6 +362,8 @@ func play_voice(stream: AudioStream) -> void:
 func play_bgm_key(key: String, instant: bool = false) -> void:
 	if key == "" or key == String(bgm_key):
 		return
+	# 转阶段一律解除 Boss 闷音（伏诛/战败/回合结束都会走到这里）
+	set_bgm_muffle(false)
 	var info: Dictionary = BGM_TABLE.get(key, {})
 	var path: String = info.get("path", "")
 	if path == "" or not ResourceLoader.exists(path):
@@ -322,6 +389,7 @@ func play_bgm_key(key: String, instant: bool = false) -> void:
 		active.volume_db = target_db
 		active.play()
 		bgm_key = StringName(key)
+		_sync_ambience(key)
 		return
 
 	# 交叉淡化：新的从空闲 player 载入播放，旧的同步停掉/淡出
@@ -355,6 +423,42 @@ func play_bgm_key(key: String, instant: bool = false) -> void:
 
 	bgm_key = StringName(key)
 	bgm_next = idle_idx
+	_sync_ambience(key)
+
+## 环境音随阶段启停：局内（战斗/试炼/金币阁）淡入垫底，菜单/结算淡出。
+## 与 BGM 共用总线，玩家拉 BGM 音量条时环境音同步缩放，不新增设置项。
+func _sync_ambience(key: String) -> void:
+	if ambience_player == null or ambience_player.stream == null:
+		return
+	var want: bool = AMBIENCE_KEYS.has(key)
+	if _ambience_tween != null and _ambience_tween.is_valid():
+		_ambience_tween.kill()
+	if want:
+		if not ambience_player.playing:
+			ambience_player.volume_db = -60.0
+			ambience_player.play()
+		_ambience_tween = create_tween()
+		_ambience_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_ambience_tween.tween_property(ambience_player, "volume_db", AMBIENCE_DB, 1.2)\
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	elif ambience_player.playing:
+		_ambience_tween = create_tween()
+		_ambience_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_ambience_tween.tween_property(ambience_player, "volume_db", -60.0, 0.8)\
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_ambience_tween.tween_callback(ambience_player.stop)
+
+## Boss 战 BGM 闷音开关：登场压闷（900Hz 低通），伏诛/转阶段解除。Tween 防爆音。
+func set_bgm_muffle(on: bool) -> void:
+	if _bgm_lowpass == null:
+		return
+	var target := MUFFLE_CUTOFF if on else CLEAR_CUTOFF
+	if _muffle_tween != null and _muffle_tween.is_valid():
+		_muffle_tween.kill()
+	_muffle_tween = create_tween()
+	_muffle_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_muffle_tween.tween_property(_bgm_lowpass, "cutoff_hz", target, 0.8)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 ## 兼容旧调用：直接给一条流就播（Main 之外不该再有别处这么用）
 func play_bgm(stream: AudioStream) -> void:

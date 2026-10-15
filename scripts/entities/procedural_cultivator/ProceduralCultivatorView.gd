@@ -80,6 +80,8 @@ func _init_renderer() -> void:
 			(renderer as HollowKnightCultivatorRenderer).set_visual_config(config)
 	renderer.high_fps_mode = high_fps_mode
 	add_child(renderer)
+	# 新渲染器实例视角回到默认 FRONT，角度缓存作废，等下一次 set_facing_dir 重发
+	_last_angle = -1
 
 func _process(delta: float) -> void:
 	if renderer == null:
@@ -168,7 +170,20 @@ func play_hit(duration: float = 0.15) -> void:
 		renderer.current_action = CultivatorRendererBase.Action.HIT
 		renderer.hit_progress = 0.0
 
-## 土豆兄弟式纯正面视角：全方向移动均以正面面向玩家，仅水平方向移动触发左右镜像翻转
+## 按移动方向切三向视角（2026-10-15）：s=朝镜头=FRONT，n=远离镜头=BACK，
+## 水平与斜向=SIDE（左右靠 flip_h 镜像）。静止时 facing 保持旧值，角度自然停在最后朝向。
+const FACE_ANGLE_MAP := {
+	"s": CultivatorRendererBase.Angle.FRONT,
+	"n": CultivatorRendererBase.Angle.BACK,
+	"e": CultivatorRendererBase.Angle.SIDE,
+	"ne": CultivatorRendererBase.Angle.SIDE,
+	"se": CultivatorRendererBase.Angle.SIDE,
+}
+
+## 上一次已下发的视角：set_facing_dir 每物理帧被调，current_angle 的 setter 无条件打脏重绘，
+## 同值重赋会打穿渲染器的重绘节流（敌人侧 HollowKnightEnemyRenderer 同款坑已修过），必须缓存比较。
+var _last_angle: int = -1
+
 func set_facing_dir(face_str: String, is_flip: bool) -> void:
 	facing = face_str
 	if face_str != "n" and face_str != "s":
@@ -177,7 +192,10 @@ func set_facing_dir(face_str: String, is_flip: bool) -> void:
 	if renderer == null:
 		return
 
-	renderer.current_angle = CultivatorRendererBase.Angle.FRONT
+	var angle: int = FACE_ANGLE_MAP.get(face_str, CultivatorRendererBase.Angle.FRONT)
+	if angle != _last_angle:
+		_last_angle = angle
+		renderer.current_angle = angle
 
 	# 斗篷风向响应：把八扇区朝向后缀还原为移动方向向量（静止时渲染器按动作状态自行衰减）
 	var wind_dir: Vector2 = FACE_DIR_MAP.get(face_str, Vector2.ZERO)

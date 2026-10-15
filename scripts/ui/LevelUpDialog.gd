@@ -422,257 +422,28 @@ static func _center_pivot(c: Control) -> void:
 	if c.size.y > 0.0:
 		c.pivot_offset = c.size * 0.5
 
+## 卡片装配整体在 ui/levelup/LevelUpCardFactory（与商店 ShopOfferCardFactory 同构）：
+## 本文件只留面板流程（摆位/选中/刷新/确认），卡内交互经下面三个入口调回。
 func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) -> Dictionary:
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(_card_w, CARD_MIN_H)
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.pivot_offset = Vector2(_card_w * 0.5, CARD_MIN_H * 0.5)
+	return LevelUpCardFactory.create_card(self, data, index, _card_w, forecast)
 
-	var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
-	var style_normal := GameStyle.card(rarity_col, 3.0, Vector2(6, 6))
-	style_normal.content_margin_left = CARD_PAD_X
-	style_normal.content_margin_top = 12.0
-	style_normal.content_margin_right = CARD_PAD_X
-	style_normal.content_margin_bottom = 12.0
-	card.add_theme_stylebox_override("panel", style_normal)
+## 工厂回调：点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认选择」。
+func on_card_tapped(index: int) -> void:
+	if _can_interact and not _is_confirming:
+		_select_card(index)
 
-	var inner_w: float = card_inner_w(_card_w)
-	var vbox := VBoxContainer.new()
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 8)
-
-	# 1. 顶部稀有度色签 + 已修层数
-	var hbox_top := HBoxContainer.new()
-	hbox_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var rarity_lbl := Label.new()
-	rarity_lbl.text = " " + data.get("rarity_label", "普通") + " "
-	GameStyle.label(rarity_lbl, 11, GameStyle.PAPER)
-	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.CHALK
-	rarity_lbl.add_theme_color_override("font_color", band_text_col)
-	var pill_style := GameStyle.block(rarity_col, GameStyle.SLANT_BAND, Vector2(2, 2))
-	pill_style.content_margin_top = 2.0
-	pill_style.content_margin_bottom = 2.0
-	rarity_lbl.add_theme_stylebox_override("normal", pill_style)
-	hbox_top.add_child(rarity_lbl)
-
-	# 「荐」推荐签（RecommendSystem 在 roll_alloc_offers 里按角色+构筑打分写入 offer）：
-	# 签是子节点，_select_card 重写卡体 stylebox 碰不到它；点按弹推荐理由，不影响选中逻辑
-	if bool(data.get("recommended", false)):
-		var rec_lbl := Label.new()
-		rec_lbl.name = "RecommendBadge"
-		rec_lbl.text = " 荐 "
-		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rec_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
-		hbox_top.add_child(rec_lbl)
-		GameStyle.label(rec_lbl, 11, GameStyle.INK_TEXT)
-		GameStyle.hotzone(rec_lbl)
-		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(rec_lbl, data))
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox_top.add_child(spacer)
-
-	var state_badge := Label.new()
-	var count_already: int = int(GameManager.upgrade_counts.get(data.get("id", ""), 0))
-	state_badge.text = "×%d" % count_already if count_already > 0 else ""
-	GameStyle.label(state_badge, 11, GameStyle.GREY)
-	hbox_top.add_child(state_badge)
-	vbox.add_child(hbox_top)
-
-	# 2. 中央图标（墨底白框）
-	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(56, 56)
-	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
-	icon_box.add_theme_stylebox_override("panel", icon_panel_style)
-
-	var icon_tex := GameStyle.icon_texture_rect(
-		String(data.get("icon", "")),
-		Vector2(42, 42)
-	)
-	icon_box.add_child(icon_tex)
-	vbox.add_child(icon_box)
-
-	# 3. 名称（纸白大字，窄卡上自己切硬换行）
-	var title_lbl := Label.new()
-	title_lbl.text = GameStyle.wrap_cjk(String(data["title"]), GameStyle.display_font(), 17, inner_w)
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_lbl.custom_minimum_size = Vector2(inner_w, 0)
-	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title_lbl)
-	GameStyle.label(title_lbl, 17, GameStyle.PAPER, 0, GameStyle.INK, true)
-
-	# 4. 分隔线（稀有度色）
-	var sep := HSeparator.new()
-	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sep_style := StyleBoxLine.new()
-	sep_style.color = GameStyle.with_alpha(rarity_col, 0.45)
-	sep_style.thickness = 2
-	sep.add_theme_stylebox_override("separator", sep_style)
-	vbox.add_child(sep)
-
-	# 5. 加成行块（2026-10-11 土豆兄弟式改版）：数值全部由 apply 经 BonusRows 直接生成——
-	#    名字白·左对齐、幅度彩色·右对齐、正增益绿/负代偿红，与生效幅度天然同源，
-	#    不再有手写 BBCode 硬编码色（旧 #ffd24d/#6fd6ff/#7ce860 与 GameStyle 常量脱节，已废）。
-	#    表里的 desc 只写 apply 之外的机制说明（纯数值项为空串），非空才渲染、灰白小字。
-	#    行块不吸收余量：加成行与机制说明成组贴顶（土豆兄弟式内容排布），底部留白。
-	#    2026-10-12 用户指令：「加一条显示当前属性是多少，增加后是多少」⇒ 每条幅度行下面
-	#    再插一行「当前 X → Y」小字，读数走 StatForecast（属性面板同一份算式），见 _build_apply_block。
-	vbox.add_child(_build_apply_block(data.get("apply", {}), 13, inner_w, forecast))
-	var flavor := String(data.get("desc", ""))
-	if not flavor.is_empty():
-		var note_lbl := Label.new()
-		note_lbl.text = GameStyle.wrap_cjk(flavor, GameStyle.body_font(), 12, inner_w)
-		note_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		note_lbl.custom_minimum_size = Vector2(inner_w, 0)
-		note_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		GameStyle.label(note_lbl, 12, GameStyle.PAPER_DIM)
-		vbox.add_child(note_lbl)
-
-	# 受益武器图标行（2026-10-10 用户指令：「把当前佩戴的装备里对这个加点有增益的那个装备
-	# 也显示在这个卡片下方」）：这条悟道会让当前上阵的哪些武器变强，把它们的图标摆在卡片底部。
-	# 判定走 GameBalance.upgrade_benefits_weapon 纯函数，与伤害结算的属性映射同源
-	# （stat_scalings / 五行 tags / 全局乘区），不写死升级 id，以后加同类升级自动带上。
-	# 图标与 HUD 武器栏/商店同源，玩家能直接对上号；无受益时不显示（功能类加点保持卡片干净）。
-	#   ——取代旧版「✦ 当前 N 把武器受此加成」纯文字提示（只覆盖元素伤一类的老口径）。
-	# 2026-10-11 用户真机图：「点击这个受益装备的图标，也可以弹窗显示这个对应装备的信息」。
-	# 于是每颗图标套一格描边盒（与 HUD 武器槽同一长相 = 一眼知道按得动），走 GameStyle.hotzone
-	# + GameStyle.tap，详情卡复用 StatsTipFactory.open_weapon_tip（HUD 武器栏/属性面板/金币阁
-	# 同一张卡，不另编文案），再带一句「这条悟道走的哪条链路」（GameBalance.upgrade_benefit_reasons）。
-	# 三条硬口径，判据 tests/BenefitIconTapCheck.tscn 逐条量：
-	# ① 只读 —— 点图标不许顺手把这张卡选中（看东西这个动作不改写状态）。格体与卡体都是 PASS
-	#    （要拖得起列表，见 _populate_cards 末尾），拦住选中的是 GameStyle.tap 的「一次手势只
-	#    兑现最里那一层」认领，不是 STOP 拦冒泡。
-	# ② 划得起来 —— 识别器用 GameStyle.tap：中途划过 TAP_SLACK 就不算点，不许一划弹一张卡。
-	# ③ 摆得下 —— 格子按卡内宽现算并夹在 [BF_CELL_MIN, BF_CELL_MAX]，摊不开就换行而不是缩成
-	#    按不动的点（HFlowContainer 的最小宽只有一颗格，绝不把卡顶宽）。整卡高仍优先留在滚动区
-	#    给的高之内：这一屏是五张卡横向比价用的，竖滑现在划得动了，但仍只当兜底。
-	var benefited: Array = []
-	for w in GameManager.get_weapons_summary():
-		if GameBalance.upgrade_benefits_weapon(data.get("apply", {}), String(w.get("id", ""))):
-			benefited.append(w)
-	if not benefited.is_empty():
-		var n_bf := benefited.size()
-		# 「受益装备」小字提醒（2026-10-10 用户反馈：光摆图标看不懂是什么意思）+ 这排图标点得动
-		var cap_lbl := Label.new()
-		cap_lbl.text = GameStyle.wrap_cjk("受益装备 · 点按看详情", GameStyle.body_font(), 11, inner_w)
-		cap_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		cap_lbl.custom_minimum_size = Vector2(inner_w, 0)
-		cap_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		GameStyle.label(cap_lbl, 11, GameStyle.PAPER_DIM)
-		vbox.add_child(cap_lbl)
-		var icon_row := HFlowContainer.new()
-		icon_row.alignment = FlowContainer.ALIGNMENT_CENTER
-		icon_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon_row.add_theme_constant_override("h_separation", BF_CELL_GAP)
-		icon_row.add_theme_constant_override("v_separation", BF_CELL_GAP)
-		var cell_sz: float = clampf(
-			(inner_w - float(BF_CELL_GAP) * float(n_bf - 1)) / float(n_bf), BF_CELL_MIN, BF_CELL_MAX)
-		var glyph_sz: float = maxf(12.0, cell_sz - BF_CELL_PAD * 2.0)
-		for gi in range(n_bf):
-			var wd: Dictionary = benefited[gi]
-			var cell := PanelContainer.new()
-			# 名字要带序号：Godot 会给同层重名的节点自动改名（@PanelContainer@92 这种），
-			# 三颗都叫 "BenefitCell" 时只有第一颗留得住名字，判据按名字取样就会漏掉后面两颗
-			cell.name = "BenefitCell%d" % gi
-			cell.custom_minimum_size = Vector2(cell_sz, cell_sz)
-			cell.add_theme_stylebox_override("panel",
-				GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
-			var w_icon := GameStyle.icon_texture_rect(
-				String(wd.get("icon", "")),
-				Vector2(glyph_sz, glyph_sz)
-			)
-			cell.add_child(w_icon)
-			icon_row.add_child(cell)
-			# 整格都是热区：图是显示件，留着 STOP 会在格面中间挖一个按不动的洞
-			GameStyle.hotzone(cell)
-			# 锚点与数据都得在挂回调之前定下来：GDScript 的 lambda 按值捕获创建那一刻的局部变量
-			GameStyle.tap(cell, func() -> void: _open_benefit_tip(cell, wd, data))
-		vbox.add_child(icon_row)
-
-	card.add_child(vbox)
-
-	# 点卡片本体 = 只选中，不直接加点（防误触）；正式生效要走底部「确认选择」。
-	# 认「按下与抬起都留在原地」的完整手势，而不是旧写法那句「左键松开 = 选中」：
-	# 卡体已从 STOP 降成 PASS（见 _populate_cards 末尾），按下同时被 CardScroll 拿去锁拖动，
-	# 只认松开的话，手指在卡上划一下列表就换一张选中 —— 与「滑不动」是同一处手势的两面。
-	GameStyle.tap(card, func() -> void:
-		if _can_interact and not _is_confirming:
-			_select_card(index)
-	)
-
-	return {
-		"root": card,
-		"style": style_normal,
-		"icon_panel_style": icon_panel_style,
-		"rarity_col": rarity_col,
-		"state_badge": state_badge,
-		"title_lbl": title_lbl,
-	}
-
-## 加成行块 + 每行下面那条「当前 X → Y」（2026-10-12 用户指令：「加一条显示当前属性是多少，
-## 增加后是多少」）。幅度行仍由 BonusRows 出（与商店货架卡、开局选武器同一长相、同一把尺），
-## 这里只在它下面插一行小字注脚，两者捆成一组：组内 1 单位、组间 4 单位，读得出谁是谁的注脚。
-## 注脚的数走 StatForecast —— 落地算式与聚合算式都是属性面板在用的那一份，卡面不许自己再算。
-## 面板没有对应行的机制项（宝箱数量/品质、开箱省击、单系元素伤）不插注脚：不硬凑一个
-## 玩家在属性面板里找不到的数字。加了等于没加（夹到上限、满血回血）照实写，且退成 GREY，
-## 与 desc 那句「到顶再加是白加」互相印证，而不是用一个跳动的数骗人点。
-func _build_apply_block(apply: Dictionary, font_size: int, row_w: float, forecast: StatForecast) -> VBoxContainer:
-	var box := VBoxContainer.new()
-	box.name = "ApplyRowsBlock"
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_theme_constant_override("separation", 4)
-	var notes: Dictionary = {}
-	for line in forecast.lines_for(apply):
-		notes[String(line["key"])] = line
-	for key in apply.keys():
-		var k := String(key)
-		var v := float(apply[key])
-		var group := VBoxContainer.new()
-		group.name = "ApplyGroup_%s" % k
-		group.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		group.add_theme_constant_override("separation", 1)
-		group.add_child(BonusRows.make_row(StatInfoData.field_name(k),
-			StatInfoData.format_amount(k, v), BonusRows.stat_color(k, v), font_size, row_w))
-		if notes.has(k):
-			var line: Dictionary = notes[k]
-			var note := Label.new()
-			note.name = "ForecastNote"
-			note.text = GameStyle.wrap_cjk(String(line["text"]), GameStyle.body_font(),
-				FORECAST_FONT, row_w)
-			note.custom_minimum_size = Vector2(row_w, 0)
-			note.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			GameStyle.label(note, FORECAST_FONT,
-				GameStyle.PAPER_DIM if bool(line["changed"]) else GameStyle.GREY)
-			group.add_child(note)
-		box.add_child(group)
-	return box
-
-## 点「荐」签 = 看推荐理由：复用 DetailTip 一层卡（与受益装备详情同一宿主同一口径）。
+## 工厂回调：点「荐」签 = 看推荐理由（统一走 RecommendTip，与商店货架卡同一张卡）。
 ## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。
-func _open_recommend_tip(anchor: Control, data: Dictionary) -> void:
+func open_recommend_tip(anchor: Control, data: Dictionary) -> void:
 	if not _can_interact or _is_confirming:
 		return
-	var notes: Array[String] = []
-	for r in data.get("recommend_reasons", []):
-		notes.append(String(r))
-	DetailTip.show_over(self, anchor, {
-		"title": "为什么推荐",
-		"chip": "推荐度 %d%%" % int(round(float(data.get("recommend_score", 0.0)) * 100.0)),
-		"chip_color": GameStyle.JADE,
-		"notes": notes,
-		"foot": "由当前角色、上阵武器与属性推算，仅供参考。",
-	})
+	RecommendTip.open(self, anchor, data.get("recommend_reasons", []), float(data.get("recommend_score", 0.0)))
 
 ## 点「受益装备」那一排的图标 = 看这件装备的详解，纯只读：不许顺手把这张卡选中
 ## （看东西这个动作不改写状态；选中仍要走卡体那一下 + 底部「确认选择」）。
 ## 卡片与 HUD 武器栏 / 属性面板 / 商店同一工厂出，这里只多带一句「这条悟道算到它头上走的是
 ## 哪条链路」，链路名取自 GameBalance.upgrade_benefit_reasons —— 与「该不该挂这颗图标」同源。
-func _open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
+func open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 	if not _can_interact or _is_confirming:
 		return
 	var reasons: Array[String] = GameBalance.upgrade_benefit_reasons(

@@ -329,6 +329,17 @@ func _melee_arc_radius() -> float:
 func _melee_thrust_mult() -> float:
 	return clampf(_range_mult(), 1.0, MELEE_STRETCH_MAX)
 
+## 出膛色随五行走：与弹丸侧 _apply_elemental_tint 同一套异常色板（火橙/冰蓝/毒绿），
+## 无异常的武器回默认暖金——弹体什么色、出膛那一瞬就什么色
+func _muzzle_color() -> Color:
+	if def.get("proc_burn", false):
+		return Color(1.0, 0.6, 0.25, 0.95)
+	if float(def.get("proc_chill", 0.0)) > 0.0:
+		return Color(0.55, 0.85, 1.0, 0.95)
+	if def.get("proc_poison", false):
+		return Color(0.55, 1.0, 0.6, 0.95)
+	return Color(1.0, 0.9, 0.55, 0.95)
+
 ## 枪口闪光（远程武器开火反馈）：叠加发光的径向光斑
 func _setup_muzzle_flash() -> void:
 	muzzle_flash = Sprite2D.new()
@@ -641,8 +652,7 @@ func _cone_deal_damage(cone_len: float) -> void:
 			dmg *= GameManager.elite_damage_mult_for(enemy)
 			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
-			if proc_burn and enemy.has_method("apply_burn"):
-				enemy.apply_burn(burn_dps, burn_dur)
+			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, 0.0, 0.0, false, 0.0, 0.0)
 			GameManager.try_lifesteal()
 
 func _final_damage() -> float:
@@ -666,7 +676,7 @@ func _perform_projectile_attack() -> void:
 		muzzle_flash.rotation = randf() * TAU
 		_muzzle_scale0 = randf_range(0.42, 0.52)
 		muzzle_flash.scale = Vector2.ONE * _muzzle_scale0
-		muzzle_flash.modulate = Color(1.0, 0.9, 0.55, 0.95)
+		muzzle_flash.modulate = _muzzle_color()
 		muzzle_flash.visible = true
 		_muzzle_t = MUZZLE_TIME
 	_flash_sprite(Color(1.35, 1.35, 1.35), 0.12)
@@ -918,12 +928,10 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
 				hit_count += 1
 			if any_proc:
-				if proc_burn and enemy.has_method("apply_burn"):
-					enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
-				if proc_chill > 0.0 and enemy.has_method("apply_chill"):
-					enemy.apply_chill(proc_chill, float(def.get("chill_dur", 2.5)))
-				if proc_poison and enemy.has_method("apply_poison"):
-					enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
+				ProcStatus.apply(enemy, proc_burn,
+					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
+					proc_chill, float(def.get("chill_dur", 2.5)),
+					proc_poison, dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
 			# 开山重刃谱：近战命中额外吸收生命
 			if can_flat_heal:
@@ -1039,12 +1047,10 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
 				hit_count += 1
 			if any_proc:
-				if proc_burn and enemy.has_method("apply_burn"):
-					enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)))
-				if proc_chill > 0.0 and enemy.has_method("apply_chill"):
-					enemy.apply_chill(proc_chill, float(def.get("chill_dur", 2.5)))
-				if proc_poison and enemy.has_method("apply_poison"):
-					enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
+				ProcStatus.apply(enemy, proc_burn,
+					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
+					proc_chill, float(def.get("chill_dur", 2.5)),
+					proc_poison, dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
 			GameManager.try_lifesteal()
 			# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
 			if can_flat_heal:

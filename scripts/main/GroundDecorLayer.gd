@@ -1,9 +1,9 @@
 class_name GroundDecorLayer
 extends Node2D
 
-## 竞技场战台地面微细节与结界外深渊远景（空洞冷冽国风）
-## 涵盖石板暗纹裂缝、青苔风化暗斑、战痕剑痕、碎石瓦砾、阵外延展符纹、
-## 以及结界外部深渊中若隐若现的古柱与峰石剪影。
+## 竞技场战台地面微细节（空洞冷冽国风）
+## 涵盖石板暗纹裂缝、青苔风化暗斑、战痕剑痕、碎石瓦砾、阵外延展符纹。
+## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
 
 var half_extent: float = 440.0
@@ -16,64 +16,8 @@ func _draw() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4217  # 固定种子确保装饰确定性，不占用或污染 GameManager.rng 战斗流
 
-	_draw_beyond_boundary_silhouettes(rng)
 	_draw_array_outer_runes()
 	_draw_ground_details(rng)
-
-# ==============================================================================
-# 1. 结界外深渊远景剪影（Beyond Boundary Silhouettes）
-# ==============================================================================
-func _draw_beyond_boundary_silhouettes(rng: RandomNumberGenerator) -> void:
-	var h: float = half_extent
-	var col_shadow := Color(0.015, 0.025, 0.04, 0.95)
-	var col_stone := Color(0.025, 0.04, 0.06, 0.90)
-	var col_faint_cyan := Color(0.18, 0.55, 0.75, 0.14)
-
-	# 北侧远景：幽冥残峰奇石起伏（y 在 -450 ~ -680 之间）
-	var north_pts := PackedVector2Array()
-	north_pts.append(Vector2(-h - 180.0, -h - 20.0))
-	var peak_x: float = -h - 180.0
-	while peak_x < h + 180.0:
-		var step: float = rng.randf_range(35.0, 75.0)
-		peak_x += step
-		var peak_y: float = -h - rng.randf_range(40.0, 160.0)
-		north_pts.append(Vector2(peak_x, peak_y))
-	north_pts.append(Vector2(h + 180.0, -h - 20.0))
-	if north_pts.size() >= 3:
-		draw_colored_polygon(north_pts, col_shadow)
-		draw_polyline(north_pts, col_stone, 1.5)
-
-	# 南侧断崖远影（y 在 +450 ~ +640 之间）
-	var south_pts := PackedVector2Array()
-	south_pts.append(Vector2(-h - 180.0, h + 20.0))
-	var s_x: float = -h - 180.0
-	while s_x < h + 180.0:
-		var step_s: float = rng.randf_range(40.0, 80.0)
-		s_x += step_s
-		var s_y: float = h + rng.randf_range(40.0, 140.0)
-		south_pts.append(Vector2(s_x, s_y))
-	south_pts.append(Vector2(h + 180.0, h + 20.0))
-	if south_pts.size() >= 3:
-		draw_colored_polygon(south_pts, col_shadow)
-		draw_polyline(south_pts, col_stone, 1.5)
-
-	# 东西两侧深渊中矗立的古刹残柱剪影
-	var pillar_xs := [-h - 60.0, -h - 130.0, h + 60.0, h + 130.0]
-	for px in pillar_xs:
-		var py_base: float = rng.randf_range(-h + 60.0, h - 60.0)
-		var p_w: float = rng.randf_range(20.0, 36.0)
-		var p_h: float = rng.randf_range(60.0, 120.0)
-		var sign_x: float = -1.0 if px < 0.0 else 1.0
-		var pts := PackedVector2Array([
-			Vector2(px, py_base),
-			Vector2(px + sign_x * p_w * 0.4, py_base - p_h * 0.7),
-			Vector2(px + sign_x * p_w * 0.8, py_base - p_h),
-			Vector2(px + sign_x * p_w, py_base)
-		])
-		draw_colored_polygon(pts, col_stone)
-		draw_polyline(pts, col_shadow, 1.5)
-		# 柱顶微弱幽芒
-		draw_circle(Vector2(px + sign_x * p_w * 0.8, py_base - p_h), 3.0, col_faint_cyan)
 
 # ==============================================================================
 # 2. 太极阵外延展符纹刻度（Outer Array Extension Runes）

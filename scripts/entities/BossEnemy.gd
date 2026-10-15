@@ -96,10 +96,15 @@ func _ready() -> void:
 	_charge_timer = 999999.0
 	bite_range = 0.0
 
+	# 死亡演出分级（2026-10-15）：Boss 伏诛走「倾倒 → 尸体滞留慢渐隐」，不随小怪塌缩
+	death_corpse_linger = true
+
 	_setup_patterns()
 	super._ready()
 	# 登场即上屏：HUD 血条由此信号点亮
 	GameManager.boss_hp_changed.emit(current_hp, max_hp, boss_title)
+	# Boss 战 BGM 压闷制造紧张感（伏诛/转阶段由 _die 与 play_bgm_key 负责解除）
+	AudioManager.set_bgm_muffle(true)
 
 func _setup_patterns() -> void:
 	if final_boss:
@@ -583,7 +588,12 @@ func _die() -> void:
 
 	GameManager.add_spirit_stones(GameBalance.BOSS_STONE_REWARD)
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
+	# Boss 伏诛也进击杀连击音阶（低音巨物基准压半档），阶梯高位时斩杀音顺势冲顶
+	AudioManager.register_kill_pitch(0.8)
 	AudioManager.play_sfx("enemy_death_elite", 0.75)
 	GameManager.announcement_triggered.emit("✦ %s · 已击杀 ✦" % boss_title)
+	# Boss 伏诛：一局一次的屏幕级暖白脉冲，不走限流闸
+	GameManager.pulse_damage_vignette(Color(1.0, 0.95, 0.78, 0.6), 0.45)
+	AudioManager.set_bgm_muffle(false)
 	GameManager.boss_defeated.emit(boss_title)
 	super._die()

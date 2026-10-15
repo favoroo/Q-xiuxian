@@ -270,7 +270,19 @@ func _build_combo_section() -> Control:
 	note.text = GameStyle.wrap_cjk("间隔与前摇 tween 的 0.05s 同源。刃金频段 1.2k-5k，受击声占 40-500Hz，两层错开才不会糊成一片。", GameStyle.body_font(), 13, COMBO_ROW_W)
 	GameStyle.label(note, 13, GameStyle.PAPER_DIM)
 	box.add_child(note)
+
+	var kill := Button.new()
+	kill.text = "击杀连击：连按 5 次（2s 窗内音高步步爬升）"
+	kill.custom_minimum_size = Vector2(COMBO_ROW_W, 34)
+	GameStyle.button(kill, GameStyle.NAVY2, GameStyle.JADE, 14, GameStyle.INK_TEXT)
+	kill.pressed.connect(_play_kill_combo)
+	box.add_child(kill)
 	return box
+
+## 击杀连击试听：正式走 register_kill_pitch → play_sfx 管线，验阶梯手感与断窗重置
+func _play_kill_combo() -> void:
+	AudioManager.register_kill_pitch(1.0)
+	AudioManager.play_sfx("enemy_death", 0.9)
 
 ## 按定稿时序复刻近战双层：前摇破空（动作，无条件）→ 命中材质（战果）→ 受击身体声
 func _play_combo(is_hit: bool) -> void:

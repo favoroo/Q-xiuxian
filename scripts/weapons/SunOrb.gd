@@ -162,12 +162,10 @@ func _try_damage(area: Area2D) -> void:
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)
 
-		if def.get("proc_burn", false) and enemy.has_method("apply_burn"):
-			enemy.apply_burn(dmg * float(def.get("burn_ratio", 0.4)), float(def.get("burn_dur", 3.0)))
-		if float(def.get("proc_chill", 0.0)) > 0.0 and enemy.has_method("apply_chill"):
-			enemy.apply_chill(float(def.get("proc_chill")), float(def.get("chill_dur", 2.5)))
-		if def.get("proc_poison", false) and enemy.has_method("apply_poison"):
-			enemy.apply_poison(dmg * float(def.get("poison_ratio", 0.3)), float(def.get("poison_dur", 2.5)))
+		ProcStatus.apply(enemy,
+			bool(def.get("proc_burn", false)), dmg * float(def.get("burn_ratio", 0.4)), float(def.get("burn_dur", 3.0)),
+			float(def.get("proc_chill", 0.0)), float(def.get("chill_dur", 2.5)),
+			bool(def.get("proc_poison", false)), dmg * float(def.get("poison_ratio", 0.3)), float(def.get("poison_dur", 2.5)))
 
 		GameManager.try_lifesteal()
 		_play_hit_pulse()

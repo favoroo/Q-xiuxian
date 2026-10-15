@@ -51,6 +51,12 @@ const DEATH_KICK_CAMERA := BalanceWave.DEATH_KICK_CAMERA
 const DEATH_MICRO_KICK := BalanceWave.DEATH_MICRO_KICK
 const STONE_FLOAT_OFFSET := BalanceWave.STONE_FLOAT_OFFSET
 const CORPSE_SWELL_SCALE := BalanceWave.CORPSE_SWELL_SCALE
+const ELITE_DEATH_STAGGER_DUR := BalanceWave.ELITE_DEATH_STAGGER_DUR
+const ELITE_DEATH_TOPPLE_RAD := BalanceWave.ELITE_DEATH_TOPPLE_RAD
+const ELITE_DEATH_COLLAPSE_DUR := BalanceWave.ELITE_DEATH_COLLAPSE_DUR
+const BOSS_DEATH_TOPPLE_RAD := BalanceWave.BOSS_DEATH_TOPPLE_RAD
+const BOSS_DEATH_LINGER_DUR := BalanceWave.BOSS_DEATH_LINGER_DUR
+const BOSS_DEATH_FADE_DUR := BalanceWave.BOSS_DEATH_FADE_DUR
 # 刷怪出生点几何 → BalanceWave
 const SPAWN_INSET_MOB := BalanceWave.SPAWN_INSET_MOB
 const SPAWN_MIN_DIST_MOB := BalanceWave.SPAWN_MIN_DIST_MOB
@@ -475,6 +481,9 @@ static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) 
 
 static func focus_fire_mult(recent_hits: int) -> float:
 	return BalanceCombat.focus_fire_mult(recent_hits)
+
+static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:
+	return BalanceCombat.hit_squash_target(knockback, is_crit)
 
 # 祭坛灵兽 → BalanceSpiritBeast
 static func spirit_beast_max_hp(wave: int) -> float:

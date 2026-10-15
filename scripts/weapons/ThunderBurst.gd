@@ -151,7 +151,7 @@ func _spawn_sky_beam() -> void:
 	var beam := Line2D.new()
 	beam.points = PackedVector2Array([Vector2(0.0, -200.0), Vector2(0.0, 0.0)])
 	beam.width = maxf(radius * 0.12, 8.0)
-	beam.default_color = Color(1.0, 0.97, 0.8, 0.8)
+	beam.default_color = Color(2.0, 1.94, 1.6, 0.8)  # HDR 超白：天雷柱核心过辉光阈值起辉
 	beam.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	beam.end_cap_mode = Line2D.LINE_CAP_ROUND
 	var curve := Curve.new()
@@ -191,10 +191,7 @@ func _deal_damage() -> void:
 			# 所以一律走 get()：取不到就当 false，不许在这里炸一场落雷
 			var was_dying: bool = enemy.get("dying") == true
 			enemy.take_damage(dmg, knock, is_crit)
-			if proc_burn and enemy.has_method("apply_burn"):
-				enemy.apply_burn(burn_dps, burn_dur)
-			if proc_chill > 0.0 and enemy.has_method("apply_chill"):
-				enemy.apply_chill(proc_chill, chill_dur)
+			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, proc_chill, chill_dur, false, 0.0, 0.0)
 			GameManager.try_lifesteal()
 			hits += 1
 			if (enemy.get("dying") == true) and not was_dying:
@@ -217,6 +214,9 @@ func _deal_damage() -> void:
 	if hit_elite:
 		trauma += 0.14
 	GameManager.add_trauma(trauma)
+	# 劈中人的落雷配屏幕级蓝白脉冲（劈空不闪，多雷同帧由 GameFeel 闸排队）
+	if GameFeel.screen_flash_gate(0.4):
+		GameManager.pulse_damage_vignette(Color(0.62, 0.78, 1.0, 0.45), 0.18)
 	# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
 	GameManager.kick_camera(Vector2.DOWN, 2.8)
 	GameFeel.vibrate(25, 0.6)

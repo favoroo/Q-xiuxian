@@ -46,6 +46,10 @@ var juice_scale: Vector2 = Vector2.ONE
 var regen_tick: float = 0.0
 var squash_tween: Tween = null
 var _flash_t: float = 0.0  ## 受击闪白剩余秒（帧内衰减，材质已转接程序化视图）
+## 定向受击反馈（2026-10-15 对齐敌人）：受力方向后仰倾角（rad）与微反冲位移（px），
+## 均零 Tween 帧内衰减；tilt 并入行走侧倾的 rotation lerp 目标，jiggle 直写 position。
+var _hit_tilt: float = 0.0
+var _hit_jiggle_offset: Vector2 = Vector2.ZERO
 ## 玩家受击闪白衰减总时长：与敌人暖白衰减（0.11s）同档，无敌帧 0.55s 内必然归零
 const PLAYER_FLASH_DOWN_DUR: float = 0.11
 var procedural_view: ProceduralCultivatorView = null
@@ -780,6 +784,18 @@ func _physics_process(delta: float) -> void:
 		_flash_t = maxf(0.0, _flash_t - delta)
 		hit_flash_mat.set_shader_parameter("flash_modifier", clampf(_flash_t / PLAYER_FLASH_DOWN_DUR, 0.0, 1.0))
 
+	# 定向受击反馈衰减（与敌人 _tick_hit_visuals 同速率）：后仰 14/s 回正、微反冲 24px/s 归零。
+	# 放在移动分支之前：rotation 的 lerp 目标在下方行走/待机分支消费 _hit_tilt，必须先衰减再合成
+	if _hit_tilt != 0.0:
+		_hit_tilt = lerpf(_hit_tilt, 0.0, minf(delta * 14.0, 1.0))
+		if absf(_hit_tilt) < 0.001:
+			_hit_tilt = 0.0
+	if _hit_jiggle_offset != Vector2.ZERO:
+		_hit_jiggle_offset = _hit_jiggle_offset.move_toward(Vector2.ZERO, delta * 24.0)
+		anim_sprite.position = _hit_jiggle_offset
+		if is_procedural and procedural_view != null:
+			procedural_view.position = _hit_jiggle_offset
+
 	# 灵愈心法 + 青木羁绊：持续回血（软顶折算与面板读数同源，BalanceCombat 唯一算式）
 	var total_regen := BalanceCombat.effective_hp_regen(GameManager.hp_regen + GameManager.synergy_hp_regen)
 	if total_regen > 0.0 and current_health < max_health:
@@ -878,8 +894,9 @@ func _physics_process(delta: float) -> void:
 			procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.7, 1.0 + hover_bob)
 			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
 			# 土豆兄弟式御风灵动侧倾：水平移速驱动 4.8° 弹性倾角，转向灵动自然
+			# 受击后仰（_hit_tilt）作为加性项并入 lerp 目标，随上方衰减自然回正，不与行走侧倾抢写
 			var target_bank := deg_to_rad(4.8) * clampf(effective_dir.x, -1.0, 1.0) * clampf(speed_ratio, 0.0, 1.2)
-			procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank, minf(delta * 14.0, 1.0))
+			procedural_view.rotation = lerp_angle(procedural_view.rotation, target_bank + _hit_tilt, minf(delta * 14.0, 1.0))
 			procedural_view.play_run(gait_phase_counter, sin(gait_phase_counter * TAU), speed_ratio, target_bank)
 		elif _motion_mode == "hover":
 			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
@@ -893,7 +910,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		if is_procedural and procedural_view != null:
 			procedural_view.scale = current_base * 1.5
-			procedural_view.rotation = lerp_angle(procedural_view.rotation, 0.0, minf(delta * 10.0, 1.0))
+			procedural_view.rotation = lerp_angle(procedural_view.rotation, _hit_tilt, minf(delta * 10.0, 1.0))
 			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
 			procedural_view.play_idle()
 		elif _motion_mode == "hover":
@@ -1233,8 +1250,21 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压 + 触觉震感
 	GameManager.feedback(GameManager.FeedbackTier.LARGE)
 	GameFeel.vibrate(40, 0.85)
-	GameManager.pulse_damage_vignette(Color(0.85, 0.12, 0.12, 0.65), 0.24)
-	play_squash(Vector2(1.35, 0.72), 0.22)
+	GameManager.pulse_damage_vignette(Color(0.85, 0.12, 0.12, 0.65))
+	# 定向受击形变（2026-10-15 对齐敌人那套）：有来源位置时按受力方向选挤压轴向，
+	# 并叠 14° 后仰 + 2.8px 微反冲。玩家受击是低频大事件，一律走暴击档强度（旧硬编码
+	# (1.35,0.72) 就是暴击档数值）；无来源位置（旧调用残留）退化为默认水平压扁。
+	var hit_dir := Vector2.ZERO
+	if source_pos != Vector2.INF:
+		hit_dir = global_position - source_pos
+	play_squash(GameBalance.hit_squash_target(hit_dir, true), 0.22)
+	if hit_dir.length_squared() > 10.0:
+		var k_norm := hit_dir.normalized()
+		_hit_tilt = -k_norm.x * deg_to_rad(14.0)
+		_hit_jiggle_offset = k_norm * 2.8
+		anim_sprite.position = _hit_jiggle_offset
+		if is_procedural and procedural_view != null:
+			procedural_view.position = _hit_jiggle_offset
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.2)
 	AudioManager.play_sfx("player_hurt", 0.9)
@@ -1263,6 +1293,13 @@ func _play_death_sequence() -> void:
 	_dash_time = 0.0
 	velocity = Vector2.ZERO
 	invulnerable_time = 9999.0  # 谢幕期不再吃任何判定
+	# 停帧后定向受击反馈的衰减不再跑：就地归位，别让尸体挂着半截反冲位移谢幕
+	#（后仰倾角保留——倒在受力方向上正是「被这一下打倒」的读数）
+	_hit_tilt = 0.0
+	_hit_jiggle_offset = Vector2.ZERO
+	anim_sprite.position = Vector2.ZERO
+	if is_procedural and procedural_view != null:
+		procedural_view.position = Vector2.ZERO
 	play_squash(Vector2(1.32, 0.62), 0.5)
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.5)

@@ -176,6 +176,14 @@ const DEATH_KICK_CAMERA := 8.5          ## 精英伏诛震屏强度
 const DEATH_MICRO_KICK := 2.5           ## 普通怪死亡微冲量（px，确认感；走全局限流闸）
 const STONE_FLOAT_OFFSET := 30.0        ## 金蟾金币飘字相对尸体的上抬量
 const CORPSE_SWELL_SCALE := 1.28        ## 死灭膨胀幅度（Anticipation 那一下）
+# —— 死亡演出分级（2026-10-15）：小怪保持「膨胀 0.045s → 塌缩 0.14s」快节奏不变（高频事件不宜加重）；
+# 精英在膨胀后多一段踉跄倾倒再塌缩，Boss 倾倒后尸体滞留慢渐隐（不缩零）。
+const ELITE_DEATH_STAGGER_DUR := 0.12   ## 精英踉跄段时长（秒）：膨胀后慢半拍，倒地有重量感
+const ELITE_DEATH_TOPPLE_RAD := 0.21    ## 精英倾倒角（rad ≈ 12°）
+const ELITE_DEATH_COLLAPSE_DUR := 0.18  ## 精英塌缩段时长（秒，比小怪 0.14 略慢）
+const BOSS_DEATH_TOPPLE_RAD := 0.28     ## Boss 倾倒角（rad ≈ 16°）
+const BOSS_DEATH_LINGER_DUR := 0.55     ## Boss 尸体滞留时长（秒）：倒地后停一停再散
+const BOSS_DEATH_FADE_DUR := 0.45       ## Boss 滞留后的渐隐时长（秒，只淡出不塌缩）
 
 # ---------------- 刷怪出生点几何（铁律 1：五处刷怪口共用，调出生安全距离只改这里） ----------------
 ## 土豆兄弟式全图随机出生 + 远离玩家安全区：随机抽一点，距玩家太近就沿径向推开再夹回场内。

@@ -168,13 +168,11 @@ func _test_knock_direction() -> void:
 	_c.check(WeaponData.knockback_for("bajiao_fan") >= 350.0, "芭蕉扇击退力 >= 350（兑现文案‘击退极远’）")
 	_c.check(WeaponData.knockback_for("fantian_yin") >= 350.0, "番天镇岳印击退力 >= 350（兑现文案‘强击退’）")
 
-	# 敌人受击定向形变与受击硬直验证
-	var test_enemy := EnemyBase.new()
-	var squash_horiz := test_enemy._calculate_hit_squash(Vector2(200.0, 10.0), false)
+	# 受击定向形变（玩家/敌人同一把尺子：GameBalance.hit_squash_target，2026-10-15 从 EnemyBase 上移）
+	var squash_horiz := GameBalance.hit_squash_target(Vector2(200.0, 10.0), false)
 	_c.check(squash_horiz.x < 1.0 and squash_horiz.y > 1.0, "横向受击水平压扁垂直拉伸")
-	var squash_vert := test_enemy._calculate_hit_squash(Vector2(10.0, 200.0), false)
+	var squash_vert := GameBalance.hit_squash_target(Vector2(10.0, 200.0), false)
 	_c.check(squash_vert.x > 1.0 and squash_vert.y < 1.0, "纵向受击垂直压扁水平拉伸")
-	test_enemy.free()
 
 # ---------------- 妖狼长扑：位移闭式解与走廊扫掠几何 ----------------
 

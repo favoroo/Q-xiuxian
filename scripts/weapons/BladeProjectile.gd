@@ -85,6 +85,8 @@ var poison_dur: float = 2.5
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var glow: PointLight2D = $PointLight2D
 var _vector_renderer: ProceduralProjectileRenderer = null
+## 世界坐标历史拖尾：追踪弹拐弯时留弧线（局部彗尾只会跟着本体转），池化复用零重建
+var _trail: ProjectileTrail = null
 
 func _ready() -> void:
 	rotation = direction.angle()
@@ -95,6 +97,11 @@ func _ready() -> void:
 	# 改 _physics_process 手写推进，池化复用时零重建
 	_setup_vector_visual()
 	_apply_elemental_tint()
+	_trail = ProjectileTrail.new()
+	_trail.name = "Trail"
+	add_child(_trail)
+	# 压到兄弟首位画在弹体之下（top_level 只脱变换不脱树序）；z_index -1 会沉到地面之下，不可用
+	move_child(_trail, 0)
 
 func _setup_vector_visual() -> void:
 	var path_str := bullet_texture.resource_path if bullet_texture != null else ""
@@ -127,6 +134,8 @@ func _apply_elemental_tint() -> void:
 func _physics_process(delta: float) -> void:
 	_steer(delta)
 	position += direction * speed * delta
+	if _trail != null:
+		_trail.sample(global_position, delta)
 	if spin:
 		sprite.rotation += delta * (TAU / 0.45)   ## 与旧 Tween 同速：0.45s 一整圈
 	lifetime -= delta
@@ -170,15 +179,11 @@ func _on_area_entered(area: Area2D) -> void:
 		enemy.take_damage(actual_dmg, knock, is_crit)
 		GameManager.try_lifesteal()
 
-		# 施加五行异常。保持 has_method 鸭类型：武器/弹丸脚本绝不能硬引用 EnemyBase——
-		# 实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成空 PackedScene
-		# （循环类依赖解析坑），弹丸 instantiate 全返回 null。proc 开关恒假时 has_method 不会执行，零成本
-		if proc_burn and enemy.has_method("apply_burn"):
-			enemy.apply_burn(burn_dps, burn_dur)
-		if proc_chill > 0.0 and enemy.has_method("apply_chill"):
-			enemy.apply_chill(proc_chill, chill_dur)
-		if proc_poison and enemy.has_method("apply_poison"):
-			enemy.apply_poison(poison_dps, poison_dur)
+		# 施加五行异常走 ProcStatus 收口（保持 has_method 鸭类型）。武器/弹丸脚本绝不能硬引用
+		# EnemyBase——实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成
+		# 空 PackedScene（循环类依赖解析坑），弹丸 instantiate 全返回 null。
+		ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur,
+			proc_chill, chill_dur, proc_poison, poison_dps, poison_dur)
 
 		# 受击火花 / 震屏 / 顿帧全部由被击一方 EnemyBase.take_damage 统一发放：
 		# 弹体侧再发一份就是同一次命中火花双发、创伤计两遍（方向读数糊掉 + 镜头一直摇的元凶）
@@ -212,6 +217,12 @@ func _get_impact_color() -> Color:
 	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
 		return _vector_renderer.elemental_tint
 	return Color(0.95, 0.90, 0.72)
+
+## 拖尾取色：同一把尺子先用异常色温（modulate），退而矢量渲染器的元素色，最后回默认纸金。
+## 与 _get_impact_color 的差别只在饱和度压暗——拖尾是辉光叠加线，全饱和色叠加会糊成白块
+func _trail_color() -> Color:
+	var base := _get_impact_color()
+	return Color(base.r * 0.9, base.g * 0.9, base.b * 0.9)
 
 ## 就近找一个敌人。ahead_only = 只认弹头前方锥内的（丢目标重录用），false = 全向（弹射连锁用，历史行为）
 func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
@@ -297,6 +308,9 @@ func activate() -> void:
 	# 桌面 60fps 恰好对齐 60Hz 物理帧使插值退化为空操作看不出，真机帧率抖动时就闪
 	reset_physics_interpolation()
 	visible = true
+	# 异常色温残值清零：上一发是火符（modulate 橙），这一发换冰针时不清的话
+	# _apply_elemental_tint 的 WHITE 分支跳过赋值，冰针顶着一身橙色飞全程
+	modulate = Color.WHITE
 	# 残值清零：lifetime（FloatingWeapon 出膛时是乘 range_mult 的，复用弹丸若带着上一发
 	# 的残值会「出膛即逝」——ProjectileProbe B 段贴脸 100% 落空的元凶）与 acquire_left
 	# （命中即置 0，复用后必须恢复丢目标重找的额度）
@@ -311,6 +325,9 @@ func activate() -> void:
 		_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
 		_vector_renderer.queue_redraw()
 	_apply_elemental_tint()
+	if _trail != null:
+		_trail.configure(_trail_color())
+		_trail.seed_point(global_position)
 	# 碰撞恢复必须也走 deferred：同一帧「回收→复用」时，回收的 disabled=true deferred
 	# 会在帧末 flush，直接赋值的 false 会被它覆盖 —— 弹丸从此永世撞不到人（探针 B 段 0% 命中的元凶）。
 	# 两个 deferred 按入队顺序执行：回收(true) → 出膛(false)，最终值必落在出膛侧。
@@ -330,6 +347,9 @@ func _recycle() -> void:
 	_pooled = true
 	active_count = maxi(0, active_count - 1)
 	homing_target = null
+	# 拖尾同拍清史：休眠弹丸的弧线必须跟碰撞/登记表一起撤（池体不许占拍，AGENTS 坑 13）
+	if _trail != null:
+		_trail.reset()
 	_release_light()
 	set_physics_process(false)
 	set_deferred("monitoring", false)

@@ -274,6 +274,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(22, 0), "upright": true,
 						"desc": "落雷轰击区域大范围击退，受元素伤害与护甲加成", "tag": "范围·雷法·土",
 						"burst_radius": 80.0, "burst_tint": Color(0.62, 0.86, 1.0),
+						"burst_kind": "earth",  # 土系雷法走地裂扬尘：与金雷锥/金霄雷令的雷柱拉开形态
 						"tags": ["thunder", "earth"],
 						"stat_scalings": {"elemental_damage": 1.2, "armor": 2.0},
 					},

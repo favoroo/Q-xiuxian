@@ -6,6 +6,7 @@ signal pause_requested
 signal stats_requested
 
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
+@onready var hp_ghost_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar/HPGhostBar
 @onready var hp_label: Label = $TopContainer/LeftBox/HPBlock/HBox/HPLabel
 @onready var level_label: Label = $TopContainer/LeftBox/LevelBadge/VBox/LevelLabel
 @onready var exp_bar: ProgressBar = $TopContainer/LeftBox/LevelBadge/VBox/ExpBar
@@ -67,6 +68,16 @@ var _last_zoom_ms := 0
 const HUD_TWEEN_MIN_INTERVAL := 0.05
 var _last_hp_tween_ms := 0
 var _last_exp_tween_ms := 0
+## 血条白影（HPGhostBar，受创两段式 2026-10-15）：红条立即落、白影延迟追平。
+## 白影是主条子节点画在上层 ⇒ 主条值 >= 白影值时只露红条，掉血瞬间白影才从残血处露出来。
+var _hp_ghost_tween: Tween = null
+var _hp_last_cur: float = -1.0  ## 上一拍血量：判断这次信号是扣血还是回血
+## 金币增量脉冲（2026-10-15）：金币跳涨时 Label squash 回弹 + 金色驻留一闪，读得出「进账了」
+const SHARDS_PULSE_MIN_GAIN := 5    ## 单拍增量阈值：低于它（单珠碎金）不闪，防常亮刷屏
+const SHARDS_PULSE_GATE_MS := 150   ## 脉冲最小间隔：磁吸齐吃一拍几十金只闪一次
+var _shards_pulse_tween: Tween = null
+var _shards_last: int = -1
+var _last_shards_pulse_ms := 0
 
 ## 兼容引用：判据（skill_check / obelisk_charge_readout_check）与覆盖层仍从 HUD 取按钮节点
 var _skill_box: Control = null
@@ -347,18 +358,37 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v
-	if _hp_tween != null and _hp_tween.is_valid():
-		_hp_tween.kill()
-		_hp_tween = null
-	# tween 创建闸（2026-10-14）：战斗中挨打/吸血每秒十几次信号，闸外才补间、
-	# 闸内直接写终值 —— kill+create 的 Tween 分配从每信号一次降到 20 次/秒上限以下
-	var now_ms := Time.get_ticks_msec()
-	if now_ms - _last_hp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
-		_last_hp_tween_ms = now_ms
-		_hp_tween = create_tween()
-		_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	else:
+	hp_ghost_bar.max_value = max_v
+	# 受创两段式（2026-10-15）：扣血拍红条立即直写（受创可读性优先，不做缓动），
+	# 白影条延迟 0.25s 后 0.3s 追平 —— 红白落差就是「这一刀有多疼」的量尺；
+	# 回血拍红条保持既有补间，白影直接贴上去（治疗不留白影）。
+	var is_damage := _hp_last_cur >= 0.0 and cur < _hp_last_cur
+	_hp_last_cur = cur
+	if _hp_ghost_tween != null and _hp_ghost_tween.is_valid():
+		_hp_ghost_tween.kill()
+		_hp_ghost_tween = null
+	if is_damage:
+		# 白影先停在旧值（露出红白差），主条立即扣到底；白影随后追平
+		hp_ghost_bar.value = hp_bar.value
 		hp_bar.value = cur
+		_hp_ghost_tween = create_tween()
+		_hp_ghost_tween.tween_interval(0.25)
+		_hp_ghost_tween.tween_property(hp_ghost_bar, "value", cur, 0.3)\
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	else:
+		hp_ghost_bar.value = cur
+		if _hp_tween != null and _hp_tween.is_valid():
+			_hp_tween.kill()
+			_hp_tween = null
+		# tween 创建闸（2026-10-14）：战斗中挨打/吸血每秒十几次信号，闸外才补间、
+		# 闸内直接写终值 —— kill+create 的 Tween 分配从每信号一次降到 20 次/秒上限以下
+		var now_ms := Time.get_ticks_msec()
+		if now_ms - _last_hp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
+			_last_hp_tween_ms = now_ms
+			_hp_tween = create_tween()
+			_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		else:
+			hp_bar.value = cur
 	var hp_text := str(int(cur)) + "/" + str(int(max_v))
 	if hp_label.text != hp_text:
 		hp_label.text = hp_text
@@ -473,11 +503,39 @@ func _on_stats_updated(kills: int, g_time: float, stones: int) -> void:
 	var shards_text := "金币 " + str(stones)
 	if shards_label.text != shards_text:
 		shards_label.text = shards_text
+	# 金币增量脉冲：跳涨过阈值时 Label squash 回弹（击杀数不闪——+1 离散事件闪起来是噪音）
+	_pulse_shards(stones)
 	var mins = int(g_time / 60.0)
 	var secs = int(g_time) % 60
 	var time_text := "%02d:%02d" % [mins, secs]
 	if time_label.text != time_text:
 		time_label.text = time_text
+
+## 金币进账脉冲（2026-10-15）：单拍增量过阈值且过 0.15s 闸才闪一次，防止磁吸齐吃
+## 一拍几十金变成常亮。squash 用 TRANS_BACK 回弹落位，与升级徽记同一套手感；
+## 金色驻留 0.18s 渐回（金币芯片底色本来就是点缀黄，闪的是字色白→金→白读不出，
+## 改闪 Label 整体 scale + 字色加深一拍，芯片不换色）。
+func _pulse_shards(stones: int) -> void:
+	if _shards_last < 0:
+		_shards_last = stones
+		return
+	var gain := stones - _shards_last
+	_shards_last = stones
+	if gain < SHARDS_PULSE_MIN_GAIN:
+		return
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_shards_pulse_ms < SHARDS_PULSE_GATE_MS:
+		return
+	_last_shards_pulse_ms = now_ms
+	if _shards_pulse_tween != null and _shards_pulse_tween.is_valid():
+		_shards_pulse_tween.kill()
+	shards_label.pivot_offset = shards_label.size * 0.5
+	shards_label.scale = Vector2(1.25, 1.25)
+	_shards_pulse_tween = create_tween()
+	_shards_pulse_tween.tween_property(shards_label, "scale", Vector2.ONE, 0.22)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", Color(1.35, 1.25, 0.9, 1.0), 0.05)
+	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", Color.WHITE, 0.2).set_delay(0.05)
 
 func _on_wave_changed(n: int) -> void:
 	wave_label.get_parent().visible = n >= 1

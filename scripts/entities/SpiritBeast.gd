@@ -257,7 +257,8 @@ func take_damage(amount: float) -> void:
 func _die() -> void:
 	_dying = true
 	set_physics_process(false)
-	AudioManager.play_sfx("enemy_death", 0.8)
+	# 友方灵兽被咬死不是玩家战果：pitch_override 直传，不进击杀连击阶梯
+	AudioManager.play_sfx("enemy_death", 0.8, 1.0)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(self, "scale", Vector2(0.1, 0.1), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)

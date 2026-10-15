@@ -363,10 +363,15 @@ func _setup_map_bounds() -> void:
 		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		map.add_child(rect)
 
-	# 2. 地面程序化微细节层：石板裂缝、青苔暗斑、剑痕、碎石、阵外刻痕与深渊剪影（纯静态一次性 _draw）
+	# 2. 地面程序化微细节层：石板裂缝、青苔暗斑、剑痕、碎石、阵外刻痕（纯静态一次性 _draw）
 	var ground_decor := GroundDecorLayer.new()
 	ground_decor.half_extent = half
 	map.add_child(ground_decor)
+
+	# 2.5 结界外深渊远景剪影：独立视差层（0.45 系数反向跟相机），纯静态 _draw + 每帧只挪 position
+	var beyond := BeyondBoundaryLayer.new()
+	beyond.half_extent = half
+	map.add_child(beyond)
 
 	# 3. 战台程序化矢量层：中心太极四象大阵 + 四方灵脉槽 + 锁灵结界光墙与青铜镇魂阵角
 	var arena_vis := ArenaVisualLayer.new()

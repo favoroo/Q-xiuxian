@@ -120,6 +120,17 @@ const KNOCKBACK_MAX_SPEED_NORMAL := 620.0 ## 普通受击初速上限（px/s）�
 const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）：暴击击退封顶（~65px以内）
 const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
 const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把敌人甩出半屏）
+
+## 定向受击挤压（Squash & Stretch）：按击退轴选形变，玩家/敌人同一把尺子（2026-10-15 从
+## EnemyBase 上移为共用纯函数）。无击退向量时给默认水平压扁；有击退时沿冲击轴压扁、垂直轴拉长。
+static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:
+	if knockback.length_squared() < 10.0:
+		return Vector2(1.36, 0.70) if is_crit else Vector2(1.24, 0.80)
+	var k_norm := knockback.normalized()
+	if absf(k_norm.x) >= absf(k_norm.y):
+		return Vector2(0.68, 1.38) if is_crit else Vector2(0.76, 1.26)   # 水平冲击：横压竖拉
+	else:
+		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)   # 垂直冲击：竖压横拉
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
 const KILL_HITSTOP_SCALE := 0.20         ## 击杀微顿帧时间倍率（清脆微顿，高于安全地板 0.15）
 const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）

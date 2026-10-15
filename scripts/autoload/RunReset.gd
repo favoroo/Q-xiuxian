@@ -70,6 +70,9 @@ static func reset(gm: Node) -> void:
 	gm.frenzy_enabled = 0.0
 	gm.frenzy_stacks = 0.0
 	gm.frenzy_idle = 0.0
+	# 击杀连击音阶状态：AudioManager 是 autoload，跨局不随场景销毁，这里显式归零
+	AudioManager._kill_combo_count = 0
+	AudioManager._kill_pitch_base = 1.0
 	gm.thunder_strike = 0.0
 	gm.reroll_price_mult = 1.0
 	gm.crowd_damage_per_enemy = 0.0
