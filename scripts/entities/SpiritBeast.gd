@@ -1,7 +1,7 @@
 class_name SpiritBeast
 extends CharacterBody2D
 
-## 祭坛灵兽（2026-10-15 三连灵羽弹 + 圆团玄鹤重做）：祭坛激活时召唤的风筝型远程友军。
+## 祭坛灵兽「灵珑」（2026-10-15 圆形灵魄重做：去鹤形、按圆形设计）：祭坛激活时召唤的风筝型远程友军。
 ##
 ## 组与碰撞（两条铁律，动了会被全场武器追着打 / 回合末被清场）：
 ##   - 只挂 "allies" 组 —— 绝不进 enemies/turrets/gems/chests，那四组 WaveSpawner.end_wave 全清；
@@ -20,7 +20,7 @@ extends CharacterBody2D
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
 ## 生命是它的寿命：无碰撞后敌人 slide 接触咬不到它，改为灵兽自判近身啃咬
 ## （CONTACT_RANGE 内取敌人 contact_damage，同一把尺子、同一无敌帧）；生命耗尽即消散。
-## 生命不挂血条：受击时把 hp_ratio 灌给渲染器，由玄鹤本体传达（灵光/丹顶/灵目转暗、濒死裂纹闪烁）。
+## 生命不挂血条：受击时把 hp_ratio 灌给渲染器，由灵珑本体传达（灵光/祭纹灵印/灵目转暗、濒死裂纹闪烁）。
 ## 索敌读 GameManager.live_enemies 登记表，不做物理查询（最多 3 只，10Hz 重索节流）。
 
 const BULLET_TEXTURE: Texture2D = preload("res://assets/art/bullet_spirit_pellet.png")
@@ -54,13 +54,14 @@ func _ready() -> void:
 	current_hp = max_hp
 
 	_renderer = ProceduralDroneRenderer.new()
-	_renderer.kind = ProceduralDroneRenderer.DroneKind.XUAN_HE
+	_renderer.kind = ProceduralDroneRenderer.DroneKind.YUAN_LING
 	add_child(_renderer)
 
 	GameManager.register_ally(self)
 
-	# 出场弹起
+	# 出场弹起 + 现身辉光（晕圈强闪、灵尘收拢一拍，衔接祭坛冲击环）
 	scale = Vector2(0.2, 0.2)
+	_renderer.spawn_glow = 1.0
 	var tw := create_tween()
 	tw.tween_property(self, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

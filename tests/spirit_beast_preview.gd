@@ -1,8 +1,8 @@
 extends Node2D
 
-## 祭坛灵兽（玄鹤）调形台（非判据，不参与绿灯）：并排摆 悬停 / 巡航 / 濒死 / 扑击
-## 四态 + 左朝向镜像 + 濒死巡航混合，供编辑器/真机直接看形 —— 画得好看不好看是
-## 纯眼睛的活，调 ProceduralDroneRenderer._draw_xuan_he() 的形准与动态节奏时改完重开即可。
+## 祭坛灵兽（灵珑·圆形灵魄）调形台（非判据，不参与绿灯）：并排摆 悬停 / 巡航 / 濒死 / 扑击
+## 四态 + 左朝向镜像 + 濒死巡航混合 + 出场辉光，供编辑器/真机直接看形 —— 画得好看不好看是
+## 纯眼睛的活，调 ProceduralDroneRenderer._draw_yuan_ling() 的形准与动态节奏时改完重开即可。
 ## 运行（不能加 --headless，headless 不渲染）：
 ##   $G --path . res://tests/SpiritBeastPreview.tscn
 
@@ -12,6 +12,8 @@ var _t: float = 0.0
 var _cruise: ProceduralDroneRenderer = null
 var _lunge: ProceduralDroneRenderer = null
 var _charge: ProceduralDroneRenderer = null
+var _spawn: ProceduralDroneRenderer = null
+var _spawn_cd: float = 0.0
 var _lunge_base: Vector2 = Vector2.ZERO
 var _lunge_cd: float = 1.0
 
@@ -22,7 +24,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var title := Label.new()
-	title.text = "祭坛灵兽 · 玄鹤调形台（ProceduralDroneRenderer.XUAN_HE）"
+	title.text = "祭坛灵兽 · 灵珑调形台（ProceduralDroneRenderer.YUAN_LING）"
 	title.position = Vector2(40, 16)
 	GameStyle.label(title, 14, GameStyle.PAPER, 0, GameStyle.INK, true)
 	add_child(title)
@@ -35,6 +37,7 @@ func _ready() -> void:
 	_charge = _cell("蓄力 charge 脉动", Vector2(130, 410), 1.0, 1.0)
 	_cell("左朝向镜像", Vector2(350, 410), -1.0, 1.0)
 	_cell("濒死 35% + 巡航混合", Vector2(570, 410), -1.0, 0.35)
+	_spawn = _cell("出场辉光（周期重现）", Vector2(790, 410), 1.0, 1.0)
 
 	if DisplayServer.get_name() == "headless":
 		print("SpiritBeastPreview: headless 无渲染意义，直接退出")
@@ -58,6 +61,11 @@ func _process(delta: float) -> void:
 		_cruise.bank_angle = deg_to_rad(6.5) * 0.6 * sin(_t * 0.9)
 	if _charge != null:
 		_charge.charge_ratio = 0.5 + 0.5 * sin(_t * 2.5)
+	if _spawn != null:
+		_spawn_cd -= delta
+		if _spawn_cd <= 0.0:
+			_spawn_cd = 1.8
+			_spawn.spawn_glow = 1.0
 	if _lunge != null:
 		_lunge.speed_ratio = 0.4
 		_lunge_cd -= delta
@@ -75,7 +83,7 @@ func _draw() -> void:
 
 func _cell(title: String, pos: Vector2, face: float, hp: float) -> ProceduralDroneRenderer:
 	var r := ProceduralDroneRenderer.new()
-	r.kind = ProceduralDroneRenderer.DroneKind.XUAN_HE
+	r.kind = ProceduralDroneRenderer.DroneKind.YUAN_LING
 	r.position = pos
 	r.scale.x = face
 	r.hp_ratio = hp

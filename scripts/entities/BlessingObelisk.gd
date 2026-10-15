@@ -348,6 +348,8 @@ func _summon_spirit_beast() -> void:
 	beast.global_position = global_position + Vector2(
 		GameManager.rng.randf_range(-36.0, 36.0),
 		GameManager.rng.randf_range(-36.0, 36.0))
+	# 现身一拍：灵兽落点扩散一圈泽青灵气环（复用 JuiceEffect 对象池，与灵珑配色同源）
+	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, Color(0.58, 0.95, 0.98), 0.3)
 
 ## 灰相收口：灯直接关掉、范围环不再占位（看不见却还在的圈就是 bug）
 func _enter_spent_look() -> void:
