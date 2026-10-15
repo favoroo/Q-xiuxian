@@ -597,3 +597,38 @@ func _die() -> void:
 	AudioManager.set_bgm_muffle(false)
 	GameManager.boss_defeated.emit(boss_title)
 	super._die()
+
+## Boss 登场凝聚成形演出（T-5.4）：
+## 1. 材质切换为 dissolve.gdshader，dissolve_amount 从 1.0 (全隐) 缓动到 0.0 (凝实)；
+## 2. 凝聚成形完毕时恢复 hit_flash_mat，爆发金色冲击环 + 短震屏与创伤反馈。
+func play_spawn_sequence(on_complete: Callable = Callable()) -> void:
+	var mat := ShaderMaterial.new()
+	mat.shader = _get_dissolve_shader()
+	mat.set_shader_parameter("noise_texture", _get_noise_texture())
+	mat.set_shader_parameter("dissolve_amount", 1.0)
+	mat.set_shader_parameter("edge_width", 0.08)
+	mat.set_shader_parameter("edge_color", GameStyle.FX_HDR_GOLD)
+	if procedural_view != null:
+		procedural_view.material = mat
+	anim_sprite.material = mat
+
+	scale = Vector2.ONE * 0.4
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(self, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(v: float):
+		mat.set_shader_parameter("dissolve_amount", v)
+	, 1.0, 0.0, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	tw.chain().tween_callback(func():
+		if procedural_view != null and hit_flash_mat != null:
+			procedural_view.material = hit_flash_mat
+		anim_sprite.material = hit_flash_mat
+		var parent := get_parent()
+		if parent != null:
+			JuiceEffect.spawn_shockwave(parent, global_position, 96.0, GameStyle.FX_HDR_GOLD, 0.35)
+		GameManager.shake_camera(8.0, 0.38)
+		GameManager.add_trauma(0.35)
+		if on_complete.is_valid():
+			on_complete.call()
+	)

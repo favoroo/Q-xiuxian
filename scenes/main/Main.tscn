@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=23 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -22,6 +22,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/ManualDialog.tscn" id="20_manual"]
 [ext_resource type="PackedScene" uid="uid://skillsel001" path="res://scenes/ui/SkillSelect.tscn" id="21_skill"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TutorialDialog.tscn" id="22_tutorial"]
+[ext_resource type="Script" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -29,9 +30,9 @@ glow_enabled = true
 glow_levels/1 = true
 glow_levels/2 = true
 glow_levels/3 = true
-glow_intensity = 0.3
+glow_intensity = 0.4
 glow_strength = 0.7
-glow_bloom = 0.0
+glow_bloom = 0.04
 glow_blend_mode = 0
 glow_hdr_threshold = 1.0
 glow_hdr_scale = 2.0
@@ -41,8 +42,8 @@ glow_hdr_luminance_cap = 6.0
 resource_local_to_scene = true
 shader = ExtResource("6_vig")
 shader_parameter/tint_color = Color(0, 0, 0, 0.1)
-shader_parameter/vignette_intensity = 0.36
-shader_parameter/vignette_opacity = 0.5
+shader_parameter/vignette_intensity = 0.4
+shader_parameter/vignette_opacity = 0.52
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -81,6 +82,10 @@ script = ExtResource("5_spawner")
 
 [node name="AtmosphereLayer" type="Node2D" parent="."]
 z_index = 40
+
+[node name="FxParticlePool" type="Node2D" parent="."]
+z_index = 35
+script = ExtResource("23_fx")
 
 [node name="SmoothCamera" type="Camera2D" parent="."]
 zoom = Vector2(1.2, 1.2)

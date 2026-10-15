@@ -46,6 +46,18 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 		return
 	visible = true
 	set_process(true)
+	# 命中首拍对应材质微粒（T-2.6）：火雨→EMBER、冰霜/地裂/坠印→对应材质碎屑
+	match kind:
+		"fire_rain":
+			FxParticlePool.burst(FxParticlePool.EMBER, global_position, "fire", 0.8)
+		"frost":
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "water", 0.8)
+		"earth":
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "earth", 0.85)
+		"seal":
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "gold", 0.9)
+		"drum", "sonic":
+			FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, "lightning", 0.75)
 
 ## 提前收场（ThunderBurst 回池时调用）
 func deactivate() -> void:
@@ -106,7 +118,7 @@ func _draw_flame_drop(pos: Vector2, s: float, a: float) -> void:
 	draw_colored_polygon(tail, Color(0.85, 0.25, 0.12, 0.5 * a))
 	draw_circle(pos, s, Color(0.85, 0.25, 0.12, 0.75 * a))
 	draw_circle(pos, s * 0.62, Color(1.0, 0.65, 0.20, 0.9 * a))
-	draw_circle(pos, s * 0.3, Color(1.0, 0.95, 0.85, a))
+	draw_circle(pos, s * 0.3, GameStyle.FX_HDR_FIRE)
 
 ## 冰霜：冰刺从落点圈内拔地戳出（ stagger 生长），末端霜环淡去
 func _draw_frost() -> void:
@@ -126,7 +138,7 @@ func _draw_frost() -> void:
 		draw_colored_polygon(PackedVector2Array([
 			base + Vector2(-w, 0), base + Vector2(w, 0), base + lean + Vector2(0, -h)]),
 			Color(tint.r, tint.g, tint.b, 0.75 * a))
-		draw_line(base + Vector2(0, -2), base + lean + Vector2(0, -h), Color(0.92, 0.98, 1.0, a), 1.6)
+		draw_line(base + Vector2(0, -2), base + lean + Vector2(0, -h), GameStyle.FX_HDR_WATER, 1.6)
 	# 霜环：演出末段贴着判定半径内缘淡去
 	var ring_p: float = clampf(_t / 0.2, 0.0, 1.0)
 	var ring_a := 0.4 * (1.0 - clampf((_t - 0.2) / (DUR - 0.2), 0.0, 1.0))
@@ -160,9 +172,9 @@ func _draw_drum() -> void:
 			var dir := Vector2(cos(ang), sin(ang))
 			draw_line(dir * radius * 0.2 * p, dir * radius * 0.85 * p,
 				Color(tint.r, tint.g, tint.b, a * 0.6), 1.8)
-	# 鼓面回弹：中心小圆两拍脉冲
+	# 鼓面回弹：中心小圆两拍脉冲（接 FX_HDR_GOLD 泛光起辉）
 	var pulse := 1.0 + 0.35 * sin(_t * 28.0) * maxf(0.0, 1.0 - _t / 0.25)
-	draw_arc(Vector2.ZERO, 10.0 * pulse, 0.0, TAU, 20, Color(1.0, 0.95, 0.8, 0.7 * (1.0 - p)), 2.0)
+	draw_arc(Vector2.ZERO, 10.0 * pulse, 0.0, TAU, 20, GameStyle.FX_HDR_GOLD, 2.0)
 
 ## 地裂：锯齿裂缝从爆心爬出去 + 碎石块崩起（裂山铎）
 func _draw_earth() -> void:
@@ -180,8 +192,8 @@ func _draw_earth() -> void:
 			var jag := (3.5 if k % 2 == 0 else -3.5) * (1.0 - float(k) / 5.0)
 			pts.append(dir * d + tan * jag)
 		draw_polyline(pts, crack_col, 2.4)
-		# 裂缝沿线的亮土边（裂口翻起的新土）
-		draw_polyline(pts, Color(tint.r, tint.g, tint.b, 0.35 * fade), 0.9)
+		# 裂缝沿线的亮土边（裂口翻起的新土，接 FX_HDR_EARTH）
+		draw_polyline(pts, GameStyle.FX_HDR_EARTH, 0.9)
 	# 崩起的碎石块：easeOutBack 弹出后定格，随尾段淡出
 	for i in 5:
 		var ang := float(i) * 1.9 + 0.9
@@ -199,13 +211,12 @@ func _draw_earth() -> void:
 ## 重冲击环压场 + 一圈低扬尘环 + 尘点四溅，全部几何由 radius 派生（画多大==判多大）
 func _draw_seal_dust() -> void:
 	var fade := 1.0 - clampf((_t - 0.22) / (DUR - 0.22), 0.0, 1.0)
-	# 重冲击环：0.16s 内从爆心砸到判定内缘，粗→细快速收细，给出「重物落地的第一拍」
+	# 重冲击环：0.16s 内从爆心砸到判定内缘，粗→细快速收细，给出「重物落地的第一拍」（接 FX_HDR_CORE 起辉）
 	var slam_p: float = clampf(_t / 0.16, 0.0, 1.0)
 	if slam_p > 0.0 and slam_p < 1.0:
 		var slam_r := radius * (0.15 + 0.75 * slam_p)
-		var slam_a := 0.75 * (1.0 - slam_p) * maxf(fade, 0.35)
 		draw_arc(Vector2.ZERO, slam_r, 0.0, TAU, 44,
-			Color(tint.r, tint.g, tint.b, slam_a), 6.5 - 4.5 * slam_p)
+			GameStyle.FX_HDR_CORE, 6.5 - 4.5 * slam_p)
 	# 低扬尘环：冲击环过后贴地翻起，慢速外扩
 	var p: float = clampf(_t / 0.3, 0.0, 1.0)
 	var a := 0.4 * (1.0 - p)

@@ -257,8 +257,7 @@ static func spawn_shockwave(parent: Node, pos: Vector2, max_radius: float, col: 
 	fx._add_ring(max_radius * 0.12, max_radius, col, 6.0)
 	fx._add_ring(max_radius * 0.06, max_radius * 0.9, col.lightened(0.45), 2.5)
 
-## 金币入体微缩流光：入体环用**扩散**方向（2→16），与冲击波/死亡爆散同一套
-## 「向外迸发」的环语言 —— 旧版 16→2 收缩读作「被吸进体内一个点」，方向感拧着
+## 金币入体微缩流光：入体环用扩散方向（2→16），并叠 4 粒向内收束灵光微粒（T-1.5 强化）
 static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) -> void:
 	if not _ready_to_spawn(parent):
 		return
@@ -266,6 +265,11 @@ static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) 
 	fx._begin(EffectType.PICKUP_POP, pos, 0.18, Z_OVERLAY)
 	var c := Color(0.35, 0.8, 1.0, 0.85) if not is_gold else Color(1.0, 0.88, 0.35, 0.95)
 	fx._add_ring(2.0, 16.0, c, 2.0)
+	for i in range(4):
+		var ang := float(i) * (TAU / 4.0) + (0.2 if is_gold else 0.0)
+		var p_off := Vector2(cos(ang), sin(ang)) * 8.0
+		var p_vel := -p_off * 5.0
+		fx._add_particle(p_off, p_vel, 2.0, c.lightened(0.2), 2.0)
 
 ## 治疗上飘（2026-10-14 P1 灵医可视出口）：被治疗目标身上升起 3 颗青绿灵光。
 ## 「谁在被奶」是玩家最该读到的信息（治疗者优先击杀的判断依据），灵医自己的

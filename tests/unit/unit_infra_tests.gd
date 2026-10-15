@@ -645,3 +645,46 @@ func _test_skin_system() -> void:
 	GameManager.cultivator_best_danger = orig_records
 	GameManager.skin_selections = orig_skins
 	GameManager._save_progress()
+
+
+# ---------------- 粒子池系统（2026-10-15 VFX T-0.2） ----------------
+
+func _test_fx_particle_pool() -> void:
+	# 1. Kind 枚举完整性
+	_c.equals(FxParticlePool.HIT_SPARK, 0, "Kind.HIT_SPARK 为 0")
+	_c.equals(FxParticlePool.DEATH_WISP, 1, "Kind.DEATH_WISP 为 1")
+	_c.equals(FxParticlePool.DEATH_BURST, 2, "Kind.DEATH_BURST 为 2")
+	_c.equals(FxParticlePool.EMBER, 3, "Kind.EMBER 为 3")
+	_c.equals(FxParticlePool.SOUL_ORB, 4, "Kind.SOUL_ORB 为 4")
+	_c.equals(FxParticlePool.LEVEL_PILLAR, 5, "Kind.LEVEL_PILLAR 为 5")
+
+	# 2. 空实例调用安全（测试/非主场景下不崩溃）
+	var orig_inst := FxParticlePool.instance
+	FxParticlePool.instance = null
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, Vector2.ZERO)
+	_c.check(true, "FxParticlePool.instance 为 null 时 burst 安全返回不抛异常")
+
+	# 3. 实例化测试
+	var pool := FxParticlePool.new()
+	add_child(pool)
+	_c.equals(pool.get_child_count(), FxParticlePool.POOL_CAP, "粒子池预创建 POOL_CAP(24) 个 GPUParticles2D")
+	_c.equals(FxParticlePool.instance, pool, "粒子池挂树后 instance 静态单例就位")
+
+	# 4. 触发 burst
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, Vector2(100, 100), "fire")
+	FxParticlePool.burst(FxParticlePool.DEATH_BURST, Vector2(200, 200), "gold")
+	_c.check(true, "FxParticlePool burst 触发成功")
+
+	# 5. 清理
+	remove_child(pool)
+	pool.free()
+	FxParticlePool.clear_cache()
+	FxParticlePool.instance = orig_inst
+
+	# 6. FxBudget 预算硬上限断言
+	_c.check(FxBudget.GLOBAL_LIGHT_CAP <= 20, "全局动态灯上限 <= 20")
+	_c.check(FxBudget.MAX_ACTIVE_EMITTERS <= 30, "同屏活跃粒子发射器上限 <= 30")
+	_c.equals(FxBudget.LIGHT_CAP_GEM, AstralGem.GEM_LIGHT_CAP, "掉落物灯预算与 AstralGem.GEM_LIGHT_CAP 对齐")
+	_c.equals(FxBudget.LIGHT_CAP_PROJECTILE, BladeProjectile.LIGHT_CAP, "弹丸灯预算与 BladeProjectile.LIGHT_CAP 对齐")
+
+

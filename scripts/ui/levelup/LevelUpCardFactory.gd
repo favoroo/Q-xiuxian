@@ -20,8 +20,11 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	card.pivot_offset = Vector2(card_w * 0.5, LevelUpDialog.CARD_MIN_H * 0.5)
 
-	var rarity_col: Color = data.get("border_color", GameStyle.PAPER)
-	var style_normal := GameStyle.card(rarity_col, 3.0, Vector2(6, 6))
+	var rarity_str: String = String(data.get("rarity", "common"))
+	var rarity_col: Color = data.get("border_color", GameStyle.rarity_color(rarity_str))
+	# T-5.1 稀有度卡框描边接 FX_HDR 对应档（普通白不发辉、金色档 HDR 超白起辉）：
+	var edge_col: Color = GameStyle.rarity_edge_color(rarity_str) if data.has("rarity") else GameStyle.rarity_edge_color(rarity_col)
+	var style_normal := GameStyle.card(edge_col, 3.0, Vector2(6, 6))
 	style_normal.content_margin_left = LevelUpDialog.CARD_PAD_X
 	style_normal.content_margin_top = 12.0
 	style_normal.content_margin_right = LevelUpDialog.CARD_PAD_X
@@ -53,7 +56,7 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	var sep := HSeparator.new()
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sep_style := StyleBoxLine.new()
-	sep_style.color = GameStyle.with_alpha(rarity_col, 0.45)
+	sep_style.color = GameStyle.with_alpha(edge_col, 0.45)
 	sep_style.thickness = 2
 	sep.add_theme_stylebox_override("separator", sep_style)
 	vbox.add_child(sep)
@@ -101,7 +104,9 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		"root": card,
 		"style": style_normal,
 		"icon_panel_style": icon_panel_style,
-		"rarity_col": rarity_col,
+		"rarity_col": edge_col,
+		"rarity_base": rarity_col,
+		"rarity": rarity_str,
 		"state_badge": hbox_top.get_node_or_null("StateBadge"),
 		"title_lbl": title_lbl,
 	}

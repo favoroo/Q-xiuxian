@@ -20,12 +20,27 @@ static func _redraw_interval() -> float:
 
 var _anim: float = 0.0
 var _phase: float = 0.0
+var _spark_timer: float = 0.0
+var _tip_light: PointLight2D = null
 
 func _ready() -> void:
 	visible = false
 	set_process(false)
 	# 错相初始化：避免多把束流武器同帧扎堆重绘
 	_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
+	_setup_light()
+
+func _setup_light() -> void:
+	if _tip_light != null and is_instance_valid(_tip_light):
+		return
+	_tip_light = PointLight2D.new()
+	_tip_light.name = "TipLight"
+	_tip_light.texture = load("res://assets/art/light_radial.png") as Texture2D
+	_tip_light.texture_scale = 0.45
+	_tip_light.energy = 0.8
+	_tip_light.color = Color(0.78, 0.55, 1.0)
+	_tip_light.enabled = false
+	add_child(_tip_light)
 
 ## 亮起/续命：每帧下发当前几何（长度随射线命中变化）
 func beam_on(p_length: float, p_width: float, p_tint: Color) -> void:
@@ -39,10 +54,18 @@ func beam_on(p_length: float, p_width: float, p_tint: Color) -> void:
 func beam_off() -> void:
 	visible = false
 	set_process(false)
+	if _tip_light != null:
+		_tip_light.enabled = false
 
 func _process(delta: float) -> void:
 	_anim += delta
 	_phase += delta
+	_spark_timer -= delta
+	if _spark_timer <= 0.0 and length > 10.0:
+		_spark_timer = 0.18
+		var tip_pos := to_global(Vector2(length, 0.0))
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, tip_pos, "shadow", 0.85)
+
 	var interval := _redraw_interval()
 	if _phase >= interval:
 		_phase -= interval
@@ -50,6 +73,8 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	if length <= 1.0:
+		if _tip_light != null:
+			_tip_light.enabled = false
 		return
 	# 中心线蛇形驻波：根部稳、尾端飘（激光不是死直线，是憋着能量的电弧）
 	var pts := PackedVector2Array()
@@ -58,20 +83,30 @@ func _draw() -> void:
 		var x := length * float(i) / float(SEGS)
 		var wob := sin(x * 0.09 - _anim * 26.0) * 2.6 * (0.25 + 0.75 * float(i) / float(SEGS))
 		pts[i] = Vector2(x, wob)
-	# 三层同形叠画：外晕 / 主束 / 白炽芯
+
+	# 三层同形叠画：外晕 / 主束 / HDR 超白核心芯（T-2.2 接 FX_HDR_SHADOW 泛光起辉）
 	var glow := tint
 	glow.a = 0.22
 	var mid := tint
 	mid.a = 0.55
-	var core := tint.lerp(Color.WHITE, 0.75)
-	# HDR 超白核心束：过辉光阈值起辉，外层 glow/mid 保持 LDR 不双辉
-	core = Color(core.r * 2.2, core.g * 2.2, core.b * 2.2, 0.95)
+	var core := GameStyle.FX_HDR_SHADOW
+
 	draw_polyline(pts, glow, beam_width)
 	draw_polyline(pts, mid, beam_width * 0.5)
 	draw_polyline(pts, core, beam_width * 0.18)
-	# 命中端溅射：菱晶 + 四散电丝，脉冲呼吸
+
 	var tip := pts[SEGS]
 	var pulse := 1.0 + sin(_anim * 30.0) * 0.25
+
+	# 两端径向光晕圆（随光束缩放，消灭死硬线段感）
+	var root_r := beam_width * 0.65 * pulse
+	var tip_r := beam_width * 0.95 * pulse
+	draw_circle(pts[0], root_r, Color(tint.r, tint.g, tint.b, 0.35))
+	draw_circle(pts[0], root_r * 0.45, core)
+	draw_circle(tip, tip_r, Color(tint.r, tint.g, tint.b, 0.45))
+	draw_circle(tip, tip_r * 0.5, core)
+
+	# 命中端溅射：菱晶 + 四散电丝，脉冲呼吸
 	var d := 5.0 * pulse
 	draw_colored_polygon(PackedVector2Array([
 		tip + Vector2(d, 0.0), tip + Vector2(0.0, -d),
@@ -80,3 +115,14 @@ func _draw() -> void:
 		var a := float(k) * TAU / 4.0 + _anim * 7.0
 		var dir := Vector2(cos(a), sin(a))
 		draw_line(tip + dir * d, tip + dir * (d + 5.0), mid, 1.4)
+
+	# 命中端动态 PointLight2D 跟踪（名额在 FxBudget 登记）
+	if _tip_light != null:
+		_tip_light.enabled = true
+		_tip_light.position = tip
+		_tip_light.color = Color(tint.r, tint.g, tint.b, 0.9)
+
+func _exit_tree() -> void:
+	if _tip_light != null and is_instance_valid(_tip_light):
+		_tip_light.queue_free()
+		_tip_light = null

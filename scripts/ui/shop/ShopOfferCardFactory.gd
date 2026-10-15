@@ -104,7 +104,8 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		stat_rows = BonusRows.apply_rows(def.get("apply", {}))
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
-		edge_color = ItemData.tier_color(tier).darkened(0.35)
+		# T-5.1 道具卡边框接 FX_HDR 对应档（普通白不发辉、金色档 HDR 起辉）：
+		edge_color = GameStyle.rarity_edge_color(tier)
 		var owned_count: int = GameManager.items.count(item_id)
 		if owned_count > 0:
 			owned_text = "拥有 ×%d" % owned_count
@@ -244,6 +245,10 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 		var wid := w_id if not w_id.is_empty() else String(offer.get("id", ""))
 		border_color = GameStyle.weapon_element_color(wid, GameStyle.LINE)
 		is_elem = GameStyle.is_elemental(wid)
+	elif kind == "item":
+		var idef := ItemData.get_def(String(offer.get("id", "")))
+		var itier := int(idef.get("tier", 1))
+		border_color = GameStyle.rarity_edge_color(itier)
 	elif kind == "pet":
 		var pdef := PetData.get_def(String(offer.get("id", "")))
 		border_color = pdef.get("color", GameStyle.GOLD)

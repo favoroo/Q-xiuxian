@@ -39,8 +39,8 @@ func _ready() -> void:
 func configure(color: Color) -> void:
 	_color = color
 	if _line_glow != null:
-		_line_glow.gradient = _make_gradient(GLOW_ALPHA_HEAD)
-		_line_core.gradient = _make_gradient(CORE_ALPHA_HEAD)
+		_line_glow.gradient = _make_gradient(GLOW_ALPHA_HEAD, 1.0)
+		_line_core.gradient = _make_gradient(CORE_ALPHA_HEAD, 1.6)
 
 ## 出膛起笔：清空上一发历史后从枪口位置落第一个点
 func seed_point(pos: Vector2) -> void:
@@ -75,10 +75,10 @@ func reset() -> void:
 	_redraw()
 
 func _build_lines() -> void:
-	_line_glow = _make_line(GLOW_WIDTH, GLOW_ALPHA_HEAD)
-	_line_core = _make_line(CORE_WIDTH, CORE_ALPHA_HEAD)
+	_line_glow = _make_line(GLOW_WIDTH, GLOW_ALPHA_HEAD, 1.0)
+	_line_core = _make_line(CORE_WIDTH, CORE_ALPHA_HEAD, 1.6)
 
-func _make_line(width: float, head_alpha: float) -> Line2D:
+func _make_line(width: float, head_alpha: float, hdr_boost: float = 1.0) -> Line2D:
 	var line := Line2D.new()
 	line.width = width
 	line.joint_mode = Line2D.LINE_JOINT_ROUND
@@ -89,15 +89,18 @@ func _make_line(width: float, head_alpha: float) -> Line2D:
 	curve.add_point(Vector2(0.0, 0.1))
 	curve.add_point(Vector2(1.0, 1.0))
 	line.width_curve = curve
-	line.gradient = _make_gradient(head_alpha)
+	line.gradient = _make_gradient(head_alpha, hdr_boost)
 	add_child(line)
 	return line
 
-func _make_gradient(head_alpha: float) -> Gradient:
+func _make_gradient(head_alpha: float, hdr_boost: float = 1.0) -> Gradient:
 	var grad := Gradient.new()
+	var r := _color.r * hdr_boost
+	var g := _color.g * hdr_boost
+	var b := _color.b * hdr_boost
 	grad.colors = PackedColorArray([
-		Color(_color.r, _color.g, _color.b, 0.0),
-		Color(_color.r, _color.g, _color.b, head_alpha),
+		Color(r, g, b, 0.0),
+		Color(r, g, b, head_alpha),
 	])
 	return grad
 

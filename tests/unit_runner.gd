@@ -67,6 +67,7 @@ func _ready() -> void:
 	infra._test_career_milestones()
 	infra._test_skin_system()
 	infra._test_modal_pause_buttons()
+	infra._test_fx_particle_pool()
 	combat._test_knock_direction()
 	combat._test_charge_geometry()
 	combat._test_stat_breakdown_buff()

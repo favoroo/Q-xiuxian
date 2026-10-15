@@ -146,7 +146,9 @@ func _recycle() -> void:
 		return
 	_pool.append(self)
 
-## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知
+## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知。
+## T-2.5 余韵：消散瞬间顶端电弧四散（复用 LightningBolt.build_jagged_points 一把锯齿尺），
+## 3 条短线从柱顶向斜上散开 HDR 渐隐——「雷柱散成电花」，不新建节点不挂池。
 func _spawn_sky_beam() -> void:
 	var beam := Line2D.new()
 	beam.points = PackedVector2Array([Vector2(0.0, -200.0), Vector2(0.0, 0.0)])
@@ -161,6 +163,19 @@ func _spawn_sky_beam() -> void:
 	add_child(beam)
 	var btw = create_tween()
 	btw.tween_property(beam, "modulate:a", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# 顶端电弧四散：随雷柱同步淡出（0.13s 内从满亮到熄），线体 activate 时已随雷柱 queue_free 清理
+	var top := Vector2(0.0, -200.0)
+	for i in 3:
+		var arc := Line2D.new()
+		var dir := Vector2.UP.rotated(deg_to_rad(-55.0 + 55.0 * float(i)))
+		var tip := top + dir.rotated(randf_range(-0.3, 0.3)) * randf_range(26.0, 42.0)
+		arc.points = LightningBolt.build_jagged_points(top, tip, 9.0, 6.0)
+		arc.width = 1.8
+		arc.default_color = Color(2.4, 2.3, 1.9, 0.9)  # 与雷柱同源的 HDR 超白（GameStyle.FX_HDR_LIGHTNING 同值）
+		arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		arc.end_cap_mode = Line2D.LINE_CAP_ROUND
+		add_child(arc)
+		btw.parallel().tween_property(arc, "modulate:a", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _deal_damage() -> void:
 	var space_state = get_world_2d().direct_space_state
@@ -207,6 +222,8 @@ func _deal_damage() -> void:
 		return
 	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档
 	_struck = true
+	# 命中火花溅射（T-2.5）：雷光超白碎屑，吃 FxParticlePool 既有 HIT_FRAME_BUDGET 帧闸
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.2)
 	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
 	var trauma := 0.16
 	if kills >= 3:
@@ -217,5 +234,8 @@ func _deal_damage() -> void:
 	# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
 	GameManager.kick_camera(Vector2.DOWN, 2.8)
 	GameFeel.vibrate(25, 0.6)
+	# 屏幕微亮脉冲（T-2.5）：复用既有 vignette 脉冲通道（信号签名不变，不碰 GameManager），
+	# 反向打亮——冷蓝白低透明 0.16s 快速衰减，与受击红闪同路不同色；屏闪设置关则静默
+	GameManager.pulse_damage_vignette(Color(0.75, 0.85, 1.0, 0.22), 0.16)
 	if kills >= 3 or hit_elite:
 		GameManager.zoom_punch(0.025, 0.14)

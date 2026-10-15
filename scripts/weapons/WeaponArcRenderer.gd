@@ -9,6 +9,14 @@ extends Node2D
 ##   外缘半径 OUTER(124) × scale == 判定几何外缘；所有形态点缀都不许刺出 OUTER。
 ##   近战月牙张角 ±70° / 横扫扇面 ±80° 与判定同源；显隐只由 visible + modulate.a 驱动
 ##   （FloatingWeapon 的扫放/淡出 tween 照旧只动 position/scale/modulate.a，本渲染器零 tween）。
+##
+## T-2.1（2026-10-15）内锐外羽 + 短拖尾（空洞骨钉 × 死亡细胞弧光）：
+##   刃带改为「锐利内芯 / 羽化外缘」——亮度不再贴外缘：主刃身内收 5px，OUTER 顶缘留
+##   两档低透明渐变段（a≈0.10/0.05）= 外缘羽化拉长；白芯亮线改贴内缘曲线（两端随
+##   _taper 收尖成针），色接 GameStyle.FX_HDR_CORE（超白起辉，不越 OUTER 不碰判定）。
+##   挥砍瞬间记录 ≤0.12s 刃缘世界位置史，照 ProjectileTrail 双层 Line2D 范式画短弧
+##   拖尾（宽低透主色 + 窄 HDR 亮核）；显隐/渐隐完全跟随宿主 visible + modulate.a，
+##   隐藏即清史（池体休眠三件套同拍，AGENTS 坑 13）。
 
 enum ArcMode { MELEE, SWEEP }
 
@@ -17,6 +25,7 @@ const MELEE_INNER := 110.0      ## 近战月牙中心内缘（中心厚度 14px�
 const MELEE_HALF := deg_to_rad(70.0)   ## 近战月牙张角，与 slash 旧贴图同源
 const SWEEP_HALF := deg_to_rad(80.0)   ## 横扫月牙张角 == FloatingWeapon.SWEEP_HALF_ANGLE
 const SWEEP_INNER := 104.0      ## 横扫月牙中心内缘（中心厚度 20px，比近战 14px 宽，雄浑大月牙）
+const BODY_INSET := 8.0         ## 刃身顶缘内收量（T-2.1 内锐外羽）：亮刃切断在此，OUTER 顶缘留给羽化渐变
 
 const _ARC_STEPS := 30          ## 外缘采样段数
 ## 重绘节流（2026-10-14）：亮起窗口内原每帧无条件重绘，火舌/电弧微动 20Hz 足够
@@ -33,6 +42,20 @@ var element: String = "metal"   ## metal/wood/water/fire/earth/thunder，空串�
 var _anim: float = 0.0          ## 亮起窗口内推相位：火舌/电弧微动
 var _draw_phase: float = 0.0
 
+# —— 短拖尾（T-2.1）：照抄 ProjectileTrail 双层 Line2D 范式（宽低透辉光 + 窄 HDR 亮核）——
+## 挥砍瞬间记录刃缘世界位置史，画 0.1-0.15s 渐隐的弧线；渐隐不另起 tween，
+## 完全吃宿主扫放后的 modulate.a 淡出（top_level 只重置变换、不阻断 modulate 传播）。
+const TRAIL_GLOW_WIDTH := 6.0
+const TRAIL_CORE_WIDTH := 1.6
+const TRAIL_MAX_POINTS_LOW := 4    ## 低档 20Hz × 4 点 ≈ 0.2s 记忆（重绘节流口径内）
+const TRAIL_MAX_POINTS_HIGH := 8   ## 流畅档 40Hz × 8 点 ≈ 0.2s
+const TRAIL_MIN_STEP_SQ := 36.0    ## 相邻两点平方距下限（6px）：扫放缓段不堆重合点
+
+var _trail_root: Node2D = null
+var _trail_glow: Line2D = null
+var _trail_core: Line2D = null
+var _trail_pts := PackedVector2Array()
+
 func configure(p_mode: ArcMode, p_element: String) -> void:
 	mode = p_mode
 	element = p_element if p_element != "" else "metal"
@@ -40,6 +63,7 @@ func configure(p_mode: ArcMode, p_element: String) -> void:
 func _ready() -> void:
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	set_process(false)
+	_build_trail()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED:
@@ -48,6 +72,7 @@ func _notification(what: int) -> void:
 			queue_redraw()
 		else:
 			_anim = 0.0
+			_trail_reset()
 
 func _process(delta: float) -> void:
 	_anim += delta
@@ -55,7 +80,71 @@ func _process(delta: float) -> void:
 	if _draw_phase <= 0.0:
 		_draw_phase = _redraw_interval()
 		redraw_count += 1
+		_trail_sample()
 		queue_redraw()
+
+# ---------------- 短拖尾（照 ProjectileTrail 双层 Line2D 范式，T-2.1）----------------
+
+## 拖尾根 top_level 脱离刃光变换：历史点存世界坐标，刃光被宿主扫放/缩放时弧线留在原地
+func _build_trail() -> void:
+	_trail_root = Node2D.new()
+	_trail_root.top_level = true
+	_trail_root.position = Vector2.ZERO
+	_trail_root.visible = false
+	add_child(_trail_root)
+	_trail_glow = _make_trail_line(TRAIL_GLOW_WIDTH, 0.35)
+	_trail_core = _make_trail_line(TRAIL_CORE_WIDTH, 0.9)
+
+func _make_trail_line(width: float, head_alpha: float) -> Line2D:
+	var line := Line2D.new()
+	line.width = width
+	line.joint_mode = Line2D.LINE_JOINT_ROUND
+	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.15))
+	curve.add_point(Vector2(1.0, 1.0))
+	line.width_curve = curve
+	var grad := Gradient.new()
+	grad.colors = PackedColorArray([
+		Color(1.0, 1.0, 1.0, 0.0),
+		Color(1.0, 1.0, 1.0, head_alpha),
+	])
+	line.gradient = grad
+	_trail_root.add_child(line)
+	return line
+
+## 挥砍亮起窗口内按重绘节流拍采样外缘中点（前缘端）的世界位置；
+## 颜色也在此逐拍下发（configure 可能早于 _ready，不在那里碰线节点）：
+## 宽层吃元素主刃色、窄层吃 FX_HDR 白芯超白，线自身 modulate 乘渐变 alpha，
+## 挥砍淡出时宿主的 modulate.a 会一并传播进来收尾。
+func _trail_sample() -> void:
+	if _trail_root == null:
+		return
+	var pal := _palette(element)
+	_trail_glow.modulate = pal["main"]
+	_trail_core.modulate = GameStyle.FX_HDR_CORE
+	var half: float = MELEE_HALF if mode == ArcMode.MELEE else SWEEP_HALF
+	var a: float = half * 0.55   ## 峰厚前缘侧的弧中点，扫放时位移最大、弧线最清晰
+	var local_pt := Vector2(cos(a), sin(a)) * (OUTER - BODY_INSET)
+	var pt := global_transform * local_pt
+	if _trail_pts.size() > 0 and _trail_pts[_trail_pts.size() - 1].distance_squared_to(pt) < TRAIL_MIN_STEP_SQ:
+		return
+	_trail_pts.append(pt)
+	var cap := TRAIL_MAX_POINTS_HIGH if VisualRate.high_fps else TRAIL_MAX_POINTS_LOW
+	if _trail_pts.size() > cap:
+		_trail_pts = _trail_pts.slice(_trail_pts.size() - cap)
+	_trail_glow.points = _trail_pts
+	_trail_core.points = _trail_pts
+	_trail_root.visible = _trail_pts.size() >= 2
+
+## 隐藏即清史：残留弧线从上一挥死亡点连到下一挥出生点是「池体占拍」的同型事故（AGENTS 坑 13）
+func _trail_reset() -> void:
+	_trail_pts = PackedVector2Array()
+	if _trail_root != null:
+		_trail_glow.points = _trail_pts
+		_trail_core.points = _trail_pts
+		_trail_root.visible = false
 
 ## 元素调色板：main 主刃色 / core 近白亮芯 / glow 低透明外晕
 static func _palette(elem: String) -> Dictionary:
@@ -129,31 +218,41 @@ func _draw() -> void:
 		_draw_sweep_crescent(main, core, glow)
 	_draw_accents(main, core, glow)
 
-## 近战月牙：两端收尖的锥形细刃（中心厚 14px），四层叠画——
-## 气芒 / 根部薄透底 / 刃口半层提亮（刃口亮、根部透）/ 贴外缘细亮线
+## 近战月牙：两端收尖的锥形细刃（中心厚 14px），内锐外羽六层叠画（T-2.1）——
+## 外羽两段（顶 OUTER 的 0.05 / 顶 OUTER-4 的 0.10 低透渐变，alpha→0 区段加宽）
+## / 刃身薄透底 / 刃身半层提亮 / 内缘贴外缘的锐利白芯亮线（FX_HDR_CORE 超白起辉）。
+## 刃身顶缘内收 8px 形成锐利切断；羽化顶缘仍恰在 OUTER == 判定外缘（画多大==判多大）。
 func _draw_crescent(main: Color, core: Color, glow: Color) -> void:
 	var thick := OUTER - MELEE_INNER
+	var body_top := OUTER - 8.0
+	glow.a = 0.05
+	_band_tapered(OUTER, MELEE_HALF, thick + 8.0, glow, true)
 	glow.a = 0.10
-	_band_tapered(OUTER, MELEE_HALF, thick + 7.0, glow, true)
-	main.a = 0.40
-	_band_tapered(OUTER, MELEE_HALF, thick, main, true)
-	main.a = 0.65
-	_band_tapered(OUTER, MELEE_HALF, thick * 0.55, main, true)
-	core.a = 0.95
-	_edge_line(OUTER, MELEE_HALF * 0.92, core, 1.8, true)
+	_band_tapered(OUTER - 4.0, MELEE_HALF, thick + 4.0, glow, true)
+	main.a = 0.45
+	_band_tapered(body_top, MELEE_HALF, thick, main, true)
+	main.a = 0.70
+	_band_tapered(body_top, MELEE_HALF, thick * 0.55, main, true)
+	var hdr := GameStyle.FX_HDR_CORE
+	hdr.a = 0.90
+	_edge_line(body_top, MELEE_HALF * 0.92, hdr, 1.8, true)
 
 ## 横扫月牙：与近战同源同构，张角更开阔（±80° vs ±70°）、中心更厚（20px vs 14px），
-## 凌厉大月牙斩波；锥形收尖 + 刃口渐亮的层次与近战一致。
+## 凌厉大月牙斩波；内锐外羽的层次与近战一致（羽化顶缘 == OUTER，刃身顶缘内收 8px）。
 func _draw_sweep_crescent(main: Color, core: Color, glow: Color) -> void:
 	var thick := OUTER - SWEEP_INNER
-	glow.a = 0.12
-	_band_tapered(OUTER, SWEEP_HALF, thick + 8.0, glow, true)
-	main.a = 0.42
-	_band_tapered(OUTER, SWEEP_HALF, thick, main, true)
-	main.a = 0.68
-	_band_tapered(OUTER, SWEEP_HALF, thick * 0.55, main, true)
-	core.a = 0.95
-	_edge_line(OUTER, SWEEP_HALF * 0.92, core, 2.2, true)
+	var body_top := OUTER - 8.0
+	glow.a = 0.06
+	_band_tapered(OUTER, SWEEP_HALF, thick + 9.0, glow, true)
+	glow.a = 0.11
+	_band_tapered(OUTER - 4.0, SWEEP_HALF, thick + 5.0, glow, true)
+	main.a = 0.46
+	_band_tapered(body_top, SWEEP_HALF, thick, main, true)
+	main.a = 0.72
+	_band_tapered(body_top, SWEEP_HALF, thick * 0.55, main, true)
+	var hdr := GameStyle.FX_HDR_CORE
+	hdr.a = 0.90
+	_edge_line(body_top, SWEEP_HALF * 0.92, hdr, 2.2, true)
 
 ## 元素形态点缀（全部收在 OUTER 以内）
 func _draw_accents(main: Color, core: Color, glow: Color) -> void:

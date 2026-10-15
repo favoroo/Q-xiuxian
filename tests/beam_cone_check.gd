@@ -121,7 +121,9 @@ func _test_beam() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	w.current_target = far
-	w._tick_channel(0.016)
+	for _i in range(35):
+		await get_tree().physics_frame
+		w._tick_channel(0.016)
 	var max_len: float = w.attack_range * w._range_mult() - w.muzzle_len
 	_c.near(w._beam_len, max_len, 0.5,
 		"无遮挡光束打满射程（期望 %.1f，实得 %.1f）" % [max_len, w._beam_len])

@@ -47,11 +47,11 @@ const SHADOW_DK := Color("3a1f52")          ## 幽夜紫暗底（影层角标的
 const POISON := Color(0.35, 0.75, 0.45)     ## 剧毒绿 = 敌方投毒毒潭/持续伤害区域专用（与增益绿 GOOD 的语义
 ## 相反：GOOD 是给玩家的治疗，POISON 是敌人放的地面持续伤害，黑底上同档亮度但只用于世界空间危险区）
 
-# 稀有度 / 品阶统一色值（普通暖灰 / 稀有玉 / 史诗霜金 / 传说紫）——均按黑底可读调亮
-const RARITY_COMMON := Color(0.72, 0.70, 0.62)
-const RARITY_RARE := Color(0.22, 0.78, 0.60)
-const RARITY_EPIC := Color("d9b356")  # 冷月霜金调亮：古金在纯黑上要够亮才读得出品阶
-const RARITY_LEGEND := Color(0.74, 0.42, 0.94)
+# 稀有度 / 品阶统一色值（普通暖灰 / 稀有灵蓝 / 史诗幽紫 / 传说浩然金 —— 哈迪斯式四档，按黑底可读调亮）
+const RARITY_COMMON := Color(0.72, 0.70, 0.65)   ## 普通：纸白暖灰（不发辉）
+const RARITY_RARE := Color(0.28, 0.68, 0.98)     ## 稀有：灵蓝（水系/天蓝同调）
+const RARITY_EPIC := Color(0.78, 0.45, 0.98)     ## 史诗：幽夜紫
+const RARITY_LEGEND := Color(1.0, 0.78, 0.25)    ## 传说：浩然金（冷月霜金调亮古金）
 
 # 五行标签统一色值（2026-10-14 重定：金改金色，火/土随动拉开与状态色的距离，
 # 水随主蓝换天蓝随动压深 —— 主蓝 #4fc3f7 与旧水色只差 31，玄水必得是深蓝才分得出）
@@ -68,6 +68,102 @@ const ELEMENT_COLORS := {
 	"fire": Color("ec4018"),
 	"earth": Color("a97544"),
 }
+
+# —— FX_HDR 特效发光色表（超白起辉通道）——
+# 项目已开启 viewport/hdr_2d=true，Main.tscn Environment glow_hdr_threshold=1.0。
+# 任何分量 > 1.0 的颜色自动触发 WorldEnvironment glow 泛光起辉，零额外性能开销。
+# 通用发光档位：
+const FX_HDR_CORE := Color(2.6, 2.5, 2.3)        ## 白芯超白：刀光、弹丸硬核、高亮爆发中心
+const FX_HDR_LIGHTNING := Color(2.4, 2.3, 1.9)   ## 雷光超白：雷击、电弧核心（消灭散落魔法数）
+const FX_HDR_CRIT := Color(2.6, 1.8, 0.4)        ## 暴击绯金超白：暴击火花、暴击跳字描边
+const FX_HDR_HEAL := Color(0.8, 2.2, 1.2)        ## 治愈碧翠超白：回春、生机灵光
+const FX_HDR_SHADOW := Color(1.8, 1.2, 2.5)      ## 幽夜紫超白：暗影、影层释放、紫虹镜光束芯
+const FX_HDR_GOLD := Color(2.4, 2.0, 0.8)        ## 浩然金超白：境界升级、护罩高光
+
+# 五行 HDR 起辉色（分量 > 1.0，与 ELEMENT_COLORS 对应，供火花/弹丸/光束/法阵取用）：
+const FX_HDR_METAL := Color(2.4, 1.9, 0.6)       ## 金系古金超白
+const FX_HDR_WOOD := Color(1.0, 2.3, 1.4)        ## 木系青碧超白
+const FX_HDR_WATER := Color(0.8, 1.8, 2.5)       ## 水系灵蓝超白
+const FX_HDR_FIRE := Color(2.5, 1.1, 0.4)        ## 火系炽阳超白
+const FX_HDR_EARTH := Color(2.2, 1.6, 0.9)       ## 土系玄黄超白
+
+const FX_HDR_ELEMENTS := {
+    "metal": FX_HDR_METAL,
+    "wood": FX_HDR_WOOD,
+    "water": FX_HDR_WATER,
+    "fire": FX_HDR_FIRE,
+    "earth": FX_HDR_EARTH,
+}
+
+## 按五行字符串获取 HDR 发光色，未匹配时回退到 FX_HDR_CORE
+static func fx_hdr_element(elem: String, fallback: Color = FX_HDR_CORE) -> Color:
+    return FX_HDR_ELEMENTS.get(elem, fallback)
+
+# —— T-5.1 稀有度卡框与选中光 HDR 体系（哈迪斯式四档，普通白不发辉、金色档 HDR 起辉）——
+const FX_HDR_RARITY_COMMON := Color(0.72, 0.70, 0.65)        ## 普通白：不超白不发辉
+const FX_HDR_RARITY_RARE := Color(0.40, 1.10, 1.60)          ## 稀有蓝：轻微泛光
+const FX_HDR_RARITY_EPIC := Color(1.35, 0.80, 1.95)          ## 史诗紫：中度起辉
+const FX_HDR_RARITY_LEGEND := Color(2.40, 1.90, 0.60)        ## 传说金：强 HDR 超白起辉（= FX_HDR_METAL/GOLD）
+
+# 稀有度选中瞬间高光脉冲色（落子确认反馈，0.22s 内平滑回落至卡框描边色）：
+const FX_HDR_SEL_COMMON := Color(1.10, 1.10, 1.15)           ## 普通白高光
+const FX_HDR_SEL_RARE := Color(0.60, 1.40, 2.20)             ## 稀有蓝高光
+const FX_HDR_SEL_EPIC := Color(1.80, 1.10, 2.50)             ## 史诗紫高光
+const FX_HDR_SEL_LEGEND := Color(2.80, 2.30, 1.10)           ## 传说金超白强脉冲
+
+## 按稀有度获取基础 LDR 颜色（标签、色签文本背景使用）
+static func rarity_color(rarity: Variant) -> Color:
+    if rarity is Color:
+        return rarity
+    var r_str := String(rarity).to_lower()
+    match r_str:
+        "legendary", "legend", "4":
+            return RARITY_LEGEND
+        "epic", "3":
+            return RARITY_EPIC
+        "rare", "2":
+            return RARITY_RARE
+        _:
+            return RARITY_COMMON
+
+## 按稀有度获取卡框描边 HDR 颜色（常态描边，普通白不发辉、金色档 HDR 起辉）
+static func rarity_edge_color(rarity: Variant) -> Color:
+    if rarity is Color:
+        return _rarity_color_to_edge(rarity)
+    var r_str := String(rarity).to_lower()
+    match r_str:
+        "legendary", "legend", "4":
+            return FX_HDR_RARITY_LEGEND
+        "epic", "3":
+            return FX_HDR_RARITY_EPIC
+        "rare", "2":
+            return FX_HDR_RARITY_RARE
+        _:
+            return FX_HDR_RARITY_COMMON
+
+static func _rarity_color_to_edge(col: Color) -> Color:
+    if col.is_equal_approx(RARITY_LEGEND) or col.r > 1.5:
+        return FX_HDR_RARITY_LEGEND
+    if col.is_equal_approx(RARITY_EPIC):
+        return FX_HDR_RARITY_EPIC
+    if col.is_equal_approx(RARITY_RARE):
+        return FX_HDR_RARITY_RARE
+    return FX_HDR_RARITY_COMMON
+
+## 按稀有度获取选中瞬间高光脉冲色
+static func rarity_select_glow(rarity: Variant) -> Color:
+    var r_str := String(rarity).to_lower()
+    match r_str:
+        "legendary", "legend", "4":
+            return FX_HDR_SEL_LEGEND
+        "epic", "3":
+            return FX_HDR_SEL_EPIC
+        "rare", "2":
+            return FX_HDR_SEL_RARE
+        _:
+            return FX_HDR_SEL_COMMON
+
+
 
 const SLANT_PLATE := 3.0
 const SLANT_BLOCK := 5.0

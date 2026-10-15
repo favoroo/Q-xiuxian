@@ -19,6 +19,7 @@ static func _redraw_interval() -> float:
 var _anim: float = 0.0
 var _phase: float = 0.0
 var _open: float = 0.0   ## 起喷张开度（0→1，0.08s 喷射展开）
+var _ember_timer: float = 0.0
 
 func _ready() -> void:
 	visible = false
@@ -32,6 +33,7 @@ func cone_on(p_length: float, p_half_width: float) -> void:
 	if not visible:
 		visible = true
 		_open = 0.0
+		_ember_timer = 0.0
 		set_process(true)
 
 func cone_off() -> void:
@@ -43,6 +45,20 @@ func _process(delta: float) -> void:
 	_anim += delta
 	_open = minf(1.0, _open + delta / 0.08)
 	_phase += delta
+	_ember_timer -= delta
+
+	# 锥口与锥身火舌粒子流（T-2.3）：20Hz 节流喷发，局限于判定锥内
+	if _ember_timer <= 0.0 and length > 20.0 and _open > 0.25:
+		_ember_timer = 0.08
+		var nozzle_pos := global_position
+		FxParticlePool.burst(FxParticlePool.EMBER, nozzle_pos, "fire", 0.95)
+		# 锥缘火舌粒子：中段随机位置，高度限制在判定锥宽度以内（绝不超过判定边缘）
+		var t_pos := 0.35 + 0.45 * (float(int(_anim * 100.0) % 100) / 100.0)
+		var x_l := length * t_pos
+		var max_h := half_width * pow(t_pos, 0.75) * 0.7
+		var y_l := ((float(int(_anim * 37.0) % 100) / 50.0) - 1.0) * max_h
+		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.7)
+
 	var interval := _redraw_interval()
 	if _phase >= interval:
 		_phase -= interval
@@ -53,10 +69,10 @@ func _draw() -> void:
 	var w := half_width * lerpf(0.45, 1.0, _open)
 	if l <= 4.0:
 		return
-	# 三层同形火锥（外暗赤 / 中炽橙 / 内白炽），远缘火舌随相位抖动
+	# 三层同形火锥：外暗赤 / 中炽橙 / 内炽阳超白（接 FX_HDR_FIRE 泛光起辉）
 	_cone_poly(l, w, Color(0.85, 0.25, 0.12, 0.30), 1.0)
 	_cone_poly(l * 0.78, w * 0.66, Color(1.0, 0.55, 0.15, 0.55), 0.8)
-	_cone_poly(l * 0.5, w * 0.38, Color(1.0, 0.88, 0.55, 0.85), 0.5)
+	_cone_poly(l * 0.5, w * 0.38, GameStyle.FX_HDR_FIRE, 0.5)
 	# 顺流火星：四粒火屑沿锥面向前飘，越远越小越淡
 	for i in 4:
 		var p := fposmod(_anim * 2.6 + float(i) * 0.29, 1.0)

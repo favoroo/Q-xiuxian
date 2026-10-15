@@ -512,12 +512,10 @@ func _spawn_boss(player: Node2D) -> void:
 		_boss_ref = boss
 		EnemyCodex.record_seen("boss")
 		parent.add_child(boss)
-		# 破阵弹入：与精英/小怪同款出生弹性，但幅度更大收得更沉
-		boss.scale = Vector2.ONE * 0.3
-		var tw := boss.create_tween()
-		tw.tween_property(boss, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		GameManager.announcement_triggered.emit(_boss_announcement())
-		GameManager.shake_camera(7.0, 0.35)
+		# 登场演出（T-5.4）：地面魔印大阵预警落位后，dissolve 逆向凝聚成形，爆发冲击环与创伤短震
+		boss.play_spawn_sequence(func():
+			GameManager.announcement_triggered.emit(_boss_announcement())
+		)
 	parent.add_child(indicator)
 
 ## 本回合魔君存活与否（Boss 回合超时锁关的判据）

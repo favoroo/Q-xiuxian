@@ -280,18 +280,21 @@ func _fire() -> void:
 
 	p.activate()
 
-	# 开火反馈：枪口闪光（染元素色） + 核心亮闪 + 后坐抖动与音效
+	# 开火反馈（T-2.8）：枪口 HDR 闪光起辉 + 2-3 粒元素碎屑 + 核心亮闪 + 后坐抖动与音效
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
 		muzzle_flash.scale = Vector2.ONE * randf_range(0.35, 0.45)
-		var flash_col := _elem_edge_color()
-		muzzle_flash.modulate = Color(flash_col.r, flash_col.g, flash_col.b, 0.95)
+		var flash_col := GameStyle.fx_hdr_element(_elem, GameStyle.FX_HDR_CORE)
+		muzzle_flash.modulate = flash_col
 		muzzle_flash.visible = true
 		var mtw := create_tween()
 		mtw.set_parallel(true)
 		mtw.tween_property(muzzle_flash, "scale", Vector2.ONE * 0.75, 0.08)
 		mtw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
 		mtw.chain().tween_callback(func(): muzzle_flash.visible = false)
+
+	# 炮口微粒喷射
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.6)
 
 	core_sprite.modulate = Color(1.4, 1.35, 1.2)
 	var ftw := create_tween()

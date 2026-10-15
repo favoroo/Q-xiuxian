@@ -8,9 +8,26 @@ extends Node2D
 @onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var dust_particles: CPUParticles2D
+var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
 var _vignette_tween: Tween = null
 var _low_hp_phase: float = 0.0
+var _atmo_mood_tween: Tween = null   ## 煞气两态颜色渐变闸（新切换先杀旧 tween）
+var _atmo_baleful: bool = false      ## 当前氛围态 memo：波次重复 emit 不重放
+
+# —— T-4.3 环境光尘两态氛围（常态灵气光尘 / Boss·末 5 波煞气碎屑）——
+## 灵尘按深度分两层：远层小而密、近层大而稀（更大更慢更低透明）；灵叶层沿用原样。
+## 煞气态只切颜色（1s 渐变）与重力/初速（直切，只影响新生成粒子，天然平滑）。
+const ATMO_COLOR_DUST_FAR := Color(0.35, 0.85, 1.0, 0.17)      ## 远层灵气光尘（小而密）
+const ATMO_COLOR_DUST_NEAR := Color(0.45, 0.90, 1.0, 0.10)     ## 近层光尘（大而稀更淡）
+const ATMO_COLOR_PETAL := Color(0.80, 0.92, 1.0, 0.30)         ## 飘落灵叶常态
+const ATMO_COLOR_BALEFUL := Color(0.74, 0.20, 0.14, 0.26)      ## 煞气碎屑（暗红，尘两层共用）
+const ATMO_COLOR_PETAL_BALEFUL := Color(0.60, 0.18, 0.14, 0.28) ## 煞气暗叶
+const ATMO_MOOD_FADE := 1.0      ## 两态颜色渐变时长（任务卡：1s 渐变别跳变）
+const ATMO_GRAV_DUST_FAR := Vector2(0.0, -5.0)   ## 远层常态微浮
+const ATMO_GRAV_DUST_NEAR := Vector2(0.0, -3.0)  ## 近层常态更缓
+const ATMO_GRAV_BALEFUL := Vector2(0.0, 12.0)    ## 煞气缓沉（远层）
+const ATMO_GRAV_BALEFUL_NEAR := Vector2(0.0, 9.0) ## 煞气缓沉（近层）
 var _settings_return_to_pause: bool = false
 var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
@@ -228,6 +245,8 @@ func _exit_tree() -> void:
 	GameManager.player = null
 	GameManager.wave_spawner = null
 	GameManager.joystick = null
+	if GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
+		GameManager.wave_changed.disconnect(_on_wave_changed_atmo)  # T-4.3 氛围监听随场景退订
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
@@ -237,22 +256,38 @@ func _exit_tree() -> void:
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()
+	FxParticlePool.clear_cache()
 
 func _setup_atmosphere() -> void:
-	# 1. 灵尘微光浮游粒子（跟随玩家，主菜单暂停时也持续飘动）
+	# 1. 远层灵气光尘（小而密：原灵尘档位瘦身提密度，主菜单暂停时也持续飘动）
 	dust_particles = CPUParticles2D.new()
 	dust_particles.process_mode = Node.PROCESS_MODE_ALWAYS
 	dust_particles.amount = 26
 	dust_particles.lifetime = 3.2
 	dust_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	dust_particles.emission_rect_extents = Vector2(480, 280)
-	dust_particles.gravity = Vector2(0.0, -8.0)
+	dust_particles.gravity = ATMO_GRAV_DUST_FAR
 	dust_particles.initial_velocity_min = 4.0
 	dust_particles.initial_velocity_max = 12.0
-	dust_particles.scale_amount_min = 1.2
-	dust_particles.scale_amount_max = 2.4
-	dust_particles.color = Color(0.35, 0.85, 1.0, 0.28)
+	dust_particles.scale_amount_min = 0.8
+	dust_particles.scale_amount_max = 1.6
+	dust_particles.color = ATMO_COLOR_DUST_FAR
 	$AtmosphereLayer.add_child(dust_particles)
+
+	# 1.5 近层灵气光尘（大而稀：颗粒更大、更慢、更低透明，营造纵深两档视差）
+	dust_near_particles = CPUParticles2D.new()
+	dust_near_particles.process_mode = Node.PROCESS_MODE_ALWAYS
+	dust_near_particles.amount = 10
+	dust_near_particles.lifetime = 5.5
+	dust_near_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	dust_near_particles.emission_rect_extents = Vector2(480, 280)
+	dust_near_particles.gravity = ATMO_GRAV_DUST_NEAR
+	dust_near_particles.initial_velocity_min = 2.0
+	dust_near_particles.initial_velocity_max = 6.0
+	dust_near_particles.scale_amount_min = 2.6
+	dust_near_particles.scale_amount_max = 4.2
+	dust_near_particles.color = ATMO_COLOR_DUST_NEAR
+	$AtmosphereLayer.add_child(dust_near_particles)
 
 	# 2. 飘落灵叶与霜露微粒（带微弱自转与左下斜倾飘风，主菜单暂停时也持续飘落）
 	petal_particles = CPUParticles2D.new()
@@ -268,11 +303,46 @@ func _setup_atmosphere() -> void:
 	petal_particles.angular_velocity_max = 25.0
 	petal_particles.scale_amount_min = 1.6
 	petal_particles.scale_amount_max = 2.8
-	petal_particles.color = Color(0.80, 0.92, 1.0, 0.30)
+	petal_particles.color = ATMO_COLOR_PETAL
 	$AtmosphereLayer.add_child(petal_particles)
 
 	# 3. 极低对比度缓动薄雾片（增加深邃空间感，零 PointLight2D 开销）
 	_setup_ambient_mist()
+
+	# 4. T-4.3 煞气变奏：Boss 波 / 最后 5 波切暗红「煞气碎屑」缓沉，波结束切回。
+	# 信号源用现成 GameManager.wave_changed + GameBalance.is_boss_wave（与 WaveSpawner 判波同一把尺），
+	# 不新增信号不改 WaveSpawner；「最后 5 波」口径：n >= VICTORY_WAVE - 4。
+	if not GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
+		GameManager.wave_changed.connect(_on_wave_changed_atmo)
+
+## 波次 → 氛围态：Boss 波或最后 5 波为煞气态，其余常态（含波间商店/结算回常态）
+func _atmo_should_be_baleful(n: int) -> bool:
+	return GameBalance.is_boss_wave(n) or n >= GameManager.VICTORY_WAVE - 4
+
+func _on_wave_changed_atmo(n: int) -> void:
+	var baleful := _atmo_should_be_baleful(n)
+	if baleful == _atmo_baleful:
+		return
+	_atmo_baleful = baleful
+	_apply_atmo_mood(baleful)
+
+## 两态切换：颜色 1s tween 渐变（别跳变）；重力/初速直切（只影响新生成粒子，视觉天然平滑）
+func _apply_atmo_mood(baleful: bool) -> void:
+	if dust_particles == null or petal_particles == null or dust_near_particles == null:
+		return
+	if _atmo_mood_tween != null and _atmo_mood_tween.is_valid():
+		_atmo_mood_tween.kill()
+	_atmo_mood_tween = create_tween().set_parallel()
+	_atmo_mood_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	var c_far: Color = ATMO_COLOR_BALEFUL if baleful else ATMO_COLOR_DUST_FAR
+	var c_near: Color = ATMO_COLOR_BALEFUL if baleful else ATMO_COLOR_DUST_NEAR
+	var c_petal: Color = ATMO_COLOR_PETAL_BALEFUL if baleful else ATMO_COLOR_PETAL
+	_atmo_mood_tween.tween_property(dust_particles, "color", c_far, ATMO_MOOD_FADE)
+	_atmo_mood_tween.tween_property(dust_near_particles, "color", c_near, ATMO_MOOD_FADE)
+	_atmo_mood_tween.tween_property(petal_particles, "color", c_petal, ATMO_MOOD_FADE)
+	# 运动语义：煞气缓沉（重力翻向下），常态微浮
+	dust_particles.gravity = ATMO_GRAV_BALEFUL if baleful else ATMO_GRAV_DUST_FAR
+	dust_near_particles.gravity = ATMO_GRAV_BALEFUL_NEAR if baleful else ATMO_GRAV_DUST_NEAR
 
 func _setup_ambient_mist() -> void:
 	var mist_tex: Texture2D = preload("res://assets/art/light_radial.png")
@@ -299,6 +369,8 @@ func _process(delta: float) -> void:
 		var p_pos: Vector2 = GameManager.player.global_position
 		if dust_particles != null:
 			dust_particles.global_position = p_pos
+		if dust_near_particles != null:
+			dust_near_particles.global_position = p_pos
 		if petal_particles != null:
 			petal_particles.global_position = p_pos
 

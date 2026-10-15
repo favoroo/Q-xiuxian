@@ -407,6 +407,9 @@ func reset_for_reuse() -> void:
 		procedural_view.position = Vector2.ZERO
 		procedural_view.rotation = 0.0
 	if hit_flash_mat != null:
+		if procedural_view != null:
+			procedural_view.material = hit_flash_mat
+		anim_sprite.material = hit_flash_mat
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 		hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
 	set_physics_process(true)
@@ -450,6 +453,11 @@ static func _recycle(e: EnemyBase) -> void:
 	e.set_process(false)
 	e.set_process_input(false)
 	e.visible = false
+	if e.hit_flash_mat != null:
+		if e.procedural_view != null:
+			e.procedural_view.material = e.hit_flash_mat
+		e.anim_sprite.material = e.hit_flash_mat
+		e.hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 	var bucket: Array = _pools.get(e._pool_key, [])
 	if bucket.size() >= POOL_CAP_PER_KIND:
 		e.free()
@@ -1813,6 +1821,41 @@ func _enter_mutation() -> void:
 	AudioManager.play_sfx("boss_raid", 0.9, 0.85)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 
+static var _dissolve_shader: Shader = null
+static var _shared_noise_tex: ImageTexture = null
+
+static func _get_dissolve_shader() -> Shader:
+	if _dissolve_shader == null:
+		_dissolve_shader = load("res://assets/shaders/dissolve.gdshader") as Shader
+	return _dissolve_shader
+
+static func _get_noise_texture() -> ImageTexture:
+	if _shared_noise_tex != null:
+		return _shared_noise_tex
+	var img := Image.create(64, 64, false, Image.FORMAT_L8)
+	for y in range(64):
+		for x in range(64):
+			var n1 := sin(float(x) * 0.35 + sin(float(y) * 0.42) * 2.0) * 0.5 + 0.5
+			var n2 := sin(float(x) * 0.73 - float(y) * 0.65) * 0.5 + 0.5
+			var v := clampf(n1 * 0.6 + n2 * 0.4, 0.0, 1.0)
+			img.set_pixel(x, y, Color(v, v, v, 1.0))
+	_shared_noise_tex = ImageTexture.create_from_image(img)
+	return _shared_noise_tex
+
+func _start_dissolve(duration: float, edge_col: Color, tw: Tween) -> void:
+	var mat := ShaderMaterial.new()
+	mat.shader = _get_dissolve_shader()
+	mat.set_shader_parameter("noise_texture", _get_noise_texture())
+	mat.set_shader_parameter("dissolve_amount", 0.0)
+	mat.set_shader_parameter("edge_width", 0.06)
+	mat.set_shader_parameter("edge_color", edge_col)
+	if procedural_view != null:
+		procedural_view.material = mat
+	anim_sprite.material = mat
+	tw.parallel().tween_method(func(v: float):
+		mat.set_shader_parameter("dissolve_amount", v)
+	, 0.0, 1.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
 ## 回合结束时的消散：不掉落、不计数
 # ---------------- 死亡与清场 ----------------
 
@@ -1830,6 +1873,7 @@ func dissolve() -> void:
 	if procedural_view != null:
 		tw.tween_property(procedural_view, "modulate:a", 0.0, 0.4)
 		tw.tween_property(procedural_view, "scale", procedural_view.scale * 0.6, 0.4)
+	_start_dissolve(0.4, GameStyle.FX_HDR_SHADOW, tw)
 	tw.chain().tween_callback(_recycle_or_free)
 	## （池化：原 queue_free——尸体塌缩落定后出树回池，下一波同种怪零 instantiate 复用）
 
@@ -1873,6 +1917,15 @@ func _die() -> void:
 		# 池容量 16 与寿命 0.55s 双重兜底，极高频击杀下自动复用最旧残晕，不会糊满地面
 		var glow_r: float = 26.0 if not is_elite else 38.0
 		GroundDecal.spawn_tinted(get_parent(), global_position, glow_r, procedural_view.config.col_primary)
+	# 死亡演出（T-1.2 小怪墨屑上飘，T-1.3 精英/Boss 爆裂灵光碎屑 + 冲击环）：
+	if not _no_drop:
+		if is_elite or death_corpse_linger:
+			var burst_scale: float = 1.8 if death_corpse_linger else 1.25
+			var wave_r: float = 72.0 if death_corpse_linger else 48.0
+			FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", burst_scale)
+			JuiceEffect.spawn_shockwave(get_parent(), global_position, wave_r, GameStyle.FX_HDR_GOLD, 0.22)
+		else:
+			FxParticlePool.burst(FxParticlePool.DEATH_WISP, global_position)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
@@ -1992,23 +2045,27 @@ func _die() -> void:
 				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 	if death_corpse_linger:
-		# Boss：倒地后尸体滞留一停，再只淡出不塌缩（「大妖伏诛」的遗体读数）
+		# Boss：倒地后尸体滞留一停，再只淡出不塌缩（「大妖伏诛」1.2s 消融）
 		tw.chain().tween_interval(GameBalance.BOSS_DEATH_LINGER_DUR)
 		tw.set_parallel(true)
-		tw.tween_property(anim_sprite, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+		var fade_dur: float = 1.2
+		tw.tween_property(anim_sprite, "modulate:a", 0.0, fade_dur)
 		if procedural_view != null:
-			tw.tween_property(procedural_view, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+			tw.tween_property(procedural_view, "modulate:a", 0.0, fade_dur)
 		if shadow_sprite != null and shadow_sprite.visible:
-			tw.tween_property(shadow_sprite, "modulate:a", 0.0, GameBalance.BOSS_DEATH_FADE_DUR)
+			tw.tween_property(shadow_sprite, "modulate:a", 0.0, fade_dur)
+		_start_dissolve(fade_dur, GameStyle.FX_HDR_GOLD, tw)
 	else:
-		# 小怪/精英：原地塌缩消散（精英塌缩略慢）
-		var collapse_dur: float = GameBalance.ELITE_DEATH_COLLAPSE_DUR if is_elite else 0.14
+		# 小怪（0.4s）/精英（0.8s）：原地消融塌缩消散（T-3.1 接入 dissolve shader）
+		var collapse_dur: float = 0.8 if is_elite else 0.4
+		var edge_col: Color = GameStyle.FX_HDR_GOLD if is_elite else GameStyle.FX_HDR_SHADOW
 		tw.set_parallel(true)
 		tw.tween_property(anim_sprite, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 		tw.tween_property(anim_sprite, "modulate:a", 0.0, collapse_dur)
 		if procedural_view != null:
 			tw.tween_property(procedural_view, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 			tw.tween_property(procedural_view, "modulate:a", 0.0, collapse_dur)
+		_start_dissolve(collapse_dur, edge_col, tw)
 	# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
 	# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
 	tw.chain().tween_callback(_recycle_or_free)

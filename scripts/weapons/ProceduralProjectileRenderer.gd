@@ -202,6 +202,8 @@ func _draw_gengjin_sword() -> void:
 	draw_line(Vector2(-10.0, -3.5), Vector2(-10.0, 3.5), Color(0.20, 0.18, 0.25), 1.5, true)
 	draw_line(Vector2(-10.0, 0.0), Vector2(-15.0, 0.0), Color(0.12, 0.12, 0.16), 1.5, true)
 	draw_circle(Vector2(-15.5, 0.0), 1.2, Color(0.92, 0.76, 0.28))
+	# 剑尖锋芒 HDR 起辉（T-2.4 弹头自带光感）
+	draw_circle(Vector2(14.0, 0.0), 1.2, GameStyle.FX_HDR_METAL)
 
 # ----------------- 1b. 流火飞剑 (炽亮橙红烧刃 + 雪亮剑锋 + 火尾) -----------------
 func _draw_liuhuo_sword() -> void:
@@ -250,13 +252,13 @@ func _draw_liuhuo_sword() -> void:
 	])
 	draw_colored_polygon(blade_bot, Color(0.82, 0.30, 0.10))
 
-	# 雪亮剑锋（剑尖最亮一点，右端高光楔）
+	# 雪亮剑锋（接 FX_HDR_FIRE 炽阳超白起辉）
 	var tip_poly := PackedVector2Array([
 		Vector2(15.0, 0.0),
 		Vector2(8.0, -1.2),
 		Vector2(8.0, 1.2)
 	])
-	draw_colored_polygon(tip_poly, Color(1.0, 0.96, 0.86))
+	draw_colored_polygon(tip_poly, GameStyle.FX_HDR_FIRE)
 	# 中脊火线
 	draw_line(Vector2(14.0, 0.0), Vector2(-10.0, 0.0), Color(1.0, 0.85, 0.40), 1.0, true)
 	# 剑格剑柄（玄铁暗色收尾）
@@ -295,8 +297,8 @@ func _draw_silver_needle() -> void:
 	draw_line(Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(0.95, 0.98, 1.0, 0.50), 1.2, true)
 	# 针体核心
 	draw_line(Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(0.98, 0.98, 1.0), 1.0, true)
-	# 针尖锐芒光点
-	draw_circle(Vector2(10.0, 0.0), 1.1, Color.WHITE)
+	# 针尖锐芒光点（FX_HDR_CORE 超白起辉）
+	draw_circle(Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
 
 # ----------------- 3b. 庚金金针 (冷金破空锐针 + 环首倒刺) -----------------
 func _draw_gold_needle() -> void:
@@ -308,8 +310,8 @@ func _draw_gold_needle() -> void:
 	# 环首（针尾金环，与暴雨银针的纯细线拉开剪影）+ 倒刺
 	draw_arc(Vector2(-9.0, 0.0), 2.0, 0.0, TAU, 10, Color(0.95, 0.82, 0.35, 0.9), 1.0)
 	draw_line(Vector2(2.0, 0.0), Vector2(-1.0, -1.8), Color(1.0, 0.90, 0.55, 0.85), 0.9, true)
-	# 针尖锐芒
-	draw_circle(Vector2(10.0, 0.0), 1.1, Color(1.0, 0.98, 0.88))
+	# 针尖锐芒（FX_HDR_METAL 超白起辉）
+	draw_circle(Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_METAL)
 
 # ----------------- 4. 玄冰飞针 (晶莹透光幽蓝冰锥) -----------------
 func _draw_ice_needle() -> void:
@@ -508,8 +510,8 @@ func _draw_flame() -> void:
 	])
 	draw_colored_polygon(mid_flame, Color(1.0, 0.65, 0.20, 0.90))
 
-	# 内层白炽真火灵核
-	draw_circle(Vector2(2.0, 0.0), 2.2 * pulse, Color(1.0, 0.95, 0.85))
+	# 内层白炽真火灵核（FX_HDR_FIRE 超白起辉）
+	draw_circle(Vector2(2.0, 0.0), 2.2 * pulse, GameStyle.FX_HDR_FIRE)
 
 # ----------------- 7. 连环灵弹 (翡翠灵珠 + 环绕星环 + 灵光彗尾) -----------------
 func _draw_spirit_pellet() -> void:
@@ -520,7 +522,7 @@ func _draw_spirit_pellet() -> void:
 	# 翡翠灵珠核心
 	draw_circle(Vector2.ZERO, 5.0, Color(0.20, 0.65, 0.45))
 	draw_circle(Vector2(1.0, -1.0), 3.0, Color(0.45, 0.88, 0.68))
-	draw_circle(Vector2(1.5, -1.5), 1.2, Color(0.95, 1.0, 0.95)) # 高光
+	draw_circle(Vector2(1.5, -1.5), 1.2, GameStyle.FX_HDR_WOOD) # 高光超白起辉
 
 	# 环绕自转星环 (极细倾斜椭圆)
 	var ring_ang := _lifetime_acc * 8.0
@@ -560,8 +562,8 @@ func _draw_water_shuttle() -> void:
 		var t := -9.0 + float(i) * 3.4
 		wave.append(Vector2(t, 0.55 * sin(float(i) * 2.1 + phase_shift)))
 	draw_polyline(wave, Color(0.85, 0.98, 1.0, 0.9), 0.9, true)
-	# 梭尖寒芒
-	draw_circle(Vector2(13.0, 0.0), 0.9, Color(0.92, 1.0, 1.0))
+	# 梭尖寒芒（FX_HDR_WATER 超白起辉）
+	draw_circle(Vector2(13.0, 0.0), 1.0, GameStyle.FX_HDR_WATER)
 
 # ----------------- 8. 通用法刃 (冷月气刃) -----------------
 func _draw_generic_blade() -> void:
@@ -581,3 +583,5 @@ func _draw_generic_blade() -> void:
 	])
 	draw_colored_polygon(blade_pts, Color(0.90, 0.94, 0.98))
 	draw_line(Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
+	# 刃尖寒光起辉
+	draw_circle(Vector2(12.0, 0.0), 1.2, GameStyle.FX_HDR_CORE)

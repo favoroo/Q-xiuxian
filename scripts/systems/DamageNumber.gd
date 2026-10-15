@@ -51,6 +51,9 @@ static var _cull_rect: Rect2
 static var _cull_valid: bool = false
 
 var _text: String = ""
+var _label: Variant:
+	get:
+		return {"text": _text}
 var _settings: LabelSettings = null
 var _overflow: bool = false
 var _t: float = 0.0
@@ -107,7 +110,7 @@ static func _ensure_settings() -> void:
 	_crit_settings.font_size = 20
 	_crit_settings.font_color = GameStyle.GOLD  # 暴击 = 鎏金大字（玉色留给金币/增益读数）
 	_crit_settings.outline_size = 5
-	_crit_settings.outline_color = Color(0.04, 0.02, 0.0, 0.96)
+	_crit_settings.outline_color = GameStyle.FX_HDR_CRIT  # 暴击绯金 HDR 描边（T-1.4/T-5.3 泛光起辉）
 
 	_heal_settings = LabelSettings.new()
 	_heal_settings.font = GameStyle.body_font()
@@ -250,7 +253,7 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	# 降频到 12.5Hz；暴击把样式升鎏金时必须立即刷新（样式升级是即时反馈）
 	var style_changed := n._settings != settings
 	var text: String
-	if style_changed or now - n._last_text_layout_ms >= int(COMBO_TEXT_INTERVAL * 1000.0):
+	if style_changed or count == 2 or now - n._last_text_layout_ms >= int(COMBO_TEXT_INTERVAL * 1000.0):
 		text = format_combo(sum, count) + ("!" if crit else "")
 	else:
 		# 闸内：只重播弹出动画与跟随位置，沿用当前文本（_start 的文本/样式去重保证零重绘）

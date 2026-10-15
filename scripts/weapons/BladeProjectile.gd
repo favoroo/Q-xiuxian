@@ -179,6 +179,11 @@ func _on_area_entered(area: Area2D) -> void:
 		enemy.take_damage(actual_dmg, knock, is_crit)
 		GameManager.try_lifesteal()
 
+		# 命中火花与暴击加档反馈（T-1.1 / T-1.4）：严格贴实弹丸命中点，受帧限流与视口门控约束
+		var spark_scale: float = 1.5 if is_crit else 1.0
+		var spark_elem: Variant = "crit" if is_crit else _get_impact_element()
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, spark_elem, spark_scale)
+
 		# 施加五行异常走 ProcStatus 收口（保持 has_method 鸭类型）。武器/弹丸脚本绝不能硬引用
 		# EnemyBase——实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成
 		# 空 PackedScene（循环类依赖解析坑），弹丸 instantiate 全返回 null。
@@ -217,6 +222,17 @@ func _get_impact_color() -> Color:
 	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
 		return _vector_renderer.elemental_tint
 	return Color(0.95, 0.90, 0.72)
+
+func _get_impact_element() -> Variant:
+	if proc_burn:
+		return "fire"
+	elif proc_chill > 0.0:
+		return "water"
+	elif proc_poison:
+		return "wood"
+	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
+		return _vector_renderer.elemental_tint
+	return "none"
 
 ## 拖尾取色：同一把尺子先用异常色温（modulate），退而矢量渲染器的元素色，最后回默认纸金。
 ## 与 _get_impact_color 的差别只在饱和度压暗——拖尾是辉光叠加线，全饱和色叠加会糊成白块

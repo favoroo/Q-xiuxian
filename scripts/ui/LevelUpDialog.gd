@@ -488,11 +488,12 @@ func _select_card(index: int) -> void:
 			title_lbl.add_theme_color_override("font_color", GameStyle.GOLD)
 			badge.text = "已选 ✦"
 			badge.add_theme_color_override("font_color", GameStyle.GOLD)
-			# 选中高光：边框霜华亮蓝→主蓝回落一下，给「落子」可见确认。
-			# 面板是暂停态，镜头级原语（time_scale 顿帧/相机 Tween）在这里全部失效，
-			# UI 侧脉冲是唯一可行的屏级反馈（本面板 PROCESS_MODE_ALWAYS，Tween 照常跑）。
-			style.border_color = GameStyle.GOLD_EDGE
-			tw.chain().tween_property(style, "border_color", GameStyle.GOLD, 0.22)
+			# T-5.1 选中高光：按稀有度起辉（普通微白高光，金色档 HDR 强起辉）
+			var r_key: String = String(entry.get("rarity", "common"))
+			var sel_glow := GameStyle.rarity_select_glow(r_key)
+			var sel_edge := GameStyle.rarity_edge_color(r_key)
+			style.border_color = sel_glow
+			tw.chain().tween_property(style, "border_color", sel_edge, 0.22)
 		else:
 			tw.tween_property(card, "scale", Vector2(DIM_SCALE, DIM_SCALE), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", GameStyle.with_alpha(Color(0.78, 0.80, 0.86), 0.78), 0.12)

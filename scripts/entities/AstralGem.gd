@@ -31,6 +31,10 @@ var current_speed: float = -40.0   # 初始微反冲：有被吸附瞬间的弹�
 var max_speed: float = 680.0
 var acceleration: float = 850.0
 
+var _pop_time: float = 0.0
+var _pop_vel: Vector2 = Vector2.ZERO
+var _trail_line: Line2D = null
+
 @onready var sprite: Sprite2D = $Sprite2D
 var loot_renderer: ProceduralLootRenderer = null
 
@@ -104,7 +108,22 @@ func activate() -> void:
 	visible = true
 	target_player = null
 	current_speed = -40.0
-	set_physics_process(false)   ## 静置宝石不跑物理；magnet_to 时再开
+	_pop_time = 0.0
+	_pop_vel = Vector2.ZERO
+	if _trail_line != null:
+		_trail_line.clear_points()
+		_trail_line.visible = false
+	
+	# 精英/Boss金宝抛物微跳演出（T-1.3）：0.2s 随机向外溅跃
+	if is_gold and GameManager.rng != null:
+		_pop_time = 0.2
+		var angle := GameManager.rng.randf_range(0.0, TAU)
+		var spd := GameManager.rng.randf_range(90.0, 150.0)
+		_pop_vel = Vector2(cos(angle), sin(angle)) * spd
+		set_physics_process(true)
+	else:
+		set_physics_process(false)   ## 静置宝石不跑物理；magnet_to 时再开
+
 	$CollisionShape2D.set_deferred("disabled", false)
 	set_deferred("monitorable", true)
 	add_to_group("gems")
@@ -118,6 +137,11 @@ func recycle() -> void:
 		return
 	_pooled = true
 	target_player = null
+	_pop_time = 0.0
+	_pop_vel = Vector2.ZERO
+	if _trail_line != null:
+		_trail_line.clear_points()
+		_trail_line.visible = false
 	# 入池先清档色：池里的实例不许带着上一颗的金/碎晶状态见下一个调用方
 	is_gold = false
 	is_shard = false
@@ -187,28 +211,67 @@ func _update_visual() -> void:
 			else:
 				light.color = Color(0.4, 0.8, 1.0)
 
+func _ensure_trail() -> void:
+	if _trail_line != null and is_instance_valid(_trail_line):
+		return
+	_trail_line = Line2D.new()
+	_trail_line.top_level = true
+	_trail_line.width = 2.4
+	_trail_line.default_color = GameStyle.FX_HDR_GOLD
+	_trail_line.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_trail_line.visible = false
+	add_child(_trail_line)
+
 func magnet_to(player: Node2D) -> void:
 	if target_player == null:
 		target_player = player
 		current_speed = -50.0
+		_ensure_trail()
+		if _trail_line != null:
+			_trail_line.default_color = GameStyle.FX_HDR_GOLD if is_gold else GameStyle.FX_HDR_WATER
+			_trail_line.clear_points()
+			_trail_line.visible = true
 		set_physics_process(true)
 
 func _physics_process(delta: float) -> void:
+	if _pop_time > 0.0:
+		_pop_time -= delta
+		global_position += _pop_vel * delta
+		_pop_vel = _pop_vel.move_toward(Vector2.ZERO, 600.0 * delta)
+		if _pop_time <= 0.0 and target_player == null:
+			set_physics_process(false)
+			return
+
 	if target_player == null or not is_instance_valid(target_player):
-		set_physics_process(false)
+		if _pop_time <= 0.0:
+			set_physics_process(false)
 		return
+
 	var dir = (target_player.global_position - global_position).normalized()
 	var dist = global_position.distance_to(target_player.global_position)
 	current_speed = minf(max_speed, current_speed + acceleration * delta)
 	global_position += dir * current_speed * delta
 
+	if _trail_line != null and _trail_line.visible:
+		_trail_line.add_point(global_position)
+		if _trail_line.get_point_count() > 5:
+			_trail_line.remove_point(0)
+
 	if dist < 22.0:
+		if _trail_line != null:
+			_trail_line.clear_points()
+			_trail_line.visible = false
 		JuiceEffect.spawn_pickup_pop(get_parent(), global_position, is_gold)
 		if target_player.has_method("play_squash"):
 			# 碎晶轻一档的 squash，给最低档一个更小的入口反馈
 			_player_squash(target_player)
 		GameManager.add_experience(exp_value, stone_value)
 		recycle()
+
+func _exit_tree() -> void:
+	if _trail_line != null and is_instance_valid(_trail_line):
+		_trail_line.queue_free()
+		_trail_line = null
 
 func _player_squash(player: Node2D) -> void:
 	if is_shard:

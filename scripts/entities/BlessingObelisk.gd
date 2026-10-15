@@ -132,24 +132,27 @@ func _ready() -> void:
 	_build_charge_readout()
 
 func _setup_charge_particles() -> void:
+	# 界碑充能粒子（T-3.6）：外圈螺旋向心吸入（空洞骑士 Focus 灵气聚流）
 	_charge_particles = CPUParticles2D.new()
 	_charge_particles.emitting = false
-	_charge_particles.amount = 12
-	_charge_particles.lifetime = 0.8
+	_charge_particles.amount = 16
+	_charge_particles.lifetime = 0.75
 	_charge_particles.explosiveness = 0.0
-	_charge_particles.direction = Vector2(0, -1)
-	_charge_particles.spread = 180.0
-	_charge_particles.gravity = Vector2(0, -30)
-	_charge_particles.initial_velocity_min = 20.0
-	_charge_particles.initial_velocity_max = 40.0
+	_charge_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RING
+	_charge_particles.emission_ring_radius = 64.0
+	_charge_particles.emission_ring_inner_radius = 52.0
+	_charge_particles.gravity = Vector2.ZERO
+	_charge_particles.initial_velocity_min = 6.0
+	_charge_particles.initial_velocity_max = 14.0
+	_charge_particles.radial_accel_min = -80.0
+	_charge_particles.radial_accel_max = -130.0
+	_charge_particles.tangential_accel_min = 40.0
+	_charge_particles.tangential_accel_max = 70.0
 	_charge_particles.angular_velocity_min = -60.0
 	_charge_particles.angular_velocity_max = 60.0
-	_charge_particles.scale_amount_min = 1.0
-	_charge_particles.scale_amount_max = 2.5
-	_charge_particles.color = Color(0.45, 0.85, 1.0, 0.6)
-	_charge_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RING
-	_charge_particles.emission_ring_radius = 50.0
-	_charge_particles.emission_ring_inner_radius = 0.0
+	_charge_particles.scale_amount_min = 1.4
+	_charge_particles.scale_amount_max = 2.8
+	_charge_particles.color = Color(0.45, 0.85, 1.0, 0.75)
 	add_child(_charge_particles)
 
 ## 世界侧进度读数：碑脚走针环 + 碑顶百分比。平时不显示，充能期间才亮。

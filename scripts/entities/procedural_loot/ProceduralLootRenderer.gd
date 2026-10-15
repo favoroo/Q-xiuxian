@@ -56,8 +56,8 @@ static var _cull_limit: Vector2
 static var _cull_valid: bool = false
 
 func _ready() -> void:
-	# 错开每颗晶石的时间相位，避免全场完全同频机械闪烁
-	_time = randf() * 10.0
+	# 错开每颗晶石的时间相位，避免全场完全同频机械闪烁（按 instance_id 确定错相，零全局 randf 依赖）
+	_time = float(get_instance_id() % 360) * 0.1
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 
 func _process(delta: float) -> void:
@@ -133,7 +133,9 @@ func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
 		col_dark = Color(0.08, 0.22, 0.44, 0.95)
 		col_edge = Color(0.60, 0.90, 1.0, 0.9)
 
-	# 柔光外晕
+	# 柔光外晕与 4s 周期微光呼吸（T-1.5）
+	var breathe: float = sin(_time * (TAU / 4.0)) * 0.18 + 0.82
+	col_glow.a *= breathe
 	var pulse: float = sin(_time * 3.5) * 0.08 + 1.0
 	var glow_poly := PackedVector2Array([
 		Vector2(0, -half_h * 1.35 * pulse),
@@ -289,7 +291,9 @@ func _draw_heal_orb() -> void:
 		col_rim = Color(0.85, 1.15, 0.95, 0.95)
 		col_halo = Color(0.20, 0.85, 0.50, 0.22)
 
-	# 外围生机晕轮
+	# 外围生机晕轮与 4s 周期微光呼吸（T-1.5）
+	var breathe_heal: float = sin(_time * (TAU / 4.0)) * 0.2 + 0.8
+	col_halo.a *= breathe_heal
 	if not is_waiting:
 		draw_circle(Vector2(0, 2), 12.0 * pulse, col_halo)
 
