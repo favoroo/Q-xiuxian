@@ -13,6 +13,9 @@ keystore/secret.txt
 # Agent 变更日志（仅本地，不随提交推送）
 CHANGELOG.md
 
+# 本地规划文档（供分派执行 Agent 用，不入仓库）
+vfx-optimization-plan.md
+
 # 本地 IDE / 工作区配置
 .qoder/
 .zcode/
