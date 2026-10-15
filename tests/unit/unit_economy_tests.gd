@@ -158,9 +158,11 @@ func _test_gem_shard() -> void:
 	_c.check(GameBalance.gem_shard_chance(20) > 0.65, "W20 碎金率已超六成五（实测 %.2f）" % GameBalance.gem_shard_chance(20))
 
 	# 购买力硬护栏：第 1 波击杀期望金币必须能买得起首波基础武器（原价 25）
-	# W1 预算 17~18 只，小怪 exp_reward 基准为 3，50% 碎金(1) + 50% 蓝灵石(3) = 均值 2
+	# 2026-10-15 反割草 2.0：W1 预算 14 只（11+2.9 取整），单怪 exp_reward 基准 3 × MOB_KILL_EXP_MULT(1.25) = 3.75
+	#（实际取整为 4），50% 碎金(1) + 50% 灵石(4) = 期望 2.5/只
 	var w1_kills: int = GameBalance.wave_spawn_budget(1)
-	var w1_expected_stones: float = float(w1_kills) * ((1.0 - GameBalance.gem_shard_chance(1)) * 3.0 + GameBalance.gem_shard_chance(1) * 1.0)
+	var w1_unit_exp := float(GameBalance.mob_kill_exp(3))
+	var w1_expected_stones: float = float(w1_kills) * ((1.0 - GameBalance.gem_shard_chance(1)) * w1_unit_exp + GameBalance.gem_shard_chance(1) * 1.0)
 	_c.check(w1_expected_stones >= 25.0,
 		"W1 击杀期望金币 %.1f ≥ 25（确保首回合稳买基础武器）" % w1_expected_stones)
 

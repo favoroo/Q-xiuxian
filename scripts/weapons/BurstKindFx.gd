@@ -21,11 +21,16 @@ const EARTH_CRACKS := 6    ## 地裂条数
 
 var _t: float = 0.0
 ## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 20Hz 足够流畅
-const REDRAW_INTERVAL := 0.05
+## 60fps 档（2026-10-15 VisualRate 档位联动）：演出 0.38s 在 60fps 下只 23 帧，
+## 20Hz 每 3 帧一画会露台阶，高帧档翻倍 40Hz；低档 20Hz 是 perf_probe 预算口径。
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 var _draw_phase: float = 0.0
 
 func _ready() -> void:
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	visible = false
 	set_process(false)
 
@@ -54,7 +59,7 @@ func _process(delta: float) -> void:
 		return
 	_draw_phase -= delta
 	if _draw_phase <= 0.0:
-		_draw_phase = REDRAW_INTERVAL
+		_draw_phase = _redraw_interval()
 		queue_redraw()
 
 func _draw() -> void:

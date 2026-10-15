@@ -16,8 +16,8 @@ var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
 
 func _ready() -> void:
-	# 帧率上限（2026-10-14 性能优化）：默认锁 30（物理同步 30Hz，靠插值保持平滑）；
-	# 设置里可开「高帧率模式」升 60。headless 判据依赖自由帧节奏（time_scale 竞态余量），跳过。
+	# 帧率档位（2026-10-15）：默认「流畅模式」60fps + 物理 60Hz，设置页可关成 30/30 省电档。
+	# headless 判据依赖自由帧节奏与 30Hz 物理基线（time_scale 竞态余量、PerfProbe 节流预算），跳过。
 	_apply_fps_limit()
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
@@ -175,7 +175,11 @@ func resume_from_save() -> void:
 	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
 	GameManager.pending_points_changed.emit(GameManager.pending_upgrade_points)
 	start_menu.visible = false
-	var spawner := $MapLayer/EntitiesLayer/WaveSpawner as WaveSpawner
+	# 注意层级：Main.tscn 里 EntitiesLayer 与 MapLayer 是兄弟（都直挂 Main 下），
+	# WaveSpawner 真实路径是 EntitiesLayer/WaveSpawner —— 写成 MapLayer/EntitiesLayer/...
+	# 会拿到 null，ALLOC/SHOP 分支当场崩、面板打不开、树保持暂停（2026-10-15 用户反馈
+	# 「继续游戏进来后啥也点不了」的根因）。改用 GameManager.wave_spawner（_ready 已登记）更稳。
+	var spawner := GameManager.wave_spawner as WaveSpawner
 	match saved_phase:
 		WaveSpawner.Phase.ALLOC:
 			spawner.phase = WaveSpawner.Phase.ALLOC
@@ -200,11 +204,19 @@ func _run_resumed_fight(spawner: WaveSpawner) -> void:
 	get_tree().paused = false
 	spawner.start_wave(GameManager.wave_number)
 
-## 帧率上限落地：高帧率模式开 = 60，关 = 30；无头判据不锁帧
+## 帧率档位落地（渲染上限 + 物理 tick + 视觉档位三者联动）：
+## 流畅档 = 60/60，省电档 = 30/30。渲染与物理必须同频：物理留 30Hz 而 max_fps 抬 60，
+## CharacterBody2D 运动、相机跟随（physics 回调）、CPU 粒子仍是 30 步/秒，60 只是渲染空转。
+## 无头判据不锁帧、不抬物理（保持 30Hz 物理 + 低档节流预算，PerfProbe 依赖此基线）。
 func _apply_fps_limit() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	Engine.max_fps = 60 if bool(SettingsManager.get_val(&"display", &"fps_60", false)) else 30
+	var high := bool(SettingsManager.get_val(&"display", &"fps_60", true))
+	Engine.max_fps = 60 if high else 30
+	Engine.physics_ticks_per_second = 60 if high else 30
+	VisualRate.high_fps = high
+	# 注：局中切档后一两帧内，物理插值缓冲按旧步长快照插一帧新 tick，可能有轻微滑移；
+	# 池化实体复用已各自 reset_physics_interpolation（BladeProjectile 等），一次性切档可接受。
 
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
 	if section == &"display" and key == &"fps_60":

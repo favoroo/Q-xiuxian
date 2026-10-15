@@ -30,7 +30,12 @@ static var _burst_count_this_frame: int = 0
 ## 15 个活跃特效就是 15 次/帧重绘；粒子/光环数学每帧照跑（并行数组零分配很便宜），
 ## 只有重绘降 20Hz 并按 instance_id 错相，短促特效视觉上无感。
 ## （锁 30 帧后 30Hz 节流 = 帧长，等于每帧重绘，故取 20Hz 保持真实节流收益）
-const REDRAW_INTERVAL := 0.05
+## 60fps 档（2026-10-15 VisualRate 档位联动）翻倍到 40Hz：冲击环半径 60fps 扩张、
+## 画面 3 帧一画会台阶化；低档 20Hz 维持 perf_probe 预算口径。
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 
 var effect_type: int = EffectType.PICKUP_POP
 var lifetime: float = 0.2
@@ -133,7 +138,7 @@ func _begin(type: int, pos: Vector2, life: float, z: int) -> void:
 	global_position = pos
 	modulate = Color(1, 1, 1, 1)
 	visible = true
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	set_process(true)
 	queue_redraw()
 
@@ -207,7 +212,7 @@ func _process(delta: float) -> void:
 		_p_vel[i] = _p_vel[i] * decay
 
 	if _draw_phase <= 0.0:
-		_draw_phase = REDRAW_INTERVAL
+		_draw_phase = _redraw_interval()
 		queue_redraw()
 	else:
 		_draw_phase -= delta

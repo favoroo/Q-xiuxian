@@ -35,6 +35,7 @@ const DEEP_SWARM_PER_WAVE := BalanceWave.DEEP_SWARM_PER_WAVE
 const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
+const MOB_KILL_EXP_MULT := BalanceWave.MOB_KILL_EXP_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
 const ENEMY_DMG_BASE_MULT := BalanceWave.ENEMY_DMG_BASE_MULT
 const BOLT_DMG_BASE_REF := BalanceWave.BOLT_DMG_BASE_REF
@@ -398,6 +399,10 @@ static func endless_swarm_mult(wave: int) -> float:
 
 static func healer_amount(wave: int) -> float:
 	return BalanceWave.healer_amount(wave)
+
+## 单只小怪击杀经验（含反割草补偿倍率，曲线在 BalanceWave）
+static func mob_kill_exp(exp_reward: int) -> int:
+	return BalanceWave.mob_kill_exp(exp_reward)
 
 static func looter_stone_reward(wave: int) -> int:
 	return BalanceWave.looter_stone_reward(wave)

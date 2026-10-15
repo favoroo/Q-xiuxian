@@ -30,16 +30,20 @@ const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 # 收得更狠（~-51%）、W15 103/230 ≈ -55%、W20 131/425 ≈ -69%。危险度/角色的敌潮倍率由调用方乘。
 # 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90 ⇒
 # W1=17 / W5=32 / W10=50 / W20=86），单怪生命基数同步 +33% 补上压力，预算缺口照旧走经验补差。
-const WAVE_SPAWN_BUDGET_BASE := 14.0
-const WAVE_SPAWN_BUDGET_PER_WAVE := 3.6
-const WAVE_SPAWN_BUDGET_MAX := 90.0
+# 2026-10-15 反割草 2.0（用户口径「每个敌人要有适当的击杀难度，敌人数量可以适当变少」，
+# 根因 v0.0.36 武器伤害整体上调后敌人侧未配套）：预算全程再 -20%（11/2.9/72 ⇒
+# W1=14 / W5=26 / W10=40 / W20=69），单怪生命基数同步 +42%（6.0→8.5）补上压力，
+# 一波总血量约 +13%（压力不减、密度降、每只击杀有读数）；缺口经验由 MOB_KILL_EXP_MULT 反向补偿。
+const WAVE_SPAWN_BUDGET_BASE := 11.0
+const WAVE_SPAWN_BUDGET_PER_WAVE := 2.9
+const WAVE_SPAWN_BUDGET_MAX := 72.0
 # 2026-10-13 无尽深层三涨：正常局 20 波通关，故「波数 > 20」即等价无尽深层，曲线分段
 # 无需读 endless_mode（保持纯函数）。深层段预算不再封顶 90，从 W20 的 86 只起每波 +4，
 # 到 180 硬顶（约 W44 饱和）；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
 # 走 endless_swarm_mult。四个成长率是独立旋钮，试玩后可单独回调。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（正常局通关波，> 此值走深层曲线）
-const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 86 续算）
-const DEEP_BUDGET_MAX := 180.0           ## 深层预算硬顶（约 W44 饱和）
+const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 69 只起续算）
+const DEEP_BUDGET_MAX := 145.0           ## 深层预算硬顶（2026-10-15 随反割草 2.0 同比例 180→145，约 W39 饱和）
 const DEEP_DMG_GROWTH := 1.09            ## 深层每波伤害复利（20 波段是 1.06；W40 单下 ≈11.5×基线）
 const DEEP_HP_GROWTH := 1.18             ## 深层每波生命复利（20 波段是 1.16；W40 血 ≈225×基线）
 const DEEP_SWARM_PER_WAVE := 0.06        ## 深层每波同屏密度增量（+6%/波，随危险度/角色倍率同乘）
@@ -50,14 +54,27 @@ const DEEP_SWARM_MAX := 2.0              ## 深层同屏密度放大硬顶（约
 static func wave_spawn_budget(wave: int) -> int:
 	var w := float(maxi(wave, 1))
 	if w <= float(DEEP_WAVE_THRESHOLD):
-		return int(minf(WAVE_SPAWN_BUDGET_BASE + w * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX))
-	return int(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
-		+ (w - float(DEEP_WAVE_THRESHOLD)) * DEEP_BUDGET_PER_WAVE, DEEP_BUDGET_MAX))
+		return int(round(minf(WAVE_SPAWN_BUDGET_BASE + w * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX)))
+	return int(round(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
+		+ (w - float(DEEP_WAVE_THRESHOLD)) * DEEP_BUDGET_PER_WAVE, DEEP_BUDGET_MAX)))
 const ENEMY_HP_GROWTH := 1.16             ## 每回合生命复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础生命整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
 ## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
 ## 2026-10-11 缩图减怪：刷入量 -33% 后单怪 +33% 血（4.5→6.0）补上压力，「少而硬」。
-const MOB_HP_BASE_MULT := 6.0
+## 2026-10-15 反割草 2.0：v0.0.36 近战/横扫伤害整体上调后小怪 TTK 全线跌破设计意图（成型 Build
+## W10+ 约 0.5~2s 蒸发），血量基数 +42%（6.0→8.5）与刷怪预算 -20% 联动 —— 一波总血量约 +13%，
+## 压力不减、密度降、每个击杀有读数。
+const MOB_HP_BASE_MULT := 8.5
+## 小怪击杀经验/金币腿补偿倍率：与 WAVE_SPAWN_BUDGET_* 联动（改预算必须同步改它）。
+## 预算 -20% 后被闸掉的怪不再掉落，原先由 budget_compensation_exp 折经验找平；但补差只覆盖
+## 「预算没花完」的部分且用的是 exp_reward 原值 —— 单怪掉落必须同倍放大才能让每波经验收入持平
+##（0.8 数量 × 1.25 单只 = 1.0）。金币腿随 exp_value 同值入账，碎金档仍折 1 枚不受影响。
+## 精英不走这条（经验由 ELITE_GEM_EXP 固定，金币由 ELITE_STONE_BONUS）。
+const MOB_KILL_EXP_MULT := 1.25
+## 单只小怪击杀经验（纯函数）：exp_reward × 补偿倍率取整。掉落（EnemyBase._die）与
+## 刷怪补差均值统计（WaveSpawner）共用这一个出口，两边口径不许漂。
+static func mob_kill_exp(exp_reward: int) -> int:
+	return int(round(float(maxi(exp_reward, 0)) * MOB_KILL_EXP_MULT))
 const ENEMY_DMG_GROWTH := 1.06            ## 每回合接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 ## 敌伤整体基线倍率：所有敌人伤害的唯一总闸。
 ## 折进 enemy_dmg_mult 这一个出口 ⇒ 接触 / 冲刺 / 短咬 / 自爆 / 火球 / Boss 接触·环弹·震地
@@ -207,7 +224,9 @@ const SPAWN_PUSH_CHEST := 180.0         ## 藏宝匣：推开距离（不走径�
 
 const ELITE_WAVES := [5, 15]             ## 精英回合：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
-const BOSS_HP_BASE := 6500.0             ## Boss 基础生命（适配神识分流与新武器基数：W10≈2.5万 / W20≈11万；成型 ~45s、极端 6 剑 ~12s）
+const BOSS_HP_BASE := 6200.0             ## Boss 基础生命（2026-10-15 反割草对冲：神识分流 0.12→0.15 收紧后微降 6500→6200，
+                                         ## Boss TTK 保持中性 W10≈66s / W20≈46s，割草收敛全部由小怪侧与分流侧承担；
+                                         ## 成型 ~46s、极端 6 剑 ~13s）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
 const BOSS_ATTACK_INTERVAL := 3.8        ## 特殊攻击循环间隔（秒）
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量

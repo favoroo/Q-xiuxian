@@ -22,15 +22,17 @@ func _test_wave_scaling() -> void:
 	# 刷怪预算（2026-10-11 土豆兄弟式克制）：波内总刷入封顶，预算耗尽即停手，场上越打越空。
 	# 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90），
 	# 单怪血量基数同步 +33% 补压力，预算缺口由经验补差兜底（见 balance_sim_check 绑定契约）。
-	_c.equals(GameBalance.wave_spawn_budget(1), 17, "第 1 波预算 17（缩图后全程收紧）")
-	_c.equals(GameBalance.wave_spawn_budget(5), 32, "第 5 波预算 32")
-	_c.equals(GameBalance.wave_spawn_budget(6), 35, "第 6 波预算 35")
-	_c.equals(GameBalance.wave_spawn_budget(10), 50, "第 10 波预算 50")
-	_c.equals(GameBalance.wave_spawn_budget(20), 86, "第 20 波预算 86")
-	# 2026-10-13 深层三涨：>20 波预算自 W20=86 续 +4/波，封顶 DEEP_BUDGET_MAX（180）。
-	_c.equals(GameBalance.wave_spawn_budget(21), 90, "深层第 21 波预算 90（续涨 +4）")
-	_c.equals(GameBalance.wave_spawn_budget(30), 126, "深层第 30 波预算 126")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 180")
+	# 2026-10-15 反割草 2.0：预算再 -20%（11/2.9/72），单怪血量基数 6.0→8.5 同步补压，
+	# 单怪掉落经验由 MOB_KILL_EXP_MULT ×1.25 反向找平（每波收入持平）。
+	_c.equals(GameBalance.wave_spawn_budget(1), 14, "第 1 波预算 14（反割草 2.0 收紧）")
+	_c.equals(GameBalance.wave_spawn_budget(5), 26, "第 5 波预算 26")
+	_c.equals(GameBalance.wave_spawn_budget(6), 28, "第 6 波预算 28")
+	_c.equals(GameBalance.wave_spawn_budget(10), 40, "第 10 波预算 40")
+	_c.equals(GameBalance.wave_spawn_budget(20), 69, "第 20 波预算 69")
+	# 2026-10-13 深层三涨：>20 波预算自 W20=69 续 +4/波，封顶 DEEP_BUDGET_MAX（145）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 73, "深层第 21 波预算 73（续涨 +4）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 109, "深层第 30 波预算 109")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 145")
 	var budget_prev := 0
 	var budget_nondecreasing := true
 	for w in range(1, 61):
@@ -41,10 +43,16 @@ func _test_wave_scaling() -> void:
 	_c.check(budget_nondecreasing, "预算曲线逐波不降（触顶后持平，不回落）")
 	# 深层段在封顶前必须每波都真的多刷（否则「敌潮随深层涨」落空）
 	var deep_rises := 0
-	for w in range(21, 44):
+	for w in range(21, 40):
 		if GameBalance.wave_spawn_budget(w) > GameBalance.wave_spawn_budget(w - 1):
 			deep_rises += 1
-	_c.equals(deep_rises, 23, "深层 21~43 波逐波续涨（封顶前不提前持平）")
+	_c.equals(deep_rises, 19, "深层 21~39 波逐波续涨（封顶前不提前持平）")
+
+	# 2026-10-15 反割草 2.0：小怪掉落经验补偿倍率（预算 -20% 的倒数），掉落与补差均值同走一个出口
+	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.25, EPS, "小怪经验补偿倍率 1.25（= 预算 -20% 的倒数，改预算必须同步改它）")
+	_c.equals(GameBalance.mob_kill_exp(3), 4, "史莱姆 exp 3 → 实发 4（×1.25 取整）")
+	_c.equals(GameBalance.mob_kill_exp(5), 6, "邪修 exp 5 → 实发 6")
+	_c.equals(GameBalance.mob_kill_exp(0), 0, "非法 exp 0 不放大")
 
 	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
 	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.09")

@@ -486,24 +486,27 @@ func _process(delta: float) -> void:
 		frenzy_idle += delta
 		frenzy_stacks = FrenzyData.decay(frenzy_stacks, frenzy_idle, delta)
 
-		if not is_game_over and not get_tree().paused and player != null:
-			game_time += delta
-			_lifesteal_window += delta
-			if _lifesteal_window >= 1.0:
-				_lifesteal_window = 0.0
-				_lifesteal_procs = 0
-			# HUD 只关心「斩妖/金币/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
-			# 数值真正变化时由各事件函数自己 emit，不必每帧重画 60 次。
-			_hud_tick += delta
-			if _hud_tick >= 0.2:
-				_hud_tick = 0.0
-				stats_updated.emit(kills, game_time, spirit_stones)
-			# 中断续玩自动存档：只在 FIGHT 计时（树一暂停就轮不到这里——ALLOC/SHOP 各有
-			# 阶段边界钩子），headless 下 RunSave 自拒，判据测试不落盘
-			_autosave_cd += delta
-			if _autosave_cd >= AUTOSAVE_INTERVAL:
-				_autosave_cd = 0.0
-				RunSave.autosave_current(self)
+	# 全局计时 / HUD 节流 / FIGHT 自动存档：所有角色同权（2026-10-15 修复：此块曾被错误
+	# 缩进进上面的狂战 if 内 —— 非狂战整局 game_time 恒 0、HUD 计时永远 00:00、
+	# 3 秒自动存档从不触发，中断续玩只剩回合边界快照与退游戏兜底）
+	if not is_game_over and not get_tree().paused and player != null:
+		game_time += delta
+		_lifesteal_window += delta
+		if _lifesteal_window >= 1.0:
+			_lifesteal_window = 0.0
+			_lifesteal_procs = 0
+		# HUD 只关心「斩妖/金币/计时」三个读数：计时按 0.2s 节流即可（显示精度是整秒），
+		# 数值真正变化时由各事件函数自己 emit，不必每帧重画 60 次。
+		_hud_tick += delta
+		if _hud_tick >= 0.2:
+			_hud_tick = 0.0
+			stats_updated.emit(kills, game_time, spirit_stones)
+		# 中断续玩自动存档：只在 FIGHT 计时（树一暂停就轮不到这里——ALLOC/SHOP 各有
+		# 阶段边界钩子），headless 下 RunSave 自拒，判据测试不落盘
+		_autosave_cd += delta
+		if _autosave_cd >= AUTOSAVE_INTERVAL:
+			_autosave_cd = 0.0
+			RunSave.autosave_current(self)
 
 # ---------------- 经验 / 金币 ----------------
 
@@ -1122,6 +1125,12 @@ func shake_camera(intensity: float = 3.5, duration: float = 0.12) -> void:
 func kick_camera(dir: Vector2, strength: float = 3.0) -> void:
 	GameFeel.kick_camera(self, dir, strength)
 
+func focus_camera(pos: Vector2, zoom_mult: float = 1.3, duration: float = 0.55) -> void:
+	GameFeel.focus_camera(self, pos, zoom_mult, duration)
+
+func release_camera(duration: float = 0.6) -> void:
+	GameFeel.release_camera(self, duration)
+
 func hit_stop(duration: float = 0.045, target_scale: float = 0.05) -> void:
 	GameFeel.hit_stop(self, duration, target_scale)
 
@@ -1160,5 +1169,7 @@ func continue_endless() -> void:
 	endless_mode = true
 	is_game_over = false
 	get_tree().paused = false
+	if player != null and is_instance_valid(player) and player.has_method("reset_victory_state"):
+		player.reset_victory_state()
 	if wave_spawner != null and wave_spawner.has_method("open_shop"):
 		wave_spawner.open_shop()

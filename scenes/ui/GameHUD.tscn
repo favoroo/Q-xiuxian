@@ -1,19 +1,21 @@
-[gd_scene load_steps=11 format=3 uid="uid://chud001"]
+[gd_scene load_steps=12 format=3 uid="uid://chud001"]
 
 [ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
 bg_color = Color(0, 0, 0, 0.92)
+skew = Vector2(0.087, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_fill"]
 bg_color = Color(0.31, 0.82, 0.647, 1)
+skew = Vector2(0.087, 0)
 border_width_bottom = 1
 border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_block"]
-content_margin_left = 12.0
+content_margin_left = 10.0
 content_margin_top = 6.0
-content_margin_right = 14.0
+content_margin_right = 12.0
 content_margin_bottom = 6.0
 bg_color = Color(0.22, 0.486, 0.902, 1)
 skew = Vector2(0.087, 0)
@@ -26,14 +28,24 @@ shadow_color = Color(0, 0, 0, 0.45)
 shadow_size = 1
 shadow_offset = Vector2(4, 5)
 
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_hp_bar_bg"]
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_track"]
 bg_color = Color(0, 0, 0, 0.85)
+skew = Vector2(0.087, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.18, 0.22, 0.8)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
 bg_color = Color(0.949, 0.937, 0.894, 1)
+skew = Vector2(0.087, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_ghost_fill"]
-bg_color = Color(1, 1, 1, 0.75)
+bg_color = Color(1, 0.96, 0.92, 0.8)
+skew = Vector2(0.087, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_level_badge"]
 content_margin_left = 10.0
@@ -41,7 +53,10 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 5.0
 bg_color = Color(0.22, 0.486, 0.902, 1)
-skew = Vector2(0.14, 0)
+skew = Vector2(0.087, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
 border_width_bottom = 4
 border_color = Color(0.102, 0.263, 0.549, 1)
 shadow_color = Color(0, 0, 0, 0.45)
@@ -54,12 +69,15 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 0.95)
-skew = Vector2(0.14, 0)
+skew = Vector2(0.087, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
-border_width_bottom = 3
+border_width_bottom = 4
 border_color = Color(0.227, 0.227, 0.259, 1)
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 1
+shadow_offset = Vector2(3, 3)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kills_chip"]
 content_margin_left = 10.0
@@ -67,7 +85,10 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 1)
-skew = Vector2(0.14, 0)
+skew = Vector2(0.087, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
 border_width_bottom = 4
 border_color = Color(0.227, 0.227, 0.259, 1)
 shadow_color = Color(0, 0, 0, 0.45)
@@ -80,7 +101,10 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
 bg_color = Color(0.31, 0.82, 0.647, 1)
-skew = Vector2(0.14, 0)
+skew = Vector2(0.087, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
 border_width_bottom = 4
 border_color = Color(0.122, 0.478, 0.369, 1)
 shadow_color = Color(0, 0, 0, 0.45)
@@ -124,25 +148,24 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="HPTitle" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 17
-text = "生命"
-
 [node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox"]
-custom_minimum_size = Vector2(130, 14)
+custom_minimum_size = Vector2(136, 14)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBoxFlat_hp_track")
+theme_override_styles/background = SubResource("StyleBoxEmpty_hp_bar_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
 [node name="HPGhostBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox/HPBar"]
-custom_minimum_size = Vector2(130, 14)
-layout_mode = 2
+show_behind_parent = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_hp_track")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_ghost_fill")

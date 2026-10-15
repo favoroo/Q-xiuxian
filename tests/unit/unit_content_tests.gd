@@ -760,8 +760,9 @@ func _test_turret_and_new_cultivators() -> void:
 	GameManager.reset_run()
 
 	# 8. 多法器神识分流与同目标短窗集火韧性验证
+	# 2026-10-15 反割草收紧：分流系数 0.12→0.15（6 把总输出 3.75x→3.43x）
 	_c.near(GameBalance.multi_weapon_damage_mult(1), 1.0, EPS, "单把法器神识效率 100%")
-	_c.near(GameBalance.multi_weapon_damage_mult(6), 1.0 / 1.6, EPS, "6 把法器单把神识分流系数 62.5%（总有效倍率 3.75x）")
+	_c.near(GameBalance.multi_weapon_damage_mult(6), 1.0 / 1.75, EPS, "6 把法器单把神识分流系数 ~57.1%（总有效倍率 3.43x）")
 	var prev_tot := 0.0
 	var tot_monotonic := true
 	for n_slots in range(1, 7):
@@ -771,8 +772,8 @@ func _test_turret_and_new_cultivators() -> void:
 		prev_tot = tot
 	_c.check(tot_monotonic, "1~6 把法器总有效倍率严格单调递增（多戴必正收益）")
 	# 2026-10-11 召唤流校准：御灵按半权计神识分流（召唤物自主作战不占主人神识）
-	_c.near(GameBalance.multi_weapon_damage_mult(6, 0), 1.0 / 1.6, EPS, "纯非召唤 6 把分流不受御灵半权影响（仍 62.5%）")
-	_c.near(GameBalance.multi_weapon_damage_mult(6, 6), 1.0 / 1.24, EPS, "6 御灵半权分流：有效 3 把 ⇒ 单把 ~80.6%（以多打少不再被拖死）")
+	_c.near(GameBalance.multi_weapon_damage_mult(6, 0), 1.0 / 1.75, EPS, "纯非召唤 6 把分流不受御灵半权影响（仍 ~57.1%）")
+	_c.near(GameBalance.multi_weapon_damage_mult(6, 6), 1.0 / 1.30, EPS, "6 御灵半权分流：有效 3 把 ⇒ 单把 ~76.9%（以多打少不再被拖死）")
 	_c.check(GameBalance.multi_weapon_damage_mult(6, 6) > GameBalance.multi_weapon_damage_mult(6, 0),
 		"同槽位下御灵半权分流系数高于全额口径")
 	_c.near(GameBalance.focus_fire_mult(0), 1.0, EPS, "短窗第 1 击全额 100%")

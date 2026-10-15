@@ -296,7 +296,11 @@ func end_wave(early_secs: float = 0.0) -> void:
 func _open_shop() -> void:
 	if wave_number >= GameManager.VICTORY_WAVE and not GameManager.endless_mode:
 		phase = Phase.SHOP
-		GameManager.trigger_game_over(true)
+		var player = GameManager.player
+		if DisplayServer.get_name() != "headless" and player != null and is_instance_valid(player) and player.has_method("play_victory_sequence"):
+			player.play_victory_sequence()
+		else:
+			GameManager.trigger_game_over(true)
 		return
 	_enter_wave_break()
 
@@ -379,7 +383,9 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 		_scale_to_wave(enemy)
 		enemy.activate()
 		parent.add_child(enemy)
-		_budget_exp_sum += float(enemy.exp_reward)
+		# 补差均值与实际掉落同口径：小怪 exp_reward 过 mob_kill_exp 补偿倍率（EnemyBase._die 同一出口），
+		# 否则预算缺口 × 原值均值会少算玩家的实际单怪收入
+		_budget_exp_sum += float(GameBalance.mob_kill_exp(enemy.exp_reward))
 		# 出场弹性缩放动画 (0.4 -> 1.0)
 		enemy.scale = Vector2.ONE * 0.4
 		var tw := enemy.create_tween()

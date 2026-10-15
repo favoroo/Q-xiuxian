@@ -29,7 +29,12 @@ enum ProjectileKind {
 	GENERIC_BLADE     ## 通用法刃：虚空冷月气刃
 }
 
-const REDRAW_INTERVAL := 0.05 ## 20Hz 错相刷新节流，与 ProceduralDroneRenderer 同步范式
+## 20Hz 错相刷新节流，与 ProceduralDroneRenderer 同步范式；60fps 档翻倍 40Hz
+## （2026-10-15 VisualRate 档位联动：弹体位置 60fps 运动，画面 3 帧一画会分离；低档 20Hz 为 perf_probe 预算口径）
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 
 @export var kind: ProjectileKind = ProjectileKind.GENERIC_BLADE
 @export var elemental_tint: Color = Color.WHITE
@@ -39,14 +44,15 @@ var _draw_phase: float = 0.0
 
 func _ready() -> void:
 	# 错相初始化：避免所有弹丸在同个物理帧扎堆 queue_redraw
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	queue_redraw()
 
 func _process(delta: float) -> void:
 	_lifetime_acc += delta
 	_draw_phase += delta
-	if _draw_phase >= REDRAW_INTERVAL:
-		_draw_phase -= REDRAW_INTERVAL
+	var interval := _redraw_interval()
+	if _draw_phase >= interval:
+		_draw_phase -= interval
 		queue_redraw()
 
 ## 根据贴图路径或武器 ID 自适应识别弹丸品类

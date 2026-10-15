@@ -45,19 +45,25 @@ var _anim_time: float = 0.0
 ## 环绕灵宝矢量 _draw 一帧几十条指令，「武器一多」时多只灵宝每帧全量重绘
 ## 是渲染线程热点。与 HollowKnightEnemyRenderer 同款：20Hz 节流 + 实例错相；
 ## _anim_time 照常逐帧推进，回绘时动画相位连续。灵宝环绕玩家永在屏内，无需屏外剔除。
-const REDRAW_INTERVAL := 0.05     ## 重绘间隔：20Hz
+## 60fps 档（2026-10-15 VisualRate 档位联动）翻倍到 40Hz：灵宝位置 60fps 环绕、
+## 画面 3 帧一画会分离；低档 20Hz 维持 perf_probe 预算口径。
+const HZ_LOW := 20.0               ## 省电档重绘频率
+const HZ_HIGH := 40.0              ## 流畅档重绘频率
 static var redraw_count: int = 0  ## 重绘发放计数（tests/PerfProbe 断言用）
+
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 
 var _draw_phase: float = 0.0      ## 距下次重绘的剩余时间（错相载体）
 
 func _ready() -> void:
 	# 错相：instance_id 派生初值（不碰玩法随机），多只灵宝的重绘摊到不同帧
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 
 func _process(delta: float) -> void:
 	_anim_time += delta
 	if _draw_phase <= 0.0:
-		_draw_phase = REDRAW_INTERVAL
+		_draw_phase = _redraw_interval()
 		redraw_count += 1
 		queue_redraw()
 	else:

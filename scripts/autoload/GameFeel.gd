@@ -28,6 +28,16 @@ static func kick_camera(gm: Node, dir: Vector2, strength: float = 3.0) -> void:
 	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("kick_directional"):
 		gm.main_camera.kick_directional(dir, strength)
 
+## 镜头叙事聚焦（不受震屏开关抑制）：平滑推进至目标世界坐标并放大视距
+static func focus_camera(gm: Node, pos: Vector2, zoom_mult: float = 1.3, duration: float = 0.55) -> void:
+	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("focus_at"):
+		gm.main_camera.focus_at(pos, zoom_mult, duration)
+
+## 镜头叙事聚焦释放（平滑回拉至基准视距，恢复常规跟随）
+static func release_camera(gm: Node, duration: float = 0.6) -> void:
+	if gm.main_camera != null and is_instance_valid(gm.main_camera) and gm.main_camera.has_method("release_focus"):
+		gm.main_camera.release_focus(duration)
+
 # ---------------- 设置每帧 memo（Android 稳态 GC 治理） ----------------
 ## get_val 每次调用分配 2 个 String（StringName→String 转换），shake_mult 一次 ≈ 6 个分配；
 ## 单次暴击命中链原来要穿透读 8 次 get_val（16 String），高频命中下是稳态 GC 停顿来源。
@@ -86,10 +96,14 @@ static func vibrate(duration_ms: int = 18, amplitude: float = 0.5) -> void:
 	if OS.has_feature("mobile"):
 		Input.vibrate_handheld(duration_ms, amplitude)
 
-## 顿帧时长 30fps 补偿（2026-10-14）：顿帧的感知强度由「连续冻结的渲染帧数」决定，
-## 锁 30 帧后 33.3ms 帧长使击杀微顿帧 0.03s 只剩 ~1 帧（≈一帧正常画面，趋近无感），
-## 统一乘 1.5 恢复等效感知（0.03s→45ms≈1.4 帧）。切回 60 帧模式时顿帧略沉，属可接受权衡。
-const HITSTOP_FPS_COMPENSATION := 1.5
+## 顿帧时长按帧率档位补偿（2026-10-15 改动态）：顿帧的感知强度由「连续冻结的渲染帧数」决定，
+## 30fps 档（33.3ms 帧长）击杀微顿帧 0.03s 只剩 ~1 帧（≈一帧正常画面，趋近无感），乘 1.5
+## 恢复等效感知（45ms≈1.4 帧）；60fps 档不补偿（0.03s≈1.8 帧即为原始设计手感），
+## 否则冻结 3+ 帧反而卡。档位读 VisualRate，headless 判据恒走低档 1.5（PerfProbe 基线不变）。
+const HITSTOP_FPS_COMPENSATION_30 := 1.5
+
+static func hitstop_compensation() -> float:
+	return 1.0 if VisualRate.high_fps else HITSTOP_FPS_COMPENSATION_30
 
 static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.05) -> void:
 	if not hit_stop_enabled():
@@ -100,7 +114,7 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 	Engine.time_scale = clampf(target_scale, GameBalance.HITSTOP_TIMESCALE_FLOOR, 1.0)
 	# 零分配恢复（2026-10-14）：只写真实毫秒截止时刻，GameManager._process 到点还原；
 	# 原实现每次顿帧 create_timer 分配 SceneTreeTimer + 闭包。重复顿帧天然延期（覆写更晚时刻）。
-	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * HITSTOP_FPS_COMPENSATION * 1000.0)
+	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * hitstop_compensation() * 1000.0)
 
 static var _last_crit_hitstop_ms: int = 0
 const CRIT_HITSTOP_MIN_INTERVAL := 0.10

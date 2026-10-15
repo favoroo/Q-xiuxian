@@ -69,9 +69,17 @@ const HUD_TWEEN_MIN_INTERVAL := 0.05
 var _last_hp_tween_ms := 0
 var _last_exp_tween_ms := 0
 ## 血条白影（HPGhostBar，受创两段式 2026-10-15）：红条立即落、白影延迟追平。
-## 白影是主条子节点画在上层 ⇒ 主条值 >= 白影值时只露红条，掉血瞬间白影才从残血处露出来。
+## 白影在主条背后透光（show_behind_parent）⇒ 掉血瞬间白影才从残血处露出来。
 var _hp_ghost_tween: Tween = null
 var _hp_last_cur: float = -1.0  ## 上一拍血量：判断这次信号是扣血还是回血
+## 血条装饰与动效句柄
+var _hp_fill_style: StyleBoxFlat = null
+var _hp_block_style: StyleBoxFlat = null
+var _hp_block_base_border := Color(0, 0, 0, 0)
+var _hp_heal_flash: Panel = null
+var _hp_heal_tween: Tween = null
+var _hp_label_heal_tween: Tween = null
+var _hp_notch: Control = null
 ## 金币增量脉冲（2026-10-15）：金币跳涨时 Label squash 回弹 + 金色驻留一闪，读得出「进账了」
 const SHARDS_PULSE_MIN_GAIN := 5    ## 单拍增量阈值：低于它（单珠碎金）不闪，防常亮刷屏
 const SHARDS_PULSE_GATE_MS := 150   ## 脉冲最小间隔：磁吸齐吃一拍几十金只闪一次
@@ -102,9 +110,8 @@ func _ready() -> void:
 	_apply_safe_area()
 	# 蓝白黄斜切色块（场景里未定样的两块在这里补）
 	banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(5, 6)))
-	$TopContainer/CenterBox/TimeBlock.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.INK, GameStyle.SLANT_BAND, Vector2(4, 5)))
+	$TopContainer/CenterBox/TimeBlock.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.INK, GameStyle.SLANT_BLOCK, Vector2(4, 5)))
 
-	GameStyle.label($TopContainer/LeftBox/HPBlock/HBox/HPTitle, 17, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(hp_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(level_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(time_label, 24, GameStyle.CHALK, 0, GameStyle.INK, true)
@@ -140,6 +147,46 @@ func _ready() -> void:
 	add_child(_synergy_box)
 	_build_pending_chip()
 	_build_level_flash()
+	_build_hp_bar_decorations()
+
+## 血条斜切装饰与刻度线：
+## 1. 28% 告急刻线（与 BalanceCombat.HP_LOW_RATIO 同源）：5° 斜切雕刻刻度，直观预知进入危险阈值
+## 2. 治疗翡翠微闪遮罩（Panel + StyleBoxFlat 5° 斜切）：回血时温润翠光拂过
+func _build_hp_bar_decorations() -> void:
+	var flash_sb := StyleBoxFlat.new()
+	flash_sb.bg_color = GameStyle.GOOD
+	flash_sb.skew = Vector2(deg_to_rad(GameStyle.SLANT_BLOCK), 0.0)
+	_hp_heal_flash = Panel.new()
+	_hp_heal_flash.name = "HPHealFlash"
+	_hp_heal_flash.add_theme_stylebox_override("panel", flash_sb)
+	_hp_heal_flash.modulate.a = 0.0
+	_hp_heal_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hp_heal_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hp_bar.add_child(_hp_heal_flash)
+
+	_hp_notch = Control.new()
+	_hp_notch.name = "HPNotch"
+	_hp_notch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hp_notch.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hp_bar.add_child(_hp_notch)
+	_hp_notch.draw.connect(_on_hp_notch_draw)
+
+func _on_hp_notch_draw() -> void:
+	if _hp_notch == null or hp_bar == null:
+		return
+	var w: float = hp_bar.size.x
+	var h: float = hp_bar.size.y
+	if w <= 0.0 or h <= 0.0:
+		return
+	var x: float = w * BalanceCombat.HP_LOW_RATIO
+	var skew_x: float = tan(deg_to_rad(GameStyle.SLANT_BLOCK))
+	var top_x: float = x + (h * 0.5) * skew_x
+	var btm_x: float = x - (h * 0.5) * skew_x
+	if _last_hp_low:
+		_hp_notch.draw_line(Vector2(top_x, 0.0), Vector2(btm_x, h), GameStyle.BAD, 1.5)
+	else:
+		_hp_notch.draw_line(Vector2(top_x - 0.5, 0.0), Vector2(btm_x - 0.5, h), Color(0.0, 0.0, 0.0, 0.55), 1.0)
+		_hp_notch.draw_line(Vector2(top_x + 0.5, 0.0), Vector2(btm_x + 0.5, h), Color(1.0, 1.0, 1.0, 0.25), 1.0)
 
 ## 全屏升级金光：升级瞬间轻闪一下（对照受击红晕的反馈位，换金色、更短促）。
 ## 挪到首个子节点 ⇒ 画在 HUD 所有控件之下、游戏画面之上，顶栏读数不被染色。
@@ -361,14 +408,23 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_ghost_bar.max_value = max_v
 	# 受创两段式（2026-10-15）：扣血拍红条立即直写（受创可读性优先，不做缓动），
 	# 白影条延迟 0.25s 后 0.3s 追平 —— 红白落差就是「这一刀有多疼」的量尺；
-	# 回血拍红条保持既有补间，白影直接贴上去（治疗不留白影）。
+	# 回血拍红条保持既有补间，白影同步跟随（治疗不留白影差）。
 	var is_damage := _hp_last_cur >= 0.0 and cur < _hp_last_cur
+	var is_heal := _hp_last_cur >= 0.0 and cur > _hp_last_cur
 	_hp_last_cur = cur
+
+	# 满血微亮：满血纯白高光，未满血温润纸白
+	if _hp_fill_style == null:
+		_hp_fill_style = hp_bar.get_theme_stylebox("fill").duplicate()
+		hp_bar.add_theme_stylebox_override("fill", _hp_fill_style)
+	var full := cur >= max_v - 0.001
+	_hp_fill_style.bg_color = Color(1.0, 1.0, 1.0, 1.0) if full else GameStyle.PAPER
+
 	if _hp_ghost_tween != null and _hp_ghost_tween.is_valid():
 		_hp_ghost_tween.kill()
 		_hp_ghost_tween = null
 	if is_damage:
-		# 白影先停在旧值（露出红白差），主条立即扣到底；白影随后追平
+		# 白影先停在旧值（露出白影差），主条立即扣到底；白影随后追平
 		hp_ghost_bar.value = hp_bar.value
 		hp_bar.value = cur
 		_hp_ghost_tween = create_tween()
@@ -376,7 +432,8 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		_hp_ghost_tween.tween_property(hp_ghost_bar, "value", cur, 0.3)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	else:
-		hp_ghost_bar.value = cur
+		if is_heal:
+			_play_heal_fx()
 		if _hp_tween != null and _hp_tween.is_valid():
 			_hp_tween.kill()
 			_hp_tween = null
@@ -387,8 +444,10 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 			_last_hp_tween_ms = now_ms
 			_hp_tween = create_tween()
 			_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_hp_tween.parallel().tween_property(hp_ghost_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		else:
 			hp_bar.value = cur
+			hp_ghost_bar.value = cur
 	var hp_text := str(int(cur)) + "/" + str(int(max_v))
 	if hp_label.text != hp_text:
 		hp_label.text = hp_text
@@ -397,9 +456,16 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	# 每次都调 add_theme_color_override 触发 NOTIFICATION_THEME_CHANGED 是无谓开销
 	if low != _last_hp_low:
 		_last_hp_low = low
-		hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.PAPER)
-		# 告急期血条本体呼吸闪烁（与 Main 濒死红晕同一把阈值、同一个屏闪开关）：
-		# 只改字色在混战中扫一眼读不到「快死了」，整条血槽一起起伏才是警报
+		hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.INK_TEXT)
+		if _hp_notch != null:
+			_hp_notch.queue_redraw()
+		if _hp_block_style == null:
+			var hp_block: PanelContainer = $TopContainer/LeftBox/HPBlock
+			_hp_block_style = hp_block.get_theme_stylebox("panel").duplicate()
+			_hp_block_base_border = _hp_block_style.border_color
+			hp_block.add_theme_stylebox_override("panel", _hp_block_style)
+		# 告急期血条本体呼吸闪烁与底边描边泛红同拍：
+		# 整条血槽连同外框一起起伏才是明确的濒死警报
 		if _hp_low_tween != null and _hp_low_tween.is_valid():
 			_hp_low_tween.kill()
 			_hp_low_tween = null
@@ -407,10 +473,37 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 			_hp_low_tween = create_tween().set_loops()
 			_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", GameStyle.BAD, 0.35)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 			_hp_low_tween.tween_property(hp_bar, "modulate", Color.WHITE, 0.35)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", _hp_block_base_border, 0.35)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		else:
 			hp_bar.modulate = Color.WHITE
+			if _hp_block_style != null:
+				_hp_block_style.border_color = _hp_block_base_border
+
+## 回血视觉反馈（克制版，不加受击冲突反馈）：翡翠微光拂过血槽 + 血字温和回弹
+func _play_heal_fx() -> void:
+	if _hp_heal_flash != null:
+		if _hp_heal_tween != null and _hp_heal_tween.is_valid():
+			_hp_heal_tween.kill()
+		_hp_heal_flash.modulate.a = 0.45
+		_hp_heal_tween = create_tween()
+		_hp_heal_tween.tween_property(_hp_heal_flash, "modulate:a", 0.0, 0.28)\
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	if hp_label != null:
+		if _hp_label_heal_tween != null and _hp_label_heal_tween.is_valid():
+			_hp_label_heal_tween.kill()
+		hp_label.pivot_offset = hp_label.size * 0.5
+		hp_label.scale = Vector2(1.15, 1.15)
+		_hp_label_heal_tween = create_tween()
+		_hp_label_heal_tween.tween_property(hp_label, "scale", Vector2.ONE, 0.2)\
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_hp_label_heal_tween.parallel().tween_property(hp_label, "modulate", Color(0.3, 1.4, 0.6, 1.0), 0.05)
+		_hp_label_heal_tween.tween_property(hp_label, "modulate", Color.WHITE, 0.15)
 
 ## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 斜切光环/星屑（HudLevelBadgeFx）。
 ## 可重入：连升多级时 player_leveled_up 连发，先杀旧 tween、颜色复位，再整段重播。

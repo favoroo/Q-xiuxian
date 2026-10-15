@@ -129,10 +129,10 @@ const SCHEMA: Array[Dictionary] = [
 	{
 		"section": "display",
 		"key": "fps_60",
-		"title": "高帧率模式",
-		"desc": "开启后帧率上限 60（更流畅但更耗电发热）；关闭为 30（省电稳定）",
+		"title": "流畅模式",
+		"desc": "开启后帧率上限 60（操作与画面更顺滑，略耗电发热）；关闭为 30（省电稳定）",
 		"type": "toggle",
-		"default": false,
+		"default": true,
 	},
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
@@ -249,6 +249,7 @@ func _ready() -> void:
 	_init_defaults()
 	_load_settings()
 	_follow_legacy_layout_default()
+	_follow_fps_default_migration()
 	_apply_all_audio()
 
 ## 初始化默认配置
@@ -441,6 +442,21 @@ func _follow_legacy_layout_default() -> void:
 	var v: Variant = sec.get("obelisk_btn_xy", null)
 	if v is Vector2 and (v as Vector2).is_equal_approx(OBELISK_BTN_XY_LEGACY):
 		sec["obelisk_btn_xy"] = OBELISK_BTN_XY_DEFAULT
+
+## 帧率默认换代的一次性迁移（2026-10-15：默认 30 → 默认 60「流畅模式」）。
+## 为什么需要：_save_settings 把含默认值的全表一次写盘，老存档里已经落了
+## 「从没碰过的 fps_60=false」，只改 SCHEMA 默认值他们永远跟不到新档位。
+## 与 _follow_legacy_layout_default 不同，这里无法区分「显式关过」与「没碰过」
+## （落盘值相同），用一次性标记只迁一次：升级首启升到流畅档，此后玩家怎么选都尊重。
+func _follow_fps_default_migration() -> void:
+	if not _settings.has("display"):
+		return
+	var sec: Dictionary = _settings["display"]
+	if bool(sec.get("fps_60_migrated", false)):
+		return
+	sec["fps_60_migrated"] = true
+	sec["fps_60"] = true
+	_save_settings()
 
 # ----------------- 仙途指引（新手指南自动弹出） -----------------
 

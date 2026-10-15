@@ -151,8 +151,9 @@ func _play_reveal() -> void:
 	if _victory:
 		GameStyle.slash_wipe(self, GameStyle.JADE, 0.09)
 
-	# ① 背景压暗淡入（衔接死亡演出/清场，消除硬切）
+	# ① 背景压暗淡入（衔接死亡演出/清场，消除硬切）+ 镜头特写平滑回拉至标准视距
 	_track(create_tween()).tween_property(dim, "modulate:a", 1.0, 0.3)
+	GameManager.release_camera(0.65)
 	# ② 标题带砸落 + 定音 sting（胜利/失败各一声，SFX 与 BGM 同 key 不同层）
 	GameStyle.pin_center_pivot(title_band)
 	title_band.scale = Vector2(1.3, 1.3)

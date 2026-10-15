@@ -17,10 +17,14 @@ extends Camera2D
 @export var max_offset: Vector2 = Vector2(14.0, 10.0)  ## 2026-10-11 由 (12,9) 上调一档：单次事件峰值更可见，最坏稳态仍受每秒预算钉死
 @export var max_roll: float = 0.022                    ## 2026-10-11 由 0.018 上调一档
 
+const DEFAULT_BASE_ZOOM := Vector2(1.2, 1.2)
+
 var trauma: float = 0.0
 var _t: float = 0.0
-var _base_zoom: Vector2 = Vector2(1.2, 1.2)
+var _base_zoom: Vector2 = DEFAULT_BASE_ZOOM
 var _zoom_tween: Tween = null
+var _focus_tween: Tween = null
+var _focus_active: bool = false
 var _lookahead: Vector2 = Vector2.ZERO
 var _kick_offset: Vector2 = Vector2.ZERO  ## 方向性冲击位移（顺受力方向猛推后快速高阻尼回弹）
 ## 档位幅度倍率（SettingsManager.shake_mult() 的缓存，随 setting_changed 刷新）
@@ -31,7 +35,10 @@ var _budget_timer: float = 1.0
 
 func _ready() -> void:
 	GameManager.main_camera = self
-	_base_zoom = zoom
+	if not zoom.is_equal_approx(Vector2.ONE):
+		_base_zoom = zoom
+	else:
+		zoom = _base_zoom
 	ignore_rotation = false
 	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	SettingsManager.setting_changed.connect(_on_setting_changed)
@@ -45,17 +52,18 @@ func _on_setting_changed(section: StringName, key: StringName, _val: Variant) ->
 		_refresh_intensity()
 
 func _physics_process(delta: float) -> void:
-	var player = GameManager.player
-	if player != null and is_instance_valid(player):
-		var target_lookahead := Vector2.ZERO
-		if player is CharacterBody2D:
-			target_lookahead = (player as CharacterBody2D).velocity * lookahead_factor
-		var look_weight := 1.0 - exp(-6.0 * delta)
-		_lookahead = _lookahead.lerp(target_lookahead, look_weight)
+	if not _focus_active:
+		var player = GameManager.player
+		if player != null and is_instance_valid(player):
+			var target_lookahead := Vector2.ZERO
+			if player is CharacterBody2D:
+				target_lookahead = (player as CharacterBody2D).velocity * lookahead_factor
+			var look_weight := 1.0 - exp(-6.0 * delta)
+			_lookahead = _lookahead.lerp(target_lookahead, look_weight)
 
-		var target_pos: Vector2 = player.global_position + _lookahead
-		var follow_weight := 1.0 - exp(-follow_speed * delta)
-		global_position = global_position.lerp(target_pos, follow_weight)
+			var target_pos: Vector2 = player.global_position + _lookahead
+			var follow_weight := 1.0 - exp(-follow_speed * delta)
+			global_position = global_position.lerp(target_pos, follow_weight)
 
 	# 预算按真实秒记账：一帧之内攒够的碎震叠不起来，只允许"每秒这么多"的量
 	_budget_timer -= delta
@@ -71,15 +79,19 @@ func _physics_process(delta: float) -> void:
 
 	if trauma > 0.0:
 		trauma = maxf(trauma - trauma_decay * delta, 0.0)
-		var shake_amt := GameBalance.shake_amount(trauma) * _intensity
-		_t += delta * 28.0
-		offset = Vector2(
-			max_offset.x * shake_amt * _shake_axis(1.3, _t),
-			max_offset.y * shake_amt * _shake_axis(3.7, _t)
-		) + _kick_offset
-		rotation = max_roll * shake_amt * _shake_axis(7.1, _t * 0.85)
+		if _focus_active:
+			offset = Vector2.ZERO
+			rotation = 0.0
+		else:
+			var shake_amt := GameBalance.shake_amount(trauma) * _intensity
+			_t += delta * 28.0
+			offset = Vector2(
+				max_offset.x * shake_amt * _shake_axis(1.3, _t),
+				max_offset.y * shake_amt * _shake_axis(3.7, _t)
+			) + _kick_offset
+			rotation = max_roll * shake_amt * _shake_axis(7.1, _t * 0.85)
 	else:
-		offset = _kick_offset
+		offset = Vector2.ZERO if _focus_active else _kick_offset
 		rotation = 0.0
 
 ## 多频无公倍正弦合成的连续伪随机波形（平滑不刺眼）
@@ -114,7 +126,7 @@ func trauma_budget_left() -> float:
 ## 同帧/连续 zoom punch 合并：已有活跃 Tween 时，新冲击幅值不超过当前 zoom 则跳过，
 ## 避免穿透/弹射多目标同帧暴击狂建 Tween；更大的事件（如击杀）仍能覆盖更小的。
 func zoom_punch(punch_scale: float = 0.05, duration: float = 0.18) -> void:
-	if _intensity <= 0.0:
+	if _focus_active or _intensity <= 0.0:
 		return
 	var target_zoom := _base_zoom * (1.0 + punch_scale * _intensity)
 	if _zoom_tween != null and _zoom_tween.is_valid():
@@ -122,9 +134,73 @@ func zoom_punch(punch_scale: float = 0.05, duration: float = 0.18) -> void:
 			return
 		_zoom_tween.kill()
 	zoom = target_zoom
-	_zoom_tween = create_tween()
-	_zoom_tween.tween_property(self, "zoom", _base_zoom, duration)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if is_inside_tree():
+		_zoom_tween = create_tween()
+		_zoom_tween.tween_property(self, "zoom", _base_zoom, duration)\
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+## 镜头演出通道：平滑聚焦到目标世界坐标并变焦放大（叙事演出，不受震屏开关抑制）
+func focus_at(world_pos: Vector2, zoom_mult: float = 1.3, duration: float = 0.55) -> void:
+	_focus_active = true
+	if _zoom_tween != null and _zoom_tween.is_valid():
+		_zoom_tween.kill()
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	var dur := maxf(duration, 0.01)
+	var target_zoom := _base_zoom * zoom_mult
+	if is_inside_tree():
+		_focus_tween = create_tween()
+		_focus_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_focus_tween.set_parallel(true)
+		_focus_tween.tween_property(self, "global_position", world_pos, dur)\
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_focus_tween.tween_property(self, "zoom", target_zoom, dur)\
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	else:
+		global_position = world_pos
+		zoom = target_zoom
+
+## 释放聚焦状态：平滑回拉至基准视距，恢复常规跟随
+func release_focus(duration: float = 0.6) -> void:
+	if not _focus_active and zoom.is_equal_approx(_base_zoom):
+		return
+	if _zoom_tween != null and _zoom_tween.is_valid():
+		_zoom_tween.kill()
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	var dur := maxf(duration, 0.01)
+	var target_pos := global_position
+	var player = GameManager.player
+	if player != null and is_instance_valid(player):
+		target_pos = player.global_position
+	if is_inside_tree():
+		_focus_tween = create_tween()
+		_focus_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_focus_tween.set_parallel(true)
+		_focus_tween.tween_property(self, "global_position", target_pos, dur)\
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_focus_tween.tween_property(self, "zoom", _base_zoom, dur)\
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_focus_tween.chain().tween_callback(func():
+			_focus_active = false
+		)
+	else:
+		global_position = target_pos
+		zoom = _base_zoom
+		_focus_active = false
+
+## 立即重置聚焦（无动画硬切），供测试与场景重置使用
+func reset_focus() -> void:
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	if _zoom_tween != null and _zoom_tween.is_valid():
+		_zoom_tween.kill()
+	_focus_active = false
+	zoom = _base_zoom
+
+## 当前是否正处于聚焦演出中
+func is_focusing() -> bool:
+	return _focus_active
 
 ## 兼容旧接口：按强度折算为 trauma 叠加。
 ## 注意：在 Trauma 创伤模型下，振动时长由衰减率自然派生（duration = trauma / TRAUMA_DECAY），

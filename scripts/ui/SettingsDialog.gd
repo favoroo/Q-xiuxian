@@ -241,7 +241,7 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
-	_add_toggle_row(vbox, "fps_60", "高帧率模式", "开启后帧率上限 60（更流畅但更耗电发热）；关闭为 30（省电稳定）")
+	_add_toggle_row(vbox, "fps_60", "流畅模式", "开启后帧率上限 60（操作与画面更顺滑，略耗电发热）；关闭为 30（省电稳定）")
 
 	return scroll
 

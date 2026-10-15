@@ -10,8 +10,13 @@ var length: float = 0.0
 var beam_width: float = 10.0
 var tint: Color = Color(0.70, 0.55, 1.0)
 
-const REDRAW_INTERVAL := 0.05
 const SEGS := 12
+## 重绘节流按帧率档位取双档（2026-10-15 VisualRate 档位联动）：束流端点跟随移动实体，
+## 60fps 档 20Hz 是每 3 帧一画、「位置顺画面卡」，翻倍到 40Hz；低档 20Hz 维持 perf_probe 预算。
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 
 var _anim: float = 0.0
 var _phase: float = 0.0
@@ -20,7 +25,7 @@ func _ready() -> void:
 	visible = false
 	set_process(false)
 	# 错相初始化：避免多把束流武器同帧扎堆重绘
-	_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 
 ## 亮起/续命：每帧下发当前几何（长度随射线命中变化）
 func beam_on(p_length: float, p_width: float, p_tint: Color) -> void:
@@ -38,8 +43,9 @@ func beam_off() -> void:
 func _process(delta: float) -> void:
 	_anim += delta
 	_phase += delta
-	if _phase >= REDRAW_INTERVAL:
-		_phase -= REDRAW_INTERVAL
+	var interval := _redraw_interval()
+	if _phase >= interval:
+		_phase -= interval
 		queue_redraw()
 
 func _draw() -> void:

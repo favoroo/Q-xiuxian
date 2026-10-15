@@ -20,7 +20,12 @@ const SWEEP_INNER := 104.0      ## 横扫月牙中心内缘（中心厚度 20px�
 
 const _ARC_STEPS := 30          ## 外缘采样段数
 ## 重绘节流（2026-10-14）：亮起窗口内原每帧无条件重绘，火舌/电弧微动 20Hz 足够
-const REDRAW_INTERVAL := 0.05
+## 60fps 档（2026-10-15 VisualRate 档位联动）：刃光跟随挥砍运动，画面 3 帧一画会有
+## 「位置顺、画面卡」分离感，高帧档翻倍到 40Hz；低档 20Hz 是 perf_probe 钉住的预算口径。
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 static var redraw_count: int = 0  ## 重绘计数（perf_probe 节流判据消费）
 
 var mode: ArcMode = ArcMode.MELEE
@@ -33,7 +38,7 @@ func configure(p_mode: ArcMode, p_element: String) -> void:
 	element = p_element if p_element != "" else "metal"
 
 func _ready() -> void:
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	set_process(false)
 
 func _notification(what: int) -> void:
@@ -48,7 +53,7 @@ func _process(delta: float) -> void:
 	_anim += delta
 	_draw_phase -= delta
 	if _draw_phase <= 0.0:
-		_draw_phase = REDRAW_INTERVAL
+		_draw_phase = _redraw_interval()
 		redraw_count += 1
 		queue_redraw()
 

@@ -84,6 +84,8 @@ var shadow_ring: Array = []
 ## 阵亡谢幕进行中（演出窗口挡移动/技能/再受创）；结算触发后的收尾全走 is_game_over。
 ## 演出约 1s：塌伏 → 沉没消散 → trigger_game_over（结算面板自带 paused + defeat BGM）。
 var _dying: bool = false
+## 通关胜利演出进行中（得道飞升镜头推进 + 仙乐灵气环爆发）
+var _victorious: bool = false
 
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
@@ -738,8 +740,8 @@ func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
 
-	# 阵亡谢幕期：不再推进移动/技能，只剩演出 tween 在跑
-	if _dying:
+	# 阵亡或通关谢幕期：不再推进移动/技能，只剩演出 tween 在跑
+	if _dying or _victorious:
 		return
 
 	# 技能冷却两段式：先走效果活跃窗口（归零即收尾+进冷却），再走冷却与短时增益倒计时
@@ -1206,7 +1208,7 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 ## 受创入口。source_pos = 伤害来源位置（Boss 震地/丹爆自爆等 AoE 传入），
 ## 受击火花据此指向真实来向；未传（接触/弹丸等贴脸伤害本就有实体因果）时保持向上。
 func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
-	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying:
+	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying or _victorious:
 		return
 
 	# 流云身法：闪避成功不掉血，换一段「残影」短无敌，并把躲掉的这一刀存进影里等着还回去。
@@ -1283,9 +1285,9 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 			return
 		_play_death_sequence()
 
-## 阵亡演出（2026-10-14）：塌落消散约 1s 后才弹结算。
+## 阵亡演出（2026-10-15 优化）：镜头平滑推入特写 + 塌落化光消散 + 结算弹窗无缝衔接。
 ## 期间 _dying 挡住移动/技能/再受创，敌人照常行动（不暂停整场，只谢幕玩家本体）；
-## 演出结束才 trigger_game_over（结算面板自带 paused + defeat BGM，此处不发重复音）。
+## 镜头推近放大（1.35x）聚焦于倒地修士，消散谢幕后才 trigger_game_over。
 func _play_death_sequence() -> void:
 	if _dying:
 		return
@@ -1300,26 +1302,105 @@ func _play_death_sequence() -> void:
 	anim_sprite.position = Vector2.ZERO
 	if is_procedural and procedural_view != null:
 		procedural_view.position = Vector2.ZERO
-	play_squash(Vector2(1.32, 0.62), 0.5)
+
+	# 1. 镜头平滑推进特写（0.55s CUBIC_OUT 放大 1.35x 聚焦玩家倒地位置）
+	GameFeel.focus_camera(GameManager, global_position, 1.35, 0.55)
+
+	# 2. 倒地姿态与初阶受击反馈
+	play_squash(Vector2(1.32, 0.62), 0.55)
 	if is_procedural and procedural_view != null:
-		procedural_view.play_hit(0.5)
-	# 灵气散逸：一圈纸白微环 + 落点微尘（走 JuiceEffect 池，带帧预算闸与视口门控）
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 30.0, GameStyle.PAPER, 0.5)
+		procedural_view.play_hit(0.55)
+	# 灵气初散：一圈纸白微环 + 落点微尘
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 32.0, GameStyle.PAPER, 0.45)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), Vector2.UP * 30.0)
 	GameFeel.vibrate(80, 1.0)
-	var tw := create_tween()
-	# 先塌伏（前倾倒地姿态由 squash 承担），后半段整体沉入地面消散
-	tw.tween_interval(0.45)
+
 	var fade_target: Node2D = anim_sprite
 	if is_procedural and procedural_view != null:
 		fade_target = procedural_view
-	tw.tween_property(fade_target, "modulate:a", 0.0, 0.4)
-	tw.tween_property(fade_target, "scale", Vector2(0.4, 0.18), 0.4)\
+
+	var tw := create_tween()
+	# 0.5s 伏地定格，让特写镜头清晰展现修士倒地姿势
+	tw.tween_interval(0.5)
+	tw.tween_callback(func():
+		# 灵气消散：一圈略大的空灵微环散开
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, 48.0, GameStyle.PAPER, 0.55)
+	)
+	# 随后 0.45s 沉地淡出，灵韵归虚
+	tw.tween_property(fade_target, "modulate:a", 0.0, 0.45)
+	tw.parallel().tween_property(fade_target, "scale", Vector2(0.35, 0.16), 0.45)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(shadow_sprite, "modulate:a", 0.0, 0.4)
+	# 留白 0.2s 呼吸静默，让空场稍有沉淀，再无缝呼出结算屏
+	tw.tween_interval(0.2)
 	tw.tween_callback(func():
 		if not GameManager.is_game_over:
 			GameManager.trigger_game_over(false))
+
+## 通关胜利演出（2026-10-15）：荡平妖潮·得道飞升。
+## 镜头平滑推入特写（1.4x）+ 角色微浮升空 + 金玉双色灵气环爆发 + 仙乐定音，随后唤起通关结算。
+func play_victory_sequence() -> void:
+	if _victorious or _dying:
+		return
+	_victorious = true
+	_dash_time = 0.0
+	velocity = Vector2.ZERO
+	invulnerable_time = 9999.0
+
+	_hit_tilt = 0.0
+	_hit_jiggle_offset = Vector2.ZERO
+	anim_sprite.position = Vector2.ZERO
+	if is_procedural and procedural_view != null:
+		procedural_view.position = Vector2.ZERO
+		procedural_view.rotation = 0.0
+		procedural_view.play_idle()
+	else:
+		RunMotion.select_anim(anim_sprite, _anim_idle, false)
+
+	# 1. 镜头平滑推入特写（0.65s CUBIC_OUT 放大 1.4x 聚焦玩家身位）
+	GameFeel.focus_camera(GameManager, global_position, 1.4, 0.65)
+
+	# 2. 仙乐定音与触觉反馈
+	AudioManager.play_sfx("obelisk_blessing", 1.0)
+	GameFeel.vibrate(60, 0.8)
+
+	# 3. 得道飞升姿态：修仙真身微浮升空 + 金玉双环绽放
+	play_squash(Vector2(0.85, 1.22), 0.55)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD, 0.65)
+	JuiceEffect.spawn_heal_rise(get_parent(), global_position)
+
+	var target_node: Node2D = anim_sprite
+	if is_procedural and procedural_view != null:
+		target_node = procedural_view
+
+	var tw := create_tween()
+	# 角色微升 10px 宛如得道凌空浮起，微泛仙灵暖光
+	tw.tween_property(target_node, "position:y", -10.0, 0.55)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(target_node, "modulate", Color(1.25, 1.2, 0.95), 0.55)
+
+	# 0.45s 时爆出第二重澄澈玉色灵气环（象征大乘圆满）
+	tw.tween_callback(func():
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, 96.0, GameStyle.JADE, 0.7)
+	)
+
+	# 留白定格 ~0.55s 尽显真身风采，随后 trigger_game_over(true)
+	tw.tween_interval(0.55)
+	tw.tween_callback(func():
+		if not GameManager.is_game_over:
+			GameManager.trigger_game_over(true)
+	)
+
+## 胜利状态复位（从结算弹窗选择「继续无尽」时调用，恢复正常物理与移动）
+func reset_victory_state() -> void:
+	_victorious = false
+	invulnerable_time = 0.0
+	anim_sprite.position = Vector2.ZERO
+	anim_sprite.modulate = Color.WHITE
+	if is_procedural and procedural_view != null:
+		procedural_view.position = Vector2.ZERO
+		procedural_view.modulate = Color.WHITE
+		procedural_view.rotation = 0.0
 
 func increase_max_hp(amount: float, heal_amount: float) -> void:
 	max_health += amount

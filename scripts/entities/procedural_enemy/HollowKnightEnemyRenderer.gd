@@ -9,8 +9,8 @@ extends Node2D
 	set(val):
 		config = val
 		if config != null:
-			# 精英/Boss 数量少、动作分量重，保持每帧重绘；普通怪走 20Hz 节流
-			_redraw_interval = REDRAW_INTERVAL_MOB if (not config.is_elite and not config.is_boss) else 0.0
+			# 精英/Boss 数量少、动作分量重，保持每帧重绘；普通怪走档位化节流
+			_is_mob = not config.is_elite and not config.is_boss
 		_dirty = true
 
 # 运动驱动状态
@@ -38,12 +38,16 @@ var _time: float = 0.0
 ## 是「敌人一多就卡」的头号热点。处理：普通怪降频 20Hz 重绘（本来是 10fps 帧动画风格，
 ## 20fps 矢量动画无感），精英/Boss 数量少保持每帧；每实例随机错相把重绘摊到不同帧
 ## 避免「每 N 帧一次尖峰」；屏外直接跳过重绘（_time 照常推进，回屏即恢复）。
-const REDRAW_INTERVAL_MOB := 0.05   ## 普通怪重绘间隔：20Hz
+## 60fps 档（2026-10-15 VisualRate 档位联动）：普通怪步进随物理 60Hz 翻倍，
+## 20Hz 画面会露台阶，提到 30Hz；低档 20Hz 是 perf_probe 钉住的预算口径。
+const HZ_MOB_LOW := 20.0            ## 省电档普通怪重绘频率
+const HZ_MOB_HIGH := 30.0           ## 流畅档普通怪重绘频率
 const CULL_MARGIN := 64.0           ## 屏外剔除余量（px），防半身出屏闪烁
 static var redraw_count: int = 0    ## 重绘发放计数（tests/PerfProbe 断言用）
 
 var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相载体）
-var _redraw_interval: float = REDRAW_INTERVAL_MOB
+## 普通怪 = 节流重绘；精英/Boss = 每帧（0 间隔）。默认节流（config 未赋值前与旧口径一致）
+var _is_mob: bool = true
 var _offscreen: bool = false
 var _dirty: bool = false            ## 状态翻转（镜像/换装）时插队重绘
 ## 屏外剔除变换缓存：全屏敌人共享同一个 canvas_transform + visible_rect，
@@ -54,10 +58,16 @@ static var _cull_transform: Transform2D
 static var _cull_limit: Vector2
 static var _cull_valid: bool = false
 
+## 本实例的重绘间隔：精英/Boss 每帧（0），普通怪按帧率档位节流
+func _redraw_interval() -> float:
+	if not _is_mob:
+		return 0.0
+	return VisualRate.interval(HZ_MOB_HIGH, HZ_MOB_LOW)
+
 func _ready() -> void:
 	# 错相：用 instance_id 派生初值（不碰玩法随机），把 35 只怪的重绘摊到不同帧，
 	# 避免「每 N 帧一次集中重绘尖峰」把节流收益吃掉
-	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL_MOB)
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -78,7 +88,7 @@ func _process(delta: float) -> void:
 			return
 	if _dirty or _draw_phase <= 0.0:
 		_dirty = false
-		_draw_phase = _redraw_interval
+		_draw_phase = _redraw_interval()
 		redraw_count += 1
 		queue_redraw()
 	else:

@@ -413,7 +413,7 @@ func _selftest() -> void:
 		return
 
 	# 反例①：修复前的徽记接线 —— 只认左键松开，且回调引用「尚未赋值的局部变量」
-	var old_chip: Label
+	var old_chip: Label = null
 	var old_cb := func() -> void:
 		DetailTip.show_over(_hud, old_chip, {"title": "反例① 旧接线"})
 	old_chip = Label.new()

@@ -131,6 +131,39 @@ func _test_screen_shake_budget() -> void:
 	_c.equals(SettingsManager.damage_number_mode_next(), &"all", "智能合并下一档为全部显示")
 	SettingsManager.set_val(&"display", &"damage_number_mode", orig_num_mode)
 
+	# 7. 镜头叙事聚焦通道（特写、变焦、震屏关闭下仍生效、重置复位）
+	var fcam := SmoothCamera.new()
+	add_child(fcam)
+	_c.check(not fcam.is_focusing(), "相机初始不在聚焦状态")
+	fcam.focus_at(Vector2(320.0, 180.0), 1.35, 0.5)
+	_c.check(fcam.is_focusing(), "调用 focus_at 后立即进入聚焦状态")
+	# 关掉震屏测试聚焦不受震屏开关抑制
+	SettingsManager.set_val(&"display", &"shake_intensity", &"off")
+	fcam.focus_at(Vector2(100.0, 50.0), 1.5, 0.4)
+	_c.check(fcam.is_focusing(), "震屏关闭下聚焦通道依然正常进入")
+	# 聚焦状态下 zoom_punch 被跳过，不冲淡特写
+	var z_before := fcam.zoom
+	fcam.zoom_punch(0.1, 0.2)
+	_c.check(fcam.zoom.is_equal_approx(z_before), "聚焦状态下 zoom_punch 跳过不破坏特写")
+	fcam.reset_focus()
+	_c.check(not fcam.is_focusing(), "reset_focus 立即退出聚焦状态")
+	_c.check(fcam.zoom.is_equal_approx(Vector2(1.2, 1.2)), "reset_focus 恢复基准视距 (1.2, 1.2)")
+	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
+	fcam.free()
+
+	# 8. 玩家通关飞升演出状态机测试
+	var p_scene: PackedScene = load("res://scenes/entities/Player.tscn")
+	var test_player: Player = p_scene.instantiate()
+	add_child(test_player)
+	_c.check(not test_player._victorious, "玩家初始不在胜利演出态")
+	test_player.play_victory_sequence()
+	_c.check(test_player._victorious, "play_victory_sequence 后进入胜利演出态")
+	_c.check(test_player.invulnerable_time >= 9000.0, "胜利演出期获绝对无敌保护")
+	test_player.reset_victory_state()
+	_c.check(not test_player._victorious, "reset_victory_state 成功复位胜利演出态")
+	_c.near(test_player.invulnerable_time, 0.0, EPS, "复位后无敌时间恢复")
+	test_player.free()
+
 func _test_knock_direction() -> void:
 	var p := Vector2.ZERO
 	var src := Vector2(300.0, 0.0)                 # 落点：玩家正东 300 的敌人（正是分配位，不是最近位）

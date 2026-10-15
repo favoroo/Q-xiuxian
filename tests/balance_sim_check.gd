@@ -4,9 +4,10 @@ extends Node
 ##
 ## 本判据在 headless 环境下全真跑 GameBalance、WeaponData 与 GameManager 数值链路，钉死四大护栏：
 ## 1) 20 件法器 ★1 零加点单体 DPS 严格收敛在分档带内，全库极差比 ≤ 2.0（杜绝个别法器 5 倍碾压或沦为纯摆设）；
-## 2) 敌人气血曲线确为 1.15 复利增长，危险度 0 呈现前松后紧；
+## 2) 敌人气血曲线确为 1.16 复利增长，危险度 0 呈现前松后紧；
 ## 3) 标准成型 Build 在第 10/20 波 Boss 战击杀时长（TTK）落在 30~70s 区间（真正的 Boss 攻坚体验）；
-## 4) 极端 6 把青云剑纯输出 Build 在第 20 波魔尊战 TTK 坚守 ≥ 8.0s（不剥夺暴力 build 的爽感，但彻底杜绝 0.5s 摸一下就秒的荒谬现象）。
+## 4) 极端 6 把青云剑纯输出 Build 在第 20 波魔尊战 TTK 坚守 ≥ 8.0s（不剥夺暴力 build 的爽感，但彻底杜绝 0.5s 摸一下就秒的荒谬现象）；
+## 5) 反割草下限（2026-10-15）：成型 Build 全队火力全集中一只中型怪也不许秒蒸发（W10 ≥1.5s / W20 ≥2.5s）。
 ##
 ## 运行: godot --headless --path . res://tests/BalanceSimCheck.tscn
 ##       godot --headless --path . res://tests/BalanceSimCheck.tscn -- --selftest
@@ -128,7 +129,7 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 	_c.check(m10 >= 3.70 and m10 <= 3.90, "第 10 波气血倍率提速 (~3.80x，实得 %.2f)" % m10)
 	_c.check(m20 >= 16.5 and m20 <= 17.2, "第 20 波气血倍率达 ~16.88x (实得 %.2f)" % m20)
 
-	# Boss 气血
+	# Boss 气血（2026-10-15 基数 6500→6200 对冲神识分流收紧：W10≈2.36万 / W20≈10.4万）
 	var b10 := GameBalance.boss_hp(10)
 	var b20 := GameBalance.boss_hp(20)
 	_c.check(b10 >= 22000.0 and b10 <= 28000.0, "第 10 波 Boss 气血落在 2.2~2.8 万 (实得 %.0f)" % b10)
@@ -138,15 +139,15 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 
 func _test_reference_build_ttks() -> void:
 	# 3.1 杂怪 TTK 与多把 ★1 法器集火韧性
-	# W1 史莱姆 base 18 × MOB_HP_BASE_MULT(4.5) = 81，蜂群精 base 12 × 4.5 = 54
+	# 2026-10-15 反割草 2.0：小怪血量基数 8.5（W1 史莱姆 18×8.5=153，蜂群精 12×8.5=102）
 	var w1_slime_hp := 18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(1)
 	var w1_slime_ttk := w1_slime_hp / WeaponData.sustained_single_dps("qingyun_sword", 1)
-	_c.check(w1_slime_ttk >= 2.0 and w1_slime_ttk <= 4.0,
-		"W1 杂怪扎实耐打：首发法器 TTK 落在 2~4s（约 3 刀，实得 %.2fs）" % w1_slime_ttk)
+	_c.check(w1_slime_ttk >= 3.5 and w1_slime_ttk <= 5.5,
+		"W1 杂怪扎实耐打：首发法器 TTK 落在 3.5~5.5s（约 5 刀，实得 %.2fs）" % w1_slime_ttk)
 
-	# 佩戴 4 把 ★1 青云剑（W3 史莱姆 81 * 1.16^2 ≈ 109 HP）：
-	# 单剑基础 30 × 神识分流(4把=0.735) = 22.06/刀；即使 4 剑同帧集火同一只怪，
-	# 经短窗集火保护（1.0 + 0.7 + 0.5 + 0.5 = 2.7 倍单刀）仅打 59.6 < 109 HP，绝不秒杀！
+	# 佩戴 4 把 ★1 青云剑（W3 史莱姆 153 × 1.16^2 ≈ 206 HP）：
+	# 单刀基础 34 × 神识分流(4把≈0.690) = 23.45/刀；即使 4 剑同帧集火同一只怪，
+	# 经短窗集火保护（1.0 + 0.7 + 0.5 + 0.5 = 2.7 倍单刀）仅打 63.3 < 206 HP，绝不秒杀！
 	var w3_slime_hp := ceilf(18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(3))
 	var single_sword_hit_4w := WeaponData.damage_for("qingyun_sword", 1) * GameBalance.multi_weapon_damage_mult(4)
 	var volley_4w_burst := single_sword_hit_4w * (GameBalance.focus_fire_mult(0) + GameBalance.focus_fire_mult(1) + GameBalance.focus_fire_mult(2) + GameBalance.focus_fire_mult(3))
@@ -158,10 +159,11 @@ func _test_reference_build_ttks() -> void:
 	_c.check(volley_6w_burst < w4_slime_hp,
 		"6 把 ★1 武器同帧齐射绝不秒杀 W4 小怪（齐射伤害 %.1f < 气血 %.0f）" % [volley_6w_burst, w4_slime_hp])
 
-	# 3.2 成型 Build 仿真（Standard Meta Build）
-	# W10: 5 把法器 (2把★2, 3把★1), 8 项悟道加点, 1 件法宝
-	# 对第 10 波 Boss 的仿真 DPS
-	var std_w10_dps := _simulate_build_dps(
+	# 3.1b 反割草下限（2026-10-15 新增）：成型 Build 全队火力**全部集中**在一只中型常见怪上的
+	# 最坏情况口径（雷兽 base 45，W10 解锁主力怪种）。真实体感在分流打多目标与集火单目标之间，
+	# 但只要这条下限守得住，武器侧未来任何上调都不会再回到「贴面即蒸发」的割草区。
+	# 对杂怪不吃斩将加成：DPS 除以 (1 + elite_damage)。
+	var std_w10_dps_pre := _simulate_build_dps(
 		[{"id": "qingyun_sword", "star": 2}, {"id": "gengjin_feijian", "star": 2},
 		 {"id": "liuye_feidao", "star": 1}, {"id": "huoyan_fu", "star": 1}, {"id": "bajiao_fan", "star": 1}],
 		{
@@ -172,12 +174,11 @@ func _test_reference_build_ttks() -> void:
 		},
 		true
 	)
-	var std_w10_boss_ttk := GameBalance.boss_hp(10) / std_w10_dps
-	_c.check(std_w10_boss_ttk >= 30.0 and std_w10_boss_ttk <= 70.0,
-		"成型 Build 在第 10 波 Boss 战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [std_w10_boss_ttk, std_w10_dps])
-
-	# W20: 6 把法器 (2把★3, 4把★2), 18 项悟道加点, 3 件法宝
-	var std_w20_dps := _simulate_build_dps(
+	var lei_w10_hp := 45.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(10)
+	var w10_mob_ttk := lei_w10_hp / (std_w10_dps_pre / 1.25)
+	_c.check(w10_mob_ttk >= 1.5,
+		"成型 Build 火力全集中也不许秒蒸发 W10 中型怪（雷兽 TTK %.2fs ≥ 1.5s）" % w10_mob_ttk)
+	var std_w20_dps_pre := _simulate_build_dps(
 		[{"id": "qingyun_sword", "star": 3}, {"id": "gengjin_feijian", "star": 3},
 		 {"id": "liuye_feidao", "star": 2}, {"id": "huoyan_fu", "star": 2},
 		 {"id": "bajiao_fan", "star": 2}, {"id": "chiyan_dao", "star": 2}],
@@ -189,6 +190,22 @@ func _test_reference_build_ttks() -> void:
 		},
 		true
 	)
+	var lei_w20_hp := 45.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(20)
+	var w20_mob_ttk := lei_w20_hp / (std_w20_dps_pre / 1.5)
+	_c.check(w20_mob_ttk >= 2.5,
+		"成型 Build 火力全集中也不许秒蒸发 W20 中型怪（雷兽 TTK %.2fs ≥ 2.5s）" % w20_mob_ttk)
+	print("MOB_TTK 反割草下限：成型 W10 雷兽 %.2fs / W20 雷兽 %.2fs（全队集中口径）" % [w10_mob_ttk, w20_mob_ttk])
+
+	# 3.2 成型 Build 仿真（Standard Meta Build）—— 与 3.1b 共用同一次 DPS 仿真
+	# W10: 5 把法器 (2把★2, 3把★1), 8 项悟道加点, 1 件法宝
+	# 对第 10 波 Boss 的仿真 DPS
+	var std_w10_dps := std_w10_dps_pre
+	var std_w10_boss_ttk := GameBalance.boss_hp(10) / std_w10_dps
+	_c.check(std_w10_boss_ttk >= 30.0 and std_w10_boss_ttk <= 70.0,
+		"成型 Build 在第 10 波 Boss 战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [std_w10_boss_ttk, std_w10_dps])
+
+	# W20: 6 把法器 (2把★3, 4把★2), 18 项悟道加点, 3 件法宝
+	var std_w20_dps := std_w20_dps_pre
 	var std_w20_boss_ttk := GameBalance.boss_hp(20) / std_w20_dps
 	_c.check(std_w20_boss_ttk >= 30.0 and std_w20_boss_ttk <= 70.0,
 		"成型 Build 在第 20 波魔尊战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [std_w20_boss_ttk, std_w20_dps])
@@ -473,6 +490,8 @@ func _test_survivability() -> void:
 ## （时长/间隔 × 平均批量，含 25% 追加概率）与预算 wave_spawn_budget 逐波对照。
 ## 2026-10-11 缩图+减怪后契约改写：预算全程收紧（W1 起即触发），
 ## 被闸掉的刷入量由 budget_compensation_exp 折经验足额补差 ⇒ 只减压力不减经济；
+## 2026-10-15 反割草 2.0：预算再 -20%（11/2.9/72 ⇒ W1=14 / W10=40 / W20=69），
+## 单怪掉落经验同步 ×MOB_KILL_EXP_MULT(1.25)，补差均值统计与掉落同走 mob_kill_exp 一个出口；
 ## 打印表即调参时的校准尺。
 func _test_spawn_budget_binding() -> void:
 	var table: Array[String] = []

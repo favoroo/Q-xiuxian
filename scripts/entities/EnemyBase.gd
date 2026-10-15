@@ -1935,7 +1935,10 @@ func _die() -> void:
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS),
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS))
 		gem.global_position = global_position + offset
-		gem.exp_value = exp_reward
+		# 小怪经验走反割草补偿倍率（BalanceWave.mob_kill_exp）：预算 -20% 后单只 ×1.25 找平每波收入。
+		# 精英在下面立即被 ELITE_GEM_EXP 覆写，不吃这条。金币腿（stone_value=-1 随 exp_value 同值）
+		# 自动同比放大 —— 数量 ×0.8 × 单只 ×1.25 = 每波金币收入持平；碎金档显式置 1 枚不受影响。
+		gem.exp_value = GameBalance.mob_kill_exp(exp_reward)
 		gem.is_gold = is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
 		if is_elite:
 			gem.exp_value = GameBalance.ELITE_GEM_EXP

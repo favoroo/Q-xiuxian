@@ -9,7 +9,12 @@ extends Node2D
 var length: float = 100.0
 var half_width: float = 40.0
 
-const REDRAW_INTERVAL := 0.05
+## 重绘节流按帧率档位取双档（2026-10-15 VisualRate 档位联动）：火锥几何每帧跟随弹道下发，
+## 60fps 档 20Hz 是每 3 帧一画，翻倍到 40Hz；低档 20Hz 维持 perf_probe 预算。
+const HZ_LOW := 20.0
+const HZ_HIGH := 40.0
+static func _redraw_interval() -> float:
+	return VisualRate.interval(HZ_HIGH, HZ_LOW)
 
 var _anim: float = 0.0
 var _phase: float = 0.0
@@ -18,7 +23,7 @@ var _open: float = 0.0   ## 起喷张开度（0→1，0.08s 喷射展开）
 func _ready() -> void:
 	visible = false
 	set_process(false)
-	_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+	_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 
 ## 亮起/续命：每帧下发当前几何
 func cone_on(p_length: float, p_half_width: float) -> void:
@@ -38,8 +43,9 @@ func _process(delta: float) -> void:
 	_anim += delta
 	_open = minf(1.0, _open + delta / 0.08)
 	_phase += delta
-	if _phase >= REDRAW_INTERVAL:
-		_phase -= REDRAW_INTERVAL
+	var interval := _redraw_interval()
+	if _phase >= interval:
+		_phase -= interval
 		queue_redraw()
 
 func _draw() -> void:
