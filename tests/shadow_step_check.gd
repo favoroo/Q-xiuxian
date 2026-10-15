@@ -14,6 +14,9 @@ extends Node
 ##   6. 视觉与判定同源：冲击环扫到的半径 == ShadowStepData.BURST_RADIUS == 判定用的那个数
 ##   7. 攒层即增伤：GameManager.shadow_amp_mult == amp_mult(影层)，兑现后回 1.0
 ##   8. 影爆门控：无冷却——0 层拒、有层可连放；空 extra_skill_id 直接拒
+##   9. 影爆波次同步：满层兑现 ≥ 参照小怪（邪修基血 24×MOB_HP_BASE_MULT）生命，
+##      W1/W10/W20/W30 全部成立（用户口径 2026-10-15「满层影爆震死周围一环小怪」；
+##      旧版只跟接触伤走，小怪血复利更快，W10 满层仅及 ~10% 血＝挠痒）
 ##
 ## 运行: godot --headless --path . res://tests/ShadowStepCheck.tscn
 ##       godot --headless --path . res://tests/ShadowStepCheck.tscn -- --selftest
@@ -27,9 +30,8 @@ const EPS := 0.0001
 ## 摆位受两条硬约束，改这里前先把算式核一遍：
 ##   ① 视口内 —— 玩家位置就是冲击波生成点，屏外会被 _pos_in_viewport 静默丢弃，同源半径那条会假绿；
 ##   ② 圈外怪（SPAWN_AT.x + BURST_RADIUS + 60）必须落在界碑收口内 —— EnemyBase._physics_process
-##      每帧 clamp 到 ±(MAP_HALF_EXTENT - 20) = ±420，越界的怪会被拖回，读成「圈外敌人动了」。
-##      旧值 260 让圈外怪落在 x=440 ⇒ 每帧被钳回 420，漂 20px 报红（v0.0.24 把 MAP_HALF_EXTENT
-##      从 500 缩到 440 时翻的车）。180 + 120 + 60 = 360，留 60px 余量。
+##      每帧 clamp 到 ±(MAP_HALF_EXTENT - 20) = ±540，越界的怪会被拖回，读成「圈外敌人动了」。
+##      180 + 120 + 60 = 360，留足安全余量。
 const SPAWN_AT := Vector2(180.0, 270.0)
 
 var _c := TestCheck.new()
@@ -46,6 +48,7 @@ func _ready() -> void:
 	await _test_non_shadow_no_stack()
 	await _test_fifo_cap()
 	await _test_amp_pure()
+	await _test_burst_wave_power()
 	await _test_dash_iframe_bonus()
 	await _test_release_delivers()
 	if _selftest:
@@ -131,21 +134,22 @@ func _test_non_shadow_no_stack() -> void:
 	_c.check(p.current_health >= hp_before - EPS, "非影者闪避照样不掉血（流云身法通用兜底）")
 	_c.near(p.invulnerable_time, ShadowStepData.GUARD_SEC, 0.001, "非影者闪避仍拿残影短无敌")
 	_c.check(_stacks(p) == 0, "非影者闪避不攒影层（实得 %d 层）：没有影爆键，攒了无处兑现" % _stacks(p))
-	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "非影者闪避不动增伤乘区（防白拿 ×1.40 永久增伤）")
+	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "非影者闪避不动增伤乘区（防白拿 ×1.50 永久增伤）")
 	p.queue_free()
 
 # ---------------- 3. 满层 FIFO ----------------
 
 func _test_fifo_cap() -> void:
 	var p := _make_player(1.0)
-	for raw in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]:
+	# 12 刀挤进 10 层上限：最旧两刀（10/20）必须让位
+	for raw in [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0]:
 		p.invulnerable_time = 0.0
 		p.take_damage(float(raw))
 	_c.check(_stacks(p) == ShadowStepData.MAX_STACKS,
-		"闪 10 次后层数钉在上限 %d（实得 %d）" % [ShadowStepData.MAX_STACKS, _stacks(p)])
+		"闪 12 次后层数钉在上限 %d（实得 %d）" % [ShadowStepData.MAX_STACKS, _stacks(p)])
 	_c.near(ShadowStepData.stored_sum(p.shadow_ring),
-		30.0 + 40.0 + 50.0 + 60.0 + 70.0 + 80.0 + 90.0 + 100.0, EPS,
-		"满层后换掉最旧那一刀：留的是最近 %d 刀（30…100）" % ShadowStepData.MAX_STACKS)
+		30.0 + 40.0 + 50.0 + 60.0 + 70.0 + 80.0 + 90.0 + 100.0 + 110.0 + 120.0, EPS,
+		"满层后换掉最旧那两刀：留的是最近 %d 刀（30…120）" % ShadowStepData.MAX_STACKS)
 	_c.near(GameManager.shadow_amp_mult, ShadowStepData.amp_mult(p.shadow_ring), EPS,
 		"满层增伤 ×%.2f（每层 +%.0f%%，攒着就生效）" % [
 			ShadowStepData.amp_mult(p.shadow_ring), ShadowStepData.AMP_PER_STACK * 100.0])
@@ -158,6 +162,30 @@ func _test_amp_pure() -> void:
 	_c.near(ShadowStepData.amp_mult([10.0, 20.0, 30.0]),
 		1.0 + 3.0 * ShadowStepData.AMP_PER_STACK, EPS,
 		"3 层增伤 = 1 + 3 × 每层 %.0f%%" % [ShadowStepData.AMP_PER_STACK * 100.0])
+
+# ---------------- 影爆波次同步：满层兑现恒清一环小怪（第 9 条） ----------------
+
+func _test_burst_wave_power() -> void:
+	# 满 10 层全按参照小怪（邪修 contact 13 / 基血 24×MOB_HP_BASE_MULT）的接触刀计：
+	# 波次同步必须让满层兑现 ≥ 该档小怪生命，否则中后期影爆退化成挠痒。
+	for wave in [1, 10, 20, 30]:
+		var hit := ceilf(13.0 * GameBalance.enemy_dmg_mult(wave))
+		var ring: Array = []
+		for i in range(ShadowStepData.MAX_STACKS):
+			ring = ShadowStepData.push_ring(ring, hit)
+		var burst := ShadowStepData.burst_damage(ring, wave)
+		var ref_hp := ceilf(24.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(wave))
+		_c.check(burst >= ref_hp,
+			"W%d 满层影爆 %.0f ≥ 参照小怪血 %.0f（满层清一环小怪，全波次同一体感）" % [
+				wave, burst, ref_hp])
+	# 厚皮档留活口（威力底数的上界钉点）：蛛母基血 65 不能被满层秒——否则波次同步被调过猛
+	var hit20 := ceilf(13.0 * GameBalance.enemy_dmg_mult(20))
+	var ring20: Array = []
+	for i in range(ShadowStepData.MAX_STACKS):
+		ring20 = ShadowStepData.push_ring(ring20, hit20)
+	var ref_zhumu := ceilf(65.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(20))
+	_c.check(ShadowStepData.burst_damage(ring20, 20) < ref_zhumu,
+		"W20 满层影爆咬不动蛛母档厚皮（威力底数不许溢出「清小怪」的定位）")
 
 # ---------------- 4. 带影层冲刺：无敌被动同源，且不再消耗影层 ----------------
 
@@ -209,13 +237,14 @@ func _test_release_delivers() -> void:
 	var pos_in: Vector2 = inside.global_position
 	var pos_out: Vector2 = outside.global_position
 	var stored: float = ShadowStepData.stored_sum(p.shadow_ring)
-	var want_dmg: float = ShadowStepData.burst_damage(p.shadow_ring)
+	var want_dmg: float = ShadowStepData.burst_damage(p.shadow_ring, GameManager.wave_number)
 
 	_c.check(p.try_activate_extra_skill(), "影爆走额外技能真入口释放成功（try_activate_extra_skill）")
 
 	_c.near(hp_in - inside.current_hp, want_dmg, 0.01,
-		"圈内敌人吃到影爆 %.1f 伤害（= 躲掉的 %.0f × %.0f%%，走 EnemyBase.take_damage）" % [
-			want_dmg, stored, ShadowStepData.STORE_RATIO * 100.0])
+		"圈内敌人吃到影爆 %.1f 伤害（= 躲掉的 %.0f × %.0f%% × 波次威力 %.2f，走 EnemyBase.take_damage）" % [
+			want_dmg, stored, ShadowStepData.STORE_RATIO * 100.0,
+			ShadowStepData.wave_power(GameManager.wave_number)])
 	_c.check(is_equal_approx(hp_out, outside.current_hp), "圈外敌人一格没掉（判定半径没被辉光糊大）")
 	_c.check(_stacks(p) == 0, "兑现后影层归零（不重复放）")
 	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "兑现后增伤乘区回 1.0（攒着的加成随爆发一起花掉）")

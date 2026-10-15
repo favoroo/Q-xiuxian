@@ -238,7 +238,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 24, "成就共配置 24 条（16 奖励型 + 8 纯荣誉型）")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 30, "成就共配置 30 条（16 奖励型 + 14 纯荣誉型）")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -684,7 +684,9 @@ func _test_fx_particle_pool() -> void:
 	# 6. FxBudget 预算硬上限断言
 	_c.check(FxBudget.GLOBAL_LIGHT_CAP <= 20, "全局动态灯上限 <= 20")
 	_c.check(FxBudget.MAX_ACTIVE_EMITTERS <= 30, "同屏活跃粒子发射器上限 <= 30")
+	_c.check(FxParticlePool.POOL_CAP <= FxBudget.MAX_ACTIVE_EMITTERS, "FxParticlePool 常驻发射器池容量 <= MAX_ACTIVE_EMITTERS")
 	_c.equals(FxBudget.LIGHT_CAP_GEM, AstralGem.GEM_LIGHT_CAP, "掉落物灯预算与 AstralGem.GEM_LIGHT_CAP 对齐")
 	_c.equals(FxBudget.LIGHT_CAP_PROJECTILE, BladeProjectile.LIGHT_CAP, "弹丸灯预算与 BladeProjectile.LIGHT_CAP 对齐")
+	_c.equals(FxBudget.LIGHT_CAP_ELITE, EnemyBase.ELITE_LIGHT_CAP, "精英灯预算与 EnemyBase.ELITE_LIGHT_CAP 对齐")
 
 

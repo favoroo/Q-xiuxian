@@ -52,14 +52,14 @@ func _process(delta: float) -> void:
 	_clock += delta
 	progress = clampf(1.0 - (_time_left / _duration()), 0.0, 1.0)
 
-	# 妖气凝聚微粒（T-3.6）：外圈灵气向中心收拢，营造敌人从灵气中凝结成形的质感
-	_particle_timer -= delta
-	if _particle_timer <= 0.0 and progress < 0.92:
-		_particle_timer = 0.14
-		var ang := randf() * TAU
-		var p_pos := global_position + Vector2(cos(ang), sin(ang)) * (indicator_radius * 1.05)
-		var p_elem: Variant = "crit" if (is_boss or is_elite) else "shadow"
-		FxParticlePool.burst(FxParticlePool.SOUL_ORB, p_pos, p_elem, 0.75)
+	# 妖气凝聚微粒（去躁优化）：仅魔君与精英怪保留高阶妖气凝聚粒子，普通小怪只用纯净同心缩圆与阵纹
+	if (is_boss or is_elite) and progress < 0.92:
+		_particle_timer -= delta
+		if _particle_timer <= 0.0:
+			_particle_timer = 0.18
+			var ang := randf() * TAU
+			var p_pos := global_position + Vector2(cos(ang), sin(ang)) * (indicator_radius * 1.05)
+			FxParticlePool.burst(FxParticlePool.SOUL_ORB, p_pos, "crit", 0.75)
 
 	_redraw_timer -= delta
 	if _redraw_timer <= 0.0:

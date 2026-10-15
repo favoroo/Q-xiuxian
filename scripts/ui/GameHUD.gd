@@ -5,6 +5,7 @@ extends Control
 signal pause_requested
 signal stats_requested
 
+@onready var hp_icon: TextureRect = $TopContainer/LeftBox/HPBlock/HBox/HPIcon
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
 @onready var hp_ghost_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar/HPGhostBar
 @onready var hp_label: Label = $TopContainer/LeftBox/HPBlock/HBox/HPLabel
@@ -19,7 +20,7 @@ signal stats_requested
 @onready var banner_label: Label = $Banner/BannerLabel
 
 ## 顶栏原本留的左右边距与顶边距（安全区让位是在它们之上再加，不是替换）
-const BASE_EDGE_X := 22.0
+const BASE_EDGE_X := 16.0
 const BASE_TOP := 20.0
 ## 让位上限：读数再大也不许被一个离谱的 safe area 推到屏心
 const SAFE_CAP := 140.0
@@ -57,9 +58,6 @@ var _hp_low_tween: Tween = null
 var _lv_badge_style: StyleBoxFlat = null
 var _lv_badge_base_bg := Color(0, 0, 0, 0)
 var _lv_badge_base_border := Color(0, 0, 0, 0)
-## 经验条填充色同理：升级金闪与徽记底色同拍，先换私有副本再动色
-var _exp_fill_style: StyleBoxFlat = null
-var _exp_fill_base := Color(0, 0, 0, 0)
 ## 全屏升级金光（_ready 里代码创建，压在 HUD 控件之下）
 var _flash_rect: ColorRect = null
 ## 镜头缩放冲击节流：连升多级 0.2s 内只顿一次
@@ -464,27 +462,37 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 			_hp_block_style = hp_block.get_theme_stylebox("panel").duplicate()
 			_hp_block_base_border = _hp_block_style.border_color
 			hp_block.add_theme_stylebox_override("panel", _hp_block_style)
-		# 告急期血条本体呼吸闪烁与底边描边泛红同拍：
-		# 整条血槽连同外框一起起伏才是明确的濒死警报
-		if _hp_low_tween != null and _hp_low_tween.is_valid():
-			_hp_low_tween.kill()
-			_hp_low_tween = null
-		if low and GameFeel.screen_flash_enabled():
-			_hp_low_tween = create_tween().set_loops()
-			_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", GameStyle.BAD, 0.35)\
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_hp_low_tween.tween_property(hp_bar, "modulate", Color.WHITE, 0.35)\
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", _hp_block_base_border, 0.35)\
-				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		else:
-			hp_bar.modulate = Color.WHITE
-			if _hp_block_style != null:
-				_hp_block_style.border_color = _hp_block_base_border
+			# 告急期血条本体呼吸闪烁与底边描边泛红同拍：
+			# 整条血槽连同外框一起起伏才是明确的濒死警报
+			if _hp_low_tween != null and _hp_low_tween.is_valid():
+				_hp_low_tween.kill()
+				_hp_low_tween = null
+			if low and GameFeel.screen_flash_enabled():
+				if hp_icon != null:
+					hp_icon.pivot_offset = hp_icon.size * 0.5
+				_hp_low_tween = create_tween().set_loops()
+				_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
+					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", GameStyle.BAD, 0.35)\
+					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				if hp_icon != null:
+					_hp_low_tween.parallel().tween_property(hp_icon, "scale", Vector2(1.18, 1.18), 0.35)\
+						.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				_hp_low_tween.tween_property(hp_bar, "modulate", Color.WHITE, 0.35)\
+					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", _hp_block_base_border, 0.35)\
+					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				if hp_icon != null:
+					_hp_low_tween.parallel().tween_property(hp_icon, "scale", Vector2.ONE, 0.35)\
+						.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			else:
+				hp_bar.modulate = Color.WHITE
+				if _hp_block_style != null:
+					_hp_block_style.border_color = _hp_block_base_border
+				if hp_icon != null:
+					hp_icon.scale = Vector2.ONE
 
-## 回血视觉反馈（克制版，不加受击冲突反馈）：翡翠微光拂过血槽 + 血字温和回弹
+## 回血视觉反馈（克制版，不加受击冲突反馈）：翡翠微光拂过血槽 + 血字温和回弹 + 气血图标轻跳
 func _play_heal_fx() -> void:
 	if _hp_heal_flash != null:
 		if _hp_heal_tween != null and _hp_heal_tween.is_valid():
@@ -505,7 +513,14 @@ func _play_heal_fx() -> void:
 		_hp_label_heal_tween.parallel().tween_property(hp_label, "modulate", Color(0.3, 1.4, 0.6, 1.0), 0.05)
 		_hp_label_heal_tween.tween_property(hp_label, "modulate", Color.WHITE, 0.15)
 
-## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 斜切光环/星屑（HudLevelBadgeFx）。
+	if hp_icon != null:
+		hp_icon.pivot_offset = hp_icon.size * 0.5
+		hp_icon.scale = Vector2(1.2, 1.2)
+		var icon_tw := create_tween()
+		icon_tw.tween_property(hp_icon, "scale", Vector2.ONE, 0.22)\
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 单圈斜切光环/星屑（HudLevelBadgeFx）。
 ## 可重入：连升多级时 player_leveled_up 连发，先杀旧 tween、颜色复位，再整段重播。
 func _on_leveled_up(_lvl: int) -> void:
 	var badge: PanelContainer = $TopContainer/LeftBox/LevelBadge
@@ -526,23 +541,17 @@ func _on_leveled_up(_lvl: int) -> void:
 	_lv_badge_style.bg_color = GameStyle.JADE
 	_lv_badge_style.border_color = GameStyle.JADE_DK
 	# squash & stretch：先压扁，再 TRANS_BACK 回弹过冲落位（比直线缩放更弹）
+	# 幅度收在「看得出弹了一下」这一档：顶栏一直在动，压得太狠整条 UI 跟着抖
 	badge.pivot_offset = badge.size * 0.5
-	badge.scale = Vector2(0.8, 1.2)
+	badge.scale = Vector2(0.88, 1.12)
 	_lv_tween = create_tween()
 	_lv_tween.tween_property(badge, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	# 金色只驻留 0.26s 再渐回主蓝，杀出「跳了一下」的信号又不停在错误配色上
 	_lv_tween.parallel().tween_property(_lv_badge_style, "bg_color", _lv_badge_base_bg, 0.22).set_delay(0.26)
 	_lv_tween.parallel().tween_property(_lv_badge_style, "border_color", _lv_badge_base_border, 0.22).set_delay(0.26)
-	# 经验条金闪：与徽记底色同拍（同时驻留 0.26s、同时渐回），升级信号在条子上也读得出
-	if _exp_fill_style == null:
-		_exp_fill_style = exp_bar.get_theme_stylebox("fill").duplicate()
-		_exp_fill_base = _exp_fill_style.bg_color
-		exp_bar.add_theme_stylebox_override("fill", _exp_fill_style)
-	_exp_fill_style.bg_color = GameStyle.JADE
-	_lv_tween.parallel().tween_property(_exp_fill_style, "bg_color", _exp_fill_base, 0.22).set_delay(0.26)
 	# 数字脉冲：Lv 数值从中心放大回弹，视线钉在「升了几级」上
 	level_label.pivot_offset = level_label.size * 0.5
-	level_label.scale = Vector2(1.5, 1.5)
+	level_label.scale = Vector2(1.25, 1.25)
 	_lv_label_tween = create_tween()
 	_lv_label_tween.tween_property(level_label, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	HudLevelBadgeFx.burst(self, badge)

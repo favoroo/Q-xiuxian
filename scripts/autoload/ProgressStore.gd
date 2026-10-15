@@ -74,6 +74,7 @@ static func load_into(gm: Node) -> void:
 		gm.career_stats["best_hits_taken"] = int(cfg.get_value("stats", "best_hits_taken", 0))
 		gm.career_stats["best_level"] = int(cfg.get_value("stats", "best_level", 0))
 		gm.career_stats["best_danger_cleared"] = int(cfg.get_value("stats", "best_danger_cleared", -1))
+		gm.career_stats["wins_no_skill_enhance"] = int(cfg.get_value("stats", "wins_no_skill_enhance", 0))
 
 		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
 		gm.cultivator_best_danger = cbd.duplicate() if cbd is Dictionary else {}
@@ -162,6 +163,7 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("stats", "best_hits_taken", int(gm.career_stats.get("best_hits_taken", 0)))
 	cfg.set_value("stats", "best_level", int(gm.career_stats.get("best_level", 0)))
 	cfg.set_value("stats", "best_danger_cleared", int(gm.career_stats.get("best_danger_cleared", -1)))
+	cfg.set_value("stats", "wins_no_skill_enhance", int(gm.career_stats.get("wins_no_skill_enhance", 0)))
 
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
 	cfg.set_value("records", "cultivator_danger_clears", gm.cultivator_danger_clears)
@@ -264,6 +266,9 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	gm.career_stats["total_runs"] = int(gm.career_stats.get("total_runs", 0)) + 1
 	if victory:
 		gm.career_stats["total_wins"] = int(gm.career_stats.get("total_wins", 0)) + 1
+		# 「就不听你话」进度：本局技能非角色契合时累加
+		if not gm.active_skill_id.is_empty() and not SkillData.is_enhanced_for_cultivator(gm.active_skill_id, gm.cultivator_id):
+			gm.career_stats["wins_no_skill_enhance"] = int(gm.career_stats.get("wins_no_skill_enhance", 0)) + 1
 	gm.career_stats["total_kills"] = int(gm.career_stats.get("total_kills", 0)) + gm.kills
 	gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), eff_wave)
 	gm.career_stats["best_kills"] = maxi(int(gm.career_stats.get("best_kills", 0)), gm.kills)

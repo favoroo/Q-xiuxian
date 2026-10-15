@@ -30,6 +30,9 @@ var _drag_off: Vector2 = Vector2.ZERO
 var _drag_touch_idx: int = -100  # -100 = 鼠标拖动；≥0 = 触控 index
 var _pointer: Vector2 = Vector2.ZERO
 
+## 恢复默认的二次确认层（整层 STOP 盖住拖动代理与底栏，开了就没法误触别的）
+var _confirm_root: Control = null
+
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -136,10 +139,8 @@ func _build() -> void:
 	reset_btn.custom_minimum_size = Vector2(150, 36)
 	reset_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(reset_btn, GameStyle.NAVY2, GameStyle.BAD, 14, GameStyle.PAPER, 5.0)
-	reset_btn.pressed.connect(func():
-		SettingsManager.reset_button_layout()
-		_sync_size_slider()
-	)
+	# 一键抹掉三颗键的摆位不可撤销：先弹窗确认再动手（2026-10-15 用户反馈）
+	reset_btn.pressed.connect(_open_reset_confirm)
 	bar.add_child(reset_btn)
 
 	var done_btn := Button.new()
@@ -151,6 +152,91 @@ func _build() -> void:
 	bar.add_child(done_btn)
 
 	_select(_selected)
+	_build_reset_confirm()
+
+# ---------------- 恢复默认的二次确认弹窗 ----------------
+
+## 弹窗常驻（构建一次、只切显隐）：整层 mouse_filter STOP 盖住三颗拖动代理与底栏，
+## 弹窗开着时下面的键一颗都点不到，也就不存在「确认的同时还在拖」的竞态。
+func _build_reset_confirm() -> void:
+	_confirm_root = Control.new()
+	_confirm_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_confirm_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	_confirm_root.visible = false
+	add_child(_confirm_root)
+
+	var dim := ColorRect.new()
+	dim.color = GameStyle.dim_overlay(0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_confirm_root.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_confirm_root.add_child(center)
+
+	var panel := PanelContainer.new()
+	var st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 2)
+	st.content_margin_left = 22.0
+	st.content_margin_right = 22.0
+	st.content_margin_top = 16.0
+	st.content_margin_bottom = 16.0
+	panel.add_theme_stylebox_override("panel", st)
+	center.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "恢复默认位置？"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(title, 17, GameStyle.CHALK, 2, GameStyle.INK)
+	vb.add_child(title)
+
+	var body := Label.new()
+	# 中文硬换行：短句也拆两行，不赌引擎 autowrap（真机不可靠）
+	body.text = "三颗按钮的位置和大小\n都会回到出厂摆位。"
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(body, 13, GameStyle.PAPER_DIM)
+	vb.add_child(body)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_child(row)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "取消"
+	cancel_btn.custom_minimum_size = Vector2(110, 36)
+	cancel_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(cancel_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER_DIM)
+	cancel_btn.pressed.connect(_close_reset_confirm)
+	row.add_child(cancel_btn)
+
+	var ok_btn := Button.new()
+	ok_btn.text = "恢复"
+	ok_btn.custom_minimum_size = Vector2(110, 36)
+	ok_btn.focus_mode = Control.FOCUS_NONE
+	# 危险动作沿用设置页 danger 行的配色口径：暗底 + 红沿悬停
+	GameStyle.button(ok_btn, GameStyle.NAVY2, GameStyle.BAD, 14, GameStyle.PAPER, 6.0, GameStyle.CHALK)
+	ok_btn.pressed.connect(func():
+		SettingsManager.reset_button_layout()
+		_sync_size_slider()
+		_close_reset_confirm()
+	)
+	row.add_child(ok_btn)
+
+func _open_reset_confirm() -> void:
+	# 弹窗一开先收掉没收尾的拖动，别让弹窗底下的键还在跟手
+	_end_drag()
+	if _confirm_root != null:
+		_confirm_root.visible = true
+
+func _close_reset_confirm() -> void:
+	if _confirm_root != null:
+		_confirm_root.visible = false
 
 # ---------------- 槽位 → 设置项的取数口径（三颗键一张表，不再 if/else 串行） ----------------
 
@@ -237,14 +323,20 @@ func _apply_drag(drag_id: int) -> void:
 
 ## _input 先于 gui_input 吃到同一拍事件：这里只记指针坐标与收尾，
 ## 起拖交给代理钮自己的 gui_input（它知道点没点在自己身上）。
+## 拖动中只认起拖那根指针：第二根手指/别的按键乱动不许劫持 _pointer，
+## 否则按钮会被拽向第二根手指的方向。
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
-	if event is InputEventMouseMotion or event is InputEventScreenDrag:
+	if event is InputEventMouseMotion:
 		_pointer = event.position
+	elif event is InputEventScreenDrag:
+		if _drag_id == DRAG_NONE or event.index == _drag_touch_idx:
+			_pointer = event.position
 	elif event is InputEventScreenTouch:
 		if event.pressed:
-			_pointer = event.position
+			if _drag_id == DRAG_NONE or event.index == _drag_touch_idx:
+				_pointer = event.position
 		elif _drag_id != DRAG_NONE and event.index == _drag_touch_idx:
 			_end_drag()
 	elif event is InputEventMouseButton and not event.pressed \
@@ -254,6 +346,14 @@ func _input(event: InputEvent) -> void:
 
 ## 代理钮按下：先选中（滑杆跟着切到它），再起拖
 ## （松手事件走 _input 全局收口，手指滑出钮面也能收得住）
+## 起拖坐标必须取自本事件自身：gui_input 的事件坐标已被本地化到控件内，
+## 用 get_global_transform_with_canvas() 乘回去才是视口坐标。
+## （用户 2026-10-15 真机：一碰按钮就飞到屏幕角。根因是触屏下 Godot 的
+##  「触摸→模拟鼠标」事件先于真实触摸抵达 gui_input，此刻 _input 还没见过
+##  真实触摸，_pointer 停在旧值——首次触摸就是原点 (0,0)——于是
+##  _drag_off = 键心 - 旧值 算大，下一帧 c = 真实指针 + 大偏移 ≈ 两倍坐标，
+##  归一化后被夹到 1,1 屏幕角。改成事件自带坐标 + 起拖同步 _pointer，
+##  与事件抵达顺序无关，鼠标/触摸/模拟链路都成立。）
 func _on_proxy_input(event: InputEvent, drag_id: int) -> void:
 	var pressed := false
 	if event is InputEventScreenTouch and event.pressed:
@@ -267,7 +367,9 @@ func _on_proxy_input(event: InputEvent, drag_id: int) -> void:
 	_select(drag_id)
 	var p := _proxy_of(drag_id)
 	_drag_id = drag_id
-	_drag_off = (p.position + p.pivot_offset) - _pointer
+	var ev_pos: Vector2 = p.get_global_transform_with_canvas() * event.position
+	_pointer = ev_pos
+	_drag_off = (p.position + p.pivot_offset) - ev_pos
 
 # ---------------- 选中与大小滑杆 ----------------
 
@@ -326,5 +428,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		finish()
+		# Esc 先关确认弹窗，弹窗没开才退整个调整模式
+		if _confirm_root != null and _confirm_root.visible:
+			_close_reset_confirm()
+		else:
+			finish()
 		get_viewport().set_input_as_handled()

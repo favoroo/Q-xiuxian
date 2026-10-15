@@ -193,6 +193,9 @@ var procedural_view: ProceduralEnemyView = null
 ##   - 出场基准快照必须在 instantiate 当刻拍（_capture_base_stats），晚一拍就被
 ##     _scale_to_wave / 精英变异原地改过的字段污染
 const POOL_CAP_PER_KIND := 40  ## 每种敌的池上限；溢出个体直接释放（项目惯例：不把池撑大）
+const ELITE_LIGHT_CAP := FxBudget.LIGHT_CAP_ELITE  ## 精英常驻动态灯名额（硬红线 ≤20 闭环）
+static var _lit_elite_count: int = 0
+var _has_elite_light: bool = false
 static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
 static var pool_created_count: int = 0 ## 探针断言用：复用两轮零增长
 static var pool_reused_count: int = 0
@@ -264,6 +267,7 @@ func activate() -> void:
 	_teleport_timer = teleport_interval
 	_elite_slam_timer = slam_interval
 	_heal_timer = heal_interval
+	_refresh_elite_light()
 	_poison_timer = poison_interval
 
 	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
@@ -412,10 +416,11 @@ func reset_for_reuse() -> void:
 		anim_sprite.material = hit_flash_mat
 		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 		hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
-	set_physics_process(true)
-	set_process(true)
-	$CollisionShape2D.disabled = false
-	$Hurtbox/CollisionShape2D.disabled = false
+		set_physics_process(true)
+		set_process(true)
+		$CollisionShape2D.disabled = false
+		$Hurtbox/CollisionShape2D.disabled = false
+		_release_elite_light()
 
 ## 取一只敌人：池里有同种休眠体就复用，没有 instantiate 新的（出厂快照在离开池口前拍好）。
 ## 调用方随后 reset_for_reuse() → 配位置/成长字段 → activate() → add_child。
@@ -490,6 +495,30 @@ static func pool_idle_count() -> int:
 
 func _exit_tree() -> void:
 	GameManager.unregister_enemy(self)
+	_release_elite_light()
+
+## 动态控灯：精英/魔偶挂载 PointLight2D 时，受 FxBudget.LIGHT_CAP_ELITE 额度门控，超限关灯防打穿全场上限
+func _refresh_elite_light() -> void:
+	var l := get_node_or_null("PointLight2D") as PointLight2D
+	if l == null:
+		return
+	if _has_elite_light:
+		l.enabled = true
+		return
+	if _lit_elite_count < ELITE_LIGHT_CAP:
+		_lit_elite_count += 1
+		_has_elite_light = true
+		l.enabled = true
+	else:
+		l.enabled = false
+
+func _release_elite_light() -> void:
+	if _has_elite_light:
+		_has_elite_light = false
+		_lit_elite_count = maxi(0, _lit_elite_count - 1)
+	var l := get_node_or_null("PointLight2D") as PointLight2D
+	if l != null:
+		l.enabled = false
 
 ## 由场景根节点名推导 enemy_id：遍历 EnemyData.ID_PREFIXES 的前缀表。
 ## 原先这里是 16 分支 begins_with 链 —— 加一种怪要同时改 EnemyData 与 EnemyBase 两处，
@@ -757,12 +786,12 @@ func _tick_hit_stun(delta: float) -> bool:
 	if is_in_hit_stun:
 		hit_stun_timer -= delta
 
-	# 击退急刹擦地烟尘（被击退起步瞬间扬尘，表现地面抓地阻力）
-	if is_in_hit_stun and knockback_velocity.length_squared() > 14400.0:
-		_skid_dust_timer -= delta
-		if _skid_dust_timer <= 0.0:
-			_skid_dust_timer = 0.045
-			JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), knockback_velocity)
+		# 击退急刹擦地烟尘（节流优化：仅在刚被击退的首段低频触发，防怪群受击时地面持续喷白尘）
+		if is_in_hit_stun and knockback_velocity.length_squared() > 14400.0:
+			_skid_dust_timer -= delta
+			if _skid_dust_timer <= 0.0:
+				_skid_dust_timer = 0.12
+				JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), knockback_velocity)
 	return is_in_hit_stun
 
 ## 行为支路推进：远程风筝 / 扑咬状态机 / 自爆引信 / 火球 / 产卵 / 光环 / 闪现。
@@ -1282,28 +1311,28 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-		# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
-		# 命中瞬间设置 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
-		# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）；
-		# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满 1.0，避免持续集火下糊成全白剪影；
-		# 处于集火窗内重叠命中时峰值适度收束到 0.70，透出纹理层次。
-		if hit_flash_mat != null:
-			var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
-			if is_fresh_flash:
-				var peak_flash: float = 1.0
-				if not is_crit and _focus_hit_count > 1:
-					peak_flash = 0.70
-				if is_crit:
-					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
-					_flash_t = 0.12
-					_flash_down_dur = 0.12
-					_flash_swap_t = 0.02
-				else:
-					hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
-					_flash_t = 0.11
-					_flash_down_dur = 0.11
-					_flash_swap_t = 0.0
-				hit_flash_mat.set_shader_parameter("flash_modifier", peak_flash)
+			# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
+			# 命中瞬间设置 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
+			# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）；
+			# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满，避免持续集火下糊成全白剪影；
+			# 调柔优化：普通受击峰值 0.60（重叠集火 0.40），时长 0.08s，透出怪物暗色轮廓与动作。
+			if hit_flash_mat != null:
+				var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
+				if is_fresh_flash:
+					var peak_flash: float = 0.60 if not is_crit else 1.0
+					if not is_crit and _focus_hit_count > 1:
+						peak_flash = 0.40
+					if is_crit:
+						hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
+						_flash_t = 0.12
+						_flash_down_dur = 0.12
+						_flash_swap_t = 0.02
+					else:
+						hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
+						_flash_t = 0.08
+						_flash_down_dur = 0.08
+						_flash_swap_t = 0.0
+					hit_flash_mat.set_shader_parameter("flash_modifier", peak_flash)
 
 	if lethal:
 		# 致命一刀不做任何位移：knockback_velocity 只作死亡镜头反馈的方向读数，
@@ -1475,8 +1504,6 @@ func _update_charge_warning(player: Node2D) -> void:
 	# 线长与扫掠判定、与判据 ⑧ 的实测位移，三处都取自 GameBalance.charge_reach 这一个式子。
 	# 预判型（charge_aim_lead>0）画预判点方向：玩家看线就能读出「它在算我的跑位」，
 	# 每帧跟玩家速度更新，出手那帧在 _start_charge 里锁死 —— 线始终就是真冲刺路径。
-	_charge_warning_line.clear_points()
-	_charge_warning_line.add_point(Vector2.ZERO)
 	# 端点方向：预判型冲向预判点（方向每帧跟玩家速度），普通型正对玩家。
 	# 线长仍被 clamp 到 charge_reach 真实可达距离 —— 画出来的永远就是冲得到的那段。
 	var aim_target: Vector2 = player.global_position + player.velocity * charge_aim_lead
@@ -1484,7 +1511,13 @@ func _update_charge_warning(player: Node2D) -> void:
 	var reach: float = GameBalance.charge_reach(move_speed * charge_speed_mul, charge_duration, charge_brake_time)
 	if local_target.length() > reach:
 		local_target = local_target.normalized() * reach
-	_charge_warning_line.add_point(local_target)
+	# 原地覆写点 1 位置，避免每帧 clear_points + add_point 重建 PackedVector2Array
+	if _charge_warning_line.get_point_count() < 2:
+		_charge_warning_line.clear_points()
+		_charge_warning_line.add_point(Vector2.ZERO)
+		_charge_warning_line.add_point(local_target)
+	else:
+		_charge_warning_line.set_point_position(1, local_target)
 
 	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）。
 	# 基线从 0.15 提到 0.20：0.05~0.25 的旧区间在亮地面/密集弹幕里几乎读不出来。
@@ -1917,15 +1950,13 @@ func _die() -> void:
 		# 池容量 16 与寿命 0.55s 双重兜底，极高频击杀下自动复用最旧残晕，不会糊满地面
 		var glow_r: float = 26.0 if not is_elite else 38.0
 		GroundDecal.spawn_tinted(get_parent(), global_position, glow_r, procedural_view.config.col_primary)
-	# 死亡演出（T-1.2 小怪墨屑上飘，T-1.3 精英/Boss 爆裂灵光碎屑 + 冲击环）：
-	if not _no_drop:
-		if is_elite or death_corpse_linger:
-			var burst_scale: float = 1.8 if death_corpse_linger else 1.25
-			var wave_r: float = 72.0 if death_corpse_linger else 48.0
-			FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", burst_scale)
-			JuiceEffect.spawn_shockwave(get_parent(), global_position, wave_r, GameStyle.FX_HDR_GOLD, 0.22)
-		else:
-			FxParticlePool.burst(FxParticlePool.DEATH_WISP, global_position)
+		# 死亡演出（精简去躁：普通小怪死亡已有贴地残晕与塌缩消散，省去高频 DEATH_WISP 粒子；精英/Boss 保持完整灵光碎屑 + 冲击环）：
+		if not _no_drop:
+			if is_elite or death_corpse_linger:
+				var burst_scale: float = 1.8 if death_corpse_linger else 1.25
+				var wave_r: float = 72.0 if death_corpse_linger else 48.0
+				FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", burst_scale)
+				JuiceEffect.spawn_shockwave(get_parent(), global_position, wave_r, GameStyle.FX_HDR_GOLD, 0.22)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击

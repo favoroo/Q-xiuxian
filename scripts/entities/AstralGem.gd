@@ -9,7 +9,7 @@ extends Area2D
 ## 4. 软上限保险丝 GEM_SOFT_CAP——超过后最旧宝石被强制磁吸给玩家，不消失、无经验损失。
 
 const POOL_CAP := 160          ## 池上限：单回合同存远小于此值
-const GEM_LIGHT_CAP := 8       ## 动态灯名额（与 BladeProjectile.LIGHT_CAP=6 独立计数）
+const GEM_LIGHT_CAP := 5       ## 动态灯名额（与 BladeProjectile.LIGHT_CAP=6 独立计数）
 const GEM_SOFT_CAP := 140      ## 场上软上限：超过后强制最旧宝石磁吸给玩家（保险丝）
 
 @export var exp_value: int = 1

@@ -165,10 +165,10 @@ func _process(delta: float) -> void:
 		_hit_combo_timer -= delta
 		if _hit_combo_timer <= 0.0:
 			_hit_combo_count = 0
-	# 击杀连击断窗兜底：register_kill_pitch 只在击杀时被调，开火间隙里把层数清零，
-	# 否则隔半分钟再杀一只会沿用旧阶梯高位（frenzy_idle 在游戏中才累计，菜单不涨）
-	if GameManager.frenzy_idle >= KILL_COMBO_WINDOW and _kill_combo_count != 0:
-		_kill_combo_count = 0
+		# 击杀连击断窗兜底：register_kill_pitch 只在击杀时被调，开火间隙里把层数清零，
+		# 否则隔半分钟再杀一只会沿用旧阶梯高位（frenzy_idle 在游戏中才累计，菜单不涨）
+		if GameManager != null and GameManager.frenzy_idle >= KILL_COMBO_WINDOW and _kill_combo_count != 0:
+			_kill_combo_count = 0
 # ---------------- 音效注册表 ----------------
 
 func _load_audio_assets() -> void:

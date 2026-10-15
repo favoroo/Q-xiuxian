@@ -296,8 +296,9 @@ func _act_xuangui() -> void:
 			elif b.has_method("_recycle"):
 				b._recycle()
 			intercepted_count += 1
-			if is_inside_tree() and scene_parent != null:
-				JuiceEffect.spawn_impact_pop(scene_parent, n2d.global_position, Color(0.35, 0.85, 0.95))
+	# 拦截火花防抢占：不再对每颗弹丸逐发 spawn_impact_pop（避免吃光全局 6/帧 限流闸导致玩家飞剑无反馈），仅在首颗位置放至多 1 处
+	if intercepted_count > 0 and first_bolt_pos != Vector2.ZERO and is_inside_tree() and scene_parent != null:
+		JuiceEffect.spawn_impact_pop(scene_parent, first_bolt_pos, Color(0.35, 0.85, 0.95))
 
 	# 2. 拒马震退近身敌人
 	var repelled: int = 0
@@ -321,14 +322,16 @@ func _act_xuangui() -> void:
 		shield_granted = true
 
 	if intercepted_count > 0 or repelled > 0 or shield_granted:
-		pulse_trigger_fx(Vector2(1.35, 1.35), 0.18)
+		pulse_trigger_fx(Vector2(1.15, 1.15), 0.12)
 		_custom_fx_type = "xuangui_shield"
 		if first_bolt_pos != Vector2.ZERO:
 			_tether_target_pos = to_local(first_bolt_pos)
 			_tether_progress = 0.0
 
 		if is_inside_tree() and scene_parent != null:
-			JuiceEffect.spawn_shockwave(scene_parent, center, radius, GameStyle.AURUM, 0.30)
+			# 冲击环去噪：收拢横跨全屏的 240px 超大金环，只在拦到弹丸时放紧凑金环（半径 0.40，时长 0.18s）
+			if intercepted_count > 0:
+				JuiceEffect.spawn_shockwave(scene_parent, center, radius * 0.40, GameStyle.AURUM, 0.18)
 			if shield_granted:
 				DamageNumber.spawn(scene_parent, center + Vector2(0, -22), 0, false, "玄甲护体")
 			elif intercepted_count > 0:
@@ -348,11 +351,11 @@ func _act_yulu() -> void:
 	GameManager.buff_move_speed_mult = maxf(GameManager.buff_move_speed_mult, 1.0 + BalanceSpiritPet.YULU_SPEED_BONUS)
 	_yulu_buff_timer = BalanceSpiritPet.YULU_BUFF_DURATION
 
-	pulse_trigger_fx(Vector2(0.9, 1.35), 0.16)
+	pulse_trigger_fx(Vector2(1.05, 1.15), 0.10)
 	_custom_fx_type = "yulu_dew"
 	var scene_parent: Node = get_parent()
 	if is_inside_tree() and scene_parent != null:
-		JuiceEffect.spawn_shockwave(scene_parent, target.global_position, 48.0, GameStyle.GOOD, 0.28)
+		JuiceEffect.spawn_shockwave(scene_parent, target.global_position, 28.0, GameStyle.GOOD, 0.18)
 		DamageNumber.spawn(scene_parent, target.global_position + Vector2(0, -22), int(heal_amt), false, "+" + str(int(heal_amt)))
 	AudioManager.play_sfx("heal", 0.45, 1.25)
 
@@ -425,11 +428,11 @@ func _act_fengdiao() -> void:
 		if affected <= 6 and scene_parent != null:
 			DamageNumber.spawn(scene_parent, en.global_position + Vector2(0, -14), 0, false, "定")
 	if affected > 0:
-		pulse_trigger_fx(Vector2(1.25, 1.25), 0.15)
-		_spin_angle = TAU * 2.0
+		pulse_trigger_fx(Vector2(1.15, 1.15), 0.12)
+		_spin_angle = 0.0  # 取消本体 720° 自转，避免像穿模失控
 		_custom_fx_type = "wind_vortex"
 		if is_inside_tree() and scene_parent != null:
-			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, BalanceSpiritPet.MELEE_RING, Color(0.85, 0.92, 1.0, 0.75), 0.3)
+			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, BalanceSpiritPet.MELEE_RING * 0.65, Color(0.85, 0.92, 1.0, 0.6), 0.22)
 		AudioManager.play_sfx("fan_gust", 0.5, 0.85)
 
 ## 磐石猿：地动山摇重击与崩碎岩沼
@@ -457,15 +460,13 @@ func _act_shiyuan() -> void:
 			if e.has_method("apply_chill"):
 				e.apply_chill(BalanceSpiritPet.SMASH_SLOW_PCT, BalanceSpiritPet.SMASH_SLOW_DURATION)
 
-		if hit:
-			pulse_trigger_fx(Vector2(1.45, 0.65), 0.18)
-			_custom_fx_type = "earth_smash"
-			var scene_parent: Node = get_parent()
-			if is_inside_tree() and scene_parent != null:
-				JuiceEffect.spawn_shockwave(scene_parent, center, radius, Color(0.72, 0.62, 0.45, 0.9), 0.35)
-				JuiceEffect.spawn_step_dust(scene_parent, center, Vector2.DOWN)
-				GroundDecal.spawn(scene_parent, center, GroundDecal.Kind.CRACK, radius)
-			AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
+	if hit:
+		pulse_trigger_fx(Vector2(1.25, 0.75), 0.14)
+		var scene_parent: Node = get_parent()
+		if is_inside_tree() and scene_parent != null:
+			# 简化特效：冲击环收紧至 0.38，时长 0.20s，低调干练
+			JuiceEffect.spawn_shockwave(scene_parent, center, radius * 0.38, Color(0.72, 0.62, 0.45, 0.65), 0.20)
+		AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
 
 ## 聚宝蟾：回合末产出金币触发视觉动效
 func trigger_wave_harvest_fx() -> void:
@@ -512,26 +513,23 @@ func _draw() -> void:
 	var base_color: Color = pet_def.get("color", Color(0.9, 0.9, 0.9))
 	var base_halo: Color = pet_def.get("halo_color", Color(1.0, 1.0, 1.0, 0.35))
 
-	# 闪白提亮：受激/触发时瞬间过曝至乳白流光
-	var color: Color = base_color.lerp(Color.WHITE, flash_ratio * 0.85)
-	var halo: Color = base_halo.lerp(Color(1.0, 1.0, 1.0, 0.75), flash_ratio * 0.7)
+	# 闪白提亮：受激/触发时轻微提亮，保留本色，避免持续刺眼过曝
+	var color: Color = base_color.lerp(Color.WHITE, flash_ratio * 0.35)
+	var halo: Color = base_halo.lerp(Color(1.0, 1.0, 1.0, 0.45), flash_ratio * 0.35)
 
-	# 1. 外层灵光晕（触发时爆发扩张）
-	var halo_scale: float = 2.2 + 0.8 * flash_ratio
-	_circle(Vector2.ZERO, core_r * halo_scale, Color(halo.r, halo.g, halo.b, halo.a * (0.6 + 0.4 * pulse + 0.4 * flash_ratio)))
-	# 2. 中层光魄
-	_circle(Vector2.ZERO, core_r * 1.45, Color(color.r, color.g, color.b, 0.32 + 0.3 * flash_ratio))
-	# 3. 核心真身
+	# 1. 外层灵光晕（轻灵收敛：避免在玩家头顶形成大团白光遮挡视线）
+	var halo_scale: float = 1.35 + 0.25 * flash_ratio
+	_circle(Vector2.ZERO, core_r * halo_scale, Color(halo.r, halo.g, halo.b, halo.a * (0.35 + 0.15 * pulse + 0.20 * flash_ratio)))
+	# 2. 核心真身
 	_circle(Vector2.ZERO, core_r, color)
-	# 4. 高光灵瞳/光斑
-	_circle(Vector2(-core_r * 0.28, -core_r * 0.32) * (1.0 + 0.2 * flash_ratio), core_r * 0.36, Color(1.0, 1.0, 1.0, 0.88))
-	_circle(Vector2(core_r * 0.32, -core_r * 0.15), core_r * 0.2, Color(1.0, 1.0, 1.0, 0.55))
+	# 3. 柔和高光灵瞳（单点轻微提神）
+	_circle(Vector2(-core_r * 0.28, -core_r * 0.32), core_r * 0.32, Color(1.0, 1.0, 1.0, 0.45))
 
-	# 5. 特征部件（精细化绘制）
+	# 4. 特征部件（精细化绘制）
 	var decor: String = String(pet_def.get("decor", ""))
 	_draw_decor(decor, core_r, color)
 
-	# 6. 法力连线
+	# 5. 法力连线
 	if _tether_progress >= 0.0 and _tether_target_pos != Vector2.ZERO:
 		var tether_alpha: float = 1.0 - _tether_progress
 		var tether_col: Color = GameStyle.AURUM
@@ -541,7 +539,7 @@ func _draw() -> void:
 		_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
 		_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
 
-	# 7. 行动与专属特效（雷弧、风涡、火芒或波纹）
+	# 6. 行动与专属特效（雷弧、风涡或轻柔单环）
 	if _action_fx >= 0.0:
 		if _lightning_target_pos != Vector2.ZERO:
 			# 主雷电电弧
@@ -556,11 +554,10 @@ func _draw() -> void:
 			_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
 			_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
 		else:
-			# 扩散波纹环（双重能量环：主环 + 亮白内圈）
-			var ring_r: float = lerpf(core_r, core_r * 3.5, _action_fx)
-			var ring_alpha: float = 1.0 - _action_fx
-			_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(color.r, color.g, color.b, ring_alpha * 0.85), 2.2)
-			_arc(Vector2.ZERO, ring_r * 0.82, 0.0, TAU, 28, Color(1.0, 1.0, 1.0, ring_alpha * 0.65), 1.4)
+			# 轻柔单层扩散波纹环（收去多余的高亮内白圈，去燥不抢戏）
+			var ring_r: float = lerpf(core_r, core_r * 2.2, _action_fx)
+			var ring_alpha: float = (1.0 - _action_fx) * 0.65
+			_arc(Vector2.ZERO, ring_r, 0.0, TAU, 28, Color(color.r, color.g, color.b, ring_alpha), 1.4)
 
 func _draw_lightning_arc(start_pt: Vector2, end_pt: Vector2, alpha: float) -> void:
 	var mid := (start_pt + end_pt) * 0.5

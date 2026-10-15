@@ -31,6 +31,8 @@ var _mat: ShaderMaterial = null
 ## 热区槽（Array 池，避免每帧分配）：[world_pos, radius, strength, until_ms]
 var _slots: Array = []
 var _phase: float = 0.0
+## 复用 uniform 缓冲（避免每帧 new Array + resize）
+var _params_buf: Array = []
 
 ## 静态上报入口（火锥/火雨唯一调用面）：
 ## world_pos 世界坐标热心、radius 世界半径、strength 0..1 强度、hold 无续报时热区存活秒数。
@@ -58,6 +60,7 @@ func _ready() -> void:
 	layer = 1
 	for i in MAX_SLOTS:
 		_slots.append([Vector2.ZERO, 0.0, 0.0, 0])
+		_params_buf.append(Vector4.ZERO)
 	_rebuild_channels()
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 
@@ -135,6 +138,16 @@ func _process(delta: float) -> void:
 	if _rect == null or _mat == null:
 		return
 	_phase += delta
+	var now := Time.get_ticks_msec()
+	# 全槽空闲时短路：不查视口、不写 uniform（wave 仅在有热区时被采样）
+	var any_active := false
+	for i in MAX_SLOTS:
+		var s: Array = _slots[i]
+		if (s[2] as float) > 0.0 and (s[3] as int) > now:
+			any_active = true
+			break
+	if not any_active:
+		return
 	var vp := get_viewport()
 	if vp == null:
 		return
@@ -142,24 +155,21 @@ func _process(delta: float) -> void:
 	var vs := vp.get_visible_rect().size
 	if vs.x <= 0.0 or vs.y <= 0.0:
 		return
-	var now := Time.get_ticks_msec()
-	var params: Array = []
-	params.resize(MAX_SLOTS)
 	for i in MAX_SLOTS:
 		var s: Array = _slots[i]
 		if (s[2] as float) <= 0.0 or (s[3] as int) <= now:
-			params[i] = Vector4.ZERO
+			_params_buf[i] = Vector4.ZERO
 			continue
 		# 世界坐标 → 设计视口归一坐标（stretch canvas_items 下与 SCREEN_UV 同基）
 		var screen_pos: Vector2 = canvas_xform * (s[0] as Vector2)
 		var norm := screen_pos / vs
 		# 屏外（30% 容差）清零，shader 循环里 w<=0 直接跳过
 		if norm.x < -0.3 or norm.x > 1.3 or norm.y < -0.3 or norm.y > 1.3:
-			params[i] = Vector4.ZERO
+			_params_buf[i] = Vector4.ZERO
 			continue
 		var r_norm: float = (s[1] as float) / ((vs.x + vs.y) * 0.5)
-		params[i] = Vector4(norm.x, norm.y, maxf(r_norm, 0.02), s[2])
-	_mat.set_shader_parameter("heats", params)
+		_params_buf[i] = Vector4(norm.x, norm.y, maxf(r_norm, 0.02), s[2])
+	_mat.set_shader_parameter("heats", _params_buf)
 	_mat.set_shader_parameter("wave", Vector2(_phase, fposmod(_phase * 0.37, 1.0)))
 
 static func _zero_params() -> Array:

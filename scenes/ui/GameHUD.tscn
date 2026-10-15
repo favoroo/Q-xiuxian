@@ -1,6 +1,7 @@
-[gd_scene load_steps=12 format=3 uid="uid://chud001"]
+[gd_scene load_steps=13 format=3 uid="uid://chud001"]
 
 [ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
+[ext_resource type="Texture2D" uid="uid://cg7c26b45tpha" path="res://assets/art/icon_hp.png" id="2_icon_hp"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
 bg_color = Color(0, 0, 0, 0.92)
@@ -125,9 +126,9 @@ script = ExtResource("1_hud")
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 22.0
+offset_left = 16.0
 offset_top = 20.0
-offset_right = -22.0
+offset_right = -16.0
 offset_bottom = 62.0
 grow_horizontal = 2
 mouse_filter = 2
@@ -146,7 +147,17 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_hp_block")
 [node name="HBox" type="HBoxContainer" parent="TopContainer/LeftBox/HPBlock"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
+
+[node name="HPIcon" type="TextureRect" parent="TopContainer/LeftBox/HPBlock/HBox"]
+texture_filter = 2
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture = ExtResource("2_icon_hp")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox"]
 custom_minimum_size = Vector2(136, 14)
@@ -267,9 +278,9 @@ text = "金币 0"
 
 [node name="WeaponsBar" type="HBoxContainer" parent="."]
 layout_mode = 0
-offset_left = 24.0
+offset_left = 18.0
 offset_top = 96.0
-offset_right = 284.0
+offset_right = 278.0
 offset_bottom = 132.0
 mouse_filter = 2
 theme_override_constants/separation = 8

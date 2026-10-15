@@ -80,7 +80,7 @@ func _build_ui() -> void:
 
 	var arena_viewport_node := Node2D.new()
 	arena_panel.add_child(arena_viewport_node)
-	arena_viewport_node.position = Vector2(285, 235)  # 居中对齐
+	arena_viewport_node.position = Vector2(265, 230)  # 居中对齐
 
 	# 1. 地砖平铺 (TextureRect)
 	var tiles := TextureRect.new()
@@ -92,41 +92,49 @@ func _build_ui() -> void:
 	tiles.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	arena_viewport_node.add_child(tiles)
 
+	# 1.5 场外九幽深渊虚空衰减
+	var abyss := AbyssFalloffLayer.new()
+	abyss.half_extent = 210.0
+	abyss.ground_extent = 320.0
+	abyss.falloff_width = 40.0
+	arena_viewport_node.add_child(abyss)
+
 	# 2. 战台矢量大阵与结界
 	var arena_vis := ArenaVisualLayer.new()
-	arena_vis.half_extent = 260.0  # 缩小到看板适中视野
+	arena_vis.half_extent = 210.0  # 缩小到看板适中视野，完整展示四周边界与四角阵枢
 	arena_viewport_node.add_child(arena_vis)
 
 	# 3. 在战台上摆设九天悬晶大阵（待命完整体）
 	var obelisk := ProceduralObeliskRenderer.new()
-	obelisk.position = Vector2(0, -90)
+	obelisk.position = Vector2(0, -50)
+	obelisk.scale = Vector2.ONE * 0.75
 	obelisk.is_player_inside = true
 	arena_viewport_node.add_child(obelisk)
 
 	# 4. 在战台地面散布八面菱形水晶与灵宝
 	var gem_blue := ProceduralLootRenderer.new()
 	gem_blue.loot_type = ProceduralLootRenderer.LootType.GEM_BLUE
-	gem_blue.position = Vector2(-75, 40)
-	gem_blue.scale = Vector2.ONE * 1.3
+	gem_blue.position = Vector2(-55, 30)
+	gem_blue.scale = Vector2.ONE * 1.1
 	arena_viewport_node.add_child(gem_blue)
 
 	var gem_gold := ProceduralLootRenderer.new()
 	gem_gold.loot_type = ProceduralLootRenderer.LootType.GEM_GOLD
-	gem_gold.position = Vector2(-45, 75)
-	gem_gold.scale = Vector2.ONE * 1.3
+	gem_gold.position = Vector2(-30, 55)
+	gem_gold.scale = Vector2.ONE * 1.1
 	arena_viewport_node.add_child(gem_gold)
 
 	var heal_gem := ProceduralLootRenderer.new()
 	heal_gem.loot_type = ProceduralLootRenderer.LootType.HEAL_ORB
-	heal_gem.position = Vector2(65, 55)
-	heal_gem.scale = Vector2.ONE * 1.25
+	heal_gem.position = Vector2(50, 40)
+	heal_gem.scale = Vector2.ONE * 1.05
 	arena_viewport_node.add_child(heal_gem)
 
 	var chest := Sprite2D.new()
 	chest.texture = load("res://assets/art/prop_chest.png")
 	chest.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	chest.scale = Vector2.ONE * 0.53   # 与 SpiritChest 同档：屏幕宽 ≈ 判定直径 51px（产物画布 96px）
-	chest.position = Vector2(130, -35)
+	chest.position = Vector2(75, -20)
 	arena_viewport_node.add_child(chest)
 
 	# ==========================================================================

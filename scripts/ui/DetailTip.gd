@@ -159,7 +159,7 @@ func _build_header(vbox: VBoxContainer, payload: Dictionary) -> void:
 	band_margin.add_theme_constant_override("margin_bottom", 1)
 	var title := Label.new()
 	title.text = String(payload.get("title", ""))
-	GameStyle.label(title, 15, GameStyle.PAPER, 2, GameStyle.INK, true)
+	GameStyle.label(title, 15, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	band_margin.add_child(title)
 	band.add_child(band_margin)
 	head.add_child(band)

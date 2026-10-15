@@ -9,7 +9,7 @@ extends RefCounted
 
 const DANGER_ZONE_RADIUS := 75.0  ## 贴身危急警戒半径（防暴毙优先集火区）
 const TARGETING_ELLIPSE_Y_RATIO := 0.65  ## 椭圆索敌垂直短轴压缩比（适配 16:9 扁平视野，防垂直打出屏幕盲区）
-const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(390.0, 220.0)  ## 默认视口半宽半高（960x540 / zoom 1.2 内缩 10px 安全边界）
+const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(426.0, 235.0)  ## 默认视口半宽半高（960x540 / zoom 1.1 内缩 10px 安全边界）
 
 ## 椭圆等效距离：将 y 轴按 y_ratio 还原为长轴标尺，计算在长轴尺度下的等效距离
 ## 当 eff_dist <= range 时，几何点正好位于 (x/range)^2 + (y/(range*y_ratio))^2 <= 1 内
@@ -305,22 +305,32 @@ const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距
 const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
 const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
 
+## 少具转速补偿（2026-10-15，用户口径：「只配一个召唤武器太弱，转快点」）：
+## 环绕是接触伤害，具数越少扫掠覆盖越差、对同一敌人的经过频率越低。
+## 按场上灵宝总具数给基础转速乘区：1 具 ×1.25 / 2 具 ×1.10 / ≥3 具不补。
+## 单敌实伤随转速近线性水涨船高，是最直接的"单召唤加强"；不折进 spirit_contact_duty
+## 纸面折算尺（图鉴展示口径保持不变，低估方向安全）。
+const SPIRIT_LONE_SPEED_MULT: Array[float] = [1.25, 1.10, 1.0]
+
 ## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
 ## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）
 ## synergy_haste_mult: GameManager.synergy_haste_mult（雷法/玄水羁绊加成）
 ## in_combat: 战斗感知圈内有敌人时触发温和激战加速（1.18x）
+## orb_count: 场上灵宝总具数（少具补偿，见 SPIRIT_LONE_SPEED_MULT）
 static func spirit_orbit_angular_speed(
 	base_speed: float = SPIRIT_BASE_ANGULAR_SPEED,
 	attack_speed_mult: float = 1.0,
 	synergy_haste_mult: float = 1.0,
 	in_combat: bool = false,
-	max_star: int = 1
+	max_star: int = 1,
+	orb_count: int = 1
 ) -> float:
 	var eff_cd_mult: float = clampf(attack_speed_mult * synergy_haste_mult, 0.25, 1.5)
 	var haste_scale: float = 1.0 / eff_cd_mult
 	var combat_scale: float = 1.18 if in_combat else 1.0
 	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
-	return base_speed * haste_scale * combat_scale * star_scale
+	var lone_scale: float = SPIRIT_LONE_SPEED_MULT[clampi(orb_count, 1, 3) - 1]
+	return base_speed * haste_scale * combat_scale * star_scale * lone_scale
 
 ## 环绕灵宝接触结算占空比：轨道扫掠 + 扇区扑击 + 26px 接触圈下，敌人处于可结算位置的
 ## 时间占比实测估计（tests/WeaponProbe.tscn 灵蝶 ★1 口径）。纸面 DPS × 该系数 = 有效 DPS，
@@ -357,10 +367,12 @@ static func compute_spirit_orbit(
 	if enemies_info.is_empty():
 		return {"radii": result_radii, "in_combat": false}
 
-	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）
+	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）。
+	# 性能：本函数被 Player 每物理帧调用（60Hz），不建中间数组（原 in_range/danger
+	# 两个 Array[Dictionary] 每帧新建即 ~240 次分配/秒），改记计数二次遍历 enemies_info。
 	var in_combat := false
-	var in_range_enemies: Array[Dictionary] = []
-	var danger_enemies: Array[Dictionary] = []
+	var in_range_count := 0
+	var danger_count := 0
 	var sum_dist := 0.0
 
 	for e in enemies_info:
@@ -368,15 +380,15 @@ static func compute_spirit_orbit(
 		if d <= max_reach + 20.0:
 			in_combat = true
 		if d <= max_reach:
-			in_range_enemies.append(e)
+			in_range_count += 1
 			sum_dist += d
 		if d <= SPIRIT_DANGER_DIST:
-			danger_enemies.append(e)
+			danger_count += 1
 
-	if not in_combat or in_range_enemies.is_empty():
+	if not in_combat or in_range_count == 0:
 		return {"radii": result_radii, "in_combat": in_combat}
 
-	var avg_reach_dist: float = clampf(sum_dist / float(in_range_enemies.size()), min_radius, base_radius * 1.25)
+	var avg_reach_dist: float = clampf(sum_dist / float(in_range_count), min_radius, base_radius * 1.25)
 
 	# 2. 为每枚灵宝计算自适应半径
 	for i in range(count):
@@ -385,12 +397,14 @@ static func compute_spirit_orbit(
 
 		# 2.1 贴身危急优先内收自保：灵宝公转到危急敌人附近时，收缩到敌人身前封堵
 		var closest_danger_dist := 9999.0
-		for de in danger_enemies:
-			var de_ang: float = float(de.get("angle", 0.0))
-			var diff := absf(wrapf(de_ang - orb_a, -PI, PI))
-			if diff <= PI * 0.5:
-				var dd: float = float(de.get("dist", SPIRIT_DANGER_DIST))
-				if dd < closest_danger_dist:
+		if danger_count > 0:
+			for de in enemies_info:
+				var dd: float = float(de.get("dist", 9999.0))
+				if dd > SPIRIT_DANGER_DIST:
+					continue
+				var de_ang: float = float(de.get("angle", 0.0))
+				var diff := absf(wrapf(de_ang - orb_a, -PI, PI))
+				if diff <= PI * 0.5 and dd < closest_danger_dist:
 					closest_danger_dist = dd
 		if closest_danger_dist < 9999.0:
 			assigned_r = clampf(closest_danger_dist, min_radius, base_radius)
@@ -398,13 +412,14 @@ static func compute_spirit_orbit(
 		# 2.2 扇区索敌扑击：灵宝正前方扇区内的最近敌人，灵宝动态外扩扑击
 		if assigned_r < 0.0:
 			var best_sector_dist := 9999.0
-			for e in in_range_enemies:
+			for e in enemies_info:
+				var ed: float = float(e.get("dist", 9999.0))
+				if ed > max_reach:
+					continue
 				var e_ang: float = float(e.get("angle", 0.0))
 				var diff := absf(wrapf(e_ang - orb_a, -PI, PI))
-				if diff <= SPIRIT_SECTOR_HALF_ANGLE:
-					var ed: float = float(e.get("dist", 9999.0))
-					if ed < best_sector_dist:
-						best_sector_dist = ed
+				if diff <= SPIRIT_SECTOR_HALF_ANGLE and ed < best_sector_dist:
+					best_sector_dist = ed
 			if best_sector_dist < 9999.0:
 				assigned_r = clampf(best_sector_dist, min_radius, max_reach)
 

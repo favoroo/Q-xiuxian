@@ -8,7 +8,7 @@ extends Node2D
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
 ## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 随「回合内总刷入预算」下调至 28，
-## 2026-10-11 缩图（半场 680→500）后再下调至 18 —— 地图更小、单怪更厚，密度由「少而硬」维持
+## 2026-10-11 缩图后下调至 18（2026-10-15 扩图至 560，支持并发合围动态 cap）—— 密度与机动兼顾
 @export var max_enemies: int = 18
 
 # —— 回合内总刷入预算（2026-10-11 土豆兄弟式克制，曲线见 BalanceWave.wave_spawn_budget）——
@@ -24,6 +24,11 @@ var _budget_exp_sum: float = 0.0  ## 已刷出敌人 exp_reward 累计（补差�
 ## 留这一拍让下一只怪有机会落地，别让最后一只母体死亡的瞬间把整回合掐掉。
 const EARLY_CLEAR_CONFIRM := 0.4
 var _clear_hold: float = 0.0    ## 本回合已连续满足「敌潮已尽」的秒数
+
+# —— 分批清剿制与并发推进（2026-10-15）——
+var _batch_cooldown: float = 0.0    ## 清剿完一批后的喘息呼吸倒计时（秒）
+var _batch_hold_time: float = 0.0    ## 当前批次在场对峙时长（秒，防挂机/中后期合围）
+var _batch_in_combat: bool = false   ## 当前批次是否已进入交火对峙态（活跃敌数 > 1）
 
 var phase: int = Phase.WAITING
 ## 回合号的唯一来源是 GameManager.wave_number。
@@ -81,6 +86,9 @@ func _process_fight(delta: float) -> void:
 
 	wave_timer -= delta
 	spawn_timer -= delta
+	_batch_hold_time += delta
+	if _batch_cooldown > 0.0:
+		_batch_cooldown -= delta
 
 	# Boss 回合超时锁关：魔君未死则敌潮不退（停表停刷，等 Boss 伏诛再进结算）
 	if GameBalance.is_boss_wave(wave_number) and wave_timer <= 0.0:
@@ -92,9 +100,29 @@ func _process_fight(delta: float) -> void:
 		end_wave()
 		return
 
-	if spawn_timer <= 0.0:
-		spawn_timer = GameBalance.spawn_interval(wave_number)
-		_spawn_regular(player)
+	# 分批清剿制与并发合围刷新（2026-10-15）
+	if _budget_used < _budget_total:
+		var active_enemies: int = GameManager.enemy_count + SpawnIndicator.active_count
+		if active_enemies > 1:
+			_batch_in_combat = true
+		elif _batch_in_combat and active_enemies <= 1:
+			# 当前批次已基本清剿，进入呼吸喘息间隙（0.8s 供玩家拾取灵石与走位调整）
+			_batch_in_combat = false
+			_batch_cooldown = GameBalance.BATCH_CLEAR_COOLDOWN
+
+		# 判定 1：清剿推进（主力路线）—— 场上存活 ≤ 1 只且呼吸间隙已过
+		if active_enemies <= 1 and _batch_cooldown <= 0.0 and spawn_timer <= 0.0:
+			_spawn_regular(player)
+			_batch_hold_time = 0.0
+			spawn_timer = 0.2
+		# 判定 2：并发合围（中后期路线）—— 第 6 波起对峙超时，且同屏未超上限时允许下一批合围
+		elif wave_number >= GameBalance.CONCURRENT_BATCH_MIN_WAVE and _batch_hold_time >= GameBalance.BATCH_STALEMATE_TIMEOUT and spawn_timer <= 0.0:
+			var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
+			var est_batch := GameBalance.spawn_batch(wave_number, 0.5)
+			if active_enemies + est_batch <= enemy_cap:
+				_spawn_regular(player)
+				_batch_hold_time = 0.0
+				spawn_timer = 1.0
 
 	# 精英回合：第 5/15 波；Boss 回合（第 10/20 波）改由魔君登场
 	var is_elite_wave := _is_elite_wave(wave_number)
@@ -179,11 +207,15 @@ func _is_boss_wave(n: int) -> bool:
 func start_wave(n: int) -> void:
 	GameManager.wave_number = n
 	GameManager.wave_changed.emit(n)
+	max_enemies = GameBalance.max_enemies_cap(n)
 	elite_spawned = false
 	_boss_ref = null
 	_overtime_noted = false
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
+	_batch_cooldown = 0.0
+	_batch_hold_time = 0.0
+	_batch_in_combat = false
 	phase = Phase.FIGHT
 	# 本回合刷怪预算：危险度与角色敌潮倍率与同屏上限同源同乘
 	_budget_total = int(round(float(GameBalance.wave_spawn_budget(n)) * GameBalance.danger_count_mult(GameManager.danger_level) * GameManager.enemy_count_mult))
@@ -349,8 +381,11 @@ func _spawn_regular(player: Node2D) -> void:
 		return
 
 	var count := int(round(float(GameBalance.spawn_batch(wave_number, GameManager.rng.randf())) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level)))
-	# 最后一轮允许部分兑现：预算剩几只刷几只，不整轮丢弃
+	# 最后一轮允许部分兑现：预算剩几只刷几只，且不超过同屏上限容限
 	count = mini(count, _budget_total - _budget_used)
+	count = mini(count, enemy_cap - GameManager.enemy_count)
+	if count <= 0:
+		return
 	for i in range(count):
 		# 土豆兄弟式全图随机出生 + 远离玩家安全区保护（参数见 BalanceWave 刷怪出生点几何）
 		var pos := _spawn_pos_away_from_player(player,
@@ -487,6 +522,7 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 func _spawn_boss(player: Node2D) -> void:
 	var pos := _spawn_pos_away_from_player(player,
 		GameBalance.SPAWN_INSET_BOSS, GameBalance.SPAWN_MIN_DIST_BOSS, GameBalance.SPAWN_PUSH_BOSS)
+	EnemyCodex.record_seen("boss")
 
 	var parent := get_parent()
 	if parent == null:
@@ -510,7 +546,6 @@ func _spawn_boss(player: Node2D) -> void:
 		boss.final_boss = wave_number >= GameManager.VICTORY_WAVE
 		boss.boss_title = _boss_title()
 		_boss_ref = boss
-		EnemyCodex.record_seen("boss")
 		parent.add_child(boss)
 		# 登场演出（T-5.4）：地面魔印大阵预警落位后，dissolve 逆向凝聚成形，爆发冲击环与创伤短震
 		boss.play_spawn_sequence(func():

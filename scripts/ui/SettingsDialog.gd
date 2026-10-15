@@ -13,6 +13,9 @@ var _cycle_controls: Dictionary = {}
 
 var _content_box: MarginContainer
 var _reset_tip_lbl: Label
+var _changelog_dialog: ChangelogDialog = null
+var _check_update_btn: Button
+var _update_tip_lbl: Label
 
 func _get_title_text() -> String:
 	return "游 戏 设 置"
@@ -74,6 +77,16 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 
+	UpdateManager.update_available.connect(func(_info: Dictionary):
+		_on_update_check_done("发现新版本，已弹出更新视窗", GameStyle.GOOD)
+	)
+	UpdateManager.no_update_found.connect(func():
+		_on_update_check_done("当前已是最新版本 (%s)" % Version.APP_VERSION_NAME, GameStyle.GOOD)
+	)
+	UpdateManager.check_failed.connect(func(err_msg: String):
+		_on_update_check_done("检测失败（%s）" % err_msg, GameStyle.BAD)
+	)
+
 	# 三页整棵子树放开「按下」冒泡：设置行是 PanelContainer（mouse_filter 默认 STOP），
 	# 会把外层 ScrollContainer 起手锁定手指拖动要的那一拍吃掉 → 真机上只有卡片缝隙能划。
 	# 行控件（HSlider / Button）自己收事件，降成 PASS 不影响拖滑杆与点按钮。
@@ -106,6 +119,7 @@ func _build_audio_page() -> Control:
 	_add_audio_slider_row(vbox, &"BGM", "音乐音量", "背景音乐 (BGM)")
 	_add_audio_slider_row(vbox, &"SFX", "音效音量", "战斗与击杀音效 (SFX)")
 
+	GameStyle.scrollable(scroll)
 	return scroll
 
 func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String, desc: String) -> void:
@@ -241,12 +255,12 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
-	_add_toggle_row(vbox, "fps_60", "流畅模式", "开启后帧率上限 60（操作与画面更顺滑，略耗电发热）；关闭为 30（省电稳定）")
 	# T-6.1 热浪扭曲：可选高档位默认关（back buffer copy 低端机有掉帧风险），排最后不抢眼
 	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥与火雨区域画面热浪扭曲（高端画质，低配设备可能掉帧，默认关）")
 	# T-6.2 受击屏幕冲击波：可选高档位默认关
 	_add_toggle_row(vbox, "screen_shockwave", "受击冲击波", "遭受强敌重击时从受击点扩散屏幕径向扭曲环（高端画质，默认关）")
 
+	GameStyle.scrollable(scroll)
 	return scroll
 
 ## 通用行外壳：左「标题 + 说明」右控件的金签墨条，开关行与档位行共用同一份摆位
@@ -368,6 +382,7 @@ func _build_controls_page() -> Control:
 	_add_action_row(vbox, "恢复默认布局", "两个按钮的位置与大小一起回到出厂摆位",
 		"恢复默认", func(): SettingsManager.reset_button_layout(), true)
 
+	GameStyle.scrollable(scroll)
 	return scroll
 
 ## 动作行：右侧一颗按钮执行一件事（进入调整模式 / 恢复默认布局）
@@ -386,14 +401,31 @@ func _add_action_row(parent: VBoxContainer, title: String, desc: String,
 	hbox.add_child(btn)
 	btn.pressed.connect(on_press)
 
-## 进入按钮调整模式：藏起设置面板（不发 closed，回来还停在当前页），交给 HUD 覆盖层拖
+## 进入按钮调整模式：藏起设置面板（不发 closed，回来还停在当前页），交给 HUD 覆盖层拖。
+## 主菜单入口要顺手把菜单卡片与纯黑幕布收掉——调整背景必须是游戏地图场景，
+## 对着首页卡片摆战斗按钮会失去参照（2026-10-15 用户反馈）。
 func _enter_btn_edit_mode() -> void:
 	var hud := get_parent().get_node_or_null("GameHUD") as GameHUD
 	if hud == null:
 		return
 	DetailTip.close_all(self)
 	visible = false
-	hud.open_btn_edit_overlay(func(): visible = true)
+	var menu := get_parent().get_node_or_null("StartMenu") as Control
+	var backdrop := get_parent().get_node_or_null("StageBackdrop") as Control
+	var from_menu := menu != null and menu.visible
+	if from_menu:
+		menu.visible = false
+		if backdrop != null:
+			backdrop.visible = false
+	hud.open_btn_edit_overlay(func():
+		if from_menu:
+			# 回到菜单态：黑幕与菜单卡片按原样亮回来（设置弹窗保持停在本页）
+			if backdrop != null:
+				backdrop.visible = true
+			if menu != null:
+				menu.visible = true
+		visible = true
+	)
 
 # ----------------- 分页 4：演化推衍（系统与拓展） -----------------
 
@@ -404,83 +436,275 @@ func _build_system_page() -> Control:
 
 	var vbox := VBoxContainer.new()
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 14)
+	vbox.add_theme_constant_override("separation", 12)
 	scroll.add_child(vbox)
 
-	var info_panel := PanelContainer.new()
-	var ip_st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
-	ip_st.content_margin_left = 14.0
-	ip_st.content_margin_top = 12.0
-	ip_st.content_margin_right = 14.0
-	ip_st.content_margin_bottom = 12.0
-	info_panel.add_theme_stylebox_override("panel", ip_st)
-	vbox.add_child(info_panel)
+	# 1. 游戏版本与更新
+	vbox.add_child(_build_version_card())
 
-	var ip_vbox := VBoxContainer.new()
-	ip_vbox.add_theme_constant_override("separation", 6)
-	info_panel.add_child(ip_vbox)
+	# 2. 作者 HQ · 宗门阵地
+	vbox.add_child(_build_author_hq_card())
 
-	var ver_title := Label.new()
-	ver_title.text = "✦ 当前运行状态"
-	GameStyle.label(ver_title, 14, GameStyle.JADE)
-	ip_vbox.add_child(ver_title)
+	# 3. 运行环境与诊断
+	vbox.add_child(_build_diagnostics_card())
+
+	# 4. 预设与重置
+	vbox.add_child(_build_reset_card())
+
+	GameStyle.scrollable(scroll)
+	return scroll
+
+func _build_version_card() -> Control:
+	var panel := PanelContainer.new()
+	var sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 14.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_bottom = 10.0
+	panel.add_theme_stylebox_override("panel", sb)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "✦ 游戏版本与更新"
+	GameStyle.label(title, 14, GameStyle.JADE)
+	vb.add_child(title)
 
 	var ver_lbl := Label.new()
 	ver_lbl.text = "游戏版本：" + Version.APP_NAME + " (" + Version.APP_NAME_EN + ") " + Version.APP_VERSION_NAME + " (Godot 4.7 Forward+)"
 	GameStyle.label(ver_lbl, 13, GameStyle.PAPER)
-	ip_vbox.add_child(ver_lbl)
+	vb.add_child(ver_lbl)
 
 	var res_lbl := Label.new()
-	res_lbl.text = "渲染规格：960×540 基准视口 · 像素平滑过滤 Nearest"
-	GameStyle.label(res_lbl, 13, GameStyle.PAPER_DIM)
-	ip_vbox.add_child(res_lbl)
+	res_lbl.text = "渲染规格：960×540 基准视口 · 像素平滑过滤 Nearest · 60 FPS"
+	GameStyle.label(res_lbl, 12, GameStyle.PAPER_DIM)
+	vb.add_child(res_lbl)
 
-	var exp_panel := PanelContainer.new()
-	var ep_st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
-	ep_st.content_margin_left = 14.0
-	ep_st.content_margin_top = 12.0
-	ep_st.content_margin_right = 14.0
-	ep_st.content_margin_bottom = 12.0
-	exp_panel.add_theme_stylebox_override("panel", ep_st)
-	vbox.add_child(exp_panel)
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	vb.add_child(btn_row)
 
-	var ep_vbox := VBoxContainer.new()
-	ep_vbox.add_theme_constant_override("separation", 6)
-	exp_panel.add_child(ep_vbox)
+	_check_update_btn = Button.new()
+	_check_update_btn.text = "✦ 检查更新"
+	_check_update_btn.custom_minimum_size = Vector2(110, 30)
+	_check_update_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_check_update_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
+	_check_update_btn.pressed.connect(_on_check_update_pressed)
+	btn_row.add_child(_check_update_btn)
 
-	var exp_title := Label.new()
-	exp_title.text = "✦ 后续功能规划预留"
-	GameStyle.label(exp_title, 14, GameStyle.JADE)
-	ep_vbox.add_child(exp_title)
+	var changelog_btn := Button.new()
+	changelog_btn.text = "✦ 更新记录"
+	changelog_btn.custom_minimum_size = Vector2(110, 30)
+	changelog_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(changelog_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	changelog_btn.pressed.connect(_open_changelog)
+	btn_row.add_child(changelog_btn)
 
-	var exp_desc := Label.new()
-	exp_desc.text = "包含自定义虚拟摇杆位置锁定、键位映射配置、画质渲染级别选择、多语言本地化等设定将在后续版本陆续拓展接入。"
-	GameStyle.label(exp_desc, 12, GameStyle.GREY)
-	exp_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	ep_vbox.add_child(exp_desc)
+	_update_tip_lbl = Label.new()
+	_update_tip_lbl.text = ""
+	GameStyle.label(_update_tip_lbl, 12, GameStyle.GOOD)
+	btn_row.add_child(_update_tip_lbl)
 
-	# 恢复默认设置按钮
-	var bottom_hbox := HBoxContainer.new()
-	bottom_hbox.add_theme_constant_override("separation", 12)
-	vbox.add_child(bottom_hbox)
+	return panel
+
+func _build_author_hq_card() -> Control:
+	var panel := PanelContainer.new()
+	var sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 14.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_bottom = 10.0
+	panel.add_theme_stylebox_override("panel", sb)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "✦ 作者 HQ · 宗门阵地"
+	GameStyle.label(title, 14, GameStyle.JADE)
+	vb.add_child(title)
+
+	var desc := Label.new()
+	desc.text = "独立制作：favo。代码与版本双端开源，欢迎道友交流论道、提交建议与反馈共建！"
+	GameStyle.label(desc, 12, GameStyle.PAPER)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(desc)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	vb.add_child(btn_row)
+
+	var gitee_btn := Button.new()
+	gitee_btn.text = "✦ Gitee 阵地"
+	gitee_btn.custom_minimum_size = Vector2(110, 30)
+	gitee_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(gitee_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	gitee_btn.pressed.connect(func():
+		OS.shell_open("https://gitee.com/%s/%s" % [Version.GITEE_OWNER, Version.GITEE_REPO])
+		UpdateManager.show_toast("正在前往 Gitee 宗门阵地...", GameStyle.JADE)
+	)
+	btn_row.add_child(gitee_btn)
+
+	var gh_btn := Button.new()
+	gh_btn.text = "✦ GitHub 阵地"
+	gh_btn.custom_minimum_size = Vector2(110, 30)
+	gh_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(gh_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	gh_btn.pressed.connect(func():
+		OS.shell_open("https://github.com/%s/%s" % [Version.GITHUB_OWNER, Version.GITHUB_REPO])
+		UpdateManager.show_toast("正在前往 GitHub 宗门阵地...", GameStyle.JADE)
+	)
+	btn_row.add_child(gh_btn)
+
+	var feedback_btn := Button.new()
+	feedback_btn.text = "✦ 建议与反馈"
+	feedback_btn.custom_minimum_size = Vector2(110, 30)
+	feedback_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(feedback_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	feedback_btn.pressed.connect(func():
+		OS.shell_open("https://gitee.com/%s/%s/issues" % [Version.GITEE_OWNER, Version.GITEE_REPO])
+		UpdateManager.show_toast("正在前往反馈通道，期待道友的高见...", GameStyle.JADE)
+	)
+	btn_row.add_child(feedback_btn)
+
+	return panel
+
+func _build_diagnostics_card() -> Control:
+	var panel := PanelContainer.new()
+	var sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 14.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_bottom = 10.0
+	panel.add_theme_stylebox_override("panel", sb)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "✦ 运行环境与诊断"
+	GameStyle.label(title, 14, GameStyle.JADE)
+	vb.add_child(title)
+
+	var arch := Engine.get_architecture_name()
+	var env_lbl := Label.new()
+	env_lbl.text = "平台环境：%s (%s) · 架构：%s · 引擎：%s" % [
+		OS.get_name(),
+		OS.get_version(),
+		arch,
+		Engine.get_version_info().get("string", "Godot 4.7")
+	]
+	GameStyle.label(env_lbl, 12, GameStyle.PAPER_DIM)
+	env_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(env_lbl)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	vb.add_child(btn_row)
+
+	var copy_btn := Button.new()
+	copy_btn.text = "✦ 复制运行诊断信息"
+	copy_btn.custom_minimum_size = Vector2(160, 30)
+	copy_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(copy_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	copy_btn.pressed.connect(_copy_diagnostics_info)
+	btn_row.add_child(copy_btn)
+
+	return panel
+
+func _build_reset_card() -> Control:
+	var panel := PanelContainer.new()
+	var sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 14.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_bottom = 10.0
+	panel.add_theme_stylebox_override("panel", sb)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "✦ 预设与重置"
+	GameStyle.label(title, 14, GameStyle.JADE)
+	vb.add_child(title)
+
+	var desc := Label.new()
+	desc.text = "将音效音量、战斗视觉特效、震屏档位等全部设置恢复至出厂预设推荐值。"
+	GameStyle.label(desc, 12, GameStyle.PAPER_DIM)
+	vb.add_child(desc)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 12)
+	vb.add_child(btn_row)
 
 	var reset_btn := Button.new()
 	reset_btn.text = "恢 复 默 认 设 置"
-	reset_btn.custom_minimum_size = Vector2(160, 36)
+	reset_btn.custom_minimum_size = Vector2(150, 32)
 	reset_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(reset_btn, GameStyle.NAVY2, GameStyle.BAD, 13, GameStyle.PAPER, 5.0, GameStyle.CHALK)
 	reset_btn.pressed.connect(_on_reset_pressed)
-	bottom_hbox.add_child(reset_btn)
+	btn_row.add_child(reset_btn)
 
 	_reset_tip_lbl = Label.new()
 	_reset_tip_lbl.text = ""
 	GameStyle.label(_reset_tip_lbl, 13, GameStyle.GOOD)
-	bottom_hbox.add_child(_reset_tip_lbl)
+	btn_row.add_child(_reset_tip_lbl)
 
-	return scroll
+	return panel
 
-## 打开新手指南：TutorialDialog 在 UILayer 中排在设置之后，天然盖在其上；
-## ESC 先关指南再回设置，关掉后停在当前页签
+func _on_check_update_pressed() -> void:
+	if UpdateManager.is_checking:
+		return
+	if is_instance_valid(_check_update_btn):
+		_check_update_btn.disabled = true
+		_check_update_btn.text = "检测中..."
+	if is_instance_valid(_update_tip_lbl):
+		_update_tip_lbl.text = "正在连接远端版本节点..."
+		_update_tip_lbl.add_theme_color_override("font_color", GameStyle.GOLD)
+	UpdateManager.check_for_update(true)
+
+func _on_update_check_done(tip: String, color: Color) -> void:
+	if is_instance_valid(_check_update_btn):
+		_check_update_btn.disabled = false
+		_check_update_btn.text = "✦ 检查更新"
+	if is_instance_valid(_update_tip_lbl):
+		_update_tip_lbl.text = tip
+		_update_tip_lbl.add_theme_color_override("font_color", color)
+		var tw := create_tween()
+		tw.tween_interval(3.5)
+		tw.tween_callback(func():
+			if is_instance_valid(_update_tip_lbl):
+				_update_tip_lbl.text = ""
+		)
+
+func _open_changelog() -> void:
+	if _changelog_dialog == null or not is_instance_valid(_changelog_dialog):
+		_changelog_dialog = ChangelogDialog.new()
+		var p := get_parent()
+		if p != null:
+			p.add_child(_changelog_dialog)
+		else:
+			add_child(_changelog_dialog)
+	_changelog_dialog.open()
+
+func _copy_diagnostics_info() -> void:
+	var info := "【剑士 (Swordsman) 运行诊断信息】\n"
+	info += "游戏版本: %s (%s)\n" % [Version.APP_VERSION_NAME, Version.APP_NAME_EN]
+	info += "运行平台: %s (%s)\n" % [OS.get_name(), OS.get_version()]
+	info += "架构规格: %s\n" % Engine.get_architecture_name()
+	info += "引擎版本: %s\n" % Engine.get_version_info().get("string", "Godot 4.7")
+	info += "渲染基准: 960x540 (Nearest, 60 FPS)"
+
+	if DisplayServer.has_method("clipboard_set"):
+		DisplayServer.clipboard_set(info)
+	UpdateManager.show_toast("✦ 运行诊断信息已复制到剪贴板 ✦", GameStyle.GOOD)
+
 func _open_tutorial() -> void:
 	var tut := get_parent().get_node_or_null("TutorialDialog")
 	if tut != null:

@@ -13,12 +13,14 @@ const PULSE_INTERVAL: float = 1.0  ## 治疗节拍（秒/拍）
 const FOLLOW_DIST: float = 34.0    ## 跟随绕飘半径（px）
 const HEIGHT_OFFSET: float = 30.0  ## 悬在玩家头顶上方（px，负 Y 向上）
 const DISSOLVE_SEC: float = 0.35   ## 消散动画时长（秒）
+const REDRAW_INTERVAL: float = 0.05 ## 重绘节流（20Hz，杜绝每物理帧无节流重绘）
 
 var heal_pct: float = 0.02  ## 每拍回复玩家最大生命比例（Player._do_renewal 按 SkillData 写入）
 var lifetime: float = 8.0   ## 存活时长（秒），耗尽即消散
 var target: Player = null   ## 跟随与治疗目标（召唤者）
 
 var _age: float = 0.0
+var _redraw_timer: float = 0.0
 var _pulse_timer: float = 1.0  ## 首拍延迟 1 秒：落地先飘半拍再开工，避免召出瞬间和治疗闪 frame 重叠
 var _pulse_fx: float = -1.0    ## 治疗脉冲扩散动画进度（0~1，<0 = 无脉冲）
 var _orbit_sign: float = 1.0   ## 绕飘方向（固定一边，避免临界抖动）
@@ -56,7 +58,10 @@ func _physics_process(delta: float) -> void:
 	if lifetime <= 0.0:
 		_dissolve()
 		return
-	queue_redraw()
+	_redraw_timer -= delta
+	if _redraw_timer <= 0.0 or _pulse_fx >= 0.0:
+		_redraw_timer = REDRAW_INTERVAL
+		queue_redraw()
 
 func _heal_pulse() -> void:
 	if _dying or target == null:
@@ -67,7 +72,8 @@ func _heal_pulse() -> void:
 	if gained <= 0.01:
 		return
 	_pulse_fx = 0.0
-	DamageNumber.spawn(get_parent(), target.global_position + Vector2(0, -22), int(gained), false, "+" + str(int(gained)))
+	# 跳字坐标错开至 -32，避开玉露鹿灵兽治疗 (-22)，防止同层重叠
+	DamageNumber.spawn(get_parent(), target.global_position + Vector2(0, -32), int(gained), false, "+" + str(int(gained)))
 
 ## 消散：收拢淡出后自行释放（先出组，防止重施替换拿到正在消散的旧灵）
 func _dissolve() -> void:
@@ -83,12 +89,11 @@ func _dissolve() -> void:
 
 func _draw() -> void:
 	var pulse := 0.5 + 0.5 * sin(_age * 3.2)  # 呼吸相位
-	var core_r := 7.0 + 1.5 * pulse
-	# 外晕 → 中晕 → 光核 → 高光，全走 GameStyle 增益绿
-	draw_circle(Vector2.ZERO, core_r * 2.6, Color(GameStyle.GOOD, 0.10 + 0.06 * pulse))
-	draw_circle(Vector2.ZERO, core_r * 1.6, Color(GameStyle.GOOD, 0.22))
+	var core_r := 6.5 + 1.2 * pulse
+	# 轻灵通透：外晕收敛 + 核心柔和光斑，不抢视线
+	draw_circle(Vector2.ZERO, core_r * 1.6, Color(GameStyle.GOOD, 0.08 + 0.04 * pulse))
 	draw_circle(Vector2.ZERO, core_r, GameStyle.GOOD)
-	draw_circle(Vector2(0, -2.0), core_r * 0.45, Color(1.0, 1.0, 1.0, 0.85))
+	draw_circle(Vector2(0, -1.8), core_r * 0.4, Color(1.0, 1.0, 1.0, 0.45))
 	if _pulse_fx >= 0.0:
-		var r := lerpf(10.0, 32.0, _pulse_fx)
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(GameStyle.GOOD, 1.0 - _pulse_fx), 2.0)
+		var r := lerpf(8.0, 24.0, _pulse_fx)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 28, Color(GameStyle.GOOD, (1.0 - _pulse_fx) * 0.7), 1.5)

@@ -22,17 +22,17 @@ func _test_wave_scaling() -> void:
 	# 刷怪预算（2026-10-11 土豆兄弟式克制）：波内总刷入封顶，预算耗尽即停手，场上越打越空。
 	# 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90），
 	# 单怪血量基数同步 +33% 补压力，预算缺口由经验补差兜底（见 balance_sim_check 绑定契约）。
-	# 2026-10-15 反割草 2.0：预算再 -20%（11/2.9/72），单怪血量基数 6.0→8.5 同步补压，
-	# 单怪掉落经验由 MOB_KILL_EXP_MULT ×1.25 反向找平（每波收入持平）。
-	_c.equals(GameBalance.wave_spawn_budget(1), 14, "第 1 波预算 14（反割草 2.0 收紧）")
-	_c.equals(GameBalance.wave_spawn_budget(5), 26, "第 5 波预算 26")
-	_c.equals(GameBalance.wave_spawn_budget(6), 28, "第 6 波预算 28")
-	_c.equals(GameBalance.wave_spawn_budget(10), 40, "第 10 波预算 40")
-	_c.equals(GameBalance.wave_spawn_budget(20), 69, "第 20 波预算 69")
-	# 2026-10-13 深层三涨：>20 波预算自 W20=69 续 +4/波，封顶 DEEP_BUDGET_MAX（145）。
-	_c.equals(GameBalance.wave_spawn_budget(21), 73, "深层第 21 波预算 73（续涨 +4）")
-	_c.equals(GameBalance.wave_spawn_budget(30), 109, "深层第 30 波预算 109")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 145")
+	# 刷怪预算（2026-10-15 分批清剿制）：每回合总刷入预算收窄，单批集中推进 + 间歇呼吸。
+	# 单怪掉落经验由 MOB_KILL_EXP_MULT ×1.75 反向找平（每波总经验收入完全持平）。
+	_c.equals(GameBalance.wave_spawn_budget(1), 10, "第 1 波预算 10（分批清剿制收紧）")
+	_c.equals(GameBalance.wave_spawn_budget(5), 19, "第 5 波预算 19")
+	_c.equals(GameBalance.wave_spawn_budget(6), 21, "第 6 波预算 21")
+	_c.equals(GameBalance.wave_spawn_budget(10), 30, "第 10 波预算 30")
+	_c.equals(GameBalance.wave_spawn_budget(20), 52, "第 20 波预算 52")
+	# 2026-10-15 深层续涨：>20 波预算自 W20=52 续 +3/波，封顶 DEEP_BUDGET_MAX（115）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 55, "深层第 21 波预算 55（续涨 +3）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 82, "深层第 30 波预算 82")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 115")
 	var budget_prev := 0
 	var budget_nondecreasing := true
 	for w in range(1, 61):
@@ -48,10 +48,17 @@ func _test_wave_scaling() -> void:
 			deep_rises += 1
 	_c.equals(deep_rises, 19, "深层 21~39 波逐波续涨（封顶前不提前持平）")
 
-	# 2026-10-15 反割草 2.0：小怪掉落经验补偿倍率（预算 -20% 的倒数），掉落与补差均值同走一个出口
-	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.25, EPS, "小怪经验补偿倍率 1.25（= 预算 -20% 的倒数，改预算必须同步改它）")
-	_c.equals(GameBalance.mob_kill_exp(3), 4, "史莱姆 exp 3 → 实发 4（×1.25 取整）")
-	_c.equals(GameBalance.mob_kill_exp(5), 6, "邪修 exp 5 → 实发 6")
+	# 2026-10-15 分批清剿制：动态同屏上限
+	_c.equals(GameBalance.max_enemies_cap(1), 6, "第 1 波同屏上限 6 只")
+	_c.equals(GameBalance.max_enemies_cap(5), 8, "第 5 波同屏上限 8 只")
+	_c.equals(GameBalance.max_enemies_cap(10), 10, "第 10 波同屏上限 10 只")
+	_c.equals(GameBalance.max_enemies_cap(20), 16, "第 20 波同屏上限 16 只")
+	_c.check(GameBalance.max_enemies_cap(30) > 16, "深层同屏上限高于 20 波")
+
+	# 2026-10-15 分批清剿制：小怪掉落经验补偿倍率（预算 -26% 的倒数），掉落与补差均值同走一个出口
+	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.75, EPS, "小怪经验补偿倍率 1.75（改预算必须同步改它）")
+	_c.equals(GameBalance.mob_kill_exp(3), 5, "史莱姆 exp 3 → 实发 5（×1.75 取整）")
+	_c.equals(GameBalance.mob_kill_exp(5), 9, "邪修 exp 5 → 实发 9")
 	_c.equals(GameBalance.mob_kill_exp(0), 0, "非法 exp 0 不放大")
 
 	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
@@ -111,10 +118,10 @@ func _test_boss_waves() -> void:
 	_c.check(GameBalance.boss_contact_damage(20) > GameBalance.boss_contact_damage(1), "Boss 接触伤害随波次成长")
 
 func _test_spawn_shape() -> void:
-	_c.equals(GameBalance.spawn_batch(1, 0.0), 2, "第 1 波 + 触发追加 → 2 只")
-	_c.equals(GameBalance.spawn_batch(1, 0.9), 1, "第 1 波未触发追加 → 1 只")
-	_c.equals(GameBalance.spawn_batch(8, 0.9), 2, "第 8 波 → 1+1=2 只")
-	_c.equals(GameBalance.spawn_batch(8, 0.0), 3, "第 8 波追加 → 3 只")
+	_c.equals(GameBalance.spawn_batch(1, 0.0), 5, "第 1 波分批清剿 + 触发追加 → 5 只")
+	_c.equals(GameBalance.spawn_batch(1, 0.9), 4, "第 1 波分批未触发追加 → 4 只")
+	_c.equals(GameBalance.spawn_batch(8, 0.9), 5, "第 8 波分批 → 5 只")
+	_c.equals(GameBalance.spawn_batch(8, 0.0), 6, "第 8 波分批追加 → 6 只")
 	_c.equals(GameBalance.ELITE_STONE_BONUS, 25, "精英额外灵石 25")
 	var count_at_cap := 0
 	for i in range(200):

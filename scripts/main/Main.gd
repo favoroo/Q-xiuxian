@@ -9,6 +9,11 @@ extends Node2D
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var _vignette_copy: BackBufferCopy = null
 var _shockwave_tween: Tween = null
+# 暗角两套 shader：soft（纯暗角，零 screen_texture → 零每帧 BackBufferCopy）与
+# shockwave（含屏幕折射，需 backbuffer）。开关关时挂 soft，开时挂 shockwave。
+# 根因：单一 shader 声明 hint_screen_texture 即触发每帧隐式全屏拷贝，即便冲击波分支不走。
+const _VIG_SHADER_SOFT := preload("res://assets/shaders/vignette_soft.gdshader")
+const _VIG_SHADER_SHOCKWAVE := preload("res://assets/shaders/vignette_shockwave.gdshader")
 var dust_particles: CPUParticles2D
 var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
@@ -138,6 +143,8 @@ func _ready() -> void:
 		GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
 	if not GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
 		GameManager.screen_shockwave_triggered.connect(trigger_screen_shockwave)
+	if not GameManager.game_over_triggered.is_connected(_on_game_over_reset_vignette):
+		GameManager.game_over_triggered.connect(_on_game_over_reset_vignette)
 
 	# 聚灵阵信号接线：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
 	var hud: GameHUD = $UILayer/GameHUD
@@ -226,24 +233,20 @@ func _run_resumed_fight(spawner: WaveSpawner) -> void:
 	get_tree().paused = false
 	spawner.start_wave(GameManager.wave_number)
 
-## 帧率档位落地（渲染上限 + 物理 tick + 视觉档位三者联动）：
-## 流畅档 = 60/60，省电档 = 30/30。渲染与物理必须同频：物理留 30Hz 而 max_fps 抬 60，
+## 帧率落地（渲染上限 + 物理 tick + 视觉档位三者联动）：
+## 恒定 60fps 渲染 + 60Hz 物理（2026-10-15 起 30 帧省电档已下线）。
+## 渲染与物理必须同频：物理留 30Hz 而 max_fps 抬 60，
 ## CharacterBody2D 运动、相机跟随（physics 回调）、CPU 粒子仍是 30 步/秒，60 只是渲染空转。
 ## 无头判据不锁帧、不抬物理（保持 30Hz 物理 + 低档节流预算，PerfProbe 依赖此基线）。
 func _apply_fps_limit() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var high := bool(SettingsManager.get_val(&"display", &"fps_60", true))
-	Engine.max_fps = 60 if high else 30
-	Engine.physics_ticks_per_second = 60 if high else 30
-	VisualRate.high_fps = high
-	# 注：局中切档后一两帧内，物理插值缓冲按旧步长快照插一帧新 tick，可能有轻微滑移；
-	# 池化实体复用已各自 reset_physics_interpolation（BladeProjectile 等），一次性切档可接受。
+	Engine.max_fps = 60
+	Engine.physics_ticks_per_second = 60
+	VisualRate.high_fps = true
 
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
-	if section == &"display" and key == &"fps_60":
-		_apply_fps_limit()
-	elif section == &"display" and key == &"screen_shockwave":
+	if section == &"display" and key == &"screen_shockwave":
 		_sync_shockwave_channel()
 
 func _exit_tree() -> void:
@@ -439,6 +442,28 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 					hit_pos = GameManager.player.global_position
 				trigger_screen_shockwave(hit_pos, 1.0, 0.45)
 
+## 结算时红晕渐隐复位（2026-10-15 用户反馈：阵亡红特效一直挂着不散）。
+## 根因：阵亡后血量为 0，_process 濒死分支每帧刷红 vignette；结算屏一弹整树暂停，
+## _process 停摆把红晕冻在最后一帧。此处用 PAUSE_PROCESS 补间让红晕在结算屏上缓缓退去。
+func _on_game_over_reset_vignette(_victory: bool) -> void:
+	if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
+		return
+	_low_hp_phase = 0.0
+	if _vignette_tween != null and _vignette_tween.is_valid():
+		_vignette_tween.kill()
+	var mat := vignette_rect.material as ShaderMaterial
+	var start_tint: Color = mat.get_shader_parameter("tint_color")
+	var start_op: float = mat.get_shader_parameter("vignette_opacity")
+	_vignette_tween = create_tween()
+	# 树已暂停，不放开补间的话红晕同样会冻住
+	_vignette_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_vignette_tween.tween_method(
+		func(t: float):
+			mat.set_shader_parameter("tint_color", start_tint.lerp(Color(0.0, 0.0, 0.0, 0.1), t))
+			mat.set_shader_parameter("vignette_opacity", lerpf(start_op, 0.5, t)),
+		0.0, 1.0, 1.2
+	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
 ## 检查当前场上是否有首领/精英敌人活动
 func _has_active_boss() -> bool:
 	if GameBalance.is_boss_wave(GameManager.wave_number):
@@ -461,14 +486,19 @@ func _setup_screen_shockwave() -> void:
 		parent.move_child(_vignette_copy, vignette_rect.get_index())
 		_sync_shockwave_channel()
 
-## 同步冲击波通道状态：画质开关关闭时禁用 BackBufferCopy 与重置 shader 参数
+## 同步冲击波通道状态：开关关时挂纯暗角 shader（零 screen_texture 引用 → 零每帧
+## BackBufferCopy）并禁用显式 BackBufferCopy 节点；开时挂冲击波 shader 并启用拷贝。
+## 同名参数（tint_color/vignette_intensity/vignette_opacity）跨 shader 切换自动保留。
 func _sync_shockwave_channel() -> void:
 	var on := bool(SettingsManager.get_val(&"display", &"screen_shockwave", false))
 	if _vignette_copy != null and is_instance_valid(_vignette_copy):
 		_vignette_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT if on else BackBufferCopy.COPY_MODE_DISABLED
 	if vignette_rect != null and vignette_rect.material is ShaderMaterial:
 		var mat := vignette_rect.material as ShaderMaterial
-		if not on:
+		var want_shader := _VIG_SHADER_SHOCKWAVE if on else _VIG_SHADER_SOFT
+		if mat.shader != want_shader:
+			mat.shader = want_shader
+		if on:
 			mat.set_shader_parameter("shockwave_strength", 0.0)
 			mat.set_shader_parameter("shockwave_progress", 0.0)
 
@@ -522,21 +552,12 @@ func _setup_map_bounds() -> void:
 	var half: float = GameManager.MAP_HALF_EXTENT
 	var ground_half: float = 2400.0
 
-	# 1. 场外压暗：边界到地砖边缘的四块遮罩（保持深渊压暗，去蓝取中性墨色）
-	var dim := Color(0.02, 0.02, 0.03, 0.66)
-	var bands := [
-		[Vector2(-ground_half, -ground_half), Vector2(ground_half * 2.0, ground_half - half)],
-		[Vector2(-ground_half, half), Vector2(ground_half * 2.0, ground_half - half)],
-		[Vector2(-ground_half, -half), Vector2(ground_half - half, half * 2.0)],
-		[Vector2(half, -half), Vector2(ground_half - half, half * 2.0)],
-	]
-	for b in bands:
-		var rect := ColorRect.new()
-		rect.color = dim
-		rect.position = b[0]
-		rect.size = b[1]
-		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		map.add_child(rect)
+	# 1. 场外九幽深渊虚空：梯形双线性平滑坠落衰减，彻底消除硬折线与切糕感
+	var abyss := AbyssFalloffLayer.new()
+	abyss.half_extent = half
+	abyss.ground_extent = ground_half
+	abyss.falloff_width = 120.0
+	map.add_child(abyss)
 
 	# 2. 地面程序化微细节层：石板裂缝、青苔暗斑、剑痕、碎石、阵外刻痕（纯静态一次性 _draw）
 	var ground_decor := GroundDecorLayer.new()

@@ -15,6 +15,14 @@ extends Node
 ##   真实按钮原地不动，代理钮每帧又被贴回原处，看着就是"按住了拖不走"。
 ##   这种错不崩、不退出，只在控制台每帧刷一条 SCRIPT ERROR ⇒ UnitRunner / SmokeRunner 全绿。
 ##
+## 为什么立第二条（用户 2026-10-15 真机：一碰按钮就飞到屏幕角）：
+##   触屏真机上 Godot 的「触摸→模拟鼠标」事件**先于**真实触摸抵达 gui_input，此刻 _input
+##   还没见过真实触摸，旧写法用 _pointer 记抓手偏移，而 _pointer 停在上一处落点（首触是
+##   原点 0,0）⇒ _drag_off = 键心 - 旧值 算大 ⇒ 下一帧 c = 真实指针 + 大偏移 ≈ 两倍坐标，
+##   归一化后被夹到 (1,1) 屏幕角。修复后起拖坐标取自 gui_input 事件自身（本地化坐标乘
+##   get_global_transform_with_canvas 逆变换回视口系），与事件抵达顺序无关。
+##   注意 push_input 直进视口管线、不过 Input 的模拟链，模拟事件必须自己按真机顺序补发。
+##
 ## 尺子口径：走生产入口（GameHUD.open_btn_edit_overlay，设置页那颗按钮调的就是它），
 ## 事件用 push_input 真发按下/微动/抬起（emit_signal 会绕过拾取，热区是死的也照样全绿），
 ## 量的是「真实按钮的视觉中心有没有跟到手指落点」+「代理钮跟不跟得上」+「松手才落盘」。
@@ -117,8 +125,10 @@ func _run() -> void:
 	await _check_blank_drag_does_nothing(KEYS[0], Vector2(vp.x * 0.5, vp.y * 0.5))
 	for i in range(KEYS.size()):
 		await _check_one_drag(KEYS[i], DRAG_OFFSETS[i])
+	await _check_stale_pointer_no_corner_jump(KEYS[0])
 	await _check_save_only_on_release(KEYS[0])
 	await _check_slider_follows_selection()
+	await _check_reset_needs_confirm()
 	_check_labels()
 	_c.check(_c.passed >= 25, "判据记满账（实得 %d 条，条数掉一半 = 中途炸了还在打 ALL PASS）" % _c.passed)
 	_restore(orig)
@@ -166,6 +176,44 @@ func _check_one_drag(k: Dictionary, off: Vector2) -> void:
 					name_s, got_proxy.x, got_proxy.y, got.x, got.y])
 	_c.near(got_xy.x, target.x / vp.x, 0.011, "%s 存档 X 与落点同源" % name_s)
 	_c.near(got_xy.y, target.y / vp.y, 0.011, "%s 存档 Y 与落点同源" % name_s)
+
+## 回归（2026-10-15 真机：一碰按钮就飞屏幕角）：按真机事件顺序打枪 ——
+## 指针停在远处旧值 → 模拟鼠标按下（真机上它先于真实触摸抵达 gui_input）→
+## 真实触摸补到同一落点 → 真实拖动 → 抬起。前两拍键都必须原地不动（旧写法在这一枪
+## 把 _drag_off 算成 键心-旧值，下一帧 ≈ 两倍坐标被夹到 1,1 屏幕角），之后照常跟手落点。
+func _check_stale_pointer_no_corner_jump(k: Dictionary) -> void:
+	var name_s := String(k["name"])
+	var start: Vector2 = _hud.call(String(k["get_px"]))
+	var vp := _hud.get_viewport_rect().size
+	var half := SkillButtonView.SKILL_BTN_SIZE * 0.5 + 2.0
+	var target := Vector2(
+			clampf(start.x - 140.0, half, vp.x - half),
+			clampf(start.y - 90.0, half, vp.y - half))
+	# 第一拍：把指针甩到远处旧值，随后直接按下（没有 motion 热身）
+	await _motion(Vector2(24, 24))
+	await _press(start)
+	await _settle(2)
+	var after_press: Vector2 = _hud.call(String(k["get_px"]))
+	_c.check(after_press.distance_to(start) <= SNAP_EPS,
+			"%s 旧指针值下直接按下不飞角（键心原地 %.0f,%.0f，实得 %.0f,%.0f）" % [
+					name_s, start.x, start.y, after_press.x, after_press.y])
+	# 第二拍：真实触摸随后补到（真机顺序），不许把已起的拖动顶飞
+	await _touch_down(start)
+	await _settle(2)
+	var after_touch: Vector2 = _hud.call(String(k["get_px"]))
+	_c.check(after_touch.distance_to(start) <= SNAP_EPS,
+			"%s 真实触摸补到同一落点仍原地（实得 %.0f,%.0f）" % [
+					name_s, after_touch.x, after_touch.y])
+	# 第三拍：跟手拖到落点、抬起收口
+	await _touch_drag(target)
+	await _touch_up(target)
+	await _settle(3)
+	var got: Vector2 = _hud.call(String(k["get_px"]))
+	_c.check(got.distance_to(target) <= SNAP_EPS,
+			"%s 旧值起拖后照常跟到落点 %.0f,%.0f（实得 %.0f,%.0f）" % [
+					name_s, target.x, target.y, got.x, got.y])
+	_c.check(int(_ov.get("_drag_id")) == DRAG_NONE,
+			"%s 这一枪收得住口（_drag_id 实得 %d）" % [name_s, int(_ov.get("_drag_id"))])
 
 ## 拖动中不落盘、松手才写 settings.cfg（口径写在 _apply_drag 注释里：每帧写盘会卡手）
 func _check_save_only_on_release(k: Dictionary) -> void:
@@ -221,6 +269,42 @@ func _check_slider_follows_selection() -> void:
 			"没选中的技能键大小不动（滑杆不串台，实得 %.2f）" % SettingsManager.skill_btn_scale())
 	slider.value = 100.0
 	await _settle(2)
+
+## 回归（2026-10-15 用户反馈）：「恢复默认位置」不许一键直接抹掉摆位，先弹确认。
+## 量三段：按下只弹窗不动账 → 取消原样退回 → 再进弹窗点「恢复」才真回出厂位。
+func _check_reset_needs_confirm() -> void:
+	var reset_btn := _find_btn_by_text(_ov, "恢复默认位置")
+	_c.check(reset_btn != null, "底栏找得到「恢复默认位置」按钮")
+	if reset_btn == null:
+		return
+	# 先把技能键拖离出厂位，恢复与否才量得出差
+	var start: Vector2 = _hud.skill_btn_center_px()
+	await _drag(start, start + Vector2(-110.0, 70.0))
+	var moved: Vector2 = SettingsManager.skill_btn_xy()
+	# ① 点「恢复默认位置」→ 只开弹窗，不落盘
+	await _tap(reset_btn.get_global_rect().get_center())
+	var confirm: Control = _ov.get("_confirm_root")
+	_c.check(confirm != null and confirm.visible, "点「恢复默认位置」先弹确认弹窗")
+	_c.check(SettingsManager.skill_btn_xy().distance_to(moved) < 0.0001,
+			"弹窗阶段摆位不动（没有被直接恢复）")
+	# ② 取消 → 弹窗关、摆位仍是拖过的那份
+	var cancel_btn := _find_btn_by_text(confirm, "取消")
+	_c.check(cancel_btn != null, "确认弹窗里有「取消」")
+	await _tap(cancel_btn.get_global_rect().get_center())
+	_c.check(confirm != null and not confirm.visible, "「取消」关掉弹窗")
+	_c.check(SettingsManager.skill_btn_xy().distance_to(moved) < 0.0001,
+			"取消后摆位原样（%.3f,%.3f）" % [moved.x, moved.y])
+	# ③ 再进弹窗点「恢复」→ 回出厂位
+	await _tap(reset_btn.get_global_rect().get_center())
+	var ok_btn := _find_btn_by_text(confirm, "恢复")
+	_c.check(ok_btn != null and confirm.visible, "第二次点开确认弹窗")
+	await _tap(ok_btn.get_global_rect().get_center())
+	_c.check(confirm != null and not confirm.visible, "「恢复」执行后弹窗自动关")
+	_c.check(SettingsManager.skill_btn_xy().distance_to(SettingsManager.SKILL_BTN_XY_DEFAULT) < 0.0001,
+			"确认后才真恢复默认（技能键盘上 %.3f,%.3f → 出厂值）" % [
+					SettingsManager.skill_btn_xy().x, SettingsManager.skill_btn_xy().y])
+	_c.check(int(_ov.get("_drag_id")) == DRAG_NONE,
+			"恢复默认这一枪不留没收尾的拖动（_drag_id 实得 %d）" % int(_ov.get("_drag_id")))
 
 ## 键面文案（用户 2026-10-11：英文 extra 看不出那是颗什么键）
 func _check_labels() -> void:
@@ -411,6 +495,16 @@ func _proxy_center(field: String) -> Vector2:
 	if p == null:
 		return Vector2(INF, INF)
 	return p.position + p.pivot_offset
+
+## 按文案递归找钮：恢复确认弹窗的取消/恢复钮没存字段引用，判据按用户看见的文案去找
+func _find_btn_by_text(root: Node, text: String) -> Button:
+	if root is Button and String(root.text) == text:
+		return root
+	for child in root.get_children():
+		var found := _find_btn_by_text(child, text)
+		if found != null:
+			return found
+	return null
 
 ## 读 user://settings.cfg 上真正落盘的那一份（内存里的值证明不了落盘）
 func _disk_xy(cfg: String) -> Vector2:

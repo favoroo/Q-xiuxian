@@ -28,8 +28,8 @@
 background_mode = 3
 glow_enabled = true
 glow_levels/1 = true
-glow_levels/2 = true
-glow_levels/3 = true
+glow_levels/2 = false
+glow_levels/3 = false
 glow_intensity = 0.4
 glow_strength = 0.7
 glow_bloom = 0.04
@@ -58,6 +58,7 @@ color = Color(0.909804, 0.929412, 0.960784, 1)
 
 [node name="GroundTiles" type="TextureRect" parent="MapLayer"]
 texture_repeat = 2
+texture_filter = 5
 offset_left = -2400.0
 offset_top = -2400.0
 offset_right = 2400.0
@@ -67,13 +68,13 @@ texture = ExtResource("2_tile")
 stretch_mode = 1
 
 [node name="ObeliskCenter" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(0, -105)
+position = Vector2(0, -135)
 
 [node name="ObeliskEast" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(300, -140)
+position = Vector2(380, -178)
 
 [node name="ObeliskWest" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(-300, 140)
+position = Vector2(-380, 178)
 
 [node name="EntitiesLayer" type="Node2D" parent="."]
 y_sort_enabled = true
@@ -91,7 +92,7 @@ z_index = 35
 script = ExtResource("23_fx")
 
 [node name="SmoothCamera" type="Camera2D" parent="."]
-zoom = Vector2(1.2, 1.2)
+zoom = Vector2(1.1, 1.1)
 script = ExtResource("7_cam")
 
 [node name="PostProcessLayer" type="CanvasLayer" parent="."]

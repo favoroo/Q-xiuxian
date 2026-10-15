@@ -24,6 +24,7 @@ const POOL_DARK := Color(0.10, 0.28, 0.16)   ## 液面外暗晕
 const FADE_TIME := 0.6              ## 末期渐隐时长（秒）：替代到点硬消失
 const GROW_TIME := 0.22             ## 落地摊开生长时长（秒）：毒液从中心摊开，替代凭空满形态出现
 const REDRAW_INTERVAL := 0.05       ## 冒泡/渐隐重绘节流（20Hz，照 ArenaVisualLayer 口径）
+const DAMAGE_SCAN_INTERVAL := 0.0667 ## 伤害扫描节流（~15Hz，照 SunOrb 口径）：玩家受击无敌帧 ~0.5s，15Hz 必不漏跳
 const GROUND_SORT_Y := -100000.0    ## 宿主 Y 排序钉死键：恒排在角色之前（永远画在角色脚下）
 
 # —— 对象池（照 AstralGem / HealOrb / EnemyBolt 模式）——
@@ -66,6 +67,7 @@ var _shape_nodes: Array[CollisionShape2D] = []  ## 每块液面子圆一块碰�
 var _clock: float = 0.0             ## 视觉时钟（冒泡相位，不参与计时结算）
 var _age: float = 0.0               ## 落地后经过时长（驱动摊开生长动画）
 var _redraw_timer: float = 0.0      ## 重绘节流计时
+var _dmg_scan_timer: float = 0.0    ## 伤害 overlap 扫描节流计时（15Hz + 错相）
 var _blobs: Array[Vector3] = []     ## 液面子圆聚合：x/y = 偏移，z = 半径（外观与碰撞逐块同源）
 var _bubbles: Array[Vector3] = []   ## 冒泡点：x/y = 偏移，z = 基准半径（相位由 _clock 驱动）
 var _specks: Array[Vector3] = []    ## 液内暗斑：x/y = 偏移，z = 半径（静态质感，纯视觉无判定）
@@ -101,6 +103,8 @@ func activate() -> void:
 	_clock = 0.0
 	_age = 0.0
 	_redraw_timer = 0.0
+	# 错相初始化：多毒潭同屏时伤害扫描不在同一物理帧扎堆（照 SunOrb instance_id 错相）
+	_dmg_scan_timer = fposmod(float(get_instance_id() % 97) * 0.001, DAMAGE_SCAN_INTERVAL)
 	_generate_shape()
 	_sync_collision()
 	queue_redraw()
@@ -220,12 +224,20 @@ func _physics_process(delta: float) -> void:
 	# 只走 overlap 扫描、不接 body_entered 信号：Area2D 的进入信号对「起手前就已经在毒里」
 	## 的玩家不触发（毒潭多是砸在玩家脚下落成的），两条路径必须同一口径 —— 都在第一帧
 	## 物理扫描里结算，先摆人后放潭与先放潭后摆人吃到的第一跳完全一致。
-	var player := GameManager.player
-	if player != null and is_instance_valid(player) and player.current_health > 0.0:
-		for body in get_overlapping_bodies():
-			if body == player:
-				body.take_damage(damage, global_position)
-				break
+	# 伤害扫描节流 15Hz + 距离门控（照 SunOrb/HealOrb 先例）：玩家受击无敌帧 ~0.5s，
+	# 15Hz 必不漏跳；玩家不在毒潭包络半径内时直接跳过 overlap 查询，省 get_overlapping_bodies。
+	_dmg_scan_timer -= delta
+	if _dmg_scan_timer <= 0.0:
+		_dmg_scan_timer = DAMAGE_SCAN_INTERVAL
+		var player := GameManager.player
+		if player != null and is_instance_valid(player) and player.current_health > 0.0:
+			# 距离门控：玩家中心超出毒潭包络半径 + 4px 容差就不可能踩在任何液面子圆里
+			var d_sq := global_position.distance_squared_to(player.global_position)
+			if d_sq <= (radius + 4.0) * (radius + 4.0):
+				for body in get_overlapping_bodies():
+					if body == player:
+						body.take_damage(damage, global_position)
+						break
 	duration -= delta
 	if duration <= 0.0:
 		recycle()

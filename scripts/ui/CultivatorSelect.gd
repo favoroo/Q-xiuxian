@@ -113,9 +113,10 @@ func _build_ui() -> void:
 	_progress_label = Label.new()
 	_progress_label.custom_minimum_size = Vector2(104, 30)
 	_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_progress_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_progress_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_progress_label.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
-	GameStyle.label(_progress_label, 11, GameStyle.INK)
+	_progress_label.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+	GameStyle.label(_progress_label, 11, GameStyle.INK_TEXT)
 	header_row.add_child(_progress_label)
 
 	# 2. 主体左右分栏
@@ -319,8 +320,8 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	epithet_lbl.text = epi_raw
 	epithet_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	epithet_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK if is_unlocked else GameStyle.NAVY2))
-	GameStyle.label(epithet_lbl, 10, GameStyle.CHALK if is_unlocked else GameStyle.GREY)
+	epithet_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_unlocked else GameStyle.NAVY2))
+	GameStyle.label(epithet_lbl, 10, GameStyle.INK_TEXT if is_unlocked else GameStyle.GREY)
 	name_box.add_child(epithet_lbl)
 
 	var status_box := VBoxContainer.new()
@@ -393,7 +394,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var sname := String(sdef.get("name", syn_sid))
 		var enh := SkillData.enhance_desc(syn_sid, cid)
 		var syn_text := "✦ 契合「%s」：%s" % [sname, enh] if not enh.is_empty() else "✦ 专属契合「%s」" % sname
-		mid_col.add_child(_make_info_row("技能", GameStyle.GOLD_DK, GameStyle.GOLD_EDGE,
+		mid_col.add_child(_make_info_row("技能", GameStyle.GOLD, GameStyle.GOLD_EDGE,
 				[syn_text], col_w))
 
 	GameStyle.swipeable(mid_col)
@@ -499,7 +500,7 @@ func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
 
 # ---------------- 皮肤切换栏（通关难度解锁换色皮肤） ----------------
 
-## 皮肤栏：「皮肤」色签 + 原色槽 + 6 套主题色槽 + 当前皮肤名
+## 皮肤栏：「皮肤」色签 + 原色槽 + 6 套主题色槽
 func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 	var strip := HBoxContainer.new()
 	strip.add_theme_constant_override("separation", 6)
@@ -509,8 +510,8 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 	var tag_lbl := Label.new()
 	tag_lbl.text = " 皮肤 "
 	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD_DK))
-	GameStyle.label(tag_lbl, 11, GameStyle.CHALK)
+	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+	GameStyle.label(tag_lbl, 11, GameStyle.INK_TEXT)
 	strip.add_child(tag_lbl)
 
 	var cur_idx := GameManager.get_selected_skin(cid)
@@ -529,15 +530,6 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 				Color(t.get("cloak_inner", GameStyle.NAVY2)),
 				Color(t.get("cloak_edge", GameStyle.LINE)),
 				slot_open, is_unlocked and cur_idx == i))
-
-	var cur_name := "原色"
-	if cur_idx >= 0:
-		cur_name = String(SkinData.get_theme(cur_idx).get("name", ""))
-	var name_lbl := Label.new()
-	name_lbl.text = cur_name
-	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	GameStyle.label(name_lbl, 11, GameStyle.JADE if cur_idx >= 0 else GameStyle.PAPER_DIM)
-	strip.add_child(name_lbl)
 
 	return strip
 
@@ -587,7 +579,7 @@ func _on_skin_slot_tapped(cid: String, skin_idx: int, anchor: Control) -> void:
 		return
 	AudioManager.play_sfx("ui_confirm", 1.0)
 	GameManager.set_selected_skin(cid, skin_idx)
-	# 详情大头像与右侧网格缩略图实时换色；皮肤栏原位重建刷新高亮与当前皮肤名
+	# 详情大头像与右侧网格缩略图实时换色；皮肤栏原位重建刷新选中框
 	if _detail_pview != null and is_instance_valid(_detail_pview):
 		_detail_pview.setup_character_id(cid)
 	_refresh_roster_skin(cid)
@@ -685,7 +677,8 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
-	GameStyle.label(tag_lbl, 11, GameStyle.CHALK)
+	var tag_fg := GameStyle.INK_TEXT if (chip_bg == GameStyle.GOLD or chip_bg == GameStyle.JADE) else GameStyle.CHALK
+	GameStyle.label(tag_lbl, 11, tag_fg)
 	hbox.add_child(tag_lbl)
 
 	var text_box := VBoxContainer.new()

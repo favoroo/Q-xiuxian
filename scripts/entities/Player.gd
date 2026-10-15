@@ -100,6 +100,9 @@ var query_alloc_count: int = 0
 var query_reuse_count: int = 0
 
 var _weapons_buf: Array[FloatingWeapon] = []
+## joystick.get_direction 能力缓存（避免每物理帧 has_method 字符串查表）
+var _joy_get_dir_checked: bool = false
+var _joy_get_dir_ok: bool = false
 var _candidate_enemies_buf: Array[Node2D] = []
 var _candidate_chests_buf: Array[Node2D] = []
 var _candidate_targets_buf: Array[Node2D] = []
@@ -580,7 +583,7 @@ func _do_dash(st: Dictionary) -> void:
 func _release_shadow_step() -> void:
 	if not ShadowStepData.has_charge(shadow_ring):
 		return
-	var dmg := ShadowStepData.burst_damage(shadow_ring)
+	var dmg := ShadowStepData.burst_damage(shadow_ring, GameManager.wave_number)
 	var impulse: float = ShadowStepData.push_impulse(shadow_ring) * GameManager.knockback_mult
 	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
 	for e in EnemyFilter.collect(get_tree(), global_position, ShadowStepData.BURST_RADIUS):
@@ -817,8 +820,15 @@ func _physics_process(delta: float) -> void:
 
 	# 1. 移动输入与高响应加减速平滑
 	var dir: Vector2 = Vector2.ZERO
-	if GameManager.joystick != null and GameManager.joystick.has_method("get_direction"):
-		dir = GameManager.joystick.get_direction()
+	var joy = GameManager.joystick
+	if joy != null:
+		if not _joy_get_dir_checked:
+			_joy_get_dir_checked = true
+			_joy_get_dir_ok = joy.has_method("get_direction")
+		if _joy_get_dir_ok:
+			dir = joy.get_direction()
+		else:
+			dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	else:
 		dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 
@@ -1002,8 +1012,9 @@ func _update_weapon_targets() -> void:
 	_seen_ids_buf.clear()
 	for res in results:
 		var col = res.get("collider")
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent() as Node2D
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent as Node2D
 			if not is_instance_valid(enemy):
 				continue
 			var is_chest := enemy.is_in_group("chests")
@@ -1094,14 +1105,20 @@ func _update_weapon_targets() -> void:
 ## （target_bank / 0.0）就是天然衰减通道，脉冲叠加一次即被缓慢拉回，无需自管状态。
 const ATTACK_REACT_BANK := deg_to_rad(3.5)   ## 开火脉冲侧倾角
 var _weapons_attacking_buf: Array[bool] = [] ## 上一帧各武器 is_attacking 快照（边沿检测）
+## 灵珠子节点缓存（count 变化时重建，避免每帧 get_child 轮询）
+var _orbs_buf: Array[SunOrb] = []
+var _orbs_buf_count: int = -1
 
 func _tick_attack_react() -> void:
 	if not is_procedural or procedural_view == null:
 		return
-	var count := weapon_holder.get_child_count()
+	# 复用 _update_weapon_targets（10Hz）填充的 _weapons_buf，避免每帧 get_child_count + get_child 轮询
+	var count := _weapons_buf.size()
+	if count == 0:
+		return
 	_weapons_attacking_buf.resize(count)
 	for i in range(count):
-		var w := weapon_holder.get_child(i) as FloatingWeapon
+		var w := _weapons_buf[i]
 		if w == null or not is_instance_valid(w):
 			_weapons_attacking_buf[i] = false
 			continue
@@ -1118,6 +1135,13 @@ func _process_sun_orbs(delta: float) -> void:
 	var count := sun_orb_container.get_child_count()
 	if count == 0:
 		return
+	# count 变化时重建灵珠缓存，避免每帧两次 get_child 轮询
+	if count != _orbs_buf_count:
+		_orbs_buf_count = count
+		_orbs_buf.clear()
+		_orbs_buf.resize(count)
+		for i in range(count):
+			_orbs_buf[i] = sun_orb_container.get_child(i) as SunOrb
 
 	var range_mult: float = GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var base_radius: float = SunOrb.ORBIT_RADIUS * range_mult
@@ -1125,7 +1149,7 @@ func _process_sun_orbs(delta: float) -> void:
 	var max_reach: float = 175.0
 	var max_star: int = 1
 	for i in range(count):
-		var orb_child := sun_orb_container.get_child(i) as SunOrb
+		var orb_child := _orbs_buf[i]
 		if orb_child != null:
 			if orb_child.max_orbit_reach > max_reach:
 				max_reach = orb_child.max_orbit_reach
@@ -1154,12 +1178,13 @@ func _process_sun_orbs(delta: float) -> void:
 		GameManager.attack_speed_mult,
 		GameManager.synergy_haste_mult,
 		in_combat,
-		max_star
+		max_star,
+		count
 	) * (1.0 + GameManager.item_hook_sum("drone_spin_speed"))
 	sun_orb_angle += delta * angular_speed
 
 	for i in range(count):
-		var orb := sun_orb_container.get_child(i) as SunOrb
+		var orb := _orbs_buf[i]
 		if orb == null:
 			continue
 		var a: float = sun_orb_angle + float(i) * (TAU / float(count))
@@ -1195,8 +1220,9 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 		var idx := 0
 		for res in results:
 			var col = res.get("collider")
-			if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-				var enemy := col.get_parent() as Node2D
+			var parent = col.get_parent() if col != null else null
+			if parent != null and parent.has_method("take_damage"):
+				var enemy := parent as Node2D
 				if not is_instance_valid(enemy) or enemy.is_in_group("chests") or enemy.is_in_group("herbs"):
 					continue
 				var eid := enemy.get_instance_id()
@@ -1225,10 +1251,10 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		AudioManager.play_sfx("dodge", 1.0)
 		invulnerable_time = maxf(invulnerable_time, ShadowStepData.GUARD_SEC)
 		# 影层是影者专属机制（闸=是否绑定影爆额外技能，与 HUD 额外按钮显隐同一把尺）：
-		# 其他角色靠加点/道具/神行术也能闪，但没处兑现影爆，只涨层等于白送 ×1.40 永久增伤。
+		# 其他角色靠加点/道具/神行术也能闪，但没处兑现影爆，只涨层等于白送 ×1.50 永久增伤。
 		if GameManager.extra_skill_id == "shadowburst":
 			shadow_ring = ShadowStepData.push_ring(shadow_ring, amount)
-			# 攒着就增伤：影层乘区跟着队列长度走（满层 ×1.40），落地兑现清空时回 1.0
+			# 攒着就增伤：影层乘区跟着队列长度走（满层 ×1.50），落地兑现清空时回 1.0
 			GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
 			if skill_vfx != null:
 				skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))

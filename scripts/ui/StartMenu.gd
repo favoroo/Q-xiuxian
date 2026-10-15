@@ -123,18 +123,9 @@ func _build_background() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
 
-	# 2. 柔和暗角晕映（四周向内柔和压暗，将视觉重心锁在中央 Hero 与 2×2 功能矩阵）
-	var vig := ColorRect.new()
-	vig.name = "BackgroundVignette"
-	vig.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var vig_mat := ShaderMaterial.new()
-	vig_mat.shader = preload("res://assets/shaders/vignette_soft.gdshader")
-	vig_mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.0))
-	vig_mat.set_shader_parameter("vignette_intensity", 0.45)
-	vig_mat.set_shader_parameter("vignette_opacity", 0.85)
-	vig.material = vig_mat
-	add_child(vig)
+	# 2. 菱形流星雨装饰层（垫在纯黑底与卡片矩阵之间；headless 判据下不建）
+	if DisplayServer.get_name() != "headless":
+		MenuMeteorShower.install(self)
 
 ## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
@@ -509,9 +500,9 @@ func _layout_responsive() -> void:
 		_update_host.offset_bottom = -CORNER_MARGIN_BOTTOM
 		_update_host.offset_right = -CORNER_MARGIN_RIGHT
 
-	# 2. 按可视宽度计算方块矩阵缩放因子（预留左右 36px 给斜切外扩与安全边距）
+	# 2. 按可视宽度计算方块矩阵缩放因子（预留左右 48px 给斜切外扩与安全边距）
 	var base_total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
-	var avail_w := maxf(640.0, vp.x - 44.0)
+	var avail_w := maxf(640.0, vp.x - 48.0)
 	var f := clampf(avail_w / base_total_w, 0.74, 1.15)
 	if absf(f - 1.0) < 0.03:
 		f = 1.0

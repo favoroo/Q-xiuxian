@@ -7,7 +7,7 @@
 [ext_resource type="Shader" path="res://assets/shaders/desaturate.gdshader" id="5_grey"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_area"]
-radius = 85.0
+radius = 95.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_spent"]
 resource_local_to_scene = true
@@ -23,7 +23,7 @@ script = ExtResource("1_ob")
 
 [node name="RingSprite" type="Sprite2D" parent="ChargeCircle"]
 modulate = Color(0.55, 0.85, 1, 0.5)
-scale = Vector2(0.95, 0.95)
+scale = Vector2(1.06, 1.06)
 texture = ExtResource("4_ring")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
@@ -35,7 +35,7 @@ texture = ExtResource("2_tex")
 color = Color(0.45, 0.85, 1, 1)
 energy = 1.25
 texture = ExtResource("3_light")
-texture_scale = 1.3
+texture_scale = 1.45
 
 [node name="InteractionArea" type="Area2D" parent="."]
 collision_layer = 32

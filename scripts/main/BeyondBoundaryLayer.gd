@@ -25,7 +25,7 @@ const FOG_DRIFT_DURATION := 26.0   ## 雾团自漂单程时长（s，慢速量�
 const PILLAR_COLOR := Color(0.50, 0.72, 0.92, 0.12)
 const PILLAR_SEGMENTS := 10        ## 梯形垂直分段数（分段渐变足够平滑）
 
-var half_extent: float = 440.0
+var half_extent: float = 560.0
 var _fog_far: Node2D = null
 var _fog_near: Node2D = null
 
@@ -94,7 +94,7 @@ func _draw() -> void:
 	# 山体剪影盖住柱底 → 天然「从山后透出」的层次。位置确定性用本层固定种子 rng。
 	_draw_soul_pillars(rng, h)
 
-	# 北侧远景：幽冥残峰奇石起伏（y 在 -450 ~ -680 之间）。
+	# 北侧远景：幽冥残峰奇石起伏（y 在 -(h+40) ~ -(h+160) 之间）。
 	# 横向留足 ±(h+180) 余量：相机拉到战场边缘时视差回挪，剪影仍需盖住视口缺口。
 	var north_pts := PackedVector2Array()
 	north_pts.append(Vector2(-h - 180.0, -h - 20.0))
@@ -109,7 +109,7 @@ func _draw() -> void:
 		draw_colored_polygon(north_pts, col_shadow)
 		draw_polyline(north_pts, col_stone, 1.5)
 
-	# 南侧断崖远影（y 在 +450 ~ +640 之间）
+		# 南侧断崖远影（y 在 +(h+30) ~ +(h+140) 之间）
 	var south_pts := PackedVector2Array()
 	south_pts.append(Vector2(-h - 180.0, h + 20.0))
 	var s_x: float = -h - 180.0

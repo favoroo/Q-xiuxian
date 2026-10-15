@@ -17,12 +17,22 @@ const SAMPLE_INTERVAL_HIGH := 0.0125 ## 流畅档采样节流（< 1/60s 物理�
 const MAX_POINTS_LOW := 9      ## 低档历史点数（30Hz × 9 ≈ 0.27s）
 const MAX_POINTS_HIGH := 16    ## 流畅档历史点数（60Hz × 16 ≈ 0.27s）
 const MIN_STEP_SQ := 25.0      ## 相邻两点平方距下限（5px），回收前贴脸命中时防零长线段
-const GLOW_WIDTH := 8.0
-const CORE_WIDTH := 2.4
-const GLOW_ALPHA_HEAD := 0.30
+## 2026-10-15 视觉克制化：光晕 8.0→6.5、亮核 2.4→2.1、头部透明度 0.30→0.24，
+## 弹丸拖尾是仅次于光束的常驻粗线，多弹齐射时不再糊成一片
+const GLOW_WIDTH := 6.5
+const CORE_WIDTH := 2.1
+const GLOW_ALPHA_HEAD := 0.24
 const CORE_ALPHA_HEAD := 0.85
 
-var _pts := PackedVector2Array()
+## 历史点存环形缓冲：sample() 满员后原地覆写最老点（弹丸池 64 发 × 60Hz 齐射时
+## 原先每拍 slice() 新建 PackedVector2Array ≈ 1200 次分配/秒，是弹丸路径最大持续分配源）。
+## _redraw 时才按时间序展开进复用的 _draw_buf（Line2D.points 需要连续数组，仅这一次赋值拷贝）。
+const RING_CAP := MAX_POINTS_HIGH  ## 环形容量按高档取（低档只用前 MAX_POINTS_LOW 个）
+
+var _ring := PackedVector2Array()
+var _head: int = 0        ## 下一个写入槽（即最老点）
+var _count: int = 0
+var _draw_buf := PackedVector2Array()
 var _acc: float = 0.0
 var _line_glow: Line2D = null
 var _line_core: Line2D = null
@@ -33,6 +43,8 @@ func _ready() -> void:
 	# 画序靠宿主 move_child 压到兄弟首位（z_index -1 会沉到地面瓦片之下，不可用）。
 	top_level = true
 	position = Vector2.ZERO
+	_ring.resize(RING_CAP)
+	_draw_buf.resize(RING_CAP)
 	_build_lines()
 
 ## 配色下发（与弹体异常色温同源）：BladeProjectile.activate 逐发调用
@@ -45,7 +57,9 @@ func configure(color: Color) -> void:
 ## 出膛起笔：清空上一发历史后从枪口位置落第一个点
 func seed_point(pos: Vector2) -> void:
 	reset()
-	_pts.append(pos)
+	_ring[0] = pos
+	_head = 1 % RING_CAP
+	_count = 1
 	_redraw()
 
 func _sample_interval() -> float:
@@ -60,17 +74,20 @@ func sample(pos: Vector2, delta: float) -> void:
 	if _acc < _sample_interval():
 		return
 	_acc = 0.0
-	if _pts.size() > 0 and _pts[_pts.size() - 1].distance_squared_to(pos) < MIN_STEP_SQ:
-		return
-	_pts.append(pos)
-	var cap := _max_points()
-	if _pts.size() > cap:
-		_pts = _pts.slice(_pts.size() - cap)
+	if _count > 0:
+		var last := _ring[(_head - 1 + RING_CAP) % RING_CAP]
+		if last.distance_squared_to(pos) < MIN_STEP_SQ:
+			return
+	_ring[_head] = pos
+	_head = (_head + 1) % RING_CAP
+	if _count < _max_points():
+		_count += 1
 	_redraw()
 
 ## 回池清史：残留弧线从上一发死亡点连到下一发枪口就是「池体占拍」的同型事故（AGENTS 坑 13）
 func reset() -> void:
-	_pts = PackedVector2Array()
+	_head = 0
+	_count = 0
 	_acc = 0.0
 	_redraw()
 
@@ -107,5 +124,16 @@ func _make_gradient(head_alpha: float, hdr_boost: float = 1.0) -> Gradient:
 func _redraw() -> void:
 	if _line_glow == null or _line_core == null:
 		return
-	_line_glow.points = _pts
-	_line_core.points = _pts
+	if _count == 0:
+		_line_glow.points = PackedVector2Array()
+		_line_core.points = PackedVector2Array()
+		return
+	# 环形缓冲按时间序展开：最老点在 (_head - _count)（_head 是下一写入槽），
+	# 低档 _count 封顶 9 < RING_CAP 16 时 _head 仍在全环上游走，不能拿 _head 当起点。
+	# resize 缩容不释放底层内存，_count 单调涨到上限后稳定，不产生每次重绘的分配。
+	_draw_buf.resize(_count)
+	var start := (_head - _count + RING_CAP) % RING_CAP
+	for i in range(_count):
+		_draw_buf[i] = _ring[(start + i) % RING_CAP]
+	_line_glow.points = _draw_buf
+	_line_core.points = _draw_buf

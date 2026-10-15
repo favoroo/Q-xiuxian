@@ -704,6 +704,53 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.equals(AchievementData.progress_text("ach_feat_endless", {}),
 		"", "无量化口径的成就返回空串（调用方不显示进度行）")
 
+	# 7.8.3 2026-10-15 新增趣味成就判定（纯荣誉型，reward_type="none"）
+	_c.check(AchievementData.is_condition_met("ach_feat_nodamage", {"victory": true, "damage_taken_count": 0}, {}),
+		"无伤通关达成【金光护体】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": true, "damage_taken_count": 1}, {}),
+		"承伤 1 次不达成【金光护体】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": false, "damage_taken_count": 0}, {}),
+		"未通关不达成【金光护体】")
+	_c.check(AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 3}),
+		"无契合通关 3 次达成【就不听你话】")
+	_c.check(not AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 2}),
+		"无契合通关 2 次不达成【就不听你话】")
+	_c.check(AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 0}, {}),
+		"零召唤通关达成【独行侠】")
+	_c.check(not AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 1}, {}),
+		"有召唤不达成【独行侠】")
+	var omni_ctx := {"max_class_counts": {"sword": 1, "talisman": 1, "wide": 1, "thunder": 1, "spirit": 1, "contraption": 1}}
+	_c.check(AchievementData.is_condition_met("ach_style_omni", omni_ctx, {}),
+		"六系武器齐聚达成【万器宗师】")
+	var omni_missing := {"max_class_counts": {"sword": 1, "talisman": 1, "wide": 1, "thunder": 1, "spirit": 1}}
+	_c.check(not AchievementData.is_condition_met("ach_style_omni", omni_missing, {}),
+		"缺 contraption 系不达成【万器宗师】")
+	_c.check(AchievementData.is_condition_met("ach_grind_level20", {"level": 20}, {}),
+		"单局 Lv.20 达成【升级狂魔】")
+	_c.check(not AchievementData.is_condition_met("ach_grind_level20", {"level": 19}, {}),
+		"单局 Lv.19 不达成【升级狂魔】")
+	_c.check(AchievementData.is_condition_met("ach_luck_turtle", {"victory": true, "damage_taken_count": 50}, {}),
+		"承伤 50 次通关达成【铁王八】")
+	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"victory": true, "damage_taken_count": 49}, {}),
+		"承伤 49 次不达成【铁王八】")
+	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"victory": false, "damage_taken_count": 50}, {}),
+		"未通关不达成【铁王八】")
+	# 新成就进度文案
+	_c.equals(AchievementData.progress_text("ach_style_rebel", {"wins_no_skill_enhance": 2}),
+		"无契合通关 2/3 次", "【就不听你话】进度读无契合通关累计")
+	_c.equals(AchievementData.progress_text("ach_grind_level20", {"best_level": 17}),
+		"单局最高 Lv.17/20", "【升级狂魔】进度读单局最高等级")
+	_c.equals(AchievementData.progress_text("ach_luck_turtle", {"best_hits_taken": 30}),
+		"单局承伤 30/50 次", "【铁王八】进度读单局承伤峰值")
+	_c.equals(AchievementData.progress_text("ach_feat_nodamage", {}),
+		"", "【金光护体】无累计进度口径返回空串")
+	_c.equals(AchievementData.progress_text("ach_style_loner", {}),
+		"", "【独行侠】无累计进度口径返回空串")
+	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
+		"", "【万器宗师】无累计进度口径返回空串")
+	# 成就总数 = 30（原 24 + 新增 6）
+	_c.equals(int(AchievementData.all_ids().size()), 30, "成就总数 = 30")
+
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()
 	GameManager.cultivator_id = "juechen"

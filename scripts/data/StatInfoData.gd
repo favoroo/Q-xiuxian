@@ -219,9 +219,8 @@ static func rules(id: String) -> Array[String]:
 			out.append(("闪避成功另给 %.2f 秒「残影」短无敌：不给这一段，怪群贴身时下一帧又是一次判定，"
 				+ "闪了只是把那一下推迟几帧，减不了挨打频率。") % ShadowStepData.GUARD_SEC)
 			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：影在身上时武器伤害每层 +%d%%，"
-				+ "点额外技能「影爆」随时踩碎，把躲掉的伤害按 %.0f%% 还给周身敌人并推开一圈。") % [
-					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0),
-					ShadowStepData.STORE_RATIO * 100.0])
+				+ "点额外技能「影爆」随时踩碎，把躲掉的伤害成倍还给周身敌人并推开一圈。") % [
+					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0)])
 		"lifesteal":
 			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
 			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)

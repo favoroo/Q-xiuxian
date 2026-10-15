@@ -147,7 +147,7 @@ func _test_screen_shake_budget() -> void:
 	_c.check(fcam.zoom.is_equal_approx(z_before), "聚焦状态下 zoom_punch 跳过不破坏特写")
 	fcam.reset_focus()
 	_c.check(not fcam.is_focusing(), "reset_focus 立即退出聚焦状态")
-	_c.check(fcam.zoom.is_equal_approx(Vector2(1.2, 1.2)), "reset_focus 恢复基准视距 (1.2, 1.2)")
+	_c.check(fcam.zoom.is_equal_approx(SmoothCamera.DEFAULT_BASE_ZOOM), "reset_focus 恢复基准视距 (%s)" % str(SmoothCamera.DEFAULT_BASE_ZOOM))
 	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
 	fcam.free()
 

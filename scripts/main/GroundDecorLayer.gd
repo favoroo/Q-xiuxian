@@ -6,7 +6,7 @@ extends Node2D
 ## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
 
-var half_extent: float = 440.0
+var half_extent: float = 560.0
 
 func _ready() -> void:
 	# 位于 MapLayer 内，靠树顺序排在地砖之上、ArenaVisualLayer 之下；z_index 保持 0 不越过实体层
@@ -28,8 +28,9 @@ func _draw_array_outer_runes() -> void:
 	var col_cyan_tick := Color(0.25, 0.65, 0.85, 0.20)
 	var col_gold_dot := Color(0.85, 0.70, 0.25, 0.25)
 
-	# 虚线外导引环 (r = 168)
-	var r_guide: float = 168.0
+	# 虚线外导引环 (标准半场 440 下 r=168，随 half_extent 等比缩放，确保始终位于太极外环 r_outer=145*scale_f 外围)
+	var scale_f := half_extent / 440.0
+	var r_guide: float = 168.0 * scale_f
 	draw_arc(Vector2.ZERO, r_guide, 0.0, TAU, 64, col_dark_tick, 1.0)
 
 	# 24 节气辐射刻度齿
@@ -47,22 +48,24 @@ func _draw_array_outer_runes() -> void:
 # 3. 战场地面细节（石板裂纹、青苔暗斑、剑痕、碎石、落瓣）
 # ==============================================================================
 func _draw_ground_details(rng: RandomNumberGenerator) -> void:
-	# 避位区检查：中心阵、三座界碑坐标与四灵脉主走廊
+	var scale_f := half_extent / 440.0
+	# 避位区检查：中心阵（随 scale_f 动态调整）、三座界碑坐标与四灵脉主走廊
 	var obstacles: Array[Dictionary] = [
-		{"pos": Vector2.ZERO, "r": 180.0},
-		{"pos": Vector2(0, -105), "r": 70.0},
-		{"pos": Vector2(300, -140), "r": 70.0},
-		{"pos": Vector2(-300, 140), "r": 70.0},
+		{"pos": Vector2.ZERO, "r": 200.0 * scale_f},
+		{"pos": Vector2(0, -135), "r": 85.0},
+		{"pos": Vector2(380, -178), "r": 85.0},
+		{"pos": Vector2(-380, 178), "r": 85.0},
 	]
 
+	var conduit_reach := 320.0 * scale_f
 	var can_place := func(pos: Vector2, min_dist: float) -> bool:
 		for ob in obstacles:
 			if pos.distance_to(ob.pos) < (ob.r + min_dist):
 				return false
 		# 避开四条导灵脉（水平和垂直轴心主线）
-		if (absf(pos.x) < 26.0 and absf(pos.y) < 320.0):
+		if (absf(pos.x) < 26.0 and absf(pos.y) < conduit_reach):
 			return false
-		if (absf(pos.y) < 26.0 and absf(pos.x) < 320.0):
+		if (absf(pos.y) < 26.0 and absf(pos.x) < conduit_reach):
 			return false
 		return true
 

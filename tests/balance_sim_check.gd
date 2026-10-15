@@ -139,11 +139,11 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 
 func _test_reference_build_ttks() -> void:
 	# 3.1 杂怪 TTK 与多把 ★1 法器集火韧性
-	# 2026-10-15 反割草 2.0：小怪血量基数 8.5（W1 史莱姆 18×8.5=153，蜂群精 12×8.5=102）
+	# 2026-10-15 分批清剿制：小怪血量基数 11.5（W1 史莱姆 18×11.5=207，蜂群精 12×11.5=138）
 	var w1_slime_hp := 18.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(1)
 	var w1_slime_ttk := w1_slime_hp / WeaponData.sustained_single_dps("qingyun_sword", 1)
-	_c.check(w1_slime_ttk >= 3.5 and w1_slime_ttk <= 5.5,
-		"W1 杂怪扎实耐打：首发法器 TTK 落在 3.5~5.5s（约 5 刀，实得 %.2fs）" % w1_slime_ttk)
+	_c.check(w1_slime_ttk >= 4.0 and w1_slime_ttk <= 7.0,
+		"W1 杂怪扎实耐打：首发法器 TTK 落在 4.0~7.0s（约 6~7 刀，实得 %.2fs）" % w1_slime_ttk)
 
 	# 佩戴 4 把 ★1 青云剑（W3 史莱姆 153 × 1.16^2 ≈ 206 HP）：
 	# 单刀基础 34 × 神识分流(4把≈0.690) = 23.45/刀；即使 4 剑同帧集火同一只怪，

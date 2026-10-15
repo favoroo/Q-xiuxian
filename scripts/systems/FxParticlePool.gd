@@ -25,8 +25,10 @@ const POOL_CAP := 24                 ## 常驻发射器池上限（硬红线 ≤
 const Z_OVERLAY := 35                ## 特效渲染层级（在角色与怪物之上，在 HUD 之下）
 
 ## 帧限流预算闸（同物理帧宁缺勿糊，历史教训防糊屏）
-const HIT_FRAME_BUDGET := 6          ## 同物理帧最多 6 处命中火花
-const BURST_FRAME_BUDGET := 3        ## 同物理帧最多 3 处死亡爆散
+const HIT_FRAME_BUDGET := FxBudget.FRAME_BUDGET_HIT_SPARK          ## 同物理帧最多 6 处命中火花
+const BURST_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_BURST      ## 同物理帧最多 3 处死亡爆散
+const WISP_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_WISP        ## 同物理帧最多 4 处小怪消散
+const SOUL_ORB_FRAME_BUDGET := FxBudget.FRAME_BUDGET_SOUL_ORB      ## 同物理帧最多 2 处灵气凝聚微粒
 
 static var instance: FxParticlePool = null
 
@@ -37,6 +39,10 @@ static var _last_hit_frame: int = -1
 static var _hit_count_this_frame: int = 0
 static var _last_burst_frame: int = -1
 static var _burst_count_this_frame: int = 0
+static var _last_wisp_frame: int = -1
+static var _wisp_count_this_frame: int = 0
+static var _last_soul_orb_frame: int = -1
+static var _soul_orb_count_this_frame: int = 0
 
 var _available_emitters: Array[GPUParticles2D] = []
 var _active_emitters: Array[GPUParticles2D] = []
@@ -94,6 +100,8 @@ static func clear_cache() -> void:
 	_hit_count_this_frame = 0
 	_last_burst_frame = -1
 	_burst_count_this_frame = 0
+	_last_wisp_frame = -1
+	_wisp_count_this_frame = 0
 
 func _init_pool() -> void:
 	for i in range(POOL_CAP):
@@ -160,26 +168,42 @@ static func _resolve_color(element: Variant, default_color: Color) -> Color:
 ## pos: 爆发绝对世界坐标
 ## element: 颜色语义，支持 String（如 "fire" / "crit"）、int（五行索引）或指定 Color
 ## scale_factor: 缩放倍率（暴击/精英死亡可适当放大）
-static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0) -> void:
+## bypass_budget: 是否绕过同帧限流（供炮口、技能释放等低频非命中事件使用，避免挤占受击火花预算）
+static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0, bypass_budget: bool = false) -> void:
 	if instance == null or not is_instance_valid(instance):
 		return
 	
 	# 物理帧限流检查
-	var cur_frame := Engine.get_physics_frames()
-	if kind == Kind.HIT_SPARK:
-		if cur_frame != _last_hit_frame:
-			_last_hit_frame = cur_frame
-			_hit_count_this_frame = 0
-		_hit_count_this_frame += 1
-		if _hit_count_this_frame > HIT_FRAME_BUDGET:
-			return
-	elif kind == Kind.DEATH_BURST:
-		if cur_frame != _last_burst_frame:
-			_last_burst_frame = cur_frame
-			_burst_count_this_frame = 0
-		_burst_count_this_frame += 1
-		if _burst_count_this_frame > BURST_FRAME_BUDGET:
-			return
+	if not bypass_budget:
+		var cur_frame := Engine.get_physics_frames()
+		if kind == Kind.HIT_SPARK:
+			if cur_frame != _last_hit_frame:
+				_last_hit_frame = cur_frame
+				_hit_count_this_frame = 0
+			_hit_count_this_frame += 1
+			if _hit_count_this_frame > HIT_FRAME_BUDGET:
+				return
+		elif kind == Kind.DEATH_BURST:
+			if cur_frame != _last_burst_frame:
+				_last_burst_frame = cur_frame
+				_burst_count_this_frame = 0
+			_burst_count_this_frame += 1
+			if _burst_count_this_frame > BURST_FRAME_BUDGET:
+				return
+		elif kind == Kind.DEATH_WISP:
+			if cur_frame != _last_wisp_frame:
+				_last_wisp_frame = cur_frame
+				_wisp_count_this_frame = 0
+			_wisp_count_this_frame += 1
+			if _wisp_count_this_frame > WISP_FRAME_BUDGET:
+				return
+		elif kind == Kind.SOUL_ORB:
+			if cur_frame != _last_soul_orb_frame:
+				_last_soul_orb_frame = cur_frame
+				_soul_orb_count_this_frame = 0
+			_soul_orb_count_this_frame += 1
+			if _soul_orb_count_this_frame > SOUL_ORB_FRAME_BUDGET:
+				return
 	
 	instance._trigger_burst(kind, pos, element, scale_factor)
 

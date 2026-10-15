@@ -9,8 +9,9 @@ extends Node2D
 	set(val):
 		config = val
 		if config != null:
-			# 精英/Boss 数量少、动作分量重，保持每帧重绘；普通怪走档位化节流
+			# 精英 30Hz / Boss 每帧 / 普通怪档位化节流
 			_is_mob = not config.is_elite and not config.is_boss
+			_is_boss = config.is_boss
 		_dirty = true
 
 # 运动驱动状态
@@ -42,12 +43,15 @@ var _time: float = 0.0
 ## 20Hz 画面会露台阶，提到 30Hz；低档 20Hz 是 perf_probe 钉住的预算口径。
 const HZ_MOB_LOW := 20.0            ## 省电档普通怪重绘频率
 const HZ_MOB_HIGH := 30.0           ## 流畅档普通怪重绘频率
+const HZ_ELITE := 30.0              ## 精英重绘频率（2026-10-15 起精英不再每帧全量重建）
 const CULL_MARGIN := 64.0           ## 屏外剔除余量（px），防半身出屏闪烁
 static var redraw_count: int = 0    ## 重绘发放计数（tests/PerfProbe 断言用）
 
 var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相载体）
-## 普通怪 = 节流重绘；精英/Boss = 每帧（0 间隔）。默认节流（config 未赋值前与旧口径一致）
+## 普通怪 = 档位节流；精英 = 30Hz；Boss = 每帧（0 间隔，数量恒 1，全量动画值得）。
+## 默认按普通怪节流（config 未赋值前与旧口径一致）
 var _is_mob: bool = true
+var _is_boss: bool = false
 var _offscreen: bool = false
 var _dirty: bool = false            ## 状态翻转（镜像/换装）时插队重绘
 ## 屏外剔除变换缓存：全屏敌人共享同一个 canvas_transform + visible_rect，
@@ -58,10 +62,13 @@ static var _cull_transform: Transform2D
 static var _cull_limit: Vector2
 static var _cull_valid: bool = false
 
-## 本实例的重绘间隔：精英/Boss 每帧（0），普通怪按帧率档位节流
+## 本实例的重绘间隔：普通怪按帧率档位节流；精英恒 30Hz；
+## Boss 每帧（0，数量恒 1，全量动画值得保每帧）
 func _redraw_interval() -> float:
-	if not _is_mob:
+	if _is_boss:
 		return 0.0
+	if not _is_mob:
+		return 1.0 / HZ_ELITE
 	return VisualRate.interval(HZ_MOB_HIGH, HZ_MOB_LOW)
 
 func _ready() -> void:

@@ -175,7 +175,7 @@ func on_dash_start(direction: Vector2, distance: float, duration: float, crit_wi
 	_notify_procedural_view("dash", true, 1.0)
 	# 释放瞬间触发对应色粒子（缩地成寸：庚金古金 / FX_HDR_METAL）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "metal", 1.0)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "metal", 1.0, true)
 	# 生成瞬身剪影残影（冷蓝半透，0.15s 迅速渐隐进池，不做长拖尾）
 	spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 	queue_redraw()
@@ -188,7 +188,7 @@ func on_gale_start(duration: float) -> void:
 	_notify_procedural_view("gale", true, 1.0)
 	# 释放瞬间触发对应色粒子（神行术：灵木青碧 / FX_HDR_WOOD）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "wood", 1.0)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "wood", 1.0, true)
 	# 身法残影（冷蓝半透，0.15s 快速回收）
 	spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 	queue_redraw()
@@ -203,7 +203,7 @@ func on_haste_start(duration: float) -> void:
 	_notify_procedural_view("haste", true, 1.0)
 	# 释放瞬间触发对应色粒子（疾风咒：玄水灵蓝 / FX_HDR_WATER）
 	var center_pos: Vector2 = player.global_position + (Vector2(0.0, HASTE_FEET.y * _body_scale.y) if player != null else Vector2.ZERO)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "water", 1.0)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "water", 1.0, true)
 	queue_redraw()
 
 ## 金光护体激活
@@ -219,7 +219,7 @@ func on_aegis_start(duration: float) -> void:
 	_notify_procedural_view("aegis", true, 1.0)
 	# 释放瞬间触发对应色粒子（金光护体：浩然金 / FX_HDR_GOLD）
 	var center_pos: Vector2 = player.global_position + (Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y) if player != null else Vector2.ZERO)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "gold", 1.1)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "gold", 1.1, true)
 	queue_redraw()
 
 ## 回春术施放（改灵光四周螺旋汇聚：空洞骑士 Focus 汇聚感）
@@ -229,7 +229,7 @@ func on_renewal_cast() -> void:
 	_notify_procedural_view("renewal", true, 1.0)
 	# 释放瞬间触发对应色粒子（回春甘露：生机碧翠 / FX_HDR_HEAL）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "heal", 1.0)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "heal", 1.0, true)
 	# 24 粒生机灵光从四周外圈向角色身躯螺旋汇聚
 	for i in range(24):
 		var ang := float(i) * (TAU / 24.0) + randf_range(-0.15, 0.15)

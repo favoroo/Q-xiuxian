@@ -15,7 +15,7 @@ const CULTIVATOR := "fuzhen"
 const START_WEAPON := "qingyun_sword"
 ## 一次喂够跨多级的大经验（链首几级需求很小，500 必然连升 ≥ 2 级）
 const BIG_EXP := 500
-## 动画全家总时长（徽记 0.48s / 光效 0.5s / 金光 0.34s / 弹入 0.25s）之外再放宽
+## 动画全家总时长（徽记 0.48s / 光效 0.42s / 金光 0.34s / 弹入 0.25s）之外再放宽
 const SETTLE_SEC := 1.5
 ## 徽记场景原配底色（GameHUD.tscn StyleBoxFlat_level_badge.bg_color）
 const BADGE_BASE_BG := Color(0.22, 0.486, 0.902, 1)
@@ -70,9 +70,9 @@ func _run() -> void:
 	_c.check(after_bg.is_equal_approx(pre_bg), "徽记底色复位回主蓝（金色闪变不停在错误配色上）")
 	var label: Label = badge.get_node("VBox/LevelLabel")
 	_c.check(label.scale.is_equal_approx(Vector2.ONE), "Lv 数字脉冲复位")
-	# 经验条金闪与徽记底色同拍，动画结束必须复位回场景原配绿（私有副本停在金色就是状态损坏）
+	# 经验条不参与金闪（闪黄会和徽记底色同色、进度条整条看不见），全程必须保持场景原配绿
 	var fill_style: StyleBoxFlat = badge.get_node("VBox/ExpBar").get_theme_stylebox("fill")
-	_c.check(fill_style.bg_color.is_equal_approx(Color(0.31, 0.82, 0.647, 1)), "经验条填充色金闪后复位回绿")
+	_c.check(fill_style.bg_color.is_equal_approx(Color(0.31, 0.82, 0.647, 1)), "经验条填充色保持绿（升级不闪它）")
 	if flash != null:
 		_c.near(flash.modulate.a, 0.0, 0.001, "全屏金光熄灭（不留常亮色块）")
 	else:

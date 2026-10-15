@@ -28,7 +28,7 @@ const SLASH_ART_OUTER := 124.0
 ## —— 剑气是从剑上劈出去的，不是凭空悬在远处。终态仍是上面那条"外缘==判定半径"的同源
 ## 不变量，判定数值一字不动。月牙贴图的不透明带贴在外缘（0° 方向实测 102~127px、89px 起
 ## 半透明淡入），出生缩放按"内缘压住剑尖屏上位置 muzzle_len"反解。
-const SLASH_ART_INNER := 110.0  ## 月牙中心内缘画布半径（== WeaponArcRenderer.MELEE_INNER，锥形月牙中心厚度 14px），出生"贴剑尖"反解用
+const SLASH_ART_INNER := 114.0  ## 月牙中心内缘画布半径（== WeaponArcRenderer.MELEE_INNER，锥形月牙中心厚度 10px），出生"贴剑尖"反解用
 const SLASH_SPAWN_INSET := 2.0  ## 出生内缘再往前探 2px，让剑尖埋进剑气里
 const SLASH_SWEEP_TIME := 0.10  ## 剑气从剑尖扫放到判定外缘的时长（期间保持全亮）
 const SLASH_FADE_TIME := 0.08   ## 抵达判定外缘后的淡出时长 —— 落点先亮一拍再散
@@ -69,6 +69,9 @@ var def: Dictionary = {}
 var behavior: int = WeaponData.Behavior.MELEE
 var base_damage: float = 30.0
 var attack_cooldown: float = 1.1
+## _volley_targets 排序上下文（命名方法避免每次开火 new 闭包，照 Player._sort_candidate_by_dist 先例）
+var _volley_player_pos: Vector2 = Vector2.ZERO
+var _volley_muzzle_pos: Vector2 = Vector2.ZERO
 var attack_range: float = 150.0
 var pierce: int = 1
 var burst_radius: float = 80.0
@@ -563,7 +566,9 @@ func _tick_channel(delta: float) -> void:
 			_beam_cast_phase = BEAM_CAST_INTERVAL
 			_beam_len_target = _beam_cast_length(reach)
 		_beam_len = lerpf(_beam_len, _beam_len_target, minf(delta * 14.0, 1.0))
-		var w_mult := 1.0 + 0.18 * float(star - 1)
+		# 星升视觉膨胀收一档（2026-10-15 克制化 0.18→0.08）：判定盒（_beam_deal_damage
+		# 恒 BEAM_HALF_WIDTH*2.0）本就不乘它，纯视觉；★3 视觉宽 13.6→11.6，不再比判定宽出 1/3
+		var w_mult := 1.0 + 0.08 * float(star - 1)
 		beam_renderer.beam_on(_beam_len, BEAM_HALF_WIDTH * 2.0 * w_mult, _get_aura_color())
 		if _channel_tick <= 0.0:
 			_channel_tick = BEAM_TICK
@@ -613,8 +618,9 @@ func _beam_deal_damage() -> void:
 	var kb_force := WeaponData.knockback_for(weapon_def_id, 60.0) * 0.15  # 持续束只留一点点推感
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent()
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
 			var dmg := tick_dmg
 			var is_crit: bool = GameManager.roll_crit()
 			if is_crit:
@@ -640,8 +646,9 @@ func _cone_deal_damage(cone_len: float) -> void:
 	var burn_dur := float(def.get("burn_dur", 2.5))
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent()
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
 			var to_enemy: Vector2 = enemy.global_position - from
 			if to_enemy.length() > SWEEP_CLOSE_GRACE and absf(aim_dir.angle_to(to_enemy)) > half_ang:
 				continue
@@ -916,8 +923,9 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent()
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
 			var dmg := base_dmg
 			var is_crit: bool = GameManager.roll_crit()
 			if is_crit:
@@ -1031,8 +1039,9 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent()
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
 			# 扇形过滤：横扫只打正前方弧面（身后的漏网是横扫与近战的本质差异）
 			var to_enemy: Vector2 = enemy.global_position - origin
 			if to_enemy.length() > SWEEP_CLOSE_GRACE and absf(aim_dir.angle_to(to_enemy)) > half_ang:
@@ -1073,8 +1082,9 @@ func _find_target() -> Node2D:
 	var chest_on_screen: bool = false
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent() as Node2D
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent as Node2D
 			if enemy == null or enemy.is_in_group("herbs"):
 				continue
 			var d := GameBalance.elliptical_distance(enemy.global_position - player.global_position)
@@ -1130,18 +1140,11 @@ func _volley_targets(n: int) -> Array[Node2D]:
 			continue
 		cands.append(e)
 	# 同屏可见优先，同屏状态一致时离炮口近的先被咬住
-	cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
-		var a_on := GameBalance.is_in_viewport(a.global_position, player_pos)
-		var b_on := GameBalance.is_in_viewport(b.global_position, player_pos)
-		if a_on != b_on:
-			return a_on
-		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
-	chest_cands.sort_custom(func(a: Node2D, b: Node2D) -> bool:
-		var a_on := GameBalance.is_in_viewport(a.global_position, player_pos)
-		var b_on := GameBalance.is_in_viewport(b.global_position, player_pos)
-		if a_on != b_on:
-			return a_on
-		return muzzle_pos.distance_squared_to(a.global_position) < muzzle_pos.distance_squared_to(b.global_position))
+	# 命名方法排序避免每次开火 new 闭包（照 Player._sort_candidate_by_dist 先例）
+	_volley_player_pos = player_pos
+	_volley_muzzle_pos = muzzle_pos
+	cands.sort_custom(_sort_volley_by_proximity)
+	chest_cands.sort_custom(_sort_volley_by_proximity)
 	for e in cands:
 		if out.size() >= n:
 			break
@@ -1153,6 +1156,15 @@ func _volley_targets(n: int) -> Array[Node2D]:
 			break
 		out.append(c)
 	return out
+
+## _volley_targets 排序：同屏可见优先，同屏状态一致时离炮口近的先被咬住。
+## 命名方法（非闭包）避免每次开火分配 Callable；上下文经 _volley_player_pos/_volley_muzzle_pos 传入。
+func _sort_volley_by_proximity(a: Node2D, b: Node2D) -> bool:
+	var a_on := GameBalance.is_in_viewport(a.global_position, _volley_player_pos)
+	var b_on := GameBalance.is_in_viewport(b.global_position, _volley_player_pos)
+	if a_on != b_on:
+		return a_on
+	return _volley_muzzle_pos.distance_squared_to(a.global_position) < _volley_muzzle_pos.distance_squared_to(b.global_position)
 
 ## 土系重击地面贴花接入（开山斧/崩山剑/奔浪锤等命中敌群时克制留痕）
 func _try_spawn_earth_crack(hit_pos: Vector2, hit_radius: float) -> void:

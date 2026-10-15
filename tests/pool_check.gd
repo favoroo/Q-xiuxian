@@ -171,7 +171,8 @@ func _run() -> void:
 	var l_bolt_b := LightningBolt.acquire(world)
 	_check(l_bolt_b == l_bolt_a, "引雷第二次 acquire 复用同一实例")
 	l_bolt_b.activate(Vector2(20, 20), Vector2(80, 80), Color.WHITE, 1.2)
-	_check(l_bolt_b.visible and l_bolt_b._line_glow.width == 12.0, "引雷复用激活按 width_mult 重置线宽")
+	# 基准线宽 2026-10-15 克制化 10.0→7.0：7.0 × 1.2 = 8.4
+	_check(l_bolt_b.visible and is_equal_approx(l_bolt_b._line_glow.width, 8.4), "引雷复用激活按 width_mult 重置线宽")
 	# 5.7b 引雷与地面大阵层级守卫：宿主与特效线不抬高全局 z_index 盖压角色
 	_check(LightningBolt._host.z_index <= 0, "引雷池宿主 z_index 不抬高压人")
 	_check(l_bolt_b._line_core.z_index <= 0, "引雷折线 z_index 不盖压角色")
@@ -234,6 +235,10 @@ func _run() -> void:
 	_check(DamageNumber.created_count() == 0 and JuiceEffect.created_count() == 0, "clear_cache 归零计数")
 	DamageNumber.spawn(world, Vector2(40, 40), 1)
 	_check(DamageNumber.created_count() == 1, "清理后可重新建池并继续工作")
+
+	# ---------- 7. 动态灯预算账目（全场 PointLight2D 预分配 ≤ GLOBAL_LIGHT_CAP） ----------
+	_check(FxBudget.get_allocated_light_cap() <= FxBudget.GLOBAL_LIGHT_CAP,
+		"灯账目 %d ≤ 硬顶 %d" % [FxBudget.get_allocated_light_cap(), FxBudget.GLOBAL_LIGHT_CAP])
 
 	world.free()
 	Engine.time_scale = 1.0

@@ -21,10 +21,10 @@ extends Node2D
 enum ArcMode { MELEE, SWEEP }
 
 const OUTER := 124.0            ## 外缘画布半径 == FloatingWeapon.SLASH_ART_OUTER / SWEEP_ART_OUTER
-const MELEE_INNER := 110.0      ## 近战月牙中心内缘（中心厚度 14px，两端收尖）== FloatingWeapon.SLASH_ART_INNER（出生"贴剑尖"反解用）
+const MELEE_INNER := 114.0      ## 近战月牙中心内缘（中心厚度 10px，两端收尖）== FloatingWeapon.SLASH_ART_INNER（出生"贴剑尖"反解用）
 const MELEE_HALF := deg_to_rad(70.0)   ## 近战月牙张角，与 slash 旧贴图同源
 const SWEEP_HALF := deg_to_rad(80.0)   ## 横扫月牙张角 == FloatingWeapon.SWEEP_HALF_ANGLE
-const SWEEP_INNER := 104.0      ## 横扫月牙中心内缘（中心厚度 20px，比近战 14px 宽，雄浑大月牙）
+const SWEEP_INNER := 109.0      ## 横扫月牙中心内缘（中心厚度 15px，比近战 10px 宽，雄浑大月牙）
 const BODY_INSET := 8.0         ## 刃身顶缘内收量（T-2.1 内锐外羽）：亮刃切断在此，OUTER 顶缘留给羽化渐变
 
 const _ARC_STEPS := 30          ## 外缘采样段数
@@ -45,8 +45,8 @@ var _draw_phase: float = 0.0
 # —— 短拖尾（T-2.1）：照抄 ProjectileTrail 双层 Line2D 范式（宽低透辉光 + 窄 HDR 亮核）——
 ## 挥砍瞬间记录刃缘世界位置史，画 0.1-0.15s 渐隐的弧线；渐隐不另起 tween，
 ## 完全吃宿主扫放后的 modulate.a 淡出（top_level 只重置变换、不阻断 modulate 传播）。
-const TRAIL_GLOW_WIDTH := 6.0
-const TRAIL_CORE_WIDTH := 1.6
+const TRAIL_GLOW_WIDTH := 5.0
+const TRAIL_CORE_WIDTH := 1.4
 const TRAIL_MAX_POINTS_LOW := 4    ## 低档 20Hz × 4 点 ≈ 0.2s 记忆（重绘节流口径内）
 const TRAIL_MAX_POINTS_HIGH := 8   ## 流畅档 40Hz × 8 点 ≈ 0.2s
 const TRAIL_MIN_STEP_SQ := 36.0    ## 相邻两点平方距下限（6px）：扫放缓段不堆重合点
@@ -218,7 +218,7 @@ func _draw() -> void:
 		_draw_sweep_crescent(main, core, glow)
 	_draw_accents(main, core, glow)
 
-## 近战月牙：两端收尖的锥形细刃（中心厚 14px），内锐外羽六层叠画（T-2.1）——
+## 近战月牙：两端收尖的锥形细刃（中心厚 10px），内锐外羽六层叠画（T-2.1）——
 ## 外羽两段（顶 OUTER 的 0.05 / 顶 OUTER-4 的 0.10 低透渐变，alpha→0 区段加宽）
 ## / 刃身薄透底 / 刃身半层提亮 / 内缘贴外缘的锐利白芯亮线（FX_HDR_CORE 超白起辉）。
 ## 刃身顶缘内收 8px 形成锐利切断；羽化顶缘仍恰在 OUTER == 判定外缘（画多大==判多大）。
@@ -237,22 +237,24 @@ func _draw_crescent(main: Color, core: Color, glow: Color) -> void:
 	hdr.a = 0.90
 	_edge_line(body_top, MELEE_HALF * 0.92, hdr, 1.8, true)
 
-## 横扫月牙：与近战同源同构，张角更开阔（±80° vs ±70°）、中心更厚（20px vs 14px），
+## 横扫月牙：与近战同源同构，张角更开阔（±80° vs ±70°）、中心更厚（15px vs 10px），
 ## 凌厉大月牙斩波；内锐外羽的层次与近战一致（羽化顶缘 == OUTER，刃身顶缘内收 8px）。
 func _draw_sweep_crescent(main: Color, core: Color, glow: Color) -> void:
 	var thick := OUTER - SWEEP_INNER
 	var body_top := OUTER - 8.0
-	glow.a = 0.06
+	# 2026-10-15 视觉克制化：横扫透明度/芯线向近战档对齐（0.06/0.11→0.05/0.09、
+	# 0.46/0.72→0.44/0.66、芯线 2.2→1.9），多武器同屏时大扇面不再最重
+	glow.a = 0.05
 	_band_tapered(OUTER, SWEEP_HALF, thick + 9.0, glow, true)
-	glow.a = 0.11
+	glow.a = 0.09
 	_band_tapered(OUTER - 4.0, SWEEP_HALF, thick + 5.0, glow, true)
-	main.a = 0.46
+	main.a = 0.44
 	_band_tapered(body_top, SWEEP_HALF, thick, main, true)
-	main.a = 0.72
+	main.a = 0.66
 	_band_tapered(body_top, SWEEP_HALF, thick * 0.55, main, true)
 	var hdr := GameStyle.FX_HDR_CORE
 	hdr.a = 0.90
-	_edge_line(body_top, SWEEP_HALF * 0.92, hdr, 2.2, true)
+	_edge_line(body_top, SWEEP_HALF * 0.92, hdr, 1.9, true)
 
 ## 元素形态点缀（全部收在 OUTER 以内）
 func _draw_accents(main: Color, core: Color, glow: Color) -> void:

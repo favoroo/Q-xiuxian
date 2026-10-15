@@ -70,9 +70,9 @@ func _get_tab_bar_separation() -> int:
 func _get_title_font_size() -> int:
 	return 18
 
-## 子类覆写：标题字色（默认纸白；亮面标题块可覆写成黑字）
+## 子类覆写：标题字色（亮面主题蓝标题块配黑字）
 func _get_title_color() -> Color:
-	return GameStyle.PAPER
+	return GameStyle.INK_TEXT
 
 ## 子类覆写：关闭按钮尺寸
 func _get_close_btn_min_size() -> Vector2:

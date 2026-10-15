@@ -32,8 +32,8 @@ enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
-## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440（880×880，面积约 -23%）：祭坛坐标/灵脉刻槽/太极阵半径需同步改 Main.tscn 与 ArenaVisualLayer
-const MAP_HALF_EXTENT: float = 440.0
+## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440；2026-10-15 扩图 440→560（1120×1120，面积约 +62%）：稀释怪物密度，提供走位周旋空间
+const MAP_HALF_EXTENT: float = 560.0
 
 ## 每次刷新给几个候选：悟道结算与商店货架同一档（2026-10-09 用户指令「改成 5 个」）
 const UPGRADE_OFFER_COUNT: int = 5
@@ -130,6 +130,7 @@ var career_stats: Dictionary = {
 	"best_hits_taken": 0,          ## 单局承受伤害次数峰值生涯最佳
 	"best_level": 0,               ## 单局最高等级生涯最佳
 	"best_danger_cleared": -1,     ## 生涯最高通关难度（-1 = 尚未通关）
+	"wins_no_skill_enhance": 0,    ## 使用不契合技能通关累计次数（→ ach_style_rebel「就不听你话」）
 }
 var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高危险度 {cultivator_id: danger_int}
 var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
@@ -424,6 +425,7 @@ var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关武器伤害�
 var _lifesteal_procs: int = 0
 var _lifesteal_window: float = 0.0
 var _hud_tick: float = 0.0  ## HUD 计时刷新节流：只走时间显示，事件驱动的数值变化各自单独 emit
+var _stats_dirty: bool = false ## 战斗高频事件（经验/金币/击杀）合并 emit 脏标记
 
 # 商店
 var shop_offers: Array = []
@@ -541,12 +543,12 @@ func add_experience(amount: int, stone_amount: int = -1) -> void:
 		player_leveled_up.emit(level)
 
 	player_exp_changed.emit(experience, experience_to_next, level)
-	stats_updated.emit(kills, game_time, spirit_stones)
+	_mark_stats_dirty()
 
 func add_spirit_stones(amount: int) -> void:
 	spirit_stones += amount
 	touch_peak_stones()
-	stats_updated.emit(kills, game_time, spirit_stones)
+	_mark_stats_dirty()
 
 func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	kills += 1
@@ -577,6 +579,17 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
 		touch_peak_stones()
+	_mark_stats_dirty()
+
+## 战斗高频事件合并 emit：同帧多次改经验/金币/击杀时只 emit 一次（call_deferred 到帧末），
+## 避免群杀清场秒内数十次 stats_updated → HUD 重绘。非战斗路径（结息/卖出）仍走即时 emit。
+func _mark_stats_dirty() -> void:
+	if not _stats_dirty:
+		_stats_dirty = true
+		call_deferred("_flush_stats")
+
+func _flush_stats() -> void:
+	_stats_dirty = false
 	stats_updated.emit(kills, game_time, spirit_stones)
 
 ## 单局金币峰值记账（成就判定用）：所有改 spirit_stones 后想记峰值的地方都走这个

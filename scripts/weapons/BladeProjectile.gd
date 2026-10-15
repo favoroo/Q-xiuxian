@@ -262,8 +262,9 @@ func _nearest_other(exclude: Node, ahead_only: bool) -> Node2D:
 	var chest_dist: float = 99999.0
 	for res in results:
 		var col = res.get("collider")
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var target = col.get_parent() as Node2D
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var target = parent as Node2D
 			if exclude != null and target == exclude:
 				continue
 			if ahead_only:

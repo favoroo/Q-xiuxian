@@ -17,7 +17,7 @@ extends Camera2D
 @export var max_offset: Vector2 = Vector2(14.0, 10.0)  ## 2026-10-11 由 (12,9) 上调一档：单次事件峰值更可见，最坏稳态仍受每秒预算钉死
 @export var max_roll: float = 0.022                    ## 2026-10-11 由 0.018 上调一档
 
-const DEFAULT_BASE_ZOOM := Vector2(1.2, 1.2)
+const DEFAULT_BASE_ZOOM := Vector2(1.1, 1.1)
 
 var trauma: float = 0.0
 var _t: float = 0.0

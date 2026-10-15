@@ -5,12 +5,15 @@ extends Node2D
 ## 涵盖中心太极四象大阵、四方灵脉刻槽、九幽边界锁灵结界光幕与四角镇魂阵角
 ## ⚠ T-4A（2026-10-15）：结界主光丝改 BoundaryFlowBand 流光带（shader TIME 驱动，零 CPU 重绘），
 ##   灵脉刻槽接 GameStyle.FX_HDR_WATER 低档 + 6s 呼吸；太极阵/刻槽/镇魂阵角仍走本层 _draw。
+## ⚠ 性能（2026-10-15）：石台砌缝/符印底座/镇魂阵角等 ~340 条纯静态指令拆到 StaticDecor
+##   子节点一次性绘制（show_behind_parent 保持原有叠放次序），本层 10Hz 重绘只剩呼吸/自转动画。
 
 const BOUNDARY_FLOW_SHADER := preload("res://assets/shaders/boundary_flow.gdshader")
 
 var _time: float = 0.0
-var half_extent: float = 440.0
+var half_extent: float = 560.0
 var _flow_bands: Array[BoundaryFlowBand] = []
+var _static_decor: StaticDecor = null
 
 ## 重绘节流（2026-10-11 第 6 波卡顿优化，2026-10-14 再降）：本层动画全是慢速量
 ## （灵脉 90s/圈自转 + 呼吸正弦 + 结界脉冲），10Hz 重绘肉眼无感 —— 高频重绘是白烧。
@@ -22,11 +25,18 @@ func _ready() -> void:
 	# 保持 z_index = 0：位于 MapLayer 内，靠树顺序排在地砖与地面微细节之上；
 	# 绝不设 >0（实体层 EntitiesLayer 及其角色默认为 z=0，设 >0 会直接盖在玩家身体上）
 	z_index = 0
+	# 静态装饰层：砌缝/符印底座/阵角一次画完不再重绘；show_behind_parent 让静态垫底，
+	# 保持「静态底座 → 动态描边/脉冲 → 流光带」的原叠放次序
+	_static_decor = StaticDecor.new()
+	_static_decor.show_behind_parent = true
+	add_child(_static_decor)
+	_static_decor.sync_half(half_extent)
 
 func _process(delta: float) -> void:
 	# _time 逐帧累计不节流，重绘触发时取到的是当前时刻，动画不会因节流变卡
 	_time += delta
 	_ensure_visibility()
+	_static_decor.sync_half(half_extent)  # 变更闸：half 没变就是一次浮点比较
 	_redraw_timer -= delta
 	if _redraw_timer <= 0.0:
 		_redraw_timer = REDRAW_INTERVAL
@@ -47,7 +57,7 @@ func _draw() -> void:
 	_ensure_flow_bands()
 	_draw_central_taiji_array()
 	_draw_array_conduits()
-	_draw_sanctum_barrier()
+	_draw_talisman_pulse()
 
 ## 结界流光带懒挂载：首次 _draw（half_extent 已由 Main 定值）时创建，
 ## 三条与主光丝同长的梯形带（上下左右），shader TIME 驱动，之后 CPU 零重绘。
@@ -56,10 +66,12 @@ func _ensure_flow_bands() -> void:
 		return
 	var mat := ShaderMaterial.new()
 	mat.shader = BOUNDARY_FLOW_SHADER
+	var placeholder_tex := PlaceholderTexture2D.new()
 	for seg in 4:
 		var band := BoundaryFlowBand.new()
 		band.segment = seg
 		band.half = half_extent
+		band.texture = placeholder_tex
 		band.material = mat
 		band.visible = false  # _ensure_visibility 定位后再亮
 		add_child(band)
@@ -69,10 +81,11 @@ func _ensure_flow_bands() -> void:
 # 1. 中心太极四象大阵（Central Taiji & Quad Array）
 # ==============================================================================
 func _draw_central_taiji_array() -> void:
-	# 三圈半径与灵脉刻槽端点随 2026-10-12 缩图（半场 500→440）等比收缩
-	var r_outer: float = 145.0
-	var r_mid: float = 92.0
-	var r_inner: float = 44.0
+	# 三圈半径随 half_extent 等比缩放（标准半场 440 下为 145 / 92 / 44）
+	var scale_f := half_extent / 440.0
+	var r_outer: float = 145.0 * scale_f
+	var r_mid: float = 92.0 * scale_f
+	var r_inner: float = 44.0 * scale_f
 
 	# 柔和灵脉呼吸（低对比度，确保绝对不抢战斗视线）
 	var breath: float = sin(_time * 0.8) * 0.04 + 0.22
@@ -143,12 +156,13 @@ func _draw_array_conduits() -> void:
 	var col_hdr := GameStyle.FX_HDR_WATER
 	col_hdr.a = flow_alpha * hdr_breath
 
-	# 指向三座界碑大致方向的微暗地表槽纹（东北/西南端点与 Main.tscn 祭坛坐标严格一致）
+	var scale_f := half_extent / 560.0
+	# 指向三座界碑大致方向的微暗地表槽纹（东北/西南端点与 Main.tscn 祭坛坐标 (380,-178) 和 (-380,178) 精确对齐）
 	var arms := [
-		[Vector2(0, -145), Vector2(0, -300)],        # 北向（中心碑）
-		[Vector2(145, 0), Vector2(300, -140)],       # 东北向（东碑）
-		[Vector2(-145, 0), Vector2(-300, 140)],      # 西南向（西碑）
-		[Vector2(0, 145), Vector2(0, 300)]           # 南向
+		[Vector2(0, -184.55 * scale_f), Vector2(0, -380.0 * scale_f)],                  # 北向（经中心碑延伸）
+		[Vector2(184.55 * scale_f, 0), Vector2(380.0 * scale_f, -178.0 * scale_f)],     # 东北向（精准指向东碑）
+		[Vector2(-184.55 * scale_f, 0), Vector2(-380.0 * scale_f, 178.0 * scale_f)],   # 西南向（精准指向西碑）
+		[Vector2(0, 184.55 * scale_f), Vector2(0, 380.0 * scale_f)]                     # 南向
 	]
 	for arm in arms:
 		var p1: Vector2 = arm[0]
@@ -159,57 +173,43 @@ func _draw_array_conduits() -> void:
 		draw_line(p1, p2, col_flow, 1.5)
 		# HDR 起辉芯线（细 0.4px，只在槽内泛光，不外溢糊边界）
 		draw_line(p1, p2, col_hdr, 1.1)
+		# 灵脉端点微润节点光印（指引阵法走向）
+		draw_circle(p2, 2.2, col_hdr)
 
 # ==============================================================================
-# 3. 九天锁灵结界光墙与四角镇魂阵角（Sanctum Barrier）
+# 3. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸）
+# 静态部分（石台砌缝、菱形底座、镇魂阵角）已拆到 StaticDecor 一次性绘制，见文件尾
 # ==============================================================================
-func _draw_sanctum_barrier() -> void:
+func _draw_talisman_pulse() -> void:
 	var h: float = half_extent
+	var node_pulse := sin(_time * 1.6) * 0.15 + 0.85
+	var col_node_rim := Color(0.30, 0.75, 0.95, 0.65 * node_pulse)
+	var col_node_core := Color(0.95, 0.85, 0.35, 0.80 * node_pulse)
+	var node_spacing := 68.0
+	var node_count := int((h * 2.0 - 180.0) / node_spacing)
+	var node_start := -h + 90.0 + (h * 2.0 - 180.0 - float(node_count) * node_spacing) * 0.5
+	var r_dist: float = h - 14.0  # 正好嵌在流光带（h-22 到 h-6）中心轴线上
 
-	# 3.1 外层玄铁界石基线（深沉稳固）
-	var outer_rect := [
-		Vector2(-h, -h), Vector2(h, -h),
-		Vector2(h, h), Vector2(-h, h),
-		Vector2(-h, -h)
-	]
-	draw_polyline(PackedVector2Array(outer_rect), Color(0.03, 0.05, 0.08, 0.95), 18.0)
-
-	# 3.2 锁灵结界流光丝（T-4.1：主光丝改 BoundaryFlowBand 流光带承担，shader 流光沿法阵转动；
-	# 此处保留内金色引线等静态衬托，脉冲色值供带子底色参考注释）
-	# var pulse_glow := sin(_time * 2.0) * 0.15 + 0.85  # 已由 shader 内呼吸接管
-	var col_inner_gold := Color(0.90, 0.75, 0.28, 0.70)
-
-	# 内侧鎏金暗引线
-	var gold_rect := [
-		Vector2(-h + 14.0, -h + 14.0), Vector2(h - 14.0, -h + 14.0),
-		Vector2(h - 14.0, h - 14.0), Vector2(-h + 14.0, h - 14.0),
-		Vector2(-h + 14.0, -h + 14.0)
-	]
-	draw_polyline(PackedVector2Array(gold_rect), col_inner_gold, 1.2)
-
-	# 3.3 四角「青铜镇魂阵角」
-	var corner_len: float = 82.0
-	var corners := [
-		[Vector2(-h + 12.0, -h + 12.0), Vector2(1, 1)],
-		[Vector2(h - 12.0, -h + 12.0), Vector2(-1, 1)],
-		[Vector2(h - 12.0, h - 12.0), Vector2(-1, -1)],
-		[Vector2(-h + 12.0, h - 12.0), Vector2(1, -1)]
-	]
-	for c in corners:
-		var pos: Vector2 = c[0]
-		var sgn: Vector2 = c[1]
-		var pts := PackedVector2Array([
-			pos + Vector2(0, sgn.y * corner_len),
-			pos,
-			pos + Vector2(sgn.x * corner_len, 0)
-		])
-		# 青铜厚底
-		draw_polyline(pts, Color(0.06, 0.10, 0.16, 0.95), 10.0, true)
-		# 翡翠青玉锁魂线
-		draw_polyline(pts, Color(0.20, 0.85, 0.65, 0.9), 4.5, true)
-		# 角端镇魂金钉
-		draw_circle(pos, 5.0, Color(1.0, 0.85, 0.35, 0.95))
-		draw_circle(pos, 2.5, Color(1.0, 1.0, 1.0, 0.95))
+	for n_idx in node_count + 1:
+		var pos_coord := node_start + float(n_idx) * node_spacing
+		var node_positions := [
+			Vector2(pos_coord, -r_dist), # 上
+			Vector2(r_dist, pos_coord),  # 右
+			Vector2(pos_coord, r_dist),  # 下
+			Vector2(-r_dist, pos_coord), # 左
+		]
+		for n_pos in node_positions:
+			# 菱形灵枢符印描边（底座填色在 StaticDecor）
+			var d_r := 3.2
+			var diamond := PackedVector2Array([
+				n_pos + Vector2(0, -d_r * 1.3),
+				n_pos + Vector2(d_r, 0),
+				n_pos + Vector2(0, d_r * 1.3),
+				n_pos + Vector2(-d_r, 0),
+				n_pos + Vector2(0, -d_r * 1.3)
+			])
+			draw_polyline(diamond, col_node_rim, 1.0)
+			draw_circle(n_pos, 1.2, col_node_core)
 
 # ==============================================================================
 # 4. 结界流光带（BoundaryFlowBand，T-4.1）
@@ -225,29 +225,226 @@ class BoundaryFlowBand:
 	## 第几段：0=上 1=右 2=下 3=左（顺时针，与 UV 参数化一致）
 	var segment: int = 0
 	## 结界半边长（宿主 half_extent 快照）
-	var half: float = 440.0
+	var half: float = 560.0
 	var _built_half: float = -1.0  # 顶点缓存：half 未变不重建
 
 	func _process(_delta: float) -> void:
 		if is_equal_approx(half, _built_half):
 			return
 		_built_half = half
-		var e := half - 8.0   # 与原 inner_rect 内缩量一致
-		var i := half - 20.0  # 带宽 12px
+		var e := half - 6.0   # 结界外沿（与石台外层咬合）
+		var i := half - 22.0  # 结界内沿（带宽 16px，更充实更具光障质感）
 		var quad := PackedVector2Array()
 		var uvs := PackedVector2Array()
 		match segment:
-			0:  # 上：左→右，UV.x 沿周长 [0, 0.25]
-				quad = PackedVector2Array([Vector2(-e, -e), Vector2(e, -e), Vector2(e, -i), Vector2(-e, -i)])
+			0:  # 上：左→右，UV.x 沿周长 [0, 0.25]，角部 45° 梯形斜切
+				quad = PackedVector2Array([Vector2(-e, -e), Vector2(e, -e), Vector2(i, -i), Vector2(-i, -i)])
 				uvs = PackedVector2Array([Vector2(0.0, 0), Vector2(0.25, 0), Vector2(0.25, 1), Vector2(0.0, 1)])
 			1:  # 右：上→下 [0.25, 0.5]
-				quad = PackedVector2Array([Vector2(e, -e), Vector2(e, e), Vector2(i, e), Vector2(i, -e)])
+				quad = PackedVector2Array([Vector2(e, -e), Vector2(e, e), Vector2(i, i), Vector2(i, -i)])
 				uvs = PackedVector2Array([Vector2(0.25, 0), Vector2(0.5, 0), Vector2(0.5, 1), Vector2(0.25, 1)])
 			2:  # 下：右→左 [0.5, 0.75]
-				quad = PackedVector2Array([Vector2(e, e), Vector2(-e, e), Vector2(-e, i), Vector2(e, i)])
+				quad = PackedVector2Array([Vector2(e, e), Vector2(-e, e), Vector2(-i, i), Vector2(i, i)])
 				uvs = PackedVector2Array([Vector2(0.5, 0), Vector2(0.75, 0), Vector2(0.75, 1), Vector2(0.5, 1)])
 			3:  # 左：下→上 [0.75, 1.0]
-				quad = PackedVector2Array([Vector2(-e, e), Vector2(-e, -e), Vector2(-i, -e), Vector2(-i, e)])
+				quad = PackedVector2Array([Vector2(-e, e), Vector2(-e, -e), Vector2(-i, i), Vector2(i, i)])
 				uvs = PackedVector2Array([Vector2(0.75, 0), Vector2(1.0, 0), Vector2(1.0, 1), Vector2(0.75, 1)])
 		polygon = quad
 		uv = uvs
+
+# ==============================================================================
+# 5. 静态装饰层（StaticDecor，一次性绘制）
+# ==============================================================================
+## 战台装饰中不随时间变化的部分：石台砌缝/金纹（原 3.1）、符印菱形底座（原 3.2 填色）、
+## 四角镇魂阵枢（原 3.3），合计 ~340 条 draw 指令。拆出后只在进树/half 变更时画一次，
+## 不再吃宿主 10Hz queue_redraw。宿主设置 show_behind_parent，叠放次序与原单次 _draw 一致。
+class StaticDecor:
+	extends Node2D
+
+	## 结界半边长（宿主 half_extent 快照）
+	var half: float = 560.0
+	var _built_half: float = -1.0  # 变更闸：half 未变不重画
+
+	func sync_half(v: float) -> void:
+		if is_equal_approx(v, _built_half):
+			return
+		half = v
+		if _built_half >= 0.0:
+			queue_redraw()  # 进树首次由引擎自动 _draw，只有运行中变更才需要标脏
+		_built_half = v
+
+	func _draw() -> void:
+		_draw_barrier_base()
+		_draw_talisman_diamonds()
+		_draw_corner_sanctuaries()
+
+	# --------------------------------------------------------------------------
+	# 3.1 战台边缘界石台基（古石砌筑、榫卯咬合与台阶立体阴影）
+	# --------------------------------------------------------------------------
+	func _draw_barrier_base() -> void:
+		var h: float = half
+		# (a) 悬空台阶外沿与坠崖深影（h 到 h + 10）
+		var drop_rect := [
+			Vector2(-h - 8.0, -h - 8.0), Vector2(h + 8.0, -h - 8.0),
+			Vector2(h + 8.0, h + 8.0), Vector2(-h - 8.0, h + 8.0),
+			Vector2(-h - 8.0, -h - 8.0)
+		]
+		draw_polyline(PackedVector2Array(drop_rect), Color(0.015, 0.025, 0.04, 0.95), 16.0)
+		# 台阶最外围的一线微弱冷墨收边线
+		draw_polyline(PackedVector2Array(drop_rect), Color(0.05, 0.09, 0.14, 0.65), 1.5)
+
+		# (b) 压顶玄岩石基（h - 18 到 h）
+		var coping_rect := [
+			Vector2(-h + 8.0, -h + 8.0), Vector2(h - 8.0, -h + 8.0),
+			Vector2(h - 8.0, h - 8.0), Vector2(-h + 8.0, h - 8.0),
+			Vector2(-h + 8.0, -h + 8.0)
+		]
+		draw_polyline(PackedVector2Array(coping_rect), Color(0.045, 0.075, 0.115, 0.98), 16.0)
+
+		# (c) 古石板榫卯砌缝（Masonry Joints）：规整石条砌筑感，每隔约 55px 一处砌缝
+		var joint_col_shadow := Color(0.015, 0.025, 0.035, 0.9)
+		var joint_col_light := Color(0.18, 0.32, 0.45, 0.35)
+		var joint_spacing := 55.0
+		var joint_count := int((h * 2.0 - 160.0) / joint_spacing)
+		var start_offset := -h + 80.0 + (h * 2.0 - 160.0 - float(joint_count) * joint_spacing) * 0.5
+
+		for idx in joint_count + 1:
+			var coord := start_offset + float(idx) * joint_spacing
+			# 上下两侧石缝（垂直线，y 跨越 [-h - 2, -h + 16] 与 [h - 16, h + 2]）
+			draw_line(Vector2(coord, -h - 2.0), Vector2(coord, -h + 16.0), joint_col_shadow, 1.4)
+			draw_line(Vector2(coord + 1.0, -h - 2.0), Vector2(coord + 1.0, -h + 16.0), joint_col_light, 0.8)
+			draw_line(Vector2(coord, h - 16.0), Vector2(coord, h + 2.0), joint_col_shadow, 1.4)
+			draw_line(Vector2(coord + 1.0, h - 16.0), Vector2(coord + 1.0, h + 2.0), joint_col_light, 0.8)
+			# 左右两侧石缝（水平线，x 跨越 [-h - 2, -h + 16] 与 [h - 16, h + 2]）
+			draw_line(Vector2(-h - 2.0, coord), Vector2(-h + 16.0, coord), joint_col_shadow, 1.4)
+			draw_line(Vector2(-h - 2.0, coord + 1.0), Vector2(-h + 16.0, coord + 1.0), joint_col_light, 0.8)
+			draw_line(Vector2(h - 16.0, coord), Vector2(h + 2.0, coord), joint_col_shadow, 1.4)
+			draw_line(Vector2(h - 16.0, coord + 1.0), Vector2(h + 2.0, coord), joint_col_light, 0.8)
+
+		# (d) 台阶内缘倒角分界金纹（嵌在石基与战台地砖之间，h - 22）
+		var inner_filigree_rect := [
+			Vector2(-h + 22.0, -h + 22.0), Vector2(h - 22.0, -h + 22.0),
+			Vector2(h - 22.0, h - 22.0), Vector2(-h + 22.0, h - 22.0),
+			Vector2(-h + 22.0, -h + 22.0)
+		]
+		draw_polyline(PackedVector2Array(inner_filigree_rect), Color(0.85, 0.70, 0.28, 0.45), 1.0)
+		# 并在内缘内侧衬一条极微暗线，增强石台阶的高差深度感
+		var inner_depth_rect := [
+			Vector2(-h + 23.5, -h + 23.5), Vector2(h - 23.5, -h + 23.5),
+			Vector2(h - 23.5, h - 23.5), Vector2(-h + 23.5, h - 23.5),
+			Vector2(-h + 23.5, -h + 23.5)
+		]
+		draw_polyline(PackedVector2Array(inner_depth_rect), Color(0.02, 0.04, 0.06, 0.6), 1.0)
+
+	# --------------------------------------------------------------------------
+	# 3.2 结界灵枢符印底座（菱形暗色填色；描边/核心脉冲留在宿主 10Hz 动态层）
+	# --------------------------------------------------------------------------
+	func _draw_talisman_diamonds() -> void:
+		var h: float = half
+		var node_spacing := 68.0
+		var node_count := int((h * 2.0 - 180.0) / node_spacing)
+		var node_start := -h + 90.0 + (h * 2.0 - 180.0 - float(node_count) * node_spacing) * 0.5
+		var r_dist: float = h - 14.0
+
+		for n_idx in node_count + 1:
+			var pos_coord := node_start + float(n_idx) * node_spacing
+			var node_positions := [
+				Vector2(pos_coord, -r_dist),
+				Vector2(r_dist, pos_coord),
+				Vector2(pos_coord, r_dist),
+				Vector2(-r_dist, pos_coord),
+			]
+			for n_pos in node_positions:
+				var d_r := 3.2
+				var diamond := PackedVector2Array([
+					n_pos + Vector2(0, -d_r * 1.3),
+					n_pos + Vector2(d_r, 0),
+					n_pos + Vector2(0, d_r * 1.3),
+					n_pos + Vector2(-d_r, 0),
+					n_pos + Vector2(0, -d_r * 1.3)
+				])
+				draw_colored_polygon(diamond, Color(0.04, 0.09, 0.14, 0.9))
+
+	# --------------------------------------------------------------------------
+	# 3.3 四角「四象镇魂阵枢」（青铜玄石阵盘，向两翼自然渐隐）
+	# --------------------------------------------------------------------------
+	func _draw_corner_sanctuaries() -> void:
+		var h: float = half
+		var corner_len: float = clampf(h * 0.24, 48.0, 108.0)
+		var plinth_arm := corner_len * 0.78
+		var plinth_bevel := plinth_arm * 0.45
+		var beam_len := corner_len * 0.32
+
+		var corners := [
+			[Vector2(-h + 14.0, -h + 14.0), Vector2(1, 1)],
+			[Vector2(h - 14.0, -h + 14.0), Vector2(-1, 1)],
+			[Vector2(h - 14.0, h - 14.0), Vector2(-1, -1)],
+			[Vector2(-h + 14.0, h - 14.0), Vector2(1, -1)]
+		]
+
+		for c in corners:
+			var pos: Vector2 = c[0]
+			var sgn: Vector2 = c[1]
+
+			# (a) 斜切八角玄石加固台座（Chamfered Plinth）
+			var plinth_pts := PackedVector2Array([
+				pos + Vector2(0, sgn.y * plinth_arm),
+				pos + Vector2(sgn.x * (plinth_arm - plinth_bevel), sgn.y * plinth_arm),
+				pos + Vector2(sgn.x * plinth_arm, sgn.y * (plinth_arm - plinth_bevel)),
+				pos + Vector2(sgn.x * plinth_arm, 0),
+				pos
+			])
+			draw_colored_polygon(plinth_pts, Color(0.035, 0.055, 0.085, 0.96))
+			# 台座斜边古铜细边
+			draw_line(
+				pos + Vector2(sgn.x * (plinth_arm - plinth_bevel), sgn.y * plinth_arm),
+				pos + Vector2(sgn.x * plinth_arm, sgn.y * (plinth_arm - plinth_bevel)),
+				Color(0.20, 0.36, 0.46, 0.65), 1.5
+			)
+
+			# (b) 青铜护角两翼（分 5 段平滑渐隐延伸，彻底消除硬截断）
+			var segs := 5
+			for s in segs:
+				var t0 := float(s) / float(segs)
+				var t1 := float(s + 1) / float(segs)
+				var p_y0 := pos + Vector2(0, sgn.y * corner_len * t0)
+				var p_y1 := pos + Vector2(0, sgn.y * corner_len * t1)
+				var p_x0 := pos + Vector2(sgn.x * corner_len * t0, 0)
+				var p_x1 := pos + Vector2(sgn.x * corner_len * t1, 0)
+				var a := lerpf(0.95, 0.0, t0 * t0)
+				var w := lerpf(7.0, 1.5, t0)
+				# 幽冥青铜底
+				draw_line(p_y0, p_y1, Color(0.08, 0.16, 0.22, a), w)
+				draw_line(p_x0, p_x1, Color(0.08, 0.16, 0.22, a), w)
+				# 冷玉水蓝阵印线
+				var w_inner := lerpf(3.0, 1.0, t0)
+				draw_line(p_y0, p_y1, Color(0.25, 0.72, 0.92, a * 0.85), w_inner)
+				draw_line(p_x0, p_x1, Color(0.25, 0.72, 0.92, a * 0.85), w_inner)
+
+			# (c) 45° 镇魂青铜阵梁与八卦爻印（向阵内延展）
+			var beam_start := pos + sgn * 6.0
+			var beam_end := pos + sgn * (6.0 + beam_len)
+			draw_line(beam_start, beam_end, Color(0.08, 0.15, 0.22, 0.95), 4.5)
+			draw_line(beam_start, beam_end, Color(0.85, 0.70, 0.28, 0.85), 1.4)
+			# 垂直于阵梁的乾坤阴阳短爻
+			var beam_dir := sgn.normalized()
+			var beam_norm := Vector2(-beam_dir.y, beam_dir.x)
+			var p_yao1 := beam_start + beam_dir * (beam_len * 0.38)
+			var p_yao2 := beam_start + beam_dir * (beam_len * 0.72)
+			draw_line(p_yao1 - beam_norm * 4.5, p_yao1 + beam_norm * 4.5, Color(0.85, 0.70, 0.28, 0.75), 1.2)
+			draw_line(p_yao2 - beam_norm * 3.8, p_yao2 + beam_norm * 3.8, Color(0.25, 0.75, 0.95, 0.75), 1.2)
+
+			# (d) 角端镇魂灵晶核心（八角青铜座 + 天蓝灵玉环 + 纯白高光核）
+			# 菱形青铜底座
+			var base_r := 8.5
+			var base_diamond := PackedVector2Array([
+				pos + Vector2(0, -base_r), pos + Vector2(base_r, 0),
+				pos + Vector2(0, base_r), pos + Vector2(-base_r, 0),
+				pos + Vector2(0, -base_r)
+			])
+			draw_colored_polygon(base_diamond, Color(0.06, 0.10, 0.15, 0.98))
+			draw_polyline(base_diamond, Color(0.85, 0.72, 0.30, 0.85), 1.2)
+			# 天蓝灵环与核心晶芒
+			draw_circle(pos, 4.8, Color(0.25, 0.75, 0.95, 0.92))
+			draw_circle(pos, 2.8, Color(0.85, 0.95, 1.0, 0.95))
+			draw_circle(pos, 1.2, Color(1.0, 1.0, 1.0, 1.0))

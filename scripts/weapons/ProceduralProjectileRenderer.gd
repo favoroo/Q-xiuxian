@@ -287,6 +287,8 @@ func _draw_leaf_dagger() -> void:
 	draw_colored_polygon(dagger_pts, Color(0.88, 0.92, 0.96))
 	# 背脊青金流光
 	draw_line(Vector2(11.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
+	# 刀尖锐芒（FX_HDR_WOOD 超白起辉）
+	draw_circle(Vector2(11.0, 0.0), 1.1, GameStyle.FX_HDR_WOOD)
 	# 刀尾配重
 	draw_circle(Vector2(-9.0, 0.0), 1.2, Color(0.10, 0.12, 0.16))
 
@@ -342,6 +344,8 @@ func _draw_ice_needle() -> void:
 	draw_colored_polygon(bot_pts, Color(0.30, 0.65, 0.95))
 	# 冰棱脊线
 	draw_line(Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.90, 0.98, 1.0), 0.8, true)
+	# 针尖冰晶寒芒（FX_HDR_WATER 超白起辉）
+	draw_circle(Vector2(12.0, 0.0), 1.1, GameStyle.FX_HDR_WATER)
 
 # ----------------- 4b. 白骨煞刺 (森白锐骨锥刺) -----------------
 func _draw_bone_spike() -> void:
@@ -370,6 +374,8 @@ func _draw_bone_spike() -> void:
 	draw_colored_polygon(shade_pts, Color(0.68, 0.72, 0.68, 0.7))
 	# 骨刺中脊
 	draw_line(Vector2(13.0, 0.0), Vector2(-8.0, 0.0), Color(0.40, 0.45, 0.44), 1.0, true)
+	# 骨尖寒芒（FX_HDR_CORE 超白起辉）
+	draw_circle(Vector2(13.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
 
 # ----------------- 5. 神符 (符纸形态 × 五行灵文 + 灵光飘带) -----------------
 ## 符纸形态（2026-10-13 形态分化）：9+ 种符箓旧写法清一色 16×10 长方形只换边框色，

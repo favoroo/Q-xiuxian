@@ -48,7 +48,7 @@ window/size/viewport_width=960
 window/size/viewport_height=540
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/stretch/mode="canvas_items"
+window/stretch/mode="viewport"
 window/stretch/aspect="expand"
 
 [gui]
@@ -72,13 +72,16 @@ pointing/emulate_touch_from_mouse=true
 
 3d/physics_engine="Jolt Physics"
 common/physics_ticks_per_second=30
-common/physics_interpolation=true
+# 关闭：渲染与物理运行时锁同频（Main._apply_fps_limit 恒 60/60），
+# 插值只在「渲染 fps 远高于物理 Hz」时有价值，这里纯属每帧白付快照+插值开销。
+common/physics_interpolation=false
 
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 textures/vram_compression/import_etc2_astc=true
+renderer/rendering_method.mobile="mobile"
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 2d/snap/snap_2d_vertices_to_pixel=true
 viewport/hdr_2d=true

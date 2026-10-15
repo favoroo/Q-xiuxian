@@ -167,12 +167,12 @@ func _switch_bottom_tab(tab_idx: int) -> void:
 		_history_scroll.visible = (tab_idx == 1)
 	if _bottom_tab_items_btn != null:
 		if tab_idx == 0:
-			GameStyle.button(_bottom_tab_items_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+			GameStyle.button(_bottom_tab_items_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
 		else:
 			GameStyle.button(_bottom_tab_items_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 	if _bottom_tab_hist_btn != null:
 		if tab_idx == 1:
-			GameStyle.button(_bottom_tab_hist_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
+			GameStyle.button(_bottom_tab_hist_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
 		else:
 			GameStyle.button(_bottom_tab_hist_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 

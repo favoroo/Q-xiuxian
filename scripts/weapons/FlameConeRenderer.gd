@@ -4,7 +4,7 @@ extends Node2D
 ## 锥形喷吐渲染器（火葫芦，2026-10-13）：三层火锥 + 锥缘火舌抖动 + 顺流火星。
 ## 几何契约：set_cone 的 length/half_width 就是判定锥的射程与末端半宽
 ## （画多宽==判多宽）——由 FloatingWeapon 按 WeaponData range 与 CONE_HALF_ANGLE 下发。
-## 零贴图零粒子零灯光；20Hz 错相重绘；起喷 0.08s 张开（_open 0→1），收喷即隐。
+## T-2.3 锥口与锥缘叠挂 FxParticlePool EMBER 顺向流火碎屑，零动态灯；20Hz 错相重绘；起喷 0.08s 张开（_open 0→1），收喷即隐。
 
 var length: float = 100.0
 var half_width: float = 40.0
@@ -49,15 +49,17 @@ func _process(delta: float) -> void:
 
 	# 锥口与锥身火舌粒子流（T-2.3）：20Hz 节流喷发，局限于判定锥内
 	if _ember_timer <= 0.0 and length > 20.0 and _open > 0.25:
-		_ember_timer = 0.08
+		# 2026-10-15 视觉克制化：火星节流 0.08→0.11s、双点 scale 0.95/0.7→0.8/0.6，
+		# 火锥是全屏面积最大的持续特效，粒子节拍放慢一档
+		_ember_timer = 0.11
 		var nozzle_pos := global_position
-		FxParticlePool.burst(FxParticlePool.EMBER, nozzle_pos, "fire", 0.95)
+		FxParticlePool.burst(FxParticlePool.EMBER, nozzle_pos, "fire", 0.8)
 		# 锥缘火舌粒子：中段随机位置，高度限制在判定锥宽度以内（绝不超过判定边缘）
 		var t_pos := 0.35 + 0.45 * (float(int(_anim * 100.0) % 100) / 100.0)
 		var x_l := length * t_pos
 		var max_h := half_width * pow(t_pos, 0.75) * 0.7
 		var y_l := ((float(int(_anim * 37.0) % 100) / 50.0) - 1.0) * max_h
-		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.7)
+		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.6)
 		# 热浪区上报（T-6.1，设置默认关时静态入口首行短路零开销）：锥心中段一团热，
 		# 跟随火舌粒子同拍 12.5Hz 续报；hold 覆盖续报间隔的 2 倍防间隙闪断
 		HeatDistortionFx.report(get_tree().root, to_global(Vector2(length * 0.55, 0.0)),
@@ -74,32 +76,37 @@ func _draw() -> void:
 	if l <= 4.0:
 		return
 	# 三层同形火锥：外暗赤 / 中炽橙 / 内炽阳超白（接 FX_HDR_FIRE 泛光起辉）
-	_cone_poly(l, w, Color(0.85, 0.25, 0.12, 0.30), 1.0)
-	_cone_poly(l * 0.78, w * 0.66, Color(1.0, 0.55, 0.15, 0.55), 0.8)
-	_cone_poly(l * 0.5, w * 0.38, GameStyle.FX_HDR_FIRE, 0.5)
+	# 2026-10-15 视觉克制化：三层透明度 0.30/0.55/0.50 → 0.24/0.45/0.40，
+	# 几何 length/half_width 判定同源不动，只降叠加油墨感
+	_cone_poly(l, w, Color(0.85, 0.25, 0.12, 0.24), 1.0)
+	_cone_poly(l * 0.78, w * 0.66, Color(1.0, 0.55, 0.15, 0.45), 0.8)
+	_cone_poly(l * 0.5, w * 0.38, GameStyle.FX_HDR_FIRE, 0.4)
 	# 顺流火星：四粒火屑沿锥面向前飘，越远越小越淡
 	for i in 4:
 		var p := fposmod(_anim * 2.6 + float(i) * 0.29, 1.0)
 		var pos := Vector2(l * p, w * 0.6 * sin(float(i) * 2.3 + p * 5.0) * p)
 		draw_circle(pos, 2.0 * (1.0 - p) + 0.8, Color(1.0, 0.75, 0.35, 0.8 * (1.0 - p)))
 
-## 锥面：根部窄口、沿程按 x^0.75 外扩、侧缘带火舌凸齿（jag 抖动作用于侧缘宽度，绝不自相交）
+## 锥面：根部窄口、沿程按 x^0.75 外扩、侧缘带火舌凸齿（jag 抖动作用于侧缘宽度，绝不自相交）。
+## 顶点写进成员缓冲复用（_draw 每次 3 次调用 × 40Hz，原先每次新建数组 ≈ 120 次分配/秒），
+## draw_colored_polygon 内部按值拷贝，缓冲可安全复用。
+const POLY_STEPS := 10
+var _poly_buf := PackedVector2Array()
+
 func _cone_poly(l: float, w: float, col: Color, jag: float) -> void:
-	var pts := PackedVector2Array()
-	var steps := 10
+	_poly_buf.resize(POLY_STEPS * 2 + 1)
 	# 上侧缘：从根部 (0,0) 向末端 (l, -w)
-	for i in steps + 1:
-		var t := float(i) / float(steps)
+	for i in POLY_STEPS + 1:
+		var t := float(i) / float(POLY_STEPS)
 		var x := l * t
 		var wave := 1.0 + jag * 0.12 * sin(_anim * 22.0 + float(i) * 2.1)
 		var h := w * pow(t, 0.75) * wave
-		pts.append(Vector2(x, -h))
+		_poly_buf[i] = Vector2(x, -h)
 	# 下侧缘：从末端 (l, w) 回到根部
-	for i in range(steps, 0, -1):
-		var t := float(i) / float(steps)
+	for i in range(POLY_STEPS, 0, -1):
+		var t := float(i) / float(POLY_STEPS)
 		var x := l * t
 		var wave := 1.0 + jag * 0.12 * sin(_anim * 19.0 + float(i) * 1.7 + 2.0)
 		var h := w * pow(t, 0.75) * wave
-		pts.append(Vector2(x, h))
-	if pts.size() >= 3:
-		draw_colored_polygon(pts, col)
+		_poly_buf[POLY_STEPS + (POLY_STEPS - i) + 1] = Vector2(x, h)
+	draw_colored_polygon(_poly_buf, col)

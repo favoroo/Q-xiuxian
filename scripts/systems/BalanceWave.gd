@@ -22,55 +22,69 @@ const SPAWN_INTERVAL_MIN := 0.45
 const SPAWN_INTERVAL_PER_WAVE := 0.045
 const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一回合多刷 1 只
 const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
+
+# ---------------- 分批清剿制与并发合围（2026-10-15） ----------------
+## 清剿完一批（场上存活 ≤ 1 只）后的呼吸间隙（秒），供玩家捡拾灵石和走位调整
+const BATCH_CLEAR_COOLDOWN := 0.8
+## 中后期对峙超时（秒）：若玩家未能在此时限内清剿，且未达同屏上限，允许并发注入下一批合围
+const BATCH_STALEMATE_TIMEOUT := 6.5
+## 允许并发 2 批的起始波次（第 1~5 波严格单批清剿，节奏清晰）
+const CONCURRENT_BATCH_MIN_WAVE := 6
+
 # 2026-10-11 土豆兄弟式克制：回合内总刷入预算 —— 间隔刷怪照旧，但全回合累计刷出只数封顶，
-# 预算耗尽即停手。旧口径「杀几只补几只」会把同屏恒定顶到上限（第 6 波起整回合满载，
-# 体感无限刷怪且是持续卡顿源）；预算制下越打越空，击杀速度重新变得有意义。
-# 绑定点对照（旧总量 = 时长/间隔 × 平均批量，见 tests/balance_sim_check.gd 第 5 节）：
-# W1~5 预算不触发（前期手感不变）；W6 54/73 ≈ -26%、W10 76/104 ≈ -27%、W12 起批量跳档后
-# 收得更狠（~-51%）、W15 103/230 ≈ -55%、W20 131/425 ≈ -69%。危险度/角色的敌潮倍率由调用方乘。
-# 2026-10-11 缩图+减怪（半场 680→500）：预算全程再降约 1/3（14/3.6/90 ⇒
-# W1=17 / W5=32 / W10=50 / W20=86），单怪生命基数同步 +33% 补上压力，预算缺口照旧走经验补差。
-# 2026-10-15 反割草 2.0（用户口径「每个敌人要有适当的击杀难度，敌人数量可以适当变少」，
-# 根因 v0.0.36 武器伤害整体上调后敌人侧未配套）：预算全程再 -20%（11/2.9/72 ⇒
-# W1=14 / W5=26 / W10=40 / W20=69），单怪生命基数同步 +42%（6.0→8.5）补上压力，
-# 一波总血量约 +13%（压力不减、密度降、每只击杀有读数）；缺口经验由 MOB_KILL_EXP_MULT 反向补偿。
-const WAVE_SPAWN_BUDGET_BASE := 11.0
-const WAVE_SPAWN_BUDGET_PER_WAVE := 2.9
-const WAVE_SPAWN_BUDGET_MAX := 72.0
+# 预算耗尽即停手。
+# 2026-10-15 分批清剿制（用户口径「敌人数量太多了，无穷无尽像纯割草，看都看不过来。减少数量、
+# 增强血量，杀完一波再来一波，后面关卡也能同时有两批或三批；前期 5-8，后期 8-12 或更多」）：
+# 预算全程平滑削减约 26%（8.0/2.2/54 ⇒ W1=10 / W5=19 / W10=30 / W20=52），
+# 单怪生命基数同步提档至 11.5（8.5→11.5，+35% 肉度，杜绝秒杀，每只动作清晰有针对性周旋），
+# 经验掉落补偿乘数 MOB_KILL_EXP_MULT 提升至 1.75（10×1.75=17.5 守恒原 14×1.25=17.5 经济）。
+const WAVE_SPAWN_BUDGET_BASE := 8.0
+const WAVE_SPAWN_BUDGET_PER_WAVE := 2.2
+const WAVE_SPAWN_BUDGET_MAX := 54.0
 # 2026-10-13 无尽深层三涨：正常局 20 波通关，故「波数 > 20」即等价无尽深层，曲线分段
-# 无需读 endless_mode（保持纯函数）。深层段预算不再封顶 90，从 W20 的 86 只起每波 +4，
-# 到 180 硬顶（约 W44 饱和）；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
-# 走 endless_swarm_mult。四个成长率是独立旋钮，试玩后可单独回调。
+# 无需读 endless_mode（保持纯函数）。深层段预算从 W20 的 52 只起每波 +3，
+# 到 115 硬顶；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
+# 走 endless_swarm_mult。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（正常局通关波，> 此值走深层曲线）
-const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 69 只起续算）
-const DEEP_BUDGET_MAX := 145.0           ## 深层预算硬顶（2026-10-15 随反割草 2.0 同比例 180→145，约 W39 饱和）
+const DEEP_BUDGET_PER_WAVE := 3.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
+const DEEP_BUDGET_MAX := 115.0          ## 深层预算硬顶（约 W41 饱和）
 const DEEP_DMG_GROWTH := 1.09            ## 深层每波伤害复利（20 波段是 1.06；W40 单下 ≈11.5×基线）
 const DEEP_HP_GROWTH := 1.18             ## 深层每波生命复利（20 波段是 1.16；W40 血 ≈225×基线）
 const DEEP_SWARM_PER_WAVE := 0.06        ## 深层每波同屏密度增量（+6%/波，随危险度/角色倍率同乘）
 const DEEP_SWARM_MAX := 2.0              ## 深层同屏密度放大硬顶（约 W37 触顶）
 
 ## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算。
-## ≤20 波走旧曲线封顶 90；深层从 W20=86 续 +4/波，封顶 DEEP_BUDGET_MAX。
+## ≤20 波走曲线封顶 54；深层从 W20=52 续 +3/波，封顶 DEEP_BUDGET_MAX。
 static func wave_spawn_budget(wave: int) -> int:
 	var w := float(maxi(wave, 1))
 	if w <= float(DEEP_WAVE_THRESHOLD):
 		return int(round(minf(WAVE_SPAWN_BUDGET_BASE + w * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX)))
 	return int(round(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
 		+ (w - float(DEEP_WAVE_THRESHOLD)) * DEEP_BUDGET_PER_WAVE, DEEP_BUDGET_MAX)))
+
+## 动态同屏敌人上限（纯函数，2026-10-15 分批清剿制）：
+## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
+## 深层无尽结合 endless_swarm_mult 持续增长（封顶 26）。
+static func max_enemies_cap(wave: int) -> int:
+	var w := maxi(wave, 1)
+	if w <= 5:
+		return 6 + int(float(w - 1) * 0.5)
+	elif w <= 12:
+		return 8 + int(float(w - 5) * 0.57)
+	elif w <= DEEP_WAVE_THRESHOLD:
+		return 12 + int(float(w - 12) * 0.5)
+	else:
+		var base := 16.0 + float(w - DEEP_WAVE_THRESHOLD) * 0.4
+		return int(round(minf(base * endless_swarm_mult(w), 26.0)))
+
 const ENEMY_HP_GROWTH := 1.16             ## 每回合生命复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础生命整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
-## 2026-10-10 打击感重塑：小怪厚度抬高、受击硬直、击退、火花、闪白这些反馈充分展现，杜绝一击秒杀。
-## 2026-10-11 缩图减怪：刷入量 -33% 后单怪 +33% 血（4.5→6.0）补上压力，「少而硬」。
-## 2026-10-15 反割草 2.0：v0.0.36 近战/横扫伤害整体上调后小怪 TTK 全线跌破设计意图（成型 Build
-## W10+ 约 0.5~2s 蒸发），血量基数 +42%（6.0→8.5）与刷怪预算 -20% 联动 —— 一波总血量约 +13%，
-## 压力不减、密度降、每个击杀有读数。
-const MOB_HP_BASE_MULT := 8.5
+## 2026-10-15 分批清剿制：配合刷怪预算 -26%，单怪血量基数由 8.5 提档至 11.5（+35% 肉度），
+## 告别一击秒杀与纯割草，每个怪物的走位、弹幕与动作清晰可辨，击杀有扎实手感。
+const MOB_HP_BASE_MULT := 11.5
 ## 小怪击杀经验/金币腿补偿倍率：与 WAVE_SPAWN_BUDGET_* 联动（改预算必须同步改它）。
-## 预算 -20% 后被闸掉的怪不再掉落，原先由 budget_compensation_exp 折经验找平；但补差只覆盖
-## 「预算没花完」的部分且用的是 exp_reward 原值 —— 单怪掉落必须同倍放大才能让每波经验收入持平
-##（0.8 数量 × 1.25 单只 = 1.0）。金币腿随 exp_value 同值入账，碎金档仍折 1 枚不受影响。
-## 精英不走这条（经验由 ELITE_GEM_EXP 固定，金币由 ELITE_STONE_BONUS）。
-const MOB_KILL_EXP_MULT := 1.25
+## 预算 -26% 后单怪掉落按 ×1.75 放大，让每波总经验收入完全守恒（10×1.75=17.5 对应原 14×1.25=17.5）。
+const MOB_KILL_EXP_MULT := 1.75
 ## 单只小怪击杀经验（纯函数）：exp_reward × 补偿倍率取整。掉落（EnemyBase._die）与
 ## 刷怪补差均值统计（WaveSpawner）共用这一个出口，两边口径不许漂。
 static func mob_kill_exp(exp_reward: int) -> int:
@@ -138,9 +152,14 @@ static func wave_duration(wave: int) -> float:
 static func spawn_interval(wave: int) -> float:
 	return maxf(SPAWN_INTERVAL_MIN, SPAWN_INTERVAL_BASE - float(maxi(wave, 1)) * SPAWN_INTERVAL_PER_WAVE)
 
-## 一回合刷几只。roll 必须由调用方给（如 GameManager.rng.randf()）
+## 单批刷怪规模（2026-10-15 分批清剿制）：
+## 前期（W1~6）4~5 只，中期（W7~12）5~6 只，后期（W13~18）6~7 只，关底（W19+）7~8 只，深层无尽最高 8~9 只。
+## roll 必须由调用方给（如 GameManager.rng.randf()）
 static func spawn_batch(wave: int, roll: float) -> int:
-	return 1 + int(float(maxi(wave, 1)) / SPAWN_BATCH_EVERY_WAVES) + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
+	var w := float(maxi(wave, 1))
+	var base := 4 + int((w - 1.0) / 6.0)
+	base = mini(base, 8)
+	return base + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
 
 static func enemy_hp_mult(wave: int) -> float:
 	var w := maxi(wave, 1)

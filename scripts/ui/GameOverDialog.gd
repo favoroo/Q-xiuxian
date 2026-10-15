@@ -34,7 +34,7 @@ var _r_stones := 0
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	GameStyle.label(title_label, 26, GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(title_label, 26, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(stats_label, 15, GameStyle.PAPER)
 	GameStyle.button(retry_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT)
 	GameStyle.button(endless_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 16, GameStyle.INK_TEXT)

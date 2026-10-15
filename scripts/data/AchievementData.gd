@@ -5,9 +5,10 @@ extends RefCounted
 ## 全部 static 纯函数 —— 不读 autoload、不碰节点，保证单测可确定性断言。
 ## 设计原则：
 ##   1. 零局外数值膨胀：成就只解锁新角色（道统）与少量道具入池，不破坏局内难度平衡；
-##   2. 初始开放 8 名代表性角色 + 83 件基础道具，其余 11 名进阶角色与 4 件高阶道具通过里程碑解锁；
+##   2. 初始开放 8 名代表性角色 + 90 件基础道具，其余 12 名进阶角色与 4 件高阶道具通过里程碑解锁；
 ##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段），
 ##      纯荣誉成就 reward_type = "none"（只点亮、不发奖励，不碰解锁经济）。
+##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条纯荣誉趣味成就（30 条总计）。
 
 ## 危险度档位名号（D0 ~ D5）
 const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
@@ -139,249 +140,309 @@ const DEFAULT_ITEMS: Array[String] = [
 ## reward_type: "cultivator"（解锁新道统） | "item"（解锁新道具入池） | "none"（纯荣誉，不发奖励）
 const ACHIEVEMENTS: Array[Dictionary] = [
 	# ---------------- 试炼：通关与难度挑战 ----------------
-	{
-		"id": "ach_cult_duoshe",
-		"name": "初次通关",
-		"cond_desc": "使用任意角色通关1次（完成第20波）",
-		"category": "trial",
+		{
+			"id": "ach_cult_duoshe",
+			"name": "羽化初登",
+			"cond_desc": "第一次在第20波活下来——恭喜，你终于不是炮灰了",
+			"category": "trial",
 		"reward_type": "cultivator",
 		"reward_id": "duoshe",
 		"reward_name": "学者",
 		"icon": "res://assets/art/cultivator_duoshe_icon.png",
 	},
-	{
-		"id": "ach_cult_dubi",
-		"name": "极限挑战",
-		"cond_desc": "通关「普通」或更高难度",
-		"category": "trial",
+		{
+			"id": "ach_cult_dubi",
+			"name": "明知山有虎",
+			"cond_desc": "通关「普通」或更高难度——修仙哪有不疯的，你先疯了一步",
+			"category": "trial",
 		"reward_type": "cultivator",
 		"reward_id": "dubi",
 		"reward_name": "狂战士",
 		"icon": "res://assets/art/cultivator_dubi_icon.png",
 	},
-	{
-		"id": "ach_feat_nightmare",
-		"name": "征服噩梦",
-		"cond_desc": "通关「噩梦」或更高难度",
-		"category": "trial",
+		{
+			"id": "ach_feat_nightmare",
+			"name": "噩梦常客",
+			"cond_desc": "通关「噩梦」难度——你在梦里杀怪，醒着也一样",
+			"category": "trial",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_jingzhe_fu.png",
 	},
-	{
-		"id": "ach_feat_hell",
-		"name": "征服地狱",
-		"cond_desc": "通关「地狱」或更高难度",
-		"category": "trial",
+		{
+			"id": "ach_feat_hell",
+			"name": "地狱签证",
+			"cond_desc": "通关「地狱」难度——阎王爷说工位给你备好了",
+			"category": "trial",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_leihuo_fu.png",
 	},
-	{
-		"id": "ach_feat_extreme",
-		"name": "征服极限",
-		"cond_desc": "通关「极限」难度",
-		"category": "trial",
+		{
+			"id": "ach_feat_extreme",
+			"name": "撞墙到头",
+			"cond_desc": "通关「极限」难度——没有更硬的墙给你撞了，歇歇吧",
+			"category": "trial",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_jinlei_zhui.png",
 	},
-	{
-		"id": "ach_item_pojia",
-		"name": "深入敌后",
-		"cond_desc": "单局抵达第15波",
-		"category": "trial",
+		{
+			"id": "ach_item_pojia",
+			"name": "深入敌后",
+			"cond_desc": "单局打到第15波——怪潮怀疑你开了挂",
+			"category": "trial",
 		"reward_type": "item",
 		"reward_id": "pojia_zhui",
 		"reward_name": "破甲针",
 		"icon": "res://assets/art/item_pojia_zhui.png",
 	},
-	{
-		"id": "ach_feat_endless",
-		"name": "无尽行者",
-		"cond_desc": "无尽模式抵达第25波",
-		"category": "trial",
+		{
+			"id": "ach_feat_endless",
+			"name": "肝帝降临",
+			"cond_desc": "无尽模式打到第25波——肝在哭，但你在笑",
+			"category": "trial",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_liuhuo_feijian.png",
-	},
+		},
+		{
+			"id": "ach_feat_nodamage",
+			"name": "金光护体",
+			"cond_desc": "无伤通关一整局——敌人连你衣角都没碰到",
+			"category": "trial",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/item_jingang_fumo_jia.png",
+		},
 	# ---------------- 流派：武器构筑 ----------------
-	{
-		"id": "ach_cult_juechen",
-		"name": "心剑通神",
-		"cond_desc": "单局同时上阵剑系武器达到4件",
-		"category": "style",
+		{
+			"id": "ach_cult_juechen",
+			"name": "心剑通神",
+			"cond_desc": "单局同时上阵4件剑系武器——你已与剑合为一体",
+			"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "juechen",
 		"reward_name": "绝尘",
 		"icon": "res://assets/art/cultivator_juechen_icon.png",
 	},
-	{
-		"id": "ach_cult_fuxiu",
-		"name": "万符朝宗",
-		"cond_desc": "单局同时上阵弹射类武器达到4件",
-		"category": "style",
+		{
+			"id": "ach_cult_fuxiu",
+			"name": "万符朝宗",
+			"cond_desc": "单局同时上阵4件弹射类武器——符箓满天飞，怪看不清路",
+			"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "fuxiu",
 		"reward_name": "灵符子",
 		"icon": "res://assets/art/cultivator_fuxiu_icon.png",
 	},
-	{
-		"id": "ach_cult_bawang",
-		"name": "横扫千军",
-		"cond_desc": "单局同时上阵横扫类武器达到4件",
-		"category": "style",
+		{
+			"id": "ach_cult_bawang",
+			"name": "横扫千军",
+			"cond_desc": "单局同时上阵4件横扫类武器——你不是在战斗，是在打扫卫生",
+			"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "bawang",
 		"reward_name": "霸王",
 		"icon": "res://assets/art/cultivator_bawang_icon.png",
 	},
-	{
-		"id": "ach_cult_jiguan",
-		"name": "巧夺天工",
-		"cond_desc": "单局同时上阵机关或召唤类武器达到4件",
-		"category": "style",
+		{
+			"id": "ach_cult_jiguan",
+			"name": "巧夺天工",
+			"cond_desc": "单局同时上阵4件机关或召唤类武器——你不再是修士，你是包工头",
+			"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "jiguan",
 		"reward_name": "机关师",
 		"icon": "res://assets/art/cultivator_jiguan_icon.png",
 	},
-	{
-		"id": "ach_style_thunder",
-		"name": "五雷正法",
-		"cond_desc": "单局同时上阵雷法类武器达到4件",
-		"category": "style",
+		{
+			"id": "ach_style_thunder",
+			"name": "五雷正法",
+			"cond_desc": "单局同时上阵4件雷法类武器——令尊是雷公本人？",
+			"category": "style",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_chunlei_gu.png",
 	},
-	{
-		"id": "ach_style_wuxing",
-		"name": "五行同阵",
-		"cond_desc": "单局同时上阵金木水火土五行武器各至少1件",
-		"category": "style",
+		{
+			"id": "ach_style_wuxing",
+			"name": "五行同阵",
+			"cond_desc": "单局金木水火土五行各带1件——五行相生相克，你是中间那个",
+			"category": "style",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_jianzhen_pan.png",
-	},
+		},
+		{
+			"id": "ach_style_rebel",
+			"name": "就不听你话",
+			"cond_desc": "使用角色不契合的技能通关3次——偏要跟道统对着干",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/skill_gale.png",
+		},
+		{
+			"id": "ach_style_loner",
+			"name": "独行侠",
+			"cond_desc": "不带任何召唤或机关武器通关——一个人修仙，一个人渡劫",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_liuhuo_feijian.png",
+		},
+		{
+			"id": "ach_style_omni",
+			"name": "万器宗师",
+			"cond_desc": "单局同时拥有全部六系武器——武器架比万宝楼还全",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_jianzhen_pan.png",
+		},
 	# ---------------- 历练：生涯累计 ----------------
-	{
-		"id": "ach_cult_meiying",
-		"name": "影行者",
-		"cond_desc": "单局有效闪避达到35%，或累计击杀500只敌人",
-		"category": "grind",
+		{
+			"id": "ach_cult_meiying",
+			"name": "影行者",
+			"cond_desc": "单局闪避率35%以上，或累计击杀500只——跑得比兔子快，咬得比蛇狠",
+			"category": "grind",
 		"reward_type": "cultivator",
 		"reward_id": "meiying",
 		"reward_name": "影者",
 		"icon": "res://assets/art/cultivator_meiying_icon.png",
 	},
-	{
-		"id": "ach_cult_kuangzhan",
-		"name": "百战不殆",
-		"cond_desc": "累计击杀达到1500只",
-		"category": "grind",
+		{
+			"id": "ach_cult_kuangzhan",
+			"name": "百战不殆",
+			"cond_desc": "累计击杀1500只——你数不清送走了多少怪，怪也数不清",
+			"category": "grind",
 		"reward_type": "cultivator",
 		"reward_id": "kuangzhan",
 		"reward_name": "蛮兵",
 		"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
 	},
-	{
-		"id": "ach_grind_kills",
-		"name": "千杀灭生",
-		"cond_desc": "累计击杀达到5000只",
-		"category": "grind",
+		{
+			"id": "ach_grind_kills",
+			"name": "千杀灭生",
+			"cond_desc": "累计击杀5000只——你就是这片修仙界的瘟疫，好消息那种",
+			"category": "grind",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_kaishan_fu.png",
 	},
-	{
-		"id": "ach_grind_wins",
-		"name": "十渡天劫",
-		"cond_desc": "累计通关达到10次",
-		"category": "grind",
+		{
+			"id": "ach_grind_wins",
+			"name": "十渡天劫",
+			"cond_desc": "累计通关10次——老天爷劈了你十次都没劈死，开始考虑换人了",
+			"category": "grind",
 		"reward_type": "none",
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_bengshan_jian.png",
 	},
-	{
-		"id": "ach_item_kuilei",
-		"name": "九死一生",
-		"cond_desc": "累计游玩5局，或任意通关1次",
-		"category": "grind",
+		{
+			"id": "ach_item_kuilei",
+			"name": "九死一生",
+			"cond_desc": "累计游玩5局，或通关1次——死了很多次，但活下来了，这就是修仙",
+			"category": "grind",
 		"reward_type": "item",
 		"reward_id": "tisi_kuilei",
 		"reward_name": "替身娃娃",
 		"icon": "res://assets/art/item_tisi_kuilei.png",
 	},
-	{
-		"id": "ach_item_wuxing",
-		"name": "经验日深",
-		"cond_desc": "单局等级达到15级",
-		"category": "grind",
+		{
+			"id": "ach_item_wuxing",
+			"name": "经验日深",
+			"cond_desc": "单局升到15级——经验珠吃得比饭还多",
+			"category": "grind",
 		"reward_type": "item",
 		"reward_id": "wuxing_pei",
 		"reward_name": "五行石",
 		"icon": "res://assets/art/item_wuxing_pei.png",
-	},
+		},
+		{
+			"id": "ach_grind_level20",
+			"name": "升级狂魔",
+			"cond_desc": "单局升到20级——你的经验槽怕不是连了水管",
+			"category": "grind",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_bengshan_jian.png",
+		},
 	# ---------------- 机缘：财富与生存 ----------------
-	{
-		"id": "ach_cult_duobao",
-		"name": "富甲一方",
-		"cond_desc": "单局金币达到250枚",
-		"category": "luck",
+		{
+			"id": "ach_cult_duobao",
+			"name": "富甲一方",
+			"cond_desc": "单局攒够250枚金币——你修的不是仙，是钱包",
+			"category": "luck",
 		"reward_type": "cultivator",
 		"reward_id": "duobao",
 		"reward_name": "收藏家",
 		"icon": "res://assets/art/cultivator_duobao_icon.png",
 	},
-	{
-		"id": "ach_cult_shoucainu",
-		"name": "日进斗金",
-		"cond_desc": "单局持有金币达到400枚",
-		"category": "luck",
+		{
+			"id": "ach_cult_shoucainu",
+			"name": "日进斗金",
+			"cond_desc": "单局持有400枚金币——这么多钱花不出去，急死个人",
+			"category": "luck",
 		"reward_type": "cultivator",
 		"reward_id": "shoucainu",
 		"reward_name": "守财奴",
 		"icon": "res://assets/art/cultivator_shoucainu_icon.png",
 	},
-	{
-		"id": "ach_item_hunyuan",
-		"name": "收益满载",
-		"cond_desc": "单局收益达到30点",
-		"category": "luck",
+		{
+			"id": "ach_item_hunyuan",
+			"name": "收益满载",
+			"cond_desc": "单局收益达到30点——你这是修仙还是搞理财？",
+			"category": "luck",
 		"reward_type": "item",
 		"reward_id": "hunyuan_zhu",
 		"reward_name": "万能珠",
 		"icon": "res://assets/art/item_hunyuan_zhu.png",
 	},
-	{
-		"id": "ach_cult_yaowang",
-		"name": "悬壶济世",
-		"cond_desc": "单局累计生命回复达到200点",
-		"category": "luck",
+		{
+			"id": "ach_cult_yaowang",
+			"name": "悬壶济世",
+			"cond_desc": "单局累计回复200点生命——你救的人比害的还多，这不科学",
+			"category": "luck",
 		"reward_type": "cultivator",
 		"reward_id": "yaowang",
 		"reward_name": "药王",
 		"icon": "res://assets/art/cultivator_yaowang_icon.png",
 	},
-	{
-		"id": "ach_cult_shixue",
-		"name": "浴血修罗",
-		"cond_desc": "单局累计承受伤害达到25次",
-		"category": "luck",
+		{
+			"id": "ach_cult_shixue",
+			"name": "浴血修罗",
+			"cond_desc": "单局挨打25次——你不是在挨打，是在收集勋章",
+			"category": "luck",
 		"reward_type": "cultivator",
 		"reward_id": "shixue",
 		"reward_name": "嗜血魔修",
 		"icon": "res://assets/art/cultivator_shixue_icon.png",
-	},
+		},
+		{
+			"id": "ach_luck_turtle",
+			"name": "铁王八",
+			"cond_desc": "单局挨打50次还能通关——你到底是肉做的还是铁打的？",
+			"category": "luck",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/cultivator_shixue_icon.png",
+		},
 ]
 
 ## 通关过的最高危险度对应的境界称号（-1 未通关返回空串）
@@ -435,9 +496,11 @@ static func unlock_hint_text(id: String, is_item: bool, prefix: String) -> Strin
 ## 判定单条成就在当前局与生涯累计下是否达成
 ## run_ctx 字段：victory(bool), endless(bool), danger(int), wave(int), level(int), kills(int),
 ##              max_stones(int), max_dodge(float), max_harvest(float),
-##              max_class_counts(Dictionary {器类tag: 同时上阵峰值}),
+##              damage_taken_count(int), hp_healed(float),
+##              max_summons(int), max_class_counts(Dictionary {器类tag: 同时上阵峰值}),
 ##              max_element_spread(int 单局同时上阵的五行元素种数峰值)
-## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int)
+## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int),
+##              wins_no_skill_enhance(int 无契合技能通关累计次数)
 static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: Dictionary) -> bool:
 	var victory := bool(run_ctx.get("victory", false))
 	var endless := bool(run_ctx.get("endless", false))
@@ -502,6 +565,22 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return float(run_ctx.get("hp_healed", 0.0)) >= 200.0 - 0.0001
 		"ach_cult_shixue":
 			return int(run_ctx.get("damage_taken_count", 0)) >= 25
+		"ach_feat_nodamage":
+			return victory and int(run_ctx.get("damage_taken_count", 0)) == 0
+		"ach_style_rebel":
+			return int(career_stats.get("wins_no_skill_enhance", 0)) >= 3
+		"ach_style_loner":
+			return victory and int(run_ctx.get("max_summons", 0)) == 0
+		"ach_style_omni":
+			var mcc := Dictionary(run_ctx.get("max_class_counts", {}))
+			for cls in WeaponData.CLASSES:
+				if int(mcc.get(cls, 0)) < 1:
+					return false
+			return true
+		"ach_grind_level20":
+			return level >= 20
+		"ach_luck_turtle":
+			return victory and int(run_ctx.get("damage_taken_count", 0)) >= 50
 	return false
 
 ## 成就进度短句：按生涯统计给出「当前进度」一句，供选人页解锁提示与成就卡点按详情复用。
@@ -566,6 +645,13 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 			return "单局最佳 %.0f/200 回复" % healed
 		"ach_cult_shixue":
 			return "单局承伤 %d/25 次" % hits
+		"ach_style_rebel":
+			var wne := int(career_stats.get("wins_no_skill_enhance", 0))
+			return "无契合通关 %d/3 次" % wne
+		"ach_grind_level20":
+			return "单局最高 Lv.%d/20" % level
+		"ach_luck_turtle":
+			return "单局承伤 %d/50 次" % hits
 	return ""
 
 ## 评估本局新达成的成就 ID 列表（已在 already_unlocked 中的不重复返回）

@@ -29,6 +29,23 @@ def fit_to_128(src_path: str, dst_path: str, size: int = 128) -> bool:
         print(f"[Error] {src_path} -> {dst_path}: {e}")
         return False
 
+COLD_SUFFIXES = ["_cold_v3", "_cold_v2", "_cold_v1"]
+
+
+def resolve_source(raw_dir: str, base_name: str) -> str:
+    """同名素材取最新画风版本：_cold_v3 > _cold_v2 > _cold_v1 > 基础名，都没有返回空串。
+
+    基础名往往是上一代画风（带场景底板），必须让冷冽版优先，否则重跑会把旧图刷回去。
+    """
+    stem = os.path.splitext(base_name)[0]
+    for suf in COLD_SUFFIXES:
+        p = os.path.join(raw_dir, f"{stem}{suf}.png")
+        if os.path.exists(p):
+            return p
+    p = os.path.join(raw_dir, base_name)
+    return p if os.path.exists(p) else ""
+
+
 def main():
     os.makedirs("assets/art", exist_ok=True)
     count = 0
@@ -39,11 +56,11 @@ def main():
         base = os.path.basename(p)
         clean_name = base
         # 解析基础名
-        for suffix in ["_cold_v3", "_cold_v2", "_cold_v1"]:
+        for suffix in COLD_SUFFIXES:
             if suffix in clean_name:
                 clean_name = clean_name.replace(suffix, "")
                 break
-        
+
         # 优先级：cold_v3 > cold_v2 > cold_v1 > 基础名
         if clean_name not in item_sources:
             item_sources[clean_name] = p
@@ -69,11 +86,12 @@ def main():
     os.makedirs(ui_dir, exist_ok=True)
     w_count = 0
     for battle_png in sorted(glob.glob("assets/art/weapon_*.png")):
-        src = os.path.join("assets_raw/images", os.path.basename(battle_png))
-        if fit_to_128(src, os.path.join(ui_dir, os.path.basename(battle_png)), 128):
+        src = resolve_source("assets_raw/images", os.path.basename(battle_png))
+        if src and fit_to_128(src, os.path.join(ui_dir, os.path.basename(battle_png)), 128):
             w_count += 1
     # sun_orb（金乌法球）同样是 48px 战斗画布 + UI 槽位复用，一并出变体
-    if fit_to_128("assets_raw/images/sun_orb.png", os.path.join(ui_dir, "sun_orb.png"), 128):
+    src = resolve_source("assets_raw/images", "sun_orb.png")
+    if src and fit_to_128(src, os.path.join(ui_dir, "sun_orb.png"), 128):
         w_count += 1
     print(f"已成功将 {w_count} 个武器 UI 图标重烘焙至 assets/art/ui/ (128x128)！")
 

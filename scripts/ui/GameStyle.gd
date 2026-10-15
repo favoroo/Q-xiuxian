@@ -130,7 +130,7 @@ static func rarity_color(rarity: Variant) -> Color:
 static func rarity_edge_color(rarity: Variant) -> Color:
     if rarity is Color:
         return _rarity_color_to_edge(rarity)
-    var r_str := String(rarity).to_lower()
+    var r_str := str(rarity).to_lower()
     match r_str:
         "legendary", "legend", "4":
             return FX_HDR_RARITY_LEGEND

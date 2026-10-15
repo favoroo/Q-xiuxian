@@ -226,8 +226,9 @@ func _find_target() -> Node2D:
 	var min_dist_sq := 99999999.0
 	for res in results:
 		var col = res["collider"]
-		if col and col.get_parent() and col.get_parent().has_method("take_damage"):
-			var enemy = col.get_parent() as Node2D
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent as Node2D
 			if enemy == null or enemy.is_in_group("herbs") or enemy.is_in_group("chests"):
 				continue
 			var d := global_position.distance_squared_to(enemy.global_position)
@@ -293,8 +294,8 @@ func _fire() -> void:
 		mtw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
 		mtw.chain().tween_callback(func(): muzzle_flash.visible = false)
 
-	# 炮口微粒喷射
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.6)
+	# 炮口微粒喷射（绕过受击限流闸，不抢占命中火花名额）
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.6, true)
 
 	core_sprite.modulate = Color(1.4, 1.35, 1.2)
 	var ftw := create_tween()

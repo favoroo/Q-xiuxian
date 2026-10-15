@@ -10,7 +10,7 @@ extends Node2D
 ## 淡出复用宿主 modulate（主四线先熄灯再归位 alpha，微弧吃第二段渐隐），不加灯不加粒子。
 
 ## HDR 超白核心：辉光阈值钉在 1.0，只有这条核心线溢出起辉，外层 alpha 假光晕保持 LDR 不双辉
-const CORE_COLOR := Color(2.4, 2.3, 1.9, 1.0)
+const CORE_COLOR := GameStyle.FX_HDR_LIGHTNING
 const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.42)
 const POOL_CAP := 16
 
@@ -18,7 +18,7 @@ const POOL_CAP := 16
 const ARC_AFTERGLOW_COUNT := 3     ## 微型电弧条数（计划 3-5 取下限，宁缺勿糊）
 const ARC_AFTERGLOW_LIFE := 0.2    ## 余韵窗口（s）
 const ARC_AFTERGLOW_LEN := 20.0    ## 单条微弧最大长度（px）
-const ARC_AFTERGLOW_WIDTH := 1.6   ## 微弧线宽（HDR 细芯）
+const ARC_AFTERGLOW_WIDTH := 1.3   ## 微弧线宽（HDR 细芯）
 
 static var _pool: Array[LightningBolt] = []
 static var _host: Node2D = null
@@ -77,10 +77,12 @@ func _ready() -> void:
 func _setup_lines() -> void:
 	if _line_glow != null:
 		return
-	_line_glow = _create_line(10.0, GLOW_COLOR)
-	_line_core = _create_line(3.2, CORE_COLOR)
-	_line_branch_glow = _create_line(6.0, GLOW_COLOR)
-	_line_branch_core = _create_line(1.8, CORE_COLOR)
+	# 2026-10-15 视觉克制化：基准线宽整体下调 ~30%（10.0/3.2/6.0/1.8 → 7.0/2.4/4.5/1.4），
+	# 多武器同屏时闪电链不再是最抢眼的常驻元素；width_mult 星升倍率不变，等比受益
+	_line_glow = _create_line(7.0, GLOW_COLOR)
+	_line_core = _create_line(2.4, CORE_COLOR)
+	_line_branch_glow = _create_line(4.5, GLOW_COLOR)
+	_line_branch_core = _create_line(1.4, CORE_COLOR)
 	for i in ARC_AFTERGLOW_COUNT:
 		_afterglow.append(_create_line(ARC_AFTERGLOW_WIDTH, CORE_COLOR))
 
@@ -109,23 +111,23 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	_line_glow.visible = true
 	_line_core.visible = true
 	_line_glow.points = main_points
-	_line_glow.width = 10.0 * width_mult
+	_line_glow.width = 7.0 * width_mult
 	_line_glow.default_color = tint_col
 
-	var core_c := CORE_COLOR if tint_col == GLOW_COLOR else Color(2.4, 2.3, 2.1, 1.0)
+	var core_c := CORE_COLOR if tint_col == GLOW_COLOR else GameStyle.FX_HDR_CORE
 	_line_core.points = main_points
-	_line_core.width = 3.2 * width_mult
+	_line_core.width = 2.4 * width_mult
 	_line_core.default_color = core_c
 
 	# 分支电弧赋值
 	if branch_points.size() >= 2:
 		_line_branch_glow.points = branch_points
-		_line_branch_glow.width = 6.0 * width_mult
+		_line_branch_glow.width = 4.5 * width_mult
 		_line_branch_glow.default_color = tint_col
 		_line_branch_glow.visible = true
 
 		_line_branch_core.points = branch_points
-		_line_branch_core.width = 1.8 * width_mult
+		_line_branch_core.width = 1.4 * width_mult
 		_line_branch_core.default_color = core_c
 		_line_branch_core.visible = true
 	else:

@@ -798,8 +798,8 @@ func _create_history_row(entry: Dictionary) -> Control:
 	else:
 		v_tag.text = " 阵亡 "
 	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_vic else GameStyle.BAD_DK))
-	# 朱砂暗徽章配暗底亮字（BAD 压 BAD_DK 会糊）
-	GameStyle.label(v_tag, 11, GameStyle.PAPER if is_vic else GameStyle.CHALK)
+	# 主蓝徽章配墨黑字，朱砂暗徽章配暗底亮字
+	GameStyle.label(v_tag, 11, GameStyle.INK_TEXT if is_vic else GameStyle.CHALK)
 	hbox.add_child(v_tag)
 
 	return row

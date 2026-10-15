@@ -110,7 +110,7 @@ static func _ensure_settings() -> void:
 	_crit_settings.font_size = 20
 	_crit_settings.font_color = GameStyle.GOLD  # 暴击 = 鎏金大字（玉色留给金币/增益读数）
 	_crit_settings.outline_size = 5
-	_crit_settings.outline_color = GameStyle.FX_HDR_CRIT  # 暴击绯金 HDR 描边（T-1.4/T-5.3 泛光起辉）
+	_crit_settings.outline_color = Color(0.04, 0.02, 0.0, 0.96)  # 纯色深描边（HDR 绯金描边太花，已回退）
 
 	_heal_settings = LabelSettings.new()
 	_heal_settings.font = GameStyle.body_font()
@@ -210,10 +210,10 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 	if n == null or not is_instance_valid(n):
 		return
 	n._start(
-		pos + Vector2(randf_range(-12.0, 12.0), -12.0),
+		pos + Vector2(_rand_range(-12.0, 12.0), -12.0),
 		text, settings, is_crit,
-		randf_range(-26.0, 26.0),
-		randf_range(32.0, 42.0) if not is_crit else randf_range(40.0, 52.0)
+		_rand_range(-26.0, 26.0),
+		_rand_range(32.0, 42.0) if not is_crit else _rand_range(40.0, 52.0)
 	)
 	if can_merge(combo_key, custom_text != ""):
 		n._combo_key = combo_key
@@ -258,12 +258,12 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	else:
 		# 闸内：只重播弹出动画与跟随位置，沿用当前文本（_start 的文本/样式去重保证零重绘）
 		text = n._text
-	n._start(
-		pos + Vector2(randf_range(-12.0, 12.0), -12.0),
-		text, settings, crit,
-		randf_range(-26.0, 26.0),
-		randf_range(40.0, 52.0) if crit else randf_range(32.0, 42.0)
-	)
+		n._start(
+			pos + Vector2(_rand_range(-12.0, 12.0), -12.0),
+			text, settings, crit,
+			_rand_range(-26.0, 26.0),
+			_rand_range(40.0, 52.0) if crit else _rand_range(32.0, 42.0)
+		)
 	return true
 
 func _ready() -> void:
@@ -378,3 +378,9 @@ static func drop_combo(combo_key: int, node: DamageNumber) -> void:
 		return
 	if _combos[combo_key]["n"] == node:
 		_combos.erase(combo_key)
+
+## 视觉微随机收口：优先走 GameManager.rng，测试或未就绪时降级
+static func _rand_range(from_val: float, to_val: float) -> float:
+	if GameManager.rng != null:
+		return GameManager.rng.randf_range(from_val, to_val)
+	return randf_range(from_val, to_val)

@@ -20,12 +20,18 @@ extends RefCounted
 ##    由 Player 在攒层/清空两个写点同步进 GameManager.shadow_amp_mult，别处不许另算。
 
 const GUARD_SEC := 0.12        ## 闪避成功给的「残影」短无敌（秒）：不这么改，贴身时闪避等于白闪
-const MAX_STACKS := 8          ## 影层上限：攒满后再闪不涨层，但会把最旧那层换成这一刀
-const STORE_RATIO := 0.55      ## 躲掉的那一下，有 55% 折成影袭伤害还回去
+const MAX_STACKS := 10         ## 影层上限：攒满后再闪不涨层，但会把最旧那层换成这一刀
+const STORE_RATIO := 0.55      ## 躲掉的那一下，有 55% 折成影袭伤害还回去（威力另有波次同步底数）
 const IFRAME_PER_STACK := 0.07 ## 踏影冲刺每层追加的无敌窗口（秒）
 const PUSH_PER_STACK := 110.0  ## 踏影冲刺每层追加的击退冲量（与武器击退同一条尺子）
 const BURST_RADIUS := 120.0    ## 影袭判定半径 = 落地环半径（像素）
-const AMP_PER_STACK := 0.05    ## 每层影给的武器伤害加成（攒着就生效，满层 ×1.40）
+const AMP_PER_STACK := 0.05    ## 每层影给的武器伤害加成（攒着就生效，满层 ×1.50）
+## 影爆威力底数（2026-10-15 用户口径「满层影爆要把周围一环小怪震死」）：
+## 影层存的是躲掉的接触伤（每波 ×1.06 复利），小怪生命却每波 ×1.16 复利——
+## 兑现只跟存伤走的话，满层影爆会随波次退化成挠痒（旧版 W10 仅及小怪血 ~10%）。
+## 随小怪基准血量提档至 11.5，底数同比例由 4.5 调整至 6.1，满层兑现恒 ≈ 参照小怪（邪修基血 24×11.5）的 ~128%：
+## 蜂群→灵异一档全秒，雪佣/毒妖/雷兽/蛛母这类厚皮留大半，精英/Boss 不受影响（钉点见 tests/ShadowStepCheck）。
+const BURST_POWER := 6.1
 
 ## 这一刀躲掉后存进影里的原始伤害（未打折，打折在兑现时算，便于改比例不动历史层）
 static func store_value(raw_damage: float) -> float:
@@ -53,9 +59,21 @@ static func stored_sum(ring: Array) -> float:
 static func amp_mult(ring: Array) -> float:
 	return 1.0 + float(ring.size()) * AMP_PER_STACK
 
-## 踏影落地时对每个圈内敌人造成的伤害
-static func burst_damage(ring: Array) -> float:
-	return stored_sum(ring) * STORE_RATIO
+## 踏影落地时对圈内每个敌人造成的伤害：存伤 × 还伤比例 × 威力 × 波次同步。
+## wave 由调用方传本局波次（Player 读 GameManager.wave_number，判据传同源读数）。
+static func burst_damage(ring: Array, wave: int) -> float:
+	return stored_sum(ring) * STORE_RATIO * wave_power(wave)
+
+## 波次同步系数：生命曲线 ÷ 伤害曲线的复利差值 × 威力底数。
+## 分段照抄 BalanceWave（≤20 波 1.16/1.06，深层 1.18/1.09）——以后调敌人成长曲线，
+## 影爆自动跟上，不用记得来这里改第二遍。
+static func wave_power(wave: int) -> float:
+	var w := maxi(wave, 1)
+	var main := float(mini(w, BalanceWave.DEEP_WAVE_THRESHOLD) - 1)
+	var deep := maxf(0.0, float(w - BalanceWave.DEEP_WAVE_THRESHOLD))
+	var hp := pow(BalanceWave.ENEMY_HP_GROWTH, main) * pow(BalanceWave.DEEP_HP_GROWTH, deep)
+	var dmg := pow(BalanceWave.ENEMY_DMG_GROWTH, main) * pow(BalanceWave.DEEP_DMG_GROWTH, deep)
+	return BURST_POWER * hp / dmg
 
 ## 踏影这次冲刺多出来的无敌秒数
 static func iframe_bonus(ring: Array) -> float:
@@ -73,8 +91,7 @@ static func card_lines() -> Array[String]:
 	return [
 		"攒：闪避成功 +1 层影，每层武器伤害 +%d%%（至多 %d 层）" % [
 			int(roundf(AMP_PER_STACK * 100.0)), MAX_STACKS],
-		"放：随时点「影爆」踩碎，把躲掉的伤害按 %d%% 还给周身敌人并推开" % [
-			int(roundf(STORE_RATIO * 100.0))],
+		"放：随时点「影爆」踩碎，把躲掉的伤害成倍还给周身敌人并推开",
 	]
 
 ## 有没有东西可兑现：空影层时冲刺保持原样，不放环、不查怪

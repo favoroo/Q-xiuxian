@@ -33,6 +33,9 @@ const DEEP_DMG_GROWTH := BalanceWave.DEEP_DMG_GROWTH
 const DEEP_HP_GROWTH := BalanceWave.DEEP_HP_GROWTH
 const DEEP_SWARM_PER_WAVE := BalanceWave.DEEP_SWARM_PER_WAVE
 const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
+const BATCH_CLEAR_COOLDOWN := BalanceWave.BATCH_CLEAR_COOLDOWN
+const BATCH_STALEMATE_TIMEOUT := BalanceWave.BATCH_STALEMATE_TIMEOUT
+const CONCURRENT_BATCH_MIN_WAVE := BalanceWave.CONCURRENT_BATCH_MIN_WAVE
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
 const MOB_KILL_EXP_MULT := BalanceWave.MOB_KILL_EXP_MULT
@@ -375,6 +378,10 @@ static func spawn_batch(wave: int, roll: float) -> int:
 static func wave_spawn_budget(wave: int) -> int:
 	return BalanceWave.wave_spawn_budget(wave)
 
+## 动态同屏敌人上限（分批清剿制）
+static func max_enemies_cap(wave: int) -> int:
+	return BalanceWave.max_enemies_cap(wave)
+
 ## 刷怪预算未花完部分的回合末经验补差（减潮不减收入）
 static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	return BalanceEconomy.budget_compensation_exp(shortfall, avg_exp)
@@ -560,9 +567,10 @@ static func spirit_orbit_angular_speed(
 	attack_speed_mult: float = 1.0,
 	synergy_haste_mult: float = 1.0,
 	in_combat: bool = false,
-	max_star: int = 1
+	max_star: int = 1,
+	orb_count: int = 1
 ) -> float:
-	return BalanceTargeting.spirit_orbit_angular_speed(base_speed, attack_speed_mult, synergy_haste_mult, in_combat, max_star)
+	return BalanceTargeting.spirit_orbit_angular_speed(base_speed, attack_speed_mult, synergy_haste_mult, in_combat, max_star, orb_count)
 
 static func compute_spirit_orbit(
 	orb_angles: Array,

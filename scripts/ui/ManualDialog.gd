@@ -659,7 +659,7 @@ func _rebuild_enemies_page() -> void:
 			var chips: Array = []
 			if seen:
 				for tag in EnemyGuideData.GUIDE[eid].get("tags", []):
-					chips.append([String(tag), GameStyle.GOLD_DK, GameStyle.CHALK])
+					chips.append([String(tag), GameStyle.GOLD, GameStyle.INK_TEXT])
 			var card := _make_entry_card(
 				"", EnemyGuideData.display_name(eid),
 				"" if seen else "未收录", GameStyle.GREY,

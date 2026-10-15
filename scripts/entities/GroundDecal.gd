@@ -17,6 +17,10 @@ const GLOW_HOLD_TIME := 0.15
 const GLOW_FADE_TIME := 0.40
 const GROUND_SORT_Y := -100000.0  ## 宿主 Y 排序钉死键：恒排在角色之前（同 PoisonPool.GROUND_SORT_Y）
 
+## 重绘节流（遵守 20Hz VisualRate 约定，杜绝每帧无脑重绘）
+const REDRAW_INTERVAL := 0.05
+var _redraw_timer: float = 0.0
+
 const CRACK_SHADOW := Color(0.02, 0.03, 0.05, 0.85)  ## 裂口深沉阴影底（线宽 2.8px）
 const CRACK_CORE := Color(0.65, 0.82, 0.95, 0.60)    ## 裂缝冷月反光亮芯（线宽 1.2px，石质断层高光）
 const CRACK_RIM := CRACK_CORE                         ## 兼容旧别名
@@ -99,6 +103,7 @@ func activate() -> void:
 	visible = true
 	_age = 0.0
 	_time_left = HOLD_TIME + FADE_TIME
+	_redraw_timer = 0.0
 	_generate_shape()
 	set_process(true)
 	queue_redraw()
@@ -180,7 +185,10 @@ func _process(delta: float) -> void:
 	if _time_left <= 0.0:
 		recycle()
 		return
-	queue_redraw()
+	_redraw_timer -= delta
+	if _redraw_timer <= 0.0:
+		_redraw_timer = REDRAW_INTERVAL
+		queue_redraw()
 
 ## 沿折线按生长进度截取子折线（0.12s 蔓延爆裂）
 static func _sample_crack_growth(pts: PackedVector2Array, grow: float) -> PackedVector2Array:
