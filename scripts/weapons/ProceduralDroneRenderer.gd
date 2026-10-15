@@ -3,6 +3,10 @@ extends Node2D
 
 ## 纯矢量环绕灵宝渲染器（冷冽国风）
 ## 为御灵系道具（灵蝶、寒泉玉莲、混元钟）提供细腻的自转、振翅与流光视觉
+## 核心起辉（2026-10-15 T-2.7）：各形态「核心一眼点」（中心亮点/灵蕊/灯焰/符印等小面积
+## 最亮层）接 GameStyle.FX_HDR 五行/通用超白低档 —— 分量 >1.0 触发 WorldEnvironment
+## glow 自动泛光，零额外开销。大面积本体一律保持 LDR 原色：环绕体多只同屏，
+## 全体起辉会糊成一团，只让每只灵宝的中心点发光提辨识度。
 
 enum DroneKind {
 	LINGDIE,        ## 灵蝶：碧翠灵羽、生机透光羽翼、双翅轻盈扑动
@@ -154,9 +158,9 @@ func _draw_spirit_butterfly() -> void:
 	draw_colored_polygon(right_hind, wing_col_base)
 	draw_polyline(right_hind, wing_col_edge, 1.0, true)
 
-	# 蝶身脊柱与灵须
+	# 蝶身脊柱与灵须（头部亮点接 FX_HDR_WOOD 起辉）
 	draw_line(Vector2(0, -7.0), Vector2(0, 7.0), Color(0.10, 0.14, 0.18), 2.0, true)
-	draw_circle(Vector2(0, -7.0), 1.6, Color(0.92, 0.95, 0.98))
+	draw_circle(Vector2(0, -7.0), 1.6, Color(GameStyle.FX_HDR_WOOD, 0.9))
 	# 触角
 	draw_line(Vector2(0, -7.0), Vector2(-4.0, -11.0), Color(0.92, 0.95, 0.98), 0.8, true)
 	draw_line(Vector2(0, -7.0), Vector2(4.0, -11.0), Color(0.92, 0.95, 0.98), 0.8, true)
@@ -182,9 +186,10 @@ func _draw_ice_lotus() -> void:
 		draw_colored_polygon(poly, col)
 		draw_polyline(PackedVector2Array([side_l, tip, side_r]), Color(0.95, 0.98, 1.0, 0.9), 1.0, false)
 
-	# 内层灵蕊
+	# 内层灵蕊（内亮层接 HDR 低档起辉：★2+ 暖金档 / ★1 冰蓝档，保住星级冷暖差）
 	draw_circle(Vector2.ZERO, inner_r, Color(0.20, 0.45, 0.70))
-	draw_circle(Vector2.ZERO, inner_r * 0.5, Color(1.0, 0.95, 0.80) if star >= 2 else Color(0.90, 0.98, 1.0))
+	draw_circle(Vector2.ZERO, inner_r * 0.5,
+		Color(GameStyle.FX_HDR_METAL, 0.75) if star >= 2 else Color(GameStyle.FX_HDR_WATER, 0.65))
 
 # ----------------- 3. 混元古钟 (玄铁青铜古钟 + 暗金云雷纹) -----------------
 func _draw_ancient_bell() -> void:
@@ -209,8 +214,8 @@ func _draw_ancient_bell() -> void:
 	draw_line(Vector2(-8.0, 0), Vector2(8.0, 0), Color(0.85, 0.75, 0.38, 0.8), 1.2, true)
 	draw_line(Vector2(-7.0, -4.0), Vector2(7.0, -4.0), Color(0.85, 0.75, 0.38, 0.6), 1.0, true)
 
-	# 钟口下沿口缘
-	draw_line(Vector2(-11.0, 9.0), Vector2(11.0, 9.0), Color(0.92, 0.82, 0.42), 2.0, true)
+	# 钟口下沿口缘（接 FX_HDR_METAL 古金起辉，钟的「一眼金」）
+	draw_line(Vector2(-11.0, 9.0), Vector2(11.0, 9.0), Color(GameStyle.FX_HDR_METAL, 0.85), 2.0, true)
 
 # ----------------- 4. 昊金轮 (自转金轮 + 六辐流光) -----------------
 func _draw_golden_wheel() -> void:
@@ -220,10 +225,10 @@ func _draw_golden_wheel() -> void:
 	for i in range(6):
 		var ang := float(i) / 6.0 * TAU + rot
 		draw_line(Vector2.ZERO, Vector2(cos(ang) * 11.0, sin(ang) * 11.0), rim, 1.6, true)
-	# 外轮圈与轴心
+	# 外轮圈与轴心（轴心亮盘接 FX_HDR_METAL 起辉）
 	draw_arc(Vector2.ZERO, 11.0, 0, TAU, 24, rim, 2.2, true)
-	draw_arc(Vector2.ZERO, 7.5, 0, TAU, 18, Color(0.98, 0.90, 0.55, 0.5), 1.0, true)
-	draw_circle(Vector2.ZERO, 3.0, Color(1.0, 0.92, 0.55))
+	draw_arc(Vector2.ZERO, 7.5, 0, TAU, 18, Color(GameStyle.FX_HDR_METAL, 0.35), 1.0, true)
+	draw_circle(Vector2.ZERO, 3.0, Color(GameStyle.FX_HDR_METAL, 0.9))
 	draw_circle(Vector2.ZERO, 1.4, Color(0.35, 0.26, 0.10))
 
 # ----------------- 5. 离火鸦 (火羽扑翼 + 焰尾) -----------------
@@ -242,23 +247,24 @@ func _draw_fire_crow() -> void:
 		])
 		draw_colored_polygon(wing, Color(0.85, 0.35, 0.10, 0.80))
 		draw_polyline(wing, flame, 1.1, true)
-	# 焰尾三条
+	# 焰尾三条（中条接 FX_HDR_FIRE 起辉，火是离火鸦的一眼点）
 	for i in range(-1, 2):
 		var sway := sin(_anim_time * 7.0 + float(i)) * 2.0
-		draw_line(Vector2(float(i) * 2.5, 4.0), Vector2(float(i) * 3.5 + sway, 12.0), flame, 1.4, true)
-	# 鸦身与金目
+		draw_line(Vector2(float(i) * 2.5, 4.0), Vector2(float(i) * 3.5 + sway, 12.0),
+			Color(GameStyle.FX_HDR_FIRE, 0.8) if i == 0 else flame, 1.4, true)
+	# 鸦身与金目（金目接 FX_HDR_FIRE 低档起辉）
 	draw_circle(Vector2.ZERO, 4.2, body)
 	draw_circle(Vector2(0, -5.2), 2.2, body)
-	draw_circle(Vector2(1.2, -5.8), 0.9, Color(1.0, 0.85, 0.30))
+	draw_circle(Vector2(1.2, -5.8), 0.9, Color(GameStyle.FX_HDR_FIRE, 0.85))
 
 # ----------------- 6. 玄武佩 (玄黄玉璧 + 云纹) -----------------
 func _draw_jade_pendant() -> void:
 	var bob := sin(_anim_time * 2.4) * 1.2
 	var off := Vector2(0, bob)
 	var jade := Color(0.42, 0.50, 0.30) if star < 2 else Color(0.62, 0.58, 0.30)
-	# 玉璧外环与内孔（璧形）
+	# 玉璧外环与内孔（璧形；内孔细环接 FX_HDR_EARTH 玄黄低档微光）
 	draw_arc(off, 10.5, 0, TAU, 24, jade, 3.4, true)
-	draw_arc(off, 4.0, 0, TAU, 16, Color(0.88, 0.80, 0.50), 1.4, true)
+	draw_arc(off, 4.0, 0, TAU, 16, Color(GameStyle.FX_HDR_EARTH, 0.55), 1.4, true)
 	# 璧面云纹两道
 	draw_arc(off + Vector2(0, -2.5), 6.8, PI * 0.15, PI * 0.85, 10, Color(0.90, 0.84, 0.55, 0.8), 1.0, true)
 	draw_arc(off + Vector2(0, 2.5), 6.8, PI * 1.15, PI * 1.85, 10, Color(0.90, 0.84, 0.55, 0.8), 1.0, true)
@@ -389,7 +395,7 @@ func _draw_yuan_ling() -> void:
 		var tick_a := float(i) * TAU / 4.0 + PI / 4.0
 		var tick_dir := Vector2(cos(tick_a), sin(tick_a))
 		draw_line(seal_pos + tick_dir * 2.3, seal_pos + tick_dir * 3.4, Color(gold_col, 0.75 * seal_a), 0.9, true)
-	draw_circle(seal_pos, 1.0, Color(1.0, 0.95, 0.65, seal_a))
+	draw_circle(seal_pos, 1.0, Color(GameStyle.FX_HDR_GOLD, seal_a))
 
 	# 9. 灵动双眸（端正微侧双眼：黑青瞳底 + 泽青灵光环 + 双高光点，炯炯有神）
 	var eye_a: float = (0.30 + 0.70 * clampf(hp_ratio, 0.0, 1.0)) * flicker
@@ -413,14 +419,14 @@ func _draw_yuan_ling() -> void:
 	draw_circle(_rot_one(Vector2(1.5, 1.8), pivot, bank_angle), 1.8, Color(0.98, 0.78, 0.80, 0.30 * spirit * flicker))
 	draw_circle(_rot_one(Vector2(9.5, 2.6), pivot, bank_angle), 2.2, Color(0.98, 0.78, 0.80, 0.35 * spirit * flicker))
 
-	# 10. 面前蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 膨胀发亮，伴随三颗旋绕光珠）
+	# 10. 面前蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 膨胀发亮，伴随三颗旋绕光珠；白芯接 FX_HDR_CORE 起辉）
 	if charge_ratio > 0.01:
 		var cp := _rot_one(Vector2(18.5, -1.0), pivot, bank_angle)
 		var cr: float = 2.0 + 5.0 * charge_ratio
 		var ca: float = charge_ratio * spirit * flicker
 		_soft_glow(cp, cr * 2.0, Color(0.52, 0.90, 0.98, 0.20 * ca))
 		draw_circle(cp, cr, Color(0.72, 0.95, 0.98, 0.65 * ca))
-		draw_circle(cp, cr * 0.55, Color(1.0, 1.0, 1.0, 0.90 * ca))
+		draw_circle(cp, cr * 0.55, Color(GameStyle.FX_HDR_CORE, 0.90 * ca))
 		for i in range(3):
 			var sa := _anim_time * 7.0 + float(i) * TAU / 3.0
 			draw_circle(cp + Vector2(cos(sa), sin(sa)) * (cr + 3.0), 1.0, Color(0.85, 0.98, 1.0, 0.7 * ca))
@@ -505,14 +511,14 @@ func _draw_golden_bell() -> void:
 	])
 	draw_colored_polygon(bell, Color(0.30, 0.26, 0.14))
 	draw_polyline(bell, gold, 1.4, true)
-	# 铃口缘与云雷横纹
+	# 铃口缘与云雷横纹（口缘亮线接 FX_HDR_METAL 起辉，铃的「一眼金」）
 	var rim_y := 7.0
-	draw_line(Vector2(-8.5, rim_y).rotated(sway), Vector2(8.5, rim_y).rotated(sway), Color(0.95, 0.86, 0.45), 1.8, true)
+	draw_line(Vector2(-8.5, rim_y).rotated(sway), Vector2(8.5, rim_y).rotated(sway), Color(GameStyle.FX_HDR_METAL, 0.85), 1.8, true)
 	draw_line(Vector2(-6.5, -2.0).rotated(sway), Vector2(6.5, -2.0).rotated(sway), Color(0.88, 0.76, 0.38, 0.7), 1.0, true)
-	# 铃舌（随摆反向荡）
+	# 铃舌（随摆反向荡；舌珠接 FX_HDR_METAL 低档起辉）
 	var clapper_x := -sway * 40.0
 	draw_line(Vector2(clapper_x * 0.4, 4.0).rotated(sway), Vector2(clapper_x, 10.0), gold, 1.4, true)
-	draw_circle(Vector2(clapper_x, 11.0), 1.8, Color(1.0, 0.90, 0.55))
+	draw_circle(Vector2(clapper_x, 11.0), 1.8, Color(GameStyle.FX_HDR_METAL, 0.85))
 	# 铃身符点
 	draw_circle(Vector2(0, -5.5).rotated(sway), 1.3, Color(0.98, 0.92, 0.60, 0.9))
 
@@ -537,9 +543,9 @@ func _draw_wood_puppet() -> void:
 	# 双腿
 	draw_line(off + Vector2(-1.8, 6.0), off + Vector2(-2.6, 11.0), vine, 1.6, true)
 	draw_line(off + Vector2(1.8, 6.0), off + Vector2(2.6, 11.0), vine, 1.6, true)
-	# 胸口生机符印（呼吸明暗）
+	# 胸口生机符印（呼吸明暗；接 FX_HDR_WOOD 青碧起辉）
 	var mark_a := 0.55 + 0.3 * sin(_anim_time * 3.0)
-	draw_circle(off + Vector2(0, 1.0), 1.6, Color(0.75, 1.0, 0.55, mark_a))
+	draw_circle(off + Vector2(0, 1.0), 1.6, Color(GameStyle.FX_HDR_WOOD, 0.8 * mark_a))
 	# 头顶灵芽
 	draw_line(off + Vector2(0, -11.0), off + Vector2(1.5, -13.5), Color(0.55, 0.95, 0.50), 1.3, true)
 
@@ -547,11 +553,11 @@ func _draw_wood_puppet() -> void:
 func _draw_ice_pearl() -> void:
 	var rot := _anim_time * 1.8
 	var ice := Color(0.55, 0.85, 1.0, 0.9) if star < 2 else Color(0.75, 0.95, 1.0)
-	# 珠体（半透明幽蓝）与内核
+	# 珠体（半透明幽蓝）与内核（雪亮冰核接 FX_HDR_WATER 低档起辉）
 	draw_circle(Vector2.ZERO, 7.0, Color(0.40, 0.70, 0.95, 0.45))
 	draw_circle(Vector2.ZERO, 7.0, Color(0.55, 0.85, 1.0, 0.12))
 	draw_arc(Vector2.ZERO, 7.0, 0, TAU, 20, ice, 1.4, true)
-	draw_circle(Vector2(0.5, -0.5), 2.2, Color(0.98, 1.0, 1.0, 0.95))
+	draw_circle(Vector2(0.5, -0.5), 2.2, Color(GameStyle.FX_HDR_WATER, 0.8))
 	# 六片环绕冰晶棱片（自转）
 	for i in range(6):
 		var ang := float(i) / 6.0 * TAU + rot
@@ -570,7 +576,6 @@ func _draw_fire_firefly() -> void:
 	var wing_flap := sin(_anim_time * 14.0)
 	var flap_x := 0.4 + 0.6 * absf(wing_flap)
 	var shell := Color(0.72, 0.26, 0.10) if star < 2 else Color(0.88, 0.36, 0.12)
-	var glow := Color(1.0, 0.62, 0.16, 0.9)
 	# 薄透火翼（两扇，扑动）
 	for side in [-1.0, 1.0]:
 		var wing := PackedVector2Array([
@@ -587,9 +592,9 @@ func _draw_fire_firefly() -> void:
 	])
 	draw_colored_polygon(abdomen, shell)
 	draw_polyline(abdomen, Color(1.0, 0.55, 0.20, 0.8), 1.0, true)
-	# 尾腹火光（呼吸闪烁）
+	# 尾腹火光（呼吸闪烁；灯焰接 FX_HDR_FIRE 起辉，萤虫的一眼点）
 	var lamp_a := 0.65 + 0.35 * sin(_anim_time * 6.0)
-	draw_circle(Vector2(0, 4.2), 2.2, Color(glow, lamp_a))
+	draw_circle(Vector2(0, 4.2), 2.2, Color(GameStyle.FX_HDR_FIRE, 0.85 * lamp_a))
 	draw_circle(Vector2(0, 4.2), 3.6, Color(1.0, 0.55, 0.15, 0.18 * lamp_a))
 	# 触须
 	draw_line(Vector2(-1.0, -5.6), Vector2(-2.6, -8.0), Color(0.45, 0.18, 0.10), 1.0, true)
@@ -599,7 +604,6 @@ func _draw_fire_firefly() -> void:
 func _draw_earth_stone() -> void:
 	var rot := sin(_anim_time * 1.6) * 0.15
 	var rock := Color(0.45, 0.38, 0.26) if star < 2 else Color(0.56, 0.47, 0.32)
-	var rune := Color(0.95, 0.80, 0.38)
 	# 石体（不规则六边山岩断面，微晃）
 	var stone := PackedVector2Array([
 		Vector2(-6.5, -8.0).rotated(rot), Vector2(3.5, -9.5).rotated(rot),
@@ -611,13 +615,13 @@ func _draw_earth_stone() -> void:
 	# 岩面裂纹两道
 	draw_line(Vector2(-4.0, -5.0).rotated(rot), Vector2(1.5, 1.0).rotated(rot), Color(0.28, 0.22, 0.14, 0.8), 1.0, true)
 	draw_line(Vector2(1.5, 1.0).rotated(rot), Vector2(-0.5, 6.5).rotated(rot), Color(0.28, 0.22, 0.14, 0.6), 1.0, true)
-	# 镇岳符印（山形三峰，发光呼吸）
+	# 镇岳符印（山形三峰，发光呼吸；接 FX_HDR_EARTH 玄黄起辉）
 	var mark_a := 0.6 + 0.3 * sin(_anim_time * 2.8)
 	var m := Vector2(0.5, -1.0).rotated(rot)
 	draw_polyline(PackedVector2Array([
 		m + Vector2(-3.2, 1.8), m + Vector2(-1.1, -1.8), m + Vector2(0.6, 0.6),
 		m + Vector2(2.0, -2.4), m + Vector2(3.8, 1.8)
-	]), Color(rune, mark_a), 1.2, true)
+	]), Color(GameStyle.FX_HDR_EARTH, 0.8 * mark_a), 1.2, true)
 
 # ----------------- 13. 剑灵 (半透明剑形精魂 + 灵气飘带) -----------------
 func _draw_sword_wisp() -> void:
@@ -639,8 +643,8 @@ func _draw_sword_wisp() -> void:
 	draw_colored_polygon(body, Color(blade, 0.55))
 	draw_polyline(body, edge, 1.1, true)
 	draw_line(Vector2(12.0, 0.0).rotated(tilt), Vector2(-5.0, 0.0).rotated(tilt), Color(1.0, 1.0, 1.0, 0.75), 0.9, true)
-	# 剑格与剑柄灵珠
+	# 剑格与剑柄灵珠（柄珠接 FX_HDR_CORE 低档微辉）
 	draw_line(Vector2(-5.5, -3.0).rotated(tilt), Vector2(-5.5, 3.0).rotated(tilt), edge, 1.3, true)
-	draw_circle(Vector2(-7.5, 0.0).rotated(tilt), 1.5, Color(0.90, 0.98, 1.0, 0.9))
-	# 剑尖灵光
-	draw_circle(Vector2(13.0, 0.0).rotated(tilt), 1.2 + 0.3 * sin(_anim_time * 6.0), Color(1.0, 1.0, 1.0, 0.85))
+	draw_circle(Vector2(-7.5, 0.0).rotated(tilt), 1.5, Color(GameStyle.FX_HDR_CORE, 0.7))
+	# 剑尖灵光（接 FX_HDR_CORE 白芯超白起辉，剑灵的一眼点）
+	draw_circle(Vector2(13.0, 0.0).rotated(tilt), 1.2 + 0.3 * sin(_anim_time * 6.0), Color(GameStyle.FX_HDR_CORE, 0.9))

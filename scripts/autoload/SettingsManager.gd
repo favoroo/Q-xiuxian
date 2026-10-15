@@ -134,6 +134,26 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": true,
 	},
+	{
+		"section": "display",
+		# T-6.1 热浪扭曲：可选高档位，back buffer copy 有掉帧风险，默认关。
+		# 开启后火锥/火雨区域画面热浪折射（HeatDistortionFx 屏幕空间折射）。
+		"key": "heat_distortion",
+		"title": "热浪扭曲",
+		"desc": "火锥与火雨区域的画面热浪扭曲（高端画质选项，低配设备可能掉帧，默认关闭）",
+		"type": "toggle",
+		"default": false,
+	},
+	{
+		"section": "display",
+		# T-6.2 受击屏幕冲击波：可选高档位，默认关。
+		# 开启后强敌重击命中玩家时从受击点扩散屏幕径向扭曲环。
+		"key": "screen_shockwave",
+		"title": "受击冲击波",
+		"desc": "遭受强敌重击时从受击点扩散屏幕径向扭曲环（高端画质选项，默认关闭）",
+		"type": "toggle",
+		"default": false,
+	},
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
 	# 归一化中心点（相对设计视口 0..1），换屏比不漂移；缩放为底尺寸倍率
@@ -644,8 +664,9 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 	if key == "tutorial_muted":
 		return _to_bool(val, false)
 	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
-			or key == "haptics" or key == "screen_flash" or key == "show_fps":
-		return _to_bool(val, key != "show_fps")
+			or key == "haptics" or key == "screen_flash" or key == "show_fps" \
+			or key == "fps_60" or key == "heat_distortion" or key == "screen_shockwave":
+		return _to_bool(val, key != "show_fps" and key != "heat_distortion" and key != "screen_shockwave")
 	if key == "shake_intensity":
 		var s := StringName(str(val))
 		if SHAKE_LEVEL_ORDER.has(s):

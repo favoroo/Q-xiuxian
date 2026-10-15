@@ -7,6 +7,8 @@ extends Node2D
 @onready var stats_dialog: Control = $UILayer/PlayerStatsDialog
 @onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
+var _vignette_copy: BackBufferCopy = null
+var _shockwave_tween: Tween = null
 var dust_particles: CPUParticles2D
 var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
@@ -42,6 +44,7 @@ func _ready() -> void:
 	_setup_atmosphere()
 	_setup_map_bounds()
 	_setup_stage_backdrop()
+	_setup_screen_shockwave()
 	# 开局在主菜单/选人阶段默认隐藏战斗 HUD 与虚拟摇杆，避免在主页背景中透出
 	$UILayer/GameHUD.visible = false
 	if joystick != null:
@@ -133,6 +136,8 @@ func _ready() -> void:
 	)
 	if not GameManager.screen_damage_pulsed.is_connected(_on_screen_damage_pulsed):
 		GameManager.screen_damage_pulsed.connect(_on_screen_damage_pulsed)
+	if not GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
+		GameManager.screen_shockwave_triggered.connect(trigger_screen_shockwave)
 
 	# 聚灵阵信号接线：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
 	var hud: GameHUD = $UILayer/GameHUD
@@ -238,6 +243,8 @@ func _apply_fps_limit() -> void:
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
 	if section == &"display" and key == &"fps_60":
 		_apply_fps_limit()
+	elif section == &"display" and key == &"screen_shockwave":
+		_sync_shockwave_channel()
 
 func _exit_tree() -> void:
 	# 归还 autoload 引用槽：场景释放后 Player / WaveSpawner / Joystick 已被释放，
@@ -247,6 +254,8 @@ func _exit_tree() -> void:
 	GameManager.joystick = null
 	if GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
 		GameManager.wave_changed.disconnect(_on_wave_changed_atmo)  # T-4.3 氛围监听随场景退订
+	if GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
+		GameManager.screen_shockwave_triggered.disconnect(trigger_screen_shockwave)
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
@@ -402,26 +411,108 @@ func _on_weapons_updated(weapons: Array) -> void:
 			joystick.visible = true
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
-	if not bool(SettingsManager.get_val(&"display", &"screen_flash", true)):
+	if bool(SettingsManager.get_val(&"display", &"screen_flash", true)):
+		if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+			var mat = vignette_rect.material as ShaderMaterial
+			if _vignette_tween != null and _vignette_tween.is_valid():
+				_vignette_tween.kill()
+			mat.set_shader_parameter("tint_color", tint)
+			mat.set_shader_parameter("vignette_opacity", 0.95)
+			_vignette_tween = create_tween()
+			# 死亡那一刻场景树随即被结算界面 paused，不放开的话红闪会冻在最红的一帧
+			_vignette_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+			_vignette_tween.tween_method(
+				func(alpha: float):
+					mat.set_shader_parameter("vignette_opacity", lerpf(0.5, 0.95, alpha)),
+				1.0, 0.0, dur
+			).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			_vignette_tween.tween_callback(func():
+				mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
+				mat.set_shader_parameter("vignette_opacity", 0.5)
+			)
+	# T-6.2 受击屏幕冲击波：受创时若为强敌/Boss命中或Boss波受创，触发径向扭曲环
+	if bool(SettingsManager.get_val(&"display", &"screen_shockwave", false)):
+		if tint.r > 0.7 and tint.b < 0.3:
+			if GameBalance.is_boss_wave(GameManager.wave_number) or _has_active_boss():
+				var hit_pos := Vector2.INF
+				if GameManager.player != null and is_instance_valid(GameManager.player):
+					hit_pos = GameManager.player.global_position
+				trigger_screen_shockwave(hit_pos, 1.0, 0.45)
+
+## 检查当前场上是否有首领/精英敌人活动
+func _has_active_boss() -> bool:
+	if GameBalance.is_boss_wave(GameManager.wave_number):
+		return true
+	for e in GameManager.live_enemies:
+		if e != null and is_instance_valid(e):
+			if e.get("boss_title") != null or e.get("is_boss") == true:
+				return true
+	return false
+
+## 初始化受击屏幕冲击波通道（T-6.2 可选高档位，默认关）：
+## 在 SoftVignette 前动态插入 BackBufferCopy，默认关时 copy_mode=DISABLED 零开销
+func _setup_screen_shockwave() -> void:
+	if vignette_rect != null and vignette_rect.get_parent() != null:
+		var parent := vignette_rect.get_parent()
+		_vignette_copy = BackBufferCopy.new()
+		_vignette_copy.name = "VignetteBackBufferCopy"
+		_vignette_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+		parent.add_child(_vignette_copy)
+		parent.move_child(_vignette_copy, vignette_rect.get_index())
+		_sync_shockwave_channel()
+
+## 同步冲击波通道状态：画质开关关闭时禁用 BackBufferCopy 与重置 shader 参数
+func _sync_shockwave_channel() -> void:
+	var on := bool(SettingsManager.get_val(&"display", &"screen_shockwave", false))
+	if _vignette_copy != null and is_instance_valid(_vignette_copy):
+		_vignette_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT if on else BackBufferCopy.COPY_MODE_DISABLED
+	if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+		var mat := vignette_rect.material as ShaderMaterial
+		if not on:
+			mat.set_shader_parameter("shockwave_strength", 0.0)
+			mat.set_shader_parameter("shockwave_progress", 0.0)
+
+## 触发受击屏幕冲击波（T-6.2 可选高档位，默认关）：
+## Boss 重击命中玩家时从受击点扩散径向扭曲环，复用 SoftVignette ColorRect 的 shader 通道。
+func trigger_screen_shockwave(world_pos: Vector2 = Vector2.INF, strength: float = 1.0, duration: float = 0.45) -> void:
+	if not bool(SettingsManager.get_val(&"display", &"screen_shockwave", false)):
 		return
 	if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
 		return
-	var mat = vignette_rect.material as ShaderMaterial
-	if _vignette_tween != null and _vignette_tween.is_valid():
-		_vignette_tween.kill()
-	mat.set_shader_parameter("tint_color", tint)
-	mat.set_shader_parameter("vignette_opacity", 0.95)
-	_vignette_tween = create_tween()
-	# 死亡那一刻场景树随即被结算界面 paused，不放开的话红闪会冻在最红的一帧
-	_vignette_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	_vignette_tween.tween_method(
-		func(alpha: float):
-			mat.set_shader_parameter("vignette_opacity", lerpf(0.5, 0.95, alpha)),
-		1.0, 0.0, dur
-	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_vignette_tween.tween_callback(func():
-		mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
-		mat.set_shader_parameter("vignette_opacity", 0.5)
+	if _vignette_copy != null and is_instance_valid(_vignette_copy):
+		_vignette_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+
+	var mat := vignette_rect.material as ShaderMaterial
+	# 归一化屏幕坐标 (0..1)
+	var center := Vector2(0.5, 0.5)
+	var vp := get_viewport()
+	if vp != null:
+		var target_pos := world_pos
+		if target_pos == Vector2.INF:
+			if GameManager.player != null and is_instance_valid(GameManager.player):
+				target_pos = GameManager.player.global_position
+		if target_pos != Vector2.INF:
+			var canvas_xform: Transform2D = vp.get_canvas_transform()
+			var screen_pos: Vector2 = canvas_xform * target_pos
+			var vs: Vector2 = vp.get_visible_rect().size
+			if vs.x > 0.0 and vs.y > 0.0:
+				center = Vector2(clampf(screen_pos.x / vs.x, 0.05, 0.95), clampf(screen_pos.y / vs.y, 0.05, 0.95))
+
+	mat.set_shader_parameter("shockwave_center", center)
+	mat.set_shader_parameter("shockwave_strength", strength)
+	mat.set_shader_parameter("shockwave_thickness", 0.08)
+
+	if _shockwave_tween != null and _shockwave_tween.is_valid():
+		_shockwave_tween.kill()
+	_shockwave_tween = create_tween()
+	_shockwave_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_shockwave_tween.tween_method(func(prog: float):
+		mat.set_shader_parameter("shockwave_progress", prog)
+	, 0.0, 1.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_shockwave_tween.tween_callback(func():
+		mat.set_shader_parameter("shockwave_strength", 0.0)
+		mat.set_shader_parameter("shockwave_progress", 0.0)
+		_sync_shockwave_channel()
 	)
 
 ## 灵田界碑与战台装饰：可活动范围（GameManager.MAP_HALF_EXTENT）之外压暗，

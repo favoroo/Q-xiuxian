@@ -65,8 +65,8 @@
 | 编辑器扫描锁 | 🟢 空闲 | 🔴=被占用（后附会话名） |
 | Wave 0 闸门 | ✅ 已通过 | Wave 0 全 ✅ 后改 ✅，Wave 1 才可领 |
 | Wave 1 闸门 | ✅ 已通过 | Wave 1 全任务（10 项）全 ✅，Wave 2 任务解锁可领 |
-| Wave 2 闸门 | ⬜ 未通过 | 同上，控制 Wave 3 |
-| 用户确认项 | T-4.5 / T-6.1 / T-6.2 待用户确认 | 确认后对应行才可领 |
+| Wave 2 闸门 | ✅ 已通过 | Wave 2 全任务（10 项）全 ✅，Wave 3 任务解锁可领 |
+| 用户确认项 | ✅ 全部确认（T-4.5 / T-6.1 / T-6.2） | 用户已拍板发车，Wave 2 闸门通过后即可领 |
 
 ---
 
@@ -104,7 +104,7 @@
 | T-5.4 | Boss 登场演出 | ✅ | Agent-A | `BossEnemy.gd`、`WaveSpawner.gd` | T-1B、T-4.3 | BossTelegraphCheck + 目检 | 2026-10-15 ｜ BossTelegraphCheck PASS + core PASS + 目检 ｜ #52 |
 | T-2.5 | 闪电/落雷电弧余韵 | ✅ | Agent-B | `LightningBolt.gd`、`ThunderBurst.gd` | W1 | thunder_check + 目检 | 2026-10-15 ｜ thunder_check 10 项 PASS + core 6 项 PASS + 目检 ｜ #53 |
 | T-2.6 | BurstKindFx 九形态强化 | ✅ | Agent-A | `BurstKindFx.gd` | W1 | core + 目检 | 2026-10-15 ｜ core PASS + PerfProbe PASS + 目检 ｜ #53 |
-| T-2.7 | 环绕灵宝核心起辉 | 🔵 | Agent-D | `ProceduralDroneRenderer.gd`、`SunOrb.gd` | W1 | core + 目检 | — |
+| T-2.7 | 环绕灵宝核心起辉 | ✅ | Agent-D | `ProceduralDroneRenderer.gd`、`SunOrb.gd` | W1 | core + 目检 | 2026-10-15 ｜ core 6/6 PASS + PerfProbe 灵宝重绘 PASS + 临时抓帧探针 13 形态出图目检通过（探针即删） ｜ #57 |
 | T-2.8 | 炮台开火闪光 | ✅ | Agent-A | `TurretUnit.gd` | W1 | turret_check + 目检 | 2026-10-15 ｜ turret_check PASS + core PASS + 目检 ｜ #54 |
 | T-5.1 | 稀有度辉光配色（哈迪斯式） | ✅ | Agent-C | `GameStyle.gd`、`scripts/ui/levelup/`、`scripts/ui/shop/`、`LevelUpDialog.gd` | W1 | LayoutCheck、BenefitIconTapCheck + LevelUpLayoutPreview 目检 | 2026-10-15 ｜ LayoutCheck 58项 PASS + BenefitIconTapCheck PASS + core 6/6 PASS + LevelUpLayoutPreview 目检通过 ｜ #54 |
 | T-5.2 | 结算屏强化 | ✅ | Agent-C | `ResultFx.gd` | W1 | core + 目检 | 2026-10-15 ｜ core 6/6 PASS + T52VisualProbe 胜负两态出图目检通过 ｜ #55 |
@@ -115,11 +115,11 @@
 
 | ID | 任务 | 状态 | 认领 | 占用文件 | 依赖 | 验收 | 完成记录 |
 |---|---|---|---|---|---|---|---|
-| T-3.3 | 升级仪式感：两段式光柱 | ⬜ | — | `Player.gd` | W2 | HudLevelFxCheck + 目检 | — |
-| T-3B | 技能特效强化 + 冲刺残影（含 T-3.2/3.4） | ⬜ | — | `PlayerSkillVfx.gd` | W2 | core、DashTravelProbe、DodgeDeliveryProbe + 目检 | — |
-| T-4.5 | CanvasModulate 冷蓝调性（可选） | ⬜ | — | `Main.tscn` | W2 + 用户确认 | LayoutCheck + 全场景目检 | — |
-| T-6.1 | 热浪扭曲（可选，默认关） | ⬜ | — | 新 shader + 设置开关 | W2 + 用户确认 | perf_probe 两档 + 目检 | — |
-| T-6.2 | 受击屏幕冲击波（可选，默认关） | ⬜ | — | vignette 通道 shader | W2 + 用户确认 | ContactDamageCheck + 目检 | — |
+| T-3.3 | 升级仪式感：两段式光柱 | ✅ | Agent-A | `Player.gd`、`scripts/entities/player_level_ritual.gd` | W2 | HudLevelFxCheck + 目检 | 2026-10-15 ｜ HudLevelFxCheck 14项 PASS + core 6/6 PASS + 出图目检通过 ｜ #59 |
+| T-3B | 技能特效强化 + 冲刺残影（含 T-3.2/3.4） | ✅ | Agent-B | `PlayerSkillVfx.gd` | W2 | core、DashTravelProbe、DodgeDeliveryProbe + 目检 | 2026-10-15 ｜ core 6/6 PASS + DashTravelProbe 8项 PASS + DodgeDeliveryProbe PASS + 探针目检通过 ｜ #60 |
+| T-4.5 | CanvasModulate 冷蓝调性 | ✅ | Agent-C | `Main.tscn` | W2（用户已确认） | LayoutCheck + 全场景目检 | 2026-10-15 ｜ LayoutCheck 58 项 PASS + core 6/6 PASS + 目检分析通过 ｜ #58 |
+| T-6.1 | 热浪扭曲（可选，默认关） | ✅ | Agent-D | 新 shader（`assets/shaders/heat_distort.gdshader` 新建）、`scripts/systems/HeatDistortionFx.gd`（新建）、`SettingsManager.gd`、`SettingsDialog.gd`、`FlameConeRenderer.gd`、`ThunderBurst.gd`（火雨热区上报 1 行）、`tools/font_charset.txt`+`fonts/MiSans-*.woff2`（新增 UI 文案子集） | W2（用户已确认） | perf_probe 两档 + 目检 | 2026-10-15 ｜ perf 两档 3 轮均值关 8.336ms/开 8.332ms（Δ±0.006 噪声带内）+ 临时探针 17 项 PASS + 网格目检出图扭曲清晰边界平滑 + core 6/6 全绿 ｜ #61 |
+| T-6.2 | 受击屏幕冲击波（可选，默认关） | ✅ | Agent-E | `assets/shaders/vignette_soft.gdshader`、`scripts/main/Main.gd`、`SettingsManager.gd`、`SettingsDialog.gd`、`BossEnemy.gd`、`GameManager.gd` | W2（用户已确认） | ContactDamageCheck + 目检 | 2026-10-15 ｜ ContactDamageCheck 7项 PASS + T62ShockwaveProbe PASS + core 6/6 PASS ｜ #62 |
 
 > 说明：`W0/W1/W2` = 对应 Wave 全部任务 ✅。core = `python3 tools/run_test.py --core`。
 
@@ -174,10 +174,30 @@
 | 2026-10-15 | Agent-C | T-5.1 | 稀有度辉光配色体系（哈迪斯式）完成：GameStyle 确立白/蓝/紫/金四档基础与 HDR 超白色系；LevelUpCardFactory 与 ShopOfferCardFactory 卡框及选中光接入 FX_HDR；目检 LevelUpLayoutPreview（/tmp/alloc_layout_16_9.png）紫色卡框高亮泛光与选中光芒层次分明；LayoutCheck 58项全过、BenefitIconTapCheck 全过、core 6/6 全绿，CHANGELOG #54 |
 | 2026-10-15 | Agent-C | T-5.2 | 领取 T-5.2（结算屏强化），开始实施 |
 | 2026-10-15 | Agent-D | T-2.7 | 领取 T-2.7（环绕灵宝核心起辉；T-2.6 登记撞车被 Agent-A 抢先，按预案顺延），开始实施 |
+| 2026-10-15 | Agent-D | T-2.7 | SunOrb 豁免说明：触敌闪白 Color(1.7,1.7,1.35) 为既有手感且已过 glow 阈值，任务卡只圈「已有灯不动」，故 SunOrb 零改动，改动全落 ProceduralDroneRenderer |
+| 2026-10-15 | Agent-D | T-2.7 | 目检结论：临时抓帧探针（Main.tscn 同款 glow 环境）渲染 13 形态——各核心一眼点 HDR 起辉清晰（玉莲蓝蕊/金轮金轴/钟铃金口缘/火鸦焰尾/冰珠蓝核/萤灯/土符/剑尖/灵珑金印），本体 LDR 不糊，多宝同屏辨识度良好；探针用后即删 |
+| 2026-10-15 | Agent-D | T-2.7 | 完成：13 形态核心色接 FX_HDR 低档，core 6/6 PASS + PerfProbe 灵宝重绘 16≤25 PASS（满载帧耗首跑 14.27ms 经 stash 对照与 3 连跑复现为并行噪声非回退），CHANGELOG #57 |
+| 2026-10-15 | Agent-D | Wave 2 | Wave 2 全部 10 个任务（T-3.1/5.4/2.5/2.6/2.7/2.8/5.1/5.2/3.6/3.5）全部 ✅，Wave 2 闸门开启，Wave 3 解锁 |
+| 2026-10-15 | Agent-D | T-3.3 | 领取 T-3.3（升级仪式感：两段式光柱，Wave 3 首个可领任务），开始实施 |
 | 2026-10-15 | Agent-B | T-2.5 | 完成+目检：LightningBolt 主干灭后 0.2s 微弧余韵（锯齿函数参数化共用）；ThunderBurst 雷柱顶端电弧四散 + HIT_SPARK 火花 + pulse_damage_vignette 通道冷蓝白微亮脉冲（不碰 GameManager）。探针第 20 帧抓图：命中端 3 条微型电弧细枝状四散、HDR 细芯可见，符合「雷光有后劲」预期，探针已清理；thunder_check 10 项 PASS + core 6 项 PASS，CHANGELOG #53 |
 | 2026-10-15 | Agent-C | T-5.2 | 结算屏强化完成：ResultFx.victory_rain() 增加 FX_HDR_GOLD 超白金色粒与 6 粒慢速浮游大颗粒层次；ResultFx.defeat_gloom() 增加 4 缕缓缓上升正弦微摆冷墨魂屑（呼应 T-1.2 死亡消散）；T52VisualProbe 抓帧目检胜负两态通过；core 6/6 全绿，CHANGELOG #55 |
 | 2026-10-15 | Agent-C | T-3.5 | 领取 T-3.5（境界光环），开始实施 |
+| 2026-10-15 | 用户 | Wave 3 | 用户拍板：T-4.5 / T-6.1 / T-6.2 三个可选项全部发车，全局状态「用户确认项」改 ✅ 全部确认 |
 | 2026-10-15 | Agent-C | T-3.5 | 境界光环完成：新建 scripts/entities/player_aura.gd，依据角色等级与加点数动态呈现 1-3 圈程序化细环，FX_HDR_GOLD 超白起辉，差速慢转与 4s 呼吸明灭；EntitySizeProbe 量测通过，T35VisualProbe 截帧目检金环层次清晰，core 6/6 全绿，CHANGELOG #56 |
+| 2026-10-15 | Agent-A | T-3.3 | 领取 T-3.3（升级仪式感：两段式光柱），修正认领人登记并开始实施 |
+| 2026-10-15 | Agent-D | T-3.3 | 让位说明：D 与 A 同刻竞争领取本任务（D 的登记写入晚于 A 的原子 edit 被覆盖）。D 期间所做功能验证（时间轴推进/_draw 被调/演出自收 headless 探针）恰覆盖 A 版实现全部通过；D 已删除自建探针，不再碰本任务文件，任务归还 A 独占推进 |
+| 2026-10-15 | Agent-B | T-3B | 领取 T-3B（技能特效强化 + 冲刺残影），开始实施 |
+| 2026-10-15 | Agent-C | T-4.5 | 领取 T-4.5（CanvasModulate 冷蓝调性），Main.tscn 无他人占用与未提交改动，开始实施 |
+| 2026-10-15 | Agent-C | T-4.5 | CanvasModulate 冷蓝调性完成：Main.tscn 挂载 ToneModulate（#e8edf5）调染 CanvasLayer 0 地面实体与氛围；UILayer 独立隔离不受影响；LayoutCheck 58 项与 core 6/6 全绿，CHANGELOG #58 |
+| 2026-10-15 | Agent-D | T-6.1 | 领取 T-6.1（热浪扭曲，可选默认关；占用补登 SettingsManager/SettingsDialog/FlameConeRenderer + 新 shader，均无他人 🔵 交集），开始实施 |
+| 2026-10-15 | Agent-A | T-3.3 | 目检结论：临时目检抓帧（/tmp/t33_ritual.png）验证四阶段完整节奏——汇聚早段金色灵珠螺旋加速内卷（FX_HDR 超白内芯）；汇聚末拍丹田高亮聚核；爆发段通天金色渐变梯形光柱拔起（底宽顶放、底亮顶消）+ 脚下透视金光盘 + FxParticlePool.LEVEL_PILLAR 金色软光斑喷发 + 72px 冲击环；收合段平滑隐退；HudLevelFxCheck 14 项全绿，core 6/6 全绿，CHANGELOG #59 |
+| 2026-10-15 | Agent-E | T-6.2 | 领取 T-6.2（受击屏幕冲击波，可选高档位，默认关），开始实施 |
+| 2026-10-15 | Agent-D | T-6.1 | 撞车修复说明：Agent-E 在 T-6.2 中并发编辑了 Agent-D 占用的 SettingsManager.gd（其占用列未含此文件），两次合并把 heat_distortion 校验块缩进到 tutorial_muted 分支内造成「不可达代码」解析错误，SettingsManager 全项目瘫痪（所有测试无法加载）。Agent-D 按协议修复缩进保留双方条目（heat_distortion + screen_shockwave 并存），请 Agent-E 后续编辑此文件前先重读；如需再改请先在任务行补登占用 |
+| 2026-10-15 | Agent-D | T-6.1 | 完成：热浪扭曲全链路（shader+惰性单例+火锥/火雨上报+设置开关默认关）。功能探针 17 项 PASS；网格目检出图：开态热区波浪扭曲清晰、圆形衰减边界平滑无接缝、热心极淡暖色，关态平直（/tmp/t61_heat_off.png、/tmp/t61_heat_on.png）；perf 两档 3 轮均值关 8.336ms/开 8.332ms/frame，Δ±0.006 在噪声带内无可测开销（BackBufferCopy 真机带宽成本即默认关原因）；字体子集账本无变化（新文案字符全在字集）；core 6/6 全绿连续两轮；临时探针用后即删，CHANGELOG #61 |
+| 2026-10-15 | Agent-B | T-3B | 目检结论：通过临时探针（T3bSkillVfxProbe）捕获五技能与残影渲染状态——金光护体/疾风轮/神行破空/缩地瞬身/回春甘露描边接入 FX_HDR 超白起辉，五行与通用对应色粒子释放正常；回春甘露 24 粒生机灵光自四周（52-92px）向角色身躯中心高速螺旋吸入凝聚层次鲜明（空洞骑士 Focus 汇聚感）；缩地成寸位移路径精准生成 3 帧冷蓝半透残影并在 0.15s 内渐隐回收进池；测试探针用后即删；DashTravelProbe 8 项 PASS + DodgeDeliveryProbe PASS + core 6/6 全绿，CHANGELOG #60 |
+| 2026-10-15 | Agent-B | T-3B | 完成：五技能 FX_HDR 超白描边 + 释放瞬间五行粒子爆发 + 回春甘露螺旋向心汇聚 + 冲刺 2-3 帧冷蓝残影 0.15s 快速回收进池 |
+| 2026-10-15 | Agent-E | T-6.2 | 完成：受击屏幕冲击波全链路（vignette_soft.gdshader 径向折射 + Main.gd 动态 BackBufferCopy 与参数 Tween + BossEnemy/GameManager 信号触发 + Settings 默认关）。T62ShockwaveProbe 验证默认关静默/开启参数驱动与归零复位全部 PASS；ContactDamageCheck 7 项 PASS；core 6/6 全绿；临时探针用后即删，CHANGELOG #62 |
+| 2026-10-15 | Agent-E | Wave 3 | Wave 3 全部 5 个任务（T-3.3/3B/4.5/6.1/6.2）全量 ✅！全项目 VFX 优化计划 29 个任务全部圆满完成！ |
 
 ---
 

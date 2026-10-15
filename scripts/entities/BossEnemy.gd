@@ -441,6 +441,7 @@ func _resolve_single_sky_fire(pos: Vector2, player: Node2D) -> void:
 	AudioManager.play_sfx("enemy_slam", 0.9)
 	if player != null and is_instance_valid(player) and player.global_position.distance_to(pos) <= GameBalance.BOSS_SKY_FIRE_RADIUS:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SKY_FIRE_DMG_MULT), pos)
+		GameManager.trigger_screen_shockwave(player.global_position)
 
 # ---------------- 招式 7：震地冲击（含近远派生） ----------------
 
@@ -472,6 +473,7 @@ func _resolve_slam(player: Node2D = null) -> void:
 		player = GameManager.player
 	if player != null and is_instance_valid(player) and player.global_position.distance_to(global_position) <= GameBalance.BOSS_SLAM_RADIUS:
 		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_SLAM_DMG_MULT), global_position)
+		GameManager.trigger_screen_shockwave(player.global_position)
 	# 二阶段或魔尊：震地炸裂顺发 12 颗外散冲击火球
 	if _phase2 or final_boss:
 		_fire_mini_ring(12, 280.0, 1.2)

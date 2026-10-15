@@ -35,6 +35,8 @@ const HASTE_WHEEL_RX := 26.0
 const HASTE_WHEEL_RY := 10.0
 
 const GHOST_POOL_CAP := 12                  ## 图集残影池上限
+const GHOST_DURATION := 0.15                ## 冲刺/瞬身残影寿命（0.15s 迅速渐隐回收，杜绝长拖尾）
+const GHOST_COLOR_COLD_BLUE := Color(0.45, 0.78, 1.15, 0.50) ## 冷蓝半透剪影残影
 
 # ---------------- 运行时状态 ----------------
 @onready var player: CharacterBody2D = get_parent() as CharacterBody2D
@@ -66,6 +68,7 @@ var dash_flash_timer: float = 0.0
 var dash_crit_timer: float = 0.0
 var dash_total_dur: float = 0.16
 var dash_dir: Vector2 = Vector2.DOWN
+var _dash_ghost_count: int = 0  ## 冲刺位移路径残影计数（位移全程精准控在 2-3 帧）
 
 # 5. 回春术状态
 var renewal_progress: float = -1.0  ## >=0 播放回春法阵与生机光柱 (0.0 -> 1.0)
@@ -168,9 +171,13 @@ func on_dash_start(direction: Vector2, distance: float, duration: float, crit_wi
 	dash_total_dur = maxf(duration, 0.05)
 	dash_flash_timer = dash_total_dur + 0.10
 	dash_crit_timer = maxf(crit_window, dash_flash_timer)
+	_dash_ghost_count = 1
 	_notify_procedural_view("dash", true, 1.0)
-	# 生成瞬身残影
-	spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.85), 0.28)
+	# 释放瞬间触发对应色粒子（缩地成寸：庚金古金 / FX_HDR_METAL）
+	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "metal", 1.0)
+	# 生成瞬身剪影残影（冷蓝半透，0.15s 迅速渐隐进池，不做长拖尾）
+	spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 	queue_redraw()
 
 ## 神行术激活
@@ -179,7 +186,11 @@ func on_gale_start(duration: float) -> void:
 	gale_timer = duration
 	gale_trail_timer = 0.0
 	_notify_procedural_view("gale", true, 1.0)
-	spawn_ghost(Color(GameStyle.JADE_EDGE, 0.75), 0.25)
+	# 释放瞬间触发对应色粒子（神行术：灵木青碧 / FX_HDR_WOOD）
+	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "wood", 1.0)
+	# 身法残影（冷蓝半透，0.15s 快速回收）
+	spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 	queue_redraw()
 
 ## 疾风咒激活
@@ -190,6 +201,9 @@ func on_haste_start(duration: float) -> void:
 	haste_rot = 0.0
 	haste_particle_timer = 0.0
 	_notify_procedural_view("haste", true, 1.0)
+	# 释放瞬间触发对应色粒子（疾风咒：玄水灵蓝 / FX_HDR_WATER）
+	var center_pos: Vector2 = player.global_position + (Vector2(0.0, HASTE_FEET.y * _body_scale.y) if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "water", 1.0)
 	queue_redraw()
 
 ## 金光护体激活
@@ -203,22 +217,31 @@ func on_aegis_start(duration: float) -> void:
 	aegis_shatter_progress = -1.0
 	aegis_shatter_sparks.clear()
 	_notify_procedural_view("aegis", true, 1.0)
+	# 释放瞬间触发对应色粒子（金光护体：浩然金 / FX_HDR_GOLD）
+	var center_pos: Vector2 = player.global_position + (Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y) if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "gold", 1.1)
 	queue_redraw()
 
-## 回春术施放
+## 回春术施放（改灵光四周螺旋汇聚：空洞骑士 Focus 汇聚感）
 func on_renewal_cast() -> void:
 	renewal_progress = 0.0
 	renewal_particles.clear()
 	_notify_procedural_view("renewal", true, 1.0)
-	for i in range(16):
-		var ang := float(i) * (TAU / 16.0)
+	# 释放瞬间触发对应色粒子（回春甘露：生机碧翠 / FX_HDR_HEAL）
+	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "heal", 1.0)
+	# 24 粒生机灵光从四周外圈向角色身躯螺旋汇聚
+	for i in range(24):
+		var ang := float(i) * (TAU / 24.0) + randf_range(-0.15, 0.15)
 		renewal_particles.append({
 			"ang": ang,
-			"radius": randf_range(14.0, 36.0),
-			"y": randf_range(10.0, 24.0),
-			"speed_y": randf_range(110.0, 160.0),
-			"rot_speed": randf_range(3.2, 5.8),
-			"size": randf_range(1.5, 3.0)
+			"init_ang": ang,
+			"init_radius": randf_range(52.0, 92.0),
+			"radius": randf_range(52.0, 92.0),
+			"y_offset": randf_range(-8.0, 18.0),
+			"rot_speed": randf_range(4.5, 7.5),
+			"size": randf_range(1.8, 3.2),
+			"wobble": randf_range(-0.3, 0.3)
 		})
 	queue_redraw()
 
@@ -410,31 +433,45 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 			gale_active = false
 			_notify_procedural_view("gale", false)
 		else:
-			# 移动中产生残影
+			# 移动中产生残影（克制间隔 0.12s，单帧寿命 0.15s，任何时刻场上最多 1-2 具，不做长拖尾）
 			if is_moving and velocity.length_squared() > 1600.0:
 				gale_trail_timer -= delta
 				if gale_trail_timer <= 0.0:
-					gale_trail_timer = 0.08
-					spawn_ghost(Color(GameStyle.JADE_EDGE, 0.55), 0.22)
+					gale_trail_timer = 0.12
+					spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 
 	# 6. 缩地成寸
 	if dash_flash_timer > 0.0:
 		needs_redraw = true
 		dash_flash_timer -= delta
-		if is_moving and fmod(dash_flash_timer, 0.04) < delta:
-			spawn_ghost(Color(GameStyle.GOLD_EDGE, 0.65), 0.20)
+		# 在冲刺位移路径上留 2-3 帧剪影残影（连同起点共 3 帧：起始帧、半程帧、终点帧，0.15s 迅速渐隐回收进池）
+		var elapsed := (dash_total_dur + 0.10) - dash_flash_timer
+		if _dash_ghost_count == 1 and elapsed >= dash_total_dur * 0.45:
+			_dash_ghost_count = 2
+			spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
+		elif _dash_ghost_count == 2 and elapsed >= dash_total_dur * 0.85:
+			_dash_ghost_count = 3
+			spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
 	if dash_crit_timer > 0.0:
 		dash_crit_timer -= delta
 		if dash_crit_timer <= 0.0:
 			_notify_procedural_view("dash", false)
 
-	# 7. 回春术
+	# 7. 回春术（空洞骑士 Focus 汇聚感：四周灵光向身躯中心螺旋收聚）
 	if renewal_progress >= 0.0:
 		needs_redraw = true
-		renewal_progress += delta * 1.7  ## 约 0.58s 走完
+		renewal_progress += delta * 1.55  ## 约 0.64s 走完汇聚与爆发
+		var p_prog := clampf(renewal_progress, 0.0, 1.0)
 		for p in renewal_particles:
-			p["y"] = float(p["y"]) - float(p["speed_y"]) * delta
-			p["ang"] = float(p["ang"]) + float(p["rot_speed"]) * delta
+			var init_r: float = float(p.get("init_radius", 70.0))
+			var rot_spd: float = float(p.get("rot_speed", 6.0))
+			# 螺旋收拢：半径按非线性加速收拢至身躯中心，角度高速旋转汇聚
+			p["radius"] = init_r * (1.0 - pow(p_prog, 1.35))
+			p["ang"] = float(p["init_ang"]) + rot_spd * p_prog * TAU
+			# 垂直方向向身躯中心平滑收聚
+			var init_y: float = FEET_CENTER.y + float(p.get("y_offset", 0.0))
+			var target_y: float = BODY_CENTER.y * _body_scale.y
+			p["cur_y"] = lerpf(init_y, target_y, pow(p_prog, 1.25))
 		if renewal_progress >= 1.0:
 			renewal_progress = -1.0
 			renewal_particles.clear()
@@ -715,7 +752,7 @@ func _draw_vector_ghosts() -> void:
 ## （不环身画法阵、不遮角色，与金光护体的椭球罩构图彻底区分）
 func _draw_haste_fx() -> void:
 	var col_main := Color(GameStyle.GOLD, 0.82)       # 主蓝
-	var col_edge := Color(GameStyle.GOLD_EDGE, 0.95)  # 霜华亮蓝
+	var col_edge := Color(GameStyle.FX_HDR_WATER, 0.95)  # 霜华亮蓝（接 FX_HDR_WATER 超白起辉描边）
 	# 几何随角色体型插槽缩放（脚底锚点随身高、轮径/摆幅随体宽）
 	var bs := _body_scale
 	var feet := Vector2(0.0, HASTE_FEET.y * bs.y)
@@ -776,7 +813,7 @@ func _draw_haste_fx() -> void:
 ## 绘制【神行术】：脚底御风双层青轮 + 身侧破风流光飘带
 func _draw_gale_wind() -> void:
 	var wave := sin(gale_wind_phase) * 2.2
-	var col_edge := Color(GameStyle.JADE_EDGE, 0.92)
+	var col_edge := Color(GameStyle.FX_HDR_WOOD, 0.92)  # 接 FX_HDR_WOOD 超白青碧描边
 	var col_main := Color(GameStyle.JADE, 0.75)
 
 	# 1. 脚底御风大青轮（透视双层风环与破风角标）
@@ -812,8 +849,8 @@ func _draw_gale_wind() -> void:
 func _draw_dash_cone() -> void:
 	var cone_dir := dash_dir
 	var ratio := clampf(dash_flash_timer / (dash_total_dur + 0.10), 0.0, 1.0)
-	var col_outer := Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, ratio * 0.95)
-	var col_core := Color(1.0, 1.0, 1.0, ratio * 0.98)
+	var col_outer := Color(GameStyle.FX_HDR_METAL.r, GameStyle.FX_HDR_METAL.g, GameStyle.FX_HDR_METAL.b, ratio * 0.95) # 接 FX_HDR_METAL 古金描边
+	var col_core := Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, ratio * 0.98)   # 接 FX_HDR_CORE 剑芒白芯
 
 	# 1. 中心主破障剑芒裂痕
 	var tip := BODY_CENTER + cone_dir * (52.0 * ratio)
@@ -867,7 +904,7 @@ func _draw_aegis_shield() -> void:
 		var s_ry := ry * pop * breathe * _body_scale.y
 		var c := Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y)
 
-		var col_edge := GameStyle.AURUM_EDGE   # 暖金亮边
+		var col_edge := GameStyle.FX_HDR_GOLD  # 接 FX_HDR_GOLD 超白浩然金描边
 		var col_main := GameStyle.AURUM        # 暖金主色
 
 		# 1. 罩体半透明填充（极低 alpha，通透不糊人）
@@ -953,38 +990,40 @@ func _back_out(t: float) -> float:
 	var x := t - 1.0
 	return 1.0 + c3 * x * x * x + c1 * x * x
 
-## 绘制【回春术】：地面九品青莲生机甘露阵 + 穿透升华的生机光羽（彻底剔除绿色大光罩覆盖）
+## 绘制【回春术】：灵光四周螺旋汇聚（空洞骑士 Focus 汇聚感） + 九品生机甘露阵
 func _draw_renewal_fx() -> void:
 	var p := renewal_progress
 	var alpha := 1.0 - p
 	var r := 16.0 + p * 36.0
 
-	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环）
-	var ring_col := Color(GameStyle.GOOD.r, GameStyle.GOOD.g, GameStyle.GOOD.b, alpha * 0.95)
+	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环，描边接 FX_HDR_HEAL 起辉）
+	var ring_col := Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, alpha * 0.95)
 	draw_arc(FEET_CENTER, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
-	draw_arc(FEET_CENTER, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(1.0, 1.0, 1.0, alpha * 0.85), 1.5, true)
+	draw_arc(FEET_CENTER, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
 
 	# 莲瓣角标
 	for i in range(8):
 		var la := float(i) * (TAU / 8.0) + p * 0.8
 		var lp := FEET_CENTER + Vector2(cos(la) * r, sin(la) * (r * 0.42))
-		draw_circle(lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), Color.WHITE)
+		draw_circle(lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE)
 
-	# 2. 旋升穿透身躯的甘露光羽与灵气微粒（从脚底直冲云霄，化作点点甘霖）
+	# 2. 空洞骑士 Focus 式：灵光自四周外圈向角色身躯中心螺旋汇聚
 	for pt in renewal_particles:
-		var cur_y := float(pt["y"])
-		var cur_r := float(pt["radius"]) * (1.0 - p * 0.2)
-		var ang := float(pt["ang"])
-		var pos := Vector2(cos(ang) * cur_r, cur_y)
-		var p_alpha := clampf((1.0 - p) * 1.3, 0.0, 1.0)
-		var p_sz: float = float(pt.get("size", 2.2)) * (1.0 - p * 0.3)
+		var cur_r: float = float(pt.get("radius", 30.0))
+		var ang: float = float(pt.get("ang", 0.0))
+		var cur_y: float = float(pt.get("cur_y", BODY_CENTER.y))
+		var wobble: float = float(pt.get("wobble", 0.0))
+		var pos := Vector2(cos(ang) * (cur_r + wobble * 4.0), cur_y)
+		var p_alpha := clampf((1.0 - p) * 1.25, 0.0, 1.0)
+		var p_sz: float = float(pt.get("size", 2.2)) * (0.8 + 0.4 * sin(ang * 2.0))
 
-		# 翠绿甘露光羽 + 纯白灵核
-		draw_circle(pos, p_sz, Color(GameStyle.GOOD.r, GameStyle.GOOD.g, GameStyle.GOOD.b, p_alpha * 0.9))
-		draw_circle(pos, p_sz * 0.55, Color(1.0, 1.0, 1.0, p_alpha * 0.95))
-		# 向上拖曳的甘霖光丝
-		var tail_p := pos + Vector2(0.0, float(pt["speed_y"]) * 0.06 * (1.0 - p))
-		draw_line(tail_p, pos, Color(GameStyle.GOOD.r, GameStyle.GOOD.g, GameStyle.GOOD.b, p_alpha * 0.65), 1.2)
+		# 翠绿生机灵光（FX_HDR_HEAL 起辉）+ 白炽灵核（FX_HDR_CORE）
+		draw_circle(pos, p_sz, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.9))
+		draw_circle(pos, p_sz * 0.55, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, p_alpha * 0.95))
+		# 螺旋向心汇聚的流光拖尾
+		var tail_dir := Vector2(cos(ang - 0.28), 0.0) * (cur_r * 0.15)
+		var tail_p := pos + tail_dir
+		draw_line(tail_p, pos, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.55), 1.2)
 
 ## 绘制【药爆】：摔碎药罐的地面药液波纹、四散飞沫与升华药气
 func _draw_elixir_fx() -> void:

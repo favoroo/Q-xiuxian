@@ -242,6 +242,10 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
 	_add_toggle_row(vbox, "fps_60", "流畅模式", "开启后帧率上限 60（操作与画面更顺滑，略耗电发热）；关闭为 30（省电稳定）")
+	# T-6.1 热浪扭曲：可选高档位默认关（back buffer copy 低端机有掉帧风险），排最后不抢眼
+	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥与火雨区域画面热浪扭曲（高端画质，低配设备可能掉帧，默认关）")
+	# T-6.2 受击屏幕冲击波：可选高档位默认关
+	_add_toggle_row(vbox, "screen_shockwave", "受击冲击波", "遭受强敌重击时从受击点扩散屏幕径向扭曲环（高端画质，默认关）")
 
 	return scroll
 

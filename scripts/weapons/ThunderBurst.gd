@@ -96,6 +96,9 @@ func activate() -> void:
 		_kind_fx.name = "KindFx"
 		add_child(_kind_fx)
 	_kind_fx.activate_fx(burst_kind, radius, tint)
+	# 火雨热浪区上报（T-6.1，可选默认关时静态入口首行短路）：落点一团热盖住整轮坠雨演出
+	if burst_kind == "fire_rain":
+		HeatDistortionFx.report(get_tree().root, global_position, radius, 0.9, BurstKindFx.DUR + 0.2)
 
 	# 劈空收档（2026-10-11 频闪治理）：落点先只演「小印记」——低α小光环 + 窄雷柱 + 落点音。
 	# 同帧 deferred 的 _deal_damage 结算完战果后由 _bloom_or_recycle 分档：劈空快速收场，

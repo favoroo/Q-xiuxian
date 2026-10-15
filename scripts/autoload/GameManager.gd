@@ -18,6 +18,7 @@ signal alloc_opened
 signal alloc_finished
 signal pending_points_changed(pending: int)
 signal screen_damage_pulsed(color: Color, duration: float)
+signal screen_shockwave_triggered(pos: Vector2, strength: float, duration: float)
 signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
 signal achievements_unlocked(ach_ids: Array)
@@ -1144,6 +1145,9 @@ func feedback(tier: int) -> void:
 
 func pulse_damage_vignette(color: Color = Color(0.85, 0.12, 0.12, 0.65), duration: float = 0.22) -> void:
 	GameFeel.pulse_damage_vignette(self, color, duration)
+
+func trigger_screen_shockwave(pos: Vector2 = Vector2.INF, strength: float = 1.0, duration: float = 0.45) -> void:
+	screen_shockwave_triggered.emit(pos, strength, duration)
 
 func trigger_game_over(victory: bool = false) -> void:
 	if is_game_over:

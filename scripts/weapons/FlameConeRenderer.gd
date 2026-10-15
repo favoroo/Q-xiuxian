@@ -58,6 +58,10 @@ func _process(delta: float) -> void:
 		var max_h := half_width * pow(t_pos, 0.75) * 0.7
 		var y_l := ((float(int(_anim * 37.0) % 100) / 50.0) - 1.0) * max_h
 		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.7)
+		# 热浪区上报（T-6.1，设置默认关时静态入口首行短路零开销）：锥心中段一团热，
+		# 跟随火舌粒子同拍 12.5Hz 续报；hold 覆盖续报间隔的 2 倍防间隙闪断
+		HeatDistortionFx.report(get_tree().root, to_global(Vector2(length * 0.55, 0.0)),
+			maxf(half_width * 1.4, 46.0), 1.0, 0.16)
 
 	var interval := _redraw_interval()
 	if _phase >= interval:

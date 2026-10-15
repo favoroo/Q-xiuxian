@@ -51,6 +51,9 @@ script = ExtResource("1_main")
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_hd2d")
 
+[node name="ToneModulate" type="CanvasModulate" parent="."]
+color = Color(0.909804, 0.929412, 0.960784, 1)
+
 [node name="MapLayer" type="Node2D" parent="."]
 
 [node name="GroundTiles" type="TextureRect" parent="MapLayer"]

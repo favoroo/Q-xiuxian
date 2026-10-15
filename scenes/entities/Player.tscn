@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://cplayer001"]
+[gd_scene load_steps=10 format=3 uid="uid://cplayer001"]
 
 [ext_resource type="Script" path="res://scripts/entities/Player.gd" id="1_player"]
 [ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="4_light"]
 [ext_resource type="Script" path="res://scripts/entities/PlayerSkillVfx.gd" id="5_skill_vfx"]
 [ext_resource type="Script" path="res://scripts/entities/player_aura.gd" id="6_aura"]
+[ext_resource type="Script" path="res://scripts/entities/player_level_ritual.gd" id="7_ritual"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_player"]
 resource_local_to_scene = true
@@ -33,6 +34,10 @@ texture = ExtResource("3_shadow")
 [node name="PlayerAura" type="Node2D" parent="."]
 position = Vector2(0, 16)
 script = ExtResource("6_aura")
+
+[node name="PlayerLevelRitual" type="Node2D" parent="."]
+position = Vector2(0, 16)
+script = ExtResource("7_ritual")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 visible = false

@@ -25,6 +25,7 @@ var invulnerable_time: float = 0.0
 @onready var pickup_area: Area2D = $PickupArea
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
 @onready var skill_vfx: PlayerSkillVfx = $SkillVfx
+@onready var level_ritual: Node2D = $PlayerLevelRitual
 
 var sun_orb_angle: float = 0.0
 var idle_bob_phase: float = 0.0
@@ -259,7 +260,11 @@ func pickup_radius() -> float:
 	return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
 
 func _on_leveled_up(_lvl: int) -> void:
-	play_squash(Vector2(0.72, 1.38), 0.28)
+	# 升级仪式两段式光柱（T-3.3）：汇聚聚灵→爆发拔起两段节奏，节点缺失时兜底单段 squash
+	if level_ritual != null and level_ritual.has_method("play"):
+		level_ritual.play()
+	else:
+		play_squash(Vector2(0.72, 1.38), 0.28)
 
 # ---------------- 武器管理 ----------------
 
