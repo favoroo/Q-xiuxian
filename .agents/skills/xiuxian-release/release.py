@@ -527,31 +527,70 @@ def _ver_key(tag: str):
     return tuple(int(n) for n in nums) or (0,)
 
 
-def prune_old_apks(keep: int, tokens: dict, dry_run: bool = False) -> None:
-    """双端只保留最近 keep 个版本的 APK 附件，防止超出 Gitee 配额。"""
-    log(f'检查并清理老版本 APK 附件（保留最近 {keep} 个版本）...')
-    st, rels = http_json(f'{GITEE_API}/releases?access_token={tokens["gitee"]}&per_page=100')
-    if st == 200 and isinstance(rels, list):
-        releases_with_apk = []
-        for r in rels:
-            assets = r.get('assets', [])
-            apk_assets = [a for a in assets if str(a.get('name', '')).endswith('.apk')]
-            if apk_assets:
-                releases_with_apk.append(r)
-        releases_with_apk.sort(key=lambda r: _ver_key(str(r.get('tag_name', ''))), reverse=True)
+def _list_releases_with_apk_gh(tokens: dict) -> list:
+    """拉取 GitHub 全部 Release，返回带 APK 附件的列表（含 assets 明细）。"""
+    releases = []
+    page = 1
+    while True:
+        st, rels = http_json(f'{GITHUB_API}/releases?per_page=100&page={page}',
+                             headers=gh_headers(tokens['gh']))
+        if st != 200 or not isinstance(rels, list) or not rels:
+            break
+        releases.extend(rels)
+        if len(rels) < 100:
+            break
+        page += 1
+    out = []
+    for r in releases:
+        apk_assets = [a for a in r.get('assets', []) if str(a.get('name', '')).endswith('.apk')]
+        if apk_assets:
+            out.append({'id': r['id'], 'tag': str(r.get('tag_name', '')), 'apk_assets': apk_assets})
+    return out
 
-        if len(releases_with_apk) > keep:
-            for old in releases_with_apk[keep:]:
-                rid = old['id']
-                st_att, atts = http_json(f'{GITEE_API}/releases/{rid}/attach_files?access_token={tokens["gitee"]}')
-                if st_att == 200 and isinstance(atts, list):
-                    for a in atts:
-                        if str(a.get('name', '')).endswith('.apk'):
-                            aid = a['id']
-                            log(f'{"[Dry-run] " if dry_run else ""}清理 Gitee 老附件: {old.get("tag_name")} / {a.get("name")}')
-                            if not dry_run:
-                                http_json(f'{GITEE_API}/releases/{rid}/attach_files/{aid}?access_token={tokens["gitee"]}',
-                                          method='DELETE')
+
+def _list_releases_with_apk_gitee(tokens: dict) -> list:
+    """拉取 Gitee 全部 Release，返回带 APK 附件的列表（逐个查 attach_files 明细）。"""
+    st, rels = http_json(f'{GITEE_API}/releases?access_token={tokens["gitee"]}&per_page=100')
+    if st != 200 or not isinstance(rels, list):
+        return []
+    out = []
+    for r in rels:
+        rid = r['id']
+        st_att, atts = http_json(f'{GITEE_API}/releases/{rid}/attach_files?access_token={tokens["gitee"]}')
+        if st_att == 200 and isinstance(atts, list):
+            apk_assets = [a for a in atts if str(a.get('name', '')).endswith('.apk')]
+            if apk_assets:
+                out.append({'id': rid, 'tag': str(r.get('tag_name', '')), 'apk_assets': apk_assets})
+    return out
+
+
+def prune_old_apks(keep_gh: int, keep_gitee: int, tokens: dict, dry_run: bool = False) -> None:
+    """双端分别只保留最近 N 个版本的 APK 附件，控制仓库体积与 Gitee 配额。"""
+    log(f'清理老版本 APK 附件（GitHub 保留 {keep_gh} 个 / Gitee 保留 {keep_gitee} 个）...')
+
+    # --- GitHub：按 asset id 删 ---
+    if keep_gh >= 0:
+        gh_list = sorted(_list_releases_with_apk_gh(tokens),
+                         key=lambda r: _ver_key(r['tag']), reverse=True)
+        for old in gh_list[keep_gh:]:
+            for a in old['apk_assets']:
+                log(f'{"[Dry-run] " if dry_run else ""}清理 GitHub 老附件: {old["tag"]} / {a.get("name")}')
+                if not dry_run:
+                    http_json(f'{GITHUB_API}/releases/assets/{a["id"]}',
+                              method='DELETE', headers=gh_headers(tokens['gh']))
+        log(f'✓ GitHub 带 APK 的 Release 共 {len(gh_list)} 个')
+
+    # --- Gitee：按 attach_files id 删 ---
+    if keep_gitee >= 0:
+        gt_list = sorted(_list_releases_with_apk_gitee(tokens),
+                         key=lambda r: _ver_key(r['tag']), reverse=True)
+        for old in gt_list[keep_gitee:]:
+            for a in old['apk_assets']:
+                log(f'{"[Dry-run] " if dry_run else ""}清理 Gitee 老附件: {old["tag"]} / {a.get("name")}')
+                if not dry_run:
+                    http_json(f'{GITEE_API}/releases/{old["id"]}/attach_files/{a["id"]}?access_token={tokens["gitee"]}',
+                              method='DELETE')
+        log(f'✓ Gitee 带 APK 的 Release 共 {len(gt_list)} 个')
 
 
 def cmd_publish(args) -> None:
@@ -587,7 +626,7 @@ def cmd_publish(args) -> None:
     rel_ids = create_release(tag, rel_name, notes, tokens)
     upload_apks(rel_ids, apk_path, apk_name, tokens)
     verify_releases(tag, apk_name, tokens)
-    prune_old_apks(args.keep, tokens, args.dry_run)
+    prune_old_apks(args.keep_gh, args.keep_gitee, tokens, args.dry_run)
 
     print('\n' + '=' * 60)
     print(f'🎉 发布成功！{rel_name}')
@@ -609,11 +648,13 @@ def main():
     p_pub.add_argument('--version', required=True, help='版本号，如 0.0.1')
     p_pub.add_argument('--notes-file', help='Release 说明 Markdown 文件路径')
     p_pub.add_argument('--timeout', type=int, default=900, help='等待构建元数据超时（秒）')
-    p_pub.add_argument('--keep', type=int, default=20, help='保留最近 N 个版本的 APK 附件')
+    p_pub.add_argument('--keep-gh', type=int, default=10, help='GitHub 保留最近 N 个版本的 APK 附件')
+    p_pub.add_argument('--keep-gitee', type=int, default=3, help='Gitee 保留最近 N 个版本的 APK 附件')
     p_pub.add_argument('--dry-run', action='store_true', help='预检与令牌测试，不做实际变更')
 
     p_prune = sub.add_parser('prune', help='独立清理老版本 APK 附件')
-    p_prune.add_argument('--keep', type=int, default=20, help='保留最近 N 个版本')
+    p_prune.add_argument('--keep-gh', type=int, default=10, help='GitHub 保留最近 N 个版本')
+    p_prune.add_argument('--keep-gitee', type=int, default=3, help='Gitee 保留最近 N 个版本')
     p_prune.add_argument('--dry-run', action='store_true', help='仅打印待清理列表')
 
     p_bump = sub.add_parser('bump', help='自动计算下一个版本号')
@@ -627,7 +668,7 @@ def main():
         cmd_publish(args)
     elif args.subcmd == 'prune':
         tokens = {'gh': get_github_token(), 'gitee': get_gitee_token()}
-        prune_old_apks(args.keep, tokens, args.dry_run)
+        prune_old_apks(args.keep_gh, args.keep_gitee, tokens, args.dry_run)
     elif args.subcmd == 'bump':
         cmd_bump(args)
 

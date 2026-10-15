@@ -41,6 +41,7 @@ description: 剑士游戏的 Git 提交存档、双平台推送与版本发布�
 | 版本来源 | `scripts/autoload/Version.gd` 的 `APP_VERSION` 与 `export_presets.cfg` 的 `version/name`、`version/code` 保持严格一致 |
 | 两端一致性 | GitHub 与 Gitee 必须使用相同 Tag、相同 APK 文件名、同为正式 Release（非 draft / prerelease） |
 | 更新服务 | `scripts/autoload/UpdateManager.gd` 优先读 Gitee `/releases/latest`，备选 GitHub，并配合国内加速代理 |
+| 附件保留策略 | **发布后自动清理双端老 APK 附件**：GitHub 保留最近 10 个（`--keep-gh`）、Gitee 保留最近 3 个（`--keep-gitee`），控制仓库体积与 Gitee 1GB 附件配额 |
 
 ### 1. 一键脚本编排
 
@@ -65,7 +66,7 @@ description: 剑士游戏的 Git 提交存档、双平台推送与版本发布�
 ```
 
 - `build` 阶段：校验版本一致性 → Godot headless 导出 Release APK → SHA-256 计算 → 证书指纹核验 → 原子写 `build/release-meta.json`。
-- `publish` 阶段：等待构建元数据就绪 → 预检（工作树干净、tag 不存在）→ 创建 annotated tag → **并行**推送双端 → **并行**创建双端 Release → **并行**上传 APK → 幂等可重试 → 双端验证 → 自动清理双端老版本附件（保留最近 20 个）。
+- `publish` 阶段：等待构建元数据就绪 → 预检（工作树干净、tag 不存在）→ 创建 annotated tag → **并行**推送双端 → **并行**创建双端 Release → **并行**上传 APK → 幂等可重试 → 双端验证 → 自动清理双端老版本附件（GitHub 保留最近 10 个 / Gitee 保留最近 3 个）。
 
 ### 2. 令牌获取（严禁写入任何仓库文件）
 
@@ -97,4 +98,4 @@ description: 剑士游戏的 Git 提交存档、双平台推送与版本发布�
 - [ ] Gitee Release 页面可见，APK 附件已上传
 - [ ] 两端 Tag 一致（`v<version>`）、两端 APK 文件名一致
 - [ ] 两端 `/releases/latest` 均指向新 Tag（游戏内更新检测依赖）
-- [ ] 双端历史附件已按配额修剪（保留最近 20 版）
+- [ ] 双端历史附件已按配额修剪（GitHub 最近 10 版 / Gitee 最近 3 版）
