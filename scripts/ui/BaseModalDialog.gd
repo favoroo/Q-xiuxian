@@ -32,7 +32,7 @@ var _current_tab: int = 0
 
 func _ready() -> void:
 	visible = false
-	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_mode = Node.PROCESS_MODE_DISABLED
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_modal_chrome()
@@ -205,6 +205,7 @@ func _on_closed() -> void:
 func open() -> void:
 	if visible:
 		return
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = true
 	_closing = false
 	_on_opened()
@@ -222,6 +223,7 @@ func close() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
 	tw.tween_callback(func():
 		visible = false
+		process_mode = Node.PROCESS_MODE_DISABLED
 		_closing = false
 		_on_closed()
 		closed.emit()

@@ -7,6 +7,7 @@ extends Node
 ##   ④ 生命周期：HOLD 留存期不回收，HOLD+FADE 走完后回池休眠（短暂留存后消失）
 ##   ⑤ 对象池：回收后再 spawn 复用同一实例，零新建
 ##   ⑥ 纯视觉：贴花没有碰撞体，不参与判定（判定在持有者侧）
+##   ⑦ 击杀残晕（FADE_GLOW）：断环/烬点/烟缕形态预生成，0.55s 短寿命走完即回池（不长留地面）
 ## 运行: godot --headless --path . res://tests/GroundDecalCheck.tscn
 
 var _c := TestCheck.new()
@@ -29,6 +30,7 @@ func _run() -> void:
 	await _case_lifecycle()
 	await _case_pool_reuse()
 	_case_pure_visual()
+	await _case_glow_shape()
 
 	print("GROUND_DECAL 判据跑完")
 	Engine.time_scale = 1.0
@@ -125,4 +127,24 @@ func _case_pure_visual() -> void:
 			has_collision = true
 	_c.check(not has_collision, "贴花无碰撞体（纯视觉，判定在持有者侧）")
 	d.recycle()
+	await get_tree().process_frame
+
+## ⑦ 击杀残晕（FADE_GLOW）：形态预生成齐套 + 0.55s 短寿命走完即回池
+func _case_glow_shape() -> void:
+	var d := GroundDecal.spawn_tinted(_world, Vector2(900, 300), 40.0, Color(0.55, 0.10, 0.16))
+	await get_tree().process_frame
+	_c.check(d._ring_segs.size() >= 3 and d._ring_segs.size() <= 4,
+		"残晕 3~4 段断环符纹（%d）" % d._ring_segs.size())
+	_c.check(d._embers.size() >= 5 and d._embers.size() <= 7,
+		"残晕 5~7 颗烬点（%d）" % d._embers.size())
+	_c.equals(d._ember_phase.size(), d._embers.size(), "烬点与闪烁相位一一对应")
+	_c.equals(d._wisps.size(), 3, "残晕三缕烟缕")
+	# 8 倍速下一帧已走 0.133s，只钉「落在 0.55s 短档」而非精值：显著小于长留存档 2.3s 即成立
+	_c.check(d._time_left < 1.0, "残晕短寿命 0.55s 档（不被长留存 2.3s 覆盖，当前 %.2f）" % d._time_left)
+	# 走完 0.55s（8 倍速下等 0.8s 游戏时间）后回池，不再长留地面撞脸出生预警
+	var t := 0.0
+	while t < 0.8:
+		await get_tree().physics_frame
+		t += 1.0 / 60.0 * 8.0
+	_c.check(d._pooled and not d.visible, "残晕 0.55s 走完后回池休眠（不留长痕）")
 	await get_tree().process_frame

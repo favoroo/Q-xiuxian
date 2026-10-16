@@ -98,17 +98,17 @@ func _draw_central_taiji_array() -> void:
 	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
 
 	# 外同心双环（弧段按半径自适应修剪：145px 半径 48 段已远超肉眼分辨）
-	draw_arc(Vector2.ZERO, r_outer, 0.0, TAU, 48, col_cyan, 1.8, true)
-	draw_arc(Vector2.ZERO, r_outer - 8.0, 0.0, TAU, 48, col_dark, 1.0, true)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_outer, 0.0, TAU, col_cyan, 1.8, true)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_outer - 8.0, 0.0, TAU, col_dark, 1.0, true)
 
 	# 12 方位天干地支刻印点
 	for i in range(12):
 		var a := (TAU / 12.0) * float(i)
 		var p_node := Vector2(cos(a), sin(a)) * (r_outer - 4.0)
-		draw_circle(p_node, 1.8, col_gold)
+		AdaptiveDraw.circle(self, p_node, 1.8, col_gold)
 
 	# 中阵环（四象象限与八卦爻刻）
-	draw_arc(Vector2.ZERO, r_mid, 0.0, TAU, 40, col_dark, 1.2, true)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_mid, 0.0, TAU, col_dark, 1.2, true)
 	for j in range(8):
 		var b := (TAU / 8.0) * float(j)
 		var dir := Vector2(cos(b), sin(b))
@@ -118,7 +118,7 @@ func _draw_central_taiji_array() -> void:
 		draw_line(p_mid - dir.orthogonal() * 4.0, p_mid + dir.orthogonal() * 4.0, col_gold, 1.4)
 
 	# 内阵核：太极双鱼图腾
-	draw_arc(Vector2.ZERO, r_inner, 0.0, TAU, 28, col_cyan, 1.5, true)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, col_cyan, 1.5, true)
 
 	# 阴阳鱼 S 曲线刻线
 	var s_pts := PackedVector2Array()
@@ -136,9 +136,9 @@ func _draw_central_taiji_array() -> void:
 	draw_polyline(s_pts, col_cyan, 1.4, true)
 
 	# 阴阳眼
-	draw_circle(Vector2(0, -r_inner * 0.5), 3.5, col_cyan)
-	draw_circle(Vector2(0, r_inner * 0.5), 3.5, col_dark)
-	draw_circle(Vector2(0, r_inner * 0.5), 1.5, col_gold)
+	AdaptiveDraw.circle(self, Vector2(0, -r_inner * 0.5), 3.5, col_cyan)
+	AdaptiveDraw.circle(self, Vector2(0, r_inner * 0.5), 3.5, col_dark)
+	AdaptiveDraw.circle(self, Vector2(0, r_inner * 0.5), 1.5, col_gold)
 
 	# 还原坐标系
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -174,7 +174,7 @@ func _draw_array_conduits() -> void:
 		# HDR 起辉芯线（细 0.4px，只在槽内泛光，不外溢糊边界）
 		draw_line(p1, p2, col_hdr, 1.1)
 		# 灵脉端点微润节点光印（指引阵法走向）
-		draw_circle(p2, 2.2, col_hdr)
+		AdaptiveDraw.circle(self, p2, 2.2, col_hdr)
 
 # ==============================================================================
 # 3. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸）
@@ -209,7 +209,7 @@ func _draw_talisman_pulse() -> void:
 				n_pos + Vector2(0, -d_r * 1.3)
 			])
 			draw_polyline(diamond, col_node_rim, 1.0)
-			draw_circle(n_pos, 1.2, col_node_core)
+			AdaptiveDraw.circle(self, n_pos, 1.2, col_node_core)
 
 # ==============================================================================
 # 4. 结界流光带（BoundaryFlowBand，T-4.1）
@@ -445,6 +445,6 @@ class StaticDecor:
 			draw_colored_polygon(base_diamond, Color(0.06, 0.10, 0.15, 0.98))
 			draw_polyline(base_diamond, Color(0.85, 0.72, 0.30, 0.85), 1.2)
 			# 天蓝灵环与核心晶芒
-			draw_circle(pos, 4.8, Color(0.25, 0.75, 0.95, 0.92))
-			draw_circle(pos, 2.8, Color(0.85, 0.95, 1.0, 0.95))
-			draw_circle(pos, 1.2, Color(1.0, 1.0, 1.0, 1.0))
+			AdaptiveDraw.circle(self, pos, 4.8, Color(0.25, 0.75, 0.95, 0.92))
+			AdaptiveDraw.circle(self, pos, 2.8, Color(0.85, 0.95, 1.0, 0.95))
+			AdaptiveDraw.circle(self, pos, 1.2, Color(1.0, 1.0, 1.0, 1.0))

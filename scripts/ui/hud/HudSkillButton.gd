@@ -28,6 +28,9 @@ var _shadow_chip: Label = null   ## 充能角标（影爆=影层读数，服丹=
 var _shadow_shown: int = -1      ## 上一次画出去的层数：只在变了时重设样式，不每帧刷
 var _was_ready: bool = false
 var _face_state: int = -1  ## 键面读数态：-1 就绪 / 0 冷却 / 1 效果活跃（只在变化时刷读数配色）
+var _last_cd_visible: bool = false
+var _last_drawn_act_ratio: float = -1.0
+var _last_drawn_cd_ratio: float = -1.0
 var _shaking: bool = false
 var _edit_mode: bool = false
 var _last_press_frame: int = -1
@@ -250,10 +253,22 @@ func _process(_delta: float) -> void:
 	var on_cd := cd_left > 0.0
 
 	# 三态键面：效果活跃（点缀黄环倒数、图标全亮，冷却还没开始）→ 冷却（暗环倒数、图标压暗）→ 就绪
-	_cd_ring.visible = on_active or on_cd
-	_cd_ring.active_ratio = clampf(active_left / active_total, 0.0, 1.0) if on_active else 0.0
-	_cd_ring.cd_ratio = clampf(cd_left / cd_total, 0.0, 1.0) if on_cd else 0.0
-	_cd_ring.queue_redraw()
+	var cd_vis := on_active or on_cd
+	if cd_vis != _last_cd_visible:
+		_last_cd_visible = cd_vis
+		_cd_ring.visible = cd_vis
+		if not cd_vis:
+			_last_drawn_act_ratio = -1.0
+			_last_drawn_cd_ratio = -1.0
+	if cd_vis:
+		var act_r := clampf(active_left / active_total, 0.0, 1.0) if on_active else 0.0
+		var cd_r := clampf(cd_left / cd_total, 0.0, 1.0) if on_cd else 0.0
+		_cd_ring.active_ratio = act_r
+		_cd_ring.cd_ratio = cd_r
+		if absf(act_r - _last_drawn_act_ratio) >= 0.005 or absf(cd_r - _last_drawn_cd_ratio) >= 0.005:
+			_last_drawn_act_ratio = act_r
+			_last_drawn_cd_ratio = cd_r
+			_cd_ring.queue_redraw()
 
 	var state := 1 if on_active else (0 if on_cd else -1)
 	if state != _face_state:

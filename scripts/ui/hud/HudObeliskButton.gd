@@ -19,6 +19,9 @@ const BTN_FONT := 18
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
 var _active_ob: BlessingObelisk = null
+var _anim_tween: Tween = null
+var _base_scale: Vector2 = Vector2.ONE
+var _edit_mode: bool = false
 
 func _ready() -> void:
 	visible = false
@@ -82,24 +85,44 @@ func handle_input(event: InputEvent) -> void:
 		_active_ob.stop_charge()
 		_style_btn(false)
 
+func _kill_anim_tween() -> void:
+	if _anim_tween != null and _anim_tween.is_valid():
+		_anim_tween.kill()
+	_anim_tween = null
+
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
+	if ob == null or ob.is_triggered:
+		return
+	var was_same_active := (_active_ob == ob)
 	_active_ob = ob
 	_ring.set_ratio(0.0)
+	if was_same_active and visible and modulate.a >= 0.99 and (_anim_tween == null or not _anim_tween.is_valid()):
+		scale = _base_scale
+		return
+	_kill_anim_tween()
 	visible = true
+	var target_s := _base_scale
+	scale = target_s * 0.8
 	modulate.a = 0.0
-	## 弹入只动「相对缩放」：直接 tween 到 1.0 会把设置里存的键体大小抹平
-	var s := scale
-	var tw = create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.18)
-	tw.parallel().tween_property(self, "scale", s, 0.18).from(s * 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_anim_tween = create_tween()
+	_anim_tween.tween_property(self, "modulate:a", 1.0, 0.18)
+	_anim_tween.parallel().tween_property(self, "scale", target_s, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## 玩家离开聚灵阵范围：隐藏激活按钮
-func hide_obelisk_activation(_ob: BlessingObelisk) -> void:
+func hide_obelisk_activation(ob: BlessingObelisk) -> void:
+	if _active_ob != null and ob != null and ob != _active_ob:
+		return
 	_active_ob = null
-	var tw = create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.2)
-	tw.tween_callback(func(): visible = false)
+	_kill_anim_tween()
+	_anim_tween = create_tween()
+	_anim_tween.tween_property(self, "modulate:a", 0.0, 0.2)
+	_anim_tween.tween_callback(func() -> void:
+		if _active_ob == null and not _edit_mode:
+			visible = false
+			scale = _base_scale
+			modulate.a = 1.0
+	)
 
 ## 聚灵阵开始充能：视觉反馈
 func on_obelisk_charge_started(_ob: BlessingObelisk) -> void:
@@ -118,26 +141,49 @@ func on_obelisk_charge_cancelled(_ob: BlessingObelisk) -> void:
 		_ring.set_ratio(0.0)
 
 ## 聚灵阵触发成功：播放完成动画后隐藏
-func on_obelisk_blessing_triggered(_ob: BlessingObelisk) -> void:
+func on_obelisk_blessing_triggered(ob: BlessingObelisk) -> void:
+	if _active_ob != null and ob != null and ob != _active_ob:
+		return
+	_kill_anim_tween()
 	if visible:
-		var s := scale
-		var tw = create_tween()
-		tw.tween_property(self, "scale", s * 1.15, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(self, "modulate:a", 0.0, 0.4)
-		tw.tween_callback(func():
-			visible = false
-			scale = s
-			modulate.a = 1.0
-			_ring.set_ratio(0.0)
-			_active_ob = null
+		var target_s := _base_scale
+		_anim_tween = create_tween()
+		_anim_tween.tween_property(self, "scale", target_s * 1.15, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_anim_tween.parallel().tween_property(self, "modulate:a", 0.0, 0.4)
+		_anim_tween.tween_callback(func() -> void:
+			if _active_ob == ob or _active_ob == null:
+				if not _edit_mode:
+					visible = false
+				scale = _base_scale
+				modulate.a = 1.0
+				_ring.set_ratio(0.0)
+				_active_ob = null
 		)
+	else:
+		scale = _base_scale
+		modulate.a = 1.0
+		_ring.set_ratio(0.0)
+		_active_ob = null
 
 ## 进入/退出调整模式：强制亮出键体交给覆盖层拖动（树此时是暂停态）
 func set_edit_mode(on: bool) -> void:
+	_edit_mode = on
+	_kill_anim_tween()
+	modulate.a = 1.0
+	scale = _base_scale
 	# 退出调整模式时若人还站在阵法范围内，按钮保持可见（等离开范围再收）
 	visible = on or _active_ob != null
 	if on:
 		_ring.set_ratio(0.0)
+
+func _process(_delta: float) -> void:
+	if _edit_mode:
+		return
+	if _active_ob != null:
+		if not is_instance_valid(_active_ob) or _active_ob.is_triggered or not _active_ob.is_player_inside:
+			hide_obelisk_activation(_active_ob)
+		elif not visible and (_anim_tween == null or not _anim_tween.is_valid()):
+			show_obelisk_activation(_active_ob)
 
 ## 按钮视觉中心（设计坐标，含缩放摆位）
 func center_px() -> Vector2:
@@ -155,3 +201,4 @@ func get_ring() -> SkillButtonView.CircleProgressOverlay:
 
 func _apply_layout() -> void:
 	HudButtonLayout.apply(self, SettingsManager.obelisk_btn_xy(), SettingsManager.obelisk_btn_scale(), BTN_SIZE)
+	_base_scale = scale

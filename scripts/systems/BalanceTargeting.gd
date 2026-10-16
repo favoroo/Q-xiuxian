@@ -347,6 +347,10 @@ static func spirit_contact_duty(star: int = 1) -> float:
 
 ## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
 ## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）
+## 性能静态复用缓冲：供 compute_spirit_orbit 60Hz 零分配返回
+static var _orbit_res_buf: Dictionary = {"radii": [], "in_combat": false}
+static var _orbit_radii_buf: Array[float] = []
+
 ## enemies_info: Array[Dictionary]，每个敌人的信息 { "dist": float, "angle": float }
 ## 返回: { "radii": Array[float], "in_combat": bool }
 static func compute_spirit_orbit(
@@ -357,15 +361,18 @@ static func compute_spirit_orbit(
 	max_reach: float = SPIRIT_MAX_REACH
 ) -> Dictionary:
 	var count := orb_angles.size()
-	var result_radii: Array[float] = []
+	_orbit_radii_buf.resize(count)
 	for i in range(count):
-		result_radii.append(base_radius)
+		_orbit_radii_buf[i] = base_radius
+
+	_orbit_res_buf["radii"] = _orbit_radii_buf
+	_orbit_res_buf["in_combat"] = false
 
 	if count == 0:
-		return {"radii": result_radii, "in_combat": false}
+		return _orbit_res_buf
 
 	if enemies_info.is_empty():
-		return {"radii": result_radii, "in_combat": false}
+		return _orbit_res_buf
 
 	# 1. 判定是否处于战斗感知圈内（max_reach 范围内有敌人）。
 	# 性能：本函数被 Player 每物理帧调用（60Hz），不建中间数组（原 in_range/danger
@@ -386,7 +393,8 @@ static func compute_spirit_orbit(
 			danger_count += 1
 
 	if not in_combat or in_range_count == 0:
-		return {"radii": result_radii, "in_combat": in_combat}
+		_orbit_res_buf["in_combat"] = in_combat
+		return _orbit_res_buf
 
 	var avg_reach_dist: float = clampf(sum_dist / float(in_range_count), min_radius, base_radius * 1.25)
 
@@ -427,9 +435,10 @@ static func compute_spirit_orbit(
 		if assigned_r < 0.0:
 			assigned_r = avg_reach_dist
 
-		result_radii[i] = assigned_r
+		_orbit_radii_buf[i] = assigned_r
 
-	return {"radii": result_radii, "in_combat": in_combat}
+	_orbit_res_buf["in_combat"] = in_combat
+	return _orbit_res_buf
 
 # ---------------- 多武器神识分流（仿土豆兄弟多武器负载与成长节拍） ----------------
 

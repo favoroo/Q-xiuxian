@@ -493,29 +493,44 @@ static func outlined_panel(bg: Color, border: Color, border_w: int = 2, skew_deg
     sb.border_color = border
     return sb
 
-## 凹陷槽：经验槽轨道/滑杆/未选中
+## 凹陷槽：经验槽轨道/滑杆/未选中（全局单例共享）
 static func slot() -> StyleBoxFlat:
+    if _slot_cache != null:
+        return _slot_cache
     var sb := panel(NAVY2, 0.0, Vector2.ZERO)
     sb.border_width_left = 1
     sb.border_width_top = 1
     sb.border_width_right = 1
     sb.border_width_bottom = 3
     sb.border_color = LINE
+    _slot_cache = sb
     return sb
 
 ## 进度条成对样式（track 底 + fill 面）
 static func bar_styles(track: Color, fill: Color) -> Array:
-    var bg := slot()
-    bg.bg_color = track
+    var bg := panel(track, 0.0, Vector2.ZERO)
+    bg.border_width_left = 1
+    bg.border_width_top = 1
+    bg.border_width_right = 1
+    bg.border_width_bottom = 3
+    bg.border_color = LINE
     var fl := panel(fill, 0.0, Vector2.ZERO)
     return [bg, fl]
 
-## 色签 chip：小面积斜切更陡才读得出形状
+## 色签 chip：小面积斜切更陡才读得出形状（按色缓存共享）
 static func chip(face: Color) -> StyleBoxFlat:
-    return block(face, SLANT_BAND, Vector2(2, 3))
+    var k := face.to_rgba32()
+    if _chip_cache.has(k):
+        return _chip_cache[k]
+    var sb := block(face, SLANT_BAND, Vector2(2, 3))
+    _chip_cache[k] = sb
+    return sb
 
-## 紧凑型色签 compact_chip：专用于高信息密度卡片（如商店货架卡），收窄边框与投影，防膨胀高度
+## 紧凑型色签 compact_chip：专用于高信息密度卡片（如商店货架卡），收窄边框与投影，防膨胀高度（按色缓存共享）
 static func compact_chip(face: Color) -> StyleBoxFlat:
+    var k := face.to_rgba32()
+    if _compact_chip_cache.has(k):
+        return _compact_chip_cache[k]
     var sb := panel(face, SLANT_BAND, Vector2(1, 1))
     sb.border_width_left = 1
     sb.border_width_top = 1
@@ -529,6 +544,7 @@ static func compact_chip(face: Color) -> StyleBoxFlat:
     sb.content_margin_right = 3.0
     sb.content_margin_top = 1.0
     sb.content_margin_bottom = 1.0
+    _compact_chip_cache[k] = sb
     return sb
 
 ## 半调网点带：标题带上的印刷味装饰。一次性 _draw（retained），不进每帧路径，不参与交互。
@@ -714,6 +730,25 @@ static func icon_texture_rect(texture_path: String = "", min_size: Vector2 = Vec
         tex_rect.custom_minimum_size = min_size
     return tex_rect
 
+static var _empty_focus_style: StyleBoxEmpty = null
+static var _slot_cache: StyleBoxFlat = null
+static var _chip_cache: Dictionary = {}
+static var _compact_chip_cache: Dictionary = {}
+static var _btn_block_cache: Dictionary = {}
+
+static func empty_focus() -> StyleBoxEmpty:
+    if _empty_focus_style == null:
+        _empty_focus_style = StyleBoxEmpty.new()
+    return _empty_focus_style
+
+static func _btn_block(bg: Color, skew_deg: float, shadow_offset: Vector2) -> StyleBoxFlat:
+    var k := [bg.to_rgba32(), skew_deg, shadow_offset]
+    if _btn_block_cache.has(k):
+        return _btn_block_cache[k]
+    var sb := block(bg, skew_deg, shadow_offset)
+    _btn_block_cache[k] = sb
+    return sb
+
 ## UI 图标路径 → 高清变体路径：assets/art/ 下的武器图标在 assets/art/ui/ 找同名 128px 变体。
 ## 变体只增不清：原路径不存在或无变体时原样返回，调用方 ResourceLoader.exists 兜底。
 ## 缓存探测结果：商店一屏几十张图标逐张 is_file() 太浪费。
@@ -735,17 +770,17 @@ static func _hd_icon_path(path: String) -> String:
 static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
         font_color: Color = PAPER, skew_deg: float = SLANT_BUTTON,
         hover_color: Color = Color(0, 0, 0, 0)) -> void:
-    var normal := block(bg, skew_deg, Vector2(3, 4))
-    var hover := block(hover_bg, skew_deg, Vector2(3, 4))
+    var normal := _btn_block(bg, skew_deg, Vector2(3, 4))
+    var hover := _btn_block(hover_bg, skew_deg, Vector2(3, 4))
     btn.add_theme_stylebox_override("normal", normal)
     btn.add_theme_stylebox_override("hover", hover)
-    btn.add_theme_stylebox_override("pressed", block(hover_bg.darkened(0.15), skew_deg, Vector2(1, 1)))
+    btn.add_theme_stylebox_override("pressed", _btn_block(hover_bg.darkened(0.15), skew_deg, Vector2(1, 1)))
     # 禁用态也要看得见：引擎默认那套 disabled 与纯黑面板几乎同色，「按不动」在真机上看起来
     # 像「这里根本没有按钮」（用户 2026-10-11 真机：金币阁里金币不够的商品）。
     # 口径 = 一颗比面板亮一档的灰键 + 纸暗字：形状、价格、差多少全在，只是按不动。
-    btn.add_theme_stylebox_override("disabled", block(LINE, skew_deg, Vector2(3, 4)))
+    btn.add_theme_stylebox_override("disabled", _btn_block(LINE, skew_deg, Vector2(3, 4)))
     btn.add_theme_color_override("font_disabled_color", PAPER_DIM)
-    btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+    btn.add_theme_stylebox_override("focus", empty_focus())
     btn.add_theme_font_override("font", body_font())
     btn.add_theme_font_size_override("font_size", font_size)
     btn.add_theme_color_override("font_color", font_color)

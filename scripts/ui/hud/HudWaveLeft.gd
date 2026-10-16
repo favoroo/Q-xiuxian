@@ -17,6 +17,13 @@ extends PanelContainer
 ## 「魔君未死敌潮不退」时玩家要看得见还剩几个）。
 ##
 ## 5Hz 轮询两个 int 读数，不订阅高频信号、严禁 get_nodes_in_group（v0.0.13 掉帧教训）。
+##
+## 2026-10-16 用户真机：「余妖 13/19」被屏幕切掉尾巴。根因是**换文字的那一拍没人重算左锚**：
+## 引擎在最小尺寸变大时把控件朝右下撑（位置不动，实测 40 宽的盒子自己长到 74），
+## 于是右锚芯片从「空文案那一格」往屏外长肉。判据当时全绿，因为 `show_as_worst_case()`
+## 自己调了一次 `_fit_right()`，把要量的毛病当场修好了（演示与生产不同源）。
+## ⇒ 现在文字只有一个写者 `set_readout()`，轮询与判据同一条路，它必带重算摆位；
+##   再加 `NOTIFICATION_RESIZED` 兜底：不管谁把宽度改了，右缘都被拉回 `EDGE_X`。
 
 const LEFT_FMT := "余妖 %d/%d"
 ## 轮询间隔（秒）：敌数变化节奏远慢于帧率，5Hz 足够跟手又不每帧写 Label
@@ -29,6 +36,8 @@ const WORST_TOTAL := 194
 const ROW_TOP := 66.0
 const ROW_BOTTOM := 88.0
 const EDGE_X := 22.0
+## 空文案那一档的盒子下限宽（真读数一律按文案现算，不拿它当上限）
+const MIN_W := 40.0
 
 ## 判据灌最坏样本时置 true：锁住轮询刷新，免得控件每 0.2s 把 demo 文案盖回当前回合
 var demo_lock: bool = false
@@ -55,11 +64,20 @@ func _ready() -> void:
 	visible = false
 	refresh_now()
 
-## 右锚贴第二排右缘，左缘按内容最小宽现算。锚点若把左缘也钉在右界（offset_left=-22），
-## 容器从 0 宽向右长肉、整颗芯片出屏（LayoutCheck 实测 rect=938 97x29 出屏 75px 的现场）。
+func _notification(what: int) -> void:
+	# 兜底那一枪：宽度只要变了（不管是轮询换文案、字体换档还是引擎按最小尺寸撑盒子），
+	# 就把左锚按新宽度收回来，右缘恒钉在 EDGE_X 上。
+	if what == NOTIFICATION_RESIZED and _label != null:
+		_fit_right()
+
+## 右锚贴第二排右缘，左缘按**当前文案实要的那一格宽**现算。
+## 锚点若把左缘也钉在右界（offset_left=-22），容器从 0 宽向右长肉、整颗芯片出屏
+## （LayoutCheck 实测 rect=938 97x29 出屏 75px 的现场）。
+## 幂等：算出来一样就不写，躲开「设 offset → RESIZED → 再设」自激。
 func _fit_right() -> void:
-	var min_w := get_combined_minimum_size().x
-	offset_left = offset_right - maxf(min_w, 40.0)
+	var want_left: float = offset_right - maxf(get_combined_minimum_size().x, MIN_W)
+	if absf(want_left - offset_left) > 0.5:
+		offset_left = want_left
 
 func _process(delta: float) -> void:
 	_acc += delta
@@ -77,10 +95,18 @@ func refresh_now() -> void:
 	var spawner: Node = GameManager.wave_spawner
 	if spawner == null:
 		return
-	var t := formatted(spawner.wave_left_count(), spawner.wave_total_count())
-	if t != _text_shown:
-		_text_shown = t
+	set_readout(spawner.wave_left_count(), spawner.wave_total_count())
+
+## 文字上屏的唯一出口：判据与 5Hz 轮询都从这一格走，换文字与重算摆位同一拍完成。
+## 分两处（一处写文字、一处算宽度）就是真机那半截出屏的根因。
+func set_readout(left: int, total: int) -> void:
+	var t := formatted(left, total)
+	if t == _text_shown:
+		return
+	_text_shown = t
+	if _label != null:
 		_label.text = t
+	_fit_right()
 
 func _is_fighting() -> bool:
 	var spawner: Node = GameManager.wave_spawner
@@ -96,13 +122,12 @@ static func formatted(left: int, total: int) -> String:
 static func worst_case_text() -> String:
 	return formatted(WORST_LEFT, WORST_TOTAL)
 
-## 把芯片钉成最坏样本并锁住轮询（与 HudWaveCountdown.show_as_worst_case 同一入口约定）
+## 把芯片钉成最坏样本并锁住轮询（与 HudWaveCountdown.show_as_worst_case 同一入口约定）。
+## 灌样本必须走 `set_readout` —— 这里自己 `_fit_right()` 一次，判据量的就不是真机那一拍了。
 func show_as_worst_case() -> void:
 	demo_lock = true
 	visible = true
-	if _label != null:
-		_label.text = worst_case_text()
-		_fit_right()
+	set_readout(WORST_LEFT, WORST_TOTAL)
 
 # ---------------- 判据取值口 ----------------
 

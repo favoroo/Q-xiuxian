@@ -1317,6 +1317,8 @@ static func sell_price(id: String, star: int) -> int:
 	var base := int(def.get("price", 10))
 	return int(ceil(float(base) * SELL_RATIO * pow(STAR_SELL_MULT, float(star - 1))))
 
+const _EMPTY_ARRAY: Array = []
+
 static func star_text(star: int) -> String:
 	return "★".repeat(clampi(star, 1, MAX_STAR))
 
@@ -1327,7 +1329,9 @@ static func full_name(id: String, star: int) -> String:
 	return "%s %s" % [star_text(star), def.get("name", "?")]
 
 static func tags_of(id: String) -> Array:
-	return DEFS.get(id, {}).get("tags", [])
+	if not DEFS.has(id):
+		return _EMPTY_ARRAY
+	return DEFS[id].get("tags", _EMPTY_ARRAY)
 
 static func class_of(id: String) -> String:
 	var t := tags_of(id)

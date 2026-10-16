@@ -149,9 +149,14 @@ func _stress_hud(hud: Control) -> void:
 		hud.wave_countdown.show_as_worst_case()
 	else:
 		hud.wave_label.text = "第 20 波"
-	# 余妖芯片同一约定：样本走控件自己的 worst_case_text，锁刷新由控件自己做
+	# 余妖芯片同一约定：样本走控件自己的 worst_case_text，锁刷新由控件自己做。
+	# 2026-10-16 用户真机「余妖 13/19 出屏」而这一屏全绿：show_as_worst_case 里那句
+	# _fit_right 把要量的毛病当场修好了 ⇒ 灌样本必须先画短读数、再换成最坏那一串，
+	# 逼它走一遍真机「文字变长」的换档，量的是生产写者 set_readout 摆出来的那一格。
 	if hud.wave_left != null:
 		hud.wave_left.show_as_worst_case()
+		hud.wave_left.set_readout(3, 9)
+		hud.wave_left.set_readout(HudWaveLeft.WORST_LEFT, HudWaveLeft.WORST_TOTAL)
 	hud.kills_label.text = "击杀 12847"
 	hud.shards_label.text = "金币 99999"
 	var box: HBoxContainer = hud.get("_synergy_box")
@@ -332,6 +337,8 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		_c.check(chip_txts.any(func(s: String) -> bool: return s.contains("MAX)")),
 			"%s · 至少一枚满档徽记，量的是最长那一档读数" % String(spec["tag"]))
 	var bad := _walk(node, screen, float(spec.get("edge_gap", 0.0)))
+	if String(spec["tag"]) == "顶栏 HUD":
+		bad.append_array(_check_wave_left_chip(node as GameHUD, screen))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
 	_c.check(bad.is_empty(), "%s · 屏宽 %d：无出屏、每行文字装得下（%d 处毛病）%s" % [
@@ -398,6 +405,48 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 		bad.append("货架滚动区里 %d 处装饰控件留 STOP，手指压在卡上滑不动：%s" % [
 			stopped.size(), "、".join(stopped)])
 	return bad
+
+## 第二排右缘那颗「余妖」芯片点名量（2026-10-16 用户真机：读数被屏幕切掉半截）。
+## 通用 _walk 也会报「出屏」，但报的是一串 rect；这一条直接点名「右缘没贴住边距」
+## 与「盒子宽度没跟上文案」——那正是「换文字的那一拍没人重算左锚」的形状。
+## 顺带确认尺子活着：芯片必须真上屏、真钉成最坏样本，否则这一格等于没量。
+func _check_wave_left_chip(hud: GameHUD, screen: Vector2) -> Array[String]:
+	var bad: Array[String] = []
+	if hud == null:
+		return ["顶栏不是 GameHUD，第二排右缘这一格没量到"]
+	if hud.wave_left == null:
+		return ["顶栏没有余妖芯片（HudWaveLeft 未构建）"]
+	var chip: HudWaveLeft = hud.wave_left
+	if not chip.is_showing():
+		bad.append("余妖芯片未上屏，这一格没量到（尺子空转）")
+		return bad
+	var want := String(HudWaveLeft.worst_case_text())
+	if chip.readout_text() != want:
+		bad.append("余妖芯片没灌成最坏样本：实得「%s」应为「%s」" % [chip.readout_text(), want])
+	var r: Rect2 = chip.get_global_rect()
+	var over := chip_right_over(r, screen.x, HudWaveLeft.EDGE_X)
+	if not chip_right_flush(r, screen.x, HudWaveLeft.EDGE_X):
+		bad.append("余妖芯片右缘 %.1f 没贴住第二排边距（屏 %.0f - %.0f = %.1f，越界 %.1f）文案=「%s」" % [
+			r.end.x, screen.x, HudWaveLeft.EDGE_X, screen.x - HudWaveLeft.EDGE_X, over,
+			chip.readout_text()])
+	if not chip_box_fits(r.size.x, chip.get_combined_minimum_size().x):
+		bad.append("余妖芯片盒子 %.0f 宽装不下要 %.0f 宽的文案 ⇒ 左锚没跟着文字重算" % [
+			r.size.x, chip.get_combined_minimum_size().x])
+	return bad
+
+## 尺子①：右锚芯片的右缘要正好落在「屏宽 - 边距」上（容差 1 单位，给取整）。
+## 旧写法（换文案不重算左锚）量出来：盒子从 40 长到 74、左缘不动 ⇒ 右缘比边距多出 34、
+## 其中 12 单位已经在屏外（就是用户截图里「13/」后面那截没了的量）。
+static func chip_right_flush(rect: Rect2, screen_x: float, edge_x: float) -> bool:
+	return absf(rect.end.x - (screen_x - edge_x)) <= 1.0
+
+## 越界多少（正数 = 出屏多少单位），只用于把读数报成人话
+static func chip_right_over(rect: Rect2, screen_x: float, edge_x: float) -> float:
+	return rect.end.x - (screen_x - edge_x)
+
+## 尺子②：布局盒至少要装得下自己那串文案（装不下 = 引擎会把盒子朝右下撑出屏）
+static func chip_box_fits(box_w: float, need_w: float) -> bool:
+	return box_w + 1.0 >= need_w
 
 ## 整棵树逐个控件量三件事：① 这一格在屏内 ② 它**画出来**的那一圈也在屏内
 ## ③ 这一格里的每一行文字装得下。
@@ -666,6 +715,23 @@ func _selftest() -> void:
 	_check_bleed()
 	_check_gutters()
 	_check_safe_insets()
+	_check_right_anchored_chip()
+
+## 右锚芯片那三把尺的反例/正例。数字就是 2026-10-16 探针（PanelContainer + PRESET_TOP_RIGHT、
+## offset_left 按空文案钉成 40 宽）量出来的那一档：换成「余妖 13/19」后最小尺寸要 74，
+## 引擎把盒子朝右下撑（左缘不动）⇒ 右缘越界 34、越屏 12。拦不住这一档就是漏判。
+func _check_right_anchored_chip() -> void:
+	var screen_x := 1202.0
+	var edge := HudWaveLeft.EDGE_X
+	var stale := Rect2(screen_x - 62.0, 66.0, 74.0, 22.0)
+	_c.check(not chip_right_flush(stale, screen_x, edge),
+		"反例13 换文案没重算左锚：右缘越界 %.1f 被拦住" % chip_right_over(stale, screen_x, edge))
+	_c.check(not rect_on_screen(stale, Vector2(screen_x, 540.0)),
+		"反例14 同一格按通用出屏尺也拦得住（越屏 %.1f）" % (stale.end.x - screen_x))
+	var fitted := Rect2(screen_x - edge - 74.0, 66.0, 74.0, 22.0)
+	_c.check(chip_right_flush(fitted, screen_x, edge), "正例 左锚跟着文案重算后右缘贴住边距")
+	_c.check(chip_box_fits(74.0, 74.0), "正例 盒子 74 装得下要 74 的文案")
+	_c.check(not chip_box_fits(40.0, 74.0), "反例15 盒子还停在空文案那 40 宽被拦住")
 
 ## 斜切与放大这两圈「布局盒量不到」的账（2026-10-09 用户真机：悟道面板两边溢出、
 ## 选中卡上下溢出）。反例必须拦住，正例必须放行 —— 拦不住的那一次就是漏判。

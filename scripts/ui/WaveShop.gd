@@ -13,6 +13,11 @@ signal pause_requested
 signal manual_requested(filter_tag: String)
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
+## 内容层（面板本体）：开店的淡入只作用在这一层，根上的全屏 DimOverlay 压暗底随 visible
+## 立即满不透明 —— 加点面板收屏与商店进场的交叉淡变期间，两层暗底无缝接力，
+## 不会闪出身后的战场（2026-10-16 用户反馈「确认加点后闪一下别的画面」）。
+## 出场（出战回战场）仍是整根淡出，让暗底随面板一起退，那是预期效果。
+@onready var content: Control = $CenterContainer
 @onready var stones_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/StonesChip/StonesLabel
 @onready var wave_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TopBar/WaveLabel
 @onready var offers_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/OffersScroll
@@ -346,10 +351,12 @@ func _on_shop_opened() -> void:
 	refresh()
 	visible = true
 	get_tree().paused = true
-	modulate.a = 0.0
+	# 上一回合出战的整根淡出会把根透明度留在 0，这里必须复位；淡入只淡内容层（见 content 注释）
+	modulate.a = 1.0
+	content.modulate.a = 0.0
 	var tw = create_tween()
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
+	tw.tween_property(content, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
 
 ## 按这一档屏宽现算面板与货架卡：高钉成「屏幕高 - 呼吸量」，宽按格数均分可用宽。
 ## 货架卡高由内容决定 ⇒ 这一屏正常情况下竖着不需要滑（判据点名量那条）；

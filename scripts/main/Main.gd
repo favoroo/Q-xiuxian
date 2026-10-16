@@ -158,6 +158,8 @@ func _ready() -> void:
 			ob.charge_progress_updated.connect(hud.on_obelisk_charge_progress)
 			ob.charge_cancelled.connect(hud.on_obelisk_charge_cancelled)
 			ob.blessing_triggered.connect(hud.on_obelisk_blessing_triggered)
+			if ob.is_player_inside and not ob.is_triggered:
+				hud.show_obelisk_activation(ob)
 
 	# BGM 交给 AudioManager 的状态机：开局在主菜单与选人阶段播放 menu，进入回合后由 WaveSpawner 切 battle/trial
 	AudioManager.play_bgm_key("menu")
@@ -400,8 +402,9 @@ func _setup_ambient_mist() -> void:
 		tw.tween_property(sprite, "position", cfg.pos, cfg.dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _process(delta: float) -> void:
-	if GameManager.player != null and is_instance_valid(GameManager.player):
-		var p_pos: Vector2 = GameManager.player.global_position
+	var player := GameManager.player
+	if player != null and is_instance_valid(player):
+		var p_pos: Vector2 = player.global_position
 		if dust_particles != null:
 			dust_particles.global_position = p_pos
 		if dust_near_particles != null:
@@ -409,25 +412,24 @@ func _process(delta: float) -> void:
 		if petal_particles != null:
 			petal_particles.global_position = p_pos
 
-			# 濒死生命警示脉冲（阈值走 GameBalance.hp_is_low：与 HUD 血字、灵石阁徽记同一把尺）
-			var p = GameManager.player
-			# 开关走 GameFeel 每帧 memo：本分支每渲染帧执行，原 get_val 每帧 2 个 String 分配
-			var in_low_hp: bool = GameFeel.screen_flash_enabled() and GameBalance.hp_is_low(p.current_health, p.max_health)
-			if in_low_hp:
-				_low_hp_phase += delta * 4.5
-				var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
-				if vignette_rect != null and vignette_rect.material is ShaderMaterial:
-					var mat = vignette_rect.material as ShaderMaterial
-					if _vignette_tween == null or not _vignette_tween.is_valid():
-						mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
-						mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
-			elif _low_hp_phase > 0.0:
-				_low_hp_phase = 0.0
-				if vignette_rect != null and vignette_rect.material is ShaderMaterial:
-					var mat = vignette_rect.material as ShaderMaterial
-					if _vignette_tween == null or not _vignette_tween.is_valid():
-						mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
-						mat.set_shader_parameter("vignette_opacity", 0.5)
+		# 濒死生命警示脉冲（阈值走 GameBalance.hp_is_low：与 HUD 血字、灵石阁徽记同一把尺）
+		# 开关走 GameFeel 每帧 memo：本分支每渲染帧执行，原 get_val 每帧 2 个 String 分配
+		var in_low_hp: bool = GameFeel.screen_flash_enabled() and GameBalance.hp_is_low(player.current_health, player.max_health)
+		if in_low_hp:
+			_low_hp_phase += delta * 4.5
+			var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
+			if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+				var mat = vignette_rect.material as ShaderMaterial
+				if _vignette_tween == null or not _vignette_tween.is_valid():
+					mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
+					mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
+		elif _low_hp_phase > 0.0:
+			_low_hp_phase = 0.0
+			if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+				var mat = vignette_rect.material as ShaderMaterial
+				if _vignette_tween == null or not _vignette_tween.is_valid():
+					mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
+					mat.set_shader_parameter("vignette_opacity", 0.5)
 
 func _on_weapons_updated(weapons: Array) -> void:
 	if not weapons.is_empty():

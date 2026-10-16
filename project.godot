@@ -83,5 +83,7 @@ rendering_device/driver.windows="d3d12"
 textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method.mobile="mobile"
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
-2d/snap/snap_2d_vertices_to_pixel=true
+# 关闭（2026-10-16）：逐顶点 CPU 对齐破坏 canvas 批处理（759 draw call 根因之一），
+# 本项目主体是程序化矢量绘制 + 非整像素 squash 缩放，无整像素收益。
+2d/snap/snap_2d_vertices_to_pixel=false
 viewport/hdr_2d=true

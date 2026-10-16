@@ -39,6 +39,11 @@ var _urgent: bool = false
 var _has_bar: bool = false
 var _text_shown: String = ""
 var _last_urgent: bool = false  ## 配色守卫：仅在 _urgent 翻转时写一次 override，不每帧刷
+var _last_drawn_ratio: float = -1.0
+var _last_drawn_urgent: bool = false
+var _last_drawn_has_bar: bool = false
+var _last_calc_wave: int = -1
+var _last_calc_secs: int = -999
 
 func _init(target: Label) -> void:
 	_label = target
@@ -65,17 +70,32 @@ func refresh_now() -> void:
 		ratio = clampf(left / total, 0.0, 1.0) if total > 0.0 else 0.0
 	_has_bar = fighting
 	_ratio = ratio
-	_urgent = fighting and int(ceili(left)) <= URGENT_SECS
-	var t := formatted(GameManager.wave_number, left)
-	if t != _text_shown:
-		_text_shown = t
-		_label.text = t
+	var cur_secs := int(ceili(left)) if fighting else -1
+	var cur_wave := GameManager.wave_number
+	_urgent = fighting and cur_secs <= URGENT_SECS
+	if cur_secs != _last_calc_secs or cur_wave != _last_calc_wave:
+		_last_calc_secs = cur_secs
+		_last_calc_wave = cur_wave
+		var t := formatted(cur_wave, left)
+		if t != _text_shown:
+			_text_shown = t
+			_label.text = t
 	# 配色仅在告急翻转时写一次：每帧调 add_theme_color_override 即使值相同
 	# 也触发 NOTIFICATION_THEME_CHANGED → update_minimum_size + queue_redraw，是无谓开销
 	if _urgent != _last_urgent:
 		_last_urgent = _urgent
 		_label.add_theme_color_override("font_color", shown_color())
-	queue_redraw()
+	# 重绘节流：仅当 bar 显隐/告急翻转/线长变化 >= 0.5px 时重绘，不无条件 60Hz queue_redraw
+	var need_redraw := false
+	if _has_bar != _last_drawn_has_bar or _urgent != _last_drawn_urgent:
+		need_redraw = true
+	elif _has_bar and absf(_ratio - _last_drawn_ratio) * maxf(size.x, 100.0) >= 0.5:
+		need_redraw = true
+	if need_redraw:
+		_last_drawn_has_bar = _has_bar
+		_last_drawn_urgent = _urgent
+		_last_drawn_ratio = _ratio
+		queue_redraw()
 
 ## 只有「正在打、且不是 Boss 回合」这一格才发倒计时：清场/悟道/商店阶段表是停着的，
 ## 画一根不动的线等于撒谎

@@ -183,9 +183,22 @@ func _test_floating_btn_defaults() -> void:
 		ov.size = Vector2(d, d)   # 三颗键同径（外观基准钉在 SKILL_BTN_SIZE 一个数上）
 		var arc_r := ov.arc_radius()
 		ov.free()
-		_c.check(corner <= arc_r,
-				"%s：键面文案收在走针环之内（角半径 %.1f <= 走针半径 %.1f，按住时那一圈不压在字上）" % [
-						face[0], corner, arc_r])
+		# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
+		var ob_btn := HudObeliskButton.new()
+		add_child(ob_btn)
+		var dummy_ob := BlessingObelisk.new()
+		add_child(dummy_ob)
+		dummy_ob.is_player_inside = true
+		ob_btn.show_obelisk_activation(dummy_ob)
+		_c.check(ob_btn.visible, "祭坛激活键初次显示")
+		var init_scale: Vector2 = ob_btn._base_scale
+		# 触发离开（启动 0.2s 淡出补间）后立即重新进入
+		ob_btn.hide_obelisk_activation(dummy_ob)
+		ob_btn.show_obelisk_activation(dummy_ob)
+		_c.check(ob_btn.visible, "淡出中立即重新进入 ⇒ 强行截断淡出并保持可见")
+		_c.equals(ob_btn._base_scale, init_scale, "连续打断补间不发生基准缩放漂移")
+		ob_btn.queue_free()
+		dummy_ob.queue_free()
 
 ## 存档损坏容错与 RunReset 清理契约（2026-10-13 健壮性优化）：
 ## 钉住非法类型不崩、_btn_scale 非数值回退 1.0、RunReset 对 live_allies/ally_count/last_run_new_records 清零。

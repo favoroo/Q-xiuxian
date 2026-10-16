@@ -49,6 +49,7 @@ func _ready() -> void:
 	# 画序靠宿主 move_child 压到兄弟首位（z_index -1 会沉到地面瓦片之下，不可用）。
 	top_level = true
 	position = Vector2.ZERO
+	visible = false
 	_ring.resize(RING_CAP)
 	_draw_buf.resize(RING_CAP)
 	_build_lines()
@@ -84,6 +85,7 @@ func seed_point(pos: Vector2) -> void:
 	_ring[0] = pos
 	_head = 1 % RING_CAP
 	_count = 1
+	visible = true
 	_redraw()
 
 func _sample_interval() -> float:
@@ -113,6 +115,7 @@ func reset() -> void:
 	_head = 0
 	_count = 0
 	_acc = 0.0
+	visible = false
 	_redraw()
 
 func _build_lines() -> void:
@@ -143,9 +146,9 @@ func _redraw() -> void:
 	if _line_glow == null or _line_core == null:
 		return
 	if _count == 0:
-		_line_glow.points = PackedVector2Array()
-		_line_core.points = PackedVector2Array()
+		visible = false
 		return
+	visible = true
 	# 环形缓冲按时间序展开：最老点在 (_head - _count)（_head 是下一写入槽），
 	# 低档 _count 封顶 9 < RING_CAP 16 时 _head 仍在全环上游走，不能拿 _head 当起点。
 	# resize 缩容不释放底层内存，_count 单调涨到上限后稳定，不产生每次重绘的分配。

@@ -8,12 +8,18 @@ extends Label
 ## 2026-10-14 再扩：逻辑帧窗口峰值（平均值的尖峰盲区，对应「帧率波动大」主诉）、
 ## 渲染对象数（区分「对象多」还是「draw call 多」）、节点/孤儿节点/内存（池泄漏症状）、
 ## 物理体/碰撞对（对照物理耗时）。
+## 2026-10-16 又扩：显存（纹理预算是否爆）与渲染命令提交耗时
+## （RenderingServer.get_frame_setup_time_cpu：CPU 侧 canvas 命令录制/提交负担，
+## draw call 或图元虚高时它会跟着涨——GPU 纯耗时 Godot 无常规 API，此项是最接近的信号）。
+## 读数用法升级：逻辑/物理 > 16ms ⇒ 卡 CPU；提交耗时高 ⇒ 渲染命令负担重；
+## 两者都不高而 FPS 低 ⇒ GPU 填充率/后处理卡（glow/灯光/高分屏拉伸）。
 ## 读数用法：逻辑/物理耗时合计 > 16ms ⇒ 卡在 CPU 侧；耗时不高但 FPS 低 ⇒ 卡在渲染/GPU 侧。
 
 const REFRESH_INTERVAL := 0.5  ## 面板刷新周期（秒）：2Hz
 
 var _timer: float = 0.0
 var _proc_peak_ms: float = 0.0  ## 当前刷新窗口内逻辑帧耗时峰值（每帧采样，刷新后清零）
+var _last_fps_col: Color = GameStyle.GOOD  ## 上次写入的帧率色（未变不覆写主题色）
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -47,8 +53,12 @@ func _process(delta: float) -> void:
 	_timer = 0.0
 	var fps := Engine.get_frames_per_second()
 	var fps_col := GameStyle.GOOD if fps >= 55 else (GameStyle.JADE if fps >= 35 else GameStyle.BAD)
-	add_theme_color_override("font_color", fps_col)
+	# 颜色未变不覆写：每次 add_theme_color_override 都触发 NOTIFICATION_THEME_CHANGED 无谓开销
+	if fps_col != _last_fps_col:
+		_last_fps_col = fps_col
+		add_theme_color_override("font_color", fps_col)
 	var phys_ms := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	var draw_ms := RenderingServer.get_frame_setup_time_cpu()
 	var draws := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var prims := _fmt_count(int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)))
 	var render_objs := _fmt_count(int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)))
@@ -56,13 +66,14 @@ func _process(delta: float) -> void:
 	var nodes := _fmt_count(int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)))
 	var orphans := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	var mem_mb := Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0
+	var vram_mb := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
 	var phys_bodies := int(Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS))
 	var phys_pairs := int(Performance.get_monitor(Performance.PHYSICS_2D_COLLISION_PAIRS))
-	text = "FPS: %d\n逻辑 %.1fms 峰 %.1fms  物理 %.1fms\n绘制 %d  图元 %s  对象 %s\n敌 %d  弹 %d  宝 %d  特 %d  字 %d\n节点 %s  孤儿 %d  内存 %.0fMB\n物理体 %d  碰撞对 %d" % [
-		fps, proc_now_ms, _proc_peak_ms, phys_ms, draws, prims, render_objs,
+	text = "FPS: %d\n逻辑 %.1fms 峰 %.1fms  物理 %.1fms  提交 %.2fms\n绘制 %d  图元 %s  对象 %s\n敌 %d  弹 %d  宝 %d  特 %d  字 %d\n节点 %s  孤儿 %d  内存 %.0fMB  显存 %.0fMB\n物理体 %d  碰撞对 %d" % [
+		fps, proc_now_ms, _proc_peak_ms, phys_ms, draw_ms, draws, prims, render_objs,
 		GameManager.enemy_count, bolts, AstralGem.active_gem_count() + HealOrb.active_count,
 		JuiceEffect.active_count, DamageNumber.active_count,
-		nodes, orphans, mem_mb, phys_bodies, phys_pairs,
+		nodes, orphans, mem_mb, vram_mb, phys_bodies, phys_pairs,
 	]
 	_proc_peak_ms = 0.0
 

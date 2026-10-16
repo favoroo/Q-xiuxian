@@ -274,6 +274,7 @@ const SPAWN_PUSH_CHEST := 180.0         ## 藏宝匣：推开距离（不走径�
 
 const ELITE_WAVES := [5, 15]             ## 精英回合：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
+const BOSS_WAVE_MAX: int = 20            ## 常量缓存 BOSS_WAVES.max()，避免每帧重复全表求最大值
 const BOSS_HP_BASE := 6200.0             ## Boss 基础生命（2026-10-15 反割草对冲：神识分流 0.12→0.15 收紧后微降 6500→6200，
                                          ## Boss TTK 保持中性 W10≈66s / W20≈46s，割草收敛全部由小怪侧与分流侧承担；
                                          ## 成型 ~46s、极端 6 剑 ~13s）
@@ -338,11 +339,11 @@ const BOSS_STONE_REWARD := 150           ## Boss 击杀额外金币奖励
 ## 固定 Boss 回合：10/20 波，20 回合后（无尽）每 5 波再逢魔君
 ## （2026-10-13：用户口径深层 Boss 战要保留且加密，10 → 5 波一场：25/30/35…）
 static func is_boss_wave(n: int) -> bool:
-	return n in BOSS_WAVES or (n > BOSS_WAVES.max() and n % 5 == 0)
+	return n in BOSS_WAVES or (n > BOSS_WAVE_MAX and n % 5 == 0)
 
 ## 精英回合：5/15 波；无尽模式 20 回合后每 3 波一次（Boss 回合让位）
 static func is_elite_wave(n: int, endless: bool = false) -> bool:
-	return n in ELITE_WAVES or (endless and n > BOSS_WAVES.max() and n % 3 == 0 and not is_boss_wave(n))
+	return n in ELITE_WAVES or (endless and n > BOSS_WAVE_MAX and n % 3 == 0 and not is_boss_wave(n))
 
 ## Boss 生命：与普通敌人同一条 hp 曲线，靠基础值拉开厚度差距
 static func boss_hp(wave: int) -> float:

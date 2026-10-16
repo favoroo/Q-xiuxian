@@ -69,6 +69,7 @@ var extra_skill_cd_total: float = 1.0 ## 额外技能总冷却（算遮罩比例
 var _skill_active_kind: int = -1   ## 活跃窗口对应的技能 Kind（收尾钩子用，-1 = 无活跃技能）
 var _skill_pending_cd: float = 0.0 ## 效果结束后要进入的冷却值（施放时暂存）
 var _skill_buffs: Dictionary = {}  ## 进行中的短时增益：buff id -> 剩余秒（gale / haste）
+var _expired_buffs_buf: Array = [] ## 复用数组，避免 _tick_skill_buffs 每帧分配
 var _gale_cap_forced: bool = false ## 神行术这轮是否把闪避上限临时抬到 1.0（影者 100% 闪避专属）
 var _gale_cap_before: float = 0.0  ## 抬上限前那一帧的角色抬升值（回滚按它还原，别拿算式反推）
 var _dash_time: float = 0.0        ## 冲刺剩余秒（>0 期间移动被冲刺接管）
@@ -520,12 +521,15 @@ func try_activate_extra_skill() -> bool:
 	return false
 
 func _tick_skill_buffs(delta: float) -> void:
-	var expired: Array = []
-	for key in _skill_buffs.keys():
-		_skill_buffs[key] = float(_skill_buffs[key]) - delta
-		if float(_skill_buffs[key]) <= 0.0:
-			expired.append(key)
-	for key in expired:
+	_expired_buffs_buf.clear()
+	for key in _skill_buffs:
+		var left: float = float(_skill_buffs[key]) - delta
+		_skill_buffs[key] = left
+		if left <= 0.0:
+			_expired_buffs_buf.append(key)
+	if _expired_buffs_buf.is_empty():
+		return
+	for key in _expired_buffs_buf:
 		_skill_buffs.erase(key)
 		# 到期精确回滚：buff 乘区与加点/羁绊乘区隔离，回 1.0 即完全无残留
 		match String(key):

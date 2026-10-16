@@ -13,15 +13,40 @@ enum Angle {
 @export var current_angle: Angle = Angle.FRONT:
 	set(val):
 		current_angle = val
-		queue_redraw()
+		_draw_phase = 0.0  # 姿态切换插队重绘，不等下一拍
 
 @export var animate: bool = true
 var _time: float = 0.0
 
+# —— 重绘节流 + 屏外剔除（2026-10-16，照 CultivatorRendererBase/HollowKnightEnemyRenderer 范式）——
+## 本基类此前每帧无条件 queue_redraw() 且无可见性守卫：画廊 4 风格 × 多姿态十几个实例
+## 哪怕藏在隐藏面板里也照跑 60Hz 全量重绘。节流 20Hz + instance_id 错相摊帧，
+## 与 CultivatorRendererBase（玩家级 30Hz）口径一致；animate=false 时完全静止零重绘。
+const REDRAW_INTERVAL := 0.05
+
+var _draw_phase: float = 0.0
+
+func _ready() -> void:
+	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
+
 func _process(delta: float) -> void:
-	if animate:
-		_time += delta
+	if not animate:
+		return
+	_time += delta
+	# 隐藏（如未打开的画廊面板）不重绘：visible=false 时 CanvasItem 不提交绘制，重绘纯浪费
+	if not is_visible_in_tree():
+		return
+	if _draw_phase <= 0.0:
+		_draw_phase = REDRAW_INTERVAL
+		# 屏外剔除：局部原点投到屏幕坐标，落在视口外（留 96px 边距给大件装饰）就不必重绘
+		var canvas_xf := get_viewport().get_canvas_transform()
+		var screen_pos := canvas_xf * get_global_transform().origin
+		var vp := get_viewport().get_visible_rect().size
+		if screen_pos.x < -96.0 or screen_pos.y < -96.0 or screen_pos.x > vp.x + 96.0 or screen_pos.y > vp.y + 96.0:
+			return
 		queue_redraw()
+	else:
+		_draw_phase -= delta
 
 func _draw() -> void:
 	match current_angle:

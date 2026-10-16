@@ -8,6 +8,7 @@ extends Node2D
 ##   ② 极慢正反差速自转（天地阴阳运转感）；
 ##   ③ 4.0s 周期呼吸明灭（sin(TAU / 4.0) 柔和律动）；
 ##   ④ 纯视觉零碰撞判定，show_behind_parent 确保不遮挡角色真身。
+## ⚠ 2026-10-16：圆/弧接 AdaptiveDraw 自适应段数（半径 17~32px 圆环 36~48 段虚耗，自适应后 6~32 段）。
 
 const ROT_SPEED_INNER := 0.12    ## 内环自转角速度（rad/s，约 52s/圈）
 const ROT_SPEED_MID := -0.08    ## 中环反向自转（约 78s/圈）
@@ -69,7 +70,7 @@ func _draw() -> void:
 	# --- 第 1 圈（初境）：细同心主环 + 4 方位八卦爻标 ---
 	var r1 := 17.0
 	draw_set_transform(Vector2.ZERO, _rot_inner, Vector2(1.0, 0.48))  # 俯视透视扁率 0.48
-	draw_arc(Vector2.ZERO, r1, 0.0, TAU, 36, col_glow, 1.2, true)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r1, 0.0, TAU, col_glow, 1.2, true)
 	for i in 4:
 		var ang := (TAU / 4.0) * float(i)
 		var p1 := Vector2(cos(ang), sin(ang)) * (r1 - 2.5)
@@ -80,17 +81,17 @@ func _draw() -> void:
 	if _tier >= 2:
 		var r2 := 24.5
 		draw_set_transform(Vector2.ZERO, _rot_mid, Vector2(1.0, 0.48))
-		draw_arc(Vector2.ZERO, r2, 0.0, TAU, 40, col_faint, 1.0, true)
+		AdaptiveDraw.arc(self, Vector2.ZERO, r2, 0.0, TAU, col_faint, 1.0, true)
 		for j in 8:
 			var ang_j := (TAU / 8.0) * float(j)
 			var pt := Vector2(cos(ang_j), sin(ang_j)) * r2
-			draw_circle(pt, 1.2, col_glow)
+			AdaptiveDraw.circle(self, pt, 1.2, col_glow)
 
 	# --- 第 3 圈（圆满）：天元十二宫阵环 ---
 	if _tier >= 3:
 		var r3 := 32.0
 		draw_set_transform(Vector2.ZERO, _rot_outer, Vector2(1.0, 0.48))
-		draw_arc(Vector2.ZERO, r3, 0.0, TAU, 48, col_faint * 0.85, 0.9, true)
+		AdaptiveDraw.arc(self, Vector2.ZERO, r3, 0.0, TAU, col_faint * 0.85, 0.9, true)
 		for k in 12:
 			var ang_k := (TAU / 12.0) * float(k)
 			var pk1 := Vector2(cos(ang_k), sin(ang_k)) * (r3 - 1.8)

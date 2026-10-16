@@ -81,6 +81,11 @@ const BF_CELL_GAP := 3
 const FORECAST_FONT := 11
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
+## 内容层（面板本体）：开/关/换屏的淡入淡出只作用在这一层。
+## 根节点上还挂着全屏压暗层 DimOverlay —— 它必须全程满不透明，否则面板间切换
+## （加点→下一屏加点、加点→金币阁）的淡入缝隙里会把身后的战场与 HUD 整个露出来，
+## 用户看到的「确认加点后闪一下别的画面」就是这个（2026-10-16 反馈）。
+@onready var content: Control = $CenterContainer
 ## 面板内容那一层：左右边距按「面板斜切从顶走到底挪的那一截」现调（见 chrome_x）
 @onready var content_margin: MarginContainer = $CenterContainer/Panel/MarginContainer
 @onready var card_scroll: ScrollContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll
@@ -304,9 +309,13 @@ func _on_alloc_opened() -> void:
 	_refresh()
 	visible = true
 	get_tree().paused = true
-	modulate.a = 0.0
+	# 只淡入内容层（卡片）：DimOverlay 压暗底随 visible 立即满不透明盖住战场，
+	# 不再整根淡入 —— 否则入场缝隙里暗底是透明的，会闪出身后的战场与 HUD。
+	# 根透明度复位是防御：万一有别处整根淡出过（如商店出战的旧路径），重开不能带着 0 的根。
+	modulate.a = 1.0
+	content.modulate.a = 0.0
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
+	tw.tween_property(content, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
 	# 入场防误触保护窗口：动画播放完后才允许交互
 	tw.tween_interval(0.14)
 	tw.tween_callback(func(): _can_interact = true)
@@ -318,8 +327,10 @@ func _on_alloc_finished() -> void:
 	_can_interact = false
 	# 详情卡是本面板的子节点：不收干净就是「隐藏后复活」——下次开面板它会带着上一局的旧读数亮出来
 	DetailTip.close_all(self)
+	# 只淡内容层：同一帧金币阁已带着自己满不透明的 DimOverlay 亮起来，这里暗底若跟着淡出，
+	# 两层半透明暗底叠加会露出战场（2026-10-16 用户反馈「确认加点后闪一下别的画面」）。
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
+	tw.tween_property(content, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
 	tw.tween_callback(func(): visible = false)
 
 func _layout_for_viewport() -> void:
@@ -536,10 +547,10 @@ func _on_confirm_pick() -> void:
 		return
 	_layout_for_viewport()
 	_refresh()
-	# 连点保护：新一屏候选先淡入，动画放完才放行手指
-	modulate.a = 0.0
+	# 连点保护：新一屏候选先淡入（同样只淡内容层，暗底不动），动画放完才放行手指
+	content.modulate.a = 0.0
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.12)
+	tw.tween_property(content, "modulate:a", 1.0, 0.12)
 	tw.tween_interval(0.1)
 	tw.tween_callback(func(): _can_interact = true)
 

@@ -5,6 +5,8 @@ extends Node2D
 ## 涵盖石板暗纹裂缝、青苔风化暗斑、战痕剑痕、碎石瓦砾、阵外延展符纹。
 ## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
+## ⚠ 2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
+##   本层 ~116 个 0.8~1.6px 小点曾单独吃掉 ~14.6k 图元（面板「图元 21.0k」的大头）。
 
 var half_extent: float = 560.0
 
@@ -31,7 +33,7 @@ func _draw_array_outer_runes() -> void:
 	# 虚线外导引环 (标准半场 440 下 r=168，随 half_extent 等比缩放，确保始终位于太极外环 r_outer=145*scale_f 外围)
 	var scale_f := half_extent / 440.0
 	var r_guide: float = 168.0 * scale_f
-	draw_arc(Vector2.ZERO, r_guide, 0.0, TAU, 64, col_dark_tick, 1.0)
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_guide, 0.0, TAU, col_dark_tick, 1.0)
 
 	# 24 节气辐射刻度齿
 	for i in range(24):
@@ -42,7 +44,7 @@ func _draw_array_outer_runes() -> void:
 		var c_tick := col_cyan_tick if is_major else col_dark_tick
 		draw_line(dir * (r_guide - 4.0), dir * (r_guide + len_tick), c_tick, 1.2 if is_major else 0.8)
 		if is_major:
-			draw_circle(dir * (r_guide + len_tick + 4.0), 1.6, col_gold_dot)
+			AdaptiveDraw.circle(self, dir * (r_guide + len_tick + 4.0), 1.6, col_gold_dot)
 
 # ==============================================================================
 # 3. 战场地面细节（石板裂纹、青苔暗斑、剑痕、碎石、落瓣）
@@ -84,8 +86,8 @@ func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 		for _j in range(sub_count):
 			var offset := Vector2(rng.randf_range(-base_r * 0.7, base_r * 0.7), rng.randf_range(-base_r * 0.7, base_r * 0.7))
 			var r_sub := rng.randf_range(base_r * 0.4, base_r * 0.8)
-			draw_circle(p + offset, r_sub, col_moss)
-		draw_circle(p, base_r * 0.4, col_moss_inner)
+			AdaptiveDraw.circle(self, p + offset, r_sub, col_moss)
+		AdaptiveDraw.circle(self, p, base_r * 0.4, col_moss_inner)
 
 	# 3.2 石板裂缝 (Stone Cracks)
 	var col_crack_shadow := Color(0.03, 0.05, 0.08, 0.65)
@@ -140,7 +142,7 @@ func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 		draw_colored_polygon(peb_pts, col_pebble_dark)
 		# 碎石顶部冷光切面
 		draw_line(pos_peb + Vector2(-peb_size * 0.5, -peb_size * 0.3), pos_peb + Vector2(peb_size * 0.5, -peb_size * 0.6), col_pebble_top, 1.0)
-		draw_circle(pos_peb + Vector2(0.0, -peb_size * 0.4), 0.8, col_pebble_rim)
+		AdaptiveDraw.circle(self, pos_peb + Vector2(0.0, -peb_size * 0.4), 0.8, col_pebble_rim)
 
 	# 3.5 散落灵木落叶与灵气结晶点 (Fallen Petals & Jade Motes)
 	var col_petal_cyan := Color(0.40, 0.82, 0.95, 0.26)

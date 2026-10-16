@@ -83,6 +83,9 @@ var renewal_particles: Array[Dictionary] = []
 
 # 6. 图集残影对象池 (Sprite2D，仅供图集模式兼容)
 var _ghost_pool: Array[Sprite2D] = []
+var _ghost_life: Array[float] = []
+var _ghost_max_life: Array[float] = []
+var _ghost_base_col: Array[Color] = []
 
 # 7. 程序化角色纯矢量流光残影队列
 var _vector_ghosts: Array[Dictionary] = []
@@ -151,6 +154,12 @@ func _refresh_body_scale() -> void:
 	_body_scale = Vector2(s * w, s * h)
 
 func _init_ghost_pool() -> void:
+	_ghost_life.resize(GHOST_POOL_CAP)
+	_ghost_max_life.resize(GHOST_POOL_CAP)
+	_ghost_base_col.resize(GHOST_POOL_CAP)
+	_ghost_life.fill(0.0)
+	_ghost_max_life.fill(0.2)
+	_ghost_base_col.fill(Color.WHITE)
 	for i in range(GHOST_POOL_CAP):
 		var s := Sprite2D.new()
 		s.top_level = true
@@ -159,11 +168,11 @@ func _init_ghost_pool() -> void:
 		add_child(s)
 		_ghost_pool.append(s)
 
-func _acquire_ghost() -> Sprite2D:
-	for s in _ghost_pool:
-		if not s.visible:
-			return s
-	return null
+func _acquire_ghost_idx() -> int:
+	for i in range(_ghost_pool.size()):
+		if not _ghost_pool[i].visible:
+			return i
+	return -1
 
 ## 通知角色本体视图联动更新法相与流光状态
 func _notify_procedural_view(skill_id: String, active: bool, intensity: float = 1.0) -> void:
@@ -362,17 +371,16 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 	var needs_redraw := false
 
 	# 1. 图集残影生命周期淡出
-	for s in _ghost_pool:
+	for i in range(_ghost_pool.size()):
+		var s := _ghost_pool[i]
 		if s.visible:
-			var life: float = float(s.get_meta(&"life", 0.0)) - delta
-			var max_l: float = float(s.get_meta(&"max_life", 0.2))
+			var life: float = _ghost_life[i] - delta
 			if life <= 0.0:
 				s.visible = false
 			else:
-				s.set_meta(&"life", life)
-				var base_col: Color = s.get_meta(&"base_color", Color.WHITE)
-				var ratio := clampf(life / max_l, 0.0, 1.0)
-				s.modulate.a = base_col.a * ratio
+				_ghost_life[i] = life
+				var ratio := clampf(life / _ghost_max_life[i], 0.0, 1.0)
+				s.modulate.a = _ghost_base_col[i].a * ratio
 
 	# 2. 程序化角色纯矢量流光虚影更新
 	if not _vector_ghosts.is_empty():
@@ -657,10 +665,11 @@ func spawn_ghost(color: Color, duration: float) -> void:
 	if tex == null:
 		return
 
-	var ghost := _acquire_ghost()
-	if ghost == null:
+	var idx := _acquire_ghost_idx()
+	if idx < 0:
 		return
 
+	var ghost := _ghost_pool[idx]
 	ghost.texture = tex
 	ghost.offset = sprite.offset
 	ghost.flip_h = sprite.flip_h
@@ -668,9 +677,9 @@ func spawn_ghost(color: Color, duration: float) -> void:
 	ghost.rotation = sprite.global_rotation
 	ghost.global_position = sprite.global_position
 	ghost.modulate = color
-	ghost.set_meta(&"base_color", color)
-	ghost.set_meta(&"life", duration)
-	ghost.set_meta(&"max_life", duration)
+	_ghost_base_col[idx] = color
+	_ghost_life[idx] = duration
+	_ghost_max_life[idx] = duration
 	ghost.visible = true
 
 # ---------------- 动态图形绘制 ----------------

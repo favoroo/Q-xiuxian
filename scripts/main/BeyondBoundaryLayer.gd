@@ -70,16 +70,27 @@ func _setup_fog_layers() -> void:
 		else:
 			_fog_near = layer
 
+## 帧级相机查询缓存（2026-10-16，照 HollowKnightEnemyRenderer 范式）：
+## get_viewport/get_camera_2d 的返回值在同一渲染帧内对全部节点相同，
+## 全屏常显层没理由每帧付 4 次引擎查询——每渲染帧只查一次。
+static var _cam_frame: int = -1
+static var _cam_cache: Camera2D = null
+
 func _process(_delta: float) -> void:
-	var cam := get_viewport().get_camera_2d()
+	var frame := Engine.get_frames_drawn()
+	if frame != _cam_frame:
+		_cam_frame = frame
+		_cam_cache = get_viewport().get_camera_2d()
+	var cam := _cam_cache
 	if cam != null:
-		position = cam.global_position * (1.0 - PARALLAX_FACTOR)
+		var cam_pos := cam.global_position
+		position = cam_pos * (1.0 - PARALLAX_FACTOR)
 		# 雾层视差补偿（子层 world = self.position + child.position）：
 		# 远层比主体慢 → 正补偿；近层比主体快 → 负补偿（反向错位）
 		if _fog_far != null:
-			_fog_far.position = cam.global_position * (PARALLAX_FACTOR - FOG_FACTOR_FAR)
+			_fog_far.position = cam_pos * (PARALLAX_FACTOR - FOG_FACTOR_FAR)
 		if _fog_near != null:
-			_fog_near.position = cam.global_position * (PARALLAX_FACTOR - FOG_FACTOR_NEAR)
+			_fog_near.position = cam_pos * (PARALLAX_FACTOR - FOG_FACTOR_NEAR)
 
 func _draw() -> void:
 	var rng := RandomNumberGenerator.new()

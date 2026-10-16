@@ -102,7 +102,14 @@ var bob_phase: float = 0.0
 var _slash_tween: Tween = null     # 剑气出鞘扫放的全生命周期（亮扫→淡出→隐藏），再次攻击时先杀旧的
 var sweep_sprite: WeaponArcRenderer = null  # 横扫专属元素扇面（top_level 世界坐标，SWEEP 才建）
 var _sweep_slash_tween: Tween = null
-var _ground_decal_cd: float = 0.0  ## 土系重击地面贴花生成节流（秒，防高攻速铺满屏幕）
+
+## 土系重击地面裂痕全局限频（2026-10-16）：旧写法每把武器各自 0.85s 一道，
+## 多把土系武器 × 高攻速下几乎每次命中都裂、满屏裂纹。裂痕是「重击砸地」的
+## 偶发留痕而非常规命中反馈，改全武器共享一道时间闸：任一武器留痕后
+## EARTH_CRACK_MIN_GAP_MS 内所有武器（含自己）的后续命中都不再出新裂痕。
+## 用时间戳而非倒计时——_process 每实例各跑一遍，共享倒计时会被多把武器重复扣减。
+const EARTH_CRACK_MIN_GAP_MS := 2500
+static var _last_earth_crack_ms: int = -999999  ## 上次留痕时间戳（负初值 = 从未留痕；GDScript 的 << 不吃负操作数）
 
 # ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
 ## 每次开火原建 3~4 个局部 Tween（后坐 1 + 枪口闪光 1 + 本体亮闪 1 + 光晕 1），
@@ -297,19 +304,25 @@ func _setup_aura() -> void:
 	add_child(aura_sprite)
 	move_child(aura_sprite, 0)
 
+var _cached_aura_color: Color = Color.TRANSPARENT
+
 func _get_aura_color() -> Color:
+	if _cached_aura_color.a > 0.0:
+		return _cached_aura_color
 	var tags: Array = WeaponData.tags_of(weapon_def_id)
 	if tags.has("fire"):
-		return Color(1.0, 0.42, 0.15)
+		_cached_aura_color = Color(1.0, 0.42, 0.15)
 	elif tags.has("water"):
-		return Color(0.35, 0.75, 1.0)
+		_cached_aura_color = Color(0.35, 0.75, 1.0)
 	elif tags.has("thunder"):
-		return Color(0.65, 0.45, 1.0)
+		_cached_aura_color = Color(0.65, 0.45, 1.0)
 	elif tags.has("wood") or tags.has("poison"):
-		return Color(0.35, 0.85, 0.45)
+		_cached_aura_color = Color(0.35, 0.85, 0.45)
 	elif tags.has("earth"):
-		return Color(0.85, 0.65, 0.35)
-	return Color(0.95, 0.85, 0.50)
+		_cached_aura_color = Color(0.85, 0.65, 0.35)
+	else:
+		_cached_aura_color = Color(0.95, 0.85, 0.50)
+	return _cached_aura_color
 
 ## 朝向唯一入口：节点 rotation = 真实瞄准角（发射帧），贴图自己做补偿。
 ## - 会转的武器：贴图补掉 art_angle ⇒ 画出来的剑尖必然落在发射帧 +X 上。
@@ -436,8 +449,6 @@ func _process(delta: float) -> void:
 
 	_tick_fire_fx(delta)
 	cooldown_timer -= delta
-	if _ground_decal_cd > 0.0:
-		_ground_decal_cd -= delta
 	bob_phase += delta * 3.5
 
 	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
@@ -1175,13 +1186,16 @@ func _sort_volley_by_proximity(a: Node2D, b: Node2D) -> bool:
 	return _volley_muzzle_pos.distance_squared_to(a.global_position) < _volley_muzzle_pos.distance_squared_to(b.global_position)
 
 ## 土系重击地面贴花接入（开山斧/崩山剑/奔浪锤等命中敌群时克制留痕）
+## 全武器共享一道全局时间闸（静态时间戳，非逐实例倒计时）——裂痕是重击砸地的
+## 偶发留痕，不是每次命中的常规反馈；命中演出本身（月牙/扇面/闪光/材质声）不受影响
 func _try_spawn_earth_crack(hit_pos: Vector2, hit_radius: float) -> void:
-	if _ground_decal_cd > 0.0:
-		return
 	var tags: Array = WeaponData.tags_of(weapon_def_id)
 	if not tags.has("earth"):
 		return
-	_ground_decal_cd = 0.85
+	var now_ms := Time.get_ticks_msec()
+	if now_ms - _last_earth_crack_ms < EARTH_CRACK_MIN_GAP_MS:
+		return
+	_last_earth_crack_ms = now_ms
 	var player: Node2D = GameManager.player
 	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (get_tree().current_scene if get_tree() != null else self)
 	if battle_layer != null and is_inside_tree():

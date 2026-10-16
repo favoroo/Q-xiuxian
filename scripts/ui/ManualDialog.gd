@@ -612,6 +612,35 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 
 	return row
 
+func _on_closed() -> void:
+	if GameManager.run_started:
+		trim_heavy_pages()
+
+## 在对局战斗期间释放重页内容（保树体精简，待下次打开再按页懒建）
+func trim_heavy_pages() -> void:
+	if visible:
+		return
+	if _weapons_box != null:
+		for c in _weapons_box.get_children():
+			c.queue_free()
+		_page_built[1] = false
+		_page_dirty[1] = true
+	if _items_box != null:
+		for c in _items_box.get_children():
+			c.queue_free()
+		_page_built[2] = false
+		_page_dirty[2] = true
+	if _cult_box != null:
+		for c in _cult_box.get_children():
+			c.queue_free()
+		_page_built[3] = false
+		_page_dirty[3] = true
+	if _enemies_box != null:
+		for c in _enemies_box.get_children():
+			c.queue_free()
+		_page_built[4] = false
+		_page_dirty[4] = true
+
 # ----------------- 分页 5：敌人图鉴 -----------------
 
 func _build_enemies_page(parent: Control) -> Control:

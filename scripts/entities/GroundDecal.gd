@@ -29,9 +29,10 @@ const CRACK_DEBRIS := Color(0.55, 0.68, 0.78, 0.70)  ## 迸溅微碎石亮面
 const CRACK_DEBRIS_SHADOW := Color(0.02, 0.03, 0.05, 0.60) ## 碎石落影
 const SCORCH_BODY := Color(0.05, 0.04, 0.04, 0.50)   ## 焦痕炭黑
 const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.28)  ## 余烬暗橙（渐隐时同步熄灭）
-## 击杀残晕（FADE_GLOW）：色相由调用方按敌种主色传入 _tint，这里只给基准透明度
-const FADE_GLOW_CORE_A := 0.30   ## 中心亮核
-const FADE_GLOW_RIM_A := 0.16    ## 外圈柔晕
+## 击杀残晕（FADE_GLOW）：冷灰灵烬为主调，敌种主色（_tint）只留一丝余温 ——
+## 与出生预警的实心红圆+十字煞针彻底拉开色相与形态，不再误读为「又要刷怪」
+const GLOW_ASH := Color(0.66, 0.78, 0.90, 1.0)   ## 灵烬冷灰主调（贴地残痕结构色）
+const GLOW_SHADE := Color(0.03, 0.05, 0.08, 0.35) ## 残痕贴地暗影
 
 var _tint: Color = Color.WHITE   ## FADE_GLOW 专用：敌种主色（spawn 时传入）
 
@@ -80,7 +81,6 @@ static func spawn_tinted(parent: Node, pos: Vector2, p_radius: float, col: Color
 	d.kind = Kind.FADE_GLOW
 	d.radius = p_radius
 	d._tint = col
-	d._time_left = GLOW_HOLD_TIME + GLOW_FADE_TIME
 	d.activate()
 	return d
 
@@ -90,9 +90,15 @@ var radius: float = 100.0   ## 视觉包络半径：贴花内容永不超出此�
 var _pooled: bool = false
 var _age: float = 0.0
 var _time_left: float = 0.0
+var _hold_time: float = HOLD_TIME   ## 按 kind 在 activate() 落定（FADE_GLOW 走短寿命档）
+var _fade_time: float = FADE_TIME
 var _cracks: Array[PackedVector2Array] = []   ## 裂纹折线（震裂用）
 var _debris: Array[Vector3] = []               ## 碎石颗粒：x/y = 偏移，z = 半径（震裂用）
 var _blobs: Array[Vector3] = []               ## 子圆聚合：x/y = 偏移，z = 半径（焦痕用）
+var _ring_segs: Array[Vector3] = []           ## 断环符纹：x = 起始角，y = 跨度，z = 半径系数（残晕用）
+var _embers: Array[Vector3] = []              ## 烬点：x/y = 偏移，z = 半径（残晕用）
+var _ember_phase: Array[float] = []           ## 烬点闪烁相位（与 _embers 一一对应）
+var _wisps: Array[Vector3] = []               ## 烟缕基点：x/y = 偏移，z = 长度系数（残晕用）
 
 ## 出膛激活：按 kind 预生成形态，随后进入「留存→渐隐→回收」计时
 func activate() -> void:
@@ -102,7 +108,15 @@ func activate() -> void:
 	reset_physics_interpolation()
 	visible = true
 	_age = 0.0
-	_time_left = HOLD_TIME + FADE_TIME
+	# 寿命按 kind 分档：震裂/焦痕长留存，击杀残晕是高频事件走 0.55s 短档
+	#（旧写法恒用 HOLD+FADE 2.3s，spawn_tinted 预设的短寿命被这里覆盖，红圆在地上赖 2.3s 才被读出撞脸出生预警）
+	if kind == Kind.FADE_GLOW:
+		_hold_time = GLOW_HOLD_TIME
+		_fade_time = GLOW_FADE_TIME
+	else:
+		_hold_time = HOLD_TIME
+		_fade_time = FADE_TIME
+	_time_left = _hold_time + _fade_time
 	_redraw_timer = 0.0
 	_generate_shape()
 	set_process(true)
@@ -136,6 +150,10 @@ func _generate_shape() -> void:
 	_cracks.clear()
 	_debris.clear()
 	_blobs.clear()
+	_ring_segs.clear()
+	_embers.clear()
+	_ember_phase.clear()
+	_wisps.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(absf(global_position.x) * 738.5) ^ int(absf(global_position.y) * 1934.9) ^ (created_count + reused_count)
 	match kind:
@@ -177,7 +195,21 @@ func _generate_shape() -> void:
 				if sub_r > 2.0:
 					_blobs.append(Vector3(off.x, off.y, sub_r))
 		Kind.FADE_GLOW:
-			pass  # 纯同心圆光晕，无随机形态要预生成
+			# 灵烬残痕：断环符纹 + 烬点 + 烟缕，全部预生成、绘制零随机
+			var seg_count := rng.randi_range(3, 4)
+			for i in range(seg_count):
+				var start := TAU * float(i) / float(seg_count) + rng.randf_range(-0.3, 0.3)
+				_ring_segs.append(Vector3(start, rng.randf_range(0.5, 1.0), rng.randf_range(0.72, 0.95)))
+			var ember_count := rng.randi_range(5, 7)
+			for _i in range(ember_count):
+				var dir := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU))
+				var pos := dir * rng.randf_range(0.0, radius * 0.55)
+				_embers.append(Vector3(pos.x, pos.y, rng.randf_range(0.9, 1.8)))
+				_ember_phase.append(rng.randf_range(0.0, TAU))
+			for _i in range(3):
+				var dir := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU))
+				var pos := dir * rng.randf_range(0.0, radius * 0.25)
+				_wisps.append(Vector3(pos.x, pos.y, rng.randf_range(0.55, 0.9)))
 
 func _process(delta: float) -> void:
 	_age += delta
@@ -216,8 +248,8 @@ static func _sample_crack_growth(pts: PackedVector2Array, grow: float) -> Packed
 	return res
 
 func _draw() -> void:
-	# 渐隐系数：留存期恒 1，末段线性降到 0
-	var a := clampf(_time_left / FADE_TIME, 0.0, 1.0)
+	# 渐隐系数：留存期恒 1，末段线性降到 0（渐隐窗按 kind 分档，与 activate() 同源）
+	var a := clampf(_time_left / _fade_time, 0.0, 1.0)
 	match kind:
 		Kind.CRACK:
 			# 0~0.12s 快速爆裂展开（平滑开方缓动，第 1 帧即见雏形）
@@ -248,7 +280,38 @@ func _draw() -> void:
 			for b in _blobs:
 				draw_circle(Vector2(b.x, b.y), b.z * 0.45, ember)
 		Kind.FADE_GLOW:
-			# 击杀余韵：敌种主色同心双圈贴地残晕，随时间整体淡出。
-			# 出生即最大（尸体塌缩那一帧脚下亮起），不再做生长动画——高频事件要的是轻
-			draw_circle(Vector2.ZERO, radius, Color(_tint.r, _tint.g, _tint.b, FADE_GLOW_RIM_A * a))
-			draw_circle(Vector2.ZERO, radius * 0.55, Color(_tint.r, _tint.g, _tint.b, FADE_GLOW_CORE_A * a))
+			# 击杀余韵「灵烬余痕」（2026-10-16 重设计）：冷灰断环符纹 + 闪烁烬点 + 升腾烟缕，
+			# 敌种主色只留一丝余温。旧版实心敌色双圆与出生预警红圈撞脸（尤其血煞系小怪），
+			# 现版以「压扁贴地 + 冷灰为主 + 零碎断笔」三个手段与预警的正圆红环拉开读数。
+			# 出生即最大（尸体塌缩那一帧脚下亮起），不做生长动画——高频事件要的是轻。
+			var total := _hold_time + _fade_time
+			var life_t := clampf(_age / maxf(total, 0.01), 0.0, 1.0)
+			var ring_col := GLOW_ASH.lerp(_tint, 0.30)
+			var ember_col := _tint.lightened(0.4).lerp(Color.WHITE, 0.3)
+			var wisp_col := GLOW_ASH.lerp(_tint, 0.45)
+			# 贴地层统一压扁（俯视贴地感，形态上与正圆预警圈再拉开一档）
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.62))
+			draw_circle(Vector2.ZERO, radius * (0.9 - 0.2 * life_t), Color(GLOW_SHADE, GLOW_SHADE.a * a))
+			var ring_r := radius * (1.0 - 0.22 * life_t)
+			for seg in _ring_segs:
+				draw_arc(Vector2.ZERO, ring_r * seg.z, seg.x, seg.x + seg.y, 10,
+					Color(ring_col.r, ring_col.g, ring_col.b, 0.7 * a), 1.5, true)
+			# 内晕：极淡的敌色余温，随消散微缩
+			draw_circle(Vector2.ZERO, radius * 0.46 * (1.0 - 0.35 * life_t),
+				Color(_tint.r, _tint.g, _tint.b, 0.14 * a))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			# 烬点：微光闪烁上浮，熄灭比整体更快（×a²）
+			for i in range(_embers.size()):
+				var e := _embers[i]
+				var tw := 0.55 + 0.45 * sin(_age * 9.0 + _ember_phase[i])
+				var epos := Vector2(e.x, e.y * 0.62) + Vector2(0.0, -life_t * 3.0)
+				draw_circle(epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a))
+			# 烟缕：三缕残烟自烬痕升起，摇曳消散（顶端收在包络圈内）
+			for i in range(_wisps.size()):
+				var w := _wisps[i]
+				var base := Vector2(w.x, w.y * 0.62)
+				var rise := life_t * radius * 0.4 * w.z
+				var sway := sin(_age * 2.4 + float(i) * 2.1) * 2.2
+				var tip := base + Vector2(sway, -rise - radius * 0.25 * w.z)
+				draw_line(base + Vector2(0.0, -rise * 0.3), tip,
+					Color(wisp_col.r, wisp_col.g, wisp_col.b, 0.42 * a * a), 1.2, true)

@@ -199,6 +199,27 @@ var _has_elite_light: bool = false
 static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
 static var pool_created_count: int = 0 ## 探针断言用：复用两轮零增长
 static var pool_reused_count: int = 0
+
+## —— 全局大面积特效时间戳闸（2026-10-16 演出去噪）——
+## 静态时间戳闸（Time.get_ticks_msec）：同屏大面积演出（焦痕/爆炸环）走「最后一次放行后
+## GAP 内全静默」，无论多少只怪同帧同秒触发。用时间戳不用共享倒计时——倒计时被多实例
+## 各自扣一遍会加速漏闸。GDScript 坑：位移 << 不吃负操作数，初值只写普通负数。
+const GROUND_SCORCH_MIN_GAP_MS := 2500   ## 自爆焦痕：屏上至多一块，与贴花 2.3s 寿命衔接
+const KILL_EXPLODE_FX_MIN_GAP_MS := 700  ## 裂魂铃爆炸环：清怪高潮不再冲击环雨，保留节奏读数
+static var _last_scorch_ms: int = -999999
+static var _last_kill_explode_fx_ms: int = -999999
+
+## 全局闸通行检查：距上次放行 ≥ gap_ms 时放行并记账，否则静默拦下
+static func _fx_gap_gate(gap_ms: int, slot: String) -> bool:
+	var now_ms := Time.get_ticks_msec()
+	var last_ms: int = _last_scorch_ms if slot == "scorch" else _last_kill_explode_fx_ms
+	if now_ms - last_ms < gap_ms:
+		return false
+	if slot == "scorch":
+		_last_scorch_ms = now_ms
+	else:
+		_last_kill_explode_fx_ms = now_ms
+	return true
 var _poolable: bool = false            ## 是否可回池（仅 acquire_or_new 出的个体为 true）
 var _pooled: bool = false              ## 当前是否泡在池里
 var _pool_key: String = ""
@@ -1414,8 +1435,10 @@ func _explode(player: Node2D) -> void:
 	_clear_explode_ring()
 	# 冲击波扫到 explode_radius 为止：扫过的范围就是受伤的范围（与判定同源）
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, explode_radius, GameStyle.BAD)
-	# 爆点留焦痕（纯视觉贴花，判定已在上方结算）
-	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
+	# 爆点留焦痕（纯视觉贴花，判定已在上方结算）。焦痕走全局共享闸（同 FloatingWeapon 裂痕
+	# 同一治理口径）：成群丹爆接连自爆不再把地面糊满黑斑，屏上至多一块焦痕。
+	if _fx_gap_gate(GROUND_SCORCH_MIN_GAP_MS, "scorch"):
+		GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 	# 自爆也算战果：进击杀连击音阶（精英基准抬档同 _die 口径）
 	AudioManager.register_kill_pitch(die_pitch_base * 1.12)
@@ -1776,10 +1799,13 @@ func _pulse_heal() -> void:
 			continue
 		e.receive_heal(heal_amount)
 		healed_any = true
-		if healed_any:
-			JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
-			AudioManager.play_sfx("heal", 0.5)
-			play_squash(Vector2(1.18, 0.84), 0.18)
+	# 2026-10-16 演出去噪：演出环每跳只发一次（旧写法 if 缩进在 for 内，一跳奶到 N 个
+	# 残血同伴就同帧叠 N 个 240px 大绿圈 + N 重音效——治疗环是全游戏最大的冲击环，群奶糊屏）。
+	# 治疗本身照常逐个结算；「谁在被奶」的受者读数由 receive_heal 里的 heal_rise 逐个亮，不丢信息。
+	if healed_any:
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
+		AudioManager.play_sfx("heal", 0.5)
+		play_squash(Vector2(1.18, 0.84), 0.18)
 
 func receive_heal(amount: float) -> void:
 	if dying:
@@ -2023,7 +2049,11 @@ func _die() -> void:
 				continue
 			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
 			e.take_damage(ex_dmg, ex_dir * ex_impulse)
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
+		# 2026-10-16 演出去噪：伤害/击退照常逐次结算（玩法零改动），金色爆炸环走全局限频——
+		# 旧写法每次击杀一发 90px 环，清怪高潮连环爆炸时是冲击环雨。伤害与环同源只是读法惯例，
+		# 环限频不改爆炸链实际范围；链爆读数由受击方 take_damage 自己的受击反馈补足。
+		if _fx_gap_gate(KILL_EXPLODE_FX_MIN_GAP_MS, "kill_explode_fx"):
+			JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
