@@ -34,6 +34,11 @@ static var created_count: int = 0
 static var reused_count: int = 0
 static var active_count: int = 0  ## 当前在场回复珠数：HUD「宝」计数与宝石合并统计
 
+static func clear_pool() -> void:
+	_pool.clear()
+	active_count = 0
+	_host = null
+
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
 		return

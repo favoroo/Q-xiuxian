@@ -39,6 +39,10 @@ var _acc: float = 0.0
 var _line_glow: Line2D = null
 var _line_core: Line2D = null
 var _color := Color(0.95, 0.90, 0.72)
+## 两条 Line2D 共用的常驻 Gradient（_build_lines 建一次，configure 只就地改 colors）：
+## 池化弹丸逐发 activate 都会 configure，原先每次 new 2 个 Gradient 是弹丸侧最大持续分配源
+var _grad_glow: Gradient = null
+var _grad_core: Gradient = null
 
 func _ready() -> void:
 	# top_level + position 恒为原点 ⇒ 本地坐标 == 世界坐标，历史点直接存全局位置。
@@ -49,12 +53,30 @@ func _ready() -> void:
 	_draw_buf.resize(RING_CAP)
 	_build_lines()
 
-## 配色下发（与弹体异常色温同源）：BladeProjectile.activate 逐发调用
+## 配色下发（与弹体异常色温同源）：BladeProjectile.activate 逐发调用。
+## 颜色未变直接短路；变了也只就地覆写常驻 Gradient 的 colors（照 WeaponArcRenderer
+## 「不重建只下发」范式），不再每次 new 2 个 Gradient + PackedColorArray。
 func configure(color: Color) -> void:
+	if color == _color:
+		return
 	_color = color
-	if _line_glow != null:
-		_line_glow.gradient = _make_gradient(GLOW_ALPHA_HEAD, 1.0)
-		_line_core.gradient = _make_gradient(CORE_ALPHA_HEAD, 1.6)
+	_apply_gradients()
+
+func _apply_gradients() -> void:
+	if _grad_glow == null:
+		return
+	_fill_gradient(_grad_glow, GLOW_ALPHA_HEAD, 1.0)
+	_fill_gradient(_grad_core, CORE_ALPHA_HEAD, 1.6)
+
+## 就地填充常驻 Gradient 的 colors（两色端点：尾端全透 → 头部带 HDR 提亮的主题色）
+func _fill_gradient(grad: Gradient, head_alpha: float, hdr_boost: float = 1.0) -> void:
+	var r := _color.r * hdr_boost
+	var g := _color.g * hdr_boost
+	var b := _color.b * hdr_boost
+	grad.colors = PackedColorArray([
+		Color(r, g, b, 0.0),
+		Color(r, g, b, head_alpha),
+	])
 
 ## 出膛起笔：清空上一发历史后从枪口位置落第一个点
 func seed_point(pos: Vector2) -> void:
@@ -94,10 +116,13 @@ func reset() -> void:
 	_redraw()
 
 func _build_lines() -> void:
-	_line_glow = _make_line(GLOW_WIDTH, GLOW_ALPHA_HEAD, 1.0)
-	_line_core = _make_line(CORE_WIDTH, CORE_ALPHA_HEAD, 1.6)
+	_grad_glow = Gradient.new()
+	_grad_core = Gradient.new()
+	_line_glow = _make_line(GLOW_WIDTH, _grad_glow)
+	_line_core = _make_line(CORE_WIDTH, _grad_core)
+	_apply_gradients()
 
-func _make_line(width: float, head_alpha: float, hdr_boost: float = 1.0) -> Line2D:
+func _make_line(width: float, grad: Gradient) -> Line2D:
 	var line := Line2D.new()
 	line.width = width
 	line.joint_mode = Line2D.LINE_JOINT_ROUND
@@ -108,20 +133,11 @@ func _make_line(width: float, head_alpha: float, hdr_boost: float = 1.0) -> Line
 	curve.add_point(Vector2(0.0, 0.1))
 	curve.add_point(Vector2(1.0, 1.0))
 	line.width_curve = curve
-	line.gradient = _make_gradient(head_alpha, hdr_boost)
+	# Gradient 由调用方传入并常驻成员持有（_grad_glow/_grad_core），
+	# configure 变色时就地覆写 colors，不再每次 new
+	line.gradient = grad
 	add_child(line)
 	return line
-
-func _make_gradient(head_alpha: float, hdr_boost: float = 1.0) -> Gradient:
-	var grad := Gradient.new()
-	var r := _color.r * hdr_boost
-	var g := _color.g * hdr_boost
-	var b := _color.b * hdr_boost
-	grad.colors = PackedColorArray([
-		Color(r, g, b, 0.0),
-		Color(r, g, b, head_alpha),
-	])
-	return grad
 
 func _redraw() -> void:
 	if _line_glow == null or _line_core == null:

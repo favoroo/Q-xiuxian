@@ -62,6 +62,7 @@ func _ready() -> void:
 				"--star": _star = int(String(args[i + 1]))
 				"--seconds": _sample_seconds = float(String(args[i + 1]))
 	BladeProjectile.homing_scale = 0.0 if _selftest else 1.0
+	BladeProjectile.record_final_stats = true
 	if _selftest:
 		print("[INFO] 反例模式：homing_scale=0（退回旧的直线弹），A 段命中兑现率必须跌破下限")
 	call_deferred("_run")
@@ -281,8 +282,10 @@ func _finish() -> void:
 		else:
 			print("[FAIL] 反例不成立：关掉追踪后 A 段仍然全绿 —— 判据没牙齿")
 			_c.failures.append("反例：关掉追踪后 A 段必须报错")
-	BladeProjectile.homing_scale = 1.0
-	GameManager.joystick = null
+		BladeProjectile.homing_scale = 1.0
+		BladeProjectile.record_final_stats = false
+		BladeProjectile.clear_final_stats()
+		GameManager.joystick = null
 	if _c.report("PROJECTILE_RESULT"):
 		get_tree().quit(0)
 	else:

@@ -258,12 +258,12 @@ static func _try_merge(combo_key: int, amount: int, is_crit: bool, pos: Vector2)
 	else:
 		# 闸内：只重播弹出动画与跟随位置，沿用当前文本（_start 的文本/样式去重保证零重绘）
 		text = n._text
-		n._start(
-			pos + Vector2(_rand_range(-12.0, 12.0), -12.0),
-			text, settings, crit,
-			_rand_range(-26.0, 26.0),
-			_rand_range(40.0, 52.0) if crit else _rand_range(32.0, 42.0)
-		)
+	n._start(
+		pos + Vector2(_rand_range(-12.0, 12.0), -12.0),
+		text, settings, crit,
+		_rand_range(-26.0, 26.0),
+		_rand_range(40.0, 52.0) if crit else _rand_range(32.0, 42.0)
+	)
 	return true
 
 func _ready() -> void:

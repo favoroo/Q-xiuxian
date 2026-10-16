@@ -82,6 +82,13 @@ var art_angle: float = 0.0             # == tip_local.angle()：这张图天生�
 var upright: bool = false              # 重器保持世界竖直（宝灯/法牌/大印/灵藤）
 var muzzle_len: float = 11.0           # 出膛点离本体中心的屏上距离 = |tip| × 贴图缩放
 
+## 弹丸外观三件套（bullet / bullet_scale / bullet_spin）：setup 期一次性解析，
+## 开火逐发不再走 ResourceLoader.exists/load 与 def.get —— 高射速齐射时每秒
+## 数十次的路径哈希查找是纯浪费（路径对同一武器恒定）
+var _bullet_tex: Texture2D = null
+var _bullet_scale: float = 1.0
+var _bullet_spins: bool = false
+
 var cooldown_timer: float = 0.0
 var base_angle: float = 0.0        # 无目标时回归的基础槽位角（Player 下发）
 var spread_angle: float = 0.0      # 多把武器间的错开角，避免重叠（Player 下发）
@@ -204,6 +211,12 @@ func setup(def_id: String, star_level: int) -> void:
 	tip_local = def.get("tip", FALLBACK_TIP)
 	art_angle = tip_local.angle()
 	upright = bool(def.get("upright", false))
+	# 弹丸纹理在 setup 期只加载一次（升星重调 setup 也只是重复赋同值，load 有引擎级缓存兜底）
+	var bullet_path: String = String(def.get("bullet", ""))
+	if not bullet_path.is_empty() and ResourceLoader.exists(bullet_path):
+		_bullet_tex = load(bullet_path) as Texture2D
+	_bullet_scale = float(def.get("bullet_scale", 1.0))
+	_bullet_spins = bool(def.get("bullet_spin", false))
 
 func _ready() -> void:
 	slash_sprite.visible = false
@@ -698,12 +711,7 @@ func _perform_projectile_attack() -> void:
 	# 弹丸外观按武器归位（2026-10-09 才真正接上）：WeaponData 的 bullet / bullet_scale / bullet_spin
 	# 三个字段 2026-10-08 就写进表里了，但出膛那一圈从来没读它 —— 运行时五把远程武器
 	# 打出去的全是 BladeProjectile.tscn 里那张公共火符（用户口径：「不知道从哪里发射出来的」）。
-	var bullet_tex: Texture2D = null
-	var bullet_path: String = String(def.get("bullet", ""))
-	if not bullet_path.is_empty() and ResourceLoader.exists(bullet_path):
-		bullet_tex = load(bullet_path) as Texture2D
-	var bullet_scale: float = float(def.get("bullet_scale", 1.0))
-	var bullet_spins: bool = bool(def.get("bullet_spin", false))
+	# 2026-10-16 起改为 setup 期解析缓存（_bullet_tex 等），开火热路径零资源查找。
 	# 逐发锁定：一次三发的武器，每一发各咬一个最近的敌人。
 	# 旧写法三发全按同一个 aim_dir 扇形散开 ⇒ 只剩一个敌人时两边那两发飞过头顶（仿真：350px
 	# 处散布侧偏 70+px，而判定只有 7px + 受击圈 15px），群怪时又因为不追踪而大量空放。
@@ -738,9 +746,9 @@ func _perform_projectile_attack() -> void:
 		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
 		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
-		p.bullet_texture = bullet_tex
-		p.bullet_scale = bullet_scale
-		p.spin = bullet_spins
+		p.bullet_texture = _bullet_tex
+		p.bullet_scale = _bullet_scale
+		p.spin = _bullet_spins
 		if def.get("proc_burn", false):
 			p.proc_burn = true
 			p.burn_dps = final_dmg * float(def.get("burn_ratio", 0.4))

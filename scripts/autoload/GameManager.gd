@@ -157,7 +157,7 @@ func _ready() -> void:
 # ---------------- 中断续玩（2026-10-15，落盘与恢复在 RunSave） ----------------
 
 ## 战斗中自动存档间隔（秒）：波内金币/经验/血量以最后一次快照为准，本波从头重打
-const AUTOSAVE_INTERVAL: float = 3.0
+const AUTOSAVE_INTERVAL: float = 10.0
 var _autosave_cd: float = AUTOSAVE_INTERVAL
 
 ## 应用生命周期兜底：Android 上滑杀进程/Home 键、系统返回键、桌面关窗 ——

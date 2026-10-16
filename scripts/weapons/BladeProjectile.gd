@@ -44,6 +44,17 @@ static var _lit_count: int = 0       ## 当前点亮的弹丸灯数
 static var active_count: int = 0     ## 当前在场（已激活未回收）弹丸数：HUD 性能面板消费
 ## 回收终值登记（launch_id -> {pierce,bounce}）：projectile_probe 结账用，读取后由探针清除
 static var _final_stats: Dictionary = {}
+static var record_final_stats: bool = false
+
+static func clear_final_stats() -> void:
+	_final_stats.clear()
+
+static func clear_pool() -> void:
+	_pool.clear()
+	_lit_count = 0
+	active_count = 0
+	_host = null
+	clear_final_stats()
 
 var direction: Vector2 = Vector2.RIGHT
 var speed: float = 470.0
@@ -87,6 +98,9 @@ var poison_dur: float = 2.5
 var _vector_renderer: ProceduralProjectileRenderer = null
 ## 世界坐标历史拖尾：追踪弹拐弯时留弧线（局部彗尾只会跟着本体转），池化复用零重建
 var _trail: ProjectileTrail = null
+## 上一次 kind 推断用的纹理路径：同一武器连发时路径恒定，跳过逐发的
+## detect_kind_from_path 字符串子串匹配（activate 热路径）
+var _last_kind_path: String = ""
 
 func _ready() -> void:
 	rotation = direction.angle()
@@ -341,7 +355,10 @@ func activate() -> void:
 	sprite.rotation = 0.0
 	if _vector_renderer != null:
 		var path_str := bullet_texture.resource_path if bullet_texture != null else ""
-		_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+		# 同路径复用上一发的推断结果：detect 是纯路径子串匹配，换武器才需要重跑
+		if path_str != _last_kind_path:
+			_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+			_last_kind_path = path_str
 		_vector_renderer.queue_redraw()
 	_apply_elemental_tint()
 	if _trail != null:
@@ -360,8 +377,8 @@ func _recycle() -> void:
 	if _pooled:
 		return
 	# 终值上报：贴脸弹丸常在两次扫描之间完成「命中→回收」，逐帧扫描读不到终值，
-	# 探针（projectile_probe）结账时优先读这里，防把真实命中误记成落空
-	if launch_id >= 0:
+	# 探针（projectile_probe）结账时优先读这里，防把真实命中误记成落空；仅在探针开启时记录，正式局不泄漏
+	if record_final_stats and launch_id >= 0:
 		_final_stats[launch_id] = {"pierce": pierce_left, "bounce": bounce_left}
 	_pooled = true
 	active_count = maxi(0, active_count - 1)
@@ -395,13 +412,16 @@ func _try_acquire_light() -> void:
 	if glow == null:
 		return
 	if _has_light:
+		glow.enabled = true
 		glow.visible = true
 		return
 	if _lit_count < LIGHT_CAP:
 		_lit_count += 1
 		_has_light = true
+		glow.enabled = true
 		glow.visible = true
 	else:
+		glow.enabled = false
 		glow.visible = false
 
 func _release_light() -> void:
@@ -409,4 +429,5 @@ func _release_light() -> void:
 		_lit_count = maxi(0, _lit_count - 1)
 		_has_light = false
 	if glow != null:
+		glow.enabled = false
 		glow.visible = false

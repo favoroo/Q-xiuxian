@@ -52,18 +52,24 @@ func _on_config_changed() -> void:
 
 var current_action: Action = Action.IDLE:
 	set(val):
+		if current_action == val:
+			return
 		current_action = val
 		_dirty = true
 		queue_redraw()
 
 var current_angle: Angle = Angle.FRONT:
 	set(val):
+		if current_angle == val:
+			return
 		current_angle = val
 		_dirty = true
 		queue_redraw()
 
 var flip_h: bool = false:
 	set(val):
+		if flip_h == val:
+			return
 		flip_h = val
 		_dirty = true
 		queue_redraw()

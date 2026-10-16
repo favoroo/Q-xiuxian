@@ -54,6 +54,12 @@ static var _lit_count: int = 0                     ## 当前点亮灯数
 static func active_gem_count() -> int:
 	return _active_gems.size()
 
+static func clear_pool() -> void:
+	_pool.clear()
+	_active_gems.clear()
+	_lit_count = 0
+	_host = null
+
 var _pooled: bool = false
 var _has_light: bool = false
 
@@ -164,13 +170,16 @@ func _try_acquire_light() -> void:
 	if light == null:
 		return
 	if _has_light:
+		light.enabled = true
 		light.visible = true
 		return
 	if _lit_count < GEM_LIGHT_CAP:
 		_lit_count += 1
 		_has_light = true
+		light.enabled = true
 		light.visible = true
 	else:
+		light.enabled = false
 		light.visible = false
 
 func _release_light() -> void:
@@ -179,6 +188,7 @@ func _release_light() -> void:
 		_has_light = false
 	var light := get_node_or_null("PointLight2D") as PointLight2D
 	if light != null:
+		light.enabled = false
 		light.visible = false
 
 func _ready() -> void:

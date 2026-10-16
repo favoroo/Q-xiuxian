@@ -757,6 +757,10 @@ func _tick_damage_over_time(delta: float) -> bool:
 			poison_dps = 0.0
 	return false
 
+## 本体常驻染色（冰缓结束恢复用；Boss 阶段染色由子类覆写，防止被异常状态洗成白色）
+func _base_tint() -> Color:
+	return Color.WHITE
+
 ## 有效移速 = 基础 ×（1-冰缓）× 光环；顺带处理冰缓染色与光环过期待遇失效
 func _effective_speed(delta: float) -> float:
 	var eff_speed: float = move_speed
@@ -764,11 +768,12 @@ func _effective_speed(delta: float) -> float:
 		chill_timer -= delta
 		eff_speed = move_speed * (1.0 - chill_slow)
 		if _fuse < 0.0:
-			anim_sprite.modulate = Color(0.68, 0.88, 1.05)
+			# 冰蓝色温改为提亮（旧版压暗红绿通道，深蓝地图上怪物直接隐形）
+			anim_sprite.modulate = Color(1.15, 1.35, 1.7)
 		if chill_timer <= 0.0:
 			chill_slow = 0.0
 			if _fuse < 0.0:
-				anim_sprite.modulate = Color.WHITE
+				anim_sprite.modulate = _base_tint()
 	# 鼓妖光环：被覆盖期间加速，过期待遇自动失效（脚下琥珀标记同步熄灭）
 	if _aura_speed_mult != 1.0 and Time.get_ticks_msec() > _aura_until_ms:
 		_aura_speed_mult = 1.0
@@ -1771,10 +1776,10 @@ func _pulse_heal() -> void:
 			continue
 		e.receive_heal(heal_amount)
 		healed_any = true
-	if healed_any:
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
-		AudioManager.play_sfx("drone_chime", 0.5)
-		play_squash(Vector2(1.18, 0.84), 0.18)
+		if healed_any:
+			JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
+			AudioManager.play_sfx("heal", 0.5)
+			play_squash(Vector2(1.18, 0.84), 0.18)
 
 func receive_heal(amount: float) -> void:
 	if dying:
@@ -1856,6 +1861,9 @@ func _enter_mutation() -> void:
 
 static var _dissolve_shader: Shader = null
 static var _shared_noise_tex: ImageTexture = null
+## 溶解材质实例（每实例懒建一次常驻）：死亡/清场消散时挂在动画节点上，
+## 回池时由 reset_for_reuse/_recycle 切回 hit_flash_mat 覆盖
+var _dissolve_mat: ShaderMaterial = null
 
 static func _get_dissolve_shader() -> Shader:
 	if _dissolve_shader == null:
@@ -1876,24 +1884,28 @@ static func _get_noise_texture() -> ImageTexture:
 	return _shared_noise_tex
 
 func _start_dissolve(duration: float, edge_col: Color, tw: Tween) -> void:
-	var mat := ShaderMaterial.new()
-	mat.shader = _get_dissolve_shader()
-	mat.set_shader_parameter("noise_texture", _get_noise_texture())
-	mat.set_shader_parameter("dissolve_amount", 0.0)
-	mat.set_shader_parameter("edge_width", 0.06)
-	mat.set_shader_parameter("edge_color", edge_col)
+	# 溶解材质实例常驻复用（2026-10-16 GC 治理）：AOE 群杀同帧死十余只时，
+	# 原先每次死亡都 ShaderMaterial.new() + 匿名闭包是集中分配热点。
+	# shader/噪声贴图本就静态共享，材质实例懒建一次，之后只就地改参数；
+	# 回池侧 reset_for_reuse/_recycle 已有「切回 hit_flash_mat」逻辑，无需再清。
+	if _dissolve_mat == null:
+		_dissolve_mat = ShaderMaterial.new()
+		_dissolve_mat.shader = _get_dissolve_shader()
+		_dissolve_mat.set_shader_parameter("noise_texture", _get_noise_texture())
+	_dissolve_mat.set_shader_parameter("dissolve_amount", 0.0)
+	_dissolve_mat.set_shader_parameter("edge_width", 0.06)
+	_dissolve_mat.set_shader_parameter("edge_color", edge_col)
 	if procedural_view != null:
-		procedural_view.material = mat
-	anim_sprite.material = mat
-	tw.parallel().tween_method(func(v: float):
-		mat.set_shader_parameter("dissolve_amount", v)
-	, 0.0, 1.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		procedural_view.material = _dissolve_mat
+	anim_sprite.material = _dissolve_mat
+	tw.parallel().tween_property(_dissolve_mat, "shader_parameter/dissolve_amount", 1.0, duration)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 ## 回合结束时的消散：不掉落、不计数
 # ---------------- 死亡与清场 ----------------
 
 func dissolve() -> void:
-	if dying:
+	if dying or not is_inside_tree():
 		return
 	dying = true
 	set_physics_process(false)
@@ -1911,7 +1923,7 @@ func dissolve() -> void:
 	## （池化：原 queue_free——尸体塌缩落定后出树回池，下一波同种怪零 instantiate 复用）
 
 func _die() -> void:
-	if dying:
+	if dying or not is_inside_tree():
 		return
 	dying = true
 	GameManager.register_kill(is_elite, _death_crit_kill)

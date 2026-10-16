@@ -100,6 +100,9 @@ var query_alloc_count: int = 0
 var query_reuse_count: int = 0
 
 var _weapons_buf: Array[FloatingWeapon] = []
+## 拾取圈形状的独立副本（_ready 时 duplicate 一次常驻）：此后 _sync_pickup_radius
+## 原地改 radius（物理服务器自动感知），不再走走停停每次 duplicate + 重绑
+var _pickup_shape: CircleShape2D = null
 ## joystick.get_direction 能力缓存（避免每物理帧 has_method 字符串查表）
 var _joy_get_dir_checked: bool = false
 var _joy_get_dir_ok: bool = false
@@ -244,11 +247,18 @@ func _on_upgrade_applied(up_id: String) -> void:
 
 func _sync_pickup_radius() -> void:
 	var shape_node = $PickupArea/CollisionShape2D
-	if shape_node != null and shape_node.shape is CircleShape2D:
-		var c_shape = shape_node.shape.duplicate() as CircleShape2D
-		var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
-		c_shape.radius = BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
-		shape_node.shape = c_shape
+	if shape_node == null or not (shape_node.shape is CircleShape2D):
+		return
+	# 形状只此一个消费者：_ready 首次调用时独立化一次，之后原地改 radius 短路复用
+	# （旧写法走停边沿每次 duplicate 新 CircleShape2D + 重绑，白发分配与物理重注册）
+	if _pickup_shape == null:
+		_pickup_shape = shape_node.shape.duplicate() as CircleShape2D
+		shape_node.shape = _pickup_shape
+	var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
+	var radius := BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
+	if is_equal_approx(_pickup_shape.radius, radius):
+		return
+	_pickup_shape.radius = radius
 
 ## 当前拾取半径：真话只有 PickupArea 那一圈碰撞形状。
 ## 满血待命的回复珠要问它（别抄常数），否则「圈内掉血自动飞来」会和热区不一致。

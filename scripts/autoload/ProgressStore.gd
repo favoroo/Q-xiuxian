@@ -172,10 +172,10 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	# 新手指南「下次不弹出」是玩家偏好，2026-10-11 起落 user://settings.cfg
 	# （SettingsManager.tutorial_muted），不再占用局外进度存档的 tutorial_seen 位。
 	cfg.set_value("history", "recent_runs", gm.run_history)
-	var err := cfg.save(target_path)
+	var err := _atomic_save(cfg, target_path)
 	if err != OK:
 		push_warning("ProgressStore: 保存局外进度失败 err=%d path=%s，尝试重试" % [err, target_path])
-		err = cfg.save(target_path)
+		err = _atomic_save(cfg, target_path)
 		if err != OK:
 			push_warning("ProgressStore: 重试保存局外进度仍失败 err=%d path=%s" % [err, target_path])
 			var tree := Engine.get_main_loop() as SceneTree
@@ -184,6 +184,30 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 				if um != null and um.has_method("show_toast"):
 					um.show_toast("进度保存失败（存储空间不足或权限受限）", GameStyle.BAD, 3.5)
 	return err
+
+## 原子保存 ConfigFile：先写入同目录下的 .tmp 文件，成功后再重命名覆盖目标文件，
+## 避免直接覆盖写入过程中发生强退或断电导致原存档损坏截断。
+static func _atomic_save(cfg: ConfigFile, target_path: String) -> Error:
+	var base_dir := target_path.get_base_dir()
+	var file_name := target_path.get_file()
+	var tmp_name := file_name + ".tmp"
+	var tmp_path := (base_dir + "/" + tmp_name) if not base_dir.is_empty() else tmp_name
+	var err := cfg.save(tmp_path)
+	if err != OK:
+		return err
+	var dir := DirAccess.open(base_dir)
+	if dir == null:
+		return DirAccess.get_open_error()
+	var r := dir.rename(tmp_name, file_name)
+	if r != OK:
+		# 跨平台兼容兜底：若系统不支持原子替换已存在文件，先清理目标再重命名
+		if dir.file_exists(file_name):
+			dir.remove(file_name)
+			r = dir.rename(tmp_name, file_name)
+	if r != OK:
+		dir.remove(tmp_name)
+		return r
+	return OK
 
 ## 结算时汇总生涯统计、记录战报、判定新成就解锁并统一落盘
 ## 两条路径：

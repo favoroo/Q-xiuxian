@@ -41,6 +41,8 @@ var _cur_motes_boost: float = 0.0
 # 朝向与翻转
 var flip_h: bool = false:
 	set(val):
+		if flip_h == val:
+			return
 		flip_h = val
 		if renderer:
 			renderer.flip_h = val

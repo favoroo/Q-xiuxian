@@ -31,6 +31,10 @@ static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（PerfProbe 判据口径同 EnemyBolt）
 static var reused_count: int = 0     ## 累计池复用数
 
+static func clear_pool() -> void:
+	_pool.clear()
+	_host = null
+
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
 		return
@@ -75,7 +79,8 @@ var _arcs: Array[Line2D] = []
 
 func _ready() -> void:
 	# 常驻设施（FxSprite/PointLight2D）由场景给出；爆发行为全部在 activate()，
-	# 池化首建时字段尚未写入，_ready 不读任何业务字段
+	# 池化首建时字段尚未写入，_ready 不读任何业务字段；休眠池关闭物理帧
+	set_physics_process(false)
 	_build_beam_nodes()
 
 ## 雷柱与顶端电弧一次建好（_ready 常驻设施），activate 只重铺几何与透明度
@@ -168,6 +173,12 @@ func _recycle() -> void:
 	_pooled = true
 	visible = false
 	light.energy = 0.0
+	_beam_fade = -1.0
+	if _beam != null:
+		_beam.visible = false
+	for arc in _arcs:
+		arc.visible = false
+	set_physics_process(false)
 	if _kind_fx != null:
 		_kind_fx.deactivate()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
@@ -200,11 +211,13 @@ func _spawn_sky_beam() -> void:
 		arc.modulate.a = 1.0
 		arc.visible = true
 	_beam_fade = BEAM_FADE_DUR
+	set_physics_process(true)
 
 ## 雷柱/电弧淡出帧内插值：替代每次落雷 4 个 Tween 的旧写法（_process 由 activate 间歇驱动不保证，
 ## 这里由宿主 physics 帧推进；雷柱只活 0.13s，用 _physics_process 常驻推进开销可忽略）
 func _physics_process(delta: float) -> void:
 	if _beam_fade < 0.0:
+		set_physics_process(false)
 		return
 	_beam_fade -= delta
 	var t := clampf(_beam_fade / BEAM_FADE_DUR, 0.0, 1.0)
@@ -216,6 +229,7 @@ func _physics_process(delta: float) -> void:
 		_beam.visible = false
 		for arc in _arcs:
 			arc.visible = false
+		set_physics_process(false)
 
 func _deal_damage() -> void:
 	var space_state = get_world_2d().direct_space_state
@@ -255,11 +269,11 @@ func _deal_damage() -> void:
 				hit_elite = true
 			if is_crit:
 				had_crit = true
-		if had_crit:
-			GameManager.crit_hit_stop()
-		# 劈空（hits==0）提前返回：不爆散、不震屏，落点小印记由 _bloom_or_recycle 走快速收场档
+	# 劈空（hits==0）提前返回：不爆散、不震屏，落点小印记由 _bloom_or_recycle 走快速收场档
 	if hits == 0:
 		return
+	if had_crit:
+		GameManager.crit_hit_stop()
 	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档
 	_struck = true
 	# 命中火花溅射（T-2.5）：雷光超白碎屑，吃 FxParticlePool 既有 HIT_FRAME_BUDGET 帧闸

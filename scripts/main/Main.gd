@@ -259,7 +259,7 @@ func _exit_tree() -> void:
 		GameManager.wave_changed.disconnect(_on_wave_changed_atmo)  # T-4.3 氛围监听随场景退订
 	if GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
 		GameManager.screen_shockwave_triggered.disconnect(trigger_screen_shockwave)
-	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表）随场景释放，
+	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表 / 弹丸及掉落物池）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
 	EnemyBase.clear_pools()
@@ -269,6 +269,11 @@ func _exit_tree() -> void:
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()
 	FxParticlePool.clear_cache()
+	BladeProjectile.clear_pool()
+	ThunderBurst.clear_pool()
+	EnemyBolt.clear_pool()
+	AstralGem.clear_pool()
+	HealOrb.clear_pool()
 
 func _setup_atmosphere() -> void:
 	# 1. 远层灵气光尘（小而密：原灵尘档位瘦身提密度，主菜单暂停时也持续飘动）

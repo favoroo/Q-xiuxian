@@ -14,6 +14,13 @@ var attack_range: float = 220.0
 var lifetime: float = 12.0
 var current_target: Node2D = null
 
+## 武器表与弹丸外观：setup 期一次性解析，_fire() 热路径不再走
+## WeaponData.get_def + ResourceLoader.exists/load（高射速下每秒数十次纯浪费）
+var _def: Dictionary = {}
+var _bullet_tex: Texture2D = null
+var _bullet_scale: float = 0.55
+var _bullet_spins: bool = false
+
 var _cooldown_timer: float = 0.0
 var _lifetime_timer: float = 0.0
 var _is_dying: bool = false
@@ -39,25 +46,32 @@ var _elem: String = "metal"
 func setup(def_id: String, star_level: int) -> void:
 	weapon_def_id = def_id
 	star = clampi(star_level, 1, WeaponData.MAX_STAR)
-	var def := WeaponData.get_def(def_id)
+	_def = WeaponData.get_def(def_id)
 	base_damage = WeaponData.damage_for(def_id, star)
-	fire_cooldown = float(def.get("turret_fire_cd", 0.8))
-	attack_range = float(def.get("range", 220.0))
-	lifetime = float(def.get("turret_lifetime", 12.0))
+	fire_cooldown = float(_def.get("turret_fire_cd", 0.8))
+	attack_range = float(_def.get("range", 220.0))
+	lifetime = float(_def.get("turret_lifetime", 12.0))
 	_lifetime_timer = lifetime
 	_cooldown_timer = GameManager.rng.randf_range(0.1, 0.3)
 	# 错相：多台炮台把索敌查询劈散到不同帧
 	_search_timer = GameManager.rng.randf_range(0.0, TARGET_SEARCH_INTERVAL)
+	# 弹丸外观缓存：默认路径与 _fire() 旧兜底同源（bullet_gold_needle）
+	var bullet_path := String(_def.get("bullet", "res://assets/art/bullet_gold_needle.png"))
+	if ResourceLoader.exists(bullet_path):
+		_bullet_tex = load(bullet_path) as Texture2D
+	_bullet_scale = float(_def.get("bullet_scale", 0.55))
+	_bullet_spins = bool(_def.get("bullet_spin", false))
 
 func _ready() -> void:
 	add_to_group("turrets")
-	var def := WeaponData.get_def(weapon_def_id)
+	if _def.is_empty():
+		_def = WeaponData.get_def(weapon_def_id)
 	_elem = WeaponData.element_of(weapon_def_id)
 	if _elem == "":
 		_elem = "metal"
 	queue_redraw()
-	if def.has("icon") and ResourceLoader.exists(def["icon"]):
-		core_sprite.texture = load(def["icon"])
+	if _def.has("icon") and ResourceLoader.exists(_def["icon"]):
+		core_sprite.texture = load(_def["icon"])
 	# 出场微小弹起动画
 	scale = Vector2(0.2, 0.2)
 	modulate.a = 0.0
@@ -251,16 +265,11 @@ func _eff_fire_cd() -> float:
 func _fire() -> void:
 	_cooldown_timer = maxf(0.12, _eff_fire_cd())
 
-	var def := WeaponData.get_def(weapon_def_id)
 	var aim_dir := Vector2.RIGHT.rotated(core_sprite.rotation)
 	if current_target != null and is_instance_valid(current_target):
 		aim_dir = (current_target.global_position - muzzle_point.global_position).normalized()
 
 	var final_dmg := _final_damage()
-	var bullet_path := String(def.get("bullet", "res://assets/art/bullet_gold_needle.png"))
-	var bullet_tex: Texture2D = null
-	if ResourceLoader.exists(bullet_path):
-		bullet_tex = load(bullet_path) as Texture2D
 
 	var p := BladeProjectile.acquire_or_new(projectile_scene, get_tree().current_scene)
 	p.global_position = muzzle_point.global_position
@@ -268,16 +277,16 @@ func _fire() -> void:
 	p.homing_target = current_target if (current_target != null and is_instance_valid(current_target)) else null
 	p.damage = final_dmg
 	p.knockback_base = WeaponData.knockback_for(weapon_def_id, 120.0)
-	p.pierce_left = int(def.get("pierce", 1)) + GameManager.bonus_pierce
-	p.bounce_left = int(def.get("bounce_count", 0))
-	p.bullet_texture = bullet_tex
-	p.bullet_scale = float(def.get("bullet_scale", 0.55))
-	p.spin = bool(def.get("bullet_spin", false))
+	p.pierce_left = int(_def.get("pierce", 1)) + GameManager.bonus_pierce
+	p.bounce_left = int(_def.get("bounce_count", 0))
+	p.bullet_texture = _bullet_tex
+	p.bullet_scale = _bullet_scale
+	p.spin = _bullet_spins
 
-	if def.get("proc_burn", false):
+	if _def.get("proc_burn", false):
 		p.proc_burn = true
-		p.burn_dps = final_dmg * float(def.get("burn_ratio", 0.4))
-		p.burn_dur = float(def.get("burn_dur", 2.5))
+		p.burn_dps = final_dmg * float(_def.get("burn_ratio", 0.4))
+		p.burn_dur = float(_def.get("burn_dur", 2.5))
 
 	p.activate()
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=24 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
@@ -23,6 +23,7 @@
 [ext_resource type="PackedScene" uid="uid://skillsel001" path="res://scenes/ui/SkillSelect.tscn" id="21_skill"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TutorialDialog.tscn" id="22_tutorial"]
 [ext_resource type="Script" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
+[ext_resource type="Script" path="res://scripts/main/AtmosphereGate.gd" id="24_atmo"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -86,6 +87,7 @@ script = ExtResource("5_spawner")
 
 [node name="AtmosphereLayer" type="Node2D" parent="."]
 z_index = 40
+script = ExtResource("24_atmo")
 
 [node name="FxParticlePool" type="Node2D" parent="."]
 z_index = 35

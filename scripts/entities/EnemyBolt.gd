@@ -35,6 +35,11 @@ static var reused_count: int = 0     ## 累计池复用数
 static var active_count: int = 0     ## 当前在场（已激活未回收）火球数：HUD 性能面板消费
 static var interp_reset_count: int = 0  ## 累计插值重置次数（PoolCheck 断言 activate 重置了物理插值用）
 
+static func clear_pool() -> void:
+	_pool.clear()
+	active_count = 0
+	_host = null
+
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
 		return
