@@ -45,6 +45,10 @@ extends Node
 
 ## 按住多久算拎起：Android 拖拽的长按阀，比系统长按（0.4s）短一截，比误触划动停顿长
 const HOLD_DELAY := 0.28
+## 拖拽看门狗（秒）：Android 多指触屏下，模拟鼠标的 Release 只在最后一根手指抬起时才发；
+## 若拖拽途中别的手指先抬或系统插入手势中断，_drag 会永久卡死并在 _input 里持续
+## set_input_as_handled 吞噬全屏输入（商店点哪儿都没反应）。超过此时长无运动即就地取消。
+const DRAG_WATCHDOG_SEC := 8.0
 ## 图标中心离手指的竖直距离：整颗图标抬到手指上方，才谈得上"按图标判定"（见头注）
 const AIM_LIFT := 44.0
 ## 落点容差：图标中心落在格子外扩 AIM_SLACK 的范围内就算这一格。陈列行格子之间只有 10 单位
@@ -70,6 +74,8 @@ var _press: Dictionary = {}
 var _gen := 0
 ## 进行中：{src: Dictionary}；空字典＝没拎着
 var _drag: Dictionary = {}
+## 拖拽开始的真实时刻（Time.get_ticks_msec，不受暂停/time_scale 影响）：看门狗用
+var _drag_start_ms: int = 0
 var _ghost: Control = null
 ## 动作签：贴在幽灵上沿之上，跟着图标走（被手指挡住的是格子，不是这一行字）
 var _cap: Label = null
@@ -157,6 +163,14 @@ func _input(event: InputEvent) -> void:
 		if not _drag.is_empty() or not _press.is_empty():
 			_cancel_all()
 		return
+	# Android 返回键：手势进行中按下返回，就地取消（否则 _drag 卡死后连返回都吞不到）
+	if event.is_action_pressed("ui_cancel") and (not _drag.is_empty() or not _press.is_empty()):
+		_cancel_all()
+		return
+	# 拖拽看门狗：超过 DRAG_WATCHDOG_SEC 无运动即取消（Android 多指抬起事件丢失的兜底）
+	if not _drag.is_empty() and (Time.get_ticks_msec() - _drag_start_ms) > int(DRAG_WATCHDOG_SEC * 1000.0):
+		_cancel_all()
+		return
 	var mm := event as InputEventMouseMotion
 	if not _drag.is_empty():
 		var mb := event as InputEventMouseButton
@@ -167,6 +181,10 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			if not mb.pressed:
 				_drop()
+		elif event is InputEventScreenTouch and not (event as InputEventScreenTouch).pressed:
+			# 原生触屏抬起：多指场景下模拟鼠标不发 Release，认到任何触屏抬起就松手（宁可早放不可锁死）
+			get_viewport().set_input_as_handled()
+			_drop()
 		return
 	if _press.is_empty():
 		return
@@ -199,6 +217,7 @@ func _pickup() -> void:
 	# 拎起时收掉还开着的详情卡（收卡会触发整行重建，幽灵挂在本商店上，不受影响）
 	DetailTip.close_all(_shop)
 	_drag = {"src": src}
+	_drag_start_ms = Time.get_ticks_msec()
 	_cap_txt = ""
 	_build_ghost(item, tile)
 	if _src_node != null and is_instance_valid(_src_node):
@@ -249,6 +268,8 @@ func _build_ghost(item: Dictionary, tile: float) -> void:
 func _drag_move(p: Vector2) -> void:
 	if _ghost == null or not is_instance_valid(_ghost):
 		return
+	# 看门狗续命：手指还在动就重置计时，只有真静止超时才会被取消
+	_drag_start_ms = Time.get_ticks_msec()
 	var vr := get_viewport().get_visible_rect()
 	var gs := _ghost.size
 	var pos := p - Vector2(gs.x * 0.5, AIM_LIFT + gs.y * 0.5)

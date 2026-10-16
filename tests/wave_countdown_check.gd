@@ -11,7 +11,7 @@ extends Node
 ## 难的是别让它长成第二套时间，所以这里钉四件事：
 ##   ① 秒数 = ceili(spawner.wave_timer)：判据从读数文本里把秒数抠出来，再与 spawner
 ##      那一格比 —— 控件若自己起一张表，抠出来的数就对不上。
-##   ② 线长 = wave_timer / wave_duration(n)：分母随波次变（第 1 波 26s、第 12 波 44s），
+##   ② 线长 = wave_timer / wave_duration(n)：分母随波次变（第 1 波 35.9s、第 12 波 67.8s），
 ##      写死 60 的写法会把第 12 波剩 22s 画成 0.37 长，而它该是一半 —— selftest 拦住它。
 ##   ③ Boss 波（第 10 波）整条不出现（用户当轮指令「boss 战就不用倒计时了」）：那一段
 ##      表走到 0 也不开下一波（魔君未死停表锁关），画一个会卡在 0:00 的读数只会让人以为坏了。
@@ -136,8 +136,8 @@ func _run() -> void:
 	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
 
 	# ---- ⑧ 最长真实读数 == LayoutCheck 灌的那串样本 ----
-	# 样本串里的秒数跟着波长封顶走（2026-10-11 WAVE_DURATION_MAX 60→70 ⇒ 尾巴是 1:10 不是 1:00）
-	_c.check(HudWaveCountdown.worst_case_text() == "第 99 波 · 1:10",
+	# 样本串里的秒数跟着波长封顶走（2026-10-16 WAVE_DURATION_MAX 70→80 ⇒ 尾巴是 1:20 不是 1:10）
+	_c.check(HudWaveCountdown.worst_case_text() == "第 99 波 · 1:20",
 		"最坏样本 = 最长真实读数（实得 %s；波长封顶 %.0fs）" % [
 			HudWaveCountdown.worst_case_text(), GameBalance.wave_duration(99)])
 
@@ -169,7 +169,7 @@ func _selftest() -> void:
 	_c.check(_near(_wc.bar_ratio(), 12.4 / total_1),
 		"正例 真实现放行：线长 == 12.4/%.0f（实得 %.3f）" % [total_1, _wc.bar_ratio()])
 
-	# 反例① 分母写死 60s（第 1 波总长 26s，会把半程画成 0.207）
+	# 反例① 分母写死 60s（第 1 波总长 35.9s，会把 12.4/35.9=0.345 画成 0.207）
 	_c.check(not _near(_wc.bar_ratio(), 12.4 / 60.0),
 		"反例① 分母写死 60s 被拦住（那样算得 %.3f，实得 %.3f）" % [12.4 / 60.0, _wc.bar_ratio()])
 	# 反例② 读数拿整局时长凑（game_time 1234s 的尾巴是 34s）

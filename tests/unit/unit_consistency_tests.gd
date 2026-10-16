@@ -410,3 +410,29 @@ func _synergy_line_has_numbers(tag: String, tier: int, effs: Array) -> void:
 				break
 		_c.check(hit, "SYNERGIES/%s 第 %d 档文案「%s」里找不到 %s 的 %s" % [
 				tag, tier, line, String(eff.get("label", "")), want])
+
+
+func _test_ui_chip_contrast() -> void:
+	# 1. 基础明度自适应规则：亮底必配黑字，暗底必配白字
+	_c.check(GameStyle.on_face_text(GameStyle.GOLD) == GameStyle.INK_TEXT, "天蓝 GOLD 属于亮面，必须配墨黑字 INK_TEXT")
+	_c.check(GameStyle.on_face_text(GameStyle.JADE) == GameStyle.INK_TEXT, "点缀黄 JADE 属于亮面，必须配墨黑字 INK_TEXT")
+	_c.check(GameStyle.on_face_text(GameStyle.SWEEP) == GameStyle.INK_TEXT, "琥珀金 SWEEP 属于亮面，必须配墨黑字 INK_TEXT")
+	_c.check(GameStyle.on_face_text(GameStyle.GOOD) == GameStyle.INK_TEXT, "增益绿 GOOD 属于亮面，必须配墨黑字 INK_TEXT")
+	_c.check(GameStyle.on_face_text(GameStyle.BAD) == GameStyle.CHALK, "朱砂红 BAD 属于暗面，必须配白字 CHALK")
+	_c.check(GameStyle.on_face_text(GameStyle.NAVY2) == GameStyle.CHALK, "纯黑 NAVY2 属于暗面，必须配白字 CHALK")
+	_c.check(GameStyle.on_face_text(GameStyle.INK) == GameStyle.CHALK, "纯黑 INK 属于暗面，必须配白字 CHALK")
+
+	# 2. 遍历所有武器在图鉴中生成的色签，断言绝无亮底配白字或暗底配黑字
+	for wid in WeaponData.DEFS.keys():
+		var def := WeaponData.get_def(String(wid))
+		var chips: Array = WeaponCodexBuilder.card_chips(wid, def)
+		for chip in chips:
+			var txt: String = String(chip[0])
+			var face: Color = chip[1]
+			var fg: Color = chip[2]
+			var is_light := face.get_luminance() > 0.5
+			if is_light:
+				_c.check(fg == GameStyle.INK_TEXT, "武器 %s 标签「%s」底色 %s 为亮面，字色必须是黑字（实得 %s）" % [wid, txt, face, fg])
+			else:
+				_c.check(fg != GameStyle.INK_TEXT, "武器 %s 标签「%s」底色 %s 为暗面，字色不应是黑字（实得 %s）" % [wid, txt, face, fg])
+

@@ -11,10 +11,17 @@ extends RefCounted
 # 预算低/小怪加厚 4.5×）——「时间够但没东西打」。直解是把刷怪密度顶上去，但 10-11 预算制
 # 正是为治高密度卡顿而设，峰值同屏数不能放。故取折中：回合拉长 + 预算同比例放大，
 # 总击杀数变多、单回合更充实，而峰值同屏数（间隔/批量）不变 ⇒ 不重引入卡顿。
-# 新曲线：W1=30.5s / W5=40.5s / W10=53s / W15=65.5s / W17+ 封顶 70s，20 波总战斗 ≈17.8min（旧 ≈13.7min）。
-const WAVE_DURATION_BASE := 28.0
-const WAVE_DURATION_PER_WAVE := 2.5
-const WAVE_DURATION_MAX := 70.0
+# 2026-10-16 表再放宽一档（用户口径「每回合的倒计时目前是多少，适当增加一点」「怪总量不动」）：
+# 28/2.5/70 ⇒ 33/2.9/80，曲线 W1=35.9s / W5=47.5s / W10=62s / W15=76.5s / W17+ 封顶 80s，
+# 20 波按表跑满 ≈20.7min（旧 ≈17.8min，+16%）。WAVE_SPAWN_BUDGET_* 一个字没动 ⇒
+# 每波总刷入只数、单批规模、刷怪间隔全部不变（峰值同屏不变、不加怪）。
+# 这条表在 10-15 分批清剿制下只是**上限**：真正结束一回合的是「预算刷尽 + 场上清空」
+# （WaveSpawner._tide_spent 提前出口，余秒折余时赏）。所以本档拉长的实际收益落在
+# 「打不完预算的那一段」——中后期与无尽深层原本 70s 到点、剩下的怪根本没刷出来，
+# 现在多给的那 10s 让它们刷得出来；前期能打完预算的波，长度仍由击杀速度决定。
+const WAVE_DURATION_BASE := 33.0
+const WAVE_DURATION_PER_WAVE := 2.9
+const WAVE_DURATION_MAX := 80.0
 # 2026-10-10 打击感重塑：刷怪放缓 + 批量收窄（小怪加血 3.5 倍后单敌活得更久，
 # 同屏密度由更少的刷入量维持，击杀成为「低频但每下都有读数」的事件）
 const SPAWN_INTERVAL_BASE := 1.60
@@ -24,12 +31,36 @@ const SPAWN_BATCH_EVERY_WAVES := 6.0      ## 每多 6 波，一回合多刷 1 �
 const SPAWN_BATCH_BONUS_CHANCE := 0.25    ## 额外一只的概率
 
 # ---------------- 分批清剿制与并发合围（2026-10-15） ----------------
-## 清剿完一批（场上存活 ≤ 1 只）后的呼吸间隙（秒），供玩家捡拾灵石和走位调整
-const BATCH_CLEAR_COOLDOWN := 0.8
-## 中后期对峙超时（秒）：若玩家未能在此时限内清剿，且未达同屏上限，允许并发注入下一批合围
-const BATCH_STALEMATE_TIMEOUT := 6.5
+## 清剿完一批后的呼吸间隙（秒），供玩家捡拾灵石和走位调整。
+## 2026-10-16 节奏紧凑化：0.8 → 0.6（配合刷新阈值爬坡，压缩批间空窗）。
+const BATCH_CLEAR_COOLDOWN := 0.6
+## 中后期对峙超时（秒）：若玩家未能在此时限内清剿，且未达同屏上限，允许并发注入下一批合围。
+## 2026-10-16 节奏紧凑化：6.5 → 5.5（对峙容忍收紧，下一批来得更快）。
+const BATCH_STALEMATE_TIMEOUT := 5.5
 ## 允许并发 2 批的起始波次（第 1~5 波严格单批清剿，节奏清晰）
 const CONCURRENT_BATCH_MIN_WAVE := 6
+
+# ---------------- 批次刷新阈值爬坡（2026-10-16 节奏紧凑化） ----------------
+## 「场上还剩几只就开始刷下一批」的阈值随波数爬坡（原先全程 ≤1 只）。
+## 口径与 WaveSpawner 判据同源：active_enemies = 场上活妖（含 dying 尸体）+ 凝聚中的预警，
+## 所以阈值 3 的观感约等于 2 只活怪（尸体与 1.1s 凝聚预警各占一拍）。
+## 前期严格单批清剿保留喘息，中后期并发度逐步提升，批间空窗显著缩短。
+const BATCH_REFILL_EARLY := 1            ## 爬坡起点阈值（与旧行为一致）
+const BATCH_REFILL_MID := 2              ## 中期阈值
+const BATCH_REFILL_LATE := 3             ## 后期阈值
+const BATCH_REFILL_MID_WAVE := 4         ## 第 4 波起用中期阈值
+const BATCH_REFILL_LATE_WAVE := 10       ## 第 10 波起用后期阈值
+
+## 批次刷新阈值（纯函数）：W1-3 → 1，W4-9 → 2，W10+ → 3。
+## 阈值提高后 WaveSpawner 两处判定（呼吸间隙进出 + 清剿推进）必须同源读它，
+## 且判定 1 补同屏上限闸（见 WaveSpawner._process_fight），防止后期临界超 cap。
+static func batch_refill_threshold(wave: int) -> int:
+	var w := maxi(wave, 1)
+	if w >= BATCH_REFILL_LATE_WAVE:
+		return BATCH_REFILL_LATE
+	elif w >= BATCH_REFILL_MID_WAVE:
+		return BATCH_REFILL_MID
+	return BATCH_REFILL_EARLY
 
 # 2026-10-11 土豆兄弟式克制：回合内总刷入预算 —— 间隔刷怪照旧，但全回合累计刷出只数封顶，
 # 预算耗尽即停手。

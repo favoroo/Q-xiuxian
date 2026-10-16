@@ -68,7 +68,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 	var stat_rows: Array = []
 	var merge_ready := false
 	var chip_color: Color = GameStyle.GOLD
-	var chip_text_color: Color = GameStyle.PAPER
+	var chip_text_color: Color = GameStyle.on_face_text(chip_color)
 	var edge_color: Color = GameStyle.GOLD_DK
 	var behavior_chip: Array = []
 	var owned_text := ""
@@ -158,7 +158,8 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		desc = def.get("desc", "")
 		# 攻击方式色签（近战朱砂 / 非近战主蓝）：def.tag 首段会被流派进度覆盖，
 		# 货架上一直看不出近战远程（2026-10-11 用户），behavior 才是结构真话。
-		behavior_chip = [WeaponData.behavior_label(def), StatsTipFactory.behavior_color(def), GameStyle.PAPER]
+		var beh_col: Color = StatsTipFactory.behavior_color(def)
+		behavior_chip = [WeaponData.behavior_label(def), beh_col, GameStyle.on_face_text(beh_col)]
 		# 卡面四行统一一条规则：左边纸面值、右边你现在拿到的值，两数相同就不画箭头。
 		# 伤害不再拆成「伤害 24 / 属性加成 +10」两行（2026-10-11 用户：那行读起来像武器送你属性，
 		# 方向反了；玩家想看的只是"本身多痛、加成后多痛"）。
@@ -365,16 +366,17 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 	if not behavior_chip.is_empty():
 		chip_defs.append(behavior_chip)
 		chip_tips.append({"kind": "behavior", "w_id": w_id})
-	if tag_parts.is_empty():
-		chip_defs.append([tag, chip_color, chip_text_color])
-		chip_tips.append({})	# 药水/道具这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
-	else:
-		for i in range(tag_parts.size()):
-			var hot_i: bool = bool(part_hot[i])
-			chip_defs.append([tag_parts[i],
-				GameStyle.JADE if hot_i else chip_color,
-				GameStyle.INK_TEXT if hot_i else chip_text_color])
-			chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
+		if tag_parts.is_empty():
+			chip_defs.append([tag, chip_color, GameStyle.on_face_text(chip_color)])
+			chip_tips.append({})	# 药水/道具这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
+		else:
+			for i in range(tag_parts.size()):
+				var hot_i: bool = bool(part_hot[i])
+				var chip_face: Color = GameStyle.JADE if hot_i else chip_color
+				chip_defs.append([tag_parts[i],
+					chip_face,
+					GameStyle.on_face_text(chip_face)])
+				chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
 	# 「买下即凑齐三合一」角标：绿面墨字，与背包 mergeable 绿边同口径
 	if merge_ready:
 		chip_defs.append(["可合成", GameStyle.JADE, GameStyle.INK_TEXT])

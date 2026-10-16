@@ -169,10 +169,80 @@ const ID_PREFIXES: Dictionary = {
 	"jiansha_elite": "jiansha",
 }
 
+# ---------------- 登场聚焦与每波主打怪（2026-10-16，学土豆兄弟的波次主题） ----------------
+## 问题：解锁即永久混池 ⇒ 每一波都是同一锅概率汤，没有「这波主打什么」的记忆点。
+## 做法：roll 的最前端固定切两块份额（登场怪 / 主打怪），剩下区间整体重标定回 [0,1)
+## 再走原分段带。重标定而非重排带子 ⇒ 原带内每种怪的相对比例与可达性逐字不变
+## （W14 全解锁「十一种怪都真的会被选到」的单测口径天然保持）。
+const DEBUT_SHARE := 0.20          ## 登场聚焦份额：本波新解锁的怪合起来占这么大
+const FEATURED_SHARE := 0.12       ## 每波主打怪份额（从已解锁怪按固定步长轮换）
+const FEATURED_ROTATION_STEP := 5  ## 主打轮换步长（质数步长，表长变化时仍能铺开、不总是同一只）
+const FEATURED_MIN_WAVE := 2       ## 主打怪起始波次（第 1 波保持纯教学：史莱姆 + 零星邪修）
+
+## 本波登场组（纯函数）：恰好在本波解锁的怪（MOBS 表序）；无则空数组。
+## 同波多只解锁（W3 丹爆+蜂群、W6 血蛹+毒妖）共享登场份额、按序对半切，
+## 保证每只新怪都有且只有一波「登场秀」——玩家先见识机制，之后回落进混池。
+## 邪修（无 unlock_wave）不进登场组：它第 1 波就占自己的爬坡格，由 xiexiu_edge 负责。
+static func debut_group(wave: int) -> Array:
+	var w := maxi(wave, 1)
+	var group: Array = []
+	for key in MOBS:
+		var row: Dictionary = MOBS[key]
+		if row.has("unlock_wave") and int(row["unlock_wave"]) == w:
+			group.append(String(key))
+	return group
+
+## 本波主打怪（纯函数）：从当前已解锁的常规怪里轮换（排除保底史莱姆与本波登场组），
+## 指针按固定步长扫过 MOBS 表序，从指针位向后走跳过未解锁/登场中的怪（不耗 rng，同种子可钉）。
+## 第 1 波不出主打（保持纯教学：史莱姆 + 零星邪修）。
+static func featured_mob(wave: int) -> String:
+	var w := maxi(wave, 1)
+	if w < FEATURED_MIN_WAVE:
+		return ""
+	var debut: Array = debut_group(w)
+	var order: Array = []
+	for key in MOBS:
+		if String(key) != "slime":
+			order.append(String(key))
+	if order.is_empty():
+		return ""
+	var n := order.size()
+	for step in range(n):
+		var key: String = order[(w * FEATURED_ROTATION_STEP + step) % n]
+		var row: Dictionary = MOBS[key]
+		if row.has("unlock_wave") and int(row["unlock_wave"]) > w:
+			continue
+		if debut.has(key):
+			continue
+		return key
+	return ""
+
 ## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key），被闸门锁住的种把份额让给下一格。
-## 与旧 WaveSpawner.pick_scene_key 逐行等价；判定顺序写死在这里，表序变化不影响它。
+## 结构（2026-10-16）：头部先按序切 [0, DEBUT_SHARE) 登场组（组内均分）、
+## [DEBUT_SHARE, +FEATURED_SHARE) 主打怪；剩余区间重标定回 [0,1) 交给 pick_band_key 的原分段带。
+## 仍然只消耗调用方一次 randf，不新增随机源（同种子刷怪序列的分布仍可被 balance_sim_check 钉住）。
 static func pick_scene_key(wave: int, roll: float) -> String:
 	var w := maxi(wave, 1)
+	var cursor := 0.0
+	var debut: Array = debut_group(w)
+	if not debut.is_empty():
+		var slice := DEBUT_SHARE / float(debut.size())
+		var idx := mini(int(roll / slice), debut.size() - 1)
+		if roll < DEBUT_SHARE:
+			return String(debut[idx])
+		cursor += DEBUT_SHARE
+	var featured := featured_mob(w)
+	if featured != "":
+		if roll < cursor + FEATURED_SHARE:
+			return featured
+		cursor += FEATURED_SHARE
+	if cursor <= 0.0:
+		return pick_band_key(w, roll)
+	return pick_band_key(w, (roll - cursor) / (1.0 - cursor))
+
+## 分段带判定（2026-10-13 收编时的逐行原样，判定顺序写死在这里，表序变化不影响它）。
+## 不含登场/主打头部份额 —— 单测按这条钉带子口径（共段、闸门让位等），与头部份额解耦。
+static func pick_band_key(w: int, roll: float) -> String:
 	if w >= MOBS["danbao"]["unlock_wave"] and roll < MOBS["danbao"]["edge"]:
 		return "danbao"
 	if roll < xiexiu_edge(w):

@@ -186,7 +186,7 @@ func _build_chip(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var lbl := Label.new()
 	lbl.text = " " + chip + " "
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	GameStyle.label(lbl, 11, GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.CHALK)
+	GameStyle.label(lbl, 11, GameStyle.on_face_text(col))
 	lbl.add_theme_stylebox_override("normal", GameStyle.chip(col))
 	vbox.add_child(lbl)
 

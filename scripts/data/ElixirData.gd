@@ -27,6 +27,12 @@ const PUSH_IMPULSE := 90.0
 const BUFF_DURATION := 5.0
 const BUFF_DAMAGE := 0.12
 
+## —— 药爆释放演出（纯视觉参数；环半径仍只认 BURST_RADIUS——画多大 == 判多大）——
+const FX_DURATION := 1.0          ## 摔药罐动画总时长（秒，PlayerSkillVfx 读）
+const BURST_RING_DURATION := 0.50 ## 药爆落地冲击环时长（秒，JuiceEffect.spawn_shockwave 读）
+const GROUND_RESIDUE_SEC := 1.5   ## 地面药圃残辉留存（秒，GroundDecal 贴地淡出，半径 = 判定半径）
+const BURST_ZOOM_PUNCH := 0.04    ## 药爆镜头微缩强（zoom punch；低频主动技只给一档轻缩放）
+
 ## 毒雾单次伤害（未吃任何乘区；调用方自行乘 GameManager.buff_damage_mult）
 static func burst_damage(elemental_damage: float) -> float:
 	return BASE_DAMAGE + maxf(0.0, elemental_damage) * ELEMENTAL_RATIO

@@ -100,21 +100,29 @@ func _process_fight(delta: float) -> void:
 		end_wave()
 		return
 
-	# 分批清剿制与并发合围刷新（2026-10-15）
+	# 分批清剿制与并发合围刷新（2026-10-15；2026-10-16 阈值爬坡紧凑化）
+	# 刷新阈值随波数爬坡（W1-3 ≤1 / W4-9 ≤2 / W10+ ≤3），不再全程死等「只剩一只」。
+	# 进出呼吸间隙与清剿推进必须读同一个阈值，否则会出现「刚进间隙就判定可刷」的自激。
 	if _budget_used < _budget_total:
+		var refill_at := GameBalance.batch_refill_threshold(wave_number)
 		var active_enemies: int = GameManager.enemy_count + SpawnIndicator.active_count
-		if active_enemies > 1:
+		if active_enemies > refill_at:
 			_batch_in_combat = true
-		elif _batch_in_combat and active_enemies <= 1:
-			# 当前批次已基本清剿，进入呼吸喘息间隙（0.8s 供玩家拾取灵石与走位调整）
+		elif _batch_in_combat and active_enemies <= refill_at:
+			# 当前批次已基本清剿，进入呼吸喘息间隙（0.6s 供玩家拾取灵石与走位调整）
 			_batch_in_combat = false
 			_batch_cooldown = GameBalance.BATCH_CLEAR_COOLDOWN
 
-		# 判定 1：清剿推进（主力路线）—— 场上存活 ≤ 1 只且呼吸间隙已过
-		if active_enemies <= 1 and _batch_cooldown <= 0.0 and spawn_timer <= 0.0:
-			_spawn_regular(player)
-			_batch_hold_time = 0.0
-			spawn_timer = 0.2
+		# 判定 1：清剿推进（主力路线）—— 场上存活 ≤ 阈值且呼吸间隙已过。
+		# 阈值升到 3 后中后期会贴着同屏上限，故补 cap 闸（与判定 2 同款），超限时让判定 2 的
+		# 对峙计时继续等，避免「刷出一批就顶破 cap」。
+		if active_enemies <= refill_at and _batch_cooldown <= 0.0 and spawn_timer <= 0.0:
+			var est_batch_clear := GameBalance.spawn_batch(wave_number, 0.5)
+			var enemy_cap_clear := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
+			if active_enemies + est_batch_clear <= enemy_cap_clear:
+				_spawn_regular(player)
+				_batch_hold_time = 0.0
+				spawn_timer = 0.2
 		# 判定 2：并发合围（中后期路线）—— 第 6 波起对峙超时，且同屏未超上限时允许下一批合围
 		elif wave_number >= GameBalance.CONCURRENT_BATCH_MIN_WAVE and _batch_hold_time >= GameBalance.BATCH_STALEMATE_TIMEOUT and spawn_timer <= 0.0:
 			var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
@@ -445,6 +453,10 @@ static func duyao_edge(wave: int) -> float:
 ## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key）；转发 EnemyData
 static func pick_scene_key(wave: int, roll: float) -> String:
 	return EnemyData.pick_scene_key(wave, roll)
+
+## 分段带判定（不含登场/主打头部份额）；转发 EnemyData，供单测按带子口径钉线
+static func pick_band_key(wave: int, roll: float) -> String:
+	return EnemyData.pick_band_key(wave, roll)
 
 ## 精英池轮换：铁甲魔傀（坦克）→ 赤雷兽（突进）→ 剑煞邪修（三连剑气），依次登场
 ## （池顺序与称号都在 EnemyData.ELITE_POOL，这里只按出场次数取模）

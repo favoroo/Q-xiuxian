@@ -47,19 +47,22 @@ func _process(delta: float) -> void:
 	_phase += delta
 	_ember_timer -= delta
 
-	# 锥口与锥身火舌粒子流（T-2.3）：20Hz 节流喷发，局限于判定锥内
+	# 锥口与锥身火舌粒子流（T-2.3）：节流喷发，局限于判定锥内
 	if _ember_timer <= 0.0 and length > 20.0 and _open > 0.25:
-		# 2026-10-15 视觉克制化：火星节流 0.08→0.11s、双点 scale 0.95/0.7→0.8/0.6，
-		# 火锥是全屏面积最大的持续特效，粒子节拍放慢一档
-		_ember_timer = 0.11
+		# 2026-10-15 视觉克制化：火星节流 0.08→0.11s。
+		# 2026-10-16 攻击粒子减量：多把火葫芦同屏时 EMBER 线性叠加（现已被 FxBudget
+		# FRAME_BUDGET_EMBER 收口），节拍再放慢一档 0.11→0.16s，尺寸 0.8/0.6→0.65/0.5；
+		# 两发火星传锥向 dir——EMBER 原先硬编码世界 +X 方向，火星不随武器朝向转向
+		_ember_timer = 0.16
+		var cone_dir := global_transform.x
 		var nozzle_pos := global_position
-		FxParticlePool.burst(FxParticlePool.EMBER, nozzle_pos, "fire", 0.8)
+		FxParticlePool.burst(FxParticlePool.EMBER, nozzle_pos, "fire", 0.65, false, cone_dir)
 		# 锥缘火舌粒子：中段随机位置，高度限制在判定锥宽度以内（绝不超过判定边缘）
 		var t_pos := 0.35 + 0.45 * (float(int(_anim * 100.0) % 100) / 100.0)
 		var x_l := length * t_pos
 		var max_h := half_width * pow(t_pos, 0.75) * 0.7
 		var y_l := ((float(int(_anim * 37.0) % 100) / 50.0) - 1.0) * max_h
-		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.6)
+		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.5, false, cone_dir)
 		# 热浪区上报（T-6.1，设置默认关时静态入口首行短路零开销）：锥心中段一团热，
 		# 跟随火舌粒子同拍 12.5Hz 续报；hold 覆盖续报间隔的 2 倍防间隙闪断
 		HeatDistortionFx.report(get_tree().root, to_global(Vector2(length * 0.55, 0.0)),

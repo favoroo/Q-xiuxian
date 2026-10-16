@@ -180,9 +180,11 @@ func _on_area_entered(area: Area2D) -> void:
 		GameManager.try_lifesteal()
 
 		# 命中火花与暴击加档反馈（T-1.1 / T-1.4）：严格贴实弹丸命中点，受帧限流与视口门控约束
-		var spark_scale: float = 1.5 if is_crit else 1.0
+		# 2026-10-16 攻击粒子减量：非暴击 scale 收 0.85，暴击维持 1.5（重击感知靠对比）；
+		# 顺向喷溅：碎片随弹道飞（dir 非零 → ~100° 扇形），多武器齐射不再糊成全向白噪
+		var spark_scale: float = 1.5 if is_crit else 0.85
 		var spark_elem: Variant = "crit" if is_crit else _get_impact_element()
-		FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, spark_elem, spark_scale)
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, spark_elem, spark_scale, false, direction)
 
 		# 施加五行异常走 ProcStatus 收口（保持 has_method 鸭类型）。武器/弹丸脚本绝不能硬引用
 		# EnemyBase——实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成

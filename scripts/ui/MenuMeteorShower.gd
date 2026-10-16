@@ -1,16 +1,21 @@
 class_name MenuMeteorShower
 extends Control
 
-## 首页氛围层：菱形流星雨自左上斜滑落向右下 + 极淡闪烁星点铺底，
+## 首页氛围层：流星雨自左上斜滑落向右下 + 极淡闪烁星点铺底，
 ## 垫在纯黑底与卡片矩阵之间。
-## 照 ResultFx 自绘范式：纯 _draw 不走粒子池，免依赖、保像素硬边；
+## 照 ResultFx 自绘范式：纯 _draw 不走粒子池，免依赖；
 ## 菜单开着时整树暂停，故 process_mode = ALWAYS，_process 自己推相位。
 ## 随机源一律 GameManager.rng（项目红线），headless 判据下由调用方不建本层。
 ## 整层 ADD 加法混合：本层只叠在纯黑底上（卡片压在其上），黑底下加法 == 普通混合，
 ## 流星交叠处更亮、光晕自然融合，白赚一层发光感。
+## 抗锯齿口径：项目全局开了 snap_2d_vertices_to_pixel（project.godot），逐节点关不掉。
+## 平滑靠素材与画法自身——①拖尾是整条连续折线 + 顶点色渐变（不是分段独立线宽，无一圈圈
+## 台阶），且点密 + 每点亚像素抖动，让像素对齐误差彼此不同步、小于一像素，肉眼不可辨；
+## ②头部光晕不用贴图（全局 Nearest 会把软光斑缩成马赛克），改用逐层 draw_circle 叠径向
+## 渐变，天然平滑；③圆与火花都走 draw_circle 抗锯齿重绘。星点保持像素硬边不动。
 
-## 同屏流星数量：多了糊屏，少了没质感
-const METEOR_COUNT := 9
+## 同屏流星总配额：调低至 5 颗，常态仅 1~2 颗在屏中滑落，清爽宁静不喧宾夺主
+const METEOR_COUNT := 5
 ## 滑落速度区间（px/s）：每颗不同，快慢错落
 const SPEED_MIN := 150.0
 const SPEED_MAX := 340.0
@@ -25,18 +30,55 @@ const ALPHA_MIN := 0.35
 const ALPHA_MAX := 0.70
 ## 拖尾时长（秒）：拖尾长度 = 速度 × 该值，快星尾更长
 const TRAIL_TIME := 0.28
-## 拖尾分段数：渐隐渐细（段少了能看出一节节，10 段肉眼即连续）
-const TRAIL_SEGMENTS := 10
-## 飞出场外后再次入场的歇息区间（秒）
-const RESPAWN_MIN := 0.3
-const RESPAWN_MAX := 1.5
+## 拖尾采样点数：沿拖尾取多少顶点配多顶点色。拖尾画成一整条 polyline（颜色按顶点
+## 渐变），不是分段独立线宽，所以没有"一圈圈"接缝；点多只为拟合平滑 + 让全局像素
+## 对齐的误差分散不同步（每点再叠亚像素抖动），20 点 + 抖动后肉眼不可辨
+const TRAIL_SEGMENTS := 20
+## 飞出场外后再次入场的歇息区间（秒）：放宽喘息时间，流星不再扎堆接连飞过
+const RESPAWN_MIN := 0.8
+const RESPAWN_MAX := 2.6
 ## 背景星点数量：极淡慢闪，只填纯黑的空旷感
 const STAR_COUNT := 42
 
-## 菱晶本地坐标（+X 为飞行方向，scale=1 基准）：前尖长、后尖短的拉长菱形
-const GEM_FRONT := 9.0
-const GEM_BACK := 5.0
-const GEM_HALF_W := 3.2
+## 火球头部外圈光晕半径（scale=1 基准，px）：柔光晕撑出"球"的体积感
+const HALO_R := 12.0
+## 火球实心亮核半径（px）：旧菱形本体的替代，构成流星的"燃烧核心"
+const CORE_R := 2.4
+## 超白 HDR 芯半径（px）：借 WorldEnvironment 泛光微微起辉，是头部的最高光点
+const CORE_HDR_R := 1.3
+## 头部半径脉动幅度与角频率（小数比例 / rad·s）：
+## 流星在空中明暗呼吸，比死板的固定亮核有活气
+const PULSE_DEPTH := 0.08
+const PULSE_SPEED := 7.0
+
+## 拖尾主尾线宽（px）：一根连续折线从头至尾的粗细，头部粗靠顶点色、不是分段线宽
+const TRAIL_WIDTH_IN := 3.0
+## 拖尾外圈柔光线宽（px）：叠在主尾下的宽而淡一层，消硬边、塑彗发外圈
+const TRAIL_WIDTH_OUT := 7.0
+## 拖尾锥形衰减指数：尾部收得多快。用整条线的顶点 alpha 渐变做"收细"——
+## >1 让远端色淡下去（视觉尾部更细更虚），1.0 是匀速，1.5 平滑收尖
+const TRAIL_FALLOFF := 1.5
+## 拖尾主尾头部透明度权重（相对流星整体 alpha）：头亮尾虚，收向 0
+const TRAIL_ALPHA_IN := 0.6
+## 拖尾外圈柔光透明度权重：更淡，只当辉光垫底
+const TRAIL_ALPHA_OUT := 0.13
+
+## 每秒每颗流星最大火花产出数（颗/s）：流量更克制，点染即止
+const SPARK_RATE_MIN := 3.0
+const SPARK_RATE_MAX := 9.0
+## 单颗流星同屏火花上限：超出即回收最老的一颗
+const SPARK_COUNT_MAX := 5
+## 火花寿命区间（秒）：短促，一现即灭
+const SPARK_LIFE_MIN := 0.25
+const SPARK_LIFE_MAX := 0.55
+## 火花侧向飞散速度区间（px/s）：沿拖尾法线左右迸溅
+const SPARK_SPEED_MIN := 14.0
+const SPARK_SPEED_MAX := 42.0
+## 火花半径区间（px）
+const SPARK_SIZE_MIN := 1.2
+const SPARK_SIZE_MAX := 2.2
+## 火花向白插值的比例：火星偏白，与 tint 主色拉开层次
+const SPARK_WHITENESS := 0.45
 
 ## 流星配色（重复项 = 权重）：纸白为主调，天蓝/点缀黄次之，朱砂/幽紫点染
 const PALETTE: Array[Color] = [
@@ -58,8 +100,6 @@ const STAR_PALETTE: Array[Color] = [
 	GameStyle.GOLD_EDGE,
 ]
 
-## 头部径向光晕贴图（项目现成软光斑）
-const TEX_HALO := preload("res://assets/art/light_radial.png")
 
 var _meteors: Array[Dictionary] = []
 var _stars: Array[Dictionary] = []
@@ -80,14 +120,17 @@ static func install(host: Control) -> MenuMeteorShower:
 	host.add_child(fx)
 	return fx
 
-func _ready() -> void:
-	for i in range(METEOR_COUNT):
-		_meteors.append({"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0,
-			"scale": 1.0, "alpha": 0.5, "tint": GameStyle.PAPER,
-			"delay": 0.0, "active": false})
-		# 首批错峰入场，避免开局齐刷刷一排
-		_meteors[i]["delay"] = GameManager.rng.randf_range(0.0, 2.4)
-	_seed_stars()
+	func _ready() -> void:
+		for i in range(METEOR_COUNT):
+			_meteors.append({"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0,
+				"scale": 1.0, "alpha": 0.5, "tint": GameStyle.PAPER,
+				"seed": 0.0, "delay": 0.0, "active": false,
+				"sparks": [], "spark_acc": 0.0})
+			# 首批错峰入场，时间拉开，避免开局扎堆出现
+			_meteors[i]["delay"] = GameManager.rng.randf_range(0.0, 3.5)
+			# 头部脉动相位：每颗各错开，避免整屏同步呼吸
+			_meteors[i]["seed"] = GameManager.rng.randf_range(0.0, TAU)
+		_seed_stars()
 
 func _seed_stars() -> void:
 	# 归一化坐标存星位，窗口尺寸变化时自然铺满
@@ -118,6 +161,9 @@ func _respawn(m: Dictionary) -> void:
 	else:
 		m["x"] = -30.0
 		m["y"] = GameManager.rng.randf_range(-vp.y * 0.1, vp.y * 0.5)
+	# 上一程的火花不许带到新流星上，否则会在新位置凭空炸开
+	(m["sparks"] as Array).clear()
+	m["spark_acc"] = 0.0
 	m["active"] = true
 
 func _process(delta: float) -> void:
@@ -134,6 +180,8 @@ func _process(delta: float) -> void:
 			continue
 		m["x"] = m["x"] + m["vx"] * delta
 		m["y"] = m["y"] + m["vy"] * delta
+		_emit_sparks(m, delta)
+		_step_sparks(m, delta)
 		# 星体拖尾一起出界后歇一会再续下一颗
 		var margin := 40.0 + Vector2(m["vx"], m["vy"]).length() * TRAIL_TIME
 		if m["x"] - m["vx"] * TRAIL_TIME > vp.x + margin or m["y"] - m["vy"] * TRAIL_TIME > vp.y + margin:
@@ -158,46 +206,114 @@ func _draw_stars() -> void:
 
 func _draw_meteor(m: Dictionary) -> void:
 	var head := Vector2(m["x"], m["y"])
-	var dir := Vector2(m["vx"], m["vy"]).normalized()
+	var vel := Vector2(m["vx"], m["vy"])
+	var dir := vel.normalized()
 	var alpha: float = m["alpha"]
 	var sc: float = m["scale"]
 	var tint: Color = m["tint"]
+	# 头部半径随时间轻微呼吸，避免死板的固定亮核
+	var seed: float = m["seed"]
+	var pulse := 1.0 + PULSE_DEPTH * sin(_time * PULSE_SPEED + seed)
 
-	# 拖尾双层：先铺一层宽而淡的柔光底（消硬线感），再叠渐隐渐细的亮芯
-	var trail_len := Vector2(m["vx"], m["vy"]).length() * TRAIL_TIME
-	var seg_len := trail_len / TRAIL_SEGMENTS
-	for i in range(TRAIL_SEGMENTS):
-		var t0 := float(i) / TRAIL_SEGMENTS
-		var t1 := float(i + 1) / TRAIL_SEGMENTS
-		var p0 := head - dir * seg_len * i
-		var p1 := head - dir * seg_len * (i + 1)
-		draw_line(p0, p1, GameStyle.with_alpha(tint, alpha * 0.16 * (1.0 - t1)),
-			lerpf(4.6, 1.2, t0) * sc, true)
-		draw_line(p0, p1, GameStyle.with_alpha(tint, alpha * 0.55 * (1.0 - t1)),
-			lerpf(1.8, 0.4, t0) * sc, true)
+	# 拖尾双层锥形：外圈宽而淡的柔光晕 + 内层亮芯，都画成"一整条连续折线"，
+	# 粗细恒定、只让顶点 alpha 沿尾向衰减（外圈更快）→ 视觉上头粗尾虚、整条线颜色
+	# 平滑插值，没有分段接缝的一圈圈台阶
+	var trail_len := vel.length() * TRAIL_TIME
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var cols_in := PackedColorArray()
+	for i in range(TRAIL_SEGMENTS + 1):
+		var t := float(i) / TRAIL_SEGMENTS
+		# taper 0→1：头部满 alpha，尾部指数式压向 0，锥形收尖全靠这条顶点色渐变
+		var taper := 1.0 - pow(t, TRAIL_FALLOFF)
+		# 每点亚像素抖动：全局像素对齐下各段对齐误差彼此不同步、且小于一像素，
+		# 拖尾不会整段一起钉格显锯齿（确定性抖动，不吃 rng）
+		var jx := 0.12 if (i % 2 == 0) else -0.12
+		var jy := 0.1 if (i % 3 == 0) else -0.07
+		pts.append(head - dir * trail_len * t + Vector2(jx, jy))
+		cols.append(GameStyle.with_alpha(tint, alpha * TRAIL_ALPHA_OUT * taper))
+		cols_in.append(GameStyle.with_alpha(tint, alpha * TRAIL_ALPHA_IN * taper))
+	draw_polyline_colors(pts, cols, TRAIL_WIDTH_OUT * sc, true)
+	draw_polyline_colors(pts, cols_in, TRAIL_WIDTH_IN * sc, true)
 
-	# 头部软光晕：径向贴图加法混合，天然无锯齿，顺便软化菱形轮廓
-	var halo_r := 11.0 * sc
-	draw_texture_rect(TEX_HALO, Rect2(head - Vector2(halo_r, halo_r), Vector2(halo_r * 2.0, halo_r * 2.0)),
-		false, GameStyle.with_alpha(tint, alpha * 0.38))
+	# 火球头部：外圈柔光晕 + 实心亮核 + 超白 HDR 芯。
+	# 光晕用逐层 draw_circle 叠径向渐变（不碰贴图，天然无锯齿、不受全局 Nearest 影响）
+	var halo_r := HALO_R * sc * pulse
+	_draw_radial_halo(head, halo_r, tint, alpha * 0.5)
+	# 圆走抗锯齿重绘，避免低级多边形硬边
+	draw_circle(head, CORE_R * sc * pulse, GameStyle.with_alpha(tint.lerp(Color.WHITE, 0.3), alpha), true)
+	draw_circle(head, CORE_HDR_R * sc * pulse, GameStyle.with_alpha(GameStyle.FX_HDR_CORE, alpha * 0.9), true)
 
-	# 星体：沿飞行方向的拉长菱形；draw_colored_polygon 无 AA，
-	# 补一圈同色抗锯齿描边收边，轮廓即平滑
-	var xf := Transform2D(dir.angle(), head)
-	var gem := PackedVector2Array([
-		Vector2(GEM_FRONT, 0.0) * sc,
-		Vector2(0.0, -GEM_HALF_W) * sc,
-		Vector2(-GEM_BACK, 0.0) * sc,
-		Vector2(0.0, GEM_HALF_W) * sc,
-	])
-	for i in range(gem.size()):
-		gem[i] = xf * gem[i]
-	draw_colored_polygon(gem, GameStyle.with_alpha(tint, alpha))
-	var outline := gem + PackedVector2Array([gem[0]])
-	draw_polyline(outline, GameStyle.with_alpha(tint, alpha * 0.9), 1.0 * sc, true)
+	_draw_sparks(m)
 
-	# 星核一点超白，借 WorldEnvironment 泛光微微起辉（克制，不糊）
-	draw_circle(head, 1.6 * sc, GameStyle.with_alpha(GameStyle.FX_HDR_CORE, alpha * 0.55))
+## 径向柔光晕：由外向内逐层叠圆（外层大而淡、内层小而实），层间 alpha 连续过渡。
+## 用 _draw 叠圆而非贴图：贴图受全局 snap/过滤影响会出锯齿或马赛克，叠圆则完全平滑
+func _draw_radial_halo(center: Vector2, radius: float, tint: Color, alpha: float) -> void:
+	const LAYERS := 10
+	for i in range(LAYERS):
+		# r 由外（i=0，最淡）向内收，alpha 随内收递增；末层 i=LAYERS-1 最接近实心
+		var k := float(LAYERS - i) / LAYERS
+		var r := radius * (float(i + 1) / LAYERS)
+		# 外层薄、内层厚：alpha 按层位渐变，整体中心亮、边缘溶到 0
+		var layer_a := alpha * 0.14 * pow(k, 1.6)
+		draw_circle(center, r, GameStyle.with_alpha(tint, layer_a), true)
+
+## 按规整流量沿拖尾迸溅火花：快而大的流星火花更密
+func _emit_sparks(m: Dictionary, delta: float) -> void:
+	var vel := Vector2(m["vx"], m["vy"])
+	var sc: float = m["scale"]
+	var fast: float = (vel.length() - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)
+	var rate: float = lerpf(SPARK_RATE_MIN, SPARK_RATE_MAX, clampf(fast, 0.0, 1.0)) * sc
+	m["spark_acc"] = m["spark_acc"] + rate * delta
+	var sparks: Array = m["sparks"]
+	while m["spark_acc"] >= 1.0:
+		m["spark_acc"] = m["spark_acc"] - 1.0
+		if sparks.size() >= SPARK_COUNT_MAX:
+			sparks.pop_front()
+		_spawn_spark(m)
+
+func _spawn_spark(m: Dictionary) -> void:
+	var vel := Vector2(m["vx"], m["vy"])
+	var dir := vel.normalized()
+	var perp := Vector2(-dir.y, dir.x)
+	var sc: float = m["scale"]
+	var trail_len := vel.length() * TRAIL_TIME
+	# 出生点取拖尾上一处 + 法线微偏移，让火花贴尾而不全压在中线上
+	var p := Vector2(m["x"], m["y"]) - dir * trail_len * GameManager.rng.randf()
+	p += perp * GameManager.rng.randf_range(-1.6, 1.6) * sc
+	var sp := GameManager.rng.randf_range(SPARK_SPEED_MIN, SPARK_SPEED_MAX) * sc
+	var side := 1.0 if GameManager.rng.randf() < 0.5 else -1.0
+	var life := GameManager.rng.randf_range(SPARK_LIFE_MIN, SPARK_LIFE_MAX)
+	m["sparks"].append({
+		"x": p.x, "y": p.y,
+		# 侧向飞散为主，再叠一点顺流向后飘的拖尾惯性
+		"vx": perp.x * sp * side - dir.x * sp * 0.35,
+		"vy": perp.y * sp * side - dir.y * sp * 0.35,
+		"life": life, "life_max": life,
+		"size": GameManager.rng.randf_range(SPARK_SIZE_MIN, SPARK_SIZE_MAX) * sc,
+	})
+
+func _step_sparks(m: Dictionary, delta: float) -> void:
+	var sparks: Array = m["sparks"]
+	var i := sparks.size() - 1
+	while i >= 0:
+		var sp: Dictionary = sparks[i]
+		sp["x"] = sp["x"] + sp["vx"] * delta
+		sp["y"] = sp["y"] + sp["vy"] * delta
+		sp["life"] = sp["life"] - delta
+		if sp["life"] <= 0.0:
+			sparks.remove_at(i)
+		i -= 1
+
+## 火花：沿拖尾迸出的小辉点，随寿命缩到一点，偏白显火星
+func _draw_sparks(m: Dictionary) -> void:
+	var hot: Color = m["tint"].lerp(Color.WHITE, SPARK_WHITENESS)
+	var alpha: float = m["alpha"]
+	for sp: Dictionary in m["sparks"]:
+		var life_max: float = sp["life_max"]
+		var k: float = clampf(sp["life"] / life_max, 0.0, 1.0)
+		draw_circle(Vector2(sp["x"], sp["y"]), sp["size"] * k,
+			GameStyle.with_alpha(hot, alpha * k * 0.95), true)
 
 func _vp_size() -> Vector2:
 	var vp := get_viewport_rect().size

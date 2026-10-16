@@ -18,6 +18,10 @@ const BURST_RATIO := 1.2    ## 爆发伤害 = 蓄能 ×1.2：存得多还得更�
 const BURST_RADIUS := 140.0 ## 震荡判定半径 = 环特效半径（像素）
 const PUSH_IMPULSE := 260.0 ## 震退冲量（调用方乘玩家震退乘区，与武器击退同一把尺子）
 
+## —— 盾势爆发演出（纯视觉参数；环半径仍只认 BURST_RADIUS——画多大 == 判多大）——
+const BURST_RING_DURATION := 0.45 ## 盾势落地冲击环时长（秒，JuiceEffect.spawn_shockwave 读）
+const BURST_ZOOM_PUNCH := 0.04    ## 盾势镜头微缩强（zoom punch；低频爆发技只给一档轻缩放）
+
 ## 槽上限（生命变化时现算，不缓存——加点/道具提血后下一刀自动按新上限走）
 static func cap_of(max_health: float) -> float:
 	return maxf(1.0, max_health * CAP_HP_RATIO)

@@ -190,12 +190,13 @@ static func card_chips(wid: String, def: Dictionary) -> Array:
 		var nm := String(syn.get("name", tag))
 		if tag in WeaponData.ELEMENTS:
 			var elem_col: Color = GameStyle.ELEMENT_COLORS.get(tag, GameStyle.GOLD)
-			out.append([nm, elem_col, GameStyle.INK_TEXT])
+			out.append([nm, elem_col, GameStyle.on_face_text(elem_col)])
 		else:
 			out.append([nm, GameStyle.NAVY2, GameStyle.PAPER])
 	var beh := WeaponData.behavior_label(def)
 	if not _chips_have(out, beh):
-		out.insert(0, [beh, StatsTipFactory.behavior_color(def), GameStyle.PAPER])
+		var beh_col: Color = StatsTipFactory.behavior_color(def)
+		out.insert(0, [beh, beh_col, GameStyle.on_face_text(beh_col)])
 	return out
 
 

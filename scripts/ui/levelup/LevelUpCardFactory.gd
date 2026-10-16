@@ -119,7 +119,7 @@ static func _create_top_row(dialog: LevelUpDialog, data: Dictionary, rarity_col:
 	var rarity_lbl := Label.new()
 	rarity_lbl.text = " " + data.get("rarity_label", "普通") + " "
 	GameStyle.label(rarity_lbl, 11, GameStyle.PAPER)
-	var band_text_col: Color = GameStyle.INK_TEXT if rarity_col.get_luminance() > 0.5 else GameStyle.CHALK
+	var band_text_col: Color = GameStyle.on_face_text(rarity_col)
 	rarity_lbl.add_theme_color_override("font_color", band_text_col)
 	var pill_style := GameStyle.block(rarity_col, GameStyle.SLANT_BAND, Vector2(2, 2))
 	pill_style.content_margin_top = 2.0

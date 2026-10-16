@@ -37,6 +37,13 @@ const HASTE_WHEEL_RY := 10.0
 const GHOST_POOL_CAP := 12                  ## 图集残影池上限
 const GHOST_DURATION := 0.15                ## 冲刺/瞬身残影寿命（0.15s 迅速渐隐回收，杜绝长拖尾）
 const GHOST_COLOR_COLD_BLUE := Color(0.45, 0.78, 1.15, 0.50) ## 冷蓝半透剪影残影
+const GHOST_COLOR_SHADOW := Color(0.72, 0.45, 1.05, 0.55)    ## 幽夜紫半透剪影残影（影爆踩碎收束）
+
+## 瞬发技能演出时长（秒）：影爆读 ShadowStepData.BURST_FX_DURATION（数据表同源），
+## 回春/盾势/战意没有专属数据表，时长常量落在这里
+const RENEWAL_FX_DURATION := 1.15   ## 回春术灵光汇聚演出总时长（旧 0.64s 太短，按下感知不到）
+const GUARD_BURST_FX_DUR := 0.40    ## 盾势蓄满爆发罡气扩散时长（旧 0.24s）
+const FRENZY_BURST_FX_DUR := 0.45   ## 战意满层爆气光环时长（旧 0.28s）
 
 # ---------------- 运行时状态 ----------------
 @onready var player: CharacterBody2D = get_parent() as CharacterBody2D
@@ -114,6 +121,10 @@ var cd_refund_timer: float = 0.0
 
 # 15. 陷阵煞环状态（蛮兵）
 var crowd_aura_alpha: float = 0.0
+
+# 16. 影爆释放爆发状态（影者·额外技能：踩碎影层的幽夜爆发）
+var shadowburst_progress: float = -1.0  ## >=0 播放影爆爆发演出 (0.0 -> 1.0)
+var shadowburst_shards: Array[Dictionary] = []  ## 影锥碎芒 {ang, spd, dist, len, size}
 
 func _ready() -> void:
 	z_index = 2  ## 略高于角色精灵
@@ -230,6 +241,11 @@ func on_renewal_cast() -> void:
 	# 释放瞬间触发对应色粒子（回春甘露：生机碧翠 / FX_HDR_HEAL）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "heal", 1.0, true)
+	# 上冲生机光柱 + 「灵气入体」上飘灵光：让按下那一瞬在世界层也有可见反馈
+	var feet_pos: Vector2 = player.global_position + (FEET_CENTER * _body_scale.y if player != null else Vector2.ZERO)
+	FxParticlePool.burst(FxParticlePool.LEVEL_PILLAR, feet_pos, "heal", 0.9, true)
+	if player != null and player.get_parent() != null:
+		JuiceEffect.spawn_heal_rise(player.get_parent(), center_pos)
 	# 24 粒生机灵光从四周外圈向角色身躯螺旋汇聚
 	for i in range(24):
 		var ang := float(i) * (TAU / 24.0) + randf_range(-0.15, 0.15)
@@ -251,10 +267,25 @@ func on_shadow_gained(stacks: int) -> void:
 	_shadow_pop = 1.0
 	queue_redraw()
 
-## 踏影落地兑现后清空（Player.shadow_ring 已空，读数跟着归零）
+## 踏影落地兑现：清空影层读数 + 播放影爆爆发演出（影环扩张 + 影锥碎芒放射 + 收束残影）。
+## 旧版这里只清零读数、一个特效都不发——按下等于没按（2026-10-16 用户实测反馈后补全）。
 func on_shadow_spent() -> void:
 	shadow_stacks = 0
 	_shadow_pop = 0.0
+	shadowburst_progress = 0.0
+	shadowburst_shards.clear()
+	# 影锥碎芒：10 道放射状影刺（极坐标预生成，_draw 只读不随机）
+	for i in range(10):
+		var ang := float(i) * (TAU / 10.0) + randf_range(-0.14, 0.14)
+		shadowburst_shards.append({
+			"ang": ang,
+			"spd": randf_range(150.0, 240.0),
+			"dist": 0.0,
+			"len": randf_range(14.0, 26.0),
+			"size": randf_range(2.2, 3.6),
+		})
+	# 影层被「踩碎」的收束残影：幽夜紫剪影留一拍渐隐（与 dash 的冷蓝外放残影色相反）
+	spawn_ghost(GHOST_COLOR_SHADOW, ShadowStepData.BURST_FX_DURATION * 0.5)
 	queue_redraw()
 
 ## 药爆施放（摔碎药罐：自身回血甘霖 + 毒雾飞沫四溅）
@@ -262,13 +293,13 @@ func on_elixir_cast() -> void:
 	elixir_progress = 0.0
 	elixir_shards.clear()
 	_notify_procedural_view("renewal", true, 1.0)
-	for i in range(16):
-		var ang := float(i) * (TAU / 16.0) + randf_range(-0.18, 0.18)
-		var spd := randf_range(90.0, 180.0)
+	for i in range(20):
+		var ang := float(i) * (TAU / 20.0) + randf_range(-0.16, 0.16)
+		var spd := randf_range(110.0, 230.0)
 		elixir_shards.append({
 			"pos": FEET_CENTER,
 			"vel": Vector2(cos(ang) * spd, sin(ang) * (spd * 0.72)),
-			"size": randf_range(1.8, 3.4),
+			"size": randf_range(2.0, 3.8),
 			"is_leaf": (i % 2 == 0),
 		})
 	queue_redraw()
@@ -301,7 +332,7 @@ func on_guard_charge_updated(charge: float, max_charge: float) -> void:
 ## 盾势蓄满爆发（守卫）：罡气炸开
 func on_guard_burst() -> void:
 	guard_charge_ratio = 0.0
-	guard_burst_timer = 0.24
+	guard_burst_timer = GUARD_BURST_FX_DUR
 	_notify_procedural_view("guard", false)
 	queue_redraw()
 
@@ -317,7 +348,7 @@ func sync_frenzy(stacks: float, max_stacks: float) -> void:
 
 ## 狂战士战意满层爆气
 func on_frenzy_max_burst() -> void:
-	frenzy_burst_timer = 0.28
+	frenzy_burst_timer = FRENZY_BURST_FX_DUR
 	queue_redraw()
 
 ## 斩灭凝神返还技能冷却（绝尘）
@@ -460,7 +491,7 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 	# 7. 回春术（空洞骑士 Focus 汇聚感：四周灵光向身躯中心螺旋收聚）
 	if renewal_progress >= 0.0:
 		needs_redraw = true
-		renewal_progress += delta * 1.55  ## 约 0.64s 走完汇聚与爆发
+		renewal_progress += delta / RENEWAL_FX_DURATION  ## 约 1.15s 走完汇聚与爆发（旧 0.64s 按下感知不到）
 		var p_prog := clampf(renewal_progress, 0.0, 1.0)
 		for p in renewal_particles:
 			var init_r: float = float(p.get("init_radius", 70.0))
@@ -482,10 +513,21 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		needs_redraw = true
 		_shadow_pop = maxf(0.0, _shadow_pop - delta * 5.0)
 
+	# 8b. 影爆爆发演出推进（影者·额外技能）
+	if shadowburst_progress >= 0.0:
+		needs_redraw = true
+		shadowburst_progress += delta / ShadowStepData.BURST_FX_DURATION
+		for sh in shadowburst_shards:
+			sh["dist"] = float(sh["dist"]) + float(sh["spd"]) * delta
+			sh["spd"] = float(sh["spd"]) * 0.90
+		if shadowburst_progress >= 1.0:
+			shadowburst_progress = -1.0
+			shadowburst_shards.clear()
+
 	# 9. 药爆动效更新（摔药罐四溅飞沫与药雾）
 	if elixir_progress >= 0.0:
 		needs_redraw = true
-		elixir_progress += delta * 2.2  ## 约 0.45s 走完
+		elixir_progress += delta / ElixirData.FX_DURATION  ## 约 1.0s 走完（旧 0.45s 按下感知不到）
 		for s in elixir_shards:
 			s["pos"] = Vector2(s["pos"]) + Vector2(s["vel"]) * delta
 			s["vel"] = Vector2(s["vel"]) * 0.90
@@ -683,9 +725,58 @@ func _draw() -> void:
 	if cd_refund_timer > 0.0:
 		_draw_cd_refund_fx()
 
+	# 11b. 影爆爆发（影者·额外技能）：幽夜影环扩张 + 影锥碎芒放射
+	if shadowburst_progress >= 0.0:
+		_draw_shadowburst_fx()
+
 	# 12. 踏影影层读数（最后画：它是给人数的数，不许被任何特效压住）
 	if shadow_stacks > 0:
 		_draw_shadow_pips()
+
+## 绘制【影爆】：踩碎影层的幽夜爆发——影环双层扩张 + 地面影波 + 影锥碎芒放射。
+## 角色层贴身演出；判定半径那一圈由世界层 JuiceEffect 冲击环表达（画多大 == 判多大）。
+func _draw_shadowburst_fx() -> void:
+	var p := clampf(shadowburst_progress, 0.0, 1.0)
+	var bs := _body_scale
+	var bc := BODY_CENTER * bs.y
+	var fc := FEET_CENTER * bs.y
+	var fade := 1.0 - p
+	var col_main := Color(GameStyle.SHADOW.r, GameStyle.SHADOW.g, GameStyle.SHADOW.b, fade * 0.9)
+	var col_edge := Color(GameStyle.FX_HDR_SHADOW.r, GameStyle.FX_HDR_SHADOW.g, GameStyle.FX_HDR_SHADOW.b, fade * 0.95)
+
+	# 1. 周身影环双层扩张（ease-out 扫开：外暗影主环 + 内 HDR 亮环逆转）
+	var eo := 1.0 - pow(1.0 - p, 3.0)
+	var ring_r := lerpf(10.0 * bs.x, 64.0 * bs.x, eo)
+	draw_arc(bc, ring_r, 0.0, TAU, 28, col_main, maxf(1.0, 4.0 * fade), true)
+	draw_arc(bc, ring_r * 0.72, -p * 3.0, -p * 3.0 + TAU * 0.8, 22, col_edge, 1.5, true)
+
+	# 2. 地面影波（透视扁环，比身躯环慢半拍启动，读「震开一圈」）
+	var g_p := clampf((p - 0.12) / 0.88, 0.0, 1.0)
+	if g_p > 0.0:
+		var g_eo := 1.0 - pow(1.0 - g_p, 2.5)
+		var g_rx := lerpf(14.0, 78.0, g_eo) * bs.x
+		var g_pts := PackedVector2Array()
+		for i in range(25):
+			var a := float(i) * (TAU / 24.0)
+			g_pts.append(fc + Vector2(cos(a) * g_rx, sin(a) * g_rx * 0.42))
+		draw_polyline(g_pts, Color(GameStyle.SHADOW.r, GameStyle.SHADOW.g, GameStyle.SHADOW.b, (1.0 - g_p) * 0.7), 2.0, true)
+
+	# 3. 影锥碎芒放射（放射影刺 + 白芯尖端，随外扩减速衰减）
+	for sh in shadowburst_shards:
+		var ang: float = float(sh["ang"])
+		var dist: float = float(sh["dist"])
+		var dir := Vector2(cos(ang), sin(ang))
+		var base := bc + dir * (8.0 * bs.x + dist)
+		var tip := base + dir * float(sh["len"]) * (0.6 + 0.4 * fade)
+		draw_line(base, tip, col_main, maxf(1.0, float(sh["size"]) * fade), true)
+		draw_circle(tip, 1.3 * fade + 0.4,
+			Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, fade * 0.9))
+
+	# 4. 起爆强闪（首 30% 一圈亮紫贴身影廓，证明「踩碎了」）
+	if p < 0.30:
+		var f := 1.0 - p / 0.30
+		draw_arc(bc, 20.0 * bs.x * (1.0 + p), 0.0, TAU, 20,
+			Color(GameStyle.SHADOW_EDGE.r, GameStyle.SHADOW_EDGE.g, GameStyle.SHADOW_EDGE.b, f * 0.85), 2.2, true)
 
 ## 绘制【踏影】影层读数：头顶一排幽夜紫菱形，一层就是一刀，攒满换成亮紫并压一条可释放底线。
 ## 为什么画头顶而不是身后：身后那条已经被 dash/gale 的流光残影占用，同处叠两套形状数不出层数。
@@ -1001,6 +1092,14 @@ func _draw_renewal_fx() -> void:
 	draw_arc(FEET_CENTER, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
 	draw_arc(FEET_CENTER, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
 
+	# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，把「治疗落地」的存在感铺到地面层
+	var pulse_p := clampf(p * 1.2, 0.0, 1.0)
+	var ground_r := 22.0 + pulse_p * 54.0
+	var ground_a := (1.0 - pulse_p) * 0.55
+	if ground_a > 0.02:
+		draw_arc(FEET_CENTER, ground_r, 0.0, TAU, 32,
+			Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, ground_a), 1.8, true)
+
 	# 莲瓣角标
 	for i in range(8):
 		var la := float(i) * (TAU / 8.0) + p * 0.8
@@ -1032,7 +1131,7 @@ func _draw_elixir_fx() -> void:
 
 	# 1. 地面药罐碎裂波纹：两层透视椭圆（脚底展开）
 	var col_good := GameStyle.GOOD
-	var col_edge := GameStyle.GOOD  # TODO(药爆作者): 原写 GOOD_EDGE 并不存在，先以 GOOD 顶替编译
+	var col_edge := GameStyle.FX_HDR_HEAL  # 亮绿起辉描边（GameStyle 无 GOOD_EDGE，HDR 碧翠即「药力亮边」）
 	var ring_rx := 24.0 + p * 38.0
 	var ring_ry := 10.0 + p * 16.0
 	var ring_pts := PackedVector2Array()
@@ -1128,7 +1227,7 @@ func _draw_guard_stance_fx() -> void:
 
 	# 蓄满爆发当帧扩散冲击
 	if guard_burst_timer > 0.0:
-		var bp := 1.0 - guard_burst_timer / 0.24
+		var bp := 1.0 - guard_burst_timer / GUARD_BURST_FX_DUR
 		var b_rx := lerpf(SHIELD_RX * _body_scale.x, 48.0 * _body_scale.x, bp)
 		var b_ry := lerpf(SHIELD_RY * _body_scale.y, 48.0 * _body_scale.y, bp)
 		var b_pts := PackedVector2Array()
@@ -1164,7 +1263,7 @@ func _draw_frenzy_fx() -> void:
 
 	# 3. 满层（20层）瞬时爆气光环
 	if frenzy_burst_timer > 0.0:
-		var p := 1.0 - frenzy_burst_timer / 0.28
+		var p := 1.0 - frenzy_burst_timer / FRENZY_BURST_FX_DUR
 		var bc := BODY_CENTER * _body_scale.y
 		var r_burst := lerpf(12.0, 36.0, p) * _body_scale.x
 		draw_arc(bc, r_burst, 0.0, TAU, 24, Color(1.0, 0.25, 0.18, (1.0 - p) * 0.9), 2.4, true)

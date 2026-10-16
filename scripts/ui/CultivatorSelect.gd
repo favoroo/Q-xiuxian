@@ -677,7 +677,7 @@ func _make_info_row(tag_title: String, chip_bg: Color, accent_col: Color,
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
-	var tag_fg := GameStyle.INK_TEXT if (chip_bg == GameStyle.GOLD or chip_bg == GameStyle.JADE) else GameStyle.CHALK
+	var tag_fg := GameStyle.on_face_text(chip_bg)
 	GameStyle.label(tag_lbl, 11, tag_fg)
 	hbox.add_child(tag_lbl)
 

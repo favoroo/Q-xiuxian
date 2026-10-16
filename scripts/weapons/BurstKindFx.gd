@@ -47,17 +47,18 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 	visible = true
 	set_process(true)
 	# 命中首拍对应材质微粒（T-2.6）：火雨→EMBER、冰霜/地裂/坠印→对应材质碎屑
+	# 2026-10-16 攻击粒子减量：各形态 scale 收一档（0.75-0.9 → 0.6-0.75）
 	match kind:
 		"fire_rain":
-			FxParticlePool.burst(FxParticlePool.EMBER, global_position, "fire", 0.8)
+			FxParticlePool.burst(FxParticlePool.EMBER, global_position, "fire", 0.65)
 		"frost":
-			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "water", 0.8)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "water", 0.65)
 		"earth":
-			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "earth", 0.85)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "earth", 0.7)
 		"seal":
-			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "gold", 0.9)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "gold", 0.75)
 		"drum", "sonic":
-			FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, "lightning", 0.75)
+			FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, "lightning", 0.6)
 
 ## 提前收场（ThunderBurst 回池时调用）
 func deactivate() -> void:

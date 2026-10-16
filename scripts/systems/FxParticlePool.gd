@@ -25,10 +25,11 @@ const POOL_CAP := 24                 ## 常驻发射器池上限（硬红线 ≤
 const Z_OVERLAY := 35                ## 特效渲染层级（在角色与怪物之上，在 HUD 之下）
 
 ## 帧限流预算闸（同物理帧宁缺勿糊，历史教训防糊屏）
-const HIT_FRAME_BUDGET := FxBudget.FRAME_BUDGET_HIT_SPARK          ## 同物理帧最多 6 处命中火花
+const HIT_FRAME_BUDGET := FxBudget.FRAME_BUDGET_HIT_SPARK          ## 同物理帧最多 4 处命中火花
 const BURST_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_BURST      ## 同物理帧最多 3 处死亡爆散
 const WISP_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_WISP        ## 同物理帧最多 4 处小怪消散
 const SOUL_ORB_FRAME_BUDGET := FxBudget.FRAME_BUDGET_SOUL_ORB      ## 同物理帧最多 2 处灵气凝聚微粒
+const EMBER_FRAME_BUDGET := FxBudget.FRAME_BUDGET_EMBER            ## 同物理帧最多 3 处火锥碎屑
 
 static var instance: FxParticlePool = null
 
@@ -43,6 +44,8 @@ static var _last_wisp_frame: int = -1
 static var _wisp_count_this_frame: int = 0
 static var _last_soul_orb_frame: int = -1
 static var _soul_orb_count_this_frame: int = 0
+static var _last_ember_frame: int = -1
+static var _ember_count_this_frame: int = 0
 
 var _available_emitters: Array[GPUParticles2D] = []
 var _active_emitters: Array[GPUParticles2D] = []
@@ -102,6 +105,8 @@ static func clear_cache() -> void:
 	_burst_count_this_frame = 0
 	_last_wisp_frame = -1
 	_wisp_count_this_frame = 0
+	_last_ember_frame = -1
+	_ember_count_this_frame = 0
 
 func _init_pool() -> void:
 	for i in range(POOL_CAP):
@@ -169,7 +174,9 @@ static func _resolve_color(element: Variant, default_color: Color) -> Color:
 ## element: 颜色语义，支持 String（如 "fire" / "crit"）、int（五行索引）或指定 Color
 ## scale_factor: 缩放倍率（暴击/精英死亡可适当放大）
 ## bypass_budget: 是否绕过同帧限流（供炮口、技能释放等低频非命中事件使用，避免挤占受击火花预算）
-static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0, bypass_budget: bool = false) -> void:
+## dir: 定向喷溅方向（世界坐标单位向量）。仅 HIT_SPARK/EMBER 响应：非零时从全向盘
+##   改为顺向扇形（约 100°），碎片随弹道飞——死亡细胞式命中反馈。零向量保持全向。
+static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0, bypass_budget: bool = false, dir: Vector2 = Vector2.ZERO) -> void:
 	if instance == null or not is_instance_valid(instance):
 		return
 	
@@ -204,10 +211,17 @@ static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_fact
 			_soul_orb_count_this_frame += 1
 			if _soul_orb_count_this_frame > SOUL_ORB_FRAME_BUDGET:
 				return
+		elif kind == Kind.EMBER:
+			if cur_frame != _last_ember_frame:
+				_last_ember_frame = cur_frame
+				_ember_count_this_frame = 0
+			_ember_count_this_frame += 1
+			if _ember_count_this_frame > EMBER_FRAME_BUDGET:
+				return
 	
-	instance._trigger_burst(kind, pos, element, scale_factor)
+	instance._trigger_burst(kind, pos, element, scale_factor, dir)
 
-func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: float) -> void:
+func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: float, dir: Vector2 = Vector2.ZERO) -> void:
 	var emitter: GPUParticles2D = null
 	if not _available_emitters.is_empty():
 		emitter = _available_emitters.pop_back()
@@ -234,20 +248,32 @@ func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: flo
 	match kind:
 		Kind.HIT_SPARK:
 			emitter.texture = _tex_square_chip
-			emitter.amount = 8
-			emitter.lifetime = 0.25
+			emitter.amount = 6
+			emitter.lifetime = 0.22
 			emitter.explosiveness = 0.92
-			mat.direction = Vector3(0, 0, 0)
-			mat.spread = 180.0
-			mat.initial_velocity_min = 180.0 * scale_factor
-			mat.initial_velocity_max = 320.0 * scale_factor
-			mat.gravity = Vector3(0, 100.0, 0)
+			# 2026-10-16 攻击粒子减量+精致化：8→6 粒、寿命 0.25→0.22、尺寸收一档；
+			# dir 非零时全向盘改顺向 ~100° 扇形，碎片随弹道飞（多武器齐射不再糊成一团白噪）
+			if dir.length_squared() > 0.001:
+				emitter.rotation = dir.angle()
+				mat.direction = Vector3(1, 0, 0)
+				mat.spread = 100.0
+			else:
+				mat.direction = Vector3(0, 0, 0)
+				mat.spread = 180.0
+			mat.initial_velocity_min = 170.0 * scale_factor
+			mat.initial_velocity_max = 280.0 * scale_factor
+			# 元素材质分化：火余烬微上扬 / 水冰软斑溅落 / 毒雾慢飘 / 雷刺短促爆闪，
+			# 同一发射器同一贴图预算，只换材质参数——多武器同屏时靠质感而非数量区分武器
+			if dir.length_squared() <= 0.001:
+				mat.gravity = Vector3(0, 100.0, 0)
+			else:
+				mat.gravity = Vector3(0, 70.0, 0)
 			mat.damping_min = 160.0
 			mat.damping_max = 240.0
-			mat.scale_min = 0.16 * scale_factor
-			mat.scale_max = 0.32 * scale_factor
-			mat.color = _resolve_color(element, GameStyle.FX_HDR_CORE)
-			
+			mat.scale_min = 0.14 * scale_factor
+			mat.scale_max = 0.28 * scale_factor
+			_apply_spark_material(emitter, mat, element)
+				
 		Kind.DEATH_WISP:
 			emitter.texture = _tex_soft_dot
 			emitter.amount = 5
@@ -283,9 +309,12 @@ func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: flo
 			
 		Kind.EMBER:
 			emitter.texture = _tex_square_chip
-			emitter.amount = 10
+			emitter.amount = 7
 			emitter.lifetime = 0.35
 			emitter.explosiveness = 0.85
+			# 2026-10-16 减量：10→7 粒；dir 非零时发射器转向（修复火葫芦火星不随武器朝向）
+			if dir.length_squared() > 0.001:
+				emitter.rotation = dir.angle()
 			mat.direction = Vector3(1, 0, 0)
 			mat.spread = 45.0
 			mat.initial_velocity_min = 150.0 * scale_factor
@@ -342,3 +371,45 @@ func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: flo
 
 	emitter.restart()
 	emitter.emitting = true
+
+## 命中火花元素材质分化（2026-10-16 精致化）：同一发射器只换贴图/材质参数，不增粒子不加灯。
+## 颜色仍走 _resolve_color 同一条链路；元素语义：
+##   火——余烬微上扬缓落；水/冰——软光斑溅落；木/毒——软光斑低初速慢飘（毒雾弥散）；
+##   雷——短命 0.16s 高初速电刺；金/暴击/未知——维持方屑基准。
+func _apply_spark_material(emitter: GPUParticles2D, mat: ParticleProcessMaterial, element: Variant) -> void:
+	var elem_str := ""
+	if element is String:
+		elem_str = (element as String).to_lower()
+	elif element is int:
+		match int(element):
+			1: elem_str = "metal"
+			2: elem_str = "wood"
+			3: elem_str = "water"
+			4: elem_str = "fire"
+			5: elem_str = "earth"
+	mat.color = _resolve_color(element, GameStyle.FX_HDR_CORE)
+	match elem_str:
+		"fire":
+			emitter.texture = _tex_square_chip
+			mat.gravity = Vector3(0, -30.0, 0)
+			mat.damping_min = 140.0
+			mat.damping_max = 200.0
+		"water", "ice", "frost":
+			emitter.texture = _tex_soft_dot
+			mat.gravity = Vector3(0, 160.0, 0)
+			mat.initial_velocity_min *= 0.8
+			mat.initial_velocity_max *= 0.8
+		"wood", "poison":
+			emitter.texture = _tex_soft_dot
+			mat.gravity = Vector3(0, 20.0, 0)
+			mat.initial_velocity_min *= 0.55
+			mat.initial_velocity_max *= 0.55
+			mat.damping_min = 200.0
+			mat.damping_max = 260.0
+		"lightning":
+			emitter.texture = _tex_square_chip
+			emitter.lifetime = 0.16
+			mat.initial_velocity_min *= 1.35
+			mat.initial_velocity_max *= 1.35
+		_:
+			emitter.texture = _tex_square_chip

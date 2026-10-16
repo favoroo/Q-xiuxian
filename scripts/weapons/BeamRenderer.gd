@@ -64,9 +64,11 @@ func _process(delta: float) -> void:
 	_phase += delta
 	_spark_timer -= delta
 	if _spark_timer <= 0.0 and length > 10.0:
-		_spark_timer = 0.18
+		# 2026-10-16 攻击粒子减量：持续束流端头火花节拍 0.18→0.26s、scale 0.85→0.7，
+		# 多把束流武器同屏时端头碎屑不再线性叠糊
+		_spark_timer = 0.26
 		var tip_pos := to_global(Vector2(length, 0.0))
-		FxParticlePool.burst(FxParticlePool.HIT_SPARK, tip_pos, "shadow", 0.85, true)
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, tip_pos, "shadow", 0.7, true, Vector2.RIGHT.rotated(global_rotation))
 
 	var interval := _redraw_interval()
 	if _phase >= interval:

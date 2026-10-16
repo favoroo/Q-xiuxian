@@ -263,7 +263,8 @@ func _deal_damage() -> void:
 	# 劈到人：放行 _bloom_or_recycle 的全亮大闪档
 	_struck = true
 	# 命中火花溅射（T-2.5）：雷光超白碎屑，吃 FxParticlePool 既有 HIT_FRAME_BUDGET 帧闸
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.2)
+	# （2026-10-16 减量 scale 1.2→1.0；雷刺元素在池内已分化为短命高初速电刺形态）
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.0)
 	# 落雷是本作少数「值得抖一下」的节点，量按战果给：劈到就轻震，收掉多命/劈到精英才加码
 	var trauma := 0.16
 	if kills >= 3:

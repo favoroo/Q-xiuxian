@@ -578,8 +578,8 @@ func _do_dash(st: Dictionary) -> void:
 	AudioManager.play_sfx("skill_dash", 1.0)
 
 ## 影爆（额外技能）：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
-## 环特效半径传的就是判定半径本身（画多大 == 判多大）；不加震屏——爆发的因果由环、
-## 跳字与击退本身表达，同帧再叠震屏就是满屏乱晃。
+## 环特效半径传的就是判定半径本身（画多大 == 判多大）；镜头只给一档轻 zoom punch（低频主动技），
+## 不加震屏/顿帧——同帧叠满屏乱晃的历史教训不变。
 func _release_shadow_step() -> void:
 	if not ShadowStepData.has_charge(shadow_ring):
 		return
@@ -591,15 +591,18 @@ func _release_shadow_step() -> void:
 		var dir := off.normalized() if off.length_squared() > 0.0001 else _dash_dir
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, ShadowStepData.BURST_RADIUS,
-		GameStyle.SHADOW, 0.26)
+		GameStyle.SHADOW, ShadowStepData.BURST_RING_DURATION)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -10), "shadow", 1.2, true)
 	AudioManager.play_sfx("whoosh_heavy", 1.0, 0.82)
+	AudioManager.play_sfx("whoosh_heavy", 0.7, 0.62)  ## 降调低频层：影爆踩碎的「闷响」
+	GameFeel.zoom_punch(GameManager, ShadowStepData.BURST_ZOOM_PUNCH, 0.2)
 	shadow_ring = []
 	GameManager.shadow_amp_mult = 1.0
 	if skill_vfx != null:
 		skill_vfx.on_shadow_spent()
 
 ## 盾势爆发（守卫·全自动）：把槽里蓄的「被护甲挡下的伤害」按比例折成一次周身震荡还回去并震开。
-## 与影爆同一把尺子：环特效半径传的就是判定半径；不加震屏——爆发由环、跳字与击退本身表达。
+## 与影爆同一把尺子：环特效半径传的就是判定半径；镜头只给一档轻 zoom punch（低频爆发技），不加震屏。
 ## 唯一触发点是 take_damage 蓄满当帧（攒/放同一写点），槽先清零再结算，爆发期间挨的刀计入下一槽。
 func _release_guard_stance() -> void:
 	var charge := GameManager.shield_charge
@@ -614,7 +617,8 @@ func _release_guard_stance() -> void:
 		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, GuardStanceData.BURST_RADIUS,
-		GameStyle.AURUM, 0.26)
+		GameStyle.AURUM, GuardStanceData.BURST_RING_DURATION)
+	GameFeel.zoom_punch(GameManager, GuardStanceData.BURST_ZOOM_PUNCH, 0.18)
 	AudioManager.play_sfx("whoosh_heavy", 0.9, 0.72)
 
 ## 天雷（雷法真君·全自动）：引雷劈向索敌圈内最近的敌人，落点小范围震荡。
@@ -667,9 +671,15 @@ func _release_elixir() -> void:
 	GameManager.buff_damage_mult = ElixirData.buff_mult()
 	_skill_buffs["elixir"] = ElixirData.BUFF_DURATION
 
-	# 4. 视觉与音效：冲击环（画多大==判多大，GOOD 翠绿药雾色）+ 随行药爆药雾粒子
+	# 4. 视觉与音效：冲击环（画多大==判多大，GOOD 翠绿药雾色）+ 地面药圃残辉 + 随行药爆药雾粒子
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, ElixirData.BURST_RADIUS,
-		GameStyle.GOOD, 0.28)
+		GameStyle.GOOD, ElixirData.BURST_RING_DURATION)
+	# 地面药圃残辉：毒伤范围贴地留痕（半径 = 判定半径），让按下的那一圈在地上留一拍
+	var residue := GroundDecal.spawn_tinted(get_parent(), global_position, ElixirData.BURST_RADIUS, GameStyle.GOOD)
+	if residue != null:
+		residue._time_left = ElixirData.GROUND_RESIDUE_SEC
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, 4), "heal", 1.1, true)
+	GameFeel.zoom_punch(GameManager, ElixirData.BURST_ZOOM_PUNCH, 0.2)
 	if skill_vfx != null:
 		skill_vfx.on_elixir_cast()
 	if is_procedural and procedural_view != null:
@@ -721,6 +731,7 @@ func _do_renewal(st: Dictionary) -> void:
 	if skill_vfx != null:
 		skill_vfx.on_renewal_cast()
 	AudioManager.play_sfx("skill_heal", 1.0)
+	AudioManager.play_sfx("heal", 0.65, 1.15)  ## 回血确认音（heal 走了 quiet 通道吞掉原音，这里低声叠回）
 
 ## 治疗灵兽：治疗技能附带召唤（SkillData renewal 的 pet_* 字段），跟随玩家周期回血；重施按组替换旧灵
 func _summon_spirit_healer(st: Dictionary) -> void:

@@ -123,7 +123,7 @@ func _build_background() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
 
-	# 2. 菱形流星雨装饰层（垫在纯黑底与卡片矩阵之间；headless 判据下不建）
+	# 2. 流星雨装饰层（垫在纯黑底与卡片矩阵之间；headless 判据下不建）
 	if DisplayServer.get_name() != "headless":
 		MenuMeteorShower.install(self)
 

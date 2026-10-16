@@ -337,6 +337,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_shop_opened() -> void:
 	DetailTip.close_all(self)
+	# 上一次商店会话可能残留拖拽手势（_drag/_press），开店即清，防悬空指针 + 输入吞锁
+	if drag_ctl != null:
+		drag_ctl._cancel_all()
 	selected = {}
 	_confirming = false
 	_layout_for_viewport()
@@ -375,6 +378,10 @@ func _layout_for_viewport() -> void:
 func refresh(animate: bool = true) -> void:
 	# 整排卡要重建 ⇒ 先收掉还开着的详情卡：卡上印的是刚才那批数，买入/锁定之后就是旧账
 	DetailTip.close_all(self)
+	# 陈列行会被整批 queue_free 重建：拖拽手势若还挂着旧格子引用，重建后就是悬空指针，
+	# 且 _drag 态会在 _input 里持续 set_input_as_handled 吞噬全屏输入。任何 refresh 前先结清。
+	if drag_ctl != null:
+		drag_ctl._cancel_all()
 	stones_label.text = "金币 %d" % GameManager.spirit_stones
 	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
 	# 生命读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
@@ -489,6 +496,10 @@ func _on_confirm() -> void:
 		return
 	_confirming = true
 	DetailTip.close_all(self)
+	# 出战淡出期间不许再有拖拽手势挂着：清掉幽灵与悬停高亮，防淡出回调里 _shop.visible 翻 false 时
+	# ShopDragDrop._input 走 _cancel_all 路径与 confirm_shop 竞态
+	if drag_ctl != null:
+		drag_ctl._cancel_all()
 	AudioManager.play_sfx("ui_confirm", 0.9)
 	# 淡出后再交回流程（之前是 visible=false 硬切，与进场淡入不对称）
 	var tw := create_tween()

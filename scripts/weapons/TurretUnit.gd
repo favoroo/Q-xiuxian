@@ -294,8 +294,8 @@ func _fire() -> void:
 		mtw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
 		mtw.chain().tween_callback(func(): muzzle_flash.visible = false)
 
-	# 炮口微粒喷射（绕过受击限流闸，不抢占命中火花名额）
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.6, true)
+	# 炮口微粒喷射（绕过受击限流闸，不抢占命中火花名额；2026-10-16 减量 scale 0.6→0.45 并顺向）
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.45, true, aim_dir)
 
 	core_sprite.modulate = Color(1.4, 1.35, 1.2)
 	var ftw := create_tween()

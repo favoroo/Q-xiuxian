@@ -50,7 +50,8 @@ const MAX_ACTIVE_EMITTERS := 30
 const MAX_BURST_PARTICLES := 16
 
 ## 命中火花单物理帧限流闸（同帧最多放行处数，防止高穿透齐射糊屏脱锚）
-const FRAME_BUDGET_HIT_SPARK := 6
+## 2026-10-16 攻击粒子减量：6→4，多武器齐射时同帧火花密度收敛一档
+const FRAME_BUDGET_HIT_SPARK := 4
 
 ## 死亡爆散单物理帧限流闸（同帧最多放行处数，群杀时宁缺勿糊）
 const FRAME_BUDGET_DEATH_BURST := 3
@@ -60,6 +61,10 @@ const FRAME_BUDGET_DEATH_WISP := 4
 
 ## 灵气凝聚微粒单物理帧限流闸（仅精英/魔君凝聚，防止刷怪同帧抢占池）
 const FRAME_BUDGET_SOUL_ORB := 2
+
+## 火锥碎屑单物理帧限流闸（2026-10-16 补挂：EMBER 原先无闸，
+## 是唯一随火葫芦数量线性叠加的无上限持续粒子源）
+const FRAME_BUDGET_EMBER := 3
 
 # ==============================================================================
 # 三、重绘与排序铁律常量

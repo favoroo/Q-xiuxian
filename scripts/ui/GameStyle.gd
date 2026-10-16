@@ -336,8 +336,8 @@ static func compact_chip_pin_w(text: String, font: Font, font_size: int = 10) ->
 ## 色签 Label 工厂：斜切面 + 贴着字走的宽。商店货架卡行②、图鉴卡面三签、羁绊签
 ## 都是「[文字, 面色, 字色]」这一形状，画法收在这一处 —— 否则两处各画一套，
 ## 同一张流派签在商店是蓝的、在图鉴是灰的，玩家对不上号。
-## 面色由调用方给（色即功能，取色口径在业务侧），这里不猜语义。
-static func chip_label(text: String, face: Color, text_color: Color,
+## 面色由调用方给（色即功能，取色口径在业务侧）；text_color 可缺省（Color(-1,-1,-1,-1)），缺省按底色明度自动适配。
+static func chip_label(text: String, face: Color, text_color: Color = Color(-1, -1, -1, -1),
         font_size: int = 11) -> Label:
     var lbl := Label.new()
     lbl.text = " %s " % text
@@ -345,8 +345,14 @@ static func chip_label(text: String, face: Color, text_color: Color,
     lbl.custom_minimum_size = Vector2(chip_pin_w(lbl.text, body_font(), font_size), 0)
     lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     lbl.add_theme_stylebox_override("normal", chip(face))
-    label(lbl, font_size, text_color)
+    var final_fg: Color = on_face_text(face) if text_color.r < 0.0 else text_color
+    label(lbl, font_size, final_fg)
     return lbl
+
+## 亮面配墨黑字、暗面配纸白字：全项目统一色度判据
+## 亮度阈值 0.5（>0.5 为亮面走 INK_TEXT，<=0.5 为暗面走 CHALK/PAPER）
+static func on_face_text(face: Color) -> Color:
+    return INK_TEXT if face.get_luminance() > 0.5 else CHALK
 
 ## BBCode 版的硬换行：悟道候选那种 `[center]…\n• 武器总伤害 [b]+15%[/b][/color]…` 的文案，
 ## 标签零宽、可见字符才占宽，所以逐字走一遍、只在可见字符之间下刀。

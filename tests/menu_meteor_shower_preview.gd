@@ -1,6 +1,6 @@
 extends Node
 
-## 首页菱形流星雨装饰出图台（非判据，不参与核心基线）：开 StartMenu 真渲染几秒，
+## 首页流星雨装饰出图台（非判据，不参与核心基线）：开 StartMenu 真渲染几秒，
 ## 存 PNG 后自动退出，供肉眼验收流星密度/速度/配色/简约度。
 ## 运行（不能加 --headless，headless 不渲染、且 StartMenu 在 headless 下不建装饰层）：
 ##   $G --path . res://tests/MenuMeteorShowerPreview.tscn   # 窗口一闪即退，产物 /tmp/menu_meteor_shower.png

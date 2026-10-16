@@ -33,6 +33,11 @@ const AMP_PER_STACK := 0.05    ## 每层影给的武器伤害加成（攒着就�
 ## 蜂群→灵异一档全秒，雪佣/毒妖/雷兽/蛛母这类厚皮留大半，精英/Boss 不受影响（钉点见 tests/ShadowStepCheck）。
 const BURST_POWER := 6.1
 
+## —— 影爆释放演出（纯视觉参数；判定数值在上方，环半径仍只认 BURST_RADIUS——画多大 == 判多大）——
+const BURST_FX_DURATION := 0.80   ## 影爆角色层爆发演出总时长（秒）：影环扩张 + 影锥碎芒放射
+const BURST_RING_DURATION := 0.55 ## 影爆落地冲击环时长（秒，JuiceEffect.spawn_shockwave 读）
+const BURST_ZOOM_PUNCH := 0.045   ## 影爆镜头微缩强（zoom punch；低频主动技只给一档轻缩放，不加震屏）
+
 ## 这一刀躲掉后存进影里的原始伤害（未打折，打折在兑现时算，便于改比例不动历史层）
 static func store_value(raw_damage: float) -> float:
 	return maxf(0.0, raw_damage)

@@ -18,9 +18,11 @@ const MAX_POINTS_LOW := 9      ## 低档历史点数（30Hz × 9 ≈ 0.27s）
 const MAX_POINTS_HIGH := 16    ## 流畅档历史点数（60Hz × 16 ≈ 0.27s）
 const MIN_STEP_SQ := 25.0      ## 相邻两点平方距下限（5px），回收前贴脸命中时防零长线段
 ## 2026-10-15 视觉克制化：光晕 8.0→6.5、亮核 2.4→2.1、头部透明度 0.30→0.24，
-## 弹丸拖尾是仅次于光束的常驻粗线，多弹齐射时不再糊成一片
-const GLOW_WIDTH := 6.5
-const CORE_WIDTH := 2.1
+## 弹丸拖尾是仅次于光束的常驻粗线，多弹齐射时不再糊成一片。
+## 2026-10-16 攻击粒子减量：光晕 6.5→5.2、亮核 2.1→1.8——点数与记忆长度不动，
+## 弧线形状不变只收宽度，多武器齐射时拖尾不再连成一片辉光海
+const GLOW_WIDTH := 5.2
+const CORE_WIDTH := 1.8
 const GLOW_ALPHA_HEAD := 0.24
 const CORE_ALPHA_HEAD := 0.85
 

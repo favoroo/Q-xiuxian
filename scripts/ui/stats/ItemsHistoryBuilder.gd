@@ -88,7 +88,7 @@ static func create_history_row(dialog: PlayerStatsDialog, item: Dictionary, idx:
 	pill_sb.content_margin_bottom = 1.0
 	pill.add_theme_stylebox_override("normal", pill_sb)
 	# 浅色带配黑字，深色带配暗底亮字（PAPER 已翻转为墨黑，深色带上会糊）
-	var band_text_col: Color = GameStyle.INK_TEXT if col.get_luminance() > 0.5 else GameStyle.CHALK
+	var band_text_col: Color = GameStyle.on_face_text(col)
 	pill.add_theme_color_override("font_color", band_text_col)
 	hbox.add_child(pill)
 

@@ -13,9 +13,9 @@ func _test_wave_scaling() -> void:
 	_c.near(GameBalance.enemy_dmg_mult(10), GameBalance.ENEMY_DMG_BASE_MULT * pow(1.06, 9), EPS, "第 10 波敌伤 = 基线 × 复利 1.69")
 	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "波间复利梯度不因基线下移而变")
 	_c.near(GameBalance.boss_contact_damage(1), ceilf(24.0 * GameBalance.ENEMY_DMG_BASE_MULT), EPS, "Boss 接触伤害与杂怪同一个总闸")
-	_c.near(GameBalance.wave_duration(1), 30.5, EPS, "第 1 波时长 30.5s（2026-10-11 波次拉长）")
-	_c.near(GameBalance.wave_duration(20), 70.0, EPS, "第 20 波封顶 70s")
-	_c.near(GameBalance.wave_duration(99), 70.0, EPS, "无尽波次也封顶 70s")
+	_c.near(GameBalance.wave_duration(1), 35.9, EPS, "第 1 波时长 35.9s（2026-10-16 表再放宽一档，预算不动）")
+	_c.near(GameBalance.wave_duration(20), 80.0, EPS, "第 20 波封顶 80s")
+	_c.near(GameBalance.wave_duration(99), 80.0, EPS, "无尽波次也封顶 80s")
 	_c.near(GameBalance.spawn_interval(1), 1.555, EPS, "第 1 波刷怪间隔 1.555s")
 	_c.near(GameBalance.spawn_interval(40), GameBalance.SPAWN_INTERVAL_MIN, EPS, "刷怪间隔有下限")
 	_c.near(GameBalance.enemy_hp_mult(0), GameBalance.enemy_hp_mult(1), EPS, "非法波次 0 被夹到 1")
@@ -143,17 +143,19 @@ func _test_enemy_mix() -> void:
 			monotonic = false
 		prev = edge
 	_c.check(monotonic, "邪修占比逐波不降（难度阶梯单调）")
-	_c.equals(WaveSpawner.pick_scene_key(1, 0.03), "xiexiu", "第 1 波 roll 落在邪修带内 → 邪修")
-	_c.equals(WaveSpawner.pick_scene_key(1, 0.06), "slime", "第 1 波邪修只占 6%，其余仍是史莱姆")
-	_c.equals(WaveSpawner.pick_scene_key(1, 0.5), "slime", "第 1 波仍不刷花妖（维持第 2 波解锁）")
-	_c.equals(WaveSpawner.pick_scene_key(3, 0.05), "danbao", "第 3 波丹爆傀儡已解锁，roll<0.12 → 丹爆傀儡")
-	_c.equals(WaveSpawner.pick_scene_key(3, 0.20), "flower", "第 3 波邪修带被丹爆整段吃掉（[0.12,0.12) 为空），roll 0.20 落在花妖带")
-	_c.equals(WaveSpawner.pick_scene_key(3, 0.70), "slime", "第 3 波高 roll 但未到蜂群带（0.70 < 0.78）仍是史莱姆")
-	_c.equals(WaveSpawner.pick_scene_key(5, 0.15), "xiexiu", "第 5 波邪修带为 [0.12, 0.18)，roll 0.15 落邪修")
-	_c.equals(WaveSpawner.pick_scene_key(5, 0.30), "leibeast", "第 5 波雷兽带为 [0.18, 0.42)")
-	_c.equals(WaveSpawner.pick_scene_key(12, 0.05), "danbao", "第 12 波 roll<0.12 → 丹爆傀儡")
-	_c.equals(WaveSpawner.pick_scene_key(12, 0.20), "xiexiu", "第 12 波 [0.12, 0.27) → 邪修")
-	_c.equals(WaveSpawner.pick_scene_key(12, 0.35), "leibeast", "第 12 波 [0.27, 0.42) → 雷兽")
+	# 2026-10-16 登场聚焦与每波主打怪：roll 头部切两块份额，尾部重标定回 [0,1) 走原分段带。
+	# 带子口径断言一律走 pick_band_key（不含头部份额），与 pick_scene_key 的头部行为解耦。
+	_c.equals(WaveSpawner.pick_band_key(1, 0.03), "xiexiu", "第 1 波 roll 落在邪修带内 → 邪修")
+	_c.equals(WaveSpawner.pick_band_key(1, 0.06), "slime", "第 1 波邪修只占 6%，其余仍是史莱姆")
+	_c.equals(WaveSpawner.pick_band_key(1, 0.5), "slime", "第 1 波仍不刷花妖（维持第 2 波解锁）")
+	_c.equals(WaveSpawner.pick_band_key(3, 0.05), "danbao", "第 3 波丹爆傀儡已解锁，roll<0.12 → 丹爆傀儡")
+	_c.equals(WaveSpawner.pick_band_key(3, 0.20), "flower", "第 3 波邪修带被丹爆整段吃掉（[0.12,0.12) 为空），roll 0.20 落在花妖带")
+	_c.equals(WaveSpawner.pick_band_key(3, 0.70), "slime", "第 3 波高 roll 但未到蜂群带（0.70 < 0.78）仍是史莱姆")
+	_c.equals(WaveSpawner.pick_band_key(5, 0.15), "xiexiu", "第 5 波邪修带为 [0.12, 0.18)，roll 0.15 落邪修")
+	_c.equals(WaveSpawner.pick_band_key(5, 0.30), "leibeast", "第 5 波雷兽带为 [0.18, 0.42)")
+	_c.equals(WaveSpawner.pick_band_key(12, 0.05), "danbao", "第 12 波 roll<0.12 → 丹爆傀儡")
+	_c.equals(WaveSpawner.pick_band_key(12, 0.20), "xiexiu", "第 12 波 [0.12, 0.27) → 邪修")
+	_c.equals(WaveSpawner.pick_band_key(12, 0.35), "leibeast", "第 12 波 [0.27, 0.42) → 雷兽")
 	var seen := {}
 	for w in range(1, 25):
 		for i in range(100):
@@ -161,23 +163,91 @@ func _test_enemy_mix() -> void:
 	_c.equals(seen.keys().size(), 12, "十二种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
 
 	# 批三新敌种：高 roll 段从史莱姆的保底份额里切走，逐波解锁
-	_c.equals(WaveSpawner.pick_scene_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
-	_c.equals(WaveSpawner.pick_scene_key(3, 0.80), "fengqun", "第 3 波蜂群精解锁")
-	_c.equals(WaveSpawner.pick_scene_key(6, 0.90), "xueyong", "第 6 波血蛹解锁（死亡分裂，带 [0.88,0.92)）")
-	_c.equals(WaveSpawner.pick_scene_key(7, 0.93), "yingmei", "第 7 波影魅解锁（闪现侧翼）")
-	_c.equals(WaveSpawner.pick_scene_key(7, 0.85), "fengqun", "第 7 波灵医未解锁，roll 0.85 落回蜂群带（闸门让位）")
-	_c.equals(WaveSpawner.pick_scene_key(8, 0.85), "lingyi", "第 8 波灵医解锁（治疗同伴，带 [0.83,0.88)）")
-	_c.equals(WaveSpawner.pick_scene_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
-	_c.equals(WaveSpawner.pick_scene_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
-	_c.equals(WaveSpawner.pick_scene_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
+	_c.equals(WaveSpawner.pick_band_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
+	_c.equals(WaveSpawner.pick_band_key(3, 0.80), "fengqun", "第 3 波蜂群精解锁")
+	_c.equals(WaveSpawner.pick_band_key(6, 0.90), "xueyong", "第 6 波血蛹解锁（死亡分裂，带 [0.88,0.92)）")
+	_c.equals(WaveSpawner.pick_band_key(7, 0.93), "yingmei", "第 7 波影魅解锁（闪现侧翼）")
+	_c.equals(WaveSpawner.pick_band_key(7, 0.85), "fengqun", "第 7 波灵医未解锁，roll 0.85 落回蜂群带（闸门让位）")
+	_c.equals(WaveSpawner.pick_band_key(8, 0.85), "lingyi", "第 8 波灵医解锁（治疗同伴，带 [0.83,0.88)）")
+	_c.equals(WaveSpawner.pick_band_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
+	_c.equals(WaveSpawner.pick_band_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
+	_c.equals(WaveSpawner.pick_band_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
 
 	# 毒妖（2026-10-13 投毒）：与花妖共段 [0.42, flower_edge)，判序在前切走 35%。
 	# 共段的代价是必须同时钉住「两边都还在」——只断言解锁会让花妖被悄悄整段吃掉而不被发现
-	_c.equals(WaveSpawner.pick_scene_key(6, 0.50), "duyao", "第 6 波毒妖解锁（投毒持续伤害区域，占 [0.42,0.54)）")
-	_c.equals(WaveSpawner.pick_scene_key(6, 0.60), "flower", "毒妖共段后花妖仍占自己的份额（不被整段吃掉）")
-	_c.equals(WaveSpawner.pick_scene_key(5, 0.50), "flower", "第 5 波毒妖未解锁，[0.42,0.54) 整段落回花妖")
+	_c.equals(WaveSpawner.pick_band_key(6, 0.50), "duyao", "第 6 波毒妖解锁（投毒持续伤害区域，占 [0.42,0.54)）")
+	_c.equals(WaveSpawner.pick_band_key(6, 0.60), "flower", "毒妖共段后花妖仍占自己的份额（不被整段吃掉）")
+	_c.equals(WaveSpawner.pick_band_key(5, 0.50), "flower", "第 5 波毒妖未解锁，[0.42,0.54) 整段落回花妖")
 	_c.near(WaveSpawner.duyao_edge(6), 0.5418, EPS, "毒妖第 6 波上沿 0.5418（0.42 + (0.768-0.42)×0.35）")
 	_c.near(WaveSpawner.duyao_edge(14), WaveSpawner.duyao_edge(6), EPS, "花妖带封顶后毒妖份额不再增长（同一条曲线封顶）")
+
+# 2026-10-16 登场聚焦 / 每波主打怪 / 批次刷新阈值爬坡（节奏紧凑化）
+func _test_wave_theme() -> void:
+	# 登场聚焦：本波新解锁的怪合吃头部 20% 份额（同波多只按序均分），先见识机制再回落混池
+	_c.equals(EnemyData.debut_group(1), [], "第 1 波无新解锁（邪修走自己的爬坡格，不进登场组）")
+	_c.equals(EnemyData.debut_group(2), ["flower"], "第 2 波登场组 = 花妖（unlock_wave 2）")
+	_c.equals(EnemyData.debut_group(3), ["danbao", "fengqun"], "第 3 波登场组 = 丹爆 + 蜂群（同波两个解锁，表序）")
+	_c.equals(EnemyData.debut_group(6), ["xueyong", "duyao"], "第 6 波登场组 = 血蛹 + 毒妖（同波两个解锁）")
+	_c.equals(EnemyData.debut_group(7), ["yingmei"], "第 7 波登场组 = 影魅（unlock_wave 7）")
+	_c.equals(EnemyData.debut_group(12), [], "第 12 波无新解锁（W9 之后到 W14 才有下一个）")
+	_c.equals(EnemyData.debut_group(14), ["zhumu"], "第 14 波登场组 = 百目妖")
+	# 登场段真的吃进 pick_scene_key 头部：roll < 0.20 必出登场组内的怪，且组内均分
+	for w in range(1, 21):
+		var group: Array = EnemyData.debut_group(w)
+		if group.is_empty():
+			continue
+		var got0 := WaveSpawner.pick_scene_key(w, 0.0)
+		var got19 := WaveSpawner.pick_scene_key(w, 0.19)
+		_c.check(group.has(got0), "第 %d 波 roll 0 → 登场组 %s 之一（实得 %s）" % [w, str(group), got0])
+		_c.check(group.has(got19), "第 %d 波 roll 0.19（登场段内）→ 登场组之一（实得 %s）" % [w, got19])
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.0), "danbao", "第 3 波登场段前半 → 丹爆")
+	_c.equals(WaveSpawner.pick_scene_key(3, 0.19), "fengqun", "第 3 波登场段后半 → 蜂群（组内均分）")
+
+	# 每波主打怪：第 1 波不出（纯教学），第 2 波起从已解锁怪轮换、不选保底史莱姆/未解锁/登场怪
+	_c.equals(EnemyData.featured_mob(1), "", "第 1 波不出主打怪（史莱姆 + 零星邪修的教学波）")
+	var feat_ok := true
+	for w in range(2, 41):
+		var feat := EnemyData.featured_mob(w)
+		if feat == "" or feat == "slime":
+			feat_ok = false
+		var row: Dictionary = EnemyData.MOBS.get(feat, {})
+		if row.is_empty() or (row.has("unlock_wave") and int(row["unlock_wave"]) > w):
+			feat_ok = false
+		if EnemyData.debut_group(w).has(feat):
+			feat_ok = false
+	_c.check(feat_ok, "第 2~40 波主打怪都有值、已解锁、非史莱姆、不与登场组撞车")
+	# 轮换要真的换（不许常年同一只）：连续 12 波里至少出现 3 种
+	var feat_seen := {}
+	for w in range(2, 14):
+		feat_seen[EnemyData.featured_mob(w)] = true
+	_c.check(feat_seen.keys().size() >= 3, "主打怪 12 波内至少轮换出 3 种（实得 %d 种）" % feat_seen.keys().size())
+	# 头部份额与重标定：roll 落在头部之外时，尾部仍能选到原带子里的怪（重标定不吞份额）
+	_c.check(EnemyData.DEBUT_SHARE + EnemyData.FEATURED_SHARE < 0.5, "头部两块份额之和 < 50%（尾部分段带仍有主体份额）")
+	var tail_seen := {}
+	for w in range(1, 25):
+		for i in range(100):
+			var r := 0.35 + float(i) / 100.0 * 0.65
+			tail_seen[WaveSpawner.pick_scene_key(w, r)] = true
+	_c.check(tail_seen.keys().size() >= 10, "尾部区间仍能选到绝大多数怪种（实得 %d 种）" % tail_seen.keys().size())
+
+	# 批次刷新阈值爬坡（2026-10-16 节奏紧凑化）：W1-3 → 1 / W4-9 → 2 / W10+ → 3
+	_c.equals(GameBalance.batch_refill_threshold(1), 1, "第 1 波刷新阈值 1（保留前期单批清剿喘息）")
+	_c.equals(GameBalance.batch_refill_threshold(3), 1, "第 3 波阈值仍为 1")
+	_c.equals(GameBalance.batch_refill_threshold(4), 2, "第 4 波阈值升到 2")
+	_c.equals(GameBalance.batch_refill_threshold(9), 2, "第 9 波阈值仍为 2")
+	_c.equals(GameBalance.batch_refill_threshold(10), 3, "第 10 波阈值升到 3")
+	_c.equals(GameBalance.batch_refill_threshold(99), 3, "无尽深层阈值封顶 3")
+	_c.equals(GameBalance.batch_refill_threshold(0), 1, "非法波次 0 夹到第 1 波阈值")
+	var thr_prev := 0
+	var thr_monotonic := true
+	for w in range(1, 41):
+		var t := GameBalance.batch_refill_threshold(w)
+		if t < thr_prev:
+			thr_monotonic = false
+		thr_prev = t
+	_c.check(thr_monotonic, "刷新阈值逐波不降（爬坡单调）")
+	_c.near(GameBalance.BATCH_CLEAR_COOLDOWN, 0.6, EPS, "呼吸间隙压缩到 0.6s（2026-10-16 紧凑化）")
+	_c.near(GameBalance.BATCH_STALEMATE_TIMEOUT, 5.5, EPS, "对峙超时收紧到 5.5s（2026-10-16 紧凑化）")
 
 func _test_danger_system() -> void:
 	# 公式钉线

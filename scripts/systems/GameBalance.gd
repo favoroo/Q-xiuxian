@@ -36,6 +36,11 @@ const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
 const BATCH_CLEAR_COOLDOWN := BalanceWave.BATCH_CLEAR_COOLDOWN
 const BATCH_STALEMATE_TIMEOUT := BalanceWave.BATCH_STALEMATE_TIMEOUT
 const CONCURRENT_BATCH_MIN_WAVE := BalanceWave.CONCURRENT_BATCH_MIN_WAVE
+const BATCH_REFILL_EARLY := BalanceWave.BATCH_REFILL_EARLY
+const BATCH_REFILL_MID := BalanceWave.BATCH_REFILL_MID
+const BATCH_REFILL_LATE := BalanceWave.BATCH_REFILL_LATE
+const BATCH_REFILL_MID_WAVE := BalanceWave.BATCH_REFILL_MID_WAVE
+const BATCH_REFILL_LATE_WAVE := BalanceWave.BATCH_REFILL_LATE_WAVE
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
 const MOB_KILL_EXP_MULT := BalanceWave.MOB_KILL_EXP_MULT
@@ -373,6 +378,10 @@ static func spawn_interval(wave: int) -> float:
 
 static func spawn_batch(wave: int, roll: float) -> int:
 	return BalanceWave.spawn_batch(wave, roll)
+
+## 批次刷新阈值爬坡（节奏紧凑化）：场上存活 ≤ 此值即刷下一批（W1-3 → 1 / W4-9 → 2 / W10+ → 3）
+static func batch_refill_threshold(wave: int) -> int:
+	return BalanceWave.batch_refill_threshold(wave)
 
 ## 回合内总刷入预算（土豆兄弟式克制）：预算耗尽即停手，场上越打越空
 static func wave_spawn_budget(wave: int) -> int:
