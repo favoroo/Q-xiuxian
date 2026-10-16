@@ -43,6 +43,7 @@ func _ready() -> void:
 	# 帧率档位（2026-10-15）：默认「流畅模式」60fps + 物理 60Hz，设置页可关成 30/30 省电档。
 	# headless 判据依赖自由帧节奏与 30Hz 物理基线（time_scale 竞态余量、PerfProbe 节流预算），跳过。
 	_apply_fps_limit()
+	_apply_render_quality()
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
 	GameManager.joystick = joystick
@@ -245,9 +246,26 @@ func _apply_fps_limit() -> void:
 	Engine.physics_ticks_per_second = 60
 	VisualRate.high_fps = true
 
+## 画面清晰度档位落地（2026-10-16）：
+## high (高清): Window.CONTENT_SCALE_MODE_CANVAS_ITEMS（全屏原生高分渲染，UI 字体与画面极致清晰）
+## performance (流畅): Window.CONTENT_SCALE_MODE_VIEWPORT（锁定 960×540 视口渲染再拉伸，超高分低端机防掉帧）
+func _apply_render_quality() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var win := get_window()
+	if win == null:
+		return
+	var quality := SettingsManager.render_quality()
+	if quality == &"performance":
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+	else:
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
 	if section == &"display" and key == &"screen_shockwave":
 		_sync_shockwave_channel()
+	elif section == &"display" and key == &"render_quality":
+		_apply_render_quality()
 
 func _exit_tree() -> void:
 	# 归还 autoload 引用槽：场景释放后 Player / WaveSpawner / Joystick 已被释放，

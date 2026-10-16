@@ -120,17 +120,17 @@ static func install(host: Control) -> MenuMeteorShower:
 	host.add_child(fx)
 	return fx
 
-	func _ready() -> void:
-		for i in range(METEOR_COUNT):
-			_meteors.append({"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0,
-				"scale": 1.0, "alpha": 0.5, "tint": GameStyle.PAPER,
-				"seed": 0.0, "delay": 0.0, "active": false,
-				"sparks": [], "spark_acc": 0.0})
-			# 首批错峰入场，时间拉开，避免开局扎堆出现
-			_meteors[i]["delay"] = GameManager.rng.randf_range(0.0, 3.5)
-			# 头部脉动相位：每颗各错开，避免整屏同步呼吸
-			_meteors[i]["seed"] = GameManager.rng.randf_range(0.0, TAU)
-		_seed_stars()
+func _ready() -> void:
+	for i in range(METEOR_COUNT):
+		_meteors.append({"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0,
+			"scale": 1.0, "alpha": 0.5, "tint": GameStyle.PAPER,
+			"seed": 0.0, "delay": 0.0, "active": false,
+			"sparks": [], "spark_acc": 0.0})
+		# 首批错峰入场，时间拉开，避免开局扎堆出现
+		_meteors[i]["delay"] = GameManager.rng.randf_range(0.0, 3.5)
+		# 头部脉动相位：每颗各错开，避免整屏同步呼吸
+		_meteors[i]["seed"] = GameManager.rng.randf_range(0.0, TAU)
+	_seed_stars()
 
 func _seed_stars() -> void:
 	# 归一化坐标存星位，窗口尺寸变化时自然铺满

@@ -255,6 +255,16 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
+	# 画面清晰度：高清（原生高分屏极清渲染）/ 流畅（固定视口拉伸，低配防掉帧）
+	_add_cycle_row(
+		vbox,
+		"render_quality",
+		"画面清晰度",
+		"高清（原生高分渲染，极致清晰）/ 流畅（固定视口拉伸，低配防掉帧）",
+		func() -> String: return "清晰度 · %s" % SettingsManager.render_quality_label(),
+		func() -> bool: return SettingsManager.render_quality() == &"high",
+		func(): SettingsManager.set_val(&"display", &"render_quality", SettingsManager.render_quality_next())
+	)
 	# T-6.1 热浪扭曲：可选高档位默认关（back buffer copy 低端机有掉帧风险），排最后不抢眼
 	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥与火雨区域画面热浪扭曲（高端画质，低配设备可能掉帧，默认关）")
 	# T-6.2 受击屏幕冲击波：可选高档位默认关

@@ -94,30 +94,30 @@ const SCHEMA: Array[Dictionary] = [
 		"default": &"standard",
 		"options": [&"off", &"light", &"standard", &"heavy"],
 	},
-		{
-			"section": "display",
-			"key": "hit_stop",
-			"title": "顿帧打击感",
-			"desc": "命中与击杀强敌时的微顿帧（增强打击感）",
-			"type": "toggle",
-			"default": true,
-		},
-		{
-			"section": "display",
-			"key": "haptics",
-			"title": "触觉震动",
-			"desc": "受创与暴击时触发手柄/手机轻微震动反馈",
-			"type": "toggle",
-			"default": true,
-		},
-		{
-			"section": "display",
-			"key": "screen_flash",
-			"title": "受击红晕",
-			"desc": "受伤及濒死时屏幕边缘的暗红警示效果",
-			"type": "toggle",
-			"default": true,
-		},
+	{
+		"section": "display",
+		"key": "hit_stop",
+		"title": "顿帧打击感",
+		"desc": "命中与击杀强敌时的微顿帧（增强打击感）",
+		"type": "toggle",
+		"default": true,
+	},
+	{
+		"section": "display",
+		"key": "haptics",
+		"title": "触觉震动",
+		"desc": "受创与暴击时触发手柄/手机轻微震动反馈",
+		"type": "toggle",
+		"default": true,
+	},
+	{
+		"section": "display",
+		"key": "screen_flash",
+		"title": "受击红晕",
+		"desc": "受伤及濒死时屏幕边缘的暗红警示效果",
+		"type": "toggle",
+		"default": true,
+	},
 	{
 		"section": "display",
 		"key": "show_fps",
@@ -125,6 +125,15 @@ const SCHEMA: Array[Dictionary] = [
 		"desc": "左上角显示当前帧率 (FPS)",
 		"type": "toggle",
 		"default": false,
+	},
+	{
+		"section": "display",
+		"key": "render_quality",
+		"title": "画面清晰度",
+		"desc": "高清（原生高分屏极清渲染） / 流畅（固定视口拉伸，低配防掉帧）",
+		"type": "cycle",
+		"default": &"high",
+		"options": [&"high", &"performance"],
 	},
 	{
 		"section": "display",
@@ -253,6 +262,16 @@ const DAMAGE_NUMBER_MODE_LABELS := {
 }
 const DAMAGE_NUMBER_DEFAULT_MODE := &"smart"
 
+## 画面清晰度档位表（高清 / 流畅）
+## high: 对应 Window.CONTENT_SCALE_MODE_CANVAS_ITEMS（原生清晰，字体与画面极致锐利）
+## performance: 对应 Window.CONTENT_SCALE_MODE_VIEWPORT（锁定 960×540 视口渲染再放大，超高分低端机防掉帧）
+const RENDER_QUALITY_ORDER: Array[StringName] = [&"high", &"performance"]
+const RENDER_QUALITY_LABELS := {
+	"high": "高清",
+	"performance": "流畅",
+}
+const RENDER_QUALITY_DEFAULT := &"high"
+
 ## 内存设置字典: section -> { key: value }
 var _settings: Dictionary = {}
 
@@ -375,6 +394,24 @@ func damage_number_mode_next() -> StringName:
 	if i < 0:
 		i = 0
 	return DAMAGE_NUMBER_MODE_ORDER[(i + 1) % DAMAGE_NUMBER_MODE_ORDER.size()]
+
+# ----------------- 画面清晰度便捷接口 -----------------
+
+## 当前清晰度档位：high (高清) / performance (流畅)
+func render_quality() -> StringName:
+	return StringName(str(get_val(&"display", &"render_quality", RENDER_QUALITY_DEFAULT)))
+
+## 档位的人话名（设置界面用）
+func render_quality_label() -> String:
+	return String(RENDER_QUALITY_LABELS.get(str(render_quality()), "高清"))
+
+## 循环到下一档清晰度（高清与流畅切换）
+func render_quality_next() -> StringName:
+	var cur := render_quality()
+	var i := RENDER_QUALITY_ORDER.find(cur)
+	if i < 0:
+		i = 0
+	return RENDER_QUALITY_ORDER[(i + 1) % RENDER_QUALITY_ORDER.size()]
 
 # ----------------- 操作按钮布局（技能键 / 祭坛键自由拖动） -----------------
 
@@ -644,15 +681,20 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 			or key == "heat_distortion" or key == "screen_shockwave":
 		return _to_bool(val, key != "show_fps" and key != "heat_distortion" and key != "screen_shockwave")
 	if key == "shake_intensity":
-		var s := StringName(str(val))
-		if SHAKE_LEVEL_ORDER.has(s):
-			return s
+		var s_shake := StringName(str(val))
+		if SHAKE_LEVEL_ORDER.has(s_shake):
+			return s_shake
 		return SHAKE_DEFAULT_LEVEL
 	if key == "damage_number_mode":
-		var s := StringName(str(val))
-		if DAMAGE_NUMBER_MODE_ORDER.has(s):
-			return s
+		var s_dmg := StringName(str(val))
+		if DAMAGE_NUMBER_MODE_ORDER.has(s_dmg):
+			return s_dmg
 		return DAMAGE_NUMBER_DEFAULT_MODE
+	if key == "render_quality":
+		var s_render := StringName(str(val))
+		if RENDER_QUALITY_ORDER.has(s_render):
+			return s_render
+		return RENDER_QUALITY_DEFAULT
 	return val
 
 func _try_migrate_legacy_audio() -> void:
