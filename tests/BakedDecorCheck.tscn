@@ -1,0 +1,6 @@
+[gd_scene uid="uid://cbakeddec001" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/baked_decor_check.gd" id="1_baked"]
+
+[node name="BakedDecorCheck" type="Node"]
+script = ExtResource("1_baked")

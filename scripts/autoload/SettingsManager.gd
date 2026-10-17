@@ -155,6 +155,17 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
+	{
+		"section": "display",
+		# 辉光/HDR 联动通道（2026-10-17 真机 42fps GPU 专项）：glow 多 pass + RGBA16
+		# 帧缓冲是移动端最大固定带宽税。默认开（旗舰无感）；持续低帧时 Main 会自动
+		# 关闭并 toast 提示，恢复只能手动开回（防来回翻转）。
+		"key": "glow",
+		"title": "辉光",
+		"desc": "超白起辉光效（暴击绯金、灵光等）。关掉可大幅省电提帧，低帧时会自动关闭",
+		"type": "toggle",
+		"default": true,
+	},
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
 	# 归一化中心点（相对设计视口 0..1），换屏比不漂移；缩放为底尺寸倍率
@@ -678,7 +689,7 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 		return _to_bool(val, false)
 	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
 			or key == "haptics" or key == "screen_flash" or key == "show_fps" \
-			or key == "heat_distortion" or key == "screen_shockwave":
+			or key == "heat_distortion" or key == "screen_shockwave" or key == "glow":
 		return _to_bool(val, key != "show_fps" and key != "heat_distortion" and key != "screen_shockwave")
 	if key == "shake_intensity":
 		var s_shake := StringName(str(val))

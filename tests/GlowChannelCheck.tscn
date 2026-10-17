@@ -1,0 +1,6 @@
+[gd_scene uid="uid://cglowchan001" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/glow_channel_check.gd" id="1_glow"]
+
+[node name="GlowChannelCheck" type="Node"]
+script = ExtResource("1_glow")

@@ -48,6 +48,12 @@ func _ready() -> void:
 	# headless 判据依赖自由帧节奏与 30Hz 物理基线（time_scale 竞态余量、PerfProbe 节流预算），跳过。
 	_apply_fps_limit()
 	_apply_render_quality()
+	# 辉光/HDR 联动通道首拍（2026-10-17）：启动帧一次性设（viewport 创建后立即切，
+	# 避开运行中切帧缓冲格式的未验证路径）；此后仅手动开关与自动降档两处再写。
+	_glow_auto_offed = false
+	_glow_low_streak = 0
+	_glow_toasted = false
+	_apply_glow_channel()
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
 	GameManager.joystick = joystick
@@ -272,6 +278,11 @@ func _on_setting_changed(section: StringName, key: StringName, _value: Variant) 
 		_sync_shockwave_channel()
 	elif section == &"display" and key == &"render_quality":
 		_apply_render_quality()
+	elif section == &"display" and key == &"glow":
+		# 手动开回时清自动降档态与低帧计数，让状态机回到纯手动控制
+		_glow_auto_offed = false
+		_glow_low_streak = 0
+		_apply_glow_channel()
 
 func _exit_tree() -> void:
 	# 归还 autoload 引用槽：场景释放后 Player / WaveSpawner / Joystick 已被释放，
@@ -286,6 +297,7 @@ func _exit_tree() -> void:
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表 / 弹丸及掉落物池）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
+	BakedDecorTexture.clear()
 	EnemyBase.clear_pools()
 	PoisonPool.clear_pool()
 	GroundDecal.clear_pool()
@@ -479,6 +491,54 @@ func _poll_crowd_glow(delta: float) -> void:
 	var want: float = FxBudget.glow_intensity()
 	if _env_res.glow_intensity != want:
 		_env_res.glow_intensity = want
+	_poll_glow_auto_off()
+
+# —— 辉光/HDR 联动通道（2026-10-17 真机 42fps GPU 专项）——
+## 真机判读：轻负载（4 敌 15 弹）仅 42fps，提交 0.12ms 极轻 ⇒ GPU bound；
+## glow 多 pass + RGBA16 帧缓冲（hdr_2d）是最大的固定带宽税。两者强绑定：
+## glow_hdr_threshold=1.0 依赖 HDR 范围起辉，关 glow 留 HDR 只会「超白被钳到 1.0
+## 还白付 float16 带宽」——所以本通道永远同开同关。
+## 三态：手动开（默认）/ 手动关（设置页）/ 自动关（战斗中 fps<50 连续 5s，
+## toast 提示一次；恢复唯一路径是手动开回，防来回翻转）。
+const GLOW_AUTO_FPS_FLOOR := 50      ## 自动降档帧率阈值（连续采样低于它才触发）
+const GLOW_AUTO_TRIGGERS := 5        ## 连续低帧采样数（1s 粒度 ⇒ 5s）
+var _glow_low_streak: int = 0        ## 连续低帧采样计数
+var _glow_auto_offed: bool = false   ## 本局是否已自动关闭（翻转后不自动开回）
+var _glow_toasted: bool = false      ## 自动降档提示一次闸（每次对局最多一条）
+
+## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值。
+## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
+func _apply_glow_channel() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var want: bool = bool(SettingsManager.get_val(&"display", &"glow", true)) and not _glow_auto_offed
+	if _env_res == null:
+		var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+		if we == null or we.environment == null:
+			return
+		_env_res = we.environment
+	if _env_res.glow_enabled != want:
+		_env_res.glow_enabled = want
+	var vp := get_viewport()
+	if vp != null and vp.use_hdr_2d != want:
+		vp.use_hdr_2d = want
+
+## 自动降档采样（挂在 1s 轮询尾部）：仅战斗中采样；连续 GLOW_AUTO_TRIGGERS 次
+## fps < 阈值即翻转自动关 + toast 一次；手动关闭的用户不走这条（本来就关着）。
+func _poll_glow_auto_off() -> void:
+	if not GameManager.run_started or get_tree().paused:
+		return
+	if bool(SettingsManager.get_val(&"display", &"glow", true)):
+		if Engine.get_frames_per_second() < GLOW_AUTO_FPS_FLOOR:
+			_glow_low_streak += 1
+			if _glow_low_streak >= GLOW_AUTO_TRIGGERS and not _glow_auto_offed:
+				_glow_auto_offed = true
+				_apply_glow_channel()
+				if not _glow_toasted:
+					_glow_toasted = true
+					GameManager.announcement_triggered.emit("已自动关闭辉光以提升帧率 · 可在设置中开启")
+		else:
+			_glow_low_streak = 0
 
 func _on_weapons_updated(weapons: Array) -> void:
 	if not weapons.is_empty():
@@ -634,7 +694,10 @@ func trigger_screen_shockwave(world_pos: Vector2 = Vector2.INF, strength: float 
 func _setup_map_bounds() -> void:
 	var map: Node2D = $MapLayer
 	var half: float = GameManager.MAP_HALF_EXTENT
-	var ground_half: float = 2400.0
+	# 深渊外沿从 ±2400 收到 ±1600（2026-10-17 真机 GPU 专项）：竖屏相机视野内玩家
+	# 永远看不到外块远端，±1600 仍完整包住 BeyondBoundary 剪影（±740）与边界 clamp（±540），
+	# 每帧省 ~40% 的全屏近不透明 overdraw。编辑器预览要拉回全场对照时改回 2400 即可。
+	var ground_half: float = 1600.0
 
 	# 1. 场外九幽深渊虚空：梯形双线性平滑坠落衰减，彻底消除硬折线与切糕感
 	var abyss := AbyssFalloffLayer.new()
@@ -657,6 +720,26 @@ func _setup_map_bounds() -> void:
 	var arena_vis := ArenaVisualLayer.new()
 	arena_vis.half_extent = half
 	map.add_child(arena_vis)
+
+	# 3.5 静态装饰烘焙（2026-10-17 真机 GPU 专项）：GroundDecor + ArenaVisual 的
+	# StaticDecor 都是「纯色确定性零重绘」矢量，离屏烘成一张 2× 纹理由单 Sprite 代替，
+	# 每帧省 ~2000 图元并把多层半透明混合压成一次不透明采样。烘焙失败（headless/
+	# 抓帧异常）自动回退矢量层，视觉零差异。动态部分（太极阵自转/呼吸/脉冲）不烘。
+	_bake_static_decor(map, half, ground_decor, arena_vis)
+
+## 异步烘焙挂载：成功 → 藏原两层矢量；失败 → 原两层照常显示（回退保底）
+func _bake_static_decor(map: Node2D, half: float, ground_decor: GroundDecorLayer, arena_vis: ArenaVisualLayer) -> void:
+	var sprite := await BakedDecorTexture.bake(half)
+	if sprite == null:
+		return
+	# 层序：插在 GroundDecor 原位置（烘焙图包含其内容），ArenaVisual 的动态部分
+	# 仍在其上（树序在后），StaticDecor 内容被烘焙图替代后藏宿主的静态子层
+	map.add_child(sprite)
+	map.move_child(sprite, ground_decor.get_index())
+	ground_decor.visible = false
+	var sd: Node2D = arena_vis._static_decor
+	if sd != null:
+		sd.visible = false
 
 ## 选人阶段黑幕托底
 ## 链式对话框（选角 → 选技能 → 选武器）用「先淡出再淡入下一个」的非重叠时序，

@@ -69,7 +69,9 @@ func _process(delta: float) -> void:
 	var vram_mb := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
 	var phys_bodies := int(Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS))
 	var phys_pairs := int(Performance.get_monitor(Performance.PHYSICS_2D_COLLISION_PAIRS))
-	text = "FPS: %d\n逻辑 %.1fms 峰 %.1fms  物理 %.1fms  提交 %.2fms\n绘制 %d  图元 %s  对象 %s\n敌 %d  弹 %d  宝 %d  特 %d  字 %d\n节点 %s  孤儿 %d  内存 %.0fMB  显存 %.0fMB\n物理体 %d  碰撞对 %d" % [
+	# 判读提示（2026-10-17 第二次踩坑后固定上屏）：移动渲染器下 TIME_PROCESS/TIME_PHYSICS_PROCESS
+	# 含 CPU 等 GPU 帧同步的墙钟（headless 同场景逻辑仅 0.78ms vs 真机 31ms），不可当 CPU 真耗时
+	text = "FPS: %d\n逻辑 %.1fms 峰 %.1fms  物理 %.1fms  提交 %.2fms\n绘制 %d  图元 %s  对象 %s\n敌 %d  弹 %d  宝 %d  特 %d  字 %d\n节点 %s  孤儿 %d  内存 %.0fMB  显存 %.0fMB\n物理体 %d  碰撞对 %d\n注:逻辑/物理含等GPU墙钟" % [
 		fps, proc_now_ms, _proc_peak_ms, phys_ms, draw_ms, draws, prims, render_objs,
 		GameManager.enemy_count, bolts, AstralGem.active_gem_count() + HealOrb.active_count,
 		JuiceEffect.active_count, DamageNumber.active_count,
