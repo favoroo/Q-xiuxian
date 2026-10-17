@@ -88,7 +88,31 @@ func _test_auto_off_state_machine() -> void:
 	SettingsManager.set_val(&"display", &"glow", true, false)
 	for i in range(MainLevel.GLOW_AUTO_TRIGGERS + 1):
 		m._poll_glow_auto_off()
-	_check(m._glow_auto_offed, "再次低帧仍能重新翻转（新对局语义由 _ready 复位）")
+	_check(m._glow_auto_offed, "再次低帧仍能重新翻转（新对局语义由 _ready 复位)")
+
+	# —— 二级降档（#05）：辉光关掉后仍低帧 ⇒ 自动切流畅画质 ——
+	# 当前 headless 下 fps=1 < 50 且辉光被手动关闭 ⇒ 走 elif 分支
+	SettingsManager.set_val(&"display", &"glow", false, false)   # 模拟辉光已不在生效
+	m._glow_auto_offed = false                                    # 从干净态驱动
+	m._glow_low_streak = 0
+	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
+	m._quality_auto_offed = false
+	for i in range(MainLevel.GLOW_AUTO_TRIGGERS):
+		m._poll_glow_auto_off()
+	_check(m._quality_auto_offed, "辉光失效后连续低帧触发二级画质降档")
+	_check(get_window().content_scale_mode == Window.CONTENT_SCALE_MODE_VIEWPORT,
+		"二级降档把 content_scale_mode 切到 VIEWPORT（锁 960×540）")
+	# 流畅档下不再有第三级：连续低帧不重复翻转、不改设置档
+	m._glow_low_streak = 0
+	for i in range(MainLevel.GLOW_AUTO_TRIGGERS + 1):
+		m._poll_glow_auto_off()
+	_check(SettingsManager.render_quality() == &"high",
+		"二级降档不写设置档（会话级临时切换，用户设置仍是 high）")
+	# 用户手动改画质清二级闸（状态机让位）
+	m._quality_auto_offed = true
+	SettingsManager.set_val(&"display", &"render_quality", &"performance", false)
+	_check(m._quality_auto_offed == false, "用户手动改画质清二级自动闸")
+	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	main.queue_free()
 	await get_tree().process_frame
 
