@@ -26,15 +26,15 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	var edge_col: Color = GameStyle.rarity_edge_color(rarity_str) if data.has("rarity") else GameStyle.rarity_edge_color(rarity_col)
 	var style_normal := GameStyle.card(edge_col, 3.0, Vector2(6, 6))
 	style_normal.content_margin_left = LevelUpDialog.CARD_PAD_X
-	style_normal.content_margin_top = 10.0
+	style_normal.content_margin_top = 12.0
 	style_normal.content_margin_right = LevelUpDialog.CARD_PAD_X
-	style_normal.content_margin_bottom = 10.0
+	style_normal.content_margin_bottom = 12.0
 	card.add_theme_stylebox_override("panel", style_normal)
 
 	var inner_w: float = LevelUpDialog.card_inner_w(card_w)
 	var vbox := VBoxContainer.new()
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 5)
+	vbox.add_theme_constant_override("separation", 8)
 
 	# 1. 顶部稀有度色签 + 已修层数
 	var hbox_top := _create_top_row(dialog, data, rarity_col)

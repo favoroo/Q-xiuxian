@@ -65,9 +65,7 @@ func _process(delta: float) -> void:
 		FxParticlePool.burst(FxParticlePool.EMBER, to_global(Vector2(x_l, y_l)), "fire", 0.5, false, cone_dir)
 		# 热浪区上报（T-6.1，设置默认关时静态入口首行短路零开销）：锥心中段一团热，
 		# 跟随火舌粒子同拍 12.5Hz 续报；hold 覆盖续报间隔的 2 倍防间隙闪断
-		# 热浪层必须与世界同 viewport（2026-10-17 #06 SubViewport 化）：world_root 优先，
-		# Main 不在场（测试）时退回 tree.root
-		HeatDistortionFx.report(GameManager.battle_host(get_tree().root), to_global(Vector2(length * 0.55, 0.0)),
+		HeatDistortionFx.report(get_tree().root, to_global(Vector2(length * 0.55, 0.0)),
 			maxf(half_width * 1.4, 46.0), 1.0, 0.16)
 
 	var interval := _redraw_interval()

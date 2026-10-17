@@ -323,7 +323,7 @@ func _trigger_blessing() -> void:
 	# 掉落金色金币
 	for i in range(GEM_COUNT):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
-		var gem := AstralGem.acquire_or_new(gem_scene, GameManager.battle_host())
+		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
 		var offset = Vector2(GameManager.rng.randf_range(-40.0, 40.0), GameManager.rng.randf_range(-40.0, 40.0))
 		gem.global_position = global_position + offset
 		gem.is_gold = true
@@ -343,7 +343,7 @@ func _trigger_blessing() -> void:
 ## 灵兽挂 allies 组、不在回合末清理四组里，生命不耗尽就跨回合一直在场；
 ## 每座祭坛 is_triggered 只触发一次 ⇒ 天然「每座一只、全场最多三只」。
 func _summon_spirit_beast() -> void:
-	var host: Node = GameManager.player.get_parent() if GameManager.player != null else GameManager.battle_host()
+	var host: Node = GameManager.player.get_parent() if GameManager.player != null else get_tree().current_scene
 	if host == null:
 		return
 	var beast := beast_scene.instantiate() as SpiritBeast

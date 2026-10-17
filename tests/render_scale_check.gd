@@ -47,23 +47,14 @@ func _run() -> void:
 	await get_tree().physics_frame
 
 	_c.check(main_scene != null, "④Main 场景实例化成功")
-	# 触发清晰度变更，验证 _on_setting_changed 和 _apply_render_quality 执行无异常；
-	# 并断言档位真的落到世界 SubViewport 尺寸上（2026-10-17 #06 世界级缩放）
-	var wvp: SubViewport = main_scene.get_node("WorldContainer/WorldViewport")
-	var vp_rect: Vector2 = get_viewport().get_visible_rect().size
+	# 触发清晰度变更，验证 _on_setting_changed 和 _apply_render_quality 执行无异常
 	SettingsManager.set_val(&"display", &"render_quality", &"performance", false)
 	await get_tree().physics_frame
 	_c.check(true, "④切换到流畅档无崩溃")
-	var want_perf: Vector2 = Vector2(roundi(vp_rect.x * main_scene.WORLD_SCALE_PERF), roundi(vp_rect.y * main_scene.WORLD_SCALE_PERF))
-	_c.equals(Vector2(wvp.size), want_perf, "④流畅档世界视口为半分辨率")
-	_c.check(wvp.size_2d_override_stretch, "④size_2d_override_stretch 开启（坐标系锁设计单位）")
-	_c.equals(Vector2(wvp.size_2d_override), vp_rect.round(), "④override 尺寸等于设计视口")
 
 	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	await get_tree().physics_frame
 	_c.check(true, "④切换回高清档无崩溃")
-	var want_high: Vector2 = Vector2(roundi(vp_rect.x * main_scene.WORLD_SCALE_HIGH), roundi(vp_rect.y * main_scene.WORLD_SCALE_HIGH))
-	_c.equals(Vector2(wvp.size), want_high, "④高清档世界视口为原生分辨率")
 
 	main_scene.queue_free()
 	await get_tree().physics_frame

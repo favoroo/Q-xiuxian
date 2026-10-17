@@ -274,8 +274,7 @@ static func player_stat_dict(gm: Object) -> Dictionary:
 		"weapon_damage_mult": gm.get_weapon_damage_mult() * gm.synergy_damage_mult,
 		"attack_range_mult": gm.attack_range_mult * gm.synergy_range_mult,
 		"melee_damage": gm.melee_damage,
-		# 弹射羁绊的远程伤害加成并进同一键（武器 stat_scalings["ranged_damage"] 直接吃到）
-		"ranged_damage": gm.ranged_damage + gm.synergy_ranged_damage,
+		"ranged_damage": gm.ranged_damage,
 		"elemental_damage": gm.elemental_damage,
 		"engineering_damage": gm.engineering_damage + gm.synergy_engineering_damage,
 		"contraption_damage": gm.contraption_damage,

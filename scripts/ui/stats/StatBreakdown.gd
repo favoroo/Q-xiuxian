@@ -34,8 +34,7 @@ static func breakdown(gm: Object) -> Dictionary:
 		"damage_mult": eff_dmg,
 		"damage_bonus_pct": (eff_dmg - 1.0) * 100.0,
 		"melee_damage": gm.melee_damage,
-		# 远程伤害读数 = 加点/道具层 + 弹射羁绊（synergy_ranged_damage，2026-10-17 弹射羁绊新增）
-		"ranged_damage": gm.ranged_damage + gm.synergy_ranged_damage,
+		"ranged_damage": gm.ranged_damage,
 			"elemental_damage": gm.elemental_damage,
 			"engineering_damage": gm.engineering_damage,
 			"contraption_damage": gm.contraption_damage,

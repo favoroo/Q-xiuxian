@@ -732,7 +732,7 @@ func _perform_projectile_attack() -> void:
 
 	for idx in range(p_count):
 		# 弹丸走对象池（2026-10-10 性能优化）：不再 instantiate/queue_free 高频往复
-		var p := BladeProjectile.acquire_or_new(projectile_scene, GameManager.battle_host())
+		var p := BladeProjectile.acquire_or_new(projectile_scene, get_tree().current_scene)
 		p.global_position = muzzle_point.global_position
 		var offset_ang := 0.0
 		if p_count > 1:
@@ -755,7 +755,7 @@ func _perform_projectile_attack() -> void:
 		p.direction = shot_dir.rotated(offset_ang)
 		p.damage = final_dmg
 		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
-		p.pierce_left = WeaponData.capped_pierce(pierce + GameManager.bonus_pierce)
+		p.pierce_left = pierce + GameManager.bonus_pierce
 		p.bounce_left = p_bounce
 		p.bullet_texture = _bullet_tex
 		p.bullet_scale = _bullet_scale

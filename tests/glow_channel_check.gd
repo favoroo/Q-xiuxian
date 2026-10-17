@@ -90,44 +90,28 @@ func _test_auto_off_state_machine() -> void:
 		m._poll_glow_auto_off()
 	_check(m._glow_auto_offed, "再次低帧仍能重新翻转（新对局语义由 _ready 复位)")
 
-	# —— 二级降档（#06 世界级缩放）：辉光关掉后仍低帧 ⇒ 世界分辨率 0.75 → 0.5 两级过渡 ——
-	# 当前 headless 下 fps=1 < 50 且辉光被手动关闭 ⇒ 走 elif 分支。
-	# _sync_world_viewport 在 headless 下也生效（纯逻辑属性，不碰渲染 API）。
+	# —— 二级降档（#05）：辉光关掉后仍低帧 ⇒ 自动切流畅画质 ——
+	# 当前 headless 下 fps=1 < 50 且辉光被手动关闭 ⇒ 走 elif 分支
 	SettingsManager.set_val(&"display", &"glow", false, false)   # 模拟辉光已不在生效
 	m._glow_auto_offed = false                                    # 从干净态驱动
 	m._glow_low_streak = 0
 	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	m._quality_auto_offed = false
-	m._world_scale_override = 0.0
-	var wvp: SubViewport = main.get_node("WorldContainer/WorldViewport")
-	var vp_rect: Vector2 = get_viewport().get_visible_rect().size
-	var want_mid := Vector2i(roundi(vp_rect.x * MainLevel.WORLD_SCALE_BALANCED), roundi(vp_rect.y * MainLevel.WORLD_SCALE_BALANCED))
 	for i in range(MainLevel.GLOW_AUTO_TRIGGERS):
 		m._poll_glow_auto_off()
-	_check(not m._quality_auto_offed, "第一级落到均衡中间态（0.75）未到底")
-	_check(m._world_scale_override == MainLevel.WORLD_SCALE_BALANCED, "二级降档第一步 override=0.75")
-	_check(wvp.size == want_mid, "世界 SubViewport 尺寸为设计视口 ×0.75")
-	_check(wvp.size_2d_override_stretch, "size_2d_override_stretch 开启（坐标系锁设计单位）")
-	_check(m._glow_toasted, "二级降档 toast 提示一次闸置位")
-	# 第二级：仍低帧 → 落到 0.5 并封闸
-	m._glow_low_streak = 0
-	for i in range(MainLevel.GLOW_AUTO_TRIGGERS):
-		m._poll_glow_auto_off()
-	_check(m._world_scale_override == MainLevel.WORLD_SCALE_PERF, "二级降档第二步 override=0.5")
-	_check(m._quality_auto_offed, "落到 0.5 后封二级闸（无第三级）")
-	var want_perf := Vector2i(roundi(vp_rect.x * MainLevel.WORLD_SCALE_PERF), roundi(vp_rect.y * MainLevel.WORLD_SCALE_PERF))
-	_check(wvp.size == want_perf, "世界 SubViewport 尺寸为设计视口 ×0.5")
-	_check(SettingsManager.render_quality() == &"high",
-		"二级降档不写设置档（会话级临时切换，用户设置仍是 high）")
-	# 到底后连续低帧不再翻动
+	_check(m._quality_auto_offed, "辉光失效后连续低帧触发二级画质降档")
+	_check(get_window().content_scale_mode == Window.CONTENT_SCALE_MODE_VIEWPORT,
+		"二级降档把 content_scale_mode 切到 VIEWPORT（锁 960×540）")
+	# 流畅档下不再有第三级：连续低帧不重复翻转、不改设置档
 	m._glow_low_streak = 0
 	for i in range(MainLevel.GLOW_AUTO_TRIGGERS + 1):
 		m._poll_glow_auto_off()
-	_check(m._world_scale_override == MainLevel.WORLD_SCALE_PERF, "已到底后低帧不再翻动 override")
-	# 用户手动改画质清二级闸与 override（状态机让位）
+	_check(SettingsManager.render_quality() == &"high",
+		"二级降档不写设置档（会话级临时切换，用户设置仍是 high）")
+	# 用户手动改画质清二级闸（状态机让位）
+	m._quality_auto_offed = true
 	SettingsManager.set_val(&"display", &"render_quality", &"performance", false)
 	_check(m._quality_auto_offed == false, "用户手动改画质清二级自动闸")
-	_check(m._world_scale_override == 0.0, "用户手动改画质清自动 override")
 	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	main.queue_free()
 	await get_tree().process_frame

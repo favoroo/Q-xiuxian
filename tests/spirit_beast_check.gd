@@ -74,7 +74,7 @@ func _run() -> void:
 
 ## ① 祭坛触发即召唤（直接调生产入口 _trigger_blessing，不走 HUD 长按模拟）
 func _case_summon() -> void:
-	var obelisk := get_node_or_null("/root/Main/WorldContainer/WorldViewport/World/MapLayer/ObeliskCenter") as BlessingObelisk
+	var obelisk := get_node_or_null("/root/Main/MapLayer/ObeliskCenter") as BlessingObelisk
 	_c.check(obelisk != null, "① 前置：祭坛节点在（MapLayer/ObeliskCenter）")
 	if obelisk == null:
 		return

@@ -133,7 +133,6 @@ static func reset(gm: Node) -> void:
 	gm.synergy_armor = 0.0
 	gm.synergy_knockback_mult = 1.0
 	gm.synergy_contraption_mult = 1.0
-	gm.synergy_ranged_damage = 0.0
 	gm.active_synergies = {}
 	gm._applied_hp_bonus = 0.0
 	gm._lifesteal_procs = 0

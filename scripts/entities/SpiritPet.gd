@@ -194,7 +194,7 @@ func _act_yanhu() -> void:
 	var eff_mult := _get_effective_damage_mult()
 	var dmg := BalanceSpiritPet.fire_damage(GameManager.wave_number, eff_mult)
 
-	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, GameManager.battle_host())
+	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, get_tree().current_scene)
 	p.global_position = global_position + dir * 12.0
 	p.direction = dir
 	p.speed = 380.0

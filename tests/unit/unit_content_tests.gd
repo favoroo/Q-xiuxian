@@ -124,7 +124,7 @@ func _test_five_elements_system() -> void:
 	_c.check(not GameBalance.upgrade_benefits_weapon({"ranged_damage": 2.0}, "qingyun_sword"), "远程强化不让青云剑（近战）受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "qingyun_sword")
 		and GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "lingdie"), "武器强化是全局乘区：近战与环绕都受益")
-	_c.check(GameBalance.upgrade_benefits_weapon({"attack_speed_mult_mul": 0.88}, "lingdie"), "攻击间隔缩短让环绕武器护蝶受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"attack_speed_mult_mul": 0.88}, "lingdie"), "攻速提升让环绕灵蝶受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"knockback_mult": 0.25}, "qingyun_sword"), "击退提升全体法器受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"elite_damage": 0.25}, "huoyan_fu"), "斩将加成全体法器受益（对精英乘区）")
 	_c.check(GameBalance.upgrade_benefits_weapon({"element_damage_wood": 0.10}, "wanmu_lingfu"), "青木真解让木系毒符受益")

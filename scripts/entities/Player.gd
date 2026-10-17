@@ -669,7 +669,7 @@ func _call_thunder() -> bool:
 	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
 		GameStyle.GOLD_EDGE, 0.3)
 	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
-	var bolt_parent: Node = get_parent() if get_parent() != null else GameManager.battle_host(self)
+	var bolt_parent: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
 	if bolt_parent != null:
 		var bolt := LightningBolt.acquire(bolt_parent)
 		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0

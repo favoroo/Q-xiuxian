@@ -41,7 +41,7 @@ func _make_player() -> Player:
 	return p
 
 func _count_shockwaves() -> int:
-	var host := (GameManager.world_root if GameManager.world_root != null else get_tree().current_scene).get_node_or_null("JuiceEffectPool")
+	var host := get_tree().current_scene.get_node_or_null("JuiceEffectPool")
 	if host == null:
 		return 0
 	var n := 0

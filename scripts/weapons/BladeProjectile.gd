@@ -15,12 +15,6 @@ const HOMING_TURN_RATE := 3.6
 const HOMING_ACQUIRE_RADIUS := 240.0
 const HOMING_ACQUIRE_AHEAD := 0.30        ## dot(弹向, 目标方位) 低于这个值就不算"在前方"
 const BOUNCE_SEARCH_RADIUS := 260.0       ## 弹射连锁的找下家半径（沿用历史值）
-## 穿透/弹射伤害衰减（2026-10-17，用户口径：「穿透之后的二次伤害要降低」）：
-## 同一发弹丸第 N 次命中（N=1 首跳全额）伤害 × N 次的 PIERCE_HIT_DECAY 次方。
-## 0.5：首跳 100% → 二跳 50% → 三跳 25% —— 贯穿是"刮过"，不是"全额重复收账"。
-## 弹射与穿透同一把尺：都是"同一发弹丸的第 N 个敌人"。
-const PIERCE_HIT_DECAY := 0.5
-var _hit_index: int = 0                   ## 本发已命中敌人数（衰减用，activate 清零）
 ## 仅判据用：整体缩放转向速率（tests/ProjectileProbe.tscn 的 `-- --no-homing` 置 0 退回旧直线弹），
 ## 用来证明"命中率"这条断言真的有牙齿。运行时永远是 1.0。
 static var homing_scale: float = 1.0
@@ -40,10 +34,7 @@ const POOL_CAP := 64
 ## 最旧一发强制让位（它本来就快过期）。120 ≈ 现役构建峰值的 2 倍，常规构建永不触闸。
 const ACTIVE_BUDGET := 120
 ## 场景默认寿命：activate 复用时重置的基准（FloatingWeapon 出膛再乘 range_mult）
-## 2026-10-17 收紧 1.6→1.2（用户口径「满屏飞行物」）：弹速 470 ⇒ 裸航程 564px，
-## 覆盖全部弹丸基础锁敌圈（250~315）+ 追击余量；吃满范围乘区后 ~996px 贴对角线，
-## 不再出现一屏半的弹道
-const BASE_LIFETIME := 1.2
+const BASE_LIFETIME := 1.6
 ## —— 弹丸灯光上限 ——
 ## 每发弹丸一盏 PointLight2D，6 剑齐射常驻 10~20 盏 2D 动态灯，光照 pass 逐灯叠加是
 ## 渲染侧主卡因。全场最多同时点亮 LIGHT_CAP 盏，超限弹丸灯灭但矢量渲染器自带的
@@ -202,10 +193,7 @@ func _on_area_entered(area: Area2D) -> void:
 	if enemy and enemy.has_method("take_damage"):
 		var is_crit: bool = GameManager.roll_crit()
 		var crit_m := GameManager.get_crit_mult()
-		# 穿透/弹射逐跳衰减：第 1 跳全额，之后每跳 ×PIERCE_HIT_DECAY（异常量按实伤等比缩水）
-		_hit_index += 1
-		var decay := pow(PIERCE_HIT_DECAY, float(_hit_index - 1))
-		var actual_dmg = damage * decay * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
+		var actual_dmg = damage * (crit_m if is_crit else 1.0) * GameManager.elite_damage_mult_for(enemy)
 		var knock := GameManager.knockback_vec(global_position, enemy.global_position, knockback_base)
 		if knock.length_squared() < 0.001:
 			knock = direction * GameManager.knockback_force(knockback_base)
@@ -222,9 +210,8 @@ func _on_area_entered(area: Area2D) -> void:
 		# 施加五行异常走 ProcStatus 收口（保持 has_method 鸭类型）。武器/弹丸脚本绝不能硬引用
 		# EnemyBase——实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成
 		# 空 PackedScene（循环类依赖解析坑），弹丸 instantiate 全返回 null。
-		# 异常量跟随逐跳衰减的实伤口径：二跳引燃就不该有首跳那么旺
-		ProcStatus.apply(enemy, proc_burn, burn_dps * decay, burn_dur,
-			proc_chill, chill_dur, proc_poison, poison_dps * decay, poison_dur)
+		ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur,
+			proc_chill, chill_dur, proc_poison, poison_dps, poison_dur)
 
 		# 受击火花 / 震屏 / 顿帧全部由被击一方 EnemyBase.take_damage 统一发放：
 		# 弹体侧再发一份就是同一次命中火花双发、创伤计两遍（方向读数糊掉 + 镜头一直摇的元凶）
@@ -243,9 +230,7 @@ func _on_area_entered(area: Area2D) -> void:
 				acquire_left = 1
 				direction = (next_enemy.global_position - global_position).normalized()
 				rotation = direction.angle()
-				# 弹射续命 1.0→0.7（2026-10-17 随基础寿命同批收紧）：3 次弹射总在场时长
-				# 1.2+0.7×3 ≈ 3.3s，不再绕场半周；找下家半径不变，够不着就自然消散
-				lifetime = 0.7
+				lifetime = 1.0
 				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
 				return
 
@@ -365,7 +350,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 ## 出膛激活：池化后 _ready 先于战斗字段赋值跑过，所有依赖字段的视觉与物理状态
 ## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
 ##   direction/speed/damage/knockback_base/lifetime/pierce_left/bounce_left/
-##   homing_target/acquire_left/_hit_index/proc_burn/burn_dps/burn_dur/proc_chill/chill_dur/
+##   homing_target/acquire_left/proc_burn/burn_dps/burn_dur/proc_chill/chill_dur/
 ##   proc_poison/poison_dur/bullet_texture/bullet_scale/spin
 func activate() -> void:
 	_pooled = false
@@ -383,10 +368,9 @@ func activate() -> void:
 	modulate = Color.WHITE
 	# 残值清零：lifetime（FloatingWeapon 出膛时是乘 range_mult 的，复用弹丸若带着上一发
 	# 的残值会「出膛即逝」——ProjectileProbe B 段贴脸 100% 落空的元凶）与 acquire_left
-	# （命中即置 0，复用后必须恢复丢目标重找的额度）与 _hit_index（穿透衰减从首跳全额起算）
+	# （命中即置 0，复用后必须恢复丢目标重找的额度）
 	lifetime = BASE_LIFETIME
 	acquire_left = 1
-	_hit_index = 0
 	rotation = direction.angle()
 	sprite.texture = bullet_texture
 	sprite.scale = Vector2.ONE * bullet_scale

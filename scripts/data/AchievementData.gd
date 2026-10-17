@@ -234,7 +234,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_fuxiu",
 			"name": "万符朝宗",
-			"cond_desc": "单局同时上阵4件弹射类武器——弹丸满天飞，怪看不清路",
+			"cond_desc": "单局同时上阵4件弹射类武器——符箓满天飞，怪看不清路",
 			"category": "style",
 		"reward_type": "cultivator",
 		"reward_id": "fuxiu",

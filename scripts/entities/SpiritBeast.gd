@@ -206,7 +206,7 @@ func _fire_one() -> void:
 		var to_target: Vector2 = current_target.global_position - global_position
 		if to_target.length() > 0.001:
 			dir = to_target.normalized()
-	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, GameManager.battle_host())
+	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, get_tree().current_scene)
 	p.global_position = global_position + dir * 12.0
 	p.direction = dir
 	p.speed = GameBalance.SPIRIT_BEAST_PROJECTILE_SPEED

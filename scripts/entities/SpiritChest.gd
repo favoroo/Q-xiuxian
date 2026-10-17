@@ -219,7 +219,7 @@ func _drop_gems(count: int, exp_each: int) -> void:
 	var player: Node2D = GameManager.player
 	for i in range(count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
-		var gem := AstralGem.acquire_or_new(gem_scene, GameManager.battle_host())
+		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
 		gem.global_position = global_position + Vector2(
 			GameManager.rng.randf_range(-20.0, 20.0), GameManager.rng.randf_range(-20.0, 20.0))
 		gem.is_gold = true

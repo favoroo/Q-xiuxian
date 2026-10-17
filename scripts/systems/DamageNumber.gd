@@ -150,16 +150,12 @@ static func _acquire() -> DamageNumber:
 	_host.add_child(n)
 	return n
 
-## 取池宿主应挂的场景根（2026-10-17 #06）：跳字必须与世界同 viewport，
-## 优先 GameManager.world_root；Main 不在场（测试）时退回旧逻辑。
+## 取池宿主应挂的场景根。
 ## 测试里 Main 是手动 add_child 到 root 的，此时 tree.current_scene 为空 → 退回向上找 root 的直接子节点。
 static func _scene_root_for(node: Node) -> Node:
 	var tree := node.get_tree()
 	if tree == null:
 		return null
-	var wr := GameManager.world_root
-	if wr != null and is_instance_valid(wr):
-		return wr
 	if tree.current_scene != null and is_instance_valid(tree.current_scene):
 		return tree.current_scene
 	var cur: Node = node
