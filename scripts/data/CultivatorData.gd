@@ -90,8 +90,8 @@ const DEFS: Dictionary = {
 				"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
-				"start_equip": "★2 双生护蝶 ×1",
-				"pros": ["开局自带 ★2 双生护蝶", "召唤类武器伤害 +12%", "召唤伤害属性 +2", "召唤羁绊门槛 -1（1/3/5 件成档）"],
+				"start_equip": "★2 护蝶 ×1",
+				"pros": ["开局自带 ★2 护蝶", "召唤类武器伤害 +12%", "召唤伤害属性 +2", "召唤羁绊门槛 -1（1/3/5 件成档）"],
 				"cons": ["非召唤类武器伤害 -30%"],
 				"mods": {
 					"start_drones": 1,
@@ -259,7 +259,7 @@ const DEFS: Dictionary = {
 					"motion": "procedural",
 					"render_style": "hollow_knight",
 					"start_equip": "",
-					"pros": ["初始元素伤害 +3", "雷法与符箓武器伤害 +30%", "【天雷】自动落雷轰击敌人，受元素伤害加成"],
+					"pros": ["初始元素伤害 +3", "雷法与弹射武器伤害 +30%", "【天雷】自动落雷轰击敌人，受元素伤害加成"],
 				"cons": ["剑系武器伤害 -40%"],
 				"mods": {
 					"elemental": 3.0,

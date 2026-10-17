@@ -277,7 +277,7 @@ func _fire() -> void:
 	p.homing_target = current_target if (current_target != null and is_instance_valid(current_target)) else null
 	p.damage = final_dmg
 	p.knockback_base = WeaponData.knockback_for(weapon_def_id, 120.0)
-	p.pierce_left = int(_def.get("pierce", 1)) + GameManager.bonus_pierce
+	p.pierce_left = WeaponData.capped_pierce(int(_def.get("pierce", 1)) + GameManager.bonus_pierce)
 	p.bounce_left = int(_def.get("bounce_count", 0))
 	p.bullet_texture = _bullet_tex
 	p.bullet_scale = _bullet_scale

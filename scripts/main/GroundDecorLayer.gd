@@ -8,7 +8,7 @@ extends Node2D
 ## ⚠ 2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
 ##   本层 ~116 个 0.8~1.6px 小点曾单独吃掉 ~14.6k 图元（面板「图元 21.0k」的大头）。
 
-var half_extent: float = 560.0
+var half_extent: float = 480.0
 
 func _ready() -> void:
 	# 位于 MapLayer 内，靠树顺序排在地砖之上、ArenaVisualLayer 之下；z_index 保持 0 不越过实体层

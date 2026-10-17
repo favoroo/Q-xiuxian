@@ -32,8 +32,8 @@ enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
 const VICTORY_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
-## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440；2026-10-15 扩图 440→560（1120×1120，面积约 +62%）：稀释怪物密度，提供走位周旋空间
-const MAP_HALF_EXTENT: float = 560.0
+## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440；2026-10-15 扩图 440→560（1120×1120，面积约 +62%）；2026-10-17 缩图 560→480（960×960，面积约 -27%）：压缩跑路时间、提升局部密度，保留走位余地
+const MAP_HALF_EXTENT: float = 480.0
 
 ## 每次刷新给几个候选：悟道结算与商店货架同一档（2026-10-09 用户指令「改成 5 个」）
 const UPGRADE_OFFER_COUNT: int = 5
@@ -405,7 +405,8 @@ var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（Floating
 
 # 武器羁绊加成（由 recalc_synergies 每回合/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础
-var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量
+var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量（2026-10-17 起恒 +1，成长走远程伤害）
+var synergy_ranged_damage: float = 0.0 ## 符箓羁绊：远程伤害加成幅度（0.06 即 +6%，弹射流第二条成长线）
 var bonus_pierce: int = 0           ## 弹丸额外穿透合计（stat + synergy）
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
 var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
@@ -637,6 +638,7 @@ func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 		"counts": upgrade_counts,
 		"rng": rng,
 		"has_pets": (not pets.is_empty() or cultivator_id == "yushou"),
+		"gm": self,   # 满穿透闸（PierceLimit）：阵容穿透顶到上限后 pierce_up 停刷
 	})
 
 # ---------------- 回合后悟道结算（委托 AllocSession） ----------------
@@ -915,7 +917,7 @@ func sell_item(item_id: String) -> bool:
 func chest_grant_item() -> bool:
 	if chest_item_grants >= GameBalance.CHEST_JADE_ITEM_GRANT_CAP:
 		return false
-	var id := ItemData.pick_id(luck, wave_number, items_bought, rng, unlocked_items)
+	var id := ItemData.pick_id(luck, wave_number, items_bought, rng, unlocked_items, self)
 	if id.is_empty():
 		return false
 	if not add_item(id):

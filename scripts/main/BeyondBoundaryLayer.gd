@@ -25,7 +25,7 @@ const FOG_DRIFT_DURATION := 26.0   ## 雾团自漂单程时长（s，慢速量�
 const PILLAR_COLOR := Color(0.50, 0.72, 0.92, 0.12)
 const PILLAR_SEGMENTS := 10        ## 梯形垂直分段数（分段渐变足够平滑）
 
-var half_extent: float = 560.0
+var half_extent: float = 480.0
 var _fog_far: Node2D = null
 var _fog_near: Node2D = null
 

@@ -25,7 +25,7 @@ static func clear() -> void:
 	_texture = null
 
 ## 异步烘焙：返回挂载用 Sprite2D（成功）或 null（失败→调用方回退矢量层）。
-## half 传战场半边长（560），烘焙内容与原两层几何完全一致。
+	## half 传战场半边长（480），烘焙内容与原两层几何完全一致。
 static func bake(half: float) -> Sprite2D:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.root == null:

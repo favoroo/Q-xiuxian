@@ -35,7 +35,7 @@ func _test_headless_fallback() -> void:
 	if DisplayServer.get_name() != "headless":
 		_c.check(true, "非 headless 环境跳过回退断言")
 		return
-	var sprite := await BakedDecorTexture.bake(560.0)
+	var sprite := await BakedDecorTexture.bake(GameManager.MAP_HALF_EXTENT)
 	_check(sprite == null, "headless 下 bake 返回 null（回退矢量层保底）")
 	_check(not BakedDecorTexture.is_baked(), "headless 下不置烘焙成功标志")
 

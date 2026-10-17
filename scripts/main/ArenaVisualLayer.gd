@@ -11,7 +11,7 @@ extends Node2D
 const BOUNDARY_FLOW_SHADER := preload("res://assets/shaders/boundary_flow.gdshader")
 
 var _time: float = 0.0
-var half_extent: float = 560.0
+var half_extent: float = 480.0
 var _flow_bands: Array[BoundaryFlowBand] = []
 var _static_decor: StaticDecor = null
 
@@ -225,7 +225,7 @@ class BoundaryFlowBand:
 	## 第几段：0=上 1=右 2=下 3=左（顺时针，与 UV 参数化一致）
 	var segment: int = 0
 	## 结界半边长（宿主 half_extent 快照）
-	var half: float = 560.0
+	var half: float = 480.0
 	var _built_half: float = -1.0  # 顶点缓存：half 未变不重建
 
 	func _process(_delta: float) -> void:
@@ -262,7 +262,7 @@ class StaticDecor:
 	extends Node2D
 
 	## 结界半边长（宿主 half_extent 快照）
-	var half: float = 560.0
+	var half: float = 480.0
 	var _built_half: float = -1.0  # 变更闸：half 未变不重画
 
 	func sync_half(v: float) -> void:

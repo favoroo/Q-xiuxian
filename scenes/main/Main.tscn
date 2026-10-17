@@ -69,13 +69,13 @@ texture = ExtResource("2_tile")
 stretch_mode = 1
 
 [node name="ObeliskCenter" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(0, -135)
+position = Vector2(0, -116)
 
 [node name="ObeliskEast" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(380, -178)
+position = Vector2(326, -153)
 
 [node name="ObeliskWest" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(-380, 178)
+position = Vector2(-326, 153)
 
 [node name="EntitiesLayer" type="Node2D" parent="."]
 y_sort_enabled = true

@@ -755,7 +755,7 @@ func _perform_projectile_attack() -> void:
 		p.direction = shot_dir.rotated(offset_ang)
 		p.damage = final_dmg
 		p.knockback_base = WeaponData.knockback_for(weapon_def_id, 140.0)
-		p.pierce_left = pierce + GameManager.bonus_pierce
+		p.pierce_left = WeaponData.capped_pierce(pierce + GameManager.bonus_pierce)
 		p.bounce_left = p_bounce
 		p.bullet_texture = _bullet_tex
 		p.bullet_scale = _bullet_scale

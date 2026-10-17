@@ -5,7 +5,7 @@ extends Node2D
 ## 位于地砖之上，BeyondBoundaryLayer 之下。
 ## 纯静态一次性 _draw()，四段梯形顶点双线性插值实现自然坠落深渊感，零每帧 CPU 开销。
 
-var half_extent: float = 560.0
+var half_extent: float = 480.0
 var ground_extent: float = 2400.0
 var falloff_width: float = 120.0
 
