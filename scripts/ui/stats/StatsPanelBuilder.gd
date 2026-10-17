@@ -183,12 +183,12 @@ static func make_tip_row(dialog: PlayerStatsDialog, stat_id: String, content: Co
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	var flat := StyleBoxFlat.new()
 	flat.draw_center = false
-	flat.content_margin_top = 1.0
-	flat.content_margin_bottom = 1.0
+	flat.content_margin_top = 0.0
+	flat.content_margin_bottom = 0.0
 	var on := StyleBoxFlat.new()
 	on.bg_color = GameStyle.with_alpha(GameStyle.GOLD, 0.22)
-	on.content_margin_top = 1.0
-	on.content_margin_bottom = 1.0
+	on.content_margin_top = 0.0
+	on.content_margin_bottom = 0.0
 	row.add_theme_stylebox_override("panel", flat)
 	row.set_meta("sb_flat", flat)
 	row.set_meta("sb_on", on)

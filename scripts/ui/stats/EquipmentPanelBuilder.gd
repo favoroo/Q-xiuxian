@@ -160,9 +160,9 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	syn_vbox.add_child(syn_head)
 
 	var syn_scroll := ScrollContainer.new()
-	# 100：给顶部道统卡让出纵向空间，同时保住 StatsTipCheck 的 9px 出屏边距判定
-	# （内容最小高度必须 ≤ 面板高度钳制 526，否则面板被撑高出屏）。羁绊卡可滚动，不丢信息。
-	syn_scroll.custom_minimum_size = Vector2(0, 100)
+	# 76：给顶部道统卡让出纵向空间，同时保住 StatsTipCheck 的 9px 出屏边距判定
+	# （内容最小高度必须 ≤ 面板高度钳制 516，否则面板被撑高出屏）。羁绊卡可滚动，不丢信息。
+	syn_scroll.custom_minimum_size = Vector2(0, 76)
 	syn_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	syn_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	syn_vbox.add_child(syn_scroll)

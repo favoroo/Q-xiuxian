@@ -17,21 +17,9 @@ const TEXT_W := 756.0
 ## 五行配色（武器卡 chip 用，与 GameStyle.ELEMENT_COLORS 同源）
 const ELEMENT_COLORS := GameStyle.ELEMENT_COLORS
 
-## 武器 stat_scalings 的 key → 人话名（优先查 StatInfoData，这里补面板没有的行）
-const SCALING_NAMES := {
-	"melee_damage": "近战伤害",
-	"ranged_damage": "远程伤害",
-		"elemental_damage": "元素伤害",
-		"engineering_damage": "召唤伤害",
-		"contraption_damage": "机关伤害",
-		"crit_rate": "暴击率",
-	"crit_mult_bonus": "暴击伤害",
-	"armor": "护甲",
-	"max_hp": "最大生命",
-	"move_speed_mult": "移动速度",
-	"attack_speed_mult": "攻击间隔",
-	"lifesteal": "吸血",
-}
+## 「属性受益」行人话名统一走 GameBalance.stat_scaling_label（商店账单/武器详情同一把尺）。
+## 2026-10-17 删掉此处手抄表：它按属性侧旧键名（max_hp/move_speed_mult/attack_speed_mult）写，
+## 而武器 stat_scalings 用 _bonus 侧键名，23 把武器的图鉴行兜底露出了英文原始 key。
 
 const BEHAVIOR_NAMES := {
 	WeaponData.Behavior.MELEE: "近战",
@@ -407,8 +395,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	if not scalings.is_empty():
 		var names: Array[String] = []
 		for key in scalings.keys():
-			var k := String(key)
-			names.append(String(SCALING_NAMES.get(k, StatInfoData.field_name(k))))
+			names.append(GameBalance.stat_scaling_label(String(key)))
 		notes.append("属性受益：" + "、".join(names))
 	notes.append("集齐 3 把同名同星可在商店合成升星")
 

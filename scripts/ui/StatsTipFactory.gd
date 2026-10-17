@@ -184,7 +184,6 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 				GameStyle.JADE],
 		[WeaponDamageReadout.per_second_label(id),
 				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE],
-		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
 		["属性加伤", "+%s" % BonusRows.fmt_num(bonus), _c(bonus)],
 	] + factor_rows + [
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
@@ -194,13 +193,10 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		rows.append(["特性", feats])
 
 	var notes: Array[String] = [
-		# 公式句保持原有长度：详情卡定宽 306、notes 走 autowrap，多折一行就把卡底往下推
-		# （BenefitIconTapCheck 按「卡不许出屏」判）。行名换成「多武器分流」多的两个字，
-		# 用把「全局武器伤害」缩成「全局」抵平 —— 这两个乘区本来就有各自的行按名字列着，不丢信息。
-		"单发伤害 =（基础 × 星级 + 属性加伤）× 全局 × 羁绊 × 角色 × 五行 × 多武器分流；" \
-				+ "暴击与对精英伤害按目标另算。",
+		# 紧凑单行公式与升星句：详情卡定宽 306，多折一行卡底就顶出视口（BenefitIconTapCheck 判出屏）
+		"单发 =（基础×星级 + 属性加伤）× 全局×羁绊×角色×五行×分流；暴击/斩将另算。",
 		WeaponDamageReadout.bonus_bill_text(id, star),
-		"升星：同名同星集满 3 件在商店合成，伤害 ×%s、攻击间隔 ×%s，最高 %s。" % [
+		"升星：同名满 3 件在商店合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
 	if not benefit_note.is_empty():

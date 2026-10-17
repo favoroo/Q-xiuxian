@@ -6,7 +6,19 @@ extends Node2D
 @onready var pause_menu: PauseMenu = $UILayer/PauseMenu
 @onready var stats_dialog: Control = $UILayer/PlayerStatsDialog
 @onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
-@onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
+@onready var vignette_rect: ColorRect = $WorldContainer/WorldViewport/World/PostProcessLayer/SoftVignette
+# —— 世界级分辨率缩放（2026-10-17 #06）——
+## 世界内容全部搬进 SubViewport：降分辨率只作用于世界（SubViewport 的 size×k 像素 +
+## size_2d_override 保持设计单位坐标系），UI 留在根 viewport 永远原生清晰。
+## 统一处理方式 = 一个缩放系数 k：设置档定基准（high=1.0 / performance=0.5），
+## 自动降档只写 _world_scale_override（0.75 → 0.5 两级过渡，不写设置档）。
+@onready var _world_container: SubViewportContainer = $WorldContainer
+@onready var _world_vp: SubViewport = $WorldContainer/WorldViewport
+@onready var world: Node2D = $WorldContainer/WorldViewport/World
+const WORLD_SCALE_HIGH := 1.0
+const WORLD_SCALE_BALANCED := 0.75   ## 自动降档中间态（仅自动路径，不进设置档）
+const WORLD_SCALE_PERF := 0.5
+var _world_scale_override: float = 0.0  ## 自动降档覆盖系数（>0 生效；手动改画质时清零）
 var _vignette_copy: BackBufferCopy = null
 var _shockwave_tween: Tween = null
 # 暗角两套 shader：soft（纯暗角，零 screen_texture → 零每帧 BackBufferCopy）与
@@ -54,6 +66,16 @@ func _ready() -> void:
 	_glow_low_streak = 0
 	_glow_toasted = false
 	_quality_auto_offed = false
+	_world_scale_override = 0.0
+	# 世界根登记（特效池宿主 / 热浪上报的挂载基准）+ 首拍尺寸同步。
+	# 根窗口永远保持 canvas_items（UI 原生清晰）；分辨率问题收敛为 SubViewport 上的系数 k。
+	GameManager.world_root = world
+	get_window().size_changed.connect(_sync_world_viewport)
+	# 根 viewport 关 HDR：世界（唯一 HDR 消费方）已进 SubViewport，UI 无 HDR 需求，
+	# 省掉根上 RGBA16 帧缓冲带宽；glow 的 HDR 判定由 _apply_glow_channel 写 _world_vp。
+	if not DisplayServer.get_name() == "headless":
+		get_viewport().use_hdr_2d = false
+	_sync_world_viewport()
 	_apply_glow_channel()
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
@@ -161,8 +183,8 @@ func _ready() -> void:
 	# 聚灵阵信号接线：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
 	var hud: GameHUD = $UILayer/GameHUD
 	for ob_name in ["ObeliskCenter", "ObeliskEast", "ObeliskWest"]:
-		if $MapLayer.has_node(ob_name):
-			var ob = $MapLayer.get_node(ob_name) as BlessingObelisk
+		if world.get_node_or_null("MapLayer/" + ob_name) != null:
+			var ob = world.get_node("MapLayer/" + ob_name) as BlessingObelisk
 			ob.activation_available.connect(hud.show_obelisk_activation)
 			ob.activation_unavailable.connect(hud.hide_obelisk_activation)
 			ob.charge_started.connect(hud.on_obelisk_charge_started)
@@ -259,20 +281,40 @@ func _apply_fps_limit() -> void:
 	Engine.physics_ticks_per_second = 60
 	VisualRate.high_fps = true
 
-## 画面清晰度档位落地（2026-10-16）：
-## high (高清): Window.CONTENT_SCALE_MODE_CANVAS_ITEMS（全屏原生高分渲染，UI 字体与画面极致清晰）
-## performance (流畅): Window.CONTENT_SCALE_MODE_VIEWPORT（锁定 960×540 视口渲染再拉伸，超高分低端机防掉帧）
+## 画面清晰度档位落地（2026-10-17 #06 重写为世界级缩放）：
+## high (高清): 世界 k=1.0（SubViewport 与设计视口同像素，原生极清）
+## performance (流畅): 世界 k=0.5（半分辨率渲到纹理再拉伸，填充率 ~4× 下降）
+## 两种档位 UI 都留在根 viewport 原生渲染——文字/图标永不降清晰度。
+## 根窗口 content_scale_mode 恒为 CANVAS_ITEMS（本项目不再碰 Window 级缩放）。
 func _apply_render_quality() -> void:
-	if DisplayServer.get_name() == "headless":
+	_world_scale_override = 0.0
+	_sync_world_viewport()
+
+## 当前生效的世界缩放系数：自动降档覆盖优先，否则按设置档
+func _current_world_scale() -> float:
+	if _world_scale_override > 0.0:
+		return _world_scale_override
+	return WORLD_SCALE_PERF if SettingsManager.render_quality() == &"performance" else WORLD_SCALE_HIGH
+
+## 世界视口尺寸同步（2026-10-17 #06）：容器贴满设计视口，SubViewport 以 k 倍像素渲染。
+## stretch=false 手动管理：stretch=true 时引擎禁止手写 SubViewport.size（只接受容器
+## 自适应），而 k=0.75 需要非整数比——手动 size + size_2d_override 锁设计单位坐标系，
+## 相机变换、屏外剔除、冲击波归一化换算与旧单视口架构完全同语义，只有像素密度变了。
+## 容器会自动把低分辨率纹理拉伸铺满自身（SubViewportContainer 的显示拉伸不走 stretch 开关）。
+## 不设 headless 守卫：纯逻辑属性，headless 判据依赖断言这些值。
+func _sync_world_viewport() -> void:
+	if _world_container == null or _world_vp == null:
 		return
-	var win := get_window()
-	if win == null:
+	var root_vp := get_viewport()
+	if root_vp == null:
 		return
-	var quality := SettingsManager.render_quality()
-	if quality == &"performance":
-		win.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-	else:
-		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	var vr := root_vp.get_visible_rect()
+	_world_container.position = vr.position
+	_world_container.size = vr.size
+	var k := _current_world_scale()
+	_world_vp.size = Vector2i(maxi(1, roundi(vr.size.x * k)), maxi(1, roundi(vr.size.y * k)))
+	_world_vp.size_2d_override = Vector2i(vr.size.round())
+	_world_vp.size_2d_override_stretch = true
 
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
 	if section == &"display" and key == &"screen_shockwave":
@@ -295,6 +337,9 @@ func _exit_tree() -> void:
 	GameManager.player = null
 	GameManager.wave_spawner = null
 	GameManager.joystick = null
+	GameManager.world_root = null
+	if get_window().size_changed.is_connected(_sync_world_viewport):
+		get_window().size_changed.disconnect(_sync_world_viewport)
 	if GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
 		GameManager.wave_changed.disconnect(_on_wave_changed_atmo)  # T-4.3 氛围监听随场景退订
 	if GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
@@ -330,7 +375,7 @@ func _setup_atmosphere() -> void:
 	dust_particles.scale_amount_min = 0.8
 	dust_particles.scale_amount_max = 1.6
 	dust_particles.color = ATMO_COLOR_DUST_FAR
-	$AtmosphereLayer.add_child(dust_particles)
+	world.get_node("AtmosphereLayer").add_child(dust_particles)
 
 	# 1.5 近层灵气光尘（大而稀：颗粒更大、更慢、更低透明，营造纵深两档视差）
 	dust_near_particles = CPUParticles2D.new()
@@ -345,7 +390,7 @@ func _setup_atmosphere() -> void:
 	dust_near_particles.scale_amount_min = 2.6
 	dust_near_particles.scale_amount_max = 4.2
 	dust_near_particles.color = ATMO_COLOR_DUST_NEAR
-	$AtmosphereLayer.add_child(dust_near_particles)
+	world.get_node("AtmosphereLayer").add_child(dust_near_particles)
 
 	# 2. 飘落灵叶与霜露微粒（带微弱自转与左下斜倾飘风，主菜单暂停时也持续飘落）
 	petal_particles = CPUParticles2D.new()
@@ -362,7 +407,7 @@ func _setup_atmosphere() -> void:
 	petal_particles.scale_amount_min = 1.6
 	petal_particles.scale_amount_max = 2.8
 	petal_particles.color = ATMO_COLOR_PETAL
-	$AtmosphereLayer.add_child(petal_particles)
+	world.get_node("AtmosphereLayer").add_child(petal_particles)
 
 	# 3. 极低对比度缓动薄雾片（增加深邃空间感，零 PointLight2D 开销）
 	_setup_ambient_mist()
@@ -404,7 +449,7 @@ func _apply_atmo_mood(baleful: bool) -> void:
 
 func _setup_ambient_mist() -> void:
 	var mist_tex: Texture2D = preload("res://assets/art/light_radial.png")
-	var atmo_layer: Node2D = $AtmosphereLayer
+	var atmo_layer: Node2D = world.get_node("AtmosphereLayer")
 	var mist_configs: Array[Dictionary] = [
 		{"pos": Vector2(-180.0, -150.0), "scale": Vector2(8.5, 7.0), "alpha": 0.045, "drift": Vector2(60.0, 30.0), "dur": 22.0},
 		{"pos": Vector2(200.0, 140.0), "scale": Vector2(10.0, 8.0), "alpha": 0.050, "drift": Vector2(-50.0, -40.0), "dur": 28.0},
@@ -489,7 +534,7 @@ func _poll_crowd_glow(delta: float) -> void:
 		return
 	_crowd_glow_cd = 1.0
 	if _env_res == null:
-		var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+		var we := world.get_node_or_null("WorldEnvironment") as WorldEnvironment
 		if we == null or we.environment == null:
 			return
 		_env_res = we.environment
@@ -512,29 +557,29 @@ var _glow_auto_offed: bool = false   ## 本局是否已自动关闭（翻转后�
 var _glow_toasted: bool = false      ## 自动降档提示一次闸（每次对局最多一条）
 var _quality_auto_offed: bool = false  ## 二级降档（自动切流畅画质）已触发闸：翻转后不回切
 
-## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值。
+## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值，
+## 两者都落在世界 SubViewport 上（辉光是世界画面效果，且随世界 k 一同省像素）。
 ## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
 func _apply_glow_channel() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var want: bool = bool(SettingsManager.get_val(&"display", &"glow", true)) and not _glow_auto_offed
 	if _env_res == null:
-		var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+		var we := world.get_node_or_null("WorldEnvironment") as WorldEnvironment
 		if we == null or we.environment == null:
 			return
 		_env_res = we.environment
 	if _env_res.glow_enabled != want:
 		_env_res.glow_enabled = want
-	var vp := get_viewport()
-	if vp != null and vp.use_hdr_2d != want:
-		vp.use_hdr_2d = want
+	if _world_vp != null and _world_vp.use_hdr_2d != want:
+		_world_vp.use_hdr_2d = want
 
 ## 自动降档采样（挂在 1s 轮询尾部）：仅战斗中采样；连续 GLOW_AUTO_TRIGGERS 次
 ## fps < 阈值即翻转自动关 + toast 一次；手动关闭的用户不走这条（本来就关着）。
-## 二级降档（2026-10-17 #05）：辉光关掉后仍连续低帧 ⇒ 管线税不是主因，
-## 下一个量级杠杆是渲染分辨率——自动切「流畅」画质（CONTENT_SCALE_MODE_VIEWPORT
-## 锁 960×540 再拉伸，填充率 ~5× 下降）。用户手动选的画质档不动（尊重明确意愿），
-## 只降「仍在默认 high 档」的设备；流畅档下不再有第二级，防来回翻转同辉光口径。
+## 二级降档（2026-10-17 #06 重写为世界级缩放）：辉光关掉后仍连续低帧 ⇒ 管线税不是主因，
+## 杠杆换成分两步降世界分辨率：先 k=0.75（均衡中间态），仍不行再 k=0.5。
+## 只写 _world_scale_override 不碰设置档（尊重用户明确意愿），手动改画质即清零；
+## 已到 0.5（设置档 performance 或 override 已 0.5）不再有下一级，防来回翻转同辉光口径。
 func _poll_glow_auto_off() -> void:
 	if not GameManager.run_started or get_tree().paused:
 		return
@@ -550,16 +595,20 @@ func _poll_glow_auto_off() -> void:
 		else:
 			_glow_low_streak = 0
 	elif not _quality_auto_offed:
-		# 辉光已不在生效（手动关或自动关）但帧率仍低 ⇒ 二级降档：自动切流畅画质
+		# 辉光已不在生效（手动关或自动关）但帧率仍低 ⇒ 世界降分辨率（两级过渡）
 		if Engine.get_frames_per_second() < GLOW_AUTO_FPS_FLOOR:
 			_glow_low_streak += 1
-			if _glow_low_streak >= GLOW_AUTO_TRIGGERS \
-					and SettingsManager.render_quality() == &"high":
-				_quality_auto_offed = true
-				get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+			if _glow_low_streak >= GLOW_AUTO_TRIGGERS and _current_world_scale() > WORLD_SCALE_PERF:
+				_world_scale_override = WORLD_SCALE_BALANCED if _world_scale_override <= 0.0 else WORLD_SCALE_PERF
+				_sync_world_viewport()
+				if _world_scale_override <= WORLD_SCALE_PERF:
+					_quality_auto_offed = true  # 已到底，防反复采样空转
 				if not _glow_toasted:
 					_glow_toasted = true
-					GameManager.announcement_triggered.emit("已自动切换流畅画质以提升帧率 · 可在设置中调回")
+					if _world_scale_override <= WORLD_SCALE_PERF:
+						GameManager.announcement_triggered.emit("已自动切换流畅画质以提升帧率 · 可在设置中调回")
+					else:
+						GameManager.announcement_triggered.emit("已自动降低画面精度以提升帧率 · 可在设置中调回")
 		else:
 			_glow_low_streak = 0
 
@@ -680,9 +729,10 @@ func trigger_screen_shockwave(world_pos: Vector2 = Vector2.INF, strength: float 
 		_vignette_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
 
 	var mat := vignette_rect.material as ShaderMaterial
-	# 归一化屏幕坐标 (0..1)
+	# 归一化屏幕坐标 (0..1)：投影必须用世界 SubViewport 的 canvas_transform——
+	# vignette 随 PostProcessLayer 在同一 SubViewport 内，SCREEN_UV 与此坐标系同源
 	var center := Vector2(0.5, 0.5)
-	var vp := get_viewport()
+	var vp := _world_vp as Viewport
 	if vp != null:
 		var target_pos := world_pos
 		if target_pos == Vector2.INF:
@@ -715,7 +765,7 @@ func trigger_screen_shockwave(world_pos: Vector2 = Vector2.INF, strength: float 
 ## 灵田界碑与战台装饰：可活动范围（GameManager.MAP_HALF_EXTENT）之外压暗，
 ## 战场中心太极四象古阵与九天锁灵结界光墙（由 ArenaVisualLayer 矢量渲染）
 func _setup_map_bounds() -> void:
-	var map: Node2D = $MapLayer
+	var map: Node2D = world.get_node("MapLayer")
 	var half: float = GameManager.MAP_HALF_EXTENT
 	# 深渊外沿从 ±2400 收到 ±1600（2026-10-17 真机 GPU 专项）：竖屏相机视野内玩家
 	# 永远看不到外块远端，±1600 仍完整包住 BeyondBoundary 剪影（±740）与边界 clamp（±540），

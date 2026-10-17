@@ -73,6 +73,20 @@ var player: Node2D = null
 var joystick = null
 var main_camera: Camera2D = null
 var wave_spawner: Node = null
+## 世界内容根（2026-10-17 SubViewport 化）：Main 里的 World 节点。
+## 特效池宿主（JuiceEffect/DamageNumber）与 HeatDistortionFx.report 的挂载基准——
+## 它们必须与世界同 viewport，坐标换算/剔除才自洽；Main 不在场时为 null（测试回退 current_scene）。
+var world_root: Node2D = null
+
+## 战斗实体挂载基准（2026-10-17 #06）：弹丸/掉落物/光珠等物理实体必须与世界同一 viewport
+## ——物理 Area2D 碰撞只在同一 viewport 内发生，挂在根 viewport 的弹丸永远打不中世界里的敌人。
+## Main 不在场（部分测试）时回退 current_scene，保持旧测试布局可用。
+func battle_host(fallback: Node = null) -> Node:
+	if world_root != null and is_instance_valid(world_root):
+		return world_root
+	if fallback != null:
+		return fallback
+	return get_tree().current_scene if get_tree() != null and get_tree().current_scene != null else null
 
 # 敌人活体登记（2026-10-11）：EnemyBase 在 _ready/_exit_tree 进出。
 # 高频消费方（鼓妖光环每 0.25s、蛛母/影魅/Boss 的召唤上限、刷怪口容量）改读这里，
@@ -405,7 +419,8 @@ var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（Floating
 
 # 武器羁绊加成（由 recalc_synergies 每回合/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础
-var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量
+var synergy_bonus_pierce: int = 0   ## 符箓羁绊：弹丸额外穿透增量（2026-10-17 起恒 +1，成长走远程伤害）
+var synergy_ranged_damage: float = 0.0 ## 符箓羁绊：远程伤害加成幅度（0.06 即 +6%，弹射流第二条成长线）
 var bonus_pierce: int = 0           ## 弹丸额外穿透合计（stat + synergy）
 var synergy_damage_mult: float = 1.0  ## 广域/离火羁绊：额外伤害乘区
 var synergy_range_mult: float = 1.0   ## 剑系羁绊：额外攻击范围乘区
@@ -637,6 +652,7 @@ func roll_upgrades(count: int = UPGRADE_OFFER_COUNT) -> Array[Dictionary]:
 		"counts": upgrade_counts,
 		"rng": rng,
 		"has_pets": (not pets.is_empty() or cultivator_id == "yushou"),
+		"gm": self,   # 满穿透闸（PierceLimit）：bonus_pierce 顶到上限后 pierce_up 停刷
 	})
 
 # ---------------- 回合后悟道结算（委托 AllocSession） ----------------
@@ -915,7 +931,7 @@ func sell_item(item_id: String) -> bool:
 func chest_grant_item() -> bool:
 	if chest_item_grants >= GameBalance.CHEST_JADE_ITEM_GRANT_CAP:
 		return false
-	var id := ItemData.pick_id(luck, wave_number, items_bought, rng, unlocked_items)
+	var id := ItemData.pick_id(luck, wave_number, items_bought, rng, unlocked_items, self)
 	if id.is_empty():
 		return false
 	if not add_item(id):

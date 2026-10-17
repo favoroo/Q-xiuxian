@@ -29,7 +29,7 @@ func _make_save(phase: int) -> bool:
 	GameManager.level = 8
 	GameManager.wave_number = 8
 	var main = get_tree().root.get_node_or_null("Main")
-	var spawner = main.get_node("EntitiesLayer/WaveSpawner")
+	var spawner = main.get_node("WorldContainer/WorldViewport/World/EntitiesLayer/WaveSpawner")
 	match phase:
 		WaveSpawner.Phase.ALLOC:
 			GameManager.pending_upgrade_points = 2
@@ -46,7 +46,7 @@ func _teardown(main: Node) -> void:
 	await get_tree().process_frame
 
 func _report(tag: String, main: Node) -> void:
-	var spawner = main.get_node("EntitiesLayer/WaveSpawner")
+	var spawner = main.get_node("WorldContainer/WorldViewport/World/EntitiesLayer/WaveSpawner")
 	var dlg = main.get_node_or_null("UILayer/LevelUpDialog")
 	var shop = main.get_node_or_null("UILayer/WaveShop")
 	var pause_menu = main.get_node_or_null("UILayer/PauseMenu")
@@ -83,7 +83,7 @@ func _run() -> void:
 		_report(tag, main2)
 		match phase:
 			WaveSpawner.Phase.FIGHT:
-				var sp2 = main2.get_node("EntitiesLayer/WaveSpawner")
+				var sp2 = main2.get_node("WorldContainer/WorldViewport/World/EntitiesLayer/WaveSpawner")
 				_check(not get_tree().paused, "[%s] FIGHT 恢复后应解暂停" % tag)
 				# 刷怪有 1.1s 妖气预警延迟，敌体落地的窗口不必卡死；波表在走 = 战斗接管成功
 				_check(get_tree().get_nodes_in_group("enemies").size() > 0

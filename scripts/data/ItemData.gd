@@ -244,7 +244,7 @@ const DEFS: Dictionary = {
 			"apply": {"elemental_damage": 2.0},
 		},
 		"yuling_pai": {
-			"name": "御灵牌", "tier": 1, "price": 14,
+			"name": "召唤牌", "tier": 1, "price": 14,
 			"icon": "res://assets/art/item_yuling_pai.png",
 			"desc": "",
 			"apply": {"engineering_damage": 2.0},
@@ -610,14 +610,14 @@ const DEFS: Dictionary = {
 			"tiangong_fatiao": {
 				"name": "天工发条", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_luban_suo.png",
-				"desc": "机括极转：机关炮台攻击间隔缩短20%，环绕灵蝶与灵宝旋转速度提升30%",
+				"desc": "机括极转：机关炮台攻击间隔缩短20%，环绕武器旋转速度提升30%",
 				"apply": {"luck": -2.0},
 				"turret_haste": 0.20, "drone_spin_speed": 0.30,
 			},
 			"qianfu_lianhuan": {
 				"name": "千符连环印", "tier": 3, "price": 50,
 				"icon": "res://assets/art/item_juling_fu.png",
-				"desc": "万符齐发：符箓与远程弹丸武器发射弹丸数+1，弹丸散布角略微增加",
+				"desc": "万符齐发：弹射类与远程武器发射弹丸数+1，弹丸散布角略微增加",
 				"apply": {"attack_range_mult": -0.10},
 				"projectile_count_bonus": 1,
 			},
@@ -676,13 +676,17 @@ static func sell_price(id: String) -> int:
 ## 抽一件道具上货架：按档位权重抽取（公式见 GameBalance.item_tier_weights），
 ## bought = 本局已购入过的道具（含已出售的那件）：unique 道具只要买过一次就再不进池，
 ## 详情卡上「出售后本局不再出现」那句承诺由这里兑现。若传入 unlocked_items，则未解锁道具不入池；
+## gm 可选透传（满穿透闸 PierceLimit：bonus_pierce 顶到上限后穿透道具停刷）；
 ## 池空返回 ""，调用方落回武器位
-static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator, unlocked_items: Array = []) -> String:
+static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator, unlocked_items: Array = [], gm: Node = null) -> String:
 	var tier_w: Array = GameBalance.item_tier_weights(luck, wave)
 	var pool: Array = []
 	var weights: Array = []
 	for id in DEFS.keys():
 		if not unlocked_items.is_empty() and not (id in unlocked_items):
+			continue
+		# 满穿透时不进穿透道具（破虚符/裂空锥/洞虚针），判定收口在 PierceLimit
+		if gm != null and not PierceLimit.filter_item_id(gm, id):
 			continue
 		var d: Dictionary = DEFS[id]
 		if bool(d.get("unique", false)) and id in bought:

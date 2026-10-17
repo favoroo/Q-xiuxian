@@ -86,7 +86,7 @@ const UPGRADES: Array[Dictionary] = [
 	{
 		"id": "haste_up",
 		"apply": {"attack_speed_mult_mul": 0.88},
-		"title": "攻速提升",
+		"title": "攻击间隔缩短",
 		"desc": "",
 		"rarity": "rare",
 		"rarity_label": "稀有",
@@ -509,6 +509,8 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 	var owned_counts: Dictionary = ctx.get("counts", {})
 	var rng: RandomNumberGenerator = ctx.get("rng", null)
 	var has_pets: bool = bool(ctx.get("has_pets", false))
+	# 满穿透闸（2026-10-17）：ctx 可选带 gm，满穿透时 pierce_up 不进候选池
+	var gm_for_pierce: Node = ctx.get("gm", null)
 
 	var weights_dict := GameBalance.rarity_weights(luck, wave)
 	var common_w: float = weights_dict["common"]
@@ -526,6 +528,9 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 			continue
 		# 无随行灵兽且非御兽师时，不刷出灵兽强化项（防污染卡池）
 		if uid.begins_with("pet_") and not has_pets:
+			continue
+		# 穿透加成合计已到上限 ⇒ 穿透强化不再刷出（PierceLimit 唯一判定）
+		if gm_for_pierce != null and not PierceLimit.filter_upgrade_id(gm_for_pierce, uid):
 			continue
 		var w: float = common_w
 		match u.get("rarity", "common"):

@@ -401,11 +401,16 @@ static func _pos_in_viewport(parent: Node, pos: Vector2) -> bool:
 	var screen := vp.get_canvas_transform() * pos
 	return vp.get_visible_rect().grow(-8.0).has_point(screen)
 
-## 取池宿主应挂的场景根（测试里 current_scene 为空时退回向上找 root 的直接子节点）
+## 取池宿主应挂的场景根（2026-10-17 #06）：特效必须与世界同 viewport（剔除/缩放语义），
+## 优先 GameManager.world_root（Main 的 World 节点）；Main 不在场（部分测试）时
+## 退回 current_scene / 向上找 root 直接子节点的旧逻辑。
 static func _scene_root_for(node: Node) -> Node:
 	var tree := node.get_tree()
 	if tree == null:
 		return null
+	var wr := GameManager.world_root
+	if wr != null and is_instance_valid(wr):
+		return wr
 	if tree.current_scene != null and is_instance_valid(tree.current_scene):
 		return tree.current_scene
 	var cur: Node = node

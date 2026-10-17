@@ -244,7 +244,7 @@ const DEFS: Dictionary = {
 						"knockback": 200.0,
 						"price": 40, "icon": "res://assets/art/weapon_fire_lantern.png",
 						"tip": Vector2(22, 0), "upright": true,
-						"desc": "召唤火雨轰击区域并点燃火海，受元素伤害加成", "tag": "元素·雷法·火",
+						"desc": "降下火雨轰击区域并点燃火海，受元素伤害加成", "tag": "元素·雷法·火",
 						"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
 						"burst_kind": "fire_rain",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
@@ -310,7 +310,7 @@ const DEFS: Dictionary = {
 							"knockback": 480.0,
 							"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
 							"tip": Vector2(22, -12),
-							"desc": "厚重大盾超宽弧面横推强力击飞来敌，受护甲与生命加成", "tag": "近战·剑系·土",
+							"desc": "厚重大盾超宽弧面横推强力击飞来敌，受近战伤害、护甲与生命加成", "tag": "近战·剑系·土",
 						"arc_scale": 1.55,
 						"tags": ["sword", "earth"],
 						"stat_scalings": {"melee_damage": 0.8, "armor": 3.0, "max_hp_bonus": 0.15},
@@ -469,9 +469,9 @@ const DEFS: Dictionary = {
 							"knockback": 100.0,
 							"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 							"tip": Vector2(22, -12),
-							"desc": "透骨钉穿透3敌并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
+							"desc": "透骨钉穿透2敌并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
 						"bullet": "res://assets/art/bullet_bone_spike.png", "bullet_scale": 0.55, "bullet_spin": false,
-						"pierce": 3, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
+						"pierce": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 						"tags": ["talisman", "wood"],
 						"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.6},
 					},
@@ -573,7 +573,7 @@ const DEFS: Dictionary = {
 							"knockback": 150.0,
 							"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
 							"tip": Vector2(20, 2),
-							"desc": "双柄炽炎飞剑交错射出各引燃敌人，受元素与远程伤害加成", "tag": "元素·远程·剑系·火",
+							"desc": "双柄炽炎飞剑交错射出各引燃敌人，受元素与远程伤害加成", "tag": "元素·剑系·火",
 							"bullet": "res://assets/art/bullet_fire_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
 							"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
 							"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
@@ -687,7 +687,7 @@ const DEFS: Dictionary = {
 					"knockback": 420.0,
 					"price": 38, "icon": "res://assets/art/weapon_bengshan_jian.png",
 					"tip": Vector2(22, 0),
-					"desc": "崩山重剑横扫大力震退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
+					"desc": "崩山重剑阔扫大力震退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
 					"arc_scale": 1.3,
 					"tags": ["sword", "earth"],
 					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
@@ -776,7 +776,7 @@ const DEFS: Dictionary = {
 					"damage": 21.0, "cooldown": 0.45, "range": 172.0,
 					"knockback": 170.0,
 					"price": 44, "icon": "res://assets/art/weapon_jianling.png",
-					"desc": "剑形精魂环绕飞斩，受召唤伤害与暴击率加成", "tag": "召唤·剑灵·金",
+					"desc": "剑形精魂环绕飞斩，受召唤伤害与暴击率加成", "tag": "召唤·剑系·金",
 					"tags": ["spirit", "sword", "metal"],
 					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 				},
@@ -791,7 +791,7 @@ const DEFS: Dictionary = {
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
 						"tip": Vector2(22, -2), "upright": true,
-						"desc": "布设符灯傀儡兽掷石守御，受机关与召唤伤害加成", "tag": "机关·傀儡·土",
+						"desc": "布设符灯傀儡兽掷石守御，受机关与召唤伤害加成", "tag": "机关·召唤·土",
 						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.55, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["contraption", "spirit", "earth"],
@@ -968,7 +968,7 @@ const DEFS: Dictionary = {
 							"knockback": 95.0,
 							"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 							"tip": Vector2(20, -6), "upright": true,
-							"desc": "布设凝冰机弩远程点杀冻缓敌人，受机关伤害与攻击范围加成", "tag": "机关·水",
+							"desc": "布设凝冰机弩远程点杀冻缓敌人，受机关伤害与范围加成", "tag": "机关·水",
 							"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 							"pierce": 1, "proc_chill": 0.25, "chill_dur": 1.5,
 							"tags": ["contraption", "water"],
@@ -1013,15 +1013,25 @@ const DEFS: Dictionary = {
 const SYNERGIES: Dictionary = {
 	# ---- 器类羁绊 ----
 	"sword": {
-		"name": "剑系", "thresholds": [2, 4, 6], "values": [0.15, 0.30, 0.50],
+		# 2026-10-17 收档：范围全域共享（弹丸寿命也吃乘区），6 件 +50% 前后差出 200px，
+		# 屏上夸张；砍到与横扫档同高 +10/20/30，用户口径「现在太大了」
+		"name": "剑系", "thresholds": [2, 4, 6], "values": [0.10, 0.20, 0.30],
 		"effects": [
 			{"field": "synergy_range_mult", "list": "values", "op": "add", "label": "攻击范围", "form": "pct"},
 		],
 	},
 	"talisman": {
-		"name": "弹射", "thresholds": [2, 4, 6], "values": [1, 2, 3],
+		# 2026-10-17 重做（用户口径：+1/2/3 穿透与 PIERCE_CAP=3 冲突——6 件 +3 会被钳成
+		# "看着涨实际原地踏步"）。改成双条效果：穿透只给首档 +1（2 件起效、后面档位不再加），
+		# 成长换到远程伤害 +6/12/18%——弹射流 13 把全是弹丸（ranged_damage 全员系数 0.8+），
+		# 逐档有实感、永不撞上限。满穿透停刷判定仍以 bonus_pierce 合计 ≥2 为准（PierceLimit）。
+		# eng_values 模式仿 spirit：第一条效果的 list 指向 "values"（三档只有首档非零），
+		# 展示口径 form=flat，1 件档不激活 ⇒ 无事发生。
+		"name": "弹射", "thresholds": [2, 4, 6], "values": [1, 1, 1],
+		"dmg_values": [0.06, 0.12, 0.18],
 		"effects": [
 			{"field": "synergy_bonus_pierce", "list": "values", "op": "add", "label": "弹丸穿透", "form": "flat"},
+			{"field": "synergy_ranged_damage", "list": "dmg_values", "op": "add", "label": "远程伤害", "form": "pct"},
 		],
 	},
 	"thunder": {
@@ -1109,10 +1119,19 @@ const SYNERGY_FIELDS: Array[String] = [
 	"synergy_bonus_pierce", "synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_max_hp_bonus", "synergy_engineering_damage", "synergy_crit_rate", "synergy_crit_mult",
 	"synergy_hp_regen", "synergy_lifesteal", "synergy_move_speed_mult", "synergy_burn_mult",
-	"synergy_armor", "synergy_knockback_mult", "synergy_contraption_mult",
+	"synergy_armor", "synergy_knockback_mult", "synergy_contraption_mult", "synergy_ranged_damage",
 ]
 
-## 某属性的羁绊基数（"add" 从基数起算，"mul" 从 1.0 起算）：与 GameManager 声明初值同源
+## 弹丸穿透总数上限（2026-10-17，用户口径：「最大穿透为3，达到之后就不会继续刷出加穿透的加点和物品」）：
+## 表内 pierce + 词条/道具/羁绊合计钳到 PIERCE_CAP；PierceLimit.has_max_pierce 按同一把尺
+## 判定"满穿透"：PierceLimit 按当前阵容逐把检查基础 pierce + bonus_pierce，全部达到上限才停刷。
+const PIERCE_CAP := 3
+
+## 出膛穿透钳位：FloatingWeapon/TurretUnit 弹丸赋值统一走它，不许各自散写 mini
+static func capped_pierce(raw_pierce: int) -> int:
+	return mini(maxi(1, raw_pierce), PIERCE_CAP)
+
+## 该属性的羁绊基数（"add" 从基数起算，"mul" 从 1.0 起算）：与 GameManager 声明初值同源
 ## 基数写成 int 的字段（穿透次数）＝ 声明该属性是整数，SynergySystem 结算后按它回截类型，
 ## 往 int 属性 set 一个 float 会被引擎打回「Invalid assignment」并静默留旧值。
 const SYNERGY_BASE := {
@@ -1121,6 +1140,7 @@ const SYNERGY_BASE := {
 	"synergy_crit_rate": 0.0, "synergy_crit_mult": 0.0, "synergy_hp_regen": 0.0,
 	"synergy_lifesteal": 0.0, "synergy_move_speed_mult": 0.0, "synergy_burn_mult": 1.0,
 	"synergy_armor": 0.0, "synergy_knockback_mult": 1.0, "synergy_contraption_mult": 1.0,
+	"synergy_ranged_damage": 0.0,
 }
 
 ## 开局六选一：五行齐备（长剑金/风扇水/火符火/巨印土/护蝶木）+ 雷法落雷「雷牌」
@@ -1216,7 +1236,7 @@ const BEHAVIOR_TIPS: Dictionary = {
 	Behavior.DRONE: {
 		"how": "绕着本体转圈，贴到的敌人持续掉血",
 		"notes": [
-			"不靠出手那一帧：同一个敌人各自有命中间隔，攻速越快贴得越疼。",
+			"不靠出手那一帧：同一个敌人各自有命中间隔，攻击间隔越短贴得越疼。",
 			"打得到的是绕身那一圈，远处的敌人够不着 ⇒ 通常再配一把近战或远程补上。",
 			"升星会分身：★2 一化为二、★3 一化为三，每具独立贴身结算，总伤害不变但贴得更全。",
 		],

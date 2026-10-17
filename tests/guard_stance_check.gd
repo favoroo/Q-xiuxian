@@ -146,7 +146,7 @@ func _test_burst_delivers() -> void:
 
 ## 读活跃冲击波的目标半径：特效池挂在场景根下的 JuiceEffectPool 里（与 ShadowStepCheck 同一取法）
 func _shockwave_radius() -> float:
-	var host := get_tree().current_scene.get_node_or_null("JuiceEffectPool")
+	var host := (GameManager.world_root if GameManager.world_root != null else get_tree().current_scene).get_node_or_null("JuiceEffectPool")
 	if host == null:
 		return -1.0
 	for child in host.get_children():

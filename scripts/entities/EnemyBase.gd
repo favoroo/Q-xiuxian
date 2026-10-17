@@ -2106,7 +2106,7 @@ func _die() -> void:
 			JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_EDGE, 0.25)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
-		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
+		var gem := AstralGem.acquire_or_new(gem_scene, GameManager.battle_host())
 		var offset = Vector2.ZERO if gem_count == 1 else Vector2(
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS),
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS))

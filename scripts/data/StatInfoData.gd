@@ -236,7 +236,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("按点数直接增加所有飞剑飞针与飞射类远程武器的基础伤害。")
 			out.append("飞剑、飞刀、冰针、毒符等远程武器直接享受本项加成。")
 		"elemental_dmg":
-			out.append("按点数直接增加符箓、雷法轰击以及异常状态的伤害。")
+			out.append("按点数增加详情卡写了「受元素伤害加成」的武器伤害，并提升灼烧、中毒等跳字的每秒伤害。")
 			out.append("直接提升火符灼烧与毒符中毒的每秒跳字伤害，火系与木系角色首选。")
 		"engineering_dmg":
 			out.append("按点数直接增加所有环绕类召唤武器的基础接触伤害。")
@@ -497,7 +497,7 @@ static func stat_tip_rows(id: String) -> Array:
 				["间隔缩减", "%.1f%%" % float(s.get("cdr_pct", 0.0)), _c(float(s.get("cdr_pct", 0.0)))],
 				["实际攻击间隔", _mul(float(s.get("attack_speed_mult", 1.0)))],
 				["升级·道具·角色", _mul(GameManager.attack_speed_mult), _c(1.0 - GameManager.attack_speed_mult)],
-				["范围·水系羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
+				["雷法·水系羁绊", _mul(GameManager.synergy_haste_mult), _c(1.0 - GameManager.synergy_haste_mult)],
 			]
 			if GameManager.still_time > 0.0 and GameManager.item_hook_sum("still_attack_speed") > 0.0:
 				var st_haste := GameManager.item_hook_sum("still_attack_speed")
