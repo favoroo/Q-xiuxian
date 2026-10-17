@@ -9,6 +9,12 @@ extends RefCounted
 ## 步态相位由本类按物理帧自维护并反向驱动 sprite.frame（AnimatedSprite2D 须 pause），
 ## 不再读 sprite.frame + frame_progress 采样——动画帧默认在 _process 推进、
 ## 形变在 _physics_process 计算，两个时钟混叠会让腾空曲线与腿帧错位抖动。
+##
+## 2026-10-17 性能专项（去 meta 化）：步态相位/速度/悬浮相位/意图/影子基线原先全部
+## 存在 sprite 的 meta 上（get_meta/set_meta 是 Variant 装箱 + StringName 哈希查表，
+## 35 敌 × 每物理帧 4-6 次 ≈ 每秒上万次），改为 RunMotionState 实例字段承载；
+## 调用方（EnemyBase/Player）各持一个实例随实体复用，本类所有 apply* 改收 state 参数。
+## meta 键位无外部消费方（程序化敌人/修士视图各持自有 gait_phase 字段），语义零改动。
 
 const LIFT := 0.5        # 步态腾空峰值（压低贴地；影子配合缩放变淡，脚不沾地的悬浮感由此消除）
 const AIR_EXP := 1.7     # 腾空曲线塑形指数：>1 让触地权重高、腾空峰值短促
@@ -36,6 +42,18 @@ const SLITHER_SQ := 0.06     # 蠕动伸缩幅度（scale.x/y 反向交替，蛞
 
 ## 方向图集的行序：动画后缀 → 图集行号
 const DIR_ROW := {"s": 0, "n": 1, "e": 2, "se": 3, "ne": 4}
+
+## 步态/悬浮状态载体（2026-10-17 去 meta 化）：每实体一个实例（EnemyBase/Player 各持一份
+## 随池化复用），全部字段为强类型 float/Vector2/Color，替代旧 sprite meta 的 Variant 装箱。
+class RunMotionState:
+	extends RefCounted
+	var gait_phase: float = 0.0        ## 步态相位（0..frame_count，驱动腿帧与腾空曲线）
+	var gait_speed: float = 1.0       ## 步频倍速（平滑跟随目标步频）
+	var hover_phase: float = 0.0       ## 悬浮/蠕动相位（悬浮基频与蠕动行进波共用）
+	var hover_intent: float = 0.0      ## 悬浮纵向意图（逼近沉身/后撤仰身的一阶跟随）
+	var shadow_base_scale: Vector2 = Vector2.ZERO  ## 影子基线三件套（首帧懒存）
+	var shadow_base_alpha: float = -1.0
+	var shadow_base_pos: Vector2 = Vector2.ZERO
 
 ## 8 扇区配置表：扇区编号 0..7 → [动画后缀, 是否水平翻转, 扇区中心角(度)]
 const SECTOR_TABLE := [
@@ -117,6 +135,7 @@ static func select_anim(sprite: AnimatedSprite2D, anim: String, manual_drive: bo
 ## moving=true：按自维护步态相位驱动帧推进、触地微弹与身体前倾，并让影子随腾空收缩变淡
 ## moving=false：平滑归位并融入自然待机呼吸（breath_phase）
 static func apply(
+	state: RunMotionState,
 	sprite: AnimatedSprite2D,
 	base_scale: Vector2,
 	moving: bool,
@@ -131,8 +150,7 @@ static func apply(
 	if moving:
 		# 动态匹配步频倍速，消除滑步感与机械重复感
 		var target_speed_scale := clampf(lerpf(SPEED_SCALE_MIN, SPEED_SCALE_MAX, clampf(speed_ratio, 0.0, 1.5)), 0.8, 1.4)
-		var speed_scale: float = lerpf(float(sprite.get_meta(&"gait_speed", 1.0)), target_speed_scale, minf(delta * 14.0, 1.0))
-		sprite.set_meta(&"gait_speed", speed_scale)
+		state.gait_speed = lerpf(state.gait_speed, target_speed_scale, minf(delta * 14.0, 1.0))
 
 		# 自维护步态相位并反向驱动帧：腾空曲线与腿帧严格同相
 		var frame_count := 4
@@ -140,8 +158,8 @@ static func apply(
 		if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(sprite.animation):
 			frame_count = maxi(sprite.sprite_frames.get_frame_count(sprite.animation), 1)
 			anim_fps = sprite.sprite_frames.get_animation_speed(sprite.animation)
-		var phase: float = fmod(float(sprite.get_meta(&"gait_phase", 0.0)) + delta * anim_fps * speed_scale, float(frame_count))
-		sprite.set_meta(&"gait_phase", phase)
+		var phase: float = fmod(state.gait_phase + delta * anim_fps * state.gait_speed, float(frame_count))
+		state.gait_phase = phase
 		sprite.set_frame_and_progress(int(phase) % frame_count, phase - floorf(phase))
 
 		var stride_intensity := clampf(speed_ratio, 0.45, 1.25)
@@ -164,8 +182,8 @@ static func apply(
 		var step_rock := deg_to_rad(0.65 * stride_intensity) * sway
 		sprite.rotation = lerp_angle(sprite.rotation, lean + step_rock, minf(delta * 12.0, 1.0))
 	else:
-		sprite.set_meta(&"gait_phase", 0.0)
-		sprite.set_meta(&"gait_speed", 1.0)
+		state.gait_phase = 0.0
+		state.gait_speed = 1.0
 		var k := minf(delta * 14.0, 1.0)
 		var breath := sin(breath_phase) * BREATH_AMP
 		var target_idle_scale := Vector2(
@@ -177,7 +195,7 @@ static func apply(
 		sprite.rotation = lerp_angle(sprite.rotation, 0.0, k)
 
 	if shadow != null:
-		_apply_shadow(shadow, air, minf(delta * 14.0, 1.0))
+		_apply_shadow(state, shadow, air, minf(delta * 14.0, 1.0))
 
 ## 御剑/悬浮模式：不切腿帧（单姿势图集），浮沉/侧倾/前倾全程序驱动。
 ## 待机也保持低速浮沉（始终悬在剑上），移动时浮沉加速并按走位侧倾。
@@ -188,6 +206,7 @@ static func apply(
 ## idle 单姿势，逼近/环绕/后撤三种运动在旧版长得一模一样（只剩一条上下浮），玩家只能靠猜。
 ## 缺省 0.0 ⇒ 玩家不叠纵向意图（他自己就是「面向 = 走位」），悬浮玩家的手感保持原样。
 static func apply_hover(
+	state: RunMotionState,
 	sprite: AnimatedSprite2D,
 	base_scale: Vector2,
 	moving: bool,
@@ -198,8 +217,8 @@ static func apply_hover(
 	advance: float = 0.0
 ) -> void:
 	var freq_mult := 1.0 + 0.4 * clampf(speed_ratio, 0.0, 1.5) if moving else 1.0
-	var phase: float = float(sprite.get_meta(&"hover_phase", 0.0)) + delta * TAU * HOVER_FREQ * freq_mult
-	sprite.set_meta(&"hover_phase", fmod(phase, TAU * 1000.0))
+	var phase: float = state.hover_phase + delta * TAU * HOVER_FREQ * freq_mult
+	state.hover_phase = fmod(phase, TAU * 1000.0)
 	var bob := sin(phase)
 
 	var k := minf(delta * 14.0, 1.0)
@@ -209,9 +228,8 @@ static func apply_hover(
 	var intent := 0.0
 	if moving and absf(advance) > HOVER_INTENT_BAND:
 		intent = signf(advance) * minf(absf(advance), 1.0)
-	var cur_intent: float = float(sprite.get_meta(&"hover_intent", 0.0))
-	cur_intent = lerpf(cur_intent, intent, minf(delta * HOVER_INTENT_FOLLOW, 1.0))
-	sprite.set_meta(&"hover_intent", cur_intent)
+	state.hover_intent = lerpf(state.hover_intent, intent, minf(delta * HOVER_INTENT_FOLLOW, 1.0))
+	var cur_intent: float = state.hover_intent
 
 	# 后撤（intent<0）抬身、逼近（intent>0）沉身
 	var lift := HOVER_INTENT_LIFT * cur_intent
@@ -231,11 +249,12 @@ static func apply_hover(
 	if shadow != null:
 		# 上下走位时 bank≈0，方向只能靠影子被拖长 + 滞后来说 ⇒ 竖直方向唯一的方向线索
 		var streak := move_dir if moving else Vector2.ZERO
-		_apply_shadow(shadow, 0.62 + 0.30 * bob, k, streak, clampf(speed_ratio, 0.0, 1.3))
+		_apply_shadow(state, shadow, 0.62 + 0.30 * bob, k, streak, clampf(speed_ratio, 0.0, 1.3))
 
 ## 蠕动/滑行模式：贴地无悬浮无前倾（史莱姆、血蛹等无腿软体），
 ## 行进波全靠 scale.x/y 反向交替伸缩；待机时慢速微动，影子保持稳定。
 static func apply_slither(
+	state: RunMotionState,
 	sprite: AnimatedSprite2D,
 	base_scale: Vector2,
 	moving: bool,
@@ -245,8 +264,8 @@ static func apply_slither(
 ) -> void:
 	var freq_mult := 1.0 + 0.5 * clampf(speed_ratio, 0.0, 1.5) if moving else 0.4
 	var amp_mult := 1.0 if moving else 0.4
-	var phase: float = float(sprite.get_meta(&"hover_phase", 0.0)) + delta * TAU * SLITHER_FREQ * freq_mult
-	sprite.set_meta(&"hover_phase", fmod(phase, TAU * 1000.0))
+	var phase: float = state.hover_phase + delta * TAU * SLITHER_FREQ * freq_mult
+	state.hover_phase = fmod(phase, TAU * 1000.0)
 	var wave := sin(phase) * SLITHER_SQ * amp_mult
 
 	var k := minf(delta * 14.0, 1.0)
@@ -255,24 +274,24 @@ static func apply_slither(
 	sprite.rotation = lerp_angle(sprite.rotation, 0.0, k)
 
 	if shadow != null:
-		_apply_shadow(shadow, 0.0, k)
+		_apply_shadow(state, shadow, 0.0, k)
 
 ## 影子贴地反馈：腾空时影子收缩变淡（脚离地的视觉补偿），触地/待机时恢复基准。
 ## streak/drift 非零时再叠一层「行进拖影」：沿移动方向拉长、并向后滞后一点（云气被拖在身后）。
 static func _apply_shadow(
+	state: RunMotionState,
 	shadow: Sprite2D,
 	air: float,
 	k: float,
 	streak: Vector2 = Vector2.ZERO,
 	drift: float = 0.0
 ) -> void:
-	if not shadow.has_meta(&"gait_base"):
-		shadow.set_meta(&"gait_base", [shadow.scale, shadow.modulate.a, shadow.position])
-	var base: Array = shadow.get_meta(&"gait_base")
-	var base_scale: Vector2 = base[0]
-	var base_alpha: float = base[1]
-	var base_pos: Vector2 = base[2]
+	# 影子基线首帧懒存进 state（旧版存 shadow meta，同为 Variant 装箱点）
+	if state.shadow_base_alpha < 0.0:
+		state.shadow_base_scale = shadow.scale
+		state.shadow_base_alpha = shadow.modulate.a
+		state.shadow_base_pos = shadow.position
 	var stretch := Vector2(1.0 + SHADOW_STRETCH * absf(streak.x), 1.0 + SHADOW_STRETCH * absf(streak.y))
-	shadow.scale = shadow.scale.lerp(base_scale * (1.0 - SHADOW_SHRINK * air) * stretch, k)
-	shadow.modulate.a = lerpf(shadow.modulate.a, base_alpha * (1.0 - SHADOW_FADE * air), k)
-	shadow.position = shadow.position.lerp(base_pos - streak * SHADOW_DRIFT * drift, k)
+	shadow.scale = shadow.scale.lerp(state.shadow_base_scale * (1.0 - SHADOW_SHRINK * air) * stretch, k)
+	shadow.modulate.a = lerpf(shadow.modulate.a, state.shadow_base_alpha * (1.0 - SHADOW_FADE * air), k)
+	shadow.position = shadow.position.lerp(state.shadow_base_pos - streak * SHADOW_DRIFT * drift, k)

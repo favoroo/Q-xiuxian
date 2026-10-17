@@ -19,6 +19,8 @@ var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
 var _vignette_tween: Tween = null
 var _low_hp_phase: float = 0.0
+var _low_hp_pulsing: bool = false   ## 低血量红晕脉冲态 memo（状态机闸：只在翻转沿建/杀 tween）
+var _low_hp_tween: Tween = null     ## 低血量脉冲循环 tween 句柄（退出/红闪抢通道时 kill）
 var _atmo_mood_tween: Tween = null   ## 煞气两态颜色渐变闸（新切换先杀旧 tween）
 var _atmo_baleful: bool = false      ## 当前氛围态 memo：波次重复 emit 不重放
 
@@ -38,6 +40,8 @@ const ATMO_GRAV_BALEFUL_NEAR := Vector2(0.0, 9.0) ## 煞气缓沉（近层）
 var _settings_return_to_pause: bool = false
 var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
+var _crowd_glow_cd: float = 0.0           ## glow 拥挤档轮询计时（1s 粒度，见 _poll_crowd_glow）
+var _env_res: Environment = null           ## WorldEnvironment 的 Environment 资源缓存（glow 档位写入目标）
 
 func _ready() -> void:
 	# 帧率档位（2026-10-15）：默认「流畅模式」60fps + 物理 60Hz，设置页可关成 30/30 省电档。
@@ -402,6 +406,7 @@ func _setup_ambient_mist() -> void:
 		tw.tween_property(sprite, "position", cfg.pos, cfg.dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _process(delta: float) -> void:
+	_poll_crowd_glow(delta)
 	var player := GameManager.player
 	if player != null and is_instance_valid(player):
 		var p_pos: Vector2 = player.global_position
@@ -413,23 +418,67 @@ func _process(delta: float) -> void:
 			petal_particles.global_position = p_pos
 
 		# 濒死生命警示脉冲（阈值走 GameBalance.hp_is_low：与 HUD 血字、灵石阁徽记同一把尺）
-		# 开关走 GameFeel 每帧 memo：本分支每渲染帧执行，原 get_val 每帧 2 个 String 分配
+		# 开关走 GameFeel 每帧 memo。2026-10-17 性能专项重做：原版每帧 2 次 set_shader_parameter
+		# + 2 个 Color 分配 + sin()（守卫 _vignette_tween.is_valid() 因 tween 播完从不置 null 而恒真）。
+		# 改状态机：进入低血量只建一条循环 tween 驱动脉冲，退出/受击红闪抢通道时 kill 掉；
+		# 稳态每帧只剩一次 bool 比较 + hp_is_low 判定（已是 memo，零分配）。
 		var in_low_hp: bool = GameFeel.screen_flash_enabled() and GameBalance.hp_is_low(player.current_health, player.max_health)
 		if in_low_hp:
-			_low_hp_phase += delta * 4.5
-			var pulse: float = (sin(_low_hp_phase) * 0.5 + 0.5) * 0.45
-			if vignette_rect != null and vignette_rect.material is ShaderMaterial:
-				var mat = vignette_rect.material as ShaderMaterial
-				if _vignette_tween == null or not _vignette_tween.is_valid():
-					mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
-					mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
-		elif _low_hp_phase > 0.0:
-			_low_hp_phase = 0.0
-			if vignette_rect != null and vignette_rect.material is ShaderMaterial:
-				var mat = vignette_rect.material as ShaderMaterial
-				if _vignette_tween == null or not _vignette_tween.is_valid():
-					mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
-					mat.set_shader_parameter("vignette_opacity", 0.5)
+			if not _low_hp_pulsing:
+				_low_hp_pulsing = true
+				_start_low_hp_pulse()
+		elif _low_hp_pulsing:
+			_low_hp_pulsing = false
+			_stop_low_hp_pulse()
+
+## 低血量红晕脉冲：循环 tween 全权驱动两个 shader 参数，_process 不再逐帧写。
+## 受击红闪（_on_screen_damage_pulsed）会 kill 本通道并接管参数，其结束时
+## vignette_opacity 复位 0.5；因此本循环每圈都从基准值重扫，不与红闪残余态打架。
+func _start_low_hp_pulse() -> void:
+	if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
+		return
+	var mat := vignette_rect.material as ShaderMaterial
+	if _low_hp_tween != null and _low_hp_tween.is_valid():
+		_low_hp_tween.kill()
+	_low_hp_tween = create_tween().set_loops()
+	_low_hp_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	# 相位与旧 sin(_low_hp_phase * 4.5) 同节奏（周期 ≈ 1.396s），脉动范围同旧版 0.15~0.2635 / 0.55~0.6625
+	var pulse_mat := vignette_rect.material as ShaderMaterial
+	var tcol := func(pulse: float):
+		pulse_mat.set_shader_parameter("tint_color", Color(0.85, 0.1, 0.1, 0.15 + pulse * 0.25))
+	var vop := func(pulse: float):
+		pulse_mat.set_shader_parameter("vignette_opacity", 0.55 + pulse * 0.25)
+	_low_hp_tween.tween_method(tcol, 0.0, 0.45, 0.698).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_low_hp_tween.tween_method(vop, 0.0, 0.45, 0.698).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_low_hp_tween.tween_method(tcol, 0.45, 0.0, 0.698).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_low_hp_tween.tween_method(vop, 0.45, 0.0, 0.698).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## 退出低血量：撤脉冲 tween，参数复位到常态暗角（与受击红闪复位值同源）
+func _stop_low_hp_pulse() -> void:
+	if _low_hp_tween != null and _low_hp_tween.is_valid():
+		_low_hp_tween.kill()
+	_low_hp_tween = null
+	if vignette_rect != null and vignette_rect.material is ShaderMaterial:
+		var mat := vignette_rect.material as ShaderMaterial
+		mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
+		mat.set_shader_parameter("vignette_opacity", 0.5)
+
+## glow 拥挤档落地（2026-10-17 性能专项）：1s 粒度轮询 FxBudget.crowded，
+## 高压战斗把 glow_intensity 0.4 → 0.25（阈值与色表不动，超白起辉只是峰值压一档）。
+## 同值短路：Environment.glow_intensity 写入只在翻转沿发生，稳态零成本。
+func _poll_crowd_glow(delta: float) -> void:
+	_crowd_glow_cd -= delta
+	if _crowd_glow_cd > 0.0:
+		return
+	_crowd_glow_cd = 1.0
+	if _env_res == null:
+		var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
+		if we == null or we.environment == null:
+			return
+		_env_res = we.environment
+	var want: float = FxBudget.glow_intensity()
+	if _env_res.glow_intensity != want:
+		_env_res.glow_intensity = want
 
 func _on_weapons_updated(weapons: Array) -> void:
 	if not weapons.is_empty():
@@ -442,6 +491,12 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if bool(SettingsManager.get_val(&"display", &"screen_flash", true)):
 		if vignette_rect != null and vignette_rect.material is ShaderMaterial:
 			var mat = vignette_rect.material as ShaderMaterial
+			# 受击红闪接管 vignette 通道：低血量脉冲先让位（下一帧 _process 会因红闪中
+			# is_valid 守卫自动重建？不会——脉冲态 memo 不受影响，红闪结束后由
+			# 状态机翻转沿重建。这里显式 kill 防两条 tween 同时写参数互顶）
+			if _low_hp_tween != null and _low_hp_tween.is_valid():
+				_low_hp_tween.kill()
+				_low_hp_tween = null
 			if _vignette_tween != null and _vignette_tween.is_valid():
 				_vignette_tween.kill()
 			mat.set_shader_parameter("tint_color", tint)
@@ -474,6 +529,10 @@ func _on_game_over_reset_vignette(_victory: bool) -> void:
 	if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
 		return
 	_low_hp_phase = 0.0
+	_low_hp_pulsing = false
+	if _low_hp_tween != null and _low_hp_tween.is_valid():
+		_low_hp_tween.kill()
+	_low_hp_tween = null
 	if _vignette_tween != null and _vignette_tween.is_valid():
 		_vignette_tween.kill()
 	var mat := vignette_rect.material as ShaderMaterial

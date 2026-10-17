@@ -29,6 +29,10 @@ static var query_reuse_count: int = 0
 ## 全套生命周期）是「剑一多就卡」的分配压力来源。照 JuiceEffect/DamageNumber 池模式：
 ## 死亡不再 queue_free 而是回池休眠，复用由 activate() 全量重置（字段清单见 activate 注释）。
 const POOL_CAP := 64
+## 活跃弹丸预算（2026-10-17 性能专项）：POOL_CAP 只限「停泊数」，活跃数原先无约束，
+## 极端武器组合可无限堆同屏弹丸（每发都带物理回调 + 灯 + 拖尾）。超预算时新弹照发、
+## 最旧一发强制让位（它本来就快过期）。120 ≈ 现役构建峰值的 2 倍，常规构建永不触闸。
+const ACTIVE_BUDGET := 120
 ## 场景默认寿命：activate 复用时重置的基准（FloatingWeapon 出膛再乘 range_mult）
 const BASE_LIFETIME := 1.6
 ## —— 弹丸灯光上限 ——
@@ -42,6 +46,8 @@ static var created_count: int = 0    ## 累计 instantiate 数（tests/PerfProbe
 static var reused_count: int = 0     ## 累计池复用数
 static var _lit_count: int = 0       ## 当前点亮的弹丸灯数
 static var active_count: int = 0     ## 当前在场（已激活未回收）弹丸数：HUD 性能面板消费
+## 活跃弹丸出生序登记表（acquire 预算闸用）：Dictionary 保插入序，头部即最旧
+static var _active_registry: Dictionary = {}
 ## 回收终值登记（launch_id -> {pierce,bounce}）：projectile_probe 结账用，读取后由探针清除
 static var _final_stats: Dictionary = {}
 static var record_final_stats: bool = false
@@ -53,6 +59,7 @@ static func clear_pool() -> void:
 	_pool.clear()
 	_lit_count = 0
 	active_count = 0
+	_active_registry.clear()
 	_host = null
 	clear_final_stats()
 
@@ -314,8 +321,22 @@ static func _ensure_host(parent: Node) -> void:
 
 ## 取一发弹丸：池里有就复用，没有 instantiate 新的挂到池宿主下。
 ## 调用方随后设置全部战斗字段并调用 activate()。
+## 2026-10-17 性能专项：加活跃预算闸 —— 旧版 POOL_CAP=64 只是「停泊上限」（回收时才判），
+## 活跃数无任何约束，极端武器组合（多弹幕齐射）可无限堆活跃弹丸。
+## 超预算时不丢新弹（新弹代表新伤害意图），而是强制回收最旧一发让位：
+## 寿命最短的本来就是快过期的，视觉损失为零。
 static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 	_ensure_host(parent)
+	# 活跃预算：超限时踢掉最旧活跃弹丸（active 记录的出生序，头部即最旧）
+	while active_count >= ACTIVE_BUDGET:
+		var victim: BladeProjectile = null
+		for p in _active_registry:
+			if is_instance_valid(p) and not p._pooled:
+				victim = p
+				break
+		if victim == null:
+			break   # 登记表空转保护（异常态下不阻塞出弹）
+		victim._recycle()
 	while not _pool.is_empty():
 		var p: BladeProjectile = _pool.pop_back()
 		if is_instance_valid(p):
@@ -334,6 +355,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 func activate() -> void:
 	_pooled = false
 	active_count += 1
+	_active_registry[get_instance_id()] = self
 	launch_seq += 1
 	launch_id = launch_seq
 	# 池化节点回收时留在树里停在死亡点，复用出膛是从旧位置瞬移到枪口：
@@ -382,6 +404,7 @@ func _recycle() -> void:
 		_final_stats[launch_id] = {"pierce": pierce_left, "bounce": bounce_left}
 	_pooled = true
 	active_count = maxi(0, active_count - 1)
+	_active_registry.erase(get_instance_id())
 	homing_target = null
 	# 拖尾同拍清史：休眠弹丸的弧线必须跟碰撞/登记表一起撤（池体不许占拍，AGENTS 坑 13）
 	if _trail != null:
@@ -407,7 +430,8 @@ func _recycle() -> void:
 		return
 	_pool.append(self)
 
-## 灯按 LIGHT_CAP 先到先得：超限弹丸熄灯飞行（矢量辉光仍在），回收时让位
+## 灯按名额先到先得：超限弹丸熄灯飞行（矢量辉光仍在），回收时让位；
+## 名额走 FxBudget 拥挤档（2026-10-17）：高压战斗弹丸灯减半让位带宽，敌潮退去回满
 func _try_acquire_light() -> void:
 	if glow == null:
 		return
@@ -415,7 +439,7 @@ func _try_acquire_light() -> void:
 		glow.enabled = true
 		glow.visible = true
 		return
-	if _lit_count < LIGHT_CAP:
+	if _lit_count < FxBudget.projectile_light_cap():
 		_lit_count += 1
 		_has_light = true
 		glow.enabled = true

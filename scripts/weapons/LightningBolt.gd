@@ -90,9 +90,11 @@ func _create_line(w: float, col: Color) -> Line2D:
 	var line := Line2D.new()
 	line.width = w
 	line.default_color = col
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	# 照 ProjectileTrail 同款治理（2026-10-16）：闪电 jagged 折点密集，ROUND joint
+	# 每拐点扇形三角化是顶点爆炸源；折线细（1~3px）方关节接缝肉眼不可见
+	line.joint_mode = Line2D.LINE_JOINT_BEVEL
+	line.begin_cap_mode = Line2D.LINE_CAP_NONE
+	line.end_cap_mode = Line2D.LINE_CAP_NONE
 	line.z_index = 0
 	add_child(line)
 	return line

@@ -98,9 +98,11 @@ func _build_trail() -> void:
 func _make_trail_line(width: float, head_alpha: float) -> Line2D:
 	var line := Line2D.new()
 	line.width = width
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	# 照 ProjectileTrail 同款治理（2026-10-16）：ROUND joint 每拐点扇形三角化是图元虚高源，
+	# 拖尾有 gradient 渐隐 + width_curve 收尖，方关节接缝不可见
+	line.joint_mode = Line2D.LINE_JOINT_BEVEL
+	line.begin_cap_mode = Line2D.LINE_CAP_NONE
+	line.end_cap_mode = Line2D.LINE_CAP_NONE
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 0.15))
 	curve.add_point(Vector2(1.0, 1.0))

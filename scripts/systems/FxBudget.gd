@@ -79,3 +79,29 @@ const Z_OVERLAY := 35
 ## 获取已分配的动态灯总数（含全部 8 类，应 ≤ GLOBAL_LIGHT_CAP）
 static func get_allocated_light_cap() -> int:
 	return LIGHT_CAP_GEM + LIGHT_CAP_PROJECTILE + LIGHT_CAP_OBELISK + LIGHT_CAP_SUN_ORB + LIGHT_CAP_BOSS + LIGHT_CAP_ELITE + LIGHT_CAP_THUNDER + LIGHT_CAP_BEAM_RESERVED
+
+# ==============================================================================
+# 四、拥挤档（2026-10-17 性能专项）：同屏敌量驱动的灯/glow 动态降档
+# ==============================================================================
+## 高压战斗（同屏敌 ≥ 24）时 GPU 填充吃紧（原生分辨率 + glow + 20 灯全开），
+## 掉落/弹丸两类「可再生物」（死了还会掉、射了还会亮）灯名额减半，让位给带宽；
+## 界碑/Boss/精英/落雷等「演出承诺」类名额不动。敌潮退去自动回满，玩家无感。
+## 全局状态由 WaveSpawner 每秒采样翻转（_tick_crowd_tier），消费方读这里。
+static var crowded: bool = false
+
+## 拥挤档下生效的掉落灵玉灯名额（5 → 2）
+static func gem_light_cap() -> int:
+	return LIGHT_CAP_GEM >> 1 if crowded else LIGHT_CAP_GEM
+
+## 拥挤档下生效的弹丸灯名额（6 → 3）
+static func projectile_light_cap() -> int:
+	return LIGHT_CAP_PROJECTILE >> 1 if crowded else LIGHT_CAP_PROJECTILE
+
+## 拥挤档下 glow 强度（0.4 → 0.25：超白起辉仍在，只是峰值压一档；阈值不动保 FX_HDR 色表）
+const GLOW_INTENSITY_NORMAL := 0.4
+const GLOW_INTENSITY_CROWDED := 0.25
+static func glow_intensity() -> float:
+	return GLOW_INTENSITY_CROWDED if crowded else GLOW_INTENSITY_NORMAL
+
+## 拥挤判定阈值（同屏敌数，含预警中的 SpawnIndicator）
+const CROWDED_ENEMY_THRESHOLD := 24

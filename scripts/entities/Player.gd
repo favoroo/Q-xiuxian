@@ -46,7 +46,22 @@ var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var regen_tick: float = 0.0
 var squash_tween: Tween = null
-var _flash_t: float = 0.0  ## 受击闪白剩余秒（帧内衰减，材质已转接程序化视图）
+var _flash_t: float = 0.0  ## 受击闪白剩余秒（帧内衰减，顶点色通道 self_modulate 承载）
+var _run_state := RunMotion.RunMotionState.new()   ## 步态/悬浮状态载体（2026-10-17 去 meta 化，随实例常驻）
+## 受击闪白顶点色写入（2026-10-17 与 EnemyBase 同口径）：材质共享零 uniform，
+## 闪白强度由 self_modulate 提亮承载；modulate 归无敌帧频闪/护体金光，COLOR 相乘叠加。
+## 玩家闪白无分级色（纯亮白），同值短路防无谓属性写。
+func _write_flash_channel(flash: float) -> void:
+	if flash <= 0.001:
+		if anim_sprite.self_modulate != Color.WHITE:
+			anim_sprite.self_modulate = Color.WHITE
+		if procedural_view != null and procedural_view.self_modulate != Color.WHITE:
+			procedural_view.self_modulate = Color.WHITE
+		return
+	var tint: Color = Color.WHITE.lerp(Color(1.8, 1.75, 1.7), clampf(flash, 0.0, 1.0))
+	anim_sprite.self_modulate = tint
+	if procedural_view != null:
+		procedural_view.self_modulate = tint
 ## 定向受击反馈（2026-10-15 对齐敌人）：受力方向后仰倾角（rad）与微反冲位移（px），
 ## 均零 Tween 帧内衰减；tilt 并入行走侧倾的 rotation lerp 目标，jiggle 直写 position。
 var _hit_tilt: float = 0.0
@@ -814,10 +829,11 @@ func _physics_process(delta: float) -> void:
 		if is_procedural and procedural_view != null:
 			procedural_view.modulate = Color.WHITE
 
-	# 受击闪白衰减：材质已转接给程序化视图（渲染器继承父材质），逐帧拉回 0
-	if _flash_t > 0.0 and hit_flash_mat != null:
+	# 受击闪白衰减：顶点色通道（self_modulate 承载，2026-10-17 与 EnemyBase 同口径改造，
+	# 材质共享零 uniform；modulate 仍归无敌帧频闪/护体金光业务，COLOR 相乘叠加互不覆盖）
+	if _flash_t > 0.0:
 		_flash_t = maxf(0.0, _flash_t - delta)
-		hit_flash_mat.set_shader_parameter("flash_modifier", clampf(_flash_t / PLAYER_FLASH_DOWN_DUR, 0.0, 1.0))
+		_write_flash_channel(clampf(_flash_t / PLAYER_FLASH_DOWN_DUR, 0.0, 1.0))
 
 	# 定向受击反馈衰减（与敌人 _tick_hit_visuals 同速率）：后仰 14/s 回正、微反冲 24px/s 归零。
 	# 放在移动分支之前：rotation 的 lerp 目标在下方行走/待机分支消费 _hit_tilt，必须先衰减再合成
@@ -943,12 +959,12 @@ func _physics_process(delta: float) -> void:
 		elif _motion_mode == "hover":
 			# 御剑悬浮：不切腿帧（图集各列同一姿势），浮沉/前倾由程序驱动
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
-			RunMotion.apply_hover(anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
+			RunMotion.apply_hover(_run_state, anim_sprite, current_base, true, effective_dir, delta, speed_ratio, shadow_sprite)
 		else:
 			RunMotion.select_anim(anim_sprite, _anim_run, true)
 
 			var lean_axis: float = absf(effective_dir.x)
-			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
+			RunMotion.apply(_run_state, anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 	else:
 		if is_procedural and procedural_view != null:
 			procedural_view.scale = current_base * 1.5
@@ -957,11 +973,11 @@ func _physics_process(delta: float) -> void:
 			procedural_view.play_idle()
 		elif _motion_mode == "hover":
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
-			RunMotion.apply_hover(anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
+			RunMotion.apply_hover(_run_state, anim_sprite, current_base, false, Vector2.ZERO, delta, 1.0, shadow_sprite)
 		else:
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			idle_bob_phase += delta * 2.2
-			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
+			RunMotion.apply(_run_state, anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
 
 	# 4. 攻击本体联动 + 灵蝶环绕运算
 	_tick_attack_react()
@@ -1327,11 +1343,10 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		procedural_view.play_hit(0.2)
 	AudioManager.play_sfx("player_hurt", 0.9)
 
-	# 受击闪白：帧内衰减（零 Tween 分配，与 EnemyBase 同款）。材质已转接给程序化视图
-	# （渲染器 use_parent_material 继承），旧写法 tween 到已隐藏的 anim_sprite 上从不生效。
-	if hit_flash_mat != null:
-		hit_flash_mat.set_shader_parameter("flash_modifier", 1.0)
-		_flash_t = PLAYER_FLASH_DOWN_DUR
+	# 受击闪白：帧内衰减（零 Tween 分配，与 EnemyBase 同款）。顶点色通道版：
+	# self_modulate 承载闪白（材质共享，渲染器 use_parent_material 继承父级顶点色）
+	_write_flash_channel(1.0)
+	_flash_t = PLAYER_FLASH_DOWN_DUR
 
 	DamageNumber.spawn(get_parent(), global_position, int(reduced), false)
 

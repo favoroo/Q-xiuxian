@@ -96,6 +96,12 @@ static func wave_spawn_budget(wave: int) -> int:
 ## 动态同屏敌人上限（纯函数，2026-10-15 分批清剿制）：
 ## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
 ## 深层无尽结合 endless_swarm_mult 持续增长（封顶 26）。
+## 2026-10-17 性能专项绝对硬顶（用户拍板）：cap 只在刷怪口夹「基础值」，
+## WaveSpawner 的最终同屏数还会乘 danger_count_mult（危险 5 = 2.08）与角色敌潮倍率，
+## 深层极端构建可叠到 ~95 只 —— 那是节点规模的绝对上限来源，帧率无法数学保证。
+## MAX_ENEMIES_HARD_CAP 48 是「任何乘区叠满后」的最终同屏硬顶（20 波内常规峰值 ~33 不受影响）。
+const MAX_ENEMIES_HARD_CAP := 48
+
 static func max_enemies_cap(wave: int) -> int:
 	var w := maxi(wave, 1)
 	if w <= 5:

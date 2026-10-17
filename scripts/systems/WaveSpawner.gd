@@ -52,6 +52,57 @@ var _looter_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tsc
 var _boss_ref: BossEnemy = null  ## 本回合魔君引用（Boss 回合超时锁关轮询用）
 var _overtime_noted: bool = false
 
+# —— 性能基线采样（2026-10-17 性能优化专项阶段 0）——
+## debug 构建 + 环境变量 PERF_BASELINE=1 时激活，FIGHT 期间每 2s 打一行 CSV 快照
+## （波次/敌数/弹数/物理与逻辑耗时/draw call/图元/对象数），供优化前后真机对照归因。
+## 只打 print 不改任何运行时行为；判据跑 headless（非 debug 或无环境变量）时零成本短路。
+var _perf_sample_cd: float = 0.0
+static var _perf_baseline_on: bool = false
+static var _perf_baseline_checked: bool = false
+
+# —— 拥挤档采样（2026-10-17 性能专项）——
+## FIGHT 期间每 1s 采一次同屏敌数（含预警中的 SpawnIndicator），翻转 FxBudget.crowded。
+## 1s 粒度足够（敌潮进出是秒级事件）：灯名额减半的生效/失效都由「下一次新掉落/新弹丸」
+## 自然吃到，已有灯不强拆（避免画面灯忽明忽暗）。翻转沿才写静态 bool，零稳态成本。
+var _crowd_tier_cd: float = 0.0
+
+func _tick_crowd_tier(delta: float) -> void:
+	_crowd_tier_cd -= delta
+	if _crowd_tier_cd > 0.0:
+		return
+	_crowd_tier_cd = 1.0
+	var want: bool = GameManager.enemy_count + SpawnIndicator.active_count >= FxBudget.CROWDED_ENEMY_THRESHOLD
+	if want != FxBudget.crowded:
+		FxBudget.crowded = want
+
+func _perf_baseline_active() -> bool:
+	if not _perf_baseline_checked:
+		_perf_baseline_checked = true
+		_perf_baseline_on = OS.is_debug_build() \
+			and OS.get_environment("PERF_BASELINE") == "1" \
+			and DisplayServer.get_name() != "headless"
+	return _perf_baseline_on
+
+## 2s 一次的快照打印：优化前后各采一份（W12 危险0 / W20 危险5 各 60s），
+## TIME_*_PROCESS 是上一帧耗时（ms），draw/图元/对象为上一渲染帧渲染侧总量。
+func _perf_sample(delta: float) -> void:
+	_perf_sample_cd -= delta
+	if _perf_sample_cd > 0.0:
+		return
+	_perf_sample_cd = 2.0
+	var proc_ms: float = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	var phys_ms: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	var draws: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var prims: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	var robjs: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	var nodes: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	print("[PERF] w%02d fps=%d t=%.0f enemies=%d bolts=%d gems=%d proc=%.2fms phys=%.2fms draws=%d prims=%d robjs=%d nodes=%d" % [
+		wave_number, Engine.get_frames_per_second(), wave_timer, GameManager.enemy_count,
+		BladeProjectile.active_count + EnemyBolt.active_count,
+		AstralGem.active_gem_count() + HealOrb.active_count,
+		proc_ms, phys_ms, draws, prims, robjs, nodes,
+	])
+
 func _ready() -> void:
 	GameManager.wave_spawner = self
 	GameManager.shop_closed.connect(_on_shop_closed)
@@ -70,14 +121,29 @@ func _process(delta: float) -> void:
 				start_wave(1)
 		Phase.FIGHT:
 			_process_fight(delta)
+			_tick_crowd_tier(delta)
+			if _perf_baseline_active():
+				_perf_sample(delta)
 		Phase.CLEARING:
 			clear_timer -= delta
+			_drain_magnet_queue()
 			if clear_timer <= 0.0:
 				_open_shop()
 		Phase.ALLOC:
 			pass
 		Phase.SHOP:
 			pass
+
+
+## 同屏敌人最终上限（2026-10-17 性能专项）：
+## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 无尽潮数倍率，
+## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=48 绝对硬顶 —— 深层无尽极端构建
+## （危险 5 × 潮数 2.0 可叠到 ~95）不再失控，常规 20 波（峰值 ~33）不受影响。
+func _final_enemy_cap() -> int:
+	var raw := int(round(float(max_enemies) * GameManager.enemy_count_mult
+		* GameBalance.danger_count_mult(GameManager.danger_level)
+		* GameBalance.endless_swarm_mult(wave_number)))
+	return mini(raw, GameBalance.MAX_ENEMIES_HARD_CAP)
 
 func _process_fight(delta: float) -> void:
 	var player = GameManager.player
@@ -118,14 +184,14 @@ func _process_fight(delta: float) -> void:
 		# 对峙计时继续等，避免「刷出一批就顶破 cap」。
 		if active_enemies <= refill_at and _batch_cooldown <= 0.0 and spawn_timer <= 0.0:
 			var est_batch_clear := GameBalance.spawn_batch(wave_number, 0.5)
-			var enemy_cap_clear := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
+			var enemy_cap_clear := _final_enemy_cap()
 			if active_enemies + est_batch_clear <= enemy_cap_clear:
 				_spawn_regular(player)
 				_batch_hold_time = 0.0
 				spawn_timer = 0.2
 		# 判定 2：并发合围（中后期路线）—— 第 6 波起对峙超时，且同屏未超上限时允许下一批合围
 		elif wave_number >= GameBalance.CONCURRENT_BATCH_MIN_WAVE and _batch_hold_time >= GameBalance.BATCH_STALEMATE_TIMEOUT and spawn_timer <= 0.0:
-			var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
+			var enemy_cap := _final_enemy_cap()
 			var est_batch := GameBalance.spawn_batch(wave_number, 0.5)
 			if active_enemies + est_batch <= enemy_cap:
 				_spawn_regular(player)
@@ -293,6 +359,8 @@ func _spawn_chests() -> void:
 
 func end_wave(early_secs: float = 0.0) -> void:
 	phase = Phase.CLEARING
+	# 拥挤档退出（2026-10-17）：波末清场后灯名额/glow 回满档，回合间商店照常亮堂
+	FxBudget.crowded = false
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
 	GameManager.announcement_triggered.emit("第 %d 波敌潮平息" % wave_number)
@@ -325,13 +393,41 @@ func end_wave(early_secs: float = 0.0) -> void:
 		if turret is TurretUnit:
 			turret.dismiss()
 	# 地上金币全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折金币）
+	# 磁吸风暴分帧（2026-10-17 性能专项）：旧版同一帧把最多 140 颗宝石全部切进 60Hz
+	# 物理回调 + 各挂 Line2D 拖尾，正是回合末清场瞬间的掉帧尖峰来源。
+	# 改为进 CLEARING 后每物理帧放行 ≤16 颗（140 颗约 9 帧 ≈ 0.15s 摊完，肉眼不可辨），
+	# 候选表按出生序（Dictionary 保插入序），最旧的先进磁吸。
 	var player = GameManager.player
 	if player != null:
-		for gem in get_tree().get_nodes_in_group("gems"):
-			if gem is HealOrb:
-				(gem as HealOrb).settle_for_wave_end(player)
-			elif gem.has_method("magnet_to"):
-				gem.magnet_to(player)
+		_collect_gems_batched(player)
+
+# —— 回合末磁吸分帧（每物理帧 ≤ MAGNET_BATCH_PER_FRAME 颗）——
+const MAGNET_BATCH_PER_FRAME := 16
+var _magnet_queue: Array = []   ## 待磁吸宝石队列（出生序）；CLEARING 期间每帧消化一批
+
+func _collect_gems_batched(player: Node2D) -> void:
+	_magnet_queue.clear()
+	for gem in get_tree().get_nodes_in_group("gems"):
+		if gem is HealOrb:
+			(gem as HealOrb).settle_for_wave_end(player)
+		elif gem.has_method("magnet_to") and gem.target_player == null:
+			_magnet_queue.append(gem)
+
+## 每物理帧放行一批进磁吸态（≤16 颗）：把「同帧 140 颗齐开物理回调」摊成 9 帧，
+# 队列里的宝石可能已被玩家顺手捡走（物理拾取先于本帧），进队列前逐颗验活。
+func _drain_magnet_queue() -> void:
+	if _magnet_queue.is_empty():
+		return
+	var player = GameManager.player
+	if player == null or not is_instance_valid(player):
+		_magnet_queue.clear()
+		return
+	var batch := mini(MAGNET_BATCH_PER_FRAME, _magnet_queue.size())
+	for i in range(batch):
+		var gem = _magnet_queue[i]
+		if is_instance_valid(gem) and gem.target_player == null:
+			gem.magnet_to(player)
+	_magnet_queue = _magnet_queue.slice(batch)
 
 func _open_shop() -> void:
 	if wave_number >= GameManager.VICTORY_WAVE and not GameManager.endless_mode:
@@ -384,7 +480,7 @@ func _spawn_regular(player: Node2D) -> void:
 		return
 	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每回合刷怪量；
 	# 无尽深层（>20 波）再乘 endless_swarm_mult（曲线在 BalanceWave，正常局恒 1.0）
-	var enemy_cap := int(round(float(max_enemies) * GameManager.enemy_count_mult * GameBalance.danger_count_mult(GameManager.danger_level) * GameBalance.endless_swarm_mult(wave_number)))
+	var enemy_cap := _final_enemy_cap()
 	if GameManager.enemy_count >= enemy_cap:
 		return
 

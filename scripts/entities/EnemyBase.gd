@@ -172,6 +172,34 @@ var _squash_dur: float = 0.16            ## 挤压总时长（插值分母）
 var _flash_t: float = 0.0                ## 闪白剩余时长（衰减段）
 var _flash_down_dur: float = 0.11        ## 本次闪白衰减总时长（归一化分母）
 var _flash_swap_t: float = 0.0           ## 暴击绯金→暖白换色倒计时（普通命中为 0）
+var _flash_col: Color = Color(1.0, 1.0, 0.95, 1.0)  ## 当前闪白目标色（顶点色通道驱动版）
+var _run_state := RunMotion.RunMotionState.new()   ## 步态/悬浮状态载体（2026-10-17 去 meta 化，随实例池化复用）
+
+# —— 受击闪白目标色（顶点色通道版，2026-10-17 性能专项）——
+# 旧版是 per-instance shader uniform（19 场景 resource_local_to_scene=true ⇒ 每敌独享材质，
+# 759 draw call 的主要来源）。新版全部实例共享一份直通材质，闪白由 self_modulate 承载：
+# _write_flash_channel 按 flash 权重向目标色提亮写入 self_modulate —— 分量 >1 时顶点色
+# 外溢成超白（HDR glow 起辉），视觉口径与旧 shader mix(flash_color) 等价。
+# 提亮基点取 1.8 而非 1.0：直通材质下 mix 语义改为「向提亮色 lerp」，1.8 峰值才能贴住旧观感。
+const FLASH_COL_NORMAL := Color(1.8, 1.75, 1.7)   ## 普通受击：亮白（提亮基点）
+const FLASH_COL_CRIT := Color(2.4, 1.15, 0.62)    ## 暴击：绯金（红绿超白起辉）
+const FLASH_COL_SWAP := Color(1.8, 1.72, 1.62)   ## 暴击换色：暖白衰减段
+
+## 受击闪白顶点色写入（零 uniform 唯一出口）：
+## flash=0 时写回纯白（直通），>0 时向 _flash_col 提亮 lerp。
+## 只写 self_modulate（闪白业务独占）；modulate 仍归冰缓/引信/蓄力染色，COLOR 相乘叠加。
+## 同值短路：静止值写入是幂等的，Godot setter 同值赋值无重绘副作用。
+func _write_flash_channel(flash: float) -> void:
+	if flash <= 0.001:
+		if anim_sprite.self_modulate != Color.WHITE:
+			anim_sprite.self_modulate = Color.WHITE
+		if procedural_view != null and procedural_view.self_modulate != Color.WHITE:
+			procedural_view.self_modulate = Color.WHITE
+		return
+	var tint: Color = Color.WHITE.lerp(_flash_col, clampf(flash, 0.0, 1.0))
+	anim_sprite.self_modulate = tint
+	if procedural_view != null:
+		procedural_view.self_modulate = tint
 var _hit_tilt: float = 0.0          ## 受创后仰倾角（受击瞬间沿受力反向倾斜，急刹后平滑回正）
 
 ## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与节流判定缓存
@@ -431,17 +459,18 @@ func reset_for_reuse() -> void:
 		procedural_view.modulate = Color.WHITE
 		procedural_view.position = Vector2.ZERO
 		procedural_view.rotation = 0.0
+	# 闪白通道复位（顶点色版）：self_modulate 归白即零闪白；材质仍指回共享 hit_flash
+	# （dissolve 死亡路径会把 material 换成 _dissolve_mat，复用前必须切回）
+	_write_flash_channel(0.0)
 	if hit_flash_mat != null:
 		if procedural_view != null:
 			procedural_view.material = hit_flash_mat
 		anim_sprite.material = hit_flash_mat
-		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
-		hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
-		set_physics_process(true)
-		set_process(true)
-		$CollisionShape2D.disabled = false
-		$Hurtbox/CollisionShape2D.disabled = false
-		_release_elite_light()
+	set_physics_process(true)
+	set_process(true)
+	$CollisionShape2D.disabled = false
+	$Hurtbox/CollisionShape2D.disabled = false
+	_release_elite_light()
 
 ## 取一只敌人：池里有同种休眠体就复用，没有 instantiate 新的（出厂快照在离开池口前拍好）。
 ## 调用方随后 reset_for_reuse() → 配位置/成长字段 → activate() → add_child。
@@ -479,11 +508,12 @@ static func _recycle(e: EnemyBase) -> void:
 	e.set_process(false)
 	e.set_process_input(false)
 	e.visible = false
+	# 闪白通道复位（顶点色版，回池体不许带着上一命的闪白残值见调用方）
+	e._write_flash_channel(0.0)
 	if e.hit_flash_mat != null:
 		if e.procedural_view != null:
 			e.procedural_view.material = e.hit_flash_mat
 		e.anim_sprite.material = e.hit_flash_mat
-		e.hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
 	var bucket: Array = _pools.get(e._pool_key, [])
 	if bucket.size() >= POOL_CAP_PER_KIND:
 		e.free()
@@ -728,7 +758,14 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 
 	_tick_hit_visuals(delta)
-	_update_facing_and_anim(delta, dir, dist_sq)
+	# 屏外敌人跳过整套朝向/动画/步态视觉逻辑（2026-10-17 性能专项）：
+	# 位置与行为每物理 tick 照常推进（回屏无缝），只是不再做朝向计算、RunMotion 步态
+	# 形变与程序化视图属性写——屏外这些状态没人看。HollowKnightEnemyRenderer 已在
+	# _process 屏外跳过重绘，这里把省的从「渲染」升级为「全部视觉逻辑」。
+	# _offscreen 是 10Hz 采样（进出屏秒级事件），回屏首拍最多滞后 0.1s 补一次形变，无感。
+	# 例外：受击衰减（_tick_hit_fx 已在上方跑）需要连续性，但那是独立计时推进不依赖本函数。
+	if not _offscreen:
+		_update_facing_and_anim(delta, dir, dist_sq)
 	_resolve_contact_damage(target, pos_before_move)
 
 ## 嘲讽目标选择（2026-10-11 祭坛灵兽）：嘲讽圈内有灵兽则追最近的灵兽，否则维持追玩家。
@@ -1112,16 +1149,15 @@ func _tick_hit_fx(delta: float) -> void:
 		_squash_t = maxf(0.0, _squash_t - delta)
 		var t := 1.0 - _squash_t / _squash_dur
 		var c1 := 1.70158
-		var e := 1.0 + (c1 + 1.0) * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0)
+		var e := 1.0 + (c1 + 1) * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0)
 		juice_scale = _squash_from.lerp(Vector2.ONE, clampf(e, 0.0, 1.0))
 	if _flash_t > 0.0:
 		_flash_t = maxf(0.0, _flash_t - delta)
-		if hit_flash_mat != null:
-			hit_flash_mat.set_shader_parameter("flash_modifier", clampf(_flash_t / _flash_down_dur, 0.0, 1.0))
+		_write_flash_channel(clampf(_flash_t / _flash_down_dur, 0.0, 1.0))
 	if _flash_swap_t > 0.0:
 		_flash_swap_t -= delta
-		if _flash_swap_t <= 0.0 and hit_flash_mat != null:
-			hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.96, 0.85, 1.0))
+		if _flash_swap_t <= 0.0:
+			_flash_col = FLASH_COL_SWAP
 
 ## 受击视觉：微反冲回弹（非自爆抖动期间生效，同步作用于精灵与程序化矢量视图）与后仰倾角衰减
 func _tick_hit_visuals(delta: float) -> void:
@@ -1170,24 +1206,24 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		if not _pp_stun:
 			advance = vel_dir.dot(dir)
 		RunMotion.select_anim(anim_sprite, _anim_idle, false)
-		RunMotion.apply_hover(anim_sprite, current_base, is_moving, vel_dir, delta, speed_ratio, shadow_sprite, advance)
+		RunMotion.apply_hover(_run_state, anim_sprite, current_base, is_moving, vel_dir, delta, speed_ratio, shadow_sprite, advance)
 	elif locomotion_mode == "slither":
 		# 蠕动：贴地行进波（scale 伸缩），无悬浮无前倾
 		RunMotion.select_anim(anim_sprite, _anim_idle, false)
-		RunMotion.apply_slither(anim_sprite, current_base, is_moving, delta, speed_ratio, shadow_sprite)
+		RunMotion.apply_slither(_run_state, anim_sprite, current_base, is_moving, delta, speed_ratio, shadow_sprite)
 	else:
 		# 步态腿帧：有图集才切腿帧；程序化敌种没有帧集，但形变链路照走
 		#（RunMotion.apply 对 null 帧集内部按 4 帧 / 10fps 默认推进步态相位）
 		if _anim_has_run and is_moving:
 			RunMotion.select_anim(anim_sprite, _anim_run, true)
-			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
+			RunMotion.apply(_run_state, anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
 		elif _anim_has_run:
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
-			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, 0.0, shadow_sprite)
+			RunMotion.apply(_run_state, anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, 0.0, shadow_sprite)
 		elif is_moving:
-			RunMotion.apply(anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
+			RunMotion.apply(_run_state, anim_sprite, current_base, true, anim_sprite.flip_h, absf(dir.x), delta, speed_ratio, 0.0, shadow_sprite)
 		else:
-			RunMotion.apply(anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
+			RunMotion.apply(_run_state, anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta)
 
 	# 3.5 同步程序化矢量视图
 	if procedural_view != null:
@@ -1237,18 +1273,26 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 				target.take_damage(contact_damage * charge_damage_mul)
 
 	# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
-	for i in range(get_slide_collision_count()):
-		var col = get_slide_collision(i)
-		var collider = col.get_collider()
-		if collider is Player:
-			var hp_before: float = collider.current_health
-			collider.take_damage(contact_damage, global_position)
-			# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
-			var eff_thorns: float = GameManager.get_effective_thorns()
-			if eff_thorns > 0.0 and collider.current_health < hp_before:
-				take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
-		elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
-			collider.take_damage(contact_damage)
+	# thorns 读侧备忘（2026-10-17 性能专项）：站定护甲钩子走 item_hook_sum 缓存，但接触结算
+	# 每碰撞体都查一遍仍属重复读——同一物理帧多敌贴身时（群怪围玩家）每敌一次 Dictionary
+	# 链。挪到循环外读一次（站定态 60Hz 内不会变，失效点在 add_item/sell_item）。
+	var col_count := get_slide_collision_count()
+	if col_count > 0:
+		var thorns_cache: float = -1.0   # 懒读：首个命中玩家的碰撞体才拉一次
+		for i in range(col_count):
+			var col = get_slide_collision(i)
+			var collider = col.get_collider()
+			if collider is Player:
+				var hp_before: float = collider.current_health
+				collider.take_damage(contact_damage, global_position)
+				# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
+				if collider.current_health < hp_before:
+					if thorns_cache < 0.0:
+						thorns_cache = GameManager.get_effective_thorns()
+					if thorns_cache > 0.0:
+						take_damage(contact_damage * thorns_cache, Vector2.ZERO, false)
+			elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
+				collider.take_damage(contact_damage)
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
@@ -1337,28 +1381,29 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-			# 3. 闪白 Shader（分级闪白：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版：
-			# 命中瞬间设置 flash_modifier 并启动衰减计时（原 0.02s 拉满段在 60fps 下只有 1~2 帧），
-			# 暴击先绯金、0.02s 后换暖白再衰减（换色倒计时走 _flash_swap_t）；
+			# 3. 受击闪白（分级：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版。
+			# 2026-10-17 性能专项：per-instance shader uniform（打断批处理的元凶）改为共享材质 +
+			# 顶点色通道 —— self_modulate 只属于闪白业务（modulate 仍归冰缓/引信/蓄力染色），
+			# CPU 侧按 flash 权重向目标色提亮写入，衰减沿 _tick_hit_fx 同一计时推进。
+			# 换色语义保留：暴击先绯金、0.02s 后换暖白再衰减（_flash_swap_t）；
 			# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满，避免持续集火下糊成全白剪影；
-			# 调柔优化：普通受击峰值 0.60（重叠集火 0.40），时长 0.08s，透出怪物暗色轮廓与动作。
-			if hit_flash_mat != null:
-				var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
-				if is_fresh_flash:
-					var peak_flash: float = 0.60 if not is_crit else 1.0
-					if not is_crit and _focus_hit_count > 1:
-						peak_flash = 0.40
-					if is_crit:
-						hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.42, 0.22, 1.0))
-						_flash_t = 0.12
-						_flash_down_dur = 0.12
-						_flash_swap_t = 0.02
-					else:
-						hit_flash_mat.set_shader_parameter("flash_color", Color(1.0, 1.0, 0.95, 1.0))
-						_flash_t = 0.08
-						_flash_down_dur = 0.08
-						_flash_swap_t = 0.0
-					hit_flash_mat.set_shader_parameter("flash_modifier", peak_flash)
+			# 调柔口径不变：普通受击峰值 0.60（重叠集火 0.40），时长 0.08s，透出怪物暗色轮廓与动作。
+			var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
+			if is_fresh_flash:
+				var peak_flash: float = 0.60 if not is_crit else 1.0
+				if not is_crit and _focus_hit_count > 1:
+					peak_flash = 0.40
+				if is_crit:
+					_flash_col = FLASH_COL_CRIT
+					_flash_t = 0.12
+					_flash_down_dur = 0.12
+					_flash_swap_t = 0.02
+				else:
+					_flash_col = FLASH_COL_NORMAL
+					_flash_t = 0.08
+					_flash_down_dur = 0.08
+					_flash_swap_t = 0.0
+				_write_flash_channel(peak_flash)
 
 	if lethal:
 		# 致命一刀不做任何位移：knockback_velocity 只作死亡镜头反馈的方向读数，
@@ -1569,15 +1614,19 @@ func _launch_bite(dir: Vector2) -> void:
 	play_squash(Vector2(0.72, 1.3), 0.18)
 	AudioManager.play_sfx("enemy_claw", 0.85, GameManager.rng.randf_range(0.92, 1.08))
 
-## 画短咬预告线：胶囊带宽 = bite_hit_radius * 2.0（对齐长扑预警带与「画多大 == 判多大」铁律）
-## 长度 = 短咬真实位移。颜色与长扑同源走半透明朱砂红，并在蓄力期高频呼吸闪烁。
+## 画短咬预告线：与长扑预警带同一读法——细长红带指向扑咬方向。
+## 带宽不按判定半径 bite_hit_radius*2 画：短咬真实位移只有 ~69px，胶囊长≈宽
+## 会糊成一团把敌人整个裹住（2026-10-17 用户现场「把敌人抱起来」）。
+## 线长仍 = 真实起跳位移（不虚报扑咬距离），宽度取细警示档，只表方向不表范围。
+const BITE_WARNING_WIDTH := 18.0  ## 短咬预告线宽：细线档（长扑带 68px 的读法同款，但短咬位移短，画宽了就成团）
+
 func _show_bite_warning(dir: Vector2) -> void:
 	_clear_bite_warning()
 	if dir.length_squared() < 0.01:
 		return
 	_bite_warning_line = Line2D.new()
-	_bite_warning_line.width = bite_hit_radius * 2.0
-	_bite_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.22)
+	_bite_warning_line.width = BITE_WARNING_WIDTH
+	_bite_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.28)
 	_bite_warning_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	_bite_warning_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	add_child(_bite_warning_line)
@@ -1585,11 +1634,12 @@ func _show_bite_warning(dir: Vector2) -> void:
 	_bite_warning_line.add_point(dir * (bite_duration * move_speed * bite_speed_mul))
 
 ## 更新短咬预警线（预警期间高频呼吸闪烁，传达下蹲蓄势扑咬的危险感）
+## 细线不像宽带那样糊场地，alpha 可以吃得比长扑带（基线 0.20）更足才够醒目
 func _update_bite_warning() -> void:
 	if _bite_warning_line == null:
 		return
-	var alpha: float = 0.22 + 0.14 * sin((bite_windup_time - _bite_windup) * 24.0)
-	_bite_warning_line.default_color.a = clampf(alpha, 0.08, 0.45)
+	var alpha: float = 0.28 + 0.14 * sin((bite_windup_time - _bite_windup) * 24.0)
+	_bite_warning_line.default_color.a = clampf(alpha, 0.12, 0.5)
 
 ## 清理短咬预告线（起跳瞬间即消退，不随身拖带）
 func _clear_bite_warning() -> void:
@@ -2090,8 +2140,7 @@ func _die() -> void:
 	anim_sprite.position = Vector2.ZERO
 	if procedural_view != null:
 		procedural_view.position = Vector2.ZERO
-	if hit_flash_mat != null:
-		hit_flash_mat.set_shader_parameter("flash_modifier", 0.0)
+	_write_flash_channel(0.0)
 
 	# 死灭动画分级（2026-10-15）：小怪保持「膨胀 0.045s → 塌缩 0.14s」快节奏（高频事件不宜加重）；
 	# 精英膨胀后多一段踉跄倾倒再塌缩（慢半拍，倒地有重量感）；Boss 倾倒后尸体滞留慢渐隐

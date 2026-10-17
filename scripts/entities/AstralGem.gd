@@ -45,7 +45,11 @@ var loot_renderer: ProceduralLootRenderer = null
 ##   但新档出现时仍建议显式设（照 SpiritChest._drop_gems 的金宝口径）。
 static var _pool: Array[AstralGem] = []
 static var _host: Node2D = null                    ## 池宿主，挂场景根下常驻
-static var _active_gems: Array[AstralGem] = []     ## 场上活宝石（按出生序），保险丝用
+# 2026-10-17 性能专项：由 Array 改 Dictionary（instance_id → 宝石）。
+# 根因：140 颗同帧掉落的波末，activate 的 has() 与 recycle 的 erase() 各 O(n) 线性扫，
+# 叠加 _try_release_fuse 找最旧颗也是线性扫 ⇒ 140×140/2 ≈ 9.8k 次比较的尖峰。
+# Dictionary 保插入序（Godot 4 有序哈希表），「最旧优先」语义不变；keys()/values() 遍历兼容旧测试。
+static var _active_gems: Dictionary = {}           ## 场上活宝石（id→实例，按出生序），保险丝用
 static var created_count: int = 0                  ## 累计实例化次数（PerfProbe 判据）
 static var reused_count: int = 0                   ## 累计复用次数（PerfProbe 判据）
 static var _lit_count: int = 0                     ## 当前点亮灯数
@@ -98,10 +102,11 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> AstralGem:
 
 ## 软上限保险丝：场上宝石数到顶后，每次出膛让最旧的一颗飞向玩家。
 ## 只触发磁吸不凭空消失，经验一颗不少，只是把「堆到回合末」变成「滚进兜里」。
+## Dictionary 保插入序：keys() 头部即最旧颗，通常首击即中，不再线性扫全表找候选。
 static func _try_release_fuse() -> void:
 	if _active_gems.size() < GEM_SOFT_CAP:
 		return
-	for g in _active_gems:
+	for g in _active_gems.values():
 		if is_instance_valid(g) and not g._pooled and g.target_player == null \
 				and GameManager.player != null:
 			g.magnet_to(GameManager.player)
@@ -133,8 +138,7 @@ func activate() -> void:
 	$CollisionShape2D.set_deferred("disabled", false)
 	set_deferred("monitorable", true)
 	add_to_group("gems")
-	if not _active_gems.has(self):
-		_active_gems.append(self)
+	_active_gems[get_instance_id()] = self
 	_update_visual()
 	_try_acquire_light()
 
@@ -153,7 +157,7 @@ func recycle() -> void:
 	is_shard = false
 	stone_value = -1
 	_release_light()
-	_active_gems.erase(self)
+	_active_gems.erase(get_instance_id())
 	remove_from_group("gems")
 	set_physics_process(false)
 	$CollisionShape2D.set_deferred("disabled", true)
@@ -173,7 +177,8 @@ func _try_acquire_light() -> void:
 		light.enabled = true
 		light.visible = true
 		return
-	if _lit_count < GEM_LIGHT_CAP:
+	# 灯名额走 FxBudget 拥挤档（2026-10-17）：高压战斗掉落灯减半让位带宽，敌潮退去回满
+	if _lit_count < FxBudget.gem_light_cap():
 		_lit_count += 1
 		_has_light = true
 		light.enabled = true

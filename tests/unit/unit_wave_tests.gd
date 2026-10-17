@@ -54,6 +54,8 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.max_enemies_cap(10), 10, "第 10 波同屏上限 10 只")
 	_c.equals(GameBalance.max_enemies_cap(20), 16, "第 20 波同屏上限 16 只")
 	_c.check(GameBalance.max_enemies_cap(30) > 16, "深层同屏上限高于 20 波")
+	# 2026-10-17 性能专项：绝对硬顶常量钉住（cap 基础值之外，最终同屏再乘危险/潮数后由它兜底）
+	_c.equals(GameBalance.MAX_ENEMIES_HARD_CAP, 48, "同屏敌人绝对硬顶 48（任何乘区叠满后的兜底）")
 
 	# 2026-10-15 分批清剿制：小怪掉落经验补偿倍率（预算 -26% 的倒数），掉落与补差均值同走一个出口
 	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.75, EPS, "小怪经验补偿倍率 1.75（改预算必须同步改它）")

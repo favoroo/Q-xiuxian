@@ -12,7 +12,7 @@ config_version=5
 
 config/name="剑士 (Swordsman)"
 run/main_scene="res://scenes/main/Main.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
 boot_splash/image="res://assets/brand/splash_round.png"
@@ -71,9 +71,9 @@ pointing/emulate_touch_from_mouse=true
 [physics]
 
 3d/physics_engine="Jolt Physics"
-common/physics_ticks_per_second=30
-# 关闭：渲染与物理运行时锁同频（Main._apply_fps_limit 恒 60/60），
-# 插值只在「渲染 fps 远高于物理 Hz」时有价值，这里纯属每帧白付快照+插值开销。
+common/physics_ticks_per_second=60
+# 与运行时一致（Main._apply_fps_limit 恒 60/60 渲染+物理；旧值 30 是已下线省电档的残留，
+# 2026-10-17 性能专项清理——避免调优时被 project 设置误导）。
 common/physics_interpolation=false
 
 [rendering]

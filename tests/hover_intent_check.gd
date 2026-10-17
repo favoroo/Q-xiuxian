@@ -55,12 +55,14 @@ func _case_layer_pure() -> void:
 	get_tree().root.add_child(world)
 	await get_tree().process_frame
 
-	_c.check(shd.has_meta(&"gait_base") == false,
+	# 2026-10-17 去 meta 化适配：影子基线与悬浮意图改存 RunMotionState（判据读 state 字段）
+	var st := RunMotion.RunMotionState.new()
+	_c.check(st.shadow_base_alpha < 0.0,
 		"A0 前置：影子基准（位置/缩放）尚未被捕获 ⇒ 首帧才会拿真初值")
 
 	# A1 横向走位：侧倾符号 = 实际走位符号，逼近(+x) 与后撤(-x) 必须倾反方向
-	var close_x := _drive(spr, shd, SPRITE_SCALE, Vector2(1.0, 0.0), 1.0, 1.0)
-	var flee_x := _drive(spr, shd, SPRITE_SCALE, Vector2(-1.0, 0.0), -1.0, 1.0)
+	var close_x := _drive(st, spr, shd, SPRITE_SCALE, Vector2(1.0, 0.0), 1.0, 1.0)
+	var flee_x := _drive(st, spr, shd, SPRITE_SCALE, Vector2(-1.0, 0.0), -1.0, 1.0)
 	_c.check(float(close_x["rot"]) > 0.0 and float(flee_x["rot"]) < 0.0,
 		"A1 横向：逼近侧倾 %+.2f° / 后撤侧倾 %+.2f° 必须反向" % [
 			rad_to_deg(float(close_x["rot"])), rad_to_deg(float(flee_x["rot"]))])
@@ -69,8 +71,8 @@ func _case_layer_pure() -> void:
 			rad_to_deg(float(close_x["rot"])), rad_to_deg(float(flee_x["rot"]))])
 
 	# A2 竖直走位：bank≈0（截图那个方位），只能靠沉身/仰身 + 影子拖影分
-	var close_y := _drive(spr, shd, SPRITE_SCALE, Vector2(0.0, -1.0), 1.0, 1.0)
-	var flee_y := _drive(spr, shd, SPRITE_SCALE, Vector2(0.0, 1.0), -1.0, 1.0)
+	var close_y := _drive(st, spr, shd, SPRITE_SCALE, Vector2(0.0, -1.0), 1.0, 1.0)
+	var flee_y := _drive(st, spr, shd, SPRITE_SCALE, Vector2(0.0, 1.0), -1.0, 1.0)
 	_c.check(absf(float(close_y["rot"])) < 0.005 and absf(float(flee_y["rot"])) < 0.005,
 		"A2 竖直：bank 确实不出力（%.4f / %.4f rad）⇒ 方向只能由纵向通道给" % [
 			float(close_y["rot"]), float(flee_y["rot"])])
@@ -91,13 +93,13 @@ func _case_layer_pure() -> void:
 			float(close_y["shsy"]), float(flee_y["shsy"]), SHADOW_SCALE.y])
 
 	# A3 环绕：|逼近度| 在死区内 ⇒ 不叠纵向形变（只留 bank 与浮沉）
-	var orbit := _drive(spr, shd, SPRITE_SCALE, Vector2(0.0, -1.0), 0.1, 1.0)
+	var orbit := _drive(st, spr, shd, SPRITE_SCALE, Vector2(0.0, -1.0), 0.1, 1.0)
 	_c.check(absf(float(orbit["sy"]) - SPRITE_SCALE.y) / SPRITE_SCALE.y < 0.02,
 		"A3 环绕：|advance|=0.1 落在死区内，纵向形变 ≈0（scale.y 偏 %.2f%%）" % (
 			(float(orbit["sy"]) - SPRITE_SCALE.y) / SPRITE_SCALE.y * 100.0))
 
 	# A4 量级：后撤形变要在手机上看得见（0.44 缩放的 sprite 上至少 2% 高差）
-	var flee_full := _drive(spr, shd, SPRITE_SCALE, Vector2(0.0, 1.0), -1.0, 1.0)
+	var flee_full := _drive(st, spr, shd, SPRITE_SCALE, Vector2(0.0, 1.0), -1.0, 1.0)
 	var dev_pct := absf(float(flee_full["sy"]) - SPRITE_SCALE.y) / SPRITE_SCALE.y * 100.0
 	_c.check(dev_pct >= 2.0,
 		"A4 量级：满档后撤纵向形变 %.2f%% ≥ 2%%（手机上看得见）" % dev_pct)
@@ -106,7 +108,7 @@ func _case_layer_pure() -> void:
 	#    旧写法：lean = deg_to_rad(7 * |dir.x| * clamp(speed,0,1.3)) * sign(dir.x)
 	var p_move := Vector2(0.6, -0.8).normalized()
 	var p_ratio := 1.15
-	var p_read := _drive(spr, shd, SPRITE_SCALE, p_move, 0.0, p_ratio)
+	var p_read := _drive(st, spr, shd, SPRITE_SCALE, p_move, 0.0, p_ratio)
 	var expect_rot := deg_to_rad(RunMotion.HOVER_BANK_DEG * absf(p_move.x) * clampf(p_ratio, 0.0, 1.3)) * signf(p_move.x)
 	_c.check(absf(float(p_read["rot"]) - expect_rot) < 1e-4,
 		"A5 玩家：不传 advance 时侧倾与旧公式一致（期望 %.5f，实得 %.5f rad）" % [expect_rot, float(p_read["rot"])])
@@ -120,9 +122,9 @@ func _case_layer_pure() -> void:
 
 ## 用同一组输入连推 SETTLE_FRAMES 帧，返回收敛后的读数
 ## （浮沉是正弦，bob 项只进 offset.y 与 ≤0.6% 的 scale 呼吸，故 scale 读数稳定可比）
-func _drive(spr: AnimatedSprite2D, shd: Sprite2D, base: Vector2, move_dir: Vector2, advance: float, ratio: float) -> Dictionary:
+func _drive(st: RunMotion.RunMotionState, spr: AnimatedSprite2D, shd: Sprite2D, base: Vector2, move_dir: Vector2, advance: float, ratio: float) -> Dictionary:
 	for i in range(SETTLE_FRAMES):
-		RunMotion.apply_hover(spr, base, true, move_dir, DT, ratio, shd, advance)
+		RunMotion.apply_hover(st, spr, base, true, move_dir, DT, ratio, shd, advance)
 	return {
 		"rot": spr.rotation,
 		"sy": spr.scale.y,
@@ -130,7 +132,7 @@ func _drive(spr: AnimatedSprite2D, shd: Sprite2D, base: Vector2, move_dir: Vecto
 		"oy": spr.offset.y,
 		"shpy": shd.position.y,
 		"shsy": shd.scale.y,
-		"intent": spr.get_meta(&"hover_intent"),
+		"intent": st.hover_intent,
 	}
 
 # ────────────────────────────────────────────────────────────────
@@ -224,7 +226,7 @@ func _probe_intent(dist: float) -> Dictionary:
 		"dot": dot,
 		"retreating": dot < -1.0,
 		"closing": dot > 1.0,
-		"intent": float(e.anim_sprite.get_meta(&"hover_intent", 0.0)),
+		"intent": e._run_state.hover_intent,
 	}
 	e.queue_free()
 	await get_tree().physics_frame

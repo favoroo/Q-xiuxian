@@ -6,10 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/entities/FengQunEnemy.tscn" id="4_fengqun"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_zhumu"]
-resource_local_to_scene = true
 shader = ExtResource("2_shader")
-shader_parameter/flash_color = Color(1, 1, 0.9, 1)
-shader_parameter/flash_modifier = 0.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
 radius = 24.0

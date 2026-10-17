@@ -307,8 +307,10 @@ func _run() -> void:
 	var tween_delta: int = get_tree().get_processed_tweens().size() - tweens_before
 	_check(tween_delta == 0, "普通命中零 Tween（含 zoom_punch 路径覆盖）：12 次受击 Tween 零增长（实得 %+d）" % tween_delta)
 	await get_tree().create_timer(0.3).timeout
-	var flash_val: float = float(hit_e.hit_flash_mat.get_shader_parameter("flash_modifier"))
-	_check(flash_val <= 0.001, "闪白帧内计时衰减归零（实得 %.3f）" % flash_val)
+	# 2026-10-17 闪白改顶点色通道（self_modulate 承载，材质共享零 uniform）：
+	# 衰减归零的判据口径同步为 self_modulate 归白（= Color.WHITE 即零闪白）
+	var flash_val: float = 0.0 if hit_e.anim_sprite.self_modulate == Color.WHITE else 1.0
+	_check(flash_val <= 0.001, "闪白帧内计时衰减归零（self_modulate 归白，实得 %.3f）" % flash_val)
 	_check(hit_e.juice_scale.distance_to(Vector2.ONE) < 0.02, "挤压回弹帧内计时归位")
 	# 5a-2. 暴击命中 zoom punch 合并：12 次同帧暴击最多只建 1 个 zoom tween
 	var crit_tweens_before: int = get_tree().get_processed_tweens().size()

@@ -128,9 +128,12 @@ func _build_lines() -> void:
 func _make_line(width: float, grad: Gradient) -> Line2D:
 	var line := Line2D.new()
 	line.width = width
-	line.joint_mode = Line2D.LINE_JOINT_ROUND
-	line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	# 关节/bevel 不用 ROUND：ROUND joint 在每个拐点展开成扇形三角扇（顶点数 × 段数），
+	# 弹幕 29 发 × 16 点 × 双线时是图元虚高的隐形大头（手机端实测 23.4k）。
+	# 拖尾本来就有 gradient 渐隐 + width_curve 收尖，方关节的接缝在渐隐下不可见。
+	line.joint_mode = Line2D.LINE_JOINT_BEVEL
+	line.begin_cap_mode = Line2D.LINE_CAP_NONE
+	line.end_cap_mode = Line2D.LINE_CAP_NONE
 	# 尾端收到 10% 宽、头端全宽：与渐隐同向，弧线末端自然消失不留圆头
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 0.1))
