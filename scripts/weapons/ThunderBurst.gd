@@ -30,10 +30,13 @@ static var _pool: Array[ThunderBurst] = []
 static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（PerfProbe 判据口径同 EnemyBolt）
 static var reused_count: int = 0     ## 累计池复用数
+## 动态落雷灯名额严格控制（收口 FxBudget.LIGHT_CAP_THUNDER）：多雷法武器同屏连发时瞬态灯最多亮 1 盏
+static var _active_lights: int = 0
 
 static func clear_pool() -> void:
 	_pool.clear()
 	_host = null
+	_active_lights = 0
 
 static func _ensure_host(parent: Node) -> void:
 	if _host != null and is_instance_valid(_host):
@@ -69,6 +72,8 @@ static var _dmg_query: PhysicsShapeQueryParameters2D = null
 var _pooled: bool = false
 ## 本次落雷是否劈到人：_deal_damage 结算后置位，_bloom_or_recycle 据此分档（劈空不演大闪）
 var _struck: bool = false
+## 本次落雷是否成功占用动态灯名额（严格受 FxBudget.LIGHT_CAP_THUNDER 守卫）
+var _has_light: bool = false
 ## 落点形态渲染器：常驻子节点随池复用（activate 重铺字段），不随每发 instantiate
 var _kind_fx: BurstKindFx = null
 ## 雷柱与顶端电弧：常驻子节点随池复用（2026-10-15 去分配：原先每发 new 1 Line2D + 1 Curve
@@ -94,10 +99,11 @@ func _build_beam_nodes() -> void:
 	_beam_curve.add_point(Vector2(1.0, 1.0))
 	_beam.width_curve = _beam_curve
 	add_child(_beam)
-	for i in 3:
+	# 2026-10-18 简化：顶端电弧从 3 条缩减至 2 条，线宽 1.4→1.1，克制分散
+	for i in 2:
 		var arc := Line2D.new()
 		arc.name = "TopArc%d" % i
-		arc.width = 1.4
+		arc.width = 1.1
 		arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
 		arc.end_cap_mode = Line2D.LINE_CAP_ROUND
 		arc.default_color = Color(GameStyle.FX_HDR_LIGHTNING.r, GameStyle.FX_HDR_LIGHTNING.g, GameStyle.FX_HDR_LIGHTNING.b, 0.9)  # 与雷柱同源的 HDR 超白
@@ -111,6 +117,12 @@ func activate() -> void:
 	visible = true
 	# 劈没劈到人由同帧 deferred 的 _deal_damage 置位（先于 _bloom_or_recycle 回调）
 	_struck = false
+	# 动态灯名额严格限制：最多 LIGHT_CAP_THUNDER 盏，超额不耗 GPU 动态光源
+	if not _has_light and _active_lights < FxBudget.LIGHT_CAP_THUNDER:
+		_has_light = true
+		_active_lights += 1
+	light.energy = 0.0
+
 	# 雷柱与电弧是常驻子节点，先整体藏起再按形态决定是否亮出
 	_beam.visible = false
 	for arc in _arcs:
@@ -138,7 +150,8 @@ func activate() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(fx_sprite, "modulate:a", 0.45, 0.05)
 	tw.tween_property(fx_sprite, "scale", Vector2.ONE * (radius * 1.1 / 128.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(light, "energy", 0.9, 0.06)
+	if _has_light:
+		tw.tween_property(light, "energy", 0.9, 0.06)
 	tw.chain().tween_callback(_bloom_or_recycle)
 
 	_deal_damage.call_deferred()
@@ -154,16 +167,19 @@ func _bloom_or_recycle() -> void:
 		var ftw = create_tween()
 		ftw.set_parallel(true)
 		ftw.tween_property(fx_sprite, "modulate:a", 0.0, 0.10)
-		ftw.parallel().tween_property(light, "energy", 0.0, 0.12)
+		if _has_light:
+			ftw.parallel().tween_property(light, "energy", 0.0, 0.12)
 		ftw.chain().tween_callback(_recycle)
 		return
 	var tw = create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(fx_sprite, "modulate:a", 0.95, 0.05)
 	tw.tween_property(fx_sprite, "scale", Vector2.ONE * (radius * 2.0 / 128.0), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(light, "energy", 2.2, 0.06)
+	if _has_light:
+		tw.tween_property(light, "energy", 2.2, 0.06)
 	tw.chain().tween_property(fx_sprite, "modulate:a", 0.0, 0.18)
-	tw.parallel().tween_property(light, "energy", 0.0, 0.2)
+	if _has_light:
+		tw.parallel().tween_property(light, "energy", 0.0, 0.2)
 	tw.chain().tween_callback(_recycle)
 
 ## 回收入池（替代 queue_free）：灯光熄灭、池满或宿主失效才真释放
@@ -173,6 +189,9 @@ func _recycle() -> void:
 	_pooled = true
 	visible = false
 	light.energy = 0.0
+	if _has_light:
+		_has_light = false
+		_active_lights = maxi(0, _active_lights - 1)
 	_beam_fade = -1.0
 	if _beam != null:
 		_beam.visible = false
@@ -188,7 +207,7 @@ func _recycle() -> void:
 
 ## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知。
 ## T-2.5 余韵：消散瞬间顶端电弧四散（复用 LightningBolt.build_jagged_points 一把锯齿尺），
-## 3 条短线从柱顶向斜上散开 HDR 渐隐——「雷柱散成电花」。
+## 2 条短线从柱顶向斜上散开 HDR 渐隐——「雷柱散成电花」。
 ## 节点全部常驻（_build_beam_nodes），这里只重铺几何/宽度并点亮，淡出用帧内插值状态机。
 const BEAM_TOP := Vector2(0.0, -200.0)
 const BEAM_FADE_DUR := 0.13
@@ -196,20 +215,22 @@ var _beam_fade: float = -1.0  ## ≥0 = 淡出进行中（剩余秒数），-1 =
 
 func _spawn_sky_beam() -> void:
 	_beam.points = PackedVector2Array([BEAM_TOP, Vector2(0.0, 0.0)])
-	# 2026-10-15 视觉克制化：柱宽系数 0.12→0.09、地板 8→6（雷柱是竖直演出线，
+	# 2026-10-18 视觉简化：柱宽系数 0.09→0.06、地板 6→4（雷柱是竖直演出线，
 	# 判定是水平圆 _dmg_shape.radius，缩柱宽不碰判定）
-	_beam.width = maxf(radius * 0.09, 6.0)
+	_beam.width = maxf(radius * 0.06, 4.0)
 	_beam.default_color = Color(GameStyle.FX_HDR_LIGHTNING.r * 0.85, GameStyle.FX_HDR_LIGHTNING.g * 0.85, GameStyle.FX_HDR_LIGHTNING.b * 0.85, 0.8)  # HDR 超白：天雷柱核心过辉光阈值起辉
 	_beam.modulate.a = 1.0
 	_beam.visible = true
-	# 顶端电弧：随机取向的锯齿短线，仅重铺 points，节点零新建
-	for i in 3:
-		var arc := _arcs[i]
-		var dir := Vector2.UP.rotated(deg_to_rad(-55.0 + 55.0 * float(i)))
-		var tip := BEAM_TOP + dir.rotated(randf_range(-0.3, 0.3)) * randf_range(26.0, 42.0)
-		arc.points = LightningBolt.build_jagged_points(BEAM_TOP, tip, 9.0, 6.0)
-		arc.modulate.a = 1.0
-		arc.visible = true
+
+	# 顶端电弧：拥挤档（FxBudget.crowded）跳过顶端电弧，非拥挤档保留 2 条微弱电花
+	if not FxBudget.crowded:
+		for i in 2:
+			var arc := _arcs[i]
+			var dir := Vector2.UP.rotated(deg_to_rad(-40.0 + 80.0 * float(i)))
+			var tip := BEAM_TOP + dir.rotated(randf_range(-0.25, 0.25)) * randf_range(20.0, 32.0)
+			arc.points = LightningBolt.build_jagged_points(BEAM_TOP, tip, 10.0, 4.0)
+			arc.modulate.a = 1.0
+			arc.visible = true
 	_beam_fade = BEAM_FADE_DUR
 	set_physics_process(true)
 

@@ -171,14 +171,27 @@ func _run() -> void:
 	var l_bolt_b := LightningBolt.acquire(world)
 	_check(l_bolt_b == l_bolt_a, "引雷第二次 acquire 复用同一实例")
 	l_bolt_b.activate(Vector2(20, 20), Vector2(80, 80), Color.WHITE, 1.2)
-	# 基准线宽 2026-10-15 克制化 10.0→7.0：7.0 × 1.2 = 8.4
-	_check(l_bolt_b.visible and is_equal_approx(l_bolt_b._line_glow.width, 8.4), "引雷复用激活按 width_mult 重置线宽")
+	# 基准线宽 2026-10-18 简化 7.0→4.5：4.5 × 1.2 = 5.4
+	_check(l_bolt_b.visible and is_equal_approx(l_bolt_b._line_glow.width, 5.4), "引雷复用激活按 width_mult 重置线宽")
 	# 5.7b 引雷与地面大阵层级守卫：宿主与特效线不抬高全局 z_index 盖压角色
 	_check(LightningBolt._host.z_index <= 0, "引雷池宿主 z_index 不抬高压人")
 	_check(l_bolt_b._line_core.z_index <= 0, "引雷折线 z_index 不盖压角色")
 	if ThunderBurst._host != null:
 		_check(ThunderBurst._host.z_index <= 0, "落雷池宿主 z_index 不抬高压人")
 	l_bolt_b._recycle()
+
+	# ---------- 5.7c 落雷池（ThunderBurst）：落雷灯动态名额守卫 ----------
+	var tb_scene: PackedScene = load("res://scenes/weapons/ThunderBurst.tscn")
+	var tb1 := ThunderBurst.acquire(world, tb_scene)
+	tb1.activate()
+	var tb2 := ThunderBurst.acquire(world, tb_scene)
+	tb2.activate()
+	_check(ThunderBurst._active_lights <= FxBudget.LIGHT_CAP_THUNDER,
+		"落雷并发时活跃灯数 %d ≤ 名额上限 %d" % [ThunderBurst._active_lights, FxBudget.LIGHT_CAP_THUNDER])
+	_check(tb1._has_light != tb2._has_light, "名额饱和时仅先到者分得动态灯")
+	tb1._recycle()
+	tb2._recycle()
+	_check(ThunderBurst._active_lights == 0, "落雷回收后活跃灯数全部归零")
 
 	# ---------- 5.8 弹丸湮灭微闪（IMPACT_POP）与限流闸 ----------
 	var pop_pre := JuiceEffect.created_count()

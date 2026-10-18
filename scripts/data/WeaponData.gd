@@ -125,7 +125,8 @@ const DEFS: Dictionary = {
 					"damage": 18.0, "cooldown": 1.05, "range": 280.0,
 					"knockback": 140.0,
 					"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
-					"tip": Vector2(20, -18),
+					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
+					"tip": Vector2(22, 0), "upright": true,
 					"desc": "追踪弹射并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
 					"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
@@ -217,7 +218,8 @@ const DEFS: Dictionary = {
 					"damage": 10.0, "cooldown": 0.88, "range": 280.0,
 					"knockback": 155.0,
 					"price": 30, "icon": "res://assets/art/weapon_staff.png",
-					"tip": Vector2(6, -24),
+					# 斜挂黄纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修躺倒翻面）
+					"tip": Vector2(20, 0), "upright": true,
 					"desc": "掷出2张燃烧符追踪引燃，受元素与远程伤害加成", "tag": "元素·弹射·火",
 					"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_scale": 0.5, "bullet_spin": true,
 					"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
@@ -329,7 +331,8 @@ const DEFS: Dictionary = {
 						"damage": 9.0, "cooldown": 0.65, "range": 280.0,
 						"knockback": 80.0,
 						"price": 34, "icon": "res://assets/art/weapon_jinzhen_fu.png",
-						"tip": Vector2(22, -6),
+						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
+						"tip": Vector2(22, 0), "upright": true,
 						"desc": "连射2枚金针高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
 						"bullet": "res://assets/art/bullet_gold_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
@@ -342,7 +345,8 @@ const DEFS: Dictionary = {
 					"damage": 20.0, "cooldown": 1.0, "range": 280.0,
 					"knockback": 130.0,
 					"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
-					"tip": Vector2(22, -6),
+					# 横躺卷轴是自然姿态：upright 保持不转（2026-10-18 修翻面跳动）
+					"tip": Vector2(22, 0), "upright": true,
 					"desc": "冰符弹射2次并冰缓敌人，受远程伤害与移速加成", "tag": "远程·弹射·水",
 					"bullet": "res://assets/art/bullet_ice_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_chill": 0.35, "chill_dur": 2.0,
@@ -586,7 +590,8 @@ const DEFS: Dictionary = {
 					"damage": 17.0, "cooldown": 1.1, "range": 285.0,
 					"knockback": 160.0,
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
-					"tip": Vector2(12, 12),
+					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
+					"tip": Vector2(20, 0), "upright": true,
 					"desc": "三昧真火符穿透2敌烈焰灼烧，受元素与远程伤害加成", "tag": "元素·远程·弹射·火",
 					"bullet": "res://assets/art/bullet_true_fire_talisman.png", "bullet_scale": 0.65, "bullet_spin": true,
 					"pierce": 2, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
@@ -600,7 +605,8 @@ const DEFS: Dictionary = {
 					"damage": 10.0, "cooldown": 0.95, "range": 290.0,
 					"knockback": 140.0,
 					"price": 40, "icon": "res://assets/art/weapon_leihuo_fu.png",
-					"tip": Vector2(16, -6),
+					# 竖直符纸无锋刃轴：upright 竖直悬浮施法，器口只在瞄准轴取长度（2026-10-18 修歪斜翻面）
+					"tip": Vector2(20, 0), "upright": true,
 					"desc": "雷火双符扇射2张引燃爆裂，受元素与远程伤害加成", "tag": "元素·雷法·火",
 					"bullet": "res://assets/art/bullet_thunder_fire_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "projectile_count": 2, "spread_angle": 0.12,
@@ -657,7 +663,8 @@ const DEFS: Dictionary = {
 					"damage": 16.0, "cooldown": 1.0, "range": 280.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_gudu_fu.png",
-					"tip": Vector2(12, 10),
+					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
+					"tip": Vector2(20, 0), "upright": true,
 					"desc": "蛊虫毒符连锁弹射3次剧毒蔓延，受远程与元素伤害加成", "tag": "远程·弹射·木",
 					"bullet": "res://assets/art/bullet_gu_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 3, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
@@ -817,7 +824,8 @@ const DEFS: Dictionary = {
 					"damage": 16.0, "cooldown": 1.0, "range": 285.0,
 					"knockback": 130.0,
 					"price": 36, "icon": "res://assets/art/weapon_jingzhe_fu.png",
-					"tip": Vector2(0, -22),
+					# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
+					"tip": Vector2(22, 0), "upright": true,
 					"desc": "惊蛰雷符弹射2次叠毒滋蔓，受远程与元素伤害加成", "tag": "远程·雷法·木",
 					"bullet": "res://assets/art/bullet_jingzhe_fu.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
@@ -856,7 +864,8 @@ const DEFS: Dictionary = {
 							"damage": 9.0, "cooldown": 0.66, "range": 285.0,
 							"knockback": 85.0,
 							"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
-							"tip": Vector2(0, -22),
+							# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
+							"tip": Vector2(22, 0), "upright": true,
 							"desc": "连射2张金符高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
 							"bullet": "res://assets/art/bullet_gengjin_fu.png", "bullet_scale": 0.55, "bullet_spin": false,
 							"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
@@ -888,7 +897,8 @@ const DEFS: Dictionary = {
 						"damage": 21.0, "cooldown": 0.85, "range": 285.0,
 						"knockback": 120.0,
 						"price": 32, "icon": "res://assets/art/weapon_guishui_fu.png",
-						"tip": Vector2(18, -12),
+						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
+						"tip": Vector2(22, 0), "upright": true,
 						"desc": "癸水阴符急速连发穿透2敌，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
 						"bullet": "res://assets/art/bullet_frost_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 2,

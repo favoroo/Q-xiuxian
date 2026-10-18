@@ -1,31 +1,37 @@
 class_name LightningBolt
 extends Node2D
 
-## 五雷法牌引雷演出：从武器射向落雷点的锯齿闪电（细亮芯 + 宽光晕 + 分支电弧）
+## 五雷法牌引雷演出：从武器射向落雷点的锯齿闪电（细亮芯 + 柔光晕 + 单芯分支）
 ## 已接入静态对象池（POOL_CAP=16），零动态 new/queue_free 分配。
 ##
-## T-2.5（2026-10-15）电弧余韵：主干闪灭（0.13s）后 0.2s 内从命中点散 3 条微型电弧
-## 再回池——雷光「有后劲」，不再是啪一下就没了。微弧与主干共用同一把锯齿生成函数
-## （build_jagged_points 参数化 seg_len/amp_max），线体池化常驻（_setup_lines 一次建），
-## 淡出复用宿主 modulate（主四线先熄灯再归位 alpha，微弧吃第二段渐隐），不加灯不加粒子。
+## 2026-10-18 视觉简化与性能优化：
+## 1. 线宽与层数收拢：主光晕 7.0→4.5，主芯 2.4→1.8；分支电弧剔除光晕层只留 1.1px 单芯，常驻 4 线减为 3 线。
+## 2. 几何更克制：锯齿折段间距 22→28px，抖幅 14→9px，折点减少约 25%，观感干净平直。
+## 3. 电弧余韵减量：3 条→2 条、时长 0.2s→0.15s、长度 20→15px。
+## 4. 降档联动：glow 关闭时隐藏主光晕层（无 bloom 时宽半透明线只耗填充），拥挤档（FxBudget.crowded）跳过分支电弧与余韵。
 
 ## HDR 超白核心：辉光阈值钉在 1.0，只有这条核心线溢出起辉，外层 alpha 假光晕保持 LDR 不双辉
 const CORE_COLOR := GameStyle.FX_HDR_LIGHTNING
-const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.42)
+const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.38)
+const LDR_CORE_COLOR := Color(0.82, 0.94, 1.0, 0.95)  ## glow 关闭时的备用清晰亮芯
 const POOL_CAP := 16
 
-# —— 电弧余韵（T-2.5）——
-const ARC_AFTERGLOW_COUNT := 3     ## 微型电弧条数（计划 3-5 取下限，宁缺勿糊）
-const ARC_AFTERGLOW_LIFE := 0.2    ## 余韵窗口（s）
-const ARC_AFTERGLOW_LEN := 20.0    ## 单条微弧最大长度（px）
-const ARC_AFTERGLOW_WIDTH := 1.3   ## 微弧线宽（HDR 细芯）
+# —— 基准线宽（配合 width_mult 等比缩放）——
+const BASE_WIDTH_GLOW := 4.5
+const BASE_WIDTH_CORE := 1.8
+const BASE_WIDTH_BRANCH := 1.1
+
+# —— 电弧余韵（T-2.5，微型电弧从命中点消散）——
+const ARC_AFTERGLOW_COUNT := 2     ## 2 条微型电弧（精简克制）
+const ARC_AFTERGLOW_LIFE := 0.15   ## 余韵窗口（s）
+const ARC_AFTERGLOW_LEN := 15.0    ## 单条微弧最大长度（px）
+const ARC_AFTERGLOW_WIDTH := 1.0   ## 微弧线宽（细芯）
 
 static var _pool: Array[LightningBolt] = []
 static var _host: Node2D = null
 
 var _line_glow: Line2D
 var _line_core: Line2D
-var _line_branch_glow: Line2D
 var _line_branch_core: Line2D
 var _afterglow: Array[Line2D] = []
 var _tween: Tween = null
@@ -77,12 +83,10 @@ func _ready() -> void:
 func _setup_lines() -> void:
 	if _line_glow != null:
 		return
-	# 2026-10-15 视觉克制化：基准线宽整体下调 ~30%（10.0/3.2/6.0/1.8 → 7.0/2.4/4.5/1.4），
-	# 多武器同屏时闪电链不再是最抢眼的常驻元素；width_mult 星升倍率不变，等比受益
-	_line_glow = _create_line(7.0, GLOW_COLOR)
-	_line_core = _create_line(2.4, CORE_COLOR)
-	_line_branch_glow = _create_line(4.5, GLOW_COLOR)
-	_line_branch_core = _create_line(1.4, CORE_COLOR)
+	# 2026-10-18 视觉简化：4 线收缩为 3 线（移除分支光晕，单芯足以表达折角），基准线宽缩细
+	_line_glow = _create_line(BASE_WIDTH_GLOW, GLOW_COLOR)
+	_line_core = _create_line(BASE_WIDTH_CORE, CORE_COLOR)
+	_line_branch_core = _create_line(BASE_WIDTH_BRANCH, CORE_COLOR)
 	for i in ARC_AFTERGLOW_COUNT:
 		_afterglow.append(_create_line(ARC_AFTERGLOW_WIDTH, CORE_COLOR))
 
@@ -107,33 +111,37 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 
 	global_position = from_pos
 	var main_points := _build_jagged_points(from_pos, to_pos)
-	var branch_points := _build_branch_points(main_points, to_pos - from_pos)
+	var is_crowded := FxBudget.crowded
+	var glow_active := bool(SettingsManager.get_val(&"display", &"glow", true)) and not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 
-	# 主干赋值（余韵结束后主四线被隐藏过，复用激活时先全部亮回来）
-	_line_glow.visible = true
+	# 主干赋值：glow 关闭时隐藏光晕层（无 bloom 时宽半透明多边形只白耗带宽）
+	if glow_active:
+		_line_glow.visible = true
+		_line_glow.points = main_points
+		_line_glow.width = BASE_WIDTH_GLOW * width_mult
+		_line_glow.default_color = tint_col
+	else:
+		_line_glow.visible = false
+
+	var core_c: Color
+	if glow_active:
+		core_c = CORE_COLOR if tint_col == GLOW_COLOR else GameStyle.FX_HDR_CORE
+	else:
+		core_c = LDR_CORE_COLOR
+
 	_line_core.visible = true
-	_line_glow.points = main_points
-	_line_glow.width = 7.0 * width_mult
-	_line_glow.default_color = tint_col
-
-	var core_c := CORE_COLOR if tint_col == GLOW_COLOR else GameStyle.FX_HDR_CORE
 	_line_core.points = main_points
-	_line_core.width = 2.4 * width_mult
+	_line_core.width = BASE_WIDTH_CORE * width_mult
 	_line_core.default_color = core_c
 
-	# 分支电弧赋值
+	# 分支电弧赋值：拥挤档（同屏敌≥24）时跳过分支，专注主干
+	var branch_points := _build_branch_points(main_points, to_pos - from_pos) if not is_crowded else PackedVector2Array()
 	if branch_points.size() >= 2:
-		_line_branch_glow.points = branch_points
-		_line_branch_glow.width = 4.5 * width_mult
-		_line_branch_glow.default_color = tint_col
-		_line_branch_glow.visible = true
-
 		_line_branch_core.points = branch_points
-		_line_branch_core.width = 1.4 * width_mult
+		_line_branch_core.width = BASE_WIDTH_BRANCH * width_mult
 		_line_branch_core.default_color = core_c
 		_line_branch_core.visible = true
 	else:
-		_line_branch_glow.visible = false
 		_line_branch_core.visible = false
 
 	modulate.a = 1.0
@@ -141,11 +149,13 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 
 	_tween = create_tween()
 	_tween.tween_property(self, "modulate:a", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# 电弧余韵（T-2.5）：主干熄灯后从命中点散微弧再回池——先灭主四线再亮微弧，
-	# 节点共享同一个 modulate，分两段走免得微弧跟着主干一起被压暗
-	_tween.tween_callback(_spawn_afterglow)
+	# 电弧余韵：拥挤档跳过余韵直接回池，非拥挤档保留微弱余韵
+	if not is_crowded:
+		_tween.tween_callback(_spawn_afterglow)
+	else:
+		_tween.tween_callback(_after_afterglow)
 
-## 主干已淡出，从命中点向四周散 3 条微型电弧（HDR 细芯，0.2s 渐隐），演完回池。
+## 主干已淡出，从命中点向四周散 2 条微型电弧（细芯，0.15s 渐隐），演完回池。
 ## 微弧线与主干同为本节点子线、共享局部坐标系：origin 直接取主干折线末点（命中端）局部坐标。
 func _spawn_afterglow() -> void:
 	var pts := _line_core.points
@@ -153,23 +163,25 @@ func _spawn_afterglow() -> void:
 	for arc_line in _afterglow:
 		var dir := Vector2.RIGHT.rotated(randf_range(0.0, TAU))
 		var tip := origin + dir.rotated(randf_range(-0.5, 0.5)) * randf_range(ARC_AFTERGLOW_LEN * 0.6, ARC_AFTERGLOW_LEN)
-		arc_line.points = build_jagged_points(origin, tip, 8.0, 5.0)
+		arc_line.points = build_jagged_points(origin, tip, 8.0, 4.0)
 		arc_line.visible = true
 	modulate.a = 1.0
 	_tween = create_tween()
 	_tween.tween_property(self, "modulate:a", 0.0, ARC_AFTERGLOW_LIFE).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_tween.tween_callback(_after_afterglow)
 
-## 余韵熄灯后把主四线藏掉再回池：池体复用靠 activate 全量重铺，隐藏只是视觉兜底
+## 余韵熄灯后把所有子线藏掉再回池：池体复用靠 activate 全量重铺，隐藏只是视觉兜底
 func _after_afterglow() -> void:
-	for l in [_line_glow, _line_core, _line_branch_glow, _line_branch_core]:
-		l.visible = false
+	_line_glow.visible = false
+	_line_core.visible = false
+	_line_branch_core.visible = false
 	for arc_line in _afterglow:
 		arc_line.visible = false
 	_recycle()
 
 func _build_jagged_points(from_pos: Vector2, to_pos: Vector2) -> PackedVector2Array:
-	return build_jagged_points(from_pos, to_pos, 22.0, 14.0)
+	# 2026-10-18 简化：折段间距 22→28，抖幅 14→9，线条更平直利落，折点少约 25%
+	return build_jagged_points(from_pos, to_pos, 28.0, 9.0)
 
 ## 锯齿折线生成（主干/微弧共用一把尺，T-2.5 参数化）：seg_len 控制折段密度、
 ## amp_max 控制法向抖幅（主干沿程 sin 包络缩放，微弧短且直、抖幅直接给满）

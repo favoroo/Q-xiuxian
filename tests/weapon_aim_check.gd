@@ -264,7 +264,11 @@ func _test_projectile_bay() -> void:
 		w.current_target = target
 		var aim := w._aim_at(target.global_position)
 		w._apply_facing(aim)
-		var tip := _drawn_tip(w)
+		# upright 重器（竖纸符箓等）没有"画出来的剑尖"可言：器口语义 = 瞄准轴上 muzzle_len 处
+		# （与 _test_facing 的 upright 分支同一把尺子），弹丸从那里出膛即算贴脸。
+		var upright := bool(def.get("upright", false))
+		var tip := _drawn_tip(w) if not upright \
+			else w.global_position + Vector2.RIGHT.rotated(aim) * (w.tip_local.length() * w.sprite.scale.x)
 		w._perform_projectile_attack()
 		var shots := _spawned()
 		var count := maxi(1, int(def.get("projectile_count", 1)))
