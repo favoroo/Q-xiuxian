@@ -105,3 +105,7 @@ static func glow_intensity() -> float:
 
 ## 拥挤判定阈值（同屏敌数，含预警中的 SpawnIndicator）
 const CROWDED_ENEMY_THRESHOLD := 24
+## 拥挤退出阈值（滞回，2026-10-17 真机 UI 频闪治理）：进入 24 / 退出 20。
+## 无滞回时敌量在 24 附近波动会让 crowded 每秒翻转，glow_intensity（0.4 与 0.25 互跳）与
+## 弹丸灯名额随之每秒跳变，亮 UI（纸白/金高亮）的辉光每秒脉冲一次，观感即「UI 在闪」。
+const CROWDED_EXIT_THRESHOLD := 20

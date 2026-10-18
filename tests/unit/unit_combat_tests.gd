@@ -256,6 +256,20 @@ func _test_feel_gates() -> void:
 	_c.check(not GameFeel.micro_kick_gate(t0 + kick_iv - 1), "间隔内的镜头微冲击被拒")
 	_c.check(GameFeel.micro_kick_gate(t0 + kick_iv), "间隔过后微冲击重新放行")
 
+## 顿帧低帧降频闸判据（2026-10-17 真机 UI 频闪治理）：正常帧率间隔倍率恒 1.0；
+## 低帧时三路顿闸最小间隔统一乘 HITSTOP_LOWFPS_INTERVAL_MULT（占空比砍半）。
+## 用 _lowfps_test_override 钉帧率态，不依赖 headless 下 Engine.get_frames_per_second() 的值。
+func _test_hitstop_lowfps_gate() -> void:
+	GameFeel._lowfps_test_override = 0
+	_c.check(GameFeel.hitstop_interval_mult() == 1.0, "正常帧率顿帧间隔倍率恒 1.0")
+	GameFeel._lowfps_test_override = 1
+	_c.check(is_equal_approx(GameFeel.hitstop_interval_mult(), GameBalance.HITSTOP_LOWFPS_INTERVAL_MULT),
+		"低帧时顿帧间隔倍率 = 降频系数")
+	_c.check(GameBalance.HITSTOP_LOWFPS_INTERVAL_MULT >= 2.0, "降频系数至少 ×2（顿帧占空比砍半）")
+	_c.check(GameBalance.HITSTOP_LOWFPS_FLOOR > 30.0 and GameBalance.HITSTOP_LOWFPS_FLOOR < 60.0,
+		"低帧判定阈值落在 30~60 之间（区分挣扎机与健康机）")
+	GameFeel._lowfps_test_override = -1
+
 func _test_weapon_phase_stagger() -> void:
 	# 用户口径 2026-10-14：「配了多把近战，感觉不同武器攻击间隔一样，都是一起挥砍」。
 	# 根因：cooldown_timer 初值 0 且 setup() 不设相位，同型号武器从首击起永久锁相齐挥。

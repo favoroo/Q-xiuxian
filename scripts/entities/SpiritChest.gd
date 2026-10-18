@@ -8,7 +8,7 @@ extends Node2D
 ##   玉匣 —— 必送一件随机道具（与金币阁同一个 roller），另有金币；每局送出件数有顶，
 ##           到顶后退回铜匣奖励 ×1.5（见 BalanceChest.jade_fallback_reward）
 ## 掉出的葫芦在满血时不会被吃掉，会压在灰相留在原地等玩家掉血（见 HealOrb）
-## 持有「纳灵盘」道具时，砸开掉的金币当场飞进袖中（heal orb 仍需贴身，引擎没有它的磁吸口）
+## 持有「纳灵盘」道具时，砸开掉的掉落物当场飞进袖中（残血时葫芦也一同吸附）
 ## 挂在 4 号层（enemies）让武器判定能碰到；加入 chests 组 = 「可砸但不是威胁」的标记：
 ## 索敌按两段式走（见 GameBalance.assign_targets_with_chests）—— 场上还有活妖时武器不会
 ## 甩开妖来砸匣子，只有闲着的武器与多出来的弹道才流向它。
@@ -212,6 +212,10 @@ func _drop_heal(pct: float) -> void:
 	fruit.global_position = global_position
 	fruit.heal_pct = pct
 	fruit.activate()
+	var magnet: bool = GameManager.item_hook_sum("chest_magnet") > 0.0
+	var player: Node2D = GameManager.player
+	if magnet and player != null and is_instance_valid(player):
+		fruit.magnet_to(player)
 
 ## 一捧金币：撒在匣心周围。持有「纳灵盘」时当场全部飞向玩家 —— 砸匣子不必再绕一趟走位
 func _drop_gems(count: int, exp_each: int) -> void:

@@ -126,8 +126,8 @@ const UPGRADES: Array[Dictionary] = [
 	{
 		"id": "pickup_up",
 		"apply": {"pickup_range_mult": 0.4},
-		"title": "拾取范围",
-		"desc": "金币与经验的吸附范围",
+			"title": "拾取范围",
+			"desc": "金币、经验与回复葫芦的吸附范围",
 		"rarity": "common",
 		"rarity_label": "普通",
 		"icon": "res://assets/art/icon_magnet.png",

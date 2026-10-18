@@ -86,6 +86,7 @@ func _ready() -> void:
 	spiritpet._test_fengdiao_ring_geometry()
 	spiritpet._test_fengdiao_data_desc_consistency()
 	combat._test_feel_gates()
+	combat._test_hitstop_lowfps_gate()
 	combat._test_weapon_phase_stagger()
 
 	if _c.report("UNIT_RESULT"):

@@ -274,18 +274,17 @@ func _draw_jade_pendant() -> void:
 # ----------------- 7. 灵珑 (祭坛召唤灵兽：圆形灵兽幼兽 + 祭纹金印 + 灵动祥云) -----------------
 ## 圆形灵兽「灵珑」（2026-10-15 按圆形设计重做）：
 ## 以圆球灵身为主体（不伸脖子/不生巨翼），参考随行灵兽（SpiritPet）圆萌仙侠范式——
-## 圆滚滚的玉青灵魄躯体 + 贴头小巧灵耳 + 软糯祥云短尾 + 灵动双眸 + 额前道纹金印。
+## 圆滚滚的玉青灵魄躯体 + 贴头小巧灵耳 + 软糯祥云短尾 + 灵动双眸。
 ## 特效华丽层次丰富：足下祥云灵雾 + 周身三层明灭柔光晕 + 6 粒交叉轨道自转星尘 +
 ## 蓄力面前流转灵珠 + 濒死霜青裂纹与灵息闪烁。
 ## 面朝 +x，朝向由宿主翻转 scale.x；speed_ratio 驱动耳尾轻摇与尾后灵尘；
-## bank_angle 驱动微倾；生命全由本体传达（hp_ratio 驱动金印、灵目、周身辉光）。
+## bank_angle 驱动微倾；生命全由本体传达（hp_ratio 驱动灵目、周身辉光）。
 func _draw_yuan_ling() -> void:
 	var body_col := Color(0.82, 0.94, 0.93)          ## 核心真身玉青
 	var belly_col := Color(0.95, 0.99, 0.99)         ## 月白高光
 	var edge_col := Color(0.42, 0.76, 0.84)          ## 霜青描边
 	var glow_col := Color(0.58, 0.95, 0.98)          ## 泽青灵光
 	var ear_inner := Color(0.98, 0.86, 0.86, 0.85)   ## 内耳粉玉色
-	var gold_col := Color(0.96, 0.82, 0.38)          ## 祭纹金
 
 	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）
 	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
@@ -385,19 +384,7 @@ func _draw_yuan_ling() -> void:
 		draw_polyline(_rot_pts(PackedVector2Array([Vector2(-6.0, -8.0), Vector2(-2.5, -3.0), Vector2(-5.0, 2.0)]), pivot, bank_angle), crack_col, 1.2, true)
 		draw_polyline(_rot_pts(PackedVector2Array([Vector2(3.0, -9.0), Vector2(5.5, -3.5), Vector2(3.5, 2.5)]), pivot, bank_angle), crack_col, 1.0, true)
 
-	# 8. 额前祭纹金印（微缩祭坛八卦星印，生命的核心视觉语言）
-	var seal_a: float = (0.35 + 0.65 * clampf(hp_ratio, 0.0, 1.0)) * flicker
-	var seal_pos := _rot_one(Vector2(-0.5, -core_r * 0.62), pivot, bank_angle)
-	_soft_glow(seal_pos, 5.0, Color(gold_col, 0.25 * seal_a))
-	draw_arc(seal_pos, 3.6, 0.0, TAU, 18, Color(gold_col, 0.9 * seal_a), 1.1, true)
-	draw_arc(seal_pos, 2.2, 0.0, TAU, 14, Color(gold_col, 0.6 * seal_a), 0.8, true)
-	for i in range(4):
-		var tick_a := float(i) * TAU / 4.0 + PI / 4.0
-		var tick_dir := Vector2(cos(tick_a), sin(tick_a))
-		draw_line(seal_pos + tick_dir * 2.3, seal_pos + tick_dir * 3.4, Color(gold_col, 0.75 * seal_a), 0.9, true)
-	draw_circle(seal_pos, 1.0, Color(GameStyle.FX_HDR_GOLD, seal_a))
-
-	# 9. 灵动双眸（端正微侧双眼：黑青瞳底 + 泽青灵光环 + 双高光点，炯炯有神）
+	# 8. 灵动双眸（端正微侧双眼：黑青瞳底 + 泽青灵光环 + 双高光点，炯炯有神）
 	var eye_a: float = (0.30 + 0.70 * clampf(hp_ratio, 0.0, 1.0)) * flicker
 	# 左眼（略小略偏内）
 	var eye_l_pos := _rot_one(Vector2(2.4, -2.6), pivot, bank_angle)
@@ -419,7 +406,7 @@ func _draw_yuan_ling() -> void:
 	draw_circle(_rot_one(Vector2(1.5, 1.8), pivot, bank_angle), 1.8, Color(0.98, 0.78, 0.80, 0.30 * spirit * flicker))
 	draw_circle(_rot_one(Vector2(9.5, 2.6), pivot, bank_angle), 2.2, Color(0.98, 0.78, 0.80, 0.35 * spirit * flicker))
 
-	# 10. 面前蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 膨胀发亮，伴随三颗旋绕光珠；白芯接 FX_HDR_CORE 起辉）
+	# 9. 面前蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 膨胀发亮，伴随三颗旋绕光珠；白芯接 FX_HDR_CORE 起辉）
 	if charge_ratio > 0.01:
 		var cp := _rot_one(Vector2(18.5, -1.0), pivot, bank_angle)
 		var cr: float = 2.0 + 5.0 * charge_ratio
@@ -431,7 +418,7 @@ func _draw_yuan_ling() -> void:
 			var sa := _anim_time * 7.0 + float(i) * TAU / 3.0
 			draw_circle(cp + Vector2(cos(sa), sin(sa)) * (cr + 3.0), 1.0, Color(0.85, 0.98, 1.0, 0.7 * ca))
 
-	# 11. 移动灵尘（尾后散逸的三粒流光灵珠，随速度显隐）
+	# 10. 移动灵尘（尾后散逸的三粒流光灵珠，随速度显隐）
 	if speed_ratio > 0.2:
 		var dust_a := 0.45 * speed_ratio
 		for i in range(3):

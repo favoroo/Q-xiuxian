@@ -149,12 +149,12 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 			chip_text_color = GameStyle.INK_TEXT
 			edge_color = GameStyle.JADE
 		# 买下即凑齐三合一：手里同名同星正好 2 把（货架只卖 1 星，买这把就满 3）——
-		# 绿边 + 「可合成」角标，与背包槽位 mergeable 绿边同口径。==2 才提示：
+		# 「可合成」文字签，与背包槽位「合」角标同一副语言。==2 才提示：
 		# 手里已有 3 把说明早已凑齐（该先去合成），买了变 4 把不叫「凑齐」。
+		# 2026-10-18 用户：原先的 JADE 亮黄卡边与金/土系黄族色签撞车 ⇒ 卡边不再表达可合成，
+		# 边框语义只留「临门一档」（will_activate 的 JADE 边），可合成由文字签独立说话。
 		merge_ready = not bool(offer.get("sold", false)) \
 				and GameManager.count_copies(w_id, 1) == 2
-		if merge_ready:
-			edge_color = GameStyle.JADE
 		desc = def.get("desc", "")
 		# 攻击方式色签（近战朱砂 / 非近战主蓝）：def.tag 首段会被流派进度覆盖，
 		# 货架上一直看不出近战远程（2026-10-11 用户），behavior 才是结构真话。
@@ -183,7 +183,7 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 			stat_rows.append(["特性", card_feats, GameStyle.PAPER_DIM])
 
 	# 推荐位亮边：只在没有更具体边色语义时把中性深蓝底边提亮一档
-	# （可合成/临门一档的 JADE 边、道具档位边、药水边都保留原语义，「荐」签足以表达）
+	# （临门一档的 JADE 边、道具档位边、药水边都保留原语义，「荐」签足以表达）
 	if recommended and edge_color == GameStyle.GOLD_DK:
 		edge_color = GameStyle.GOLD_EDGE
 
@@ -377,7 +377,7 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 					chip_face,
 					GameStyle.on_face_text(chip_face)])
 				chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
-	# 「买下即凑齐三合一」角标：绿面墨字，与背包 mergeable 绿边同口径
+	# 「买下即凑齐三合一」角标：绿面墨字，与背包槽位「合」角标同一副语言
 	if merge_ready:
 		chip_defs.append(["可合成", GameStyle.JADE, GameStyle.INK_TEXT])
 		chip_tips.append({"kind": "merge", "w_id": w_id})

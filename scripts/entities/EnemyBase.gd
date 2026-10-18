@@ -982,9 +982,14 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_pp_target_vel = _bite_dir * move_speed * bite_speed_mul
 			if not _bite_hit and dist_sq < bite_hit_radius * bite_hit_radius:
 				_bite_hit = true
-				player.take_damage(contact_damage * bite_damage_mul, global_position)
-				# 不在这里再发一次反馈：player.take_damage 已经按「玩家受创」这个节点给过
+				# 目标可能是被嘲讽改追的灵兽：Player 走两参受创链路（无敌帧/护甲/反馈），
+				# 其余鸭子分派单参，与 _resolve_contact_damage 同一口径。
+				# 不在这里再发一次反馈：take_damage 已按「受创」节点给过
 				# 大创伤 + 顿帧 + 红晕，两边都发就是同一下挨打震两回
+				if player is Player:
+					player.take_damage(contact_damage * bite_damage_mul, global_position)
+				elif player.has_method("take_damage"):
+					player.take_damage(contact_damage * bite_damage_mul)
 			if _bite_active <= 0.0:
 				_clear_bite_warning()
 
@@ -1489,7 +1494,11 @@ func _explode(player: Node2D) -> void:
 	AudioManager.register_kill_pitch(die_pitch_base * 1.12)
 	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
-		player.take_damage(contact_damage * 2.0, global_position)
+		# 目标可能是被嘲讽改追的灵兽：Player 走两参受创链路，其余鸭子分派单参（同短咬口径）
+		if player is Player:
+			player.take_damage(contact_damage * 2.0, global_position)
+		elif player.has_method("take_damage"):
+			player.take_damage(contact_damage * 2.0)
 	_no_drop = true
 	_die()
 

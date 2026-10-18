@@ -138,6 +138,12 @@ const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限
 ## 呈送黑帧（整屏含 UI 闪一下的元凶之一）。0.12 → 0.15（2026-10-13 真机闪屏治理），
 ## 再深会明显削弱最重两档（HEAVY / 暴击击杀）的顿挫层次。
 const HITSTOP_TIMESCALE_FLOOR := 0.15
+## 顿帧低帧降频闸（2026-10-17 真机 UI 频闪治理）：实测 fps 低于阈值时，暴击/击杀/暴击击杀
+## 三路顿帧的最小间隔统一乘降频系数——低端机 GPU bound（稳态 ~42fps）下三路各 0.10~0.18s
+## 的限流叠加起来每 ~0.1s 就把时间轴压到地板一次，冻结-恢复循环在交换链上呈黑帧频闪
+## （整屏含 UI 一起闪）。降频把占空比砍半；fps 回升后自动恢复原节奏。
+const HITSTOP_LOWFPS_FLOOR := 45.0        ## 低帧判定阈值（fps，GameFeel 以 1s 粒度采样）
+const HITSTOP_LOWFPS_INTERVAL_MULT := 2.0 ## 低帧时顿帧最小间隔倍率
 const CRIT_TRAUMA_NORMAL := 0.20         ## 普通暴击追加创伤（从 0.12 上调：平方后产生可见轻颤，稳态仍严格受每秒预算保护）
 const CRIT_TRAUMA_ELITE := 0.32          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
 const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」

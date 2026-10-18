@@ -6,6 +6,7 @@ extends Node
 ##   ③ 循环切档：高清 → 流畅 → 高清
 ##   ④ 坏值校验：非法值自动回落默认高清
 ##   ⑤ Main 场景响应：实例化后响应 render_quality 变更，不崩溃、不报空指针
+##   ⑥ 低帧不自动切画质：画质恒定由用户手动控制，低帧时不自动切换档位
 ## 运行: godot --headless --path . res://tests/RenderScaleCheck.tscn
 
 var _c := TestCheck.new()
@@ -55,6 +56,18 @@ func _run() -> void:
 	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	await get_tree().physics_frame
 	_c.check(true, "④切换回高清档无崩溃")
+
+	# ⑤ 验证画质不因低帧自动切换（由用户完全手动控制）
+	GameManager.run_started = true
+	get_tree().paused = false
+	SettingsManager.set_val(&"display", &"glow", false, false) # 即使辉光关闭
+	var m := main_scene as MainLevel
+	if m != null:
+		for i in range(10):
+			m._poll_glow_auto_off()
+	_c.equals(SettingsManager.render_quality(), &"high", "⑤低帧持续采样下画质仍保持高清档")
+	_c.check(get_window().content_scale_mode != Window.CONTENT_SCALE_MODE_VIEWPORT,
+		"⑤低帧持续采样下 window content_scale_mode 未被降至 VIEWPORT")
 
 	main_scene.queue_free()
 	await get_tree().physics_frame

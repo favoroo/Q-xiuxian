@@ -4,9 +4,10 @@ extends Node
 ## 钉住 Main 辉光状态机的三条不变量：
 ##   1. SettingsManager SCHEMA 注册了 display/gow 键（toggle，默认 true）——
 ##      缺 SCHEMA 时 SettingsDialog reset 会漏掉该项
-##   2. FxBudget 拥挤档常量与 glow_intensity 分档函数口径（0.4/0.25）
+##   2. FxBudget 拥挤档常量与 glow_intensity 分档函数口径（0.4/0.25，阈值滞回 24/20）
 ##   3. Main 的自动降档状态机字段存在且翻转沿逻辑正确（headless 下 _apply_glow_channel
-##      直接短路返回，但状态机字段与采样逻辑可独立驱动验证）
+##      直接短路返回，但状态机字段与采样逻辑可独立驱动验证）；
+##      自动降档态持久化在 display/glow_auto_off，跨局读回（2026-10-17 UI 频闪治理）
 ## 运行: godot --headless --path . res://tests/GlowChannelCheck.tscn
 ## 退出码 0 且末行 GLOW_RESULT: ALL PASS
 
@@ -58,10 +59,15 @@ func _test_fx_budget_tier() -> void:
 	_check(is_equal_approx(FxBudget.glow_intensity(), 0.25), "拥挤档 glow_intensity 读出 0.25")
 	FxBudget.crowded = saved
 	_check(FxBudget.CROWDED_ENEMY_THRESHOLD == 24, "拥挤档敌量阈值 24")
+	_check(FxBudget.CROWDED_EXIT_THRESHOLD == 20, "拥挤档退出阈值 20（滞回，防阈值附近每秒翻转）")
+	_check(FxBudget.CROWDED_EXIT_THRESHOLD < FxBudget.CROWDED_ENEMY_THRESHOLD, "退出阈值严格低于进入阈值")
 
 ## 3. 自动降档状态机（直接驱动 Main 的采样逻辑；headless 下生效出口短路但状态可验）
 func _test_auto_off_state_machine() -> void:
 	GameManager.reset_run()
+	# 清持久位：上次崩溃的测试或真机游玩可能在 user://settings.cfg 留了 glow_auto_off=true，
+	# 不清的话 Main._ready 会把它读回，「初始态」断言被环境污染
+	SettingsManager.set_val(&"display", &"glow_auto_off", false, false)
 	var main: Node = load("res://scenes/main/Main.tscn").instantiate()
 	add_child(main)
 	await get_tree().process_frame
@@ -80,41 +86,34 @@ func _test_auto_off_state_machine() -> void:
 		m._poll_glow_auto_off()
 	_check(m._glow_auto_offed, "连续 %d 次低帧采样触发自动降档翻转" % MainLevel.GLOW_AUTO_TRIGGERS)
 	_check(m._glow_toasted, "自动降档时 toast 提示一次闸置位")
-	# 手动开回（setting_changed 路径）：清自动降档态
+	_check(bool(SettingsManager.get_val(&"display", &"glow_auto_off", false)),
+		"自动降档态持久化写入 display/glow_auto_off")
+	# 跨局持久：新 Main 实例 _ready 从持久位读回（重开一局不再重新触发通道翻转）
+	var main2: Node = load("res://scenes/main/Main.tscn").instantiate()
+	add_child(main2)
+	await get_tree().process_frame
+	var m2 := main2 as MainLevel
+	_check(m2 != null and m2._glow_auto_offed, "重开一局自动降档态从持久位读回（跨局生效）")
+	main2.queue_free()
+	await get_tree().process_frame
+	# 第二实例的 _ready 同样 reset_run + 暂停整树，恢复「战斗中」再驱动主实例
+	GameManager.run_started = true
+	get_tree().paused = false
+	# 手动开回（setting_changed 路径）：清自动降档态（含持久位）
 	SettingsManager.set_val(&"display", &"glow", true, false)
 	_check(m._glow_auto_offed == false, "手动开回清自动降档态（恢复唯一路径）")
 	_check(m._glow_low_streak == 0, "手动开回清低帧计数")
+	_check(not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false)),
+		"手动开回同步清持久位")
 	# 翻转后不再重复 toast（本对局内）
 	SettingsManager.set_val(&"display", &"glow", true, false)
 	for i in range(MainLevel.GLOW_AUTO_TRIGGERS + 1):
 		m._poll_glow_auto_off()
-	_check(m._glow_auto_offed, "再次低帧仍能重新翻转（新对局语义由 _ready 复位)")
-
-	# —— 二级降档（#05）：辉光关掉后仍低帧 ⇒ 自动切流畅画质 ——
-	# 当前 headless 下 fps=1 < 50 且辉光被手动关闭 ⇒ 走 elif 分支
-	SettingsManager.set_val(&"display", &"glow", false, false)   # 模拟辉光已不在生效
-	m._glow_auto_offed = false                                    # 从干净态驱动
-	m._glow_low_streak = 0
-	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
-	m._quality_auto_offed = false
-	for i in range(MainLevel.GLOW_AUTO_TRIGGERS):
-		m._poll_glow_auto_off()
-	_check(m._quality_auto_offed, "辉光失效后连续低帧触发二级画质降档")
-	_check(get_window().content_scale_mode == Window.CONTENT_SCALE_MODE_VIEWPORT,
-		"二级降档把 content_scale_mode 切到 VIEWPORT（锁 960×540）")
-	# 流畅档下不再有第三级：连续低帧不重复翻转、不改设置档
-	m._glow_low_streak = 0
-	for i in range(MainLevel.GLOW_AUTO_TRIGGERS + 1):
-		m._poll_glow_auto_off()
-	_check(SettingsManager.render_quality() == &"high",
-		"二级降档不写设置档（会话级临时切换，用户设置仍是 high）")
-	# 用户手动改画质清二级闸（状态机让位）
-	m._quality_auto_offed = true
-	SettingsManager.set_val(&"display", &"render_quality", &"performance", false)
-	_check(m._quality_auto_offed == false, "用户手动改画质清二级自动闸")
-	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
+	_check(m._glow_auto_offed, "再次低帧仍能重新翻转（新对局语义由 _ready 复位）")
 	main.queue_free()
 	await get_tree().process_frame
+	# 收尾把持久位写回 false 并落盘，不污染真机/桌面设置文件
+	SettingsManager.set_val(&"display", &"glow_auto_off", false, true)
 
 ## 4. 生效出口 headless 短路（不碰渲染状态，判据环境安全）
 func _test_apply_short_circuit() -> void:

@@ -50,11 +50,12 @@ func _ready() -> void:
 	_apply_render_quality()
 	# 辉光/HDR 联动通道首拍（2026-10-17）：启动帧一次性设（viewport 创建后立即切，
 	# 避开运行中切帧缓冲格式的未验证路径）；此后仅手动开关与自动降档两处再写。
-	_glow_auto_offed = false
+	# 自动降档态持久化在 display/glow_auto_off（2026-10-17 真机 UI 频闪治理）：跨局保住，
+	# 重开一局不再重新触发一次 use_hdr_2d 帧缓冲重建（交换链重建 = 整屏含 UI 闪一下）。
+	_glow_auto_offed = bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 	_glow_low_streak = 0
 	_glow_toasted = false
-	_quality_auto_offed = false
-	_apply_glow_channel()
+	_apply_glow_channel(true)
 	SettingsManager.setting_changed.connect(_on_setting_changed)
 	GameManager.reset_run()
 	GameManager.joystick = joystick
@@ -278,15 +279,14 @@ func _on_setting_changed(section: StringName, key: StringName, _value: Variant) 
 	if section == &"display" and key == &"screen_shockwave":
 		_sync_shockwave_channel()
 	elif section == &"display" and key == &"glow":
-		# 手动开回时清自动降档态与低帧计数，让状态机回到纯手动控制；
-		# 二级画质闸不在这里清（流畅切回高清走 render_quality 行，防与辉光开关互相干扰）
+		# 手动开回时清自动降档态（含持久位）与低帧计数，让状态机回到纯手动控制
 		_glow_auto_offed = false
 		_glow_low_streak = 0
-		_apply_glow_channel()
+		# 清持久位不重复写盘（glow 那一拍 set_val 已落盘，下一拍整体保存会带上）
+		SettingsManager.set_val(&"display", &"glow_auto_off", false, false)
+		# 手动开关在设置页（树已暂停），用户主动操作可预期一次通道翻转
+		_apply_glow_channel(true)
 	elif section == &"display" and key == &"render_quality":
-		# 用户手动改画质：同时清二级自动闸（用户明确表达了画质意愿，状态机让位）
-		_quality_auto_offed = false
-		_glow_low_streak = 0
 		_apply_render_quality()
 
 func _exit_tree() -> void:
@@ -508,13 +508,16 @@ func _poll_crowd_glow(delta: float) -> void:
 const GLOW_AUTO_FPS_FLOOR := 50      ## 自动降档帧率阈值（连续采样低于它才触发）
 const GLOW_AUTO_TRIGGERS := 5        ## 连续低帧采样数（1s 粒度 ⇒ 5s）
 var _glow_low_streak: int = 0        ## 连续低帧采样计数
-var _glow_auto_offed: bool = false   ## 本局是否已自动关闭（翻转后不自动开回）
+var _glow_auto_offed: bool = false   ## 是否已自动关闭（持久化在 display/glow_auto_off，跨局生效；恢复唯一路径是手动开回）
 var _glow_toasted: bool = false      ## 自动降档提示一次闸（每次对局最多一条）
-var _quality_auto_offed: bool = false  ## 二级降档（自动切流畅画质）已触发闸：翻转后不回切
 
 ## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值。
 ## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
-func _apply_glow_channel() -> void:
+## allow_hdr_flip（2026-10-17 真机 UI 频闪治理）：use_hdr_2d 翻转会重建根视口帧缓冲
+## （RGBA16 与 RGBA8 互切），Android 真机上是整屏（含 UI）交换链重建闪一下——只允许局外落
+## （_ready 首拍 / 用户在设置页手动开关）；战斗中自动降档只关 glow pass，HDR 带宽税
+## 多交一局，下一局 _ready 再统一落（自动降档态已持久化进 display/glow_auto_off）。
+func _apply_glow_channel(allow_hdr_flip: bool = false) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var want: bool = bool(SettingsManager.get_val(&"display", &"glow", true)) and not _glow_auto_offed
@@ -525,16 +528,14 @@ func _apply_glow_channel() -> void:
 		_env_res = we.environment
 	if _env_res.glow_enabled != want:
 		_env_res.glow_enabled = want
-	var vp := get_viewport()
-	if vp != null and vp.use_hdr_2d != want:
-		vp.use_hdr_2d = want
+	if allow_hdr_flip:
+		var vp := get_viewport()
+		if vp != null and vp.use_hdr_2d != want:
+			vp.use_hdr_2d = want
 
 ## 自动降档采样（挂在 1s 轮询尾部）：仅战斗中采样；连续 GLOW_AUTO_TRIGGERS 次
 ## fps < 阈值即翻转自动关 + toast 一次；手动关闭的用户不走这条（本来就关着）。
-## 二级降档（2026-10-17 #05）：辉光关掉后仍连续低帧 ⇒ 管线税不是主因，
-## 下一个量级杠杆是渲染分辨率——自动切「流畅」画质（CONTENT_SCALE_MODE_VIEWPORT
-## 锁 960×540 再拉伸，填充率 ~5× 下降）。用户手动选的画质档不动（尊重明确意愿），
-## 只降「仍在默认 high 档」的设备；流畅档下不再有第二级，防来回翻转同辉光口径。
+## 注：画质清晰度不随帧率自动切换，只保留辉光通道自动保护，画质由用户自主选择。
 func _poll_glow_auto_off() -> void:
 	if not GameManager.run_started or get_tree().paused:
 		return
@@ -543,23 +544,13 @@ func _poll_glow_auto_off() -> void:
 			_glow_low_streak += 1
 			if _glow_low_streak >= GLOW_AUTO_TRIGGERS and not _glow_auto_offed:
 				_glow_auto_offed = true
+				# 持久化自动降档态：跨局保住，重开一局不会在 5s 低帧后再翻一次通道
+				SettingsManager.set_val(&"display", &"glow_auto_off", true)
+				# 战斗中只关 glow pass，不翻 use_hdr_2d（帧缓冲重建 = 整屏含 UI 闪）
 				_apply_glow_channel()
 				if not _glow_toasted:
 					_glow_toasted = true
 					GameManager.announcement_triggered.emit("已自动关闭辉光以提升帧率 · 可在设置中开启")
-		else:
-			_glow_low_streak = 0
-	elif not _quality_auto_offed:
-		# 辉光已不在生效（手动关或自动关）但帧率仍低 ⇒ 二级降档：自动切流畅画质
-		if Engine.get_frames_per_second() < GLOW_AUTO_FPS_FLOOR:
-			_glow_low_streak += 1
-			if _glow_low_streak >= GLOW_AUTO_TRIGGERS \
-					and SettingsManager.render_quality() == &"high":
-				_quality_auto_offed = true
-				get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
-				if not _glow_toasted:
-					_glow_toasted = true
-					GameManager.announcement_triggered.emit("已自动切换流畅画质以提升帧率 · 可在设置中调回")
 		else:
 			_glow_low_streak = 0
 

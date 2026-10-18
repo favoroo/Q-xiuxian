@@ -18,7 +18,8 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	slot.custom_minimum_size = Vector2(tile, tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_PASS
 
-	# 两个通道各说各的：底色说「这件在哪一格池子里」，描边说「它是什么属性 / 这一刻能对它做什么」。
+	# 两个通道各说各的：底色说「这件在哪一格池子里」，描边说「它是什么属性」，
+	# 角标说「这一刻能对它做什么」（可合成=左上「合」，星级=右下 ★n）。
 	# 为什么底色要现调：GameStyle 里 NAVY 与 NAVY2 早在 #29/#31 那轮色彩校准里一起翻成纯黑，
 	# 拿它们当池子区分等于没区分 —— 上阵位压一层主蓝薄底，与纯黑背包位拉开（2026-10-12 出图验收）。
 	# 2026-10-14 用户：上阵/背包的武器要与货架大卡同一副语言 ⇒ 外边框统一五行属性色，
@@ -29,9 +30,9 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 		bg = GameStyle.with_alpha(GameStyle.GOLD, 0.14)
 	# 描边双通道独立拆分：
 	# 元素特性不侵占外框，由底部 3px 暖橙红下边框恒定指示（GameStyle.apply_elemental_bottom_bar）；
-	# 外边框优先级从低到高：五行基础 → 可合成 → 已选中。
-	if mergeable:
-		border = GameStyle.JADE
+	# 外边框优先级从低到高：五行基础 → 已选中。
+	# 2026-10-18 用户：可合成的 JADE 亮黄边与金系古金边同色系撞车，五行这条信息被整圈刷掉
+	# ⇒ 外框永远说五行，「这一刻能合成」改由左上角「合」字徽说（与右下 ★n 同一副文字语言）。
 	if is_sel:
 		border = GameStyle.PAPER
 		bg = bg.lightened(0.12)
@@ -58,6 +59,12 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	# 星级跟着格子长：44 格上 11 号字还行，60 格上就缩成灰了
 	GameStyle.star_label(slot, star, int(round(clampf(tile * 0.24, 12.0, 16.0))))
 
+	# 可合成角标：左上角「合」字（与右下 ★n 同一副文字语言，共用 PanelContainer 铺满子节点
+	# 的对齐写法，不画底以免整格刷黄）。2026-10-18 用户：JADE 亮黄边与金系古金撞色 ⇒ 合成
+	# 状态不再侵占外框，外框永远说五行。
+	if mergeable:
+		_add_merge_badge(slot, tile)
+
 	# 点选认「按下与抬起都留在原地」，不认松开：划列表时格子跟着内容一起走，手指自始至终压在
 	# 同一格内 ⇒ 按旧写法（BaseButton.pressed）每划一下都顺手多选一件。
 	# 点击已持有的武器弹出悬浮详情卡：展示全部属性、流派与说明，并提供快捷操作（合成/换装/出售）。
@@ -75,6 +82,25 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	# 拖拽换装：这一格也是「按住拎起 → 拖到目标格放下」的源与落点（手势口径见 ShopDragDrop 头注）
 	shop.drag_register(slot, {"pool": pool, "index": index})
 	return slot
+
+## 可合成「合」字角标：左上角亮黄字 + 墨色描边（与右下 ★n 同一副文字语言、同一取色，
+## 不拦输入；字号跟着格子长，口径同 star_label）。判据可按 name 找它。
+static func _add_merge_badge(slot: Control, tile: float) -> Label:
+	var lbl := Label.new()
+	lbl.name = "MergeBadge"
+	lbl.text = "合"
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_override("font", GameStyle.body_font())
+	lbl.add_theme_font_size_override("font_size", int(round(clampf(tile * 0.24, 12.0, 16.0))))
+	lbl.add_theme_color_override("font_color", GameStyle.JADE)
+	lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
+	lbl.add_theme_constant_override("outline_size", 3)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	slot.add_child(lbl)
+	return lbl
 
 ## 上阵容量签：「装备 n/上限n件」（限件数角色才出现）
 static func create_equipped_cap_chip(used: int, max_slots: int) -> Control:

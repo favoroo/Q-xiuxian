@@ -71,7 +71,14 @@ func _tick_crowd_tier(delta: float) -> void:
 	if _crowd_tier_cd > 0.0:
 		return
 	_crowd_tier_cd = 1.0
-	var want: bool = GameManager.enemy_count + SpawnIndicator.active_count >= FxBudget.CROWDED_ENEMY_THRESHOLD
+	var count: int = GameManager.enemy_count + SpawnIndicator.active_count
+	# 滞回判定（2026-10-17）：未拥挤 ≥24 进入，已拥挤 ≤20 退出，中间保持，
+	# 敌量在阈值附近波动时 glow_intensity/灯名额不再每秒翻转（亮 UI 辉光脉冲 = UI 频闪观感）
+	var want: bool
+	if FxBudget.crowded:
+		want = count > FxBudget.CROWDED_EXIT_THRESHOLD
+	else:
+		want = count >= FxBudget.CROWDED_ENEMY_THRESHOLD
 	if want != FxBudget.crowded:
 		FxBudget.crowded = want
 

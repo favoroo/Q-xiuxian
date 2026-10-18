@@ -1489,7 +1489,7 @@ func decrease_max_hp(amount: float) -> void:
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
 func _on_pickup_area_area_entered(area: Area2D) -> void:
-	# 只认实现了 magnet_to 的掉落物（金币）。残丹/回春葫芦故意不实现它：那颗要人贴上去才入口。
+	# 认实现了 magnet_to 的掉落物（金币与回复葫芦）。葫芦自带满血门控（满血不飞）。
 	if area.has_method("magnet_to"):
 		area.magnet_to(self)
 	elif area.get_parent() and area.get_parent().has_method("magnet_to"):

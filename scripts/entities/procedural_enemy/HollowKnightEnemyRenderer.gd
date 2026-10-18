@@ -47,6 +47,9 @@ const HZ_ELITE := 30.0              ## 精英重绘频率（2026-10-15 起精英
 const CULL_MARGIN := 64.0           ## 屏外剔除余量（px），防半身出屏闪烁
 static var redraw_count: int = 0    ## 重绘发放计数（tests/PerfProbe 断言用）
 
+## 敌人整体基准视觉缩放（在原有 config.scale_factor 基础上统一放大 25%，使体型更具压迫感且与碰撞体积饱满对齐）
+const ENEMY_GLOBAL_SCALE := 1.25
+
 var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相载体）
 ## 普通怪 = 档位节流；精英 = 30Hz；Boss = 每帧（0 间隔，数量恒 1，全量动画值得）。
 ## 默认按普通怪节流（config 未赋值前与旧口径一致）
@@ -105,9 +108,9 @@ func _draw() -> void:
 	if config == null:
 		return
 
-	# 全局朝向水平镜像处理
+	# 全局朝向水平镜像与等比尺寸缩放处理
 	var root_scale_x := -1.0 if flip_h else 1.0
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(root_scale_x, 1.0) * config.scale_factor)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(root_scale_x, 1.0) * (config.scale_factor * ENEMY_GLOBAL_SCALE))
 
 	# 精英/魔君常驻识别环（2026-10-14 P2）：贴地呼吸骨环，满屏时一眼分出「这只厚」。
 	# 画在各敌种函数之前（垫底贴地层），所有敌型一次覆盖；Boss 用更宽的朱砂双环。
@@ -186,7 +189,16 @@ func _arc(center: Vector2, radius: float, start_angle: float, end_angle: float, 
 	var seg := clampi(int(radius * absf(end_angle - start_angle) * 0.22), 6, 32)
 	draw_arc(center, radius, start_angle, end_angle, seg, color, width, antialiased)
 
-func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: Color, stroke_w: float = 1.8) -> void:
+## 敌人轮廓微描边色（空洞冷冽国风高反差微勾边）：
+## 将敌人的特色强调色 (col_accent) 与高反差骨甲色 (col_secondary) 柔和交融提亮，
+## 生成既保留该敌种本色特征、又在黑夜暗底上边缘清晰不发虚的纤细微描边。
+func _contour_color() -> Color:
+	if config == null:
+		return Color(0.85, 0.88, 0.92, 0.88)
+	var base_c := config.col_accent.lerp(config.col_secondary, 0.45)
+	return Color(base_c.r, base_c.g, base_c.b, 0.88).lightened(0.12)
+
+func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: Color, stroke_w: float = 1.4) -> void:
 	if pts.size() < 3:
 		return
 	draw_colored_polygon(pts, fill_col)
@@ -246,7 +258,7 @@ func _draw_slime() -> void:
 		Vector2(16 * squish_x, 4 - wave * 0.3),
 		Vector2(14 * squish_x, 12)
 	])
-	draw_stroked_polygon(pts, config.col_primary, config.col_accent, 1.8)
+	draw_stroked_polygon(pts, config.col_primary, _contour_color(), 1.4)
 
 	# 内部深渊核
 	draw_filled_ellipse(Vector2(0, 2 - wave * 0.3), 8.0 * squish_x, 6.0, config.col_void)
@@ -306,7 +318,7 @@ func _draw_xiexiu() -> void:
 		Vector2(2, 8 + float_y),
 		Vector2(-2, 11 + float_y)
 	])
-	draw_stroked_polygon(robe_pts, config.col_primary, config.col_accent, 1.6)
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.3)
 
 	# 苍白修罗骨面
 	var head_pos := Vector2(0, -9 + float_y)
@@ -318,7 +330,7 @@ func _draw_xiexiu() -> void:
 		head_pos + Vector2(6, 5),
 		head_pos + Vector2(0, 8) # 尖下巴
 	])
-	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.8)
+	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.4)
 
 	# 单侧修罗冷眸
 	draw_sharp_eye(head_pos + Vector2(2, -1), 3.5, 1.8, config.col_glow, Color.WHITE)
@@ -337,7 +349,7 @@ func _draw_danbao() -> void:
 
 	# 鼎炉外壳
 	_circle(urn_center, urn_r, config.col_primary)
-	_arc(urn_center, urn_r, 0, TAU, 24, config.col_secondary, 2.0, true)
+	_arc(urn_center, urn_r, 0, TAU, 24, _contour_color(), 1.4, true)
 
 	# 炉身灼热地火裂纹
 	var glow_c := config.col_glow if not is_critical else Color(1.2, 0.2, 0.1)
@@ -396,7 +408,7 @@ func _draw_fengqun() -> void:
 		body_pos + Vector2(0, 4),
 		body_pos + Vector2(5, -2)
 	])
-	draw_stroked_polygon(thorax_pts, config.col_primary, config.col_secondary, 1.6)
+	draw_stroked_polygon(thorax_pts, config.col_primary, _contour_color(), 1.3)
 
 	# 剧毒磷光复眼
 	draw_soft_glow(body_pos + Vector2(-2.5, -4), 4.0, config.col_glow, 2)
@@ -410,7 +422,7 @@ func _draw_fengqun() -> void:
 		body_pos + Vector2(0, 12), # 尖毒针
 		body_pos + Vector2(3, 3)
 	])
-	draw_stroked_polygon(stinger_pts, config.col_void, config.col_glow, 1.4)
+	draw_stroked_polygon(stinger_pts, config.col_void, config.col_glow, 1.2)
 
 ## 5. 花妖：噬灵妖花 (空灵悬浮舒展)
 func _draw_flower() -> void:
@@ -429,7 +441,7 @@ func _draw_flower() -> void:
 		var p0 := center + Vector2(float(i) * 4.0, 6)
 		var p1 := p0 + Vector2(sway * 0.5, 8)
 		var p2 := p1 + Vector2(sway, 9)
-		draw_polyline(PackedVector2Array([p0, p1, p2]), config.col_accent, 1.6, true)
+		draw_polyline(PackedVector2Array([p0, p1, p2]), config.col_accent, 1.4, true)
 
 	# 5 片放射状锋利血色花瓣
 	for i in range(5):
@@ -438,7 +450,7 @@ func _draw_flower() -> void:
 		var left := center + Vector2(cos(ang - 0.4), sin(ang - 0.4)) * (9.0 * petal_open)
 		var right := center + Vector2(cos(ang + 0.4), sin(ang + 0.4)) * (9.0 * petal_open)
 		var petal_pts := PackedVector2Array([center, left, tip, right])
-		draw_stroked_polygon(petal_pts, config.col_primary, config.col_secondary, 1.4)
+		draw_stroked_polygon(petal_pts, config.col_primary, _contour_color(), 1.3)
 
 	# 花心深渊虚空与噬灵邪眼
 	_circle(center, 5.5, config.col_void)
@@ -459,7 +471,7 @@ func _draw_xueyong() -> void:
 
 	# 暗红血晶茧体
 	draw_filled_ellipse(center, rx, ry, config.col_primary)
-	_arc(center, rx, 0, TAU, 28, config.col_accent, 2.0, true)
+	_arc(center, rx, 0, TAU, 28, _contour_color(), 1.4, true)
 
 	# 内部幽微血光核心（心跳明暗）
 	var core_alpha := 0.4 + sin(_time * 3.0) * 0.25
@@ -493,7 +505,7 @@ func _draw_duyao() -> void:
 		body_c + Vector2(-8, 11),
 		body_c + Vector2(-12, 0)
 	])
-	draw_stroked_polygon(body_pts, config.col_primary, config.col_accent, 1.8)
+	draw_stroked_polygon(body_pts, config.col_primary, _contour_color(), 1.4)
 
 	# 苔痕皮瘤（背上一串）
 	for i in range(3):
@@ -508,7 +520,7 @@ func _draw_duyao() -> void:
 	var sac_c := body_c + Vector2(-2.0, -14.0)
 	var sac_r: float = 7.5 * sac_pulse
 	draw_filled_ellipse(sac_c, sac_r, sac_r * 0.92, config.col_secondary)
-	_arc(sac_c, sac_r, 0, TAU, 24, config.col_accent, 2.0, true)
+	_arc(sac_c, sac_r, 0, TAU, 24, _contour_color(), 1.3, true)
 	var core_alpha: float = 0.5 + (0.45 if casting else 0.0)
 	draw_soft_glow(sac_c, sac_r * 0.8, config.col_glow * Color(1, 1, 1, core_alpha), 2)
 	_circle(sac_c, sac_r * 0.38, config.col_glow)
@@ -537,7 +549,7 @@ func _draw_guyao() -> void:
 
 	# 煞铜重鼓鼓身（略扁椭圆）
 	draw_filled_ellipse(drum_center, 14.5, 12.0, config.col_primary)
-	_arc(drum_center, 14.5, 0, TAU, 28, config.col_secondary, 2.2, true)
+	_arc(drum_center, 14.5, 0, TAU, 28, _contour_color(), 1.4, true)
 
 	# 鼓面太极魔纹与灵玉核心
 	_arc(drum_center, 8.5, 0, TAU, 20, config.col_accent, 1.4, true)
@@ -582,19 +594,19 @@ func _draw_yingmei() -> void:
 		head_pos + Vector2(-1, 22 + wave * 0.5),
 		head_pos + Vector2(-9, 17 - wave * 0.6)
 	])
-	draw_stroked_polygon(cloak_pts, config.col_primary, config.col_accent, 1.8)
+	draw_stroked_polygon(cloak_pts, config.col_primary, _contour_color(), 1.4)
 
 	# 双支向后弯曲的影骨角
 	draw_polyline(PackedVector2Array([
 		head_pos + Vector2(-4, -4),
 		head_pos + Vector2(-9, -12),
 		head_pos + Vector2(-12, -10)
-	]), config.col_secondary, 2.2, true)
+	]), config.col_secondary, 2.0, true)
 	draw_polyline(PackedVector2Array([
 		head_pos + Vector2(4, -4),
 		head_pos + Vector2(9, -12),
 		head_pos + Vector2(12, -10)
-	]), config.col_secondary, 2.2, true)
+	]), config.col_secondary, 2.0, true)
 
 	# 苍白虚空面壳与雪白锐利狭眸
 	draw_filled_ellipse(head_pos, 6.0, 5.0, config.col_void)
@@ -611,7 +623,7 @@ func _draw_zhumu() -> void:
 
 	# 巨大深紫魔核躯体
 	draw_filled_ellipse(center, 18.0, 15.0, config.col_primary)
-	_arc(center, 18.0, 0, TAU, 32, config.col_accent, 2.2, true)
+	_arc(center, 18.0, 0, TAU, 32, _contour_color(), 1.4, true)
 
 	# 下方蠕动的微弱触手
 	for i in range(-2, 3):
@@ -621,7 +633,7 @@ func _draw_zhumu() -> void:
 			center + Vector2(sx, 12),
 			center + Vector2(sx + tw * 0.5, 18),
 			center + Vector2(sx + tw, 23)
-		]), config.col_primary, 2.2, true)
+		]), config.col_primary, 2.0, true)
 
 	# 主魔眼（正中央巨眼）
 	draw_filled_ellipse(center, 7.5, 5.5, config.col_void)
@@ -664,7 +676,7 @@ func _draw_leibeast(is_elite: bool) -> void:
 		body_center + Vector2(7, 6),
 		body_center + Vector2(-7, 6)
 	])
-	draw_stroked_polygon(beast_pts, config.col_primary, config.col_accent, 2.0)
+	draw_stroked_polygon(beast_pts, config.col_primary, _contour_color(), 1.4)
 
 	# 背部向后倾斜的锋利雷棘骨刺（4 根）
 	for i in range(4):
@@ -717,7 +729,7 @@ func _draw_golem() -> void:
 		center + Vector2(12, 10),
 		center + Vector2(0, 14)
 	])
-	draw_stroked_polygon(chest_pts, config.col_primary, config.col_accent, 2.4)
+	draw_stroked_polygon(chest_pts, config.col_primary, _contour_color(), 1.5)
 
 	# 胸口旋转的幽蓝菱形阵眼灵石
 	var rot := _time * 1.2
@@ -739,7 +751,7 @@ func _draw_golem() -> void:
 			center + Vector2(fx + 5, 8),
 			center + Vector2(fx - 5, 8)
 		])
-		draw_stroked_polygon(sh_pts, config.col_secondary, config.col_accent, 1.8)
+		draw_stroked_polygon(sh_pts, config.col_secondary, _contour_color(), 1.3)
 
 	# 头顶方形青铜古面
 	var head_pts := PackedVector2Array([
@@ -748,7 +760,7 @@ func _draw_golem() -> void:
 		center + Vector2(6, -20),
 		center + Vector2(-6, -20)
 	])
-	draw_stroked_polygon(head_pts, config.col_primary, config.col_secondary, 2.0)
+	draw_stroked_polygon(head_pts, config.col_primary, config.col_secondary, 1.4)
 	draw_line(center + Vector2(-4, -16), center + Vector2(4, -16), config.col_glow, 1.8, true)
 
 ## 13. 剑煞邪修（精英）：万剑煞宗残魂 (三剑齐御悬浮)
@@ -777,7 +789,7 @@ func _draw_jiansha_elite() -> void:
 			t_sw * Vector2(16, 1),
 			t_sw * Vector2(-15, 2)
 		])
-		draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.6)
+		draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.4)
 		if special_state > 0.0 and i == 1:
 			# 中间主剑剑尖聚光：火球出膛方位预告
 			var tip := t_sw * Vector2(21, 0)
@@ -791,7 +803,7 @@ func _draw_jiansha_elite() -> void:
 		center + Vector2(10, 12),
 		center + Vector2(0, 9)
 	])
-	draw_stroked_polygon(robe_pts, config.col_primary, config.col_accent, 2.0)
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.4)
 
 	# 苍白修罗骨面带垂直血痕
 	var head_pos := center + Vector2(0, -9)
@@ -803,7 +815,7 @@ func _draw_jiansha_elite() -> void:
 		head_pos + Vector2(7, 6),
 		head_pos + Vector2(0, 9)
 	])
-	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 2.0)
+	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.4)
 	draw_line(head_pos + Vector2(0, -8), head_pos + Vector2(0, 7), Color(0.85, 0.15, 0.25), 1.6, true)
 	draw_sharp_eye(head_pos + Vector2(-3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
@@ -846,7 +858,7 @@ func _draw_boss(final_boss: bool) -> void:
 		center + Vector2(16, 20),
 		center + Vector2(0, 15)
 	])
-	draw_stroked_polygon(armor_pts, config.col_primary, config.col_accent, 2.5)
+	draw_stroked_polygon(armor_pts, config.col_primary, _contour_color(), 1.6)
 
 	# 胸口核心魔眼
 	draw_soft_glow(center, 12.0, config.col_glow, 2)
@@ -863,19 +875,19 @@ func _draw_boss(final_boss: bool) -> void:
 		head_pos + Vector2(9, 7),
 		head_pos + Vector2(0, 11)
 	])
-	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 2.2)
+	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.5)
 
 	# 巨大魔角
 	draw_polyline(PackedVector2Array([
 		head_pos + Vector2(-6, -6),
 		head_pos + Vector2(-14, -18),
 		head_pos + Vector2(-11, -25)
-	]), config.col_secondary, 3.0, true)
+	]), config.col_secondary, 2.4, true)
 	draw_polyline(PackedVector2Array([
 		head_pos + Vector2(6, -6),
 		head_pos + Vector2(14, -18),
 		head_pos + Vector2(11, -25)
-	]), config.col_secondary, 3.0, true)
+	]), config.col_secondary, 2.4, true)
 
 	if final_boss:
 		# 皇冠分叉中央角
@@ -883,7 +895,7 @@ func _draw_boss(final_boss: bool) -> void:
 			head_pos + Vector2(-3, -11),
 			head_pos + Vector2(0, -22),
 			head_pos + Vector2(3, -11)
-		]), config.col_accent, 2.2, true)
+		]), config.col_accent, 1.8, true)
 
 	# 燃烧神魔双目
 	draw_sharp_eye(head_pos + Vector2(-4, 0), 4.2, 2.0, config.col_glow, Color.WHITE)
@@ -914,7 +926,7 @@ func _draw_lingyi() -> void:
 		center + Vector2(0, 16),
 		center + Vector2(-10, 12)
 	])
-	draw_stroked_polygon(robe_pts, config.col_primary, config.col_accent, 1.8)
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.3)
 
 	# 胸前绷带十字（月白布条）
 	draw_line(center + Vector2(-4, 2), center + Vector2(4, 2), config.col_secondary, 2.4, true)
@@ -942,7 +954,7 @@ func _draw_jinchan() -> void:
 	# 胖圆蟾躯与腹甲
 	draw_filled_ellipse(center, 13.5, 11.0, config.col_primary)
 	draw_filled_ellipse(center + Vector2(0, 3), 8.5, 6.0, config.col_secondary)
-	_arc(center, 13.5, 0, TAU, 26, config.col_accent, 1.6, true)
+	_arc(center, 13.5, 0, TAU, 26, _contour_color(), 1.4, true)
 
 	# 背后三枚古铜钱纹（方孔钱）
 	for i in range(3):

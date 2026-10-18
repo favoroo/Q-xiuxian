@@ -644,6 +644,10 @@ func _apply_all_audio() -> void:
 
 func reset_to_defaults() -> void:
 	_init_defaults()
+	# 清掉非 SCHEMA 的内部持久位：辉光自动降档态（display/glow_auto_off），
+	# 否则恢复默认后 glow 显示开、实际仍被自动降档压着
+	if _settings.has("display") and _settings["display"].has("glow_auto_off"):
+		_settings["display"]["glow_auto_off"] = false
 	_apply_all_audio()
 	_save_settings()
 	for item in SCHEMA:

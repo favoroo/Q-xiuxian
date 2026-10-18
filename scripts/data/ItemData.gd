@@ -428,7 +428,7 @@ const DEFS: Dictionary = {
 			"naling_zhuo": {
 				"name": "纳灵盘", "tier": 2, "price": 22,
 				"icon": "res://assets/art/item_naling_zhuo.png",
-				"desc": "宝箱砸开时掉的经验球当场飞进袖中，不必再绕一趟走位（回复珠仍需贴身）",
+				"desc": "宝箱砸开时掉的掉落物当场飞进袖中，不必再绕一趟走位",
 				"apply": {},
 				"chest_magnet": true,
 			},

@@ -116,6 +116,31 @@ static func hit_stop(gm: Node, duration: float = 0.045, target_scale: float = 0.
 	# 原实现每次顿帧 create_timer 分配 SceneTreeTimer + 闭包。重复顿帧天然延期（覆写更晚时刻）。
 	gm._hitstop_deadline_ms = Time.get_ticks_msec() + int(duration * hitstop_compensation() * 1000.0)
 
+# ---------------- 顿帧低帧降频闸（2026-10-17 真机 UI 频闪治理） ----------------
+## 低端机 GPU bound（稳态 ~42fps）时，暴击/击杀/暴击击杀三路顿帧各 0.10~0.18s 的最小间隔
+## 叠加起来每 ~0.1s 就把时间轴压到地板一次，冻结-恢复循环在交换链上呈黑帧频闪
+## （整屏含 UI 一起闪）。实测 fps 低于 GameBalance.HITSTOP_LOWFPS_FLOOR 时三路最小间隔统一
+## 乘 HITSTOP_LOWFPS_INTERVAL_MULT，占空比砍半；fps 回升后自动复原。fps 采样 1s 粒度 memo
+## （顿帧判定在命中热路径上，不逐次穿透 Engine）。
+static var _lowfps_memo_ms: int = -1000
+static var _lowfps_on: bool = false
+static var _lowfps_test_override: int = -1  ## 测试钉桩：-1 自动采样 / 0 强制正常帧率 / 1 强制低帧
+
+static func _refresh_lowfps() -> void:
+	if _lowfps_test_override >= 0:
+		_lowfps_on = _lowfps_test_override == 1
+		return
+	var now := Time.get_ticks_msec()
+	if now - _lowfps_memo_ms < 1000:
+		return
+	_lowfps_memo_ms = now
+	_lowfps_on = Engine.get_frames_per_second() < GameBalance.HITSTOP_LOWFPS_FLOOR
+
+## 当前顿帧最小间隔倍率（低帧时 > 1，正常帧率恒 1.0）
+static func hitstop_interval_mult() -> float:
+	_refresh_lowfps()
+	return GameBalance.HITSTOP_LOWFPS_INTERVAL_MULT if _lowfps_on else 1.0
+
 static var _last_crit_hitstop_ms: int = 0
 const CRIT_HITSTOP_MIN_INTERVAL := 0.10
 
@@ -123,7 +148,7 @@ const CRIT_HITSTOP_MIN_INTERVAL := 0.10
 ## 防止多穿透/高攻速/连击下每秒十几发暴击连续把时间轴压死。
 static func crit_hit_stop(gm: Node) -> void:
 	var now := Time.get_ticks_msec()
-	if now - _last_crit_hitstop_ms < int(CRIT_HITSTOP_MIN_INTERVAL * 1000.0):
+	if now - _last_crit_hitstop_ms < int(CRIT_HITSTOP_MIN_INTERVAL * hitstop_interval_mult() * 1000.0):
 		return
 	_last_crit_hitstop_ms = now
 	hit_stop(gm, 0.038, 0.16)
@@ -135,7 +160,7 @@ static var _last_kill_hitstop_ms: int = 0
 ## 不会把时间锁死；普通命中与 DoT 跳死不走这里（2026-10-10 打击感重塑）。
 static func kill_hit_stop(gm: Node) -> void:
 	var now := Time.get_ticks_msec()
-	if now - _last_kill_hitstop_ms < int(GameBalance.KILL_HITSTOP_MIN_INTERVAL * 1000.0):
+	if now - _last_kill_hitstop_ms < int(GameBalance.KILL_HITSTOP_MIN_INTERVAL * hitstop_interval_mult() * 1000.0):
 		return
 	_last_kill_hitstop_ms = now
 	hit_stop(gm, GameBalance.KILL_HITSTOP_DURATION, GameBalance.KILL_HITSTOP_SCALE)
@@ -146,7 +171,7 @@ static var _last_crit_kill_hitstop_ms: int = 0
 ## 独立于 kill_hit_stop 的流水账（暴击斩杀会跳过普通击杀顿帧直接走这里，互不重发）。
 static func crit_kill_hit_stop(gm: Node) -> void:
 	var now := Time.get_ticks_msec()
-	if now - _last_crit_kill_hitstop_ms < int(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL * 1000.0):
+	if now - _last_crit_kill_hitstop_ms < int(GameBalance.CRIT_KILL_HITSTOP_MIN_INTERVAL * hitstop_interval_mult() * 1000.0):
 		return
 	_last_crit_kill_hitstop_ms = now
 	hit_stop(gm, GameBalance.CRIT_KILL_HITSTOP_DURATION, GameBalance.CRIT_KILL_HITSTOP_SCALE)

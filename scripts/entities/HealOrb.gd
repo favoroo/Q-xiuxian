@@ -1,15 +1,13 @@
 class_name HealOrb
 extends Area2D
 
-## 残丹/回春葫芦：贴上去才入口的回复珠（2026-10-09 用户三条指令）
-##   ①「不会靠近就被吸附拾取，要角色贴上去才会拾取」—— 本珠不实现 magnet_to，
-##      96 px 摄灵圈（Player.PickupArea 只认 loot 层上的 magnet_to）拿它没办法；
-##      入口靠自己的 Area2D 认玩家身体那一层，判定圆 = 画出来的那颗珠子（半径 10）；
-##      画幅与晶石同档（≈24 px），两颗掉在地上的东西一般大（2026-10-09 用户指令「葫芦再小一点」）。
-##   ②「满血不会被拾取」—— 顶满时贴上去也不入口，压成灰相留在原地；贴身这一路每帧读引擎的
-##      接触名单，所以「压着葫芦挨一刀」不必重新踩上去也算数。灰相是「你正压着它、且现在满血」
-##      的实时读数而非作废印章：身体一离开就恢复可入口相（2026-10-10 用户口径），否则玩家掉血
-##      之后回头看那颗早就试过的葫芦，会顶着一张「已经没用」的脸被白白绕开。
+## 残丹/回春葫芦：走近摄灵圈吸附入口的回复珠
+##   ①「走近即吸附」—— 实现了 magnet_to，Player.PickupArea（loot 层）碰到直接触发吸附；
+##      同时在 _physics_process 里做拾取圈每帧复验，兼顾「满血时在圈内、掉血当拍起飞」
+##      与「人在圈里珠子才落下」的场景。
+##      画幅与晶石同档（≈24 px），两颗掉在地上的东西一般大。
+##   ②「满血不会被拾取」—— 顶满时进圈不起飞，贴身不入口，留在原地压成灰相；掉血那一拍
+##      由每帧复验放行起飞。身体与摄灵圈一离开就恢复可入口相，掉血后再靠近可正常吸附。
 ##   ③「回合结束时未拾取的葫芦，溢出生命值部分变成金币」—— WaveSpawner.end_wave 把场上的
 ##      珠子请进袖中结算：按当前缺血回血，回不上的那一截走 GameBalance.heal_overflow_stones
 ##      折金币并当场飘字。既不白丢治疗，也不留一颗永远躺在地上的珠子。
@@ -63,7 +61,7 @@ static func acquire_or_new(parent: Node) -> HealOrb:
 var heal_amount: float = 3.0
 var heal_pct: float = 0.0   ## >0 时按玩家生命上限百分比恢复（回春葫芦用）
 
-var target_player: Node2D = null   ## 仅回合末结算的飞行途中非空
+var target_player: Node2D = null   ## 磁吸与回合末结算飞行途中非空
 var waiting_full_hp: bool = false  ## true = 此刻正被满血的身体压着，这一拍不入口；身体一离开就转回 false
 var current_speed: float = -40.0
 var max_speed: float = 680.0
@@ -173,11 +171,26 @@ static func heal_is_useful(player: Node2D) -> bool:
 	return p.current_health + FULL_HP_EPS < p.max_health
 
 func _physics_process(delta: float) -> void:
-	if _settling:
-		_fly_to_settle(delta)
+	if target_player != null:
+		if not is_instance_valid(target_player):
+			_end_flight()
+			return
+		var fp := target_player as Player
+		if fp == null:
+			_end_flight()
+			return
+		# 磁吸途中若已回满（且非波末结算），停飞落回原地
+		if not _settling and not heal_is_useful(fp):
+			_end_flight()
+			return
+		_fly_to_player(delta)
 		return
-	# 贴身这一路每帧问引擎的接触名单，不自己存一份 body_entered 引用：
-	# 存了就会过期 —— 玩家一步跨开、名单先清，才轮到「掉血那一拍」。
+
+	# 摄灵圈吸附（若在圈内且未满血直接起飞；满血则转待命灰相）
+	if _check_pickup_range():
+		return
+
+	# 贴身保底接触
 	var touching := _touching_player()
 	if touching == null:
 		_set_waiting(false)
@@ -187,6 +200,58 @@ func _physics_process(delta: float) -> void:
 		return
 	_set_waiting(false)
 	_collect(touching)
+
+## 进拾取圈这一拍：由 Player.PickupArea.area_entered 触发（与灵石同一个口）。
+## 若当前满血则不起飞，留在原地等掉血那一拍。
+func magnet_to(player: Node2D) -> void:
+	if target_player != null or _settling or is_queued_for_deletion():
+		return
+	if not heal_is_useful(player):
+		return
+	target_player = player
+	current_speed = -50.0
+	_begin_flight()
+
+## 每帧复验：人回到圈里 / 圈里满血转残血 —— 这一拍补 area_entered 的单次触发。
+func _check_pickup_range() -> bool:
+	var p := GameManager.player as Player
+	if p == null or not is_instance_valid(p):
+		return false
+	var radius: float = p.pickup_radius() if p.has_method("pickup_radius") else 96.0
+	if global_position.distance_to(p.global_position) > radius:
+		return false
+	if not heal_is_useful(p):
+		_set_waiting(true)
+		return true
+	magnet_to(p)
+	return target_player != null
+
+## 起飞：悬浮交由物理位移接管
+func _begin_flight() -> void:
+	if _loot_renderer != null:
+		_loot_renderer.self_bob = false
+		_loot_renderer.position.y = 0.0
+	if _bob_tween != null and _bob_tween.is_valid():
+		_bob_tween.kill()
+
+## 停飞落回：磁吸被满血闸拦截时用，珠子恢复悬浮等下一拍
+func _end_flight() -> void:
+	target_player = null
+	current_speed = -40.0
+	_start_bob()
+
+## 飞向玩家并落袋（磁吸与回合末结算两条路共用）
+func _fly_to_player(delta: float) -> void:
+	var p := target_player as Player
+	if p == null:
+		_end_flight()
+		return
+	var dist := global_position.distance_to(p.global_position)
+	var dir: Vector2 = (p.global_position - global_position).normalized()
+	current_speed = minf(max_speed, current_speed + acceleration * delta)
+	global_position += dir * current_speed * delta
+	if dist < ARRIVE_DIST:
+		_collect(p)
 
 ## 现在压着本珠的玩家身体（没有就 null）。
 ## 先做 40px 距离平方门控（接触线仅 24px），玩家不在近旁时不调 get_overlapping_bodies()，
@@ -203,33 +268,13 @@ func _touching_player() -> Player:
 
 ## 回合末结算：这一路不再等玩家走过来，请进袖中；回不上的那截折金币
 func settle_for_wave_end(player: Node2D) -> void:
-	if _settling or is_queued_for_deletion() or not (player is Player):
+	if _settling or target_player != null or is_queued_for_deletion() or not (player is Player):
 		return
 	_set_waiting(false)
 	_settling = true
 	target_player = player
 	current_speed = -50.0
-	if _loot_renderer != null:
-		_loot_renderer.self_bob = false
-		_loot_renderer.position.y = 0.0
-	if _bob_tween != null and _bob_tween.is_valid():
-		_bob_tween.kill()
-
-func _fly_to_settle(delta: float) -> void:
-	if target_player == null or not is_instance_valid(target_player):
-		_settling = false
-		_start_bob()
-		return
-	var p := target_player as Player
-	if p == null:
-		_settling = false
-		return
-	var dist := global_position.distance_to(p.global_position)
-	var dir: Vector2 = (p.global_position - global_position).normalized()
-	current_speed = minf(max_speed, current_speed + acceleration * delta)
-	global_position += dir * current_speed * delta
-	if dist < ARRIVE_DIST:
-		_collect(p)
+	_begin_flight()
 
 ## 落袋：回得上的回血，回不上的溢出折金币 —— 贴身与回合末两条入口共用这一把尺子
 func _collect(p: Player) -> void:
