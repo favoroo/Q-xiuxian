@@ -273,7 +273,7 @@ func set_start_in_endless(enabled: bool) -> void:
 func _maybe_unlock_danger() -> void:
 	if danger_level >= max_danger_unlocked and max_danger_unlocked < GameBalance.DANGER_MAX:
 		max_danger_unlocked += 1
-		announcement_triggered.emit("✦ 难度「%d」已解锁 ✦" % max_danger_unlocked)
+		announcement_triggered.emit("◆ 难度「%d」已解锁 ◆" % max_danger_unlocked)
 
 var kills: int = 0
 var game_time: float = 0.0
@@ -555,14 +555,14 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	kills += 1
 	# 击杀里程碑：每 50 杀一条横幅喜报（复用 GameHUD 横幅管线，不配新音，避免刷屏）
 	if kills % 50 == 0:
-		announcement_triggered.emit("✦ 连破 %d 敌 ✦" % kills)
+		announcement_triggered.emit("◆ 连破 %d 敌 ◆" % kills)
 	# 狂战士·战意：每次击杀 +1 层并把流失宽限计时归零（唯一攒点）
 	if frenzy_enabled > 0.0:
 		var prev_stacks := frenzy_stacks
 		frenzy_stacks = FrenzyData.add_stack(frenzy_stacks)
 		frenzy_idle = 0.0
 		if prev_stacks < float(FrenzyData.MAX_STACKS) and frenzy_stacks >= float(FrenzyData.MAX_STACKS):
-			announcement_triggered.emit("✦ 战意沸腾 ✦")
+			announcement_triggered.emit("◆ 战意沸腾 ◆")
 			if player != null and is_instance_valid(player):
 				var pvfx = player.get("skill_vfx")
 				if pvfx != null and pvfx.has_method("on_frenzy_max_burst"):
@@ -801,7 +801,7 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 		add_spirit_stones(early_stones)
 		clauses.append("提前 %d 秒清场 +%d 金币" % [int(floor(maxf(0.0, early_secs))), early_stones])
 	if not clauses.is_empty():
-		announcement_triggered.emit("✦ 收益到账 · %s ✦" % " · ".join(clauses))
+		announcement_triggered.emit("◆ 收益到账 · %s ◆" % " · ".join(clauses))
 	if harvest_decay > 0.0:
 		harvest = maxf(0.0, harvest - harvest_decay)
 	harvest = GameBalance.harvest_next(harvest, wave_number, HARVEST_GROWTH_WAVE_CAP)
@@ -811,7 +811,7 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 		if interest > 0:
 			spirit_stones += interest
 			stats_updated.emit(kills, game_time, spirit_stones)
-			announcement_triggered.emit("✦ 金币结息 · 获得 %d 枚金币 ✦" % interest)
+			announcement_triggered.emit("◆ 金币结息 · 获得 %d 枚金币 ◆" % interest)
 	# 回复葫芦等道具的回合末回血 hook
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
@@ -923,7 +923,7 @@ func chest_grant_item() -> bool:
 	if not add_item(id):
 		return false
 	chest_item_grants += 1
-	announcement_triggered.emit("✦ 玉匣破开 · 得【%s】✦" % String(ItemData.get_def(id).get("name", id)))
+	announcement_triggered.emit("◆ 玉匣破开 · 得【%s】◆" % String(ItemData.get_def(id).get("name", id)))
 	return true
 
 ## 消耗一件道具（替死傀儡这类一次性机制用），返回是否真的消耗了
@@ -952,7 +952,7 @@ func try_revive() -> bool:
 		player.current_health = player.max_health * 0.5
 		player.invulnerable_time = 2.0
 		player_hp_changed.emit(player.current_health, player.max_health)
-	announcement_triggered.emit("✦ 替身娃娃碎裂 · 死里逃生 ✦")
+	announcement_triggered.emit("◆ 替身娃娃碎裂 · 死里逃生 ◆")
 	AudioManager.play_sfx("level_up", 1.0)
 	return true
 
@@ -968,9 +968,9 @@ func start_run(starter_id: String) -> void:
 	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
 	add_weapon(starter_id)
 	if endless_mode:
-		announcement_triggered.emit("✦ 无尽模式 · 战至终局 ✦")
+		announcement_triggered.emit("◆ 无尽模式 · 战至终局 ◆")
 	else:
-		announcement_triggered.emit("✦ 生存战斗 · 击杀敌人 ✦")
+		announcement_triggered.emit("◆ 生存战斗 · 击杀敌人 ◆")
 
 ## 开局应用角色流派的正负代偿（规则在 CultivatorSystem，2026-10-11 抽离）
 func _apply_cultivator() -> void:

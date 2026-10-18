@@ -5,7 +5,7 @@ extends Control
 ## victory_rain() 金色星屑雨（通关的「庆」）；defeat_gloom() 朱砂呼吸暗晕（阵亡的「哀」）。
 ## 自绘不走 GPUParticles：保像素硬边（无柔光），headless 判据下由调用方直接不建本层。
 ## 结算屏开着时整树暂停，故 process_mode = ALWAYS，_process 自己推相位。
-## ⚠ T-5.2（2026-10-15）：
+## 【注意】T-5.2（2026-10-15）：
 ##   ① victory_rain 加入 GameStyle.FX_HDR_GOLD 超白起辉金色粒 + 少量大颗粒慢速飘落层次；
 ##   ② defeat_gloom 朱砂暗晕叠加上升墨色魂屑（4 缕冷墨带微紫，呼应 T-1.2 死亡消散）。
 

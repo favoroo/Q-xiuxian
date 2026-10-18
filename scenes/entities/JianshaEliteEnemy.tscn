@@ -23,6 +23,7 @@ move_speed = 118.0
 contact_damage = 26.0
 is_elite = true
 exp_reward = 8
+enemy_id = "jiansha_elite"
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 locomotion_mode = "hover"
 preferred_range = 280.0

@@ -60,11 +60,11 @@ var is_charging: bool = false
 var is_triggered: bool = false
 var charge_time: float = 0.0
 
-@onready var light: PointLight2D = $PointLight2D
-@onready var circle_sprite: Node2D = $ChargeCircle
-@onready var interaction_area: Area2D = $InteractionArea
+@onready var light: PointLight2D = get_node_or_null("PointLight2D") as PointLight2D
+@onready var circle_sprite: Node2D = get_node_or_null("ChargeCircle") as Node2D
+@onready var interaction_area: Area2D = get_node_or_null("InteractionArea") as Area2D
 ## 石碑褪灰走着色器：modulate 乘不出灰色（蓝底乘灰还是蓝），必须按亮度压色
-@onready var stone_mat: ShaderMaterial = $Sprite2D.material as ShaderMaterial
+@onready var stone_mat: ShaderMaterial = (get_node("Sprite2D").material if has_node("Sprite2D") else null) as ShaderMaterial
 
 var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
 ## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，生命不耗尽跨回合一直在场
@@ -111,8 +111,10 @@ class ChargeArc:
 		draw_circle(Vector2.RIGHT.rotated(end_angle) * radius, width * 0.82, head_color)
 
 func _ready() -> void:
-	light.energy = 1.2
-	circle_sprite.rotation = 0.0
+	if light != null:
+		light.energy = 1.2
+	if circle_sprite != null:
+		circle_sprite.rotation = 0.0
 
 	# 隐藏旧像素贴图与粗暴复用的摇杆底图，转由纯矢量悬晶大阵接管渲染
 	var old_sprite = get_node_or_null("Sprite2D") as CanvasItem
@@ -311,7 +313,7 @@ func _trigger_blessing() -> void:
 	blessing_triggered.emit(self)
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	GameManager.announcement_triggered.emit("⚡ 祭坛激活 · 灵兽现身助战 ⚡")
+	GameManager.announcement_triggered.emit("◆ 祭坛激活 · 灵兽现身助战 ◆")
 	_spawn_shockwave_ring()
 	_summon_spirit_beast()
 	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，

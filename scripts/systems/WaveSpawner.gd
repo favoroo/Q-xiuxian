@@ -168,7 +168,7 @@ func _process_fight(delta: float) -> void:
 		if _boss_still_alive():
 			if not _overtime_noted:
 				_overtime_noted = true
-				GameManager.announcement_triggered.emit("⚠ Boss未除 · 敌潮不退 ⚠")
+				GameManager.announcement_triggered.emit("◆ Boss未除 · 敌潮不退 ◆")
 			return
 		end_wave()
 		return
@@ -308,15 +308,15 @@ func start_wave(n: int) -> void:
 	_looter_done = false
 	_spawn_chests()
 	if _is_boss_wave(n):
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · Boss来袭 ✦" % n)
+		GameManager.announcement_triggered.emit("◆ 第 %d 波 · Boss来袭 ◆" % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	elif _is_elite_wave(n):
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 敌潮来袭 ✦" % n)
+		GameManager.announcement_triggered.emit("◆ 第 %d 波 · 敌潮来袭 ◆" % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	else:
-		GameManager.announcement_triggered.emit("✦ 第 %d 波 · 敌潮来袭 ✦" % n)
+		GameManager.announcement_triggered.emit("◆ 第 %d 波 · 敌潮来袭 ◆" % n)
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 	# 中断续玩：波次边界快照（新开局第一波 + 商店关进下一波共用这条）
@@ -594,7 +594,7 @@ func _spawn_elite(player: Node2D) -> void:
 		_scale_to_wave(elite)
 		elite.activate()
 		parent.add_child(elite)
-		GameManager.announcement_triggered.emit("⚠ %s突入战场！" % elite_title)
+		GameManager.announcement_triggered.emit("◆ %s突入战场！" % elite_title)
 		GameManager.shake_camera(5.0, 0.25)
 	parent.add_child(indicator)
 
@@ -606,7 +606,7 @@ func _spawn_looter(player: Node2D) -> void:
 		GameBalance.SPAWN_INSET_ELITE, GameBalance.SPAWN_MIN_DIST_ELITE, GameBalance.SPAWN_PUSH_ELITE)
 	_schedule_enemy_spawn(_looter_scene, pos, false)
 	EnemyCodex.record_seen("jinchan")
-	GameManager.announcement_triggered.emit("✦ 金蟾携宝现身 · 击杀爆金币 ✦")
+	GameManager.announcement_triggered.emit("◆ 金蟾携宝现身 · 击杀爆金币 ◆")
 
 ## 随波数成长敌人属性（曲线见 GameBalance），同种怪个体 ±10% 浮动；危险度再整体抬血/攻。
 ## 移速也吃 ±12% 方差（2026-10-12，土豆兄弟式快慢梯队：同屏同种怪不再整齐划一）。
@@ -681,7 +681,7 @@ func _boss_title() -> String:
 
 func _boss_announcement() -> String:
 	if wave_number == GameManager.VICTORY_WAVE:
-		return "⚠ 最终Boss战 · 最终Boss出现！"
+		return "◆ 最终Boss战 · 最终Boss出现！"
 	if wave_number > GameManager.VICTORY_WAVE:
-		return "⚠ 回响Boss · 再次出现！"
-	return "⚠ Boss回合 · 火焰Boss突入战场！"
+		return "◆ 回响Boss · 再次出现！"
+	return "◆ Boss回合 · 火焰Boss突入战场！"

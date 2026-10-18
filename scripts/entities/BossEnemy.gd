@@ -544,7 +544,7 @@ func _enter_phase2() -> void:
 	move_speed *= GameBalance.BOSS_PHASE2_SPEED_MULT
 	_setup_patterns()
 	play_squash(Vector2(1.3, 0.75), 0.35)
-	GameManager.announcement_triggered.emit("⚠ %s · 狂暴形态 ⚠" % boss_title)
+	GameManager.announcement_triggered.emit("◆ %s · 狂暴形态 ◆" % boss_title)
 	AudioManager.play_sfx("boss_raid", 1.15)
 	# 狂暴是全游戏最高光的瞬间之一，给最强档（HEAVY 自带更大创伤/顿帧/缩放，内部单发，
 	# 不再叠第二处反馈 —— 「同一次事件只许一处发反馈」口径）。
@@ -593,7 +593,7 @@ func _die() -> void:
 	# Boss 伏诛也进击杀连击音阶（低音巨物基准压半档），阶梯高位时斩杀音顺势冲顶
 	AudioManager.register_kill_pitch(0.8)
 	AudioManager.play_sfx("enemy_death_elite", 0.75)
-	GameManager.announcement_triggered.emit("✦ %s · 已击杀 ✦" % boss_title)
+	GameManager.announcement_triggered.emit("◆ %s · 已击杀 ◆" % boss_title)
 	# Boss 伏诛：一局一次的屏幕级暖白脉冲，不走限流闸
 	GameManager.pulse_damage_vignette(Color(1.0, 0.95, 0.78, 0.6), 0.45)
 	AudioManager.set_bgm_muffle(false)

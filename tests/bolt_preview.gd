@@ -34,6 +34,22 @@ func _ready() -> void:
 	big.scale_factor = GameBalance.BOSS_BOLT_SCALE
 	big.position = Vector2(520, 430)
 	add_child(big)
+
+	# 幽冥剑气（邪修专属）与剑煞血光剑气（精英专属）
+	var sword_bolt := EnemyBolt.new()
+	sword_bolt.speed = 0.0
+	sword_bolt.sword_style = true
+	sword_bolt.direction = Vector2(1, 0.5).normalized()
+	sword_bolt.position = Vector2(620, 340)
+	add_child(sword_bolt)
+
+	var jiansha_bolt := EnemyBolt.new()
+	jiansha_bolt.speed = 0.0
+	jiansha_bolt.sword_style = true
+	jiansha_bolt.purple_style = true
+	jiansha_bolt.direction = Vector2(-1, 0.2).normalized()
+	jiansha_bolt.position = Vector2(720, 340)
+	add_child(jiansha_bolt)
 	for i in range(4):
 		await get_tree().process_frame
 	if DisplayServer.get_name() != "headless":

@@ -130,10 +130,9 @@ func _build_ui() -> void:
 	heal_gem.scale = Vector2.ONE * 1.05
 	arena_viewport_node.add_child(heal_gem)
 
-	var chest := Sprite2D.new()
-	chest.texture = load("res://assets/art/prop_chest.png")
-	chest.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	chest.scale = Vector2.ONE * 0.53   # 与 SpiritChest 同档：屏幕宽 ≈ 判定直径 51px（产物画布 96px）
+	var chest := ChestVisual.new()
+	chest.tier = BalanceChest.TIER_WOOD
+	chest.scale = Vector2.ONE * 0.53   # 与 SpiritChest 同档：屏幕宽 ≈ 判定直径 51px（画布 96px）
 	chest.position = Vector2(75, -20)
 	arena_viewport_node.add_child(chest)
 
@@ -162,7 +161,7 @@ func _build_ui() -> void:
 	grid.add_child(_create_loot_card("八面赤金灵石", "击杀精英/大阵爆发·耀金高阶灵粹", ProceduralLootRenderer.LootType.GEM_GOLD, 1.8, false))
 	grid.add_child(_create_loot_card("碧翠回春灵玉", "贴身拾取·内蕴生机光种", ProceduralLootRenderer.LootType.HEAL_ORB, 1.7, false))
 	grid.add_child(_create_loot_card("回春待命灰玉", "满血不吃·暗哑石青等掉血", ProceduralLootRenderer.LootType.HEAL_ORB, 1.7, true))
-	grid.add_child(_create_sprite_card("九幽玄铁灵匣", "生图精灵·受击龟裂掉宝", "res://assets/art/prop_chest.png", 0.64))
+	grid.add_child(_create_chest_card("九幽玄铁灵匣", "程序绘制·受击龟裂掉宝"))
 	grid.add_child(_create_obelisk_card("九天锁灵悬晶柱", "充能聚灵 50% 走针 & 灵液注满"))
 
 func _create_loot_card(title: String, desc: String, ltype: ProceduralLootRenderer.LootType, sc: float, is_wait: bool) -> PanelContainer:
@@ -202,8 +201,8 @@ func _create_loot_card(title: String, desc: String, ltype: ProceduralLootRendere
 
 	return panel
 
-## 生图精灵卡片（藏宝匣 2026-10-10 起走 prop_chest.png，不再程序化绘制）
-func _create_sprite_card(title: String, desc: String, tex_path: String, sc: float) -> PanelContainer:
+## 藏宝匣卡片（2026-10-18 起走 ChestVisual 程序绘制，不再吃 prop_chest.png）
+func _create_chest_card(title: String, desc: String) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -226,9 +225,8 @@ func _create_sprite_card(title: String, desc: String, tex_path: String, sc: floa
 	disp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(disp)
 
-	var spr := Sprite2D.new()
-	spr.texture = load(tex_path)
-	spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	var spr := ChestVisual.new()
+	spr.tier = BalanceChest.TIER_JADE
 	spr.scale = Vector2.ONE * sc
 	spr.position = Vector2(85, 38)
 	disp.add_child(spr)

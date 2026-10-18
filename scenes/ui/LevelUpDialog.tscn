@@ -153,4 +153,4 @@ vertical_alignment = 1
 [node name="ConfirmButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 custom_minimum_size = Vector2(148, 44)
 layout_mode = 2
-text = "确认选择 ✦"
+text = "确认选择 ★"

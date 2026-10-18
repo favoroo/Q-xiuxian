@@ -1246,12 +1246,18 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 				vel_dir = velocity / current_speed
 			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
 			procedural_view.advance = vel_dir.dot(dir)
-		if _fuse >= 0.0:
-			procedural_view.special_state = 1.0
-		elif _charge_windup >= 0.0 or _bite_windup >= 0.0 or _bolt_windup_t >= 0.0:
-			procedural_view.special_state = 1.0
-		else:
-			procedural_view.special_state = 0.0
+			if _fuse >= 0.0:
+				procedural_view.special_state = 1.0
+			elif _charge_windup >= 0.0 or _bite_windup >= 0.0 or _bolt_windup_t >= 0.0:
+				procedural_view.special_state = 1.0
+			else:
+				procedural_view.special_state = 0.0
+			if _bolt_windup_t >= 0.0:
+				procedural_view.aim_dir = _bolt_windup_dir
+			elif dir.length_squared() > 0.01:
+				procedural_view.aim_dir = dir
+			else:
+				procedural_view.aim_dir = Vector2.ZERO
 
 	## 冲刺走廊扫掠结算 + 追击目标接触伤害判定（石岳反震只认玩家，灵兽无反震）
 func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
@@ -1345,14 +1351,18 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			AudioManager.play_sfx("enemy_hit", 1.25, GameManager.rng.randf_range(1.08, 1.22))
 			AudioManager.play_sfx("enemy_hit_crit", 1.35, GameManager.rng.randf_range(0.95, 1.05))
 		GameManager.crit_hit_stop()
-		GameManager.kick_camera(knockback, 6.5)
-		GameFeel.zoom_punch(GameManager, 0.022, 0.12)
-		# 暴击从「只冲不摇」升级为可见摇晃：普通暴击也发一笔小额创伤（走每秒预算，稳态不变）
+		# 2026-10-18 雷法抖屏治理：暴击的镜头反馈（方向冲击+缩放+创伤）全局限流成一记。
+		# 一发 AoE 打 5~6 个敌人、每只各自掷暴击时，逐只发会让同帧叠十几记 6.5px 冲击 + 十几笔创伤。
+		# 限流只砍镜头，暴击方向环 / 跳字 / 顿帧 / 触觉仍按原样逐次给。
+		if GameFeel.crit_camera_gate():
+			GameManager.kick_camera(knockback, 6.5)
+			GameFeel.zoom_punch(GameManager, 0.022, 0.12)
+			if is_elite:
+				GameManager.add_trauma(GameBalance.CRIT_TRAUMA_ELITE)
+			else:
+				GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
 		if is_elite:
-			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_ELITE)
 			GameFeel.vibrate(26, 0.65)
-		else:
-			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
 		# 暴击方向环（2026-10-14 受击火花「重构替代品」，只给暴击）：0.11s 极小光环，
 		# 补「这一刀从哪来」的方向读数。暴击本身低频，且入口有 JuiceEffect 帧预算（≤6/帧）
 		# 与视口双闸兜底，不会复现 2026-10-11 高频命中「空白处乱闪」的刷屏问题。
@@ -1677,24 +1687,38 @@ func _cancel_bolt_windup() -> void:
 	anim_sprite.modulate = _bolt_base_tint
 	if procedural_view != null:
 		procedural_view.position.x = 0.0
+		procedural_view.special_state = 0.0
 
 func _fire_bolt(player: Node2D) -> void:
 	_bolt_windup_t = -1.0
 	anim_sprite.modulate = _bolt_base_tint
 	# 出手方向最后锁死：蓄力期玩家已看过预告，锁死的是「预告过的那个方向」
 	var base_dir: Vector2 = (player.global_position - global_position).normalized()
+
+	# 出膛点对齐法剑器尖（避免从肚脐中心凭空刷出）
+	var spawn_pos: Vector2 = global_position
+	if procedural_view != null:
+		spawn_pos = procedural_view.get_weapon_tip_global_pos()
+		procedural_view.trigger_recoil(base_dir)
+
+	var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
 	for i in range(maxi(1, bolt_count)):
 		# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
 		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = global_position
+		bolt.global_position = spawn_pos
 		var offset_ang := 0.0
 		if bolt_count > 1:
 			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
 		bolt.direction = base_dir.rotated(offset_ang)
 		bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
+		bolt.sword_style = true
+		bolt.purple_style = is_jiansha
 		bolt.activate()
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
+	if get_parent() != null:
+		var pop_col := Color(0.85, 0.35, 0.65) if is_jiansha else Color(0.35, 0.85, 1.0)
+		JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
 # ---------------- 行为支路：鼓妖光环 ----------------
@@ -1940,7 +1964,7 @@ func _enter_mutation() -> void:
 	_mutated = true
 	anim_sprite.modulate = Color(1.5, 0.65, 0.6)
 	play_squash(Vector2(1.3, 0.75), 0.3)
-	GameManager.announcement_triggered.emit("⚠ 精英狂暴化 ⚠")
+	GameManager.announcement_triggered.emit("◆ 精英狂暴化 ◆")
 	AudioManager.play_sfx("boss_raid", 0.9, 0.85)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 

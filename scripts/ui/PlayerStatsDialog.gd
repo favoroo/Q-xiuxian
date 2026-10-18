@@ -179,6 +179,7 @@ func _switch_bottom_tab(tab_idx: int) -> void:
 func open(unpause_on_close: bool = true) -> void:
 	if visible or GameManager.is_game_over:
 		return
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_closing = false
 	_unpause_on_close = unpause_on_close
 	_panel.custom_minimum_size.y = _fit_panel_height()
@@ -187,16 +188,20 @@ func open(unpause_on_close: bool = true) -> void:
 	get_tree().paused = true
 	modulate.a = 0.0
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 1.0, 0.16)
 
 func close() -> void:
 	if _closing or not visible:
 		return
+	DetailTip.close_all(self)
 	_closing = true
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(func():
 		visible = false
+		process_mode = Node.PROCESS_MODE_DISABLED
 		if _unpause_on_close:
 			get_tree().paused = false
 		_closing = false
@@ -445,9 +450,9 @@ func _refresh_items_and_history() -> void:
 	var item_list := GameManager.items
 	var history := GameManager.upgrade_history
 	if _bottom_tab_items_btn != null:
-		_bottom_tab_items_btn.text = "✦ 携带道具 (%d)" % item_list.size()
+		_bottom_tab_items_btn.text = "◆ 携带道具 (%d)" % item_list.size()
 	if _bottom_tab_hist_btn != null:
-		_bottom_tab_hist_btn.text = "✦ 升级记录 (%d)" % history.size()
+		_bottom_tab_hist_btn.text = "◆ 升级记录 (%d)" % history.size()
 
 	# 若道具为空但已有悟道记录，自动展示悟道历程避免空面板；反之有道具时优先展示道具
 	if item_list.is_empty() and not history.is_empty() and _current_bottom_tab == 0:

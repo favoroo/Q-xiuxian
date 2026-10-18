@@ -3,7 +3,7 @@ extends Node2D
 
 ## 纯矢量弹道渲染器（冷冽国风修仙）
 ## 取代低清像素 bullet_*.png，实现高频无损旋转、精准物理咬合、动态流光与气刃尾迹
-## ⚠ 2026-10-16：draw_circle/draw_arc 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
+## 【注意】2026-10-16：draw_circle/draw_arc 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
 ##   弹幕 29 发在场时 21 个 1~5px 小点 × 64 段 × 每发重绘是图元虚高主力之一（手机端实测 23.4k）
 
 enum ProjectileKind {

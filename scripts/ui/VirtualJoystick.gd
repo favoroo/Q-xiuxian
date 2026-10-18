@@ -137,7 +137,7 @@ func _start_joystick(pos: Vector2, id: int) -> void:
     knob.position = (base.size - knob.size) * 0.5
     base.visible = true
     
-    var tw = create_tween()
+    var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
     tw.tween_property(self, "modulate:a", 0.65, 0.12)
     output = Vector2.ZERO
     joystick_updated.emit(output)
@@ -168,7 +168,7 @@ func _stop_joystick() -> void:
     output = Vector2.ZERO
     joystick_updated.emit(output)
     
-    var tw = create_tween()
+    var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
     tw.tween_property(self, "modulate:a", 0.0, 0.15)
     tw.tween_callback(func(): base.visible = false)
 

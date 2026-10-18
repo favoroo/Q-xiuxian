@@ -23,7 +23,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	root_vbox.add_child(sub_bar)
 
 	var sub_lbl := Label.new()
-	sub_lbl.text = "✦ 记录《剑士》各版本演进轨迹、核心玩法拓展与优化细节 ✦"
+	sub_lbl.text = "◆ 记录《剑士》各版本演进轨迹、核心玩法拓展与优化细节 ◆"
 	GameStyle.label(sub_lbl, 12, GameStyle.PAPER_DIM)
 	sub_bar.add_child(sub_lbl)
 
@@ -81,7 +81,7 @@ func _build_version_card(log_entry: Dictionary) -> Control:
 	vbox.add_child(head_hbox)
 
 	var ver_lbl := Label.new()
-	ver_lbl.text = "✦ " + ver_str
+	ver_lbl.text = "◆ " + ver_str
 	GameStyle.label(ver_lbl, 15, GameStyle.JADE if is_current else GameStyle.GOLD)
 	head_hbox.add_child(ver_lbl)
 

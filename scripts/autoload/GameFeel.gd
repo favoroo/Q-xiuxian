@@ -199,6 +199,20 @@ static func micro_kick(gm: Node, dir: Vector2, strength: float = 3.0) -> void:
 	if micro_kick_gate():
 		kick_camera(gm, dir, strength)
 
+static var _last_crit_cam_ms: int = 0
+
+## 暴击镜头反馈全局限流闸（2026-10-18 雷法抖屏治理）：落雷/横扫一发打 5~6 个敌人、
+## 每个敌人各自掷暴击，同帧会叠出十几记 6.5px 方向冲击 + 十几笔创伤，镜头整片狂晃。
+## 暴击的镜头反馈（方向冲击 + 缩放冲击 + 创伤）统一走此闸，间隔内静默丢弃；
+## 暴击的「这一刀从哪来」仍由方向环 / 跳字 / 顿帧表达，不受此闸影响。
+## 精英击杀 8.5px 等低频大事件不走此闸（调用方直接 kick_camera / feedback）。
+static func crit_camera_gate(now_ms: int = -1) -> bool:
+	var now: int = Time.get_ticks_msec() if now_ms < 0 else now_ms
+	if now - _last_crit_cam_ms < int(GameBalance.CRIT_CAMERA_MIN_INTERVAL * 1000.0):
+		return false
+	_last_crit_cam_ms = now
+	return true
+
 
 static func feedback(gm: Node, tier: int) -> void:
 	match tier:

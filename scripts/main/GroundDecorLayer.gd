@@ -5,7 +5,7 @@ extends Node2D
 ## 涵盖石板暗纹裂缝、青苔风化暗斑、战痕剑痕、碎石瓦砾、阵外延展符纹。
 ## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
-## ⚠ 2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
+## 【注意】2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
 ##   本层 ~116 个 0.8~1.6px 小点曾单独吃掉 ~14.6k 图元（面板「图元 21.0k」的大头）。
 
 var half_extent: float = 480.0

@@ -50,6 +50,21 @@ var special_state: float = 0.0:
 		if renderer:
 			renderer.special_state = val
 
+var aim_dir: Vector2 = Vector2.ZERO:
+	set(val):
+		aim_dir = val
+		if renderer:
+			renderer.aim_dir = val
+
+func trigger_recoil(dir: Vector2 = Vector2.ZERO) -> void:
+	if renderer != null:
+		renderer.trigger_recoil(dir)
+
+func get_weapon_tip_global_pos() -> Vector2:
+	if renderer != null:
+		return renderer.to_global(renderer.get_tip_local_pos())
+	return global_position
+
 ## 鼓妖光环标记（0/1）：脚下琥珀细环，读出「这只怪被加速了、先杀鼓妖」（土豆兄弟 Buffer 红描边同思路）
 var aura_level: float = 0.0:
 	set(val):

@@ -180,7 +180,7 @@ func _play_cast_fx() -> void:
 	if _btn == null:
 		return
 	_btn.pivot_offset = Vector2(BTN_SIZE * 0.5, BTN_SIZE * 0.5)
-	var tw = create_tween()
+	var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(_btn, "scale", Vector2(0.86, 0.86), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_btn, "scale", Vector2.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
@@ -190,7 +190,7 @@ func _play_reject_fx() -> void:
 		return
 	_shaking = true
 	var orig_pos := _btn.position
-	var tw = create_tween()
+	var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(_btn, "position:x", orig_pos.x - 5.0, 0.04)
 	tw.tween_property(_btn, "position:x", orig_pos.x + 5.0, 0.04)
 	tw.tween_property(_btn, "position:x", orig_pos.x, 0.04)
@@ -290,7 +290,7 @@ func _process(_delta: float) -> void:
 		# 冷却转好：亮一下 + 弹性放大，提醒可以再放
 		_was_ready = true
 		_btn.pivot_offset = Vector2(BTN_SIZE * 0.5, BTN_SIZE * 0.5)
-		var tw = create_tween()
+		var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		tw.tween_property(_btn, "scale", Vector2(1.16, 1.16), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(_btn, "scale", Vector2.ONE, 0.14)
 	_update_shadow_chip(player)

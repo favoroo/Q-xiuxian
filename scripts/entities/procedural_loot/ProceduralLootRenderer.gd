@@ -2,8 +2,8 @@ class_name ProceduralLootRenderer
 extends Node2D
 
 ## 掉落物程序化矢量渲染器（空洞冷冽国风）
-## 涵盖八面菱形金币水晶（普通/金色）与生机回春灵玉；藏宝匣 2026-10-10 起改走
-## assets/art/prop_chest.png 生图精灵（见 SpiritChest），不再程序化绘制。
+## 涵盖八面菱形金币水晶与生机回春灵玉；藏宝匣 2026-10-18 起回归程序绘制，
+## 走 ChestVisual（scripts/entities/ChestVisual.gd）。
 ## 2026-10-10 第 6 波卡顿优化：重绘 20Hz 节流 + instance_id 错相摊帧 + 屏外剔除
 ## （照 HollowKnightEnemyRenderer 现成模式）；宝石上下浮动由 _process 手写 sin 驱动
 ## （self_bob 默认关，只有 AstralGem 开——灵玉的 position 由外部 tween 接管，不能抢写）。

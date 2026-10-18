@@ -947,7 +947,7 @@ func _build_ui_gallery() -> void:
 	# 五档色带卡
 	var accents := [GameStyle.RARITY_COMMON, GameStyle.RARITY_RARE, GameStyle.RARITY_EPIC,
 		GameStyle.RARITY_LEGEND, GameStyle.GOLD]
-	var names := ["普通 (Common)", "稀有 (Rare)", "史诗 (Epic)", "传说 (Legend)", "选中 (Selected ✦)"]
+	var names := ["普通 (Common)", "稀有 (Rare)", "史诗 (Epic)", "传说 (Legend)", "选中 (Selected ★)"]
 	for i in range(accents.size()):
 		var c := PanelContainer.new()
 		c.position = Vector2(40 + i * 178.0, 75)

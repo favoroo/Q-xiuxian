@@ -35,6 +35,14 @@ func _test_enemy_bolt() -> void:
 	if shape != null and shape.shape is CircleShape2D:
 		_c.near((shape.shape as CircleShape2D).radius, bolt.radius, EPS, "判定圆半径 == 画出来的圆半径（同一份 radius）")
 	_c.equals(bolt.get_child_count(), 1, "火球没有外焰/尾迹辉光子节点（外观不会超出判定范围）")
+	# 幽冥剑气形态（御剑邪修专属）：剑气旋转对齐 direction，回池后重置
+	bolt.sword_style = true
+	bolt.direction = Vector2(-1, 0)
+	bolt.activate()
+	_c.near(bolt.rotation, PI, EPS, "剑气形态出膛朝向对齐飞行速度角")
+	bolt._recycle()
+	_c.check(not bolt.sword_style, "回收后 sword_style 重置为 false")
+	_c.near(bolt.rotation, 0.0, EPS, "回收后 rotation 重置为 0")
 	bolt.free()
 
 func _test_screen_shake_budget() -> void:
@@ -255,6 +263,14 @@ func _test_feel_gates() -> void:
 	_c.check(GameFeel.micro_kick_gate(t0), "首个普通命中镜头微冲击放行")
 	_c.check(not GameFeel.micro_kick_gate(t0 + kick_iv - 1), "间隔内的镜头微冲击被拒")
 	_c.check(GameFeel.micro_kick_gate(t0 + kick_iv), "间隔过后微冲击重新放行")
+
+	# 暴击镜头反馈闸（2026-10-18 雷法抖屏治理）：AoE 一发打多个敌人、每只各自掷暴击时，
+	# 逐只发 kick+trauma 会叠成持续抖屏；此闸保证间隔内只放行一记镜头反馈。
+	var crit_iv := int(GameBalance.CRIT_CAMERA_MIN_INTERVAL * 1000.0)
+	_c.check(crit_iv >= kick_iv, "暴击镜头闸间隔不小于普通微冲击闸（暴击是更重的反馈，不该更密）")
+	_c.check(GameFeel.crit_camera_gate(t0), "首个暴击镜头反馈放行")
+	_c.check(not GameFeel.crit_camera_gate(t0 + crit_iv - 1), "间隔内的暴击镜头反馈被拒")
+	_c.check(GameFeel.crit_camera_gate(t0 + crit_iv), "间隔过后暴击镜头反馈重新放行")
 
 ## 顿帧低帧降频闸判据（2026-10-17 真机 UI 频闪治理）：正常帧率间隔倍率恒 1.0；
 ## 低帧时三路顿闸最小间隔统一乘 HITSTOP_LOWFPS_INTERVAL_MULT（占空比砍半）。

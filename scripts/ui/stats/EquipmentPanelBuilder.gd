@@ -93,7 +93,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	var wp_head := HBoxContainer.new()
 	wp_head.add_theme_constant_override("separation", 10)
 	dialog._wp_title_lbl = Label.new()
-	dialog._wp_title_lbl.text = "✦ 装备武器 (0/6)"
+	dialog._wp_title_lbl.text = "◆ 装备武器 (0/6)"
 	GameStyle.label(dialog._wp_title_lbl, 14, GameStyle.JADE)
 	wp_head.add_child(dialog._wp_title_lbl)
 
@@ -145,7 +145,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 
 	var syn_head := HBoxContainer.new()
 	var syn_title := Label.new()
-	syn_title.text = "✦ 羁绊与元素共鸣"
+	syn_title.text = "◆ 羁绊与元素共鸣"
 	GameStyle.label(syn_title, 14, GameStyle.JADE)
 	syn_head.add_child(syn_title)
 
@@ -194,14 +194,14 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	bot_header.add_theme_constant_override("separation", 8)
 
 	dialog._bottom_tab_items_btn = Button.new()
-	dialog._bottom_tab_items_btn.text = "✦ 携带道具 (0)"
+	dialog._bottom_tab_items_btn.text = "◆ 携带道具 (0)"
 	dialog._bottom_tab_items_btn.custom_minimum_size = Vector2(136, 26)
 	dialog._bottom_tab_items_btn.focus_mode = Control.FOCUS_NONE
 	dialog._bottom_tab_items_btn.pressed.connect(func(): dialog._switch_bottom_tab(0))
 	bot_header.add_child(dialog._bottom_tab_items_btn)
 
 	dialog._bottom_tab_hist_btn = Button.new()
-	dialog._bottom_tab_hist_btn.text = "✦ 升级记录 (0)"
+	dialog._bottom_tab_hist_btn.text = "◆ 升级记录 (0)"
 	dialog._bottom_tab_hist_btn.custom_minimum_size = Vector2(136, 26)
 	dialog._bottom_tab_hist_btn.focus_mode = Control.FOCUS_NONE
 	dialog._bottom_tab_hist_btn.pressed.connect(func(): dialog._switch_bottom_tab(1))
@@ -257,7 +257,7 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 	var summary := GameManager.get_weapons_summary()
 	var max_slots := GameManager.max_weapon_slots()
 	if dialog._wp_title_lbl != null:
-		dialog._wp_title_lbl.text = "✦ 装备武器 (%d/%d)" % [summary.size(), max_slots]
+		dialog._wp_title_lbl.text = "◆ 装备武器 (%d/%d)" % [summary.size(), max_slots]
 
 	for i in range(WeaponData.MAX_SLOTS):
 		var slot := PanelContainer.new()

@@ -242,7 +242,7 @@ func _build_page(p: Dictionary) -> Control:
 	row.add_child(col)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "✦ " + String(p.get("title", ""))
+	title_lbl.text = "◆ " + String(p.get("title", ""))
 	GameStyle.label(title_lbl, 16, GameStyle.JADE, 0, GameStyle.INK, true)
 	col.add_child(title_lbl)
 

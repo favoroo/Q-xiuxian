@@ -22,6 +22,16 @@ const BODY_COLOR_PURPLE := Color(0.72, 0.28, 1.0)   ## 魔尊/子母弹球体（
 const CORE_COLOR_PURPLE := Color(0.94, 0.78, 1.0)   ## 幽紫高光芯
 const RIM_COLOR_PURPLE := Color(0.24, 0.05, 0.38)   ## 幽紫硬描边
 
+# 幽冥剑气配色（御剑邪修专属：冷冽幽蓝梭形剑芒）
+const BODY_COLOR_SWORD := Color(0.20, 0.75, 1.0)       ## 幽蓝剑气身
+const CORE_COLOR_SWORD := Color(0.90, 0.98, 1.0)       ## 极亮纯白霜雪剑芯
+const RIM_COLOR_SWORD := Color(0.06, 0.15, 0.35)       ## 深蓝锐利描边
+
+# 剑煞血光配色（剑煞邪修精英专属：血煞剑芒）
+const BODY_COLOR_JIANSHA := Color(0.85, 0.25, 0.50)    ## 血煞剑气身
+const CORE_COLOR_JIANSHA := Color(1.0, 0.90, 0.95)     ## 绯红亮芯
+const RIM_COLOR_JIANSHA := Color(0.35, 0.05, 0.18)     ## 暗红描边
+
 # —— 对象池（2026-10-11，照 AstralGem/BladeProjectile 模式）——
 ## 御剑邪修周期直射 + 魔君环弹/螺旋/子母弹每次 new()+queue_free，Area2D + 碰撞体
 ## 全套生命周期分配是回合卡顿源。死亡/到期回池休眠，activate() 全量重置。
@@ -80,6 +90,7 @@ var split_speed: float = 275.0   ## 子火球飞行速度
 var split_scale: float = 1.0     ## 子火球缩放系数
 var split_damage: float = 0.0    ## 子火球伤害（≤0 时按母弹 65% 折算）
 var purple_style: bool = false   ## 幽紫魔焰配色（第 20 波最终 Boss 及子母弹专属）
+var sword_style: bool = false    ## 幽冥剑气形态（御剑邪修专属：冷冽幽蓝梭形剑芒）
 
 ## 池状态与 _ready 建好的节点引用（复用时 activate 重铺要用）
 var _pooled: bool = false
@@ -88,6 +99,7 @@ var _circle: CircleShape2D = null
 
 func _reset_defaults() -> void:
 	direction = Vector2.RIGHT
+	rotation = 0.0
 	speed = 300.0
 	damage = 6.0
 	scale_factor = 1.0
@@ -100,13 +112,14 @@ func _reset_defaults() -> void:
 	split_scale = 1.0
 	split_damage = 0.0
 	purple_style = false
+	sword_style = false
 
 func _ready() -> void:
 	add_to_group("enemy_bolts")
 	collision_layer = 0
 	collision_mask = 2  # player
-	# 火球不旋转，保持圆形
-	rotation = 0.0
+	# 火球不旋转，剑气沿发射方向定向
+	rotation = direction.angle() if sword_style else 0.0
 	# scale_factor 由发射方在 add_child 之前写入，所以这里算一次就是终值
 	radius = RADIUS * maxf(scale_factor, 0.05)
 
@@ -130,7 +143,7 @@ func activate() -> void:
 	reset_physics_interpolation()
 	interp_reset_count += 1
 	visible = true
-	rotation = 0.0
+	rotation = direction.angle() if sword_style else 0.0
 	radius = RADIUS * maxf(scale_factor, 0.05)
 	if _circle != null:
 		_circle.radius = radius
@@ -146,7 +159,11 @@ func activate() -> void:
 func intercept() -> void:
 	if _pooled:
 		return
-	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
+	var rim_c := RIM_COLOR
+	if sword_style:
+		rim_c = RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
+	elif purple_style:
+		rim_c = RIM_COLOR_PURPLE
 	if is_inside_tree() and get_parent() != null:
 		JuiceEffect.spawn_impact_pop(get_parent(), global_position, rim_c, direction)
 	_recycle()
@@ -197,6 +214,9 @@ func _recycle() -> void:
 	_pool.append(self)
 
 func _draw() -> void:
+	if sword_style:
+		_draw_sword_bolt()
+		return
 	var body_c := BODY_COLOR_PURPLE if purple_style else BODY_COLOR
 	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
 	var core_c := CORE_COLOR_PURPLE if purple_style else CORE_COLOR
@@ -205,9 +225,44 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, maxf(radius - 1.0, 1.0), 0.0, TAU, 24, rim_c, 2.0, true)
 	draw_circle(Vector2.ZERO, radius * 0.45, core_c)
 
+## 幽冥剑气视觉绘制（几何尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
+func _draw_sword_bolt() -> void:
+	var body_c := BODY_COLOR_JIANSHA if purple_style else BODY_COLOR_SWORD
+	var rim_c := RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
+	var core_c := CORE_COLOR_JIANSHA if purple_style else CORE_COLOR_SWORD
+
+	var r := radius
+	# 锐利剑梭多边形（前尖达到 r，侧刃向后收束）
+	var pts := PackedVector2Array([
+		Vector2(r, 0.0),
+		Vector2(-r * 0.2, -r * 0.65),
+		Vector2(-r * 0.75, -r * 0.25),
+		Vector2(-r * 0.55, 0.0),
+		Vector2(-r * 0.75, r * 0.25),
+		Vector2(-r * 0.2, r * 0.65)
+	])
+	draw_colored_polygon(pts, body_c)
+
+	var stroke_pts := PackedVector2Array([
+		Vector2(r, 0.0),
+		Vector2(-r * 0.2, -r * 0.65),
+		Vector2(-r * 0.75, -r * 0.25),
+		Vector2(-r * 0.55, 0.0),
+		Vector2(-r * 0.75, r * 0.25),
+		Vector2(-r * 0.2, r * 0.65),
+		Vector2(r, 0.0)
+	])
+	draw_polyline(stroke_pts, rim_c, 1.6, true)
+
+	# 剑脊高能亮芯
+	draw_line(Vector2(-r * 0.45, 0.0), Vector2(r * 0.7, 0.0), core_c, 1.8, true)
+	draw_circle(Vector2(r * 0.1, 0.0), r * 0.25, core_c)
+
 func _physics_process(delta: float) -> void:
 	if angular_speed != 0.0:
 		direction = direction.rotated(angular_speed * delta)
+		if sword_style:
+			rotation = direction.angle()
 	if accel != 0.0:
 		speed = maxf(min_speed, speed + accel * delta)
 	position += direction * speed * delta

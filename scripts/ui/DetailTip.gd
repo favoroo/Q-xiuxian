@@ -86,6 +86,7 @@ static func live(host: Control) -> DetailTip:
 	return null
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -398,6 +399,7 @@ func _place() -> void:
 		return
 	_shown = true
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 1.0, 0.12)
 
 func close() -> void:
@@ -410,5 +412,6 @@ func close() -> void:
 	if _card != null and is_instance_valid(_card):
 		_card.resized.disconnect(_place)
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 0.0, 0.1)
 	tw.tween_callback(queue_free)

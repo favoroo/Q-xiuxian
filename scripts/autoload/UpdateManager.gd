@@ -93,7 +93,7 @@ func _init_dialog() -> void:
 	no_update_found.connect(func():
 		if _last_check_manual:
 			_last_check_manual = false
-			show_toast("✦ 当前已是最新版本 (%s) ✦" % Version.APP_VERSION_NAME, GameStyle.GOOD)
+			show_toast("◆ 当前已是最新版本 (%s) ◆" % Version.APP_VERSION_NAME, GameStyle.GOOD)
 	)
 	check_failed.connect(func(err_msg: String):
 		if _last_check_manual:

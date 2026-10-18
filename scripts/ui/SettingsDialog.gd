@@ -33,10 +33,10 @@ func _get_top_bar_separation() -> int:
 	return 14
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	add_tab_button(0, "✦ 音效")
-	add_tab_button(1, "✦ 画面")
-	add_tab_button(2, "✦ 操作")
-	add_tab_button(3, "✦ 其他")
+	add_tab_button(0, "◆ 音效")
+	add_tab_button(1, "◆ 画面")
+	add_tab_button(2, "◆ 操作")
+	add_tab_button(3, "◆ 其他")
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -66,7 +66,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	root_vbox.add_child(foot_bar)
 
 	var guide_btn := Button.new()
-	guide_btn.text = "✦ 新手指南"
+	guide_btn.text = "◆ 新手指南"
 	guide_btn.custom_minimum_size = Vector2(130, 32)
 	guide_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(guide_btn, GameStyle.NAVY2, GameStyle.JADE, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -480,7 +480,7 @@ func _build_version_card() -> Control:
 	panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "✦ 游戏版本与更新"
+	title.text = "◆ 游戏版本与更新"
 	GameStyle.label(title, 14, GameStyle.JADE)
 	vb.add_child(title)
 
@@ -499,7 +499,7 @@ func _build_version_card() -> Control:
 	vb.add_child(btn_row)
 
 	_check_update_btn = Button.new()
-	_check_update_btn.text = "✦ 检查更新"
+	_check_update_btn.text = "◆ 检查更新"
 	_check_update_btn.custom_minimum_size = Vector2(110, 30)
 	_check_update_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(_check_update_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 13, GameStyle.INK_TEXT, 5.0)
@@ -507,7 +507,7 @@ func _build_version_card() -> Control:
 	btn_row.add_child(_check_update_btn)
 
 	var changelog_btn := Button.new()
-	changelog_btn.text = "✦ 更新记录"
+	changelog_btn.text = "◆ 更新记录"
 	changelog_btn.custom_minimum_size = Vector2(110, 30)
 	changelog_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(changelog_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -535,7 +535,7 @@ func _build_author_hq_card() -> Control:
 	panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "✦ 作者 HQ · 宗门阵地"
+	title.text = "◆ 作者 HQ · 宗门阵地"
 	GameStyle.label(title, 14, GameStyle.JADE)
 	vb.add_child(title)
 
@@ -550,7 +550,7 @@ func _build_author_hq_card() -> Control:
 	vb.add_child(btn_row)
 
 	var gitee_btn := Button.new()
-	gitee_btn.text = "✦ Gitee 阵地"
+	gitee_btn.text = "◆ Gitee 阵地"
 	gitee_btn.custom_minimum_size = Vector2(110, 30)
 	gitee_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(gitee_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -561,7 +561,7 @@ func _build_author_hq_card() -> Control:
 	btn_row.add_child(gitee_btn)
 
 	var gh_btn := Button.new()
-	gh_btn.text = "✦ GitHub 阵地"
+	gh_btn.text = "◆ GitHub 阵地"
 	gh_btn.custom_minimum_size = Vector2(110, 30)
 	gh_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(gh_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -572,7 +572,7 @@ func _build_author_hq_card() -> Control:
 	btn_row.add_child(gh_btn)
 
 	var feedback_btn := Button.new()
-	feedback_btn.text = "✦ 建议与反馈"
+	feedback_btn.text = "◆ 建议与反馈"
 	feedback_btn.custom_minimum_size = Vector2(110, 30)
 	feedback_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(feedback_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -598,7 +598,7 @@ func _build_diagnostics_card() -> Control:
 	panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "✦ 运行环境与诊断"
+	title.text = "◆ 运行环境与诊断"
 	GameStyle.label(title, 14, GameStyle.JADE)
 	vb.add_child(title)
 
@@ -619,7 +619,7 @@ func _build_diagnostics_card() -> Control:
 	vb.add_child(btn_row)
 
 	var copy_btn := Button.new()
-	copy_btn.text = "✦ 复制运行诊断信息"
+	copy_btn.text = "◆ 复制运行诊断信息"
 	copy_btn.custom_minimum_size = Vector2(160, 30)
 	copy_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(copy_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
@@ -642,7 +642,7 @@ func _build_reset_card() -> Control:
 	panel.add_child(vb)
 
 	var title := Label.new()
-	title.text = "✦ 预设与重置"
+	title.text = "◆ 预设与重置"
 	GameStyle.label(title, 14, GameStyle.JADE)
 	vb.add_child(title)
 
@@ -684,7 +684,7 @@ func _on_check_update_pressed() -> void:
 func _on_update_check_done(tip: String, color: Color) -> void:
 	if is_instance_valid(_check_update_btn):
 		_check_update_btn.disabled = false
-		_check_update_btn.text = "✦ 检查更新"
+		_check_update_btn.text = "◆ 检查更新"
 	if is_instance_valid(_update_tip_lbl):
 		_update_tip_lbl.text = tip
 		_update_tip_lbl.add_theme_color_override("font_color", color)
@@ -715,7 +715,7 @@ func _copy_diagnostics_info() -> void:
 
 	if DisplayServer.has_method("clipboard_set"):
 		DisplayServer.clipboard_set(info)
-	UpdateManager.show_toast("✦ 运行诊断信息已复制到剪贴板 ✦", GameStyle.GOOD)
+	UpdateManager.show_toast("◆ 运行诊断信息已复制到剪贴板 ◆", GameStyle.GOOD)
 
 func _open_tutorial() -> void:
 	var tut := get_parent().get_node_or_null("TutorialDialog")

@@ -76,7 +76,7 @@ func _mark_phase2() -> void:
 		if _phase_tween != null and _phase_tween.is_valid():
 			_phase_tween.kill()
 		_phase_tick.modulate = Color(3.0, 3.0, 3.0, 1.0)
-		_phase_tween = create_tween()
+		_phase_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_phase_tween.tween_property(_phase_tick, "modulate", Color.WHITE, 0.5)
 
 func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
@@ -96,7 +96,7 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 		# 登场：自屏顶压落 + 弹跳（与 banner / 等级徽章同款 BACK 缓动），配 boss_raid 低吼同拍
 		if _fx_tween != null and _fx_tween.is_valid():
 			_fx_tween.kill()
-		_fx_tween = create_tween()
+		_fx_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_fx_tween.set_parallel()
 		_fx_tween.tween_property(self, "scale", Vector2.ONE, 0.22)\
 			.from(Vector2(0.6, 0.6)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -110,14 +110,14 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 	if absf(_bar.value - cur) > 0.5:
 		if _bar_tween != null and _bar_tween.is_valid():
 			_bar_tween.kill()
-		_bar_tween = create_tween()
+		_bar_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_bar_tween.tween_property(_bar, "value", cur, 0.15)
 
 func _on_boss_defeated(_title: String) -> void:
 	_active = false
 	if _fx_tween != null and _fx_tween.is_valid():
 		_fx_tween.kill()
-	_fx_tween = create_tween()
+	_fx_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_fx_tween.tween_property(self, "modulate:a", 0.0, 0.3)
 	_fx_tween.tween_callback(func():
 		visible = false

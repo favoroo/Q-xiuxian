@@ -211,6 +211,7 @@ func open() -> void:
 	_on_opened()
 	modulate.a = 0.0
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
 
 ## 关闭弹窗（带淡出动画与防重入）
@@ -220,6 +221,7 @@ func close() -> void:
 	DetailTip.close_all(self)
 	_closing = true
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 0.0, GameStyle.UI_FADE_OUT)
 	tw.tween_callback(func():
 		visible = false

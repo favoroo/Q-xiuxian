@@ -37,7 +37,7 @@ static func burst(host: Control, badge: Control) -> void:
 	fx.global_position = badge.get_global_rect().get_center()
 	fx._spawn_ring()
 	fx._spawn_shards()
-	var tw := fx.create_tween()
+	var tw := fx.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_method(fx._set_progress, 0.0, 1.0, TOTAL_DUR)
 	tw.tween_callback(fx.queue_free)
 
@@ -54,10 +54,10 @@ func _spawn_ring() -> void:
 	ring.modulate.a = 0.0
 	add_child(ring)
 	# 淡入→淡出与扩散各走一条 tween：alpha 先到峰值再线性退场，scale 一路 EASE_OUT 扩出去
-	var tw_a := ring.create_tween()
+	var tw_a := ring.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw_a.tween_property(ring, "modulate:a", RING_PEAK_ALPHA, 0.05)
 	tw_a.tween_property(ring, "modulate:a", 0.0, RING_DUR - 0.05)
-	var tw_s := ring.create_tween()
+	var tw_s := ring.create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw_s.tween_property(ring, "scale", Vector2.ONE * RING_EXPAND, RING_DUR) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 

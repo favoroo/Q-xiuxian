@@ -38,9 +38,9 @@ func _get_panel_margins() -> Vector4:
 
 func _build_body(root_vbox: VBoxContainer) -> void:
 	# 1. 注册顶部 Tab 按钮
-	add_tab_button(0, "✦ 成就")
-	add_tab_button(1, "✦ 角色")
-	add_tab_button(2, "✦ 战斗记录")
+	add_tab_button(0, "◆ 成就")
+	add_tab_button(1, "◆ 角色")
+	add_tab_button(2, "◆ 战斗记录")
 
 	# 2. 生涯核心数据横条（5 个指标卡）
 	var stats_row := HBoxContainer.new()
@@ -173,7 +173,7 @@ func _refresh_data() -> void:
 		for a in defs:
 			if GameManager.is_achievement_unlocked(String(a.get("id", ""))):
 				done += 1
-		_ach_list_box.add_child(_section_header("✦ %s · %d/%d" % [
+		_ach_list_box.add_child(_section_header("◆ %s · %d/%d" % [
 			String(AchievementData.CATEGORY_NAMES.get(cat, cat)), done, defs.size()],
 			_category_color(cat)))
 		var grid := GridContainer.new()
@@ -193,7 +193,7 @@ func _refresh_data() -> void:
 	for cid in CultivatorData.DEFS.keys():
 		if GameManager.is_cultivator_unlocked(String(cid)):
 			unlocked_n += 1
-	_cult_list_box.add_child(_section_header("✦ 角色 · 已解锁 %d/%d · 通关对应难度即可点亮该档封印" % [
+	_cult_list_box.add_child(_section_header("◆ 角色 · 已解锁 %d/%d · 通关对应难度即可点亮该档封印" % [
 		unlocked_n, CultivatorData.DEFS.size()], GameStyle.GOLD))
 	var cgrid := GridContainer.new()
 	cgrid.columns = 2
@@ -545,7 +545,7 @@ func _rebuild_log_list() -> void:
 	for c in _log_list_box.get_children():
 		c.queue_free()
 
-	_log_list_box.add_child(_section_header("✦ 通关记录 · 共 %d 次" % GameManager.victory_log.size()))
+	_log_list_box.add_child(_section_header("◆ 通关记录 · 共 %d 次" % GameManager.victory_log.size()))
 	if GameManager.victory_log.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "暂无通关记录 · 完成 20 波即可记录"
@@ -557,7 +557,7 @@ func _rebuild_log_list() -> void:
 			_log_list_box.add_child(_create_log_row(GameManager.victory_log[i], i))
 
 	_log_list_box.add_child(_spacer(6))
-	_log_list_box.add_child(_section_header("✦ 最近游戏 · 最近 %d 局" % GameManager.run_history.size()))
+	_log_list_box.add_child(_section_header("◆ 最近游戏 · 最近 %d 局" % GameManager.run_history.size()))
 	if GameManager.run_history.is_empty():
 		var empty2 := Label.new()
 		empty2.text = "暂无记录 · 开始游戏即可记录"

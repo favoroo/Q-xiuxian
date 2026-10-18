@@ -26,7 +26,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	vbox.add_child(tab_bar)
 
 	var sec_title := Label.new()
-	sec_title.text = "✦ 属 性"
+	sec_title.text = "◆ 属 性"
 	GameStyle.label(sec_title, 15, GameStyle.JADE)
 	sec_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tab_bar.add_child(sec_title)

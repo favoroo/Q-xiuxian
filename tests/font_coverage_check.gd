@@ -11,7 +11,11 @@ extends Node
 ##
 ## 三个账本（都在 tools/ 下，由 tools/subset_fonts.py 生成）：
 ##   字集　　　　 charset.txt      两份字重保留的字形清单，也是 pyftsubset 的输入
-##   豁免账　　　 exempt_chars.txt 源码里有、但 MiSans 渲染不了的字（⇒ ✦ 这类，靠系统回退）
+##   豁免账　　　 exempt_chars.txt 源码注释里有、但 MiSans 渲染不了的字（⇒ 这类）。
+##   　　　　　　　 红线：豁免账只许进注释，不许进任何渲染到屏幕的文案 —— Android 真机上
+##   　　　　　　　 系统回退字体的动态加载会让全屏文字当帧重排（UI 集体闪一下），编辑器里
+##   　　　　　　　 被系统字体兜住看不出来。U+26A0/U+26A1/U+2726/U+2716 曾因此走豁免账
+##   　　　　　　　 漏进战斗播报，2026-10-18 已全清（此处只写码位，字面量入源码必红）。
 ##   （源码本身） 现场重扫，不落盘
 ##
 ## 三段账：
@@ -70,9 +74,9 @@ func _run_all() -> void:
 			continue
 		var supported := _supported_set(font)
 		# 尺子对照：先证这把尺子既不是空的、也不会走去系统回退字体。真走了回退，A 段的账
-		# 就不是这两份字体的账了，全绿也是假的。U+2726（✦）不在 MiSans 里，正好当反例。
+		# 就不是这两份字体的账了，全绿也是假的。U+2726 不在 MiSans 里，正好当反例。
 		_c.check(supported.size() > 0 and not supported.has(0x2726),
-			"%s字重尺子对照：能读到 cmap 且不含 U+2726 ✦（实得字形 %d）" % [label, supported.size()])
+			"%s字重尺子对照：能读到 cmap 且不含 U+2726（实得字形 %d）" % [label, supported.size()])
 		var missing: Array = _drift(charset, supported)
 		_c.check(missing.is_empty(),
 			"%s字重覆盖字集全部 %d 个码位%s" % [label, charset.size(), _sample(missing)])
@@ -105,7 +109,7 @@ func _selftest() -> void:
 	_c.check(_drift({0x4FEE: true}, supported).is_empty(),
 		"正例① 字体有的字（修 U+4FEE）不误报")
 	_c.check(not _drift({0x2726: true}, supported).is_empty(),
-		"反例① 字体缺的字（✦ U+2726）被 _drift 抓到")
+		"反例① 字体缺的字（U+2726）被 _drift 抓到")
 
 	_c.check(not _charset_ok(0) and not _charset_ok(CHARSET_MIN - 1) and _charset_ok(CHARSET_MIN),
 		"反例② 空/截断字集过不了规模守卫，刚好达标才放行")
@@ -120,8 +124,8 @@ func _selftest() -> void:
 	for cp in exempt.keys():
 		allowed[cp] = true
 	_c.check(_drift(charset, charset).is_empty(), "正例③ 字集对自己无漂移")
-	_c.check(_drift({0x2726: true}, allowed).is_empty(),
-		"正例③ 豁免账里的字（✦ U+2726）被 B 段放行")
+	_c.check(_drift({0x21D2: true}, allowed).is_empty(),
+		"正例③ 豁免账里的字（U+21D2）被 B 段放行")
 	_c.check(_intersection({0x4FEE: true, 0x2726: true}, {0x2726: true, 0x9F98: true}) == [0x2726],
 		"正例⑤ _intersection 找出共同元素")
 	_c.check(_intersection({0x4FEE: true}, {0x2726: true}).is_empty(),

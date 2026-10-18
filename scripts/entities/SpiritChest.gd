@@ -14,7 +14,7 @@ extends Node2D
 ## 甩开妖来砸匣子，只有闲着的武器与多出来的弹道才流向它。
 ## 耐久按「几下」计而不按生命：伤害数值随星级/属性涨几十倍，若匣子跟着敌方 hp 曲线走，
 ## 后期会变成打不动的石头或一碰就没，两种都读不出「砸」这个动作。
-## 档位（tier）由 WaveSpawner 在 add_child 之前写入：_ready 里贴图/体型/击数/配色全读它，
+## 档位（tier）由 WaveSpawner 在 add_child 之前写入：_ready 里造型/体型/击数/配色全读它，
 ## 挂树后再改 tier 不会重建这些件，所以构造顺序是契约的一部分。
 
 ## 剩余击数读数：只在受损后出现，一格一下，从右往左熄灭
@@ -44,24 +44,19 @@ class HitPips:
 
 const BASE_SCALE := Vector2(34.0 / 96.0, 34.0 / 96.0)
 ## 体型倍率（2026-10-10 用户口径「敌人和宝箱的大小要大一点」）。
-## 判定圆直径 34（局部半径 17），精灵按「屏幕宽 == 判定直径」定标：
-## prop_chest.png 产物画布 96×87（源图 assets_raw 256px 预缩一半，2026-10-10 生图换稿），
+## 判定圆直径 34（局部半径 17），造型按「屏幕宽 == 判定直径」定标：
+## ChestVisual 画布 96×87、原点居中（2026-10-18 起程序绘制，与旧 prop_chest.png 同画布口径），
 ## ×SIZE_MULT 后与判定同涨 —— 视觉与判定同倍放缩（AGENTS.md 铁律 7），PIP_LIFT 跟着走。
 const SIZE_MULT := 1.5
 ## 读数离匣心的高度：产物画布 87 高，×(34/96×1.5) 后上沿在匣心上方约 23px，
 ## 这条要在它之上 —— 摆在 40×SIZE_MULT=60px，远在匣顶上方，不压画面。
 const PIP_LIFT := 40.0 * SIZE_MULT
-const JIGGLE_PX := 3.2        ## 受击瞬间精灵微反冲位移
+const JIGGLE_PX := 3.2        ## 受击瞬间造型微反冲位移
 const FLASH_MOD := 2.2        ## 受击闪白倍率（modulate 超过 1 即提亮，无需着色器）
 
-## 三档贴图（下标 == BalanceChest.TIER_*）：木=玄铁匣（2026-10-10 换稿那张）、铜=青铜古匣、
-## 玉=青玉镶板匣。三张源图同为 256 宽、产物同为 96 宽，所以 BASE_SCALE 这一把尺通用；
-## 档位之间的体型差由 BalanceChest.TIER_SCALE 同倍乘在精灵与判定圆上（画多大 == 判多大）。
-const TIER_TEXTURES: Array[Texture2D] = [
-	preload("res://assets/art/prop_chest.png"),
-	preload("res://assets/art/prop_chest_bronze.png"),
-	preload("res://assets/art/prop_chest_jade.png"),
-]
+## 三档造型（2026-10-18 换程序绘制，几何共用一套、材质配色分档）：
+## 木=棕木铁箍、铜=青铜红绸、玉=青玉金箍嵌宝，绘制在 ChestVisual，无贴图依赖；
+## 档位之间的体型差由 BalanceChest.TIER_SCALE 同倍乘在绘制与判定圆上（画多大 == 判多大）。
 ## 耐久格配色分档（取色只从 GameStyle）：木=金币黄、铜=霜金、玉=青碧
 const TIER_PIP_COLORS: Array[Color] = [GameStyle.JADE, GameStyle.RARITY_EPIC, GameStyle.RARITY_RARE]
 
@@ -74,9 +69,9 @@ var dying: bool = false
 var tier: int = BalanceChest.TIER_WOOD
 var max_hits: int = GameBalance.CHEST_BREAK_HITS
 var remaining_hits: int = GameBalance.CHEST_BREAK_HITS
-var _tier_scale: float = 1.0   ## 本档体型倍率（精灵与判定圆同乘）
+var _tier_scale: float = 1.0   ## 本档体型倍率（造型与判定圆同乘）
 
-var _sprite: Sprite2D
+var _visual: ChestVisual
 var _pips: HitPips
 var _box: Area2D
 var _box_shape: CollisionShape2D
@@ -103,12 +98,10 @@ func _ready() -> void:
 	_box_shape.shape = circle
 	_box.add_child(_box_shape)
 
-	_sprite = Sprite2D.new()
-	_sprite.texture = TIER_TEXTURES[clampi(tier, 0, TIER_TEXTURES.size() - 1)]
-	# 0.2 倍微缩显示，全局 Nearest 会碎边出洞 —— 单节点开 Linear（SlashEffect 同款先例）
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	_sprite.scale = Vector2.ZERO
-	add_child(_sprite)
+	_visual = ChestVisual.new()
+	_visual.tier = tier
+	_visual.scale = Vector2.ZERO
+	add_child(_visual)
 
 	_pips = HitPips.new()
 	_pips.position = Vector2(0.0, -PIP_LIFT * _tier_scale)
@@ -120,20 +113,20 @@ func _ready() -> void:
 	add_child(_pips)
 
 	# 砸落登场 + 匣内灵气吞吐，两者都落在 SIZE_MULT×档位 这一档体型上。
-	# 呼吸必须等登场落定再接手：两条 tween 同写 _sprite.scale 时谁后写谁赢。
+	# 呼吸必须等登场落定再接手：两条 tween 同写 _visual.scale 时谁后写谁赢。
 	var rest := BASE_SCALE * SIZE_MULT * _tier_scale
 	_entrance_tw = create_tween()
-	_entrance_tw.tween_property(_sprite, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_entrance_tw.tween_property(_visual, "scale", rest, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_entrance_tw.tween_callback(_start_breathe)
 
 ## 登场落定后才开始吞吐：起幅就是 rest，之后只在 rest 与 rest×1.04 之间摆
 func _start_breathe() -> void:
-	if _sprite == null or not is_instance_valid(_sprite):
+	if _visual == null or not is_instance_valid(_visual):
 		return
 	var rest := BASE_SCALE * SIZE_MULT * _tier_scale
 	_breathe = create_tween().set_loops()
-	_breathe.tween_property(_sprite, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
-	_breathe.tween_property(_sprite, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_visual, "scale", rest * 1.04, 1.1).set_trans(Tween.TRANS_SINE)
+	_breathe.tween_property(_visual, "scale", rest, 1.1).set_trans(Tween.TRANS_SINE)
 
 ## 受损后的常驻相：微暗微冷，越裂越沉 —— 「这匣子挨过打」的底色，闪白要回到这里而不是纯白
 func _resting_modulate() -> Color:
@@ -160,17 +153,17 @@ func _flash() -> void:
 	if _flash_tw != null and _flash_tw.is_valid():
 		_flash_tw.kill()
 	_flash_tw = create_tween()
-	_flash_tw.tween_property(_sprite, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
-	_flash_tw.tween_property(_sprite, "modulate", _resting_modulate(), 0.10)
+	_flash_tw.tween_property(_visual, "modulate", Color(FLASH_MOD, FLASH_MOD, FLASH_MOD * 0.9, 1.0), 0.02)
+	_flash_tw.tween_property(_visual, "modulate", _resting_modulate(), 0.10)
 
-## 受击微反冲：精灵朝击退方向偏一下再回位（匣子本体不位移，位移的是画）
+## 受击微反冲：造型朝击退方向偏一下再回位（匣子本体不位移，位移的是画）
 func _jiggle(knockback: Vector2) -> void:
 	if _jiggle_tw != null and _jiggle_tw.is_valid():
 		_jiggle_tw.kill()
 	var dir := knockback.normalized() if knockback.length_squared() > 1.0 else Vector2.UP
 	_jiggle_tw = create_tween()
-	_jiggle_tw.tween_property(_sprite, "position", dir * JIGGLE_PX, 0.045)
-	_jiggle_tw.tween_property(_sprite, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
+	_jiggle_tw.tween_property(_visual, "position", dir * JIGGLE_PX, 0.045)
+	_jiggle_tw.tween_property(_visual, "position", Vector2.ZERO, 0.11).set_trans(Tween.TRANS_SINE)
 
 func _destroy() -> void:
 	if dying or is_queued_for_deletion():
@@ -250,6 +243,6 @@ func dissolve() -> void:
 	_pips.visible = false
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(_sprite, "modulate:a", 0.0, 0.4)
-	tw.tween_property(_sprite, "scale", _sprite.scale * 0.6, 0.4)
+	tw.tween_property(_visual, "modulate:a", 0.0, 0.4)
+	tw.tween_property(_visual, "scale", _visual.scale * 0.6, 0.4)
 	tw.chain().tween_callback(queue_free)

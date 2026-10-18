@@ -81,6 +81,96 @@ func _run() -> void:
 			w, pr.position.y, pr.end.y, area.y])
 		await _close_dialog()
 
+	# ---- ④ 暂停生命周期：open() 切 ALWAYS 防卡死，close() 恢复 DISABLED ----
+	await _check_pause_lifecycle()
+	await _check_detail_tip_pause()
+	await _check_pause_menu_guards()
+
+func _check_pause_lifecycle() -> void:
+	var dlg := PlayerStatsDialog.new()
+	add_child(dlg)
+	_c.check(dlg.process_mode == Node.PROCESS_MODE_DISABLED, "初始状态 process_mode 为 DISABLED")
+	dlg.open(false)
+	_c.check(dlg.process_mode == Node.PROCESS_MODE_ALWAYS, "open 后 process_mode 切换为 ALWAYS（保证暂停时不卡死）")
+	_c.check(get_tree().paused, "open 后整树进入 paused 状态")
+	for i in range(12):
+		await get_tree().process_frame
+	_c.check(dlg.modulate.a > 0.0, "暂停下淡入动画正常推进（透明度 %.2f > 0）" % dlg.modulate.a)
+	dlg.close()
+	await dlg.closed
+	_c.check(not dlg.visible and dlg.process_mode == Node.PROCESS_MODE_DISABLED, "close 后面板隐藏且 process_mode 恢复为 DISABLED")
+	get_tree().paused = false
+	dlg.queue_free()
+
+func _check_detail_tip_pause() -> void:
+	var host := Control.new()
+	host.process_mode = Node.PROCESS_MODE_INHERIT
+	add_child(host)
+
+	var anchor := Control.new()
+	anchor.position = Vector2(100, 100)
+	anchor.size = Vector2(50, 50)
+	host.add_child(anchor)
+
+	var tip := DetailTip.show_over(host, anchor, {
+		"title": "测试详情",
+		"body": "内容"
+	})
+	_c.check(tip != null, "DetailTip 成功创建")
+	_c.check(tip.process_mode == Node.PROCESS_MODE_ALWAYS, "DetailTip process_mode 为 ALWAYS")
+
+	get_tree().paused = true
+	tip.close()
+	for i in range(40):
+		await get_tree().process_frame
+		if not is_instance_valid(tip) or tip.is_queued_for_deletion():
+			break
+
+	_c.check(not is_instance_valid(tip) or tip.is_queued_for_deletion(), "暂停状态下 DetailTip 仍能顺利完成淡出并销毁")
+	get_tree().paused = false
+	host.queue_free()
+
+func _check_pause_menu_guards() -> void:
+	var root := Control.new()
+	add_child(root)
+
+	var pause_menu := PauseMenu.new()
+	pause_menu.name = "PauseMenu"
+	root.add_child(pause_menu)
+
+	var stats_dlg := PlayerStatsDialog.new()
+	stats_dlg.name = "PlayerStatsDialog"
+	root.add_child(stats_dlg)
+
+	# 1. 验证背后有 PlayerStatsDialog 时，PauseMenu.close() 绝不解暂停
+	pause_menu.open()
+	_c.check(get_tree().paused, "PauseMenu open 后暂停")
+	stats_dlg.visible = true
+	pause_menu.close(true)
+	for i in range(40):
+		await get_tree().process_frame
+		if not pause_menu.visible:
+			break
+	_c.check(not pause_menu.visible, "PauseMenu 淡出完成并隐藏")
+	_c.check(get_tree().paused, "背后有二级弹窗（PlayerStatsDialog）时 PauseMenu.close 绝不解暂停")
+	stats_dlg.visible = false
+	get_tree().paused = false
+
+	# 2. 验证淡出途中点击次级入口（_on_stats_pressed），旧 close tween 被及时 kill，不误解暂停
+	pause_menu.open()
+	_c.check(get_tree().paused, "PauseMenu 重新 open 后暂停")
+	pause_menu.close(true)
+	await get_tree().process_frame
+	pause_menu._on_stats_pressed()
+	stats_dlg.visible = true
+	for i in range(40):
+		await get_tree().process_frame
+	_c.check(get_tree().paused, "淡出途中改选次级入口，旧 close tween 被截断，依然保持暂停")
+
+	stats_dlg.visible = false
+	get_tree().paused = false
+	root.queue_free()
+
 func _sweep_total() -> int:
 	return StatInfoData.ids().size() + WeaponData.MAX_SLOTS + GameManager.stash.size() \
 		+ GameManager.upgrade_history.size()

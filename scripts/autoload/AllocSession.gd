@@ -20,7 +20,7 @@ static func open_alloc_session(gm: Node) -> void:
 
 static func force_end_alloc(gm: Node, reason: String) -> void:
 	if gm.pending_upgrade_points > 0:
-		gm.announcement_triggered.emit("✦ %s · 剩余 %d 点作废 ✦" % [reason, gm.pending_upgrade_points])
+		gm.announcement_triggered.emit("◆ %s · 剩余 %d 点作废 ◆" % [reason, gm.pending_upgrade_points])
 	gm.pending_upgrade_points = 0
 	gm.alloc_offers.clear()
 	gm.pending_points_changed.emit(0)

@@ -425,7 +425,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		# 白影先停在旧值（露出白影差），主条立即扣到底；白影随后追平
 		hp_ghost_bar.value = hp_bar.value
 		hp_bar.value = cur
-		_hp_ghost_tween = create_tween()
+		_hp_ghost_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_hp_ghost_tween.tween_interval(0.25)
 		_hp_ghost_tween.tween_property(hp_ghost_bar, "value", cur, 0.3)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -440,7 +440,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		var now_ms := Time.get_ticks_msec()
 		if now_ms - _last_hp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
 			_last_hp_tween_ms = now_ms
-			_hp_tween = create_tween()
+			_hp_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			_hp_tween.tween_property(hp_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			_hp_tween.parallel().tween_property(hp_ghost_bar, "value", cur, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		else:
@@ -470,7 +470,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 			if low and GameFeel.screen_flash_enabled():
 				if hp_icon != null:
 					hp_icon.pivot_offset = hp_icon.size * 0.5
-				_hp_low_tween = create_tween().set_loops()
+				_hp_low_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_loops()
 				_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
 					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 				_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", GameStyle.BAD, 0.35)\
@@ -498,7 +498,7 @@ func _play_heal_fx() -> void:
 		if _hp_heal_tween != null and _hp_heal_tween.is_valid():
 			_hp_heal_tween.kill()
 		_hp_heal_flash.modulate.a = 0.45
-		_hp_heal_tween = create_tween()
+		_hp_heal_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_hp_heal_tween.tween_property(_hp_heal_flash, "modulate:a", 0.0, 0.28)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
@@ -507,7 +507,7 @@ func _play_heal_fx() -> void:
 			_hp_label_heal_tween.kill()
 		hp_label.pivot_offset = hp_label.size * 0.5
 		hp_label.scale = Vector2(1.15, 1.15)
-		_hp_label_heal_tween = create_tween()
+		_hp_label_heal_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_hp_label_heal_tween.tween_property(hp_label, "scale", Vector2.ONE, 0.2)\
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		_hp_label_heal_tween.parallel().tween_property(hp_label, "modulate", Color(0.3, 1.4, 0.6, 1.0), 0.05)
@@ -516,7 +516,7 @@ func _play_heal_fx() -> void:
 	if hp_icon != null:
 		hp_icon.pivot_offset = hp_icon.size * 0.5
 		hp_icon.scale = Vector2(1.2, 1.2)
-		var icon_tw := create_tween()
+		var icon_tw := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		icon_tw.tween_property(hp_icon, "scale", Vector2.ONE, 0.22)\
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
@@ -544,7 +544,7 @@ func _on_leveled_up(_lvl: int) -> void:
 	# 幅度收在「看得出弹了一下」这一档：顶栏一直在动，压得太狠整条 UI 跟着抖
 	badge.pivot_offset = badge.size * 0.5
 	badge.scale = Vector2(0.88, 1.12)
-	_lv_tween = create_tween()
+	_lv_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_lv_tween.tween_property(badge, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	# 金色只驻留 0.26s 再渐回主蓝，杀出「跳了一下」的信号又不停在错误配色上
 	_lv_tween.parallel().tween_property(_lv_badge_style, "bg_color", _lv_badge_base_bg, 0.22).set_delay(0.26)
@@ -552,7 +552,7 @@ func _on_leveled_up(_lvl: int) -> void:
 	# 数字脉冲：Lv 数值从中心放大回弹，视线钉在「升了几级」上
 	level_label.pivot_offset = level_label.size * 0.5
 	level_label.scale = Vector2(1.25, 1.25)
-	_lv_label_tween = create_tween()
+	_lv_label_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_lv_label_tween.tween_property(level_label, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	HudLevelBadgeFx.burst(self, badge)
 	# 全屏金光：防重入——上一闪没淡完时排队，等淡完再补一次，避免 alpha 跳峰造成按钮闪
@@ -572,7 +572,7 @@ func _play_level_flash() -> void:
 	if _flash_rect == null:
 		return
 	_flash_rect.modulate.a = 1.0
-	_flash_tween = create_tween()
+	_flash_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_flash_tween.tween_property(_flash_rect, "modulate:a", 0.0, 0.28).set_delay(0.06)
 	_flash_tween.tween_callback(func():
 		if _flash_queued:
@@ -589,7 +589,7 @@ func _on_exp_changed(cur: int, target: int, lvl: int) -> void:
 	var now_ms := Time.get_ticks_msec()
 	if now_ms - _last_exp_tween_ms >= int(HUD_TWEEN_MIN_INTERVAL * 1000.0):
 		_last_exp_tween_ms = now_ms
-		_exp_tween = create_tween()
+		_exp_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_exp_tween.tween_property(exp_bar, "value", float(cur), 0.12)
 	else:
 		exp_bar.value = float(cur)
@@ -633,7 +633,7 @@ func _pulse_shards(stones: int) -> void:
 		_shards_pulse_tween.kill()
 	shards_label.pivot_offset = shards_label.size * 0.5
 	shards_label.scale = Vector2(1.25, 1.25)
-	_shards_pulse_tween = create_tween()
+	_shards_pulse_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_shards_pulse_tween.tween_property(shards_label, "scale", Vector2.ONE, 0.22)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", Color(1.35, 1.25, 0.9, 1.0), 0.05)
@@ -696,7 +696,7 @@ func show_announcement(msg: String) -> void:
 	banner.pivot_offset = banner.size / 2.0
 	if _banner_tween != null and _banner_tween.is_valid():
 		_banner_tween.kill()
-	_banner_tween = create_tween()
+	_banner_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	var tw := _banner_tween
 	tw.tween_property(banner, "modulate:a", 1.0, 0.18)
 	tw.parallel().tween_property(banner, "scale", Vector2(1.08, 1.08), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

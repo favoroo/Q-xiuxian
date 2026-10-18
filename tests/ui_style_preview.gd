@@ -30,7 +30,7 @@ func _ready() -> void:
 	# 色带卡一排：凡/良/仙/传 + 选中态
 	var accents := [GameStyle.RARITY_COMMON, GameStyle.RARITY_RARE, GameStyle.RARITY_EPIC,
 		GameStyle.RARITY_LEGEND, GameStyle.GOLD]
-	var names := ["普通", "稀有", "史诗", "传说", "已选 ✦"]
+	var names := ["普通", "稀有", "史诗", "传说", "已选 ★"]
 	for i in range(accents.size()):
 		var c := PanelContainer.new()
 		c.position = Vector2(60 + i * 172.0, 160)

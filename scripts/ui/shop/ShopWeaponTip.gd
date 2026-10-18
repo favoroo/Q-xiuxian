@@ -81,7 +81,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var actions: Array = []
 	if mergeable:
 		actions.append([{
-			"text": "✦ 三合一 · 升至 %s ✦" % WeaponData.star_text(star + 1),
+			"text": "◆ 三合一 · 升至 %s ◆" % WeaponData.star_text(star + 1),
 			"color": GameStyle.JADE,
 			"edge_color": GameStyle.JADE_EDGE,
 			"text_color": GameStyle.INK_TEXT,

@@ -32,6 +32,52 @@ var advance: float = 0.0
 var gait_phase: float = 0.0
 var special_state: float = 0.0  ## 特殊机制状态（丹爆引信/雷兽蓄力/Boss强化等）
 
+var aim_dir: Vector2 = Vector2.ZERO:  ## 全局锁敌朝向（用于法剑/眼眸精准指向）
+	set(val):
+		if val == aim_dir:
+			return
+		aim_dir = val
+		if special_state > 0.0:
+			_dirty = true
+
+var recoil: float = 0.0:              ## 武器出膛后坐力（1.0 -> 0.0 快速回弹）
+	set(val):
+		recoil = val
+		_dirty = true
+
+var weapon_tip_pos: Vector2 = Vector2.ZERO  ## 武器器尖局部坐标（供出膛点查询）
+
+func trigger_recoil(_dir: Vector2 = Vector2.ZERO) -> void:
+	recoil = 1.0
+	_dirty = true
+
+func get_tip_local_pos() -> Vector2:
+	if weapon_tip_pos != Vector2.ZERO:
+		return weapon_tip_pos
+	return _calc_weapon_tip_pos()
+
+func _calc_weapon_tip_pos() -> Vector2:
+	var root_scale_x := -1.0 if flip_h else 1.0
+	var casting := special_state > 0.0
+	var local_aim := Vector2.RIGHT
+	if aim_dir.length_squared() > 0.01:
+		local_aim = Vector2(aim_dir.x * root_scale_x, aim_dir.y).normalized()
+
+	var sword_pos := Vector2.ZERO
+	var sword_rot := 0.0
+	if casting or recoil > 0.001:
+		sword_rot = local_aim.angle()
+		var pull_back := -local_aim * (5.0 * special_state + 7.0 * recoil)
+		sword_pos = Vector2(2, 4) + pull_back
+	else:
+		sword_pos = Vector2(2, 8)
+		sword_rot = deg_to_rad(20.0)
+
+	var t_sword := Transform2D(sword_rot, sword_pos)
+	var tip_in_local := t_sword * Vector2(20.0, 0.0)
+	var sf := (config.scale_factor if config != null else 1.0) * ENEMY_GLOBAL_SCALE
+	return Vector2(tip_in_local.x * root_scale_x, tip_in_local.y) * sf
+
 var _time: float = 0.0
 
 # —— 重绘节流（2026-10-10 性能优化）——
@@ -81,6 +127,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	if recoil > 0.0:
+		recoil = maxf(0.0, recoil - delta * 9.0)
+		_dirty = true
 	# 每帧首只怪刷新缓存，后续直接复用（get_viewport 等返回值在同一渲染帧内对所有节点相同）
 	var frame := Engine.get_frames_drawn()
 	if frame != _cull_frame:
@@ -271,42 +320,16 @@ func _draw_slime() -> void:
 	var eye_pos := Vector2(0, -2 - wave * 0.4)
 	draw_sharp_eye(eye_pos, 4.5, 3.0, config.col_glow, Color(0.9, 1.0, 0.8))
 
-## 2. 御剑邪修：幽冥剑客 (御剑悬浮滑行)
+## 2. 御剑邪修：幽冥剑客 (御剑悬浮滑行与器尖精准指向)
 func _draw_xiexiu() -> void:
 	var float_y := sin(_time * 2.8) * 2.4
 	var t_bank := bank_angle * 0.85
 	var adv_lean := deg_to_rad(advance * 4.0)
-
-	# 火球蓄力姿态（special_state 与 EnemyBase._bolt_windup_t 同源）：脚下幽剑后拉 3px + 剑尖聚光，
-	# 与毒妖毒囊胀大同一条「蓄力读法」通道——变色预告之外再给一个形体预告
-	var casting := special_state > 0.0
-	var cast_pull := 3.0 * special_state
+	var root_scale_x := -1.0 if flip_h else 1.0
 
 	# 地影（高度变化驱动影子呼吸）
 	var shadow_rx := 13.0 - float_y * 0.4
 	draw_filled_ellipse(Vector2(0, 16), maxf(shadow_rx, 6.0), 4.0, Color(0.04, 0.05, 0.08, 0.45))
-
-	# 脚下幽光残剑（斜横悬浮，剑身刻符文）
-	var sword_pos := Vector2(-2 - cast_pull, 11 + float_y)
-	var sword_rot := deg_to_rad(14.0) + t_bank * 0.5 - adv_lean * 0.5
-	var t_sword := Transform2D(sword_rot, sword_pos)
-	var sword_glow_a := 0.4 + special_state * 0.45
-	draw_soft_glow(sword_pos, 14.0, config.col_glow * Color(1, 1, 1, sword_glow_a), 2)
-	if casting:
-		# 剑尖聚光：出膛方向的前端一点暖白亮核，读「火球将从此处出」
-		var tip_pos := t_sword * Vector2(19, 0)
-		_circle(tip_pos, 2.6 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
-	var blade_pts := PackedVector2Array([
-		t_sword * Vector2(-16, -2),
-		t_sword * Vector2(14, -1),
-		t_sword * Vector2(19, 0), # 尖锐断锋
-		t_sword * Vector2(14, 1),
-		t_sword * Vector2(-16, 2)
-	])
-	draw_stroked_polygon(blade_pts, config.col_secondary, config.col_glow, 1.4)
-	# 剑格与剑柄红穗
-	draw_line(t_sword * Vector2(-12, -4), t_sword * Vector2(-12, 4), config.col_accent, 2.0, true)
-	draw_line(t_sword * Vector2(-16, 0), t_sword * Vector2(-21, 2), Color(0.85, 0.25, 0.25), 1.6, true)
 
 	# 破风墨黑长袍下摆（飘逸）
 	var cloth_wave := sin(_time * 4.0) * 2.0
@@ -319,6 +342,8 @@ func _draw_xiexiu() -> void:
 		Vector2(-2, 11 + float_y)
 	])
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.3)
+	# 道袍中缝束带（冷紫滚边，增加修仙长袍层次感）
+	draw_line(Vector2(0, -4 + float_y), Vector2(0, 9 + float_y), config.col_accent, 1.5, true)
 
 	# 苍白修罗骨面
 	var head_pos := Vector2(0, -9 + float_y)
@@ -331,9 +356,70 @@ func _draw_xiexiu() -> void:
 		head_pos + Vector2(0, 8) # 尖下巴
 	])
 	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.4)
-
-	# 单侧修罗冷眸
+	# 额前修罗血纹与冷冽单眸
+	draw_line(head_pos + Vector2(0, -7), head_pos + Vector2(0, 2), Color(0.75, 0.20, 0.35, 0.85), 1.4, true)
 	draw_sharp_eye(head_pos + Vector2(2, -1), 3.5, 1.8, config.col_glow, Color.WHITE)
+
+	# ---------------- 幽冥法剑（御空悬浮 / 瞄准指向 / 剑芒器尖） ----------------
+	# 姿态分派：
+	# 1. 蓄力段（special_state > 0）：剑身拔升、剑尖精准朝向玩家、高频颤振蓄势、器尖聚光成芒
+	# 2. 发射后坐（recoil > 0）：剑身后挫反冲后复位
+	# 3. 寻常巡航：身侧斜挑悬浮浮沉
+	var casting := special_state > 0.0
+	var local_aim := Vector2.RIGHT
+	if aim_dir.length_squared() > 0.01:
+		local_aim = Vector2(aim_dir.x * root_scale_x, aim_dir.y).normalized()
+
+	var sword_pos := Vector2.ZERO
+	var sword_rot := 0.0
+	if casting or recoil > 0.001:
+		# 瞄准射击姿态：飞剑悬浮于身前，剑刃沿 local_aim 直指目标
+		var aim_ang := local_aim.angle()
+		sword_rot = aim_ang
+		# 蓄力后拉（5px）+ 后坐力（7px）+ 高频灵力振颤
+		var pull_back := -local_aim * (5.0 * special_state + 7.0 * recoil)
+		var jitter := Vector2(-local_aim.y, local_aim.x) * (sin(_time * 48.0) * 1.4 * special_state)
+		sword_pos = Vector2(2, 4 + float_y) + pull_back + jitter
+	else:
+		# 寻常巡航：身侧斜挑（20° 倾角，随悬浮呼吸浮沉）
+		sword_pos = Vector2(2, 8 + float_y)
+		sword_rot = deg_to_rad(20.0) + t_bank * 0.5 - adv_lean * 0.5
+
+	var t_sword := Transform2D(sword_rot, sword_pos)
+
+	# 计算器尖坐标（用于 EnemyBase 出膛点精确对其）
+	var tip_in_local := t_sword * Vector2(20.0, 0.0)
+	weapon_tip_pos = Vector2(tip_in_local.x * root_scale_x, tip_in_local.y) * (config.scale_factor * ENEMY_GLOBAL_SCALE)
+
+	# 飞剑本体幽光辉芒
+	var sword_glow_a := 0.45 + special_state * 0.45 + recoil * 0.5
+	draw_soft_glow(sword_pos, 16.0 + special_state * 6.0, config.col_glow * Color(1, 1, 1, sword_glow_a), 2)
+
+	# 剑身几何体（修长锐利的冷冽飞剑）
+	var blade_pts := PackedVector2Array([
+		t_sword * Vector2(-16, -2.2),
+		t_sword * Vector2(14, -1.2),
+		t_sword * Vector2(20, 0.0), # 锋刃尖端
+		t_sword * Vector2(14, 1.2),
+		t_sword * Vector2(-16, 2.2)
+	])
+	draw_stroked_polygon(blade_pts, config.col_secondary, config.col_glow, 1.4)
+	# 剑脊血槽刻纹（幽光流转）
+	draw_line(t_sword * Vector2(-12, 0), t_sword * Vector2(15, 0), config.col_glow, 1.2, true)
+	# 剑格护手与朱砂剑穗
+	draw_line(t_sword * Vector2(-12, -4.5), t_sword * Vector2(-12, 4.5), config.col_accent, 2.2, true)
+	draw_line(t_sword * Vector2(-16, 0), t_sword * Vector2(-22, 2.0), Color(0.85, 0.25, 0.25), 1.6, true)
+
+	# 蓄力期间：器尖高亮凝芒 + 锐利瞄准虚芒（给玩家极强的弹道与威胁读数）
+	if casting:
+		# 器尖耀眼光斑
+		_circle(tip_in_local, 3.2 + special_state * 2.2, Color(0.92, 0.98, 1.0, 0.95))
+		draw_soft_glow(tip_in_local, 12.0 * special_state, Color(0.35, 0.85, 1.0), 3)
+		# 前探瞄准虚芒针（向玩家方向伸出 22px，预示出膛轨道）
+		var aim_line_len := 22.0 * special_state
+		var aim_line_end := tip_in_local + local_aim * aim_line_len
+		draw_line(tip_in_local, aim_line_end, Color(0.35, 0.85, 1.0, 0.7 * special_state), 1.6, true)
+		draw_circle(aim_line_end, 1.6, Color(1.0, 1.0, 1.0, 0.85 * special_state))
 
 ## 3. 丹爆傀儡：蚀骨毒炉 (悬浮晃荡 + 沸腾胀缩)
 func _draw_danbao() -> void:
@@ -763,37 +849,14 @@ func _draw_golem() -> void:
 	draw_stroked_polygon(head_pts, config.col_primary, config.col_secondary, 1.4)
 	draw_line(center + Vector2(-4, -16), center + Vector2(4, -16), config.col_glow, 1.8, true)
 
-## 13. 剑煞邪修（精英）：万剑煞宗残魂 (三剑齐御悬浮)
+## 13. 剑煞邪修（精英）：万剑煞宗残魂 (三剑齐御悬浮与扇形瞄准)
 func _draw_jiansha_elite() -> void:
 	var float_y := sin(_time * 2.8) * 2.2
 	var center := Vector2(0, float_y)
+	var root_scale_x := -1.0 if flip_h else 1.0
 
 	# 地影
 	draw_filled_ellipse(Vector2(0, 16), 16.0, 4.5, Color(0.04, 0.05, 0.08, 0.5))
-
-	# 火球蓄力姿态（special_state 同源）：三剑向身后收拢 3px 并提亮，读「聚气将发」
-	var cast_pull := 3.0 * special_state
-	var cast_bright := 0.4 + special_state * 0.45
-
-	# 背后呈扇形悬浮的 3 柄冷冽煞剑（主剑在中央，双侧副剑）
-	for i in range(3):
-		var ang_offset := deg_to_rad(-24.0 + float(i) * 24.0)
-		var sw_pos := center + Vector2(cos(ang_offset + PI * 0.5), sin(ang_offset + PI * 0.5) - 1.0) * (-12.0 - cast_pull)
-		var sw_rot := ang_offset + deg_to_rad(150.0)
-		var t_sw := Transform2D(sw_rot, sw_pos)
-		draw_soft_glow(sw_pos, 10.0, config.col_glow * Color(1, 1, 1, cast_bright), 2)
-		var sw_pts := PackedVector2Array([
-			t_sw * Vector2(-15, -2),
-			t_sw * Vector2(16, -1),
-			t_sw * Vector2(21, 0),
-			t_sw * Vector2(16, 1),
-			t_sw * Vector2(-15, 2)
-		])
-		draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.4)
-		if special_state > 0.0 and i == 1:
-			# 中间主剑剑尖聚光：火球出膛方位预告
-			var tip := t_sw * Vector2(21, 0)
-			_circle(tip, 2.4 + special_state * 1.6, Color(1.0, 0.85, 0.55, 0.5 + special_state * 0.4))
 
 	# 墨黑金纹魔袍
 	var robe_pts := PackedVector2Array([
@@ -804,6 +867,7 @@ func _draw_jiansha_elite() -> void:
 		center + Vector2(0, 9)
 	])
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.4)
+	draw_line(center + Vector2(0, -4), center + Vector2(0, 10), config.col_accent, 1.8, true)
 
 	# 苍白修罗骨面带垂直血痕
 	var head_pos := center + Vector2(0, -9)
@@ -819,6 +883,48 @@ func _draw_jiansha_elite() -> void:
 	draw_line(head_pos + Vector2(0, -8), head_pos + Vector2(0, 7), Color(0.85, 0.15, 0.25), 1.6, true)
 	draw_sharp_eye(head_pos + Vector2(-3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
 	draw_sharp_eye(head_pos + Vector2(3, 0), 3.2, 1.6, config.col_glow, Color.WHITE)
+
+	# 背后呈扇形悬浮的 3 柄冷冽煞剑（主剑在中央，双侧副剑）
+	var casting := special_state > 0.0
+	var local_aim := Vector2.RIGHT
+	if aim_dir.length_squared() > 0.01:
+		local_aim = Vector2(aim_dir.x * root_scale_x, aim_dir.y).normalized()
+
+	var cast_bright := 0.4 + special_state * 0.45 + recoil * 0.5
+
+	for i in range(3):
+		var sw_pos := Vector2.ZERO
+		var sw_rot := 0.0
+		if casting or recoil > 0.001:
+			var ang_spread := deg_to_rad(-18.0 + float(i) * 18.0)
+			sw_rot = local_aim.angle() + ang_spread
+			var pull_back := -local_aim * (5.0 * special_state + 7.0 * recoil)
+			var side_offset := Vector2(-local_aim.y, local_aim.x) * float(i - 1) * 9.0
+			sw_pos = center + Vector2(2, 2) + side_offset + pull_back
+		else:
+			var ang_offset := deg_to_rad(-24.0 + float(i) * 24.0)
+			sw_pos = center + Vector2(cos(ang_offset + PI * 0.5), sin(ang_offset + PI * 0.5) - 1.0) * -12.0
+			sw_rot = ang_offset + deg_to_rad(150.0)
+
+		var t_sw := Transform2D(sw_rot, sw_pos)
+		draw_soft_glow(sw_pos, 10.0, config.col_glow * Color(1, 1, 1, cast_bright), 2)
+		var sw_pts := PackedVector2Array([
+			t_sw * Vector2(-15, -2),
+			t_sw * Vector2(16, -1),
+			t_sw * Vector2(21, 0),
+			t_sw * Vector2(16, 1),
+			t_sw * Vector2(-15, 2)
+		])
+		draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.4)
+		if i == 1:
+			var tip := t_sw * Vector2(21, 0)
+			weapon_tip_pos = Vector2(tip.x * root_scale_x, tip.y) * (config.scale_factor * ENEMY_GLOBAL_SCALE)
+			if casting:
+				_circle(tip, 2.8 + special_state * 2.0, Color(1.0, 0.90, 0.95, 0.95))
+				draw_soft_glow(tip, 14.0 * special_state, config.col_glow, 3)
+				var aim_line_end := tip + local_aim * (24.0 * special_state)
+				draw_line(tip, aim_line_end, Color(1.0, 0.35, 0.50, 0.75 * special_state), 1.8, true)
+				draw_circle(aim_line_end, 1.8, Color.WHITE)
 
 ## 14. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
 func _draw_boss(final_boss: bool) -> void:

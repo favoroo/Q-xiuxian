@@ -80,7 +80,7 @@ func _play_pop() -> void:
 	pivot_offset = size * 0.5
 	modulate.a = 0.0
 	scale = Vector2(0.6, 0.6)
-	_pop_tween = create_tween()
+	_pop_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_pop_tween.set_parallel()
 	_pop_tween.tween_property(self, "modulate:a", 1.0, 0.14)
 	_pop_tween.tween_property(self, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -91,5 +91,5 @@ func _play_pulse() -> void:
 		_pulse_tween.kill()
 	_label.pivot_offset = _label.size * 0.5
 	_label.scale = Vector2(1.35, 1.35)
-	_pulse_tween = create_tween()
+	_pulse_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_pulse_tween.tween_property(_label, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

@@ -2,10 +2,10 @@ class_name ArenaVisualLayer
 extends Node2D
 
 ## 竞技场战台程序化矢量装饰与九天锁灵结界（空洞冷冽国风）
-## 涵盖中心太极四象大阵、四方灵脉刻槽、九幽边界锁灵结界光幕与四角镇魂阵角
-## ⚠ T-4A（2026-10-15）：结界主光丝改 BoundaryFlowBand 流光带（shader TIME 驱动，零 CPU 重绘），
-##   灵脉刻槽接 GameStyle.FX_HDR_WATER 低档 + 6s 呼吸；太极阵/刻槽/镇魂阵角仍走本层 _draw。
-## ⚠ 性能（2026-10-15）：石台砌缝/符印底座/镇魂阵角等 ~340 条纯静态指令拆到 StaticDecor
+## 涵盖中心太极四象大阵、四方灵脉刻槽与九幽边界锁灵结界光幕
+## 【注意】T-4A（2026-10-15）：结界主光丝改 BoundaryFlowBand 流光带（shader TIME 驱动，零 CPU 重绘），
+##   灵脉刻槽接 GameStyle.FX_HDR_WATER 低档 + 6s 呼吸；太极阵/刻槽仍走本层 _draw。
+## 【注意】性能（2026-10-15）：石台砌缝/符印底座等纯静态指令拆到 StaticDecor
 ##   子节点一次性绘制（show_behind_parent 保持原有叠放次序），本层 10Hz 重绘只剩呼吸/自转动画。
 
 const BOUNDARY_FLOW_SHADER := preload("res://assets/shaders/boundary_flow.gdshader")
@@ -247,7 +247,7 @@ class BoundaryFlowBand:
 				quad = PackedVector2Array([Vector2(e, e), Vector2(-e, e), Vector2(-i, i), Vector2(i, i)])
 				uvs = PackedVector2Array([Vector2(0.5, 0), Vector2(0.75, 0), Vector2(0.75, 1), Vector2(0.5, 1)])
 			3:  # 左：下→上 [0.75, 1.0]
-				quad = PackedVector2Array([Vector2(-e, e), Vector2(-e, -e), Vector2(-i, i), Vector2(i, i)])
+				quad = PackedVector2Array([Vector2(-e, e), Vector2(-e, -e), Vector2(-i, -i), Vector2(-i, i)])
 				uvs = PackedVector2Array([Vector2(0.75, 0), Vector2(1.0, 0), Vector2(1.0, 1), Vector2(0.75, 1)])
 		polygon = quad
 		uv = uvs
@@ -255,9 +255,9 @@ class BoundaryFlowBand:
 # ==============================================================================
 # 5. 静态装饰层（StaticDecor，一次性绘制）
 # ==============================================================================
-## 战台装饰中不随时间变化的部分：石台砌缝/金纹（原 3.1）、符印菱形底座（原 3.2 填色）、
-## 四角镇魂阵枢（原 3.3），合计 ~340 条 draw 指令。拆出后只在进树/half 变更时画一次，
-## 不再吃宿主 10Hz queue_redraw。宿主设置 show_behind_parent，叠放次序与原单次 _draw 一致。
+## 战台装饰中不随时间变化的部分：石台砌缝/金纹（原 3.1）、符印菱形底座（原 3.2 填色）。
+## 拆出后只在进树/half 变更时画一次，不再吃宿主 10Hz queue_redraw。
+## 宿主设置 show_behind_parent，叠放次序与原单次 _draw 一致。
 class StaticDecor:
 	extends Node2D
 
@@ -276,7 +276,6 @@ class StaticDecor:
 	func _draw() -> void:
 		_draw_barrier_base()
 		_draw_talisman_diamonds()
-		_draw_corner_sanctuaries()
 
 	# --------------------------------------------------------------------------
 	# 3.1 战台边缘界石台基（古石砌筑、榫卯咬合与台阶立体阴影）
@@ -364,87 +363,3 @@ class StaticDecor:
 					n_pos + Vector2(0, -d_r * 1.3)
 				])
 				draw_colored_polygon(diamond, Color(0.04, 0.09, 0.14, 0.9))
-
-	# --------------------------------------------------------------------------
-	# 3.3 四角「四象镇魂阵枢」（青铜玄石阵盘，向两翼自然渐隐）
-	# --------------------------------------------------------------------------
-	func _draw_corner_sanctuaries() -> void:
-		var h: float = half
-		var corner_len: float = clampf(h * 0.24, 48.0, 108.0)
-		var plinth_arm := corner_len * 0.78
-		var plinth_bevel := plinth_arm * 0.45
-		var beam_len := corner_len * 0.32
-
-		var corners := [
-			[Vector2(-h + 14.0, -h + 14.0), Vector2(1, 1)],
-			[Vector2(h - 14.0, -h + 14.0), Vector2(-1, 1)],
-			[Vector2(h - 14.0, h - 14.0), Vector2(-1, -1)],
-			[Vector2(-h + 14.0, h - 14.0), Vector2(1, -1)]
-		]
-
-		for c in corners:
-			var pos: Vector2 = c[0]
-			var sgn: Vector2 = c[1]
-
-			# (a) 斜切八角玄石加固台座（Chamfered Plinth）
-			var plinth_pts := PackedVector2Array([
-				pos + Vector2(0, sgn.y * plinth_arm),
-				pos + Vector2(sgn.x * (plinth_arm - plinth_bevel), sgn.y * plinth_arm),
-				pos + Vector2(sgn.x * plinth_arm, sgn.y * (plinth_arm - plinth_bevel)),
-				pos + Vector2(sgn.x * plinth_arm, 0),
-				pos
-			])
-			draw_colored_polygon(plinth_pts, Color(0.035, 0.055, 0.085, 0.96))
-			# 台座斜边古铜细边
-			draw_line(
-				pos + Vector2(sgn.x * (plinth_arm - plinth_bevel), sgn.y * plinth_arm),
-				pos + Vector2(sgn.x * plinth_arm, sgn.y * (plinth_arm - plinth_bevel)),
-				Color(0.20, 0.36, 0.46, 0.65), 1.5
-			)
-
-			# (b) 青铜护角两翼（分 5 段平滑渐隐延伸，彻底消除硬截断）
-			var segs := 5
-			for s in segs:
-				var t0 := float(s) / float(segs)
-				var t1 := float(s + 1) / float(segs)
-				var p_y0 := pos + Vector2(0, sgn.y * corner_len * t0)
-				var p_y1 := pos + Vector2(0, sgn.y * corner_len * t1)
-				var p_x0 := pos + Vector2(sgn.x * corner_len * t0, 0)
-				var p_x1 := pos + Vector2(sgn.x * corner_len * t1, 0)
-				var a := lerpf(0.95, 0.0, t0 * t0)
-				var w := lerpf(7.0, 1.5, t0)
-				# 幽冥青铜底
-				draw_line(p_y0, p_y1, Color(0.08, 0.16, 0.22, a), w)
-				draw_line(p_x0, p_x1, Color(0.08, 0.16, 0.22, a), w)
-				# 冷玉水蓝阵印线
-				var w_inner := lerpf(3.0, 1.0, t0)
-				draw_line(p_y0, p_y1, Color(0.25, 0.72, 0.92, a * 0.85), w_inner)
-				draw_line(p_x0, p_x1, Color(0.25, 0.72, 0.92, a * 0.85), w_inner)
-
-			# (c) 45° 镇魂青铜阵梁与八卦爻印（向阵内延展）
-			var beam_start := pos + sgn * 6.0
-			var beam_end := pos + sgn * (6.0 + beam_len)
-			draw_line(beam_start, beam_end, Color(0.08, 0.15, 0.22, 0.95), 4.5)
-			draw_line(beam_start, beam_end, Color(0.85, 0.70, 0.28, 0.85), 1.4)
-			# 垂直于阵梁的乾坤阴阳短爻
-			var beam_dir := sgn.normalized()
-			var beam_norm := Vector2(-beam_dir.y, beam_dir.x)
-			var p_yao1 := beam_start + beam_dir * (beam_len * 0.38)
-			var p_yao2 := beam_start + beam_dir * (beam_len * 0.72)
-			draw_line(p_yao1 - beam_norm * 4.5, p_yao1 + beam_norm * 4.5, Color(0.85, 0.70, 0.28, 0.75), 1.2)
-			draw_line(p_yao2 - beam_norm * 3.8, p_yao2 + beam_norm * 3.8, Color(0.25, 0.75, 0.95, 0.75), 1.2)
-
-			# (d) 角端镇魂灵晶核心（八角青铜座 + 天蓝灵玉环 + 纯白高光核）
-			# 菱形青铜底座
-			var base_r := 8.5
-			var base_diamond := PackedVector2Array([
-				pos + Vector2(0, -base_r), pos + Vector2(base_r, 0),
-				pos + Vector2(0, base_r), pos + Vector2(-base_r, 0),
-				pos + Vector2(0, -base_r)
-			])
-			draw_colored_polygon(base_diamond, Color(0.06, 0.10, 0.15, 0.98))
-			draw_polyline(base_diamond, Color(0.85, 0.72, 0.30, 0.85), 1.2)
-			# 天蓝灵环与核心晶芒
-			AdaptiveDraw.circle(self, pos, 4.8, Color(0.25, 0.75, 0.95, 0.92))
-			AdaptiveDraw.circle(self, pos, 2.8, Color(0.85, 0.95, 1.0, 0.95))
-			AdaptiveDraw.circle(self, pos, 1.2, Color(1.0, 1.0, 1.0, 1.0))

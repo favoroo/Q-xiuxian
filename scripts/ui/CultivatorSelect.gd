@@ -333,11 +333,11 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	status_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status_chip.size_flags_horizontal = Control.SIZE_SHRINK_END
 	if is_unlocked:
-		status_chip.text = " ✦ 已解锁 "
+		status_chip.text = " ◆ 已解锁 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOOD_DK))
 		GameStyle.label(status_chip, 10, GameStyle.GOOD)
 	else:
-		status_chip.text = " ✖ 未解锁 "
+		status_chip.text = " × 未解锁 "
 		status_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.BAD_DK))
 		GameStyle.label(status_chip, 10, GameStyle.BAD)
 	status_box.add_child(status_chip)
@@ -363,7 +363,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	var raw_equip := CultivatorData.get_start_equip(cid)
 	if not raw_equip.is_empty():
 		mid_col.add_child(_make_info_row("装备", GameStyle.JADE_DK, GameStyle.JADE,
-				["✦ " + raw_equip], col_w))
+				["◆ " + raw_equip], col_w))
 
 	# (b) 独门天赋
 	var pros_lines: Array[String] = []
@@ -393,7 +393,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		var sdef := SkillData.get_def(syn_sid)
 		var sname := String(sdef.get("name", syn_sid))
 		var enh := SkillData.enhance_desc(syn_sid, cid)
-		var syn_text := "✦ 契合「%s」：%s" % [sname, enh] if not enh.is_empty() else "✦ 专属契合「%s」" % sname
+		var syn_text := "◆ 契合「%s」：%s" % [sname, enh] if not enh.is_empty() else "◆ 专属契合「%s」" % sname
 		mid_col.add_child(_make_info_row("技能", GameStyle.GOLD, GameStyle.GOLD_EDGE,
 				[syn_text], col_w))
 
@@ -762,7 +762,7 @@ func _update_small_card_selection(cid: String) -> void:
 			tag_lbl.text = "◆"
 			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE)
 		elif not is_unlocked:
-			tag_lbl.text = "✖"
+			tag_lbl.text = "×"
 			tag_lbl.add_theme_color_override("font_color", GameStyle.GREY)
 		else:
 			tag_lbl.text = " "
@@ -856,7 +856,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		tag_lbl.text = "◆"
 		GameStyle.label(tag_lbl, 12, GameStyle.JADE)
 	elif not is_unlocked:
-		tag_lbl.text = "✖"
+		tag_lbl.text = "×"
 		GameStyle.label(tag_lbl, 10, GameStyle.GREY)
 	else:
 		tag_lbl.text = " "

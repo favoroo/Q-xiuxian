@@ -233,7 +233,7 @@ func _make_text_card(title: String, body: String, image: String = "", image_h: f
 	card.add_child(vbox)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "✦ " + title
+	title_lbl.text = "◆ " + title
 	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
@@ -558,7 +558,7 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	var equip_str: String = String(def.get("start_equip", ""))
 	if not equip_str.is_empty():
 		var equip_lbl := Label.new()
-		equip_lbl.text = "✦ " + equip_str
+		equip_lbl.text = "◆ " + equip_str
 		GameStyle.label(equip_lbl, 12, GameStyle.JADE)
 		text_col.add_child(equip_lbl)
 
@@ -798,7 +798,7 @@ func _make_synergy_card() -> Control:
 	card.add_child(vbox)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "✦ 流派羁绊"
+	title_lbl.text = "◆ 流派羁绊"
 	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
@@ -851,7 +851,7 @@ func _make_stat_guide_card() -> Control:
 	card.add_child(vbox)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "✦ 属性词条 · 这是什么"
+	title_lbl.text = "◆ 属性词条 · 这是什么"
 	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
@@ -895,7 +895,7 @@ func _make_build_card(guide: Dictionary) -> Control:
 	card.add_child(vbox)
 
 	var title_lbl := Label.new()
-	title_lbl.text = "✦ 流派 · " + String(guide.get("name", ""))
+	title_lbl.text = "◆ 流派 · " + String(guide.get("name", ""))
 	GameStyle.label(title_lbl, 15, GameStyle.GOLD, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 

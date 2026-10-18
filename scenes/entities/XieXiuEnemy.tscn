@@ -21,6 +21,7 @@ max_hp = 24.0
 move_speed = 115.0
 contact_damage = 13.0
 exp_reward = 5
+enemy_id = "xiexiu"
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 locomotion_mode = "hover"
 preferred_range = 260.0
@@ -34,7 +35,6 @@ scale = Vector2(1.12, 1.12)
 texture = ExtResource("3_shadow")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-modulate = Color(0.75, 0.55, 1.25, 1)
 material = SubResource("ShaderMaterial_xiexiu")
 scale = Vector2(0.63, 0.63)
 

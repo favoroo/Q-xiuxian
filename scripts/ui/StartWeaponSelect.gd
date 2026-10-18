@@ -178,7 +178,7 @@ func _create_card(w_id: String) -> Control:
 
 	# 行为签（若契合当前道统则追加契合标识）
 	var tag_lbl = Label.new()
-	tag_lbl.text = (" ✦适配·%s " % def.get("tag", "")) if rec else (" " + def.get("tag", "") + " ")
+	tag_lbl.text = (" ◆适配·%s " % def.get("tag", "")) if rec else (" " + def.get("tag", "") + " ")
 	tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	tag_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))

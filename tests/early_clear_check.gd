@@ -141,7 +141,7 @@ func _run() -> void:
 
 	# ---- ⑦ 横幅装得下：最长那句真实读数不许探出画布 ----
 	if _hud != null:
-		var longest := "✦ 收益到账 · 金币与经验 +%d · 提前 %d 秒清场 +%d 金币 ✦" % [
+		var longest := "◆ 收益到账 · 金币与经验 +%d · 提前 %d 秒清场 +%d 金币 ◆" % [
 			GameBalance.harvest_gain(GameManager.harvest) + 999,
 			GameBalance.EARLY_CLEAR_STONES_MAX, GameBalance.EARLY_CLEAR_STONES_MAX]
 		_hud.show_announcement(longest)

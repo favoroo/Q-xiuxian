@@ -105,7 +105,7 @@ func show_obelisk_activation(ob: BlessingObelisk) -> void:
 	var target_s := _base_scale
 	scale = target_s * 0.8
 	modulate.a = 0.0
-	_anim_tween = create_tween()
+	_anim_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_anim_tween.tween_property(self, "modulate:a", 1.0, 0.18)
 	_anim_tween.parallel().tween_property(self, "scale", target_s, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
@@ -115,7 +115,7 @@ func hide_obelisk_activation(ob: BlessingObelisk) -> void:
 		return
 	_active_ob = null
 	_kill_anim_tween()
-	_anim_tween = create_tween()
+	_anim_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_anim_tween.tween_property(self, "modulate:a", 0.0, 0.2)
 	_anim_tween.tween_callback(func() -> void:
 		if _active_ob == null and not _edit_mode:
@@ -147,7 +147,7 @@ func on_obelisk_blessing_triggered(ob: BlessingObelisk) -> void:
 	_kill_anim_tween()
 	if visible:
 		var target_s := _base_scale
-		_anim_tween = create_tween()
+		_anim_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_anim_tween.tween_property(self, "scale", target_s * 1.15, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		_anim_tween.parallel().tween_property(self, "modulate:a", 0.0, 0.4)
 		_anim_tween.tween_callback(func() -> void:

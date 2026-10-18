@@ -16,6 +16,7 @@ var _retry_armed: bool = false
 var _retry_btn: Button
 var _menu_btn: Button
 var _retry_reset_tween: Tween
+var _close_tween: Tween
 var _update_btn: Button
 var _ver_label: Label
 
@@ -211,12 +212,16 @@ func _on_check_failed(err_msg: String) -> void:
 				_update_btn.text = "检 查 更 新"
 		)
 
-## 检查背后是否有加点、商店或局前选人等需要保持暂停的弹窗
+## 检查背后是否有加点、商店或局前选人等需要保持暂停的弹窗（含全部二级弹窗）
 func _has_paused_modal_behind() -> bool:
 	var p := get_parent()
 	if p == null:
 		return false
-	for name_str in ["LevelUpDialog", "WaveShop", "StartMenu", "CultivatorSelect", "SkillSelect", "StartWeaponSelect", "GameOverDialog"]:
+	for name_str in [
+		"LevelUpDialog", "WaveShop", "StartMenu", "CultivatorSelect", "SkillSelect",
+		"StartWeaponSelect", "GameOverDialog", "PlayerStatsDialog", "SettingsDialog",
+		"ManualDialog", "TutorialDialog", "CareerDialog", "ChangelogDialog", "UpdateDialog"
+	]:
 		var n := p.get_node_or_null(name_str) as Control
 		if n != null and n.visible:
 			return true
@@ -256,52 +261,71 @@ func _unhandled_input(event: InputEvent) -> void:
 	open()
 	get_viewport().set_input_as_handled()
 
+func _kill_close_tween() -> void:
+	if _close_tween != null and _close_tween.is_valid():
+		_close_tween.kill()
+		_close_tween = null
+
 func open(unpause_on_close: Variant = null) -> void:
 	if visible or GameManager.is_game_over:
 		return
+	_kill_close_tween()
 	var behind := _has_paused_modal_behind()
 	if unpause_on_close != null:
 		_unpause_on_close = bool(unpause_on_close) and not behind
 	else:
 		_unpause_on_close = not behind
 	_closing = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
 	var tw := create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 1.0, 0.16)
 
 func close(unpause: bool = true) -> void:
 	if _closing:
 		return
 	_closing = true
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	_reset_retry_confirm()
-	var should_unpause := unpause and _unpause_on_close and not _has_paused_modal_behind()
-	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 0.0, 0.12)
-	tw.tween_callback(func():
+	_kill_close_tween()
+	_close_tween = create_tween()
+	_close_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_close_tween.tween_property(self, "modulate:a", 0.0, 0.12)
+	_close_tween.tween_callback(func():
 		visible = false
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var should_unpause := unpause and _unpause_on_close and not _has_paused_modal_behind()
 		if should_unpause:
 			get_tree().paused = false
 		_closing = false
+		_close_tween = null
 	)
 
 func _on_stats_pressed() -> void:
+	_kill_close_tween()
 	visible = false
 	_closing = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
 	stats_requested.emit()
 
 func _on_manual_pressed() -> void:
+	_kill_close_tween()
 	visible = false
 	_closing = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
 	manual_requested.emit()
 
 func _on_settings_pressed() -> void:
+	_kill_close_tween()
 	visible = false
 	_closing = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
 	settings_requested.emit()
 

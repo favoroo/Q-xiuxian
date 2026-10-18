@@ -103,7 +103,7 @@ static func get_def(id: String) -> Dictionary:
 static func all_ids() -> Array:
 	return DEFS.keys()
 
-## 角色是否强化该技能（选择界面黄边「✦契合」判定）
+## 角色是否强化该技能（选择界面黄边「◆契合」判定）
 static func is_enhanced_for_cultivator(skill_id: String, cid: String) -> bool:
 	var cdef: Dictionary = CultivatorData.get_def(cid)
 	if cdef.is_empty():
@@ -153,7 +153,7 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)) * maxf(0.2, cd_mult))
 	return out
 
-## 强化文案（卡片上的「✦ 道统契合：…」一行），未强化返回空串
+## 强化文案（卡片上的「◆ 道统契合：…」一行），未强化返回空串
 static func enhance_desc(skill_id: String, cid: String) -> String:
 	var cdef: Dictionary = CultivatorData.get_def(cid)
 	var mods: Dictionary = Dictionary(cdef.get("skill_mods", {})).get(skill_id, {})

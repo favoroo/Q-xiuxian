@@ -602,7 +602,7 @@ func _refresh_endless_toggle() -> void:
 		return
 	var on := GameManager.start_in_endless
 	if on:
-		_endless_btn.text = "✦ 无尽模式 · [开]"
+		_endless_btn.text = "◆ 无尽模式 · [开]"
 		GameStyle.button(_endless_btn, GameStyle.GOOD, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BAND)
 		if _hero_start_btn != null:
 			_hero_start_btn.text = "直 入 无 尽  》"

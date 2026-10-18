@@ -174,7 +174,7 @@ func _create_card(s_id: String) -> Control:
 
 	# 冷却 chip（契合时带标识，数值为角色合并后的真实冷却）
 	var cd_lbl = Label.new()
-	cd_lbl.text = (" ✦适配·冷却 %d 秒 " % int(round(float(st["cooldown"])))) if enhanced else (" 冷却 %d 秒 " % int(round(float(st["cooldown"]))))
+	cd_lbl.text = (" ◆适配·冷却 %d 秒 " % int(round(float(st["cooldown"])))) if enhanced else (" 冷却 %d 秒 " % int(round(float(st["cooldown"]))))
 	cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cd_lbl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	cd_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
@@ -185,7 +185,7 @@ func _create_card(s_id: String) -> Control:
 	var desc_text: String = String(def.get("desc", ""))
 	var enhance: String = SkillData.enhance_desc(s_id, cid)
 	if not enhance.is_empty():
-		desc_text += "\n✦ 角色适配：" + enhance
+		desc_text += "\n◆ 角色适配：" + enhance
 	var desc_lbl = Label.new()
 	desc_lbl.text = GameStyle.wrap_cjk(desc_text, GameStyle.body_font(), 12, _desc_w())
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

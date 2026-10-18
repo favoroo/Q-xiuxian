@@ -311,6 +311,10 @@ func _case_bolt_windup() -> void:
 	xiexiu._fire_bolt(_player)
 	_c.equals(EnemyBolt.active_count, 1, "蓄力满发射 1 发火球")
 	_c.check(xiexiu._bolt_windup_t < 0.0, "发射后蓄力段关闭")
+	if EnemyBolt._host != null and EnemyBolt._host.get_child_count() > 0:
+		var active_bolt := EnemyBolt._host.get_child(EnemyBolt._host.get_child_count() - 1) as EnemyBolt
+		if active_bolt != null:
+			_c.check(active_bolt.sword_style, "邪修发射的子弹标记为 sword_style（幽冥剑气形态）")
 	xiexiu._cancel_bolt_windup()
 
 	# 硬直打断：起手后立刻硬直 → 蓄力作废不发弹

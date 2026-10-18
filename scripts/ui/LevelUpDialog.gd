@@ -386,7 +386,7 @@ func _refresh_bars() -> void:
 	_update_gate_label()
 
 func _update_confirm_btn() -> void:
-	confirm_btn.text = "确认选择 ✦"
+	confirm_btn.text = "确认选择 ★"
 	confirm_btn.disabled = selected_index < 0 or not _can_interact or _is_confirming
 	confirm_btn.custom_minimum_size = Vector2(148, 44)
 
@@ -468,7 +468,7 @@ func open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 			String(up.get("title", "")), "、".join(names)]
 	StatsTipFactory.open_weapon_tip(self, anchor, w, false, note)
 
-## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ✦」，未选中的退回「×层数」。
+## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ★」，未选中的退回「×层数」。
 ## 底部 gate_label 同时把「已选【名字】+ 还剩几点」写在明面上。
 func _select_card(index: int) -> void:
 	if index < 0 or index >= GameManager.alloc_offers.size():
@@ -497,7 +497,7 @@ func _select_card(index: int) -> void:
 			style.bg_color = GameStyle.NAVY2.lightened(0.10)
 			icon_st.border_color = GameStyle.GOLD
 			title_lbl.add_theme_color_override("font_color", GameStyle.GOLD)
-			badge.text = "已选 ✦"
+			badge.text = "已选 ★"
 			badge.add_theme_color_override("font_color", GameStyle.GOLD)
 			# T-5.1 选中高光：按稀有度起辉（普通微白高光，金色档 HDR 强起辉）
 			var r_key: String = String(entry.get("rarity", "common"))

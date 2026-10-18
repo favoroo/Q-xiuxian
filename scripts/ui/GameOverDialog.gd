@@ -260,9 +260,9 @@ func _refresh_unlocks() -> void:
 		var chip := Label.new()
 		if rtype == "none":
 			# 纯荣誉成就没有奖励对象，文案不硬拼「解锁：」
-			chip.text = " ✦ 成就「%s」达成 ✦ " % String(adef.get("name", ""))
+			chip.text = " ◆ 成就「%s」达成 ◆ " % String(adef.get("name", ""))
 		else:
-			chip.text = " ✦ 成就「%s」· %s：%s ✦ " % [adef.get("name", ""), prefix, rname]
+			chip.text = " ◆ 成就「%s」· %s：%s ◆ " % [adef.get("name", ""), prefix, rname]
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
@@ -288,7 +288,7 @@ func _refresh_records() -> void:
 	var max_show := mini(records.size(), 3)
 	for i in range(max_show):
 		var chip := Label.new()
-		chip.text = " ✦ %s ✦ " % String(records[i])
+		chip.text = " ◆ %s ◆ " % String(records[i])
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))

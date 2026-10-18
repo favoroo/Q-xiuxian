@@ -8,7 +8,7 @@ extends Camera2D
 ##
 ## 震屏的两条硬约束（口径来自 GameBalance「打击感：镜头创伤」段）：
 ##   1) 每秒累加有预算上限 ⇒ 哪怕调用方拿高频事件乱发创伤，最坏也只稳在
-##      GameBalance.trauma_steady_state()（±1.4px 的轻颤），不会整局猛摇；
+##      GameBalance.trauma_steady_state()（±0.9px 的轻颤），不会整局猛摇；
 ##   2) 幅度受设置档位倍率控制，档位「关闭」= 完全不动（含缩放冲击）。
 
 @export var follow_speed: float = 9.0

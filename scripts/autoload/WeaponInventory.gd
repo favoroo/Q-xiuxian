@@ -180,7 +180,7 @@ static func merge_weapon(gm: Node, w_id: String, star: int, keep: Dictionary) ->
 	if keeper_node != null and is_instance_valid(keeper_node) and gm.player.has_method("upgrade_weapon_instance"):
 		gm.player.upgrade_weapon_instance(keeper_node, star + 1)
 
-	gm.announcement_triggered.emit("✦ 三合一 · %s ✦" % WeaponData.full_name(w_id, star + 1))
+	gm.announcement_triggered.emit("◆ 三合一 · %s ◆" % WeaponData.full_name(w_id, star + 1))
 	AudioManager.play_sfx("merge_success", 1.0)
 	gm.notify_weapons_updated(get_weapons_summary(gm))
 	return true
