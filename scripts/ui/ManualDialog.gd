@@ -37,10 +37,10 @@ const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison
 ## 敌人图鉴详情卡：皮实度/移速档位 → 语义色（档位词表见 EnemyGuideData.TOUGH_TIERS/SPEED_TIERS）。
 ## 越危险越红（BAD 朱砂）、越温和越绿（GOOD），中档走纸白——与「敌人」chip 同一套危险语义。
 const TOUGH_COLORS := {
-	"脆": GameStyle.GOOD, "普通": GameStyle.PAPER, "厚": GameStyle.ELEMENT, "极厚": GameStyle.BAD,
+	"脆": GameStyle.GOOD_DK, "普通": GameStyle.PAPER, "厚": GameStyle.ELEMENT, "极厚": GameStyle.BAD,
 }
 const SPEED_COLORS := {
-	"极快": GameStyle.BAD, "快": GameStyle.ELEMENT, "寻常": GameStyle.PAPER, "慢": GameStyle.GOOD,
+	"极快": GameStyle.BAD, "快": GameStyle.ELEMENT, "寻常": GameStyle.PAPER, "慢": GameStyle.GOOD_DK,
 }
 
 var _items_box: VBoxContainer
@@ -92,7 +92,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var cont_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	cont_sb.content_margin_left = 14.0
 	cont_sb.content_margin_top = 10.0
 	cont_sb.content_margin_right = 14.0
@@ -234,7 +234,7 @@ func _make_text_card(title: String, body: String, image: String = "", image_h: f
 
 	var title_lbl := Label.new()
 	title_lbl.text = "◆ " + title
-	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	if image != "" and ResourceLoader.exists(image):
@@ -559,13 +559,13 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	if not equip_str.is_empty():
 		var equip_lbl := Label.new()
 		equip_lbl.text = "◆ " + equip_str
-		GameStyle.label(equip_lbl, 12, GameStyle.JADE)
+		GameStyle.label(equip_lbl, 12, GameStyle.JADE_DK)
 		text_col.add_child(equip_lbl)
 
 	for pro in def.get("pros", []):
 		var pro_lbl := Label.new()
 		pro_lbl.text = "＋ " + String(pro)
-		GameStyle.label(pro_lbl, 12, GameStyle.GOOD)
+		GameStyle.label(pro_lbl, 12, GameStyle.GOOD_DK)
 		text_col.add_child(pro_lbl)
 	# 额外技能单独一段（幽夜紫）：与选角界面同一份文案、同一个色语义（数字现读机制表）
 	for x_line in CultivatorData.get_extra_desc(cid):
@@ -593,7 +593,7 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 		GameStyle.label(status_lbl, 12, GameStyle.GREY)
 		var cond_lbl := Label.new()
 		cond_lbl.text = AchievementData.unlock_hint_text(cid, false, "解锁条件：")
-		GameStyle.label(cond_lbl, 11, GameStyle.JADE)
+		GameStyle.label(cond_lbl, 11, GameStyle.JADE_DK)
 		text_col.add_child(cond_lbl)
 	hbox.add_child(status_lbl)
 
@@ -656,7 +656,7 @@ func _rebuild_enemies_page() -> void:
 		var header := Label.new()
 		header.text = "── %s ──" % String(g[0])
 		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(header, 13, GameStyle.JADE, 0, GameStyle.INK, true)
+		GameStyle.label(header, 13, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 		_enemies_box.add_child(header)
 
 		var grid := GridContainer.new()
@@ -799,7 +799,7 @@ func _make_synergy_card() -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "◆ 流派羁绊"
-	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var intro_lbl := Label.new()
@@ -852,7 +852,7 @@ func _make_stat_guide_card() -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "◆ 属性词条 · 这是什么"
-	GameStyle.label(title_lbl, 15, GameStyle.JADE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
 	var intro_lbl := Label.new()

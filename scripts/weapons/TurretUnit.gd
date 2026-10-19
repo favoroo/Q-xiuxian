@@ -41,6 +41,9 @@ var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectil
 @onready var base_ring: Node2D = $BaseRing
 
 var muzzle_flash: Sprite2D = null
+## 矢量机关本体（批次 4：弩机/阵盘/炮管/机关兽/投石机/灯塔）。
+## 非 null 时 CoreSprite 的贴图让位，由它出画面（逐批灰度：未登记 turret_shape 的仍显示旧贴图）。
+var _proc_renderer: ProceduralTurretRenderer = null
 ## 机关元素（_ready 时从 WeaponData 推导）：底座阵缘配色/形态与枪口闪光都按它分化
 var _elem: String = "metal"
 
@@ -73,6 +76,7 @@ func _ready() -> void:
 	queue_redraw()
 	if _def.has("icon") and ResourceLoader.exists(_def["icon"]):
 		core_sprite.texture = load(_def["icon"])
+	_setup_proc_renderer()
 	# 出场微小弹起动画
 	scale = Vector2(0.2, 0.2)
 	modulate.a = 0.0
@@ -83,6 +87,22 @@ func _ready() -> void:
 	# 布设：机关砸进地面那一记钝响。不许借用 orb_hit（那是灵宝触敌的暖金钟）
 	AudioManager.play_sfx("impact_blunt", 0.9)
 	_setup_muzzle_flash()
+
+## 矢量机关本体：只在本批已实现器形时挂载，并把旧贴图隐蔽。
+## 坐标契约见 ProceduralTurretRenderer 头注释：器形沿 +X 画、炮口落在本地 x=16（×1.5=24），
+## 与 CoreSprite/MuzzlePoint 的本地 (24,0) 同源 ⇒ 出膛点零改动。
+func _setup_proc_renderer() -> void:
+	if _proc_renderer != null:
+		return
+	var tshape := ProceduralTurretRenderer.shape_from_name(String(_def.get("turret_shape", "")))
+	if tshape == ProceduralTurretRenderer.TurretShape.GENERIC:
+		return
+	_proc_renderer = ProceduralTurretRenderer.new()
+	_proc_renderer.name = "ProcTurret"
+	_proc_renderer.configure(tshape, _elem, star)
+	# 挂在 CoreSprite 下：继承它的 0.55 缩放与 rotation，索敌转向自动同拍
+	core_sprite.add_child(_proc_renderer)
+	core_sprite.self_modulate.a = 0.0
 
 func _setup_muzzle_flash() -> void:
 	if muzzle_point == null:

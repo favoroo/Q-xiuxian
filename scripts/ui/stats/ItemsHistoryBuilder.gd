@@ -105,7 +105,7 @@ static func create_history_row(dialog: PlayerStatsDialog, item: Dictionary, idx:
 
 	var lvl_lbl := Label.new()
 	lvl_lbl.text = "Lv.%d" % int(item.get("level", 1))
-	GameStyle.label(lvl_lbl, 11, GameStyle.JADE)
+	GameStyle.label(lvl_lbl, 11, GameStyle.JADE_DK)
 	hbox.add_child(lvl_lbl)
 
 	return row

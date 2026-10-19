@@ -7,14 +7,14 @@ content_margin_left = 12.0
 content_margin_top = 12.0
 content_margin_right = 12.0
 content_margin_bottom = 12.0
-bg_color = Color(0, 0, 0, 0.97)
-skew = Vector2(0.052, 0)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 6
-border_color = Color(0.227, 0.227, 0.259, 1)
-shadow_color = Color(0, 0, 0, 0.6)
+bg_color = Color(0.968627, 0.952941, 0.909804, 1)
+skew = Vector2(0, 0)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0, 0, 0, 1)
+shadow_color = Color(0, 0, 0, 1)
 shadow_size = 1
 shadow_offset = Vector2(10, 10)
 
@@ -23,10 +23,13 @@ content_margin_left = 22.0
 content_margin_top = 5.0
 content_margin_right = 22.0
 content_margin_bottom = 5.0
-bg_color = Color(0.22, 0.486, 0.902, 1)
-skew = Vector2(0.14, 0)
-border_width_bottom = 5
-border_color = Color(0.102, 0.263, 0.549, 1)
+bg_color = Color(1, 0, 0.431373, 1)
+skew = Vector2(0, 0)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info_band"]
 content_margin_left = 14.0
@@ -34,12 +37,12 @@ content_margin_top = 5.0
 content_margin_right = 14.0
 content_margin_bottom = 5.0
 bg_color = Color(0, 0, 0, 0.9)
-skew = Vector2(0.07, 0)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 3
-border_color = Color(0.227, 0.227, 0.259, 1)
+border_color = Color(0, 0, 0, 1)
 
 [node name="LevelUpDialog" type="Control"]
 process_mode = 3
@@ -145,7 +148,7 @@ text = "刷新升级"
 [node name="GateLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.608, 0.631, 0.675, 1)
+theme_override_colors/font_color = Color(0.372549, 0.352941, 0.305882, 1)
 theme_override_font_sizes/font_size = 13
 text = "点中一张卡，再按右侧「确认选择」"
 vertical_alignment = 1

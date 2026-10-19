@@ -49,7 +49,7 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 	var kind_lbl := Label.new()
 	kind_lbl.text = "元素" if is_elem else "类型"
 	# 纸灰激活卡上亮蓝字会洗白，走主蓝；未激活暗卡上主蓝依旧可读
-	GameStyle.label(kind_lbl, 10, GameStyle.JADE if is_elem else GameStyle.GOLD)
+	GameStyle.label(kind_lbl, 10, GameStyle.JADE_DK if is_elem else GameStyle.GOLD)
 	head.add_child(kind_lbl)
 
 	var title_lbl := Label.new()

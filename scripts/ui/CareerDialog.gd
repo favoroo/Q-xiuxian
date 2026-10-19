@@ -97,7 +97,7 @@ func _add_summary_card(parent: HBoxContainer, title: String, init_val: String) -
 	v_lbl.text = init_val
 	v_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(v_lbl, 13, GameStyle.JADE)
+	GameStyle.label(v_lbl, 13, GameStyle.JADE_DK)
 	hbox.add_child(v_lbl)
 
 	parent.add_child(card)
@@ -434,7 +434,7 @@ func _create_cultivator_card(cid: String) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(cdef.get("name", "未知角色"))
-	GameStyle.label(name_lbl, 15, GameStyle.PAPER if unlocked else GameStyle.PAPER_DIM, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 15, GameStyle.CHALK if unlocked else GameStyle.GREY, 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
 	var realm_lbl := Label.new()
@@ -489,7 +489,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	else:
 		var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"
 		detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d" % [wins, endless_txt, int(rec["best_kills"])]
-		GameStyle.label(detail_lbl, 11, GameStyle.PAPER_DIM)
+		GameStyle.label(detail_lbl, 11, GameStyle.with_alpha(GameStyle.CHALK, 0.65))
 	text_col.add_child(detail_lbl)
 
 	# 卡面点按 → 「这是什么」详情（生涯档案 / 解锁条件）

@@ -72,7 +72,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	# 内容区：斜切内容面板，各页叠放、按显隐切换
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var cont_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	cont_sb.content_margin_left = 14.0
 	cont_sb.content_margin_top = 10.0
 	cont_sb.content_margin_right = 14.0
@@ -243,7 +243,7 @@ func _build_page(p: Dictionary) -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "◆ " + String(p.get("title", ""))
-	GameStyle.label(title_lbl, 16, GameStyle.JADE, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 16, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	col.add_child(title_lbl)
 
 	var body_lbl := Label.new()

@@ -4,7 +4,7 @@ extends Control
 ## 全屏暂停式模态弹窗通用基类
 ## 统一沉淀：
 ## 1. 半透明暗色遮罩（点击空白关闭）
-## 2. 居中斜切大面板 + 长按防摇杆群组注册 + 统一边框阴影
+## 2. 居中直角大面板 + 长按防摇杆群组注册 + 统一边框阴影
 ## 3. 顶部标题色块 + Tab 栏 / 元信息插槽 + 关闭按钮
 ## 4. open/close 淡入淡出动画与防重入、ESC/ui_cancel 拦截（先退 DetailTip 再关弹窗）
 ## 5. 通用 Tab 页签切换逻辑（统一按 GameStyle 样式切高亮）
@@ -105,12 +105,12 @@ func _build_modal_chrome() -> void:
 	_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_center)
 
-	# 3. 斜切大面板
+	# 3. 直角大面板
 	_panel = PanelContainer.new()
 	_panel.custom_minimum_size = _get_panel_size()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.GOLD))
+	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.INK))
 	_center.add_child(_panel)
 
 	# 4. 内边距
@@ -201,7 +201,7 @@ func _on_opened() -> void:
 func _on_closed() -> void:
 	pass
 
-## 打开弹窗（带淡入动画）
+## 打开弹窗（遮罩淡入 + 面板拍桌 Slam In）
 func open() -> void:
 	if visible:
 		return
@@ -213,6 +213,7 @@ func open() -> void:
 	var tw := create_tween()
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(self, "modulate:a", 1.0, GameStyle.UI_FADE_IN)
+	GameStyle.slam_in(_panel)
 
 ## 关闭弹窗（带淡出动画与防重入）
 func close() -> void:

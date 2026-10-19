@@ -414,12 +414,12 @@ func _synergy_line_has_numbers(tag: String, tier: int, effs: Array) -> void:
 
 func _test_ui_chip_contrast() -> void:
 	# 1. 基础明度自适应规则：亮底必配黑字，暗底必配白字
-	_c.check(GameStyle.on_face_text(GameStyle.GOLD) == GameStyle.INK_TEXT, "天蓝 GOLD 属于亮面，必须配墨黑字 INK_TEXT")
+	_c.check(GameStyle.on_face_text(GameStyle.GOLD) == GameStyle.CHALK, "品红 GOLD 属于暗面，必须配白字 CHALK（stylekit 原配即粉底白字）")
 	_c.check(GameStyle.on_face_text(GameStyle.JADE) == GameStyle.INK_TEXT, "点缀黄 JADE 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.SWEEP) == GameStyle.INK_TEXT, "琥珀金 SWEEP 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.GOOD) == GameStyle.INK_TEXT, "增益绿 GOOD 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.BAD) == GameStyle.CHALK, "朱砂红 BAD 属于暗面，必须配白字 CHALK")
-	_c.check(GameStyle.on_face_text(GameStyle.NAVY2) == GameStyle.CHALK, "纯黑 NAVY2 属于暗面，必须配白字 CHALK")
+	_c.check(GameStyle.on_face_text(GameStyle.NAVY2) == GameStyle.INK_TEXT, "宣纸白 NAVY2 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.INK) == GameStyle.CHALK, "纯黑 INK 属于暗面，必须配白字 CHALK")
 
 	# 2. 遍历所有武器在图鉴中生成的色签，断言绝无亮底配白字或暗底配黑字

@@ -1382,7 +1382,7 @@ func _play_death_sequence() -> void:
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.55)
 	# 灵气初散：一圈纸白微环 + 落点微尘
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 32.0, GameStyle.PAPER, 0.45)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 32.0, GameStyle.CHALK, 0.45)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), Vector2.UP * 30.0)
 	GameFeel.vibrate(80, 1.0)
 
@@ -1395,7 +1395,7 @@ func _play_death_sequence() -> void:
 	tw.tween_interval(0.5)
 	tw.tween_callback(func():
 		# 灵气消散：一圈略大的空灵微环散开
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, 48.0, GameStyle.PAPER, 0.55)
+		JuiceEffect.spawn_shockwave(get_parent(), global_position, 48.0, GameStyle.CHALK, 0.55)
 	)
 	# 随后 0.45s 沉地淡出，灵韵归虚
 	tw.tween_property(fade_target, "modulate:a", 0.0, 0.45)

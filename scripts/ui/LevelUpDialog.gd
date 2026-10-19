@@ -60,10 +60,10 @@ const SCREEN_PAD_Y := 24.0
 const PANEL_AIR_X := 34.0
 const PANEL_MIN_H := 420.0
 ## 面板 stylebox 的斜切（弧度），与 LevelUpDialog.tscn 的 StyleBoxFlat_panel.skew 同源
-## = GameStyle.SLANT_PLATE 3°。判据会核对两边没漂（改 .tscn 里的 skew 必须同步这里）。
-const PANEL_SKEW_RAD := 0.052
-## 卡片 stylebox 的斜切（弧度），与 _create_card_entry 里 style.skew = deg_to_rad(3.0) 同源
-const CARD_SKEW_RAD := 0.052
+## 2026-10-19 新野兽派换肤全直角化：归零（= GameStyle.SLANT_PLATE）。判据会核对两边没漂。
+const PANEL_SKEW_RAD := 0.0
+## 卡片 stylebox 的斜切（弧度），与 _create_card_entry 里 style.skew 同源（直角化归零）
+const CARD_SKEW_RAD := 0.0
 ## 选中/未选中的缩放倍率：放大倍率同时决定这一行上下要留多少余量（pop_gutter_y）
 const SEL_SCALE := 1.03
 const DIM_SCALE := 0.97
@@ -400,7 +400,7 @@ func _update_gate_label() -> void:
 	else:
 		gate_label.text = "已选【%s】 · %s" % [
 			GameManager.alloc_offers[selected_index].get("title", "?"), rest]
-		GameStyle.label(gate_label, 13, GameStyle.JADE)
+		GameStyle.label(gate_label, 13, GameStyle.JADE_DK)
 
 func _populate_cards() -> void:
 	# 整批重建前先收掉摊在暗底下的旧详情卡：它还挂在 self 上，不收就会停在新那一屏后面

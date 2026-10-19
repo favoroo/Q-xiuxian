@@ -29,7 +29,7 @@ func _ready() -> void:
 	offset_top = -170.0
 	offset_right = 336.0
 	offset_bottom = -8.0
-	GameStyle.label(self, 12, GameStyle.PAPER_DIM)
+	GameStyle.label(self, 12, GameStyle.with_alpha(GameStyle.CHALK, 0.75))
 	text = "FPS: 60"
 	_update_visibility()
 	SettingsManager.setting_changed.connect(func(sec: StringName, key: StringName, _val: Variant):

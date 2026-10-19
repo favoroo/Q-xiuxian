@@ -377,7 +377,7 @@ static func _fmt(v: float) -> String:
 
 static func _c(v: float) -> Color:
 	if v > 0.0001:
-		return GameStyle.GOOD
+		return GameStyle.GOOD_DK
 	if v < -0.0001:
 		return GameStyle.BAD
 	return GameStyle.PAPER

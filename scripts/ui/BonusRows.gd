@@ -18,7 +18,7 @@ static func stat_color(key: String, v: float) -> Color:
 	match key:
 		"attack_speed_mult_mul", "shop_price_mul":
 			good = v < 1.0
-	return GameStyle.GOOD if good else GameStyle.BAD
+	return GameStyle.GOOD_DK if good else GameStyle.BAD
 
 ## apply 字典 → [名字, 幅度文本, 颜色] 行数组，DetailTip.rows 可直接拼用
 static func apply_rows(apply: Dictionary) -> Array:

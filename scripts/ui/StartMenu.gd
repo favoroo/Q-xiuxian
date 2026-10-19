@@ -224,7 +224,7 @@ func _build_center_matrix() -> void:
 	# 右下 1：天地律动·设置（纸白色块）
 	var settings_res := _build_entry_block(
 		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
-		GameStyle.PAPER, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOLD,
+		GameStyle.NAVY2, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOLD,
 		_on_settings_pressed
 	)
 	bot_pair.add_child(settings_res["card"])
@@ -292,7 +292,7 @@ func _build_hero_block() -> PanelContainer:
 	tag_chip.text = " PLAY "
 	tag_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tag_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-	GameStyle.label(tag_chip, 11, GameStyle.JADE)
+	GameStyle.label(tag_chip, 11, GameStyle.JADE_DK)
 	top_row.add_child(tag_chip)
 
 	var top_spacer := Control.new()
@@ -335,7 +335,7 @@ func _build_hero_block() -> PanelContainer:
 
 	var d_lbl := Label.new()
 	d_lbl.text = "难度选择 · 通关当前最高档解锁下一档"
-	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, GameStyle.PAPER_DIM)
+	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, GameStyle.with_alpha(GameStyle.CHALK, 0.75))
 	_danger_head_lbl = d_lbl
 	d_head.add_child(d_lbl)
 
@@ -623,7 +623,7 @@ func _refresh_sound_badge() -> void:
 		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, GameStyle.SLANT_BAND)
 	else:
 		_sound_badge_btn.text = "音效 · 开"
-		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
+		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE_DK, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
 
 func _refresh_dynamic_texts() -> void:
 	# 1. 修仙志卡片副行

@@ -5,11 +5,11 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
 bg_color = Color(0, 0, 0, 0.92)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_fill"]
-bg_color = Color(0.31, 0.82, 0.647, 1)
-skew = Vector2(0.087, 0)
+bg_color = Color(0.184314, 0.823529, 0.443137, 1)
+skew = Vector2(0, 0)
 border_width_bottom = 1
 border_color = Color(0, 0, 0, 1)
 
@@ -18,13 +18,13 @@ content_margin_left = 10.0
 content_margin_top = 6.0
 content_margin_right = 12.0
 content_margin_bottom = 6.0
-bg_color = Color(0.22, 0.486, 0.902, 1)
-skew = Vector2(0.087, 0)
+bg_color = Color(1, 0, 0.431373, 1)
+skew = Vector2(0, 0)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 5
-border_color = Color(0.102, 0.263, 0.549, 1)
+border_color = Color(0.690196, 0, 0.305882, 1)
 shadow_color = Color(0, 0, 0, 0.45)
 shadow_size = 1
 shadow_offset = Vector2(4, 5)
@@ -33,7 +33,7 @@ shadow_offset = Vector2(4, 5)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_track"]
 bg_color = Color(0, 0, 0, 0.85)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -42,24 +42,24 @@ border_color = Color(0.18, 0.18, 0.22, 0.8)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
 bg_color = Color(0.949, 0.937, 0.894, 1)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_ghost_fill"]
 bg_color = Color(1, 0.96, 0.92, 0.8)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_level_badge"]
 content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 5.0
-bg_color = Color(0.22, 0.486, 0.902, 1)
-skew = Vector2(0.087, 0)
+bg_color = Color(1, 0, 0.431373, 1)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 4
-border_color = Color(0.102, 0.263, 0.549, 1)
+border_color = Color(0.690196, 0, 0.305882, 1)
 shadow_color = Color(0, 0, 0, 0.45)
 shadow_size = 1
 shadow_offset = Vector2(3, 3)
@@ -70,7 +70,7 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 0.95)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -86,7 +86,7 @@ content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
 bg_color = Color(0, 0, 0, 1)
-skew = Vector2(0.087, 0)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -101,13 +101,13 @@ content_margin_left = 10.0
 content_margin_top = 4.0
 content_margin_right = 10.0
 content_margin_bottom = 4.0
-bg_color = Color(0.31, 0.82, 0.647, 1)
-skew = Vector2(0.087, 0)
+bg_color = Color(0.184314, 0.823529, 0.443137, 1)
+skew = Vector2(0, 0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 4
-border_color = Color(0.122, 0.478, 0.369, 1)
+border_color = Color(0.184314, 0.560784, 0.298039, 1)
 shadow_color = Color(0, 0, 0, 0.45)
 shadow_size = 1
 shadow_offset = Vector2(3, 3)
@@ -243,7 +243,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_wave_chip")
 
 [node name="WaveLabel" type="Label" parent="TopContainer/CenterBox/WaveChip"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.22, 0.486, 0.902, 1)
+theme_override_colors/font_color = Color(1, 0, 0.431373, 1)
 theme_override_font_sizes/font_size = 15
 text = "第 1 波"
 

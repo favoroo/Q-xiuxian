@@ -6,7 +6,7 @@ extends RefCounted
 
 static func _c(v: float) -> Color:
 	if v > 0.0001:
-		return GameStyle.GOOD
+		return GameStyle.GOOD_DK
 	if v < -0.0001:
 		return GameStyle.BAD
 	return GameStyle.PAPER
@@ -27,7 +27,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	var rows: Array = []
 	var pros: Array = def.get("pros", [])
 	for i in range(pros.size()):
-		rows.append(["加成 %d" % (i + 1), String(pros[i]), GameStyle.GOOD])
+		rows.append(["加成 %d" % (i + 1), String(pros[i]), GameStyle.GOOD_DK])
 	var cons: Array = def.get("cons", [])
 	for i in range(cons.size()):
 		rows.append(["代偿 %d" % (i + 1), String(cons[i]), GameStyle.BAD])
@@ -38,7 +38,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	if not skill_id.is_empty():
 		var sdef := SkillData.get_def(skill_id)
 		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
-		rows.append(["随行技能", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE])
+		rows.append(["随行技能", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE_DK])
 	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
 	if not start_equip.is_empty():
 		rows.append(["开局自带", start_equip, GameStyle.PAPER])
@@ -76,7 +76,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 	var tier_col: Color = ItemData.tier_color(tier_num)
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["当前持有", "%d 件" % count, GameStyle.JADE],
+		["当前持有", "%d 件" % count, GameStyle.JADE_DK],
 	]
 	# 加成行（2026-10-11 改版）：统一走 BonusRows —— 乘算字段（攻击间隔/物价）按语义判色，
 	# 修正旧 _c 按符号判色把「物价上涨」也染绿的口径问题
@@ -181,12 +181,12 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	var rows: Array = [
 		["攻击方式", WeaponData.behavior_label(def), behavior_color(def)],
 		["单发伤害", WeaponDamageReadout.arrow_text(WeaponData.damage_for(id, star), per_hit),
-				GameStyle.JADE],
+				GameStyle.JADE_DK],
 		[WeaponDamageReadout.per_second_label(id),
-				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE],
+				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE_DK],
 		["属性加伤", "+%s" % BonusRows.fmt_num(bonus), _c(bonus)],
 	] + factor_rows + [
-		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
+		["攻击范围", range_txt, GameStyle.JADE_DK if range_buffed else GameStyle.PAPER],
 	]
 	var feats := weapon_feats(def)
 	if not feats.is_empty():
@@ -263,7 +263,7 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 
 	var rows: Array = BonusRows.apply_rows(apply)
 	rows.append(["已领悟", "第 %d 次 / 上限 %d 次" % [taken, cap],
-		GameStyle.JADE if cap > 0 and taken >= cap else GameStyle.PAPER])
+		GameStyle.JADE_DK if cap > 0 and taken >= cap else GameStyle.PAPER])
 	rows.append(["领悟于", "Lv.%d · %02d:%02d" % [int(item.get("level", 1)), int(t / 60.0), int(t) % 60]])
 	if cap > 0 and taken >= cap:
 		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])

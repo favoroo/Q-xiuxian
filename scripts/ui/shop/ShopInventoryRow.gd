@@ -92,7 +92,7 @@ static func _add_merge_badge(slot: Control, tile: float) -> Label:
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", GameStyle.body_font())
 	lbl.add_theme_font_size_override("font_size", int(round(clampf(tile * 0.24, 12.0, 16.0))))
-	lbl.add_theme_color_override("font_color", GameStyle.JADE)
+	lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
 	lbl.add_theme_color_override("font_outline_color", GameStyle.INK)
 	lbl.add_theme_constant_override("outline_size", 3)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT

@@ -162,9 +162,9 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 	var max_th: int = int(p["max_th"])
 	var owned_txt: String = ("%d 件 · 已满档" % n) if bool(p["is_max"]) else ("%d / %d 件" % [n, max_th])
 	var rows: Array = [
-		["当前装备", owned_txt, GameStyle.JADE if lv > 0 else GameStyle.PAPER],
+		["当前装备", owned_txt, GameStyle.JADE_DK if lv > 0 else GameStyle.PAPER],
 		["羁绊状态", "已达成第 %d 档" % lv if lv > 0 else "未激活 (差 %d 件)" % maxi(1, int(ths[0]) - n),
-			GameStyle.GOOD if lv > 0 else GameStyle.GREY],
+			GameStyle.GOOD_DK if lv > 0 else GameStyle.GREY],
 	]
 	for idx in range(ths.size()):
 		var th_need: int = int(ths[idx])
@@ -173,7 +173,7 @@ static func build_tip_data(tag: String, custom_body: String = "", custom_foot: S
 		rows.append([
 			"%d 件档" % th_need,
 			tier_txt,
-			GameStyle.GOOD if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
+			GameStyle.GOOD_DK if lv == idx + 1 else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
 		])
 
 	var notes: Array[String] = []

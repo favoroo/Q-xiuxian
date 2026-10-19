@@ -103,7 +103,7 @@ func _build_ui() -> void:
 	_sub_label.text = "点选右侧角色预览 · 确认天赋与代价后出战"
 	_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_box.add_child(_sub_label)
-	GameStyle.label(_sub_label, 11, GameStyle.PAPER_DIM)
+	GameStyle.label(_sub_label, 11, GameStyle.with_alpha(GameStyle.CHALK, 0.75))
 
 	var r_spacer := Control.new()
 	r_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -754,13 +754,13 @@ func _update_small_card_selection(cid: String) -> void:
 		icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
 	if name_lbl != null:
-		var name_col := GameStyle.JADE if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+		var name_col := GameStyle.JADE_DK if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
 		name_lbl.add_theme_color_override("font_color", name_col)
 
 	if tag_lbl != null:
 		if is_selected:
 			tag_lbl.text = "◆"
-			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE)
+			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
 		elif not is_unlocked:
 			tag_lbl.text = "×"
 			tag_lbl.add_theme_color_override("font_color", GameStyle.GREY)
@@ -836,7 +836,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(def.get("name", "?"))
-	var name_col := GameStyle.JADE if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
+	var name_col := GameStyle.JADE_DK if is_selected else (GameStyle.PAPER if is_unlocked else GameStyle.GREY)
 	GameStyle.label(name_lbl, 13, name_col, 0, GameStyle.INK, true)
 	info_box.add_child(name_lbl)
 
@@ -854,7 +854,7 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var tag_lbl := Label.new()
 	if is_selected:
 		tag_lbl.text = "◆"
-		GameStyle.label(tag_lbl, 12, GameStyle.JADE)
+		GameStyle.label(tag_lbl, 12, GameStyle.JADE_DK)
 	elif not is_unlocked:
 		tag_lbl.text = "×"
 		GameStyle.label(tag_lbl, 10, GameStyle.GREY)

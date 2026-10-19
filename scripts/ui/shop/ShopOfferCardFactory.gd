@@ -321,7 +321,7 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 		owned_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		owned_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		title_box.add_child(owned_lbl)
-		GameStyle.label(owned_lbl, 10, GameStyle.JADE, 0, GameStyle.INK, true)
+		GameStyle.label(owned_lbl, 10, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 
 	head.add_child(title_box)
 	return head

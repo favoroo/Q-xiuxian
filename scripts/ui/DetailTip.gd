@@ -113,8 +113,8 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 	var sb := GameStyle.outlined_panel(
 		GameStyle.with_alpha(GameStyle.NAVY, 0.99),
 		GameStyle.GOLD, 2, GameStyle.SLANT_PLATE)
-	sb.shadow_color = GameStyle.with_alpha(Color.BLACK, 0.65)
-	sb.shadow_size = 0
+	sb.shadow_color = Color(0, 0, 0, 1)
+	sb.shadow_size = 1
 	sb.shadow_offset = Vector2(6, 6)
 	_card.add_theme_stylebox_override("panel", sb)
 	add_child(_card)

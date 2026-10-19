@@ -27,7 +27,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 
 	var sec_title := Label.new()
 	sec_title.text = "◆ 属 性"
-	GameStyle.label(sec_title, 15, GameStyle.JADE)
+	GameStyle.label(sec_title, 15, GameStyle.JADE_DK)
 	sec_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tab_bar.add_child(sec_title)
 
@@ -61,13 +61,13 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	# 纯显示件也要让开「按下」那一拍：ProgressBar 的 mouse_filter 默认是 STOP，它自己不处理
 	# 输入却照样把事件吃掉 → 生命值那一整行里最显眼的血条成了死点（点名字弹卡、点血条没反应）。
 	dialog._hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bar_st := GameStyle.bar_styles(GameStyle.with_alpha(Color(0.04, 0.06, 0.1), 0.85), GameStyle.GOOD)
+	var bar_st := GameStyle.bar_styles(GameStyle.NAVY2.darkened(0.08), GameStyle.GOOD)
 	dialog._hp_bar.add_theme_stylebox_override("background", bar_st[0])
 	dialog._hp_bar.add_theme_stylebox_override("fill", bar_st[1])
 	hp_box.add_child(dialog._hp_bar)
 
 	dialog._hp_val_lbl = Label.new()
-	GameStyle.label(dialog._hp_val_lbl, 12, GameStyle.GOOD)
+	GameStyle.label(dialog._hp_val_lbl, 12, GameStyle.GOOD_DK)
 	hp_box.add_child(dialog._hp_val_lbl)
 	vbox.add_child(make_tip_row(dialog, "hp", hp_box))
 
@@ -173,7 +173,7 @@ static func add_stat_block(parent: Container, header_text: String) -> VBoxContai
 
 	var head := Label.new()
 	head.text = header_text
-	GameStyle.label(head, 11, GameStyle.JADE)
+	GameStyle.label(head, 11, GameStyle.JADE_DK)
 	inner.add_child(head)
 	return inner
 

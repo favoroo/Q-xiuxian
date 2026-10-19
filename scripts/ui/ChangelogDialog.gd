@@ -29,7 +29,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var cont_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	cont_sb.content_margin_left = 14.0
 	cont_sb.content_margin_top = 12.0
 	cont_sb.content_margin_right = 14.0
@@ -82,7 +82,7 @@ func _build_version_card(log_entry: Dictionary) -> Control:
 
 	var ver_lbl := Label.new()
 	ver_lbl.text = "◆ " + ver_str
-	GameStyle.label(ver_lbl, 15, GameStyle.JADE if is_current else GameStyle.GOLD)
+	GameStyle.label(ver_lbl, 15, GameStyle.JADE_DK if is_current else GameStyle.GOLD)
 	head_hbox.add_child(ver_lbl)
 
 	var date_lbl := Label.new()
@@ -103,7 +103,7 @@ func _build_version_card(log_entry: Dictionary) -> Control:
 	if is_current:
 		var cur_tag := Label.new()
 		cur_tag.text = "【当前版本】"
-		GameStyle.label(cur_tag, 12, GameStyle.JADE)
+		GameStyle.label(cur_tag, 12, GameStyle.JADE_DK)
 		head_hbox.add_child(cur_tag)
 
 	# 更新明细条目

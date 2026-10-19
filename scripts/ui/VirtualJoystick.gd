@@ -98,7 +98,7 @@ func _on_knob_draw() -> void:
     # 2. 外缘光圈：1.5px 细致冷冽蓝环
     knob.draw_arc(center, kr, 0.0, TAU, 48, GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.60), 1.5, true)
     # 3. 核心道点：半径 2.0px 纸白凝光点
-    knob.draw_circle(center, 2.0, GameStyle.with_alpha(GameStyle.PAPER, 0.85))
+    knob.draw_circle(center, 2.0, GameStyle.with_alpha(GameStyle.CHALK, 0.85))
 
 ## 按钮入组：组内成员随节点释放自动移除，重开一局不必清理
 func _on_ui_node_added(node: Node) -> void:

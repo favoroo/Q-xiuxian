@@ -98,10 +98,10 @@ func _get_close_btn_min_size() -> Vector2:
 	return Vector2(96, 30)
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.GOLD, 2.5, Vector2(8, 8)))
+	_panel.add_theme_stylebox_override("panel", GameStyle.dialog_panel(GameStyle.INK, 0.0, Vector2(8, 8)))
 
 	_meta_label = Label.new()
-	GameStyle.label(_meta_label, 13, GameStyle.JADE)
+	GameStyle.label(_meta_label, 13, GameStyle.JADE_DK)
 	_meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_meta_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_tab_bar.add_child(_meta_label)
@@ -265,7 +265,7 @@ func refresh() -> void:
 	var cr: float = float(stats["crit_rate_pct"])
 	var cdmg: float = float(stats["crit_dmg_pct"]) / 100.0
 	_crit_val_lbl.text = "%.0f%% (%.1f×)" % [cr, cdmg]
-	_crit_val_lbl.add_theme_color_override("font_color", GameStyle.GOOD if cr > 5.0 or cdmg > 1.5 else GameStyle.PAPER_DIM)
+	_crit_val_lbl.add_theme_color_override("font_color", GameStyle.GOOD_DK if cr > 5.0 or cdmg > 1.5 else GameStyle.PAPER_DIM)
 
 	var rng_bonus: float = float(stats["attack_range_pct"])
 	_range_val_lbl.text = "%s%.0f%%" % ["+" if rng_bonus >= 0 else "", rng_bonus]
@@ -326,7 +326,7 @@ func refresh() -> void:
 	_free_rerolls_val_lbl.add_theme_color_override("font_color", _c_row(float(fr_v)))
 
 	_stones_val_lbl.text = "%d 枚" % GameManager.spirit_stones
-	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE if GameManager.spirit_stones > 0 else GameStyle.PAPER_DIM)
+	_stones_val_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK if GameManager.spirit_stones > 0 else GameStyle.PAPER_DIM)
 
 	_kills_val_lbl.text = "%d 杀" % GameManager.kills
 	_kills_val_lbl.add_theme_color_override("font_color", GameStyle.PAPER if GameManager.kills > 0 else GameStyle.PAPER_DIM)

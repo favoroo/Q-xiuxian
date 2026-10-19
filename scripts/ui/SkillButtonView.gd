@@ -2,7 +2,8 @@ class_name SkillButtonView
 extends RefCounted
 
 ## 随行技能按钮外观与位置布局辅助
-## 从 GameHUD 抽离，负责圆形冷却绘制遮罩、半透明墨蓝/流金样式以及按偏好设置定位。
+## 从 GameHUD 抽离，负责圆形冷却绘制遮罩、半透明墨面/流金样式以及按偏好设置定位。
+## 圆键是战斗舞台上的刻意圆形件（新野兽派允许装饰性圆形），不走 GameStyle.button 的直角黑框。
 
 const SKILL_BTN_SIZE := 76.0
 ## 圆键键面字号基准：一颗字（"技"）用 28；四字占位文案要降到 18 才收得进圆面
@@ -119,7 +120,7 @@ static func style_circle_button(btn: Button, font_size: int = SKILL_BTN_FONT) ->
 	btn.add_theme_font_size_override("font_size", font_size)
 	btn.add_theme_color_override("font_color", GameStyle.CHALK)
 	btn.add_theme_color_override("font_hover_color", GameStyle.JADE)
-	btn.add_theme_color_override("font_pressed_color", GameStyle.PAPER)
+	btn.add_theme_color_override("font_pressed_color", GameStyle.CHALK)
 	btn.add_theme_constant_override("outline_size", 2)
 	btn.add_theme_color_override("font_outline_color", GameStyle.with_alpha(GameStyle.INK, 0.70))
 

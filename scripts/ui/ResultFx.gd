@@ -56,7 +56,7 @@ func _seed_shards() -> void:
 		GameStyle.JADE,             ## 点缀金
 		GameStyle.AURUM,            ## 暖金
 		GameStyle.FX_HDR_GOLD,      ## 超白浩然金
-		GameStyle.PAPER,            ## 纸白
+		GameStyle.CHALK,            ## 纸白
 		GameStyle.GOLD_EDGE,        ## 天蓝亮边
 	]
 	# 分层撒播：前 6 粒为慢速大颗粒（飘落浮游层次），后 22 粒为中速中颗粒

@@ -34,7 +34,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# 面板样式收口到 GameStyle（旧版在 .tscn 里钉死 900 宽 + 旧蓝色板 + 不画的投影）
 	var panel: PanelContainer = $CenterContainer/Panel
-	var st := GameStyle.dialog_panel(GameStyle.LINE, GameStyle.SLANT_PLATE, Vector2(10, 10))
+	var st := GameStyle.dialog_panel(GameStyle.INK, GameStyle.SLANT_PLATE, Vector2(10, 10))
 	st.content_margin_left = 24.0
 	st.content_margin_top = 20.0
 	st.content_margin_right = 24.0
@@ -162,7 +162,7 @@ func _create_card(s_id: String) -> Control:
 		glyph_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		glyph_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_box.add_child(glyph_lbl)
-		GameStyle.label(glyph_lbl, 34, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
+		GameStyle.label(glyph_lbl, 34, GameStyle.JADE_DK if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(icon_box)
 
 	# 名称
@@ -170,7 +170,7 @@ func _create_card(s_id: String) -> Control:
 	name_lbl.text = def.get("name", "?")
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(name_lbl)
-	GameStyle.label(name_lbl, 17, GameStyle.JADE if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 17, GameStyle.JADE_DK if enhanced else GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	# 冷却 chip（契合时带标识，数值为角色合并后的真实冷却）
 	var cd_lbl = Label.new()

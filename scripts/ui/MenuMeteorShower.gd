@@ -82,9 +82,9 @@ const SPARK_WHITENESS := 0.45
 
 ## 流星配色（重复项 = 权重）：纸白为主调，天蓝/点缀黄次之，朱砂/幽紫点染
 const PALETTE: Array[Color] = [
-	GameStyle.PAPER,
-	GameStyle.PAPER,
-	GameStyle.PAPER,
+	GameStyle.CHALK,
+	GameStyle.CHALK,
+	GameStyle.CHALK,
 	GameStyle.GOLD,
 	GameStyle.GOLD,
 	GameStyle.JADE,
@@ -95,8 +95,8 @@ const PALETTE: Array[Color] = [
 
 ## 星点配色：只取冷调（纸白/天蓝亮边），暖色星点远看像噪点
 const STAR_PALETTE: Array[Color] = [
-	GameStyle.PAPER,
-	GameStyle.PAPER,
+	GameStyle.CHALK,
+	GameStyle.CHALK,
 	GameStyle.GOLD_EDGE,
 ]
 
@@ -123,7 +123,7 @@ static func install(host: Control) -> MenuMeteorShower:
 func _ready() -> void:
 	for i in range(METEOR_COUNT):
 		_meteors.append({"x": 0.0, "y": 0.0, "vx": 0.0, "vy": 0.0,
-			"scale": 1.0, "alpha": 0.5, "tint": GameStyle.PAPER,
+			"scale": 1.0, "alpha": 0.5, "tint": GameStyle.CHALK,
 			"seed": 0.0, "delay": 0.0, "active": false,
 			"sparks": [], "spark_acc": 0.0})
 		# 首批错峰入场，时间拉开，避免开局扎堆出现

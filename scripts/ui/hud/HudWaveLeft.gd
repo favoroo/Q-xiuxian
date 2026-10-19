@@ -57,7 +57,7 @@ func _ready() -> void:
 	add_theme_stylebox_override("panel", GameStyle.chip(Color(0, 0, 0, 1)))
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 15)
-	_label.add_theme_color_override("font_color", GameStyle.PAPER)
+	_label.add_theme_color_override("font_color", GameStyle.CHALK)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)
 	_fit_right()

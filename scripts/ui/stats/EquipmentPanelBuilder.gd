@@ -43,7 +43,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	cult_text.add_child(cult_head)
 
 	dialog._cult_name_lbl = Label.new()
-	GameStyle.label(dialog._cult_name_lbl, 13, GameStyle.JADE)
+	GameStyle.label(dialog._cult_name_lbl, 13, GameStyle.JADE_DK)
 	cult_head.add_child(dialog._cult_name_lbl)
 
 	dialog._cult_epi_lbl = Label.new()
@@ -61,7 +61,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	cult_head.add_child(cult_hint)
 
 	dialog._cult_pros_lbl = Label.new()
-	GameStyle.label(dialog._cult_pros_lbl, 11, GameStyle.GOOD)
+	GameStyle.label(dialog._cult_pros_lbl, 11, GameStyle.GOOD_DK)
 	cult_text.add_child(dialog._cult_pros_lbl)
 
 	# 额外技能单独一段（幽夜紫）：没配额外技能的角色这一行隐藏，不占位
@@ -94,7 +94,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	wp_head.add_theme_constant_override("separation", 10)
 	dialog._wp_title_lbl = Label.new()
 	dialog._wp_title_lbl.text = "◆ 装备武器 (0/6)"
-	GameStyle.label(dialog._wp_title_lbl, 14, GameStyle.JADE)
+	GameStyle.label(dialog._wp_title_lbl, 14, GameStyle.JADE_DK)
 	wp_head.add_child(dialog._wp_title_lbl)
 
 	var wp_sp := Control.new()
@@ -146,7 +146,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	var syn_head := HBoxContainer.new()
 	var syn_title := Label.new()
 	syn_title.text = "◆ 羁绊与元素共鸣"
-	GameStyle.label(syn_title, 14, GameStyle.JADE)
+	GameStyle.label(syn_title, 14, GameStyle.JADE_DK)
 	syn_head.add_child(syn_title)
 
 	var syn_sp := Control.new()

@@ -46,7 +46,7 @@ func _build_ui() -> void:
 	panel.custom_minimum_size = Vector2(330, 0)
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出 ⇒ 点面板空白处不许在它底下长出摇杆
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var style := GameStyle.dialog_panel(GameStyle.LINE, GameStyle.SLANT_PLATE, Vector2(9, 11))
+	var style := GameStyle.dialog_panel(GameStyle.INK, GameStyle.SLANT_PLATE, Vector2(9, 11))
 	panel.add_theme_stylebox_override("panel", style)
 	center.add_child(panel)
 

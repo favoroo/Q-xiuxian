@@ -57,7 +57,7 @@ func _build_ui() -> void:
 	# 卡体登记成「长按键」：面板不是按钮，摇杆认不出，否则点面板空白处会在它底下长出摇杆
 	# （整屏 dim 仍不登记 —— 那等于一整块全屏禁区）。
 	_panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
-	var style := GameStyle.dialog_panel(GameStyle.GOLD_EDGE, GameStyle.SLANT_PLATE, Vector2(8, 10))
+	var style := GameStyle.dialog_panel(GameStyle.INK, GameStyle.SLANT_PLATE, Vector2(8, 10))
 	_panel.add_theme_stylebox_override("panel", style)
 	center.add_child(_panel)
 
@@ -77,7 +77,7 @@ func _build_ui() -> void:
 	_title_label = Label.new()
 	_title_label.text = "发  现  新  版  本"
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	GameStyle.label(_title_label, 26, GameStyle.JADE, 0, GameStyle.INK, true)
+	GameStyle.label(_title_label, 26, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(_title_label)
 
 	# 版本与体积行
@@ -239,7 +239,7 @@ func _render_release_notes(raw_notes: String) -> void:
 		if s.begins_with("### ") or s.begins_with("## "):
 			var text = s.trim_prefix("### ").trim_prefix("## ")
 			lbl.text = "【" + text + "】"
-			GameStyle.label(lbl, 13, GameStyle.JADE)
+			GameStyle.label(lbl, 13, GameStyle.JADE_DK)
 		elif s.begins_with("- ") or s.begins_with("* "):
 			var text = s.substr(2).trim_prefix("**").trim_suffix("**")
 			lbl.text = " · " + text

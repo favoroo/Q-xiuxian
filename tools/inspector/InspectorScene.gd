@@ -965,7 +965,7 @@ func _build_ui_gallery() -> void:
 		v.add_child(nl)
 		
 		var dl := Label.new()
-		dl.text = "无圆角无渐变\n斜切平行四边形\n深蓝底 + 纸白字"
+		dl.text = "无圆角无渐变\n直角黑框硬影\n宣纸白 + 墨字"
 		GameStyle.label(dl, 10, GameStyle.PAPER_DIM)
 		v.add_child(dl)
 		

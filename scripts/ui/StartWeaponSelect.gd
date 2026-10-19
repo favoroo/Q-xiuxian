@@ -35,7 +35,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# 面板样式收口到 GameStyle（旧版在 .tscn 里钉死 820 宽 + 旧蓝色板 + 不画的投影）
 	var panel: PanelContainer = $CenterContainer/Panel
-	var st := GameStyle.dialog_panel(GameStyle.LINE, GameStyle.SLANT_PLATE, Vector2(10, 10))
+	var st := GameStyle.dialog_panel(GameStyle.INK, GameStyle.SLANT_PLATE, Vector2(10, 10))
 	st.content_margin_left = 24.0
 	st.content_margin_top = 20.0
 	st.content_margin_right = 24.0
@@ -174,7 +174,7 @@ func _create_card(w_id: String) -> Control:
 	name_lbl.text = def.get("name", "?")
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(name_lbl)
-	GameStyle.label(name_lbl, 17, GameStyle.JADE if rec else GameStyle.PAPER, 0, GameStyle.INK, true)
+	GameStyle.label(name_lbl, 17, GameStyle.JADE_DK if rec else GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	# 行为签（若契合当前道统则追加契合标识）
 	var tag_lbl = Label.new()
@@ -186,7 +186,7 @@ func _create_card(w_id: String) -> Control:
 	GameStyle.label(tag_lbl, 11, GameStyle.INK_TEXT)
 
 	# 伤害行（2026-10-11 土豆兄弟式口径：武器卡最显眼处就是伤害，与商店货架卡同款）
-	var dmg_row := BonusRows.make_row("伤害", BonusRows.fmt_num(WeaponData.damage_for(w_id, 1)), GameStyle.JADE, 12, _desc_w())
+	var dmg_row := BonusRows.make_row("伤害", BonusRows.fmt_num(WeaponData.damage_for(w_id, 1)), GameStyle.JADE_DK, 12, _desc_w())
 	vbox.add_child(dmg_row)
 
 	# 描述（换行切进文本，不交给引擎折行：见 GameStyle.wrap_cjk 头注）

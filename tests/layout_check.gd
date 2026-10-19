@@ -479,9 +479,11 @@ func _walk(root: Control, screen: Vector2, min_edge: float = 0.0) -> Array[Strin
 		if not n.visible:
 			continue
 		var next_scroll: ScrollContainer = (n as ScrollContainer) if n is ScrollContainer else scroll
-		# 最外侧那层斜切面板才是这一屏的「框」；再往里一层 PanelContainer 是卡片/色签，
+		# 最外侧那层面板才是这一屏的「框」；再往里一层 PanelContainer 是卡片/色签，
 		# 它的内容边距是卡内排版（悟道卡 8、色签 2），不归这条尺管 ⇒ 进卡就交还 null。
-		var is_frame: bool = n is PanelContainer and absf(skew_rad(n)) > 0.001
+		# 2026-10-19 直角化后 skew 恒 0，「框」改认大硬影：dialog_panel 硬影偏移 (8,9) 起步，
+		# 卡片 (4,5)/色签 (2,3) 都到不了 7.0。
+		var is_frame: bool = n is PanelContainer and (absf(skew_rad(n)) > 0.001 or _shadow_reach(n) >= 7.0)
 		var next_skin: Control = null if (is_frame and skin != null) \
 				else (skin if skin != null else (n if is_frame else null))
 		var in_scroll := next_scroll != null and next_scroll != n
@@ -538,6 +540,17 @@ static func skew_rad(n: Control) -> float:
 			var sb: StyleBox = n.get_theme_stylebox(key)
 			if sb is StyleBoxFlat:
 				return (sb as StyleBoxFlat).skew.x
+	return 0.0
+
+## 这一格 stylebox 硬影的偏移量（没画投影就是 0）：直角化后用来辨认「框」——
+## 弹窗大面板的硬影 (8,9) 起跳，卡片/色签的小硬影到不了这档。
+static func _shadow_reach(n: Control) -> float:
+	for key in ["panel", "normal"]:
+		if n.has_theme_stylebox(key):
+			var sb: StyleBox = n.get_theme_stylebox(key)
+			if sb is StyleBoxFlat:
+				var f := sb as StyleBoxFlat
+				return f.shadow_offset.length() if f.shadow_size > 0 else 0.0
 	return 0.0
 
 func _path(n: Node) -> String:
@@ -742,11 +755,11 @@ func _check_bleed() -> void:
 	# 旧算术：「屏宽 - 面板占位」全分给 5 张卡 ⇒ 面板布局盒正好贴住屏幕左右边
 	var flush := Rect2(0, (wide.y - h) * 0.5, wide.x, h)
 	var drawn_flush := drawn_rect(flush, LevelUpDialog.PANEL_SKEW_RAD)
-	_c.check(not rect_on_screen(drawn_flush, wide),
-		"反例⑨ 面板布局盒贴屏边（旧算术）⇒ 斜切画出来的两个角出屏被拦住（伸到 %.1f..%.1f）" % [
-			drawn_flush.position.x, drawn_flush.end.x])
-	_c.check(absf(drawn_flush.position.x) - LevelUpDialog.skew_x(h) < 0.01,
-		"反例⑨ 出屏的量正好是一个斜切伸出量（%.1f 单位）" % LevelUpDialog.skew_x(h))
+	# 2026-10-19 直角化：斜切四档归零，画出来的边界 == 布局盒，不再有斜切伸出量
+	_c.check(rect_on_screen(drawn_flush, wide),
+		"正例⑨ 直角化后面板布局盒贴屏边 = 画出来的边贴屏边（无斜切伸出）")
+	_c.check(LevelUpDialog.skew_x(h) < 0.001,
+		"正例⑨ 斜切伸出量归零（%.3f 单位）" % LevelUpDialog.skew_x(h))
 	# 新算术：两头各让出 PANEL_AIR_X + 斜切伸出量
 	var pw: float = LevelUpDialog.panel_w_for(wide, n)
 	var centered := Rect2((wide.x - pw) * 0.5, flush.position.y, pw, h)
@@ -786,13 +799,13 @@ func _check_gutters() -> void:
 	_c.check(inside_h(Rect2(new_left - pad, 116, pad * 2.0 + 900.0, 340),
 		Rect2(new_left, 130.8, 160.0, 310.4)),
 		"正例 滚动区两头留 %d 单位后卡角画出来 x %.1f 仍在滚动区内" % [int(pad), new_left - 8.1])
-	# 面板布局盒按旧占位（CHROME_BASE 40，不含 lean）摆：右下角那颗按钮会压上边框线
+	# 直角化后「压边框」不再由斜切制造：合成一颗贴边按钮（留白 4 < EDGE_GAP 10）钉住判据
 	var old_panel := Rect2(33.4, 12, 1137.2, h)
-	var btn := Rect2(995.0, 484, 153.2, 44)
+	var btn := Rect2(1013.4, 484, 153.2, 44)
 	var old_gap := edge_gap_at(drawn_rect(btn, deg_to_rad(GameStyle.SLANT_BUTTON)), old_panel,
 		LevelUpDialog.PANEL_SKEW_RAD)
 	_c.check(old_gap < EDGE_GAP,
-		"反例12 旧占位：「确认领悟」画出来的右边离面板画出来的右边只剩 %.1f 被拦住" % old_gap)
+		"反例12 贴边按钮：画出来的右边离面板画出来的右边只剩 %.1f 被拦住" % old_gap)
 	var pw: float = LevelUpDialog.panel_w_for(wide, GameManager.UPGRADE_OFFER_COUNT)
 	var new_panel := Rect2((wide.x - pw) * 0.5, 12, pw, h)
 	var inner_r: float = new_panel.end.x - LevelUpDialog.chrome_x(h) / 2.0

@@ -40,7 +40,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var cont_sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var cont_sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	cont_sb.content_margin_left = 16.0
 	cont_sb.content_margin_top = 14.0
 	cont_sb.content_margin_right = 16.0
@@ -170,7 +170,7 @@ func _add_audio_slider_row(parent: VBoxContainer, bus: StringName, title: String
 	val_lbl.custom_minimum_size = Vector2(50, 24)
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	GameStyle.label(val_lbl, 13, GameStyle.JADE)
+	GameStyle.label(val_lbl, 13, GameStyle.JADE_DK)
 	hbox.add_child(val_lbl)
 
 	var mute_btn := Button.new()
@@ -220,7 +220,7 @@ func _update_audio_row_ui(bus: StringName) -> void:
 		GameStyle.button(mute_btn, GameStyle.BAD_DK, GameStyle.BAD, 12, GameStyle.CHALK, 4.0)
 	else:
 		val_lbl.text = "%d%%" % int(round(vol * 100.0))
-		val_lbl.add_theme_color_override("font_color", GameStyle.JADE)
+		val_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
 		mute_btn.text = "静音"
 		GameStyle.button(mute_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 
@@ -481,7 +481,7 @@ func _build_version_card() -> Control:
 
 	var title := Label.new()
 	title.text = "◆ 游戏版本与更新"
-	GameStyle.label(title, 14, GameStyle.JADE)
+	GameStyle.label(title, 14, GameStyle.JADE_DK)
 	vb.add_child(title)
 
 	var ver_lbl := Label.new()
@@ -516,7 +516,7 @@ func _build_version_card() -> Control:
 
 	_update_tip_lbl = Label.new()
 	_update_tip_lbl.text = ""
-	GameStyle.label(_update_tip_lbl, 12, GameStyle.GOOD)
+	GameStyle.label(_update_tip_lbl, 12, GameStyle.GOOD_DK)
 	btn_row.add_child(_update_tip_lbl)
 
 	return panel
@@ -536,7 +536,7 @@ func _build_author_hq_card() -> Control:
 
 	var title := Label.new()
 	title.text = "◆ 作者 HQ · 宗门阵地"
-	GameStyle.label(title, 14, GameStyle.JADE)
+	GameStyle.label(title, 14, GameStyle.JADE_DK)
 	vb.add_child(title)
 
 	var desc := Label.new()
@@ -599,7 +599,7 @@ func _build_diagnostics_card() -> Control:
 
 	var title := Label.new()
 	title.text = "◆ 运行环境与诊断"
-	GameStyle.label(title, 14, GameStyle.JADE)
+	GameStyle.label(title, 14, GameStyle.JADE_DK)
 	vb.add_child(title)
 
 	var arch := Engine.get_architecture_name()
@@ -643,7 +643,7 @@ func _build_reset_card() -> Control:
 
 	var title := Label.new()
 	title.text = "◆ 预设与重置"
-	GameStyle.label(title, 14, GameStyle.JADE)
+	GameStyle.label(title, 14, GameStyle.JADE_DK)
 	vb.add_child(title)
 
 	var desc := Label.new()
@@ -665,7 +665,7 @@ func _build_reset_card() -> Control:
 
 	_reset_tip_lbl = Label.new()
 	_reset_tip_lbl.text = ""
-	GameStyle.label(_reset_tip_lbl, 13, GameStyle.GOOD)
+	GameStyle.label(_reset_tip_lbl, 13, GameStyle.GOOD_DK)
 	btn_row.add_child(_reset_tip_lbl)
 
 	return panel
