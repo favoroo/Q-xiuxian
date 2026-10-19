@@ -353,8 +353,9 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> void:
 	if not _layer_on(Layer.SHADOW):
 		return
-	draw_filled_ellipse(pos, rx, ry, Color(0.03, 0.04, 0.07, alpha))
-	draw_filled_ellipse(pos, rx * 0.65, ry * 0.65, Color(0.02, 0.02, 0.04, alpha * 0.4))
+	# 2026-10-18 阴影统一升级：外层弥散减弱、内层接触暗核加深，脚下更「实」
+	draw_filled_ellipse(pos, rx, ry, Color(0.03, 0.04, 0.07, alpha * 0.6))
+	draw_filled_ellipse(pos, rx * 0.66, ry * 0.66, Color(0.015, 0.02, 0.04, minf(alpha * 1.35, 0.88)))
 	var edge_col := col_cloak_edge
 	if cloak_shimmer_intensity > 0.05 and cloak_shimmer_color.a > 0.01:
 		edge_col = col_cloak_edge.lerp(cloak_shimmer_color, clampf(cloak_shimmer_intensity, 0.0, 1.0))

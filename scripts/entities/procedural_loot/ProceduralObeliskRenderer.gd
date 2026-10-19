@@ -122,6 +122,9 @@ func _draw_floating_crystal_spire() -> void:
 	var bob_y: float = sin(_time * 2.2) * 3.5 - 12.0
 	var core_pos := Vector2(0, bob_y)
 
+	# 2.0 地面落影（2026-10-18 补）：双层软影垫在基座下，悬浮玄晶有落点
+	_draw_ground_shadow(Vector2(0, 12), 26.0, 6.0, 0.5)
+
 	# 2.1 阵台玄铁基座（紧贴地面）
 	var base_poly := PackedVector2Array([
 		Vector2(-22, 6),
@@ -187,6 +190,19 @@ func _draw_floating_crystal_spire() -> void:
 	_draw_mini_floating_gem(p_left_orb, col_light, col_ridge)
 	_draw_mini_floating_gem(p_right_orb, col_light, col_ridge)
 
+## 双层软地影（2026-10-18 阴影统一升级）：外层弥散 + 内层接触暗核，与全场实体同一画法。
+## 无 draw_filled_ellipse 辅助，本地以 16 边多边形近似压扁椭圆。
+func _draw_ground_shadow(pos: Vector2, rx: float, ry: float, alpha: float) -> void:
+	for layer in range(2):
+		var k := 1.0 if layer == 0 else 0.66
+		var a := alpha * 0.6 if layer == 0 else minf(alpha * 1.35, 0.88)
+		var pts := PackedVector2Array()
+		for i in range(16):
+			var ang := TAU * float(i) / 16.0
+			pts.append(pos + Vector2(cos(ang) * rx * k, sin(ang) * ry * k))
+		var depth := 1.0 if layer == 0 else 0.4
+		draw_colored_polygon(pts, Color(0.04 * depth, 0.05 * depth, 0.08 * depth, a))
+
 func _draw_mini_floating_gem(pos: Vector2, c_main: Color, c_ridge: Color) -> void:
 	var gw: float = 4.5
 	var gh: float = 8.0
@@ -206,6 +222,9 @@ func _draw_spent_look() -> void:
 	# 阵盘残痕（极暗冷灰，弧段自适应修剪）
 	draw_arc(Vector2.ZERO, 85.0, 0, TAU, 36, Color(0.18, 0.22, 0.26, 0.2), 1.2, true)
 	draw_arc(Vector2.ZERO, 52.0, 0, TAU, 24, Color(0.18, 0.22, 0.26, 0.15), 1.0, true)
+
+	# 地面落影（耗尽态同样垫底）
+	_draw_ground_shadow(Vector2(0, 12), 26.0, 6.0, 0.45)
 
 	# 基座与落座残石
 	var base_poly := PackedVector2Array([

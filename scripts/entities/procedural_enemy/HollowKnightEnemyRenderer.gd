@@ -268,6 +268,13 @@ func draw_filled_ellipse(pos: Vector2, rx: float, ry: float, col: Color) -> void
 		_circle_buf[i] = pos + Vector2(cos(ang) * rx, sin(ang) * ry)
 	draw_colored_polygon(_circle_buf, col)
 
+## 双层软地影（2026-10-18 阴影统一升级）：外层大而淡的弥散影 + 内层约六成大小的接触暗核，
+## 让实体「扎根地面」。仅在既有 _draw 内多画一个多边形，与本体同一 CanvasItem 批处理，
+## 吃现有 20/30Hz 节流与屏外剔除，零额外节点/材质开销。tint 供特殊敌种换调（如毒妖湿绿）。
+func _draw_soft_shadow(pos: Vector2, rx: float, ry: float, alpha: float, tint := Color(0.04, 0.05, 0.08)) -> void:
+	draw_filled_ellipse(pos, rx, ry, Color(tint.r, tint.g, tint.b, alpha * 0.6))
+	draw_filled_ellipse(pos, rx * 0.66, ry * 0.66, Color(tint.r * 0.4, tint.g * 0.4, tint.b * 0.4, minf(alpha * 1.35, 0.88)))
+
 func draw_soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) -> void:
 	for i in range(layers, 0, -1):
 		var r := radius * (float(i) / float(layers))
@@ -295,7 +302,7 @@ func _draw_slime() -> void:
 	var squish_y := 1.0 - sin(_time * 4.5) * 0.12 * (1.0 + speed_ratio * 0.4)
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 14), 16.0 * squish_x, 4.5, Color(0.04, 0.05, 0.08, 0.5))
+	_draw_soft_shadow(Vector2(0, 14), 16.0 * squish_x, 4.5, 0.5)
 
 	# 柔性流质血煞外轮廓（7 节点平滑多边形）
 	var pts := PackedVector2Array([
@@ -329,7 +336,7 @@ func _draw_xiexiu() -> void:
 
 	# 地影（高度变化驱动影子呼吸）
 	var shadow_rx := 13.0 - float_y * 0.4
-	draw_filled_ellipse(Vector2(0, 16), maxf(shadow_rx, 6.0), 4.0, Color(0.04, 0.05, 0.08, 0.45))
+	_draw_soft_shadow(Vector2(0, 16), maxf(shadow_rx, 6.0), 4.0, 0.45)
 
 	# 破风墨黑长袍下摆（飘逸）
 	var cloth_wave := sin(_time * 4.0) * 2.0
@@ -428,7 +435,7 @@ func _draw_danbao() -> void:
 	var boil_pulse := sin(_time * (28.0 if is_critical else 6.0)) * (1.8 if is_critical else 0.4)
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 15), 14.0 + boil_pulse, 4.5, Color(0.04, 0.05, 0.08, 0.5))
+	_draw_soft_shadow(Vector2(0, 15), 14.0 + boil_pulse, 4.5, 0.5)
 
 	var urn_center := Vector2(0, 1 + float_y)
 	var urn_r := 11.0 + boil_pulse
@@ -457,7 +464,7 @@ func _draw_fengqun() -> void:
 	var wing_span := 15.0 * absf(wing_phase)
 
 	# 轻量小地影
-	draw_filled_ellipse(Vector2(0, 15), 9.0, 3.2, Color(0.04, 0.05, 0.08, 0.35))
+	_draw_soft_shadow(Vector2(0, 15), 9.0, 3.2, 0.35)
 
 	var body_pos := Vector2(0, float_y)
 
@@ -516,7 +523,7 @@ func _draw_flower() -> void:
 	var petal_open := 1.0 + sin(_time * 3.5) * 0.15 # 花瓣呼吸开合
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 16), 13.0, 4.0, Color(0.04, 0.05, 0.08, 0.45))
+	_draw_soft_shadow(Vector2(0, 16), 13.0, 4.0, 0.45)
 
 	var center := Vector2(0, -2 + float_y)
 
@@ -549,7 +556,7 @@ func _draw_xueyong() -> void:
 	var squish_y := 1.0 - sin(_time * 3.0) * 0.08
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 13), 16.0 * squish_x, 4.8, Color(0.04, 0.05, 0.08, 0.55))
+	_draw_soft_shadow(Vector2(0, 13), 16.0 * squish_x, 4.8, 0.55)
 
 	var center := Vector2(0, 2)
 	var rx := (13.0 + pulse * 0.5) * squish_x
@@ -578,7 +585,7 @@ func _draw_duyao() -> void:
 	var sac_pulse: float = 1.0 + (0.35 if casting else 0.0) * absf(sin(_time * 9.0))
 
 	# 腐沼地影（比鼓妖更湿更扁）
-	draw_filled_ellipse(Vector2(0, 16), 15.5, 4.0, Color(0.04, 0.07, 0.05, 0.45))
+	_draw_soft_shadow(Vector2(0, 16), 15.5, 4.0, 0.45, Color(0.04, 0.07, 0.05))
 
 	var body_c := Vector2(0, float_y)
 
@@ -631,7 +638,7 @@ func _draw_guyao() -> void:
 	var drum_center := Vector2(0, float_y)
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 15), 15.0, 4.2, Color(0.04, 0.05, 0.08, 0.45))
+	_draw_soft_shadow(Vector2(0, 15), 15.0, 4.2, 0.45)
 
 	# 煞铜重鼓鼓身（略扁椭圆）
 	draw_filled_ellipse(drum_center, 14.5, 12.0, config.col_primary)
@@ -667,7 +674,7 @@ func _draw_yingmei() -> void:
 	var wave := sin(_time * 5.5) * 2.5
 
 	# 虚空地影
-	draw_filled_ellipse(Vector2(0, 15), 13.0, 3.8, Color(0.04, 0.05, 0.08, 0.4))
+	_draw_soft_shadow(Vector2(0, 15), 13.0, 3.8, 0.4)
 
 	var head_pos := Vector2(0, -7 + float_y)
 
@@ -705,7 +712,7 @@ func _draw_zhumu() -> void:
 	var center := Vector2(0, float_y)
 
 	# 庞大地影
-	draw_filled_ellipse(Vector2(0, 18), 20.0, 5.5, Color(0.04, 0.05, 0.08, 0.5))
+	_draw_soft_shadow(Vector2(0, 18), 20.0, 5.5, 0.5)
 
 	# 巨大深紫魔核躯体
 	draw_filled_ellipse(center, 18.0, 15.0, config.col_primary)
@@ -747,7 +754,7 @@ func _draw_leibeast(is_elite: bool) -> void:
 
 	# 地影
 	var shd_rx := 18.0 if not is_elite else 23.0
-	draw_filled_ellipse(Vector2(0, 14), shd_rx, 4.8, Color(0.04, 0.05, 0.08, 0.5))
+	_draw_soft_shadow(Vector2(0, 14), shd_rx, 4.8, 0.5)
 
 	var body_center := Vector2(0, 1 + float_y + crouch)
 
@@ -804,7 +811,7 @@ func _draw_golem() -> void:
 	var center := Vector2(0, -2 + float_y)
 
 	# 沉重巨地影
-	draw_filled_ellipse(Vector2(0, 18), 22.0, 6.0, Color(0.04, 0.05, 0.08, 0.6))
+	_draw_soft_shadow(Vector2(0, 18), 22.0, 6.0, 0.6)
 
 	# 青黑玄铁核心胸铠
 	var chest_pts := PackedVector2Array([
@@ -856,7 +863,7 @@ func _draw_jiansha_elite() -> void:
 	var root_scale_x := -1.0 if flip_h else 1.0
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 16), 16.0, 4.5, Color(0.04, 0.05, 0.08, 0.5))
+	_draw_soft_shadow(Vector2(0, 16), 16.0, 4.5, 0.5)
 
 	# 墨黑金纹魔袍
 	var robe_pts := PackedVector2Array([
@@ -932,7 +939,7 @@ func _draw_boss(final_boss: bool) -> void:
 	var center := Vector2(0, -4 + float_y)
 
 	# 霸者超大地影
-	draw_filled_ellipse(Vector2(0, 26), 28.0, 7.5, Color(0.04, 0.05, 0.08, 0.65))
+	_draw_soft_shadow(Vector2(0, 26), 28.0, 7.5, 0.65)
 
 	# 背后悬浮的魔轮（普通 Boss 为 4 骨刃环，第 20 波魔尊为 8 符文神魔紫焰法轮）
 	var wheel_rot := _time * (0.6 if not final_boss else 0.8)
@@ -1013,7 +1020,7 @@ func _draw_lingyi() -> void:
 	var center := Vector2(0, -4 + float_y)
 
 	# 地影
-	draw_filled_ellipse(Vector2(0, 15), 12.0, 3.6, Color(0.04, 0.05, 0.08, 0.4))
+	_draw_soft_shadow(Vector2(0, 15), 12.0, 3.6, 0.4)
 
 	# 背后缓慢旋转的回春光环（治疗者的身份标识）
 	var halo_rot := _time * 0.9
@@ -1052,7 +1059,7 @@ func _draw_jinchan() -> void:
 
 	# 地影随跳跃缩放
 	var shadow_w := 14.0 - hop * 3.0
-	draw_filled_ellipse(Vector2(0, 15), shadow_w, 4.0, Color(0.04, 0.05, 0.08, 0.4))
+	_draw_soft_shadow(Vector2(0, 15), shadow_w, 4.0, 0.4)
 
 	# 宝气金光罩
 	draw_soft_glow(center, 18.0, config.col_glow * Color(1, 1, 1, 0.4), 2)

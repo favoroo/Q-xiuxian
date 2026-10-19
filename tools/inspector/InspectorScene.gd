@@ -1157,11 +1157,23 @@ func _build_screen_battle_mock() -> void:
 	GameManager.add_weapon("huoyan_fu")
 	GameManager.add_weapon("chiyan_dao")
 	
-	# 1. 模拟战场地面
+	# 1. 模拟战场地面（锚定在 Node2D 父级下不生效，须显式尺寸；色值对齐真机地砖均值 RGB(24,33,46)）
 	var ground := ColorRect.new()
-	ground.color = Color(0.08, 0.10, 0.15)
-	ground.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ground.color = Color(0.094, 0.129, 0.18)
+	ground.position = Vector2.ZERO
+	ground.size = Vector2(960, 540)
 	add_child(ground)
+
+	# 1.5 藏宝匣与聚灵石碑（阴影验收用，直接挂矢量渲染器免上下文）
+	var chest := ChestVisual.new()
+	chest.tier = BalanceChest.TIER_COPPER
+	chest.position = Vector2(150, 380)
+	chest.scale = Vector2.ONE * 1.5
+	add_child(chest)
+	var obelisk := ProceduralObeliskRenderer.new()
+	obelisk.position = Vector2(830, 400)
+	obelisk.fill_ratio = 0.55
+	add_child(obelisk)
 	
 	# 2. 模拟玩家修士居中站位与背负法器
 	var player_cfg := CultivatorVisualConfig.get_config("jianchi")

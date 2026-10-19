@@ -62,8 +62,9 @@ var tier: int = BalanceChest.TIER_WOOD:
 
 func _draw() -> void:
 	var p: Dictionary = PALETTES[tier]
-	# 地面落影：压扁的多边形椭圆，垫在匣底下
-	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 40.0, 6.5), Color(0, 0, 0, 0.35))
+	# 地面落影（2026-10-18 升级双层软影）：外层弥散 + 内核接触暗斑，垫在匣底下
+	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 40.0, 6.5), Color(0, 0, 0, 0.24))
+	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 26.0, 4.4), Color(0, 0, 0, 0.55))
 
 	# 匣身（底角斜切）+ 勾边
 	var body := PackedVector2Array([
