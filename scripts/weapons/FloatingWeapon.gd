@@ -176,6 +176,9 @@ static var _beam_query: PhysicsShapeQueryParameters2D = null
 var muzzle_flash: Sprite2D
 var aura_sprite: Sprite2D = null
 var _base_sprite_scale := Vector2(0.55, 0.55)
+## 矢量法器本体（批次 1：剑/刀/匕首）。非 null 时 Sprite2D 被隐蔽，由它出画面。
+## 未实现的大类保持 null ⇒ 继续显示旧贴图（逐批灰度，不破现状）。
+var _proc_renderer: ProceduralWeaponRenderer = null
 
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
@@ -224,6 +227,10 @@ func setup(def_id: String, star_level: int) -> void:
 		_bullet_tex = load(bullet_path) as Texture2D
 	_bullet_scale = float(def.get("bullet_scale", 1.0))
 	_bullet_spins = bool(def.get("bullet_spin", false))
+	# 升星重调 setup：把新星数下发矢量本体（结构强化：★2 器尖冷光点、★3 刃脊流光）
+	if _proc_renderer != null:
+		_proc_renderer.star = star
+		_proc_renderer.queue_redraw()
 
 func _ready() -> void:
 	slash_sprite.visible = false
@@ -243,6 +250,7 @@ func _ready() -> void:
 		# 出膛点摆在发射帧（本体 +X = 瞄准方向）的剑尖处：贴图缩放后的实际屏上距离
 		muzzle_len = tip_local.length() * sprite.scale.x
 		muzzle_point.position = Vector2(muzzle_len, 0.0)
+		_setup_proc_renderer()
 		_apply_facing(rotation)
 		_setup_muzzle_flash()
 		_setup_aura()
@@ -252,6 +260,25 @@ func _ready() -> void:
 			_setup_beam_renderer()
 		elif behavior == WeaponData.Behavior.CONE:
 			_setup_cone_renderer()
+
+## 矢量法器本体：只在本批已实现器形（剑/刀/匕首）时挂载，并把旧贴图隐蔽。
+## 坐标契约见 ProceduralWeaponRenderer 头注释：画布像素空间沿 +X 绘制、器尖落 tip_len，
+## 节点 scale = 旧 sprite 的 0.55 ⇒ 器尖屏上位置与 MuzzlePoint 出膛点严丝合缝，判定零改动。
+func _setup_proc_renderer() -> void:
+	if _proc_renderer != null:
+		return
+	var shape_name := String(def.get("shape", ""))
+	var wshape := ProceduralWeaponRenderer.shape_from_name(shape_name)
+	if wshape == ProceduralWeaponRenderer.WeaponShape.GENERIC:
+		return
+	_proc_renderer = ProceduralWeaponRenderer.new()
+	_proc_renderer.name = "ProcWeapon"
+	_proc_renderer.configure(wshape, _arc_element(), tip_local.length(), star)
+	_proc_renderer.scale = sprite.scale
+	_proc_renderer.z_index = sprite.z_index
+	add_child(_proc_renderer)
+	# 贴图让位：矢量本体接管显示（与 BladeProjectile/SunOrb 同款过渡手法）
+	sprite.self_modulate.a = 0.0
 
 ## 横扫元素扇面（top_level = 世界坐标）：扇面钉在挥出那一帧的方位与地点，
 ## 本体收势/回轨都不会拖着它走 —— 这是「画多大==判多大」在横扫上的落点。
@@ -336,10 +363,16 @@ func _apply_facing(angle: float) -> void:
 	if upright:
 		sprite.flip_v = false
 		sprite.rotation = -angle
+		# 矢量本体同样反向补掉本体转角，世界坐标里始终竖直
+		if _proc_renderer != null:
+			_proc_renderer.rotation = -angle
 	else:
 		var mirrored: bool = absf(wrapf(angle, -PI, PI)) > PI * 0.5
 		sprite.flip_v = mirrored
 		sprite.rotation = art_angle if mirrored else -art_angle
+		# 矢量本体器尖本就画在 +X，跟随节点转角即天然对准目标，无需 art_angle/flip 补偿
+		if _proc_renderer != null:
+			_proc_renderer.rotation = 0.0
 
 ## 这一发的瞄准角：有目标就朝目标，没目标退回当前发射帧（贴图补偿由 _apply_facing 统一做）
 func _aim_at(pos: Vector2) -> float:
@@ -388,11 +421,19 @@ func _setup_muzzle_flash() -> void:
 ## 记下起点色，衰减在 _tick_fire_fx 逐帧插值回白/回基线
 func _flash_sprite(color: Color, dur: float) -> void:
 	sprite.modulate = color
+	if _proc_renderer != null:
+		_proc_renderer.modulate = color
 	_flash_from = color
 	_flash_total = maxf(dur, 0.0001)
 	_flash_t = _flash_total
 	if aura_sprite != null:
 		aura_sprite.modulate.a = AURA_FLASH_A
+
+## 本体色 tween：贴图与矢量本体同步推进（BURST 蓄力金光/引雷亮闪等演出）
+func _tw_modulate(tw: Tween, color: Color, dur: float) -> void:
+	tw.parallel().tween_property(sprite, "modulate", color, dur)
+	if _proc_renderer != null:
+		tw.parallel().tween_property(_proc_renderer, "modulate", color, dur)
 
 ## 开火视觉帧内状态机推进（后坐/沉身、本体亮闪、枪口闪光、光晕回位）
 ## 在 _process 每渲染帧调用；全部闭式插值，不再创建 Tween
@@ -421,6 +462,8 @@ func _tick_fire_fx(delta: float) -> void:
 		_flash_t = maxf(_flash_t - delta, 0.0)
 		var fk := 1.0 - _flash_t / _flash_total
 		sprite.modulate = _flash_from.lerp(Color.WHITE, fk)
+		if _proc_renderer != null:
+			_proc_renderer.modulate = sprite.modulate
 	# 3. 光晕回基线（回位后由待机呼吸脉动接管）
 	if aura_sprite != null and aura_sprite.modulate.a > AURA_BASE_A and _lunge_t < 0.0:
 		aura_sprite.modulate.a = maxf(aura_sprite.modulate.a - delta * (AURA_FLASH_A - AURA_BASE_A) / MUZZLE_TIME, AURA_BASE_A)
@@ -486,6 +529,8 @@ func _process(delta: float) -> void:
 			# 待机器身微呼吸与灵光脉动
 			var breath := sin(bob_phase) * 0.02
 			sprite.scale = _base_sprite_scale * (1.0 + breath)
+			if _proc_renderer != null:
+				_proc_renderer.scale = sprite.scale
 			if aura_sprite != null:
 				aura_sprite.modulate.a = 0.12 + sin(bob_phase) * 0.05
 
@@ -801,15 +846,15 @@ func _perform_burst_attack() -> void:
 	var tw = create_tween()
 	tw.tween_property(self, "position", cast_pos, 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "scale", Vector2(1.22, 1.22), 0.10).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(sprite, "modulate", CHARGE_GLOW, 0.10)
+	_tw_modulate(tw, CHARGE_GLOW, 0.10)
 	for i in range(3):
 		tw.tween_property(self, "position", cast_pos + Vector2(randf_range(-2.5, 2.5), randf_range(-2.5, 2.5)), 0.035)
 	tw.tween_callback(func(): _spawn_lightning(target_pos))
 	tw.tween_property(self, "position", orig_pos + strike_dir * 12.0, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(sprite, "modulate", Color(1.9, 1.85, 1.45), 0.05)
+	_tw_modulate(tw, Color(1.9, 1.85, 1.45), 0.05)
 	tw.tween_property(self, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(self, "position", orig_pos, 0.15).set_trans(Tween.TRANS_SINE)
-	tw.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.18)
+	_tw_modulate(tw, Color.WHITE, 0.18)
 	tw.tween_callback(func(): is_attacking = false)
 
 ## 引雷：锯齿闪电从武器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
