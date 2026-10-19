@@ -156,6 +156,16 @@ var _poison_tick: float = 0.0
 var chill_timer: float = 0.0
 var chill_slow: float = 0.0
 
+# —— 五行异常体表视觉（2026-10-19 V3：灼烧火星/剧毒雾斑/冰缓霜晶 + 本体染色）——
+## DoT 存续期每隔 STATUS_FX_INTERVAL 在体表续一发低频粒子（三系共用 FxBudget 帧闸），
+## 灼烧/剧毒顺带染色（冰缓染色在 _effective_speed 既有链路）。染色互斥纪律：
+## 冰缓 > 灼烧 > 剧毒 > 本体色；引信（_fuse>=0）与火球蓄力（_bolt_windup_t>=0）独占
+## modulate，异常染色整段让位。同值短路：Godot setter 同值赋值无重绘副作用。
+const STATUS_FX_INTERVAL := 0.45              ## 体表粒子续发间隔（错相靠 instance_id 相位）
+const STATUS_TINT_BURN := Color(1.55, 1.05, 0.8)   ## 灼烧暖橙提亮（对齐冰缓提亮思路，不压暗）
+const STATUS_TINT_POISON := Color(0.9, 1.45, 0.85) ## 剧毒青绿提亮
+var _status_fx_cd: float = 0.0                ## 体表粒子续发计时（activate 时按 instance_id 错相）
+
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var shadow_sprite: Sprite2D = get_node_or_null("Shadow") as Sprite2D
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
@@ -227,6 +237,7 @@ var _has_elite_light: bool = false
 static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
 static var pool_created_count: int = 0 ## 探针断言用：复用两轮零增长
 static var pool_reused_count: int = 0
+static var _explode_snap_pool: Array = []  ## 裂魂铃链爆快照复用栈（每层递归独占一张，clear 回栈容量不丢）
 
 ## —— 全局大面积特效时间戳闸（2026-10-16 演出去噪）——
 ## 静态时间戳闸（Time.get_ticks_msec）：同屏大面积演出（焦痕/爆炸环）走「最后一次放行后
@@ -421,6 +432,8 @@ func reset_for_reuse() -> void:
 	_poison_tick = 0.0
 	chill_timer = 0.0
 	chill_slow = 0.0
+	# 体表粒子续发按 instance_id 错相摊开，群怪同中异常不会同帧齐发撞帧闸
+	_status_fx_cd = STATUS_FX_INTERVAL * fposmod(float(get_instance_id() % 89) * 0.011, 1.0)
 	_squash_t = 0.0
 	_flash_t = 0.0
 	_flash_swap_t = 0.0
@@ -536,6 +549,12 @@ static func clear_pools() -> void:
 			if is_instance_valid(e):
 				e.free()
 	_pools.clear()
+	# 影魅残影池同为静态节点引用：场景 teardown 后池中节点已随树释放，必须清空防悬空复用
+	for g in _ghost_idle:
+		if is_instance_valid(g):
+			g.free()
+	_ghost_idle.clear()
+	_explode_snap_pool.clear()
 
 ## 池内休眠体总数（探针/判据用）
 static func pool_idle_count() -> int:
@@ -724,6 +743,8 @@ func _physics_process(delta: float) -> void:
 
 	# 有效移速：冰缓减速 × 鼓妖光环加速
 	var eff_speed := _effective_speed(delta)
+	# 五行异常体表粒子与灼烧/剧毒染色（屏外跳过粒子，染色照写保证回屏色温正确）
+	_tick_status_fx(delta)
 
 	# 1. 击退速度急刹与受击硬直定身（空洞骑士/死亡细胞风格：0帧瞬发冲量 → ~0.11s急刹刹停 → 原地僵直定身）
 	_pp_stun = _tick_hit_stun(delta)
@@ -818,6 +839,39 @@ func _tick_damage_over_time(delta: float) -> bool:
 ## 本体常驻染色（冰缓结束恢复用；Boss 阶段染色由子类覆写，防止被异常状态洗成白色）
 func _base_tint() -> Color:
 	return Color.WHITE
+
+## 五行异常体表视觉：低频续发体表粒子 + 灼烧/剧毒本体染色。
+## 染色优先级 冰缓（_effective_speed 链路）> 灼烧 > 剧毒 > 本体色；
+## 引信/蓄力独占 modulate 时整段让位，不写不读。
+func _tick_status_fx(delta: float) -> void:
+	var burning := burn_timer > 0.0
+	var poisoned := poison_timer > 0.0
+	var chilled := chill_timer > 0.0
+	# 染色（灼烧/剧毒；冰缓在 _effective_speed 既有链路，此处不覆盖）；
+	# 异常消退当帧把本体色归还（只认自己写过的两档色，避免误洗引信/蓄力色）
+	if not chilled and _fuse < 0.0 and _bolt_windup_t < 0.0:
+		if burning:
+			anim_sprite.modulate = STATUS_TINT_BURN
+		elif poisoned:
+			anim_sprite.modulate = STATUS_TINT_POISON
+		elif anim_sprite.modulate == STATUS_TINT_BURN or anim_sprite.modulate == STATUS_TINT_POISON:
+			anim_sprite.modulate = _base_tint()
+	if not burning and not poisoned and not chilled:
+		return
+	# 体表粒子续发（屏外不发，帧闸在 FxParticlePool 侧兜底）
+	if _offscreen:
+		return
+	_status_fx_cd -= delta
+	if _status_fx_cd > 0.0:
+		return
+	_status_fx_cd = STATUS_FX_INTERVAL
+	var fx_pos := global_position + Vector2(0.0, -10.0)
+	if burning:
+		FxParticlePool.burst(FxParticlePool.BURN_AURA, fx_pos, "fire")
+	if poisoned:
+		FxParticlePool.burst(FxParticlePool.POISON_AURA, fx_pos, "poison")
+	if chilled:
+		FxParticlePool.burst(FxParticlePool.CHILL_AURA, fx_pos, "water")
 
 ## 有效移速 = 基础 ×（1-冰缓）× 光环；顺带处理冰缓染色与光环过期待遇失效
 func _effective_speed(delta: float) -> float:
@@ -1802,10 +1856,20 @@ func _spawn_teleport_ghost() -> void:
 	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
 	tw.chain().tween_callback(ghost.queue_free)
 
-## 矢量残影：复制本体当前姿态的渲染器，染成妖异蓝后淡出。
+## 矢量残影：复用静态池里的剪影渲染器，染成妖异蓝后淡出回池（2026-10-19 零 GC 专项）。
+## 旧写法每次闪现 HollowKnightEnemyRenderer.new() + 淡出 queue_free，高密度影魅波是
+## 节点构造/销毁 churn 热点。池化消灭节点 churn；淡出仍走 tween——闪现是秒级低频事件，
+## 且 EnemyBase 无静态逐帧 tick 载体，tween 分配可忽略。
 ## 不继承受击闪白材质（残影要的是剪影，不是再闪一下）。
+const GHOST_POOL_CAP := 10              ## 残影渲染器池上限；溢出个体淡出后直接释放
+static var _ghost_idle: Array = []      ## 闲置残影渲染器（HollowKnightEnemyRenderer，出树休眠）
+
 func _spawn_vector_ghost() -> void:
-	var ghost := HollowKnightEnemyRenderer.new()
+	var ghost: HollowKnightEnemyRenderer
+	if _ghost_idle.is_empty():
+		ghost = HollowKnightEnemyRenderer.new()
+	else:
+		ghost = _ghost_idle.pop_back()
 	ghost.config = procedural_view.config
 	ghost.facing = procedural_view.facing
 	ghost.flip_h = procedural_view.flip_h
@@ -1815,12 +1879,25 @@ func _spawn_vector_ghost() -> void:
 	ghost.scale = procedural_view.scale
 	ghost.z_index = anim_sprite.z_index
 	ghost.modulate = Color(0.55, 0.75, 1.0, 0.5)
+	ghost.visible = true
 	get_parent().add_child(ghost)
 	var tw := ghost.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(ghost, "modulate:a", 0.0, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(ghost, "scale", ghost.scale * 0.85, 0.25)
-	tw.chain().tween_callback(ghost.queue_free)
+	tw.chain().tween_callback(EnemyBase._recycle_vector_ghost.bind(ghost))
+
+## 残影淡出收尾：出树回池（池满直接释放）；场景退出时经 clear_pools 统一清
+static func _recycle_vector_ghost(ghost: HollowKnightEnemyRenderer) -> void:
+	if not is_instance_valid(ghost):
+		return
+	if ghost.get_parent() != null:
+		ghost.get_parent().remove_child(ghost)
+	ghost.visible = false
+	if _ghost_idle.size() < GHOST_POOL_CAP:
+		_ghost_idle.append(ghost)
+	else:
+		ghost.queue_free()
 
 ## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前回合 × 危险度缩放；自爆/消散不触发）
 func _split_offspring() -> void:
@@ -2119,10 +2196,13 @@ func _die() -> void:
 		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
 		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
 		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
-		# 改用 GameManager.live_enemies 快照（避免 get_nodes_in_group 每次击杀 new Array，
-		# duplicate 防止链式 take_damage 递归改动 live_enemies 数组）：
-		var enemies_snapshot := GameManager.live_enemies.duplicate()
-		for e in enemies_snapshot:
+		# live_enemies 快照走静态复用数组栈（2026-10-19 零 GC 专项）：
+		# 旧写法每次击杀 duplicate() 一次新数组，群杀链爆时同帧几十次分配。
+		# 递归安全：链式 take_damage 里嵌套的 _die 会再取一张快照（每层独占一张），
+		# 用完 clear() 回栈容量不丢，稳态零分配。
+		var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
+		snap.append_array(GameManager.live_enemies)
+		for e in snap:
 			if e == null or not is_instance_valid(e) or e.dying or e == self:
 				continue
 			if e.is_in_group("chests") or e.is_in_group("herbs"):
@@ -2132,6 +2212,8 @@ func _die() -> void:
 				continue
 			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
 			e.take_damage(ex_dmg, ex_dir * ex_impulse)
+		snap.clear()
+		_explode_snap_pool.push_back(snap)
 		# 2026-10-16 演出去噪：伤害/击退照常逐次结算（玩法零改动），金色爆炸环走全局限频——
 		# 旧写法每次击杀一发 90px 环，清怪高潮连环爆炸时是冲击环雨。伤害与环同源只是读法惯例，
 		# 环限频不改爆炸链实际范围；链爆读数由受击方 take_damage 自己的受击反馈补足。

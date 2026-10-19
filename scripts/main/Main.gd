@@ -18,6 +18,10 @@ var dust_particles: CPUParticles2D
 var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
 var _vignette_tween: Tween = null
+## 常态暗角基准（与 Main.tscn ShaderMaterial_vignette 初值同源）：
+## 红闪/低血量脉冲/结算渐隐结束后一律复位到这里，改基准两处同步。
+const VIG_TINT_BASE := Color(0.05, 0.08, 0.14, 0.14)  ## 常态边缘冷蓝 tint（修仙冷基调）
+const VIG_OPACITY_BASE := 0.58                          ## 常态暗角不透明度
 var _low_hp_phase: float = 0.0
 var _low_hp_pulsing: bool = false   ## 低血量红晕脉冲态 memo（状态机闸：只在翻转沿建/杀 tween）
 var _low_hp_tween: Tween = null     ## 低血量脉冲循环 tween 句柄（退出/红闪抢通道时 kill）
@@ -477,8 +481,8 @@ func _stop_low_hp_pulse() -> void:
 	_low_hp_tween = null
 	if vignette_rect != null and vignette_rect.material is ShaderMaterial:
 		var mat := vignette_rect.material as ShaderMaterial
-		mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
-		mat.set_shader_parameter("vignette_opacity", 0.5)
+		mat.set_shader_parameter("tint_color", VIG_TINT_BASE)
+		mat.set_shader_parameter("vignette_opacity", VIG_OPACITY_BASE)
 
 ## glow 拥挤档落地（2026-10-17 性能专项）：1s 粒度轮询 FxBudget.crowded，
 ## 高压战斗把 glow_intensity 0.4 → 0.25（阈值与色表不动，超白起辉只是峰值压一档）。
@@ -580,12 +584,12 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 			_vignette_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			_vignette_tween.tween_method(
 				func(alpha: float):
-					mat.set_shader_parameter("vignette_opacity", lerpf(0.5, 0.95, alpha)),
+					mat.set_shader_parameter("vignette_opacity", lerpf(VIG_OPACITY_BASE, 0.95, alpha)),
 				1.0, 0.0, dur
 			).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			_vignette_tween.tween_callback(func():
-				mat.set_shader_parameter("tint_color", Color(0.0, 0.0, 0.0, 0.1))
-				mat.set_shader_parameter("vignette_opacity", 0.5)
+				mat.set_shader_parameter("tint_color", VIG_TINT_BASE)
+				mat.set_shader_parameter("vignette_opacity", VIG_OPACITY_BASE)
 			)
 	# T-6.2 受击屏幕冲击波：受创时若为强敌/Boss命中或Boss波受创，触发径向扭曲环
 	if bool(SettingsManager.get_val(&"display", &"screen_shockwave", false)):
@@ -617,8 +621,8 @@ func _on_game_over_reset_vignette(_victory: bool) -> void:
 	_vignette_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_vignette_tween.tween_method(
 		func(t: float):
-			mat.set_shader_parameter("tint_color", start_tint.lerp(Color(0.0, 0.0, 0.0, 0.1), t))
-			mat.set_shader_parameter("vignette_opacity", lerpf(start_op, 0.5, t)),
+			mat.set_shader_parameter("tint_color", start_tint.lerp(VIG_TINT_BASE, t))
+			mat.set_shader_parameter("vignette_opacity", lerpf(start_op, VIG_OPACITY_BASE, t)),
 		0.0, 1.0, 1.2
 	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 

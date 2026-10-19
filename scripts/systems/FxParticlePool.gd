@@ -12,6 +12,9 @@ enum Kind {
 	EMBER = 3,        ## 火锥/火舌碎屑（0.35s，顺向喷发，6-12 粒）
 	SOUL_ORB = 4,     ## 拾取灵光/灵珠吸附微粒（软光斑，0.25s，4-8 粒）
 	LEVEL_PILLAR = 5, ## 升级仪式灵气光柱粒子（金色超白，0.4s，12-16 粒）
+	BURN_AURA = 6,    ## 灼烧体表火星（DoT 存续期低频续发，3 粒上升余烬，0.45s）
+	POISON_AURA = 7,  ## 剧毒体表雾斑（DoT 存续期低频续发，4 粒毒雾软斑缓飘，0.6s）
+	CHILL_AURA = 8,   ## 冰缓体表霜晶（冰缓存续期低频续发，3 粒霜屑缓落，0.5s）
 }
 
 const HIT_SPARK := Kind.HIT_SPARK
@@ -20,6 +23,9 @@ const DEATH_BURST := Kind.DEATH_BURST
 const EMBER := Kind.EMBER
 const SOUL_ORB := Kind.SOUL_ORB
 const LEVEL_PILLAR := Kind.LEVEL_PILLAR
+const BURN_AURA := Kind.BURN_AURA
+const POISON_AURA := Kind.POISON_AURA
+const CHILL_AURA := Kind.CHILL_AURA
 
 const POOL_CAP := 24                 ## 常驻发射器池上限（硬红线 ≤30）
 const Z_OVERLAY := 35                ## 特效渲染层级（在角色与怪物之上，在 HUD 之下）
@@ -30,6 +36,7 @@ const BURST_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_BURST      ## 同物理�
 const WISP_FRAME_BUDGET := FxBudget.FRAME_BUDGET_DEATH_WISP        ## 同物理帧最多 4 处小怪消散
 const SOUL_ORB_FRAME_BUDGET := FxBudget.FRAME_BUDGET_SOUL_ORB      ## 同物理帧最多 2 处灵气凝聚微粒
 const EMBER_FRAME_BUDGET := FxBudget.FRAME_BUDGET_EMBER            ## 同物理帧最多 3 处火锥碎屑
+const AURA_FRAME_BUDGET := FxBudget.FRAME_BUDGET_STATUS_AURA       ## 同物理帧最多 2 处异常体表粒子（三系共用）
 
 static var instance: FxParticlePool = null
 
@@ -46,6 +53,8 @@ static var _last_soul_orb_frame: int = -1
 static var _soul_orb_count_this_frame: int = 0
 static var _last_ember_frame: int = -1
 static var _ember_count_this_frame: int = 0
+static var _last_aura_frame: int = -1
+static var _aura_count_this_frame: int = 0
 
 var _available_emitters: Array[GPUParticles2D] = []
 var _active_emitters: Array[GPUParticles2D] = []
@@ -107,6 +116,8 @@ static func clear_cache() -> void:
 	_wisp_count_this_frame = 0
 	_last_ember_frame = -1
 	_ember_count_this_frame = 0
+	_last_aura_frame = -1
+	_aura_count_this_frame = 0
 
 func _init_pool() -> void:
 	for i in range(POOL_CAP):
@@ -217,6 +228,13 @@ static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_fact
 				_ember_count_this_frame = 0
 			_ember_count_this_frame += 1
 			if _ember_count_this_frame > EMBER_FRAME_BUDGET:
+				return
+		elif kind == Kind.BURN_AURA or kind == Kind.POISON_AURA or kind == Kind.CHILL_AURA:
+			if cur_frame != _last_aura_frame:
+				_last_aura_frame = cur_frame
+				_aura_count_this_frame = 0
+			_aura_count_this_frame += 1
+			if _aura_count_this_frame > AURA_FRAME_BUDGET:
 				return
 	
 	instance._trigger_burst(kind, pos, element, scale_factor, dir)
@@ -357,7 +375,58 @@ func _trigger_burst(kind: int, pos: Vector2, element: Variant, scale_factor: flo
 			mat.scale_min = 0.28 * scale_factor
 			mat.scale_max = 0.55 * scale_factor
 			mat.color = _resolve_color(element, GameStyle.FX_HDR_GOLD)
-			
+
+		Kind.BURN_AURA:
+			# 灼烧体表火星：少量余烬自躯体上升，低 explosiveness 拖成断续细流而非齐爆
+			emitter.texture = _tex_square_chip
+			emitter.amount = 3
+			emitter.lifetime = 0.45
+			emitter.explosiveness = 0.35
+			mat.direction = Vector3(0, -1, 0)
+			mat.spread = 35.0
+			mat.initial_velocity_min = 28.0 * scale_factor
+			mat.initial_velocity_max = 55.0 * scale_factor
+			mat.gravity = Vector3(0, -40.0, 0)
+			mat.damping_min = 20.0
+			mat.damping_max = 45.0
+			mat.scale_min = 0.10 * scale_factor
+			mat.scale_max = 0.20 * scale_factor
+			mat.color = _resolve_color(element, GameStyle.FX_HDR_FIRE)
+
+		Kind.POISON_AURA:
+			# 剧毒体表雾斑：软光斑低初速弥散缓飘，刻意压低明度不抢 DoT 飘字读数
+			emitter.texture = _tex_soft_dot
+			emitter.amount = 4
+			emitter.lifetime = 0.6
+			emitter.explosiveness = 0.3
+			mat.direction = Vector3(0, 0, 0)
+			mat.spread = 180.0
+			mat.initial_velocity_min = 10.0 * scale_factor
+			mat.initial_velocity_max = 26.0 * scale_factor
+			mat.gravity = Vector3(0, -8.0, 0)
+			mat.damping_min = 30.0
+			mat.damping_max = 60.0
+			mat.scale_min = 0.22 * scale_factor
+			mat.scale_max = 0.42 * scale_factor
+			mat.color = Color(0.5, 1.3, 0.65, 0.6)
+
+		Kind.CHILL_AURA:
+			# 冰缓体表霜晶：霜屑缓落微闪，呼应染蓝色温
+			emitter.texture = _tex_soft_dot
+			emitter.amount = 3
+			emitter.lifetime = 0.5
+			emitter.explosiveness = 0.3
+			mat.direction = Vector3(0, 0, 0)
+			mat.spread = 180.0
+			mat.initial_velocity_min = 8.0 * scale_factor
+			mat.initial_velocity_max = 20.0 * scale_factor
+			mat.gravity = Vector3(0, 26.0, 0)
+			mat.damping_min = 25.0
+			mat.damping_max = 50.0
+			mat.scale_min = 0.14 * scale_factor
+			mat.scale_max = 0.28 * scale_factor
+			mat.color = Color(0.9, 1.5, 2.2, 0.7)
+
 		_:
 			emitter.texture = _tex_square_chip
 			emitter.amount = 8
