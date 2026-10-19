@@ -1,7 +1,7 @@
-[gd_scene load_steps=24 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=25 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
-[ext_resource type="Texture2D" path="res://assets/art/courtyard_tile.png" id="2_tile"]
+[ext_resource type="Shader" path="res://assets/shaders/ground_tile.gdshader" id="2_tile"]
 [ext_resource type="PackedScene" uid="uid://cobelisk001" path="res://scenes/entities/BlessingObelisk.tscn" id="3_ob"]
 [ext_resource type="PackedScene" uid="uid://cplayer001" path="res://scenes/entities/Player.tscn" id="4_player"]
 [ext_resource type="Script" path="res://scripts/systems/WaveSpawner.gd" id="5_spawner"]
@@ -40,6 +40,17 @@ glow_hdr_threshold = 1.0
 glow_hdr_scale = 2.0
 glow_hdr_luminance_cap = 6.0
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
+resource_local_to_scene = true
+shader = ExtResource("2_tile")
+shader_parameter/base_color = Color(0.208, 0.243, 0.263, 1)
+shader_parameter/gap_color = Color(0.1, 0.13, 0.15, 1)
+shader_parameter/tile_size = 160.0
+shader_parameter/gap_width = 2.0
+shader_parameter/tone_variation = 0.03
+shader_parameter/wear_intensity = 0.02
+shader_parameter/world_size = Vector2(4800, 4800)
+
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
 resource_local_to_scene = true
 shader = ExtResource("6_vig")
@@ -54,20 +65,17 @@ script = ExtResource("1_main")
 environment = SubResource("Environment_hd2d")
 
 [node name="ToneModulate" type="CanvasModulate" parent="."]
-color = Color(0.74, 0.8, 0.95, 1)
+color = Color(0.85, 0.88, 0.96, 1)
 
 [node name="MapLayer" type="Node2D" parent="."]
 
-[node name="GroundTiles" type="TextureRect" parent="MapLayer"]
-texture_repeat = 2
-texture_filter = 5
+[node name="GroundTiles" type="ColorRect" parent="MapLayer"]
+material = SubResource("ShaderMaterial_ground")
 offset_left = -2400.0
 offset_top = -2400.0
 offset_right = 2400.0
 offset_bottom = 2400.0
 mouse_filter = 2
-texture = ExtResource("2_tile")
-stretch_mode = 1
 
 [node name="ObeliskCenter" parent="MapLayer" instance=ExtResource("3_ob")]
 position = Vector2(0, -116)

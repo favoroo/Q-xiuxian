@@ -96,6 +96,8 @@ var sword_style: bool = false    ## 幽冥剑气形态（御剑邪修专属：�
 var _pooled: bool = false
 var _shape_node: CollisionShape2D = null
 var _circle: CircleShape2D = null
+## 世界坐标拖尾（2026-10-19）：仅剑气/Boss 大弹启用，普通火球不挂（守同屏图元预算）
+var _trail: EnemyBoltTrail = null
 
 func _reset_defaults() -> void:
 	direction = Vector2.RIGHT
@@ -133,6 +135,29 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 
+## 当前弹体是否值得挂拖尾：拥挤档一律不挂；剑气/Boss 大弹才挂
+func _trail_enabled() -> bool:
+	if FxBudget.crowded:
+		return false
+	return sword_style or scale_factor > 1.2
+
+## 拖尾按需懒建（只在需要时挂一次，池化复用不再重建）。
+## 不在 _ready 建：普通火球（占绝大多数）永不创建，既守「画多大判多大」的子节点铁律
+## （判定圆之外不长任何视觉节点），也省内存。
+func _ensure_trail() -> EnemyBoltTrail:
+	if _trail == null or not is_instance_valid(_trail):
+		_trail = EnemyBoltTrail.new()
+		add_child(_trail)
+	return _trail
+
+## 弹体描边色（拖尾同源取色，读得出「这是什么弹」）
+func _rim_color() -> Color:
+	if sword_style:
+		return RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
+	if purple_style:
+		return RIM_COLOR_PURPLE
+	return RIM_COLOR
+
 ## 出膛激活：池化后 _ready 只在首建时跑过，所有依赖字段的视觉与物理状态
 ## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
 ##   direction/speed/damage/lifetime/scale_factor ⇒ radius/碰撞圆/寿命
@@ -154,6 +179,15 @@ func activate() -> void:
 	# 会在帧末 flush，直接赋值的 false 会被它覆盖（照 BladeProjectile.activate 同一条坑）
 	set_deferred("monitoring", true)
 	_shape_node.set_deferred("disabled", false)
+
+	# 拖尾按当前形态决定挂不挂；挂上则清史从出膛点起笔
+	if _trail_enabled():
+		var tr := _ensure_trail()
+		tr.configure(_rim_color())
+		tr.set_active(true)
+		tr.seed(global_position)
+	elif _trail != null:
+		_trail.set_active(false)
 
 ## 被友方/防御灵兽拦截：立刻回收入池（产生湮灭灵光碎屑，平滑消散）
 func intercept() -> void:
@@ -207,6 +241,8 @@ func _recycle() -> void:
 	set_deferred("monitoring", false)
 	_shape_node.set_deferred("disabled", true)
 	visible = false
+	if _trail != null:
+		_trail.set_active(false)
 	_reset_defaults()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
@@ -266,6 +302,8 @@ func _physics_process(delta: float) -> void:
 	if accel != 0.0:
 		speed = maxf(min_speed, speed + accel * delta)
 	position += direction * speed * delta
+	if _trail != null:
+		_trail.sample(global_position, delta)
 	lifetime -= delta
 	if split_timer > 0.0:
 		split_timer -= delta

@@ -4,7 +4,7 @@ extends Node2D
 ## 地面贴花：震地落点的「震裂」与火焰/爆炸落点的「焦痕」。
 ## 纯视觉、无判定 —— 判定在持有者侧结算完毕后才调用本组件留痕（照 AoeTelegraph「只画不判」铁律）。
 ## 形态在 activate() 用本地 RNG 预生成（种子 = 位置哈希，不走 GameManager.rng，不污染玩法随机流），
-## _draw() 只画不随机：裂纹折线算法复用 GroundDecorLayer §3.2，焦痕聚合复用 §3.1 青苔模式。
+## _draw() 只画不随机：裂纹折线与焦痕聚合算法内联于本类（旧版复用自 GroundDecorLayer，2026-10-19 该层去裂痕后独立）。
 ## 生命周期：HOLD 全亮 → FADE 渐隐 → 回收入池（对象池照 PoisonPool 范式）。
 
 enum Kind { CRACK, SCORCH, FADE_GLOW }
@@ -16,19 +16,21 @@ const GROW_TIME := 0.12  ## 裂纹向外爆开生长时间（秒）
 const GLOW_HOLD_TIME := 0.15
 const GLOW_FADE_TIME := 0.40
 const GROUND_SORT_Y := -100000.0  ## 宿主 Y 排序钉死键：恒排在角色之前（同 PoisonPool.GROUND_SORT_Y）
+const GROUND_SQUASH := 0.62       ## 俯视透视压扁比（全类型贴地统一基准，对齐实体双层软阴影）
 
 ## 重绘节流（遵守 20Hz VisualRate 约定，杜绝每帧无脑重绘）
 const REDRAW_INTERVAL := 0.05
 var _redraw_timer: float = 0.0
 
 const CRACK_SHADOW := Color(0.02, 0.03, 0.05, 0.85)  ## 裂口深沉阴影底（线宽 2.8px）
-const CRACK_CORE := Color(0.65, 0.82, 0.95, 0.60)    ## 裂缝冷月反光亮芯（线宽 1.2px，石质断层高光）
+const CRACK_CORE := Color(0.65, 0.82, 0.95, 0.34)    ## 裂缝冷月反光亮芯（线宽 1.2px，石质断层微光，收敛浮空感）
 const CRACK_RIM := CRACK_CORE                         ## 兼容旧别名
-const CRACK_DENT := Color(0.02, 0.04, 0.06, 0.42)    ## 落点中心凹痕（暗面扩展）
-const CRACK_DEBRIS := Color(0.55, 0.68, 0.78, 0.70)  ## 迸溅微碎石亮面
-const CRACK_DEBRIS_SHADOW := Color(0.02, 0.03, 0.05, 0.60) ## 碎石落影
-const SCORCH_BODY := Color(0.05, 0.04, 0.04, 0.50)   ## 焦痕炭黑
-const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.28)  ## 余烬暗橙（渐隐时同步熄灭）
+const CRACK_DENT := Color(0.02, 0.04, 0.06, 0.30)    ## 落点中心凹痕（暗面扩展）
+const CRACK_DEBRIS := Color(0.55, 0.68, 0.78, 0.65)  ## 迸溅微碎石亮面
+const CRACK_DEBRIS_SHADOW := Color(0.02, 0.03, 0.05, 0.55) ## 碎石落影
+const SCORCH_BODY := Color(0.04, 0.03, 0.03, 0.45)   ## 焦痕炭黑（微调融入冷调地砖）
+const SCORCH_SMOKE := Color(0.02, 0.02, 0.03, 0.15)  ## 外延烟熏扩散晕（消除硬切边缘）
+const SCORCH_EMBER := Color(0.85, 0.35, 0.12, 0.25)  ## 余烬暗橙（渐隐时同步熄灭）
 ## 击杀残晕（FADE_GLOW）：冷灰灵烬为主调，敌种主色（_tint）只留一丝余温 ——
 ## 与出生预警的实心红圆+十字煞针彻底拉开色相与形态，不再误读为「又要刷怪」
 const GLOW_ASH := Color(0.66, 0.78, 0.90, 1.0)   ## 灵烬冷灰主调（贴地残痕结构色）
@@ -37,7 +39,7 @@ const GLOW_SHADE := Color(0.03, 0.05, 0.08, 0.35) ## 残痕贴地暗影
 var _tint: Color = Color.WHITE   ## FADE_GLOW 专用：敌种主色（spawn 时传入）
 
 # —— 对象池（照 PoisonPool 范式）——
-const POOL_CAP := 16
+const POOL_CAP := 6   ## 2026-10-19 风格统一：同屏地面痕迹限量，避免糊满玉面战台
 static var _pool: Array[GroundDecal] = []
 static var _host: Node2D = null
 static var created_count: int = 0   ## 累计 new 数（PoolCheck 断言用）
@@ -252,10 +254,14 @@ func _draw() -> void:
 	var a := clampf(_time_left / _fade_time, 0.0, 1.0)
 	match kind:
 		Kind.CRACK:
+			# 俯视透视压扁：对齐地面视角，消除发光硬线漂浮感
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 			# 0~0.12s 快速爆裂展开（平滑开方缓动，第 1 帧即见雏形）
 			var raw_grow := clampf(_age / GROW_TIME, 0.0, 1.0) if GROW_TIME > 0.0 else 1.0
 			var grow := sqrt(raw_grow)
 			var dent_r := radius * 0.42 * grow
+			# 凹痕羽化层：外圈极淡下陷影 + 本体 + 深心，软化边缘
+			draw_circle(Vector2.ZERO, dent_r * 1.35, Color(CRACK_DENT.r, CRACK_DENT.g, CRACK_DENT.b, CRACK_DENT.a * a * 0.35))
 			draw_circle(Vector2.ZERO, dent_r, Color(CRACK_DENT, CRACK_DENT.a * a))
 			draw_circle(Vector2.ZERO, dent_r * 0.45, Color(CRACK_DENT, CRACK_DENT.a * a * 1.3))
 			for pts in _cracks:
@@ -272,13 +278,25 @@ func _draw() -> void:
 					var dpos := Vector2(deb.x, deb.y) * grow
 					draw_circle(dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a))
 					draw_circle(dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		Kind.SCORCH:
+			# 俯视透视压扁：贴合冷调地砖
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+			# 外圈烟熏扩散晕（羽化渐变，消除生硬贴纸圆感）
+			for b in _blobs:
+				draw_circle(Vector2(b.x, b.y), b.z * 1.25, Color(SCORCH_SMOKE.r, SCORCH_SMOKE.g, SCORCH_SMOKE.b, SCORCH_SMOKE.a * a))
+			for b in _blobs:
+				draw_circle(Vector2(b.x, b.y), b.z * 1.10, Color(SCORCH_BODY.r, SCORCH_BODY.g, SCORCH_BODY.b, 0.28 * a))
+			# 焦痕炭黑本体
 			for b in _blobs:
 				draw_circle(Vector2(b.x, b.y), b.z, Color(SCORCH_BODY, SCORCH_BODY.a * a))
-			# 余烬核：比焦黑更快熄灭（×a²），读「火刚烧过」
-			var ember := Color(SCORCH_EMBER, SCORCH_EMBER.a * a * a)
+			# 余烬核：外晕 + 核心，比焦黑更快熄灭（×a²），读「火刚烧过」
+			var ember_glow := Color(SCORCH_EMBER.r, SCORCH_EMBER.g, SCORCH_EMBER.b, 0.12 * a * a * a)
+			var ember_core := Color(SCORCH_EMBER, SCORCH_EMBER.a * a * a)
 			for b in _blobs:
-				draw_circle(Vector2(b.x, b.y), b.z * 0.45, ember)
+				draw_circle(Vector2(b.x, b.y), b.z * 0.55, ember_glow)
+				draw_circle(Vector2(b.x, b.y), b.z * 0.38, ember_core)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		Kind.FADE_GLOW:
 			# 击杀余韵「灵烬余痕」（2026-10-16 重设计）：冷灰断环符纹 + 闪烁烬点 + 升腾烟缕，
 			# 敌种主色只留一丝余温。旧版实心敌色双圆与出生预警红圈撞脸（尤其血煞系小怪），
@@ -290,7 +308,7 @@ func _draw() -> void:
 			var ember_col := _tint.lightened(0.4).lerp(Color.WHITE, 0.3)
 			var wisp_col := GLOW_ASH.lerp(_tint, 0.45)
 			# 贴地层统一压扁（俯视贴地感，形态上与正圆预警圈再拉开一档）
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.62))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 			draw_circle(Vector2.ZERO, radius * (0.9 - 0.2 * life_t), Color(GLOW_SHADE, GLOW_SHADE.a * a))
 			var ring_r := radius * (1.0 - 0.22 * life_t)
 			for seg in _ring_segs:
@@ -304,12 +322,12 @@ func _draw() -> void:
 			for i in range(_embers.size()):
 				var e := _embers[i]
 				var tw := 0.55 + 0.45 * sin(_age * 9.0 + _ember_phase[i])
-				var epos := Vector2(e.x, e.y * 0.62) + Vector2(0.0, -life_t * 3.0)
+				var epos := Vector2(e.x, e.y * GROUND_SQUASH) + Vector2(0.0, -life_t * 3.0)
 				draw_circle(epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a))
 			# 烟缕：三缕残烟自烬痕升起，摇曳消散（顶端收在包络圈内）
 			for i in range(_wisps.size()):
 				var w := _wisps[i]
-				var base := Vector2(w.x, w.y * 0.62)
+				var base := Vector2(w.x, w.y * GROUND_SQUASH)
 				var rise := life_t * radius * 0.4 * w.z
 				var sway := sin(_age * 2.4 + float(i) * 2.1) * 2.2
 				var tip := base + Vector2(sway, -rise - radius * 0.25 * w.z)

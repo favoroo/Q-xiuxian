@@ -167,7 +167,7 @@ func _try_damage(area: Area2D) -> void:
 			float(def.get("proc_chill", 0.0)), float(def.get("chill_dur", 2.5)),
 			bool(def.get("proc_poison", false)), dmg * float(def.get("poison_ratio", 0.3)), float(def.get("poison_dur", 2.5)))
 
-		GameManager.try_lifesteal()
+		GameManager.try_lifesteal(WeaponData.Behavior.DRONE)
 		_play_hit_pulse()
 		AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.0)
 

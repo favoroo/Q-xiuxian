@@ -56,7 +56,6 @@ func _ensure_visibility() -> void:
 func _draw() -> void:
 	_ensure_flow_bands()
 	_draw_central_taiji_array()
-	_draw_array_conduits()
 	_draw_talisman_pulse()
 
 ## 结界流光带懒挂载：首次 _draw（half_extent 已由 Main 定值）时创建，
@@ -144,41 +143,9 @@ func _draw_central_taiji_array() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================
-# 2. 四方灵脉刻槽（Conduits Leading to Obelisks）
-# ==============================================================================
-func _draw_array_conduits() -> void:
-	var flow_alpha: float = (sin(_time * 1.5) * 0.5 + 0.5) * 0.15 + 0.10
-	var col_trough := Color(0.04, 0.08, 0.12, 0.7)
-	# T-4.4 灵脉刻槽 HDR 脉动：灵流接 GameStyle.FX_HDR_WATER 灵蓝超白低档（alpha 压低、仅槽内起细辉），
-	# 6s 周期明灭呼吸（振幅 ≤30% alpha，慢速量沿既有 10Hz 重绘通道改色值，零新节点）
-	var hdr_breath: float = sin(_time * TAU / 6.0) * 0.12 + 0.76
-	var col_flow := Color(0.20, 0.75, 0.95, flow_alpha)
-	var col_hdr := GameStyle.FX_HDR_WATER
-	col_hdr.a = flow_alpha * hdr_breath
-
-	var scale_f := half_extent / 560.0
-	# 指向三座界碑大致方向的微暗地表槽纹（东北/西南端点与 Main.tscn 祭坛坐标 (380,-178) 和 (-380,178) 精确对齐）
-	var arms := [
-		[Vector2(0, -184.55 * scale_f), Vector2(0, -380.0 * scale_f)],                  # 北向（经中心碑延伸）
-		[Vector2(184.55 * scale_f, 0), Vector2(380.0 * scale_f, -178.0 * scale_f)],     # 东北向（精准指向东碑）
-		[Vector2(-184.55 * scale_f, 0), Vector2(-380.0 * scale_f, 178.0 * scale_f)],   # 西南向（精准指向西碑）
-		[Vector2(0, 184.55 * scale_f), Vector2(0, 380.0 * scale_f)]                     # 南向
-	]
-	for arm in arms:
-		var p1: Vector2 = arm[0]
-		var p2: Vector2 = arm[1]
-		# 阴影深槽
-		draw_line(p1, p2, col_trough, 4.0)
-		# 灵流（底色铺槽）
-		draw_line(p1, p2, col_flow, 1.5)
-		# HDR 起辉芯线（细 0.4px，只在槽内泛光，不外溢糊边界）
-		draw_line(p1, p2, col_hdr, 1.1)
-		# 灵脉端点微润节点光印（指引阵法走向）
-		AdaptiveDraw.circle(self, p2, 2.2, col_hdr)
-
-# ==============================================================================
-# 3. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸）
+# 2. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸）
 # 静态部分（石台砌缝、菱形底座、镇魂阵角）已拆到 StaticDecor 一次性绘制，见文件尾
+# （注：原 2. 四方灵脉刻槽 _draw_array_conduits 已于 2026-10-19 移除，消除切断玉面的直穿连线）
 # ==============================================================================
 func _draw_talisman_pulse() -> void:
 	var h: float = half_extent

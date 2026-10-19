@@ -250,6 +250,15 @@ func _test_new_stat_fields() -> void:
 	_c.equals(GameManager.spirit_stones, stones_before - GameBalance.reroll_cost(3, 0, 1.0), "第三次重掷开始付灵石（按第 1 次付费价）")
 	GameManager.reset_run()
 
+	# 吸血按攻击方式分档：近战/横扫全额，远程/范围打折，高频接触类再压一档。
+	# 不分类时高频武器会独吞「每秒最多 N 次」的全局闸，近战反而拿不到几口。
+	_c.near(BalanceTargeting.lifesteal_weapon_mult(WeaponData.Behavior.MELEE), 1.0, EPS, "近战吸血系数全额")
+	_c.near(BalanceTargeting.lifesteal_weapon_mult(WeaponData.Behavior.SWEEP), 1.0, EPS, "横扫吸血系数全额")
+	_c.near(BalanceTargeting.lifesteal_weapon_mult(WeaponData.Behavior.PROJECTILE), 0.4, EPS, "远程弹丸吸血系数 40%")
+	_c.near(BalanceTargeting.lifesteal_weapon_mult(WeaponData.Behavior.BURST), 0.4, EPS, "范围落雷吸血系数 40%")
+	for rapid in [WeaponData.Behavior.DRONE, WeaponData.Behavior.TURRET, WeaponData.Behavior.BEAM, WeaponData.Behavior.CONE]:
+		_c.near(BalanceTargeting.lifesteal_weapon_mult(rapid), 0.25, EPS, "高频接触类（%d）吸血系数 25%%" % rapid)
+
 func _test_item_system() -> void:
 	# 数据表完整性：apply 键都在白名单内、档位合法、图标就位、定价为正
 	var fields: Array = GameBalance.upgrade_fields()

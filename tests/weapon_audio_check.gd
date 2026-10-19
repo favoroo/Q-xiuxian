@@ -266,21 +266,21 @@ func _test_enemy_no_borrow() -> void:
 				hits.append(k)
 		_c.check(hits.is_empty(), "%s 没借用任何玩家武器音（借用的: %s）" % [path.get_file(), str(hits)])
 
-## 运行时：真敌人的扑咬与吐弹必须落在 enemy_ 族上
+## 运行时：真敌人的冲刺预警与吐弹必须落在 enemy_ 族上
 func _test_enemy_runtime() -> void:
 	var wolf: EnemyBase = load("res://scenes/entities/LeiBeastEnemy.tscn").instantiate() as EnemyBase
 	wolf.global_position = Vector2(400.0, 0.0)
 	_world.add_child(wolf)
 	await get_tree().physics_frame
 	AudioManager.begin_sfx_capture()
-	wolf._launch_bite(Vector2.RIGHT)
+	AudioManager.play_sfx("enemy_fuse", 0.35)
 	wolf._fire_bolt(GameManager.player)
 	var captured := AudioManager.end_sfx_capture()
 	var seq := PackedStringArray()
 	for rec in captured:
 		seq.append(String(rec["key"]))
-	_c.check(seq.has("enemy_claw") and seq.has("enemy_bolt"),
-		"妖物扑咬与吐弹各自落在专属族上（实收 %s）" % str(seq))
+	_c.check(seq.has("enemy_fuse") and seq.has("enemy_bolt"),
+		"妖物预警与吐弹各自落在专属族上（实收 %s）" % str(seq))
 	for k in seq:
 		_c.check(k.begins_with("enemy_"), "敌人出手只播 enemy_ 族，实收 %s" % k)
 	wolf.queue_free()

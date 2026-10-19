@@ -17,10 +17,11 @@ extends Area2D
 
 const RADIUS := 60.0                ## 基准包络半径（不含 scale_factor）：预警圈与 scale_factor 的同源锚
 const MAX_BLOBS := 10               ## 液面子圆上限：碰撞形状槽按此数预建，激活时按下标复用
-const POOL_BODY := Color(0.35, 0.75, 0.45)   ## 毒液本色（青木剧毒的绿）
-const POOL_SHEEN := Color(0.62, 0.95, 0.66)  ## 液面亮芯（读「液体还在流动」）
-const POOL_EDGE := Color(0.55, 0.95, 0.62)   ## 冒泡亮沿（读「正在腐噬」）
-const POOL_DARK := Color(0.10, 0.28, 0.16)   ## 液面外暗晕
+const GROUND_SQUASH := 0.62         ## 俯视透视压扁比（同 GroundDecal.FADE_GLOW 与实体软阴影，营造贴地感）
+const POOL_BODY := Color(0.18, 0.42, 0.26, 0.78)   ## 毒液本色：降饱和与亮度，偏深青苔绿，融入冷调地砖
+const POOL_SHEEN := Color(0.40, 0.72, 0.48, 0.20)  ## 液面流动内光：低反差暗流感
+const POOL_EDGE := Color(0.48, 0.85, 0.54, 0.65)   ## 冒泡亮沿：保留腐蚀动态读数，收敛泛光
+const POOL_DARK := Color(0.04, 0.08, 0.07, 0.40)   ## 腐蚀浸润底晕：近黑深青，读「毒气浸透石砖」
 const FADE_TIME := 0.6              ## 末期渐隐时长（秒）：替代到点硬消失
 const GROW_TIME := 0.22             ## 落地摊开生长时长（秒）：毒液从中心摊开，替代凭空满形态出现
 const REDRAW_INTERVAL := 0.05       ## 冒泡/渐隐重绘节流（20Hz，照 ArenaVisualLayer 口径）
@@ -189,20 +190,27 @@ func _draw() -> void:
 	# 比实际范围略小半拍，绝不画得比判定大）
 	var grow_t := clampf(_age / GROW_TIME, 0.0, 1.0)
 	var g := (0.4 + 0.6 * (1.0 - pow(1.0 - grow_t, 3.0))) * lerpf(0.75, 1.0, fade)
-	# 液面：最外暗渍虚影 + 暗晕 + 毒液本体，三层同形不规则（暗渍压暗地面读「毒气熏地」）
+
+	# 俯视透视压扁：与地面角度对齐，消除立面漂浮感
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+
+	# 多阶羽化湿迹浸润底晕：从外到内梯级衰减，使毒液轮廓柔和融进地砖纹理，消除硬边贴纸感
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.16 * g, Color(POOL_DARK, 0.32 * fade))
+		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.16 * fade))
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.08 * g, Color(POOL_DARK, POOL_DARK.a * fade))
+		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.30 * fade))
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * g, Color(POOL_BODY, POOL_BODY.a * fade))
-	# 液面亮芯：较大子圆向中心收一圈的高光，读「液体还在流动」而非死贴片
+		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
+	# 毒液本体
+	for b in _blobs:
+		draw_circle(Vector2(b.x, b.y) * g, b.z * g, Color(POOL_BODY.r, POOL_BODY.g, POOL_BODY.b, POOL_BODY.a * fade))
+	# 液面暗流亮芯：向中心收缩的微光，读「液体还在流动」
 	for b in _blobs:
 		if b.z >= radius * 0.30:
-			draw_circle(Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(POOL_SHEEN, 0.28 * fade))
+			draw_circle(Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(POOL_SHEEN.r, POOL_SHEEN.g, POOL_SHEEN.b, POOL_SHEEN.a * fade))
 	# 暗斑质感
 	for s in _specks:
-		draw_circle(Vector2(s.x, s.y) * g, s.z * g, Color(POOL_DARK, 0.55 * fade))
+		draw_circle(Vector2(s.x, s.y) * g, s.z * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
 	# 冒泡：逐泡独立相位「胀大→破掉」，破时挑一帧细亮环，读「这滩毒还活着」
 	for i in range(_bubbles.size()):
 		var b := _bubbles[i]
@@ -211,9 +219,12 @@ func _draw() -> void:
 		var br := b.z * pulse * g
 		if br <= 0.2:
 			continue
-		draw_circle(Vector2(b.x, b.y) * g, br, Color(POOL_EDGE, 0.5 * fade * pulse))
+		draw_circle(Vector2(b.x, b.y) * g, br, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, POOL_EDGE.a * fade * pulse))
 		if cycle > 0.8:
-			draw_arc(Vector2(b.x, b.y) * g, br + 1.5, 0.0, TAU, 10, Color(POOL_EDGE, (1.0 - cycle) * 2.5 * fade), 1.0, true)
+			draw_arc(Vector2(b.x, b.y) * g, br + 1.2, 0.0, TAU, 10, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, (1.0 - cycle) * 2.0 * fade), 1.0, true)
+
+	# 恢复变换
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _physics_process(delta: float) -> void:
 	# monitoring 是 deferred 开启的：activate 当帧还没 flush，overlap 扫描要等下一物理帧

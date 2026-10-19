@@ -1,7 +1,7 @@
 shader_type canvas_item;
 
-## 死亡消散消融材质（空洞冷冽灵体溃散）
-## 噪声阈值消融 + HDR 超白边缘描边（在 WorldEnvironment glow 下起辉）
+// 死亡消散消融材质（空洞冷冽灵体溃散）
+// 噪声阈值消融 + HDR 超白边缘描边（在 WorldEnvironment glow 下起辉）
 
 uniform sampler2D noise_texture : repeat_enable, filter_linear;
 uniform float dissolve_amount : hint_range(0.0, 1.0) = 0.0;

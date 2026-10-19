@@ -268,7 +268,7 @@ func _test_achievement_and_meta_save() -> void:
 		else:
 			_c.equals(rtype, "none", "成就 %s 非角色/法宝奖励时必须为纯荣誉 none 型" % aid)
 			_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 8, "初始默认开放 8 名基础修士")
-		_c.equals(AchievementData.DEFAULT_ITEMS.size(), 83, "初始默认开放 83 件基础法宝（全 87 件除去 4 件成就解锁）")
+		_c.equals(AchievementData.DEFAULT_ITEMS.size(), 84, "初始默认开放 84 件基础法宝（全 88 件除去 4 件成就解锁）")
 
 	# 1.1 解锁覆盖：每名角色都必须有途径——要么默认解锁，要么反查得到成就。
 	# 御兽师曾两处都没列（7 默认 + 12 成就 = 19），选角页永远「暂无收录途径」，

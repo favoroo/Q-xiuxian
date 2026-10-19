@@ -97,6 +97,7 @@ static var redraw_count: int = 0    ## 重绘发放计数（tests/PerfProbe 断�
 const ENEMY_GLOBAL_SCALE := 1.25
 
 var _draw_phase: float = 0.0        ## 距下次重绘的剩余时间（错相载体）
+var _phase_seed: float = 0.0        ## 每实例呼吸相位（instance_id 派生，不碰玩法随机）
 ## 普通怪 = 档位节流；精英 = 30Hz；Boss = 每帧（0 间隔，数量恒 1，全量动画值得）。
 ## 默认按普通怪节流（config 未赋值前与旧口径一致）
 var _is_mob: bool = true
@@ -124,6 +125,7 @@ func _ready() -> void:
 	# 错相：用 instance_id 派生初值（不碰玩法随机），把 35 只怪的重绘摊到不同帧，
 	# 避免「每 N 帧一次集中重绘尖峰」把节流收益吃掉
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
+	_phase_seed = float(get_instance_id() % 17)
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -163,15 +165,17 @@ func _draw() -> void:
 
 	# 精英/魔君常驻识别环（2026-10-14 P2）：贴地呼吸骨环，满屏时一眼分出「这只厚」。
 	# 画在各敌种函数之前（垫底贴地层），所有敌型一次覆盖；Boss 用更宽的朱砂双环。
+	# 2026-10-19 拥挤档联动：同屏敌人多时环叠环会糊，alpha 减半让位（Boss 保留主环读数）
 	if config.is_boss or config.is_elite:
+		var crowd_mult := 0.5 if FxBudget.crowded else 1.0
 		var ring_r := config.body_radius + 8.0
 		var ring_pulse := sin(_time * 2.4) * 0.06 + 0.94
 		if config.is_boss:
-			var boss_col := Color(0.85, 0.22, 0.28, 0.55 * ring_pulse)
+			var boss_col := Color(0.85, 0.22, 0.28, 0.55 * ring_pulse * crowd_mult)
 			_arc(Vector2(0, 15), ring_r + 3.0, 0.0, TAU, 40, boss_col, 3.2, true)
-			_arc(Vector2(0, 15), ring_r * 0.8, 0.0, TAU, 40, Color(boss_col.r, boss_col.g, boss_col.b, 0.30), 1.4, true)
+			_arc(Vector2(0, 15), ring_r * 0.8, 0.0, TAU, 40, Color(boss_col.r, boss_col.g, boss_col.b, 0.30 * crowd_mult), 1.4, true)
 		else:
-			var elite_col := Color(0.92, 0.86, 0.70, 0.50 * ring_pulse)
+			var elite_col := Color(0.92, 0.86, 0.70, 0.50 * ring_pulse * crowd_mult)
 			_arc(Vector2(0, 15), ring_r, 0.0, TAU, 32, elite_col, 2.4, true)
 
 	# 根据敌种 ID 派发专属绘制管线
@@ -283,7 +287,9 @@ func draw_soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) ->
 
 func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, col_core: Color) -> void:
 	# 绘制狭长冷眸（外层幽光 + 内层锐核）
-	draw_soft_glow(pos, width * 1.5, col_glow, 2)
+	# 2026-10-19 灵核脉动：幽光随呼吸微胀（±10%），全敌种共享，让静态形象有生命感
+	var eye_pulse := 1.0 + sin(_time * 3.1 + _phase_seed) * 0.10
+	draw_soft_glow(pos, width * 1.5 * eye_pulse, col_glow, 2)
 	var pts := PackedVector2Array([
 		pos + Vector2(-width, 0),
 		pos + Vector2(0, -height),
@@ -419,14 +425,20 @@ func _draw_xiexiu() -> void:
 
 	# 蓄力期间：器尖高亮凝芒 + 锐利瞄准虚芒（给玩家极强的弹道与威胁读数）
 	if casting:
-		# 器尖耀眼光斑
-		_circle(tip_in_local, 3.2 + special_state * 2.2, Color(0.92, 0.98, 1.0, 0.95))
-		draw_soft_glow(tip_in_local, 12.0 * special_state, Color(0.35, 0.85, 1.0), 3)
+		# 器尖耀眼光斑：随蓄力进度由小聚大（special_state 0→1），读得出「正在攒劲」
+		var charge := clampf(special_state, 0.0, 1.0)
+		_circle(tip_in_local, 2.6 + charge * 3.2, Color(0.92, 0.98, 1.0, 0.95))
+		draw_soft_glow(tip_in_local, 12.0 * charge, Color(0.35, 0.85, 1.0), 3)
+		# 聚能环：进度过半后器尖浮出一圈收束弧，强化「能量在汇聚」的读数
+		if charge > 0.35:
+			var halo_a := (charge - 0.35) / 0.65
+			_arc(tip_in_local, 5.0 + charge * 3.5, -PI * 0.7, PI * 0.7, 14,
+				Color(0.55, 0.92, 1.0, 0.75 * halo_a), 1.3, true)
 		# 前探瞄准虚芒针（向玩家方向伸出 22px，预示出膛轨道）
-		var aim_line_len := 22.0 * special_state
+		var aim_line_len := 22.0 * charge
 		var aim_line_end := tip_in_local + local_aim * aim_line_len
-		draw_line(tip_in_local, aim_line_end, Color(0.35, 0.85, 1.0, 0.7 * special_state), 1.6, true)
-		draw_circle(aim_line_end, 1.6, Color(1.0, 1.0, 1.0, 0.85 * special_state))
+		draw_line(tip_in_local, aim_line_end, Color(0.35, 0.85, 1.0, 0.7 * charge), 1.6, true)
+		draw_circle(aim_line_end, 1.6, Color(1.0, 1.0, 1.0, 0.85 * charge))
 
 ## 3. 丹爆傀儡：蚀骨毒炉 (悬浮晃荡 + 沸腾胀缩)
 func _draw_danbao() -> void:
@@ -927,10 +939,15 @@ func _draw_jiansha_elite() -> void:
 			var tip := t_sw * Vector2(21, 0)
 			weapon_tip_pos = Vector2(tip.x * root_scale_x, tip.y) * (config.scale_factor * ENEMY_GLOBAL_SCALE)
 			if casting:
-				_circle(tip, 2.8 + special_state * 2.0, Color(1.0, 0.90, 0.95, 0.95))
-				draw_soft_glow(tip, 14.0 * special_state, config.col_glow, 3)
-				var aim_line_end := tip + local_aim * (24.0 * special_state)
-				draw_line(tip, aim_line_end, Color(1.0, 0.35, 0.50, 0.75 * special_state), 1.8, true)
+				var charge := clampf(special_state, 0.0, 1.0)
+				_circle(tip, 2.4 + charge * 3.0, Color(1.0, 0.90, 0.95, 0.95))
+				draw_soft_glow(tip, 14.0 * charge, config.col_glow, 3)
+				if charge > 0.35:
+					var halo_a := (charge - 0.35) / 0.65
+					_arc(tip, 5.0 + charge * 3.2, -PI * 0.7, PI * 0.7, 14,
+						Color(1.0, 0.55, 0.65, 0.75 * halo_a), 1.3, true)
+				var aim_line_end := tip + local_aim * (24.0 * charge)
+				draw_line(tip, aim_line_end, Color(1.0, 0.35, 0.50, 0.75 * charge), 1.8, true)
 				draw_circle(aim_line_end, 1.8, Color.WHITE)
 
 ## 14. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)

@@ -94,7 +94,6 @@ func _ready() -> void:
 	charge_whiff_stagger = 0.25
 	charge_interval = 999999.0
 	_charge_timer = 999999.0
-	bite_range = 0.0
 
 	# 死亡演出分级（2026-10-15）：Boss 伏诛走「倾倒 → 尸体滞留慢渐隐」，不随小怪塌缩
 	death_corpse_linger = true
@@ -348,6 +347,8 @@ func _cast_split_bomb(player: Node2D) -> void:
 		bolt.split_damage = maxf(1.0, contact_damage * GameBalance.BOSS_SPLIT_CHILD_DMG_MULT)
 		bolt.purple_style = true
 		bolt.activate()
+	# 齐射瞬间给一圈幽紫冲击环：读出「这一波要散成子母弹」，与分裂时子弹出膛呼应
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 44.0, GameStyle.FX_HDR_SHADOW, 0.24)
 
 # ---------------- 招式 5：破阵冲锋 + 侧翼洒弹 ----------------
 
@@ -380,7 +381,7 @@ func _start_charge(dir: Vector2) -> void:
 				bolt.scale_factor = 1.2
 				bolt.purple_style = final_boss
 				bolt.activate()
-	AudioManager.play_sfx("whoosh_heavy", 1.0)
+	AudioManager.play_sfx("enemy_slam", 0.85)
 	GameManager.add_trauma(0.12)
 	_clear_charge_warning()
 

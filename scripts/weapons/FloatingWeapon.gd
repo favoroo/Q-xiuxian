@@ -108,7 +108,7 @@ var _sweep_slash_tween: Tween = null
 ## 偶发留痕而非常规命中反馈，改全武器共享一道时间闸：任一武器留痕后
 ## EARTH_CRACK_MIN_GAP_MS 内所有武器（含自己）的后续命中都不再出新裂痕。
 ## 用时间戳而非倒计时——_process 每实例各跑一遍，共享倒计时会被多把武器重复扣减。
-const EARTH_CRACK_MIN_GAP_MS := 2500
+const EARTH_CRACK_MIN_GAP_MS := 5000   ## 2026-10-19 风格统一：玉面战台去裂痕化，留痕间隔再翻倍
 static var _last_earth_crack_ms: int = -999999  ## 上次留痕时间戳（负初值 = 从未留痕；GDScript 的 << 不吃负操作数）
 
 # ---------------- 开火视觉帧内状态机（Android 稳态 GC 治理） ----------------
@@ -652,7 +652,7 @@ func _beam_deal_damage() -> void:
 			dmg *= GameManager.elite_damage_mult_for(enemy)
 			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
-			GameManager.try_lifesteal()
+			GameManager.try_lifesteal(behavior)
 
 ## 喷吐 tick 结算：器口为圆心查锥长半径的圆，再按半角过滤（贴脸宽容与横扫同口径），
 ## 命中挂灼烧。tick 伤害同源折算 ⇒ 纸面 dmg/cd + 常驻灼烧即实伤。
@@ -684,7 +684,7 @@ func _cone_deal_damage(cone_len: float) -> void:
 			var knock: Vector2 = GameManager.knockback_vec(global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
 			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, 0.0, 0.0, false, 0.0, 0.0)
-			GameManager.try_lifesteal()
+			GameManager.try_lifesteal(behavior)
 
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
@@ -760,6 +760,8 @@ func _perform_projectile_attack() -> void:
 		p.bullet_texture = _bullet_tex
 		p.bullet_scale = _bullet_scale
 		p.spin = _bullet_spins
+		# 吸血分档：弹丸按远程系数（机关炮台在 TurretUnit 里另填 TURRET）
+		p.source_behavior = WeaponData.Behavior.PROJECTILE
 		if def.get("proc_burn", false):
 			p.proc_burn = true
 			p.burn_dps = final_dmg * float(def.get("burn_ratio", 0.4))
@@ -959,7 +961,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
 					proc_chill, float(def.get("chill_dur", 2.5)),
 					proc_poison, dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
-			GameManager.try_lifesteal()
+			GameManager.try_lifesteal(behavior)
 			# 开山重刃谱：近战命中额外吸收生命
 			if can_flat_heal:
 				player.heal(flat_ls, true)
@@ -1079,7 +1081,7 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
 					proc_chill, float(def.get("chill_dur", 2.5)),
 					proc_poison, dmg * float(def.get("poison_ratio", 0.35)), float(def.get("poison_dur", 3.0)))
-			GameManager.try_lifesteal()
+			GameManager.try_lifesteal(behavior)
 			# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
 			if can_flat_heal:
 				player.heal(flat_ls, true)

@@ -145,7 +145,7 @@ const BRIEF: Dictionary = {
 	"regen": "每秒自动回复的生命值。",
 	"armor": "挨打时按护甲值渐近减免伤害，堆越高每点越不值钱。",
 	"dodge": "有概率完全闪避一次攻击，不掉血。",
-	"lifesteal": "命中时有概率吸取1点生命。",
+	"lifesteal": "命中时有概率吸取1点生命，近战更易触发。",
 	"damage": "所有武器伤害的总乘区。",
 	"melee_dmg": "加成近战类武器的基础伤害。",
 	"ranged_dmg": "加成远程类武器的基础伤害。",
@@ -223,6 +223,9 @@ static func rules(id: String) -> Array[String]:
 					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0)])
 		"lifesteal":
 			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
+			out.append("触发概率按武器类型打折：近战与横扫全额，远程与范围 %d%%，环绕/机关/光束/喷吐 %d%%。" % [
+				int(BalanceTargeting.LIFESTEAL_MULT_RANGED * 100.0),
+				int(BalanceTargeting.LIFESTEAL_MULT_RAPID * 100.0)])
 			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
 			out.append("木系羁绊的加成与升级、道具合在一起算，共用同一个每秒闸。")
 		"damage":
@@ -440,6 +443,9 @@ static func stat_tip_rows(id: String) -> Array:
 				["触发概率", "%.0f%%" % float(s.get("lifesteal_pct", 0.0)), _c(float(s.get("lifesteal_pct", 0.0)))],
 				["升级·道具·角色", "%.0f%%" % (GameManager.lifesteal * 100.0), _c(GameManager.lifesteal)],
 				["木系羁绊", "+%.0f%%" % (GameManager.synergy_lifesteal * 100.0), _c(GameManager.synergy_lifesteal)],
+				["近战/横扫", "全额", GameStyle.GOOD],
+				["远程/范围", "%d%%" % int(BalanceTargeting.LIFESTEAL_MULT_RANGED * 100.0), GameStyle.GREY],
+				["环绕/机关/光束/喷吐", "%d%%" % int(BalanceTargeting.LIFESTEAL_MULT_RAPID * 100.0), GameStyle.GREY],
 				["每秒至多", "%d 次" % GameManager.LIFESTEAL_MAX_PER_SEC],
 				["每次生效", "回复 1 点生命"],
 			]

@@ -236,6 +236,27 @@ static func stat_scaling_label(key: String) -> String:
 		"harvest": return "收益"
 	return key
 
+# ---------------- 吸血（噬元）按攻击方式分档 ----------------
+## 吸血是「命中掷概率回 1 点」，触发频率天然跟着武器的命中频率走。若不分类，
+## 环绕/机关/光束这类每秒撞十几次的武器会把「每秒最多 3 次」的全局闸吃满，
+## 而近战一刀一秒才挥一次，反而拿不到几口 —— 与「贴脸换续航」的意图正好相反。
+## 于是按攻击方式乘一个触发概率系数：近战/横扫（要贴脸、有风险）全额，
+## 远程/范围（站得远）打折，高频接触类（命中次数本来就多）再压一档。
+## 系数只作用在「触发概率」上，每次仍回 1 点，全局每秒闸仍作为安全阀。
+const LIFESTEAL_MULT_MELEE := 1.0    ## 近战 / 横扫：全额
+const LIFESTEAL_MULT_RANGED := 0.4   ## 远程弹丸 / 范围落雷：四折
+const LIFESTEAL_MULT_RAPID := 0.25   ## 环绕 / 机关 / 光束 / 喷吐：高频接触，压到四分之一
+
+## 攻击方式 → 吸血触发概率系数（纯函数，只读 WeaponData 枚举）
+static func lifesteal_weapon_mult(behavior: int) -> float:
+	match behavior:
+		WeaponData.Behavior.MELEE, WeaponData.Behavior.SWEEP:
+			return LIFESTEAL_MULT_MELEE
+		WeaponData.Behavior.PROJECTILE, WeaponData.Behavior.BURST:
+			return LIFESTEAL_MULT_RANGED
+		_:
+			return LIFESTEAL_MULT_RAPID
+
 ## 加点 apply 字段 → 武器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
 ## 与上面 weapon_stat_bonus 的折算 match 同源：武器 stat_scalings 里配了这个键才真吃这条属性。
 ## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。

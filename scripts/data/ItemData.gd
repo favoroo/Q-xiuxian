@@ -39,6 +39,8 @@ extends RefCounted
 ##   melee_lifesteal_flat —— 开山重刃谱：近战命中吸血固定值（FloatingWeapon.gd）
 ##   skill_cooldown_mult —— 凝神符：随行技能冷却缩减比例（SkillData.final_stats）
 ##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：回合结束永久成长（GameManager.apply_harvest）
+##   （吸血类走 apply 的 "lifesteal" 键即可，无需专属钩子：血纹符 / 饮血珠 / 嗜血石。
+##    吸血概率在 GameManager.try_lifesteal 里按武器攻击方式打折，见 BalanceTargeting.lifesteal_weapon_mult）
 ## 转化件的机制数字写在 desc（同回复葫芦/替身娃娃先例）；apply 留空，卡面加成行不冒第二份数字。
 ## unique: true 时每局限购一件：本局买过（或被玉匣送过）就再不进货架池，出售也不解禁
 ##
@@ -260,6 +262,14 @@ const DEFS: Dictionary = {
 			"icon": "res://assets/art/item_manli_huwan.png",
 			"desc": "",
 			"apply": {"weapon_damage_mult": 0.10, "attack_speed_mult_mul": 1.04},
+		},
+		# 2026-10-19 低档吸血入口：此前吸血只有 tier2 起，前几波几乎见不到。
+		# 数值按档位压低（+2%），用一点生命回复换，避免把高档饮血珠/嗜血石挤成废件。
+		"xuewen_fu": {
+			"name": "血纹符", "tier": 1, "price": 14,
+			"icon": "res://assets/art/item_wanshou_long.png",
+			"desc": "",
+			"apply": {"lifesteal": 0.02, "hp_regen": -0.2},
 		},
 
 		# ---- 稀有（tier 2 · 第 4 波起） ----

@@ -2,11 +2,12 @@ class_name GroundDecorLayer
 extends Node2D
 
 ## 竞技场战台地面微细节（空洞冷冽国风）
-## 涵盖石板暗纹裂缝、青苔风化暗斑、战痕剑痕、碎石瓦砾、阵外延展符纹。
+## 2026-10-19 风格统一改造：删去石板裂缝/战痕剑痕/碎石瓦砾（与程序化青玉石板底
+## 「干净打磨」气质冲突），只留青苔暗斑、灵叶结晶与石板角刻纹三样细刻纹点缀。
 ## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
 ## 【注意】2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
-##   本层 ~116 个 0.8~1.6px 小点曾单独吃掉 ~14.6k 图元（面板「图元 21.0k」的大头）。
+##   本层小点曾单独吃掉 ~14.6k 图元（面板「图元 21.0k」的大头）。
 
 var half_extent: float = 480.0
 
@@ -47,7 +48,7 @@ func _draw_array_outer_runes() -> void:
 			AdaptiveDraw.circle(self, dir * (r_guide + len_tick + 4.0), 1.6, col_gold_dot)
 
 # ==============================================================================
-# 3. 战场地面细节（石板裂纹、青苔暗斑、剑痕、碎石、落瓣）
+# 3. 战场地面细节（青苔暗斑、石板角刻纹、灵叶结晶）
 # ==============================================================================
 func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 	var scale_f := half_extent / 440.0
@@ -75,9 +76,9 @@ func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 	var bound: float = half_extent - margin
 
 	# 3.1 青苔与风化暗斑 (Ancient Moss & Weathering)
-	var col_moss := Color(0.10, 0.24, 0.18, 0.18)
-	var col_moss_inner := Color(0.14, 0.32, 0.22, 0.24)
-	for _i in range(16):
+	var col_moss := Color(0.10, 0.24, 0.18, 0.14)
+	var col_moss_inner := Color(0.14, 0.32, 0.22, 0.18)
+	for _i in range(10):
 		var p := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
 		if not can_place.call(p, 10.0):
 			continue
@@ -89,65 +90,31 @@ func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 			AdaptiveDraw.circle(self, p + offset, r_sub, col_moss)
 		AdaptiveDraw.circle(self, p, base_r * 0.4, col_moss_inner)
 
-	# 3.2 石板裂缝 (Stone Cracks)
-	var col_crack_shadow := Color(0.03, 0.05, 0.08, 0.65)
-	var col_crack_rim := Color(0.20, 0.40, 0.55, 0.16)
-	for _i in range(18):
-		var start_p := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
-		if not can_place.call(start_p, 10.0):
-			continue
-		var pts := PackedVector2Array()
-		pts.append(start_p)
-		var curr := start_p
-		var seg_count := rng.randi_range(2, 4)
-		var dir := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU))
-		for _k in range(seg_count):
-			dir = dir.rotated(rng.randf_range(-0.5, 0.5))
-			var seg_len := rng.randf_range(8.0, 16.0)
-			curr += dir * seg_len
-			pts.append(curr)
-		draw_polyline(pts, col_crack_shadow, 1.4)
-		# 微弱冷月反光边
-		draw_polyline(pts, col_crack_rim, 0.7)
+	# 3.2 石板角刻纹（与 ground_tile.gdshader 的 160px 石板网格对齐：
+	# 每个石板交点画一枚极小回纹角花，代替旧版随机石板裂缝的「打磨刻度」）
+	var col_engrave := Color(0.06, 0.10, 0.13, 0.30)
+	var col_engrave_lit := Color(0.30, 0.55, 0.68, 0.10)
+	var tile_step := 160.0
+	var arm := 7.0
+	var grid_n := int(bound / tile_step)
+	for gx in range(-grid_n, grid_n + 1):
+		for gy in range(-grid_n, grid_n + 1):
+			var corner := Vector2(float(gx), float(gy)) * tile_step
+			if not can_place.call(corner, 6.0):
+				continue
+			# 每格交点四角各一 L 形刻角，指向石板内侧
+			for sx in [-1.0, 1.0]:
+				for sy in [-1.0, 1.0]:
+					var base := corner + Vector2(sx * 2.5, sy * 2.5)
+					draw_line(base, base + Vector2(sx * arm, 0.0), col_engrave, 1.0)
+					draw_line(base, base + Vector2(0.0, sy * arm), col_engrave, 1.0)
+			# 中心一点微弱冷光，像玉面磨出的高光
+			AdaptiveDraw.circle(self, corner, 0.9, col_engrave_lit)
 
-	# 3.3 战痕与剑痕 (Battle Scratches)
-	var col_scratch := Color(0.04, 0.08, 0.12, 0.55)
-	var col_scratch_glint := Color(0.30, 0.60, 0.80, 0.22)
+	# 3.3 散落灵木落叶与灵气结晶点 (Fallen Petals & Jade Motes)
+	var col_petal_cyan := Color(0.40, 0.82, 0.95, 0.22)
+	var col_petal_gold := Color(0.92, 0.80, 0.40, 0.16)
 	for _i in range(12):
-		var p_mid := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
-		if not can_place.call(p_mid, 12.0):
-			continue
-		var angle := rng.randf_range(0.0, PI)
-		var dir := Vector2(cos(angle), sin(angle))
-		var len_sc := rng.randf_range(16.0, 36.0)
-		draw_line(p_mid - dir * (len_sc * 0.5), p_mid + dir * (len_sc * 0.5), col_scratch, 1.2)
-		draw_line(p_mid - dir * (len_sc * 0.2), p_mid + dir * (len_sc * 0.2), col_scratch_glint, 0.8)
-
-	# 3.4 碎石瓦砾 (Pebbles & Stone Chips)
-	var col_pebble_dark := Color(0.05, 0.09, 0.14, 0.85)
-	var col_pebble_top := Color(0.18, 0.28, 0.38, 0.70)
-	var col_pebble_rim := Color(0.35, 0.60, 0.75, 0.35)
-	for _i in range(28):
-		var pos_peb := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
-		if not can_place.call(pos_peb, 8.0):
-			continue
-		var peb_size := rng.randf_range(2.0, 4.2)
-		var peb_pts := PackedVector2Array([
-			pos_peb + Vector2(-peb_size, peb_size * 0.3),
-			pos_peb + Vector2(0.0, -peb_size),
-			pos_peb + Vector2(peb_size * 1.1, -peb_size * 0.2),
-			pos_peb + Vector2(peb_size * 0.5, peb_size * 0.8),
-			pos_peb + Vector2(-peb_size * 0.6, peb_size * 0.9)
-		])
-		draw_colored_polygon(peb_pts, col_pebble_dark)
-		# 碎石顶部冷光切面
-		draw_line(pos_peb + Vector2(-peb_size * 0.5, -peb_size * 0.3), pos_peb + Vector2(peb_size * 0.5, -peb_size * 0.6), col_pebble_top, 1.0)
-		AdaptiveDraw.circle(self, pos_peb + Vector2(0.0, -peb_size * 0.4), 0.8, col_pebble_rim)
-
-	# 3.5 散落灵木落叶与灵气结晶点 (Fallen Petals & Jade Motes)
-	var col_petal_cyan := Color(0.40, 0.82, 0.95, 0.26)
-	var col_petal_gold := Color(0.92, 0.80, 0.40, 0.20)
-	for _i in range(24):
 		var p_leaf := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
 		if not can_place.call(p_leaf, 6.0):
 			continue

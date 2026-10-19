@@ -17,6 +17,7 @@ enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST, HEA
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
 const Z_DUST := 5            ## 步伐微尘层级（贴近角色阴影）
+const GROUND_SQUASH := 0.62  ## 俯视透视压扁比（地面冲击波贴地扩散基准）
 
 const IMPACT_POP_FRAME_BUDGET := 6  ## 弹丸湮灭闪单物理帧预算限流闸，防止高穿透齐射糊屏
 static var _last_pop_frame: int = -1
@@ -220,13 +221,18 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
+	var is_ground := effect_type == EffectType.SHOCKWAVE
 
-	# 0. 冲击光环（弧段数随半径自适应，小环不付 32 段的钱）
+	# 0. 冲击光环（弧段数随半径自适应；若是地面冲击波则施加俯视透视压扁，消除立面悬浮感）
+	if is_ground:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	for i in range(_r_count):
 		var col: Color = _r_col[i]
 		col.a *= alpha
 		var width: float = maxf(1.0, _r_w[i] * (1.0 - progress * 0.6))
 		draw_arc(Vector2.ZERO, _r_cur[i], 0.0, TAU, clampi(int(_r_cur[i] * 1.2), 10, 32), col, width, true)
+	if is_ground:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 1. 灵尘：仍有速度时画成拖尾线段，静止后收成一个点
 	for i in range(_p_count):

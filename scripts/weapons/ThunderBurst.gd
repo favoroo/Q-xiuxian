@@ -26,6 +26,7 @@ var chill_dur: float = 2.0
 
 # —— 对象池 ——
 const POOL_CAP := 24
+const GROUND_SQUASH := 0.62          ## 俯视透视压扁比（落点光斑贴地展开，对齐双层软影与地面贴花）
 static var _pool: Array[ThunderBurst] = []
 static var _host: Node2D = null
 static var created_count: int = 0    ## 累计 instantiate 数（PerfProbe 判据口径同 EnemyBolt）
@@ -127,7 +128,8 @@ func activate() -> void:
 	_beam.visible = false
 	for arc in _arcs:
 		arc.visible = false
-	fx_sprite.scale = Vector2.ONE * 0.2
+	var base_scale := Vector2(1.0, GROUND_SQUASH)
+	fx_sprite.scale = base_scale * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
 	light.color = tint
 	# 天雷柱只给雷系（fire_rain/frost/earth 等的落点形态由 BurstKindFx 各自交代，
@@ -149,7 +151,7 @@ func activate() -> void:
 	var tw = create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(fx_sprite, "modulate:a", 0.45, 0.05)
-	tw.tween_property(fx_sprite, "scale", Vector2.ONE * (radius * 1.1 / 128.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(fx_sprite, "scale", base_scale * (radius * 1.1 / 128.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if _has_light:
 		tw.tween_property(light, "energy", 0.9, 0.06)
 	tw.chain().tween_callback(_bloom_or_recycle)
@@ -173,8 +175,9 @@ func _bloom_or_recycle() -> void:
 		return
 	var tw = create_tween()
 	tw.set_parallel(true)
+	var base_scale := Vector2(1.0, GROUND_SQUASH)
 	tw.tween_property(fx_sprite, "modulate:a", 0.95, 0.05)
-	tw.tween_property(fx_sprite, "scale", Vector2.ONE * (radius * 2.0 / 128.0), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(fx_sprite, "scale", base_scale * (radius * 2.0 / 128.0), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if _has_light:
 		tw.tween_property(light, "energy", 2.2, 0.06)
 	tw.chain().tween_property(fx_sprite, "modulate:a", 0.0, 0.18)
@@ -282,7 +285,7 @@ func _deal_damage() -> void:
 			var was_dying: bool = enemy.get("dying") == true
 			enemy.take_damage(dmg, knock, is_crit)
 			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, proc_chill, chill_dur, false, 0.0, 0.0)
-			GameManager.try_lifesteal()
+			GameManager.try_lifesteal(WeaponData.Behavior.BURST)
 			hits += 1
 			if (enemy.get("dying") == true) and not was_dying:
 				kills += 1

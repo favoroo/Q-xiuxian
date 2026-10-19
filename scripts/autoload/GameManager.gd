@@ -773,8 +773,11 @@ func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
 	return StatSystem.weapon_stat_bonus(self, w_id, star)
 
 ## 命中时尝试噬元回血（每秒最多触发 LIFESTEAL_MAX_PER_SEC 次，防高频武器无限续航）
-func try_lifesteal() -> void:
-	var total_ls := lifesteal + synergy_lifesteal
+## behavior：命中武器的攻击方式（WeaponData.Behavior）。吸血概率按武器类型打折：
+##   近战/横扫全额、远程/范围 40%、环绕/机关/光束/喷吐 25%（算式见 BalanceTargeting.lifesteal_weapon_mult）。
+##   不分类时高频武器会独吞每秒闸，近战反而拿不到几口，与「贴脸换续航」的意图相反。
+func try_lifesteal(behavior: int = WeaponData.Behavior.MELEE) -> void:
+	var total_ls := (lifesteal + synergy_lifesteal) * BalanceTargeting.lifesteal_weapon_mult(behavior)
 	if total_ls <= 0.0 or player == null or not is_instance_valid(player):
 		return
 	if _lifesteal_procs >= LIFESTEAL_MAX_PER_SEC:

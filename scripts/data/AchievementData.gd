@@ -65,6 +65,7 @@ const DEFAULT_ITEMS: Array[String] = [
 	"juling_fu",
 	"yuling_pai",
 	"manli_huwan",
+	"xuewen_fu",
 	# 稀有（tier 2）
 	"jinjing_shi",
 	"chenxiang_mu",

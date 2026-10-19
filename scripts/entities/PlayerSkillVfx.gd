@@ -929,8 +929,14 @@ func _draw_gale_wind() -> void:
 		# 轮端纯白破空锋点
 		draw_circle(pts[pts.size() - 1], 2.2, Color.WHITE)
 
-	# 内层风轮
-	draw_arc(FEET_CENTER, 18.0, -gale_wind_phase, -gale_wind_phase + PI * 1.2, 16, col_main, 1.4, true)
+	# 内层风轮（对齐俯视透视椭圆）
+	var in_pts := PackedVector2Array()
+	var in_rx := 18.0
+	var in_ry := 7.3
+	for s in range(13):
+		var a := -gale_wind_phase + (PI * 1.2) * (float(s) / 12.0)
+		in_pts.append(FEET_CENTER + Vector2(cos(a) * in_rx, sin(a) * in_ry))
+	draw_polyline(in_pts, col_main, 1.4, true)
 
 	# 2. 身躯两侧上升的灵动青风流带（轻柔飘逸曲线，告别生硬粗折线）
 	for side_val in [-1.0, 1.0]:
@@ -1096,24 +1102,26 @@ func _draw_renewal_fx() -> void:
 	var alpha := 1.0 - p
 	var r := 16.0 + p * 36.0
 
-	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环，描边接 FX_HDR_HEAL 起辉）
+	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环，俯视透视贴地）
+	draw_set_transform(FEET_CENTER, 0.0, Vector2(1.0, 0.50))
 	var ring_col := Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, alpha * 0.95)
-	draw_arc(FEET_CENTER, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
-	draw_arc(FEET_CENTER, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
+	draw_arc(Vector2.ZERO, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
 
-	# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，把「治疗落地」的存在感铺到地面层
+	# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，贴地铺展
 	var pulse_p := clampf(p * 1.2, 0.0, 1.0)
 	var ground_r := 22.0 + pulse_p * 54.0
 	var ground_a := (1.0 - pulse_p) * 0.55
 	if ground_a > 0.02:
-		draw_arc(FEET_CENTER, ground_r, 0.0, TAU, 32,
+		draw_arc(Vector2.ZERO, ground_r, 0.0, TAU, 32,
 			Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, ground_a), 1.8, true)
 
 	# 莲瓣角标
 	for i in range(8):
 		var la := float(i) * (TAU / 8.0) + p * 0.8
-		var lp := FEET_CENTER + Vector2(cos(la) * r, sin(la) * (r * 0.42))
+		var lp := Vector2(cos(la), sin(la)) * r
 		draw_circle(lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 2. 空洞骑士 Focus 式：灵光自四周外圈向角色身躯中心螺旋汇聚
 	for pt in renewal_particles:

@@ -145,6 +145,27 @@ func _run() -> void:
 	_check(bolt_b.lifetime == EnemyBolt.BASE_LIFETIME, "复用激活重置寿命（残值不清会出膛即逝）")
 	bolt_b._recycle()
 
+	# ---------- 5.5b 敌方弹丸拖尾（2026-10-19）：剑气挂尾、普通球不挂、回收清史 ----------
+	# 普通火球（非剑气、scale=1）不挂拖尾：守同屏图元预算
+	var bolt_plain := EnemyBolt.acquire(world)
+	bolt_plain.global_position = Vector2.ZERO
+	bolt_plain.direction = Vector2.RIGHT
+	bolt_plain.activate()
+	_check(bolt_plain._trail == null or not bolt_plain._trail.active, "普通火球不渲染拖尾")
+	bolt_plain._recycle()
+	# 剑气弹启用拖尾，且出膛后 seed 了首点
+	var bolt_sw := EnemyBolt.acquire(world)
+	bolt_sw.global_position = Vector2.ZERO
+	bolt_sw.direction = Vector2.RIGHT
+	bolt_sw.sword_style = true
+	bolt_sw.activate()
+	_check(bolt_sw._trail != null and bolt_sw._trail.active, "剑气弹启用拖尾")
+	_check(bolt_sw._trail._count >= 1, "出膛 seed 了拖尾首点 (%d)" % bolt_sw._trail._count)
+	bolt_sw._trail.sample(Vector2(40, 0), 0.05)
+	_check(bolt_sw._trail._count >= 2, "飞行采样累积拖尾点 (%d)" % bolt_sw._trail._count)
+	bolt_sw._recycle()
+	_check(not bolt_sw._trail.active and bolt_sw._trail._count == 0, "回收清空拖尾历史并休眠")
+
 	# ---------- 5.6 回复珠池（2026-10-11）：出膛 / 回收 / 复用 / gems 组语义 ----------
 	var orb_a := HealOrb.acquire_or_new(world)
 	orb_a.global_position = Vector2(50, 50)

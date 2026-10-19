@@ -33,15 +33,8 @@ var death_corpse_linger: bool = false
 @export var charge_speed_mul: float = 3.2    ## 冲刺倍速（起步即满速，不再靠加速度爬）
 @export var charge_brake_time: float = 0.25  ## 收势刹车时长：峰速线性刹到站定，这段位移也计入预警线
 @export var charge_hit_radius: float = 34.0  ## 冲刺走廊半宽：建议取「敌我碰撞半径之和」⇒ 预警带画多宽就判多宽
-@export var charge_damage_mul: float = 1.0   ## 冲刺伤害 = contact_damage × 它（与接触/短咬同一条尺子，别另起一档）
+@export var charge_damage_mul: float = 1.0   ## 冲刺伤害 = contact_damage × 它（与接触伤害同一条尺子，别另起一档）
 @export var charge_whiff_stagger: float = 0.9 ## 落空收势硬直：冲空罚站给玩家反打窗口（命中则不罚）
-@export var bite_range: float = 0.0          ## >0：贴近短扑咬的触发上沿。建议与 charge_min_range 取同值 ⇒ 两带互补、中间不留空隙
-@export var bite_interval: float = 2.4       ## 短扑咬冷却（同样是整周期）
-@export var bite_windup_time: float = 0.35   ## 下蹲预告时长（方向在这一帧锁死，之后不追踪玩家，否则 0.35s 躲不开）
-@export var bite_duration: float = 0.22      ## 起跳时长（位移 ≈ 69px，只当"咬一口"的凑身，不当跑道冲刺）
-@export var bite_speed_mul: float = 2.6      ## 起跳倍速
-@export var bite_hit_radius: float = 40.0    ## 咬合判定半径（狼嘴够得到的距离）
-@export var bite_damage_mul: float = 1.0     ## 咬合伤害 = contact_damage × 它（与接触伤害同一条尺子，别另起一档）
 @export var explode_radius: float = 0.0    ## >0：贴近玩家 40px 后点燃 0.8s 引信自爆
 @export var heal_orb_drop: int = 0         ## >0：死亡掉「残丹」回血珠而非金币
 @export var bolt_count: int = 1            ## 火球扇射数量（>1 时按 bolt_spread 扇形展开）
@@ -100,6 +93,8 @@ var anim_base_scale: Vector2 = Vector2.ONE
 var juice_scale: Vector2 = Vector2.ONE
 var _bolt_timer: float = 1.2
 var _bolt_windup_t: float = -1.0    ## >=0 表示火球蓄力中（站定 + 变色预告，出手瞬间锁向）
+var _bolt_windup_total: float = 0.0  ## 本次蓄力总时长（算 0→1 进度，供器尖聚能与灵力汇聚读数）
+var _bolt_gather_cd: float = 0.0     ## 蓄力期灵力汇聚粒子续发计时（低频，走 SOUL_ORB 帧闸）
 var _bolt_windup_dir: Vector2 = Vector2.ZERO  ## 蓄力期实时朝向玩家（只用于预警读法，出手那帧才锁死）
 var _bolt_base_tint: Color = Color.WHITE  ## 蓄力前本体色（精英变异染色等），蓄力结束/被打断时还原
 var _death_bolts_spent: bool = false  ## 死亡弹幕一命只发一次闸（防自爆与击杀路径双发）
@@ -110,13 +105,7 @@ var _charge_windup: float = -1.0   ## >=0 表示进入冲刺预警阶段
 var _charge_warning_line: Line2D = null  ## 冲刺预警线节点
 var _charge_brake: float = 0.0     ## >0 收势刹车锁定段（这一段的位移同样是承诺出去的一部分）
 var _charge_stagger: float = 0.0   ## >0 落空罚站：不追人、任人打（冲刺的代价，与预警的兑现配成一对）
-var _charge_hit: bool = false      ## 这一冲已经结算过（一次冲刺只碾一下，同 _bite_hit 一口只结算一次）
-var _bite_timer: float = 0.0       ## 短扑咬冷却
-var _bite_windup: float = -1.0     ## >=0 表示下蹲预告中
-var _bite_active: float = 0.0      ## >0 表示起跳中
-var _bite_dir: Vector2 = Vector2.ZERO
-var _bite_warning_line: Line2D = null
-var _bite_hit: bool = false        ## 这一跳已经咬到（一次起跳只结算一口）
+var _charge_hit: bool = false      ## 这一冲已经结算过（一次冲刺只碾一下）
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
 const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = 引信烧完 = 自爆结算
 const FLEE_WALL_BAND := 80.0       ## 金蟾软墙警告带（px）：带内背离墙外的逃离分量清零改沿墙滑行；贴墙滑行向锁存防角落抖振
@@ -243,7 +232,7 @@ static var _explode_snap_pool: Array = []  ## 裂魂铃链爆快照复用栈（�
 ## 静态时间戳闸（Time.get_ticks_msec）：同屏大面积演出（焦痕/爆炸环）走「最后一次放行后
 ## GAP 内全静默」，无论多少只怪同帧同秒触发。用时间戳不用共享倒计时——倒计时被多实例
 ## 各自扣一遍会加速漏闸。GDScript 坑：位移 << 不吃负操作数，初值只写普通负数。
-const GROUND_SCORCH_MIN_GAP_MS := 2500   ## 自爆焦痕：屏上至多一块，与贴花 2.3s 寿命衔接
+const GROUND_SCORCH_MIN_GAP_MS := 5000   ## 自爆焦痕：屏上至多一块，与贴花 2.3s 寿命衔接（2026-10-19 去裂痕化同步翻倍）
 const KILL_EXPLODE_FX_MIN_GAP_MS := 700  ## 裂魂铃爆炸环：清怪高潮不再冲击环雨，保留节奏读数
 static var _last_scorch_ms: int = -999999
 static var _last_kill_explode_fx_ms: int = -999999
@@ -322,7 +311,6 @@ func activate() -> void:
 	# 封顶 1.0s 而非 2.0s：v0.0.7 全局砍血后狼只有 45HP，2.0s+1.2s 预警=3.2s 站桩太长，
 	# 中等火力下狼在预警期间就被打死了，活不到冲刺出手那一下。
 	_charge_timer = minf(charge_interval, 1.0)
-	_bite_timer = bite_interval
 	_minion_timer = spawn_minion_interval
 	_teleport_timer = teleport_interval
 	_elite_slam_timer = slam_interval
@@ -399,6 +387,8 @@ func reset_for_reuse() -> void:
 	juice_scale = Vector2.ONE
 	_bolt_timer = 1.2
 	_bolt_windup_t = -1.0
+	_bolt_windup_total = 0.0
+	_bolt_gather_cd = 0.0
 	_bolt_base_tint = Color.WHITE
 	_death_bolts_spent = false
 	_charge_active = 0.0
@@ -407,10 +397,6 @@ func reset_for_reuse() -> void:
 	_charge_brake = 0.0
 	_charge_stagger = 0.0
 	_charge_hit = false
-	_bite_windup = -1.0
-	_bite_active = 0.0
-	_bite_dir = Vector2.ZERO
-	_bite_hit = false
 	_fuse = -1.0
 	_no_drop = false
 	_buff_timer = 0.0
@@ -448,9 +434,6 @@ func reset_for_reuse() -> void:
 	if is_instance_valid(_charge_warning_line):
 		_charge_warning_line.queue_free()
 	_charge_warning_line = null
-	if is_instance_valid(_bite_warning_line):
-		_bite_warning_line.queue_free()
-	_bite_warning_line = null
 	if is_instance_valid(_explode_ring):
 		_explode_ring.queue_free()
 	_explode_ring = null
@@ -964,17 +947,12 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		elif dist <= preferred_range + 30.0:
 			_pp_target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
-	# 妖狼系的两套扑击（共用同一个移动出口 _pp_target_vel，靠 elif 链天然互斥）：
-	#   长扑 = 跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
-	#   短咬 = 贴进 charge_min_range 以内 → 下蹲预告（方向当帧锁死、之后不追踪）→ 小幅跃击咬一口
+	# 妖狼系长扑（移动出口 _pp_target_vel）：
+	#   跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
 	# 长扑的三件事必须同源，都取自 GameBalance.charge_reach：预警带长度、真实位移、扫掠判定。
 	# 冲刺/收势两段自己把 velocity 写死（下面 charge_locked 那一段因此跳过吸附插值）。
-	# 旧版只有长扑，且触发带下沿写死 120px：贴着脸它整个技能就不出手，只剩毫无预告的
-	# 接触伤害一路蹭（2026-10-08 用户现场：「近距离一直追着我、远距离才扑」）。
-	# 两带以 charge_min_range 为界互补 ⇒ 任何距离都有一个看得见预告的威胁。
-	if charge_interval > 0.0 or bite_range > 0.0:
+	if charge_interval > 0.0:
 		_charge_timer -= delta
-		_bite_timer -= delta
 		var min_sq: float = charge_min_range * charge_min_range
 		var max_sq: float = charge_max_range * charge_max_range
 
@@ -984,14 +962,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_pp_target_vel = Vector2.ZERO
 			_update_charge_warning(player)
 			if _charge_windup <= 0.0:
-				# 预警期间玩家贴进了「没跑道」的距离 ⇒ 就地转成短咬：它已经站桩预警了
-				# 1.2s、玩家看得很清楚，所以不再补一次下蹲预告，直接跳。
-				# 旧写法不复查距离，症状是「都贴脸了还往前冲 300px、从玩家身上碾过去」
-				if bite_range > 0.0 and dist_sq < min_sq:
-					_clear_charge_warning()
-					_launch_bite(dir)
-				else:
-					_start_charge(_charge_aim_dir(player, dir))
+				_start_charge(_charge_aim_dir(player, dir))
 
 		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
 		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
@@ -1021,51 +992,14 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_charge_stagger -= delta
 			_pp_target_vel = Vector2.ZERO
 
-		# 短咬：下蹲预告。方向在锁死那一帧定、之后不追踪玩家（0.35s 还追踪就躲不开了）
-		elif _bite_windup > 0.0:
-			_bite_windup -= delta
-			_pp_target_vel = Vector2.ZERO
-			_update_bite_warning()
-			if _bite_windup <= 0.0:
-				_launch_bite(_bite_dir)
-
-		# 短咬：起跳。一次起跳只结算一口，伤害与接触伤害同一把尺子（走玩家那套无敌帧，
-		# 所以贴着它被蹭到的那一下不会和这一口叠加）
-		elif _bite_active > 0.0:
-			_bite_active -= delta
-			_pp_target_vel = _bite_dir * move_speed * bite_speed_mul
-			if not _bite_hit and dist_sq < bite_hit_radius * bite_hit_radius:
-				_bite_hit = true
-				# 目标可能是被嘲讽改追的灵兽：Player 走两参受创链路（无敌帧/护甲/反馈），
-				# 其余鸭子分派单参，与 _resolve_contact_damage 同一口径。
-				# 不在这里再发一次反馈：take_damage 已按「受创」节点给过
-				# 大创伤 + 顿帧 + 红晕，两边都发就是同一下挨打震两回
-				if player is Player:
-					player.take_damage(contact_damage * bite_damage_mul, global_position)
-				elif player.has_method("take_damage"):
-					player.take_damage(contact_damage * bite_damage_mul)
-			if _bite_active <= 0.0:
-				_clear_bite_warning()
-
-		# 空闲：冷却到 + 跑道够 → 长扑预警（硬直中不起手：预警/起跳是冲刺的蓄力段，
-		# 被钉着还起手，后续 _bite_active/_start_charge 会从硬直滑行分支夺走位移，「定身」成空话）
-		if charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq and not _pp_stun:
+		# 空闲：冷却到 + 跑道够 → 长扑预警（硬直中不起手：预警是冲刺的蓄力段，
+		# 被钉着还起手，后续 _start_charge 会从硬直滑行分支夺走位移，「定身」成空话）
+		elif charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq and not _pp_stun:
 			_charge_timer = charge_interval
 			_charge_windup = charge_windup_time
 			# 起手反馈：下蹲蓄势 + 低音量哨声（全预警体系里原本唯一「静默起手」的，现在齐了）
 			play_squash(Vector2(0.82, 1.2), 0.24)
 			AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
-
-		# 空闲：冷却到 + 玩家已贴进 bite_range → 短咬下蹲（同样只挡「起手」，不夺已承诺段）
-		# （bite_range 与 charge_min_range 取同值 ⇒ 两带互补，中间不留"谁都不出手"的缝）
-		elif bite_range > 0.0 and _bite_timer <= 0.0 and dist_sq > 16.0 and dist_sq <= bite_range * bite_range and not _pp_stun:
-			_bite_timer = bite_interval
-			_bite_windup = bite_windup_time
-			_bite_dir = dir
-			_show_bite_warning(dir)
-			play_squash(Vector2(1.24, 0.76), bite_windup_time)
-			# 起手是敌人自己的扑咬声，不许借玩家武器的挥砍（旧写法播 sword_swing，战场上分不清谁在打）
-			AudioManager.play_sfx("enemy_claw", 0.5, GameManager.rng.randf_range(0.92, 1.08))
 
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
 	if explode_radius > 0.0:
@@ -1099,9 +1033,9 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 	if bolt_interval > 0.0 and _fuse < 0.0:
 		if _bolt_windup_t >= 0.0:
 			# 蓄力段：站定 + 本体提亮变色，出手方向每帧跟玩家（只作读法，出手那帧才锁死）
-			_bolt_windup_t -= delta
 			_pp_target_vel = Vector2.ZERO
 			_bolt_windup_dir = (player.global_position - global_position).normalized()
+			_tick_bolt_windup(delta)
 			if _bolt_windup_t <= 0.0:
 				_fire_bolt(player)
 		else:
@@ -1188,7 +1122,7 @@ func _resolve_velocity(delta: float) -> void:
 		# 受击卡肉定格（空洞骑士/死亡细胞风格）：冻结位移吸附在刀尖，
 		# 期间速度归零且不衰减 knockback_velocity，定格计时结束后才释放并衰减击退冲量
 		velocity = Vector2.ZERO
-	elif _pp_stun and _bite_active <= 0.0:
+	elif _pp_stun:
 		velocity = knockback_velocity
 		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
 		var decay_rate: float = GameBalance.KNOCKBACK_DECAY_STUN
@@ -1302,8 +1236,12 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			procedural_view.advance = vel_dir.dot(dir)
 			if _fuse >= 0.0:
 				procedural_view.special_state = 1.0
-			elif _charge_windup >= 0.0 or _bite_windup >= 0.0 or _bolt_windup_t >= 0.0:
+			elif _charge_windup >= 0.0:
 				procedural_view.special_state = 1.0
+			elif _bolt_windup_t >= 0.0:
+				# 火球蓄力走 0→1 进度（器尖聚能球随之由小到大），不写死 1.0
+				# 进度真话源是 _tick_bolt_windup 写下的值，这里不覆盖
+				pass
 			else:
 				procedural_view.special_state = 0.0
 			if _bolt_windup_t >= 0.0:
@@ -1313,15 +1251,14 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			else:
 				procedural_view.aim_dir = Vector2.ZERO
 
-	## 冲刺走廊扫掠结算 + 追击目标接触伤害判定（石岳反震只认玩家，灵兽无反震）
+## 冲刺走廊扫掠结算 + 追击目标接触伤害判定（石岳反震只认玩家，灵兽无反震）
 func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 	# 3.6 冲刺走廊扫掠结算：判定走的是「狼身这一帧扫过的那一段」，独立于本体碰撞。
 	# 旧写法长扑只有下面那条身位滑碰（狼 19.5 + 玩家 14 = 33.5px）这一个出口，
 	# 而预警 0.8s 够玩家横移 168px ⇒ 只要动一下就必然躲开，整个技能形同虚设
-	#（2026-10-10 用户现场：「根本冲刺不到我」）。近战短咬反倒有 bite_hit_radius 那道口
-	# ⇒ 近距离打得人、远距离打不到，威胁段刚好落在最不需要威胁的地方。
+	#（2026-10-10 用户现场：「根本冲刺不到我」）。扫掠判定保证冲刺走廊覆盖。
 	# 伤害只走目标自己的 take_damage 这一个口子：玩家侧的无敌帧/闪避/护甲/受创反馈全复用，
-	# 不在这里发第二次反馈（同短咬那处口径）；一个 flag 钉死「一次冲刺只碾一下」。
+	# 不在这里发第二次反馈；一个 flag 钉死「一次冲刺只碾一下」。
 	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
 	if charge_locked and not _charge_hit:
 		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, target.global_position)
@@ -1515,16 +1452,16 @@ func apply_poison(dps: float, duration: float) -> void:
 	poison_dps = GameBalance.stack_poison_dps(active_dps, dps)
 	poison_timer = maxf(poison_timer, duration)
 
-## 施加【罡风卷定】（灵兽·灵风貂）：牵引初速 + 钉身 + 吹散在途扑咬蓄力。
+## 施加【罡风卷定】（灵兽·灵风貂）：牵引初速 + 钉身 + 吹散在途扑击蓄力。
 ## 位移复用受击硬直滑行段（_resolve_velocity：velocity = knockback_velocity 后按
 ## KNOCKBACK_DECAY_STUN 指数急刹），调用方用 BalanceSpiritPet.pull_impulse 反解出
 ## 「恰好刹停在定身环」的初速，本函数不再过 take_damage 的击退限速（那是武器刀的尺子，
 ## 卷位移的目标是到环，不是推多远）。伤害由调用方另走 take_damage（复用飘字/集火保护）。
 ## 长扑承诺段不夺（项目口径：冲刺一旦起步 commit-through，wolf_ai_check 判据在守）；
-## 但预警站桩与短咬起跳直接吹散 —— 挂着「定身」还把人扑出去咬一口，文案就是假的。
-## 哨兵注意：_charge_windup/_bite_windup 的「不在该阶段」是 -1.0 而不是 0.0，
-## 写 0.0 会让本帧末的预警到点分支照常发射。冷却无需重置：进蓄力时 _charge_timer/
-## _bite_timer 已按整周期回满，吹散不会导致立刻再扑。
+## 但预警站桩直接吹散 —— 挂着「定身」还把人扑出去，文案就是假的。
+## 哨兵注意：_charge_windup 的「不在该阶段」是 -1.0 而不是 0.0，
+## 写 0.0 会让本帧末的预警到点分支照常发射。冷却无需重置：进蓄力时 _charge_timer
+## 已按整周期回满，吹散不会导致立刻再扑。
 func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 	if dying:
 		return
@@ -1533,12 +1470,6 @@ func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 	if _charge_windup > 0.0:
 		_charge_windup = -1.0
 		_clear_charge_warning()
-	if _bite_windup > 0.0:
-		_bite_windup = -1.0
-		_clear_bite_warning()
-	if _bite_active > 0.0:
-		_bite_active = 0.0
-		_clear_bite_warning()
 
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
 # ---------------- 行为支路：自爆 ----------------
@@ -1628,7 +1559,7 @@ func _start_charge(dir: Vector2) -> void:
 ## 收势落空判定：要等整段承诺（冲刺 + 刹车）的扫掠都结算完才许罚站。
 ## 冲刺归零那一帧的命中判定在本函数之后才跑（扫掠在 move_and_slide 之后），
 ## 在冲刺段末尾判会漏掉"最后一帧才够到人"的那一冲 ⇒ 碾到了还罚站，玩家看不懂。
-## 落空才罚站（这是玩家侧身一步的奖励）；碾到人则不罚（已贴脸，下一步自然接短咬）。
+## 落空才罚站（这是玩家侧身一步的奖励）；碾到人则不罚。
 func _settle_charge_recovery() -> void:
 	if not _charge_hit and charge_whiff_stagger > 0.0:
 		_charge_stagger = charge_whiff_stagger
@@ -1676,75 +1607,70 @@ func _clear_charge_warning() -> void:
 		_charge_warning_line.queue_free()
 		_charge_warning_line = null
 
-## 短咬起跳（下蹲预告结束、或长扑预警中被玩家贴掉跑道时调用）
-# ---------------- 行为支路：短扑咬 ----------------
-
-func _launch_bite(dir: Vector2) -> void:
-	_bite_active = bite_duration
-	_bite_dir = dir
-	_bite_hit = false
-	_clear_bite_warning()
-	play_squash(Vector2(0.72, 1.3), 0.18)
-	AudioManager.play_sfx("enemy_claw", 0.85, GameManager.rng.randf_range(0.92, 1.08))
-
-## 画短咬预告线：与长扑预警带同一读法——细长红带指向扑咬方向。
-## 带宽不按判定半径 bite_hit_radius*2 画：短咬真实位移只有 ~69px，胶囊长≈宽
-## 会糊成一团把敌人整个裹住（2026-10-17 用户现场「把敌人抱起来」）。
-## 线长仍 = 真实起跳位移（不虚报扑咬距离），宽度取细警示档，只表方向不表范围。
-const BITE_WARNING_WIDTH := 18.0  ## 短咬预告线宽：细线档（长扑带 68px 的读法同款，但短咬位移短，画宽了就成团）
-
-func _show_bite_warning(dir: Vector2) -> void:
-	_clear_bite_warning()
-	if dir.length_squared() < 0.01:
-		return
-	_bite_warning_line = Line2D.new()
-	_bite_warning_line.width = BITE_WARNING_WIDTH
-	_bite_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.28)
-	_bite_warning_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	_bite_warning_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-	add_child(_bite_warning_line)
-	_bite_warning_line.add_point(Vector2.ZERO)
-	_bite_warning_line.add_point(dir * (bite_duration * move_speed * bite_speed_mul))
-
-## 更新短咬预警线（预警期间高频呼吸闪烁，传达下蹲蓄势扑咬的危险感）
-## 细线不像宽带那样糊场地，alpha 可以吃得比长扑带（基线 0.20）更足才够醒目
-func _update_bite_warning() -> void:
-	if _bite_warning_line == null:
-		return
-	var alpha: float = 0.28 + 0.14 * sin((bite_windup_time - _bite_windup) * 24.0)
-	_bite_warning_line.default_color.a = clampf(alpha, 0.12, 0.5)
-
-## 清理短咬预告线（起跳瞬间即消退，不随身拖带）
-func _clear_bite_warning() -> void:
-	if _bite_warning_line != null:
-		_bite_warning_line.queue_free()
-		_bite_warning_line = null
-
 ## 发射火球（御剑邪修；bolt_count>1 时按 bolt_spread 扇形展开，剑煞邪修三连击）
 # ---------------- 行为支路：远程火球 ----------------
 
 const BOLT_WINDUP_TINT := Color(1.9, 1.35, 0.85)  ## 蓄力本体暖色提亮（比自爆引信的 2.2 档淡，一读是「要出手」不是「要炸了」）
+const BOLT_GATHER_INTERVAL := 0.12  ## 蓄力期灵力汇聚粒子续发间隔（低频，走 FxParticlePool 的 SOUL_ORB 帧闸）
+const BOLT_GATHER_OFFSET := 26.0    ## 汇聚粒子相对器尖的初始偏移半径（从身周收束向器尖）
 
 ## 起手蓄力：站定 + 变色 + 形变 + 低音量引信声。方向不在此锁（出手那帧才锁，蓄力期只作预告读法）
 func _start_bolt_windup() -> void:
 	_bolt_windup_t = maxf(bolt_windup, 0.05)
+	_bolt_windup_total = _bolt_windup_t
+	_bolt_gather_cd = 0.0
 	_bolt_base_tint = anim_sprite.modulate
 	anim_sprite.modulate = BOLT_WINDUP_TINT
 	play_squash(Vector2(1.14, 0.88), _bolt_windup_t)
 	AudioManager.play_sfx("enemy_fuse", 0.4)
+	# 起手当帧就进施法姿态（>0 即 casting），避免首帧剑仍停在巡航位再跳一下
+	if procedural_view != null:
+		procedural_view.special_state = 0.001
+
+## 蓄力期推进（每物理帧）：算 0→1 进度写进 special_state（驱动器尖聚能球由小到大），
+## 并低频续发向器尖收束的灵力微粒。器尖聚能 = 施法「正在攒劲」的可读读数。
+func _tick_bolt_windup(delta: float) -> void:
+	_bolt_windup_t -= delta
+	var progress: float = 0.0
+	if _bolt_windup_total > 0.001:
+		progress = clampf(1.0 - _bolt_windup_t / _bolt_windup_total, 0.0, 1.0)
+	if procedural_view != null:
+		procedural_view.special_state = progress
+		procedural_view.aim_dir = _bolt_windup_dir
+	# 灵力汇聚微粒：只对施法读法有意义的邪修系（有法剑器尖）发放，且走 SOUL_ORB 帧闸
+	if _bolt_gather_cd <= 0.0 and procedural_view != null:
+		_bolt_gather_cd = BOLT_GATHER_INTERVAL
+		var tip: Vector2 = procedural_view.get_weapon_tip_global_pos()
+		var out_dir: Vector2 = (_bolt_windup_dir if _bolt_windup_dir.length_squared() > 0.001 else Vector2.RIGHT)
+		# 从器尖反向偏移一圈外沿出发，粒子顺向收束到器尖（FX 内部有上浮/汇聚感）
+		var gather_pos: Vector2 = tip - out_dir * BOLT_GATHER_OFFSET
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, gather_pos, _bolt_gather_color(), 0.8, false, out_dir)
+	else:
+		_bolt_gather_cd -= delta
+
+## 灵力汇聚/打断四散的配色：剑煞血红、御剑幽蓝（与弹体色温同源）
+func _bolt_gather_color() -> Color:
+	var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
+	return GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_WATER
 
 ## 蓄力被打断（受击硬直等）时还原本体色，蓄力作废不补发（硬直窗口就是玩家的反打奖励）
+## 同时把已聚拢的灵力「炸散」：一撮微粒反向迸出，强化「打断成功」的反馈读数
 func _cancel_bolt_windup() -> void:
 	if _bolt_windup_t < 0.0:
 		return
 	_bolt_windup_t = -1.0
+	_bolt_windup_total = 0.0
 	anim_sprite.modulate = _bolt_base_tint
 	if procedural_view != null:
 		procedural_view.position.x = 0.0
 		procedural_view.special_state = 0.0
+		# 打断四散：从器尖处迸一小撮灵光（bypass 帧闸：低频、且这是玩家挣来的反馈，不该被受击火花挤掉）
+		var tip: Vector2 = procedural_view.get_weapon_tip_global_pos()
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, tip, _bolt_gather_color(), 1.0, true)
 
 func _fire_bolt(player: Node2D) -> void:
 	_bolt_windup_t = -1.0
+	_bolt_windup_total = 0.0
 	anim_sprite.modulate = _bolt_base_tint
 	# 出手方向最后锁死：蓄力期玩家已看过预告，锁死的是「预告过的那个方向」
 	var base_dir: Vector2 = (player.global_position - global_position).normalized()
@@ -1771,7 +1697,8 @@ func _fire_bolt(player: Node2D) -> void:
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
 	if get_parent() != null:
-		var pop_col := Color(0.85, 0.35, 0.65) if is_jiansha else Color(0.35, 0.85, 1.0)
+		# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气水系 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
+		var pop_col := GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_WATER
 		JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
@@ -2126,7 +2053,6 @@ func _die() -> void:
 
 	# 清理预警线（如果存在）
 	_clear_charge_warning()
-	_clear_bite_warning()
 	_clear_explode_ring()
 	_clear_poison_ring()
 	if _elite_slam_ring != null and is_instance_valid(_elite_slam_ring):
@@ -2155,6 +2081,8 @@ func _die() -> void:
 				var wave_r: float = 72.0 if death_corpse_linger else 48.0
 				FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", burst_scale)
 				JuiceEffect.spawn_shockwave(get_parent(), global_position, wave_r, GameStyle.FX_HDR_GOLD, 0.22)
+				# 幽魂消散（2026-10-19）：塌缩前一刻器尖/灵核蓄满再炸开，给厚血敌人一个「气数已尽」的收束
+				FxParticlePool.burst(FxParticlePool.DEATH_WISP, global_position, "shadow", burst_scale, true)
 	if is_elite:
 		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
 		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击

@@ -109,6 +109,10 @@ var proc_poison: bool = false
 var poison_dps: float = 0.0
 var poison_dur: float = 2.5
 
+## 出膛它的武器攻击方式（吸血分档用）：FloatingWeapon 出膛填 PROJECTILE，
+## TurretUnit 出膛填 TURRET。默认按远程算，未赋值时退化为远程系数。
+var source_behavior: int = WeaponData.Behavior.PROJECTILE
+
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var glow: PointLight2D = $PointLight2D
 var _vector_renderer: ProceduralProjectileRenderer = null
@@ -210,7 +214,7 @@ func _on_area_entered(area: Area2D) -> void:
 		if knock.length_squared() < 0.001:
 			knock = direction * GameManager.knockback_force(knockback_base)
 		enemy.take_damage(actual_dmg, knock, is_crit)
-		GameManager.try_lifesteal()
+		GameManager.try_lifesteal(source_behavior)
 
 		# 命中火花与暴击加档反馈（T-1.1 / T-1.4）：严格贴实弹丸命中点，受帧限流与视口门控约束
 		# 2026-10-16 攻击粒子减量：非暴击 scale 收 0.85，暴击维持 1.5（重击感知靠对比）；
@@ -367,6 +371,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 ##   direction/speed/damage/knockback_base/lifetime/pierce_left/bounce_left/
 ##   homing_target/acquire_left/_hit_index/proc_burn/burn_dps/burn_dur/proc_chill/chill_dur/
 ##   proc_poison/poison_dur/bullet_texture/bullet_scale/spin
+## 注：source_behavior 由出膛方在 activate() 之前写好，回收时在 _recycle 归零，activate 不覆盖它。
 func activate() -> void:
 	_pooled = false
 	active_count += 1
@@ -439,6 +444,8 @@ func _recycle() -> void:
 	proc_poison = false
 	poison_dps = 0.0
 	poison_dur = 0.0
+	# 吸血分档残值清零：上一发若是机关炮台（TURRET），复用给灵兽/远程时不清会沿用高频系数
+	source_behavior = WeaponData.Behavior.PROJECTILE
 	bounce_left = 0
 	pierce_left = 0
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
