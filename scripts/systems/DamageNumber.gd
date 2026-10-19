@@ -108,7 +108,7 @@ static func _ensure_settings() -> void:
 	_crit_settings = LabelSettings.new()
 	_crit_settings.font = GameStyle.display_font()
 	_crit_settings.font_size = 20
-	_crit_settings.font_color = GameStyle.GOLD  # 暴击 = 鎏金大字（玉色留给金币/增益读数）
+	_crit_settings.font_color = GameStyle.GOLD_FX  # 暴击 = 鎏金大字（玉色留给金币/增益读数）
 	_crit_settings.outline_size = 5
 	_crit_settings.outline_color = Color(0.04, 0.02, 0.0, 0.96)  # 纯色深描边（HDR 绯金描边太花，已回退）
 

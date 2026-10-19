@@ -10,6 +10,8 @@ extends Node
 
 signal setting_changed(section: StringName, key: StringName, value: Variant)
 signal audio_volume_changed(bus: StringName, linear_val: float, muted: bool)
+## 主题色变更（id 为 GameStyle.THEME_PRESETS 里的 id）：需要自行重绘的逐帧绘制控件订阅它
+signal theme_color_changed(preset: StringName)
 
 const SETTINGS_PATH := "user://settings.cfg"
 const AUDIO_LEGACY_PATH := "user://audio.cfg"
@@ -229,6 +231,16 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
+	# --------- 界面主题（用户自选主题色，色块行不走 cycle 按钮，SCHEMA 只管存取与校验） ---------
+	{
+		"section": "ui",
+		"key": "theme_color",
+		"title": "界面主题",
+		"desc": "主行动、选中与标题带的高亮色；即点即换并自动保存",
+		"type": "cycle",
+		"default": &"pink",
+		"options": [&"pink", &"amber", &"orange", &"cyan", &"lime"],
+	},
 ]
 
 const BUS_KEY_MAP := {
@@ -283,6 +295,9 @@ const RENDER_QUALITY_LABELS := {
 }
 const RENDER_QUALITY_DEFAULT := &"high"
 
+## 主题色默认档（与 GameStyle.THEME_PRESETS 第一项同源；主题 id 白名单在 GameStyle 维护）
+const THEME_DEFAULT := &"pink"
+
 ## 内存设置字典: section -> { key: value }
 var _settings: Dictionary = {}
 
@@ -292,6 +307,8 @@ func _ready() -> void:
 	_load_settings()
 	_follow_legacy_layout_default()
 	_apply_all_audio()
+	# 主题色：autoload 先于主场景 ready，此处套用后所有后续构建的样式即用新色（注册表此时为空）
+	GameStyle.apply_theme_color(theme_color())
 
 ## 初始化默认配置
 func _init_defaults() -> void:
@@ -347,6 +364,11 @@ func set_val(section: StringName, key: StringName, val: Variant, auto_save: bool
 
 	_sync_shake_pair(sec_str, key_str)
 	_sync_damage_number_pair(sec_str, key_str)
+
+	# 主题色：改值 → 全界面原地换色（注册表回放）→ 通知逐帧绘制方重画
+	if sec_str == "ui" and key_str == "theme_color":
+		GameStyle.apply_theme_color(StringName(str(val)))
+		theme_color_changed.emit(StringName(str(val)))
 
 	if auto_save:
 		_save_settings()
@@ -423,6 +445,20 @@ func render_quality_next() -> StringName:
 	if i < 0:
 		i = 0
 	return RENDER_QUALITY_ORDER[(i + 1) % RENDER_QUALITY_ORDER.size()]
+
+# ----------------- 界面主题色便捷接口 -----------------
+
+## 当前主题 id（ConfigFile 存取会把 StringName 变 String，这里统一归一化）
+func theme_color() -> StringName:
+	return StringName(str(get_val(&"ui", &"theme_color", THEME_DEFAULT)))
+
+## 主题人话名（设置页色块行与提示用）
+func theme_color_label() -> String:
+	return GameStyle.theme_name(theme_color())
+
+## 设置主题并即时换色 + 落盘
+func set_theme_color(id: StringName) -> void:
+	set_val(&"ui", &"theme_color", id)
 
 # ----------------- 操作按钮布局（技能键 / 祭坛键自由拖动） -----------------
 
@@ -654,6 +690,9 @@ func reset_to_defaults() -> void:
 		setting_changed.emit(StringName(item["section"]), StringName(item["key"]), item["default"])
 	for bus in BUS_KEY_MAP.keys():
 		audio_volume_changed.emit(bus, get_bus_volume(bus), is_bus_muted(bus))
+	# 主题色回到默认并立刻换色（上面只 emit 了信号，注册表回放要靠这里显式调）
+	GameStyle.apply_theme_color(theme_color())
+	theme_color_changed.emit(theme_color())
 
 func _load_settings() -> void:
 	var cfg := ConfigFile.new()
@@ -710,6 +749,11 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 		if RENDER_QUALITY_ORDER.has(s_render):
 			return s_render
 		return RENDER_QUALITY_DEFAULT
+	if key == "theme_color":
+		var s_theme := StringName(str(val))
+		if GameStyle.theme_ids().has(s_theme):
+			return s_theme
+		return THEME_DEFAULT
 	return val
 
 func _try_migrate_legacy_audio() -> void:

@@ -70,6 +70,11 @@ func _ready() -> void:
     #    更新浮层还挂在 UpdateManager 而不是本层，所以不能只扫自己这个 CanvasLayer）。
     _adopt_buttons(get_tree().root)
     get_tree().node_added.connect(_on_ui_node_added)
+    # 主题色变更：底盘/摇杆头是 _draw 逐帧现取 GameStyle.GOLD(_EDGE)，通知重画一帧即跟上
+    SettingsManager.theme_color_changed.connect(func(_p: StringName) -> void:
+        base.queue_redraw()
+        knob.queue_redraw()
+    )
 
 ## 极简仙侠风底盘绘制：通透暗底 + 纤细冷蓝轮廓 + 四向微光道点
 func _on_base_draw() -> void:

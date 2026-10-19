@@ -742,6 +742,8 @@ func _update_small_card_selection(cid: String) -> void:
 			(GameStyle.GOLD.darkened(0.35) if is_unlocked else GameStyle.LINE)
 	if style != null:
 		style.border_color = accent
+		if is_unlocked and not is_selected:
+			GameStyle.register_theme_derived_box(style, &"border_color", &"main", &"darken", 0.35)
 		if is_selected:
 			style.bg_color = GameStyle.NAVY2.lightened(0.12)
 		elif not is_unlocked:
@@ -780,6 +782,8 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var accent := GameStyle.JADE if is_selected else \
 			(GameStyle.GOLD.darkened(0.35) if is_unlocked else GameStyle.LINE)
 	var style := GameStyle.card(accent, GameStyle.SLANT_PLATE, Vector2(3, 3))
+	if is_unlocked and not is_selected:
+		GameStyle.register_theme_derived_box(style, &"border_color", &"main", &"darken", 0.35)
 	if is_selected:
 		style.bg_color = GameStyle.NAVY2.lightened(0.12)
 	elif not is_unlocked:

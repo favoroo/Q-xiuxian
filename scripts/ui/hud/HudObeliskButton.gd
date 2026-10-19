@@ -33,6 +33,11 @@ func _ready() -> void:
 		if sec == &"display" and key in [&"obelisk_btn_xy", &"obelisk_btn_scale"]:
 			_apply_layout()
 	)
+	# 主题色变更：圆键四态是手搓 StyleBox，重跑样式工厂拿新主色
+	SettingsManager.theme_color_changed.connect(func(_p: StringName) -> void:
+		if _btn != null:
+			_style_btn(false)
+	)
 
 ## 构建激活 UI：圆形键 + 键面走针环（摆位交给 HudButtonLayout）
 func _build_button() -> void:

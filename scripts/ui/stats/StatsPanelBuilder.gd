@@ -187,6 +187,7 @@ static func make_tip_row(dialog: PlayerStatsDialog, stat_id: String, content: Co
 	flat.content_margin_bottom = 0.0
 	var on := StyleBoxFlat.new()
 	on.bg_color = GameStyle.with_alpha(GameStyle.GOLD, 0.22)
+	GameStyle.register_theme_derived_box(on, &"bg_color", &"main", &"alpha", 0.22)
 	on.content_margin_top = 0.0
 	on.content_margin_bottom = 0.0
 	row.add_theme_stylebox_override("panel", flat)

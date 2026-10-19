@@ -414,7 +414,20 @@ func _synergy_line_has_numbers(tag: String, tier: int, effs: Array) -> void:
 
 func _test_ui_chip_contrast() -> void:
 	# 1. 基础明度自适应规则：亮底必配黑字，暗底必配白字
-	_c.check(GameStyle.on_face_text(GameStyle.GOLD) == GameStyle.CHALK, "品红 GOLD 属于暗面，必须配白字 CHALK（stylekit 原配即粉底白字）")
+	#    主题色已可切换（5 套预设），逐套断言 on_face_text 的明暗归类 —— 不能钉死「GOLD 必是暗面」，
+	#    否则用户切成明黄/天青那四套亮色后，这条判据自己就假了。
+	var prev_theme := GameStyle.current_theme()
+	for preset in GameStyle.THEME_PRESETS:
+		var pid: StringName = preset["id"]
+		var main: Color = preset["main"]
+		GameStyle.apply_theme_color(pid)
+		var want: Color = GameStyle.INK_TEXT if main.get_luminance() > 0.5 else GameStyle.CHALK
+		_c.check(GameStyle.on_face_text(main) == want,
+			"主题「%s」主色 %s 必须配 %s（亮面黑字/暗面白字）" % [String(preset["name"]), main, want])
+		_c.check(GameStyle.GOLD == main,
+			"主题「%s」切换后 GOLD 归位为主色（实得 %s）" % [String(preset["name"]), GameStyle.GOLD])
+	GameStyle.apply_theme_color(prev_theme)
+
 	_c.check(GameStyle.on_face_text(GameStyle.JADE) == GameStyle.INK_TEXT, "点缀黄 JADE 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.SWEEP) == GameStyle.INK_TEXT, "琥珀金 SWEEP 属于亮面，必须配墨黑字 INK_TEXT")
 	_c.check(GameStyle.on_face_text(GameStyle.GOOD) == GameStyle.INK_TEXT, "增益绿 GOOD 属于亮面，必须配墨黑字 INK_TEXT")
@@ -435,4 +448,41 @@ func _test_ui_chip_contrast() -> void:
 				_c.check(fg == GameStyle.INK_TEXT, "武器 %s 标签「%s」底色 %s 为亮面，字色必须是黑字（实得 %s）" % [wid, txt, face, fg])
 			else:
 				_c.check(fg != GameStyle.INK_TEXT, "武器 %s 标签「%s」底色 %s 为暗面，字色不应是黑字（实得 %s）" % [wid, txt, face, fg])
+
+## 主题色运行时切换：注册表必须把「已产出的按钮 stylebox」原地换成新色。
+## 这是「即点即换」的核心契约 —— 旧实现 GOLD 是 const，换肤只能改源码重启；
+## 现在靠 static var + 样式注册表回放。若注册表失效，已显示的按钮会留在旧色（用户点了没反应）。
+func _test_theme_swap_runtime() -> void:
+	var prev := GameStyle.current_theme()
+	GameStyle.apply_theme_color(&"pink")
+	var btn := Button.new()
+	GameStyle.button(btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12)
+	var normal := btn.get_theme_stylebox("normal") as StyleBoxFlat
+	_c.check(normal != null and normal.bg_color == GameStyle.THEME_PRESETS[0]["main"],
+		"默认主题下按钮 normal 面取品红")
+	# 切到天青：同一颗按钮的 normal StyleBox 必须就地变天青（不动节点引用）
+	GameStyle.apply_theme_color(&"cyan")
+	_c.check(normal.bg_color == GameStyle.theme_preset(&"cyan")["main"],
+		"切换主题后已建按钮的 normal 面原地变天青（注册表回放生效，实得 %s）" % normal.bg_color)
+	# 默认主题下 GOLD_EDGE 也要跟着变（hover 面）
+	var hover := btn.get_theme_stylebox("hover") as StyleBoxFlat
+	_c.check(hover.bg_color == GameStyle.theme_preset(&"cyan")["edge"],
+		"切换主题后 hover 面原地变天青亮边")
+	btn.free()
+	GameStyle.apply_theme_color(prev)
+
+## 主题预设表自身完整性：5 套、id 唯一、三件套齐备、默认品红
+func _test_theme_presets() -> void:
+	_c.check(GameStyle.THEME_PRESETS.size() == 5, "主题预设恰为 5 套（品红/明黄/暖橙/天青/荧绿）")
+	var seen := {}
+	for preset in GameStyle.THEME_PRESETS:
+		_c.check(preset.has("id") and preset.has("name") and preset.has("main") \
+				and preset.has("edge") and preset.has("dk"), "主题「%s」三件套字段齐备" % String(preset.get("name", "?")))
+		var id: StringName = preset["id"]
+		_c.check(not seen.has(id), "主题 id「%s」不重复" % String(id))
+		seen[id] = true
+	_c.check(GameStyle.THEME_PRESETS[0]["id"] == &"pink", "第一套（默认）是品红")
+	_c.check(SettingsManager.THEME_DEFAULT == &"pink", "SettingsManager 默认主题与 GameStyle 首项同源")
+	_c.check(SettingsManager.theme_color_label() == GameStyle.theme_name(SettingsManager.theme_color()),
+		"设置页读到的主题名与当前主题一致")
 

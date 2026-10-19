@@ -18,19 +18,24 @@ const RADIUS := 8.0                  ## 基准判定半径（不含 scale_factor
 const BODY_COLOR := Color(1.0, 0.45, 0.12)   ## 球体（烈焰橙）
 const CORE_COLOR := Color(1.0, 0.87, 0.45)   ## 高光芯
 const RIM_COLOR := Color(0.42, 0.07, 0.04)   ## 硬描边，压在判定圆内侧
+const OUTLINE_COLOR := Color(1.0, 0.88, 0.60, 0.70)  ## 浅色细描边（暖金微光，反差勾勒）
+
 const BODY_COLOR_PURPLE := Color(0.72, 0.28, 1.0)   ## 魔尊/子母弹球体（幽紫魔焰）
 const CORE_COLOR_PURPLE := Color(0.94, 0.78, 1.0)   ## 幽紫高光芯
 const RIM_COLOR_PURPLE := Color(0.24, 0.05, 0.38)   ## 幽紫硬描边
+const OUTLINE_COLOR_PURPLE := Color(0.92, 0.75, 1.0, 0.70) ## 幽紫浅色细描边（冷紫高光）
 
 # 幽冥剑气配色（御剑邪修专属：冷冽幽蓝梭形剑芒）
 const BODY_COLOR_SWORD := Color(0.20, 0.75, 1.0)       ## 幽蓝剑气身
 const CORE_COLOR_SWORD := Color(0.90, 0.98, 1.0)       ## 极亮纯白霜雪剑芯
 const RIM_COLOR_SWORD := Color(0.06, 0.15, 0.35)       ## 深蓝锐利描边
+const OUTLINE_COLOR_SWORD := Color(0.75, 0.92, 1.0, 0.75)   ## 霜雪浅蓝细描边
 
 # 剑煞血光配色（剑煞邪修精英专属：血煞剑芒）
 const BODY_COLOR_JIANSHA := Color(0.85, 0.25, 0.50)    ## 血煞剑气身
 const CORE_COLOR_JIANSHA := Color(1.0, 0.90, 0.95)     ## 绯红亮芯
 const RIM_COLOR_JIANSHA := Color(0.35, 0.05, 0.18)     ## 暗红描边
+const OUTLINE_COLOR_JIANSHA := Color(1.0, 0.75, 0.85, 0.75) ## 绯粉细描边
 
 # —— 对象池（2026-10-11，照 AstralGem/BladeProjectile 模式）——
 ## 御剑邪修周期直射 + 魔君环弹/螺旋/子母弹每次 new()+queue_free，Area2D + 碰撞体
@@ -158,6 +163,14 @@ func _rim_color() -> Color:
 		return RIM_COLOR_PURPLE
 	return RIM_COLOR
 
+## 浅色细描边色（外沿高光反差轮廓）
+func _outline_color() -> Color:
+	if sword_style:
+		return OUTLINE_COLOR_JIANSHA if purple_style else OUTLINE_COLOR_SWORD
+	if purple_style:
+		return OUTLINE_COLOR_PURPLE
+	return OUTLINE_COLOR
+
 ## 出膛激活：池化后 _ready 只在首建时跑过，所有依赖字段的视觉与物理状态
 ## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
 ##   direction/speed/damage/lifetime/scale_factor ⇒ radius/碰撞圆/寿命
@@ -255,16 +268,23 @@ func _draw() -> void:
 		return
 	var body_c := BODY_COLOR_PURPLE if purple_style else BODY_COLOR
 	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
+	var outline_c := OUTLINE_COLOR_PURPLE if purple_style else OUTLINE_COLOR
 	var core_c := CORE_COLOR_PURPLE if purple_style else CORE_COLOR
-	# 描边中心放在 radius - 1、线宽 2 ⇒ 最外沿正好压在判定圆上，视觉永不超过实际范围
+	# 绘制口径：画多大判多大（半径严格在 radius 之内）
+	# 1. 弹体球身
 	draw_circle(Vector2.ZERO, radius, body_c)
-	draw_arc(Vector2.ZERO, maxf(radius - 1.0, 1.0), 0.0, TAU, 24, rim_c, 2.0, true)
+	# 2. 内层暗色硬描边（线宽 1.4，内压立体感）
+	draw_arc(Vector2.ZERO, maxf(radius - 1.2, 1.0), 0.0, TAU, 24, rim_c, 1.4, true)
+	# 3. 最外层细浅描边（线宽 1.0，外沿严格吻合 radius 判定圆，暗调地表上高反差勾边）
+	draw_arc(Vector2.ZERO, maxf(radius - 0.5, 0.5), 0.0, TAU, 24, outline_c, 1.0, true)
+	# 4. 高光芯
 	draw_circle(Vector2.ZERO, radius * 0.45, core_c)
 
 ## 幽冥剑气视觉绘制（几何尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
 func _draw_sword_bolt() -> void:
 	var body_c := BODY_COLOR_JIANSHA if purple_style else BODY_COLOR_SWORD
 	var rim_c := RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
+	var outline_c := OUTLINE_COLOR_JIANSHA if purple_style else OUTLINE_COLOR_SWORD
 	var core_c := CORE_COLOR_JIANSHA if purple_style else CORE_COLOR_SWORD
 
 	var r := radius
@@ -289,6 +309,8 @@ func _draw_sword_bolt() -> void:
 		Vector2(r, 0.0)
 	])
 	draw_polyline(stroke_pts, rim_c, 1.6, true)
+	# 细浅寒芒刃线（线宽 1.0，叠在深色描边上形成亮刃微芒）
+	draw_polyline(stroke_pts, outline_c, 1.0, true)
 
 	# 剑脊高能亮芯
 	draw_line(Vector2(-r * 0.45, 0.0), Vector2(r * 0.7, 0.0), core_c, 1.8, true)

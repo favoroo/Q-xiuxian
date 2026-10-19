@@ -667,14 +667,14 @@ func _call_thunder() -> bool:
 		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
-		GameStyle.GOLD_EDGE, 0.3)
+		GameStyle.GOLD_FX_EDGE, 0.3)
 	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
 	var bolt_parent: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
 	if bolt_parent != null:
 		var bolt := LightningBolt.acquire(bolt_parent)
 		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
 		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
+		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_FX_EDGE, 1.35)
 	if skill_vfx != null:
 		skill_vfx.on_thunder_cast()
 	play_squash(Vector2(1.08, 0.92), 0.12)
@@ -1437,7 +1437,7 @@ func play_victory_sequence() -> void:
 
 	# 3. 得道飞升姿态：修仙真身微浮升空 + 金玉双环绽放
 	play_squash(Vector2(0.85, 1.22), 0.55)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD, 0.65)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD_FX, 0.65)
 	JuiceEffect.spawn_heal_rise(get_parent(), global_position)
 
 	var target_node: Node2D = anim_sprite

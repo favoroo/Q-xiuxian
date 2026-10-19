@@ -213,6 +213,12 @@ func _ready() -> void:
 	# 两排滚动条统一长相：引擎默认那根浅灰与这块深蓝面板不搭（货架摆不平那一档会露出来）
 	GameStyle.scrollable(offers_scroll)
 	GameStyle.scrollable(owned_scroll)
+	# 标题带底色在 .tscn 里烘焙成默认品红，不走 GameStyle 工厂 ⇒ 按当前主题重涂并登记
+	var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TopBar/TitleBand
+	var tb_sb := title_band.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	tb_sb.bg_color = GameStyle.GOLD
+	title_band.add_theme_stylebox_override("panel", tb_sb)
+	GameStyle.register_theme_box(tb_sb, &"bg_color", &"main")
 	GameManager.shop_opened.connect(_on_shop_opened)
 	reroll_btn.pressed.connect(_on_reroll)
 	confirm_btn.pressed.connect(_on_confirm)

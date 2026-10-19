@@ -1,7 +1,14 @@
 [gd_scene load_steps=13 format=3 uid="uid://chud001"]
 
 [ext_resource type="Script" path="res://scripts/ui/GameHUD.gd" id="1_hud"]
-[ext_resource type="Texture2D" uid="uid://cg7c26b45tpha" path="res://assets/art/icon_hp.png" id="2_icon_hp"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_badge"]
+content_margin_left = 5.0
+content_margin_top = 1.0
+content_margin_right = 5.0
+content_margin_bottom = 2.0
+bg_color = Color(0, 0, 0, 1)
+skew = Vector2(0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_exp_bg"]
 bg_color = Color(0, 0, 0, 0.92)
@@ -126,9 +133,9 @@ script = ExtResource("1_hud")
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 16.0
+offset_left = 10.0
 offset_top = 20.0
-offset_right = -16.0
+offset_right = -10.0
 offset_bottom = 62.0
 grow_horizontal = 2
 mouse_filter = 2
@@ -149,15 +156,20 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="HPIcon" type="TextureRect" parent="TopContainer/LeftBox/HPBlock/HBox"]
-texture_filter = 2
-custom_minimum_size = Vector2(18, 18)
+[node name="HPIcon" type="PanelContainer" parent="TopContainer/LeftBox/HPBlock/HBox"]
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-texture = ExtResource("2_icon_hp")
-expand_mode = 1
-stretch_mode = 5
+theme_override_styles/panel = SubResource("StyleBoxFlat_hp_badge")
+
+[node name="BadgeLabel" type="Label" parent="TopContainer/LeftBox/HPBlock/HBox/HPIcon"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.949, 0.937, 0.894, 1)
+theme_override_font_sizes/font_size = 11
+text = "HP"
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="HPBar" type="ProgressBar" parent="TopContainer/LeftBox/HPBlock/HBox"]
 custom_minimum_size = Vector2(136, 14)

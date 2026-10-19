@@ -16,6 +16,9 @@ var _reset_tip_lbl: Label
 var _changelog_dialog: ChangelogDialog = null
 var _check_update_btn: Button
 var _update_tip_lbl: Label
+# 主题色块：id -> PanelContainer（选中框按当前主题刷新）
+var _theme_slots: Dictionary = {}
+var _theme_name_lbl: Label = null
 
 func _get_title_text() -> String:
 	return "游 戏 设 置"
@@ -76,6 +79,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	switch_tab(0)
 	SettingsManager.audio_volume_changed.connect(_on_audio_volume_changed)
 	SettingsManager.setting_changed.connect(_on_setting_changed)
+	SettingsManager.theme_color_changed.connect(_on_theme_color_changed)
 
 	UpdateManager.update_available.connect(func(_info: Dictionary):
 		_on_update_check_done("发现新版本，已弹出更新视窗", GameStyle.GOOD)
@@ -241,6 +245,9 @@ func _build_display_page() -> Control:
 	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
+	# 界面主题：五套配色色块直选（即点即换）。排最上 —— 换色是全局观感，翻到这一页第一眼就该看到
+	_add_theme_swatch_row(vbox)
+
 	_add_toggle_row(vbox, "damage_numbers", "伤害跳字", "命中与暴击时显示伤害数字，闪避时显示回避标识")
 	# 震屏不给「开/关」两态：他想要的是"偶尔来一下"，所以按幅度分四档，人话命名、不暴露系数
 	_add_cycle_row(
@@ -307,6 +314,72 @@ func _add_row_shell(parent: VBoxContainer, title: String, desc: String) -> HBoxC
 	title_vbox.add_child(d_lbl)
 
 	return hbox
+
+## 主题色块行：五套预设色块直选，选中态粗黑框 + 硬影（select_snap 位移回弹）。
+## 换色本身是全屏 Brutal Snap 硬切；色块的选中框切换给流畅感。
+func _add_theme_swatch_row(parent: VBoxContainer) -> void:
+	var hbox := _add_row_shell(parent, "界面主题", "主行动、选中与标题带的高亮色；点色块即换，自动保存")
+	_theme_slots.clear()
+
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 8)
+	strip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(strip)
+
+	for preset in GameStyle.THEME_PRESETS:
+		var slot := PanelContainer.new()
+		slot.custom_minimum_size = Vector2(38, 38)
+		slot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		slot.mouse_filter = Control.MOUSE_FILTER_STOP
+		strip.add_child(slot)
+		var id: StringName = preset["id"]
+		_theme_slots[id] = slot
+		GameStyle.tap(slot, func() -> void: _on_theme_slot_tapped(id))
+
+	_theme_name_lbl = Label.new()
+	_theme_name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	GameStyle.label(_theme_name_lbl, 12, GameStyle.PAPER_DIM)
+	hbox.add_child(_theme_name_lbl)
+
+	_update_theme_swatches()
+
+func _update_theme_swatches() -> void:
+	# 以「实际生效主题」为准（GameStyle.current_theme），存档值只负责持久化；
+	# 两者在正常流程恒等，但以生效值为准可避免任何时刻显示与观感分家。
+	var cur := GameStyle.current_theme()
+	for preset in GameStyle.THEME_PRESETS:
+		var id: StringName = preset["id"]
+		var slot: PanelContainer = _theme_slots.get(id, null)
+		if slot == null:
+			continue
+		var main: Color = preset["main"]
+		var on := id == cur
+		# 选中：3px 纯黑粗框 + 硬影；未选：1px 深灰细框。色块面恒为预设主色（所见即所得）
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = main
+		sb.corner_radius_top_left = 0
+		sb.corner_radius_top_right = 0
+		sb.corner_radius_bottom_left = 0
+		sb.corner_radius_bottom_right = 0
+		sb.border_color = GameStyle.INK
+		var bw := 3 if on else 1
+		sb.border_width_left = bw
+		sb.border_width_top = bw
+		sb.border_width_right = bw
+		sb.border_width_bottom = bw
+		if on:
+			sb.shadow_color = Color(0, 0, 0, 1)
+			sb.shadow_size = 1
+			sb.shadow_offset = Vector2(3, 3)
+		slot.add_theme_stylebox_override("panel", sb)
+	if _theme_name_lbl != null:
+		_theme_name_lbl.text = SettingsManager.theme_color_label()
+
+func _on_theme_slot_tapped(id: StringName) -> void:
+	if id == SettingsManager.theme_color():
+		return
+	SettingsManager.set_theme_color(id)
+	_update_theme_swatches()
 
 func _add_toggle_row(parent: VBoxContainer, key: String, title: String, desc: String) -> void:
 	var hbox := _add_row_shell(parent, title, desc)
@@ -743,6 +816,10 @@ func _on_setting_changed(section: StringName, key: StringName, _val: Variant) ->
 		_update_toggle_btn_ui(String(key))
 		_update_cycle_btn_ui(String(key))
 
+## 主题色变更：刷新本页色块选中框与主题名（本弹窗自身的金签行卡由 GameStyle 注册表自动换色）
+func _on_theme_color_changed(_preset: StringName) -> void:
+	_update_theme_swatches()
+
 func _refresh_all_ui() -> void:
 	# Voice 总线仍在引擎里，但这一页没有它的滑杆（开局台词已撤），故不刷该行
 	for bus in [&"Master", &"BGM", &"SFX"]:
@@ -751,3 +828,4 @@ func _refresh_all_ui() -> void:
 		_update_toggle_btn_ui(k)
 	for k in _cycle_controls.keys():
 		_update_cycle_btn_ui(k)
+	_update_theme_swatches()

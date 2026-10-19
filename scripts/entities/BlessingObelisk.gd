@@ -194,7 +194,7 @@ func _build_charge_readout() -> void:
 
 	if stone_mat != null:
 		## 灌灵色仍从 GameStyle 取，不在着色器里留一份第二真话
-		stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
+		stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_FX_EDGE)
 		## fill_ratio/amount 先落成确定值：直接触发（判据不走充能）时 tween 读到 Nil 会报类型错
 		stone_mat.set_shader_parameter("fill_ratio", 0.0)
 		stone_mat.set_shader_parameter("amount", 0.0)
@@ -227,8 +227,8 @@ func _set_readout_ratio(ratio: float) -> void:
 		_readout_arc.ratio = _readout_ratio
 		## 转黄只留给最后一档：线性拉色的话充到六成半就已经是土黄，看着像"卡住了"
 		var warm: float = smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)
-		_readout_arc.progress_color = GameStyle.GOLD.lerp(GameStyle.JADE, warm)
-		_readout_arc.head_color = GameStyle.GOLD_EDGE.lerp(GameStyle.JADE_EDGE, warm)
+		_readout_arc.progress_color = GameStyle.GOLD_FX.lerp(GameStyle.JADE, warm)
+		_readout_arc.head_color = GameStyle.GOLD_FX_EDGE.lerp(GameStyle.JADE_EDGE, warm)
 		_readout_arc.queue_redraw()
 	if _readout_label != null:
 		var pct: int = int(roundf(_readout_ratio * 100.0))

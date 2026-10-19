@@ -48,6 +48,11 @@ func _ready() -> void:
 		if sec == &"display" and key in [_xy_key(), _scale_key()]:
 			_apply_layout()
 	)
+	# 主题色变更：圆形键的描边/按压面是手搓 StyleBox，重跑一遍样式工厂拿新色
+	SettingsManager.theme_color_changed.connect(func(_p: StringName) -> void:
+		if _btn != null:
+			SkillButtonView.style_circle_button(_btn)
+	)
 
 ## 本键绑定的槽位 → 设置项/技能 id 的取数口径（主键与额外键各认各的，不串账）
 func _xy_key() -> StringName:

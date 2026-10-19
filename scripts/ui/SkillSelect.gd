@@ -123,6 +123,8 @@ func _create_card(s_id: String) -> Control:
 
 	var base_border: Color = GameStyle.JADE if enhanced else GameStyle.GOLD.darkened(0.3)
 	var style = GameStyle.card(base_border, 3.0, Vector2(5, 5))
+	if not enhanced:
+		GameStyle.register_theme_derived_box(style, &"border_color", &"main", &"darken", 0.3)
 	style.content_margin_left = CARD_PAD_X
 	style.content_margin_top = 12.0
 	style.content_margin_right = CARD_PAD_X

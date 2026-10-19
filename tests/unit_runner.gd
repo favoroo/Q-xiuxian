@@ -80,6 +80,8 @@ func _ready() -> void:
 	consistency._test_skill_desc_apply()
 	consistency._test_synergy_effects_text()
 	consistency._test_ui_chip_contrast()
+	consistency._test_theme_presets()
+	consistency._test_theme_swap_runtime()
 	spiritbeast._test_spirit_beast_scaling()
 	spiritbeast._test_spirit_beast_constants()
 	spiritpet._test_fengdiao_vortex_formulas()

@@ -80,25 +80,28 @@ const SPARK_SIZE_MAX := 2.2
 ## 火花向白插值的比例：火星偏白，与 tint 主色拉开层次
 const SPARK_WHITENESS := 0.45
 
-## 流星配色（重复项 = 权重）：纸白为主调，天蓝/点缀黄次之，朱砂/幽紫点染
-const PALETTE: Array[Color] = [
-	GameStyle.CHALK,
-	GameStyle.CHALK,
-	GameStyle.CHALK,
-	GameStyle.GOLD,
-	GameStyle.GOLD,
-	GameStyle.JADE,
-	GameStyle.JADE,
-	GameStyle.BAD,
-	GameStyle.SHADOW,
-]
+## 流星配色（重复项 = 权重）：纸白为主调，主题色/点缀黄次之，朱砂/幽紫点染
+## 注意：主题色 GOLD 已改为运行时可变（static var），不能再写进 const 数组 ⇒ 改为按需现取。
+func _palette() -> Array[Color]:
+	return [
+		GameStyle.CHALK,
+		GameStyle.CHALK,
+		GameStyle.CHALK,
+		GameStyle.GOLD,
+		GameStyle.GOLD,
+		GameStyle.JADE,
+		GameStyle.JADE,
+		GameStyle.BAD,
+		GameStyle.SHADOW,
+	]
 
-## 星点配色：只取冷调（纸白/天蓝亮边），暖色星点远看像噪点
-const STAR_PALETTE: Array[Color] = [
-	GameStyle.CHALK,
-	GameStyle.CHALK,
-	GameStyle.GOLD_EDGE,
-]
+## 星点配色：只取冷调（纸白/主题亮边），暖色星点远看像噪点
+func _star_palette() -> Array[Color]:
+	return [
+		GameStyle.CHALK,
+		GameStyle.CHALK,
+		GameStyle.GOLD_EDGE,
+	]
 
 
 var _meteors: Array[Dictionary] = []
@@ -142,7 +145,7 @@ func _seed_stars() -> void:
 			"base_a": GameManager.rng.randf_range(0.10, 0.30),
 			"tw_speed": GameManager.rng.randf_range(0.5, 1.6),
 			"phase": GameManager.rng.randf_range(0.0, TAU),
-			"tint": STAR_PALETTE[GameManager.rng.randi_range(0, STAR_PALETTE.size() - 1)],
+			"tint": _star_palette()[GameManager.rng.randi_range(0, _star_palette().size() - 1)],
 		})
 
 func _respawn(m: Dictionary) -> void:
@@ -153,7 +156,7 @@ func _respawn(m: Dictionary) -> void:
 	m["vy"] = sin(ang) * speed
 	m["scale"] = GameManager.rng.randf_range(SCALE_MIN, SCALE_MAX)
 	m["alpha"] = GameManager.rng.randf_range(ALPHA_MIN, ALPHA_MAX)
-	m["tint"] = PALETTE[GameManager.rng.randi_range(0, PALETTE.size() - 1)]
+	m["tint"] = _palette()[GameManager.rng.randi_range(0, _palette().size() - 1)]
 	# 七成自顶边落入、三成自左边划入，覆盖左上半区
 	if GameManager.rng.randf() < 0.7:
 		m["x"] = GameManager.rng.randf_range(-vp.x * 0.1, vp.x * 0.9)

@@ -223,7 +223,7 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 		return
 
 	_target_aura_type = skill_id
-	var g_gold := GameStyle.GOLD_EDGE
+	var g_gold := GameStyle.GOLD_FX_EDGE
 	var g_jade := GameStyle.JADE_EDGE
 	var g_good := GameStyle.GOOD
 	var g_aurum := GameStyle.AURUM_EDGE  # 暖金（与金光护体椭球护罩同源）

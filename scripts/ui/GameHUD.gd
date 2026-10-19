@@ -5,7 +5,7 @@ extends Control
 signal pause_requested
 signal stats_requested
 
-@onready var hp_icon: TextureRect = $TopContainer/LeftBox/HPBlock/HBox/HPIcon
+@onready var hp_icon: Control = $TopContainer/LeftBox/HPBlock/HBox/HPIcon
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
 @onready var hp_ghost_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar/HPGhostBar
 @onready var hp_label: Label = $TopContainer/LeftBox/HPBlock/HBox/HPLabel
@@ -19,8 +19,8 @@ signal stats_requested
 @onready var banner: PanelContainer = $Banner
 @onready var banner_label: Label = $Banner/BannerLabel
 
-## 顶栏原本留的左右边距与顶边距（安全区让位是在它们之上再加，不是替换）
-const BASE_EDGE_X := 16.0
+## 顶栏原本留的左右边距与顶边距（无刘海时的紧凑基准）
+const BASE_EDGE_X := 10.0
 const BASE_TOP := 20.0
 ## 让位上限：读数再大也不许被一个离谱的 safe area 推到屏心
 const SAFE_CAP := 140.0
@@ -109,7 +109,16 @@ func _ready() -> void:
 	# 蓝白黄斜切色块（场景里未定样的两块在这里补）
 	banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(5, 6)))
 	$TopContainer/CenterBox/TimeBlock.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.INK, GameStyle.SLANT_BLOCK, Vector2(4, 5)))
+	# 场景里 .tscn 烘焙的主题粉（血条块/等级徽记底/波次字色）不经 GameStyle 工厂，
+	# 注册表够不到 ⇒ 这里补一次重涂 + 订阅主题变更，换色后同拍跟上。
+	_retheme_baked_styles()
+	SettingsManager.theme_color_changed.connect(_on_theme_color_changed)
 
+	var badge_lbl: Label = hp_icon.get_node_or_null("BadgeLabel") if hp_icon != null else null
+	if badge_lbl != null:
+		GameStyle.label(badge_lbl, 11, GameStyle.CHALK, 0, GameStyle.INK, true)
+	elif hp_icon is Label:
+		GameStyle.label(hp_icon, 13, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	GameStyle.label(hp_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(level_label, 14, GameStyle.INK_TEXT)
 	GameStyle.label(time_label, 24, GameStyle.CHALK, 0, GameStyle.INK, true)
@@ -138,14 +147,44 @@ func _ready() -> void:
 	_synergy_box.add_theme_constant_override("separation", 6)
 	_synergy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_synergy_box.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_synergy_box.offset_left = BASE_EDGE_X
+	_synergy_box.offset_left = _left_edge_x()
 	_synergy_box.offset_top = 66.0
-	_synergy_box.offset_right = -BASE_EDGE_X
+	_synergy_box.offset_right = -BASE_EDGE_X - _safe_insets[2]
 	_synergy_box.offset_bottom = 88.0
 	add_child(_synergy_box)
 	_build_pending_chip()
 	_build_level_flash()
 	_build_hp_bar_decorations()
+
+## .tscn 烘焙主题色重涂：HP 块面/底边、等级徽记面/底边、波次字色。
+## 这几个节点在场景里写死了品红（Color(1,0,0.431) 系），运行时改外观只能就地改属性。
+func _retheme_baked_styles() -> void:
+	var hp_block: PanelContainer = $TopContainer/LeftBox/HPBlock
+	if _hp_block_style == null:
+		_hp_block_style = hp_block.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		hp_block.add_theme_stylebox_override("panel", _hp_block_style)
+		GameStyle.register_theme_box(_hp_block_style, &"bg_color", &"main")
+		GameStyle.register_theme_box(_hp_block_style, &"border_color", &"dk")
+	_hp_block_style.bg_color = GameStyle.GOLD
+	_hp_block_style.border_color = GameStyle.GOLD_DK
+	_hp_block_base_border = GameStyle.GOLD_DK
+	var badge: PanelContainer = $TopContainer/LeftBox/LevelBadge
+	if _lv_badge_style == null:
+		_lv_badge_style = badge.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		badge.add_theme_stylebox_override("panel", _lv_badge_style)
+		GameStyle.register_theme_box(_lv_badge_style, &"bg_color", &"main")
+		GameStyle.register_theme_box(_lv_badge_style, &"border_color", &"dk")
+	_lv_badge_style.border_color = GameStyle.GOLD_DK
+	_lv_badge_base_bg = GameStyle.GOLD
+	_lv_badge_base_border = GameStyle.GOLD_DK
+	wave_label.add_theme_color_override("font_color", GameStyle.GOLD)
+	# 波次字色是直接 override 的，注册一个字色条目让它跟主题一起变
+	GameStyle.register_theme_label(wave_label)
+
+## 主题色变更：重涂场景烘焙样式 + 重建横幅色块（工厂样式由注册表自动换色）
+func _on_theme_color_changed(_preset: StringName) -> void:
+	_retheme_baked_styles()
+	banner.add_theme_stylebox_override("panel", GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BAND, Vector2(5, 6)))
 
 ## 血条斜切装饰与刻度线：
 ## 1. 28% 告急刻线（与 BalanceCombat.HP_LOW_RATIO 同源）：5° 斜切雕刻刻度，直观预知进入危险阈值
@@ -200,6 +239,9 @@ func _build_level_flash() -> void:
 
 # ---------------- 安全区让位（刘海 / 圆角 / 系统手势条） ----------------
 
+func _left_edge_x() -> float:
+	return (_safe_insets[0] + 4.0) if _safe_insets[0] > 0.0 else BASE_EDGE_X
+
 ## 顶栏整条往安全区里让：刘海会把最左那颗生命块与最右那颗暂停键吃掉一半 ——
 ## 桌面预览里永远是整屏，只有真机看得见，所以这条算术做成纯函数交给判据喂假刘海。
 func _apply_safe_area() -> void:
@@ -209,9 +251,12 @@ func _apply_safe_area() -> void:
 	var scale: float = win.size.x / vp.size.x if vp.size.x > 0.0 else 1.0
 	_safe_insets = safe_insets(safe, win, scale)
 	var top := $TopContainer
-	top.offset_left = BASE_EDGE_X + _safe_insets[0]
+	top.offset_left = _left_edge_x()
 	top.offset_top = BASE_TOP + _safe_insets[1]
 	top.offset_right = -BASE_EDGE_X - _safe_insets[2]
+	if _synergy_box != null:
+		_synergy_box.offset_left = _left_edge_x()
+		_synergy_box.offset_right = -BASE_EDGE_X - _safe_insets[2]
 
 ## 纯算术：安全区与窗口都取**屏幕像素**、scale = 像素/设计单位。
 ## 返回 [左, 上, 右] 三个让位量（设计单位，已夹到 0..SAFE_CAP）。
@@ -455,6 +500,11 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	if low != _last_hp_low:
 		_last_hp_low = low
 		hp_label.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.INK_TEXT)
+		var badge_lbl: Label = hp_icon.get_node_or_null("BadgeLabel") if hp_icon != null else null
+		if badge_lbl != null:
+			badge_lbl.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.CHALK)
+		elif hp_icon is Label:
+			hp_icon.add_theme_color_override("font_color", GameStyle.BAD if low else GameStyle.INK_TEXT)
 		if _hp_notch != null:
 			_hp_notch.queue_redraw()
 		if _hp_block_style == null:

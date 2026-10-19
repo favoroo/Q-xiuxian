@@ -888,6 +888,7 @@ func _make_build_card(guide: Dictionary) -> Control:
 	sb.content_margin_bottom = 8.0
 	sb.border_width_bottom = 4
 	sb.border_color = GameStyle.GOLD
+	GameStyle.register_theme_box(sb, &"border_color", &"main")
 	card.add_theme_stylebox_override("panel", sb)
 
 	var vbox := VBoxContainer.new()

@@ -15,6 +15,7 @@ const GRID_COLOR := Color(0.12, 0.16, 0.24, 0.5)
 
 var target_type: String = "cultivator"
 var target_id: String = "jianchi"
+var theme_id: String = ""
 var view_scale: float = 3.5
 var out_path: String = "tests/inspect/preview.png"
 var show_grid: bool = false
@@ -26,6 +27,12 @@ var _vfx_nodes: Array[Node2D] = []
 
 func _ready() -> void:
 	_parse_arguments()
+	# 主题色验收：--theme <id> 在构建任何 UI 之前套用（注册表此时为空，纯赋颜色）。
+	# 同时写进 SettingsManager 内存值，让设置页色块行的「当前选中/主题名」与观感一致
+	# （不落盘：auto_save=false，避免验收截图污染真实 settings.cfg）。
+	if theme_id != "":
+		GameStyle.apply_theme_color(StringName(theme_id))
+		SettingsManager.set_val(&"ui", &"theme_color", StringName(theme_id), false)
 	
 	DirAccess.make_dir_recursive_absolute("tests/inspect")
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -80,6 +87,8 @@ func _parse_arguments() -> void:
 			out_path = combined_args[i + 1]
 		elif arg == "--grid":
 			show_grid = true
+		elif arg == "--theme" and i + 1 < combined_args.size():
+			theme_id = combined_args[i + 1]
 		elif arg == "--gallery":
 			is_gallery_mode = true
 
@@ -1091,6 +1100,8 @@ func _build_screen_view(sid: String) -> void:
 			_build_screen_records_mock()
 		"start_menu", "start":
 			_build_screen_start_menu_mock()
+		"settings":
+			_build_screen_settings_mock()
 		_:
 			_build_screen_battle_mock()
 
@@ -1105,6 +1116,17 @@ func _build_screen_start_menu_mock() -> void:
 		add_child(inst)
 		if inst.has_method("open"):
 			inst.open()
+
+## 设置弹窗（默认开在「画面」页 —— 主题色块行的验收位）
+func _build_screen_settings_mock() -> void:
+	var script_res := load("res://scripts/ui/SettingsDialog.gd")
+	if script_res:
+		var inst: Control = script_res.new()
+		add_child(inst)
+		if inst.has_method("open"):
+			inst.open()
+		if inst.has_method("switch_tab"):
+			inst.switch_tab(1)
 
 func _build_screen_cultivator_select_mock() -> void:
 	var script_res := load("res://scripts/ui/CultivatorSelect.gd")

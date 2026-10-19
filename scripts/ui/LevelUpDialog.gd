@@ -201,6 +201,11 @@ func _setup_top_bar() -> void:
 	title_band.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	title_band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top_bar.add_child(title_band)
+	# 标题带底色在 .tscn 里烘焙成默认品红，不走 GameStyle 工厂 ⇒ 这里按当前主题重涂并登记
+	var tb_sb := title_band.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	tb_sb.bg_color = GameStyle.GOLD
+	title_band.add_theme_stylebox_override("panel", tb_sb)
+	GameStyle.register_theme_box(tb_sb, &"bg_color", &"main")
 
 	# 2026-10-12 圆形待加点次数徽记：紧贴标题右侧，不挤占操作区与卡片空间，连升多级时直观告知剩余次数
 	_points_badge = PanelContainer.new()

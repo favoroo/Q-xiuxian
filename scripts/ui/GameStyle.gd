@@ -11,6 +11,12 @@ extends RefCounted
 ##    PAPER 二次翻转为纸面墨字 #171410（暗底亮字一律显式走 CHALK）；
 ##    GOLD 三件套改品红 #ff006e 家族；SLANT_* 四档归零（常量保留，调用点不动）；
 ##    FX_HDR_*/ELEMENT_COLORS/RARITY_* 战斗特效色一律不动。
+## 【主题色】2026-10-19 新增「用户自选主题色」：GOLD 三件套由 const 改 static var，
+##    取值来自 THEME_PRESETS（5 套：品红/明黄/暖橙/天青/荧绿），由 SettingsManager 持久化。
+##    切换走 apply_theme_color()：先改三个 static var，再遍历「样式注册表」把已产出的
+##    StyleBoxFlat / Label 字色原地改色（Resource 是共享实例，一处改、整屏重绘），
+##    最后清空按色缓存的字典（旧 key 已失真）。工厂函数产出样式时若颜色命中主题角色
+##    会自动登记，调用点无需逐界面接线；逐帧 _draw 的用法天然每帧读新值。
 ## 【历史】2026-10-10 二次换肤（纯黑主题）：底一律纯黑；PAPER 翻回纸白亮字。
 ## 【历史】2026-10-14 主蓝换色：GOLD 三件套取 Material Light Blue 家族（现已被品红取代）。
 
@@ -27,9 +33,50 @@ const INK_TEXT := Color("000000")   # 亮面/彩色面上的黑字
 const CHALK := Color("f2efe4")      # 暗底亮字（舞台/HUD/深色块上的文字一律显式用它）
 
 # —— 角色色（色即功能）——
-const GOLD := Color("ff006e")       # 品红 = 主行动/选中/标题带（新野兽派第一强调色；做底配黑字）
-const GOLD_EDGE := Color("ff69ac")  # 品红亮边（hover/高光）
-const GOLD_DK := Color("b0004e")    # 品红压暗（按压态/深底）
+# 主题三件套（main / edge / dk）：主行动、选中、标题带。2026-10-19 起由 const 改 static var，
+# 值来自 THEME_PRESETS，玩家可在设置页切换（名字沿用历史 GOLD，82 个调用点零改动）。
+# 注意：这三项不再能进 const 数组/常量表达式；引用它们的地方一律用 static var 或运行时取。
+static var GOLD := Color("ff006e")       # 主题主色（默认品红；做底配黑字）
+static var GOLD_EDGE := Color("ff69ac")  # 主题亮边（hover/高光）
+static var GOLD_DK := Color("b0004e")    # 主题压暗（按压态/深底）
+
+## 战斗/世界空间特效的「固定品红基准」（不随 UI 主题色漂移）。
+## 用户口径：主题色只换 UI 层，战斗特效不动。玩家自选主题色后，暴击跳字、技能光效、
+## 敌人爆炸环、聚灵阵读环等世界空间视觉仍用这一套固定色，避免「选天青后敌人爆炸变青」。
+const GOLD_FX := Color("ff006e")
+const GOLD_FX_EDGE := Color("ff69ac")
+const GOLD_FX_DK := Color("b0004e")
+
+## 可自选主题色预设表（唯一真话源）。每套手调 edge/dk，不跑 lightened() 公式，
+## 保证与默认品红三件套同品质；id 写进 settings.cfg，改名会断存档。
+const THEME_PRESETS: Array[Dictionary] = [
+	{"id": &"pink", "name": "品红", "main": Color("ff006e"), "edge": Color("ff69ac"), "dk": Color("b0004e")},
+	{"id": &"amber", "name": "明黄", "main": Color("ffd500"), "edge": Color("ffe45c"), "dk": Color("b39400")},
+	{"id": &"orange", "name": "暖橙", "main": Color("ff6b35"), "edge": Color("ff9a72"), "dk": Color("b3471c")},
+	{"id": &"cyan", "name": "天青", "main": Color("27ddf5"), "edge": Color("7aebfa"), "dk": Color("179cad")},
+	{"id": &"lime", "name": "荧绿", "main": Color("c5e803"), "edge": Color("dbf45c"), "dk": Color("8ba300")},
+]
+## 当前主题 id（SettingsManager 启动时按存档位调用 apply_theme_color 覆盖）
+static var _theme_id: StringName = &"pink"
+
+## 主题 id 列表 / 预设查询 / 人话名
+static func theme_ids() -> Array:
+	var out: Array = []
+	for p in THEME_PRESETS:
+		out.append(p["id"])
+	return out
+
+static func theme_preset(id: StringName) -> Dictionary:
+	for p in THEME_PRESETS:
+		if p["id"] == id:
+			return p
+	return THEME_PRESETS[0]
+
+static func theme_name(id: StringName) -> String:
+	return String(theme_preset(id).get("name", "品红"))
+
+static func current_theme() -> StringName:
+	return _theme_id
 const JADE := Color("ffd23f")       # 点缀黄 = 金币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
 const JADE_EDGE := Color("ffe9a8")
 const JADE_DK := Color("8f6a14")
@@ -356,8 +403,18 @@ static func chip_label(text: String, face: Color, text_color: Color = Color(-1, 
 	lbl.custom_minimum_size = Vector2(chip_pin_w(lbl.text, body_font(), font_size), 0)
 	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	lbl.add_theme_stylebox_override("normal", chip(face))
-	var final_fg: Color = on_face_text(face) if text_color.r < 0.0 else text_color
+	var auto_fg: bool = text_color.r < 0.0
+	var final_fg: Color = on_face_text(face) if auto_fg else text_color
 	label(lbl, font_size, final_fg)
+	# 主题色面 + 自动适配字色：换主题后面色明暗翻转（品红暗面配白字、四套新色亮面配黑字），
+	# 字色必须跟着重算 —— 登记 &"auto"，apply 时按新面色跑 on_face_text。
+	if auto_fg and _theme_role(face) != &"":
+		_track_append({
+			"ref": weakref(lbl),
+			"kind": &"auto",
+			"field": &"font_color",
+			"role": &"main",
+		})
 	return lbl
 
 ## 亮面配墨黑字、暗面配纸白字：全项目统一色度判据
@@ -441,6 +498,7 @@ static func panel(bg: Color, skew_deg: float = SLANT_PLATE, shadow_offset: Vecto
 		sb.shadow_color = shadow_col
 		sb.shadow_size = 1
 		sb.shadow_offset = shadow_offset
+	_track_style(sb, bg, &"bg_color")
 	return sb
 
 ## 实底大色块：主色面 + 纯黑等宽粗框 + 硬偏移墨影（新野兽派标准件）
@@ -465,6 +523,7 @@ static func card(accent: Color, skew_deg: float = SLANT_BLOCK, shadow_offset: Ve
 	sb.border_width_right = 2
 	sb.border_width_bottom = 3
 	sb.border_color = accent
+	_track_style(sb, accent, &"border_color")
 	return sb
 
 ## 弹窗大面板：纸白底 + 纯黑 3 框 + 大硬影。
@@ -488,6 +547,7 @@ static func side_card(accent: Color, skew_deg: float = SLANT_PLATE) -> StyleBoxF
 	sb.border_width_right = 1
 	sb.border_width_bottom = 2
 	sb.border_color = accent
+	_track_style(sb, accent, &"border_color")
 	return sb
 
 ## 带外描边的斜切面板（武器槽/卡片描边态）
@@ -498,6 +558,7 @@ static func outlined_panel(bg: Color, border: Color, border_w: int = 2, skew_deg
 	sb.border_width_right = border_w
 	sb.border_width_bottom = border_w
 	sb.border_color = border
+	_track_style(sb, border, &"border_color")
 	return sb
 
 ## 凹陷槽：经验槽轨道/滑杆/未选中（全局单例共享）。
@@ -718,6 +779,7 @@ static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
 	l.add_theme_font_override("font", display_font() if display else body_font())
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
+	_track_label(l, color)
 	if outline > 0:
 		l.add_theme_constant_override("outline_size", outline)
 		l.add_theme_color_override("font_outline_color", outline_col)
@@ -747,15 +809,205 @@ static var _chip_cache: Dictionary = {}
 static var _compact_chip_cache: Dictionary = {}
 static var _btn_block_cache: Dictionary = {}
 
+# —— 主题色样式注册表 ——
+# 工厂产出的样式若引用了主题三件套（GOLD/GOLD_EDGE/GOLD_DK），登记一条
+# {ref: WeakRef, kind: &"box"/&"label"/&"modulate", field: StringName, role: &"main"/&"edge"/&"dk"}。
+# 切换主题时遍历登记表，把存活的实例原地改色：StyleBoxFlat 是 Resource、控件与工厂共享同一实例，
+# 改属性即整屏重绘，无需逐界面重跑构建。WeakRef 保证出树控件被回收后自净（apply 时顺手剪枝），
+# 否则 static 表强引用 RefCounted 会在退出时报 resources still in use。
+static var _theme_registry: Array[Dictionary] = []
+## 去重表：obj_instance_id:field → true。刷新路径会反复对同一缓存 StyleBox 调工厂，
+## 不去重会无限往注册表里追加同一条（内存只增不减）。
+static var _theme_seen: Dictionary = {}
+
+## 追加一条登记；同一对象同一属性只记一次
+static func _track_append(entry: Dictionary) -> void:
+	var obj: Variant = (entry["ref"] as WeakRef).get_ref()
+	if obj == null:
+		return
+	var key := "%d:%s" % [(obj as Object).get_instance_id(), String(entry["field"])]
+	if _theme_seen.has(key):
+		return
+	_theme_seen[key] = true
+	_theme_registry.append(entry)
+
+## 颜色 → 主题角色；不是主题三件套之一返回空串
+static func _theme_role(c: Color) -> StringName:
+	if c == GOLD:
+		return &"main"
+	if c == GOLD_EDGE:
+		return &"edge"
+	if c == GOLD_DK:
+		return &"dk"
+	return &""
+
+static func _role_color(role: StringName) -> Color:
+	match role:
+		&"edge":
+			return GOLD_EDGE
+		&"dk":
+			return GOLD_DK
+		_:
+			return GOLD
+
+static func _track_style(sb: StyleBoxFlat, touched: Color, field: StringName) -> void:
+	var role := _theme_role(touched)
+	if role == &"":
+		return
+	_track_append({
+		"ref": weakref(sb),
+		"kind": &"box",
+		"field": field,
+		"role": role,
+	})
+
+## 派生色登记：面/边由主题色经过 darkened/lightened/alpha 变换而来（如按钮 pressed 面
+## = hover_bg.darkened(0.15)）。回放时按同样变换重算，换主题后按压态也跟着走。
+static func _track_derived(sb: StyleBoxFlat, field: StringName, base: Color,
+		op: StringName, amount: float) -> void:
+	var role := _theme_role(base)
+	if role == &"":
+		return
+	_track_append({
+		"ref": weakref(sb),
+		"kind": &"box_derived",
+		"field": field,
+		"role": role,
+		"op": op,
+		"amount": amount,
+	})
+
+static func _apply_derived(base: Color, op: StringName, amount: float) -> Color:
+	match op:
+		&"darken":
+			return base.darkened(amount)
+		&"lighten":
+			return base.lightened(amount)
+		&"alpha":
+			var c := base
+			c.a = amount
+			return c
+		_:
+			return base
+
+## 登记外部已有的 StyleBoxFlat（如从 .tscn 烘焙样式 duplicate 来的），主题切换时回放改色。
+## 供「颜色在场景文件里写死、不经工厂」的节点补挂——工厂出口会自动登记，这里只是补漏。
+static func register_theme_box(sb: StyleBoxFlat, field: StringName = &"bg_color",
+		role: StringName = &"main") -> void:
+	if sb == null:
+		return
+	_track_append({
+		"ref": weakref(sb),
+		"kind": &"box",
+		"field": field,
+		"role": role,
+	})
+
+## 文字色登记：label() 里字体色正好是主题色时登记，主题切换时重写 font_color
+static func _track_label(l: Label, color: Color) -> void:
+	var role := _theme_role(color)
+	if role == &"":
+		return
+	_track_append({
+		"ref": weakref(l),
+		"kind": &"label",
+		"field": &"font_color",
+		"role": role,
+	})
+
+## 外部已有 Label 的字体色补登记（节点已自行 override 成主题色的场景用）
+static func register_theme_label(l: Label, role: StringName = &"main") -> void:
+	if l == null:
+		return
+	_track_append({
+		"ref": weakref(l),
+		"kind": &"label",
+		"field": &"font_color",
+		"role": role,
+	})
+
+## 外部派生样式的补登记（颜色是主题色经 darkened/lightened/alpha 变换来的，工厂认不出原色）。
+## 例：未选中卡描边 = GOLD.darkened(0.35)、上阵格底色 = GOLD 淡化 14%。
+## op 取 &"darken"/&"lighten"/&"alpha"；role 指派生所依据的主题档位。
+static func register_theme_derived_box(sb: StyleBoxFlat, field: StringName,
+		role: StringName, op: StringName, amount: float) -> void:
+	if sb == null:
+		return
+	_track_append({
+		"ref": weakref(sb),
+		"kind": &"box_derived",
+		"field": field,
+		"role": role,
+		"op": op,
+		"amount": amount,
+	})
+
+## 属性（modulate 等）登记：滚动条按 GOLD 调 modulate，主题切换时重算
+static func _track_modulate(node: CanvasItem) -> void:
+	_track_append({
+		"ref": weakref(node),
+		"kind": &"modulate",
+		"field": &"modulate",
+		"role": &"main",
+	})
+
+## 切换主题色：改 static var → 回放注册表原地改色 → 清按色缓存（旧 key 已失真）。
+## SettingsManager 在启动加载与玩家点选色块时调用；幂等。
+static func apply_theme_color(id: StringName) -> void:
+	var preset := theme_preset(id)
+	_theme_id = StringName(preset.get("id", &"pink"))
+	GOLD = preset.get("main", Color("ff006e"))
+	GOLD_EDGE = preset.get("edge", Color("ff69ac"))
+	GOLD_DK = preset.get("dk", Color("b0004e"))
+
+	var alive: Array[Dictionary] = []
+	for entry in _theme_registry:
+		var obj: Variant = (entry["ref"] as WeakRef).get_ref()
+		if obj == null:
+			continue   # 控件已释放：剪枝
+		alive.append(entry)
+		var col := _role_color(entry["role"])
+		match entry["kind"]:
+			&"box":
+				(obj as StyleBoxFlat).set(entry["field"], col)
+			&"label":
+				(obj as Label).add_theme_color_override(entry["field"], col)
+			&"auto":
+				# 主题色面上的自适应字色：按新面色重新判明暗
+				(obj as Label).add_theme_color_override(entry["field"], on_face_text(col))
+			&"box_derived":
+				(obj as StyleBoxFlat).set(entry["field"], _apply_derived(col, entry["op"], entry["amount"]))
+			&"modulate":
+				var c := col
+				c.a = 0.85
+				(obj as CanvasItem).modulate = c
+	_theme_registry = alive
+	# 去重表按存活条目重建（死引用同步清掉，避免 instance_id 复用导致新对象被误判为已登记）
+	_theme_seen.clear()
+	for entry in _theme_registry:
+		var o: Variant = (entry["ref"] as WeakRef).get_ref()
+		if o != null:
+			_theme_seen["%d:%s" % [(o as Object).get_instance_id(), String(entry["field"])]] = true
+
+	# 按色缓存的 key 里烤的是旧色值，必须清空（否则新建按钮会命中旧色缓存）
+	_chip_cache.clear()
+	_compact_chip_cache.clear()
+	_btn_block_cache.clear()
+	_slot_cache = null
+
 static func empty_focus() -> StyleBoxEmpty:
 	if _empty_focus_style == null:
 		_empty_focus_style = StyleBoxEmpty.new()
 	return _empty_focus_style
 
 static func _btn_block(bg: Color, skew_deg: float, shadow_offset: Vector2) -> StyleBoxFlat:
+	# 缓存命中仍要补登记：首次按钮用的缓存可能是「非主题色」建出来的，
+	# 而主题切换会清空缓存；不清时返回的旧实例也需要登记才能跟随换色。
 	var k := [bg.to_rgba32(), skew_deg, shadow_offset]
 	if _btn_block_cache.has(k):
-		return _btn_block_cache[k]
+		var cached: StyleBoxFlat = _btn_block_cache[k]
+		_track_style(cached, bg, &"bg_color")
+		return cached
 	var sb := block(bg, skew_deg, shadow_offset)
 	_btn_block_cache[k] = sb
 	return sb
@@ -790,6 +1042,8 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("hover", hover)
 	var pressed := _btn_block(hover_bg.darkened(0.15), skew_deg, Vector2.ZERO)
+	# pressed 面是 hover_bg 压暗派生：hover_bg 若为主题色，pressed 也必须跟着换肤
+	_track_derived(pressed, &"bg_color", hover_bg, &"darken", 0.15)
 	# 物理压扁：pressed 阴影归零，内容右下挪 —— 位移量 = 原阴影偏移量
 	pressed.content_margin_left = 3.0
 	pressed.content_margin_top = 4.0
@@ -1008,3 +1262,5 @@ static func _scroll_bar(bar: ScrollBar) -> void:
 	if bar == null:
 		return
 	bar.modulate = Color(GOLD.r, GOLD.g, GOLD.b, 0.85)
+	# ScrollBar 不吃 stylebox（4.7 实测），只能靠 modulate 上色 —— 主题切换时按新 GOLD 重算
+	_track_modulate(bar)

@@ -37,6 +37,8 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 		border = GameStyle.PAPER
 		bg = bg.lightened(0.12)
 	var sb := GameStyle.outlined_panel(bg, border, 2, 0.0)
+	if pool == "equipped":
+		GameStyle.register_theme_derived_box(sb, &"bg_color", &"main", &"alpha", 0.14)
 	# 图标与星角共用的内缩：PanelContainer 把每个子节点都铺满内容区，内缩只能给在 stylebox 上。
 	# 2026-10-12 用户真机：这一排图标「都看不清」⇒ 格子放大后内缩按比例收，把地方让给图。
 	sb.content_margin_left = 2.0
@@ -124,6 +126,7 @@ static func create_empty_equipped_slot(shop: WaveShop, index: int, tile: float) 
 	var style := GameStyle.slot()
 	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
 	style.border_color = GameStyle.with_alpha(GameStyle.GOLD, 0.45)
+	GameStyle.register_theme_derived_box(style, &"border_color", &"main", &"alpha", 0.45)
 	slot.add_theme_stylebox_override("panel", style)
 	if shop != null:
 		shop.drag_register(slot, {"pool": "equipped", "index": index, "kind": "empty"})

@@ -54,7 +54,7 @@ def get_font(size):
                 continue
     return ImageFont.load_default()
 
-def run_godot_inspector(target, target_id, out_path, is_gallery=False, scale=3.5, grid=True):
+def run_godot_inspector(target, target_id, out_path, is_gallery=False, scale=3.5, grid=True, theme=""):
     godot = find_godot_bin()
     if not godot:
         print("[Error] 未找到可执行的 Godot 引擎路径！请设置 GODOT_BIN 环境变量或安装 Godot 至 /Applications/Godot.app。")
@@ -70,6 +70,8 @@ def run_godot_inspector(target, target_id, out_path, is_gallery=False, scale=3.5
         "--scale", str(scale),
         "--out", out_path
     ]
+    if theme:
+        cmd.extend(["--theme", theme])
     if is_gallery:
         cmd.append("--gallery")
     if grid:
@@ -406,12 +408,17 @@ def main():
 
     elif cmd == "screen":
         arg = sys.argv[2] if len(sys.argv) >= 3 else "all"
-        screens = ["battle", "levelup", "shop", "start_menu", "cultivator_select", "records"]
+        theme = ""
+        if "--theme" in sys.argv:
+            ti = sys.argv.index("--theme")
+            if ti + 1 < len(sys.argv):
+                theme = sys.argv[ti + 1]
+        screens = ["battle", "levelup", "shop", "start_menu", "cultivator_select", "records", "settings"]
         if arg == "all" or arg == "--all":
             for s in screens:
-                run_godot_inspector("screen", s, f"tests/inspect/screen_{s}.png", is_gallery=False)
+                run_godot_inspector("screen", s, f"tests/inspect/screen_{s}{('_'+theme) if theme else ''}.png", is_gallery=False, theme=theme)
         else:
-            run_godot_inspector("screen", arg, f"tests/inspect/screen_{arg}.png", is_gallery=False)
+            run_godot_inspector("screen", arg, f"tests/inspect/screen_{arg}{('_'+theme) if theme else ''}.png", is_gallery=False, theme=theme)
 
     elif cmd == "lint":
         ok = run_asset_lint(verbose=True)
@@ -437,7 +444,7 @@ def main():
         run_godot_inspector("projectile", "all", "tests/inspect/projectile_gallery_all.png", is_gallery=True)
         run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
         for s in ["battle", "levelup", "shop", "start_menu", "cultivator_select", "records"]:
-            run_godot_inspector("screen", s, f"tests/inspect/screen_{s}.png", is_gallery=False)
+            run_godot_inspector("screen", s, f"tests/inspect/screen_{s}{('_'+theme) if theme else ''}.png", is_gallery=False, theme=theme)
         generate_html_report()
         print("★ 全部画廊图、实景界面截图与 HTML 交互看板更新完毕！")
 
