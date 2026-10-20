@@ -136,12 +136,13 @@ static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:
 	else:
 		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)   # 垂直冲击：竖压横拉
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
-const KILL_HITSTOP_SCALE := 0.20         ## 击杀微顿帧时间倍率（清脆微顿，高于安全地板 0.15）
-const KILL_HITSTOP_MIN_INTERVAL := 0.12  ## 击杀顿帧最小间隔（尸潮限流，防连续顿帧锁死节奏）
+const KILL_HITSTOP_SCALE := 0.45         ## 击杀微顿帧时间倍率（0.40 地板之上，保留轻于暴击的层次）
+const KILL_HITSTOP_MIN_INTERVAL := 0.25  ## 击杀顿帧最小间隔（尸潮限流：≤4Hz，防连续顿帧把节奏切碎）
 ## 顿帧时间倍率安全地板：极端近 0 的停顿会让物理步与渲染交换链抢相位，真机 vsync 下
-## 呈送黑帧（整屏含 UI 闪一下的元凶之一）。0.12 → 0.15（2026-10-13 真机闪屏治理），
-## 再深会明显削弱最重两档（HEAVY / 暴击击杀）的顿挫层次。
-const HITSTOP_TIMESCALE_FLOOR := 0.15
+## 呈送黑帧（整屏含 UI 闪一下的元凶之一）。2026-10-20 由 0.15 抬到 0.40：玩家移动不再豁免
+## 顿帧（改为与世界同步变慢），若地板仍近 0，玩家会每帧被拖到近静止再放开 ⇒ 反而「走一顿一顿」。
+## 0.40 让世界只慢到 40%，保留可见顿挫层次而不卡步。
+const HITSTOP_TIMESCALE_FLOOR := 0.40
 ## 顿帧低帧降频闸（2026-10-17 真机 UI 频闪治理）：实测 fps 低于阈值时，暴击/击杀/暴击击杀
 ## 三路顿帧的最小间隔统一乘降频系数——低端机 GPU bound（稳态 ~42fps）下三路各 0.10~0.18s
 ## 的限流叠加起来每 ~0.1s 就把时间轴压到地板一次，冻结-恢复循环在交换链上呈黑帧频闪
@@ -165,8 +166,8 @@ const BOSS_HIT_SPARK_EDGE_OFFSET := 32.0  ## Boss 火花体表偏移（px）
 ## 0.25s ≈ 每秒最多 4 记；实测全雷法六把满星配装：移动帧占比 71%→40%、平均位移 2.77→1.2px。
 const CRIT_CAMERA_MIN_INTERVAL := 0.25   ## 暴击镜头反馈（方向冲击+缩放+创伤）全局限流最小间隔（秒）
 const CRIT_KILL_HITSTOP_DURATION := 0.055 ## 暴击击杀顿帧时长（秒）：比普通击杀微顿帧更「实」
-const CRIT_KILL_HITSTOP_SCALE := 0.12    ## 暴击击杀顿帧时间倍率（扎实顿挫，落地时被安全地板钳到 0.15）
-const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.18 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
+const CRIT_KILL_HITSTOP_SCALE := 0.40    ## 暴击击杀顿帧时间倍率（扎实顿挫，落在安全地板 0.40 上）
+const CRIT_KILL_HITSTOP_MIN_INTERVAL := 0.30 ## 暴击击杀顿帧最小间隔（秒，独立限流防锁死）
 const ZHUMU_MINION_CAP := 30             ## 百目妖产卵的场面硬上限（2026-10-10 随整体减潮由 45 下调）
 
 # —— 命中反馈全局限流（2026-10-11 频闪治理）——

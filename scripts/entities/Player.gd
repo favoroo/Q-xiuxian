@@ -3,11 +3,6 @@ extends CharacterBody2D
 
 const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
 const DASH_LANDING_SPEED_MUL: float = 1.35  ## 冲刺落地那帧的残留速度上限（× 常速）：只留一点前冲，不许拖出隐形滑行
-## 顿帧豁免的时间补偿上限（≈ time_scale 地板 0.15 的倒数）。顿帧把 Engine.time_scale 压到
-## 0.15~0.20 时，物理 tick 仍按真实 60Hz 跑、只是每步 delta 被缩放（2026-10-20 探针实测），
-## 所以玩家位移按 1/time_scale 补真实时间即可做到「世界冻结、玩家照走」的幸存者类手感。
-## 夹上限防极端值；time_scale=1 时恒为 1，无任何影响。
-const HITSTOP_TIME_COMP_CAP: float = 8.0
 const SPIRIT_HEALER_SCENE: PackedScene = preload("res://scenes/entities/SpiritHealer.tscn")  ## 治疗灵兽（renewal 附带召唤）
 ## 玩家基础属性三件套：全项目「玩家没生成时」的兜底读数一律引用这三个常量，
 ## 不许再各写一份字面量（改一个数要同步七处的旧病）。
@@ -895,14 +890,9 @@ func _physics_process(delta: float) -> void:
 
 	var target_speed := base_speed * (GameManager.move_speed_mult + GameManager.synergy_move_speed_mult) * GameManager.buff_move_speed_mult
 	var target_velocity := dir * target_speed
-	# 顿帧豁免系数：hit_stop 期间 Engine.time_scale < 1（物理 tick 仍是真实 60Hz，只是每步 delta 被缩放）。
-	# 位移链按 1/time_scale 补足真实时间，让玩家全程匀速滑行；归一化时恒为 1，零影响。
-	var time_comp := 1.0
-	if Engine.time_scale < 0.999:
-		time_comp = minf(1.0 / maxf(Engine.time_scale, 0.001), HITSTOP_TIME_COMP_CAP)
 	# 冲刺接管移动：不吃加减速插值，匀速直射，途中刀枪不入（无敌在 _do_dash 里已给）
 	if _dash_time > 0.0:
-		_dash_time -= delta * time_comp  # 冲刺计时按真实时间走，顿帧不把突进拉长
+		_dash_time -= delta  # 顿帧时 delta 已被 time_scale 缩放，突进与世界同拍变慢
 		target_velocity = _dash_dir * _dash_speed
 		velocity = target_velocity
 		if _dash_time <= 0.0:
@@ -917,17 +907,10 @@ func _physics_process(delta: float) -> void:
 	var stop_threshold := maxf(30.0, target_speed * 0.35)
 	var is_moving := input_moving or actual_speed_sq > stop_threshold * stop_threshold
 	var accel := 2200.0 if input_moving else 2800.0
-	# 加减速同样按真实时间推进：顿帧时不至于从静止起步变慢（velocity 仍是真实速度语义）
-	velocity = velocity.move_toward(target_velocity, accel * delta * time_comp)
-	if time_comp > 1.0:
-		# move_and_slide 只按缩放后的 delta 位移，顿帧吞掉的那段用 move_and_collide 补齐，
-		# 保证净位移 = velocity × 真实时间（敌人/特效仍按缩放时间冻结）。
-		var _hitstop_move := velocity * delta * (time_comp - 1.0)
-		move_and_slide()
-		if _hitstop_move.length_squared() > 0.0001:
-			move_and_collide(_hitstop_move)
-	else:
-		move_and_slide()
+	# 顿帧期间 delta 已被 time_scale 缩放：玩家与世界同步变慢（经典顿帧），不做任何位移补偿，
+	# 避免单步大步长瞬移，也避免深穿敌人触发其去穿透被弹飞。
+	velocity = velocity.move_toward(target_velocity, accel * delta)
+	move_and_slide()
 
 	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印、金刚神像或苦行僧在场才计时；脚底一动立刻清零
 	if GameManager.has_still_mechanic():

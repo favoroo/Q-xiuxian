@@ -142,7 +142,7 @@ static func hitstop_interval_mult() -> float:
 	return GameBalance.HITSTOP_LOWFPS_INTERVAL_MULT if _lowfps_on else 1.0
 
 static var _last_crit_hitstop_ms: int = 0
-const CRIT_HITSTOP_MIN_INTERVAL := 0.10
+const CRIT_HITSTOP_MIN_INTERVAL := 0.25
 
 ## 暴击命中顿帧（限流版）：普通暴击命中顿帧走独立最小间隔闸，
 ## 防止多穿透/高攻速/连击下每秒十几发暴击连续把时间轴压死。
@@ -151,7 +151,7 @@ static func crit_hit_stop(gm: Node) -> void:
 	if now - _last_crit_hitstop_ms < int(CRIT_HITSTOP_MIN_INTERVAL * hitstop_interval_mult() * 1000.0):
 		return
 	_last_crit_hitstop_ms = now
-	hit_stop(gm, 0.038, 0.16)
+	hit_stop(gm, 0.038, 0.45)
 
 static var _last_kill_hitstop_ms: int = 0
 
@@ -220,14 +220,14 @@ static func feedback(gm: Node, tier: int) -> void:
 			add_trauma(gm, 0.08)
 		gm.FeedbackTier.MEDIUM:
 			add_trauma(gm, 0.18)
-			hit_stop(gm, 0.035, 0.22)
+			hit_stop(gm, 0.035, 0.55)
 		gm.FeedbackTier.LARGE:
 			add_trauma(gm, 0.38)
-			hit_stop(gm, 0.065, 0.16)
+			hit_stop(gm, 0.065, 0.45)
 			zoom_punch(gm, 0.035, 0.15)
 		gm.FeedbackTier.HEAVY:
 			add_trauma(gm, 0.70)
-			hit_stop(gm, 0.09, 0.12)
+			hit_stop(gm, 0.09, 0.40)
 			zoom_punch(gm, 0.06, 0.22)
 
 static func pulse_damage_vignette(gm: Node, color: Color = Color(0.85, 0.12, 0.12, 0.65), duration: float = 0.22) -> void:

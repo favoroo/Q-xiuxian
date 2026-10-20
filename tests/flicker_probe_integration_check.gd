@@ -69,10 +69,30 @@ func _run() -> void:
 			data_rows += 1
 	_check(data_rows >= 1, "运行若干帧后有数据行（证明 _process 在采样，实得 %d 行）" % data_rows)
 
-	# 收尾：关探针 + 清文件，不污染
+	# 4. 跨场景重载不截断（2026-10-20 真机「只留下最后 3 行」的根因）：
+	# 死亡重开/暂停重启都走 reload_current_scene，探针会在新场景里重新 _ready。
+	# 用 FileAccess.WRITE 会把整份日志截断；必须改成 READ_WRITE 追加。
+	var before_lines := content.count("\n")
 	SettingsManager.set_val(&"display", &"flicker_probe", false, false)
 	await get_tree().process_frame
 	main.queue_free()
+	await get_tree().process_frame
+	# 重新起一个 Main（模拟场景重载），再开探针
+	var main2: Node = (load("res://scenes/main/Main.tscn") as PackedScene).instantiate()
+	add_child(main2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	SettingsManager.set_val(&"display", &"flicker_probe", true, false)
+	await get_tree().process_frame
+	var after := FileAccess.get_file_as_string(LOG_PATH) if FileAccess.file_exists(LOG_PATH) else ""
+	_check(after.count("\n") > before_lines,
+		"重载后日志是追加而非截断（前 %d 行 → 后 %d 行）" % [before_lines, after.count("\n")])
+	_check(after.count("frame,t_ms") == 1, "表头只写一次（不因重载重复插入）")
+
+	# 收尾
+	SettingsManager.set_val(&"display", &"flicker_probe", false, false)
+	await get_tree().process_frame
+	main2.queue_free()
 	await get_tree().process_frame
 	if FileAccess.file_exists(LOG_PATH):
 		DirAccess.open("user://").remove("flicker_log.csv")
