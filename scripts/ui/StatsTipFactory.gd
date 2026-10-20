@@ -186,6 +186,14 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	] + factor_rows + [
 		["攻击范围", range_txt, GameStyle.JADE_DK if range_buffed else GameStyle.PAPER],
 	]
+	# 落雷/区域类：卡面「攻击范围」只是锁敌落点圈，真正炸多大看 burst_radius（2026-10-20 射程体系重做）。
+	if int(def.get("behavior", -1)) == WeaponData.Behavior.BURST:
+		var base_br: float = float(def.get("burst_radius", 0.0))
+		var eff_br: float = base_br * GameManager.attack_range_mult * GameManager.synergy_range_mult
+		var br_txt: String = "%.0f" % eff_br
+		if not is_equal_approx(eff_br, base_br):
+			br_txt = "%.0f（基础 %.0f）" % [eff_br, base_br]
+		rows.append(["爆炸半径", br_txt, GameStyle.PAPER])
 	var feats := weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])

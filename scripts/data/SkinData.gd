@@ -2,14 +2,14 @@ class_name SkinData
 extends RefCounted
 
 ## 角色换色皮肤主题表（纯静态数据，唯一真话源）
-## 每角色：默认「原色」+ 6 套全员共享主题皮肤，通关 简/普/困/噩/狱/极 对应 tier 解锁。
-## 解锁判定不走本表：GameManager.is_skin_unlocked() 按「最高通关难度 >= tier」口径，
-## 天然满足跨难度向下补齐（直接通关高难度 ⇒ 低档皮肤一并解锁）。
+## 每角色：默认「原色」+ 6 套全员共享主题皮肤。
+## 2026-10-20 与难度解耦：tier 不再对应难度档位，改为「该角色累计通关次数」门槛（tier + 1 次，任意难度）。
+## 解锁判定不走本表：GameManager.is_skin_unlocked() 读该角色记录里的 wins 累计。
 ## 皮肤只换配色（斗篷内/外/缘拼色 + 眼色 + 武器色 + 骨色微调），不改造型样式键。
 
-## 主题数组下标即 skin_idx（0~5），tier 与难度档位一一对应
+## 主题数组下标即 skin_idx（0~5）；tier = 解锁所需的该角色通关次数 - 1（1~6 次）
 const THEMES: Array[Dictionary] = [
-	{   # D0 简单 —— 苍竹：青玉竹影，偏青的碧色与剑士本相墨绿拉开区分
+	{   # 1 胜 —— 苍竹：青玉竹影，偏青的碧色与剑士本相墨绿拉开区分
 		"name": "苍竹",
 		"tier": 0,
 		"cloak_outer": Color(0.07, 0.22, 0.21),   # 沉潭青
@@ -21,7 +21,7 @@ const THEMES: Array[Dictionary] = [
 		"weapon_shadow": Color(0.58, 0.75, 0.66),
 		"weapon_accent": Color(0.48, 0.94, 0.70, 0.9),
 	},
-	{   # D1 普通 —— 赤霄：赤焰丹霞，暖意金边
+	{   # 2 胜 —— 赤霄：赤焰丹霞，暖意金边
 		"name": "赤霄",
 		"tier": 1,
 		"cloak_outer": Color(0.27, 0.08, 0.09),   # 玄赤深红
@@ -35,7 +35,7 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.98, 0.95, 0.90),    # 骨色微暖，与赤袍相合
 		"bone_shadow": Color(0.82, 0.76, 0.69),
 	},
-	{   # D2 困难 —— 霜华：冰川寒玉，清冷霜锋
+	{   # 3 胜 —— 霜华：冰川寒玉，清冷霜锋
 		"name": "霜华",
 		"tier": 2,
 		"cloak_outer": Color(0.10, 0.16, 0.30),   # 玄冰深蓝
@@ -49,7 +49,7 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.94, 0.97, 1.0),     # 骨色偏冷，霜意统一
 		"bone_shadow": Color(0.71, 0.79, 0.91),
 	},
-	{   # D3 噩梦 —— 紫府：紫气东来，华贵神秘
+	{   # 4 胜 —— 紫府：紫气东来，华贵神秘
 		"name": "紫府",
 		"tier": 3,
 		"cloak_outer": Color(0.19, 0.10, 0.30),   # 玄紫深檀
@@ -61,7 +61,7 @@ const THEMES: Array[Dictionary] = [
 		"weapon_shadow": Color(0.70, 0.62, 0.83),
 		"weapon_accent": Color(0.86, 0.55, 1.0, 0.9),
 	},
-	{   # D4 地狱 —— 鎏金：玄衣金缕，尊荣威仪
+	{   # 5 胜 —— 鎏金：玄衣金缕，尊荣威仪
 		"name": "鎏金",
 		"tier": 4,
 		"cloak_outer": Color(0.16, 0.12, 0.06),   # 玄铜墨褐
@@ -75,7 +75,7 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.97, 0.95, 0.88),    # 骨色微暖含金
 		"bone_shadow": Color(0.80, 0.75, 0.62),
 	},
-	{   # D5 极限 —— 幽冥：幽夜玄袍，磷火幽幽
+	{   # 6 胜 —— 幽冥：幽夜玄袍，磷火幽幽
 		"name": "幽冥",
 		"tier": 5,
 		"cloak_outer": Color(0.08, 0.06, 0.14),   # 幽冥玄夜

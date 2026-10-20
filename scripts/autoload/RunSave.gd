@@ -338,7 +338,8 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.wave_number = int(d.get("wave_number", 1))
 	gm.endless_mode = bool(d.get("endless_mode", false))
 	gm.run_started = bool(d.get("run_started", true))
-	gm.danger_level = int(d.get("danger_level", 0))
+	# 老中断档可能存着收缩前的 D4/D5（2026-10-20 难度收为 4 档），夹回顶档再继续
+	gm.danger_level = clampi(int(d.get("danger_level", 0)), 0, GameBalance.DANGER_MAX)
 	gm.start_in_endless = bool(d.get("start_in_endless", false))
 	gm.peak_stones = int(d.get("peak_stones", 0))
 	gm.peak_dodge = float(d.get("peak_dodge", 0.0))

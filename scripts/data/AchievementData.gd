@@ -10,11 +10,11 @@ extends RefCounted
 ##      纯荣誉成就 reward_type = "none"（只点亮、不发奖励，不碰解锁经济）。
 ##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条纯荣誉趣味成就（30 条总计）。
 
-## 危险度档位名号（D0 ~ D5）
-const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
+## 危险度档位名号（D0 ~ D3，2026-10-20 由 6 档收缩为 4 档）
+const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦"]
 
-## 境界称号：按该角色通关过的最高危险度点亮（D0 炼气 ~ D5 渡劫，未通关为空）
-const REALM_TITLES: Array[String] = ["炼气", "筑基", "金丹", "元婴", "化神", "渡劫"]
+## 境界称号：按该角色通关过的最高危险度点亮（D0 炼气 ~ D3 元婴，未通关为空）
+const REALM_TITLES: Array[String] = ["炼气", "筑基", "金丹", "元婴"]
 
 ## 成就分类（顺序即「战绩」页分节展示顺序）
 const CATEGORY_ORDER: Array[String] = ["trial", "style", "grind", "luck"]
@@ -170,26 +170,6 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		"reward_id": "",
 		"reward_name": "",
 		"icon": "res://assets/art/weapon_jingzhe_fu.png",
-	},
-		{
-			"id": "ach_feat_hell",
-			"name": "地狱签证",
-			"cond_desc": "通关「地狱」难度——阎王爷说工位给你备好了",
-			"category": "trial",
-		"reward_type": "none",
-		"reward_id": "",
-		"reward_name": "",
-		"icon": "res://assets/art/weapon_leihuo_fu.png",
-	},
-		{
-			"id": "ach_feat_extreme",
-			"name": "撞墙到头",
-			"cond_desc": "通关「极限」难度——没有更硬的墙给你撞了，歇歇吧",
-			"category": "trial",
-		"reward_type": "none",
-		"reward_id": "",
-		"reward_name": "",
-		"icon": "res://assets/art/weapon_jinlei_zhui.png",
 	},
 		{
 			"id": "ach_item_pojia",
@@ -524,10 +504,6 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return (victory and danger >= 1)
 		"ach_feat_nightmare":
 			return victory and danger >= 3
-		"ach_feat_hell":
-			return victory and danger >= 4
-		"ach_feat_extreme":
-			return victory and danger >= 5
 		"ach_item_pojia":
 			return best_wave >= 15
 		"ach_feat_endless":

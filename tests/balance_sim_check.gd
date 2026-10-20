@@ -472,17 +472,17 @@ func _test_survivability() -> void:
 	_c.check(slam <= half_hp * 0.17,
 		"第 10 波魔君震地单发掉半肉 Build %.1f%%（≤17%%：一口糊半血就是白给）" % (slam / half_hp * 100.0))
 
-	# 5.4 六档梯度不许因为整体下调而倒挂
-	var d5_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, GameBalance.DANGER_MAX), iframe)
-	_c.check(d5_sec < w10_sec, "危险度 %d 生存 %.1fs 仍短于危险度 0 的 %.1fs（梯子还在）" % [GameBalance.DANGER_MAX, d5_sec, w10_sec])
-	_c.check(d5_sec >= 4.0, "极限档半肉 Build 第 10 波也至少活 %.1fs（≥4.0s：最高档该难，但不该没有反应时间）" % d5_sec)
+	# 5.4 难度梯子不许因为整体下调而倒挂（2026-10-20 收缩为 4 档，顶档 = 原 D5 强度）
+	var top_sec := _survive_sec(half_hp, half_armor, _raw_contact(MIXED_MOB_CONTACT, 10, GameBalance.DANGER_MAX), iframe)
+	_c.check(top_sec < w10_sec, "危险度 %d 生存 %.1fs 仍短于危险度 0 的 %.1fs（梯子还在）" % [GameBalance.DANGER_MAX, top_sec, w10_sec])
+	_c.check(top_sec >= 4.0, "顶档（噩梦）半肉 Build 第 10 波也至少活 %.1fs（≥4.0s：最高档该难，但不该没有反应时间）" % top_sec)
 
 	print("SURVIVAL 危险度0 裸装(%.0f血/0甲)：" % base_hp)
 	for w in [1, 3, 5, 8, 10, 15, 20]:
 		var raw := _raw_contact(MIXED_MOB_CONTACT, w, 0)
 		print("  W%-2d 单下 %2d（%.1f%% 血）→ 顶格挨打 %.1fs" % [w, raw, GameBalance.incoming_damage(raw, 0.0) / base_hp * 100.0, _survive_sec(base_hp, 0.0, raw, iframe)])
-	print("SURVIVAL 半肉(%.0f/%.0f) W10 %.1fs · 成型(%.0f/%.0f) W20 %.1fs · 极限 W10 %.1fs · 无敌帧 %.2fs" % [
-		half_hp, half_armor, w10_sec, meta_hp, meta_armor, w20_sec, d5_sec, iframe])
+	print("SURVIVAL 半肉(%.0f/%.0f) W10 %.1fs · 成型(%.0f/%.0f) W20 %.1fs · 顶档 W10 %.1fs · 无敌帧 %.2fs" % [
+		half_hp, half_armor, w10_sec, meta_hp, meta_armor, w20_sec, top_sec, iframe])
 
 # ---------------- 自检守卫 ----------------
 

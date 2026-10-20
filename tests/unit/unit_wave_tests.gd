@@ -252,48 +252,35 @@ func _test_wave_theme() -> void:
 	_c.near(GameBalance.BATCH_STALEMATE_TIMEOUT, 5.5, EPS, "对峙超时收紧到 5.5s（2026-10-16 紧凑化）")
 
 func _test_danger_system() -> void:
-	# 公式钉线
+	# 公式钉线（2026-10-20 收缩为 4 档，顶档维持原 D5 的封顶强度）
+	_c.equals(GameBalance.DANGER_MAX, 3, "危险度共 4 档（D0~D3）")
 	_c.near(GameBalance.danger_hp_mult(0), 1.08, EPS, "危险度 0 简单基线 ×1.08")
-	_c.near(GameBalance.danger_hp_mult(5), 2.58, EPS, "危险度 5 血量 ×2.58")
-	_c.near(GameBalance.danger_dmg_mult(5), 1.84, EPS, "危险度 5 伤害 ×1.84")
-	_c.near(GameBalance.danger_count_mult(5), 2.08, EPS, "危险度 5 妖潮 ×2.08")
-	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(5), EPS, "超档夹到 5")
+	_c.near(GameBalance.danger_hp_mult(3), 2.58, EPS, "危险度 3 噩梦血量 ×2.58（= 原 D5 封顶）")
+	_c.near(GameBalance.danger_dmg_mult(3), 1.84, EPS, "危险度 3 噩梦伤害 ×1.84（= 原 D5 封顶）")
+	_c.near(GameBalance.danger_count_mult(3), 2.08, EPS, "危险度 3 噩梦妖潮 ×2.08（= 原 D5 封顶）")
+	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(3), EPS, "超档夹到 3")
 	_c.near(GameBalance.danger_hp_mult(-1), 1.08, EPS, "负档夹到 0")
+	# 档间单调递增，不能因为压缩出现持平或倒挂
+	for d in range(GameBalance.DANGER_MAX):
+		_c.check(GameBalance.danger_hp_mult(d + 1) > GameBalance.danger_hp_mult(d), "血量档间严格递增 D%d→D%d" % [d, d + 1])
+		_c.check(GameBalance.danger_dmg_mult(d + 1) > GameBalance.danger_dmg_mult(d), "伤害档间严格递增 D%d→D%d" % [d, d + 1])
+		_c.check(GameBalance.danger_count_mult(d + 1) > GameBalance.danger_count_mult(d), "妖潮档间严格递增 D%d→D%d" % [d, d + 1])
 
-	# 选择器不许越权选未解锁档
-	var orig_unlocked := GameManager.max_danger_unlocked
-	GameManager.max_danger_unlocked = 0
+	# 4 档全部开放（2026-10-20）：任意档位都能直接选中，不再有解锁梯子
 	GameManager.danger_level = 0
-	GameManager.set_danger(3)
-	_c.equals(GameManager.danger_level, 0, "未解锁危险度 3 选不上")
-	GameManager.set_danger(0)
-	_c.equals(GameManager.danger_level, 0, "凡尘（0 档）总可选")
+	for d in range(GameBalance.DANGER_MAX + 1):
+		GameManager.set_danger(d)
+		_c.equals(GameManager.danger_level, d, "危险度 %d 开局即可直接选中" % d)
+	GameManager.set_danger(99)
+	_c.equals(GameManager.danger_level, GameBalance.DANGER_MAX, "越界档位夹到顶档")
+	GameManager.set_danger(-5)
+	_c.equals(GameManager.danger_level, 0, "负档夹到简单")
 
-	# 通关当前最高档 → 解锁下一档；打旧档不重复解锁
-	GameManager.reset_run()
-	GameManager.danger_level = 0
-	GameManager.trigger_game_over(true)
-	_c.equals(GameManager.max_danger_unlocked, 1, "通关凡尘解锁危险度 1")
-	GameManager.reset_run()
-	GameManager.trigger_game_over(true)
-	_c.equals(GameManager.max_danger_unlocked, 1, "重复通关同一档不再解锁")
-	GameManager.reset_run()
-	GameManager.danger_level = 1
-	GameManager.trigger_game_over(true)
-	_c.equals(GameManager.max_danger_unlocked, 2, "通关微澜解锁危险度 2")
-	GameManager.reset_run()
-	GameManager.trigger_game_over(false)
-	_c.equals(GameManager.max_danger_unlocked, 2, "战败不解锁")
-
-	# 落盘往返：改→存→改→读回
-	GameManager.max_danger_unlocked = 3
-	GameManager._save_progress()
-	GameManager.max_danger_unlocked = 0
-	GameManager._load_progress()
-	_c.equals(GameManager.max_danger_unlocked, 3, "危险度解锁落盘后可读回")
-
-	# 还原测试前的玩家进度，不弄脏真实存档
-	GameManager.max_danger_unlocked = orig_unlocked
+	# 名号与封印表长度与档数同步
+	_c.equals(AchievementData.DANGER_NAMES.size(), GameBalance.DANGER_MAX + 1, "难度名号数与档数一致")
+	_c.equals(AchievementData.REALM_TITLES.size(), GameBalance.DANGER_MAX + 1, "境界称号数与档数一致")
+	_c.equals(AchievementData.danger_name(GameBalance.DANGER_MAX), "噩梦", "顶档名号为噩梦")
+	_c.equals(AchievementData.realm_for_danger(GameBalance.DANGER_MAX), "元婴", "顶档境界为元婴")
 
 # 2026-10-12 新机制数值钉线：精英变异阈值 / 灵医奶量曲线 / 金蟾金币曲线 / 移速方差
 func _test_new_enemy_mechanics() -> void:

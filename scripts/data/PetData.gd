@@ -77,9 +77,9 @@ const DEFS: Dictionary = {
 		"name": "聚宝蟾",
 		"role": "economy",
 		"base_price": 36,
-		"base_cooldown": 3.0, ## 金舌鞭击周期（秒）
+		"base_cooldown": 3.0, ## 金钱镖发射周期（秒）
 		"base_value": 8.0,   ## 每回合基准产出金币
-		"desc": "每 3.0 秒金舌鞭打最近敌人造成伤害，回合结束献上金币",
+		"desc": "每 3.0 秒吐出金钱镖飞袭最近敌人造成伤害，回合结束献上金币",
 		"color": Color(0.96, 0.82, 0.22),      # 金黄
 		"halo_color": Color(1.0, 0.88, 0.35, 0.4),
 		"decor": "toad_coin",

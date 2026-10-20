@@ -29,6 +29,7 @@ enum ProjectileKind {
 		SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
 		WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
 		SHURIKEN,         ## 手里剑：四芒旋风飞镖 + 月牙磨刃 + 破空金芒
+		GOLD_COIN,        ## 聚宝金钱镖：灿金天圆地方铜钱 + 飞旋金芒 + 招财灵印
 		GENERIC_BLADE     ## 通用法刃：虚空冷月气刃
 	}
 
@@ -104,6 +105,8 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 		return ProjectileKind.WATER_SHUTTLE
 	elif "bullet_shuriken" in tex_path:
 		return ProjectileKind.SHURIKEN
+	elif "bullet_gold_coin" in tex_path or "icon_coin" in tex_path:
+		return ProjectileKind.GOLD_COIN
 	return ProjectileKind.GENERIC_BLADE
 
 func _draw() -> void:
@@ -152,6 +155,8 @@ func _draw() -> void:
 			_draw_water_shuttle()
 		ProjectileKind.SHURIKEN:
 			_draw_shuriken()
+		ProjectileKind.GOLD_COIN:
+			_draw_gold_coin()
 		ProjectileKind.GENERIC_BLADE:
 			_draw_generic_blade()
 
@@ -695,4 +700,56 @@ func _draw_shuriken() -> void:
 		var ang := float(k) * PI * 0.5
 		var tip_pt := Vector2(R, 0.0).rotated(ang)
 		AdaptiveDraw.circle(self, tip_pt, 1.1, GameStyle.FX_HDR_METAL)
+
+# ----------------- 7d. 聚宝金钱镖 (天圆地方古金钱 + 飞旋金芒 + 招财灵印) -----------------
+func _draw_gold_coin() -> void:
+	var pulse := 1.0 + sin(_lifetime_acc * 18.0) * 0.08
+	const R := 10.5
+	var r_inner := R * 0.72
+	var half_hole := R * 0.28
+
+	# 1. 破空飞旋外芒气环（流金光轮 + 拖尾虚影）
+	AdaptiveDraw.arc(self, Vector2.ZERO, R * 1.35 * pulse, 0.0, TAU, Color(1.0, 0.88, 0.35, 0.16), 1.6)
+	AdaptiveDraw.arc(self, Vector2.ZERO, R * 1.12, 0.0, TAU, Color(1.0, 0.95, 0.55, 0.28), 1.0)
+
+	# 破空金气拖尾（向 -X 轴延伸渐隐）
+	var trail_poly := PackedVector2Array([
+		Vector2(-4.0, -4.5),
+		Vector2(-26.0, 0.0),
+		Vector2(-4.0, 4.5)
+	])
+	draw_colored_polygon(trail_poly, Color(0.96, 0.80, 0.25, 0.20))
+
+	# 2. 4 道对称的切向金色飞旋小锋刃（飞旋离心流光）
+	for k in range(4):
+		var a := float(k) * PI * 0.5 + _lifetime_acc * 14.0
+		var p_blade := Vector2(cos(a), sin(a)) * R
+		var p_tip := Vector2(cos(a + 0.35), sin(a + 0.35)) * (R * 1.28)
+		draw_line(p_blade, p_tip, Color(1.0, 0.92, 0.45, 0.65), 1.2, true)
+
+	# 3. 铜钱主体外圆（天圆）
+	AdaptiveDraw.circle(self, Vector2.ZERO, R, Color(0.85, 0.68, 0.18))      # 古金底色
+	AdaptiveDraw.circle(self, Vector2.ZERO, R * 0.92, Color(0.98, 0.82, 0.24)) # 阳面灿金
+	AdaptiveDraw.arc(self, Vector2.ZERO, R, 0.0, TAU, Color(0.70, 0.50, 0.12), 1.2, true) # 鎏金外轮廓
+
+	# 4. 同心外郭凸缘（铸造压印线）
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, Color(0.82, 0.62, 0.15), 1.0, true)
+
+	# 5. 中心方孔（天圆地方）
+	var hole_rect := Rect2(-half_hole, -half_hole, half_hole * 2.0, half_hole * 2.0)
+	draw_rect(hole_rect, Color(0.10, 0.12, 0.16, 0.96), true) # 中心深色透空
+	draw_rect(hole_rect, Color(0.70, 0.52, 0.12), false, 1.0) # 内方孔铜郭线
+
+	# 6. 四方招财灵纹刻线（上下左右小符文）
+	var mark_col := Color(0.75, 0.55, 0.12)
+	draw_line(Vector2(0, -r_inner + 1.2), Vector2(0, -half_hole - 1.0), mark_col, 1.0, true)
+	draw_line(Vector2(0, r_inner - 1.2), Vector2(0, half_hole + 1.0), mark_col, 1.0, true)
+	draw_line(Vector2(-r_inner + 1.2, 0), Vector2(-half_hole - 1.0, 0), mark_col, 1.0, true)
+	draw_line(Vector2(r_inner - 1.2, 0), Vector2(half_hole + 1.0, 0), mark_col, 1.0, true)
+
+	# 7. 边缘超白反光起辉点（FX_HDR_GOLD + FX_HDR_METAL）
+	var gleam_pos := Vector2(R * 0.65, -R * 0.65)
+	AdaptiveDraw.circle(self, gleam_pos, 1.3, GameStyle.FX_HDR_GOLD)
+	AdaptiveDraw.circle(self, -gleam_pos * 0.8, 0.9, GameStyle.FX_HDR_METAL)
+
 

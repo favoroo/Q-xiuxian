@@ -67,11 +67,12 @@ func _test_attack_pets_formulas() -> void:
 	_c.near(BalanceSpiritPet.smash_radius(3.0), 320.0, EPS, "磐石猿：震地半径钳上限 320")
 	_c.near(BalanceSpiritPet.SMASH_SLOW_DURATION, 3.5, EPS, "磐石猿：减速时长 3.5s（对齐冷却）")
 
-## 聚宝蟾金舌鞭击：替代原战中吸宝
+## 聚宝蟾金钱镖：替代原土石/金舌鞭击
 func _test_juchan_tongue_formulas() -> void:
-	_c.near(BalanceSpiritPet.tongue_damage(1, 1.0), 30.0, EPS, "聚宝蟾：鞭击 1 波基准 30")
-	_c.check(BalanceSpiritPet.tongue_damage(10, 1.0) > BalanceSpiritPet.tongue_damage(1, 1.0), "聚宝蟾：鞭击随波次成长")
-	_c.check(BalanceSpiritPet.tongue_damage(1, 0.0) >= 1.0, "聚宝蟾：鞭击地板 1 不归零")
+	_c.near(BalanceSpiritPet.coin_damage(1, 1.0), 30.0, EPS, "聚宝蟾：金钱镖 1 波基准 30")
+	_c.check(BalanceSpiritPet.coin_damage(10, 1.0) > BalanceSpiritPet.coin_damage(1, 1.0), "聚宝蟾：金钱镖随波次成长")
+	_c.check(BalanceSpiritPet.coin_damage(1, 0.0) >= 1.0, "聚宝蟾：金钱镖地板 1 不归零")
+	_c.near(BalanceSpiritPet.tongue_damage(1, 1.0), 30.0, EPS, "聚宝蟾：兼容旧接口 tongue_damage 1 波基准 30")
 	_c.check(BalanceSpiritPet.harvest_stones(1, 1.0) >= 3, "聚宝蟾：回合末产金下限 3")
 	_c.check(BalanceSpiritPet.harvest_stones(10, 1.0) > BalanceSpiritPet.harvest_stones(1, 1.0), "聚宝蟾：产金随波次成长")
 

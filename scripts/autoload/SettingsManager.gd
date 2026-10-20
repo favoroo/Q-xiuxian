@@ -160,26 +160,13 @@ const SCHEMA: Array[Dictionary] = [
 	{
 		"section": "display",
 		# 辉光/HDR 联动通道（2026-10-17 真机 42fps GPU 专项）：glow 多 pass + RGBA16
-		# 帧缓冲是移动端最大固定带宽税。
-		# 2026-10-20 真机 A/B 定论：关掉本开关后「整层 UI 连闪三次」消失，根因锁定在
-		# glow/HDR 后处理链上。默认值因此按平台分叉（见 glow_default_for_platform）：
-		# 移动端默认关（Android Mobile 渲染器上该链路会间歇性整帧闪，桌面 Forward+ 正常），
-		# 桌面端保持开。老移动端用户由 _migrate_glow_mobile_default 一次性迁移到关。
+		# 帧缓冲是移动端最大固定带宽税。默认开；持续低帧时 Main 会自动关闭并 toast，
+		# 恢复只能手动开回（防来回翻转）。
 		"key": "glow",
 		"title": "辉光",
-		"desc": "超白起辉光效（暴击绯金、灵光等）。关掉可大幅省电提帧；移动端默认关闭以避免画面闪烁",
+		"desc": "画面亮部起辉光效（暴击绯金、灵光等）。关掉可大幅省电提帧，低帧时会自动关闭",
 		"type": "toggle",
 		"default": true,
-	},
-	{
-		"section": "display",
-		# 移动端辉光默认值迁移标记（2026-10-20）：只在跨版本首次启动时强制关一次，
-		# 之后用户的每次手动选择都不再被覆盖。不进设置页 UI（内部持久位）。
-		"key": "glow_mobile_migrated",
-		"title": "辉光移动端迁移标记",
-		"desc": "内部位：记录移动端已完成「默认关闭辉光」的一次性迁移",
-		"type": "toggle",
-		"default": false,
 	},
 
 	# --------- 操作按钮布局（技能键 / 祭坛键自由拖动，操作页调整） ---------
@@ -311,37 +298,11 @@ const RENDER_QUALITY_DEFAULT := &"high"
 ## 主题色默认档（与 GameStyle.THEME_PRESETS 第一项同源；主题 id 白名单在 GameStyle 维护）
 const THEME_DEFAULT := &"pink"
 
-## 辉光默认值按平台分叉（2026-10-20 真机 A/B 定论）。
-## 真机实测：设置页关掉「辉光」后，战斗中的「整层 UI 连闪三次」完全消失——根因在
-## glow/HDR 后处理链，而 Android 走 Mobile 渲染器（project.godot rendering_method.mobile
-## = "mobile"），该管线上的 glow 会间歇性整帧异常；桌面 Forward+ 正常，所以只在手机可见。
-## 结论落成默认值：移动端出厂即关，桌面端维持开。
-## 纯函数（不吃 OS/引擎状态）是为了 headless 判据能直接钉两个分支。
-static func glow_default_for_platform(is_mobile: bool) -> bool:
-	return not is_mobile
-
-## 当前运行平台是否按「移动端」口径处理辉光默认值。
-## 与 export_presets 的 Android preset 一致；editor/桌面预览走 false（保持开）。
+## 当前运行平台是否为移动端（Android/iOS 导出包）。
+## 与 export_presets 的 Android preset 一致；editor/桌面预览走 false。
+## 消费方：Main._apply_glow_channel —— 移动端 use_hdr_2d 恒 false。
 static func is_mobile_platform() -> bool:
 	return OS.has_feature("mobile")
-
-## 移动端辉光默认值的一次性迁移（2026-10-20）。
-## 为什么需要：老玩家存档里已经落了 glow=true（_save_settings 会把默认项一并写盘），
-## 只改默认值他们永远跟不到，手机上照旧闪。此迁移在跨版本首次启动时强制关一次，
-## 并写下 glow_mobile_migrated 标记 —— 之后玩家主动开回辉光不会再被覆盖。
-## 返回是否发生了迁移（判据可钉幂等性）。
-func migrate_glow_mobile_default() -> bool:
-	if not is_mobile_platform():
-		return false
-	var display: Dictionary = _settings.get("display", {})
-	if bool(display.get("glow_mobile_migrated", false)):
-		return false
-	# 标记先落内存再一起写盘：两次迁移调用也只有第一次返回 true
-	display["glow_mobile_migrated"] = true
-	display["glow"] = false
-	_settings["display"] = display
-	_save_settings()
-	return true
 
 ## 内存设置字典: section -> { key: value }
 var _settings: Dictionary = {}
@@ -350,9 +311,6 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_init_defaults()
 	_load_settings()
-	# 迁移必须在 _load_settings 之后（要能看到老存档里的 glow=true），
-	# 且早于任何消费方读 glow（Main._ready 更晚）
-	migrate_glow_mobile_default()
 	_follow_legacy_layout_default()
 	_apply_all_audio()
 	# 主题色：autoload 先于主场景 ready，此处套用后所有后续构建的样式即用新色（注册表此时为空）
@@ -367,10 +325,6 @@ func _init_defaults() -> void:
 		if not _settings.has(sec):
 			_settings[sec] = {}
 		_settings[sec][k] = item["default"]
-	# 平台分叉默认值：SCHEMA 里 glow 写的是桌面默认（true），移动端在这里覆盖成 false。
-	# 放在 SCHEMA 回填之后而不是把 SCHEMA 改成哨兵值——SCHEMA 的 default 字段还被
-	# reset_to_defaults / get_val 回落 / 判据读取，保持「字面即桌面真值」更不容易出错。
-	_settings["display"]["glow"] = glow_default_for_platform(is_mobile_platform())
 
 	# 音频静音状态默认均为 false
 	if not _settings.has("audio"):
@@ -736,17 +690,10 @@ func reset_to_defaults() -> void:
 	# 否则恢复默认后 glow 显示开、实际仍被自动降档压着
 	if _settings.has("display") and _settings["display"].has("glow_auto_off"):
 		_settings["display"]["glow_auto_off"] = false
-	# 移动端刚被 _init_defaults 拨回「关」，标记同步置位，防止下次启动再迁移一次
-	if is_mobile_platform():
-		_settings["display"]["glow_mobile_migrated"] = true
 	_apply_all_audio()
 	_save_settings()
-	# emit 用内存里的实际值而不是 SCHEMA 的 default：glow 的默认值按平台分叉，
-	# 直接发 item["default"] 会让移动端收到 true（与实际生效值相反），消费方跟着点错通道
 	for item in SCHEMA:
-		var sec := StringName(item["section"])
-		var k := StringName(item["key"])
-		setting_changed.emit(sec, k, get_val(sec, k))
+		setting_changed.emit(StringName(item["section"]), StringName(item["key"]), item["default"])
 	for bus in BUS_KEY_MAP.keys():
 		audio_volume_changed.emit(bus, get_bus_volume(bus), is_bus_muted(bus))
 	# 主题色回到默认并立刻换色（上面只 emit 了信号，注册表回放要靠这里显式调）
@@ -789,14 +736,9 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 		return _to_bool(val, false)
 	if key == "tutorial_muted":
 		return _to_bool(val, false)
-	if key == "glow_mobile_migrated":
-		return _to_bool(val, false)
-	# glow 的坏值回落口径按平台分叉：移动端回 false（否则坏档会在手机上重新点亮辉光 → 闪）
-	if key == "glow":
-		return _to_bool(val, glow_default_for_platform(is_mobile_platform()))
 	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
 			or key == "haptics" or key == "screen_flash" or key == "show_fps" \
-			or key == "heat_distortion" or key == "screen_shockwave":
+			or key == "heat_distortion" or key == "screen_shockwave" or key == "glow":
 		return _to_bool(val, key != "show_fps" and key != "heat_distortion" and key != "screen_shockwave")
 	if key == "shake_intensity":
 		var s_shake := StringName(str(val))

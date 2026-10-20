@@ -102,9 +102,8 @@ func unregister_ally(a: Node) -> void:
 	live_allies.erase(a)
 	ally_count = live_allies.size()
 
-# 危险度（仿土豆兄弟 Danger 0~5）：通关当前最高档解锁下一档，落盘 user://progress.cfg
+# 危险度（D0 ~ D3 共 4 档，2026-10-20 起全部开放、不再逐档解锁）：开始菜单自由选择
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
-var max_danger_unlocked: int = 0   ## 已解锁的最高危险度
 var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（reset_run 不动它）
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
@@ -224,15 +223,16 @@ func get_cultivator_danger_mask(cid: String) -> int:
 func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
 	return (get_cultivator_danger_mask(cid) & (1 << d)) != 0
 
-## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「最高通关难度 >= 皮肤 tier」判定，
-## 天然满足跨难度向下补齐（直接通关高难度 ⇒ 低档皮肤一并解锁）
+## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「该角色累计通关次数 >= tier + 1」判定。
+## 2026-10-20 与难度解耦：不再看通关过哪一档，任意难度通关都记一次，攒够次数逐套解锁。
 func is_skin_unlocked(cid: String, skin_idx: int) -> bool:
 	if skin_idx < 0:
 		return true
 	var t := SkinData.get_theme(skin_idx)
 	if t.is_empty():
 		return false
-	return get_cultivator_best_danger(cid) >= int(t.get("tier", 0))
+	var wins_needed := int(t.get("tier", 0)) + 1
+	return get_cultivator_record(cid).get("wins", 0) >= wins_needed
 
 ## 查询某角色当前选用的皮肤（-1 = 原色；已选皮肤若未解锁则惰性回落原色兜底）
 func get_selected_skin(cid: String) -> int:
@@ -261,19 +261,13 @@ func get_cultivator_record(cid: String) -> Dictionary:
 		"best_kills": int(rec.get("best_kills", 0)),
 	}
 
-## 选择危险度：不允许选未解锁的档位
+## 选择危险度：4 档全部开放，只夹合法区间
 func set_danger(d: int) -> void:
-	danger_level = clampi(d, 0, max_danger_unlocked)
+	danger_level = clampi(d, 0, GameBalance.DANGER_MAX)
 
 ## 设置是否从主菜单直接进入无尽试炼
 func set_start_in_endless(enabled: bool) -> void:
 	start_in_endless = enabled
-
-## 通关当前最高档 → 解锁下一档（打旧档不算数，防刷低档解锁）
-func _maybe_unlock_danger() -> void:
-	if danger_level >= max_danger_unlocked and max_danger_unlocked < GameBalance.DANGER_MAX:
-		max_danger_unlocked += 1
-		announcement_triggered.emit("◆ 难度「%d」已解锁 ◆" % max_danger_unlocked)
 
 var kills: int = 0
 var game_time: float = 0.0
@@ -816,10 +810,10 @@ func apply_harvest(budget_comp_exp: int = 0, early_secs: float = 0.0) -> void:
 			spirit_stones += interest
 			stats_updated.emit(kills, game_time, spirit_stones)
 			announcement_triggered.emit("◆ 金币结息 · 获得 %d 枚金币 ◆" % interest)
-	# 回复葫芦等道具的回合末回血 hook
+	# 回复葫芦等道具的回合末回血 hook（quiet：回合间歇不在战斗画面里，别触发角色挤压抖动）
 	var heal_pct := item_hook_sum("wave_heal_pct")
 	if heal_pct > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal"):
-		player.heal(player.max_health * heal_pct)
+		player.heal(player.max_health * heal_pct, true)
 	# 突破古玉等道具的回合末永久成长 hook：它不是悟道加点、天然绕过 max_stacks，
 	# 累计到账按 WAVE_END_*_CAP 封口（2026-10-13：+3血/回合 × 20 回合无对价滚出 +60 血的口子）
 	var wave_hp := item_hook_sum("wave_end_max_hp")
@@ -1177,8 +1171,6 @@ func trigger_game_over(victory: bool = false) -> void:
 	is_game_over = true
 	# 本局已终结、战报已录入局外进度：中断续玩档随之作废
 	RunSave.clear_save()
-	if victory:
-		_maybe_unlock_danger()
 	_record_run_and_check_achievements(victory)
 	game_over_triggered.emit(victory)
 

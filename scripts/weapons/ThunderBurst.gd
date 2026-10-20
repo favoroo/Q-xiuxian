@@ -305,7 +305,7 @@ func _deal_damage() -> void:
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.0)
 	# 落雷震屏「按战果才震」（2026-10-18 用户口径：全雷法配装屏幕一直在震，别这么高频）：
 	# 单发落雷不再无条件震——六把雷法轮着砸，每发都震就是持续抖屏。只有真正打出战果
-	# （一发收 ≥3 命，或劈到精英）才给一记镜头冲击，普通落雷只留火花/微亮脉冲/音效。
+	# （一发收 ≥3 命，或劈到精英）才给一记镜头冲击，普通落雷只留火花/音效。
 	# 量按战果给：收多命加码、劈到精英再加码。
 	var trauma := 0.0
 	if kills >= 3:
@@ -317,8 +317,5 @@ func _deal_damage() -> void:
 		# 落雷垂直向下的方向性镜头微冲击 + 触觉震颤
 		GameManager.kick_camera(Vector2.DOWN, 2.8)
 		GameFeel.vibrate(25, 0.6)
-	# 屏幕微亮脉冲（T-2.5）：复用既有 vignette 脉冲通道（信号签名不变，不碰 GameManager），
-	# 反向打亮——冷蓝白低透明 0.16s 快速衰减，与受击红闪同路不同色；屏闪设置关则静默
-	GameManager.pulse_damage_vignette(Color(0.75, 0.85, 1.0, 0.22), 0.16)
 	if kills >= 3 or hit_elite:
 		GameManager.zoom_punch(0.025, 0.14)

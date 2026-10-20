@@ -39,7 +39,6 @@ static func load_into(gm: Node) -> void:
 		var saved_ver := int(cfg.get_value("meta", "save_version", 1))
 		if saved_ver > SAVE_VERSION:
 			push_warning("ProgressStore: 存档版本 %d 高于当前 %d，缺字段将按默认值加载" % [saved_ver, SAVE_VERSION])
-		gm.max_danger_unlocked = clampi(int(cfg.get_value("progress", "max_danger", 0)), 0, GameBalance.DANGER_MAX)
 
 		var cults = cfg.get_value("progress", "unlocked_cultivators", [])
 		if cults is Array and not cults.is_empty():
@@ -82,13 +81,17 @@ static func load_into(gm: Node) -> void:
 		var cdc = cfg.get_value("records", "cultivator_danger_clears", {})
 		gm.cultivator_danger_clears = cdc.duplicate() if cdc is Dictionary else {}
 		# 老档无位掩码字段：按已有最高通关难度回填低位封印
-		# （难度线性解锁，能通关 Dk 意味着该角色实力覆盖 D0~Dk，2026-10-12 迁移）
+		# （能通关 Dk 意味着该角色实力覆盖 D0~Dk，2026-10-12 迁移）
 		for cid in gm.cultivator_best_danger:
 			if gm.cultivator_danger_clears.has(cid):
 				continue
 			var best_d := int(gm.cultivator_best_danger[cid])
 			if best_d >= 0:
 				gm.cultivator_danger_clears[cid] = (1 << (best_d + 1)) - 1
+
+		# 难度 6 档 → 4 档压缩迁移（2026-10-20）：老档里的 D4/D5 记录整体折进新顶档 D3，
+		# 保留「打到过最高档」的荣誉，不因档位收缩凭空丢封印与境界。
+		_compress_danger_progress(gm)
 
 		var crec = cfg.get_value("records", "cultivator_records", {})
 		gm.cultivator_records = crec.duplicate() if crec is Dictionary else {}
@@ -136,10 +139,29 @@ static func load_into(gm: Node) -> void:
 		if not ItemData.DEFS.has(String(gm.unlocked_items[i])):
 			gm.unlocked_items.remove_at(i)
 
+## 难度 6 档 → 4 档（D0~D3）老档压缩（2026-10-20 改版一次性迁移）：
+## 老档的 D4/D5 战绩折进新顶档 D3，D0~D3 原样保留 —— 打过最高档的玩家不会因档位收缩丢记录。
+## 位掩码先折叠高位再截断，避免 (1<<4)/(1<<5) 在 UI 里映射到不存在的档位。
+static func _compress_danger_progress(gm: Node) -> void:
+	var top := GameBalance.DANGER_MAX
+	var keep_mask := (1 << (top + 1)) - 1        # 新档位可表示的位宽，如 4 档 = 0b1111
+	var high_bits := ~keep_mask                  # 被砍掉的高位，如 4 档 = 0b...11110000
+	for cid in gm.cultivator_best_danger.keys():
+		var best := int(gm.cultivator_best_danger[cid])
+		if best > top:
+			gm.cultivator_best_danger[cid] = top
+	for cid in gm.cultivator_danger_clears.keys():
+		var mask := int(gm.cultivator_danger_clears[cid])
+		if mask & high_bits:
+			mask = (mask & keep_mask) | (1 << top)
+		gm.cultivator_danger_clears[cid] = mask & keep_mask
+	var bdc := int(gm.career_stats.get("best_danger_cleared", -1))
+	if bdc > top:
+		gm.career_stats["best_danger_cleared"] = top
+
 static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	var cfg := ConfigFile.new()
 	cfg.set_value("meta", "save_version", SAVE_VERSION)
-	cfg.set_value("progress", "max_danger", gm.max_danger_unlocked)
 	cfg.set_value("progress", "unlocked_cultivators", gm.unlocked_cultivators)
 	cfg.set_value("progress", "unlocked_items", gm.unlocked_items)
 	cfg.set_value("progress", "unlocked_achievements", gm.unlocked_achievements)

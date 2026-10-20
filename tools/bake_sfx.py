@@ -445,15 +445,22 @@ SFX = {
                    noise(b, dur=0.038, peak=0.11, ftype="bandpass", f0=2100, f1=700, q=1.4, t0=0.018),
                    tone(b, wtype="triangle", f0=980, f1=340, dur=0.028, peak=0.075, t0=0.020)),
     ],
-    # 金属暗器离手（飞刀/暴雨针/冰针/金针符/透骨钉）：细金属「嗤」+ 上扫速度感。
-    # 旧写法让它们全放 talisman_throw 的纸响 —— 五把金属器听着像撒符纸
+    # 金属暗器离手（飞刀/暴雨针/冰针/金针符/透骨钉/机关弩等 10 把）：四层 = 出手瞬态 + 气流下扫
+    # + 低中频金属芯 + 体感层。2026-10-20 重做：旧配方带通 2.1k→4.4k 上扫、FM 载波 2.4k、
+    # 500Hz 以下零能量、总长仅 75~99ms ⇒ 实测 2.5-5kHz 占 98.5% 能量、频谱重心 5.6kHz，
+    # 上滑的高频嘶气被听觉直接判成「吹口哨」（用户现场：金针符像吹口哨）。
+    # 现在上滑一律改下扫（离手/远去，不是啸叫），FM 载波降到 1.1k、调制比 3.2→2.1（保留金属芯
+    # 但不出尖），并补 190→125Hz 正弦体感层解决「薄」。总长 0.11s 仍短于 impact_blade 的
+    # 0.13s —— 那 0.13s 是多把近战齐挥不糊的上限，本族触发更密，必须守在这条线以内。
     "metal_dart": [
-        lambda b: (noise(b, dur=0.04, peak=0.14, ftype="bandpass", f0=2100, f1=4400, q=0.9),
-                   fm_tone(b, f0=2400, f1=1700, dur=0.055, peak=0.13, ratio=3.2, idx0=1.8, idx1=0.3),
-                   tone(b, wtype="sine", f0=900, f1=1500, dur=0.035, peak=0.05)),
-        lambda b: (noise(b, dur=0.038, peak=0.13, ftype="bandpass", f0=2400, f1=4100, q=1.0),
-                   fm_tone(b, f0=2700, f1=1900, dur=0.05, peak=0.12, ratio=3.0, idx0=1.6, idx1=0.28),
-                   shimmer(b, f0=3400, f1=4200, dur=0.05, peak=0.028, t0=0.03)),
+        lambda b: (noise(b, dur=0.012, peak=0.12, ftype="highpass", f0=3400),
+                   noise(b, dur=0.080, peak=0.10, ftype="bandpass", f0=2500, f1=880, q=0.9),
+                   fm_tone(b, f0=900, f1=650, dur=0.100, peak=0.17, ratio=1.7, idx0=1.8, idx1=0.18),
+                   tone(b, wtype="sine", f0=190, f1=125, dur=0.070, peak=0.085)),
+        lambda b: (noise(b, dur=0.011, peak=0.11, ftype="highpass", f0=3600),
+                   noise(b, dur=0.075, peak=0.095, ftype="bandpass", f0=2700, f1=950, q=1.0),
+                   fm_tone(b, f0=980, f1=700, dur=0.095, peak=0.16, ratio=1.8, idx0=1.7, idx1=0.16),
+                   tone(b, wtype="sine", f0=175, f1=115, dur=0.075, peak=0.080)),
     ],
     # 喷焰（火葫芦开火 + 天灯落点）：火身宽带噪声 + 嘶焰 + 喷管低频。
     # 旧写法让火葫芦播 blade_shoot（飞剑离手），一把喷火的葫芦听起来在甩剑
@@ -475,15 +482,21 @@ SFX = {
                    noise(b, dur=0.055, peak=0.13, ftype="bandpass", f0=460, f1=170, q=1.0),
                    tone(b, wtype="sine", f0=156, f1=44, dur=0.18, peak=0.095, t0=0.012)),
     ],
-    # 音笛（施法与落点双层共用）：笛音上滑 + 气口噪声。气口那层摩擦是笛的身份特征，
-    # 去掉它就只剩一个正弦，听着和普通法球无异
+    # 音笛（施法与落点双层共用）：笛音上滑 + 二次谐波 + 气颤 + 气口噪声。
+    # 气口那层摩擦是笛的身份特征，去掉它就只剩一个正弦，听着和普通法球无异。
+    # 2026-10-20 补谐波与气颤：旧版是单根纯正弦（实测 500-2k 占 98%，无泛音），
+    # 电子音不像木笛。二次谐波给音色骨架，+1% 微失谐副正弦差出约 8Hz 拍频当气颤。
     "flute_wave": [
-        lambda b: (tone(b, wtype="sine", f0=880, f1=1250, dur=0.20, peak=0.17, curve="lin"),
-                   noise(b, dur=0.05, peak=0.04, ftype="bandpass", f0=3200, f1=2400, q=1.4),
-                   shimmer(b, f0=2640, f1=3600, dur=0.10, peak=0.030, t0=0.12)),
-        lambda b: (tone(b, wtype="sine", f0=784, f1=1180, dur=0.22, peak=0.16, curve="lin"),
-                   noise(b, dur=0.055, peak=0.038, ftype="bandpass", f0=3500, f1=2600, q=1.3),
-                   shimmer(b, f0=2350, f1=3300, dur=0.11, peak=0.028, t0=0.13)),
+        lambda b: (tone(b, wtype="sine", f0=880, f1=1250, dur=0.20, peak=0.13, curve="lin"),
+                   tone(b, wtype="sine", f0=1760, f1=2500, dur=0.16, peak=0.055, curve="lin"),
+                   tone(b, wtype="sine", f0=889, f1=1263, dur=0.19, peak=0.05, curve="lin"),
+                   noise(b, dur=0.05, peak=0.045, ftype="bandpass", f0=3200, f1=2400, q=1.4),
+                   shimmer(b, f0=2640, f1=3600, dur=0.10, peak=0.028, t0=0.12)),
+        lambda b: (tone(b, wtype="sine", f0=784, f1=1180, dur=0.22, peak=0.12, curve="lin"),
+                   tone(b, wtype="sine", f0=1568, f1=2360, dur=0.17, peak=0.05, curve="lin"),
+                   tone(b, wtype="sine", f0=792, f1=1192, dur=0.21, peak=0.045, curve="lin"),
+                   noise(b, dur=0.055, peak=0.042, ftype="bandpass", f0=3500, f1=2600, q=1.3),
+                   shimmer(b, f0=2350, f1=3300, dur=0.11, peak=0.026, t0=0.13)),
     ],
     # 双翼灵宝触敌（护蝶/离火鸦）：两下快速翅拍，不是钟也不是磬
     "drone_flutter": [
@@ -704,8 +717,14 @@ SFX = {
     "dodge": [
         lambda b: (noise(b, dur=0.09, peak=0.11, ftype="bandpass", f0=1700, f1=4200, q=1.2),
                    shimmer(b, f0=2600, f1=3300, dur=0.11, peak=0.035)),
-        lambda b: (tone(b, wtype="sine", f0=1500, f1=2500, dur=0.07, peak=0.07),
-                   noise(b, dur=0.06, peak=0.06, ftype="highpass", f0=3600, f1=2600)),
+        # 2026-10-20 去掉纯正弦上滑（1500→2500Hz 就是标准滑哨，一响就出戏）：
+        # 换成双层错时噪声破空 + 低频三角波给分量 = 「衣袂擦风」，仍是上扫方向但不带音高。
+        # 尾层必须用 bandpass 不是 highpass —— highpass 会漏出大量 12k 以上嘶声，
+        # 三角波被压住后整族偏闷（实测 <500Hz 占 54%）。双层错时（0/35ms）同时解决
+        # 「单层太薄、响度掉 3dB」：能量摊在 0.14s 里，A 计权只比旧版低 0.6dB。
+        lambda b: (noise(b, dur=0.075, peak=0.12, ftype="bandpass", f0=1000, f1=2600, q=0.8),
+                   noise(b, dur=0.070, peak=0.10, ftype="bandpass", f0=2000, f1=3600, q=1.0, t0=0.035),
+                   tone(b, wtype="triangle", f0=560, f1=320, dur=0.095, peak=0.042)),
     ],
     "heal": [
         lambda b: (tone(b, wtype="sine", f0=587, f1=880, dur=0.20, peak=0.12),
@@ -801,6 +820,10 @@ CANDIDATES = {}
 # ---------------- 响度归一 ----------------
 # 配方里的 peak 只是「相对关系」，真正决定混音是否均衡的是这一步：
 # 每条音色烘完都按分类目标峰值归一化，以后改配方不会改出「一个震耳一个听不见」。
+#
+# ⚠ 峰值 ≠ 感知响度。2~5kHz 是人耳最敏感的频段，同样峰值下能量挤在那里的音听起来更响；
+#   把能量搬出该频段（如 metal_dart 从 5.6kHz 重心降到中低频）后必须回补几个点，
+#   否则改完会「不刺耳了但也听不见了」。改配方时若明显挪动了频段重心，同步复核本表。
 
 TARGET_PEAK_DEFAULT = 0.22    ## UI / 拾取 / 状态反馈
 TARGET_PEAK_LOUD = 0.45       ## 死亡 / 攻击 / 阶段音头
@@ -827,7 +850,7 @@ TARGET_PEAK = {
     "metal_dart": 0.34,
     "flame_jet": 0.36,
     "drum_boom": 0.55,
-    "flute_wave": 0.45,
+    "flute_wave": 0.48,
     "drone_flutter": 0.26,
     "drone_chime": 0.28,
     # 敌人专属族：与玩家武器音彻底分源

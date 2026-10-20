@@ -251,7 +251,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 30, "成就共配置 30 条（16 奖励型 + 14 纯荣誉型）")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 28, "成就共配置 28 条（16 奖励型 + 12 纯荣誉型）")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -397,7 +397,6 @@ func _test_career_milestones() -> void:
 	var orig_cults := GameManager.unlocked_cultivators.duplicate()
 	var orig_items := GameManager.unlocked_items.duplicate()
 	var orig_achs := GameManager.unlocked_achievements.duplicate()
-	var orig_danger_max := GameManager.max_danger_unlocked
 
 	# 清场
 	GameManager.career_stats = {
@@ -466,9 +465,9 @@ func _test_career_milestones() -> void:
 	_c.equals(AchievementData.realm_for_danger(-1), "", "未通关无境界称号")
 	_c.equals(AchievementData.realm_for_danger(0), "炼气", "通关 D0 晋入炼气")
 	_c.equals(AchievementData.realm_for_danger(1), "筑基", "通关 D1 晋入筑基")
-	_c.equals(AchievementData.realm_for_danger(3), "元婴", "通关 D3 晋入元婴")
-	_c.equals(AchievementData.realm_for_danger(5), "渡劫", "通关 D5 晋入渡劫")
-	_c.equals(AchievementData.realm_for_danger(184), "渡劫", "超档仍取最高一档境界")
+	_c.equals(AchievementData.realm_for_danger(2), "金丹", "通关 D2 晋入金丹")
+	_c.equals(AchievementData.realm_for_danger(3), "元婴", "通关 D3（顶档）晋入元婴")
+	_c.equals(AchievementData.realm_for_danger(184), "元婴", "超档仍取最高一档境界")
 
 	# 4. 存档往返：新字段落盘恢复无损
 	GameManager._save_progress()
@@ -482,6 +481,31 @@ func _test_career_milestones() -> void:
 	_c.equals(int(rec["endless_best_wave"]), 25, "读档后无尽最高关数恢复")
 	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "读档后石岳 D0 封印恢复（位掩码落盘）")
 
+	# 5. 老档压缩迁移（2026-10-20 难度 6→4 档）：D4/D5 战绩折进新顶档 D3，不许丢荣誉
+	# （本段改动的字段由函数末尾的统一还原段复位）
+	GameManager.cultivator_best_danger = {"k1": 5, "k2": 4, "k3": 3, "k4": 2}
+	GameManager.cultivator_danger_clears = {
+		"k1": 0b111111,  # 通关过 D5（老档满格）
+		"k2": 0b011111,  # 通关过 D4
+		"k3": 0b001111,  # 通关过 D3（新顶档，本身合法）
+		"k4": 0b000111,  # 通关过 D2
+	}
+	GameManager.career_stats["best_danger_cleared"] = 5
+	ProgressStore._compress_danger_progress(GameManager)
+	_c.equals(int(GameManager.cultivator_best_danger["k1"]), 3, "老档 D5 最高通关折进新顶档 D3")
+	_c.equals(int(GameManager.cultivator_best_danger["k2"]), 3, "老档 D4 最高通关折进新顶档 D3")
+	_c.equals(int(GameManager.cultivator_best_danger["k3"]), 3, "老档 D3 原样保留")
+	_c.equals(int(GameManager.cultivator_best_danger["k4"]), 2, "老档 D2 原样保留")
+	_c.equals(int(GameManager.cultivator_danger_clears["k1"]), 0b1111, "老档 D4/D5 封印折进 D3 后掩码不越界")
+	_c.equals(int(GameManager.cultivator_danger_clears["k2"]), 0b1111, "老档只有 D4 也点亮新顶档 D3 封印")
+	_c.equals(int(GameManager.cultivator_danger_clears["k3"]), 0b1111, "老档 D3 封印原样保留")
+	_c.equals(int(GameManager.cultivator_danger_clears["k4"]), 0b0111, "老档 D2 封印不高位污染")
+	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 3, "生涯最高通关难度同步夹到顶档")
+	# 迁移是幂等的：再跑一遍不变
+	ProgressStore._compress_danger_progress(GameManager)
+	_c.equals(int(GameManager.cultivator_danger_clears["k4"]), 0b0111, "重复迁移不改变已合规的位掩码")
+	_c.equals(int(GameManager.cultivator_best_danger["k4"]), 2, "重复迁移不改变已合规的最高难度")
+
 	# 还原测试前的玩家真实进度
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_best_danger
@@ -492,7 +516,6 @@ func _test_career_milestones() -> void:
 	GameManager.unlocked_cultivators = orig_cults
 	GameManager.unlocked_items = orig_items
 	GameManager.unlocked_achievements = orig_achs
-	GameManager.max_danger_unlocked = orig_danger_max
 	GameManager.last_run_new_records = []
 	GameManager._save_progress()
 	GameManager.reset_run()
@@ -590,31 +613,39 @@ func _test_modal_pause_buttons() -> void:
 
 # ---------------- 换色皮肤系统（2026-10-14） ----------------
 
-## 覆盖：主题表完整性、跨难度向下补齐解锁（最高通关难度 >= tier 口径）、
+## 覆盖：主题表完整性、按该角色通关次数解锁（2026-10-20 与难度解耦）、
 ## apply_to_config 副本换色不污染原配置、选择与落盘往返、锁定皮肤惰性回落、视图装配换色生效
 func _test_skin_system() -> void:
 	# 1. 主题表完整性
-	_c.equals(SkinData.count(), 6, "皮肤主题共 6 套（对应 6 档难度）")
+	_c.equals(SkinData.count(), 6, "皮肤主题共 6 套")
 	for i in range(SkinData.count()):
 		var t := SkinData.get_theme(i)
-		_c.equals(int(t.get("tier", -1)), i, "皮肤 %d tier 与难度档位一一对应" % i)
+		_c.equals(int(t.get("tier", -1)), i, "皮肤 %d tier 与通关次数门槛对位（tier + 1 次）" % i)
 		_c.check(not String(t.get("name", "")).is_empty(), "皮肤 %d 有名号" % i)
 		_c.check(t.get("cloak_outer") is Color and t.get("cloak_edge") is Color, "皮肤 %d 配色完整" % i)
 	_c.check(SkinData.get_theme(-1).is_empty() and SkinData.get_theme(99).is_empty(), "越界皮肤序号返回空")
 
 	# 备份玩家真实进度
-	var orig_records := GameManager.cultivator_best_danger.duplicate()
+	var orig_records := GameManager.cultivator_records.duplicate()
 	var orig_skins := GameManager.skin_selections.duplicate()
 
-	# 2. 跨难度向下补齐：直接通关 D4 ⇒ tier 0~4 全解锁，D5 仍锁
-	GameManager.cultivator_best_danger = {"shiyue": 4}
+	# 2. 按通关次数解锁：4 胜 ⇒ 门槛 1~4 次的皮肤解锁，5 次以上的仍锁
+	GameManager.cultivator_records = {"shiyue": {"runs": 6, "wins": 4}}
 	GameManager.skin_selections = {}
 	_c.check(GameManager.is_skin_unlocked("shiyue", -1), "原色皮肤恒可用")
-	for i in range(5):
-		_c.check(GameManager.is_skin_unlocked("shiyue", i), "通关 D4 ⇒ 皮肤 %d 解锁（跨档补齐）" % i)
-	_c.check(not GameManager.is_skin_unlocked("shiyue", 5), "通关 D4 ⇒ D5 皮肤仍锁")
+	for i in range(4):
+		_c.check(GameManager.is_skin_unlocked("shiyue", i), "通关 4 次 ⇒ 皮肤 %d 解锁" % i)
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 4), "通关 4 次 ⇒ 第 5 套皮肤仍锁")
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 5), "通关 4 次 ⇒ 第 6 套皮肤仍锁")
 	_c.check(not GameManager.is_skin_unlocked("meiying", 0), "未通关角色皮肤全锁")
 	_c.check(not GameManager.is_skin_unlocked("shiyue", 99), "越界皮肤序号判锁")
+	# 只说"玩过很多局"不算数：runs 再多，wins=0 也解不开
+	GameManager.cultivator_records = {"shiyue": {"runs": 99, "wins": 0}}
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 0), "只玩不通关不解锁皮肤（只看 wins 不看 runs）")
+	# 难度不参与判定：同样的胜场在任何难度下解锁效果一致
+	GameManager.cultivator_records = {"shiyue": {"runs": 6, "wins": 6}}
+	_c.check(GameManager.is_skin_unlocked("shiyue", 5), "通关 6 次 ⇒ 6 套皮肤全解锁")
+	_c.check(GameManager.is_skin_unlocked("shiyue", 5), "解锁口径只看胜场，与难度无关")
 
 	# 3. apply_to_config：副本换色，原配置零污染，造型样式键不动
 	var base := CultivatorVisualConfig.get_config("jianchi")
@@ -629,24 +660,25 @@ func _test_skin_system() -> void:
 	_c.check(SkinData.apply_to_config(base, -1) == base, "非法皮肤序号原样返回")
 
 	# 4. 选择与落盘往返 + 锁定皮肤惰性回落
+	GameManager.cultivator_records = {"shiyue": {"runs": 4, "wins": 4}}
 	GameManager.set_selected_skin("shiyue", 3)
 	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "皮肤选择生效")
 	GameManager.set_selected_skin("shiyue", 5)
 	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "锁定皮肤选择被拒绝")
 	GameManager._save_progress()
 	GameManager.skin_selections = {}
-	GameManager.cultivator_best_danger = {}
+	GameManager.cultivator_records = {}
 	GameManager._load_progress()
 	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "读档后皮肤选择恢复")
-	GameManager.cultivator_best_danger = {"shiyue": 1}
-	_c.equals(GameManager.get_selected_skin("shiyue"), -1, "解锁记录回退 ⇒ 已选皮肤惰性回落原色")
+	GameManager.cultivator_records = {"shiyue": {"runs": 1, "wins": 1}}
+	_c.equals(GameManager.get_selected_skin("shiyue"), -1, "胜场回退 ⇒ 已选皮肤惰性回落原色")
 	GameManager.set_selected_skin("shiyue", -1)
 	_c.check(not GameManager.skin_selections.has("shiyue"), "选回原色后存档键擦除")
 
 	# 5. 视图装配：缺省走存档选择，显式 -1 回原色
 	var view := ProceduralCultivatorView.new()
 	add_child(view)
-	GameManager.cultivator_best_danger = {"shiyue": 4}
+	GameManager.cultivator_records = {"shiyue": {"runs": 4, "wins": 4}}
 	GameManager.skin_selections = {"shiyue": 2}
 	view.setup_character_id("shiyue")
 	_c.equals(view.renderer.config.cloak["col_outer"], SkinData.get_theme(2)["cloak_outer"], "视图按存档选择装配皮肤色")
@@ -655,7 +687,7 @@ func _test_skin_system() -> void:
 	view.queue_free()
 
 	# 还原玩家真实进度
-	GameManager.cultivator_best_danger = orig_records
+	GameManager.cultivator_records = orig_records
 	GameManager.skin_selections = orig_skins
 	GameManager._save_progress()
 

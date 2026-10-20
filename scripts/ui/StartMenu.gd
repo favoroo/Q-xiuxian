@@ -3,7 +3,7 @@ extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
 ##   ① 顶栏贴角级联徽章带（右：快速静音 + 游戏设置）
-##   ② 左 1 主方块（Hero「开始渡劫」，内嵌 6 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
+##   ② 左 1 主方块（Hero「开始渡劫」，内嵌 4 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
 ##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
 ##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
 ##   ③ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
@@ -14,7 +14,7 @@ signal career_requested
 signal manual_requested
 signal resume_requested  ## 中断续玩：主菜单「继续游戏」按钮（Main.resume_from_save 消费）
 
-const DANGER_NAMES := ["简单", "普通", "困难", "噩梦", "地狱", "极限"]
+const DANGER_NAMES := ["简单", "普通", "困难", "噩梦"]
 
 ## 核心矩阵基准尺寸（960×540 下）。`*_BASE` 是「卡内排版」的起点档：
 ## 卡片按屏现算的高度高于基准时，多出来的那一截由 `hero_metrics()` / `small_metrics()`
@@ -33,7 +33,7 @@ const HERO_SEP_BASE := 7.0            # Hero 内各行间距
 const HERO_TITLE_FONT_BASE := 32
 const HERO_DANGER_HEAD_FONT_BASE := 11
 const ENDLESS_BTN_H_BASE := 28.0
-const DANGER_BTN_H_BASE := 28.0       # 危险度那一排六颗键的高
+const DANGER_BTN_H_BASE := 28.0       # 危险度那一排四颗键的高
 const DANGER_PAD_BASE := 6.0          # 危险度衬板上下内距
 const START_BTN_H_BASE := 42.0        # 底部整条出战主按钮高
 
@@ -265,7 +265,7 @@ func _build_center_matrix() -> void:
 	_update_host.add_child(_update_btn)
 	_anim_blocks.append(_update_btn)
 
-## 左侧整柱 Hero 大方块：开始渡劫 + 6 档危险度 + 无尽试炼开关
+## 左侧整柱 Hero 大方块：开始渡劫 + 4 档危险度 + 无尽试炼开关
 func _build_hero_block() -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H_BASE)
@@ -313,7 +313,7 @@ func _build_hero_block() -> PanelContainer:
 	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
 	vbox.add_child(_hero_title)
 
-	# 危险度选择区（纯黑内嵌衬板，让 6 档按钮在金色大块上清晰醒目）
+	# 危险度选择区（纯黑内嵌衬板，让 4 档按钮在金色大块上清晰醒目）
 	_danger_box = PanelContainer.new()
 	var d_sb := GameStyle.panel(GameStyle.with_alpha(Color.BLACK, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
 	d_sb.content_margin_left = 8.0
@@ -334,7 +334,7 @@ func _build_hero_block() -> PanelContainer:
 	_danger_vbox.add_child(d_head)
 
 	var d_lbl := Label.new()
-	d_lbl.text = "难度选择 · 通关当前最高档解锁下一档"
+	d_lbl.text = "难度选择"
 	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, GameStyle.with_alpha(GameStyle.CHALK, 0.75))
 	_danger_head_lbl = d_lbl
 	d_head.add_child(d_lbl)
@@ -585,17 +585,15 @@ func _apply_small_metrics(small_h: float) -> void:
 # ---------------- 状态刷新 ----------------
 
 func _refresh_danger_row() -> void:
+	# 4 档全部开放（2026-10-20）：没有锁定态，只有选中/未选中两种样子
 	for d in range(_danger_buttons.size()):
 		var btn := _danger_buttons[d]
-		var unlocked := d <= GameManager.max_danger_unlocked
-		btn.disabled = not unlocked
-		btn.text = DANGER_NAMES[d] if unlocked else "锁"
-		if d == GameManager.danger_level and unlocked:
+		btn.disabled = false
+		btn.text = DANGER_NAMES[d]
+		if d == GameManager.danger_level:
 			GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
-		elif unlocked:
-			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
 		else:
-			GameStyle.button(btn, GameStyle.INK, GameStyle.LINE, 12, GameStyle.GREY, GameStyle.SLANT_BUTTON)
+			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
 
 func _refresh_endless_toggle() -> void:
 	if _endless_btn == null or not is_instance_valid(_endless_btn):

@@ -55,6 +55,13 @@ const SWEEP_CLOSE_GRACE := 26.0   ## 贴脸宽容：距离小于它不看角度�
 const SWEEP_ANGLE_SLACK := 6.0    ## 角度宽容（度）：扇面 80°→88° 羽化边里擦到的也算中
 const SWEEP_IMPACT_PITCH := 0.9   ## 横扫命中音低沉一档，与近战的亮脆分层
 
+## 远程弹丸航程余量（2026-10-20 射程体系重做）：
+## 旧写法弹丸寿命固定 BASE_LIFETIME=1.0s ⇒ 所有远程裸航程都是 420px，与卡面 range 脱钩
+## （range 只改「锁谁」，低 range 的远程反而够不到远处怪，卡面数字成了空头支票）。
+## 改后航程 = (攻击范围 × 乘区 + 本余量)：锁得到的就打得到，且各武器航程随自身 range 分化，
+## 范围词条叠高时航程同步外扩但不越出「别拉满屏」的口径。60px ≈ 一次脱程判定的缓冲。
+const PROJECTILE_TRAVEL_MARGIN := 60.0
+
 ## 近战双层与雷法双层的相对响度（2026-10-10 音色重构）：
 ## 前摇破空是「动作」，无条件播、当铺垫层，所以压低；命中材质是「战果」，只在真打中时补一记。
 ## 旧写法只有一层，且写在打击帧 —— 一声纯空气破空挂在命中 moment，剑听上去就是棍子。
@@ -820,9 +827,11 @@ func _perform_projectile_attack() -> void:
 			p.poison_dur = float(def.get("poison_dur", 2.5))
 		# 池化后 _ready 先于字段赋值跑过，由 activate 按当前字段值统一铺视觉与物理状态
 		p.activate()
-		# 射程倍率必须在 activate 之后乘：activate 会把 lifetime 重置回 BASE_LIFETIME，
-		# 之前乘会被覆盖成死代码
-		p.lifetime *= _range_mult()
+		# 航程 = (攻击范围 × 乘区 + 余量) / 弹速（2026-10-20 射程体系重做）：
+		# 必须在 activate 之后设：activate 会把 lifetime 重置回 BASE_LIFETIME。
+		# 旧写法 p.lifetime *= _range_mult() 让所有远程裸航程恒为 420px、range 形同虚设；
+		# 现改为按每把武器自身 range 定量，锁多远的怪就飞多远（近战/横扫的 range 也已改为真实命中半径）。
+		p.lifetime = (attack_range * _range_mult() + PROJECTILE_TRAVEL_MARGIN) / maxf(1.0, p.speed)
 
 	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id))
 

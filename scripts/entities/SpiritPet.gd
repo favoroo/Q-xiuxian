@@ -11,6 +11,7 @@ const DISSOLVE_SEC: float = 0.35    ## 出售/移除时的消散时长（秒）
 
 const BULLET_FIRE_TEXTURE = preload("res://assets/art/bullet_fire_flame.png")
 const BULLET_PELLET_TEXTURE = preload("res://assets/art/bullet_spirit_pellet.png")
+const BULLET_COIN_TEXTURE = preload("res://assets/art/icon_coin.png")
 const PROJECTILE_SCENE = preload("res://scenes/weapons/BladeProjectile.tscn")
 
 var pet_id: String = ""             ## 灵兽 id（见 PetData）
@@ -25,7 +26,7 @@ var _dying: bool = false
 var _action_fx: float = -1.0        ## 脉冲/动作特效进度（0~1，<0 为无）
 var _lightning_target_pos: Vector2 = Vector2.ZERO ## 雷击主目标终点（本地坐标）
 var _chain_targets_pos: Array[Vector2] = []       ## 雷击连锁分支目标终点（本地坐标）
-var _lash_target_pos: Vector2 = Vector2.ZERO      ## 聚宝蟾金舌鞭击目标终点（本地坐标）
+var _spit_dir: Vector2 = Vector2.ZERO             ## 聚宝蟾吐金宝朝向（本地坐标，供吐宝扇芒绘制）
 var _fire_dir: Vector2 = Vector2.ZERO             ## 焰灵狐吐火朝向（本地坐标，供喷射扇焰绘制）
 
 # --- 增强视觉表现字段 ---
@@ -100,12 +101,12 @@ func _physics_process(delta: float) -> void:
 	if _action_fx >= 0.0:
 		_action_fx += delta * 2.8
 		if _action_fx > 1.0:
-			_action_fx = -1.0
-			_lightning_target_pos = Vector2.ZERO
-			_chain_targets_pos.clear()
-			_lash_target_pos = Vector2.ZERO
-			_fire_dir = Vector2.ZERO
-			_custom_fx_type = ""
+				_action_fx = -1.0
+				_lightning_target_pos = Vector2.ZERO
+				_chain_targets_pos.clear()
+				_spit_dir = Vector2.ZERO
+				_fire_dir = Vector2.ZERO
+				_custom_fx_type = ""
 
 	# 闪白与挤压回弹推进
 	if _flash_timer > 0.0:
@@ -366,28 +367,40 @@ func _act_yulu() -> void:
 		DamageNumber.spawn(scene_parent, target.global_position + Vector2(0, -22), int(heal_amt), false, "+" + str(int(heal_amt)))
 	AudioManager.play_sfx("heal", 0.45, 1.25)
 
-## 聚宝蟾：金舌鞭击（2026-10-20 重做：去掉战中「金舌吸宝」，改为直接鞭打最近敌人）
+## 聚宝蟾：金蟾吐宝（向最近敌人发射飞旋金钱镖，带高质感破空金芒与金币爆散反馈）
 func _act_juchan() -> void:
-	var nearest := _find_nearest_enemy(300.0)
+	var nearest := _find_nearest_enemy(340.0)
 	if nearest == null:
 		return
 	var dir := (nearest.global_position - global_position).normalized()
 	var eff_mult := _get_effective_damage_mult()
-	var dmg := BalanceSpiritPet.tongue_damage(GameManager.wave_number, eff_mult)
+	var dmg := BalanceSpiritPet.coin_damage(GameManager.wave_number, eff_mult)
 
-	if nearest.has_method("take_damage"):
-		nearest.take_damage(dmg * GameManager.elite_damage_mult_for(nearest), dir * 40.0, false)
+	var p := BladeProjectile.acquire_or_new(PROJECTILE_SCENE, get_tree().current_scene)
+	p.global_position = global_position + dir * 12.0
+	p.direction = dir
+	p.speed = 400.0
+	p.damage = dmg
+	p.knockback_base = 65.0
+	p.pierce_left = 1
+	p.bounce_left = 0
+	p.homing_target = nearest
+	# 换用金钱镖贴图，启用 ProceduralProjectileRenderer 的 GOLD_COIN 纯矢量飞旋金钱
+	p.bullet_texture = BULLET_COIN_TEXTURE
+	p.bullet_scale = 0.85
+	p.spin = true
+	p.activate()
+	p.lifetime = 1.1
 
-	# 记录鞭击终点供 _draw 画金色鞭影
-	_lash_target_pos = to_local(nearest.global_position)
-
-	pulse_trigger_fx(Vector2(1.35, 0.72), 0.14)
-	_custom_fx_type = "gold_lash"
+	# 后坐形变 + 聚宝蟾吐宝碎金特效
+	pulse_trigger_fx(Vector2(0.72, 1.38), 0.15)
+	_custom_fx_type = "gold_spit"
+	_spit_dir = dir
 	var scene_parent: Node = get_parent()
 	if is_inside_tree() and scene_parent != null:
-		JuiceEffect.spawn_impact_pop(scene_parent, nearest.global_position, Color(1.0, 0.85, 0.25))
-		JuiceEffect.spawn_shockwave(scene_parent, nearest.global_position, 26.0, Color(1.0, 0.82, 0.2, 0.85), 0.20)
-	AudioManager.play_sfx("impact_blunt", 0.4, 1.3)
+		JuiceEffect.spawn_impact_pop(scene_parent, global_position + dir * 10.0, Color(1.0, 0.88, 0.35), dir)
+		JuiceEffect.spawn_shockwave(scene_parent, global_position + dir * 8.0, 22.0, Color(1.0, 0.85, 0.25, 0.8), 0.18)
+	AudioManager.play_sfx("metal_dart", 0.45, 1.25)
 
 ## 灵风貂：罡风卷定
 func _act_fengdiao() -> void:
@@ -540,49 +553,55 @@ func _draw() -> void:
 		_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
 		_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
 
-	# 6. 行动与专属特效（按灵兽各自特征绘制，2026-10-20 七只统一打磨）
-	if _action_fx >= 0.0:
-		if _lightning_target_pos != Vector2.ZERO:
-			# 主雷电电弧
-			_draw_lightning_arc(Vector2.ZERO, _lightning_target_pos, 1.0 - _action_fx)
-			# 连锁分支电弧
-			for cp in _chain_targets_pos:
-				_draw_lightning_arc(_lightning_target_pos, cp, (1.0 - _action_fx) * 0.8)
-			# 命中点十字闪光（雷灵雀专属）
-			_draw_fx_thunder_hit(_lightning_target_pos, 1.0 - _action_fx)
-		elif _custom_fx_type == "wind_vortex":
-			# 灵风气旋双螺旋 + 外圈风刃刻线
-			var wind_r: float = lerpf(core_r * 1.5, core_r * 4.2, _action_fx)
-			var wind_alpha: float = (1.0 - _action_fx) * 0.85
-			_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
-			_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
-			_draw_fx_wind_blades(wind_r, wind_alpha)
-		elif _custom_fx_type == "fire_burst":
-			# 焰灵狐：吐火朝向的锥形扇焰 + 余烬飞点
-			_draw_fx_fire(local_fire_dir(), 1.0 - _action_fx, core_r)
-		elif _custom_fx_type == "gold_lash":
-			# 聚宝蟾：灵兽到目标的金色鞭影弧带 + 命中元宝碎金光
-			_draw_fx_gold_lash(1.0 - _action_fx, core_r)
-		elif _custom_fx_type == "yulu_dew":
-			# 玉露鹿：甘霖雨丝下落 + 地面上升绿色光点
-			_draw_fx_yulu_dew(1.0 - _action_fx, core_r)
-		elif _custom_fx_type == "rock_smash":
-			# 磐石猿：地面放射状裂纹 + 碎石崩点
-			_draw_fx_rock_smash(1.0 - _action_fx, core_r)
-		elif _custom_fx_type == "xuangui_shield":
-			# 玄甲龟：六边形龟甲盾纹闪光
-			_draw_fx_turtle_shield(1.0 - _action_fx, core_r)
-		else:
-			# 保底：轻柔单层扩散波纹环
-			var ring_r: float = lerpf(core_r, core_r * 2.2, _action_fx)
-			var ring_alpha: float = (1.0 - _action_fx) * 0.65
-			_arc(Vector2.ZERO, ring_r, 0.0, TAU, 28, Color(color.r, color.g, color.b, ring_alpha), 1.4)
+		# 6. 行动与专属特效（按灵兽各自特征绘制，2026-10-20 七只统一打磨）
+		if _action_fx >= 0.0:
+			if _lightning_target_pos != Vector2.ZERO:
+				# 主雷电电弧
+				_draw_lightning_arc(Vector2.ZERO, _lightning_target_pos, 1.0 - _action_fx)
+				# 连锁分支电弧
+				for cp in _chain_targets_pos:
+					_draw_lightning_arc(_lightning_target_pos, cp, (1.0 - _action_fx) * 0.8)
+				# 命中点十字闪光（雷灵雀专属）
+				_draw_fx_thunder_hit(_lightning_target_pos, 1.0 - _action_fx)
+			elif _custom_fx_type == "wind_vortex":
+				# 灵风气旋双螺旋 + 外圈风刃刻线
+				var wind_r: float = lerpf(core_r * 1.5, core_r * 4.2, _action_fx)
+				var wind_alpha: float = (1.0 - _action_fx) * 0.85
+				_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
+				_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
+				_draw_fx_wind_blades(wind_r, wind_alpha)
+			elif _custom_fx_type == "fire_burst":
+				# 焰灵狐：吐火朝向的锥形扇焰 + 余烬飞点
+				_draw_fx_fire(local_fire_dir(), 1.0 - _action_fx, core_r)
+			elif _custom_fx_type == "gold_spit":
+				# 聚宝蟾：吐金宝朝向的金色扇弧 + 飞溅金星灵屑
+				_draw_fx_gold_spit(local_spit_dir(), 1.0 - _action_fx, core_r)
+			elif _custom_fx_type == "yulu_dew":
+				# 玉露鹿：甘霖雨丝下落 + 地面上升绿色光点
+				_draw_fx_yulu_dew(1.0 - _action_fx, core_r)
+			elif _custom_fx_type == "rock_smash":
+				# 磐石猿：地面放射状裂纹 + 碎石崩点
+				_draw_fx_rock_smash(1.0 - _action_fx, core_r)
+			elif _custom_fx_type == "xuangui_shield":
+				# 玄甲龟：六边形龟甲盾纹闪光
+				_draw_fx_turtle_shield(1.0 - _action_fx, core_r)
+			else:
+				# 保底：轻柔单层扩散波纹环
+				var ring_r: float = lerpf(core_r, core_r * 2.2, _action_fx)
+				var ring_alpha: float = (1.0 - _action_fx) * 0.65
+				_arc(Vector2.ZERO, ring_r, 0.0, TAU, 28, Color(color.r, color.g, color.b, ring_alpha), 1.4)
 
 ## 焰灵狐吐火朝向（本地坐标；无朝向时默认朝下偏右）
 func local_fire_dir() -> Vector2:
 	if _fire_dir == Vector2.ZERO:
 		return Vector2(0.7, 1.0).normalized()
 	return _fire_dir
+
+## 聚宝蟾吐金宝朝向（本地坐标；无朝向时默认朝下偏右）
+func local_spit_dir() -> Vector2:
+	if _spit_dir == Vector2.ZERO:
+		return Vector2(0.7, 0.8).normalized()
+	return _spit_dir
 
 ## 焰灵狐：锥形扇焰 + 余烬飞点
 func _draw_fx_fire(dir: Vector2, prog: float, core_r: float) -> void:
@@ -608,35 +627,38 @@ func _draw_fx_fire(dir: Vector2, prog: float, core_r: float) -> void:
 		var p: Vector2 = dir * off + tang * sin(_age * 8.0 + float(k) * 2.1) * 4.0 * t_f
 		_circle(p, maxf(0.6, 2.2 * (1.0 - t_f)), ember_col)
 
-## 聚宝蟾：金色鞭影弧带 + 命中碎金光
-func _draw_fx_gold_lash(prog: float, core_r: float) -> void:
-	if _lash_target_pos == Vector2.ZERO:
-		return
+## 聚宝蟾：金蟾吐宝灵光特效（喷吐金芒扇弧 + 飞溅金星灵屑）
+func _draw_fx_gold_spit(dir: Vector2, prog: float, core_r: float) -> void:
+	var base_ang := dir.angle()
+	var reach: float = core_r + lerpf(4.0, core_r * 2.4, prog)
 	var alpha: float = (1.0 - prog) * 0.95
-	var mid := _lash_target_pos * 0.5 + Vector2(0, -core_r * 1.2)
-	var seg := 14
-	var band := PackedVector2Array()
-	var band_inner := PackedVector2Array()
-	var bend := 2.6
+
+	# 1. 吐宝金色灵环弧面（喷吐金光波）
+	var spread := deg_to_rad(30.0)
+	var pts := PackedVector2Array([Vector2.ZERO])
+	var seg := 8
 	for i in range(seg + 1):
-		var t: float = float(i) / float(seg)
-		var p: Vector2 = Vector2.ZERO.lerp(mid, t).lerp(mid.lerp(_lash_target_pos, t), t)
-		var perp: Vector2 = (p - _lash_target_pos * 0.5).orthogonal()
-		perp = perp.normalized() if perp.length() > 0.001 else Vector2.UP
-		band.append(p + perp * bend * (1.0 - t))
-		band_inner.append(p - perp * bend * (1.0 - t))
-	band.append_array(band_inner)
-	draw_colored_polygon(band, Color(0.98, 0.74, 0.12, alpha * 0.85))
-	var core_pts := PackedVector2Array()
+		var a: float = base_ang - spread + (2.0 * spread) * float(i) / float(seg)
+		pts.append(Vector2(cos(a), sin(a)) * reach)
+	draw_colored_polygon(pts, Color(1.0, 0.88, 0.35, alpha * 0.40))
+
+	# 2. 喷射外沿流金锋芒弧线
+	var arc_pts := PackedVector2Array()
 	for i in range(seg + 1):
-		var t2: float = float(i) / float(seg)
-		core_pts.append(Vector2.ZERO.lerp(mid, t2).lerp(mid.lerp(_lash_target_pos, t2), t2))
-	draw_polyline(core_pts, Color(1.0, 0.97, 0.6, alpha), maxf(0.8, 2.4 * (1.0 - prog)))
-	var hit_c := _lash_target_pos
-	for k in range(6):
-		var a: float = TAU * float(k) / 6.0 + _age * 3.0
-		var r0: float = core_r * 0.3 + prog * core_r * 1.4
-		draw_line(hit_c + Vector2(cos(a), sin(a)) * r0, hit_c + Vector2(cos(a), sin(a)) * (r0 + 5.0), Color(1.0, 0.9, 0.35, alpha), 1.6)
+		var a2: float = base_ang - spread + (2.0 * spread) * float(i) / float(seg)
+		arc_pts.append(Vector2(cos(a2), sin(a2)) * (reach * 1.06))
+	draw_polyline(arc_pts, Color(1.0, 0.96, 0.65, alpha * 0.9), 1.6)
+
+	# 3. 飞溅招财碎金星尘（向吐出方向外扬）
+	var coin_spark_col := Color(1.0, 0.88, 0.30, alpha)
+	for k in range(4):
+		var t_f: float = prog + float(k) * 0.16
+		var off: float = lerpf(core_r * 0.5, reach * 1.25, t_f)
+		var perp_ang := base_ang + PI * 0.5
+		var tang := Vector2(cos(perp_ang), sin(perp_ang))
+		var offset_side := sin(_age * 12.0 + float(k) * 2.3) * (3.0 + 2.5 * float(k))
+		var p: Vector2 = dir * off + tang * offset_side
+		_circle(p, maxf(0.8, 2.2 * (1.0 - t_f)), coin_spark_col)
 
 ## 玉露鹿：甘霖雨丝 + 上升绿色光点
 func _draw_fx_yulu_dew(prog: float, core_r: float) -> void:

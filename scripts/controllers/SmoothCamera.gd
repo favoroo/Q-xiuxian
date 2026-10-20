@@ -52,17 +52,22 @@ func _on_setting_changed(section: StringName, key: StringName, _val: Variant) ->
 		_refresh_intensity()
 
 func _physics_process(delta: float) -> void:
+	# 顿帧豁免：Player 在 hit_stop 期间按真实时间全速移动，相机跟随也必须同拍补真实时间，
+	# 否则玩家会跑出画面（指数跟随吃的是被缩放的 delta）。只看位移链，震屏衰减仍走缩放 delta。
+	var follow_delta := delta
+	if Engine.time_scale < 0.999:
+		follow_delta = delta * minf(1.0 / maxf(Engine.time_scale, 0.001), 8.0)
 	if not _focus_active:
 		var player = GameManager.player
 		if player != null and is_instance_valid(player):
 			var target_lookahead := Vector2.ZERO
 			if player is CharacterBody2D:
 				target_lookahead = (player as CharacterBody2D).velocity * lookahead_factor
-			var look_weight := 1.0 - exp(-6.0 * delta)
+			var look_weight := 1.0 - exp(-6.0 * follow_delta)
 			_lookahead = _lookahead.lerp(target_lookahead, look_weight)
 
 			var target_pos: Vector2 = player.global_position + _lookahead
-			var follow_weight := 1.0 - exp(-follow_speed * delta)
+			var follow_weight := 1.0 - exp(-follow_speed * follow_delta)
 			global_position = global_position.lerp(target_pos, follow_weight)
 
 	# 预算按真实秒记账：一帧之内攒够的碎震叠不起来，只允许"每秒这么多"的量

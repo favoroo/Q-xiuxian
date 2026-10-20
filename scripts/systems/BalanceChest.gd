@@ -143,9 +143,10 @@ static func scale_reward(reward: Dictionary, mult: float) -> Dictionary:
 ## 葫芦掉落概率随危险度递减：高难度治疗更稀缺，让难档更难。
 ## 与 BalanceWave.danger_*_mult 同模式——纯函数，danger 由调用方（SpiritChest）传
 ## GameManager.danger_level，乘在奖励表 heal_chance 上。奖励表 heal_chance 是简单档基准，
-## 简单(0)=×1.0 → 极限(5)=×0.375（即 0.40 基准压到 0.15）。
+## 简单(0)=×1.0 → 噩梦(3)=×0.375（即 0.40 基准压到 0.15）。
+## 2026-10-20 随难度收缩 6→4 档同步：每档降幅加大到 -20.83%，顶档终值维持原 D5 的 0.375。
 const DANGER_HEAL_MULT_BASE := 1.0     ## 简单档葫芦概率乘区基线
-const DANGER_HEAL_MULT_PER := -0.125   ## 每档危险度葫芦概率 -12.5%
+const DANGER_HEAL_MULT_PER := -0.2083333  ## 每档危险度葫芦概率 -20.83%
 
 static func danger_heal_chance_mult(danger: int) -> float:
 	return maxf(0.0, DANGER_HEAL_MULT_BASE + float(clampi(danger, 0, BalanceWave.DANGER_MAX)) * DANGER_HEAL_MULT_PER)

@@ -3,7 +3,7 @@ extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）三页签：成就 / 角色 / 战斗记录
 ## 成就页：四分类（试炼/流派/历练/机缘）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
-## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 六难度封印格），
+## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 四难度封印格），
 ##         封印按 GameManager.cultivator_danger_clears 位掩码点亮，境界按最高通关难度晋升
 ## 滚动区内的展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
 ## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 末尾）
@@ -21,8 +21,8 @@ var _cult_list_box: VBoxContainer
 var _log_list_box: VBoxContainer
 var _expanded_log_idx: int = -1  ## 渡劫实录当前展开的快照下标（-1 = 全部收起）
 
-## 六难度封印格的单字（与 AchievementData.DANGER_NAMES 对位）
-const SEAL_CHARS: Array[String] = ["简", "普", "困", "噩", "狱", "极"]
+## 难度封印格的单字（与 AchievementData.DANGER_NAMES 对位，2026-10-20 收为 4 档）
+const SEAL_CHARS: Array[String] = ["简", "普", "困", "噩"]
 
 func _get_title_text() -> String:
 	return "战 绩  ·  游 戏 记 录"
@@ -117,7 +117,7 @@ func _build_achievements_page(parent: Control) -> Control:
 	scroll.add_child(_ach_list_box)
 	return scroll
 
-# ----------------- 分页 2：角色（大色块卡 + 六难度封印） -----------------
+# ----------------- 分页 2：角色（大色块卡 + 四难度封印） -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
@@ -238,12 +238,8 @@ func _danger_color(d: int) -> Color:
 			return GameStyle.GOLD
 		2:
 			return GameStyle.JADE
-		3:
-			return GameStyle.ELEMENT
-		4:
-			return GameStyle.BAD
 		_:
-			return GameStyle.RARITY_LEGEND
+			return GameStyle.ELEMENT
 
 ## 小节标题条
 func _section_header(text: String, color: Color = GameStyle.GOLD) -> Control:
@@ -376,7 +372,7 @@ func _open_achievement_tip(adef: Dictionary, anchor: Control) -> void:
 		"foot": "成就只作记录与解锁，不提供局内数值加成。",
 	})
 
-# ----------------- 角色大色块卡（境界 + 六难度封印） -----------------
+# ----------------- 角色大色块卡（境界 + 四难度封印） -----------------
 
 func _create_cultivator_card(cid: String) -> Control:
 	var unlocked: bool = GameManager.is_cultivator_unlocked(cid)
@@ -453,7 +449,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	realm_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_row.add_child(realm_lbl)
 
-	# 六难度封印格：通关过该档即点亮（未解锁角色全灭）
+	# 四难度封印格：通关过该档即点亮（未解锁角色全灭）
 	var seals := HBoxContainer.new()
 	seals.add_theme_constant_override("separation", 4)
 	seals.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -474,7 +470,7 @@ func _create_cultivator_card(cid: String) -> Control:
 		seals.add_child(seal)
 	# 封印格图例
 	var legend := Label.new()
-	legend.text = " 简→极"
+	legend.text = " 简→噩"
 	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	GameStyle.label(legend, 10, GameStyle.GREY)
 	seals.add_child(legend)

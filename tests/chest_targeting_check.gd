@@ -176,10 +176,12 @@ func _test_idle_then_target_chest() -> void:
 	_check(hits_taken > 0, "锁上之后真的打到了（吃到 %d/%d 下）" % [hits_taken, max_h])
 	_check(broken, "无妖时脚边的匣子会被法器自己砸开（用户要的完整结果，不是只『看一眼』）")
 
-## 3) 有妖时匣子不许抢目标 —— 匣子摆在 40px、妖摆在 120px，两者都在射程内
+## 3) 有妖时匣子不许抢目标 —— 匣子摆在 40px、妖摆在 90px，两者都在射程内
+##    （2026-10-20 射程体系重做后长剑真实命中半径 105px：旧值 120px 已出圈，
+##      本用例测的是「射程内妖优先于更近的匣子」，妖必须落在 105 以内）
 func _test_enemy_outranks_chest() -> void:
 	var enemy := (_spawner._mob_scenes["slime"] as PackedScene).instantiate() as Node2D
-	enemy.global_position = GameManager.player.global_position + Vector2(120.0, 0.0)
+	enemy.global_position = GameManager.player.global_position + Vector2(90.0, 0.0)
 	_spawner.get_parent().add_child(enemy)
 	var chest := _spawn_chest(Vector2(40.0, 0.0))
 	await get_tree().process_frame

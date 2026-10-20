@@ -389,7 +389,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	GameStyle.swipeable(mid_col)
 
-	# 2.5 皮肤切换栏（通关难度解锁换色皮肤；未解锁角色整排置灰）
+	# 2.5 皮肤切换栏（按该角色通关次数解锁换色皮肤；未解锁角色整排置灰）
 	_skin_row = _make_skin_row(cid, is_unlocked)
 	_detail_content.add_child(_skin_row)
 
@@ -488,7 +488,7 @@ func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
 		"foot": "进度取生涯单局最佳记录，达成后自动解锁该角色。",
 	})
 
-# ---------------- 皮肤切换栏（通关难度解锁换色皮肤） ----------------
+# ---------------- 皮肤切换栏（按该角色通关次数解锁换色皮肤） ----------------
 
 ## 皮肤栏：「皮肤」色签 + 原色槽 + 6 套主题色槽
 func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
@@ -591,20 +591,17 @@ func _refresh_roster_skin(cid: String) -> void:
 ## 未解锁皮肤点按详情浮卡：解锁条件 + 当前进度（「这是什么」点按可得）
 func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 	var t := SkinData.get_theme(skin_idx)
-	var tier := int(t.get("tier", 0))
-	var dmax := AchievementData.DANGER_NAMES.size() - 1
-	var dname := AchievementData.DANGER_NAMES[clampi(tier, 0, dmax)]
-	var best := GameManager.get_cultivator_best_danger(cid)
-	var best_txt := "尚未通关" if best < 0 else "已通关「%s」" % AchievementData.DANGER_NAMES[clampi(best, 0, dmax)]
+	var wins_needed := int(t.get("tier", 0)) + 1
+	var wins := int(GameManager.get_cultivator_record(cid).get("wins", 0))
 	DetailTip.show_over(self, anchor, {
 		"title": "皮肤 · %s" % String(t.get("name", "")),
 		"chip": "未解锁",
 		"chip_color": GameStyle.GREY,
 		"rows": [
-			["解锁条件", "通关「%s」难度" % dname, GameStyle.GOLD],
-			["当前进度", best_txt, GameStyle.GOOD if best >= tier else GameStyle.GREY],
+			["解锁条件", "该角色通关 %d 次" % wins_needed, GameStyle.GOLD],
+			["当前进度", "已通关 %d 次" % wins, GameStyle.GOOD if wins >= wins_needed else GameStyle.GREY],
 		],
-		"body": "通关对应难度即可解锁该皮肤；通关更高难度时，低档皮肤将一并解锁。",
+		"body": "任意难度通关都计数；攒够次数后，该角色的这套皮肤自动解锁。",
 	})
 
 ## 将文本中的核心数值与机制名精准高亮（其余正文走 PAPER 纸白色）

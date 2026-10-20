@@ -555,13 +555,14 @@ var _glow_tween: Tween = null        ## 辉光渐变句柄（新切换先杀旧�
 ## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
 ## allow_hdr_flip（2026-10-17 真机 UI 频闪治理）：use_hdr_2d 翻转会重建根视口帧缓冲
 ## （RGBA16 与 RGBA8 互切），Android 真机上是整屏（含 UI）交换链重建闪一下。
-## 2026-10-20 真机 A/B 定论（整层 UI 连闪三次）：设置页关掉辉光后症状完全消失 ⇒
-## 根因在 glow/HDR 后处理链，且只在 Android Mobile 渲染器上复现。虽然上一轮已把
-## HUD 侧超白颜色全部钳到 1.0（在 threshold=1.0 下 UI 本不该起辉），症状仍在 ——
-## 说明不是「UI 像素被 bloom」，而是这条 HDR 管线本身在移动端不稳。
-## 对策：把 glow 与 HDR 解绑 —— 移动端 use_hdr_2d 恒为 false（永远 8-bit LDR 帧缓冲），
-## 即使用户手动开辉光也只走 LDR 起辉（阈值降到 GLOW_LDR_THRESHOLD），不再碰 RGBA16。
-## 桌面端维持原行为（跟随 want 同开同关），画质不受影响。
+## —— 2026-10-20 真机定论（「整层 UI 连闪三次」根治）——
+## 症状史：关掉「辉光」后闪烁消失；但把开关重新打开、只保留「移动端 use_hdr_2d 恒 false」
+## 这一条后仍然不闪 ⇒ **元凶是 RGBA16 HDR 帧缓冲本身，不是 glow pass**。
+## 这也解释了上一轮为何失败：把 HUD 超白颜色钳到 1.0 治不到帧缓冲级的问题。
+## 对策：移动端 use_hdr_2d 恒为 false（永远 8-bit LDR 帧缓冲，永不重建交换链）；
+## 同时把起辉阈值降到 GLOW_LDR_THRESHOLD，使 LDR 下的近白亮部仍能起辉 ——
+## 否则超白像素被钳到 1.0 后辉光完全失效，画质白白牺牲。
+## 桌面端维持原行为（HDR + 1.0 阈值），画质不受影响。
 ## 2026-10-20：开关也不再硬切 —— 先把 glow_intensity 渐变到 0 再关 pass，开时反之。
 const GLOW_LDR_THRESHOLD := 0.85  ## 移动端 LDR 起辉阈值：降到 1.0 以下，近纯白亮部也能起辉
 const GLOW_HDR_THRESHOLD := 1.0   ## 桌面端 HDR 起辉阈值（与 Main.tscn Environment 初值同源）

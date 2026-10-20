@@ -670,11 +670,12 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.check(not AchievementData.is_condition_met("ach_style_wuxing", {"max_element_spread": 4}, {}),
 		"4 种元素不达成【五行同阵】")
 	_c.check(AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 3}, {}),
-		"通关噩梦达成【征服噩梦】")
+		"通关噩梦（顶档）达成【噩梦常客】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 2}, {}),
-		"通关困难不达成【征服噩梦】")
-	_c.check(AchievementData.is_condition_met("ach_feat_extreme", {"victory": true, "danger": 5}, {}),
-		"通关极限达成【征服极限】")
+		"通关困难不达成【噩梦常客】")
+	# 2026-10-20 难度收为 4 档：地狱/极限两项成就随档位一起下线
+	_c.check(AchievementData.get_def("ach_feat_hell").is_empty(), "「地狱签证」已随档位收缩下线")
+	_c.check(AchievementData.get_def("ach_feat_extreme").is_empty(), "「撞墙到头」已随档位收缩下线")
 	_c.check(AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 25}, {}),
 		"无尽第 25 波达成【无尽行者】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 24}, {}),
@@ -696,7 +697,7 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.equals(AchievementData.progress_text("ach_cult_duoshe", {"total_wins": 3}),
 		"已通关 3 次", "【初次通关】进度读累计通关")
 	_c.equals(AchievementData.progress_text("ach_cult_dubi", {"best_danger_cleared": 1}),
-		"最高通关「普通」", "【极限挑战】进度读最高通关难度")
+		"最高通关「普通」", "【明知山有虎】进度读最高通关难度")
 	_c.equals(AchievementData.progress_text("ach_cult_dubi", {}),
 		"尚未通关任意难度", "从未通关时【极限挑战】显示兜底文案")
 	_c.equals(AchievementData.progress_text("ach_feat_endless", {}),
@@ -746,8 +747,8 @@ func _test_turret_and_new_cultivators() -> void:
 		"", "【独行侠】无累计进度口径返回空串")
 	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
 		"", "【万器宗师】无累计进度口径返回空串")
-	# 成就总数 = 30（原 24 + 新增 6）
-	_c.equals(int(AchievementData.all_ids().size()), 30, "成就总数 = 30")
+	# 成就总数 = 28（2026-10-20 难度收为 4 档，删去地狱/极限两条难度成就；原 24 + 新增 6 - 2）
+	_c.equals(int(AchievementData.all_ids().size()), 28, "成就总数 = 28")
 
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()

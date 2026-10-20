@@ -97,7 +97,7 @@ static func wave_spawn_budget(wave: int) -> int:
 ## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
 ## 深层无尽结合 endless_swarm_mult 持续增长（封顶 26）。
 ## 2026-10-17 性能专项绝对硬顶（用户拍板）：cap 只在刷怪口夹「基础值」，
-## WaveSpawner 的最终同屏数还会乘 danger_count_mult（危险 5 = 2.08）与角色敌潮倍率，
+## WaveSpawner 的最终同屏数还会乘 danger_count_mult（顶档 D3 = 2.08）与角色敌潮倍率，
 ## 深层极端构建可叠到 ~95 只 —— 那是节点规模的绝对上限来源，帧率无法数学保证。
 ## MAX_ENEMIES_HARD_CAP 48 是「任何乘区叠满后」的最终同屏硬顶（20 波内常规峰值 ~33 不受影响）。
 const MAX_ENEMIES_HARD_CAP := 48
@@ -136,7 +136,7 @@ const ENEMY_DMG_GROWTH := 1.06            ## 每回合接触伤害复利倍率�
 ## 站进常用杂怪群（基础接触伤 14）第 1 波单下发 14 = 11.7% 生命、只活 4.7s，第 5 波只剩 3.7s，
 ## 最低档没有试错空间，故把基线降到 0.65（W1 单下 10 = 8.3% 生命、活 6.6s；W5 活 5.5s）。
 ## 尺子与档位口径见 tests/balance_sim_check.gd 第 5 节「挨打侧生存余量」。
-## 六档危险度的 +12%/档梯度（danger_dmg_mult）不受影响，整条梯子一起下移。
+## 危险度梯度（danger_dmg_mult）不受影响，整条梯子一起下移。
 ## 2026-10-11 缩图减怪：刷入量 -33% 后基线微回 0.65→0.68（W1 单下 ≈8.5% 生命，仍在 ≤9% 窗内）。
 ## 2026-10-13 用户真机口径反转：「简单模式伤害好低，死都死不了」。0.68 下 W1 站进怪群
 ## 活 6.6s、W10 半肉 Build 活 9.3s，配合走位/回血实际不可能死。基线提至 0.80（+18%），
@@ -358,15 +358,17 @@ static func boss_hp(wave: int) -> float:
 static func boss_contact_damage(wave: int) -> float:
 	return ceilf(BOSS_CONTACT_BASE * enemy_dmg_mult(wave))
 
-# ---------------- 危险度（通关解锁的难度梯度，仿土豆兄弟 Danger 0~5） ----------------
+# ---------------- 危险度（全部开放的难度梯度，D0 ~ D3 共 4 档） ----------------
+## 2026-10-20 收缩口径：6 档压成 4 档（简单/普通/困难/噩梦），开局全部可选。
+## 顶档（D3 噩梦）的封顶倍率与原 D5 极限完全一致，只是每档步进拉大，少爬两级台阶。
 
-const DANGER_MAX := 5
+const DANGER_MAX := 3
 const DANGER_HP_BASE := 1.08    ## 简单档基线生命（不再是 ×1.0 纯裸，给入门档一点压力）
-const DANGER_HP_PER := 0.30    ## 每档敌人生命 +30%
+const DANGER_HP_PER := 0.50    ## 每档敌人生命 +50%（3 档爬到原 D5 的 ×2.58）
 const DANGER_DMG_BASE := 1.04  ## 简单档基线伤害
-const DANGER_DMG_PER := 0.16   ## 每档敌人伤害 +16%
+const DANGER_DMG_PER := 0.2666667  ## 每档敌人伤害 +26.67%（3 档爬到原 D5 的 ×1.84）
 const DANGER_COUNT_BASE := 1.08  ## 简单档基线敌潮规模
-const DANGER_COUNT_PER := 0.20  ## 每档敌潮规模 +20%
+const DANGER_COUNT_PER := 0.3333333  ## 每档敌潮规模 +33.33%（3 档爬到原 D5 的 ×2.08）
 
 static func danger_hp_mult(danger: int) -> float:
 	return DANGER_HP_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER

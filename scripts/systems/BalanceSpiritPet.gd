@@ -79,11 +79,15 @@ static func harvest_stones(wave: int, effect_mult: float) -> int:
 ## 聚宝蟾战斗中单次金舌吸宝数量（兜底常量）
 const JUCHAN_ATTRACT_COUNT: int = 5
 
-## 聚宝蟾金舌鞭击伤害：base(30) × wave复利 × 灵兽伤害乘区
-## 2026-10-20 重做：去掉战中「金舌吸宝」（回收掉落物鸡肋无感），改为鞭击最近敌人
-static func tongue_damage(wave: int, damage_mult: float) -> float:
+## 聚宝蟾金钱飞镖伤害：base(30) × wave复利 × 灵兽伤害乘区
+## 2026-10-20 优化：改为金蟾吐宝金钱镖飞行物攻击敌人
+static func coin_damage(wave: int, damage_mult: float) -> float:
 	var base := 30.0 * pow(DAMAGE_GROWTH, float(maxi(wave, 1) - 1))
 	return maxf(1.0, base * maxf(0.1, damage_mult))
+
+## 保持旧方法名兼容单测与历史调用
+static func tongue_damage(wave: int, damage_mult: float) -> float:
+	return coin_damage(wave, damage_mult)
 
 ## 灵风貂风涡半径：base(220) × 灵兽效果乘区
 static func vortex_radius(effect_mult: float) -> float:

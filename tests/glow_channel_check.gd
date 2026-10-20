@@ -2,20 +2,19 @@ extends Node
 
 ## 辉光/HDR 联动通道判据（2026-10-17 真机 42fps GPU 专项）：
 ## 钉住 Main 辉光状态机的几条不变量：
-##   1. SettingsManager SCHEMA 注册了 display/glow 键（toggle）与内部迁移位
+##   1. SettingsManager SCHEMA 注册了 display/glow 键（toggle，默认 true）
 ##   2. FxBudget 拥挤档常量与 glow_intensity 分档函数口径（0.4/0.25，阈值滞回 24/20）
 ##   3. Main 的自动降档状态机字段存在且翻转沿逻辑正确（headless 下 _apply_glow_channel
 ##      直接短路返回，但状态机字段与采样逻辑可独立驱动验证）；
 ##      自动降档态持久化在 display/glow_auto_off，跨局读回（2026-10-17 UI 频闪治理）
-##   4. UI 侧不许出现 HDR 起辉色（2026-10-20 真机整层 UI 频闪根治）：
-##      UI 与世界同处根视口 HDR 缓冲，任何 modulate/color 分量 >1.0 的 UI 元素都会被
-##      WorldEnvironment glow bloom，且 glow_intensity 战斗中随拥挤档升降 ⇒ 整层 HUD 闪。
-##      扫 scripts/ui/ 下所有 Color(...) 字面量 + 硬编码 modulate 写入，分量必须 ≤1.0。
-##      战斗特效（FX_HDR_* 常量表，定义在 GameStyle.gd）是设计内的曝光源，不在本判据口径。
-##   5. 移动端辉光默认关闭 + 一次性迁移（2026-10-20 真机 A/B 定论）：
-##      真机实测关掉「辉光」后整层 UI 连闪消失 ⇒ 根因在 glow/HDR 后处理链。
-##      移动端出厂默认关，老存档由 migrate_glow_mobile_default 迁移一次；桌面端不变。
-##   6. 移动端恒 LDR：Main 的 use_hdr_2d 在移动端恒 false，起辉阈值降到 0.85。
+##   4. UI 侧不许出现 HDR 起辉色（2026-10-20）：UI 与世界同处根视口 HDR 缓冲时，
+##      分量 >1.0 的 UI 元素会被 glow bloom，且 glow_intensity 随拥挤档升降 ⇒ 整层 HUD 闪。
+##      扫 scripts/ui/ 下所有 Color(...) 字面量，分量必须 ≤1.0。
+##      战斗特效（FX_HDR_* 常量表，定义在 GameStyle.gd）是世界层曝光源，不在此口径。
+##   5. 移动端恒 LDR（2026-10-20 真机定论的落点，**这就是治闪的那一条**）：
+##      真机复测：把「辉光」开关重新打开后仍然不闪 ⇒ 元凶是 RGBA16 HDR 帧缓冲，
+##      不是 glow pass。故移动端 use_hdr_2d 恒 false，起辉阈值降到 0.85 让 LDR 也能起辉；
+##      辉光开关因此可安全保留（两平台默认都开）。
 ## 运行: godot --headless --path . res://tests/GlowChannelCheck.tscn
 ## 退出码 0 且末行 GLOW_RESULT: ALL PASS
 
@@ -29,7 +28,6 @@ func _ready() -> void:
 
 func _run() -> void:
 	_test_schema_registered()
-	_test_glow_platform_default()
 	_test_fx_budget_tier()
 	_test_auto_off_state_machine()
 	_test_apply_short_circuit()
@@ -54,30 +52,16 @@ func _test_schema_registered() -> void:
 			found = true
 			default_ok = item.get("type") == "toggle" and item.get("default") == true
 	_check(found, "SCHEMA 注册 display/glow 键")
-	# SCHEMA 的 default 字段是桌面真值（true）；移动端分叉在 _init_defaults 里覆盖
-	_check(default_ok, "SCHEMA glow 默认值 = 桌面口径 true")
-	# 默认读侧：headless 判据跑在桌面口径下，读出 true
+	# 两平台默认都开：真机复测证明 LDR 下 glow pass 安全，画质不必牺牲
+	_check(default_ok, "glow 默认开（移动端走 LDR 起辉，不碰 HDR 帧缓冲）")
 	_check(bool(SettingsManager.get_val(&"display", &"glow", true)),
-		"get_val 默认读出 true（桌面口径）")
-
-## 1b. 辉光默认值按平台分叉（2026-10-20 真机 A/B 定论）
-## 真机实测：关掉辉光后整层 UI 连闪完全消失 ⇒ 移动端出厂即关。
-func _test_glow_platform_default() -> void:
-	_check(not SettingsManager.glow_default_for_platform(true),
-		"移动端辉光默认关闭（真机 A/B：关掉辉光后闪烁消失）")
-	_check(SettingsManager.glow_default_for_platform(false),
-		"桌面端辉光默认开启（Forward+ 无此问题，画质不下调）")
-	# 迁移标记键必须进 SCHEMA，否则 reset_to_defaults 会把它抹掉、下次启动重复迁移
-	var migrated_registered := false
+		"get_val 默认读出 true")
+	# 迁移位已随定论下线，不允许再回来（回来会把用户的辉光强制关掉）
+	var stale_migration := false
 	for item in SettingsManager.SCHEMA:
-		if item.get("section") == "display" and item.get("key") == "glow_mobile_migrated":
-			migrated_registered = true
-			_check(item.get("default") == false, "迁移标记默认 false")
-	_check(migrated_registered, "SCHEMA 注册 display/glow_mobile_migrated 内部位")
-	# 迁移幂等：headless（桌面口径）下迁移整体不生效，重复调用恒 false
-	var m := SettingsManager
-	_check(not m.migrate_glow_mobile_default(), "桌面端不执行移动端迁移")
-	_check(not m.migrate_glow_mobile_default(), "重复调用仍为 false（幂等）")
+		if item.get("key") == "glow_mobile_migrated":
+			stale_migration = true
+	_check(not stale_migration, "旧的 glow_mobile_migrated 迁移位已移除（不再强制关辉光）")
 
 ## 2. FxBudget 拥挤档 glow 分档口径
 func _test_fx_budget_tier() -> void:

@@ -254,16 +254,23 @@ func _on_area_entered(area: Area2D) -> void:
 				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
 				return
 
-		pierce_left -= 1
-		if pierce_left <= 0:
-			JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
-			_recycle()
+			pierce_left -= 1
+			if pierce_left <= 0:
+				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
+				if _vector_renderer != null and _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
+					var scene_parent := get_parent()
+					if is_inside_tree() and scene_parent != null:
+						JuiceEffect.spawn_shockwave(scene_parent, global_position, 20.0, Color(1.0, 0.85, 0.25, 0.75), 0.16)
+				_recycle()
 
 func _get_impact_color() -> Color:
 	if modulate != Color.WHITE:
 		return modulate
-	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
-		return _vector_renderer.elemental_tint
+	if _vector_renderer != null:
+		if _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
+			return Color(1.0, 0.88, 0.28)
+		if _vector_renderer.elemental_tint != Color.WHITE:
+			return _vector_renderer.elemental_tint
 	return Color(0.95, 0.90, 0.72)
 
 func _get_impact_element() -> Variant:
@@ -273,8 +280,11 @@ func _get_impact_element() -> Variant:
 		return "water"
 	elif proc_poison:
 		return "wood"
-	if _vector_renderer != null and _vector_renderer.elemental_tint != Color.WHITE:
-		return _vector_renderer.elemental_tint
+	if _vector_renderer != null:
+		if _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
+			return "metal"
+		if _vector_renderer.elemental_tint != Color.WHITE:
+			return _vector_renderer.elemental_tint
 	return "none"
 
 ## 拖尾取色：同一把尺子先用异常色温（modulate），退而矢量渲染器的元素色，最后回默认纸金。

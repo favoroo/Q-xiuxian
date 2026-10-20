@@ -54,6 +54,15 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 		["攻击间隔", "%.2f 秒" % cd],
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 	]
+	# 落雷/区域类：卡面「攻击范围」是锁敌落点圈，真正的爆炸半径是另一个字段（burst_radius）。
+	# 不补这行会出现「范围 265 的金雷锥炸得比范围 250 的巨印还小」的观感反差（2026-10-20 射程体系重做）。
+	if int(def.get("behavior", -1)) == WeaponData.Behavior.BURST:
+		var base_br := float(def.get("burst_radius", 0.0))
+		var eff_br := base_br * GameManager.attack_range_mult * GameManager.synergy_range_mult
+		var br_txt := "%.0f" % eff_br
+		if not is_equal_approx(eff_br, base_br):
+			br_txt = "%.0f（基础 %.0f）" % [eff_br, base_br]
+		rows.append(["爆炸半径", br_txt, GameStyle.PAPER])
 	var feats := StatsTipFactory.weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])
