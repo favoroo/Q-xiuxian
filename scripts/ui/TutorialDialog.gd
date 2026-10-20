@@ -7,7 +7,10 @@ extends BaseModalDialog
 ## 触发：StartMenu 点「开始游戏」后、选角前（未勾选「下次不弹出」就每次都弹），见 StartMenu._on_start_pressed；
 ## 设置页入口见 SettingsDialog._build_body（底部常驻按钮，任何页签可见）。
 ## 翻页为线性向导（上一步/下一步），不复用基类 Tab；_tab_bar 插槽改作页码指示块。
-## 任意关闭路径（跳过/ESC/遮罩）都走 close() → closed，StartMenu 用 closed 信号串接选角。
+## 出口有两条，语义不同：「跳 过」（右上，同 ESC/遮罩）= 收下指南继续进选角；
+## 「〈 返 回」（左上）= 反悔退出回主菜单，且不落「下次不弹出」——玩家只是暂时不想看。
+## 两者都走 close() → closed，StartMenu 用 closed 串接：返回键先置 _left_via_back，
+## StartMenu._after_tutorial 见该标记就重开主菜单，而不是进选角。
 ## 「下次不弹出」勾选框：点一下即落 user://settings.cfg（SettingsManager.tutorial_muted），
 ## 只关掉「开局自动弹」这一条路径；勾了之后仍可从主菜单/设置页手动翻开并取消勾选。
 
@@ -51,6 +54,12 @@ var _cur: int = 0
 var _prev_btn: Button
 var _next_btn: Button
 var _mute_chk: CheckBox
+var _back_btn: Button
+
+## 本次关闭是否由「〈 返回」触发（回主菜单，不进选角）。
+## 放在关闭信号之前由按钮置位、closed 发出后由 StartMenu._after_tutorial 读走并复位；
+## 其余关闭路径（跳过/ESC/遮罩/末页「开始修仙」）恒为 false。
+var left_via_back: bool = false
 
 func _get_title_text() -> String:
 	return "修 仙 指 南"
@@ -69,6 +78,19 @@ func _get_panel_size() -> Vector2:
 	return Vector2(minf(PANEL_SIZE.x, vp.x - 48.0), minf(PANEL_SIZE.y, vp.y - 40.0))
 
 func _build_body(root_vbox: VBoxContainer) -> void:
+	# 顶栏左侧「〈 返回」：与右上「跳 过」左右对称的两条出口。
+	# 跳过 = 收下指南继续进选角；返回 = 反悔回主菜单（不落「下次不弹出」）。
+	# 基类 _top_bar 已按 [标题块, Tab插槽, 关闭键] 建好，这里把返回插到最左。
+	_back_btn = Button.new()
+	_back_btn.text = "〈 返 回"
+	_back_btn.custom_minimum_size = Vector2(84, 34)
+	_back_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_back_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_back_btn, GameStyle.NAVY2, GameStyle.GOLD, 14, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
+	_back_btn.pressed.connect(_on_back_pressed)
+	_top_bar.add_child(_back_btn)
+	_top_bar.move_child(_back_btn, 0)
+
 	# 内容区：斜切内容面板，各页叠放、按显隐切换
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -204,7 +226,17 @@ func _refresh_mute_chk() -> void:
 		_mute_chk.add_theme_color_override(c, col)
 
 func _on_opened() -> void:
+	# 每次打开复位：上一次「返回」留下的标记不许影响这一次的关闭语义
+	left_via_back = false
 	_refresh_mute_chk()
+
+## 「〈 返 回」：反悔退出回主菜单。与「跳 过」的区别只在落点与存档——
+## 不写 tutorial_muted（玩家没表示「以后别弹」），StartMenu 读 left_via_back 决定重开菜单。
+func _on_back_pressed() -> void:
+	if not visible:
+		return
+	left_via_back = true
+	close()
 
 ## 构建单页：左实机截图 + 右（页题 + 正文顶对齐），正文 wrap_cjk 硬换行
 func _build_page(p: Dictionary) -> Control:

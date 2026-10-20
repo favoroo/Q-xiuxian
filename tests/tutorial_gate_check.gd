@@ -127,6 +127,34 @@ func _run() -> void:
 	await _settle(8)
 	_check(not _sel.visible, "之后手动翻开指南再关掉，不会再跳一次选角（串接是 one-shot）")
 
+	# ---------- 4b. 「〈 返 回」：反悔退出回主菜单，不进选角、不落「下次不弹出」 ----------
+	# 为什么立这条：跳过与返回都走 close()→closed，若 _after_tutorial 不看标记，
+	# 返回会被当成「跳过」直接进选角（玩家点了返回却被推进开局），且不报错只有真机看得出。
+	var back_btn: Button = _tut.get("_back_btn")
+	_check(back_btn != null, "指南顶栏有「〈 返 回」按钮（TutorialDialog._back_btn）")
+	_check(back_btn != null and back_btn.get_parent() == _tut.get("_top_bar"),
+		"返回键挂在顶栏上（与右上「跳 过」同一条栏）")
+	_check(back_btn != null and _tut.get("_top_bar").get_child(0) == back_btn,
+		"返回键排在顶栏最左（在标题块之前）")
+	if back_btn != null:
+		SettingsManager.set_tutorial_muted(false)
+		_sel.visible = false
+		_menu.visible = false
+		_menu._on_start_pressed()
+		await _settle(30)
+		_check(_tut.visible, "返回判据现场：点开始游戏后指南已弹出")
+		_check(not bool(_tut.get("left_via_back")), "刚打开时返回标记为假（每次 open 复位）")
+		await _tap(back_btn)
+		await _wait_closed()
+		await _settle(10)
+		_check(_menu.visible, "点「〈 返 回」→ 回到主菜单（不是被推进选角）")
+		_check(not _sel.visible, "点「〈 返 回」不会顺带进选角")
+		_check(not SettingsManager.tutorial_muted(),
+			"点「〈 返 回」不落「下次不弹出」（下次开局仍会弹）")
+		_check(not bool(_tut.get("left_via_back")), "返回标记已被 StartMenu 读走并复位")
+		_menu.visible = false
+		_sel.visible = false
+
 	# ---------- 5. 分页逻辑（原有判据，翻页与门控在同一条卡片链上） ----------
 	_tut.open()
 	await _settle(3)

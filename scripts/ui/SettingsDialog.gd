@@ -276,8 +276,11 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥与火雨区域画面热浪扭曲（高端画质，低配设备可能掉帧，默认关）")
 	# T-6.2 受击屏幕冲击波：可选高档位默认关
 	_add_toggle_row(vbox, "screen_shockwave", "受击冲击波", "遭受强敌重击时从受击点扩散屏幕径向扭曲环（高端画质，默认关）")
-	# 辉光/HDR 联动（2026-10-17 真机 GPU 专项）：最大的单项画质税，默认开，低帧自动关
-	_add_toggle_row(vbox, "glow", "辉光", "超白起辉光效（暴击绯金、灵光等）。关掉可大幅省电提帧，低帧时会自动关闭")
+	# 辉光（2026-10-17 真机 GPU 专项）：最大的单项画质税。
+	# 2026-10-20 真机 A/B：关掉辉光后整层 UI 连闪消失 ⇒ 移动端出厂默认关（见
+	# SettingsManager.glow_default_for_platform）；开启时也只走 LDR 起辉，不碰 HDR 帧缓冲。
+	_add_toggle_row(vbox, "glow", "辉光",
+		"画面亮部起辉（暴击绯金、灵光等）。手机会更耗电；若画面闪烁请保持关闭")
 
 	GameStyle.scrollable(scroll)
 	return scroll

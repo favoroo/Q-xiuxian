@@ -770,6 +770,12 @@ func _auto_show_tutorial() -> bool:
 	return tut != null and not SettingsManager.tutorial_muted()
 
 func _after_tutorial() -> void:
+	# 「〈 返 回」= 反悔退出：回主菜单，不进选角。标记读一次即清，避免下一次关闭误判。
+	var tut := get_parent().get_node_or_null("TutorialDialog")
+	if tut != null and bool(tut.get("left_via_back")):
+		tut.set("left_via_back", false)
+		open()
+		return
 	var cult_select := get_parent().get_node_or_null("CultivatorSelect")
 	if cult_select != null:
 		cult_select.show_select()

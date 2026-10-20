@@ -551,28 +551,46 @@ const GLOW_FADE_DURATION := 0.45     ## 辉光档位/开关渐变时长（秒）
 var _glow_level_cur: float = -1.0    ## 当前已落地的 glow_intensity（-1 = 首写尚未发生）
 var _glow_tween: Tween = null        ## 辉光渐变句柄（新切换先杀旧）
 
-## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值。
+## 统一生效出口：want = 手动开关 && 未自动降档。
 ## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
 ## allow_hdr_flip（2026-10-17 真机 UI 频闪治理）：use_hdr_2d 翻转会重建根视口帧缓冲
-## （RGBA16 与 RGBA8 互切），Android 真机上是整屏（含 UI）交换链重建闪一下——只允许局外落
-## （_ready 首拍 / 用户在设置页手动开关）；战斗中自动降档只关 glow pass，HDR 带宽税
-## 多交一局，下一局 _ready 再统一落（自动降档态已持久化进 display/glow_auto_off）。
+## （RGBA16 与 RGBA8 互切），Android 真机上是整屏（含 UI）交换链重建闪一下。
+## 2026-10-20 真机 A/B 定论（整层 UI 连闪三次）：设置页关掉辉光后症状完全消失 ⇒
+## 根因在 glow/HDR 后处理链，且只在 Android Mobile 渲染器上复现。虽然上一轮已把
+## HUD 侧超白颜色全部钳到 1.0（在 threshold=1.0 下 UI 本不该起辉），症状仍在 ——
+## 说明不是「UI 像素被 bloom」，而是这条 HDR 管线本身在移动端不稳。
+## 对策：把 glow 与 HDR 解绑 —— 移动端 use_hdr_2d 恒为 false（永远 8-bit LDR 帧缓冲），
+## 即使用户手动开辉光也只走 LDR 起辉（阈值降到 GLOW_LDR_THRESHOLD），不再碰 RGBA16。
+## 桌面端维持原行为（跟随 want 同开同关），画质不受影响。
 ## 2026-10-20：开关也不再硬切 —— 先把 glow_intensity 渐变到 0 再关 pass，开时反之。
+const GLOW_LDR_THRESHOLD := 0.85  ## 移动端 LDR 起辉阈值：降到 1.0 以下，近纯白亮部也能起辉
+const GLOW_HDR_THRESHOLD := 1.0   ## 桌面端 HDR 起辉阈值（与 Main.tscn Environment 初值同源）
+
 func _apply_glow_channel(allow_hdr_flip: bool = false) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var want: bool = bool(SettingsManager.get_val(&"display", &"glow", true)) and not _glow_auto_offed
+	var mobile := SettingsManager.is_mobile_platform()
 	if _env_res == null:
 		var we := get_node_or_null("WorldEnvironment") as WorldEnvironment
 		if we == null or we.environment == null:
 			return
 		_env_res = we.environment
+	# 起辉阈值随平台/开关落：移动端用 LDR 阈值（无 HDR 缓冲，超白会被钳到 1.0，
+	# 不放低阈值就永远不起辉）；桌面端用 HDR 阈值。与 want 无关地写一次即可（同值短路）。
+	var want_threshold := GLOW_LDR_THRESHOLD if mobile else GLOW_HDR_THRESHOLD
+	if not is_equal_approx(_env_res.glow_hdr_threshold, want_threshold):
+		_env_res.glow_hdr_threshold = want_threshold
 	# 启动首拍（_glow_level_cur 尚未落地）：视口刚建好、画面上还没有可闪的内容，直接落值
 	var startup := _glow_level_cur < 0.0
 	if allow_hdr_flip:
 		var vp := get_viewport()
-		if vp != null and vp.use_hdr_2d != want:
-			vp.use_hdr_2d = want
+		if vp != null:
+			# 移动端：HDR 恒关（不跟随 want）。这是本轮治闪的核心一条 ——
+			# 只要不碰 RGBA16 帧缓冲，glow 开关怎么切都不会重建交换链。
+			var want_hdr := want and not mobile
+			if vp.use_hdr_2d != want_hdr:
+				vp.use_hdr_2d = want_hdr
 	if want:
 		if not _env_res.glow_enabled:
 			# 先开 pass 但强度从 0 起，交给下面的渐变拉起
