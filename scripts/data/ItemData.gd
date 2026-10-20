@@ -144,7 +144,7 @@ const DEFS: Dictionary = {
 			"name": "引路灯", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_yinhun_deng.png",
 			"desc": "",
-			"apply": {"pickup_range_mult": 0.25, "attack_range_mult": 0.15, "move_speed_mult": -0.04},
+			"apply": {"pickup_range_mult": 0.25, "attack_range_mult": 0.10, "move_speed_mult": -0.04},
 		},
 		"suoling_jia": {
 			"name": "狂战枷", "tier": 2, "price": 26,
@@ -319,7 +319,7 @@ const DEFS: Dictionary = {
 			"name": "定星盘", "tier": 2, "price": 24,
 			"icon": "res://assets/art/item_dingxing_pan.png",
 			"desc": "",
-			"apply": {"attack_range_mult": 0.15, "move_speed_mult": -0.04},
+			"apply": {"attack_range_mult": 0.10, "move_speed_mult": -0.04},
 		},
 		"jucai_dai": {
 			"name": "聚财袋", "tier": 2, "price": 24,

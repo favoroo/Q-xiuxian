@@ -486,7 +486,9 @@ func _stop_low_hp_pulse() -> void:
 
 ## glow 拥挤档落地（2026-10-17 性能专项）：1s 粒度轮询 FxBudget.crowded，
 ## 高压战斗把 glow_intensity 0.4 → 0.25（阈值与色表不动，超白起辉只是峰值压一档）。
-## 同值短路：Environment.glow_intensity 写入只在翻转沿发生，稳态零成本。
+## 2026-10-20 真机 UI 频闪根治：写入改走 _set_glow_level 的渐变通道 —— 原版同值短路只在
+## 翻转沿写一次，但那一次是硬切，整帧（含 HUD，UI 与世界同处 HDR 根视口）的 bloom 强度
+## 会瞬间跳一档，近距离观感就是「所有 UI 闪一下」。渐变把这一跳摊到 GLOW_FADE_DURATION。
 func _poll_crowd_glow(delta: float) -> void:
 	_crowd_glow_cd -= delta
 	if _crowd_glow_cd > 0.0:
@@ -497,10 +499,39 @@ func _poll_crowd_glow(delta: float) -> void:
 		if we == null or we.environment == null:
 			return
 		_env_res = we.environment
-	var want: float = FxBudget.glow_intensity()
-	if _env_res.glow_intensity != want:
-		_env_res.glow_intensity = want
+	if not _glow_should_be_on():
+		# 辉光应关（手动关 / 已自动降档）：拥挤档没有可调的强度，只续跑自动降档采样
+		_poll_glow_auto_off()
+		return
+	_set_glow_level(FxBudget.glow_intensity())
 	_poll_glow_auto_off()
+
+## 辉光通道的期望开态（手动开关 && 未自动降档）。写入侧与轮询侧共用这一把尺，
+## 否则「正在渐隐关闭」的那 0.45s 里轮询会把档位又拉回去，手动关 glow 就关不掉了。
+func _glow_should_be_on() -> bool:
+	return bool(SettingsManager.get_val(&"display", &"glow", true)) and not _glow_auto_offed
+
+## 辉光通道生效值的唯一写入口（2026-10-20）：首写直落，此后一律渐变。
+## 硬切任何一项都会让整帧 bloom 变一档 —— 真机上 UI 与游戏画面同处 HDR 根视口，
+## 观感是整层 HUD 频闪，所以只能渐变。
+func _set_glow_level(want: float) -> void:
+	if _env_res == null or not _env_res.glow_enabled:
+		return
+	if not _glow_should_be_on():
+		return
+	if _glow_level_cur < 0.0:
+		# 首写（_ready 那拍）：视口刚建好，没有「上一档」可渐变，直接落
+		_glow_level_cur = want
+		_env_res.glow_intensity = want
+		return
+	if absf(_glow_level_cur - want) < 0.001:
+		return
+	_glow_level_cur = want
+	if _glow_tween != null and _glow_tween.is_valid():
+		_glow_tween.kill()
+	_glow_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_glow_tween.tween_property(_env_res, "glow_intensity", want, GLOW_FADE_DURATION)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # —— 辉光/HDR 联动通道（2026-10-17 真机 42fps GPU 专项）——
 ## 真机判读：轻负载（4 敌 15 弹）仅 42fps，提交 0.12ms 极轻 ⇒ GPU bound；
@@ -514,6 +545,11 @@ const GLOW_AUTO_TRIGGERS := 5        ## 连续低帧采样数（1s 粒度 ⇒ 5s
 var _glow_low_streak: int = 0        ## 连续低帧采样计数
 var _glow_auto_offed: bool = false   ## 是否已自动关闭（持久化在 display/glow_auto_off，跨局生效；恢复唯一路径是手动开回）
 var _glow_toasted: bool = false      ## 自动降档提示一次闸（每次对局最多一条）
+## 辉光通道渐变（2026-10-20 真机 UI 频闪根治）：glow_intensity 与 glow_enabled 都不许硬切。
+## UI 与世界同处 HDR 根视口，这两项任一硬切 = 整帧 bloom 变一档 = 整层 HUD 闪一下。
+const GLOW_FADE_DURATION := 0.45     ## 辉光档位/开关渐变时长（秒）
+var _glow_level_cur: float = -1.0    ## 当前已落地的 glow_intensity（-1 = 首写尚未发生）
+var _glow_tween: Tween = null        ## 辉光渐变句柄（新切换先杀旧）
 
 ## 统一生效出口：want = 手动开关 && 未自动降档。glow_enabled 与 use_hdr_2d 同拍同值。
 ## headless 判据不碰渲染状态（PerfProbe 的 FX_HDR 色表断言不依赖真 glow pass）。
@@ -521,6 +557,7 @@ var _glow_toasted: bool = false      ## 自动降档提示一次闸（每次对�
 ## （RGBA16 与 RGBA8 互切），Android 真机上是整屏（含 UI）交换链重建闪一下——只允许局外落
 ## （_ready 首拍 / 用户在设置页手动开关）；战斗中自动降档只关 glow pass，HDR 带宽税
 ## 多交一局，下一局 _ready 再统一落（自动降档态已持久化进 display/glow_auto_off）。
+## 2026-10-20：开关也不再硬切 —— 先把 glow_intensity 渐变到 0 再关 pass，开时反之。
 func _apply_glow_channel(allow_hdr_flip: bool = false) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -530,12 +567,38 @@ func _apply_glow_channel(allow_hdr_flip: bool = false) -> void:
 		if we == null or we.environment == null:
 			return
 		_env_res = we.environment
-	if _env_res.glow_enabled != want:
-		_env_res.glow_enabled = want
+	# 启动首拍（_glow_level_cur 尚未落地）：视口刚建好、画面上还没有可闪的内容，直接落值
+	var startup := _glow_level_cur < 0.0
 	if allow_hdr_flip:
 		var vp := get_viewport()
 		if vp != null and vp.use_hdr_2d != want:
 			vp.use_hdr_2d = want
+	if want:
+		if not _env_res.glow_enabled:
+			# 先开 pass 但强度从 0 起，交给下面的渐变拉起
+			_env_res.glow_enabled = true
+			_env_res.glow_intensity = 0.0
+			_glow_level_cur = 0.0
+		_set_glow_level(FxBudget.glow_intensity())
+		return
+	# 关闭：先把强度渐变到 0（启动首拍直接归零），渐变结束再关 pass
+	if not _env_res.glow_enabled:
+		return
+	_glow_level_cur = 0.0
+	if _glow_tween != null and _glow_tween.is_valid():
+		_glow_tween.kill()
+	if startup:
+		_env_res.glow_intensity = 0.0
+		_env_res.glow_enabled = false
+		return
+	_glow_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_glow_tween.tween_property(_env_res, "glow_intensity", 0.0, GLOW_FADE_DURATION)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_glow_tween.tween_callback(func():
+		# 渐变期间用户又开回来 ⇒ 已被 _set_glow_level 接管，别再关
+		if _glow_level_cur <= 0.001:
+			_env_res.glow_enabled = false
+	)
 
 ## 自动降档采样（挂在 1s 轮询尾部）：仅战斗中采样；连续 GLOW_AUTO_TRIGGERS 次
 ## fps < 阈值即翻转自动关 + toast 一次；手动关闭的用户不走这条（本来就关着）。

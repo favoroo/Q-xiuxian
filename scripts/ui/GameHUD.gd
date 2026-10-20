@@ -78,6 +78,17 @@ var _hp_heal_flash: Panel = null
 var _hp_heal_tween: Tween = null
 var _hp_label_heal_tween: Tween = null
 var _hp_notch: Control = null
+## —— HUD 脉冲色硬上限（2026-10-20 真机 UI 频闪根治）——
+## 项目开了 viewport/hdr_2d + Environment.glow_hdr_threshold=1.0，任何分量 >1.0 的颜色
+## 都会被 WorldEnvironment glow 的屏幕空间后处理 bloom，而 UI 与世界同处根视口帧缓冲
+## （Main.tscn 无 SubViewport 隔离），所以 HUD 上一处超白 = 整层 HUD 跟着 bloom 起辉。
+## 战斗里 glow_intensity 还会在 0.4 与 0.25 之间升降，超白元素的辉光强度随之整帧跳变，
+## 真机（Mobile 渲染器）观感就是「所有 UI 时不时闪一下/连闪几下」。
+## 判据 tests/glow_channel_check.gd 会扫 scripts/ui/ 下所有 modulate 字面量，分量必须 ≤1.0。
+const HP_LOW_PULSE_COLOR := Color(1.0, 0.72, 0.72)   ## 低血呼吸：纯色相转红，不发辉
+const HP_HEAL_PULSE_COLOR := Color(0.35, 1.0, 0.62)  ## 回血：纯色相转碧，不发辉
+const SHARDS_PULSE_COLOR := Color(1.0, 0.94, 0.66)   ## 金币进账：纯色相偏金，不发辉
+
 ## 金币增量脉冲（2026-10-15）：金币跳涨时 Label squash 回弹 + 金色驻留一闪，读得出「进账了」
 const SHARDS_PULSE_MIN_GAIN := 5    ## 单拍增量阈值：低于它（单珠碎金）不闪，防常亮刷屏
 const SHARDS_PULSE_GATE_MS := 150   ## 脉冲最小间隔：磁吸齐吃一拍几十金只闪一次
@@ -521,7 +532,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 				if hp_icon != null:
 					hp_icon.pivot_offset = hp_icon.size * 0.5
 				_hp_low_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS).set_loops()
-				_hp_low_tween.tween_property(hp_bar, "modulate", Color(1.6, 1.25, 1.25), 0.35)\
+				_hp_low_tween.tween_property(hp_bar, "modulate", HP_LOW_PULSE_COLOR, 0.35)\
 					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 				_hp_low_tween.parallel().tween_property(_hp_block_style, "border_color", GameStyle.BAD, 0.35)\
 					.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -560,7 +571,7 @@ func _play_heal_fx() -> void:
 		_hp_label_heal_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_hp_label_heal_tween.tween_property(hp_label, "scale", Vector2.ONE, 0.2)\
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		_hp_label_heal_tween.parallel().tween_property(hp_label, "modulate", Color(0.3, 1.4, 0.6, 1.0), 0.05)
+		_hp_label_heal_tween.parallel().tween_property(hp_label, "modulate", HP_HEAL_PULSE_COLOR, 0.05)
 		_hp_label_heal_tween.tween_property(hp_label, "modulate", Color.WHITE, 0.15)
 
 	if hp_icon != null:
@@ -686,7 +697,7 @@ func _pulse_shards(stones: int) -> void:
 	_shards_pulse_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_shards_pulse_tween.tween_property(shards_label, "scale", Vector2.ONE, 0.22)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", Color(1.35, 1.25, 0.9, 1.0), 0.05)
+	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", SHARDS_PULSE_COLOR, 0.05)
 	_shards_pulse_tween.parallel().tween_property(shards_label, "modulate", Color.WHITE, 0.2).set_delay(0.05)
 
 func _on_wave_changed(n: int) -> void:

@@ -22,7 +22,7 @@ func _test_upgrade_table() -> void:
 	var deltas := {
 		"atk_up": 0.08, "armor_up": 2.0, "speed_up": 0.08, "pickup_up": 0.4,
 		"regen_up": 1.2, "critdmg_up": 0.25, "lifesteal_up": 0.04, "luck_up": 6.0,
-		"harvest_up": 8.0, "range_up": 0.12,
+		"harvest_up": 8.0, "range_up": 0.05,
 	}
 	var targets := {
 		"atk_up": "weapon_damage_mult", "armor_up": "armor", "speed_up": "move_speed_mult",

@@ -17,6 +17,11 @@ var _fx_tween: Tween = null
 var _bar_tween: Tween = null
 var _phase_tween: Tween = null
 
+## 50% 刻度线的常态色（色表基准，与 _ready 初值同源）。用常量而不是「读当前色再回填」：
+## 补间被打断时当前色会停在中间值，拿它当基准会把刻度永久留在闪过的颜色上。
+const PHASE_TICK_BASE := Color("ffd23f")  # GameStyle.JADE
+const PHASE_TICK_ALPHA := 0.6
+
 func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -56,7 +61,7 @@ func _build_row() -> void:
 	# 50% 狂暴分界刻度：位置 = GameBalance.BOSS_PHASE2_AT（与 _enter_phase2 判定同源，画在哪 == 何时变）。
 	# 用锚点钉在轨中点（不写死 300 —— 实际宽由 HBox 分配），常态低调的点缀黄竖线，跨线时闪一下。
 	_phase_tick = ColorRect.new()
-	_phase_tick.color = GameStyle.with_alpha(GameStyle.JADE, 0.6)
+	_phase_tick.color = GameStyle.with_alpha(PHASE_TICK_BASE, PHASE_TICK_ALPHA)
 	_phase_tick.anchor_left = GameBalance.BOSS_PHASE2_AT
 	_phase_tick.anchor_right = GameBalance.BOSS_PHASE2_AT
 	_phase_tick.offset_left = -1.0
@@ -67,7 +72,10 @@ func _build_row() -> void:
 	_bar.add_child(_phase_tick)
 
 ## 跨 50% 线的演出（一回合至多一次）：填充色朱砂→狂暴紫（与魔君本体 _tint 同色系语义），
-## 刻度闪一下。只动已有的 _fill_style 实例颜色与 _phase_tick.modulate，不新建样式、不堆 Tween。
+## 刻度闪一下。只动已有的 _fill_style 实例颜色与 _phase_tick 的色值，不新建样式、不堆 Tween。
+## 闪法用「底色→纸白→底色」的色相跳变，不用超白：HUD 与世界同处 HDR 根视口，
+## modulate/color 分量 >1.0 会被 WorldEnvironment glow 当起辉源，而 glow_intensity
+## 战斗中还随拥挤档升降 —— 观感就是整层 UI 跟着闪。
 func _mark_phase2() -> void:
 	_phase2_marked = true
 	if _fill_style != null:
@@ -75,9 +83,11 @@ func _mark_phase2() -> void:
 	if _phase_tick != null:
 		if _phase_tween != null and _phase_tween.is_valid():
 			_phase_tween.kill()
-		_phase_tick.modulate = Color(3.0, 3.0, 3.0, 1.0)
+		var base := GameStyle.with_alpha(PHASE_TICK_BASE, PHASE_TICK_ALPHA)
+		_phase_tick.color = GameStyle.CHALK
 		_phase_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-		_phase_tween.tween_property(_phase_tick, "modulate", Color.WHITE, 0.5)
+		_phase_tween.tween_property(_phase_tick, "color", base, 0.5)\
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 	if not _active:

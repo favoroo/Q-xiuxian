@@ -248,8 +248,10 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 3,
 	},
 	{
+		# 2026-10-20 由 +0.12 降到 +0.05（共 5 档 ⇒ 满叠 +25%）：范围是全域乘区，
+		# 与剑系羁绊、道具同乘，单档给太多会让同屏弹道直接拉满
 		"id": "range_up",
-		"apply": {"attack_range_mult": 0.12},
+		"apply": {"attack_range_mult": 0.05},
 		"title": "攻击范围",
 		"desc": "",
 		"rarity": "common",

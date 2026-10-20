@@ -64,7 +64,7 @@ const DEFS: Dictionary = {
 					"gengjin_feijian": {
 						"name": "飞剑", "behavior": Behavior.PROJECTILE,
 						"sfx": "blade_shoot",
-						"damage": 24.5, "cooldown": 0.92, "range": 310.0,
+						"damage": 24.5, "cooldown": 0.92, "range": 280.0,
 						"knockback": 185.0,
 						"price": 35, "icon": "res://assets/art/weapon_gold_sword.png",
 						# 2026-10-09 素材返工（旧图是弯的、且旧标定 (20,-14) 落在剑首那头上）：
@@ -79,7 +79,7 @@ const DEFS: Dictionary = {
 				"liuye_feidao": {
 					"name": "飞刀", "behavior": Behavior.PROJECTILE,
 					"sfx": "metal_dart",
-					"damage": 12.0, "cooldown": 1.15, "range": 295.0,
+					"damage": 12.0, "cooldown": 1.15, "range": 265.0,
 					"knockback": 110.0,
 					"price": 35, "icon": "res://assets/art/weapon_dagger.png",
 					"tip": Vector2(21, -24), "shape": "dagger",
@@ -94,7 +94,7 @@ const DEFS: Dictionary = {
 							"sfx": "metal_dart",
 							# 机制差异化重构：暴雨梨花式瞬间倾泻细针，与飞刀割草拉开差异
 							# 2026-10-14 弹丸数瘦身：8→5 发（群体雪球收敛，单体伤害不变）
-							"damage": 13.0, "cooldown": 1.25, "range": 250.0,
+							"damage": 13.0, "cooldown": 1.25, "range": 225.0,
 							"knockback": 85.0,
 							"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
 							"tip": Vector2(22, -6), "shape": "needles",
@@ -109,7 +109,7 @@ const DEFS: Dictionary = {
 						"sfx": "metal_dart",
 						# 弹射流招牌：单发旋刃连锁弹射3次（1+3 共咬 4 敌），与飞剑穿透点杀、
 						# 飞刀扇形铺面拉开差异；裸伤略高于带毒弹射件（毒符/弹弓有剧毒补尾）
-						"damage": 20.0, "cooldown": 1.0, "range": 300.0,
+						"damage": 20.0, "cooldown": 1.0, "range": 270.0,
 						"knockback": 120.0,
 						"price": 35, "icon": "res://assets/art/weapon_shoulijian.png",
 						# 四芒星径向对称：tip 只取出膛距离（外刃半径），方向补偿对它无意义
@@ -138,7 +138,7 @@ const DEFS: Dictionary = {
 				"wanmu_lingfu": {
 					"name": "毒符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 18.0, "cooldown": 1.05, "range": 280.0,
+					"damage": 18.0, "cooldown": 1.05, "range": 250.0,
 					"knockback": 140.0,
 					"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
@@ -162,7 +162,7 @@ const DEFS: Dictionary = {
 				"lianhuan_lingdan": {
 					"name": "弹弓", "behavior": Behavior.PROJECTILE,
 					"sfx": "impact_crack",
-					"damage": 18.0, "cooldown": 0.95, "range": 280.0,
+					"damage": 18.0, "cooldown": 0.95, "range": 250.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_sling.png",
 					"tip": Vector2(20, -18), "shape": "sling",
@@ -191,7 +191,7 @@ const DEFS: Dictionary = {
 				"xuanbing_feizhen": {
 					"name": "冰针", "behavior": Behavior.PROJECTILE,
 					"sfx": "metal_dart",
-					"damage": 14.0, "cooldown": 1.0, "range": 295.0,
+					"damage": 14.0, "cooldown": 1.0, "range": 265.0,
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
 				"tip": Vector2(-18, 12), "shape": "needles",
@@ -231,7 +231,7 @@ const DEFS: Dictionary = {
 				"huoyan_fu": {
 					"name": "火符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 10.0, "cooldown": 0.88, "range": 280.0,
+					"damage": 10.0, "cooldown": 0.88, "range": 250.0,
 					"knockback": 155.0,
 					"price": 30, "icon": "res://assets/art/weapon_staff.png",
 					# 斜挂黄纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修躺倒翻面）
@@ -272,7 +272,7 @@ const DEFS: Dictionary = {
 					"sanmei_huohu": {
 						"name": "火葫芦", "behavior": Behavior.CONE,
 						"sfx": "flame_jet",
-						"damage": 9.0, "cooldown": 0.42, "range": 190.0,
+						"damage": 9.0, "cooldown": 0.42, "range": 170.0,
 						"knockback": 95.0,
 						"price": 36, "icon": "res://assets/art/weapon_fire_calabash.png",
 						"tip": Vector2(22, -18), "shape": "calabash",
@@ -344,7 +344,7 @@ const DEFS: Dictionary = {
 					"jinzhen_fu": {
 						"name": "金针符", "behavior": Behavior.PROJECTILE,
 						"sfx": "metal_dart",
-						"damage": 9.0, "cooldown": 0.65, "range": 280.0,
+						"damage": 9.0, "cooldown": 0.65, "range": 250.0,
 						"knockback": 80.0,
 						"price": 34, "icon": "res://assets/art/weapon_jinzhen_fu.png",
 						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
@@ -358,7 +358,7 @@ const DEFS: Dictionary = {
 				"xuanbing_fu": {
 					"name": "玄冰符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 20.0, "cooldown": 1.0, "range": 280.0,
+					"damage": 20.0, "cooldown": 1.0, "range": 250.0,
 					"knockback": 130.0,
 					"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
 					# 横躺卷轴是自然姿态：upright 保持不转（2026-10-18 修翻面跳动）
@@ -372,7 +372,7 @@ const DEFS: Dictionary = {
 				"zhenshan_fu": {
 					"name": "镇山符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 38.0, "cooldown": 1.5, "range": 250.0,
+					"damage": 38.0, "cooldown": 1.5, "range": 225.0,
 					"knockback": 380.0,
 					"price": 38, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 					"tip": Vector2(22, 0), "shape": "talisman",
@@ -485,7 +485,7 @@ const DEFS: Dictionary = {
 						"tougu_ding": {
 							"name": "透骨钉", "behavior": Behavior.PROJECTILE,
 							"sfx": "metal_dart",
-							"damage": 15.0, "cooldown": 0.9, "range": 315.0,
+							"damage": 15.0, "cooldown": 0.9, "range": 285.0,
 							"knockback": 100.0,
 							"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 							"tip": Vector2(22, -12), "shape": "nail",
@@ -589,7 +589,7 @@ const DEFS: Dictionary = {
 							"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
 							"sfx": "blade_shoot",
 							# 机制差异化重构：双柄飞剑交错齐射（2发×穿透1各引燃），与单柄飞剑穿透2拉开手感
-							"damage": 10.5, "cooldown": 0.95, "range": 305.0,
+							"damage": 10.5, "cooldown": 0.95, "range": 275.0,
 							"knockback": 150.0,
 							"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
 							"tip": Vector2(20, 2), "shape": "sword",
@@ -603,7 +603,7 @@ const DEFS: Dictionary = {
 				"zhenhuo_fu": {
 					"name": "真火符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 17.0, "cooldown": 1.1, "range": 285.0,
+					"damage": 17.0, "cooldown": 1.1, "range": 255.0,
 					"knockback": 160.0,
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
@@ -618,7 +618,7 @@ const DEFS: Dictionary = {
 					"name": "雷火符", "behavior": Behavior.PROJECTILE,
 					# 双器类三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与火系羁绊
 					"sfx": "talisman_throw",
-					"damage": 10.0, "cooldown": 0.95, "range": 290.0,
+					"damage": 10.0, "cooldown": 0.95, "range": 260.0,
 					"knockback": 140.0,
 					"price": 40, "icon": "res://assets/art/weapon_leihuo_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法，器口只在瞄准轴取长度（2026-10-18 修歪斜翻面）
@@ -647,7 +647,7 @@ const DEFS: Dictionary = {
 				"langli_suo": {
 					"name": "浪里梭", "behavior": Behavior.PROJECTILE,
 					"sfx": "impact_crack",
-					"damage": 19.0, "cooldown": 0.95, "range": 290.0,
+					"damage": 19.0, "cooldown": 0.95, "range": 260.0,
 					"knockback": 130.0,
 					"price": 34, "icon": "res://assets/art/weapon_langli_suo.png",
 					"tip": Vector2(22, 2), "shape": "shuttle",
@@ -676,7 +676,7 @@ const DEFS: Dictionary = {
 				"gudu_fu": {
 					"name": "蛊毒符", "behavior": Behavior.PROJECTILE,
 					"sfx": "talisman_throw",
-					"damage": 16.0, "cooldown": 1.0, "range": 280.0,
+					"damage": 16.0, "cooldown": 1.0, "range": 250.0,
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_gudu_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
@@ -837,7 +837,7 @@ const DEFS: Dictionary = {
 					"name": "惊蛰符", "behavior": Behavior.PROJECTILE,
 					# 三重共鸣（仿剑阵盘）：同时计入 符箓+雷法 两条器类羁绊与木系羁绊
 					"sfx": "talisman_throw",
-					"damage": 16.0, "cooldown": 1.0, "range": 285.0,
+					"damage": 16.0, "cooldown": 1.0, "range": 255.0,
 					"knockback": 130.0,
 					"price": 36, "icon": "res://assets/art/weapon_jingzhe_fu.png",
 					# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
@@ -877,7 +877,7 @@ const DEFS: Dictionary = {
 						"gengjin_fu": {
 							"name": "庚金符", "behavior": Behavior.PROJECTILE,
 							"sfx": "metal_dart",
-							"damage": 9.0, "cooldown": 0.66, "range": 285.0,
+							"damage": 9.0, "cooldown": 0.66, "range": 255.0,
 							"knockback": 85.0,
 							"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
 							# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
@@ -911,7 +911,7 @@ const DEFS: Dictionary = {
 					"guishui_fu": {
 						"name": "癸水符", "behavior": Behavior.PROJECTILE,
 						"sfx": "talisman_throw",
-						"damage": 21.0, "cooldown": 0.85, "range": 285.0,
+						"damage": 21.0, "cooldown": 0.85, "range": 255.0,
 						"knockback": 120.0,
 						"price": 32, "icon": "res://assets/art/weapon_guishui_fu.png",
 						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
@@ -925,7 +925,7 @@ const DEFS: Dictionary = {
 						"houtu_fu": {
 							"name": "厚土符", "behavior": Behavior.PROJECTILE,
 							"sfx": "talisman_throw",
-								"damage": 13.0, "cooldown": 1.10, "range": 255.0,
+								"damage": 13.0, "cooldown": 1.10, "range": 230.0,
 							"knockback": 200.0,
 							# 2026-10-18 media-gen 专属重绘：厚土岩甲符，玄铁硬轴与古藤玄黄符纸
 							"price": 32, "icon": "res://assets/art/weapon_houtu_fu.png",
@@ -967,7 +967,7 @@ const DEFS: Dictionary = {
 							"zihong_jing": {
 								"name": "紫虹镜", "behavior": Behavior.BEAM,
 								"sfx": "flute_wave",
-								"damage": 22.0, "cooldown": 1.15, "range": 300.0,
+								"damage": 22.0, "cooldown": 1.15, "range": 270.0,
 								"knockback": 80.0,
 								# 2026-10-18 media-gen 专属重绘：八面棱角玄铁紫玉晶镜，冷月冷冽雷芒
 								"price": 42, "icon": "res://assets/art/weapon_zihong_jing.png",
@@ -1046,9 +1046,10 @@ const DEFS: Dictionary = {
 const SYNERGIES: Dictionary = {
 	# ---- 器类羁绊 ----
 	"sword": {
-		# 2026-10-17 收档：范围全域共享（弹丸寿命也吃乘区），6 件 +50% 前后差出 200px，
-		# 屏上夸张；砍到与横扫档同高 +10/20/30，用户口径「现在太大了」
-		"name": "剑系", "thresholds": [2, 4, 6], "values": [0.10, 0.20, 0.30],
+		# 2026-10-20 再收一档（用户口径「攻击范围很容易提到很大很远」）：范围全域共享
+		# （弹丸寿命也吃乘区），+10/20/30 叠上悟道与道具后仍能翻倍，砍到 +5/10/15。
+		# 剑系的主要收益仍是「多一把剑」，范围只作点缀
+		"name": "剑系", "thresholds": [2, 4, 6], "values": [0.05, 0.10, 0.15],
 		"effects": [
 			{"field": "synergy_range_mult", "list": "values", "op": "add", "label": "攻击范围", "form": "pct"},
 		],

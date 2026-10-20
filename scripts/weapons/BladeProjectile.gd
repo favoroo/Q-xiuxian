@@ -3,7 +3,7 @@ extends Area2D
 
 ## 武器弹丸：伤害由 FloatingWeapon 计算好后直接传入，支持锁定追踪、穿透、弹射连锁与五行异常
 
-## 追踪转向速率（rad/s）。弹速 470 ÷ 3.6 ⇒ 最小转弯半径约 130px：看得见符在拐，但不是制导导弹。
+## 追踪转向速率（rad/s）。弹速 420 ÷ 3.6 ⇒ 最小转弯半径约 117px：看得见符在拐，但不是制导导弹。
 ## 为什么要追踪（2026-10-08 用户口径：「火符比其他武器要弱很多」）：
 ## 旧写法直线飞行、不预判不锁敌，弹丸飞 0.5 秒的时间里敌人已经横移七八十个像素，
 ## 而判定只有 7px + 敌人受击圈 15px —— 离线仿真（弹速/判定/寿命全取运行时真值）给出
@@ -40,10 +40,10 @@ const POOL_CAP := 64
 ## 最旧一发强制让位（它本来就快过期）。120 ≈ 现役构建峰值的 2 倍，常规构建永不触闸。
 const ACTIVE_BUDGET := 120
 ## 场景默认寿命：activate 复用时重置的基准（FloatingWeapon 出膛再乘 range_mult）
-## 2026-10-17 收紧 1.6→1.2（用户口径「满屏飞行物」）：弹速 470 ⇒ 裸航程 564px，
-## 覆盖全部弹丸基础锁敌圈（250~315）+ 追击余量；吃满范围乘区后 ~996px 贴对角线，
-## 不再出现一屏半的弹道
-const BASE_LIFETIME := 1.2
+## 2026-10-17 收紧 1.6→1.2（用户口径「满屏飞行物」）。
+## 2026-10-20 再收紧 1.2→1.0 且弹速 470→420（用户口径「攻击范围很容易提到很大很远」）：
+## 裸航程 564px→420px，吃满范围乘区也不再拉满整屏对角线
+const BASE_LIFETIME := 1.0
 ## —— 弹丸灯光上限 ——
 ## 每发弹丸一盏 PointLight2D，6 剑齐射常驻 10~20 盏 2D 动态灯，光照 pass 逐灯叠加是
 ## 渲染侧主卡因。全场最多同时点亮 LIGHT_CAP 盏，超限弹丸灯灭但矢量渲染器自带的
@@ -73,10 +73,11 @@ static func clear_pool() -> void:
 	clear_final_stats()
 
 var direction: Vector2 = Vector2.RIGHT
-var speed: float = 470.0
+## 弹速 2026-10-20 由 470 降到 420：与 BASE_LIFETIME 1.0 合并，裸航程 564→420px
+var speed: float = 420.0
 var damage: float = 20.0
 var knockback_base: float = 140.0
-var lifetime: float = 1.6
+var lifetime: float = 1.0
 var pierce_left: int = 1
 var bounce_left: int = 0
 var spin: bool = true

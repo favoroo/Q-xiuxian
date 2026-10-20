@@ -339,7 +339,9 @@ func _set_hover(t: Dictionary) -> bool:
 		return true
 	_hover_node = node
 	_hover_mod = node.modulate
-	node.modulate = Color(1.32, 1.32, 1.22, 1.0)
+	# 提亮走色相不提分量：>1.0 的分量会被 WorldEnvironment glow 当起辉源（HDR 根视口含 UI），
+	# 「落点微过曝」在真机上等于让整块格子在 glow pass 里跳一下。
+	node.modulate = Color(1.0, 0.98, 0.93, 1.0)
 	var sb := node.get_theme_stylebox("panel")
 	if sb is StyleBoxFlat:
 		_hover_sb = sb

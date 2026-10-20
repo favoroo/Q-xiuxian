@@ -320,6 +320,10 @@ func _fire() -> void:
 		p.burn_dur = float(_def.get("burn_dur", 2.5))
 
 	p.activate()
+	# 寿命按索敌半径补齐（2026-10-20）：炮台索敌吃攻击范围乘区，弹丸航程却固定为
+	# 弹速 × BASE_LIFETIME；寿命收紧到 1.0 后，叠了范围的炮台会锁定飞不到的目标。
+	# 只补到「够得着最远目标」为止，不随乘区无限拉长弹道
+	p.lifetime = maxf(p.lifetime, _eff_range() / p.speed + 0.05)
 
 	# 开火反馈（T-2.8）：枪口 HDR 闪光起辉 + 2-3 粒元素碎屑 + 核心亮闪 + 后坐抖动与音效
 	if muzzle_flash != null:
