@@ -40,10 +40,8 @@ var _speed_val_lbl: Label
 var _luck_val_lbl: Label
 var _harvest_val_lbl: Label
 
-var _pickup_val_lbl: Label
 var _xp_gain_val_lbl: Label
 var _elite_dmg_val_lbl: Label
-var _knockback_val_lbl: Label
 var _pierce_val_lbl: Label
 var _thorns_val_lbl: Label
 var _shop_price_val_lbl: Label
@@ -291,10 +289,6 @@ func refresh() -> void:
 	_harvest_val_lbl.add_theme_color_override("font_color", _c_row(harvest_v))
 
 	# 2. 左侧次要属性刷新
-	var pk_bonus: float = float(stats["pickup_bonus_pct"])
-	_pickup_val_lbl.text = "%.0f (%s%.0f%%)" % [float(stats["pickup_radius"]), "+" if pk_bonus >= 0 else "", pk_bonus]
-	_pickup_val_lbl.add_theme_color_override("font_color", _c_row(pk_bonus))
-
 	var xp_pct: float = float(stats["xp_gain_pct"])
 	_xp_gain_val_lbl.text = "%s%.0f%%" % ["+" if xp_pct >= 0 else "", xp_pct]
 	_xp_gain_val_lbl.add_theme_color_override("font_color", _c_row(xp_pct))
@@ -302,10 +296,6 @@ func refresh() -> void:
 	var elite_pct: float = float(stats["elite_damage_pct"])
 	_elite_dmg_val_lbl.text = "%s%.0f%%" % ["+" if elite_pct >= 0 else "", elite_pct]
 	_elite_dmg_val_lbl.add_theme_color_override("font_color", _c_row(elite_pct))
-
-	var kb_pct: float = float(stats["knockback_pct"])
-	_knockback_val_lbl.text = "%s%.0f%%" % ["+" if kb_pct >= 0 else "", kb_pct]
-	_knockback_val_lbl.add_theme_color_override("font_color", _c_row(kb_pct))
 
 	var pierce_v: int = int(stats["bonus_pierce"])
 	_pierce_val_lbl.text = "%s%d" % ["+" if pierce_v > 0 else "", pierce_v]

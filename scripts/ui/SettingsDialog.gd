@@ -262,6 +262,8 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
+	# 真机闪屏排查用（2026-10-20）：开启后记录 HUD 闪烁时刻的状态到 user://flicker_log.csv
+	_add_toggle_row(vbox, "flicker_probe", "闪屏探针", "排查用：记录 HUD 闪烁时刻的状态到 user://flicker_log.csv（默认关）")
 	# 画面清晰度：高清（原生高分屏极清渲染）/ 流畅（固定视口拉伸，低配防掉帧）
 	_add_cycle_row(
 		vbox,

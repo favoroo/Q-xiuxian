@@ -41,14 +41,12 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
-	"qiankun_dai",
 	"jifeng_xue",
 	"qingxin_cha",
 	"zhekou_yufu",
 	"kuangxue_dan",
 	"guijia_fu",
 	"tongxuan_ling",
-	"leiyin_zhen",
 	"yinhun_deng",
 	"suoling_jia",
 	"wujian_shi",
@@ -130,6 +128,10 @@ const DEFAULT_ITEMS: Array[String] = [
 		"jinmang_souhun",
 		"qianfu_lianhuan",
 		"liekong_zhui",
+		# 2026-10-20 新增通用强力件（不挑流派，任何构筑都能吃）
+		"xuantie_ling",
+		"bumie_jinshen",
+		"tiangang_zhanyi",
 		# 传说（tier 4）
 		"xuepan_guyu",
 		"liehun_ling",

@@ -72,9 +72,10 @@ const PRIMARY_IDS: Array[String] = [
 ]
 
 ## 土豆兄弟式次要属性分组（辅助、特殊效果与统计）
+## 2026-10-20：pickup（拾取范围）/ knockback（击退）两行随整系移除。
 const SECONDARY_IDS: Array[String] = [
-	"pickup", "xp_gain", "shop_price", "bonus_pierce", "thorns",
-	"elite_dmg", "knockback", "free_rerolls", "kills", "stones"
+	"xp_gain", "shop_price", "bonus_pierce", "thorns",
+	"elite_dmg", "free_rerolls", "kills", "stones"
 ]
 
 ## 面板每一行 → 它吃什么加点字段。空表 = 纯读数，不吃任何加成。
@@ -96,13 +97,11 @@ const STAT_FIELDS: Dictionary = {
 	"speed": ["move_speed_mult"],
 	"luck": ["luck"],
 	"harvest": ["harvest"],
-	"pickup": ["pickup_range_mult"],
 	"xp_gain": ["xp_gain_mult"],
 	"shop_price": ["shop_price_mul"],
 	"bonus_pierce": ["bonus_pierce"],
 	"thorns": ["thorns"],
 	"elite_dmg": ["elite_damage"],
-	"knockback": ["knockback_mult"],
 	"free_rerolls": ["free_rerolls"],
 	"kills": [],
 	"stones": ["spirit_stones"],
@@ -123,7 +122,6 @@ const STAT_TITLES: Dictionary = {
 		"contraption_dmg": "机关伤害",
 		"haste": "攻击间隔",
 	"speed": "移动速度",
-	"pickup": "拾取范围",
 	"range": "攻击范围",
 	"crit": "暴击",
 	"luck": "幸运",
@@ -133,7 +131,6 @@ const STAT_TITLES: Dictionary = {
 	"bonus_pierce": "穿透",
 	"thorns": "反震伤害",
 	"elite_dmg": "对精英伤害",
-	"knockback": "击退力度",
 	"free_rerolls": "免费重掷",
 	"kills": "累计击杀",
 	"stones": "随身金币",
@@ -154,7 +151,6 @@ const BRIEF: Dictionary = {
 		"contraption_dmg": "加成机关炮台与地面阵盘的基础伤害。",
 		"haste": "缩短每件武器的攻击间隔。",
 	"speed": "角色的移动速度。",
-	"pickup": "金币与经验自动拾取的范围。",
 	"range": "武器索敌与攻击的距离。",
 	"crit": "暴击的概率与倍率。",
 	"luck": "提高高稀有度升级与道具的出现概率。",
@@ -164,7 +160,6 @@ const BRIEF: Dictionary = {
 	"bonus_pierce": "远程弹丸类武器的额外穿透次数。",
 	"thorns": "受到近身攻击时，按比例反弹伤害给敌方。",
 	"elite_dmg": "对精英与Boss的额外伤害。",
-	"knockback": "击中敌人时的击退距离与力度。",
 	"free_rerolls": "每回合商店开始时免费重掷的次数。",
 	"kills": "本局击杀敌人的总数，含精英与Boss。",
 	"stones": "本局货币：买武器、道具、重掷都花它。",
@@ -255,9 +250,6 @@ static func rules(id: String) -> Array[String]:
 			out.append("实际移速 = 角色基础移速 × (1 + 升级/道具加成 + 羁绊加成)。")
 			out.append("角色的负面代偿直接乘在这一条上，所以读数可能是负的（如守卫 -15%）。")
 			out.append("个别角色会锁死某条升级（如守卫锁「移速提升」），被锁的那条不再出现在候选里。")
-		"pickup":
-			out.append("半径 = 基础拾取半径 × 倍率，管金币、经验和回复葫芦的吸附，不影响攻击距离。")
-			out.append("这条不够高时，金币会留在地上等人走过去捡，站得远就捡得慢。")
 		"range":
 			out.append("乘在每件武器的射程上；剑系羁绊额外加这一条。")
 			out.append("近战武器同样吃它——挥斩的弧更长，不是只有远程受益。")
@@ -290,9 +282,6 @@ static func rules(id: String) -> Array[String]:
 		"elite_dmg":
 			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
 			out.append("升级「精英伤害」与道具「破甲针」生效，不影响寻常小怪。")
-		"knockback":
-			out.append("武器击退敌人的推力与距离加成倍率。")
-			out.append("土系羁绊与道具「雷击针」加在这条上，防高密度敌潮近身。")
 		"free_rerolls":
 			out.append("每回合进入商店时无需花费金币即可免费重掷货架的次数。")
 			out.append("道具「重掷令」提供，用完后重掷费用才开始按正常递增结算。")
@@ -518,14 +507,6 @@ static func stat_tip_rows(id: String) -> Array:
 				["升级·道具·角色", "%+.0f%%" % ((GameManager.move_speed_mult - 1.0) * 100.0), _c(GameManager.move_speed_mult - 1.0)],
 				["水系羁绊", "%+.0f%%" % (GameManager.synergy_move_speed_mult * 100.0), _c(GameManager.synergy_move_speed_mult)],
 			]
-		"pickup":
-			var pkm: float = GameManager.pickup_range_mult
-			var rad: float = float(s.get("pickup_radius", 0.0))
-			rows = [
-				["拾取半径", "%.0f 像素" % rad],
-				["倍率", _mul(pkm), _c(pkm - 1.0)],
-				["基础半径", "%.0f 像素" % (rad / pkm if pkm > 0.01 else rad)],
-			]
 		"range":
 			rows = [
 				["攻击范围", "%+.0f%%" % float(s.get("attack_range_pct", 0.0)), _c(float(s.get("attack_range_pct", 0.0)))],
@@ -590,13 +571,6 @@ static func stat_tip_rows(id: String) -> Array:
 			rows = [
 				["对精英/Boss增伤", "%+.0f%%" % ep, _c(ep)],
 				["独立乘区", _mul(1.0 + GameManager.elite_damage), _c(ep)],
-			]
-		"knockback":
-			var kp: float = float(s.get("knockback_pct", 0.0))
-			rows = [
-				["击退总倍率", _mul(GameManager.knockback_mult * GameManager.synergy_knockback_mult), _c(kp)],
-				["升级·道具", _mul(GameManager.knockback_mult), _c(GameManager.knockback_mult - 1.0)],
-				["土系羁绊", _mul(GameManager.synergy_knockback_mult), _c(GameManager.synergy_knockback_mult - 1.0)],
 			]
 		"free_rerolls":
 			var fr: int = int(s.get("free_rerolls", 0))

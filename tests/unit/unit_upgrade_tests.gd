@@ -20,13 +20,13 @@ func _test_upgrade_table() -> void:
 
 	# 逐项落地：加点确实改到了对应属性，且幅度就是表里的数
 	var deltas := {
-		"atk_up": 0.08, "armor_up": 2.0, "speed_up": 0.08, "pickup_up": 0.4,
+		"atk_up": 0.08, "armor_up": 2.0, "speed_up": 0.08, "temper": 3.0,
 		"regen_up": 1.2, "critdmg_up": 0.25, "lifesteal_up": 0.04, "luck_up": 6.0,
 		"harvest_up": 8.0, "range_up": 0.05,
 	}
 	var targets := {
 		"atk_up": "weapon_damage_mult", "armor_up": "armor", "speed_up": "move_speed_mult",
-		"pickup_up": "pickup_range_mult", "regen_up": "hp_regen", "critdmg_up": "crit_mult",
+		"temper": "armor", "regen_up": "hp_regen", "critdmg_up": "crit_mult",
 		"lifesteal_up": "lifesteal", "luck_up": "luck", "harvest_up": "harvest",
 		"range_up": "attack_range_mult",
 	}
@@ -50,9 +50,10 @@ func _test_upgrade_table() -> void:
 		GameManager.apply_upgrade("haste_up")
 	_c.near(GameManager.attack_speed_mult, GameManager.ATTACK_SPEED_FLOOR, EPS, "施法间隔不会低于地板")
 	GameManager.reset_run()
-	var stones := GameManager.spirit_stones
-	GameManager.apply_upgrade("coins_up")
-	_c.equals(GameManager.spirit_stones - stones, int(UpgradeData.get_upgrade_def("coins_up").get("apply", {})["spirit_stones"]), "灵石补给按表发钱")
+	# 贪婪：收益 +10 落地（原 coins_up 直接发钱档已重做为长期经济档）
+	var harvest_before: float = GameManager.harvest
+	GameManager.apply_upgrade("greed")
+	_c.near(GameManager.harvest - harvest_before, 10.0, EPS, "贪婪按表加收益")
 	GameManager.reset_run()
 
 	# 历史记录：同一项叠加两次要记下 count=2，供 max_stacks 过滤使用

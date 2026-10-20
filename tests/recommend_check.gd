@@ -27,7 +27,7 @@ func _base_ctx() -> Dictionary:
 			"move_speed_mult": 1.0, "weapon_damage_mult": 1.0, "attack_range_mult": 1.0,
 			"melee_damage": 0.0, "ranged_damage": 0.0, "elemental_damage": 0.0,
 			"engineering_damage": 0.0, "harvest": 0.0,
-			"dodge": 0.0, "luck": 0.0, "xp_gain_mult": 1.0, "pickup_range_mult": 1.0, "thorns": 0.0,
+			"dodge": 0.0, "luck": 0.0, "xp_gain_mult": 1.0, "thorns": 0.0,
 		},
 		"element_damage": {},
 		"weapons": [{"id": "qingyun_sword", "star": 1}],

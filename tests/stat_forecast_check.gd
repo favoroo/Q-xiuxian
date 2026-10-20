@@ -29,16 +29,16 @@ const PROBE: Dictionary = {
 	"weapon_damage_mult": 1.45, "melee_damage": 6.0, "ranged_damage": 5.0,
 	"elemental_damage": 4.0, "engineering_damage": 3.0, "attack_speed_mult": 0.72,
 	"armor": 18.0, "move_speed_mult": 1.24, "attack_range_mult": 1.3,
-	"pickup_range_mult": 1.6, "hp_regen": 2.5, "crit_rate": 0.23, "crit_mult": 1.85,
+	"hp_regen": 2.5, "crit_rate": 0.23, "crit_mult": 1.85,
 	"dodge": 0.18, "lifesteal": 0.09, "luck": 4.0, "harvest": 7.0, "xp_gain_mult": 1.35,
-	"knockback_mult": 1.5, "elite_damage": 0.25, "free_rerolls": 2, "shop_price_mult": 0.85,
+	"elite_damage": 0.25, "free_rerolls": 2, "shop_price_mult": 0.85,
 	"stat_bonus_pierce": 2, "bonus_pierce": 3, "thorns_pct": 0.15,
 	"chest_count_bonus": 1, "chest_quality": 0.5, "chest_reward_mult": 1.75,
 	"spirit_stones": 233,
 	"synergy_damage_mult": 1.18, "synergy_range_mult": 1.12, "synergy_haste_mult": 1.06,
 	"synergy_crit_rate": 0.07, "synergy_crit_mult": 0.11, "synergy_hp_regen": 1.5,
 	"synergy_lifesteal": 0.03, "synergy_move_speed_mult": 0.08, "synergy_armor": 5.0,
-	"synergy_knockback_mult": 1.09, "synergy_bonus_pierce": 1, "shadow_amp_mult": 1.14,
+	"synergy_thorns": 0.09, "synergy_bonus_pierce": 1, "shadow_amp_mult": 1.14,
 	"buff_attack_speed_mult": 0.9, "buff_move_speed_mult": 1.1, "buff_dodge": 0.04,
 	"dodge_cap_bonus": 0.1,
 }
@@ -50,8 +50,8 @@ const EPS := 0.0001
 ## 面板有行的字段 = StatInfoData.STAT_FIELDS 的 value 摊平；hp_heal 另算 —— 它落在
 ## 「生命值」那一行的当前值上（满血时当场夹顶，正是要写实的例子）
 const EXTRA_PANEL_FIELDS: Array[String] = ["hp_heal"]
-## 钉进一屏真候选的四条：夹顶那条、双字段那条、面板无行那条（不许长注脚）、当场到账那条
-const PINNED: Array[String] = ["crit_up", "hp_up", "chest_count_up", "coins_up"]
+## 钉进一屏真候选的四条：夹顶那条、双字段那条、面板无行那条（不许长注脚）、混合生存+生命那条
+const PINNED: Array[String] = ["crit_up", "hp_up", "chest_count_up", "temper"]
 
 var _c := TestCheck.new()
 var _player: Player

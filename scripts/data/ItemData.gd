@@ -24,8 +24,8 @@ extends RefCounted
 ## 2026-10-12 深度联动与站定流道具核心件（额外字段，item_hook_sum 现算）：
 ##   still_regen_pct     —— 打坐蒲团：站定每秒回复最大生命比例（Player.gd 消费）
 ##   still_dodge         —— 入定香：站定闪避率加成（GameManager.get_effective_dodge）
-##   still_armor         —— 入定香：站定护甲加成（GameManager.get_effective_armor）
-##   still_knockback     —— 玄武法坛：站定击退倍率加成（BalanceCombat.knockback_impulse）
+##   still_armor         —— 入定香/玄武法坛：站定护甲加成（GameManager.get_effective_armor）
+##   （still_knockback 已于 2026-10-20 随击退系移除，字段保留但无道具使用）
 ##   still_thorns        —— 玄武法坛：站定反伤比例加成（EnemyBase._resolve_contact_damage）
 ##   still_attack_speed  —— 金刚神像：站定不动时攻击间隔缩减（GameManager.get_effective_attack_speed_mult）
 ##   dmg_per_empty_slot  —— 三昧归真：武器少于 4 把时每少 1 把全伤害加成（CultivatorSystem.damage_mult）
@@ -72,12 +72,7 @@ const DEFS: Dictionary = {
 		"desc": "高稀有度的悟道候选与道具更易出现",
 		"apply": {"luck": 5.0},
 	},
-	"qiankun_dai": {
-		"name": "拾取袋", "tier": 1, "price": 12,
-		"icon": "res://assets/art/item_qiankun_dai.png",
-		"desc": "",
-		"apply": {"pickup_range_mult": 0.3},
-	},
+	# 2026-10-20 拾取袋（qiankun_dai）整系移除：拾取范围对任何流派都无感，玩家不会选。
 		"jifeng_xue": {
 			"name": "速跑靴", "tier": 1, "price": 13,
 			"icon": "res://assets/art/item_jifeng_xue.png",
@@ -134,17 +129,12 @@ const DEFS: Dictionary = {
 		"desc": "",
 		"apply": {"free_rerolls": 1.0},
 	},
-		"leiyin_zhen": {
-			"name": "雷击针", "tier": 2, "price": 25,
-			"icon": "res://assets/art/item_leiyin_zhen.png",
-			"desc": "",
-			"apply": {"knockback_mult": 0.35},
-		},
+		# 2026-10-20 引路灯改造：原「拾取范围 +25%」腿整系移除，改为纯攻击范围道具（攻击范围 +10% / 移速 -4%）。
 		"yinhun_deng": {
 			"name": "引路灯", "tier": 2, "price": 25,
 			"icon": "res://assets/art/item_yinhun_deng.png",
 			"desc": "",
-			"apply": {"pickup_range_mult": 0.25, "attack_range_mult": 0.10, "move_speed_mult": -0.04},
+			"apply": {"attack_range_mult": 0.10, "move_speed_mult": -0.04},
 		},
 		"suoling_jia": {
 			"name": "狂战枷", "tier": 2, "price": 26,
@@ -567,9 +557,9 @@ const DEFS: Dictionary = {
 				"xuanwu_fashan": {
 					"name": "玄武法坛", "tier": 3, "price": 46,
 					"icon": "res://assets/art/item_fanzhen_tongjia.png",
-					"desc": "阵起玄武：站定不动时受击反伤+60%，武器击退力度+80%",
+					"desc": "阵起玄武：站定不动时受击反伤+60%，护甲+3",
 					"apply": {"attack_range_mult": -0.10},
-					"still_knockback": 0.8, "still_thorns": 0.6,
+					"still_armor": 3.0, "still_thorns": 0.6,
 				},
 				"jingang_shenxiang": {
 					"name": "金刚神像", "tier": 3, "price": 46,
@@ -661,6 +651,27 @@ const DEFS: Dictionary = {
 				"desc": "",
 				"apply": {"bonus_pierce": 1.0, "attack_range_mult": -0.10},
 			},
+
+			# ==================== 2026-10-20 新增：通用强力选项（补删件空位 + 直给输出/生存） ====================
+			# 用户口径「值得选的东西太少」：这三件不挑流派，任何构筑都能吃到，专治「没东西可挑」。
+			"xuantie_ling": {
+				"name": "玄铁令", "tier": 2, "price": 27,
+				"icon": "res://assets/art/item_suoling_jia.png",
+				"desc": "",
+				"apply": {"weapon_damage_mult": 0.20},
+			},
+			"bumie_jinshen": {
+				"name": "不灭金身", "tier": 3, "price": 48,
+				"icon": "res://assets/art/item_jingang_fumo_jia.png",
+				"desc": "",
+				"apply": {"max_hp": 50.0, "hp_heal": 50.0, "armor": 4.0, "hp_regen": 1.0},
+			},
+			"tiangang_zhanyi": {
+				"name": "天罡战意", "tier": 3, "price": 46,
+				"icon": "res://assets/art/item_potian_zhui.png",
+				"desc": "",
+				"apply": {"crit_rate": 0.10, "crit_mult": 0.30},
+			},
 	}
 
 static func get_def(id: String) -> Dictionary:
@@ -689,6 +700,15 @@ static func sell_price(id: String) -> int:
 ## gm 可选透传（满穿透闸 PierceLimit：阵容穿透顶到上限后穿透道具停刷）；
 ## 池空返回 ""，调用方落回武器位
 static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator, unlocked_items: Array = [], gm: Node = null) -> String:
+	# 先按构筑感知过滤收一版池（玩剑系就不刷纯召唤/机关/单元素/灵兽/寻宝件）；
+	# 池被过滤空时回退到未过滤池，绝不让货架落空（2026-10-20）
+	var picked := _pick_id_filtered(luck, wave, bought, rng, unlocked_items, gm, true)
+	if picked != "":
+		return picked
+	return _pick_id_filtered(luck, wave, bought, rng, unlocked_items, gm, false)
+
+static func _pick_id_filtered(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator,
+		unlocked_items: Array, gm: Node, apply_build_filter: bool) -> String:
 	var tier_w: Array = GameBalance.item_tier_weights(luck, wave)
 	var pool: Array = []
 	var weights: Array = []
@@ -700,6 +720,9 @@ static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGene
 			continue
 		var d: Dictionary = DEFS[id]
 		if bool(d.get("unique", false)) and id in bought:
+			continue
+		# 构筑感知过滤：只滤纯条件件，混装件放行
+		if apply_build_filter and gm != null and not BalanceBuildFilter.item_allowed(gm, String(id)):
 			continue
 		var tier := clampi(int(d.get("tier", 1)), 1, 4)
 		var w := float(tier_w[tier - 1])

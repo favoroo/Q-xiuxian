@@ -111,12 +111,10 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 
 	var sec_combat := add_stat_block(dialog._secondary_stats_box, "战 斗")
 	dialog._elite_dmg_val_lbl = add_stat_row(dialog, sec_combat, "elite_dmg", "+0%")
-	dialog._knockback_val_lbl = add_stat_row(dialog, sec_combat, "knockback", "+0%")
 	dialog._pierce_val_lbl = add_stat_row(dialog, sec_combat, "bonus_pierce", "0")
 	dialog._thorns_val_lbl = add_stat_row(dialog, sec_combat, "thorns", "0%")
 
 	var sec_growth := add_stat_block(dialog._secondary_stats_box, "成 长")
-	dialog._pickup_val_lbl = add_stat_row(dialog, sec_growth, "pickup", "96 (+0%)")
 	dialog._xp_gain_val_lbl = add_stat_row(dialog, sec_growth, "xp_gain", "+0%")
 
 	var sec_econ := add_stat_block(dialog._secondary_stats_box, "经 营")

@@ -57,6 +57,7 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.still_damage_bonus = float(mods.get("still_damage_bonus", 0.0))
 	gm.still_haste_bonus = float(mods.get("still_haste_bonus", 0.0))
 	gm.still_armor_bonus = float(mods.get("still_armor_bonus", 0.0))
+	gm.still_regen_bonus = float(mods.get("still_regen_bonus", 0.0))
 	gm.still_pickup_bonus = float(mods.get("still_pickup_bonus", 0.0))
 	gm.move_damage_penalty = float(mods.get("move_damage_penalty", 0.0))
 	gm.move_haste_penalty = float(mods.get("move_haste_penalty", 0.0))

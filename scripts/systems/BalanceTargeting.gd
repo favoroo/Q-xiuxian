@@ -285,7 +285,7 @@ static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[St
 	for key in apply.keys():
 		var k := String(key)
 		match k:
-			"weapon_damage_mult", "attack_speed_mult_mul", "knockback_mult", \
+			"weapon_damage_mult", "attack_speed_mult_mul", \
 			"attack_range_mult", "element_damage_all", "elite_damage":
 				if not out.has(k):
 					out.append(k)
@@ -308,7 +308,7 @@ static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[St
 
 ## 这条加点（UpgradeData 的 "apply" 字典）会不会让某件武器变强（悟道卡片下方挂受益武器图标用）。
 ## 口径与伤害结算逐条对齐：
-##   全局乘区（武器伤害/攻击间隔/击退/攻击范围/全元素/斩将）→ 全体武器受益；
+##   全局乘区（武器伤害/攻击间隔/攻击范围/全元素/斩将）→ 全体武器受益；
 ##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
 ##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
 ##   stat_scalings 键 → 武器配了该属性转化系数才算；

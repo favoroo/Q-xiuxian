@@ -53,10 +53,9 @@ static func breakdown(gm: Object) -> Dictionary:
 		"luck": gm.luck,
 		"harvest": gm.harvest,
 		"xp_gain_pct": (gm.xp_gain_mult - 1.0) * 100.0,
-		"knockback_pct": (gm.knockback_mult * gm.synergy_knockback_mult - 1.0) * 100.0,
 		"elite_damage_pct": gm.elite_damage * 100.0,
 		"free_rerolls": gm.free_rerolls,
 		"bonus_pierce": gm.bonus_pierce,
-		"thorns_pct": gm.thorns_pct * 100.0,
+		"thorns_pct": (gm.thorns_pct + gm.synergy_thorns) * 100.0,
 		"shop_price_pct": (gm.shop_price_mult - 1.0) * 100.0,
 	}

@@ -9,7 +9,7 @@ extends RefCounted
 ## "apply" 是该项的**实际生效幅度**（唯一事实来源）：悟道卡面的加成行由 BonusRows 从 apply
 ## 直接生成（正绿负红、名左值右），desc 只写 apply 之外的机制说明、不再手抄数值：
 ##   可加算的字段名直接写：weapon_damage_mult / armor / move_speed_mult / attack_range_mult /
-##                         pickup_range_mult / hp_regen / crit_rate / crit_mult / dodge /
+##                         hp_regen / crit_rate / crit_mult / dodge /
 ##                         lifesteal / luck / harvest / spirit_stones
 ##   特殊：attack_speed_mult_mul（乘算，地板见 GameManager.ATTACK_SPEED_FLOOR）、
 ##        max_hp + hp_heal（改的是玩家节点，需要 GameManager 代一手）
@@ -123,25 +123,27 @@ const UPGRADES: Array[Dictionary] = [
 		"icon": "res://assets/art/icon_hp.png",
 		"max_stacks": 6,
 	},
+	# 2026-10-20 拾取范围整系移除（用户口径：不管玩什么流派都没用），原 pickup_up 位换成通用生存档。
 	{
-		"id": "pickup_up",
-		"apply": {"pickup_range_mult": 0.4},
-			"title": "拾取范围",
-			"desc": "金币、经验与回复葫芦的吸附范围",
+		"id": "temper",
+		"apply": {"armor": 3.0, "max_hp": 15.0, "hp_heal": 15.0},
+		"title": "淬体",
+		"desc": "厚甲护身，同时提升生命上限",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_magnet.png",
-		"max_stacks": 4,
+		"icon": "res://assets/art/icon_armor.png",
+		"max_stacks": 6,
 	},
+	# 2026-10-20 金币补给重做：原来 8 层共 96 金币性价比过低，改成收益复利 + 幸运的长期经济档。
 	{
-		"id": "coins_up",
-		"apply": {"spirit_stones": 12.0},
-		"title": "金币补给",
-		"desc": "回合间商店购物使用",
+		"id": "greed",
+		"apply": {"harvest": 10.0, "luck": 3.0},
+		"title": "贪婪",
+		"desc": "每回合结束白得金币与经验，并小幅提升幸运",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_coin.png",
-		"max_stacks": 8,
+		"icon": "res://assets/art/icon_harvest.png",
+		"max_stacks": 4,
 	},
 	{
 		"id": "regen_up",
@@ -259,15 +261,16 @@ const UPGRADES: Array[Dictionary] = [
 		"icon": "res://assets/art/icon_range.png",
 		"max_stacks": 5,
 	},
+	# 2026-10-20 击退提升整系移除（用户口径：不管玩什么流派都没用），原 knockback_up 位换成攻防一体的吸血档。
 	{
-		"id": "knockback_up",
-		"apply": {"knockback_mult": 0.25},
-		"title": "击退提升",
-		"desc": "击中时把敌人推得更远",
-		"rarity": "common",
-		"rarity_label": "普通",
-		"icon": "res://assets/art/item_leiyin_zhen.png",
-		"max_stacks": 4,
+		"id": "bloodlust",
+		"apply": {"lifesteal": 0.06, "weapon_damage_mult": 0.10},
+		"title": "嗜血",
+		"desc": "边打边回血，同时提升武器伤害",
+		"rarity": "epic",
+		"rarity_label": "史诗",
+		"icon": "res://assets/art/icon_lifesteal.png",
+		"max_stacks": 5,
 	},
 	{
 		"id": "insight_up",
@@ -433,8 +436,10 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 5,
 	},
 			{
+				# 2026-10-20 修数值阶梯：0.82 连乘 3 层=0.55，反而弱于 haste_up 满叠 0.88 连乘 6 层=0.46，
+				# 传说卡不如普通卡。改为每层 ×0.75（满叠约 0.42），真正压过普通档，仍在地板 0.3 之上。
 				"id": "grand_haste",
-				"apply": {"attack_speed_mult_mul": 0.82},
+				"apply": {"attack_speed_mult_mul": 0.75},
 				"title": "雷厉风行",
 				"desc": "",
 				"rarity": "legendary",
@@ -443,8 +448,10 @@ const UPGRADES: Array[Dictionary] = [
 				"max_stacks": 3,
 			},
 			{
+				# 2026-10-20 修数值阶梯：原 +0.15/层 满叠 +45% 弱于 atk_up 满叠 +48%。
+				# 改为 +0.20/层（满叠 +60%），超过软顶 2.0 后按 50% 兑现自然收敛。
 				"id": "grand_atk",
-				"apply": {"weapon_damage_mult": 0.15},
+				"apply": {"weapon_damage_mult": 0.20},
 				"title": "仙兵奥义",
 				"desc": "全系兵刃威能大幅跃升；武器伤害超过 +100% 后收益减半",
 				"rarity": "legendary",
@@ -470,7 +477,8 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/icon_hp.png",
+			# 2026-10-20 修图标错配：原来误用血瓶 icon_hp（语义不符），改用灵兽道具图标。
+			"icon": "res://assets/art/item_yuling_pai.png",
 			"max_stacks": 8,
 		},
 		{
@@ -520,30 +528,18 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 	var epic_w: float = weights_dict["epic"]
 	var legendary_w: float = weights_dict["legendary"]
 
-	var pool: Array[Dictionary] = []
-	var pool_weights: Array[float] = []
-	for u in UPGRADES:
-		var uid: String = u.get("id", "")
-		if uid in locked:
-			continue
-		if int(owned_counts.get(uid, 0)) >= int(u.get("max_stacks", 99)):
-			continue
-		# 无随行灵兽且非御兽师时，不刷出灵兽强化项（防污染卡池）
-		if uid.begins_with("pet_") and not has_pets:
-			continue
-		# 阵容穿透已全部顶到上限 ⇒ 穿透强化不再刷出（PierceLimit 唯一判定）
-		if gm_for_pierce != null and not PierceLimit.filter_upgrade_id(gm_for_pierce, uid):
-			continue
-		var w: float = common_w
-		match u.get("rarity", "common"):
-			"rare":
-				w = rare_w
-			"epic":
-				w = epic_w
-			"legendary":
-				w = legendary_w
-		pool.append(u)
-		pool_weights.append(w)
+	var gm_filter: Node = ctx.get("gm", null)
+
+	# 先按构筑感知过滤（BalanceBuildFilter）收一版池；不足 count 时回退到未过滤池，绝不让候选变少。
+	var filtered := _collect_pool(locked, owned_counts, has_pets, gm_for_pierce, gm_filter,
+		common_w, rare_w, epic_w, legendary_w, true)
+	var pool: Array[Dictionary] = filtered[0]
+	var pool_weights: Array[float] = filtered[1]
+	if pool.size() < count:
+		var full := _collect_pool(locked, owned_counts, has_pets, gm_for_pierce, gm_filter,
+			common_w, rare_w, epic_w, legendary_w, false)
+		pool = full[0]
+		pool_weights = full[1]
 
 	var result: Array[Dictionary] = []
 	var active_rng: RandomNumberGenerator = rng if rng != null else GameManager.rng
@@ -558,6 +554,39 @@ static func get_random_upgrades(count: int = 3, ctx: Dictionary = {}) -> Array[D
 		pool.remove_at(chosen)
 		pool_weights.remove_at(chosen)
 	return result
+
+## 收一版候选池，返回 [pool, weights]。apply_build_filter=false 时跳过构筑感知过滤（兜底用）。
+static func _collect_pool(locked: Array, owned_counts: Dictionary, has_pets: bool,
+		gm_for_pierce: Node, gm_filter: Node, common_w: float, rare_w: float,
+		epic_w: float, legendary_w: float, apply_build_filter: bool) -> Array:
+	var pool: Array[Dictionary] = []
+	var pool_weights: Array[float] = []
+	for u in UPGRADES:
+		var uid: String = u.get("id", "")
+		if uid in locked:
+			continue
+		if int(owned_counts.get(uid, 0)) >= int(u.get("max_stacks", 99)):
+			continue
+		# 无随行灵兽且非御兽师时，不刷出灵兽强化项（防污染卡池）
+		if uid.begins_with("pet_") and not has_pets:
+			continue
+		# 阵容穿透已全部顶到上限 ⇒ 穿透强化不再刷出（PierceLimit 唯一判定）
+		if gm_for_pierce != null and not PierceLimit.filter_upgrade_id(gm_for_pierce, uid):
+			continue
+		# 构筑感知过滤：玩剑系就别刷召唤/机关/单元素等死卡（2026-10-20）
+		if apply_build_filter and not BalanceBuildFilter.upgrade_allowed(gm_filter, uid):
+			continue
+		var w: float = common_w
+		match u.get("rarity", "common"):
+			"rare":
+				w = rare_w
+			"epic":
+				w = epic_w
+			"legendary":
+				w = legendary_w
+		pool.append(u)
+		pool_weights.append(w)
+	return [pool, pool_weights]
 
 static func get_upgrade_def(upgrade_id: String) -> Dictionary:
 	for u in UPGRADES:

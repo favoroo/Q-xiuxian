@@ -86,7 +86,7 @@ const ORPHAN_ALLOW := {
 	# 2026-10-12 深度联动与站定流法宝（14 件）
 	"dazuo_putuan": [2],
 	"ruding_xiang": [25, 3],
-	"xuanwu_fashan": [60, 80],
+	"xuanwu_fashan": [60, 3],
 	"jingang_shenxiang": [-30, 30],
 	"panshi_yin": [1, 45],
 	"sanmei_guizhen": [4, 1, 15],

@@ -123,9 +123,10 @@ static func create_empty_equipped_slot(shop: WaveShop, index: int, tile: float) 
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(tile, tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := GameStyle.slot()
-	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
-	style.border_color = GameStyle.with_alpha(GameStyle.GOLD, 0.45)
+	# 独立实例凹槽（slot() 是全局共享单例，就地改色会污染全项目 —— 2026-10-20 更新弹窗变色根因）
+	var style := GameStyle.slot_of(GameStyle.with_alpha(GameStyle.INK, 0.55),
+			GameStyle.with_alpha(GameStyle.GOLD, 0.45))
+	# 描边 = 主题 GOLD 淡化 45%：登记派生关系，换主题时即时跟随（实例独立，登记无污染）
 	GameStyle.register_theme_derived_box(style, &"border_color", &"main", &"alpha", 0.45)
 	slot.add_theme_stylebox_override("panel", style)
 	if shop != null:
@@ -247,9 +248,9 @@ static func create_empty_stash_slot(shop: WaveShop, tile: float) -> Control:
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(maxf(20.0, tile * 0.6), tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := GameStyle.slot()
-	style.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.55)
-	slot.add_theme_stylebox_override("panel", style)
+	# 独立实例凹槽：黑 55% 井底（slot() 单例严禁改色，同 create_empty_equipped_slot）
+	slot.add_theme_stylebox_override("panel",
+			GameStyle.slot_of(GameStyle.with_alpha(GameStyle.INK, 0.55)))
 	if shop != null:
 		shop.drag_register(slot, {"pool": "stash", "index": -1, "kind": "end"})
 	return slot

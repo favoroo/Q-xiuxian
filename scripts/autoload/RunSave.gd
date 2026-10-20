@@ -288,6 +288,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["still_haste_bonus"] = gm.still_haste_bonus
 	d["still_armor_bonus"] = gm.still_armor_bonus
 	d["still_pickup_bonus"] = gm.still_pickup_bonus
+	d["still_regen_bonus"] = gm.still_regen_bonus
 	d["move_damage_penalty"] = gm.move_damage_penalty
 	d["move_haste_penalty"] = gm.move_haste_penalty
 	d["total_damage_taken_count"] = gm.total_damage_taken_count
@@ -416,6 +417,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.still_haste_bonus = float(d.get("still_haste_bonus", 0.0))
 	gm.still_armor_bonus = float(d.get("still_armor_bonus", 0.0))
 	gm.still_pickup_bonus = float(d.get("still_pickup_bonus", 0.0))
+	gm.still_regen_bonus = float(d.get("still_regen_bonus", 0.0))
 	gm.move_damage_penalty = float(d.get("move_damage_penalty", 0.0))
 	gm.move_haste_penalty = float(d.get("move_haste_penalty", 0.0))
 	gm.total_damage_taken_count = int(d.get("total_damage_taken_count", 0))

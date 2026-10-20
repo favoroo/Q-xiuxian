@@ -563,16 +563,26 @@ static func outlined_panel(bg: Color, border: Color, border_w: int = 2, skew_deg
 
 ## 凹陷槽：经验槽轨道/滑杆/未选中（全局单例共享）。
 ## 纸面板上的「凹」靠压暗一档的纸灰底 + 黑细框表达。
+## 【注意】单例共享 —— 调用方严禁就地改属性（bg_color/content_margin 等），要改用 slot_of()：
+## 2026-10-20 排查更新弹窗说明框变色，根因就是商店空槽拿单例改色（bg=INK@0.55、
+## 边=GOLD@0.45），污染顺着共享缓存波及全项目每一处 slot()。
 static func slot() -> StyleBoxFlat:
 	if _slot_cache != null:
 		return _slot_cache
-	var sb := panel(NAVY2.darkened(0.08), 0.0, Vector2.ZERO)
-	sb.border_width_left = 2
-	sb.border_width_top = 2
-	sb.border_width_right = 2
-	sb.border_width_bottom = 2
-	sb.border_color = INK
-	_slot_cache = sb
+	_slot_cache = slot_of()
+	return _slot_cache
+
+## 独立实例版凹槽：要就地调参（底色/描边/内边距）的调用方一律走这里，
+## 每次新建不进缓存，改坏了也只脏自己这一个控件。
+static func slot_of(bg: Color = NAVY2.darkened(0.08), border: Color = INK,
+		border_w: int = 2) -> StyleBoxFlat:
+	var sb := panel(bg, 0.0, Vector2.ZERO)
+	sb.border_width_left = border_w
+	sb.border_width_top = border_w
+	sb.border_width_right = border_w
+	sb.border_width_bottom = border_w
+	sb.border_color = border
+	_track_style(sb, border, &"border_color")
 	return sb
 
 ## 进度条成对样式（track 底 + fill 面）
@@ -587,6 +597,7 @@ static func bar_styles(track: Color, fill: Color) -> Array:
 	return [bg, fl]
 
 ## 色签 chip：实底小色块 + 黑框 + 小硬影（按色缓存共享）
+## 【注意】单例共享 —— 要就地调内边距等参数的调用方改用 chip_of()（同 slot/slot_of 口径）。
 static func chip(face: Color) -> StyleBoxFlat:
 	var k := face.to_rgba32()
 	if _chip_cache.has(k):
@@ -594,6 +605,10 @@ static func chip(face: Color) -> StyleBoxFlat:
 	var sb := block(face, SLANT_BAND, Vector2(2, 3))
 	_chip_cache[k] = sb
 	return sb
+
+## 独立实例版色签：要改 content_margin 等参数时用，每次新建不进缓存。
+static func chip_of(face: Color) -> StyleBoxFlat:
+	return block(face, SLANT_BAND, Vector2(2, 3))
 
 ## 紧凑型色签 compact_chip：专用于高信息密度卡片（如商店货架卡），收窄边框与投影，防膨胀高度（按色缓存共享）
 static func compact_chip(face: Color) -> StyleBoxFlat:

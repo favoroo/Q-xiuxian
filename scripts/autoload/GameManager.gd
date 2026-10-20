@@ -372,7 +372,8 @@ var kuxingseng_mode: float = 0.0         ## 苦行僧：专属站定/移动机�
 var still_damage_bonus: float = 0.0      ## 苦行僧：站定时额外全伤害加成（+0.50）
 var still_haste_bonus: float = 0.0       ## 苦行僧：站定时攻击间隔缩减（0.35）
 var still_armor_bonus: float = 0.0       ## 苦行僧：站定时护甲加成（+5）
-var still_pickup_bonus: float = 0.0      ## 苦行僧：站定时拾取范围倍率加成（+1.0）
+var still_regen_bonus: float = 0.0       ## 苦行僧：站定时生命回复加成（每秒，占原拾取位）
+var still_pickup_bonus: float = 0.0      ## 保留但已无角色使用（拾取范围整系移除）
 var move_damage_penalty: float = 0.0     ## 苦行僧：移动中全伤害衰减（-0.60）
 var move_haste_penalty: float = 0.0      ## 苦行僧：移动中攻击间隔增加（+0.60）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
@@ -415,7 +416,7 @@ var synergy_lifesteal: float = 0.0    ## 青木羁绊：额外吸血
 var synergy_move_speed_mult: float = 0.0 ## 玄水羁绊：额外移速加成
 var synergy_burn_mult: float = 1.0    ## 离火羁绊：额外灼烧伤害倍率
 var synergy_armor: float = 0.0        ## 厚土羁绊：额外护甲
-var synergy_knockback_mult: float = 1.0 ## 厚土羁绊：额外受击震退力倍率
+var synergy_thorns: float = 0.0       ## 厚土羁绊：额外反伤比例（2026-10-20 第二条腿由击退改为反伤）
 var synergy_contraption_mult: float = 1.0 ## 机关羁绊：机关武器伤害乘区
 
 var _lifesteal_procs: int = 0
@@ -695,7 +696,7 @@ func get_effective_armor() -> float:
 	return armor + synergy_armor + extra_still
 
 func get_effective_thorns() -> float:
-	var t: float = thorns_pct
+	var t: float = thorns_pct + synergy_thorns
 	if still_time > 0.0:
 		t += item_hook_sum("still_thorns")
 	return t
@@ -732,10 +733,12 @@ func element_damage_mult(w_id: String) -> float:
 		return 1.0
 	return 1.0 + float(element_damage.get(WeaponData.element_of(w_id), 0.0))
 
-## 武器击退力度：玩家震退属性 × 厚土羁绊倍率 × 金光护体短时倍率 × 站定加成
+## 武器击退力度：玩家震退属性 × 金光护体短时倍率 × 站定加成
+## 2026-10-20 击退系移除后，玩家已无任何击退加成来源（knockback_mult 恒为基准 1.0），
+## 武器自带的 base 击退手感（打击感底层）原样保留。
 func knockback_force(base: float) -> float:
 	var still_kb := (1.0 + item_hook_sum("still_knockback")) if still_time > 0.0 else 1.0
-	return base * knockback_mult * synergy_knockback_mult * buff_knockback_mult * still_kb
+	return base * knockback_mult * buff_knockback_mult * still_kb
 
 ## 武器震退向量：方向走 GameBalance.knock_dir（永不把敌人往玩家身上推），力度走 knockback_force。
 ## source = 施力点（落雷点 / 武器自身 / 灵宝自身），enemy_pos = 受击敌人位置。

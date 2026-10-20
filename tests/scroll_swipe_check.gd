@@ -112,7 +112,7 @@ func _seed() -> void:
 	GameManager.danger_level = 1
 	for id in ["atk_up", "melee_up", "armor_up", "speed_up", "hp_up", "haste_up"]:
 		GameManager.apply_upgrade(id)
-	for iid in ["jubaopen", "mibao_luopan", "qiankun_dai", "zhekou_yufu", "kuangxue_dan",
+	for iid in ["jubaopen", "mibao_luopan", "jifeng_xue", "zhekou_yufu", "kuangxue_dan",
 			"guijia_fu", "tongxuan_ling"]:
 		GameManager.add_item(iid)
 	for i in range(3):

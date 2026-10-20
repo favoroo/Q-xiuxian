@@ -88,7 +88,7 @@ static func open_merge(shop: WaveShop, anchor: Control, w_id: String) -> void:
 	]
 	var notes: Array[String] = [
 		"货架只卖 ★1：买下这一把就凑满 3 件，回陈列行点它，详情卡里有【三合一】那颗键。",
-		"3 件换 1 件：合成后上阵少 2 件 ⇒ 流派羁绊的件数也跟着掉 2 件，凑档优先、升星其次。",
+		"3 件换 1 件：合成后上阵少 2 件 → 流派羁绊的件数也跟着掉 2 件，凑档优先、升星其次。",
 		"最高 %s（%d 档），每升一星属性转化的那部分伤害再多 +25%%。" % [
 			WeaponData.star_text(WeaponData.MAX_STAR), WeaponData.MAX_STAR],
 	]

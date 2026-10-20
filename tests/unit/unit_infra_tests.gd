@@ -268,7 +268,7 @@ func _test_achievement_and_meta_save() -> void:
 		else:
 			_c.equals(rtype, "none", "成就 %s 非角色/法宝奖励时必须为纯荣誉 none 型" % aid)
 			_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 8, "初始默认开放 8 名基础修士")
-		_c.equals(AchievementData.DEFAULT_ITEMS.size(), 84, "初始默认开放 84 件基础法宝（全 88 件除去 4 件成就解锁）")
+		_c.equals(AchievementData.DEFAULT_ITEMS.size(), ItemData.DEFS.size() - 4, "初始默认开放全部基础法宝（全 %d 件除去 4 件成就解锁）" % ItemData.DEFS.size())
 
 	# 1.1 解锁覆盖：每名角色都必须有途径——要么默认解锁，要么反查得到成就。
 	# 御兽师曾两处都没列（7 默认 + 12 成就 = 19），选角页永远「暂无收录途径」，
@@ -284,7 +284,7 @@ func _test_achievement_and_meta_save() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8888
 	# 替死傀儡（tisi_kuilei）与混元珠（hunyuan_zhu）未在 unlocked 列表中
-	var restricted_unlocked: Array = ["jubaopen", "mibao_luopan", "qiankun_dai", "wujian_shi"]
+	var restricted_unlocked: Array = ["jubaopen", "mibao_luopan", "jifeng_xue", "wujian_shi"]
 	for i in range(40):
 		var picked := ItemData.pick_id(50.0, 16, [], rng, restricted_unlocked)
 		_c.check(picked in restricted_unlocked, "抽出的法宝 %s 必在已解锁集合中" % picked)

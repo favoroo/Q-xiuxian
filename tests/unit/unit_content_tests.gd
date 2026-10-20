@@ -125,7 +125,7 @@ func _test_five_elements_system() -> void:
 	_c.check(GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "qingyun_sword")
 		and GameBalance.upgrade_benefits_weapon({"weapon_damage_mult": 0.15}, "lingdie"), "武器强化是全局乘区：近战与环绕都受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"attack_speed_mult_mul": 0.88}, "lingdie"), "攻击间隔缩短让环绕武器护蝶受益")
-	_c.check(GameBalance.upgrade_benefits_weapon({"knockback_mult": 0.25}, "qingyun_sword"), "击退提升全体法器受益")
+	_c.check(not GameBalance.upgrade_benefits_weapon({"knockback_mult": 0.25}, "qingyun_sword"), "击退已整系移除，不再让任何法器受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"elite_damage": 0.25}, "huoyan_fu"), "斩将加成全体法器受益（对精英乘区）")
 	_c.check(GameBalance.upgrade_benefits_weapon({"element_damage_wood": 0.10}, "wanmu_lingfu"), "青木真解让木系毒符受益")
 	_c.check(not GameBalance.upgrade_benefits_weapon({"element_damage_wood": 0.10}, "qingyun_sword"), "青木真解不让金系青云剑受益")
@@ -145,6 +145,8 @@ func _test_five_elements_system() -> void:
 	_c.check(not GameBalance.upgrade_benefits_weapon({"dodge": 0.07}, "qingyun_sword")
 		and not GameBalance.upgrade_benefits_weapon({"pickup_range_mult": 0.4}, "lingdie")
 		and not GameBalance.upgrade_benefits_weapon({"thorns": 0.35}, "hunyuan_zhong"), "闪避/拾取/反伤类不作用于任何法器")
+	# 2026-10-20 击退整系移除：knockback_mult 已不是任何加点/道具字段，不应让武器受益
+	_c.check(not GameBalance.upgrade_benefits_weapon({"knockback_mult": 0.25}, "qingyun_sword"), "击退提升已移除，不再作用于法器")
 	# 全表扫描：每条加点对全部法器判定不崩、且至少有一条加点让每把法器受益（图标行不会空摆全表）
 	var all_ids: Array = WeaponData.DEFS.keys()
 	var any_benefit := {}
@@ -180,7 +182,7 @@ func _test_five_elements_system() -> void:
 	GameManager.recalc_synergies()
 	_c.check(GameManager.active_synergies.has("spirit") and GameManager.active_synergies.has("earth"), "上阵 2 尊混元古钟同时触发【御灵】与【厚土】双羁绊")
 	_c.near(GameManager.synergy_armor, 3.0, EPS, "厚土一档提供 +3 护甲")
-	_c.near(GameManager.synergy_knockback_mult, 1.25, EPS, "厚土一档提供 +25% 震退力")
+	_c.near(GameManager.synergy_thorns, 0.10, EPS, "厚土一档提供 +10% 反伤（2026-10-20 由击退改为反伤）")
 	_c.near(GameManager.get_effective_armor(), 3.0, EPS, "有效护甲已计入厚土羁绊")
 	GameManager.reset_run()
 
@@ -211,13 +213,12 @@ func _test_new_stat_fields() -> void:
 	_c.near(GameManager.element_damage_mult("huoyan_fu"), 1.18, EPS, "离火单系再 +12% → 合计 1.18")
 	_c.near(GameManager.element_damage_mult("qingyun_sword"), 1.06, EPS, "金系不受离火加成")
 
-	# 震退：玩家属性 × 厚土羁绊同一条乘区
+	# 击退：2026-10-20 玩家侧击退系已移除，knockback_force 只剩武器 base × 金光护体 buff
 	GameManager.reset_run()
-	GameManager.knockback_mult = 1.5
-	GameManager.synergy_knockback_mult = 1.25
-	_c.near(GameManager.knockback_force(100.0), 187.5, EPS, "震退 1.5 × 厚土 1.25 = 187.5")
+	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "无加成时击退为武器基准值")
+	GameManager.buff_knockback_mult = 3.0
+	_c.near(GameManager.knockback_force(100.0), 300.0, EPS, "金光护体 ×3 仍作用在武器基准击退上")
 	GameManager.reset_run()
-	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "重置后击退回归基础值")
 
 	# 斩将：只认 is_elite 标记（精英与魔君都带），普通怪不受影响
 	GameManager.reset_run()
@@ -889,7 +890,7 @@ func _test_cultivator_new_mechanics() -> void:
 	GameManager.add_item("jubaopen")
 	_c.equals(GameManager.unique_item_count, 1, "重复购买同种法宝种数不涨")
 	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.02, EPS, "1 种法宝 +2%")
-	GameManager.add_item("qiankun_dai")
+	GameManager.add_item("guijia_fu")
 	_c.equals(GameManager.unique_item_count, 2, "新种法宝种数 +1")
 	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.04, EPS, "2 种法宝 +4%")
 	GameManager.consume_item("jubaopen")
@@ -1081,11 +1082,9 @@ func _test_conversion_items_and_hooks() -> void:
 
 	GameManager.add_item("xuanwu_fashan")
 	_c.near(GameManager.get_effective_thorns(), 0.6, EPS, "站定时玄武法坛反伤 +60%")
-	var base_kb := GameManager.knockback_force(100.0)
+	_c.near(GameManager.get_effective_armor(), 6.0, EPS, "站定时玄武法坛叠加入定香护甲：3+3=6（原击退腿改为护甲）")
 	GameManager.still_time = 0.0
-	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "移动中击退力为基准")
-	GameManager.still_time = 1.0
-	_c.near(GameManager.knockback_force(100.0), 180.0, EPS, "站定时玄武法坛击退力 +80%")
+	_c.near(GameManager.knockback_force(100.0), 100.0, EPS, "移动中击退力为基准（玩家侧已无击退加成）")
 
 	GameManager.add_item("jingang_shenxiang")
 	GameManager.still_time = 0.0

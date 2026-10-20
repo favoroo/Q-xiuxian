@@ -120,6 +120,7 @@ var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
 var _aura_shown: bool = false      ## 光环标记是否已点亮（边沿触发：从无到有时才发一次 shockwave）
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
+var _elite_spark_cd: float = 0.0   ## 精英/Boss 受击火花冷却（秒）：束流 tick/多段命中只冒一朵
 
 ## 步态相位（弧度）：仅在移动时按 speed_ratio 推进，供渲染器摆翼/蠕波与位移同相
 var _gait_phase: float = 0.0
@@ -418,6 +419,7 @@ func reset_for_reuse() -> void:
 	_aura_shown = false
 	_focus_hit_timer = 0.0
 	_focus_hit_count = 0
+	_elite_spark_cd = 0.0
 	_gait_phase = 0.0
 	_mutated = false
 	_elite_slam_windup_t = -1.0
@@ -745,6 +747,8 @@ func _physics_process(delta: float) -> void:
 		_focus_hit_timer -= delta
 		if _focus_hit_timer <= 0.0:
 			_focus_hit_count = 0
+	if _elite_spark_cd > 0.0:
+		_elite_spark_cd -= delta
 
 	# 0. 五行元素异常状态结算（灼烧/剧毒跳伤；致死即结束本帧）
 	if _tick_damage_over_time(delta):
@@ -1395,6 +1399,21 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
 		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
 			AudioManager.play_sfx("enemy_hit_heavy", 1.00, GameManager.rng.randf_range(0.92, 1.06))
+
+	# 精英/Boss 专属受击火花（2026-10-20）：小怪高频割草仍不发（防满屏乱闪的历史教训），
+	# 但精英/Boss 同屏恒 1 只、体型大，非暴击直击若无火花则打击感空落。锚在体表受击侧（向攻击来向偏移），
+	# 顺击退方向 ~100° 扇形喷溅。暴击已有方向环+镜头组承担，不重复发；DoT/致命/屏外不发。
+	# 单只冷却 ELITE_HIT_SPARK_INTERVAL 防束流 tick 逐帧刷屏；照常受 FxParticlePool 4/帧预算与视口兜底。
+	if is_elite and not is_crit and not from_dot and not lethal and not _offscreen and _elite_spark_cd <= 0.0:
+		_elite_spark_cd = GameBalance.ELITE_HIT_SPARK_INTERVAL
+		# Boss 用 death_corpse_linger 标记区分（避免基类反向引用 BossEnemy 子类）
+		var is_boss: bool = death_corpse_linger
+		var spark_scale: float = GameBalance.BOSS_HIT_SPARK_SCALE if is_boss else GameBalance.ELITE_HIT_SPARK_SCALE
+		var edge: float = GameBalance.BOSS_HIT_SPARK_EDGE_OFFSET if is_boss else GameBalance.ELITE_HIT_SPARK_EDGE_OFFSET
+		var kb_dir: Vector2 = knockback.normalized() if knockback.length_squared() > 1.0 else Vector2.ZERO
+		var spark_pos: Vector2 = global_position - kb_dir * edge if kb_dir != Vector2.ZERO else global_position
+		var spark_elem: String = "crit" if is_boss else "gold"
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, spark_elem, spark_scale, false, kb_dir)
 
 	# 跳字（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻发跳字。音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。

@@ -38,7 +38,7 @@ func _run() -> void:
 	get_tree().paused = false
 	# 击退叠到后期量级：劲力外放 + 雷音阵 + 厚土羁绊，力越大方向毛病越看得清
 	GameManager.knockback_mult = 1.6
-	GameManager.synergy_knockback_mult = 1.8
+	GameManager.buff_knockback_mult = 1.8
 	# 第 1 波怪太稀，落点上可核算的人次不够；密度抬到两倍以上，方向毛病才有次数可数
 	GameManager.enemy_count_mult *= 2.5
 

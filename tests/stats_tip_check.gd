@@ -53,7 +53,7 @@ func _seed() -> void:
 func _run() -> void:
 	# ---- ① 文案表自洽 ----
 	var ids: Array = StatInfoData.ids()
-	_c.check(ids.size() >= 14, "属性详解覆盖 %d 行" % ids.size())
+	_c.check(ids.size() >= 12, "属性详解覆盖 %d 行" % ids.size())
 	var no_tip: Array[String] = []
 	for id in ids:
 		if not _stat_tips_ok(String(id)):

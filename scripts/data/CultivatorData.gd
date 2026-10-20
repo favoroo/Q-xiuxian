@@ -420,7 +420,7 @@ const DEFS: Dictionary = {
 						"pros": [
 							"站定不动时全伤害 +50%",
 							"站定不动时攻击间隔 -35%",
-							"站定不动时护甲 +5、拾取范围 +100%",
+							"站定不动时护甲 +5、生命回复 +2/秒",
 						],
 						"cons": [
 							"移动中全伤害 -60%",
@@ -433,7 +433,7 @@ const DEFS: Dictionary = {
 							"still_damage_bonus": 0.50,
 							"still_haste_bonus": 0.35,
 							"still_armor_bonus": 5.0,
-							"still_pickup_bonus": 1.0,
+							"still_regen_bonus": 2.0,
 							"move_damage_penalty": -0.60,
 							"move_haste_penalty": 0.60,
 						},

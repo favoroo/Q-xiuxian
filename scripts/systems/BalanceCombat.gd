@@ -150,6 +150,15 @@ const HITSTOP_LOWFPS_FLOOR := 45.0        ## 低帧判定阈值（fps，GameFeel
 const HITSTOP_LOWFPS_INTERVAL_MULT := 2.0 ## 低帧时顿帧最小间隔倍率
 const CRIT_TRAUMA_NORMAL := 0.20         ## 普通暴击追加创伤（从 0.12 上调：平方后产生可见轻颤，稳态仍严格受每秒预算保护）
 const CRIT_TRAUMA_ELITE := 0.32          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
+
+# —— 精英/Boss 专属受击火花（2026-10-20）——
+## 小怪高频割草不发火花（历史教训：满屏乱闪）；精英/Boss 同屏恒 1 只、体型大，挨打没火花缺打击感，
+## 故仅对 is_elite 的非暴击直击补一朵轻火花，锚在体表受击侧。暴击另有方向环，不重复发。
+const ELITE_HIT_SPARK_INTERVAL := 0.08   ## 单只精英/Boss 火花最小间隔（秒）：束流 tick/多段命中只冒一朵，防刷屏
+const ELITE_HIT_SPARK_SCALE := 1.10      ## 精英火花缩放倍率
+const BOSS_HIT_SPARK_SCALE := 1.35       ## Boss 火花缩放倍率（体型更大，略放大）
+const ELITE_HIT_SPARK_EDGE_OFFSET := 20.0 ## 精英火花由中心向攻击来向偏移（px），落在体表而非几何中心
+const BOSS_HIT_SPARK_EDGE_OFFSET := 32.0  ## Boss 火花体表偏移（px）
 ## 暴击镜头反馈全局限流（2026-10-18 雷法抖屏治理）：落雷/横扫一次命中 5~6 个敌人，
 ## 每个敌人各自掷暴击 → 同帧叠出十几记 6.5px 方向冲击 + 十几笔创伤，镜头整片狂晃。
 ## 暴击的「这一刀从哪来」交给方向环/跳字/顿帧，镜头反馈（kick+zoom+trauma）全局限流成一记。

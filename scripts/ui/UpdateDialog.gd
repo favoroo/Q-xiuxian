@@ -96,11 +96,11 @@ func _build_ui() -> void:
 	GameStyle.label(_size_label, 13, GameStyle.PAPER_DIM)
 	meta_row.add_child(_size_label)
 
-	# 日志底框（凹陷槽）
+	# 日志底框（凹陷槽）—— 独立实例调内边距（slot() 是共享单例，改 margin 会污染别处）
 	var slot_panel := PanelContainer.new()
 	slot_panel.custom_minimum_size = Vector2(400, 140)
 	slot_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var slot_style := GameStyle.slot()
+	var slot_style := GameStyle.slot_of()
 	slot_style.content_margin_left = 14
 	slot_style.content_margin_right = 14
 	slot_style.content_margin_top = 10

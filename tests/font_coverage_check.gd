@@ -101,6 +101,19 @@ func _run_all() -> void:
 	var drift: Array = _drift(scan["chars"], allowed)
 	_c.check(drift.is_empty(), "源码里出现的字符全在「字集 ∪ 豁免账」内%s" % _sample(drift))
 
+	# ---- B2 段：豁免账里的字**只许进注释，不许进任何渲染到屏幕的字符串** ----
+	# 为什么单列一段（2026-10-20 真机 UI 整层频闪真根因）：B 段只保证「源码里有、账上有」，
+	# 于是豁免字混进用户可见文案时 B 段照样绿 —— 这正是 2026-10-18 那次播报符号事故的复刻。
+	# 本次真机复现的元凶是 U+21D2：它躺在豁免账里，却被写进商店合成提示与武器攻击方式
+	# 两条 DetailTip 文案，Android 上首次渲染触发系统回退字体加载 → 字形图集重建 → 全 HUD
+	# 共享同一份 FontVariation 单例，所有文字当帧重排 = 整层 UI 闪。桌面 macOS 有系统字体
+	# 兜底所以看不出来。本段把那条「只许进注释」的口头红线变成判据的牙齿。
+	# 口径：只扫「会进包的玩家可见代码」（排除 tests/ —— 测试里的符号只出现在断言标签里，
+	# 从不渲染上屏，纳入只会制造噪音）。
+	var leaks: Array = _find_exempt_in_string_literals(exempt)
+	_c.check(leaks.is_empty(),
+		"豁免账字符未混入字符串字面量（只许在注释里）%s" % _sample(leaks))
+
 ## 反例必须被拦住（判据自己有牙齿）
 func _selftest() -> void:
 	var font: Font = load(GameStyle.FONT_BODY)
@@ -143,6 +156,22 @@ func _selftest() -> void:
 	_c.check(chars.size() > 100, "正例④ 扫描器捞到 %d 个不同字符" % chars.size())
 	_c.check(not _has_scan_ext("x.png") and _has_scan_ext("Main.gd") and _has_scan_ext("project.godot"),
 		"正例④ 文件后缀筛选只放行文本资源")
+
+	# ---- B2 段自检：豁免字混进字符串要被抓、只在注释里要放行 ----
+	# 用 char(0x…) 拼，避免判据自己往源码里塞字集外字（同反例③ 的坑）
+	var ex := char(0x21D2)
+	var hits1: Dictionary = {}
+	_scan_literals_in_text('var s := "一句%s文案"' % ex, {0x21D2: true}, hits1)
+	_c.check(hits1.has(0x21D2), "反例⑥ 豁免字混进字符串字面量会被 B2 段抓到")
+	var hits2: Dictionary = {}
+	_scan_literals_in_text('## 注释里%s随便用' % ex, {0x21D2: true}, hits2)
+	_c.check(hits2.is_empty(), "正例⑥ 豁免字只在注释里时 B2 段放行")
+	var hits3: Dictionary = {}
+	_scan_literals_in_text('var a := 1  # 行尾注释%s\nvar b := "ok"' % ex, {0x21D2: true}, hits3)
+	_c.check(hits3.is_empty(), "正例⑥ 行尾注释里的豁免字不误报")
+	var hits4: Dictionary = {}
+	_scan_literals_in_text('var s := "转义\\"%s\\"仍在串内"' % ex, {0x21D2: true}, hits4)
+	_c.check(hits4.has(0x21D2), "反例⑥ 转义引号不会提前结束字符串判定")
 
 
 # ---------------- 纯判据（真跑与 selftest 走同一份代码） ----------------
@@ -238,6 +267,76 @@ func _has_scan_ext(name: String) -> bool:
 		if name.ends_with(e):
 			return true
 	return false
+
+## B2 段实现：扫「会进包的玩家可见代码」，把每个文件里的**字符串字面量**
+## （"..." / '...'，排除注释）提取出来，检查有没有豁免账里的字符混进去。
+## 返回命中的码位数组（去重）。
+##
+## 为什么只扫这三个根目录：tests/ 里的豁免字只出现在断言标签（`_check(cond, "…⇒…")`），
+## 从不渲染上屏；把它纳入只会让判据永远红，失去信号价值。
+## 为什么不扫 assets_raw/：那是源素材，不进包（export_presets exclude_filter 已排除）。
+## 为什么按行 + 简单状态机而不是完整词法分析：GDScript 的字符串不跨行，本项目文案都是
+## 单行字面量；状态机跳过注释与转义已足够，且不引入误报。
+##   - 遇到 `#` 且不在字符串内 ⇒ 该行剩余部分是注释，跳过（`##` 文档注释同样覆盖）
+##   - 字符串内 `\"` / `\\` 转义不误判结束
+const B2_SCAN_ROOTS: Array[String] = ["res://scripts", "res://scenes", "res://assets"]
+func _find_exempt_in_string_literals(exempt: Dictionary) -> Array:
+	var hits: Dictionary = {}
+	for root in B2_SCAN_ROOTS:
+		_walk_string_literals(root, exempt, hits)
+	var out: Array = []
+	for cp in hits.keys():
+		out.append(cp)
+	out.sort()
+	return out
+
+func _walk_string_literals(path: String, exempt: Dictionary, hits: Dictionary) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not name.begins_with("."):
+			var full := path.path_join(name)
+			if dir.current_is_dir():
+				if not SKIP_DIRS.has(name):
+					_walk_string_literals(full, exempt, hits)
+			elif _has_scan_ext(name):
+				var f := FileAccess.open(full, FileAccess.READ)
+				if f != null:
+					_scan_literals_in_text(f.get_as_text(), exempt, hits)
+		name = dir.get_next()
+	dir.list_dir_end()
+
+func _scan_literals_in_text(text: String, exempt: Dictionary, hits: Dictionary) -> void:
+	var i := 0
+	var n := text.length()
+	var in_str := false
+	var quote := 0
+	while i < n:
+		var cp := text.unicode_at(i)
+		if not in_str:
+			if cp == 0x23:  # '#' 行注释：跳到行尾
+				while i < n and text.unicode_at(i) != 0x0A:
+					i += 1
+				continue
+			if cp == 0x22 or cp == 0x27:  # " 或 '
+				in_str = true
+				quote = cp
+			i += 1
+			continue
+		# 字符串内
+		if cp == 0x5C:  # 反斜杠转义：连同下一个字符一起跳过
+			i += 2
+			continue
+		if cp == quote:
+			in_str = false
+			i += 1
+			continue
+		if exempt.has(cp):
+			hits[cp] = true
+		i += 1
 
 ## 控制字符没有字形（\n \t 也不在任何字体的 cmap 里），两边扫描都得滤掉，否则账永远对不上
 func _renderable(cp: int) -> bool:

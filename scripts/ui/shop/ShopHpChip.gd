@@ -76,7 +76,8 @@ func get_value_text() -> String:
 func _paint() -> void:
 	var low := GameBalance.hp_is_low(_cur, _max)
 	var face := GameStyle.BAD if low else GameStyle.NAVY2
-	var sb := GameStyle.chip(face)
+	# 独立实例色签：要改 content_margin（chip() 是共享缓存，改 margin 会污染别处的同色签）
+	var sb := GameStyle.chip_of(face)
 	# 与「金币」那颗同一档内边距（.tscn 里是 14/5）：贴着字走的斜切面，字会糊到画出来的边上
 	sb.content_margin_left = FACE_PAD_X
 	sb.content_margin_right = FACE_PAD_X

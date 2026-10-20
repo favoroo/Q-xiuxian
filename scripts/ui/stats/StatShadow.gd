@@ -29,7 +29,7 @@ const COPIED: Array[String] = [
 		# —— 羁绊与技能乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
-	"synergy_move_speed_mult", "synergy_armor", "synergy_knockback_mult",
+	"synergy_move_speed_mult", "synergy_armor", "synergy_thorns",
 	"synergy_bonus_pierce", "synergy_ranged_damage", "shadow_amp_mult",
 	"buff_attack_speed_mult", "buff_move_speed_mult", "buff_dodge", "dodge_cap_bonus",
 ]
@@ -90,7 +90,7 @@ var synergy_hp_regen: float = 0.0
 var synergy_lifesteal: float = 0.0
 var synergy_move_speed_mult: float = 0.0
 var synergy_armor: float = 0.0
-var synergy_knockback_mult: float = 1.0
+var synergy_thorns: float = 0.0
 var synergy_bonus_pierce: int = 0
 var synergy_ranged_damage: float = 0.0
 var shadow_amp_mult: float = 1.0

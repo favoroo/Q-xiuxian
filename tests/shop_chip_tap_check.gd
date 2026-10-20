@@ -196,7 +196,7 @@ func _tips_fit_three_widths() -> void:
 		_c.check(chips.size() >= WANT_CHIPS, "屏宽 %d：货架色签 %d 颗都在" % [w, chips.size()])
 		if chips.is_empty():
 			continue
-		for idx in [0, int(chips.size() / 2), chips.size() - 1]:
+		for idx in [0, int(chips.size() / 2.0), chips.size() - 1]:
 			var chip: Control = chips[idx]
 			var tip: Dictionary = chip.get_meta("chip_tip")
 			var payload := await _tap(chip, "屏宽 %d · %s" % [w, chip.text.strip_edges()])

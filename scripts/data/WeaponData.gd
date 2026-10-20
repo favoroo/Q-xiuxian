@@ -1140,10 +1140,11 @@ const SYNERGIES: Dictionary = {
 	},
 	"earth": {
 		"name": "土系", "thresholds": [2, 4, 6], "values": [3.0, 6.0, 10.0],
-		"kb_values": [0.25, 0.50, 0.80],
+		# 2026-10-20 击退整系移除：第二条腿从「击退力度」改为「反伤」，与守卫/玄武反震流呼应。
+		"thorns_values": [0.10, 0.20, 0.35],
 		"effects": [
 			{"field": "synergy_armor", "list": "values", "op": "add", "label": "护甲", "form": "flat"},
-			{"field": "synergy_knockback_mult", "list": "kb_values", "op": "add", "label": "击退力度", "form": "pct"},
+			{"field": "synergy_thorns", "list": "thorns_values", "op": "add", "label": "反伤", "form": "pct"},
 		],
 	},
 }
@@ -1155,7 +1156,7 @@ const SYNERGY_FIELDS: Array[String] = [
 	"synergy_bonus_pierce", "synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_max_hp_bonus", "synergy_engineering_damage", "synergy_crit_rate", "synergy_crit_mult",
 	"synergy_hp_regen", "synergy_lifesteal", "synergy_move_speed_mult", "synergy_burn_mult",
-	"synergy_armor", "synergy_knockback_mult", "synergy_contraption_mult", "synergy_ranged_damage",
+	"synergy_armor", "synergy_thorns", "synergy_contraption_mult", "synergy_ranged_damage",
 ]
 
 ## 弹丸穿透总数上限（2026-10-17，用户口径：「最大穿透为3，达到之后就不会继续刷出加穿透的加点和物品」）：
@@ -1175,7 +1176,7 @@ const SYNERGY_BASE := {
 	"synergy_haste_mult": 1.0, "synergy_max_hp_bonus": 0.0, "synergy_engineering_damage": 0.0,
 	"synergy_crit_rate": 0.0, "synergy_crit_mult": 0.0, "synergy_hp_regen": 0.0,
 	"synergy_lifesteal": 0.0, "synergy_move_speed_mult": 0.0, "synergy_burn_mult": 1.0,
-	"synergy_armor": 0.0, "synergy_knockback_mult": 1.0, "synergy_contraption_mult": 1.0,
+	"synergy_armor": 0.0, "synergy_thorns": 0.0, "synergy_contraption_mult": 1.0,
 	"synergy_ranged_damage": 0.0,
 }
 
@@ -1275,7 +1276,7 @@ const BEHAVIOR_TIPS: Dictionary = {
 		"how": "绕着本体转圈，贴到的敌人持续掉血",
 		"notes": [
 				"不靠出手那一帧：同一个敌人各自有命中间隔，攻击间隔越短贴得越疼。",
-			"打得到的是绕身那一圈，远处的敌人够不着 ⇒ 通常再配一把近战或远程补上。",
+				"打得到的是绕身那一圈，远处的敌人够不着 → 通常再配一把近战或远程补上。",
 			"升星会分身：★2 一化为二、★3 一化为三，每具独立贴身结算，总伤害不变但贴得更全。",
 		],
 	},

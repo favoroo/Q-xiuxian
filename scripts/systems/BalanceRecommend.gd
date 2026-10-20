@@ -16,7 +16,7 @@ extends RefCounted
 ##   D 货架候选买不起打 85 折（值得攒钱但不抢「现在能买」的推荐位）；回气丹按缺血程度单独计。
 ##
 ## ctx 契约（RecommendSystem.build_ctx 产出，判据测试手工构造同形字典）：
-##   stats          Dictionary  玩家属性快照（get_player_stat_dict + dodge/luck/xp_gain_mult/pickup_range_mult/thorns）
+##   stats          Dictionary  玩家属性快照（get_player_stat_dict + dodge/luck/xp_gain_mult/thorns）
 ##   element_damage Dictionary  五行真解 {元素tag: 加成}
 ##   weapons        Array       上阵武器 [{id, star}]（含灵蝶，不含背包）
 ##   tag_counts     Dictionary  上阵武器 tag 计数（SynergySystem.tag_counts 口径）
@@ -52,11 +52,9 @@ const REF_ARMOR := 0.15        ## 实际承伤相对下降 15% 打满
 const REF_REGEN := 0.02        ## 每秒回复达最大生命 2% 打满
 const REF_DODGE := 0.10        ## 闪避 +10% 打满
 const REF_LIFESTEAL := 0.05    ## 吸血 +5% 打满
-const REF_PICKUP := 0.30       ## 拾取范围 +30% 打满
 const REF_SPEED := 0.12        ## 移速 +12% 打满
 const REF_RANGE := 0.15        ## 攻击范围 +15% 打满
 const REF_ELITE := 0.15        ## 对精英伤害 +15% 打满
-const REF_KNOCKBACK := 0.50    ## 击退力度 +50% 打满（上限 0.5 分）
 const REF_PIERCE := 2.0        ## 穿透 +2 打满（上限 0.5 分）
 const REF_THORNS := 0.30       ## 反震伤害 +30% 打满（上限 0.5 分）
 const REF_HARVEST_WAVES := 60.0  ## Δ收益 × 剩余波数 ≥ 60 打满
@@ -100,8 +98,6 @@ static func simulate_stats(stats: Dictionary, element_damage: Dictionary, apply:
 				stats["move_speed_mult"] = float(stats.get("move_speed_mult", 1.0)) + v
 			"attack_range_mult":
 				stats["attack_range_mult"] = float(stats.get("attack_range_mult", 1.0)) + v
-			"pickup_range_mult":
-				stats["pickup_range_mult"] = float(stats.get("pickup_range_mult", 1.0)) + v
 			"hp_regen":
 				stats["hp_regen"] = float(stats.get("hp_regen", 0.0)) + v
 			"crit_rate":
@@ -120,8 +116,6 @@ static func simulate_stats(stats: Dictionary, element_damage: Dictionary, apply:
 				stats["max_hp"] = float(stats.get("max_hp", Player.BASE_MAX_HEALTH)) + v
 			"xp_gain_mult":
 				stats["xp_gain_mult"] = float(stats.get("xp_gain_mult", 1.0)) + v
-			"knockback_mult":
-				stats["knockback_mult"] = float(stats.get("knockback_mult", 1.0)) + v
 			"elite_damage":
 				stats["elite_damage"] = float(stats.get("elite_damage", 0.0)) + v
 			"thorns":
@@ -280,17 +274,13 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 		elif d_chest_reward > 0.0:
 			reasons.append("宝箱掉落 +%d%%" % _pct(d_chest_reward))
 
-	# ---- B4 功能轴（移动/拾取/范围/对精英伤害等，给小基线不压过主轴） ----
-	var d_pickup := float(stats2.get("pickup_range_mult", 1.0)) - float(stats.get("pickup_range_mult", 1.0))
+	# ---- B4 功能轴（移动/攻击范围/对精英伤害等，给小基线不压过主轴） ----
 	var d_speed := float(stats2.get("move_speed_mult", 1.0)) - float(stats.get("move_speed_mult", 1.0))
 	var d_range := float(stats2.get("attack_range_mult", 1.0)) - float(stats.get("attack_range_mult", 1.0))
-	var d_knock := float(stats2.get("knockback_mult", 1.0)) - float(stats.get("knockback_mult", 1.0))
 	var d_elite := float(stats2.get("elite_damage", 0.0)) - float(stats.get("elite_damage", 0.0))
 	var util_subs: Array[float] = [
-		clampf(d_pickup / REF_PICKUP, 0.0, 1.0),
 		clampf(d_speed / REF_SPEED, 0.0, 1.0),
 		clampf(d_range / REF_RANGE, 0.0, 1.0),
-		clampf(d_knock / REF_KNOCKBACK, 0.0, 0.5),
 		clampf(d_elite / REF_ELITE, 0.0, 1.0),
 		clampf(absf(float(apply.get("bonus_pierce", 0.0))) / REF_PIERCE, 0.0, 0.5),
 	]
@@ -300,8 +290,6 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 			reasons.append("移速 +%d%%" % _pct(d_speed))
 		elif d_range > 0.0:
 			reasons.append("攻击范围 +%d%%" % _pct(d_range))
-		elif d_pickup > 0.0:
-			reasons.append("拾取范围 +%d%%" % _pct(d_pickup))
 		elif d_elite > 0.0:
 			reasons.append("对精英伤害 +%d%%" % _pct(d_elite))
 

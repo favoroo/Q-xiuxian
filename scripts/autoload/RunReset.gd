@@ -90,6 +90,7 @@ static func reset(gm: Node) -> void:
 	gm.still_haste_bonus = 0.0
 	gm.still_armor_bonus = 0.0
 	gm.still_pickup_bonus = 0.0
+	gm.still_regen_bonus = 0.0
 	gm.move_damage_penalty = 0.0
 	gm.move_haste_penalty = 0.0
 	gm.total_damage_taken_count = 0
@@ -132,7 +133,7 @@ static func reset(gm: Node) -> void:
 	gm.synergy_move_speed_mult = 0.0
 	gm.synergy_burn_mult = 1.0
 	gm.synergy_armor = 0.0
-	gm.synergy_knockback_mult = 1.0
+	gm.synergy_thorns = 0.0
 	gm.synergy_contraption_mult = 1.0
 	gm.synergy_ranged_damage = 0.0
 	gm.active_synergies = {}

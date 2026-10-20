@@ -84,6 +84,7 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		# —— 技能 buff 层：短时增益到期归零，恢复即空（对玩家有利）——
 		"buff_move_speed_mult", "buff_attack_speed_mult", "buff_dodge",
 		"buff_knockback_mult", "buff_damage_mult", "force_crit_left", "shadow_amp_mult",
+		"buff_pickup_range_mult",
 		# —— 战斗瞬态：受击层数/战意/盾势/站定计时/感知圈计数，恢复归零（对玩家有利）——
 		"on_hit_damage_stacks", "on_hit_damage_timer", "shield_charge",
 		"frenzy_stacks", "frenzy_idle", "nearby_enemy_count", "still_time", "player_is_moving",
@@ -93,7 +94,7 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		"synergy_haste_mult", "synergy_max_hp_bonus", "synergy_engineering_damage",
 		"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
 		"synergy_move_speed_mult", "synergy_burn_mult", "synergy_armor",
-		"synergy_knockback_mult", "synergy_contraption_mult", "active_synergies",
+		"synergy_thorns", "synergy_contraption_mult", "synergy_ranged_damage", "active_synergies",
 		"_applied_hp_bonus",      # 羁绊 hp 台账：recalc 后由 SynergySystem 重新维护
 		# —— 帧内缓存/节流计数：不参与任何持久语义 ——
 		"_lifesteal_procs", "_lifesteal_window", "_hud_tick",

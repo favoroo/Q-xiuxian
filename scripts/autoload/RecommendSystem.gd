@@ -48,11 +48,10 @@ static func mark_shop_offers(gm: Node) -> void:
 ## player 不在场（单测/局外）时武器只数 drones 与背包，全链路不许崩。
 static func build_ctx(gm: Node) -> Dictionary:
 	var stats: Dictionary = gm.get_player_stat_dict()
-	# get_player_stat_dict 不带的四个面板外读数（推荐轴要用），就地补齐
+	# get_player_stat_dict 不带的三个面板外读数（推荐轴要用），就地补齐
 	stats["dodge"] = gm.get_effective_dodge()
 	stats["luck"] = gm.luck
 	stats["xp_gain_mult"] = gm.xp_gain_mult
-	stats["pickup_range_mult"] = gm.pickup_range_mult
 	stats["thorns"] = gm.thorns_pct
 
 	var weapons: Array = []

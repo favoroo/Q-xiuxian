@@ -941,6 +941,9 @@ func _physics_process(delta: float) -> void:
 			var regen_pct: float = GameManager.item_hook_sum("still_regen_pct")
 			if regen_pct > 0.0 and current_health < max_health:
 				heal(max_health * regen_pct * delta, true)
+			# 苦行僧·站定回血（占原「站定拾取 +100%」的槽位）
+			if GameManager.still_regen_bonus > 0.0 and current_health < max_health:
+				heal(GameManager.still_regen_bonus * delta, true)
 	else:
 		GameManager.player_is_moving = is_moving
 
