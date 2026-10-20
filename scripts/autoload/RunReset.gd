@@ -109,6 +109,7 @@ static func reset(gm: Node) -> void:
 	gm.active_skill_id = ""
 	gm.extra_skill_id = ""
 	gm.buff_move_speed_mult = 1.0
+	gm.buff_pickup_range_mult = 1.0
 	gm.buff_attack_speed_mult = 1.0
 	gm.buff_dodge = 0.0
 	gm.buff_knockback_mult = 1.0

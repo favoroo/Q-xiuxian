@@ -75,12 +75,12 @@ const ORPHAN_ALLOW := {
 	"tisi_kuilei": [50],     # 免死并恢复50%生命
 	"huichun_hulu": [15],    # 兜底：波末回血由 wave_heal_pct 机制字段解释
 	# 2026-10-12 转化核心件：机制数字由各自额外字段承载（apply 留空），在此登记口径
-	"jifeng_ren": [10, 4],         # 移速每超基础10% → 全伤害+4%（dmg_per_move_speed 0.04）
-	"huanying_ling": [10, 5],      # 每10%闪避 → +5%暴击率（crit_per_dodge 0.05）
-	"shanyue_jia": [1],            # 每点护甲+1.5%（dmg_per_armor 0.015；pct 扫描 "1.5%" 截整为 1）
-	"xuepan_guyu": [50, 1],        # 每50点最大生命+1%（dmg_per_max_hp 0.01）
-	"jubao_pen": [100, 3, 30],     # 每100灵石+3%，至多+30%（dmg_per_100_stones 0.03 / stone_dmg_cap 0.30）
-	"ranxue_fu": [10, 2],          # 每损失10%生命+2.5%（dmg_per_missing_hp 0.025；扫描截整为 2）
+		"jifeng_ren": [10, 4],         # 移速每超基础10% → 全伤害+4%（dmg_per_move_speed 0.04）
+		"huanying_ling": [10, 5],      # 每10%闪避 → +5%暴击率（crit_per_dodge 0.05）
+		"shanyue_jia": [1.5],          # 每点护甲+1.5%（dmg_per_armor 0.015）
+		"xuepan_guyu": [50, 1],        # 每50点最大生命+1%（dmg_per_max_hp 0.01）
+		"jubao_pen": [100, 3, 30],     # 每100灵石+3%，至多+30%（dmg_per_100_stones 0.03 / stone_dmg_cap 0.30）
+		"ranxue_fu": [10, 2.5],        # 每损失10%生命+2.5%（dmg_per_missing_hp 0.025）
 	"budong_yin": [1, 30],         # 站定1秒+30%（still_seconds 1.0 / still_damage 0.30）
 	"zhekou_yufu": [8, 7],         # 商店全场 8 折，最多叠到 7 折（shop_price_mul 0.92 → 折扣以「折」表述）
 	# 2026-10-12 深度联动与站定流法宝（14 件）
@@ -114,7 +114,7 @@ static func _extract_tokens(plain: String) -> Dictionary:
 	re_flat.compile("[+-]?\\d+(?:\\.\\d+)?")
 	var pcts: Array = []
 	for m in re_pct.search_all(plain):
-		pcts.append(m.get_string().trim_suffix("%").replace("+", "").to_int())
+		pcts.append(float(m.get_string().trim_suffix("%").replace("+", "")))
 	var flats: Array = []
 	for m in re_flat.search_all(re_pct.sub(plain, " ", true)):
 		flats.append(float(m.get_string().replace("+", "")))
@@ -254,15 +254,25 @@ func _test_skill_desc_apply() -> void:
 		var probs: Array = []
 		var toks := _extract_tokens(desc)
 		if d.has("power") and "%" in desc:
-			var want := int(round(float(d["power"]) * 100.0))
-			if not (want in toks.pct):
-				probs.append("power=%s 与文案百分比不一致（期望 %d%%）" % [d["power"], want])
+			var want := float(d["power"]) * 100.0
+			var hit := false
+			for p in toks.pct:
+				if absf(float(p) - want) <= 0.05:
+					hit = true
+					break
+			if not hit:
+				probs.append("power=%s 与文案百分比不一致（期望 %s%%）" % [d["power"], want])
 		# 附加效果的数值也要在文案里对得上账（2026-10-11 技能改版新增字段）
 		for extra_key in ["dodge_add", "pet_heal_pct"]:
 			if d.has(extra_key) and float(d[extra_key]) > 0.0 and "%" in desc:
-				var want_extra := int(round(float(d[extra_key]) * 100.0))
-				if not (want_extra in toks.pct):
-					probs.append("%s=%s 与文案百分比不一致（期望 %d%%）" % [extra_key, d[extra_key], want_extra])
+				var want_extra := float(d[extra_key]) * 100.0
+				var hit := false
+				for p in toks.pct:
+					if absf(float(p) - want_extra) <= 0.05:
+						hit = true
+						break
+				if not hit:
+					probs.append("%s=%s 与文案百分比不一致（期望 %s%%）" % [extra_key, d[extra_key], want_extra])
 		if d.has("duration") and "秒" in desc:
 			var re := RegEx.new()
 			re.compile("(\\d+(?:\\.\\d+)?)\\s*秒")

@@ -71,10 +71,7 @@ class CircleProgressOverlay extends Control:
 
 static func style_circle_button(btn: Button, font_size: int = SKILL_BTN_FONT) -> void:
 	var r := int(SKILL_BTN_SIZE * 0.5)
-	var is_enhanced := false
-	if not GameManager.active_skill_id.is_empty():
-		is_enhanced = SkillData.is_enhanced_for_cultivator(GameManager.active_skill_id, GameManager.cultivator_id)
-	var border_col: Color = GameStyle.with_alpha(GameStyle.JADE_EDGE, 0.65) if is_enhanced else GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.50)
+	var border_col: Color = GameStyle.with_alpha(GameStyle.GOLD_EDGE, 0.50)
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = GameStyle.with_alpha(GameStyle.INK, 0.25)

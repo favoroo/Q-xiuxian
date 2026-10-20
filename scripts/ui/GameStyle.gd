@@ -1053,9 +1053,12 @@ static func button(btn: Button, bg: Color, hover_bg: Color, font_size: int,
 	btn.add_theme_stylebox_override("focus", empty_focus())
 	btn.add_theme_font_override("font", body_font())
 	btn.add_theme_font_size_override("font_size", font_size)
+	var act_color: Color = hover_color if hover_color.a > 0 else font_color
 	btn.add_theme_color_override("font_color", font_color)
-	btn.add_theme_color_override("font_hover_color", hover_color if hover_color.a > 0 else font_color)
-	btn.add_theme_color_override("font_pressed_color", hover_color if hover_color.a > 0 else font_color)
+	btn.add_theme_color_override("font_hover_color", act_color)
+	btn.add_theme_color_override("font_pressed_color", act_color)
+	btn.add_theme_color_override("font_hover_pressed_color", act_color)
+	btn.add_theme_color_override("font_focus_color", font_color)
 	# 样式入口即反馈入口：全项目按钮的点击音在这里统一挂，避免每个界面各写一遍。
 	# meta 标记防止同一按钮被重复刷新样式时挂出多重连接（一次点击响两声）。
 	if not btn.has_meta("sfx_wired"):
@@ -1075,10 +1078,11 @@ static func _crush(btn: Button, down: bool) -> void:
 	if not is_instance_valid(btn):
 		return
 	pin_center_pivot(btn)
-	var old: Tween = btn.get_meta(_CRUSH_TW_META, null)
-	if old != null and old.is_valid():
-		old.kill()
-	btn.remove_meta(_CRUSH_TW_META)
+	if btn.has_meta(_CRUSH_TW_META):
+		var old: Variant = btn.get_meta(_CRUSH_TW_META)
+		if old is Tween and (old as Tween).is_valid():
+			(old as Tween).kill()
+		btn.remove_meta(_CRUSH_TW_META)
 	if down:
 		btn.scale = Vector2(0.97, 0.97)   # 按下瞬间硬切，不做补间
 		return

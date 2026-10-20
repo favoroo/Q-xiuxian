@@ -20,7 +20,7 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 	card.custom_minimum_size = Vector2(CARD_W, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var border_col: Color = (GameStyle.JADE if is_elem else GameStyle.GOLD) if lv > 0 else GameStyle.LINE
-	var bg_col: Color = GameStyle.NAVY2 if lv > 0 else GameStyle.with_alpha(GameStyle.INK, 0.78)
+	var bg_col: Color = GameStyle.NAVY2 if lv > 0 else GameStyle.NAVY2.darkened(0.05)
 	var sb_flat := GameStyle.outlined_panel(bg_col, border_col, 2 if lv > 0 else 1, 0.0)
 	sb_flat.content_margin_left = 8.0
 	sb_flat.content_margin_top = 5.0
@@ -54,8 +54,7 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = SynergyUI.progress_text(tag)
-	# 黑底上的次级亮灰做未激活态标题字
-	var title_col: Color = (GameStyle.JADE if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
+	var title_col: Color = (GameStyle.JADE_DK if is_elem else GameStyle.PAPER) if lv > 0 else GameStyle.PAPER_DIM
 	GameStyle.label(title_lbl, 13, title_col)
 	head.add_child(title_lbl)
 
@@ -72,9 +71,9 @@ static func create_card(dialog: PlayerStatsDialog, tag: String) -> Control:
 		var prefix: String = "★" if is_current_tier else ("·" if not reached else "+")
 		line_lbl.text = GameStyle.wrap_cjk(
 				"%s(%d) %s" % [prefix, th_need, tier_txt], GameStyle.body_font(), 11, CARD_INNER_W)
-		# 当前档增益绿；激活卡（纸灰面）灰墨分档，未激活暗卡统一暗底亮字
-		var line_col: Color = GameStyle.GOOD if is_current_tier \
-				else ((GameStyle.PAPER_DIM if reached else GameStyle.GREY) if lv > 0 else GameStyle.PAPER_DIM)
+		# 当前档增益绿；已达成档深灰墨字，未达成档置灰
+		var line_col: Color = GameStyle.GOOD_DK if is_current_tier \
+				else (GameStyle.PAPER_DIM if reached else GameStyle.GREY)
 		GameStyle.label(line_lbl, 11, line_col)
 		vbox.add_child(line_lbl)
 

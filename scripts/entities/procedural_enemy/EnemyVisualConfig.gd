@@ -42,10 +42,10 @@ static func make_slime() -> EnemyVisualConfig:
 	cfg.locomotion = LocomotionType.CRAWL
 	cfg.body_radius = 14.0
 	cfg.scale_factor = 1.1
-	cfg.col_primary = Color(0.55, 0.10, 0.16, 0.85)     # 暗红半透明流质血煞
-	cfg.col_secondary = Color(0.88, 0.86, 0.82, 0.95)   # 森白残碎骨屑
-	cfg.col_accent = Color(0.78, 0.22, 0.28, 0.70)      # 鲜红冷血边缘
-	cfg.col_glow = Color(0.40, 0.95, 0.55, 1.0)         # 幽绿怨魂核
+	cfg.col_primary = Color(0.52, 0.08, 0.14, 0.88)     # 暗红半透明流质血煞
+	cfg.col_secondary = Color(0.50, 0.46, 0.42, 0.80)   # 沉降暗骨残碎（不再惨白）
+	cfg.col_accent = Color(0.68, 0.16, 0.22, 0.75)      # 凝血暗红边缘
+	cfg.col_glow = Color(0.22, 0.82, 0.45, 0.95)         # 幽绿怨魂核（沉暗幽碧，不泛白）
 	cfg.eye_type = "single_core"
 	cfg.ornament_type = "bone_shards"
 	return cfg
@@ -79,7 +79,7 @@ static func make_danbao() -> EnemyVisualConfig:
 	cfg.col_accent = Color(0.95, 0.38, 0.18, 0.95)     # 暴烈地火裂纹
 	cfg.col_glow = Color(1.0, 0.50, 0.15, 1.0)         # 炉火金红焰心
 	cfg.eye_type = "glow_crack"
-	cfg.ornament_type = "urn_lid"
+	cfg.ornament_type = "tripod"  ## 三足鼎炉（炉口焰火 + 裂纹引信）
 	return cfg
 
 ## 4. 蜂群精：冥火毒螟 / 幽冥骨蜂 (FLIGHT)
@@ -260,7 +260,7 @@ static func make_jiansha_elite() -> EnemyVisualConfig:
 	cfg.col_accent = Color(0.75, 0.22, 0.35, 0.9)      # 扇形血光剑轮
 	cfg.col_glow = Color(1.0, 0.35, 0.50, 1.0)         # 血煞冷眸
 	cfg.eye_type = "slit"
-	cfg.ornament_type = "tri_swords"
+	cfg.ornament_type = "sword_formation"  ## 环绕血煞剑阵（蓄力收束成扇指向目标）
 	return cfg
 
 ## 15. 敌潮魔君 & 心魔魔尊 (BOSS / HOVER)
@@ -302,7 +302,7 @@ static func make_lingyi() -> EnemyVisualConfig:
 	cfg.col_accent = Color(0.30, 0.70, 0.45, 0.9)      # 青碧药草纹
 	cfg.col_glow = Color(0.35, 1.0, 0.60, 1.0)         # 回春翠绿灵辉
 	cfg.eye_type = "round"
-	cfg.ornament_type = "halo"
+	cfg.ornament_type = "medicine_gourd"  ## 背葫举杵的药灵（荷叶帽 + 药葫芦 + 捣药杵）
 	return cfg
 
 ## 17. 金蟾：衔宝金蟾 (HOVER) —— 见人就跑的宝藏怪

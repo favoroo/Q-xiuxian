@@ -121,6 +121,11 @@ var _aura_shown: bool = false      ## 光环标记是否已点亮（边沿触发
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
 
+## 步态相位（弧度）：仅在移动时按 speed_ratio 推进，供渲染器摆翼/蠕波与位移同相
+var _gait_phase: float = 0.0
+const GAIT_FREQ_HOVER := 6.0     ## 悬浮/飞行 步态角频率（rad/s，speed_ratio=1 时）
+const GAIT_FREQ_SLITHER := 9.0   ## 蠕动 行进波角频率
+
 # 投毒支路运行时状态（毒妖系；预警圈 = 判定圈同源，真话源在本类）
 var _poison_timer: float = 0.0        ## 投毒冷却计时
 var _poison_windup_t: float = -1.0    ## >=0 表示投毒预警中
@@ -405,6 +410,7 @@ func reset_for_reuse() -> void:
 	_aura_shown = false
 	_focus_hit_timer = 0.0
 	_focus_hit_count = 0
+	_gait_phase = 0.0
 	_mutated = false
 	_elite_slam_windup_t = -1.0
 	_poison_timer = 0.0
@@ -1234,22 +1240,29 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 				vel_dir = velocity / current_speed
 			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
 			procedural_view.advance = vel_dir.dot(dir)
-			if _fuse >= 0.0:
-				procedural_view.special_state = 1.0
-			elif _charge_windup >= 0.0:
-				procedural_view.special_state = 1.0
-			elif _bolt_windup_t >= 0.0:
-				# 火球蓄力走 0→1 进度（器尖聚能球随之由小到大），不写死 1.0
-				# 进度真话源是 _tick_bolt_windup 写下的值，这里不覆盖
-				pass
-			else:
-				procedural_view.special_state = 0.0
 			if _bolt_windup_t >= 0.0:
 				procedural_view.aim_dir = _bolt_windup_dir
 			elif dir.length_squared() > 0.01:
 				procedural_view.aim_dir = dir
 			else:
 				procedural_view.aim_dir = Vector2.ZERO
+		# 步态相位：仅移动时按 speed_ratio 推进（蠕动波频更高），渲染器摆翼/蠕波与位移同相
+		if is_moving:
+			_gait_phase += delta * speed_ratio * (GAIT_FREQ_SLITHER if locomotion_mode == "slither" else GAIT_FREQ_HOVER)
+		procedural_view.gait_phase = _gait_phase
+		# 蓄力/前摇进度同步（全运动模式通用，0→1 填满即出手；火球蓄力的真话源在 _tick_bolt_windup，这里不覆盖）
+		if _fuse >= 0.0:
+			procedural_view.special_state = 1.0
+		elif _charge_windup >= 0.0:
+			procedural_view.special_state = 1.0 - _charge_windup / maxf(charge_windup_time, 0.001)
+		elif _bolt_windup_t >= 0.0:
+			pass
+		elif _elite_slam_windup_t >= 0.0:
+			procedural_view.special_state = 1.0 - _elite_slam_windup_t / maxf(slam_windup, 0.001)
+		elif _poison_windup_t >= 0.0:
+			procedural_view.special_state = 1.0 - _poison_windup_t / maxf(poison_windup, 0.001)
+		else:
+			procedural_view.special_state = 0.0
 
 ## 冲刺走廊扫掠结算 + 追击目标接触伤害判定（石岳反震只认玩家，灵兽无反震）
 func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
@@ -1342,17 +1355,12 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			AudioManager.play_sfx("enemy_hit", 1.25, GameManager.rng.randf_range(1.08, 1.22))
 			AudioManager.play_sfx("enemy_hit_crit", 1.35, GameManager.rng.randf_range(0.95, 1.05))
 		GameManager.crit_hit_stop()
-		# 2026-10-18 雷法抖屏治理：暴击的镜头反馈（方向冲击+缩放+创伤）全局限流成一记。
-		# 一发 AoE 打 5~6 个敌人、每只各自掷暴击时，逐只发会让同帧叠十几记 6.5px 冲击 + 十几笔创伤。
-		# 限流只砍镜头，暴击方向环 / 跳字 / 顿帧 / 触觉仍按原样逐次给。
-		if GameFeel.crit_camera_gate():
+		# 镜头震动特权留给精英/首领：普通小怪暴击不发镜头冲击、缩放与创伤，
+		# 避免高频割草时持续累加创伤导致屏幕常态抖动；打击感由顿帧、音效、跳字与暴击方向环承担。
+		if is_elite and GameFeel.crit_camera_gate():
 			GameManager.kick_camera(knockback, 6.5)
 			GameFeel.zoom_punch(GameManager, 0.022, 0.12)
-			if is_elite:
-				GameManager.add_trauma(GameBalance.CRIT_TRAUMA_ELITE)
-			else:
-				GameManager.add_trauma(GameBalance.CRIT_TRAUMA_NORMAL)
-		if is_elite:
+			GameManager.add_trauma(GameBalance.CRIT_TRAUMA_ELITE)
 			GameFeel.vibrate(26, 0.65)
 		# 暴击方向环（2026-10-14 受击火花「重构替代品」，只给暴击）：0.11s 极小光环，
 		# 补「这一刀从哪来」的方向读数。暴击本身低频，且入口有 JuiceEffect 帧预算（≤6/帧）
@@ -1362,9 +1370,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			JuiceEffect.spawn_impact_pop(get_parent(), global_position,
 				Color(1.0, 0.42, 0.22, 0.85), knockback)
 	elif not from_dot:
-		# 普通命中：即时方向性微冲击（Directional Micro-Kick，2.8px），让刀刀入肉清晰可感，不累加持续性正弦创伤。
-		# 走全局限流闸（2026-10-11 频闪治理）：远程穿透/弹射下每秒几十次命中逐刀微震会糊成持续抖屏
-		GameFeel.micro_kick(GameManager, knockback, 2.8)
+		# 普通命中：移除镜头 micro_kick，保证屏幕稳定不颤抖；打击感由怪物受击形变、闪白、硬直与音效承担
 		var pitch: float = GameManager.rng.randf_range(0.94, 1.08) if not is_elite else 0.85
 		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
 		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
@@ -1387,40 +1393,38 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if procedural_view != null:
 			procedural_view.position = anim_sprite.position
 
-			# 3. 受击闪白（分级：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版。
-			# 2026-10-17 性能专项：per-instance shader uniform（打断批处理的元凶）改为共享材质 +
-			# 顶点色通道 —— self_modulate 只属于闪白业务（modulate 仍归冰缓/引信/蓄力染色），
-			# CPU 侧按 flash 权重向目标色提亮写入，衰减沿 _tick_hit_fx 同一计时推进。
-			# 换色语义保留：暴击先绯金、0.02s 后换暖白再衰减（_flash_swap_t）；
-			# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满，避免持续集火下糊成全白剪影；
-			# 调柔口径不变：普通受击峰值 0.60（重叠集火 0.40），时长 0.08s，透出怪物暗色轮廓与动作。
-			var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
-			if is_fresh_flash:
-				var peak_flash: float = 0.60 if not is_crit else 1.0
-				if not is_crit and _focus_hit_count > 1:
-					peak_flash = 0.40
-				if is_crit:
-					_flash_col = FLASH_COL_CRIT
-					_flash_t = 0.12
-					_flash_down_dur = 0.12
-					_flash_swap_t = 0.02
-				else:
-					_flash_col = FLASH_COL_NORMAL
-					_flash_t = 0.08
-					_flash_down_dur = 0.08
-					_flash_swap_t = 0.0
-				_write_flash_channel(peak_flash)
+	# 3. 受击闪白（分级：普通亮白 vs 暴击绯金，加实留存时间）——零 Tween 分配版。
+	# 2026-10-17 性能专项：per-instance shader uniform（打断批处理的元凶）改为共享材质 +
+	# 顶点色通道 —— self_modulate 只属于闪白业务（modulate 仍归冰缓/引信/蓄力染色），
+	# CPU 侧按 flash 权重向目标色提亮写入，衰减沿 _tick_hit_fx 同一计时推进。
+	# 换色语义保留：暴击先绯金、0.02s 后换暖白再衰减（_flash_swap_t）；
+	# 抗糊保护：当前闪白仍处前段（>0.4）且非暴击升级时，不暴力刷满，避免持续集火下糊成全白剪影；
+	# 调柔口径不变：普通受击峰值 0.60（重叠集火 0.40），时长 0.08s，透出怪物暗色轮廓与动作。
+	var is_fresh_flash := _flash_t <= 0.0 or (_flash_down_dur > 0.0 and (_flash_t / _flash_down_dur) <= 0.4) or is_crit
+	if is_fresh_flash:
+		var peak_flash: float = 0.60 if not is_crit else 1.0
+		if not is_crit and _focus_hit_count > 1:
+			peak_flash = 0.40
+		if is_crit:
+			_flash_col = FLASH_COL_CRIT
+			_flash_t = 0.12
+			_flash_down_dur = 0.12
+			_flash_swap_t = 0.02
+		else:
+			_flash_col = FLASH_COL_NORMAL
+			_flash_t = 0.08
+			_flash_down_dur = 0.08
+			_flash_swap_t = 0.0
+		_write_flash_channel(peak_flash)
 
 	if lethal:
 		# 致命一刀不做任何位移：knockback_velocity 只作死亡镜头反馈的方向读数，
-		# 精英 kick_camera / 小怪 micro_kick 内部都只 normalized() 取方向，不读模长。
-		# 暴击击杀特写：更实的独立顿帧 + 一记缩放冲击（2026-10-11；爆散规模放大于 2026-10-12 随爆散下线移除）
+		# 精英 kick_camera / 斩杀反馈在 _die 中分派。
+		# 暴击击杀特写：更实的独立顿帧（小怪不抽动镜头，精英伏诛走 HEAVY 自带更大顿帧/缩放）
 		_death_crit_kill = is_crit and not from_dot
 		if _death_crit_kill:
-			# 精英伏诛走 HEAVY 反馈自带更大顿帧/缩放，此处不重复发
 			if not is_elite:
 				GameFeel.crit_kill_hit_stop(GameManager)
-				GameFeel.zoom_punch(GameManager, 0.03, 0.14)
 		# 击杀微顿帧（GameFeel 限流）：减潮加肉后击杀是低频事件，这一记「确认感」值得给；
 		# DoT 跳死不发（那不是玩家亲手砍的一刀），精英伏诛走 LARGE 反馈自带顿帧不重复发
 		elif not from_dot and not is_elite:
@@ -2094,8 +2098,7 @@ func _die() -> void:
 		AudioManager.register_kill_pitch(die_pitch_base * 1.12)
 		AudioManager.play_sfx("enemy_death_elite", 1.0)
 	else:
-		# 普通敌人死亡给一记沿致命一刀方向的微冲量（2.5px），确认感极佳且不累加持续创伤（走全局限流闸）
-		GameFeel.micro_kick(GameManager, knockback_velocity, GameBalance.DEATH_MICRO_KICK)
+		# 普通敌人死亡不推镜头，保持视野平稳；击杀确认感由死亡消散、音效与击杀连击音阶表达
 		AudioManager.register_kill_pitch(die_pitch_base)
 		AudioManager.play_sfx("enemy_death", 0.90)
 

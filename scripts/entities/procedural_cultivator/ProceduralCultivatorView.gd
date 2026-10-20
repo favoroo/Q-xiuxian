@@ -129,15 +129,18 @@ func _process(delta: float) -> void:
 # ==================== 动作控制核心接口 ====================
 
 ## 触发待机
+## 受击硬直期间让位：否则 play_hit 写入的 HIT 姿势下一帧就被覆写回 IDLE/RUN，
+## 受击僵直姿态实际只活一个重绘 tick（~33ms），只剩 tilt/squash 没有本体姿势
 func play_idle() -> void:
-	if _dash_timer > 0.0 or _attack_timer > 0.0:
+	if _dash_timer > 0.0 or _attack_timer > 0.0 or _hit_timer > 0.0:
 		return
 	if renderer:
 		renderer.current_action = CultivatorRendererBase.Action.IDLE
 
 ## 触发奔跑（带步态相位与移速比率）
+## 受击硬直期间让位（与 play_idle 同理），HIT 姿势存活满 _hit_duration 再由本接口接管
 func play_run(phase: float, air: float, speed_ratio: float, lean: float = 0.0) -> void:
-	if _dash_timer > 0.0 or _attack_timer > 0.0:
+	if _dash_timer > 0.0 or _attack_timer > 0.0 or _hit_timer > 0.0:
 		return
 	if renderer:
 		renderer.current_action = CultivatorRendererBase.Action.RUN

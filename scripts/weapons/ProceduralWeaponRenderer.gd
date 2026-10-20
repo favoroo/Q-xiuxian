@@ -15,6 +15,10 @@ extends Node2D
 ## 灰度切换：shape == GENERIC（未实现的大类）时由 FloatingWeapon 保留原贴图显示，
 ## 逐批把大类补齐（批次 1：剑/刀/匕首；批次 2：符箓/扇/印/牌令/灯/鼓/铎）。
 
+## 器形族模块库（scripts/weapons/shapes/）：重绘接管的器形优先走族模块新画法，
+## 未接管的一律回退本文件旧画法（灰度增量，不破现状）。新增/重绘器形只改族模块，别动本文件。
+const WeaponShapeLibrary = preload("res://scripts/weapons/shapes/WeaponShapeLibrary.gd")
+
 enum WeaponShape {
 	SWORD,     ## 直剑：双刃平行、末端收锋
 	SABER,     ## 弯刀：刀背直、刀腹鼓
@@ -42,6 +46,7 @@ enum WeaponShape {
 	MIRROR,    ## 镜：圆镜 + 边框 + 镜柄（紫虹镜）
 	BEAD,      ## 珠：多棱宝珠 + 内核（玄冥雷珠）
 	AWL,       ## 锥：长锥 + 箍环（金雷锥）
+	SHURIKEN,  ## 手里剑：四芒旋刃 + 弧形月牙内凹 + 中心透孔（手里剑）
 	GENERIC,
 }
 
@@ -52,13 +57,15 @@ enum WeaponShape {
 ## 竖置重器（符/印/牌/灯/鼓/铎）：画布内长轴沿 Y 绘制，由宿主下发 rotation=-angle 保持世界竖直。
 ## 非竖置（剑/刀/扇等）：沿 +X 绘制，器尖朝瞄准方向。
 @export var upright: bool = false
+@export var weapon_id: String = ""
 
-func configure(p_shape: WeaponShape, p_element: String, p_tip_len: float, p_star: int, p_upright: bool = false) -> void:
+func configure(p_shape: WeaponShape, p_element: String, p_tip_len: float, p_star: int, p_upright: bool = false, p_weapon_id: String = "") -> void:
 	shape = p_shape
 	element = p_element
 	tip_len = maxf(p_tip_len, 8.0)
 	star = clampi(p_star, 1, 3)
 	upright = p_upright
+	weapon_id = p_weapon_id
 	queue_redraw()
 
 ## 数据表 "shape" 字段 → 枚举（未登记/未实现的一律 GENERIC，调用方据此保留贴图）
@@ -116,6 +123,8 @@ static func shape_from_name(s: String) -> WeaponShape:
 			return WeaponShape.BEAD
 		"awl":
 			return WeaponShape.AWL
+		"shuriken":
+			return WeaponShape.SHURIKEN
 	return WeaponShape.GENERIC
 
 ## 本批是否已实现该器形（false ⇒ 调用方继续显示旧贴图，保证逐批灰度不破现状）
@@ -161,6 +170,9 @@ func _draw() -> void:
 	# 非竖置的符箓（镇山符）保持 +X，长轴跟随瞄准方向。
 	if upright:
 		draw_set_transform(Vector2.ZERO, -PI * 0.5, Vector2.ONE)
+	# 新画法分发：族模块已接管（返回 true）就直接画完返回，否则继续走下方旧画法
+	if WeaponShapeLibrary.draw_shape(shape, self):
+		return
 	match shape:
 		WeaponShape.SWORD:
 			_draw_sword()
@@ -214,8 +226,10 @@ func _draw() -> void:
 			_draw_bead()
 		WeaponShape.AWL:
 			_draw_awl()
+		WeaponShape.SHURIKEN:
+			pass  ## 真实画法已由 WeaponShapeLibrary/FineShapes 接管提前返回
 
-# ---------------- 通用构件 ----------------
+	# ---------------- 通用构件 ----------------
 
 ## 带暗色描边的填充多边形：外圈暗底 + 内缩亮面
 ## 注：描边厚度按「内缩比例」控制，比例越接近 1 描边越细。器身小（屏上约 12px 宽），
@@ -965,3 +979,15 @@ func _draw_awl() -> void:
 		draw_line(Vector2(x, -w * 0.92), Vector2(x, w * 0.92), pal["dark"], 1.8, true)
 	draw_line(Vector2(L * 0.9, 0.0), Vector2(-L * 0.6, 0.0), Color(edge.r, edge.g, edge.b, 0.75), 1.0, true)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.5, 0.0), Vector2(-L * 0.1, 0.0))
+
+# ---------------- 手里剑（四芒旋刃 + 月牙磨刃 + 中心透孔） ----------------
+func _draw_shuriken() -> void:
+	# 兜底旧画法，正常分发已被 WeaponShapeLibrary 接管
+	var pal := _palette()
+	var L := tip_len
+	var r_hole := L * 0.20
+	AdaptiveDraw.circle(self, Vector2.ZERO, L, pal["dark"])
+	AdaptiveDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
+	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.6, 0.0), Vector2(r_hole * 1.5, 0.0))
+
+

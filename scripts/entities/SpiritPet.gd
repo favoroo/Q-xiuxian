@@ -25,6 +25,8 @@ var _dying: bool = false
 var _action_fx: float = -1.0        ## 脉冲/动作特效进度（0~1，<0 为无）
 var _lightning_target_pos: Vector2 = Vector2.ZERO ## 雷击主目标终点（本地坐标）
 var _chain_targets_pos: Array[Vector2] = []       ## 雷击连锁分支目标终点（本地坐标）
+var _lash_target_pos: Vector2 = Vector2.ZERO      ## 聚宝蟾金舌鞭击目标终点（本地坐标）
+var _fire_dir: Vector2 = Vector2.ZERO             ## 焰灵狐吐火朝向（本地坐标，供喷射扇焰绘制）
 
 # --- 增强视觉表现字段 ---
 var _flash_timer: float = 0.0       ## 触发/受激闪白计时（秒）
@@ -101,6 +103,8 @@ func _physics_process(delta: float) -> void:
 			_action_fx = -1.0
 			_lightning_target_pos = Vector2.ZERO
 			_chain_targets_pos.clear()
+			_lash_target_pos = Vector2.ZERO
+			_fire_dir = Vector2.ZERO
 			_custom_fx_type = ""
 
 	# 闪白与挤压回弹推进
@@ -129,6 +133,7 @@ func _physics_process(delta: float) -> void:
 		_yulu_buff_timer -= delta
 		if _yulu_buff_timer <= 0.0:
 			GameManager.buff_move_speed_mult = 1.0
+			GameManager.buff_pickup_range_mult = 1.0
 
 	# 战斗行为（非终局、非暂停时按冷却心跳推进）
 	if not GameManager.is_game_over and not get_tree().paused:
@@ -217,6 +222,7 @@ func _act_yanhu() -> void:
 	# 后坐形变 + 灵狐吐火星屑
 	pulse_trigger_fx(Vector2(0.75, 1.35), 0.14)
 	_custom_fx_type = "fire_burst"
+	_fire_dir = dir
 	var scene_parent: Node = get_parent()
 	if is_inside_tree() and scene_parent != null:
 		JuiceEffect.spawn_impact_pop(scene_parent, global_position, Color(1.0, 0.45, 0.15), -dir)
@@ -318,7 +324,7 @@ func _act_xuangui() -> void:
 	# 3. 濒危玄甲护符（生命 < 35% 时紧急保护）
 	var shield_granted := false
 	if target != null and target.current_health < target.max_health * 0.35:
-		target.heal(BalanceSpiritPet.XUANGUI_SHIELD_AMOUNT, true)
+		target.heal(BalanceSpiritPet.shield_amount(GameManager.wave_number), true)
 		shield_granted = true
 
 	if intercepted_count > 0 or repelled > 0 or shield_granted:
@@ -347,8 +353,9 @@ func _act_yulu() -> void:
 	var before := target.current_health
 	target.heal(heal_amt, true)
 
-	# 生机加速与灵泉感知
+	# 生机加速与灵泉感知（移速 + 拾取范围双加成）
 	GameManager.buff_move_speed_mult = maxf(GameManager.buff_move_speed_mult, 1.0 + BalanceSpiritPet.YULU_SPEED_BONUS)
+	GameManager.buff_pickup_range_mult = maxf(GameManager.buff_pickup_range_mult, 1.0 + BalanceSpiritPet.YULU_PICKUP_BONUS)
 	_yulu_buff_timer = BalanceSpiritPet.YULU_BUFF_DURATION
 
 	pulse_trigger_fx(Vector2(1.05, 1.15), 0.10)
@@ -359,34 +366,28 @@ func _act_yulu() -> void:
 		DamageNumber.spawn(scene_parent, target.global_position + Vector2(0, -22), int(heal_amt), false, "+" + str(int(heal_amt)))
 	AudioManager.play_sfx("heal", 0.45, 1.25)
 
-## 聚宝蟾：战中金舌卷宝
+## 聚宝蟾：金舌鞭击（2026-10-20 重做：去掉战中「金舌吸宝」，改为直接鞭打最近敌人）
 func _act_juchan() -> void:
-	if target == null:
+	var nearest := _find_nearest_enemy(300.0)
+	if nearest == null:
 		return
-	var gems := get_tree().get_nodes_in_group("gems")
-	if gems.is_empty():
-		return
-	var uncollected: Array = []
-	for g in gems:
-		if is_instance_valid(g) and not g.get("_pooled") and g.get("target_player") == null:
-			uncollected.append(g)
-	if uncollected.is_empty():
-		return
-	# 优先吸收距离较远的掉落物
-	uncollected.sort_custom(func(a: Node2D, b: Node2D) -> bool:
-		return a.global_position.distance_squared_to(target.global_position) > b.global_position.distance_squared_to(target.global_position)
-	)
-	var count := mini(uncollected.size(), BalanceSpiritPet.JUCHAN_ATTRACT_COUNT)
-	for i in range(count):
-		var gem = uncollected[i]
-		if gem.has_method("magnet_to"):
-			gem.magnet_to(target)
-	pulse_trigger_fx(Vector2(1.3, 0.8), 0.16)
-	_custom_fx_type = "gold_tongue"
+	var dir := (nearest.global_position - global_position).normalized()
+	var eff_mult := _get_effective_damage_mult()
+	var dmg := BalanceSpiritPet.tongue_damage(GameManager.wave_number, eff_mult)
+
+	if nearest.has_method("take_damage"):
+		nearest.take_damage(dmg * GameManager.elite_damage_mult_for(nearest), dir * 40.0, false)
+
+	# 记录鞭击终点供 _draw 画金色鞭影
+	_lash_target_pos = to_local(nearest.global_position)
+
+	pulse_trigger_fx(Vector2(1.35, 0.72), 0.14)
+	_custom_fx_type = "gold_lash"
 	var scene_parent: Node = get_parent()
 	if is_inside_tree() and scene_parent != null:
-		JuiceEffect.spawn_pickup_pop(scene_parent, global_position, true)
-	AudioManager.play_sfx("chest_open", 0.35, 1.3)
+		JuiceEffect.spawn_impact_pop(scene_parent, nearest.global_position, Color(1.0, 0.85, 0.25))
+		JuiceEffect.spawn_shockwave(scene_parent, nearest.global_position, 26.0, Color(1.0, 0.82, 0.2, 0.85), 0.20)
+	AudioManager.play_sfx("impact_blunt", 0.4, 1.3)
 
 ## 灵风貂：罡风卷定
 func _act_fengdiao() -> void:
@@ -435,7 +436,7 @@ func _act_fengdiao() -> void:
 			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, BalanceSpiritPet.MELEE_RING * 0.65, Color(0.85, 0.92, 1.0, 0.6), 0.22)
 		AudioManager.play_sfx("fan_gust", 0.5, 0.85)
 
-## 磐石猿：地动山摇重击与崩碎岩沼
+## 磐石猿：地动山摇重击（命中即减速，2026-10-20 去掉无感的 2 秒岩沼区，改为 3.5 秒减速）
 func _act_shiyuan() -> void:
 	var eff_mult := _get_effective_damage_mult()
 	var dmg := BalanceSpiritPet.smash_damage(GameManager.wave_number, eff_mult)
@@ -456,15 +457,15 @@ func _act_shiyuan() -> void:
 			if e.has_method("take_damage"):
 				e.take_damage(dmg * GameManager.elite_damage_mult_for(e), kb_dir * 220.0, false)
 				hit = true
-			# 施加崩碎岩沼减速
+			# 命中即减速（原岩沼区改为直接施加减速，时长对齐冷却）
 			if e.has_method("apply_chill"):
 				e.apply_chill(BalanceSpiritPet.SMASH_SLOW_PCT, BalanceSpiritPet.SMASH_SLOW_DURATION)
 
 	if hit:
 		pulse_trigger_fx(Vector2(1.25, 0.75), 0.14)
+		_custom_fx_type = "rock_smash"
 		var scene_parent: Node = get_parent()
 		if is_inside_tree() and scene_parent != null:
-			# 简化特效：冲击环收紧至 0.38，时长 0.20s，低调干练
 			JuiceEffect.spawn_shockwave(scene_parent, center, radius * 0.38, Color(0.72, 0.62, 0.45, 0.65), 0.20)
 		AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
 
@@ -539,7 +540,7 @@ func _draw() -> void:
 		_circle(_tether_target_pos * 0.5, 3.2 * tether_alpha, tether_col)
 		_circle(_tether_target_pos, 4.0 * tether_alpha, Color(1.0, 1.0, 1.0, tether_alpha))
 
-	# 6. 行动与专属特效（雷弧、风涡或轻柔单环）
+	# 6. 行动与专属特效（按灵兽各自特征绘制，2026-10-20 七只统一打磨）
 	if _action_fx >= 0.0:
 		if _lightning_target_pos != Vector2.ZERO:
 			# 主雷电电弧
@@ -547,17 +548,158 @@ func _draw() -> void:
 			# 连锁分支电弧
 			for cp in _chain_targets_pos:
 				_draw_lightning_arc(_lightning_target_pos, cp, (1.0 - _action_fx) * 0.8)
+			# 命中点十字闪光（雷灵雀专属）
+			_draw_fx_thunder_hit(_lightning_target_pos, 1.0 - _action_fx)
 		elif _custom_fx_type == "wind_vortex":
-			# 灵风气旋双螺旋
+			# 灵风气旋双螺旋 + 外圈风刃刻线
 			var wind_r: float = lerpf(core_r * 1.5, core_r * 4.2, _action_fx)
 			var wind_alpha: float = (1.0 - _action_fx) * 0.85
 			_arc(Vector2.ZERO, wind_r, _age * 12.0, _age * 12.0 + PI * 1.2, 24, Color(0.85, 0.92, 1.0, wind_alpha), 2.4)
 			_arc(Vector2.ZERO, wind_r * 0.72, -_age * 10.0, -_age * 10.0 + PI * 1.2, 24, Color(0.7, 0.85, 1.0, wind_alpha * 0.75), 1.8)
+			_draw_fx_wind_blades(wind_r, wind_alpha)
+		elif _custom_fx_type == "fire_burst":
+			# 焰灵狐：吐火朝向的锥形扇焰 + 余烬飞点
+			_draw_fx_fire(local_fire_dir(), 1.0 - _action_fx, core_r)
+		elif _custom_fx_type == "gold_lash":
+			# 聚宝蟾：灵兽到目标的金色鞭影弧带 + 命中元宝碎金光
+			_draw_fx_gold_lash(1.0 - _action_fx, core_r)
+		elif _custom_fx_type == "yulu_dew":
+			# 玉露鹿：甘霖雨丝下落 + 地面上升绿色光点
+			_draw_fx_yulu_dew(1.0 - _action_fx, core_r)
+		elif _custom_fx_type == "rock_smash":
+			# 磐石猿：地面放射状裂纹 + 碎石崩点
+			_draw_fx_rock_smash(1.0 - _action_fx, core_r)
+		elif _custom_fx_type == "xuangui_shield":
+			# 玄甲龟：六边形龟甲盾纹闪光
+			_draw_fx_turtle_shield(1.0 - _action_fx, core_r)
 		else:
-			# 轻柔单层扩散波纹环（收去多余的高亮内白圈，去燥不抢戏）
+			# 保底：轻柔单层扩散波纹环
 			var ring_r: float = lerpf(core_r, core_r * 2.2, _action_fx)
 			var ring_alpha: float = (1.0 - _action_fx) * 0.65
 			_arc(Vector2.ZERO, ring_r, 0.0, TAU, 28, Color(color.r, color.g, color.b, ring_alpha), 1.4)
+
+## 焰灵狐吐火朝向（本地坐标；无朝向时默认朝下偏右）
+func local_fire_dir() -> Vector2:
+	if _fire_dir == Vector2.ZERO:
+		return Vector2(0.7, 1.0).normalized()
+	return _fire_dir
+
+## 焰灵狐：锥形扇焰 + 余烬飞点
+func _draw_fx_fire(dir: Vector2, prog: float, core_r: float) -> void:
+	var base_ang := dir.angle()
+	var reach: float = core_r + lerpf(6.0, core_r * 2.6, prog)
+	var spread := deg_to_rad(26.0)
+	for layer in [[reach, Color(1.0, 0.42, 0.12, 0.55 * (1.0 - prog)), 6], [reach * 0.66, Color(1.0, 0.86, 0.35, 0.75 * (1.0 - prog)), 5]]:
+		var r_len: float = layer[0]
+		var col: Color = layer[1]
+		var seg: int = layer[2]
+		var pts := PackedVector2Array([Vector2.ZERO])
+		for i in range(seg + 1):
+			var a: float = base_ang - spread + (2.0 * spread) * float(i) / float(seg)
+			var jag: float = 1.0 + 0.18 * sin(_age * 22.0 + float(i) * 1.7)
+			pts.append(Vector2(cos(a), sin(a)) * r_len * jag)
+		draw_colored_polygon(pts, col)
+	# 余烬飞点
+	var ember_col := Color(1.0, 0.72, 0.25, 0.9 * (1.0 - prog))
+	for k in range(3):
+		var t_f: float = prog + float(k) * 0.18
+		var off: float = lerpf(core_r * 0.6, reach * 1.15, t_f)
+		var tang := Vector2(cos(base_ang + PI * 0.5), sin(base_ang + PI * 0.5))
+		var p: Vector2 = dir * off + tang * sin(_age * 8.0 + float(k) * 2.1) * 4.0 * t_f
+		_circle(p, maxf(0.6, 2.2 * (1.0 - t_f)), ember_col)
+
+## 聚宝蟾：金色鞭影弧带 + 命中碎金光
+func _draw_fx_gold_lash(prog: float, core_r: float) -> void:
+	if _lash_target_pos == Vector2.ZERO:
+		return
+	var alpha: float = (1.0 - prog) * 0.95
+	var mid := _lash_target_pos * 0.5 + Vector2(0, -core_r * 1.2)
+	var seg := 14
+	var band := PackedVector2Array()
+	var band_inner := PackedVector2Array()
+	var bend := 2.6
+	for i in range(seg + 1):
+		var t: float = float(i) / float(seg)
+		var p: Vector2 = Vector2.ZERO.lerp(mid, t).lerp(mid.lerp(_lash_target_pos, t), t)
+		var perp: Vector2 = (p - _lash_target_pos * 0.5).orthogonal()
+		perp = perp.normalized() if perp.length() > 0.001 else Vector2.UP
+		band.append(p + perp * bend * (1.0 - t))
+		band_inner.append(p - perp * bend * (1.0 - t))
+	band.append_array(band_inner)
+	draw_colored_polygon(band, Color(0.98, 0.74, 0.12, alpha * 0.85))
+	var core_pts := PackedVector2Array()
+	for i in range(seg + 1):
+		var t2: float = float(i) / float(seg)
+		core_pts.append(Vector2.ZERO.lerp(mid, t2).lerp(mid.lerp(_lash_target_pos, t2), t2))
+	draw_polyline(core_pts, Color(1.0, 0.97, 0.6, alpha), maxf(0.8, 2.4 * (1.0 - prog)))
+	var hit_c := _lash_target_pos
+	for k in range(6):
+		var a: float = TAU * float(k) / 6.0 + _age * 3.0
+		var r0: float = core_r * 0.3 + prog * core_r * 1.4
+		draw_line(hit_c + Vector2(cos(a), sin(a)) * r0, hit_c + Vector2(cos(a), sin(a)) * (r0 + 5.0), Color(1.0, 0.9, 0.35, alpha), 1.6)
+
+## 玉露鹿：甘霖雨丝 + 上升绿色光点
+func _draw_fx_yulu_dew(prog: float, core_r: float) -> void:
+	var alpha: float = (1.0 - prog)
+	for k in range(7):
+		var ang: float = TAU * float(k) / 7.0 + float(orbit_index)
+		var rad: float = core_r * (1.1 + 0.5 * float(k % 3))
+		var cx: float = cos(ang) * rad
+		var fall: float = fposmod(_age * 90.0 + float(k) * 37.0, 46.0)
+		var y0: float = -core_r * 1.6 + fall
+		draw_line(Vector2(cx, y0), Vector2(cx, y0 + 7.0), Color(0.7, 1.0, 0.85, alpha * 0.6), 1.2)
+	for k in range(5):
+		var ang2: float = TAU * float(k) / 5.0 - float(orbit_index)
+		var rad2: float = core_r * (0.8 + 0.6 * prog)
+		var rise: float = (1.0 - prog) * 10.0
+		_circle(Vector2(cos(ang2) * rad2, core_r * 0.8 - rise), maxf(0.6, 2.4 * (1.0 - prog)), Color(0.62, 1.0, 0.72, alpha * 0.85))
+
+## 磐石猿：地面放射状裂纹 + 碎石崩点
+func _draw_fx_rock_smash(prog: float, core_r: float) -> void:
+	var alpha: float = (1.0 - prog) * 0.85
+	var out_r: float = core_r * (1.2 + 2.6 * prog)
+	for k in range(8):
+		var a: float = TAU * float(k) / 8.0 + 0.4
+		var p_in := Vector2(cos(a), sin(a)) * (core_r * 0.6)
+		var p_out := Vector2(cos(a), sin(a)) * out_r
+		draw_line(p_in, p_out, Color(0.42, 0.34, 0.26, alpha), 2.2)
+		var mid: Vector2 = p_in.lerp(p_out, 0.6)
+		var fa: float = a + 0.4
+		draw_line(mid, mid + Vector2(cos(fa), sin(fa)) * (out_r - mid.length()) * 0.5, Color(0.42, 0.34, 0.26, alpha * 0.7), 1.4)
+	for k in range(6):
+		var ang: float = TAU * float(k) / 6.0 + 1.1
+		var d: float = out_r * (0.7 + 0.3 * sin(float(k) * 2.3))
+		_circle(Vector2(cos(ang), sin(ang)) * d, maxf(0.8, 3.0 * (1.0 - prog)), Color(0.55, 0.46, 0.36, alpha))
+
+## 玄甲龟：六边形龟甲盾纹闪光
+func _draw_fx_turtle_shield(prog: float, core_r: float) -> void:
+	var alpha: float = (1.0 - prog)
+	var hr: float = core_r * (1.4 + 1.1 * prog)
+	var hex := PackedVector2Array()
+	for k in range(7):
+		var a: float = TAU * float(k) / 6.0 - PI * 0.5
+		hex.append(Vector2(cos(a), sin(a)) * hr)
+	draw_polyline(hex, Color(0.45, 0.85, 0.95, alpha * 0.9), 2.2)
+	for k in range(6):
+		var a2: float = TAU * float(k) / 6.0 - PI * 0.5
+		draw_line(Vector2.ZERO, Vector2(cos(a2), sin(a2)) * hr, Color(0.5, 0.9, 1.0, alpha * 0.5), 1.2)
+	_circle(Vector2.ZERO, maxf(0.8, core_r * 0.35 * (1.0 - prog)), Color(0.85, 0.97, 1.0, alpha * 0.8))
+
+## 雷灵雀：命中点十字闪光
+func _draw_fx_thunder_hit(pos: Vector2, prog: float) -> void:
+	var alpha: float = prog
+	var l: float = 7.0 * prog + 3.0
+	draw_line(pos + Vector2(-l, 0), pos + Vector2(l, 0), Color(0.9, 0.85, 1.0, alpha), 2.0)
+	draw_line(pos + Vector2(0, -l), pos + Vector2(0, l), Color(0.9, 0.85, 1.0, alpha), 2.0)
+	_circle(pos, maxf(0.8, 5.0 * prog), Color(1.0, 1.0, 1.0, alpha * 0.8))
+
+## 灵风貂：外圈风刃刻线
+func _draw_fx_wind_blades(radius: float, alpha: float) -> void:
+	for k in range(6):
+		var a: float = TAU * float(k) / 6.0 + _age * 9.0
+		var p0: Vector2 = Vector2(cos(a), sin(a)) * radius
+		var p1: Vector2 = Vector2(cos(a + 0.35), sin(a + 0.35)) * (radius * 0.72)
+		draw_line(p0, p1, Color(0.9, 0.96, 1.0, alpha * 0.8), 1.6)
 
 func _draw_lightning_arc(start_pt: Vector2, end_pt: Vector2, alpha: float) -> void:
 	var mid := (start_pt + end_pt) * 0.5
@@ -571,7 +713,7 @@ func _draw_lightning_arc(start_pt: Vector2, end_pt: Vector2, alpha: float) -> vo
 func _draw_decor(decor: String, r: float, color: Color) -> void:
 	match decor:
 		"fox_ears_tail":
-			# 灵狐：立体尖耳（外耳金红、内耳粉白）+ 摆动的三尾焰尾 + 额头朱砂
+			# 灵狐：对称尖耳（外耳金红、内耳粉白）+ 对称双焰尾 + 额头朱砂
 			var ear_l := PackedVector2Array([Vector2(-r * 0.65, -r * 0.4), Vector2(-r * 0.95, -r * 1.35), Vector2(-r * 0.2, -r * 0.85)])
 			var ear_r := PackedVector2Array([Vector2(r * 0.2, -r * 0.85), Vector2(r * 0.95, -r * 1.35), Vector2(r * 0.65, -r * 0.4)])
 			draw_colored_polygon(ear_l, color.darkened(0.12))
@@ -581,37 +723,50 @@ func _draw_decor(decor: String, r: float, color: Color) -> void:
 			var in_ear_r := PackedVector2Array([Vector2(r * 0.3, -r * 0.8), Vector2(r * 0.85, -r * 1.2), Vector2(r * 0.6, -r * 0.5)])
 			draw_colored_polygon(in_ear_l, Color(1.0, 0.82, 0.75))
 			draw_colored_polygon(in_ear_r, Color(1.0, 0.82, 0.75))
-			# 灵动长尾（随时间左右轻柔摇晃）
-			var tail_swing := sin(_age * 3.5) * (r * 0.22)
-			var tail_c := Vector2(r * 0.95, r * 0.55 + tail_swing)
-			_circle(tail_c, r * 0.48, color.lightened(0.15))
-			_circle(tail_c + Vector2(r * 0.35, -r * 0.15), r * 0.32, Color(1.0, 0.85, 0.35))
 			# 额前朱砂焰火印
-			_circle(Vector2(0, -r * 0.4), r * 0.16, Color(1.0, 0.25, 0.15))
+			_circle(Vector2(0, -r * 0.55), r * 0.16, Color(1.0, 0.25, 0.15))
+			# 对称双焰尾（左右各一条舒展扬起的焰尾，反相轻摇）
+			for side in [-1.0, 1.0]:
+				var tail_sway := sin(_age * 3.5 + (0.0 if side < 0.0 else PI * 0.5)) * (r * 0.25)
+				var tc := Vector2(side * r * 1.10, r * 0.48 + tail_sway)
+				_circle(tc, r * 0.46, color.lightened(0.15))
+				_circle(tc + Vector2(side * r * 0.36, -r * 0.20), r * 0.30, Color(1.0, 0.85, 0.35))
+				_circle(tc + Vector2(side * r * 0.58, -r * 0.35), r * 0.16, Color(1.0, 0.95, 0.60))
 
 		"bird_crest_beak":
-			# 雷灵雀：羽冠 + 展翼弧线 + 锐利喙
-			draw_line(Vector2(0, -r), Vector2(0, -r * 1.65), Color(1.0, 0.92, 0.4), 2.4)
-			draw_line(Vector2(-3, -r), Vector2(-6, -r * 1.45), Color(1.0, 0.85, 0.35), 1.8)
-			draw_line(Vector2(3, -r), Vector2(6, -r * 1.45), Color(1.0, 0.85, 0.35), 1.8)
-			# 灵雀双翼轮廓
+			# 雷灵雀：对称三羽羽冠 + 对称双翼弧 + 居中雷纹额印
+			var crest_sway := sin(_age * 4.2) * (r * 0.06)
+			draw_line(Vector2(0, -r), Vector2(crest_sway, -r * 1.7), Color(1.0, 0.92, 0.4), 2.4)
+			draw_line(Vector2(-3, -r), Vector2(-6 + crest_sway, -r * 1.45), Color(1.0, 0.85, 0.35), 1.8)
+			draw_line(Vector2(3, -r), Vector2(6 + crest_sway, -r * 1.45), Color(1.0, 0.85, 0.35), 1.8)
+			# 羽梢莹光三点
+			_circle(Vector2(crest_sway, -r * 1.7), 1.0, Color(1.0, 0.95, 0.6, 0.85))
+			_circle(Vector2(-6 + crest_sway, -r * 1.45), 0.8, Color(1.0, 0.95, 0.6, 0.7))
+			_circle(Vector2(6 + crest_sway, -r * 1.45), 0.8, Color(1.0, 0.95, 0.6, 0.7))
+			# 灵雀对称双翼轮廓（随扑翼起伏）
 			var wing_flap := sin(_age * 5.0) * (r * 0.15)
-			_arc(Vector2(-r * 0.6, 0), r * 0.65, PI * 0.7, PI * 1.4, 12, Color(0.8, 0.75, 1.0), 2.0)
-			_arc(Vector2(r * 0.6, 0), r * 0.65, -PI * 0.4, PI * 0.3, 12, Color(0.8, 0.75, 1.0), 2.0)
-			# 金喙
-			draw_colored_polygon(PackedVector2Array([Vector2(r * 0.5, -2), Vector2(r * 1.15, 0), Vector2(r * 0.5, 2)]), Color(1.0, 0.85, 0.2))
+			_arc(Vector2(-r * 0.6, 0), r * 0.65 + wing_flap, PI * 0.7, PI * 1.4, 12, Color(0.8, 0.75, 1.0), 2.0)
+			_arc(Vector2(r * 0.6, 0), r * 0.65 + wing_flap, -PI * 0.4, PI * 0.3, 12, Color(0.8, 0.75, 1.0), 2.0)
+			# 居中雷纹额印（菱形象征雷符，替代侧向喙）
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, -r * 0.55), Vector2(r * 0.14, -r * 0.32),
+				Vector2(0, -r * 0.09), Vector2(-r * 0.14, -r * 0.32)
+			]), Color(1.0, 0.88, 0.35))
 
 		"turtle_shell":
-			# 玄甲龟：青甲八卦背壳 + 金色六边形环纹 + 四小足
+			# 玄甲龟：青甲八卦背壳 + 金色六边形环纹 + 对称四小足
 			_arc(Vector2.ZERO, r * 0.75, 0.0, TAU, 8, color.darkened(0.4), 2.2)
 			_arc(Vector2.ZERO, r * 0.45, 0.0, TAU, 6, Color(1.0, 0.85, 0.35, 0.75), 1.8)
 			draw_line(Vector2(-r * 0.75, 0), Vector2(r * 0.75, 0), color.darkened(0.35), 1.4)
 			draw_line(Vector2(0, -r * 0.75), Vector2(0, r * 0.75), color.darkened(0.35), 1.4)
-			# 头部微凸
-			_circle(Vector2(r * 0.9, -r * 0.3), r * 0.3, color.lightened(0.1))
+			# 对称四小足（替代原右侧头凸，整体对称化）
+			for fp in [Vector2(-r * 0.85, -r * 0.35), Vector2(r * 0.85, -r * 0.35), Vector2(-r * 0.85, r * 0.45), Vector2(r * 0.85, r * 0.45)]:
+				_circle(fp, r * 0.18, color.lightened(0.1))
+			# 壳心甲珠（呼吸微光）
+			_circle(Vector2.ZERO, r * 0.14, Color(1.0, 0.92, 0.5, 0.6 + 0.3 * sin(_age * 3.0)))
 
 		"deer_horns":
-			# 玉露鹿：珊瑚玉角 + 水滴灵珠
+			# 玉露鹿：对称珊瑚玉角 + 角尖发光玉珠 + 额心露印
 			draw_line(Vector2(-r * 0.5, -r * 0.6), Vector2(-r * 0.85, -r * 1.55), color.darkened(0.2), 2.2)
 			draw_line(Vector2(-r * 0.7, -r * 1.1), Vector2(-r * 1.1, -r * 1.25), color.darkened(0.2), 1.8)
 			draw_line(Vector2(r * 0.5, -r * 0.6), Vector2(r * 0.85, -r * 1.55), color.darkened(0.2), 2.2)
@@ -621,25 +776,40 @@ func _draw_decor(decor: String, r: float, color: Color) -> void:
 			_circle(Vector2(r * 0.85, -r * 1.55), 2.2, Color(1.0, 0.88, 0.9))
 			_circle(Vector2(-r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
 			_circle(Vector2(r * 1.1, -r * 1.25), 1.8, Color(1.0, 0.88, 0.9))
+			# 额心露印（水滴莹光，呼吸明灭）
+			_circle(Vector2(0, -r * 0.45), r * 0.13, Color(0.85, 1.0, 0.9, 0.6 + 0.3 * sin(_age * 2.8)))
 
 		"toad_coin":
-			# 聚宝蟾：头顶灿金小元宝 + 金色方孔铜钱 + 金肚
+			# 聚宝蟾：头顶居中灿金小元宝 + 对称金肚弧 + 对称铜钱光点
 			_circle(Vector2(0, -r * 1.05), r * 0.45, Color(1.0, 0.88, 0.25))
-			draw_rect(Rect2(-2.0, -r * 1.05 - 2.0, 4.0, 4.0), color.darkened(0.4))
+			_circle(Vector2(0, -r * 1.05), r * 0.20, Color(1.0, 0.96, 0.6, 0.9))
 			# 招财金圆肚弧线
 			_arc(Vector2(0, r * 0.2), r * 0.6, 0.1 * PI, 0.9 * PI, 12, Color(1.0, 0.92, 0.4), 2.0)
+			# 对称铜钱光点（左右各一，明灭闪烁）
+			var coin_a := 0.5 + 0.4 * sin(_age * 3.4)
+			_circle(Vector2(-r * 0.55, r * 0.05), r * 0.13, Color(1.0, 0.90, 0.35, coin_a))
+			_circle(Vector2(r * 0.55, r * 0.05), r * 0.13, Color(1.0, 0.90, 0.35, coin_a))
 
 		"mink_tail":
-			# 灵风貂：蓬松修长的风灵流线长尾
-			var sway := sin(_age * 4.0) * (r * 0.2)
-			_circle(Vector2(-r * 0.8, r * 0.5 + sway), r * 0.52, color.lightened(0.12))
-			_circle(Vector2(-r * 1.35, r * 0.35 + sway * 1.3), r * 0.42, color.lightened(0.2))
-			_circle(Vector2(-r * 1.8, r * 0.15 + sway * 1.6), r * 0.3, Color(1.0, 1.0, 1.0, 0.9))
+			# 灵风貂：对称双流风尾（左右各一条流线摆尾，替代原单侧三圆尾）
+			for side in [-1.0, 1.0]:
+				var sway := sin(_age * 4.0 + (0.0 if side < 0.0 else PI * 0.6)) * (r * 0.18)
+				_circle(Vector2(side * r * 0.85, r * 0.5 + sway), r * 0.44, color.lightened(0.12))
+				_circle(Vector2(side * r * 1.35, r * 0.32 + sway * 1.3), r * 0.34, color.lightened(0.2))
+				_circle(Vector2(side * r * 1.75, r * 0.10 + sway * 1.6), r * 0.22, Color(1.0, 1.0, 1.0, 0.9))
+			# 额心风纹印
+			_arc(Vector2(0, -r * 0.35), r * 0.22, PI * 1.15, PI * 1.85, 8, Color(0.85, 0.92, 1.0, 0.85), 1.4)
 
 		"ape_brows":
-			# 磐石猿：威猛红纹石眉 + 古代护额金刚箍
+			# 磐石猿：威猛红纹石眉 + 古代护额金刚箍 + 居中额印
 			_arc(Vector2(0, -r * 0.5), r * 0.75, PI * 1.1, PI * 1.9, 12, Color(1.0, 0.85, 0.35), 2.4)
 			# 刚劲重眉
 			draw_line(Vector2(-r * 0.7, -r * 0.2), Vector2(-0.8, -r * 0.4), color.darkened(0.45), 2.6)
 			draw_line(Vector2(0.8, -r * 0.4), Vector2(r * 0.7, -r * 0.2), color.darkened(0.45), 2.6)
+			# 居中额印（山岳菱纹，沉稳呼吸）
+			var brow_a := 0.6 + 0.3 * sin(_age * 2.4)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(0, -r * 0.62), Vector2(r * 0.12, -r * 0.44),
+				Vector2(0, -r * 0.26), Vector2(-r * 0.12, -r * 0.44)
+			]), Color(1.0, 0.88, 0.45, brow_a))
 

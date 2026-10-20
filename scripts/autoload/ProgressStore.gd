@@ -290,8 +290,8 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	gm.career_stats["total_runs"] = int(gm.career_stats.get("total_runs", 0)) + 1
 	if victory:
 		gm.career_stats["total_wins"] = int(gm.career_stats.get("total_wins", 0)) + 1
-		# 「就不听你话」进度：本局技能非角色契合时累加
-		if not gm.active_skill_id.is_empty() and not SkillData.is_enhanced_for_cultivator(gm.active_skill_id, gm.cultivator_id):
+		# 「万法由心」进度：本局携带随行技能通关累加
+		if not gm.active_skill_id.is_empty():
 			gm.career_stats["wins_no_skill_enhance"] = int(gm.career_stats.get("wins_no_skill_enhance", 0)) + 1
 	gm.career_stats["total_kills"] = int(gm.career_stats.get("total_kills", 0)) + gm.kills
 	gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), eff_wave)

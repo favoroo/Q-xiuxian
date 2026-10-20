@@ -104,6 +104,22 @@ const DEFS: Dictionary = {
 						"tags": ["sword", "metal"],
 						"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
 					},
+					"shoulijian": {
+						"name": "手里剑", "behavior": Behavior.PROJECTILE,
+						"sfx": "metal_dart",
+						# 弹射流招牌：单发旋刃连锁弹射3次（1+3 共咬 4 敌），与飞剑穿透点杀、
+						# 飞刀扇形铺面拉开差异；裸伤略高于带毒弹射件（毒符/弹弓有剧毒补尾）
+						"damage": 20.0, "cooldown": 1.0, "range": 300.0,
+						"knockback": 120.0,
+						"price": 35, "icon": "res://assets/art/weapon_shoulijian.png",
+						# 四芒星径向对称：tip 只取出膛距离（外刃半径），方向补偿对它无意义
+						"tip": Vector2(20, 0), "shape": "shuriken",
+						"desc": "掷出旋转手里剑连锁弹射3次，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
+						"bullet": "res://assets/art/bullet_shuriken.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"pierce": 1, "bounce_count": 3,
+						"tags": ["sword", "metal"],
+						"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 35.0},
+					},
 
 				# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
 				"qingmu_tengbian": {
@@ -1186,6 +1202,8 @@ const SHOP_POOL: Array = [
 	"xuanming_leizhu", "qingmu_pao", "ningbing_nu", "fenghuo_tai",
 	# 2026-10-13 束流支路：首把光束法器（喷吐支路由火葫芦改造承担）
 	"zihong_jing",
+	# 2026-10-19 手里剑：弹射流招牌（单发旋刃连锁弹射3次，剑系×金）
+	"shoulijian",
 ]
 
 ## 回血丹（商店消耗品）

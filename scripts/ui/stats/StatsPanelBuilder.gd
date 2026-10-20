@@ -9,7 +9,7 @@ static func build_left_panel(dialog: PlayerStatsDialog) -> Control:
 	var left_panel := PanelContainer.new()
 	left_panel.custom_minimum_size = Vector2(296, 0)
 	left_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var sb := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	sb.content_margin_left = 10.0
 	sb.content_margin_top = 8.0
 	sb.content_margin_right = 10.0
@@ -157,7 +157,7 @@ static func add_stat_row(dialog: PlayerStatsDialog, parent: Container, stat_id: 
 ## 属性分块：一组同类属性包一个浅色凹槽块，头行小标签 + 行列表（攻击/生存/机动…）
 static func add_stat_block(parent: Container, header_text: String) -> VBoxContainer:
 	var block := PanelContainer.new()
-	var bs := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.LINE, 1, 0.0)
+	var bs := GameStyle.outlined_panel(GameStyle.NAVY2.darkened(0.04), GameStyle.LINE, 1, 0.0)
 	# 上下内边距 2/3：分组块 ×3，这里每省 2px 就是面板总高 6px——
 	# 内容最小高度必须压在 526 钳制值内（StatsTipCheck 的 9px 出屏边距判定），否则面板被撑高出屏。
 	bs.content_margin_left = 8.0

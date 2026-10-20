@@ -51,6 +51,8 @@ func _ready() -> void:
 				_build_ui_gallery()
 			"screen":
 				_build_screen_gallery()
+			"loot":
+				_build_loot_gallery()
 			"cultivator", _:
 				_build_cultivator_gallery()
 	else:
@@ -65,6 +67,8 @@ func _ready() -> void:
 				_build_ui_gallery()
 			"screen":
 				_build_screen_view(target_id)
+			"loot":
+				_build_loot_gallery()
 			"cultivator", _:
 				_build_cultivator_closeup(target_id)
 	
@@ -1224,6 +1228,31 @@ func _build_screen_battle_mock() -> void:
 	e2.scale = Vector2.ONE * 2.2
 	add_child(e2)
 	_enemy_renderers.append(e2)
+
+	# 3.5 战场真实散布掉落物（验收实机尺寸、悬浮呼吸与地影贴地感）
+	var gem1 := ProceduralLootRenderer.new()
+	gem1.loot_type = ProceduralLootRenderer.LootType.GEM_BLUE
+	gem1.self_bob = true
+	gem1.position = Vector2(380, 310)
+	add_child(gem1)
+
+	var gem2 := ProceduralLootRenderer.new()
+	gem2.loot_type = ProceduralLootRenderer.LootType.GEM_GOLD
+	gem2.self_bob = true
+	gem2.position = Vector2(430, 360)
+	add_child(gem2)
+
+	var shard := ProceduralLootRenderer.new()
+	shard.loot_type = ProceduralLootRenderer.LootType.GEM_SHARD
+	shard.self_bob = true
+	shard.position = Vector2(530, 340)
+	add_child(shard)
+
+	var gourd := ProceduralLootRenderer.new()
+	gourd.loot_type = ProceduralLootRenderer.LootType.HEAL_ORB
+	gourd.self_bob = true
+	gourd.position = Vector2(580, 290)
+	add_child(gourd)
 	
 	# 4. 真实顶栏 HUD 实装
 	var hud_scn := load("res://scenes/ui/GameHUD.tscn")
@@ -1237,3 +1266,201 @@ func _build_screen_battle_mock() -> void:
 		hud.kills_label.text = "击杀 18"
 		hud.shards_label.text = "金币 54"
 		hud.call_deferred("rebuild_synergies")
+
+# ==============================================================================
+# 7. 掉落物与拾取物画廊 (Loot Gallery)
+# ==============================================================================
+
+func _build_loot_gallery() -> void:
+	var bg := ColorRect.new()
+	bg.color = Color(0.045, 0.06, 0.09)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "【掉落物与拾取物精绘走廊】 宝石 · 碎金 · 回春葫芦 · 待命玉"
+	title_lbl.position = Vector2(24, 12)
+	GameStyle.label(title_lbl, 15, GameStyle.PAPER, 0, GameStyle.INK, true)
+	add_child(title_lbl)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = "全局微缩 18% (VISUAL_SCALE=0.82) · 2026-10 统一双层地面柔光阴影（抵消浮动位移贴地） · 翡翠葫芦收腰与金丝束绳"
+	sub_lbl.position = Vector2(24, 34)
+	GameStyle.label(sub_lbl, 10, GameStyle.PAPER_DIM)
+	add_child(sub_lbl)
+
+	var card_w := 216.0
+	var card_h := 472.0
+	var start_x := 30.0
+	var gap := 18.0
+	var card_y := 56.0
+
+	var loots := [
+		{
+			"name": "八面幽蓝灵石",
+			"sub": "常规击杀掉落·晶莹八面体",
+			"type": ProceduralLootRenderer.LootType.GEM_BLUE,
+			"wait": false,
+			"color": Color(0.25, 0.8, 1.0),
+			"points": [
+				"双锥八面立体切面",
+				"强光面微晶折射光斑",
+				"底部双层贴地柔光阴影",
+				"随浮游呼吸动态明暗"
+			]
+		},
+		{
+			"name": "八面耀金灵石",
+			"sub": "精英/首领/宝匣高阶灵粹",
+			"type": ProceduralLootRenderer.LootType.GEM_GOLD,
+			"wait": false,
+			"color": Color(1.0, 0.82, 0.25),
+			"points": [
+				"高阶赤金晶魄法相",
+				"金色微光外晕与锐利耀斑",
+				"地面接触暗影深邃扎实",
+				"战场辨识度极高醒目"
+			]
+		},
+		{
+			"name": "碎金矿砂 / 金屑",
+			"sub": "基础高频小额金币",
+			"type": ProceduralLootRenderer.LootType.GEM_SHARD,
+			"wait": false,
+			"color": Color(0.95, 0.72, 0.2),
+			"points": [
+				"自然多面体金砂切面",
+				"金属折角反光短纹高光",
+				"细巧地影紧贴地面接触",
+				"极度小巧轻快不乱战局"
+			]
+		},
+		{
+			"name": "翡翠回春宝葫芦",
+			"sub": "贴身拾取·生机回复仙丹",
+			"type": ProceduralLootRenderer.LootType.HEAL_ORB,
+			"wait": false,
+			"color": Color(0.2, 0.9, 0.5),
+			"points": [
+				"双肚收腰仙家宝葫芦",
+				"束腰赤金丝绳与下垂吊坠",
+				"顶端葫芦药口与塞子细节",
+				"内蕴晶莹生机翡翠灵核"
+			]
+		}
+	]
+
+	for i in range(loots.size()):
+		var data = loots[i]
+		var cx: float = start_x + float(i) * (card_w + gap)
+
+		# 卡片底框
+		var card := PanelContainer.new()
+		card.position = Vector2(cx, card_y)
+		card.custom_minimum_size = Vector2(card_w, card_h)
+		card.size = Vector2(card_w, card_h)
+		var c_style := GameStyle.outlined_panel(
+			Color(0.065, 0.09, 0.13),
+			Color(0.2, 0.28, 0.4),
+			1,
+			0.0
+		)
+		c_style.content_margin_left = 10.0
+		c_style.content_margin_top = 8.0
+		c_style.content_margin_right = 10.0
+		c_style.content_margin_bottom = 8.0
+		card.add_theme_stylebox_override("panel", c_style)
+		add_child(card)
+
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 6)
+		card.add_child(vbox)
+
+		# 标题
+		var tlbl := Label.new()
+		tlbl.text = data["name"]
+		GameStyle.label(tlbl, 13, data["color"], 0, GameStyle.INK, true)
+		vbox.add_child(tlbl)
+
+		var sublbl := Label.new()
+		sublbl.text = data["sub"]
+		GameStyle.label(sublbl, 9, GameStyle.PAPER_DIM)
+		vbox.add_child(sublbl)
+
+		# 4x 特写展示区（深蓝石砖地坪）
+		var stage_panel := PanelContainer.new()
+		stage_panel.custom_minimum_size = Vector2(card_w - 20, 200)
+		var sp_style := GameStyle.outlined_panel(
+			Color(0.094, 0.129, 0.18),  # 对齐真机战场地坪
+			Color(0.15, 0.22, 0.32),
+			1,
+			0.0
+		)
+		sp_style.content_margin_left = 0.0
+		sp_style.content_margin_top = 0.0
+		sp_style.content_margin_right = 0.0
+		sp_style.content_margin_bottom = 0.0
+		stage_panel.add_theme_stylebox_override("panel", sp_style)
+		vbox.add_child(stage_panel)
+
+		var stage_box := Control.new()
+		stage_box.custom_minimum_size = Vector2(card_w - 20, 200)
+		stage_panel.add_child(stage_box)
+
+		# 4x 特写渲染器（正中摆放，留出阴影与顶部光晕余量）
+		var loot_large := ProceduralLootRenderer.new()
+		loot_large.loot_type = data["type"]
+		loot_large.is_waiting = data["wait"]
+		loot_large.self_bob = true
+		loot_large.scale = Vector2.ONE * 4.0
+		loot_large.position = Vector2((card_w - 20) * 0.5, 96.0)
+		stage_box.add_child(loot_large)
+
+		var mag_lbl := Label.new()
+		mag_lbl.text = "4x 高清特写"
+		mag_lbl.position = Vector2(8, 6)
+		GameStyle.label(mag_lbl, 8, GameStyle.PAPER_DIM)
+		stage_box.add_child(mag_lbl)
+
+		# 1x 实机 1:1 对比区
+		var mini_box := HBoxContainer.new()
+		mini_box.add_theme_constant_override("separation", 8)
+		vbox.add_child(mini_box)
+
+		var scale_lbl := Label.new()
+		scale_lbl.text = "实机 1:1 比例 →"
+		GameStyle.label(scale_lbl, 9, GameStyle.PAPER_DIM)
+		mini_box.add_child(scale_lbl)
+
+		var mini_stage := Control.new()
+		mini_stage.custom_minimum_size = Vector2(36, 32)
+		mini_box.add_child(mini_stage)
+
+		var loot_1x := ProceduralLootRenderer.new()
+		loot_1x.loot_type = data["type"]
+		loot_1x.is_waiting = data["wait"]
+		loot_1x.self_bob = true
+		loot_1x.position = Vector2(18, 16)
+		mini_stage.add_child(loot_1x)
+
+		# 特性描述面板
+		var desc_panel := PanelContainer.new()
+		desc_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var dp_style := GameStyle.outlined_panel(Color(0.045, 0.06, 0.09), Color(0.12, 0.16, 0.24), 1, 0.0)
+		dp_style.content_margin_left = 6.0
+		dp_style.content_margin_top = 6.0
+		dp_style.content_margin_right = 6.0
+		dp_style.content_margin_bottom = 6.0
+		desc_panel.add_theme_stylebox_override("panel", dp_style)
+		vbox.add_child(desc_panel)
+
+		var pts_box := VBoxContainer.new()
+		pts_box.add_theme_constant_override("separation", 3)
+		desc_panel.add_child(pts_box)
+
+		var points: Array = data["points"]
+		for pt in points:
+			var plbl := Label.new()
+			plbl.text = "◆ " + str(pt)
+			GameStyle.label(plbl, 10, GameStyle.PAPER)
+			pts_box.add_child(plbl)

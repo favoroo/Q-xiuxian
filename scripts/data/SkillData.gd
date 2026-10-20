@@ -6,15 +6,7 @@ extends RefCounted
 ## 闪避的窗口 = iframe 无敌时长，治疗瞬发窗口为 0（按下即进冷却）。
 ## 另有一类「额外技能」：随角色绑定（CultivatorData 的 extra_skill 键）、不走选择界面，
 ## 也登记在本表用 Kind 区分（如影爆——免冷却，由资源层门控而非 CD）。
-## 角色专属强化写在 CultivatorData.DEFS[cid]["skill_mods"][skill_id]，
-## 卡片文案与实战数值都走 final_stats() 合并结果（唯一真话），别处不抄数字。
-## skill_mods 支持的键：
-##   duration_add  —— 持续/无敌秒数加算（石岳：金光护体 +1.0s；对闪避 = 无敌窗口加时）
-##   power_mult    —— 效果强度乘算（移速加成 / 间隔减免 / 回血比例）
-##   distance_mult —— 闪避距离乘算（魅影：+55%）
-##   cooldown_mult —— 冷却乘算（多宝/符阵/夺舍：0.65）
-##   dodge_add_mult —— 期间闪避加成乘算（影者：神行术 +50% → +100%）
-##   force_full_dodge —— 期间闪避加成钉到 100%（无视基础值）
+## 所有角色均可自由搭配随行技能，无角色针对性绑定，各技能基础数值均已全面强化。
 ## glyph: 占位符文单字（正式图标走 media-gen 生成后填 icon 路径替换）
 
 enum Kind { DASH, SPEED, HASTE, IFRAME, HEAL, BURST }
@@ -25,12 +17,12 @@ const DEFS: Dictionary = {
 		"glyph": "闪",
 			"icon": "res://assets/art/skill_dash.png",
 			"kind": Kind.DASH,
-			"cooldown": 4.0,      # 全技能最短冷却（其余 9/11/10/20），闪避是走位主手段不是保命大招
+			"cooldown": 3.0,      # 全技能最短冷却，闪避是走位主手段不是保命大招
 			"duration": 0.16,     # 闪避位移耗时（秒）
-			"iframe": 0.30,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量，落地贴脸啃不动
-			"distance": 95.0,     # 闪避距离（像素）—— 落地即收速，纸面值≈实际位移（见 Player.DASH_LANDING_SPEED_MUL）
-			"crit_window": 1.0,   # 闪避后必定暴击窗口（秒）：起跳即计时，覆盖闪避与落地追击
-			"desc": "向当前方向闪避，闪避及落地后0.3秒内无敌，闪避后1秒内攻击必定暴击",
+			"iframe": 0.35,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量
+			"distance": 110.0,    # 闪避距离（像素）
+			"crit_window": 1.0,   # 闪避后必定暴击窗口（秒）
+			"desc": "向当前方向闪避，闪避及落地后0.35秒内无敌，闪避后1秒内攻击必定暴击",
 		},
 		"shadowburst": {
 			"name": "影爆",
@@ -46,7 +38,7 @@ const DEFS: Dictionary = {
 			"glyph": "爆",
 			"icon": "",           # 占位字面上键（正式图标走 media-gen 生成后填路径）
 			"kind": Kind.HEAL,
-			"cooldown": 12.0,     # 带冷却：摔碎药罐回血并伤敌，到期即可再放
+			"cooldown": 10.0,     # 带冷却：摔碎药罐回血并伤敌，到期即可再放
 			"duration": 0.0,
 			"desc": "摔碎药罐：回复生命，药雾对周身敌人造成一次性毒伤并短时增伤",
 		},
@@ -55,30 +47,30 @@ const DEFS: Dictionary = {
 			"glyph": "行",
 			"icon": "res://assets/art/skill_gale.png",
 			"kind": Kind.SPEED,
-			"cooldown": 9.0,
-			"duration": 4.0,
-			"power": 0.60,        # 移速加成比例
-			"dodge_add": 0.50,    # 期间闪避率提升（abs/abs，进 get_effective_dodge 硬上限）
-			"desc": "移速提升60%，闪避率提升50%，持续4秒",
+			"cooldown": 7.5,
+			"duration": 4.5,
+			"power": 0.80,        # 移速加成比例
+			"dodge_add": 0.60,    # 期间闪避率提升（abs/abs，进 get_effective_dodge 硬上限）
+			"desc": "移速提升80%，闪避率提升60%，持续4.5秒",
 		},
 		"haste": {
 			"name": "急速",
 			"glyph": "快",
 			"icon": "res://assets/art/skill_haste.png",
 			"kind": Kind.HASTE,
-			"cooldown": 11.0,
+			"cooldown": 8.5,
 			"duration": 5.0,
-			"power": 0.30,        # 攻击间隔缩减比例
-			"desc": "攻击间隔缩短30%，持续5秒",
+			"power": 0.40,        # 攻击间隔缩减比例
+			"desc": "攻击间隔缩短40%，持续5秒",
 		},
 		"aegis": {
 			"name": "无敌",
 			"glyph": "盾",
 			"icon": "res://assets/art/skill_aegis.png",
 			"kind": Kind.IFRAME,
-			"cooldown": 10.0,
-			"duration": 2.0,
-			"knockback_boost": 3.0,  # 期间武器击退力度倍率（knockback_force 消费，到期回 1.0）
+			"cooldown": 8.0,
+			"duration": 2.5,
+			"knockback_boost": 3.0,  # 期间武器击退力度倍率
 			"desc": "短时间内不受任何伤害，期间武器击退力度提升至3倍",
 		},
 		"renewal": {
@@ -86,11 +78,11 @@ const DEFS: Dictionary = {
 			"glyph": "治",
 			"icon": "res://assets/art/skill_renewal.png",
 			"kind": Kind.HEAL,
-			"cooldown": 20.0,
-		"power": 0.35,        # 回复最大生命比例（单口须压过回复药 50% 的体感线，商人/药王契合后 5 成以上）
-		"pet_heal_pct": 0.02, # 灵兽每秒回复最大生命比例
+			"cooldown": 15.0,
+		"power": 0.40,        # 回复最大生命比例
+		"pet_heal_pct": 0.025, # 灵兽每秒回复最大生命比例
 			"pet_duration": 8.0,  # 灵兽存活时长（秒），重施替换旧灵
-			"desc": "立即回复35%最大生命，并召唤灵兽每秒回复2%最大生命，持续8秒",
+			"desc": "立即回复40%最大生命，并召唤灵兽每秒回复2.5%最大生命，持续8秒",
 		},
 }
 
@@ -103,16 +95,13 @@ static func get_def(id: String) -> Dictionary:
 static func all_ids() -> Array:
 	return DEFS.keys()
 
-## 角色是否强化该技能（选择界面黄边「◆契合」判定）
-static func is_enhanced_for_cultivator(skill_id: String, cid: String) -> bool:
-	var cdef: Dictionary = CultivatorData.get_def(cid)
-	if cdef.is_empty():
-		return false
-	return Dictionary(cdef.get("skill_mods", {})).has(skill_id)
+## 角色是否强化该技能（已废弃：全角色自由搭配，统一返回 false）
+static func is_enhanced_for_cultivator(_skill_id: String, _cid: String) -> bool:
+	return false
 
-## 基础值 + 角色强化合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, knockback_boost, pet_heal_pct, pet_duration}
+## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, knockback_boost, pet_heal_pct, pet_duration}
 ## 冷却语义：效果活跃窗口（duration / 闪避=iframe）走完才进冷却，cooldown 是「结束后」的等待值
-static func final_stats(skill_id: String, cid: String) -> Dictionary:
+static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 	var def: Dictionary = get_def(skill_id)
 	if def.is_empty():
 		return {}
@@ -129,58 +118,15 @@ static func final_stats(skill_id: String, cid: String) -> Dictionary:
 		"pet_heal_pct": float(def.get("pet_heal_pct", 0.0)),
 		"pet_duration": float(def.get("pet_duration", 0.0)),
 	}
-	var cdef: Dictionary = CultivatorData.get_def(cid)
-	var mods: Dictionary = Dictionary(cdef.get("skill_mods", {})).get(skill_id, {})
-	# 闪避的 duration 只管位移耗时，duration_add 改走无敌窗口（对闪避 = 无敌加时）
-	if int(out["kind"]) == Kind.DASH:
-		out["iframe"] = float(out["iframe"]) + float(mods.get("duration_add", 0.0))
-	else:
-		out["duration"] = float(out["duration"]) + float(mods.get("duration_add", 0.0))
-	out["power"] = float(out["power"]) * float(mods.get("power_mult", 1.0))
-	out["distance"] = float(out["distance"]) * float(mods.get("distance_mult", 1.0))
-	# 神行术的闪避加成：整到 100% 可二选一 —— dodge_add_mult 乘算（影者 ×2），
-	# force_full_dodge 直接钉 1.0（无视基础幅度）
-	if bool(mods.get("force_full_dodge", false)):
-		out["dodge_add"] = 1.0
-	else:
-		out["dodge_add"] = float(out["dodge_add"]) * float(mods.get("dodge_add_mult", 1.0))
 	# 凝神符等道具的技能冷却缩减
 	var cd_mult := 1.0 - GameManager.item_hook_sum("skill_cooldown_mult")
-	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限，也不吃角色 cooldown_mult
+	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限
 	if int(out["kind"]) == Kind.BURST:
 		out["cooldown"] = 0.0
 	else:
-		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * float(mods.get("cooldown_mult", 1.0)) * maxf(0.2, cd_mult))
+		out["cooldown"] = maxf(1.0, float(out["cooldown"]) * maxf(0.2, cd_mult))
 	return out
 
-## 强化文案（卡片上的「◆ 道统契合：…」一行），未强化返回空串
-static func enhance_desc(skill_id: String, cid: String) -> String:
-	var cdef: Dictionary = CultivatorData.get_def(cid)
-	var mods: Dictionary = Dictionary(cdef.get("skill_mods", {})).get(skill_id, {})
-	if mods.is_empty():
-		return ""
-	var def: Dictionary = get_def(skill_id)
-	var parts: Array[String] = []
-	if mods.has("distance_mult"):
-			parts.append("闪避距离 +%d%%" % int(round((float(mods["distance_mult"]) - 1.0) * 100.0)))
-	if mods.has("dodge_add_mult"):
-		var d_base := float(def.get("dodge_add", 0.0)) * 100.0
-		var d_final := d_base * float(mods["dodge_add_mult"])
-		parts.append("闪避加成 %d%%→%d%%" % [int(round(d_base)), int(round(d_final))])
-	if mods.has("duration_add"):
-		var kind := int(def.get("kind", 0))
-		var unit := "无敌" if kind == Kind.IFRAME or kind == Kind.DASH else "持续"
-		parts.append("%s +%.1f 秒" % [unit, float(mods["duration_add"])])
-	if mods.has("power_mult"):
-		var base := float(def.get("power", 0.0)) * 100.0
-		var final := base * float(mods["power_mult"])
-		match int(def.get("kind", 0)):
-			Kind.SPEED:
-				parts.append("移速加成 %d%%→%d%%" % [int(round(base)), int(round(final))])
-			Kind.HASTE:
-				parts.append("间隔缩减 %d%%→%d%%" % [int(round(base)), int(round(final))])
-			Kind.HEAL:
-				parts.append("回复量 %d%%→%d%%" % [int(round(base)), int(round(final))])
-	if mods.has("cooldown_mult"):
-		parts.append("冷却 -%d%%" % int(round((1.0 - float(mods["cooldown_mult"])) * 100.0)))
-	return "、".join(parts)
+## 强化文案（已废弃：全角色自由搭配，统一返回空串）
+static func enhance_desc(_skill_id: String, _cid: String) -> String:
+	return ""

@@ -5,9 +5,9 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：69 把法器且图标资源齐全
-	_c.equals(WeaponData.DEFS.size(), 69, "全武器库扩充至 69 把法器")
-	_c.equals(WeaponData.SHOP_POOL.size(), 69, "商店池覆盖全部 69 把法器")
+	# 1. 武器表完整性校验：70 把法器且图标资源齐全（2026-10-19 增加手里剑：剑系·金）
+	_c.equals(WeaponData.DEFS.size(), 70, "全武器库扩充至 70 把法器")
+	_c.equals(WeaponData.SHOP_POOL.size(), 70, "商店池覆盖全部 70 把法器")
 	var missing_icons: Array = []
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
@@ -30,12 +30,12 @@ func _test_five_elements_system() -> void:
 			missing_dual_tags.append(w_id)
 		else:
 			elem_counts[e_tag] = int(elem_counts.get(e_tag, 0)) + 1
-	_c.check(missing_icons.is_empty(), "68 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
+	_c.check(missing_icons.is_empty(), "70 把法器的图标文件全部就位（缺: %s）" % str(missing_icons))
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
-	# 扩容后各系把数：金16/木13/水13/火13/土14（2026-10-13 束流支路紫虹镜入金系）
-	var elem_expect := {"metal": 16, "wood": 13, "water": 13, "fire": 13, "earth": 14}
+	# 扩容后各系把数：金17/木13/水13/火13/土14（2026-10-19 手里剑入金系）
+	var elem_expect := {"metal": 17, "wood": 13, "water": 13, "fire": 13, "earth": 14}
 	for e_key in elem_counts.keys():
 		_c.equals(int(elem_counts[e_key]), int(elem_expect[e_key]), "五行【%s】包含 %d 把法器" % [e_key, int(elem_expect[e_key])])
 
@@ -398,16 +398,11 @@ func _test_cultivator_system() -> void:
 		_c.near(GameManager.player.max_health, 120.0 * 1.30, EPS, "魅影最大生命 ×1.3（站得住怪堆）")
 	_c.near(GameManager.shadow_amp_mult, 1.0, EPS, "影层增伤乘区初始为 1.0（没攒层不加伤）")
 
-	# 加成技能是「移速那个」神行术：闪避加成 ×2 = +100%，释放期间真的每下都闪
-	# （用户口径「加成技能应该是加移速那个，释放后可以百分百闪避」）
-	_c.equals(CultivatorData.get_synergy_skill_id("meiying"), "gale",
-			"影者契合的加成技能是神行术（移速那个），不再是缩地成寸")
+	# 全角色自由搭配随行技能，无特定绑定强化；神行术通用高数值：移速 +80%、闪避 +60%
 	var mei_gale: Dictionary = SkillData.final_stats("gale", "meiying")
-	_c.near(float(mei_gale["dodge_add"]), 1.0, EPS, "影者神行术闪避加成 +50%×2=+100%")
-	_c.near(float(mei_gale["power"]), 0.60, EPS, "影者神行术移速仍是 +60%（只改闪避加成）")
-	_c.near(float(mei_gale["duration"]), 4.0, EPS, "影者神行术持续仍是 4 秒")
-	_c.equals(CultivatorData.get_def("meiying").get("skill_mods", {}).get("dash", null), null,
-			"影者不再强化缩地成寸（冲刺回归基础距离，加成技能只此一个")
+	_c.near(float(mei_gale["dodge_add"]), 0.60, EPS, "神行术通用闪避加成 +60%")
+	_c.near(float(mei_gale["power"]), 0.80, EPS, "神行术通用移速提升 +80%")
+	_c.near(float(mei_gale["duration"]), 4.5, EPS, "神行术持续 4.5 秒")
 
 	# 额外技能槽：影者绑影爆，其余角色无；影爆免冷却、不走选择界面
 	_c.equals(CultivatorData.get_extra_skill_id("meiying"), "shadowburst", "影者绑定额外技能影爆（随角色，不走五选一）")
@@ -513,12 +508,6 @@ func _test_cultivator_system() -> void:
 	_c.check(not CultivatorData.get_start_equip("fuzhen").is_empty(), "符阵灵童明确说明开局额外自带装备")
 	_c.check(CultivatorData.get_start_equip("jianchi").is_empty(), "无额外装备的角色不标注开局装备")
 
-	# 御兽师契合技能加成有效性（修复 power_add 死键，强化文案正常渲染）
-	var yushou_syn_sid := CultivatorData.get_synergy_skill_id("yushou")
-	_c.equals(yushou_syn_sid, "renewal", "御兽师契合治疗技能")
-	var yushou_enh := SkillData.enhance_desc(yushou_syn_sid, "yushou")
-	_c.check(not yushou_enh.is_empty(), "御兽师契合治疗强化文案非空（实得: %s）" % yushou_enh)
-	_c.check(yushou_enh.contains("回复量"), "御兽师契合强化文案包含回复量加成")
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
@@ -721,9 +710,9 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": false, "damage_taken_count": 0}, {}),
 		"未通关不达成【金光护体】")
 	_c.check(AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 3}),
-		"无契合通关 3 次达成【就不听你话】")
+		"随行技能通关 3 次达成【万法由心】")
 	_c.check(not AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 2}),
-		"无契合通关 2 次不达成【就不听你话】")
+		"随行技能通关 2 次不达成【万法由心】")
 	_c.check(AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 0}, {}),
 		"零召唤通关达成【独行侠】")
 	_c.check(not AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 1}, {}),
@@ -746,7 +735,7 @@ func _test_turret_and_new_cultivators() -> void:
 		"未通关不达成【铁王八】")
 	# 新成就进度文案
 	_c.equals(AchievementData.progress_text("ach_style_rebel", {"wins_no_skill_enhance": 2}),
-		"无契合通关 2/3 次", "【就不听你话】进度读无契合通关累计")
+		"通关 2/3 次", "【万法由心】进度读通关累计")
 	_c.equals(AchievementData.progress_text("ach_grind_level20", {"best_level": 17}),
 		"单局最高 Lv.17/20", "【升级狂魔】进度读单局最高等级")
 	_c.equals(AchievementData.progress_text("ach_luck_turtle", {"best_hits_taken": 30}),
@@ -1120,10 +1109,10 @@ func _test_conversion_items_and_hooks() -> void:
 
 	# 3. 随行神通冷却缩减：凝神符
 	var gale_base_cd := float(SkillData.final_stats("gale", "")["cooldown"])
-	_c.near(gale_base_cd, 9.0, EPS, "加速基准冷却 9.0s")
+	_c.near(gale_base_cd, 7.5, EPS, "加速基准冷却 7.5s")
 	GameManager.add_item("ningshen_fu")
 	var gale_mod_cd := float(SkillData.final_stats("gale", "")["cooldown"])
-	_c.near(gale_mod_cd, 8.1, EPS, "凝神符：加速冷却缩减 10% (9.0 → 8.1s)")
+	_c.near(gale_mod_cd, 6.75, EPS, "凝神符：加速冷却缩减 10% (7.5 → 6.75s)")
 	GameManager.reset_run()
 
 	# 4. 波末永久成长：突破古玉

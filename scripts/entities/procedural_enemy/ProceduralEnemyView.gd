@@ -44,6 +44,13 @@ var is_moving: bool = false:
 		if renderer:
 			renderer.is_moving = val
 
+## 步态相位（弧度）：EnemyBase 按实际位移推进，渲染器摆翼/蠕波与之同相
+var gait_phase: float = 0.0:
+	set(val):
+		gait_phase = val
+		if renderer:
+			renderer.gait_phase = val
+
 var special_state: float = 0.0:
 	set(val):
 		special_state = val

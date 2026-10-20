@@ -272,6 +272,9 @@ const SPIRIT_MAX_REACH := BalanceTargeting.SPIRIT_MAX_REACH
 const SPIRIT_DANGER_DIST := BalanceTargeting.SPIRIT_DANGER_DIST
 const SPIRIT_SECTOR_HALF_ANGLE := BalanceTargeting.SPIRIT_SECTOR_HALF_ANGLE
 const SPIRIT_BASE_ANGULAR_SPEED := BalanceTargeting.SPIRIT_BASE_ANGULAR_SPEED
+const SPIRIT_LONE_SPEED_MULT := BalanceTargeting.SPIRIT_LONE_SPEED_MULT
+const SPIRIT_FOCUS_DAMAGE_MULT := BalanceTargeting.SPIRIT_FOCUS_DAMAGE_MULT
+const SPIRIT_LONE_CRIT_BONUS := BalanceTargeting.SPIRIT_LONE_CRIT_BONUS
 const SPIRIT_CONTACT_DUTY := BalanceTargeting.SPIRIT_CONTACT_DUTY
 const SPIRIT_CONTACT_DUTY_PER_STAR := BalanceTargeting.SPIRIT_CONTACT_DUTY_PER_STAR
 const MULTI_WEAPON_LOAD_PER_EXTRA := BalanceTargeting.MULTI_WEAPON_LOAD_PER_EXTRA
@@ -596,6 +599,22 @@ static func compute_spirit_orbit(
 
 static func multi_weapon_damage_mult(slot_count: int, drone_count: int = 0) -> float:
 	return BalanceTargeting.multi_weapon_damage_mult(slot_count, drone_count)
+
+## 环绕灵宝少敌专注增伤（按单圈接触敌人数量与场上总具数）
+static func spirit_focus_damage_mult(contact_count: int = 1, orb_count: int = 1) -> float:
+	return BalanceTargeting.spirit_focus_damage_mult(contact_count, orb_count)
+
+## 环绕灵宝少具暴击率补偿
+static func spirit_lone_crit_bonus(orb_count: int = 1) -> float:
+	return BalanceTargeting.spirit_lone_crit_bonus(orb_count)
+
+## 环绕灵宝是否触发专注必暴
+static func is_spirit_guaranteed_crit(contact_count: int = 1, orb_count: int = 1) -> bool:
+	return BalanceTargeting.is_spirit_guaranteed_crit(contact_count, orb_count)
+
+## 环绕灵宝最终有效暴击率
+static func spirit_effective_crit_rate(player_crit_rate: float, orb_count: int = 1, contact_count: int = 1) -> float:
+	return BalanceTargeting.spirit_effective_crit_rate(player_crit_rate, orb_count, contact_count)
 
 ## 环绕灵宝接触结算占空比（按星级）：sustained_single_dps 与平衡仿真共用的实伤折算尺
 static func spirit_contact_duty(star: int = 1) -> float:

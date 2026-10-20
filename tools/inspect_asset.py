@@ -406,6 +406,9 @@ def main():
     elif cmd == "ui":
         run_godot_inspector("ui", "all", "tests/inspect/ui_gallery_all.png", is_gallery=True)
 
+    elif cmd == "loot":
+        run_godot_inspector("loot", "all", "tests/inspect/loot_gallery_all.png", is_gallery=True)
+
     elif cmd == "screen":
         arg = sys.argv[2] if len(sys.argv) >= 3 else "all"
         theme = ""

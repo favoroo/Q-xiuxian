@@ -135,13 +135,12 @@ func _switch_stat_tab(tab_idx: int) -> void:
 		_secondary_stats_box.visible = (tab_idx == 1)
 	if _stat_tab_primary_btn != null:
 		if tab_idx == 0:
-			# 选中态亮底：CHALK 纸白面托黑字，与纯黑面板拉开
-			GameStyle.button(_stat_tab_primary_btn, GameStyle.CHALK, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
+			GameStyle.button(_stat_tab_primary_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
 			GameStyle.button(_stat_tab_primary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 	if _stat_tab_secondary_btn != null:
 		if tab_idx == 1:
-			GameStyle.button(_stat_tab_secondary_btn, GameStyle.CHALK, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0)
+			GameStyle.button(_stat_tab_secondary_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, 4.0)
 		else:
 			GameStyle.button(_stat_tab_secondary_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 
@@ -165,16 +164,16 @@ func _switch_bottom_tab(tab_idx: int) -> void:
 		_items_scroll.visible = (tab_idx == 0)
 	if _history_scroll != null:
 		_history_scroll.visible = (tab_idx == 1)
-	if _bottom_tab_items_btn != null:
-		if tab_idx == 0:
-			GameStyle.button(_bottom_tab_items_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
-		else:
-			GameStyle.button(_bottom_tab_items_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
-	if _bottom_tab_hist_btn != null:
-		if tab_idx == 1:
-			GameStyle.button(_bottom_tab_hist_btn, GameStyle.GOLD, GameStyle.JADE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
-		else:
-			GameStyle.button(_bottom_tab_hist_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
+		if _bottom_tab_items_btn != null:
+			if tab_idx == 0:
+				GameStyle.button(_bottom_tab_items_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
+			else:
+				GameStyle.button(_bottom_tab_items_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
+		if _bottom_tab_hist_btn != null:
+			if tab_idx == 1:
+				GameStyle.button(_bottom_tab_hist_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
+			else:
+				GameStyle.button(_bottom_tab_hist_btn, GameStyle.NAVY2, GameStyle.GOLD, 12, GameStyle.PAPER_DIM, 4.0, GameStyle.INK_TEXT)
 
 func open(unpause_on_close: bool = true) -> void:
 	if visible or GameManager.is_game_over:

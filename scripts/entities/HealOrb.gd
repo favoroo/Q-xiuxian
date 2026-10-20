@@ -285,7 +285,7 @@ func _collect(p: Player) -> void:
 	var landed := minf(intended, missing)
 	var overflow := maxf(0.0, intended - landed)
 
-	JuiceEffect.spawn_pickup_pop(get_parent(), global_position, false)
+	JuiceEffect.spawn_pickup_pop(get_parent(), global_position, false, Color(0.25, 0.95, 0.55, 0.9))
 	if landed > 0.0 and p.has_method("heal"):
 		p.heal(landed)
 	var stones := GameBalance.heal_overflow_stones(overflow)

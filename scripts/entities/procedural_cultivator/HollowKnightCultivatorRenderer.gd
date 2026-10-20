@@ -31,6 +31,9 @@ var width_scale: float = 1.0
 var height_scale: float = 1.0
 var head_scale: float = 1.0
 
+## 是否抑制眼部柔和同心光晕（App 图标/Splash 特写等高倍缩放场景下避免外圈半透明光盘切边）
+var suppress_eye_glow: bool = false
+
 # ----------------- 背负武器位姿基准 -----------------
 ## 正面：斜背，柄与剑首从右肩外探出、剑尖朝下收进斗篷后。
 ## 锚点刻意压在面具轮廓（oval_chin 左右 x=±9.5、下巴 y=-5）之外——
@@ -166,6 +169,32 @@ func _sway_y(y: float) -> float:
 	var depth := clampf((y - 8.0) / 24.0, 0.0, 1.0)
 	return -_cw_wind.y * 2.2 * depth
 
+## 头饰软部件（簪尾红绳、髻根头绳穗、额前黄符）的二级动力学偏移：
+## 与斗篷同源的平滑风压（_wind_local 按 flip_h 镜像到局部）+ 移速惯性后拖 + 步频颠簸 + 微风轻颤，
+## lag 做相位错开（左右穗子不同拍）。骨角/斗笠/金冠等刚性部件禁用——硬物不飘。
+func _head_soft_sway(lag: float = 0.0) -> Vector2:
+	var wind_x := _wind_local.x * (-1.0 if flip_h else 1.0)
+	var speed_k := clampf(_speed_smooth, 0.0, 1.2)
+	var breeze := sin(_time * 6.8 + lag * 2.3) * (0.28 + speed_k * 0.4)
+	var drag_x := (-wind_x * 1.2 - _lean_smooth * 7.0) * maxf(speed_k, 0.12)
+	var run_bob := 0.0
+	if current_action == CultivatorRendererBase.Action.RUN:
+		run_bob = sin(gait_phase * TAU + lag * 1.7) * 0.45 * speed_k
+	return Vector2(drag_x + breeze, run_bob + breeze * 0.3)
+
+## 偶发眨眼：~4.2s 一周期、末段 ~0.13s 闭合再睁开（sin 包络），相位按 _idle_phase 错开（与偶发环视同手法）。
+## 返回 0~1 眼皮闭合度；受击/冲刺等紧张动作不眨眼（调用侧 _calm_blink 门控）。
+func _blink_amount() -> float:
+	var cycle := fmod(_time * 0.24 + _idle_phase * 1.37, 1.0)
+	var bt := clampf((cycle - 0.97) / 0.03, 0.0, 1.0)
+	return sin(bt * PI) if bt > 0.0 else 0.0
+
+## 仅在松弛动作（待机/奔跑）下眨眼；受击/冲刺/攻击睁眼反而有张力
+func _calm_blink() -> float:
+	if current_action == CultivatorRendererBase.Action.IDLE or current_action == CultivatorRendererBase.Action.RUN:
+		return _blink_amount()
+	return 0.0
+
 ## 斗篷纵向伪光照渐变：肩部提亮、下摆压暗（逐顶点颜色插值，零 shader 成本）
 func _cloak_gradient(pts: PackedVector2Array, base: Color) -> PackedColorArray:
 	var cols := PackedColorArray()
@@ -221,7 +250,7 @@ func _draw_head_front_gaze(float_y: float, eye_pulse: float, gaze_off: float) ->
 	var head_center := Vector2(0, -15 + float_y)
 	_draw_modular_headwear(head_center, Angle.FRONT)
 	_draw_modular_mask(head_center, Angle.FRONT)
-	_draw_modular_eyes(head_center + Vector2(gaze_off, 0.0), Angle.FRONT, eye_pulse)
+	_draw_modular_eyes(head_center + Vector2(gaze_off, 0.0), Angle.FRONT, eye_pulse, _calm_blink())
 
 # ==================== 2. 奔跑 / 御风飞行 (RUN / GLIDE) ====================
 
@@ -416,7 +445,7 @@ func _draw_head_front(float_y: float, eye_pulse: float) -> void:
 	var head_center := Vector2(0, -15 + float_y)
 	_draw_modular_headwear(head_center, Angle.FRONT)
 	_draw_modular_mask(head_center, Angle.FRONT)
-	_draw_modular_eyes(head_center, Angle.FRONT, eye_pulse)
+	_draw_modular_eyes(head_center, Angle.FRONT, eye_pulse, _calm_blink())
 
 func _draw_head_side(float_y: float, eye_pulse: float) -> void:
 	if not _layer_on(Layer.HEAD):
@@ -424,7 +453,7 @@ func _draw_head_side(float_y: float, eye_pulse: float) -> void:
 	var head_center := Vector2(1.2, -15 + float_y)
 	_draw_modular_headwear(head_center, Angle.SIDE)
 	_draw_modular_mask(head_center, Angle.SIDE)
-	_draw_modular_eyes(head_center, Angle.SIDE, eye_pulse)
+	_draw_modular_eyes(head_center, Angle.SIDE, eye_pulse, _calm_blink())
 
 func _draw_head_back(float_y: float) -> void:
 	if not _layer_on(Layer.HEAD):
@@ -734,11 +763,12 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 			if angle == Angle.SIDE:
 				draw_line(bun_c + Vector2(-6 * hs, -1 * hs), bun_c + Vector2(7 * hs, 1 * hs), col_weapon_main, 1.8)
 				_circle(bun_c + Vector2(7 * hs, 1 * hs), 1.6, col_jade)
-				draw_line(bun_c + Vector2(-5 * hs, -1 * hs), bun_c + Vector2(-7 * hs, 3 * hs), col_tassel_red, 1.2)
+				# 簪尾红绳穗：软部件随移动风压/步频二级摆动
+				draw_line(bun_c + Vector2(-5 * hs, -1 * hs), bun_c + Vector2(-7 * hs, 3 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
 			else:
 				draw_line(bun_c + Vector2(-8 * hs, 0), bun_c + Vector2(8 * hs, 0), col_weapon_main, 1.8)
 				_circle(bun_c + Vector2(8 * hs, 0), 1.6, col_jade)
-				draw_line(bun_c + Vector2(-7 * hs, 0), bun_c + Vector2(-9 * hs, 4 * hs), col_tassel_red, 1.2)
+				draw_line(bun_c + Vector2(-7 * hs, 0), bun_c + Vector2(-9 * hs, 4 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
 
 		"twin_buns":
 			# 童子双丫髻：左右对称小髻 + 髻根红头绳，无横簪（驯兽师专属）
@@ -751,6 +781,8 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				_circle(bun_r, 3.2 * hs, col_bone)
 				_arc(bun_r, 2.4 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
 				draw_line(bun_r + Vector2(-2.2 * hs, 1.8 * hs), bun_r + Vector2(2.2 * hs, 1.8 * hs), col_tassel_red, 1.2)
+				# 髻根垂下的红绳穗：软部件随移动风压/步频二级摆动
+				draw_line(bun_r + Vector2(1.6 * hs, 2.2 * hs), bun_r + Vector2(2.4 * hs, 5.0 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
 			else:
 				bun_l = head_center + Vector2(-6.5 * hs, -10 * hs)
 				bun_r = head_center + Vector2(6.5 * hs, -10 * hs)
@@ -760,6 +792,9 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				_arc(bun_r, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
 				draw_line(bun_l + Vector2(-2.4 * hs, 2.0 * hs), bun_l + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
 				draw_line(bun_r + Vector2(-2.4 * hs, 2.0 * hs), bun_r + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
+				# 双髻各垂一条红绳穗，lag 错相不同拍
+				draw_line(bun_l + Vector2(-1.6 * hs, 2.4 * hs), bun_l + Vector2(-2.4 * hs, 5.4 * hs) + _head_soft_sway(0.2), col_tassel_red, 1.1)
+				draw_line(bun_r + Vector2(1.6 * hs, 2.4 * hs), bun_r + Vector2(2.4 * hs, 5.4 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
 
 		"bamboo_hat":
 			var hat_c := head_center + Vector2(0, -9 * hs)
@@ -801,27 +836,30 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 		"talisman":
 			if angle == Angle.FRONT:
 				var t_pos := head_center + Vector2(0, -10 * hs)
+				# 符纸是软部件：下摆随移动风压/步频轻摆（0.75x 收敛幅度，贴额符箓不狂舞）
+				var t_sw := _head_soft_sway(0.9) * 0.75
 				var t_pts: PackedVector2Array = [
 					t_pos + Vector2(-3.2 * hs, 0),
 					t_pos + Vector2(3.2 * hs, 0),
-					t_pos + Vector2(3.0 * hs, 13 * hs),
-					t_pos + Vector2(0, 11.5 * hs),
-					t_pos + Vector2(-3.0 * hs, 13 * hs)
+					t_pos + Vector2(3.0 * hs, 13 * hs) + t_sw,
+					t_pos + Vector2(0, 11.5 * hs) + t_sw,
+					t_pos + Vector2(-3.0 * hs, 13 * hs) + t_sw
 				]
 				draw_colored_polygon(t_pts, Color(0.92, 0.82, 0.28))
-				draw_line(t_pos + Vector2(0, 2 * hs), t_pos + Vector2(0, 10 * hs), Color(0.85, 0.20, 0.15), 1.3)
+				draw_line(t_pos + Vector2(0, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.3)
 				draw_line(t_pos + Vector2(-1.5 * hs, 4 * hs), t_pos + Vector2(1.5 * hs, 4 * hs), Color(0.85, 0.20, 0.15), 1.1)
-				draw_line(t_pos + Vector2(-1.2 * hs, 7 * hs), t_pos + Vector2(1.2 * hs, 7 * hs), Color(0.85, 0.20, 0.15), 1.1)
+				draw_line(t_pos + Vector2(-1.2 * hs, 7 * hs) + t_sw * 0.5, t_pos + Vector2(1.2 * hs, 7 * hs) + t_sw * 0.5, Color(0.85, 0.20, 0.15), 1.1)
 			elif angle == Angle.SIDE:
 				var t_pos := head_center + Vector2(5.5 * hs, -8 * hs)
+				var t_sw := _head_soft_sway(0.9) * 0.75
 				var t_pts: PackedVector2Array = [
 					t_pos,
 					t_pos + Vector2(1.5 * hs, 0),
-					t_pos + Vector2(0.5 * hs, 12 * hs),
-					t_pos + Vector2(-1.0 * hs, 12 * hs)
+					t_pos + Vector2(0.5 * hs, 12 * hs) + t_sw,
+					t_pos + Vector2(-1.0 * hs, 12 * hs) + t_sw
 				]
 				draw_colored_polygon(t_pts, Color(0.92, 0.82, 0.28))
-				draw_line(t_pos + Vector2(0.8 * hs, 2 * hs), t_pos + Vector2(0, 10 * hs), Color(0.85, 0.20, 0.15), 1.2)
+				draw_line(t_pos + Vector2(0.8 * hs, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.2)
 			else:
 				draw_line(head_center + Vector2(-5 * hs, -8 * hs), head_center + Vector2(5 * hs, -8 * hs), Color(0.85, 0.20, 0.15), 1.3)
 				_circle(head_center + Vector2(0, -8 * hs), 1.4, Color(0.85, 0.20, 0.15))
@@ -1166,7 +1204,11 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 	draw_line(head_center + Vector2(4 * hs, -7 * hs), head_center + Vector2(10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
 
 ## 插槽 3：眼睛神态与光芒
-func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) -> void:
+func _draw_eye_soft_glow(center: Vector2, radius: float, col: Color, layers: int = 3) -> void:
+	if not suppress_eye_glow:
+		draw_soft_glow(center, radius, col, layers)
+
+func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, blink: float = 0.0) -> void:
 	var hs := head_scale
 	var eff_glow := col_eye_glow
 	var eff_core := col_eye_core
@@ -1177,6 +1219,23 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 	var glow_a := eye_glow_boost * 0.4
 	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf(eff_glow.a + eye_pulse + glow_a, 0.0, 1.0))
 
+	if blink > 0.45:
+		# 闭眼一瞬：下弯细缝弧线 + 残余微辉光，不画瞳仁/高光（闭合窗约 4 帧，阈值切换无跳变感）
+		var lid_col := Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.9)
+		var dim_glow := Color(eff_glow_col.r, eff_glow_col.g, eff_glow_col.b, eff_glow_col.a * 0.45)
+		if angle == Angle.FRONT:
+			var l_lid := head_center + Vector2(-4.2 * hs, 1.0 * hs)
+			var r_lid := head_center + Vector2(4.2 * hs, 1.0 * hs)
+			_draw_eye_soft_glow(l_lid, 4.6 + glow_r, dim_glow, 2)
+			_draw_eye_soft_glow(r_lid, 4.6 + glow_r, dim_glow, 2)
+			_arc(l_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
+			_arc(r_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
+		else:
+			var lid_pos := head_center + Vector2(4.2 * hs, 1.0 * hs)
+			_draw_eye_soft_glow(lid_pos, 4.6 + glow_r, dim_glow, 2)
+			_arc(lid_pos + Vector2(0, -0.2 * hs), 2.5 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.3)
+		return
+
 	if angle == Angle.FRONT:
 		var l_eye := head_center + Vector2(-4.2 * hs, 1.0 * hs)
 		var r_eye := head_center + Vector2(4.2 * hs, 1.0 * hs)
@@ -1185,16 +1244,16 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 			"sharp_slit":
 				draw_line(l_eye + Vector2(-3.2 * hs, 0), l_eye + Vector2(3.2 * hs, 0), col_void, 2.8)
 				draw_line(r_eye + Vector2(-3.2 * hs, 0), r_eye + Vector2(3.2 * hs, 0), col_void, 2.8)
-				draw_soft_glow(l_eye, 5.2 + glow_r, eff_glow_col, 2)
-				draw_soft_glow(r_eye, 5.2 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(l_eye, 5.2 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(r_eye, 5.2 + glow_r, eff_glow_col, 2)
 				draw_line(l_eye + Vector2(-1.6 * hs, 0), l_eye + Vector2(1.6 * hs, 0), eff_core, 1.5)
 				draw_line(r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), eff_core, 1.5)
 
 			"round_pupil":
 				_circle(l_eye, 3.8 * hs, col_void)
 				_circle(r_eye, 3.8 * hs, col_void)
-				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
-				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
 				_circle(l_eye + Vector2(0.4, -0.4), 1.7 * hs, eff_core)
 				_circle(r_eye + Vector2(-0.4, -0.4), 1.7 * hs, eff_core)
 				_circle(l_eye + Vector2(-0.6, 0.6), 0.7 * hs, Color(1, 1, 1, 0.65))
@@ -1203,8 +1262,8 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				# 童子亮眼：小黑瞳大高光，去"空洞眼窝"感（驯兽师专属）
 				_circle(l_eye, 2.7 * hs, col_void)
 				_circle(r_eye, 2.7 * hs, col_void)
-				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
-				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
 				_circle(l_eye + Vector2(0.5, -0.5), 1.5 * hs, eff_core)
 				_circle(r_eye + Vector2(-0.5, -0.5), 1.5 * hs, eff_core)
 				_circle(l_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
@@ -1215,16 +1274,16 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 				var r_poly: PackedVector2Array = [r_eye + Vector2(-3.5 * hs, -1.5 * hs), r_eye + Vector2(3.5 * hs, 2 * hs), r_eye + Vector2(-3 * hs, 1.5 * hs)]
 				draw_colored_polygon(l_poly, col_void)
 				draw_colored_polygon(r_poly, col_void)
-				draw_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 2)
-				draw_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 2)
 				_circle(l_eye, 1.6 * hs, eff_core)
 				_circle(r_eye, 1.6 * hs, eff_core)
 
 			"hollow_oval", _:
 				draw_filled_ellipse(l_eye, 3.8 * hs, 5.2 * hs, col_void)
 				draw_filled_ellipse(r_eye, 3.8 * hs, 5.2 * hs, col_void)
-				draw_soft_glow(l_eye, 6.2 + glow_r, eff_glow_col, 3)
-				draw_soft_glow(r_eye, 6.2 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(l_eye, 6.2 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(r_eye, 6.2 + glow_r, eff_glow_col, 3)
 				draw_filled_ellipse(l_eye + Vector2(0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 
@@ -1242,7 +1301,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 					eye_pos + Vector2(2.2 * hs, 0.8 * hs)
 				]
 				draw_colored_polygon(slit_pts, col_void)
-				draw_soft_glow(eye_pos, 5.2 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(eye_pos, 5.2 + glow_r, eff_glow_col, 2)
 				draw_line(eye_pos + Vector2(-1.8 * hs, 0.6 * hs), eye_pos + Vector2(2.4 * hs, -0.8 * hs), eff_core, 1.2)
 
 			"angry_slit":
@@ -1252,23 +1311,23 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float) ->
 					eye_pos + Vector2(-2.2 * hs, 1.4 * hs)
 				]
 				draw_colored_polygon(angry_pts, col_void)
-				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
 				_circle(eye_pos + Vector2(0.4 * hs, 0.2 * hs), 1.5 * hs, eff_core)
 
 			"round_pupil":
 				_circle(eye_pos, 3.2 * hs, col_void)
-				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
 				_circle(eye_pos + Vector2(0.3, -0.3), 1.7 * hs, eff_core)
 
 			"round_bright":
 				_circle(eye_pos, 2.4 * hs, col_void)
-				draw_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
+				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
 				_circle(eye_pos + Vector2(0.4, -0.4), 1.4 * hs, eff_core)
 				_circle(eye_pos + Vector2(-0.4, -0.5), 0.7 * hs, Color(1, 1, 1, 0.9))
 
 			"hollow_oval", _:
 				draw_filled_ellipse(eye_pos, 3.6 * hs, 5.0 * hs, col_void)
-				draw_soft_glow(eye_pos, 6.2 + glow_r, eff_glow_col, 3)
+				_draw_eye_soft_glow(eye_pos, 6.2 + glow_r, eff_glow_col, 3)
 				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2), 2.2 * hs, 3.6 * hs, eff_core)
 
 		if eye_glow_boost > 0.15:

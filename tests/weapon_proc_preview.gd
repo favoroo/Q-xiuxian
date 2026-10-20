@@ -2,6 +2,10 @@ extends Node2D
 
 ## 法器矢量本体预览台（非判据，必须开窗跑）：
 ##   $G --path . res://tests/WeaponProcPreview.tscn
+##   $G --path . res://tests/WeaponProcPreview.tscn -- --out /tmp/xxx.png --weapons sword,liuye_feidao
+## 可选参数（-- 之后）：
+##   --out <路径>      自定义输出 PNG（默认 /tmp/weapon_proc_preview.png）
+##   --weapons <csv>   只画命中项（按 法器id / shape器形名 / 中文名 匹配，逗号分隔），供单族自检
 ## 产物 /tmp/weapon_proc_preview.png
 ## 上区：批次 1（剑/刀/匕首）+ 批次 2（符/扇/印/牌/灯/鼓/铎）全部 4x 放大
 ##       —— 非竖置器形沿 +X，竖置重器按世界竖直画（与实机姿态一致），橙线=tip 器尖标定
@@ -21,36 +25,76 @@ const BATCH3 := [
 	"qingmu_tengbian", "xuanwu_lingdun", "kaishan_fu", "benlang_chui", "liuling_jian",
 	"jubao_chi", "jinjiao_jian", "langli_suo", "tougu_ding", "baoyu_liuhuazhen",
 	"xuanbing_feizhen", "lianhuan_lingdan", "sanmei_huohu", "bihai_chaoyindi",
-	"zihong_jing", "xuanming_leizhu", "jinlei_zhui",
+	"zihong_jing", "xuanming_leizhu", "jinlei_zhui", "shoulijian",
 ]
 const CELL := 112.0
 const ZOOM := 4.0
 
+var _out_path := "/tmp/weapon_proc_preview.png"
+var _filter: PackedStringArray = []
+
+## 解析 `--` 之后的用户参数：--out <路径> / --weapons <id或器形名或中文名，逗号分隔>
+func _parse_args() -> void:
+	var args := OS.get_cmdline_user_args()
+	var i := 0
+	while i < args.size():
+		if args[i] == "--out" and i + 1 < args.size():
+			_out_path = args[i + 1]
+			i += 1
+		elif args[i] == "--weapons" and i + 1 < args.size():
+			_filter = args[i + 1].split(",", false)
+			i += 1
+		i += 1
+
+## 过滤命中判定：id / shape / turret_shape / 中文名 任一相等即收
+func _accept(id: String) -> bool:
+	if _filter.is_empty():
+		return true
+	var def := WeaponData.get_def(id)
+	for t in _filter:
+		if id == t or String(def.get("shape", "")) == t \
+				or String(def.get("turret_shape", "")) == t or String(def.get("name", "")) == t:
+			return true
+	return false
+
+func _pick(ids: Array) -> Array:
+	var out: Array = []
+	for id in ids:
+		if _accept(id):
+			out.append(id)
+	return out
+
 func _ready() -> void:
+	_parse_args()
 	DisplayServer.window_set_size(Vector2i(1000, 1640))
 	var bg := ColorRect.new()
 	bg.color = Color(0.07, 0.09, 0.13)
 	bg.size = Vector2(1000, 1640)
 	add_child(bg)
 
-	_grid(BATCH1, 96.0, 5)
-	_grid(BATCH2, 340.0, 8)
-	_grid(BATCH3, 720.0, 6)
-
-	_label(Vector2(20, 20), "法器矢量本体（4x，橙线=tip 器尖标定）")
-	_label(Vector2(20, 300), "批次 2 · 符箓 / 扇 / 印 / 牌令 / 灯 / 鼓 / 铎")
-	_label(Vector2(20, 680), "批次 3 · 鞭 / 盾 / 斧 / 锤 / 锏 / 尺 / 剪 / 梭 / 钉 / 针 / 弹弓 / 葫芦 / 笛 / 镜 / 珠 / 锥")
+	if _filter.is_empty():
+		_grid(BATCH1, 96.0, 5)
+		_grid(BATCH2, 340.0, 8)
+		_grid(BATCH3, 720.0, 6)
+		_label(Vector2(20, 20), "法器矢量本体（4x，橙线=tip 器尖标定）")
+		_label(Vector2(20, 300), "批次 2 · 符箓 / 扇 / 印 / 牌令 / 灯 / 鼓 / 铎")
+		_label(Vector2(20, 680), "批次 3 · 鞭 / 盾 / 斧 / 锤 / 锏 / 尺 / 剪 / 梭 / 钉 / 针 / 弹弓 / 葫芦 / 笛 / 镜 / 珠 / 锥")
+	else:
+		# 过滤模式：命中项混排一个网格，供单族重绘自检
+		_grid(_pick(BATCH1 + BATCH2 + BATCH3), 96.0, 8)
+		_label(Vector2(20, 20), "法器矢量本体（4x，橙线=tip）过滤: %s" % ",".join(_filter))
 	_real_scale_row()
 	_star_row()
 	_turret_row()
 	_integration_check()
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await get_tree().process_frame
+	# 多等几帧再截图：Control 文字（字体塑形）在系统繁忙时首几帧可能还没上屏
+	for _i in range(10):
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
 	if DisplayServer.get_name() != "headless":
 		var img := get_viewport().get_texture().get_image()
-		img.save_png("/tmp/weapon_proc_preview.png")
-		print("SAVED /tmp/weapon_proc_preview.png ", img.get_size())
+		img.save_png(_out_path)
+		print("SAVED %s " % _out_path, img.get_size())
 	get_tree().quit(0)
 
 func _grid(ids: Array, top: float, cols: int) -> void:
@@ -64,7 +108,9 @@ func _grid(ids: Array, top: float, cols: int) -> void:
 ## 实机尺度对照：按真实 0.55 缩放排两行（这是玩家实际看到的大小），
 ## 用来确认矢量本体在 20~30px 尺度下仍认得出来、不被 HDR 起辉糊掉。
 func _real_scale_row() -> void:
-	var ids: Array = BATCH1 + BATCH2 + BATCH3
+	var ids: Array = _pick(BATCH1 + BATCH2 + BATCH3)
+	if ids.is_empty():
+		return
 	var y := 1046.0
 	_label(Vector2(20, y - 20), "实机尺度（×0.55，玩家实际所见大小）")
 	for i in range(ids.size()):
@@ -73,16 +119,18 @@ func _real_scale_row() -> void:
 		var upright := bool(def.get("upright", false))
 		var tip: Vector2 = def.get("tip", Vector2(22, 0))
 		var r := ProceduralWeaponRenderer.new()
-		r.configure(shape, WeaponData.element_of(ids[i]), tip.length(), 1, upright)
+		r.configure(shape, WeaponData.element_of(ids[i]), tip.length(), 1, upright, ids[i])
 		r.scale = Vector2.ONE * 0.55
 		r.position = Vector2(46 + (i % 30) * 30, y + 12 + floori(float(i) / 30.0) * 30.0)
 		add_child(r)
 
 ## 升星结构强化（★1/★2/★3）：横置扇 + 竖置令牌各一组
 func _star_row() -> void:
+	var show := _pick(["liaoyuan_shan", "wulei_paizi", "fentian_baodeng", "jinjiao_jian"])
+	if show.is_empty():
+		return
 	var y := 1120.0
 	_label(Vector2(20, y - 18), "升星结构强化（★1 / ★2 / ★3）")
-	var show := ["liaoyuan_shan", "wulei_paizi", "fentian_baodeng", "jinjiao_jian"]
 	for i in range(show.size()):
 		for s in range(3):
 			var def := WeaponData.get_def(show[i])
@@ -90,7 +138,7 @@ func _star_row() -> void:
 			var upright := bool(def.get("upright", false))
 			var tip: Vector2 = def.get("tip", Vector2(22, 0))
 			var r := ProceduralWeaponRenderer.new()
-			r.configure(shape, WeaponData.element_of(show[i]), tip.length(), s + 1, upright)
+			r.configure(shape, WeaponData.element_of(show[i]), tip.length(), s + 1, upright, show[i])
 			r.scale = Vector2.ONE * 0.55
 			r.position = Vector2(70 + i * 200 + s * 52, y + 22)
 			add_child(r)
@@ -101,7 +149,7 @@ func _place(center: Vector2, id: String, star: int, angle: float) -> void:
 	var upright := bool(def.get("upright", false))
 	var tip: Vector2 = def.get("tip", Vector2(22, 0))
 	var r := ProceduralWeaponRenderer.new()
-	r.configure(shape, WeaponData.element_of(id), tip.length(), star, upright)
+	r.configure(shape, WeaponData.element_of(id), tip.length(), star, upright, id)
 	r.scale = Vector2.ONE * (ZOOM * 0.55)
 	r.position = center
 	r.rotation = angle
@@ -128,7 +176,8 @@ func _place(center: Vector2, id: String, star: int, angle: float) -> void:
 func _label(pos: Vector2, text: String) -> void:
 	var lab := Label.new()
 	lab.text = text
-	GameStyle.label(lab, 11, GameStyle.PAPER)
+	# 深底亮字必须用 CHALK（PAPER 二次换肤后已是深墨字，深底下不可读）
+	GameStyle.label(lab, 11, GameStyle.CHALK)
 	lab.position = pos
 	add_child(lab)
 
@@ -139,13 +188,16 @@ const TURRETS := [
 ]
 
 func _turret_row() -> void:
+	var ids := _pick(TURRETS)
+	if ids.is_empty():
+		return
 	var y := 1210.0
 	_label(Vector2(20, y - 18), "批次 4 · 机关炮台（弩机 / 阵盘 / 炮管 / 机关兽 / 投石机 / 灯塔）")
-	for i in range(TURRETS.size()):
-		var def := WeaponData.get_def(TURRETS[i])
+	for i in range(ids.size()):
+		var def := WeaponData.get_def(ids[i])
 		var ts := ProceduralTurretRenderer.shape_from_name(String(def.get("turret_shape", "")))
 		var r := ProceduralTurretRenderer.new()
-		r.configure(ts, WeaponData.element_of(TURRETS[i]), 1)
+		r.configure(ts, WeaponData.element_of(ids[i]), 1)
 		r.scale = Vector2.ONE * (ZOOM * 0.55 * 0.78)
 		var cx := 80 + (i % 5) * 190
 		var cy := y + 40 + floori(float(i) / 5.0) * 140.0
@@ -158,7 +210,7 @@ func _integration_check() -> void:
 	var y := 1560.0
 	var ok := 0
 	var total := 0
-	for id in BATCH1 + BATCH2 + BATCH3:
+	for id in _pick(BATCH1 + BATCH2 + BATCH3):
 		total += 1
 		var w: FloatingWeapon = load("res://scenes/weapons/FloatingWeapon.tscn").instantiate()
 		w.setup(id, 1)

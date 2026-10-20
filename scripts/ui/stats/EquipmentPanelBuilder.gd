@@ -15,7 +15,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	# 0. 顶部：当前道统特性速览（正面加成 / 负面代偿，点按看全部详解）
 	dialog._cult_card = PanelContainer.new()
 	dialog._cult_card.mouse_filter = Control.MOUSE_FILTER_STOP
-	var cult_st := GameStyle.outlined_panel(GameStyle.NAVY, GameStyle.LINE, 2, 0.0)
+	var cult_st := GameStyle.outlined_panel(GameStyle.NAVY, GameStyle.INK, 2, 0.0)
 	cult_st.content_margin_left = 12.0
 	cult_st.content_margin_top = 5.0
 	cult_st.content_margin_right = 12.0
@@ -79,7 +79,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 
 	# 1. 上半区：上阵武器与纳戒仓库
 	var wp_panel := PanelContainer.new()
-	var wp_st := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var wp_st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	wp_st.content_margin_left = 12.0
 	wp_st.content_margin_top = 6.0
 	wp_st.content_margin_right = 12.0
@@ -132,7 +132,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 
 	# 2. 中间核心区：流派羁绊与五行共鸣（仿土豆兄弟装备标签阶梯加成）
 	var syn_panel := PanelContainer.new()
-	var syn_st := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var syn_st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	syn_st.content_margin_left = 12.0
 	syn_st.content_margin_top = 6.0
 	syn_st.content_margin_right = 12.0
@@ -165,6 +165,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	syn_scroll.custom_minimum_size = Vector2(0, 76)
 	syn_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	syn_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	GameStyle.scrollable(syn_scroll)
 	syn_vbox.add_child(syn_scroll)
 
 	dialog._synergy_flow = HFlowContainer.new()
@@ -178,7 +179,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	# 3. 下半区：随身道具 / 悟道历程（双标签切换）
 	var bot_panel := PanelContainer.new()
 	bot_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var bot_st := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var bot_st := GameStyle.outlined_panel(GameStyle.NAVY2, GameStyle.INK, 2, 0.0)
 	bot_st.content_margin_left = 12.0
 	bot_st.content_margin_top = 6.0
 	bot_st.content_margin_right = 12.0
@@ -222,6 +223,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._items_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dialog._items_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	dialog._items_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	GameStyle.scrollable(dialog._items_scroll)
 	bot_vbox.add_child(dialog._items_scroll)
 
 	dialog._items_flow = HFlowContainer.new()
@@ -235,6 +237,7 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	dialog._history_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dialog._history_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	dialog._history_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	GameStyle.scrollable(dialog._history_scroll)
 	bot_vbox.add_child(dialog._history_scroll)
 
 	dialog._history_list = VBoxContainer.new()
@@ -266,12 +269,12 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 
 		var filled := i < summary.size()
 		var locked := i >= max_slots
-		var border_col: Color = GameStyle.GOLD if filled else GameStyle.LINE
+		var border_col: Color = GameStyle.GOLD if filled else (GameStyle.LINE if not locked else GameStyle.LINE.darkened(0.2))
 		# 元素件 = 暖橙红描边（与商店陈列行/货架卡同一语言；原先贴右上角的「元素」色块已撤，
 		# 44 见方的格子上它会遮掉图标一角 —— 2026-10-12 用户）
 		if filled:
 			border_col = GameStyle.element_border(String(summary[i].get("id", "")), border_col)
-		var bg_col: Color = GameStyle.NAVY if filled else GameStyle.with_alpha(GameStyle.INK, 0.45)
+		var bg_col: Color = GameStyle.NAVY if filled else (GameStyle.DISABLED_FACE if locked else GameStyle.NAVY2.darkened(0.06))
 		var sb_off := GameStyle.outlined_panel(bg_col, border_col, 2, 0.0)
 		slot.add_theme_stylebox_override("panel", sb_off)
 		slot.set_meta("sb_flat", sb_off)

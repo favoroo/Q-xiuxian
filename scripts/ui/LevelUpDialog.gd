@@ -512,8 +512,8 @@ func _select_card(index: int) -> void:
 			tw.chain().tween_property(style, "border_color", sel_edge, 0.22)
 		else:
 			tw.tween_property(card, "scale", Vector2(DIM_SCALE, DIM_SCALE), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			tw.tween_property(card, "modulate", GameStyle.with_alpha(Color(0.78, 0.80, 0.86), 0.78), 0.12)
-			style.bg_color = GameStyle.with_alpha(GameStyle.NAVY, 0.96)
+			tw.tween_property(card, "modulate", Color.WHITE, 0.12)
+			style.bg_color = GameStyle.NAVY2
 			style.border_color = rarity_col
 			icon_st.border_color = GameStyle.LINE
 			title_lbl.add_theme_color_override("font_color", GameStyle.PAPER)

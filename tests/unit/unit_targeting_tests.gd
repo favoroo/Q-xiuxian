@@ -207,24 +207,43 @@ func _test_spirit_orbit_dynamics() -> void:
 	_c.near(float(far_res["radii"][0]), 58.0, EPS, "超远敌人下灵宝保持 58px")
 
 	# 6. 转速测试：默认基础巡航角速度 2.8 rad/s，且随攻速加点等比放大
-	# 2026-10-15 少具补偿：默认入参 = 单具（orb_count=1），基础转速一律带 ×1.25 补偿
+	# 2026-10-15 少具补偿（2026-10-19 强化）：默认入参 = 单具（orb_count=1），基础转速一律带 ×1.45 补偿
 	var base_spd := GameBalance.spirit_orbit_angular_speed(2.4, 1.0, 1.0, false, 1)
-	_c.near(base_spd, 2.4 * 1.25, EPS, "默认无加点非战斗旋转角速度 2.4×1.25（单具少具补偿）")
+	_c.near(base_spd, 2.4 * 1.45, EPS, "默认无加点非战斗旋转角速度 2.4×1.45（单具少具补偿）")
 	var combat_spd := GameBalance.spirit_orbit_angular_speed(2.4, 1.0, 1.0, true, 1)
-	_c.near(combat_spd, 2.4 * 1.18 * 1.25, EPS, "临战微幅加速 1.18x（叠加单具补偿 1.25x）")
+	_c.near(combat_spd, 2.4 * 1.18 * 1.45, EPS, "临战微幅加速 1.18x（叠加单具补偿 1.45x）")
 	# 模拟技能加点 1 次 haste_up（施法间隔 ×0.88）
 	var haste1_spd := GameBalance.spirit_orbit_angular_speed(2.4, 0.88, 1.0, false, 1)
-	_c.near(haste1_spd, 2.4 * (1.0 / 0.88) * 1.25, EPS, "加点 1 次法诀迅捷攻速 +13.6%，转速等比提升")
+	_c.near(haste1_spd, 2.4 * (1.0 / 0.88) * 1.45, EPS, "加点 1 次法诀迅捷攻速 +13.6%，转速等比提升")
 	_c.check(haste1_spd > base_spd, "攻速加点后御灵旋转速度切实增加")
 	# 模拟攻速堆叠（施法间隔 0.50）
 	var haste_high_spd := GameBalance.spirit_orbit_angular_speed(2.4, 0.50, 1.0, false, 1)
-	_c.near(haste_high_spd, 2.4 * 2.0 * 1.25, EPS, "攻速翻倍时御灵转速翻倍（叠加单具补偿）")
-	# 少具补偿档位（2026-10-15 用户口径：「只配一个召唤武器太弱」）：1 具 ×1.25 / 2 具 ×1.10 / ≥3 具不补
-	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 1), 2.8 * 1.25, EPS, "场上 1 具灵宝转速 ×1.25 补偿")
-	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 2), 2.8 * 1.10, EPS, "场上 2 具灵宝转速 ×1.10 补偿")
+	_c.near(haste_high_spd, 2.4 * 2.0 * 1.45, EPS, "攻速翻倍时御灵转速翻倍（叠加单具补偿）")
+	# 少具补偿档位（2026-10-19 用户口径：「只配一个/两个召唤武器太弱」）：1 具 ×1.45 / 2 具 ×1.20 / ≥3 具不补
+	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 1), 2.8 * 1.45, EPS, "场上 1 具灵宝转速 ×1.45 补偿")
+	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 2), 2.8 * 1.20, EPS, "场上 2 具灵宝转速 ×1.20 补偿")
 	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 3), 2.8, EPS, "场上 ≥3 具灵宝不再补偿")
 	_c.near(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 5), 2.8, EPS, "具数超表尾钳制，不超速")
 	_c.check(GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 1) > GameBalance.spirit_orbit_angular_speed(2.8, 1.0, 1.0, false, 1, 3), "单具转速切实高于多具（单召唤加强）")
+
+	# 6.1 少敌专注增伤校验（2026-10-19，仅在少具 <=2 时提供专注增伤，成型期回归 1.0）
+	_c.near(GameBalance.spirit_focus_damage_mult(1, 1), 1.35, EPS, "1 具灵宝单怪接触专注增伤 ×1.35")
+	_c.near(GameBalance.spirit_focus_damage_mult(2, 1), 1.20, EPS, "1 具灵宝双怪接触专注增伤 ×1.20")
+	_c.near(GameBalance.spirit_focus_damage_mult(3, 1), 1.00, EPS, "三怪接触无额外增伤保底 ×1.00")
+	_c.near(GameBalance.spirit_focus_damage_mult(1, 3), 1.00, EPS, "成型期 ≥3 具灵宝专注增伤回归 1.00")
+	_c.near(GameBalance.spirit_focus_damage_mult(6, 1), 1.00, EPS, "多怪接触绝不倒扣伤害 ×1.00")
+
+	# 6.2 环绕灵宝暴击机制校验（2026-10-19）
+	_c.equals(GameBalance.is_spirit_guaranteed_crit(1, 1), true, "1 具灵宝单怪接触专注必暴")
+	_c.equals(GameBalance.is_spirit_guaranteed_crit(1, 2), true, "2 具灵宝单怪接触专注必暴")
+	_c.equals(GameBalance.is_spirit_guaranteed_crit(1, 3), false, "≥3 具灵宝成型期解除必暴，走正常暴击")
+	_c.equals(GameBalance.is_spirit_guaranteed_crit(2, 1), false, "双怪接触非必暴")
+	_c.near(GameBalance.spirit_lone_crit_bonus(1), 0.35, EPS, "1 具灵宝获得 +35% 额外暴击率补偿")
+	_c.near(GameBalance.spirit_lone_crit_bonus(2), 0.20, EPS, "2 具灵宝获得 +20% 额外暴击率补偿")
+	_c.near(GameBalance.spirit_lone_crit_bonus(3), 0.0, EPS, "≥3 具灵宝无额外暴击率补偿")
+	_c.near(GameBalance.spirit_effective_crit_rate(0.05, 1, 1), 1.0, EPS, "少具且接触 1 怪时有效暴击率直接拉满 100%")
+	_c.near(GameBalance.spirit_effective_crit_rate(0.05, 1, 2), 0.40, EPS, "接触 2 怪但仅 1 具灵宝时暴击率 5%+35%=40%")
+	_c.near(GameBalance.spirit_effective_crit_rate(0.05, 4, 3), 0.05, EPS, "多具多怪时保持玩家基础暴击率")
 
 	# 7. 全局默认参数与新常数校验：基准半径 80px，最大外扩 185px，基础转速 2.8 rad/s
 	_c.near(GameBalance.SPIRIT_BASE_RADIUS, 80.0, EPS, "御灵基准半径常数提升至 80px")

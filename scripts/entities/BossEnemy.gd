@@ -54,6 +54,37 @@ var _spiral_timer: float = 0.0
 var _spiral_step_timer: float = 0.0
 var _spiral_angle: float = 0.0
 
+## 读招姿态：上一帧是否处于「蓄力/施法」态（起手→归零的跳变发一次 recoil 爆发读数）
+var _pose_casting: bool = false
+
+## 按招式状态机维持渲染器 special_state 0→1（起手预警有真进度，引导/连射给固定读数）；
+## 招式归零瞬间触发一次 recoil，区分「蓄力/爆发」两态。aim_dir 由 EnemyBase 同步段
+## 持续指向玩家，蓄力中魔刃收束读数无需此处接线。
+func _sync_cast_pose() -> void:
+	if procedural_view == null:
+		return
+	var pose := 0.0
+	if _slam_pending:
+		pose = clampf(1.0 - _slam_timer / maxf(GameBalance.BOSS_SLAM_WINDUP, 0.001), 0.0, 1.0)
+	elif _charge_windup > 0.0:
+		pose = clampf(1.0 - _charge_windup / maxf(GameBalance.BOSS_CHARGE_WINDUP, 0.001), 0.0, 1.0)
+	elif _spiral_active:
+		pose = 0.5   # 引导喷吐：恒定收束指向态
+	elif _fan_waves_left > 0 or _sky_fire_strikes_left > 0:
+		pose = 0.35  # 连射/天火后台推进：轻收束读数
+	procedural_view.special_state = pose
+	var casting := pose > 0.001
+	if _pose_casting and not casting:
+		# 出手收势：一次后坐爆发（recoil 由渲染器自行衰减回弹）
+		procedural_view.trigger_recoil()
+	_pose_casting = casting
+
+## 瞬发招式的爆发读数：无预警蓄力的招式（环弹/子母弹/召唤掩护）出手当帧
+## 直接发一次 recoil 后坐，让渲染器至少区分出「爆发」一态。
+func _pose_burst() -> void:
+	if procedural_view != null:
+		procedural_view.trigger_recoil()
+
 # 扇形连射状态机
 var _fan_waves_left: int = 0
 var _fan_wave_timer: float = 0.0
@@ -145,6 +176,11 @@ func _process(delta: float) -> void:
 		return
 	_hp_emit_cd -= delta
 	_heavy_hit_cd = maxf(0.0, _heavy_hit_cd - delta)
+	# 读招姿态接线（2026-10-19）：按 Boss 招式状态机维持 procedural_view.special_state 0→1，
+	# _process 在物理帧之后运行（最后写者生效），覆盖 EnemyBase 同步段的归零。
+	# 震地/冲锋预警有真实前摇给满值；引导/连射类（螺旋/扇形/天火）无起手预警，
+	# 用固定中位读数表「正在施法」态，与蓄力可区分；全招式都发 recoil 爆发读数。
+	_sync_cast_pose()
 	var player = GameManager.player
 	if player == null:
 		return
@@ -205,6 +241,7 @@ func _cast_next(player: Node2D) -> void:
 
 func _cast_ring() -> void:
 	play_squash(Vector2(1.25, 0.78), 0.5)
+	_pose_burst()  # 瞬发爆发读数（渲染器后坐一态）
 	var tw := create_tween()
 	tw.tween_property(anim_sprite, "modulate", Color(1.6, 0.6, 1.8) if final_boss else Color(1.7, 0.5, 0.45), 0.35)
 	tw.tween_callback(func(): _fire_ring_layer(1))
@@ -330,6 +367,7 @@ func _cast_split_bomb(player: Node2D) -> void:
 	var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
 	var base_ang := base_dir.angle()
 	play_squash(Vector2(0.82, 1.25), 0.3)
+	_pose_burst()  # 瞬发爆发读数（渲染器后坐一态）
 	AudioManager.play_sfx("enemy_fuse", 0.75)
 	for i in range(count):
 		var offset := (float(i) - float(count - 1) * 0.5) * 0.32
@@ -503,6 +541,7 @@ func _cast_summon(player: Node2D) -> void:
 		AudioManager.play_sfx("wave_start", 0.7)
 	# 召唤同时朝玩家打出一组掩护火球
 	_fire_cover_spread(player)
+	_pose_burst()  # 瞬发爆发读数（掩护齐射的渲染器后坐一态）
 
 # ---------------- 辅助弹幕发射 ----------------
 

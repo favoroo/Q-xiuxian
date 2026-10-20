@@ -128,15 +128,17 @@ func _physics_process(delta: float) -> void:
 	if areas.is_empty():
 		return
 	_refresh_dmg_cache()
+	var contact_count := areas.size()
 	for area in areas:
-		_try_damage(area)
+		_try_damage(area, contact_count)
 
 func _on_area_entered(area: Area2D) -> void:
 	if not _dmg_cache_valid:
 		_refresh_dmg_cache()
-	_try_damage(area)
+	var contact_count := maxi(1, get_overlapping_areas().size())
+	_try_damage(area, contact_count)
 
-func _try_damage(area: Area2D) -> void:
+func _try_damage(area: Area2D, contact_count: int = 1) -> void:
 	var enemy = area.get_parent()
 	if enemy and enemy.has_method("take_damage"):
 		var id: int = enemy.get_instance_id()
@@ -155,9 +157,18 @@ func _try_damage(area: Area2D) -> void:
 		if not _dmg_cache_valid:
 			_refresh_dmg_cache()
 		var total_base := base_damage + _cached_stat_bonus
-		var is_crit: bool = GameManager.roll_crit()
+		var total_orbs: int = get_parent().get_child_count() if get_parent() != null else orb_count
+		var is_force_crit: bool = (GameManager.force_crit_left > 0.0)
+		var is_guaranteed: bool = GameBalance.is_spirit_guaranteed_crit(contact_count, total_orbs)
+		var is_crit: bool = false
+		if is_force_crit or is_guaranteed:
+			is_crit = true
+		else:
+			var eff_crit_rate := GameBalance.spirit_effective_crit_rate(GameManager.get_crit_rate(), total_orbs, contact_count)
+			is_crit = (GameManager.rng.randf() < eff_crit_rate)
 		var crit_m := GameManager.get_crit_mult()
-		var dmg = total_base * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * (crit_m if is_crit else 1.0)
+		var focus_mult := GameBalance.spirit_focus_damage_mult(contact_count, total_orbs)
+		var dmg = total_base * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * focus_mult * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)

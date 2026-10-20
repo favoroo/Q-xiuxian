@@ -119,6 +119,7 @@ var _weapons_buf: Array[FloatingWeapon] = []
 ## 拾取圈形状的独立副本（_ready 时 duplicate 一次常驻）：此后 _sync_pickup_radius
 ## 原地改 radius（物理服务器自动感知），不再走走停停每次 duplicate + 重绑
 var _pickup_shape: CircleShape2D = null
+var _last_buff_pickup: float = 1.0   ## 上一帧的短时拾取范围乘区（变化才触发 _sync_pickup_radius）
 ## joystick.get_direction 能力缓存（避免每物理帧 has_method 字符串查表）
 var _joy_get_dir_checked: bool = false
 var _joy_get_dir_ok: bool = false
@@ -271,7 +272,7 @@ func _sync_pickup_radius() -> void:
 		_pickup_shape = shape_node.shape.duplicate() as CircleShape2D
 		shape_node.shape = _pickup_shape
 	var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
-	var radius := BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
+	var radius := BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus) * GameManager.buff_pickup_range_mult
 	if is_equal_approx(_pickup_shape.radius, radius):
 		return
 	_pickup_shape.radius = radius
@@ -281,12 +282,12 @@ func _sync_pickup_radius() -> void:
 func pickup_radius() -> float:
 	if pickup_area == null:
 		var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
-		return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
+		return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus) * GameManager.buff_pickup_range_mult
 	var shape_node: Node = pickup_area.get_node_or_null("CollisionShape2D")
 	if shape_node != null and shape_node.shape is CircleShape2D:
 		return (shape_node.shape as CircleShape2D).radius
 	var bonus := GameManager.still_pickup_bonus if (GameManager.still_time > 0.0) else 0.0
-	return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus)
+	return BASE_PICKUP_RADIUS * (GameManager.pickup_range_mult + bonus) * GameManager.buff_pickup_range_mult
 
 func _on_leveled_up(_lvl: int) -> void:
 	# 升级仪式两段式光柱（T-3.3）：汇聚聚灵→爆发拔起两段节奏，节点缺失时兜底单段 squash
@@ -798,6 +799,10 @@ func _physics_process(delta: float) -> void:
 		skill_active_left -= delta
 		if skill_active_left <= 0.0:
 			_on_skill_effect_end()
+	# 玉露鹿灵泉感知等短时拾取范围乘区变化时同步拾取圈（buff 涨落才重算，稳态零开销）
+	if not is_equal_approx(GameManager.buff_pickup_range_mult, _last_buff_pickup):
+		_last_buff_pickup = GameManager.buff_pickup_range_mult
+		_sync_pickup_radius()
 	if skill_cd_left > 0.0:
 		skill_cd_left -= delta
 	if extra_skill_cd_left > 0.0:
@@ -819,13 +824,15 @@ func _physics_process(delta: float) -> void:
 		# 金光护体期间图集角色泛金光高亮，程序化角色由矢量渲染器精细驱动局部流光与高光
 		var is_aegis := skill_vfx != null and skill_vfx.aegis_active
 		var sprite_mod := Color(1.3, 1.25, 0.85, 0.95) if is_aegis else Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
-		anim_sprite.modulate = sprite_mod
+		if not is_procedural:
+			anim_sprite.modulate = sprite_mod
 		if is_procedural and procedural_view != null:
 			# 程序化角色在金光护体期间保持清晰白底（由眼睛/斗篷/道印高精流光点亮），普通受击时正常频闪提示
 			var proc_mod := Color.WHITE if is_aegis else Color(1, 1, 1, 0.55 if fmod(invulnerable_time, 0.12) > 0.06 else 1.0)
 			procedural_view.modulate = proc_mod
 	else:
-		anim_sprite.modulate = Color.WHITE
+		if not is_procedural:
+			anim_sprite.modulate = Color.WHITE
 		if is_procedural and procedural_view != null:
 			procedural_view.modulate = Color.WHITE
 
@@ -843,7 +850,8 @@ func _physics_process(delta: float) -> void:
 			_hit_tilt = 0.0
 	if _hit_jiggle_offset != Vector2.ZERO:
 		_hit_jiggle_offset = _hit_jiggle_offset.move_toward(Vector2.ZERO, delta * 24.0)
-		anim_sprite.position = _hit_jiggle_offset
+		if not is_procedural:
+			anim_sprite.position = _hit_jiggle_offset
 		if is_procedural and procedural_view != null:
 			procedural_view.position = _hit_jiggle_offset
 
@@ -1336,7 +1344,8 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		var k_norm := hit_dir.normalized()
 		_hit_tilt = -k_norm.x * deg_to_rad(14.0)
 		_hit_jiggle_offset = k_norm * 2.8
-		anim_sprite.position = _hit_jiggle_offset
+		if not is_procedural:
+			anim_sprite.position = _hit_jiggle_offset
 		if is_procedural and procedural_view != null:
 			procedural_view.position = _hit_jiggle_offset
 	if is_procedural and procedural_view != null:
@@ -1370,7 +1379,8 @@ func _play_death_sequence() -> void:
 	#（后仰倾角保留——倒在受力方向上正是「被这一下打倒」的读数）
 	_hit_tilt = 0.0
 	_hit_jiggle_offset = Vector2.ZERO
-	anim_sprite.position = Vector2.ZERO
+	if not is_procedural:
+		anim_sprite.position = Vector2.ZERO
 	if is_procedural and procedural_view != null:
 		procedural_view.position = Vector2.ZERO
 
@@ -1420,7 +1430,8 @@ func play_victory_sequence() -> void:
 
 	_hit_tilt = 0.0
 	_hit_jiggle_offset = Vector2.ZERO
-	anim_sprite.position = Vector2.ZERO
+	if not is_procedural:
+		anim_sprite.position = Vector2.ZERO
 	if is_procedural and procedural_view != null:
 		procedural_view.position = Vector2.ZERO
 		procedural_view.rotation = 0.0

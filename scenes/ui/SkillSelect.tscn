@@ -68,5 +68,5 @@ alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.372549, 0.352941, 0.305882, 1)
 theme_override_font_sizes/font_size = 12
-text = "◆ 金边为角色适配技能：所选角色对它加持专属强化 ◆"
+text = "◆ 自由搭配随行技能：各技能已全面强化，辅佐战斗 ◆"
 horizontal_alignment = 1

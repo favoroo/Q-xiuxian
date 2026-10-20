@@ -34,7 +34,7 @@ func _ready() -> void:
 			_place_weapon(cell, def_id, aim)
 		var lab := Label.new()
 		lab.text = "%s·%s" % [String(def.get("name", "?")), "竖直" if bool(def.get("upright", false)) else "转向"]
-		GameStyle.label(lab, 13, GameStyle.PAPER)
+		GameStyle.label(lab, 13, GameStyle.CHALK)
 		lab.position = Vector2(c * CELL + 4, 2)
 		lab.size = Vector2(CELL - 8, 20)
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

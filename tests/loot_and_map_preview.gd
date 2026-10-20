@@ -225,10 +225,10 @@ func _create_chest_card(title: String, desc: String) -> PanelContainer:
 	disp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(disp)
 
-	var spr := ChestVisual.new()
-	spr.tier = BalanceChest.TIER_JADE
-	spr.scale = Vector2.ONE * sc
-	spr.position = Vector2(85, 38)
+		var spr := ChestVisual.new()
+		spr.tier = BalanceChest.TIER_JADE
+		spr.scale = Vector2.ONE * 0.65
+		spr.position = Vector2(85, 38)
 	disp.add_child(spr)
 
 	var d_lbl := Label.new()
@@ -278,13 +278,12 @@ func _create_obelisk_card(title: String, desc: String) -> PanelContainer:
 func _export_showcase_image() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	DirAccess.make_dir_recursive_absolute("tests/styles")
+	var global_path := ProjectSettings.globalize_path("res://tests/styles/loot_and_map_preview.png")
 	var vp := get_viewport()
 	if vp != null:
 		var tex := vp.get_texture()
 		if tex != null:
 			var img := tex.get_image()
 			if img != null and not img.is_empty():
-				var path := "tests/styles/loot_and_map_preview.png"
-				img.save_png(path)
-				print("[LootAndMapPreview] 成功导出战台与灵宝画廊大图至: %s" % path)
+				img.save_png(global_path)
+				print("[LootAndMapPreview] 成功导出战台与灵宝画廊大图至: %s" % global_path)

@@ -21,50 +21,34 @@ func _dismiss() -> void:
 	get_tree().paused = false
 
 func _check_data() -> void:
-	# 基础值（2026-10-11 技能改版：冷却整体下调 + 效果结束才进冷却 + 弱技能附加效果）
+	# 基础值（随行技能去角色专属化，全面强化基础数值）
 	var dash := SkillData.final_stats("dash", "")
-	_c.near(float(dash["cooldown"]), 4.0, 0.001, "冲刺基础冷却 4 秒")
+	_c.near(float(dash["cooldown"]), 3.0, 0.001, "冲刺基础冷却 3 秒")
 	_c.near(float(dash["crit_window"]), 1.0, 0.001, "冲刺必暴窗口 1 秒")
-	_c.near(float(dash["distance"]), 95.0, 0.001, "缩地成寸基础距离 95")
-	_c.near(float(dash["iframe"]), 0.30, 0.001, "缩地成寸无敌窗口 0.3 秒（位移全程+落地余量）")
-	_c.near(float(dash["duration"]), 0.16, 0.001, "冲刺位移耗时 0.16 秒（duration_add 不改位移时长）")
+	_c.near(float(dash["distance"]), 110.0, 0.001, "缩地成寸基础距离 110")
+	_c.near(float(dash["iframe"]), 0.35, 0.001, "缩地成寸无敌窗口 0.35 秒（位移全程+落地余量）")
+	_c.near(float(dash["duration"]), 0.16, 0.001, "冲刺位移耗时 0.16 秒")
 	var gale := SkillData.final_stats("gale", "")
-	_c.near(float(gale["cooldown"]), 9.0, 0.001, "神行术基础冷却 9 秒")
-	_c.near(float(gale["dodge_add"]), 0.50, 0.001, "神行术期间闪避提升 50%")
+	_c.near(float(gale["cooldown"]), 7.5, 0.001, "神行术基础冷却 7.5 秒")
+	_c.near(float(gale["dodge_add"]), 0.60, 0.001, "神行术期间闪避提升 60%")
+	_c.near(float(gale["power"]), 0.80, 0.001, "神行术期间移速提升 80%")
 	var haste := SkillData.final_stats("haste", "")
-	_c.near(float(haste["cooldown"]), 11.0, 0.001, "疾风咒基础冷却 11 秒")
-	_c.near(float(haste["power"]), 0.30, 0.001, "疾风咒间隔缩减 30%")
+	_c.near(float(haste["cooldown"]), 8.5, 0.001, "疾风咒基础冷却 8.5 秒")
+	_c.near(float(haste["power"]), 0.40, 0.001, "疾风咒间隔缩减 40%")
 	var aegis := SkillData.final_stats("aegis", "")
-	_c.near(float(aegis["cooldown"]), 10.0, 0.001, "金光护体基础冷却 10 秒")
+	_c.near(float(aegis["cooldown"]), 8.0, 0.001, "金光护体基础冷却 8 秒")
+	_c.near(float(aegis["duration"]), 2.5, 0.001, "金光护体持续 2.5 秒")
 	_c.near(float(aegis["knockback_boost"]), 3.0, 0.001, "金光护体期间击退力度 ×3")
 	var renewal := SkillData.final_stats("renewal", "")
-	_c.near(float(renewal["cooldown"]), 20.0, 0.001, "回春术基础冷却 20 秒")
-	_c.near(float(renewal["pet_heal_pct"]), 0.02, 0.001, "治疗灵兽每拍回复 2% 最大气血")
+	_c.near(float(renewal["cooldown"]), 15.0, 0.001, "回春术基础冷却 15 秒")
+	_c.near(float(renewal["power"]), 0.40, 0.001, "回春术瞬发回复 40%")
+	_c.near(float(renewal["pet_heal_pct"]), 0.025, 0.001, "治疗灵兽每拍回复 2.5% 最大气血")
 	_c.near(float(renewal["pet_duration"]), 8.0, 0.001, "治疗灵兽存活 8 秒")
-	# 道统强化合并（抽查三个代表：加算/乘算/冷却）
-	var jianchi_haste := SkillData.final_stats("haste", "jianchi")
-	_c.near(float(jianchi_haste["duration"]), 7.5, 0.001, "剑痴疾风咒持续 5+2.5=7.5 秒")
-	# 影者契合加成技能神行术：闪避加成 ×2 = +100%（用户口径「释放后百分百闪避」）
-	var meiying_gale := SkillData.final_stats("gale", "meiying")
-	_c.near(float(meiying_gale["dodge_add"]), 1.0, 0.001, "影者神行术闪避加成 +50%×2=+100%")
-	_c.near(float(meiying_gale["duration"]), 4.0, 0.001, "影者神行术持续仍是 4 秒（dodge_add_mult 不动时长）")
-	_c.near(float(SkillData.final_stats("gale", "")["dodge_add"]), 0.50, 0.001, "其余角色神行术闪避加成仍 +50%")
-	_c.near(float(SkillData.final_stats("dash", "meiying")["distance"]), 95.0, 0.001,
-			"影者不再强化缩地成寸（加成技能就是她加的移速那个，冲刺回归基础距离）")
-	var shiyue_aegis := SkillData.final_stats("aegis", "shiyue")
-	_c.near(float(shiyue_aegis["duration"]), 3.0, 0.001, "石岳金光护体 2.0+1.0=3.0 秒")
-	var duobao_aegis := SkillData.final_stats("aegis", "duobao")
-	_c.near(float(duobao_aegis["cooldown"]), 6.5, 0.001, "多宝金光护体冷却 10×0.65=6.5 秒")
-	var jinsuanpan_renewal := SkillData.final_stats("renewal", "jinsuanpan")
-	_c.near(float(jinsuanpan_renewal["power"]), 0.56, 0.001, "商人回春术回复 0.35×1.6=0.56")
-	# 契合判定：无强化的组合不许误判
-	_c.check(SkillData.is_enhanced_for_cultivator("haste", "jianchi"), "剑痴契合疾风咒")
+	# 角色无特定加强：所有角色共享一致的高性能技能
+	_c.check(not SkillData.is_enhanced_for_cultivator("haste", "jianchi"), "剑痴无绑定专属强化")
 	_c.check(not SkillData.is_enhanced_for_cultivator("dash", "jianchi"), "剑痴不契合缩地成寸")
-	_c.check(not SkillData.enhance_desc("haste", "dubi").is_empty(), "独臂刀圣疾风咒有强化文案")
-	_c.check(SkillData.enhance_desc("gale", "jianchi").is_empty(), "剑痴神行术无强化文案")
-	# 命中加成技能的卡面文案：增幅按「基础 → 合并后」现读，别处不抄
-	_c.check(SkillData.enhance_desc("gale", "meiying").contains("50%→100%"),
-			"影者神行术强化文案报出 50%%→100%%（实得「%s」）" % SkillData.enhance_desc("gale", "meiying"))
+	_c.check(SkillData.enhance_desc("haste", "dubi").is_empty(), "无专属强化文案")
+	_c.check(SkillData.enhance_desc("gale", "meiying").is_empty(), "影者神行术无专属强化文案")
 
 func _run() -> void:
 	_check_data()
@@ -103,8 +87,8 @@ func _run() -> void:
 
 	# ---- 神行术：移速/闪避双乘区 + 效果活跃窗口（冷却不走、活跃中拒绝再放）+ 到期精确回滚 ----
 	_c.check(player.try_activate_skill(), "神行术首次释放成功")
-	_c.near(GameManager.buff_move_speed_mult, 1.6, 0.001, "神行术写入移速乘区 1.6")
-	_c.near(GameManager.buff_dodge, 0.5, 0.001, "神行术写入闪避加成 0.5")
+	_c.near(GameManager.buff_move_speed_mult, 1.8, 0.001, "神行术写入移速乘区 1.8（移速+80%）")
+	_c.near(GameManager.buff_dodge, 0.6, 0.001, "神行术写入闪避加成 0.6（闪避+60%）")
 	_c.check(vfx.gale_active, "神行术激活角色足底御风特效")
 	_c.check(player.skill_active_left > 0.0, "释放后进入效果活跃窗口")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "活跃窗口内冷却尚未起转（效果结束才计冷却）")
@@ -119,11 +103,9 @@ func _run() -> void:
 	_c.near(GameManager.buff_dodge, 0.0, 0.001, "神行术到期后闪避加成精确归零")
 	_c.check(not vfx.gale_active, "神行术到期后角色足底御风特效关闭")
 	_c.check(player._skill_buffs.is_empty(), "buff 表已清空")
-	_c.near(player.skill_cd_left, 9.0, 0.3, "效果结束此刻才进冷却（9 秒档）")
+	_c.near(player.skill_cd_left, 7.5, 0.3, "效果结束此刻才进冷却（7.5 秒档）")
 
-	# ---- 影者契合神行术：闪避加成 ×2 = +100% ⇒ 期间真的每下都闪（用户口径「百分百闪避」） ----
-	# 这里量的是「加成技能是移速那个」，且 90% 的硬上限不许把它截回 90%
-	# 注意本判据默认以剑痴开局，所以先把影者的角色抬升 0.3 手动带上（走 CultivatorSystem 同一条路）
+	# ---- 影者使用神行术：基础 30% + 技能 60% = 90% 拉满闪避上限 ----
 	GameManager.cultivator_id = "meiying"
 	GameManager.dodge = 0.30
 	GameManager.dodge_cap_bonus = 0.30
@@ -131,15 +113,10 @@ func _run() -> void:
 	player.skill_cd_left = 0.0
 	player.skill_active_left = 0.0
 	_c.check(player.try_activate_skill(), "影者神行术释放成功")
-	_c.near(GameManager.buff_dodge, 1.0, 0.001, "影者神行术写入闪避加成 1.0（+50%×2）")
-	_c.near(GameManager.get_effective_dodge(), 1.0, 0.001,
-			"影者期间有效闪避钉在 100%：硬上限被临时抬到 1.0，没被 90% 截断")
-	_c.near(GameManager.dodge_cap_bonus, 0.4, 0.001, "上限临时抬到 100%（0.6 + 0.4，角色自身的 0.3 也在内）")
+	_c.near(GameManager.buff_dodge, 0.60, 0.001, "影者神行术写入闪避加成 0.60")
+	_c.near(GameManager.get_effective_dodge(), 0.90, 0.001,
+			"影者期间有效闪避达到 90% 上限")
 	# 判定真的兑现：复现 take_damage 的那一发（不掺护甲，只闻闪避）
-	var hp_before: float = player.current_health
-	player.invulnerable_time = 0.0
-	player.take_damage(37.0)
-	_c.check(player.current_health >= hp_before - 0.001, "100% 闪避下这一刀真的没掉血（走生产 take_damage 入口）")
 	# 到期精确回滚：闪避加成与临时上限同帧归位，上限退回角色档，闪避率回到 0（buff 不再顶）
 	player._skill_buffs["gale"] = 0.02
 	vfx.gale_timer = 0.02
@@ -147,7 +124,7 @@ func _run() -> void:
 	for i in range(6):
 		await get_tree().physics_frame
 	_c.near(GameManager.buff_dodge, 0.0, 0.001, "影者神行术到期后闪避加成精确归零")
-	_c.near(GameManager.dodge_cap_bonus, 0.30, 0.001, "临时那 0.1 同帧退回角色档 0.90（不留 100% 残留）")
+	_c.near(GameManager.dodge_cap_bonus, 0.30, 0.001, "上限退回角色档 0.90")
 	_c.near(GameManager.get_effective_dodge(), 0.30, 0.001,
 			"到期后有效闪避回到角色基础 30%（影者开局值，上限仍 90%）")
 	# 收尾：把本段手动摆的角色档退回判据默认态，别污染后面的副技能按钮判据
@@ -155,13 +132,13 @@ func _run() -> void:
 	GameManager.dodge = 0.0
 	GameManager.dodge_cap_bonus = 0.0
 
-	# ---- 疾风咒：写入攻速乘区（剑痴契合 → 持续 7.5 秒） ----
+	# ---- 疾风咒：写入攻速乘区 ----
 	GameManager.active_skill_id = "haste"
 	player.skill_cd_left = 0.0
 	player.skill_active_left = 0.0
 	_c.check(player.try_activate_skill(), "疾风咒释放成功")
-	_c.near(GameManager.buff_attack_speed_mult, 0.7, 0.001, "疾风咒写入攻速乘区 0.7（间隔缩短 30%）")
-	_c.near(float(player._skill_buffs.get("haste", 0.0)), 7.5, 0.05, "剑痴契合：疾风咒持续 7.5 秒")
+	_c.near(GameManager.buff_attack_speed_mult, 0.6, 0.001, "疾风咒写入攻速乘区 0.6（间隔缩短 40%）")
+	_c.near(float(player._skill_buffs.get("haste", 0.0)), 5.0, 0.05, "疾风咒持续 5.0 秒")
 	_c.check(vfx.haste_active, "疾风咒激活角色脚底八卦风环特效")
 	player._skill_buffs["haste"] = 0.02
 	vfx.haste_timer = 0.02
@@ -177,7 +154,7 @@ func _run() -> void:
 	player.skill_active_left = 0.0
 	player.invulnerable_time = 0.0
 	_c.check(player.try_activate_skill(), "金光护体释放成功")
-	_c.near(player.invulnerable_time, 2.0, 0.1, "金光护体起 2.0 秒无敌")
+	_c.near(player.invulnerable_time, 2.5, 0.1, "金光护体起 2.5 秒无敌")
 	_c.near(GameManager.buff_knockback_mult, 3.0, 0.001, "金光护体期间法器击退力度 ×3")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "无敌进行中冷却尚未起转")
 	_c.check(vfx.aegis_active, "金光护体激活六方法印结界与金芒护罩")
@@ -187,7 +164,7 @@ func _run() -> void:
 		await get_tree().physics_frame
 	_c.near(GameManager.buff_knockback_mult, 1.0, 0.001, "金光护体到期后击退乘区回 1.0")
 	_c.check(not vfx.aegis_active, "金光护体到期后结界转入碎灭散逸")
-	_c.near(player.skill_cd_left, 10.0, 0.3, "无敌效果结束此刻才进冷却（10 秒档）")
+	_c.near(player.skill_cd_left, 8.0, 0.3, "无敌效果结束此刻才进冷却（8 秒档）")
 
 	# ---- 回春术：按最大气血比例回复 + 瞬发即进冷却 + 治疗灵兽召唤与节拍 ----
 	GameManager.active_skill_id = "renewal"
@@ -196,14 +173,14 @@ func _run() -> void:
 	player.invulnerable_time = 0.0
 	player.current_health = player.max_health * 0.4
 	_c.check(player.try_activate_skill(), "回春术释放成功")
-	_c.near(player.current_health, player.max_health * 0.75, 1.0, "回春术回复 35% 最大气血")
+	_c.near(player.current_health, player.max_health * 0.80, 1.0, "回春术回复 40% 最大气血")
 	_c.check(vfx.renewal_progress >= 0.0, "回春术激活甘露莲花阵与旋升青芒光柱")
-	_c.near(player.skill_cd_left, 20.0, 0.3, "瞬发治疗按下当帧直接进冷却（20 秒档）")
+	_c.near(player.skill_cd_left, 15.0, 0.3, "瞬发治疗按下当帧直接进冷却（15 秒档）")
 	var healer: SpiritHealer = get_tree().get_first_node_in_group("spirit_healers")
 	_c.check(healer != null, "回春术召出治疗灵兽")
 	if healer != null:
 		_c.check(healer.target == player, "灵兽跟随玩家（target 指向玩家）")
-		_c.near(healer.heal_pct, 0.02, 0.001, "灵兽每拍回复 2% 最大气血")
+		_c.near(healer.heal_pct, 0.025, 0.001, "灵兽每拍回复 2.5% 最大气血")
 		# 重施替换旧灵
 		player.skill_cd_left = 0.0
 		player.skill_active_left = 0.0
@@ -230,7 +207,7 @@ func _run() -> void:
 	_c.check(player.try_activate_skill(), "缩地成寸释放成功")
 	_c.check(vfx.dash_flash_timer > 0.0, "缩地成寸激活瞬身刀光与破空灵芒锥")
 	_c.check(vfx.dash_crit_timer > 0.0, "缩地成寸激活必暴期间双眸发光视觉")
-	_c.near(player.invulnerable_time, 0.30, 0.01, "冲刺起即无敌 0.30 秒（实测 %.2f s）" % player.invulnerable_time)
+	_c.near(player.invulnerable_time, 0.35, 0.01, "冲刺起即无敌 0.35 秒（实测 %.2f s）" % player.invulnerable_time)
 	_c.near(GameManager.force_crit_left, 1.0, 0.1, "冲刺起跳开 1 秒必暴窗口")
 	_c.check(GameManager.roll_crit(), "必暴窗口内 roll_crit 恒真")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "冲刺无敌窗口内冷却尚未起转")
@@ -251,10 +228,10 @@ func _run() -> void:
 	var total_moved: float = player.global_position.distance_to(before)
 	_c.check(total_moved <= dash_nominal * 1.35,
 			"落地即收速：1 秒内总位移 ≤ 纸面 1.35 倍（实测 %.0f px，纸面 %.0f）" % [total_moved, dash_nominal])
-	# 60 帧已把 0.3s 无敌窗口走完：此刻冷却应在 4 秒档起转（已走过约 0.7s）
+	# 60 帧已把 0.35s 无敌窗口走完：此刻冷却应在 3 秒档起转（已走过约 0.65s）
 	_c.check(player.skill_active_left <= 0.0, "冲刺无敌窗口走完，活跃状态结束")
-	_c.check(player.skill_cd_left > 3.0 and player.skill_cd_left <= 4.0,
-			"无敌窗口走完才进冷却（4 秒档起转，实测 %.2f s）" % player.skill_cd_left)
+	_c.check(player.skill_cd_left > 2.0 and player.skill_cd_left <= 3.0,
+			"无敌窗口走完才进冷却（3 秒档起转，实测 %.2f s）" % player.skill_cd_left)
 	player.skill_cd_left = 0.0
 	player.skill_active_left = 0.0
 	await get_tree().physics_frame

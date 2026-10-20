@@ -264,12 +264,13 @@ static func spawn_shockwave(parent: Node, pos: Vector2, max_radius: float, col: 
 	fx._add_ring(max_radius * 0.06, max_radius * 0.9, col.lightened(0.45), 2.5)
 
 ## 金币入体微缩流光：入体环用扩散方向（2→16），并叠 4 粒向内收束灵光微粒（T-1.5 强化）
-static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false) -> void:
+## custom_color 可选：回复珠/葫芦拾取时传翠绿生机光，未传则普宝蓝/金宝金
+static func spawn_pickup_pop(parent: Node, pos: Vector2, is_gold: bool = false, custom_color: Color = Color.TRANSPARENT) -> void:
 	if not _ready_to_spawn(parent):
 		return
 	var fx := _acquire()
 	fx._begin(EffectType.PICKUP_POP, pos, 0.18, Z_OVERLAY)
-	var c := Color(0.35, 0.8, 1.0, 0.85) if not is_gold else Color(1.0, 0.88, 0.35, 0.95)
+	var c := custom_color if custom_color.a > 0.0 else (Color(0.35, 0.8, 1.0, 0.85) if not is_gold else Color(1.0, 0.88, 0.35, 0.95))
 	fx._add_ring(2.0, 16.0, c, 2.0)
 	for i in range(4):
 		var ang := float(i) * (TAU / 4.0) + (0.2 if is_gold else 0.0)

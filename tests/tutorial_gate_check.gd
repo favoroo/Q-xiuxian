@@ -80,21 +80,31 @@ func _run() -> void:
 	_tut.open()
 	await _settle(4)
 	_check(_mute_chk.button_pressed, "已勾过的档：打开指南时框是勾上的（看得见，也才取消得了）")
+	_check(_mute_chk.get_theme_color("font_hover_pressed_color") == GameStyle.PAPER,
+		"已勾选时 hover_pressed 状态字色为墨字（不回退为全白）")
+	_check(_mute_chk.get_theme_color("font_focus_color") == GameStyle.PAPER,
+		"已勾选时 focus 状态字色为墨字（不回退为全白）")
 	_tut.close()
 	await _wait_closed()
 	SettingsManager.set_tutorial_muted(false)
 	_tut.open()
 	await _settle(4)
 	_check(not _mute_chk.button_pressed, "没勾的档：框是空的")
+	_check(_mute_chk.get_theme_color("font_hover_pressed_color") == GameStyle.PAPER_DIM,
+		"未勾选时 hover_pressed 状态字色为次要深灰字（不回退为全白）")
 
 	await _tap(_mute_chk)
 	_check(SettingsManager.tutorial_muted(), "真点一下 → 偏好写成「下次不弹出」")
 	_check(_mute_chk.button_pressed, "点完框自己显示勾上（反馈与存档同源，不是按了没反应）")
+	_check(_mute_chk.get_theme_color("font_hover_pressed_color") == GameStyle.PAPER,
+		"点按后即时回刷字色：hover_pressed 立即切为已勾选墨字")
 	_check(not _menu._auto_show_tutorial(), "点完之后门控立刻改口：开局不再弹")
 	_check(_disk_muted() == true, "勾选态已落 user://settings.cfg（重启进程还在）")
 
 	await _tap(_mute_chk)
 	_check(not SettingsManager.tutorial_muted(), "再点一下取消勾选 → 恢复每次开局都弹")
+	_check(_mute_chk.get_theme_color("font_hover_pressed_color") == GameStyle.PAPER_DIM,
+		"取消勾选后即时回刷字色：hover_pressed 立即切回次要深灰字")
 	_check(_disk_muted() == false, "取消也落盘")
 
 	# ---------- 4. 开局那一下：弹指南 → 关掉才进选角；one-shot 不许让后面每次关闭都跳选角 ----

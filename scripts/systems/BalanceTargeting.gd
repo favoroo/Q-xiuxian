@@ -326,12 +326,44 @@ const SPIRIT_DANGER_DIST := 54.0         ## 贴身危急警戒线（低于此距
 const SPIRIT_SECTOR_HALF_ANGLE := 1.18   ## 扇区扑击半角（~67.6°，灵宝朝向前方扇区）
 const SPIRIT_BASE_ANGULAR_SPEED := 2.8   ## 基础默认旋转角速度（从 2.4 提升至 2.8 rad/s）
 
-## 少具转速补偿（2026-10-15，用户口径：「只配一个召唤武器太弱，转快点」）：
+## 少具转速补偿（2026-10-15 初版，2026-10-19 优化）：
 ## 环绕是接触伤害，具数越少扫掠覆盖越差、对同一敌人的经过频率越低。
-## 按场上灵宝总具数给基础转速乘区：1 具 ×1.25 / 2 具 ×1.10 / ≥3 具不补。
-## 单敌实伤随转速近线性水涨船高，是最直接的"单召唤加强"；不折进 spirit_contact_duty
+## 按场上灵宝总具数给基础转速乘区：1 具 ×1.45 / 2 具 ×1.20 / ≥3 具不补。
+## 单敌实伤随转速近线性水涨船高，是最直接的"单/双召唤加强"；不折进 spirit_contact_duty
 ## 纸面折算尺（图鉴展示口径保持不变，低估方向安全）。
-const SPIRIT_LONE_SPEED_MULT: Array[float] = [1.25, 1.10, 1.0]
+const SPIRIT_LONE_SPEED_MULT: Array[float] = [1.45, 1.20, 1.0]
+
+## 少敌专注增伤（2026-10-19）：
+## 环绕灵宝单圈接触到的敌人越少，每次撞击造成的伤害越集中（单体/少数怪时重击，围殴清群时不砍）。
+## contact_count: 1 个敌人 ×1.35 / 2 个敌人 ×1.20 / ≥3 个敌人 ×1.00（无衰减保底）。
+const SPIRIT_FOCUS_DAMAGE_MULT: Array[float] = [1.35, 1.20, 1.0]
+
+## 纯函数：根据当前灵宝接触到的敌人数量与场上灵宝总数计算专注伤害乘区
+## 仅在灵宝数量少（≤2 具）时提供少敌专注加成；成型期（≥3 具）多具同环覆盖已充裕，回归 1.0x
+static func spirit_focus_damage_mult(contact_count: int = 1, orb_count: int = 1) -> float:
+	if orb_count >= 3:
+		return 1.0
+	var idx := clampi(contact_count, 1, 3) - 1
+	return float(SPIRIT_FOCUS_DAMAGE_MULT[idx])
+
+## 少具暴击率补偿（2026-10-19，用户口径：「一两个环绕武器弱的不行，加个暴击」）：
+## 场上灵宝总具数较少时灵气高度凝聚，提供护主暴击率补正：1 具 +35% / 2 具 +20% / ≥3 具不补。
+const SPIRIT_LONE_CRIT_BONUS: Array[float] = [0.35, 0.20, 0.0]
+
+## 纯函数：根据场上灵宝总具数计算额外暴击率补正
+static func spirit_lone_crit_bonus(orb_count: int = 1) -> float:
+	var idx := clampi(orb_count, 1, 3) - 1
+	return float(SPIRIT_LONE_CRIT_BONUS[idx])
+
+## 纯函数：环绕灵宝是否触发专注必暴（仅在少具 orb_count <= 2 且独面单敌 contact_count <= 1 时触发）
+static func is_spirit_guaranteed_crit(contact_count: int = 1, orb_count: int = 1) -> bool:
+	return orb_count <= 2 and contact_count <= 1
+
+## 纯函数：计算环绕灵宝最终有效暴击率
+static func spirit_effective_crit_rate(player_crit_rate: float, orb_count: int = 1, contact_count: int = 1) -> float:
+	if is_spirit_guaranteed_crit(contact_count, orb_count):
+		return 1.0
+	return clampf(player_crit_rate + spirit_lone_crit_bonus(orb_count), 0.0, 1.0)
 
 ## 计算环绕灵宝的实时旋转角速度（弧度/秒）：随技能加点的攻速加成等比提升
 ## attack_speed_mult: GameManager.attack_speed_mult（默认 1.0，加点 haste_up 每次乘以 0.88）

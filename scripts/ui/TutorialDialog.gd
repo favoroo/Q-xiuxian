@@ -157,6 +157,7 @@ func _build_mute_chk() -> CheckBox:
 	chk.add_theme_constant_override("h_separation", 8)
 	chk.pressed.connect(func():
 		SettingsManager.set_tutorial_muted(chk.button_pressed)
+		_refresh_mute_chk()
 	)
 	return chk
 
@@ -199,7 +200,7 @@ func _refresh_mute_chk() -> void:
 	var muted := SettingsManager.tutorial_muted()
 	_mute_chk.set_pressed_no_signal(muted)
 	var col := GameStyle.PAPER if muted else GameStyle.PAPER_DIM
-	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color"]:
+	for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color", &"font_hover_pressed_color", &"font_focus_color"]:
 		_mute_chk.add_theme_color_override(c, col)
 
 func _on_opened() -> void:

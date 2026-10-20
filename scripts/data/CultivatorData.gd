@@ -31,7 +31,6 @@ extends RefCounted
 ##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的技能冷却秒数
 ##   kuxingseng_mode / still_damage_bonus / still_haste_bonus / still_armor_bonus / still_pickup_bonus
 ##   / move_damage_penalty / move_haste_penalty —— 苦行僧：站定与移动不对称收益/惩罚
-## skill_mods: {skill_id: {...}}                —— 随行技能专属强化（键位见 SkillData 头注；数值合并唯一入口 SkillData.final_stats）
 ## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一技能，HUD 第二颗按钮释放；
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
 ##                                                 它的玩法说明不写在本表：get_extra_desc() 现读那张机制表，
@@ -60,7 +59,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": ["sword"],
 				"locked_upgrades": [],
-				"skill_mods": {"haste": {"duration_add": 2.5}},
 			},
 			"shiyue": {
 				"name": "守卫",
@@ -81,7 +79,6 @@ const DEFS: Dictionary = {
 			},
 			"allowed_tags": [],
 			"locked_upgrades": ["speed_up"],
-			"skill_mods": {"aegis": {"duration_add": 1.0}},
 		},
 		"fuzhen": {
 			"name": "灵蝶使",
@@ -103,7 +100,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"dash": {"cooldown_mult": 0.65}},
 			},
 			"jinsuanpan": {
 				"name": "商人",
@@ -125,7 +121,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"renewal": {"power_mult": 1.6}},
 			},
 			"meiying": {
 				"name": "影者",
@@ -146,7 +141,6 @@ const DEFS: Dictionary = {
 			},
 			"allowed_tags": [],
 			"locked_upgrades": ["armor_up"],
-			"skill_mods": {"gale": {"dodge_add_mult": 2.0}},
 			"extra_skill": "shadowburst",
 		},
 				"dubi": {
@@ -167,7 +161,6 @@ const DEFS: Dictionary = {
 					},
 					"allowed_tags": [],
 					"locked_upgrades": [],
-					"skill_mods": {"haste": {"power_mult": 1.45}},
 				},
 			"kuangzhan": {
 				"name": "蛮兵",
@@ -189,7 +182,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"gale": {"power_mult": 1.583}},
 			},
 			"duoshe": {
 				"name": "学者",
@@ -209,7 +201,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"renewal": {"cooldown_mult": 0.65}},
 			},
 			"duobao": {
 				"name": "收藏家",
@@ -229,7 +220,6 @@ const DEFS: Dictionary = {
 				},
 					"allowed_tags": [],
 					"locked_upgrades": [],
-					"skill_mods": {"aegis": {"cooldown_mult": 0.65}},
 				},
 				"lingzhifu": {
 					"name": "灵植夫",
@@ -249,7 +239,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"gale": {"duration_add": 1.5}},
 			},
 				"leifa": {
 					"name": "雷法真君",
@@ -268,7 +257,6 @@ const DEFS: Dictionary = {
 				},
 					"allowed_tags": ["thunder", "talisman"],
 					"locked_upgrades": [],
-					"skill_mods": {"haste": {"power_mult": 1.3}},
 				},
 					"jiguan": {
 						"name": "机关师",
@@ -287,7 +275,6 @@ const DEFS: Dictionary = {
 						},
 						"allowed_tags": ["contraption", "spirit"],
 						"locked_upgrades": [],
-						"skill_mods": {"aegis": {"duration_add": 1.0}},
 					},
 				"yaowang": {
 					"name": "药王",
@@ -306,7 +293,6 @@ const DEFS: Dictionary = {
 					},
 					"allowed_tags": [],
 					"locked_upgrades": [],
-					"skill_mods": {"renewal": {"power_mult": 1.5}},
 					"extra_skill": "elixir",
 				},
 				"shoucainu": {
@@ -329,7 +315,6 @@ const DEFS: Dictionary = {
 					},
 					"allowed_tags": [],
 					"locked_upgrades": [],
-					"skill_mods": {"dash": {"cooldown_mult": 0.80}},
 				},
 				"shixue": {
 					"name": "嗜血魔修",
@@ -348,7 +333,6 @@ const DEFS: Dictionary = {
 				},
 				"allowed_tags": [],
 				"locked_upgrades": [],
-				"skill_mods": {"haste": {"power_mult": 1.40}},
 			},
 				"fuxiu": {
 					"name": "灵符子",
@@ -367,7 +351,6 @@ const DEFS: Dictionary = {
 					},
 					"allowed_tags": ["talisman"],
 					"locked_upgrades": [],
-					"skill_mods": {"haste": {"cooldown_mult": 0.7}},
 				},
 					"bawang": {
 						"name": "霸王",
@@ -386,7 +369,6 @@ const DEFS: Dictionary = {
 						},
 						"allowed_tags": ["wide"],
 						"locked_upgrades": [],
-						"skill_mods": {"aegis": {"duration_add": 1.0}},
 					},
 				"juechen": {
 					"name": "绝尘",
@@ -406,7 +388,6 @@ const DEFS: Dictionary = {
 					},
 					"allowed_tags": ["sword"],
 					"locked_upgrades": [],
-					"skill_mods": {},
 				},
 					"yushou": {
 						"name": "御兽师",
@@ -427,7 +408,6 @@ const DEFS: Dictionary = {
 						},
 						"allowed_tags": [],
 						"locked_upgrades": [],
-							"skill_mods": {"renewal": {"power_mult": 1.30}},
 					},
 					"kuxingseng": {
 						"name": "苦行僧",
@@ -459,7 +439,6 @@ const DEFS: Dictionary = {
 						},
 						"allowed_tags": [],
 						"locked_upgrades": [],
-						"skill_mods": {"aegis": {"duration_add": 1.5}},
 					},
 			}
 
@@ -472,11 +451,8 @@ static func all_ids() -> Array:
 static func get_start_equip(id: String) -> String:
 	return String(get_def(id).get("start_equip", ""))
 
-static func get_synergy_skill_id(id: String) -> String:
-	var s_mods: Dictionary = get_def(id).get("skill_mods", {})
-	if s_mods.is_empty():
-		return ""
-	return String(s_mods.keys()[0])
+static func get_synergy_skill_id(_id: String) -> String:
+	return ""
 
 ## 随角色绑定的额外技能 id（独立于五选一技能）；没配 extra_skill 的角色返回空串
 static func get_extra_skill_id(id: String) -> String:

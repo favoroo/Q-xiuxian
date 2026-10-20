@@ -34,11 +34,9 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	# 额外技能单独一行一段（与选角界面同读机制表，不再混在「加成 N」里）
 	for x_line in CultivatorData.get_extra_desc(GameManager.cultivator_id):
 		rows.append(["额外技能", String(x_line), GameStyle.SHADOW])
-	var skill_id := CultivatorData.get_synergy_skill_id(GameManager.cultivator_id)
-	if not skill_id.is_empty():
-		var sdef := SkillData.get_def(skill_id)
-		var enh := SkillData.enhance_desc(skill_id, GameManager.cultivator_id)
-		rows.append(["随行技能", "%s（%s）" % [String(sdef.get("name", skill_id)), enh if not enh.is_empty() else "无专属强化"], GameStyle.JADE_DK])
+	if not GameManager.active_skill_id.is_empty():
+		var sdef := SkillData.get_def(GameManager.active_skill_id)
+		rows.append(["随行技能", String(sdef.get("name", GameManager.active_skill_id)), GameStyle.GOLD])
 	var start_equip := CultivatorData.get_start_equip(GameManager.cultivator_id)
 	if not start_equip.is_empty():
 		rows.append(["开局自带", start_equip, GameStyle.PAPER])

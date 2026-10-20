@@ -7,7 +7,7 @@ extends Node2D
 ##   $G --path . res://tests/BulletPreview.tscn      # 窗口一闪即退，产物 /tmp/bullet_render.png
 
 const SHEET := "res://assets/art/"
-const ORDER: Array = ["huoyan_fu", "gengjin_feijian", "liuye_feidao", "xuanbing_feizhen", "wanmu_lingfu"]
+const ORDER: Array = ["huoyan_fu", "gengjin_feijian", "liuye_feidao", "xuanbing_feizhen", "wanmu_lingfu", "shoulijian"]
 
 func _ready() -> void:
 	var tile: Texture2D = load(SHEET + "courtyard_tile.png")

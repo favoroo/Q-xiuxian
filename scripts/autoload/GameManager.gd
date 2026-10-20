@@ -396,6 +396,7 @@ var pending_skill_id: String = "dash"  ## 选人流程里选定的技能（默�
 var active_skill_id: String = ""       ## 本局生效的技能 id
 var extra_skill_id: String = ""        ## 本局生效的「额外技能」id（随角色绑定，影者=影爆；空 = 无额外技能，第二按钮隐藏）
 var buff_move_speed_mult: float = 1.0  ## 神行术短时移速乘区（Player._physics_process 消费）
+var buff_pickup_range_mult: float = 1.0 ## 玉露鹿灵泉感知短时拾取范围乘区（Player._sync_pickup_radius 消费，到期回 1.0）
 var buff_attack_speed_mult: float = 1.0 ## 疾风咒短时施法间隔乘区（FloatingWeapon._perform_attack 消费）
 var buff_dodge: float = 0.0            ## 神行术短时闪避加成（get_effective_dodge 消费，到期归零）
 var buff_knockback_mult: float = 1.0   ## 金光护体短时击退乘区（knockback_force 消费，到期回 1.0）

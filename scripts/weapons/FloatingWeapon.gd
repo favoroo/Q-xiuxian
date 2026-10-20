@@ -273,7 +273,7 @@ func _setup_proc_renderer() -> void:
 		return
 	_proc_renderer = ProceduralWeaponRenderer.new()
 	_proc_renderer.name = "ProcWeapon"
-	_proc_renderer.configure(wshape, _arc_element(), tip_local.length(), star, upright)
+	_proc_renderer.configure(wshape, _arc_element(), tip_local.length(), star, upright, weapon_def_id)
 	_proc_renderer.scale = sprite.scale
 	_proc_renderer.z_index = sprite.z_index
 	add_child(_proc_renderer)

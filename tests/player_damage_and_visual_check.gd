@@ -98,4 +98,15 @@ func _test_damage_and_invulnerability() -> void:
 	_c.check(hp_after_hit2 < hp_after_hit1, "无敌结束后再次受击扣血成功 (从 %.1f 降至 %.1f)" % [hp_after_hit1, hp_after_hit2])
 	_c.check(p.invulnerable_time > 0.4, "再次受击重新起无敌帧")
 
+	# 5. 受击僵直姿势回归（2026-10-20 Fixed）：play_run/play_idle 原先不挡 _hit_timer，
+	# 移动中受击的 HIT 姿势下一物理帧即被覆写回 RUN，只活 ~33ms；修复后必须存活满计时
+	p.invulnerable_time = 0.0
+	p.take_damage(20.0)
+	var rdr5 = p.procedural_view.renderer
+	_c.check(rdr5.current_action == CultivatorRendererBase.Action.HIT, "受击当帧进入 HIT 僵直姿势")
+	p.velocity = Vector2(300.0, 0.0)  # 无输入但速度超停机阈值 ⇒ 走 play_run 分支
+	for i in range(2):
+		p._physics_process(0.05)
+	_c.check(rdr5.current_action == CultivatorRendererBase.Action.HIT, "移动中受击 HIT 姿势不被 play_run 覆写")
+
 	p.queue_free()

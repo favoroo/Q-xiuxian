@@ -284,8 +284,8 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		},
 		{
 			"id": "ach_style_rebel",
-			"name": "就不听你话",
-			"cond_desc": "使用角色不契合的技能通关3次——偏要跟道统对着干",
+			"name": "万法由心",
+			"cond_desc": "自由搭配随行技能通关3次——万法无常，随心而动",
 			"category": "style",
 			"reward_type": "none",
 			"reward_id": "",
@@ -648,7 +648,7 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 			return "单局承伤 %d/25 次" % hits
 		"ach_style_rebel":
 			var wne := int(career_stats.get("wins_no_skill_enhance", 0))
-			return "无契合通关 %d/3 次" % wne
+			return "通关 %d/3 次" % wne
 		"ach_grind_level20":
 			return "单局最高 Lv.%d/20" % level
 		"ach_luck_turtle":

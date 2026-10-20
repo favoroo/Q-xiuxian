@@ -26,8 +26,11 @@ func _ready() -> void:
 	svp.add_child(pview)
 
 	# 只画 武器|斗篷|头 三层：去地影与周天灵气粒子，图标更干净
+	# 同时抑制眼部柔和光晕：高分辨率图标下避免出现两个微光半透明圆盘切边
 	if pview.get("renderer") != null:
 		pview.renderer.debug_layers = 4 | 8 | 16
+		if pview.renderer is HollowKnightCultivatorRenderer:
+			(pview.renderer as HollowKnightCultivatorRenderer).suppress_eye_glow = true
 
 	await get_tree().process_frame
 	await get_tree().process_frame

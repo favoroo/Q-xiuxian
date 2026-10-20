@@ -35,22 +35,22 @@ static func lid_side_y() -> float:
 ## 每档一套：身/盖/盖顶高光/板缝/箍带/箍带高光/锁面/锁面高光/点缀（绸带或嵌宝，无色即不画）
 const PALETTES: Array[Dictionary] = [
 	{ # 木匣：棕木 + 铁箍 + 铜锁
-		"body": Color("6e4a2c"), "lid": Color("7d5732"), "lid_hi": Color("9a7248"),
-		"seam": Color("4a3018"), "strap": Color("3d3a38"), "strap_hi": Color("5a5652"),
+		"body": Color("7a5330"), "lid": Color("8d6338"), "lid_hi": Color("b08454"),
+		"seam": Color("503620"), "strap": Color("4a4642"), "strap_hi": Color("6a655f"),
 		"lock": Color("c9a227"), "lock_hi": Color("e3c25a"),
-		"accent": Color(0, 0, 0, 0),
+		"accent": Color(0, 0, 0, 0), "glow": Color(0, 0, 0, 0),
 	},
 	{ # 铜匣：青铜 + 红绸中带 + 金锁
 		"body": Color("a06a34"), "lid": Color("b57d40"), "lid_hi": Color("d29a58"),
 		"seam": Color("6e4520"), "strap": Color("7c4f22"), "strap_hi": Color("a8743a"),
 		"lock": Color("e8c35a"), "lock_hi": Color("f5dd8e"),
-		"accent": Color("b03a2e"),
+		"accent": Color("b03a2e"), "glow": Color(0.91, 0.76, 0.35, 0.10),
 	},
 	{ # 玉匣：青玉 + 金箍 + 朱砂嵌宝
 		"body": Color("2f8f6a"), "lid": Color("3fae8a"), "lid_hi": Color("67d1a8"),
 		"seam": Color("1f6b4c"), "strap": Color("d9a83c"), "strap_hi": Color("f2cd6e"),
 		"lock": Color("f2cd6e"), "lock_hi": Color("fce9ac"),
-		"accent": Color("e2503c"),
+		"accent": Color("e2503c"), "glow": Color(0.31, 0.82, 0.65, 0.14),
 	},
 ]
 
@@ -62,9 +62,12 @@ var tier: int = BalanceChest.TIER_WOOD:
 
 func _draw() -> void:
 	var p: Dictionary = PALETTES[tier]
-	# 地面落影（2026-10-18 升级双层软影）：外层弥散 + 内核接触暗斑，垫在匣底下
-	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 40.0, 6.5), Color(0, 0, 0, 0.24))
-	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 26.0, 4.4), Color(0, 0, 0, 0.55))
+	# 地面落影：外层弥散 + 内核接触暗斑，垫在匣底下
+	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 40.0, 6.5), Color(0, 0, 0, 0.34))
+	draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 26.0, 4.4), Color(0, 0, 0, 0.62))
+	# 品阶地光（纯装饰）：铜暖金/玉青碧淡光晕罩在落影上，小尺寸一眼分档，木匣无光
+	if p.glow.a > 0.0:
+		draw_colored_polygon(_ellipse(Vector2(0, BODY_BOT + 3), 46.0, 9.0), p.glow)
 
 	# 匣身（底角斜切）+ 勾边
 	var body := PackedVector2Array([
@@ -82,6 +85,8 @@ func _draw() -> void:
 		Vector2(HALF_W - CHAMFER, BODY_BOT - 1), Vector2(-HALF_W + CHAMFER, BODY_BOT - 1),
 		Vector2(-HALF_W + 1, BODY_BOT - CHAMFER),
 	]), p.seam, 3.0)
+	# 左侧细受光棱，与右/底压暗呼应
+	draw_line(Vector2(-HALF_W + 2, BODY_TOP + 2), Vector2(-HALF_W + 2, BODY_BOT - CHAMFER), p.strap_hi, 2.0)
 
 	# 匣盖（平顶斜收弧顶）+ 勾边
 	var lid := PackedVector2Array([

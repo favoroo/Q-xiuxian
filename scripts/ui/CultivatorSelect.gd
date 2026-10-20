@@ -387,16 +387,6 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		mid_col.add_child(_make_info_row("代价", GameStyle.BAD_DK, GameStyle.BAD,
 				cons_lines, col_w))
 
-	# (e) 契合技能
-	var syn_sid := CultivatorData.get_synergy_skill_id(cid)
-	if not syn_sid.is_empty():
-		var sdef := SkillData.get_def(syn_sid)
-		var sname := String(sdef.get("name", syn_sid))
-		var enh := SkillData.enhance_desc(syn_sid, cid)
-		var syn_text := "◆ 契合「%s」：%s" % [sname, enh] if not enh.is_empty() else "◆ 专属契合「%s」" % sname
-		mid_col.add_child(_make_info_row("技能", GameStyle.GOLD, GameStyle.GOLD_EDGE,
-				[syn_text], col_w))
-
 	GameStyle.swipeable(mid_col)
 
 	# 2.5 皮肤切换栏（通关难度解锁换色皮肤；未解锁角色整排置灰）

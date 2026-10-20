@@ -56,6 +56,6 @@ static func card_lines() -> Array[String]:
 			int(roundf(BUFF_DAMAGE * 100.0)), COOLDOWN],
 	]
 
-const COOLDOWN := 12.0  ## 药爆冷却秒数（真话在 SkillData.DEFS.elixir.cooldown，此处仅为卡面显示）
+const COOLDOWN := 10.0  ## 药爆冷却秒数（真话在 SkillData.DEFS.elixir.cooldown，此处仅为卡面显示）
 
 

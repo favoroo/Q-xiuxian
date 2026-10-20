@@ -26,10 +26,11 @@ enum ProjectileKind {
 	TALISMAN_FROST,   ## 癸水符：玄青阴水滴形符纸 + 水波灵纹（2026-10-13 与玄冰符分家）
 	TALISMAN_STONE,   ## 厚土符：灰岩碑形符纸 + 山纹刻痕（2026-10-13 与镇山符分家）
 	FIRE_FLAME,       ## 三昧真火：水墨烈焰火煞 + 炽金火核
-	SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
-	WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
-	GENERIC_BLADE     ## 通用法刃：虚空冷月气刃
-}
+		SPIRIT_PELLET,    ## 连环灵弹：凝元翡翠光珠 + 环绕星轨
+		WATER_SHUTTLE,    ## 浪里梭：青碧流线水梭 + 浪涛丝痕（2026-10-11 拓充）
+		SHURIKEN,         ## 手里剑：四芒旋风飞镖 + 月牙磨刃 + 破空金芒
+		GENERIC_BLADE     ## 通用法刃：虚空冷月气刃
+	}
 
 ## 20Hz 错相刷新节流，与 ProceduralDroneRenderer 同步范式；60fps 档翻倍 40Hz
 ## （2026-10-15 VisualRate 档位联动：弹体位置 60fps 运动，画面 3 帧一画会分离；低档 20Hz 为 perf_probe 预算口径）
@@ -101,6 +102,8 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 		return ProjectileKind.SPIRIT_PELLET
 	elif "bullet_water_shuttle" in tex_path:
 		return ProjectileKind.WATER_SHUTTLE
+	elif "bullet_shuriken" in tex_path:
+		return ProjectileKind.SHURIKEN
 	return ProjectileKind.GENERIC_BLADE
 
 func _draw() -> void:
@@ -147,6 +150,8 @@ func _draw() -> void:
 			_draw_spirit_pellet()
 		ProjectileKind.WATER_SHUTTLE:
 			_draw_water_shuttle()
+		ProjectileKind.SHURIKEN:
+			_draw_shuriken()
 		ProjectileKind.GENERIC_BLADE:
 			_draw_generic_blade()
 
@@ -593,3 +598,101 @@ func _draw_generic_blade() -> void:
 	draw_line(Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
 	# 刃尖寒光起辉
 	AdaptiveDraw.circle(self, Vector2(12.0, 0.0), 1.2, GameStyle.FX_HDR_CORE)
+
+# ----------------- 7c. 手里剑 (四芒旋风飞镖 + 月牙磨刃 + 破空冷金残影) -----------------
+func _draw_shuriken() -> void:
+	var pulse := 1.0 + sin(_lifetime_acc * 16.0) * 0.08
+	const R := 13.0
+	var r_hole := R * 0.22
+
+	# 飞旋破空残影气环（微弱冷月白晕）
+	AdaptiveDraw.arc(self, Vector2.ZERO, R * 0.95 * pulse, 0.0, TAU, Color(0.92, 0.95, 1.0, 0.15), 1.4)
+	AdaptiveDraw.arc(self, Vector2.ZERO, R * 0.72, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.20), 1.0)
+
+	# 构造四芒曲刃轮廓与磨刃面
+	var outer_poly := PackedVector2Array()
+	var bevel_polys: Array[PackedVector2Array] = []
+	var belly_lines: Array[PackedVector2Array] = []
+
+	const N_BACK := 10
+	const N_BELLY := 10
+
+	for k in range(4):
+		var ang := float(k) * PI * 0.5
+
+		# 背弧：从 -66° 平滑升起到 0° 尖端 (r=1.0)
+		var seg_back := PackedVector2Array()
+		for i in range(N_BACK + 1):
+			var t := float(i) / float(N_BACK)
+			var a := deg_to_rad(-66.0 + 66.0 * t)
+			var r_val := 0.38 + 0.62 * pow(t, 2.2)
+			seg_back.append(Vector2(cos(a), sin(a)) * r_val)
+
+		# 腹弧：从 0° 尖端深深内凹至 +18° 谷底 (r=0.28)
+		var seg_belly := PackedVector2Array()
+		for i in range(1, N_BELLY + 1):
+			var t := float(i) / float(N_BELLY)
+			var a := deg_to_rad(18.0 * t)
+			var r_val := 1.0 - 0.72 * pow(sin(t * PI * 0.5), 0.8)
+			seg_belly.append(Vector2(cos(a), sin(a)) * r_val)
+
+		# 谷底折角小齿（+20° r=0.35 -> +24° r=0.38 与下臂 -66° 咬合）
+		var a_notch := deg_to_rad(20.0)
+		var a_end := deg_to_rad(24.0)
+		var seg_notch := PackedVector2Array([
+			Vector2(cos(a_notch), sin(a_notch)) * 0.35,
+			Vector2(cos(a_end), sin(a_end)) * 0.38,
+		])
+
+		var arm := PackedVector2Array()
+		arm.append_array(seg_back)
+		arm.append_array(seg_belly)
+		arm.append_array(seg_notch)
+
+		for p in arm:
+			outer_poly.append(p.rotated(ang) * R)
+
+		var belly_rot := PackedVector2Array()
+		for p in seg_belly:
+			belly_rot.append(p.rotated(ang) * R)
+		belly_lines.append(belly_rot)
+
+		# 内凹月牙磨刃亮面
+		var b_poly := PackedVector2Array()
+		for p in seg_belly:
+			b_poly.append(p.rotated(ang) * R)
+		for idx in range(seg_belly.size() - 1, -1, -1):
+			var p := seg_belly[idx]
+			var dist_tip := 1.0 - p.length()
+			var w_bevel := minf(0.12, dist_tip * 0.22)
+			var inner_p := p * (1.0 - w_bevel / maxf(0.2, p.length()))
+			b_poly.append(inner_p.rotated(ang) * R)
+		bevel_polys.append(b_poly)
+
+	# 1. 暗底轮廓
+	var outer_bg := PackedVector2Array()
+	for p in outer_poly:
+		outer_bg.append(p * 1.05)
+	draw_colored_polygon(outer_bg, Color(0.06, 0.07, 0.10, 0.90))
+
+	# 2. 玄铁暗钢身
+	draw_colored_polygon(outer_poly, Color(0.26, 0.30, 0.38))
+
+	# 3. 亮银内刃磨光面
+	for bp in bevel_polys:
+		draw_colored_polygon(bp, Color(0.90, 0.94, 0.98))
+
+	# 4. 锋口冷金流光线
+	for bl in belly_lines:
+		draw_polyline(bl, Color(1.0, 0.88, 0.45), 1.0, true)
+
+	# 5. 中心透孔
+	AdaptiveDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
+	AdaptiveDraw.arc(self, Vector2.ZERO, r_hole, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.85), 1.0, true)
+
+	# 6. 四尖寒芒起辉
+	for k in range(4):
+		var ang := float(k) * PI * 0.5
+		var tip_pt := Vector2(R, 0.0).rotated(ang)
+		AdaptiveDraw.circle(self, tip_pt, 1.1, GameStyle.FX_HDR_METAL)
+

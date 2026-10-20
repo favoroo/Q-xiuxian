@@ -266,7 +266,7 @@ static func create_pets_divider() -> Control:
 	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return chip
 
-## 已持有灵兽的小徽记：绘制光灵圆球，支持点按弹出 DetailTip 详解卡与出售操作
+## 已持有灵兽的小徽记：绘制焰形光灵（与游戏内 SpiritPet 本体同源的焰形对称轮廓），支持点按弹出 DetailTip 详解卡与出售操作
 static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Control:
 	var def := PetData.get_def(pet_id)
 	var chip = PanelContainer.new()
@@ -286,8 +286,23 @@ static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Cont
 		var r: float = sz.x * 0.28
 		var halo: Color = def.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
 		preview.draw_circle(center, r * 1.5, halo)
-		preview.draw_circle(center, r, color)
-		preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+		# 焰形对称轮廓（右半点阵镜像拼合，与 SpiritPet._flame_poly 同源）
+		var half: Array[Vector2] = [
+			Vector2(0.00, 1.00), Vector2(0.60, 0.86), Vector2(0.94, 0.40),
+			Vector2(0.88, -0.20), Vector2(0.62, -0.70), Vector2(0.32, -1.05), Vector2(0.00, -1.38)
+		]
+		var body := PackedVector2Array()
+		for p in half:
+			body.append(center + Vector2(p.x * r, p.y * r))
+		for i in range(half.size() - 2, -1, -1):
+			var p: Vector2 = half[i]
+			body.append(center + Vector2(-p.x * r, p.y * r))
+		preview.draw_colored_polygon(body, color)
+		body.append(body[0])
+		preview.draw_polyline(body, color.darkened(0.25), 1.0, true)
+		# 对称双高光灵瞳
+		preview.draw_circle(center + Vector2(-r * 0.26, -r * 0.30), r * 0.20, Color(1.0, 1.0, 1.0, 0.85))
+		preview.draw_circle(center + Vector2(r * 0.26, -r * 0.30), r * 0.20, Color(1.0, 1.0, 1.0, 0.85))
 	)
 	chip.add_child(preview)
 
