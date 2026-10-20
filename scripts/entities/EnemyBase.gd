@@ -225,7 +225,7 @@ var procedural_view: ProceduralEnemyView = null
 ##   - 出场基准快照必须在 instantiate 当刻拍（_capture_base_stats），晚一拍就被
 ##     _scale_to_wave / 精英变异原地改过的字段污染
 const POOL_CAP_PER_KIND := 40  ## 每种敌的池上限；溢出个体直接释放（项目惯例：不把池撑大）
-const ELITE_LIGHT_CAP := FxBudget.LIGHT_CAP_ELITE  ## 精英常驻动态灯名额（硬红线 ≤20 闭环）
+const ELITE_LIGHT_CAP := FxBudget.LIGHT_CAP_ELITE  ## 精英灯名额基准（实际生效走 FxBudget.elite_light_cap()，移动端减半）
 static var _lit_elite_count: int = 0
 var _has_elite_light: bool = false
 static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
@@ -269,6 +269,14 @@ func _ready() -> void:
 	# 一次性装配（池化复用时 _ready 不重跑，由 reset_for_reuse + activate 接管每命初始化）
 	if not _assembled:
 		_assembled = true
+		# 全体敌人共享同一份受击闪白材质（2026-10-20 移动端 draw call 专项）：
+		# 18 个敌人场景各自带一份 ShaderMaterial 子资源 → 同屏多敌种按材质分桶断批。
+		# shader 已零 uniform（闪白走 self_modulate 顶点色），可让所有敌种共用同一实例，
+		# 跨敌种恢复 canvas 合批。桌面/移动都生效，视觉零差异。
+		var shared_mat := _get_shared_hit_flash_mat()
+		if shared_mat != null:
+			anim_sprite.material = shared_mat
+			hit_flash_mat = shared_mat
 		anim_base_scale = anim_sprite.scale
 		var eid := enemy_id
 		if eid.is_empty():
@@ -564,7 +572,7 @@ func _refresh_elite_light() -> void:
 	if _has_elite_light:
 		l.enabled = true
 		return
-	if _lit_elite_count < ELITE_LIGHT_CAP:
+	if _lit_elite_count < FxBudget.elite_light_cap():
 		_lit_elite_count += 1
 		_has_elite_light = true
 		l.enabled = true
@@ -622,10 +630,22 @@ func _init_procedural_view(eid: String) -> bool:
 ## 共享后 SpriteFrames 只读，节点级状态（scale/modulate/position/frame）互不影响。
 static var _frames_cache: Dictionary = {}
 
+## 全体敌人共享的受击闪白材质（2026-10-20 移动端 draw call 专项）：
+## 懒加载一次，所有敌种共用（shader 零 uniform，闪白走 self_modulate），跨敌种可合批。
+static var _shared_hit_flash_mat: ShaderMaterial = null
+const HIT_FLASH_SHADER := preload("res://assets/shaders/hit_flash.gdshader")
+
+static func _get_shared_hit_flash_mat() -> ShaderMaterial:
+	if _shared_hit_flash_mat == null:
+		_shared_hit_flash_mat = ShaderMaterial.new()
+		_shared_hit_flash_mat.shader = HIT_FLASH_SHADER
+	return _shared_hit_flash_mat
+
 ## 释放共享帧缓存（退出时调用）。缓存是刻意常驻的，但不主动放开引用会被
 ## Godot 报成 "resources still in use at exit"，让退出日志一片假警报。
 static func clear_frame_cache() -> void:
 	_frames_cache.clear()
+	_shared_hit_flash_mat = null
 
 ## 当前缓存的帧集合数量（调试/自动化验证用）
 static func cache_size() -> int:

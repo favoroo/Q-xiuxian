@@ -72,6 +72,12 @@ func _tick_crowd_tier(delta: float) -> void:
 		return
 	_crowd_tier_cd = 1.0
 	var count: int = GameManager.enemy_count + SpawnIndicator.active_count
+	# 低帧连续采样（1s 一拍）：移动端填充率最吃紧，帧率阈值放宽到 40；桌面 30。
+	var floor_fps: float = 40.0 if OS.has_feature("mobile") else 30.0
+	if Engine.get_frames_per_second() < floor_fps:
+		_low_fps_streak += 1
+	else:
+		_low_fps_streak = 0
 	# 滞回判定（2026-10-17）：未拥挤 ≥24 进入，已拥挤 ≤20 退出，中间保持，
 	# 敌量在阈值附近波动时 glow_intensity/灯名额不再每秒翻转（亮 UI 辉光脉冲 = UI 频闪观感）
 	var want: bool
@@ -79,8 +85,16 @@ func _tick_crowd_tier(delta: float) -> void:
 		want = count > FxBudget.CROWDED_EXIT_THRESHOLD
 	else:
 		want = count >= FxBudget.CROWDED_ENEMY_THRESHOLD
+	# 低帧兜底（2026-10-20 真机 GPU 专项）：原阈值只看敌数，而真机「敌 12 也掉到 31 帧」
+	# 时 crowded 永不触发、灯/glow 全量开。现改为「敌多 或 持续低帧」双条件：
+	# 连续 3 秒低于阈值也进拥挤档（退档仍走敌数滞回，避免帧率在阈值附近抖动导致每秒翻转）。
+	if not want and _low_fps_streak >= 3:
+		want = true
 	if want != FxBudget.crowded:
 		FxBudget.crowded = want
+
+## 低帧连续秒数（1s 采样一次，3 = 连续 3 秒低于阈值才进拥挤档）
+var _low_fps_streak: int = 0
 
 func _perf_baseline_active() -> bool:
 	if not _perf_baseline_checked:
@@ -368,6 +382,7 @@ func end_wave(early_secs: float = 0.0) -> void:
 	phase = Phase.CLEARING
 	# 拥挤档退出（2026-10-17）：波末清场后灯名额/glow 回满档，回合间商店照常亮堂
 	FxBudget.crowded = false
+	_low_fps_streak = 0
 	clear_timer = 1.0
 	AudioManager.play_sfx("wave_clear", 0.9)
 	GameManager.announcement_triggered.emit("第 %d 波敌潮平息" % wave_number)

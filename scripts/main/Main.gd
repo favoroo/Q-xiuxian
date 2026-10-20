@@ -27,6 +27,7 @@ var _low_hp_pulsing: bool = false   ## 低血量红晕脉冲态 memo（状态机
 var _low_hp_tween: Tween = null     ## 低血量脉冲循环 tween 句柄（退出/红闪抢通道时 kill）
 var _atmo_mood_tween: Tween = null   ## 煞气两态颜色渐变闸（新切换先杀旧 tween）
 var _atmo_baleful: bool = false      ## 当前氛围态 memo：波次重复 emit 不重放
+var _mist_sprites: Array[Sprite2D] = []  ## 常驻薄雾片引用（移动端减量/后续可关；原先丢失引用无法回收）
 
 # —— T-4.3 环境光尘两态氛围（常态灵气光尘 / Boss·末 5 波煞气碎屑）——
 ## 灵尘按深度分两层：远层小而密、近层大而稀（更大更慢更低透明）；灵叶层沿用原样。
@@ -306,6 +307,7 @@ func _exit_tree() -> void:
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表 / 弹丸及掉落物池）随场景释放，
 	# 不然退出时会报 "resources still in use at exit" 的假泄漏警报。
 	EnemyBase.clear_frame_cache()
+	SharedMaterials.clear()
 	BakedDecorTexture.clear()
 	EnemyBase.clear_pools()
 	PoisonPool.clear_pool()
@@ -409,11 +411,19 @@ func _apply_atmo_mood(baleful: bool) -> void:
 func _setup_ambient_mist() -> void:
 	var mist_tex: Texture2D = preload("res://assets/art/light_radial.png")
 	var atmo_layer: Node2D = $AtmosphereLayer
+	# 移动端填充率专项（2026-10-20）：每张雾 sprite 放大 8.5~10 倍近乎铺满屏，3 张半透明叠加
+	# 是「敌少也等 GPU」的固定 fill-rate 税。移动端只留 1 张（并降到 6.5 倍、alpha 收一档），
+	# 桌面端维持原 3 张氛围不变。引用存进 _mist_sprites 以便后续统一显隐/回收。
 	var mist_configs: Array[Dictionary] = [
 		{"pos": Vector2(-180.0, -150.0), "scale": Vector2(8.5, 7.0), "alpha": 0.045, "drift": Vector2(60.0, 30.0), "dur": 22.0},
 		{"pos": Vector2(200.0, 140.0), "scale": Vector2(10.0, 8.0), "alpha": 0.050, "drift": Vector2(-50.0, -40.0), "dur": 28.0},
 		{"pos": Vector2(0.0, 260.0), "scale": Vector2(9.0, 7.5), "alpha": 0.040, "drift": Vector2(40.0, -25.0), "dur": 18.0},
 	]
+	var mobile := SettingsManager.is_mobile_platform()
+	if mobile:
+		mist_configs = [
+			{"pos": Vector2(0.0, 60.0), "scale": Vector2(6.5, 5.5), "alpha": 0.038, "drift": Vector2(50.0, 24.0), "dur": 26.0},
+		]
 	for cfg in mist_configs:
 		var sprite := Sprite2D.new()
 		sprite.texture = mist_tex
@@ -421,6 +431,7 @@ func _setup_ambient_mist() -> void:
 		sprite.scale = cfg.scale
 		sprite.modulate = Color(0.20, 0.65, 0.90, cfg.alpha)
 		atmo_layer.add_child(sprite)
+		_mist_sprites.append(sprite)
 		var tw := create_tween().set_loops()
 		tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		tw.tween_property(sprite, "position", cfg.pos + cfg.drift, cfg.dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

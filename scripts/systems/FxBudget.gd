@@ -94,12 +94,22 @@ static func get_allocated_light_cap() -> int:
 static var crowded: bool = false
 
 ## 拥挤档下生效的掉落灵玉灯名额（5 → 2）
-static func gem_light_cap() -> int:
-	return LIGHT_CAP_GEM >> 1 if crowded else LIGHT_CAP_GEM
+## 移动端常驻减半（2026-10-20 真机填充率专项）：2D 灯每盏对范围内 canvas item 额外一遍
+## 光照 pass，是移动端固定填充税；掉落/弹丸这类「可再生物」在移动端恒按减半名额发放，
+## 不依赖敌量阈值（12 敌时 crowded=false，原先灯全量开）。桌面端仍走 crowded 阈值。
+static func _renewable_caps_halved() -> bool:
+	return crowded or OS.has_feature("mobile")
 
-## 拥挤档下生效的弹丸灯名额（6 → 3）
+static func gem_light_cap() -> int:
+	return LIGHT_CAP_GEM >> 1 if _renewable_caps_halved() else LIGHT_CAP_GEM
+
+## 拥挤档下生效的弹丸灯名额（6 → 3）；移动端同样恒减半（理由同上）
 static func projectile_light_cap() -> int:
-	return LIGHT_CAP_PROJECTILE >> 1 if crowded else LIGHT_CAP_PROJECTILE
+	return LIGHT_CAP_PROJECTILE >> 1 if _renewable_caps_halved() else LIGHT_CAP_PROJECTILE
+
+## 移动端精英常驻灯名额（2 → 1）：精英/Boss 数量少但仍是移动端固定灯税
+static func elite_light_cap() -> int:
+	return LIGHT_CAP_ELITE >> 1 if OS.has_feature("mobile") else LIGHT_CAP_ELITE
 
 ## 拥挤档下 glow 强度（0.4 → 0.25：超白起辉仍在，只是峰值压一档；阈值不动保 FX_HDR 色表）
 const GLOW_INTENSITY_NORMAL := 0.4

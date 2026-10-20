@@ -5,7 +5,7 @@ extends UnitTestsBase
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
 func _test_five_elements_system() -> void:
-	# 1. 武器表完整性校验：70 把法器且图标资源齐全（2026-10-19 增加手里剑：剑系·金）
+	# 1. 武器表完整性校验：70 把法器且图标资源齐全（2026-10-19 增加手里剑；2026-10-20 改判弹射·金）
 	_c.equals(WeaponData.DEFS.size(), 70, "全武器库扩充至 70 把法器")
 	_c.equals(WeaponData.SHOP_POOL.size(), 70, "商店池覆盖全部 70 把法器")
 	var missing_icons: Array = []

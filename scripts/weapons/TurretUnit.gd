@@ -112,9 +112,7 @@ func _setup_muzzle_flash() -> void:
 	if tex == null:
 		return
 	muzzle_flash.texture = tex
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	muzzle_flash.material = mat
+	muzzle_flash.material = SharedMaterials.add_blend()
 	muzzle_flash.z_index = 6
 	muzzle_flash.visible = false
 	muzzle_point.add_child(muzzle_flash)

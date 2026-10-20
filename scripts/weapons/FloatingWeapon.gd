@@ -326,9 +326,7 @@ func _setup_aura() -> void:
 	if tex == null:
 		return
 	aura_sprite.texture = tex
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	aura_sprite.material = mat
+	aura_sprite.material = SharedMaterials.add_blend()
 	aura_sprite.scale = Vector2.ONE * 0.42
 	aura_sprite.modulate = _get_aura_color()
 	aura_sprite.modulate.a = 0.12
@@ -416,9 +414,7 @@ func _setup_muzzle_flash() -> void:
 	if tex == null:
 		return
 	muzzle_flash.texture = tex
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	muzzle_flash.material = mat
+	muzzle_flash.material = SharedMaterials.add_blend()
 	muzzle_flash.position = muzzle_point.position
 	muzzle_flash.z_index = 6
 	muzzle_flash.visible = false
