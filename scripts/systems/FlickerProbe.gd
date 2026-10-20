@@ -25,6 +25,9 @@ extends Node
 ##   CROWDED        拥挤档翻转
 
 const LOG_PATH := "user://flicker_log.csv"
+## 心跳间隔（秒）：无论有没有异常，每这么多秒必写一行（event=HEARTBEAT）。
+## 这样「文件存在且有心跳」= 探针确实在跑；某段时间心跳断了 = 主线程卡死/被挂起。
+const HEARTBEAT_SEC := 2.0
 ## 显存单帧跳变阈值（MB）：字形图集重建一次通常几 MB 起步
 const VRAM_JUMP_MB := 2.0
 ## draw call 相对跌幅阈值：一帧掉这么多说明有整批东西没画
@@ -50,6 +53,7 @@ var _p_glow: float = -1.0
 var _p_crowded: bool = false
 var _hud: Control = null
 var _warmup: int = 0
+var _heartbeat_cd: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -65,29 +69,46 @@ func _refresh_enabled() -> void:
 	_enabled = bool(SettingsManager.get_val(&"display", &"flicker_probe", false))
 	set_process(_enabled)
 	if _enabled and _f == null:
+		# 一开启就建文件并立刻落表头 + 首行心跳：保证「文件一定存在」。
+		# 教训（2026-10-20）：首版只在检测到异常时才创建文件，用户开开关玩了一局却没找到
+		# 文件 —— 「没记录」与「没异常」无法区分，探针等于失效。现在改成：开即建、
+		# 每 HEARTBEAT_SEC 必写一行心跳（event=HEARTBEAT），异常行另标事件名。
 		_f = FileAccess.open(LOG_PATH, FileAccess.WRITE)
 		_rows = 0
 		_warmup = 30  # 前 30 帧只建基线，不判异常
+		_heartbeat_cd = 0.0
 		if _f != null:
 			_f.store_line("frame,t_ms,fps,proc_ms,phys_ms,draws,prims,vram_mb,hud_vis,hud_alpha,hud_x,hud_y,hud_w,hud_h,win_w,win_h,scale_mode,scale_factor,time_scale,glow,crowded,dmg,enemies,event")
+			_f.store_line("# PROBE_STARTED app=%s platform=%s" % [Version.APP_VERSION_NAME, OS.get_name()])
 			_f.flush()
 	elif not _enabled and _f != null:
-		_f.flush()
-		_f.close()
+		if _f != null:
+			_f.store_line("# PROBE_STOPPED")
+			_f.flush()
+			_f.close()
 		_f = null
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _enabled or _f == null:
 		return
+	# 同帧去重：优先用 frames_drawn，但 headless/无渲染后端下它恒为 0（实测），
+	# 单纯比较它会把 _process 从第二帧起永久挡死。这里只在它真的推进时才做去重。
 	var drawn := Engine.get_frames_drawn()
-	if drawn == _frame:
-		return  # 同一渲染帧不重复采样
-	_frame = drawn
+	if drawn > 0:
+		if drawn == _frame:
+			return
+		_frame = drawn
 
 	if _hud == null or not is_instance_valid(_hud):
-		var m := get_tree().current_scene
-		if m != null:
-			_hud = m.get_node_or_null("UILayer/GameHUD") as Control
+		# 探针就挂在 GameHUD 下 ⇒ 父节点就是 HUD。**不要**走 get_tree().current_scene：
+		# 探针 _ready 早于 Main 成为 current_scene，且测试/换局时 current_scene 也可能不是 Main，
+		# 那条路径会永久解析失败 → _hud 恒 null → 每帧 return → 一行都不写。
+		# （2026-10-20 真机「开了开关没记录」的第二个根因，集成判据才暴露出来）
+		_hud = get_parent() as Control
+		if _hud == null:
+			var m := get_tree().current_scene
+			if m != null:
+				_hud = m.get_node_or_null("UILayer/GameHUD") as Control
 	if _hud == null:
 		return
 
@@ -101,7 +122,9 @@ func _process(_delta: float) -> void:
 	var scale_factor := get_window().content_scale_factor
 	var ts := Engine.time_scale
 	var glow := 0.0
-	var we := get_tree().current_scene.get_node_or_null("WorldEnvironment") as WorldEnvironment if get_tree().current_scene != null else null
+	# WorldEnvironment 在 Main 根下。沿 HUD 的父链往上找到 Main 再取，别用 current_scene
+	# （同 _hud 的理由：current_scene 在探针就绪/测试场景下不可靠）。
+	var we := _find_world_environment()
 	if we != null and we.environment != null:
 		glow = we.environment.glow_intensity if we.environment.glow_enabled else 0.0
 	var crowded := FxBudget.crowded
@@ -138,6 +161,13 @@ func _process(_delta: float) -> void:
 
 	if not events.is_empty():
 		_write_row(vram, draws, hud_vis, hud_a, hud_rect, win, scale_mode, scale_factor, ts, glow, crowded, "|".join(events))
+
+	# 心跳：无论有无异常都定期写一行，保证「探针在跑」这件事有据可查
+	_heartbeat_cd += delta
+	if _heartbeat_cd >= HEARTBEAT_SEC:
+		_heartbeat_cd = 0.0
+		if events.is_empty():
+			_write_row(vram, draws, hud_vis, hud_a, hud_rect, win, scale_mode, scale_factor, ts, glow, crowded, "HEARTBEAT")
 
 	_snapshot(vram, draws, hud_vis, hud_a, hud_rect, win, scale_mode, scale_factor, ts, glow, crowded)
 
@@ -180,3 +210,17 @@ func is_active() -> bool:
 	return _enabled
 func rows_written() -> int:
 	return _rows
+
+## 沿 HUD 父链向上找 WorldEnvironment（挂在 Main 根下）。找不到返回 null 不报错。
+func _find_world_environment() -> WorldEnvironment:
+	if _hud == null:
+		return null
+	var cur: Node = _hud.get_parent()
+	while cur != null:
+		if cur is WorldEnvironment:
+			return cur as WorldEnvironment
+		var we := cur.get_node_or_null("WorldEnvironment") as WorldEnvironment
+		if we != null:
+			return we
+		cur = cur.get_parent()
+	return null

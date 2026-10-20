@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_schema()
 	_test_probe_instantiable()
 	_test_constants()
+	await _test_creates_file_on_enable()
 
 	if not _c.all_passed():
 		print("FLICKER_PROBE_RESULT: FAILED (%d failures)" % _c.failures.size())
@@ -59,3 +60,33 @@ func _test_constants() -> void:
 	_check(FlickerProbe.VRAM_JUMP_MB > 0.0, "显存跳变阈值 >0")
 	_check(FlickerProbe.DRAW_DROP_RATIO > 0.0 and FlickerProbe.DRAW_DROP_RATIO < 1.0,
 		"draw 跌幅阈值在 (0,1)")
+	# 心跳必须存在且为正：首版只在异常时建文件，导致用户「开了探针却找不到文件」，
+	# 心跳是「探针确实在跑」的可证伪凭据（2026-10-20 修正）
+	_check(FlickerProbe.HEARTBEAT_SEC > 0.0,
+		"心跳间隔 >0（保证文件一定被创建且有内容）")
+
+## 4. 开启后必须立刻建文件（回归「找不到文件」那个坑）
+func _test_creates_file_on_enable() -> void:
+	var path := FlickerProbe.log_path()
+	# 先清掉可能存在的旧日志，确保本段测的是「刚开启」的行为
+	if FileAccess.file_exists(path):
+		DirAccess.open("user://").remove(path.get_file())
+	var probe := FlickerProbe.new()
+	add_child(probe)
+	await get_tree().process_frame
+	# 打开开关：应立刻创建文件并写表头
+	SettingsManager.set_val(&"display", &"flicker_probe", true, false)
+	await get_tree().process_frame
+	var exists := FileAccess.file_exists(path)
+	_check(exists, "开启探针后立刻创建日志文件（不必等异常）")
+	if exists:
+		var content := FileAccess.get_file_as_string(path)
+		_check(content.contains("frame,t_ms"), "文件含 CSV 表头")
+		_check(content.contains("PROBE_STARTED"), "文件含启动标记")
+	# 关掉并清理，避免污染用户/后续测试
+	SettingsManager.set_val(&"display", &"flicker_probe", false, false)
+	await get_tree().process_frame
+	if FileAccess.file_exists(path):
+		DirAccess.open("user://").remove(path.get_file())
+	probe.queue_free()
+	await get_tree().process_frame
