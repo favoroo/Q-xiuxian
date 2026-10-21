@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>剑士 · 修仙幸存者｜20 波自动战斗</title>
-<meta name="description" content="《剑士》是一款修仙题材的俯视角自动攻击幸存者游戏。20 名角色、69 件武器、87 件道具，武器自动索敌，你只管走位与构筑。浏览器直接试玩，安卓手机免费下载。">
+<meta name="description" content="《剑士》是一款修仙题材的俯视角自动攻击幸存者游戏。20 名角色、70 件武器、103 件道具、7 只灵兽，武器自动索敌，你只管走位与构筑。浏览器直接试玩，安卓手机免费下载。">
 <meta name="theme-color" content="#000000">
 <meta property="og:title" content="剑士 · 修仙幸存者">
-<meta property="og:description" content="俯视角自动攻击幸存者。选角色、配武器、扛过 20 波妖魔。浏览器可直接试玩。">
+<meta property="og:description" content="俯视角自动攻击幸存者。选角色、配武器、带灵兽、扛过 20 波妖魔。浏览器可直接试玩。">
 <meta property="og:image" content="img/shot_field.png">
 <meta property="og:type" content="website">
 <link rel="icon" href="img/app_icon.png">
-<link rel="stylesheet" href="styles.css?v=5">
+<link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -25,9 +25,12 @@
       <a href="#play">玩法</a>
       <a href="#roles">角色</a>
       <a href="#arms">武器</a>
+      <a href="#items">道具</a>
+      <a href="#pets">灵兽</a>
+      <a href="#skills">技能</a>
       <a href="#get">下载</a>
     </nav>
-    <a class="btn btn-play topbar-cta" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">立即试玩</a>
+    <a class="btn btn-sm topbar-cta" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">立即试玩</a>
   </div>
 </header>
 
@@ -36,123 +39,182 @@
   <section class="hero">
     <div class="wrap hero-in">
       <div class="hero-copy">
-        <p class="kicker"><span>修仙</span><i>/</i><span>幸存者</span><i>/</i><span>自动战斗</span></p>
+        <p class="kicker"><span>修仙</span><span>幸存者</span><span>自动战斗</span></p>
         <h1>扛过 <em>20 波</em>妖魔<br>一战到底</h1>
         <p class="lead">俯视角自动攻击幸存者。武器自己索敌出手，你只管走位、攒钱、搭构筑。选一个角色，配一身武器，看它把你的流派滚成什么样。</p>
         <div class="cta-row">
-          <a class="btn btn-play" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">立即试玩 · 网页版</a>
+          <a class="btn" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">立即试玩 · 网页版</a>
           <a class="btn btn-ghost" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">下载安卓版</a>
         </div>
         <p class="fine">网页版打开就能玩，第一次加载稍慢一点，点一下屏幕就开始。</p>
       </div>
       <figure class="hero-shot">
         <div class="frame">
-          <img src="img/shot_field.png" alt="《剑士》实机画面：角色被武器范围环包围，自动索敌攻击" width="960" height="540">
+          <img src="img/shot_field.png" alt="《剑士》实机画面：角色在场地中央，武器自动索敌，头顶跳出伤害数字" width="960" height="540">
         </div>
         <figcaption>实机画面 · 第 1 波</figcaption>
       </figure>
     </div>
   </section>
 
+  <!-- 数字带：数值由 app.js 从 data.js 现填（tools/export_site_data.py 从游戏数据表导出），页面不手抄 -->
   <section class="band">
     <div class="wrap band-in">
-      <div class="stat"><b>20</b><span>波通关</span></div>
-      <div class="stat"><b>20</b><span>名角色</span></div>
-      <div class="stat"><b>69</b><span>件武器</span></div>
-      <div class="stat"><b>87</b><span>件道具</span></div>
-      <div class="stat"><b>7</b><span>个技能</span></div>
+      <div class="stat"><b data-count="waves">20</b><span>波通关</span></div>
+      <div class="stat"><b data-count="roles">20</b><span>名角色</span></div>
+      <div class="stat"><b data-count="weapons">70</b><span>件武器</span></div>
+      <div class="stat"><b data-count="items">103</b><span>件道具</span></div>
+      <div class="stat"><b data-count="pets">7</b><span>只灵兽</span></div>
+      <div class="stat"><b data-count="skills">7</b><span>个技能</span></div>
     </div>
   </section>
 
   <section id="play" class="section">
     <div class="wrap">
-      <h2 class="sec-title">玩法</h2>
-      <p class="sec-sub">一局 20 波。首波 36 秒，逐波变长，最长 80 秒；提前清场剩下的时间会折成金币。</p>
-      <div class="cards">
-        <article class="card plate">
-          <div class="frame"><img src="img/shot_combat.png" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540"></div>
-          <h3>自动战斗</h3>
-          <p>身上的武器自己找目标、自己出手。你要做的是别被围住，以及决定下一步买什么。</p>
-        </article>
-        <article class="card plate">
-          <div class="frame"><img src="img/shot_alloc.png" alt="实机：升级加点界面，5 张候选卡并排" width="960" height="540"></div>
-          <h3>升级加点</h3>
-          <p>每波结束后从 5 张卡里选 1 张，不满意可以免费刷新 1 次。成长方向全在你手里。</p>
-        </article>
-        <article class="card plate">
-          <div class="frame"><img src="img/shot_shop.png" alt="实机：商店界面，5 个货架格陈列武器与道具" width="960" height="540"></div>
-          <h3>商店</h3>
-          <p>波与波之间用金币买武器、道具和灵兽，5 个货架，看不上可以花钱重掷。</p>
-        </article>
-        <article class="card plate">
-          <div class="frame"><img src="img/shot_synergy.png" alt="实机：等级与属性面板，显示羁绊与元素共鸣的阶梯加成" width="960" height="540"></div>
-          <h3>羁绊与元素共鸣</h3>
-          <p>集齐 2 / 4 / 6 件同系武器解锁阶梯加成。同一把武器既算器类也算五行，构筑会互相咬合。</p>
-        </article>
+      <div class="sec-head"><h2 class="sec-title">玩法</h2></div>
+      <p class="sec-sub">一局 20 波。首波 36 秒，逐波变长，最长 80 秒；提前清场，剩下的时间折成金币。</p>
+      <div class="sec-body slab">
+        <div class="cards">
+          <article class="card plate">
+            <div class="frame"><img src="img/shot_combat.png" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540" loading="lazy"></div>
+            <h3>自动战斗</h3>
+            <p>身上的武器自己找目标、自己出手。你要做的是别被围住，以及决定下一步买什么。</p>
+          </article>
+          <article class="card plate">
+            <div class="frame"><img src="img/shot_alloc.png" alt="实机：回合末升级加点界面，一屏 5 张候选卡" width="960" height="540" loading="lazy"></div>
+            <h3>升级加点</h3>
+            <p>每波结束后从 5 张卡里选 1 张，不满意可以免费刷新 1 次。成长方向全在你手里。</p>
+          </article>
+          <article class="card plate">
+            <div class="frame"><img src="img/shot_shop.png" alt="实机：商店界面，5 个货架格陈列武器、道具与灵兽" width="960" height="540" loading="lazy"></div>
+            <h3>商店</h3>
+            <p>波与波之间用金币买武器、道具和灵兽，5 个货架，看不上可以花钱重掷，也能锁定留到下一波。</p>
+          </article>
+          <article class="card plate">
+            <div class="frame"><img src="img/shot_synergy.png" alt="实机：等级与属性面板，右侧列出羁绊与元素共鸣的阶梯加成" width="960" height="540" loading="lazy"></div>
+            <h3>羁绊与元素共鸣</h3>
+            <p>集齐 2 / 4 / 6 件同系武器解锁阶梯加成。同一把武器既算器类也算五行，构筑会互相咬合。</p>
+          </article>
+        </div>
       </div>
     </div>
   </section>
 
   <section id="roles" class="section">
     <div class="wrap">
-      <h2 class="sec-title">角色</h2>
-      <p class="sec-sub">20 名角色，每一个都是一笔交易：给一条很爽的加成，同时收一样很疼的代价。开局自带 1 个技能，部分角色还有第二个。</p>
-      <div class="roles" id="roleGrid"></div>
+      <div class="sec-head"><h2 class="sec-title">角色</h2></div>
+      <p class="sec-sub"><span data-count="roles">20</span> 名角色，每一个都是一笔交易：给一条很爽的加成，同时收一样很疼的代价。每人都能带一个随行技能，个别角色还有第二个。</p>
+      <div class="sec-body slab">
+        <div class="roles" id="roleGrid"></div>
+      </div>
     </div>
   </section>
 
   <section id="arms" class="section">
     <div class="wrap">
-      <h2 class="sec-title">武器</h2>
-      <p class="sec-sub">69 件。点一张卡片看它吃什么加成。</p>
-      <div class="filters" id="filters" role="group" aria-label="按器类筛选"></div>
-      <div class="detail plate" id="detail" aria-live="polite">
-        <img id="detailIcon" src="img/w00.png" alt="" width="44" height="44">
-        <div class="detail-txt">
-          <b id="detailName">长剑</b>
-          <span id="detailDesc">近身挥砍，受近战伤害与暴击率加成</span>
+      <div class="sec-head"><h2 class="sec-title">武器</h2></div>
+      <p class="sec-sub"><span data-count="weapons">70</span> 件。点一张卡片看它吃什么加成。</p>
+      <div class="sec-body slab">
+        <div class="filters" id="armFilters" role="group" aria-label="按器类与五行筛选"></div>
+        <div class="detail" id="armDetail" aria-live="polite">
+          <img id="armDetailIcon" src="img/w00.png" alt="" width="44" height="44">
+          <div class="detail-txt">
+            <b id="armDetailName">长剑</b>
+            <span id="armDetailDesc">近身挥砍，受近战伤害与暴击率加成</span>
+          </div>
+        </div>
+        <div class="grid arms" id="armGrid"></div>
+        <div class="rules">
+          <div class="rule">
+            <h4>三合一升星</h4>
+            <p id="starRule">集齐三把同名同星，在商店合成升一星，最高 <b class="star">★3</b>。</p>
+          </div>
+          <div class="rule">
+            <h4>羁绊阶梯</h4>
+            <p id="synLead">同一器类或同一五行攒到 2 / 4 / 6 件，逐档给加成：</p>
+            <div class="syn" id="synChips"></div>
+          </div>
         </div>
       </div>
-      <div class="arms" id="armGrid"></div>
+    </div>
+  </section>
+
+  <section id="items" class="section">
+    <div class="wrap">
+      <div class="sec-head"><h2 class="sec-title">道具</h2></div>
+      <p class="sec-sub"><span data-count="items">103</span> 件被动道具，在商店买到就生效，没有栏位限制、可以叠。<b>卡片顶边的颜色是档位</b>：普通、稀有、史诗、传说，越靠后越贵也越狠。</p>
+      <div class="sec-body slab">
+        <div class="filters" id="itemFilters" role="group" aria-label="按档位筛选"></div>
+        <div class="detail" id="itemDetail" aria-live="polite">
+          <img id="itemDetailIcon" src="img/item_jubaopen.png" alt="" width="44" height="44">
+          <div class="detail-txt">
+            <b id="itemDetailName">储蓄罐</b>
+            <span id="itemDetailDesc">每回合结束白得金币与经验</span>
+          </div>
+        </div>
+        <div class="grid items" id="itemGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pets" class="section">
+    <div class="wrap">
+      <div class="sec-head"><h2 class="sec-title">灵兽</h2></div>
+      <p class="sec-sub"><span data-count="pets">7</span> 只随行灵兽，在商店货架上买到就跟着你打，按各自的周期出手。每种只能带一只，默认 1 格，御兽师 3 格。</p>
+      <div class="sec-body slab">
+        <div class="pets" id="petGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="skills" class="section">
+    <div class="wrap">
+      <div class="sec-head"><h2 class="sec-title">技能</h2></div>
+      <p class="sec-sub">选完角色挑一个随行技能，战斗中右下圆钮手动释放。冷却从效果走完那刻起算，带冷却缩减的道具还能再压短。</p>
+      <div class="sec-body slab">
+        <div class="skills" id="skillGrid"></div>
+      </div>
     </div>
   </section>
 
   <section id="get" class="section">
     <div class="wrap">
-      <h2 class="sec-title">下载</h2>
-      <div class="gets">
-        <article class="get plate">
-          <span class="get-tag">免安装</span>
-          <h3>网页版</h3>
-          <p>不用装任何东西，手机和电脑的浏览器点开就能玩。</p>
-          <a class="btn btn-play" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">开始试玩</a>
-        </article>
-        <article class="get plate">
-          <span class="get-tag">Android</span>
-          <h3>安卓版</h3>
-          <p>下载安装包，装好就能玩。游戏里能直接检查新版本。</p>
-          <a class="btn btn-play" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">下载最新版</a>
-          <a class="btn btn-ghost" href="https://gitee.com/favo9/q-xiuxian/releases" target="_blank" rel="noopener">国内下载</a>
-        </article>
-        <article class="get plate">
-          <span class="get-tag">持续更新</span>
-          <h3>关于更新</h3>
-          <p>一个人做的小游戏，几乎每天都在更新，数值和角色一直在调。</p>
-          <a class="btn btn-ghost" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">看更新记录</a>
-        </article>
+      <div class="sec-head"><h2 class="sec-title">下载</h2></div>
+      <div class="sec-body slab">
+        <div class="gets">
+          <article class="get plate">
+            <span class="get-tag">免安装</span>
+            <h3>网页版</h3>
+            <p>不用装任何东西，手机和电脑的浏览器点开就能玩。</p>
+            <a class="btn btn-sm" href="https://favoroo.github.io/Q-xiuxian/" target="_blank" rel="noopener">开始试玩</a>
+          </article>
+          <article class="get plate">
+            <span class="get-tag">Android</span>
+            <h3>安卓版</h3>
+            <p>下载安装包，装好就能玩。游戏里能直接检查新版本，当前 <b data-version>v0.0.64</b>。</p>
+            <a class="btn btn-sm" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">下载最新版</a>
+            <a class="btn btn-sm btn-ghost" href="https://gitee.com/favo9/q-xiuxian/releases" target="_blank" rel="noopener">国内下载</a>
+          </article>
+          <article class="get plate">
+            <span class="get-tag">持续更新</span>
+            <h3>关于更新</h3>
+            <p>一个人做的小游戏，几乎每天都在更新，数值和角色一直在调。</p>
+            <a class="btn btn-sm btn-ghost" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">看更新记录</a>
+          </article>
+        </div>
+        <details class="qa">
+          <summary>存档在哪，换设备还在吗？</summary>
+          <p>存档存在你自己的设备上。网页版的存档跟着浏览器走，清了浏览器数据就没了，想长期玩建议装安卓版。</p>
+        </details>
+        <details class="qa">
+          <summary>手机配置要求高吗？</summary>
+          <p>不高，前几年出的手机也能流畅玩。设备比较旧的话，建议装安卓版。</p>
+        </details>
+        <details class="qa">
+          <summary>要钱吗？</summary>
+          <p>完全免费，没有内购，也没有广告。</p>
+        </details>
       </div>
-      <details class="qa">
-        <summary>存档在哪，换设备还在吗？</summary>
-        <p>存档存在你自己的设备上。网页版的存档跟着浏览器走，清了浏览器数据就没了，想长期玩建议装安卓版。</p>
-      </details>
-      <details class="qa">
-        <summary>手机配置要求高吗？</summary>
-        <p>不高，前几年出的手机也能流畅玩。设备比较旧的话，建议装安卓版。</p>
-      </details>
-      <details class="qa">
-        <summary>要钱吗？</summary>
-        <p>完全免费，没有内购，也没有广告。</p>
-      </details>
     </div>
   </section>
 
@@ -163,13 +225,13 @@
     <div class="foot-id">
       <img class="brand-mark" src="img/app_icon.png" alt="" width="30" height="30">
       <span class="foot-name">剑士 <i>Swordsman</i></span>
-      <span class="chip foot-author">作者 <b>HQ</b></span>
+      <span class="foot-author">作者 <b>HQ</b></span>
     </div>
     <p class="foot-meta">免费 · 手机和电脑浏览器都能玩</p>
   </div>
 </footer>
 
-<script src="data.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="data.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

@@ -127,6 +127,9 @@ var _candidate_enemies_buf: Array[Node2D] = []
 var _candidate_chests_buf: Array[Node2D] = []
 var _candidate_targets_buf: Array[Node2D] = []
 var _seen_ids_buf: Dictionary = {}
+## 索敌排序预算缓存（instance_id -> 是否在屏 / 椭圆距离），避免比较器里重复计算（2026-10-21）
+var _sort_on: Dictionary = {}
+var _sort_dist: Dictionary = {}
 var _weapons_info_buf: Array[Dictionary] = []
 var _enemies_info_buf: Array[Dictionary] = []
 var _chests_info_buf: Array[Dictionary] = []
@@ -1044,13 +1047,28 @@ func _physics_process(delta: float) -> void:
 		_update_weapon_targets()
 
 func _sort_candidate_by_dist(a: Node2D, b: Node2D) -> bool:
-	var a_on := GameBalance.is_in_viewport(a.global_position, global_position)
-	var b_on := GameBalance.is_in_viewport(b.global_position, global_position)
+	# 读预算缓存（见 _fill_sort_cache）：排序是 O(n log n) 次比较，旧写法每次比较都重算
+	# 2 次 is_in_viewport + 2 次 elliptical_distance（32 候选 ≈ 160 次比较 → 3200 次/秒）。
+	# 改为排序前对每个元素算一次存入复用字典（instance_id -> bool/float），比较器只查表。
+	var a_id := a.get_instance_id()
+	var b_id := b.get_instance_id()
+	var a_on: bool = _sort_on.get(a_id, false)
+	var b_on: bool = _sort_on.get(b_id, false)
 	if a_on != b_on:
 		return a_on
-	var da := GameBalance.elliptical_distance(a.global_position - global_position)
-	var db := GameBalance.elliptical_distance(b.global_position - global_position)
-	return da < db
+	return float(_sort_dist.get(a_id, 0.0)) < float(_sort_dist.get(b_id, 0.0))
+
+## 排序前预算：对缓冲里每个节点算一次 (是否在屏, 距离) 存入复用字典，避免比较器重复计算。
+## clear() 复用底层存储，只写基础类型值，无逐元素数组分配。
+func _fill_sort_cache(buf: Array) -> void:
+	_sort_on.clear()
+	_sort_dist.clear()
+	for node in buf:
+		if not is_instance_valid(node):
+			continue
+		var id: int = node.get_instance_id()
+		_sort_on[id] = GameBalance.is_in_viewport(node.global_position, global_position)
+		_sort_dist[id] = GameBalance.elliptical_distance(node.global_position - global_position)
 
 func _acquire_pooled_dict(pool: Array[Dictionary], idx: int) -> Dictionary:
 	while pool.size() <= idx:
@@ -1087,6 +1105,7 @@ func _update_weapon_targets() -> void:
 		_target_query.shape = _target_shape
 		_target_query.collision_mask = 4
 		_target_query.collide_with_areas = true
+		_target_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 		query_alloc_count += 1
 	else:
 		query_reuse_count += 1
@@ -1118,7 +1137,10 @@ func _update_weapon_targets() -> void:
 			_candidate_enemies_buf.append(enemy)
 
 	# 按距玩家从近到远排序，保证贴身危急判定与同向优先级稳定（命名方法避免每帧生成闭包）
+	# 排序前各算一次 on_screen/dist 进复用字典，比较器只查表（见 _fill_sort_cache）
+	_fill_sort_cache(_candidate_enemies_buf)
 	_candidate_enemies_buf.sort_custom(_sort_candidate_by_dist)
+	_fill_sort_cache(_candidate_chests_buf)
 	_candidate_chests_buf.sort_custom(_sort_candidate_by_dist)
 
 	_weapons_info_buf.clear()
@@ -1297,6 +1319,7 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 			_orb_query.shape = _orb_shape
 			_orb_query.collision_mask = 4
 			_orb_query.collide_with_areas = true
+			_orb_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 			query_alloc_count += 1
 		else:
 			query_reuse_count += 1

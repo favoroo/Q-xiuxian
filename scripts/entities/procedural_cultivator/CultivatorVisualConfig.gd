@@ -84,7 +84,17 @@ func _sync_palette() -> void:
 # ==============================================================================
 
 ## 根据道统 ID 一键获取官方视觉配置
+static var _cache: Dictionary = {}  ## character_id -> 配置；配置创建后只读，可安全共享
+
 static func get_config(character_id: String) -> CultivatorVisualConfig:
+	var cached: CultivatorVisualConfig = _cache.get(character_id, null)
+	if cached != null:
+		return cached
+	var cfg := _build_config(character_id)
+	_cache[character_id] = cfg
+	return cfg
+
+static func _build_config(character_id: String) -> CultivatorVisualConfig:
 	match character_id:
 		"shiyue":
 			return make_shiyue()

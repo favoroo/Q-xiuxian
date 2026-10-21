@@ -156,7 +156,7 @@ func _test_manual_page() -> void:
 	for g in grids:
 		cards += g.get_child_count()
 	_c.equals(grids.size(), 4, "四个分组网格都建出来")
-	_c.equals(cards, 16, "16 张卡全部就位")
+	_c.equals(cards, 17, "17 张卡全部就位（12 常规 + 3 精英 + 魔君 + 金蟾）")
 	# 遭遇/未遭遇与 EnemyCodex 同源：slime(②记)/boss、jinchan(③记) 卡不该灰显，guyao 该灰
 	_c.check(_icon_mod(grids[0], 0) == Color.WHITE, "slime 已遭遇 ⇒ 图标不灰")
 	_c.check(_icon_mod(grids[2], 0) == Color.WHITE, "魔君已遭遇 ⇒ 图标不灰")

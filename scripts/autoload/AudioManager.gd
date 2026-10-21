@@ -126,19 +126,13 @@ func _ready() -> void:
 	voice_player.bus = BUS_VOICE
 	add_child(voice_player)
 
-	# 环境音：常驻一条循环 player，播不播由 play_bgm_key 的阶段 key 决定
+	# 环境音与 SFX 资源改为懒加载（2026-10-21 启动卡顿专项）：原先在 _ready 同步 load
+	# 111 个 wav + 2.1MB ambience，全压引擎启动阻塞段。现在推迟到首帧后（call_deferred），
+	# 且任何首次使用（play_sfx / has_sfx / missing_paths / sfx_keys / 环境音同步）都会先
+	# _ensure_audio_loaded() 兜底，单测与音频试听台照常取到完整注册表。
 	ambience_player = AudioStreamPlayer.new()
 	ambience_player.bus = BUS_BGM
 	add_child(ambience_player)
-	for p in AMBIENCE_PATHS:
-		if ResourceLoader.exists(p):
-			var s = load(p) as AudioStream
-			if s is AudioStreamWAV:
-				s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-			elif s != null and "loop" in s:
-				s.loop = true
-			ambience_player.stream = s
-			break
 
 	# Boss 闷音效果器常驻 BGM 总线（截止拉到 Nyquist 等效直通，不做热插拔）
 	var bgm_idx := AudioServer.get_bus_index(BUS_BGM)
@@ -153,8 +147,27 @@ func _ready() -> void:
 		add_child(p)
 		sfx_players.append(p)
 
-	_load_audio_assets()
+	call_deferred("_ensure_audio_loaded")
 	_load_settings()
+
+var _audio_loaded: bool = false
+
+## 懒加载音频资源（幂等）。首帧后由 call_deferred 触发；任何取用处也会先调它兜底。
+func _ensure_audio_loaded() -> void:
+	if _audio_loaded:
+		return
+	_audio_loaded = true
+	# 环境音：循环 player，播不播由 play_bgm_key 的阶段 key 决定
+	for p in AMBIENCE_PATHS:
+		if ResourceLoader.exists(p):
+			var s = load(p) as AudioStream
+			if s is AudioStreamWAV:
+				s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			elif s != null and "loop" in s:
+				s.loop = true
+			ambience_player.stream = s
+			break
+	_load_audio_assets()
 
 func _process(delta: float) -> void:
 	if _gem_combo_timer > 0.0:
@@ -260,13 +273,19 @@ func _register_sfx(sfx_key: String, paths: Array) -> void:
 
 ## 注册了但加载不到的路径（单测断言用；空数组 = 注册表与素材一致）
 func missing_paths() -> Array:
+	if not _audio_loaded:
+		_ensure_audio_loaded()
 	return _missing_paths
 
 func has_sfx(key: String) -> bool:
+	if not _audio_loaded:
+		_ensure_audio_loaded()
 	return sfx_dict.has(key)
 
 ## 已注册且素材可用的音效 key 列表（试听台/调试用）
 func sfx_keys() -> Array:
+	if not _audio_loaded:
+		_ensure_audio_loaded()
 	return sfx_dict.keys()
 
 # ---------------- 判据录音口 ----------------
@@ -294,6 +313,9 @@ func play_sfx(sfx_key: String, volume_scale: float = 1.0, pitch_override: float 
 	if _capturing:
 		_captured.append({"key": sfx_key, "scale": volume_scale, "registered": sfx_dict.has(sfx_key)})
 		return
+
+	if not _audio_loaded:
+		_ensure_audio_loaded()
 
 	if not sfx_dict.has(sfx_key):
 		push_warning("AudioManager: 未注册的音效 key 「%s」" % sfx_key)
@@ -428,6 +450,8 @@ func play_bgm_key(key: String, instant: bool = false) -> void:
 ## 环境音随阶段启停：局内（战斗/试炼/金币阁）淡入垫底，菜单/结算淡出。
 ## 与 BGM 共用总线，玩家拉 BGM 音量条时环境音同步缩放，不新增设置项。
 func _sync_ambience(key: String) -> void:
+	if not _audio_loaded:
+		_ensure_audio_loaded()
 	if ambience_player == null or ambience_player.stream == null:
 		return
 	var want: bool = AMBIENCE_KEYS.has(key)

@@ -176,7 +176,6 @@ static func reset(gm: Node) -> void:
 	gm.peak_dodge = 0.0
 	gm.peak_harvest = 0.0
 	# 敌人与友军活体登记跟着清：旧场敌人/灵兽随后 _exit_tree 注销是安全空操作
-	gm.live_enemies.clear()
-	gm.enemy_count = 0
+	gm.clear_live_enemies()  # 同时清 instance_id 索引表，防下标残留
 	gm.live_allies.clear()
 	gm.ally_count = 0

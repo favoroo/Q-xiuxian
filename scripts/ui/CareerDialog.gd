@@ -402,12 +402,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	else:
 		icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
 	var cdef := CultivatorData.get_def(cid)
-	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(String(cdef.get("icon", ""))):
-		icon_tex.texture = load(String(cdef["icon"]))
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(72, 72)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var icon_tex := GameStyle.icon_texture_rect(String(cdef.get("icon", "")), Vector2(72, 72))
 	if not unlocked:
 		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)

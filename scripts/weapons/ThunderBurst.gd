@@ -263,6 +263,7 @@ func _deal_damage() -> void:
 		_dmg_query.shape = _dmg_shape
 		_dmg_query.collision_mask = 4
 		_dmg_query.collide_with_areas = true
+		_dmg_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 	_dmg_shape.radius = radius
 	_dmg_query.transform = Transform2D(0.0, global_position)
 	var results = space_state.intersect_shape(_dmg_query, 24)

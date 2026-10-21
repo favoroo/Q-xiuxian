@@ -341,7 +341,8 @@ func _refresh_cultivator() -> void:
 	_cult_card.visible = true
 	if _cult_icon != null:
 		var icon_path: String = String(def.get("icon", ""))
-		_cult_icon.texture = load(icon_path) if not icon_path.is_empty() and ResourceLoader.exists(icon_path) else null
+		var real_path: String = GameStyle._hd_icon_path(icon_path)
+		_cult_icon.texture = load(real_path) if not real_path.is_empty() and ResourceLoader.exists(real_path) else null
 	if _cult_name_lbl != null:
 		_cult_name_lbl.text = String(def.get("name", "未选角色"))
 	if _cult_epi_lbl != null:

@@ -80,14 +80,38 @@ var wave_spawner: Node = null
 # 不再各自 get_nodes_in_group("enemies") 构造全组数组；"enemies" 组保留给低频遍历与测试。
 var live_enemies: Array = []   ## 当前在场敌人（含濒死未清的，语义与 "enemies" 组一致）
 var enemy_count: int = 0       ## live_enemies.size() 的计数镜像
+# instance_id -> live_enemies 下标；配合 swap-remove 把注销从 O(n) 降到 O(1)。
+# 群杀（一次清 10+ 只）时 Array.erase 的数组搬移是尖刺来源（2026-10-21 优化）。
+var _live_enemy_index: Dictionary = {}
 
 func register_enemy(e: Node) -> void:
+	var id: int = e.get_instance_id()
+	if _live_enemy_index.has(id):
+		return
+	_live_enemy_index[id] = live_enemies.size()
 	live_enemies.append(e)
 	enemy_count = live_enemies.size()
 
 func unregister_enemy(e: Node) -> void:
-	live_enemies.erase(e)
+	var id: int = e.get_instance_id()
+	if not _live_enemy_index.has(id):
+		return
+	var idx: int = _live_enemy_index[id]
+	var last_i: int = live_enemies.size() - 1
+	if idx != last_i:
+		# swap-remove：把末尾元素填到空位并修正它的索引，避免 O(n) 搬移
+		var last: Node = live_enemies[last_i]
+		live_enemies[idx] = last
+		_live_enemy_index[last.get_instance_id()] = idx
+	live_enemies.pop_back()
+	_live_enemy_index.erase(id)
 	enemy_count = live_enemies.size()
+
+## 清空活体登记（RunReset 局末清理用；同时清索引表，防止下标残留）
+func clear_live_enemies() -> void:
+	live_enemies.clear()
+	_live_enemy_index.clear()
+	enemy_count = 0
 
 # 友军灵兽登记（2026-10-11 祭坛强化）：SpiritBeast 在 _ready/_exit_tree 进出。
 # 敌人嘲讽目标选择（EnemyBase._taunt_target）读这里；语义与 live_enemies 一致。

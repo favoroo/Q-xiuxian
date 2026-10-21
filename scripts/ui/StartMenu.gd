@@ -212,7 +212,7 @@ func _build_center_matrix() -> void:
 
 	# 右上 2：传道玉简（增益绿色块）
 	var manual_res := _build_entry_block(
-		"MANUAL", "图鉴", "20 武器 · 18 道具 · 9 角色",
+		"MANUAL", "图鉴", "70 武器 · 103 道具 · 20 角色",
 		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOOD,
 		_on_manual_pressed
 	)

@@ -322,7 +322,18 @@ static func make_jinchan() -> EnemyVisualConfig:
 	return cfg
 
 ## 通用查找入口
+static var _cache: Dictionary = {}  ## eid|elite|boss|final -> 配置；配置创建后只读，可安全共享
+
 static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: bool = false, is_final: bool = false) -> EnemyVisualConfig:
+	var key := eid + "|" + str(is_elite_flag) + "|" + str(is_boss_flag) + "|" + str(is_final)
+	var cached: EnemyVisualConfig = _cache.get(key, null)
+	if cached != null:
+		return cached
+	var cfg := _build_config(eid, is_elite_flag, is_boss_flag, is_final)
+	_cache[key] = cfg
+	return cfg
+
+static func _build_config(eid: String, is_elite_flag: bool, is_boss_flag: bool, is_final: bool) -> EnemyVisualConfig:
 	if is_boss_flag or eid == "boss":
 		return make_boss(is_final)
 	match eid:

@@ -44,6 +44,8 @@ const SPEED_COLORS := {
 }
 
 var _items_box: VBoxContainer
+var _upgrades_box: VBoxContainer
+var _pets_box: VBoxContainer
 var _cult_box: VBoxContainer
 var _weapons_box: VBoxContainer
 var _basics_box: VBoxContainer
@@ -83,12 +85,14 @@ func _get_close_btn_min_size() -> Vector2:
 	return Vector2(76, 34)
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	add_tab_button(0, "入门指南", 96.0)
-	add_tab_button(1, "武器图鉴", 96.0)
-	add_tab_button(2, "道具图鉴", 96.0)
-	add_tab_button(3, "角色图鉴", 96.0)
-	add_tab_button(4, "敌人图鉴", 96.0)
-	add_tab_button(5, "进阶攻略", 96.0)
+	add_tab_button(0, "入门指南", 78.0)
+	add_tab_button(1, "武器图鉴", 78.0)
+	add_tab_button(2, "道具图鉴", 78.0)
+	add_tab_button(3, "悟道图鉴", 78.0)
+	add_tab_button(4, "灵兽图鉴", 78.0)
+	add_tab_button(5, "角色图鉴", 78.0)
+	add_tab_button(6, "敌人图鉴", 78.0)
+	add_tab_button(7, "进阶攻略", 78.0)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -100,13 +104,15 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	content_panel.add_theme_stylebox_override("panel", cont_sb)
 	root_vbox.add_child(content_panel)
 
-	# 只建六页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
-	for i in range(6):
+	# 只建八页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
+	for i in range(8):
 		_page_built.append(false)
 		_page_dirty.append(false)
 	_pages.append(_build_basics_page(content_panel))
 	_pages.append(_build_weapons_page(content_panel))
 	_pages.append(_build_items_page(content_panel))
+	_pages.append(_build_upgrades_page(content_panel))
+	_pages.append(_build_pets_page(content_panel))
 	_pages.append(_build_cultivators_page(content_panel))
 	_pages.append(_build_enemies_page(content_panel))
 	_pages.append(_build_advanced_page(content_panel))
@@ -125,10 +131,10 @@ func _on_opened() -> void:
 	else:
 		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
 		_set_weapon_filter("")
-	# 道具/角色/敌人三页受解锁（收录）状态影响：标脏，切到那一页时才重建
+	# 道具(2)/角色(5)/敌人(6) 受解锁（收录）状态影响：标脏，切到那一页时才重建
 	_page_dirty[2] = true
-	_page_dirty[3] = true
-	_page_dirty[4] = true
+	_page_dirty[5] = true
+	_page_dirty[6] = true
 	var target := _current_tab
 	_defer_build = false
 	_schedule_page(target)
@@ -185,9 +191,11 @@ func _build_page(index: int) -> void:
 		0: _fill_basics_page()
 		1: _rebuild_weapons_page()
 		2: _rebuild_items_page()
-		3: _rebuild_cultivators_page()
-		4: _rebuild_enemies_page()
-		5: _fill_advanced_page()
+		3: _rebuild_upgrades_page()
+		4: _rebuild_pets_page()
+		5: _rebuild_cultivators_page()
+		6: _rebuild_enemies_page()
+		7: _fill_advanced_page()
 	_page_built[index] = true
 	_page_dirty[index] = false
 	# 整页子树建过就要重挂滚动拖动锁（头注「灰色卡片滑不动」坑）；
@@ -483,7 +491,195 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 		"foot": foot,
 	})
 
-# ----------------- 分页 4：角色图鉴 -----------------
+# ----------------- 分页 4：悟道图鉴 -----------------
+
+func _build_upgrades_page(parent: Control) -> Control:
+	var scroll := _new_scroll(parent)
+	_upgrades_box = _new_scroll_vbox(scroll)
+	return scroll
+
+func _rebuild_upgrades_page() -> void:
+	if _upgrades_box == null:
+		return
+	for c in _upgrades_box.get_children():
+		c.queue_free()
+	_upgrades_box.add_child(_make_text_card("悟道规则",
+		"悟道是战斗中升级后在回合间领悟的被动增益，整局生效。\n一屏给出 5 个候选，每回合有 1 次免费刷新机会。\n按稀有度分普通、稀有、史诗、传说：品质越高出现概率越低、单项加成幅度越强。\n点按任意悟道卡查看加成幅度与最大加修层数。"))
+
+	var groups: Array = [
+		["普通悟道", "common", GameStyle.PAPER],
+		["稀有悟道", "rare", GameStyle.GOLD],
+		["史诗悟道", "epic", GameStyle.RARITY_EPIC],
+		["传说悟道", "legendary", GameStyle.RARITY_LEGEND],
+	]
+	for g in groups:
+		var rarity_key := String(g[1])
+		var rarity_col := g[2] as Color
+		var header := Label.new()
+		header.text = "── %s ──" % String(g[0])
+		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		GameStyle.label(header, 13, rarity_col, 0, GameStyle.INK, true)
+		_upgrades_box.add_child(header)
+
+		var grid := GridContainer.new()
+		grid.columns = 5
+		grid.add_theme_constant_override("h_separation", 8)
+		grid.add_theme_constant_override("v_separation", 8)
+		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_upgrades_box.add_child(grid)
+
+		for udef in UpgradeData.UPGRADES:
+			var u: Dictionary = udef
+			if String(u.get("rarity", "common")) != rarity_key:
+				continue
+			var title_str: String = String(u.get("title", ""))
+			var icon_str: String = String(u.get("icon", ""))
+			var card := _make_entry_card(
+				icon_str, title_str,
+				String(u.get("rarity_label", "普通")), rarity_col,
+				func(anchor: Control): _open_upgrade_tip(u, anchor))
+			grid.add_child(card)
+
+func _open_upgrade_tip(udef: Dictionary, anchor: Control) -> void:
+	var rarity_str: String = String(udef.get("rarity", "common"))
+	var rarity_col: Color = GameStyle.rarity_color(rarity_str)
+	var rows: Array = [
+		["稀有度", String(udef.get("rarity_label", "普通")), rarity_col],
+		["最多加修", "%d 层" % int(udef.get("max_stacks", 1)), GameStyle.PAPER],
+	]
+	rows.append_array(BonusRows.apply_rows(udef.get("apply", {})))
+	var notes: Array[String] = []
+	var desc := String(udef.get("desc", "")).strip_edges()
+	if not desc.is_empty():
+		notes.append(desc)
+	notes.append("回合结束后升级时从 5 个候选卡中领悟")
+
+	DetailTip.show_over(self, anchor, {
+		"title": String(udef.get("title", "")),
+		"chip": " " + String(udef.get("rarity_label", "普通")) + " ",
+		"chip_color": rarity_col,
+		"rows": rows,
+		"notes": notes,
+		"foot": "加点即刻生效，局内永久加成",
+	})
+
+# ----------------- 分页 5：灵兽图鉴 -----------------
+
+func _build_pets_page(parent: Control) -> Control:
+	var scroll := _new_scroll(parent)
+	_pets_box = _new_scroll_vbox(scroll)
+	return scroll
+
+func _rebuild_pets_page() -> void:
+	if _pets_box == null:
+		return
+	for c in _pets_box.get_children():
+		c.queue_free()
+	_pets_box.add_child(_make_text_card("灵兽伙伴",
+		"随行灵兽可在金币阁货架购买，购买后永久随行战斗，不占武器栏位。\n寻常修士限带 1 只，御兽师最多可随行 3 只；随行期间亦可在商店折半退还金币。\n灵兽伤害、效果与冷却享受「灵兽伤害 / 灵兽效果 / 灵兽冷却」属性加成。\n点按任意灵兽卡查看助战技能与买价。"))
+
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_pets_box.add_child(grid)
+
+	for pid in PetData.all_ids():
+		var pdef: Dictionary = PetData.get_def(String(pid))
+		var card := _make_pet_entry_card(pdef, func(anchor: Control): _open_pet_tip(pdef, anchor))
+		grid.add_child(card)
+
+func _make_pet_entry_card(pdef: Dictionary, on_press: Callable) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(160, 0)
+	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
+	sb.content_margin_left = 8.0
+	sb.content_margin_right = 8.0
+	sb.content_margin_top = 8.0
+	sb.content_margin_bottom = 8.0
+	card.add_theme_stylebox_override("panel", sb)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.set_meta("tip_title", String(pdef.get("name", "")))
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	card.add_child(vbox)
+
+	var icon_center := CenterContainer.new()
+	var icon_box := PanelContainer.new()
+	icon_box.custom_minimum_size = Vector2(48, 48)
+	var p_col: Color = pdef.get("color", GameStyle.GOLD)
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, p_col, 1, 0.0))
+
+	var pet_preview := Control.new()
+	pet_preview.custom_minimum_size = Vector2(40, 40)
+	pet_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pet_preview.draw.connect(func():
+		var c: Color = pdef.get("color", Color(0.9, 0.9, 0.9))
+		var halo: Color = pdef.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
+		var sz: Vector2 = pet_preview.size
+		var center := sz * 0.5
+		var r: float = sz.x * 0.28
+		pet_preview.draw_circle(center, r * 1.6, halo)
+		pet_preview.draw_circle(center, r, c)
+		pet_preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+	)
+	icon_box.add_child(pet_preview)
+	icon_center.add_child(icon_box)
+	vbox.add_child(icon_center)
+
+	var name_lbl := Label.new()
+	name_lbl.text = String(pdef.get("name", ""))
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(name_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
+	vbox.add_child(name_lbl)
+
+	var role_key := String(pdef.get("role", "attack"))
+	var role_name := String(PetData.ROLES.get(role_key, "助战"))
+	var role_chip := GameStyle.chip_label(role_name, p_col, GameStyle.on_face_text(p_col))
+	role_chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(role_chip)
+
+	var stat_lbl := Label.new()
+	stat_lbl.text = "%d金币 · %.1f秒" % [int(pdef.get("base_price", 0)), float(pdef.get("base_cooldown", 1.0))]
+	stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(stat_lbl, 10, GameStyle.PAPER_DIM)
+	vbox.add_child(stat_lbl)
+
+	GameStyle.tap(card, func() -> void: on_press.call(card))
+	GameStyle.hotzone(card)
+	return card
+
+func _open_pet_tip(pdef: Dictionary, anchor: Control) -> void:
+	var p_col: Color = pdef.get("color", GameStyle.GOLD)
+	var role_key := String(pdef.get("role", "attack"))
+	var role_name := String(PetData.ROLES.get(role_key, "助战"))
+	var base_price := int(pdef.get("base_price", 0))
+	var rows: Array = [
+		["定位", role_name, p_col],
+		["基础买价", "%d 金币" % base_price, GameStyle.JADE],
+		["出手周期", "%.1f 秒" % float(pdef.get("base_cooldown", 1.0)), GameStyle.PAPER],
+		["出售返还", "%d 金币" % int(float(base_price) * PetData.SELL_RATIO), GameStyle.JADE],
+	]
+	var notes: Array[String] = []
+	var desc := String(pdef.get("desc", "")).strip_edges()
+	if not desc.is_empty():
+		notes.append(desc)
+	notes.append("灵兽属性吃「灵兽伤害 / 灵兽效果 / 灵兽冷却」加成")
+	notes.append("普通修士限带 1 只，御兽师最多随行 3 只")
+
+	DetailTip.show_over(self, anchor, {
+		"title": String(pdef.get("name", "")),
+		"chip": " 灵兽 ",
+		"chip_color": p_col,
+		"rows": rows,
+		"notes": notes,
+		"foot": "仅在金币阁有售，购买后永久随行",
+	})
+
+# ----------------- 分页 6：角色图鉴 -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -613,25 +809,35 @@ func trim_heavy_pages() -> void:
 			c.queue_free()
 		_page_built[2] = false
 		_page_dirty[2] = true
-	if _cult_box != null:
-		for c in _cult_box.get_children():
+	if _upgrades_box != null:
+		for c in _upgrades_box.get_children():
 			c.queue_free()
 		_page_built[3] = false
 		_page_dirty[3] = true
-	if _enemies_box != null:
-		for c in _enemies_box.get_children():
+	if _pets_box != null:
+		for c in _pets_box.get_children():
 			c.queue_free()
 		_page_built[4] = false
 		_page_dirty[4] = true
+	if _cult_box != null:
+		for c in _cult_box.get_children():
+			c.queue_free()
+		_page_built[5] = false
+		_page_dirty[5] = true
+	if _enemies_box != null:
+		for c in _enemies_box.get_children():
+			c.queue_free()
+		_page_built[6] = false
+		_page_dirty[6] = true
 
-# ----------------- 分页 5：敌人图鉴 -----------------
+# ----------------- 分页 7：敌人图鉴 -----------------
 
 func _build_enemies_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
 	_enemies_box = _new_scroll_vbox(scroll)
 	return scroll
 
-## 分组重建：常规妖物 → 精英劫 → 魔君 → 金蟾。未遭遇的种灰显「未收录」，
+## 分组重建：常规妖物（12 种）→ 精英劫（3 种）→ 魔君 → 金蟾。未遭遇的种灰显「未收录」，
 ## 与道具页同款待遇；收录口径 = 实战里刷出过（EnemyCodex），追不上的金蟾也算。
 ## 图标现渲捕获（EnemyIconCapture）：先铺占位，捕完逐张回填，页不卡在建图上。
 func _rebuild_enemies_page() -> void:
@@ -643,8 +849,8 @@ func _rebuild_enemies_page() -> void:
 		"妖物在实战中刷出过一次即自动收录。\n点按任意妖物卡查看威胁与出没波次。"))
 
 	var groups: Array = [
-		["常规妖物", EnemyGuideData.catalog_ids().slice(0, 11), false],
-		["精英劫", EnemyGuideData.catalog_ids().slice(11, 14), true],
+		["常规妖物", EnemyGuideData.catalog_ids().slice(0, 12), false],
+		["精英劫", EnemyGuideData.catalog_ids().slice(12, 15), true],
 		["魔君劫", ["boss"], false],
 		["招财金蟾", ["jinchan"], false],
 	]
@@ -761,7 +967,7 @@ static func _bbcode_text(s: String, col: Color) -> String:
 	return _bbcode_open(col) + s + BB_COLOR_CLOSE
 
 
-# ----------------- 分页 6：进阶心法 -----------------
+# ----------------- 分页 8：进阶心法 -----------------
 
 func _build_advanced_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)

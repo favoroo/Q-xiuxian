@@ -180,7 +180,7 @@ func _test_idle_then_target_chest() -> void:
 ##    （2026-10-20 射程体系重做后长剑真实命中半径 105px：旧值 120px 已出圈，
 ##      本用例测的是「射程内妖优先于更近的匣子」，妖必须落在 105 以内）
 func _test_enemy_outranks_chest() -> void:
-	var enemy := (_spawner._mob_scenes["slime"] as PackedScene).instantiate() as Node2D
+	var enemy := _spawner._get_mob_scene("slime").instantiate() as Node2D
 	enemy.global_position = GameManager.player.global_position + Vector2(90.0, 0.0)
 	_spawner.get_parent().add_child(enemy)
 	var chest := _spawn_chest(Vector2(40.0, 0.0))

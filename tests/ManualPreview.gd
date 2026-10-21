@@ -1,23 +1,32 @@
 extends Node
 
-## 非判据现场工具：渲染教程手册五个分页并截图到项目根 tmp_manual_tab*.png，供目检排版。
-## 用法（勿加 --headless）：$G --path . res://tests/ManualPreview.tscn
+## 非判据现场工具：渲染教程手册八个分页并截图到项目根 tmp_manual_tab*.png，供目检排版。
+## 用法：$G --headless --path . res://tests/ManualPreview.tscn
 
 func _ready() -> void:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(960, 540)
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(vp)
+
 	var manual := ManualDialog.new()
-	add_child(manual)
+	vp.add_child(manual)
 	manual.open()
-	# 等两帧：一帧容器布局，一帧淡入动画
-	await get_tree().process_frame
-	await get_tree().process_frame
-	for tab in range(5):
+
+	for _i in range(6):
+		await get_tree().process_frame
+
+	var names := ["basics", "weapons", "items", "upgrades", "pets", "cultivators", "enemies", "advanced"]
+	for tab in range(8):
 		manual._switch_tab(tab)
-		await get_tree().process_frame
-		await get_tree().process_frame
-		if DisplayServer.get_name() != "headless":
-			var tex := get_viewport().get_texture()
-			var img := tex.get_image() if tex != null else null
+		manual._build_page(tab)
+		for _i in range(6):
+			await get_tree().process_frame
+		var tex := vp.get_texture()
+		if tex != null:
+			var img := tex.get_image()
 			if img != null:
-				img.save_png("res://tmp_manual_tab%d.png" % tab)
-				print("SAVED tmp_manual_tab%d.png" % tab)
+				img.save_png("res://tmp_manual_tab%d_%s.png" % [tab, names[tab]])
+				print("SAVED tmp_manual_tab%d_%s.png" % [tab, names[tab]])
+
 	get_tree().quit(0)

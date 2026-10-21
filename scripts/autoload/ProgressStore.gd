@@ -138,6 +138,14 @@ static func load_into(gm: Node) -> void:
 	for i in range(gm.unlocked_items.size() - 1, -1, -1):
 		if not ItemData.DEFS.has(String(gm.unlocked_items[i])):
 			gm.unlocked_items.remove_at(i)
+	# 角色同理：剔除已不在角色表里的旧 id（防止改版删改角色导致 N/M 分子虚高）
+	for i in range(gm.unlocked_cultivators.size() - 1, -1, -1):
+		if not CultivatorData.DEFS.has(String(gm.unlocked_cultivators[i])):
+			gm.unlocked_cultivators.remove_at(i)
+	# 成就同理：剔除已不在成就表里的旧 id
+	for i in range(gm.unlocked_achievements.size() - 1, -1, -1):
+		if AchievementData.get_def(String(gm.unlocked_achievements[i])).is_empty():
+			gm.unlocked_achievements.remove_at(i)
 
 ## 难度 6 档 → 4 档（D0~D3）老档压缩（2026-10-20 改版一次性迁移）：
 ## 老档的 D4/D5 战绩折进新顶档 D3，D0~D3 原样保留 —— 打过最高档的玩家不会因档位收缩丢记录。

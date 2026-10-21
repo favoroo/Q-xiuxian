@@ -259,6 +259,7 @@ func _find_target() -> Node2D:
 		_search_query.shape = _search_shape
 		_search_query.collision_mask = 4
 		_search_query.collide_with_areas = true
+		_search_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 	_search_shape.radius = _eff_range()
 	_search_query.transform = Transform2D(0.0, global_position)
 	var results := get_world_2d().direct_space_state.intersect_shape(_search_query, 24)

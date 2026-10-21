@@ -878,6 +878,18 @@ func _setup_map_bounds() -> void:
 	# StaticDecor 都是「纯色确定性零重绘」矢量，离屏烘成一张 2× 纹理由单 Sprite 代替，
 	# 每帧省 ~2000 图元并把多层半透明混合压成一次不透明采样。烘焙失败（headless/
 	# 抓帧异常）自动回退矢量层，视觉零差异。动态部分（太极阵自转/呼吸/脉冲）不烘。
+	# 2026-10-21 启动卡顿专项：烘焙内部有 4 帧 await + 2240² 离屏渲染，原先压在首帧装配段
+	# （黑屏期延长）。改为延后几帧再烘 —— 此时已进入选人/主菜单静态界面，烘焙在后台静默
+	# 完成，玩家看不到延迟；装饰层在烘焙完成前照常走矢量绘制，视觉无缝。
+	_bake_static_decor_deferred(map, half, ground_decor, arena_vis)
+
+## 延迟触发烘焙（让首帧装配先结束、引擎先跑起来），再走原本的异步烘焙挂载。
+func _bake_static_decor_deferred(map: Node2D, half: float, ground_decor: GroundDecorLayer, arena_vis: ArenaVisualLayer) -> void:
+	# 等两帧：首帧装配结束 + 交换链/场景稳定，避免烘焙离屏宿主的 add_child 撞上装配期
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(map) or not is_inside_tree():
+		return
 	_bake_static_decor(map, half, ground_decor, arena_vis)
 
 ## 异步烘焙挂载：成功 → 藏原两层矢量；失败 → 原两层照常显示（回退保底）

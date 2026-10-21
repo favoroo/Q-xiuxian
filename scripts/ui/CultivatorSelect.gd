@@ -291,13 +291,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 		icon_box.add_child(pview)
 		_detail_pview = pview
 	else:
-		var icon_tex := TextureRect.new()
-		if ResourceLoader.exists(String(def.get("icon", ""))):
-			icon_tex.texture = load(String(def["icon"]))
-		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon_tex.custom_minimum_size = Vector2(48, 48)
-		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var icon_tex := GameStyle.icon_texture_rect(String(def.get("icon", "")), Vector2(48, 48))
 		if not is_unlocked:
 			icon_tex.modulate = GameStyle.disabled_modulate()
 		icon_box.add_child(icon_tex)
@@ -580,13 +574,11 @@ func _on_skin_slot_tapped(cid: String, skin_idx: int, anchor: Control) -> void:
 		_detail_content.add_child(_skin_row)
 		_detail_content.move_child(_skin_row, at)
 
-## 右侧网格该角色缩略图同步换色
-func _refresh_roster_skin(cid: String) -> void:
-	if not _roster_cards.has(cid):
-		return
-	var pv: ProceduralCultivatorView = _roster_cards[cid].get("pview")
-	if pv != null and is_instance_valid(pv):
-		pv.setup_character_id(cid)
+## 右侧网格该角色缩略图同步换色。
+## 2026-10-21：小卡已改用静态图标（不再实时刻画），皮肤换色只作用于左侧详情大卡，
+## 这里保留空实现以免调用方判空。
+func _refresh_roster_skin(_cid: String) -> void:
+	pass
 
 ## 未解锁皮肤点按详情浮卡：解锁条件 + 当前进度（「这是什么」点按可得）
 func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
@@ -795,26 +787,18 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	var ib_border := GameStyle.JADE if is_selected else (GameStyle.GOLD_EDGE if is_unlocked else GameStyle.LINE)
 	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, ib_border, 1, 0.0))
 
-	var pview: ProceduralCultivatorView = null
-	if String(def.get("motion", "")) == "procedural":
-		pview = ProceduralCultivatorView.new()
-		pview.position = Vector2(20, 24)
-		pview.scale = Vector2(0.55, 0.55)
-		pview.setup_character_id(cid)
-		if not is_unlocked:
-			pview.modulate = GameStyle.disabled_modulate()
-		icon_box.add_child(pview)
-	else:
-		var icon_tex := TextureRect.new()
-		if ResourceLoader.exists(String(def.get("icon", ""))):
-			icon_tex.texture = load(String(def["icon"]))
-		icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon_tex.custom_minimum_size = Vector2(34, 34)
-		icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if not is_unlocked:
-			icon_tex.modulate = GameStyle.disabled_modulate()
-		icon_box.add_child(icon_tex)
+	# 小头像用静态图标而非实时刻画（2026-10-21 启动卡顿专项）：
+	# 旧写法每张卡 new 一个 ProceduralCultivatorView + 1896 行矢量渲染器，一次重建 20 个
+	# 是「点开始游戏→选人界面弹出」那一拍的最大尖刺（20 个 renderer 一帧内构建）。
+	# 小卡只显示 40×40（原 scale 0.55 实际约 34px），静态图标完全够用且零构建成本；
+	# 完整矢量外观仍由左侧详情大卡（_rebuild_detail_card）实时绘制一份，视觉主张不变。
+	var icon_path := String(def.get("icon", ""))
+	if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
+		icon_path = "res://assets/art/cultivator_jianchi_icon.png"
+	var icon_tex := GameStyle.icon_texture_rect(icon_path, Vector2(34, 34))
+	if not is_unlocked:
+		icon_tex.modulate = GameStyle.disabled_modulate()
+	icon_box.add_child(icon_tex)
 	hbox.add_child(icon_box)
 
 	# 中间文字列（名号 + 称号）
@@ -881,7 +865,6 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 		"name_lbl": name_lbl,
 		"tag_lbl": tag_lbl,
 		"is_unlocked": is_unlocked,
-		"pview": pview,
 	}
 
 	return card

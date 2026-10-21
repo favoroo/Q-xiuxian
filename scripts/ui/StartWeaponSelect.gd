@@ -20,6 +20,8 @@ const PANEL_MIN_H := 470.0
 
 var _transitioning: bool = false
 var _card_w := 130.0
+var _prewarm: CombatPrewarm = null   ## 战斗前资源预热（2026-10-21，选完武器→开打之间分帧跑）
+var _prewarmed: bool = false         ## 本次场景生命周期内只预热一次（重开一局随场景重载复位）
 
 ## 一屏摆 n 张卡时每张的宽（纯函数，判据 tests/layout_check.gd 拿同一份算术量文案）
 static func card_w_for(screen_w: float, count: int) -> float:
@@ -33,6 +35,9 @@ static func icon_size_for(card_w: float) -> float:
 func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 预热的逐帧推进走 _process（本控件 process_mode=ALWAYS，暂停中也能跑），
+	# 正好覆盖「选完武器 → 解暂停开打」这段树被暂停的窗口。
+	set_process(false)
 	# 面板样式收口到 GameStyle（旧版在 .tscn 里钉死 820 宽 + 旧蓝色板 + 不画的投影）
 	var panel: PanelContainer = $CenterContainer/Panel
 	var st := GameStyle.dialog_panel(GameStyle.INK, GameStyle.SLANT_PLATE, Vector2(10, 10))
@@ -265,6 +270,10 @@ func _choose(w_id: String) -> void:
 	_transitioning = true
 	AudioManager.play_sfx("ui_confirm", 0.95)
 	GameManager.start_run(w_id)
+	# 预热敌人/弹丸池与 shader（2026-10-21）：趁 0.2s 淡出 + 树暂停的窗口分帧付掉
+	# 「首次刷怪 instantiate + 程序化装配」「首次死亡 dissolve 编译」等一次性成本，
+	# 让第一波怪落地时不再卡。预热没跑完也无妨 —— 只是回退到旧的即时构建路径。
+	_start_prewarm()
 	var tw = create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.2)
 	tw.tween_callback(func():
@@ -282,5 +291,31 @@ func _choose(w_id: String) -> void:
 			var joy = parent_node.get_node_or_null("VirtualJoystick")
 			if joy != null:
 				joy.visible = true
-		get_tree().paused = false
+			get_tree().paused = false
 	)
+
+## 启动预热：把敌人/弹丸池与 shader 的一次性成本提前付掉。
+## 每帧只推进一步（_process 驱动），树暂停期间照样跑（本控件 PROCESS_MODE_ALWAYS）。
+func _start_prewarm() -> void:
+	if _prewarmed:
+		return
+	_prewarmed = true
+	# 预热宿主：实体层（与真实刷怪/弹丸同一父节点，避免池宿主挂错层导致层级/坐标偏差）。
+	# 本控件挂在 UILayer 下，取不到 EntitiesLayer；WaveSpawner 的父节点正是 EntitiesLayer。
+	var parent: Node = null
+	var spawner: Node = GameManager.wave_spawner
+	if spawner != null and is_instance_valid(spawner):
+		parent = spawner.get_parent()
+	if parent == null:
+		parent = get_tree().current_scene
+	_prewarm = CombatPrewarm.new(parent)
+	set_process(true)
+
+func _process(_delta: float) -> void:
+	if _prewarm == null:
+		set_process(false)
+		return
+	# 每帧推一步；一个实例一帧里会多次触发 _process（暂停冻结时也照走）。
+	if not _prewarm.step():
+		_prewarm = null
+		set_process(false)

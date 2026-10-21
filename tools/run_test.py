@@ -51,7 +51,7 @@ ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookPr
 # 真在干活的慢判据：默认 35s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
 SLOW_TEST_LIMITS = {
     "SmokeRunner": 60.0,          # 全流程冒烟（实测 ~8.2s，给 60s 留 7 倍裕量）
-    "ManualHotzoneCheck": 75.0,   # 88 张卡 × 12 取样点 = 1056 次真实点按（实测 ~39s）
+    "ManualHotzoneCheck": 140.0,  # 173 张卡 × 12 取样点 = 2076 次真实点按（实测 ~85s）
     "ProjectileProbe": 60.0,      # B 段真跑 18 秒尸潮（time_scale=1，实测 ~34s）
     "SoakCheck": 240.0,           # 连续 20 波长局 + 重开一局再战 3 波（实测 ~122s）
 }

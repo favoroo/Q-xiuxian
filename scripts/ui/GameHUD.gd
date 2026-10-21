@@ -70,6 +70,8 @@ var _last_exp_tween_ms := 0
 ## 白影在主条背后透光（show_behind_parent）⇒ 掉血瞬间白影才从残血处露出来。
 var _hp_ghost_tween: Tween = null
 var _hp_last_cur: float = -1.0  ## 上一拍血量：判断这次信号是扣血还是回血
+var _hp_text_cur: int = -1      ## 上一次写进血条文本的整数当前值（拼串去重闸）
+var _hp_text_max: int = -1      ## 上一次写进血条文本的整数上限（拼串去重闸）
 ## 血条装饰与动效句柄
 var _hp_fill_style: StyleBoxFlat = null
 var _hp_block_style: StyleBoxFlat = null
@@ -505,9 +507,14 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		else:
 			hp_bar.value = cur
 			hp_ghost_bar.value = cur
-	var hp_text := str(int(cur)) + "/" + str(int(max_v))
-	if hp_label.text != hp_text:
-		hp_label.text = hp_text
+	# 先比整数值再拼串（2026-10-21）：战斗中血量信号秒级十几次，旧写法每次 str()+str()+拼串
+	# 都分配，即使显示值没变。整数没变就跳过拼串。
+	var cur_i := int(cur)
+	var max_i := int(max_v)
+	if cur_i != _hp_text_cur or max_i != _hp_text_max:
+		_hp_text_cur = cur_i
+		_hp_text_max = max_i
+		hp_label.text = str(cur_i) + "/" + str(max_i)
 	var low := GameBalance.hp_is_low(cur, max_v)
 	# 仅在告急状态翻转时写 override：战斗中挨打/吸血每秒十几次信号，
 	# 每次都调 add_theme_color_override 触发 NOTIFICATION_THEME_CHANGED 是无谓开销

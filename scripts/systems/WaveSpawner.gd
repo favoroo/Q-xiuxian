@@ -44,8 +44,10 @@ var elite_spawned: bool = false
 
 # —— 敌人场景：怪种名单/配比/精英/金蟾的真话在 EnemyData（scripts/data/EnemyData.gd）——
 ## 这里只留按 scene_path 的运行时缓存（load 一次后复用），不再各自 preload 一份名单。
-var _mob_scenes := {}            ## mob key -> PackedScene（_ready 时按 EnemyData.MOBS 构建）
+var _mob_scenes := {}            ## mob key -> PackedScene（取用时线程就绪后填入并缓存）
+var _mob_scene_paths := {}       ## mob key -> 场景路径（_ready 时登记 + 发起线程加载）
 var _elite_scenes: Array = []    ## 精英池场景，顺序 = EnemyData.ELITE_POOL 轮换顺序
+var _elite_scene_paths: Array = [] ## 精英场景路径（登记 + 发起线程加载；取用时填入 _elite_scenes）
 var _boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
 var _looter_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
 
@@ -128,10 +130,28 @@ func _ready() -> void:
 	GameManager.wave_spawner = self
 	GameManager.shop_closed.connect(_on_shop_closed)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
+	# 敌人场景改为线程加载（2026-10-21 启动卡顿专项）：原先在 _ready 里同步 load 16 个
+	# 怪种 + 3 个精英场景，压在引擎启动阻塞段。现在只是发起异步请求（不阻塞），
+	# 真正取用时机远晚于加载完成（选人→选技能→选武器→第一波 1.7s 预警），
+	# 取用时用 _scene_or_null() 兜底：万一尚未就绪则同步 load 一并发（极端情况才触发）。
 	for key in EnemyData.mob_keys():
-		_mob_scenes[key] = load(EnemyData.MOBS[key]["scene_path"])
+		var sp: String = EnemyData.MOBS[key]["scene_path"]
+		ResourceLoader.load_threaded_request(sp, "PackedScene")
+		_mob_scene_paths[key] = sp
 	for elite_def in EnemyData.ELITE_POOL:
-		_elite_scenes.append(load(elite_def["scene_path"]))
+		_elite_scene_paths.append(String(elite_def["scene_path"]))
+		ResourceLoader.load_threaded_request(String(elite_def["scene_path"]), "PackedScene")
+
+## 线程请求的场景：就绪则取回（并缓存），否则同步兜底 load。
+func _scene_or_null(path: String) -> PackedScene:
+	if path.is_empty():
+		return null
+	var err := ResourceLoader.load_threaded_get_status(path)
+	if err == ResourceLoader.THREAD_LOAD_LOADED:
+		var ps := ResourceLoader.load_threaded_get(path) as PackedScene
+		return ps
+	# 尚未就绪/失败：同步 load 兜底（只在极端时序下触发，平时都命中上面的就绪分支）
+	return load(path) as PackedScene
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -518,11 +538,20 @@ func _spawn_regular(player: Node2D) -> void:
 			GameBalance.SPAWN_INSET_MOB, GameBalance.SPAWN_MIN_DIST_MOB, GameBalance.SPAWN_PUSH_MOB)
 
 		var key := EnemyData.pick_scene_key(wave_number, GameManager.rng.randf())
-		var enemy_scene: PackedScene = _mob_scenes.get(key, _mob_scenes["slime"])
+		var enemy_scene: PackedScene = _get_mob_scene(key)
 		# 提前锁定预算名额与经验累计，防止 1.1s 预警延迟期间超额派发
 		_budget_used += 1
 		EnemyCodex.record_seen(key)
 		_schedule_enemy_spawn(enemy_scene, pos, false)
+
+## 按 key 取怪种场景：命中缓存直接用；否则从线程加载取回（未就绪则同步兜底）并缓存。
+func _get_mob_scene(key: String) -> PackedScene:
+	if _mob_scenes.has(key):
+		return _mob_scenes[key]
+	var path: String = String(_mob_scene_paths.get(key, _mob_scene_paths.get("slime", "")))
+	var ps := _scene_or_null(path)
+	_mob_scenes[key] = ps
+	return ps
 
 func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> void:
 	var parent := get_parent()
@@ -584,6 +613,10 @@ func _spawn_elite(player: Node2D) -> void:
 	var pos := _spawn_pos_away_from_player(player,
 		GameBalance.SPAWN_INSET_ELITE, GameBalance.SPAWN_MIN_DIST_ELITE, GameBalance.SPAWN_PUSH_ELITE)
 
+	if _elite_scenes.is_empty():
+		# 首次取用：从线程加载路径就绪取回（数量与 EnemyData.ELITE_POOL 对齐，顺序即轮换顺序）
+		for p in _elite_scene_paths:
+			_elite_scenes.append(_scene_or_null(p))
 	var pool: Array = _elite_scenes
 	var elite_idx := _elite_spawn_count % pool.size()
 	var scene: PackedScene = pool[elite_idx]

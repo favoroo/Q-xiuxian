@@ -49,7 +49,11 @@ func _ready() -> void:
 	_download_http.request_completed.connect(_on_download_request_completed)
 	add_child(_download_http)
 
-	_init_dialog()
+	# 弹窗/Toast 改为懒建（2026-10-21 启动卡顿专项）：原先在 _ready 里立即构建两套完整 UI
+	# （UpdateDialog + Toast，含 CanvasLayer 与全部控件），是引擎启动阻塞段的一笔固定开销。
+	# 现在只挂信号，真正需要显示时才建（见 _ensure_dialog / _ensure_toast）。
+	_update_signals_connected = true
+	_connect_update_signals()
 
 var _toast_canvas: CanvasLayer
 var _toast_band: CenterContainer
@@ -75,17 +79,26 @@ const TOAST_EDGE_MARGIN: float = 12.0 # 屏边留白：文案再长也不贴屏�
 const TOAST_TOP: float = 36.0         # 浮层顶缘（画布坐标）
 const TOAST_SLIDE: float = 16.0       # 入场/退场滑移量
 
-func _init_dialog() -> void:
+var _update_signals_connected: bool = false
+
+## 懒建更新弹窗（首次需要显示时才建；重复调用安全）
+func _ensure_dialog() -> void:
+	if _dialog_instance != null and is_instance_valid(_dialog_instance):
+		return
 	# 顶层 CanvasLayer 保证弹窗覆盖在全部 UI 与操作之上
 	_dialog_canvas = CanvasLayer.new()
 	_dialog_canvas.layer = 100
 	add_child(_dialog_canvas)
-
 	_dialog_instance = UpdateDialogScript.new()
 	_dialog_canvas.add_child(_dialog_instance)
 
+## 懒建 Toast 浮层（首次需要显示时才建；重复调用安全）
+func _ensure_toast() -> void:
+	if _toast_band != null and is_instance_valid(_toast_band):
+		return
 	_init_toast()
 
+func _connect_update_signals() -> void:
 	update_available.connect(func(info: Dictionary):
 		_last_check_manual = false
 		show_update_dialog(info)
@@ -168,6 +181,7 @@ func _fit_toast(text: String) -> void:
 
 ## 展示全局轻提示浮层（Toast）
 func show_toast(text: String, accent_color: Color = GameStyle.JADE, duration: float = 2.2) -> void:
+	_ensure_toast()
 	if _toast_band == null or _toast_panel == null or _toast_label == null:
 		return
 	_toast_label.text = text
@@ -209,6 +223,7 @@ func toast_probe() -> Dictionary:
 
 ## 主动弹出更新对话框
 func show_update_dialog(info: Dictionary) -> void:
+	_ensure_dialog()
 	if _dialog_instance:
 		_dialog_instance.popup_update(info)
 

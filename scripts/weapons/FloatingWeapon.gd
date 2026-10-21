@@ -212,6 +212,7 @@ func _query_enemies(radius: float, center: Vector2, max_results: int) -> Array:
 		_search_query.shape = _search_shape
 		_search_query.collision_mask = 4
 		_search_query.collide_with_areas = true
+		_search_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 	_search_shape.radius = radius
 	_search_query.transform = Transform2D(0.0, center)
 	return get_world_2d().direct_space_state.intersect_shape(_search_query, max_results)
@@ -589,11 +590,12 @@ func _perform_turret_attack() -> void:
 	var player = GameManager.player
 	var spawn_pos: Vector2 = player.global_position if player != null else global_position
 
-	var alive: Array[TurretUnit] = []
-	for t in active_turrets:
-		if t != null and is_instance_valid(t) and not t._is_dying:
-			alive.append(t)
-	active_turrets = alive
+	# 原地清理失效炮塔（2026-10-21）：旧写法每次开火新建一个 Array 拷贝，6 法器数Hz 齐射
+	# 就是每秒几十次小分配。改原地倒序删除，零分配。
+	for i in range(active_turrets.size() - 1, -1, -1):
+		var t: TurretUnit = active_turrets[i]
+		if t == null or not is_instance_valid(t) or t._is_dying:
+			active_turrets.remove_at(i)
 
 	var cap := int(def.get("turret_cap", 2)) + (star - 1)
 	if active_turrets.size() >= cap:
@@ -691,6 +693,7 @@ func _beam_deal_damage() -> void:
 		_beam_query.shape = _beam_shape
 		_beam_query.collision_mask = 4
 		_beam_query.collide_with_areas = true
+		_beam_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
 	var from := muzzle_point.global_position
 	var dir := Vector2.RIGHT.rotated(global_rotation)
 	var judge_len := _beam_len + BEAM_HIT_OVERHANG
