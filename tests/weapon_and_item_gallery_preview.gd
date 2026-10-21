@@ -146,34 +146,22 @@ func _build_ui() -> void:
 	bot_hbox.add_theme_constant_override("separation", 10)
 	bot_vbox.add_child(bot_hbox)
 
-	# 属性图标行 (17 项悟道属性)
+	# 悟道加点专属图标（直接遍历 UpgradeData.UPGRADES，与真实数据同源，不再手抄清单）
+	# 51 项放进可滚动网格，避免预览与实际数据脱节。
+	var stat_scroll := ScrollContainer.new()
+	stat_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stat_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stat_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	bot_hbox.add_child(stat_scroll)
+
 	var stat_grid := GridContainer.new()
 	stat_grid.columns = 6
 	stat_grid.add_theme_constant_override("h_separation", 4)
 	stat_grid.add_theme_constant_override("v_separation", 4)
-	bot_hbox.add_child(stat_grid)
+	stat_scroll.add_child(stat_grid)
 
-	var stats := [
-		["攻击", "res://assets/art/icon_atk.png"],
-		["护甲", "res://assets/art/icon_armor.png"],
-		["移速", "res://assets/art/icon_boots.png"],
-		["攻速", "res://assets/art/icon_haste.png"],
-		["气血", "res://assets/art/icon_hp.png"],
-		["回血", "res://assets/art/icon_regen.png"],
-		["磁吸", "res://assets/art/icon_magnet.png"],
-		["灵石", "res://assets/art/icon_coin.png"],
-		["暴击", "res://assets/art/icon_crit.png"],
-		["爆伤", "res://assets/art/icon_critdmg.png"],
-		["闪避", "res://assets/art/icon_dodge.png"],
-		["吸血", "res://assets/art/icon_lifesteal.png"],
-		["幸运", "res://assets/art/icon_luck.png"],
-		["收益", "res://assets/art/icon_harvest.png"],
-		["范围", "res://assets/art/icon_range.png"],
-		["罡气", "res://assets/art/icon_thorns.png"],
-		["透劲", "res://assets/art/icon_pierce.png"],
-	]
-	for s_info in stats:
-		var scard := _create_stat_icon_chip(s_info[0], s_info[1])
+	for up in UpgradeData.UPGRADES:
+		var scard := _create_stat_icon_chip(String(up.get("title", "")), String(up.get("icon", "")))
 		stat_grid.add_child(scard)
 
 	# 纯矢量弹道飞行物视窗

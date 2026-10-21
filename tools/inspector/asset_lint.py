@@ -103,6 +103,14 @@ def run_asset_lint(verbose: bool = True) -> bool:
         if not valid:
             all_errors.append((p, issues))
 
+    # 3.5 检查悟道加点专属图标 (assets/art/upgrade_*.png) -> 规范 128x128
+    #     程序化生成（tools/generate_cold_gothic_upgrade_icons.py），与 icon_*/item_*/weapon_* 完全独立。
+    for p in sorted(glob.glob("assets/art/upgrade_*.png")):
+        total_checked += 1
+        valid, issues = lint_icon_image(p, expected_size=(128, 128))
+        if not valid:
+            all_errors.append((p, issues))
+
     # 4. 检查数据表引用
     data_files = [
         ("UpgradeData", "scripts/data/UpgradeData.gd"),

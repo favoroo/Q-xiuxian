@@ -152,20 +152,14 @@ func _run() -> void:
 			break
 	_check(bought, "购买一件商品")
 
-	# 法宝（被动道具）货架位：若本波刷出法宝，买一件验证被动生效链路
+	# 法宝（被动道具）货架位：主动构造一条法宝上架，不依赖随机货架（否则断言数在 60/62 间波动）
 	GameManager.add_spirit_stones(500)
-	var item_idx := -1
-	for i in range(GameManager.shop_offers.size()):
-		var offer: Dictionary = GameManager.shop_offers[i]
-		if offer.get("kind", "") == "item" and not offer.get("sold", false):
-			item_idx = i
-			break
-	if item_idx >= 0:
-		var item_id: String = GameManager.shop_offers[item_idx].get("id", "")
-		_check(GameManager.buy_offer(item_idx), "购买法宝 %s" % item_id)
-		_check(GameManager.has_item(item_id), "法宝已入持有列表（%s）" % item_id)
-	else:
-		print("[INFO] 本波货架未刷出法宝，跳过法宝购买验证")
+	var forced_item_id := String(ItemData.all_ids()[0])
+	GameManager.shop_offers[0] = {
+		"kind": "item", "id": forced_item_id, "price": 14, "sold": false, "locked": false,
+	}
+	_check(GameManager.buy_offer(0), "购买法宝 %s" % forced_item_id)
+	_check(GameManager.has_item(forced_item_id), "法宝已入持有列表（%s）" % forced_item_id)
 
 	# 6. 三合一合成 + 羁绊
 	GameManager.add_weapon("huoyan_fu")
@@ -193,6 +187,23 @@ func _run() -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		kinds[e.name.get_basename()] = true
 	print("[INFO] 13 波在场敌种: " + str(kinds.keys()))
+	# 2026-10-21：原来这里只 print 不判定，实测多次在场敌人为空、这个「新敌种验证」从未生效。
+	# 改为对配比纯函数做确定性采样：13 波每个 roll 抽到的怪都必须是「13 波已解锁」的，
+	# 且必须覆盖到第 9 波才解锁的古妖（guyao），证明深层新敌种确实进了池子。
+	var unlocked_13 := {}
+	for mid in EnemyData.MOBS.keys():
+		if int(EnemyData.MOBS[mid].get("unlock_wave", 0)) <= 13:
+			unlocked_13[String(mid)] = true
+	var sampled := {}
+	var leaked: Array[String] = []
+	for i in range(200):
+		var k := EnemyData.pick_scene_key(13, float(i) / 200.0)
+		sampled[k] = true
+		if not unlocked_13.has(k):
+			leaked.append(k)
+	_check(leaked.is_empty(), "13 波配比不越界（未解锁怪：%s）" % str(leaked))
+	_check(sampled.has("guyao"), "13 波敌池含第 9 波解锁的古妖 guyao（深层新敌种已进池，实得 %s）" % str(sampled.keys()))
+	_check(sampled.size() >= 5, "13 波敌池覆盖 ≥5 种怪（实得 %d 种）" % sampled.size())
 
 	# 8. 藏宝匣砸开掉落：选取满耐久未受损匣子（避免战斗中被流弹预先波及）
 	var chest: Node2D = null

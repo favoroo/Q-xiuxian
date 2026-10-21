@@ -39,6 +39,11 @@ extends RefCounted
 ##   melee_lifesteal_flat —— 开山重刃谱：近战命中吸血固定值（FloatingWeapon.gd）
 ##   skill_cooldown_mult —— 凝神符：随行技能冷却缩减比例（SkillData.final_stats）
 ##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：回合结束永久成长（GameManager.apply_harvest）
+## 2026-10-21 角色专属玩法补充（同样走额外字段，item_hook_sum 现算）：
+##   dmg_per_nearby_enemy + dmg_per_nearby_enemy_cap —— 战旗：附近敌人越多全伤害越高（CultivatorSystem.damage_mult）
+##   dmg_per_unique_item + dmg_per_unique_item_cap   —— 藏珍卷：每持有一种不同道具全伤害加成（同上）
+##   on_hit_damage_bonus —— 血海符：受击叠层增伤，与嗜血魔修同一条乘区（CultivatorSystem.damage_mult / GameManager.on_player_hit）
+##   heal_orb_chance     —— 灵草袋：敌人死亡额外掉回复珠概率（EnemyBase 掉落块）
 ##   （吸血类走 apply 的 "lifesteal" 键即可，无需专属钩子：血纹符 / 饮血珠 / 嗜血石。
 ##    吸血概率在 GameManager.try_lifesteal 里按武器攻击方式打折，见 BalanceTargeting.lifesteal_weapon_mult）
 ## 转化件的机制数字写在 desc（同回复葫芦/替身娃娃先例）；apply 留空，卡面加成行不冒第二份数字。
@@ -87,7 +92,7 @@ const DEFS: Dictionary = {
 			},
 			"lingshou_kouliang": {
 				"name": "灵兽口粮", "tier": 1, "price": 16,
-				"icon": "res://assets/art/item_jubaopen.png",
+				"icon": "res://assets/art/item_lingshou_kouliang.png",
 				"desc": "",
 				"apply": {"pet_effect_mult": 0.20},
 			},
@@ -113,7 +118,7 @@ const DEFS: Dictionary = {
 		},
 		"yushou_ling": {
 			"name": "驭兽铃", "tier": 2, "price": 28,
-			"icon": "res://assets/art/item_jingang_zhuo.png",
+			"icon": "res://assets/art/item_yushou_ling.png",
 			"desc": "",
 			"apply": {"pet_damage_mult": 0.25},
 		},
@@ -129,13 +134,6 @@ const DEFS: Dictionary = {
 		"desc": "",
 		"apply": {"free_rerolls": 1.0},
 	},
-		# 2026-10-20 引路灯改造：原「拾取范围 +25%」腿整系移除，改为纯攻击范围道具（攻击范围 +10% / 移速 -4%）。
-		"yinhun_deng": {
-			"name": "引路灯", "tier": 2, "price": 25,
-			"icon": "res://assets/art/item_yinhun_deng.png",
-			"desc": "",
-			"apply": {"attack_range_mult": 0.10, "move_speed_mult": -0.04},
-		},
 		"suoling_jia": {
 			"name": "狂战枷", "tier": 2, "price": 26,
 			"icon": "res://assets/art/item_suoling_jia.png",
@@ -257,7 +255,7 @@ const DEFS: Dictionary = {
 		# 数值按档位压低（+2%），用一点生命回复换，避免把高档饮血珠/嗜血石挤成废件。
 		"xuewen_fu": {
 			"name": "血纹符", "tier": 1, "price": 14,
-			"icon": "res://assets/art/item_wanshou_long.png",
+			"icon": "res://assets/art/item_xuewen_fu.png",
 			"desc": "",
 			"apply": {"lifesteal": 0.02, "hp_regen": -0.2},
 		},
@@ -432,12 +430,6 @@ const DEFS: Dictionary = {
 				"apply": {},
 				"chest_magnet": true,
 			},
-			"manxia_jue": {
-				"name": "满匣诀", "tier": 2, "price": 26,
-				"icon": "res://assets/art/item_manxia_jue.png",
-				"desc": "砸开的宝箱掉得更多（金币与回复量同涨）",
-				"apply": {"chest_reward": 0.4},
-			},
 		"dianjin_jue": {
 			"name": "点金诀", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_dianjin_jue.png",
@@ -463,7 +455,7 @@ const DEFS: Dictionary = {
 			"crit_per_dodge": 0.05,
 		},
 		"shanyue_jia": {
-			"name": "山岳战甲", "tier": 3, "price": 48,
+			"name": "山岳战甲", "tier": 4, "price": 90,
 			"icon": "res://assets/art/item_guijia_fu.png",
 			"desc": "甲越厚势越沉：每点护甲+1.5%全伤害",
 			"apply": {},
@@ -542,7 +534,7 @@ const DEFS: Dictionary = {
 			# ---- 1. 站定/入定流（打坐修仙体系） ----
 			"dazuo_putuan": {
 				"name": "打坐蒲团", "tier": 1, "price": 16,
-				"icon": "res://assets/art/item_huichun_hulu.png",
+				"icon": "res://assets/art/item_dazuo_putuan.png",
 				"desc": "站定不动时每秒恢复2%最大生命；身法略受拘束",
 				"apply": {"move_speed_mult": -0.04},
 				"still_regen_pct": 0.02,
@@ -578,7 +570,7 @@ const DEFS: Dictionary = {
 
 			# ---- 2. 角色机制与核心痛点联动 ----
 			"sanmei_guizhen": {
-				"name": "三昧归真", "tier": 3, "price": 48,
+				"name": "三昧归真", "tier": 4, "price": 88,
 				"icon": "res://assets/art/item_lijian_shi.png",
 				"desc": "残缺即圆满：上阵武器少于4把时，每少1把全伤害+15%（狂战士绝配）",
 				"apply": {},
@@ -609,7 +601,7 @@ const DEFS: Dictionary = {
 			# ---- 3. 武器器类与行为质变 ----
 			"tiangong_fatiao": {
 				"name": "天工发条", "tier": 2, "price": 28,
-				"icon": "res://assets/art/item_luban_suo.png",
+				"icon": "res://assets/art/item_tiangong_fatiao.png",
 				"desc": "机括极转：机关炮台攻击间隔缩短20%，环绕武器旋转速度提升30%",
 				"apply": {"luck": -2.0},
 				"turret_haste": 0.20, "drone_spin_speed": 0.30,
@@ -623,7 +615,7 @@ const DEFS: Dictionary = {
 			},
 			"kaishan_jianyi": {
 				"name": "开山重刃谱", "tier": 2, "price": 26,
-				"icon": "res://assets/art/item_manli_huwan.png",
+				"icon": "res://assets/art/item_kaishan_jianyi.png",
 				"desc": "大巧不工：横扫类武器挥砍范围+25%，近身挥砍命中时吸收1点生命（每秒至多2次）",
 				"apply": {"move_speed_mult": -0.05},
 				"wide_range_mult": 0.25, "melee_lifesteal_flat": 1.0,
@@ -633,7 +625,7 @@ const DEFS: Dictionary = {
 			"ningshen_fu": {
 				"name": "凝神符", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_chenxiang_mu.png",
-				"desc": "心若冰清：随行技能冷却时间缩短10%",
+				"desc": "心若冰清：随行技能冷却时间缩短10%；福缘 -2",
 				"apply": {"luck": -2.0},
 				"skill_cooldown_mult": 0.10,
 			},
@@ -645,32 +637,137 @@ const DEFS: Dictionary = {
 				"unique": true,
 				"wave_end_max_hp": 3.0, "wave_end_regen": 0.5, "wave_end_lifesteal": 0.01,
 			},
-			"liekong_zhui": {
-				"name": "裂空锥", "tier": 3, "price": 42,
-				"icon": "res://assets/art/item_poxu_lingfu.png",
-				"desc": "",
-				"apply": {"bonus_pierce": 1.0, "attack_range_mult": -0.10},
-			},
-
 			# ==================== 2026-10-20 新增：通用强力选项（补删件空位 + 直给输出/生存） ====================
 			# 用户口径「值得选的东西太少」：这三件不挑流派，任何构筑都能吃到，专治「没东西可挑」。
 			"xuantie_ling": {
-				"name": "玄铁令", "tier": 2, "price": 27,
+				"name": "玄铁令", "tier": 3, "price": 46,
 				"icon": "res://assets/art/item_suoling_jia.png",
-				"desc": "",
-				"apply": {"weapon_damage_mult": 0.20},
+				"desc": "玄铁压手：出刀略沉",
+				"apply": {"weapon_damage_mult": 0.20, "attack_speed_mult_mul": 1.03},
 			},
 			"bumie_jinshen": {
-				"name": "不灭金身", "tier": 3, "price": 48,
+				"name": "不灭金身", "tier": 4, "price": 90,
 				"icon": "res://assets/art/item_jingang_fumo_jia.png",
-				"desc": "",
-				"apply": {"max_hp": 50.0, "hp_heal": 50.0, "armor": 4.0, "hp_regen": 1.0},
+				"desc": "金身沉重，步履稍缓",
+				"apply": {"max_hp": 50.0, "hp_heal": 50.0, "armor": 4.0, "hp_regen": 1.0, "move_speed_mult": -0.04},
 			},
 			"tiangang_zhanyi": {
-				"name": "天罡战意", "tier": 3, "price": 46,
+				"name": "天罡战意", "tier": 4, "price": 88,
 				"icon": "res://assets/art/item_potian_zhui.png",
-				"desc": "",
-				"apply": {"crit_rate": 0.10, "crit_mult": 0.30},
+				"desc": "战意催命，护体略薄",
+				"apply": {"crit_rate": 0.10, "crit_mult": 0.30, "armor": -1.0},
+			},
+			# ==================== 2026-10-21 流派补齐（1 主属性 + 1 跨流派负面） ====================
+			# 补近战/远程/元素/召唤/机关/技能/闪避的物品入口，以及收藏家/蛮兵/嗜血魔修/灵植夫
+			# 四个角色专属玩法的转化件。图标先借同系贴图占位，media-gen 出专属图后替换并补 manifest。
+			"tieshou": {
+				"name": "铁手套", "tier": 1, "price": 14,
+				"icon": "res://assets/art/item_tieshou.png",
+				"desc": "近身硬功，远程手法生疏",
+				"apply": {"melee_damage": 2.0, "ranged_damage": -1.0},
+			},
+			"lingyan_fu": {
+				"name": "灵焰符", "tier": 1, "price": 14,
+				"icon": "res://assets/art/item_lingyan_fu.png",
+				"desc": "灵焰催动略滞手势",
+				"apply": {"elemental_damage": 2.0, "attack_speed_mult_mul": 1.03},
+			},
+			"tongling": {
+				"name": "铜铃", "tier": 1, "price": 14,
+				"icon": "res://assets/art/item_tongling.png",
+				"desc": "铃声引灵，身法稍重",
+				"apply": {"engineering_damage": 2.0, "move_speed_mult": -0.03},
+			},
+			"pojun_fu": {
+				"name": "破军符", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_pojun_fu.png",
+				"desc": "重刃破军，出手距离略短",
+				"apply": {"melee_damage": 4.0, "attack_range_mult": -0.05},
+			},
+			"liannu_shi": {
+				"name": "连弩石", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_liannu_shi.png",
+				"desc": "机弩连发，射程略收",
+				"apply": {"ranged_damage": 4.0, "attack_range_mult": -0.05},
+			},
+			"wuxing_sha": {
+				"name": "五行砂", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_wuxing_sha.png",
+				"desc": "五行相激，生机略滞",
+				"apply": {"elemental_damage": 4.0, "hp_regen": -0.3},
+			},
+			"tongji_chi": {
+				"name": "铜机齿", "tier": 2, "price": 28,
+				"icon": "res://assets/art/item_tongji_chi.png",
+				"desc": "机齿咬合，负重增加",
+				"apply": {"contraption_damage": 4.0, "move_speed_mult": -0.04},
+			},
+			"jingxin_fu": {
+				"name": "静心符", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_jingxin_fu.png",
+				"desc": "静心凝神：随行技能冷却缩短；福缘 -1",
+				"apply": {"skill_cooldown_mult": 0.08, "luck": -1.0},
+			},
+			"huansha": {
+				"name": "幻纱", "tier": 2, "price": 26,
+				"icon": "res://assets/art/item_huansha.png",
+				"desc": "身轻如纱，护体略薄",
+				"apply": {"dodge": 0.05, "move_speed_mult": 0.04, "armor": -1.0},
+			},
+			"lingcao_dai": {
+				"name": "灵草袋", "tier": 2, "price": 24,
+				"icon": "res://assets/art/item_lingcao_dai.png",
+				"desc": "灵草滋生灵药：敌人死亡额外掉回复珠；自身回复略减",
+				"apply": {"hp_regen": -0.3},
+				"heal_orb_chance": 0.10,
+			},
+			"wanling_fan": {
+				"name": "万灵幡", "tier": 3, "price": 48,
+				"icon": "res://assets/art/item_wanling_fan.png",
+				"desc": "万灵来朝：召唤物与灵兽同受加持；幡重步缓",
+				"apply": {"engineering_damage": 5.0, "pet_damage_mult": 0.15, "move_speed_mult": -0.04},
+			},
+			"tianji_suo": {
+				"name": "天机锁", "tier": 3, "price": 46,
+				"icon": "res://assets/art/item_tianji_suo.png",
+				"desc": "天机咬合：机关运转更快；福缘 -2",
+				"apply": {"contraption_damage": 6.0, "attack_speed_mult_mul": 0.94, "luck": -2.0},
+			},
+			"zhanqi": {
+				"name": "战旗", "tier": 3, "price": 46,
+				"icon": "res://assets/art/item_zhanqi.png",
+				"desc": "战旗所指：每1个附近敌人全伤害+0.8%，至多+24%",
+				"apply": {},
+				"dmg_per_nearby_enemy": 0.008, "dmg_per_nearby_enemy_cap": 0.24,
+			},
+			"cangzhen_juan": {
+				"name": "藏珍卷", "tier": 3, "price": 46,
+				"icon": "res://assets/art/item_cangzhen_juan.png",
+				"desc": "藏品越杂底蕴越厚：每1种不同道具全伤害+1.5%，至多+30%",
+				"apply": {},
+				"dmg_per_unique_item": 0.015, "dmg_per_unique_item_cap": 0.30,
+			},
+			"xuehai_fu": {
+				"name": "血海符", "tier": 3, "price": 46,
+				"icon": "res://assets/art/item_xuehai_fu.png",
+				"desc": "受伤即蓄血海：每次受击叠1层，每层全伤害+1.5%，最多10层",
+				"apply": {"armor": -2.0},
+				"on_hit_damage_bonus": 0.015,
+			},
+			"daoyun_jing": {
+				"name": "道蕴镜", "tier": 4, "price": 90,
+				"icon": "res://assets/art/item_daoyun_jing.png",
+				"desc": "镜照道蕴：随行技能冷却大幅缩短；出招略慢\n（每局限购一件）",
+				"apply": {"skill_cooldown_mult": 0.25, "attack_speed_mult_mul": 0.92},
+				"unique": true,
+			},
+			"wanshi_jian": {
+				"name": "万矢箭", "tier": 4, "price": 88,
+				"icon": "res://assets/art/item_wanshi_jian.png",
+				"desc": "一箭化万矢：远程武器额外发射1枚弹丸；射程略收\n（每局限购一件）",
+				"apply": {"ranged_damage": 6.0, "attack_range_mult": -0.10},
+				"projectile_count_bonus": 1,
+				"unique": true,
 			},
 	}
 
@@ -685,6 +782,67 @@ static func tier_label(tier: int) -> String:
 
 static func tier_color(tier: int) -> Color:
 	return TIER_COLORS.get(clampi(tier, 1, 4), TIER_COLORS[1])
+
+## 物品标签：从 apply / 额外字段自动派生，供 ItemOfferSystem 做构筑亲和。
+## 不手工维护 tags 数组 —— 数值一改标签跟着变，避免「标签说近战、实际加远程」的脏数据。
+const TAG_FIELDS := {
+	"melee_damage": "melee", "ranged_damage": "ranged",
+	"elemental_damage": "elemental", "engineering_damage": "summon",
+	"contraption_damage": "contraption",
+	"crit_rate": "crit", "crit_mult": "crit", "dodge": "dodge",
+	"lifesteal": "lifesteal", "max_hp": "tank", "armor": "tank",
+	"hp_regen": "heal", "thorns": "thorns", "move_speed_mult": "speed",
+	"attack_speed_mult_mul": "haste", "attack_range_mult": "range",
+	"bonus_pierce": "pierce", "harvest": "economy", "luck": "economy",
+	"xp_gain_mult": "economy", "shop_price_mul": "economy",
+	"free_rerolls": "economy", "spirit_stones": "economy",
+	"chest_count": "chest", "chest_quality": "chest", "chest_reward": "chest",
+	"pet_damage_mult": "pet", "pet_effect_mult": "pet",
+	"pet_cooldown_mult_mul": "pet", "pet_slots": "pet",
+	"skill_cooldown_mult": "skill",
+}
+
+const HOOK_TAGS := {
+	"still_regen_pct": "still", "still_dodge": "still", "still_armor": "still",
+	"still_thorns": "still", "still_attack_speed": "still", "still_damage": "still",
+	"skill_cooldown_mult": "skill", "projectile_count_bonus": "projectile",
+	"wide_range_mult": "wide", "melee_lifesteal_flat": "lifesteal",
+	"heal_buff_damage": "heal", "dodge_heal_chance": "dodge",
+	"turret_haste": "contraption", "drone_spin_speed": "summon",
+	"dmg_per_nearby_enemy": "crowd", "dmg_per_unique_item": "collection",
+	"on_hit_damage_bonus": "onhit", "heal_orb_chance": "heal",
+	"kill_explode": "elemental", "dmg_per_move_speed": "speed",
+	"crit_per_dodge": "dodge", "dmg_per_armor": "tank",
+	"dmg_per_max_hp": "tank", "dmg_per_100_stones": "economy",
+	"dmg_per_missing_hp": "lifesteal", "dmg_per_empty_slot": "generic",
+	"wave_heal_pct": "heal", "chest_magnet": "chest", "revive": "tank",
+}
+
+static func tags_of(id: String) -> Array:
+	var d: Dictionary = get_def(id)
+	var out: Array = []
+	if d.is_empty():
+		return out
+	var apply: Dictionary = d.get("apply", {})
+	for k in apply.keys():
+		var key := String(k)
+		if key.begins_with("element_damage_") and key != "element_damage_all":
+			var elem := key.trim_prefix("element_damage_")
+			if not out.has(elem):
+				out.append(elem)
+			# 单元素件同时算「元素流」：雷法/符修的角色偏好标签能命中，具体五行另由 _element_hit 判。
+			if not out.has("elemental"):
+				out.append("elemental")
+		var tag := String(TAG_FIELDS.get(key, ""))
+		if tag != "" and not out.has(tag):
+			out.append(tag)
+	if apply.has("element_damage_all") and not out.has("elemental"):
+		out.append("elemental")
+	for k in d.keys():
+		var tag := String(HOOK_TAGS.get(String(k), ""))
+		if tag != "" and not out.has(tag):
+			out.append(tag)
+	return out
 
 ## 出售回收价：基准价 × SELL_RATIO（与 WeaponData.sell_price / PetData.sell_price 同一条口径：
 ## 按数据表里的基准价折半，不按当回合上架价 —— 上架价每回合 +2，回收不跟着涨，详情卡两行并排印出来）。
@@ -728,6 +886,9 @@ static func _pick_id_filtered(luck: float, wave: int, bought: Array, rng: Random
 		var w := float(tier_w[tier - 1])
 		if w <= 0.0:
 			continue
+		# 构筑亲和（2026-10-21）：档位权重 × 当前武器类别/五行/角色偏好/已持有同类。
+		# gm 为空时倍率恒 1，单测的纯池抽取仍可钉住。
+		w *= BalanceBuildFilter.item_affinity(gm, String(id))
 		pool.append(id)
 		weights.append(w)
 	if pool.is_empty():

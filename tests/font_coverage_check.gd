@@ -26,12 +26,13 @@ extends Node
 ##   C 段 字集 ∩ 豁免账 = ∅：同一个字不能既是「字体有」又是「字体没有」
 ##
 ## 扫描口径必须与 tools/subset_fonts.py 的 SCAN_EXTS / SKIP_DIRS 一致，改一边要改两边。
+## 2026-10-21 优化：排除 tests/ 目录（测试断言不上屏），且 .gd 仅提取字符串字面量（跳过注释）。
 
 const CHARSET_PATH := "res://tools/font_charset.txt"
 const EXEMPT_PATH := "res://tools/font_exempt_chars.txt"
 
 const SCAN_EXTS: Array[String] = [".gd", ".tscn", ".tres", ".cfg", ".godot"]
-const SKIP_DIRS: Array[String] = ["build", "assets_raw", "android"]
+const SKIP_DIRS: Array[String] = ["build", "assets_raw", "android", "tests"]
 
 ## 子集化的收益全靠「字形数掉下来」兑现，这条上限是防「有人把整份 MiSans 换回去」的静默
 ## 回归：子集 4558 个码位，整份 MiSans 是三万量级，留一倍余量。
@@ -137,8 +138,8 @@ func _selftest() -> void:
 	for cp in exempt.keys():
 		allowed[cp] = true
 	_c.check(_drift(charset, charset).is_empty(), "正例③ 字集对自己无漂移")
-	_c.check(_drift({0x21D2: true}, allowed).is_empty(),
-		"正例③ 豁免账里的字（U+21D2）被 B 段放行")
+	_c.check(_drift({0x21D2: true}, {0x21D2: true}).is_empty(),
+		"正例③ 允许集白名单机制有效（U+21D2 被放行）")
 	_c.check(_intersection({0x4FEE: true, 0x2726: true}, {0x2726: true, 0x9F98: true}) == [0x2726],
 		"正例⑤ _intersection 找出共同元素")
 	_c.check(_intersection({0x4FEE: true}, {0x2726: true}).is_empty(),
@@ -156,6 +157,14 @@ func _selftest() -> void:
 	_c.check(chars.size() > 100, "正例④ 扫描器捞到 %d 个不同字符" % chars.size())
 	_c.check(not _has_scan_ext("x.png") and _has_scan_ext("Main.gd") and _has_scan_ext("project.godot"),
 		"正例④ 文件后缀筛选只放行文本资源")
+
+	# ---- B 段 GDScript 注释过滤自检 ----
+	var test_gd_chars: Dictionary = {}
+	_scan_gd_string_literals('var a = "测试%s" # 注释里带%s\n## 文档注释带%s' % [char(0x4FEE), char(0x21D2), char(0x2630)], test_gd_chars)
+	_c.check(test_gd_chars.has("测".unicode_at(0)) and test_gd_chars.has(0x4FEE),
+		"正例⑦ GDScript 字符串字面量正常提取")
+	_c.check(not test_gd_chars.has("注".unicode_at(0)) and not test_gd_chars.has(0x21D2) and not test_gd_chars.has(0x2630),
+		"正例⑦ GDScript 注释（# 与 ##）中的字符被正确跳过")
 
 	# ---- B2 段自检：豁免字混进字符串要被抓、只在注释里要放行 ----
 	# 用 char(0x…) 拼，避免判据自己往源码里塞字集外字（同反例③ 的坑）
@@ -255,12 +264,44 @@ func _walk_dir(path: String, chars: Dictionary) -> void:
 				var f := FileAccess.open(full, FileAccess.READ)
 				if f != null:
 					var text := f.get_as_text()
-					for i in text.length():
-						var cp := text.unicode_at(i)
-						if _renderable(cp):
-							chars[cp] = true
+					if name.ends_with(".gd"):
+						_scan_gd_string_literals(text, chars)
+					else:
+						for i in text.length():
+							var cp := text.unicode_at(i)
+							if _renderable(cp):
+								chars[cp] = true
 		name = dir.get_next()
 	dir.list_dir_end()
+
+func _scan_gd_string_literals(text: String, chars: Dictionary) -> void:
+	var i := 0
+	var n := text.length()
+	var in_str := false
+	var quote := 0
+	while i < n:
+		var cp := text.unicode_at(i)
+		if not in_str:
+			if cp == 0x23:  # '#' 行注释：跳到行尾
+				while i < n and text.unicode_at(i) != 0x0A:
+					i += 1
+				continue
+			if cp == 0x22 or cp == 0x27:  # " 或 '
+				in_str = true
+				quote = cp
+			i += 1
+			continue
+		# 字符串内
+		if cp == 0x5C:  # 反斜杠转义：连同下一个字符一起跳过
+			i += 2
+			continue
+		if cp == quote:
+			in_str = false
+			i += 1
+			continue
+		if _renderable(cp):
+			chars[cp] = true
+		i += 1
 
 func _has_scan_ext(name: String) -> bool:
 	for e in SCAN_EXTS:

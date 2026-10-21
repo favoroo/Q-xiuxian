@@ -19,7 +19,7 @@ extends RefCounted
 const PIERCE_UPGRADE_ID := "pierce_up"
 
 ## 加穿透的道具 id 集合：满穿透时不进金币阁/玉匣道具池
-const PIERCE_ITEM_IDS: Array[String] = ["poxu_lingfu", "liekong_zhui", "wuji_tianchuan_zhen"]
+const PIERCE_ITEM_IDS: Array[String] = ["poxu_lingfu", "wuji_tianchuan_zhen"]
 
 ## 当前局穿透是否已顶到上限——按【玩家实际阵容】逐把对账，不再假设"基础最低 1"。
 ## 口径：对场上每一把弹丸类武器（悬浮 + 机关台，含背囊未上阵的弹丸不算——买了新武器

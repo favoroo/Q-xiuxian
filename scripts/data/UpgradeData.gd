@@ -30,7 +30,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "武器伤害超过 +100% 后收益减半",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/icon_atk.png",
+			"icon": "res://assets/art/upgrade_atk.png",
 			"max_stacks": 6,
 		},
 		{
@@ -40,7 +40,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/weapon_sword.png",
+			"icon": "res://assets/art/upgrade_melee.png",
 			"max_stacks": 6,
 		},
 		{
@@ -50,7 +50,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/weapon_gold_sword.png",
+			"icon": "res://assets/art/upgrade_ranged.png",
 			"max_stacks": 6,
 		},
 		{
@@ -60,7 +60,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "并提升灼烧、中毒等持续伤害",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/weapon_fire_lantern.png",
+			"icon": "res://assets/art/upgrade_elemental.png",
 			"max_stacks": 6,
 		},
 			{
@@ -70,7 +70,7 @@ const UPGRADES: Array[Dictionary] = [
 				"desc": "",
 				"rarity": "common",
 				"rarity_label": "普通",
-				"icon": "res://assets/art/weapon_earth_bell.png",
+				"icon": "res://assets/art/upgrade_engineering.png",
 				"max_stacks": 6,
 			},
 			{
@@ -80,7 +80,7 @@ const UPGRADES: Array[Dictionary] = [
 				"desc": "",
 				"rarity": "common",
 				"rarity_label": "普通",
-				"icon": "res://assets/art/item_luban_suo.png",
+				"icon": "res://assets/art/upgrade_contraption.png",
 				"max_stacks": 6,
 			},
 	{
@@ -90,7 +90,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_haste.png",
+		"icon": "res://assets/art/upgrade_haste.png",
 		"max_stacks": 6,
 	},
 	{
@@ -100,7 +100,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "按百分比减免每次受击伤害",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_armor.png",
+		"icon": "res://assets/art/upgrade_armor.png",
 		"max_stacks": 6,
 	},
 	{
@@ -110,7 +110,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_boots.png",
+		"icon": "res://assets/art/upgrade_speed.png",
 		"max_stacks": 6,
 	},
 	{
@@ -120,7 +120,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_hp.png",
+		"icon": "res://assets/art/upgrade_hp.png",
 		"max_stacks": 6,
 	},
 	# 2026-10-20 拾取范围整系移除（用户口径：不管玩什么流派都没用），原 pickup_up 位换成通用生存档。
@@ -131,7 +131,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "厚甲护身，同时提升生命上限",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_armor.png",
+		"icon": "res://assets/art/upgrade_temper.png",
 		"max_stacks": 6,
 	},
 	# 2026-10-20 金币补给重做：原来 8 层共 96 金币性价比过低，改成收益复利 + 幸运的长期经济档。
@@ -142,7 +142,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "每回合结束白得金币与经验，并小幅提升幸运",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_harvest.png",
+		"icon": "res://assets/art/upgrade_greed.png",
 		"max_stacks": 4,
 	},
 	{
@@ -152,7 +152,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "每秒持续回复生命",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/icon_regen.png",
+		"icon": "res://assets/art/upgrade_regen.png",
 		"max_stacks": 6,
 	},
 	{
@@ -162,7 +162,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "暴击率有软上限，到顶再加是白加",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_crit.png",
+		"icon": "res://assets/art/upgrade_crit.png",
 		"max_stacks": 6,
 	},
 	{
@@ -172,7 +172,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "打出暴击时伤害额外提升，上限 250%",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/icon_critdmg.png",
+		"icon": "res://assets/art/upgrade_critdmg.png",
 		"max_stacks": 4,
 	},
 	{
@@ -182,7 +182,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "有概率完全闪避一次攻击，不掉血",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_dodge.png",
+		"icon": "res://assets/art/upgrade_dodge.png",
 		"max_stacks": 6,
 	},
 	{
@@ -192,7 +192,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "命中时吸取 1 点生命（每秒最多 3 次），近战更易触发",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_lifesteal.png",
+		"icon": "res://assets/art/upgrade_lifesteal.png",
 		"max_stacks": 6,
 	},
 	{
@@ -202,7 +202,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "高稀有升级与道具更易出现",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_luck.png",
+		"icon": "res://assets/art/upgrade_luck.png",
 		"max_stacks": 8,
 	},
 	{
@@ -212,7 +212,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "每回合结束白得金币与经验",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_harvest.png",
+		"icon": "res://assets/art/upgrade_harvest.png",
 		"max_stacks": 6,
 	},
 	# 2026-10-11 寻宝流三项：生效幅度在这里，兑现点在 BalanceChest（数量 / 档次权重 / 开箱收益）
@@ -226,7 +226,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "每回合场上多刷几口宝箱",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/prop_chest.png",
+		"icon": "res://assets/art/upgrade_chest.png",
 		"max_stacks": 3,
 	},
 	{
@@ -236,7 +236,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "铜匣与玉匣更易出现，玉匣砸开必送道具",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_dianjin_jue.png",
+		"icon": "res://assets/art/upgrade_chest_quality.png",
 		"max_stacks": 4,
 	},
 	{
@@ -246,7 +246,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "砸开的宝箱掉得更多（金币与回复量同涨）",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_manxia_jue.png",
+		"icon": "res://assets/art/upgrade_chest_reward.png",
 		"max_stacks": 3,
 	},
 	{
@@ -258,7 +258,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_range.png",
+		"icon": "res://assets/art/upgrade_range.png",
 		"max_stacks": 5,
 	},
 	# 2026-10-20 击退提升整系移除（用户口径：不管玩什么流派都没用），原 knockback_up 位换成攻防一体的吸血档。
@@ -269,7 +269,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "边打边回血，同时提升武器伤害",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/icon_lifesteal.png",
+		"icon": "res://assets/art/upgrade_bloodlust.png",
 		"max_stacks": 5,
 	},
 	{
@@ -279,7 +279,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "吸收经验光球获得更多经验",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_wujian_shi.png",
+		"icon": "res://assets/art/upgrade_insight.png",
 		"max_stacks": 4,
 	},
 	{
@@ -289,7 +289,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "回合间商店免费重掷次数",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_tongxuan_ling.png",
+		"icon": "res://assets/art/upgrade_tongxuan.png",
 		"max_stacks": 2,
 	},
 	{
@@ -299,7 +299,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对精英与首领生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_pojia_zhui.png",
+		"icon": "res://assets/art/upgrade_elite.png",
 		"max_stacks": 4,
 	},
 	{
@@ -309,7 +309,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "提升全系武器的元素伤害",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/item_wuxing_pei.png",
+		"icon": "res://assets/art/upgrade_wuxing.png",
 		"max_stacks": 5,
 	},
 	# 2026-10-10 新增：单元素专精加点，与同名单元素道具（金精石等）构成专精流双链路
@@ -320,7 +320,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对金系武器生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_jinjing_shi.png",
+		"icon": "res://assets/art/upgrade_metal.png",
 		"max_stacks": 4,
 	},
 	{
@@ -330,7 +330,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对木系武器生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_chenxiang_mu.png",
+		"icon": "res://assets/art/upgrade_wood.png",
 		"max_stacks": 4,
 	},
 	{
@@ -340,7 +340,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对水系武器生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_hantan_yu.png",
+		"icon": "res://assets/art/upgrade_water.png",
 		"max_stacks": 4,
 	},
 	{
@@ -350,7 +350,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对火系武器生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_dihuo_jing.png",
+		"icon": "res://assets/art/upgrade_fire.png",
 		"max_stacks": 4,
 	},
 	{
@@ -360,7 +360,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "仅对土系武器生效",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/item_houtu_he.png",
+		"icon": "res://assets/art/upgrade_earth.png",
 		"max_stacks": 4,
 	},
 
@@ -372,7 +372,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "弹丸可多穿透 1 名敌人（近战不生效）",
 		"rarity": "rare",
 		"rarity_label": "稀有",
-		"icon": "res://assets/art/icon_pierce.png",
+		"icon": "res://assets/art/upgrade_pierce.png",
 		"max_stacks": 2,
 	},
 	{
@@ -382,7 +382,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "受到近身碰撞时反震",
 		"rarity": "common",
 		"rarity_label": "普通",
-		"icon": "res://assets/art/icon_thorns.png",
+		"icon": "res://assets/art/upgrade_thorns.png",
 		"max_stacks": 6,
 	},
 	{
@@ -392,7 +392,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "受到近身碰撞时反震",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/icon_thorns.png",
+		"icon": "res://assets/art/upgrade_thorns_grand.png",
 		"max_stacks": 3,
 	},
 	{
@@ -402,7 +402,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/weapon_sword.png",
+		"icon": "res://assets/art/upgrade_melee_grand.png",
 		"max_stacks": 5,
 	},
 	{
@@ -412,7 +412,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/weapon_gold_sword.png",
+		"icon": "res://assets/art/upgrade_ranged_grand.png",
 		"max_stacks": 5,
 	},
 	{
@@ -422,7 +422,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/weapon_fire_lantern.png",
+		"icon": "res://assets/art/upgrade_elemental_grand.png",
 		"max_stacks": 5,
 	},
 	{
@@ -432,7 +432,7 @@ const UPGRADES: Array[Dictionary] = [
 		"desc": "召唤兵器护主，附带护体罡气",
 		"rarity": "epic",
 		"rarity_label": "史诗",
-		"icon": "res://assets/art/weapon_earth_bell.png",
+		"icon": "res://assets/art/upgrade_engineering_grand.png",
 		"max_stacks": 5,
 	},
 			{
@@ -444,7 +444,7 @@ const UPGRADES: Array[Dictionary] = [
 				"desc": "",
 				"rarity": "legendary",
 				"rarity_label": "传说",
-				"icon": "res://assets/art/icon_haste.png",
+				"icon": "res://assets/art/upgrade_haste_grand.png",
 				"max_stacks": 3,
 			},
 			{
@@ -456,9 +456,60 @@ const UPGRADES: Array[Dictionary] = [
 				"desc": "全系兵刃威能大幅跃升；武器伤害超过 +100% 后收益减半",
 				"rarity": "legendary",
 				"rarity_label": "传说",
-				"icon": "res://assets/art/icon_atk.png",
+				"icon": "res://assets/art/upgrade_atk_grand.png",
 				"max_stacks": 3,
 			},
+		# ==================== 2026-10-21 结构补档（机关史诗 / 技能流 / 闪避史诗 / 商店折扣） ====================
+		{
+			"id": "grand_contraption",
+			"apply": {"contraption_damage": 6.0, "max_hp": 10.0, "hp_heal": 10.0},
+			"title": "万机归元",
+			"desc": "机关护主，附带护体罡气",
+			"rarity": "epic",
+			"rarity_label": "史诗",
+			"icon": "res://assets/art/upgrade_contraption_grand.png",
+			"max_stacks": 4,
+		},
+		{
+			"id": "skill_cd_up",
+			"apply": {"skill_cooldown_mult": 0.08},
+			"title": "凝神",
+			"desc": "随行技能冷却时间缩短；与道具冷却缩减相加",
+			"rarity": "rare",
+			"rarity_label": "稀有",
+			"icon": "res://assets/art/upgrade_skill_cd.png",
+			"max_stacks": 3,
+		},
+		{
+			"id": "grand_skill_cd",
+			"apply": {"skill_cooldown_mult": 0.15},
+			"title": "坐忘",
+			"desc": "随行技能冷却大幅缩短；与道具冷却缩减相加",
+			"rarity": "legendary",
+			"rarity_label": "传说",
+			"icon": "res://assets/art/upgrade_skill_cd_grand.png",
+			"max_stacks": 2,
+		},
+		{
+			"id": "grand_dodge",
+			"apply": {"dodge": 0.10, "armor": -1.0},
+			"title": "踏虚",
+			"desc": "身法登峰，护体略薄",
+			"rarity": "epic",
+			"rarity_label": "史诗",
+			"icon": "res://assets/art/upgrade_dodge_grand.png",
+			"max_stacks": 2,
+		},
+		{
+			"id": "merchant_up",
+			"apply": {"shop_price_mul": 0.95, "weapon_damage_mult": -0.03},
+			"title": "讨价还价",
+			"desc": "商店价格降低；武器伤害略减",
+			"rarity": "rare",
+			"rarity_label": "稀有",
+			"icon": "res://assets/art/upgrade_merchant.png",
+			"max_stacks": 2,
+		},
 		# ==================== 灵兽强化体系 ====================
 		{
 			"id": "pet_damage_up",
@@ -467,7 +518,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "common",
 			"rarity_label": "普通",
-			"icon": "res://assets/art/icon_atk.png",
+			"icon": "res://assets/art/upgrade_pet_damage.png",
 			"max_stacks": 8,
 		},
 		{
@@ -478,7 +529,7 @@ const UPGRADES: Array[Dictionary] = [
 			"rarity": "common",
 			"rarity_label": "普通",
 			# 2026-10-20 修图标错配：原来误用血瓶 icon_hp（语义不符），改用灵兽道具图标。
-			"icon": "res://assets/art/item_yuling_pai.png",
+			"icon": "res://assets/art/upgrade_pet_effect.png",
 			"max_stacks": 8,
 		},
 		{
@@ -488,7 +539,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "rare",
 			"rarity_label": "稀有",
-			"icon": "res://assets/art/icon_speed.png",
+			"icon": "res://assets/art/upgrade_pet_haste.png",
 			"max_stacks": 5,
 		},
 		{
@@ -498,7 +549,7 @@ const UPGRADES: Array[Dictionary] = [
 			"desc": "",
 			"rarity": "legendary",
 			"rarity_label": "传说",
-			"icon": "res://assets/art/item_wanshou_long.png",
+			"icon": "res://assets/art/upgrade_pet_slots.png",
 			"max_stacks": 2,
 		},
 	]

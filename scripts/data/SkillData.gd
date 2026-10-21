@@ -22,7 +22,8 @@ const DEFS: Dictionary = {
 			"iframe": 0.35,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量
 			"distance": 110.0,    # 闪避距离（像素）
 			"crit_window": 1.0,   # 闪避后必定暴击窗口（秒）
-			"desc": "向当前方向闪避，闪避及落地后0.35秒内无敌，闪避后1秒内攻击必定暴击",
+			"attack_reset": 1,    # 落地即重置所有在役武器的攻击间隔（技能重置普攻，落地那一拍立刻出手）
+			"desc": "向当前方向闪避，闪避及落地后0.35秒内无敌，闪避后1秒内攻击必定暴击，并重置全部武器攻击间隔",
 		},
 		"shadowburst": {
 			"name": "影爆",
@@ -99,7 +100,7 @@ static func all_ids() -> Array:
 static func is_enhanced_for_cultivator(_skill_id: String, _cid: String) -> bool:
 	return false
 
-## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, knockback_boost, pet_heal_pct, pet_duration}
+## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, attack_reset, knockback_boost, pet_heal_pct, pet_duration}
 ## 冷却语义：效果活跃窗口（duration / 闪避=iframe）走完才进冷却，cooldown 是「结束后」的等待值
 static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 	var def: Dictionary = get_def(skill_id)
@@ -114,12 +115,15 @@ static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 		"distance": float(def.get("distance", 0.0)),
 		"dodge_add": float(def.get("dodge_add", 0.0)),
 		"crit_window": float(def.get("crit_window", 0.0)),
+		"attack_reset": int(def.get("attack_reset", 0)),
 		"knockback_boost": float(def.get("knockback_boost", 1.0)),
 		"pet_heal_pct": float(def.get("pet_heal_pct", 0.0)),
 		"pet_duration": float(def.get("pet_duration", 0.0)),
 	}
-	# 凝神符等道具的技能冷却缩减
-	var cd_mult := 1.0 - GameManager.item_hook_sum("skill_cooldown_mult")
+	# 技能冷却缩减：加点/新道具走正式属性，旧凝神符仍走 item hook；两腿相加后统一夹顶。
+	var cd_reduction := minf(GameManager.SKILL_CD_CAP,
+			GameManager.skill_cooldown_mult + GameManager.item_hook_sum("skill_cooldown_mult"))
+	var cd_mult := 1.0 - cd_reduction
 	# 影爆免冷却（门控是影层层数本身），不吃 maxf(1.0) 的冷却下限
 	if int(out["kind"]) == Kind.BURST:
 		out["cooldown"] = 0.0

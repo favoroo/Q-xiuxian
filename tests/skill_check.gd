@@ -2,7 +2,8 @@ extends Node
 
 ## 随行神通系统判据（真实 Main 场景，不打 mock）：
 ##   1. SkillData.final_stats 基础值与道统的强化合并（数值唯一真话）
-##   2. 冲刺真实产生位移且途中无敌；神行/疾风 buff 写入 GameManager 乘区并精确回滚
+##   2. 冲刺真实产生位移且途中无敌；神行/疾风 buff 写入 GameManager 乘区并精确回滚；
+##      闪避翻滚期间压住武器起手、落地清空攻击间隔（技能重置普攻），其余技能不动
 ##   3. 冷却两段式流转：施放先开效果活跃窗口（冷却不走、再按被拒），窗口走完才进冷却；
 ##      CD 中拒绝释放、CD 归零可再放；reset_run 后技能字段全清零
 ## 运行: godot --headless --path . res://tests/SkillCheck.tscn
@@ -25,6 +26,7 @@ func _check_data() -> void:
 	var dash := SkillData.final_stats("dash", "")
 	_c.near(float(dash["cooldown"]), 3.0, 0.001, "冲刺基础冷却 3 秒")
 	_c.near(float(dash["crit_window"]), 1.0, 0.001, "冲刺必暴窗口 1 秒")
+	_c.equals(int(dash["attack_reset"]), 1, "闪避带一次技能重置普攻（清武器攻击间隔）")
 	_c.near(float(dash["distance"]), 110.0, 0.001, "缩地成寸基础距离 110")
 	_c.near(float(dash["iframe"]), 0.35, 0.001, "缩地成寸无敌窗口 0.35 秒（位移全程+落地余量）")
 	_c.near(float(dash["duration"]), 0.16, 0.001, "冲刺位移耗时 0.16 秒")
@@ -71,6 +73,8 @@ func _run() -> void:
 	var player: Player = GameManager.player
 	_c.check(player != null, "玩家已生成")
 	_c.equals(GameManager.active_skill_id, "gale", "start_run 后 pending 神通转正")
+	var test_weapon := player.weapon_holder.get_child(0) as FloatingWeapon
+	_c.check(test_weapon != null, "开局武器已装备（重置普攻判据需要一把在役法器）")
 
 	var spawner: WaveSpawner = GameManager.wave_spawner
 	_c.check(spawner != null and int(spawner.phase) == int(WaveSpawner.Phase.FIGHT), "已进入战斗阶段（技能才可释放）")
@@ -136,8 +140,12 @@ func _run() -> void:
 	GameManager.active_skill_id = "haste"
 	player.skill_cd_left = 0.0
 	player.skill_active_left = 0.0
+	if test_weapon != null:
+		test_weapon.cooldown_timer = 0.5
 	_c.check(player.try_activate_skill(), "疾风咒释放成功")
 	_c.near(GameManager.buff_attack_speed_mult, 0.6, 0.001, "疾风咒写入攻速乘区 0.6（间隔缩短 40%）")
+	if test_weapon != null:
+		_c.near(test_weapon.cooldown_timer, 0.5, 0.001, "普通技能不清武器攻击间隔（重置只属于闪避）")
 	_c.near(float(player._skill_buffs.get("haste", 0.0)), 5.0, 0.05, "疾风咒持续 5.0 秒")
 	_c.check(vfx.haste_active, "疾风咒激活角色脚底八卦风环特效")
 	player._skill_buffs["haste"] = 0.02
@@ -204,7 +212,14 @@ func _run() -> void:
 	player.facing = "s"
 	var dash_nominal: float = float(SkillData.final_stats("dash", GameManager.cultivator_id)["distance"])
 	var before: Vector2 = player.global_position
+	if test_weapon != null:
+		# 冻结出手只观察计时器：落地重置后别让它抢先打出一发把 timer 写回满值
+		test_weapon.is_attacking = true
+		test_weapon.cooldown_timer = 0.8
 	_c.check(player.try_activate_skill(), "缩地成寸释放成功")
+	if test_weapon != null:
+		_c.check(test_weapon.fire_held, "翻滚期间压住武器起手（等落地再 A）")
+		_c.check(test_weapon.cooldown_timer > 0.7, "起手不清攻击间隔（落地才重置）")
 	_c.check(vfx.dash_flash_timer > 0.0, "缩地成寸激活瞬身刀光与破空灵芒锥")
 	_c.check(vfx.dash_crit_timer > 0.0, "缩地成寸激活必暴期间双眸发光视觉")
 	_c.near(player.invulnerable_time, 0.35, 0.01, "冲刺起即无敌 0.35 秒（实测 %.2f s）" % player.invulnerable_time)
@@ -218,6 +233,10 @@ func _run() -> void:
 		_dismiss()
 		dash_frames += 1
 	var dash_moved: float = player.global_position.distance_to(before)
+	if test_weapon != null:
+		_c.check(not test_weapon.fire_held, "落地解除起手闸")
+		_c.check(test_weapon.cooldown_timer <= 0.0, "落地瞬间清空攻击间隔（下一拍立刻 A）")
+		test_weapon.is_attacking = false
 	_c.near(dash_moved, dash_nominal * 0.94, dash_nominal * 0.14,
 			"冲刺段位移与数据表同源（实测 %.0f px，纸面 %.0f）" % [dash_moved, dash_nominal])
 	_c.check(player.invulnerable_time > 0.0, "冲刺落地后仍有无敌余量（剩余 %.2f s）" % player.invulnerable_time)

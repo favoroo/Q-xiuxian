@@ -143,9 +143,11 @@ func _draw_central_taiji_array() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================
-# 2. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸）
+# 2. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸 + 流光涟漪激活）
 # 静态部分（石台砌缝、菱形底座、镇魂阵角）已拆到 StaticDecor 一次性绘制，见文件尾
 # （注：原 2. 四方灵脉刻槽 _draw_array_conduits 已于 2026-10-19 移除，消除切断玉面的直穿连线）
+# 2026-10-21 精致化：符印核心加「流光涟漪」——能量脉冲沿结界环流转（8s/圈），
+#   当前激活符印提亮放大，相邻符印渐变衰减，像灵力在结界节点间传递。
 # ==============================================================================
 func _draw_talisman_pulse() -> void:
 	var h: float = half_extent
@@ -157,6 +159,13 @@ func _draw_talisman_pulse() -> void:
 	var node_start := -h + 90.0 + (h * 2.0 - 180.0 - float(node_count) * node_spacing) * 0.5
 	var r_dist: float = h - 14.0  # 正好嵌在流光带（h-22 到 h-6）中心轴线上
 
+	# 流光涟漪：当前激活符印 index（沿四边循环，周期 8s）
+	# 总符印数 = (node_count + 1) * 4（四边，每边 node_count+1 个）
+	var total_nodes := float(node_count + 1) * 4.0
+	var flow_period := 8.0  # 流转一圈周期（秒）
+	var active_idx := int(fmod(_time / flow_period, 1.0) * total_nodes)
+
+	var node_global_idx := 0  # 全局符印序号（跨四边连续编号）
 	for n_idx in node_count + 1:
 		var pos_coord := node_start + float(n_idx) * node_spacing
 		var node_positions := [
@@ -166,6 +175,18 @@ func _draw_talisman_pulse() -> void:
 			Vector2(-r_dist, pos_coord), # 左
 		]
 		for n_pos in node_positions:
+			# 流光涟漪激活强度：距离当前激活符印的环形距离 → 高亮衰减
+			var ring_dist := absi(node_global_idx - active_idx)
+			# 环形距离（取顺/逆时针最近）
+			var ring_dist_wrap := mini(ring_dist, int(total_nodes) - ring_dist)
+			var glow_factor := 1.0
+			if ring_dist_wrap == 0:
+				glow_factor = 1.8  # 当前激活：核心半径 ×1.8
+			elif ring_dist_wrap == 1:
+				glow_factor = 1.4  # 相邻符印：渐变衰减
+			elif ring_dist_wrap == 2:
+				glow_factor = 1.15
+
 			# 菱形灵枢符印描边（底座填色在 StaticDecor）
 			var d_r := 3.2
 			var diamond := PackedVector2Array([
@@ -176,7 +197,12 @@ func _draw_talisman_pulse() -> void:
 				n_pos + Vector2(0, -d_r * 1.3)
 			])
 			draw_polyline(diamond, col_node_rim, 1.0)
-			AdaptiveDraw.circle(self, n_pos, 1.2, col_node_core)
+			# 核心半径按激活强度缩放，alpha 同步增强
+			var core_col := col_node_core
+			core_col.a = minf(core_col.a * glow_factor, 1.0)
+			AdaptiveDraw.circle(self, n_pos, 1.2 * glow_factor, core_col)
+
+			node_global_idx += 1
 
 # ==============================================================================
 # 4. 结界流光带（BoundaryFlowBand，T-4.1）
@@ -243,6 +269,7 @@ class StaticDecor:
 	func _draw() -> void:
 		_draw_barrier_base()
 		_draw_talisman_diamonds()
+		_draw_quad_spirit_marks()
 
 	# --------------------------------------------------------------------------
 	# 3.1 战台边缘界石台基（古石砌筑、榫卯咬合与台阶立体阴影）
@@ -301,6 +328,34 @@ class StaticDecor:
 			Vector2(-h + 23.5, -h + 23.5)
 		]
 		draw_polyline(PackedVector2Array(inner_depth_rect), Color(0.02, 0.04, 0.06, 0.6), 1.0)
+
+	# --------------------------------------------------------------------------
+	# 3.3 四象方位灵纹（Quad Spirit Marks）：太极阵内环外缘的云雷纹角花
+	# --------------------------------------------------------------------------
+	## 在太极阵内环 r=44*scale_f 外缘，东西南北四方位各刻一组极简云雷纹角花：
+	## L 形主纹 + 内侧卷曲回纹，象征四象镇守。暗青色低对比，不抢太极阵主体。
+	func _draw_quad_spirit_marks() -> void:
+		var scale_f := half / 440.0
+		var r_base: float = 50.0 * scale_f  # 灵纹起始半径（内环 44 外缘）
+		var col_mark := Color(0.08, 0.15, 0.24, 0.35)
+		var col_curl := Color(0.25, 0.65, 0.85, 0.12)
+
+		for i in range(4):
+			var ang := PI * 0.5 * float(i)
+			var radial := Vector2(cos(ang), sin(ang))
+			var tangent := radial.orthogonal()
+
+			# L 形主纹：径向 6px + 切向 6px（指向阵心）
+			var p_corner := radial * r_base
+			var p_radial_end := radial * (r_base + 6.0 * scale_f)
+			var p_tangent_end := p_corner + tangent * 6.0 * scale_f
+			draw_line(p_corner, p_radial_end, col_mark, 1.2)
+			draw_line(p_corner, p_tangent_end, col_mark, 1.2)
+
+			# 内侧卷曲回纹：从 L 形拐点向外卷 180° 小弧
+			var curl_center := p_corner + radial * 2.0 * scale_f + tangent * 2.0 * scale_f
+			var curl_r := 1.8 * scale_f
+			AdaptiveDraw.arc(self, curl_center, curl_r, ang + PI * 0.5, ang + PI * 1.5, col_curl, 0.9)
 
 	# --------------------------------------------------------------------------
 	# 3.2 结界灵枢符印底座（菱形暗色填色；描边/核心脉冲留在宿主 10Hz 动态层）

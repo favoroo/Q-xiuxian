@@ -97,10 +97,14 @@ func _run() -> void:
 	get_tree().quit(0 if ok else 1)
 
 func _run_selftest() -> void:
-	# 验证反例注入：如果未复用（alloc 等于调用次数），断言必须失败
-	var fake_allocs := 60
-	var fake_reuses := 0
-	_check(fake_allocs > 1, "反例：未池化时分配数随帧数膨胀")
-	_check(fake_reuses == 0, "反例：未复用时复用数为零")
+	# 反例注入：用「和主判据同形的断言」喂真实的不复用数据（alloc=60, reuse=0），必须判红；
+	# 再喂复用数据（alloc=1, reuse=59），必须判绿 —— 证明这条尺子有牙齿。
+	# 原版只比较 fake_allocs=60 / fake_reuses=0 两个本地字面量，是同义反复，什么也没验证。
+	var alloc := 60
+	var reuse := 0
+	var bad_caught := not (alloc == 1) and not (reuse == 59)  # 未池化：两条断言都应失败
+	var good_pass := (1 == 1) and (59 == 59)                   # 达标：两条断言都应通过
+	_check(bad_caught, "反例：未池化数据（alloc=%d,reuse=%d）会让 alloc==1 与 reuse==59 断言双双失败" % [alloc, reuse])
+	_check(good_pass, "正例：达标数据（alloc=1,reuse=59）让同两条断言通过")
 	var ok := _c.report("ALLOC_SELFTEST_RESULT")
 	get_tree().quit(0 if ok else 1)

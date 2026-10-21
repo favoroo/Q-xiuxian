@@ -17,6 +17,10 @@ const _VIG_SHADER_SHOCKWAVE := preload("res://assets/shaders/vignette_shockwave.
 var dust_particles: CPUParticles2D
 var dust_near_particles: CPUParticles2D
 var petal_particles: CPUParticles2D
+## 2026-10-21 精致化：地面微光灵尘（石板缝隙渗出的地脉灵气，极淡极小极慢）
+var ground_mote_particles: CPUParticles2D = null
+## 2026-10-21 精致化：南侧深渊坠落灵屑（偶有灵光碎屑坠入黑暗，暗示深渊吞噬感）
+var abyss_shard_particles: CPUParticles2D = null
 var _vignette_tween: Tween = null
 ## 常态暗角基准（与 Main.tscn ShaderMaterial_vignette 初值同源）：
 ## 红闪/低血量脉冲/结算渐隐结束后一律复位到这里，改基准两处同步。
@@ -369,6 +373,44 @@ func _setup_atmosphere() -> void:
 	petal_particles.scale_amount_max = 2.8
 	petal_particles.color = ATMO_COLOR_PETAL
 	$AtmosphereLayer.add_child(petal_particles)
+
+	# 2.5 地面微光灵尘（2026-10-21 精致化：石板缝隙渗出的地脉灵气，极淡极小极慢）
+	# 发射区覆盖整个战场地面（±480），重力近零、初速极低，让微尘悬浮在石面上闪烁。
+	# 移动端关闭（填充率专项：地面微尘在半透明叠加下是固定税，看不见但吃带宽）。
+	var mobile := SettingsManager.is_mobile_platform()
+	if not mobile:
+		ground_mote_particles = CPUParticles2D.new()
+		ground_mote_particles.process_mode = Node.PROCESS_MODE_ALWAYS
+		ground_mote_particles.amount = 8
+		ground_mote_particles.lifetime = 6.5
+		ground_mote_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		ground_mote_particles.emission_rect_extents = Vector2(460, 460)
+		ground_mote_particles.gravity = Vector2(0.0, -0.5)  # 近零重力，极缓上浮
+		ground_mote_particles.initial_velocity_min = 0.5
+		ground_mote_particles.initial_velocity_max = 2.0
+		ground_mote_particles.scale_amount_min = 0.5
+		ground_mote_particles.scale_amount_max = 0.9
+		ground_mote_particles.color = Color(0.35, 0.75, 0.95, 0.08)  # 极淡青玉灵光
+		$AtmosphereLayer.add_child(ground_mote_particles)
+
+	# 2.6 南侧深渊坠落灵屑（2026-10-21 精致化：偶有灵光碎屑坠入黑暗，暗示深渊吞噬感）
+	# 发射区仅覆盖南侧深渊边缘（y ∈ [480, 520]），重力向下加强，碎屑加速坠落消失。
+	# 移动端关闭（同地面灵尘，填充率税）。
+	if not mobile:
+		abyss_shard_particles = CPUParticles2D.new()
+		abyss_shard_particles.process_mode = Node.PROCESS_MODE_ALWAYS
+		abyss_shard_particles.amount = 6
+		abyss_shard_particles.lifetime = 3.0
+		abyss_shard_particles.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		abyss_shard_particles.emission_rect_extents = Vector2(400, 20)
+		abyss_shard_particles.position = Vector2(0, 500)  # 节点位置偏移到南侧深渊边缘
+		abyss_shard_particles.gravity = Vector2(0.0, 25.0)  # 向下加速坠落
+		abyss_shard_particles.initial_velocity_min = 8.0
+		abyss_shard_particles.initial_velocity_max = 15.0
+		abyss_shard_particles.scale_amount_min = 0.8
+		abyss_shard_particles.scale_amount_max = 1.4
+		abyss_shard_particles.color = Color(0.45, 0.70, 0.90, 0.22)  # 幽蓝碎屑
+		$AtmosphereLayer.add_child(abyss_shard_particles)
 
 	# 3. 极低对比度缓动薄雾片（增加深邃空间感，零 PointLight2D 开销）
 	_setup_ambient_mist()

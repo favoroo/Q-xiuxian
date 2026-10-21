@@ -62,6 +62,7 @@ const FIELD_FORM := {
 	"pet_effect_mult": FORM_PCT,
 	"pet_cooldown_mult_mul": FORM_MUL,
 	"pet_slots": FORM_FLAT,
+	"skill_cooldown_mult": FORM_PCT,
 }
 
 ## 文案中允许出现、但不被 apply 解释的数字（键为条目 id；百分比记整数值，平值记数值）
@@ -98,6 +99,11 @@ const ORPHAN_ALLOW := {
 	"kaishan_jianyi": [25, 1, 2],
 	"ningshen_fu": [10],
 	"tupo_guyu": [3, 0.5, 1, 30, 5, 10],
+	# 2026-10-21 角色专属转化件（机制数字由额外字段承载，apply 留空或只承担代偿）
+	"zhanqi": [1, 0.8, 24],
+	"cangzhen_juan": [1, 1.5, 30],
+	"xuehai_fu": [1, 1.5, 10],
+	"wanshi_jian": [1],
 }
 
 static func _strip_bbcode(s: String) -> String:

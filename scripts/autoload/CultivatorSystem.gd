@@ -142,17 +142,33 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 	for t in non_tag:
 		if not WeaponData.tags_of(w_id).has(String(t)):
 			m *= 1.0 + float(non_tag[t])
-	if gm.on_hit_damage_bonus > 0.0 and gm.on_hit_damage_stacks > 0:
-		m *= 1.0 + gm.on_hit_damage_bonus * float(gm.on_hit_damage_stacks)
+	# 受击叠层：角色（嗜血魔修）与道具（血海符）共用同一条乘区，层数上限仍由角色字段管。
+	var onhit_bonus: float = gm.on_hit_damage_bonus + gm.item_hook_sum("on_hit_damage_bonus")
+	if onhit_bonus > 0.0 and gm.on_hit_damage_stacks > 0:
+		m *= 1.0 + onhit_bonus * float(gm.on_hit_damage_stacks)
 	# 收藏家·图鉴：每持有一种不同道具全伤害加成（种数账本在 GameManager.add_item/consume_item 维护）
 	if gm.collection_damage_per_unique > 0.0 and gm.unique_item_count > 0:
 		m *= 1.0 + gm.collection_damage_per_unique * float(gm.unique_item_count)
+	# 藏珍卷：道具版图鉴乘区，单独走上限，不改角色原幅度。
+	var unique_per: float = gm.item_hook_sum("dmg_per_unique_item")
+	if unique_per > 0.0 and gm.unique_item_count > 0:
+		var unique_cap: float = gm.item_hook_sum("dmg_per_unique_item_cap")
+		if unique_cap <= 0.0:
+			unique_cap = 0.30
+		m *= 1.0 + minf(unique_per * float(gm.unique_item_count), unique_cap)
 	# 狂战士·战意：击杀攒的层数全伤害加成（攒/流失账本在 GameManager，幅度在 FrenzyData）
 	if gm.frenzy_enabled > 0.0 and gm.frenzy_stacks > 0.0:
 		m *= FrenzyData.damage_mult(gm.frenzy_stacks)
 	# 蛮兵·陷阵：感知圈内的敌人每只一份全伤害加成（敌潮 ×1.5 的闭环：围得越密砍得越狠）
 	if gm.crowd_damage_per_enemy > 0.0 and gm.nearby_enemy_count > 0:
 		m *= 1.0 + minf(gm.nearby_enemy_count * gm.crowd_damage_per_enemy, gm.crowd_damage_cap)
+	# 战旗：不挑角色，任何构筑都能用「周围敌人越多越强」；与蛮兵陷阵独立叠加。
+	var crowd_per: float = gm.item_hook_sum("dmg_per_nearby_enemy")
+	if crowd_per > 0.0 and gm.nearby_enemy_count > 0:
+		var crowd_cap: float = gm.item_hook_sum("dmg_per_nearby_enemy_cap")
+		if crowd_cap <= 0.0:
+			crowd_cap = 0.24
+		m *= 1.0 + minf(gm.nearby_enemy_count * crowd_per, crowd_cap)
 	# 守财奴·财可通神：随身金币每 100 枚一份全伤害加成（与结息闭环：攒钱就是攒刀）
 	if gm.stone_damage_per_100 > 0.0:
 		m *= 1.0 + minf(gm.spirit_stones / 100.0 * gm.stone_damage_per_100, gm.stone_damage_cap)

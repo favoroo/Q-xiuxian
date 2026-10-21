@@ -1141,3 +1141,96 @@ func _test_weapon_owned_summary() -> void:
 	_c.check(int(dist.get(1, 0)) == 2 and int(dist.get(2, 0)) == 1, "统计2把1星1把2星")
 	_c.check(GameManager.get_weapon_owned_summary("changjian") == "★1×2  ★2×1", "持有摘要格式化为 ★1×2  ★2×1")
 	GameManager.reset_run()
+
+## 2026-10-21 道具池结构判据：流派覆盖、负福缘、亲和、轻保底、技能冷却与新转化 hook。
+func _test_item_pool_coverage() -> void:
+	# ① 负福缘必须真的降高档概率（旧版 max(0,luck) 等于没有代价）
+	var legend_zero := float(GameBalance.item_tier_weights(0.0, 15)[3])
+	var legend_neg := float(GameBalance.item_tier_weights(-20.0, 15)[3])
+	_c.check(legend_neg < legend_zero, "负福缘降低传说道具权重（0:%.3f / -20:%.3f）" % [legend_zero, legend_neg])
+	var rare_neg := float(GameBalance.rarity_weights(-20.0, 15)["legendary"])
+	var rare_zero := float(GameBalance.rarity_weights(0.0, 15)["legendary"])
+	_c.check(rare_neg < rare_zero, "负福缘降低传说悟道权重")
+
+	# ② 标签派生：数值改了标签跟着走，不靠手抄
+	_c.check(ItemData.tags_of("lijian_shi").has("melee"), "砺剑石派生近战标签")
+	_c.check(ItemData.tags_of("jinjing_shi").has("metal"), "金精石派生金系标签")
+	_c.check(ItemData.tags_of("jinjing_shi").has("elemental"), "单元素件同时算元素流")
+	_c.check(ItemData.tags_of("ningshen_fu").has("skill"), "凝神符派生技能标签")
+
+	# ③ 流派覆盖下限：每个主要流派至少有可用道具，不再出现「只有一件」
+	var need := {
+		"melee": 3, "ranged": 3, "elemental": 5, "summon": 3, "contraption": 3,
+		"skill": 3, "pet": 4, "dodge": 4, "crit": 3, "economy": 6, "tank": 8,
+	}
+	var counts: Dictionary = {}
+	for id in ItemData.all_ids():
+		for t in ItemData.tags_of(id):
+			counts[t] = int(counts.get(t, 0)) + 1
+	for t in need.keys():
+		_c.check(int(counts.get(t, 0)) >= int(need[t]),
+				"流派 %s 道具覆盖 ≥%d（实得 %d）" % [t, int(need[t]), int(counts.get(t, 0))])
+
+	# ④ 角色亲和：剑士看得懂近战件，召唤件不应被抬权
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	var aff_melee := BalanceBuildFilter.item_affinity(GameManager, "tieshou")
+	var aff_summon := BalanceBuildFilter.item_affinity(GameManager, "yuling_pai")
+	_c.check(aff_melee > aff_summon, "剑士对近战件亲和高于召唤件（%.2f vs %.2f）" % [aff_melee, aff_summon])
+	GameManager.cultivator_id = "jiguan"
+	var aff_summon2 := BalanceBuildFilter.item_affinity(GameManager, "yuling_pai")
+	_c.check(aff_summon2 > 1.0, "机关师对召唤件有亲和（%.2f）" % aff_summon2)
+
+	# ⑤ 道具轻保底：连续 2 波无相关道具，把武器格换成主方向道具
+	GameManager.reset_run()
+	GameManager.cultivator_id = "jianchi"
+	GameManager.shop_offers = [
+		{"kind": "weapon", "id": "qingyun_sword", "price": 20, "sold": false, "locked": false},
+	]
+	GameManager._no_main_item_waves = 0
+	ShopSystem.apply_main_item_pity(GameManager, 1)
+	_c.check(String(GameManager.shop_offers[0].get("kind", "")) == "weapon", "第 1 波不触发道具保底")
+	ShopSystem.apply_main_item_pity(GameManager, 2)
+	_c.check(String(GameManager.shop_offers[0].get("kind", "")) == "item", "连续 2 波无相关道具 → 保底换成道具")
+	if String(GameManager.shop_offers[0].get("kind", "")) == "item":
+		_c.check(BalanceBuildFilter.item_matches_tags(String(GameManager.shop_offers[0].get("id", "")),
+				BalanceBuildFilter.relevant_item_tags(GameManager)), "保底道具命中主方向/角色标签")
+
+	# ⑥ 技能冷却成为正式属性：加法落地、夹顶、卖出回退
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"skill_cooldown_mult": 0.2}, "test")
+	_c.near(GameManager.skill_cooldown_mult, 0.2, EPS, "技能冷却 +20% 落地")
+	GameManager._apply_stat_fields({"skill_cooldown_mult": 0.9}, "test")
+	_c.near(GameManager.skill_cooldown_mult, GameManager.SKILL_CD_CAP, EPS, "技能冷却夹在 70% 上限")
+	GameManager.reset_run()
+	GameManager._apply_stat_fields({"skill_cooldown_mult": 0.2}, "test")
+	StatSystem.revert_stat_fields(GameManager, {"skill_cooldown_mult": 0.2}, "test")
+	_c.near(GameManager.skill_cooldown_mult, 0.0, EPS, "技能冷却卖出后回退到 0")
+
+	# ⑦ 角色专属转化 hook：战旗/藏珍卷/血海符都进同一条伤害乘区
+	# 用无伤害修正的学者做基线（剑士自带剑系 +35%，会把「道具是否生效」掩盖掉）；
+	# damage_mult 在角色数据为空时会提前返回，所以这里必须给一个真实道统。
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duoshe"
+	var base_dmg := CultivatorSystem.damage_mult(GameManager, "qingyun_sword")
+	GameManager.add_item("zhanqi")
+	GameManager.nearby_enemy_count = 10
+	var crowd_dmg := CultivatorSystem.damage_mult(GameManager, "qingyun_sword")
+	_c.check(crowd_dmg > base_dmg, "战旗：10 个附近敌人抬高全伤害（%.3f → %.3f）" % [base_dmg, crowd_dmg])
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duoshe"
+	GameManager.add_item("cangzhen_juan")
+	GameManager.unique_item_count = 10
+	var collect_dmg := CultivatorSystem.damage_mult(GameManager, "qingyun_sword")
+	_c.check(collect_dmg > 1.0, "藏珍卷：10 种道具抬高全伤害（%.3f）" % collect_dmg)
+	GameManager.reset_run()
+	GameManager.cultivator_id = "duoshe"
+	GameManager.add_item("xuehai_fu")
+	GameManager.on_hit_damage_stacks = 5
+	var onhit_dmg := CultivatorSystem.damage_mult(GameManager, "qingyun_sword")
+	_c.check(onhit_dmg > 1.0, "血海符：5 层受击增伤（%.3f）" % onhit_dmg)
+	_c.near(GameManager.item_hook_sum("heal_orb_chance"), 0.0, EPS, "未持灵草袋时回复珠概率为 0")
+	GameManager.reset_run()
+	GameManager.add_item("lingcao_dai")
+	_c.near(GameManager.item_hook_sum("heal_orb_chance"), 0.10, EPS, "灵草袋提供 +10% 回复珠概率")
+	GameManager.reset_run()

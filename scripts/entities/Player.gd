@@ -606,6 +606,11 @@ func _do_dash(st: Dictionary) -> void:
 		float(st.get("iframe", _dash_time + 0.04)) + ShadowStepData.iframe_bonus(shadow_ring))
 	# 冲刺攻势：起跳即开必暴窗口（roll_crit 消费，覆盖冲刺与落地追击的两拍输出）
 	GameManager.force_crit_left = maxf(GameManager.force_crit_left, float(st.get("crit_window", 0.0)))
+	# 技能重置普攻（薇恩 Q 式）：翻滚期间先压住武器起手，落地那一帧才清间隔放行，
+	# 于是「滚动 → 落地 → A 出去」三拍分明；冲刺自带的必暴窗口正好兑现落地这一刀。
+	# 字段在 SkillData，只有闪避带了这一条。
+	if int(st.get("attack_reset", 0)) > 0:
+		_set_weapon_fire_held(true)
 	play_squash(Vector2(1.3, 0.72), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
 	if skill_vfx != null:
@@ -613,6 +618,25 @@ func _do_dash(st: Dictionary) -> void:
 	if is_procedural and procedural_view != null:
 		procedural_view.play_dash(_dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
+
+## 翻滚期间压住所有在役武器的起手（闪避的技能重置普攻）。
+## 只挡新的起手，正在挥出的那一拍照常走完；落地由 _on_dash_landed 解除。
+func _set_weapon_fire_held(held: bool) -> void:
+	for child in weapon_holder.get_children():
+		if child is FloatingWeapon and is_instance_valid(child):
+			(child as FloatingWeapon).set_fire_held(held)
+
+## 落地那一帧：先解起手闸，再清空攻击间隔 —— 顺序不能反，否则解除前武器已按旧间隔起手。
+func _on_dash_landed() -> void:
+	_set_weapon_fire_held(false)
+	reset_weapon_attack_intervals()
+
+## 把所有在役武器的攻击间隔清零（闪避落地）。
+## 只动计时器，不打断正在挥出的那一拍——动作与判定同拍，截断会吞掉这一刀。
+func reset_weapon_attack_intervals() -> void:
+	for child in weapon_holder.get_children():
+		if child is FloatingWeapon and is_instance_valid(child):
+			(child as FloatingWeapon).reset_attack_cooldown()
 
 ## 影爆（额外技能）：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
 ## 环特效半径传的就是判定半径本身（画多大 == 判多大）；镜头只给一档轻 zoom punch（低频主动技），
@@ -901,6 +925,8 @@ func _physics_process(delta: float) -> void:
 			# （约 1.5 个屏高）。收速后位移与数据表同源，只留一点前冲余量。
 			velocity = _dash_dir * minf(velocity.length(), target_speed * DASH_LANDING_SPEED_MUL)
 			target_velocity = dir * target_speed
+			# 落地这一拍才解起手闸并清间隔：滚动期间不出手，落地立刻 A（闪避的技能重置普攻）
+			_on_dash_landed()
 	var input_moving := dir.length_squared() > 0.03
 	var actual_speed_sq := velocity.length_squared()
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
@@ -1385,6 +1411,7 @@ func _play_death_sequence() -> void:
 		return
 	_dying = true
 	_dash_time = 0.0
+	_set_weapon_fire_held(false)  # 冲刺中阵亡也要解闸，别让法器挂着「翻滚中」不出手
 	velocity = Vector2.ZERO
 	invulnerable_time = 9999.0  # 谢幕期不再吃任何判定
 	# 停帧后定向受击反馈的衰减不再跑：就地归位，别让尸体挂着半截反冲位移谢幕
@@ -1437,6 +1464,7 @@ func play_victory_sequence() -> void:
 		return
 	_victorious = true
 	_dash_time = 0.0
+	_set_weapon_fire_held(false)  # 冲刺中通关同样解闸
 	velocity = Vector2.ZERO
 	invulnerable_time = 9999.0
 

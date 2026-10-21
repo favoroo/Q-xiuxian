@@ -60,7 +60,7 @@ func _ready() -> void:
 			_shot_path = String(a).trim_prefix("--shot=")
 	await _test_inventory_ops()
 	await _test_gesture()
-	_c.check(_c.passed >= 90, "判据记满账（实得 %d 条，条数掉一半 = 中途炸了还在打 ALL PASS）" % _c.passed)
+	_c.set_min_checks(90)  # 条数掉一半 = 中途炸了还在打 ALL PASS（report 内统一守卫）
 	get_tree().quit(0 if _c.report("SHOP_DRAG_RESULT") else 1)
 
 func _grab_shot(tag: String) -> void:

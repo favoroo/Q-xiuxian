@@ -8,6 +8,22 @@ extends RefCounted
 var failures: Array[String] = []
 var passed: int = 0
 
+## 判据「记满账」下限：report() 时 passed 少于此数即补记一条 failure。
+## 为什么要有：GDScript 的 SCRIPT ERROR 不中断函数，中途炸了会静默跳过剩余断言，
+## 若一条都没记，report() 会打「ALL PASS（0 项）」——假绿。默认 0 表示不设限，
+## 重判据自行用 set_min_checks(n) 声明期望条数（条数掉一半 = 中途炸了）。
+var min_checks: int = 0
+
+func set_min_checks(n: int) -> void:
+	min_checks = n
+
+## 无条件记一条失败。用于「本不该走到这里」的分支（例如某武器没纳入任何分档）。
+## 必须存在：此前 balance_sim_check 调它却无此方法，抛 SCRIPT ERROR 吞掉了同函数后续 13 条断言。
+func fail(label: String) -> bool:
+	failures.append(label)
+	print("[FAIL] " + label)
+	return false
+
 func check(cond: bool, label: String) -> bool:
 	if cond:
 		passed += 1
@@ -29,6 +45,8 @@ func all_passed() -> bool:
 
 ## 汇总行：runner 拿它的返回值决定退出码
 func report(prefix: String) -> bool:
+	if passed < min_checks:
+		failures.append("判据空转：仅执行 %d 条断言，低于声明下限 %d（疑似中途异常/提前 return）" % [passed, min_checks])
 	if all_passed():
 		print("%s: ALL PASS（%d 项）" % [prefix, passed])
 	else:

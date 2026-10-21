@@ -97,6 +97,9 @@ var _bullet_scale: float = 1.0
 var _bullet_spins: bool = false
 
 var cooldown_timer: float = 0.0
+## 翻滚/冲刺期间压住起手（闪避技能）：落地由 Player 解除并清间隔，保证「滚动完落地才 A」。
+## 只挡新的起手，正在挥出的那一拍与持续束流不受影响。
+var fire_held: bool = false
 var base_angle: float = 0.0        # 无目标时回归的基础槽位角（Player 下发）
 var spread_angle: float = 0.0      # 多把武器间的错开角，避免重叠（Player 下发）
 ## 默认环绕轨道半长轴/半短轴（椭圆）：贴身护体，避免脱节
@@ -546,13 +549,22 @@ func _process(delta: float) -> void:
 			_apply_facing(lerp_angle(rotation, dynamic_angle, minf(delta * 6.0, 1.0)))
 
 		# 4. 攻击
-		if cooldown_timer <= 0.0 and not is_attacking:
+		if cooldown_timer <= 0.0 and not is_attacking and not fire_held:
 			if behavior == WeaponData.Behavior.TURRET or current_target != null:
 				_perform_attack()
 
 	# 5. 束流推进（BEAM/CONE）：几何随朝向逐帧走，结算按 TICK 节拍
 	if _channel_on:
 		_tick_channel(delta)
+
+## 翻滚期间起手闸门（闪避技能）。落地由 Player 解除，紧接着清间隔放行。
+func set_fire_held(held: bool) -> void:
+	fire_held = held
+
+## 技能重置普攻（闪避落地）：清掉本拍剩余的攻击间隔，冷却一转回来立刻出手。
+## 只清计时器，不强切 is_attacking：正在挥出的那一拍动作与判定同拍，截断会让这一刀落在空处。
+func reset_attack_cooldown() -> void:
+	cooldown_timer = 0.0
 
 func _perform_attack() -> void:
 	cooldown_timer = attack_cooldown * GameManager.get_effective_attack_speed_mult()

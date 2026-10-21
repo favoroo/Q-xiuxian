@@ -478,7 +478,10 @@ func _eater_at(pos: Vector2) -> String:
 	if best == null:
 		return "非 STOP 控件"
 	var par := best.get_parent()
-	return "%s(父:%s)" % [best.get_class(), par.name if par else "?"]
+	var par_name := "?"
+	if par != null:
+		par_name = String(par.name)
+	return "%s(父:%s)" % [best.get_class(), par_name]
 
 func _settle(n: int) -> void:
 	for _i in range(n):

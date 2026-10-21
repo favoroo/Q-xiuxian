@@ -17,6 +17,11 @@ void fragment() {
 	// 慢呼吸
 	float pulse = 0.85 + 0.15 * sin(TIME * pulse_speed);
 
+	// 潮汐脉动（2026-10-21 精致化）：极低频整体明暗脉动（12s/周期），
+	// 让整条结界有「灵力潮汐涨落」的呼吸感，振幅 ±10% 避免抢眼。
+	float tidal = 0.9 + 0.1 * sin(TIME * 0.5236);  // 0.5236 ≈ TAU/12，12s 周期
+	pulse *= tidal;
+
 	// 1. 双频灵潮波澜（大潮平缓推移，次波轻柔交织）
 	float tide1 = 0.5 + 0.5 * sin((UV.x - TIME * flow_speed) * TAU * 2.0);
 	float tide2 = 0.5 + 0.5 * sin((UV.x + TIME * flow_speed * 0.35) * TAU * 4.0 + y * 1.2);

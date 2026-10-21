@@ -54,6 +54,7 @@ const LIFESTEAL_CAP: float = 0.5      ## 噬元概率上限（频次另有 LIFES
 const ELITE_DAMAGE_CAP: float = 1.0   ## 斩将加成上限（elite_up 4 层正好到顶）
 const ELEMENT_DAMAGE_CAP: float = 0.6 ## 五行真解单系上限（同时扎住直击/灼烧/剧毒/击杀爆炸四个兑现口）
 const SHOP_PRICE_FLOOR: float = 0.7   ## 道具折扣腿地板（对标土豆 Coupon 叠顶；角色价格乘区另算不夹）
+const SKILL_CD_CAP: float = 0.7      ## 随行技能冷却缩减上限（留 0.3 保底，防叠成无冷却）
 ## 突破古玉回合末永久成长的累计封顶（绕过 max_stacks 治理体系的口子，钉在 apply_harvest 消费处）
 const WAVE_END_HP_CAP: float = 30.0
 const WAVE_END_REGEN_CAP: float = 5.0
@@ -307,6 +308,7 @@ var crit_mult: float = 1.5
 var dodge: float = 0.0        ## 身法：闪避概率（硬上限 DODGE_CAP）
 var lifesteal: float = 0.0    ## 噬元：命中回复 1 点生命的概率
 var luck: float = 0.0         ## 幸运：提升高稀有度悟道与商店亲和权重
+var skill_cooldown_mult: float = 0.0 ## 随行技能冷却缩减（加点+道具，Skills 侧与旧 hook 相加后夹 SKILL_CD_CAP）
 var harvest: float = 0.0      ## 收益：每回合结束无偿获得等额金币+经验，并自我复利
 var xp_gain_mult: float = 1.0 ## 经验获取倍率（只放大经验，不放大金币）
 var knockback_mult: float = 1.0 ## 震退：武器击退力度倍率
@@ -433,6 +435,7 @@ var reroll_free_left: int = 0      ## 本回合剩余免费重掷次数（roll_s
 var shop_price_mult: float = 1.0   ## 商店价格系数（角色特性用，如散修 8 折）
 var shop_tag_filter: Array = []    ## 非空时这些 tag 武器权重大幅提升，其余武器仍以低概率漏出（剑痴等流派偏好）
 var _no_main_tag_waves: int = 0    ## 连续未刷出主流派武器的波数（保底计数）
+var _no_main_item_waves: int = 0   ## 连续未刷出主流派道具的波数（道具轻保底计数）
 
 # 回合后悟道结算会话（与商店重掷同一把尺子：免费次数用完才扣金币，价格随回合与已刷次数上升）
 var alloc_offers: Array[Dictionary] = []
@@ -983,7 +986,7 @@ func cultivator_damage_mult(w_id: String) -> float:
 
 func on_player_hit(_amount: float) -> void:
 	total_damage_taken_count += 1
-	if on_hit_damage_bonus > 0.0:
+	if on_hit_damage_bonus > 0.0 or item_hook_sum("on_hit_damage_bonus") > 0.0:
 		on_hit_damage_stacks = mini(on_hit_damage_cap_stacks, on_hit_damage_stacks + 1)
 		on_hit_damage_timer = 5.0
 

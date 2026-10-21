@@ -217,6 +217,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["_exp_chain"] = gm._exp_chain
 	d["chest_item_grants"] = gm.chest_item_grants
 	d["_no_main_tag_waves"] = gm._no_main_tag_waves
+	d["_no_main_item_waves"] = gm._no_main_item_waves
 	# —— 属性加点/道具层终值 ——
 	d["weapon_damage_mult"] = gm.weapon_damage_mult
 	d["melee_damage"] = gm.melee_damage
@@ -239,6 +240,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["xp_gain_mult"] = gm.xp_gain_mult
 	d["knockback_mult"] = gm.knockback_mult
 	d["elite_damage"] = gm.elite_damage
+	d["skill_cooldown_mult"] = gm.skill_cooldown_mult
 	d["free_rerolls"] = gm.free_rerolls
 	d["stat_bonus_pierce"] = gm.stat_bonus_pierce
 	# —— 宝箱 / 灵兽层 ——
@@ -349,6 +351,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm._exp_chain = int(d.get("_exp_chain", GameBalance.EXP_FIRST_LEVEL))
 	gm.chest_item_grants = int(d.get("chest_item_grants", 0))
 	gm._no_main_tag_waves = int(d.get("_no_main_tag_waves", 0))
+	gm._no_main_item_waves = int(d.get("_no_main_item_waves", 0))
 	gm.weapon_damage_mult = float(d.get("weapon_damage_mult", 1.0))
 	gm.melee_damage = float(d.get("melee_damage", 0.0))
 	gm.ranged_damage = float(d.get("ranged_damage", 0.0))
@@ -370,6 +373,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.xp_gain_mult = float(d.get("xp_gain_mult", 1.0))
 	gm.knockback_mult = float(d.get("knockback_mult", 1.0))
 	gm.elite_damage = float(d.get("elite_damage", 0.0))
+	gm.skill_cooldown_mult = float(d.get("skill_cooldown_mult", 0.0))
 	gm.free_rerolls = int(d.get("free_rerolls", 0))
 	gm.stat_bonus_pierce = int(d.get("stat_bonus_pierce", 0))
 	gm.chest_count_bonus = int(d.get("chest_count_bonus", 0))

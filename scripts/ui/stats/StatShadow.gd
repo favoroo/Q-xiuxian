@@ -26,6 +26,7 @@ const COPIED: Array[String] = [
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
 		"chest_reward_mult", "spirit_stones",
 		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
+		"skill_cooldown_mult",
 		# —— 羁绊与技能乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
@@ -43,6 +44,7 @@ var LIFESTEAL_CAP: float = 0.5
 var ELITE_DAMAGE_CAP: float = 1.0
 var ELEMENT_DAMAGE_CAP: float = 0.6
 var SHOP_PRICE_FLOOR: float = 0.7
+var SKILL_CD_CAP: float = 0.0
 
 # —— 加点直接落的字段 ——
 var weapon_damage_mult: float = 1.0
@@ -79,6 +81,7 @@ var pet_damage_mult: float = 1.0
 var pet_effect_mult: float = 1.0
 var pet_cooldown_mult: float = 1.0
 var pet_slots_bonus: int = 0
+var skill_cooldown_mult: float = 0.0
 
 # —— 羁绊 / 技能层 ——
 var synergy_damage_mult: float = 1.0
@@ -133,6 +136,7 @@ static func from_gm(gm: Object) -> StatShadow:
 	s.ELITE_DAMAGE_CAP = gm.ELITE_DAMAGE_CAP
 	s.ELEMENT_DAMAGE_CAP = gm.ELEMENT_DAMAGE_CAP
 	s.SHOP_PRICE_FLOOR = gm.SHOP_PRICE_FLOOR
+	s.SKILL_CD_CAP = gm.SKILL_CD_CAP
 	var mir := PlayerMirror.new()
 	if gm.player != null and is_instance_valid(gm.player):
 		mir.current_health = float(gm.player.current_health)

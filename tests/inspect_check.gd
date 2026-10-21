@@ -204,16 +204,24 @@ func _test_projectile_integrity() -> void:
 		"bullet_thunder_fire_talisman.png", "bullet_wood_talisman.png", "bullet_gu_talisman.png",
 		"bullet_jingzhe_fu.png", "bullet_gengjin_fu.png", "bullet_earth_talisman.png",
 		"bullet_ice_talisman.png", "bullet_frost_talisman.png", "bullet_stone_talisman.png",
-		"bullet_fire_flame.png", "bullet_spirit_pellet.png", "bullet_water_shuttle.png"
+		"bullet_fire_flame.png", "bullet_spirit_pellet.png", "bullet_water_shuttle.png",
+		"bullet_shuriken.png"
 	]
-	_c.equals(bullets.size(), 21, "统计 21 种核心法器飞行物贴图")
+	# 2026-10-21：原 `equals(bullets.size(), 21)` 是对本地字面量的自比，恒真无意义。
+	# 改为与磁盘上的实际贴图对账：每个名字都必须真有 PNG（防清单与 assets/art 漂移）。
+	var missing_art: Array[String] = []
+	for b in bullets:
+		if not ResourceLoader.exists("res://assets/art/" + b):
+			missing_art.append(b)
+	_c.check(missing_art.is_empty(), "清单里 %d 种飞行物贴图在 assets/art 下都真实存在（缺：%s）"
+		% [bullets.size(), str(missing_art)])
 	
 	var fallback_count := 0
 	for b in bullets:
 		var kind := ProceduralProjectileRenderer.detect_kind_from_path(b)
 		if kind == ProceduralProjectileRenderer.ProjectileKind.GENERIC_BLADE:
 			fallback_count += 1
-	_c.equals(fallback_count, 0, "所有 21 种飞行物贴图均被精确识别，无静默降级 fallback")
+	_c.equals(fallback_count, 0, "所有飞行物贴图均被精确识别，无静默降级 fallback")
 
 func _test_ui_style_integrity() -> void:
 	_c.check(GameStyle.INK != Color.TRANSPARENT, "GameStyle.INK 色阶有效")

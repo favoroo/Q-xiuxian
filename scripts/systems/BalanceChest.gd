@@ -61,11 +61,12 @@ const JADE_W_PER_LUCK := 0.5
 
 static func tier_weights(quality: float, luck: float) -> Array[float]:
 	var q := maxf(quality, 0.0)
-	var l := maxf(luck, 0.0)
+	# 负福缘同样要压低铜匣/玉匣权重（2026-10-21），只给权重留一个极小地板防负数。
+	var l := luck
 	return [
 		WOOD_W,
-		COPPER_W_BASE + COPPER_W_PER_QUALITY * q + COPPER_W_PER_LUCK * l,
-		JADE_W_BASE + JADE_W_PER_QUALITY * q + JADE_W_PER_LUCK * l,
+		maxf(0.01, COPPER_W_BASE + COPPER_W_PER_QUALITY * q + COPPER_W_PER_LUCK * l),
+		maxf(0.01, JADE_W_BASE + JADE_W_PER_QUALITY * q + JADE_W_PER_LUCK * l),
 	]
 
 # ---------------- 挨几下砸开 ----------------

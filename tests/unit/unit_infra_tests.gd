@@ -706,8 +706,11 @@ func _test_fx_particle_pool() -> void:
 	# 2. 空实例调用安全（测试/非主场景下不崩溃）
 	var orig_inst := FxParticlePool.instance
 	FxParticlePool.instance = null
+	var nodes_before := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, Vector2.ZERO)
-	_c.check(true, "FxParticlePool.instance 为 null 时 burst 安全返回不抛异常")
+	var nodes_after := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	_c.check(FxParticlePool.instance == null and nodes_after == nodes_before,
+		"FxParticlePool.instance 为 null 时 burst 安全返回（无新节点 %d→%d）" % [nodes_before, nodes_after])
 
 	# 3. 实例化测试
 	var pool := FxParticlePool.new()
@@ -715,10 +718,12 @@ func _test_fx_particle_pool() -> void:
 	_c.equals(pool.get_child_count(), FxParticlePool.POOL_CAP, "粒子池预创建 POOL_CAP(24) 个 GPUParticles2D")
 	_c.equals(FxParticlePool.instance, pool, "粒子池挂树后 instance 静态单例就位")
 
-	# 4. 触发 burst
+	# 4. 触发 burst：断言活跃发射器真的增加（原 check(true) 恒真，测不到任何东西）
+	var active_before := pool._active_emitters.size()
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, Vector2(100, 100), "fire")
 	FxParticlePool.burst(FxParticlePool.DEATH_BURST, Vector2(200, 200), "gold")
-	_c.check(true, "FxParticlePool burst 触发成功")
+	_c.check(pool._active_emitters.size() > active_before,
+		"FxParticlePool burst 后活跃发射器增加（%d→%d）" % [active_before, pool._active_emitters.size()])
 
 	# 5. 清理
 	remove_child(pool)

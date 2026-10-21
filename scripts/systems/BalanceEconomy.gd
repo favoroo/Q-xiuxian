@@ -169,7 +169,8 @@ static func _rarity_growth(base: float, per_wave: float, cap: float, unlock_wave
 
 ## 悟道稀有度权重：返回 {common, rare, epic, legendary}，四档之和恒为 100（普通取余）
 static func rarity_weights(luck: float, wave: int = 1) -> Dictionary:
-	var lm := 1.0 + maxf(0.0, luck) * RARITY_LUCK_PER_POINT
+	# 负福缘要真的降概率（2026-10-21）：旧版 max(0,luck) 让「攻速换福缘」的道具代价为空。
+	var lm := clampf(1.0 + luck * RARITY_LUCK_PER_POINT, 0.1, 10.0)
 	var legendary := _rarity_growth(0.0, RARITY_LEGEND_PER_WAVE, RARITY_LEGEND_CAP, RARITY_LEGEND_WAVE, wave, lm)
 	var epic := _rarity_growth(0.0, RARITY_EPIC_PER_WAVE, RARITY_EPIC_CAP, RARITY_EPIC_WAVE, wave, lm)
 	var rare := _rarity_growth(RARITY_RARE_BASE, RARITY_RARE_PER_WAVE, RARITY_RARE_CAP, RARITY_RARE_WAVE, wave, lm)
@@ -225,7 +226,7 @@ static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 	return TAG_FILTER_LEAK
 
 static func shop_luck_mult(luck: float) -> float:
-	return 1.0 + maxf(0.0, luck) * LUCK_SHOP_PER_POINT
+	return clampf(1.0 + luck * LUCK_SHOP_PER_POINT, 0.1, 10.0)
 
 # ---------------- 道具（被动道具）档位权重 ----------------
 
@@ -251,7 +252,7 @@ static func _item_tier_growth(per_wave: float, cap: float, unlock_wave: int, wav
 ## 道具档位权重：返回长度 4 的数组（tier1~4），四档之和恒为 100（普通取余）。
 ## 高档 = 波次递进 × 福缘乘区后封顶；未到解锁回合的档位权重为 0。
 static func item_tier_weights(luck: float, wave: int) -> Array:
-	var lm := 1.0 + maxf(0.0, luck) * LUCK_ITEM_MULT_PER_POINT
+	var lm := clampf(1.0 + luck * LUCK_ITEM_MULT_PER_POINT, 0.1, 10.0)
 	var legendary := _item_tier_growth(ITEM_TIER_LEGEND_PER_WAVE, ITEM_TIER_LEGEND_CAP, int(ITEM_TIER_WAVES[4]), wave, lm)
 	var epic := _item_tier_growth(ITEM_TIER_EPIC_PER_WAVE, ITEM_TIER_EPIC_CAP, int(ITEM_TIER_WAVES[3]), wave, lm)
 	var rare := _item_tier_growth(ITEM_TIER_RARE_PER_WAVE, ITEM_TIER_RARE_CAP, int(ITEM_TIER_WAVES[2]), wave, lm)
@@ -320,4 +321,5 @@ static func upgrade_fields() -> Array:
 			"bonus_pierce", "thorns",
 			"chest_count", "chest_quality", "chest_reward",
 			"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
+			"skill_cooldown_mult",
 		]

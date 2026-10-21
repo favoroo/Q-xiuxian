@@ -41,6 +41,7 @@ static func reset(gm: Node) -> void:
 	gm.xp_gain_mult = 1.0
 	gm.knockback_mult = 1.0
 	gm.elite_damage = 0.0
+	gm.skill_cooldown_mult = 0.0
 	gm.free_rerolls = 0
 	gm.element_damage = {}
 	gm.locked_upgrades = []
@@ -148,6 +149,7 @@ static func reset(gm: Node) -> void:
 	gm.shop_price_mult = 1.0
 	gm.shop_tag_filter = []
 	gm._no_main_tag_waves = 0
+	gm._no_main_item_waves = 0
 	gm.alloc_offers.clear()  # Array[Dictionary] 定型数组：经 Node 属性通道不能赋裸 []，原地清空
 	gm.alloc_points_total = 0
 	gm.alloc_reroll_cost = 2

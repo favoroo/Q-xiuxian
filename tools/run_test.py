@@ -96,13 +96,21 @@ def clean_zombies() -> int:
     print(f"[CLEANUP] 已清理 {killed} 个挂起的无头 Godot 进程。")
     return 0
 
-def resolve_scene_path(name: str) -> str:
+def resolve_scene_path(name: str, project_path: str = ".") -> str:
+    """把测试名/路径解析成 res:// 场景路径。解析不到返回空串（由调用方报错）。
+
+    关键：候选必须真存在于 project_path 下，否则 Godot 加载失败时退出码仍是 0，
+    run_single_test 会误报 PASS（CHANGELOG:410 记录的假绿）。
+    """
+    def _local(res_path: str) -> str:
+        return os.path.join(project_path, res_path.replace("res://", ""))
+
     if name.startswith("res://"):
-        return name
+        return name if os.path.exists(_local(name)) else ""
     if name.endswith(".tscn"):
         if os.path.exists(name):
-            return "res://" + os.path.relpath(name)
-        if os.path.exists(os.path.join("tests", name)):
+            return "res://" + os.path.relpath(name, project_path)
+        if os.path.exists(os.path.join(project_path, "tests", name)):
             return "res://tests/" + name
     cand = [
         f"res://tests/{name}.tscn",
@@ -112,10 +120,18 @@ def resolve_scene_path(name: str) -> str:
         f"res://tests/{name}Preview.tscn",
     ]
     for c in cand:
-        local_p = c.replace("res://", "")
-        if os.path.exists(local_p):
+        if os.path.exists(_local(c)):
             return c
-    return f"res://tests/{name}.tscn"
+    # 命名兜底：脚本 snake_case / 场景 PascalCase 两套并存时，手敲任一形式都能解析。
+    # 归一化 = 去下划线 + 小写，使 hud_btn_drag_check ↔ HudBtnDragCheck 互相匹配。
+    tests_dir = os.path.join(project_path, "tests")
+    if os.path.isdir(tests_dir):
+        norm = name.lower().replace("_", "")
+        matches = [fn for fn in os.listdir(tests_dir)
+                   if fn.endswith(".tscn") and fn[:-5].lower().replace("_", "") == norm]
+        if len(matches) == 1:
+            return "res://tests/" + matches[0]
+    return ""
 
 def check_project_environment(project_path: str, auto_import: bool = False) -> bool:
     """预检 Godot 工程环境，防止在缺少 .godot 缓存的裸目录（如 git worktree）中运行导致死锁"""
@@ -150,6 +166,12 @@ def check_project_environment(project_path: str, auto_import: bool = False) -> b
 def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float = 35.0, project_path: str = ".") -> bool:
     if not os.path.exists(GODOT_PATH):
         print(f"[ERROR] Godot 可执行文件未找到: {GODOT_PATH}")
+        return False
+
+    # 场景不存在的前置校验：Godot 加载失败时退出码仍是 0，会误报 PASS（见 CHANGELOG:410）
+    local_scene = os.path.join(project_path, scene_res.replace("res://", ""))
+    if not os.path.exists(local_scene):
+        print(f"❌ [FAIL] 场景不存在: {scene_res}（解析到 {local_scene}）")
         return False
 
     cmd = [GODOT_PATH, "--headless", "--path", project_path, scene_res]
@@ -193,10 +215,27 @@ def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float
 
     exit_code = proc.returncode if proc else -1
     result_lines = [l for l in stdout_data.splitlines() if "RESULT" in l]
+    combined = stderr_data + "\n" + stdout_data
     error_lines = [
-        l for l in (stderr_data + "\n" + stdout_data).splitlines()
+        l for l in combined.splitlines()
         if "SCRIPT ERROR" in l or "ERROR:" in l or "[HEADLESS_GUARD]" in l
     ]
+
+    # 致命错误：脚本崩溃（SCRIPT ERROR）与场景/资源加载失败时，Godot 往往仍以退出码 0 收场，
+    # 只看退出码会把「跑崩了」当 PASS（StatShadow 缺字段那种假绿正是如此）。
+    # 例外：selftest 故意用错形参制造 SCRIPT ERROR 来验证判据有牙齿（hud_btn_drag_check），
+    #       故带 --selftest 时放行 SCRIPT ERROR。
+    is_selftest = bool(extra_args) and any("--selftest" in str(a) for a in extra_args)
+    fatal_markers = ["Failed loading", "Failed to load", "Cannot open file"]
+    fatal = [l for l in combined.splitlines() if any(m in l for m in fatal_markers)]
+    if not is_selftest:
+        fatal += [l for l in combined.splitlines() if "SCRIPT ERROR" in l]
+
+    if exit_code == 0 and fatal:
+        print(f"❌ [FAIL] 退出码 0 但运行期报致命错误（假绿），耗时 {dt:.2f}s")
+        for err in fatal[:6]:
+            print(" ", err)
+        return False
 
     if exit_code == 0 and result_lines:
         print(f"✅ [PASS] 耗时 {dt:.2f}s | 输出: {result_lines[-1]}")
@@ -251,7 +290,11 @@ def main():
             print(f"[SKIP] --all 跳过 {len(skipped)} 个现场预览场景: {', '.join(skipped)}")
 
     for t in args.tests:
-        targets.append(resolve_scene_path(t))
+        resolved = resolve_scene_path(t, args.path)
+        if not resolved:
+            print(f"❌ [FAIL] 找不到测试场景: {t}（检查名字或大小写）")
+            sys.exit(1)
+        targets.append(resolved)
 
     if not targets:
         parser.print_help()

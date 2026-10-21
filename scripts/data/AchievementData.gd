@@ -37,7 +37,7 @@ const DEFAULT_CULTIVATORS: Array[String] = [
 	"yushou",
 ]
 
-## 初始默认进入商店货架池的 51 件道具（高阶出现节奏由 GameBalance.item_tier_weights 回合门槛控制）
+## 初始默认进入商店货架池的道具（高阶出现节奏由 GameBalance.item_tier_weights 回合门槛控制）
 const DEFAULT_ITEMS: Array[String] = [
 	"jubaopen",
 	"mibao_luopan",
@@ -47,7 +47,6 @@ const DEFAULT_ITEMS: Array[String] = [
 	"kuangxue_dan",
 	"guijia_fu",
 	"tongxuan_ling",
-	"yinhun_deng",
 	"suoling_jia",
 	"wujian_shi",
 	"huichun_hulu",
@@ -94,7 +93,6 @@ const DEFAULT_ITEMS: Array[String] = [
 		# 2026-10-12：卸匣锥（砍砸开击数）换成满匣诀（抬开箱掉落），旧 id 由 ProgressStore 读档时剔除。
 		"cangbao_tu",
 		"naling_zhuo",
-		"manxia_jue",
 		"dianjin_jue",
 		# —— 2026-10-13 扩池：补齐灵兽系与 10-12 转化/站定/联动体系，彻底消灭未入池死卡 ——
 		# 普通（tier 1）
@@ -127,11 +125,28 @@ const DEFAULT_ITEMS: Array[String] = [
 		"liuyun_qianyin",
 		"jinmang_souhun",
 		"qianfu_lianhuan",
-		"liekong_zhui",
 		# 2026-10-20 新增通用强力件（不挑流派，任何构筑都能吃）
 		"xuantie_ling",
 		"bumie_jinshen",
 		"tiangang_zhanyi",
+		# 2026-10-21 流派补齐（近战/远程/元素/召唤/机关/技能/闪避/角色专属）
+		"tieshou",
+		"lingyan_fu",
+		"tongling",
+		"pojun_fu",
+		"liannu_shi",
+		"wuxing_sha",
+		"tongji_chi",
+		"jingxin_fu",
+		"huansha",
+		"lingcao_dai",
+		"wanling_fan",
+		"tianji_suo",
+		"zhanqi",
+		"cangzhen_juan",
+		"xuehai_fu",
+		"daoyun_jing",
+		"wanshi_jian",
 		# 传说（tier 4）
 		"xuepan_guyu",
 		"liehun_ling",

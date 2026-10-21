@@ -62,7 +62,11 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.add_spirit_stones(int(v))
 			"max_hp":
 				if gm.player and gm.player.has_method("increase_max_hp"):
-					gm.player.increase_max_hp(v, float(apply.get("hp_heal", 0.0)))
+					# 负上限（五行砂/幻纱）走缩上限，不要冒一条「+0 HP」的伤害数字。
+					if v < 0.0 and gm.player.has_method("decrease_max_hp"):
+						gm.player.decrease_max_hp(-v)
+					else:
+						gm.player.increase_max_hp(v, float(apply.get("hp_heal", 0.0)))
 			"hp_heal":
 				pass  # 已随 max_hp 一起结算
 			"xp_gain_mult":
@@ -95,6 +99,8 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.pet_cooldown_mult = maxf(0.2, gm.pet_cooldown_mult * v)
 			"pet_slots":
 				gm.pet_slots_bonus += int(v)
+			"skill_cooldown_mult":
+				gm.skill_cooldown_mult = minf(gm.SKILL_CD_CAP, gm.skill_cooldown_mult + v)
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
 					gm.element_damage[e] = minf(float(gm.element_damage.get(e, 0.0)) + v, gm.ELEMENT_DAMAGE_CAP)
@@ -193,6 +199,8 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 				gm.pet_cooldown_mult = undo_mult(gm.pet_cooldown_mult, v, 0.2)
 			"pet_slots":
 				gm.pet_slots_bonus -= int(v)
+			"skill_cooldown_mult":
+				gm.skill_cooldown_mult = maxf(0.0, undo_capped_add(gm.skill_cooldown_mult, v, gm.SKILL_CD_CAP))
 			"element_damage_all":
 				for e in WeaponData.ELEMENTS:
 					gm.element_damage[e] = undo_capped_add(float(gm.element_damage.get(e, 0.0)), v, gm.ELEMENT_DAMAGE_CAP)

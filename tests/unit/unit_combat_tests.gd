@@ -194,13 +194,28 @@ func _test_knock_direction() -> void:
 	_c.check(GameBalance.knock_dir(src, p, p).is_equal_approx(Vector2.LEFT), "敌人正贴在玩家身上→维持径向")
 	# 玩家位置退回施力点（局外预览、单测）时，方向与纯径向逐位相同
 	_c.check(GameBalance.knock_dir(src, e, src).is_equal_approx(old_dir), "玩家位置退回施力点=旧行为")
-	# 调用点不许再自己抄径向：那等于把「往玩家身上推」写回去
-	for path in ["res://scripts/weapons/ThunderBurst.gd", "res://scripts/weapons/FloatingWeapon.gd", "res://scripts/weapons/SunOrb.gd", "res://scripts/entities/BlessingObelisk.gd"]:
-		var text := ""
-		var f := FileAccess.open(path, FileAccess.READ)
-		if f != null:
-			text = f.get_as_text()
-		_c.check(not text.contains("(enemy.global_position - global_position).normalized()"), "%s 的震退方向走统一出口" % path)
+	# 调用点不许再自己抄径向：那等于把「往玩家身上推」写回去。
+	# 2026-10-21：原写法读文件失败时 text 为空串，`not "".contains()` 恒真 ⇒ 扫描静默失效。
+	# 改为扫描 weapons/ 全目录 + 读不到即报红 + 正则容忍空白（对齐 weapon_audio_check 的健壮写法）。
+	var legacy_radial := RegEx.new()
+	legacy_radial.compile("(enemy\\.global_position\\s*-\\s*global_position)\\.normalized\\s*\\(")
+	var weapon_dir := DirAccess.open("res://scripts/weapons")
+	var scanned := 0
+	if weapon_dir != null:
+		weapon_dir.list_dir_begin()
+		var fn := weapon_dir.get_next()
+		while fn != "":
+			if fn.ends_with(".gd"):
+				var f := FileAccess.open("res://scripts/weapons/" + fn, FileAccess.READ)
+				if f == null:
+					_c.check(false, "读不到 res://scripts/weapons/%s，震退扫描失效" % fn)
+				else:
+					scanned += 1
+					_c.check(legacy_radial.search(f.get_as_text()) == null,
+						"%s 的震退方向走统一出口（不手抄径向）" % fn)
+			fn = weapon_dir.get_next()
+		weapon_dir.list_dir_end()
+	_c.check(scanned > 0, "震退扫描确实扫到 weapons/ 下的脚本（%d 个）" % scanned)
 
 	# 15 把法器皆有定义合法击退力，且芭蕉扇与番天镇岳印击退力突出
 	for w_id in WeaponData.SHOP_POOL:

@@ -42,6 +42,13 @@ import subprocess
 import sys
 import unicodedata
 
+# 防止 tools/ 下的脚本执行时 sys.path[0] 为 tools/，导致 tools/inspect.py 遮蔽标准库 inspect
+if sys.path and os.path.basename(os.path.abspath(sys.path[0])) == "tools":
+    _tools_dir = sys.path.pop(0)
+    _root_dir = os.path.dirname(_tools_dir)
+    if _root_dir not in sys.path:
+        sys.path.insert(0, _root_dir)
+
 try:
     from fontTools.ttLib import TTFont
 except ImportError:
@@ -60,17 +67,57 @@ SUBSET_FONTS = ["MiSans-Semibold.woff2", "MiSans-Heavy.woff2"]
 
 ## 扫描口径：与 tests/font_coverage_check.gd 的 B 段同源。两边必须一致，否则判据会误报
 ## （判据扫的集合更宽就会凭空变红）。改这里要同步改那个判据。
+## 2026-10-21 优化：排除 tests/ 目录（测试断言与探针不上屏），且 .gd 文件仅扫描字符串字面量（跳过注释）。
 SCAN_EXTS = (".gd", ".tscn", ".tres", ".cfg", ".godot")
 SKIP_DIRS = {".godot", ".git", "build", "assets_raw", "android",
-             ".agents", ".zcode", ".workbuddy"}
+             ".agents", ".zcode", ".workbuddy", "tests"}
 
 WRAP = 64  # 账本文件每行字符数（纯排版，读取方只把它当一个字符集合）
 
 
 # ---------------- 字集来源 ①：扫源码文本 ----------------
 
+def extract_gd_strings(text: str) -> list:
+    """提取 GDScript 文件中的字符串字面量，跳过 # 单行与 ## 文档注释。"""
+    res = []
+    i = 0
+    n = len(text)
+    in_str = False
+    quote = ""
+    cur = []
+    while i < n:
+        c = text[i]
+        if not in_str:
+            if c == "#":
+                while i < n and text[i] != "\n":
+                    i += 1
+                continue
+            if c in ('"', "'"):
+                in_str = True
+                quote = c
+                cur = []
+            i += 1
+            continue
+        # 字符串内部
+        if c == "\\":
+            if i + 1 < n:
+                cur.append(text[i:i+2])
+                i += 2
+                continue
+        if c == quote:
+            in_str = False
+            res.append("".join(cur))
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    return res
+
+
 def scan_source_chars() -> set:
-    """递归扫工程里的文本资源，收集全部可渲染字符。"""
+    """递归扫工程里的文本资源，收集全部运行时可渲染字符。
+    .gd 代码只提取字符串字面量（排除注释），非 .gd（.tscn/.tres等）全扫。
+    """
     chars = set()
     files = 0
     for dirpath, dirnames, filenames in os.walk(ROOT):
@@ -86,7 +133,11 @@ def scan_source_chars() -> set:
                 print(f"  跳过 {path}: {e}")
                 continue
             files += 1
-            chars.update(c for c in text if _renderable(c))
+            if fn.endswith(".gd"):
+                for s in extract_gd_strings(text):
+                    chars.update(c for c in s if _renderable(c))
+            else:
+                chars.update(c for c in text if _renderable(c))
     print(f"  扫了 {files} 个文本文件")
     return chars
 

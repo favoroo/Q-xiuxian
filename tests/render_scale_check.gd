@@ -48,14 +48,20 @@ func _run() -> void:
 	await get_tree().physics_frame
 
 	_c.check(main_scene != null, "④Main 场景实例化成功")
-	# 触发清晰度变更，验证 _on_setting_changed 和 _apply_render_quality 执行无异常
+	# 触发清晰度变更，验证 _on_setting_changed 和 _apply_render_quality 执行无异常。
+	# 2026-10-21：原来这里是 check(true) 恒真断言（抛错不中断，等于没测）。
+	# 改为断言可观测结果：headless 下 _apply_render_quality 短路不动 content_scale_mode，
+	# 故用「档位读回 + content_scale_mode 保持 CANVAS_ITEMS」共同证明链路走通且未崩。
+	var mode_before := get_window().content_scale_mode
 	SettingsManager.set_val(&"display", &"render_quality", &"performance", false)
 	await get_tree().physics_frame
-	_c.check(true, "④切换到流畅档无崩溃")
+	_c.equals(SettingsManager.render_quality(), &"performance", "④切到流畅档后档位读回 performance")
+	_c.equals(get_window().content_scale_mode, mode_before,
+		"④headless 下 _apply_render_quality 短路，content_scale_mode 不被改写")
 
 	SettingsManager.set_val(&"display", &"render_quality", &"high", false)
 	await get_tree().physics_frame
-	_c.check(true, "④切换回高清档无崩溃")
+	_c.equals(SettingsManager.render_quality(), &"high", "④切回高清档后档位读回 high")
 
 	# ⑤ 验证画质不因低帧自动切换（由用户完全手动控制）
 	GameManager.run_started = true

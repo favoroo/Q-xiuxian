@@ -442,6 +442,34 @@ const DEFS: Dictionary = {
 					},
 			}
 
+## 角色偏好的道具标签（2026-10-21）：只影响货架道具的软亲和权重，不做硬过滤。
+## 标签词表与 ItemData.tags_of 同源；命中任一即算「这个角色看得懂这件道具」。
+const ITEM_TAGS := {
+	"jianchi": ["melee", "crit", "haste"],
+	"shiyue": ["tank", "thorns", "heal"],
+	"fuzhen": ["summon", "haste", "tank"],
+	"jinsuanpan": ["economy", "haste"],
+	"meiying": ["dodge", "crit", "haste"],
+	"dubi": ["melee", "generic", "haste"],
+	"kuangzhan": ["melee", "crowd", "tank"],
+	"duoshe": ["economy", "haste"],
+	"duobao": ["economy", "collection"],
+	"lingzhifu": ["heal", "economy"],
+	"leifa": ["elemental", "haste", "crit"],
+	"jiguan": ["contraption", "summon", "tank"],
+	"yaowang": ["heal", "tank", "elemental"],
+	"shoucainu": ["economy", "tank"],
+	"shixue": ["onhit", "lifesteal", "tank"],
+	"fuxiu": ["ranged", "elemental", "pierce"],
+	"bawang": ["melee", "wide", "tank"],
+	"juechen": ["skill", "melee", "crit"],
+	"yushou": ["pet", "summon", "haste"],
+	"kuxingseng": ["still", "tank", "melee"],
+}
+
+static func item_tags_of(id: String) -> Array:
+	return ITEM_TAGS.get(id, [])
+
 static func get_def(id: String) -> Dictionary:
 	return DEFS.get(id, {})
 

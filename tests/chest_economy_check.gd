@@ -5,7 +5,7 @@ extends Node
 ## 用户口径：「针对宝箱再加些玩法，在技能加点或商店里加物品，提高刷宝箱的数量和概率」。
 ## 2026-10-12 用户口径（本轮改版）：「砸开宝箱受击数减一这算什么加成，这个加成不要；
 ## 商店里那件砍击数还要带个 debuff 的，太蠢了」⇒ 砍击数那条腿（悟道「开箱省力」+ 法宝「卸匣锥」）
-## 整条删掉，换成抬兑现量的「宝箱掉落」（悟道 chest_reward_up + 法宝 manxia_jue）。
+## 整条删掉，换成抬兑现量的「宝箱掉落」（悟道 chest_reward_up）。
 ## 这条链路横跨 数据表 → 属性字段 → 刷怪口 → 匣子本体 → 掉落兑现，任何一环写歪都会变成
 ## 「卡面上写了 +1，场上还是 2 口」的假加成（历史上这类静默无效踩过多次），所以判据分三层，
 ## 每一层都从**生产入口**进去量，不在测试里另算一套：
@@ -186,8 +186,6 @@ func _test_sources_reach_spawner() -> void:
 	_c.near(GameManager.chest_quality, 2.0, 0.001, "悟道「宝箱品质」落地到字段")
 	GameManager.add_item("cangbao_tu")
 	_c.equals(GameManager.chest_count_bonus, 2, "法宝「藏宝图」与加点共用同一条字段链路")
-	GameManager.add_item("manxia_jue")
-	_c.near(GameManager.chest_reward_mult, 1.75, 0.001, "法宝「满匣诀」与加点共用同一条字段链路")
 
 	_spawner._spawn_chests()
 	await get_tree().process_frame

@@ -154,6 +154,15 @@ func _setup_charge_particles() -> void:
 	_charge_particles.angular_velocity_max = 60.0
 	_charge_particles.scale_amount_min = 1.4
 	_charge_particles.scale_amount_max = 2.8
+	## 2026-10-21 精修：寸缕内卷——尺寸沿寿命「小→大→收」曲线，配合轻微阻尼，
+	## 让吸入更像被丹田吸扯而非匀速穿场（数量维持 16，不越粒子预算）。
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.35))
+	sc.add_point(Vector2(0.45, 1.0))
+	sc.add_point(Vector2(1.0, 0.18))
+	_charge_particles.scale_amount_curve = sc
+	_charge_particles.damping_min = 6.0
+	_charge_particles.damping_max = 14.0
 	_charge_particles.color = Color(0.45, 0.85, 1.0, 0.75)
 	add_child(_charge_particles)
 
@@ -314,7 +323,15 @@ func _trigger_blessing() -> void:
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 	GameManager.announcement_triggered.emit("◆ 祭坛激活 · 灵兽现身助战 ◆")
-	_spawn_shockwave_ring()
+	## 激活演出（2026-10-21）：地面双环扩散 + 通天青玉光柱 + 超白核心闪白，
+	## 由 ObeliskFx 一次性自释放节点接管（存活 0.55s 后自灭，不常驻不占预算）。
+	var fx_host: Node = get_parent()
+	if fx_host != null:
+		ObeliskFx.play_activation(fx_host, global_position)
+	# 一次性喷发粒子：低频事件，绕过同帧限流（金色灵气光柱向上喷）
+	FxParticlePool.burst(FxParticlePool.LEVEL_PILLAR, global_position, GameStyle.FX_HDR_GOLD, 1.0, true)
+	if _obelisk_renderer != null:
+		_obelisk_renderer.activation_flash = 1.0
 	_summon_spirit_beast()
 	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，
 	# radius 传 INF 即「全场」；方向走 GameBalance.knock_dir，永不把敌人往玩家身上推）
@@ -331,15 +348,22 @@ func _trigger_blessing() -> void:
 		gem.is_gold = true
 		gem.exp_value = 10
 		gem.activate()
-	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相
+	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相。
+	# 2026-10-21：以 spent_blend 连续形变（下沉/褪色/收束）取代原先 0.55s 后的硬切剪影。
 	var tw = create_tween()
 	tw.tween_property(light, "energy", 5.0, 0.12)
 	tw.tween_property(light, "energy", 0.0, SPENT_FADE_TIME)
+	tw.parallel().tween_property(light, "color", Color(0.55, 0.62, 0.70), SPENT_FADE_TIME)
 	tw.parallel().tween_property(circle_sprite, "modulate:a", 0.0, SPENT_FADE_TIME)
 	if stone_mat != null:
 		tw.parallel().tween_property(stone_mat, ^"shader_parameter/amount", SPENT_DESATURATE, SPENT_FADE_TIME)
 		tw.parallel().tween_property(stone_mat, ^"shader_parameter/fill_ratio", 0.0, SPENT_FADE_TIME)
+	if _obelisk_renderer != null:
+		tw.parallel().tween_property(_obelisk_renderer, "spent_blend", 1.0, SPENT_FADE_TIME)
 	tw.tween_callback(_enter_spent_look)
+	# 熄灭余烬：几缕冷灰蓝灵屑上升淡出（给「余温散尽」一点回味）
+	if fx_host != null:
+		ObeliskFx.play_spent_wisp(fx_host, global_position)
 
 ## 召唤灵兽助战（2026-10-11 祭坛强化）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
 ## 灵兽挂 allies 组、不在回合末清理四组里，生命不耗尽就跨回合一直在场；
@@ -353,6 +377,11 @@ func _summon_spirit_beast() -> void:
 	beast.global_position = global_position + Vector2(
 		GameManager.rng.randf_range(-36.0, 36.0),
 		GameManager.rng.randf_range(-36.0, 36.0))
+	# 现身演出（2026-10-21）：落点先起青玉聚灵漩涡，再起一圈扩散环 + 上扬灵光。
+	# 漩涡/扩散环由 ObeliskFx 一次性节点自绘（0.32s 自灭）；灵光走既有粒子池（低频事件绕过限流）。
+	if host != null:
+		ObeliskFx.play_beast_entrance(host, beast.global_position)
+	FxParticlePool.burst(FxParticlePool.SOUL_ORB, beast.global_position, Color(0.58, 0.95, 0.98, 1.0), 1.0, true)
 	# 现身一拍：灵兽落点扩散一圈泽青灵气环（复用 JuiceEffect 对象池，与灵珑配色同源）
 	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, Color(0.58, 0.95, 0.98), 0.3)
 
@@ -362,20 +391,6 @@ func _enter_spent_look() -> void:
 	circle_sprite.visible = false
 	if _obelisk_renderer != null:
 		_obelisk_renderer.is_spent = true
-
-## 触发时的扩散灵气环 —— 视觉冲击
-func _spawn_shockwave_ring() -> void:
-	var ring := Sprite2D.new()
-	ring.texture = circle_sprite.get_node("RingSprite").texture
-	ring.modulate = Color(0.45, 0.85, 1.0, 0.7)
-	ring.scale = Vector2(0.5, 0.5)
-	ring.z_index = 0
-	get_parent().add_child(ring)
-	ring.global_position = global_position
-	var tw = create_tween()
-	tw.tween_property(ring, "scale", Vector2(6.0, 6.0), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(ring, "modulate:a", 0.0, 0.45)
-	tw.tween_callback(ring.queue_free)
 
 func _on_interaction_area_body_entered(body: Node2D) -> void:
 	if body is Player and not is_triggered:

@@ -2151,8 +2151,10 @@ func _die() -> void:
 		orb.global_position = global_position
 		orb.heal_amount = float(heal_orb_drop)
 		orb.activate()
-	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占金币位）
-	if GameManager.heal_orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < GameManager.heal_orb_chance:
+	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占金币位）。
+	# 2026-10-21 灵草袋同走这条概率腿：角色天赋 + 道具 hook 相加后夹 100%。
+	var orb_chance: float = minf(1.0, GameManager.heal_orb_chance + GameManager.item_hook_sum("heal_orb_chance"))
+	if orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < orb_chance:
 		var extra_orb := HealOrb.acquire_or_new(get_parent())
 		extra_orb.global_position = global_position + Vector2(
 			GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS),

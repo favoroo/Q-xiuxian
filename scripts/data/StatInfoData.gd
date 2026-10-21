@@ -56,8 +56,9 @@ const FIELDS: Dictionary = {
 		"pet_damage_mult": {"name": "灵兽伤害", "unit": "pct"},
 		"pet_effect_mult": {"name": "灵兽效果", "unit": "pct"},
 		"pet_cooldown_mult_mul": {"name": "灵兽冷却", "unit": "pctmul"},
-		"pet_slots": {"name": "灵兽栏位", "unit": "pt"},
-	}
+			"pet_slots": {"name": "灵兽栏位", "unit": "pt"},
+			"skill_cooldown_mult": {"name": "技能冷却缩减", "unit": "pct"},
+		}
 
 ## 五行名：element_damage_<key> 的人话名走它，与 WeaponData.ELEMENTS 同一批 key
 const ELEMENT_NAMES: Dictionary = {

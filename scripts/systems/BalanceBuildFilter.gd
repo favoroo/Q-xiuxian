@@ -26,7 +26,7 @@ const UPGRADE_CATEGORY := {
 	"ranged_up": "ranged", "grand_ranged": "ranged",
 	"elemental_up": "elemental", "grand_elemental": "elemental",
 	"engineering_up": "engineering", "grand_engineering": "engineering",
-	"contraption_up": "contraption",
+	"contraption_up": "contraption", "grand_contraption": "contraption",
 }
 
 ## 加点 id → 需要的五行
@@ -190,3 +190,99 @@ static func item_allowed(gm: Node, id: String) -> bool:
 		return has_chest_build(gm)
 
 	return true
+
+# ---------------- 2026-10-21 道具构筑亲和 / 轻保底 ----------------
+
+## 亲和倍率：道具标签命中当前武器类别 / 五行 / 角色偏好时加权。
+## 与武器标签亲和同思路，但道具没有栏位、池子更小，倍率要克制（总上限 2.5）。
+const ITEM_AFF_CATEGORY := 1.35
+const ITEM_AFF_ELEMENT := 1.30
+const ITEM_AFF_CHARACTER := 1.35
+const ITEM_AFF_STACK_PER := 0.08
+const ITEM_AFF_STACK_MAX := 3
+const ITEM_AFF_CAP := 2.5
+const ITEM_PITY_WAVES := 2
+
+## 已持有道具的标签计数（同类道具买得越多，越容易继续刷到同标签件）
+static func item_tag_counts(gm: Node) -> Dictionary:
+	var out: Dictionary = {}
+	if gm == null:
+		return out
+	for iid in gm.get("items"):
+		for t in ItemData.tags_of(String(iid)):
+			out[t] = int(out.get(t, 0)) + 1
+	return out
+
+## 当前武器侧的主伤害类别（件数最多且 >0）；没有武器返回空串
+static func main_category(gm: Node) -> String:
+	if gm == null:
+		return ""
+	var best_cat := ""
+	var best_n := 0
+	for cat in CATEGORY_KEYS.keys():
+		var key := String(CATEGORY_KEYS[cat])
+		var n := 0
+		for wid in weapon_ids(gm):
+			var scal: Dictionary = WeaponData.get_def(String(wid)).get("stat_scalings", {})
+			if float(scal.get(key, 0.0)) > 0.0:
+				n += 1
+		if n > best_n:
+			best_n = n
+			best_cat = String(cat)
+	return best_cat
+
+## 是当前构筑「看得懂」的道具标签集合：主类别 + 角色偏好。
+## 用途：道具轻保底与货架相关性判定（不是硬过滤，只决定补哪一件）。
+static func relevant_item_tags(gm: Node) -> Array:
+	var out: Array = []
+	if gm == null:
+		return out
+	var main := main_category(gm)
+	if main != "":
+		out.append(main)
+	for t in CultivatorData.item_tags_of(String(gm.get("cultivator_id"))):
+		if not out.has(String(t)):
+			out.append(String(t))
+	return out
+
+static func item_matches_tags(id: String, tags: Array) -> bool:
+	if tags.is_empty():
+		return false
+	for t in ItemData.tags_of(id):
+		if t in tags:
+			return true
+	return false
+
+## 单件道具的构筑亲和倍率；gm 为空时恒 1（单测纯池保持确定性）
+static func item_affinity(gm: Node, id: String) -> float:
+	if gm == null:
+		return 1.0
+	var tags: Array = ItemData.tags_of(id)
+	if tags.is_empty():
+		return 1.0
+	var m := 1.0
+	var cat_hit := false
+	for cat in CATEGORY_KEYS.keys():
+		if String(cat) in tags and has_category(gm, String(cat)):
+			cat_hit = true
+			break
+	if cat_hit:
+		m *= ITEM_AFF_CATEGORY
+	var elem_hit := false
+	for e in WeaponData.ELEMENTS:
+		if String(e) in tags and has_element(gm, String(e)):
+			elem_hit = true
+			break
+	if elem_hit:
+		m *= ITEM_AFF_ELEMENT
+	var char_tags: Array = CultivatorData.item_tags_of(String(gm.get("cultivator_id")))
+	for t in tags:
+		if t in char_tags:
+			m *= ITEM_AFF_CHARACTER
+			break
+	var counts := item_tag_counts(gm)
+	var best := 0
+	for t in tags:
+		best = maxi(best, int(counts.get(t, 0)))
+	m *= 1.0 + ITEM_AFF_STACK_PER * float(mini(best, ITEM_AFF_STACK_MAX))
+	return minf(m, ITEM_AFF_CAP)

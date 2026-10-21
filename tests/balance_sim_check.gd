@@ -62,6 +62,9 @@ func _test_weapon_dps_normalization() -> void:
 		"tougu_ding", "jingzhe_fu", "gudu_fu", "langli_suo", "sanmei_huohu", "zihong_jing",
 		"bihai_chaoyindi", "fentian_baodeng", "wulei_paizi", "fantian_yin",
 		"chunlei_gu", "lieshan_duo", "jinxiao_leiling", "xuanming_leizhu",
+		# 2026-10-21 补登：手里剑（弹射流）此前漏在分档外，fail() 修好后会显性报红。
+		# 单发 20 伤 / 1.0s 冷却 = 20 DPS，连锁弹射 3 次属群体铺面，归群伤档（18~26）。
+		"shoulijian",
 	]
 	var drone_weapons := [
 		"lingdie", "hanquan_yulian", "hunyuan_zhong", "haojin_lun", "lihuo_ya", "xuanwu_pei",

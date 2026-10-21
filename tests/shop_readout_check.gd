@@ -151,7 +151,7 @@ func _main_cases() -> void:
 			"%s · 顶栏摆得进面板（要 %.0f，面板只给 %.0f，差 %.0f）" % [
 				tag, want_w, give_w, want_w - give_w])
 		var title := await _tap_at(chip)
-		_c.check(title == "气血", "%s · 点徽记弹出「气血」拆解（实得「%s」）" % [tag, title])
+		_c.check(title == "生命", "%s · 点徽记弹出「生命」拆解（实得「%s」）" % [tag, title])
 		var tip := DetailTip.live(_shop)
 		if tip != null:
 			var tr := tip.card_rect()
@@ -168,7 +168,7 @@ func _main_cases() -> void:
 	await _open_shop(60)
 	_c.check(_chip_face() == GameStyle.BAD,
 		"残血（%d%%）· 徽记底色翻朱砂，实得 %s" % [int(LOW_RATIO * 100), str(_chip_face())])
-	_c.check(await _tap_at(_hp_chip()) == "气血", "残血 · 点得开拆解")
+	_c.check(await _tap_at(_hp_chip()) == "生命", "残血 · 点得开拆解")
 	await _close_shop()
 	_set_hp(CUR_RATIO)
 	await _open_shop(60)
@@ -253,7 +253,7 @@ func _topbar_min_w() -> float:
 
 ## 徽记该印的那串字：词 + 与 HUD 同格式的分数（写死一处，三档屏共用）
 func _want_chip_text() -> String:
-	return "气血 %d/%d" % [int(_player.current_health), int(_player.max_health)]
+	return "生命 %d/%d" % [int(_player.current_health), int(_player.max_health)]
 
 func _chip_text() -> String:
 	var chip := _hp_chip()
@@ -279,7 +279,7 @@ func _potion_heal_printed() -> int:
 		var r := row as Control
 		if r == null or r.get_child_count() == 0 or not (r.get_child(0) is Label):
 			continue
-		if String((r.get_child(0) as Label).text) != "回复气血":
+		if String((r.get_child(0) as Label).text) != "回复生命":
 			continue
 		var val := _value_label(r)
 		if val != null:

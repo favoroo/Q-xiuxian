@@ -21,10 +21,74 @@ static func roll_shop(gm: Node, new_wave: bool = false) -> void:
 	# 商人·老主顾：重掷费用在纯函数结果上乘角色系数（GameBalance 保持纯函数，下限 1 金币）
 	gm.reroll_cost = maxi(1, int(round(GameBalance.reroll_cost(wave, gm.reroll_count, gm.shop_price_mult) * gm.reroll_price_mult)))
 	if new_wave:
+		# 道具轻保底先跑：它可能顶掉一个武器格，武器保底随后再按剩余货架判断。
+		apply_main_item_pity(gm, wave)
 		SynergySystem.apply_main_tag_pity(gm, wave)
 	# 「荐」标：在回合首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；
 	# 锁定保留的旧货会被重新评分，重复调用幂等
 	RecommendSystem.mark_shop_offers(gm)
+
+## 道具轻保底（2026-10-21）：连续 ITEM_PITY_WAVES 波货架没有出现
+## 「主武器伤害类别 / 角色偏好标签」的道具时，把一个未锁定的武器格换成对应道具。
+## 只补能用的方向，不指定具体某件；候选仍走解锁/unique/穿透/构筑过滤四条闸。
+static func apply_main_item_pity(gm: Node, wave: int) -> void:
+	var relevant: Array = BalanceBuildFilter.relevant_item_tags(gm)
+	if relevant.is_empty():
+		gm._no_main_item_waves = 0
+		return
+	var has_relevant := false
+	for offer in gm.shop_offers:
+		if String(offer.get("kind", "")) == "item" \
+				and BalanceBuildFilter.item_matches_tags(String(offer.get("id", "")), relevant):
+			has_relevant = true
+			break
+	if has_relevant:
+		gm._no_main_item_waves = 0
+		return
+	gm._no_main_item_waves += 1
+	if gm._no_main_item_waves < BalanceBuildFilter.ITEM_PITY_WAVES:
+		return
+	var tier_w: Array = GameBalance.item_tier_weights(gm.luck, wave)
+	var pool: Array = []
+	var weights: Array = []
+	for id in ItemData.DEFS.keys():
+		var iid := String(id)
+		if not gm.unlocked_items.is_empty() and not (iid in gm.unlocked_items):
+			continue
+		if not PierceLimit.filter_item_id(gm, iid):
+			continue
+		var d: Dictionary = ItemData.get_def(iid)
+		if bool(d.get("unique", false)) and iid in gm.items_bought:
+			continue
+		if not BalanceBuildFilter.item_allowed(gm, iid):
+			continue
+		if not BalanceBuildFilter.item_matches_tags(iid, relevant):
+			continue
+		var tier := clampi(int(d.get("tier", 1)), 1, 4)
+		var w := float(tier_w[tier - 1])
+		if w <= 0.0:
+			continue
+		w *= BalanceBuildFilter.item_affinity(gm, iid)
+		pool.append(iid)
+		weights.append(w)
+	if pool.is_empty():
+		return
+	for i in range(gm.shop_offers.size()):
+		var offer: Dictionary = gm.shop_offers[i]
+		if offer.get("locked", false) or offer.get("sold", false):
+			continue
+		if String(offer.get("kind", "")) != "weapon":
+			continue
+		var picked := String(pool[GameBalance.weighted_pick_index(weights, gm.rng.randf())])
+		var idef: Dictionary = ItemData.get_def(picked)
+		gm.shop_offers[i] = {
+			"kind": "item", "id": picked,
+			"price": GameBalance.item_price(int(idef.get("price", 20)), wave,
+					gm.shop_price_mult * gm.item_price_mult),
+			"sold": false, "locked": false,
+		}
+		gm._no_main_item_waves = 0
+		return
 
 ## 单个货架位：按概率分流 回气丹 / 道具 / 武器
 static func gen_offer(gm: Node, wave: int) -> Dictionary:

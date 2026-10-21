@@ -33,6 +33,7 @@ func _ready() -> void:
 	# 与 GroundDecorLayer 同档：地砖之上、ArenaVisualLayer 之下，不越过实体层
 	z_index = 0
 	_setup_fog_layers()
+	_setup_pillar_spirits()
 
 ## 双层飘雾装配：远层雾团大而稀、近层稍小稍密；每层 3 团错位铺开。
 ## 自漂用常驻 tween 往返（EASE_IN_OUT），与 Main._setup_ambient_mist 同款手法；
@@ -104,6 +105,12 @@ func _draw() -> void:
 	# T-4.2 远景竖直幽光柱（北侧山脊后升起，3-5 条）：先画柱再画山，
 	# 山体剪影盖住柱底 → 天然「从山后透出」的层次。位置确定性用本层固定种子 rng。
 	_draw_soul_pillars(rng, h)
+
+	# 2026-10-21 精致化：幽冥浮空岛剪影（山脊后方更高处，倒锥形悬浮巨石 + 垂落锁链/灵藤）
+	_draw_floating_islands(rng, h)
+
+	# 2026-10-21 精致化：远景「云隙光」横向光带（极淡，模拟云层缝隙透光）
+	_draw_cloud_gap_lights(h)
 
 	# 北侧远景：幽冥残峰奇石起伏（y 在 -(h+40) ~ -(h+160) 之间）。
 	# 横向留足 ±(h+180) 余量：相机拉到战场边缘时视差回挪，剪影仍需盖住视口缺口。
@@ -182,3 +189,144 @@ func _draw_soul_pillars(rng: RandomNumberGenerator, h: float) -> void:
 			var col := PILLAR_COLOR
 			col.a = (a0 + a1) * 0.5
 			draw_colored_polygon(seg, col)
+
+## 2026-10-21 精致化：幽冥浮空岛剪影（Floating Islands）
+## 北侧山脊后方更高处悬浮 2~3 座倒锥形巨石，底部垂落锁链/灵藤线条，
+## 色比山更深（0.012,0.020,0.035），营造「天外有天」的纵深层次。
+func _draw_floating_islands(rng: RandomNumberGenerator, h: float) -> void:
+	var col_island := Color(0.012, 0.020, 0.035, 0.85)
+	var col_vine := Color(0.018, 0.030, 0.045, 0.70)
+
+	# 3 座浮空岛：横向分布 -0.55h / 0.05h / 0.62h，高度 y ≈ -(h+200) ~ -(h+280)
+	var island_cfgs := [
+		{"x_ratio": -0.55, "y": -(h + rng.randf_range(220.0, 260.0)), "w": rng.randf_range(80.0, 110.0), "h": rng.randf_range(50.0, 70.0)},
+		{"x_ratio": 0.05, "y": -(h + rng.randf_range(250.0, 290.0)), "w": rng.randf_range(100.0, 140.0), "h": rng.randf_range(60.0, 85.0)},
+		{"x_ratio": 0.62, "y": -(h + rng.randf_range(200.0, 240.0)), "w": rng.randf_range(70.0, 95.0), "h": rng.randf_range(45.0, 65.0)},
+	]
+
+	for cfg in island_cfgs:
+		var cx: float = cfg.x_ratio * h
+		var cy: float = cfg.y
+		var iw: float = cfg.w
+		var ih: float = cfg.h
+
+		# 倒锥形主体：上宽下尖的梯形（顶部宽度 iw，底部收窄到 iw*0.3）
+		var top_w := iw * 0.5
+		var bot_w := iw * 0.15
+		var island_pts := PackedVector2Array([
+			Vector2(cx - top_w, cy),
+			Vector2(cx + top_w, cy),
+			Vector2(cx + bot_w, cy + ih),
+			Vector2(cx - bot_w, cy + ih),
+		])
+		draw_colored_polygon(island_pts, col_island)
+
+		# 顶部平台边缘描线（微弱冷墨轮廓）
+		draw_line(Vector2(cx - top_w, cy), Vector2(cx + top_w, cy), col_vine, 1.2)
+
+		# 底部垂落 2~3 条锁链/灵藤（竖直线 + 末端小点）
+		var vine_count := rng.randi_range(2, 3)
+		for v in range(vine_count):
+			var vx := cx + rng.randf_range(-bot_w * 0.8, bot_w * 0.8)
+			var vine_top := cy + ih
+			var vine_len := rng.randf_range(15.0, 30.0)
+			var vine_bot := vine_top + vine_len
+			draw_line(Vector2(vx, vine_top), Vector2(vx, vine_bot), col_vine, 0.9)
+			# 末端一枚极小垂珠
+			draw_circle(Vector2(vx, vine_bot + 1.5), 1.0, col_vine)
+
+## 2026-10-21 精致化：远景「云隙光」横向光带（Cloud Gap Lights）
+## 在远山与浮空岛之间，穿插 2~3 片极淡的横向光带（细长梯形），
+## 模拟远处云层缝隙透下的清辉，增加远景的空气感与纵深。
+func _draw_cloud_gap_lights(h: float) -> void:
+	var col_gap_light := Color(0.35, 0.55, 0.75, 0.06)
+
+	# 3 条云隙光带：高度 y ≈ -(h+180) / -(h+230) / -(h+270)，横向贯穿大部分视野
+	var gap_cfgs := [
+		{"y": -(h + 180.0), "x0": -h * 0.8, "x1": h * 0.6, "thickness": 3.5},
+		{"y": -(h + 230.0), "x0": -h * 0.5, "x1": h * 0.9, "thickness": 4.5},
+		{"y": -(h + 270.0), "x0": -h * 0.7, "x1": h * 0.3, "thickness": 3.0},
+	]
+
+	for cfg in gap_cfgs:
+		var gy: float = cfg.y
+		var gx0: float = cfg.x0
+		var gx1: float = cfg.x1
+		var gt: float = cfg.thickness
+		# 细长梯形（横向极长，纵向极薄）
+		var gap_pts := PackedVector2Array([
+			Vector2(gx0, gy - gt * 0.5),
+			Vector2(gx1, gy - gt * 0.5),
+			Vector2(gx1, gy + gt * 0.5),
+			Vector2(gx0, gy + gt * 0.5),
+		])
+		draw_colored_polygon(gap_pts, col_gap_light)
+
+## 2026-10-21 精致化：幽光柱内「灵光升腾」动态（Pillar Spirits）
+## 每条光柱内挂 2~3 个细小光点（Sprite2D + light_radial.png），从柱底缓升到柱顶，
+## 到顶淡出、底部新光点重生（常驻 Tween 循环，照雾团漂移同款手法）。
+## 光柱位置与 _draw_soul_pillars 用同一固定种子 rng 对齐（复算一次确保一致）。
+func _setup_pillar_spirits() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4217
+	var h: float = half_extent
+	var count := 4
+	var x_span := h + 140.0
+
+	# 先复算 4 条光柱的位置（与 _draw_soul_pillars 完全一致的逻辑）
+	var pillar_positions: Array[Dictionary] = []
+	for i in count:
+		var t := (float(i) + 0.5) / float(count)
+		var px := (-x_span + 2.0 * x_span * t) + rng.randf_range(-60.0, 60.0)
+		if absf(px) < 90.0:
+			px += 150.0 * (1.0 if px >= 0.0 else -1.0)
+		var p_top := -h - rng.randf_range(150.0, 210.0)
+		var p_base := -h - rng.randf_range(30.0, 60.0)
+		pillar_positions.append({"x": px, "top": p_top, "base": p_base})
+
+	# 每条光柱内 2~3 个灵光点（移动端减半）
+	var mobile := SettingsManager.is_mobile_platform()
+	var spirit_tex: Texture2D = preload("res://assets/art/light_radial.png")
+	var spirits_layer := Node2D.new()
+	spirits_layer.name = "PillarSpirits"
+	add_child(spirits_layer)
+
+	for pillar in pillar_positions:
+		var px: float = pillar.x
+		var p_top: float = pillar.top
+		var p_base: float = pillar.base
+		var spirit_count := rng.randi_range(2, 3)
+		if mobile:
+			spirit_count = 1  # 移动端每柱只留 1 颗
+
+		for s in range(spirit_count):
+			var spirit := Sprite2D.new()
+			spirit.texture = spirit_tex
+			spirit.scale = Vector2(0.4, 0.4) * rng.randf_range(0.8, 1.2)
+			spirit.modulate = Color(0.50, 0.72, 0.92, 0.35)
+			# 初始位置：柱底随机偏移
+			var start_y := p_base - rng.randf_range(0.0, 20.0)
+			spirit.position = Vector2(px + rng.randf_range(-8.0, 8.0), start_y)
+			spirits_layer.add_child(spirit)
+
+			# 升腾循环：柱底 → 柱顶（6~10s），到顶淡出后瞬移回柱底重新升起
+			var rise_duration := rng.randf_range(6.0, 10.0)
+			var phase_offset := fposmod(float(spirit.get_instance_id() % 100) * 0.01, 1.0)
+			rise_duration *= (0.9 + 0.2 * phase_offset)
+
+			var tw := create_tween().set_loops()
+			tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+			# 升起 + 淡出
+			tw.set_parallel(true)
+			tw.tween_property(spirit, "position:y", p_top, rise_duration)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+			tw.tween_property(spirit, "modulate:a", 0.0, rise_duration * 0.3)\
+				.set_delay(rise_duration * 0.7)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+			tw.set_parallel(false)
+			# 瞬移回柱底 + 恢复透明度（下一循环开始时）
+			tw.tween_callback(func():
+				spirit.position.y = p_base - rng.randf_range(0.0, 20.0)
+				spirit.position.x = px + rng.randf_range(-8.0, 8.0)
+				spirit.modulate.a = 0.35
+			)

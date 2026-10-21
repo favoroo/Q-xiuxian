@@ -130,7 +130,7 @@ func _run() -> void:
 	await _check_slider_follows_selection()
 	await _check_reset_needs_confirm()
 	_check_labels()
-	_c.check(_c.passed >= 25, "判据记满账（实得 %d 条，条数掉一半 = 中途炸了还在打 ALL PASS）" % _c.passed)
+	_c.set_min_checks(25)  # 条数掉一半 = 中途炸了还在打 ALL PASS（report 内统一守卫）
 	_restore(orig)
 	await _settle(2)
 	await _maybe_shot()
