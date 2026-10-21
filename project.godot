@@ -81,9 +81,14 @@ common/physics_interpolation=false
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 textures/vram_compression/import_etc2_astc=true
-renderer/rendering_method.mobile="mobile"
+renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 # 关闭（2026-10-16）：逐顶点 CPU 对齐破坏 canvas 批处理（759 draw call 根因之一），
 # 本项目主体是程序化矢量绘制 + 非整像素 squash 缩放，无整像素收益。
 2d/snap/snap_2d_vertices_to_pixel=false
-viewport/hdr_2d=true
+# 移动端已切 gl_compatibility（2026-10-21 真机 HUD 闪烁根治，见下），而 GL Compatibility
+# 不支持 2D HDR 视口 —— 保留 true 会被引擎忽略并可能刷警告。桌面 Forward+ 仍走各自默认。
+# 移动端 glow 本来就在 Main._apply_glow_channel 里用 LDR 阈值起辉（use_hdr_2d 恒 false），
+# 故关掉此项目级默认不影响移动端观感；桌面端 Main 会按需把 use_hdr_2d 打开。
+# 注：hdr_2d 是「项目级默认」，运行时 Main 仍会按平台写 vp.use_hdr_2d。
+viewport/hdr_2d=false

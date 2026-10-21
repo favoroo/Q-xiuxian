@@ -51,6 +51,12 @@ static func bake(half: float) -> Sprite2D:
 	var static_decor := ArenaVisualLayer.StaticDecor.new()
 	static_decor.half = half
 	content.add_child(static_decor)
+	# 注意（2026-10-21）：调用方在 Main._ready 期间经 await 进来，此时 root 可能仍处于
+	# 「正在装配子节点」状态，直接 add_child 会报 "Parent node is busy setting up children"
+	# 并静默失败（烘焙永不生效、装饰层回退矢量）。先等一拍让装配结束再挂离屏宿主。
+	await tree.process_frame
+	if not is_instance_valid(tree.root):
+		return null
 	tree.root.add_child(host)
 	# UPDATE_ONCE 的绘制在帧尾落纹理：等 3 帧（同 EnemyIconCapture 口径）
 	for i in range(3):
