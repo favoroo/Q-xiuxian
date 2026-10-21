@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ddr1gx3s26bwp"
-path="res://.godot/imported/item_manxia_jue.png-b2610a2980c211f9046b63b214c1a50c.ctex"
+uid="uid://ctr1dn1ub4sc6"
+path="res://.godot/imported/item_jingang_shenxiang.png-b143aa1e1bf9f6d8f66e01ff3aa71457.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/item_manxia_jue.png"
-dest_files=["res://.godot/imported/item_manxia_jue.png-b2610a2980c211f9046b63b214c1a50c.ctex"]
+source_file="res://assets/art/item_jingang_shenxiang.png"
+dest_files=["res://.godot/imported/item_jingang_shenxiang.png-b143aa1e1bf9f6d8f66e01ff3aa71457.ctex"]
 
 [params]
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bohy3a5evdt2g"
-path="res://.godot/imported/item_yinhun_deng.png-804dc3fb08ef66a9589f5c9377b8c9ea.ctex"
+uid="uid://cvd4ws6laxvp3"
+path="res://.godot/imported/weapon_icon_proto.png-471137c64c979f13014051cc506e3d9f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/item_yinhun_deng.png"
-dest_files=["res://.godot/imported/item_yinhun_deng.png-804dc3fb08ef66a9589f5c9377b8c9ea.ctex"]
+source_file="res://tests/inspect/weapon_icon_proto.png"
+dest_files=["res://.godot/imported/weapon_icon_proto.png-471137c64c979f13014051cc506e3d9f.ctex"]
 
 [params]
 

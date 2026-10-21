@@ -54,32 +54,18 @@ func _collect_icons() -> Array[String]:
 			out.append(icon)
 	return out
 
-## 2. 每把武器若有 assets_raw 高清源，则必须有 ui/ 128px 变体；
-##    无源的三张机关武器（历史从未提交源图）登记在此豁免，补源后从名单删掉即收线。
-const NO_SOURCE_WHITELIST: Array[String] = [
-	"res://assets/art/weapon_jianzhen_pan.png",
-	"res://assets/art/weapon_jiguan_nu.png",
-	"res://assets/art/weapon_penhuo_jiguanshou.png",
-]
-
+## 2. 每把武器的 UI 图标必须已有 ui/ 128px 变体。
+##    ⚠ 尺子读 assets/art/ui/ 的【实际存在性】，不再拿 gitignored 的 assets_raw/images/ 判源
+##    （旧尺子用不入库目录判存在性，干净检出时把 57 张有变体的武器全判成"无源回退"假红）。
+##    2026-10-21 起 70 把武器 UI 图标统一由 tests/weapon_icon_export 导出，全有变体，故无白名单。
 func _test_hd_variants_exist() -> void:
 	for path: String in _collect_icons():
-		if path in NO_SOURCE_WHITELIST:
-			continue
-		# res://../ 形式 globalize 后仍以 res:// 前缀拼、FileAccess 探不到；
-		# 判定源图有无直接按「同名文件在 assets_raw/images/ 下是否存在」做。
-		var base := path.get_file()
-		var src := ProjectSettings.globalize_path("res://assets_raw/images/" + base)
-		var has_source := FileAccess.file_exists(src)
 		var hd := GameStyle._hd_icon_path(path)
-		if has_source:
-			_check(hd != path, "有源武器应有 ui 变体 %s" % path)
-			if hd != path:
-				var tex := load(hd) as Texture2D
-				_check(tex != null and tex.get_width() >= 128,
-					"ui 变体 ≥128px %s（实得 %s）" % [hd, "null" if tex == null else str(tex.get_width())])
-		else:
-			_check(hd == path, "无源武器原样回退 %s" % path)
+		_check(hd != path, "武器应有 ui 变体 %s（实得 %s）" % [path, hd])
+		if hd != path:
+			var tex := load(hd) as Texture2D
+			_check(tex != null and tex.get_width() >= 128,
+				"ui 变体 ≥128px %s（实得 %s）" % [hd, "null" if tex == null else str(tex.get_width())])
 
 ## 3. _hd_icon_path 映射规则：战斗武器→变体；item/未知/非 art 路径→原样
 func _test_hd_path_mapping() -> void:
@@ -93,9 +79,10 @@ func _test_hd_path_mapping() -> void:
 	var mapped := GameStyle._hd_icon_path("res://assets/art/weapon_sword.png")
 	_check(mapped == "res://assets/art/ui/weapon_sword.png",
 		"武器战斗路径映射到 ui 变体（实得 %s）" % mapped)
-	var fallback := GameStyle._hd_icon_path("res://assets/art/weapon_jianzhen_pan.png")
-	_check(fallback == "res://assets/art/weapon_jianzhen_pan.png",
-		"无变体武器回退原路径（实得 %s）" % fallback)
+	# item 图标永不带 ui/ 变体（assets/art/ui/ 只有 weapon_*），映射必原样回退
+	var item_fallback := GameStyle._hd_icon_path("res://assets/art/item_jubaopen.png")
+	_check(item_fallback == "res://assets/art/item_jubaopen.png",
+		"item 图标无变体、原样回退（实得 %s）" % item_fallback)
 
 ## 4. 工厂实际装载变体纹理：武器卡拿到的 texture 宽度是 128 而不是 48
 func _test_factory_loads_hd() -> void:

@@ -285,12 +285,7 @@ func _create_achievement_card(adef: Dictionary) -> Control:
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_box.add_theme_stylebox_override("panel",
 		GameStyle.outlined_panel(GameStyle.INK, cat_col.darkened(0.55) if is_done else GameStyle.LINE, 1, 0.0))
-	var icon_tex := TextureRect.new()
-	if ResourceLoader.exists(String(adef.get("icon", ""))):
-		icon_tex.texture = load(String(adef["icon"]))
-	icon_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon_tex.custom_minimum_size = Vector2(32, 32)
-	icon_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var icon_tex := GameStyle.icon_texture_rect(String(adef.get("icon", "")), Vector2(32, 32))
 	if not is_done:
 		icon_tex.modulate = GameStyle.disabled_modulate()
 	icon_box.add_child(icon_tex)
@@ -681,12 +676,7 @@ func _kit_section(section_name: String, kit: Array, is_item: bool) -> Control:
 		slot.custom_minimum_size = Vector2(40, 40)
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP
 		slot.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
-		var tex_rect := TextureRect.new()
-		if ResourceLoader.exists(String(w.get("icon", ""))):
-			tex_rect.texture = load(String(w["icon"]))
-		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tex_rect.custom_minimum_size = Vector2(32, 32)
-		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var tex_rect := GameStyle.icon_texture_rect(String(w.get("icon", "")), Vector2(32, 32))
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(tex_rect)
 		if not is_item:

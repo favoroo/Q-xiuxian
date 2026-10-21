@@ -255,13 +255,9 @@ func _make_text_card(title: String, body: String, image: String = "", image_h: f
 	return card
 
 func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
-	var tex := TextureRect.new()
-	if path != "" and ResourceLoader.exists(path):
-		tex.texture = load(path)
-	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tex.custom_minimum_size = tex_size
-	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	return tex
+	# 统一走 GameStyle 图标工厂：武器图标自动优先 ui/ 128px 高清变体 + LINEAR 滤波，
+	# 不再手写 load（手写只拿 48px 战斗画布，40px 槽位放大偏糊）；item 无变体原样回退，行为不变。
+	return GameStyle.icon_texture_rect(path, tex_size)
 
 ## 图鉴小卡：图标 + 名称（+ 可选色签行 / 副标签 + 可选关键数值行），点按开 DetailTip
 ## chips = [[文字, 面色, 字色], ...]，与商店卡行②的 chip_defs 同形状、同一个

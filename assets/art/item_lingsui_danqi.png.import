@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://owfalivlg2q0"
-path="res://.godot/imported/item_liexia_zhui.png-bfe45d9c6f709e59b2f1d9fe18cdbdda.ctex"
+uid="uid://bwh6v2vp45syq"
+path="res://.godot/imported/item_lingsui_danqi.png-607ed2231ac1aeee6d78035efe643bd2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/item_liexia_zhui.png"
-dest_files=["res://.godot/imported/item_liexia_zhui.png-bfe45d9c6f709e59b2f1d9fe18cdbdda.ctex"]
+source_file="res://assets/art/item_lingsui_danqi.png"
+dest_files=["res://.godot/imported/item_lingsui_danqi.png-607ed2231ac1aeee6d78035efe643bd2.ctex"]
 
 [params]
 

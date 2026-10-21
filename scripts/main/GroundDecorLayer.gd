@@ -3,7 +3,8 @@ extends Node2D
 
 ## 竞技场战台地面微细节（空洞冷冽国风）
 ## 2026-10-19 风格统一改造：删去石板裂缝/战痕剑痕/碎石瓦砾（与程序化青玉石板底
-## 「干净打磨」气质冲突），只留青苔暗斑、灵叶结晶与石板角刻纹三样细刻纹点缀。
+## 「干净打磨」气质冲突），只留灵叶结晶与石板角刻纹两样细刻纹点缀。
+## 2026-10-21：青苔暗斑（十八组 + 四角苔藓丛）在青玉地砖上读成一团团黑圆斑，用户嫌丑，整段移除。
 ## （结界外深渊剪影已拆到 BeyondBoundaryLayer 做视差，见 Main._setup_map_bounds）
 ## 纯静态一次性 _draw()，不参与 _process，零每帧开销。
 ## 【注意】2026-10-16：draw_circle 全量接 AdaptiveDraw 自适应段数——内置版固定 64 段，
@@ -229,41 +230,9 @@ func _draw_ground_details(rng: RandomNumberGenerator) -> void:
 	var margin: float = 38.0
 	var bound: float = half_extent - margin
 
-	# 3.1 青苔与风化暗斑 (Ancient Moss & Weathering)
-	# 2026-10-21 精致化：10→18 组提升密度，四角额外加 4 簇「苔藓丛」增强边缘岁月感
-	var col_moss := Color(0.10, 0.24, 0.18, 0.14)
-	var col_moss_inner := Color(0.14, 0.32, 0.22, 0.18)
-	for _i in range(18):
-		var p := Vector2(rng.randf_range(-bound, bound), rng.randf_range(-bound, bound))
-		if not can_place.call(p, 10.0):
-			continue
-		var base_r := rng.randf_range(8.0, 18.0)
-		var sub_count := rng.randi_range(3, 5)
-		for _j in range(sub_count):
-			var offset := Vector2(rng.randf_range(-base_r * 0.7, base_r * 0.7), rng.randf_range(-base_r * 0.7, base_r * 0.7))
-			var r_sub := rng.randf_range(base_r * 0.4, base_r * 0.8)
-			AdaptiveDraw.circle(self, p + offset, r_sub, col_moss)
-		AdaptiveDraw.circle(self, p, base_r * 0.4, col_moss_inner)
-
-	# 3.1.1 四角苔藓丛（战台四角远离中心走廊，岁月侵蚀感更重）
-	# 每角一簇 6~8 个子圆的密集苔藓群，位置在四角向内偏移 60~100px 的区域
-	var corner_offsets: Array[Vector2] = [
-		Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)
-	]
-	for corner_sign in corner_offsets:
-		var corner_base := Vector2(
-			corner_sign.x * rng.randf_range(half_extent - 160.0, half_extent - 80.0),
-			corner_sign.y * rng.randf_range(half_extent - 160.0, half_extent - 80.0)
-		)
-		if not can_place.call(corner_base, 20.0):
-			continue
-		var cluster_count := rng.randi_range(6, 8)
-		for _j in range(cluster_count):
-			var offset := Vector2(rng.randf_range(-28.0, 28.0), rng.randf_range(-28.0, 28.0))
-			var r_sub := rng.randf_range(4.0, 10.0)
-			AdaptiveDraw.circle(self, corner_base + offset, r_sub, col_moss)
-		# 丛中心一块稍亮的苔藓核心
-		AdaptiveDraw.circle(self, corner_base, 8.0, col_moss_inner)
+	# 3.1 青苔与风化暗斑：2026-10-21 用户反馈「地图上一堆黑黑的圆点太丑」——
+	# 半透明深绿/近黑的叠圆在青玉地砖上被读成一团团黑斑，与「干净打磨玉面」气质冲突，整段移除。
+	# （原 3.1 十八组苔藓 + 3.1.1 四角苔藓丛，见 CHANGELOG 2026-10-21 #03 的「精致化」条目）
 
 	# 3.2 石板角刻纹（与 ground_tile.gdshader 的 160px 石板网格对齐：
 	# 每个石板交点画一枚极小回纹角花，代替旧版随机石板裂缝的「打磨刻度」）

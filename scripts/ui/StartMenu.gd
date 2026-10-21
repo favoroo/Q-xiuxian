@@ -591,7 +591,9 @@ func _refresh_danger_row() -> void:
 		btn.disabled = false
 		btn.text = DANGER_NAMES[d]
 		if d == GameManager.danger_level:
-			GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+			# 选中态 hover 不换浅面：点完指针仍停在键上，换 JADE_EDGE 会整块泛白成淡黄。
+			# 悬停反馈交给硬阴影 (3,4)→(5,6) 硬切；pressed 面由 JADE 压暗派生，点击反馈仍在。
+			GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 		else:
 			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
 

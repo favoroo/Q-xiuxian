@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bocdauaslymmb"
-path="res://.godot/imported/item_leiyin_zhen.png-1ec04061ebf4917dec14d65ca01fdd51.ctex"
+uid="uid://bc3crimxgal4s"
+path="res://.godot/imported/item_budong_yin.png-3e5744d17cb096e7c93dff8420e37c17.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/item_leiyin_zhen.png"
-dest_files=["res://.godot/imported/item_leiyin_zhen.png-1ec04061ebf4917dec14d65ca01fdd51.ctex"]
+source_file="res://assets/art/item_budong_yin.png"
+dest_files=["res://.godot/imported/item_budong_yin.png-3e5744d17cb096e7c93dff8420e37c17.ctex"]
 
 [params]
 
