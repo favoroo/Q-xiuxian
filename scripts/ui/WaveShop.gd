@@ -416,8 +416,12 @@ func refresh(animate: bool = true) -> void:
 	var count := offers.size()
 	var card_w := offer_card_w(_screen, count)
 	offers_container.add_theme_constant_override("separation", offer_separation(_screen))
+	# 道具卡「当前→购买后」预览（item_stat_rows）的读数源：一屏只抄一份影子，
+	# 整排 before 同源，与悟道 _populate_cards 同构（refresh 重建时状态已定，逐卡现抄也一样，
+	# 但一份影子省得每件道具各跑一遍 from_gm）。
+	var forecast := StatForecast.open()
 	for i in range(count):
-		var c: Control = ShopOfferCardFactory.create_card(self, offers[i], i, count)
+		var c: Control = ShopOfferCardFactory.create_card(self, offers[i], i, count, forecast)
 		offers_container.add_child(c)
 		if not animate:
 			continue

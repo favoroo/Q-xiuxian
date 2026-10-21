@@ -12,6 +12,12 @@ extends RefCounted
 ## 只登记「属性面板有对应那一行」的字段：面板没有行的机制项（宝箱数量/品质、开箱省击、
 ## 单系元素伤）不硬凑一个玩家看不见的数字，卡面继续只写幅度 + desc 那句机制说明。
 ## 谁漏登记、谁多登记，由 tests/StatForecastCheck 逐条与面板对表钉住。
+##
+## 两个出口同一份影子与聚合算式，只差读数格式：
+## - lines_for：悟道卡注脚用，"当前 X → Y"，面板口径（攻击间隔带一位小数）；
+## - shop_lines_for：货架道具卡用（2026-10-21 用户：「商店物品也要显示加成后属性是多少」），
+##   卡内宽下限 124 且加成行不换行 ⇒ 数值压成 "X→Y" 无空格、攻击间隔取整到整数档，
+##   「-8.0% → -16.0%」配四字行名就破 124 了。压缩的只是小数位，算式一行没动。
 
 ## apply 字段 → [StatBreakdown 读数键, 格式]。数字与属性面板那一行的主读数同源。
 const BD_READINGS: Dictionary = {
@@ -47,6 +53,12 @@ const RAW_READINGS: Dictionary = {
 	"spirit_stones": ["spirit_stones", "%d"],
 }
 
+## 货架卡紧凑档的格式覆盖：124 卡内宽下攻击间隔带一位小数装不下，取整到整数。
+## 只压显示小数位，before/after 的数仍来自同一份影子读数。
+const COMPACT_FMT: Dictionary = {
+	"attack_speed_mult_mul": "%+.0f%%",
+}
+
 ## 一次开一屏候选只抄一份真身：before 读数与影子底版复用，逐条悟道再各复制一份影子
 var _before: StatShadow = null
 var _before_bd: Dictionary = {}
@@ -62,6 +74,14 @@ static func open() -> StatForecast:
 ## before / after 是各自格式化后的读数：判据拿「到账前承诺的 after」去对「到账后重算的 before」，
 ## 链上任何一环（含 %d 取整、金币这类不走面板读数的字段）串不上就报红。
 func lines_for(apply: Dictionary) -> Array[Dictionary]:
+	return _lines_for(apply, false)
+
+## 货架道具卡的紧凑预读：与 lines_for 同一份影子与聚合算式，
+## text 压成 "X→Y"（无空格无前缀）、攻击间隔取整档——卡面拿它直接填数值位。
+func shop_lines_for(apply: Dictionary) -> Array[Dictionary]:
+	return _lines_for(apply, true)
+
+func _lines_for(apply: Dictionary, compact: bool) -> Array[Dictionary]:
 	var after := StatShadow.from_gm(GameManager)
 	StatSystem.apply_stat_fields(after, apply, "forecast")
 	var after_bd := StatBreakdown.breakdown(after)
@@ -73,11 +93,13 @@ func lines_for(apply: Dictionary) -> Array[Dictionary]:
 			continue
 		var kind := String(src[0])
 		var fmt := String(src[2])
+		if compact and COMPACT_FMT.has(k):
+			fmt = String(COMPACT_FMT[k])
 		var b := _txt(fmt, _read(k, kind, _before, _before_bd))
 		var a := _txt(fmt, _read(k, kind, after, after_bd))
 		out.append({
 			"key": k,
-			"text": "当前 %s → %s" % [b, a],
+			"text": ("%s→%s" if compact else "当前 %s → %s") % [b, a],
 			"before": b,
 			"after": a,
 			"changed": b != a,

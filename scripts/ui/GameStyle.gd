@@ -3,7 +3,7 @@ extends RefCounted
 
 ## 「新野兽派」UI 统一样式工厂（纯黑舞台 × 宣纸白面板 × 纯黑粗框 × 硬偏移影）。
 ## 规则：全直角、无圆角、无渐变、无柔光；边框纯黑等宽；硬影零模糊零扩散、不透明纯黑。
-## 色即功能：品红 = 主行动/选中，点缀黄 = 金币/星级，朱砂 = 危险，增益绿 = 治疗。
+## 色即功能：荧绿 = 主行动/选中，点缀黄 = 金币/星级，朱砂 = 危险，增益绿 = 治疗。
 ## 动效口径：颜色/阴影瞬间硬切（Brutal Snap），位置/缩放/透明度走快速 ease-out 补间，
 ##    按钮按下「物理压扁」（pressed 阴影归零 + 内容位移量 = 原阴影偏移量）。
 ## 【注意】2026-10-19 新野兽派换肤：用户拍板「黑舞台 + 白纸面板 + 全直角 + 只改 UI 层」——
@@ -12,7 +12,7 @@ extends RefCounted
 ##    GOLD 三件套改品红 #ff006e 家族；SLANT_* 四档归零（常量保留，调用点不动）；
 ##    FX_HDR_*/ELEMENT_COLORS/RARITY_* 战斗特效色一律不动。
 ## 【主题色】2026-10-19 新增「用户自选主题色」：GOLD 三件套由 const 改 static var，
-##    取值来自 THEME_PRESETS（5 套：品红/明黄/暖橙/天青/荧绿），由 SettingsManager 持久化。
+##    取值来自 THEME_PRESETS（5 套：荧绿/品红/明黄/暖橙/天青），由 SettingsManager 持久化。
 ##    切换走 apply_theme_color()：先改三个 static var，再遍历「样式注册表」把已产出的
 ##    StyleBoxFlat / Label 字色原地改色（Resource 是共享实例，一处改、整屏重绘），
 ##    最后清空按色缓存的字典（旧 key 已失真）。工厂函数产出样式时若颜色命中主题角色
@@ -36,9 +36,9 @@ const CHALK := Color("f2efe4")      # 暗底亮字（舞台/HUD/深色块上的�
 # 主题三件套（main / edge / dk）：主行动、选中、标题带。2026-10-19 起由 const 改 static var，
 # 值来自 THEME_PRESETS，玩家可在设置页切换（名字沿用历史 GOLD，82 个调用点零改动）。
 # 注意：这三项不再能进 const 数组/常量表达式；引用它们的地方一律用 static var 或运行时取。
-static var GOLD := Color("ff006e")       # 主题主色（默认品红；做底配黑字）
-static var GOLD_EDGE := Color("ff69ac")  # 主题亮边（hover/高光）
-static var GOLD_DK := Color("b0004e")    # 主题压暗（按压态/深底）
+static var GOLD := Color("c5e803")       # 主题主色（默认荧绿；做底配黑字）
+static var GOLD_EDGE := Color("dbf45c")  # 主题亮边（hover/高光）
+static var GOLD_DK := Color("8ba300")    # 主题压暗（按压态/深底）
 
 ## 战斗/世界空间特效的「固定品红基准」（不随 UI 主题色漂移）。
 ## 用户口径：主题色只换 UI 层，战斗特效不动。玩家自选主题色后，暴击跳字、技能光效、
@@ -48,16 +48,16 @@ const GOLD_FX_EDGE := Color("ff69ac")
 const GOLD_FX_DK := Color("b0004e")
 
 ## 可自选主题色预设表（唯一真话源）。每套手调 edge/dk，不跑 lightened() 公式，
-## 保证与默认品红三件套同品质；id 写进 settings.cfg，改名会断存档。
+## 保证与默认三件套同品质；id 写进 settings.cfg，改名会断存档。
 const THEME_PRESETS: Array[Dictionary] = [
+	{"id": &"lime", "name": "荧绿", "main": Color("c5e803"), "edge": Color("dbf45c"), "dk": Color("8ba300")},
 	{"id": &"pink", "name": "品红", "main": Color("ff006e"), "edge": Color("ff69ac"), "dk": Color("b0004e")},
 	{"id": &"amber", "name": "明黄", "main": Color("ffd500"), "edge": Color("ffe45c"), "dk": Color("b39400")},
 	{"id": &"orange", "name": "暖橙", "main": Color("ff6b35"), "edge": Color("ff9a72"), "dk": Color("b3471c")},
 	{"id": &"cyan", "name": "天青", "main": Color("27ddf5"), "edge": Color("7aebfa"), "dk": Color("179cad")},
-	{"id": &"lime", "name": "荧绿", "main": Color("c5e803"), "edge": Color("dbf45c"), "dk": Color("8ba300")},
 ]
 ## 当前主题 id（SettingsManager 启动时按存档位调用 apply_theme_color 覆盖）
-static var _theme_id: StringName = &"pink"
+static var _theme_id: StringName = &"lime"
 
 ## 主题 id 列表 / 预设查询 / 人话名
 static func theme_ids() -> Array:
@@ -73,7 +73,7 @@ static func theme_preset(id: StringName) -> Dictionary:
 	return THEME_PRESETS[0]
 
 static func theme_name(id: StringName) -> String:
-	return String(theme_preset(id).get("name", "品红"))
+	return String(theme_preset(id).get("name", "荧绿"))
 
 static func current_theme() -> StringName:
 	return _theme_id
@@ -970,10 +970,10 @@ static func _track_modulate(node: CanvasItem) -> void:
 ## SettingsManager 在启动加载与玩家点选色块时调用；幂等。
 static func apply_theme_color(id: StringName) -> void:
 	var preset := theme_preset(id)
-	_theme_id = StringName(preset.get("id", &"pink"))
-	GOLD = preset.get("main", Color("ff006e"))
-	GOLD_EDGE = preset.get("edge", Color("ff69ac"))
-	GOLD_DK = preset.get("dk", Color("b0004e"))
+	_theme_id = StringName(preset.get("id", &"lime"))
+	GOLD = preset.get("main", Color("c5e803"))
+	GOLD_EDGE = preset.get("edge", Color("dbf45c"))
+	GOLD_DK = preset.get("dk", Color("8ba300"))
 
 	var alive: Array[Dictionary] = []
 	for entry in _theme_registry:
@@ -1037,7 +1037,10 @@ static func _hd_icon_path(path: String) -> String:
 	if _hd_icon_cache.has(path):
 		return _hd_icon_cache[path]
 	var hd := path.replace("res://assets/art/", "res://assets/art/ui/")
-	if hd != path and FileAccess.file_exists(hd):
+	# 必须用 ResourceLoader.exists 而非 FileAccess.file_exists：导出包里 png 源不打包，
+	# 只剩 .import + .godot/imported/*.ctex，FileAccess 探测恒 false ⇒ 真机整体回退旧 48px 图
+	# （编辑器里源文件在、看不出来，这就是「新图标只在编辑器生效」的根因）。
+	if hd != path and ResourceLoader.exists(hd):
 		_hd_icon_cache[path] = hd
 	else:
 		_hd_icon_cache[path] = path

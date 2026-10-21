@@ -195,13 +195,15 @@ func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 	GameManager.roll_shop(true)
 	# 钉两格必测的短文案色签：回气丹的「丹药」与法宝的「普通·法宝」。
 	# 这两枚正是「贴着字走的色签被引擎再折一次、多出一行孤字」的现场（框 29、字也要 29）。
+	# 道具格钉极效药丸（2026-10-21 道具卡预览后它是最坏的道具卡：6 个 apply 字段 + 限购说明），
+	# 预览行与幅度行行数相同，卡高的账不变，但量的是真机上最挤的那张道具卡。
 	var offers: Array = GameManager.shop_offers
 	if offers.size() >= 2:
 		offers[0] = {
 			"kind": "potion", "id": WeaponData.POTION_ID, "price": 11, "sold": false, "locked": false,
 		}
 		offers[1] = {
-			"kind": "item", "id": String(ItemData.all_ids()[0]), "price": 14, "sold": false, "locked": false,
+			"kind": "item", "id": "taiyi_jindan", "price": 88, "sold": false, "locked": false,
 		}
 	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
 	for i in range(mini(long_ids.size(), maxi(offers.size() - 2, 0))):
@@ -210,10 +212,13 @@ func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 			"sold": false, "locked": i % 2 == 0,
 		}
 	GameManager.items.clear()
-	# 法宝全灌：陈列行的最坏情况不是「两件」而是「15 件」——满仓 6 上阵 + 9 背包 + 15 法宝
+	# 法宝全灌（unique 除外）：限购件灌进背包会把钉在货架上的极效药丸打成「已持有」，
+	# 预览行退化成幅度行，这一屏就量不到预览卡了（2026-10-21 道具卡预览）。
+	# 陈列行的最坏情况不是「两件」而是「满仓」——满仓 6 上阵 + 9 背包 + 十几法宝
 	# = 30 格摆不平 ⇒ OwnedScroll 露一条 8 单位高的滑条，那 8 单位是从货架的竖向预算里扣的。
-	# 只灌两件就量不到这一档（2026-10-09 陈列行改横滑之后新增的开销）。
 	for id in ItemData.all_ids():
+		if bool(ItemData.get_def(String(id)).get("unique", false)):
+			continue
 		GameManager.add_item(String(id))
 	# 陈列行与操作条是这一屏另外两行「固定开销」：真机上背包会满、玩家一定会点选法器。
 	# 本判据不建 Player，而 add_weapon 没有 player 节点就进不了上阵栏 ⇒ 直接灌

@@ -46,7 +46,7 @@ const MIN_AREAS := 8
 const CASES: Array[Dictionary] = [
 	{
 		"cls": "ManualDialog", "name": "传道玉简", "switch": "_switch_tab",
-		"pages": ["入门指南", "法器图鉴", "法宝图鉴", "修士图鉴", "进阶心法"],
+		"pages": ["武器图鉴", "道具图鉴", "悟道图鉴", "灵兽图鉴", "角色图鉴", "敌人图鉴", "进阶攻略"],
 	},
 	{
 		"cls": "CareerDialog", "name": "修仙志", "switch": "_switch_tab",

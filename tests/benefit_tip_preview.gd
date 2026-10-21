@@ -50,7 +50,7 @@ func _ready() -> void:
 			var c := cells[ci]
 			print("    %s %s" % [String(c.name), str(c.get_global_rect())])
 		if not cells.is_empty():
-			node._open_benefit_tip(cells[0], _summary()[0] as Dictionary,
+			node.open_benefit_tip(cells[0], _summary()[0] as Dictionary,
 				GameManager.alloc_offers[0])
 			await get_tree().create_timer(0.35).timeout
 			await _settle(2)

@@ -23,7 +23,7 @@ func _ready() -> void:
 	add_child(_manual)
 	_manual.open()
 	await _settle(3)
-	_manual.switch_tab(1)
+	_manual.switch_tab(0)
 	await _settle(2)
 
 	# ① 全部视图：全量卡片 + 五行分组标题 + 卡面数值行

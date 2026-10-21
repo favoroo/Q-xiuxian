@@ -217,6 +217,15 @@ func close() -> void:
 		visible = false
 	)
 
+## 返回键（安卓侧滑 / ESC）先关更新弹窗本身：它是独立 CanvasLayer(100) 顶层浮层，
+## 不接这一枪的话，合成的 ui_cancel 会穿透到下面某层弹窗把它关掉，本弹窗却留在屏上。
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		close()
+		get_viewport().set_input_as_handled()
+
 func _render_release_notes(raw_notes: String) -> void:
 	for c in _notes_container.get_children():
 		c.queue_free()

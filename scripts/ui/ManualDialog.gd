@@ -1,7 +1,7 @@
 class_name ManualDialog
 extends BaseModalDialog
 
-## 教程手册（传道玉简）：玩法入门、聚灵阵用法、武器/道具/角色图鉴、进阶流派攻略。
+## 教程手册（传道玉简）：武器/道具/角色图鉴、进阶流派攻略（新手上路走「新手指南」弹窗）。
 ## 继承 BaseModalDialog；图鉴内容现读
 ## WeaponData / ItemData / CultivatorData / StatInfoData，新增条目自动进手册。
 ## 道具/角色两页标注解锁条件，按页懒建、并在每次 open() 后标脏（切到那一页才重建），
@@ -48,7 +48,6 @@ var _upgrades_box: VBoxContainer
 var _pets_box: VBoxContainer
 var _cult_box: VBoxContainer
 var _weapons_box: VBoxContainer
-var _basics_box: VBoxContainer
 var _advanced_box: VBoxContainer
 var _enemies_box: VBoxContainer
 ## 武器图鉴当前流派筛选（"" = 全部；tag 取 WeaponData.CLASSES / ELEMENTS）
@@ -85,14 +84,13 @@ func _get_close_btn_min_size() -> Vector2:
 	return Vector2(76, 34)
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	add_tab_button(0, "入门指南", 78.0)
-	add_tab_button(1, "武器图鉴", 78.0)
-	add_tab_button(2, "道具图鉴", 78.0)
-	add_tab_button(3, "悟道图鉴", 78.0)
-	add_tab_button(4, "灵兽图鉴", 78.0)
-	add_tab_button(5, "角色图鉴", 78.0)
-	add_tab_button(6, "敌人图鉴", 78.0)
-	add_tab_button(7, "进阶攻略", 78.0)
+	add_tab_button(0, "武器图鉴", 78.0)
+	add_tab_button(1, "道具图鉴", 78.0)
+	add_tab_button(2, "悟道图鉴", 78.0)
+	add_tab_button(3, "灵兽图鉴", 78.0)
+	add_tab_button(4, "角色图鉴", 78.0)
+	add_tab_button(5, "敌人图鉴", 78.0)
+	add_tab_button(6, "进阶攻略", 78.0)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -104,11 +102,10 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	content_panel.add_theme_stylebox_override("panel", cont_sb)
 	root_vbox.add_child(content_panel)
 
-	# 只建八页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
-	for i in range(8):
+	# 只建七页的「壳」（滚动区 + 空容器），内容等这一页真被看到时才填，见 _ensure_page。
+	for i in range(7):
 		_page_built.append(false)
 		_page_dirty.append(false)
-	_pages.append(_build_basics_page(content_panel))
 	_pages.append(_build_weapons_page(content_panel))
 	_pages.append(_build_items_page(content_panel))
 	_pages.append(_build_upgrades_page(content_panel))
@@ -131,10 +128,10 @@ func _on_opened() -> void:
 	else:
 		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
 		_set_weapon_filter("")
-	# 道具(2)/角色(5)/敌人(6) 受解锁（收录）状态影响：标脏，切到那一页时才重建
-	_page_dirty[2] = true
+	# 道具(1)/角色(4)/敌人(5) 受解锁（收录）状态影响：标脏，切到那一页时才重建
+	_page_dirty[1] = true
+	_page_dirty[4] = true
 	_page_dirty[5] = true
-	_page_dirty[6] = true
 	var target := _current_tab
 	_defer_build = false
 	_schedule_page(target)
@@ -144,22 +141,22 @@ func open_weapons_page(filter_tag: String = "") -> void:
 	var tag := String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
 	_set_weapon_filter(tag)
 	if visible:
-		switch_tab(1)
+		switch_tab(0)
 		return
-	_open_tab = 1
+	_open_tab = 0
 	open()
 
 func _on_filter_chip_tapped(tag: String) -> void:
 	_set_weapon_filter("" if String(tag) == weapon_filter else String(tag))
-	_ensure_page(1)
+	_ensure_page(0)
 
 ## 换筛选 = 武器页欠一次重建；筛选没变则整页照用（卡面全是 WeaponData 里的静态值）
 func _set_weapon_filter(tag: String) -> void:
 	if tag == weapon_filter:
 		return
 	weapon_filter = tag
-	if _page_dirty.size() > 1:
-		_page_dirty[1] = true
+	if _page_dirty.size() > 0:
+		_page_dirty[0] = true
 
 func _on_tab_switched(index: int) -> void:
 	_ensure_page(index)
@@ -188,14 +185,13 @@ func _build_page(index: int) -> void:
 	if _page_built[index] and not _page_dirty[index]:
 		return
 	match index:
-		0: _fill_basics_page()
-		1: _rebuild_weapons_page()
-		2: _rebuild_items_page()
-		3: _rebuild_upgrades_page()
-		4: _rebuild_pets_page()
-		5: _rebuild_cultivators_page()
-		6: _rebuild_enemies_page()
-		7: _fill_advanced_page()
+		0: _rebuild_weapons_page()
+		1: _rebuild_items_page()
+		2: _rebuild_upgrades_page()
+		3: _rebuild_pets_page()
+		4: _rebuild_cultivators_page()
+		5: _rebuild_enemies_page()
+		6: _fill_advanced_page()
 	_page_built[index] = true
 	_page_dirty[index] = false
 	# 整页子树建过就要重挂滚动拖动锁（头注「灰色卡片滑不动」坑）；
@@ -339,26 +335,7 @@ func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 	GameStyle.hotzone(card)
 	return card
 
-# ----------------- 分页 1：入门指南 -----------------
-
-func _build_basics_page(parent: Control) -> Control:
-	var scroll := _new_scroll(parent)
-	_basics_box = _new_scroll_vbox(scroll)
-	return scroll
-
-## 静态内容，一辈子建一次（_ensure_page 里不标脏）
-func _fill_basics_page() -> void:
-	if _basics_box == null:
-		return
-	for sec in ManualData.BASICS_SECTIONS:
-		_basics_box.add_child(_make_text_card(
-			String(sec.get("title", "")),
-			String(sec.get("body", "")),
-			String(sec.get("image", "")),
-			float(sec.get("image_h", 80.0))
-		))
-
-# ----------------- 分页 2：武器图鉴 -----------------
+# ----------------- 分页 1：武器图鉴 -----------------
 
 ## 筛选条 + 网格的构建与重建全在 WeaponCodexBuilder（本类只持状态与深链入口）
 func _build_weapons_page(parent: Control) -> Control:
@@ -413,7 +390,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 		"foot": "武器仅在回合间商店有售",
 	})
 
-# ----------------- 分页 3：道具图鉴 -----------------
+# ----------------- 分页 2：道具图鉴 -----------------
 
 func _build_items_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -491,7 +468,7 @@ func _open_item_tip(iid: String, anchor: Control) -> void:
 		"foot": foot,
 	})
 
-# ----------------- 分页 4：悟道图鉴 -----------------
+# ----------------- 分页 3：悟道图鉴 -----------------
 
 func _build_upgrades_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -563,7 +540,7 @@ func _open_upgrade_tip(udef: Dictionary, anchor: Control) -> void:
 		"foot": "加点即刻生效，局内永久加成",
 	})
 
-# ----------------- 分页 5：灵兽图鉴 -----------------
+# ----------------- 分页 4：灵兽图鉴 -----------------
 
 func _build_pets_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -679,7 +656,7 @@ func _open_pet_tip(pdef: Dictionary, anchor: Control) -> void:
 		"foot": "仅在金币阁有售，购买后永久随行",
 	})
 
-# ----------------- 分页 6：角色图鉴 -----------------
+# ----------------- 分页 5：角色图鉴 -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -692,7 +669,7 @@ func _rebuild_cultivators_page() -> void:
 	for c in _cult_box.get_children():
 		c.queue_free()
 	_cult_box.add_child(_make_text_card("角色规则",
-		"每名角色都是「超能力 + 严苛负面代偿」的不对称设计：选人是本局最重要的流派决定。\n初始开放四名角色，其余通过「战绩」的成就解锁。"))
+		"每名角色都是「超能力 + 严苛负面代偿」的不对称设计：选人是本局最重要的流派决定。\n初始开放八名角色，其余通过「战绩」的成就解锁。"))
 
 	for cid in CultivatorData.DEFS.keys():
 		var def: Dictionary = CultivatorData.DEFS[cid]
@@ -802,35 +779,35 @@ func trim_heavy_pages() -> void:
 	if _weapons_box != null:
 		for c in _weapons_box.get_children():
 			c.queue_free()
-		_page_built[1] = false
-		_page_dirty[1] = true
+		_page_built[0] = false
+		_page_dirty[0] = true
 	if _items_box != null:
 		for c in _items_box.get_children():
 			c.queue_free()
-		_page_built[2] = false
-		_page_dirty[2] = true
+		_page_built[1] = false
+		_page_dirty[1] = true
 	if _upgrades_box != null:
 		for c in _upgrades_box.get_children():
 			c.queue_free()
-		_page_built[3] = false
-		_page_dirty[3] = true
+		_page_built[2] = false
+		_page_dirty[2] = true
 	if _pets_box != null:
 		for c in _pets_box.get_children():
 			c.queue_free()
-		_page_built[4] = false
-		_page_dirty[4] = true
+		_page_built[3] = false
+		_page_dirty[3] = true
 	if _cult_box != null:
 		for c in _cult_box.get_children():
 			c.queue_free()
-		_page_built[5] = false
-		_page_dirty[5] = true
+		_page_built[4] = false
+		_page_dirty[4] = true
 	if _enemies_box != null:
 		for c in _enemies_box.get_children():
 			c.queue_free()
-		_page_built[6] = false
-		_page_dirty[6] = true
+		_page_built[5] = false
+		_page_dirty[5] = true
 
-# ----------------- 分页 7：敌人图鉴 -----------------
+# ----------------- 分页 6：敌人图鉴 -----------------
 
 func _build_enemies_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
@@ -967,7 +944,7 @@ static func _bbcode_text(s: String, col: Color) -> String:
 	return _bbcode_open(col) + s + BB_COLOR_CLOSE
 
 
-# ----------------- 分页 8：进阶心法 -----------------
+# ----------------- 分页 7：进阶心法 -----------------
 
 func _build_advanced_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)

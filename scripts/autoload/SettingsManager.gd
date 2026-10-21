@@ -245,15 +245,15 @@ const SCHEMA: Array[Dictionary] = [
 		"default": false,
 	},
 	# --------- 界面主题（用户自选主题色，色块行不走 cycle 按钮，SCHEMA 只管存取与校验） ---------
-	{
-		"section": "ui",
-		"key": "theme_color",
-		"title": "界面主题",
-		"desc": "主行动、选中与标题带的高亮色；即点即换并自动保存",
-		"type": "cycle",
-		"default": &"pink",
-		"options": [&"pink", &"amber", &"orange", &"cyan", &"lime"],
-	},
+		{
+			"section": "ui",
+			"key": "theme_color",
+			"title": "界面主题",
+			"desc": "主行动、选中与标题带的高亮色；即点即换并自动保存",
+			"type": "cycle",
+			"default": &"lime",
+			"options": [&"lime", &"pink", &"amber", &"orange", &"cyan"],
+		},
 ]
 
 const BUS_KEY_MAP := {
@@ -309,7 +309,7 @@ const RENDER_QUALITY_LABELS := {
 const RENDER_QUALITY_DEFAULT := &"high"
 
 ## 主题色默认档（与 GameStyle.THEME_PRESETS 第一项同源；主题 id 白名单在 GameStyle 维护）
-const THEME_DEFAULT := &"pink"
+const THEME_DEFAULT := &"lime"
 
 ## 当前运行平台是否为移动端（Android/iOS 导出包）。
 ## 与 export_presets 的 Android preset 一致；editor/桌面预览走 false。

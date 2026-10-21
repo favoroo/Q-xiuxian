@@ -3,15 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>剑士 · 修仙幸存者｜20 波自动战斗</title>
+<title>剑士</title>
 <meta name="description" content="《剑士》是一款修仙题材的俯视角自动攻击幸存者游戏。20 名角色、70 件武器、103 件道具、7 只灵兽，武器自动索敌，你只管走位与构筑。浏览器直接试玩，安卓手机免费下载。">
 <meta name="theme-color" content="#000000">
-<meta property="og:title" content="剑士 · 修仙幸存者">
+<meta property="og:title" content="剑士">
 <meta property="og:description" content="俯视角自动攻击幸存者。选角色、配武器、带灵兽、扛过 20 波妖魔。浏览器可直接试玩。">
-<meta property="og:image" content="img/shot_field.png">
+<meta property="og:image" content="img/shot_field.png?v=15">
 <meta property="og:type" content="website">
 <link rel="icon" href="img/app_icon.png">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="tokens.css?v=15">
+<link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 
@@ -47,10 +48,16 @@
           <a class="btn btn-ghost" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">下载安卓版</a>
         </div>
         <p class="fine">网页版打开就能玩，第一次加载稍慢一点，点一下屏幕就开始。</p>
+        <!-- 主题色：与游戏内设置页同一张 THEME_PRESETS（GameStyle.gd），选一次记住 -->
+        <div class="themes">
+          <span>主题色（游戏内同款）</span>
+          <span class="theme-sw-row" id="themeSwatches"></span>
+          <b class="theme-name" id="themeName">荧绿</b>
+        </div>
       </div>
       <figure class="hero-shot">
         <div class="frame">
-          <img src="img/shot_field.png" alt="《剑士》实机画面：角色在场地中央，武器自动索敌，头顶跳出伤害数字" width="960" height="540">
+          <img src="img/shot_field.png?v=15" alt="《剑士》实机画面：角色在场地中央，武器自动索敌，头顶跳出伤害数字" width="960" height="540">
         </div>
         <figcaption>实机画面 · 第 1 波</figcaption>
       </figure>
@@ -71,27 +78,27 @@
 
   <section id="play" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">玩法</h2></div>
-      <p class="sec-sub">一局 20 波。首波 36 秒，逐波变长，最长 80 秒；提前清场，剩下的时间折成金币。</p>
+      <h2 class="sec-title">玩法</h2>
+      <p class="sec-sub">一局 <b data-rule="play.victory">20</b> 波。首波 <b data-rule="play.first_seconds">36</b> 秒，逐波变长，最长 <b data-rule="play.max_seconds">80</b> 秒；提前清场，剩下的时间折成金币。</p>
       <div class="sec-body slab">
         <div class="cards">
           <article class="card plate">
-            <div class="frame"><img src="img/shot_combat.png" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_combat.png?v=15" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540" loading="lazy"></div>
             <h3>自动战斗</h3>
             <p>身上的武器自己找目标、自己出手。你要做的是别被围住，以及决定下一步买什么。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_alloc.png" alt="实机：回合末升级加点界面，一屏 5 张候选卡" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_alloc.png?v=15" alt="实机：回合末升级加点界面，一屏 5 张候选卡" width="960" height="540" loading="lazy"></div>
             <h3>升级加点</h3>
-            <p>每波结束后从 5 张卡里选 1 张，不满意可以免费刷新 1 次。成长方向全在你手里。</p>
+            <p>每波结束后从 <b data-rule="play.offer">5</b> 张卡里选 1 张，不满意可以免费刷新 <b data-rule="play.free_reroll">1</b> 次。成长方向全在你手里。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_shop.png" alt="实机：商店界面，5 个货架格陈列武器、道具与灵兽" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_shop.png?v=15" alt="实机：商店界面，5 个货架格陈列武器、道具与灵兽" width="960" height="540" loading="lazy"></div>
             <h3>商店</h3>
-            <p>波与波之间用金币买武器、道具和灵兽，5 个货架，看不上可以花钱重掷，也能锁定留到下一波。</p>
+            <p>波与波之间用金币买武器、道具和灵兽，<b data-rule="play.shop_slots">5</b> 个货架，看不上可以花钱重掷，也能锁定留到下一波。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_synergy.png" alt="实机：等级与属性面板，右侧列出羁绊与元素共鸣的阶梯加成" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_synergy.png?v=15" alt="实机：等级与属性面板，右侧列出羁绊与元素共鸣的阶梯加成" width="960" height="540" loading="lazy"></div>
             <h3>羁绊与元素共鸣</h3>
             <p>集齐 2 / 4 / 6 件同系武器解锁阶梯加成。同一把武器既算器类也算五行，构筑会互相咬合。</p>
           </article>
@@ -102,7 +109,7 @@
 
   <section id="roles" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">角色</h2></div>
+      <h2 class="sec-title">角色</h2>
       <p class="sec-sub"><span data-count="roles">20</span> 名角色，每一个都是一笔交易：给一条很爽的加成，同时收一样很疼的代价。每人都能带一个随行技能，个别角色还有第二个。</p>
       <div class="sec-body slab">
         <div class="roles" id="roleGrid"></div>
@@ -112,7 +119,7 @@
 
   <section id="arms" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">武器</h2></div>
+      <h2 class="sec-title">武器</h2>
       <p class="sec-sub"><span data-count="weapons">70</span> 件。点一张卡片看它吃什么加成。</p>
       <div class="sec-body slab">
         <div class="filters" id="armFilters" role="group" aria-label="按器类与五行筛选"></div>
@@ -141,8 +148,8 @@
 
   <section id="items" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">道具</h2></div>
-      <p class="sec-sub"><span data-count="items">103</span> 件被动道具，在商店买到就生效，没有栏位限制、可以叠。<b>卡片顶边的颜色是档位</b>：普通、稀有、史诗、传说，越靠后越贵也越狠。</p>
+      <h2 class="sec-title">道具</h2>
+      <p class="sec-sub"><span data-count="items">103</span> 件被动道具，在商店买到就生效，没有栏位限制、可以叠。<b>卡框的颜色就是档位</b>：普通、稀有、史诗、传说，越靠后越贵也越狠。</p>
       <div class="sec-body slab">
         <div class="filters" id="itemFilters" role="group" aria-label="按档位筛选"></div>
         <div class="detail" id="itemDetail" aria-live="polite">
@@ -159,7 +166,7 @@
 
   <section id="pets" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">灵兽</h2></div>
+      <h2 class="sec-title">灵兽</h2>
       <p class="sec-sub"><span data-count="pets">7</span> 只随行灵兽，在商店货架上买到就跟着你打，按各自的周期出手。每种只能带一只，默认 1 格，御兽师 3 格。</p>
       <div class="sec-body slab">
         <div class="pets" id="petGrid"></div>
@@ -169,8 +176,8 @@
 
   <section id="skills" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">技能</h2></div>
-      <p class="sec-sub">选完角色挑一个随行技能，战斗中右下圆钮手动释放。冷却从效果走完那刻起算，带冷却缩减的道具还能再压短。</p>
+      <h2 class="sec-title">技能</h2>
+      <p class="sec-sub">选完角色挑一个随行技能，战斗中右下圆钮手动释放。冷却从效果走完那刻起算，带冷却缩减的道具还能再压短。另有影爆、药爆两个角色自带技能（跟着影者 / 药王），不在这一排里。</p>
       <div class="sec-body slab">
         <div class="skills" id="skillGrid"></div>
       </div>
@@ -179,7 +186,7 @@
 
   <section id="get" class="section">
     <div class="wrap">
-      <div class="sec-head"><h2 class="sec-title">下载</h2></div>
+      <h2 class="sec-title">下载</h2>
       <div class="sec-body slab">
         <div class="gets">
           <article class="get plate">
@@ -191,7 +198,7 @@
           <article class="get plate">
             <span class="get-tag">Android</span>
             <h3>安卓版</h3>
-            <p>下载安装包，装好就能玩。游戏里能直接检查新版本，当前 <b data-version>v0.0.64</b>。</p>
+            <p>下载安装包，装好就能玩。游戏里能直接检查新版本，出新装了完就能更新。</p>
             <a class="btn btn-sm" href="https://github.com/favoroo/Q-xiuxian/releases" target="_blank" rel="noopener">下载最新版</a>
             <a class="btn btn-sm btn-ghost" href="https://gitee.com/favo9/q-xiuxian/releases" target="_blank" rel="noopener">国内下载</a>
           </article>
@@ -227,11 +234,10 @@
       <span class="foot-name">剑士 <i>Swordsman</i></span>
       <span class="foot-author">作者 <b>HQ</b></span>
     </div>
-    <p class="foot-meta">免费 · 手机和电脑浏览器都能玩</p>
   </div>
 </footer>
 
-<script src="data.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="data.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

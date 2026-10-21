@@ -221,6 +221,11 @@ func _run_notes_fit_narrowest_card() -> void:
 # ================== ⑤ 卡面真的画出来了、且与模型同源 ==================
 
 func _run_card_renders_notes() -> void:
+	# 静音生命回复：卡面注脚在 _on_alloc_opened 里同步取数，模型在 settle 几帧后另取一份，
+	# 中间只要有一次回复跳字，current_hp 就漂一档，hp_heal 注脚会差 1 点血（实测 2/3 概率红）。
+	# 回复不是这一枪要量的东西，冻结掉，两头取数才逐位可比（同 ShopReadoutCheck._quiet_arena）。
+	GameManager.hp_regen = 0.0
+	GameManager.synergy_hp_regen = 0.0
 	_pin_offers()
 	var dlg: LevelUpDialog = (load("res://scenes/ui/LevelUpDialog.tscn") as PackedScene)\
 		.instantiate() as LevelUpDialog

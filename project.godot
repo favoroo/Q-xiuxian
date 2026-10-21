@@ -12,6 +12,7 @@ config_version=5
 
 config/name="剑士 (Swordsman)"
 run/main_scene="res://scenes/main/Main.tscn"
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
@@ -71,24 +72,14 @@ pointing/emulate_touch_from_mouse=true
 [physics]
 
 3d/physics_engine="Jolt Physics"
-common/physics_ticks_per_second=60
-# 与运行时一致（Main._apply_fps_limit 恒 60/60 渲染+物理；旧值 30 是已下线省电档的残留，
-# 2026-10-17 性能专项清理——避免调优时被 project 设置误导）。
-common/physics_interpolation=false
+"#ä¸è¿è¡æ¶ä¸è´ï¼Main._apply_fps_limitæ60/60æ¸²æ+ç©çï¼æ§å¼30æ¯å·²ä¸çº¿ççµæ¡£çæ®çï¼#2026-10-17æ§è½ä¸é¡¹æ¸çââé¿åè°ä¼æ¶è¢«projectè®¾ç½®è¯¯å¯¼ï¼ãcommon/physics_interpolation"=false
 
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
-textures/vram_compression/import_etc2_astc=true
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
-# 关闭（2026-10-16）：逐顶点 CPU 对齐破坏 canvas 批处理（759 draw call 根因之一），
-# 本项目主体是程序化矢量绘制 + 非整像素 squash 缩放，无整像素收益。
-2d/snap/snap_2d_vertices_to_pixel=false
-# 移动端已切 gl_compatibility（2026-10-21 真机 HUD 闪烁根治，见下），而 GL Compatibility
-# 不支持 2D HDR 视口 —— 保留 true 会被引擎忽略并可能刷警告。桌面 Forward+ 仍走各自默认。
-# 移动端 glow 本来就在 Main._apply_glow_channel 里用 LDR 阈值起辉（use_hdr_2d 恒 false），
-# 故关掉此项目级默认不影响移动端观感；桌面端 Main 会按需把 use_hdr_2d 打开。
-# 注：hdr_2d 是「项目级默认」，运行时 Main 仍会按平台写 vp.use_hdr_2d。
-viewport/hdr_2d=false
+"#å³é­ï¼2026-10-16ï¼ï¼éé¡¶ç¹CPUå¯¹é½ç ´åcanvasæ¹å¤çï¼759drawcallæ ¹å ä¹ä¸ï¼ï¼#æ¬é¡¹ç®ä¸»ä½æ¯ç¨åºåç¢éç»å¶+éæ´åç´ squashç¼©æ¾ï¼æ æ´åç´ æ¶çã2d/snap/snap_2d_vertices_to_pixel"=false
+"#ç§»å¨ç«¯å·²ågl_compatibilityï¼2026-10-21çæºHUDéªçæ ¹æ²»ï¼è§ä¸ï¼ï¼èGLCompatibility#ä¸æ¯æ2DHDRè§å£ââä¿çtrueä¼è¢«å¼æå¿½ç¥å¹¶å¯è½å·è­¦åãæ¡é¢Forward+ä»èµ°åèªé»è®¤ã#ç§»å¨ç«¯glowæ¬æ¥å°±å¨Main._apply_glow_channeléç¨LDRéå¼èµ·è¾ï¼use_hdr_2dæfalseï¼ï¼#æå³ææ­¤é¡¹ç®çº§é»è®¤ä¸å½±åç§»å¨ç«¯è§æï¼æ¡é¢ç«¯Mainä¼æéæuse_hdr_2dæå¼ã#æ³¨ï¼hdr_2dæ¯ãé¡¹ç®çº§é»è®¤ãï¼è¿è¡æ¶Mainä»ä¼æå¹³å°åvp.use_hdr_2dãviewport/hdr_2d"=false

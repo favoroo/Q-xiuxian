@@ -30,21 +30,15 @@ func _ready() -> void:
 	add_child(_m)
 	await _settle(2)
 
-	# ① 打开只落在入门页：其余页还是空壳
+	# ① 打开落在武器页：只建当前页，其余页还是空壳
 	_m.open()
 	await _settle(3)
-	_c.check(_m._basics_box.get_child_count() > 0, "当前页两帧内已填上内容（懒建没变成不建）")
-	_c.equals(_cards_in(_m._weapons_box).size(), 0, "入门页在显示时，武器页没被顺手铺出来")
-	_c.equals(_cards_in(_m._items_box).size(), 0, "入门页在显示时，法宝页没被顺手铺出来")
-	_c.equals(_cards_in(_m._cult_box).size(), 0, "入门页在显示时，修士页没被顺手铺出来")
-
-	# ② 切到武器页才建，建出来是全量
-	_m.switch_tab(1)
-	await _settle(3)
+	_c.check(_cards_in(_m._weapons_box).size() > 0, "当前页两帧内已铺上卡（懒建没变成不建）")
+	_c.equals(_cards_in(_m._items_box).size(), 0, "武器页在显示时，道具页没被顺手铺出来")
+	_c.equals(_cards_in(_m._cult_box).size(), 0, "武器页在显示时，角色页没被顺手铺出来")
 	var wpn_first := _first_id(_m._weapons_box)
-	_c.check(wpn_first != 0, "切到武器页才铺卡（%d 张）" % _cards_in(_m._weapons_box).size())
 
-	# ③ 同筛选再开一次：整页复用，卡对象没换、按下那一拍也没往里添新子节点
+	# ② 同筛选再开一次：整页复用，卡对象没换、按下那一拍也没往里添新子节点
 	_m.close()
 	await _wait_closed()
 	var wpn_children := _m._weapons_box.get_child_count()
@@ -55,10 +49,10 @@ func _ready() -> void:
 	_c.equals(_first_id(_m._weapons_box), wpn_first, "同筛选再开：武器页整页复用，没重铺")
 	_c.check(_cards_in(_m._weapons_box).size() > 0, "复用后卡还在（%d 张）" % _cards_in(_m._weapons_box).size())
 
-	# ④ 法宝页受解锁状态影响：每次 open 要重铺，但重铺排在按下那一拍之后
+	# ③ 道具页受解锁状态影响：每次 open 要重铺，但重铺排在按下那一拍之后
 	#    （量子节点数而不是量首张卡：queue_free 的旧卡当帧还挂在树上，
 	#     拿「第一张卡是谁」去判断有没有重铺，会把同步重铺看成没发生）
-	_m.switch_tab(2)
+	_m.switch_tab(1)
 	await _settle(3)
 	var item_first := _first_id(_m._items_box)
 	var item_children := _m._items_box.get_child_count()
@@ -71,7 +65,7 @@ func _ready() -> void:
 	var item_second := _first_id(_m._items_box)
 	_c.check(item_second != 0 and item_second != item_first, "再开一次：法宝页重铺（解锁状态会变，不许复用）")
 
-	# ⑤ 换筛选：必须重铺，且只剩该流派
+	# ④ 换筛选：必须重铺，且只剩该流派
 	var want_fire := _tag_total("fire")
 	_m.open_weapons_page("fire")
 	await _settle(3)

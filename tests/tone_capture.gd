@@ -3,6 +3,10 @@ extends Node
 ## 真机画面抓拍工具（非判据）：实例化 Main.tscn 真跑一局，指定时刻截全视口 PNG。
 ## 用于环境氛围/地面/特效等「整屏观感」改动的视觉验收（headless 不出图，必须带窗口跑）。
 ## 运行: godot --path . res://tests/ToneCapture.tscn -- --wave 8 --wait 6 --out tests/inspect/tone_capture.png
+## 注意：默认切 LDR 直出（见 tools/capture_ldr.gd）——桌面 HDR2D+ACES 会把画面压暗、把品红偏成
+## 纯红，与手机真机不符；加 --hdr 可保留桌面 HDR 通道（仅排障用）。
+
+const CaptureLdr = preload("res://tools/capture_ldr.gd")
 
 var _wave := 8
 var _wait := 6.0
@@ -10,6 +14,7 @@ var _out := "tests/inspect/tone_capture.png"
 var _status := false   ## true 时抓拍前给全场敌人挂灼烧+剧毒+冰缓（验收五行异常体表视觉）
 var _danger := 0       ## >0 时强置危险度（压测用，绕开解锁钳制）
 var _endless := false  ## true 时开无尽模式（深层波次压测用）
+var _keep_hdr := false ## true 时不切 LDR（保留桌面 HDR2D/ACES，仅供排障对照）
 
 func _ready() -> void:
 	call_deferred("_run")
@@ -26,6 +31,8 @@ func _run() -> void:
 			_status = true
 		if String(args[i]) == "--endless":
 			_endless = true
+		if String(args[i]) == "--hdr":
+			_keep_hdr = true
 
 	var main = load("res://scenes/main/Main.tscn").instantiate()
 	get_tree().root.add_child(main)
@@ -37,6 +44,11 @@ func _run() -> void:
 	GameManager.cultivator_id = "jianchi"
 	GameManager.start_run("qingyun_sword")
 	get_tree().paused = false
+	# 出图色彩校准：切 LDR 直出，避开桌面 HDR2D/ACES 的「压暗 + 品红偏纯红」（与手机真机一致）。
+	if not _keep_hdr:
+		CaptureLdr.apply(get_viewport(), main)
+		await get_tree().process_frame
+		await get_tree().process_frame
 	if _danger > 0:
 		GameManager.danger_level = _danger
 	if _endless:

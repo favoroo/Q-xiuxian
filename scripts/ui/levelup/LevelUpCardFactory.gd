@@ -91,6 +91,15 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		if GameBalance.upgrade_benefits_weapon(data.get("apply", {}), String(w.get("id", ""))):
 			benefited.append(w)
 	if not benefited.is_empty():
+		# 2026-10-21 用户指令：「这个受益装备要放在卡片底部显示」。
+		# 一屏五张卡被 HBoxContainer 拉成同高，内容各自只到自身最小高 ⇒ 不加这一格弹性留白，
+		# 这排图标就贴着最后一条加成行，高矮不一的卡上位置乱跳。留白本身最小高 0，
+		# 不吃卡高、不影响「这一屏不许竖滑」那条尺子（BenefitIconTapCheck ⑧）。
+		var spring := Control.new()
+		spring.name = "BenefitSpring"
+		spring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		spring.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		vbox.add_child(spring)
 		_append_benefit_row(dialog, vbox, benefited, inner_w, data)
 
 	card.add_child(vbox)

@@ -51,8 +51,12 @@ var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
 var _crowd_glow_cd: float = 0.0           ## glow 拥挤档轮询计时（1s 粒度，见 _poll_crowd_glow）
 var _env_res: Environment = null           ## WorldEnvironment 的 Environment 资源缓存（glow 档位写入目标）
+var _back_nav: Node = null                 ## 安卓返回键路由（scripts/systems/BackNavigator.gd）
 
 func _ready() -> void:
+	# 安卓返回键：关掉引擎「返回即退出」，改由 BackNavigator 翻译成 ui_cancel 走分层返回
+	# （项目设置 quit_on_go_back 已置 false，这里挂路由节点兜底 + 承接退出信号）
+	_setup_back_nav()
 	# 帧率档位（2026-10-15）：默认「流畅模式」60fps + 物理 60Hz，设置页可关成 30/30 省电档。
 	# headless 判据依赖自由帧节奏与 30Hz 物理基线（time_scale 竞态余量、PerfProbe 节流预算），跳过。
 	_apply_fps_limit()
@@ -929,4 +933,19 @@ func _setup_stage_backdrop() -> void:
 	backdrop.visibility_changed.connect(func():
 		if OS.is_debug_build() and backdrop.visible and GameManager.run_started:
 			push_warning("StageBackdrop 在对局中被点亮——整屏黑闪嫌疑，请检查选人链路的显隐接管")
+	)
+
+## 安卓返回键路由（2026-10-21）：Godot 默认 `quit_on_go_back=true` 会让安卓侧滑/返回键
+## 直接 `_quit = true` 秒退整局，且完全绕开游戏内 `ui_cancel` 的分层返回逻辑。
+## 这里关掉该开关，改挂 BackNavigator —— 它把系统返回翻译成一次 ui_cancel 复用既有返回栈，
+## 只有「整棵 UI 都没人消费」的局外情形才要求再按一次确认退出；局内战斗永不退出。
+func _setup_back_nav() -> void:
+	get_tree().set_quit_on_go_back(false)
+	if _back_nav != null and is_instance_valid(_back_nav):
+		return
+	_back_nav = load("res://scripts/systems/BackNavigator.gd").new()
+	_back_nav.name = "BackNavigator"
+	add_child(_back_nav)
+	_back_nav.exit_confirmed.connect(func():
+		get_tree().quit()
 	)

@@ -58,6 +58,8 @@ var _hp_low_tween: Tween = null
 var _lv_badge_style: StyleBoxFlat = null
 var _lv_badge_base_bg := Color(0, 0, 0, 0)
 var _lv_badge_base_border := Color(0, 0, 0, 0)
+## 经验条填充同样得脱场景共享资源自己一份：.tscn 里烘的是固定色，玩家换主题色它才跟得上
+var _exp_fill_style: StyleBoxFlat = null
 ## 全屏升级金光（_ready 里代码创建，压在 HUD 控件之下）
 var _flash_rect: ColorRect = null
 ## 镜头缩放冲击节流：连升多级 0.2s 内只顿一次
@@ -188,8 +190,16 @@ func _retheme_baked_styles() -> void:
 		GameStyle.register_theme_box(_lv_badge_style, &"bg_color", &"main")
 		GameStyle.register_theme_box(_lv_badge_style, &"border_color", &"dk")
 	_lv_badge_style.border_color = GameStyle.GOLD_DK
+	_lv_badge_style.bg_color = GameStyle.GOLD
 	_lv_badge_base_bg = GameStyle.GOLD
 	_lv_badge_base_border = GameStyle.GOLD_DK
+	# 经验条：槽保持纯黑，填充走主题亮边。原 .tscn 里烘的是固定增益绿，
+	# 于是整块顶栏只有它不跟主题（2026-10-21 用户抓出来的：换色后经验条还是绿的）。
+	if _exp_fill_style == null:
+		_exp_fill_style = exp_bar.get_theme_stylebox("fill").duplicate() as StyleBoxFlat
+		exp_bar.add_theme_stylebox_override("fill", _exp_fill_style)
+		GameStyle.register_theme_box(_exp_fill_style, &"bg_color", &"edge")
+	_exp_fill_style.bg_color = GameStyle.GOLD_EDGE
 	wave_label.add_theme_color_override("font_color", GameStyle.GOLD)
 	# 波次字色是直接 override 的，注册一个字色条目让它跟主题一起变
 	GameStyle.register_theme_label(wave_label)

@@ -34,9 +34,14 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "scripts" / "data"
 SITE = ROOT / "site" / "dist"
 IMG = SITE / "img"
+STYLE_GD = ROOT / "scripts" / "ui" / "GameStyle.gd"
 
 # —— 期望数量：改表后这里由对账自动跟随，写死只为「骤降先报警」 ——
 EXPECT_MIN = {"weapons": 60, "items": 90, "roles": 18, "skills": 6, "pets": 6}
+
+# 站点默认主题色：改这一行就换默认档（必须是 THEME_PRESETS 里的 id）。
+# 游戏内默认是品红，站点按用户要求默认走荧绿；其余四套仍可页面上一键切换。
+SITE_THEME_ID = "lime"
 
 
 # ============================================================================
@@ -197,6 +202,230 @@ def color_to_hex(entry: str, key: str, default: str = "") -> str:
 
 
 # ============================================================================
+# GameStyle.gd → 站点样式令牌（颜色 / 边框 / 硬影 / 时长一律现读，页面不抄数）
+# ============================================================================
+
+def clamp01(v: float) -> float:
+    return max(0.0, min(1.0, v))
+
+
+def parse_color(raw: str) -> str:
+    """Color("ff006e") / Color(0.78, 0.45, 0.98) / Color(0, 0, 0, 1.0) → #rrggbb"""
+    if not raw:
+        return ""
+    m = re.search(r"Color\(([^)]*)\)", raw)
+    if not m:
+        return ""
+    arg = m.group(1).strip()
+    if arg.startswith('"'):
+        return "#" + arg.strip('"').lstrip("#").lower()
+    parts = [float(x) for x in arg.split(",") if x.strip()]
+    if len(parts) < 3:
+        return ""
+    return "#%02x%02x%02x" % tuple(round(clamp01(p) * 255) for p in parts[:3])
+
+
+def darken_hex(hexc: str, f: float) -> str:
+    """Color.darkened(f)：各通道 ×(1-f)。"""
+    r, g, b = (int(hexc[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(round(v * (1.0 - f)) for v in (r, g, b))
+
+
+def _wcag_lum(hexc: str) -> float:
+    r, g, b = (int(hexc[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+    f = [(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4) for v in (r, g, b)]
+    return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+
+def face_text(hexc: str) -> str:
+    """面色定字色：在游戏内 on_face_text「亮面墨字 / 暗面骨白字」这条口径上，按 WCAG 对比度取更优的一档。
+    不直接照抄它的线性亮度阈值：品红 #ff006e 线性亮度 0.244 会被判成「配白字」（3.8:1），
+    而游戏自己的标题带是显式配黑字（BaseModalDialog 的 INK_TEXT，5.5:1）—— 按对比度算两边才对得上，
+    且主题一切（品红↔荧绿）时按压态那种深档不会反过来把字糊没。"""
+    lum = _wcag_lum(hexc)
+    on_ink = (lum + 0.05) / 0.05
+    on_chalk = 1.05 / (lum + 0.05)
+    return "var(--ink)" if on_ink >= on_chalk else "var(--chalk)"
+
+
+def lighten_hex(hexc: str, f: float) -> str:
+    """Color.lightened(f)：c + (1-c)×f。"""
+    r, g, b = (int(hexc[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(round(v + (255 - v) * f) for v in (r, g, b))
+
+
+def const_rhs(src: str, name: str) -> str:
+    """取 `const NAME : Type = <行尾>` 的右值。"""
+    m = re.search(r"^const %s\b[^=\n]*=\s*(.*)$" % re.escape(name), src, re.M)
+    if not m:
+        raise SystemExit(f"GameStyle.gd 里找不到 const {name} —— 样式改名了就先同步这个导出器")
+    return m.group(1).strip()
+
+
+def fn_body(src: str, name: str) -> str:
+    """取 `static func name(...)` 到下一个顶层 static func / const 之前的源码段。"""
+    m = re.search(r"^static func %s\(" % re.escape(name), src, re.M)
+    if not m:
+        raise SystemExit(f"GameStyle.gd 里找不到 static func {name}()")
+    nxt = re.search(r"^(static func |const )", src[m.end():], re.M)
+    end = m.end() + nxt.start() if nxt else len(src)
+    return src[m.start():end]
+
+
+def one_vec(body: str, pattern: str, label: str, idx: int = 0) -> tuple:
+    """从函数体（含签名默认值）里按出现顺序取第 idx 个匹配，返回 (x, y)。"""
+    hits = re.findall(pattern, body)
+    if len(hits) <= idx:
+        raise SystemExit(f"{label} 里没读到预期的 Vector2/数字（{pattern}）—— 工厂写法变了，先改这个导出器")
+    a, b = hits[idx]
+    if a is None or b is None:
+        raise SystemExit(f"{label} 的 Vector2 解析失败")
+    return float(a), float(b)
+
+
+def one_num(text: str, pattern: str, label: str) -> float:
+    m = re.search(pattern, text, re.S)
+    if not m:
+        raise SystemExit(f"{label} 读不到（{pattern}）")
+    return float(m.group(1))
+
+
+def build_style_tokens() -> tuple:
+    """返回 (tokens: 有序 dict, themes: 5 套预设 list)。读不到的项一律报错，绝不静默回退成手抄数。"""
+    src = strip_comments(STYLE_GD.read_text(encoding="utf-8"))
+
+    ink = parse_color(const_rhs(src, "INK"))
+    navy = parse_color(const_rhs(src, "NAVY"))
+    navy2 = parse_color(const_rhs(src, "NAVY2"))
+    # slot_of 的底色是「纸面挖下去一档」，暗化系数就写在它的签名默认值里
+    slot_f = one_num(fn_body(src, "slot_of"), r"NAVY2\.darkened\(\s*([\d.]+)\s*\)", "slot_of 暗化系数")
+
+    # 主题三件套：const 已改 static var，值来自 THEME_PRESETS 第一套（默认品红）
+    presets = []
+    for m in re.finditer(r"\{\s*\"id\":\s*&\"([a-z]+)\",\s*\"name\":\s*\"([^\"]+)\",\s*"
+                         r"\"main\":\s*Color\(\"([0-9a-fA-F]+)\"\),\s*"
+                         r"\"edge\":\s*Color\(\"([0-9a-fA-F]+)\"\),\s*"
+                         r"\"dk\":\s*Color\(\"([0-9a-fA-F]+)\"\)\s*\}", src):
+        presets.append({"id": m.group(1), "n": m.group(2),
+                        "main": "#" + m.group(3).lower(), "edge": "#" + m.group(4).lower(),
+                        "dk": "#" + m.group(5).lower()})
+    if len(presets) < 2:
+        raise SystemExit(f"THEME_PRESETS 只解出 {len(presets)} 套，站点主题切换器会缺档")
+    theme = next((p for p in presets if p["id"] == SITE_THEME_ID), None)
+    if theme is None:
+        raise SystemExit(f"SITE_THEME_ID={SITE_THEME_ID!r} 不在 THEME_PRESETS 里（可选：{[p['id'] for p in presets]}）")
+    for p in presets:
+        # 每套预设自带三档面色对应的文字色，前端切主题时一并改，不留写死的黑白
+        p["t"] = face_text(p["main"])
+        p["te"] = face_text(p["edge"])
+        p["td"] = face_text(p["dk"])
+
+    # 工厂几何：框宽 / 硬影偏移 / 压扁位移，全部现读
+    block_b = fn_body(src, "block")
+    card_b = fn_body(src, "card")
+    dialog_b = fn_body(src, "dialog_panel")
+    side_b = fn_body(src, "side_card")
+    btn_b = fn_body(src, "button")
+    chip_off = one_vec(fn_body(src, "chip"), r"block\(face,\s*SLANT_BAND,\s*Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)\)", "chip()")
+    mini = fn_body(src, "compact_chip")
+    mini_off = one_vec(mini, r"panel\(face,\s*SLANT_BAND,\s*Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)\)", "compact_chip()")
+    normal_off = one_vec(btn_b, r"_btn_block\([^,]+,\s*skew_deg,\s*Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)\)", "button() normal", 0)
+    hover_off = one_vec(btn_b, r"_btn_block\([^,]+,\s*skew_deg,\s*Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)\)", "button() hover", 1)
+    sink = (one_num(btn_b, r"content_margin_left = ([\d.]+)", "button() 压扁位移 X"),
+            one_num(btn_b, r"content_margin_top = ([\d.]+)", "button() 压扁位移 Y"))
+
+    out = {
+        "--ink": ink,
+        "--panel": navy,
+        "--card": navy2,
+        "--slot": darken_hex(navy2, slot_f),
+        "--line": parse_color(const_rhs(src, "LINE")),
+        "--paper": parse_color(const_rhs(src, "PAPER")),
+        "--paper-dim": parse_color(const_rhs(src, "PAPER_DIM")),
+        "--chalk": parse_color(const_rhs(src, "CHALK")),
+        "--grey": parse_color(const_rhs(src, "GREY")),
+        "--disabled": parse_color(const_rhs(src, "DISABLED_FACE")),
+        "--hot": theme["main"],
+        "--hot-edge": theme["edge"],
+        "--hot-dk": theme["dk"],
+        "--on-hot": theme["t"],
+        "--on-hot-edge": theme["te"],
+        "--on-hot-dk": theme["td"],
+        "--jade": parse_color(const_rhs(src, "JADE")),
+        "--jade-edge": parse_color(const_rhs(src, "JADE_EDGE")),
+        "--jade-dk": parse_color(const_rhs(src, "JADE_DK")),
+        "--good": parse_color(const_rhs(src, "GOOD")),
+        "--good-dk": parse_color(const_rhs(src, "GOOD_DK")),
+        "--bad": parse_color(const_rhs(src, "BAD")),
+        "--bad-dk": parse_color(const_rhs(src, "BAD_DK")),
+        "--element": parse_color(const_rhs(src, "ELEMENT")),
+        # 五行色（ELEMENT_COLORS）：一色多用 —— 图标外框、图鉴签面、羁绊行头，站点沿用同一套
+        **{"--m-" + k.lower(): parse_color(v) for k, v in re.findall(
+            r'"(metal|wood|water|fire|earth)"\s*:\s*(Color\([^)]*\))',
+            const_body(src, "const ELEMENT_COLORS"))},
+        "--r-1": parse_color(const_rhs(src, "RARITY_COMMON")),
+        "--r-2": parse_color(const_rhs(src, "RARITY_RARE")),
+        "--r-3": parse_color(const_rhs(src, "RARITY_EPIC")),
+        "--r-4": parse_color(const_rhs(src, "RARITY_LEGEND")),
+        "--bw": "%dpx" % one_num(block_b, r"border_width_left = (\d+)", "block() 框宽"),
+        "--bw-thin": "%dpx" % one_num(fn_body(src, "outlined_panel"), r"border_w: int = (\d+)", "outlined_panel() 框宽"),
+        # CSS border-width 的四值顺序是 顶/右/底/左（与 GDScript 里 top/left/bottom/right 的读法不同）
+        "--card-edge": "%dpx %dpx %dpx %dpx" % (
+            one_num(card_b, r"border_width_top = (\d+)", "card() 顶带"),
+            one_num(card_b, r"border_width_right = (\d+)", "card() 右框"),
+            one_num(card_b, r"border_width_bottom = (\d+)", "card() 底框"),
+            one_num(card_b, r"border_width_left = (\d+)", "card() 侧框")),
+        "--side-edge": "%dpx %dpx %dpx %dpx" % (
+            one_num(side_b, r"border_width_top = (\d+)", "side_card() 顶"),
+            one_num(side_b, r"border_width_right = (\d+)", "side_card() 右"),
+            one_num(side_b, r"border_width_bottom = (\d+)", "side_card() 底"),
+            one_num(side_b, r"border_width_left = (\d+)", "side_card() 左竖带")),
+        "--sh-panel": "%dpx %dpx 0 var(--ink)" % one_vec(fn_body(src, "panel"),
+                                                         r"shadow_offset: Vector2 = Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)", "panel() 影"),
+        "--sh-block": "%dpx %dpx 0 var(--ink)" % one_vec(block_b,
+                        r"shadow_offset: Vector2 = Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)", "block() 影"),
+        "--sh-card": "%dpx %dpx 0 var(--ink)" % one_vec(card_b,
+                      r"shadow_offset: Vector2 = Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)", "card() 影"),
+        "--sh-dialog": "%dpx %dpx 0 var(--ink)" % one_vec(dialog_b, r"shadow_offset: Vector2 = Vector2\((-?[\d.]+),\s*(-?[\d.]+)\)", "dialog_panel() 影"),
+        "--sh-chip": "%dpx %dpx 0 var(--ink)" % chip_off,
+        "--sh-mini": "%dpx %dpx 0 var(--ink)" % mini_off,
+        "--sh-btn": "%dpx %dpx 0 var(--ink)" % normal_off,
+        "--sh-btn-hover": "%dpx %dpx 0 var(--ink)" % hover_off,
+        "--btn-sink": "%dpx %dpx" % sink,
+        "--dur-press": "%gs" % float(const_rhs(src, "ANIM_PRESS")),
+        "--dur-snap": "%gs" % float(const_rhs(src, "ANIM_SNAP")),
+        "--dur-slam": "%gs" % float(const_rhs(src, "ANIM_SLAM")),
+        "--sel-scale": "%g" % one_num(fn_body(src, "select_snap"), r"ONE \* \(([\d.]+) if on", "select_snap() 选中缩放"),
+        "--slam-from": "%g" % one_num(fn_body(src, "slam_in"), r"scale = Vector2\(([\d.]+),", "slam_in() 起始缩放"),
+        # 扫屏带 slash_wipe / band_wipe：整屏切换的那条直角带的时长、尾段淡出与双带错峰
+        "--dur-wipe": "%gs" % one_num(fn_body(src, "slash_wipe"), r'"position:x", vp\.x \* [\d.]+, ([\d.]+)\)', "slash_wipe() 扫屏时长"),
+        "--wipe-fade": "%gs" % one_num(fn_body(src, "slash_wipe"), r'"modulate:a", 0\.0, ([\d.]+)\)', "slash_wipe() 尾段淡出"),
+        "--wipe-stagger": "%gs" % one_num(fn_body(src, "band_wipe"), r"slash_wipe\(host, INK, ([\d.]+)\)", "band_wipe() 双带错峰"),
+    }
+    for k, v in out.items():
+        if not v:
+            raise SystemExit(f"令牌 {k} 解出空值")
+    return out, presets
+
+
+def emit_tokens_css(tokens: dict, themes: list) -> str:
+    lines = [
+        "/* GENERATED —— 由 tools/export_site_data.py 从 scripts/ui/GameStyle.gd 现读产出，禁止手改。",
+        "   游戏样式改完重跑：python3 tools/export_site_data.py",
+        "   口径：新野兽派（纯黑舞台 × 宣纸白面板 × 等宽纯黑粗框 × 不透明纯黑硬偏移影 × 全直角）。",
+        "   硬影一律 var(--ink)：游戏里 dialog_panel 坐在 0.85 暗幕上，站点坐在纯黑舞台，",
+        "   黑压黑看不见是真实现象、不是 bug —— 舞台上的层次靠 card() 那条 accent 顶带与品红标题带表达。",
+        "   主题三件套默认取 THEME_PRESETS 第一套，其余四套在 data.js meta.themes 里，由 app.js 现切。 */",
+        ":root {",
+    ]
+    for k, v in tokens.items():
+        lines.append(f"  {k}: {v};")
+    lines.append("}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ============================================================================
 # 各表读取
 # ============================================================================
 
@@ -286,6 +515,10 @@ def copy_icon(res_path: str, dest: Path, size: int = 0) -> str:
 def build() -> dict:
     fields = load_stat_fields()
 
+    # —— 样式令牌 + 主题预设（GameStyle.gd 是唯一真话源） ——
+    tokens, presets = build_style_tokens()
+    presets_for_meta = presets
+
     # —— 版本 ——
     ver = ""
     vm = re.search(r'const APP_VERSION: String = "([^"]+)"',
@@ -313,13 +546,23 @@ def build() -> dict:
         })
 
     # —— 羁绊（器类 + 五行 11 组，名字与阈值直接取表） ——
+    wsrc_all = (DATA / "WeaponData.gd").read_text(encoding="utf-8")
+    # 五行键从 ELEMENTS 数组声明现读。注意别用 const_body()：那是给花括号块用的，
+    # 方括号常量会一路吞到下一个 {，把 DEFS 里的 tags 全当成五行键（11 个系全被判成 element）
+    elem_m = re.search(r"const ELEMENTS: Array\[String\]\s*=\s*\[(.*?)\]", strip_comments(wsrc_all), re.S)
+    if not elem_m:
+        raise SystemExit("WeaponData.gd 里读不到 ELEMENTS 数组")
+    elem_keys = re.findall(r'"([a-z_]+)"', elem_m.group(1))
     sbody = const_body((DATA / "WeaponData.gd").read_text(encoding="utf-8"), "const SYNERGIES: Dictionary =")
     cats = []
     for sid, e in split_entries(sbody):
         thresholds = [int(float(x)) for x in re.findall(r"-?\d+(?:\.\d+)?", (get_raw_value(e, "thresholds") or "[]")[1:-1])]
         labels = re.findall(r'"label"\s*:\s*"([^"]*)"', get_raw_value(e, "effects") or "")
-        cats.append({"k": sid, "n": get_str(e, "name"), "th": thresholds,
-                     "ef": list(dict.fromkeys(labels))})
+        cats.append({"k": sid, "n": get_str(e, "name"), "kind": "element" if sid in elem_keys else "class",
+                     "th": thresholds, "ef": list(dict.fromkeys(labels))})
+    # 器类/五行必须两边都认得出：全判成一边就是 ELEMENTS 读歪了（前端色签与筛选会一起错）
+    if {c["kind"] for c in cats} != {"class", "element"}:
+        raise SystemExit("羁绊分组 kind 判定异常（器类/五行没分干净）：" + str({c["kind"] for c in cats}))
 
     # —— 技能（先于角色解析：角色卡的「额外技能」要把 id 换成人话名） ——
     ksrc = (DATA / "SkillData.gd").read_text(encoding="utf-8")
@@ -403,31 +646,57 @@ def build() -> dict:
             "i": f"img/{orb.name}" if orb.exists() else "",
         })
 
-    # —— 规则句（数字取 WeaponData 常量，句子取游戏内原句） ——
+    # —— 规则句与玩法节奏（数字全部现读常量，页面 copy 里不许再手抄秒数） ——
     wsrc = (DATA / "WeaponData.gd").read_text(encoding="utf-8")
+    gm_src = (ROOT / "scripts" / "autoload" / "GameManager.gd").read_text(encoding="utf-8")
+    bw_src = (ROOT / "scripts" / "systems" / "BalanceWave.gd").read_text(encoding="utf-8")
+    inv_src = (ROOT / "scripts" / "autoload" / "WeaponInventory.gd").read_text(encoding="utf-8")
 
-    def const_num(name):
-        m = re.search(r"const %s[^=]*=\s*(-?\d+(?:\.\d+)?)" % name, wsrc)
-        return float(m.group(1)) if m else None
+    def gconst(src, name, where):
+        m = re.search(r"const %s[^=]*=\s*(-?\d+(?:\.\d+)?)" % name, src)
+        if not m:
+            raise SystemExit(f"{where} 里读不到常量 {name}")
+        v = float(m.group(1))
+        return int(v) if v.is_integer() else v
+
+    merge_m = re.search(r"count_copies\([^)]*\)\s*<\s*(\d+)", inv_src)
+    if not merge_m:
+        raise SystemExit("WeaponInventory.gd 里读不到合成所需件数")
+    merge_need = int(merge_m.group(1))
+
+    # 波时长公式：min(BASE + 波次 × PER, CAP)，第 1 波四舍五入后就是站点写的那个数
+    w_base = gconst(bw_src, "WAVE_DURATION_BASE", "BalanceWave")
+    w_per = gconst(bw_src, "WAVE_DURATION_PER_WAVE", "BalanceWave")
+    w_cap = gconst(bw_src, "WAVE_DURATION_MAX", "BalanceWave")
 
     rules = {
         "star": {
-            "need": 3,
-            "max": int(const_num("MAX_STAR") or 3),
-            "dmg": const_num("STAR_DAMAGE_MULT"),
-            "cd": const_num("STAR_COOLDOWN_MULT"),
-            "slots": int(const_num("MAX_SLOTS") or 6),
-            "stash": int(const_num("MAX_STASH_SLOTS") or 9),
+            "need": merge_need,
+            "max": gconst(wsrc, "MAX_STAR", "WeaponData"),
+            "dmg": gconst(wsrc, "STAR_DAMAGE_MULT", "WeaponData"),
+            "cd": gconst(wsrc, "STAR_COOLDOWN_MULT", "WeaponData"),
+            "slots": gconst(wsrc, "MAX_SLOTS", "WeaponData"),
+            "stash": gconst(wsrc, "MAX_STASH_SLOTS", "WeaponData"),
         },
-        "waves": {"victory": 20},
+        "play": {
+            "victory": gconst(gm_src, "VICTORY_WAVE", "GameManager"),
+            "first_seconds": round(w_base + w_per),
+            "max_seconds": w_cap,
+            "offer": gconst(gm_src, "UPGRADE_OFFER_COUNT", "GameManager"),
+            "free_reroll": gconst(gm_src, "ALLOC_FREE_REROLLS", "GameManager"),
+            "shop_slots": gconst(gm_src, "SHOP_BASE_SLOTS", "GameManager"),
+        },
     }
 
     return {
         "meta": {
             "version": ver,
+            "themes": presets_for_meta,
+            "theme_default": SITE_THEME_ID,
             "counts": {"roles": len(roles), "weapons": len(weapons), "items": len(items),
                        "skills": len(skills), "pets": len(pets), "cats": len(cats)},
         },
+        "tokens": tokens,
         "cats": cats,
         "weapons": weapons,
         "roles": roles,
@@ -458,11 +727,43 @@ def check(data: dict) -> list:
     return problems
 
 
+def check_tokens(tokens: dict, themes: list, staleness: bool = True) -> list:
+    """令牌侧对账：①磁盘上的 tokens.css 必须等于按 GameStyle 现值重算的那份（防改了游戏忘重跑）；
+    ②styles.css 里用到的每个 var(--x) 都得有声明（防改名后页面静默掉色 —— 只有截图才看得见那种坑）。
+    写盘那一趟跳过①（本次就是要把它更新），落盘后再补对一遍。"""
+    problems = []
+    fresh = emit_tokens_css(tokens, themes)
+    disk = SITE / "tokens.css"
+    if staleness and disk.exists() and disk.read_text(encoding="utf-8") != fresh:
+        problems.append("tokens.css 与 GameStyle.gd 现值不一致（重跑 python3 tools/export_site_data.py）")
+    css_src = (SITE / "styles.css").read_text(encoding="utf-8") if (SITE / "styles.css").exists() else ""
+    # app.js 用 setProperty 现挂到节点上的自定义属性（灵兽主色等）算「已声明」
+    js_src = (SITE / "app.js").read_text(encoding="utf-8") if (SITE / "app.js").exists() else ""
+    declared = (set(re.findall(r"(--[a-z0-9-]+)\s*:", fresh))
+                | set(re.findall(r"(--[a-z0-9-]+)\s*:", css_src))
+                | set(re.findall(r'setProperty\(["\'](--[a-z0-9-]+)["\']', js_src)))
+    used = set(re.findall(r"var\((--[a-z0-9-]+)\)", css_src)) | set(re.findall(r"var\((--[a-z0-9-]+)\)", fresh))
+    missing = sorted(used - declared)
+    if missing:
+        problems.append("styles.css 用了没声明的令牌：" + " ".join(missing))
+    # CSS 的 border 简写只吃一个线宽：写成 border: var(--四值宽度) solid X 会被整条丢弃，
+    # 框直接变 0px（DOM 与 class 全对，只有像素量得出来）。四值宽度必须走 border-width 长写法。
+    for m in re.finditer(r"border:\s*var\((--[a-z0-9-]+)\)\s+[^;]+;", css_src):
+        var = m.group(1)
+        widths = re.findall(r"(-?[\d.]+)px", tokens.get(var, ""))
+        if len(widths) > 1:
+            problems.append(f"styles.css 用 border 简写套了多值宽度令牌 {var}"
+                            "（CSS 会整条丢弃 → 框变 0px），改成 border-style + border-width + border-color")
+    return problems
+
+
 def main() -> int:
     check_only = "--check" in sys.argv
     data = build()
+    tokens = data.pop("tokens")
+    themes = data["meta"]["themes"]
 
-    problems = check(data)
+    problems = check(data) + check_tokens(tokens, themes, staleness=check_only)
     if problems:
         print("对账失败：", file=sys.stderr)
         for p in problems:
@@ -471,12 +772,13 @@ def main() -> int:
 
     counts = data["meta"]["counts"]
     print("对账通过：" + " / ".join(f"{k} {v}" for k, v in counts.items())
-          + f" · 游戏版本 v{data['meta']['version']}")
+          + f" · 游戏版本 v{data['meta']['version']} · 样式令牌 {len(tokens)} 项 · 主题 {len(themes)} 套")
 
     if check_only:
         return 0
 
     IMG.mkdir(parents=True, exist_ok=True)
+    (SITE / "tokens.css").write_text(emit_tokens_css(tokens, themes), encoding="utf-8")
     out = "window.GAME_DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n"
     (SITE / "data.js").write_text(out, encoding="utf-8")
 
@@ -492,11 +794,19 @@ def main() -> int:
     missing = [w["n"] for w in back["weapons"] if not w["i"]]
     missing += [i["n"] for i in back["items"] if not i["i"]]
     missing += [r["n"] for r in back["roles"] if not r["i"]]
+    missing += [p["n"] for p in back["pets"] if not p["i"]]
     if missing:
         print("✗ 以下条目没拿到图标：" + "、".join(missing), file=sys.stderr)
         return 1
 
-    print(f"data.js 已写出：{len(out) // 1024} KB · 图标目录 {IMG.relative_to(ROOT.parent)}")
+    # 落盘后再对一遍令牌（这次带陈检查）：写完的 tokens.css 必须与 GameStyle 现值逐字节相同
+    late = check_tokens(tokens, themes)
+    if late:
+        for p in late:
+            print("✗", p, file=sys.stderr)
+        return 1
+
+    print(f"data.js {len(out) // 1024} KB · tokens.css {len(tokens)} 项 · 图标目录 {IMG.relative_to(ROOT.parent)}")
     return 0
 
 

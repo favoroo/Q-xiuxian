@@ -72,7 +72,8 @@ func _pin_offers() -> void:
 	if offers.size() >= 2:
 		offers[0] = {"kind": "potion", "id": WeaponData.POTION_ID, "price": 11,
 			"sold": false, "locked": false}
-		offers[1] = {"kind": "item", "id": String(ItemData.all_ids()[0]), "price": 14,
+		# 钉极效药丸（2026-10-21 道具卡预览后最坏的道具卡：6 字段 + 限购说明），出图用眼验收
+		offers[1] = {"kind": "item", "id": "taiyi_jindan", "price": 88,
 			"sold": false, "locked": false}
 	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
 	for i in range(mini(long_ids.size(), maxi(offers.size() - 2, 0))):

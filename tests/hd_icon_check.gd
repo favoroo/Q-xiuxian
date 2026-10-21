@@ -58,6 +58,8 @@ func _collect_icons() -> Array[String]:
 ##    ⚠ 尺子读 assets/art/ui/ 的【实际存在性】，不再拿 gitignored 的 assets_raw/images/ 判源
 ##    （旧尺子用不入库目录判存在性，干净检出时把 57 张有变体的武器全判成"无源回退"假红）。
 ##    2026-10-21 起 70 把武器 UI 图标统一由 tests/weapon_icon_export 导出，全有变体，故无白名单。
+##    ⚠ 判定必须走 ResourceLoader.exists：导出包里 png 源不打包、只剩 .import + .ctex，
+##    FileAccess.file_exists 恒 false ⇒ 真机整体回退旧 48px 图（见下方 _test_hd_resolves_in_pack）。
 func _test_hd_variants_exist() -> void:
 	for path: String in _collect_icons():
 		var hd := GameStyle._hd_icon_path(path)

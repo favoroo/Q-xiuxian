@@ -6,9 +6,12 @@ extends RefCounted
 ## 买入/锁定等操作回调经 shop 门面回流（refresh(false) 重排货架）。
 
 ## 构建一张货架卡：行①图标与名号同行、行②色签+锁定、行③加成行块+说明、行④价格/购买
-static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_count: int = 4) -> Control:
+## forecast 由宿主一次开屏只抄一份影子传入（与悟道 _populate_cards 同构）；
+## 测试直接调本工厂时不传，item 分支内部现开一份兜底。
+static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_count: int = 4,
+		forecast: StatForecast = null) -> Control:
 	var card_w := WaveShop.offer_card_w(shop._screen, total_count)
-	var data := resolve_offer_data(offer)
+	var data := resolve_offer_data(offer, forecast)
 	var card := _create_card_chrome(card_w, data.edge_color)
 	var inner_w: float = WaveShop.card_inner_w(card_w)
 
@@ -51,8 +54,9 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	return card
 
 ## 装配这张卡的全部数据（武器/道具/回复药三种货）：名号、图标、色签、加成行、说明、边色与「可合成」角标
-## stat_rows 是卡面加成行（[名字, 幅度, 颜色]），数字由 BonusRows 从数据表直接生成，不在 desc 里手抄
-static func resolve_offer_data(offer: Dictionary) -> Dictionary:
+## stat_rows 是卡面加成行（[名字, 幅度, 颜色]），数字由 BonusRows 从数据表直接生成，不在 desc 里手抄；
+## 道具卡另有「当前 → 购买后」预览（item_stat_rows），forecast 为空时内部现开一份影子（测试路径）。
+static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null) -> Dictionary:
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
 	var is_item: bool = kind == "item"
@@ -101,7 +105,15 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		icon_path = def.get("icon", "")
 		tag = "%s·道具" % ItemData.tier_label(tier)
 		desc = def.get("desc", "")
-		stat_rows = BonusRows.apply_rows(def.get("apply", {}))
+		# 买不动的那几档不画预览（2026-10-21）：已售出的格子、限购一件且已持有——
+		# 售出卡再画「购买后」等于把这件的加成又叠一遍，是张假账；此时幅度行就是它的全部。
+		var previewable := not bool(offer.get("sold", false)) \
+				and not (bool(def.get("unique", false)) and GameManager.has_item(item_id))
+		if previewable:
+			var fc := forecast if forecast != null else StatForecast.open()
+			stat_rows = item_stat_rows(def.get("apply", {}), fc)
+		else:
+			stat_rows = BonusRows.apply_rows(def.get("apply", {}))
 		chip_color = ItemData.tier_color(tier)
 		chip_text_color = GameStyle.INK_TEXT
 		# T-5.1 道具卡边框接 FX_HDR 对应档（普通白不发辉、金色档 HDR 起辉）：
@@ -163,8 +175,10 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 		# 卡面四行统一一条规则：左边纸面值、右边你现在拿到的值，两数相同就不画箭头。
 		# 伤害不再拆成「伤害 24 / 属性加成 +10」两行（2026-10-11 用户：那行读起来像武器送你属性，
 		# 方向反了；玩家想看的只是"本身多痛、加成后多痛"）。
-		# 卡面预算是硬的：BonusRows 行不换行、卡内宽最小 124px，且货架不许上下滑 —— 箭头只给
-		# 伤害这一行用，范围/间隔也带上箭头就把面板顶出屏、卡高顶到要滚动（LayoutCheck 当场红）。
+		# 卡面预算是硬的：BonusRows 行不换行、卡内宽最小 124px，且货架不许上下滑 —— 武器卡
+		# 箭头只给伤害这一行用，范围/间隔也带上箭头就把面板顶出屏、卡高顶到要滚动（LayoutCheck 当场红）。
+		# 道具卡 2026-10-21 起整列换成「当前→购买后」预览行（item_stat_rows），同样不增行数，
+		# 同一把 124 预算由它自己的兜底退档守住，谁超宽当场退回幅度行而不破格。
 		# 「每秒伤害」直接顶掉「攻击间隔」行：攻速信息本来就被它包含，还省一行给玩家验算。
 		# 伤害那一行保留两字「伤害」不扩成「单发伤害」：卡内宽下限 124 而 BonusRows 不换行，
 		# 引擎实测「单发伤害」+ 最宽读数（"999 → 9999.9"）= 135 已破格，同一档两字行名是 111。
@@ -201,6 +215,50 @@ static func resolve_offer_data(offer: Dictionary) -> Dictionary:
 ## 这张卡对应的武器 id（药水/道具卡返回空串）：色签的解释卡要按它现读属性账单与件数
 static func w_id_of_offer(offer: Dictionary) -> String:
 	return String(offer.get("id", "")) if String(offer.get("kind", "weapon")) == "weapon" else ""
+
+## 道具加成行的「当前 → 购买后」预览（2026-10-21 用户：「加成之后属性会是多少，和悟道加点界面类似」）。
+## 读数走 StatForecast.shop_lines_for（影子 + StatSystem 落地 + StatBreakdown 聚合，与到账同式），
+## 卡面不另写第二套算式。形态是内联而不是悟道式注脚：加成行每字段多插一行小字会把六字段的
+## 极效药丸卡顶破「货架不许竖滑」的预算（LayoutCheck shelf_fits），内联在数值位则卡高零增长。
+## 逐字段三档：
+## ① 面板有行的字段 → 数值位印 "X→Y"；变化按幅度语义着色（正绿负红、乘算看方向），
+##    未变化（夹顶/满血回血）退 GREY——照实写"买了等于没买"，与悟道注脚同一口径；
+## ② pair 装不下 124 卡内宽（「对精英伤害」这类长行名配大数值）→ 退 "→Y"，只留购买后那一头；
+## ③ 再装不下 → 保留原幅度行（理论到不了，兜底保证永不破格）。
+## 面板没有行的机制项（灵兽三件、宝箱、单系/全元素、技能冷却）没有预读，保持幅度行——
+## 不给玩家在属性面板里找不到的数硬凑读数。
+static func item_stat_rows(apply: Dictionary, forecast: StatForecast) -> Array:
+	var notes: Dictionary = {}
+	for line in forecast.shop_lines_for(apply):
+		notes[String(line["key"])] = line
+	var rows: Array = []
+	for key in apply.keys():
+		var k := String(key)
+		var v := float(apply[key])
+		var name_txt := StatInfoData.field_name(k)
+		var val_txt := StatInfoData.format_amount(k, v)
+		var val_col := BonusRows.stat_color(k, v)
+		if notes.has(k):
+			var line: Dictionary = notes[k]
+			var pair := String(line["text"])
+			var after_only := "→%s" % String(line["after"])
+			if _row_fits(name_txt, pair):
+				val_txt = pair
+			elif _row_fits(name_txt, after_only):
+				val_txt = after_only
+			# 两档都装不下时保留幅度行与幅度色（理论到不了，兜底不破格）；
+			# 预览真画出来了才按「变化/未变化」换色：未变化退 GREY，照实写买了等于没买
+			if val_txt != StatInfoData.format_amount(k, v):
+				val_col = BonusRows.stat_color(k, v) if bool(line["changed"]) else GameStyle.GREY
+		rows.append([name_txt, val_txt, val_col])
+	return rows
+
+## 单行宽度预算：行名 + 数值 + 列缝 4 要装进最窄档卡内宽（BonusRows 行不换行的硬约束）
+static func _row_fits(name_txt: String, val_txt: String) -> bool:
+	var body := GameStyle.body_font()
+	var need := GameStyle.line_max_w(name_txt, body, 12) \
+			+ GameStyle.line_max_w(val_txt, body, 12) + 4.0
+	return need <= WaveShop.card_inner_w(WaveShop.CARD_W_MIN)
 
 ## 点「荐」签 = 看推荐理由：统一走 RecommendTip（与悟道卡同一张卡，不再各留一份实现）。
 static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, offer: Dictionary) -> void:

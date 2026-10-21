@@ -470,12 +470,12 @@ func _test_ui_chip_contrast() -> void:
 ## 现在靠 static var + 样式注册表回放。若注册表失效，已显示的按钮会留在旧色（用户点了没反应）。
 func _test_theme_swap_runtime() -> void:
 	var prev := GameStyle.current_theme()
-	GameStyle.apply_theme_color(&"pink")
+	GameStyle.apply_theme_color(&"lime")
 	var btn := Button.new()
 	GameStyle.button(btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12)
 	var normal := btn.get_theme_stylebox("normal") as StyleBoxFlat
 	_c.check(normal != null and normal.bg_color == GameStyle.THEME_PRESETS[0]["main"],
-		"默认主题下按钮 normal 面取品红")
+		"默认主题下按钮 normal 面取荧绿")
 	# 切到天青：同一颗按钮的 normal StyleBox 必须就地变天青（不动节点引用）
 	GameStyle.apply_theme_color(&"cyan")
 	_c.check(normal.bg_color == GameStyle.theme_preset(&"cyan")["main"],
@@ -487,9 +487,9 @@ func _test_theme_swap_runtime() -> void:
 	btn.free()
 	GameStyle.apply_theme_color(prev)
 
-## 主题预设表自身完整性：5 套、id 唯一、三件套齐备、默认品红
+## 主题预设表自身完整性：5 套、id 唯一、三件套齐备、默认荧绿
 func _test_theme_presets() -> void:
-	_c.check(GameStyle.THEME_PRESETS.size() == 5, "主题预设恰为 5 套（品红/明黄/暖橙/天青/荧绿）")
+	_c.check(GameStyle.THEME_PRESETS.size() == 5, "主题预设恰为 5 套（荧绿/品红/明黄/暖橙/天青）")
 	var seen := {}
 	for preset in GameStyle.THEME_PRESETS:
 		_c.check(preset.has("id") and preset.has("name") and preset.has("main") \
@@ -497,8 +497,8 @@ func _test_theme_presets() -> void:
 		var id: StringName = preset["id"]
 		_c.check(not seen.has(id), "主题 id「%s」不重复" % String(id))
 		seen[id] = true
-	_c.check(GameStyle.THEME_PRESETS[0]["id"] == &"pink", "第一套（默认）是品红")
-	_c.check(SettingsManager.THEME_DEFAULT == &"pink", "SettingsManager 默认主题与 GameStyle 首项同源")
+	_c.check(GameStyle.THEME_PRESETS[0]["id"] == &"lime", "第一套（默认）是荧绿")
+	_c.check(SettingsManager.THEME_DEFAULT == &"lime", "SettingsManager 默认主题与 GameStyle 首项同源")
 	_c.check(SettingsManager.theme_color_label() == GameStyle.theme_name(SettingsManager.theme_color()),
 		"设置页读到的主题名与当前主题一致")
 

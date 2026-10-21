@@ -3,7 +3,7 @@ extends Node2D
 
 ## 藏宝匣：竞技场内随机刷新的可破坏宝箱（Brotato 树木的修仙版）
 ## 挨够 GameBalance.chest_break_hits() 下砸开，掉什么按档位查 BalanceChest.reward_of（三档）：
-##   木匣 —— 约六成掉回春葫芦（回 15% 生命），约四成掉 3 颗金币
+##   木匣 —— 约四成掉回春葫芦（回 15% 生命），约六成掉 3 颗金币
 ##   铜匣 —— 同样的葫芦概率但回得更多，掉 6 颗金币
 ##   玉匣 —— 必送一件随机道具（与金币阁同一个 roller），另有金币；每局送出件数有顶，
 ##           到顶后退回铜匣奖励 ×1.5（见 BalanceChest.jade_fallback_reward）

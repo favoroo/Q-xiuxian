@@ -55,10 +55,10 @@ func _run() -> void:
 	_manual.open()
 	await _settle(3)
 	var cards := 0
-	for tab in [1, 2]:
+	for tab in [0, 1]:
 		_manual._switch_tab(tab)
 		await _settle(3)
-		var tag := "法器图鉴" if tab == 1 else "法宝图鉴"
+		var tag := "武器图鉴" if tab == 0 else "道具图鉴"
 		var zones := _hot_zones(_manual)
 		_c.check(zones.size() >= 10, "%s：%d 张卡都登记了热区" % [tag, zones.size()])
 		cards += zones.size()
@@ -238,7 +238,7 @@ func _selftest() -> void:
 	add_child(_manual)
 	_manual.open()
 	await _settle(3)
-	_manual._switch_tab(2)
+	_manual._switch_tab(1)
 	await _settle(3)
 
 	var bad := _make_card_replica("BadCard", "反例卡")

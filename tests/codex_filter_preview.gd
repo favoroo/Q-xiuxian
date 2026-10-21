@@ -8,7 +8,7 @@ func _ready() -> void:
 	add_child(manual)
 	manual.open()
 	await _frames(2)
-	manual.switch_tab(1)
+	manual.switch_tab(0)
 	await _frames(2)
 	_snap("tmp_codex_all.png")
 	manual.open_weapons_page("spirit")

@@ -1,6 +1,6 @@
 extends Node
 
-## 非判据现场工具：渲染教程手册八个分页并截图到项目根 tmp_manual_tab*.png，供目检排版。
+## 非判据现场工具：渲染教程手册七个分页并截图到项目根 tmp_manual_tab*.png，供目检排版。
 ## 用法：$G --headless --path . res://tests/ManualPreview.tscn
 
 func _ready() -> void:
@@ -16,8 +16,8 @@ func _ready() -> void:
 	for _i in range(6):
 		await get_tree().process_frame
 
-	var names := ["basics", "weapons", "items", "upgrades", "pets", "cultivators", "enemies", "advanced"]
-	for tab in range(8):
+	var names := ["weapons", "items", "upgrades", "pets", "cultivators", "enemies", "advanced"]
+	for tab in range(7):
 		manual._switch_tab(tab)
 		manual._build_page(tab)
 		for _i in range(6):

@@ -82,7 +82,7 @@ func _run() -> void:
 	_manual = ManualDialog.new()
 	add_child(_manual)
 	_manual.open()
-	_manual._switch_tab(1)
+	_manual._switch_tab(0)
 	await _settle(6)
 	var cards := _zones_in_view(_manual)
 	_c.check(cards.size() >= MANUAL_CARDS, "法器图鉴采到 %d 张卡可测" % cards.size())

@@ -1,6 +1,7 @@
-/* 站点渲染层：只读 data.js（由 tools/export_site_data.py 从 scripts/data/*.gd 导出），
-   页面里所有数量、档位、羁绊阶梯、升星规则都从这份数据现填，不在此手抄任何数字。
-   交互口径与游戏内一致：筛选是「看哪一批」，不改写当前选中项（切板块不许替人选中第一件）。 */
+/* 站点渲染层：只读 data.js 与 tokens.css（两者都由 tools/export_site_data.py 从游戏现读产出）。
+   数量、档位、五行色、羁绊阶梯、升星规则、玩法秒数一律不在此手抄；
+   主题色用 GameStyle 的 THEME_PRESETS 同一张表，切换只改 :root 上那三个变量。
+   交互口径照游戏内：筛选只改「看哪一批」，不改写当前选中项（切板块不许替人选中第一件）。 */
 (function () {
   "use strict";
 
@@ -15,18 +16,73 @@
   }
   function byId(id) { return document.getElementById(id); }
 
-  /* —— 数量与版本：数字只从 meta 来 —— */
+  /* 低动效偏好一次判掉：JS 侧的揭示/数字滚动/上色扫屏全按它走，
+     CSS 里另有一整块 prefers-reduced-motion 兜住补间（两边都必须停在「完整可见」这一态） */
+  var RM = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  /* 动效时长一律从 tokens 现读，不在这里再抄一份毫秒数 */
+  function tok(name) {
+    var v = window.getComputedStyle(document.documentElement).getPropertyValue(name);
+    var n = parseFloat(v);
+    return /ms$/.test(v) ? n : n * 1000;
+  }
+  function stagger(node, i) {
+    node.style.setProperty("--rv-delay", "calc(var(--rv-step) * " + Math.min(i, 6) + ")");
+  }
+
+  /* —— 数字与规则：一律从 data 现填，HTML 里写的那些只是无 JS 时的兜底 —— */
   var counts = D.meta.counts || {};
-  counts.waves = (D.rules && D.rules.waves && D.rules.waves.victory) || 20;
+  var play = (D.rules || {}).play || {};
+  counts.waves = play.victory || 20;
   Array.prototype.forEach.call(document.querySelectorAll("[data-count]"), function (n) {
     var k = n.getAttribute("data-count");
     if (counts[k] != null) n.textContent = counts[k];
   });
-  if (D.meta.version) {
-    Array.prototype.forEach.call(document.querySelectorAll("[data-version]"), function (n) {
-      n.textContent = "v" + D.meta.version;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rule]"), function (n) {
+    var path = n.getAttribute("data-rule").split(".");
+    var cur = D.rules;
+    for (var i = 0; i < path.length && cur; i++) cur = cur[path[i]];
+    if (cur != null) n.textContent = cur;
+  });
+
+  /* —— 主题色：与游戏内设置页同一张 THEME_PRESETS，选完记住 —— */
+  var THEME_KEY = "***";
+  (function buildThemes() {
+    var box = byId("themeSwatches");
+    var label = byId("themeName");
+    var list = D.meta.themes || [];
+    if (!box || !list.length) return;
+    var saved = null;
+    try { saved = window.localStorage.getItem(THEME_KEY); } catch (e) { /* 隐私模式就不记了 */ }
+    function apply(t) {
+      var s = document.documentElement.style;
+      s.setProperty("--hot", t.main);
+      s.setProperty("--hot-edge", t.edge);
+      s.setProperty("--hot-dk", t.dk);
+      // 字色跟着面色走（导出器按对比度算好的三档），否则深档面在品红下该配白字、
+      // 换到荧绿就该配黑字，写死任何一边都会有一种主题糊字
+      s.setProperty("--on-hot", t.t);
+      s.setProperty("--on-hot-edge", t.te);
+      s.setProperty("--on-hot-dk", t.td);
+      Array.prototype.forEach.call(box.querySelectorAll(".theme-sw"), function (b) {
+        b.setAttribute("aria-pressed", b.dataset.id === t.id ? "true" : "false");
+      });
+      if (label) label.textContent = t.n;
+      try { window.localStorage.setItem(THEME_KEY, t.id); } catch (e) { /* 存不了也不影响这一屏 */ }
+    }
+    list.forEach(function (t) {
+      var b = el("button", "theme-sw");
+      b.type = "button";
+      b.dataset.id = t.id;
+      b.style.background = t.main;
+      b.setAttribute("aria-label", "主题色改用" + t.n);
+      b.addEventListener("click", function () { apply(t); });
+      box.appendChild(b);
     });
-  }
+    var want = saved || D.meta.theme_default || list[0].id;
+    var pick = null;
+    list.forEach(function (t) { if (t.id === want) pick = t; });
+    apply(pick || list[0]);
+  })();
 
   /* —— 角色：加成 / 代偿逐行列，开局自带与第二个技能做色签 —— */
   var roleGrid = byId("roleGrid");
@@ -34,8 +90,7 @@
     var card = el("article", "role plate");
     var top = el("div", "role-top");
     var img = el("img");
-    img.src = r.i; img.alt = r.n + " 头像"; img.width = 42; img.height = 42;
-    img.loading = "lazy";
+    img.src = r.i; img.alt = r.n + " 头像"; img.width = 42; img.height = 42; img.loading = "lazy";
     var meta = el("div");
     meta.appendChild(el("div", "role-name", r.n));
     meta.appendChild(el("div", "role-epi", r.e));
@@ -61,6 +116,79 @@
     if (tags.children.length) card.appendChild(tags);
     roleGrid.appendChild(card);
   });
+  (function () {
+    var cards = Array.prototype.slice.call(roleGrid.children);
+    var fold = makeFold(roleGrid, 2, "名");
+    function apply() {
+      var cap = fold.cap(cards.length);
+      cards.forEach(function (c, i) { c.hidden = i >= cap; });
+      fold.sync(cards.length);
+    }
+    roleGrid._refilter = apply;
+    apply();
+    var rid = 0;
+    window.addEventListener("resize", function () {
+      window.clearTimeout(rid); rid = window.setTimeout(apply, 180);
+    });
+  })();
+
+  /* —— 折叠：角色/武器/道具一次全铺太长，先给几整行，其余点按钮展开 ——
+     阈值按「整行 × 当前列数」算：桌面 6 列与手机 2 列下折叠块高度差很多，
+     按行取整不会出现切半行的断口，列数也直接读浏览器算好的 grid，不另写一份表。 */
+  /* 折叠：角色/武器/道具一次全铺太长，先给几整行，其余点按钮展开 ——
+     露出来的这几排靠 popFrom 逐颗顶上来，收起时不演（那是人要走的动作）。 */
+  function visibleCount(grid) {
+    return Array.prototype.filter.call(grid.children, function (n) { return !n.hidden; }).length;
+  }
+  function popFrom(grid, from) {
+    var shown = Array.prototype.filter.call(grid.children, function (n) { return !n.hidden; });
+    shown.slice(from).forEach(function (n, i) {
+      if (!n.classList.contains("tile")) return;
+      stagger(n, i);
+      n.classList.remove("pop");
+      void n.offsetWidth;
+      n.classList.add("pop");
+      n.addEventListener("animationend", function done() {
+        n.classList.remove("pop");
+        n.style.removeProperty("--rv-delay");
+        n.removeEventListener("animationend", done);
+      });
+    });
+  }
+
+  function makeFold(grid, rows, unit) {
+    var open = false;
+    var btn = el("button", "more");
+    btn.type = "button";
+    btn.setAttribute("aria-controls", grid.id);
+    grid.parentNode.insertBefore(btn, grid.nextSibling);
+    function cols() {
+      var v = window.getComputedStyle(grid).gridTemplateColumns;
+      return Math.max(1, (v ? v.split(" ").filter(Boolean).length : 1));
+    }
+    function perView() { return rows * cols(); }
+    btn.addEventListener("click", function () {
+      var before = visibleCount(grid);
+      open = !open;
+      if (grid._refilter) grid._refilter();
+      btn.scrollIntoView({ block: "nearest" });
+      // 展开：新露出来的这几排逐颗顶上来（收起就不用演了，那是人要走的动作）
+      if (!RM && open) popFrom(grid, before);
+    });
+    return {
+      open: function () { return open; },
+      cap: function (total) { return open || total <= perView() ? total : perView(); },
+      sync: function (total) {
+        var need = total > perView();
+        btn.hidden = !need;
+        if (need) {
+          btn.textContent = open ? "收起" : ("展开其余 " + (total - perView()) + " " + unit);
+          btn.appendChild(el("i", "chev", open ? "▲" : "▼"));
+        }
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    };
+  }
 
   /* —— 通用「网格 + 筛选 + 详情条」工厂 —— */
   function buildCatalog(cfg) {
@@ -70,10 +198,9 @@
     var shown = 0;
 
     var tiles = cfg.items.map(function (item, idx) {
-      var b = el("button", "tile " + (cfg.cls || ""));
+      var b = el("button", "tile" + (cfg.tileClass ? " " + cfg.tileClass(item) : ""));
       b.type = "button";
       b.dataset.idx = idx;
-      if (cfg.tileClass) b.className += " " + cfg.tileClass(item);
       var im = el("img");
       im.src = item.i; im.alt = ""; im.width = 34; im.height = 34; im.loading = "lazy";
       var t = el("span", "tile-txt");
@@ -84,6 +211,7 @@
       return b;
     });
     Array.prototype.forEach.call(tiles, function (b) { grid.appendChild(b); });
+    var fold = cfg.rows ? makeFold(grid, cfg.rows, cfg.unit || "件") : null;
 
     function select(btn) {
       var item = cfg.items[+btn.dataset.idx];
@@ -94,21 +222,41 @@
       dIcon.src = item.i;
       dName.textContent = item.n;
       dDesc.textContent = cfg.plain(item);
+      // 详情条顶一下再归位：点完卡到读出来这一下，眼睛跟得上是同一件事
+      var bar = dIcon.parentNode;
+      if (!RM && bar) {
+        bar.classList.remove("ping");
+        void bar.offsetWidth;   // 摘类后必须强制一次重排，否则同一帧内再挂上去动画不会重播
+        bar.classList.add("ping");
+      }
     }
     grid.addEventListener("click", function (e) {
       var btn = e.target.closest(".tile");
       if (btn && !btn.hidden) select(btn);
     });
 
-    /* 筛选只改「看哪一批」：当前选中项被过滤掉也不动它，详情条继续说同一件东西 */
+    /* 筛选只改「看哪一批」：当前选中项被过滤掉也不动它，详情条继续说同一件东西。
+       折叠再在筛完的序列上截一刀，所以两家的结果一起算，不用 hidden 互相覆盖。 */
+    var curKey = "";
     function applyFilter(key) {
-      shown = 0;
-      tiles.forEach(function (b) {
-        var ok = !key || cfg.match(cfg.items[+b.dataset.idx], key);
-        b.hidden = !ok;
-        if (ok) shown++;
+      curKey = key || "";
+      var matched = tiles.filter(function (b) {
+        return !curKey || cfg.match(cfg.items[+b.dataset.idx], curKey);
       });
-      count.textContent = shown + " 件";
+      tiles.forEach(function (b) { b.hidden = true; });
+      var cap = fold ? fold.cap(matched.length) : matched.length;
+      matched.slice(0, cap).forEach(function (b) { b.hidden = false; });
+      shown = matched.length;
+      count.textContent = (cap < matched.length ? "已显示 " + cap + " / " : "") + matched.length + " 件";
+      if (fold) fold.sync(matched.length);
+    }
+    if (fold) {
+      grid._refilter = function () { applyFilter(curKey); };
+      var rid = 0;
+      window.addEventListener("resize", function () {
+        window.clearTimeout(rid);
+        rid = window.setTimeout(function () { applyFilter(curKey); }, 180);
+      });
     }
 
     var count = el("span", "fcount", "");
@@ -134,32 +282,36 @@
 
     applyFilter("");
     select(tiles[0]);
-    return { select: select, tiles: tiles };
+    return { tiles: tiles };
   }
 
-  /* —— 武器：器类 + 五行 11 个筛签，五行签带本家色 —— */
-  var ELEMENT_DOT = { metal: "#c9a227", wood: "#59bf73", water: "#1e88e5", fire: "#ec4018", earth: "#a97544" };
-  var classKeys = {};
-  (D.cats || []).slice(0, 6).forEach(function (c) { classKeys[c.k] = true; });
+  /* —— 武器：卡框 accent 取五行属色（tokens 的 --m-*），器类签不带色点 —— */
+  var ELEMENT_KEY = {};
+  (D.cats || []).forEach(function (c) { if (c.kind === "element") ELEMENT_KEY[c.k] = true; });
+  function elementOf(w) {
+    for (var i = 0; i < w.g.length; i++) if (ELEMENT_KEY[w.g[i]]) return w.g[i];
+    return "";
+  }
   buildCatalog({
     grid: "armGrid", filters: "armFilters",
     detailIcon: "armDetailIcon", detailName: "armDetailName", detailDesc: "armDetailDesc",
-    items: D.weapons, cls: "arm", allLabel: "全部 " + D.weapons.length + " 件",
+    items: D.weapons, allLabel: "全部 " + D.weapons.length + " 件", rows: 3, unit: "件",
+    tileClass: function (w) { var e = elementOf(w); return e ? "e-" + e : ""; },
     sub: function (w) { return w.t; },
     plain: function (w) { return w.d || w.t; },
     match: function (w, k) { return w.g.indexOf(k) >= 0; },
     cats: (D.cats || []).map(function (c) {
-      return { k: c.k, n: c.n, dot: ELEMENT_DOT[c.k] || "" };
+      return { k: c.k, n: c.n, dot: c.kind === "element" ? "var(--m-" + c.k + ")" : "" };
     }),
   });
 
-  /* —— 升星与羁绊规则：数字从 rules / cats 现填，与游戏内同一条真话 —— */
+  /* —— 升星与羁绊：数字从 rules / cats 现填，句子与游戏内商店提示同一口径 —— */
   var st = (D.rules || {}).star || {};
   var starRule = byId("starRule");
   if (starRule && st.max) {
     starRule.textContent = "";
     starRule.appendChild(document.createTextNode(
-      "集齐 " + (st.need || 3) + " 把同名同星，在商店合成升一星，伤害 ×" + st.dmg +
+      "集齐 " + st.need + " 把同名同星，在商店合成升一星，伤害 ×" + st.dmg +
       "、攻击间隔 ×" + st.cd + "，最高 "));
     starRule.appendChild(el("b", "star", "★" + st.max));
     starRule.appendChild(document.createTextNode(
@@ -169,23 +321,22 @@
   if (synBox) {
     (D.cats || []).forEach(function (c) {
       var chip = el("em", null, c.n + " " + (c.th || []).join("/") + " 件 · " + (c.ef || []).join("+"));
-      chip.style.background = ELEMENT_DOT[c.k] || "var(--panel)";
+      chip.style.background = c.kind === "element" ? "var(--m-" + c.k + ")" : "var(--chalk)";
       synBox.appendChild(chip);
     });
   }
 
-  /* —— 道具：档位四档筛签，顶边色即稀有度 —— */
+  /* —— 道具：档位四档筛签，卡框色 = RARITY_* 四档 —— */
   var tiers = [];
   var tierSeen = {};
   D.items.forEach(function (it) {
     if (!tierSeen[it.tier]) { tierSeen[it.tier] = true; tiers.push({ t: it.tier, n: it.tl }); }
   });
   tiers.sort(function (a, b) { return a.t - b.t; });
-  var TIER_DOT = { 1: "#b8b3a6", 2: "#47adf9", 3: "#c773fa", 4: "#ffc740" };
   buildCatalog({
     grid: "itemGrid", filters: "itemFilters",
     detailIcon: "itemDetailIcon", detailName: "itemDetailName", detailDesc: "itemDetailDesc",
-    items: D.items, allLabel: "全部 " + D.items.length + " 件",
+    items: D.items, allLabel: "全部 " + D.items.length + " 件", rows: 3, unit: "件",
     tileClass: function (it) { return "t" + it.tier; },
     sub: function (it) { return it.tl + " · " + it.price + " 金币"; },
     plain: function (it) {
@@ -193,29 +344,21 @@
       return it.d ? (it.d + (rows ? "（" + rows + "）" : "")) : rows;
     },
     match: function (it, k) { return String(it.tier) === k; },
-    cats: tiers.map(function (x) { return { k: String(x.t), n: x.n, dot: TIER_DOT[x.t] }; }),
+    cats: tiers.map(function (x) { return { k: String(x.t), n: x.n, dot: "var(--r-" + x.t + ")" }; }),
   });
 
-  /* —— 灵兽：有实拍切图就用切图，没有就用 PetData 的色值画灵球兜底 —— */
+  /* —— 灵兽：图取调形台实拍切图，描边用它自己那颗灵球的主色 —— */
   var petGrid = byId("petGrid");
   D.pets.forEach(function (p) {
     var card = el("article", "pet");
+    card.style.setProperty("--pet-color", p.color);
     var top = el("div", "pet-orb");
-    if (p.i) {
-      var im = el("img", "orb-img");
-      im.src = p.i; im.alt = p.n + " 形象"; im.width = 52; im.height = 52; im.loading = "lazy";
-      top.appendChild(im);
-    } else {
-      var orb = el("div", "orb");
-      orb.style.setProperty("--pet-core", p.color);
-      orb.style.setProperty("--pet-halo", p.halo);
-      orb.appendChild(el("b", null, p.n.charAt(0)));
-      top.appendChild(orb);
-    }
+    var im = el("img", "orb-img");
+    im.src = p.i; im.alt = p.n + " 形象"; im.width = 52; im.height = 52; im.loading = "lazy";
     var who = el("div");
     who.appendChild(el("div", "pet-n", p.n));
     who.appendChild(el("div", "pet-meta", "每 " + p.cd + " 秒出手 · " + p.price + " 金币起"));
-    top.appendChild(who);
+    top.appendChild(im); top.appendChild(who);
     top.appendChild(el("span", "pet-r", p.rn));
     card.appendChild(top);
     card.appendChild(el("p", null, p.d));
@@ -224,7 +367,8 @@
 
   /* —— 技能：有图标用图标，没图标用游戏内占位符文上键 —— */
   var skillGrid = byId("skillGrid");
-  D.skills.forEach(function (s) {
+  /* 只放五选一那批：影爆 / 药爆跟着角色自带、不走选择界面，卡片混进来会让人以为能挑 */
+  D.skills.filter(function (s) { return s.offer; }).forEach(function (s) {
     var card = el("article", "skill plate");
     var top = el("div", "skill-top");
     if (s.i) {
@@ -245,25 +389,111 @@
     skillGrid.appendChild(card);
   });
 
-  /* —— 导航高亮 + 标题带扫屏（游戏内 band_wipe 的品红/墨黑双矩带） —— */
+  /* —— 导航指示条 + 分区高亮 + 标题上色扫屏 + 滚动入场 + 数据带数字 —— */
   var links = Array.prototype.slice.call(document.querySelectorAll(".nav a"));
+  var nav = links.length ? links[0].parentNode : null;
+  var ind = null;
+  if (nav) {
+    ind = el("span", "nav-ind");
+    ind.setAttribute("aria-hidden", "true");
+    nav.appendChild(ind);
+  }
+  var active = null;   // 当前分区那一项；hover 只是借过去看一下，移开就还给它
+  function place(link) {
+    if (!ind || !link) return;
+    ind.style.width = link.offsetWidth + "px";
+    ind.style.transform = "translateX(" + link.offsetLeft + "px)";
+    ind.setAttribute("data-show", "1");
+  }
+  if (nav) {
+    nav.addEventListener("mouseover", function (e) {
+      var a = e.target.closest(".nav a");
+      if (a) place(a);
+    });
+    nav.addEventListener("mouseleave", function () {
+      // 手移开就还给当前分区；一个分区都还没进过时直接收起来，别留一根没人认领的带子
+      if (active) place(active); else if (ind) ind.setAttribute("data-show", "0");
+    });
+    links.forEach(function (l) {
+      l.addEventListener("click", function () { setActive(l); });
+    });
+    window.addEventListener("resize", function () { place(active); });
+  }
+  function setActive(href) {
+    links.forEach(function (l) { l.classList.toggle("on", l === href); });
+    active = href;
+    place(href);
+  }
+
   if ("IntersectionObserver" in window) {
-    var io = new IntersectionObserver(function (rows) {
+    var spy = new IntersectionObserver(function (rows) {
       rows.forEach(function (r) {
         if (!r.isIntersecting) return;
-        links.forEach(function (l) {
-          l.classList.toggle("on", l.getAttribute("href") === "#" + r.target.id);
-        });
+        for (var i = 0; i < links.length; i++) {
+          if (links[i].getAttribute("href") === "#" + r.target.id) setActive(links[i]);
+        }
         var title = r.target.querySelector(".sec-title");
-        if (title && !title.dataset.wiped) {
+        if (title && !RM && !title.dataset.wiped) {
           title.dataset.wiped = "1";
-          title.classList.add("wiped");
+          title.classList.add("wiping");
+          // 走完必须把类摘掉：留着 = 标题的底色永久停在那一条硬边上（上一版糊「下载」就是这么来的）
+          title.addEventListener("animationend", function () { title.classList.remove("wiping"); });
+          window.setTimeout(function () { title.classList.remove("wiping"); }, tok("--dur-wipe") / 2 + 120);
         }
       });
     }, { rootMargin: "-70px 0px -65% 0px" });
     links.forEach(function (l) {
       var s = document.getElementById(l.getAttribute("href").slice(1));
-      if (s) io.observe(s);
+      if (s) spy.observe(s);
     });
+
+    /* 滚动入场：只给「此刻还在首屏下方」的块挂 .rv —— 屏内正在读的东西绝不能被藏起来再演，
+       那会变成「打开页面有一块空白自己慢慢冒出来」。JS 没跑或浏览器不认 IO 时页面照常全可见。 */
+    var targets = [];
+    Array.prototype.forEach.call(document.querySelectorAll(".section"), function (s) {
+      var kids = [].slice.call(s.querySelectorAll(".sec-sub, .sec-body > *"));
+      kids.forEach(function (n, i) {
+        if (n.getBoundingClientRect().top > window.innerHeight * 0.92) {
+          stagger(n, i);
+          n.classList.add("rv");
+          targets.push(n);
+        }
+      });
+    });
+    if (targets.length) {
+      var revealer = new IntersectionObserver(function (rows) {
+        rows.forEach(function (r) {
+          if (!r.isIntersecting) return;
+          r.target.classList.add("on");
+          revealer.unobserve(r.target);
+        });
+      }, { rootMargin: "0px 0px -8% 0px" });
+      targets.forEach(function (n) { revealer.observe(n); });
+    }
+
+    /* 数据带：六个数字滚上去，时长用扫屏那一拍（--dur-wipe + --wipe-fade）现读，不另定 */
+    var band = document.querySelector(".band");
+    if (band && !RM) {
+      var nums = [].slice.call(band.querySelectorAll("[data-count]")).map(function (n) {
+        return { node: n, to: parseInt(n.textContent, 10) || 0 };
+      });
+      var ms = tok("--dur-wipe") + tok("--wipe-fade");
+      var roll = new IntersectionObserver(function (rows) {
+        rows.forEach(function (r) {
+          if (!r.isIntersecting) return;
+          roll.disconnect();
+          var t0 = 0;
+          function frame(ts) {
+            if (!t0) t0 = ts;
+            var p = Math.min(1, (ts - t0) / ms);
+            var e = 1 - Math.pow(1 - p, 3);
+            nums.forEach(function (x) { x.node.textContent = Math.round(x.to * e); });
+            if (p < 1) window.requestAnimationFrame(frame);
+          }
+          window.requestAnimationFrame(frame);
+        });
+      }, { threshold: 0.4 });
+      roll.observe(band);
+    }
   }
 })();
