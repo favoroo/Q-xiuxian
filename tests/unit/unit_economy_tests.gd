@@ -7,8 +7,8 @@ extends UnitTestsBase
 func _test_exp_curve() -> void:
 	GameManager.reset_run()
 	_c.equals(GameManager.experience_to_next, GameBalance.EXP_FIRST_LEVEL, "1 级起始修为取自 GameBalance")
-	_c.equals(GameBalance.exp_to_next(10), 20, "exp_to_next(10)=int(14.2)+6")
-	_c.equals(GameBalance.exp_to_next(20), 34, "exp_to_next(20)=int(28.4)+6")
+	_c.equals(GameBalance.exp_to_next(10), 24, "exp_to_next(10)=int(12.8)+12")
+	_c.equals(GameBalance.exp_to_next(24), 42, "exp_to_next(24)=int(30.72)+12")
 	var prev := 1
 	var monotonic := true
 	for i in range(20):

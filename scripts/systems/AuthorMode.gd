@@ -57,6 +57,10 @@ static func set_level(gm: Node, target: int) -> void:
 	if t > old_level:
 		var gained := t - old_level
 		gm.pending_upgrade_points += gained
+		# 悟道面板正开着时，本次结算的「共几点」快照也要跟着涨，否则顶栏会出现
+		# 「剩余加点 50 次」却写着「升级已完成」的自相矛盾读数（作者模式边加点边调等级）
+		if not gm.alloc_offers.is_empty():
+			gm.alloc_points_total += gained
 		gm.pending_points_changed.emit(gm.pending_upgrade_points)
 		for i in range(gained):
 			gm.player_leveled_up.emit(old_level + i + 1)

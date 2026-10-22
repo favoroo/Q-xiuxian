@@ -470,7 +470,7 @@ func _test_cultivator_system() -> void:
 	GameManager.reset_run()
 	GameManager.cultivator_id = "duoshe"
 	GameManager._apply_cultivator()
-	_c.equals(GameManager.experience_to_next, int(round(GameBalance.EXP_FIRST_LEVEL * 0.6)), "夺舍散人首级门槛 10→6")
+	_c.equals(GameManager.experience_to_next, int(round(GameBalance.EXP_FIRST_LEVEL * 0.6)), "夺舍散人首级门槛 = 基准 ×0.6")
 	GameManager.add_experience(GameManager.experience_to_next)
 	_c.equals(GameManager.level, 2, "夺舍散人升到 2 级")
 	_c.equals(GameManager.experience_to_next, int(round(float(GameBalance.exp_to_next(GameBalance.EXP_FIRST_LEVEL)) * 0.6)), "第 2 级门槛 = 原链 ×0.6（不复利）")

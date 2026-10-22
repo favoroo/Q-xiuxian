@@ -450,6 +450,19 @@ func refresh(animate: bool = true) -> void:
 
 	_refresh_inventory()
 
+## 作者面板改金币/生命后由 Main 调用：顶栏金币、货架价格键（买得起/差 N）、重掷键、
+## 生命徽记与回复药卡「这一口回多少」都要按新读数重画。走 refresh(false) 这条既有的
+## 「本地状态变了」通道，不重播入场动画；作者面板盖在上面，收掉商店详情卡与拖拽态
+## 也不会打断玩家操作。
+func refresh_readouts() -> void:
+	refresh(false)
+
+## 作者面板发货（买到/清空背包）后由 Main 调用：库存变了，选中态与详情卡指向的都是旧账，
+## 先清选中再整屏重铺（不重播入场动画）。
+func refresh_inventory() -> void:
+	selected = {}
+	refresh(false)
+
 # ---------------- 上阵 + 背包栏位 ----------------
 
 func _refresh_inventory() -> void:

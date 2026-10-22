@@ -797,6 +797,24 @@ func _test_author_mode() -> void:
 	GameManager.experience = orig_exp
 	GameManager.experience_to_next = orig_next
 
+	# 3.1 悟道面板开着时调等级：alloc_points_total 跟着涨（否则顶栏「共 N 点」还是旧快照）
+	var orig_total := GameManager.alloc_points_total
+	var orig_offers: Array[Dictionary] = GameManager.alloc_offers.duplicate()
+	GameManager.level = 1
+	GameManager.pending_upgrade_points = 1
+	GameManager.alloc_points_total = 1
+	var probe_offers: Array[Dictionary] = [{"id": "__probe__", "title": "探针"}]
+	GameManager.alloc_offers = probe_offers
+	AuthorMode.set_level(GameManager, 4)
+	_c.equals(GameManager.alloc_points_total, 4, "悟道会话中调等级：共点数快照同步 +3")
+	GameManager.alloc_points_total = orig_total
+	GameManager.alloc_offers = orig_offers
+	GameManager.level = orig_level
+	GameManager.pending_upgrade_points = orig_points
+	GameManager._exp_chain = orig_chain
+	GameManager.experience = orig_exp
+	GameManager.experience_to_next = orig_next
+
 	# 4. 时间倍率循环 1x → 2x → 4x → 1x
 	AuthorMode.time_scale = 1.0
 	_c.near(AuthorMode.cycle_time_scale(), 2.0, 0.001, "时间倍率 1x → 2x")

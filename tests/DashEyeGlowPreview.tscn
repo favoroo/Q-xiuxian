@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://tests/dash_eye_glow_preview.gd" id="1_dasheye"]
-
-[node name="DashEyeGlowPreview" type="Node2D"]
-script = ExtResource("1_dasheye")

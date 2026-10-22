@@ -425,6 +425,20 @@ func _info_room_w() -> float:
 
 # ---------------- 一屏候选 ----------------
 
+## 供 Main 在作者面板改等级/加点后调用：点数与顶栏文案当场重画。
+## 作者模式上调等级会把差额折成 pending_upgrade_points（见 AuthorMode.set_level），
+## 但 alloc_points_total 是开面板时抄下的快照 —— 作者模式下两者本来就不一定相等，
+## 顶栏只认「剩余加点」，这里不重 roll 候选，避免玩家选到一半的卡被换掉。
+func refresh_bars() -> void:
+	_refresh_bars()
+
+## 供 Main 在作者面板发货后调用：卡面「受益装备」行按当前上阵武器现算，
+## 换装/买到新武器后要重铺候选（保留选中态会被换卡打乱，统一清掉）。
+func refresh_offers() -> void:
+	if not visible:
+		return
+	_refresh()
+
 func _refresh() -> void:
 	selected_index = -1
 	_populate_cards()

@@ -119,15 +119,13 @@ func _ready() -> void:
 			)
 		if wave_shop.has_signal("author_requested"):
 			wave_shop.author_requested.connect(author_panel.open)
-		# 作者面板发货后商店正开着 ⇒ 陈列行还是买之前的旧账（用户 2026-10-22：
-		# 「在商店前面进作者面板，买完商店武器没刷新，要下一波才出现」）。
-		# 直接走商店自己的 refresh(false)：重建货架与上阵/背包/道具/灵兽整行，
-		# 不重播入场动画（不是新货，只是本地库存变了）。
-		if author_panel.has_signal("inventory_changed"):
-			author_panel.inventory_changed.connect(func(_kind: String) -> void:
-				if wave_shop.visible and wave_shop.has_method("refresh"):
-					wave_shop.refresh(false)
-			)
+	# 作者面板发货 / 改共享读数后，仍开着的商店与悟道面板要当场重画：
+	# 原先这些读数只在开店/开面板时抄一次，商店里点「金币 +10 000」要等下一波重开才更新
+	# （2026-10-22 用户报）。两个信号分流：inventory_changed 重铺整行，state_changed 按 kind 只刷读数。
+	if author_panel.has_signal("inventory_changed"):
+		author_panel.inventory_changed.connect(_on_author_inventory_changed)
+	if author_panel.has_signal("state_changed"):
+		author_panel.state_changed.connect(_on_author_state_changed)
 	stats_dialog.closed.connect(func():
 		if _stats_return_to_pause:
 			_stats_return_to_pause = false
@@ -720,6 +718,47 @@ func _on_weapons_updated(weapons: Array) -> void:
 			$UILayer/GameHUD.visible = true
 		if joystick != null:
 			joystick.visible = true
+
+## 作者面板发货后：商店开着 ⇒ 陈列行还是买之前的旧账（用户 2026-10-22：
+## 「在商店前面进作者面板，买完商店武器没刷新，要下一波才出现」）。
+## 直接走商店自己的 refresh(false)：重建货架与上阵/背包/道具/灵兽整行，
+## 不重播入场动画（不是新货，只是本地库存变了）。
+## 悟道面板开着时同理：卡面「受益装备」行按当前上阵武器现算，也要重铺候选。
+func _on_author_inventory_changed(_kind: String) -> void:
+	var wave_shop := get_node_or_null("UILayer/WaveShop") as Control
+	if wave_shop != null and wave_shop.visible:
+		if wave_shop.has_method("refresh_inventory"):
+			wave_shop.refresh_inventory()
+		elif wave_shop.has_method("refresh"):
+			wave_shop.refresh(false)
+	var lvl_dialog := get_node_or_null("UILayer/LevelUpDialog") as Control
+	if lvl_dialog != null and lvl_dialog.visible and lvl_dialog.has_method("refresh_offers"):
+		lvl_dialog.refresh_offers()
+
+## 作者面板改金币/等级/生命：按 kind 调对应刷新入口（商店内部走既有的 refresh(false)
+## 通道，重建价格键的「买得起/差 N」与生命徽记；悟道只刷顶栏读数，不重 roll 候选）。
+## - stones：商店顶栏金币、货架价格键、重掷键；悟道刷新键与底栏文案
+## - level：悟道面板顶栏「连升 N 级 / 剩余加点」（等级还折了待加点）
+## - hp：商店生命徽记与回复药卡「这一口回多少」
+func _on_author_state_changed(kind: String) -> void:
+	var wave_shop := get_node_or_null("UILayer/WaveShop") as Control
+	var lvl_dialog := get_node_or_null("UILayer/LevelUpDialog") as Control
+	if kind == "game_over":
+		# 商店在 UILayer 里排在结算屏之后（画在上层）：不收起会把「直接胜利/失败」的
+		# 结算屏整块盖住。这里只藏商店，不动流程（结算由 GameManager 自己走）。
+		# 悟道面板在结算屏之前，本来就被盖住，且「继续无尽」还要靠它接着加点，不能藏。
+		if wave_shop != null:
+			wave_shop.visible = false
+		return
+	if wave_shop != null and wave_shop.visible:
+		match kind:
+			"stones", "hp":
+				if wave_shop.has_method("refresh_readouts"):
+					wave_shop.refresh_readouts()
+			"level":
+				pass
+	if lvl_dialog != null and lvl_dialog.visible and lvl_dialog.has_method("refresh_bars"):
+		lvl_dialog.refresh_bars()
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if bool(SettingsManager.get_val(&"display", &"screen_flash", true)):

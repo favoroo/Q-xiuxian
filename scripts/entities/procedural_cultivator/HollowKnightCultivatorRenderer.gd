@@ -1277,25 +1277,21 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 func _draw_eye_soft_glow(center: Vector2, radius: float, col: Color, layers: int = 3) -> void:
 	if suppress_eye_glow:
 		return
-	var r := radius * eye_glow_radius_scale
 	if not _chroma.is_empty():
-		draw_soft_glow(center, r * 0.60, Color(col.r, col.g, col.b, col.a * 0.78), layers)
+		draw_soft_glow(center, radius * 0.60, Color(col.r, col.g, col.b, col.a * 0.78), layers)
 	else:
-		draw_soft_glow(center, r, col, layers)
+		draw_soft_glow(center, radius, col, layers)
 
 func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, blink: float = 0.0) -> void:
 	var hs := head_scale
 	var eff_glow := col_eye_glow
 	var eff_core := col_eye_core
 	if eye_override_color.a > 0.01:
-		# 只借 override 的 RGB，alpha 沿用 col_eye_glow 的原始浓度：
-		# 整色 lerp 会把 override.a=1.0 混进柔光浓度，把三层柔光顶成实心色盘
-		# （白色时与面具同色看不出来，换成红/金等高饱和色立刻糊成一块）
-		eff_glow = Color(eye_override_color.r, eye_override_color.g, eye_override_color.b, col_eye_glow.a)
-		eff_core = col_eye_core.lerp(Color(1, 1, 1, 1), 0.55).lerp(eye_override_color, eye_core_blend)
-	var glow_r := eye_glow_boost * 3.6 * eye_glow_radius_scale
+		eff_glow = col_eye_glow.lerp(eye_override_color, clampf(eye_override_color.a, 0.0, 1.0))
+		eff_core = col_eye_core.lerp(Color(1, 1, 1, 1), 0.55).lerp(eye_override_color, 0.45)
+	var glow_r := eye_glow_boost * 3.6
 	var glow_a := eye_glow_boost * 0.4
-	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf((eff_glow.a + eye_pulse + glow_a) * eye_glow_density, 0.0, 1.0))
+	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf(eff_glow.a + eye_pulse + glow_a, 0.0, 1.0))
 
 	if blink > 0.45:
 		# 闭眼一瞬：下弯细缝弧线 + 残余微辉光，不画瞳仁/高光（闭合窗约 4 帧，阈值切换无跳变感）
@@ -1365,8 +1361,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 				draw_filled_ellipse(l_eye + Vector2(0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 
-		# 杀意暴击不画瞳孔白点：红眼里一颗白点像卡通眼，破坏凶戾感
-		if eye_glow_boost > 0.15 and skill_aura_type != "dash":
+		if eye_glow_boost > 0.15:
 			_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 			_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
@@ -1409,7 +1404,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 				_draw_eye_soft_glow(eye_pos, 6.2 + glow_r, eff_glow_col, 3)
 				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2), 2.2 * hs, 3.6 * hs, eff_core)
 
-		if eye_glow_boost > 0.15 and skill_aura_type != "dash":
+		if eye_glow_boost > 0.15:
 			_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
 ## 绘制斗篷轮廓描边与法力流动反光（仙侠高精流光反光感）

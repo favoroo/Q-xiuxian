@@ -33,19 +33,23 @@ description: 剑士游戏的 Web (HTML5) 导出与 GitHub Pages 部署流程。�
 ## 部署流程
 
 ```bash
-# 一键导出 Web 版并部署到 GitHub Pages
+# 一键导出 Web 版与宣传站并部署到 GitHub Pages
 python3 tools/deploy_web.py
 ```
 
 脚本自动完成：
-1. 调用 Godot CLI 导出 Web 版到 `build/web/`
-2. 创建或切换到 `gh-pages` 孤儿分支
-3. 将 `build/web/` 内容复制到分支根目录
-4. 提交并推送到 `origin`
-5. 切回原工作分支
-6. 打印访问 URL
+1. 自动同步游戏数据到宣传站 `site/dist/data.js`
+2. 调用 Godot CLI 导出 Web 版到 `build/web/`
+3. 创建或切换到 `gh-pages` 孤儿分支
+4. 将 `build/web/` 内容复制到分支根目录（游戏本体）
+5. 将 `site/dist/` 内容复制到分支 `site/` 目录（宣传站官网）
+6. 提交并推送到 `origin`
+7. 切回原工作分支
+8. 打印访问 URL
 
-部署后访问：`https://favoroo.github.io/Q-xiuxian/`
+部署后访问：
+- **游戏本体**：`https://favoroo.github.io/Q-xiuxian/`
+- **宣传官网**：`https://favoroo.github.io/Q-xiuxian/site/`
 
 首次生效需等待 1-2 分钟（GitHub Pages 缓存刷新）。
 
@@ -57,10 +61,16 @@ python3 tools/deploy_web.py
 python3 tools/deploy_web.py
 ```
 
-如果已有 `build/web/` 产物且只改了部署逻辑，可跳过导出：
+如果已有 `build/web/` 产物且只改了宣传站或部署逻辑，可跳过 Godot 导出：
 
 ```bash
 python3 tools/deploy_web.py --skip-export
+```
+
+如果只想部署游戏版不包含宣传站，可传：
+
+```bash
+python3 tools/deploy_web.py --skip-site
 ```
 
 ## 技术细节

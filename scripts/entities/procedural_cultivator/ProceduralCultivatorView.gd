@@ -38,14 +38,6 @@ var _cur_cloak_shimmer: float = 0.0
 var _cur_sigil_boost: float = 0.0
 var _cur_motes_boost: float = 0.0
 
-## 眼部柔光浓度（1.0 = 原有强度）：只改柔光浓淡，不动半径与形状
-var _target_eye_density: float = 1.0
-var _cur_eye_density: float = 1.0
-var _target_eye_radius_scale: float = 1.0
-var _cur_eye_radius_scale: float = 1.0
-var _target_eye_core_blend: float = 0.45
-var _cur_eye_core_blend: float = 0.45
-
 # 朝向与翻转
 var flip_h: bool = false:
 	set(val):
@@ -125,16 +117,10 @@ func _process(delta: float) -> void:
 	_cur_cloak_shimmer = move_toward(_cur_cloak_shimmer, _target_cloak_shimmer, step)
 	_cur_sigil_boost = move_toward(_cur_sigil_boost, _target_sigil_boost, step)
 	_cur_motes_boost = move_toward(_cur_motes_boost, _target_motes_boost, step)
-	_cur_eye_density = move_toward(_cur_eye_density, _target_eye_density, step)
-	_cur_eye_radius_scale = move_toward(_cur_eye_radius_scale, _target_eye_radius_scale, step)
-	_cur_eye_core_blend = move_toward(_cur_eye_core_blend, _target_eye_core_blend, step)
 
 	renderer.skill_aura_type = _target_aura_type
 	renderer.eye_override_color = _target_eye_color
 	renderer.eye_glow_boost = _cur_eye_boost
-	renderer.eye_glow_density = _cur_eye_density
-	renderer.eye_glow_radius_scale = _cur_eye_radius_scale
-	renderer.eye_core_blend = _cur_eye_core_blend
 	renderer.cloak_shimmer_color = _target_cloak_color
 	renderer.cloak_shimmer_intensity = _cur_cloak_shimmer
 	renderer.sigil_boost = _cur_sigil_boost
@@ -233,9 +219,6 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 			_target_aura_type = ""
 			_target_eye_color = Color.TRANSPARENT
 			_target_eye_boost = 0.0
-			_target_eye_density = 1.0
-			_target_eye_radius_scale = 1.0
-			_target_eye_core_blend = 0.45
 			_target_cloak_color = Color.TRANSPARENT
 			_target_cloak_shimmer = 0.0
 			_target_sigil_boost = 0.0
@@ -243,9 +226,6 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 		return
 
 	_target_aura_type = skill_id
-	_target_eye_density = 1.0
-	_target_eye_radius_scale = 1.0
-	_target_eye_core_blend = 0.45
 	var g_gold := GameStyle.GOLD_FX_EDGE
 	var g_jade := GameStyle.JADE_EDGE
 	var g_good := GameStyle.GOOD
@@ -272,16 +252,9 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 			_target_cloak_shimmer = 0.7 * intensity
 			_target_sigil_boost = 0.5 * intensity
 			_target_motes_boost = 0.75 * intensity
-		"dash": # 缩地成寸：瞬身血煞杀意锋芒爆闪、斗篷极速流光
-			_target_eye_color = Color(1.0, 0.12, 0.08, 1.0)
+		"dash": # 缩地成寸：瞬身纯白剑意锋芒爆闪、斗篷极速流光
+			_target_eye_color = Color(1.0, 1.0, 1.0, 1.0)
 			_target_eye_boost = 1.25 * intensity
-			_target_eye_density = 0.95      # 柔光浓度：眼窝内要亮到「发光」
-			_target_eye_radius_scale = 0.40 # 光晕半径：只贴着眼眶一圈
-			_target_eye_core_blend = 0.92   # 虹膜红透，不掺白芯
-			# 浓度/半径/染色起手即生效：平滑过渡会让起手那一拍用满浓度满半径的红色，糊成红盘
-			_cur_eye_density = _target_eye_density
-			_cur_eye_radius_scale = _target_eye_radius_scale
-			_cur_eye_core_blend = _target_eye_core_blend
 			_target_cloak_color = Color(1.0, 0.95, 0.8, 1.0)
 			_target_cloak_shimmer = 1.2 * intensity
 			_target_sigil_boost = 0.85 * intensity
@@ -317,9 +290,6 @@ func set_skill_visual(skill_id: String, active: bool, intensity: float = 1.0) ->
 		_:
 			_target_eye_color = Color.TRANSPARENT
 			_target_eye_boost = 0.0
-			_target_eye_density = 1.0
-			_target_eye_radius_scale = 1.0
-			_target_eye_core_blend = 0.45
 			_target_cloak_color = Color.TRANSPARENT
 			_target_cloak_shimmer = 0.0
 			_target_sigil_boost = 0.0

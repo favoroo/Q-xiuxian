@@ -1,16 +1,20 @@
 extends Node
 
 ## 作者面板判据：武器页筛选与卡面三签、所有条目「点卡开详情窗 → 窗内购买」、
-## 武器窗内 1/2/3 星三键、购买后 inventory_changed 联动商店陈列行刷新。
+## 武器窗内 1/2/3 星三键、购买后 inventory_changed 联动商店陈列行刷新、
+## 金币/等级/生命改动后 state_changed 联动商店读数即时刷新。
 ## 运行: $G --headless --path . res://tests/AuthorPanelCheck.tscn
 ##
-## 为什么立这条（用户 2026-10-22 两轮反馈）：
+## 为什么立这条（用户 2026-10-22 三轮反馈）：
 ##  ① 作者面板武器页原先是一整片无标签的卡，找装备只能靠肉眼扫 —— 要像图鉴一样
 ##     按类型/五行筛选、卡面直接印类别标签；筛选口径必须与图鉴同源（WeaponData.tags_of）。
 ##  ② 原先「点一下直接买」容易点错，要改成点卡先看详情、在详情窗里点购买。
 ##     这条也钉住「只点卡不许发货」——否则改回去时单看购买成功是测不出来的。
 ##  ③ 商店开着时从作者面板买东西，商店陈列行原先要等下一波才刷新（用户报的 bug），
 ##     现在购买成功发 inventory_changed，Main 接线到 shop.refresh(false)。
+##  ④ 商店里点「金币 +10 000」原先要出战后才生效（用户 2026-10-22 报）：金币只是数据，
+##     商店顶栏/价格键/重掷键都是开店时抄的旧账 —— 现在发 state_changed("stones")，
+##     Main 转 shop.refresh_readouts() 当场重画；补血/调等级同理。
 ##
 ## 假玩家只满足 WeaponInventory 的鸭类型需求（不启真实战场，判据跑得快）。
 
@@ -20,6 +24,7 @@ var _c := TestCheck.new()
 var _panel: AuthorPanel
 var _shop: WaveShop
 var _last_inventory_kind: String = ""
+var _last_state_kind: String = ""
 
 func _ready() -> void:
 	get_tree().root.size = VIEWPORT_SIZE
@@ -49,6 +54,15 @@ func _ready() -> void:
 		if _shop.visible and _shop.has_method("refresh"):
 			_shop.refresh(false)
 	)
+	# Main.gd 的 state_changed 接线（判据里等价复刻：按 kind 调商店对应刷新入口）
+	_panel.state_changed.connect(func(kind: String) -> void:
+		_last_state_kind = kind
+		if not _shop.visible:
+			return
+		match kind:
+			"stones", "hp":
+				_shop.refresh_readouts()
+	)
 	_panel.open()
 	await _settle(3)
 	_panel.switch_tab(2)
@@ -58,6 +72,7 @@ func _ready() -> void:
 	await _check_weapon_tip_purchase()
 	await _check_item_purchase()
 	_check_pet_tip()
+	await _check_shop_state_sync()
 	await _check_shop_refresh_link()
 
 	_c.check(_panel.visible, "全程作者面板没被误关")
@@ -172,6 +187,54 @@ func _check_pet_tip() -> void:
 		_c.check(_action_texts(tip).has("免费获得"), "灵兽详情窗有「免费获得」键")
 		DetailTip.close_all(_panel)
 		await _settle(2)
+
+# ---------------- 金币/生命即时联动 ----------------
+
+## 用户 2026-10-22：在商店界面点作者面板「金币 +10 000」，要出战后才加上来。
+## 根因：金币只是数据，商店顶栏/价格键/重掷键都是开店时抄的旧账；_add_stones 只发了
+## stats_updated（只有战斗 HUD 在听）。这里钉住 state_changed("stones") 发出、
+## 且走一遍 Main 的等价接线后商店读数当场变。
+func _check_shop_state_sync() -> void:
+	_panel.switch_tab(0)
+	await _settle(2)
+	# 摆一格买不起的货：价格键应显示「差 N」并置灰，加钱后当场变回可买（用户报的正是这一屏）
+	GameManager.spirit_stones = 0
+	GameManager.shop_offers = [{"kind": "weapon", "id": "qingyun_sword", "price": 99999,
+		"sold": false, "locked": false}]
+	_shop.refresh(false)
+	await _settle(3)
+	var price_btn := _find_price_btn()
+	_c.check(price_btn != null and price_btn.disabled, "钱不够时价格键置灰")
+	if price_btn != null:
+		_c.check(price_btn.text.contains("差"), "灰键写明差额（%s）" % price_btn.text)
+	var stones_before := GameManager.spirit_stones
+	_panel._add_stones(100000)
+	await _settle(3)
+	_c.equals(_last_state_kind, "stones", "加金币后发 state_changed(stones)")
+	_c.equals(GameManager.spirit_stones, stones_before + 100000, "金币当场入账 +100000")
+	_c.equals(_shop.stones_label.text, "金币 %d" % GameManager.spirit_stones,
+		"商店顶栏金币当场刷新（%s）" % _shop.stones_label.text)
+	var price_after := _find_price_btn()
+	_c.check(price_after != null and not price_after.disabled,
+		"加钱后价格键当场解除置灰（%s）" % (price_after.text if price_after != null else "无键"))
+
+	# 补满生命后商店生命徽记也要当场变
+	var p := GameManager.player as AuthorTestPlayer
+	p.current_health = 10.0
+	p.max_health = 100.0
+	_panel._heal_full()
+	await _settle(3)
+	_c.equals(_last_state_kind, "hp", "补满生命后发 state_changed(hp)")
+	_c.check(_shop._hp_chip.get_value_text().contains("100/100"),
+		"商店生命徽记当场刷新（%s）" % _shop._hp_chip.get_value_text())
+	GameManager.shop_offers = []
+
+## 货架卡的价格键：唯一一颗 custom_minimum_size 高 = CARD_PRICE_H 的按钮
+func _find_price_btn() -> Button:
+	for btn in _buttons_of(_shop.offers_container):
+		if is_equal_approx(btn.custom_minimum_size.y, WaveShop.CARD_PRICE_H):
+			return btn
+	return null
 
 # ---------------- 商店刷新联动 ----------------
 

@@ -18,6 +18,8 @@ extends BaseModalDialog
 ## - 直购全部走 AuthorMode.grant，不扣金币；面板自带「金币 +1000 / +10000」供经济测试。
 ## - 购买成功发 inventory_changed：商店开着时由 Main 转去 shop.refresh(false)，
 ##   否则买完的东西要等下一波才出现在陈列行里（2026-10-22 用户报的 bug）。
+## - 金币/等级/生命这类共享读数改动后发 state_changed：商店与悟道面板开着时由 Main
+##   当场重画（2026-10-22 用户报：商店里点金币 +10 000 要出战后才生效）。
 ## - 所有按钮都走 GameStyle.button（唯一取色入口 + 统一点击音）。
 
 const LEVEL_PRESETS: Array[int] = [1, 5, 10, 20, 30, 50]
@@ -29,6 +31,10 @@ const GRID_GAP := 8
 
 ## 购买成功后发一次（kind = "weapon"/"item"/"pet"）：宿主据此刷新商店陈列行等只读视图
 signal inventory_changed(kind: String)
+## 改动面板外的共享读数后发一次（kind = "stones"/"level"/"hp"）：宿主据此刷新仍开着的
+## 商店/悟道面板。原先只发 stats_updated（只有 HUD 在听），商店的「金币 N」与价格键
+## 要等下一波重开才更新（2026-10-22 用户报：在商店里点金币 +10000 不即时生效）。
+signal state_changed(kind: String)
 
 var _was_paused_before_open: bool = false
 ## 关面板时是否强制保持暂停（直接胜利/失败后结算屏要靠树暂停冻结，不能被本面板解掉）
@@ -189,6 +195,7 @@ func _set_level_to(target: int) -> void:
 		return
 	AuthorMode.set_level(GameManager, target)
 	_refresh_state_labels()
+	state_changed.emit("level")
 
 func _jump_relative(delta: int) -> void:
 	_jump_to(GameManager.wave_number + delta)
@@ -209,6 +216,8 @@ func _add_stones(amount: int) -> void:
 	GameManager.add_spirit_stones(amount)
 	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
 	_refresh_state_labels()
+	# 商店/悟道面板开着时，金币读数、价格键的「买得起/差 N」与刷新键的可用态都要当场重画
+	state_changed.emit("stones")
 
 func _refresh_state_labels() -> void:
 	if _level_value_lbl != null:
@@ -290,6 +299,9 @@ func _style_toggle(btn: Button, label: String, on: bool) -> void:
 
 func _force_end(victory: bool) -> void:
 	_keep_paused_on_close = true
+	# 商店开着时直接结算：商店是 UILayer 里排在结算屏之后的兄弟，不先收起会整块盖住
+	# 结算屏（玩家只看到商店，以为「直接胜利」没反应）。Main 接到这条把商店藏掉。
+	state_changed.emit("game_over")
 	close()
 	GameManager.trigger_game_over(victory)
 
@@ -300,6 +312,8 @@ func _clear_stash() -> void:
 		return
 	GameManager.stash.clear()
 	GameManager.notify_weapons_updated(GameManager.get_weapons_summary())
+	# 商店开着时陈列行要当场收掉这些格子（原先只发 weapons_updated，商店不监听）
+	inventory_changed.emit("weapon")
 	GameManager.announcement_triggered.emit("背包已清空")
 	AudioManager.play_sfx("sell", 0.9)
 
@@ -307,9 +321,17 @@ func _heal_full() -> void:
 	var p = GameManager.player
 	if p != null and is_instance_valid(p):
 		p.heal(p.max_health)
+		# 商店顶栏的生命徽记与回复药卡「这一口回多少」都按当前血量现算：补满后必须重画
+		state_changed.emit("hp")
 
 func _end_wave_now() -> void:
 	if GameManager.wave_spawner == null:
+		return
+	# 只允许战斗中调用：商店/悟道期间 end_wave 会再发一次回合收益、把阶段打回 CLEARING，
+	# 随后又重开一次商店（货架整批重 roll）—— 作者面板在这两屏也能打开，必须挡掉。
+	var phase_val: Variant = GameManager.wave_spawner.get("phase")
+	if phase_val != null and int(phase_val) != WaveSpawner.Phase.FIGHT:
+		GameManager.announcement_triggered.emit("只在战斗中可结束本波")
 		return
 	# end_wave 进 CLEARING 靠 _process 走倒计时，树必须是解暂停态
 	_force_unpause_on_close = true
