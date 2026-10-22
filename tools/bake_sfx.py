@@ -842,11 +842,13 @@ TARGET_PEAK = {
     "fan_gust": TARGET_PEAK_LOUD,
     "orb_hit": 0.32,
     # 器型族：近战双层（前摇压低当铺垫，命中层抬上来但压在 enemy_hit 之下）
+    # 2026-10-22 近战打击感：命中材质层整体抬 8 点（仍严格压在 enemy_hit 0.56 之下，
+    # 三层同帧不糊），近战「刃入肉」的实感主要靠这一层，故不再一味压低。
     "whoosh_light": 0.30,
     "whoosh_heavy": 0.36,
-    "impact_blade": 0.42,
-    "impact_blunt": 0.44,
-    "impact_crack": 0.40,
+    "impact_blade": 0.50,
+    "impact_blunt": 0.52,
+    "impact_crack": 0.48,
     "metal_dart": 0.34,
     "flame_jet": 0.36,
     "drum_boom": 0.55,

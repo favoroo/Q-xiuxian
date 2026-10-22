@@ -200,7 +200,9 @@ const DEFS: Dictionary = {
 			"name": "万能珠", "tier": 4, "price": 85,
 			"icon": "res://assets/art/item_hunyuan_zhu.png",
 			"desc": "",
-			"apply": {"luck": 8.0, "harvest": 8.0},
+			# 2026-10-22 由 幸运+8/收益+8 提到 +12/+10：原数值被同价位的天机盘
+			# （幸运+10、免费重掷+1、收益+5）全面支配，传说档纯数值件不该输给同档机制件。
+			"apply": {"luck": 12.0, "harvest": 10.0},
 		},
 		"taiyi_jindan": {
 			"name": "极效药丸", "tier": 4, "price": 88,
@@ -313,7 +315,9 @@ const DEFS: Dictionary = {
 			"name": "聚财袋", "tier": 2, "price": 24,
 			"icon": "res://assets/art/item_jucai_dai.png",
 			"desc": "",
-			"apply": {"harvest": 8.0, "weapon_damage_mult": -0.08},
+			# 2026-10-22 收益 8→15、武器伤害代价 −8%→−5%：原版比普通档储蓄罐（14 金/收益+6/无代价）
+			# 只多 2 点收益却贵 10 金还永久 −8% 伤害，被同价位与免费加点两头夹。现按「高投入高回报」重定。
+			"apply": {"harvest": 15.0, "weapon_damage_mult": -0.05},
 		},
 		"poxu_lingfu": {
 			"name": "破虚符", "tier": 2, "price": 28,
@@ -423,13 +427,9 @@ const DEFS: Dictionary = {
 				"desc": "每回合场上多刷几口宝箱",
 				"apply": {"chest_count": 1},
 			},
-			"naling_zhuo": {
-				"name": "纳灵盘", "tier": 2, "price": 22,
-				"icon": "res://assets/art/item_naling_zhuo.png",
-				"desc": "宝箱砸开时掉的掉落物当场飞进袖中，不必再绕一趟走位",
-				"apply": {},
-				"chest_magnet": true,
-			},
+			# 2026-10-22 纳灵盘（chest_magnet）整件移除：用户口径「自动吸附掉落物的都没用」。
+			# 它只省一趟走位、不改任何收益量，同价位重掷令直接换钱 ⇒ 永远是垫底选择。
+			# chest_magnet 机制本身保留（SpiritChest._drop_gems 仍认这个字段），只是暂无道具使用。
 		"dianjin_jue": {
 			"name": "点金诀", "tier": 3, "price": 46,
 			"icon": "res://assets/art/item_dianjin_jue.png",
@@ -464,9 +464,12 @@ const DEFS: Dictionary = {
 		"xuepan_guyu": {
 			"name": "血盘古玉", "tier": 4, "price": 88,
 			"icon": "res://assets/art/item_xuepan_guyu.png",
-			"desc": "生命如炉：每50点最大生命+1%全伤害",
+			# 2026-10-22 系数 0.01→0.02：CultivatorSystem.damage_mult 里除数是写死的 /50.0，
+			# 故等价于「每 25 点最大生命 +1% 全伤害」。原版基线 120 血只有 +2.4%、
+			# 堆到 300 血才 +6%，同价位山岳战甲（每点护甲 +1.5%）远远更强。
+			"desc": "生命如炉：每25点最大生命+1%全伤害",
 			"apply": {},
-			"dmg_per_max_hp": 0.01,
+			"dmg_per_max_hp": 0.02,
 		},
 		"jubao_pen": {
 			"name": "聚宝盆", "tier": 3, "price": 48,
@@ -593,9 +596,11 @@ const DEFS: Dictionary = {
 			"jinmang_souhun": {
 				"name": "金芒搜魂令", "tier": 3, "price": 45,
 				"icon": "res://assets/art/item_jinmang_souhun.png",
-				"desc": "剑芒截气：暴击击杀敌人时，有30%概率额外吸收1枚金币",
+				# 2026-10-22 30% 概率掉 1 枚 → 100% 概率掉 2 枚（GameManager.register_kill 读 crit_kill_stone_bonus）。
+				# 原版代价是永久 −6% 武器伤害，回报却是「每 3 次暴击击杀才 1 金币」，完全不值。
+				"desc": "剑芒截气：暴击击杀敌人时，额外吸收2枚金币",
 				"apply": {"weapon_damage_mult": -0.06},
-				"crit_kill_stone_chance": 0.30,
+				"crit_kill_stone_chance": 1.0, "crit_kill_stone_bonus": 2.0,
 			},
 
 			# ---- 3. 武器器类与行为质变 ----
@@ -625,9 +630,11 @@ const DEFS: Dictionary = {
 			"ningshen_fu": {
 				"name": "凝神符", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_ningshen_fu.png",
-				"desc": "心若冰清：随行技能冷却时间缩短10%；福缘 -2",
+				# 2026-10-22 技能冷却 −10%→−12%：原版与更便宜的静心符（−8%/幸运−1）相比
+				# 只多 2% 冷却却多扣 1 点幸运，且同为稀有档 ⇒ 被全面支配。现拉开成 8/12/25 三档阶梯。
+				"desc": "心若冰清：随行技能冷却时间缩短12%；福缘 -2",
 				"apply": {"luck": -2.0},
-				"skill_cooldown_mult": 0.10,
+				"skill_cooldown_mult": 0.12,
 			},
 			"tupo_guyu": {
 				"name": "突破古玉", "tier": 4, "price": 95,
@@ -664,19 +671,23 @@ const DEFS: Dictionary = {
 				"name": "铁手套", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_tieshou.png",
 				"desc": "近身硬功，远程手法生疏",
-				"apply": {"melee_damage": 2.0, "ranged_damage": -1.0},
+				# 2026-10-22 近战 2→3 / 远程 −1→−2：原版主属性与无代价的砺剑石同为 +2，
+			# 同价却白背一条远程惩罚 ⇒ 被砺剑石严格支配。有代价就该换到更高主属性。
+			"apply": {"melee_damage": 3.0, "ranged_damage": -2.0},
 			},
 			"lingyan_fu": {
 				"name": "灵焰符", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_lingyan_fu.png",
 				"desc": "灵焰催动略滞手势",
-				"apply": {"elemental_damage": 2.0, "attack_speed_mult_mul": 1.03},
+				# 2026-10-22 元素 2→3：原版与无代价的聚灵符同为 +2 却多背一条攻速惩罚，被严格支配。
+			"apply": {"elemental_damage": 3.0, "attack_speed_mult_mul": 1.03},
 			},
 			"tongling": {
 				"name": "铜铃", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_tongling.png",
 				"desc": "铃声引灵，身法稍重",
-				"apply": {"engineering_damage": 2.0, "move_speed_mult": -0.03},
+				# 2026-10-22 召唤 2→3：原版与无代价的召唤牌同为 +2 却多背一条移速惩罚，被严格支配。
+			"apply": {"engineering_damage": 3.0, "move_speed_mult": -0.03},
 			},
 			"pojun_fu": {
 				"name": "破军符", "tier": 2, "price": 26,

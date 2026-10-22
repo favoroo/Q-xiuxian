@@ -24,6 +24,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/TutorialDialog.tscn" id="22_tutorial"]
 [ext_resource type="Script" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
 [ext_resource type="Script" path="res://scripts/main/AtmosphereGate.gd" id="24_atmo"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AuthorPanel.tscn" id="25_author"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -154,4 +155,6 @@ script = ExtResource("19_career")
 [node name="ManualDialog" parent="UILayer" instance=ExtResource("20_manual")]
 
 [node name="TutorialDialog" parent="UILayer" instance=ExtResource("22_tutorial")]
+
+[node name="AuthorPanel" parent="UILayer" instance=ExtResource("25_author")]
 

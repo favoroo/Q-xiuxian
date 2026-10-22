@@ -262,6 +262,27 @@ func _run() -> void:
 	EnemyBase.clear_pools()
 	_check(EnemyBase.pool_idle_count() == 0, "clear_pools 清空休眠体")
 
+	# ---------- 5.10 出怪预警池（2026-10-22）：出池 / 回池 / 复用零新建 ----------
+	# 预警指示器每只怪一个、1.1s 后回收：原先 new+queue_free 逐只 churn。
+	# 判据钉四条：首次新建、到期回池且出树、第二轮零新建、复用后档位/进度完全复位。
+	var si_created0: int = SpawnIndicator.created_count
+	var si_a := SpawnIndicator.acquire(world, Vector2(60, 60), true, false)
+	_check(si_a != null and si_a.is_inside_tree(), "预警池首轮可出池入树")
+	_check(SpawnIndicator.created_count == si_created0 + 1, "预警池首轮新建 1 个 (%d)" % (SpawnIndicator.created_count - si_created0))
+	_check(si_a.is_elite and si_a.indicator_radius == 36.0, "精英档半径按档位就位 (%.0f)" % si_a.indicator_radius)
+	_check(SpawnIndicator.active_count >= 1, "在树预警计入 active_count")
+	# 手动走回收（不真等 1.1s，避免测试拖时长）：回调置空 + 出树 + 回池
+	si_a._release()
+	_check(si_a.get_parent() == null, "回收后出树")
+	var si_b := SpawnIndicator.acquire(world, Vector2(90, 90), false, true)
+	_check(si_b == si_a, "第二次 acquire 复用同一实例")
+	_check(SpawnIndicator.created_count == si_created0 + 1, "复用零新建 (%d)" % (SpawnIndicator.created_count - si_created0))
+	_check(not si_b.is_elite and si_b.is_boss and si_b.indicator_radius == 52.0, "复用后档位重铺为 Boss 档 (%.0f)" % si_b.indicator_radius)
+	_check(is_equal_approx(si_b._time_left, si_b.BOSS_DURATION) and si_b.progress == 0.0, "复用后计时/进度归零")
+	si_b._release()
+	SpawnIndicator.clear_pool()
+	_check(SpawnIndicator.created_count == 0, "clear_pool 归零计数")
+
 	# ---------- 6. 缓存清理不影响运行中对象 ----------
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()

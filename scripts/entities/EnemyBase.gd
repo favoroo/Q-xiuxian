@@ -1344,6 +1344,10 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		amount *= GameBalance.focus_fire_mult(_focus_hit_count)
 		_focus_hit_count += 1
 		_focus_hit_timer = GameBalance.FOCUS_FIRE_WINDOW
+	# 作者模式·一击必杀：抬到必死（Boss 也吃这一刀）。放在集火削减之后，保证不会被削回不致死；
+	# 其余受击流程照常走，死亡爆散/掉落/连杀音阶都还是真流程，方便验收击杀表现。
+	if GameManager.author_mode and AuthorMode.one_hit_kill:
+		amount = maxf(amount, current_hp + max_hp)
 	current_hp -= amount
 	# 精英变异血线检查（只触发一次；Boss 走自己的二阶段，_enter_mutation 内部按敌种分发）
 	if not _mutated and is_elite and current_hp > 0.0 and current_hp <= max_hp * GameBalance.ELITE_MUTATION_HP_PCT:

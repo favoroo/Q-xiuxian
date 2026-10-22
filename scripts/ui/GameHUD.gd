@@ -4,6 +4,8 @@ extends Control
 ## 顶栏暂停与属性按钮请求（由 Main 接线）
 signal pause_requested
 signal stats_requested
+## 作者模式面板请求（仅 author_mode 时按钮可见，由 Main 接线到 AuthorPanel）
+signal author_requested
 
 @onready var hp_icon: Control = $TopContainer/LeftBox/HPBlock/HBox/HPIcon
 @onready var hp_bar: ProgressBar = $TopContainer/LeftBox/HPBlock/HBox/HPBar
@@ -36,6 +38,7 @@ var _skill_widget: HudSkillButton = null
 var _extra_skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
 var _boss_bar_widget: HudBossBar = null
+var _author_btn: Button = null
 ## 顶栏回合倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
 ## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
 var wave_countdown: HudWaveCountdown = null
@@ -454,6 +457,31 @@ func _build_top_buttons() -> void:
 	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	$TopContainer/RightBox.add_child(pause_btn)
+
+	# 作者模式按钮：只在作者模式开启时出现，排在「属性」左边（不挤占最常用的暂停键）。
+	# 宽度刻意压到 42：960 宽最坏读数（12847/12847 · Lv.99 · 第 20 波 · 击杀 12847 · 金币 99999）
+	# 下顶栏本来只剩 ~42 的余量，再宽就会把「暂停」顶出屏（判据 LayoutCheck 量屏缘）。
+	_author_btn = Button.new()
+	_author_btn.name = "AuthorButton"
+	_author_btn.text = "作者"
+	_author_btn.custom_minimum_size = Vector2(42, 0)
+	_author_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_author_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_author_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_author_btn, GameStyle.BAD_DK, GameStyle.BAD, 12, GameStyle.CHALK, 5.0)
+	_author_btn.pressed.connect(func(): author_requested.emit())
+	$TopContainer/RightBox.add_child(_author_btn)
+	$TopContainer/RightBox.move_child(_author_btn, stats_btn.get_index())
+	_refresh_author_btn()
+	if not GameManager.author_mode_changed.is_connected(_on_author_mode_changed):
+		GameManager.author_mode_changed.connect(_on_author_mode_changed)
+
+func _on_author_mode_changed(_enabled: bool) -> void:
+	_refresh_author_btn()
+
+func _refresh_author_btn() -> void:
+	if _author_btn != null and is_instance_valid(_author_btn):
+		_author_btn.visible = GameManager.author_mode
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:

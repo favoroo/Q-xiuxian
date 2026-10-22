@@ -150,7 +150,8 @@ func _try_damage(area: Area2D, contact_count: int = 1) -> void:
 		_hit_ms[id] = now
 		if _hit_ms.size() > 48 and now - _last_gc_ms > cd_ms:
 			_last_gc_ms = now
-			for k in _hit_ms.keys():
+			# 直接遍历字典（零分配）；keys() 会新建一个 Array，48+ 条时每次 GC 都白付一次
+			for k in _hit_ms:
 				if now - int(_hit_ms[k]) >= cd_ms:
 					_hit_ms.erase(k)
 		var def := WeaponData.get_def(drone_id)

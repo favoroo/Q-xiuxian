@@ -740,3 +740,60 @@ func _test_fx_particle_pool() -> void:
 	_c.equals(FxBudget.LIGHT_CAP_ELITE, EnemyBase.ELITE_LIGHT_CAP, "精英灯预算与 EnemyBase.ELITE_LIGHT_CAP 对齐")
 
 
+
+## 作者模式（2026-10-22）：会话级开关 —— 解锁是读侧短路、关掉即恢复、不污染任何存档字段。
+func _test_author_mode() -> void:
+	var orig_mode := GameManager.author_mode
+	# 1. 解锁读侧短路：不写 unlocked_* 数组
+	var orig_cult := GameManager.unlocked_cultivators.duplicate()
+	var orig_items := GameManager.unlocked_items.duplicate()
+	GameManager.set_author_mode(true)
+	_c.check(GameManager.is_cultivator_unlocked("__not_a_real_id__"), "作者模式角色解锁判定恒真")
+	_c.check(GameManager.is_item_unlocked("__not_a_real_id__"), "作者模式道具解锁判定恒真")
+	_c.check(GameManager.is_skin_unlocked("jianchi", 5), "作者模式皮肤解锁判定恒真")
+	_c.equals(GameManager.unlocked_cultivators, orig_cult, "作者模式不往已解锁角色数组写数据")
+	_c.equals(GameManager.unlocked_items, orig_items, "作者模式不往已解锁道具数组写数据")
+
+	# 2. 关闭即恢复原判定（且作弊开关全部复位）
+	AuthorMode.god_mode = true
+	AuthorMode.one_hit_kill = true
+	AuthorMode.time_scale = 4.0
+	Engine.time_scale = 4.0
+	GameManager.set_author_mode(false)
+	_c.check(not GameManager.is_cultivator_unlocked("__not_a_real_id__"), "退出作者模式后角色判定恢复")
+	_c.check(not GameManager.is_item_unlocked("__not_a_real_id__"), "退出作者模式后道具判定恢复")
+	_c.check(not AuthorMode.god_mode and not AuthorMode.one_hit_kill, "退出作者模式复位无敌与秒杀")
+	_c.near(AuthorMode.time_scale, 1.0, 0.001, "退出作者模式复位时间倍率")
+	_c.near(Engine.time_scale, 1.0, 0.001, "退出作者模式复位引擎时间轴")
+
+	# 3. 等级链：设 N 级后的经验门槛与逐级 exp_to_next 迭代完全一致，差额折悟道点
+	var orig_level := GameManager.level
+	var orig_points := GameManager.pending_upgrade_points
+	var orig_chain := GameManager._exp_chain
+	var orig_exp := GameManager.experience
+	var orig_next := GameManager.experience_to_next
+	GameManager.level = 1
+	GameManager.pending_upgrade_points = 0
+	AuthorMode.set_level(GameManager, 7)
+	var want_chain: int = GameBalance.EXP_FIRST_LEVEL
+	for _i in range(6):
+		want_chain = GameBalance.exp_to_next(want_chain)
+	_c.equals(GameManager.level, 7, "set_level 落到目标等级")
+	_c.equals(GameManager._exp_chain, want_chain, "set_level 经验链与正常升级链同源")
+	_c.equals(GameManager.experience_to_next, maxi(1, int(round(float(want_chain) * GameManager.xp_require_mult))),
+		"set_level 下一级门槛按倍率折算")
+	_c.equals(GameManager.pending_upgrade_points, 6, "set_level 上调 6 级折 6 点悟道")
+	_c.equals(GameManager.experience, 0, "set_level 清零当前经验")
+	GameManager.level = orig_level
+	GameManager.pending_upgrade_points = orig_points
+	GameManager._exp_chain = orig_chain
+	GameManager.experience = orig_exp
+	GameManager.experience_to_next = orig_next
+
+	# 4. 时间倍率循环 1x → 2x → 4x → 1x
+	AuthorMode.time_scale = 1.0
+	_c.near(AuthorMode.cycle_time_scale(), 2.0, 0.001, "时间倍率 1x → 2x")
+	_c.near(AuthorMode.cycle_time_scale(), 4.0, 0.001, "时间倍率 2x → 4x")
+	_c.near(AuthorMode.cycle_time_scale(), 1.0, 0.001, "时间倍率 4x → 1x")
+	Engine.time_scale = 1.0
+	GameManager.author_mode = orig_mode

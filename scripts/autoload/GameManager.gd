@@ -23,6 +23,8 @@ signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
 signal achievements_unlocked(ach_ids: Array)
 signal pets_updated(pets: Array)
+## 作者模式开关变化（HUD/商店/悟道顶栏的「作者」按钮显隐、首页徽章刷新）
+signal author_mode_changed(enabled: bool)
 
 ## 打击感分级。顿帧/缩放冲击按档给，**震屏（创伤）只发给"值得看的节点"**：
 ## 玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中。
@@ -74,6 +76,10 @@ var player: Node2D = null
 var joystick = null
 var main_camera: Camera2D = null
 var wave_spawner: Node = null
+
+## 作者模式（会话级测试开关）：**不进任何存档**，重启游戏自然回到普通模式。
+## 开关入口在 StartMenu 右上设置徽章连点 5 次；作弊状态集中在 AuthorMode。
+var author_mode: bool = false
 
 # 敌人活体登记（2026-10-11）：EnemyBase 在 _ready/_exit_tree 进出。
 # 高频消费方（鼓妖光环每 0.25s、蛛母/影魅/Boss 的召唤上限、刷怪口容量）改读这里，
@@ -222,14 +228,22 @@ func _load_progress() -> void:
 	ProgressStore.load_into(self)
 
 func _save_progress() -> void:
+	# 作者模式期间一律不落盘：解锁是全开的读侧短路，若照常保存会把作弊局的
+	# 生涯统计/皮肤选择写进 progress.cfg，退出作者模式后也擦不掉。
+	if author_mode:
+		return
 	ProgressStore.save_from(self)
 
 ## 检查角色是否已解锁
 func is_cultivator_unlocked(cid: String) -> bool:
+	if author_mode:
+		return true
 	return cid in unlocked_cultivators
 
 ## 检查道具是否已解锁入池
 func is_item_unlocked(item_id: String) -> bool:
+	if author_mode:
+		return true
 	return item_id in unlocked_items
 
 ## 检查成就是否已达成
@@ -251,6 +265,8 @@ func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
 ## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「该角色累计通关次数 >= tier + 1」判定。
 ## 2026-10-20 与难度解耦：不再看通关过哪一档，任意难度通关都记一次，攒够次数逐套解锁。
 func is_skin_unlocked(cid: String, skin_idx: int) -> bool:
+	if author_mode:
+		return true
 	if skin_idx < 0:
 		return true
 	var t := SkinData.get_theme(skin_idx)
@@ -293,6 +309,16 @@ func set_danger(d: int) -> void:
 ## 设置是否从主菜单直接进入无尽试炼
 func set_start_in_endless(enabled: bool) -> void:
 	start_in_endless = enabled
+
+## 切换作者模式（会话级，不落盘）。关闭时把无敌/秒杀/时间加速一并复位，
+## 防止退出作者模式后还留着 4 倍速或无敌跑普通局。
+func set_author_mode(enabled: bool) -> void:
+	if author_mode == enabled:
+		return
+	author_mode = enabled
+	if not enabled:
+		AuthorMode.reset()
+	author_mode_changed.emit(author_mode)
 
 var kills: int = 0
 var game_time: float = 0.0
@@ -501,7 +527,8 @@ func _process(delta: float) -> void:
 	# 顿帧恢复（零分配轮询）：GameFeel.hit_stop 只写下恢复时刻，到点还原时间轴
 	if _hitstop_deadline_ms != 0 and Time.get_ticks_msec() >= _hitstop_deadline_ms:
 		_hitstop_deadline_ms = 0
-		Engine.time_scale = 1.0
+		# 作者模式的时间加速：顿帧恢复必须回到面板设定的倍率，否则一次暴击就把 4x 打回 1x
+		Engine.time_scale = AuthorMode.base_time_scale() if author_mode else 1.0
 
 	if on_hit_damage_timer > 0.0:
 		on_hit_damage_timer -= delta
@@ -594,11 +621,13 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 	var cd_refund: float = kill_cd_reduction_elite if is_elite else kill_cd_reduction_normal
 	if cd_refund > 0.0 and player != null and is_instance_valid(player) and player.has_method("refund_skill_cooldown"):
 		player.refund_skill_cooldown(cd_refund)
-	# 金芒搜魂令：暴击击杀敌人有概率吸收金币
+	# 金芒搜魂令：暴击击杀敌人按概率吸收金币（数额读 crit_kill_stone_bonus，
+	# 缺省 1 枚 —— 老存档/未配该字段的道具行为不变，2026-10-22 起金芒搜魂令配 2 枚）
 	if is_crit:
 		var stone_chance: float = item_hook_sum("crit_kill_stone_chance")
 		if stone_chance > 0.0 and rng.randf() < stone_chance:
-			spirit_stones += 1
+			var stone_gain: int = maxi(1, int(round(item_hook_sum("crit_kill_stone_bonus"))))
+			spirit_stones += stone_gain
 			touch_peak_stones()
 	if is_elite:
 		spirit_stones += GameBalance.ELITE_STONE_BONUS
@@ -1205,6 +1234,10 @@ func trigger_game_over(victory: bool = false) -> void:
 	game_over_triggered.emit(victory)
 
 func _record_run_and_check_achievements(victory: bool) -> void:
+	# 作者模式：整局当作"沙盒"，不写生涯统计/成就/战报 —— 否则跳关+一击必杀几分钟
+	# 就能把全成就刷满，退出作者模式后也回不去。
+	if author_mode:
+		return
 	ProgressStore.record_run_and_check_achievements(self, victory)
 
 func continue_endless() -> void:

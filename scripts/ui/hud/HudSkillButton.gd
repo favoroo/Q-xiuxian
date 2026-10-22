@@ -451,12 +451,21 @@ func _process(_delta: float) -> void:
 ## 额外技能充能角标：影爆读影层（Player.shadow_ring）。
 ## 攒上才出现，攒满直接换成可释放的亮面（不靠闪一下提示——看不见等于没做）。
 ## 读数都现读账本本身，不在这里另记一份。只归额外技能键：主技能键不挂这颗角标。
+## 2026-10-22 性能优化：原每渲染帧 player.get("shadow_ring") 是 Variant 反射查找（2 键 × 60fps）；
+## 改为每 0.2s 采样一次（影层是 1~5 的整数层数，200ms 延迟无感），且先判技能 id 早退。
+const SHADOW_SAMPLE_INTERVAL := 0.2
+var _shadow_sample_cd: float = 0.0
+
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:
 		return
 	if not bind_extra or GameManager.extra_skill_id != "shadowburst":
 		_shadow_chip.visible = false
 		return
+	_shadow_sample_cd -= get_process_delta_time()
+	if _shadow_sample_cd > 0.0:
+		return
+	_shadow_sample_cd = SHADOW_SAMPLE_INTERVAL
 	# 影爆：影层读数
 	var stacks := 0
 	var ring = player.get("shadow_ring")

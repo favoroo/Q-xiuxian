@@ -23,6 +23,77 @@ var _particle_timer: float = 0.0
 ## 原来每帧全量遍历战斗层全部子节点（100+），改走 O(1) 计数
 static var active_count: int = 0
 
+# ---------------- 对象池（2026-10-22 性能优化） ----------------
+## 每只怪出生都要先摆一个 1.1s 的妖气预警：旧写法逐只 new Node2D + 到期 queue_free，
+## 中后期一波几十只就是几十次节点分配/释放（手机端 GC 尖峰与刷怪顿挫的来源之一）。
+## 照 DamageNumber 的静态池范式：出池复位字段、回池出树休眠（active_count 由进出树自动同拍）。
+const POOL_CAP := 32  ## 同屏预警上限（刷怪分批，一波同屏远小于此值）
+static var _pool: Array[SpawnIndicator] = []
+static var created_count: int = 0
+static var reused_count: int = 0
+var _pooled: bool = false  ## 回池守卫：重复 _release（game_over 与到期同帧）不得二次入池
+
+## 取一只预警指示器：出池复位 → 落点/档位就位 → 入树。
+## 字段必须在 add_child 前写好（_ready 只跑一次，复用不会重跑），所以统一走本入口。
+static func acquire(parent: Node, pos: Vector2, elite: bool = false, boss: bool = false) -> SpawnIndicator:
+	if parent == null:
+		return null
+	var s: SpawnIndicator = null
+	while not _pool.is_empty():
+		var cand: SpawnIndicator = _pool.pop_back()
+		if is_instance_valid(cand):
+			s = cand
+			reused_count += 1
+			break
+	if s == null:
+		s = SpawnIndicator.new()
+		created_count += 1
+	s._reset(pos, elite, boss)
+	parent.add_child(s)
+	return s
+
+func _reset(pos: Vector2, elite: bool, boss: bool) -> void:
+	_pooled = false
+	is_elite = elite
+	is_boss = boss
+	indicator_radius = 52.0 if boss else (36.0 if elite else 22.0)
+	_time_left = _duration()
+	progress = 0.0
+	_redraw_timer = 0.0
+	_clock = 0.0
+	_particle_timer = 0.0
+	spawn_callback = Callable()
+	global_position = pos
+	visible = true
+	set_process(true)
+	queue_redraw()
+
+## 回池：出树（active_count 同拍减）→ 断掉回调引用（lambda 会拽住 WaveSpawner/场景）→ 休眠。
+func _release() -> void:
+	if _pooled:
+		return
+	_pooled = true
+	set_process(false)
+	spawn_callback = Callable()
+	visible = false
+	if get_parent() != null:
+		get_parent().remove_child(self)
+	if _pool.size() < POOL_CAP:
+		_pool.append(self)
+	else:
+		# 池满直接释放（不把池撑大）；本函数可能在自身 _process 内被调，必须走 queue_free
+		queue_free()
+
+## 释放池内休眠体（Main._exit_tree 随场景清）：出树常驻的静态引用不主动放开
+## 会被退出检查报成 resources still in use 假泄漏（与 DamageNumber 同一条坑）
+static func clear_pool() -> void:
+	for s in _pool:
+		if is_instance_valid(s):
+			s.free()
+	_pool.clear()
+	created_count = 0
+	reused_count = 0
+
 func _enter_tree() -> void:
 	active_count += 1
 
@@ -33,11 +104,6 @@ func _ready() -> void:
 	# 保持 z_index = 0：在 EntitiesLayer 内，天然位于 MapLayer（地砖/地面装饰/结界）之上；
 	# 绝不设 >0（实体与弹丸默认为 z=0，设 >0 会直接盖在角色表面）
 	z_index = 0
-	if is_boss:
-		indicator_radius = 52.0
-		_time_left = BOSS_DURATION
-	elif is_elite:
-		indicator_radius = 36.0
 
 ## 魔君凝聚时长：给玩家 2 秒看清落点跑位；WaveSpawner 在开场 1.5s 后才发起凝聚，
 ## 凝聚期内回合表早已走完但「Boss 未除敌潮不退」口径兜底，不影响节奏
@@ -45,7 +111,7 @@ const BOSS_DURATION := 2.0
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
-		queue_free()
+		_release()
 		return
 
 	_time_left -= delta
@@ -80,7 +146,7 @@ func _finish_and_spawn() -> void:
 			JuiceEffect.spawn_shockwave(get_parent(), global_position, indicator_radius * 1.8, GameStyle.BAD, 0.35)
 		elif is_elite:
 			JuiceEffect.spawn_shockwave(get_parent(), global_position, indicator_radius * 1.5, GameStyle.BAD, 0.25)
-	queue_free()
+	_release()
 
 ## 凝聚总时长：魔君长版，普通/精英共用 1.1s
 func _duration() -> float:

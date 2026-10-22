@@ -501,8 +501,11 @@ const UPGRADES: Array[Dictionary] = [
 			"max_stacks": 2,
 		},
 		{
+			# 2026-10-22 折扣腿 0.85 → 0.80（用户口径：商店价 ×0.8、武器伤害 −3% 不动）。
+			# 与商人角色开局 0.8 相乘 = 0.64，会被 StatSystem 的 SHOP_PRICE_FLOOR(0.7) 夹住；
+			# 夹掉那份不兑现，负代偿腿由 cost_scale() 按「实收降幅/名义降幅」折算，不会白扣伤害。
 			"id": "merchant_up",
-			"apply": {"shop_price_mul": 0.85, "weapon_damage_mult": -0.03},
+			"apply": {"shop_price_mul": 0.8, "weapon_damage_mult": -0.03},
 			"title": "讨价还价",
 			"desc": "商店价格降低；武器伤害略减",
 			"rarity": "rare",

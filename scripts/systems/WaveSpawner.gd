@@ -31,6 +31,9 @@ var _batch_hold_time: float = 0.0    ## 当前批次在场对峙时长（秒，�
 var _batch_in_combat: bool = false   ## 当前批次是否已进入交火对峙态（活跃敌数 > 1）
 
 var phase: int = Phase.WAITING
+## 跳关闸：force_end_alloc 会同步发 alloc_finished，必须让 _on_alloc_finished 知道
+## 这次是跳关强收，不要顺手把商店也开起来。
+var _jumping: bool = false
 ## 回合号的唯一来源是 GameManager.wave_number。
 ## 这里只留一个只读访问器：以前本地也存了一份，只有 start_wave 会同步写，
 ## 「继续无尽」等路径只改单例那份，两边会悄悄漂移，所以改成同一份数据。
@@ -501,6 +504,9 @@ func _enter_wave_break() -> void:
 
 ## 点数加完：接着开商店（alloc_finished 由 GameManager 发，UI 不直接指挥流程）
 func _on_alloc_finished() -> void:
+	# 跳关期间强收悟道面板：不要再走「开商店」那一段（否则面板刚关商店又亮起来）
+	if _jumping:
+		return
 	if phase != Phase.ALLOC:
 		return
 	phase = Phase.SHOP
@@ -515,6 +521,62 @@ func _open_shop_inner() -> void:
 
 func _on_shop_closed() -> void:
 	start_wave(wave_number + 1)
+
+## 作者模式·跳关：清场后直接开第 n 波。
+## 不复制 end_wave 的收益结算（跳关是测试工具，不该凭空发灵韵/金币），只复刻「清场」那一段：
+## 余怪消散、匣子/炮台回收、预警指示器归零、磁吸队列清空。之后按当前所处阶段收掉面板再开波。
+## n 夹在 1..VICTORY_WAVE（无尽模式允许超过，由调用方保证 endless_mode）。
+func jump_to_wave(n: int) -> void:
+	var target := maxi(1, n)
+	if not GameManager.endless_mode:
+		target = mini(target, GameManager.VICTORY_WAVE)
+	# 1. 收掉可能开着的回合间面板：悟道面板会卡在 ALLOC 等 alloc_finished；
+	#    商店 UI 不监听 shop_closed（它自己在 _on_confirm 里隐藏），所以这里直接找节点藏起来 ——
+	#    不能发 shop_closed，那会经 _on_shop_closed 先开一次 wave+1，和后面的 start_wave 打架。
+	if phase == Phase.ALLOC:
+		_jumping = true
+		GameManager.force_end_alloc("跳关")
+		_jumping = false
+	elif phase == Phase.SHOP:
+		# current_scene 在测试/工具场景里可能是测试宿主（没有 UILayer）：先按 current_scene 找，
+		# 找不到再退回 root 下的 Main —— 绝不能因为找不到节点就让商店盖着新波。
+		var shop_ui: Node = null
+		var scene := get_tree().current_scene
+		if scene != null:
+			shop_ui = scene.get_node_or_null("UILayer/WaveShop")
+		if shop_ui == null:
+			var main := get_tree().root.get_node_or_null("Main")
+			if main != null:
+				shop_ui = main.get_node_or_null("UILayer/WaveShop")
+		if shop_ui != null and shop_ui is CanvasItem:
+			(shop_ui as CanvasItem).visible = false
+			(shop_ui as CanvasItem).modulate.a = 1.0
+	# 2. 清场（与 end_wave 的清场块同口径，但不做收益结算/磁吸动画）
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if enemy is EnemyBase:
+			enemy.dissolve()
+	for chest in get_tree().get_nodes_in_group("chests"):
+		if chest is SpiritChest:
+			(chest as SpiritChest).dissolve()
+	for turret in get_tree().get_nodes_in_group("turrets"):
+		if turret is TurretUnit:
+			turret.dismiss()
+	GameManager.clear_live_enemies()
+	# 预警指示器：不释放的话到点会把旧落点的怪召回来
+	for child in get_parent().get_children():
+		if child is SpawnIndicator:
+			(child as SpawnIndicator)._release()
+	_magnet_queue.clear()
+	_clear_hold = 0.0
+	_batch_cooldown = 0.0
+	_batch_hold_time = 0.0
+	_batch_in_combat = false
+	_low_fps_streak = 0
+	FxBudget.crowded = false
+	Engine.time_scale = AuthorMode.base_time_scale() if GameManager.author_mode else 1.0
+	# 3. 开波（start_wave 自己设 phase = FIGHT、刷本波匣子、发 wave_changed）
+	get_tree().paused = false
+	start_wave(target)
 
 func _spawn_regular(player: Node2D) -> void:
 	# 回合内总刷入预算：耗尽即停手（回合时长照常跑满，场上越打越空）
@@ -557,9 +619,9 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 	var parent := get_parent()
 	if parent == null:
 		return
-	var indicator := SpawnIndicator.new()
-	indicator.global_position = pos
-	indicator.is_elite = is_elite
+	var indicator := SpawnIndicator.acquire(parent, pos, is_elite, false)
+	if indicator == null:
+		return
 	indicator.spawn_callback = func():
 		if phase != Phase.FIGHT:
 			return
@@ -580,7 +642,6 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 		enemy.scale = Vector2.ONE * 0.4
 		var tw := enemy.create_tween()
 		tw.tween_property(enemy, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	parent.add_child(indicator)
 
 ## 敌人配比：真话在 EnemyData（怪种行 + 爬坡/闸门 + 金蟾档期），这里只留状态位与调度。
 ## 口径沿革（2026-10-08）：旧写法是「累计带 + 回合闸门」，闸门一开邪修直接吃掉整段
@@ -627,9 +688,9 @@ func _spawn_elite(player: Node2D) -> void:
 	var parent := get_parent()
 	if parent == null:
 		return
-	var indicator := SpawnIndicator.new()
-	indicator.global_position = pos
-	indicator.is_elite = true
+	var indicator := SpawnIndicator.acquire(parent, pos, true, false)
+	if indicator == null:
+		return
 	indicator.spawn_callback = func():
 		if phase != Phase.FIGHT:
 			return
@@ -644,7 +705,6 @@ func _spawn_elite(player: Node2D) -> void:
 		parent.add_child(elite)
 		GameManager.announcement_triggered.emit("◆ %s突入战场！" % elite_title)
 		GameManager.shake_camera(5.0, 0.25)
-	parent.add_child(indicator)
 
 ## 金蟾：在远离玩家的位置刷一只携宝金蟾（击杀爆金币，见 EnemyBase.stone_reward）。
 ## 不占刷怪预算、不吃同屏上限；它活着时「提前清场」会等它（它是活体敌人），
@@ -691,9 +751,9 @@ func _spawn_boss(player: Node2D) -> void:
 	if parent == null:
 		return
 
-	var indicator := SpawnIndicator.new()
-	indicator.global_position = pos
-	indicator.is_boss = true
+	var indicator := SpawnIndicator.acquire(parent, pos, false, true)
+	if indicator == null:
+		return
 	indicator.spawn_callback = func():
 		if phase != Phase.FIGHT:
 			return
@@ -714,7 +774,6 @@ func _spawn_boss(player: Node2D) -> void:
 		boss.play_spawn_sequence(func():
 			GameManager.announcement_triggered.emit(_boss_announcement())
 		)
-	parent.add_child(indicator)
 
 ## 本回合魔君存活与否（Boss 回合超时锁关的判据）
 func _boss_still_alive() -> bool:

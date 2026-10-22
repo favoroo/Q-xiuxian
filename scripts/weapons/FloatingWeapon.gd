@@ -35,6 +35,18 @@ const SLASH_FADE_TIME := 0.08   ## 抵达判定外缘后的淡出时长 —— �
 const MELEE_THRUST := 26.0      ## 打击帧本体前突距离
 const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（只往前够，不缩水）
 
+## 近战/横扫命中火花（2026-10-22）：远程弹丸命中已有 FxParticlePool.HIT_SPARK，
+## 但近战/横扫命中点此前一粒火花都没有（小怪只有暴击才给方向环），「刀咬进肉里」缺一个落点读数。
+## 这里补上，且刻意与当年下线的旧火花区分：近战天然低频（1.1s 一挥、一次至多几只）、
+## 火花锚在敌人受击侧、顺击退方向喷溅，再受下面四道闸兜底，不空地乱闪也不糊屏：
+##   ① 复用 FxParticlePool 火花帧预算（4/物理帧）② 视口门控（屏外不发）
+##   ③ 致命一击不发（击杀反馈归死亡爆散，同一次挨打只一处发反馈）
+##   ④ 单次挥砍前 N 个目标封顶，横扫扫一片也只出几朵；精英/Boss 已有专属火花，这里不重复发。
+const MELEE_SPARK_MAX := 2         ## 近战单次命中火花上限（前 N 个目标）
+const SWEEP_SPARK_MAX := 3         ## 横扫单次命中火花上限（扫一片也不全冒）
+const MELEE_SPARK_SCALE := 0.75    ## 火花缩放（比弹丸非暴击 0.85 更克制一档）
+const MELEE_SPARK_EDGE := 14.0     ## 火花由敌人中心向攻击来向偏移，落在体表而非几何中心
+
 ## 横扫（SWEEP）与近战分家（2026-10-13，用户口径：「横扫和近战玩起来没区别」）：
 ## 判定是「前方真扇形」——以本体为圆心查 _sweep_arc_radius() 的圆，再按角度过滤，
 ## 只结算 aim_dir ±SWEEP_HALF_ANGLE 里的敌人（身后的漏网，这是与近战 360° 圆判定最本质的手感差异）；
@@ -66,7 +78,7 @@ const PROJECTILE_TRAVEL_MARGIN := 60.0
 ## 前摇破空是「动作」，无条件播、当铺垫层，所以压低；命中材质是「战果」，只在真打中时补一记。
 ## 旧写法只有一层，且写在打击帧 —— 一声纯空气破空挂在命中 moment，剑听上去就是棍子。
 const MELEE_WHOOSH_SCALE := 1.0
-const MELEE_IMPACT_SCALE := 0.95   ## 压在 enemy_hit（0.56 峰值）之下，三层同帧才不糊
+const MELEE_IMPACT_SCALE := 1.0    ## 压在 enemy_hit（0.56 峰值）之下，三层同帧才不糊（2026-10-22 抬到 1.0，配合材质声峰值 +8）
 const BURST_CAST_SCALE := 0.7      ## 施法层：落点才是主角，这里只起手
 
 @export var weapon_def_id: String = "qingyun_sword"
@@ -307,6 +319,29 @@ func _arc_element() -> String:
 	if e == "" and WeaponData.tags_of(weapon_def_id).has("thunder"):
 		e = "thunder"
 	return e
+
+## 近战/横扫命中火花——单目标发射。守 ①②③ 三道闸（帧预算/视口/致命不发），
+## 精英/Boss 走 EnemyBase 自己的专属火花不重复发。位置落敌人受击侧，方向顺击退。
+## 必须在 enemy.take_damage 之后调用：致命/精英状态那时才更新到位。
+func _spawn_melee_hit_spark(enemy: Node, knock: Vector2) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	# 精英/Boss 已有受击火花（EnemyBase 专属），避免同一次命中双发
+	if enemy.get("is_elite") == true:
+		return
+	# 致命一击不发：take_damage 已同步走 _die() 置 dying，击杀点反馈由死亡爆散一力承担
+	# （同一次挨打只许一处发反馈）。此处必须在 take_damage 之后调用才读得到最新状态。
+	if enemy.get("dying") == true:
+		return
+	var epos: Vector2 = enemy.global_position
+	# 视口门控：屏外命中不冒火花
+	var player: Node2D = GameManager.player
+	var vp_center: Vector2 = player.global_position if player != null else global_position
+	if not GameBalance.is_in_viewport(epos, vp_center):
+		return
+	var kb_dir: Vector2 = knock.normalized() if knock.length_squared() > 1.0 else Vector2.ZERO
+	var spark_pos: Vector2 = epos - kb_dir * MELEE_SPARK_EDGE if kb_dir != Vector2.ZERO else epos
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, _arc_element(), MELEE_SPARK_SCALE, false, kb_dir)
 
 ## 光束渲染器挂在器口（MuzzlePoint 与发射帧 +X 同轴，本体转向即光束转向）
 func _setup_beam_renderer() -> void:
@@ -1021,6 +1056,9 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 			enemy.take_damage(dmg, knock, is_crit)
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
 				hit_count += 1
+			# 命中火花（前 MELEE_SPARK_MAX 个目标，防扫一片全冒）
+			if hit_count <= MELEE_SPARK_MAX:
+				_spawn_melee_hit_spark(enemy, knock)
 			if any_proc:
 				ProcStatus.apply(enemy, proc_burn,
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
@@ -1141,6 +1179,9 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 			enemy.take_damage(dmg, knock, is_crit)
 			if GameBalance.is_in_viewport(enemy.global_position, vp_center):
 				hit_count += 1
+			# 命中火花（前 SWEEP_SPARK_MAX 个目标，横扫扫一片也只出几朵）
+			if hit_count <= SWEEP_SPARK_MAX:
+				_spawn_melee_hit_spark(enemy, knock)
 			if any_proc:
 				ProcStatus.apply(enemy, proc_burn,
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
@@ -1193,8 +1234,15 @@ func _find_target() -> Node2D:
 ## 逐发分配锁定目标：主目标（Player 按扇区统筹分配的那一个）排第一，其余按同屏优先 + 离炮口的远近补齐。
 ## 返回长度 = min(场上可用人手, n)，调用方按 idx % size 取用 ⇒ 怪少时多发自然归约到同一个敌人。
 ## 纯索敌，不改任何数值：弹丸拿到目标后按 BladeProjectile.HOMING_TURN_RATE 自己拐过去。
+## 2026-10-22 性能优化：三个返回/候选数组改成员缓冲（开火热路径原先每次 new 3 个 Array，
+## 8 武器高攻速时每秒数十次分配）。调用方只在本次开火内消费返回值，下一次调用覆写安全。
+var _volley_out_buf: Array[Node2D] = []
+var _volley_cands_buf: Array[Node2D] = []
+var _volley_chest_buf: Array[Node2D] = []
+
 func _volley_targets(n: int) -> Array[Node2D]:
-	var out: Array[Node2D] = []
+	var out := _volley_out_buf
+	out.clear()
 	if n <= 0:
 		return out
 	if current_target != null and is_instance_valid(current_target):
@@ -1208,8 +1256,10 @@ func _volley_targets(n: int) -> Array[Node2D]:
 	var results := _query_enemies(eff_range, player.global_position, 32)
 	var muzzle_pos: Vector2 = muzzle_point.global_position
 	var player_pos: Vector2 = player.global_position
-	var cands: Array[Node2D] = []
-	var chest_cands: Array[Node2D] = []
+	var cands := _volley_cands_buf
+	var chest_cands := _volley_chest_buf
+	cands.clear()
+	chest_cands.clear()
 	for res in results:
 		var col = res.get("collider")
 		if col == null or col.get_parent() == null:

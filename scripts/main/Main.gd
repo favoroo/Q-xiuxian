@@ -6,6 +6,7 @@ extends Node2D
 @onready var pause_menu: PauseMenu = $UILayer/PauseMenu
 @onready var stats_dialog: Control = $UILayer/PlayerStatsDialog
 @onready var settings_dialog: SettingsDialog = $UILayer/SettingsDialog
+@onready var author_panel: AuthorPanel = $UILayer/AuthorPanel
 @onready var vignette_rect: ColorRect = $PostProcessLayer/SoftVignette
 var _vignette_copy: BackBufferCopy = null
 var _shockwave_tween: Tween = null
@@ -87,6 +88,8 @@ func _ready() -> void:
 		_stats_return_to_pause = false
 		stats_dialog.open(true)
 	)
+	if $UILayer/GameHUD.has_signal("author_requested"):
+		$UILayer/GameHUD.author_requested.connect(author_panel.open)
 	pause_menu.stats_requested.connect(func():
 		_stats_return_to_pause = true
 		stats_dialog.open(false)
@@ -102,6 +105,8 @@ func _ready() -> void:
 				_stats_return_to_pause = false
 				stats_dialog.open(false)
 			)
+		if lvl_dialog.has_signal("author_requested"):
+			lvl_dialog.author_requested.connect(author_panel.open)
 	if $UILayer.has_node("WaveShop"):
 		var wave_shop: Control = $UILayer/WaveShop
 		wave_shop.stats_requested.connect(func():
@@ -112,6 +117,8 @@ func _ready() -> void:
 			wave_shop.pause_requested.connect(func():
 				pause_menu.open(false)
 			)
+		if wave_shop.has_signal("author_requested"):
+			wave_shop.author_requested.connect(author_panel.open)
 	stats_dialog.closed.connect(func():
 		if _stats_return_to_pause:
 			_stats_return_to_pause = false
@@ -223,7 +230,7 @@ func resume_from_save() -> void:
 		joystick.visible = true
 	# 瞬态归位（对玩家有利）：顿帧时间轴、技能 buff/战意/盾势在 _fill 未覆盖即默认零值，
 	# 这里只兜 Engine.time_scale 与存档计时器
-	Engine.time_scale = 1.0
+	Engine.time_scale = AuthorMode.base_time_scale() if GameManager.author_mode else 1.0
 	GameManager._autosave_cd = GameManager.AUTOSAVE_INTERVAL
 	# HUD 无 _ready 全量兜底的几路读数补发对齐信号（波次/武器由 start_wave 与
 	# notify_weapons_updated 触发，血量/经验/三读数/待加点角标必须手动补）
@@ -329,6 +336,7 @@ func _exit_tree() -> void:
 	EnemyBolt.clear_pool()
 	AstralGem.clear_pool()
 	HealOrb.clear_pool()
+	SpawnIndicator.clear_pool()
 
 func _setup_atmosphere() -> void:
 	# 1. 远层灵气光尘（小而密：原灵尘档位瘦身提密度，主菜单暂停时也持续飘动）

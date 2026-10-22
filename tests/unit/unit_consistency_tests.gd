@@ -79,7 +79,7 @@ const ORPHAN_ALLOW := {
 		"jifeng_ren": [10, 4],         # 移速每超基础10% → 全伤害+4%（dmg_per_move_speed 0.04）
 		"huanying_ling": [10, 5],      # 每10%闪避 → +5%暴击率（crit_per_dodge 0.05）
 		"shanyue_jia": [1.5],          # 每点护甲+1.5%（dmg_per_armor 0.015）
-		"xuepan_guyu": [50, 1],        # 每50点最大生命+1%（dmg_per_max_hp 0.01）
+		"xuepan_guyu": [25, 1],        # 每25点最大生命+1%（dmg_per_max_hp 0.02，除数固定 /50.0）
 		"jubao_pen": [100, 3, 30],     # 每100灵石+3%，至多+30%（dmg_per_100_stones 0.03 / stone_dmg_cap 0.30）
 		"ranxue_fu": [10, 2.5],        # 每损失10%生命+2.5%（dmg_per_missing_hp 0.025）
 	"budong_yin": [1, 30],         # 站定1秒+30%（still_seconds 1.0 / still_damage 0.30）
@@ -93,11 +93,11 @@ const ORPHAN_ALLOW := {
 	"sanmei_guizhen": [4, 1, 15],
 	"lingsui_danqi": [3, 25, 15],
 	"liuyun_qianyin": [50, 3],
-	"jinmang_souhun": [30, 1],
+	"jinmang_souhun": [2],
 	"tiangong_fatiao": [20, 30],
 	"qianfu_lianhuan": [1],
 	"kaishan_jianyi": [25, 1, 2],
-	"ningshen_fu": [10],
+	"ningshen_fu": [12],
 	"tupo_guyu": [3, 0.5, 1, 30, 5, 10],
 	# 2026-10-21 角色专属转化件（机制数字由额外字段承载，apply 留空或只承担代偿）
 	"zhanqi": [1, 0.8, 24],

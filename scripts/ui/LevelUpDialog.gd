@@ -3,6 +3,8 @@ extends Control
 
 signal stats_requested
 signal pause_requested
+## 作者模式面板（仅 author_mode 时按钮可见，由 Main 接线）
+signal author_requested
 
 ## 回合后悟道结算面板：战斗中升级只攒点数（GameManager.pending_upgrade_points），
 ## 回合结束统一在这里一次性加完 —— 加几点就翻几屏候选，每屏 5 个选项、可刷新。
@@ -115,6 +117,7 @@ var _card_w: float = CARD_W
 var _points_badge: PanelContainer = null
 var _points_label: Label = null
 var _badge_tween: Tween = null
+var _author_btn: Button = null
 var _last_pending: int = -1
 
 ## 保存每张卡片的组件引用以便切换选中/未选中视觉状态
@@ -288,6 +291,26 @@ func _setup_top_bar() -> void:
 	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
 	pause_btn.pressed.connect(func(): pause_requested.emit())
 	top_bar.add_child(pause_btn)
+
+	# 作者模式按钮：只在作者模式开启时出现，插在「属性」左边
+	_author_btn = Button.new()
+	_author_btn.name = "AuthorButton"
+	_author_btn.text = "作 者"
+	_author_btn.custom_minimum_size = Vector2(72, 32)
+	_author_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_author_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_author_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, 4.0)
+	_author_btn.pressed.connect(func(): author_requested.emit())
+	top_bar.add_child(_author_btn)
+	top_bar.move_child(_author_btn, stats_btn.get_index())
+	_author_btn.visible = GameManager.author_mode
+	if not GameManager.author_mode_changed.is_connected(_on_author_mode_changed):
+		GameManager.author_mode_changed.connect(_on_author_mode_changed)
+
+## 作者模式开关联动：面板开着时切模式，按钮跟着显隐
+func _on_author_mode_changed(_enabled: bool) -> void:
+	if _author_btn != null and is_instance_valid(_author_btn):
+		_author_btn.visible = GameManager.author_mode
 
 func _show_points_tip() -> void:
 	if _points_badge == null:

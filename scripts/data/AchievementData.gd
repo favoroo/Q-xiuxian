@@ -89,10 +89,10 @@ const DEFAULT_ITEMS: Array[String] = [
 	"xuanwu_yin",
 	"tianji_pan",
 	"wuji_tianchuan_zhen",
-	# —— 2026-10-11 寻宝流四件（ProgressStore 末尾的 DEFAULT_ITEMS 回灌会让老档也拿到）——
+	# —— 2026-10-11 寻宝流（ProgressStore 末尾的 DEFAULT_ITEMS 回灌会让老档也拿到）——
 		# 2026-10-12：卸匣锥（砍砸开击数）换成满匣诀（抬开箱掉落），旧 id 由 ProgressStore 读档时剔除。
+		# 2026-10-22：纳灵盘（naling_zhuo）整件移除（自动吸附掉落物对玩家无价值），旧 id 由读档剔除。
 		"cangbao_tu",
-		"naling_zhuo",
 		"dianjin_jue",
 		# —— 2026-10-13 扩池：补齐灵兽系与 10-12 转化/站定/联动体系，彻底消灭未入池死卡 ——
 		# 普通（tier 1）

@@ -140,6 +140,10 @@ var _orb_enemies_buf: Array[Dictionary] = []
 var _orb_dict_pool: Array[Dictionary] = []
 var _orb_angles_buf: Array[float] = []
 var _target_groups_buf: Dictionary = {}
+## 分组数组常驻池（2026-10-22 性能优化）：原先每组 `_target_groups_buf[t_idx] = []`
+## 在 10Hz 索敌里每组新建一个 Array（最多 32 组 ⇒ 每秒数百次分配）。
+## 改为按目标下标复用数组壳，每帧只 clear 内容。
+var _target_groups_pool: Dictionary = {}
 
 func _ready() -> void:
 	current_health = max_health
@@ -1186,12 +1190,18 @@ func _update_weapon_targets() -> void:
 
 	# 按实际共享同一目标的武器分组计算扇形错开角：独自迎敌时不偏移，共享目标时扇形展开
 	_target_groups_buf.clear()
+	# 复用上一轮的数组壳：只清内容不换壳（池规模 = 历史最大分组数，通常 ≤ 武器数）
+	# 注意遍历字典直接 for key in dict（零分配），不要用 .values()/.keys()（各建一个 Array）
+	for key in _target_groups_pool:
+		(_target_groups_pool[key] as Array).clear()
 	for i in range(_weapons_buf.size()):
 		var t_idx := int(assignments[i])
 		if t_idx >= 0:
-			if not _target_groups_buf.has(t_idx):
-				_target_groups_buf[t_idx] = []
-			_target_groups_buf[t_idx].append(i)
+			if not _target_groups_pool.has(t_idx):
+				_target_groups_pool[t_idx] = []
+			var group: Array = _target_groups_pool[t_idx]
+			group.append(i)
+			_target_groups_buf[t_idx] = group
 
 	for i in range(_weapons_buf.size()):
 		var w := _weapons_buf[i]
@@ -1349,6 +1359,9 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 ## 受创入口。source_pos = 伤害来源位置（Boss 震地/丹爆自爆等 AoE 传入），
 ## 受击火花据此指向真实来向；未传（接触/弹丸等贴脸伤害本就有实体因果）时保持向上。
 func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
+	# 作者模式·无敌：入口直接吞掉，连闪避/盾势/受击反馈都不走（站桩观察特效时最省心）
+	if GameManager.author_mode and AuthorMode.god_mode:
+		return
 	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying or _victorious:
 		return
 

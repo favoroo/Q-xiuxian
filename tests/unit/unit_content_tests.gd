@@ -1107,12 +1107,12 @@ func _test_conversion_items_and_hooks() -> void:
 	_c.near(CultivatorSystem.damage_mult(GameManager, "qingyun_sword"), 1.60, EPS, "三昧归真 0 武器 → +60%")
 	GameManager.reset_run()
 
-	# 3. 随行神通冷却缩减：凝神符
+	# 3. 随行神通冷却缩减：凝神符（2026-10-22 由 10% 提到 12%，拉开与静心符 8% 的档差）
 	var gale_base_cd := float(SkillData.final_stats("gale", "")["cooldown"])
 	_c.near(gale_base_cd, 7.5, EPS, "加速基准冷却 7.5s")
 	GameManager.add_item("ningshen_fu")
 	var gale_mod_cd := float(SkillData.final_stats("gale", "")["cooldown"])
-	_c.near(gale_mod_cd, 6.75, EPS, "凝神符：加速冷却缩减 10% (7.5 → 6.75s)")
+	_c.near(gale_mod_cd, 6.6, EPS, "凝神符：加速冷却缩减 12% (7.5 → 6.6s)")
 	GameManager.reset_run()
 
 	# 4. 波末永久成长：突破古玉

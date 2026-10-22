@@ -54,6 +54,10 @@ static func clear_save() -> void:
 static func autosave_current(gm: Node) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	# 作者模式：不写中断续玩档。作弊局若留下快照，退出作者模式后「继续游戏」
+	# 会以普通模式复现一份跳关/全解锁的存档 —— 会话级开关必须连局内档一起堵。
+	if bool(gm.get("author_mode")):
+		return
 	var phase := WaveSpawner.Phase.FIGHT
 	if gm.wave_spawner != null:
 		phase = gm.wave_spawner.phase

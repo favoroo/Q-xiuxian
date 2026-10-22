@@ -19,7 +19,8 @@ extends Node
 ## 3) 现场层：Main 场景 + start_run，冻住波次状态机，量
 ##    刷出口数 / 上限 / 档位判定半径与体型同源 / 玉匣真多一件法宝 / 送满上限后退回仍有掉落 /
 ##    同一口铜匣在 ×1 与 ×2 两档下到账数不同（开箱收益真的兑现）/
-##    纳灵盘开与关时掉出的经验球 target_player 不同（磁吸真的接上了）。
+##    磁吸开与关时掉出的经验球 target_player 不同（磁吸真的接上了；2026-10-22 纳灵盘下架后
+##    改为直接注入 chest_magnet 字段验机制链路本身）。
 ##
 ## 运行: godot --headless --path . res://tests/ChestEconomyCheck.tscn
 ##       godot --headless --path . res://tests/ChestEconomyCheck.tscn -- --selftest
@@ -293,6 +294,9 @@ func _test_jade_cap_fallback() -> void:
 		"退回奖励仍然落地：场上出现灵石或葫芦，不是砸开啥都没有")
 
 ## 磁吸：关掉留在原地，开了当场飞向玩家 —— 两种状态读数必须不同，否则这条判据是空的
+## 2026-10-22 纳灵盘（naling_zhuo）整件移除后，这条判据改为直接注入 chest_magnet 字段来验
+## 「机制链路」本身：chest_magnet 字段仍由 SpiritChest._drop_gems 消费，只是当前无道具提供。
+## 这样改的好处是链路守卫不会随商品下架一起失效 —— 将来若再上架磁吸件，机制仍是好的。
 func _test_magnet() -> void:
 	GameManager.chest_count_bonus = 0
 	var c1 := _make_chest(BalanceChest.TIER_WOOD)
@@ -303,11 +307,13 @@ func _test_magnet() -> void:
 	var pulled_off := _new_gems_pulled(before1)
 	var n_off := _new_gem_count(before1)
 	_c.check(n_off > 0 and pulled_off == 0,
-		"没有纳灵盘：掉出的灵石留在原地（%d 颗，%d 颗被吸）" % [n_off, pulled_off])
+		"没有磁吸：掉出的灵石留在原地（%d 颗，%d 颗被吸）" % [n_off, pulled_off])
 	c1.queue_free()
 
-	GameManager.add_item("naling_zhuo")
-	_c.check(GameManager.item_hook_sum("chest_magnet") > 0.0, "纳灵盘的机制字段被 item_hook_sum 读到")
+	# 直接往 hook 缓存注入一份磁吸（等效于持有过一件带 chest_magnet 的道具）
+	GameManager._hook_cache["chest_magnet"] = 1.0
+	GameManager._hook_cache_items_size = GameManager.items.size()
+	_c.check(GameManager.item_hook_sum("chest_magnet") > 0.0, "磁吸机制字段被 item_hook_sum 读到")
 	var c2 := _make_chest(BalanceChest.TIER_WOOD)
 	await get_tree().process_frame
 	var before2 := _gem_ids()
@@ -316,8 +322,11 @@ func _test_magnet() -> void:
 	var n_on := _new_gem_count(before2)
 	var pulled_on := _new_gems_pulled(before2)
 	_c.check(n_on > 0 and pulled_on == n_on,
-		"持有纳灵盘：掉出的灵石当场全部飞向玩家（%d/%d）" % [pulled_on, n_on])
+		"磁吸开启：掉出的灵石当场全部飞向玩家（%d/%d）" % [pulled_on, n_on])
 	c2.queue_free()
+	# 还原缓存，别把注入值漏给后续用例
+	GameManager._hook_cache.clear()
+	GameManager._hook_cache_items_size = -1
 	await _clear_chests()
 
 # ---------------- 小工具 ----------------

@@ -65,6 +65,14 @@ var _matrix_host: CenterContainer
 # 顶栏徽章控件
 var _sound_badge_btn: Button
 var _top_set_btn: Button
+var _author_badge_btn: Button
+
+# —— 作者模式入口：右上设置徽章 3 秒内连点 5 次 ——
+## 不写存档（GameManager.author_mode 是会话成员），下次启动自然回普通模式。
+const AUTHOR_TAP_COUNT := 5
+const AUTHOR_TAP_WINDOW := 3.0
+var _author_taps: int = 0
+var _author_last_tap_ms: int = 0
 
 # Hero 大方块与内部控件
 var _hero_card: PanelContainer
@@ -106,6 +114,7 @@ func _ready() -> void:
 	_build_top_bar()
 	_build_center_matrix()
 	_layout_responsive()
+	_refresh_author_badge()
 	# 首帧这一屏的实得尺寸还没定（挂在别的容器里时 size 可能是 0），延一帧再按窗口现算一次
 	call_deferred("_layout_responsive")
 	UpdateManager.update_available.connect(_on_update_available)
@@ -113,6 +122,9 @@ func _ready() -> void:
 	UpdateManager.check_failed.connect(_on_check_failed)
 	SettingsManager.audio_volume_changed.connect(func(_b: StringName, _v: float, _m: bool): _refresh_sound_badge())
 	SettingsManager.setting_changed.connect(func(_s: StringName, _k: StringName, _v: Variant): _refresh_dynamic_texts())
+	# 作者模式可能在首页之外（局内/结算）被关掉：回首页时徽章要跟当前状态一致
+	if not GameManager.author_mode_changed.is_connected(_on_author_mode_changed):
+		GameManager.author_mode_changed.connect(_on_author_mode_changed)
 
 func _build_background() -> void:
 	# 1. 纯黑不透明暗底
@@ -833,7 +845,45 @@ func _cancel_reset_timer() -> void:
 		_update_reset_tween = null
 
 func _on_settings_pressed() -> void:
+	# 作者模式入口：连点计数。满 5 次在 3 秒窗口内即切换开关，不再弹设置面板。
+	if _count_author_tap():
+		return
 	settings_requested.emit()
+
+## 连点计数：返回 true 表示这一下已消费为作者模式切换（调用方不要再开设置）。
+## 用真实毫秒而不是帧数：低帧设备上连点间隔不该被帧率放大。
+func _count_author_tap() -> bool:
+	var now := Time.get_ticks_msec()
+	if _author_taps > 0 and now - _author_last_tap_ms > int(AUTHOR_TAP_WINDOW * 1000.0):
+		_author_taps = 0
+	_author_last_tap_ms = now
+	_author_taps += 1
+	if _author_taps < AUTHOR_TAP_COUNT:
+		return false
+	_author_taps = 0
+	GameManager.set_author_mode(not GameManager.author_mode)
+	GameManager.announcement_triggered.emit(
+		"◆ 作者模式已开启 ◆" if GameManager.author_mode else "作者模式已关闭")
+	AudioManager.play_sfx("ui_confirm", 0.9)
+	return true
+
+## 首页顶栏作者徽章：开启时显示，作为状态提示（同时是关闭入口的视觉锚点）
+func _refresh_author_badge() -> void:
+	if _top_bar == null or not is_instance_valid(_top_bar):
+		return
+	if _author_badge_btn == null or not is_instance_valid(_author_badge_btn):
+		_author_badge_btn = _make_badge_button("作者模式", Vector2(92, 36),
+			GameStyle.BAD_DK, GameStyle.BAD, GameStyle.CHALK, _on_author_badge_pressed)
+		_top_bar.add_child(_author_badge_btn)
+		_top_bar.move_child(_author_badge_btn, 0)
+	_author_badge_btn.visible = GameManager.author_mode
+
+func _on_author_badge_pressed() -> void:
+	GameManager.set_author_mode(false)
+	GameManager.announcement_triggered.emit("作者模式已关闭")
+
+func _on_author_mode_changed(_enabled: bool) -> void:
+	_refresh_author_badge()
 
 func _on_career_pressed() -> void:
 	career_requested.emit()

@@ -24,6 +24,7 @@ var is_gallery_mode: bool = false
 var _cultivator_renderers: Array[HollowKnightCultivatorRenderer] = []
 var _enemy_renderers: Array[HollowKnightEnemyRenderer] = []
 var _vfx_nodes: Array[Node2D] = []
+var _delayed_fx_callbacks: Array[Callable] = []
 
 func _ready() -> void:
 	_parse_arguments()
@@ -107,7 +108,10 @@ func _schedule_export() -> void:
 	if tree == null:
 		return
 	
-	for _frame in range(12):
+	for frame_idx in range(12):
+		if frame_idx == 4:
+			for cb in _delayed_fx_callbacks:
+				cb.call()
 		await tree.process_frame
 	
 	_export_snapshot()
@@ -772,6 +776,10 @@ func _build_vfx_closeup(vfx_id: String) -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	
+	if vfx_id in ["hit_spark", "melee_hit_spark", "spark"]:
+		_build_hit_spark_closeup()
+		return
+	
 	var title_lbl := Label.new()
 	title_lbl.text = "【特效法相特写】 %s" % vfx_id
 	title_lbl.position = Vector2(24, 20)
@@ -812,6 +820,239 @@ func _build_vfx_closeup(vfx_id: String) -> void:
 		fx.position = center
 		add_child(fx)
 		fx.activate_fx(vfx_id, 90.0, Color(1.0, 0.65, 0.25))
+
+func _build_hit_spark_closeup() -> void:
+	var fx_pool := FxParticlePool.new()
+	add_child(fx_pool)
+
+	var header := MarginContainer.new()
+	header.offset_left = 24
+	header.offset_top = 12
+	header.offset_right = 936
+	header.offset_bottom = 64
+	add_child(header)
+
+	var h_vbox := VBoxContainer.new()
+	h_vbox.add_theme_constant_override("separation", 3)
+	header.add_child(h_vbox)
+
+	var title_hbox := HBoxContainer.new()
+	title_hbox.add_theme_constant_override("separation", 12)
+	h_vbox.add_child(title_hbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "【近战与横扫命中火花特写】 顺向扇形喷溅 · 体表受击侧锚定 · 五行质感分化"
+	GameStyle.label(title_lbl, 16, GameStyle.CHALK)
+	title_hbox.add_child(title_lbl)
+
+	var tag_lbl := Label.new()
+	tag_lbl.text = "「实战验收」"
+	GameStyle.label(tag_lbl, 12, GameStyle.GOLD_EDGE)
+	title_hbox.add_child(tag_lbl)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = "顿挫入肉碎屑 (scale 0.75) · 帧限流 4/帧与视口门控双重保护 · 致命与精英不双发 · 挥砍前 2 到 3 目标上限"
+	GameStyle.label(sub_lbl, 10, Color(0.70, 0.75, 0.82))
+	h_vbox.add_child(sub_lbl)
+
+	# 中间三场景
+	var scenes_hbox := HBoxContainer.new()
+	scenes_hbox.offset_left = 24
+	scenes_hbox.offset_top = 68
+	scenes_hbox.offset_right = 936
+	scenes_hbox.offset_bottom = 328
+	scenes_hbox.add_theme_constant_override("separation", 16)
+	add_child(scenes_hbox)
+
+	# 场景 1：青云剑·锐金斩击
+	var sc1 := _build_melee_spark_card(
+		"近战·锐金 (MELEE) · 古金方屑",
+		"xiexiu",
+		WeaponArcRenderer.ArcMode.MELEE,
+		"metal",
+		"metal",
+		false
+	)
+	scenes_hbox.add_child(sc1)
+
+	# 场景 2：赤焰刀·炽火重斩
+	var sc2 := _build_melee_spark_card(
+		"近战·炽火 (MELEE) · 炽焰余烬",
+		"golem",
+		WeaponArcRenderer.ArcMode.MELEE,
+		"fire",
+		"fire",
+		false
+	)
+	scenes_hbox.add_child(sc2)
+
+	# 场景 3：崩浪锤·玄冰横扫（SWEEP 扇形双怪）
+	var sc3 := _build_melee_spark_card(
+		"横扫·玄冰 (SWEEP) · 冰蓝霜晶",
+		"slime",
+		WeaponArcRenderer.ArcMode.SWEEP,
+		"water",
+		"water",
+		true
+	)
+	scenes_hbox.add_child(sc3)
+
+	# 底部七色全系对比面板
+	var panel := PanelContainer.new()
+	panel.offset_left = 24
+	panel.offset_top = 338
+	panel.offset_right = 936
+	panel.offset_bottom = 524
+	panel.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.04, 0.06, 0.09), Color(0.18, 0.25, 0.38), 1, 0.0))
+	add_child(panel)
+
+	var p_vbox := VBoxContainer.new()
+	p_vbox.offset_left = 12
+	p_vbox.offset_top = 8
+	p_vbox.offset_right = 900
+	p_vbox.offset_bottom = 178
+	p_vbox.add_theme_constant_override("separation", 6)
+	panel.add_child(p_vbox)
+
+	var p_title := Label.new()
+	p_title.text = "◆ 七色命中火花（HIT_SPARK）五行与暴击质感对比：顺向 100° 扇形喷溅（scale 0.75，初速分化）"
+	GameStyle.label(p_title, 11, GameStyle.CHALK)
+	p_vbox.add_child(p_title)
+
+	var p_row := HBoxContainer.new()
+	p_row.custom_minimum_size = Vector2(880, 140)
+	p_row.add_theme_constant_override("separation", 10)
+	p_vbox.add_child(p_row)
+
+	var elements_meta := [
+		{"id": "metal", "name": "金·古金方屑", "desc": "高初速方块"},
+		{"id": "fire", "name": "火·炽阳余烬", "desc": "负重力微上扬"},
+		{"id": "water", "name": "水·玄冰霜晶", "desc": "软斑溅落"},
+		{"id": "wood", "name": "木·生机毒雾", "desc": "低初速缓飘"},
+		{"id": "earth", "name": "土·玄黄岩屑", "desc": "重力沉降"},
+		{"id": "lightning", "name": "雷·紫电极刺", "desc": "0.16s疾爆"},
+		{"id": "crit", "name": "暴击·绯金超白", "desc": "超白强起辉"}
+	]
+
+	for i in range(elements_meta.size()):
+		var m: Dictionary = elements_meta[i]
+		var col_ctl := Control.new()
+		col_ctl.custom_minimum_size = Vector2(116, 135)
+		
+		var col_bg := ColorRect.new()
+		col_bg.color = Color(0.02, 0.03, 0.05, 0.75)
+		col_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		col_ctl.add_child(col_bg)
+
+		var name_lbl := Label.new()
+		name_lbl.text = m["name"]
+		name_lbl.position = Vector2(6, 6)
+		GameStyle.label(name_lbl, 11, GameStyle.CHALK)
+		col_ctl.add_child(name_lbl)
+
+		var desc_lbl := Label.new()
+		desc_lbl.text = m["desc"]
+		desc_lbl.position = Vector2(6, 24)
+		GameStyle.label(desc_lbl, 9, GameStyle.GOLD_EDGE)
+		col_ctl.add_child(desc_lbl)
+
+		var origin_cross := Label.new()
+		origin_cross.text = "·"
+		origin_cross.position = Vector2(25, 75)
+		GameStyle.label(origin_cross, 14, Color(0.4, 0.5, 0.6))
+		col_ctl.add_child(origin_cross)
+
+		var elem_id: String = m["id"]
+		_delayed_fx_callbacks.append(func():
+			var burst_pos := col_ctl.global_position + Vector2(28, 85)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, burst_pos, elem_id, 0.75, true, Vector2(1, 0))
+		)
+		p_row.add_child(col_ctl)
+
+func _build_melee_spark_card(title: String, enemy_id: String, arc_mode: int, arc_elem: String, spark_elem: String, is_multi: bool) -> Control:
+	var box := VBoxContainer.new()
+	box.custom_minimum_size = Vector2(288, 255)
+	box.add_theme_constant_override("separation", 4)
+
+	var title_panel := PanelContainer.new()
+	title_panel.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.09, 0.13, 0.20), Color(0.28, 0.38, 0.55), 1, 0.0))
+	var t_lbl := Label.new()
+	t_lbl.text = title
+	t_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(t_lbl, 12, GameStyle.CHALK)
+	title_panel.add_child(t_lbl)
+	box.add_child(title_panel)
+
+	var stage := Control.new()
+	stage.custom_minimum_size = Vector2(288, 225)
+	stage.clip_contents = true
+
+	var stage_bg := ColorRect.new()
+	stage_bg.color = Color(0.02, 0.03, 0.05)
+	stage_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stage.add_child(stage_bg)
+
+	var cfg := EnemyVisualConfig.get_config(enemy_id)
+	if not is_multi:
+		var ren := HollowKnightEnemyRenderer.new()
+		ren.config = cfg
+		ren.position = Vector2(178, 115)
+		ren.scale = Vector2(2.2, 2.2)
+		ren.rotation = deg_to_rad(6.0)
+		ren.self_modulate = Color(1.9, 1.85, 1.8)
+		stage.add_child(ren)
+		_enemy_renderers.append(ren)
+
+		var arc := WeaponArcRenderer.new()
+		arc.configure(arc_mode, arc_elem)
+		arc.position = Vector2(150, 115)
+		arc.scale = Vector2.ONE * 0.75
+		arc.visible = true
+		arc.modulate.a = 1.0
+		stage.add_child(arc)
+		_vfx_nodes.append(arc)
+
+		_delayed_fx_callbacks.append(func():
+			var spos := stage.global_position + Vector2(192, 115)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, spos, spark_elem, 0.75, true, Vector2(1.0, 0.0))
+		)
+	else:
+		var ren1 := HollowKnightEnemyRenderer.new()
+		ren1.config = cfg
+		ren1.position = Vector2(172, 88)
+		ren1.scale = Vector2(1.8, 1.8)
+		ren1.rotation = deg_to_rad(5.0)
+		ren1.self_modulate = Color(1.8, 1.8, 1.9)
+		stage.add_child(ren1)
+		_enemy_renderers.append(ren1)
+
+		var ren2 := HollowKnightEnemyRenderer.new()
+		ren2.config = cfg
+		ren2.position = Vector2(190, 148)
+		ren2.scale = Vector2(1.8, 1.8)
+		ren2.rotation = deg_to_rad(7.0)
+		ren2.self_modulate = Color(1.8, 1.8, 1.9)
+		stage.add_child(ren2)
+		_enemy_renderers.append(ren2)
+
+		var fan := WeaponArcRenderer.new()
+		fan.configure(arc_mode, arc_elem)
+		fan.position = Vector2(125, 118)
+		fan.scale = Vector2.ONE * 0.85
+		fan.visible = true
+		fan.modulate.a = 1.0
+		stage.add_child(fan)
+		_vfx_nodes.append(fan)
+
+		_delayed_fx_callbacks.append(func():
+			var spos1 := stage.global_position + Vector2(186, 88)
+			var spos2 := stage.global_position + Vector2(204, 148)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, spos1, spark_elem, 0.75, true, Vector2(1.0, -0.2))
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, spos2, spark_elem, 0.75, true, Vector2(1.0, 0.2))
+		)
+
+	box.add_child(stage)
+	return box
 
 # ==============================================================================
 # 4. 飞行物与弹丸 (Projectile Gallery & Closeup)

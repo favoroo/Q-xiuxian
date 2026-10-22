@@ -11,6 +11,8 @@ signal pause_requested
 ## 查流派武器总表：filter_tag 为 "" 时打开武器图鉴不筛选（顶栏按钮），
 ## 否则直达并预选该流派（羁绊详情卡「查看该流派武器」）；Main 接线到 ManualDialog
 signal manual_requested(filter_tag: String)
+## 作者模式面板（仅 author_mode 时按钮可见，由 Main 接线）
+signal author_requested
 
 @onready var panel: PanelContainer = $CenterContainer/Panel
 ## 内容层（面板本体）：开店的淡入只作用在这一层，根上的全屏 DimOverlay 压暗底随 visible
@@ -182,6 +184,8 @@ var _info_bar: HBoxContainer = null
 var _synergy_box: HBoxContainer = null
 ## 顶栏生命徽记（见 ShopHpChip 头注）：买不买回复道具的依据就印在这一屏
 var _hp_chip: ShopHpChip = null
+## 顶栏「作者」按钮（仅作者模式可见）
+var _author_btn: Button = null
 ## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
 var _screen: Vector2 = Vector2(960, 540)
 
@@ -254,6 +258,20 @@ func _ready() -> void:
 	manual_btn.pressed.connect(func(): manual_requested.emit(""))
 	top_bar.add_child(manual_btn)
 	top_bar.move_child(manual_btn, stats_btn.get_index())
+
+	# 作者模式按钮：只在作者模式开启时出现，插在「属性」左边
+	_author_btn = Button.new()
+	_author_btn.name = "AuthorButton"
+	_author_btn.text = "作者"
+	_author_btn.custom_minimum_size = Vector2(56, 32)
+	_author_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_author_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, 4.0)
+	_author_btn.pressed.connect(func(): author_requested.emit())
+	top_bar.add_child(_author_btn)
+	top_bar.move_child(_author_btn, stats_btn.get_index())
+	_author_btn.visible = GameManager.author_mode
+	if not GameManager.author_mode_changed.is_connected(_on_author_mode_changed):
+		GameManager.author_mode_changed.connect(_on_author_mode_changed)
 
 	# 生命徽记插在「金币」左边：这两颗是同一类东西（这一屏上仅有的两个资源读数），
 	# 买回气丹要在它们之间来回比 —— 隔成一左一右就得靠记忆算账（见 ShopHpChip 头注）。
@@ -348,7 +366,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_shop_opened() -> void:
 	DetailTip.close_all(self)
-	# 上一次商店会话可能残留拖拽手势（_drag/_press），开店即清，防悬空指针 + 输入吞锁
+	# 作者模式可能在商店开着时被关掉：每次开店顺手同步按钮显隐
+	if _author_btn != null and is_instance_valid(_author_btn):
+		_author_btn.visible = GameManager.author_mode	# 上一次商店会话可能残留拖拽手势（_drag/_press），开店即清，防悬空指针 + 输入吞锁
 	if drag_ctl != null:
 		drag_ctl._cancel_all()
 	selected = {}
@@ -502,6 +522,11 @@ func _refresh_action_bar() -> void:
 		child.queue_free()
 	# 武器详情与操作已收归悬浮菜单（DetailTip），底部横条常驻收起，把高度让给货架
 	action_bar.visible = false
+
+## 作者模式开关联动：商店开着时切模式，按钮跟着显隐
+func _on_author_mode_changed(_enabled: bool) -> void:
+	if _author_btn != null and is_instance_valid(_author_btn):
+		_author_btn.visible = GameManager.author_mode
 
 func _on_reroll() -> void:
 	DetailTip.close_all(self)
