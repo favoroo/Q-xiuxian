@@ -378,7 +378,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 		["攻击范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
 		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
 	]
-	if int(def.get("pierce", 0)) > 0:
+	if int(def.get("pierce", 0)) > 1:
 		rows.append(["穿透", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
 	if int(def.get("projectile_count", 1)) > 1:
 		rows.append(["齐射", "%d 发" % int(def["projectile_count"]), GameStyle.PAPER])

@@ -72,9 +72,9 @@ const DEFS: Dictionary = {
 						# 2026-10-09 素材返工（旧图是弯的、且旧标定 (20,-14) 落在剑首那头上）：
 						# 新图为笔直双刃剑斜铺，tip 由 tools/fit_weapon_icon.py 实测打印后原样抄入。
 						"tip": Vector2(22, -16), "shape": "sword",
-						"desc": "自动追击并穿透2名敌人，受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
+						"desc": "自动追击锁定敌人，受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
 						"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
-						"pierce": 2,
+						"pierce": 1,
 						"tags": ["sword", "metal"],
 						"stat_scalings": {"ranged_damage": 1.0, "crit_mult_bonus": 30.0},
 					},
@@ -87,7 +87,7 @@ const DEFS: Dictionary = {
 					"tip": Vector2(21, -24), "shape": "dagger",
 					"desc": "扇形射出3把飞刀各锁1敌，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
 					"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.6, "bullet_spin": false,
-					"pierce": 2, "projectile_count": 3, "spread_angle": 0.20,
+					"pierce": 1, "projectile_count": 3, "spread_angle": 0.20,
 					"tags": ["sword", "metal"],
 					"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
 				},
@@ -380,9 +380,9 @@ const DEFS: Dictionary = {
 					"knockback": 380.0,
 					"price": 38, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 					"tip": Vector2(22, 0), "shape": "talisman",
-					"desc": "重符缓出穿透2敌沉重击退，受远程伤害与护甲加成", "tag": "远程·弹射·土",
+					"desc": "重符缓出沉重击退，受远程伤害与护甲加成", "tag": "远程·弹射·土",
 					"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
-					"pierce": 2,
+					"pierce": 1,
 					"tags": ["talisman", "earth"],
 					"stat_scalings": {"ranged_damage": 0.8, "armor": 2.5},
 				},
@@ -493,9 +493,9 @@ const DEFS: Dictionary = {
 							"knockback": 100.0,
 							"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 							"tip": Vector2(22, -12), "shape": "nail",
-							"desc": "透骨钉穿透2敌并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
+							"desc": "透骨钉射出并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
 						"bullet": "res://assets/art/bullet_bone_spike.png", "bullet_scale": 0.55, "bullet_spin": false,
-						"pierce": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
+						"pierce": 1, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 						"tags": ["talisman", "wood"],
 						"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.6},
 					},
@@ -561,7 +561,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(22, 0), "turret_shape": "array_disc", "upright": true,
 						"desc": "布设御剑阵盘疾射飞剑，受机关与近战伤害加成", "tag": "机关·剑系·金",
 						"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.55, "bullet_spin": false,
-						"pierce": 2,
+						"pierce": 1,
 						"tags": ["contraption", "sword", "metal"],
 						"stat_scalings": {"contraption_damage": 1.0, "melee_damage": 0.5},
 					},
@@ -575,7 +575,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(22, -10), "turret_shape": "beast", "upright": true,
 						"desc": "布设喷火机关兽持续灼烧敌群，受机关与元素伤害加成", "tag": "机关·火",
 						"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
-						"pierce": 2, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
+						"pierce": 1, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["contraption", "fire"],
 						"stat_scalings": {"contraption_damage": 1.0, "elemental_damage": 0.6},
 					},
@@ -592,7 +592,7 @@ const DEFS: Dictionary = {
 						"liuhuo_feijian": {
 							"name": "流火飞剑", "behavior": Behavior.PROJECTILE,
 							"sfx": "blade_shoot",
-							# 机制差异化重构：双柄飞剑交错齐射（2发×穿透1各引燃），与单柄飞剑穿透2拉开手感
+							# 机制差异化重构：双柄飞剑交错齐射（2发各引燃），与单柄飞剑单点拉开手感
 							"damage": 10.5, "cooldown": 0.95, "range": 275.0,
 							"knockback": 150.0,
 							"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
@@ -612,9 +612,9 @@ const DEFS: Dictionary = {
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
 					"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-					"desc": "三昧真火符穿透2敌烈焰灼烧，受元素与远程伤害加成", "tag": "元素·远程·弹射·火",
+					"desc": "三昧真火符烈焰灼烧，受元素与远程伤害加成", "tag": "元素·远程·弹射·火",
 					"bullet": "res://assets/art/bullet_true_fire_talisman.png", "bullet_scale": 0.65, "bullet_spin": true,
-					"pierce": 2, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
+					"pierce": 1, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
 					"tags": ["talisman", "fire"],
 					"stat_scalings": {"elemental_damage": 1.2, "ranged_damage": 0.6},
 				},
@@ -671,7 +671,7 @@ const DEFS: Dictionary = {
 						"tip": Vector2(20, -6), "turret_shape": "beast", "upright": true,
 						"desc": "布设寒泉机关兽连吐冰针冻缓敌群，受机关伤害与攻击间隔加成", "tag": "机关·水",
 						"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
-						"pierce": 2, "proc_chill": 0.30, "chill_dur": 1.5,
+						"pierce": 1, "proc_chill": 0.30, "chill_dur": 1.5,
 						"tags": ["contraption", "water"],
 						"stat_scalings": {"contraption_damage": 1.0, "cdr_bonus": 20.0},
 					},
@@ -920,9 +920,9 @@ const DEFS: Dictionary = {
 						"price": 32, "icon": "res://assets/art/weapon_guishui_fu.png",
 						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
 						"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-						"desc": "癸水阴符急速连发穿透2敌，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
+						"desc": "癸水阴符急速连发，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
 						"bullet": "res://assets/art/bullet_frost_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
-						"pierce": 2,
+						"pierce": 1,
 						"tags": ["talisman", "water"],
 						"stat_scalings": {"ranged_damage": 0.8, "cdr_bonus": 25.0},
 					},
@@ -991,7 +991,7 @@ const DEFS: Dictionary = {
 								"tip": Vector2(22, -12), "turret_shape": "cannon", "upright": true,
 								"desc": "布设青木灵炮贯穿敌阵，受机关伤害与生命回复加成", "tag": "机关·木",
 								"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
-								"pierce": 2,
+								"pierce": 1,
 								"tags": ["contraption", "wood"],
 								"stat_scalings": {"contraption_damage": 1.0, "hp_regen": 4.0},
 							},
@@ -1021,7 +1021,7 @@ const DEFS: Dictionary = {
 								"tip": Vector2(20, 0), "turret_shape": "tower", "upright": true,
 								"desc": "布设烽火台持续喷焰引燃敌群，受机关伤害与最大生命加成", "tag": "机关·火",
 								"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
-								"pierce": 2, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
+								"pierce": 1, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
 								"tags": ["contraption", "fire"],
 								"stat_scalings": {"contraption_damage": 1.0, "max_hp_bonus": 0.10},
 							},
@@ -1180,8 +1180,8 @@ const SYNERGY_BASE := {
 	"synergy_ranged_damage": 0.0,
 }
 
-## 开局六选一：五行齐备（长剑金/风扇水/火符火/巨印土/护蝶木）+ 雷法落雷「雷牌」
-const STARTER_IDS: Array = ["qingyun_sword", "wulei_paizi", "bajiao_fan", "huoyan_fu", "fantian_yin", "lingdie"]
+## 开局六选一：六大器类齐备（长剑-剑系/雷牌-雷法/风扇-横扫/火符-弹射/机关弩-机关/护蝶-御灵），兼顾五行
+const STARTER_IDS: Array = ["qingyun_sword", "wulei_paizi", "bajiao_fan", "huoyan_fu", "jiguan_nu", "lingdie"]
 
 ## 商店武器池（全部武器，分批新增记录见各段注释）
 const SHOP_POOL: Array = [
@@ -1330,7 +1330,8 @@ static func behavior_count(behavior: int) -> int:
 static func card_feats(def: Dictionary) -> String:
 	var out: Array[String] = []
 	var pierce := int(def.get("pierce", 0))
-	if pierce > 0:
+	# 基础 pierce=1 即只打一名敌人（不穿透），卡面不显「穿透」；仅基础 ≥2 才上卡。
+	if pierce > 1:
 		out.append("穿透%d" % pierce)
 	var count := int(def.get("projectile_count", 1))
 	if count > 1:

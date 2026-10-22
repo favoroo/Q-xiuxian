@@ -59,7 +59,7 @@ func _test_five_elements_system() -> void:
 	_c.equals(label_of["fantian_yin"], "范围", "番天印标记范围")
 	_c.equals(label_of["lingdie"], "环绕", "灵蝶标记环绕")
 	_c.equals(label_of["jiguan_nu"], "机关", "机关弩标记机关")
-	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "穿透2·3发", "柳叶飞刀紧凑特性＝穿透2·3发（量词用「发」：projectile_count 是出膛弹丸数，不是连击段数；2026-10-14 穿透 3→2）")
+	_c.equals(WeaponData.card_feats(WeaponData.get_def("liuye_feidao")), "3发", "柳叶飞刀紧凑特性＝3发（基础不穿透，pierce=1 不上卡面；量词用「发」：projectile_count 是出膛弹丸数）")
 	_c.equals(WeaponData.card_feats(WeaponData.get_def("qingyun_sword")), "", "青云剑无机械特性时不占卡面特性行")
 
 	# 1b-2. 色签解释的两条数据前提（货架卡点色签弹解释卡，2026-10-11 用户「加成怎么样加成哪些」）：

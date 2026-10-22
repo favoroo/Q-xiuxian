@@ -11,9 +11,11 @@ extends RefCounted
 static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_count: int = 4,
 		forecast: StatForecast = null) -> Control:
 	var card_w := WaveShop.offer_card_w(shop._screen, total_count)
-	var data := resolve_offer_data(offer, forecast)
-	var card := _create_card_chrome(card_w, data.edge_color)
 	var inner_w: float = WaveShop.card_inner_w(card_w)
+	# 卡内宽按这一屏的真卡宽传下去：预览行只在「这一档屏真装不下」时才退兜底，
+	# 不许拿最窄档 124 当所有屏的尺子（20:9 宽卡上明明放得下，当前值却被砍掉）
+	var data := resolve_offer_data(offer, forecast, inner_w)
+	var card := _create_card_chrome(card_w, data.edge_color)
 
 	var vbox := VBoxContainer.new()
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -56,7 +58,8 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 ## 装配这张卡的全部数据（武器/道具/回复药三种货）：名号、图标、色签、加成行、说明、边色与「可合成」角标
 ## stat_rows 是卡面加成行（[名字, 幅度, 颜色]），数字由 BonusRows 从数据表直接生成，不在 desc 里手抄；
 ## 道具卡另有「当前 → 购买后」预览（item_stat_rows），forecast 为空时内部现开一份影子（测试路径）。
-static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null) -> Dictionary:
+static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
+		row_w: float = -1.0) -> Dictionary:
 	var kind: String = offer.get("kind", "weapon")
 	var is_potion: bool = kind == "potion"
 	var is_item: bool = kind == "item"
@@ -111,7 +114,7 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null)
 				and not (bool(def.get("unique", false)) and GameManager.has_item(item_id))
 		if previewable:
 			var fc := forecast if forecast != null else StatForecast.open()
-			stat_rows = item_stat_rows(def.get("apply", {}), fc)
+			stat_rows = item_stat_rows(def.get("apply", {}), fc, row_w)
 		else:
 			stat_rows = BonusRows.apply_rows(def.get("apply", {}))
 		chip_color = ItemData.tier_color(tier)
@@ -223,11 +226,14 @@ static func w_id_of_offer(offer: Dictionary) -> String:
 ## 逐字段三档：
 ## ① 面板有行的字段 → 数值位印 "X→Y"；变化按幅度语义着色（正绿负红、乘算看方向），
 ##    未变化（夹顶/满血回血）退 GREY——照实写"买了等于没买"，与悟道注脚同一口径；
-## ② pair 装不下 124 卡内宽（「对精英伤害」这类长行名配大数值）→ 退 "→Y"，只留购买后那一头；
-## ③ 再装不下 → 保留原幅度行（理论到不了，兜底保证永不破格）。
+## ② 完整 pair 装不下这一档卡内宽 → 省掉两头的「+」再试（"26%→23%"，正号只是冗余，
+##    读数与颜色不变）。2026-10-22 用户指着货架问「攻击间隔前面的数字怎么没显示」：
+##    原先是硬拿最窄档 124 当所有屏的尺子，宽屏上明明放得下也退成 "→Y"，起点被砍掉；
+## ③ 再装不下 → 保留原幅度行（"攻击间隔 +4%"）。宁可只讲这一件道具加多少，
+##    也不印一个没有起点的 "→Y"——半个承诺比没有承诺更难读。
 ## 面板没有行的机制项（灵兽三件、宝箱、单系/全元素、技能冷却）没有预读，保持幅度行——
 ## 不给玩家在属性面板里找不到的数硬凑读数。
-static func item_stat_rows(apply: Dictionary, forecast: StatForecast) -> Array:
+static func item_stat_rows(apply: Dictionary, forecast: StatForecast, row_w: float = -1.0) -> Array:
 	var notes: Dictionary = {}
 	for line in forecast.shop_lines_for(apply):
 		notes[String(line["key"])] = line
@@ -241,24 +247,31 @@ static func item_stat_rows(apply: Dictionary, forecast: StatForecast) -> Array:
 		if notes.has(k):
 			var line: Dictionary = notes[k]
 			var pair := String(line["text"])
-			var after_only := "→%s" % String(line["after"])
-			if _row_fits(name_txt, pair):
+			if _row_fits(name_txt, pair, row_w):
 				val_txt = pair
-			elif _row_fits(name_txt, after_only):
-				val_txt = after_only
-			# 两档都装不下时保留幅度行与幅度色（理论到不了，兜底不破格）；
+			else:
+				var compact_pair := compact_pair_text(String(line["before"]), String(line["after"]))
+				if _row_fits(name_txt, compact_pair, row_w):
+					val_txt = compact_pair
 			# 预览真画出来了才按「变化/未变化」换色：未变化退 GREY，照实写买了等于没买
 			if val_txt != StatInfoData.format_amount(k, v):
 				val_col = BonusRows.stat_color(k, v) if bool(line["changed"]) else GameStyle.GREY
 		rows.append([name_txt, val_txt, val_col])
 	return rows
 
-## 单行宽度预算：行名 + 数值 + 列缝 4 要装进最窄档卡内宽（BonusRows 行不换行的硬约束）
-static func _row_fits(name_txt: String, val_txt: String) -> bool:
+## 兜底档的紧凑 pair：省掉两头冗余的正号（"+26%→+23%" → "26%→23%"），数字一位不改
+static func compact_pair_text(before: String, after: String) -> String:
+	return "%s→%s" % [before.trim_prefix("+"), after.trim_prefix("+")]
+
+## 单行宽度预算：行名 + 数值 + 列缝 4 要装进这一档卡内宽（BonusRows 行不换行的硬约束）。
+## row_w 缺省（测试/无屏上下文）按最窄档 CARD_W_MIN 算；真上屏时由 create_card 传本屏卡内宽，
+## 宽屏不该被最窄档的尺子误伤（2026-10-22 攻击间隔预览丢起点）。
+static func _row_fits(name_txt: String, val_txt: String, row_w: float = -1.0) -> bool:
 	var body := GameStyle.body_font()
 	var need := GameStyle.line_max_w(name_txt, body, 12) \
 			+ GameStyle.line_max_w(val_txt, body, 12) + 4.0
-	return need <= WaveShop.card_inner_w(WaveShop.CARD_W_MIN)
+	var budget: float = row_w if row_w > 0.0 else WaveShop.card_inner_w(WaveShop.CARD_W_MIN)
+	return need <= budget
 
 ## 点「荐」签 = 看推荐理由：统一走 RecommendTip（与悟道卡同一张卡，不再各留一份实现）。
 static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, offer: Dictionary) -> void:

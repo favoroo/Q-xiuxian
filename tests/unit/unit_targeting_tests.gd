@@ -101,9 +101,9 @@ func _test_ranged_focus_dps() -> void:
 
 	# 1. 尺子本身先自证：口径与运行时逐条对齐，估计算错这里就红
 	_c.equals(WeaponData.targets_per_shot("huoyan_fu"), 2, "火焰符双符齐掷 = 单发最多结算 2 敌，仍属点杀位")
-	_c.equals(WeaponData.targets_per_shot("gengjin_feijian"), 2, "庚金飞剑贯穿两敌")
+	_c.equals(WeaponData.targets_per_shot("gengjin_feijian"), 1, "庚金飞剑单发点杀 1 敌（基础不穿透，pierce=1）")
 	_c.equals(WeaponData.targets_per_shot("wanmu_lingfu"), 3, "万木灵符 1 穿透 + 2 弹射 = 单发 3 敌")
-	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 6, "柳叶飞刀 3 发 × 2 穿透 = 单发 6 敌（2026-10-14 穿透 3→2 收敛群体雪球）")
+	_c.equals(WeaponData.targets_per_shot("liuye_feidao"), 3, "柳叶飞刀 3 发 × 1 = 单发 3 敌（基础不穿透，pierce=1）")
 	_c.equals(WeaponData.targets_per_shot("bajiao_fan"), 6, "横扫扇形天生群体，不进点杀位")
 	# 火焰符 ★1：damage × 发数 ÷ 冷却 + 单张灼烧（冷却 < 灼烧时长 ⇒ 常驻）。数字全从表里取，
 	# 这三条验的是"公式的语义"，不是某一次的数值快照 —— 以后调伤害不用回来改断言
@@ -163,7 +163,7 @@ func _test_ranged_focus_dps() -> void:
 
 	# 4. 群体档不许反过来吃掉单体档：弹丸单发结算的敌人越多，单价就该越便宜
 	_c.check(int(WeaponData.get_def("huoyan_fu").get("price", 0)) <= int(WeaponData.get_def("liuye_feidao").get("price", 0)),
-		"单发只咬 1 敌的火焰符不比单发咬 9 敌的柳叶飞刀贵")
+		"单发只咬 1 敌的火焰符不比单发咬 3 敌的柳叶飞刀贵")
 	_c.check(WeaponData.sustained_single_dps("huoyan_fu", 1) > WeaponData.sustained_single_dps("liuye_feidao", 1),
 		"火焰符对孤立目标的 DPS 高于群体弹丸（各档各有各的活）")
 	_c.check(WeaponData.sustained_single_dps("gengjin_feijian", 1) > WeaponData.sustained_single_dps("liuye_feidao", 1),

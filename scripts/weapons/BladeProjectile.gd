@@ -254,14 +254,14 @@ func _on_area_entered(area: Area2D) -> void:
 				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
 				return
 
-			pierce_left -= 1
-			if pierce_left <= 0:
-				JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
-				if _vector_renderer != null and _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
-					var scene_parent := get_parent()
-					if is_inside_tree() and scene_parent != null:
-						JuiceEffect.spawn_shockwave(scene_parent, global_position, 20.0, Color(1.0, 0.85, 0.25, 0.75), 0.16)
-				_recycle()
+		pierce_left -= 1
+		if pierce_left <= 0:
+			JuiceEffect.spawn_impact_pop(self, global_position, _get_impact_color(), direction)
+			if _vector_renderer != null and _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
+				var scene_parent := get_parent()
+				if is_inside_tree() and scene_parent != null:
+					JuiceEffect.spawn_shockwave(scene_parent, global_position, 20.0, Color(1.0, 0.85, 0.25, 0.75), 0.16)
+			_recycle()
 
 func _get_impact_color() -> Color:
 	if modulate != Color.WHITE:

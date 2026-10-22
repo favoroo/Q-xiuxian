@@ -238,8 +238,11 @@ static func weapon_feats(def: Dictionary) -> String:
 	if int(def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
 		out.append("锁敌追击")
 	var pierce: int = int(def.get("pierce", 0))
+	# 基础 pierce=1 只打一名敌人（不穿透）；加成后实际穿透数 = 基础 + bonus，>1 才上详情卡。
 	if pierce > 0:
-		out.append("穿透 %d" % (pierce + GameManager.bonus_pierce))
+		var pierce_eff: int = pierce + GameManager.bonus_pierce
+		if pierce_eff > 1:
+			out.append("穿透 %d" % pierce_eff)
 	var count: int = int(def.get("projectile_count", 1))
 	if count > 1:
 		out.append("一次 %d 发" % count)

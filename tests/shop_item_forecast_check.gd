@@ -6,7 +6,7 @@ extends Node
 ##
 ## 五条口径：
 ## ① 模型同源：全量 ItemData 逐件装配货架卡，有预读的行必须与 StatForecast.shop_lines_for
-##    对上（pair 或 "→after" 兜底档），颜色按「变化=幅度语义色 / 未变化=GREY」；
+##    对上（完整 pair / 省正号的紧凑 pair / 幅度行三档），颜色按「变化=幅度语义色 / 未变化=GREY」；
 ## ② 该有就有、不该有就没有：面板有行的字段行内含「→」，机制项（灵兽三件/宝箱/元素/技能冷却）
 ##    保持幅度行——不给属性面板里找不到的数硬凑读数；
 ## ③ 宽度：最窄档 124 卡内宽下，每件道具每行「行名+数值+列缝」都装得下（BonusRows 不换行）；
@@ -110,6 +110,47 @@ func _run_model_matches_all_items() -> void:
 	_check_sweep_prerequisites(checked, forecast_rows)
 	_c.check(bad.is_empty(), "全量道具卡逐行与预读模型同源（%d 件）：%s" % [
 		ItemData.all_ids().size(), " | ".join(bad)])
+	_check_no_half_arrow()
+	_check_wide_card_keeps_before()
+
+## ②b 半截承诺一枪：任何道具卡行都不许出现「→Y」——起点被宽度兜底吃掉正是
+## 2026-10-22 用户指出的 bug。宽度不够时只许整条退回幅度行（「攻击间隔 +4%」）。
+func _check_no_half_arrow() -> void:
+	var bad: Array[String] = []
+	var previewed := 0
+	for id in ItemData.all_ids():
+		var iid := String(id)
+		var apply: Dictionary = ItemData.get_def(iid).get("apply", {})
+		if apply.is_empty():
+			continue
+		for r in ShopOfferCardFactory.resolve_offer_data({"kind": "item", "id": iid}).get("stat_rows", []):
+			var txt := String(r[1])
+			if txt.begins_with("→"):
+				bad.append("%s「%s」%s" % [iid, String(r[0]), txt])
+			elif txt.contains("→"):
+				previewed += 1
+	_c.check(previewed >= 20, "前提：本轮 %d 行真带起点的预览（0 行 = 判据空转）" % previewed)
+	_c.check(bad.is_empty(), "货架道具行不许只印「→购买后」的半截数：%s" % " | ".join(bad))
+
+## ②c 宽卡不许误伤：20:9 真机上卡内宽 ~172，「攻击间隔 +26%→+23%」这种
+## 最宽 pair 必须完整画出来（旧实现拿最窄档 124 当尺子，起点被砍掉）。
+## 同时守最窄档：真装不下时只许退幅度行，不许破格。
+func _check_wide_card_keeps_before() -> void:
+	var wide_inner: float = WaveShop.card_inner_w(
+			WaveShop.offer_card_w(Vector2(1202, 540), GameManager.SHOP_BASE_SLOTS))
+	var apply: Dictionary = ItemData.get_def("manli_huwan").get("apply", {})
+	var forecast := StatForecast.open()
+	var rows: Array = ShopOfferCardFactory.item_stat_rows(apply, forecast, wide_inner)
+	var atk := _row_of_name(rows, "攻击间隔")
+	_c.check(atk.size() == 3 and String(atk[1]).contains("→")
+			and not String(atk[1]).begins_with("→"),
+			"20:9 宽卡（卡内宽 %.0f）攻击间隔行带起点（实得「%s」）" % [
+				wide_inner, String(atk[1]) if atk.size() > 1 else "缺行"])
+	var narrow: Array = ShopOfferCardFactory.item_stat_rows(apply, forecast)
+	var atk_n := _row_of_name(narrow, "攻击间隔")
+	_c.check(atk_n.size() == 3 and not String(atk_n[1]).begins_with("→"),
+			"最窄档也不印半截箭头（实得「%s」）" % [
+				String(atk_n[1]) if atk_n.size() > 1 else "缺行"])
 
 ## 前提守卫：行数太少或一行预读都没有 = 判据空转（同「ALL PASS 但 0 项」那类假绿）
 func _check_sweep_prerequisites(checked: int, forecast_rows: int) -> void:
@@ -130,16 +171,27 @@ func _model_index(lines: Array[Dictionary]) -> Dictionary:
 	return by_key
 
 ## 一行卡值 vs 模型行：返回空串=对上，否则人话错误（selftest 也用它验牙齿）
+## 三档合法形态：完整 pair、省正号的紧凑 pair、装不下时整条幅度行。
 static func _row_vs_model(val_txt: String, val_col, line: Dictionary, k: String, v: float) -> String:
-	var want_col: Color = BonusRows.stat_color(k, v) if bool(line["changed"]) else GameStyle.GREY
-	if not (val_col as Color).is_equal_approx(want_col):
-		return "%s 颜色不符（实得 %s / 应得 %s）" % [k, val_col, want_col]
 	if val_txt == String(line["text"]):
+		var want_col: Color = BonusRows.stat_color(k, v) if bool(line["changed"]) else GameStyle.GREY
+		if not (val_col as Color).is_equal_approx(want_col):
+			return "%s 颜色不符（实得 %s / 应得 %s）" % [k, val_col, want_col]
 		return ""
-	if val_txt == "→" + String(line["after"]):
+	var compact := ShopOfferCardFactory.compact_pair_text(
+			String(line["before"]), String(line["after"]))
+	if val_txt == compact:
+		var want_col2: Color = BonusRows.stat_color(k, v) if bool(line["changed"]) else GameStyle.GREY
+		if not (val_col as Color).is_equal_approx(want_col2):
+			return "%s 紧凑 pair 颜色不符（实得 %s / 应得 %s）" % [k, val_col, want_col2]
 		return ""
-	return "%s 行值「%s」对不上模型（pair「%s」/ after「%s」）" % [
-		k, val_txt, String(line["text"]), String(line["after"])]
+	if val_txt == StatInfoData.format_amount(k, v):
+		if not (val_col as Color).is_equal_approx(BonusRows.stat_color(k, v)):
+			return "%s 幅度兜底行颜色不符（实得 %s / 应得 %s）" % [
+				k, val_col, BonusRows.stat_color(k, v)]
+		return ""
+	return "%s 行值「%s」对不上模型（pair「%s」/ 紧凑「%s」/ 幅度「%s」）" % [
+		k, val_txt, String(line["text"]), compact, StatInfoData.format_amount(k, v)]
 
 # ============================ ④ 真实到账链条 ============================
 
@@ -184,7 +236,8 @@ func _run_chain_against_real_purchase() -> void:
 	_c.check(cap_row.size() == 3 and (cap_row[2] as Color).is_equal_approx(GameStyle.GREY),
 			"闪避夹顶行退 GREY（实得 %s）" % str(cap_row))
 
-## 从装配行里拎出每条预读的 after（按行名反查 key）
+## 从装配行里拎出每条预读的 after（按行名反查 key）。三种合法形态：
+## 完整 pair / 省正号的紧凑 pair / 装不下时的幅度行（没有 after 可拎，跳过）
 func _promised_after(rows: Array, apply: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	var model := _model_index(StatForecast.open().shop_lines_for(apply))
@@ -193,10 +246,14 @@ func _promised_after(rows: Array, apply: Dictionary) -> Dictionary:
 		if not model.has(k):
 			continue
 		var val := String(r[1])
-		if val.begins_with("→"):
-			out[k] = val.trim_prefix("→")
-		elif val == String(model[k]["text"]):
-			out[k] = String(model[k]["after"])
+		var after := ""
+		if val == String(model[k]["text"]):
+			after = String(model[k]["after"])
+		elif val == ShopOfferCardFactory.compact_pair_text(
+				String(model[k]["before"]), String(model[k]["after"])):
+			after = String(model[k]["after"])
+		if not after.is_empty():
+			out[k] = after
 	return out
 
 func _row_of_name(rows: Array, name_txt: String) -> Array:
@@ -229,12 +286,14 @@ func _run_card_renders_forecast() -> void:
 	var bad: Array[String] = []
 	var body := GameStyle.body_font()
 	var cards: Array = shop.offers_container.get_children()
+	var real_inner: float = WaveShop.card_inner_w(
+			WaveShop.offer_card_w(shop._screen, GameManager.shop_offers.size()))
 	for ci in range(3):
 		if ci >= cards.size():
 			bad.append("第 %d 张卡没上屏" % ci)
 			continue
 		var assembled: Array = ShopOfferCardFactory.resolve_offer_data(
-				{"kind": "item", "id": String(offers[ci]["id"])}).get("stat_rows", [])
+				{"kind": "item", "id": String(offers[ci]["id"])}, null, real_inner).get("stat_rows", [])
 		var drawn := _screen_rows(cards[ci])
 		if drawn.size() != assembled.size():
 			bad.append("卡 %d 画出 %d 行（装配 %d 行）" % [ci, drawn.size(), assembled.size()])
@@ -280,22 +339,32 @@ func _screen_rows(card: Control) -> Array:
 
 # ============================ 反例 selftest ============================
 
-## 尺子必须有牙齿：篡改的行值、机制项的预读、破格的宽度，各须被抓一次
+## 尺子必须有牙齿：篡改的行值、半截箭头、机制项的预读、破格的宽度，各须被抓一次
 func _run_selftest() -> void:
 	var line: Dictionary = {"key": "armor", "text": "18→21", "before": "18", "after": "21", "changed": true}
 	var err := _row_vs_model("18→22", GameStyle.GOOD_DK, line, "armor", 3.0)
 	_c.check(not err.is_empty(), "反例① 篡改行值（18→22 ≠ 18→21）被抓（实得：%s）" % err)
 	var ok := _row_vs_model("18→21", BonusRows.stat_color("armor", 3.0), line, "armor", 3.0)
 	_c.check(ok.is_empty(), "正例 原样 pair 放行")
+	var compact := _row_vs_model("18→21", BonusRows.stat_color("armor", 3.0),
+			{"key": "armor", "text": "+18→+21", "before": "+18", "after": "+21", "changed": true},
+			"armor", 3.0)
+	_c.check(compact.is_empty(), "正例 省正号的紧凑 pair 放行")
+	var half := _row_vs_model("→21", BonusRows.stat_color("armor", 3.0), line, "armor", 3.0)
+	_c.check(not half.is_empty(), "反例② 半截箭头「→21」被抓（起点被砍就是 bug）")
 	var grey := _row_vs_model("18→21", GameStyle.GOOD_DK,
 			{"key": "armor", "text": "18→21", "before": "18", "after": "21", "changed": false},
 			"armor", 3.0)
-	_c.check(not grey.is_empty(), "反例② 未变化却上了幅度色被抓（实得：%s）" % grey)
+	_c.check(not grey.is_empty(), "反例③ 未变化却上了幅度色被抓（实得：%s）" % grey)
 	_c.check(StatForecast.has_reading("armor") and not StatForecast.has_reading("pet_damage_mult"),
-			"反例③ 登记表分得清面板有行与机制项")
+			"反例④ 登记表分得清面板有行与机制项")
 	_c.check(not ShopOfferCardFactory._row_fits("最大生命", "99999→199999"),
-			"反例④ 破格宽度被抓（兜底退档有牙齿）")
+			"反例⑤ 破格宽度被抓（兜底退档有牙齿）")
 	_c.check(ShopOfferCardFactory._row_fits("最大生命", "120→132"), "正例 正常读数放行")
+	_c.check(ShopOfferCardFactory._row_fits("攻击间隔", "+26%→+23%", 172.0),
+			"正例 20:9 卡内宽 172 放得下最宽攻击间隔 pair")
+	_c.check(not ShopOfferCardFactory._row_fits("攻击间隔", "+26%→+23%", 124.0),
+			"反例⑥ 最窄档 124 仍按预算拒绝（宽度尺子没有放水）")
 
 ## 过几帧让布局与信号落定（只用来等排版，不做任何「几帧=几秒」的时间换算）
 func _settle(frames: int) -> void:
