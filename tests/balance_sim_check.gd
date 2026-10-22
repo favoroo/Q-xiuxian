@@ -560,6 +560,45 @@ func _test_stat_caps_and_pacing() -> void:
 	GameManager.reset_run()
 	GameManager._apply_stat_fields({"shop_price_mul": 0.1}, "test")
 	_c.near(GameManager.shop_price_mult, GameManager.SHOP_PRICE_FLOOR, EPS, "道具折扣腿夹地板 %.2f" % GameManager.SHOP_PRICE_FLOOR)
+	# 6.2b 「讨价还价」这类同表带代偿的折扣腿：夹地板的那一份没兑现，代偿就不许照收整份
+	var mkt_apply: Dictionary = UpgradeData.get_upgrade_def("merchant_up").get("apply", {})
+	var mkt_mul: float = float(mkt_apply.get("shop_price_mul", 1.0))
+	var mkt_cost: float = float(mkt_apply.get("weapon_damage_mult", 0.0))
+	_c.check(mkt_mul < 1.0 and mkt_cost < 0.0, "讨价还价仍是「折扣腿 + 负代偿腿」同表结构")
+	# ① 没夹到地板（新开局）⇒ 代偿整份照扣，老行为不许被这条闸改坏
+	GameManager.reset_run()
+	var dmg_base: float = GameManager.weapon_damage_mult
+	GameManager._apply_stat_fields(mkt_apply, "test")
+	_c.near(GameManager.shop_price_mult, mkt_mul, EPS, "起始档物价按表落地（×%.2f）" % mkt_mul)
+	_c.near(GameManager.weapon_damage_mult - dmg_base, mkt_cost, EPS, "起始档没夹地板 ⇒ 伤害代偿整份照扣")
+	# ② 已在地板 ⇒ 一分不省，代偿归零（白罚反例）
+	GameManager.reset_run()
+	dmg_base = GameManager.weapon_damage_mult
+	GameManager.shop_price_mult = GameManager.SHOP_PRICE_FLOOR
+	GameManager._apply_stat_fields(mkt_apply, "test")
+	_c.near(GameManager.shop_price_mult, GameManager.SHOP_PRICE_FLOOR, EPS, "已在地板 ⇒ 物价不许跌破地板")
+	_c.near(GameManager.weapon_damage_mult - dmg_base, 0.0, EPS, "已在地板 ⇒ 折扣零兑现，伤害代偿零扣")
+	# ③ 商人自带 8 折：0.8×mul 越界被夹回地板 ⇒ 代偿按「实收降幅 / 名义降幅」折成
+	GameManager.reset_run()
+	dmg_base = GameManager.weapon_damage_mult
+	GameManager.shop_price_mult = 0.8
+	var got_price: float = 0.8 - GameManager.SHOP_PRICE_FLOOR
+	var want_ratio: float = got_price / (0.8 * (1.0 - mkt_mul))
+	GameManager._apply_stat_fields(mkt_apply, "test")
+	_c.near(GameManager.shop_price_mult, GameManager.SHOP_PRICE_FLOOR, EPS, "商人档物价夹回地板")
+	_c.near(GameManager.weapon_damage_mult - dmg_base, mkt_cost * want_ratio, EPS,
+		"商人档伤害代偿按实收扣（实收 %.1f%% / 名义 %.1f%%）" % [got_price * 100.0, 0.8 * (1.0 - mkt_mul) * 100.0])
+	_c.check(absf(GameManager.weapon_damage_mult - dmg_base) < absf(mkt_cost) - EPS
+		and GameManager.weapon_damage_mult - dmg_base < -EPS,
+		"商人档代偿落在 0 与整份之间（既不是零也不是整份）")
+	# ④ 卖出回退按名义值整份退 ⇒ 可卖道具不许在同一份 apply 里既带折扣腿又带负代偿腿
+	for iid in ItemData.all_ids():
+		var iapply: Dictionary = ItemData.get_def(String(iid)).get("apply", {})
+		if not iapply.has("shop_price_mul"):
+			continue
+		for k in iapply.keys():
+			_c.check(float(iapply[k]) >= 0.0 or StatInfoData.field_unit(String(k)) == "pctmul",
+				"道具 %s 不许既带折扣腿又带负代偿腿（回退按名义整份退会漏账）" % iid)
 	# 暴击合计出口：加点层 + 羁绊层超过总上限时 getter 也要夹
 	GameManager.reset_run()
 	GameManager.crit_mult = 2.2

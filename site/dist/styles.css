@@ -10,7 +10,8 @@
         列表行按 side_card()：左边一条 3px 竖带、行内不投影
       · 动效照 GameStyle：按下 = 影归零 + 位移一个影量（ANIM_PRESS 只在松开时回弹，按下 0ms 硬切），
         选中 = scale(var(--sel-scale)) 走 ANIM_SNAP，弹窗进入 = slam_in 从 var(--slam-from) 起
-        走 ANIM_SLAM，整屏揭幕 = slash_wipe 那条直角带（--dur-wipe / --wipe-fade / --wipe-stagger）
+        走 ANIM_SLAM；游戏里 slash_wipe 那条整屏直角带（--dur-wipe / --wipe-fade / --wipe-stagger）
+        站点不拿来当标题特效（2026-10-21 用户拍板关掉扫屏），只借它的时长给数据带数字滚动
       · 浏览器里的补间口径（2026-10-21 与用户确认）：颜色/阴影给一条 --dur-press 的短补间，
         位移/缩放走 --dur-snap —— 触屏上没有 hover 常驻，硬切看着像闪一下；按下仍然 0ms 到位。
         游戏内没有「滚动揭示」这种东西，入场用的时长 = 令牌整数倍（见 :root 那三条站点自有变量），
@@ -44,13 +45,14 @@
   --rv-step: calc(var(--dur-press) / 2);
   --rv-dur: calc(var(--dur-snap) * 2);
   --slide-dur: calc(var(--dur-snap) * 2);
+  --tap: 40px;          /* 触屏热区下限（游戏内没有这种约束，站点自有） */
   --ease-out: cubic-bezier(.33, 1, .68, 1);   /* 与 .tile.sel 那条缩放补间同一支曲线 */
   --ease-in: cubic-bezier(.32, 0, .67, 0);    /* 游戏 slash_wipe 用的是 TRANS_CUBIC + EASE_IN */
 }
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; scroll-padding-top: 78px; }
+html { scroll-behavior: smooth; scroll-padding-top: 78px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -62,6 +64,7 @@ body {
   font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
   overflow-x: hidden;
 }
 
@@ -87,19 +90,24 @@ a { color: inherit; text-decoration: none; }
   background: var(--ink);
   border-bottom: var(--bw) solid var(--hot);
 }
-.topbar-in { display: flex; align-items: center; gap: 16px; height: 62px; }
-.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; min-width: 0; }
+.topbar-in { display: flex; align-items: center; gap: 12px; height: 62px; }
+/* 顶栏三块：品牌不缩、导航吃掉剩下来的宽度并自己横滑、按钮不缩。
+   少了这三条约束，中文按钮会被压成一列一个字（390 档实测「立即试玩」竖排三行）。 */
+.brand { display: flex; align-items: center; gap: 10px; flex: none; margin-right: auto; min-width: 0; }
 .brand-mark { width: 34px; height: 34px; border: var(--bw-thin) solid var(--hot); }
-.brand-name { font-weight: 900; font-size: 21px; letter-spacing: .06em; color: var(--chalk); }
+.brand-name { font-weight: 900; font-size: 21px; letter-spacing: .06em; color: var(--chalk); white-space: nowrap; }
 
-.nav { position: relative; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.nav { position: relative; display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .nav::-webkit-scrollbar { display: none; }
 .nav a {
+  display: flex; align-items: center;
+  min-height: var(--tap);
   padding: 7px 12px;
   font-size: 14px;
   white-space: nowrap;
   color: var(--grey);
   border-bottom: var(--bw-thin) solid transparent;
+  touch-action: manipulation;
 }
 .nav a:hover, .nav a.on { color: var(--chalk); }
 /* 分区指示条：整条导航只有一根骨白→主题色的带子，靠它滑动指出当前分区，
@@ -143,7 +151,8 @@ a { color: inherit; text-decoration: none; }
 .btn-ghost:hover { background: var(--chalk); }
 .btn-ghost:active { background: var(--slot); }
 .btn-sm { padding: 9px 15px; font-size: 13px; }
-.topbar-cta { padding: 8px 14px; font-size: 13px; }
+.topbar-cta { padding: 8px 14px; font-size: 13px; white-space: nowrap; flex: none; touch-action: manipulation; }
+.btn { touch-action: manipulation; }
 
 /* —— HERO —— */
 .hero { padding: 54px 0 56px; }
@@ -185,14 +194,15 @@ a { color: inherit; text-decoration: none; }
 
 /* 主题色切换：与游戏内 THEME_PRESETS 同一张表，色块就是可点的档 */
 .themes { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; flex-wrap: wrap; }
-.themes > span { font-size: 12.5px; color: var(--grey); letter-spacing: .04em; }
+.themes > span { font-size: 12.5px; color: var(--grey); letter-spacing: .04em; white-space: nowrap; }
 .theme-sw-row { display: flex; gap: 8px; }
 .theme-sw {
-  width: 26px; height: 26px;
+  width: 30px; height: 30px;
   padding: 0;
   border: var(--bw-thin) solid var(--ink);
   box-shadow: var(--sh-mini);
   cursor: pointer;
+  touch-action: manipulation;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -289,7 +299,17 @@ a { color: inherit; text-decoration: none; }
 .roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .role { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
 .role-top { display: flex; align-items: center; gap: 11px; }
-.role-top img { width: 42px; height: 42px; flex: none; border: var(--bw-thin) solid var(--ink); }
+/* 角色头像与游戏内选角卡同一个做法：CultivatorSelect 用 outlined_panel(INK, LINE, 1) 把
+   图标坐在纯黑凹槽里（图标是透明底，实测不透明像素只占 20%~64%，压纸白会露出一圈浅色底）。
+   边框跟着换成 --line：黑底上再画一圈纯墨边框等于没有，游戏里那圈本来就是中性深灰线。 */
+/* 游戏图标一律坐在纯黑凹槽里（与技能、角色同一条规矩）：这批切图全是透明底
+   （实测武器/道具不透明像素只占 3~6 成，角色 2~6 成），压在纸白卡面上会露出一圈浅色底；
+   游戏内本来就是 outlined_panel(INK, LINE, 1)。黑底上再画一圈纯墨边框等于没有，
+   所以带边框的那几处统一描中性深灰线 --line；武器/道具那面密网格不给边框，
+   让卡片自己那条五行属色/档位 accent 框当唯一边框，34px 的小格再套一圈会糊。 */
+.role-top img, .tile img, .detail img, .skill-top img { background: var(--ink); }
+.role-top img, .detail img, .skill-top img { border: var(--bw-thin) solid var(--line); }
+.role-top img { width: 42px; height: 42px; flex: none; }
 .role-name { font-size: 16.5px; font-weight: 900; letter-spacing: .04em; color: var(--paper); }
 .role-epi { font-size: 12px; color: var(--paper-dim); line-height: 1.45; }
 .role-line { display: flex; gap: 7px; font-size: 12.5px; line-height: 1.5; align-items: baseline; }
@@ -324,6 +344,8 @@ a { color: inherit; text-decoration: none; }
 .fbtn, .tile { -webkit-appearance: none; appearance: none; font: inherit; color: inherit; }
 .filters { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 16px; }
 .fbtn {
+  display: inline-flex; align-items: center;
+  min-height: var(--tap);
   padding: 5px 12px;
   font-size: 13px;
   font-weight: 900;
@@ -332,6 +354,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--slot);
   border: var(--bw-thin) solid var(--ink);
   cursor: pointer;
+  touch-action: manipulation;
 }
 .fbtn:hover { background: var(--panel); color: var(--paper); }
 .fbtn.on { background: var(--hot); color: var(--on-hot); border-width: var(--bw); box-shadow: var(--sh-chip); }
@@ -349,7 +372,7 @@ a { color: inherit; text-decoration: none; }
   border-style: solid; border-width: var(--side-edge); border-color: var(--hot);
   color: var(--paper);
 }
-.detail img { flex: none; width: 44px; height: 44px; background: var(--slot); border: var(--bw-thin) solid var(--ink); }
+.detail img { flex: none; width: 44px; height: 44px; }   /* 底色与边框见上面那条统一规矩 */
 .detail-txt { display: flex; flex-direction: column; min-width: 0; }
 .detail-txt b { font-size: 16px; font-weight: 900; letter-spacing: .04em; color: var(--jade-dk); }
 .detail-txt span { font-size: 13px; color: var(--paper-dim); }
@@ -461,12 +484,10 @@ a { color: inherit; text-decoration: none; }
 .skills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .skill { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .skill-top { display: flex; align-items: center; gap: 11px; }
-/* 技能图标是纯白镂空画（实测画身 #fefefe），压浅灰凹槽底几乎看不见，一律走黑底白画 */
+/* 技能图标是纯白镂空画（实测画身 #fefefe），一律黑底白画 */
 .skill-top img {
   flex: none;
-  width: 40px; height: 40px;
-  border: var(--bw-thin) solid var(--ink);
-  background: var(--ink);
+  width: 40px; height: 40px;   /* 底色与边框见上面那条统一规矩 */
 }
 .glyph {
   display: grid; place-items: center;
@@ -551,15 +572,14 @@ a { color: inherit; text-decoration: none; }
   transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1));
 }
 
-/* 首屏进入：静态值就是可见态，动画只负责从下面顶上来（fill both 的起始帧是屏外，
-   所以 JS 没跑、动画不支持时也是完整页面，不会藏东西）。 */
-@keyframes rise { from { opacity: 0; transform: translateY(var(--rv-rise)); } to { opacity: 1; transform: none; } }
-.hero-copy > * { animation: rise var(--rv-dur) var(--ease-out) both; }
-.hero-copy > :nth-child(2) { animation-delay: var(--rv-step); }
-.hero-copy > :nth-child(3) { animation-delay: calc(var(--rv-step) * 2); }
-.hero-copy > :nth-child(4) { animation-delay: calc(var(--rv-step) * 3); }
-.hero-copy > :nth-child(5) { animation-delay: calc(var(--rv-step) * 4); }
-.hero-copy > :nth-child(6) { animation-delay: calc(var(--rv-step) * 5); }
+/* 首屏进入：静态值必须就是「可见」——上一版用 `@keyframes + fill both`，起始帧写在屏外，
+   结果凡是「动画不推进」的渲染（冻结截图 / 站点预览 Canvas）整段首屏文案是空的。
+   现在改成 JS 在同一帧里挂 .enter → 强制落地 → 立刻摘掉，靠 transition 补间进来：
+   JS 没跑 = 页面照常全可见；动画卡住 = 停在可见态。截图里的 --hide-scrollbars 之类不影响这个结论。 */
+.hero-copy > * {
+  transition: opacity var(--rv-dur) linear, transform var(--rv-dur) var(--ease-out);
+}
+.hero-copy > .enter { opacity: 0; transform: translateY(var(--rv-rise)); }
 
 /* 滚动入场（JS 只给「此刻还在首屏下方」的块挂 .rv，屏内正在读的东西一律不藏） */
 .rv { opacity: 0; transform: translateY(var(--rv-rise)); }
@@ -575,24 +595,9 @@ a { color: inherit; text-decoration: none; }
 @keyframes ping { from { opacity: .3; transform: translateX(calc(var(--bw) * -1)); } to { opacity: 1; transform: none; } }
 .detail.ping { animation: ping var(--dur-slam) var(--ease-out) both; }
 
-/* 标题扫屏：游戏里 band_wipe 是整屏切换用的两条 45% 视口宽带（品红 + 墨黑错峰 0.07s），
-   挪到一行小标题上就变成「一块色糊在字上再挪走」，上一版正是这个观感 —— 标题本身要被读，
-   不该当转场幕布。改成一条直角硬边从左往右把标题上色：骨白带子走在前头，主题色面紧跟落地，
-   走完的像素与静态值完全一致（不留任何遮盖）。渐变在这里只是硬止点的两色掩膜，不是柔光。
-   时长取 --dur-wipe 的一半：游戏那条带走的是整屏宽，这里只走一个标题宽。 */
-@keyframes paint-in {
-  from { background-position: 100% 0; }
-  to   { background-position: 0 0; }
-}
-.sec-title.wiping {
-  background-color: transparent;
-  background-image: linear-gradient(90deg,
-    var(--hot) 0%, var(--hot) 50%, var(--chalk) 50%, var(--chalk) 55%,
-    transparent 55%, transparent 100%);
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  animation: paint-in calc(var(--dur-wipe) / 2) var(--ease-in) both;
-}
+/* 分区标题不做扫屏/上色动效（用户 2026-10-21 拍板关掉）：标题是要被读的那一行，
+   给它加一闪而过的东西只会抢正文的注意力，静态实心那档本来就够硬。
+   游戏里 band_wipe 仍用于整屏切换，与这里无关；数据带数字滚动的时长照旧走 --dur-wipe。 */
 
 /* —— 响应式 —— */
 @media (max-width: 1040px) {
@@ -611,15 +616,22 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 620px) {
   body { font-size: 15px; }
+  /* 顶栏挤到一屏时：按钮文案收成「试玩」两字（「立即」是修饰，砍掉不丢信息），
+     品牌与按钮都不参与压缩，宽度全留给能横滑的导航 */
+  html { scroll-padding-top: 66px; }
+  .cta-full { display: none; }
   .roles, .pets, .skills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .arms, .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .topbar-in { height: 56px; gap: 10px; }
+  .topbar-in { height: 56px; gap: 8px; }
   .topbar-cta { padding: 7px 10px; font-size: 12px; }
+  .brand { gap: 8px; }
   .brand-name { font-size: 18px; }
-  .nav a { font-size: 13px; padding: 6px 9px; }
+  .nav a { font-size: 13px; padding: 6px 10px; }
   .cta-row .btn { flex: 1 1 100%; text-align: center; }
   .sec-title { font-size: 22px; }
   .frame { border-style: solid; }
+  .theme-sw { width: 36px; height: 36px; }
+  .hero-shot { margin-top: 4px; }
 }
 @media (max-width: 400px) {
   .roles, .pets, .skills { grid-template-columns: 1fr; }
@@ -630,10 +642,10 @@ a { color: inherit; text-decoration: none; }
   html { scroll-behavior: auto; }
   /* 一处收口：低动效下所有补间与入场动画直接不要，页面停在最终的可见态。
      揭示类动效的结束帧必须是「完整可见」，摘掉动画后不留任何遮盖或空块。 */
-  .hero-shot .frame, .hero-copy > *, .tile.pop, .detail.ping { animation: none; }
-  .sec-title.wiping { animation: none; background-color: var(--hot); background-image: none; }
+  .hero-shot .frame, .tile.pop, .detail.ping { animation: none; }
   .rv { opacity: 1; transform: none; }
-  .btn, .more, .fbtn, .tile, .plate, .pet, .theme-sw, .qa, .detail, .nav a { transition: none; }
+  .hero-copy > *, .hero-copy > .enter { opacity: 1; transform: none; }
+  .btn, .more, .fbtn, .tile, .plate, .pet, .theme-sw, .qa, .detail, .nav a, .hero-copy > * { transition: none; }
   .cards .card:hover, .roles .role:hover, .pets .pet:hover, .skills .skill:hover,
   .gets .get:hover, .qa:hover { transform: none; }
   .nav-ind { transition: none; }

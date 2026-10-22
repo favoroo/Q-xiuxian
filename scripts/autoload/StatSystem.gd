@@ -18,9 +18,30 @@ extends RefCounted
 ## 比任何一条加成幅度小得多的余量。
 const CLAMP_EPS := 0.0001
 
+## 代偿折扣比例（2026-10-21）：一份 apply 里带 `shop_price_mul` 时，物价腿会被
+## `SHOP_PRICE_FLOOR` 夹住 —— 夹掉的那一份是玩家按下却没拿到的收益，照收整份代偿就是白罚。
+## 口径：代偿只按「真省下来的那一份」扣 = 实际降幅 / 名义降幅（1.0 = 完整落地，0.0 = 一分没省）。
+## 只压负值代偿腿；乘算腿（unit == "pctmul"，物价/攻击间隔/灵兽冷却）的"变差"写作 v > 1，不在这条闸里。
+## ⚠ 卖出回退（revert_stat_fields）按名义值整份退，所以**限购/可卖道具不许在同一份 apply 里
+##    既带 shop_price_mul 又带负代偿腿** —— tests/BalanceSimCheck 6.2 逐件钉着这条。
+static func cost_scale(gm: Object, apply: Dictionary) -> float:
+	if not apply.has("shop_price_mul"):
+		return 1.0
+	var old: float = float(gm.shop_price_mult)
+	var v: float = float(apply["shop_price_mul"])
+	var nominal: float = old * (1.0 - v)
+	if nominal <= CLAMP_EPS:
+		return 1.0
+	var realized: float = old - maxf(gm.SHOP_PRICE_FLOOR, old * v)
+	return clampf(realized / nominal, 0.0, 1.0)
+
 static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> void:
+	var scale: float = cost_scale(gm, apply)
 	for key in apply.keys():
 		var v: float = float(apply[key])
+		# 物价腿被地板夹了一部分 ⇒ 同一份里的负代偿腿按比例少扣（见 cost_scale）
+		if scale < 1.0 - CLAMP_EPS and v < 0.0 and StatInfoData.field_unit(key) != "pctmul":
+			v *= scale
 		match key:
 			"weapon_damage_mult":
 				gm.weapon_damage_mult += v

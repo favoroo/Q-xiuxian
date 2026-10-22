@@ -17,6 +17,10 @@ func _ready() -> void:
 	manual.open_weapons_page("fire")
 	await _frames(2)
 	_snap("tmp_codex_fire.png")
+	# 类型 × 元素同时筛：剑系 ∩ 火系（火系已在上面选中，这里补点类型行）
+	manual._on_filter_chip_tapped("class", "sword")
+	await _frames(2)
+	_snap("tmp_codex_sword_fire.png")
 	get_tree().quit(0)
 
 func _frames(n: int) -> void:

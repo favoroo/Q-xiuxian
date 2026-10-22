@@ -389,7 +389,22 @@
     skillGrid.appendChild(card);
   });
 
-  /* —— 导航指示条 + 分区高亮 + 标题上色扫屏 + 滚动入场 + 数据带数字 —— */
+  /* —— 首屏进入：同一帧里挂 .enter → 强制样式落地 → 立刻摘掉，让 CSS 补间把它顶上来。
+     静态值不藏东西：JS 没跑或渲染器不推动画时，首屏文案照常完整可见（上一版用 keyframes +
+     fill both，起始帧写在屏外，冻结渲染下整段首屏是空的）。 */
+  (function enterHero() {
+    if (RM) return;
+    var kids = document.querySelectorAll(".hero-copy > *");
+    var step = tok("--dur-press") / 2;
+    for (var i = 0; i < kids.length; i++) {
+      kids[i].classList.add("enter");
+      kids[i].style.transitionDelay = Math.min(i, 6) * step + "ms";
+    }
+    void document.body.offsetWidth;   // 不强制落地的话，摘类后没有起始值可补间
+    for (var j = 0; j < kids.length; j++) kids[j].classList.remove("enter");
+  })();
+
+  /* —— 导航指示条 + 分区高亮 + 滚动入场 + 数据带数字 —— */
   var links = Array.prototype.slice.call(document.querySelectorAll(".nav a"));
   var nav = links.length ? links[0].parentNode : null;
   var ind = null;
@@ -399,11 +414,24 @@
     nav.appendChild(ind);
   }
   var active = null;   // 当前分区那一项；hover 只是借过去看一下，移开就还给它
+  /* 手机上导航是横着划的：指示条滑到哪，就得把那一格也划进可视范围，
+     否则会看到「带子在下面走，字却屏外了」这种断片。只滚 .nav 自己，不动整页。 */
+  function ensureVisible(link) {
+    if (!nav || !link) return;
+    var l = link.offsetLeft, r = l + link.offsetWidth, w = nav.clientWidth;
+    var to = nav.scrollLeft;
+    if (l < to) to = l - 8;
+    else if (r > to + w) to = r - w + 8;
+    if (to === nav.scrollLeft) return;
+    if (nav.scrollTo) nav.scrollTo({ left: to, behavior: RM ? "auto" : "smooth" });
+    else nav.scrollLeft = to;
+  }
   function place(link) {
     if (!ind || !link) return;
     ind.style.width = link.offsetWidth + "px";
     ind.style.transform = "translateX(" + link.offsetLeft + "px)";
     ind.setAttribute("data-show", "1");
+    ensureVisible(link);
   }
   if (nav) {
     nav.addEventListener("mouseover", function (e) {
@@ -432,14 +460,7 @@
         for (var i = 0; i < links.length; i++) {
           if (links[i].getAttribute("href") === "#" + r.target.id) setActive(links[i]);
         }
-        var title = r.target.querySelector(".sec-title");
-        if (title && !RM && !title.dataset.wiped) {
-          title.dataset.wiped = "1";
-          title.classList.add("wiping");
-          // 走完必须把类摘掉：留着 = 标题的底色永久停在那一条硬边上（上一版糊「下载」就是这么来的）
-          title.addEventListener("animationend", function () { title.classList.remove("wiping"); });
-          window.setTimeout(function () { title.classList.remove("wiping"); }, tok("--dur-wipe") / 2 + 120);
-        }
+        // 分区标题不做扫屏/上色动效（用户 2026-10-21 拍板关掉），这里只负责把导航指到当前分区
       });
     }, { rootMargin: "-70px 0px -65% 0px" });
     links.forEach(function (l) {
@@ -460,8 +481,9 @@
         }
       });
     });
-    if (targets.length) {
-      var revealer = new IntersectionObserver(function (rows) {
+    var revealer = null;
+    if (targets.length && "IntersectionObserver" in window) {
+      revealer = new IntersectionObserver(function (rows) {
         rows.forEach(function (r) {
           if (!r.isIntersecting) return;
           r.target.classList.add("on");
@@ -469,6 +491,33 @@
         });
       }, { rootMargin: "0px 0px -8% 0px" });
       targets.forEach(function (n) { revealer.observe(n); });
+    }
+    /* 兜底闸：IO 没回调（老 WebView、冻结渲染、极快滚动丢帧）时，
+       只要某块已经进视口就必须露出来 —— 看不见的内容一律按 bug 处理。 */
+    function sweep() {
+      for (var i = targets.length - 1; i >= 0; i--) {
+        var n = targets[i], r = n.getBoundingClientRect();
+        if (r.top < window.innerHeight && r.bottom > 0) {
+          n.classList.add("on");
+          if (revealer) revealer.unobserve(n);
+          targets.splice(i, 1);
+        }
+      }
+      if (!targets.length && ticking) {
+        window.removeEventListener("scroll", onScroll);
+        ticking = false;
+      }
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { ticking = false; sweep(); });
+    }
+    if (targets.length) {
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.setTimeout(sweep, 1200);
+      window.setTimeout(sweep, 4000);
     }
 
     /* 数据带：六个数字滚上去，时长用扫屏那一拍（--dur-wipe + --wipe-fade）现读，不另定 */

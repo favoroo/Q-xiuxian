@@ -202,7 +202,7 @@ func _build_center_matrix() -> void:
 	# 右上 1：修仙志（点缀黄色块）
 	var career_res := _build_entry_block(
 		"CAREER", "战 绩", "0 胜 · 击杀 0 只",
-		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.JADE,
+		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.JADE,
 		_on_career_pressed
 	)
 	top_pair.add_child(career_res["card"])
@@ -213,7 +213,7 @@ func _build_center_matrix() -> void:
 	# 右上 2：传道玉简（增益绿色块）
 	var manual_res := _build_entry_block(
 		"MANUAL", "图鉴", "70 武器 · 103 道具 · 20 角色",
-		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOOD,
+		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.GOOD,
 		_on_manual_pressed
 	)
 	top_pair.add_child(manual_res["card"])
@@ -224,7 +224,7 @@ func _build_center_matrix() -> void:
 	# 右下 1：天地律动·设置（纸白色块）
 	var settings_res := _build_entry_block(
 		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
-		GameStyle.NAVY2, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.GOLD,
+		GameStyle.NAVY2, GameStyle.INK_TEXT, GameStyle.GOLD,
 		_on_settings_pressed
 	)
 	bot_pair.add_child(settings_res["card"])
@@ -235,7 +235,7 @@ func _build_center_matrix() -> void:
 	# 右下 2：新手指南（元素橙色块）
 	var guide_res := _build_entry_block(
 		"GUIDE", "新手指南", "六页图文 · 随时重温",
-		GameStyle.ELEMENT, GameStyle.INK_TEXT, GameStyle.NAVY2, GameStyle.ELEMENT,
+		GameStyle.ELEMENT, GameStyle.INK_TEXT, GameStyle.ELEMENT,
 		_on_guide_pressed
 	)
 	bot_pair.add_child(guide_res["card"])
@@ -288,11 +288,7 @@ func _build_hero_block() -> PanelContainer:
 	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(top_row)
 
-	var tag_chip := Label.new()
-	tag_chip.text = " PLAY "
-	tag_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tag_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
-	GameStyle.label(tag_chip, 11, GameStyle.JADE_DK)
+	var tag_chip := GameStyle.corner_tag("PLAY", GameStyle.GOLD)
 	top_row.add_child(tag_chip)
 
 	var top_spacer := Control.new()
@@ -389,8 +385,9 @@ func _build_hero_block() -> PanelContainer:
 	return card
 
 ## 右列 2×2 实底大色块构建器（整块可点，内置角签、大名号、副文案、右下箭标）
+## accent 只喂角签左端那道色标 —— 卡片面已经是纯亮色，签面固定墨黑，不再按卡面色反推字色。
 func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
-		face_col: Color, ink_col: Color, chip_bg: Color, chip_fg: Color,
+		face_col: Color, ink_col: Color, accent: Color,
 		callback: Callable) -> Dictionary:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_SMALL_W, SMALL_H_BASE)
@@ -410,10 +407,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	top_row.add_theme_constant_override("separation", 6)
 	vbox.add_child(top_row)
 
-	var chip := Label.new()
-	chip.text = " %s " % tag_text
-	chip.add_theme_stylebox_override("normal", GameStyle.chip(chip_bg))
-	GameStyle.label(chip, 10, chip_fg)
+	var chip := GameStyle.corner_tag(tag_text, accent)
 	top_row.add_child(chip)
 
 	# 中行：大标题

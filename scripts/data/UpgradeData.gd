@@ -502,7 +502,7 @@ const UPGRADES: Array[Dictionary] = [
 		},
 		{
 			"id": "merchant_up",
-			"apply": {"shop_price_mul": 0.95, "weapon_damage_mult": -0.03},
+			"apply": {"shop_price_mul": 0.85, "weapon_damage_mult": -0.03},
 			"title": "讨价还价",
 			"desc": "商店价格降低；武器伤害略减",
 			"rarity": "rare",

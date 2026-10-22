@@ -50,9 +50,11 @@ var _cult_box: VBoxContainer
 var _weapons_box: VBoxContainer
 var _advanced_box: VBoxContainer
 var _enemies_box: VBoxContainer
-## 武器图鉴当前流派筛选（"" = 全部；tag 取 WeaponData.CLASSES / ELEMENTS）
-var weapon_filter: String = ""
-## 筛选 chips（tag → Label），build_page 建一次常驻，rebuild 时只重涂不重建
+## 武器图鉴当前筛选（"" = 全部）：器类与五行两条线各自独立，同时选中时取交集
+var weapon_class_filter: String = ""
+var weapon_element_filter: String = ""
+## 筛选 chips（tag → Label；两行「全部」分别以 "all_class" / "all_element" 为键），
+## build_page 建一次常驻，rebuild 时只重涂不重建
 var _filter_chips: Dictionary = {}
 ## open() 时要直接落到哪一页（-1 = 留在当前页）。深链入口用：省掉「先建当前页、再切页重建」
 var _open_tab: int = -1
@@ -127,7 +129,7 @@ func _on_opened() -> void:
 		_open_tab = -1
 	else:
 		# 每次打开回落「全部」：主菜单/暂停菜单的图鉴入口不带上次筛选。
-		_set_weapon_filter("")
+		_set_weapon_filters("", "")
 	# 道具(1)/角色(4)/敌人(5) 受解锁（收录）状态影响：标脏，切到那一页时才重建
 	_page_dirty[1] = true
 	_page_dirty[4] = true
@@ -137,24 +139,37 @@ func _on_opened() -> void:
 	_schedule_page(target)
 
 ## 深链入口：商店顶栏「图鉴」按钮 / 羁绊详情卡「查看该流派武器」直达武器页并预选筛选。
+## 羁绊只属于一条线：器类标签锁类型行、五行标签锁元素行，另一条线清空，避免叠加成空结果。
 func open_weapons_page(filter_tag: String = "") -> void:
-	var tag := String(filter_tag) if WeaponData.SYNERGIES.has(filter_tag) else ""
-	_set_weapon_filter(tag)
+	var tag := String(filter_tag)
+	if tag in WeaponData.CLASSES:
+		_set_weapon_filters(tag, "")
+	elif tag in WeaponData.ELEMENTS:
+		_set_weapon_filters("", tag)
+	else:
+		_set_weapon_filters("", "")
 	if visible:
 		switch_tab(0)
 		return
 	_open_tab = 0
 	open()
 
-func _on_filter_chip_tapped(tag: String) -> void:
-	_set_weapon_filter("" if String(tag) == weapon_filter else String(tag))
+## 点 chip：在本行内切换；再点已选中的（含「全部」）即清空本行，另一行保持不动。
+func _on_filter_chip_tapped(group: String, tag: String) -> void:
+	var cur := weapon_class_filter if group == "class" else weapon_element_filter
+	var next := "" if String(tag) == cur else String(tag)
+	if group == "class":
+		_set_weapon_filters(next, weapon_element_filter)
+	else:
+		_set_weapon_filters(weapon_class_filter, next)
 	_ensure_page(0)
 
-## 换筛选 = 武器页欠一次重建；筛选没变则整页照用（卡面全是 WeaponData 里的静态值）
-func _set_weapon_filter(tag: String) -> void:
-	if tag == weapon_filter:
+## 换筛选 = 武器页欠一次重建；两条线都没变则整页照用（卡面全是 WeaponData 里的静态值）
+func _set_weapon_filters(class_tag: String, element_tag: String) -> void:
+	if class_tag == weapon_class_filter and element_tag == weapon_element_filter:
 		return
-	weapon_filter = tag
+	weapon_class_filter = class_tag
+	weapon_element_filter = element_tag
 	if _page_dirty.size() > 0:
 		_page_dirty[0] = true
 

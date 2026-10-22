@@ -22,7 +22,9 @@ extends Node
 ## ① 弹窗没建起来、页签没切到、一处真能滚的区域都扫不出来 → FAIL；
 ## ② 某区域采到的点太少、或全落在卡片缝隙上（等于没测到 STOP 那一类）→ FAIL；
 ## ③ 内容没超出可视高度（本来不需要滚）→ 跳过，不算通过也不算失败，但把两端的数打出来；
-##    用例自己钉了 must_scroll 时，跳过就是数据没造够 → FAIL（悟道面板那一屏就钉着）；
+##    用例自己钉了 must_scroll 时，跳过就是数据没造够 → FAIL；
+##    钉了反向的 must_fit 时（悟道加点那一屏，用户 2026-10-22 要「一屏摆完」）恰恰相反 ——
+##    扫出可滑区域就是毛病，同时另开一枪查卡子树里有没有 STOP 装饰件（摆得下≠可以不防）；
 ## ④ --selftest 把一处本来能滑的卡片改回修复前的 STOP 形状，必须被这条尺子抓出来；
 ## ⑤ 落点取「每一格自己的中心 x」，不是滚动区中心 x：横排五张卡（悟道面板）只按中心 x 采
 ##    等于只测中间那一张。--selftest 另把最左那张换回 STOP，必须被抓出来，才证明这条采法活着。
@@ -30,7 +32,7 @@ extends Node
 ## 用例字段：cls 脚本类名 / name 人话名 / switch 切页签的方法 / pages 页签名（与页签同序）；
 ## 可选 scene（按 .tscn 实例化，面板靠 @onready 取场景节点时必需）、entry（默认 open）、
 ## prep（本判据里的造数据方法，跑在 entry 之前）、rows（"一格一格"那层的属性名）、
-## settle_sec（入场动画等头）、must_scroll、sliders、expand。
+## settle_sec（入场动画等头）、must_scroll、must_fit、sliders、expand。
 
 const VP := Vector2(1202, 540)
 ## 每处滚动区最少采几个落点、其中至少几个必须落在内容卡片上（否则等于没测）
@@ -71,14 +73,14 @@ const CASES: Array[Dictionary] = [
 		"switch": "", "pages": ["左右两栏"],
 	},
 	{
-		# 波后悟道加点：5 张卡横排、卡高超出滚动区 ⇒ 必须每一处都划得起来
-		# （用户 2026-10-12 真机：「手压在卡片上滑不动，要挪到侧面没有卡片遮挡的地方才能滑」）。
-		# 面板靠 @onready 取场景节点，只能按 .tscn 实例化；候选与上阵法器由 _prep_alloc 钉成
+		# 波后悟道加点：5 张卡横排。用户 2026-10-12 真机「手压在卡片上滑不动」立的本用例；
+		# 2026-10-22 又指定「把黑底状态条那一整排让给卡片」⇒ 这一屏改钉「最坏一屏一屏摆完」
+		# （must_fit，与灵石阁「货架不许上下滑」同一口径）。候选与上阵法器仍由 _prep_alloc 钉成
 		# 最占地方的一屏（随机 roll 撞出矮卡屏就等于空跑），开法走面板自己的那个信号回调。
 		"cls": "LevelUpDialog", "name": "升级加点",
 		"scene": "res://scenes/ui/LevelUpDialog.tscn", "prep": "_prep_alloc",
 		"entry": "_on_alloc_opened", "switch": "", "pages": ["一屏候选"],
-		"rows": "cards_container", "settle_sec": 1.0, "must_scroll": true,
+		"rows": "cards_container", "settle_sec": 1.0, "must_fit": true,
 	},
 ]
 
@@ -157,6 +159,20 @@ func _run_case(one_case: Dictionary) -> void:
 			# 上面那枪会一处都不扫、只打一条 PASS，等于没测 —— 宁可红，不许静默跳过。
 			_c.check(swept > 0, "%s：这一屏必须真需要竖滑（扫到 %d 处可滑区域，0 处就是数据没造够）" % [
 				String(one_case["name"]), swept])
+		if bool(one_case.get("must_fit", false)):
+			# 反向的空跑防线：这一屏的账是「最坏一屏要一屏摆完」（用户 2026-10-22：状态条并进顶栏，
+			# 把那一整排高让给卡片）。改前真机档 1202×540 量到内容 359 / 滚动区 340（要竖滑 19），
+			# 并排后 359 / 376 摆完。再出现可滑区域 = 有人把卡片撑高或把顶栏吃回来了，报红点名。
+			_c.check(swept == 0, "%s：最坏一屏要一屏摆完（实扫到 %d 处可滑区域，0 处才对）" % [
+				String(one_case["name"]), swept])
+			# 摆得下 ≠ 可以不防：卡子树里不许留 STOP 装饰件，否则哪天内容一顶出滚动区，
+			# 又是「手压在卡片上滑不动」那一格（2026-10-12 的原案）。
+			var deco_stopped: Array[String] = []
+			if rows != null:
+				_collect_stopped(rows, deco_stopped)
+			_c.check(deco_stopped.is_empty(), "%s：卡片行里 %d 处装饰件留 STOP（将来一顶出就是划不动的死区）%s" % [
+				String(one_case["name"]), deco_stopped.size(),
+				("" if deco_stopped.is_empty() else " → " + "、".join(deco_stopped))])
 		if i == 0 and bool(one_case.get("sliders", false)):
 			await _check_sliders(dlg, String(one_case["name"]))
 		if switch_to != "" and int((one_case.get("expand", {}) as Dictionary).get("tab", -1)) == i:
@@ -202,7 +218,7 @@ func _make(one_case: Dictionary) -> Control:
 
 ## 波后悟道面板的前置：真 Player + 上阵法器（受益装备那排图标会把卡撑高）+ 候选钉成最占地方
 ## 的一屏。不钉的话随机 roll 撞出「五张矮卡摆得下」的屏 ⇒ 本用例一处都扫不到，而扫不到是静默的
-## （头注的防假 PASS：空跑必须报红，见 must_scroll）。
+## （头注的防假 PASS：空跑必须报红，见 must_scroll / must_fit）。
 func _prep_alloc() -> void:
 	var p := (load("res://scenes/entities/Player.tscn") as PackedScene).instantiate() as Player
 	add_child(p)
@@ -321,6 +337,20 @@ func _sweep(host: Control, label: String, rows: Control = null, must_scroll := f
 		print("CHECK %-22s 采样 %2d 点（卡片上 %2d），可起手拖动 %2d 点" % [
 			label, points.size(), on_content, got])
 	return counted
+
+## 递归收「这一格里会把按下吃掉的装饰件」：Container 默认 PASS，PanelContainer / ColorRect 默认
+## STOP，而 STOP 就地吃掉「按下」那一拍、不冒泡 ⇒ 卡盖多大面积就滑不动多大面积（本判据的原案）。
+## 按钮不算：它本来就该吃掉自己那一下（点图标看详解、点键走键）。
+## 用于「这一屏本来就摆得下、没有可滑区域」的场合 —— 摆得下不等于可以不防。
+func _collect_stopped(node: Node, out: Array[String]) -> void:
+	for ch in node.get_children():
+		if not (ch is Control):
+			continue
+		var ctl := ch as Control
+		if ctl.visible and not (ctl is BaseButton) \
+				and ctl.mouse_filter == Control.MOUSE_FILTER_STOP:
+			out.append("%s(%s)" % [String(ctl.name), ctl.get_class()])
+		_collect_stopped(ctl, out)
 
 ## 内容是否真的摆不下（只有摆不下才谈得上「滑不动」）
 func _needs_scroll(sc: ScrollContainer, content: Control) -> bool:
@@ -553,6 +583,11 @@ func _selftest_alloc() -> void:
 	await get_tree().create_timer(float(one_case.get("settle_sec", 0.0))).timeout
 	var sc: ScrollContainer = dlg.card_scroll
 	var rows: Control = dlg.cards_container
+	# 这一屏平时一屏摆完（must_fit，用户 2026-10-22 要把状态条那排高让给卡片）⇒ 扫不到可滑区域，
+	# 「按下被谁吃掉」那条链压根不会启动。牙齿要另造条件：只把卡行自己的最小高顶到滚动区之上
+	# （动布局尺寸，不编造候选数据），让它真的需要竖滑，才量得出 STOP 那一枪。测完的面板整个丢掉。
+	rows.custom_minimum_size = Vector2(rows.custom_minimum_size.x, sc.size.y + 60.0)
+	await _settle(3)
 	var pts := _sample_points(sc, _content_of(sc), rows)
 	var first := rows.get_child(0) as Control
 	var on_first: Array = []

@@ -17,7 +17,7 @@ extends Node
 ## ⑤ 换筛选必须重铺、数量跟着筛选走（复用不许把内容冻住）。
 ##
 ## 反例自证（2026-10-12 逐条打过）：拆掉 _build_page 的「建过就复用」锁 ⇒ ③ 报红；
-## 拆掉 _set_weapon_filter 的标脏 ⇒ ③ 报红；把 open 改成同步重铺五页 ⇒ ① 报红；
+## 拆掉 _set_weapon_filters 的标脏 ⇒ ③ 报红；把 open 改成同步重铺五页 ⇒ ① 报红；
 ## 把 _schedule_page 换成当场 _build_page ⇒ ④ 的第一顶报红。
 
 var _c := TestCheck.new()

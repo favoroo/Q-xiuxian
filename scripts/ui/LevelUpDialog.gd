@@ -13,6 +13,11 @@ signal pause_requested
 ## 判据 LayoutCheck 用同一份算术量最窄那一档，别处不再抄数字）。
 ## 纵向放不下交给 CardScroll 竖着滑 —— 全留 + 可滑到，不砍文案也不压字号。
 ##
+## 2026-10-22 用户真机：「中间这个黑色的一行移到上面一点显示，不要单独站一行，把空间留给
+## 下面加点卡片显示」。回合状态条不再是独立的一整排，改成顶栏里那颗小徽条 ⇒ 面板只剩
+## 顶栏/卡片行/操作条三排，白占的 36 单位全落到 CardScroll。细账见 _setup_top_bar 头注，
+## 判据 tests/LayoutCheck.tscn 的 _check_levelup_rows 钉住。
+##
 ## 2026-10-09 用户真机图：「两边有点溢出了，选中的那个卡片上下也有点溢出了」。
 ## 两头出屏：旧算术把「屏幕宽 - 面板占位」全分给 5 张卡 ⇒ 面板布局盒正好贴住屏幕左右边，
 ##   而它是斜切平行四边形（引擎绕布局盒竖直中线居中斜切），画出来的两个角各伸出 13.5 单位，
@@ -92,10 +97,14 @@ const FORECAST_FONT := 11
 @onready var cards_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleBand/TitleLabel
+@onready var info_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/InfoBand
 @onready var info_label: Label = $CenterContainer/Panel/MarginContainer/VBox/InfoBand/InfoLabel
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/ConfirmButton
 @onready var gate_label: Label = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/GateLabel
+## 顶栏（代码建，见 _setup_top_bar）：标题带 + 点数徽记 + 回合状态条 + 两颗键。
+## 判据 LayoutCheck 现读这一排的 combined_minimum_size 核对「摆得下」，别处不再抄宽度。
+var top_bar: HBoxContainer = null
 
 var selected_index: int = -1
 var _can_interact: bool = false
@@ -186,11 +195,17 @@ func _ready() -> void:
 	GameManager.alloc_opened.connect(_on_alloc_opened)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
 
-## 顶栏：左侧标题色块，右侧「属性」与「暂停」按钮（与金币阁同一布局口径）
+## 顶栏：左侧标题色块 + 点数徽记 + 回合状态条，右侧「属性」与「暂停」按钮（与金币阁同一布局口径）。
+## 2026-10-22 用户真机（第 3 回合那屏）：「中间这个黑色的一行移到上面一点显示，不要单独站
+## 一行，把空间留给下面加点卡片显示」。原先「第 N 回合结束 · 待加点 X 次」是 VBox 里独立的一整排
+## 黑底带（LayoutCheck 量出 y 80~108 = 28 高 + 缝隙 8 = 白占 36 单位），卡片行于是被挤矮。
+## 现在把同一串读数并进顶栏，做成标题右边那颗小徽条（金币阁顶栏把「备战/金币」摆在同一排，
+## 这一屏照同一把尺子走），VBox 只剩顶栏 / 卡片行 / 操作条三排，36 单位全数还给卡片。
+## 摆得下由判据现量（_check_levelup_rows：同一排 + 只剩三排 + 整排最小宽 ≤ 面板内容宽）。
 func _setup_top_bar() -> void:
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
 	var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
-	var top_bar := HBoxContainer.new()
+	top_bar = HBoxContainer.new()
 	top_bar.name = "TopBar"
 	top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_bar.add_theme_constant_override("separation", 10)
@@ -241,6 +256,13 @@ func _setup_top_bar() -> void:
 			_show_points_tip()
 	)
 	top_bar.add_child(_points_badge)
+
+	# 状态条并进顶栏（用户 2026-10-22：别单独站一行，把高还给卡片）。贴着徽记走，
+	# 与金币阁 TopBar 同一读法：左边「这是什么 + 还剩几点」，右边留给两颗键。
+	vbox.remove_child(info_band)
+	info_band.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	info_band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top_bar.add_child(info_band)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -359,6 +381,25 @@ func _layout_for_viewport() -> void:
 	content_margin.add_theme_constant_override("margin_left", side)
 	content_margin.add_theme_constant_override("margin_right", side)
 
+## 顶栏留给状态条的宽 = 面板内容宽 - 这一排其它控件各自要的最小宽 - 每一道的缝隙 - 状态条自己的边距。
+## 全部现读，别处不抄数字：标题带的最小宽由它自己的 stylebox 内边距/描边决定，徽记与两颗键各按
+## custom_minimum_size，缝隙读 top_bar 的 separation，边距读 info_band 的 stylebox。
+## 弹开用的 spacer 最小宽是 0，但它的缝隙照扣 —— 少扣一道就会把右边的「属性/暂停」挤出面板。
+func _info_room_w() -> float:
+	if top_bar == null or info_band == null:
+		return 120.0
+	var room: float = panel_inner_w(get_viewport().get_visible_rect().size)
+	var sep: float = float(top_bar.get_theme_constant("separation"))
+	for ch in top_bar.get_children():
+		if ch != info_band:
+			room -= (ch as Control).get_combined_minimum_size().x
+		room -= sep
+	var sb: StyleBoxFlat = info_band.get_theme_stylebox("panel") as StyleBoxFlat
+	if sb != null:
+		room -= sb.content_margin_left + sb.content_margin_right \
+			+ float(sb.border_width_left) + float(sb.border_width_right)
+	return maxf(60.0, room)
+
 # ---------------- 一屏候选 ----------------
 
 func _refresh() -> void:
@@ -383,8 +424,9 @@ func _refresh_bars() -> void:
 	else:
 		head += " · 升级已完成"
 	title_label.text = "升 级 加 点"
-	info_label.text = GameStyle.wrap_cjk(head, GameStyle.body_font(), 13,
-		maxf(120.0, get_viewport().get_visible_rect().size.x - 120.0))
+	# 顶栏这一排摆不下时按「顶栏剩下的宽」切硬换行（引擎 AUTOWRAP 在中文真机上不可靠），
+	# 平时是一行、白占的那一整排全给了卡片。尺子现读，与判据 _check_levelup_rows 同一口径。
+	info_label.text = GameStyle.wrap_cjk(head, GameStyle.body_font(), 13, _info_room_w())
 	reroll_btn.text = GameManager.alloc_reroll_label()
 	reroll_btn.disabled = not GameManager.can_reroll_alloc() or pending <= 0
 	_update_confirm_btn()

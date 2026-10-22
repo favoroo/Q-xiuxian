@@ -268,6 +268,17 @@ static func display_font() -> FontVariation:
 		_display.variation_embolden = 0.08
 	return _display
 
+## 角签专用字：display 字重 + 字距放宽。小字号全大写不拉开字距时，
+## 六个字母会挤成一团黑块（CAREER / CONFIG / MANUAL 都是这种词）。
+static var _tag_font: FontVariation
+static func tag_font() -> FontVariation:
+	if _tag_font == null:
+		_tag_font = FontVariation.new()
+		_tag_font.base_font = load(FONT_DISPLAY)
+		_tag_font.variation_embolden = 0.08
+		_tag_font.spacing_glyph = 2
+	return _tag_font
+
 # ---------------- 折行：把「这一句要切几行」从引擎手里拿回来 ----------------
 ##
 ## 为什么要自己切：同一段代码、同一份字体度量，macOS 上 `AUTOWRAP_WORD` 会折成三行，
@@ -609,6 +620,46 @@ static func chip(face: Color) -> StyleBoxFlat:
 ## 独立实例版色签：要改 content_margin 等参数时用，每次新建不进缓存。
 static func chip_of(face: Color) -> StyleBoxFlat:
 	return block(face, SLANT_BAND, Vector2(2, 3))
+
+## 主菜单角签：墨黑实底 + 左端一道色标 + 纸白大写字母（display 字重）。
+## 为什么不再用「亮底 + 亮色字」：2026-10-19 换肤把 NAVY2 翻成宣纸白之后，
+## CAREER/MANUAL/CONFIG/GUIDE 全成了「白底压黄/绿/橙字」，真机上直接糊掉
+## （玩家反馈「看不清」）。黑底托纸白字最稳，颜色语义交给左端色标，
+## 换主题色也只影响那道标，字始终是同一档高对比。
+## accent 是游戏性色码，由业务侧传（色即功能），这里不自取。
+static func corner_tag(text: String, accent: Color, font_size: int = 11) -> Control:
+	var chip := PanelContainer.new()
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var sb := panel(INK, SLANT_BAND, Vector2(2, 3))
+	sb.content_margin_left = 5.0
+	sb.content_margin_right = 7.0
+	sb.content_margin_top = 1.0
+	sb.content_margin_bottom = 2.0
+	chip.add_theme_stylebox_override("panel", sb)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.add_child(row)
+
+	# 色标：占满签高的窄竖条（不是小方点 —— 这个字号下 5×5 会读成一个脏点）。
+	# 用 Panel + 无框样式而不是 ColorRect：accents 里的主题色要能跟着换肤回放，
+	# panel() 会把命中主题角色的底色登记进注册表，而 ColorRect.color 没人管。
+	var mark := Panel.new()
+	mark.add_theme_stylebox_override("panel", panel(accent, SLANT_BAND, Vector2.ZERO))
+	mark.custom_minimum_size = Vector2(3, 0)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(mark)
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_override("font", tag_font())
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", CHALK)
+	row.add_child(lbl)
+	return chip
 
 ## 紧凑型色签 compact_chip：专用于高信息密度卡片（如商店货架卡），收窄边框与投影，防膨胀高度（按色缓存共享）
 static func compact_chip(face: Color) -> StyleBoxFlat:

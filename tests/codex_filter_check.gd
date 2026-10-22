@@ -1,7 +1,8 @@
 extends Node
 
 ## 图鉴流派筛选判据：筛选 chip 点选后网格只留该流派武器、卡面带关键数值行与三签
-## （攻击方式·器类·五行）、深链 open_weapons_page 预选生效、再点一次取消回全量。
+## （攻击方式·器类·五行）、深链 open_weapons_page 预选生效、再点一次取消回全量；
+## 类型行与元素行可同时选中（取交集，例「剑系 + 火系」），清一条不影响另一条。
 ## 运行: $G --headless --path . res://tests/CodexFilterCheck.tscn
 ##
 ## 口径：武器归属唯一真话是 WeaponData.tags_of(id)（与商店羁绊签/羁绊结算同源），
@@ -59,6 +60,37 @@ func _ready() -> void:
 		await _tap_chip(metal_chip)
 		_c.equals(_card_count(), _weapon_total(), "再点金系 chip：取消筛选回全量 %d 把" % _weapon_total())
 
+	# ⑥ 类型 × 元素同时筛选（用户口径「剑里面的火属性武器有哪些」）
+	var sword_chip: Label = _manual._filter_chips.get("sword")
+	var fire_chip: Label = _manual._filter_chips.get("fire")
+	_c.check(sword_chip != null and is_instance_valid(sword_chip)
+			and fire_chip != null and is_instance_valid(fire_chip), "筛选条上「剑系」「火系」chip 都在")
+	if sword_chip != null and fire_chip != null:
+		await _tap_chip(sword_chip)
+		_c.equals(_card_count(), _tag_total("sword"), "只选剑系：%d 把" % _tag_total("sword"))
+		await _tap_chip(fire_chip)
+		var want := _intersect_total("sword", "fire")
+		_c.equals(_card_count(), want, "剑系 + 火系：交集 %d 把" % want)
+		_c.check(want > 0 and want < _tag_total("sword"), "交集确实收窄（剑系 %d → %d）" % [
+			_tag_total("sword"), want])
+		_c.check(_is_selected(sword_chip) and _is_selected(fire_chip), "两行 chip 同时保持选中态")
+		_c.check(_header_text().contains("剑系") and _header_text().contains("火系"),
+			"组标题并列两条筛选（%s）" % _header_text())
+
+		# ⑦ 元素行「全部」只清元素，类型行保持剑系
+		var elem_all: Label = _manual._filter_chips.get("all_element")
+		_c.check(elem_all != null and is_instance_valid(elem_all), "元素行有「全部」chip")
+		if elem_all != null:
+			await _tap_chip(elem_all)
+			_c.equals(_card_count(), _tag_total("sword"),
+				"清元素行后回剑系全量 %d 把" % _tag_total("sword"))
+			_c.check(_is_selected(sword_chip) and _is_selected(elem_all),
+				"类型行仍选中剑系、元素行回全部（两行互不干扰）")
+			var cls_all: Label = _manual._filter_chips.get("all_class")
+			if cls_all != null:
+				await _tap_chip(cls_all)
+				_c.equals(_card_count(), _weapon_total(), "再清类型行回全量 %d 把" % _weapon_total())
+
 	_c.check(_manual.visible, "全程图鉴没被误关")
 	get_tree().quit(0 if _c.report("CODEX_FILTER_RESULT") else 1)
 
@@ -77,6 +109,20 @@ func _tag_total(tag: String) -> int:
 		if tag in WeaponData.tags_of(String(wid)):
 			n += 1
 	return n
+
+## 两条线同时筛的期望把数：器类 tag 与五行 tag 同时命中同一把武器
+func _intersect_total(cls_tag: String, elem_tag: String) -> int:
+	var n := 0
+	for wid in WeaponData.DEFS.keys():
+		var tags := WeaponData.tags_of(String(wid))
+		if cls_tag in tags and elem_tag in tags:
+			n += 1
+	return n
+
+## chip 选中态 = 主蓝底（与 restyle_chips 的判定同源）
+func _is_selected(chip: Control) -> bool:
+	var sb := chip.get_theme_stylebox("normal") as StyleBoxFlat
+	return sb != null and sb.bg_color == GameStyle.GOLD
 
 ## 网格区里带 tip_title 的卡数（_make_entry_card 打标；重建后的旧树已 queue_free 出去）
 func _card_count() -> int:

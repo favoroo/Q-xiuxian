@@ -346,6 +346,8 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		bad.append_array(_check_wave_left_chip(node as GameHUD, screen))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
+	if String(spec["tag"]) == "波后悟道结算":
+		bad.append_array(_check_levelup_rows(node as LevelUpDialog, screen))
 	_c.check(bad.is_empty(), "%s · 屏宽 %d：无出屏、每行文字装得下（%d 处毛病）%s" % [
 		String(spec["tag"]), int(screen.x), bad.size(),
 		("" if bad.is_empty() else "\n      " + "\n      ".join(bad))])
@@ -409,6 +411,49 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 	if not stopped.is_empty():
 		bad.append("货架滚动区里 %d 处装饰控件留 STOP，手指压在卡上滑不动：%s" % [
 			stopped.size(), "、".join(stopped)])
+	return bad
+
+## 用户报的那一格（2026-10-22 真机）：「中间这个黑色的一行移到上面一点显示，不要单独站一行，
+## 把空间留给下面加点卡片显示」。回合状态条原先自己占一整排（黑底 + 缝隙 ≈ 40 单位），
+## 卡片行于是被挤矮。点名三件事：
+## ① 状态条与标题同一排（画出来的上下范围真的交叠，不是「名义上在顶栏」）；
+## ② 面板真的只剩三排（顶栏 / 卡片行 / 操作条）——谁再往中间塞一整排读数就报红；
+## ③ 顶栏这一排摆得下：整排要的最小宽 ≤ 面板内容宽，并点名最宽的那一颗（挤人的就是它）。
+## 尺子全走运行时节点自己的账（combined_minimum_size + 现读的 separation/stylebox），不抄像素。
+func _check_levelup_rows(lvl: LevelUpDialog, screen: Vector2) -> Array[String]:
+	var bad: Array[String] = []
+	if lvl == null or lvl.info_band == null or lvl.top_bar == null:
+		return ["悟道面板没有顶栏/状态条（尺子空转，这一格没量到）"]
+	var vbox: VBoxContainer = lvl.get_node(
+		"CenterContainer/Panel/MarginContainer/VBox") as VBoxContainer
+	var rows: Array[String] = []
+	for ch in vbox.get_children():
+		rows.append(String(ch.name))
+	if rows != ["TopBar", "CardScroll", "ActionBar"]:
+		bad.append("加点面板中间还有空行：VBox 实得 %s（应为顶栏/卡片行/操作条三排）" % str(rows))
+	var info_r: Rect2 = lvl.info_band.get_global_rect()
+	var title_r: Rect2 = lvl.title_label.get_global_rect()
+	# 同一排 = 竖向真的交叠（两者左右并排，横向本就不相交，不能用 Rect2.intersects）
+	if not (info_r.position.y < title_r.end.y and title_r.position.y < info_r.end.y):
+		bad.append("状态条没和标题同一排：状态条 y %.1f~%.1f 与标题 y %.1f~%.1f 不相交" % [
+			info_r.position.y, info_r.end.y, title_r.position.y, title_r.end.y])
+	# 20:9 真机档必须是**一行**：换成两行就是把省下的 36 单位又吃回去（窄屏兜底的硬换行只许
+	# 出现在摆不平的那一档，见 LevelUpDialog._info_room_w）。
+	if screen.x >= 1200.0 and lvl.info_label.text.contains("\n"):
+		bad.append("状态条在 20:9 档折成 %d 行，顶栏变高 ⇒ 卡片行没真的拿到那一排（文案=「%s」）" % [
+			lvl.info_label.text.split("\n").size(), lvl.info_label.text.replace("\n", "|")])
+	var need_w: float = lvl.top_bar.get_combined_minimum_size().x
+	var avail_w: float = LevelUpDialog.panel_inner_w(screen)
+	if need_w > avail_w + EPS:
+		var widest := ""
+		var widest_w := 0.0
+		for ch in lvl.top_bar.get_children():
+			var ctl := ch as Control
+			if ctl != null and ctl.get_combined_minimum_size().x > widest_w:
+				widest_w = ctl.get_combined_minimum_size().x
+				widest = String(ctl.name)
+		bad.append("顶栏摆不下：整排要 %.0f 宽，面板内容只给 %.0f，最宽的是 %s（%.0f）⇒ 属性/暂停会被挤出面板" % [
+			need_w, avail_w, widest, widest_w])
 	return bad
 
 ## 第二排右缘那颗「余妖」芯片点名量（2026-10-16 用户真机：读数被屏幕切掉半截）。
