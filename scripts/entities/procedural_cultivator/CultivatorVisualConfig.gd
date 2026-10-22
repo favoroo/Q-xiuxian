@@ -40,7 +40,8 @@ extends Resource
 
 ## 4. 背负本命武器插槽 (Back Artifact / Weapon)
 ## weapon_type: "bone_nail" (骨钉剑), "stone_pillar" (玄石尺/碑), "peach_sword" (桃木剑), "golden_abacus" (金算盘),
-##              "shadow_daggers" (暗影双刃), "broken_blade" (厚背断刀), "bone_axe" (巨兽骨斧), "soul_banner" (招魂幡), "treasure_chest" (多宝匣)
+##              "shadow_daggers" (暗影双刃), "broken_blade" (厚背断刀), "bone_axe" (巨兽骨斧), "soul_banner" (招魂幡), "treasure_chest" (多宝匣),
+##              "assorted_bundle" (麻绳捆扎的一捆杂兵器，散修)
 ## carry_front_pos / carry_front_rot / carry_side_pos / carry_side_rot / carry_back_pos / carry_back_rot:
 ##              可选的背负位姿覆盖。头饰宽大（蛮修双角、刀圣斗笠）或武器填充色接近骨白时，
 ##              要用它把武器挪到头部轮廓之外，否则会画成"武器长在脸上"。缺省值见渲染器 CARRY_* 常量。
@@ -56,6 +57,11 @@ extends Resource
 @export var bone_white: Color = Color(0.96, 0.97, 0.99)
 @export var bone_shadow: Color = Color(0.76, 0.82, 0.88)
 @export var void_black: Color = Color(0.06, 0.07, 0.10)
+
+## 炫彩皮肤动画参数（空字典 = 普通静态换色）
+## 由 SkinData.apply_to_config() 从主题 "chroma" 键整份拷入，渲染器只读消费：
+## cycle 秒/圈、hue_offsets 各部位相位偏移、sheen 袍面油膜强度、rim_glow 缘边常驻流光强度。
+@export var chroma: Dictionary = {}
 
 ## 向后兼容色盘字典
 @export var palette: Dictionary = {}
@@ -134,6 +140,8 @@ static func _build_config(character_id: String) -> CultivatorVisualConfig:
 			return make_yushou()
 		"kuxingseng":
 			return make_kuxingseng()
+		"sanxiu":
+			return make_sanxiu()
 		"jianchi", _:
 			return make_jianchi()
 
@@ -713,6 +721,37 @@ static func make_kuxingseng() -> CultivatorVisualConfig:
 		"col_shadow": Color(0.28, 0.24, 0.20),
 		"col_accent": Color(0.95, 0.80, 0.35),
 		"strap_style": "diagonal"
+	}
+	cfg._sync_palette()
+	return cfg
+
+# 21. 散修（无门无派，博采众长，竹笠遮面，百衲杂袍，背负一捆杂兵器）
+static func make_sanxiu() -> CultivatorVisualConfig:
+	var cfg := CultivatorVisualConfig.new()
+	cfg.body = { "scale": 1.0, "width_scale": 1.04, "height_scale": 1.0, "head_scale": 1.0 }
+	cfg.face = {
+		"mask_style": "oval_chin",
+		"horns_style": "bamboo_hat",
+		"eye_style": "round_pupil",
+		"eye_color": Color(0.72, 0.86, 0.95, 0.42),  # 淡蓝灰：不属任何一系的旁观者眸
+		"eye_core_color": Color(0.96, 0.98, 1.0)
+	}
+	cfg.cloak = {
+		"cloak_style": "tattered_rags",
+		"col_outer": Color(0.24, 0.26, 0.30),        # 灰蓝百衲布
+		"col_inner": Color(0.36, 0.33, 0.26),        # 土褐补丁
+		"col_edge": Color(0.62, 0.72, 0.80),         # 冷银走线
+		"chest_ornament": "none"
+	}
+	cfg.weapon = {
+		"weapon_type": "assorted_bundle",
+		"col_main": Color(0.36, 0.38, 0.44),         # 玄铁杂兵刃身（深铁灰，压在骨白面具旁也分得开）
+		"col_shadow": Color(0.18, 0.20, 0.25),
+		"col_accent": Color(0.72, 0.60, 0.36),       # 麻绳与旧木柄
+		"strap_style": "dual",
+		# 捆束右移出肩外、刃尖朝上外展：正面视角武器先画、斗篷后盖，压原位会被袍身整片吞掉
+		"carry_front_pos": Vector2(12.0, 1.0), "carry_front_rot": 24.0,
+		"carry_side_pos": Vector2(-8.5, 6.0), "carry_side_rot": -16.0,
 	}
 	cfg._sync_palette()
 	return cfg

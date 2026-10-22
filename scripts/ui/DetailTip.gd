@@ -14,6 +14,8 @@ extends Control
 ##
 ## payload：
 ##   title      String      标题（走大标题字体，压在蓝色色带里）
+##   icon       String      图标路径（自动优先 assets/art/ui/ 下 128px 高清变体）
+##   icon_texture Texture2D 现成纹理（如现渲的敌人快照）；与 icon 二选一，icon_texture 优先
 ##   chip       String      角签文案，如稀有度 / 器类·五行；空串则不画
 ##   chip_color Color       角签底色（字色按亮度自动取墨黑或纸白）
 ##   rows       Array       读数行，每项 [名字, 值] 或 [名字, 值, Color]
@@ -25,6 +27,7 @@ extends Control
 
 const GAP := 12.0
 const CARD_W := 306.0
+const DETAIL_ICON_SIZE := 128.0
 const MARGIN := 10.0
 ## 卡内可用宽 = 卡宽 − 左右边距(12×2) − 描边(2×2)。
 ## 凡是折行的控件都必须把它钉成 custom_minimum_size.x：折行 Label 的「最小宽」只有一个词，
@@ -133,6 +136,7 @@ func _open(src_global: Rect2, data: Dictionary) -> void:
 
 	_build_header(vbox, payload)
 	_build_chip(vbox, payload)
+	_build_icon(vbox, payload)
 	_build_rows(vbox, payload)
 	_build_body(vbox, payload)
 	_build_notes(vbox, payload)
@@ -190,6 +194,42 @@ func _build_chip(vbox: VBoxContainer, payload: Dictionary) -> void:
 	GameStyle.label(lbl, 11, GameStyle.on_face_text(col))
 	lbl.add_theme_stylebox_override("normal", GameStyle.chip(col))
 	vbox.add_child(lbl)
+
+func _build_icon(vbox: VBoxContainer, payload: Dictionary) -> void:
+	var tex_obj: Texture2D = payload.get("icon_texture") as Texture2D
+	var icon_path: String = String(payload.get("icon", ""))
+	var tex_rect: TextureRect = null
+	if tex_obj != null:
+		tex_rect = TextureRect.new()
+		tex_rect.texture = tex_obj
+		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tex_rect.custom_minimum_size = Vector2(DETAIL_ICON_SIZE, DETAIL_ICON_SIZE)
+	elif not icon_path.is_empty():
+		tex_rect = GameStyle.icon_texture_rect(icon_path, Vector2(DETAIL_ICON_SIZE, DETAIL_ICON_SIZE))
+		if tex_rect.texture == null:
+			tex_rect.queue_free()
+			return
+	else:
+		return
+
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon_box := PanelContainer.new()
+	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_left", 4)
+	margin.add_theme_constant_override("margin_right", 4)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	margin.add_child(tex_rect)
+	icon_box.add_child(margin)
+	center.add_child(icon_box)
+	vbox.add_child(center)
 
 func _build_rows(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var rows: Array = payload.get("rows", [])

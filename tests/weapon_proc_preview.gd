@@ -227,17 +227,19 @@ func _integration_check() -> void:
 		w.queue_free()
 	var msg := "集成契约: %d/%d 通过（挂载矢量本体 + 贴图让位 + 出膛点=tip×0.55）" % [ok, total]
 	_label(Vector2(20, y), msg)
-	print(msg)
-	# 覆盖率：悬浮法器已全量矢量化；御灵/机关走 SunOrb / TurretUnit，本渲染器不接管（灰度开关保留）
-	var covered := 0
-	var floating := 0
-	for def_id in WeaponData.DEFS.keys():
-		var b := int((WeaponData.DEFS[def_id] as Dictionary).get("behavior", -1))
-		if b == WeaponData.Behavior.DRONE or b == WeaponData.Behavior.TURRET:
-			continue
-		floating += 1
-		if ProceduralWeaponRenderer.shape_from_name(String(WeaponData.DEFS[def_id].get("shape", ""))) != ProceduralWeaponRenderer.WeaponShape.GENERIC:
-			covered += 1
-	var cov_ok := covered == floating
-	print("悬浮法器矢量化覆盖率: %d/%d" % [covered, floating])
-	_label(Vector2(20, y + 22), "悬浮法器矢量化覆盖率: %d/%d（御灵/机关另走 SunOrb/TurretUnit）: %s" % [covered, floating, "OK" if cov_ok else "FAIL"])
+		print(msg)
+		# 覆盖率：悬浮法器与机关本体已全量矢量化；御灵武器走 SunOrb
+		var covered := 0
+		var floating := 0
+		for def_id in WeaponData.DEFS.keys():
+			var b := int((WeaponData.DEFS[def_id] as Dictionary).get("behavior", -1))
+			if b == WeaponData.Behavior.DRONE:
+				continue
+			floating += 1
+			var w_ok := ProceduralWeaponRenderer.shape_from_name(String(WeaponData.DEFS[def_id].get("shape", ""))) != ProceduralWeaponRenderer.WeaponShape.GENERIC
+			var t_ok := ProceduralTurretRenderer.shape_from_name(String(WeaponData.DEFS[def_id].get("turret_shape", ""))) != ProceduralTurretRenderer.TurretShape.GENERIC
+			if w_ok or t_ok:
+				covered += 1
+		var cov_ok := covered == floating
+		print("悬浮法器与机关矢量化覆盖率: %d/%d" % [covered, floating])
+		_label(Vector2(20, y + 22), "悬浮法器与机关矢量化覆盖率: %d/%d（御灵另走 SunOrb）: %s" % [covered, floating, "OK" if cov_ok else "FAIL"])

@@ -61,6 +61,9 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.still_pickup_bonus = float(mods.get("still_pickup_bonus", 0.0))
 	gm.move_damage_penalty = float(mods.get("move_damage_penalty", 0.0))
 	gm.move_haste_penalty = float(mods.get("move_haste_penalty", 0.0))
+	gm.scattered_mode = float(mods.get("scattered_mode", 0.0))
+	gm.scattered_bonus_per_class = float(mods.get("scattered_bonus_per_class", 0.0))
+	gm.scattered_penalty_per_synergy = float(mods.get("scattered_penalty_per_synergy", 0.0))
 	gm.pet_slots_bonus += int(mods.get("pet_slots", 0))
 	gm.pet_offer_chance_bonus = float(mods.get("pet_offer_chance_bonus", 0.0))
 	gm.pet_damage_mult += float(mods.get("pet_damage_mult", 0.0))
@@ -142,6 +145,25 @@ static func damage_mult(gm: Node, w_id: String) -> float:
 	for t in non_tag:
 		if not WeaponData.tags_of(w_id).has(String(t)):
 			m *= 1.0 + float(non_tag[t])
+	# 散修·博采众长：只算器类羁绊（WeaponData.CLASSES 六系），五行共鸣不参与。
+	# 「只带 1 件、未成档」的器类每系加伤；已触发器类羁绊每一条倒扣——走杂才强，凑羁绊反而弱。
+	# 件数账本直接读 SynergySystem 结算后的 active_synergies（缺 key = 未持有；level≥1 = 已成档）。
+	if gm.scattered_mode > 0.0:
+		var solo_classes := 0
+		var active_class_synergies := 0
+		for cls in WeaponData.CLASSES:
+			var info: Dictionary = gm.active_synergies.get(cls, {})
+			if info.is_empty():
+				continue
+			if int(info.get("level", 0)) >= 1:
+				active_class_synergies += 1
+			else:
+				solo_classes += 1
+		var scattered: float = 1.0 + gm.scattered_bonus_per_class * float(solo_classes) \
+				+ gm.scattered_penalty_per_synergy * float(active_class_synergies)
+		# 钳下限：六系全成档时也不许伤害变成负数/零（-20%×6 已越过 1.0）
+		m *= maxf(0.2, scattered)
+
 	# 受击叠层：角色（嗜血魔修）与道具（血海符）共用同一条乘区，层数上限仍由角色字段管。
 	var onhit_bonus: float = gm.on_hit_damage_bonus + gm.item_hook_sum("on_hit_damage_bonus")
 	if onhit_bonus > 0.0 and gm.on_hit_damage_stacks > 0:

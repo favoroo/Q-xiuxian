@@ -309,6 +309,16 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 			"reward_name": "",
 			"icon": "res://assets/art/weapon_jianzhen_pan.png",
 		},
+		{
+			"id": "ach_cult_sanxiu",
+			"name": "百家杂艺",
+			"cond_desc": "单局同时上阵4种不同器类的武器——哪派都沾一点，哪派都不深交",
+			"category": "style",
+			"reward_type": "cultivator",
+			"reward_id": "sanxiu",
+			"reward_name": "散修",
+			"icon": "res://assets/art/cultivator_sanxiu_icon.png",
+		},
 	# ---------------- 历练：生涯累计 ----------------
 		{
 			"id": "ach_cult_meiying",
@@ -571,6 +581,14 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 				if int(mcc.get(cls, 0)) < 1:
 					return false
 			return true
+		"ach_cult_sanxiu":
+			# 散修解锁：单局同时持有 ≥4 种不同器类（与 ach_style_omni 同一份 max_class_counts 账本）
+			var sanxiu_mcc := Dictionary(run_ctx.get("max_class_counts", {}))
+			var sanxiu_kinds := 0
+			for cls in WeaponData.CLASSES:
+				if int(sanxiu_mcc.get(cls, 0)) >= 1:
+					sanxiu_kinds += 1
+			return sanxiu_kinds >= 4
 		"ach_grind_level20":
 			return level >= 20
 		"ach_luck_turtle":
@@ -615,6 +633,13 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 			return "单局最佳 %d/4 件" % int(cc.get("thunder", 0))
 		"ach_style_wuxing":
 			return "单局最佳 %d/5 行" % spread
+		"ach_cult_sanxiu":
+			# 进度按「单局同时持有最多的器类种数」报，复用 best_class_counts 里 ≥1 件的系计数
+			var sanxiu_kinds := 0
+			for cls in WeaponData.CLASSES:
+				if int(cc.get(cls, 0)) >= 1:
+					sanxiu_kinds += 1
+			return "单局最佳 %d/4 系" % sanxiu_kinds
 		"ach_cult_meiying":
 			return "闪避峰值 %d%% · 击杀 %d/500" % [int(dodge * 100.0), kills]
 		"ach_cult_kuangzhan":

@@ -27,6 +27,7 @@ func _run() -> void:
 	await _test_spawn_hooks()
 	await _test_manual_page()
 	await _test_icon_capture()
+	await _test_detail_tip_large_icon()
 	if _c.report("ENEMYCODEX_RESULT"):
 		get_tree().quit(0)
 	else:
@@ -213,3 +214,64 @@ func _count_codex_hosts() -> int:
 			if ch is Node2D and ch.get_child_count() == 1 and ch.get_child(0) is SubViewport:
 				n += 1
 	return n
+
+# ---------------- ⑥ 详情大图与按尺寸捕获 ----------------
+func _test_detail_tip_large_icon() -> void:
+	# 尺寸 key 格式隔离
+	_c.equals(EnemyIconCapture._key("slime", false, 96), "slime", "默认尺寸 96 key 不带后缀")
+	_c.equals(EnemyIconCapture._key("slime", false, 128), "slime#s128", "自定义尺寸 128 key 带 #s128")
+	_c.equals(EnemyIconCapture._key("golem", true, 128), "golem#e#s128", "精英 128 key 组合正确")
+
+	# DetailTip 大图渲染挂载测试
+	var host := Control.new()
+	host.custom_minimum_size = Vector2(960, 540)
+	get_tree().root.add_child(host)
+
+	var anchor := Control.new()
+	anchor.position = Vector2(100, 100)
+	anchor.size = Vector2(40, 40)
+	host.add_child(anchor)
+
+	# 1. 带 icon 的 payload（武器/道具）
+	var w_payload := CodexTipData.weapon_payload("qingyun_sword")
+	_c.check(w_payload.has("icon") and not String(w_payload["icon"]).is_empty(), "武器 payload 包含 icon 路径")
+	var tip1 := DetailTip.show_over(host, anchor, w_payload)
+	_c.check(tip1 != null, "DetailTip 打开成功")
+	await get_tree().process_frame
+
+	var found_icon1 := false
+	var icon_size1 := Vector2.ZERO
+	for node in _find_all_texture_rects(tip1):
+		if node.custom_minimum_size.x >= 128.0:
+			found_icon1 = true
+			icon_size1 = node.custom_minimum_size
+			break
+	_c.check(found_icon1, "武器详情卡内包含 128x128 大图 TextureRect（实得 %s）" % str(icon_size1))
+	tip1.queue_free()
+
+	# 2. 纯文字 payload（如属性说明）不生成大图槽
+	var text_payload := {"title": "纯文本", "rows": [["测试", "值"]]}
+	var tip2 := DetailTip.show_over(host, anchor, text_payload)
+	await get_tree().process_frame
+	var found_icon2 := false
+	for node in _find_all_texture_rects(tip2):
+		if node.custom_minimum_size.x >= 128.0:
+			found_icon2 = true
+			break
+	_c.check(not found_icon2, "纯文字 payload 不会虚占大图槽")
+	tip2.queue_free()
+
+	host.queue_free()
+	for i in range(3):
+		await get_tree().process_frame
+
+func _find_all_texture_rects(root: Node) -> Array[TextureRect]:
+	var res: Array[TextureRect] = []
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is TextureRect:
+			res.append(n as TextureRect)
+		for ch in n.get_children():
+			stack.append(ch)
+	return res

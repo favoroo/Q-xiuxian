@@ -5,7 +5,7 @@ extends Node
 ## 运行: $G --headless --path . res://tests/WaveCountdownCheck.tscn
 ##       $G --headless --path . res://tests/WaveCountdownCheck.tscn -- --selftest
 ##
-## 立条目的现场（2026-10-11 用户提问「每波回合有对应的倒计时提示吗」）：非 Boss 波的
+## 立条目的现场（2026-10-11 用户提问「每波回合有对应的倒计时提示吗」）：非关底波的
 ## 结束条件**只有一个** —— WaveSpawner._process_fight 里 wave_timer 走到 0，场上怪清没清
 ## 都不算 ⇒ 这根表就是关卡长度，而顶栏原来只有整局正计时，玩家零刻度。补读数容易，
 ## 难的是别让它长成第二套时间，所以这里钉四件事：
@@ -13,8 +13,9 @@ extends Node
 ##      那一格比 —— 控件若自己起一张表，抠出来的数就对不上。
 ##   ② 线长 = wave_timer / wave_duration(n)：分母随波次变（第 1 波 35.9s、第 12 波 67.8s），
 ##      写死 60 的写法会把第 12 波剩 22s 画成 0.37 长，而它该是一半 —— selftest 拦住它。
-##   ③ Boss 波（第 10 波）整条不出现（用户当轮指令「boss 战就不用倒计时了」）：那一段
-##      表走到 0 也不开下一波（魔君未死停表锁关），画一个会卡在 0:00 的读数只会让人以为坏了。
+##   ③ Boss/精英波（第 10 波 / 第 5、15 波）整条不出现（用户当轮指令「boss 战就不用倒计时了」；
+##      2026-10-22 精英波同口径：关底未死会锁关）。那一段表走到 0 也不开下一波，画一个会
+##      卡在 0:00 的读数只会让人以为坏了。
 ##   ④ 波次一结束（phase 离开 FIGHT）线就收：不许留一根停在 0:00 的假进度。
 ##
 ## 两处取舍：
@@ -135,6 +136,29 @@ func _run() -> void:
 	_c.check(not _wc.has_bar(), "Boss 波芯片底部不画线")
 	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
 
+	# ---- ⑦ Boss/精英波：Boss 整条不出现；精英有表时报时，表走完锁关期退化成纯波号 ----
+	_spawner.start_wave(10)
+	await get_tree().process_frame
+	_c.check(_readout() == "第 10 波", "Boss 波读数不带时间（实得 %s）" % _readout())
+	_c.check(not _wc.has_bar(), "Boss 波芯片底部不画线")
+	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
+	_spawner.start_wave(5)
+	_spawner.elite_spawned = true   # 判据只量读数，不让 _process 真去刷精英
+	await get_tree().process_frame
+	_c.check(_readout().find(":") >= 0, "精英波有表时照常报时（实得 %s）" % _readout())
+	_c.check(_wc.has_bar(), "精英波有表时画进度线")
+	_spawner.wave_timer = 0.0
+	var elite_ref := _make_elite_ref()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_c.check(_readout() == "第 5 波", "精英锁关期读数退化成纯波号（实得 %s）" % _readout())
+	_c.check(not _wc.has_bar() and _wc.fill_width() == 0.0,
+		"精英锁关期不画停在 0:00 的假进度")
+	_spawner._elite_ref = null
+	if is_instance_valid(elite_ref):
+		elite_ref.get_parent().remove_child(elite_ref)
+		elite_ref.queue_free()
+
 	# ---- ⑧ 最长真实读数 == LayoutCheck 灌的那串样本 ----
 	# 样本串里的秒数跟着波长封顶走（2026-10-16 WAVE_DURATION_MAX 70→80 ⇒ 尾巴是 1:20 不是 1:10）
 	_c.check(HudWaveCountdown.worst_case_text() == "第 99 波 · 1:20",
@@ -211,6 +235,17 @@ func _selftest() -> void:
 			0.5 * GameBalance.wave_duration(3), _secs_shown()])
 
 # ---------------- 取值小工具 ----------------
+
+## 造一只「活着挡在场上」的精英引用：读数判据只需要锁关状态成立，不走 1.1s 凝聚演出
+func _make_elite_ref() -> EnemyBase:
+	var scene: PackedScene = load("res://scenes/entities/SlimeEnemy.tscn")
+	var e := scene.instantiate() as EnemyBase
+	e.is_elite = true
+	_spawner.get_parent().add_child(e)
+	e.activate()
+	e.max_hp = 99999.0
+	e.current_hp = 99999.0
+	return e
 
 func _readout() -> String:
 	return _wc.readout_text()

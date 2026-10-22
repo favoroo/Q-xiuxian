@@ -25,6 +25,17 @@ is_elite = true
 exp_reward = 8
 spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
 locomotion_mode = "hover"
+slam_interval = 4.2
+slam_radius = 115.0
+slam_windup = 0.9
+slam_dmg_mult = 1.1
+rock_interval = 6.5
+rock_count = 3
+rock_radius = 85.0
+rock_windup = 0.9
+rock_dmg_mult = 0.9
+rock_spread = 140.0
+rock_lead = 0.35
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 22.4)

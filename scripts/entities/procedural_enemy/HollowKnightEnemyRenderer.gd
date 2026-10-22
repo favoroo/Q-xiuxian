@@ -1187,132 +1187,218 @@ func _draw_zhumu() -> void:
 		var pupil_r := er * (0.42 + sin(_time * 2.9 + spec[3] * 1.7) * 0.06)
 		_circle(ep, pupil_r, config.col_glow)
 
-## 11. 雷兽 / 赤雷兽 (低伏贴地奔兽：四足迈步 + 背脊雷刺 + 蓄力下压前倾)
+## 羽片：从 base 到 tip 的一片渐细羽毛（中段微微外扩做出羽面弧度），自带黑描边。
+func _draw_feather(base: Vector2, tip: Vector2, w_base: float, w_mid: float,
+		fill: Color, stroke: Color, stroke_w: float = 1.0) -> void:
+	var d := tip - base
+	var dlen := d.length()
+	if dlen < 0.5:
+		return
+	var n := d / dlen
+	var p := Vector2(-n.y, n.x)
+	var mid := base + d * 0.55
+	draw_stroked_polygon(PackedVector2Array([
+		base + p * w_base, mid + p * w_mid, tip, mid - p * w_mid, base - p * w_base
+	]), fill, stroke, stroke_w)
+
+## 高段数椭圆填充（鸟身/鸟颅专用）：_circle 与 _arc 都按半径自适应段数，
+## 半径 5~8 只给 6~11 段，画圆身会变成多边形「桶」；这里固定 28 段保证圆润。
+static var _oval_buf := PackedVector2Array()
+
+func _draw_oval(center: Vector2, rx: float, ry: float, col: Color) -> void:
+	var seg := 28
+	_oval_buf.resize(seg)
+	for i in range(seg):
+		var ang := float(i) * TAU / float(seg)
+		_oval_buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
+	draw_colored_polygon(_oval_buf, col)
+
+## 高段数椭圆描边（同上，闭合 polyline 而非 arc）。
+func _stroke_oval(center: Vector2, rx: float, ry: float, col: Color, width: float) -> void:
+	var seg := 28
+	var buf := PackedVector2Array()
+	buf.resize(seg + 1)
+	for i in range(seg + 1):
+		var ang := float(i) * TAU / float(seg)
+		buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
+	draw_polyline(buf, col, width, true)
+
+## 11. 雷兽 / 赤雷兽 (雷鸦·振翅飞行兽)
+## 2026-10-22 整只重画：旧版是贴地四足走兽，四条腿只有髋/膝/蹄三点、单一相位对角摆动，
+## 观感僵硬（用户现场否决「四肢类走路效果太差」）；中途两版膜翼兽也读不清（半透明翼膜在黑底上
+## 只剩一根白线、钩爪像掸子）。现在按猛禽画：圆身鸟躯 + 钩喙鸟首 + 扇形分离飞羽双翼 +
+## 尾羽扇 + 收拢鸟爪，动感全交给振翅/尾羽摆动。蓄力时双翼高举收拢、身体前倾、
+## 冠羽与翼尖电弧提亮——冲撞预警读数与原版一致。
 func _draw_leibeast(is_elite: bool) -> void:
 	var t := _time + _phase_seed
 	var charge := clampf(special_state, 0.0, 1.0) # 冲刺蓄力 0→1 进度
-	# 步态：移动时四足对角交替迈步、躯干起伏；静止时冻结、只留呼吸
-	var stride := 4.2 * speed_ratio if is_moving else 0.0
-	var leg_swing := sin(gait_phase) * stride
-	var bob := (sin(gait_phase * 2.0) * 1.3 * speed_ratio) if is_moving else (sin(t * 3.2) * 0.7)
-	# 蓄力：身体逐帧下压蓄劲；出手后坐（recoil 1→0）躯干向上回弹伸展
-	var crouch := charge * 3.2 - recoil * 2.2
-	var body_c := Vector2(0, 1.5 + bob + crouch)
-	var lean := charge * 0.16 # 蓄力时躯干前倾角
+	# 振翅相位：移动时吃 gait_phase（与位移同相）；静止时 gait_phase 冻结，改用 _time 慢拍
+	var flap := sin(gait_phase if is_moving else t * 2.6)
+	var flap_amp := 0.62 if is_moving else 0.22
+	# 悬浮浮沉：移动时由步态二次谐波驱动，静止时低频呼吸
+	var bob := (sin(gait_phase * 2.0) * 1.5 * speed_ratio) if is_moving else (sin(t * 2.4) * 1.1)
+	# 蓄力：整体下沉蓄劲；出手后坐（recoil 1→0）身体向上回弹
+	var sink := charge * 2.4 - recoil * 1.8
+	var body_c := Vector2(0, -2.0 + bob + sink)
+	var lean := charge * 0.16 - recoil * 0.10 # 蓄力前倾角
 
-	# 地影（贴地宽影）
-	_draw_soft_shadow(Vector2(0, 14), (16.0 if not is_elite else 20.0), 4.6, 0.5)
+	# 悬空地影：小、淡，读出离地高度（鸟不落地）
+	_draw_soft_shadow(Vector2(0, 15), (11.0 if not is_elite else 13.5), 3.2, 0.28)
 
 	# 前倾旋转变换（绕躯干中心 body_c）
 	var pure_rot := Transform2D(lean, Vector2.ZERO)
 	var rot := Transform2D(lean, body_c - pure_rot * body_c)
 
-	# —— 四足：对角步态（前左/后右同相），短粗兽腿蹬地，蓄力时压缩 ——
-	var hip_x := [8.5, 5.5, -7.5, -10.5]
-	var swing_s := [1.0, -1.0, -1.0, 1.0]
-	for li in range(4):
-		var hx: float = hip_x[li]
-		var sw: float = leg_swing * swing_s[li]
-		var hip := body_c + Vector2(hx, 3.5)
-		var knee := hip + Vector2(sw * 0.6 + (1.4 if hx > 0.0 else -1.4), 3.2 - charge * 1.0)
-		var foot := knee + Vector2(sw * 0.8, 3.6 - charge * 1.2)
-		# 锥形腿杆（骨白，髋粗蹄细，精英加粗）
-		var w_hip := 2.4 if not is_elite else 2.9
-		var w_foot := 1.3 if not is_elite else 1.6
-		draw_stroked_polygon(PackedVector2Array([
-			hip + Vector2(-w_hip, 0), knee + Vector2(-w_foot, 0), foot + Vector2(-w_foot, 0),
-			foot + Vector2(w_foot, 0), knee + Vector2(w_foot, 0), hip + Vector2(w_hip, 0)
-		]), config.col_secondary, config.col_void, 1.0)
-		# 蹄爪三点
-		for k in range(3):
-			draw_line(foot + Vector2(float(k - 1) * 1.2, 0.5), foot + Vector2(float(k - 1) * 1.6, 2.2), config.col_void, 1.2, true)
+	# 振翅角：正=翼尖上抬（上扑）；蓄力时整体收拢后掠，后坐时展开
+	var wing_ang := flap * flap_amp - charge * 0.34 + recoil * 0.22
+	var arc_a := clampf(charge * 0.9 + (speed_ratio * 0.45 if is_moving else 0.0), 0.0, 1.0)
+	var wscale := 1.0 if not is_elite else 1.06
 
-	# —— 尾巴：骨鞭尾向后下垂，随步态甩动 ——
-	var tail_sway := (sin(gait_phase * 0.8 + 1.4) * 2.5) if is_moving else (sin(t * 1.8) * 1.2)
+	# —— 双翼：远翼（后上、压暗）先画，近翼（前下、亮）后画 ——
+	# 翼形 = 一根粗骨臂（肩→腕）+ 腕节外扇的 5 片长初级飞羽 + 臂下 3 片短次级飞羽。
+	# 飞羽是分离的独立羽片（各带黑描边），所以翼形靠羽片读出来，不依赖大片半透明膜。
+	for layer in range(2):
+		var is_near: bool = layer == 1
+		# 两翼分层：远翼抬到肩上方（几乎向上扇）、更小更暗；近翼压到肩下、更大更亮。
+		# 2026-10-22 修：两翼角度差只有 22°、根点只差 2px 时，远翼整片被近翼盖住，
+		# 侧视读成「只有一只翅膀」。
+		var root := body_c + (Vector2(-3.4, -6.8) if not is_near else Vector2(-0.4, -2.4))
+		var ang := wing_ang * (1.0 if is_near else 0.80) + (deg_to_rad(-12.0) if is_near else deg_to_rad(30.0))
+		var wt := rot * Transform2D(ang, root)
+		var sw := (1.0 if is_near else 0.74) * wscale
+		var fea_fill := config.col_accent if is_near else config.col_accent.darkened(0.42)
+		# 翼骨臂：用羽色掺本体色（纯本体色在赤雷兽上偏红棕，会和躯干糊成一根横管）
+		var arm_fill := fea_fill.lerp(config.col_primary, 0.45)
+		# 羽片描边：羽色压暗一档的「暗缝」，既能分出羽片又不至于像虚空黑硬边把羽勾成刀锋。
+		# （用亮色描边试过：羽片之间失去分隔，整扇翼糊成一团毛）
+		var fea_stroke := fea_fill.darkened(0.44)
+		var arm_stroke := arm_fill.darkened(0.36)
+		# 骨臂：肩→腕的粗羽臂（与躯干同色，只靠黑描边分界，避免在身前一横亮条）
+		var s_pt: Vector2 = wt * (Vector2(0.6, 1.0) * sw)
+		var w_pt: Vector2 = wt * (Vector2(-6.2, -8.8) * sw)
+		_draw_feather(s_pt, w_pt, 2.6 if is_near else 2.1, 2.9 if is_near else 2.3,
+			arm_fill, arm_stroke, 1.1)
+		# 初级飞羽：自腕节扇形展开（越靠翼尖越长），蓄力收翼时羽扇夹紧
+		# 末片收到接近水平（不再下垂到躯干下缘），否则会读成一根横插的棍
+		var fan := [
+			Vector2(-13.6, -13.2), Vector2(-17.4, -10.0), Vector2(-19.6, -5.8),
+			Vector2(-20.2, -1.6), Vector2(-18.4, 2.0)
+		]
+		for k in range(fan.size()):
+			var u := float(k) / float(fan.size() - 1)
+			var tp: Vector2 = fan[k]
+			# 收翼：羽尖向腕节回缩（charge 越大越夹）
+			var tp_c := w_pt + (wt * (tp * sw) - w_pt) * (1.0 - charge * 0.26)
+			_draw_feather(w_pt, tp_c, 1.5 if is_near else 1.2, 2.2 if is_near else 1.8,
+				fea_fill.lerp(config.col_secondary, 0.42 * (1.0 - u * 0.7)), fea_stroke, 0.9)
+		# 次级飞羽：臂下两片短羽，填住翼面内侧（贴臂走，不外伸成横条）
+		for k in range(2):
+			var u := float(k) / 1.0
+			var b_pt: Vector2 = wt * (Vector2(-1.4 - u * 3.0, -2.4 - u * 3.6) * sw)
+			var e_pt: Vector2 = wt * (Vector2(-7.4 - u * 4.2, -1.2 - u * 3.0) * sw)
+			_draw_feather(b_pt, e_pt, 1.3, 1.9, fea_fill.darkened(0.16), fea_stroke, 0.8)
+		# 翼尖电弧：移动或蓄力时最外侧羽尖噼啪放电（读数：雷压在翼上攒着）
+		if arc_a > 0.05:
+			var tip0: Vector2 = w_pt + (wt * (fan[0] * sw) - w_pt) * (1.0 - charge * 0.26)
+			var d_out := (tip0 - w_pt).normalized()
+			var jag := tip0 + d_out * 2.4 + Vector2(1.8, -1.2)
+			draw_polyline(PackedVector2Array([
+				tip0, jag, tip0 + d_out * 4.4 + Vector2(-0.6, -2.6)
+			]), Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, arc_a * 0.85), 1.1, true)
+
+	# —— 尾羽扇：四/五片骨羽自尾根向后下展开，随振翅轻摆 ——
+	var tail_sway := (sin(gait_phase * 0.7 + 1.2) * 0.14) if is_moving else (sin(t * 1.6) * 0.08)
+	var tail_root: Vector2 = rot * (body_c + Vector2(-6.6, 2.6))
+	var tail_n := 4 if not is_elite else 5
+	for k in range(tail_n):
+		var u := float(k) / float(tail_n - 1) - 0.5 # -0.5..0.5
+		# 尾羽向后下铺开（约 148°），长度中等，读成一把尾扇而不是毛团
+		var ang := deg_to_rad(148.0) + u * 0.52 + tail_sway
+		var flen := (10.2 - absf(u) * 1.4) * (1.0 if not is_elite else 1.14)
+		var tp: Vector2 = rot * (body_c + Vector2(-7.0 + cos(ang) * flen, 1.8 + sin(ang) * flen))
+		_draw_feather(tail_root, tp, 1.2, 1.6,
+			config.col_accent.darkened(0.18).lerp(config.col_secondary, 0.28),
+			config.col_accent.darkened(0.46), 0.8)
+
+	# —— 躯干：斜置蛋形鸟身（前高后低的飞行姿态）——
+	# 2026-10-22 修：正圆躯干 + 上下半圈覆羽色块，被腰线横切读成「西瓜」。
+	# 现在躯干整体沿 -12° 斜置（前胸抬、后腰沉），覆羽只做「背上一块圆羽斑」，
+	# 不再用腰线分割；体积靠翼根阴影与腹部亮斑读。
+	var body_rx := 7.6 if not is_elite else 8.8
+	var body_ry := 5.6 if not is_elite else 6.6
+	var body_fill := config.col_primary.lerp(config.col_accent, 0.34)
+	var body_tilt := deg_to_rad(-12.0)
+	# 躯干局部坐标系：以 body_c 为中心、按 body_tilt 斜置
+	var bt := rot * Transform2D(body_tilt, body_c)
+	var body_pts := PackedVector2Array()
+	body_pts.resize(26)
+	for i in range(26):
+		var a := float(i) * TAU / 26.0
+		# 后腰（cos<0）略收、前胸（cos>0）略鼓 → 蛋形
+		var taper := 1.0 + 0.06 * maxf(cos(a), 0.0) - 0.04 * maxf(-cos(a), 0.0)
+		body_pts[i] = bt * Vector2(cos(a) * body_rx * taper, sin(a) * body_ry)
+	draw_stroked_polygon(body_pts, body_fill, config.col_primary.darkened(0.40), 1.3)
+	# 体积只用「上缘高光 + 下缘暗影」两条弧读（不再叠内部斑块：三块椭圆叠在一起会读成熊猫眼）
+	_arc(bt * Vector2(-0.6, -0.4), body_rx * 0.74, deg_to_rad(206.0), deg_to_rad(316.0), 16,
+		config.col_accent.darkened(0.06), 1.5, true)
+	_arc(bt * Vector2(0.8, 0.8), body_rx * 0.82, deg_to_rad(24.0), deg_to_rad(150.0), 16,
+		config.col_primary.darkened(0.34), 2.0, true)
+	# 胸侧雷纹（折线闪电，蓄力时提亮；只做身份记号，压在前胸）
+	var bolt_col := config.col_accent.lerp(config.col_glow, charge * 0.7)
 	draw_polyline(PackedVector2Array([
-		body_c + Vector2(-13.0, -2.0),
-		body_c + Vector2(-17.5, -0.5 + tail_sway * 0.4),
-		body_c + Vector2(-20.5, 3.0 + tail_sway)
-	]), config.col_secondary, (1.8 if not is_elite else 2.4), true)
+		bt * Vector2(3.2, -1.6), bt * Vector2(1.8, 0.6),
+		bt * Vector2(3.4, 1.0), bt * Vector2(2.0, 3.2)
+	]), bolt_col, 1.2, true)
 
-	# —— 躯干：低伏长条兽躯（蓄力时整体前倾） ——
-	var torso := PackedVector2Array([
-		body_c + Vector2(-13.5, -2.0),
-		body_c + Vector2(-10.0, -7.0), # 弓背
-		body_c + Vector2(-1.0, -8.5),
-		body_c + Vector2(7.5, -7.0), # 肩峰
-		body_c + Vector2(12.5, -3.0), # 胸口
-		body_c + Vector2(11.5, 3.5),
-		body_c + Vector2(2.0, 5.5), # 收腹
-		body_c + Vector2(-8.0, 5.0),
-		body_c + Vector2(-13.0, 2.0)
-	])
-	var torso_r := PackedVector2Array()
-	torso_r.resize(torso.size())
-	for i in range(torso.size()):
-		torso_r[i] = rot * torso[i]
-	draw_stroked_polygon(torso_r, config.col_primary, _contour_color(), 1.5)
-	# 肋侧幽蓝雷甲纹（脊椎延伸线）
-	draw_line(rot * (body_c + Vector2(-9.0, -5.5)), rot * (body_c + Vector2(8.0, -5.0)), config.col_accent, 1.4, true)
-
-	# —— 背脊雷刺：一排后掠骨刺，蓄力时前倾发亮 ——
-	var spike_n := 5 if not is_elite else 6
-	for i in range(spike_n):
-		var u := float(i) / float(spike_n - 1)
-		var base := rot * (body_c + Vector2(-9.5 + u * 16.0, -7.0 + absf(u - 0.4) * 1.5))
-		var spike_h := (5.5 + u * 2.5) * (1.0 if not is_elite else 1.35)
-		# 刺尖：常态后掠，蓄力逐帧前倾；雷光随蓄力提亮
-		var tip := base + Vector2(-3.5 + charge * 6.5, -spike_h)
-		var spike_col := config.col_secondary
-		if charge > 0.0:
-			spike_col = config.col_secondary.lerp(config.col_glow, charge * 0.8)
-		draw_stroked_polygon(PackedVector2Array([
-			base + Vector2(-1.6, 0.5), tip, base + Vector2(1.9, 0.5)
-		]), spike_col, config.col_void, 1.0)
-		if charge > 0.4:
-			# 刺尖电弧光点（读数：雷压在脊上攒着）
-			_circle(tip, 1.2 * charge, Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, charge))
-
-	# —— 头部：狼首骨面 + 凶吻獠牙 + 独角（随蓄力压低前探） ——
-	var head_pos := rot * (body_c + Vector2(13.0, -3.0 + charge * 2.0))
-	var skull := PackedVector2Array([
-		head_pos + Vector2(-4.0, -3.5),
-		head_pos + Vector2(1.0, -4.5),
-		head_pos + Vector2(5.0, -2.0), # 额至吻顶
-		head_pos + Vector2(8.5, -0.5), # 尖吻
-		head_pos + Vector2(4.5, 1.0),
-		head_pos + Vector2(5.5, 2.8), # 下颚前点
-		head_pos + Vector2(-1.0, 3.5),
-		head_pos + Vector2(-5.0, 0.5)
-	])
-	draw_stroked_polygon(skull, config.col_secondary, config.col_void, 1.6)
-	# 凶吻獠牙（上犬齿外露）
-	draw_polyline(PackedVector2Array([
-		head_pos + Vector2(5.2, 1.0), head_pos + Vector2(6.2, 3.4), head_pos + Vector2(4.0, 1.6)
-	]), config.col_void, 1.2, true)
-	# 口缝
-	draw_line(head_pos + Vector2(1.5, 2.0), head_pos + Vector2(7.2, 0.8), config.col_void, 1.2, true)
-	# 独角：颅顶一支后掠雷角（角根埋进颅骨，精英为冲天分叉巨角）
-	if not is_elite:
-		draw_stroked_polygon(PackedVector2Array([
-			head_pos + Vector2(-2.0, -2.5),
-			head_pos + Vector2(-4.5 - charge * 2.0, -10.5),
-			head_pos + Vector2(1.5, -3.5)
-		]), config.col_secondary, config.col_void, 1.1)
-	else:
-		draw_stroked_polygon(PackedVector2Array([
-			head_pos + Vector2(-2.5, -3.0),
-			head_pos + Vector2(-3.0, -11.5),
-			head_pos + Vector2(3.0, -16.5),
-			head_pos + Vector2(0.5, -10.5),
-			head_pos + Vector2(-0.5, -3.5)
-		]), config.col_secondary, config.col_void, 1.3)
-		draw_line(head_pos + Vector2(-2.8, -8.5), head_pos + Vector2(-7.5, -12.0), config.col_secondary, 2.0, true)
-	# 暴虐雷眸（蓄力时更凶）
-	draw_sharp_eye(head_pos + Vector2(0.5, -1.5), 2.4, 1.4, config.col_glow, Color.WHITE)
+	# —— 鸟首：蓝颅 + 骨白钩喙 + 骨白雷角 + 锐眸 ——
+	# 2026-10-22 定稿。踩过的坑：①骨白填充→读成灰白石头；②整圈亮描边→读成月牙；
+	# ③颈楔→灰方块；④双细冠→两块木板；⑤draw_sharp_eye 自带 2 层软光晕，把喙整个盖掉、
+	# 在黑底上糊成一坨白。现在：颅用与躯干同族的蓝色（不掺灰），亮色只给喙/角/眸，
+	# 眸自绘小锐菱形（不加光晕），喙做大做实心并从颅右前方伸出。
+	var hk := 1.0 if not is_elite else 1.14
+	var head_pos: Vector2 = rot * (body_c + Vector2(4.0, -7.0 + charge * 1.8))
+	# 颅：蓝色主体（与躯干同族，略亮一档）+ 暗描边
+	var skull_fill := body_fill.lightened(0.10)
+	_draw_oval(head_pos, 5.0 * hk, 4.6 * hk, skull_fill)
+	_stroke_oval(head_pos, 5.0 * hk, 4.6 * hk, config.col_primary.darkened(0.40), 1.2)
+	# 骨白雷角：一支实心粗三角自颅顶向后上方掠出（蓄力前倾），角根压进颅体
+	var horn_len := (7.2 if not is_elite else 9.6) * hk
+	var hb_a: Vector2 = head_pos + Vector2(-2.2, -3.1) * hk
+	var hb_b: Vector2 = head_pos + Vector2(2.0, -2.2) * hk
+	var ht: Vector2 = head_pos + Vector2(-horn_len * 0.46 + charge * 2.4, -3.4 * hk - horn_len)
+	var horn_col := config.col_secondary.darkened(0.10).lerp(config.col_glow, charge * 0.85)
+	draw_stroked_polygon(PackedVector2Array([hb_a, ht, hb_b]), horn_col,
+		config.col_primary.darkened(0.52), 1.2)
+	if charge > 0.10:
+		_circle(ht, 0.8, Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, charge * 0.9))
+	# 骨白钩喙：厚实楔形自颅右前方伸出，尖端下钩（整只鸟最亮的硬边）
+	# 2026-10-22 修：喙只有 ~5px 高，中间那条暗「喙缝」会把它劈成上下两条白细条，
+	# 读成「两根筷子」——喙缝直接删掉，改由喙的下缘折角表达上下喙。
+	# 喙形：喙根贴颅（宽约 3px），向前收窄到喙尖，尖端再下钩（钩子靠最后两点折出）
+	# 喙尺寸铁律：喙长 ≈ 颅半径（5px），喙高 ≈ 3px。之前喙长 9px、高 5px，
+	# 占掉半张脸，整只读成「铲子」。喙根压进颅体，尖端用最后两点折出下钩。
+	draw_stroked_polygon(PackedVector2Array([
+		head_pos + Vector2(1.4, -2.0) * hk,  # 上喙根（压进颅体）
+		head_pos + Vector2(7.4, -0.9) * hk,  # 上喙前缘
+		head_pos + Vector2(8.6, 0.6) * hk,   # 喙尖
+		head_pos + Vector2(7.4, 1.9) * hk,   # 下钩
+		head_pos + Vector2(4.6, 1.5) * hk,   # 下喙缘
+		head_pos + Vector2(1.4, 1.9) * hk    # 下喙根（压进颅体）
+	]), config.col_secondary, config.col_primary.darkened(0.52), 1.1)
+	# 锐眸：自绘小菱形（不用 draw_sharp_eye：它自带 2 层软光晕会糊成大块白）
+	var eye_p: Vector2 = head_pos + Vector2(1.4, -2.2) * hk
+	var eye_w := 1.6 * hk
+	var eye_h := 1.0 * hk
+	draw_colored_polygon(PackedVector2Array([
+		eye_p + Vector2(-eye_w, 0), eye_p + Vector2(0, -eye_h),
+		eye_p + Vector2(eye_w, 0), eye_p + Vector2(0, eye_h)
+	]), config.col_glow)
+	_circle(eye_p + Vector2(0.3, 0), 0.55, config.col_glow.lightened(0.55))
 	if charge > 0.5:
 		# 蓄力瞳焰拖尾（前探方向）
-		draw_line(head_pos + Vector2(2.8, -1.5), head_pos + Vector2(2.8 + charge * 4.5, -1.5), config.col_glow, 1.4, true)
+		draw_line(eye_p + Vector2(eye_w, 0), eye_p + Vector2(eye_w + charge * 3.4, 0),
+			config.col_glow, 1.2, true)
+
 
 ## 12. 铁甲魔傀（精英）：幽冥玄铁巨傀 (重力悬浮磁场)
 ## 2026-10-19 强化：双层叠甲肩盾+甲脊骨刺、胸铠全身铆钉与甲缝青铜勾线、胸口核心炉光点光；

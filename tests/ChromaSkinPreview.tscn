@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://d1x4h8k2m9q7c"]
+
+[ext_resource type="Script" path="res://tests/chroma_skin_preview.gd" id="1"]
+
+[node name="ChromaSkinPreview" type="Node2D"]
+script = ExtResource("1")

@@ -32,6 +32,11 @@ bolt_damage = 17.0
 bolt_count = 3
 bolt_spread = 0.22
 bolt_windup = 0.35
+field_interval = 7.0
+field_radius = 120.0
+field_windup = 0.8
+field_dmg_mult = 0.8
+field_duration = 3.5
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 21.0)

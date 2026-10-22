@@ -14,25 +14,10 @@ const PANEL_SIZE := Vector2(880, 470)
 ## 正文排版宽度：880 面板 − 外边距 40 − 内容面板内边距 28 − 卡片内边距 24，再留余量
 const TEXT_W := 756.0
 
-## 五行配色（武器卡 chip 用，与 GameStyle.ELEMENT_COLORS 同源）
-const ELEMENT_COLORS := GameStyle.ELEMENT_COLORS
-
 ## 「属性受益」行人话名统一走 GameBalance.stat_scaling_label（与商店账单/属性面板同一把尺）。
 ## 删掉此处手抄表：它按属性侧旧键名（max_hp/move_speed_mult/attack_speed_mult）写，
 ## 而武器 stat_scalings 用 _bonus 侧键名，23 把武器的图鉴行此前会兜底露出英文原始 key。
-
-const BEHAVIOR_NAMES := {
-	WeaponData.Behavior.MELEE: "近战",
-	WeaponData.Behavior.PROJECTILE: "远程",
-	WeaponData.Behavior.BURST: "范围",
-	WeaponData.Behavior.DRONE: "环绕",
-	WeaponData.Behavior.TURRET: "机关",
-	WeaponData.Behavior.SWEEP: "横扫",
-	WeaponData.Behavior.BEAM: "光束",
-	WeaponData.Behavior.CONE: "喷吐",
-}
-
-const PROC_NAMES := {"proc_burn": "灼烧", "proc_chill": "减速", "proc_poison": "中毒"}
+## 武器/道具/灵兽详情载荷已抽到 CodexTipData（作者面板购买弹窗读同一份）。
 
 ## 敌人图鉴详情卡：皮实度/移速档位 → 语义色（档位词表见 EnemyGuideData.TOUGH_TIERS/SPEED_TIERS）。
 ## 越危险越红（BAD 朱砂）、越温和越绿（GOOD），中档走纸白——与「敌人」chip 同一套危险语义。
@@ -239,39 +224,7 @@ func _new_scroll_vbox(scroll: ScrollContainer, separation: int = 8) -> VBoxConta
 
 ## 分段图文卡：段题（黄）+ 可选插图 + 正文（wrap_cjk 硬换行）
 func _make_text_card(title: String, body: String, image: String = "", image_h: float = 80.0) -> Control:
-	var card := PanelContainer.new()
-	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
-	sb.content_margin_left = 12.0
-	sb.content_margin_right = 12.0
-	sb.content_margin_top = 8.0
-	sb.content_margin_bottom = 8.0
-	card.add_theme_stylebox_override("panel", sb)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	card.add_child(vbox)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "◆ " + title
-	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
-	vbox.add_child(title_lbl)
-
-	if image != "" and ResourceLoader.exists(image):
-		var img_center := CenterContainer.new()
-		var tex := TextureRect.new()
-		tex.texture = load(image)
-		tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tex.custom_minimum_size = Vector2(image_h * 2.0, image_h)
-		img_center.add_child(tex)
-		vbox.add_child(img_center)
-
-	var body_lbl := Label.new()
-	body_lbl.text = GameStyle.wrap_cjk(body, GameStyle.body_font(), 13, TEXT_W)
-	GameStyle.label(body_lbl, 13, GameStyle.PAPER_DIM)
-	vbox.add_child(body_lbl)
-
-	return card
+	return CodexCardFactory.make_text_card(title, body, TEXT_W, image, image_h)
 
 func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
 	# 统一走 GameStyle 图标工厂：武器图标自动优先 ui/ 128px 高清变体 + LINEAR 滤波，
@@ -281,74 +234,10 @@ func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
 ## 图鉴小卡：图标 + 名称（+ 可选色签行 / 副标签 + 可选关键数值行），点按开 DetailTip
 ## chips = [[文字, 面色, 字色], ...]，与商店卡行②的 chip_defs 同形状、同一个
 ## GameStyle.chip_label 画。给了 chips 就不画 sub 那行灰字（同一件事不印两遍）。
+## 卡体本身在 CodexCardFactory：作者面板直购页用同一张卡，两屏长得一样。
 func _make_entry_card(icon: String, name: String, sub: String, sub_color: Color,
 		on_press: Callable, stat_line: String = "", chips: Array = []) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(148, 0)
-	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
-	sb.content_margin_left = 8.0
-	sb.content_margin_right = 8.0
-	sb.content_margin_top = 8.0
-	sb.content_margin_bottom = 8.0
-	card.add_theme_stylebox_override("panel", sb)
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.set_meta("tip_title", name)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	card.add_child(vbox)
-
-	var icon_center := CenterContainer.new()
-	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(48, 48)
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
-	var tex := _load_icon(icon, Vector2(40, 40))
-	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tex.offset_left = 4
-	tex.offset_top = 4
-	tex.offset_right = -4
-	tex.offset_bottom = -4
-	icon_box.add_child(tex)
-	icon_center.add_child(icon_box)
-	vbox.add_child(icon_center)
-	card.set_meta("icon_tex", tex)
-
-	var name_lbl := Label.new()
-	name_lbl.text = name
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	GameStyle.label(name_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
-	vbox.add_child(name_lbl)
-
-	if not chips.is_empty():
-		# 色签成排：摆得下就一行，摆不下自动折第二行（图鉴卡窄，双器类武器有 4 签）
-		var flow := HFlowContainer.new()
-		flow.name = "TagFlow"
-		flow.alignment = FlowContainer.ALIGNMENT_CENTER
-		flow.add_theme_constant_override("h_separation", 4)
-		flow.add_theme_constant_override("v_separation", 3)
-		vbox.add_child(flow)
-		for cd in chips:
-			flow.add_child(GameStyle.chip_label(String(cd[0]), cd[1] as Color, cd[2] as Color))
-	elif sub != "":
-		var sub_lbl := Label.new()
-		sub_lbl.text = sub
-		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(sub_lbl, 11, sub_color)
-		vbox.add_child(sub_lbl)
-
-	if stat_line != "":
-		var stat_lbl := Label.new()
-		stat_lbl.text = stat_line
-		stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(stat_lbl, 10, GameStyle.PAPER_DIM)
-		vbox.add_child(stat_lbl)
-
-	GameStyle.tap(card, func() -> void: on_press.call(card))
-	# 整格都是热区：图框那层 PanelContainer 默认 STOP，会把「点图片」这一枪截在半路 ——
-	# 真机上就成了点名字弹卡、点图没反应（用户 2026-10-09 反馈）。放在最后一步统一压子树。
-	GameStyle.hotzone(card)
-	return card
+	return CodexCardFactory.make_entry_card(icon, name, sub, sub_color, on_press, stat_line, chips)
 
 # ----------------- 分页 1：武器图鉴 -----------------
 
@@ -357,53 +246,8 @@ func _build_weapons_page(parent: Control) -> Control:
 	return WeaponCodexBuilder.build_page(self, parent)
 
 func _open_weapon_tip(wid: String, anchor: Control) -> void:
-	var def := WeaponData.get_def(wid)
-	if def.is_empty():
-		return
-	var elem := ""
-	for t in def.get("tags", []):
-		if t in WeaponData.ELEMENTS:
-			elem = String(t)
-	var chip_color: Color = ELEMENT_COLORS.get(elem, GameStyle.GOLD)
-
-	# 行名与货架卡/详情卡用同一套词（2026-10-11 用户「看不懂」口径的同类问题）：
-	# 旧写法这里自有一套黑话 ——「路数」「射程/范围」「贯穿」，与商店那屏的
-	# 「攻击方式」「攻击范围」「穿透」指的是同一件事，玩家对不上号。
-	# 「伤害」加「基础」两字：图鉴这一列是数据表纸面值，本局加成不在这里，
-	# 而商店卡上那个「伤害 26 → 31.1」右边才是你实际打得出的数，不加限定词会当成同一个。
-	var rows: Array = [
-		["攻击方式", String(BEHAVIOR_NAMES.get(def.get("behavior", 0), "近战")), chip_color],
-		["基础伤害", "%d" % int(def.get("damage", 0)), GameStyle.JADE],
-		["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER],
-		["攻击范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER],
-		["买入价格", "%d 金币" % int(def.get("price", 0)), GameStyle.JADE],
-	]
-	if int(def.get("pierce", 0)) > 1:
-		rows.append(["穿透", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
-	if int(def.get("projectile_count", 1)) > 1:
-		rows.append(["齐射", "%d 发" % int(def["projectile_count"]), GameStyle.PAPER])
-	for proc_key in PROC_NAMES.keys():
-		if def.has(proc_key):
-			rows.append(["异常状态", PROC_NAMES[proc_key], chip_color])
-
-	var notes: Array[String] = []
-	var scalings: Dictionary = def.get("stat_scalings", {})
-	if not scalings.is_empty():
-		var names: Array[String] = []
-		for key in scalings.keys():
-			names.append(GameBalance.stat_scaling_label(String(key)))
-		notes.append("属性受益：" + "、".join(names))
-	notes.append("集齐 3 把同名同星可在商店合成升星")
-
-	DetailTip.show_over(self, anchor, {
-		"title": String(def.get("name", wid)),
-		"chip": " " + String(def.get("tag", "")) + " ",
-		"chip_color": chip_color,
-		"rows": rows,
-		"body": String(def.get("desc", "")),
-		"notes": notes,
-		"foot": "武器仅在回合间商店有售",
-	})
+	# 载荷在 CodexTipData：作者面板的购买弹窗读同一份，两屏数字不会各写一套
+	DetailTip.show_over(self, anchor, CodexTipData.weapon_payload(wid))
 
 # ----------------- 分页 2：道具图鉴 -----------------
 
@@ -449,39 +293,8 @@ func _rebuild_items_page() -> void:
 			grid.add_child(card)
 
 func _open_item_tip(iid: String, anchor: Control) -> void:
-	var def := ItemData.get_def(iid)
-	if def.is_empty():
-		return
-	var tier_num := int(def.get("tier", 1))
-	var tier_col := ItemData.tier_color(tier_num)
-	var rows: Array = [
-		["品阶", ItemData.tier_label(tier_num), tier_col],
-		# 词与商店那张详情卡对齐（2026-10-12 道具可出售）：这一行是数据表里的基准价，
-		# 当回合上架价每回合还要 +2，写「买入价格」会让人以为自己付的就是这个数。
-		["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM],
-		["出售返还", "%d 金币" % ItemData.sell_price(iid), GameStyle.JADE],
-	]
-	# 加成行（2026-10-11 土豆兄弟式改版）：与商店卡面同源同色，BonusRows 从 apply 直接生成
-	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
-	var desc_lines := String(def.get("desc", "")).split("\n")
-	var notes: Array[String] = []
-	for line in desc_lines:
-		if line.strip_edges() != "":
-			notes.append(line.strip_edges())
-	var foot := ""
-	if not GameManager.is_item_unlocked(iid):
-		foot = AchievementData.unlock_hint_text(iid, true, "收录条件：")
-	elif bool(def.get("unique", false)):
-		foot = "每局限购一件"
-
-	DetailTip.show_over(self, anchor, {
-		"title": String(def.get("name", iid)),
-		"chip": " " + ItemData.tier_label(tier_num) + " ",
-		"chip_color": tier_col,
-		"rows": rows,
-		"notes": notes,
-		"foot": foot,
-	})
+	# 载荷在 CodexTipData：作者面板的购买弹窗读同一份
+	DetailTip.show_over(self, anchor, CodexTipData.item_payload(iid))
 
 # ----------------- 分页 3：悟道图鉴 -----------------
 
@@ -548,6 +361,7 @@ func _open_upgrade_tip(udef: Dictionary, anchor: Control) -> void:
 
 	DetailTip.show_over(self, anchor, {
 		"title": String(udef.get("title", "")),
+		"icon": String(udef.get("icon", "")),
 		"chip": " " + String(udef.get("rarity_label", "普通")) + " ",
 		"chip_color": rarity_col,
 		"rows": rows,
@@ -645,31 +459,8 @@ func _make_pet_entry_card(pdef: Dictionary, on_press: Callable) -> PanelContaine
 	return card
 
 func _open_pet_tip(pdef: Dictionary, anchor: Control) -> void:
-	var p_col: Color = pdef.get("color", GameStyle.GOLD)
-	var role_key := String(pdef.get("role", "attack"))
-	var role_name := String(PetData.ROLES.get(role_key, "助战"))
-	var base_price := int(pdef.get("base_price", 0))
-	var rows: Array = [
-		["定位", role_name, p_col],
-		["基础买价", "%d 金币" % base_price, GameStyle.JADE],
-		["出手周期", "%.1f 秒" % float(pdef.get("base_cooldown", 1.0)), GameStyle.PAPER],
-		["出售返还", "%d 金币" % int(float(base_price) * PetData.SELL_RATIO), GameStyle.JADE],
-	]
-	var notes: Array[String] = []
-	var desc := String(pdef.get("desc", "")).strip_edges()
-	if not desc.is_empty():
-		notes.append(desc)
-	notes.append("灵兽属性吃「灵兽伤害 / 灵兽效果 / 灵兽冷却」加成")
-	notes.append("普通修士限带 1 只，御兽师最多随行 3 只")
-
-	DetailTip.show_over(self, anchor, {
-		"title": String(pdef.get("name", "")),
-		"chip": " 灵兽 ",
-		"chip_color": p_col,
-		"rows": rows,
-		"notes": notes,
-		"foot": "仅在金币阁有售，购买后永久随行",
-	})
+	# 载荷在 CodexTipData：作者面板的购买弹窗读同一份
+	DetailTip.show_over(self, anchor, CodexTipData.pet_payload(String(pdef.get("id", ""))))
 
 # ----------------- 分页 5：角色图鉴 -----------------
 
@@ -873,7 +664,7 @@ func _rebuild_enemies_page() -> void:
 			var card := _make_entry_card(
 				"", EnemyGuideData.display_name(eid),
 				"" if seen else "未收录", GameStyle.GREY,
-				func(anchor: Control): _open_enemy_tip(eid, anchor),
+				func(anchor: Control): _open_enemy_tip(eid, is_elite, anchor),
 				EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), chips)
 			if not seen:
 				# 未遭遇不捕图不剧透形象：灰显的是空占位框（与道具页「图标压暗」同理——
@@ -900,7 +691,7 @@ func _apply_icon_async(tex: TextureRect, eid: String, is_elite: bool) -> void:
 	if got != null and is_instance_valid(tex):
 		tex.texture = got
 
-func _open_enemy_tip(eid: String, anchor: Control) -> void:
+func _open_enemy_tip(eid: String, is_elite: bool, anchor: Control) -> void:
 	var def: Dictionary = EnemyGuideData.GUIDE.get(eid, {})
 	if def.is_empty():
 		return
@@ -909,7 +700,13 @@ func _open_enemy_tip(eid: String, anchor: Control) -> void:
 	var rows: Array = []
 	var body := ""
 	var notes: Array[String] = []
+	var icon_tex: Texture2D = null
 	if seen:
+		icon_tex = EnemyIconCapture.peek(eid, is_elite, EnemyIconCapture.DETAIL_SIZE)
+		if icon_tex == null:
+			icon_tex = await EnemyIconCapture.capture(eid, is_elite, EnemyIconCapture.DETAIL_SIZE)
+		if icon_tex == null:
+			icon_tex = EnemyIconCapture.peek(eid, is_elite)
 		# 遭遇过才给强度行：没见过的东西只露「出没/收录」，与卡面不放威胁签同一口径。
 		# 攻击方式固定朱砂（它就是「它会怎么打你」），皮实度/移速按档位取色（越极端越红）。
 		rows.append(["攻击方式", String(def.get("attack", "")), GameStyle.BAD])
@@ -929,7 +726,7 @@ func _open_enemy_tip(eid: String, anchor: Control) -> void:
 		notes.append(_desc_plain(desc))
 	rows.append(["出没", EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), GameStyle.PAPER])
 	rows.append(["收录", "已遭遇" if seen else "未遭遇", GameStyle.GOOD if seen else GameStyle.GREY])
-	DetailTip.show_over(self, anchor, {
+	var payload := {
 		"title": EnemyGuideData.display_name(eid),
 		"chip": " 敌人 ",
 		"chip_color": GameStyle.BAD,
@@ -937,7 +734,10 @@ func _open_enemy_tip(eid: String, anchor: Control) -> void:
 		"body": body,
 		"notes": notes,
 		"foot": "收录途径：实战中遭遇" if not seen else "",
-	})
+	}
+	if icon_tex != null:
+		payload["icon_texture"] = icon_tex
+	DetailTip.show_over(self, anchor, payload)
 
 ## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文染朱砂。
 ## 与 CultivatorSelect.highlight_bbcode 同一手法，只是这里只认一种强调色。

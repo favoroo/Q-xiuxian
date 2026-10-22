@@ -154,7 +154,10 @@ func _case_mutation_once() -> void:
 	var chilei := _spawn_enemy("res://scenes/entities/ChileiEliteEnemy.tscn", Vector2(5200, 5000))
 	var jiansha := _spawn_enemy("res://scenes/entities/JianshaEliteEnemy.tscn", Vector2(5400, 5000))
 	await get_tree().process_frame
-	_c.check(golem.slam_interval == 0.0, "前置：铁甲巨怪变异前没有震地")
+	# 2026-10-22 精英双招式改版：震地/落石从「变异解锁」改为「进场常驻」，
+	# 变异升格为二阶段强化（三连震 / 增点 / 链冲 / 扩域）。
+	_c.check(golem.slam_interval > 0.0, "前置：铁甲巨怪常驻震地（进场即有）")
+	_c.check(golem.rock_interval > 0.0, "前置：铁甲巨怪常驻落石（进场即有）")
 	_c.check(chilei.charge_side_bolts == 0, "前置：烈雷兽变异前没有侧射")
 	_c.check(jiansha.bolt_count == 3, "前置：剑客亡灵变异前三连剑气")
 
@@ -170,7 +173,8 @@ func _case_mutation_once() -> void:
 	chilei.take_damage(1.0, Vector2.ZERO)
 	jiansha.take_damage(1.0, Vector2.ZERO)
 	_c.check(golem._mutated, "铁甲巨怪过血线触发变异")
-	_c.check(golem.slam_interval > 0.0, "铁甲巨怪变异获得震地")
+	_c.check(golem.slam_interval > 0.0, "铁甲巨怪变异保持震地")
+	_c.check(golem.slam_hits == GameBalance.MUT_GOLEM_SLAM_HITS, "铁甲巨怪变异震地升格多段（%d 段）" % golem.slam_hits)
 	_c.check(chilei._mutated and chilei.charge_side_bolts > 0, "烈雷兽变异获得冲刺侧射")
 	_c.check(jiansha._mutated and jiansha.bolt_count == GameBalance.MUT_JIANSHA_BOLT_COUNT, "剑客亡灵变异剑气加密")
 	_c.check(jiansha.preferred_range < 200.0, "剑客亡灵变异压近身（%.0f）" % jiansha.preferred_range)
@@ -191,7 +195,10 @@ func _case_golem_slam() -> void:
 	await get_tree().process_frame
 	golem.current_hp = golem.max_hp * 0.5
 	golem.take_damage(1.0, Vector2.ZERO)
-	_c.check(golem.slam_interval > 0.0, "前置：变异已给铁甲巨怪震地")
+	_c.check(golem.slam_interval > 0.0, "前置：变异后铁甲巨怪震地仍在")
+	# 隔离震地单招：落石也会砸玩家脚下，会把「圈外不掉血」判据污染成假红
+	golem.rock_interval = 0.0
+	golem._rock_windup_t = -1.0
 
 	# 玩家贴身（圈内），跳过冷却直接起手
 	_player.global_position = golem.global_position + Vector2(60, 0)

@@ -196,13 +196,15 @@ static func make_zhumu() -> EnemyVisualConfig:
 	cfg.ornament_type = "tentacles"
 	return cfg
 
-## 11. 雷兽：幽都凶兽 / 冥雷煞兽 (CRAWL)
+## 11. 雷兽：幽都凶兽 / 冥雷煞兽 (FLIGHT，雷翼飞行兽)
+## 2026-10-22：原为 CRAWL 四足走兽，四肢步态观感僵硬已被否决；改为离地悬浮的雷翼兽。
 static func make_leibeast() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "leibeast"
 	cfg.display_name = "冥雷煞兽"
-	cfg.locomotion = LocomotionType.CRAWL
-	cfg.body_radius = 15.0
+	cfg.locomotion = LocomotionType.FLIGHT
+	# 识别环半径 = body_radius + 8；鸟形身宽比原四足兽窄，环半径按鸟身收（否则环横穿鸟身）
+	cfg.body_radius = 12.0
 	cfg.scale_factor = 1.15
 	cfg.col_primary = Color(0.12, 0.16, 0.26, 1.0)     # 深蓝玄夜兽躯
 	cfg.col_secondary = Color(0.92, 0.90, 0.85, 1.0)   # 骨质狼首骨面与利齿
@@ -229,14 +231,16 @@ static func make_golem() -> EnemyVisualConfig:
 	cfg.ornament_type = "floating_shields"
 	return cfg
 
-## 13. 赤雷兽（精英）：九幽赤煞雷帝兽 (CRAWL)
+## 13. 赤雷兽（精英）：九幽赤煞雷帝兽 (FLIGHT，赤雷巨翼兽)
+## 2026-10-22：同雷兽一起由 CRAWL 四足改为雷翼飞行兽，翼幅与翼刺更夸张。
 static func make_chilei_elite() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
 	cfg.enemy_id = "chilei_elite"
 	cfg.display_name = "赤雷巨兽"
-	cfg.locomotion = LocomotionType.CRAWL
+	cfg.locomotion = LocomotionType.FLIGHT
 	cfg.is_elite = true
-	cfg.body_radius = 18.0
+	# 识别环半径 = body_radius + 8；鸟形身宽比原四足兽窄，环半径按鸟身收
+	cfg.body_radius = 11.0
 	cfg.scale_factor = 1.4
 	cfg.col_primary = Color(0.28, 0.12, 0.12, 1.0)     # 焦黑血煞战躯
 	cfg.col_secondary = Color(0.95, 0.85, 0.75, 1.0)   # 巨大赤金雷角

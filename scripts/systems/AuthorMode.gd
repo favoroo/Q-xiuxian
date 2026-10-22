@@ -17,15 +17,12 @@ static var god_mode: bool = false
 static var one_hit_kill: bool = false
 ## 时间加速倍率（1.0 / 2.0 / 4.0），由 GameManager 顿帧恢复与跳关共同读
 static var time_scale: float = 1.0
-## 图鉴直购的武器星级（1~3），面板顶部切换
-static var grant_star: int = 1
 
 ## 关闭作者模式时把所有作弊状态复位（时间轴必须拉回 1.0，否则退出后整局慢/快放）
 static func reset() -> void:
 	god_mode = false
 	one_hit_kill = false
 	time_scale = 1.0
-	grant_star = 1
 	Engine.time_scale = 1.0
 
 ## 当前应有的基础时间倍率：GameManager 顿帧结束、跳关落地都读它，

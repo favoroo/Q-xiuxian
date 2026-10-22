@@ -77,6 +77,9 @@ func _reset_defaults() -> void:
 	damage = 4.0
 	duration = 5.0
 	scale_factor = 1.0
+	# 染色归白：毒妖投毒是本色，剑煞雷剑域靠 modulate 乘法染血煞色；
+	# 池化复用必须回白，否则毒妖会捡到上一滩的红色（2026-10-22 精英双招式）
+	modulate = Color.WHITE
 
 func _ready() -> void:
 	collision_layer = 0

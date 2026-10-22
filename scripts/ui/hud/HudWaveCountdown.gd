@@ -5,15 +5,18 @@ extends Control
 ## WaveLabel 接进来，之后这条读数（文字 + 线 + 颜色）的唯一写者就是本控件。
 ##
 ## 为什么非要它（2026-10-11 用户提问「每回合回合有对应的倒计时提示吗」）：
-## 这根表是「这一回合最长还要撑多久」的刻度：wave_timer 走到 0 一定收尾（顶栏原来只有整局
+## 这根表是「这一回合最长还要撑多久」的刻度：非关底波的 wave_timer 走到 0 一定收尾（顶栏原来只有整局
 ## 正计时 game_time，从开局往上数，玩家对「这一回合还要撑多久」完全没有刻度，而波长还会从
 ## 第 1 波 35.9s 一路爬到封顶 80s，中后期一整分钟没参照）。
 ## 2026-10-12 起它只是**上限**：WaveSpawner._tide_spent 那条提前出口会让敌潮刷尽、场上又清空
 ## 的波当场收尾并按余秒发「余时赏」⇒ 线没走完波也可能已经完了，别把这根表读成必须熬满。
 ##
-## Boss 回合整条不出现（用户当轮指令「boss 战就不用倒计时了」）：那一段的表走到 0
-## 也不会开下一回合 —— 魔君未死就停表锁关、怪继续刷（同文件 _process_fight 的锁关分支），
-## 画一个会卡在 0:00 的读数只会让人以为游戏坏了。所以 Boss 回合只剩「第 N 波」，不画线。
+## Boss/精英回合的读数口径（2026-10-22）：
+## · Boss 回合整条不出现（用户当轮指令「boss 战就不用倒计时了」）—— 魔君未死就停表锁关、
+##   怪继续刷，画一个会卡在 0:00 的读数只会让人以为游戏坏了。
+## · 精英回合照常报时：表本身仍有意义（它决定常规刷怪何时停手与关底何时必须解决）。
+##   表走完、精英还没伏诛时，读数退化成纯「第 N 波」、线收起 —— 与 Boss 回合同一留白语义，
+##   但不提前把整根表藏起来（那样玩家连「这一波还有多久」都看不见）。
 ##
 ## 同源（判据 WaveCountdownCheck 钉的就是这条线）：秒数取 spawner.wave_timer、
 ## 线长取 spawner.wave_timer / GameBalance.wave_duration(n)，也就是真正决定这一回合结束的
@@ -98,12 +101,19 @@ func refresh_now() -> void:
 		queue_redraw()
 
 ## 只有「正在打、且不是 Boss 回合」这一格才发倒计时：清场/悟道/商店阶段表是停着的，
-## 画一根不动的线等于撒谎
+## 画一根不动的线等于撒谎；Boss 回合要有意留白（魔君未死会锁关，表会卡在 0:00）。
+## 精英回合照常报时，只有「表已走完但精英未除」的锁关期退化成纯波号（不留 0:00 假进度）。
 func _is_countdown_wave() -> bool:
 	var spawner: Node = GameManager.wave_spawner
 	if spawner == null:
 		return false
-	return int(spawner.phase) == int(WaveSpawner.Phase.FIGHT) and not GameBalance.is_boss_wave(GameManager.wave_number)
+	if int(spawner.phase) != int(WaveSpawner.Phase.FIGHT):
+		return false
+	if GameBalance.is_boss_wave(GameManager.wave_number):
+		return false
+	if GameBalance.is_elite_wave(GameManager.wave_number, GameManager.endless_mode):
+		return float(spawner.wave_timer) > 0.0
+	return true
 
 ## 唯一的格式化出口（left_secs 传负数 = 这一回合不给倒计时）。worst_case_text 也走它，
 ## 所以判据量的那串字与屏幕上那串字永远同格式。

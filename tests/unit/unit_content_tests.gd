@@ -369,8 +369,8 @@ func _test_item_system() -> void:
 	_c.check(GameBalance.HEAL_OVERFLOW_STONE_CAP <= 15, "折灵石单颗封顶不超过 15（不滚成巨款）")
 
 func _test_cultivator_system() -> void:
-	# 数据表完整性：20 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
-	_c.equals(CultivatorData.all_ids().size(), 20, "修士扩充至 20 名")
+	# 数据表完整性：21 名修士，每名都有 名称/称号/图标/天赋/代价/独立形象 字段
+	_c.equals(CultivatorData.all_ids().size(), 21, "修士扩充至 21 名")
 	var bad: Array = []
 	for cid in CultivatorData.all_ids():
 		var d := CultivatorData.get_def(cid)
@@ -383,6 +383,14 @@ func _test_cultivator_system() -> void:
 		if String(d.get("sprite", "")).is_empty():
 			bad.append("%s.sprite" % cid)
 	_c.check(bad.is_empty(), "修士元数据齐全（缺: %s）" % str(bad))
+
+	# 选角台词语音：每个角色都要配 voice 路径且资源真实存在（缺一条就静默没声音，必须钉住）
+	var bad_voice: Array = []
+	for cid in CultivatorData.all_ids():
+		var vp := CultivatorData.get_voice_path(String(cid))
+		if vp.is_empty() or not ResourceLoader.exists(vp):
+			bad_voice.append(String(cid))
+	_c.check(bad_voice.is_empty(), "21 名修士的选角台词音频全部就位（缺: %s）" % str(bad_voice))
 
 	# 魅影（Ghost 原型）：闪避上限抬到 90%，锁死罡气护体；
 	# 重做后走「高血高回复换输出」：血量 ×1.3、回复 +1.5、全武器伤害 -20%（伤害来源交给影层）
@@ -512,7 +520,7 @@ func _test_cultivator_system() -> void:
 	var cs := CultivatorSelect.new()
 	add_child(cs)
 	cs.show_select()
-	_c.equals(cs._roster_grid.get_child_count(), 20, "道统选择界面下半部分两排网格展示 20 张形象小卡片")
+	_c.equals(cs._roster_grid.get_child_count(), 21, "道统选择界面下半部分网格展示全部 21 张形象小卡片")
 	_c.check(cs._detail_panel.visible, "道统选择界面上半部分详解大卡片正常可见")
 	cs._select_cultivator("fuzhen")
 	_c.equals(cs._selected_id, "fuzhen", "点击小卡片即时切换至对应修士")
@@ -748,8 +756,8 @@ func _test_turret_and_new_cultivators() -> void:
 		"", "【独行侠】无累计进度口径返回空串")
 	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
 		"", "【万器宗师】无累计进度口径返回空串")
-	# 成就总数 = 28（2026-10-20 难度收为 4 档，删去地狱/极限两条难度成就；原 24 + 新增 6 - 2）
-	_c.equals(int(AchievementData.all_ids().size()), 28, "成就总数 = 28")
+	# 成就总数 = 29（2026-10-22 新增「百家杂艺」解锁散修；此前 28：2026-10-20 难度收为 4 档，删去地狱/极限两条难度成就）
+	_c.equals(int(AchievementData.all_ids().size()), 29, "成就总数 = 29")
 
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()

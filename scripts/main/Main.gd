@@ -119,6 +119,15 @@ func _ready() -> void:
 			)
 		if wave_shop.has_signal("author_requested"):
 			wave_shop.author_requested.connect(author_panel.open)
+		# 作者面板发货后商店正开着 ⇒ 陈列行还是买之前的旧账（用户 2026-10-22：
+		# 「在商店前面进作者面板，买完商店武器没刷新，要下一波才出现」）。
+		# 直接走商店自己的 refresh(false)：重建货架与上阵/背包/道具/灵兽整行，
+		# 不重播入场动画（不是新货，只是本地库存变了）。
+		if author_panel.has_signal("inventory_changed"):
+			author_panel.inventory_changed.connect(func(_kind: String) -> void:
+				if wave_shop.visible and wave_shop.has_method("refresh"):
+					wave_shop.refresh(false)
+			)
 	stats_dialog.closed.connect(func():
 		if _stats_return_to_pause:
 			_stats_return_to_pause = false

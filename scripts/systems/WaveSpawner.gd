@@ -4,6 +4,8 @@ extends Node2D
 ## 回合状态机：WAITING(选武器) → FIGHT → CLEARING(清场吸附) → ALLOC(回合后悟道，有待加点才插队) → SHOP → 下一回合
 ## 第 20 波通关「渡劫成功」（双精英心魔劫）；可继续无尽
 ## FIGHT 的出口有两条（2026-10-12 起）：表走完，或「敌潮已尽」提前收尾 —— 判据见 _tide_spent()
+## 关底锁关（2026-10-22 起从 Boss 回合扩到精英回合）：Boss/精英未伏诛时表走完也不收尾，
+## 必须由玩家亲手击杀关底才进结算（用户口径：「有精英怪的关卡必须打完精英怪才能结束」）。
 
 enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
 
@@ -55,7 +57,8 @@ var _boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
 var _looter_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
 
 var _boss_ref: BossEnemy = null  ## 本回合魔君引用（Boss 回合超时锁关轮询用）
-var _overtime_noted: bool = false
+var _elite_ref: EnemyBase = null ## 本回合精英引用（精英回合超时锁关轮询用；池化复用前必须清）
+var _overtime_noted: bool = false ## 关底锁关播报只发一次（Boss/精英共用，单回合只有一类关底）
 
 # —— 性能基线采样（2026-10-17 性能优化专项阶段 0）——
 ## debug 构建 + 环境变量 PERF_BASELINE=1 时激活，FIGHT 期间每 2s 打一行 CSV 快照
@@ -194,18 +197,18 @@ func _process_fight(delta: float) -> void:
 	if player == null:
 		return
 
+	_tick_elite_ref()
+
 	wave_timer -= delta
 	spawn_timer -= delta
 	_batch_hold_time += delta
 	if _batch_cooldown > 0.0:
 		_batch_cooldown -= delta
 
-	# Boss 回合超时锁关：魔君未死则敌潮不退（停表停刷，等 Boss 伏诛再进结算）
-	if GameBalance.is_boss_wave(wave_number) and wave_timer <= 0.0:
-		if _boss_still_alive():
-			if not _overtime_noted:
-				_overtime_noted = true
-				GameManager.announcement_triggered.emit("◆ Boss未除 · 敌潮不退 ◆")
+	# 关底锁关（Boss 回合 / 精英回合同一口径）：关底未伏诛则敌潮不退（停表停刷，等它倒下再进结算）
+	if wave_timer <= 0.0 and (_is_boss_wave(wave_number) or _is_elite_wave(wave_number)):
+		if _gatekeeper_still_alive():
+			_announce_overtime("◆ %s未除 · 敌潮不退 ◆" % ("Boss" if _is_boss_wave(wave_number) else "精英"))
 			return
 		end_wave()
 		return
@@ -284,25 +287,43 @@ func _tide_spent() -> bool:
 		return false
 	return GameManager.enemy_count <= 0
 
+## 关底锁关期：表已走完、关底还活着，常规刷怪已在 _process_fight 的锁关分支停手。
+## 这段里没刷出来的预算永远不会再刷，读数不许把它算成「余妖」（面板撒谎比不显示更糟）。
+func _gatekeeper_lock_active() -> bool:
+	if wave_timer > 0.0:
+		return false
+	if not (_is_boss_wave(wave_number) or _is_elite_wave(wave_number)):
+		return false
+	return _gatekeeper_still_alive()
+
 func _indicators_pending() -> bool:
 	return SpawnIndicator.active_count > 0
 
 # ---------------- 本波剩余敌数读数（HUD「余妖 N/M」唯一数据源） ----------------
 ## 与 _tide_spent 逐枝同源的「还剩多少妖要对付」：还没刷入的预算 + 正在凝聚的预警 +
 ## 场上活妖（含 dying 尸体，登记表语义一致）+ 还没到场的精英/魔君 + 有档期未刷的金蟾。
-## 只组合现成字段、不新增状态；判 N==0 与「敌潮已尽」永不错位（渲染层只读状态）。
+## 关底锁关期（表已走完、关底未死）预算冻结、金蟾不再兑现，只数场上活妖与预警 ——
+## 否则读数会拿一份永远不会刷完的旧预算骗人（N 永远回不到 0）。
+## 只组合现成字段、不新增状态；非锁关期判 N==0 与「敌潮已尽」永不错位（渲染层只读状态）。
 func wave_left_count() -> int:
-	var left: int = maxi(_budget_total - _budget_used, 0)
+	# 锁关期：预算已冻结，只数场上活妖与凝聚中的妖气；未刷预算/金蟾档期都不再兑现
+	var locked := _gatekeeper_lock_active()
+	var left: int = 0 if locked else maxi(_budget_total - _budget_used, 0)
 	left += SpawnIndicator.active_count
 	left += GameManager.enemy_count
-	if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
-		left += 1
-	if _looter_pending and not _looter_done:
-		left += 1
+	if not locked:
+		if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
+			left += 1
+		if _looter_pending and not _looter_done:
+			left += 1
 	return left
 
 ## 本波敌数总额 M：预算只数 + 精英/Boss +1 + 金蟾档期 +1（与 wave_left_count 同一口径）。
+## 锁关期（表已走完、关底未伏诛）预算不再兑现，M 同步收成「场上还剩多少」，
+## 读数变成「余妖 1/1」而不是拿一份永远不会刷完的旧预算分母吓人。
 func wave_total_count() -> int:
+	if _gatekeeper_lock_active():
+		return SpawnIndicator.active_count + GameManager.enemy_count
 	var total: int = _budget_total
 	if _is_elite_wave(wave_number) or _is_boss_wave(wave_number):
 		total += 1
@@ -328,6 +349,7 @@ func start_wave(n: int) -> void:
 	max_enemies = GameBalance.max_enemies_cap(n)
 	elite_spawned = false
 	_boss_ref = null
+	_elite_ref = null
 	_overtime_noted = false
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
@@ -703,6 +725,7 @@ func _spawn_elite(player: Node2D) -> void:
 		_scale_to_wave(elite)
 		elite.activate()
 		parent.add_child(elite)
+		_elite_ref = elite
 		GameManager.announcement_triggered.emit("◆ %s突入战场！" % elite_title)
 		GameManager.shake_camera(5.0, 0.25)
 
@@ -778,6 +801,36 @@ func _spawn_boss(player: Node2D) -> void:
 ## 本回合魔君存活与否（Boss 回合超时锁关的判据）
 func _boss_still_alive() -> bool:
 	return _boss_ref != null and is_instance_valid(_boss_ref) and not _boss_ref.dying
+
+## 本回合精英存活与否（精英回合超时锁关的判据）。池化复用/清场都必须先过 dying 门：
+## 精英一进 _die 就是「已伏诛」，塌缩动画还没播完也不许把整回合继续锁着。
+func _elite_still_alive() -> bool:
+	return _elite_ref != null and is_instance_valid(_elite_ref) and not _elite_ref.dying
+
+## 精英引用掉线即永久置空（每帧在 _process_fight 开头调）：
+## 精英死后会被对象池回收、同一实例洗成下一只小怪 —— 若一直攥着旧引用，那只小怪活着
+## 就会把已经解除的锁关重新锁上。看到 dying / 失效当拍就断开，之后一律按「关底已伏诛」。
+func _tick_elite_ref() -> void:
+	if _elite_ref == null:
+		return
+	if not is_instance_valid(_elite_ref) or _elite_ref.dying:
+		_elite_ref = null
+
+## 关底是否仍挡着结算：Boss 与精英同一条口径（精英关刷怪口不刷 Boss，两者互斥）。
+## 引用为空（尚未落地/刷怪失败）时返回 false —— 没有关底可打就不该把回合永久锁死。
+func _gatekeeper_still_alive() -> bool:
+	if _is_boss_wave(wave_number):
+		return _boss_still_alive()
+	if _is_elite_wave(wave_number):
+		return _elite_still_alive()
+	return false
+
+## 关底锁关播报只发一次：表已走完但关底未死，横幅提示玩家先清关底再结算
+func _announce_overtime(text: String) -> void:
+	if _overtime_noted:
+		return
+	_overtime_noted = true
+	GameManager.announcement_triggered.emit(text)
 
 func _boss_title() -> String:
 	if wave_number > GameManager.VICTORY_WAVE:

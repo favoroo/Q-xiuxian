@@ -39,6 +39,7 @@ var _roster_cards: Dictionary = {}
 var _cached_roster_w: float = -1.0
 var _detail_pview: ProceduralCultivatorView = null  ## 详情卡大头像（皮肤切换实时预览用）
 var _skin_row: Control = null                     ## 详情卡皮肤切换栏（点选皮肤后局部重建用）
+var _voice_cache: Dictionary = {}                  ## 选角台词音频缓存：path -> AudioStream（避免每次点选重复解码）
 
 func _ready() -> void:
 	visible = false
@@ -225,6 +226,7 @@ func _select_cultivator(cid: String) -> void:
 	if _transitioning or cid == _selected_id:
 		return
 	AudioManager.play_sfx("ui_click")
+	_play_cultivator_voice(cid)
 	var old_id := _selected_id
 	_selected_id = cid
 	var vis_w := get_viewport().get_visible_rect().size.x
@@ -233,6 +235,21 @@ func _select_cultivator(cid: String) -> void:
 	_rebuild_detail_card(_selected_id, vis_w)
 	_update_small_card_selection(old_id)
 	_update_small_card_selection(_selected_id)
+
+## 点选角色卡时播一句该角色的选角台词（约 2~4 秒）。
+## 语音未配/资源缺失时静默跳过；切换角色时新语音直接顶掉上一句（AudioManager 单 voice_player）。
+func _play_cultivator_voice(cid: String) -> void:
+	var path := CultivatorData.get_voice_path(cid)
+	if path.is_empty():
+		return
+	if not _voice_cache.has(path):
+		if not ResourceLoader.exists(path):
+			return
+		var stream := load(path) as AudioStream
+		if stream == null:
+			return
+		_voice_cache[path] = stream
+	AudioManager.play_voice(_voice_cache[path] as AudioStream)
 
 func _rebuild_all() -> void:
 	var vis_w := get_viewport().get_visible_rect().size.x
@@ -549,6 +566,23 @@ func _make_skin_slot(cid: String, skin_idx: int,
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		GameStyle.label(lock_lbl, 10, GameStyle.GREY)
 		slot.add_child(lock_lbl)
+	# 炫彩皮肤槽：底部压一道硬边四色棱镜条，呼应「黑底 + 虹彩缘」的特殊观感
+	if SkinData.get_theme(skin_idx).has("chroma"):
+		var prism := Control.new()
+		prism.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		prism.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(prism)
+		var prism_cols: Array[Color] = [
+			Color(0.35, 0.95, 1.0), Color(0.55, 0.45, 1.0),
+			Color(1.0, 0.45, 0.85), Color(1.0, 0.80, 0.35),
+		]
+		for i in range(prism_cols.size()):
+			var seg := ColorRect.new()
+			seg.color = prism_cols[i] if open else prism_cols[i].darkened(0.45).lerp(Color(0.5, 0.5, 0.5), 0.5)
+			seg.position = Vector2(1.0 + float(i) * 9.5, 36.0)
+			seg.size = Vector2(9.5, 3.0)
+			seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			prism.add_child(seg)
 	GameStyle.tap(slot, func() -> void: _on_skin_slot_tapped(cid, skin_idx, slot))
 	return slot
 
@@ -585,6 +619,9 @@ func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 	var t := SkinData.get_theme(skin_idx)
 	var wins_needed := int(t.get("tier", 0)) + 1
 	var wins := int(GameManager.get_cultivator_record(cid).get("wins", 0))
+	var body := "任意难度通关都计数；攒够次数后，该角色的这套皮肤自动解锁。"
+	if t.has("chroma"):
+		body += "\n虹霓皮肤：袍身保持墨黑，缘边、眼瞳与武器流光会随时间流转虹彩。"
 	DetailTip.show_over(self, anchor, {
 		"title": "皮肤 · %s" % String(t.get("name", "")),
 		"chip": "未解锁",
@@ -593,7 +630,7 @@ func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 			["解锁条件", "该角色通关 %d 次" % wins_needed, GameStyle.GOLD],
 			["当前进度", "已通关 %d 次" % wins, GameStyle.GOOD if wins >= wins_needed else GameStyle.GREY],
 		],
-		"body": "任意难度通关都计数；攒够次数后，该角色的这套皮肤自动解锁。",
+		"body": body,
 	})
 
 ## 将文本中的核心数值与机制名精准高亮（其余正文走 PAPER 纸白色）

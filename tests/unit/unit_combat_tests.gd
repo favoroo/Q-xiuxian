@@ -248,6 +248,43 @@ func _test_charge_geometry() -> void:
 	_c.check(GameBalance.seg_closest_point(head, tail, Vector2(-40.0, 5.0)).is_equal_approx(tail), "冲过头钳到线段终点（不许穿透继续判）")
 	_c.check(GameBalance.seg_closest_point(Vector2(50.0, 50.0), Vector2(50.0, 50.0), Vector2(50.0, 90.0)).is_equal_approx(Vector2(50.0, 50.0)), "零长线段退化成点距（贴边界 clamp 那一帧不炸）")
 
+# ---------------- 精英常驻招式数值（2026-10-22） ----------------
+
+## 判据口径：常驻档 < 变异档（变异必须是强化而不是削弱）；多段震/链冲/扩域都落在 BalanceWave 单一真话源。
+func _test_elite_attack_constants() -> void:
+	# 铁甲魔傀：常驻震地弱于变异震地（前半管血也要躲，但别一进场就秒）
+	_c.check(GameBalance.GOLEM_SLAM_INTERVAL > GameBalance.MUT_GOLEM_SLAM_INTERVAL,
+		"常驻震地周期长于变异档（%.1f > %.1f）" % [GameBalance.GOLEM_SLAM_INTERVAL, GameBalance.MUT_GOLEM_SLAM_INTERVAL])
+	_c.check(GameBalance.GOLEM_SLAM_RADIUS < GameBalance.MUT_GOLEM_SLAM_RADIUS,
+		"常驻震地半径小于变异档（%.0f < %.0f）" % [GameBalance.GOLEM_SLAM_RADIUS, GameBalance.MUT_GOLEM_SLAM_RADIUS])
+	_c.check(GameBalance.MUT_GOLEM_SLAM_HITS >= 2, "变异震地为多段（%d 段）" % GameBalance.MUT_GOLEM_SLAM_HITS)
+	_c.check(GameBalance.MUT_GOLEM_SLAM_RADIUS_GROW > 1.0, "变异余波逐段扩圈（×%.2f）" % GameBalance.MUT_GOLEM_SLAM_RADIUS_GROW)
+	_c.check(GameBalance.MUT_GOLEM_ROCK_COUNT > GameBalance.GOLEM_ROCK_COUNT,
+		"变异落石增点（%d > %d）" % [GameBalance.MUT_GOLEM_ROCK_COUNT, GameBalance.GOLEM_ROCK_COUNT])
+	_c.check(GameBalance.GOLEM_ROCK_DMG_MULT < GameBalance.GOLEM_SLAM_DMG_MULT,
+		"单点落石轻于震地（%.2f < %.2f，多点合计才是威胁）" % [GameBalance.GOLEM_ROCK_DMG_MULT, GameBalance.GOLEM_SLAM_DMG_MULT])
+	# 赤雷兽：雷环 / 链冲 / 变异增发
+	_c.check(GameBalance.CHILEI_RING_COUNT > 0 and GameBalance.MUT_CHILEI_RING_COUNT > GameBalance.CHILEI_RING_COUNT,
+		"变异雷环增发（%d → %d）" % [GameBalance.CHILEI_RING_COUNT, GameBalance.MUT_CHILEI_RING_COUNT])
+	_c.check(GameBalance.MUT_CHILEI_CHAIN_CHARGES >= 2, "变异链冲至少两段（%d）" % GameBalance.MUT_CHILEI_CHAIN_CHARGES)
+	_c.check(GameBalance.MUT_CHILEI_CHAIN_GAP > 0.0, "链冲段间留短预警窗口（%.2fs）" % GameBalance.MUT_CHILEI_CHAIN_GAP)
+	_c.check(GameBalance.MUT_CHILEI_CHAIN_WINDUP_MULT < 1.0, "后续冲刺预警缩短（×%.2f，但仍可读）" % GameBalance.MUT_CHILEI_CHAIN_WINDUP_MULT)
+	_c.check(GameBalance.CHILEI_RING_DMG_MULT < 1.0, "单颗雷环伤害轻于接触伤（%.2f，全向多颗合计才是威胁）" % GameBalance.CHILEI_RING_DMG_MULT)
+	# 剑煞：雷剑域 / 瞬身回斩
+	_c.check(GameBalance.JIANSHA_FIELD_DURATION > 0.0 and GameBalance.JIANSHA_FIELD_RADIUS > 0.0,
+		"雷剑域有持续时长与半径（%.1fs / %.0fpx）" % [GameBalance.JIANSHA_FIELD_DURATION, GameBalance.JIANSHA_FIELD_RADIUS])
+	_c.check(GameBalance.MUT_JIANSHA_FIELD_RADIUS_MULT > 1.0,
+		"变异雷剑域扩域（×%.2f）" % GameBalance.MUT_JIANSHA_FIELD_RADIUS_MULT)
+	_c.check(GameBalance.MUT_JIANSHA_BLINK_INTERVAL > 0.0 and GameBalance.MUT_JIANSHA_BLINK_BOLTS > 0,
+		"变异瞬身回斩有周期与弹数（%.1fs / %d 发）" % [GameBalance.MUT_JIANSHA_BLINK_INTERVAL, GameBalance.MUT_JIANSHA_BLINK_BOLTS])
+	# 转发层一致性：GameBalance 必须逐项转发 BalanceWave（铁律1：数值单一真话源）
+	_c.equals(GameBalance.GOLEM_SLAM_INTERVAL, BalanceWave.GOLEM_SLAM_INTERVAL, "GameBalance 转发 GOLEM_SLAM_INTERVAL")
+	_c.equals(GameBalance.MUT_GOLEM_SLAM_HITS, BalanceWave.MUT_GOLEM_SLAM_HITS, "GameBalance 转发 MUT_GOLEM_SLAM_HITS")
+	_c.equals(GameBalance.CHILEI_RING_COUNT, BalanceWave.CHILEI_RING_COUNT, "GameBalance 转发 CHILEI_RING_COUNT")
+	_c.equals(GameBalance.MUT_CHILEI_CHAIN_GAP, BalanceWave.MUT_CHILEI_CHAIN_GAP, "GameBalance 转发 MUT_CHILEI_CHAIN_GAP")
+	_c.equals(GameBalance.JIANSHA_FIELD_DURATION, BalanceWave.JIANSHA_FIELD_DURATION, "GameBalance 转发 JIANSHA_FIELD_DURATION")
+	_c.equals(GameBalance.MUT_JIANSHA_BLINK_BOLTS, BalanceWave.MUT_JIANSHA_BLINK_BOLTS, "GameBalance 转发 MUT_JIANSHA_BLINK_BOLTS")
+
 # ---------------- 属性面板读数：与 Player 实际口径同源 ----------------
 
 ## 疾风/神行在身时开面板，移速/攻速读数必须含神通 buff 层（2026-10-11 补漏：
@@ -324,3 +361,25 @@ func _test_weapon_phase_stagger() -> void:
 	_c.near(a.cooldown_timer, phase_before, EPS, "升星重调 setup() 不重掷首跳相位（不打断既有节奏）")
 	a.free()
 	b.free()
+
+func _test_turret_floating_weapon_renderer() -> void:
+	# 机关类武器（TURRET，共 10 座）作为玩家悬浮法器时，必须挂载 ProceduralTurretRenderer 并隐蔽旧贴图
+	# （修复前仅检查 shape 遗漏 turret_shape，导致寒泉兽/藤萝机关等悬浮时显示旧 48x48 像素贴图）
+	var turrets := [
+		"jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou", "hanquan_shou",
+		"tengluo_jiguan", "leishi_jiguan", "kuilei_shou", "qingmu_pao",
+		"ningbing_nu", "fenghuo_tai",
+	]
+	var scene: PackedScene = load("res://scenes/weapons/FloatingWeapon.tscn")
+	for wid in turrets:
+		var w: FloatingWeapon = scene.instantiate()
+		w.setup(wid, 1)
+		add_child(w)
+		_c.check(w._proc_renderer != null, "%s FloatingWeapon 成功挂载矢量渲染器" % wid)
+		_c.check(w._proc_renderer is ProceduralTurretRenderer, "%s 挂载的是 ProceduralTurretRenderer" % wid)
+		_c.check(is_equal_approx(w.sprite.self_modulate.a, 0.0), "%s Sprite2D 旧贴图已隐蔽（self_modulate.a == 0）" % wid)
+		# 升星下发测试
+		w.setup(wid, 2)
+		var tr := w._proc_renderer as ProceduralTurretRenderer
+		_c.equals(tr.star, 2, "%s 升星后 ProceduralTurretRenderer.star 同步为 2" % wid)
+		w.queue_free()

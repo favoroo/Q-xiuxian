@@ -90,6 +90,15 @@ var move_dir: Vector2 = Vector2.ZERO
 var skill_aura_type: String = ""
 var eye_override_color: Color = Color.TRANSPARENT
 var eye_glow_boost: float = 0.0
+## 眼部柔光浓度（1.0 = 原有强度）：深色高饱和眼色在骨白面具上按原浓度会糊成实心色块，
+## 单独调低这一档即可保留原有柔光形状、只让颜色变淡透
+var eye_glow_density: float = 1.0
+## 眼部柔光半径缩放（1.0 = 原有强度）：柔光三层外扩后半径可达 20px、超过面具半宽，
+## 高饱和色会把整张脸染成一块色斑；缩放后红光只包住眼眶
+var eye_glow_radius_scale: float = 1.0
+## 虹膜内核向 override 色靠拢的比例（默认 0.45）：默认会保留大量白芯，
+## 换成红色时白芯把红冲成粉白；杀意红需要拉高到 0.9 才是「红眼发光」
+var eye_core_blend: float = 0.45
 var cloak_shimmer_color: Color = Color.TRANSPARENT
 var cloak_shimmer_intensity: float = 0.0
 var sigil_boost: float = 0.0
@@ -130,9 +139,14 @@ func _process(delta: float) -> void:
 		_dirty = false
 		_draw_phase = REDRAW_INTERVAL_HIGHFPS if high_fps_mode else REDRAW_INTERVAL
 		redraw_count += 1
+		_on_before_redraw()
 		queue_redraw()
 	else:
 		_draw_phase -= delta
+
+## 重绘前钩子（虚方法）：炫彩皮肤在此按 _time 重算缓存色，普通皮肤空实现零开销
+func _on_before_redraw() -> void:
+	pass
 
 func _draw() -> void:
 	# 根据动作状态机分发到具体绘制函数

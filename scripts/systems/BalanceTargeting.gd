@@ -8,6 +8,10 @@ extends RefCounted
 # ---------------- 多武器智能索敌与分流分配 ----------------
 
 const DANGER_ZONE_RADIUS := 75.0  ## 贴身危急警戒半径（防暴毙优先集火区）
+## 已被占用的目标再加一把武器的成本惩罚（2026-10-22 由 500 降到 300）：
+## 500 时代怪少时驱散过强，武器宁可横跨全场追远怪也不共打近怪，读起来像各自乱跑；
+## 300 仍足以防 Overkill，但允许 2~3 把武器集火同一威胁，配合共享目标的扇形错开更像协同包抄。
+const DUP_TARGET_PENALTY := 300.0
 const TARGETING_ELLIPSE_Y_RATIO := 0.65  ## 椭圆索敌垂直短轴压缩比（适配 16:9 扁平视野，防垂直打出屏幕盲区）
 const VIEWPORT_SAFE_HALF_EXTENTS := Vector2(426.0, 235.0)  ## 默认视口半宽半高（960x540 / zoom 1.1 内缩 10px 安全边界）
 
@@ -104,7 +108,7 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 
 			# 成本函数：
 			# - 屏幕外可见性惩罚（1500 分）：场上有任何屏幕内敌人时，武器坚决优先打同屏可见怪，杜绝打屏幕外盲区
-			# - 已被分配惩罚（500 分/武器）：强烈驱使武器挑选未被覆盖的不同方向敌人，防止 Overkill
+			# - 已被分配惩罚（DUP_TARGET_PENALTY 分/武器）：驱使武器挑选未被覆盖的不同方向敌人防 Overkill
 			# - 扇区契合度（0~120 分）：使槽位方位更顺路的武器迎战该侧敌人
 			# - 相对距离（0~80 分）：同方向优先打击距离更近的敌人
 			# - 目标粘滞奖励（-40 分）：当前已锁定敌人拥有微弱粘滞优势，防止帧间目标抖动
@@ -112,7 +116,7 @@ static func assign_weapon_targets(weapons_info: Array, enemies_info: Array, dang
 			var offscreen_penalty := 0.0 if on_screen else 1500.0
 			var stickiness_bonus := 40.0 if (prev_id != 0 and prev_id == e_id) else 0.0
 			var cost: float = offscreen_penalty \
-				+ float(count_assigned) * 500.0 \
+				+ float(count_assigned) * DUP_TARGET_PENALTY \
 				+ (angle_diff / PI) * 120.0 \
 				+ (e_dist / maxf(1.0, w_range)) * 80.0 \
 				- stickiness_bonus

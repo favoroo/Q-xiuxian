@@ -81,6 +81,7 @@ func _ready() -> void:
 		[infra, "_test_fx_particle_pool"],
 		[combat, "_test_knock_direction"],
 		[combat, "_test_charge_geometry"],
+		[combat, "_test_elite_attack_constants"],
 		[combat, "_test_stat_breakdown_buff"],
 		[targeting, "_test_spirit_orbit_dynamics"],
 		[content, "_test_turret_and_new_cultivators"],
@@ -102,10 +103,11 @@ func _ready() -> void:
 		[spiritpet, "_test_juchan_tongue_formulas"],
 		[spiritpet, "_test_yulu_heal_formulas"],
 		[spiritpet, "_test_xuangui_shield_formulas"],
-		[combat, "_test_feel_gates"],
-		[combat, "_test_hitstop_lowfps_gate"],
-		[combat, "_test_weapon_phase_stagger"],
-	]
+			[combat, "_test_feel_gates"],
+			[combat, "_test_hitstop_lowfps_gate"],
+			[combat, "_test_weapon_phase_stagger"],
+			[combat, "_test_turret_floating_weapon_renderer"],
+		]
 	for entry in plan:
 		var mod: Node = entry[0]
 		var meth: String = entry[1]

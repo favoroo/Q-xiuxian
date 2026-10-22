@@ -2,10 +2,11 @@ class_name SkinData
 extends RefCounted
 
 ## 角色换色皮肤主题表（纯静态数据，唯一真话源）
-## 每角色：默认「原色」+ 6 套全员共享主题皮肤。
+## 每角色：默认「原色」+ 6 套全员共享主题皮肤（第 6 套「虹霓」为动态炫彩）。
 ## 2026-10-20 与难度解耦：tier 不再对应难度档位，改为「该角色累计通关次数」门槛（tier + 1 次，任意难度）。
 ## 解锁判定不走本表：GameManager.is_skin_unlocked() 读该角色记录里的 wins 累计。
 ## 皮肤只换配色（斗篷内/外/缘拼色 + 眼色 + 武器色 + 骨色微调），不改造型样式键。
+## 炫彩主题额外带 "chroma" 参数：渲染器按时间沿色环流转缘边/眼瞳/武器流光，袍面保持黑底只叠油膜虹彩。
 
 ## 主题数组下标即 skin_idx（0~5）；tier = 解锁所需的该角色通关次数 - 1（1~6 次）
 const THEMES: Array[Dictionary] = [
@@ -75,19 +76,41 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.97, 0.95, 0.88),    # 骨色微暖含金
 		"bone_shadow": Color(0.80, 0.75, 0.62),
 	},
-	{   # 6 胜 —— 幽冥：幽夜玄袍，磷火幽幽
-		"name": "幽冥",
+	{   # 6 胜 —— 虹霓：墨底油膜幻彩，缘边/眼瞳/武器流光沿色环流转（炫彩皮肤）
+		"name": "虹霓",
 		"tier": 5,
-		"cloak_outer": Color(0.08, 0.06, 0.14),   # 幽冥玄夜
-		"cloak_inner": Color(0.17, 0.12, 0.30),   # 暗魅紫
-		"cloak_edge": Color(0.36, 0.95, 0.74),    # 磷火幽绿
-		"eye_color": Color(0.45, 1.0, 0.74, 0.65),
-		"eye_core_color": Color(0.80, 1.0, 0.90),
-		"weapon_main": Color(0.86, 0.92, 0.95),
-		"weapon_shadow": Color(0.55, 0.63, 0.72),
-		"weapon_accent": Color(0.40, 0.95, 0.74, 0.9),
-		"bone_white": Color(0.90, 0.95, 0.97),    # 骨色微染幽青
-		"bone_shadow": Color(0.66, 0.75, 0.84),
+		"cloak_outer": Color(0.063, 0.045, 0.100), # 墨底玄紫（低明度保黑底，色相随时间流转）
+		"cloak_inner": Color(0.092, 0.085, 0.170), # 墨底靛青
+		"cloak_edge": Color(0.38, 0.93, 1.0),      # 基准冷青（炫彩相位锚点）
+		"eye_color": Color(0.42, 0.95, 1.0, 0.32),
+		"eye_core_color": Color(0.80, 1.0, 1.0),
+		"weapon_main": Color(0.90, 0.93, 0.99),    # 刃身近白，微带冷调
+		"weapon_shadow": Color(0.52, 0.57, 0.74),
+		"weapon_accent": Color(0.18, 0.98, 1.0, 0.9),
+		"bone_white": Color(0.95, 0.96, 1.0),      # 骨色中性冷白，不参与虹彩
+		"bone_shadow": Color(0.72, 0.76, 0.88),
+		"chroma": {                                # 炫彩动画参数（渲染器消费）
+			"cycle": 7.0,                          # 色相绕行一圈的秒数
+			"hue_offsets": {                       # 各部位相对相位（圈，错开成棱镜散彩）
+				"cloak_outer": 0.0,
+				"cloak_inner": 0.0,
+				"cloak_edge": 0.0,
+				"eye_glow": 0.06,
+				"eye_core": 0.02,
+				"weapon_main": 0.22,
+				"weapon_shadow": 0.16,
+				"weapon_accent": 0.30,
+				"slash_arc": 0.10,
+				"gold": 0.34,
+				"jade": 0.12,
+				"tassel": 0.40,
+			},
+			"locked": ["cloak_outer", "cloak_inner"],  # 袍身色相锁死（黑底不跑色，虹彩交给油膜 sheen）
+			"sheen": 0.075,                        # 袍面油膜虹彩混入强度（低=保黑底高级感）
+			"sheen_dx": 0.010,                     # 油膜带沿衣褶的横向色相梯度
+			"sheen_dy": 0.015,                     # 纵向色相梯度（斜向油膜纹）
+			"rim_glow": 0.50,                      # 缘边常驻流光强度（无需技能也持续游走）
+		},
 	},
 ]
 
@@ -125,5 +148,11 @@ static func apply_to_config(base: CultivatorVisualConfig, skin_idx: int) -> Cult
 		cfg.bone_white = t["bone_white"]
 	if t.has("bone_shadow"):
 		cfg.bone_shadow = t["bone_shadow"]
+	if t.has("chroma"):
+		cfg.chroma = (t["chroma"] as Dictionary).duplicate(true)
+	else:
+		# 显式清空：duplicate(true) 会带出 base 的 chroma，若不覆盖，
+		# 同一配置先套炫彩再套普通主题会残留动画参数
+		cfg.chroma = {}
 	cfg._sync_palette()
 	return cfg

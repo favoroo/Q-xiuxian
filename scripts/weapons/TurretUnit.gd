@@ -28,7 +28,6 @@ var _spin_angle: float = 0.0
 
 ## 索敌节流（2026-10-11，与 FloatingWeapon 同款）：intersect_shape 最多 15Hz
 const TARGET_SEARCH_INTERVAL := 0.066
-const GROUND_SQUASH := 0.62          ## 俯视透视压扁比（底座贴地扎根基准）
 var _search_timer: float = 0.0
 
 static var _search_shape: CircleShape2D = null
@@ -118,31 +117,22 @@ func _setup_muzzle_flash() -> void:
 	muzzle_point.add_child(muzzle_flash)
 
 func _draw() -> void:
-	# 冷冽几何八角机关阵盘底座：阵缘配色与形态按元素分化（2026-10-13）
-	# 增加俯视透视压扁与贴地双层软阴影，使炮台底座稳稳贴合石砖地面
+	# 冷冽几何正圆机关阵盘底座：阵缘配色与形态按元素分化（2026-10-22 椭圆→正圆改版）
+	# 俯视视角不做透视压扁：正圆阵盘在炮台索敌转向时不产生形变，读作稳扎地面的阵基
 	var r_outer := 18.0
 	var r_inner := 13.0
 	var edge_col: Color = _elem_edge_color()
 
 	# 1. 贴地双层软阴影（外圈漫溢衰减 + 接触内核）
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	draw_circle(Vector2(0.0, 1.5), r_outer * 1.30, Color(0.02, 0.03, 0.05, 0.25))
 	draw_circle(Vector2(0.0, 1.0), r_outer * 1.08, Color(0.02, 0.03, 0.05, 0.50))
 
-	# 2. 八角机关阵盘底座与元素点缀
-	var pts_outer := PackedVector2Array()
-	var pts_inner := PackedVector2Array()
-	for i in range(8):
-		var ang := float(i) * TAU / 8.0
-		pts_outer.append(Vector2(cos(ang), sin(ang)) * r_outer)
-		pts_inner.append(Vector2(cos(ang), sin(ang)) * r_inner)
-	draw_colored_polygon(pts_outer, Color(0.08, 0.10, 0.14, 0.90))
-	pts_outer.append(pts_outer[0])
-	draw_polyline(pts_outer, edge_col, 2.0)
-	pts_inner.append(pts_inner[0])
-	draw_polyline(pts_inner, Color(edge_col.r, edge_col.g, edge_col.b, 0.55), 1.2)
+	# 2. 正圆机关阵盘底座：实心盘 + 外缘亮环 + 内圈暗环
+	draw_circle(Vector2.ZERO, r_outer, Color(0.08, 0.10, 0.14, 0.90))
+	draw_arc(Vector2.ZERO, r_outer, 0.0, TAU, 40, edge_col, 2.0, true)
+	draw_arc(Vector2.ZERO, r_inner, 0.0, TAU, 32,
+		Color(edge_col.r, edge_col.g, edge_col.b, 0.55), 1.2, true)
 	_draw_elem_accents(r_outer, edge_col)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 阵缘元素色（黑底上要够亮才读得出）
 func _elem_edge_color() -> Color:

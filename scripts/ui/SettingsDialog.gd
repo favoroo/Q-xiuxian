@@ -122,6 +122,7 @@ func _build_audio_page() -> Control:
 	_add_audio_slider_row(vbox, &"Master", "主 音 量", "全局整体音量大小控制")
 	_add_audio_slider_row(vbox, &"BGM", "音乐音量", "背景音乐 (BGM)")
 	_add_audio_slider_row(vbox, &"SFX", "音效音量", "战斗与击杀音效 (SFX)")
+	_add_audio_slider_row(vbox, &"Voice", "语音音量", "选角台词与角色语音 (Voice)")
 
 	GameStyle.scrollable(scroll)
 	return scroll

@@ -31,6 +31,9 @@ extends RefCounted
 ##   kill_cd_reduction_normal / kill_cd_reduction_elite —— 绝尘·斩灭凝神：击杀普通怪/精英怪返还的技能冷却秒数
 ##   kuxingseng_mode / still_damage_bonus / still_haste_bonus / still_armor_bonus / still_pickup_bonus
 ##   / move_damage_penalty / move_haste_penalty —— 苦行僧：站定与移动不对称收益/惩罚
+##   scattered_mode / scattered_bonus_per_class / scattered_penalty_per_synergy
+##                                              —— 散修·博采众长：每种「未成档」器类全伤害加成 / 每触发一条
+##                                                 器类羁绊的全伤害惩罚（五行共鸣不计；damage_mult 现算）
 ## extra_skill: "skill_id"                      —— 随角色绑定的「额外技能」（独立于五选一技能，HUD 第二颗按钮释放；
 ##                                                 缺省 = 该角色无额外技能，按钮隐藏。免冷却类由资源门控，见 SkillData.BURST）
 ##                                                 它的玩法说明不写在本表：get_extra_desc() 现读那张机制表，
@@ -41,12 +44,14 @@ extends RefCounted
 ## 全员 procedural 渲染不加载图集）。未来新角色若真要启用图集渲染，先把排除名单里的
 ## *_8dir.png 两项移除，否则真机上 ResourceLoader.exists 直接失败、走 pawn_blue 兜底白模。
 ## motion: 移动方式（缺省 "gait" 步态腿帧；"hover" 御剑/悬浮——单姿势图集 + RunMotion.apply_hover 程序驱动浮沉）
+## voice: 选角台词音频路径（点选角色卡时播放一句，约 2~4 秒；缺省 = 该角色无台词，静默跳过）
 
 const DEFS: Dictionary = {
 			"jianchi": {
 				"name": "剑士",
 				"epithet": "一剑在手，所向披靡",
 				"icon": "res://assets/art/cultivator_jianchi_icon.png",
+				"voice": "res://assets/audio/voice/vo_jianchi.mp3",
 				"sprite": "res://assets/art/pawn_blue_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -64,6 +69,7 @@ const DEFS: Dictionary = {
 				"name": "守卫",
 				"epithet": "铁壁之躯，坚不可摧",
 				"icon": "res://assets/art/cultivator_shiyue_icon.png",
+				"voice": "res://assets/audio/voice/vo_shiyue.mp3",
 				"sprite": "res://assets/art/cultivator_shiyue_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -84,6 +90,7 @@ const DEFS: Dictionary = {
 			"name": "灵蝶使",
 			"epithet": "以多打少，游刃有余",
 				"icon": "res://assets/art/cultivator_fuzhen_icon.png",
+				"voice": "res://assets/audio/voice/vo_fuzhen.mp3",
 				"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -105,6 +112,7 @@ const DEFS: Dictionary = {
 				"name": "商人",
 				"epithet": "精打细算，财源滚滚",
 				"icon": "res://assets/art/cultivator_jinsuanpan_icon.png",
+				"voice": "res://assets/audio/voice/vo_jinsuanpan.mp3",
 				"sprite": "res://assets/art/cultivator_jinsuanpan_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -126,6 +134,7 @@ const DEFS: Dictionary = {
 				"name": "影者",
 				"epithet": "来无影，去无踪",
 				"icon": "res://assets/art/cultivator_meiying_icon.png",
+				"voice": "res://assets/audio/voice/vo_meiying.mp3",
 				"sprite": "res://assets/art/cultivator_meiying_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -147,6 +156,7 @@ const DEFS: Dictionary = {
 					"name": "狂战士",
 					"epithet": "一刀开山，所向无敌",
 					"icon": "res://assets/art/cultivator_dubi_icon.png",
+					"voice": "res://assets/audio/voice/vo_dubi.mp3",
 					"sprite": "res://assets/art/cultivator_dubi_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -166,6 +176,7 @@ const DEFS: Dictionary = {
 				"name": "蛮兵",
 				"epithet": "敌越多，战越狂",
 				"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
+				"voice": "res://assets/audio/voice/vo_kuangzhan.mp3",
 				"sprite": "res://assets/art/cultivator_kuangzhan_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -187,6 +198,7 @@ const DEFS: Dictionary = {
 				"name": "学者",
 				"epithet": "进步神速，一日千里",
 				"icon": "res://assets/art/cultivator_duoshe_icon.png",
+				"voice": "res://assets/audio/voice/vo_duoshe.mp3",
 				"sprite": "res://assets/art/cultivator_duoshe_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -206,6 +218,7 @@ const DEFS: Dictionary = {
 				"name": "收藏家",
 				"epithet": "琳琅满目，应有尽有",
 				"icon": "res://assets/art/cultivator_duobao_icon.png",
+				"voice": "res://assets/audio/voice/vo_duobao.mp3",
 				"sprite": "res://assets/art/cultivator_duobao_8dir.png",
 				"motion": "procedural",
 				"render_style": "hollow_knight",
@@ -225,6 +238,7 @@ const DEFS: Dictionary = {
 					"name": "灵植夫",
 					"epithet": "灵田百亩，春华秋实",
 					"icon": "res://assets/art/cultivator_lingzhifu_icon.png",
+					"voice": "res://assets/audio/voice/vo_lingzhifu.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -244,6 +258,7 @@ const DEFS: Dictionary = {
 					"name": "雷法真君",
 					"epithet": "天雷引动，万法归一",
 					"icon": "res://assets/art/cultivator_leifa_icon.png",
+					"voice": "res://assets/audio/voice/vo_leifa.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -262,6 +277,7 @@ const DEFS: Dictionary = {
 						"name": "机关师",
 						"epithet": "千机百炼，甲阵通神",
 						"icon": "res://assets/art/cultivator_jiguan_icon.png",
+						"voice": "res://assets/audio/voice/vo_jiguan.mp3",
 						"sprite": "res://assets/art/pawn_blue_8dir.png",
 						"motion": "procedural",
 						"render_style": "hollow_knight",
@@ -280,6 +296,7 @@ const DEFS: Dictionary = {
 					"name": "药王",
 					"epithet": "悬壶济世，金针度人",
 					"icon": "res://assets/art/cultivator_yaowang_icon.png",
+					"voice": "res://assets/audio/voice/vo_yaowang.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -299,6 +316,7 @@ const DEFS: Dictionary = {
 					"name": "守财奴",
 					"epithet": "寸利必争，金山积垒",
 					"icon": "res://assets/art/cultivator_shoucainu_icon.png",
+					"voice": "res://assets/audio/voice/vo_shoucainu.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -320,6 +338,7 @@ const DEFS: Dictionary = {
 					"name": "嗜血魔修",
 					"epithet": "以痛为引，煞血滔天",
 					"icon": "res://assets/art/cultivator_shixue_icon.png",
+					"voice": "res://assets/audio/voice/vo_shixue.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -338,6 +357,7 @@ const DEFS: Dictionary = {
 					"name": "灵符子",
 					"epithet": "万符归宗，弹射无影",
 					"icon": "res://assets/art/cultivator_fuxiu_icon.png",
+					"voice": "res://assets/audio/voice/vo_fuxiu.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -356,6 +376,7 @@ const DEFS: Dictionary = {
 						"name": "霸王",
 						"epithet": "横扫千军，所向披靡",
 						"icon": "res://assets/art/cultivator_bawang_icon.png",
+						"voice": "res://assets/audio/voice/vo_bawang.mp3",
 						"sprite": "res://assets/art/pawn_blue_8dir.png",
 						"motion": "procedural",
 						"render_style": "hollow_knight",
@@ -374,6 +395,7 @@ const DEFS: Dictionary = {
 					"name": "绝尘",
 					"epithet": "一剑绝尘，万法无歇",
 					"icon": "res://assets/art/cultivator_juechen_icon.png",
+					"voice": "res://assets/audio/voice/vo_juechen.mp3",
 					"sprite": "res://assets/art/pawn_blue_8dir.png",
 					"motion": "procedural",
 					"render_style": "hollow_knight",
@@ -393,6 +415,7 @@ const DEFS: Dictionary = {
 						"name": "御兽师",
 						"epithet": "万灵来朝，兽伴同行",
 						"icon": "res://assets/art/cultivator_yushou_icon.png",
+						"voice": "res://assets/audio/voice/vo_yushou.mp3",
 						"sprite": "res://assets/art/cultivator_fuzhen_8dir.png",
 						"motion": "procedural",
 						"render_style": "hollow_knight",
@@ -413,6 +436,7 @@ const DEFS: Dictionary = {
 						"name": "苦行僧",
 						"epithet": "心如止水，金刚怒目",
 						"icon": "res://assets/art/cultivator_kuxingseng_icon.png",
+						"voice": "res://assets/audio/voice/vo_kuxingseng.mp3",
 						"sprite": "res://assets/art/pawn_blue_8dir.png",
 						"motion": "procedural",
 						"render_style": "hollow_knight",
@@ -436,6 +460,31 @@ const DEFS: Dictionary = {
 							"still_regen_bonus": 2.0,
 							"move_damage_penalty": -0.60,
 							"move_haste_penalty": 0.60,
+						},
+						"allowed_tags": [],
+						"locked_upgrades": [],
+					},
+					"sanxiu": {
+						"name": "散修",
+						"epithet": "无门无派，博采众长",
+						"icon": "res://assets/art/cultivator_sanxiu_icon.png",
+						"voice": "res://assets/audio/voice/vo_sanxiu.mp3",
+						"sprite": "res://assets/art/pawn_blue_8dir.png",
+						"motion": "procedural",
+						"render_style": "hollow_knight",
+						"start_equip": "",
+						"pros": [
+							"每种「只带 1 件」的器类，全伤害 +15%",
+							"六系各带 1 件时全伤害 +90%",
+						],
+						"cons": [
+							"每触发 1 条器类羁绊，全伤害 -20%",
+							"五行共鸣不受影响，照常享受",
+						],
+						"mods": {
+							"scattered_mode": 1.0,
+							"scattered_bonus_per_class": 0.15,
+							"scattered_penalty_per_synergy": -0.20,
 						},
 						"allowed_tags": [],
 						"locked_upgrades": [],
@@ -465,6 +514,7 @@ const ITEM_TAGS := {
 	"juechen": ["skill", "melee", "crit"],
 	"yushou": ["pet", "summon", "haste"],
 	"kuxingseng": ["still", "tank", "melee"],
+	"sanxiu": ["generic", "crit", "haste"],
 }
 
 static func item_tags_of(id: String) -> Array:
@@ -478,6 +528,10 @@ static func all_ids() -> Array:
 
 static func get_start_equip(id: String) -> String:
 	return String(get_def(id).get("start_equip", ""))
+
+## 选角台词音频（选中角色时播放一句，约 2~4 秒）；未配语音的角色返回空串。
+static func get_voice_path(id: String) -> String:
+	return String(get_def(id).get("voice", ""))
 
 static func get_synergy_skill_id(_id: String) -> String:
 	return ""

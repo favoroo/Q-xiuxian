@@ -13,6 +13,7 @@ extends RefCounted
 ## 渲染后端可能给出无效纹理，判据据此只断言「不崩、占位在、重试不放大」。
 
 const CAP_SIZE := 96
+const DETAIL_SIZE := 128
 ## catalog id → EnemyVisualConfig 视觉 id：赤雷/剑煞的渲染分支认 `_elite` 后缀
 ## （EnemyBase 运行时 id 同形，见 EnemyData.ID_PREFIXES）；直接用 catalog id 会落进
 ## get_config 的 `_` 兜底臂被画成 golem（画多大==判多大级别的形象撒谎）。
@@ -20,14 +21,17 @@ const VISUAL_ID := {"chilei": "chilei_elite", "jiansha": "jiansha_elite"}
 static var _cache: Dictionary = {}   ## eid(+#+elite) -> Texture2D | null（null 也缓存）
 static var _pending: Dictionary = {} ## 捕获中的 key：并发 await 同一张，不叠 SubViewport
 
-static func _key(eid: String, is_elite: bool) -> String:
-	return eid if not is_elite else eid + "#e"
+static func _key(eid: String, is_elite: bool, size: int = CAP_SIZE) -> String:
+	var k := eid if not is_elite else eid + "#e"
+	if size != CAP_SIZE:
+		k += "#s%d" % size
+	return k
 
 ## 异步捕一张：调用方 await。已缓存直接返回（含失败缓存）。
 ## 并发去重：同 key 捕获中（_pending）时轮询等兄弟任务落缓存（捕一张约 3 帧，
 ## 120 帧封顶防挂死），不叠 SubViewport。
-static func capture(eid: String, is_elite: bool = false) -> Texture2D:
-	var key := _key(eid, is_elite)
+static func capture(eid: String, is_elite: bool = false, size: int = CAP_SIZE) -> Texture2D:
+	var key := _key(eid, is_elite, size)
 	if _cache.has(key):
 		return _cache[key]
 	if _pending.has(key):
@@ -38,16 +42,16 @@ static func capture(eid: String, is_elite: bool = false) -> Texture2D:
 				break
 		return _cache.get(key)
 	_pending[key] = true
-	var result := await _capture_uncached(eid, is_elite)
+	var result := await _capture_uncached(eid, is_elite, size)
 	_pending.erase(key)
 	_cache[key] = result
 	return result
 
 ## 页重建前的同步查询：捕过才给图，没捕过给 null（调用方先铺占位再逐张异步补）
-static func peek(eid: String, is_elite: bool = false) -> Texture2D:
-	return _cache.get(_key(eid, is_elite))
+static func peek(eid: String, is_elite: bool = false, size: int = CAP_SIZE) -> Texture2D:
+	return _cache.get(_key(eid, is_elite, size))
 
-static func _capture_uncached(eid: String, is_elite: bool) -> Texture2D:
+static func _capture_uncached(eid: String, is_elite: bool, size: int = CAP_SIZE) -> Texture2D:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null or tree.root == null:
 		return null
@@ -57,7 +61,7 @@ static func _capture_uncached(eid: String, is_elite: bool) -> Texture2D:
 		return null
 	var host := Node2D.new()
 	var vp := SubViewport.new()
-	vp.size = Vector2i(CAP_SIZE, CAP_SIZE)
+	vp.size = Vector2i(size, size)
 	vp.transparent_bg = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	host.add_child(vp)
@@ -66,12 +70,15 @@ static func _capture_uncached(eid: String, is_elite: bool) -> Texture2D:
 	# 先换成视觉 id 再 setup：get_config 认 "chilei_elite"/"jiansha_elite"，
 	# 传裸 catalog id 会落 `_` 兜底被画成 golem
 	view.setup(String(VISUAL_ID.get(eid, eid)), is_elite, is_boss, false)
-	view.position = Vector2(CAP_SIZE, CAP_SIZE) * 0.5
-	# 魔君/精英体型是杂兵的数倍，96 见方装不下原尺寸 → 缩进画框（图鉴只要求认得出是谁）
+	view.position = Vector2(size, size) * 0.5
+	# 魔君/精英体型是杂兵的数倍，画框装不下原尺寸 → 缩进画框；按 size/CAP_SIZE 等比放缩保证画框占比稳定且矢量锐利
+	var scale_mul := float(size) / float(CAP_SIZE)
 	if is_boss:
-		view.scale = Vector2(0.55, 0.55)
+		view.scale = Vector2(0.55 * scale_mul, 0.55 * scale_mul)
 	elif is_elite:
-		view.scale = Vector2(0.8, 0.8)
+		view.scale = Vector2(0.8 * scale_mul, 0.8 * scale_mul)
+	elif scale_mul != 1.0:
+		view.scale = Vector2(scale_mul, scale_mul)
 	vp.add_child(view)
 	tree.root.add_child(host)
 	# 渲染在帧尾：等三帧让 UPDATE_ONCE 的绘制落进纹理

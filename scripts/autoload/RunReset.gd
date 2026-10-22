@@ -94,6 +94,9 @@ static func reset(gm: Node) -> void:
 	gm.still_regen_bonus = 0.0
 	gm.move_damage_penalty = 0.0
 	gm.move_haste_penalty = 0.0
+	gm.scattered_mode = 0.0
+	gm.scattered_bonus_per_class = 0.0
+	gm.scattered_penalty_per_synergy = 0.0
 	gm.total_damage_taken_count = 0
 	gm.total_hp_healed = 0.0
 	gm.max_concurrent_summons = 0

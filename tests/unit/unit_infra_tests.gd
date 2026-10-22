@@ -251,7 +251,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 28, "成就共配置 28 条（16 奖励型 + 12 纯荣誉型）")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 29, "成就共配置 29 条（17 奖励型 + 12 纯荣誉型）")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -658,6 +658,13 @@ func _test_skin_system() -> void:
 	_c.equals(String(skinned.cloak.get("cloak_style", "")), String(base.cloak.get("cloak_style", "")), "造型样式键保持角色本相")
 	_c.equals(skinned.palette.get("cloak_outer"), skinned.cloak["col_outer"], "派生色盘已同步")
 	_c.check(SkinData.apply_to_config(base, -1) == base, "非法皮肤序号原样返回")
+
+	# 3.5 炫彩皮肤（虹霓）：主题带 chroma 参数，apply 后配置可被渲染器消费；普通主题不沾
+	var chroma_cfg := SkinData.apply_to_config(base, 5)
+	_c.check(not chroma_cfg.chroma.is_empty(), "第 6 套皮肤为炫彩，chroma 参数已写入配置")
+	_c.check(float(chroma_cfg.chroma.get("cycle", 0.0)) > 0.0, "炫彩循环周期有效")
+	_c.check((chroma_cfg.chroma.get("hue_offsets", {}) as Dictionary).has("cloak_edge"), "炫彩含缘边相位偏移")
+	_c.check(SkinData.apply_to_config(base, 4).chroma.is_empty(), "普通换色皮肤不带炫彩参数")
 
 	# 4. 选择与落盘往返 + 锁定皮肤惰性回落
 	GameManager.cultivator_records = {"shiyue": {"runs": 4, "wins": 4}}

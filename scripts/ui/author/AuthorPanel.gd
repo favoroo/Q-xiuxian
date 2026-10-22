@@ -6,18 +6,29 @@ extends BaseModalDialog
 ## 四个分页：
 ##   ◆ 状态：人物等级 / 跳关 / 金币
 ##   ◆ 战斗：无敌 / 一击必杀 / 时间加速 / 直接胜利·失败
-##   ◆ 武器：全武器免费直购（点一次拿一件，满栏自动进背包）
-##   ◆ 道具：全道具免费直购（灵兽并入此页，避免再开一页挤窄屏）
+##   ◆ 武器：全武器图鉴式浏览（类型/五行筛选 + 卡面三签），点卡开详情窗、窗内选 1/2/3 星免费购买
+##   ◆ 道具：全道具 + 灵兽，点卡开详情窗、窗内免费购买
 ##
 ## 口径：
 ## - 打开即 `get_tree().paused = true`（继承 BaseModalDialog 的暂停式模态），关面板不主动解暂停：
 ##   战斗中它叠在 HUD 上，解暂停由玩家自己的暂停/继续路径负责；商店/悟道期间本来就在暂停。
 ##   为避免「战斗中关掉面板后整局卡住」，关闭时按打开前的暂停态还原。
+## - 所有条目「点卡 = 看详情」，只有详情窗里的购买键才真正发货（2026-10-22 用户口径：
+##   原先点一下直接买，容易点错；现在与图鉴一样先看信息再决定）。
 ## - 直购全部走 AuthorMode.grant，不扣金币；面板自带「金币 +1000 / +10000」供经济测试。
+## - 购买成功发 inventory_changed：商店开着时由 Main 转去 shop.refresh(false)，
+##   否则买完的东西要等下一波才出现在陈列行里（2026-10-22 用户报的 bug）。
 ## - 所有按钮都走 GameStyle.button（唯一取色入口 + 统一点击音）。
 
 const LEVEL_PRESETS: Array[int] = [1, 5, 10, 20, 30, 50]
 const WAVE_PRESETS: Array[int] = [1, 5, 10, 15, 20]
+## 条目卡宽与格缝（与 CodexCardFactory 同源）：列数按面板可用宽现算，
+## 窄屏（720）落 3 列、桌面（900 面板）落 5 列，绝不把整排顶出面板
+const CARD_W := CodexCardFactory.CARD_W
+const GRID_GAP := 8
+
+## 购买成功后发一次（kind = "weapon"/"item"/"pet"）：宿主据此刷新商店陈列行等只读视图
+signal inventory_changed(kind: String)
 
 var _was_paused_before_open: bool = false
 ## 关面板时是否强制保持暂停（直接胜利/失败后结算屏要靠树暂停冻结，不能被本面板解掉）
@@ -36,12 +47,15 @@ var _god_btn: Button
 var _one_hit_btn: Button
 var _speed_btn: Button
 
-# 直购页
-var _weapon_grid: GridContainer
+# 武器页：筛选状态（"" = 该行全部）与控件
+var weapon_class_filter: String = ""
+var weapon_element_filter: String = ""
+var _filter_chips: Dictionary = {}
+var _weapon_box: VBoxContainer
+
+# 道具页
 var _item_grid: GridContainer
 var _pet_grid: GridContainer
-var _star_btn: Button
-var _buy_hint_lbl: Label
 
 func _get_title_text() -> String:
 	return "作 者 模 式"
@@ -302,72 +316,225 @@ func _end_wave_now() -> void:
 	close()
 	GameManager.wave_spawner.end_wave()
 
-# ---------------- 分页 3：武器直购 ----------------
+# ---------------- 分页 3：武器 ----------------
 
+## 页结构：两行筛选 chips 钉在滚动区上方（选完流派只滚内容，筛选条不跑），
+## 下面是滚动网格。筛选口径与图鉴完全一致：类型 × 五行两条线独立、同时选中取交集。
 func _build_weapon_page(parent: Control) -> Control:
-	var scroll := _new_scroll(parent)
-	var box := _new_scroll_vbox(scroll)
+	var page := VBoxContainer.new()
+	page.name = "WeaponsPage"
+	page.add_theme_constant_override("separation", 6)
+	parent.add_child(page)
 
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	box.add_child(head)
-	head.add_child(_make_hint("点卡片免费获得一件（上阵满则自动进背包）。"))
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(spacer)
-	_star_btn = _make_button("星级：1 星", func(): _cycle_star(), 104)
-	head.add_child(_star_btn)
-	_buy_hint_lbl = _make_value_label("")
-	head.add_child(_buy_hint_lbl)
+	page.add_child(_build_filter_row("class", "类型", WeaponData.CLASSES))
+	page.add_child(_build_filter_row("element", "元素", WeaponData.ELEMENTS))
 
-	_weapon_grid = GridContainer.new()
-	_weapon_grid.columns = 7
-	_weapon_grid.add_theme_constant_override("h_separation", 6)
-	_weapon_grid.add_theme_constant_override("v_separation", 6)
-	box.add_child(_weapon_grid)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	GameStyle.scrollable(scroll)
+	page.add_child(scroll)
 
-	GameStyle.swipeable(scroll)
-	return scroll
+	_weapon_box = VBoxContainer.new()
+	_weapon_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_weapon_box.add_theme_constant_override("separation", 8)
+	scroll.add_child(_weapon_box)
+	return page
 
-func _cycle_star() -> void:
-	AuthorMode.grant_star = AuthorMode.grant_star % WeaponData.MAX_STAR + 1
-	if _star_btn != null:
-		_star_btn.text = "星级：%d 星" % AuthorMode.grant_star
+func _build_filter_row(group: String, group_label: String, tags: Array) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var g_lbl := Label.new()
+	g_lbl.text = group_label
+	GameStyle.label(g_lbl, 12, GameStyle.GREY)
+	row.add_child(g_lbl)
+	row.add_child(_make_filter_chip(group, "", "全部"))
+	for tag in tags:
+		row.add_child(_make_filter_chip(group, String(tag),
+			String(WeaponData.SYNERGIES.get(tag, {}).get("name", tag))))
+	return row
+
+func _make_filter_chip(group: String, tag: String, text: String) -> Label:
+	var chip_lbl := Label.new()
+	chip_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	chip_lbl.text = " %s " % text
+	chip_lbl.set_meta("filter_tag", tag)
+	chip_lbl.set_meta("filter_group", group)
+	# 两行各有一枚「全部」（tag 都是 ""），字典键按行分开存，否则后建的会覆盖前一枚
+	GameStyle.tap(chip_lbl, func() -> void: _on_filter_chip_tapped(group, tag))
+	_filter_chips[tag if tag != "" else "all_" + group] = chip_lbl
+	_restyle_filter_chips()
+	return chip_lbl
+
+## 点 chip：本行内切换；再点已选中的（含「全部」）即清空本行，另一行保持不动。
+func _on_filter_chip_tapped(group: String, tag: String) -> void:
+	var cur := weapon_class_filter if group == "class" else weapon_element_filter
+	var next := "" if String(tag) == cur else String(tag)
+	if group == "class":
+		weapon_class_filter = next
+	else:
+		weapon_element_filter = next
+	_restyle_filter_chips()
+	_rebuild_weapon_grid()
+
+## 选中主蓝底墨字、未选灰蓝底暗字，与图鉴筛选条同一套语言
+func _restyle_filter_chips() -> void:
+	for key in _filter_chips.keys():
+		var chip_lbl: Label = _filter_chips[key]
+		if not is_instance_valid(chip_lbl):
+			continue
+		var group := String(chip_lbl.get_meta("filter_group", "class"))
+		var cur := weapon_class_filter if group == "class" else weapon_element_filter
+		if String(chip_lbl.get_meta("filter_tag", "")) == cur:
+			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+			GameStyle.label(chip_lbl, 12, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
+		else:
+			chip_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
+			GameStyle.label(chip_lbl, 12, GameStyle.PAPER_DIM)
 
 func _rebuild_weapon_grid() -> void:
-	if _weapon_grid == null:
+	if _weapon_box == null:
 		return
-	for c in _weapon_grid.get_children():
+	for c in _weapon_box.get_children():
 		c.queue_free()
+	_weapon_box.add_child(_make_hint("点卡片查看详情，在弹窗里选 1 / 2 / 3 星免费获得（上阵满则自动进背包）。类型与元素两条筛选可同时选中，取交集。"))
+
+	var cls_tag := weapon_class_filter
+	var elem_tag := weapon_element_filter
+	if cls_tag == "" and elem_tag == "":
+		for elem in WeaponData.ELEMENTS:
+			_weapon_box.add_child(_make_group_header(
+				"── %s行武器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem)),
+				GameStyle.ELEMENT_COLORS.get(elem, GameStyle.PAPER)))
+			_weapon_box.add_child(_make_weapon_grid(func(wid: String) -> bool:
+				return String(elem) in WeaponData.tags_of(wid)))
+	else:
+		var keep := func(wid: String) -> bool:
+			var tags := WeaponData.tags_of(wid)
+			if cls_tag != "" and not (cls_tag in tags):
+				return false
+			if elem_tag != "" and not (elem_tag in tags):
+				return false
+			return true
+		var count := 0
+		for wid in WeaponData.DEFS.keys():
+			if WeaponData.DEFS[wid].has("tags") and bool(keep.call(String(wid))):
+				count += 1
+		var head_col: Color = GameStyle.GOLD
+		if elem_tag != "":
+			head_col = GameStyle.ELEMENT_COLORS.get(elem_tag, GameStyle.GOLD)
+		_weapon_box.add_child(_make_group_header("── %s · %d 把 ──" % [_filter_title(cls_tag, elem_tag), count], head_col))
+		if count == 0:
+			_weapon_box.add_child(CodexCardFactory.make_text_card("没有匹配的武器",
+				"「%s」里没有同时满足的武器。点上方「全部」放宽其中一条筛选。" % _filter_title(cls_tag, elem_tag),
+				_content_w() - 12.0))
+		else:
+			_weapon_box.add_child(_make_weapon_grid(keep))
+	# 卡是 PanelContainer（默认 STOP）：整页建完必须再降一遍，否则整页只能从缝隙里拖动
+	GameStyle.swipeable(_weapon_box)
+
+func _filter_title(cls_tag: String, elem_tag: String) -> String:
+	var parts: Array[String] = []
+	for tag in [cls_tag, elem_tag]:
+		var t := String(tag)
+		if t != "":
+			parts.append(String(WeaponData.SYNERGIES.get(t, {}).get("name", t)))
+	return " · ".join(parts)
+
+func _make_group_header(text: String, color: Color) -> Label:
+	var header := Label.new()
+	header.text = text
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(header, 13, color, 0, GameStyle.INK, true)
+	return header
+
+func _make_weapon_grid(keep: Callable) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.columns = _grid_cols()
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	for wid in WeaponData.DEFS.keys():
 		var def: Dictionary = WeaponData.DEFS[wid]
-		_weapon_grid.add_child(_make_grant_card(
-			String(def.get("icon", "")), String(def.get("name", wid)),
-			"weapon", String(wid)))
-	# 卡是 PanelContainer（默认 STOP）：重建后必须再降一遍，否则整页只能从缝隙里拖动
-	GameStyle.swipeable(_weapon_grid)
+		if not def.has("tags"):
+			continue
+		if not bool(keep.call(String(wid))):
+			continue
+		grid.add_child(_make_weapon_card(String(wid), def))
+	return grid
 
-# ---------------- 分页 4：道具 + 灵兽直购 ----------------
+## 武器卡：与图鉴同一张卡（三签 = 攻击方式 + 器类 + 五行，关键数值行），
+## 只是点按后弹的是「带购买键」的详情窗。
+func _make_weapon_card(wid: String, def: Dictionary) -> PanelContainer:
+	var stat_line := WeaponCodexBuilder.STAT_LINE_FMT % [
+		int(def.get("damage", 0)),
+		String.num(float(def.get("cooldown", 1.0)), 2),
+		int(def.get("price", 0)),
+	]
+	var card := CodexCardFactory.make_entry_card(
+		String(def.get("icon", "")), String(def.get("name", wid)),
+		"", GameStyle.PAPER_DIM,
+		func(anchor: Control): _open_weapon_tip(wid, anchor),
+		stat_line, WeaponCodexBuilder.card_chips(wid, def))
+	card.set_meta("wid", wid)
+	# 元素件 = 图标框那一圈暖橙红描边（图鉴与商店/属性面板同一口径）
+	var icon_tex := card.get_meta("icon_tex") as TextureRect
+	if icon_tex != null and GameStyle.is_elemental(wid):
+		var icon_box := icon_tex.get_parent() as Control
+		if icon_box != null:
+			icon_box.add_theme_stylebox_override("panel",
+					GameStyle.outlined_panel(GameStyle.INK, GameStyle.ELEMENT, 1, 0.0))
+	return card
+
+func _open_weapon_tip(wid: String, anchor: Control) -> void:
+	var payload := CodexTipData.weapon_payload(wid, "作者模式：免费获得，不扣金币，也不写存档")
+	if payload.is_empty():
+		return
+	# 三个星级各一颗键：点哪颗就按哪一星发货（2026-10-22 用户口径）
+	payload["actions"] = [[
+		{
+			"text": "买 1 星",
+			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
+			"callback": func() -> void: _buy_weapon(wid, 1),
+		},
+		{
+			"text": "买 2 星",
+			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
+			"callback": func() -> void: _buy_weapon(wid, 2),
+		},
+		{
+			"text": "买 3 星",
+			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
+			"callback": func() -> void: _buy_weapon(wid, 3),
+		},
+	]]
+	DetailTip.show_over(self, anchor, payload)
+
+func _buy_weapon(wid: String, star: int) -> void:
+	_grant("weapon", wid, star)
+
+# ---------------- 分页 4：道具 + 灵兽 ----------------
 
 func _build_item_page(parent: Control) -> Control:
 	var scroll := _new_scroll(parent)
 	var box := _new_scroll_vbox(scroll)
 
-	box.add_child(_make_section_title("道具（免费直购）", GameStyle.GOLD))
-	box.add_child(_make_hint("点一次拿一件，立即生效。unique 道具本局限购一件，重复点会被拒绝。"))
+	box.add_child(_make_section_title("道具", GameStyle.GOLD))
+	box.add_child(_make_hint("点卡片查看效果与入手价，在弹窗里免费购买。部分道具本局限购一件。"))
 	_item_grid = GridContainer.new()
-	_item_grid.columns = 7
-	_item_grid.add_theme_constant_override("h_separation", 6)
-	_item_grid.add_theme_constant_override("v_separation", 6)
+	_item_grid.columns = _grid_cols()
+	_item_grid.add_theme_constant_override("h_separation", 8)
+	_item_grid.add_theme_constant_override("v_separation", 8)
 	box.add_child(_item_grid)
 
 	box.add_child(_make_separator())
-	box.add_child(_make_section_title("灵兽（免费直购）", GameStyle.JADE))
-	box.add_child(_make_hint("受灵兽栏上限约束；栏满先卖掉再点。"))
+	box.add_child(_make_section_title("灵兽", GameStyle.JADE))
+	box.add_child(_make_hint("点卡片查看助战技能，在弹窗里免费购买。受灵兽栏上限约束，栏满先卖掉再买。"))
 	_pet_grid = GridContainer.new()
-	_pet_grid.columns = 7
-	_pet_grid.add_theme_constant_override("h_separation", 6)
-	_pet_grid.add_theme_constant_override("v_separation", 6)
+	_pet_grid.columns = _grid_cols()
+	_pet_grid.add_theme_constant_override("h_separation", 8)
+	_pet_grid.add_theme_constant_override("v_separation", 8)
 	box.add_child(_pet_grid)
 
 	GameStyle.swipeable(scroll)
@@ -380,9 +547,15 @@ func _rebuild_item_grid() -> void:
 		c.queue_free()
 	for iid in ItemData.DEFS.keys():
 		var def: Dictionary = ItemData.DEFS[iid]
-		_item_grid.add_child(_make_grant_card(
+		var tier_num := int(def.get("tier", 1))
+		var tier_col := ItemData.tier_color(tier_num)
+		var card := CodexCardFactory.make_entry_card(
 			String(def.get("icon", "")), String(def.get("name", iid)),
-			"item", String(iid)))
+			"", GameStyle.PAPER_DIM,
+			func(anchor: Control): _open_item_tip(iid, anchor),
+			"", [[ItemData.tier_label(tier_num), tier_col, GameStyle.on_face_text(tier_col)]])
+		card.set_meta("iid", iid)
+		_item_grid.add_child(card)
 	GameStyle.swipeable(_item_grid)
 
 func _rebuild_pet_grid() -> void:
@@ -392,79 +565,69 @@ func _rebuild_pet_grid() -> void:
 		c.queue_free()
 	for pid in PetData.DEFS.keys():
 		var def: Dictionary = PetData.DEFS[pid]
-		# 灵兽没有位图图标（战斗里是程序化光灵）：用它的主体色画一颗圆点占位
-		_pet_grid.add_child(_make_grant_card(
-			"", String(def.get("name", pid)), "pet", String(pid),
-			def.get("color", GameStyle.GOLD)))
+		var p_col: Color = def.get("color", GameStyle.GOLD)
+		var role_name := String(PetData.ROLES.get(String(def.get("role", "attack")), "助战"))
+		var card := CodexCardFactory.make_entry_card(
+			"", String(def.get("name", pid)),
+			"", GameStyle.PAPER_DIM,
+			func(anchor: Control): _open_pet_tip(pid, anchor),
+			"%d金币 · %.1f秒" % [int(def.get("base_price", 0)), float(def.get("base_cooldown", 1.0))],
+			[[role_name, p_col, GameStyle.on_face_text(p_col)]],
+			p_col)
+		card.set_meta("pid", pid)
+		_pet_grid.add_child(card)
 	GameStyle.swipeable(_pet_grid)
 
-## 直购小卡：图标 + 名字 + 品阶/价格角标。点按即 grant（免费）。
-## icon 为空时用 tint 画一颗纯色圆点（灵兽没有位图图标）。
-func _make_grant_card(icon: String, name: String, kind: String, id: String,
-		tint: Color = Color(-1, -1, -1, -1)) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(112, 0)
-	var sb := GameStyle.block(GameStyle.NAVY2, GameStyle.SLANT_PLATE, Vector2(2, 3))
-	sb.content_margin_left = 6.0
-	sb.content_margin_right = 6.0
-	sb.content_margin_top = 6.0
-	sb.content_margin_bottom = 6.0
-	card.add_theme_stylebox_override("panel", sb)
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
+func _open_item_tip(iid: String, anchor: Control) -> void:
+	var payload := CodexTipData.item_payload(iid, "作者模式：免费获得，不扣金币，也不写存档")
+	if payload.is_empty():
+		return
+	payload["actions"] = [[{
+		"text": "免费获得",
+		"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
+		"callback": func() -> void: _grant("item", iid),
+	}]]
+	DetailTip.show_over(self, anchor, payload)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	card.add_child(vbox)
+func _open_pet_tip(pid: String, anchor: Control) -> void:
+	var payload := CodexTipData.pet_payload(pid, "作者模式：免费获得，不扣金币，也不写存档")
+	if payload.is_empty():
+		return
+	payload["actions"] = [[{
+		"text": "免费获得",
+		"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
+		"callback": func() -> void: _grant("pet", pid),
+	}]]
+	DetailTip.show_over(self, anchor, payload)
 
-	var icon_center := CenterContainer.new()
-	var icon_box := PanelContainer.new()
-	icon_box.custom_minimum_size = Vector2(40, 40)
-	icon_box.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
-	if icon.is_empty() and tint.a > 0.0:
-		var dot := Control.new()
-		dot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		dot.draw.connect(func() -> void:
-			var c := dot.size * 0.5
-			dot.draw_circle(c, minf(dot.size.x, dot.size.y) * 0.30, tint)
-			dot.draw_circle(c, minf(dot.size.x, dot.size.y) * 0.15, Color(1, 1, 1, 0.55))
-		)
-		icon_box.add_child(dot)
-	else:
-		var tex := GameStyle.icon_texture_rect(icon, Vector2(34, 34))
-		tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		tex.offset_left = 3
-		tex.offset_top = 3
-		tex.offset_right = -3
-		tex.offset_bottom = -3
-		icon_box.add_child(tex)
-	icon_center.add_child(icon_box)
-	vbox.add_child(icon_center)
-
-	var name_lbl := Label.new()
-	name_lbl.text = name
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	GameStyle.label(name_lbl, 11, GameStyle.PAPER, 0, GameStyle.INK, true)
-	vbox.add_child(name_lbl)
-
-	GameStyle.tap(card, func() -> void: _grant(kind, id))
-	GameStyle.hotzone(card)
-	return card
-
-func _grant(kind: String, id: String) -> void:
-	var ok := AuthorMode.grant(GameManager, kind, id, AuthorMode.grant_star)
+## 发货：成功才发 inventory_changed（商店开着时宿主据此重铺陈列行）
+func _grant(kind: String, id: String, star: int = 1) -> void:
+	var ok := AuthorMode.grant(GameManager, kind, id, star)
 	if ok:
-		if _buy_hint_lbl != null:
-			_buy_hint_lbl.text = "已获得"
-		AudioManager.play_sfx("shop_buy", 1.0)
+		inventory_changed.emit(kind)
 	else:
-		if _buy_hint_lbl != null:
-			_buy_hint_lbl.text = "栏位已满或限购"
 		AudioManager.play_sfx("ui_error", 0.9)
+		match kind:
+			"weapon":
+				GameManager.announcement_triggered.emit("上阵与背包都满了")
+			"item":
+				GameManager.announcement_triggered.emit("这件道具本局限购一件")
+			"pet":
+				GameManager.announcement_triggered.emit("灵兽栏已满或已持有")
 
 # ---------------- 通用小件 ----------------
+
+## 面板内容可用宽：面板宽（随屏收窄）− 面板内边距 36 − 内容面板内边距 28。
+## 折行文案必须按这个宽度预切，写死 720 在 720 宽屏上会把面板顶宽。
+func _content_w() -> float:
+	var vp := get_viewport_rect().size
+	if vp.x <= 0.0:
+		vp = Vector2(960, 540)
+	return maxf(240.0, minf(900.0, vp.x - 40.0) - 64.0)
+
+## 网格列数：内容宽内摆得下几张 148 卡就几列（至少 2 列）
+func _grid_cols() -> int:
+	return maxi(2, int(floor((_content_w() + GRID_GAP) / (CARD_W + GRID_GAP))))
 
 func _new_scroll(parent: Control) -> ScrollContainer:
 	var scroll := ScrollContainer.new()
@@ -490,7 +653,7 @@ func _make_section_title(text: String, color: Color) -> Label:
 
 func _make_hint(text: String) -> Label:
 	var lbl := Label.new()
-	lbl.text = GameStyle.wrap_cjk(text, GameStyle.body_font(), 11, 720.0)
+	lbl.text = GameStyle.wrap_cjk(text, GameStyle.body_font(), 11, _content_w() - 12.0)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return lbl

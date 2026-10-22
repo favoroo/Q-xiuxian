@@ -1210,7 +1210,10 @@ func _update_weapon_targets() -> void:
 			var group: Array = _target_groups_buf[t_idx]
 			var group_size := group.size()
 			var pos_in_group := group.find(i)
-			w.spread_angle = (float(pos_in_group) - float(group_size - 1) * 0.5) * deg_to_rad(24.0)
+			## 共享目标扇形（2026-10-22 24°→40°）：同打一只怪的多把武器原先只错开 24°，
+			## 轨道方位与挥砍朝向挤成一列、像同一个动作复制了几份；拉宽到 40° 后呈扇面包抄，
+			## 每把武器有自己的迎敌方位，多武器才读得出「各自独立作战」。
+			w.spread_angle = (float(pos_in_group) - float(group_size - 1) * 0.5) * deg_to_rad(40.0)
 			if not w.is_attacking:
 				w.current_target = _candidate_targets_buf[t_idx]
 		else:
@@ -1264,6 +1267,7 @@ func _process_sun_orbs(delta: float) -> void:
 
 	var range_mult: float = GameManager.attack_range_mult * GameManager.synergy_range_mult
 	var base_radius: float = SunOrb.ORBIT_RADIUS * range_mult
+	_orb_breath_t += delta
 	var min_radius: float = SunOrb.MIN_ORBIT_RADIUS
 	var max_reach: float = 175.0
 	var max_star: int = 1
@@ -1292,15 +1296,19 @@ func _process_sun_orbs(delta: float) -> void:
 	var in_combat: bool = bool(orbit_res.get("in_combat", false))
 	var target_radii: Array = orbit_res.get("radii", [])
 
-	var angular_speed: float = GameBalance.spirit_orbit_angular_speed(
-		GameBalance.SPIRIT_BASE_ANGULAR_SPEED,
+	var angular_speed: float = GameBalance.spirit_orbit_angular_speed(		GameBalance.SPIRIT_BASE_ANGULAR_SPEED,
 		GameManager.attack_speed_mult,
 		GameManager.synergy_haste_mult,
 		in_combat,
 		max_star,
 		count
 	) * (1.0 + GameManager.item_hook_sum("drone_spin_speed"))
-	sun_orb_angle += delta * angular_speed
+	# 公转节奏有机化（2026-10-22）：原先恒定角速度 = 完美的匀速圆周，读起来像机械齿轮。
+	# 给一个极慢的正弦起伏（±22%，周期约 9s）：灵珠绕行会有"缓一下、快一下"的呼吸感。
+	# 只调视觉节奏，不碰 compute_spirit_orbit 的半径/扑击（那是判定同源），
+	# 角速度起伏在既有 contact duty 余量内，接触判定次数不变。
+	var orbit_breath: float = 1.0 + ORB_SPEED_BREATH_AMP * sin(_orb_breath_t * ORB_SPEED_BREATH_FREQ + _orb_breath_phase)
+	sun_orb_angle += delta * angular_speed * orbit_breath
 
 	for i in range(count):
 		var orb := _orbs_buf[i]
@@ -1317,6 +1325,12 @@ func _process_sun_orbs(delta: float) -> void:
 ## 仍逐帧跑（吃快照）；与武器索敌同款待遇 —— 敌人入圈最多延迟 100ms 被扑击，肉眼无感
 const ORB_SCAN_INTERVAL := 0.1
 var _orb_scan_phase: float = 0.05   ## 初相偏移：与武器索敌的 10Hz 错开，避免同帧叠加物理查询
+
+## 御灵公转呼吸（2026-10-22）：恒定角速度的匀速圆周读起来机械，给 ±22% 的极慢起伏。
+const ORB_SPEED_BREATH_AMP := 0.22
+const ORB_SPEED_BREATH_FREQ := 0.7   ## rad/s（周期约 9s）
+var _orb_breath_t: float = 0.0
+var _orb_breath_phase: float = randf() * TAU   ## 随机初相：与武器待机呼吸一样，别让每局节奏完全一致
 
 ## 御灵感知圈敌人快照（原 _process_sun_orbs 每帧段原样搬移，唯一变化是改由节流器调用）
 func _scan_orb_enemies(eff_max_reach: float) -> void:

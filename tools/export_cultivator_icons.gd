@@ -24,13 +24,24 @@ const CULTIVATORS := [
 		"juechen",
 		"yushou",
 		"kuxingseng",
+		"sanxiu",
 	]
 
 func _ready() -> void:
-	_export_all_icons()
+	# 支持只重导指定角色（新增角色时不必把 21 张全刷一遍）：
+	#   Godot --path . res://tools/ExportCultivatorIcons.tscn -- sanxiu
+	# 无参数 = 全量导出。必须真实渲染（禁 headless），否则 SubViewport 取到空图。
+	var only: PackedStringArray = OS.get_cmdline_user_args()
+	var targets: Array = []
+	if only.size() > 0:
+		for cid in only:
+			targets.append(String(cid))
+	else:
+		targets = CULTIVATORS.duplicate()
+	_export_all_icons(targets)
 
-func _export_all_icons() -> void:
-	for cid in CULTIVATORS:
+func _export_all_icons(targets: Array) -> void:
+	for cid in targets:
 		var svp := SubViewport.new()
 		svp.size = Vector2i(96, 96)
 		svp.transparent_bg = true

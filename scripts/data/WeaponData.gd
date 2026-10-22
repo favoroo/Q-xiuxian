@@ -126,12 +126,12 @@ const DEFS: Dictionary = {
 					},
 
 				# ==================== 木系 (Wood: 生机·回复·剧毒) ====================
-				"qingmu_tengbian": {
-					"name": "藤鞭", "behavior": Behavior.SWEEP,
-					"sfx": "whoosh_heavy", "sfx_impact": "impact_crack",
-					# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（原群伤带 18~26 让位给安全远程）
-					"damage": 26.0, "cooldown": 1.40, "range": 119.0,
-					"knockback": 340.0,
+					"qingmu_tengbian": {
+						"name": "藤鞭", "behavior": Behavior.SWEEP,
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_crack",
+						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：轻灵软鞭 1.15s 疾扫）
+						"damage": 23.0, "cooldown": 1.15, "range": 119.0,
+						"knockback": 340.0,
 					"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
 					"tip": Vector2(22, 0), "shape": "whip", "upright": true,
 					"desc": "横扫前方大片敌群并附带中毒，受近战与元素伤害加成", "tag": "近战·横扫·木",
@@ -179,12 +179,12 @@ const DEFS: Dictionary = {
 				},
 
 				# ==================== 水系 (Water: 极寒·缓速·迅捷) ====================
-						"bajiao_fan": {
-							"name": "风扇", "behavior": Behavior.SWEEP,
-							"sfx": "fan_gust", "sfx_impact": "impact_crack",
-							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-							"damage": 37.0, "cooldown": 1.40, "range": 119.0,
-							"knockback": 520.0,
+							"bajiao_fan": {
+								"name": "风扇", "behavior": Behavior.SWEEP,
+								"sfx": "fan_gust", "sfx_impact": "impact_crack",
+								# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：风刃轻挥 1.30s）
+								"damage": 35.0, "cooldown": 1.30, "range": 119.0,
+								"knockback": 520.0,
 							"price": 26, "icon": "res://assets/art/weapon_fan.png",
 							"tip": Vector2(0, -15), "shape": "fan",
 							"desc": "横扫扇出寒冰风刃减速敌群，受近战伤害与移速加成", "tag": "近战·横扫·水",
@@ -216,11 +216,12 @@ const DEFS: Dictionary = {
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
 				},
-				"bihai_chaoyindi": {
-					"name": "音笛", "behavior": Behavior.BURST,
-					"sfx": "flute_wave", "sfx_impact": "flute_wave",
-					"damage": 31.0, "cooldown": 1.40, "range": 255.0,
-					"knockback": 320.0,
+					"bihai_chaoyindi": {
+						"name": "音笛", "behavior": Behavior.BURST,
+						"sfx": "flute_wave", "sfx_impact": "flute_wave",
+						# 2026-10-22 攻速分化：笛音回旋连绵 1.15s 轻快回响
+						"damage": 25.0, "cooldown": 1.15, "range": 255.0,
+						"knockback": 320.0,
 					"price": 44, "icon": "res://assets/art/weapon_flute.png",
 					"tip": Vector2(20, 0), "shape": "flute", "upright": true,
 					"desc": "音波震荡大范围强减速，受元素伤害与移速加成", "tag": "元素·雷法·水",
@@ -259,11 +260,12 @@ const DEFS: Dictionary = {
 					"tags": ["sword", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "range_bonus": 25.0},
 				},
-					"fentian_baodeng": {
-						"name": "天灯", "behavior": Behavior.BURST,
-						"sfx": "whoosh_heavy", "sfx_impact": "flame_jet",
-						"damage": 20.0, "cooldown": 1.45, "range": 265.0,
-						"knockback": 200.0,
+						"fentian_baodeng": {
+							"name": "天灯", "behavior": Behavior.BURST,
+							"sfx": "whoosh_heavy", "sfx_impact": "flame_jet",
+							# 2026-10-22 攻速分化：宝灯祭空 1.65s 沉稳引漫天火雨
+							"damage": 22.0, "cooldown": 1.65, "range": 265.0,
+							"knockback": 200.0,
 						"price": 40, "icon": "res://assets/art/weapon_fire_lantern.png",
 						"tip": Vector2(22, 0), "shape": "lantern", "upright": true,
 						"desc": "降下火雨轰击区域并点燃火海，受元素伤害加成", "tag": "元素·雷法·火",
@@ -287,11 +289,12 @@ const DEFS: Dictionary = {
 					},
 
 					# ==================== 土系 (Earth: 厚重·护甲·震退) ====================
-					"wulei_paizi": {
-						"name": "雷牌", "behavior": Behavior.BURST,
-						"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
-						"damage": 35.0, "cooldown": 1.50, "range": 260.0,
-						"knockback": 280.0,
+						"wulei_paizi": {
+							"name": "雷牌", "behavior": Behavior.BURST,
+							"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
+							# 2026-10-22 攻速分化：五雷符牌 1.60s 庄严召雷
+							"damage": 37.0, "cooldown": 1.60, "range": 260.0,
+							"knockback": 280.0,
 						"price": 40, "icon": "res://assets/art/weapon_thunder.png",
 						"tip": Vector2(22, 0), "shape": "tablet", "upright": true,
 						"desc": "落雷轰击区域大范围击退，受元素伤害与护甲加成", "tag": "元素·雷法·土",
@@ -300,11 +303,12 @@ const DEFS: Dictionary = {
 						"tags": ["thunder", "earth"],
 						"stat_scalings": {"elemental_damage": 1.2, "armor": 2.0},
 					},
-					"fantian_yin": {
-						"name": "巨印", "behavior": Behavior.BURST,
-						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						"damage": 38.0, "cooldown": 1.55, "range": 250.0,
-						"knockback": 360.0,
+						"fantian_yin": {
+							"name": "巨印", "behavior": Behavior.BURST,
+							"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+							# 2026-10-22 攻速分化：番天巨印 1.85s 极沉轰砸，地动山摇
+							"damage": 45.0, "cooldown": 1.85, "range": 250.0,
+							"knockback": 360.0,
 						"price": 42, "icon": "res://assets/art/weapon_earth_seal.png",
 						"tip": Vector2(20, 0), "shape": "seal", "upright": true,
 						"desc": "巨印从天砸下，受元素伤害与护甲加成", "tag": "元素·横扫·土",
@@ -313,11 +317,12 @@ const DEFS: Dictionary = {
 						"tags": ["wide", "earth"],
 						"stat_scalings": {"elemental_damage": 1.0, "armor": 3.5},
 					},
-						"hunyuan_zhong": {
-							"name": "古钟", "behavior": Behavior.DRONE,
-							"sfx": "orb_hit",
-							"damage": 28.0, "cooldown": 0.58, "range": 205.0,
-							"knockback": 340.0,
+							"hunyuan_zhong": {
+								"name": "古钟", "behavior": Behavior.DRONE,
+								"sfx": "orb_hit",
+								# 2026-10-22 攻速分化：混元古钟沉稳厚重 0.65s 撼地撞击
+								"damage": 31.0, "cooldown": 0.65, "range": 205.0,
+								"knockback": 340.0,
 							"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
 							"desc": "环绕周身撞击击退敌群，受召唤伤害与最大生命加成", "tag": "召唤·环绕·土",
 							"tags": ["spirit", "earth"],
@@ -386,12 +391,12 @@ const DEFS: Dictionary = {
 					"tags": ["talisman", "earth"],
 					"stat_scalings": {"ranged_damage": 0.8, "armor": 2.5},
 				},
-					"jinjiao_jian": {
-						"name": "金蛟剪", "behavior": Behavior.SWEEP,
-						"sfx": "whoosh_heavy", "sfx_impact": "impact_blade",
-						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-						"damage": 38.0, "cooldown": 1.40, "range": 128.0,
-						"knockback": 390.0,
+						"jinjiao_jian": {
+							"name": "金蛟剪", "behavior": Behavior.SWEEP,
+							"sfx": "whoosh_heavy", "sfx_impact": "impact_blade",
+							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：巨剪开合 1.50s 重击）
+							"damage": 41.0, "cooldown": 1.50, "range": 128.0,
+							"knockback": 390.0,
 						"price": 38, "icon": "res://assets/art/weapon_jinjiao_jian.png",
 						"tip": Vector2(22, 0), "shape": "shears",
 						"desc": "横扫金蛟大剪剪开敌阵，受近战伤害与暴击率加成", "tag": "近战·横扫·金",
@@ -424,11 +429,12 @@ const DEFS: Dictionary = {
 					"tags": ["thunder", "metal"],
 					"stat_scalings": {"elemental_damage": 1.2, "crit_rate": 30.0},
 				},
-				"chunlei_gu": {
-					"name": "春雷鼓", "behavior": Behavior.BURST,
-					"sfx": "drum_boom", "sfx_impact": "drum_boom",
-					"damage": 24.0, "cooldown": 1.4, "range": 250.0,
-					"knockback": 200.0,
+					"chunlei_gu": {
+						"name": "春雷鼓", "behavior": Behavior.BURST,
+						"sfx": "drum_boom", "sfx_impact": "drum_boom",
+						# 2026-10-22 攻速分化：春雷阵阵鼓点 1.25s 连绵回响
+						"damage": 22.0, "cooldown": 1.25, "range": 250.0,
+						"knockback": 200.0,
 					"price": 44, "icon": "res://assets/art/weapon_chunlei_gu.png",
 					"tip": Vector2(22, 0), "shape": "drum", "upright": true,
 					"desc": "春雷滚滚落点范围叠毒，受元素伤害与生命回复加成", "tag": "元素·雷法·木",
@@ -438,21 +444,23 @@ const DEFS: Dictionary = {
 					"tags": ["thunder", "wood"],
 					"stat_scalings": {"elemental_damage": 1.0, "hp_regen": 4.0},
 				},
-					"haojin_lun": {
-						"name": "昊金轮", "behavior": Behavior.DRONE,
-						"sfx": "orb_hit",
-						"damage": 22.0, "cooldown": 0.45, "range": 195.0,
-						"knockback": 200.0,
+						"haojin_lun": {
+							"name": "昊金轮", "behavior": Behavior.DRONE,
+							"sfx": "orb_hit",
+							# 2026-10-22 攻速分化：金轮疾转切割 0.40s
+							"damage": 20.0, "cooldown": 0.40, "range": 195.0,
+							"knockback": 200.0,
 						"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
 						"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "召唤·环绕·金",
 						"tags": ["spirit", "metal"],
 						"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 					},
-					"lihuo_ya": {
-						"name": "离火鸦", "behavior": Behavior.DRONE,
-						"sfx": "drone_flutter",
-						"damage": 19.0, "cooldown": 0.50, "range": 195.0,
-						"knockback": 150.0,
+						"lihuo_ya": {
+							"name": "离火鸦", "behavior": Behavior.DRONE,
+							"sfx": "drone_flutter",
+							# 2026-10-22 攻速分化：火鸦展翅蓄焰 0.55s 盘旋扑咬
+							"damage": 21.0, "cooldown": 0.55, "range": 195.0,
+							"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
 						"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "召唤·环绕·火",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
@@ -473,12 +481,12 @@ const DEFS: Dictionary = {
 					"tags": ["sword", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
 				},
-					"jubao_chi": {
-						"name": "聚宝金尺", "behavior": Behavior.SWEEP,
-						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-						"damage": 36.0, "cooldown": 1.35, "range": 114.0,
-						"knockback": 340.0,
+						"jubao_chi": {
+							"name": "聚宝金尺", "behavior": Behavior.SWEEP,
+							"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：标准量天尺 1.40s）
+							"damage": 37.0, "cooldown": 1.40, "range": 114.0,
+							"knockback": 340.0,
 						"price": 30, "icon": "res://assets/art/weapon_jubao_chi.png",
 						"tip": Vector2(22, -10), "shape": "ruler",
 						"desc": "横扫财气金尺越旺打得越狠，受近战伤害与收益加成", "tag": "近战·横扫·金",
@@ -499,12 +507,12 @@ const DEFS: Dictionary = {
 						"tags": ["talisman", "wood"],
 						"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.6},
 					},
-					"benlang_chui": {
-						"name": "崩浪锤", "behavior": Behavior.SWEEP,
-						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-						"damage": 42.0, "cooldown": 1.55, "range": 119.0,
-						"knockback": 680.0,
+						"benlang_chui": {
+							"name": "崩浪锤", "behavior": Behavior.SWEEP,
+							"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：千钧重锤 1.75s 沉重破阵）
+							"damage": 47.0, "cooldown": 1.75, "range": 119.0,
+							"knockback": 680.0,
 						"price": 34, "icon": "res://assets/art/weapon_benlang_chui.png",
 						"tip": Vector2(22, 14), "shape": "hammer", "upright": true,
 						"desc": "横扫崩浪重锤击飞敌群并冰缓，受近战伤害与移速加成", "tag": "近战·横扫·水",
@@ -524,11 +532,12 @@ const DEFS: Dictionary = {
 						"tags": ["sword", "earth"],
 						"stat_scalings": {"melee_damage": 1.0, "armor": 3.5},
 					},
-						"xuanwu_pei": {
-							"name": "玄武佩", "behavior": Behavior.DRONE,
-							"sfx": "drone_chime",
-							"damage": 28.0, "cooldown": 0.60, "range": 200.0,
-							"knockback": 420.0,
+							"xuanwu_pei": {
+								"name": "玄武佩", "behavior": Behavior.DRONE,
+								"sfx": "drone_chime",
+								# 2026-10-22 攻速分化：玄武重佩镇御万方 0.75s 沉重震击
+								"damage": 35.0, "cooldown": 0.75, "range": 200.0,
+								"knockback": 420.0,
 							"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
 							"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "召唤·环绕·土",
 							"tags": ["spirit", "earth"],
@@ -744,64 +753,70 @@ const DEFS: Dictionary = {
 				# tip 由 tools/fit_weapon_icon.py 实测回填。
 
 				# ---- 御灵 6 把（DRONE）：每五行交叉补到 2~3 把 ----
-				"jinming_ling": {
-					"name": "金鸣铃", "behavior": Behavior.DRONE,
-					"sfx": "drone_chime",
-					"damage": 22.0, "cooldown": 0.47, "range": 180.0,
-					"knockback": 210.0,
+					"jinming_ling": {
+						"name": "金鸣铃", "behavior": Behavior.DRONE,
+						"sfx": "drone_chime",
+						# 2026-10-22 攻速分化：金铃清脆震鸣 0.46s
+						"damage": 22.0, "cooldown": 0.46, "range": 180.0,
+						"knockback": 210.0,
 					"price": 42, "icon": "res://assets/art/weapon_jinming_ling.png",
 					"desc": "金铃环绕震鸣切金，受召唤伤害与暴击率加成", "tag": "召唤·环绕·金",
 					"tags": ["spirit", "metal"],
 					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 				},
-				"muling_ou": {
-					"name": "木灵偶", "behavior": Behavior.DRONE,
-					"sfx": "drone_flutter",
-					"damage": 24.0, "cooldown": 0.50, "range": 185.0,
-					"knockback": 180.0,
+					"muling_ou": {
+						"name": "木灵偶", "behavior": Behavior.DRONE,
+						"sfx": "drone_flutter",
+						# 2026-10-22 攻速分化：木偶人步法 0.52s 守御
+						"damage": 25.0, "cooldown": 0.52, "range": 185.0,
+						"knockback": 180.0,
 					"price": 42, "icon": "res://assets/art/weapon_muling_ou.png",
 					"desc": "木偶人环绕护卫生生不息，受召唤伤害与生命回复加成", "tag": "召唤·环绕·木",
 					"tags": ["spirit", "wood"],
 					"stat_scalings": {"engineering_damage": 1.0, "hp_regen": 4.0},
 				},
-				"bingpo_zhu": {
-					"name": "冰魄珠", "behavior": Behavior.DRONE,
-					"sfx": "drone_chime",
-					"damage": 23.0, "cooldown": 0.48, "range": 185.0,
-					"knockback": 190.0,
+					"bingpo_zhu": {
+						"name": "冰魄珠", "behavior": Behavior.DRONE,
+						"sfx": "drone_chime",
+						# 2026-10-22 攻速分化：冰魄凝晶宝珠 0.50s 护体
+						"damage": 24.0, "cooldown": 0.50, "range": 185.0,
+						"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_bingpo_zhu.png",
 					"desc": "冰魄宝珠环绕冻缓来敌，受召唤伤害与攻击间隔加成", "tag": "召唤·环绕·水",
 					"proc_chill": 0.40, "chill_dur": 2.5,
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
 				},
-				"chiyan_ying": {
-					"name": "赤炎萤", "behavior": Behavior.DRONE,
-					"sfx": "drone_flutter",
-					"damage": 18.0, "cooldown": 0.42, "range": 180.0,
-					"knockback": 150.0,
+					"chiyan_ying": {
+						"name": "赤炎萤", "behavior": Behavior.DRONE,
+						"sfx": "drone_flutter",
+						# 2026-10-22 攻速分化：火萤蜂鸣高速穿刺 0.36s 疾舞
+						"damage": 16.0, "cooldown": 0.36, "range": 180.0,
+						"knockback": 150.0,
 					"price": 42, "icon": "res://assets/art/weapon_chiyan_ying.png",
 					"desc": "火萤群环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "召唤·环绕·火",
 					"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
 					"tags": ["spirit", "fire"],
 					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
 				},
-					"tuling_shi": {
-						"name": "土灵石", "behavior": Behavior.DRONE,
-						"sfx": "orb_hit",
-						"damage": 28.0, "cooldown": 0.58, "range": 185.0,
-						"knockback": 330.0,
+						"tuling_shi": {
+							"name": "土灵石", "behavior": Behavior.DRONE,
+							"sfx": "orb_hit",
+							# 2026-10-22 攻速分化：厚土磐石厚重运转 0.70s 强力震退
+							"damage": 34.0, "cooldown": 0.70, "range": 185.0,
+							"knockback": 330.0,
 						"price": 42, "icon": "res://assets/art/weapon_tuling_shi.png",
 						"desc": "符文灵石环绕撞击震退敌群，受召唤伤害与护甲加成", "tag": "召唤·环绕·土",
 						"tags": ["spirit", "earth"],
 						"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5},
 					},
-				"jianling": {
-					"name": "剑灵", "behavior": Behavior.DRONE,
-					# 三重共鸣（仿剑阵盘）：同时计入 御灵+剑系 两条器类羁绊与金系羁绊
-					"sfx": "drone_chime",
-					"damage": 21.0, "cooldown": 0.45, "range": 180.0,
-					"knockback": 170.0,
+					"jianling": {
+						"name": "剑灵", "behavior": Behavior.DRONE,
+						# 三重共鸣（仿剑阵盘）：同时计入 御灵+剑系 两条器类羁绊与金系羁绊
+						"sfx": "drone_chime",
+						# 2026-10-22 攻速分化：精魂灵动飞斩 0.42s
+						"damage": 20.0, "cooldown": 0.42, "range": 180.0,
+						"knockback": 170.0,
 					"price": 44, "icon": "res://assets/art/weapon_jianling.png",
 					"desc": "剑形精魂环绕飞斩，受召唤伤害与暴击率加成", "tag": "召唤·剑系·金",
 					"tags": ["spirit", "sword", "metal"],
@@ -824,11 +839,12 @@ const DEFS: Dictionary = {
 						"tags": ["contraption", "spirit", "earth"],
 						"stat_scalings": {"contraption_damage": 1.0, "engineering_damage": 0.5, "armor": 2.0},
 					},
-					"lieshan_duo": {
-						"name": "裂山铎", "behavior": Behavior.BURST,
-						"sfx": "whoosh_heavy", "sfx_impact": "drum_boom",
-						"damage": 30.0, "cooldown": 1.40, "range": 255.0,
-						"knockback": 340.0,
+						"lieshan_duo": {
+							"name": "裂山铎", "behavior": Behavior.BURST,
+							"sfx": "whoosh_heavy", "sfx_impact": "drum_boom",
+							# 2026-10-22 攻速分化：铎声震山 1.45s 标准雷法
+							"damage": 31.0, "cooldown": 1.45, "range": 255.0,
+							"knockback": 340.0,
 						"price": 40, "icon": "res://assets/art/weapon_lieshan_duo.png",
 						"tip": Vector2(20, 2), "shape": "bell", "upright": true,
 						"desc": "铎钟裂山震波轰击区域大力击退，受元素伤害与护甲加成", "tag": "元素·雷法·土",
@@ -852,12 +868,12 @@ const DEFS: Dictionary = {
 					"tags": ["talisman", "thunder", "wood"],
 					"stat_scalings": {"ranged_damage": 0.8, "elemental_damage": 0.8, "hp_regen": 3.0},
 				},
-				"liaoyuan_shan": {
-					"name": "燎原扇", "behavior": Behavior.SWEEP,
-					"sfx": "fan_gust", "sfx_impact": "impact_crack",
-						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-						"damage": 26.0, "cooldown": 1.45, "range": 119.0,
-					"knockback": 390.0,
+					"liaoyuan_shan": {
+						"name": "燎原扇", "behavior": Behavior.SWEEP,
+						"sfx": "fan_gust", "sfx_impact": "impact_crack",
+							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：火风急扇 1.25s）
+							"damage": 24.0, "cooldown": 1.25, "range": 119.0,
+						"knockback": 390.0,
 					"price": 36, "icon": "res://assets/art/weapon_liaoyuan_shan.png",
 					"tip": Vector2(22, 0), "shape": "fan",
 					"desc": "横扫燎原火风焚烧前方敌群，受近战与元素伤害加成", "tag": "近战·横扫·火",
@@ -865,12 +881,12 @@ const DEFS: Dictionary = {
 					"tags": ["wide", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "move_speed_bonus": 25.0},
 				},
-				"kaishan_fu": {
-					"name": "开山斧", "behavior": Behavior.SWEEP,
-					"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
-						# 2026-10-14 风险溢价重排：横扫贴脸档 26~34
-						"damage": 40.0, "cooldown": 1.50, "range": 114.0,
-					"knockback": 620.0,
+					"kaishan_fu": {
+						"name": "开山斧", "behavior": Behavior.SWEEP,
+						"sfx": "whoosh_heavy", "sfx_impact": "impact_blunt",
+							# 2026-10-14 风险溢价重排：横扫贴脸档 26~34（2026-10-22 攻速分化：巨斧蓄力 1.65s 力劈）
+							"damage": 44.0, "cooldown": 1.65, "range": 114.0,
+						"knockback": 620.0,
 					"price": 38, "icon": "res://assets/art/weapon_kaishan_fu.png",
 					"tip": Vector2(22, 0), "shape": "axe",
 					"desc": "横扫开山巨斧劈退正面敌群，受近战伤害与护甲加成", "tag": "近战·横扫·土",
@@ -943,7 +959,8 @@ const DEFS: Dictionary = {
 							"jinxiao_leiling": {
 								"name": "金霄雷令", "behavior": Behavior.BURST,
 								"sfx": "whoosh_light", "sfx_impact": "thunder_strike",
-								"damage": 32.0, "cooldown": 1.50, "range": 270.0,
+								# 2026-10-22 攻速分化：神霄金令 1.70s 威严肃穆引大雷
+								"damage": 36.0, "cooldown": 1.70, "range": 270.0,
 								"knockback": 260.0,
 								# 2026-10-18 media-gen 专属重绘：五雷天师金牌令牌，雷云兽首吞口与金色雷纹
 								"price": 38, "icon": "res://assets/art/weapon_jinxiao_leiling.png",
@@ -956,7 +973,8 @@ const DEFS: Dictionary = {
 							"xuanming_leizhu": {
 								"name": "玄冥雷珠", "behavior": Behavior.BURST,
 								"sfx": "flute_wave", "sfx_impact": "thunder_strike",
-								"damage": 30.0, "cooldown": 1.45, "range": 270.0,
+								# 2026-10-22 攻速分化：玄冥阴雷珠 1.50s 运转炸开
+								"damage": 31.0, "cooldown": 1.50, "range": 270.0,
 								"knockback": 300.0,
 								# 2026-10-18 media-gen 专属重绘：玄冥冰晶水雷珠，深邃玄晶与幽蓝冷电
 								"price": 38, "icon": "res://assets/art/weapon_xuanming_leizhu.png",

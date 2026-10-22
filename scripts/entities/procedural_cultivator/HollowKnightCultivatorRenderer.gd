@@ -25,6 +25,12 @@ var col_gold_shadow: Color = Color(0.65, 0.48, 0.18)
 var col_jade: Color = Color(0.58, 0.94, 0.80)
 var col_tassel_red: Color = Color(0.88, 0.22, 0.18)
 
+# ----------------- 炫彩皮肤动画状态（虹霓） -----------------
+## 空字典 = 普通静态换色；非空 = 炫彩参数（SkinData 主题 "chroma" 整份拷入）
+var _chroma: Dictionary = {}
+## 基准色快照：色相流转只改 H，S/V 一律取自快照（防多次流转后褪色/漂白）
+var _chroma_base: Dictionary = {}
+
 # ----------------- 插槽参数缓存 -----------------
 var body_scale: float = 1.0
 var width_scale: float = 1.0
@@ -127,6 +133,50 @@ func _sync_config() -> void:
 	else:
 		col_gold = Color(0.96, 0.84, 0.32)
 
+	# 炫彩皮肤：缓存动画参数与基准色快照；非炫彩清空（防渲染器复用串色）
+	_chroma = config.chroma.duplicate(true) if not config.chroma.is_empty() else {}
+	_chroma_base = {
+		"cloak_outer": col_cloak_outer,
+		"cloak_inner": col_cloak_inner,
+		"cloak_edge": col_cloak_edge,
+		"eye_glow": col_eye_glow,
+		"eye_core": col_eye_core,
+		"weapon_main": col_weapon_main,
+		"weapon_shadow": col_weapon_shadow,
+		"weapon_accent": col_weapon_accent,
+		"gold": col_gold,
+		"jade": col_jade,
+		"tassel": col_tassel_red,
+		"slash_arc": col_slash_arc,
+	}
+
+## 炫彩：把基准色色相沿色环旋转（phase + offset 圈），S/V 取自基准（可整体提饱和/提亮）
+func _chroma_shift(base: Color, phase: float, offset: float, sat_mul: float = 1.0, val_mul: float = 1.0) -> Color:
+	var h := fposmod(base.h + phase + offset, 1.0)
+	return Color.from_hsv(h, clampf(base.s * sat_mul, 0.0, 1.0), clampf(base.v * val_mul, 0.0, 1.0), base.a)
+
+## 重绘前钩子：炫彩皮肤按 _time 重算全部缓存色，普通皮肤零开销
+func _on_before_redraw() -> void:
+	if _chroma.is_empty():
+		return
+	var cycle := maxf(float(_chroma.get("cycle", 7.0)), 1.0)
+	var phase := fposmod(_time / cycle, 1.0)
+	var offs: Dictionary = _chroma.get("hue_offsets", {})
+	var locked: Array = _chroma.get("locked", [])
+	col_cloak_outer = _chroma_base["cloak_outer"] if locked.has("cloak_outer") else _chroma_shift(_chroma_base["cloak_outer"], phase, float(offs.get("cloak_outer", 0.0)))
+	col_cloak_inner = _chroma_base["cloak_inner"] if locked.has("cloak_inner") else _chroma_shift(_chroma_base["cloak_inner"], phase, float(offs.get("cloak_inner", 0.0)))
+	col_cloak_edge = _chroma_shift(_chroma_base["cloak_edge"], phase, float(offs.get("cloak_edge", 0.0)))
+	col_eye_glow = _chroma_shift(_chroma_base["eye_glow"], phase, float(offs.get("eye_glow", 0.0)))
+	col_eye_core = _chroma_shift(_chroma_base["eye_core"], phase, float(offs.get("eye_core", 0.0)), 2.2)
+	col_weapon_main = _chroma_shift(_chroma_base["weapon_main"], phase, float(offs.get("weapon_main", 0.0)), 1.6)
+	col_weapon_shadow = _chroma_shift(_chroma_base["weapon_shadow"], phase, float(offs.get("weapon_shadow", 0.0)))
+	col_weapon_accent = _chroma_shift(_chroma_base["weapon_accent"], phase, float(offs.get("weapon_accent", 0.0)))
+	col_gold = _chroma_shift(_chroma_base["gold"], phase, float(offs.get("gold", 0.0)))
+	col_jade = _chroma_shift(_chroma_base["jade"], phase, float(offs.get("jade", 0.0)))
+	col_tassel_red = _chroma_shift(_chroma_base["tassel"], phase, float(offs.get("tassel", 0.0)))
+	col_slash_arc = _chroma_shift(_chroma_base["slash_arc"], phase, float(offs.get("slash_arc", 0.0)), 1.4)
+	col_slash_glow = col_cloak_edge
+
 ## 动态设置视觉配置
 func set_visual_config(cfg: CultivatorVisualConfig) -> void:
 	config = cfg
@@ -196,11 +246,30 @@ func _calm_blink() -> float:
 	return 0.0
 
 ## 斗篷纵向伪光照渐变：肩部提亮、下摆压暗（逐顶点颜色插值，零 shader 成本）
+## 炫彩皮肤额外叠一层「油膜虹彩」：色相随衣褶坐标斜向偏移 + 明暗带交替，强度低以保黑底
 func _cloak_gradient(pts: PackedVector2Array, base: Color) -> PackedColorArray:
 	var cols := PackedColorArray()
+	var chroma_on := not _chroma.is_empty()
+	var phase := 0.0
+	var sheen := 0.0
+	var dx := 0.0
+	var dy := 0.0
+	if chroma_on:
+		phase = fposmod(_time / maxf(float(_chroma.get("cycle", 7.0)), 1.0), 1.0)
+		sheen = float(_chroma.get("sheen", 0.16))
+		dx = float(_chroma.get("sheen_dx", 0.012))
+		dy = float(_chroma.get("sheen_dy", 0.018))
 	for p in pts:
 		var t := clampf((p.y + 6.0) / 36.0, 0.0, 1.0)
-		cols.append(base.lightened(0.10 * (1.0 - t)).darkened(0.30 * t))
+		var c := base.lightened(0.10 * (1.0 - t)).darkened(0.30 * t)
+		if chroma_on:
+			# 袍身底色锁死不动，油膜虹彩靠 sheen 随相位漂移：film_h = 底色 + 时间相位 + 衣褶空间梯度
+			var film_h := fposmod(base.h + phase + p.x * dx + p.y * dy, 1.0)
+			# 油膜明暗带：斜向缓流，band 决定该点虹彩混入量
+			var band := 0.5 + 0.5 * sin((p.x * dx + p.y * dy + phase) * TAU * 2.0)
+			var film := Color.from_hsv(film_h, clampf(0.55 + 0.30 * band, 0.0, 1.0), clampf(c.v + 0.16 * band, 0.0, 1.0), c.a)
+			c = c.lerp(film, sheen * band)
+		cols.append(c)
 	return cols
 
 # ==================== 1. 待机 (IDLE) ====================
@@ -1204,20 +1273,29 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 	draw_line(head_center + Vector2(4 * hs, -7 * hs), head_center + Vector2(10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
 
 ## 插槽 3：眼睛神态与光芒
+## 炫彩皮肤：收窄眼部柔光半径并压 alpha，让骨白面壳保持干净，只留眼窝虹彩
 func _draw_eye_soft_glow(center: Vector2, radius: float, col: Color, layers: int = 3) -> void:
-	if not suppress_eye_glow:
-		draw_soft_glow(center, radius, col, layers)
+	if suppress_eye_glow:
+		return
+	var r := radius * eye_glow_radius_scale
+	if not _chroma.is_empty():
+		draw_soft_glow(center, r * 0.60, Color(col.r, col.g, col.b, col.a * 0.78), layers)
+	else:
+		draw_soft_glow(center, r, col, layers)
 
 func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, blink: float = 0.0) -> void:
 	var hs := head_scale
 	var eff_glow := col_eye_glow
 	var eff_core := col_eye_core
 	if eye_override_color.a > 0.01:
-		eff_glow = col_eye_glow.lerp(eye_override_color, clampf(eye_override_color.a, 0.0, 1.0))
-		eff_core = col_eye_core.lerp(Color(1, 1, 1, 1), 0.55).lerp(eye_override_color, 0.45)
-	var glow_r := eye_glow_boost * 3.6
+		# 只借 override 的 RGB，alpha 沿用 col_eye_glow 的原始浓度：
+		# 整色 lerp 会把 override.a=1.0 混进柔光浓度，把三层柔光顶成实心色盘
+		# （白色时与面具同色看不出来，换成红/金等高饱和色立刻糊成一块）
+		eff_glow = Color(eye_override_color.r, eye_override_color.g, eye_override_color.b, col_eye_glow.a)
+		eff_core = col_eye_core.lerp(Color(1, 1, 1, 1), 0.55).lerp(eye_override_color, eye_core_blend)
+	var glow_r := eye_glow_boost * 3.6 * eye_glow_radius_scale
 	var glow_a := eye_glow_boost * 0.4
-	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf(eff_glow.a + eye_pulse + glow_a, 0.0, 1.0))
+	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf((eff_glow.a + eye_pulse + glow_a) * eye_glow_density, 0.0, 1.0))
 
 	if blink > 0.45:
 		# 闭眼一瞬：下弯细缝弧线 + 残余微辉光，不画瞳仁/高光（闭合窗约 4 帧，阈值切换无跳变感）
@@ -1287,7 +1365,8 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 				draw_filled_ellipse(l_eye + Vector2(0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
 
-		if eye_glow_boost > 0.15:
+		# 杀意暴击不画瞳孔白点：红眼里一颗白点像卡通眼，破坏凶戾感
+		if eye_glow_boost > 0.15 and skill_aura_type != "dash":
 			_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 			_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
@@ -1330,7 +1409,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 				_draw_eye_soft_glow(eye_pos, 6.2 + glow_r, eff_glow_col, 3)
 				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2), 2.2 * hs, 3.6 * hs, eff_core)
 
-		if eye_glow_boost > 0.15:
+		if eye_glow_boost > 0.15 and skill_aura_type != "dash":
 			_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
 
 ## 绘制斗篷轮廓描边与法力流动反光（仙侠高精流光反光感）
@@ -1342,6 +1421,31 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 		eff_edge = default_edge.lerp(cloak_shimmer_color, clampf(cloak_shimmer_intensity * 0.85, 0.0, 1.0))
 	var base_w := 1.2 + cloak_shimmer_intensity * 0.8
 	draw_polyline(pts, eff_edge, base_w, true)
+
+	# 炫彩皮肤：缘边常驻彩虹描边（逐顶点色相环绕）+ 沿轮廓游走的棱镜光段，无需技能激活
+	if not _chroma.is_empty():
+		var chroma_cycle := maxf(float(_chroma.get("cycle", 7.0)), 1.0)
+		var rim_glow := float(_chroma.get("rim_glow", 0.32))
+		var cn := pts.size()
+		var cph := fposmod(_time / chroma_cycle, 1.0)
+		var edge_base: Color = _chroma_base["cloak_edge"]
+		var edge_h := edge_base.h
+		var rim_cols := PackedColorArray()
+		for i in range(cn):
+			var rh := fposmod(edge_h + cph + float(i) / float(cn), 1.0)
+			rim_cols.append(Color.from_hsv(rh, 0.80, 1.0, rim_glow))
+		draw_polyline_colors(pts, rim_cols, base_w + 0.5, true)
+
+		var comet_center := int(fposmod(_time * 0.22 + _idle_phase * 0.05, 1.0) * float(cn))
+		var comet_pts := PackedVector2Array()
+		var comet_cols := PackedColorArray()
+		for off in range(-3, 4):
+			var idx := (comet_center + off + cn) % cn
+			comet_pts.append(pts[idx])
+			var ch := fposmod(edge_h + cph + 0.5 + float(off) * 0.055, 1.0)
+			comet_cols.append(Color.from_hsv(ch, 0.90, 1.0, rim_glow * 0.9))
+		if comet_pts.size() >= 2:
+			draw_polyline_colors(comet_pts, comet_cols, base_w + 1.2, true)
 
 	# 常驻下摆微光：沿下摆顶点叠一条细亮线，随行波轻闪（技能流光叠加其上）
 	var hem := PackedVector2Array()
@@ -1841,6 +1945,25 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 			draw_line(t * Vector2(0, -9), t * Vector2(0, 7), col_weapon_accent, 1.6)
 			_circle(t * Vector2(0, 0), 2.4, Color(1.0, 0.88, 0.35))
 			_circle(t * Vector2(0, 0), 1.2, col_jade)
+
+		"assorted_bundle": # 麻绳捆扎的一捆杂兵器（散修：什么都会一点）
+			# 四根长短不一的兵刃从同一绳结明显扇形散开，暗示「六系各带一件」的走杂构筑；
+			# 张角要够大（±0.55 rad）才能在 96px 图标里从斗篷轮廓外辨认出来
+			for i in range(4):
+				var spread := (float(i) - 1.5) * 0.36
+				var blade_len := 16.5 - absf(float(i) - 1.5) * 3.0
+				var tip: Vector2 = t * Vector2(sin(spread) * 13.0, -blade_len)
+				var butt: Vector2 = t * Vector2(sin(spread) * 3.5, 8.5)
+				draw_line(butt, tip, col_weapon_shadow, 3.0)
+				draw_line(butt, tip, col_weapon_main, 1.8)
+				# 各兵刃的护手/刃镡：一眼看出是「不同来路」的兵器
+				var guard_at: Vector2 = t * Vector2(sin(spread) * 5.2, 1.5)
+				draw_line(guard_at, t * Vector2(guard_at.x + cos(spread) * 3.2, guard_at.y), col_weapon_accent, 1.6)
+			# 麻绳捆扎：两道横绳 + 绳结
+			draw_line(t * Vector2(-5.2, 2.2), t * Vector2(5.2, 2.2), col_weapon_accent, 2.0)
+			draw_line(t * Vector2(-4.4, 5.6), t * Vector2(4.4, 5.6), col_weapon_accent, 1.6)
+			_circle(t * Vector2(0, 3.9), 2.1, col_weapon_accent)
+			_circle(t * Vector2(0, 3.9), 0.9, col_void)
 
 		"bone_nail", _: # 纯白月光骨钉/长剑（青云剑修独孤）
 			var nail_pts: PackedVector2Array = [

@@ -393,6 +393,7 @@ func _cast_split_bomb(player: Node2D) -> void:
 func _cast_charge(player: Node2D) -> void:
 	_charge_dir = (player.global_position - global_position).normalized()
 	_charge_windup = GameBalance.BOSS_CHARGE_WINDUP
+	_charge_windup_total = _charge_windup
 	_charge_timer = 999999.0
 	charge_interval = 999999.0
 	_update_charge_warning(player)

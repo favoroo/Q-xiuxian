@@ -161,6 +161,58 @@ const MUT_JIANSHA_BOLT_COUNT := 5            ## 剑客亡灵变异：剑气 3→
 const MUT_JIANSHA_INTERVAL_MULT := 0.7       ## 剑客亡灵变异：剑气间隔缩短倍率
 const MUT_JIANSHA_RANGE := 180.0             ## 剑客亡灵变异：风筝距离 280→180（压近身）
 
+# ---------------- 精英常驻招式（2026-10-22，W5/W15 精英从「血厚木桩」升级为双招式） ----------------
+## 设计口径：精英的招牌技能从「60% 血线变异才解锁」改为「进场即常驻」，
+## 变异则从「解锁技能」升格为「二阶段强化」（多段/连锁/扩域）。
+## 数值全部集中在此，EnemyBase 只读；场景 .tscn 只做引用赋值。
+
+## 铁甲魔傀·常驻震地（进场即威胁，变异后升格三连震）
+const GOLEM_SLAM_INTERVAL := 4.2         ## 常驻震地周期（秒）
+const GOLEM_SLAM_RADIUS := 115.0         ## 常驻震地半径（变异 130，Boss 175 的精英档）
+const GOLEM_SLAM_WINDUP := 0.9           ## 常驻震地预警时长
+const GOLEM_SLAM_DMG_MULT := 1.1         ## 常驻震地伤害 = 接触伤害 × 系数
+const MUT_GOLEM_SLAM_HITS := 3           ## 变异震地总段数（首段 + 2 段余波）
+const MUT_GOLEM_SLAM_ECHO_GAP := 0.45    ## 变异余波间隔（秒）：每段给一次横向走位窗口
+const MUT_GOLEM_SLAM_RADIUS_GROW := 1.15 ## 变异余波逐段半径扩张倍率
+
+## 铁甲魔傀·落石轰炸（第二招式：克制贴脸风筝，预判落点 + 多点预警）
+const GOLEM_ROCK_INTERVAL := 6.5         ## 落石周期（秒）
+const GOLEM_ROCK_COUNT := 3              ## 常驻落石点数
+const MUT_GOLEM_ROCK_COUNT := 4          ## 变异落石点数
+const GOLEM_ROCK_RADIUS := 85.0          ## 单点落石半径：预警圈 = 判定圈（同源）
+const GOLEM_ROCK_WINDUP := 0.9           ## 落石预警时长（与震地同档，读法统一）
+const GOLEM_ROCK_DMG_MULT := 0.9         ## 单点落石伤害 = 接触伤害 × 系数
+const GOLEM_ROCK_SPREAD := 140.0         ## 落点散布半径（首点锁玩家预判位，其余环绕散布）
+const GOLEM_ROCK_LEAD := 0.35            ## 首点预判量（玩家速度 × 它，匀速跑位会被算中）
+
+## 赤雷兽·雷环齐射（第二招式：中距离封锁走位；变异增发）
+const CHILEI_RING_INTERVAL := 5.0        ## 雷环周期（秒）
+const CHILEI_RING_COUNT := 8             ## 常驻雷环弹数
+const CHILEI_RING_SPEED := 150.0         ## 雷环弹速（px/s）
+const CHILEI_RING_DMG_MULT := 0.7        ## 单颗雷环伤害 = 接触伤害 × 系数
+const CHILEI_RING_WINDUP := 0.4          ## 雷环起手前摇（站定提亮，读得出「要放环」）
+const CHILEI_RING_CURVE_ANG := 0.45      ## 雷环弧线角速度（rad/s，正顺时针，形成旋臂压迫）
+const MUT_CHILEI_RING_COUNT := 12        ## 变异雷环弹数
+
+## 赤雷兽·三连冲（变异升格：长扑不再单发，冲完接短预警再冲）
+const MUT_CHILEI_CHAIN_CHARGES := 3      ## 变异后一轮长扑的连续冲刺段数
+const MUT_CHILEI_CHAIN_GAP := 0.35       ## 链冲段间短预警间隔（秒）
+const MUT_CHILEI_CHAIN_WINDUP_MULT := 0.6 ## 后续冲刺的预警时长倍率（首段仍用场景原值）
+
+## 剑煞邪修·雷剑域（第二招式：在玩家脚下铺持续伤害领域，逼迫离开原位）
+const JIANSHA_FIELD_INTERVAL := 7.0      ## 雷剑域周期（秒）
+const JIANSHA_FIELD_RADIUS := 120.0      ## 领域半径：预警圈 = 判定圈（同源）
+const JIANSHA_FIELD_WINDUP := 0.8        ## 落域预警时长
+const JIANSHA_FIELD_DMG_MULT := 0.8      ## 每跳伤害 = 接触伤害 × 系数（受击无敌帧节流）
+const JIANSHA_FIELD_DURATION := 3.5      ## 领域持续时长（秒）
+const MUT_JIANSHA_FIELD_RADIUS_MULT := 1.25 ## 变异领域半径扩张倍率
+
+## 剑煞邪修·瞬身回斩（变异专属：闪现到玩家侧翼后立刻扇形剑气反打）
+const MUT_JIANSHA_BLINK_INTERVAL := 6.0  ## 瞬身周期（秒）
+const MUT_JIANSHA_BLINK_DIST := 230.0    ## 瞬身落点距玩家距离
+const MUT_JIANSHA_BLINK_BOLTS := 2       ## 回斩剑气数量
+const MUT_JIANSHA_BLINK_BOLT_ARC := 0.18 ## 回斩剑气张角（弧度，单侧）
+
 ## 灵医每跳治疗量：随回合复利成长（与敌人伤害同一条 dmg 曲线，保治疗与输出同量级对抗。
 ## 2026-10-13 改走 enemy_hp_mult 同源出口，深层复利提档自动跟涨）
 static func healer_amount(wave: int) -> float:

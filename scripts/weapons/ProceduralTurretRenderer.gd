@@ -7,7 +7,7 @@ extends Node2D
 ## 【坐标契约 — 与 TurretUnit.CoreSprite / MuzzlePoint 严格对齐】
 ##   · 在【画布像素】空间沿 +X 绘制（+X = 炮口/攻击朝向），炮口落在 muzzle_len 附近；
 ##   · 外部把本节点 scale 设成 0.55（与旧 Sprite2D 同尺寸），节点 rotation 即索敌角；
-##   · TurretUnit 的底座八角阵盘仍由它自己的 _draw 画，本渲染器只负责「盘上那台机体」。
+##   · TurretUnit 的底座正圆阵盘仍由它自己的 _draw 画，本渲染器只负责「盘上那台机体」。
 ##
 ## 灰度切换：shape == GENERIC（未实现器形）时由 TurretUnit 保留原贴图显示。
 ##
@@ -202,13 +202,13 @@ func _draw_core_fx(pal: Dictionary, center: Vector2, r0: float) -> void:
 ## 机座（炮台扎根盘面的暗色底盘）
 ## 注意：draw_set_transform 是「替换」而非「叠乘」，这里必须把 _draw 头部的 ART_SCALE
 ## 一起带上，画完再恢复，否则后续器身会退回 1.0 比例、炮口与 MuzzlePoint 分家。
+## 2026-10-22：机座改正圆（原 0.62 y 压扁随索敌转向晃成椭圆；正圆旋转不变形）
 const ART_SCALE := 1.5
 
 func _draw_mount(pal: Dictionary, rx: float) -> void:
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(ART_SCALE, 0.62 * ART_SCALE))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(ART_SCALE, ART_SCALE))
 	AdaptiveDraw.circle(self, Vector2.ZERO, rx, Color(0.03, 0.04, 0.06, 0.55))
 	AdaptiveDraw.circle(self, Vector2.ZERO, rx * 0.78, pal["frame"])
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(ART_SCALE, ART_SCALE))
 
 # ---------------- 弩机（弩身 + 弩槽 + 弩机匣 + 反曲弩臂 + 弦） ----------------
 ## 一眼读成"弩"的三剪影特征：横置反曲双臂 + 骨白长弦挂到机牙 + 沿 +X 的长弩身与出鞘弩箭。
