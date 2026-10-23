@@ -33,6 +33,7 @@ GameManager="*res://scripts/autoload/GameManager.gd"
 
 [debug]
 
+debug/file_logging/enable_file_logging=true
 gdscript/warnings/unassigned_variable=2
 gdscript/warnings/unassigned_variable_op_assign=2
 gdscript/warnings/unreachable_code=2

@@ -596,6 +596,51 @@ static func slot_of(bg: Color = NAVY2.darkened(0.08), border: Color = INK,
 	_track_style(sb, border, &"border_color")
 	return sb
 
+## 输入框样式（2026-10-23 反馈功能新增：项目此前没有任何 LineEdit/TextEdit）
+## 纸面凹槽 + 黑细框；聚焦态换主题色粗框，让「正在输入」有明确的当前焦点。
+## 四态分开建实例，不用共享缓存：输入框数量少，且各控件会就地调 content_margin。
+static func input_style(focused: bool = false, multiline: bool = false) -> StyleBoxFlat:
+	var bg := NAVY2.darkened(0.06) if not focused else Color("fffdf7")
+	var sb := panel(bg, 0.0, Vector2.ZERO)
+	sb.border_width_left = 2
+	sb.border_width_top = 2
+	sb.border_width_right = 2
+	sb.border_width_bottom = 2
+	sb.border_color = GOLD if focused else INK
+	if focused:
+		_track_style(sb, GOLD, &"border_color")
+	sb.content_margin_left = 10.0
+	sb.content_margin_right = 10.0
+	sb.content_margin_top = 8.0 if multiline else 6.0
+	sb.content_margin_bottom = 8.0 if multiline else 6.0
+	return sb
+
+## 单行输入框统一样式：字体、字色、占位符、光标、四态 StyleBox 一次配齐。
+static func line_edit(le: LineEdit, font_size: int = 13) -> LineEdit:
+	le.add_theme_font_override("font", body_font())
+	le.add_theme_font_size_override("font_size", font_size)
+	le.add_theme_color_override("font_color", PAPER)
+	le.add_theme_color_override("font_placeholder_color", GREY)
+	le.add_theme_color_override("caret_color", GOLD)
+	le.add_theme_color_override("selection_color", with_alpha(GOLD, 0.35))
+	le.add_theme_stylebox_override("normal", input_style(false, false))
+	le.add_theme_stylebox_override("focus", input_style(true, false))
+	le.add_theme_stylebox_override("read_only", input_style(false, false))
+	return le
+
+## 多行输入框统一样式（反馈正文用）。
+static func text_edit(te: TextEdit, font_size: int = 13) -> TextEdit:
+	te.add_theme_font_override("font", body_font())
+	te.add_theme_font_size_override("font_size", font_size)
+	te.add_theme_color_override("font_color", PAPER)
+	te.add_theme_color_override("font_placeholder_color", GREY)
+	te.add_theme_color_override("caret_color", GOLD)
+	te.add_theme_color_override("selection_color", with_alpha(GOLD, 0.35))
+	te.add_theme_stylebox_override("normal", input_style(false, true))
+	te.add_theme_stylebox_override("focus", input_style(true, true))
+	te.add_theme_stylebox_override("read_only", input_style(false, true))
+	return te
+
 ## 进度条成对样式（track 底 + fill 面）
 static func bar_styles(track: Color, fill: Color) -> Array:
 	var bg := panel(track, 0.0, Vector2.ZERO)

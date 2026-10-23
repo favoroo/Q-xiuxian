@@ -258,6 +258,7 @@ func _screens() -> Array[Dictionary]:
 			"cultivator": "meiying"},
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
 			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
+			{"tag": "意见反馈", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open"},
 			{"tag": "修仙志", "path": "res://scripts/ui/CareerDialog.gd", "open": "open"},
 			{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
 	]

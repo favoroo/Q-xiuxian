@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://cmain001"]
+[gd_scene load_steps=26 format=3 uid="uid://cmain001"]
 
 [ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
 [ext_resource type="Shader" path="res://assets/shaders/ground_tile.gdshader" id="2_tile"]
@@ -25,6 +25,7 @@
 [ext_resource type="Script" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
 [ext_resource type="Script" path="res://scripts/main/AtmosphereGate.gd" id="24_atmo"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AuthorPanel.tscn" id="25_author"]
+[ext_resource type="PackedScene" path="res://scenes/ui/FeedbackDialog.tscn" id="26_feedback"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -157,4 +158,6 @@ script = ExtResource("19_career")
 [node name="TutorialDialog" parent="UILayer" instance=ExtResource("22_tutorial")]
 
 [node name="AuthorPanel" parent="UILayer" instance=ExtResource("25_author")]
+
+[node name="FeedbackDialog" parent="UILayer" instance=ExtResource("26_feedback")]
 

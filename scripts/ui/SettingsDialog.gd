@@ -14,6 +14,7 @@ var _cycle_controls: Dictionary = {}
 var _content_box: MarginContainer
 var _reset_tip_lbl: Label
 var _changelog_dialog: ChangelogDialog = null
+var _feedback_dialog: FeedbackDialog = null
 var _check_update_btn: Button
 var _update_tip_lbl: Label
 # 主题色块：id -> PanelContainer（选中框按当前主题刷新）
@@ -653,10 +654,7 @@ func _build_author_hq_card() -> Control:
 	feedback_btn.custom_minimum_size = Vector2(110, 30)
 	feedback_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(feedback_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
-	feedback_btn.pressed.connect(func():
-		OS.shell_open("https://gitee.com/%s/%s/issues" % [Version.GITEE_OWNER, Version.GITEE_REPO])
-		UpdateManager.show_toast("正在前往反馈通道，期待道友的高见...", GameStyle.JADE)
-	)
+	feedback_btn.pressed.connect(_open_feedback)
 	btn_row.add_child(feedback_btn)
 
 	return panel
@@ -810,6 +808,21 @@ func _open_changelog() -> void:
 		else:
 			add_child(_changelog_dialog)
 	_changelog_dialog.open()
+
+## 打开应用内意见反馈弹窗（2026-10-23）：文字 + 相册截图直接发到作者邮箱。
+## 二级弹窗挂到同一父级（UILayer），遮罩自然叠在设置面板之上；关闭后回到设置，暂停态不变。
+func _open_feedback() -> void:
+	if _feedback_dialog == null or not is_instance_valid(_feedback_dialog):
+		var p := get_parent()
+		_feedback_dialog = p.get_node_or_null("FeedbackDialog") as FeedbackDialog
+		if _feedback_dialog == null:
+			_feedback_dialog = FeedbackDialog.new()
+			_feedback_dialog.name = "FeedbackDialog"
+			if p != null:
+				p.add_child(_feedback_dialog)
+			else:
+				add_child(_feedback_dialog)
+	_feedback_dialog.open()
 
 func _copy_diagnostics_info() -> void:
 	var info := "【剑士 (Swordsman) 运行诊断信息】\n"
