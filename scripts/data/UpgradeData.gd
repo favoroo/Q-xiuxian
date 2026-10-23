@@ -293,6 +293,16 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 2,
 	},
 	{
+		"id": "revive_up",
+		"apply": {"revive_charges": 1.0},
+		"title": "轮回重生",
+		"desc": "阵亡后可在结算屏原地复活，恢复半血并短暂无敌",
+		"rarity": "epic",
+		"rarity_label": "史诗",
+		"icon": "res://assets/art/item_tisi_kuilei.png",
+		"max_stacks": 2,
+	},
+	{
 		"id": "elite_up",
 		"apply": {"elite_damage": 0.25},
 		"title": "精英伤害",

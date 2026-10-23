@@ -37,6 +37,7 @@ const FIELDS: Dictionary = {
 	"xp_gain_mult": {"name": "经验获取", "unit": "pct"},
 	"knockback_mult": {"name": "击退力度", "unit": "pct"},
 	"free_rerolls": {"name": "免费重掷", "unit": "times"},
+	"revive_charges": {"name": "复活次数", "unit": "times"},
 	"elite_damage": {"name": "对精英伤害", "unit": "pct"},
 	"shop_price_mul": {"name": "商店物价", "unit": "pctmul"},
 	"bonus_pierce": {"name": "穿透", "unit": "pt"},

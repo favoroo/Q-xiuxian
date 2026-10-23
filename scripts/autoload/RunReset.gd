@@ -43,6 +43,7 @@ static func reset(gm: Node) -> void:
 	gm.elite_damage = 0.0
 	gm.skill_cooldown_mult = 0.0
 	gm.free_rerolls = 0
+	gm.revive_charges = 0
 	gm.element_damage = {}
 	gm.locked_upgrades = []
 	gm.chest_count_bonus = 0

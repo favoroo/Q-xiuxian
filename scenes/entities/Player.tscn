@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/entities/PlayerSkillVfx.gd" id="5_skill_vfx"]
 [ext_resource type="Script" path="res://scripts/entities/player_aura.gd" id="6_aura"]
 [ext_resource type="Script" path="res://scripts/entities/player_level_ritual.gd" id="7_ritual"]
+[ext_resource type="Script" path="res://scripts/entities/player_revive_ritual.gd" id="8_revive"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_player"]
 shader = ExtResource("2_shader")
@@ -35,6 +36,10 @@ script = ExtResource("6_aura")
 [node name="PlayerLevelRitual" type="Node2D" parent="."]
 position = Vector2(0, 16)
 script = ExtResource("7_ritual")
+
+[node name="PlayerReviveRitual" type="Node2D" parent="."]
+position = Vector2(0, 16)
+script = ExtResource("8_revive")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 visible = false

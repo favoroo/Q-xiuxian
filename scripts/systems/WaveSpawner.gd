@@ -343,6 +343,11 @@ func _is_elite_wave(n: int) -> bool:
 func _is_boss_wave(n: int) -> bool:
 	return GameBalance.is_boss_wave(n)
 
+## 当前波次续播用战斗 BGM 键：与 start_wave 的开场选择同一口径（结算屏复活回场时读）
+func current_wave_bgm_key() -> String:
+	var n := GameManager.wave_number
+	return "trial" if (_is_boss_wave(n) or _is_elite_wave(n)) else "battle"
+
 func start_wave(n: int) -> void:
 	GameManager.wave_number = n
 	GameManager.wave_changed.emit(n)

@@ -12,6 +12,7 @@ extends Control
 @onready var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
 
 var _menu_btn: Button
+var _revive_btn: Button
 var _unlocks_box: VBoxContainer
 var _records_box: VBoxContainer
 
@@ -69,6 +70,18 @@ func _ready() -> void:
 	_menu_btn.pressed.connect(_on_menu_pressed)
 	vbox.add_child(_menu_btn)
 
+	# 原地复活（2026-10-23）：仅败北且有剩余次数时显示，排在重开之前 —— 还魂是首选动作
+	_revive_btn = Button.new()
+	_revive_btn.text = "原 地 复 活"
+	_revive_btn.custom_minimum_size = Vector2(230, 44)
+	_revive_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_revive_btn.focus_mode = Control.FOCUS_NONE
+	_revive_btn.visible = false
+	GameStyle.button(_revive_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 18, GameStyle.INK_TEXT)
+	_revive_btn.pressed.connect(_on_revive_pressed)
+	vbox.add_child(_revive_btn)
+	vbox.move_child(_revive_btn, retry_btn.get_index())
+
 	GameManager.game_over_triggered.connect(_on_game_over)
 	retry_btn.pressed.connect(_on_retry_pressed)
 	endless_btn.pressed.connect(_on_endless_pressed)
@@ -94,6 +107,10 @@ func _on_game_over(victory: bool) -> void:
 	_refresh_unlocks()
 	_refresh_records()
 	endless_btn.visible = victory and not GameManager.endless_mode
+	# 原地复活：仅败北且还有次数可消耗；文案带剩余次数，让玩家知道这是有限资源
+	_revive_btn.visible = not victory and GameManager.revive_charges > 0
+	_revive_btn.disabled = false
+	_revive_btn.text = "原 地 复 活（剩 %d 次）" % GameManager.revive_charges
 	visible = true
 	get_tree().paused = true
 
@@ -185,6 +202,8 @@ func _play_reveal() -> void:
 	var btns: Array[Control] = [retry_btn, _menu_btn]
 	if endless_btn.visible:
 		btns.push_front(endless_btn)
+	if _revive_btn.visible:
+		btns.push_front(_revive_btn)
 	var t_btn := t_chip + chips.size() * 0.09 + 0.15
 	for i in range(btns.size()):
 		var b := btns[i]
@@ -342,3 +361,31 @@ func _on_endless_pressed() -> void:
 		visible = false
 		AudioManager.play_sfx("level_up", 1.0)
 		GameManager.continue_endless())
+
+## 原地复活（2026-10-23）：消耗一次「轮回重生」次数，解除暂停与结算态，
+## 由 Player.revive_from_death 完成还魂仪式（凝魂阵→光柱爆发→3 秒无敌）。
+func _on_revive_pressed() -> void:
+	if not _can_interact:
+		return
+	if GameManager.revive_charges <= 0:
+		_revive_btn.visible = false
+		return
+	if is_instance_valid(_revive_btn):
+		_revive_btn.text = "还 魂 中..."
+		_revive_btn.disabled = true
+	GameManager.revive_charges -= 1
+	_exit_to(func():
+		visible = false
+		get_tree().paused = false
+		GameManager.is_game_over = false
+		AudioManager.play_bgm_key(_battle_bgm_key())
+		if GameManager.player != null and is_instance_valid(GameManager.player)\
+			and GameManager.player.has_method("revive_from_death"):
+			GameManager.player.revive_from_death())
+
+## 复活回场续播的战斗 BGM：与 WaveSpawner 开局同一口径（Boss/精英波 trial，其余 battle）
+func _battle_bgm_key() -> String:
+	var ws: Node = GameManager.wave_spawner
+	if ws != null and ws.has_method("current_wave_bgm_key"):
+		return String(ws.current_wave_bgm_key())
+	return "battle"

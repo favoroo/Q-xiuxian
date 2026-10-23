@@ -98,6 +98,8 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.elite_damage = minf(gm.elite_damage + v, gm.ELITE_DAMAGE_CAP)
 			"free_rerolls":
 				gm.free_rerolls += int(v)
+			"revive_charges":
+				gm.revive_charges += int(v)
 			"shop_price_mul":
 				# 道具折扣腿带地板（对标土豆 Coupon 叠顶）：角色价格乘区在别处结算、不夹
 				gm.shop_price_mult = maxf(gm.SHOP_PRICE_FLOOR, gm.shop_price_mult * v)
@@ -198,6 +200,8 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 				gm.elite_damage = undo_capped_add(gm.elite_damage, v, gm.ELITE_DAMAGE_CAP)
 			"free_rerolls":
 				gm.free_rerolls -= int(v)
+			"revive_charges":
+				gm.revive_charges = maxi(0, gm.revive_charges - int(v))
 			"shop_price_mul":
 				if v > 0.0:
 					gm.shop_price_mult = undo_mult(gm.shop_price_mult, v, gm.SHOP_PRICE_FLOOR)

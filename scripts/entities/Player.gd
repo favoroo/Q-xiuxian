@@ -26,6 +26,7 @@ var invulnerable_time: float = 0.0
 @onready var hit_flash_mat: ShaderMaterial = anim_sprite.material as ShaderMaterial
 @onready var skill_vfx: PlayerSkillVfx = $SkillVfx
 @onready var level_ritual: Node2D = $PlayerLevelRitual
+@onready var revive_ritual: Node2D = $PlayerReviveRitual
 
 var sun_orb_angle: float = 0.0
 var idle_bob_phase: float = 0.0
@@ -1573,6 +1574,67 @@ func reset_victory_state() -> void:
 		procedural_view.position = Vector2.ZERO
 		procedural_view.modulate = Color.WHITE
 		procedural_view.rotation = 0.0
+
+## 原地复活（2026-10-23）：阵亡结算屏点「原地复活」后由 GameOverDialog 调用。
+## 视觉主体交给 PlayerReviveRitual（凝魂阵→魂火归体→通灵光柱→护体余韵），
+## 本方法只负责状态复位 + 镜头叙事 + 音效编排：
+## 演出期间保持 _dying=true，挡住 _physics_process 对 modulate/scale 的逐帧覆写与再受创，
+## 身躯凝形完成后才交还控制权，并给 3 秒复活无敌（频闪/护体金环同源读数）。
+func revive_from_death() -> void:
+	if not _dying:
+		return
+	_dash_time = 0.0
+	velocity = Vector2.ZERO
+	_hit_tilt = 0.0
+	_hit_jiggle_offset = Vector2.ZERO
+	# 血量先落读数：顶栏从 0 跳到半血，身体随后凝形
+	current_health = max_health * 0.5
+	GameManager.player_hp_changed.emit(current_health, max_health)
+
+	if not is_procedural:
+		anim_sprite.position = Vector2.ZERO
+	if is_procedural and procedural_view != null:
+		procedural_view.position = Vector2.ZERO
+
+	var fade_target: Node2D = anim_sprite
+	if is_procedural and procedural_view != null:
+		fade_target = procedural_view
+	var base_scale := anim_base_scale
+	if is_procedural and procedural_view != null:
+		base_scale = anim_base_scale * 1.5
+
+	# 镜头推近还魂现场 + 还魂仪式开演
+	GameFeel.focus_camera(GameManager, global_position, 1.28, 0.45)
+	AudioManager.play_sfx("level_up", 0.7)
+	if revive_ritual != null and revive_ritual.has_method("play"):
+		revive_ritual.play()
+
+	# 身躯凝形：透明+压扁 → 弹回基准（BACK_OUT），与凝魂段同长
+	fade_target.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(fade_target, "modulate:a", 1.0, 0.55)
+	tw.parallel().tween_property(fade_target, "scale", base_scale, 0.55)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(shadow_sprite, "modulate:a", 1.0, 0.55)
+	# 爆发拍：顿帧一响 + 镜头冲击 + 定音 + 振动 + 公告（粒子/光柱由仪式节点负责）
+	tw.tween_callback(func():
+		GameFeel.hit_stop(GameManager, 0.08, 0.12)
+		GameFeel.zoom_punch(GameManager, 0.06, 0.22)
+		GameFeel.shake_camera(GameManager, 3.5, 0.16)
+		GameFeel.vibrate(120, 1.0)
+		AudioManager.play_sfx("obelisk_blessing", 1.0)
+		GameManager.announcement_triggered.emit("◆ 起死回生 · 逆天改命 ◆")
+	)
+	tw.tween_interval(0.4)
+	# 归位：交还控制权并给 3 秒无敌（护体金环随 invulnerable_time 自然收场）
+	tw.tween_callback(func():
+		_dying = false
+		invulnerable_time = 3.0
+		fade_target.modulate = Color.WHITE
+		fade_target.scale = base_scale
+		shadow_sprite.modulate = Color.WHITE
+		GameFeel.release_camera(GameManager, 0.7)
+	)
 
 func increase_max_hp(amount: float, heal_amount: float) -> void:
 	max_health += amount

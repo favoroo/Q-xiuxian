@@ -50,6 +50,7 @@ const FIELD_FORM := {
 	"harvest": FORM_FLAT,
 	"spirit_stones": FORM_FLAT,
 	"free_rerolls": FORM_FLAT,
+	"revive_charges": FORM_FLAT,
 	"bonus_pierce": FORM_FLAT,
 	"luck": FORM_FLAT,
 	# 2026-10-11 寻宝流：数量与品质是「几口 / 几点」的平值；2026-10-12 第三条腿改抬兑现量，

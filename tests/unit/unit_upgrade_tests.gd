@@ -106,6 +106,21 @@ func _test_upgrade_roll_filters() -> void:
 	_c.equals(rest.size(), 1, "只剩 1 项可选时不硬凑 3 项")
 	_c.equals(rest[0].get("id", ""), "atk_up", "剩下的正是未叠满那项")
 
+	# 轮回重生：限购 2 次（复活次数），落地与「买满不再刷新」双向回归
+	GameManager.reset_run()
+	GameManager.apply_upgrade("revive_up")
+	_c.equals(GameManager.revive_charges, 1, "轮回重生落地为复活次数 +1")
+	var revive_maxed := {}
+	for u in UpgradeData.UPGRADES:
+		revive_maxed[u.get("id", "")] = int(u.get("max_stacks", 99))
+	revive_maxed["revive_up"] = 2
+	var revive_picks := UpgradeData.get_random_upgrades(3, {"counts": revive_maxed})
+	var leaked := false
+	for rp in revive_picks:
+		if rp.get("id", "") == "revive_up":
+			leaked = true
+	_c.check(not leaked, "轮回重生买满 2 次后不再出现在悟道候选")
+
 	# 福缘把高稀有（史诗+传说）概率抬上去：固定样本量下数量应随福缘增加
 	var epic_low := _count_high_rarity(0.0)
 	var epic_high := _count_high_rarity(40.0)

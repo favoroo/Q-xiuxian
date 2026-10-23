@@ -314,7 +314,7 @@ static func upgrade_fields() -> Array:
 		"weapon_damage_mult", "attack_speed_mult_mul", "armor", "move_speed_mult",
 		"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
 		"dodge", "lifesteal", "luck", "harvest", "spirit_stones", "max_hp", "hp_heal",
-		"xp_gain_mult", "knockback_mult", "free_rerolls", "elite_damage", "shop_price_mul",
+		"xp_gain_mult", "knockback_mult", "free_rerolls", "revive_charges", "elite_damage", "shop_price_mul",
 			"melee_damage", "ranged_damage", "elemental_damage", "engineering_damage", "contraption_damage",
 		"element_damage_all", "element_damage_metal", "element_damage_wood",
 		"element_damage_water", "element_damage_fire", "element_damage_earth",
