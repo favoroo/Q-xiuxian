@@ -94,7 +94,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 		"chip": "%s道具" % ItemData.tier_label(tier_num),
 		"chip_color": tier_col,
 		"rows": rows,
-		"body": "稀有道具：属性加成与升级同源叠加。",
+		"body": "被动道具：属性加成与悟道同源叠加。",
 		"notes": notes,
 		"foot": "在回合间商店可继续购置更多道具。",
 	})

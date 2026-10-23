@@ -259,6 +259,10 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
 			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
 			{"tag": "意见反馈", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open"},
+			{"tag": "意见反馈·发送中", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open",
+				"feedback_overlay": "sending"},
+			{"tag": "意见反馈·成功", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open",
+				"feedback_overlay": "success"},
 			{"tag": "修仙志", "path": "res://scripts/ui/CareerDialog.gd", "open": "open"},
 			{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
 	]
@@ -303,6 +307,15 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		return
 	if String(spec["tag"]) == "顶栏 HUD":
 		_stress_hud(node)
+	if spec.has("feedback_overlay"):
+		# 发送覆盖层平时隐藏，判据必须显式拉起才量得到（否则这一屏是假绿）
+		var fb := node as FeedbackDialog
+		if fb != null and fb._overlay != null:
+			if String(spec["feedback_overlay"]) == "success":
+				fb._overlay.show_success()
+			else:
+				fb._overlay.show_sending("正在上传截图…")
+			await get_tree().create_timer(0.5).timeout
 	await get_tree().process_frame
 	await get_tree().process_frame
 	# 卡片入场是错峰缩放 tween（0.72 → 1.0）：只等两帧量到的是缩小的中间帧，

@@ -33,7 +33,7 @@ const JPEG_QUALITY := 0.85
 ## 单个日志文件只带尾部 16KB：排查够用，也不会让邮件正文被服务端截断
 const LOG_TAIL_BYTES := 16384
 const GODOT_LOG_PATH := "user://logs/godot.log"
-const FLICKER_LOG_PATH := "user://flicker_log.csv"
+const DRAFT_PATH := "user://feedback_draft.cfg"
 const USER_AGENT := "QXiuxian-GodotClient"
 
 static var _boundary_seq: int = 0
@@ -151,6 +151,41 @@ static func build_fields(message: String, contact: String) -> Dictionary:
 		fields["_replyto"] = contact.strip_edges()
 	return fields
 
+# ---------------- 草稿 ----------------
+
+## 保存未发送的草稿（只存文字与联系方式；截图不落盘，避免占空间与隐私顾虑）。
+## 输入停顿 0.6 秒由 FeedbackDialog 触发，正常关闭时也会补存一次。
+static func save_draft(message: String, contact: String) -> void:
+	if message.strip_edges().is_empty() and contact.strip_edges().is_empty():
+		clear_draft()
+		return
+	var cfg := ConfigFile.new()
+	cfg.set_value("draft", "message", message)
+	cfg.set_value("draft", "contact", contact)
+	cfg.set_value("draft", "saved_at", Time.get_datetime_string_from_system(false, true))
+	cfg.save(DRAFT_PATH)
+
+## 读取草稿：无草稿/空正文返回空字典
+static func load_draft() -> Dictionary:
+	if not FileAccess.file_exists(DRAFT_PATH):
+		return {}
+	var cfg := ConfigFile.new()
+	if cfg.load(DRAFT_PATH) != OK:
+		return {}
+	var msg := String(cfg.get_value("draft", "message", ""))
+	if msg.strip_edges().is_empty():
+		return {}
+	return {
+		"message": msg,
+		"contact": String(cfg.get_value("draft", "contact", "")),
+	}
+
+## 清除草稿（发送成功后调用）
+static func clear_draft() -> void:
+	var dir := DirAccess.open("user://")
+	if dir != null and dir.file_exists("feedback_draft.cfg"):
+		dir.remove("feedback_draft.cfg")
+
 # ---------------- 日志尾部 ----------------
 
 ## 读文件尾部最多 max_bytes 字节。从中间截断时丢掉第一行残片，避免日志首行缺头。
@@ -173,39 +208,38 @@ static func read_log_tail(path: String, max_bytes: int = LOG_TAIL_BYTES) -> Stri
 			text = text.substr(nl + 1)
 	return text
 
-## 收集最近日志：Godot 运行日志 + 闪屏探针日志（存在才带）
+## 收集最近运行日志（user://logs/godot.log 存在才带）
 static func collect_recent_logs() -> String:
-	var parts: Array[String] = []
 	var godot_tail := read_log_tail(GODOT_LOG_PATH, LOG_TAIL_BYTES).strip_edges()
-	if not godot_tail.is_empty():
-		parts.append("【最近运行日志】\n" + godot_tail)
-	var flicker_tail := read_log_tail(FLICKER_LOG_PATH, LOG_TAIL_BYTES).strip_edges()
-	if not flicker_tail.is_empty():
-		parts.append("【闪屏探针日志（最近）】\n" + flicker_tail)
-	return "\n\n".join(parts)
+	if godot_tail.is_empty():
+		return ""
+	return "【最近运行日志】\n" + godot_tail
 
 # ---------------- 截图压缩 ----------------
 
 ## 从相册路径读图，长边压到 max_dim，转 JPEG 字节。
+## 兼容 Android SAF 返回的 content:// URI：FileAccess 能直接打开 URI（Godot 4.7 文档），
+## 但 file_exists() 对 URI 不可靠，所以这里只认「能不能打开 + 能不能解码」。
 ## 返回 { ok, bytes, width, height, mime } 或 { ok:false, error }。
 static func compress_image_for_upload(path: String, max_dim: int = MAX_IMAGE_DIM,
 		quality: float = JPEG_QUALITY) -> Dictionary:
 	if path.is_empty():
 		return {"ok": false, "error": "没有选择图片"}
-	if not FileAccess.file_exists(path):
-		return {"ok": false, "error": "图片不存在或无法访问"}
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
-		return {"ok": false, "error": "无法读取图片文件"}
+		return {"ok": false, "error": "无法读取图片（可能未授予相册权限）"}
 	var src_size := f.get_length()
-	f.close()
 	if src_size <= 0:
+		f.close()
 		return {"ok": false, "error": "图片文件为空"}
 	# 先按文件大小挡一道：40MB 的图解码就可能把手机内存顶爆
 	if src_size > 40 * 1024 * 1024:
+		f.close()
 		return {"ok": false, "error": "图片过大（超过 40MB），请换一张"}
+	var raw := f.get_buffer(src_size)
+	f.close()
 
-	var img := Image.load_from_file(path)
+	var img := decode_image_bytes(raw)
 	if img == null or img.is_empty():
 		return {"ok": false, "error": "无法解码这张图片，请换一张"}
 	var w := img.get_width()
@@ -230,6 +264,28 @@ static func compress_image_for_upload(path: String, max_dim: int = MAX_IMAGE_DIM
 		"height": img.get_height(),
 		"mime": "image/jpeg",
 	}
+
+## 按文件头解码图片字节（相册可能给 PNG/JPEG/WebP，扩展名不可信）
+static func decode_image_bytes(raw: PackedByteArray) -> Image:
+	if raw.size() < 12:
+		return null
+	var img := Image.new()
+	var ok := false
+	# PNG: 89 50 4E 47
+	if raw[0] == 0x89 and raw[1] == 0x50 and raw[2] == 0x4E and raw[3] == 0x47:
+		ok = img.load_png_from_buffer(raw) == OK
+	# JPEG: FF D8 FF
+	elif raw[0] == 0xFF and raw[1] == 0xD8 and raw[2] == 0xFF:
+		ok = img.load_jpg_from_buffer(raw) == OK
+	# WebP: RIFF....WEBP
+	elif raw[0] == 0x52 and raw[1] == 0x49 and raw[2] == 0x46 and raw[3] == 0x46 \
+			and raw[8] == 0x57 and raw[9] == 0x45 and raw[10] == 0x42 and raw[11] == 0x50:
+		ok = img.load_webp_from_buffer(raw) == OK
+	# BMP: BM
+	elif raw[0] == 0x42 and raw[1] == 0x4D:
+		ok = img.load_bmp_from_buffer(raw) == OK
+	# 未知文件头：引擎没有通用的「按字节猜格式」入口，直接判失败
+	return img if ok else null
 
 ## 附件文件名统一用时间戳，避免相册原名里的空格/中文/引号污染 multipart 头
 static func build_attachment_filename() -> String:

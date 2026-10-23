@@ -1,4 +1,4 @@
-[gd_scene uid="uid://bfeedbackcheck01" load_steps=2 format=3]
+[gd_scene format=3 uid="uid://ouyx22wy8i57"]
 
 [ext_resource type="Script" path="res://tests/feedback_check.gd" id="1_fbcheck"]
 

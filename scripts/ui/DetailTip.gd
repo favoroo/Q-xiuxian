@@ -289,11 +289,12 @@ func _build_body(vbox: VBoxContainer, payload: Dictionary) -> void:
 	rt.custom_minimum_size = Vector2(INNER_W, 0)
 	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rt.add_theme_font_override("normal_font", GameStyle.body_font())
-	rt.add_theme_font_override("bold_font", GameStyle.body_font())
+	rt.add_theme_font_override("bold_font", GameStyle.emph_font())
 	rt.add_theme_font_size_override("normal_font_size", 13)
 	rt.add_theme_font_size_override("bold_font_size", 13)
 	rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
-	rt.text = body
+	# body 也走同一套标色（payload 里仍是纯文本；已含 BBCode 的串会被原样放行）
+	rt.text = GameStyle.colorize_terms(body)
 	vbox.add_child(rt)
 
 func _build_notes(vbox: VBoxContainer, payload: Dictionary) -> void:
@@ -305,15 +306,26 @@ func _build_notes(vbox: VBoxContainer, payload: Dictionary) -> void:
 		vbox.add_child(sep)
 	# 中文长句在真机上不能指望引擎折行（AGENTS.md 坑 4），按卡内可用宽切硬换行。
 	# 预算必须等于 INNER_W：折窄一档，整张卡就多长一行，受益详情那几张会顶出视口。
+	# 用 RichTextLabel 而非 Label：强调色走 GameStyle.colorize_terms（payload 里仍是纯文本，
+	# 测试读 payload 不受影响）。注意 BBCode 版的换行要交给 wrap_bbcode，否则标签会被当可见字符切断。
 	for n in notes:
-		var lbl := Label.new()
-		lbl.text = "· " + GameStyle.wrap_cjk(String(n), GameStyle.body_font(), 12, INNER_W)
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		lbl.custom_minimum_size = Vector2(INNER_W, 0)
-		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		GameStyle.label(lbl, 12, GameStyle.GREY)
-		vbox.add_child(lbl)
+		var rt := RichTextLabel.new()
+		rt.bbcode_enabled = true
+		rt.fit_content = true
+		rt.scroll_active = false
+		rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rt.custom_minimum_size = Vector2(INNER_W, 0)
+		rt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rt.add_theme_font_override("normal_font", GameStyle.body_font())
+		rt.add_theme_font_override("bold_font", GameStyle.emph_font())
+		rt.add_theme_font_size_override("normal_font_size", 12)
+		rt.add_theme_font_size_override("bold_font_size", 12)
+		# GREY #8a857a 在纸白底只有 3.31 对比度（低于正文 4.5 门槛），接到 PAPER_DIM
+		rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+		rt.text = "· " + GameStyle.wrap_bbcode(
+			GameStyle.colorize_terms(String(n)), GameStyle.body_font(), 12, INNER_W)
+		vbox.add_child(rt)
 
 func _build_foot(vbox: VBoxContainer, payload: Dictionary) -> void:
 	var foot := String(payload.get("foot", ""))

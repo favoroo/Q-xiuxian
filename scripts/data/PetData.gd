@@ -31,7 +31,7 @@ const DEFS: Dictionary = {
 		"base_price": 38,
 		"base_cooldown": 2.2,
 		"base_value": 38.0,  ## 基础火丹伤害
-		"desc": "每 2.2 秒向最近敌人发射穿透三昧火弹，附带灼烧与 15% 烈焰易伤",
+		"desc": "向最近敌人发射穿透火弹，附带灼烧与 15% 烈焰易伤",
 		"color": Color(0.98, 0.42, 0.16),      # 橙红
 		"halo_color": Color(1.0, 0.55, 0.2, 0.35),
 		"decor": "fox_ears_tail",
@@ -43,7 +43,7 @@ const DEFS: Dictionary = {
 		"base_price": 42,
 		"base_cooldown": 2.8,
 		"base_value": 64.0,  ## 单发高伤雷击
-		"desc": "每 2.8 秒召唤连锁神雷，造成高伤并麻痹打断敌人",
+		"desc": "召唤连锁神雷，高伤并麻痹打断敌人",
 		"color": Color(0.55, 0.45, 0.98),      # 蓝紫
 		"halo_color": Color(0.68, 0.58, 1.0, 0.35),
 		"decor": "bird_crest_beak",
@@ -55,7 +55,7 @@ const DEFS: Dictionary = {
 		"base_price": 46,
 		"base_cooldown": 2.5,
 		"base_value": 120.0, ## 拒马与清弹幕半径 px
-		"desc": "每 2.5 秒周身消除敌方弹丸并震退近身敌人，濒危附加玄甲护符",
+		"desc": "消除周身敌方弹丸并震退近身敌人；濒危时附赠护符",
 		"color": Color(0.24, 0.62, 0.68),      # 青黛
 		"halo_color": Color(0.35, 0.75, 0.82, 0.35),
 		"decor": "turtle_shell",
@@ -67,7 +67,7 @@ const DEFS: Dictionary = {
 		"base_price": 40,
 		"base_cooldown": 2.5,
 		"base_value": 20.0,  ## 基础回血量
-		"desc": "每 2.5 秒降下甘霖回血，并赋予 2 秒移速与拾取范围加成",
+		"desc": "降下甘霖回血，并短时提升移速与拾取范围",
 		"color": Color(0.35, 0.85, 0.55),      # 玉绿
 		"halo_color": Color(0.48, 0.95, 0.65, 0.35),
 		"decor": "deer_horns",
@@ -79,7 +79,7 @@ const DEFS: Dictionary = {
 		"base_price": 36,
 		"base_cooldown": 3.0, ## 金钱镖发射周期（秒）
 		"base_value": 8.0,   ## 每回合基准产出金币
-		"desc": "每 3.0 秒吐出金钱镖飞袭最近敌人造成伤害，回合结束献上金币",
+		"desc": "吐出金钱镖伤敌；每回合结束献上金币",
 		"color": Color(0.96, 0.82, 0.22),      # 金黄
 		"halo_color": Color(1.0, 0.88, 0.35, 0.4),
 		"decor": "toad_coin",
@@ -103,7 +103,7 @@ const DEFS: Dictionary = {
 		"base_price": 38,
 		"base_cooldown": 3.5,
 		"base_value": 160.0, ## 震地半径 px，伤害见 BalanceSpiritPet.smash_damage
-		"desc": "每 3.5 秒重砸地面击退 160px 内敌人，命中即减速 3.5 秒",
+		"desc": "重砸地面击退周围敌人并减速",
 		"color": Color(0.65, 0.58, 0.52),      # 岩灰
 		"halo_color": Color(0.78, 0.72, 0.66, 0.35),
 		"decor": "ape_brows",

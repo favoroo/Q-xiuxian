@@ -226,6 +226,23 @@ func _new_scroll_vbox(scroll: ScrollContainer, separation: int = 8) -> VBoxConta
 func _make_text_card(title: String, body: String, image: String = "", image_h: float = 80.0) -> Control:
 	return CodexCardFactory.make_text_card(title, body, TEXT_W, image, image_h)
 
+## 单段富文本正文（走 GameStyle 标色 + 换行）：给羁绊/词条引言等不带卡体的独立正文用
+func _make_body_rt(body: String) -> RichTextLabel:
+	var rt := RichTextLabel.new()
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rt.custom_minimum_size = Vector2(TEXT_W, 0)
+	rt.add_theme_font_override("normal_font", GameStyle.body_font())
+	rt.add_theme_font_override("bold_font", GameStyle.emph_font())
+	rt.add_theme_font_size_override("normal_font_size", 13)
+	rt.add_theme_font_size_override("bold_font_size", 13)
+	rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+	rt.text = GameStyle.wrap_bbcode(GameStyle.colorize_terms(body), GameStyle.body_font(), 13, TEXT_W)
+	return rt
+
 func _load_icon(path: String, tex_size: Vector2) -> TextureRect:
 	# 统一走 GameStyle 图标工厂：武器图标自动优先 ui/ 128px 高清变体 + LINEAR 滤波，
 	# 不再手写 load（手写只拿 48px 战斗画布，40px 槽位放大偏糊）；item 无变体原样回退，行为不变。
@@ -261,8 +278,8 @@ func _rebuild_items_page() -> void:
 		return
 	for c in _items_box.get_children():
 		c.queue_free()
-	_items_box.add_child(_make_text_card("道具规则",
-		"道具是买即生效的被动道具，无限持有、不占武器栏位。\n品阶越高现身越晚、价格越贵：普通开局即有，稀有、史诗、传说随回合陆续现身。\n加成读数认颜色：绿色是增益、红色是代偿，数值与实际生效幅度同源。\n点按任意道具卡查看效果与入手价。"))
+	_items_box.add_child(_make_text_card(
+		String(ManualData.RULE_CARDS["items"]["title"]), String(ManualData.RULE_CARDS["items"]["body"])))
 
 	for tier in [1, 2, 3, 4]:
 		var tier_col: Color = ItemData.tier_color(tier)
@@ -308,8 +325,8 @@ func _rebuild_upgrades_page() -> void:
 		return
 	for c in _upgrades_box.get_children():
 		c.queue_free()
-	_upgrades_box.add_child(_make_text_card("悟道规则",
-		"悟道是战斗中升级后在回合间领悟的被动增益，整局生效。\n一屏给出 5 个候选，每回合有 1 次免费刷新机会。\n按稀有度分普通、稀有、史诗、传说：品质越高出现概率越低、单项加成幅度越强。\n点按任意悟道卡查看加成幅度与最大加修层数。"))
+	_upgrades_box.add_child(_make_text_card(
+		String(ManualData.RULE_CARDS["upgrades"]["title"]), String(ManualData.RULE_CARDS["upgrades"]["body"])))
 
 	var groups: Array = [
 		["普通悟道", "common", GameStyle.PAPER],
@@ -381,8 +398,8 @@ func _rebuild_pets_page() -> void:
 		return
 	for c in _pets_box.get_children():
 		c.queue_free()
-	_pets_box.add_child(_make_text_card("灵兽伙伴",
-		"随行灵兽可在金币阁货架购买，购买后永久随行战斗，不占武器栏位。\n寻常修士限带 1 只，御兽师最多可随行 3 只；随行期间亦可在商店折半退还金币。\n灵兽伤害、效果与冷却享受「灵兽伤害 / 灵兽效果 / 灵兽冷却」属性加成。\n点按任意灵兽卡查看助战技能与买价。"))
+	_pets_box.add_child(_make_text_card(
+		String(ManualData.RULE_CARDS["pets"]["title"]), String(ManualData.RULE_CARDS["pets"]["body"])))
 
 	var grid := GridContainer.new()
 	grid.columns = 4
@@ -474,8 +491,8 @@ func _rebuild_cultivators_page() -> void:
 		return
 	for c in _cult_box.get_children():
 		c.queue_free()
-	_cult_box.add_child(_make_text_card("角色规则",
-		"每名角色都是「超能力 + 严苛负面代偿」的不对称设计：选人是本局最重要的流派决定。\n初始开放八名角色，其余通过「战绩」的成就解锁。"))
+	_cult_box.add_child(_make_text_card(
+		String(ManualData.RULE_CARDS["cultivators"]["title"]), String(ManualData.RULE_CARDS["cultivators"]["body"])))
 
 	for cid in CultivatorData.DEFS.keys():
 		var def: Dictionary = CultivatorData.DEFS[cid]
@@ -628,8 +645,8 @@ func _rebuild_enemies_page() -> void:
 		return
 	for c in _enemies_box.get_children():
 		c.queue_free()
-	_enemies_box.add_child(_make_text_card("敌人图鉴",
-		"妖物在实战中刷出过一次即自动收录。\n点按任意妖物卡查看威胁与出没波次。"))
+	_enemies_box.add_child(_make_text_card(
+		String(ManualData.RULE_CARDS["enemies"]["title"]), String(ManualData.RULE_CARDS["enemies"]["body"])))
 
 	var groups: Array = [
 		["常规妖物", EnemyGuideData.catalog_ids().slice(0, 12), false],
@@ -739,12 +756,12 @@ func _open_enemy_tip(eid: String, is_elite: bool, anchor: Control) -> void:
 		payload["icon_texture"] = icon_tex
 	DetailTip.show_over(self, anchor, payload)
 
-## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文染朱砂。
-## 与 CultivatorSelect.highlight_bbcode 同一手法，只是这里只认一种强调色。
+## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文走朱砂色块强调。
 static func _danger_bbcode(raw: String) -> String:
 	var re := RegEx.new()
 	re.compile("【([^】]+)】")
-	return re.sub(raw, _bbcode_open(GameStyle.BAD) + "$1" + BB_COLOR_CLOSE, true)
+	var open := "[bgcolor=#" + GameStyle.BAD.to_html(false) + "][color=#" + GameStyle.INK_TEXT.to_html(false) + "]"
+	return re.sub(raw, open + "$1[/color][/bgcolor]", true)
 
 ## 未收录只给纯文本：括号是排版记号，不该在玩家面前露出来
 static func _desc_plain(raw: String) -> String:
@@ -796,12 +813,8 @@ func _make_synergy_card() -> Control:
 	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
-	var intro_lbl := Label.new()
-	intro_lbl.text = GameStyle.wrap_cjk(
-		"持有同一标签的武器达 2 / 4 / 6 件时逐级激活羁绊加成。类型与元素两条线互不冲突、同时生效——凑羁绊是中期发力的核心。",
-		GameStyle.body_font(), 13, TEXT_W)
-	GameStyle.label(intro_lbl, 13, GameStyle.PAPER_DIM)
-	vbox.add_child(intro_lbl)
+	var synergy_rt := _make_body_rt(String(ManualData.RULE_CARDS["synergy_intro"]["body"]))
+	vbox.add_child(synergy_rt)
 
 	for group in [["类型", WeaponData.CLASSES], ["元素", WeaponData.ELEMENTS]]:
 		var g_lbl := Label.new()
@@ -849,12 +862,8 @@ func _make_stat_guide_card() -> Control:
 	GameStyle.label(title_lbl, 15, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	vbox.add_child(title_lbl)
 
-	var intro_lbl := Label.new()
-	intro_lbl.text = GameStyle.wrap_cjk(
-		"局内点右上「等级」打开属性面板，每条属性还能点按看结算公式与上限。以下是常用词条的一句话解读：",
-		GameStyle.body_font(), 13, TEXT_W)
-	GameStyle.label(intro_lbl, 13, GameStyle.PAPER_DIM)
-	vbox.add_child(intro_lbl)
+	var stat_rt := _make_body_rt(String(ManualData.RULE_CARDS["stat_guide_intro"]["body"]))
+	vbox.add_child(stat_rt)
 
 	for sid in ManualData.STAT_GUIDE_IDS:
 		var line := HBoxContainer.new()

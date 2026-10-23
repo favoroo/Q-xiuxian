@@ -1,6 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://cflickerprobe001"]
-
-[ext_resource type="Script" path="res://tests/flicker_probe_check.gd" id="1_fp"]
-
-[node name="FlickerProbeCheck" type="Node"]
-script = ExtResource("1_fp")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 uid="uid://bfeedbackdlg01" format=3]
+[gd_scene format=3 uid="uid://qbneo41pkpge"]
 
 [ext_resource type="Script" path="res://scripts/ui/FeedbackDialog.gd" id="1_feedback"]
 

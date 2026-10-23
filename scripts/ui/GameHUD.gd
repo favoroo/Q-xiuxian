@@ -316,9 +316,6 @@ func _build_widgets() -> void:
 	_extra_skill_box = _extra_skill_widget
 	_extra_skill_btn = _extra_skill_widget.get_btn()
 	add_child(HudFpsCounter.new())
-	# 真机闪屏定位探针（2026-10-20）：默认关，设置页「闪屏探针」开启后每帧采样，
-	# 只在检测到 HUD 异常跳变时写 user://flicker_log.csv。挂在 HUD 下随场景生灭。
-	add_child(FlickerProbe.new())
 	# 回合倒计时：作为 WaveChip 的第二个孩子铺进同一格内容矩形 —— PanelContainer 会把
 	# 所有子节点都摆成内容区，所以这颗零最小尺寸的 Control 既不改变芯片大小，又能拿到
 	# 与文字同样宽的底边去画那根线（不改 .tscn、不给顶栏添新格子）。

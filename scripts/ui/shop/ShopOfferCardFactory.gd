@@ -33,14 +33,22 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	var stat_rows: Array = data.stat_rows
 	if not stat_rows.is_empty():
 		vbox.add_child(BonusRows.build_rows_block(stat_rows, 12, inner_w))
-	if not String(data.desc).is_empty():
-		var desc_lbl := Label.new()
-		desc_lbl.text = GameStyle.wrap_cjk(data.desc, GameStyle.body_font(), 12, inner_w)
-		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		desc_lbl.custom_minimum_size = Vector2(inner_w, 0)
-		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
-		vbox.add_child(desc_lbl)
+		if not String(data.desc).is_empty():
+			var desc_rt := RichTextLabel.new()
+			desc_rt.bbcode_enabled = true
+			desc_rt.fit_content = true
+			desc_rt.scroll_active = false
+			desc_rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			desc_rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			desc_rt.custom_minimum_size = Vector2(inner_w, 0)
+			desc_rt.add_theme_font_override("normal_font", GameStyle.body_font())
+			desc_rt.add_theme_font_override("bold_font", GameStyle.emph_font())
+			desc_rt.add_theme_font_size_override("normal_font_size", 12)
+			desc_rt.add_theme_font_size_override("bold_font_size", 12)
+			desc_rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+			desc_rt.text = GameStyle.wrap_bbcode(
+				GameStyle.colorize_terms(data.desc), GameStyle.body_font(), 12, inner_w)
+			vbox.add_child(desc_rt)
 	# 弹性占位：纯加成卡（如药水、desc 已清空的道具）也要把价格键钉在卡底，
 	# 不然货架把卡拉成等高后价格悬在半空、卡底留一大段黑
 	var stretch := Control.new()

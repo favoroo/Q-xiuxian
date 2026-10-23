@@ -23,27 +23,27 @@ const COL_TEXT_W := 300.0
 const PAGES: Array[Dictionary] = [
 	{
 		"title": "战斗与技能",
-		"body": "左下摇杆走位，武器自动索敌攻击——你只管躲伤害、捡金币和经验。\n右下圆钮是技能，手动释放带冷却，关键时刻保命（图中「闪避」）；部分角色还有一个专属的「额外技能」圆钮，攒上资源就能按（如影者的「影爆」）。打不过就跑，边退边打是活下去的第一要义。",
+		"body": "左下摇杆走位，武器自动攻击——你只管躲伤害、捡金币和经验。\n右下圆钮是技能，手动放、有冷却；部分角色还有第二颗额外技能钮。打不过就跑，边退边打。",
 		"image": "res://assets/art/tutorial/shot_combat.png",
 	},
 	{
 		"title": "装备标签羁绊",
-		"body": "每件武器带「器类 + 五行」双标签。点右上「属性」打开面板，看「羁绊与元素共鸣」一栏：同标签凑齐 2 / 4 / 6 件，阶梯式点亮加成（图中火系 2/6 已亮）——阵容越纯越强。",
+		"body": "每件武器带「器类 + 五行」两个标签。\n点右上「属性」看羁绊栏：同标签凑齐 2 / 4 / 6 件，逐级解锁加成——阵容越纯越强。",
 		"image": "res://assets/art/tutorial/shot_synergy.png",
 	},
 	{
 		"title": "商店与升星",
-		"body": "商店刷 5 格货架：看中的点卡上「锁定」留到下回合；不满意点左下「重掷货架」，费用逐次递增。\n背包陈列槽里集齐 3 把同名同星武器可合成升星，每星伤害翻倍——看到同名先买下囤着。",
+		"body": "商店 5 格货架：看中的点「锁定」留到下回合；不满意可「重掷」，费用逐次递增。\n集齐 3 把同名同星武器可合成升星，每星伤害翻倍。",
 		"image": "res://assets/art/tutorial/shot_shop.png",
 	},
 	{
 		"title": "悟道加点",
-		"body": "战斗中升级不打断，只攒点数，回合结束后统一加。\n一屏给 5 张候选卡：点中一张再按「确认选择」；每回合 1 次免费刷新（图中左下按钮），之后按次扣金币。",
+		"body": "升级不打断战斗，攒到回合结束统一加点。\n一屏 5 张候选，点中再按「确认」；每回合 1 次免费刷新，之后花金币。",
 		"image": "res://assets/art/tutorial/shot_alloc.png",
 	},
 	{
 		"title": "场景交互物",
-		"body": "场上三座聚灵阵（图中顶部发光的阵）：走入光圈长按「激活祭祀」约 0.8 秒，全屏冲击重创敌人并散落金币——每座只能用一次，留给 Boss 回合或绝境。\n场上的宝箱挨 3 下砸开，掉回复或金币；分木匣、铜匣、玉匣三档，越稀有的档掉得越多，玉匣砸开直接送一件道具。",
+		"body": "聚灵阵：走入光圈长按激活，全屏重创敌人并掉金币，每座限用一次，留给 Boss。\n宝箱：打 3 下砸开，分木/铜/玉三档，越稀有掉越多，玉匣直接送道具。",
 		"image": "res://assets/art/tutorial/shot_field.png",
 	},
 ]
@@ -58,11 +58,11 @@ var _back_btn: Button
 
 ## 本次关闭是否由「〈 返回」触发（回主菜单，不进选角）。
 ## 放在关闭信号之前由按钮置位、closed 发出后由 StartMenu._after_tutorial 读走并复位；
-## 其余关闭路径（跳过/ESC/遮罩/末页「开始修仙」）恒为 false。
+## 其余关闭路径（跳过/ESC/遮罩/末页「开始游戏」）恒为 false。
 var left_via_back: bool = false
 
 func _get_title_text() -> String:
-	return "修 仙 指 南"
+	return "新 手 指 南"
 
 ## 标题块是浅色底，黑字对比更清楚
 func _get_title_color() -> Color:
@@ -226,8 +226,9 @@ func _refresh_mute_chk() -> void:
 		_mute_chk.add_theme_color_override(c, col)
 
 func _on_opened() -> void:
-	# 每次打开复位：上一次「返回」留下的标记不许影响这一次的关闭语义
+	# 每次打开复位：上一次「返回」留下的标记不许影响这一次的关闭语义，页码重置回首页
 	left_via_back = false
+	_go_page(0)
 	_refresh_mute_chk()
 
 ## 「〈 返 回」：反悔退出回主菜单。与「跳 过」的区别只在落点与存档——
@@ -279,9 +280,24 @@ func _build_page(p: Dictionary) -> Control:
 	GameStyle.label(title_lbl, 16, GameStyle.JADE_DK, 0, GameStyle.INK, true)
 	col.add_child(title_lbl)
 
-	var body_lbl := Label.new()
-	body_lbl.text = GameStyle.wrap_cjk(String(p.get("body", "")), GameStyle.body_font(), 13, COL_TEXT_W)
-	GameStyle.label(body_lbl, 13, GameStyle.PAPER_DIM)
+	# 正文走 RichTextLabel：名词与数值由 colorize_terms 自动上语义色（文案表里仍是纯文本）。
+	# 换行必须用 wrap_bbcode —— 纯文本的 wrap_cjk 会把 [color] 标签当可见字符切断。
+	var body_lbl := RichTextLabel.new()
+	body_lbl.bbcode_enabled = true
+	body_lbl.fit_content = true
+	body_lbl.scroll_active = false
+	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body_lbl.custom_minimum_size = Vector2(COL_TEXT_W, 0)
+	body_lbl.add_theme_font_override("normal_font", GameStyle.body_font())
+	body_lbl.add_theme_font_override("bold_font", GameStyle.emph_font())
+	body_lbl.add_theme_font_size_override("normal_font_size", 13)
+	body_lbl.add_theme_font_size_override("bold_font_size", 13)
+	body_lbl.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+	# 段间距：正文用 \n 分段，行距留 6px 让两段不糊在一起（单页最多两三段，不会顶高）
+	body_lbl.add_theme_constant_override("line_separation", 6)
+	body_lbl.text = GameStyle.wrap_bbcode(
+		GameStyle.colorize_headings(String(p.get("body", ""))), GameStyle.body_font(), 13, COL_TEXT_W)
 	col.add_child(body_lbl)
 
 	return page
@@ -292,7 +308,7 @@ func _on_next_pressed() -> void:
 	else:
 		_go_page(_cur + 1)
 
-## 翻页：切显隐、刷指示块、首页禁用上一步、末页下一步换「开始修仙」
+## 翻页：切显隐、刷指示块、首页禁用上一步、末页下一步换「开始游戏」
 func _go_page(i: int) -> void:
 	_cur = clampi(i, 0, PAGES.size() - 1)
 	for k in range(_page_controls.size()):
@@ -304,7 +320,7 @@ func _go_page(i: int) -> void:
 	_prev_btn.disabled = (_cur == 0)
 	_prev_btn.modulate.a = 0.45 if _cur == 0 else 1.0
 	if _cur == PAGES.size() - 1:
-		_next_btn.text = "开 始 修 仙"
+		_next_btn.text = "开 始 游 戏"
 		GameStyle.button(_next_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 15, GameStyle.INK_TEXT)
 	else:
 		_next_btn.text = "下一步 〉"

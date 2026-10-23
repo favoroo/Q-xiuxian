@@ -127,20 +127,9 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "toggle",
 		"default": false,
 	},
-	{
-		"section": "display",
-		# 真机闪屏定位探针（2026-10-20）：开启后把「HUD 瞬闪」那一帧的状态写入
-		# user://flicker_log.csv（显存跳变/draw 骤降/HUD 显隐与透明度/窗口尺寸/缩放档/
-		# time_scale/辉光/拥挤档）。平时零日志零开销，仅供排查，玩家默认关闭。
-		"key": "flicker_probe",
-		"title": "闪屏探针",
-		"desc": "排查用：记录 HUD 闪烁时刻的状态到 user://flicker_log.csv（默认关）",
-		"type": "toggle",
-		"default": false,
-	},
-	{
-		"section": "display",
-		"key": "render_quality",
+		{
+			"section": "display",
+			"key": "render_quality",
 		"title": "画面清晰度",
 		"desc": "高清（原生高分屏极清渲染） / 流畅（固定视口拉伸，低配防掉帧）",
 		"type": "cycle",
@@ -750,8 +739,7 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 		return _to_bool(val, false)
 	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
 			or key == "haptics" or key == "screen_flash" or key == "show_fps" \
-			or key == "heat_distortion" or key == "screen_shockwave" or key == "glow" \
-			or key == "flicker_probe":
+			or key == "heat_distortion" or key == "screen_shockwave" or key == "glow":
 		return _to_bool(val, key != "show_fps" and key != "heat_distortion" and key != "screen_shockwave")
 	if key == "shake_intensity":
 		var s_shake := StringName(str(val))

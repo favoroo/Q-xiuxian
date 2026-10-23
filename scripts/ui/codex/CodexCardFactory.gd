@@ -124,9 +124,22 @@ static func make_text_card(title: String, body: String, text_w: float,
 		img_center.add_child(tex)
 		vbox.add_child(img_center)
 
-	var body_lbl := Label.new()
-	body_lbl.text = GameStyle.wrap_cjk(body, GameStyle.body_font(), 13, text_w)
-	GameStyle.label(body_lbl, 13, GameStyle.PAPER_DIM)
+	# 正文走 RichTextLabel：名词与数值由 colorize_terms 自动上语义色（文案表里仍是纯文本）。
+	# 换行必须用 wrap_bbcode —— 纯文本的 wrap_cjk 会把 [color] 标签当可见字符切断。
+	var body_lbl := RichTextLabel.new()
+	body_lbl.bbcode_enabled = true
+	body_lbl.fit_content = true
+	body_lbl.scroll_active = false
+	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body_lbl.custom_minimum_size = Vector2(text_w, 0)
+	body_lbl.add_theme_font_override("normal_font", GameStyle.body_font())
+	body_lbl.add_theme_font_override("bold_font", GameStyle.emph_font())
+	body_lbl.add_theme_font_size_override("normal_font_size", 13)
+	body_lbl.add_theme_font_size_override("bold_font_size", 13)
+	body_lbl.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+	body_lbl.text = GameStyle.wrap_bbcode(
+		GameStyle.colorize_terms(body), GameStyle.body_font(), 13, text_w)
 	vbox.add_child(body_lbl)
 
 	return card

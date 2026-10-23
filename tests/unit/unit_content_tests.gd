@@ -549,7 +549,7 @@ func _detail_info_rows(host: Control) -> Dictionary:
 			if l is RichTextLabel:
 				var plain := String((l as RichTextLabel).text).replace("[lb]", "\n")
 				var regex := RegEx.new()
-				regex.compile("\\[/?(?:color|b|i|u|s|font_size|font|outline_size|outline_color)(?:=[^\\]]*)?\\]")
+				regex.compile("\\[/?(?:bgcolor|color|b|i|u|s|font_size|font|outline_size|outline_color)(?:=[^\\]]*)?\\]")
 				lines.append(regex.sub(plain, "", true))
 			elif l is Label:
 				lines.append(String((l as Label).text))

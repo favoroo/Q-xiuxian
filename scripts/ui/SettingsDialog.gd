@@ -264,8 +264,6 @@ func _build_display_page() -> Control:
 	_add_toggle_row(vbox, "hit_stop", "顿帧打击感", "命中或击杀强敌时的微顿帧（增强打击感）")
 	_add_toggle_row(vbox, "screen_flash", "受击红晕", "受伤及濒死时屏幕边缘的暗红呼吸效果")
 	_add_toggle_row(vbox, "show_fps", "实时帧率", "左上角显示当前帧率 (FPS)")
-	# 真机闪屏排查用（2026-10-20）：开启后记录 HUD 闪烁时刻的状态到 user://flicker_log.csv
-	_add_toggle_row(vbox, "flicker_probe", "闪屏探针", "排查用：记录 HUD 闪烁时刻的状态到 user://flicker_log.csv（默认关）")
 	# 画面清晰度：高清（原生高分屏极清渲染）/ 流畅（固定视口拉伸，低配防掉帧）
 	_add_cycle_row(
 		vbox,
@@ -701,36 +699,7 @@ func _build_diagnostics_card() -> Control:
 	copy_btn.pressed.connect(_copy_diagnostics_info)
 	btn_row.add_child(copy_btn)
 
-	# 闪屏日志一键复制（2026-10-20）：真机上找 user:// 路径很麻烦，直接读文件内容塞剪贴板。
-	# 只在探针开过、文件存在时有效；内容过长时只复制尾部（最近的记录最有用）。
-	var flicker_btn := Button.new()
-	flicker_btn.text = "◆ 复制闪屏日志"
-	flicker_btn.custom_minimum_size = Vector2(160, 30)
-	flicker_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(flicker_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
-	flicker_btn.pressed.connect(_copy_flicker_log)
-	btn_row.add_child(flicker_btn)
-
 	return panel
-
-## 复制闪屏探针日志到剪贴板（见 FlickerProbe）。文件不存在时明确提示「没采集到」，
-## 而不是静默失败 —— 用户分不清「没闪」和「探针没跑」是这类排查最大的坑。
-func _copy_flicker_log() -> void:
-	var path := FlickerProbe.log_path()
-	if not FileAccess.file_exists(path):
-		UpdateManager.show_toast("◆ 还没有闪屏日志：请先在「画面」页开启闪屏探针 ◆", GameStyle.BAD)
-		return
-	var text := FileAccess.get_file_as_string(path)
-	if text.is_empty():
-		UpdateManager.show_toast("◆ 闪屏日志为空 ◆", GameStyle.BAD)
-		return
-	# 太长时只保留尾部（最近记录最能说明问题），并加一行说明
-	const MAX_CHARS := 30000
-	if text.length() > MAX_CHARS:
-		text = "…（前段省略，仅保留最近记录）…\n" + text.substr(text.length() - MAX_CHARS)
-	if DisplayServer.has_method("clipboard_set"):
-		DisplayServer.clipboard_set(text)
-	UpdateManager.show_toast("◆ 闪屏日志已复制到剪贴板（%d 字符）◆" % text.length(), GameStyle.GOOD)
 
 func _build_reset_card() -> Control:
 	var panel := PanelContainer.new()

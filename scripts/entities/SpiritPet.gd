@@ -176,7 +176,7 @@ func _trigger_action() -> void:
 
 ## 获取灵兽当前享受的综合伤害倍率
 func _get_effective_damage_mult() -> float:
-	var global_dmg: float = GameManager.damage_mult
+	var global_dmg: float = (GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult) - 1.0
 	var elem_bonus: float = 0.0
 	if not GameManager.element_damage.is_empty():
 		for v in GameManager.element_damage.values():

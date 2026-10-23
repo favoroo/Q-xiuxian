@@ -210,13 +210,12 @@ static func rules(id: String) -> Array[String]:
 		"dodge":
 			# 上限必须现读「硬上限 + 角色抬升」：只读 DODGE_CAP 会对影者写出一句假话
 			#（她的卡面写着 90%，详解却劝她到 60% 就停手）。
-			out.append("硬上限 %.0f%%：到顶之后再点这一条不会继续涨，多余的额度是浪费。" % [
+			out.append("硬上限 %.0f%%：到顶后再点不会涨，多的额度是浪费。" % [
 				(GameManager.DODGE_CAP + GameManager.dodge_cap_bonus) * 100.0])
 			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
-			out.append(("闪避成功另给 %.2f 秒「残影」短无敌：不给这一段，怪群贴身时下一帧又是一次判定，"
-				+ "闪了只是把那一下推迟几帧，减不了挨打频率。") % ShadowStepData.GUARD_SEC)
-			out.append(("每躲掉一刀攒 1 层影（最多 %d 层，满层换掉最旧那一刀）：影在身上时武器伤害每层 +%d%%，"
-				+ "点额外技能「影爆」随时踩碎，把躲掉的伤害成倍还给周身敌人并推开一圈。") % [
+			out.append("闪避成功另有 %.2f 秒短无敌，免得怪群贴身时下一帧又判定一次。" % ShadowStepData.GUARD_SEC)
+			out.append(("每躲掉一刀攒 1 层影（最多 %d 层）：影在身上时武器伤害每层 +%d%%，"
+				+ "点「影爆」可随时踩碎，把躲掉的伤害还给周身敌人并推开。") % [
 					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0)])
 		"lifesteal":
 			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
@@ -262,8 +261,8 @@ static func rules(id: String) -> Array[String]:
 			out.append("金系羁绊同时抬这两处；部分武器还会把暴击率直接折成额外伤害。")
 		"luck":
 			out.append("每点使高稀有（稀有/史诗/传说）概率 ×(1+%s%%)，先乘后封顶。" % _fmt(GameBalance.RARITY_LUCK_PER_POINT * 100.0))
-			out.append("高稀有概率随波次递进、各有上限；普通取余且有地板 %s，幸运堆到极高后边际收益会停住。" % _fmt(GameBalance.RARITY_COMMON_FLOOR))
-			out.append("对商店货架与悟道候选同时生效，是按权重微调，不是必出；幸运低也不至于刷不出货。")
+			out.append("高稀有概率随波次提高、各有上限；堆到极高后收益会停住。")
+			out.append("对商店货架与悟道候选同时生效，只是提高概率，不是必出。")
 		"harvest":
 			out.append("回合结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
 			out.append("每回合自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
@@ -292,7 +291,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
 		"stones":
 			out.append("来源四条：击杀掉落、收益回合末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
-			out.append("余时赏：本回合敌潮已全部刷进场、场上又被你清空时当场收尾，剩下的秒数折成金币（只给金币，不给经验）。")
+			out.append("余时赏：本回合敌人已全部刷出、又被你清空时当场收尾，剩下的秒数折成金币。")
 			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
 	return out
 

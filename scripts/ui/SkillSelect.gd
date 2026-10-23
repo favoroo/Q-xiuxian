@@ -180,16 +180,24 @@ func _create_card(s_id: String) -> Control:
 	vbox.add_child(cd_lbl)
 	GameStyle.label(cd_lbl, 11, GameStyle.INK_TEXT)
 
-	# 描述（换行切进文本，不交给引擎折行：见 GameStyle.wrap_cjk 头注）
+	# 描述（走短语级标色 + wrap_bbcode 硬换行）
 	var desc_text: String = String(def.get("desc", ""))
-	var desc_lbl = Label.new()
-	desc_lbl.text = GameStyle.wrap_cjk(desc_text, GameStyle.body_font(), 12, _desc_w())
-	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_lbl.custom_minimum_size = Vector2(_desc_w(), 0)
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(desc_lbl)
-	GameStyle.label(desc_lbl, 12, GameStyle.PAPER_DIM)
+	var desc_rt := RichTextLabel.new()
+	desc_rt.bbcode_enabled = true
+	desc_rt.fit_content = true
+	desc_rt.scroll_active = false
+	desc_rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desc_rt.custom_minimum_size = Vector2(_desc_w(), 0)
+	desc_rt.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desc_rt.add_theme_font_override("normal_font", GameStyle.body_font())
+	desc_rt.add_theme_font_override("bold_font", GameStyle.emph_font())
+	desc_rt.add_theme_font_size_override("normal_font_size", 12)
+	desc_rt.add_theme_font_size_override("bold_font_size", 12)
+	desc_rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+	desc_rt.text = "[center]" + GameStyle.wrap_bbcode(
+		GameStyle.colorize_terms(desc_text), GameStyle.body_font(), 12, _desc_w()) + "[/center]"
+	vbox.add_child(desc_rt)
 
 	# 选择按钮
 	var btn = Button.new()

@@ -86,6 +86,8 @@ const BAD := Color("e2503c")        # 朱砂 = 危险/扣血
 const BAD_DK := Color("8f2a1c")
 const GREY := Color("8a857a")       # 暗部正文/禁用（纸底可读暖灰）
 const DISABLED_FACE := Color("ddd8ca")  # 禁用按钮面（浅灰纸：形状价格全在，只是按不动）
+## RichTextLabel 内边距余量：BBCode 手工折行要比 wrap_cjk 再收一点，见 wrap_bbcode
+const BBCODE_PAD := 8.0
 const ELEMENT := Color("ff8a3d")    # 元素橙红 = 「元素伤害」角标专用（与蓝/黄/增益绿/朱砂都不撞）
 const SWEEP := Color("f5a83d")      # 琥珀金 = 「横扫」攻击方式专用（近战朱砂/横扫琥珀/其他主蓝三档，与元素橙红拉开明度）
 const AURUM := Color("ffc94d")      # 暖金 = 金光护体椭球护罩主色（世界特效专用，与点缀黄 JADE 的货币语义区分）
@@ -268,6 +270,18 @@ static func display_font() -> FontVariation:
 		_display.variation_embolden = 0.08
 	return _display
 
+## 正文内联强调字：与 body_font 同一个 base_font，只调高 embolden。
+## 为什么不用 display_font 当 [b] 字重：MiSans-Heavy 的行高比 Semibold 大，
+## 正文里只要出现一个 [b]，整段行距就会被撑开 —— 详情卡曾因此超高 19px 顶出视口
+## （2026-10-23 ShopChipTapCheck 抓到）。同一 base_font 加粗，行高不变。
+static var _emph: FontVariation
+static func emph_font() -> FontVariation:
+	if _emph == null:
+		_emph = FontVariation.new()
+		_emph.base_font = load(FONT_BODY)
+		_emph.variation_embolden = 0.5
+	return _emph
+
 ## 角签专用字：display 字重 + 字距放宽。小字号全大写不拉开字距时，
 ## 六个字母会挤成一团黑块（CAREER / CONFIG / MANUAL 都是这种词）。
 static var _tag_font: FontVariation
@@ -433,15 +447,140 @@ static func chip_label(text: String, face: Color, text_color: Color = Color(-1, 
 static func on_face_text(face: Color) -> Color:
 	return INK_TEXT if face.get_luminance() > 0.5 else CHALK
 
+## 正文强调色：短语级「色块高亮」。
+##
+## 为什么是色块：纸白底 (#f7f3e8) 上，压深的文字色（深绿 3.7 / 深琥珀 4.5）视觉重量远不如
+## 主题亮色色块。色块底用主题色、块内字走 INK_TEXT 黑，对比度 5.4~14.5，符合新野兽派
+## 「硬色块」语言，也和按钮/标题带的既有视觉一致。
+##
+## 语义 → 颜色（取色仍在本文件，TextStyleData 只声明语义档）：
+##   GAIN 收益 → GOOD  #2fd271 绿块
+##   COST 代价 → BAD   #e2503c 红块
+##   COIN 货币 → JADE  #ffd23f 黄块
+##   BOLD 名词 → 墨黑 + 加粗（不上色）
+##
+## 标色规则表在 TextStyleData（唯一真话）：显式逐句表优先，通用规则兜底；
+## 重叠时「显式 > 通用、长片段 > 短片段」。文案本身保持纯文本，payload 读取不受影响。
+static func colorize_terms(text: String) -> String:
+	if text.is_empty() or text.contains("[bgcolor=") or text.contains("[color="):
+		return text
+	var spans: Array[Dictionary] = []
+
+	# 1. 显式逐句表：整段 t 都是一个色块
+	for rule in TextStyleData.RULES:
+		var t := String(rule["t"])
+		if t.is_empty():
+			continue
+		var style := int(rule["s"])
+		var from := 0
+		while true:
+			var at := text.find(t, from)
+			if at < 0:
+				break
+			spans.append({"at": at, "end": at + t.length(), "s": style, "prio": 2})
+			from = at + t.length()
+
+	# 2. 通用兜底规则
+	for p in TextStyleData.PATTERNS:
+		var re := RegEx.new()
+		re.compile(String(p["re"]))
+		var style := int(p["s"])
+		for m in re.search_all(text):
+			spans.append({"at": m.get_start(), "end": m.get_end(), "s": style, "prio": 1})
+
+	if spans.is_empty():
+		return text
+
+	# 3. 冲突消解：显式优先 → 长片段优先 → 起点靠前
+	spans.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a["prio"]) != int(b["prio"]):
+			return int(a["prio"]) > int(b["prio"])
+		var la: int = int(a["end"]) - int(a["at"])
+		var lb: int = int(b["end"]) - int(b["at"])
+		if la != lb:
+			return la > lb
+		return int(a["at"]) < int(b["at"]))
+
+	# 4. 贪心取互不重叠的一段
+	var chosen: Array[Dictionary] = []
+	for sp in spans:
+		var ok := true
+		for c in chosen:
+			if int(sp["at"]) < int(c["end"]) and int(c["at"]) < int(sp["end"]):
+				ok = false
+				break
+		if ok:
+			chosen.append(sp)
+	chosen.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["at"]) < int(b["at"]))
+
+	# 5. 重建：只包标记，不增删一个字符（TextStyleCheck 逐字对账）
+	var out := ""
+	var cur := 0
+	for sp in chosen:
+		var at := int(sp["at"])
+		var end := int(sp["end"])
+		out += text.substr(cur, at - cur)
+		out += _style_open(int(sp["s"]))
+		out += text.substr(at, end - at)
+		out += _style_close(int(sp["s"]))
+		cur = end
+	out += text.substr(cur)
+	return out
+
+## 语义档 → 开标记。色值全部取自本文件常量，TextStyleData 不碰颜色。
+static func _style_open(style: int) -> String:
+	var ink := "#" + INK_TEXT.to_html(false)
+	match style:
+		TextStyleData.S.GAIN:
+			return "[bgcolor=#" + GOOD.to_html(false) + "][color=" + ink + "]"
+		TextStyleData.S.COST:
+			return "[bgcolor=#" + BAD.to_html(false) + "][color=" + ink + "]"
+		TextStyleData.S.COIN:
+			return "[bgcolor=#" + JADE.to_html(false) + "][color=" + ink + "]"
+		_:
+			return "[b][color=#" + PAPER.to_html(false) + "]"
+
+static func _style_close(style: int) -> String:
+	match style:
+		TextStyleData.S.BOLD:
+			return "[/color][/b]"
+		_:
+			return "[/color][/bgcolor]"
+
+## 供测试对账：把一段 BBCode 剥回可见字符
+static func strip_markup(text: String) -> String:
+	return _strip_bbcode(text)
+
+## 新手指南专用：在 colorize_terms 之上，把「聚灵阵：」「宝箱：」这类行首小标题提亮加粗。
+## 只给分页正文用 —— 通用卡片的正文里「被动道具：…」这种正常句子也会命中，且加粗字体
+## 行高更大，会把详情卡撑高（2026-10-23 ShopChipTapCheck 因此红过一次）。
+## 用字符串扫描而不是正则量词：`{` 不在字体子集里，写进字符串字面量会触发 FontCoverageCheck。
+static func colorize_headings(text: String) -> String:
+	var s := colorize_terms(text)
+	var head_hex := "#" + PAPER.to_html(false)
+	var out := PackedStringArray()
+	for line in s.split("\n"):
+		var colon := line.find("：")
+		# 行首 1~6 个字符 + 全角冒号 = 小标题；更长的说明句不动
+		if colon >= 1 and colon <= 6 and not line.begins_with("["):
+			out.append("[b][color=" + head_hex + "]" + line.substr(0, colon)
+				+ "[/color][/b]" + line.substr(colon))
+		else:
+			out.append(line)
+	return "\n".join(out)
+
 ## BBCode 版的硬换行：悟道候选那种 `[center]…\n• 武器总伤害 [b]+15%[/b][/color]…` 的文案，
 ## 标签零宽、可见字符才占宽，所以逐字走一遍、只在可见字符之间下刀。
 ## 标签状态是跨行延续的（RichTextLabel 不在换行处重置 [color]/[b]），所以从中间断开
 ## 不会漏闭合 —— 这也是为什么这里能切、而纯文本那套 `wrap_cjk` 不能直接拿来用。
+## 预算必须比 wrap_cjk 更保守：RichTextLabel 有内边距，手工折到 274 宽时它仍会二次折行
+## 多出一行（2026-10-23 详情卡超高 19px 顶出视口就是这么来的）。固定再收 8px。
 static func wrap_bbcode(text: String, font: Font, font_size: int, max_w: float,
 		reserve: float = 2.0) -> String:
 	if text == "" or max_w <= 0.0:
 		return text
-	var budget: float = maxf(8.0, max_w - reserve)
+	var budget: float = maxf(8.0, max_w - reserve - BBCODE_PAD)
 	var out := PackedStringArray()
 	for seg in text.split("\n"):
 		out.append(_wrap_bbcode_one(seg, font, font_size, budget))
@@ -457,10 +596,27 @@ static func _wrap_bbcode_one(seg: String, font: Font, font_size: int, budget: fl
 		if ch == "[":
 			var close := seg.find("]", i)
 			if close >= 0:
-				line += seg.substr(i, close - i + 1)   # 标签零宽，跟着当前行走
+				var tag := seg.substr(i, close - i + 1)
+				# 色块原子性（新野兽派硬块排版）：当遇到 [bgcolor= 时，如果本行装不下
+				# 整个色块，且本行已有可见字，提前换行 —— 避免色块被腰斩成两截，
+				# 更杜绝在上一行行末留下 0 宽色块竖条细缝（2026-10-23 目视验收抓到）。
+				if tag.begins_with("[bgcolor=") and last_vis_at >= 0:
+					var end_tag := seg.find("[/bgcolor]", close + 1)
+					if end_tag > close:
+						var block_content := seg.substr(close + 1, end_tag - close - 1)
+						var block_w := _visible_w(block_content, font, font_size)
+						if _visible_w(line, font, font_size) + block_w > budget:
+							done += line + "\n"
+							line = ""
+							last_vis_at = -1
+				line += tag
 				i = close + 1
 				continue
-		if _visible_w(line, font, font_size) + _text_w(ch, font, font_size) > budget and last_vis_at >= 0:
+		# 必须精确量「接上这个字之后」的可见宽，不能拿「整行宽 + 单字宽」估算：
+		# 逐字相加漏掉字距，长句会低估几个像素，手工折出的行仍比 budget 宽，
+		# 引擎再二次折一次就多出一行（2026-10-23 详情卡因此超高 19px 顶出视口）。
+		var probe := line + ch
+		if _visible_w(probe, font, font_size) > budget and last_vis_at >= 0:
 			if ch.length() == 1 and NO_LINE_START.contains(ch):
 				done += line.substr(0, last_vis_at) + "\n"
 				line = line.substr(last_vis_at) + ch

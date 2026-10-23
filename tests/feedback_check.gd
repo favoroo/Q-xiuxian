@@ -12,7 +12,7 @@ extends Node
 var _c := TestCheck.new()
 
 func _ready() -> void:
-	_c.set_min_checks(18)
+	_c.set_min_checks(40)
 	_run()
 	_finish()
 
@@ -29,6 +29,7 @@ func _run() -> void:
 	_test_filename()
 	_test_log_tail()
 	_test_image_compress()
+	_test_decode_headers()
 	_test_diagnostics()
 	_test_report_text()
 
@@ -143,6 +144,16 @@ func _test_image_compress() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(src))
 	var bad := FeedbackSender.compress_image_for_upload("user://not_exists_img.png")
 	_c.check(not bool(bad.get("ok", true)), "不存在的图片给出失败原因")
+
+func _test_decode_headers() -> void:
+	var img := Image.create(32, 32, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.2, 0.6, 0.3))
+	var png := img.save_png_to_buffer()
+	var jpg := img.save_jpg_to_buffer(0.9)
+	_c.check(FeedbackSender.decode_image_bytes(png) != null, "PNG 字节按文件头解码成功")
+	_c.check(FeedbackSender.decode_image_bytes(jpg) != null, "JPEG 字节按文件头解码成功")
+	_c.check(FeedbackSender.decode_image_bytes(PackedByteArray([1, 2, 3])) == null, "未知/过短字节返回 null")
+	_c.check(FeedbackSender.decode_image_bytes(PackedByteArray()) == null, "空字节返回 null")
 
 func _test_diagnostics() -> void:
 	var info := FeedbackSender.build_diagnostics()

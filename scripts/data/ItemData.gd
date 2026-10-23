@@ -408,13 +408,13 @@ const DEFS: Dictionary = {
 				"luban_suo": {
 					"name": "鲁班锁", "tier": 2, "price": 28,
 					"icon": "res://assets/art/item_luban_suo.png",
-					"desc": "榫卯严丝合缝",
+					"desc": "机关伤害提升",
 					"apply": {"contraption_damage": 3.0},
 				},
 				"jiguan_hexin": {
 					"name": "机簧核心", "tier": 3, "price": 48,
 					"icon": "res://assets/art/item_jiguan_hexin.png",
-					"desc": "机括极速运转",
+					"desc": "机关伤害与攻速提升",
 					"apply": {"contraption_damage": 4.0, "attack_speed_mult_mul": 0.92},
 				},
 
@@ -495,7 +495,7 @@ const DEFS: Dictionary = {
 		"liehun_ling": {
 			"name": "裂魂铃", "tier": 4, "price": 92,
 			"icon": "res://assets/art/item_liehun_ling.png",
-			"desc": "被杀的敌人当场爆开，伤及周身同伴（伤害随元素成长）\n（每局限购一件）",
+			"desc": "击杀的敌人会爆炸，波及周围；爆炸伤害受元素伤害加成\n（限购一件）",
 			"apply": {},
 			"kill_explode": 40.0, "kill_explode_radius": 90.0,
 			"unique": true,
@@ -575,14 +575,14 @@ const DEFS: Dictionary = {
 			"sanmei_guizhen": {
 				"name": "三昧归真", "tier": 4, "price": 88,
 				"icon": "res://assets/art/item_sanmei_guizhen.png",
-				"desc": "残缺即圆满：上阵武器少于4把时，每少1把全伤害+15%（狂战士绝配）",
+				"desc": "上阵武器少于 4 把时，每少 1 把全伤害 +15%",
 				"apply": {},
 				"dmg_per_empty_slot": 0.15,
 			},
 			"lingsui_danqi": {
 				"name": "灵髓丹气", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_lingsui_danqi.png",
-					"desc": "药力发作：拾取回复珠或药爆后3秒内，全伤害+25%、移速+15%",
+					"desc": "拾取回复珠或药爆后 3 秒内：全伤害 +25%、移速 +15%",
 				"apply": {"hp_regen": -0.2},
 				"heal_buff_damage": 0.25, "heal_buff_speed": 0.15, "heal_buff_dur": 3.0,
 			},
@@ -607,21 +607,21 @@ const DEFS: Dictionary = {
 			"tiangong_fatiao": {
 				"name": "天工发条", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_tiangong_fatiao.png",
-				"desc": "机括极转：机关炮台攻击间隔缩短20%，环绕武器旋转速度提升30%",
+				"desc": "机关炮台攻速 +20%，环绕武器转速 +30%",
 				"apply": {"luck": -2.0},
 				"turret_haste": 0.20, "drone_spin_speed": 0.30,
 			},
 			"qianfu_lianhuan": {
 				"name": "千符连环印", "tier": 3, "price": 50,
 				"icon": "res://assets/art/item_qianfu_lianhuan.png",
-				"desc": "万符齐发：弹射类与远程武器发射弹丸数+1，弹丸散布角略微增加",
+				"desc": "弹射与远程武器多 1 发弹丸，散布略增",
 				"apply": {"attack_range_mult": -0.10},
 				"projectile_count_bonus": 1,
 			},
 			"kaishan_jianyi": {
 				"name": "开山重刃谱", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_kaishan_jianyi.png",
-				"desc": "大巧不工：横扫类武器挥砍范围+25%，近身挥砍命中时吸收1点生命（每秒至多2次）",
+				"desc": "横扫范围 +25%；近战命中吸血 1 点（每秒至多 2 次）",
 				"apply": {"move_speed_mult": -0.05},
 				"wide_range_mult": 0.25, "melee_lifesteal_flat": 1.0,
 			},
@@ -639,7 +639,7 @@ const DEFS: Dictionary = {
 			"tupo_guyu": {
 				"name": "突破古玉", "tier": 4, "price": 95,
 				"icon": "res://assets/art/item_tupo_guyu.png",
-				"desc": "道果累进：每回合结束时永久+3最大生命、+0.5生命回复、+1%吸血\n（每局限购一件，成长累计上限 +30 生命 / +5 回复 / +10% 吸血）",
+				"desc": "每回合结束永久 +3 生命、+0.5 回复、+1% 吸血\n（限购一件；上限 +30 生命 / +5 回复 / +10% 吸血）",
 				"apply": {},
 				"unique": true,
 				"wave_end_max_hp": 3.0, "wave_end_regen": 0.5, "wave_end_lifesteal": 0.01,
@@ -649,19 +649,19 @@ const DEFS: Dictionary = {
 			"xuantie_ling": {
 				"name": "玄铁令", "tier": 3, "price": 46,
 				"icon": "res://assets/art/item_xuantie_ling.png",
-				"desc": "玄铁压手：出刀略沉",
+				"desc": "武器伤害大幅提升，攻速略降",
 				"apply": {"weapon_damage_mult": 0.20, "attack_speed_mult_mul": 1.03},
 			},
 			"bumie_jinshen": {
 				"name": "不灭金身", "tier": 4, "price": 90,
 				"icon": "res://assets/art/item_bumie_jinshen.png",
-				"desc": "金身沉重，步履稍缓",
+				"desc": "生命与护甲大幅提升，移速略降",
 				"apply": {"max_hp": 50.0, "hp_heal": 50.0, "armor": 4.0, "hp_regen": 1.0, "move_speed_mult": -0.04},
 			},
 			"tiangang_zhanyi": {
 				"name": "天罡战意", "tier": 4, "price": 88,
 				"icon": "res://assets/art/item_tiangang_zhanyi.png",
-				"desc": "战意催命，护体略薄",
+				"desc": "暴击与暴伤大幅提升，护甲略降",
 				"apply": {"crit_rate": 0.10, "crit_mult": 0.30, "armor": -1.0},
 			},
 			# ==================== 2026-10-21 流派补齐（1 主属性 + 1 跨流派负面） ====================
@@ -670,7 +670,7 @@ const DEFS: Dictionary = {
 			"tieshou": {
 				"name": "铁手套", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_tieshou.png",
-				"desc": "近身硬功，远程手法生疏",
+				"desc": "近战伤害提升，远程伤害降低",
 				# 2026-10-22 近战 2→3 / 远程 −1→−2：原版主属性与无代价的砺剑石同为 +2，
 			# 同价却白背一条远程惩罚 ⇒ 被砺剑石严格支配。有代价就该换到更高主属性。
 			"apply": {"melee_damage": 3.0, "ranged_damage": -2.0},
@@ -678,39 +678,39 @@ const DEFS: Dictionary = {
 			"lingyan_fu": {
 				"name": "灵焰符", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_lingyan_fu.png",
-				"desc": "灵焰催动略滞手势",
+				"desc": "元素伤害提升，攻速略降",
 				# 2026-10-22 元素 2→3：原版与无代价的聚灵符同为 +2 却多背一条攻速惩罚，被严格支配。
 			"apply": {"elemental_damage": 3.0, "attack_speed_mult_mul": 1.03},
 			},
 			"tongling": {
 				"name": "铜铃", "tier": 1, "price": 14,
 				"icon": "res://assets/art/item_tongling.png",
-				"desc": "铃声引灵，身法稍重",
+				"desc": "召唤伤害提升，移速略降",
 				# 2026-10-22 召唤 2→3：原版与无代价的召唤牌同为 +2 却多背一条移速惩罚，被严格支配。
 			"apply": {"engineering_damage": 3.0, "move_speed_mult": -0.03},
 			},
 			"pojun_fu": {
 				"name": "破军符", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_pojun_fu.png",
-				"desc": "重刃破军，出手距离略短",
+				"desc": "近战伤害提升，攻击范围略降",
 				"apply": {"melee_damage": 4.0, "attack_range_mult": -0.05},
 			},
 			"liannu_shi": {
 				"name": "连弩石", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_liannu_shi.png",
-				"desc": "机弩连发，射程略收",
+				"desc": "远程伤害提升，攻击范围略降",
 				"apply": {"ranged_damage": 4.0, "attack_range_mult": -0.05},
 			},
 			"wuxing_sha": {
 				"name": "五行砂", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_wuxing_sha.png",
-				"desc": "五行相激，生机略滞",
+				"desc": "元素伤害提升，生命回复略降",
 				"apply": {"elemental_damage": 4.0, "hp_regen": -0.3},
 			},
 			"tongji_chi": {
 				"name": "铜机齿", "tier": 2, "price": 28,
 				"icon": "res://assets/art/item_tongji_chi.png",
-				"desc": "机齿咬合，负重增加",
+				"desc": "机关伤害提升，移速略降",
 				"apply": {"contraption_damage": 4.0, "move_speed_mult": -0.04},
 			},
 			"jingxin_fu": {
@@ -722,7 +722,7 @@ const DEFS: Dictionary = {
 			"huansha": {
 				"name": "幻纱", "tier": 2, "price": 26,
 				"icon": "res://assets/art/item_huansha.png",
-				"desc": "身轻如纱，护体略薄",
+				"desc": "闪避与移速提升，护甲略降",
 				"apply": {"dodge": 0.05, "move_speed_mult": 0.04, "armor": -1.0},
 			},
 			"lingcao_dai": {
@@ -768,14 +768,14 @@ const DEFS: Dictionary = {
 			"daoyun_jing": {
 				"name": "道蕴镜", "tier": 4, "price": 90,
 				"icon": "res://assets/art/item_daoyun_jing.png",
-				"desc": "镜照道蕴：随行技能冷却大幅缩短；出招略慢\n（每局限购一件）",
+				"desc": "随行技能冷却大幅缩短；攻击间隔略增\n（限购一件）",
 				"apply": {"skill_cooldown_mult": 0.25, "attack_speed_mult_mul": 0.92},
 				"unique": true,
 			},
 			"wanshi_jian": {
 				"name": "万矢箭", "tier": 4, "price": 88,
 				"icon": "res://assets/art/item_wanshi_jian.png",
-				"desc": "一箭化万矢：远程武器额外发射1枚弹丸；射程略收\n（每局限购一件）",
+				"desc": "远程武器多 1 发弹丸；攻击范围略降\n（限购一件）",
 				"apply": {"ranged_damage": 6.0, "attack_range_mult": -0.10},
 				"projectile_count_bonus": 1,
 				"unique": true,

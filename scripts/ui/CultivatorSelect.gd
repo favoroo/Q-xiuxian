@@ -633,18 +633,17 @@ func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 		"body": body,
 	})
 
-## 将文本中的核心数值与机制名精准高亮（其余正文走 PAPER 纸白色）
+## 将文本中的核心数值与机制名精准高亮（按宣纸白面板可读口径，改用 _DK 深色系）
 static func highlight_bbcode(raw: String) -> String:
 	var s := raw
-	var good_hex := "#" + GameStyle.GOOD.to_html(false)
-	var bad_hex := "#" + GameStyle.BAD.to_html(false)
-	var jade_hex := "#" + GameStyle.JADE.to_html(false)
-	var gold_hex := "#" + GameStyle.GOLD.to_html(false)
+	var good_hex := "#" + GameStyle.GOOD_DK.to_html(false)
+	var bad_hex := "#" + GameStyle.BAD_DK.to_html(false)
+	var bold_hex := "#" + GameStyle.PAPER.to_html(false)
 
-	# 1. 机制名 【...】 -> JADE 金黄
+	# 1. 机制名 【...】 -> 墨黑加粗
 	var re_mech := RegEx.new()
 	re_mech.compile("【([^】]+)】")
-	s = re_mech.sub(s, "[color=" + jade_hex + "]【$1】[/color]", true)
+	s = re_mech.sub(s, "[b][color=" + bold_hex + "]【$1】[/color][/b]", true)
 
 	# 2. 负向限制与惩罚词
 	var re_bad_kw := RegEx.new()
@@ -664,7 +663,7 @@ static func highlight_bbcode(raw: String) -> String:
 	# 5. 专属契合名字
 	var re_syn := RegEx.new()
 	re_syn.compile("「([^」]+)」")
-	s = re_syn.sub(s, "[color=" + gold_hex + "]「$1」[/color]", true)
+	s = re_syn.sub(s, "[b][color=" + bold_hex + "]「$1」[/color][/b]", true)
 
 	return s
 

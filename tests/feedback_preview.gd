@@ -4,6 +4,8 @@ extends Control
 ## 运行: godot --path . res://tests/FeedbackPreview.tscn （不要加 --headless）
 
 func _ready() -> void:
+	# 预览脚本会触发草稿自动保存；开跑前先清干净，避免把测试文案留在真机档里
+	FeedbackSender.clear_draft()
 	var bg := ColorRect.new()
 	bg.color = GameStyle.INK
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -41,4 +43,19 @@ func _ready() -> void:
 	img2.save_png("/tmp/feedback_preview_filled.png")
 	print("SAVED PREVIEW TO /tmp/feedback_preview_filled.png")
 
+	# 发送中覆盖层（旋转环 + 扫描条 + 阶段文案）
+	dlg._overlay.show_sending("正在上传截图…")
+	await get_tree().create_timer(0.5).timeout
+	var img3 := get_viewport().get_texture().get_image()
+	img3.save_png("/tmp/feedback_preview_sending.png")
+	print("SAVED PREVIEW TO /tmp/feedback_preview_sending.png")
+
+	# 成功态（大对勾 + 完成按钮）
+	dlg._overlay.show_success()
+	await get_tree().create_timer(0.6).timeout
+	var img4 := get_viewport().get_texture().get_image()
+	img4.save_png("/tmp/feedback_preview_success.png")
+	print("SAVED PREVIEW TO /tmp/feedback_preview_success.png")
+
+	FeedbackSender.clear_draft()
 	get_tree().quit(0)
