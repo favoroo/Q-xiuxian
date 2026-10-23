@@ -118,6 +118,7 @@ static func clear_cache() -> void:
 	_ember_count_this_frame = 0
 	_last_aura_frame = -1
 	_aura_count_this_frame = 0
+	_last_elite_spark_ms = -999999
 
 func _init_pool() -> void:
 	for i in range(POOL_CAP):
@@ -179,6 +180,67 @@ static func _resolve_color(element: Variant, default_color: Color) -> Color:
 
 # ----------------- 核心爆发接口 -----------------
 
+## 命中火花的反馈归属（决定 burst 内部执行哪套「同一次命中只许一处发反馈」门控）。
+## 2026-10-23 下沉：业务规则从各调用方的散装 if 收进 burst 参数，调用方只声明「我是谁」。
+## 漏抄的代价见本轮修复：弹丸侧曾漏三条 ⇒ 打精英同帧双发、致命仍发、屏外仍发。
+enum HitOwner {
+	NONE = 0,    ## 非命中类（技能/炮口/落体形态）：不跑业务门控，只走帧预算
+	WEAPON = 1,  ## 武器命中（弹丸/近战/横扫）：致命不发 + 屏外不发 + 精英非暴击不发
+	ENEMY = 2,   ## 敌人自身受击反馈（EnemyBase 精英/Boss）：致命不发 + 屏外不发 + 全局节奏闸
+}
+
+## 精英/Boss 受击火花的全局时间戳闸（毫秒）：束流 tick(0.15s)/多段命中/多武器齐射收敛成一朵。
+## 2026-10-23 由每敌倒计时 `_elite_spark_cd` 改来——倒计时在多实例下会被各自扣一遍，
+## 且递减写在 EnemyBase._physics_process 的 player==null 早退之后（判据场景永不归零）。
+## 取值 = HIT_SPARK 寿命 0.22s：保证同一时刻屏上至多一朵精英火花，不与下一朵重叠。
+static var _last_elite_spark_ms: int = -999999
+
+## 武器命中火花唯一入口（弹丸/近战/横扫共用）。
+## 调用方只报「打中了谁、是否暴击」，三条业务门控全在 burst 内部：
+##   ① 精英/Boss 非暴击 → 不发（EnemyBase 专属火花承担，避免同帧双发）
+##      精英/Boss 暴击 → 放行（EnemyBase 刻意跳过暴击火花，由武器侧按暴击规格发）
+##   ② 致命一刀（dying）→ 不发（击杀点反馈由死亡爆散一力承担）
+##   ③ 屏外 → 不发（历史「空地凭空闪白」教训）
+## 必须在 enemy.take_damage() 之后调用：dying / is_elite 此时才是最新状态。
+static func weapon_hit_spark(enemy: Node, pos: Vector2, element: Variant, scale_factor: float,
+		is_crit: bool, dir: Vector2 = Vector2.ZERO) -> void:
+	burst(Kind.HIT_SPARK, pos, element, scale_factor, false, dir, HitOwner.WEAPON, enemy, is_crit)
+
+## 敌人自身受击火花（EnemyBase 精英/Boss 专属）。同样走统一门控，但不受「精英非暴击不发」限制
+## （这条规则本来就是防武器侧重复发）。额外吃全局节奏闸，束流 tick 不再逐跳冒花。
+## is_lethal 必须显式传：EnemyBase 的火花代码在 `_die()` 之前执行，那一刻 `dying` 还没置位，
+## 只读 dying 会漏判（⑦ 致命一刀仍发 amount=6 的元凶）。
+static func enemy_hit_spark(enemy: Node, pos: Vector2, element: Variant, scale_factor: float,
+		dir: Vector2 = Vector2.ZERO, is_lethal: bool = false) -> void:
+	burst(Kind.HIT_SPARK, pos, element, scale_factor, false, dir, HitOwner.ENEMY, enemy, false, is_lethal)
+
+## 命中火花业务门控唯一实现（2026-10-23 下沉）：调用方不再各写 if。
+## 必须在 take_damage 之后调用（武器侧）；敌人自身在 take_damage 内部调用时须显式传 is_lethal。
+static func _hit_feedback_allowed(owner: int, target: Node, pos: Vector2, is_crit: bool, is_lethal: bool) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	# ① 致命不发：尸体 0.185s 就塌缩，火花 0.22s 会在空处留一道白闪。
+	#    两个来源取并集：调用方显式告知（EnemyBase 在 _die() 之前调用）+ 已置位的 dying（武器侧）。
+	if is_lethal or target.get("dying") == true:
+		return false
+	# ② 屏外不发：命中不可见。无玩家（判据/菜单）时以自身位置为中心，恒放行
+	var player: Node2D = GameManager.player
+	var center: Vector2 = player.global_position if player != null and is_instance_valid(player) else pos
+	if not GameBalance.is_in_viewport(pos, center):
+		return false
+	if owner == HitOwner.WEAPON:
+		# ③ 精英/Boss 非暴击不发（EnemyBase 专属火花承担）；暴击放行（EnemyBase 跳过暴击）
+		if target.get("is_elite") == true and not is_crit:
+			return false
+	elif owner == HitOwner.ENEMY:
+		# ④ 精英/Boss 火花全局节奏闸：静态时间戳（同 EnemyBase._fx_gap_gate 口径），
+		#    多实例共享一个时钟，束流 tick / 多段命中 / 多精英同帧都收敛成一朵
+		var now_ms := Time.get_ticks_msec()
+		if now_ms - _last_elite_spark_ms < GameBalance.ELITE_HIT_SPARK_GAP_MS:
+			return false
+		_last_elite_spark_ms = now_ms
+	return true
+
 ## 一次性爆发粒子的统一对外 API
 ## kind: Kind 枚举
 ## pos: 爆发绝对世界坐标
@@ -187,9 +249,17 @@ static func _resolve_color(element: Variant, default_color: Color) -> Color:
 ## bypass_budget: 是否绕过同帧限流（供炮口、技能释放等低频非命中事件使用，避免挤占受击火花预算）
 ## dir: 定向喷溅方向（世界坐标单位向量）。仅 HIT_SPARK/EMBER 响应：非零时从全向盘
 ##   改为顺向扇形（约 100°），碎片随弹道飞——死亡细胞式命中反馈。零向量保持全向。
-static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0, bypass_budget: bool = false, dir: Vector2 = Vector2.ZERO) -> void:
+## hit_owner/hit_target/is_crit/is_lethal: 命中火花的业务门控上下文（2026-10-23 下沉）。
+##   武器命中请直接走 weapon_hit_spark()、精英/Boss 请走 enemy_hit_spark()，不要手拼这些参数。
+static func burst(kind: int, pos: Vector2, element: Variant = "none", scale_factor: float = 1.0, bypass_budget: bool = false, dir: Vector2 = Vector2.ZERO,
+		hit_owner: int = HitOwner.NONE, hit_target: Node = null, is_crit: bool = false, is_lethal: bool = false) -> void:
 	if instance == null or not is_instance_valid(instance):
 		return
+	
+	# 「同一次命中只许一处发反馈」业务门控：先于帧预算，被拦下的命中不占名额
+	if hit_owner != HitOwner.NONE and kind == Kind.HIT_SPARK:
+		if not _hit_feedback_allowed(hit_owner, hit_target, pos, is_crit, is_lethal):
+			return
 	
 	# 物理帧限流检查
 	if not bypass_budget:

@@ -28,7 +28,8 @@ func _ready() -> void:
 	var consistency := UnitConsistencyTests.new(_c)
 	var spiritbeast := UnitSpiritBeastTests.new(_c)
 	var spiritpet := UnitSpiritPetTests.new(_c)
-	var modules: Array[Node] = [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast, spiritpet]
+	var flock := UnitFlockTests.new(_c)
+	var modules: Array[Node] = [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast, spiritpet, flock]
 	for m in modules:
 		add_child(m)
 
@@ -107,6 +108,11 @@ func _ready() -> void:
 			[combat, "_test_hitstop_lowfps_gate"],
 			[combat, "_test_weapon_phase_stagger"],
 			[combat, "_test_turret_floating_weapon_renderer"],
+			# 2026-10-23 敌群集行为与近战扑咬（EnemyFlock / EnemyLunge 纯函数与状态机）
+			[flock, "_test_flock_separation"],
+			[flock, "_test_flock_orbit"],
+			[flock, "_test_lunge_geometry"],
+			[flock, "_test_lunge_state_machine"],
 		]
 	for entry in plan:
 		var mod: Node = entry[0]

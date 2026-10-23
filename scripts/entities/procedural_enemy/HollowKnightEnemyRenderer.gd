@@ -80,6 +80,68 @@ func _calc_weapon_tip_pos() -> Vector2:
 
 var _time: float = 0.0
 
+## 视线本地缓存（_draw 首帧算一次，供全部眼型共用）：全局 aim_dir 已转成本地坐标（含镜像）。
+## 为零 = 无锁敌（待机/无目标），眼型退回静态。
+var _local_aim_cache: Vector2 = Vector2.ZERO
+
+## 残血读数（0~1，1=满血）：EnemyBase 每帧同步，供喘息/失序调制。
+var hp_ratio: float = 1.0:            ## 生命比例（渲染层只读，纯表现，不参与任何判定）
+	set(val):
+		if absf(val - hp_ratio) < 0.005:
+			return
+		hp_ratio = val
+		_dirty = true
+
+## 瞳孔朝目标偏移量（眼型内复用）：偏移幅度按眼半径比例，且越近看越用力。
+## 返回本地坐标下的偏移向量，调用方自己加到瞳孔位置上。
+## 2026-10-23 幅度实测校准：首版取 15% 眼幅，全敌种静帧对比图里三态（正常/锁敌/残血）
+## 肉眼分不出来（史莱姆眼宽 2.6px ⇒ 偏移 0.4px）。改为 50% 眼幅 + 1.5px 绝对下限，
+## 小眼型也读得出「瞳孔在动」；上限夹在 60% 眼幅，避免瞳孔顶出眼白。
+func _gaze_offset(eye_radius: float) -> Vector2:
+	if _local_aim_cache == Vector2.ZERO:
+		return Vector2.ZERO
+	var focus := 0.50 + 0.22 * clampf(special_state, 0.0, 1.0)
+	var amp := maxf(eye_radius * focus, 1.5)
+	# 上限 = 60% 眼幅，小眼型保底 1px（保证瞳孔在动读得出来）。
+	# 旧写法「maxf(eye_radius, 1.0) * 0.6 + 1.0」等于在 60% 之外又加 1px，
+	# 小眼型（如金蟾 1.1px）上限变 150% 眼幅，瞳孔会顶出眼白。
+	return _local_aim_cache * minf(amp, maxf(eye_radius * 0.6, 1.0))
+
+## 出手瞪视：蓄力进度过半后瞳孔/高光提亮并微胀，作第二层预警（不替代符印与预警线）
+func _gaze_glare() -> float:
+	return 1.0 + 0.45 * clampf((special_state - 0.35) / 0.65, 0.0, 1.0)
+
+## 残血喘息倍率（0=满血，1=濒死）：生命越低呼吸幅度越大、节奏越慢（喘不上气）。
+## 与 _time 驱动的基础呼吸相乘即可，不改任何现有静态形变公式的量级。
+func _low_hp_breath() -> float:
+	if hp_ratio >= 0.999:
+		return 0.0
+	return clampf(1.0 - hp_ratio, 0.0, 1.0)
+
+## 残血裂痕（2026-10-23）：生命低于 40% 后，体表浮出一道随呼吸明灭的暗色裂纹。
+## 为什么要有：呼吸幅度/浮沉频率这类「动态读数」在静帧里完全看不出来，而实战中玩家
+## 也很难盯着某一只怪数它的呼吸节奏。一条静帧可读的裂纹才是「这只快死了」的硬读数。
+## 纯绘制、不参与判定；拥挤档（同屏怪多）自动淡出，避免满屏裂纹噪声。
+func _draw_hp_cracks(center: Vector2, radius: float) -> void:
+	var hurt := _low_hp_breath()
+	if hurt < 0.6:
+		return
+	var k := clampf((hurt - 0.6) / 0.4, 0.0, 1.0)
+	var pulse := 0.55 + 0.45 * sin(_time * 3.4 + _phase_seed)
+	var a := k * pulse * (0.35 if FxBudget.crowded else 0.62)
+	var crack_col := Color(0.10, 0.02, 0.04, a)
+	# 三道短裂纹：自中心偏上向外斜裂，长度按半径走（贴体，不越轮廓）
+	var segs := [
+		[Vector2(-0.15, -0.42), Vector2(-0.52, -0.05)],
+		[Vector2(0.10, -0.30), Vector2(0.34, 0.22)],
+		[Vector2(-0.28, 0.16), Vector2(-0.05, 0.48)],
+	]
+	for s in segs:
+		var p0: Vector2 = center + Vector2(s[0].x, s[0].y) * radius
+		var p1: Vector2 = center + Vector2(s[1].x, s[1].y) * radius
+		var mid: Vector2 = (p0 + p1) * 0.5 + Vector2(-(p1 - p0).y, (p1 - p0).x).normalized() * 1.2
+		draw_polyline(PackedVector2Array([p0, mid, p1]), crack_col, 1.3, true)
+
 # —— 重绘节流（2026-10-10 性能优化）——
 ## 全量 _draw 每只怪一次重建几十条矢量指令，35 敌同屏就是每帧几千条，
 ## 是「敌人一多就卡」的头号热点。处理：普通怪降频 20Hz 重绘（本来是 10fps 帧动画风格，
@@ -163,6 +225,13 @@ func _draw() -> void:
 	var root_scale_x := -1.0 if flip_h else 1.0
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(root_scale_x, 1.0) * (config.scale_factor * ENEMY_GLOBAL_SCALE))
 
+	# 视线缓存（2026-10-23 全敌种瞳孔锁敌）：把全局 aim_dir 转到本地绘制坐标系（含镜像），
+	# 供各眼型算瞳孔偏移。旧版只有邪修/剑煞/Boss 三处读 aim_dir 画器尖与法阵，
+	# 其余 13 种怪的瞳孔钉死在脸上 —— 敌人在追你、眼睛却不看你，白白丢掉最省力的「有意识」读数。
+	_local_aim_cache = Vector2.ZERO
+	if aim_dir.length_squared() > 0.01:
+		_local_aim_cache = Vector2(aim_dir.x * root_scale_x, aim_dir.y).normalized()
+
 	# 精英/魔君常驻识别环（2026-10-14 P2）：贴地呼吸骨环，满屏时一眼分出「这只厚」。
 	# 画在各敌种函数之前（垫底贴地层），所有敌型一次覆盖；Boss 用更宽的朱砂双环。
 	# 2026-10-19 拥挤档联动：同屏敌人多时环叠环会糊，alpha 减半让位（Boss 保留主环读数）
@@ -222,6 +291,10 @@ func _draw() -> void:
 			else:
 				_draw_slime()
 
+	# 残血裂痕（2026-10-23）：画在所有敌种之后（贴最上层），残血时的静帧硬读数。
+	# 放在派发之后统一画，17 套绘制函数不用各改一遍，也保证不会被本体后画的图元盖住。
+	_draw_hp_cracks(Vector2(0.0, config.body_radius * 0.1), config.body_radius)
+
 # ==================== 1. 基础几何与空洞风图元绘制工具 ====================
 
 ## 自适应圆/弧段数（2026-10-14 性能优化）：内置 draw_circle 固定 64 段，
@@ -257,6 +330,9 @@ const CONTOUR_MIN_VALUE := 0.42
 const CONTOUR_FLOOR_MIX := 0.55
 ## 描边加粗倍率：仅做极轻微补偿（1.2~1.7 → 约 1.3~1.8），不做粗描边。
 const STROKE_W_SCALE := 1.06
+## 残血描边泛血色与掺入比例（2026-10-23）：濒死时轮廓向朱砂偏移，静帧一眼可读「这只快死了」。
+const HP_CONTOUR_BLOOD := Color(0.78, 0.16, 0.20)
+const HP_CONTOUR_MIX := 0.55
 
 func _contour_color() -> Color:
 	if config == null:
@@ -269,6 +345,14 @@ func _contour_color() -> Color:
 	if lit.v < CONTOUR_MIN_VALUE:
 		var gap := (CONTOUR_MIN_VALUE - lit.v) / CONTOUR_MIN_VALUE
 		lit = lit.lerp(CONTOUR_BONE, clampf(gap, 0.0, 1.0) * CONTOUR_FLOOR_MIX)
+	# 残血描边泛血（2026-10-23）：生命 ≤40% 时轮廓向朱砂偏移、并略微加亮。
+	# 为什么走描边而不是裂纹：裂纹是「贴在本体上的一笔」，各敌种轮廓差异大，常常糊进本体里；
+	# 描边是**全敌种同一条通路**（17 套绘制函数全部走 _contour_color），静帧一眼可读，
+	# 且不吃 modulate 通道（那是闪白/冰缓/引信染色的地盘）。
+	var hurt := _low_hp_breath()
+	if hurt > 0.6:
+		var k := clampf((hurt - 0.6) / 0.4, 0.0, 1.0)
+		lit = lit.lerp(HP_CONTOUR_BLOOD, k * HP_CONTOUR_MIX).lightened(k * 0.12)
 	return Color(lit.r, lit.g, lit.b, CONTOUR_ALPHA)
 
 func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: Color, stroke_w: float = 1.4) -> void:
@@ -308,16 +392,23 @@ func draw_soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) ->
 func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, col_core: Color) -> void:
 	# 绘制狭长冷眸（外层幽光 + 内层锐核）
 	# 2026-10-19 灵核脉动：幽光随呼吸微胀（±10%），全敌种共享，让静态形象有生命感
+	# 2026-10-23 视线锁敌：锐核沿瞄准方向偏移 15% 眼幅，蓄力过半再加 7% 并提亮 ⇒ 出手前「瞪过来」
 	var eye_pulse := 1.0 + sin(_time * 3.1 + _phase_seed) * 0.10
 	draw_soft_glow(pos, width * 1.5 * eye_pulse, col_glow, 2)
+	var gaze: Vector2 = _gaze_offset(width)
+	var core_pos: Vector2 = pos + gaze
+	var core_col: Color = col_core if special_state <= 0.35 else col_core.lerp(col_glow, 0.35)
 	var pts := PackedVector2Array([
-		pos + Vector2(-width, 0),
-		pos + Vector2(0, -height),
-		pos + Vector2(width, 0),
-		pos + Vector2(0, height)
+		core_pos + Vector2(-width, 0),
+		core_pos + Vector2(0, -height),
+		core_pos + Vector2(width, 0),
+		core_pos + Vector2(0, height)
 	])
-	draw_colored_polygon(pts, col_core)
-	draw_line(pos + Vector2(-width * 0.7, 0), pos + Vector2(width * 0.7, 0), Color.WHITE, 1.2, true)
+	draw_colored_polygon(pts, core_col)
+	# 高光竖线：跟着瞳孔走，锁敌时更亮（读作「眼里的反光在动」）
+	var hl_a: float = clampf(_gaze_glare() - 0.55, 0.55, 1.0)
+	draw_line(core_pos + Vector2(-width * 0.7, 0), core_pos + Vector2(width * 0.7, 0),
+		Color(1.0, 1.0, 1.0, hl_a), 1.2, true)
 
 # ==================== 2. 敌种专属程序化绘制管线 ====================
 
@@ -325,8 +416,10 @@ func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, 
 func _draw_slime() -> void:
 	# 行进波：gait_phase 沿面朝方向（x+）推一道「压扁-拉伸」波，与位移同相；
 	# 待机时 crawl_amp=0，只留 _time 微呼吸，静止冻结不空抖。
+	# 2026-10-23 残血喘息：生命越低呼吸越沉（幅度↑、频率↓），读作「快撑不住了」
 	var crawl_amp := speed_ratio if is_moving else 0.0
-	var breathe := sin(_time * 2.6 + _phase_seed) * 0.05
+	var hurt := _low_hp_breath()
+	var breathe := sin(_time * (2.6 - hurt * 1.1) + _phase_seed) * (0.05 + hurt * 0.045)
 	var squish_x := 1.0 + breathe + sin(gait_phase) * 0.10 * crawl_amp
 	var squish_y := 1.0 - breathe - sin(gait_phase) * 0.10 * crawl_amp
 	var nuc_y := 2.0 - sin(gait_phase * 0.5) * 1.2 * crawl_amp
@@ -382,7 +475,8 @@ func _draw_slime() -> void:
 		_circle(Vector2(bx, drop_y), drop_r, Color(config.col_accent.r, config.col_accent.g, config.col_accent.b, 0.9 - cycle * 0.4))
 
 	# 幽冷怨魂狭瞳（深渊黑腔上部的幽碧妖眸，竖直深渊瞳裂，完全消除刺眼白线与白斑）
-	var eye_pos := Vector2(0, nuc_y - 1.8)
+	# 2026-10-23 视线：瞳体随瞄准方向平移 15%，深渊瞳缝跟着走 —— 史莱姆也会「盯着你挪」
+	var eye_pos := Vector2(0, nuc_y - 1.8) + _gaze_offset(2.6)
 	var eye_pulse := 1.0 + sin(_time * 2.8 + _phase_seed) * 0.08
 	draw_soft_glow(eye_pos, 3.6 * eye_pulse, Color(0.10, 0.52, 0.25, 0.35), 2)
 	var ew := 2.6 * eye_pulse
@@ -689,8 +783,10 @@ func _draw_fengqun() -> void:
 
 ## 5. 花妖：噬灵妖花 (空灵悬浮舒展，妖花前倾索食)
 func _draw_flower() -> void:
-	var float_y := sin(_time * 2.2) * 2.6
-	var petal_open := 1.0 + sin(_time * 3.5) * 0.15 # 花瓣呼吸开合
+	var hurt := _low_hp_breath()
+	# 残血：整株垂头（下坠 1.2px + 花瓣开合变弱），读作「蔫了」
+	var float_y := sin(_time * (2.2 - hurt * 0.9)) * 2.6 + hurt * 1.2
+	var petal_open := 1.0 + sin(_time * 3.5) * (0.15 - hurt * 0.09) # 花瓣呼吸开合（残血收拢）
 	# 移动时整株沿面朝方向前倾摇摆（gait 与位移同相），待机只留微晃
 	var crawl_amp := speed_ratio if is_moving else 0.0
 	var lean := sin(gait_phase) * 0.16 * crawl_amp + sin(_time * 1.6 + _phase_seed) * 0.04
@@ -762,9 +858,11 @@ func _draw_flower() -> void:
 ## 6. 血蛹：九幽血茧 (贴地拱动与心跳搏动)
 func _draw_xueyong() -> void:
 	var crawl_amp := speed_ratio if is_moving else 0.0
-	var pulse := sin(_time * 3.0) * 1.2
-	var squish_x := 1.0 + sin(_time * 3.0) * 0.08
-	var squish_y := 1.0 - sin(_time * 3.0) * 0.08
+	# 2026-10-23 残血：心跳变快变浅（搏动幅度衰减、频率上抬）—— 濒死的茧在急促抽动
+	var hurt := _low_hp_breath()
+	var pulse := sin(_time * (3.0 + hurt * 1.6)) * (1.2 - hurt * 0.5)
+	var squish_x := 1.0 + sin(_time * 3.0) * (0.08 + hurt * 0.03)
+	var squish_y := 1.0 - sin(_time * 3.0) * (0.08 + hurt * 0.03)
 
 	# 地影
 	_draw_soft_shadow(Vector2(0, 13), 16.0 * squish_x, 4.8, 0.55)
@@ -1090,9 +1188,10 @@ func _draw_yingmei() -> void:
 	])
 	draw_stroked_polygon(mask_pts, Color(config.col_secondary.r, config.col_secondary.g, config.col_secondary.b, 0.95), config.col_void, 1.4)
 	# 眼洞（虚空黑洞，底浮妖紫瞳光）
+	# 2026-10-23 视线：瞳光在眼洞内偏移（眼洞是固定黑洞，瞳光游走 = 面具后有人在看）
 	for i in [-1, 1]:
 		draw_filled_ellipse(head_pos + Vector2(float(i) * 2.6, -1.0), 1.7, 2.2, config.col_void)
-		_circle(head_pos + Vector2(float(i) * 2.6, -0.6), 0.8, config.col_glow)
+		_circle(head_pos + Vector2(float(i) * 2.6, -0.6) + _gaze_offset(1.7), 0.8, config.col_glow)
 	# 裂口嘴缝（面无表情，只一道竖裂）
 	draw_line(head_pos + Vector2(0, 1.5), head_pos + Vector2(0, 4.5), config.col_void, 1.3, true)
 
@@ -1145,10 +1244,12 @@ func _draw_zhumu() -> void:
 		draw_line(center + vein_rad * 3.6, center + vein_rad * (5.6 if absf(vein_rad.x) > 0.6 else 4.2),
 			config.col_accent, 0.8, true)
 	var iris_pulse := 1.0 + sin(_time * 2.4 + _phase_seed) * 0.07
-	draw_filled_ellipse(center, 4.0 * iris_pulse, 4.4 * iris_pulse, config.col_glow)
+	# 2026-10-23 视线：整颗虹膜+竖瞳沿瞄准方向游走（巨眼是这只怪的主读点，必须真的在看你）
+	var iris_c: Vector2 = center + _gaze_offset(4.0)
+	draw_filled_ellipse(iris_c, 4.0 * iris_pulse, 4.4 * iris_pulse, config.col_glow)
 	# 竖瞳：狭长虚空黑裂 + 冷冽高光
-	draw_filled_ellipse(center, 1.15, 3.9, config.col_void)
-	_circle(center + Vector2(-1.6, -1.5), 0.7, Color(1.0, 0.97, 0.85, 0.9))
+	draw_filled_ellipse(iris_c, 1.15, 3.9, config.col_void)
+	_circle(iris_c + Vector2(-1.6, -1.5), 0.7, Color(1.0, 0.97, 0.85, 0.9))
 
 	# 周身 14 颗邪眼（offset/radius/freq/phase 四元组）：
 	# 频率互质错开，任意时刻总有几颗在眨；闭眼画骨白眼缝，睁眼分大中小三层
@@ -1184,8 +1285,9 @@ func _draw_zhumu() -> void:
 				var v_dir := Vector2(cos(v_ang), sin(v_ang))
 				draw_line(ep + v_dir * (er * 0.5), ep + v_dir * (er * 1.5), config.col_accent, 0.7, true)
 		# 眸核微脉动（相位错开，密密麻麻的金红邪眸逐颗呼吸）
+		# 2026-10-23 视线：14 颗副眼瞳核同向偏移 —— 一整片眼阵齐刷刷盯过来，是这只怪最强的压迫感来源
 		var pupil_r := er * (0.42 + sin(_time * 2.9 + spec[3] * 1.7) * 0.06)
-		_circle(ep, pupil_r, config.col_glow)
+		_circle(ep + _gaze_offset(er * 0.85), pupil_r, config.col_glow)
 
 ## 羽片：从 base 到 tip 的一片渐细羽毛（中段微微外扩做出羽面弧度），自带黑描边。
 func _draw_feather(base: Vector2, tip: Vector2, w_base: float, w_mid: float,
@@ -1386,7 +1488,8 @@ func _draw_leibeast(is_elite: bool) -> void:
 		head_pos + Vector2(1.4, 1.9) * hk    # 下喙根（压进颅体）
 	]), config.col_secondary, config.col_primary.darkened(0.52), 1.1)
 	# 锐眸：自绘小菱形（不用 draw_sharp_eye：它自带 2 层软光晕会糊成大块白）
-	var eye_p: Vector2 = head_pos + Vector2(1.4, -2.2) * hk
+	# 2026-10-23 视线：菱形瞳核与高光沿瞄准方向偏移，猛禽锁定猎物的读法
+	var eye_p: Vector2 = head_pos + Vector2(1.4, -2.2) * hk + _gaze_offset(1.6)
 	var eye_w := 1.6 * hk
 	var eye_h := 1.0 * hk
 	draw_colored_polygon(PackedVector2Array([
@@ -1948,8 +2051,9 @@ func _draw_jinchan() -> void:
 	draw_rect(Rect2(coin_pos - Vector2(1.4, 1.4 * coin_squish), Vector2(2.8, 2.8 * coin_squish)), config.col_primary)
 
 	# 圆润鼓眼
+	# 2026-10-23 视线：瞳光在金蟾大眼球里偏移，读作「它在盯着我的金币跑」
 	var head_pos := center + Vector2(0, -7)
 	_circle(head_pos + Vector2(-4, 0), 2.6, config.col_void)
 	_circle(head_pos + Vector2(4, 0), 2.6, config.col_void)
-	_circle(head_pos + Vector2(-4, -0.5), 1.1, config.col_glow)
-	_circle(head_pos + Vector2(4, -0.5), 1.1, config.col_glow)
+	_circle(head_pos + Vector2(-4, -0.5) + _gaze_offset(1.1), 1.1, config.col_glow)
+	_circle(head_pos + Vector2(4, -0.5) + _gaze_offset(1.1), 1.1, config.col_glow)

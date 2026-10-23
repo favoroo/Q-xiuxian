@@ -12,6 +12,13 @@ const BASE_SPEED: float = 210.0           ## 基础移速（乘区/技能 buff �
 ## GuardStanceData 的蓄能节流、ShadowStepData 的有效生命兑现、BalanceWave 的挨打生存论证都锚这个数 ——
 ## 改它之前先把那三处的注释推导一起重算，否则平衡文档会静默失真。
 const BASE_INVULNERABLE_TIME: float = 0.55
+## 移动加减速（px/s²）：2026-10-23 由 2200/2800 下调一档——210px/s 的移速在旧值下
+## 0.1s 内就完成启停，配合程序化角色的 squash 弹跳会显得「开关感」重。
+## 现加速约 0.12s、减速约 0.1s 到位，保留高响应但起停有肉。
+const MOVE_ACCEL: float = 1700.0
+const MOVE_DECEL: float = 2200.0
+## 停步时程序化角色 squash 回弹时长（秒）：停步不再把 scale 直接压平，按这个节奏收敛
+const IDLE_SETTLE_TIME: float = 0.12
 
 @export var max_health: float = BASE_MAX_HEALTH
 var current_health: float = BASE_MAX_HEALTH
@@ -940,7 +947,7 @@ func _physics_process(delta: float) -> void:
 	# 松手减速到目标速度的 35% 以下立即切待机：否则腿在原地踏步而身体还在滑行（悬浮感来源）
 	var stop_threshold := maxf(30.0, target_speed * 0.35)
 	var is_moving := input_moving or actual_speed_sq > stop_threshold * stop_threshold
-	var accel := 2200.0 if input_moving else 2800.0
+	var accel := MOVE_ACCEL if input_moving else MOVE_DECEL
 	# 顿帧期间 delta 已被 time_scale 缩放：玩家与世界同步变慢（经典顿帧），不做任何位移补偿，
 	# 避免单步大步长瞬移，也避免深穿敌人触发其去穿透被弹飞。
 	velocity = velocity.move_toward(target_velocity, accel * delta)
@@ -1021,7 +1028,11 @@ func _physics_process(delta: float) -> void:
 			RunMotion.apply(_run_state, anim_sprite, current_base, true, anim_sprite.flip_h, lean_axis, delta, speed_ratio, 0.0, shadow_sprite)
 	else:
 		if is_procedural and procedural_view != null:
-			procedural_view.scale = current_base * 1.5
+			# 2026-10-23 停步回弹：旧写法直接把 scale 压回基准，弹跳被瞬间抹平（停步「一顿」的来源之一）。
+			# 现在按 IDLE_SETTLE_TIME 指数收敛，squash 从当前形变自然回到静止，观感像卸力而不是急停。
+			var idle_target := current_base * 1.5
+			var settle_w := 1.0 - exp(-delta / maxf(IDLE_SETTLE_TIME, 0.001) * 2.2)
+			procedural_view.scale = procedural_view.scale.lerp(idle_target, settle_w)
 			procedural_view.rotation = lerp_angle(procedural_view.rotation, _hit_tilt, minf(delta * 10.0, 1.0))
 			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)
 			procedural_view.play_idle()
@@ -1374,6 +1385,10 @@ func _scan_orb_enemies(eff_max_reach: float) -> void:
 ## 受创入口。source_pos = 伤害来源位置（Boss 震地/丹爆自爆等 AoE 传入），
 ## 受击火花据此指向真实来向；未传（接触/弹丸等贴脸伤害本就有实体因果）时保持向上。
 func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
+	# 入口闸：非正伤害不是一次受击（配表/乘区折零时不许走到「扣血+无敌帧+全屏红晕」的全套流程；
+	# 负值更会变成回血）。与 heal() 的 amount<=0 早退同一口径。
+	if amount <= 0.0:
+		return
 	# 作者模式·无敌：入口直接吞掉，连闪避/盾势/受击反馈都不走（站桩观察特效时最省心）
 	if GameManager.author_mode and AuthorMode.god_mode:
 		return
@@ -1439,7 +1454,10 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 			procedural_view.position = _hit_jiggle_offset
 	if is_procedural and procedural_view != null:
 		procedural_view.play_hit(0.2)
-	AudioManager.play_sfx("player_hurt", 0.9)
+	# 2026-10-23 伤害驱动响度/音高：与敌人受击同一把尺（占最大生命比例），大伤害更闷更响
+	AudioManager.play_sfx("player_hurt",
+		0.9 * GameBalance.hit_sfx_volume(reduced, max_health),
+		GameBalance.hit_sfx_pitch(reduced, max_health))
 
 	# 受击闪白：帧内衰减（零 Tween 分配，与 EnemyBase 同款）。顶点色通道版：
 	# self_modulate 承载闪白（材质共享，渲染器 use_parent_material 继承父级顶点色）

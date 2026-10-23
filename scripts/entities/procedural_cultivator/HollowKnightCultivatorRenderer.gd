@@ -185,9 +185,22 @@ func set_visual_config(cfg: CultivatorVisualConfig) -> void:
 
 # ==================== 布料动态：平滑状态与行波上下文 ====================
 
+## 步频基准（与 Player.gd 的 gait_phase_counter 推进同源：delta * 2.4 * speed_k）
+const GAIT_RATE := 2.4
+## 奔跑身体浮沉幅度（px）：与 Player 的 squash 弹跳同相位同频
+const RUN_FLOAT_AMP := 2.4
+## RUN↔IDLE 动作交叉淡化时长（秒）：停步不再瞬间换公式/压平弹跳
+const ACTION_BLEND_TIME := 0.18
+
 var _wind_local: Vector2 = Vector2.ZERO  ## 平滑后的移动风压（世界系，绘制时按 flip_h 镜像到局部）
 var _speed_smooth: float = 0.0           ## 平滑后的移速比率：起停时斗篷风阻渐变，不突跳
 var _lean_smooth: float = 0.0            ## 平滑后的侧倾：衣摆滞后于身体 4.8° 弹性倾角
+## RUN 混合权重（0=待机，1=奔跑）：身体浮沉、斗篷振幅/风阻全部按它交叉淡化，
+## 避免 play_idle/play_run 切换那一拍公式突变造成「一顿」
+var _run_blend: float = 0.0
+## 斗篷行波相位（连续积分，不直接取 _time/gait_phase）：动作切换时相位不跳变，
+## 频率随 _run_blend 从待机慢呼吸平滑过渡到步频，布料不会瞬移
+var _cloak_phase: float = 0.0
 
 ## 行波上下文（_draw_modular_cloak 注入，供 _sway_x/_sway_y 消费）
 var _cw_amp: float = 0.0              ## 行波振幅基准（px）
@@ -202,6 +215,129 @@ func _process(delta: float) -> void:
 	_wind_local = _wind_local.lerp(move_dir if running else Vector2.ZERO, k)
 	_speed_smooth = lerpf(_speed_smooth, speed_ratio if running else 0.0, minf(delta * 8.0, 1.0))
 	_lean_smooth = lerpf(_lean_smooth, lean_angle if running else 0.0, k)
+
+	# 动作交叉淡化：RUN↔IDLE 的浮沉/斗篷在 0.18s 内过渡，不再瞬间换公式
+	_run_blend = move_toward(_run_blend, 1.0 if running else 0.0, delta / ACTION_BLEND_TIME)
+	# 斗篷行波相位连续积分：待机 ~0.25Hz 慢呼吸 ↔ 奔跑半步频（布料跟不上脚步，约为步频一半），
+	# 按 _run_blend 平滑过渡；相位连续所以起停/变速时衣摆不会瞬移
+	var idle_freq := 2.6 / maxf(body_scale, 0.6)
+	var run_cloak_rate := TAU * GAIT_RATE * 0.5 * clampf(speed_ratio, 0.7, 1.4)
+	var cloak_rate := lerpf(idle_freq * 0.62, run_cloak_rate, _run_blend)
+	_cloak_phase = fmod(_cloak_phase + cloak_rate * delta, TAU)
+
+	_tick_blink(delta)
+
+## 待机呼吸浮沉（px）：体型越大越沉缓，相位按 instance_id 错开
+func _idle_float_y() -> float:
+	var idle_freq := 2.6 / maxf(body_scale, 0.6)
+	var idle_amp := 1.8 * clampf(body_scale, 0.8, 1.25)
+	return sin(_time * idle_freq + _idle_phase) * idle_amp
+
+## 奔跑浮沉（px）：与 Player.gd:1005 的 squash 弹跳、:1000 的落地放尘同源 gait_phase
+func _run_float_y() -> float:
+	return sin(gait_phase * TAU) * RUN_FLOAT_AMP
+
+## 身体浮沉唯一出口：待机/奔跑按 _run_blend 交叉淡化，起停不跳变
+func _body_float_y() -> float:
+	return lerpf(_idle_float_y(), _run_float_y(), _run_blend)
+
+# ==================== 眨眼：自然拟真调度（2026-10-23） ====================
+## 旧实现是 fmod(_time*0.24,1) 的固定 4.17s 单眨：节奏可被肉眼预测，且闭眼靠
+## blink>0.45 硬阈值切两套几何，中间没有半闭态 → 「突然就眨一下」的机械感。
+## 新实现：随机 2~6s 一次；30% 概率连眨 2~3 下（间隔 0.12~0.22s）；15% 半眨；
+## 单次包络「闭合快(0.06s) → 保持(0.02s) → 睁开慢(0.10s)」。
+## 随机源用局部 RNG（instance_id 播种）：纯视觉节奏，不消耗 GameManager.rng 的玩法序列，
+## 同屏多个角色也能各自错开。绘制端按 0~1 连续盖眼睑，见 _draw_eyelids。
+const BLINK_GAP_MIN := 2.0
+const BLINK_GAP_MAX := 6.0
+const BLINK_BURST_CHANCE := 0.30
+const BLINK_BURST_MIN := 2          ## 连眨最少总次数
+const BLINK_BURST_MAX := 3          ## 连眨最多总次数
+const BLINK_BURST_GAP_MIN := 0.12
+const BLINK_BURST_GAP_MAX := 0.22
+const BLINK_HALF_CHANCE := 0.15     ## 半眨概率
+const BLINK_HALF_MIN := 0.60
+const BLINK_HALF_MAX := 0.80
+const BLINK_CLOSE_TIME := 0.075
+const BLINK_HOLD_TIME := 0.02
+const BLINK_OPEN_TIME := 0.12
+const BLINK_FORCE_OPEN_TIME := 0.05 ## 切到紧张动作时的快速睁眼时长
+
+var _blink_rng := RandomNumberGenerator.new()
+var _blink_wait: float = 0.0        ## 距下一次眨眼（或连眨间隔）的剩余秒
+var _blink_burst_left: int = 0      ## 本轮连眨还欠几下
+var _blink_t: float = -1.0          ## 当前这一下的进度；<0 表示不在眨
+var _blink_amp: float = 1.0         ## 本下闭合幅度（1=全闭，0.6~0.8=半眨）
+var _blink_value: float = 0.0       ## 当前闭眼程度 0~1（绘制消费）
+## 预览/判据用的手动覆盖（-1 = 关闭，走正常调度）：帧条导出需要逐帧指定闭眼程度，
+## 否则渲染器自己的 _process 会在截图间隙把值推进掉。
+var _blink_override: float = -1.0
+
+func _ready() -> void:
+	super._ready()
+	# instance_id 播种：同屏角色各自错开，且判据可复现（不碰玩法随机）
+	_blink_rng.seed = int(get_instance_id()) * 7919 + 13
+	_blink_wait = _blink_rng.randf_range(0.8, 3.0)
+
+## 眨眼调度推进：等待 → 起眨 → 包络推进 → 收尾/连眨
+func _tick_blink(delta: float) -> void:
+	if _blink_override >= 0.0:
+		_blink_value = _blink_override
+		return
+	var relaxed := current_action == CultivatorRendererBase.Action.IDLE \
+			or current_action == CultivatorRendererBase.Action.RUN
+	if not relaxed:
+		# 受击/冲刺/攻击：不眨眼；若正眨到一半则快速睁开（0.05s），不硬切
+		if _blink_value > 0.0:
+			_blink_value = move_toward(_blink_value, 0.0, delta / BLINK_FORCE_OPEN_TIME)
+		if _blink_value <= 0.0:
+			_blink_t = -1.0
+			_blink_burst_left = 0
+			if _blink_wait <= 0.0:
+				_blink_wait = _blink_rng.randf_range(BLINK_GAP_MIN, BLINK_GAP_MAX)
+		return
+
+	if _blink_t < 0.0:
+		_blink_wait -= delta
+		if _blink_wait <= 0.0:
+			_start_blink()
+		return
+
+	_blink_t += delta
+	var dur := BLINK_CLOSE_TIME + BLINK_HOLD_TIME + BLINK_OPEN_TIME
+	if _blink_t >= dur:
+		_blink_value = 0.0
+		_blink_t = -1.0
+		if _blink_burst_left > 0:
+			_blink_burst_left -= 1
+			_blink_wait = _blink_rng.randf_range(BLINK_BURST_GAP_MIN, BLINK_BURST_GAP_MAX)
+		else:
+			_blink_wait = _blink_rng.randf_range(BLINK_GAP_MIN, BLINK_GAP_MAX)
+		return
+
+	_blink_value = _blink_envelope(_blink_t) * _blink_amp
+
+func _start_blink() -> void:
+	_blink_t = 0.0
+	_blink_amp = 1.0
+	if _blink_rng.randf() < BLINK_HALF_CHANCE:
+		_blink_amp = _blink_rng.randf_range(BLINK_HALF_MIN, BLINK_HALF_MAX)
+	# 连眨只在序列起点掷一次：burst_left = 总次数-1（后面还有几下）
+	if _blink_burst_left <= 0 and _blink_rng.randf() < BLINK_BURST_CHANCE:
+		_blink_burst_left = _blink_rng.randi_range(BLINK_BURST_MIN, BLINK_BURST_MAX) - 1
+	_blink_value = 0.0
+
+## 单次眨眼包络：闭合 smoothstep（快而不生硬）→ 保持 → 睁开 smoothstep（略慢）
+## 两端导数都为 0，起眨/睁眼没有折角；0.075s 闭合在 60fps 下约 4.5 帧，足够看出「合上」的过程
+func _blink_envelope(t: float) -> float:
+	if t < BLINK_CLOSE_TIME:
+		var k := clampf(t / BLINK_CLOSE_TIME, 0.0, 1.0)
+		return k * k * (3.0 - 2.0 * k)
+	var hold_end := BLINK_CLOSE_TIME + BLINK_HOLD_TIME
+	if t < hold_end:
+		return 1.0
+	var k2 := clampf((t - hold_end) / BLINK_OPEN_TIME, 0.0, 1.0)
+	return 1.0 - k2 * k2 * (3.0 - 2.0 * k2)
 
 ## 下摆顶点行波偏移（x 方向）：相位随横向位置与下摆深度推进，越靠边、越靠下越滞后，
 ## 振幅随深度增大——衣摆从躯干向外柔和传播，取代旧版整块共相位摆动。
@@ -232,12 +368,10 @@ func _head_soft_sway(lag: float = 0.0) -> Vector2:
 		run_bob = sin(gait_phase * TAU + lag * 1.7) * 0.45 * speed_k
 	return Vector2(drag_x + breeze, run_bob + breeze * 0.3)
 
-## 偶发眨眼：~4.2s 一周期、末段 ~0.13s 闭合再睁开（sin 包络），相位按 _idle_phase 错开（与偶发环视同手法）。
-## 返回 0~1 眼皮闭合度；受击/冲刺等紧张动作不眨眼（调用侧 _calm_blink 门控）。
+## 当前眼皮闭合度 0~1（由 _tick_blink 状态机维护，见「眨眼：自然拟真调度」段）。
+## 受击/冲刺/攻击不眨眼（调用侧 _calm_blink 门控），绘制端按连续值压眼睑。
 func _blink_amount() -> float:
-	var cycle := fmod(_time * 0.24 + _idle_phase * 1.37, 1.0)
-	var bt := clampf((cycle - 0.97) / 0.03, 0.0, 1.0)
-	return sin(bt * PI) if bt > 0.0 else 0.0
+	return _blink_value
 
 ## 仅在松弛动作（待机/奔跑）下眨眼；受击/冲刺/攻击睁眼反而有张力
 func _calm_blink() -> float:
@@ -279,14 +413,14 @@ func _draw_idle(angle: Angle) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	# 待机差异化呼吸（2026-10-14 P1）：频率按体型反比调——石岳(1.18)沉缓、灵蝶使(0.85)轻快；
-	# 相位按 instance_id 错开，同屏待机的角色不再同步起落像拷贝
-	var idle_freq := 2.6 / maxf(body_scale, 0.6)
-	var idle_amp := 1.8 * clampf(body_scale, 0.8, 1.25)
-	var idle_t := _time * idle_freq + _idle_phase
-	var float_y := sin(idle_t) * idle_amp
-	# 待机布料呼吸：低频慢波（~0.25Hz），振幅克制 2px，站桩也有仙气吐纳感
-	var cloak_amp := 2.0
-	var cloak_t := idle_t * 0.62
+	# 相位按 instance_id 错开，同屏待机的角色不再同步起落像拷贝。
+	# 2026-10-23：浮沉改走 _body_float_y()（RUN↔IDLE 交叉淡化），起停不再瞬跳
+	var idle_t := _time * (2.6 / maxf(body_scale, 0.6)) + _idle_phase
+	var float_y := _body_float_y()
+	# 待机布料呼吸：低频慢波（~0.25Hz），振幅克制 2px，站桩也有仙气吐纳感。
+	# 相位取连续积分的 _cloak_phase；振幅按 _run_blend 与奔跑档交叉淡化，停步不瞬间收摆
+	var cloak_amp := lerpf(2.0, 3.3 * (0.9 + 0.18 * sin(gait_phase * TAU)), _run_blend)
+	var cloak_t := _cloak_phase
 	# 偶发环视（每 6~10s 一次、持续约 0.8s 的视线偏移）：instance_id 错开时刻，
 	# 眼睛朝随机侧偏 1.4px 再荡回——待机也有生命感的廉价高级感
 	var gaze_cycle := fmod(_time * 0.145 + _idle_phase, 1.0)  # ~6.9s 一个周期
@@ -327,22 +461,25 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
-	var wave_t := _time * 5.2
-	var float_y := sin(wave_t) * 2.4
-	# 双频斗篷衣摆：主波相位滞后身体半拍（布料惯性），振幅随步频呼吸涨落，
-	# 风阻取平滑移速（起停渐变），高频微风在 _sway_x 内叠加
-	var cloak_drag := clampf(maxf(_speed_smooth, 0.2), 0.4, 1.4) * 2.8
-	var cloak_amp := 3.3 * (0.9 + 0.18 * sin(gait_phase * TAU))
-	var cloak_t := wave_t - 0.7
+	# 2026-10-23 步态同源：身体浮沉不再用独立 _time*5.2（5.2Hz），改吃 gait_phase——
+	# 与 Player 的 squash 弹跳、落地放尘同一相位同一频率，三者不再各走各的。
+	# 走 _body_float_y() 而非 _run_float_y()：IDLE→RUN 的 0.18s 内从待机浮沉交叉淡入
+	var float_y := _body_float_y()
+	# 双频斗篷衣摆：主波相位滞后身体 1/4 步循环（布料惯性，随步频自适应），
+	# 振幅随步频呼吸涨落，风阻取平滑移速（起停渐变），高频微风在 _sway_x 内叠加
+	var cloak_drag := clampf(maxf(_speed_smooth, 0.2), 0.4, 1.4) * 2.8 * _run_blend
+	var cloak_amp := lerpf(2.0, 3.3 * (0.9 + 0.18 * sin(gait_phase * TAU)), _run_blend)
+	var cloak_t := _cloak_phase
 
-	var shadow_alpha := 0.44 - sin(wave_t) * 0.07
-	var shadow_rx := (16.5 - sin(wave_t) * 1.1) * width_scale
+	var bob := sin(gait_phase * TAU)
+	var shadow_alpha := 0.44 - bob * 0.07
+	var shadow_rx := (16.5 - bob * 1.1) * width_scale
 	_draw_ground_shadow(Vector2(0, 32), shadow_rx, 4.4, shadow_alpha)
 	_draw_immortal_motes(float_y)
 
 	match angle:
 		Angle.FRONT:
-			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y * 0.85), deg_to_rad(carry_front_rot + sin(wave_t) * 2.5), Angle.FRONT)
+			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y * 0.85), deg_to_rad(carry_front_rot + bob * 2.5), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.FRONT)
 			_draw_head_front(float_y, 0.06)
 		Angle.SIDE:
@@ -1284,6 +1421,10 @@ func _draw_eye_soft_glow(center: Vector2, radius: float, col: Color, layers: int
 
 func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, blink: float = 0.0) -> void:
 	var hs := head_scale
+	var b := clampf(blink, 0.0, 1.0)
+	var open_a := 1.0 - b
+	# 睁眼垂直压扁系数：blink=0 全开，blink=1 压到 12%（留一条细线，不彻底消失）
+	var sq := 1.0 - b * 0.88
 	var eff_glow := col_eye_glow
 	var eff_core := col_eye_core
 	if eye_override_color.a > 0.01:
@@ -1291,24 +1432,12 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 		eff_core = col_eye_core.lerp(Color(1, 1, 1, 1), 0.55).lerp(eye_override_color, 0.45)
 	var glow_r := eye_glow_boost * 3.6
 	var glow_a := eye_glow_boost * 0.4
-	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b, clampf(eff_glow.a + eye_pulse + glow_a, 0.0, 1.0))
-
-	if blink > 0.45:
-		# 闭眼一瞬：下弯细缝弧线 + 残余微辉光，不画瞳仁/高光（闭合窗约 4 帧，阈值切换无跳变感）
-		var lid_col := Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.9)
-		var dim_glow := Color(eff_glow_col.r, eff_glow_col.g, eff_glow_col.b, eff_glow_col.a * 0.45)
-		if angle == Angle.FRONT:
-			var l_lid := head_center + Vector2(-4.2 * hs, 1.0 * hs)
-			var r_lid := head_center + Vector2(4.2 * hs, 1.0 * hs)
-			_draw_eye_soft_glow(l_lid, 4.6 + glow_r, dim_glow, 2)
-			_draw_eye_soft_glow(r_lid, 4.6 + glow_r, dim_glow, 2)
-			_arc(l_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
-			_arc(r_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
-		else:
-			var lid_pos := head_center + Vector2(4.2 * hs, 1.0 * hs)
-			_draw_eye_soft_glow(lid_pos, 4.6 + glow_r, dim_glow, 2)
-			_arc(lid_pos + Vector2(0, -0.2 * hs), 2.5 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.3)
-		return
+	# 2026-10-23 连续眨眼：睁眼几何按 open_a 淡出、按 sq 垂直压扁；闭眼眼缝按 b 淡入。
+	# 两套几何交叉淡化 + 压扁同时进行，任意 blink 值都有自然中间态，不再有 blink>0.45 硬切。
+	var eff_glow_col := Color(eff_glow.r, eff_glow.g, eff_glow.b,
+			clampf(eff_glow.a + eye_pulse + glow_a, 0.0, 1.0) * open_a)
+	var c_void := Color(col_void.r, col_void.g, col_void.b, col_void.a * open_a)
+	var c_core := Color(eff_core.r, eff_core.g, eff_core.b, eff_core.a * open_a)
 
 	if angle == Angle.FRONT:
 		var l_eye := head_center + Vector2(-4.2 * hs, 1.0 * hs)
@@ -1316,96 +1445,118 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 
 		match eye_style:
 			"sharp_slit":
-				draw_line(l_eye + Vector2(-3.2 * hs, 0), l_eye + Vector2(3.2 * hs, 0), col_void, 2.8)
-				draw_line(r_eye + Vector2(-3.2 * hs, 0), r_eye + Vector2(3.2 * hs, 0), col_void, 2.8)
+				draw_line(l_eye + Vector2(-3.2 * hs, 0), l_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
+				draw_line(r_eye + Vector2(-3.2 * hs, 0), r_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
 				_draw_eye_soft_glow(l_eye, 5.2 + glow_r, eff_glow_col, 2)
 				_draw_eye_soft_glow(r_eye, 5.2 + glow_r, eff_glow_col, 2)
-				draw_line(l_eye + Vector2(-1.6 * hs, 0), l_eye + Vector2(1.6 * hs, 0), eff_core, 1.5)
-				draw_line(r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), eff_core, 1.5)
+				draw_line(l_eye + Vector2(-1.6 * hs, 0), l_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
+				draw_line(r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
 
 			"round_pupil":
-				_circle(l_eye, 3.8 * hs, col_void)
-				_circle(r_eye, 3.8 * hs, col_void)
+				draw_filled_ellipse(l_eye, 3.8 * hs, 3.8 * hs * sq, c_void)
+				draw_filled_ellipse(r_eye, 3.8 * hs, 3.8 * hs * sq, c_void)
 				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
 				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
-				_circle(l_eye + Vector2(0.4, -0.4), 1.7 * hs, eff_core)
-				_circle(r_eye + Vector2(-0.4, -0.4), 1.7 * hs, eff_core)
-				_circle(l_eye + Vector2(-0.6, 0.6), 0.7 * hs, Color(1, 1, 1, 0.65))
+				draw_filled_ellipse(l_eye + Vector2(0.4, -0.4 * sq), 1.7 * hs, 1.7 * hs * sq, c_core)
+				draw_filled_ellipse(r_eye + Vector2(-0.4, -0.4 * sq), 1.7 * hs, 1.7 * hs * sq, c_core)
 
 			"round_bright":
 				# 童子亮眼：小黑瞳大高光，去"空洞眼窝"感（驯兽师专属）
-				_circle(l_eye, 2.7 * hs, col_void)
-				_circle(r_eye, 2.7 * hs, col_void)
+				draw_filled_ellipse(l_eye, 2.7 * hs, 2.7 * hs * sq, c_void)
+				draw_filled_ellipse(r_eye, 2.7 * hs, 2.7 * hs * sq, c_void)
 				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 3)
 				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 3)
-				_circle(l_eye + Vector2(0.5, -0.5), 1.5 * hs, eff_core)
-				_circle(r_eye + Vector2(-0.5, -0.5), 1.5 * hs, eff_core)
-				_circle(l_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
-				_circle(r_eye + Vector2(-0.7, -0.8), 0.8 * hs, Color(1, 1, 1, 0.9))
+				draw_filled_ellipse(l_eye + Vector2(0.5, -0.5 * sq), 1.5 * hs, 1.5 * hs * sq, c_core)
+				draw_filled_ellipse(r_eye + Vector2(-0.5, -0.5 * sq), 1.5 * hs, 1.5 * hs * sq, c_core)
+				draw_filled_ellipse(l_eye + Vector2(-0.7, -0.8 * sq), 0.8 * hs, 0.8 * hs * sq, Color(1, 1, 1, 0.9 * open_a))
+				draw_filled_ellipse(r_eye + Vector2(-0.7, -0.8 * sq), 0.8 * hs, 0.8 * hs * sq, Color(1, 1, 1, 0.9 * open_a))
 
 			"angry_slit":
-				var l_poly: PackedVector2Array = [l_eye + Vector2(-3.5 * hs, 2 * hs), l_eye + Vector2(3.5 * hs, -1.5 * hs), l_eye + Vector2(3 * hs, 1.5 * hs)]
-				var r_poly: PackedVector2Array = [r_eye + Vector2(-3.5 * hs, -1.5 * hs), r_eye + Vector2(3.5 * hs, 2 * hs), r_eye + Vector2(-3 * hs, 1.5 * hs)]
-				draw_colored_polygon(l_poly, col_void)
-				draw_colored_polygon(r_poly, col_void)
+				var l_poly: PackedVector2Array = [
+					l_eye + Vector2(-3.5 * hs, 2 * hs * sq), l_eye + Vector2(3.5 * hs, -1.5 * hs * sq),
+					l_eye + Vector2(3 * hs, 1.5 * hs * sq)]
+				var r_poly: PackedVector2Array = [
+					r_eye + Vector2(-3.5 * hs, -1.5 * hs * sq), r_eye + Vector2(3.5 * hs, 2 * hs * sq),
+					r_eye + Vector2(-3 * hs, 1.5 * hs * sq)]
+				draw_colored_polygon(l_poly, c_void)
+				draw_colored_polygon(r_poly, c_void)
 				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 2)
 				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 2)
-				_circle(l_eye, 1.6 * hs, eff_core)
-				_circle(r_eye, 1.6 * hs, eff_core)
+				draw_filled_ellipse(l_eye, 1.6 * hs, 1.6 * hs * sq, c_core)
+				draw_filled_ellipse(r_eye, 1.6 * hs, 1.6 * hs * sq, c_core)
 
 			"hollow_oval", _:
-				draw_filled_ellipse(l_eye, 3.8 * hs, 5.2 * hs, col_void)
-				draw_filled_ellipse(r_eye, 3.8 * hs, 5.2 * hs, col_void)
+				draw_filled_ellipse(l_eye, 3.8 * hs, 5.2 * hs * sq, c_void)
+				draw_filled_ellipse(r_eye, 3.8 * hs, 5.2 * hs * sq, c_void)
 				_draw_eye_soft_glow(l_eye, 6.2 + glow_r, eff_glow_col, 3)
 				_draw_eye_soft_glow(r_eye, 6.2 + glow_r, eff_glow_col, 3)
-				draw_filled_ellipse(l_eye + Vector2(0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
-				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3), 2.2 * hs, 3.6 * hs, eff_core)
+				draw_filled_ellipse(l_eye + Vector2(0.2, -0.3 * sq), 2.2 * hs, 3.6 * hs * sq, c_core)
+				draw_filled_ellipse(r_eye + Vector2(-0.2, -0.3 * sq), 2.2 * hs, 3.6 * hs * sq, c_core)
 
 		if eye_glow_boost > 0.15:
-			_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
-			_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
+			_circle(l_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85 * open_a))
+			_circle(r_eye, 1.1 * hs, Color(1, 1, 1, eye_glow_boost * 0.85 * open_a))
+
+		if b > 0.02:
+			_draw_closed_eye_slits(head_center, angle, hs, b)
 
 	else:
 		var eye_pos := head_center + Vector2(4.2 * hs, 1.0 * hs)
 		match eye_style:
 			"sharp_slit":
 				var slit_pts: PackedVector2Array = [
-					eye_pos + Vector2(-3.0 * hs, 1.0 * hs),
-					eye_pos + Vector2(3.2 * hs, -1.6 * hs),
-					eye_pos + Vector2(2.2 * hs, 0.8 * hs)
+					eye_pos + Vector2(-3.0 * hs, 1.0 * hs * sq),
+					eye_pos + Vector2(3.2 * hs, -1.6 * hs * sq),
+					eye_pos + Vector2(2.2 * hs, 0.8 * hs * sq)
 				]
-				draw_colored_polygon(slit_pts, col_void)
+				draw_colored_polygon(slit_pts, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.2 + glow_r, eff_glow_col, 2)
-				draw_line(eye_pos + Vector2(-1.8 * hs, 0.6 * hs), eye_pos + Vector2(2.4 * hs, -0.8 * hs), eff_core, 1.2)
+				draw_line(eye_pos + Vector2(-1.8 * hs, 0.6 * hs * sq), eye_pos + Vector2(2.4 * hs, -0.8 * hs * sq), c_core, 1.2)
 
 			"angry_slit":
 				var angry_pts: PackedVector2Array = [
-					eye_pos + Vector2(-3.2 * hs, -1.4 * hs),
-					eye_pos + Vector2(3.2 * hs, 1.6 * hs),
-					eye_pos + Vector2(-2.2 * hs, 1.4 * hs)
+					eye_pos + Vector2(-3.2 * hs, -1.4 * hs * sq),
+					eye_pos + Vector2(3.2 * hs, 1.6 * hs * sq),
+					eye_pos + Vector2(-2.2 * hs, 1.4 * hs * sq)
 				]
-				draw_colored_polygon(angry_pts, col_void)
+				draw_colored_polygon(angry_pts, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				_circle(eye_pos + Vector2(0.4 * hs, 0.2 * hs), 1.5 * hs, eff_core)
+				draw_filled_ellipse(eye_pos + Vector2(0.4, 0.2 * sq), 1.5 * hs, 1.5 * hs * sq, c_core)
 
 			"round_pupil":
-				_circle(eye_pos, 3.2 * hs, col_void)
+				draw_filled_ellipse(eye_pos, 3.2 * hs, 3.2 * hs * sq, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				_circle(eye_pos + Vector2(0.3, -0.3), 1.7 * hs, eff_core)
+				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.3 * sq), 1.7 * hs, 1.7 * hs * sq, c_core)
 
 			"round_bright":
-				_circle(eye_pos, 2.4 * hs, col_void)
+				draw_filled_ellipse(eye_pos, 2.4 * hs, 2.4 * hs * sq, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
-				_circle(eye_pos + Vector2(0.4, -0.4), 1.4 * hs, eff_core)
-				_circle(eye_pos + Vector2(-0.4, -0.5), 0.7 * hs, Color(1, 1, 1, 0.9))
+				draw_filled_ellipse(eye_pos + Vector2(0.4, -0.4 * sq), 1.4 * hs, 1.4 * hs * sq, c_core)
+				draw_filled_ellipse(eye_pos + Vector2(-0.4, -0.5 * sq), 0.7 * hs, 0.7 * hs * sq, Color(1, 1, 1, 0.9 * open_a))
 
 			"hollow_oval", _:
-				draw_filled_ellipse(eye_pos, 3.6 * hs, 5.0 * hs, col_void)
+				draw_filled_ellipse(eye_pos, 3.6 * hs, 5.0 * hs * sq, c_void)
 				_draw_eye_soft_glow(eye_pos, 6.2 + glow_r, eff_glow_col, 3)
-				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2), 2.2 * hs, 3.6 * hs, eff_core)
+				draw_filled_ellipse(eye_pos + Vector2(0.3, -0.2 * sq), 2.2 * hs, 3.6 * hs * sq, c_core)
 
 		if eye_glow_boost > 0.15:
-			_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85))
+			_circle(eye_pos, 1.2 * hs, Color(1, 1, 1, eye_glow_boost * 0.85 * open_a))
+
+		if b > 0.02:
+			_draw_closed_eye_slits(head_center, angle, hs, b)
+
+## 闭眼眼缝：按 blink 淡入的深色下弯弧线（沿用旧闭眼造型，改成连续透明度）。
+## 与睁眼几何交叉淡化，配合 _draw_modular_eyes 里的垂直压扁，形成「眼皮合上」的连续过程。
+func _draw_closed_eye_slits(head_center: Vector2, angle: Angle, hs: float, b: float) -> void:
+	var lid_col := Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.9 * b)
+	if angle == Angle.FRONT:
+		var l_lid := head_center + Vector2(-4.2 * hs, 1.0 * hs)
+		var r_lid := head_center + Vector2(4.2 * hs, 1.0 * hs)
+		_arc(l_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
+		_arc(r_lid + Vector2(0, -0.2 * hs), 2.7 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.4)
+	else:
+		var lid_pos := head_center + Vector2(4.2 * hs, 1.0 * hs)
+		_arc(lid_pos + Vector2(0, -0.2 * hs), 2.5 * hs, PI * 0.15, PI * 0.85, 8, lid_col, 1.3)
 
 ## 绘制斗篷轮廓描边与法力流动反光（仙侠高精流光反光感）
 func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> void:

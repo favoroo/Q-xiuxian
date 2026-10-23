@@ -30,7 +30,7 @@ extends Node
 ##    8d. 武器连续开火窗口 get_processed_tweens() 增量 ≤ 2（开火视觉零 Tween 化）；
 ##    8e. 设置变更走 GameFeel 每帧 memo，下一帧生效。
 ## 9. 重绘节流补网（2026-10-14 逻辑帧治理）：
-##    9a. 玩家级修士渲染器 high_fps_mode 1 秒 redraw_count 增量 ≤ 38（30Hz，旧每帧模式约 60+）；
+##    9a. 玩家级修士渲染器 high_fps_mode 1 秒 redraw_count 增量 ≤ 68（60Hz，2026-10-23 由 30Hz 提档）；
 ##    9b. AoeTelegraph 预警圈 1 秒重绘 ≤ 38（30Hz，旧每帧无条件 queue_redraw）；
 ##    9c. WeaponArcRenderer 元素刀光亮起窗口 1 秒重绘 ≤ 38（30Hz）；
 ##    9d. hit_stop 零分配：压下时间轴 + 写 _hitstop_deadline_ms，GameManager._process 到点还原。
@@ -505,17 +505,19 @@ func _run() -> void:
 	_check(GameFeel.shake_mult_memo() > 0.0, "恢复 standard 后 memo 读数 > 0")
 
 	# ================= 9. 重绘节流补网（2026-10-14 逻辑帧治理） =================
-	# 9a. 玩家级修士渲染器 30Hz：high_fps_mode 原每帧全量重绘（444 处 draw_ × 60fps
-	#     是逻辑帧最大单一开销），降频后 1 秒 redraw_count 增量应 ≈30（阈值 ≤ 38）。
+	# 9a. 玩家级修士渲染器 60Hz：2026-10-23 从 30Hz 提档（30Hz 下 sin 微动效有台阶感，
+	#     用户反馈「一顿一顿」）。玩家恒为单实例，1 秒 redraw_count 增量应 ≈60（阈值 ≤ 68）。
 	var cr := HollowKnightCultivatorRenderer.new(CultivatorVisualConfig.get_config("jianchi"))
 	cr.high_fps_mode = true
 	world.add_child(cr)
 	var cr_before: int = CultivatorRendererBase.redraw_count
 	await get_tree().create_timer(1.0).timeout
 	var cr_delta: int = CultivatorRendererBase.redraw_count - cr_before
-	print("PERF: 玩家级修士渲染器 1s 重绘 = %d（阈值 ≤ 38）" % cr_delta)
-	_check(cr_delta <= 38, "玩家渲染器 30Hz 节流：1s 重绘 ≤ 38（实得 %d，旧每帧模式约 60+）" % cr_delta)
-	_check(cr_delta >= 20, "玩家渲染器仍在重绘（节流不能把动画卡死，下限 20）")
+	# 注意：headless 下引擎空转实际只有 ~38fps（无 vsync 也不跑满），
+	# 60Hz 重绘的实测上限就是帧率本身，所以判据只钉「不得低于旧 30Hz 的 25」+「不得超过帧率」。
+	print("PERF: 玩家级修士渲染器 1s 重绘 = %d（60Hz 档，headless 帧率上限约 38）" % cr_delta)
+	_check(cr_delta <= 68, "玩家渲染器 60Hz：1s 重绘 ≤ 68（实得 %d）" % cr_delta)
+	_check(cr_delta >= 30, "玩家渲染器已从 30Hz 提档（下限 30，旧 30Hz 档约 25，实得 %d）" % cr_delta)
 	world.remove_child(cr)
 	cr.free()
 

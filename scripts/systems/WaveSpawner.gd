@@ -810,7 +810,10 @@ func _boss_still_alive() -> bool:
 ## 本回合精英存活与否（精英回合超时锁关的判据）。池化复用/清场都必须先过 dying 门：
 ## 精英一进 _die 就是「已伏诛」，塌缩动画还没播完也不许把整回合继续锁着。
 func _elite_still_alive() -> bool:
-	return _elite_ref != null and is_instance_valid(_elite_ref) and not _elite_ref.dying
+	# _pooled 双保险：精英死后实例会回池，若恰在 _tick_elite_ref 清引用之前被复用成小怪，
+	# dying 已被 reset_for_reuse 洗回 false，会把已解除的锁关重新锁上。
+	return _elite_ref != null and is_instance_valid(_elite_ref) \
+		and not _elite_ref._pooled and not _elite_ref.dying
 
 ## 精英引用掉线即永久置空（每帧在 _process_fight 开头调）：
 ## 精英死后会被对象池回收、同一实例洗成下一只小怪 —— 若一直攥着旧引用，那只小怪活着

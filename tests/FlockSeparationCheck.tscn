@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cflocksep001"]
+
+[ext_resource type="Script" path="res://tests/flock_separation_check.gd" id="1_check"]
+
+[node name="FlockSeparationCheck" type="Node"]
+script = ExtResource("1_check")

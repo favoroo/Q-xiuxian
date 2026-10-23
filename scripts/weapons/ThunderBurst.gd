@@ -303,7 +303,14 @@ func _deal_damage() -> void:
 	_struck = true
 	# 命中火花溅射（T-2.5）：雷光超白碎屑，吃 FxParticlePool 既有 HIT_FRAME_BUDGET 帧闸
 	# （2026-10-16 减量 scale 1.2→1.0；雷刺元素在池内已分化为短命高初速电刺形态）
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.0)
+	# 2026-10-23 去重：按落点形态只发**一支**——
+	#   雷系（thunder/空）走本处的 lightning 碎屑；
+	#   其余形态交给 BurstKindFx.emit_hit_spark()（火雨 EMBER / 冰霜水 / 地裂土 / 坠印金 / 鼓音波）。
+	#   原先 BurstKindFx 在 activate 阶段就发一支、这里再发一支 ⇒ 同一落点同帧双发（实测 2 支）。
+	if burst_kind == "thunder" or burst_kind == "":
+		FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position, "lightning", 1.0)
+	elif _kind_fx != null:
+		_kind_fx.emit_hit_spark()
 	# 落雷震屏「按战果才震」（2026-10-18 用户口径：全雷法配装屏幕一直在震，别这么高频）：
 	# 单发落雷不再无条件震——六把雷法轮着砸，每发都震就是持续抖屏。只有真正打出战果
 	# （一发收 ≥3 命，或劈到精英）才给一记镜头冲击，普通落雷只留火花/音效。

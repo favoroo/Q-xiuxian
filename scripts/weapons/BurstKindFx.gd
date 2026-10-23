@@ -36,6 +36,10 @@ func _ready() -> void:
 	set_process(false)
 
 ## 重铺字段并开演（池化复用唯一入口）
+## 2026-10-23 去重：本函数原先在 activate 阶段就发 HIT_SPARK 材质微粒，但那时还不知道劈没劈到人
+## （ThunderBurst._deal_damage 是同帧 deferred），于是①劈空也在空地冒粒子，②劈中时
+## ThunderBurst 末尾再发一支 = 同一落点双发（实测 frost 形态同帧 2 支）。
+## 现在火花统一由 ThunderBurst._deal_damage 在 hits>0 之后调 emit_hit_spark() 发一支。
 func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 	kind = p_kind
 	radius = p_radius
@@ -47,8 +51,11 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 		return
 	visible = true
 	set_process(true)
-	# 命中首拍对应材质微粒（T-2.6）：火雨→EMBER、冰霜/地裂/坠印→对应材质碎屑
-	# 2026-10-16 攻击粒子减量：各形态 scale 收一档（0.75-0.9 → 0.6-0.75）
+
+## 命中首拍材质微粒（由 ThunderBurst._deal_damage 在确认 hits>0 后调用一次）。
+## 与 ThunderBurst 自己的雷光碎屑二选一：雷系走 lightning，其余形态走各自元素，
+## 避免同一落点同帧两支 HIT_SPARK（2026-10-23）。
+func emit_hit_spark() -> void:
 	match kind:
 		"fire_rain":
 			FxParticlePool.burst(FxParticlePool.EMBER, global_position, "fire", 0.65)

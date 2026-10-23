@@ -72,7 +72,7 @@ pointing/emulate_touch_from_mouse=true
 [physics]
 
 3d/physics_engine="Jolt Physics"
-"#ä¸è¿è¡æ¶ä¸è´ï¼Main._apply_fps_limitæ60/60æ¸²æ+ç©çï¼æ§å¼30æ¯å·²ä¸çº¿ççµæ¡£çæ®çï¼#2026-10-17æ§è½ä¸é¡¹æ¸çââé¿åè°ä¼æ¶è¢«projectè®¾ç½®è¯¯å¯¼ï¼ãcommon/physics_interpolation"=false
+common/physics_interpolation=false
 
 [rendering]
 
@@ -81,5 +81,5 @@ rendering_device/driver.windows="d3d12"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
-"#å³é­ï¼2026-10-16ï¼ï¼éé¡¶ç¹CPUå¯¹é½ç ´åcanvasæ¹å¤çï¼759drawcallæ ¹å ä¹ä¸ï¼ï¼#æ¬é¡¹ç®ä¸»ä½æ¯ç¨åºåç¢éç»å¶+éæ´åç´ squashç¼©æ¾ï¼æ æ´åç´ æ¶çã2d/snap/snap_2d_vertices_to_pixel"=false
-"#ç§»å¨ç«¯å·²ågl_compatibilityï¼2026-10-21çæºHUDéªçæ ¹æ²»ï¼è§ä¸ï¼ï¼èGLCompatibility#ä¸æ¯æ2DHDRè§å£ââä¿çtrueä¼è¢«å¼æå¿½ç¥å¹¶å¯è½å·è­¦åãæ¡é¢Forward+ä»èµ°åèªé»è®¤ã#ç§»å¨ç«¯glowæ¬æ¥å°±å¨Main._apply_glow_channeléç¨LDRéå¼èµ·è¾ï¼use_hdr_2dæfalseï¼ï¼#æå³ææ­¤é¡¹ç®çº§é»è®¤ä¸å½±åç§»å¨ç«¯è§æï¼æ¡é¢ç«¯Mainä¼æéæuse_hdr_2dæå¼ã#æ³¨ï¼hdr_2dæ¯ãé¡¹ç®çº§é»è®¤ãï¼è¿è¡æ¶Mainä»ä¼æå¹³å°åvp.use_hdr_2dãviewport/hdr_2d"=false
+2d/snap/snap_2d_vertices_to_pixel=false
+viewport/hdr_2d=false

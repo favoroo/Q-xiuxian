@@ -48,6 +48,12 @@ const MOB_KILL_EXP_MULT := BalanceWave.MOB_KILL_EXP_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
 const ENEMY_DMG_BASE_MULT := BalanceWave.ENEMY_DMG_BASE_MULT
 const BOLT_DMG_BASE_REF := BalanceWave.BOLT_DMG_BASE_REF
+# 敌群集行为（分离排斥 / 包围方位）→ BalanceWave
+const FLOCK_SEPARATION_RADIUS := BalanceWave.FLOCK_SEPARATION_RADIUS
+const FLOCK_SEPARATION_STRENGTH := BalanceWave.FLOCK_SEPARATION_STRENGTH
+const FLOCK_ORBIT_BIAS_MAX := BalanceWave.FLOCK_ORBIT_BIAS_MAX
+const FLOCK_ORBIT_CLOSE_RADIUS := BalanceWave.FLOCK_ORBIT_CLOSE_RADIUS
+const FLOCK_ORBIT_TANGENT := BalanceWave.FLOCK_ORBIT_TANGENT
 # 掉落与死亡反馈几何 → BalanceWave
 const ELITE_GEM_COUNT := BalanceWave.ELITE_GEM_COUNT
 const GEM_SCATTER_RADIUS := BalanceWave.GEM_SCATTER_RADIUS
@@ -277,7 +283,7 @@ const HITSTOP_LOWFPS_FLOOR := BalanceCombat.HITSTOP_LOWFPS_FLOOR
 const HITSTOP_LOWFPS_INTERVAL_MULT := BalanceCombat.HITSTOP_LOWFPS_INTERVAL_MULT
 const CRIT_TRAUMA_NORMAL := BalanceCombat.CRIT_TRAUMA_NORMAL
 const CRIT_TRAUMA_ELITE := BalanceCombat.CRIT_TRAUMA_ELITE
-const ELITE_HIT_SPARK_INTERVAL := BalanceCombat.ELITE_HIT_SPARK_INTERVAL
+const ELITE_HIT_SPARK_GAP_MS := BalanceCombat.ELITE_HIT_SPARK_GAP_MS
 const ELITE_HIT_SPARK_SCALE := BalanceCombat.ELITE_HIT_SPARK_SCALE
 const BOSS_HIT_SPARK_SCALE := BalanceCombat.BOSS_HIT_SPARK_SCALE
 const ELITE_HIT_SPARK_EDGE_OFFSET := BalanceCombat.ELITE_HIT_SPARK_EDGE_OFFSET
@@ -292,6 +298,14 @@ const BOSS_HEAVY_HIT_TRAUMA := BalanceCombat.BOSS_HEAVY_HIT_TRAUMA
 const BOSS_HEAVY_HIT_COOLDOWN := BalanceCombat.BOSS_HEAVY_HIT_COOLDOWN
 const ZHUMU_MINION_CAP := BalanceCombat.ZHUMU_MINION_CAP
 const CHARGE_BRAKE_END_SPEED_PCT := BalanceCombat.CHARGE_BRAKE_END_SPEED_PCT
+# 近战扑咬（纯接触怪的前摇出招）→ BalanceCombat
+const LUNGE_WINDUP := BalanceCombat.LUNGE_WINDUP
+const LUNGE_SPEED_MUL := BalanceCombat.LUNGE_SPEED_MUL
+const LUNGE_DASH_TIME := BalanceCombat.LUNGE_DASH_TIME
+const LUNGE_RECOVER := BalanceCombat.LUNGE_RECOVER
+const LUNGE_COOLDOWN := BalanceCombat.LUNGE_COOLDOWN
+const LUNGE_MIN_RANGE := BalanceCombat.LUNGE_MIN_RANGE
+const LUNGE_MAX_RANGE := BalanceCombat.LUNGE_MAX_RANGE
 const BURN_STACK_RATIO := BalanceCombat.BURN_STACK_RATIO
 const POISON_STACK_RATIO := BalanceCombat.POISON_STACK_RATIO
 const BURN_ELEM_TICK_COEF := BalanceCombat.BURN_ELEM_TICK_COEF
@@ -553,6 +567,15 @@ static func focus_fire_mult(recent_hits: int) -> float:
 
 static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:
 	return BalanceCombat.hit_squash_target(knockback, is_crit)
+
+static func hit_sfx_volume(damage: float, max_hp: float) -> float:
+	return BalanceCombat.hit_sfx_volume(damage, max_hp)
+
+static func hit_sfx_pitch(damage: float, max_hp: float) -> float:
+	return BalanceCombat.hit_sfx_pitch(damage, max_hp)
+
+static func hit_sfx_is_heavy(damage: float, max_hp: float) -> bool:
+	return BalanceCombat.hit_sfx_is_heavy(damage, max_hp)
 
 # 祭坛灵兽 → BalanceSpiritBeast
 static func spirit_beast_max_hp(wave: int) -> float:

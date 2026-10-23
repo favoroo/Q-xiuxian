@@ -277,7 +277,33 @@ func _build_combo_section() -> Control:
 	GameStyle.button(kill, GameStyle.NAVY2, GameStyle.JADE, 14, GameStyle.INK_TEXT)
 	kill.pressed.connect(_play_kill_combo)
 	box.add_child(kill)
+
+	# 打击分层试听（2026-10-23）：普通/重击/暴击三档并排，验「同一把武器、不同份量」的听感梯度
+	var tier := HBoxContainer.new()
+	tier.add_theme_constant_override("separation", 4)
+	box.add_child(tier)
+	for spec in [
+		{"text": "普通命中", "key": "enemy_hit", "scale": 1.15},
+		{"text": "重击", "key": "enemy_hit_heavy", "scale": 1.0},
+		{"text": "暴击", "key": "enemy_hit_crit", "scale": 1.35},
+	]:
+		var b := Button.new()
+		b.text = String(spec["text"])
+		b.custom_minimum_size = Vector2(COMBO_ROW_W / 3.0 - 3.0, 30)
+		GameStyle.button(b, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER)
+		b.pressed.connect(_play_hit_tier.bind(String(spec["key"]), float(spec["scale"])))
+		tier.add_child(b)
+
+	var tier_note := Label.new()
+	tier_note.text = GameStyle.wrap_cjk("三档都是「脆头 + 实身 + 沉尾」五层结构，靠中频厚度与尾巴长度分层。暴击单播一声，不再叠普通命中。", GameStyle.body_font(), 13, COMBO_ROW_W)
+	GameStyle.label(tier_note, 13, GameStyle.PAPER_DIM)
+	box.add_child(tier_note)
 	return box
+
+## 打击分层试听：直接走正式注册 key，与游戏里 EnemyBase 的播放参数同源
+func _play_hit_tier(key: String, scale: float) -> void:
+	AudioManager.play_sfx(key, scale, GameManager.rng.randf_range(0.96, 1.04))
+	_show("打击分层 · %s" % key)
 
 ## 击杀连击试听：正式走 register_kill_pitch → play_sfx 管线，验阶梯手感与断窗重置
 func _play_kill_combo() -> void:
@@ -305,7 +331,7 @@ func _play_combo(is_hit: bool) -> void:
 		if seq != _burst_seq:
 			return
 		## 第三层走正式注册 key —— 要验的就是会不会和游戏里那声受击糊成一片
-		AudioManager.play_sfx("enemy_hit", 1.25, GameManager.rng.randf_range(1.08, 1.22))
+		AudioManager.play_sfx("enemy_hit", 1.15, GameManager.rng.randf_range(0.94, 1.08))
 
 func _pick_cand(family: String) -> Dictionary:
 	if not _cands.has(family):

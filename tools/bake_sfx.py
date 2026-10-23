@@ -124,12 +124,13 @@ class Biquad:
 
 
 def tone(buf, *, wtype="sine", f0=440.0, f1=None, t0=0.0, dur=0.12, peak=0.3,
-         curve="exp", lp=0.0) -> None:
+         curve="exp", lp=0.0, atk=-1.0) -> None:
     if f1 is None:
         f1 = f0
     start = int(round(t0 * SR))
     length = int(round(dur * SR))
-    atk = min(0.012, dur * 0.2)
+    # 默认 12ms 慢起音适合长音；打击类 body 需要 2~4ms 陡起音才砸得下去
+    atk = min(0.012, dur * 0.2) if atk < 0.0 else min(atk, dur * 0.5)
     bq = Biquad() if lp else None
     if bq:
         bq.set("lowpass", lp, 0.8)
@@ -187,6 +188,24 @@ def fm_tone(buf, *, f0=440.0, f1=None, t0=0.0, dur=0.15, peak=0.25,
             buf[pos] += s
 
 
+def sat_tone(buf, *, f0=440.0, f1=None, t0=0.0, dur=0.12, peak=0.3,
+             atk=0.002, drive=3.0, lp=2200.0) -> None:
+    """饱和正弦：tanh 软削波把低频基音「整流」出 2/3/4 次谐波，再低通收掉刺耳高频。
+    用途：手机小喇叭放不出 100~200Hz，但能放 400~800Hz 的谐波——
+    听感上仍是同一个低沉的「咚」，只是靠谐波被听见。比单纯堆低频 peak 有效得多：
+    后者在峰值归一化时会把中频预算挤掉，手机上反而更听不见。"""
+    if f1 is None:
+        f1 = f0
+    tmp = [0.0] * len(buf)
+    tone(tmp, wtype="sine", f0=f0, f1=f1, t0=t0, dur=dur, peak=1.0, atk=atk)
+    k = math.tanh(drive)
+    bq = Biquad()
+    bq.set("lowpass", lp, 0.8)
+    for i, v in enumerate(tmp):
+        if 0 <= i < len(buf):
+            buf[i] += bq.process(math.tanh(v * drive) / k) * peak
+
+
 def shimmer(buf, *, f0=1600.0, f1=None, t0=0.0, dur=0.35, peak=0.08,
             detune=0.007, wobble=6.5, wdepth=0.4) -> None:
     """双失谐正弦 + 缓慢幅度颤：灵光/仙气/魂火消散的那层「飘」。
@@ -235,7 +254,7 @@ _NOISE = [_srand() for _ in range(NOISE_LEN)]
 
 
 def noise(buf, *, t0=0.0, dur=0.1, peak=0.2, ftype="bandpass", f0=1200.0, f1=None,
-          q=1.2) -> None:
+          q=1.2, atk=None) -> None:
     if f1 is None:
         f1 = f0
     start = int(round(t0 * SR))
@@ -243,7 +262,12 @@ def noise(buf, *, t0=0.0, dur=0.1, peak=0.2, ftype="bandpass", f0=1200.0, f1=Non
     rate = _urand(0.85, 1.15)
     pos = int(_urand(0.0, 0.5) * SR)
     bq = Biquad()
-    atk = 0.006
+    # 不传 atk 时保持原 6ms 起音（既有音色逐字节不变）；
+    # 极短 click 需显式传更陡的 atk，否则 6ms 会把瞬态吃掉。
+    if atk is None:
+        atk = 0.006
+    else:
+        atk = min(atk, dur * 0.5)
     for i in range(length):
         t = i / SR
         bq.set(ftype, f0 if f1 == f0 else _expramp(f0, max(30.0, f1), t, dur), q)
@@ -271,79 +295,141 @@ def _arp(buf, freqs, *, t_step=0.09, dur=0.26, peak=0.15, wtype="triangle", echo
 
 
 SFX = {
-    # 命中反馈分层：普通入肉斩裂、暴击低频撕裂（Sub-Bass）、重器钝击
+    # 命中反馈分层：普通入肉斩裂、暴击骨裂重击、重器钝击
+    # 2026-10-23 打击族整体重做（参考死亡细胞：每一击 = 脆头 + 实身 + 沉尾）。
+    # 原配方三变体仅 65~90ms、缺音头刃口 click、低频 body 只到 46Hz/80ms，
+    # 实机听感「啪一声就没了」。
+    # 关键约束：这是安卓手游，手机外放 500Hz 以下基本没有输出 —— 打击感不能靠堆
+    # 低频 peak（归一化会把中频预算挤掉，手机上反而更听不见）。低频 body 一律走
+    # sat_tone 软饱和，把能量以谐波形式搬进手机能放的 400~800Hz。
+    # 统一五层：① 瞬态头（click/刃口，highpass 3~8ms）② 中段撕裂/钝击噪声
+    #       ③ 中频 thwack（手机外放的主角）④ 饱和 punch（把低频搬到 400~800Hz）
+    #       ⑤ 饱和 sub（垫底厚度，只在能放低频的设备上锦上添花）
+    # 族间差异：普通命中偏「脆」，暴击在五层上再加金属锐鸣与更长拖尾，
+    #           重击把中段换成钝器噪声、尾巴收短（长尾让给暴击，两声低频不糊）。
     "enemy_hit": [
-        # 变体 1：利刃割肉撕裂瞬态 + 扎实低频身体撞击微下潜
-        lambda b: (tone(b, wtype="sine", f0=115, f1=46, dur=0.08, peak=0.42),
-                   noise(b, dur=0.07, peak=0.32, ftype="bandpass", f0=1800, f1=480, q=1.2),
-                   tone(b, wtype="triangle", f0=1400, f1=360, dur=0.035, peak=0.18)),
-        # 变体 2：沉闷切肉入骨，低频更深
-        lambda b: (tone(b, wtype="sine", f0=105, f1=40, dur=0.09, peak=0.45),
-                   noise(b, dur=0.08, peak=0.30, ftype="lowpass", f0=2200, f1=420, q=1.1),
-                   tone(b, wtype="sawtooth", f0=880, f1=260, dur=0.04, peak=0.16, lp=800)),
-        # 变体 3：快速清脆斩切，瞬态突出
-        lambda b: (tone(b, wtype="sine", f0=125, f1=50, dur=0.075, peak=0.40),
-                   noise(b, dur=0.065, peak=0.35, ftype="bandpass", f0=2400, f1=650, q=1.4),
-                   tone(b, wtype="triangle", f0=1600, f1=420, dur=0.03, peak=0.20)),
+        # 变体 1：利刃割肉 —— 标准款，锋口瞬态 + 宽幅撕裂 + 实心中频一击
+        lambda b: (noise(b, dur=0.004, peak=0.12, ftype="highpass", f0=6200, atk=0.0004),
+                   noise(b, dur=0.095, peak=0.28, ftype="bandpass", f0=2600, f1=480, q=1.1, atk=0.0015),
+                   tone(b, wtype="triangle", f0=900, f1=520, dur=0.05, peak=0.26, atk=0.0018),
+                   sat_tone(b, f0=430, f1=145, dur=0.105, peak=0.20, atk=0.002, drive=3.0),
+                   tone(b, wtype="sine", f0=112, f1=38, dur=0.16, peak=0.20, atk=0.004),
+                   tone(b, wtype="triangle", f0=1500, f1=380, dur=0.045, peak=0.13)),
+        # 变体 2：沉闷切肉入骨 —— thwack 更低更钝，撕裂偏闷，sub 更深
+        lambda b: (noise(b, dur=0.0045, peak=0.10, ftype="highpass", f0=5200, atk=0.0005),
+                   noise(b, dur=0.11, peak=0.26, ftype="lowpass", f0=2200, f1=320, q=1.0, atk=0.002),
+                   tone(b, wtype="triangle", f0=780, f1=440, dur=0.055, peak=0.28, atk=0.002),
+                   sat_tone(b, f0=370, f1=120, dur=0.115, peak=0.22, atk=0.0025, drive=3.4),
+                   tone(b, wtype="sine", f0=100, f1=32, dur=0.175, peak=0.22, atk=0.005),
+                   tone(b, wtype="sawtooth", f0=900, f1=220, dur=0.055, peak=0.10, lp=700)),
+        # 变体 3：快速清脆斩切 —— click 更亮、thwack 更高更短，突出「脆」
+        lambda b: (noise(b, dur=0.0035, peak=0.14, ftype="highpass", f0=7200, atk=0.0003),
+                   noise(b, dur=0.085, peak=0.30, ftype="bandpass", f0=3200, f1=620, q=1.3, atk=0.0012),
+                   tone(b, wtype="triangle", f0=1080, f1=640, dur=0.042, peak=0.27, atk=0.0015),
+                   sat_tone(b, f0=490, f1=165, dur=0.09, peak=0.18, atk=0.0018, drive=3.0),
+                   tone(b, wtype="sine", f0=124, f1=42, dur=0.135, peak=0.18, atk=0.0035),
+                   tone(b, wtype="triangle", f0=1750, f1=430, dur=0.038, peak=0.15)),
     ],
     "enemy_hit_crit": [
-        # 暴击 1：刺目金属锐鸣 + 骨裂撕裂 + 140Hz->30Hz 超低频深潜（Sub-Bass Thud）
-        lambda b: (tone(b, wtype="sine", f0=140, f1=28, dur=0.22, peak=0.55),
-                   noise(b, dur=0.12, peak=0.36, ftype="bandpass", f0=2600, f1=420, q=1.5),
-                   tone(b, wtype="sawtooth", f0=1800, f1=320, dur=0.06, peak=0.25, lp=1200)),
-        # 暴击 2：重锤砸裂，低频下潜更深厚重
-        lambda b: (tone(b, wtype="sine", f0=130, f1=26, dur=0.24, peak=0.58),
-                   noise(b, dur=0.14, peak=0.38, ftype="lowpass", f0=3200, f1=360, q=1.3),
-                   tone(b, wtype="triangle", f0=1500, f1=280, dur=0.05, peak=0.22)),
-        # 暴击 3：极速贯穿破甲，瞬态强劲
-        lambda b: (tone(b, wtype="sine", f0=150, f1=32, dur=0.20, peak=0.52),
-                   noise(b, dur=0.11, peak=0.35, ftype="bandpass", f0=3000, f1=500, q=1.6),
-                   tone(b, wtype="sawtooth", f0=2200, f1=450, dur=0.055, peak=0.24, lp=1400)),
+        # 暴击 1：骨裂标准款 —— 骨裂 click + 宽幅撕裂 + 中频 crack + 饱和 punch + 深潜 sub
+        lambda b: (noise(b, dur=0.003, peak=0.16, ftype="highpass", f0=6800, atk=0.0003),
+                   noise(b, dur=0.115, peak=0.30, ftype="bandpass", f0=3000, f1=420, q=1.3, atk=0.0012),
+                   tone(b, wtype="triangle", f0=720, f1=300, dur=0.065, peak=0.30, atk=0.0016),
+                   sat_tone(b, f0=330, f1=95, dur=0.125, peak=0.24, atk=0.002, drive=4.0),
+                   tone(b, wtype="sine", f0=92, f1=28, dur=0.22, peak=0.24, atk=0.004),
+                   fm_tone(b, f0=1900, f1=420, dur=0.075, peak=0.10, ratio=2.7, idx0=4.6, idx1=0.2, atk=0.0015)),
+        # 暴击 2：重锤砸裂 —— 中频更低更厚，sub 更深、拖尾更长
+        lambda b: (noise(b, dur=0.0035, peak=0.14, ftype="highpass", f0=5600, atk=0.0004),
+                   noise(b, dur=0.13, peak=0.32, ftype="lowpass", f0=3600, f1=340, q=1.2, atk=0.0016),
+                   tone(b, wtype="triangle", f0=620, f1=250, dur=0.075, peak=0.32, atk=0.0018),
+                   sat_tone(b, f0=290, f1=82, dur=0.14, peak=0.26, atk=0.0022, drive=4.4),
+                   tone(b, wtype="sine", f0=82, f1=25, dur=0.25, peak=0.26, atk=0.0045),
+                   fm_tone(b, f0=1500, f1=340, dur=0.07, peak=0.09, ratio=2.9, idx0=4.2, idx1=0.18, atk=0.0018)),
+        # 暴击 3：极速贯穿破甲 —— click 最亮、中频最高，金属锐鸣更突出
+        lambda b: (noise(b, dur=0.0025, peak=0.18, ftype="highpass", f0=7800, atk=0.00025),
+                   noise(b, dur=0.10, peak=0.30, ftype="bandpass", f0=3600, f1=560, q=1.5, atk=0.0010),
+                   tone(b, wtype="triangle", f0=840, f1=360, dur=0.055, peak=0.29, atk=0.0014),
+                   sat_tone(b, f0=380, f1=110, dur=0.11, peak=0.22, atk=0.0018, drive=3.8),
+                   tone(b, wtype="sine", f0=104, f1=32, dur=0.20, peak=0.22, atk=0.0035),
+                   fm_tone(b, f0=2300, f1=500, dur=0.08, peak=0.12, ratio=2.5, idx0=5.0, idx1=0.22, atk=0.0012)),
     ],
     "enemy_hit_heavy": [
-        # 重击 1：钝器/大印轰然砸落，深沉低频震荡
-        lambda b: (tone(b, wtype="sine", f0=88, f1=24, dur=0.25, peak=0.58),
-                   noise(b, dur=0.16, peak=0.34, ftype="lowpass", f0=850, f1=150, q=1.6)),
-        # 重击 2：沉闷地裂微震
-        lambda b: (tone(b, wtype="triangle", f0=98, f1=26, dur=0.22, peak=0.54),
-                   noise(b, dur=0.15, peak=0.32, ftype="bandpass", f0=1100, f1=180, q=1.3)),
-        # 重击 3：沉重击退冲击音
-        lambda b: (tone(b, wtype="sine", f0=80, f1=22, dur=0.26, peak=0.56),
-                   noise(b, dur=0.18, peak=0.30, ftype="lowpass", f0=750, f1=130, q=1.5)),
+        # 重击 1：钝器轰然砸落 —— 钝噪声头 + 中频 thwack + 饱和 body（尾巴短干）
+        # 2026-10-23 中频 thwack 由 300→130 抬到 500→210：原配方 90% 能量压在 200Hz 以下，
+        # 手机外放实测比普通命中还轻 7dB，重击听感反而不如轻击。
+        lambda b: (noise(b, dur=0.05, peak=0.22, ftype="lowpass", f0=2400, f1=420, q=1.2, atk=0.0015),
+                   tone(b, wtype="triangle", f0=500, f1=210, dur=0.085, peak=0.32, atk=0.002),
+                   sat_tone(b, f0=300, f1=110, dur=0.13, peak=0.26, atk=0.0025, drive=4.2),
+                   tone(b, wtype="sine", f0=78, f1=26, dur=0.19, peak=0.22, atk=0.005)),
+        # 重击 2：沉闷地裂 —— 中段带一点带通「地鸣」，body 略高
+        lambda b: (noise(b, dur=0.06, peak=0.21, ftype="bandpass", f0=1600, f1=340, q=1.2, atk=0.002),
+                   tone(b, wtype="triangle", f0=460, f1=190, dur=0.08, peak=0.30, atk=0.0022),
+                   sat_tone(b, f0=275, f1=100, dur=0.12, peak=0.25, atk=0.0028, drive=4.0),
+                   tone(b, wtype="sine", f0=72, f1=24, dur=0.18, peak=0.21, atk=0.005)),
+        # 重击 3：沉重击退冲击 —— 噪声头更闷、sub 最深
+        lambda b: (noise(b, dur=0.07, peak=0.20, ftype="lowpass", f0=1900, f1=360, q=1.3, atk=0.002),
+                   tone(b, wtype="triangle", f0=430, f1=175, dur=0.09, peak=0.30, atk=0.0025),
+                   sat_tone(b, f0=255, f1=92, dur=0.135, peak=0.24, atk=0.003, drive=4.4),
+                   tone(b, wtype="sine", f0=68, f1=22, dur=0.20, peak=0.21, atk=0.0055)),
     ],
     # 玩家受伤：闷、肉、不金属 —— 与敌人挨打音色明确区分（低频塌陷 + 皮肉钝响）
+    # 2026-10-23 补陡起音与中频 body：原来只有 120~155Hz 正弦，手机外放近乎无声（实测 -52dBFS）。
+    # 玩家受击是单独播放（没有别的层垫着），中频必须自己撑住可听度。
     "player_hurt": [
-        lambda b: (tone(b, wtype="sine", f0=140, f1=52, dur=0.13, peak=0.38),
-                   noise(b, dur=0.09, peak=0.22, ftype="lowpass", f0=760, f1=240, q=1.0),
-                   tone(b, wtype="triangle", f0=210, f1=90, dur=0.07, peak=0.14)),
-        lambda b: (tone(b, wtype="sine", f0=120, f1=46, dur=0.15, peak=0.40),
-                   noise(b, dur=0.11, peak=0.20, ftype="lowpass", f0=620, f1=200, q=1.1),
-                   tone(b, wtype="sawtooth", f0=330, f1=140, dur=0.05, peak=0.10, lp=700)),
-        lambda b: (tone(b, wtype="sine", f0=155, f1=58, dur=0.12, peak=0.36),
-                   noise(b, dur=0.08, peak=0.24, ftype="lowpass", f0=880, f1=260, q=0.9),
-                   tone(b, wtype="triangle", f0=240, f1=105, dur=0.06, peak=0.12)),
+        lambda b: (noise(b, dur=0.006, peak=0.12, ftype="lowpass", f0=1400, atk=0.0006),
+                   noise(b, dur=0.10, peak=0.24, ftype="lowpass", f0=1100, f1=340, q=1.0, atk=0.002),
+                   tone(b, wtype="triangle", f0=430, f1=180, dur=0.09, peak=0.30, atk=0.0025),
+                   sat_tone(b, f0=250, f1=95, dur=0.12, peak=0.24, atk=0.003, drive=3.6),
+                   tone(b, wtype="sine", f0=88, f1=40, dur=0.16, peak=0.14, atk=0.005)),
+        lambda b: (noise(b, dur=0.0065, peak=0.11, ftype="lowpass", f0=1200, atk=0.0007),
+                   noise(b, dur=0.115, peak=0.22, ftype="lowpass", f0=950, f1=290, q=1.1, atk=0.0022),
+                   tone(b, wtype="triangle", f0=390, f1=160, dur=0.095, peak=0.31, atk=0.0028),
+                   sat_tone(b, f0=225, f1=85, dur=0.13, peak=0.24, atk=0.0032, drive=3.8),
+                   tone(b, wtype="sine", f0=80, f1=36, dur=0.17, peak=0.14, atk=0.005)),
+        lambda b: (noise(b, dur=0.0055, peak=0.13, ftype="lowpass", f0=1500, atk=0.0005),
+                   noise(b, dur=0.09, peak=0.25, ftype="lowpass", f0=1250, f1=380, q=0.9, atk=0.0018),
+                   tone(b, wtype="triangle", f0=470, f1=200, dur=0.08, peak=0.29, atk=0.0022),
+                   sat_tone(b, f0=270, f1=105, dur=0.11, peak=0.23, atk=0.0028, drive=3.4),
+                   tone(b, wtype="sine", f0=95, f1=44, dur=0.15, peak=0.13, atk=0.0045)),
     ],
     # 妖物死灭：扑灭一声 + 一缕魂光（shimmer 尾巴是「灵散」的仙气层）
+    # 2026-10-23 补饱和 body 与中频层：原配方 250Hz 正弦在手机外放几乎只剩 shimmer
     "enemy_death": [
-        lambda b: (tone(b, wtype="sine", f0=250, f1=72, dur=0.10, peak=0.22),
-                   noise(b, dur=0.07, peak=0.13, ftype="bandpass", f0=1500, f1=450, q=0.9),
+        lambda b: (noise(b, dur=0.008, peak=0.12, ftype="bandpass", f0=2200, f1=700, q=0.9, atk=0.0008),
+                   noise(b, dur=0.07, peak=0.13, ftype="bandpass", f0=1500, f1=450, q=0.9, atk=0.0015),
+                   tone(b, wtype="triangle", f0=520, f1=200, dur=0.085, peak=0.22, atk=0.002),
+                   sat_tone(b, f0=300, f1=95, dur=0.13, peak=0.20, atk=0.002, drive=3.4),
+                   tone(b, wtype="sine", f0=250, f1=72, dur=0.10, peak=0.13, atk=0.003),
                    shimmer(b, f0=2300, f1=3400, dur=0.17, peak=0.035)),
-        lambda b: (tone(b, wtype="triangle", f0=410, f1=140, dur=0.09, peak=0.18),
-                   noise(b, dur=0.06, peak=0.10, ftype="highpass", f0=2500, f1=1000),
+        lambda b: (noise(b, dur=0.007, peak=0.11, ftype="highpass", f0=3000, f1=1100, atk=0.0007),
+                   noise(b, dur=0.06, peak=0.10, ftype="highpass", f0=2500, f1=1000, atk=0.0014),
+                   tone(b, wtype="triangle", f0=600, f1=240, dur=0.075, peak=0.21, atk=0.0018),
+                   sat_tone(b, f0=360, f1=120, dur=0.11, peak=0.18, atk=0.0018, drive=3.2),
+                   tone(b, wtype="sine", f0=410, f1=140, dur=0.09, peak=0.11, atk=0.0025),
                    shimmer(b, f0=2700, f1=3900, dur=0.15, peak=0.030)),
-        lambda b: (tone(b, wtype="sine", f0=215, f1=62, dur=0.13, peak=0.24),
-                   noise(b, dur=0.09, peak=0.11, ftype="lowpass", f0=950, f1=260, q=1.0),
+        lambda b: (noise(b, dur=0.009, peak=0.12, ftype="bandpass", f0=1800, f1=600, q=1.0, atk=0.0009),
+                   noise(b, dur=0.09, peak=0.11, ftype="lowpass", f0=1200, f1=340, q=1.0, atk=0.0018),
+                   tone(b, wtype="triangle", f0=470, f1=180, dur=0.09, peak=0.22, atk=0.0022),
+                   sat_tone(b, f0=270, f1=85, dur=0.14, peak=0.21, atk=0.0022, drive=3.6),
+                   tone(b, wtype="sine", f0=215, f1=62, dur=0.13, peak=0.13, atk=0.0032),
                    shimmer(b, f0=1900, f1=2800, dur=0.20, peak=0.032)),
     ],
     "enemy_death_elite": [
         # 大妖殒落：低频塌陷 + 咆哮衰减 + 魂光升散
-        lambda b: (tone(b, wtype="sine", f0=150, f1=30, dur=0.34, peak=0.30),
-                   tone(b, wtype="sawtooth", f0=195, f1=44, dur=0.28, peak=0.17, lp=1100),
-                   noise(b, dur=0.11, peak=0.17, ftype="highpass", f0=3000, f1=800, q=0.9),
+        # 2026-10-23 低频塌陷主体改 sat_tone：原 150→30Hz 纯正弦手机外放听不见
+        lambda b: (noise(b, dur=0.012, peak=0.15, ftype="highpass", f0=3200, f1=900, q=0.9, atk=0.0008),
+                   tone(b, wtype="triangle", f0=440, f1=150, dur=0.10, peak=0.20, atk=0.002),
+                   sat_tone(b, f0=240, f1=58, dur=0.30, peak=0.24, atk=0.003, drive=3.8),
+                   tone(b, wtype="sawtooth", f0=195, f1=44, dur=0.28, peak=0.14, lp=1100, atk=0.004),
+                   tone(b, wtype="sine", f0=150, f1=30, dur=0.34, peak=0.15, atk=0.005),
+                   noise(b, dur=0.11, peak=0.15, ftype="highpass", f0=3000, f1=800, q=0.9, atk=0.002),
                    shimmer(b, f0=1400, f1=2200, dur=0.30, peak=0.045)),
-        lambda b: (tone(b, wtype="sine", f0=135, f1=34, dur=0.38, peak=0.28),
-                   tone(b, wtype="sawtooth", f0=165, f1=40, dur=0.30, peak=0.15, lp=950),
-                   noise(b, dur=0.26, peak=0.16, ftype="lowpass", f0=2800, f1=170, q=1.4),
+        lambda b: (noise(b, dur=0.014, peak=0.14, ftype="bandpass", f0=2800, f1=700, q=1.0, atk=0.001),
+                   tone(b, wtype="triangle", f0=400, f1=135, dur=0.11, peak=0.19, atk=0.0022),
+                   sat_tone(b, f0=210, f1=52, dur=0.34, peak=0.23, atk=0.0035, drive=4.0),
+                   tone(b, wtype="sawtooth", f0=165, f1=40, dur=0.30, peak=0.13, lp=950, atk=0.0045),
+                   tone(b, wtype="sine", f0=135, f1=34, dur=0.38, peak=0.14, atk=0.0055),
+                   noise(b, dur=0.26, peak=0.14, ftype="lowpass", f0=2800, f1=170, q=1.4, atk=0.003),
                    shimmer(b, f0=1200, f1=1900, dur=0.34, peak=0.040)),
     ],
     # 攻击音按器型分族（2026-10-10 见下方「器型族」）：飞剑离手 / 符箓离指 / 落雷 / 扇风。

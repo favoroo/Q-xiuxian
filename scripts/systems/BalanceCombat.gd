@@ -135,6 +135,37 @@ static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:
 		return Vector2(0.68, 1.38) if is_crit else Vector2(0.76, 1.26)   # 水平冲击：横压竖拉
 	else:
 		return Vector2(1.38, 0.68) if is_crit else Vector2(1.26, 0.76)   # 垂直冲击：竖压横拉
+# ---------------- 打击音：伤害驱动的响度/音高（2026-10-23，参考死亡细胞）----------------
+## 死亡细胞的手感来源之一：同一把武器，小伤害是「啪」，大伤害是「咚」——响度与音高都跟着
+## 这一刀的份量走。这里只做「倍率」，调用方仍叠自己的随机抖音高与暴击基准音高，两者相乘。
+## 口径：以「本次伤害占目标最大生命的比例」为尺（不看绝对伤害——W20 的 300 点和 W1 的 30 点
+## 占血比可能一样，听感就该一样重）。比例超过参考值后线性加码，封顶各常数。
+const HIT_SFX_DAMAGE_REF := 0.18       ## 参考伤害占比：单次打掉目标 18% 生命算「一记狠的」
+const HIT_SFX_VOLUME_MAX_BONUS := 0.22 ## 大伤害最多额外 +22% 响度（线性到顶，避免盖住 BGM）
+const HIT_SFX_PITCH_MAX_DROP := 0.12   ## 大伤害最多降 12% 音高（越重越沉）
+const HIT_SFX_HEAVY_RATIO := 0.35      ## 单次打掉 35% 生命：追加 enemy_hit_heavy 重击层
+
+## 伤害占比归一化到 0~1：参考值以下 = 0（普通命中保持原样），从参考值到重击线线性加码，
+## 到 HIT_SFX_HEAVY_RATIO 满额（正好与「追加一层重击音」同一根线，听感与分层同步）。
+## 上限为 0 时按 0 处理（防除零）。
+static func hit_sfx_weight(damage: float, max_hp: float) -> float:
+	if max_hp <= 0.0:
+		return 0.0
+	var ratio := damage / max_hp
+	return clampf((ratio - HIT_SFX_DAMAGE_REF) / (HIT_SFX_HEAVY_RATIO - HIT_SFX_DAMAGE_REF), 0.0, 1.0)
+
+## 命中音效的响度倍率（1.0 ~ 1.0+MAX_BONUS）
+static func hit_sfx_volume(damage: float, max_hp: float) -> float:
+	return 1.0 + HIT_SFX_VOLUME_MAX_BONUS * hit_sfx_weight(damage, max_hp)
+
+## 命中音效的音高倍率（1.0 ~ 1.0-MAX_DROP，大伤害更低沉）
+static func hit_sfx_pitch(damage: float, max_hp: float) -> float:
+	return 1.0 - HIT_SFX_PITCH_MAX_DROP * hit_sfx_weight(damage, max_hp)
+
+## 这一击是否重到需要追加重击音层（暴击走 crit 自己的完整主体，不叠本层）
+static func hit_sfx_is_heavy(damage: float, max_hp: float) -> bool:
+	return max_hp > 0.0 and damage / max_hp >= HIT_SFX_HEAVY_RATIO
+
 const KILL_HITSTOP_DURATION := 0.03      ## 击杀微顿帧时长（秒）
 const KILL_HITSTOP_SCALE := 0.45         ## 击杀微顿帧时间倍率（0.40 地板之上，保留轻于暴击的层次）
 const KILL_HITSTOP_MIN_INTERVAL := 0.25  ## 击杀顿帧最小间隔（尸潮限流：≤4Hz，防连续顿帧把节奏切碎）
@@ -152,10 +183,13 @@ const HITSTOP_LOWFPS_INTERVAL_MULT := 2.0 ## 低帧时顿帧最小间隔倍率
 const CRIT_TRAUMA_NORMAL := 0.20         ## 普通暴击追加创伤（从 0.12 上调：平方后产生可见轻颤，稳态仍严格受每秒预算保护）
 const CRIT_TRAUMA_ELITE := 0.32          ## 精英暴击创伤（既有口径，提出来与普通暴击并列成表）
 
-# —— 精英/Boss 专属受击火花（2026-10-20）——
+# —— 精英/Boss 专属受击火花（2026-10-20，2026-10-23 改全局节奏闸）——
 ## 小怪高频割草不发火花（历史教训：满屏乱闪）；精英/Boss 同屏恒 1 只、体型大，挨打没火花缺打击感，
 ## 故仅对 is_elite 的非暴击直击补一朵轻火花，锚在体表受击侧。暴击另有方向环，不重复发。
-const ELITE_HIT_SPARK_INTERVAL := 0.08   ## 单只精英/Boss 火花最小间隔（秒）：束流 tick/多段命中只冒一朵，防刷屏
+## 2026-10-23：由「每敌倒计时 0.08s」改为**全局时间戳闸**。根因：0.08s 短于束流 tick(0.15s)
+## 拦不住，且倒计时在多实例下各自扣一遍；改成全局时间戳后全屏同一时刻至多一朵，
+## 束流 tick / 多段命中 / 多武器齐射 / 多精英同帧都收敛成一朵。取值 = 火花寿命 0.22s。
+const ELITE_HIT_SPARK_GAP_MS := 220      ## 精英/Boss 火花全局最小间隔（毫秒）：= HIT_SPARK 寿命，屏上至多一朵
 const ELITE_HIT_SPARK_SCALE := 1.10      ## 精英火花缩放倍率
 const BOSS_HIT_SPARK_SCALE := 1.35       ## Boss 火花缩放倍率（体型更大，略放大）
 const ELITE_HIT_SPARK_EDGE_OFFSET := 20.0 ## 精英火花由中心向攻击来向偏移（px），落在体表而非几何中心
@@ -201,6 +235,56 @@ static func seg_closest_point(seg_a: Vector2, seg_b: Vector2, p: Vector2) -> Vec
 		return seg_a
 	var t := clampf((p - seg_a).dot(ab) / ab.length_squared(), 0.0, 1.0)
 	return seg_a + ab * t
+
+# ---------------- 近战扑咬（2026-10-23：纯接触怪从「撞上来」升级为「扑上来」） ----------------
+## 背景：史莱姆/花妖/蜂群/血蛹这类纯接触怪只有被动滑碰伤害 —— 贴上来，「撞」出伤害，没有出招动作。
+## 与长扑/火球/震地这些有前摇的招式放在一起，普通怪的活物感是断档的。扑咬补的就是这一档：
+## 站蹲前摇（可读、可躲）→ 短促前扑 → 收势。
+##
+## 三条纪律与长扑同款：
+##   ① 伤害零新增 —— 前扑的位移把身体送进既有接触带，伤害仍由 _resolve_contact_damage 结算；
+##   ② 几何同源 —— 前扑真实位移 = lunge_reach(峰速, 扑击时长)，与判据量的位移同一把尺子；
+##   ③ 前摇可打断 —— 站蹲段挨打就取消，不做「被钉着还扑出来」（同火球蓄力口径）。
+
+const LUNGE_WINDUP := 0.34        ## 站蹲前摇（秒）：下蹲 + 本体提亮，玩家看到就知道要扑
+const LUNGE_SPEED_MUL := 2.1      ## 前扑峰速 = 移速 × 它（默认档，敌种可覆写）
+const LUNGE_DASH_TIME := 0.16     ## 前扑时长（秒）：短促一扑，不是长距离冲锋
+const LUNGE_RECOVER := 0.22       ## 收势（秒）：扑完短暂停住，给玩家反打窗口
+const LUNGE_COOLDOWN := 2.2       ## 冷却（秒）：扑空后隔这么久才再起手
+const LUNGE_MIN_RANGE := 46.0     ## 下沿：太近不起手（贴脸时接触伤害已在生效，别叠动作）
+const LUNGE_MAX_RANGE := 132.0    ## 上沿硬顶：再远连扑出去也够不着，老老实实走位
+## 起手可达距离的接触余量（px）：前扑必须真的能把身子送进接触带，否则「有招式但永远咬不到」。
+## 取「敌我碰撞半径之和」量级（小怪 18 + 玩家 14 ≈ 32），留 2px 容差。
+const LUNGE_CONTACT_MARGIN := 34.0
+
+## 前扑真实位移（px）：匀速段面积。收势段原地刹住不产生位移，故只有冲刺项。
+## 与 charge_reach 同一个建模思路：先有闭式解，再让「画的」「冲的」「判的」都取它。
+static func lunge_reach(peak_speed: float, dash_time: float) -> float:
+	return maxf(peak_speed, 0.0) * maxf(dash_time, 0.0)
+
+## 起手距离上限（px）：前扑能覆盖的距离 + 接触余量，且不超过 LUNGE_MAX_RANGE 硬顶。
+## 这是「有招式却永远咬不到」的根治 —— 旧写法用固定 132px 上沿，
+## 而史莱姆一扑只有 33.6px，132px 起手扑完还剩 98px，动作演了、伤害永远不结算。
+static func lunge_engage_range(peak_speed: float, dash_time: float) -> float:
+	return minf(lunge_reach(peak_speed, dash_time) + LUNGE_CONTACT_MARGIN, LUNGE_MAX_RANGE)
+
+## 敌种扑咬参数（eid → 参数；空字典 = 该敌种不扑）。
+## 只给「纯接触、无其他招式」的四种。排除口径：
+##   有长扑的（雷兽/赤雷）、有震地落石的（铁甲魔傀）、有弹幕的（邪修/剑煞）、
+##   有引信自爆的（丹爆）、有投毒的（毒妖）、有召唤/光环/治疗的（蛛母/鼓妖/灵医）、
+##   有闪现的（影魅）、恒逃的（金蟾）。
+## 血蛹的分裂是死亡触发、不影响活体行为，故仍给扑咬。
+static func lunge_params(eid: String) -> Dictionary:
+	match eid:
+		"slime":
+			return {"speed_mul": 2.0, "dash": 0.16, "recover": 0.24, "cooldown": 2.4}
+		"flower":
+			return {"speed_mul": 2.3, "dash": 0.14, "recover": 0.20, "cooldown": 2.0}
+		"fengqun":
+			return {"speed_mul": 1.8, "dash": 0.13, "recover": 0.18, "cooldown": 2.6}
+		"xueyong":
+			return {"speed_mul": 2.2, "dash": 0.17, "recover": 0.26, "cooldown": 2.8}
+	return {}
 
 # ---------------- 五行异常状态（灼烧 / 剧毒）叠层与结算 ----------------
 

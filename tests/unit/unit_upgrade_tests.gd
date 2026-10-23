@@ -106,10 +106,11 @@ func _test_upgrade_roll_filters() -> void:
 	_c.equals(rest.size(), 1, "只剩 1 项可选时不硬凑 3 项")
 	_c.equals(rest[0].get("id", ""), "atk_up", "剩下的正是未叠满那项")
 
-	# 轮回重生：限购 2 次（复活次数），落地与「买满不再刷新」双向回归
+	# 轮回重生：默认每局 1 次，限购 2 次（复活次数），落地与「买满不再刷新」双向回归
 	GameManager.reset_run()
+	_c.equals(GameManager.revive_charges, 1, "每局默认带 1 次复活")
 	GameManager.apply_upgrade("revive_up")
-	_c.equals(GameManager.revive_charges, 1, "轮回重生落地为复活次数 +1")
+	_c.equals(GameManager.revive_charges, 2, "轮回重生落地为复活次数 +1（默认 1 → 2）")
 	var revive_maxed := {}
 	for u in UpgradeData.UPGRADES:
 		revive_maxed[u.get("id", "")] = int(u.get("max_stacks", 99))

@@ -42,6 +42,9 @@ func _ready() -> void:
 		fx.position = Vector2(620 + (i % 3) * 130, 400 + int(i / 3.0) * 110)
 		add_child(fx)
 		fx.activate_fx(kinds[i], 48.0, tints[i])
+		# 2026-10-23：命中微粒已从 activate_fx 拆出（改由 ThunderBurst 命中后调），
+		# 出图台要看到首拍碎屑，这里显式补一发
+		fx.emit_hit_spark()
 
 func _process(_delta: float) -> void:
 	_frame += 1

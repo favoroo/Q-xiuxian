@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c3fylhhl5diuq"]
+
+[ext_resource type="Script" path="res://tests/melee_lunge_check.gd" id="1_check"]
+
+[node name="MeleeLungeCheck" type="Node"]
+script = ExtResource("1_check")

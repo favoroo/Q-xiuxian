@@ -63,6 +63,14 @@ var aim_dir: Vector2 = Vector2.ZERO:
 		if renderer:
 			renderer.aim_dir = val
 
+## 生命比例（0~1，1=满血）：渲染层据此加大喘息幅度/压低浮沉/加残血歪斜。
+## 纯表现读数，不参与任何判定（分层铁律：渲染层只读状态）。
+var hp_ratio: float = 1.0:
+	set(val):
+		hp_ratio = val
+		if renderer:
+			renderer.hp_ratio = val
+
 func trigger_recoil(dir: Vector2 = Vector2.ZERO) -> void:
 	if renderer != null:
 		renderer.trigger_recoil(dir)

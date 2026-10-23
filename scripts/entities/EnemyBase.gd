@@ -148,12 +148,20 @@ var _aura_until_ms: int = 0        ## 光环有效期（毫秒时间戳）
 var _aura_shown: bool = false      ## 光环标记是否已点亮（边沿触发：从无到有时才发一次 shockwave）
 var _focus_hit_timer: float = 0.0  ## 同目标短窗集火保护计时
 var _focus_hit_count: int = 0      ## 短窗内已承受直击次数
-var _elite_spark_cd: float = 0.0   ## 精英/Boss 受击火花冷却（秒）：束流 tick/多段命中只冒一朵
+## 精英/Boss 受击火花的节奏闸已上收到 FxParticlePool（全局时间戳 _last_elite_spark_ms），
+## 2026-10-23 删掉每敌 `_elite_spark_cd`：0.08s 短于束流 tick(0.15s) 拦不住，
+## 且递减写在 _physics_process 的 player==null 早退之后（判据场景永不归零）。
 
 ## 步态相位（弧度）：仅在移动时按 speed_ratio 推进，供渲染器摆翼/蠕波与位移同相
 var _gait_phase: float = 0.0
 const GAIT_FREQ_HOVER := 6.0     ## 悬浮/飞行 步态角频率（rad/s，speed_ratio=1 时）
 const GAIT_FREQ_SLITHER := 9.0   ## 蠕动 行进波角频率
+
+# 敌群集行为（2026-10-23）：分离排斥 + 包围方位，数学在 EnemyFlock（static 纯函数）。
+# orbit_bias 每命抽一次：正负决定从哪一侧包抄，绝对值决定绕多狠（0 = 直冲不改向）。
+var orbit_bias: float = 0.0            ## 包围方位偏置（弧度，activate 时按实例抽）
+var flock_separation: float = 1.0      ## 分离排斥强度倍率（0 = 关闭；精英/Boss/金蟾不吃）
+var _flock_push: Vector2 = Vector2.ZERO  ## 本帧分离推力缓存（只作调试读数，不跨帧持有语义）
 
 # 投毒支路运行时状态（毒妖系；预警圈 = 判定圈同源，真话源在本类）
 var _poison_timer: float = 0.0        ## 投毒冷却计时
@@ -163,6 +171,9 @@ var _poison_ring: AoeTelegraph = null ## 落点预警圈
 
 # 精英变异（2026-10-12，仿土豆兄弟 Elite Mutation：过血线一次性切换行为参数）
 var _eid: String = ""              ## 解析后的敌种标识（_ready 落定，变异分发的依据）
+## 近战扑咬（2026-10-23）：纯接触怪的出招动作，三段状态机在 EnemyLunge（独立文件，基类只留挂接点）。
+## 空 = 该敌种不扑（lunge_params 返回空字典）。伤害零新增，仍走接触结算。
+var lunge: EnemyLunge = null
 var _mutated: bool = false         ## 变异只触发一次
 var _elite_slam_timer: float = 0.0       ## 震地周期计时
 var _elite_slam_windup_t: float = -1.0   ## >=0 表示震地预警中
@@ -252,6 +263,15 @@ func _write_flash_channel(flash: float) -> void:
 	if procedural_view != null:
 		procedural_view.self_modulate = tint
 var _hit_tilt: float = 0.0          ## 受创后仰倾角（受击瞬间沿受力反向倾斜，急刹后平滑回正）
+## 打懵回摆（2026-10-23）：受击倾角不再单向归零，改为阻尼正弦过零回摆（仰→回正→轻晃→停）。
+## _hit_tilt_peak 是本下峰值幅度，_hit_tilt_wobble 是剩余回摆时长；连击重启包络 = 持续摇晃。
+const HIT_TILT_WOBBLE_DUR := 0.42   ## 回摆总时长（秒）：约 1.5 个完整周期，够读出「懵」但不拖沓
+var _hit_tilt_peak: float = 0.0
+var _hit_tilt_wobble: float = 0.0
+## 罚站打懵摇晃相位（2026-10-23）：落空罚站期间躯体低频左右晃，读作「冲空了、站不稳」。
+## 相位由渲染节拍推进（与 _time 同源），幅度入 GameBalance 常量区。
+var _stagger_phase: float = 0.0
+const STAGGER_SWAY_RAD := 0.055     ## 罚站摇晃幅度（弧度 ≈3.2°）：够看出晃、不破坏轮廓
 
 ## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与节流判定缓存
 const CULL_MARGIN := 64.0
@@ -353,6 +373,14 @@ func activate() -> void:
 	if _active:
 		return
 	_active = true
+	# 首次出场时 _ready 还没跑（刷怪口 activate 先于 add_child），这里必须先解析 _eid：
+	# 否则按敌种分发的招式（扑咬）查空表，首命新实例永远装不上，只有死过回池的复用体才有。
+	# 与 _ready 里同一口径；_ready 后续再解析一次是幂等的。
+	if _eid.is_empty():
+		var eid := enemy_id
+		if eid.is_empty():
+			eid = _deduce_enemy_id()
+		_eid = eid
 	# 小怪整体加血（GameBalance.MOB_HP_BASE_MULT）：精英/Boss 不吃这条，它们的厚度由基础值拉开。
 	# 收口在 activate 这一处：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
 	# 不用在四个刷怪口各乘一遍。2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」。
@@ -385,6 +413,48 @@ func activate() -> void:
 
 	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
 	_cull_timer = float(get_instance_id() % 6) * (CULL_INTERVAL / 6.0)
+
+	# 包围方位（2026-10-23）：每命抽一次，从哪一侧包抄由玩法 rng 决定（可复现，测试钉得住）。
+	# 只给「直冲型近战」：远程怪已有 preferred_range 环绕、金蟾恒背离、精英/Boss 体型大不参与散兵线。
+	# 有长扑的怪（雷兽/赤雷）也不给：包抄会改变冲刺的起手方位，而「预警带宽 = 真冲位移 = 扫掠判定」
+	# 是同源纪律钉死的一套几何，起手方位一偏，判据量到的位移就与 charge_reach 对不上。
+	if not is_elite and not always_flee and preferred_range <= 0.0 and charge_interval <= 0.0:
+		orbit_bias = GameManager.rng.randf_range(-GameBalance.FLOCK_ORBIT_BIAS_MAX, GameBalance.FLOCK_ORBIT_BIAS_MAX)
+	else:
+		orbit_bias = 0.0
+	# 分离强度：精英/Boss/金蟾不吃（精英恒 1 只无同伴可推，金蟾的绕场环流是设计好的，别被同伴顶歪）
+	flock_separation = 0.0 if (is_elite or always_flee) else 1.0
+
+	# 近战扑咬（2026-10-23）：纯接触怪的出招动作。参数表按敌种查（BalanceCombat.lunge_params），
+	# 空表 = 不扑。池化复用每次 activate 都重建，杜绝上一命残留段位。
+	# 除查表外还要验「本实例确实没有任何其他招式」：eid 认不出（空串/临时实例）或场景字段
+	# 与配表不符时，宁可不起手，也不要让一只带长扑的怪同时演扑咬（招式叠叠 + 判据读数被污染）。
+	# Boss 判定与 _init_procedural_view 同口径，不用 is BossEnemy 反引子类。
+	if is_elite or _eid == "boss" or self.get("final_boss") != null or not _is_pure_contact():
+		lunge = null
+	else:
+		var lp: Dictionary = BalanceCombat.lunge_params(_eid)
+		if lp.is_empty():
+			lunge = null
+		else:
+			if lunge == null:
+				lunge = EnemyLunge.new()
+			lunge.configure(lp)
+
+## 纯接触怪判定：没有任何远程/冲刺/自爆/投毒/召唤/光环/治疗/闪现/逃窜行为开关。
+## 与 BalanceCombat.lunge_params 的配表互为双保险 —— 配表写错也不会让一只长扑怪多出一个扑咬。
+func _is_pure_contact() -> bool:
+	if charge_interval > 0.0 or bolt_interval > 0.0 or preferred_range > 0.0:
+		return false
+	if explode_radius > 0.0 or poison_interval > 0.0 or always_flee:
+		return false
+	if slam_interval > 0.0 or rock_interval > 0.0 or ring_bolt_interval > 0.0 or field_interval > 0.0:
+		return false
+	if blink_strike_interval > 0.0 or teleport_interval > 0.0:
+		return false
+	if buff_radius > 0.0 or heal_interval > 0.0 or spawn_minion_interval > 0.0:
+		return false
+	return true
 
 ## 出厂字段快照：必须赶在刷怪口 _scale_to_wave / 精英变异原地改数之前拍（acquire 当刻调用）。
 ## 清单口径 = 所有「出场后会被原地改写」的导出字段：_scale_to_wave 四项 + 变异十二项 + 根节点变换。
@@ -512,7 +582,11 @@ func reset_for_reuse() -> void:
 	_aura_shown = false
 	_focus_hit_timer = 0.0
 	_focus_hit_count = 0
-	_elite_spark_cd = 0.0
+	orbit_bias = 0.0
+	flock_separation = 1.0
+	_flock_push = Vector2.ZERO
+	if lunge != null:
+		lunge.reset()
 	_gait_phase = 0.0
 	_mutated = false
 	_elite_slam_windup_t = -1.0
@@ -547,6 +621,9 @@ func reset_for_reuse() -> void:
 	_flash_t = 0.0
 	_flash_swap_t = 0.0
 	_hit_tilt = 0.0
+	_hit_tilt_peak = 0.0
+	_hit_tilt_wobble = 0.0
+	_stagger_phase = 0.0
 	_offscreen = false
 	_pp_stun = false
 	_pp_target_vel = Vector2.ZERO
@@ -710,7 +787,11 @@ func _deduce_enemy_id() -> String:
 	for id in EnemyData.ID_PREFIXES:
 		if n.begins_with(String(EnemyData.ID_PREFIXES[id])):
 			return String(id)
-	return "slime"
+	# 2026-10-23：兜底从「猜 slime」改成「认不出就返回空」。
+	# 旧兜底会把认不出的节点当成史莱姆 —— 判据/临时实例的节点名可能是引擎自动生成的
+	# `@CharacterBody2D@65`（不含任何敌种前缀），结果妖狼被判成史莱姆、拿到史莱姆的扑咬配置，
+	# 表现为「狼在罚站段却按史莱姆追击」。空串 = 不装配任何按 eid 分发的行为（扑咬/变异）。
+	return ""
 
 ## 装配程序化矢量视图。返回 true = 已挂上渲染器（调用方据此跳过图集加载）。
 ## EnemyVisualConfig.get_config 对全部敌种都有配置（含 _ 兜底），当前恒返回 true。
@@ -837,7 +918,6 @@ func _physics_process(delta: float) -> void:
 	var player = GameManager.player
 	if player == null:
 		return
-
 	# 灵兽嘲讽（2026-10-11 祭坛灵兽）：周身嘲讽圈内有友方灵兽时改追灵兽，替玩家分担火力。
 	# 追击方向、扑咬/冲刺/自爆/火球的瞄准与接触结算都改吃这个目标；Boss 出招大脑仍锁玩家。
 	var target: Node2D = _taunt_target(player)
@@ -858,8 +938,6 @@ func _physics_process(delta: float) -> void:
 		_focus_hit_timer -= delta
 		if _focus_hit_timer <= 0.0:
 			_focus_hit_count = 0
-	if _elite_spark_cd > 0.0:
-		_elite_spark_cd -= delta
 
 	# 0. 五行元素异常状态结算（灼烧/剧毒跳伤；致死即结束本帧）
 	if _tick_damage_over_time(delta):
@@ -882,9 +960,51 @@ func _physics_process(delta: float) -> void:
 	var dir: Vector2 = to_player.normalized() if dist_sq > 0.0001 else Vector2.ZERO
 	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
 	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
-	_pp_target_vel = Vector2.ZERO if _pp_stun else (dir * eff_speed)
+	var chase_dir: Vector2 = _flock_orbit_dir(dir, dist_sq)
+	_pp_target_vel = Vector2.ZERO if _pp_stun else (chase_dir * eff_speed)
 	if _tick_behaviors(delta, target, dir, dist_sq, eff_speed):
 		return
+	# 2.2 近战扑咬（2026-10-23）：纯接触怪的出招段。前摇/收势段钉住不动，前扑段直接锁速度。
+	# 只在本帧没被其他行为支路接管时推进（_tick_behaviors 未 return 说明走的是常规追击）。
+	if lunge != null:
+		var dist: float = sqrt(dist_sq)
+		var lunge_phase_before: int = lunge.phase
+		var lunge_vel: Vector2 = lunge.tick(delta, dist, to_player, move_speed, _pp_stun)
+		# 起手与出手各给一次形变反馈（读法：先蹲、再弹）。不走音效池 —— 小怪高频，
+		# 只靠形变 + 现有 special_state 提亮表达，避免满屏扑咬音把命中音埋掉。
+		if lunge.phase != lunge_phase_before:
+			if lunge.phase == EnemyLunge.Phase.WINDUP:
+				play_squash(Vector2(0.86, 1.16), 0.22)
+			elif lunge.phase == EnemyLunge.Phase.DASH:
+				play_squash(Vector2(1.22, 0.80), 0.16)
+		if lunge.is_dashing():
+			# 锁定段必须直接写 velocity（不是只写 _pp_target_vel）：
+			# _resolve_velocity 的 charge_locked 分支是 `pass`（沿用既有 velocity），
+			# 只给期望速度的话前扑这一帧仍按旧追击速度走 —— 位移恒为零（实测 0px）。
+			# 与长扑冲刺同一口径：起步即满速、逐帧写死、清掉残余击退。
+			velocity = lunge_vel
+			_pp_target_vel = lunge_vel
+			knockback_velocity = Vector2.ZERO
+		elif lunge.is_rooted():
+			# 前摇/收势是「原地钉住」的承诺段：必须直接写 velocity，不能只归零期望速度。
+			# 交给 _resolve_velocity 的吸附刹车会留滑行尾巴（收势起手可达数百 px/s），
+			# 实际位移就会超出 lunge_reach 闭式解 —— 画/冲/判同源纪律失真。
+			_pp_target_vel = Vector2.ZERO
+			velocity = Vector2.ZERO
+			knockback_velocity = Vector2.ZERO
+	# 2.5 敌群分离（2026-10-23）：把「一坨叠一起」摊成可辨认的散兵线。
+	# 只在本帧没有「承诺型状态」时叠加：站桩预警/罚站/引信/蓄力/硬直期间必须原地不动，
+	# 被同伴顶开的话预警线画的点和真冲出去的点就对不上了（画多大判多大的同源纪律）。
+	# 性能：邻域查询走 EnemyFlock 的空间哈希桶（O(n)，每物理帧首只怪建一次桶），
+	# 不再 O(n²) 全表扫 —— 后者在 35 敌满载帧实测把物理帧从 9.8ms 顶到 13ms。
+	if _flock_steerable():
+		_flock_push = EnemyFlock.separation_push(global_position, GameManager.live_enemies,
+			get_instance_id(), GameBalance.FLOCK_SEPARATION_RADIUS,
+			eff_speed * GameBalance.FLOCK_SEPARATION_STRENGTH * flock_separation)
+		if _flock_push != Vector2.ZERO:
+			_pp_target_vel = EnemyFlock.combine(_pp_target_vel, _flock_push, eff_speed)
+	else:
+		_flock_push = Vector2.ZERO
 
 	# 位移解算（冲刺锁定段不插值）+ 界碑拦阻
 	_resolve_velocity(delta)
@@ -926,6 +1046,40 @@ func _taunt_target(player: Node2D) -> Node2D:
 			best_sq = d
 			best = ally
 	return best
+
+## 包围走位（2026-10-23）：进入贴身带后把追击方向转向自己抽到的扇区。
+## 远处仍直线压来（读得清「它在冲我」），近了才绕（读得清「它们想把我围住」）——
+## 这是土豆兄弟那套「散兵围猎」的手感来源：玩家靠侧移能找到空隙，而不是被一条直线顶死。
+## 贴近 18px 以内不绕：与 _update_facing_and_anim 的「贴近锁朝向」同一条防抽搐纪律。
+func _flock_orbit_dir(dir: Vector2, dist_sq: float) -> Vector2:
+	if absf(orbit_bias) < 0.0001 or dir.length_squared() < 0.0001:
+		return dir
+	if dist_sq > GameBalance.FLOCK_ORBIT_CLOSE_RADIUS * GameBalance.FLOCK_ORBIT_CLOSE_RADIUS:
+		return dir
+	if dist_sq < 324.0:
+		return dir
+	return EnemyFlock.orbit_dir(dir, orbit_bias, GameBalance.FLOCK_ORBIT_TANGENT)
+
+## 本帧是否允许被同伴推开：只有「自由追击」态才吃分离力。
+## 站桩预警/冲刺/收势/罚站/引信/火球蓄力/投毒/震地/落石/受击硬直 —— 一律钉住原地，
+## 否则预警线画的点与真冲出去的点错位（画多大判多大的同源纪律），蓄力也会被顶成漂移。
+func _flock_steerable() -> bool:
+	if _pp_stun or _hit_freeze_timer > 0.0:
+		return false
+	if _charge_windup >= 0.0 or _charge_active > 0.0 or _charge_brake > 0.0 or _charge_stagger > 0.0:
+		return false
+	if _chain_t >= 0.0 or _fuse >= 0.0:
+		return false
+	if _bolt_windup_t >= 0.0 or _poison_windup_t >= 0.0:
+		return false
+	if _elite_slam_windup_t >= 0.0 or _ring_bolt_windup_t >= 0.0 or _field_windup_t >= 0.0:
+		return false
+	if always_flee or preferred_range > 0.0:
+		return false
+	# 扑咬各段（前摇站蹲 / 前扑 / 收势）一律钉住，不吃分离力：前扑位移必须与 lunge_reach 同源
+	if lunge != null and lunge.is_active():
+		return false
+	return true
 
 func _update_offscreen_cull() -> void:
 	var vp := get_viewport()
@@ -1132,6 +1286,12 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		elif _charge_stagger > 0.0:
 			_charge_stagger -= delta
 			_pp_target_vel = Vector2.ZERO
+			# 2026-10-23：罚站必须真的站住。旧写法只把期望速度归零，velocity 由
+			# _resolve_velocity 的 move_toward(900px/s²) 从收势末速慢慢刹 —— 罚站头 0.1s
+			# 仍以 40+ px/s 往前滑，判据量到 29.4px 位移（用户口径「罚站就是站桩挨打」）。
+			# 收势段的线性刹车已经把速度收到接近零，这里直接钉死，不留滑行尾巴。
+			velocity = Vector2.ZERO
+			knockback_velocity = Vector2.ZERO
 
 		# 链冲段间短预警（变异烈雷兽）：上一段收势后不罚站，短暂停顿再起手下一冲。
 		# 每段仍有完整预警线可读，玩家能连续侧移躲完整轮；链尾才吃落空罚站。
@@ -1335,7 +1495,9 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 ## 速度解算：冲刺/收势锁定段由状态机逐帧写死（不交给插值、不被硬直夺走）；
 ## 受击卡肉定格期完全静止且保持击退冲量；硬直期间位移纯由击退主导并快速衰减；平时吸附插值追击
 func _resolve_velocity(delta: float) -> void:
-	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0
+	# 扑咬前扑段与长扑冲刺同一条口径：锁定段由状态机逐帧写死，不交给吸附插值、不被硬直夺走
+	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0 \
+		or (lunge != null and (lunge.is_dashing() or lunge.is_rooted()))
 	if charge_locked:
 		# velocity 已由状态机逐帧写死 ⇒ 既不交给吸附插值去改，
 		# 也不被受击硬直夺走（commit-through，与旧写法「硬直期间冲刺照冲」同一条口径）
@@ -1344,6 +1506,11 @@ func _resolve_velocity(delta: float) -> void:
 		# 受击卡肉定格（空洞骑士/死亡细胞风格）：冻结位移吸附在刀尖，
 		# 期间速度归零且不衰减 knockback_velocity，定格计时结束后才释放并衰减击退冲量
 		velocity = Vector2.ZERO
+	elif _charge_stagger > 0.0:
+		# 罚站是「站桩挨打」的承诺：收势刹车末帧仍有 ~180px/s，交给 900px/s² 吸附插值去刹
+		# 会滑出 29px（判据实测），与「冲空了就是白给」的读法相悖。这里直接钉死，不留滑行尾巴。
+		velocity = Vector2.ZERO
+		knockback_velocity = Vector2.ZERO
 	elif _pp_stun:
 		velocity = knockback_velocity
 		# 衰减在赋予 velocity 之后执行：第 0 帧吃满初速，并在 ~0.11s 内快速到位并完全刹停
@@ -1376,6 +1543,11 @@ func _tick_hit_fx(delta: float) -> void:
 
 ## 受击视觉：微反冲回弹（非自爆抖动期间生效，同步作用于精灵与程序化矢量视图）与后仰倾角衰减
 func _tick_hit_visuals(delta: float) -> void:
+	# 罚站摇晃相位：只在罚站期间推进，进出罚站都从 0 起（不会中途接上旧相位抖一下）
+	if _charge_stagger > 0.0:
+		_stagger_phase = fposmod(_stagger_phase + delta * 7.5, TAU)
+	else:
+		_stagger_phase = 0.0
 	if _hit_jiggle_offset.length_squared() > 0.01:
 		_hit_jiggle_offset = _hit_jiggle_offset.lerp(Vector2.ZERO, minf(delta * 24.0, 1.0))
 	else:
@@ -1386,10 +1558,17 @@ func _tick_hit_visuals(delta: float) -> void:
 			procedural_view.position = anim_sprite.position
 
 	# 受创后仰倾角衰减
-	if absf(_hit_tilt) > 0.005:
-		_hit_tilt = lerpf(_hit_tilt, 0.0, minf(delta * 14.0, 1.0))
+	# 2026-10-23 打懵回摆：旧写法单向 lerp 归零，受击像「弹簧直接松手」；
+	# 改成带阻尼的过零回摆（sin 包络衰减）—— 挨了一下先仰、再回正、多晃两下，
+	# 读作「被打懵了」。零分配：只多一次 sin 与一次乘法，与 _squash 同一条「逐帧解析曲线」路线。
+	if absf(_hit_tilt) > 0.005 or _hit_tilt_wobble > 0.0:
+		_hit_tilt_wobble = maxf(0.0, _hit_tilt_wobble - delta)
+		var wobble_k: float = _hit_tilt_wobble / HIT_TILT_WOBBLE_DUR
+		var wobble: float = sin(wobble_k * PI * 3.0) * _hit_tilt_peak * wobble_k
+		_hit_tilt = lerpf(_hit_tilt, wobble, minf(delta * 14.0, 1.0))
 	else:
 		_hit_tilt = 0.0
+		_hit_tilt_wobble = 0.0
 
 ## 朝向迟滞 + 三档步态动画（步态腿帧 / 悬浮 / 蠕动）+ 程序化矢量视图同步
 func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void:
@@ -1448,20 +1627,29 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		procedural_view.modulate = anim_sprite.modulate
 		procedural_view.is_moving = is_moving
 		procedural_view.speed_ratio = speed_ratio
+		# 残血读数（2026-10-23）：渲染层据此加大呼吸幅度、压低浮沉、加静态歪斜 —— 越残越「喘」。
+		# 纯表现，不参与任何判定；每帧写，setter 自带 0.5% 死区挡掉浮点抖动引起的重绘。
+		procedural_view.hp_ratio = clampf(current_hp / maxf(max_hp, 1.0), 0.0, 1.0)
+		# 视线（2026-10-23）：旧版只在 hover 支路喂 aim_dir，slither（史莱姆/血蛹）与 gait 敌种
+		# 的瞳孔永远钉死。现在全运动模式都喂：只要它朝你走，眼睛就朝你看。
+		if _bolt_windup_t >= 0.0:
+			procedural_view.aim_dir = _bolt_windup_dir
+		elif dir.length_squared() > 0.01:
+			procedural_view.aim_dir = dir
+		else:
+			procedural_view.aim_dir = Vector2.ZERO
 		if _pp_stun:
 			procedural_view.bank_angle = _hit_tilt
+		elif _charge_stagger > 0.0:
+			# 罚站打懵（2026-10-23）：冲空了站着挨打，躯体低频左右晃（读作「晕了、站不稳」）。
+			# 与受击后仰同一通道（bank_angle），不另开旋转通道 —— 渲染器只认这一个倾角。
+			procedural_view.bank_angle = sin(_stagger_phase) * STAGGER_SWAY_RAD
 		elif locomotion_mode == "hover":
 			var vel_dir := Vector2.ZERO
 			if is_moving and current_speed > 0.01:
 				vel_dir = velocity / current_speed
 			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
 			procedural_view.advance = vel_dir.dot(dir)
-			if _bolt_windup_t >= 0.0:
-				procedural_view.aim_dir = _bolt_windup_dir
-			elif dir.length_squared() > 0.01:
-				procedural_view.aim_dir = dir
-			else:
-				procedural_view.aim_dir = Vector2.ZERO
 		# 步态相位：仅移动时按 speed_ratio 推进（蠕动波频更高），渲染器摆翼/蠕波与位移同相
 		if is_moving:
 			_gait_phase += delta * speed_ratio * (GAIT_FREQ_SLITHER if locomotion_mode == "slither" else GAIT_FREQ_HOVER)
@@ -1477,6 +1665,9 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			procedural_view.special_state = 1.0 - _elite_slam_windup_t / maxf(slam_windup, 0.001)
 		elif _poison_windup_t >= 0.0:
 			procedural_view.special_state = 1.0 - _poison_windup_t / maxf(poison_windup, 0.001)
+		elif lunge != null and lunge.is_active():
+			# 扑咬前摇：复用同一条蓄力通道（下蹲 + 提亮 + 瞳孔瞪视），出手即归零
+			procedural_view.special_state = lunge.charge_progress()
 		else:
 			procedural_view.special_state = 0.0
 
@@ -1529,6 +1720,10 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
 	if dying:
 		return
+	# 入口闸：负伤害会变成回血（并照走硬直/击退/闪白全套反馈），必须挡在结算前。
+	# 注意 amount == 0 是合法用法 —— 玄龟震退用 take_damage(0.0, 击退) 只推不伤，不能一并拦掉。
+	if amount < 0.0:
+		return
 	# 普通小怪同目标短窗集火保护：防多把武器同帧命中瞬间蒸发，保证受击硬直/击退/闪白充分展现
 	if not from_dot and not is_elite:
 		if _focus_hit_timer <= 0.0:
@@ -1566,14 +1761,24 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		_hit_freeze_timer = maxf(_hit_freeze_timer, freeze_dur * elite_scale * hit_stun_resist)
 		if knockback.length_squared() > 10.0:
 			_hit_tilt = -knockback.normalized().x * deg_to_rad(14.0)
+			# 打懵回摆包络起点（2026-10-23）：以本下峰值与时长重启，连击会叠加成持续摇晃
+			_hit_tilt_peak = absf(_hit_tilt)
+			_hit_tilt_wobble = HIT_TILT_WOBBLE_DUR
 
 	# 1. 声音与震动（分层听觉：入肉撕裂+低频下潜 + 肉眼可见的方向性顿挫冲击）
 	# 暴击：声音+暴击顿帧+方向冲撞+zoom punch+创伤；DoT 暴击不出声但仍给镜头反馈
 	# 普通命中（非 DoT）：方向性微冲击 + 入肉声，走全局限流闸
+	# 2026-10-23 伤害驱动响度/音高（参考死亡细胞）：同一把武器，小伤害「啪」、大伤害「咚」。
+	# 以「本次伤害占目标最大生命比例」为尺（绝对伤害跨波次不可比），只给倍率，叠加在各基准上。
+	var dmg_vol: float = GameBalance.hit_sfx_volume(amount, max_hp)
+	var dmg_pitch: float = GameBalance.hit_sfx_pitch(amount, max_hp)
 	if is_crit:
 		if not from_dot:
-			AudioManager.play_sfx("enemy_hit", 1.25, GameManager.rng.randf_range(1.08, 1.22))
-			AudioManager.play_sfx("enemy_hit_crit", 1.35, GameManager.rng.randf_range(0.95, 1.05))
+			# 2026-10-23 暴击双播改单播：crit 配方自带完整五层主体（骨裂头+撕裂+punch+sub），
+			# 再叠一声 enemy_hit 只会双倍占 16 通道池、且两 key 节流闸不同步（hit 18ms / crit 40ms）
+			# 导致连击暴击「hit 在响、crit 被吞」。现在一声到位，音高仍随伤害下压。
+			AudioManager.play_sfx("enemy_hit_crit", 1.35 * dmg_vol,
+				GameManager.rng.randf_range(0.95, 1.05) * dmg_pitch)
 		GameManager.crit_hit_stop()
 		# 镜头震动特权留给精英/首领：普通小怪暴击不发镜头冲击、缩放与创伤，
 		# 避免高频割草时持续累加创伤导致屏幕常态抖动；打击感由顿帧、音效、跳字与暴击方向环承担。
@@ -1591,17 +1796,21 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 				Color(1.0, 0.42, 0.22, 0.85), knockback)
 	elif not from_dot:
 		# 普通命中：移除镜头 micro_kick，保证屏幕稳定不颤抖；打击感由怪物受击形变、闪白、硬直与音效承担
-		var pitch: float = GameManager.rng.randf_range(0.94, 1.08) if not is_elite else 0.85
-		AudioManager.play_sfx("enemy_hit", 1.15 if not is_elite else 0.95, pitch)
-		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED:
-			AudioManager.play_sfx("enemy_hit_heavy", 1.00, GameManager.rng.randf_range(0.92, 1.06))
+		# 2026-10-23：音高在随机抖音高上再乘伤害倍率（大伤害更沉），响度同理；精英基准仍压低半档
+		var pitch: float = (GameManager.rng.randf_range(0.94, 1.08) if not is_elite else 0.85) * dmg_pitch
+		AudioManager.play_sfx("enemy_hit", (1.15 if not is_elite else 0.95) * dmg_vol, pitch)
+		# 重击层三个来源：精英 / 大击退 / 单次打掉目标 35%+ 生命（后者补「这一刀很重」的听感）
+		if is_elite or raw_kb.length() > GameBalance.KNOCKBACK_HEAVY_SPEED \
+				or GameBalance.hit_sfx_is_heavy(amount, max_hp):
+			AudioManager.play_sfx("enemy_hit_heavy", 1.00 * dmg_vol,
+				GameManager.rng.randf_range(0.92, 1.06) * dmg_pitch)
 
 	# 精英/Boss 专属受击火花（2026-10-20）：小怪高频割草仍不发（防满屏乱闪的历史教训），
 	# 但精英/Boss 同屏恒 1 只、体型大，非暴击直击若无火花则打击感空落。锚在体表受击侧（向攻击来向偏移），
-	# 顺击退方向 ~100° 扇形喷溅。暴击已有方向环+镜头组承担，不重复发；DoT/致命/屏外不发。
-	# 单只冷却 ELITE_HIT_SPARK_INTERVAL 防束流 tick 逐帧刷屏；照常受 FxParticlePool 4/帧预算与视口兜底。
-	if is_elite and not is_crit and not from_dot and not lethal and not _offscreen and _elite_spark_cd <= 0.0:
-		_elite_spark_cd = GameBalance.ELITE_HIT_SPARK_INTERVAL
+	# 顺击退方向 ~100° 扇形喷溅。暴击已有方向环+镜头组承担，不重复发；DoT 不发。
+	# 2026-10-23 门控下沉：致命/屏外/全局节奏闸全部由 FxParticlePool.enemy_hit_spark 统一判定，
+	# 本处只声明「这是精英的非暴击直击」——原先这里自己写 lethal/_offscreen/每敌冷却三份，漏一处就出错。
+	if is_elite and not is_crit and not from_dot:
 		# Boss 用 death_corpse_linger 标记区分（避免基类反向引用 BossEnemy 子类）
 		var is_boss: bool = death_corpse_linger
 		var spark_scale: float = GameBalance.BOSS_HIT_SPARK_SCALE if is_boss else GameBalance.ELITE_HIT_SPARK_SCALE
@@ -1609,7 +1818,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		var kb_dir: Vector2 = knockback.normalized() if knockback.length_squared() > 1.0 else Vector2.ZERO
 		var spark_pos: Vector2 = global_position - kb_dir * edge if kb_dir != Vector2.ZERO else global_position
 		var spark_elem: String = "crit" if is_boss else "gold"
-		FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, spark_elem, spark_scale, false, kb_dir)
+		FxParticlePool.enemy_hit_spark(self, spark_pos, spark_elem, spark_scale, kb_dir, lethal)
 
 	# 跳字（2026-10-10 屏外减负）：屏外一概不发（玩家看不见，白烧分配）；
 	# DoT tick 常驻发跳字。音效/硬直/击退/闪白/顿帧全部保留 —— 打击感读数不变。
@@ -1808,6 +2017,11 @@ func _settle_charge_recovery() -> void:
 	if not _charge_hit and charge_whiff_stagger > 0.0:
 		_charge_stagger = charge_whiff_stagger
 		play_squash(Vector2(1.22, 0.78), 0.18)
+		# 2026-10-23：罚站起手当帧就把速度钉死。收势刹车走完时 velocity 还有 ~180px/s
+		# （brake_k 未完全归零），交给下一帧的 900px/s² 吸附插值刹会滑出 29px ——
+		# 判据实测「罚站 0.9s 内位移 29.4px」，与用户口径「罚站就是站桩挨打」相悖。
+		velocity = Vector2.ZERO
+		knockback_velocity = Vector2.ZERO
 
 ## 更新冲刺预警线（预警期间每帧调用）
 func _update_charge_warning(player: Node2D) -> void:
@@ -2333,6 +2547,9 @@ func _pulse_heal() -> void:
 
 func receive_heal(amount: float) -> void:
 	if dying:
+		return
+	# 入口闸：负治疗会静默扣血且不走 _die，血量与状态机错位（同 Player.heal 的 amount<=0 口径）
+	if amount <= 0.0:
 		return
 	current_hp = minf(max_hp, current_hp + amount)
 	if not _offscreen:

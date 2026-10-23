@@ -45,6 +45,7 @@ const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（
 const MELEE_SPARK_MAX := 2         ## 近战单次命中火花上限（前 N 个目标）
 const SWEEP_SPARK_MAX := 3         ## 横扫单次命中火花上限（扫一片也不全冒）
 const MELEE_SPARK_SCALE := 0.75    ## 火花缩放（比弹丸非暴击 0.85 更克制一档）
+const CRIT_SPARK_SCALE := 1.5      ## 暴击火花缩放（与 BladeProjectile 暴击 1.5 同档，重击感知靠对比）
 const MELEE_SPARK_EDGE := 14.0     ## 火花由敌人中心向攻击来向偏移，落在体表而非几何中心
 
 ## 横扫（SWEEP）与近战分家（2026-10-13，用户口径：「横扫和近战玩起来没区别」）：
@@ -384,28 +385,19 @@ func _arc_element() -> String:
 		e = "thunder"
 	return e
 
-## 近战/横扫命中火花——单目标发射。守 ①②③ 三道闸（帧预算/视口/致命不发），
-## 精英/Boss 走 EnemyBase 自己的专属火花不重复发。位置落敌人受击侧，方向顺击退。
-## 必须在 enemy.take_damage 之后调用：致命/精英状态那时才更新到位。
-func _spawn_melee_hit_spark(enemy: Node, knock: Vector2) -> void:
+## 近战/横扫命中火花——单目标发射。业务门控（精英非暴击不重复 / 致命不发 / 屏外不发）
+## 全部收在 FxParticlePool.weapon_hit_spark 内部，本处只报「打中了谁、是否暴击」。
+## 位置落敌人受击侧，方向顺击退。必须在 enemy.take_damage 之后调用：致命/精英状态那时才更新到位。
+## 暴击规格与弹丸侧对齐（2026-10-23）：scale 1.5 + "crit" 绯金，与非暴击 0.75 拉开重击对比。
+func _spawn_melee_hit_spark(enemy: Node, knock: Vector2, is_crit: bool = false) -> void:
 	if enemy == null or not is_instance_valid(enemy):
 		return
-	# 精英/Boss 已有受击火花（EnemyBase 专属），避免同一次命中双发
-	if enemy.get("is_elite") == true:
-		return
-	# 致命一击不发：take_damage 已同步走 _die() 置 dying，击杀点反馈由死亡爆散一力承担
-	# （同一次挨打只许一处发反馈）。此处必须在 take_damage 之后调用才读得到最新状态。
-	if enemy.get("dying") == true:
-		return
 	var epos: Vector2 = enemy.global_position
-	# 视口门控：屏外命中不冒火花
-	var player: Node2D = GameManager.player
-	var vp_center: Vector2 = player.global_position if player != null else global_position
-	if not GameBalance.is_in_viewport(epos, vp_center):
-		return
 	var kb_dir: Vector2 = knock.normalized() if knock.length_squared() > 1.0 else Vector2.ZERO
 	var spark_pos: Vector2 = epos - kb_dir * MELEE_SPARK_EDGE if kb_dir != Vector2.ZERO else epos
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, _arc_element(), MELEE_SPARK_SCALE, false, kb_dir)
+	var spark_scale: float = CRIT_SPARK_SCALE if is_crit else MELEE_SPARK_SCALE
+	var spark_elem: Variant = "crit" if is_crit else _arc_element()
+	FxParticlePool.weapon_hit_spark(enemy, spark_pos, spark_elem, spark_scale, is_crit, kb_dir)
 
 ## 光束渲染器挂在器口（MuzzlePoint 与发射帧 +X 同轴，本体转向即光束转向）
 func _setup_beam_renderer() -> void:
@@ -1226,7 +1218,7 @@ func _deal_melee_damage(aim_dir: Vector2) -> int:
 				hit_count += 1
 			# 命中火花（前 MELEE_SPARK_MAX 个目标，防扫一片全冒）
 			if hit_count <= MELEE_SPARK_MAX:
-				_spawn_melee_hit_spark(enemy, knock)
+				_spawn_melee_hit_spark(enemy, knock, is_crit)
 			if any_proc:
 				ProcStatus.apply(enemy, proc_burn,
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),
@@ -1344,7 +1336,7 @@ func _deal_sweep_damage(aim_dir: Vector2) -> int:
 				hit_count += 1
 			# 命中火花（前 SWEEP_SPARK_MAX 个目标，横扫扫一片也只出几朵）
 			if hit_count <= SWEEP_SPARK_MAX:
-				_spawn_melee_hit_spark(enemy, knock)
+				_spawn_melee_hit_spark(enemy, knock, is_crit)
 			if any_proc:
 				ProcStatus.apply(enemy, proc_burn,
 					dmg * float(def.get("burn_ratio", 0.45)), float(def.get("burn_dur", 3.0)),

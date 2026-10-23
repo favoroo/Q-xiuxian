@@ -230,6 +230,28 @@ func _test_knock_direction() -> void:
 	var squash_vert := GameBalance.hit_squash_target(Vector2(10.0, 200.0), false)
 	_c.check(squash_vert.x > 1.0 and squash_vert.y < 1.0, "纵向受击垂直压扁水平拉伸")
 
+	# 打击音伤害驱动（2026-10-23，参考死亡细胞）：以「伤害占最大生命比例」为尺，
+	# 小伤害原样、大伤害更响更沉；重击层在 35% 生命处触发。跨波次绝对伤害不可比，
+	# 所以这里必须用同一个血量下的不同伤害来钉，别拿 W1/W20 的绝对数值。
+	var light_vol := GameBalance.hit_sfx_volume(9.0, 100.0)     # 9% 生命，未到 18% 参考值
+	var heavy_vol := GameBalance.hit_sfx_volume(36.0, 100.0)    # 36% 生命，超过参考值封顶
+	_c.check(is_equal_approx(light_vol, 1.0), "小伤害（9%%生命）不额外加响度，实得 %.3f" % light_vol)
+	_c.check(heavy_vol > 1.15, "大伤害（36%%生命）显著加响度，实得 %.3f" % heavy_vol)
+	var light_pitch := GameBalance.hit_sfx_pitch(9.0, 100.0)
+	var heavy_pitch := GameBalance.hit_sfx_pitch(36.0, 100.0)
+	_c.check(is_equal_approx(light_pitch, 1.0), "小伤害（9%%生命）不降音高，实得 %.3f" % light_pitch)
+	_c.check(heavy_pitch < 0.92, "大伤害（36%%生命）明显更沉，实得 %.3f" % heavy_pitch)
+	_c.check(not GameBalance.hit_sfx_is_heavy(9.0, 100.0), "9%%生命不触发重击层")
+	_c.check(GameBalance.hit_sfx_is_heavy(36.0, 100.0), "36%%生命触发重击层")
+	# 上限为 0（空载/未初始化）不许除零出 NaN
+	_c.check(is_equal_approx(GameBalance.hit_sfx_volume(10.0, 0.0), 1.0), "最大生命为 0 时响度退化为 1.0（防除零）")
+	_c.check(is_equal_approx(GameBalance.hit_sfx_pitch(10.0, 0.0), 1.0), "最大生命为 0 时音高退化为 1.0（防除零）")
+	# 伤害超过参考值后必须封顶，不许无限变响（会盖住 BGM）
+	_c.check(GameBalance.hit_sfx_volume(100.0, 100.0) <= 1.0 + BalanceCombat.HIT_SFX_VOLUME_MAX_BONUS + EPS,
+		"满血一击的响度封顶在 +%.0f%%" % (BalanceCombat.HIT_SFX_VOLUME_MAX_BONUS * 100.0))
+	_c.check(GameBalance.hit_sfx_pitch(100.0, 100.0) >= 1.0 - BalanceCombat.HIT_SFX_PITCH_MAX_DROP - EPS,
+		"满血一击的音高下压封顶在 -%.0f%%" % (BalanceCombat.HIT_SFX_PITCH_MAX_DROP * 100.0))
+
 # ---------------- 妖狼长扑：位移闭式解与走廊扫掠几何 ----------------
 
 ## 真实帧的兑现由 WolfAiCheck 量（⑧⑨⑩），这里只钉公式自己：纸面位移与点到线段最近距离

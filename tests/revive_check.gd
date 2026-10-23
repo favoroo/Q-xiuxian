@@ -41,9 +41,9 @@ func _run() -> void:
 		_finish()
 		return
 
-	# 1. 致死 → 结算屏（有 1 次复活）
+	# 1. 致死 → 结算屏（每局默认带 1 次复活）
 	GameManager.dodge = 0.0
-	GameManager.revive_charges = 1
+	_check(GameManager.revive_charges == 1, "开局默认带 1 次复活")
 	_kill_player(player)
 	await _wait_game_over()
 	_check(GameManager.is_game_over, "致死一击后进入结算态")
