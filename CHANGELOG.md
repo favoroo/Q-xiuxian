@@ -1,3 +1,6 @@
+## 2026-10-24 #47
+CI 在 main 上红（`tests` workflow / Ubuntu 的 Python 3.14）。**根因**：`tools/inspect.py` 是指向 `inspect_asset.py` 的符号链接，直跑 `python3 tools/run_test.py` 时 `sys.path[0]=tools/`；Python 3.14 的 argparse 一启动就 `import dataclasses` → `import inspect`，于是命中这个链接，asset CLI 又去 `from PIL import ...`，CI 没装 Pillow 直接 `ModuleNotFoundError`（连测试都没开始跑）。本地 macOS 是 Python 3.9，argparse 启动路径不碰 inspect，所以一直没暴露。修：删除该符号链接，CLI 真名统一为 `tools/inspect_asset.py`（同步改 `tools/inspect_asset.py` 的用法串、`.agents/skills/asset-inspector/SKILL.md`、`subset_fonts.py` 的 sys.path 兜底注释、`export_site_data.py` 的说明）。**排查口径**：`tools/` 下任何与标准库同名的 `.py` 都是定时炸弹，脚本直跑必被 `sys.path[0]` 抢先导入；新增工具文件先查名字是否撞标准库。
+
 ## 2026-10-24 #45
 版本号从 0.0.76 跨到 **0.1.0**（minor 位进位，标记阶段性版本）。`Version.gd` 的 `APP_VERSION` 与 `export_presets.cfg` 的 `version/name`、`version/code` 严格同源，code 按 `major*10000+minor*100+patch` 口径由 76 改 100（沿用 `release.py` 的 `version_code_from_version` 公式，别手写别的推导）。发布口径同 `xiuxian-release`：Android APK 双端 Release + `web-deploy` 更新 GitHub Pages 宣传站。
 

@@ -556,9 +556,10 @@ def subset_site_fonts() -> None:
     原地裁完以后新增的字就永久丢了；所以全量字体放 `site/fonts/`（不进部署目录），
     每次都从它重新裁出 `site/dist/fonts/*-subset.woff2`。
 
-    子集化走子进程 `python -m fontTools.subset`：`tools/` 下有个 `inspect.py`，
-    直接在本进程 import fontTools 会让 dataclasses 取到它（`import inspect` 被脚本目录抢先），
-    报 `module 'inspect' has no attribute 'signature'`；-m 的 sys.path 是仓库根，不踩这个坑。
+    子集化走子进程 `python -m fontTools.subset`：`-m` 的 sys.path[0] 是仓库根而非 `tools/`，
+    脚本目录永远不会抢先命中同名模块。历史上 `tools/` 曾有一个同名的 `inspect.py` 符号链接，
+    在 Python 3.14 下连 `import argparse` 都会被它劫持（argparse 启动时 import dataclasses→inspect），
+    该链接已于 2026-10-24 删除；子进程写法保留，作为不再依赖 cwd 的隔离手段。
     """
     try:
         import fontTools  # noqa: F401

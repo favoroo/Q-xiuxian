@@ -3,17 +3,17 @@
 """
 tools/inspect_asset.py — 游戏美术视觉检视统一调度 CLI
 用法:
-    python3 tools/inspect.py cultivator <id|--all>   # 修仙者单角色 4 视角特写 / 全量 20 位画廊
-    python3 tools/inspect.py weapon <id|--all>       # 法器 8x 像素特写 + 器尖标定线 / 69 把法器走廊图
-    python3 tools/inspect.py item <id|--all>         # 道具 8x 像素特写 + 品质色框 / 全道具画廊
-    python3 tools/inspect.py enemy <id|--all>        # 妖魔 3 态特写 / 全量 17 种妖魔画廊
-    python3 tools/inspect.py vfx <id|--all>          # 攻击特效特写 / 12 款刀光扇面+光束+火锥+爆发画廊
-    python3 tools/inspect.py projectile <id|--all>   # 飞行物特写 / 21 种纯矢量弹道画廊 (别名 bullet)
-    python3 tools/inspect.py ui [--all]              # 界面 GameStyle 规范样张与面板画廊
-    python3 tools/inspect.py screen <id|--all>       # 核心游戏界面/战斗视口抓拍 (battle/levelup/shop/start/select/records)
-    python3 tools/inspect.py lint                    # 资产合规体检 (检测抠底安全边距、尺寸、防场景图误入)
-    python3 tools/inspect.py report                  # 重新打包生成交互式 HTML 看板
-    python3 tools/inspect.py all                     # 一键刷新全部画廊并打包 HTML 看板
+    python3 tools/inspect_asset.py cultivator <id|--all>   # 修仙者单角色 4 视角特写 / 全量 20 位画廊
+    python3 tools/inspect_asset.py weapon <id|--all>       # 法器 8x 像素特写 + 器尖标定线 / 69 把法器走廊图
+    python3 tools/inspect_asset.py item <id|--all>         # 道具 8x 像素特写 + 品质色框 / 全道具画廊
+    python3 tools/inspect_asset.py enemy <id|--all>        # 妖魔 3 态特写 / 全量 17 种妖魔画廊
+    python3 tools/inspect_asset.py vfx <id|--all>          # 攻击特效特写 / 12 款刀光扇面+光束+火锥+爆发画廊
+    python3 tools/inspect_asset.py projectile <id|--all>   # 飞行物特写 / 21 种纯矢量弹道画廊 (别名 bullet)
+    python3 tools/inspect_asset.py ui [--all]              # 界面 GameStyle 规范样张与面板画廊
+    python3 tools/inspect_asset.py screen <id|--all>       # 核心游戏界面/战斗视口抓拍 (battle/levelup/shop/start/select/records)
+    python3 tools/inspect_asset.py lint                    # 资产合规体检 (检测抠底安全边距、尺寸、防场景图误入)
+    python3 tools/inspect_asset.py report                  # 重新打包生成交互式 HTML 看板
+    python3 tools/inspect_asset.py all                     # 一键刷新全部画廊并打包 HTML 看板
 """
 
 import os
@@ -346,7 +346,7 @@ def main():
 
     if cmd == "cultivator":
         if len(sys.argv) < 3:
-            print("用法: python3 tools/inspect.py cultivator <id|--all>")
+            print("用法: python3 tools/inspect_asset.py cultivator <id|--all>")
             sys.exit(1)
         arg = sys.argv[2]
         if arg == "--all":
@@ -356,7 +356,7 @@ def main():
 
     elif cmd == "weapon":
         if len(sys.argv) < 3:
-            print("用法: python3 tools/inspect.py weapon <id|--all>")
+            print("用法: python3 tools/inspect_asset.py weapon <id|--all>")
             sys.exit(1)
         arg = sys.argv[2]
         if arg == "--all":
@@ -371,7 +371,7 @@ def main():
 
     elif cmd == "item":
         if len(sys.argv) < 3:
-            print("用法: python3 tools/inspect.py item <id|--all>")
+            print("用法: python3 tools/inspect_asset.py item <id|--all>")
             sys.exit(1)
         arg = sys.argv[2]
         if arg == "--all":
@@ -381,7 +381,7 @@ def main():
 
     elif cmd == "enemy":
         if len(sys.argv) < 3:
-            print("用法: python3 tools/inspect.py enemy <id|--all>")
+            print("用法: python3 tools/inspect_asset.py enemy <id|--all>")
             sys.exit(1)
         arg = sys.argv[2]
         if arg == "--all":

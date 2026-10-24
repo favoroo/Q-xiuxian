@@ -42,7 +42,8 @@ import subprocess
 import sys
 import unicodedata
 
-# 防止 tools/ 下的脚本执行时 sys.path[0] 为 tools/，导致 tools/inspect.py 遮蔽标准库 inspect
+# 兜底：脚本直跑时 sys.path[0] 是 tools/，若目录里出现与标准库同名的模块就会被抢先导入
+# （2026-10-24 已删掉同名符号链接 tools/inspect.py，此处保留以防再犯）
 if sys.path and os.path.basename(os.path.abspath(sys.path[0])) == "tools":
     _tools_dir = sys.path.pop(0)
     _root_dir = os.path.dirname(_tools_dir)
