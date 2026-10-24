@@ -16,6 +16,11 @@
   }
   function byId(id) { return document.getElementById(id); }
 
+  /* 图标的缓存版本：img/*.png 是「同名覆盖」更新，不换 URL 浏览器就一直吃旧图。
+     data.js 只给路径带不了版本号，所以改图后要把这里也 +1（与 index.html 的 ?v= 同步）。 */
+  var IMG_V = "?v=25";
+  function imgUrl(u) { return u ? u + IMG_V : u; }
+
   /* 低动效偏好一次判掉：JS 侧的揭示/数字滚动/上色扫屏全按它走，
      CSS 里另有一整块 prefers-reduced-motion 兜住补间（两边都必须停在「完整可见」这一态） */
   var RM = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -90,7 +95,7 @@
     var card = el("article", "role plate");
     var top = el("div", "role-top");
     var img = el("img");
-    img.src = r.i; img.alt = r.n + " 头像"; img.width = 42; img.height = 42; img.loading = "lazy";
+    img.src = imgUrl(r.i); img.alt = r.n + " 头像"; img.width = 42; img.height = 42; img.loading = "lazy";
     var meta = el("div");
     meta.appendChild(el("div", "role-name", r.n));
     meta.appendChild(el("div", "role-epi", r.e));
@@ -202,7 +207,7 @@
       b.type = "button";
       b.dataset.idx = idx;
       var im = el("img");
-      im.src = item.i; im.alt = ""; im.width = 34; im.height = 34; im.loading = "lazy";
+      im.src = imgUrl(item.i); im.alt = ""; im.width = 34; im.height = 34; im.loading = "lazy";
       var t = el("span", "tile-txt");
       t.appendChild(el("b", null, item.n));
       t.appendChild(el("span", null, cfg.sub(item)));
@@ -219,7 +224,7 @@
         a.classList.toggle("sel", a === btn);
         a.setAttribute("aria-pressed", a === btn ? "true" : "false");
       });
-      dIcon.src = item.i;
+      dIcon.src = imgUrl(item.i);
       dName.textContent = item.n;
       dDesc.textContent = cfg.plain(item);
       // 详情条顶一下再归位：点完卡到读出来这一下，眼睛跟得上是同一件事
@@ -354,7 +359,7 @@
     card.style.setProperty("--pet-color", p.color);
     var top = el("div", "pet-orb");
     var im = el("img", "orb-img");
-    im.src = p.i; im.alt = p.n + " 形象"; im.width = 52; im.height = 52; im.loading = "lazy";
+    im.src = imgUrl(p.i); im.alt = p.n + " 形象"; im.width = 52; im.height = 52; im.loading = "lazy";
     var who = el("div");
     who.appendChild(el("div", "pet-n", p.n));
     who.appendChild(el("div", "pet-meta", "每 " + p.cd + " 秒出手 · " + p.price + " 金币起"));
@@ -373,7 +378,7 @@
     var top = el("div", "skill-top");
     if (s.i) {
       var im = el("img");
-      im.src = s.i; im.alt = s.n + " 图标"; im.width = 40; im.height = 40;
+      im.src = imgUrl(s.i); im.alt = s.n + " 图标"; im.width = 40; im.height = 40;
       top.appendChild(im);
     } else {
       top.appendChild(el("div", "glyph", s.g || s.n.charAt(0)));

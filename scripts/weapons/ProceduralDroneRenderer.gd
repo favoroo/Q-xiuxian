@@ -1,50 +1,65 @@
 class_name ProceduralDroneRenderer
 extends Node2D
 
-## 纯矢量环绕灵宝渲染器（冷冽国风）
-## 为御灵系道具（灵蝶、寒泉玉莲、混元钟）提供细腻的自转、振翅与流光视觉
-## 核心起辉（2026-10-15 T-2.7）：各形态「核心一眼点」（中心亮点/灵蕊/灯焰/符印等小面积
-## 最亮层）接 GameStyle.FX_HDR 五行/通用超白低档 —— 分量 >1.0 触发 WorldEnvironment
-## glow 自动泛光，零额外开销。大面积本体一律保持 LDR 原色：环绕体多只同屏，
-## 全体起辉会糊成一团，只让每只灵宝的中心点发光提辨识度。
+## 环绕御灵渲染器（新野兽派 · 平涂版）
+## 为 12 个御灵类武器本体与祭坛灵兽「灵珑」画环绕体。画法与武器侧野兽派接管
+## （BrutalistCommon.gd）同一口径：平涂色块 + 粗墨描边 + 右下硬偏移投影，
+## 零辉光 / 零渐变 / 零装饰纹；升星只用撞色方钉（star_studs），不复旧画法的辉光档。
+## 每只灵兽 = 五行主色一大块（BC.pal，灵珑用本文件专属平涂色）+ 撞色一处 + 墨黑；
+## 硬边几何（多边形硬折线，自画圆弧低分段 ≤12 段）。
+## 旧「冷冽国风」画法的柔和光晕 / 透光羽 / 流光点 / 飘带 / 云雷纹已全部砍除
+## （_soft_glow 已删，本文件不再引用 GameStyle 取色）。
+## 状态输入（宿主每帧灌入）全部保留，一律以硬边几何表达，不回退柔光：
+##   speed_ratio 驱动态度（飘带甩幅 / 灵尘）· bank_angle 只倾躯体组（足影不随动）·
+##   hp_ratio 低于 0.3 显墨色裂纹 · charge_ratio 显蓄力灵光球 ·
+##   spawn_glow 出场一拍（撞色硬边六角环从外向本体收拢 + 方钉内聚）· _anim_time 相位。
+
+const BC = preload("res://scripts/weapons/shapes/BrutalistCommon.gd")
+
+## 灵珑（祭坛灵兽）专属平涂配色：不挂五元素 tag，不进 BC.PAL，常量只落这一处
+const LING_BODY := Color(0.42, 0.80, 0.76)    ## 灵青主色（焰形真身大块）
+const LING_DEEP := Color(0.30, 0.62, 0.60)    ## 主色暗档（身侧飘带）
+const LING_ACCENT := Color(0.96, 0.85, 0.30)  ## 撞色（双角 / 蓄力球 / 出场环 / 星钉）
+const LING_PALE := Color(0.93, 0.97, 0.94)    ## 月白内焰（唯一亮层，平涂不透光）
 
 enum DroneKind {
-	LINGDIE,        ## 灵蝶：碧翠灵羽、生机透光羽翼、双翅轻盈扑动
-	HANQUAN_YULIAN, ## 寒泉玉莲：晶莹冰魄青莲、层叠八瓣寒晶、中央灵蕊
-	HUNYUAN_ZHONG,  ## 混元钟：玄铁青铜古钟、暗金饕餮符印、钟首盘龙纽
-	HAOJIN_LUN,     ## 昊金轮：旋转金轮、辐条流光（2026-10-10 新增）
-	LIHUO_YA,       ## 离火鸦：火羽扑翼、焰尾曳光（2026-10-10 新增）
-	XUANWU_PEI,     ## 玄武佩：玄黄玉璧、云纹护身（2026-10-10 新增）
-	YUAN_LING,      ## 灵珑：祭坛召唤灵兽，焰形灵魄真身 + 对称流云飘带（2026-10-20 由圆形侧视幼兽重做：去圆球、改左右镜像对称焰形）
-	JINMING_LING,   ## 金鸣铃：悬空金铃、铃舌摆鸣、云雷符纹（2026-10-11 第二批）
-	MULING_OU,      ## 木灵偶：青木偶人、灵藤关节、生机符印（2026-10-11 第二批）
-	BINGPO_ZHU,     ## 冰魄珠：寒冰宝珠、冰晶棱片、雪亮冰核（2026-10-11 第二批）
-	CHIYAN_YING,    ## 赤炎萤：流火萤虫、薄透火翼、尾腹火光（2026-10-11 第二批）
-	TULING_SHI,     ## 土灵石：符文灵石、山岩棱面、镇岳古符（2026-10-11 第二批）
-	JIAN_LING       ## 剑灵：半透明剑形精魂、灵气飘带（2026-10-11 第二批）
+	LINGDIE,        ## 灵蝶：木色硬边四翅 + 翅尖撞色三角 + 墨身方头
+	HANQUAN_YULIAN, ## 寒泉玉莲：双层八角硬边莲盘 + 撞色莲心
+	HUNYUAN_ZHONG,  ## 混元钟：土色宽钟身 + 口缘撞色带 + 墨拱钮（无舌，沉稳）
+	HAOJIN_LUN,     ## 昊金轮：旋转六棱轮盘 + 三根贯穿墨辐 + 撞色轴心
+	LIHUO_YA,       ## 离火鸦：火色硬翼 + 墨描圆身 + 撞色焰尾三杆
+	XUANWU_PEI,     ## 玄武佩：双环玉璧（主色宽环 + 撞色细环）+ 墨系绳
+	YUAN_LING,      ## 灵珑：祭坛召唤灵兽，焰形灵魄真身（平涂版：硬边焰身 + 撞色双角）
+	JINMING_LING,   ## 金鸣铃：白金铃身 + 口缘撞色带 + 反摆墨铃舌
+	MULING_OU,      ## 木灵偶：木色偶人 + 墨关节方钉 + 胸口撞色方章
+	BINGPO_ZHU,     ## 冰魄珠：六棱珠体 + 环绕六片冰晶三角 + 撞色内棱
+	CHIYAN_YING,    ## 赤炎萤：火色腹块 + 墨头 + 呼吸涨缩的撞色尾灯
+	TULING_SHI,     ## 土灵石：七棱山岩 + 墨裂纹 + 撞色镇岳山形一笔
+	JIAN_LING       ## 剑灵：硬边剑形精魂 + 撞色剑格与剑首
 }
 
 @export var kind: DroneKind = DroneKind.LINGDIE
 @export var star: int = 1
 
 ## 速度权重（0=悬停 1=全速）：仅灵珑（YUAN_LING）消费，由宿主按实际移速灌入，
-## 驱动绒羽摆幅 / 灵纹转速 / 尾后移动灵尘
+## 驱动身侧飘带甩幅 / 焰尖摆幅 / 尾后移动方钉灵尘
 var speed_ratio: float = 0.0
 
-## 侧倾角（弧度）：仅灵珑消费 —— 按朝向系下的横向走位 bank，只倾圆面装饰组（晕圈/足雾不随动）；
-## 宿主按 velocity.x * 朝向符号 归一灌入，左右镜像由 scale.x 承担
+## 侧倾角（弧度）：仅灵珑消费 —— 按朝向系下的横向走位 bank，只倾躯体组（飘带/焰身/双角/
+## 双眸/裂纹/蓄力球随动，足下影块与出场环不随）；宿主按 velocity.x * 朝向符号归一灌入，
+## 左右镜像由 scale.x 承担
 var bank_angle: float = 0.0
 
 ## 生命比（0..1）：仅灵珑消费，由宿主（SpiritBeast）灌入 —— 灵兽不挂血条，
-## 生命全由本体传达：驱动灵光晕圈/祭纹灵印/灵目明暗，低于 30% 圆面浮现裂纹与灵息闪烁
+## 生命全由本体传达：灵目墨色浓淡，低于 30% 浮现镜像墨色裂纹（随灵息闪烁）
 var hp_ratio: float = 1.0
 
 ## 蓄力比（0..1）：仅灵珑消费，由宿主（SpiritBeast）三连灵羽弹蓄力灌入 ——
-## 面前灵光球随蓄力涨大发亮，连发时随剩余发数递减（余辉）
+## 面前撞色灵光圆盘随蓄力涨大，连发时随剩余发数递减（余辉）
 var charge_ratio: float = 0.0
 
 ## 出场辉光（1→0 自减）：仅灵珑消费，宿主（SpiritBeast）召唤出场时灌 1 ——
-## 晕圈强闪 + 环绕灵尘从外圈向本体收拢，衔接祭坛冲击环的「现身」一拍
+## 撞色硬边六角环从外圈向本体收拢 + 六颗方钉内聚，衔接祭坛冲击环的「现身」一拍
 var spawn_glow: float = 0.0
 
 var _anim_time: float = 0.0
@@ -107,450 +122,39 @@ func _draw() -> void:
 		DroneKind.JIAN_LING:
 			_draw_sword_wisp()
 
-# ----------------- 1. 灵蝶 (生机碧翠灵羽 + 振翅扑动) -----------------
-func _draw_spirit_butterfly() -> void:
-	# 振翅周期 (约 5Hz)
-	var wing_flap := sin(_anim_time * 12.0)
-	var flap_x := 0.4 + 0.6 * absf(wing_flap)
+# ----------------- 共用小构件 -----------------
 
-	var wing_col_base := Color(0.20, 0.65, 0.45, 0.75)
-	var wing_col_edge := Color(0.55, 0.95, 0.75, 0.90)
-	if star >= 2:
-		wing_col_edge = Color(0.95, 0.85, 0.40, 0.95)
+## 五行归属：与 WeaponData 各御灵 tags 的五元素一致，取 BC.pal 平涂配色
+func _elem() -> String:
+	match kind:
+		DroneKind.HANQUAN_YULIAN, DroneKind.BINGPO_ZHU:
+			return "water"
+		DroneKind.HUNYUAN_ZHONG, DroneKind.XUANWU_PEI, DroneKind.TULING_SHI:
+			return "earth"
+		DroneKind.HAOJIN_LUN, DroneKind.JINMING_LING, DroneKind.JIAN_LING:
+			return "metal"
+		DroneKind.LIHUO_YA, DroneKind.CHIYAN_YING:
+			return "fire"
+		_:
+			return "wood"  # LINGDIE / MULING_OU
 
-	# 左前翅
-	var left_fore := PackedVector2Array([
-		Vector2(0, 0),
-		Vector2(-14.0 * flap_x, -12.0),
-		Vector2(-12.0 * flap_x, -2.0),
-		Vector2(-2.0, 2.0)
-	])
-	draw_colored_polygon(left_fore, wing_col_base)
-	draw_polyline(left_fore, wing_col_edge, 1.2, true)
+## 正 N 边形顶点（硬边轮盘/珠体/莲盘共用，rot 为整体转角）
+func _ngon(c: Vector2, radius: float, n: int, rot: float = 0.0) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in range(n):
+		var a: float = rot + TAU * float(i) / float(n)
+		pts.append(c + Vector2(cos(a), sin(a)) * radius)
+	return pts
 
-	# 右前翅
-	var right_fore := PackedVector2Array([
-		Vector2(0, 0),
-		Vector2(14.0 * flap_x, -12.0),
-		Vector2(12.0 * flap_x, -2.0),
-		Vector2(2.0, 2.0)
-	])
-	draw_colored_polygon(right_fore, wing_col_base)
-	draw_polyline(right_fore, wing_col_edge, 1.2, true)
-
-	# 左后翅 (更小巧)
-	var left_hind := PackedVector2Array([
-		Vector2(0, 2.0),
-		Vector2(-10.0 * flap_x, 6.0),
-		Vector2(-7.0 * flap_x, 12.0),
-		Vector2(0, 5.0)
-	])
-	draw_colored_polygon(left_hind, wing_col_base)
-	draw_polyline(left_hind, wing_col_edge, 1.0, true)
-
-	# 右后翅
-	var right_hind := PackedVector2Array([
-		Vector2(0, 2.0),
-		Vector2(10.0 * flap_x, 6.0),
-		Vector2(7.0 * flap_x, 12.0),
-		Vector2(0, 5.0)
-	])
-	draw_colored_polygon(right_hind, wing_col_base)
-	draw_polyline(right_hind, wing_col_edge, 1.0, true)
-
-	# 翅脉（前后翅各一道，随扑翼收展，透光感）
-	var vein_col := Color(wing_col_edge.r, wing_col_edge.g, wing_col_edge.b, 0.55)
-	draw_line(Vector2(0, -1.0), Vector2(-11.0 * flap_x, -8.5), vein_col, 0.8, true)
-	draw_line(Vector2(0, -1.0), Vector2(11.0 * flap_x, -8.5), vein_col, 0.8, true)
-	draw_line(Vector2(0, 2.5), Vector2(-7.0 * flap_x, 8.5), vein_col, 0.7, true)
-	draw_line(Vector2(0, 2.5), Vector2(7.0 * flap_x, 8.5), vein_col, 0.7, true)
-
-	# 蝶身脊柱与灵须（头部亮点接 FX_HDR_WOOD 起辉）
-	draw_line(Vector2(0, -7.0), Vector2(0, 7.0), Color(0.10, 0.14, 0.18), 2.0, true)
-	draw_circle(Vector2(0, -7.0), 1.6, Color(GameStyle.FX_HDR_WOOD, 0.9))
-	# 触角（梢端两点莹光）
-	draw_line(Vector2(0, -7.0), Vector2(-4.0, -11.0), Color(0.92, 0.95, 0.98), 0.8, true)
-	draw_line(Vector2(0, -7.0), Vector2(4.0, -11.0), Color(0.92, 0.95, 0.98), 0.8, true)
-	draw_circle(Vector2(-4.0, -11.0), 0.7, Color(0.85, 1.0, 0.90, 0.8))
-	draw_circle(Vector2(4.0, -11.0), 0.7, Color(0.85, 1.0, 0.90, 0.8))
-
-	# 伴飞灵粉三粒（环绕明灭，添灵动）
-	for i in range(3):
-		var ang := _anim_time * 2.2 + float(i) * TAU / 3.0
-		var mp := Vector2(cos(ang) * 15.0, sin(ang) * 9.0 - 1.0)
-		var twk := 0.5 + 0.5 * sin(_anim_time * 4.0 + float(i) * 2.1)
-		draw_circle(mp, 0.9 + 0.4 * twk, Color(0.75, 1.0, 0.85, 0.20 + 0.30 * twk))
-
-# ----------------- 2. 寒泉玉莲 (晶莹冰魄层叠八瓣莲台) -----------------
-func _draw_ice_lotus() -> void:
-	var rot := _anim_time * 1.2
-	var petals := 8
-	var outer_r := 13.0
-	var inner_r := 4.5
-
-	# 外层八瓣青莲
-	for i in range(petals):
-		var ang := float(i) / float(petals) * TAU + rot
-		var tip := Vector2(cos(ang) * outer_r, sin(ang) * outer_r)
-		var left_ang := ang - 0.28
-		var right_ang := ang + 0.28
-		var side_l := Vector2(cos(left_ang) * (outer_r * 0.6), sin(left_ang) * (outer_r * 0.6))
-		var side_r := Vector2(cos(right_ang) * (outer_r * 0.6), sin(right_ang) * (outer_r * 0.6))
-
-		var poly := PackedVector2Array([Vector2.ZERO, side_l, tip, side_r])
-		var col := Color(0.40, 0.75, 0.95, 0.65) if (i % 2 == 0) else Color(0.65, 0.90, 1.0, 0.85)
-		draw_colored_polygon(poly, col)
-		draw_polyline(PackedVector2Array([side_l, tip, side_r]), Color(0.95, 0.98, 1.0, 0.9), 1.0, false)
-		# 瓣尖凝露微光（明灭闪烁，添冰晶感）
-		var dew := 0.4 + 0.6 * (0.5 + 0.5 * sin(_anim_time * 3.6 + float(i) * 1.9))
-		draw_circle(tip, 0.8, Color(0.92, 0.99, 1.0, 0.45 * dew))
-
-	# 瓣间反旋细光环（与莲瓣反向，添流转层次）
-	draw_arc(Vector2.ZERO, outer_r * 0.78, -rot * 0.6, -rot * 0.6 + PI * 1.2, 20, Color(0.80, 0.96, 1.0, 0.28), 0.8, true)
-	draw_arc(Vector2.ZERO, outer_r * 0.78, -rot * 0.6 + PI, -rot * 0.6 + PI * 2.2, 20, Color(0.80, 0.96, 1.0, 0.28), 0.8, true)
-
-	# 内层灵蕊（内亮层接 HDR 低档起辉：★2+ 暖金档 / ★1 冰蓝档，保住星级冷暖差）
-	draw_circle(Vector2.ZERO, inner_r, Color(0.20, 0.45, 0.70))
-	draw_circle(Vector2.ZERO, inner_r * 0.5,
-		Color(GameStyle.FX_HDR_METAL, 0.75) if star >= 2 else Color(GameStyle.FX_HDR_WATER, 0.65))
-
-# ----------------- 3. 混元古钟 (玄铁青铜古钟 + 暗金云雷纹) -----------------
-func _draw_ancient_bell() -> void:
-	# 钟体轮廓 (上窄下阔梯形钟身)
-	var bell_poly := PackedVector2Array([
-		Vector2(-6.0, -9.0),
-		Vector2(6.0, -9.0),
-		Vector2(9.5, 6.0),
-		Vector2(11.0, 9.0),
-		Vector2(-11.0, 9.0),
-		Vector2(-9.5, 6.0)
-	])
-	# 玄铁沉稳底色
-	draw_colored_polygon(bell_poly, Color(0.18, 0.22, 0.28))
-	# 边缘暗金/青铜包边
-	draw_polyline(bell_poly, Color(0.78, 0.68, 0.35) if star >= 2 else Color(0.40, 0.55, 0.50), 1.4, true)
-
-	# 钟钮 (顶部吊环)
-	draw_arc(Vector2(0, -10.5), 3.0, PI, TAU, 8, Color(0.85, 0.75, 0.38), 1.5)
-
-	# 钟腹云雷横纹
-	draw_line(Vector2(-8.0, 0), Vector2(8.0, 0), Color(0.85, 0.75, 0.38, 0.8), 1.2, true)
-	draw_line(Vector2(-7.0, -4.0), Vector2(7.0, -4.0), Color(0.85, 0.75, 0.38, 0.6), 1.0, true)
-
-	# 钟腹中心兽面符点（呼吸明暗）
-	var face_a := 0.5 + 0.3 * sin(_anim_time * 2.6)
-	draw_circle(Vector2(0, 2.5), 1.5, Color(0.88, 0.76, 0.40, 0.7 * face_a))
-
-	# 钟口下沿口缘（接 FX_HDR_METAL 古金起辉，钟的「一眼金」）
-	draw_line(Vector2(-11.0, 9.0), Vector2(11.0, 9.0), Color(GameStyle.FX_HDR_METAL, 0.85), 2.0, true)
-
-	# 钟声余韵（周期性自钟口荡开的对称音弧，添「鸣」意）
-	var ring_t: float = fposmod(_anim_time, 2.4) / 2.4
-	var ring_r: float = 12.0 + ring_t * 9.0
-	var ring_a: float = (1.0 - ring_t) * 0.35
-	draw_arc(Vector2(0, 9.0), ring_r, PI * 0.15, PI * 0.85, 16, Color(0.90, 0.80, 0.45, ring_a), 1.0, true)
-
-# ----------------- 4. 昊金轮 (自转金轮 + 六辐流光) -----------------
-func _draw_golden_wheel() -> void:
-	var rot := _anim_time * 4.0
-	var rim := Color(0.95, 0.80, 0.30) if star >= 2 else Color(0.72, 0.58, 0.22)
-	# 外环反旋虚光轮（与主轮对旋，添流转层次）
-	for i in range(8):
-		var ang0 := float(i) / 8.0 * TAU - rot * 0.45
-		draw_arc(Vector2.ZERO, 13.5, ang0, ang0 + 0.32, 6, Color(rim, 0.30), 1.0, true)
-	# 六辐轮辐
-	for i in range(6):
-		var ang := float(i) / 6.0 * TAU + rot
-		draw_line(Vector2.ZERO, Vector2(cos(ang) * 11.0, sin(ang) * 11.0), rim, 1.6, true)
-		# 辐梢流光点
-		draw_circle(Vector2(cos(ang) * 11.0, sin(ang) * 11.0), 1.2, Color(1.0, 0.90, 0.55, 0.8))
-	# 外轮圈与轴心（轴心亮盘接 FX_HDR_METAL 起辉）
-	draw_arc(Vector2.ZERO, 11.0, 0, TAU, 24, rim, 2.2, true)
-	draw_arc(Vector2.ZERO, 7.5, 0, TAU, 18, Color(GameStyle.FX_HDR_METAL, 0.35), 1.0, true)
-	draw_circle(Vector2.ZERO, 3.0, Color(GameStyle.FX_HDR_METAL, 0.9))
-	draw_circle(Vector2.ZERO, 1.4, Color(0.35, 0.26, 0.10))
-
-# ----------------- 5. 离火鸦 (火羽扑翼 + 焰尾) -----------------
-func _draw_fire_crow() -> void:
-	var wing_flap := sin(_anim_time * 11.0)
-	var flap_x := 0.45 + 0.55 * absf(wing_flap)
-	var body := Color(0.45, 0.12, 0.08)
-	var flame := Color(1.0, 0.55, 0.15, 0.85) if star < 2 else Color(1.0, 0.72, 0.25, 0.95)
-	# 双翼（火羽）
-	for side in [-1.0, 1.0]:
-		var wing := PackedVector2Array([
-			Vector2(0, -1.0),
-			Vector2(side * 13.0 * flap_x, -9.0),
-			Vector2(side * 10.0 * flap_x, 0.5),
-			Vector2(side * 2.0, 2.5)
-		])
-		draw_colored_polygon(wing, Color(0.85, 0.35, 0.10, 0.80))
-		draw_polyline(wing, flame, 1.1, true)
-	# 焰尾三条（中条接 FX_HDR_FIRE 起辉，火是离火鸦的一眼点）
-	for i in range(-1, 2):
-		var sway := sin(_anim_time * 7.0 + float(i)) * 2.0
-		draw_line(Vector2(float(i) * 2.5, 4.0), Vector2(float(i) * 3.5 + sway, 12.0),
-			Color(GameStyle.FX_HDR_FIRE, 0.8) if i == 0 else flame, 1.4, true)
-	# 鸦身与对称金目（金目接 FX_HDR_FIRE 低档起辉）
-	draw_circle(Vector2.ZERO, 4.2, body)
-	draw_circle(Vector2(0, -5.2), 2.4, body)
-	draw_circle(Vector2(-1.1, -5.8), 0.85, Color(GameStyle.FX_HDR_FIRE, 0.85))
-	draw_circle(Vector2(1.1, -5.8), 0.85, Color(GameStyle.FX_HDR_FIRE, 0.85))
-	# 居中焰喙小点（替代原侧视单目布局，正面化对称）
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(-0.9, -4.6), Vector2(0.9, -4.6), Vector2(0.0, -3.2)
-	]), flame)
-	# 尾梢升起的火星余烬两粒（明灭上浮，添灵动感）
-	for i in range(2):
-		var t: float = fposmod(_anim_time * 0.9 + float(i) * 0.5, 1.0)
-		var ex: float = (float(i) - 0.5) * 4.0 + sin(_anim_time * 5.0 + float(i) * 2.0) * 1.2
-		draw_circle(Vector2(ex, 10.0 - t * 14.0), 0.8 * (1.0 - t * 0.5), Color(1.0, 0.65, 0.25, 0.6 * (1.0 - t)))
-
-# ----------------- 6. 玄武佩 (玄黄玉璧 + 云纹) -----------------
-func _draw_jade_pendant() -> void:
-	var bob := sin(_anim_time * 2.4) * 1.2
-	var off := Vector2(0, bob)
-	var jade := Color(0.42, 0.50, 0.30) if star < 2 else Color(0.62, 0.58, 0.30)
-	# 玉璧外环与内孔（璧形；内孔细环接 FX_HDR_EARTH 玄黄低档微光）
-	draw_arc(off, 10.5, 0, TAU, 24, jade, 3.4, true)
-	draw_arc(off, 4.0, 0, TAU, 16, Color(GameStyle.FX_HDR_EARTH, 0.55), 1.4, true)
-	# 璧面云纹两道
-	draw_arc(off + Vector2(0, -2.5), 6.8, PI * 0.15, PI * 0.85, 10, Color(0.90, 0.84, 0.55, 0.8), 1.0, true)
-	draw_arc(off + Vector2(0, 2.5), 6.8, PI * 1.15, PI * 1.85, 10, Color(0.90, 0.84, 0.55, 0.8), 1.0, true)
-	# 璧外对称流云一对（左右舒展，添仙气）
-	var cl := 0.45 + 0.20 * sin(_anim_time * 2.0)
-	draw_arc(off + Vector2(-11.5, 0), 3.2, PI * 0.5, PI * 1.6, 8, Color(0.75, 0.85, 0.60, cl), 1.0, true)
-	draw_arc(off + Vector2(11.5, 0), 3.2, -PI * 0.6, PI * 0.5, 8, Color(0.75, 0.85, 0.60, cl), 1.0, true)
-	# 顶部系绳结
-	draw_line(off + Vector2(0, -10.5), off + Vector2(0, -13.5), Color(0.70, 0.30, 0.20), 1.6, true)
-	# 绳结坠珠（轻微左右摆）
-	var bead_x: float = sin(_anim_time * 2.8) * 1.2
-	draw_line(off + Vector2(0, -13.5), off + Vector2(bead_x, -16.0), Color(0.70, 0.30, 0.20), 1.0, true)
-	draw_circle(off + Vector2(bead_x, -16.6), 1.0, Color(0.92, 0.86, 0.60, 0.9))
-
-# ----------------- 7. 灵珑 (祭坛召唤灵兽：焰形灵魄 + 对称流云飘带 + 灵动星尘) -----------------
-## 焰形灵魄「灵珑」（2026-10-20 按焰形灵魄式重做：去圆形侧视幼兽，改左右镜像对称）：
-## 上尖下圆的对称焰形灵身（非正圆点阵轮廓）+ 焰尖随呼吸轻摆 + 对称双眸/腮晕 +
-## 身侧对称流云飘带（_draw_ribbon）——「飘逸」主载体；配足下灵雾 / 三层晕圈 /
-## 6 粒轨道星尘 / 蓄力灵珠 / 出场辉光收束等成熟层。
-## 本体沿 y 轴镜像对称，面朝 +x 语义由蓄力球与移动灵尘承担，scale.x 翻转后形态不变；
-## speed_ratio 驱动飘带摆幅 / 灵纹转速 / 尾后灵尘；bank_angle 只倾躯体组（晕圈足雾不随动）；
-## 生命全由本体传达（hp_ratio 驱动灵目明暗、周身辉光与濒死对称裂纹）。
-func _draw_yuan_ling() -> void:
-	var body_col := Color(0.82, 0.94, 0.93)          ## 核心真身玉青
-	var belly_col := Color(0.95, 0.99, 0.99)         ## 月白内焰
-	var edge_col := Color(0.42, 0.76, 0.84)          ## 霜青描边
-	var glow_col := Color(0.58, 0.95, 0.98)          ## 泽青灵光
-
-	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）
-	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
-	# 濒死程度与灵息闪烁
-	var low: float = clampf((0.30 - hp_ratio) / 0.30, 0.0, 1.0)
-	var flicker: float = 1.0 - low * (0.5 + 0.5 * sin(_anim_time * 14.0)) * 0.45
-	# 出场辉光：1→0 自减，瞬间强闪与灵尘收束
-	var sg: float = clampf(spawn_glow, 0.0, 1.0)
-
-	# 悬浮呼吸起伏（灵身随呼吸整体上浮下沉，比圆形版更轻灵）
-	var bob: float = sin(_anim_time * 2.6) * 1.8
-	var pivot := Vector2(0.0, -2.0 + bob)
-	var core_r: float = 13.5 + 0.8 * sin(_anim_time * 2.4)
-
-	# 1. 足下祥云灵雾（贴地层，随呼吸微缩；出场时暴涨）
-	var mist_a: float = (0.12 + 0.05 * sin(_anim_time * 2.2)) * spirit * flicker + 0.12 * sg
-	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.5), 18.0 + 4.0 * sg, 4.0, 16), Color(0.52, 0.86, 0.92, mist_a))
-	draw_colored_polygon(_ellipse_polygon(Vector2(0.0, 16.5), 11.0, 2.6, 12), Color(0.76, 0.95, 0.98, mist_a * 0.85))
-
-	# 2. 周身三层多重灵光晕圈（深浅呼应，外柔内实）
-	var aura_a: float = (0.85 + 0.15 * sin(_anim_time * 3.0)) * spirit * flicker
-	_soft_glow(pivot, 28.0 + 10.0 * sg, Color(0.46, 0.85, 0.92, 0.12 * aura_a + 0.12 * sg), 4)
-	draw_arc(pivot, 24.0, 0.0, TAU, 32, Color(0.56, 0.92, 0.96, 0.12 * aura_a + 0.15 * sg), 1.1, true)
-	draw_arc(pivot, 18.5, 0.0, TAU, 28, Color(0.65, 0.95, 0.98, 0.16 * aura_a), 0.9, true)
-
-	# 3. 环绕自转星尘六粒（椭圆轨道，出场时从外围向核心聚拢）
-	for i in range(6):
-		var ang := _anim_time * 1.0 + float(i) * TAU / 6.0
-		var orbit_r: float = lerpf(21.0, 34.0, sg)
-		var mp := pivot + Vector2(cos(ang) * orbit_r, sin(ang) * orbit_r * 0.52)
-		var twk := 0.5 + 0.5 * sin(_anim_time * 3.4 + float(i) * 1.6)
-		draw_circle(mp, 1.3 + 0.5 * twk + 0.9 * sg, Color(0.72, 0.96, 1.0, (0.18 + 0.32 * twk) * spirit * flicker + 0.35 * sg))
-
-	# 4. 身侧舒展流云双羽飘带（左右各一组修长舒展的仙气飘带，宽幅扬波 —— 飘逸核心载体）
-	var ribbon_a: float = 0.55 * spirit * flicker
-	for side in [-1.0, 1.0]:
-		# 主流云带（自灵身中下侧向外下方大幅舒展，带长 24px）
-		var pts_main := PackedVector2Array()
-		for k in range(7):
-			var t := float(k) / 6.0
-			var px: float = side * (core_r * 0.70 + t * 20.0)
-			var py: float = core_r * 0.25 + t * 9.0 + sin(_anim_time * 3.2 + t * 3.4 + side * 1.0) * (2.0 + 3.5 * speed_ratio) * t
-			pts_main.append(pivot + Vector2(px, py))
-		_draw_ribbon(_rot_pts(pts_main, pivot, bank_angle), 4.2, 0.8, Color(0.60, 0.90, 0.96, ribbon_a))
-		# 内层月白亮带（同轨迹稍薄，透出丝缎质感）
-		_draw_ribbon(_rot_pts(pts_main, pivot, bank_angle), 2.0, 0.4, Color(0.95, 0.99, 1.0, ribbon_a * 1.3))
-		# 梢端凝聚的莹亮灵珠
-		var tip_p := _rot_one(pts_main[6], pivot, bank_angle)
-		draw_circle(tip_p, 1.4, Color(0.90, 0.99, 1.0, ribbon_a * 1.5))
-		# 次流云细带（稍短，偏上方扬起）
-		var pts_sub := PackedVector2Array()
-		for k in range(5):
-			var t := float(k) / 4.0
-			var px: float = side * (core_r * 0.80 + t * 14.0)
-			var py: float = -core_r * 0.10 + t * 4.0 + sin(_anim_time * 3.8 + t * 2.8 + side * 1.2) * (1.2 + 2.0 * speed_ratio) * t
-			pts_sub.append(pivot + Vector2(px, py))
-		_draw_ribbon(_rot_pts(pts_sub, pivot, bank_angle), 2.2, 0.5, Color(0.70, 0.94, 0.98, ribbon_a * 0.75))
-
-	# 5. 头顶对称仙羽灵角（左右一对修长晶莹的玉角，随呼吸轻摇，打破单纯水滴包子感）
-	var crest_sway: float = sin(_anim_time * 2.4) * (0.06 + 0.12 * speed_ratio)
-	for side in [-1.0, 1.0]:
-		var crest := PackedVector2Array([
-			pivot + Vector2(side * (core_r * 0.22), -core_r * 0.92),
-			pivot + Vector2(side * (core_r * 0.65) + crest_sway * 5.0, -core_r * 1.65),
-			pivot + Vector2(side * (core_r * 0.42), -core_r * 1.05)
-		])
-		draw_colored_polygon(_rot_pts(crest, pivot, bank_angle), Color(body_col.r, body_col.g, body_col.b, 0.9))
-		draw_polyline(_closed(_rot_pts(crest, pivot, bank_angle)), edge_col, 1.1, true)
-		# 羽心月白透光
-		var in_crest := PackedVector2Array([
-			pivot + Vector2(side * (core_r * 0.26), -core_r * 0.98),
-			pivot + Vector2(side * (core_r * 0.58) + crest_sway * 4.2, -core_r * 1.52),
-			pivot + Vector2(side * (core_r * 0.38), -core_r * 1.08)
-		])
-		draw_colored_polygon(_rot_pts(in_crest, pivot, bank_angle), Color(belly_col, 0.95))
-		# 羽尖仙光莹点
-		var tip_pos := _rot_one(pivot + Vector2(side * (core_r * 0.65) + crest_sway * 5.0, -core_r * 1.65), pivot, bank_angle)
-		draw_circle(tip_pos, 1.2, Color(glow_col, 0.85 * spirit * flicker))
-
-	# 6. 焰形灵身（上尖下圆对称轮廓：右半点阵镜像拼合，焰尖随呼吸轻摆）
-	var tip_sway: float = sin(_anim_time * 2.2) * (0.8 + 1.2 * speed_ratio)
-	var half: Array[Vector2] = [
-		Vector2(0.00, 1.02), Vector2(0.58, 0.88), Vector2(0.94, 0.42),
-		Vector2(0.90, -0.18), Vector2(0.66, -0.68), Vector2(0.34, -1.08), Vector2(0.00, -1.52)
-	]
-	var flame := PackedVector2Array()
-	for p in half:
-		var f: float = clampf(-p.y / 1.52, 0.0, 1.0)
-		flame.append(pivot + Vector2(p.x * core_r + tip_sway * f, p.y * core_r))
-	for i in range(half.size() - 2, -1, -1):
-		var p: Vector2 = half[i]
-		var f: float = clampf(-p.y / 1.52, 0.0, 1.0)
-		flame.append(pivot + Vector2(-p.x * core_r + tip_sway * f, p.y * core_r))
-	# 外层通透灵晕
-	draw_circle(pivot + Vector2(tip_sway * 0.3, -core_r * 0.2), core_r * 1.22, Color(0.70, 0.92, 0.94, 0.30 * spirit * flicker))
-	var flame_poly := _rot_pts(flame, pivot, bank_angle)
-	draw_colored_polygon(flame_poly, body_col)
-	draw_polyline(_closed(flame_poly), edge_col, 1.3, true)
-
-	# 内焰月白亮层（同轮廓缩小下沉，透出焰心）
-	var inner := PackedVector2Array()
-	for p in flame:
-		var q: Vector2 = pivot + (p - pivot) * 0.62 + Vector2(0.0, core_r * 0.14)
-		inner.append(q)
-	draw_colored_polygon(_rot_pts(inner, pivot, bank_angle), Color(belly_col, 0.85))
-
-	# 额心道印（精致对称水滴灵符，呼应修仙真身，添灵性）
-	var mark_pos := _rot_one(pivot + Vector2(0.0, -core_r * 0.58), pivot, bank_angle)
-	var mark_pts := PackedVector2Array([
-		mark_pos + Vector2(0, -2.4), mark_pos + Vector2(1.2, 0.6),
-		mark_pos + Vector2(0, 1.8), mark_pos + Vector2(-1.2, 0.6)
-	])
-	draw_colored_polygon(mark_pts, Color(edge_col, 0.85 * spirit * flicker))
-	draw_circle(mark_pos + Vector2(0, 0.4), 0.6, Color(1.0, 1.0, 1.0, 0.9 * spirit * flicker))
-
-	# 焰心内部流转的仙灵道纹（缓慢对旋，透射仙气）
-	var inner_r := core_r * 0.72
-	var rune_c := _rot_one(pivot + Vector2(0.0, core_r * 0.1), pivot, bank_angle)
-	draw_arc(rune_c, inner_r, 0.0, TAU, 24, Color(edge_col, 0.30 * spirit * flicker), 0.9, true)
-	var rune_a: float = (0.28 + 0.22 * sin(_anim_time * 2.2)) * spirit * flicker
-	var spin1: float = _anim_time * (0.7 + 1.4 * speed_ratio) + bank_angle * 1.5
-	var spin2: float = -_anim_time * (0.5 + 1.0 * speed_ratio) + bank_angle * 1.5
-	draw_arc(rune_c, inner_r * 0.68, spin1, spin1 + 2.2, 16, Color(glow_col, rune_a), 1.1, true)
-	draw_arc(rune_c, inner_r * 0.46, spin2, spin2 + 1.8, 14, Color(edge_col, rune_a * 0.75), 0.9, true)
-
-	# 7. 濒死裂纹（灵体受损浮现的霜青裂痕，左右镜像一对）
-	if low > 0.0:
-		var crack_col := Color(0.55, 0.94, 0.98, (0.35 + 0.45 * low) * flicker)
-		var crack_r := PackedVector2Array([
-			pivot + Vector2(4.5, -core_r * 0.62), pivot + Vector2(2.5, -core_r * 0.1), pivot + Vector2(5.0, core_r * 0.35)
-		])
-		draw_polyline(_rot_pts(crack_r, pivot, bank_angle), crack_col, 1.2, true)
-		var crack_l := PackedVector2Array()
-		for p in crack_r:
-			crack_l.append(Vector2(pivot.x - (p.x - pivot.x), p.y))
-		draw_polyline(_rot_pts(crack_l, pivot, bank_angle), crack_col, 1.0, true)
-
-	# 8. 灵动双眸（左右对称同大：黑青瞳底 + 泽青灵光环 + 双高光点，炯炯有神）
-	var eye_a: float = (0.30 + 0.70 * clampf(hp_ratio, 0.0, 1.0)) * flicker
-	for side in [-1.0, 1.0]:
-		var eye_pos := _rot_one(pivot + Vector2(side * 4.6, -core_r * 0.10), pivot, bank_angle)
-		var mir := Vector2(-side, 1.0)  ## 高光点随侧镜像
-		draw_circle(eye_pos, 3.2, Color(glow_col, 0.25 * eye_a))
-		draw_circle(eye_pos, 2.2, Color(0.12, 0.32, 0.38, 0.95 * eye_a))
-		draw_circle(eye_pos, 1.15, Color(glow_col, eye_a))
-		draw_circle(eye_pos + Vector2(-0.55, -0.6) * Vector2(1, 1), 0.65, Color(1.0, 1.0, 1.0, eye_a))
-		draw_circle(eye_pos + Vector2(0.5, 0.38) * mir, 0.35, Color(1.0, 1.0, 1.0, 0.75 * eye_a))
-
-	# 腮边淡淡仙晕（左右对称粉玉红晕，增加生动灵气感）
-	draw_circle(_rot_one(pivot + Vector2(-7.6, core_r * 0.22), pivot, bank_angle), 2.0, Color(0.98, 0.78, 0.80, 0.30 * spirit * flicker))
-	draw_circle(_rot_one(pivot + Vector2(7.6, core_r * 0.22), pivot, bank_angle), 2.0, Color(0.98, 0.78, 0.80, 0.30 * spirit * flicker))
-
-	# 8. 面前蓄力灵光球（三连灵羽弹蓄力：随 charge_ratio 膨胀发亮，伴随三颗旋绕光珠；白芯接 FX_HDR_CORE 起辉）
-	if charge_ratio > 0.01:
-		var cp := _rot_one(pivot + Vector2(18.5, 0.0), pivot, bank_angle)
-		var cr: float = 2.0 + 5.0 * charge_ratio
-		var ca: float = charge_ratio * spirit * flicker
-		_soft_glow(cp, cr * 2.0, Color(0.52, 0.90, 0.98, 0.20 * ca))
-		draw_circle(cp, cr, Color(0.72, 0.95, 0.98, 0.65 * ca))
-		draw_circle(cp, cr * 0.55, Color(GameStyle.FX_HDR_CORE, 0.90 * ca))
-		for i in range(3):
-			var sa := _anim_time * 7.0 + float(i) * TAU / 3.0
-			draw_circle(cp + Vector2(cos(sa), sin(sa)) * (cr + 3.0), 1.0, Color(0.85, 0.98, 1.0, 0.7 * ca))
-
-	# 9. 移动灵尘（尾后散逸的三粒流光灵珠，随速度显隐）
-	if speed_ratio > 0.2:
-		var dust_a := 0.45 * speed_ratio
-		for i in range(3):
-			var di := float(i)
-			var mp := pivot + Vector2(-core_r - 4.0 - di * 4.8, core_r * 0.2 + di * 1.8 + sin(_anim_time * 7.5 + di * 1.2) * 1.8)
-			draw_circle(mp, 1.9 - di * 0.4, Color(0.68, 0.92, 0.98, dust_a * (1.0 - di * 0.26)))
-
-## 椭圆多边形采样（足下灵雾、灵珑圆身等共用）
+## 椭圆多边形采样（灵珑足下硬边影块）
 func _ellipse_polygon(center: Vector2, rx: float, ry: float, segs: int = 16) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	for i in range(segs):
-		var a := float(i) / float(segs) * TAU
+		var a: float = float(i) / float(segs) * TAU
 		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
 	return pts
 
-## 闭合折线（多边形描边用：末点补回首点）
-func _closed(pts: PackedVector2Array) -> PackedVector2Array:
-	var out := pts.duplicate()
-	out.append(pts[0])
-	return out
-
-## 沿折线生成由 w0 渐变到 w1 的带状多边形并填充（飘带/缎带状部件共用）
-func _draw_ribbon(pts: PackedVector2Array, w0: float, w1: float, col: Color) -> void:
-	var n := pts.size()
-	if n < 2:
-		return
-	var left := PackedVector2Array()
-	var right := PackedVector2Array()
-	for i in range(n):
-		var dir: Vector2
-		if i == 0:
-			dir = pts[1] - pts[0]
-		elif i == n - 1:
-			dir = pts[n - 1] - pts[n - 2]
-		else:
-			dir = pts[i + 1] - pts[i - 1]
-		var nor := dir.normalized().orthogonal() * (lerpf(w0, w1, float(i) / float(n - 1)) * 0.5)
-		left.append(pts[i] + nor)
-		right.append(pts[i] - nor)
-	var poly := PackedVector2Array(left)
-	for i in range(n - 1, -1, -1):
-		poly.append(right[i])
-	draw_colored_polygon(poly, col)
-
-## 躯体组统一绕 pivot 旋转 bank（晕圈/足雾不转 —— 悬浮侧倾只倾身体）
+## 躯体组统一绕 pivot 旋转 bank（足影/出场环不转 —— 悬浮侧倾只倾身体）
 func _rot_pts(pts: PackedVector2Array, pivot: Vector2, a: float) -> PackedVector2Array:
 	if absf(a) < 0.0005:
 		return pts
@@ -562,207 +166,492 @@ func _rot_pts(pts: PackedVector2Array, pivot: Vector2, a: float) -> PackedVector
 func _rot_one(p: Vector2, pivot: Vector2, a: float) -> Vector2:
 	return pivot + (p - pivot).rotated(a)
 
-## 多层同心圆柔光（HollowKnightEnemyRenderer.draw_soft_glow 的轻量同款，内亮外淡）
-func _soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) -> void:
-	for i in range(layers):
-		var f := float(i + 1) / float(layers)
-		draw_circle(pos, radius * f, Color(col.r, col.g, col.b, col.a * (1.0 - f * 0.7)))
+## 绕原点整体旋转（铃/剑/石等自身摆动共用，复用 _rot_pts）
+func _rot_all(pts: PackedVector2Array, a: float) -> PackedVector2Array:
+	return _rot_pts(pts, Vector2.ZERO, a)
 
-# ----------------- 8. 金鸣铃 (悬空金铃 + 摆动铃舌 + 云雷纹) -----------------
-func _draw_golden_bell() -> void:
-	var sway := sin(_anim_time * 3.0) * 0.12
-	var gold := Color(0.95, 0.80, 0.30) if star >= 2 else Color(0.72, 0.60, 0.26)
-	# 吊绳
-	draw_line(Vector2(0, -14), Vector2(0, -9.5), Color(0.60, 0.50, 0.22), 1.4, true)
-	# 铃身（上窄下阔钟形，随 sway 轻摆）
+# ----------------- 1. 灵蝶（木 · 硬边四翅 + 翅尖撞色） -----------------
+## 旧画法转化：透光羽翼/翅脉/伴飞灵粉/梢端莹光全砍。四翅改平涂硬边多边形，
+## 前翅尖一整块撞色三角（唯一的「亮处」），蝶身压成粗墨竖杆 + 方头。
+func _draw_spirit_butterfly() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	# 振翅周期（与旧拍同频，约 5Hz）
+	var flap_x := 0.40 + 0.60 * absf(sin(_anim_time * 12.0))
+	# 后翅（主色暗档，先画压在前翅下面）
+	for side in [-1.0, 1.0]:
+		var hind := PackedVector2Array([
+			Vector2(side * 1.0, 2.0), Vector2(side * 10.0 * flap_x, 5.0),
+			Vector2(side * 7.0 * flap_x, 11.0), Vector2(side * 0.5, 5.5),
+		])
+		BC.flat(self, hind, body.darkened(0.22), 1.4)
+	# 前翅（主色大块）+ 翅尖撞色三角（随翅收展）
+	for side in [-1.0, 1.0]:
+		var fore := PackedVector2Array([
+			Vector2(side * 1.0, -1.0), Vector2(side * 14.0 * flap_x, -12.0),
+			Vector2(side * 11.0 * flap_x, -1.5), Vector2(side * 1.5, 2.0),
+		])
+		BC.flat(self, fore, body, 1.8)
+		var tip_tri := PackedVector2Array([
+			Vector2(side * 14.0 * flap_x, -12.0), Vector2(side * 11.0 * flap_x, -1.5),
+			Vector2(side * 7.0 * flap_x, -6.0),
+		])
+		BC.flat(self, tip_tri, accent, 1.0)
+	# 躯干粗墨竖杆 + 方头
+	BC.bar(self, Vector2(0, -7.0), Vector2(0, 7.0), 3.0, BC.INK)
+	BC.square(self, Vector2(0, -8.8), 1.8, body.darkened(0.40), 1.2)
+	# 触角（两根硬墨线）
+	draw_line(Vector2(0, -10.0), Vector2(-4.0, -13.5), BC.INK, 1.4, true)
+	draw_line(Vector2(0, -10.0), Vector2(4.0, -13.5), BC.INK, 1.4, true)
+	# 升星方钉（左右前翅中段）
+	BC.star_studs(self, star, Vector2(-5.0, -5.5), Vector2(5.0, -5.5), accent)
+
+# ----------------- 2. 寒泉玉莲（水 · 双层八角莲盘 + 撞色莲心） -----------------
+## 旧画法转化：八瓣凝露/反旋光环/HDR 灵蕊全砍。改双层八角硬边莲盘（内层转 22.5°
+## 压出层叠瓣感），莲心一枚撞色圆盘 + 墨方钉。
+func _draw_ice_lotus() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var rot := _anim_time * 1.2
+	# 外层八角莲盘（慢旋）
+	BC.flat(self, _ngon(Vector2.ZERO, 13.5, 8, rot), body, 2.0)
+	# 内层莲盘（转 22.5° 错瓣，主色暗档 —— 层叠瓣）
+	BC.flat(self, _ngon(Vector2.ZERO, 8.8, 8, rot + PI / 8.0), body.darkened(0.28), 1.4)
+	# 八道墨色瓣缝（外环放射短墨线，把圆盘读成八瓣莲）
+	for i in range(8):
+		var a: float = rot + PI / 8.0 + TAU * float(i) / 8.0
+		draw_line(Vector2(cos(a), sin(a)) * 8.0, Vector2(cos(a), sin(a)) * 12.6, BC.INK, 1.6, true)
+	# 莲心（撞色圆盘 + 小墨方芯 —— 芯用裸方点，方钉描边会吞掉撞色）
+	BC.disc(self, Vector2.ZERO, 4.8, accent, 1.4)
+	draw_rect(Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
+	# 升星方钉（外盘对瓣位置）
+	BC.star_studs(self, star, Vector2(10.5, 0.0).rotated(rot), Vector2(-10.5, 0.0).rotated(rot), accent)
+
+# ----------------- 3. 混元钟（土 · 宽钟身 + 口缘撞色带） -----------------
+## 旧画法转化：云雷横纹/兽面呼吸符点/钟声余韵音弧全砍。宽钟身平涂 + 口缘一整条
+## 撞色带 + 墨拱钮 + 墨方符钉，整钟绕顶轻摆（摆感保留）。
+func _draw_ancient_bell() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var sway := sin(_anim_time * 2.2) * 0.10
+	# 钟钮拱（低分段硬折半环：墨描 + 主色芯，深底上也能读出钮）
+	var loop := PackedVector2Array()
+	for i in range(5):
+		var a: float = PI + PI * float(i) / 4.0
+		loop.append(Vector2(0, -10.0) + Vector2(cos(a), sin(a)) * 3.4)
+	draw_polyline(_rot_all(loop, sway), BC.INK, 3.6, true)
+	draw_polyline(_rot_all(loop, sway), body, 1.6, true)
+	# 钟身（上窄下阔硬梯形，随 sway 摆；拔高钟身避免读成斗笠）
 	var bell := PackedVector2Array([
-		Vector2(-4.5, -9.5).rotated(sway),
-		Vector2(4.5, -9.5).rotated(sway),
-		Vector2(7.5, 4.0).rotated(sway),
-		Vector2(8.5, 7.0).rotated(sway),
-		Vector2(-8.5, 7.0).rotated(sway),
-		Vector2(-7.5, 4.0).rotated(sway)
+		Vector2(-5.0, -10.0), Vector2(5.0, -10.0),
+		Vector2(10.0, 6.5), Vector2(11.5, 10.0),
+		Vector2(-11.5, 10.0), Vector2(-10.0, 6.5),
 	])
-	draw_colored_polygon(bell, Color(0.30, 0.26, 0.14))
-	draw_polyline(bell, gold, 1.4, true)
-	# 铃口缘与云雷横纹（口缘亮线接 FX_HDR_METAL 起辉，铃的「一眼金」）
-	var rim_y := 7.0
-	draw_line(Vector2(-8.5, rim_y).rotated(sway), Vector2(8.5, rim_y).rotated(sway), Color(GameStyle.FX_HDR_METAL, 0.85), 1.8, true)
-	draw_line(Vector2(-6.5, -2.0).rotated(sway), Vector2(6.5, -2.0).rotated(sway), Color(0.88, 0.76, 0.38, 0.7), 1.0, true)
-	# 铃舌（随摆反向荡；舌珠接 FX_HDR_METAL 低档起辉）
-	var clapper_x := -sway * 40.0
-	draw_line(Vector2(clapper_x * 0.4, 4.0).rotated(sway), Vector2(clapper_x, 10.0), gold, 1.4, true)
-	draw_circle(Vector2(clapper_x, 11.0), 1.8, Color(GameStyle.FX_HDR_METAL, 0.85))
-	# 铃身符点
-	draw_circle(Vector2(0, -5.5).rotated(sway), 1.3, Color(0.98, 0.92, 0.60, 0.9))
-	# 铃音荡开的对称声波弧（随舌摆节奏明灭）
-	var snd_a := 0.30 * (0.5 + 0.5 * sin(_anim_time * 3.0))
-	draw_arc(Vector2(0, 2.0).rotated(sway), 12.5, PI * 0.25, PI * 0.75, 12, Color(0.95, 0.85, 0.50, snd_a), 0.9, true)
-	draw_arc(Vector2(0, 2.0).rotated(sway), 12.5, PI * 1.25, PI * 1.75, 12, Color(0.95, 0.85, 0.50, snd_a), 0.9, true)
-
-# ----------------- 9. 木灵偶 (青木偶人 + 灵藤关节 + 生机符印) -----------------
-func _draw_wood_puppet() -> void:
-	var bob := sin(_anim_time * 2.6) * 1.2
-	var off := Vector2(0, bob)
-	var wood := Color(0.52, 0.40, 0.24) if star < 2 else Color(0.64, 0.50, 0.30)
-	var vine := Color(0.35, 0.75, 0.40)
-	# 头（圆木雕）与躯干
-	draw_circle(off + Vector2(0, -7.0), 4.0, wood)
-	var torso := PackedVector2Array([
-		off + Vector2(-3.5, -3.0), off + Vector2(3.5, -3.0),
-		off + Vector2(2.5, 6.0), off + Vector2(-2.5, 6.0)
+	BC.flat(self, _rot_all(bell, sway), body, 2.2)
+	# 口缘撞色带（钟的「一眼亮」，随 sway 摆）
+	var rim := PackedVector2Array([
+		Vector2(-10.2, 6.0), Vector2(10.2, 6.0), Vector2(11.5, 10.0), Vector2(-11.5, 10.0),
 	])
-	draw_colored_polygon(torso, wood)
-	draw_polyline(torso, vine, 1.0, true)
-	# 双臂（灵藤束连，微张摆动）
-	var arm_sw := sin(_anim_time * 3.4) * 2.0
-	draw_line(off + Vector2(-3.0, -1.5), off + Vector2(-8.5, 1.5 + arm_sw), vine, 1.6, true)
-	draw_line(off + Vector2(3.0, -1.5), off + Vector2(8.5, 1.5 - arm_sw), vine, 1.6, true)
-	# 双腿
-	draw_line(off + Vector2(-1.8, 6.0), off + Vector2(-2.6, 11.0), vine, 1.6, true)
-	draw_line(off + Vector2(1.8, 6.0), off + Vector2(2.6, 11.0), vine, 1.6, true)
-	# 胸口生机符印（呼吸明暗；接 FX_HDR_WOOD 青碧起辉）
-	var mark_a := 0.55 + 0.3 * sin(_anim_time * 3.0)
-	draw_circle(off + Vector2(0, 1.0), 1.6, Color(GameStyle.FX_HDR_WOOD, 0.8 * mark_a))
-	# 头顶对称灵芽双叶（替代单侧单芽，左右舒展）
-	draw_line(off + Vector2(0, -11.0), off + Vector2(-2.2, -13.8), Color(0.55, 0.95, 0.50), 1.3, true)
-	draw_line(off + Vector2(0, -11.0), off + Vector2(2.2, -13.8), Color(0.55, 0.95, 0.50), 1.3, true)
-	draw_circle(off + Vector2(-2.2, -13.8), 1.0, Color(0.65, 1.0, 0.60, 0.85))
-	draw_circle(off + Vector2(2.2, -13.8), 1.0, Color(0.65, 1.0, 0.60, 0.85))
-	# 灵藤关节亮点（四肢关节，呼吸微光）
-	for jp in [Vector2(-3.0, -1.5), Vector2(3.0, -1.5), Vector2(-1.8, 6.0), Vector2(1.8, 6.0)]:
-		draw_circle(off + jp, 0.8, Color(0.60, 0.95, 0.55, 0.5 * mark_a))
+	BC.flat(self, _rot_all(rim, sway), accent, 1.2)
+	# 钟腹墨方符钉（替代旧兽面呼吸点）
+	BC.square(self, Vector2(0, 0.0).rotated(sway), 2.0, BC.INK, 1.0)
+	# 升星方钉（钟腹两肩）
+	BC.star_studs(self, star, Vector2(-4.5, -4.5).rotated(sway), Vector2(4.5, -4.5).rotated(sway), accent)
 
-# ----------------- 10. 冰魄珠 (寒冰宝珠 + 环绕冰晶棱片 + 雪亮冰核) -----------------
-func _draw_ice_pearl() -> void:
-	var rot := _anim_time * 1.8
-	var ice := Color(0.55, 0.85, 1.0, 0.9) if star < 2 else Color(0.75, 0.95, 1.0)
-	# 珠体（半透明幽蓝）与内核（雪亮冰核接 FX_HDR_WATER 低档起辉）
-	draw_circle(Vector2.ZERO, 7.0, Color(0.40, 0.70, 0.95, 0.45))
-	draw_circle(Vector2.ZERO, 7.0, Color(0.55, 0.85, 1.0, 0.12))
-	draw_arc(Vector2.ZERO, 7.0, 0, TAU, 20, ice, 1.4, true)
-	draw_circle(Vector2(0.5, -0.5), 2.2, Color(GameStyle.FX_HDR_WATER, 0.8))
-	# 六片环绕冰晶棱片（自转）
-	for i in range(6):
-		var ang := float(i) / 6.0 * TAU + rot
-		var c := Vector2(cos(ang), sin(ang)) * 10.5
-		var spike := PackedVector2Array([
-			c + Vector2(cos(ang + 0.5), sin(ang + 0.5)) * 2.6,
-			c + Vector2(cos(ang), sin(ang)) * 4.6,
-			c + Vector2(cos(ang - 0.5), sin(ang - 0.5)) * 2.6
-		])
-		draw_colored_polygon(spike, Color(0.75, 0.95, 1.0, 0.85))
-	# 内圈三片反旋小冰棱（与外圈对旋，添层次）
+# ----------------- 4. 昊金轮（金 · 旋转六棱轮盘 + 贯穿墨辐） -----------------
+## 旧画法转化：反旋虚光轮/辐梢流光点/HDR 轴心全砍。六棱轮盘整体旋转（硬边自转感），
+## 三根贯穿墨辐 + 撞色轴心盘。
+func _draw_golden_wheel() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var rot := _anim_time * 4.0
+	# 六棱轮盘（整体旋转）
+	BC.flat(self, _ngon(Vector2.ZERO, 13.0, 6, rot), body, 2.4)
+	# 三根贯穿辐条（六辐，粗墨，随轮转）
 	for i in range(3):
-		var ang := float(i) / 3.0 * TAU - rot * 1.4
-		var c := Vector2(cos(ang), sin(ang)) * 4.6
-		var spike := PackedVector2Array([
-			c + Vector2(cos(ang + 0.6), sin(ang + 0.6)) * 1.6,
-			c + Vector2(cos(ang), sin(ang)) * 2.8,
-			c + Vector2(cos(ang - 0.6), sin(ang - 0.6)) * 1.6
-		])
-		draw_colored_polygon(spike, Color(0.88, 0.98, 1.0, 0.7))
-	# 寒雾微光与雪芒闪烁
-	draw_arc(Vector2.ZERO, 13.0, 0, TAU, 24, Color(0.70, 0.92, 1.0, 0.18), 1.0, true)
-	for i in range(2):
-		var ang := _anim_time * 2.6 + float(i) * PI
-		var sp := Vector2(cos(ang), sin(ang)) * 13.0
-		var twk := 0.5 + 0.5 * sin(_anim_time * 5.2 + float(i) * 2.6)
-		draw_circle(sp, 0.7 + 0.4 * twk, Color(0.95, 1.0, 1.0, 0.25 + 0.35 * twk))
+		var a: float = rot + PI * float(i) / 3.0
+		var dir := Vector2(cos(a), sin(a))
+		draw_line(-dir * 11.0, dir * 11.0, BC.INK, 2.2, true)
+	# 轴心撞色盘 + 小墨方芯（裸方点，方钉描边会吞掉撞色）
+	BC.disc(self, Vector2.ZERO, 4.0, accent, 1.4)
+	draw_rect(Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
+	# 升星方钉（两根辐条中段，随轮转）
+	var sa: float = rot + PI / 6.0
+	var sb: float = rot + PI + PI / 6.0
+	BC.star_studs(self, star, Vector2(cos(sa), sin(sa)) * 7.5, Vector2(cos(sb), sin(sb)) * 7.5, accent)
 
-# ----------------- 11. 赤炎萤 (流火萤虫 + 薄透火翼 + 尾腹火光) -----------------
-func _draw_fire_firefly() -> void:
-	var wing_flap := sin(_anim_time * 14.0)
-	var flap_x := 0.4 + 0.6 * absf(wing_flap)
-	var shell := Color(0.72, 0.26, 0.10) if star < 2 else Color(0.88, 0.36, 0.12)
-	# 薄透火翼（两扇，扑动）
+# ----------------- 5. 离火鸦（火 · 硬翼 + 焰尾三杆） -----------------
+## 旧画法转化：透光火羽/焰喙 HDR 金目/上浮火星余烬全砍。双翼平涂硬三角随扑动收展，
+## 头身合一块暗档硬边剪影（圆盘小件会被粗墨环吃掉），撞色留给焰喙 + 金目 + 焰尾三杆。
+func _draw_fire_crow() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var flap_x := 0.45 + 0.55 * absf(sin(_anim_time * 11.0))
+	# 双翼（主色硬三角，扑动）
 	for side in [-1.0, 1.0]:
 		var wing := PackedVector2Array([
-			Vector2(side * 1.5, -3.0),
-			Vector2(side * 9.0 * flap_x, -10.0),
-			Vector2(side * 7.5 * flap_x, -3.5)
+			Vector2(side * 1.5, -2.0), Vector2(side * 13.0 * flap_x, -9.5),
+			Vector2(side * 9.0 * flap_x, 0.5), Vector2(side * 1.5, 2.5),
 		])
-		draw_colored_polygon(wing, Color(1.0, 0.55, 0.20, 0.35))
-		draw_polyline(wing, Color(1.0, 0.75, 0.35, 0.7), 0.9, true)
-	# 甲壳躯干（头小腹大）
-	draw_circle(Vector2(0, -3.5), 2.6, Color(0.35, 0.14, 0.08))
-	var abdomen := PackedVector2Array([
-		Vector2(-3.4, -1.0), Vector2(3.4, -1.0), Vector2(2.4, 5.5), Vector2(-2.4, 5.5)
-	])
-	draw_colored_polygon(abdomen, shell)
-	draw_polyline(abdomen, Color(1.0, 0.55, 0.20, 0.8), 1.0, true)
-	# 尾腹火光（呼吸闪烁；灯焰接 FX_HDR_FIRE 起辉，萤虫的一眼点）
-	var lamp_a := 0.65 + 0.35 * sin(_anim_time * 6.0)
-	draw_circle(Vector2(0, 4.2), 2.2, Color(GameStyle.FX_HDR_FIRE, 0.85 * lamp_a))
-	draw_circle(Vector2(0, 4.2), 3.6, Color(1.0, 0.55, 0.15, 0.18 * lamp_a))
-	# 灯焰热晕外环（随呼吸荡开的薄光环）
-	draw_arc(Vector2(0, 4.2), 5.5 + 1.2 * sin(_anim_time * 6.0), 0, TAU, 16, Color(1.0, 0.70, 0.30, 0.16 * lamp_a), 0.8, true)
-	# 触须
-	draw_line(Vector2(-1.0, -5.6), Vector2(-2.6, -8.0), Color(0.45, 0.18, 0.10), 1.0, true)
-	draw_line(Vector2(1.0, -5.6), Vector2(2.6, -8.0), Color(0.45, 0.18, 0.10), 1.0, true)
-	# 触须梢端莹光点
-	draw_circle(Vector2(-2.6, -8.0), 0.6, Color(1.0, 0.75, 0.40, 0.7))
-	draw_circle(Vector2(2.6, -8.0), 0.6, Color(1.0, 0.75, 0.40, 0.7))
+		BC.flat(self, wing, body, 1.6)
+	# 焰尾三杆（撞色，随相位摆）
+	for i in range(3):
+		var sway: float = sin(_anim_time * 7.0 + float(i) * 1.1) * 1.6
+		var bx: float = (float(i) - 1.0) * 3.0
+		BC.bar(self, Vector2(bx, 5.0), Vector2(bx * 1.4 + sway, 11.5), 2.2, accent)
+	# 头身一体剪影（主色暗档，一块读出头与腹）
+	var deep := body.darkened(0.35)
+	BC.flat(self, PackedVector2Array([
+		Vector2(0.0, -9.0), Vector2(2.8, -7.6), Vector2(3.4, -4.6), Vector2(4.6, -0.5),
+		Vector2(3.0, 5.0), Vector2(-3.0, 5.0), Vector2(-4.6, -0.5),
+		Vector2(-3.4, -4.6), Vector2(-2.8, -7.6),
+	]), deep, 1.4)
+	# 撞色焰喙（顶出墨描边之外的硬三角）
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-1.5, -8.0), Vector2(1.5, -8.0), Vector2(0.0, -11.0),
+	]), accent)
+	# 金目两粒（硬边方点，落在头身亮芯内）
+	draw_rect(Rect2(Vector2(-2.0, -6.4), Vector2(1.5, 1.5)), accent)
+	draw_rect(Rect2(Vector2(0.5, -6.4), Vector2(1.5, 1.5)), accent)
+	# 升星方钉（腹身两侧）
+	BC.star_studs(self, star, Vector2(-2.4, 1.5), Vector2(2.4, 1.5), accent)
 
-# ----------------- 12. 土灵石 (符文灵石 + 山岩棱面 + 镇岳古符) -----------------
-func _draw_earth_stone() -> void:
-	var rot := sin(_anim_time * 1.6) * 0.15
-	var rock := Color(0.45, 0.38, 0.26) if star < 2 else Color(0.56, 0.47, 0.32)
-	# 石体（山岩断面，近对称六棱，微晃）
-	var stone := PackedVector2Array([
-		Vector2(-6.5, -7.5).rotated(rot), Vector2(0.0, -9.8).rotated(rot),
-		Vector2(6.5, -7.5).rotated(rot), Vector2(8.5, 2.0).rotated(rot),
-		Vector2(3.0, 9.5).rotated(rot), Vector2(-3.0, 9.5).rotated(rot),
-		Vector2(-8.5, 2.0).rotated(rot)
+# ----------------- 6. 玄武佩（土 · 双环玉璧 + 墨系绳） -----------------
+## 旧画法转化：璧面云纹/对称流云/绳结坠珠莹光全砍。主色宽环 + 撞色细环的双环璧，
+## 墨短绳 + 墨方坠，环上布硬边方钉（悬浮起伏保留）。
+func _draw_jade_pendant() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var off := Vector2(0, sin(_anim_time * 2.4) * 1.2)
+	# 外璧宽环（主色）+ 内璧细环（撞色）
+	BC.ring(self, off, 10.5, 3.6, body)
+	BC.ring(self, off, 5.6, 2.2, accent)
+	# 系绳（墨短杆）与绳结坠（墨方钉，轻摆）
+	BC.bar(self, off + Vector2(0, -10.5), off + Vector2(0, -13.8), 2.0, BC.INK)
+	var bead_x := sin(_anim_time * 2.8) * 1.2
+	BC.square(self, off + Vector2(bead_x, -15.4), 1.6, BC.INK, 1.0)
+	# 璧环硬边布点：左右墨钉 + 升星撞色钉（上下）
+	BC.square(self, off + Vector2(-10.5, 0.0), 1.4, BC.INK, 1.0)
+	BC.square(self, off + Vector2(10.5, 0.0), 1.4, BC.INK, 1.0)
+	BC.star_studs(self, star, off + Vector2(0.0, 10.5), off + Vector2(0.0, -10.5), accent)
+
+# ----------------- 7. 灵珑（祭坛灵兽：平涂版焰形灵魄） -----------------
+## 焰形灵魄「灵珑」野兽派转化（2026-10-24 平涂重绘）：保留上尖下圆的左右镜像对称
+## 焰形真身与全部状态输入，画风换硬边平涂 ——
+##   · 焰身一大块灵青平涂 + 粗墨描边 + 硬投影，内焰压一块月白（唯一亮层，平涂不透光）；
+##   · 头顶双角改撞色硬三角（打碎水滴剪影），身侧飘带改两段式硬折墨描杆（甩幅随 speed_ratio）；
+##   · 三层柔光晕圈 / 轨道光尘星子 / 焰心对旋道纹 / 额心道印 / 腮晕全部砍除；
+##   · 足下灵雾改硬边影块（低分段椭圆平涂暗影），出场辉光改撞色六角环收拢 + 方钉内聚；
+##   · 生命由灵目墨色浓淡与濒死墨裂纹传达，蓄力灵光球改撞色圆盘 + 墨方钉旋绕。
+## 本体沿 y 轴镜像对称，面朝 +x 语义由蓄力球与移动灵尘承担，scale.x 翻转后形态不变；
+## bank_angle 只倾躯体组（足影/出场环不随动），speed_ratio 驱动飘带甩幅 / 焰尖摆 / 尾后灵尘。
+func _draw_yuan_ling() -> void:
+	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）；濒死程度与灵息闪烁
+	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
+	var low: float = clampf((0.30 - hp_ratio) / 0.30, 0.0, 1.0)
+	var flicker: float = 1.0 - low * (0.5 + 0.5 * sin(_anim_time * 14.0)) * 0.45
+	# 出场辉光：1→0 自减，硬边现身一拍
+	var sg: float = clampf(spawn_glow, 0.0, 1.0)
+	# 常用色（撞色 / 墨，带 alpha 派生色多处用，先取好）
+	var acc := LING_ACCENT
+	var ink := BC.INK
+
+	# 悬浮呼吸起伏（灵身随呼吸整体上浮下沉，与旧拍同频）
+	var bob: float = sin(_anim_time * 2.6) * 1.8
+	var pivot := Vector2(0.0, -2.0 + bob)
+	var core_r: float = 13.5 + 0.8 * sin(_anim_time * 2.4)
+
+	# 1. 足下硬边影块（贴地低分段椭圆平涂暗影，出场时外扩；不随 bank）
+	draw_colored_polygon(
+		_ellipse_polygon(Vector2(0.0, 16.5), 16.0 + 6.0 * sg, 3.6, 8),
+		Color(ink.r, ink.g, ink.b, BC.SHADOW.a * (0.55 + 0.25 * sg)))
+
+	# 2. 出场现身一拍（spawn_glow 1→0：撞色硬边六角环向本体收拢 + 六颗方钉内聚；不随 bank）
+	if sg > 0.01:
+		var ring_r: float = lerpf(8.0, 30.0, sg)
+		var hexa := PackedVector2Array()
+		for i in range(7):
+			var a: float = TAU * float(i) / 6.0 - PI * 0.5
+			hexa.append(pivot + Vector2(cos(a), sin(a)) * ring_r)
+		draw_polyline(hexa, Color(acc.r, acc.g, acc.b, sg), 2.4, true)
+		for i in range(6):
+			var a2: float = TAU * float(i) / 6.0 + _anim_time * 2.0
+			var sq_c := pivot + Vector2(cos(a2), sin(a2)) * ring_r
+			var hs: float = 1.2 + 1.2 * sg
+			draw_rect(Rect2(sq_c - Vector2(hs, hs), Vector2(hs * 2.0, hs * 2.0)),
+				Color(acc.r, acc.g, acc.b, sg))
+
+	# 3. 身侧硬折飘带（左右各一：两段式墨描杆，甩幅随 speed_ratio —— 「态度」载体；随 bank）
+	var whip: float = 2.0 + 5.0 * speed_ratio
+	for side in [-1.0, 1.0]:
+		var sway1: float = sin(_anim_time * 6.0 + side * 1.3) * whip
+		var sway2: float = sin(_anim_time * 6.0 + side * 1.3 + 0.9) * whip
+		var rib := PackedVector2Array([
+			pivot + Vector2(side * core_r * 0.55, core_r * 0.28),
+			pivot + Vector2(side * (core_r * 0.55 + 8.0), core_r * 0.55 + sway1 * 0.5),
+			pivot + Vector2(side * (core_r * 0.55 + 15.0), core_r * 0.95 + sway2),
+		])
+		rib = _rot_pts(rib, pivot, bank_angle)
+		BC.bar(self, rib[0], rib[1], 2.6, LING_DEEP)
+		BC.bar(self, rib[1], rib[2], 1.8, LING_DEEP)
+
+	# 4. 头顶双角（撞色硬三角，随呼吸轻摇，打碎水滴剪影；随 bank）
+	var crest_sway: float = sin(_anim_time * 2.4) * (0.06 + 0.12 * speed_ratio)
+	for side in [-1.0, 1.0]:
+		var horn := PackedVector2Array([
+			pivot + Vector2(side * core_r * 0.18, -core_r * 0.86),
+			pivot + Vector2(side * core_r * 0.62 + crest_sway * 5.0, -core_r * 1.62),
+			pivot + Vector2(side * core_r * 0.44, -core_r * 0.98),
+		])
+		BC.flat(self, _rot_pts(horn, pivot, bank_angle), acc, 1.4)
+
+	# 5. 焰形灵身（上尖下圆对称轮廓：右半点阵镜像拼合，焰尖随呼吸轻摆；随 bank）
+	var tip_sway: float = sin(_anim_time * 2.2) * (0.8 + 1.2 * speed_ratio)
+	var half: Array[Vector2] = [
+		Vector2(0.00, 1.02), Vector2(0.58, 0.88), Vector2(0.94, 0.42),
+		Vector2(0.90, -0.18), Vector2(0.66, -0.68), Vector2(0.34, -1.08), Vector2(0.00, -1.52),
+	]
+	var flame := PackedVector2Array()
+	for p in half:
+		var f: float = clampf(-p.y / 1.52, 0.0, 1.0)
+		flame.append(pivot + Vector2(p.x * core_r + tip_sway * f, p.y * core_r))
+	for i in range(half.size() - 2, -1, -1):
+		var p2: Vector2 = half[i]
+		var f2: float = clampf(-p2.y / 1.52, 0.0, 1.0)
+		flame.append(pivot + Vector2(-p2.x * core_r + tip_sway * f2, p2.y * core_r))
+	BC.flat(self, _rot_pts(flame, pivot, bank_angle), LING_BODY, 2.4)
+	# 内焰月白亮层（同轮廓缩小下沉，平涂不透光）
+	var inner := PackedVector2Array()
+	for q in flame:
+		inner.append(pivot + (q - pivot) * 0.58 + Vector2(0.0, core_r * 0.16))
+	BC.flat(self, _rot_pts(inner, pivot, bank_angle), LING_PALE, 1.2)
+
+	# 6. 灵动双眸（墨圆底 + 月白方高光；生命越低越暗 —— 生命由本体传达；随 bank）
+	var eye_a: float = (0.35 + 0.65 * clampf(hp_ratio, 0.0, 1.0)) * flicker
+	for side in [-1.0, 1.0]:
+		var eye_pos := _rot_one(pivot + Vector2(side * 4.6, -core_r * 0.10), pivot, bank_angle)
+		draw_circle(eye_pos, 2.4, Color(ink.r, ink.g, ink.b, eye_a))
+		draw_rect(Rect2(eye_pos + Vector2(-1.0, -1.4), Vector2(1.4, 1.4)),
+			Color(LING_PALE.r, LING_PALE.g, LING_PALE.b, eye_a))
+
+	# 7. 濒死裂纹（hp_ratio < 0.3 浮现的墨色裂痕，左右镜像一对，随灵息闪烁；随 bank）
+	if low > 0.0:
+		var crack_a: float = (0.35 + 0.45 * low) * flicker
+		var crack_col := Color(ink.r, ink.g, ink.b, crack_a)
+		var crack_r := PackedVector2Array([
+			pivot + Vector2(4.5, -core_r * 0.62), pivot + Vector2(2.5, -core_r * 0.10),
+			pivot + Vector2(5.0, core_r * 0.35),
+		])
+		draw_polyline(_rot_pts(crack_r, pivot, bank_angle), crack_col, 1.6, true)
+		var crack_l := PackedVector2Array()
+		for p3 in crack_r:
+			crack_l.append(Vector2(pivot.x - (p3.x - pivot.x), p3.y))
+		draw_polyline(_rot_pts(crack_l, pivot, bank_angle), crack_col, 1.3, true)
+
+	# 8. 面前蓄力灵光球（charge_ratio 驱动：撞色圆盘涨大 + 三颗墨方钉旋绕，硬边零辉光；随 bank）
+	if charge_ratio > 0.01:
+		var cp := _rot_one(pivot + Vector2(18.5, 0.0), pivot, bank_angle)
+		var cr: float = 2.0 + 5.0 * charge_ratio
+		var ca: float = clampf(charge_ratio * spirit * flicker, 0.0, 1.0)
+		BC.disc(self, cp, cr, Color(acc.r, acc.g, acc.b, ca), 1.6)
+		for i in range(3):
+			var sa: float = _anim_time * 7.0 + TAU * float(i) / 3.0
+			var sq_p := cp + Vector2(cos(sa), sin(sa)) * (cr + 3.0)
+			draw_rect(Rect2(sq_p - Vector2(1.2, 1.2), Vector2(2.4, 2.4)),
+				Color(ink.r, ink.g, ink.b, ca))
+
+	# 9. 移动灵尘（speed_ratio > 0.2：尾后三颗撞色小方钉，随速度显隐）
+	if speed_ratio > 0.2:
+		for i in range(3):
+			var di := float(i)
+			var mp := pivot + Vector2(-core_r - 4.0 - di * 5.0,
+				core_r * 0.2 + di * 2.0 + sin(_anim_time * 7.5 + di * 1.2) * 1.8)
+			var ds: float = (1.0 - di * 0.28) * clampf(speed_ratio, 0.0, 1.0)
+			draw_rect(Rect2(mp - Vector2(1.4, 1.4) * ds, Vector2(2.8, 2.8) * ds),
+				Color(acc.r, acc.g, acc.b, 0.85 * ds))
+
+	# 10. 升星方钉（焰身两肩；灵兽宿主不设 star，恒 1 时自动不画）
+	BC.star_studs(self, star,
+		_rot_one(pivot + Vector2(-4.0, -core_r * 0.55), pivot, bank_angle),
+		_rot_one(pivot + Vector2(4.0, -core_r * 0.55), pivot, bank_angle), acc)
+
+# ----------------- 8. 金鸣铃（金 · 白金铃身 + 反摆墨铃舌） -----------------
+## 旧画法转化：云雷横纹/符点莹光/声波弧全砍。白金铃身平涂 + 口缘撞色带 + 墨拱钮，
+## 铃舌改墨杆 + 墨盘随摆反向荡（摆感保留），与混元钟以「有舌有绳、白身」区分。
+func _draw_golden_bell() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var sway := sin(_anim_time * 3.0) * 0.12
+	# 吊绳（墨短杆，不随摆）
+	BC.bar(self, Vector2(0, -14.5), Vector2(0, -9.5), 1.8, BC.INK)
+	# 钟钮小拱（低分段硬折线：墨描 + 白金芯，随摆）
+	var loop := PackedVector2Array()
+	for i in range(5):
+		var a: float = PI + PI * float(i) / 4.0
+		loop.append(Vector2(0, -9.5) + Vector2(cos(a), sin(a)) * 2.8)
+	draw_polyline(_rot_all(loop, sway), BC.INK, 3.2, true)
+	draw_polyline(_rot_all(loop, sway), body, 1.4, true)
+	# 铃身（上窄下阔钟形，随 sway 轻摆）
+	var bell := PackedVector2Array([
+		Vector2(-4.5, -9.5), Vector2(4.5, -9.5),
+		Vector2(7.5, 4.0), Vector2(8.5, 7.0),
+		Vector2(-8.5, 7.0), Vector2(-7.5, 4.0),
 	])
-	draw_colored_polygon(stone, rock)
-	draw_polyline(_closed(stone), Color(0.80, 0.68, 0.40), 1.3, true)
-	# 岩面裂纹两道（左右镜像一对）
-	draw_line(Vector2(-4.0, -4.5).rotated(rot), Vector2(-1.5, 0.5).rotated(rot), Color(0.28, 0.22, 0.14, 0.8), 1.0, true)
-	draw_line(Vector2(4.0, -4.5).rotated(rot), Vector2(1.5, 0.5).rotated(rot), Color(0.28, 0.22, 0.14, 0.8), 1.0, true)
-	# 镇岳符印（山形三峰，发光呼吸；接 FX_HDR_EARTH 玄黄起辉）
-	var mark_a := 0.6 + 0.3 * sin(_anim_time * 2.8)
+	BC.flat(self, _rot_all(bell, sway), body, 2.0)
+	# 口缘撞色带（铃的「一眼金」）
+	var rim := PackedVector2Array([
+		Vector2(-7.7, 4.6), Vector2(7.7, 4.6), Vector2(8.5, 7.0), Vector2(-8.5, 7.0),
+	])
+	BC.flat(self, _rot_all(rim, sway), accent, 1.2)
+	# 铃舌（随摆反向荡：墨杆 + 墨盘，悬在口缘下方不压撞色带）
+	var clapper_x := -sway * 40.0
+	BC.bar(self, Vector2(0, 7.5).rotated(sway), Vector2(clapper_x, 11.0), 1.6, BC.INK)
+	draw_circle(Vector2(clapper_x, 12.2), 1.9, BC.INK)
+	# 升星方钉（铃身两肩）
+	BC.star_studs(self, star, Vector2(-3.5, -5.5).rotated(sway), Vector2(3.5, -5.5).rotated(sway), accent)
+
+# ----------------- 9. 木灵偶（木 · 偶人 + 墨关节 + 撞色方章） -----------------
+## 旧画法转化：生机符印呼吸辉光/关节莹光点/芽梢莹点全砍。偶人全平涂：圆头方眼 +
+## 硬梯形躯干 + 短木杆四肢（摆臂保留）+ 墨方关节钉，胸口一枚撞色方章。
+func _draw_wood_puppet() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var off := Vector2(0, sin(_anim_time * 2.6) * 1.2)
+	var limb := body.darkened(0.32)
+	var arm_sw := sin(_anim_time * 3.4) * 2.0
+	# 四肢（短木杆，先画压在躯干下；摆臂保留）
+	BC.bar(self, off + Vector2(-1.8, 6.0), off + Vector2(-2.6, 11.5), 2.8, limb)
+	BC.bar(self, off + Vector2(1.8, 6.0), off + Vector2(2.6, 11.5), 2.8, limb)
+	BC.bar(self, off + Vector2(-3.0, -1.5), off + Vector2(-8.5, 1.5 + arm_sw), 2.8, limb)
+	BC.bar(self, off + Vector2(3.0, -1.5), off + Vector2(8.5, 1.5 - arm_sw), 2.8, limb)
+	# 躯干（硬梯形主色块）
+	BC.flat(self, PackedVector2Array([
+		off + Vector2(-3.5, -3.0), off + Vector2(3.5, -3.0),
+		off + Vector2(2.5, 6.0), off + Vector2(-2.5, 6.0),
+	]), body, 1.8)
+	# 头（圆盘）+ 方眼两粒（硬边墨块，落在亮芯内）
+	BC.disc(self, off + Vector2(0, -7.2), 4.4, body, 1.4)
+	draw_rect(Rect2(off + Vector2(-2.0, -7.8), Vector2(1.3, 1.5)), BC.INK)
+	draw_rect(Rect2(off + Vector2(0.7, -7.8), Vector2(1.3, 1.5)), BC.INK)
+	# 头顶灵芽（两根短杆）
+	BC.bar(self, off + Vector2(0, -11.0), off + Vector2(-2.4, -14.0), 1.6, limb)
+	BC.bar(self, off + Vector2(0, -11.0), off + Vector2(2.4, -14.0), 1.6, limb)
+	# 胸口撞色方章（唯一撞色块）
+	BC.square(self, off + Vector2(0, 1.0), 2.0, accent, 1.2)
+	# 四肢关节墨钉（硬边）
+	for jp in [Vector2(-3.0, -1.5), Vector2(3.0, -1.5), Vector2(-1.8, 6.0), Vector2(1.8, 6.0)]:
+		draw_rect(Rect2(off + jp - Vector2(0.9, 0.9), Vector2(1.8, 1.8)), BC.INK)
+	# 升星方钉（双肩）
+	BC.star_studs(self, star, off + Vector2(-4.6, -3.4), off + Vector2(4.6, -3.4), accent)
+
+# ----------------- 10. 冰魄珠（水 · 六棱珠体 + 环绕冰晶三角） -----------------
+## 旧画法转化：半透明幽蓝珠体/雪亮冰核 HDR/寒雾微光/雪芒闪烁全砍。六棱硬边珠体
+## （反向微旋）+ 撞色内棱六边 + 六片环绕冰晶三角（自转保留）。
+func _draw_ice_pearl() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var rot := _anim_time * 1.8
+	var spike := body.darkened(0.22)
+	# 六片环绕冰晶（硬边三角，自转）
+	for i in range(6):
+		var ang: float = rot + TAU * float(i) / 6.0
+		var c := Vector2(cos(ang), sin(ang)) * 10.5
+		var tip := c + Vector2(cos(ang), sin(ang)) * 4.5
+		var pl := c + Vector2(cos(ang + 0.55), sin(ang + 0.55)) * 2.4
+		var pr := c + Vector2(cos(ang - 0.55), sin(ang - 0.55)) * 2.4
+		BC.flat(self, PackedVector2Array([pl, tip, pr]), spike, 1.2)
+	# 六棱珠体（反向微旋，主色大块）
+	BC.flat(self, _ngon(Vector2.ZERO, 7.5, 6, -rot * 0.5), body, 2.0)
+	# 内棱撞色六边形（错 30°，冰核）
+	BC.flat(self, _ngon(Vector2.ZERO, 4.2, 6, -rot * 0.5 + PI / 6.0), accent, 1.0)
+	# 升星方钉（珠体上下）
+	BC.star_studs(self, star, Vector2(0, -5.8), Vector2(0, 5.8), accent)
+
+# ----------------- 11. 赤炎萤（火 · 硬腹块 + 呼吸尾灯） -----------------
+## 旧画法转化：薄透火翼/灯焰热晕环/触须莹光点全砍。火色大腹块 + 暗档小翼压身下 +
+## 墨头墨须，尾灯改撞色圆盘呼吸涨缩缩在腹尾（萤的一眼点保留，不压腹块）。
+func _draw_fire_firefly() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var flap_x := 0.40 + 0.60 * absf(sin(_anim_time * 14.0))
+	var deep := body.darkened(0.25)
+	# 薄翼两扇（硬边三角，扑动；主色暗档压在身下）
+	for side in [-1.0, 1.0]:
+		var wing := PackedVector2Array([
+			Vector2(side * 1.5, -3.0), Vector2(side * 9.5 * flap_x, -10.5),
+			Vector2(side * 7.0 * flap_x, -3.0),
+		])
+		BC.flat(self, wing, deep, 1.2)
+	# 尾腹（主色大块，头小腹大）
+	BC.flat(self, PackedVector2Array([
+		Vector2(-3.8, -1.0), Vector2(3.8, -1.0), Vector2(2.8, 7.0), Vector2(-2.8, 7.0),
+	]), body, 1.6)
+	# 头（墨盘）与触须（两根墨线）
+	BC.disc(self, Vector2(0, -3.8), 2.6, BC.INK, 1.0)
+	draw_line(Vector2(-1.0, -5.8), Vector2(-2.8, -8.4), BC.INK, 1.2, true)
+	draw_line(Vector2(1.0, -5.8), Vector2(2.8, -8.4), BC.INK, 1.2, true)
+	# 尾灯（撞色圆盘，呼吸涨缩 —— 萤的一眼点，缩在腹尾不吞腹块）
+	var lamp_r: float = 2.2 + 0.6 * sin(_anim_time * 6.0)
+	BC.disc(self, Vector2(0, 5.6), lamp_r, accent, 1.0)
+	# 升星方钉（腹背）
+	BC.star_studs(self, star, Vector2(-2.2, 0.8), Vector2(2.2, 0.8), accent)
+
+# ----------------- 12. 土灵石（土 · 七棱山岩 + 撞色镇岳一笔） -----------------
+## 旧画法转化：符文呼吸辉光/山脚环绕浮尘全砍。七棱山岩平涂微晃（晃感保留）+
+## 墨裂纹两道（镜像保留）+ 撞色山形一笔镇岳符。
+func _draw_earth_stone() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
+	var rot := sin(_anim_time * 1.6) * 0.15
+	# 石体（七棱山岩断面，微晃）
+	var stone := PackedVector2Array([
+		Vector2(-6.5, -7.5), Vector2(0.0, -9.8), Vector2(6.5, -7.5),
+		Vector2(8.5, 2.0), Vector2(3.0, 9.5), Vector2(-3.0, 9.5), Vector2(-8.5, 2.0),
+	])
+	BC.flat(self, _rot_all(stone, rot), body, 2.2)
+	# 岩面裂纹两道（墨，镜像）
+	draw_line(Vector2(-4.0, -4.5).rotated(rot), Vector2(-1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
+	draw_line(Vector2(4.0, -4.5).rotated(rot), Vector2(1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
+	# 镇岳符（撞色山形折线，一笔三峰）
 	var m := Vector2(0.0, 0.5).rotated(rot)
 	draw_polyline(PackedVector2Array([
-		m + Vector2(-3.2, 1.8), m + Vector2(-1.1, -1.8), m + Vector2(0.6, 0.6),
-		m + Vector2(2.0, -2.4), m + Vector2(3.8, 1.8)
-	]), Color(GameStyle.FX_HDR_EARTH, 0.8 * mark_a), 1.2, true)
-	# 山脚环绕浮尘三粒（缓慢明灭，添「悬浮灵石」感）
-	for i in range(3):
-		var ang := _anim_time * 1.4 + float(i) * TAU / 3.0
-		var dp := Vector2(cos(ang) * 12.5, sin(ang) * 5.5 + 6.0)
-		var twk := 0.5 + 0.5 * sin(_anim_time * 3.8 + float(i) * 2.2)
-		draw_circle(dp, 0.8 + 0.4 * twk, Color(0.85, 0.75, 0.50, 0.20 + 0.25 * twk))
+		m + Vector2(-3.6, 2.2), m + Vector2(-1.4, -2.0), m + Vector2(0.2, 0.8),
+		m + Vector2(2.0, -2.6), m + Vector2(4.2, 2.2),
+	]), accent, 2.0, true)
+	# 升星方钉（石面两肩）
+	BC.star_studs(self, star, Vector2(-4.5, -2.5).rotated(rot), Vector2(4.5, -2.5).rotated(rot), accent)
 
-# ----------------- 13. 剑灵 (半透明剑形精魂 + 灵气飘带) -----------------
+# ----------------- 13. 剑灵（金 · 硬边剑形精魂） -----------------
+## 旧画法转化：半透明剑身/灵气飘带/刃口流光/剑尖 HDR 灵光全砍。实心硬边剑：
+## 主色剑身收锋 + 墨剑脊 + 撞色剑格 + 墨剑柄 + 撞色剑首方钉（悬浮轻倾保留）。
 func _draw_sword_wisp() -> void:
+	var pal: Dictionary = BC.pal(_elem())
+	var body: Color = pal["body"]
+	var accent: Color = pal["accent"]
 	var tilt := sin(_anim_time * 2.2) * 0.2
-	var blade := Color(0.72, 0.92, 1.0, 0.80) if star < 2 else Color(0.85, 0.98, 1.0, 0.92)
-	var edge := Color(0.55, 0.90, 1.0, 0.9)
-	# 灵气飘带（剑柄后方两条相位飘动的丝带）
-	for i in range(2):
-		var ribbon := PackedVector2Array()
-		for k in range(6):
-			var t := float(k) / 5.0
-			ribbon.append(Vector2(-4.0 - t * 9.0, (1.2 + float(i) * 2.2) * sin(_anim_time * 5.0 + t * 4.0 + float(i) * 1.8) * (1.0 - t * 0.4)))
-		draw_polyline(ribbon, Color(0.60, 0.92, 1.0, 0.5 - float(i) * 0.15), 1.1, true)
-	# 剑身（半透明青白，随 tilt 轻倾）
-	var body := PackedVector2Array([
-		Vector2(13.0, 0.0).rotated(tilt), Vector2(-1.0, -2.4).rotated(tilt),
-		Vector2(-6.0, 0.0).rotated(tilt), Vector2(-1.0, 2.4).rotated(tilt)
+	# 剑身（长四边形 + 收锋剑尖，主色大块，随 tilt 轻倾）
+	var blade := PackedVector2Array([
+		Vector2(14.0, 0.0), Vector2(2.0, -3.6), Vector2(-5.5, -2.4),
+		Vector2(-5.5, 2.4), Vector2(2.0, 3.6),
 	])
-	draw_colored_polygon(body, Color(blade, 0.55))
-	draw_polyline(body, edge, 1.1, true)
-	draw_line(Vector2(12.0, 0.0).rotated(tilt), Vector2(-5.0, 0.0).rotated(tilt), Color(1.0, 1.0, 1.0, 0.75), 0.9, true)
-	# 剑格与剑柄灵珠（柄珠接 FX_HDR_CORE 低档微辉）
-	draw_line(Vector2(-5.5, -3.0).rotated(tilt), Vector2(-5.5, 3.0).rotated(tilt), edge, 1.3, true)
-	draw_circle(Vector2(-7.5, 0.0).rotated(tilt), 1.5, Color(GameStyle.FX_HDR_CORE, 0.7))
-	# 剑格两侧对称翼耳（添古剑形制）
-	draw_line(Vector2(-5.5, -3.0).rotated(tilt), Vector2(-7.2, -4.6).rotated(tilt), edge, 1.1, true)
-	draw_line(Vector2(-5.5, 3.0).rotated(tilt), Vector2(-7.2, 4.6).rotated(tilt), edge, 1.1, true)
-	# 刃口流光（一道沿剑身往复的亮线，添「淬灵」感）
-	var flow_t: float = 0.5 + 0.5 * sin(_anim_time * 3.6)
-	var flow_p := Vector2(lerpf(-4.0, 11.0, flow_t), 0.0).rotated(tilt)
-	draw_circle(flow_p, 1.0, Color(1.0, 1.0, 1.0, 0.55))
-	# 剑尖灵光（接 FX_HDR_CORE 白芯超白起辉，剑灵的一眼点）
-	draw_circle(Vector2(13.0, 0.0).rotated(tilt), 1.2 + 0.3 * sin(_anim_time * 6.0), Color(GameStyle.FX_HDR_CORE, 0.9))
+	BC.flat(self, _rot_all(blade, tilt), body, 2.0)
+	# 剑脊墨线
+	draw_line(Vector2(12.0, 0.0).rotated(tilt), Vector2(-4.5, 0.0).rotated(tilt), BC.INK, 1.2, true)
+	# 剑格（撞色横杆）
+	BC.bar(self, Vector2(-5.5, -4.2).rotated(tilt), Vector2(-5.5, 4.2).rotated(tilt), 2.8, accent)
+	# 剑柄（墨杆）与剑首（撞色方钉）
+	BC.bar(self, Vector2(-5.5, 0.0).rotated(tilt), Vector2(-10.5, 0.0).rotated(tilt), 2.4, BC.INK)
+	BC.square(self, Vector2(-11.8, 0.0).rotated(tilt), 1.8, accent, 1.2)
+	# 升星方钉（剑身前后段）
+	BC.star_studs(self, star, Vector2(8.0, 0.0).rotated(tilt), Vector2(-2.0, 0.0).rotated(tilt), accent)

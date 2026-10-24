@@ -12,7 +12,7 @@ extends Node
 var _c := TestCheck.new()
 
 func _ready() -> void:
-	_c.set_min_checks(40)
+	_c.set_min_checks(50)
 	_run()
 	_finish()
 
@@ -32,6 +32,8 @@ func _run() -> void:
 	_test_decode_headers()
 	_test_diagnostics()
 	_test_report_text()
+	_test_cocreate_fields()
+	_test_cocreate_draft_isolation()
 
 func _test_validate() -> void:
 	_c.check(FeedbackSender.validate_message("") != "", "空反馈被拦下")
@@ -167,3 +169,37 @@ func _test_report_text() -> void:
 	_c.check(text.contains("【反馈内容】") and text.contains("商店打不开"), "复制文本含反馈内容")
 	_c.check(text.contains("【联系方式】") and text.contains("QQ:12345"), "复制文本含联系方式")
 	_c.check(text.contains("【剑士反馈诊断信息】"), "复制文本含诊断信息")
+
+## 共创复用同一发送链路，靠 tag/category 区分来件
+func _test_cocreate_fields() -> void:
+	var subject := FeedbackSender.build_subject("想要一把会喷火的扇子",
+		FeedbackSender.TAG_COCREATE, "武器")
+	_c.check(subject.contains("【剑士共创·武器】"), "共创主题带分类（实得「%s」）" % subject)
+	_c.check(subject.contains(Version.APP_VERSION_NAME) and subject.contains("想要一把会喷火的扇子"),
+		"共创主题带版本与想法首行")
+	var no_cat := FeedbackSender.build_subject("随便一个想法", FeedbackSender.TAG_COCREATE)
+	_c.check(no_cat.contains("【剑士共创】") and not no_cat.contains("·"), "不选分类时主题不带分类段")
+
+	var fields := FeedbackSender.build_fields("想要新角色", "", FeedbackSender.TAG_COCREATE, "角色", false)
+	_c.check(fields.get("category", "") == "角色", "共创表单带 category 字段")
+	_c.check(String(fields.get("diagnostics", "")).contains("【剑士共创诊断信息】"),
+		"共创诊断抬头用共创口径")
+	_c.check(not String(fields.get("_subject", "")).contains("剑士反馈"), "共创件不会混进反馈主题")
+	_c.check(FeedbackSender.build_fields("纯反馈", "").get("category", null) == null,
+		"反馈件不带 category 字段（默认空）")
+	_c.check(FeedbackSender.validate_message("", "想法") == "请先填写想法", "共创校验文案用「想法」")
+	_c.check(FeedbackSender.validate_message("有内容", "想法") == "", "共创正文通过校验")
+
+## 两个窗口的草稿互不覆盖
+func _test_cocreate_draft_isolation() -> void:
+	FeedbackSender.clear_draft()
+	FeedbackSender.clear_draft(FeedbackSender.COCREATE_DRAFT_PATH)
+	FeedbackSender.save_draft("反馈草稿", "fb@qq.com")
+	FeedbackSender.save_draft("共创草稿", "cc@qq.com", FeedbackSender.COCREATE_DRAFT_PATH)
+	_c.check(String(FeedbackSender.load_draft().get("message", "")) == "反馈草稿", "反馈草稿不受共创影响")
+	_c.check(String(FeedbackSender.load_draft(FeedbackSender.COCREATE_DRAFT_PATH).get("message", "")) == "共创草稿",
+		"共创草稿独立读取")
+	FeedbackSender.clear_draft(FeedbackSender.COCREATE_DRAFT_PATH)
+	_c.check(FeedbackSender.load_draft(FeedbackSender.COCREATE_DRAFT_PATH).is_empty(), "共创草稿可独立清除")
+	_c.check(not FeedbackSender.load_draft().is_empty(), "清共创草稿不会误删反馈草稿")
+	FeedbackSender.clear_draft()

@@ -6,12 +6,13 @@ extends Control
 ##   ② 左 1 主方块（Hero「开始渡劫」，内嵌 4 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
 ##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
 ##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
-##   ③ 右下角一颗「检查更新」小按钮 —— 贴屏底贴屏右，不再拉通宽横幅
+##   ③ 右下角一颗「检查更新」小按钮、左下角一颗「游戏共创」小按钮 —— 各贴屏底一角，不再拉通宽横幅
 ## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
 
 signal settings_requested
 signal career_requested
 signal manual_requested
+signal cocreation_requested  ## 游戏共创：主菜单左下角「游戏共创」按钮（Main 接 CoCreateDialog.open）
 signal resume_requested  ## 中断续玩：主菜单「继续游戏」按钮（Main.resume_from_save 消费）
 
 const DANGER_NAMES := ["简单", "普通", "困难", "噩梦"]
@@ -55,6 +56,7 @@ const CONTENT_TOP_GAP := 14.0          # 顶栏底 → 矩阵可落位区顶
 ## 底距 26 是按钮与屏底之间的视觉留白（连同 4px 硬影也收在内）。
 const CORNER_MARGIN_BOTTOM := 26.0
 const CORNER_MARGIN_RIGHT := 34.0
+const CORNER_MARGIN_LEFT := 34.0
 const FOOT_BAND_H := CORNER_MARGIN_BOTTOM + CORNER_BTN_H   # 矩阵与屏底之间为按钮预留的收边带
 const BLOCK_GAP_MAX := 32.0            # 矩阵上/下气口上界，再空就让主块长高
 const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把空白搬进卡里
@@ -98,6 +100,10 @@ var _settings_sub_lbl: Label
 var _update_host: HBoxContainer
 var _update_btn: Button
 var _update_reset_tween: Tween
+
+# 左下角游戏共创按钮（左对齐容器托着，与检查更新共用底部收边带）
+var _cocreate_host: HBoxContainer
+var _cocreate_btn: Button
 
 # 入场动效队列
 var _anim_blocks: Array[Control] = []
@@ -276,6 +282,22 @@ func _build_center_matrix() -> void:
 	_update_btn.pressed.connect(_on_update_pressed)
 	_update_host.add_child(_update_btn)
 	_anim_blocks.append(_update_btn)
+
+	# 3. 左下角一颗游戏共创按钮（与检查更新共用底部收边带，左右各贴一边）
+	_cocreate_host = HBoxContainer.new()
+	_cocreate_host.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_cocreate_host.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_cocreate_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_cocreate_host)
+
+	_cocreate_btn = Button.new()
+	_cocreate_btn.text = "游戏共创"
+	_cocreate_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
+	_cocreate_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_cocreate_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+	_cocreate_btn.pressed.connect(_on_cocreate_pressed)
+	_cocreate_host.add_child(_cocreate_btn)
+	_anim_blocks.append(_cocreate_btn)
 
 ## 左侧整柱 Hero 大方块：开始渡劫 + 4 档危险度 + 无尽试炼开关
 func _build_hero_block() -> PanelContainer:
@@ -505,6 +527,10 @@ func _layout_responsive() -> void:
 		_update_host.offset_top = -FOOT_BAND_H
 		_update_host.offset_bottom = -CORNER_MARGIN_BOTTOM
 		_update_host.offset_right = -CORNER_MARGIN_RIGHT
+	if _cocreate_host != null and is_instance_valid(_cocreate_host):
+		_cocreate_host.offset_left = CORNER_MARGIN_LEFT
+		_cocreate_host.offset_top = -FOOT_BAND_H
+		_cocreate_host.offset_bottom = -CORNER_MARGIN_BOTTOM
 
 	# 2. 按可视宽度计算方块矩阵缩放因子（预留左右 48px 给斜切外扩与安全边距）
 	var base_total_w := BASE_HERO_W + BASE_GAP_HERO + BASE_SMALL_W * 2.0 + BASE_GAP_COL
@@ -789,6 +815,10 @@ func _after_tutorial() -> void:
 		var weapon_select := get_parent().get_node_or_null("StartWeaponSelect")
 		if weapon_select != null:
 			weapon_select.show_select()
+
+## 游戏共创：交给 Main 打开 CoCreateDialog（首页不直接持有弹窗，沿用信号接线约定）
+func _on_cocreate_pressed() -> void:
+	cocreation_requested.emit()
 
 func _on_update_pressed() -> void:
 	if not is_instance_valid(_update_btn):

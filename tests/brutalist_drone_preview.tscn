@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/brutalist_drone_preview.gd" id="1_bdp"]
+
+[node name="BrutalistDronePreview" type="Control"]
+anchors_preset = 0
+script = ExtResource("1_bdp")

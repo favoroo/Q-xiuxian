@@ -17,8 +17,12 @@ const START_WEAPON := "qingyun_sword"
 const BIG_EXP := 500
 ## 动画全家总时长（徽记 0.48s / 光效 0.42s / 金光 0.34s / 弹入 0.25s）之外再放宽
 const SETTLE_SEC := 1.5
-## 徽记场景原配底色（GameHUD.tscn StyleBoxFlat_level_badge.bg_color）
-const BADGE_BASE_BG := Color(0.22, 0.486, 0.902, 1)
+## 徽记底色基线：2026-10-21 主题化改造（用户抓出「换色后徽记/经验条不跟主题」）后，
+## GameHUD 启动时把场景烘焙底色覆盖为主题金（GameStyle.GOLD），动画结束回到它。
+## 不钉死色值 —— 主题预设可换，钉「与主题同源」才不会每次换主题就误红。
+var BADGE_BASE_BG: Color:
+	get:
+		return GameStyle.GOLD
 
 var _c := TestCheck.new()
 var _main: Node
@@ -67,12 +71,14 @@ func _run() -> void:
 	_c.check(_count_fx() == 0, "动画结束后临时光效节点已自毁（无泄漏）")
 	_c.check(badge.scale.is_equal_approx(Vector2.ONE), "徽记缩放复位（squash 回弹不留残形）")
 	var after_bg: Color = badge.get_theme_stylebox("panel").bg_color
-	_c.check(after_bg.is_equal_approx(pre_bg), "徽记底色复位回主蓝（金色闪变不停在错误配色上）")
+	_c.check(after_bg.is_equal_approx(pre_bg), "徽记底色复位回基线色（金色闪变不停在错误配色上）")
 	var label: Label = badge.get_node("VBox/LevelLabel")
 	_c.check(label.scale.is_equal_approx(Vector2.ONE), "Lv 数字脉冲复位")
-	# 经验条不参与金闪（闪黄会和徽记底色同色、进度条整条看不见），全程必须保持场景原配绿
+	# 经验条不参与金闪（闪黄会和徽记底色同色、进度条整条看不见）。
+	# 2026-10-21 主题化改造后填充走主题亮边（GameHUD._apply_theme：原烘焙绿不跟主题被用户抓出），
+	# 这里钉「升级全程不改动填充 stylebox」—— 填充色始终与 GameStyle.GOLD_EDGE 同源。
 	var fill_style: StyleBoxFlat = badge.get_node("VBox/ExpBar").get_theme_stylebox("fill")
-	_c.check(fill_style.bg_color.is_equal_approx(Color(0.31, 0.82, 0.647, 1)), "经验条填充色保持绿（升级不闪它）")
+	_c.check(fill_style.bg_color.is_equal_approx(GameStyle.GOLD_EDGE), "经验条填充色跟主题亮边（升级不闪它）")
 	if flash != null:
 		_c.near(flash.modulate.a, 0.0, 0.001, "全屏金光熄灭（不留常亮色块）")
 	else:

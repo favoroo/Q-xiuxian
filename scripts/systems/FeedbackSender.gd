@@ -23,8 +23,14 @@ const FORM_ENDPOINT := "https://formsubmit.co/" + FEEDBACK_EMAIL
 const REFERER := "https://favoroo.github.io/Q-xiuxian/"
 const ORIGIN := "https://favoroo.github.io"
 
-## 反馈正文上限（与 FeedbackDialog 的字数计数同源）
+## 反馈正文上限（与 MailFormDialog 的字数计数同源）
 const MAX_MESSAGE_CHARS := 1000
+## 反馈草稿与共创草稿分开落盘：同一台设备上两个窗口互不覆盖
+const DRAFT_PATH := "user://feedback_draft.cfg"
+const COCREATE_DRAFT_PATH := "user://cocreate_draft.cfg"
+## 邮件主题前缀。反馈与共创共用一个发送通道，靠前缀区分来件
+const TAG_FEEDBACK := "剑士反馈"
+const TAG_COCREATE := "剑士共创"
 ## FormSubmit 所有附件合计上限 10MB；这里留 1MB 余量给 multipart 头与字段
 const MAX_ATTACHMENT_BYTES := 9 * 1024 * 1024
 ## 手机截图长边压到 1600 再转 JPEG，通常 200~500KB，真机流量与邮箱附件都轻松
@@ -33,7 +39,6 @@ const JPEG_QUALITY := 0.85
 ## 单个日志文件只带尾部 16KB：排查够用，也不会让邮件正文被服务端截断
 const LOG_TAIL_BYTES := 16384
 const GODOT_LOG_PATH := "user://logs/godot.log"
-const DRAFT_PATH := "user://feedback_draft.cfg"
 const USER_AGENT := "QXiuxian-GodotClient"
 
 static var _boundary_seq: int = 0
@@ -41,9 +46,10 @@ static var _boundary_seq: int = 0
 # ---------------- 文本与诊断 ----------------
 
 ## 拼装设备/运行/进度诊断信息。只读全局状态，不依赖节点，便于单测直接调用。
-static func build_diagnostics() -> String:
+## tag 只影响抬头文案：反馈件是「剑士反馈诊断信息」，共创件传「剑士共创」。
+static func build_diagnostics(tag: String = TAG_FEEDBACK) -> String:
 	var lines: Array[String] = []
-	lines.append("【剑士反馈诊断信息】")
+	lines.append("【%s诊断信息】" % tag)
 	lines.append("游戏版本: %s (%s)" % [Version.APP_VERSION_NAME, Version.APP_VERSION])
 	lines.append("运行平台: %s %s" % [OS.get_name(), OS.get_version()])
 	lines.append("设备型号: %s" % _safe_str(OS.get_model_name(), "未知"))
@@ -97,28 +103,37 @@ static func build_diagnostics() -> String:
 	lines.append("提交时间: %s" % Time.get_datetime_string_from_system(false, true))
 	return "\n".join(lines)
 
-## 反馈正文（复制到剪贴板用）：反馈内容 + 联系方式 + 诊断 + 最近日志
-static func build_report_text(message: String, contact: String) -> String:
-	var out := "【反馈内容】\n" + message.strip_edges()
+## 邮件正文（复制到剪贴板用）：正文 + 联系方式 + 诊断 + 最近日志
+## body_head/category 供共创复用：正文抬高为「共创想法」并额外标出分类。
+static func build_report_text(message: String, contact: String,
+		tag: String = TAG_FEEDBACK, category: String = "",
+		body_head: String = "反馈内容") -> String:
+	var out := "【%s】" % body_head
+	var cat := category.strip_edges()
+	if not cat.is_empty():
+		out += "（%s）" % cat
+	out += "\n" + message.strip_edges()
 	if not contact.strip_edges().is_empty():
 		out += "\n\n【联系方式】\n" + contact.strip_edges()
-	out += "\n\n" + build_diagnostics()
+	out += "\n\n" + build_diagnostics(tag)
 	var logs := collect_recent_logs()
 	if not logs.is_empty():
 		out += "\n\n" + logs
 	return out
 
-## 反馈内容校验：返回空串表示通过，否则返回给玩家看的原因
-static func validate_message(message: String) -> String:
+## 内容校验：返回空串表示通过，否则返回给玩家看的原因。
+## what 供共创复用（「请先填写想法」）；默认文案与反馈窗口保持一致。
+static func validate_message(message: String, what: String = "反馈内容") -> String:
 	var trimmed := message.strip_edges()
 	if trimmed.is_empty():
-		return "请先填写反馈内容"
+		return "请先填写%s" % what
 	if trimmed.length() > MAX_MESSAGE_CHARS:
-		return "反馈内容不能超过 %d 字" % MAX_MESSAGE_CHARS
+		return "%s不能超过 %d 字" % [what, MAX_MESSAGE_CHARS]
 	return ""
 
-## 邮件主题：版本 / 平台 / 反馈首行（过长截断）
-static func build_subject(message: String) -> String:
+## 邮件主题：分类 / 版本 / 平台 / 首行（过长截断）
+static func build_subject(message: String, tag: String = TAG_FEEDBACK,
+		category: String = "") -> String:
 	var first := ""
 	for line in message.strip_edges().split("\n"):
 		var t := line.strip_edges()
@@ -129,16 +144,24 @@ static func build_subject(message: String) -> String:
 		first = "无标题"
 	if first.length() > 40:
 		first = first.substr(0, 40) + "…"
-	return "【剑士反馈】%s / %s / %s" % [Version.APP_VERSION_NAME, OS.get_name(), first]
+	var head := "【%s】" % tag
+	var cat := category.strip_edges()
+	if not cat.is_empty():
+		head = "【%s·%s】" % [tag, cat]
+	return "%s%s / %s / %s" % [head, Version.APP_VERSION_NAME, OS.get_name(), first]
 
 ## FormSubmit 表单字段（含隐藏控制字段）
-static func build_fields(message: String, contact: String) -> Dictionary:
-	var diagnostics := build_diagnostics()
-	var logs := collect_recent_logs()
-	if not logs.is_empty():
-		diagnostics += "\n\n" + logs
+## with_logs=false 用于共创：想法类内容不需要最近的运行日志，邮件更轻。
+static func build_fields(message: String, contact: String,
+		tag: String = TAG_FEEDBACK, category: String = "",
+		with_logs: bool = true) -> Dictionary:
+	var diagnostics := build_diagnostics(tag)
+	if with_logs:
+		var logs := collect_recent_logs()
+		if not logs.is_empty():
+			diagnostics += "\n\n" + logs
 	var fields := {
-		"_subject": build_subject(message),
+		"_subject": build_subject(message, tag, category),
 		"_template": "table",
 		"_captcha": "false",
 		"message": message.strip_edges(),
@@ -146,6 +169,10 @@ static func build_fields(message: String, contact: String) -> Dictionary:
 		"contact": contact.strip_edges(),
 		"client_time": Time.get_datetime_string_from_system(false, true),
 	}
+	var cat := category.strip_edges()
+	if not cat.is_empty():
+		# 分类单列一个字段：FormSubmit 的 table 模板会单独成行，作者一眼能看出想法属于哪类
+		fields["category"] = cat
 	# 联系方式是邮箱时顺手设为 Reply-To，作者点回复就能直接回到玩家邮箱
 	if contact.contains("@"):
 		fields["_replyto"] = contact.strip_edges()
@@ -154,23 +181,24 @@ static func build_fields(message: String, contact: String) -> Dictionary:
 # ---------------- 草稿 ----------------
 
 ## 保存未发送的草稿（只存文字与联系方式；截图不落盘，避免占空间与隐私顾虑）。
-## 输入停顿 0.6 秒由 FeedbackDialog 触发，正常关闭时也会补存一次。
-static func save_draft(message: String, contact: String) -> void:
+## 输入停顿 0.6 秒由 MailFormDialog 触发，正常关闭时也会补存一次。
+## path 供共创窗口传 COCREATE_DRAFT_PATH，两窗口的草稿互不覆盖。
+static func save_draft(message: String, contact: String, path: String = DRAFT_PATH) -> void:
 	if message.strip_edges().is_empty() and contact.strip_edges().is_empty():
-		clear_draft()
+		clear_draft(path)
 		return
 	var cfg := ConfigFile.new()
 	cfg.set_value("draft", "message", message)
 	cfg.set_value("draft", "contact", contact)
 	cfg.set_value("draft", "saved_at", Time.get_datetime_string_from_system(false, true))
-	cfg.save(DRAFT_PATH)
+	cfg.save(path)
 
 ## 读取草稿：无草稿/空正文返回空字典
-static func load_draft() -> Dictionary:
-	if not FileAccess.file_exists(DRAFT_PATH):
+static func load_draft(path: String = DRAFT_PATH) -> Dictionary:
+	if not FileAccess.file_exists(path):
 		return {}
 	var cfg := ConfigFile.new()
-	if cfg.load(DRAFT_PATH) != OK:
+	if cfg.load(path) != OK:
 		return {}
 	var msg := String(cfg.get_value("draft", "message", ""))
 	if msg.strip_edges().is_empty():
@@ -181,10 +209,9 @@ static func load_draft() -> Dictionary:
 	}
 
 ## 清除草稿（发送成功后调用）
-static func clear_draft() -> void:
-	var dir := DirAccess.open("user://")
-	if dir != null and dir.file_exists("feedback_draft.cfg"):
-		dir.remove("feedback_draft.cfg")
+static func clear_draft(path: String = DRAFT_PATH) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 # ---------------- 日志尾部 ----------------
 

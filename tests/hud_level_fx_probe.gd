@@ -14,6 +14,12 @@ func _ready() -> void:
 	call_deferred("_boot")
 
 func _boot() -> void:
+	# headless 无渲染：get_image() 恒 null，save_png 抛脚本错误打断 await 链，
+	# quit(0) 永远执行不到 ⇒ run_test --all 里被看门狗强杀误报 TIMEOUT。
+	if DisplayServer.get_name() == "headless":
+		print("[HudLevelFxProbe] headless 无渲染意义，退出")
+		get_tree().quit(0)
+		return
 	DirAccess.make_dir_recursive_absolute("/tmp/lvfx_probe")
 	_hud = (load("res://scenes/ui/GameHUD.tscn") as PackedScene).instantiate()
 	get_tree().root.add_child(_hud)

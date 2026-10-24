@@ -43,6 +43,12 @@ EXPECT_MIN = {"weapons": 60, "items": 90, "roles": 18, "skills": 6, "pets": 6}
 # 游戏内默认是品红，站点按用户要求默认走荧绿；其余四套仍可页面上一键切换。
 SITE_THEME_ID = "lime"
 
+# 角色卡首屏顺序：网页首屏只铺 2 行 × 当前列数（桌面 8 张），其余收在「展开其余 N 名」。
+# 只钉首屏这几个 id，未列出的角色按 CultivatorData 表序跟在后面（新增角色自动落折叠区）。
+# 顺序是站点自己的展示取向，不改游戏内选人顺序。
+SITE_ROLE_TOP = ["jianchi", "juechen", "fuzhen", "jinsuanpan",
+                 "meiying", "dubi", "sanxiu", "duoshe"]
+
 
 # ============================================================================
 # GDScript 字典字面量的轻量解析（只做站点需要的读取，不求覆盖引擎语法）
@@ -508,6 +514,21 @@ def copy_icon(res_path: str, dest: Path, size: int = 0) -> str:
     return f"img/{dest.name}"
 
 
+def ui_icon_path(res_path: str) -> str:
+    """优先取商店/图鉴口径的 128px 变体（`assets/art/ui/` 同名文件）。
+
+    WeaponData 里的 icon 指向战斗画布 `assets/art/weapon_*.png`（48x48，与 tip 剑尖坐标绑定，
+    不能放大改画布）；矢量重绘后的新画风只落在 ui/ 变体里（`tools/sync_weapon_ui_icons.py` 产出），
+    站点按 48px 拷过去在高分屏上就是糊的旧图。ui/ 有就用 ui/，没有才退回原路径。
+    """
+    if not res_path.startswith("res://"):
+        return res_path
+    rel = Path(res_path[len("res://"):])
+    ui_rel = rel.parent / "ui" / rel.name
+    return "res://" + ui_rel.as_posix() if (ROOT / ui_rel).exists() else res_path
+
+
+
 # ============================================================================
 # 导出
 # ============================================================================
@@ -542,7 +563,7 @@ def build() -> dict:
             "b": weapon_cn_behavior(get_raw_value(e, "behavior") or ""),
             "g": tags,
             "p": get_num(e, "price", 0),
-            "i": copy_icon(get_str(e, "icon"), IMG / f"w{idx:02d}.png"),
+            "i": copy_icon(ui_icon_path(get_str(e, "icon")), IMG / f"w{idx:02d}.png"),
         })
 
     # —— 羁绊（器类 + 五行 11 组，名字与阈值直接取表） ——
@@ -600,6 +621,14 @@ def build() -> dict:
             "ex": skill_name.get(ex, "") if ex else "",          # 角色绑定的第二个技能名
             "i": copy_icon(get_str(e, "icon"), IMG / f"c_{Path(get_str(e, 'icon')).name}"),
         })
+
+    # 首屏这 8 张按 SITE_ROLE_TOP 排，缺 id 说明角色被改名/删表，直接报错不静默换位
+    role_by_id = {r["id"]: r for r in roles}
+    missing_top = [rid for rid in SITE_ROLE_TOP if rid not in role_by_id]
+    if missing_top:
+        raise SystemExit("SITE_ROLE_TOP 里的角色 id 不在 CultivatorData.DEFS：" + ", ".join(missing_top))
+    top_set = set(SITE_ROLE_TOP)
+    roles = [role_by_id[rid] for rid in SITE_ROLE_TOP] + [r for r in roles if r["id"] not in top_set]
 
     # —— 道具 ——
     ibody = const_body((DATA / "ItemData.gd").read_text(encoding="utf-8"), "const DEFS: Dictionary =")

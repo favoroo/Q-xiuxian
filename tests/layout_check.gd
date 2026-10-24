@@ -263,6 +263,9 @@ func _screens() -> Array[Dictionary]:
 				"feedback_overlay": "sending"},
 			{"tag": "意见反馈·成功", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open",
 				"feedback_overlay": "success"},
+			{"tag": "游戏共创", "path": "res://scenes/ui/CoCreateDialog.tscn", "open": "open"},
+			{"tag": "游戏共创·发送中", "path": "res://scenes/ui/CoCreateDialog.tscn", "open": "open",
+				"feedback_overlay": "sending"},
 			{"tag": "修仙志", "path": "res://scripts/ui/CareerDialog.gd", "open": "open"},
 			{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
 	]
@@ -309,7 +312,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		_stress_hud(node)
 	if spec.has("feedback_overlay"):
 		# 发送覆盖层平时隐藏，判据必须显式拉起才量得到（否则这一屏是假绿）
-		var fb := node as FeedbackDialog
+		var fb := node as MailFormDialog
 		if fb != null and fb._overlay != null:
 			if String(spec["feedback_overlay"]) == "success":
 				fb._overlay.show_success()

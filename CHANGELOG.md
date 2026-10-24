@@ -1,3 +1,36 @@
+## 2026-10-24 #22
+全武器野兽派第二批收口：机关炮台（`ProceduralTurretRenderer.gd` 6 器形×10 把）与御灵灵兽（`ProceduralDroneRenderer.gd` 13 形态）整体重绘为平涂硬边，随后 `python3 tools/sync_weapon_ui_icons.py` 一次同步 **70 把** UI 图标到 `assets/art/ui/`，商店/图鉴/背包/成就全部同源（实测 ShopLayoutPreview 确认）。**契约零改动**：`MUZZLE_X=16`（炮口=弹丸出膛点）、`DroneKind` 枚举、灵兽节流（20/40Hz 错相，PerfProbe 断言）与全部状态输入（speed/bank/hp/charge/spawn_glow → 硬边几何表达）原样。**顺修三处测试基建**（均与重绘无关，stash 回退复现为既存）：①`tests/hud_level_fx_probe.gd` 缺 headless 卫语句，headless 下 `get_image()` 返 null → `save_png` 抛错打断 await 链 → `quit(0)` 不可达，`run_test --all` 里被看门狗误报 TIMEOUT；②`tests/hud_level_fx_check.gd` 两条期望漂移——2026-10-21 主题化改造把经验条填充从烘焙绿改跟主题（`GOLD_EDGE`）、徽记底色基线从主蓝改 `GOLD`，判据还在钉旧色值，改为与 `GameStyle.*` 同源（主题再换不再误红）；③同日早些时候 `WeaponAudioCheck`（EnemyBase 借玩家音）与 `WeaponAimCheck`（手里剑 48×48 方形弹丸画布 ×0.6 超本体）已另记 #20。**注意**：全量 `--all` 曾出现 PoolCheck/SoakCheck/TextStyleCheck 等瞬时红，为另一 Agent 并行改 Main/反馈链路期间代码树移动所致，非稳定态失败；本批武器范围判据（核心 6 项 + Aim/Audio/HdIcon/LevelFx/PerHit/HeadFusion/Turret）全部 ALL PASS。
+
+## 2026-10-24 #21
+宣传站图标跟新：70 把武器换新野兽派矢量图标、守卫/蛮兵/霸王换新体型配色头像并已部署。**根因**：①站点武器图标一直拷 `assets/art/weapon_*.png`（48x48 战斗画布，与 WeaponData.tip 剑尖坐标绑定），矢量重绘的新画风只落 `assets/art/ui/` 的 128px 变体，所以战斗是新风、网页是旧糊图——导出器新增 `ui_icon_path()`，同名 ui/ 变体优先、没有才退回原路径；②`CultivatorVisualConfig.gd` 改了体型/配色不会自动重出静态头像，需真实渲染跑 `$G --path . res://tools/ExportCultivatorIcons.tscn -- shiyue kuangzhan bawang`（禁 headless，SubViewport 取空图）再跑导出器搬图。**另补**：`app.js` 的图片 src 统一过 `imgUrl()` + `IMG_V`——`img/*.png` 是同名覆盖且 data.js 只给路径带不了版本号，不换 URL 老访客永远吃旧图缓存。涉及 `tools/export_site_data.py`、`site/dist/app.js`、`site/dist/index.html`（app.js →v25）。
+
+## 2026-10-24 #20
+清掉两处**既存**判据红（与野兽派重绘无关，stash 回退到 HEAD 复现确认）：①`WeaponAudioCheck`「EnemyBase 没借用玩家武器音」——无敌技能的金光剑气附伤在 `EnemyBase.gd:1774` 硬播 `impact_blade`，而 `impact_blade` 是玩家武器族 key，敌人侧借用玩家音判红；改播敌人侧专用 `enemy_hit_crit`（语义也更贴：剑气附伤是敌人受创音）。②`WeaponAimCheck`「手里剑弹丸不大过法器本体」——弹丸长轴 28.8px > 本体 26.4px，根因是手里剑弹丸画布是 48×48 **方形**（其余远程武器多是 40×10 长条）×`bullet_scale`0.6 ⇒ 28.8；按数据表既有铁律「弹丸屏上长轴不许大过发射它的武器本体」，`bullet_scale` 0.6→0.55（48×0.55=26.4，正好齐平），不改画布不改判定半径。两项此前被记为「留待后续单独修」，现 `--all` 全量回归无红。
+
+## 2026-10-24 #19
+机关炮台 6 器形本体渲染改新野兽派（`scripts/weapons/ProceduralTurretRenderer.gd` 单文件重绘，接 #11~#15 武器新风、#18 图标同步）。硬契约零改动：`MUZZLE_X=16`（×ART_SCALE=1.5=24 = MuzzlePoint 本地 x）、`configure`/`shape_from_name`/`TurretShape`/`star` 原样，剪影与旧画法同尺寸，内部细节大砍（辉光核心/齿轮/冰晶/木纹/砌缝/多套背饰全删，弩机匣/阵眼/药室/颅吻/兜中弹/焰梢六处撞色，升星只走 `BC.star_studs`）。**坑**：本渲染器局部空间只有 16 单位（重器族 26），`BC.flat` 默认 `ow=2.2` 的墨描边（ow+2.4 宽、两边各侵入一半）会把 ≤4 单位宽的构件整个吞成黑团——全文件 ow 收窄到 0.6~1.6；更细的小件（兽角/女墙垛口）独立画三角必死（内切圆半径 < 描边半径，像素采样证实整块只剩 INK 色），必须并进大块剪影：兽角并入躯干多边形、垛齿并入顶层台身、顶层挑沿改在台身之前画（否则后画的 eave 会盖掉齿）。临时预览 `tests/brutalist_turret_preview.{gd,tscn}`（`-- --export --cell N --zoom Z` 单格放大排查；窗口纹理是 1280×720 带 4/3 content scale，像素采样别按 960×540 算）。
+
+## 2026-10-24 #18
+商店/图鉴武器图标同步到新野兽派（接 #11~#15 矢量重绘，用户问「图标同步换了没」）。**根因**：`tests/WeaponIconExport.tscn` 这个「把矢量本体抓成 PNG」的导出工具输出**只写 /tmp/weapon_icon_raw，从未落地 assets/art/ui/**；而 `assets/art/ui/*.png` 实际由 `tools/reexport_all_icons_128.py` 从 `assets_raw/images/` 的 AI 插画重烘焙 —— 矢量本体重绘后那条链路纹丝不动 ⇒ 战斗是新风、UI 仍是旧冷冽风插画。**改法**：新增 `tools/sync_weapon_ui_icons.py`（Godot 导出矢量本体 → 裁透明边 → 缩放居中 → 落 `assets/art/ui/` 128px），70 把一次同步；`assets/art/weapon_*.png`（48×48 战斗画布，坐标系与 `WeaponData.tip` 剑尖绑定）一律不动。**坑**：`GameStyle._hd_icon_path` 走 `ResourceLoader.exists` 而非 `FileAccess.file_exists`（导出包里 png 源不打包），改动 UI 图标落盘后必须重跑编辑器扫描让 `.import` 重新生成，否则真机整体回退旧图。
+
+## 2026-10-24 #17
+守卫/蛮兵撞型区分（接 #14，用户口径「样子太像」）：两人同为棕褐大氅+角+怒目，色相相撞。守卫（石岳）大氅改玄岩青灰系（outer 0.26,0.29,0.34 / inner 0.42,0.46,0.52 / edge 岩缝琥珀金），贴磐石人设；蛮兵保留兽皮深褐身份色。区分维度四个：袍色（灰 vs 棕）、摆型（heavy_overcoat 直摆 vs tattered_rags 锯齿）、武器（玄尺 vs 白斧）、角形（牛角上挑 vs 横展战角）。**坑**：SkinData 主题皮肤在 apply_to_config 里整体替换 cloak 色键，改角色基础配色不影响六套皮肤；fusion 判据的斗篷遮挡只看亮度 ≥20 阈值，岩灰 (66) 不改变 buried 判定，判据无需重跑。
+
+## 2026-10-24 #16
+新增「游戏共创」：首页左下角小按钮 → `CoCreateDialog`（角色/武器/道具/技能/其他单选分类 + 想法正文 + 可选参考图 + 联系方式），复用 FormSubmit 通道把玩家创意发到作者邮箱，主题为 `【剑士共创·分类】版本 / 平台 / 首行`。**架构**：把 `FeedbackDialog` 的表单/截图/发送/草稿/键盘避让整套搬进新基类 `scripts/ui/MailFormDialog.gd`（逻辑原样搬移，虚函数只区分文案、主题前缀、分类、草稿路径），`FeedbackDialog` 缩为薄子类，`CoCreateDialog` 再加分类 chip；`FeedbackSender` 的 `build_subject/build_fields/build_diagnostics/build_report_text/validate_message/save_draft/load_draft/clear_draft` 全部加默认参数（默认值即反馈口径，41+30 项旧判据零改动全绿）。**坑**：① 草稿必须分路径（`user://cocreate_draft.cfg`），共用一份会让两个窗口互相恢复对方内容；② 共创不带运行日志（`with_logs=false`）、但保留诊断以便知道版本平台；③ `LayoutCheck` 的发送覆盖层探针原来强转 `FeedbackDialog`，基类化后改判 `MailFormDialog`，否则共创的「发送中」是假绿；④ 首页左下角按钮与「检查更新」共用 `FOOT_BAND_H` 收边带（左对齐容器 `ALIGNMENT_BEGIN` + `offset_left=CORNER_MARGIN_LEFT`），新增页签/按钮后仍要过 `LayoutCheck`。涉及 `scripts/ui/{MailFormDialog,FeedbackDialog,CoCreateDialog,StartMenu}.gd`、`scenes/ui/CoCreateDialog.tscn`、`scenes/main/Main.tscn`、`scripts/main/Main.gd`、`scripts/systems/FeedbackSender.gd`、`tests/{layout_check,feedback_check}.gd`。
+
+## 2026-10-24 #15
+霸王同款减脂（接 #14，用户口径「霸王也改了」）：`CultivatorVisualConfig.gd` `make_bawang` body 宽度 1.22→1.10、整体 1.16→1.12、高度 1.02→1.04，三壮汉（守卫/蛮兵/霸王）口径统一为纵高块头。霸王兽骨战斧为玄铁暗金深色，与骨白面具色差远超判据 B 兜底线，且不在 `WeaponHeadFusionCheck` 的 9 人 CHAR_IDS 名单内，穿模风险本就低；图鉴预览重导出核对比例正常。
+
+## 2026-10-24 #14
+守卫/蛮兵体型减脂（用户口径「太胖了」）：`CultivatorVisualConfig.gd` 两人 body 宽度 1.25/1.26→1.10、整体 1.18/1.22→1.14/1.18、高度略升补偿，横桶身改纵高块头。**坑**：渲染器把背负法器位姿与头部画在同一份 `draw_set_transform` 缩放里，改体型会等比压缩武器-头部像素隔离带——蛮兵骨斧主色与骨白面具色差仅 0.162 < 判据 B 的 0.18，隔离带 ≥2px 是唯一通过途径，改体型后必须实跑 `WeaponHeadFusionCheck.tscn`（带窗口）复验；实跑余量充足（front 6.17 / side 3.33 / back 7.50px）无需再调背负位。霸王（1.16×1.22）未动，现已是全角色最宽。
+
+## 2026-10-24 #13
+12 御灵灵宝 + 祭坛灵兽灵珑（`scripts/weapons/ProceduralDroneRenderer.gd`）本体渲染换新野兽派平涂版（接 #11 全武器第二批）。砍除：`_soft_glow` 函数及全部柔光晕圈/透光羽/流光点/飘带/云雷纹/对旋道纹/HDR 起辉（本文件不再引用 GameStyle）；状态输入全保留改硬边表达——spawn_glow=撞色六角环收拢+方钉内聚、hp_ratio<0.3=墨裂纹、charge_ratio=撞色圆盘+墨方钉旋绕、speed_ratio=飘带甩幅/尾后方钉尘、bank_angle 仍只倾躯体组。**坑**（小尺寸平涂件通用，与 #11 验收坑互补）：①`BC.square`/小墨芯叠在 `BC.disc` 撞色芯上会把 fill 全吞成墨点（描边宽 = ow+2.4 居中，±1.3 方钉外扩 1.7px），<2px 碎件一律裸 `draw_rect`/`draw_colored_polygon` 不描边；②`BC.disc` 的墨环是**内环**（fill 画 r-ow），小半径盘别给大 ow；③钟钮/拱类悬空墨折线在深底不可见，用「墨描+主色芯」双 polyline。**契约未动**：DroneKind 序、20/40Hz 错相重绘（PerfProbe 55 项过）、各形态外接尺寸（±13~16px）。预览：`tests/brutalist_drone_preview.tscn -- --export`（16 格含灵珑 4 状态，钉 `_anim_time=0.40` + `set_process(false)` 冻结相位保证导出图逐次可比）。
+
+## 2026-10-24 #12
+宣传站角色首屏换人：散修/绝尘上首屏，守卫/蛮兵下沉折叠区。**坑**：`site/dist/data.js` 的 `roles` 顺序是 `CultivatorData.DEFS` 表序的投影，只手改 data.js 会被下一次 `export_site_data.py` 原样还原——顺序钉在导出器新常量 `SITE_ROLE_TOP`（只列首屏 8 个 id，未列角色按表序跟后，新增角色自动落折叠区，id 缺失直接 exit 1），游戏内选人顺序不动。涉及 `tools/export_site_data.py`、`site/dist/data.js`、`site/dist/index.html`（data.js 缓存版本 →25）。
+
 ## 2026-10-24 #11
 全武器 27 器形新野兽派重绘完成（平涂色块+粗墨描边+硬投影，零辉光零渐变；用户口径「太花哨，要简约」）。**架构**：新增 `scripts/weapons/shapes/BrutalistCommon.gd`（唯一配色/构件入口：flat/bar/square/disc/ring/star_studs）+ 三族模块 `BrutalistBladeShapes`（刃 9）/`BrutalistHeavyShapes`（重 8）/`BrutalistCraftShapes`（巧 10），在 `WeaponShapeLibrary._FAMILIES` 队首注册优先接管，未接管回退旧画法；坐标契约（+X/tip_len/upright）与星级表达（★2/★3 撞色方钉）未动，出膛点/判定零改动。**验收坑**（三族共同踩过，新增器形必读）：①`BC.flat` 硬投影会把 <8px 细刃/缺口填成双影——斧月牙缺口靠敞开露背景、细针用 draw_line 三层直画；②墨黑构件不能悬空在深蓝底上（柄/绳/流苏改纸暗色芯）；③窄器身（≤10px）上别用 BC.bar（描边+投影会切段器形），墨箍用纯 draw_line。**遗留**：商店/图鉴 UI 图标（assets/art weapon_*.png）仍是旧风贴图，需重跑 `tests/WeaponIconExport.tscn` 才会同步；炮塔/无人机/弹丸渲染器未动（第二批）。预览判据 `tests/BrutalistWeaponPreview.tscn -- --export` 出 27 格全量矩阵。
 

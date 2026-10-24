@@ -178,9 +178,11 @@ static func make_jianchi() -> CultivatorVisualConfig:
 	return cfg
 
 # 2. 石岳·体修（肉身成圣，高血高甲，磐石厚土，巍峨如山）
+# 体型 2026-10-24 减脂：宽度 1.25→1.10，块头往纵方向收（巍峨不臃肿）
+# 配色 2026-10-24 岩灰化：原棕褐大氅与蛮兵兽皮棕撞色相，改玄岩青灰+岩缝琥珀金（磐石本相）
 static func make_shiyue() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
-	cfg.body = { "scale": 1.18, "width_scale": 1.25, "height_scale": 1.02, "head_scale": 0.96 }
+	cfg.body = { "scale": 1.14, "width_scale": 1.10, "height_scale": 1.04, "head_scale": 0.96 }
 	cfg.face = {
 		"mask_style": "square_rock",
 		"horns_style": "bull_horns",
@@ -190,9 +192,9 @@ static func make_shiyue() -> CultivatorVisualConfig:
 	}
 	cfg.cloak = {
 		"cloak_style": "heavy_overcoat",
-		"col_outer": Color(0.22, 0.18, 0.15),     # 玄岩深褐
-		"col_inner": Color(0.35, 0.28, 0.22),     # 赭石厚土
-		"col_edge": Color(0.72, 0.52, 0.32),      # 古金岩纹
+		"col_outer": Color(0.26, 0.29, 0.34),     # 玄岩深灰
+		"col_inner": Color(0.42, 0.46, 0.52),     # 岩层青灰
+		"col_edge": Color(0.85, 0.66, 0.32),      # 岩缝琥珀金
 		"chest_ornament": "skull"
 	}
 	cfg.weapon = {
@@ -325,9 +327,10 @@ static func make_duanbi() -> CultivatorVisualConfig:
 	return make_dubi()
 
 # 7. 蛮兵（荒古狂战，陷阵无双，铜金战角，金芒怒目，兽皮深褐百衲袍，蛮荒兽骨巨斧）
+# 体型 2026-10-24 减脂：宽度 1.26→1.10，全角色第二宽的横桶身收成纵高块头
 static func make_kuangzhan() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
-	cfg.body = { "scale": 1.22, "width_scale": 1.26, "height_scale": 1.04, "head_scale": 0.94 }
+	cfg.body = { "scale": 1.18, "width_scale": 1.10, "height_scale": 1.06, "head_scale": 0.94 }
 	cfg.face = {
 		"mask_style": "stout_brute",
 		"horns_style": "barbarian_horns",
@@ -614,9 +617,10 @@ static func make_fuxiu() -> CultivatorVisualConfig:
 	return cfg
 
 # 17. 霸王（横扫千军，怒面无饰自生威，玄黑赤金大氅，兽骨战斧）
+# 体型 2026-10-24 减脂（接守卫/蛮兵 #14）：宽度 1.22→1.10，纵高块头
 static func make_bawang() -> CultivatorVisualConfig:
 	var cfg := CultivatorVisualConfig.new()
-	cfg.body = { "scale": 1.16, "width_scale": 1.22, "height_scale": 1.02, "head_scale": 0.95 }
+	cfg.body = { "scale": 1.12, "width_scale": 1.10, "height_scale": 1.04, "head_scale": 0.95 }
 	cfg.face = {
 		"mask_style": "stout_brute",
 		"horns_style": "none",

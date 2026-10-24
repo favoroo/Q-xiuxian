@@ -1771,7 +1771,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		if not _offscreen:
 			DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -18.0), int(ki_dmg), true, "剑气")
 			FxParticlePool.burst(FxParticlePool.Kind.HIT_SPARK, global_position, "gold", 1.25, false, knockback.normalized())
-			AudioManager.play_sfx("impact_blade", 0.85, 1.25)
+			AudioManager.play_sfx("enemy_hit_crit", 0.85, 1.25)
 
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
 	var elite_scale: float = 0.55 if is_elite else 1.0

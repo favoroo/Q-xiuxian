@@ -117,7 +117,7 @@ const DEFS: Dictionary = {
 						# 四芒星径向对称：tip 只取出膛距离（外刃半径），方向补偿对它无意义
 						"tip": Vector2(20, 0), "shape": "shuriken",
 						"desc": "掷出旋转手里剑连锁弹射3次，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
-						"bullet": "res://assets/art/bullet_shuriken.png", "bullet_scale": 0.6, "bullet_spin": true,
+						"bullet": "res://assets/art/bullet_shuriken.png", "bullet_scale": 0.55, "bullet_spin": true,
 						"pierce": 1, "bounce_count": 3,
 						# 2026-10-20 从 sword 改判 talisman（用户口径：「应该放进弹射吧」）：
 						# 旋刃连锁弹射本就是弹射流招牌（同日注释），弹射羁绊给穿透+远程伤害与它机制同源

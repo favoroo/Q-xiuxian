@@ -151,6 +151,12 @@ func _ready() -> void:
 	# 中断续玩：主菜单「继续游戏」按钮 → 按存档重建整局
 	if start_menu.has_signal("resume_requested"):
 		start_menu.resume_requested.connect(resume_from_save)
+	# 游戏共创：主菜单左下角按钮 → 共创弹窗（与意见反馈共用 FeedbackSender 发送链路）
+	if $UILayer.has_node("CoCreateDialog") and start_menu.has_signal("cocreation_requested"):
+		var cocreate_dialog: Control = $UILayer/CoCreateDialog
+		start_menu.cocreation_requested.connect(func():
+			cocreate_dialog.open()
+		)
 	if $UILayer.has_node("ManualDialog"):
 		var manual_dialog: Control = $UILayer/ManualDialog
 		if start_menu.has_signal("manual_requested"):
