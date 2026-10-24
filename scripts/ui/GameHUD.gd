@@ -487,14 +487,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		if DetailTip.close_all(self):
 			get_viewport().set_input_as_handled()
 			return
+	# E 松开半拍先收祭坛键盘充能（没在充时键内自判为空操作）
+	if event is InputEventKey and not event.pressed and event.keycode == KEY_E:
+		_obelisk_widget.key_release()
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
 			if _skill_box != null and _skill_box.visible:
 				_skill_widget.trigger_press()
 				get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_E:
-			if _extra_skill_box != null and _extra_skill_box.visible:
-				_extra_skill_widget.trigger_press()
+			# E 专职祭坛激活：键亮着才充能，额外技能只走鼠标/触屏
+			if _obelisk_widget.can_key_charge():
+				_obelisk_widget.key_press()
 				get_viewport().set_input_as_handled()
 
 func _on_hp_changed(cur: float, max_v: float) -> void:

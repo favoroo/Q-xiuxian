@@ -149,7 +149,16 @@ func _trail_reset() -> void:
 		_trail_root.visible = false
 
 ## 元素调色板：main 主刃色 / core 近白亮芯 / glow 低透明外晕
+## 2026-10-24 静态缓存：_trail_sample 每次重绘拍都取一次，原先每次新建 3 键 Dictionary；
+## 调色板只含常量色且无调用方改写，按 elem 常驻共享。
+static var _palette_cache := {}
+
 static func _palette(elem: String) -> Dictionary:
+	if not _palette_cache.has(elem):
+		_palette_cache[elem] = _build_palette(elem)
+	return _palette_cache[elem]
+
+static func _build_palette(elem: String) -> Dictionary:
 	match elem:
 		"fire":
 			return {"main": Color(1.0, 0.52, 0.16), "core": Color(1.0, 0.95, 0.80), "glow": Color(0.85, 0.25, 0.12)}

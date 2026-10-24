@@ -756,12 +756,12 @@ func _open_enemy_tip(eid: String, is_elite: bool, anchor: Control) -> void:
 		payload["icon_texture"] = icon_tex
 	DetailTip.show_over(self, anchor, payload)
 
-## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文走朱砂色块强调。
+## 文案里的【】是「危险机制词」标记（口径见 EnemyGuideData 头注），详情卡正文走深红文字强调。
 static func _danger_bbcode(raw: String) -> String:
 	var re := RegEx.new()
 	re.compile("【([^】]+)】")
-	var open := "[bgcolor=#" + GameStyle.BAD.to_html(false) + "][color=#" + GameStyle.INK_TEXT.to_html(false) + "]"
-	return re.sub(raw, open + "$1[/color][/bgcolor]", true)
+	var open := "[color=#" + GameStyle.BAD_DK.to_html(false) + "]"
+	return re.sub(raw, open + "$1[/color]", true)
 
 ## 未收录只给纯文本：括号是排版记号，不该在玩家面前露出来
 static func _desc_plain(raw: String) -> String:

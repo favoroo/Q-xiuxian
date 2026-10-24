@@ -302,6 +302,14 @@ func _draw() -> void:
 ## 按半径与弧角张量自适应 6~32 段。静态缓冲复用，_draw 在主线程串行执行，无重入风险。
 static var _circle_buf := PackedVector2Array()
 static var _stroke_buf := PackedVector2Array()
+## 敌种轮廓缓冲（2026-10-24 性能优化）：史莱姆 12 点 / 血蛹茧壳 16 点 / 血蛹缠带 5 点 /
+## 雷兽鸟身 26 点 / 闭合椭圆描边 29 点原先每次 _draw 局部新建 Packed 数组（约千次/秒分配，
+## Android 上是 GC 停顿来源），统一改静态缓冲覆写。口径同上：主线程串行，无重入风险。
+static var _slime_buf := PackedVector2Array()
+static var _shell_buf := PackedVector2Array()
+static var _band_buf := PackedVector2Array()
+static var _body_buf := PackedVector2Array()
+static var _oval_stroke_buf := PackedVector2Array()
 
 func _circle(center: Vector2, radius: float, col: Color) -> void:
 	var seg := clampi(int(radius * 1.4), 6, 28)
@@ -430,7 +438,7 @@ func _draw_slime() -> void:
 		Color(config.col_primary.r, config.col_primary.g, config.col_primary.b, 0.42))
 
 	# 柔性流质血煞外轮廓（12 节点平滑蛋形，逐点叠一道自背向面推进的行进波）
-	var pts := PackedVector2Array()
+	_slime_buf.resize(12)
 	for i in range(12):
 		var ang := float(i) / 12.0 * TAU - PI * 0.5
 		var px := cos(ang) * 15.0
@@ -441,9 +449,9 @@ func _draw_slime() -> void:
 		var w := sin(gait_phase - px * 0.32) * 1.7 * crawl_amp
 		px += cos(ang) * w
 		py += sin(ang) * w * 0.6
-		pts.append(Vector2(px * squish_x, py * squish_y))
+		_slime_buf[i] = Vector2(px * squish_x, py * squish_y)
 	# 外轮廓走统一骨白勾边（2026-10-20：原暗黑凝血勾边在黑底战场上完全读不出轮廓）
-	draw_stroked_polygon(pts, config.col_primary, _contour_color(), 1.3)
+	draw_stroked_polygon(_slime_buf, config.col_primary, _contour_color(), 1.3)
 
 	# 流质润泽弧（左上暗血反光，表现湿滑血胶表面，绝不用纯白光斑）
 	_arc(Vector2(0, -1), 10.2, deg_to_rad(198.0), deg_to_rad(250.0), 10, Color(0.82, 0.22, 0.28, 0.28), 1.4, true)
@@ -872,14 +880,14 @@ func _draw_xueyong() -> void:
 	var ry := (15.0 - pulse * 0.5) * squish_y
 
 	# 暗红血晶茧体：轮廓叠一道自尾向头的 slither 拱波（与 gait_phase 同相，移动才起波）
-	var shell := PackedVector2Array()
+	_shell_buf.resize(16)
 	for i in range(16):
 		var ang := float(i) / 16.0 * TAU
 		var px := cos(ang) * rx
 		var py := sin(ang) * ry
 		var arch := sin(gait_phase - px * 0.28) * 1.7 * crawl_amp
-		shell.append(center + Vector2(px, py + arch))
-	draw_stroked_polygon(shell, config.col_primary, _contour_color(), 1.4)
+		_shell_buf[i] = center + Vector2(px, py + arch)
+	draw_stroked_polygon(_shell_buf, config.col_primary, _contour_color(), 1.4)
 
 	# 内部幽微血光核心（心跳明暗）
 	var core_alpha := 0.4 + sin(_time * 3.0) * 0.25
@@ -897,7 +905,7 @@ func _draw_xueyong() -> void:
 	for k in range(5):
 		var y0 := -10.0 + float(k) * 5.0
 		var slant := 3.0 if k % 2 == 0 else -3.0
-		var band := PackedVector2Array()
+		_band_buf.resize(5)
 		for s in range(5):
 			var t := float(s) / 4.0
 			var dy := y0 + slant * (t * 2.0 - 1.0)
@@ -905,15 +913,15 @@ func _draw_xueyong() -> void:
 			# 半宽按「带实际落点高度」夹到茧面内，防下坠段戳出轮廓
 			var ry_eff := maxf(ry - absf(dy + sag), 1.0)
 			var hw := rx * sqrt(maxf(1.0 - ((dy + sag) / ry) * ((dy + sag) / ry), 0.04)) * (ry_eff / ry)
-			band.append(center + Vector2((t * 2.0 - 1.0) * hw, dy + sag))
+			_band_buf[s] = center + Vector2((t * 2.0 - 1.0) * hw, dy + sag)
 		# 暗底宽描边 + 骨白带身 = 粗黑勾边缠带
-		draw_polyline(band, config.col_void, 4.8, true)
-		draw_polyline(band, config.col_secondary, 3.2, true)
+		draw_polyline(_band_buf, config.col_void, 4.8, true)
+		draw_polyline(_band_buf, config.col_secondary, 3.2, true)
 		# 布面织纹：沿带的暗色细中线
-		draw_polyline(band, config.col_primary.lightened(0.1), 0.8, true)
+		draw_polyline(_band_buf, config.col_primary.lightened(0.1), 0.8, true)
 		# 隔带朱砂封灵符线
 		if k % 2 == 1:
-			draw_polyline(band, Color(0.85, 0.15, 0.2, 0.9), 1.1, true)
+			draw_polyline(_band_buf, Color(0.85, 0.15, 0.2, 0.9), 1.1, true)
 
 	# 顶端 2~3 根短触须微颤（将裂未裂的探知读点）
 	for i in range(3):
@@ -1315,15 +1323,14 @@ func _draw_oval(center: Vector2, rx: float, ry: float, col: Color) -> void:
 		_oval_buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
 	draw_colored_polygon(_oval_buf, col)
 
-## 高段数椭圆描边（同上，闭合 polyline 而非 arc）。
+## 高段数椭圆描边（同上，闭合 polyline 而非 arc）。缓冲覆写口径同 _oval_buf。
 func _stroke_oval(center: Vector2, rx: float, ry: float, col: Color, width: float) -> void:
 	var seg := 28
-	var buf := PackedVector2Array()
-	buf.resize(seg + 1)
+	_oval_stroke_buf.resize(seg + 1)
 	for i in range(seg + 1):
 		var ang := float(i) * TAU / float(seg)
-		buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
-	draw_polyline(buf, col, width, true)
+		_oval_stroke_buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
+	draw_polyline(_oval_stroke_buf, col, width, true)
 
 ## 11. 雷兽 / 赤雷兽 (雷鸦·振翅飞行兽)
 ## 2026-10-22 整只重画：旧版是贴地四足走兽，四条腿只有髋/膝/蹄三点、单一相位对角摆动，
@@ -1432,14 +1439,13 @@ func _draw_leibeast(is_elite: bool) -> void:
 	var body_tilt := deg_to_rad(-12.0)
 	# 躯干局部坐标系：以 body_c 为中心、按 body_tilt 斜置
 	var bt := rot * Transform2D(body_tilt, body_c)
-	var body_pts := PackedVector2Array()
-	body_pts.resize(26)
+	_body_buf.resize(26)
 	for i in range(26):
 		var a := float(i) * TAU / 26.0
 		# 后腰（cos<0）略收、前胸（cos>0）略鼓 → 蛋形
 		var taper := 1.0 + 0.06 * maxf(cos(a), 0.0) - 0.04 * maxf(-cos(a), 0.0)
-		body_pts[i] = bt * Vector2(cos(a) * body_rx * taper, sin(a) * body_ry)
-	draw_stroked_polygon(body_pts, body_fill, config.col_primary.darkened(0.40), 1.3)
+		_body_buf[i] = bt * Vector2(cos(a) * body_rx * taper, sin(a) * body_ry)
+	draw_stroked_polygon(_body_buf, body_fill, config.col_primary.darkened(0.40), 1.3)
 	# 体积只用「上缘高光 + 下缘暗影」两条弧读（不再叠内部斑块：三块椭圆叠在一起会读成熊猫眼）
 	_arc(bt * Vector2(-0.6, -0.4), body_rx * 0.74, deg_to_rad(206.0), deg_to_rad(316.0), 16,
 		config.col_accent.darkened(0.06), 1.5, true)

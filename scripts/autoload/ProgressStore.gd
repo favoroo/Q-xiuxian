@@ -113,9 +113,34 @@ static func load_into(gm: Node) -> void:
 
 		var hist = cfg.get_value("history", "recent_runs", [])
 		gm.run_history = hist.duplicate() if hist is Array else []
+
+		# 2026-10-24 坏字段可见化：文件能解析但字段类型不对（手改/写入中断）时原先静默回落
+		# 默认值，玩家侧读作「解锁/记录全没了」且日志零线索。异常字段集中点名一条。
+		var bad_fields: Array[String] = []
+		if not (cults is Array):
+			bad_fields.append("unlocked_cultivators")
+		if not (itms is Array):
+			bad_fields.append("unlocked_items")
+		if not (achs is Array):
+			bad_fields.append("unlocked_achievements")
+		if not (cbd is Dictionary):
+			bad_fields.append("cultivator_best_danger")
+		if not (cdc is Dictionary):
+			bad_fields.append("cultivator_danger_clears")
+		if not (crec is Dictionary):
+			bad_fields.append("cultivator_records")
+		if not (vlog is Array):
+			bad_fields.append("victory_log")
+		if not (hist is Array):
+			bad_fields.append("recent_runs")
+		if not bad_fields.is_empty():
+			push_error("ProgressStore: progress.cfg 字段类型异常（%s），对应内容已回落默认 —— 疑似存档被手改或写入中断 path=%s" % [
+					"、".join(PackedStringArray(bad_fields)), PROGRESS_PATH])
 	else:
 		if FileAccess.file_exists(PROGRESS_PATH):
-			push_warning("ProgressStore: 读取局外进度失败 err=%d path=%s，已回落默认" % [load_err, PROGRESS_PATH])
+			# 2026-10-24 从 warning 升级为 error：文件在但读不出来 = 玩家进度实际丢失，
+			# 是需要被看见的故障（首次启动无档走上面的 OK 外路径，不进这里）
+			push_error("ProgressStore: 读取局外进度失败 err=%d path=%s，已回落默认" % [load_err, PROGRESS_PATH])
 		gm.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
 		gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
 		gm.unlocked_achievements = []

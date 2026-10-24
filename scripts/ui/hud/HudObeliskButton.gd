@@ -19,6 +19,8 @@ const BTN_FONT := 18
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
 var _active_ob: BlessingObelisk = null
+## 键盘 E 的按住态：只认键盘自己的按下/松开对，E 松开不会误停鼠标/触屏正在充的能
+var _key_holding := false
 var _anim_tween: Tween = null
 var _base_scale: Vector2 = Vector2.ONE
 var _edit_mode: bool = false
@@ -64,6 +66,10 @@ func _build_button() -> void:
 	_ring.head_color = GameStyle.JADE_EDGE
 	_btn.add_child(_ring)
 
+	# 键位提示签（桌面端/桌面浏览器专属）：E 长按激活，移动端无键盘不亮
+	if SkillButtonView.key_hint_enabled():
+		_btn.add_child(SkillButtonView.make_key_chip("E"))
+
 ## 键面样式：平时墨底蓝勾边，按住充能整面翻实蓝 —— 文案不动，状态由底色 + 那一圈说
 func _style_btn(charging: bool) -> void:
 	SkillButtonView.style_circle_action(_btn, GameStyle.GOLD, BTN_FONT, charging)
@@ -87,6 +93,27 @@ func handle_input(event: InputEvent) -> void:
 		_active_ob.start_charge()
 		_style_btn(true)
 	elif is_release and _active_ob != null:
+		_active_ob.stop_charge()
+		_style_btn(false)
+
+## 键盘路由判据（GameHUD 分流 E 键用）：按钮亮着且挂着还没触发过的阵法
+func can_key_charge() -> bool:
+	return visible and not _edit_mode and _active_ob != null and not _active_ob.is_triggered
+
+## 键盘 E 按下：与键面按住同一套充能状态（start_charge 自带 is_triggered/入阵门）
+func key_press() -> void:
+	if _edit_mode or _key_holding or _active_ob == null:
+		return
+	_key_holding = true
+	_active_ob.start_charge()
+	_style_btn(true)
+
+## 键盘 E 松开：充能收尾（没充上时是幂等空操作）
+func key_release() -> void:
+	if not _key_holding:
+		return
+	_key_holding = false
+	if _active_ob != null:
 		_active_ob.stop_charge()
 		_style_btn(false)
 

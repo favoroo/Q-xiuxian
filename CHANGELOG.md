@@ -1,3 +1,6 @@
+## 2026-10-24 #05
+新增新野兽派武器重绘样稿对比预览（非判据）：`tests/BrutalistWeaponPreview.tscn` + `tests/brutalist_weapon_preview.gd`，同器形同 tip_len 对照现行 `ProceduralWeaponRenderer` 与样稿画法（平涂色块+粗墨描边+硬投影，零辉光零渐变），开窗跑 `-- --export` 出图到 `tests/styles/brutalist_weapon_preview.png`。**坑**：项目 stretch 是 canvas_items + 960×540 基准，预览里 `get_window().size` 改大会被等比缩放裁切，预览排版必须守在 960×540 内。
+
 ## 2026-10-24 #04
 宣传站首屏视频放大（桌面端观感锯齿/发糊）。**根因**：hero 沿用正文 1200px 容器 + 1.02:1 双列，视频实际只渲染约 530px 宽，1080p 画面被缩到不足三分之一，像素风素材缩小后出现糊边与锯齿。**改法**：`.hero-in` 单独放宽容器至 1440px 并把列比例改为 `1fr : 1.3fr`（视频列约 760px，放大约 44%），正文列仍有约 590px 不挤；≤860px 的单列断点不变，移动端不受影响。缓存版本升 `?v=22` 并重新部署。涉及 `site/dist/{styles.css,index.html}`。
 

@@ -41,6 +41,7 @@ func _check_data() -> void:
 	_c.near(float(aegis["cooldown"]), 8.0, 0.001, "金光护体基础冷却 8 秒")
 	_c.near(float(aegis["duration"]), 2.5, 0.001, "金光护体持续 2.5 秒")
 	_c.near(float(aegis["knockback_boost"]), 3.0, 0.001, "金光护体期间击退力度 ×3")
+	_c.near(float(aegis["sword_ki_ratio"]), 0.50, 0.001, "金光护体期间金光剑气附伤 50%")
 	var renewal := SkillData.final_stats("renewal", "")
 	_c.near(float(renewal["cooldown"]), 15.0, 0.001, "回春术基础冷却 15 秒")
 	_c.near(float(renewal["power"]), 0.40, 0.001, "回春术瞬发回复 40%")
@@ -164,6 +165,7 @@ func _run() -> void:
 	_c.check(player.try_activate_skill(), "金光护体释放成功")
 	_c.near(player.invulnerable_time, 2.5, 0.1, "金光护体起 2.5 秒无敌")
 	_c.near(GameManager.buff_knockback_mult, 3.0, 0.001, "金光护体期间法器击退力度 ×3")
+	_c.near(GameManager.buff_sword_ki_ratio, 0.50, 0.001, "金光护体期间金光剑气附伤激活 0.50")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "无敌进行中冷却尚未起转")
 	_c.check(vfx.aegis_active, "金光护体激活六方法印结界与金芒护罩")
 	vfx.aegis_timer = 0.02
@@ -171,6 +173,7 @@ func _run() -> void:
 	for i in range(6):
 		await get_tree().physics_frame
 	_c.near(GameManager.buff_knockback_mult, 1.0, 0.001, "金光护体到期后击退乘区回 1.0")
+	_c.near(GameManager.buff_sword_ki_ratio, 0.0, 0.001, "金光护体到期后金光剑气附伤回 0.0")
 	_c.check(not vfx.aegis_active, "金光护体到期后结界转入碎灭散逸")
 	_c.near(player.skill_cd_left, 8.0, 0.3, "无敌效果结束此刻才进冷却（8 秒档）")
 

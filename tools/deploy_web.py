@@ -15,7 +15,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_DIR = REPO_ROOT / 'build' / 'web'
 SITE_DIR = REPO_ROOT / 'site' / 'dist'
-GODOT_BIN = '/Applications/Godot.app/Contents/MacOS/Godot'
+GODOT_BIN = os.environ.get('GODOT_BIN', os.environ.get('G', '/Applications/Godot.app/Contents/MacOS/Godot'))
 
 # GitHub Pages 地址（项目页面，非用户页面）
 GITHUB_OWNER, GITHUB_REPO = 'favoroo', 'Q-xiuxian'

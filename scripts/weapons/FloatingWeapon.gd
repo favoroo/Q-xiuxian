@@ -708,16 +708,20 @@ func _process(delta: float) -> void:
 		# 急停时向前荡回，配合下面的位置 lerp 自然形成弹簧感（纯视觉偏移，判定圆心仍用 global_position）
 		var inertia: Vector2 = -_smoothed_player_vel * INERTIA_FACTOR * _feel_inertia
 		# 双频呼吸：主频沿用原节奏，叠一层慢副频 + 实例独立相位，破掉"全场一起上下"的节拍器感
-		var bob_y: float = sin(bob_phase) * BOB_MAIN_AMP + sin(bob_phase * BOB_SUB_FREQ + _idle_phase) * BOB_SUB_AMP
+		# 2026-10-24：两组 sin 同帧各算一次复用（原先 bob/breath/aura 三处重复求值，
+		# 8 武器 × 60fps ≈ 2880 次/秒的冗余 sin）
+		var bob_main := sin(bob_phase)
+		var bob_sub := sin(bob_phase * BOB_SUB_FREQ + _idle_phase)
+		var bob_y: float = bob_main * BOB_MAIN_AMP + bob_sub * BOB_SUB_AMP
 		position = position.lerp(orbit_pos + inertia + Vector2(0, bob_y), minf(delta * _feel_orbit, 1.0))
 
 		# 待机器身微呼吸与灵光脉动（同样双频，避免与邻居同拍）
-		var breath := sin(bob_phase) * 0.014 + sin(bob_phase * BOB_SUB_FREQ + _idle_phase) * 0.010
+		var breath := bob_main * 0.014 + bob_sub * 0.010
 		sprite.scale = _base_sprite_scale * (1.0 + breath)
 		if _proc_renderer != null:
 			_proc_renderer.scale = sprite.scale
 		if aura_sprite != null:
-			aura_sprite.modulate.a = 0.12 + sin(bob_phase) * 0.035 + sin(bob_phase * BOB_SUB_FREQ + _idle_phase) * 0.02
+			aura_sprite.modulate.a = 0.12 + bob_main * 0.035 + bob_sub * 0.02
 
 	# 3. 朝向：有目标面向目标；无目标朝轨道外（贴图补偿与镜像都在 _apply_facing 一处算）
 	if not is_attacking:

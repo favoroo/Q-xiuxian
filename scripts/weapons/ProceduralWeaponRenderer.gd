@@ -132,8 +132,17 @@ func is_implemented() -> bool:
 	return shape != WeaponShape.GENERIC
 
 ## 五行配色：亮面 / 暗面 / 刃口流光 / HDR 起辉 / 柄色
+## 2026-10-24 静态缓存：本文件 20+ 个器形绘制函数每次 _draw 各取一次，原先每次新建 5 键
+## Dictionary；调色板只含常量色且无调用方改写（只读 pal["xxx"]），按 element 常驻共享。
+static var _palette_cache := {}
+
 func _palette() -> Dictionary:
-	match element:
+	if not _palette_cache.has(element):
+		_palette_cache[element] = _build_palette(element)
+	return _palette_cache[element]
+
+static func _build_palette(elem: String) -> Dictionary:
+	match elem:
 		"wood":
 			return {
 				"light": Color(0.72, 0.90, 0.74), "dark": Color(0.40, 0.62, 0.44),

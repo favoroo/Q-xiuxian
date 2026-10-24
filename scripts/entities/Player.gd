@@ -524,6 +524,7 @@ func _on_skill_effect_end() -> void:
 	match _skill_active_kind:
 		SkillData.Kind.IFRAME:
 			GameManager.buff_knockback_mult = 1.0
+			GameManager.buff_sword_ki_ratio = 0.0
 	_skill_active_kind = -1
 	_begin_skill_cooldown()
 
@@ -792,12 +793,28 @@ func _do_haste(st: Dictionary) -> void:
 func _do_aegis(st: Dictionary) -> void:
 	var dur: float = float(st["duration"])
 	invulnerable_time = maxf(invulnerable_time, dur)
-	# 金光罡风：无敌期间武器击退力度大幅提升（活跃窗口走完由 _on_skill_effect_end 回 1.0）
+	# 金光护体：无敌期间武器击退力度大幅提升，并激活金光剑气附伤（活跃窗口走完由 _on_skill_effect_end 精确回滚）
 	GameManager.buff_knockback_mult = float(st.get("knockback_boost", 1.0))
+	GameManager.buff_sword_ki_ratio = float(st.get("sword_ki_ratio", 0.50))
 	play_squash(Vector2(0.82, 1.22), 0.24)
 	if skill_vfx != null:
 		skill_vfx.on_aegis_start(dur)
 	AudioManager.play_sfx("skill_aegis", 1.0)
+	# 护体罡风爆发：开启瞬间主动震开周身贴身敌人并造成金光震荡伤害
+	_repel_aegis_surroundings()
+
+## 金光护体震开周身敌人并造成金光震荡伤害（开盾瞬间解围脱困）
+func _repel_aegis_surroundings() -> void:
+	var repel_radius := 120.0
+	var impulse: float = 280.0 * GameManager.knockback_mult
+	var dmg: float = 20.0 * GameManager.get_weapon_damage_mult() * GameManager.buff_damage_mult
+	for e in EnemyFilter.collect(get_tree(), global_position, repel_radius):
+		var off: Vector2 = e.global_position - global_position
+		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
+		e.take_damage(dmg, dir * impulse)
+	var parent_node: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
+	if parent_node != null:
+		JuiceEffect.spawn_shockwave(parent_node, global_position, repel_radius, GameStyle.GOLD_FX_EDGE, 0.28)
 
 func _do_renewal(st: Dictionary) -> void:
 	heal(max_health * float(st["power"]), true)

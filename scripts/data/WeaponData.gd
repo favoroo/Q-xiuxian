@@ -1201,34 +1201,13 @@ const SYNERGY_BASE := {
 ## 开局六选一：六大器类齐备（长剑-剑系/雷牌-雷法/风扇-横扫/火符-弹射/机关弩-机关/护蝶-御灵），兼顾五行
 const STARTER_IDS: Array = ["qingyun_sword", "wulei_paizi", "bajiao_fan", "huoyan_fu", "jiguan_nu", "lingdie"]
 
-## 商店武器池（全部武器，分批新增记录见各段注释）
-const SHOP_POOL: Array = [
-	"qingyun_sword", "gengjin_feijian", "liuye_feidao", "baoyu_liuhuazhen",
-	"qingmu_tengbian", "wanmu_lingfu", "lingdie", "lianhuan_lingdan",
-	"bajiao_fan", "xuanbing_feizhen", "hanquan_yulian", "bihai_chaoyindi",
-	"huoyan_fu", "chiyan_dao", "fentian_baodeng", "sanmei_huohu",
-	"wulei_paizi", "fantian_yin", "hunyuan_zhong", "xuanwu_lingdun",
-	# 2026-10-10 新增 15 把：补 器类×五行 格子 + 流派专武
-	"jinzhen_fu", "xuanbing_fu", "zhenshan_fu", "jinjiao_jian", "qingteng_jian",
-	"jinlei_zhui", "chunlei_gu", "haojin_lun", "lihuo_ya",
-	"xueyin_dao", "jubao_chi", "tougu_ding", "benlang_chui", "liuling_jian", "xuanwu_pei",
-	# 机关支路 3 把
-	"jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou",
-	# 2026-10-11 新增 10 把：加厚五行×器类交叉格子 + 补机关/雷法（详见 DEFS 尾部设计注释）
-	"liuhuo_feijian", "zhenhuo_fu", "leihuo_fu",
-	"hanshuang_jian", "langli_suo", "hanquan_shou",
-	"gudu_fu", "tengluo_jiguan", "bengshan_jian", "leishi_jiguan",
-	# 2026-10-11 第二批 12 把：御灵全面加厚 + 三标签交叉（详见 DEFS 尾部设计注释）
-	"jinming_ling", "muling_ou", "bingpo_zhu", "chiyan_ying", "tuling_shi", "jianling",
-	"kuilei_shou", "lieshan_duo", "jingzhe_fu", "liaoyuan_shan", "kaishan_fu", "gengjin_fu",
-	# 2026-10-12 第三批 8 把：填满只剩 1 把的 器类×五行 交叉格（详见 DEFS 尾部设计注释）
-	"taomu_jian", "guishui_fu", "houtu_fu", "jinxiao_leiling",
-	"xuanming_leizhu", "qingmu_pao", "ningbing_nu", "fenghuo_tai",
-	# 2026-10-13 束流支路：首把光束法器（喷吐支路由火葫芦改造承担）
-	"zihong_jing",
-	# 2026-10-19 手里剑：弹射流招牌（单发旋刃连锁弹射3次，弹射×金；2026-10-20 从剑系改判弹射）
-	"shoulijian",
-]
+## 商店武器池 = 全部武器。
+## 2026-10-24 起由 DEFS 键自动派生：原先是 70 个 id 的手工副本（分批新增记录见各段注释），
+## 漏抄一个的后果是「新武器永远不进商店且无任何报错」（13 处消费方与 8 个测试都遍历
+## SHOP_POOL 而非 DEFS，测试跟着失明）。机制上根除：加武器只改 DEFS 一处。
+## 消费方约定：只读迭代/索引，不得 mutate（static 共享，写坏会污染整个会话）；
+## 若未来需要「个别武器不进商店」，在 DEFS 条目加 "in_shop": false 再在这里过滤。
+static var SHOP_POOL: Array = DEFS.keys()
 
 ## 回血丹（商店消耗品）
 const POTION_ID: String = "healing_pill"

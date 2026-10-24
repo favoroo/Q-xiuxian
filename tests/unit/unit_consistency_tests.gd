@@ -253,6 +253,23 @@ func _test_item_desc_apply() -> void:
 			extra.append(float(d["wave_heal_pct"]))
 		_check_desc_matches_apply(_c, "ItemData", String(item_id), String(d.get("desc", "")), d.get("apply", {}), extra)
 
+## 角色道具软亲和标签守卫（2026-10-24）：item_tags 已收进 CultivatorData.DEFS 条目（原先的
+## 独立 ITEM_TAGS 手工副本漏抄一个 = 该角色道具亲和静默退化成空、商店推荐全部失明，无任何报错）。
+## 新角色条目必须带非空 item_tags，漏配在这里显性报红。
+func _test_cultivator_item_tags() -> void:
+	var missing: Array[String] = []
+	var empty_tags: Array[String] = []
+	for cid in CultivatorData.all_ids():
+		var d := CultivatorData.get_def(String(cid))
+		if not d.has("item_tags"):
+			missing.append(String(cid))
+		elif (d["item_tags"] as Array).is_empty():
+			empty_tags.append(String(cid))
+	_c.check(missing.is_empty(), "每个角色 DEFS 条目都带 item_tags 字段（缺失：%s）" % "; ".join(PackedStringArray(missing)))
+	_c.check(empty_tags.is_empty(), "角色 item_tags 不得为空数组（空表 = 商店亲和全失明：%s）" % "; ".join(PackedStringArray(empty_tags)))
+	_c.check(CultivatorData.item_tags_of("jianchi").size() == 3,
+			"item_tags_of 走 DEFS 读取（剑士应返回 3 个标签，实得 %d）" % CultivatorData.item_tags_of("jianchi").size())
+
 func _test_skill_desc_apply() -> void:
 	# 神通卡文案不带富文本，直接对 power 百分比与「N秒」持续时长做同源断言
 	for sid in SkillData.all_ids():
@@ -270,7 +287,7 @@ func _test_skill_desc_apply() -> void:
 			if not hit:
 				probs.append("power=%s 与文案百分比不一致（期望 %s%%）" % [d["power"], want])
 		# 附加效果的数值也要在文案里对得上账（2026-10-11 技能改版新增字段）
-		for extra_key in ["dodge_add", "pet_heal_pct"]:
+		for extra_key in ["dodge_add", "pet_heal_pct", "sword_ki_ratio"]:
 			if d.has(extra_key) and float(d[extra_key]) > 0.0 and "%" in desc:
 				var want_extra := float(d[extra_key]) * 100.0
 				var hit := false

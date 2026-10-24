@@ -1035,7 +1035,11 @@ func _physics_process(delta: float) -> void:
 
 ## 嘲讽目标选择（2026-10-11 祭坛灵兽）：嘲讽圈内有灵兽则追最近的灵兽，否则维持追玩家。
 ## 灵兽最多 3 只（三座祭坛各召唤一只），全表扫描开销可忽略。
+## 2026-10-24 短路：无灵兽时（绝大多数对局）每敌每物理帧的空表遍历是白烧（35 敌 × 60Hz ≈ 2100 次/秒），
+## 用 ally_count 计数镜像先挡掉，零遍历直接返回玩家。
 func _taunt_target(player: Node2D) -> Node2D:
+	if GameManager.ally_count <= 0:
+		return player
 	var best: Node2D = player
 	var best_sq: float = GameBalance.SPIRIT_BEAST_TAUNT_RADIUS * GameBalance.SPIRIT_BEAST_TAUNT_RADIUS
 	for ally in GameManager.live_allies:
@@ -1081,12 +1085,28 @@ func _flock_steerable() -> bool:
 		return false
 	return true
 
+## 屏外剔除变换缓存（2026-10-24）：全场敌人共享同一物理帧的 canvas_transform + visible_rect，
+## 每物理帧只查一次引擎接口（照 HollowKnightEnemyRenderer._cull_frame 的范式）。
+## 原先每敌各自每 0.1s 查 3 次引擎接口（35 敌 ≈ 350 次/秒的 get_viewport/get_canvas_transform/
+## get_visible_rect 冗余调用）。键用物理帧号 —— 本函数跑在 _physics_process，与渲染器侧
+## 按 get_frames_drawn 缓存的那份各自独立、互不串帧。
+static var _cull_frame: int = -1
+static var _cull_transform: Transform2D
+static var _cull_limit: Vector2
+static var _cull_valid: bool = false
+
 func _update_offscreen_cull() -> void:
-	var vp := get_viewport()
-	if vp != null:
-		var sp: Vector2 = vp.get_canvas_transform() * global_position
-		var lim: Vector2 = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
-		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > lim.x or sp.y > lim.y
+	var frame := Engine.get_physics_frames()
+	if frame != _cull_frame:
+		_cull_frame = frame
+		var vp := get_viewport()
+		_cull_valid = vp != null
+		if _cull_valid:
+			_cull_transform = vp.get_canvas_transform()
+			_cull_limit = vp.get_visible_rect().size + Vector2.ONE * CULL_MARGIN
+	if _cull_valid:
+		var sp: Vector2 = _cull_transform * global_position
+		_offscreen = sp.x < -CULL_MARGIN or sp.y < -CULL_MARGIN or sp.x > _cull_limit.x or sp.y > _cull_limit.y
 
 ## 灼烧/剧毒跳伤结算；致死（dying）返回 true，调用方立即结束本帧
 func _tick_damage_over_time(delta: float) -> bool:
@@ -1742,6 +1762,16 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 致命一刀不再发命中火花：尸体 0.185s 就塌缩没，火花要放 0.22s，会在空处留一道白闪；
 	# 击杀点反馈由 _die() 的死亡爆散一力承担（视觉不丢，只是不再双发）
 	var lethal := current_hp <= 0.0
+
+	# 金光护体·金光剑气附伤：无敌期间直击命中敌人附带金光剑气打击与金芒斩击
+	if not from_dot and amount > 0.0 and GameManager.buff_sword_ki_ratio > 0.0 and not lethal:
+		var ki_dmg := amount * GameManager.buff_sword_ki_ratio
+		current_hp -= ki_dmg
+		lethal = current_hp <= 0.0
+		if not _offscreen:
+			DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -18.0), int(ki_dmg), true, "剑气")
+			FxParticlePool.burst(FxParticlePool.Kind.HIT_SPARK, global_position, "gold", 1.25, false, knockback.normalized())
+			AudioManager.play_sfx("impact_blade", 0.85, 1.25)
 
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
 	var elite_scale: float = 0.55 if is_elite else 1.0

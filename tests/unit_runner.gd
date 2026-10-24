@@ -88,6 +88,7 @@ func _ready() -> void:
 		[content, "_test_turret_and_new_cultivators"],
 		[consistency, "_test_upgrade_desc_apply"],
 		[consistency, "_test_icon_assets_exist"],
+		[consistency, "_test_cultivator_item_tags"],
 		[consistency, "_test_item_desc_apply"],
 		[consistency, "_test_skill_desc_apply"],
 		[consistency, "_test_synergy_effects_text"],

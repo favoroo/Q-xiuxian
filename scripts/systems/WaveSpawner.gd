@@ -186,11 +186,21 @@ func _process(delta: float) -> void:
 ## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 无尽潮数倍率，
 ## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=48 绝对硬顶 —— 深层无尽极端构建
 ## （危险 5 × 潮数 2.0 可叠到 ~95）不再失控，常规 20 波（峰值 ~33）不受影响。
+## 2026-10-24 输入签名缓存：_process_fight 每帧取 2 次，但四个输入只在开局/换波时变；
+## 签名（max_enemies/倍率/危险度/波数）不变直接返回缓存，变了对齐重算一次。
+var _cap_cache: int = 0
+var _cap_sig: Vector4 = Vector4(-1.0, -1.0, -1.0, -1.0)
+
 func _final_enemy_cap() -> int:
+	var sig := Vector4(max_enemies, GameManager.enemy_count_mult, float(GameManager.danger_level), float(wave_number))
+	if sig == _cap_sig:
+		return _cap_cache
+	_cap_sig = sig
 	var raw := int(round(float(max_enemies) * GameManager.enemy_count_mult
 		* GameBalance.danger_count_mult(GameManager.danger_level)
 		* GameBalance.endless_swarm_mult(wave_number)))
-	return mini(raw, GameBalance.MAX_ENEMIES_HARD_CAP)
+	_cap_cache = mini(raw, GameBalance.MAX_ENEMIES_HARD_CAP)
+	return _cap_cache
 
 func _process_fight(delta: float) -> void:
 	var player = GameManager.player

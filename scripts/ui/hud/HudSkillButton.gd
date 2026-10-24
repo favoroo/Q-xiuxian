@@ -147,6 +147,10 @@ func _build_button() -> void:
 	_shadow_chip.visible = false
 	_btn.add_child(_shadow_chip)
 
+	# 键位提示签（桌面端/桌面浏览器专属）：主技能键 = 空格；额外键无键盘绑定不挂
+	if not bind_extra and SkillButtonView.key_hint_enabled():
+		_btn.add_child(SkillButtonView.make_key_chip("空格"))
+
 ## 引擎 _input 转发入口（由 GameHUD._input 调）：支持触屏第二根手指
 ## （左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
 func handle_engine_input(event: InputEvent) -> void:
@@ -387,12 +391,20 @@ func _process(_delta: float) -> void:
 		cd_left = player.skill_cd_left
 		cd_total = maxf(0.01, player.skill_cd_total)
 	else:
-		var e_cd = player.get("extra_skill_cd_left")
-		if e_cd is float or e_cd is int:
-			cd_left = float(e_cd)
-		var e_tot = player.get("extra_skill_cd_total")
-		if e_tot is float or e_tot is int:
-			cd_total = maxf(0.01, float(e_tot))
+		# 2026-10-24 性能优化：原每渲染帧 2 次 player.get("extra_skill_cd_*") Variant 反射查找
+		# （口径同 _update_shadow_chip 的 2026-10-22 优化）。分层采样：计时中逐帧读
+		# （冷却环顺滑、转就绪的反馈帧准），就绪待机（绝大多数帧）0.2s 采样一次 ——
+		# 下一轮 CD 开始最多晚 0.2s 才上环，环面满格附近不可辨。
+		_extra_cd_sample_cd -= get_process_delta_time()
+		if _extra_timing or _extra_cd_sample_cd <= 0.0:
+			_extra_cd_sample_cd = EXTRA_CD_SAMPLE_INTERVAL
+			var e_cd = player.get("extra_skill_cd_left")
+			if e_cd is float or e_cd is int:
+				cd_left = float(e_cd)
+			var e_tot = player.get("extra_skill_cd_total")
+			if e_tot is float or e_tot is int:
+				cd_total = maxf(0.01, float(e_tot))
+			_extra_timing = cd_left > 0.0
 	var on_active := active_left > 0.0
 	var on_cd := cd_left > 0.0
 
@@ -455,6 +467,11 @@ func _process(_delta: float) -> void:
 ## 改为每 0.2s 采样一次（影层是 1~5 的整数层数，200ms 延迟无感），且先判技能 id 早退。
 const SHADOW_SAMPLE_INTERVAL := 0.2
 var _shadow_sample_cd: float = 0.0
+
+## 额外技能 CD 反射读取的分层采样（见上方 _process 内 else 分支注释）
+const EXTRA_CD_SAMPLE_INTERVAL := 0.2
+var _extra_cd_sample_cd: float = 0.0
+var _extra_timing: bool = false
 
 func _update_shadow_chip(player: Node) -> void:
 	if _shadow_chip == null:

@@ -156,3 +156,26 @@ static func _circle_box(bg: Color, border: Color, w: int) -> StyleBoxFlat:
 	s.corner_radius_bottom_right = r
 	s.corner_radius_bottom_left = r
 	return s
+
+## 键位提示签开关：只有带实体键盘的环境亮（桌面原生 + 桌面浏览器 + 编辑器调试）。
+## 移动端口径双保险：原生 android/ios/mobile 任一命中即排除；网页手机浏览器按官方
+## 文档钦定的 web_android/web_ios 判（android/ios 在浏览器里不声明，光查它们漏手机网页）。
+static func key_hint_enabled() -> bool:
+	if OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios"):
+		return false
+	if OS.has_feature("web_android") or OS.has_feature("web_ios"):
+		return false
+	return true
+
+## 键位提示小签：墨底斜切签 + 纸白字，钉在键的右上角（影层角标同位同款，视觉语言一致）。
+## 文案如「空格」「E」；面色给墨黑、字色走 chip_label 自动适配（换肤跟着重算）。
+static func make_key_chip(text: String) -> Label:
+	var chip := GameStyle.chip_label(text, GameStyle.INK, Color(-1, -1, -1, -1), 10)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.anchor_left = 1.0
+	chip.anchor_right = 1.0
+	chip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	chip.offset_right = -3.0
+	chip.offset_left = chip.offset_right - chip.custom_minimum_size.x
+	chip.offset_top = 3.0
+	return chip

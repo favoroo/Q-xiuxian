@@ -462,7 +462,7 @@ static func on_face_text(face: Color) -> Color:
 ## 标色规则表在 TextStyleData（唯一真话）：显式逐句表优先，通用规则兜底；
 ## 重叠时「显式 > 通用、长片段 > 短片段」。文案本身保持纯文本，payload 读取不受影响。
 static func colorize_terms(text: String) -> String:
-	if text.is_empty() or text.contains("[bgcolor=") or text.contains("[color="):
+	if text.is_empty() or text.contains("[color="):
 		return text
 	var spans: Array[Dictionary] = []
 
@@ -529,15 +529,15 @@ static func colorize_terms(text: String) -> String:
 	return out
 
 ## 语义档 → 开标记。色值全部取自本文件常量，TextStyleData 不碰颜色。
+## 纯文字着色（高对比度，纸白底不加色块卡片，保持字面干净优雅）。
 static func _style_open(style: int) -> String:
-	var ink := "#" + INK_TEXT.to_html(false)
 	match style:
 		TextStyleData.S.GAIN:
-			return "[bgcolor=#" + GOOD.to_html(false) + "][color=" + ink + "]"
+			return "[color=#" + GOOD_DK.to_html(false) + "]"
 		TextStyleData.S.COST:
-			return "[bgcolor=#" + BAD.to_html(false) + "][color=" + ink + "]"
+			return "[color=#" + BAD_DK.to_html(false) + "]"
 		TextStyleData.S.COIN:
-			return "[bgcolor=#" + JADE.to_html(false) + "][color=" + ink + "]"
+			return "[color=#" + JADE_DK.to_html(false) + "]"
 		_:
 			return "[b][color=#" + PAPER.to_html(false) + "]"
 
@@ -546,7 +546,7 @@ static func _style_close(style: int) -> String:
 		TextStyleData.S.BOLD:
 			return "[/color][/b]"
 		_:
-			return "[/color][/bgcolor]"
+			return "[/color]"
 
 ## 供测试对账：把一段 BBCode 剥回可见字符
 static func strip_markup(text: String) -> String:
@@ -597,18 +597,6 @@ static func _wrap_bbcode_one(seg: String, font: Font, font_size: int, budget: fl
 			var close := seg.find("]", i)
 			if close >= 0:
 				var tag := seg.substr(i, close - i + 1)
-				# 色块原子性（新野兽派硬块排版）：当遇到 [bgcolor= 时，如果本行装不下
-				# 整个色块，且本行已有可见字，提前换行 —— 避免色块被腰斩成两截，
-				# 更杜绝在上一行行末留下 0 宽色块竖条细缝（2026-10-23 目视验收抓到）。
-				if tag.begins_with("[bgcolor=") and last_vis_at >= 0:
-					var end_tag := seg.find("[/bgcolor]", close + 1)
-					if end_tag > close:
-						var block_content := seg.substr(close + 1, end_tag - close - 1)
-						var block_w := _visible_w(block_content, font, font_size)
-						if _visible_w(line, font, font_size) + block_w > budget:
-							done += line + "\n"
-							line = ""
-							last_vis_at = -1
 				line += tag
 				i = close + 1
 				continue

@@ -170,6 +170,9 @@ func _destroy() -> void:
 		return
 	dying = true
 	AudioManager.play_sfx("chest_open", 0.9)
+	# 破匣爆开演出：碎板飞溅 + 尘环 + 锁牌弹出（纯 _draw 一次性节点，挂在池层原位，
+	# 不延后 queue_free —— 匣子多活一拍会撑破「chests」组的计数判据）
+	ChestBurstFx.play(get_parent(), global_position, tier, BASE_SCALE * SIZE_MULT * _tier_scale)
 	if tier == BalanceChest.TIER_JADE:
 		# 玉匣是全场最高档匣子，破开给一次专属镜头语言（青碧金环 + 缩放冲击 + 击杀级轻顿，
 		# 全走限流原语，受 display 设置总闸约束）。木/铜保持原样：每回合 2~4 口匣子，全发会把高光糊成常态

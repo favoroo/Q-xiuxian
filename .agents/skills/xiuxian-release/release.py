@@ -27,8 +27,8 @@ PRESETS_CFG = REPO_ROOT / 'export_presets.cfg'
 BUILD_DIR = REPO_ROOT / 'build'
 META_FILE = BUILD_DIR / 'release-meta.json'
 
-GODOT_BIN = '/Applications/Godot.app/Contents/MacOS/Godot'
-KEYTOOL_BIN = '/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/keytool'
+GODOT_BIN = os.environ.get('GODOT_BIN', os.environ.get('G', '/Applications/Godot.app/Contents/MacOS/Godot'))
+KEYTOOL_BIN = os.environ.get('KEYTOOL_BIN', '/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/keytool')
 
 GITHUB_OWNER, GITHUB_REPO = 'favoroo', 'Q-xiuxian'
 GITEE_OWNER, GITEE_REPO = 'favo9', 'q-xiuxian'

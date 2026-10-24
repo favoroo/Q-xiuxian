@@ -454,6 +454,7 @@ var buff_knockback_mult: float = 1.0   ## 金光护体短时击退乘区（knock
 var force_crit_left: float = 0.0       ## 冲刺必暴剩余秒（roll_crit 消费，Player 每帧递减，>0 时所有攻击必暴）
 var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就生效：Player 在攒层/兑现两写点按 ShadowStepData.amp_mult 维护，落地清空回 1.0）
 var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（FloatingWeapon._final_damage 消费，到期由 Player 精确回 1.0）
+var buff_sword_ki_ratio: float = 0.0   ## 金光护体短时金光剑气附伤比例（EnemyBase.take_damage 消费，到期回 0.0）
 
 # 武器羁绊加成（由 recalc_synergies 每回合/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础

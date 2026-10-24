@@ -103,10 +103,14 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> AstralGem:
 ## 软上限保险丝：场上宝石数到顶后，每次出膛让最旧的一颗飞向玩家。
 ## 只触发磁吸不凭空消失，经验一颗不少，只是把「堆到回合末」变成「滚进兜里」。
 ## Dictionary 保插入序：keys() 头部即最旧颗，通常首击即中，不再线性扫全表找候选。
+## 2026-10-24 修正：原先 for g in _active_gems.values() —— values() 每次调用整表拷贝一个
+## Array（140 颗在场时每次掉落多一份 140 引用的分配）；改为沿 key 插入序零拷贝迭代取值，
+## 「取最旧」语义与注释承诺对齐。
 static func _try_release_fuse() -> void:
 	if _active_gems.size() < GEM_SOFT_CAP:
 		return
-	for g in _active_gems.values():
+	for key in _active_gems:
+		var g: AstralGem = _active_gems[key]
 		if is_instance_valid(g) and not g._pooled and g.target_player == null \
 				and GameManager.player != null:
 			g.magnet_to(GameManager.player)

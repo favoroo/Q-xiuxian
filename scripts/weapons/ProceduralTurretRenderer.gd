@@ -54,8 +54,17 @@ static func shape_from_name(s: String) -> TurretShape:
 	return TurretShape.GENERIC
 
 ## 五行配色：亮面 / 暗面 / 描边流光 / HDR 起辉 / 机座色
+## 2026-10-24 静态缓存：各炮形绘制函数每次 _draw 各取一次，原先每次新建 5 键 Dictionary；
+## 调色板只含常量色且无调用方改写，按 element 常驻共享。
+static var _palette_cache := {}
+
 func _palette() -> Dictionary:
-	match element:
+	if not _palette_cache.has(element):
+		_palette_cache[element] = _build_palette(element)
+	return _palette_cache[element]
+
+static func _build_palette(elem: String) -> Dictionary:
+	match elem:
 		"wood":
 			return {"light": Color(0.62, 0.86, 0.64), "dark": Color(0.30, 0.54, 0.36),
 				"edge": Color(0.55, 1.0, 0.72), "hdr": GameStyle.FX_HDR_WOOD,

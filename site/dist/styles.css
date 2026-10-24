@@ -156,11 +156,14 @@ a { color: inherit; text-decoration: none; }
 
 /* —— HERO —— */
 .hero { padding: 54px 0 56px; }
+/* 首屏比正文区（1200）更宽：视频展示是首屏主角，640 宽的旧版会
+   把 1080p 画面缩到三分之一，像素风内容明显发糊、出锯齿 */
 .hero-in {
   display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 44px;
   align-items: center;
+  max-width: 1440px;
 }
 .hero-copy { min-width: 0; }
 .kicker { margin: 0 0 16px; font-size: 12px; letter-spacing: .18em; }
@@ -213,9 +216,10 @@ a { color: inherit; text-decoration: none; }
 }
 .theme-name { font-size: 12.5px; font-weight: 900; color: var(--chalk); letter-spacing: .06em; }
 
-/* 截图框：黑舞台上给一条 accent 顶带（card() 那条 5px），细框收在旁边 */
+/* 截图与视频框：黑舞台上给一条 accent 顶带（card() 那条 5px），细框收在旁边 */
 .frame { background: var(--ink); border-style: solid; border-width: var(--card-edge); border-color: var(--hot); }
-.frame img { width: 100%; height: auto; }
+.frame img, .frame video { width: 100%; height: auto; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
+.hero-video { background: #000; }
 .hero-shot { margin: 0; }
 .hero-shot figcaption {
   margin-top: 14px;

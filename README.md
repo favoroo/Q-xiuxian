@@ -1,7 +1,7 @@
 # 剑士（Swordsman）
 
 > 修仙题材的俯视角自动攻击幸存者游戏。选角色、配法器、扛过 20 波妖魔，悟道加点、金币阁淘宝，一战到底。
-> 当前版本 `v0.0.32`（Android，包名 `com.favo.qxiuxian`）。
+> 当前版本见 [scripts/autoload/Version.gd](scripts/autoload/Version.gd)（Android，包名 `com.favo.qxiuxian`；发布由 `release.py` 从该文件同步 `export_presets.cfg`）。
 
 ## 玩法
 

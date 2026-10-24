@@ -133,24 +133,31 @@ static func _atomic_save(cfg: ConfigFile, target_path: String) -> Error:
 
 ## 灌回一局状态（仅 autoload 字段；玩家实体交给 apply_player）。
 ## 返回存档时的阶段（WaveSpawner.Phase.*），无档/坏档返回 -1。
+## 2026-10-24 坏档可见化：无档（正常首次启动）保持静默；文件存在但解析/校验失败
+## 一律 push_error 点名原因 —— 玩家报「续玩档丢了」时日志里能区分到底是哪种失败。
 static func load_into(gm: Node) -> int:
 	_loaded_payload = {}
 	if not FileAccess.file_exists(SAVE_PATH):
 		return -1
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
+		push_error("RunSave: 续玩档存在但解析失败 path=%s（文件损坏或被截断），本次按无档处理" % SAVE_PATH)
 		return -1
 	var d = cfg.get_value("run", "payload", {})
 	if not (d is Dictionary):
+		push_error("RunSave: 续玩档 payload 非字典（实得类型 %d）path=%s" % [typeof(d), SAVE_PATH])
 		return -1
 	var data: Dictionary = d
 	if data.is_empty() or int(data.get("wave_number", 0)) < 1:
+		push_error("RunSave: 续玩档 payload 波数无效（wave_number=%s）path=%s" % [str(data.get("wave_number", "缺字段")), SAVE_PATH])
 		return -1
 	if String(data.get("cultivator_id", "")).is_empty() \
 			or CultivatorData.get_def(String(data.get("cultivator_id", ""))).is_empty():
+		push_error("RunSave: 续玩档 cultivator_id 无效（%s）path=%s" % [String(data.get("cultivator_id", "")), SAVE_PATH])
 		return -1
 	var ws = data.get("weapons", [])
 	if not (ws is Array) or (ws as Array).is_empty():
+		push_error("RunSave: 续玩档 weapons 非数组或为空 path=%s" % SAVE_PATH)
 		return -1
 	_fill_scalars(gm, data)
 	_fill_collections(gm, data)

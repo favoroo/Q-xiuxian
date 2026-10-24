@@ -103,49 +103,53 @@ func _test_markup_lossless(corpus: Array[String]) -> void:
 
 ## ③ 标签闭合检查
 func _test_tag_closure(corpus: Array[String]) -> void:
+	## ③ 标签闭合检查 + 杜绝背景色块
 	var broken := 0
+	var has_bgcolor := 0
 	for raw in corpus:
 		var colored := GameStyle.colorize_terms(raw)
-		var bg_opens: int = colored.count("[bgcolor=")
-		var bg_closes: int = colored.count("[/bgcolor]")
+		if colored.contains("[bgcolor=") or colored.contains("[/bgcolor]"):
+			has_bgcolor += 1
 		var col_opens: int = colored.count("[color=")
 		var col_closes: int = colored.count("[/color]")
 		var b_opens: int = colored.count("[b]")
 		var b_closes: int = colored.count("[/b]")
-		if bg_opens != bg_closes or col_opens != col_closes or b_opens != b_closes:
+		if col_opens != col_closes or b_opens != b_closes:
 			broken += 1
+	_c.check(has_bgcolor == 0, "杜绝 [bgcolor] 背景色块卡片，全部走纯文字着色（违规句数: %d）" % has_bgcolor)
 	_c.check(broken == 0, "全部文案 BBCode 标签严格配对闭合（未闭合句数: %d）" % broken)
 
-## ④ 颜色白名单：只允许三色色块 + 墨黑文字
+## ④ 颜色白名单：只允许三色高对比纯文字（深绿/深红/深金）+ 墨黑加粗
 func _test_color_whitelist(corpus: Array[String]) -> void:
-	var allowed_bg := {
-		GameStyle.GOOD.to_html(false).to_lower(): true,
-		GameStyle.BAD.to_html(false).to_lower(): true,
-		GameStyle.JADE.to_html(false).to_lower(): true,
+	var allowed_col := {
+		GameStyle.GOOD_DK.to_html(false).to_lower(): true,
+		GameStyle.BAD_DK.to_html(false).to_lower(): true,
+		GameStyle.JADE_DK.to_html(false).to_lower(): true,
+		GameStyle.PAPER.to_html(false).to_lower(): true,
 	}
-	var re_bg := RegEx.new()
-	re_bg.compile("\\[bgcolor=#([0-9a-fA-F]+)\\]")
+	var re_col := RegEx.new()
+	re_col.compile("\\[color=#([0-9a-fA-F]+)\\]")
 	var illegal: Array[String] = []
 	for raw in corpus:
 		var colored := GameStyle.colorize_terms(raw)
-		for m in re_bg.search_all(colored):
+		for m in re_col.search_all(colored):
 			var c := m.get_string(1).to_lower()
-			if not allowed_bg.has(c) and not (c in illegal):
+			if not allowed_col.has(c) and not (c in illegal):
 				illegal.append(c)
-	_c.check(illegal.is_empty(), "色块底色全在三色主题白名单内（非法颜色: %s）" % str(illegal))
+	_c.check(illegal.is_empty(), "文本颜色全在纸底高对比白名单内（非法颜色: %s）" % str(illegal))
 
 ## ⑤ 语义反例测试（防「攻击间隔 -30%」误标红回归）
 func _test_semantic_direction() -> void:
-	var good_hex: String = GameStyle.GOOD.to_html(false).to_lower()
-	var bad_hex: String = GameStyle.BAD.to_html(false).to_lower()
+	var good_hex: String = GameStyle.GOOD_DK.to_html(false).to_lower()
+	var bad_hex: String = GameStyle.BAD_DK.to_html(false).to_lower()
 
 	# 攻击间隔缩短是收益 → 必须绿
 	var s1 := GameStyle.colorize_terms("攻击间隔 -30%")
-	_c.check(s1.to_lower().contains("[bgcolor=#" + good_hex + "]"),
-		"「攻击间隔 -30%」正确标为 GAIN 绿块")
+	_c.check(s1.to_lower().contains("[color=#" + good_hex + "]"),
+		"「攻击间隔 -30%」正确标为 GAIN 绿字")
 
 	# 攻速略降是代价 → 必须红
 	var s2 := GameStyle.colorize_terms("武器伤害大幅提升，攻速略降")
-	_c.check(s2.to_lower().contains("[bgcolor=#" + good_hex + "]")
-			and s2.to_lower().contains("[bgcolor=#" + bad_hex + "]"),
-		"「武器伤害大幅提升，攻速略降」双色块并存（增益绿 + 代价红）")
+	_c.check(s2.to_lower().contains("[color=#" + good_hex + "]")
+			and s2.to_lower().contains("[color=#" + bad_hex + "]"),
+		"「武器伤害大幅提升，攻速略降」双色字并存（增益绿 + 代价红）")

@@ -60,6 +60,11 @@ func _run() -> void:
 	var tip_host := Control.new()
 	tip_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	get_tree().root.add_child(tip_host)
+	var bg_tip := ColorRect.new()
+	bg_tip.color = GameStyle.NAVY
+	bg_tip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tip_host.add_child(bg_tip)
+
 	var anchor := Control.new()
 	anchor.position = Vector2(100, 60); anchor.size = Vector2(60, 24)
 	tip_host.add_child(anchor)
@@ -88,6 +93,23 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().create_timer(0.4).timeout
 	get_viewport().get_texture().get_image().save_png("/tmp/style_preview/tip_item.png")
+	DetailTip.close_all(tip_host)
+	tip_host.queue_free()
+	await get_tree().create_timer(0.2).timeout
+
+	# 4. 技能选择卡（SkillSelect 实景预览）
+	GameManager.cultivator_id = "jianshi"
+	var cl := CanvasLayer.new()
+	get_tree().root.add_child(cl)
+	var ss = load("res://scenes/ui/SkillSelect.tscn").instantiate()
+	cl.add_child(ss)
+	await get_tree().process_frame
+	ss.show_select()
+	await get_tree().process_frame
+	await get_tree().create_timer(0.6).timeout
+	get_viewport().get_texture().get_image().save_png("/tmp/style_preview/skill_select.png")
+	cl.queue_free()
+	await get_tree().create_timer(0.2).timeout
 
 	print("PREVIEW_ALL_SAVED")
 	get_tree().quit(0)

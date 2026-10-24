@@ -49,9 +49,11 @@ static func separation_push(self_pos: Vector2, others: Array, self_id: int, radi
 					continue
 				if o.get_instance_id() == self_id:
 					continue
-				# 濒死个体（塌缩中）不参与推挤：它已不在战术盘面上，还占位会把同伴顶开
-				if o.get("dying") == true:
-					continue
+				# 濒死个体不参与推挤的过滤在建桶时做（_ensure_grid 里 dying 的根本不入桶）。
+				# 2026-10-24 移除原先此处的 o.get("dying") 反射复查：Object.get(name) 是字符串
+				# 哈希查找，每怪每邻居一次 ≈ 千次/秒的纯开销；建桶排除 + 帧号自愈重建已覆盖
+				# 常规路径，残余的同帧竞态（建桶后才标记 dying）最多让塌缩尸体多推同伴一帧，
+				# 视觉不可辨。单测 unit_flock_tests 的 dying 用例走建桶路径，口径不变。
 				var d: Vector2 = self_pos - o.global_position
 				var d_sq: float = d.length_squared()
 				if d_sq > r_sq or d_sq < EPS:
@@ -66,7 +68,10 @@ static func separation_push(self_pos: Vector2, others: Array, self_id: int, radi
 
 ## 重建空间网格（每物理帧首只怪触发一次；cell = 分离半径 ⇒ 半径内邻居必在 3×3 邻域）。
 ## 代价 O(n)，比 O(n²) 低一个量级；桶数组复用 static 容器，稳态零分配。
-## 有效性只维持「同一物理帧内」：位置每帧都变，帧末由调用方 invalidate_grid() 作废。
+## 有效性（2026-10-24 口径修正）：生产路径靠 Engine.get_physics_frames() 帧号自愈作废 ——
+## 位置每帧都变，下一物理帧帧号不同自然触发重建，无需任何调用方手动 invalidate。
+## invalidate_grid() 只作为测试接缝保留：headless 单测的多个用例跑在同一物理帧内，
+## 需要它强制重建（见 unit_flock_tests 各用例前的调用）。
 static func _ensure_grid(others: Array, radius: float) -> void:
 	if _grid_frame == Engine.get_physics_frames():
 		return
@@ -93,7 +98,7 @@ static func _ensure_grid(others: Array, radius: float) -> void:
 
 static var _grid_frame: int = -1
 
-## 让调用方在每物理帧开头作废网格（位置每帧都变，缓存只在同一帧内有效）
+## 强制作废网格（测试接缝：同物理帧内多次用例间强制重建；生产路径靠帧号自愈，勿在游戏代码里调用）
 static func invalidate_grid() -> void:
 	_grid_frame = -1
 

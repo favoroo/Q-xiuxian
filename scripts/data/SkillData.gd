@@ -64,16 +64,17 @@ const DEFS: Dictionary = {
 			"power": 0.40,        # 攻击间隔缩减比例
 			"desc": "攻击间隔缩短40%，持续5秒",
 		},
-		"aegis": {
-			"name": "无敌",
-			"glyph": "盾",
-			"icon": "res://assets/art/skill_aegis.png",
-			"kind": Kind.IFRAME,
-			"cooldown": 8.0,
-			"duration": 2.5,
-			"knockback_boost": 3.0,  # 期间武器击退力度倍率
-			"desc": "短时间内不受任何伤害，期间武器击退力度提升至3倍",
-		},
+			"aegis": {
+				"name": "无敌",
+				"glyph": "盾",
+				"icon": "res://assets/art/skill_aegis.png",
+				"kind": Kind.IFRAME,
+				"cooldown": 8.0,
+				"duration": 2.5,
+				"knockback_boost": 3.0,  # 期间武器击退力度倍率
+				"sword_ki_ratio": 0.50,  # 期间每次攻击附带金光剑气伤害比例
+				"desc": "震开周身敌人并不受伤害，攻击附带50%金光剑气，武器击退提升至3倍，持续2.5秒",
+			},
 		"renewal": {
 			"name": "治疗",
 			"glyph": "治",
@@ -100,7 +101,7 @@ static func all_ids() -> Array:
 static func is_enhanced_for_cultivator(_skill_id: String, _cid: String) -> bool:
 	return false
 
-## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, attack_reset, knockback_boost, pet_heal_pct, pet_duration}
+## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, attack_reset, knockback_boost, sword_ki_ratio, pet_heal_pct, pet_duration}
 ## 冷却语义：效果活跃窗口（duration / 闪避=iframe）走完才进冷却，cooldown 是「结束后」的等待值
 static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 	var def: Dictionary = get_def(skill_id)
@@ -117,6 +118,7 @@ static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 		"crit_window": float(def.get("crit_window", 0.0)),
 		"attack_reset": int(def.get("attack_reset", 0)),
 		"knockback_boost": float(def.get("knockback_boost", 1.0)),
+		"sword_ki_ratio": float(def.get("sword_ki_ratio", 0.0)),
 		"pet_heal_pct": float(def.get("pet_heal_pct", 0.0)),
 		"pet_duration": float(def.get("pet_duration", 0.0)),
 	}
