@@ -10,8 +10,8 @@ keystore/secret.txt
 # media-gen 技能：API 密钥（勿提交）
 .agents/skills/media-gen/config/api.env
 
-# Agent 变更日志（仅本地，不随提交推送）
-CHANGELOG.md
+# Agent 变更日志（2026-10-24 起纳入版本控制：333 条根因记录是排查知识库，
+# 只存在单机上时换机/协作即全部丢失；AGENTS.md 的“查历史改动”指路才有真话源）
 
 # 本地规划文档（供分派执行 Agent 用，不入仓库）
 vfx-optimization-plan.md
