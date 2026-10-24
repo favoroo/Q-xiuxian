@@ -227,6 +227,10 @@ func _setup_headless_guard() -> void:
 func _load_progress() -> void:
 	ProgressStore.load_into(self)
 
+## 启动期坏档告警暂存（2026-10-24 坏档可见化）：autoload 阶段 UI 未就绪弹不了 toast，
+## ProgressStore 读档失败把文案写到这里，主菜单 StartMenu.open() 首次展示时消费并清空。
+var pending_load_alert: String = ""
+
 func _save_progress() -> void:
 	# 作者模式期间一律不落盘：解锁是全开的读侧短路，若照常保存会把作弊局的
 	# 生涯统计/皮肤选择写进 progress.cfg，退出作者模式后也擦不掉。

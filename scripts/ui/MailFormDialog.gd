@@ -624,6 +624,9 @@ func _on_send_pressed() -> void:
 			"name": _shot_name,
 			"mime": _shot_mime,
 		}
+		# 截图元信息单列一行（table 模板自成一行）：万一附件被邮箱端拦截，
+		# 作者仍能从邮件知道玩家发过图、图的基本参数，便于引导重发
+		fields["screenshot"] = _shot_info.text
 
 	_abort_pending_http()
 	_http = HTTPRequest.new()

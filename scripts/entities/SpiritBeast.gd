@@ -1,7 +1,8 @@
 class_name SpiritBeast
 extends CharacterBody2D
 
-## 祭坛灵兽「灵珑」（2026-10-15 圆形灵魄重做：去鹤形、按圆形设计）：祭坛激活时召唤的风筝型远程友军。
+## 祭坛灵兽「灵珑」（2026-10-15 去鹤形改焰形；2026-10-24 圆球光灵重做：无脸圆球 +
+## 金焰苗 + 双耳芽，形体语言对齐随行灵兽）：祭坛激活时召唤的风筝型远程友军。
 ##
 ## 组与碰撞（两条铁律，动了会被全场武器追着打 / 回合末被清场）：
 ##   - 只挂 "allies" 组 —— 绝不进 enemies/turrets/gems/chests，那四组 WaveSpawner.end_wave 全清；
@@ -14,13 +15,16 @@ extends CharacterBody2D
 ## 目标进甜区（PREFER_RANGE_MIN~MAX）就切向环绕着输出，太近边退边打（倒退也面朝目标），
 ## 太远追近；被嘲讽追它的敌人天然被它拖着绕圈。三段走位速度用 MOVE_ACCEL 平滑过渡、
 ## 侧倾 bank 一阶跟随带死区（2026-10-15 抽搐修复：旧版朝向随后退 180° 翻面 + bank 每帧直写）。
+## 拥挤软分离（2026-10-24）：无碰撞体积 ⇒ 敌人纯路过会踩上来，CROWD_RADIUS 内按距离衰减
+## 合成远离向漂移直接积分位置，被围时从人堆缓缓挤出；本体 z_index=1 永画在敌人上层不被盖。
 ## 攻击为「三连灵羽弹」：冷却到 → 蓄力 CHARGE_TIME（嘴边灵光球涨大，渲染器 charge_ratio 0→1）
 ## → BURST_GAP 间隔连吐 BURST_COUNT 发追踪灵羽（每发后坐、音调递进，余辉随剩余发数递减）。
 ## 灵羽复用 BladeProjectile 对象池（player_projectiles 层），命中/击杀反馈全走敌人那一条；
 ## 伤害吃召唤伤害乘区（engineering_damage + synergy_engineering_damage，与御灵/炮台同链路）。
 ## 生命是它的寿命：无碰撞后敌人 slide 接触咬不到它，改为灵兽自判近身啃咬
 ## （CONTACT_RANGE 内取敌人 contact_damage，同一把尺子、同一无敌帧）；生命耗尽即消散。
-## 生命不挂血条：受击时把 hp_ratio 灌给渲染器，由灵珑本体传达（灵光/祭纹灵印/灵目转暗、濒死裂纹闪烁）。
+## 生命不挂血条：受击时把 hp_ratio / hit_flash 灌给渲染器，由灵珑本体传达
+## （受击平涂闪白一拍 + 挤压回弹 + 顺咬合方向微弹退；血量低落圆身转暗、濒死裂纹闪烁）。
 ## 索敌读 GameManager.live_enemies 登记表，不做物理查询（最多 3 只，10Hz 重索节流）。
 
 const BULLET_TEXTURE: Texture2D = preload("res://assets/art/bullet_spirit_pellet.png")
@@ -35,7 +39,7 @@ var _dying: bool = false
 var _attack_timer: float = 0.0
 var _search_timer: float = 0.0
 var _invincible_timer: float = 0.0
-var _hit_flash: float = 0.0
+var _scale_tween: Tween = null    ## 本体 scale 补间句柄（出场弹起/受击挤压共用通道，先杀旧再起新）
 var _face_sign: float = 1.0
 var _bank: float = 0.0           ## 平滑后的侧倾角（bank 一阶跟随的状态载体）
 var _orbit_sign: float = 1.0     ## 甜区环绕方向（每只灵兽固定一边，避免临界抖动）
@@ -49,6 +53,9 @@ func _ready() -> void:
 	add_to_group("allies")
 	collision_layer = 0   # 无碰撞体积（铁律见文件头，别改）
 	collision_mask = 0
+	# 永远画在敌人上层（z 压过 EntitiesLayer 的 y_sort）：灵兽无碰撞体积，敌人纯路过会踩上来，
+	# 被踩时剪影不能被怪体盖掉糊成一团（2026-10-24 拥挤状态优化）
+	z_index = 1
 	_wave = maxi(GameManager.wave_number, 1)
 	max_hp = GameBalance.spirit_beast_max_hp(_wave)
 	current_hp = max_hp
@@ -62,8 +69,8 @@ func _ready() -> void:
 	# 出场弹起 + 现身辉光（晕圈强闪、灵尘收拢一拍，衔接祭坛冲击环）
 	scale = Vector2(0.2, 0.2)
 	_renderer.spawn_glow = 1.0
-	var tw := create_tween()
-	tw.tween_property(self, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_scale_tween = create_tween()
+	_scale_tween.tween_property(self, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 	_attack_timer = GameManager.rng.randf_range(0.2, 0.5)
 	_search_timer = GameManager.rng.randf_range(0.0, GameBalance.SPIRIT_BEAST_SEARCH_INTERVAL)
@@ -78,10 +85,6 @@ func _physics_process(delta: float) -> void:
 
 	if _invincible_timer > 0.0:
 		_invincible_timer -= delta
-	if _hit_flash > 0.0:
-		_hit_flash -= delta
-		if _hit_flash <= 0.0:
-			modulate = Color.WHITE
 
 	# 索敌节流：目标死了不当帧重查，下一节拍再找
 	_search_timer -= delta
@@ -123,8 +126,8 @@ func _physics_process(delta: float) -> void:
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 近身啃咬结算：敌人贴到 CONTACT_RANGE 内仍咬得到它（生命即寿命的承伤口）
-	_resolve_contact_bites()
+	# 敌人接触结算：拥挤软分离 + 近身啃咬
+	_resolve_contact_bites(delta)
 
 	# 蓄力 → 三连 → 冷却的攻击状态机
 	_update_attack(delta)
@@ -229,31 +232,61 @@ func _fire_one() -> void:
 	var shot_idx: int = GameBalance.SPIRIT_BEAST_BURST_COUNT - _burst_left
 	AudioManager.play_sfx("blade_shoot", 0.45, 0.92 + 0.09 * float(shot_idx))
 
-## 近身啃咬：无碰撞体积后敌人 slide 接触够不到灵兽，改由灵兽自判——
-## 敌人贴进 CONTACT_RANGE 就按它自己的 contact_damage 咬一口（无敌帧挡逐帧结算）
-func _resolve_contact_bites() -> void:
-	if _invincible_timer > 0.0:
-		return
+## 敌人接触结算：灵兽无碰撞体积（铁律见文件头），敌人是纯路过踩上来的——
+## 一次循环做两件事（2026-10-24 拥挤状态优化）：
+##   ① 拥挤软分离：CROWD_RADIUS 内每个敌人按距离衰减贡献一个远离向推量，
+##      合成后直接积分位置——被围时从人堆里缓缓挤出去，不再站在怪堆剪影里糊成一团；
+##   ② 近身啃咬：敌人贴进 CONTACT_RANGE 就按它自己的 contact_damage 咬一口（无敌帧挡逐帧结算）
+func _resolve_contact_bites(delta: float) -> void:
+	var crowd := Vector2.ZERO
+	var crowd_n := 0
 	var range_sq: float = GameBalance.SPIRIT_BEAST_CONTACT_RANGE * GameBalance.SPIRIT_BEAST_CONTACT_RANGE
+	var crowd_sq: float = GameBalance.SPIRIT_BEAST_CROWD_RADIUS * GameBalance.SPIRIT_BEAST_CROWD_RADIUS
 	for e in GameManager.live_enemies:
 		if e == null or not is_instance_valid(e) or e.dying:
 			continue
-		if global_position.distance_squared_to(e.global_position) <= range_sq:
-			take_damage(e.contact_damage)
-			return
+		var e_pos: Vector2 = e.global_position
+		var diff := global_position - e_pos
+		var d_sq := diff.length_squared()
+		if d_sq > crowd_sq:
+			continue
+		var d := sqrt(d_sq)
+		var push: Vector2 = diff / d if d > 0.001 else Vector2.UP
+		crowd += push * (1.0 - d / GameBalance.SPIRIT_BEAST_CROWD_RADIUS)
+		crowd_n += 1
+		if d_sq <= range_sq:
+			take_damage(e.contact_damage, push)
+	if crowd_n > 0:
+		global_position += crowd.normalized() * GameBalance.SPIRIT_BEAST_CROWD_PUSH_SPEED * delta
+		var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
+		global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-## 受击（近身啃咬的口子）：无敌帧挡逐帧结算，闪白 + 灵息转暗（hp_ratio 灌给渲染器）
-func take_damage(amount: float) -> void:
+## 受击（近身啃咬的口子）：无敌帧挡逐帧结算。受击一拍三件套（2026-10-24 受击动画重做）：
+## 渲染器平涂闪白（hit_flash 1→0 约 0.16s，只提亮色块、墨环不发灰）+ 本体挤压回弹
+## （压扁 1.18/0.84 后 BACK_OUT 弹回）+ 顺咬合方向微弹退（renderer 位移通道，与吐息后坐同款）；
+## 血量长期传达照旧走 hp_ratio（低落圆身转暗、濒死墨裂纹）
+func take_damage(amount: float, from_dir: Vector2 = Vector2.ZERO) -> void:
 	if _dying or _invincible_timer > 0.0:
 		return
 	_invincible_timer = GameBalance.SPIRIT_BEAST_HIT_INVINCIBLE
 	current_hp -= amount
-	_hit_flash = 0.12
-	modulate = Color(1.8, 1.8, 1.8)
+	AudioManager.play_sfx("impact_blunt", 0.4, 1.3)
 	if _renderer != null:
+		_renderer.hit_flash = 1.0
 		_renderer.hp_ratio = clampf(current_hp / max_hp, 0.0, 1.0)
+		if from_dir != Vector2.ZERO:
+			_renderer.position = from_dir * 6.0
+			var nudge := create_tween()
+			nudge.tween_property(_renderer, "position", Vector2.ZERO, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if current_hp <= 0.0:
 		_die()
+		return
+	# 挤压回弹（flinch 一拍）：与出场弹起共用 scale 通道，先杀旧补间再起新
+	if _scale_tween != null and _scale_tween.is_valid():
+		_scale_tween.kill()
+	scale = Vector2(1.18, 0.84)
+	_scale_tween = create_tween()
+	_scale_tween.tween_property(self, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _die() -> void:
 	_dying = true

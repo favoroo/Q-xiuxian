@@ -53,21 +53,21 @@ func _run() -> void:
 	var outer := _spawn_enemy(Vector2(300, 0))    # 圈外
 	await get_tree().process_frame
 
-	var got := EnemyFilter.collect(get_tree(), origin, 100.0)
+	var got := EnemyFilter.collect(GameManager.live_enemies, origin, 100.0)
 	_check(got.size() == 1 and got[0] == inner,
 		"半径圈内只圈到 1 只（实得 %d 只）" % got.size())
 
-	got = EnemyFilter.collect(get_tree(), origin, INF)
+	got = EnemyFilter.collect(GameManager.live_enemies, origin, INF)
 	_check(got.size() == 2, "radius=INF 全场圈定（实得 %d 只）" % got.size())
 
-	_check(EnemyFilter.count_in_range(get_tree(), origin, 100.0) == 1,
+	_check(EnemyFilter.count_in_range(GameManager.live_enemies, origin, 100.0) == 1,
 		"count_in_range 只数圈内 1 只")
-	_check(EnemyFilter.count_in_range(get_tree(), origin, INF) == 2,
+	_check(EnemyFilter.count_in_range(GameManager.live_enemies, origin, INF) == 2,
 		"count_in_range 全场 2 只")
 
 	# ---------- 2. 垂死怪不算 ----------
 	inner.dying = true
-	got = EnemyFilter.collect(get_tree(), origin, 100.0)
+	got = EnemyFilter.collect(GameManager.live_enemies, origin, 100.0)
 	_check(got.is_empty(), "垂死怪（dying 置位）不进圈定结果")
 	inner.dying = false
 
@@ -79,25 +79,25 @@ func _run() -> void:
 	chest_like.add_to_group("chests")   # 模拟「在 enemies 组里但算匣子」
 	var herb_like := _spawn_enemy(Vector2(70, 0))
 	herb_like.add_to_group("herbs")     # 灵草前瞻位：同样豁免
-	got = EnemyFilter.collect(get_tree(), origin, 100.0)
+	got = EnemyFilter.collect(GameManager.live_enemies, origin, 100.0)
 	_check(not got.has(chest_like) and not got.has(herb_like),
 		"匣子/灵草即使挂在 enemies 组也不进圈定结果")
 	_check(got.has(inner), "不挂豁免组的普通怪照常在列（inner）")
-	_check(EnemyFilter.count_in_range(get_tree(), origin, 100.0) == got.size(),
-		"count_in_range 与 collect 同口径（%d/%d）" % [EnemyFilter.count_in_range(get_tree(), origin, 100.0), got.size()])
+	_check(EnemyFilter.count_in_range(GameManager.live_enemies, origin, 100.0) == got.size(),
+		"count_in_range 与 collect 同口径（%d/%d）" % [EnemyFilter.count_in_range(GameManager.live_enemies, origin, 100.0), got.size()])
 
 	# 清掉普通怪后：圈里只剩匣子/灵草 ⇒ collect 空、nearest null
 	inner.queue_free()
 	await get_tree().process_frame
-	_check(EnemyFilter.collect(get_tree(), origin, 100.0).is_empty(),
+	_check(EnemyFilter.collect(GameManager.live_enemies, origin, 100.0).is_empty(),
 		"圈里只剩匣子/灵草 ⇒ collect 为空")
-	_check(EnemyFilter.nearest(get_tree(), origin, 100.0) == null,
+	_check(EnemyFilter.nearest(GameManager.live_enemies, origin, 100.0) == null,
 		"nearest 同口径豁免（圈里只剩匣子/灵草 ⇒ null）")
 
 	# ---------- 4. 自体豁免（裂魂铃口径：不炸自己） ----------
 	var self_e := _spawn_enemy(Vector2(20, 0))
 	var other := _spawn_enemy(Vector2(80, 0))
-	got = EnemyFilter.collect(get_tree(), origin, 100.0, self_e)
+	got = EnemyFilter.collect(GameManager.live_enemies, origin, 100.0, self_e)
 	_check(not got.has(self_e) and got.has(other),
 		"from_self 被剔除、场上其余怪保留（实得 %d 只）" % got.size())
 
@@ -109,9 +109,9 @@ func _run() -> void:
 	# ---------- 5. nearest 取最近 ----------
 	var near_a := _spawn_enemy(Vector2(30, 0))
 	var near_b := _spawn_enemy(Vector2(90, 0))
-	_check(EnemyFilter.nearest(get_tree(), origin, 100.0) == near_a,
+	_check(EnemyFilter.nearest(GameManager.live_enemies, origin, 100.0) == near_a,
 		"nearest 取圈内最近的一只")
-	_check(EnemyFilter.nearest(get_tree(), origin, 25.0) == null,
+	_check(EnemyFilter.nearest(GameManager.live_enemies, origin, 25.0) == null,
 		"搜索半径内一只都没有 ⇒ nearest 返回 null")
 
 	# ---------- 6. 清场豁免（清场过程中组里还挂着垂死/将释放节点的情况） ----------
@@ -123,7 +123,7 @@ func _run() -> void:
 	near_b.dying = true
 	var still_ok := true
 	for i in range(3):
-		got = EnemyFilter.collect(get_tree(), origin, INF)
+		got = EnemyFilter.collect(GameManager.live_enemies, origin, INF)
 		if not got.is_empty():
 			still_ok = false
 	_check(still_ok, "清场动画期间连续查询不炸、垂死怪全部豁免")

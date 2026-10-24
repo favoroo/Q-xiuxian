@@ -20,9 +20,9 @@ const ART_SCALE := 6.0
 
 ## 同器形同五行的武器，矢量本体完全一样 ⇒ 导出层叠一个「专属细节」区分（不碰战斗渲染器）。
 ## 只列需要区分的（每组基准保持原样）。kind 见 DetailMark。
+## 2026-10-24：飞剑/桃木剑已在刃器族内按 weapon_id 出专属剪影（战斗/图标同源），
+## 导出层的小细节反成噪点，移除；符纸族仍靠此层区分。
 const DETAILS := {
-	"weapon_gold_sword": {"kind": "gem", "color": Color(0.35, 0.92, 1.0)},      # 飞剑：护手嵌青玉
-	"weapon_taomu_jian": {"kind": "tassel", "color": Color(0.86, 0.20, 0.16)},   # 桃木剑：剑首红穗
 	"weapon_xueyin_dao": {"kind": "blood", "color": Color(0.72, 0.06, 0.08)},    # 血饮狂刀：血槽血珠
 	"weapon_jinzhen_fu": {"kind": "needle", "color": Color(0.78, 0.18, 0.12)},   # 金针符
 	"weapon_gengjin_fu": {"kind": "meander", "color": Color(0.78, 0.18, 0.12)},  # 庚金符

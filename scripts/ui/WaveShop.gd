@@ -57,17 +57,12 @@ signal author_requested
 const OFFER_PAD_X := 12.0
 ## 面板左右固定占位：Panel 内容边距 28×2 + MarginContainer 12×2（与 .tscn 同源）
 const CHROME_X := 80.0
-## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 20（斜切画出来的角之外再留）
-const SCREEN_PAD_Y := 24.0
-const PANEL_AIR_X := 20.0
-const PANEL_MIN_H := 420.0
-## 面板 stylebox 的斜切（弧度），与 WaveShop.tscn 的 StyleBoxFlat_panel.skew 同源
-## （改 .tscn 里的 skew 必须同步这里，判据会核对两头留白）
-const PANEL_SKEW_RAD := 0.035
+## 面板摆位常量已收拢进 ShopCardLayout（SHOP_* / PANEL_* 两档，改口径只动那一份）：
+## 面板呼吸量 SCREEN_PAD_Y/PANEL_AIR_X、面板高下限、面板与卡片斜切、卡间缝，见该文件头注。
 const CARD_W_MIN := 148.0
 const CARD_W_MAX := 220.0
-const CARD_GAP_MIN := 10.0
-const CARD_GAP_MAX := 16.0
+## 卡间缝 SHOP_CARD_GAP_MIN/MAX 已收拢 ShopCardLayout（下同，不再本地声明）
+
 ## 卡内摆位：内容边距 6、行距 3、图标 48、价格键 32、锁定角键 36×20。
 ## 这一组数一起决定「最坏文案下这张卡多高」，判据按现量的数说话（见头注 ③）。
 ## 左右边距不许再压：卡片是 3° 斜切的平行四边形，260 高时上下各挪出 6.8 单位，
@@ -99,21 +94,18 @@ const INV_GAP := 10.0
 
 ## 这一档屏高下面板该占的高（与 LevelUpDialog 同源，见 ShopCardLayout）
 static func panel_h_for(screen_h: float) -> float:
-	return ShopCardLayout.panel_h_for(screen_h, PANEL_MIN_H, SCREEN_PAD_Y)
+	return ShopCardLayout.panel_h_for(screen_h, ShopCardLayout.PANEL_MIN_H, ShopCardLayout.PANEL_SCREEN_PAD_Y)
 
 static func skew_x(h: float) -> float:
-	return ShopCardLayout.skew_x(PANEL_SKEW_RAD, h)
-
-## 货架卡自己的斜切（弧度），与 ShopOfferCardFactory 卡体 style.skew 同源
-const CARD_SKEW_RAD := 0.052
+	return ShopCardLayout.skew_x(ShopCardLayout.SHOP_PANEL_SKEW_RAD, h)
 
 ## 滚动区左右要留的白（按卡高上限 CARD_H_REF 算，防斜切角被裁）
 static func card_pad_x() -> float:
-	return ShopCardLayout.card_pad_x(CARD_SKEW_RAD, CARD_H_REF)
+	return ShopCardLayout.card_pad_x(ShopCardLayout.SHOP_CARD_SKEW_RAD, CARD_H_REF)
 
 ## 面板布局盒可用的宽 = 屏幕宽 - 面板左右占位 - 面板两头画出来的斜切 - 两头呼吸量
 static func panel_inner_w(screen: Vector2) -> float:
-	var bleed: float = skew_x(panel_h_for(screen.y)) + PANEL_AIR_X
+	var bleed: float = skew_x(panel_h_for(screen.y)) + ShopCardLayout.SHOP_PANEL_AIR_X
 	return maxf(0.0, screen.x - CHROME_X - bleed * 2.0)
 
 ## 一排卡可用的宽 = 面板内容宽 - 滚动区两头的斜切留白（card_pad_x）
@@ -122,7 +114,7 @@ static func avail_w(screen: Vector2) -> float:
 
 ## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
 static func gap_for(avail: float) -> float:
-	return ShopCardLayout.gap_for(avail, 0.014, CARD_GAP_MIN, CARD_GAP_MAX)
+	return ShopCardLayout.gap_for(avail, 0.014, ShopCardLayout.SHOP_CARD_GAP_MIN, ShopCardLayout.SHOP_CARD_GAP_MAX)
 
 ## n 张卡均分可用宽，夹在 [CARD_W_MIN, CARD_W_MAX] 并向下取整防浮点余量唤出横向滑条
 static func offer_card_w(screen: Vector2, count: int) -> float:

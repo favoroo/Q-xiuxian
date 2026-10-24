@@ -136,11 +136,13 @@ static func load_into(gm: Node) -> void:
 		if not bad_fields.is_empty():
 			push_error("ProgressStore: progress.cfg 字段类型异常（%s），对应内容已回落默认 —— 疑似存档被手改或写入中断 path=%s" % [
 					"、".join(PackedStringArray(bad_fields)), PROGRESS_PATH])
+			gm.pending_load_alert = "◆ 进度存档字段异常，部分进度已重置 ◆"
 	else:
 		if FileAccess.file_exists(PROGRESS_PATH):
 			# 2026-10-24 从 warning 升级为 error：文件在但读不出来 = 玩家进度实际丢失，
 			# 是需要被看见的故障（首次启动无档走上面的 OK 外路径，不进这里）
 			push_error("ProgressStore: 读取局外进度失败 err=%d path=%s，已回落默认" % [load_err, PROGRESS_PATH])
+			gm.pending_load_alert = "◆ 进度存档损坏，已从零开始 ◆"
 		gm.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
 		gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
 		gm.unlocked_achievements = []

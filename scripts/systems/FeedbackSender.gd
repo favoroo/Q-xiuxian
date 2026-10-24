@@ -359,16 +359,25 @@ static func sanitize_filename(name: String) -> String:
 	out = out.strip_edges()
 	return out if not out.is_empty() else "feedback.jpg"
 
-## 发送反馈：先试 /ajax/（JSON 返回），失败再试普通表单端点。
+## 发送反馈。端点顺序按是否带附件分流：
+## - 无附件：先试 /ajax/（返回 JSON，成败好判断），失败再退普通表单端点。
+## - 有附件：先走普通表单端点。FormSubmit 的附件转发只挂在原生 multipart 表单
+##   路径上（官方文档 File uploads 一节只演示普通表单 POST）；/ajax/ 端点收下
+##   multipart 后只解析文本字段，附件不随邮件转发（2026-10-24 实测：游戏内
+##   带图发送，邮件正文正常到达但无图片，当时走的正是 /ajax/）。
+##   普通 302 感谢页 HTTPRequest 会自动跟随成 200，与旧兜底路径同判法。
 ## 返回值 { ok:true, activation_required?:bool } 或 { ok:false, error:String }。
 static func send_feedback(http: HTTPRequest, fields: Dictionary, attachment: Dictionary) -> Dictionary:
 	if http == null:
 		return {"ok": false, "error": "网络组件未初始化"}
 	var file_bytes: PackedByteArray = attachment.get("bytes", PackedByteArray())
+	var has_file := not file_bytes.is_empty()
 	var file_name := String(attachment.get("name", ""))
 	var file_mime := String(attachment.get("mime", "image/jpeg"))
 	var last_error := "发送失败"
-	for endpoint in [AJAX_ENDPOINT, FORM_ENDPOINT]:
+	var endpoints: Array = [AJAX_ENDPOINT, FORM_ENDPOINT] if not has_file \
+			else [FORM_ENDPOINT, AJAX_ENDPOINT]
+	for endpoint in endpoints:
 		var boundary := make_boundary()
 		var body := build_multipart(fields, "attachment", file_name, file_mime, file_bytes, boundary)
 		var headers := PackedStringArray([

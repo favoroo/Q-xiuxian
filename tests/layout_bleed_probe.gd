@@ -50,7 +50,7 @@ func _run() -> void:
 			panel.get_global_rect().position.y, panel.get_global_rect().end.y,
 			pr.position.x, pr.end.x])
 		print("     离屏 左 %.1f 右 %.1f（PANEL_AIR_X=%s）" % [
-			pr.position.x, screen.x - pr.end.x, str(LevelUpDialog.PANEL_AIR_X)])
+			pr.position.x, screen.x - pr.end.x, str(ShopCardLayout.ALLOC_PANEL_AIR_X)])
 		var row: Control = node.get_node(
 			"CenterContainer/Panel/MarginContainer/VBox/CardScroll")
 		var rr: Rect2 = row.get_global_rect()
@@ -73,7 +73,7 @@ func _run() -> void:
 		var ad: Rect2 = _drawn(ab)
 		var pbox: Rect2 = panel.get_global_rect()
 		var pcy: float = pbox.position.y + pbox.size.y * 0.5
-		var right_at_top: float = pbox.end.x - LevelUpDialog.PANEL_SKEW_RAD * (ad.position.y - pcy)
+		var right_at_top: float = pbox.end.x - ShopCardLayout.ALLOC_PANEL_SKEW_RAD * (ad.position.y - pcy)
 		print("     确认领悟画出来 x %.1f..%.1f ｜ 面板画出来的右边在同一高度 %.1f ｜ 留白 %.1f" % [
 			ad.position.x, ad.end.x, right_at_top, right_at_top - ad.end.x])
 		var i := 0

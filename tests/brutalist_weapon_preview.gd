@@ -1,36 +1,46 @@
 extends Control
 
-## 新野兽派武器重绘【全量 27 器形矩阵预览】（非判据，必须开窗跑）
+## 新野兽派武器重绘【全量矩阵预览 · 含同形分型 + 升星三联】（非判据，必须开窗跑）
 ##   $G --path . res://tests/BrutalistWeaponPreview.tscn -- --export [-- --out <path>]
 ##
 ## 直接实例化战斗同款 ProceduralWeaponRenderer：已被 BrutalistXxxShapes 接管的器形
 ## 显示新野兽派画法，未接管的回退旧画法（=待办，进度一眼可见）。
-## 每格：大=放大看形（1.35），小=实战尺寸（0.55，与 FloatingWeapon 一致）。
+## 2026-10-24 增列同形分型格：剑 7 把 / 刀 2 把 / 针 2 把 / 扇 2 把 / 牌 2 把，
+## 每格按真实 weapon_id 走战斗同款分型画法（cell 带 "wid"）。
+## 每格三联同尺寸挂载 ★1 / ★2 / ★3（升星档：★2 墨描加粗 / ★3 鎏金芯线），一眼核对梯度。
 ## 默认导出 tests/styles/brutalist_weapon_preview.png 后退出。
 
 const DEFAULT_OUT := "tests/styles/brutalist_weapon_preview.png"
 const TIP_LEN := 26.0
-const STAR := 2
-const BIG_SCALE := 1.35
+const MOUNT_SCALE := 0.8
 const COLS := 7
 const CELL_W := 130.0
-const CELL_H := 118.0
+const CELL_H := 80.0
 const GRID_X := 30.0
-const GRID_Y := 56.0
+const GRID_Y := 48.0
 
-## 27 器形 × 代表五行（覆盖金木水火土）。顺序按族：刃 9 / 重 8 / 巧 10。
+## 5 行 × 7 列：第一行 = 剑族 7 把全分型（本轮重点），其余按族排布。
 const CELLS := [
-	{"name": "长剑", "shape": "sword", "element": "metal", "upright": false},
-	{"name": "狂刀", "shape": "saber", "element": "fire", "upright": false},
+	{"name": "长剑", "shape": "sword", "element": "metal", "upright": false, "wid": "qingyun_sword"},
+	{"name": "飞剑", "shape": "sword", "element": "metal", "upright": false, "wid": "gengjin_feijian"},
+	{"name": "青藤剑", "shape": "sword", "element": "wood", "upright": false, "wid": "qingteng_jian"},
+	{"name": "桃木剑", "shape": "sword", "element": "wood", "upright": false, "wid": "taomu_jian"},
+	{"name": "流火飞剑", "shape": "sword", "element": "fire", "upright": false, "wid": "liuhuo_feijian"},
+	{"name": "寒霜剑", "shape": "sword", "element": "water", "upright": false, "wid": "hanshuang_jian"},
+	{"name": "崩山剑", "shape": "sword", "element": "earth", "upright": false, "wid": "bengshan_jian"},
+	{"name": "烈焰刀", "shape": "saber", "element": "fire", "upright": false, "wid": "chiyan_dao"},
+	{"name": "血饮狂刀", "shape": "saber", "element": "fire", "upright": false, "wid": "xueyin_dao"},
+	{"name": "暴雨针", "shape": "needles", "element": "metal", "upright": false, "wid": "baoyu_liuhuazhen"},
+	{"name": "冰针", "shape": "needles", "element": "water", "upright": false, "wid": "xuanbing_feizhen"},
 	{"name": "飞刀", "shape": "dagger", "element": "metal", "upright": false},
 	{"name": "手里剑", "shape": "shuriken", "element": "metal", "upright": false},
 	{"name": "开山斧", "shape": "axe", "element": "earth", "upright": false},
 	{"name": "金蛟剪", "shape": "shears", "element": "metal", "upright": false},
 	{"name": "透骨钉", "shape": "nail", "element": "wood", "upright": false},
-	{"name": "冰针", "shape": "needles", "element": "water", "upright": false},
 	{"name": "金锥", "shape": "awl", "element": "metal", "upright": true},
 	{"name": "法印", "shape": "seal", "element": "earth", "upright": true},
-	{"name": "令牌", "shape": "tablet", "element": "earth", "upright": true},
+	{"name": "雷牌", "shape": "tablet", "element": "earth", "upright": true, "wid": "wulei_paizi"},
+	{"name": "金霄雷令", "shape": "tablet", "element": "metal", "upright": true, "wid": "jinxiao_leiling"},
 	{"name": "天灯", "shape": "lantern", "element": "fire", "upright": true},
 	{"name": "战鼓", "shape": "drum", "element": "wood", "upright": true},
 	{"name": "裂山铎", "shape": "bell", "element": "earth", "upright": true},
@@ -38,7 +48,8 @@ const CELLS := [
 	{"name": "重锏", "shape": "mace", "element": "earth", "upright": true},
 	{"name": "重盾", "shape": "shield", "element": "earth", "upright": false},
 	{"name": "灵符", "shape": "talisman", "element": "wood", "upright": true},
-	{"name": "折扇", "shape": "fan", "element": "water", "upright": false},
+	{"name": "芭蕉扇", "shape": "fan", "element": "water", "upright": false, "wid": "bajiao_fan"},
+	{"name": "燎原扇", "shape": "fan", "element": "fire", "upright": false, "wid": "liaoyuan_shan"},
 	{"name": "灵鞭", "shape": "whip", "element": "wood", "upright": true},
 	{"name": "金尺", "shape": "ruler", "element": "metal", "upright": false},
 	{"name": "飞梭", "shape": "shuttle", "element": "water", "upright": false},
@@ -66,14 +77,14 @@ func _build_ui() -> void:
 	add_child(bg)
 
 	var title := Label.new()
-	title.text = "新野兽派 · 全武器 27 器形矩阵（显示旧画法 = 该形未接管，待办）"
+	title.text = "新野兽派 · 全武器矩阵（首行=剑族分型；显示旧画法 = 该形未接管，待办）"
 	title.position = Vector2(16, 8)
 	GameStyle.label(title, 15, Color(0.93, 0.94, 0.98))
 	add_child(title)
 
 	var note := Label.new()
-	note.text = "平涂色块 · 粗墨描边 · 硬投影 · 零辉光零渐变（刃器 1-9 / 重器 10-17 / 巧器 18-27；每格：大=放大 小=实战）"
-	note.position = Vector2(16, 32)
+	note.text = "平涂色块 · 粗墨描边 · 硬投影 · 零辉光零渐变（每格三联 = ★1 / ★2 / ★3 升星档对照）"
+	note.position = Vector2(16, 30)
 	GameStyle.label(note, 10, GameStyle.GREY)
 	add_child(note)
 
@@ -90,15 +101,16 @@ func _build_ui() -> void:
 		GameStyle.label(name_lbl, 10, GameStyle.GOLD)
 		add_child(name_lbl)
 
-		_mount(s, Vector2(x + CELL_W * 0.56, y + 58.0), BIG_SCALE)
-		_mount(s, Vector2(x + 22.0, y + 92.0), 0.55)
+		_mount(s, Vector2(x + 24.0, y + 46.0), MOUNT_SCALE, 1)
+		_mount(s, Vector2(x + 65.0, y + 46.0), MOUNT_SCALE, 2)
+		_mount(s, Vector2(x + 106.0, y + 46.0), MOUNT_SCALE, 3)
 
 
-func _mount(s: Dictionary, pos: Vector2, sc: float) -> void:
+func _mount(s: Dictionary, pos: Vector2, sc: float, st: int) -> void:
 	var wr := ProceduralWeaponRenderer.new()
 	wr.configure(
 		ProceduralWeaponRenderer.shape_from_name(String(s["shape"])),
-		String(s["element"]), TIP_LEN, STAR, bool(s["upright"]))
+		String(s["element"]), TIP_LEN, st, bool(s["upright"]), String(s.get("wid", "")))
 	wr.position = pos
 	wr.scale = Vector2.ONE * sc
 	add_child(wr)

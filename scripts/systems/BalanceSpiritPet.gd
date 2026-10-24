@@ -41,19 +41,25 @@ const THUNDER_CHAIN_MAX: int = 3
 ## 雷灵雀麻痹打断时长（秒）
 const THUNDER_STUN_DURATION: float = 0.40
 
-## 磐石猿震地伤害：base(34) × wave复利 × 灵兽伤害乘区
+## 磐石猿飞石落点震击伤害：base(34) × wave复利 × 灵兽伤害乘区
 static func smash_damage(wave: int, damage_mult: float) -> float:
 	var base := 34.0 * pow(DAMAGE_GROWTH, float(maxi(wave, 1) - 1))
 	return maxf(1.0, base * maxf(0.1, damage_mult))
 
-## 磐石猿震地半径：base(160) × 灵兽效果乘区
+## 磐石猿飞石落点震击半径：base(160) × 灵兽效果乘区
 static func smash_radius(effect_mult: float) -> float:
 	return clampf(160.0 * maxf(0.5, effect_mult), 100.0, 320.0)
 
-## 磐石猿震地减速持续时间与减速比例
-## 2026-10-20 调整：原「2 秒岩沼减速区」无感，改为命中即减速并延长至 3.5 秒（对齐冷却，范围内近乎常驻）
+## 磐石猿减速持续时间与减速比例（石落命中即施加；3.5s 时长对齐 3.5s 冷却，被砸的怪群近乎常驻压制）
 const SMASH_SLOW_DURATION: float = 3.5
 const SMASH_SLOW_PCT: float = 0.50
+
+## 磐石猿飞石索敌射程（px）：灵兽悬于玩家头顶绕飘，等效以玩家为中心的远程射程
+const BOULDER_RANGE: float = 360.0
+## 磐石猿飞石飞行速度（px/s）：重石慢飞，抛物弧高由 SpiritPetBoulder 按飞行距离演算
+const BOULDER_SPEED: float = 300.0
+## 磐石猿飞石落点震退力度
+const SMASH_KNOCKBACK: float = 220.0
 
 ## 玉露鹿治疗总量：(base_flat(12) + base_pct(2.0% max_hp)) × 灵兽效果乘区
 ## 2026-10-20 削弱：原 (20 + 2.5%maxhp)/2.5s 约 9HP/s 过强，降至约 5.5HP/s；拾取范围加成作为补偿真正接线

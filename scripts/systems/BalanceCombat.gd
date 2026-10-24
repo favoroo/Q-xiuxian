@@ -290,19 +290,33 @@ static func lunge_params(eid: String) -> Dictionary:
 
 const BURN_STACK_RATIO := 0.25         ## 多源灼烧叠层共鸣系数：已处于灼烧时，叠加新灼烧量的 25%
 const POISON_STACK_RATIO := 0.50       ## 剧毒叠层累加系数
+## 叠层共鸣帽（2026-10-24）：累积 DPS 不超过「本次施加量 × 帽倍率」，且**只挡增长不回落**——
+## 弱源或弹射衰减跳的少量施加不许拉低已叠高的强源异常。原本两系都无上限线性成长
+## （蛊毒符 ★1 打 30s boss 毒 DPS 滚到 ~84 vs 基准 5.6），长战斗必超模。
+## 帽值口径：普通怪 3~6 秒死亡内基本叠不满（无感），boss 战有界——剧毒 6 次施加到顶（×3）、
+## 灼烧 7 次到顶（×2.5），满层后蛊毒符毒伤 16.8/s ≈ 其直伤 16/s，DoT 定位保留、滚雪球封死。
+## 官方尺子 sustained_single_dps 与 BalanceSimCheck 仍按「单次施加基准量」标定（有界低估 ≤ ×帽）。
+const POISON_CAP_MULT := 3.0
+const BURN_CAP_MULT := 2.5
 const BURN_ELEM_TICK_COEF := 0.40      ## 每点元素伤害对每次灼烧跳字（0.5s）的额外伤害加成
 const POISON_ELEM_TICK_COEF := 0.30    ## 每点元素伤害对每次剧毒跳字（0.5s）的额外伤害加成
 const DOT_TICK_INTERVAL := 0.50        ## DoT 跳字结算周期（秒）
 
-## 施加灼烧后的新 DPS：未灼烧时全额起算，已灼烧时在保留最高值基础上叠加 25% 共鸣伤害
+## 施加灼烧后的新 DPS：未灼烧时全额起算，已灼烧时在保留最高值基础上叠加 25% 共鸣伤害；
+## 累积不越过「本次施加量 × BURN_CAP_MULT」，弱源不回落
 static func stack_burn_dps(current_dps: float, incoming_dps: float) -> float:
 	if current_dps <= 0.0:
 		return maxf(0.0, incoming_dps)
-	return maxf(current_dps, incoming_dps) + maxf(0.0, incoming_dps) * BURN_STACK_RATIO
+	var grown := maxf(current_dps, incoming_dps) + maxf(0.0, incoming_dps) * BURN_STACK_RATIO
+	var cap := maxf(maxf(0.0, incoming_dps) * BURN_CAP_MULT, maxf(0.0, current_dps))
+	return minf(grown, cap)
 
-## 施加剧毒后的新 DPS：持续累加
+## 施加剧毒后的新 DPS：持续累加；累积不越过「本次施加量 × POISON_CAP_MULT」，弱源不回落
 static func stack_poison_dps(current_dps: float, incoming_dps: float) -> float:
-	return maxf(0.0, current_dps) + maxf(0.0, incoming_dps) * POISON_STACK_RATIO
+	var cur := maxf(0.0, current_dps)
+	var grown := cur + maxf(0.0, incoming_dps) * POISON_STACK_RATIO
+	var cap := maxf(maxf(0.0, incoming_dps) * POISON_CAP_MULT, cur)
+	return minf(grown, cap)
 
 ## 单次灼烧跳字（每 0.5s）实际结算伤害：受元素伤害属性与离火羁绊倍率双重增幅
 static func burn_tick_damage(burn_dps: float, elemental_damage: float, synergy_burn_mult: float = 1.0) -> float:

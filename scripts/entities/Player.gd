@@ -3,7 +3,6 @@ extends CharacterBody2D
 
 const BASE_PICKUP_RADIUS: float = 96.0   ## 拾取圈内径（福缘/乾坤袋按乘区放大）
 const DASH_LANDING_SPEED_MUL: float = 1.35  ## 冲刺落地那帧的残留速度上限（× 常速）：只留一点前冲，不许拖出隐形滑行
-const SPIRIT_HEALER_SCENE: PackedScene = preload("res://scenes/entities/SpiritHealer.tscn")  ## 治疗灵兽（renewal 附带召唤）
 ## 玩家基础属性三件套：全项目「玩家没生成时」的兜底读数一律引用这三个常量，
 ## 不许再各写一份字面量（改一个数要同步七处的旧病）。
 const BASE_MAX_HEALTH: float = 120.0      ## 基础生命：CultivatorData 只有 hp_mult 乘区，这里是唯一权威基线
@@ -468,7 +467,7 @@ func heal(amount: float, quiet: bool = false) -> void:
 	AudioManager.play_sfx("heal", 0.9)
 	DamageNumber.spawn(get_parent(), global_position, int(gained), false, "+" + str(int(gained)))
 
-# ---------------- 随行技能 ----------------
+# ---------------- 随行技能（实现已拆 player_skills/：主动五连 ActiveSkills、爆发四件套 BurstSkills） ----------------
 
 ## HUD 技能按钮入口。false = 没放出来（CD 中 / 效果活跃中 / 战斗外 / 无技能），调用方不发反馈
 func try_activate_skill() -> bool:
@@ -494,15 +493,15 @@ func try_activate_skill() -> bool:
 		skill_active_left = active_dur
 	match int(st["kind"]):
 		SkillData.Kind.DASH:
-			_do_dash(st)
+			ActiveSkills.dash(self, st)
 		SkillData.Kind.SPEED:
-			_do_gale(st)
+			ActiveSkills.gale(self, st)
 		SkillData.Kind.HASTE:
-			_do_haste(st)
+			ActiveSkills.haste(self, st)
 		SkillData.Kind.IFRAME:
-			_do_aegis(st)
+			ActiveSkills.aegis(self, st)
 		SkillData.Kind.HEAL:
-			_do_renewal(st)
+			ActiveSkills.renewal(self, st)
 	return true
 
 ## 效果活跃窗口时长（秒）：冲刺按无敌窗口，持续型按 duration，其余（瞬发）为 0
@@ -566,14 +565,14 @@ func try_activate_extra_skill() -> bool:
 			extra_skill_cd_left = extra_skill_cd_total
 			play_squash(Vector2(1.18, 0.84), 0.18)
 			if sid == "elixir":
-				_release_elixir()
+				BurstSkills.release_elixir(self)
 			return true
 		SkillData.Kind.BURST:
 			# 蓄能释放：没攒上按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
 			if not ShadowStepData.has_charge(shadow_ring):
 				return false
 			play_squash(Vector2(1.18, 0.84), 0.18)
-			_release_shadow_step()
+			BurstSkills.release_shadow_step(self)
 			return true
 	return false
 
@@ -608,50 +607,7 @@ func _tick_skill_buffs(delta: float) -> void:
 				GameManager.buff_damage_mult = 1.0
 				GameManager.buff_move_speed_mult = 1.0
 
-## 无输入时按当前朝向给冲刺方向（facing + flip_h 还原 8 方向单位向量）
-func _facing_vec() -> Vector2:
-	var right := Vector2.LEFT if anim_sprite.flip_h else Vector2.RIGHT
-	match facing:
-		"n":
-			return Vector2.UP
-		"s":
-			return Vector2.DOWN
-		"e":
-			return right
-		"se":
-			return (Vector2.DOWN + right).normalized()
-		"ne":
-			return (Vector2.UP + right).normalized()
-	return Vector2.DOWN
 
-func _do_dash(st: Dictionary) -> void:
-	var dir: Vector2 = Vector2.ZERO
-	if GameManager.joystick != null and GameManager.joystick.has_method("get_direction"):
-		dir = GameManager.joystick.get_direction()
-	if dir.length_squared() < 0.03:
-		# 松手冲刺：沿当前惯性方向；站定则沿面朝方向
-		dir = velocity.normalized() if velocity.length_squared() > 900.0 else _facing_vec()
-	_dash_dir = dir.normalized()
-	_dash_time = float(st["duration"])
-	_dash_speed = float(st["distance"]) / maxf(0.05, _dash_time)
-	# 无敌覆盖位移全程 + 落地脱身余量（时长唯一真话在 SkillData 的 iframe 字段），落点瞬间不吃贴脸伤害
-	# 影层被动：每层再加一段无敌（影在身上时冲刺更稳）——影层兑现不在这里，影爆是独立技能
-	invulnerable_time = maxf(invulnerable_time,
-		float(st.get("iframe", _dash_time + 0.04)) + ShadowStepData.iframe_bonus(shadow_ring))
-	# 冲刺攻势：起跳即开必暴窗口（roll_crit 消费，覆盖冲刺与落地追击的两拍输出）
-	GameManager.force_crit_left = maxf(GameManager.force_crit_left, float(st.get("crit_window", 0.0)))
-	# 技能重置普攻（薇恩 Q 式）：翻滚期间先压住武器起手，落地那一帧才清间隔放行，
-	# 于是「滚动 → 落地 → A 出去」三拍分明；冲刺自带的必暴窗口正好兑现落地这一刀。
-	# 字段在 SkillData，只有闪避带了这一条。
-	if int(st.get("attack_reset", 0)) > 0:
-		_set_weapon_fire_held(true)
-	play_squash(Vector2(1.3, 0.72), 0.2)
-	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), _dash_dir * _dash_speed)
-	if skill_vfx != null:
-		skill_vfx.on_dash_start(_dash_dir, float(st["distance"]), _dash_time, float(st.get("crit_window", 1.0)))
-	if is_procedural and procedural_view != null:
-		procedural_view.play_dash(_dash_time)
-	AudioManager.play_sfx("skill_dash", 1.0)
 
 ## 翻滚期间压住所有在役武器的起手（闪避的技能重置普攻）。
 ## 只挡新的起手，正在挥出的那一拍照常走完；落地由 _on_dash_landed 解除。
@@ -672,197 +628,15 @@ func reset_weapon_attack_intervals() -> void:
 		if child is FloatingWeapon and is_instance_valid(child):
 			(child as FloatingWeapon).reset_attack_cooldown()
 
-## 影爆（额外技能）：把影层里存的「刚才躲掉的那几刀」按比例折成一次周身影袭还回去，同时推开一圈怪。
-## 环特效半径传的就是判定半径本身（画多大 == 判多大）；镜头只给一档轻 zoom punch（低频主动技），
-## 不加震屏/顿帧——同帧叠满屏乱晃的历史教训不变。
-func _release_shadow_step() -> void:
-	if not ShadowStepData.has_charge(shadow_ring):
-		return
-	var dmg := ShadowStepData.burst_damage(shadow_ring, GameManager.wave_number)
-	var impulse: float = ShadowStepData.push_impulse(shadow_ring) * GameManager.knockback_mult
-	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
-	for e in EnemyFilter.collect(get_tree(), global_position, ShadowStepData.BURST_RADIUS):
-		var off: Vector2 = e.global_position - global_position
-		var dir := off.normalized() if off.length_squared() > 0.0001 else _dash_dir
-		e.take_damage(dmg, dir * impulse)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, ShadowStepData.BURST_RADIUS,
-		GameStyle.SHADOW, ShadowStepData.BURST_RING_DURATION)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -10), "shadow", 1.2, true)
-	AudioManager.play_sfx("whoosh_heavy", 1.0, 0.82)
-	AudioManager.play_sfx("whoosh_heavy", 0.7, 0.62)  ## 降调低频层：影爆踩碎的「闷响」
-	GameFeel.zoom_punch(GameManager, ShadowStepData.BURST_ZOOM_PUNCH, 0.2)
-	shadow_ring = []
-	GameManager.shadow_amp_mult = 1.0
-	if skill_vfx != null:
-		skill_vfx.on_shadow_spent()
 
-## 盾势爆发（守卫·全自动）：把槽里蓄的「被护甲挡下的伤害」按比例折成一次周身震荡还回去并震开。
-## 与影爆同一把尺子：环特效半径传的就是判定半径；镜头只给一档轻 zoom punch（低频爆发技），不加震屏。
-## 唯一触发点是 take_damage 蓄满当帧（攒/放同一写点），槽先清零再结算，爆发期间挨的刀计入下一槽。
-func _release_guard_stance() -> void:
-	var charge := GameManager.shield_charge
-	GameManager.shield_charge = 0.0
-	if skill_vfx != null:
-		skill_vfx.on_guard_burst()
-	var dmg := GuardStanceData.burst_damage(charge)
-	var impulse: float = GuardStanceData.PUSH_IMPULSE * GameManager.knockback_mult
-	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
-	for e in EnemyFilter.collect(get_tree(), global_position, GuardStanceData.BURST_RADIUS):
-		var off: Vector2 = e.global_position - global_position
-		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
-		e.take_damage(dmg, dir * impulse)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, GuardStanceData.BURST_RADIUS,
-		GameStyle.AURUM, GuardStanceData.BURST_RING_DURATION)
-	GameFeel.zoom_punch(GameManager, GuardStanceData.BURST_ZOOM_PUNCH, 0.18)
-	AudioManager.play_sfx("whoosh_heavy", 0.9, 0.72)
 
-## 天雷（雷法真君·全自动）：引雷劈向索敌圈内最近的敌人，落点小范围震荡。
-## 与盾势同一把尺子：环特效半径传的就是判定半径；不加震屏——落雷由环、跳字与击退本身表达。
-## 伤害只随元素伤害成长（ThunderData.bolt_damage）× 短时增益乘区——不吃武器 tag 乘区，
-## 它是道统技能不是武器；返回 false = 索敌圈内无怪（调用方走短间隔重试，不空耗整轮冷却）。
-func _call_thunder() -> bool:
-	# 索敌：过滤口径统一走 EnemyFilter，取 SEEK_RANGE 内最近的一只
-	var best := EnemyFilter.nearest(get_tree(), global_position, ThunderData.SEEK_RANGE)
-	if best == null:
-		return false
-	var strike_pos: Vector2 = best.global_position
-	var dmg: float = ThunderData.bolt_damage(GameManager.elemental_damage) * GameManager.buff_damage_mult
-	var impulse: float = ThunderData.PUSH_IMPULSE * GameManager.knockback_mult
-	for e in EnemyFilter.collect(get_tree(), strike_pos, ThunderData.RADIUS):
-		var off: Vector2 = e.global_position - strike_pos
-		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
-		e.take_damage(dmg, dir * impulse)
-	JuiceEffect.spawn_shockwave(get_parent(), strike_pos, ThunderData.RADIUS,
-		GameStyle.GOLD_FX_EDGE, 0.3)
-	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
-	var bolt_parent: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
-	if bolt_parent != null:
-		var bolt := LightningBolt.acquire(bolt_parent)
-		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
-		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_FX_EDGE, 1.35)
-	if skill_vfx != null:
-		skill_vfx.on_thunder_cast()
-	play_squash(Vector2(1.08, 0.92), 0.12)
-	AudioManager.play_sfx("thunder_strike", 0.9, 1.0)
-	return true
 
-## 药爆（药王·额外技能）：摔碎药罐——自身回复一截生命（ElixirData.HEAL_HP_RATIO），
-## 药力向周身炸开对敌人造成一次性毒伤（不挂 DoT）并推开，随附短时增伤反打窗口。
-func _release_elixir() -> void:
-	# 1. 自身回血（小治疗，直接按当前最大生命比例回复）
-	var heal_val := ElixirData.heal_amount(max_health)
-	heal(heal_val)
 
-	# 2. 周身一次性毒雾伤害（走毒系口径：随元素伤害成长 × 短时增益乘区）
-	var dmg := ElixirData.burst_damage(GameManager.elemental_damage) * GameManager.buff_damage_mult
-	var impulse := ElixirData.PUSH_IMPULSE * GameManager.knockback_mult
-	for e in EnemyFilter.collect(get_tree(), global_position, ElixirData.BURST_RADIUS):
-		var off: Vector2 = e.global_position - global_position
-		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
-		e.take_damage(dmg, dir * impulse)
 
-	# 3. 药力反打短时增伤（ElixirData 数值）
-	GameManager.buff_damage_mult = ElixirData.buff_mult()
-	_skill_buffs["elixir"] = ElixirData.BUFF_DURATION
 
-	# 4. 视觉与音效：冲击环（画多大==判多大，GOOD 翠绿药雾色）+ 地面药圃残辉 + 随行药爆药雾粒子
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, ElixirData.BURST_RADIUS,
-		GameStyle.GOOD, ElixirData.BURST_RING_DURATION)
-	# 地面药圃残辉：毒伤范围贴地留痕（半径 = 判定半径），让按下的那一圈在地上留一拍
-	var residue := GroundDecal.spawn_tinted(get_parent(), global_position, ElixirData.BURST_RADIUS, GameStyle.GOOD)
-	if residue != null:
-		residue._time_left = ElixirData.GROUND_RESIDUE_SEC
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, 4), "heal", 1.1, true)
-	GameFeel.zoom_punch(GameManager, ElixirData.BURST_ZOOM_PUNCH, 0.2)
-	if skill_vfx != null:
-		skill_vfx.on_elixir_cast()
-	if is_procedural and procedural_view != null:
-		procedural_view.set_skill_visual("renewal", true, 1.0)
-	AudioManager.play_sfx("skill_heal", 1.05, 1.1)
-	AudioManager.play_sfx("whoosh_heavy", 0.85, 1.25)
 
-func _do_gale(st: Dictionary) -> void:
-	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])
-	# 罡风护身：加速期间身法闪避大幅提升（到期与移速乘区同帧精确归零）
-	var dodge_add: float = float(st.get("dodge_add", 0.0))
-	GameManager.buff_dodge = dodge_add
-	# 100% 闪避（影者契合）：角色抬升只到 90% 的硬上限会把它截成 90% ⇒ 期间把上限临时
-	# 抬到 1.0，buff 走完由 _tick_skill_buffs 按抬升前的原值精确还原（与 buff_dodge 同帧，不留残留）
-	const FULL_DODGE_EPS := 0.0001
-	_gale_cap_forced = dodge_add >= 1.0 - FULL_DODGE_EPS
-	if _gale_cap_forced:
-		_gale_cap_before = GameManager.dodge_cap_bonus
-		GameManager.dodge_cap_bonus = maxf(GameManager.dodge_cap_bonus, 1.0 - GameManager.DODGE_CAP)
-	_skill_buffs["gale"] = float(st["duration"])
-	play_squash(Vector2(0.85, 1.2), 0.2)
-	if skill_vfx != null:
-		skill_vfx.on_gale_start(float(st["duration"]))
-	AudioManager.play_sfx("skill_buff", 1.0)
 
-func _do_haste(st: Dictionary) -> void:
-	GameManager.buff_attack_speed_mult = maxf(GameManager.ATTACK_SPEED_FLOOR, 1.0 - float(st["power"]))
-	_skill_buffs["haste"] = float(st["duration"])
-	play_squash(Vector2(1.12, 0.9), 0.18)
-	if skill_vfx != null:
-		skill_vfx.on_haste_start(float(st["duration"]))
-	AudioManager.play_sfx("skill_buff", 1.1)
 
-func _do_aegis(st: Dictionary) -> void:
-	var dur: float = float(st["duration"])
-	invulnerable_time = maxf(invulnerable_time, dur)
-	# 金光护体：无敌期间武器击退力度大幅提升，并激活金光剑气附伤（活跃窗口走完由 _on_skill_effect_end 精确回滚）
-	GameManager.buff_knockback_mult = float(st.get("knockback_boost", 1.0))
-	GameManager.buff_sword_ki_ratio = float(st.get("sword_ki_ratio", 0.50))
-	play_squash(Vector2(0.82, 1.22), 0.24)
-	if skill_vfx != null:
-		skill_vfx.on_aegis_start(dur)
-	AudioManager.play_sfx("skill_aegis", 1.0)
-	# 护体罡风爆发：开启瞬间主动震开周身贴身敌人并造成金光震荡伤害
-	_repel_aegis_surroundings()
-
-## 金光护体震开周身敌人并造成金光震荡伤害（开盾瞬间解围脱困）
-func _repel_aegis_surroundings() -> void:
-	var repel_radius := 120.0
-	var impulse: float = 280.0 * GameManager.knockback_mult
-	var dmg: float = 20.0 * GameManager.get_weapon_damage_mult() * GameManager.buff_damage_mult
-	for e in EnemyFilter.collect(get_tree(), global_position, repel_radius):
-		var off: Vector2 = e.global_position - global_position
-		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
-		e.take_damage(dmg, dir * impulse)
-	var parent_node: Node = get_parent() if get_parent() != null else (get_tree().current_scene if get_tree() != null else self)
-	if parent_node != null:
-		JuiceEffect.spawn_shockwave(parent_node, global_position, repel_radius, GameStyle.GOLD_FX_EDGE, 0.28)
-
-func _do_renewal(st: Dictionary) -> void:
-	heal(max_health * float(st["power"]), true)
-	play_squash(Vector2(0.88, 1.16), 0.18)
-	DamageNumber.spawn(get_parent(), global_position, int(max_health * float(st["power"])), false, "+" + str(int(max_health * float(st["power"]))) + " HP")
-	_summon_spirit_healer(st)
-	if skill_vfx != null:
-		skill_vfx.on_renewal_cast()
-	AudioManager.play_sfx("skill_heal", 1.0)
-	AudioManager.play_sfx("heal", 0.65, 1.15)  ## 回血确认音（heal 走了 quiet 通道吞掉原音，这里低声叠回）
-
-## 治疗灵兽：治疗技能附带召唤（SkillData renewal 的 pet_* 字段），跟随玩家周期回血；重施按组替换旧灵
-func _summon_spirit_healer(st: Dictionary) -> void:
-	var pet_pct := float(st.get("pet_heal_pct", 0.0))
-	var pet_life := float(st.get("pet_duration", 0.0))
-	if pet_pct <= 0.0 or pet_life <= 0.0:
-		return
-	var old := get_tree().get_first_node_in_group("spirit_healers")
-	if old != null:
-		# 先出组再销毁：queue_free 要到帧末才真正释放，同帧重施必须立刻能拿到新灵
-		old.remove_from_group("spirit_healers")
-		old.queue_free()
-	var pet := SPIRIT_HEALER_SCENE.instantiate() as SpiritHealer
-	if pet == null:
-		return
-	pet.heal_pct = pet_pct
-	pet.lifetime = pet_life
-	pet.target = self
-	get_parent().add_child(pet)
-	pet.global_position = global_position + Vector2(0, -SpiritHealer.HEIGHT_OFFSET)
 
 # ---------------- 主循环 ----------------
 
@@ -874,8 +648,46 @@ func _physics_process(delta: float) -> void:
 	if _dying or _victorious:
 		return
 
-	# 技能冷却两段式：先走效果活跃窗口（归零即收尾+进冷却），再走冷却与短时增益倒计时
-	# （与加点乘区隔离，到期精确回滚）
+	# 主循环已按职责切片（2026-10-24，照 _tick_attack_react 先例）：计时 → 视觉衰减 →
+	# 回血 → 移动 → 站定账本 → 步态。切片间共享的移动上下文走成员（每帧覆写零分配）。
+	_tick_skill_timers(delta)
+	_tick_invuln_visuals(delta)
+	_tick_hit_decay(delta)
+	_tick_regen(delta)
+	_tick_movement(delta)
+	_tick_stillness(delta)
+	_tick_gait(delta)
+
+	# 4. 攻击本体联动 + 灵蝶环绕运算
+	_tick_attack_react()
+	_process_sun_orbs(delta)
+
+	# 5. 随行技能角色身上动效更新
+	if skill_vfx != null:
+		if GameManager.frenzy_enabled > 0.0:
+			skill_vfx.sync_frenzy(GameManager.frenzy_stacks, FrenzyData.MAX_STACKS)
+		skill_vfx.update_vfx(delta, _move_is_moving, velocity)
+
+	# 6. 统一调度各武器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
+	# 10Hz 节流 + 错相（2026-10-10 第 6 波卡顿优化）：敌人位置连续，索敌无需逐帧
+	# intersect_shape；新目标入射程最多延迟 100ms 锁定，肉眼无感
+	_search_phase -= delta
+	if _search_phase <= 0.0:
+		_search_phase = TARGET_SEARCH_INTERVAL
+		_update_weapon_targets()
+
+# ---------------- 主循环切片（2026-10-24） ----------------
+
+## 移动上下文成员：_tick_movement 产出、_tick_gait/_tick_stillness 消费。
+## 每帧覆写、零分配（切片间传多值走成员而非返回字典，避开每帧 new Dictionary）。
+var _move_dir: Vector2 = Vector2.ZERO
+var _move_input_moving: bool = false
+var _move_is_moving: bool = false
+var _move_target_speed: float = 0.0
+
+## 技能冷却两段式：先走效果活跃窗口（归零即收尾+进冷却），再走冷却与短时增益倒计时
+## （与加点乘区隔离，到期精确回滚）
+func _tick_skill_timers(delta: float) -> void:
 	if skill_active_left > 0.0:
 		skill_active_left -= delta
 		if skill_active_left <= 0.0:
@@ -897,9 +709,10 @@ func _physics_process(delta: float) -> void:
 	if GameManager.thunder_strike > 0.0:
 		_thunder_cd -= delta
 		if _thunder_cd <= 0.0:
-			_thunder_cd = ThunderData.INTERVAL if _call_thunder() else ThunderData.RETRY_INTERVAL
+			_thunder_cd = ThunderData.INTERVAL if BurstSkills.call_thunder(self) else ThunderData.RETRY_INTERVAL
 
-	# 受击无敌帧倒计时与频闪反馈
+## 受击无敌帧倒计时与频闪反馈
+func _tick_invuln_visuals(delta: float) -> void:
 	if invulnerable_time > 0.0:
 		invulnerable_time -= delta
 		# 金光护体期间图集角色泛金光高亮，程序化角色由矢量渲染器精细驱动局部流光与高光
@@ -923,8 +736,9 @@ func _physics_process(delta: float) -> void:
 		_flash_t = maxf(0.0, _flash_t - delta)
 		_write_flash_channel(clampf(_flash_t / PLAYER_FLASH_DOWN_DUR, 0.0, 1.0))
 
-	# 定向受击反馈衰减（与敌人 _tick_hit_visuals 同速率）：后仰 14/s 回正、微反冲 24px/s 归零。
-	# 放在移动分支之前：rotation 的 lerp 目标在下方行走/待机分支消费 _hit_tilt，必须先衰减再合成
+## 定向受击反馈衰减（与敌人 _tick_hit_visuals 同速率）：后仰 14/s 回正、微反冲 24px/s 归零。
+## 放在移动分支之前：rotation 的 lerp 目标在 _tick_gait 行走/待机分支消费 _hit_tilt，必须先衰减再合成
+func _tick_hit_decay(delta: float) -> void:
 	if _hit_tilt != 0.0:
 		_hit_tilt = lerpf(_hit_tilt, 0.0, minf(delta * 14.0, 1.0))
 		if absf(_hit_tilt) < 0.001:
@@ -936,7 +750,8 @@ func _physics_process(delta: float) -> void:
 		if is_procedural and procedural_view != null:
 			procedural_view.position = _hit_jiggle_offset
 
-	# 灵愈心法 + 青木羁绊：持续回血（软顶折算与面板读数同源，BalanceCombat 唯一算式）
+## 灵愈心法 + 青木羁绊：持续回血（软顶折算与面板读数同源，BalanceCombat 唯一算式）
+func _tick_regen(delta: float) -> void:
 	var total_regen := BalanceCombat.effective_hp_regen(GameManager.hp_regen + GameManager.synergy_hp_regen)
 	if total_regen > 0.0 and current_health < max_health:
 		var before_regen := current_health
@@ -948,7 +763,8 @@ func _physics_process(delta: float) -> void:
 		regen_tick = 0.0
 		GameManager.player_hp_changed.emit(current_health, max_health)
 
-	# 1. 移动输入与高响应加减速平滑
+## 1. 移动输入与高响应加减速平滑（含冲刺接管与落地收速）
+func _tick_movement(delta: float) -> void:
 	var dir: Vector2 = Vector2.ZERO
 	var joy = GameManager.joystick
 	if joy != null:
@@ -964,7 +780,7 @@ func _physics_process(delta: float) -> void:
 
 	var target_speed := base_speed * (GameManager.move_speed_mult + GameManager.synergy_move_speed_mult) * GameManager.buff_move_speed_mult
 	var target_velocity := dir * target_speed
-	# 冲刺接管移动：不吃加减速插值，匀速直射，途中刀枪不入（无敌在 _do_dash 里已给）
+	# 冲刺接管移动：不吃加减速插值，匀速直射，途中刀枪不入（无敌在 ActiveSkills.dash 里已给）
 	if _dash_time > 0.0:
 		_dash_time -= delta  # 顿帧时 delta 已被 time_scale 缩放，突进与世界同拍变慢
 		target_velocity = _dash_dir * _dash_speed
@@ -988,15 +804,22 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(target_velocity, accel * delta)
 	move_and_slide()
 
+	_move_dir = dir
+	_move_input_moving = input_moving
+	_move_is_moving = is_moving
+	_move_target_speed = target_speed
+
+## 站定/入定流账本 + 蛮兵陷阵感知 + 灵田界碑边界
+func _tick_stillness(delta: float) -> void:
 	# 站定/入定流账本：打坐蒲团、入定香、玄武法坛、不动明王印、磐石印、金刚神像或苦行僧在场才计时；脚底一动立刻清零
 	if GameManager.has_still_mechanic():
 		var was_still := GameManager.still_time > 0.0
-		GameManager.player_is_moving = is_moving
-		GameManager.still_time = 0.0 if is_moving else GameManager.still_time + delta
+		GameManager.player_is_moving = _move_is_moving
+		GameManager.still_time = 0.0 if _move_is_moving else GameManager.still_time + delta
 		var is_now_still := GameManager.still_time > 0.0
 		if was_still != is_now_still and GameManager.still_pickup_bonus > 0.0:
 			_sync_pickup_radius()
-		if not is_moving:
+		if not _move_is_moving:
 			var regen_pct: float = GameManager.item_hook_sum("still_regen_pct")
 			if regen_pct > 0.0 and current_health < max_health:
 				heal(max_health * regen_pct * delta, true)
@@ -1004,7 +827,7 @@ func _physics_process(delta: float) -> void:
 			if GameManager.still_regen_bonus > 0.0 and current_health < max_health:
 				heal(GameManager.still_regen_bonus * delta, true)
 	else:
-		GameManager.player_is_moving = is_moving
+		GameManager.player_is_moving = _move_is_moving
 
 	# 蛮兵·陷阵：节流数感知圈内的敌人（crowd_damage_radius = 0 时整块零开销）
 	if GameManager.crowd_damage_radius > 0.0:
@@ -1012,23 +835,22 @@ func _physics_process(delta: float) -> void:
 		if _crowd_tick <= 0.0:
 			_crowd_tick = 0.2
 			GameManager.nearby_enemy_count = EnemyFilter.count_in_range(
-				get_tree(), global_position, GameManager.crowd_damage_radius)
+				GameManager.live_enemies, global_position, GameManager.crowd_damage_radius)
 
 	# 灵田界碑边界
 	var lim: float = GameManager.MAP_HALF_EXTENT - 26.0
 	global_position = global_position.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 2. 奔跑步伐微尘：已在步相推进点（下方 procedural 分支）随「脚落地帧」同步放尘，
-	# 与身体垂直弹跳/影子脉冲三者同源 gait_phase_counter，不再用独立定时器错拍
-
-	# 3. Sprite 方向 & 动画（带迟滞滤波 + 移速步频自适应 + 统一形变插值流）
+## 3. Sprite 方向 & 动画（带迟滞滤波 + 移速步频自适应 + 统一形变插值流；三模式：程序化/悬浮/图集）
+## 奔跑步伐微尘已在程序化分支随「脚落地帧」同步放尘（与身体垂直弹跳/影子脉冲三者同源 gait_phase_counter）
+func _tick_gait(delta: float) -> void:
 	var current_base := anim_base_scale * juice_scale
 	var current_speed := velocity.length()
-	var speed_ratio: float = (current_speed / target_speed) if target_speed > 0.0 else 1.0
+	var speed_ratio: float = (current_speed / _move_target_speed) if _move_target_speed > 0.0 else 1.0
 
-	if is_moving:
+	if _move_is_moving:
 		# 使用带迟滞区间的 8 方向平滑算法，彻底消除摇杆临界角度导致的快速抽搐
-		var effective_dir := dir if input_moving else velocity.normalized()
+		var effective_dir := _move_dir if _move_input_moving else velocity.normalized()
 		var face: Array = RunMotion.facing_stable(effective_dir, facing, anim_sprite.flip_h, 29.0)
 		if face[0] != "":
 			facing = face[0]
@@ -1081,24 +903,6 @@ func _physics_process(delta: float) -> void:
 			RunMotion.select_anim(anim_sprite, _anim_idle, false)
 			idle_bob_phase += delta * 2.2
 			RunMotion.apply(_run_state, anim_sprite, current_base, false, anim_sprite.flip_h, 0.0, delta, 1.0, idle_bob_phase, shadow_sprite)
-
-	# 4. 攻击本体联动 + 灵蝶环绕运算
-	_tick_attack_react()
-	_process_sun_orbs(delta)
-
-	# 5. 随行技能角色身上动效更新
-	if skill_vfx != null:
-		if GameManager.frenzy_enabled > 0.0:
-			skill_vfx.sync_frenzy(GameManager.frenzy_stacks, FrenzyData.MAX_STACKS)
-		skill_vfx.update_vfx(delta, is_moving, velocity)
-
-	# 6. 统一调度各武器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）
-	# 10Hz 节流 + 错相（2026-10-10 第 6 波卡顿优化）：敌人位置连续，索敌无需逐帧
-	# intersect_shape；新目标入射程最多延迟 100ms 锁定，肉眼无感
-	_search_phase -= delta
-	if _search_phase <= 0.0:
-		_search_phase = TARGET_SEARCH_INTERVAL
-		_update_weapon_targets()
 
 func _sort_candidate_by_dist(a: Node2D, b: Node2D) -> bool:
 	# 读预算缓存（见 _fill_sort_cache）：排序是 O(n log n) 次比较，旧写法每次比较都重算
@@ -1468,7 +1272,7 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		if skill_vfx != null and skill_vfx.has_method("on_guard_charge_updated"):
 			skill_vfx.on_guard_charge_updated(GameManager.shield_charge, GuardStanceData.cap_of(max_health))
 		if GuardStanceData.is_full(GameManager.shield_charge, max_health):
-			_release_guard_stance()
+			BurstSkills.release_guard_stance(self)
 	GameManager.player_hp_changed.emit(current_health, max_health)
 
 	# game-feel 复合打击反馈：相机大创伤 + 顿帧 + 屏幕边缘红晕脉冲 + 玩家受力挤压 + 触觉震感

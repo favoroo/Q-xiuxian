@@ -1,0 +1,164 @@
+class_name ChannelHandler
+extends RefCounted
+
+## 持续束流（BEAM 光束 / CONE 喷吐）行为实现（2026-10-24 自 FloatingWeapon 拆出）。
+## 与六段式攻击不同：束流不设 is_attacking（不冻结轨道与朝向），起喷后由 tick
+## 逐帧续命 —— 朝向本身 15rad/s 追踪目标，光束/火锥自然跟着缓慢扫动。
+## 每 TICK 结算一次，tick 伤害 = 整管伤害 × TICK / 有效冷却 ⇒ 纸面 DPS（damage/cd）即实伤。
+## 冷却循环到期自动续喷（CHANNEL_HOLD > 冷却 ⇒ 目标在程内连续不断）；目标死亡/脱程即收束。
+##
+## 纪律：首参 w 为宿主武器（不标类型，鸭类型访问——武器侧硬类型引用会触发
+## 循环类依赖，把弹丸 preload 打成空 PackedScene，项目坑 12）。
+## 束流运行时状态（_channel_on/_beam_len 等）仍是武器成员（渲染节点挂武器下、判据直读），
+## 本模块只读写不持有；射线/矩形查询对象是本模块静态复用（单线程顺序执行安全）。
+
+const CHANNEL_HOLD := 1.6      ## 一次起喷持续时间（秒），冷却每转一圈回来续喷
+const BEAM_TICK := 0.15        ## 光束结算间隔
+const CONE_TICK := 0.21        ## 喷吐结算间隔（火葫芦 0.42 冷却 = 每周期 2 跳）
+const CONE_HALF_ANGLE := 28.0  ## 喷吐锥形半角（度），视觉锥宽同源
+const BEAM_HALF_WIDTH := 5.0   ## 光束判定半宽（视觉束宽同源）
+## 光束判定在截断点后再探出一段：射线停在挡束者表面，不补这段则挡住光束的敌人自己
+## 反而打不到（判定只到它表皮）；补段长约一个敌人受击半径，只盖挡束者、不穿墙打后排。
+const BEAM_HIT_OVERHANG := 24.0
+## 束长射线节流（2026-10-14）：原每渲染帧 create 参数对象 + intersect_ray（60 次/秒），
+## 降到 10Hz 快照 + 参数对象复用（对齐武器 _search_query 范式），帧间 _beam_len 向快照缓动；
+## 起喷当帧强制立判（武器 _beam_need_cast），首跳伤害长度不滞后。
+const BEAM_CAST_INTERVAL := 0.1
+
+## 光束长度射线与判定矩形的静态复用对象（单线程使用安全，尺寸/变换每次调用重设）
+static var _beam_ray_query: PhysicsRayQueryParameters2D = null
+static var _beam_shape: RectangleShape2D = null
+static var _beam_query: PhysicsShapeQueryParameters2D = null
+
+## 束流起喷：不冻结轨道（不设 is_attacking），挂上持续时长与起手反馈；
+## 冷却循环每转一圈回来续喷，所以起手音只在从收束态点燃时放（连续喷不叠音）
+static func perform_channel(w) -> void:
+	if not w._channel_on:
+		w._channel_on = true
+		w._beam_need_cast = true
+		AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), 0.9)
+		w._flash_sprite(Color(1.4, 1.25, 1.5), 0.14)
+	w._channel_left = CHANNEL_HOLD
+
+static func stop(w) -> void:
+	w._channel_on = false
+	w._channel_left = 0.0
+	if w.beam_renderer != null:
+		w.beam_renderer.beam_off()
+	if w.cone_renderer != null:
+		w.cone_renderer.cone_off()
+
+static func tick(w, delta: float) -> void:
+	w._channel_left -= delta
+	if w._channel_left <= 0.0 or w.current_target == null or not is_instance_valid(w.current_target):
+		stop(w)
+		return
+	var reach: float = w.attack_range * w._range_mult()
+	w._channel_tick -= delta
+	if w.behavior == WeaponData.Behavior.BEAM:
+		w._beam_cast_phase -= delta
+		if w._beam_need_cast:
+			w._beam_need_cast = false
+			w._beam_cast_phase = BEAM_CAST_INTERVAL
+			w._beam_len = cast_beam_length(w, reach)
+			w._beam_len_target = w._beam_len
+		elif w._beam_cast_phase <= 0.0:
+			w._beam_cast_phase = BEAM_CAST_INTERVAL
+			w._beam_len_target = cast_beam_length(w, reach)
+		w._beam_len = lerpf(w._beam_len, w._beam_len_target, minf(delta * 14.0, 1.0))
+		# 星升视觉膨胀收一档（2026-10-15 克制化 0.18→0.08）：判定盒（deal_beam_damage
+		# 恒 BEAM_HALF_WIDTH*2.0）本就不乘它，纯视觉；★3 视觉宽 13.6→11.6，不再比判定宽出 1/3
+		var w_mult: float = 1.0 + 0.08 * float(w.star - 1)
+		w.beam_renderer.beam_on(w._beam_len, BEAM_HALF_WIDTH * 2.0 * w_mult, w._get_aura_color())
+		if w._channel_tick <= 0.0:
+			w._channel_tick = BEAM_TICK
+			deal_beam_damage(w)
+	else:
+		# 锥长从器口起算：判定圆心 == 器口、半径 == 锥长，渲染器同源下发
+		var cone_len: float = maxf(40.0, reach - w.muzzle_len)
+		w.cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(CONE_HALF_ANGLE)))
+		if w._channel_tick <= 0.0:
+			w._channel_tick = CONE_TICK
+			deal_cone_damage(w, cone_len)
+
+## 光束长度：从器口沿发射帧 +X 打射线，命中首个受击区即截断（光束被第一个敌人挡住），
+## 否则打满射程。返回值为判定与渲染的唯一真话（画多远==判多远）。
+static func cast_beam_length(w, reach: float) -> float:
+	var max_len: float = maxf(40.0, reach - w.muzzle_len)
+	var from: Vector2 = w.muzzle_point.global_position
+	var dir: Vector2 = Vector2.RIGHT.rotated(w.global_rotation)
+	if _beam_ray_query == null:
+		_beam_ray_query = PhysicsRayQueryParameters2D.create(from, from + dir * max_len, 4, [])
+		_beam_ray_query.collide_with_areas = true
+		_beam_ray_query.hit_from_inside = true
+	else:
+		_beam_ray_query.from = from
+		_beam_ray_query.to = from + dir * max_len
+	var hit: Dictionary = w.get_world_2d().direct_space_state.intersect_ray(_beam_ray_query)
+	if hit.is_empty():
+		return max_len
+	return maxf(8.0, from.distance_to(hit["position"]))
+
+## 光束 tick 结算：矩形沿束查询，线上敌人一起吃；tick 伤害 = 整管 × TICK/有效冷却
+static func deal_beam_damage(w) -> void:
+	if _beam_shape == null or _beam_query == null:
+		_beam_shape = RectangleShape2D.new()
+		_beam_query = PhysicsShapeQueryParameters2D.new()
+		_beam_query.shape = _beam_shape
+		_beam_query.collision_mask = 4
+		_beam_query.collide_with_areas = true
+		_beam_query.collide_with_bodies = false  # 只查敌人 Hurtbox(Area)，不扫 body 层
+	var from: Vector2 = w.muzzle_point.global_position
+	var dir: Vector2 = Vector2.RIGHT.rotated(w.global_rotation)
+	var judge_len: float = w._beam_len + BEAM_HIT_OVERHANG
+	_beam_shape.size = Vector2(judge_len, BEAM_HALF_WIDTH * 2.0)
+	_beam_query.transform = Transform2D(w.global_rotation, from + dir * judge_len * 0.5)
+	var results: Array = w.get_world_2d().direct_space_state.intersect_shape(_beam_query, 16)
+	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
+	var tick_dmg: float = w._final_damage() * BEAM_TICK / eff_cd
+	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 60.0) * 0.15  # 持续束只留一点点推感
+	for res in results:
+		var col = res["collider"]
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
+			var dmg := tick_dmg
+			var is_crit: bool = GameManager.roll_crit()
+			if is_crit:
+				dmg *= GameManager.get_crit_mult()
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock: Vector2 = GameManager.knockback_vec(w.global_position, enemy.global_position, kb_force)
+			enemy.take_damage(dmg, knock, is_crit)
+			GameManager.try_lifesteal(w.behavior)
+
+## 喷吐 tick 结算：器口为圆心查锥长半径的圆，再按半角过滤（贴脸宽容与横扫同口径），
+## 命中挂灼烧。tick 伤害同源折算 ⇒ 纸面 dmg/cd + 常驻灼烧即实伤。
+static func deal_cone_damage(w, cone_len: float) -> void:
+	var from: Vector2 = w.muzzle_point.global_position
+	var aim_dir: Vector2 = Vector2.RIGHT.rotated(w.global_rotation)
+	var half_ang := deg_to_rad(CONE_HALF_ANGLE)
+	var results: Array = w._query_enemies(cone_len, from, 24)
+	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
+	var cycle_dmg: float = w._final_damage()
+	var tick_dmg: float = cycle_dmg * CONE_TICK / eff_cd
+	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 95.0) * 0.25
+	var proc_burn: bool = w.def.get("proc_burn", false)
+	var burn_dps: float = cycle_dmg * float(w.def.get("burn_ratio", 0.4))
+	var burn_dur: float = float(w.def.get("burn_dur", 2.5))
+	for res in results:
+		var col = res["collider"]
+		var parent = col.get_parent() if col != null else null
+		if parent != null and parent.has_method("take_damage"):
+			var enemy = parent
+			var to_enemy: Vector2 = enemy.global_position - from
+			if to_enemy.length() > SweepHandler.SWEEP_CLOSE_GRACE and absf(aim_dir.angle_to(to_enemy)) > half_ang:
+				continue
+			var dmg := tick_dmg
+			var is_crit: bool = GameManager.roll_crit()
+			if is_crit:
+				dmg *= GameManager.get_crit_mult()
+			dmg *= GameManager.elite_damage_mult_for(enemy)
+			var knock: Vector2 = GameManager.knockback_vec(w.global_position, enemy.global_position, kb_force)
+			enemy.take_damage(dmg, knock, is_crit)
+			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, 0.0, 0.0, false, 0.0, 0.0)
+			GameManager.try_lifesteal(w.behavior)

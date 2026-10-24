@@ -48,8 +48,15 @@ func _init(parent: Node) -> void:
 		var row: Dictionary = EnemyData.MOBS.get(key, {})
 		var sp := String(row.get("scene_path", ""))
 		if not sp.is_empty() and ResourceLoader.exists(sp):
-			_enemy_scenes.append(load(sp) as PackedScene)
+			var packed := load(sp) as PackedScene
+			if packed == null:
+				# exists 过了但 as 转换失败 = 循环依赖把 PackedScene 打成空（坑 12 同源），预热会静默失效
+				push_warning("CombatPrewarm: 怪种 %s 场景加载为空：%s" % [key, sp])
+				continue
+			_enemy_scenes.append(packed)
 	_projectile_scene = load("res://scenes/weapons/BladeProjectile.tscn") as PackedScene
+	if _projectile_scene == null:
+		push_warning("CombatPrewarm: BladeProjectile.tscn 加载为空（多为循环类依赖），弹丸预热失效")
 
 ## 总步数（shader 1 + 弹丸批 1 + 每种怪 1）
 func total_steps() -> int:

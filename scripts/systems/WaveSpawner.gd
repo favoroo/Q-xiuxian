@@ -216,9 +216,11 @@ func _process_fight(delta: float) -> void:
 		_batch_cooldown -= delta
 
 	# 关底锁关（Boss 回合 / 精英回合同一口径）：关底未伏诛则敌潮不退（停表停刷，等它倒下再进结算）
+	# 播报去重守卫前置到这里：锁关期这里每帧都走，实参 % 格式化不能跟着每帧求值
 	if wave_timer <= 0.0 and (_is_boss_wave(wave_number) or _is_elite_wave(wave_number)):
 		if _gatekeeper_still_alive():
-			_announce_overtime("◆ %s未除 · 敌潮不退 ◆" % ("Boss" if _is_boss_wave(wave_number) else "精英"))
+			if not _overtime_noted:
+				_announce_overtime("◆ %s未除 · 敌潮不退 ◆" % ("Boss" if _is_boss_wave(wave_number) else "精英"))
 			return
 		end_wave()
 		return

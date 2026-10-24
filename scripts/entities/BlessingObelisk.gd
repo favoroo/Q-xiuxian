@@ -336,7 +336,7 @@ func _trigger_blessing() -> void:
 	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，
 	# radius 传 INF 即「全场」；方向走 GameBalance.knock_dir，永不把敌人往玩家身上推）
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
-	for enemy in EnemyFilter.collect(get_tree(), global_position, INF):
+	for enemy in EnemyFilter.collect(GameManager.live_enemies, global_position, INF):
 		var knock = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * KNOCK_FORCE
 		enemy.take_damage(BLESSING_DAMAGE, knock, true)
 	# 掉落金色金币

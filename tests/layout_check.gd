@@ -821,7 +821,7 @@ func _check_bleed() -> void:
 	var h: float = LevelUpDialog.panel_h_for(wide.y)
 	# 旧算术：「屏宽 - 面板占位」全分给 5 张卡 ⇒ 面板布局盒正好贴住屏幕左右边
 	var flush := Rect2(0, (wide.y - h) * 0.5, wide.x, h)
-	var drawn_flush := drawn_rect(flush, LevelUpDialog.PANEL_SKEW_RAD)
+	var drawn_flush := drawn_rect(flush, ShopCardLayout.ALLOC_PANEL_SKEW_RAD)
 	# 2026-10-19 直角化：斜切四档归零，画出来的边界 == 布局盒，不再有斜切伸出量
 	_c.check(rect_on_screen(drawn_flush, wide),
 		"正例⑨ 直角化后面板布局盒贴屏边 = 画出来的边贴屏边（无斜切伸出）")
@@ -830,11 +830,11 @@ func _check_bleed() -> void:
 	# 新算术：两头各让出 PANEL_AIR_X + 斜切伸出量
 	var pw: float = LevelUpDialog.panel_w_for(wide, n)
 	var centered := Rect2((wide.x - pw) * 0.5, flush.position.y, pw, h)
-	var drawn_new := drawn_rect(centered, LevelUpDialog.PANEL_SKEW_RAD)
+	var drawn_new := drawn_rect(centered, ShopCardLayout.ALLOC_PANEL_SKEW_RAD)
 	_c.check(rect_on_screen(drawn_new, wide), "正例 新算术下面板画出来的边在屏内")
-	_c.check(near_air(drawn_new.position.x, LevelUpDialog.PANEL_AIR_X),
+	_c.check(near_air(drawn_new.position.x, ShopCardLayout.ALLOC_PANEL_AIR_X),
 		"正例 让位算术自洽：画出来的边离屏 %.1f = PANEL_AIR_X %.1f（占位与 .tscn 没漂）" % [
-			drawn_new.position.x, LevelUpDialog.PANEL_AIR_X])
+			drawn_new.position.x, ShopCardLayout.ALLOC_PANEL_AIR_X])
 	# 选中放大：卡片撑满整行时上下各顶出去；让出 pop_gutter_y 之后仍在这行之内
 	var row := Rect2(28, 116, 1144, 340)
 	var no_gutter := drawn_rect(Rect2(28, row.position.y, 216, row.size.y * LevelUpDialog.SEL_SCALE), 0.0)
@@ -870,7 +870,7 @@ func _check_gutters() -> void:
 	var old_panel := Rect2(33.4, 12, 1137.2, h)
 	var btn := Rect2(1013.4, 484, 153.2, 44)
 	var old_gap := edge_gap_at(drawn_rect(btn, deg_to_rad(GameStyle.SLANT_BUTTON)), old_panel,
-		LevelUpDialog.PANEL_SKEW_RAD)
+		ShopCardLayout.ALLOC_PANEL_SKEW_RAD)
 	_c.check(old_gap < EDGE_GAP,
 		"反例12 贴边按钮：画出来的右边离面板画出来的右边只剩 %.1f 被拦住" % old_gap)
 	var pw: float = LevelUpDialog.panel_w_for(wide, GameManager.UPGRADE_OFFER_COUNT)
@@ -878,7 +878,7 @@ func _check_gutters() -> void:
 	var inner_r: float = new_panel.end.x - LevelUpDialog.chrome_x(h) / 2.0
 	var new_btn := Rect2(inner_r - 153.2, 484, 153.2, 44)
 	var new_gap := edge_gap_at(drawn_rect(new_btn, deg_to_rad(GameStyle.SLANT_BUTTON)), new_panel,
-		LevelUpDialog.PANEL_SKEW_RAD)
+		ShopCardLayout.ALLOC_PANEL_SKEW_RAD)
 	_c.check(new_gap >= EDGE_GAP,
 		"正例 占位算进 lean 后同一颗按钮留白 %.1f（≥ %.0f）" % [new_gap, EDGE_GAP])
 

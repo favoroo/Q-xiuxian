@@ -103,10 +103,18 @@ static func _seal(r: ProceduralWeaponRenderer) -> void:
 	BC.square(r, Vector2(-L * 0.42, 0.0), 1.8, BC.INK, 1.0)
 	BC.star_studs(r, r.star, Vector2(L * 0.10, -L * 0.40), Vector2(L * 0.10, L * 0.40), pal["accent"])
 
-# ---------------- 牌：竖长令牌 + 撞色圆头 + 墨箍（五雷令牌） ----------------
+# ---------------- 牌族分型：雷牌(矩形基准) / 金霄雷令(尖顶令牌) ----------------
+static func _tablet(r: ProceduralWeaponRenderer) -> void:
+	match String(r.weapon_id):
+		"jinxiao_leiling":
+			_tablet_ling(r)
+		_:
+			_tablet_paizi(r)
+
+## 雷牌（土，牌族基准）：矩形牌身 + 撞色圆头 + 墨箍（样稿种子，勿改风格）
 ## 旧画法转化：矩形牌身（底角斜切）+ 低分段半圆牌头（顶点精确落 (L,0)，整块撞色）+
 ## 头心穿绳墨孔 + 两道横箍，砍掉云卷/雷纹/滚边。
-static func _tablet(r: ProceduralWeaponRenderer) -> void:
+static func _tablet_paizi(r: ProceduralWeaponRenderer) -> void:
 	var pal: Dictionary = BC.pal(r.element)
 	var L: float = r.tip_len
 	var hw: float = clampf(L * 0.40, 6.0, 9.0)
@@ -132,6 +140,24 @@ static func _tablet(r: ProceduralWeaponRenderer) -> void:
 	BC.bar(r, Vector2(L * 0.40, -hw * 0.72), Vector2(L * 0.40, hw * 0.72), 2.2, BC.INK)
 	BC.bar(r, Vector2(-L * 0.34, -hw * 0.46), Vector2(-L * 0.34, hw * 0.46), 1.8, BC.INK)
 	BC.star_studs(r, r.star, Vector2(L * 0.05, 0.0), Vector2(-L * 0.55, 0.0), pal["accent"])
+
+## 金霄雷令（金）：上尖六棱令牌 + 撞色横带 + 令心墨印——尖顶令与矩形牌剪影不同
+static func _tablet_ling(r: ProceduralWeaponRenderer) -> void:
+	var pal: Dictionary = BC.pal(r.element)
+	var L: float = r.tip_len
+	var hw: float = clampf(L * 0.34, 5.0, 7.5)
+	# 令体：上尖六棱（尖顶精确 (L,0)，下端平齐双斜切）
+	BC.flat(r, PackedVector2Array([
+		Vector2(L, 0.0), Vector2(L * 0.62, -hw), Vector2(-L * 0.34, -hw),
+		Vector2(-L * 0.58, -hw * 0.45), Vector2(-L * 0.58, hw * 0.45),
+		Vector2(-L * 0.34, hw), Vector2(L * 0.62, hw),
+	]), pal["body"])
+	# 撞色横带 + 墨箍（令牌读法：一带一箍）
+	BC.bar(r, Vector2(L * 0.40, -hw * 0.72), Vector2(L * 0.40, hw * 0.72), 2.6, pal["accent"])
+	BC.bar(r, Vector2(-L * 0.30, -hw * 0.72), Vector2(-L * 0.30, hw * 0.72), 2.0, BC.INK)
+	# 令心墨方印
+	BC.square(r, Vector2(L * 0.04, 0.0), 2.0, BC.INK, 1.0)
+	BC.star_studs(r, r.star, Vector2(L * 0.52, 0.0), Vector2(-L * 0.44, 0.0), pal["accent"])
 
 # ---------------- 灯：圆腹灯笼 + 上下墨箍 + 撞色灯心 + 提环（天灯） ----------------
 ## 旧画法转化：圆盘灯腹（火主色一大块）+ 两道垂直长轴的墨箍 + 柄色拱形提环 +

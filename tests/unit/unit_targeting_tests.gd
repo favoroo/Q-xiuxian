@@ -177,6 +177,20 @@ func _test_ranged_focus_dps() -> void:
 	_c.near(GameBalance.burn_tick_damage(20.0, 10.0, 1.5), 21.0, EPS, "离火羁绊倍率 1.5x 完整放大灼烧跳字")
 	_c.near(GameBalance.poison_tick_damage(10.0, 10.0), 8.0, EPS, "10 点元素伤害为剧毒每跳额外提供 +3 点伤害")
 
+	# 6. 叠层共鸣加帽（2026-10-24）：累积封顶后停住，弱源/衰减跳只挡增长不回落
+	var poison_acc := 0.0
+	for _i in 12:
+		poison_acc = GameBalance.stack_poison_dps(poison_acc, 10.0)
+	_c.near(poison_acc, 30.0, EPS, "剧毒加帽：同源反复施加停在基准 ×3（12 次施加 = 30，帽 POISON_CAP_MULT=3）")
+	_c.near(GameBalance.stack_poison_dps(30.0, 2.0), 30.0, EPS, "剧毒加帽：弱源小量施加不拉低已叠高的毒")
+	var burn_acc := 0.0
+	for _i in 20:
+		burn_acc = GameBalance.stack_burn_dps(burn_acc, 10.0)
+	_c.near(burn_acc, 25.0, EPS, "灼烧加帽：同源反复施加停在基准 ×2.5（20 次施加 = 25，帽 BURN_CAP_MULT=2.5）")
+	_c.near(GameBalance.stack_burn_dps(25.0, 2.0), 25.0, EPS, "灼烧加帽：弱源小量施加不拉低已叠高的火")
+	_c.near(GameBalance.stack_poison_dps(0.0, 10.0), 5.0, EPS, "剧毒首次施加按 50% 起算（加帽不改首跳语义）")
+	_c.near(GameBalance.stack_burn_dps(20.0, 16.0), 24.0, EPS, "灼烧叠加量未到帽时维持原共鸣口径（24 = 20 + 16×25%）")
+
 func _test_spirit_orbit_dynamics() -> void:
 	# 1. 无敌情巡航：非战斗状态，所有灵宝平稳处于基准半径
 	var empty_res := GameBalance.compute_spirit_orbit([0.0, PI], [], 58.0, 28.0, 135.0)

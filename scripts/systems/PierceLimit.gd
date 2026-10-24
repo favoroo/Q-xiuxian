@@ -22,8 +22,8 @@ const PIERCE_UPGRADE_ID := "pierce_up"
 const PIERCE_ITEM_IDS: Array[String] = ["poxu_lingfu", "wuji_tianchuan_zhen"]
 
 ## 当前局穿透是否已顶到上限——按【玩家实际阵容】逐把对账，与出膛钳位同源。
-## 口径：对场上每一把弹丸类武器（悬浮 + 机关台，含背囊未上阵的弹丸不算——买了新武器
-## 换上来时会重新 recalc 重刷货架），算 capped_pierce(基础 + bonus_pierce)；
+## 口径：对场上每一把弹丸类武器（悬浮 PROJECTILE + 机关台 TURRET，含背囊未上阵的弹丸不算
+## ——买了新武器换上来时会重新 recalc 重刷货架），算 capped_pierce(基础 + bonus_pierce)；
 ## 全部弹丸都顶到 PIERCE_CAP 才算满 ⇒ 穿透词条/道具停刷。
 ## 两类阵容各自的样子（基础均 1）：
 ##   全基础 1 阵容 + bonus 1 → 出膛 2 < 3：不停刷（还差一层，买词条/道具才满）
@@ -32,17 +32,22 @@ const PIERCE_ITEM_IDS: Array[String] = ["poxu_lingfu", "wuji_tianchuan_zhen"]
 static func has_max_pierce(gm: Node) -> bool:
 	if gm.player == null or not is_instance_valid(gm.player):
 		return false
-	var found_projectile := false
+	var found_pierceable := false
 	for w in gm.player.get_equipped_weapons_data():
 		var def := WeaponData.get_def(String(w.get("id", "")))
-		if def.is_empty() or int(def.get("behavior", -1)) != WeaponData.Behavior.PROJECTILE:
+		if def.is_empty():
 			continue
-		found_projectile = true
+		# 只统计出膛走 capped_pierce 的两类：悬浮 PROJECTILE 与机关台 TURRET。
+		# TurretUnit.gd:298 与 ProjectileHandler.gd:185 同一式子，漏掉 TURRET 会导致
+		# 只带机关台的玩家被判「未满」一直刷穿透词条，但机关台实际已钳到 CAP。
+		var beh := int(def.get("behavior", -1))
+		if beh != WeaponData.Behavior.PROJECTILE and beh != WeaponData.Behavior.TURRET:
+			continue
+		found_pierceable = true
 		if WeaponData.capped_pierce(int(def.get("pierce", 1)) + int(gm.bonus_pierce)) < WeaponData.PIERCE_CAP:
 			return false
-	# 机关台的弹丸与悬浮武器共用同一 bonus，逐把查完防未来出现基础≥2 的弹丸漏判；
-	# 当前基础均 1，全满即 bonus ≥ 2。
-	if not found_projectile:
+	# 逐把查完防未来出现基础≥2 的弹丸漏判；当前基础均 1，全满即 bonus ≥ 2。
+	if not found_pierceable:
 		return false
 	return true
 

@@ -13,6 +13,7 @@ const BULLET_FIRE_TEXTURE = preload("res://assets/art/bullet_fire_flame.png")
 const BULLET_PELLET_TEXTURE = preload("res://assets/art/bullet_spirit_pellet.png")
 const BULLET_COIN_TEXTURE = preload("res://assets/art/icon_coin.png")
 const PROJECTILE_SCENE = preload("res://scenes/weapons/BladeProjectile.tscn")
+const BOULDER_SCRIPT = preload("res://scripts/entities/SpiritPetBoulder.gd")
 
 var pet_id: String = ""             ## 灵兽 id（见 PetData）
 var pet_def: Dictionary = {}
@@ -449,38 +450,24 @@ func _act_fengdiao() -> void:
 			JuiceEffect.spawn_shockwave(scene_parent, target.global_position, BalanceSpiritPet.MELEE_RING * 0.65, Color(0.85, 0.92, 1.0, 0.6), 0.22)
 		AudioManager.play_sfx("fan_gust", 0.5, 0.85)
 
-## 磐石猿：地动山摇重击（命中即减速，2026-10-20 去掉无感的 2 秒岩沼区，改为 3.5 秒减速）
+## 磐石猿：掷出巨石远程轰击（石落点范围震伤击退减速，落点结算与碎裂演出在 SpiritPetBoulder）
 func _act_shiyuan() -> void:
+	var nearest := _find_nearest_enemy(BalanceSpiritPet.BOULDER_RANGE)
+	if nearest == null:
+		return
 	var eff_mult := _get_effective_damage_mult()
 	var dmg := BalanceSpiritPet.smash_damage(GameManager.wave_number, eff_mult)
 	var radius := BalanceSpiritPet.smash_radius(GameManager.pet_effect_mult)
-	var radius_sq := radius * radius
-	var hit: bool = false
-	var center := global_position
+	var boulder := BOULDER_SCRIPT.new()
+	boulder.setup(global_position, nearest.global_position, dmg, radius)
+	get_tree().current_scene.add_child(boulder)
 
-	for e in GameManager.live_enemies:
-		if not is_instance_valid(e) or not (e is Node2D):
-			continue
-		if e.get(&"dying") == true:
-			continue
-		var n2d := e as Node2D
-		var diff := n2d.global_position - center
-		if diff.length_squared() <= radius_sq:
-			var kb_dir := diff.normalized() if diff.length_squared() > 1.0 else Vector2.RIGHT
-			if e.has_method("take_damage"):
-				e.take_damage(dmg * GameManager.elite_damage_mult_for(e), kb_dir * 220.0, false)
-				hit = true
-			# 命中即减速（原岩沼区改为直接施加减速，时长对齐冷却）
-			if e.has_method("apply_chill"):
-				e.apply_chill(BalanceSpiritPet.SMASH_SLOW_PCT, BalanceSpiritPet.SMASH_SLOW_DURATION)
-
-	if hit:
-		pulse_trigger_fx(Vector2(1.25, 0.75), 0.14)
-		_custom_fx_type = "rock_smash"
-		var scene_parent: Node = get_parent()
-		if is_inside_tree() and scene_parent != null:
-			JuiceEffect.spawn_shockwave(scene_parent, center, radius * 0.38, Color(0.72, 0.62, 0.45, 0.65), 0.20)
-		AudioManager.play_sfx("enemy_hit_heavy", 0.45, 0.9)
+	# 掷石后坐 + 扬尘起手
+	pulse_trigger_fx(Vector2(0.8, 1.3), 0.14)
+	var scene_parent: Node = get_parent()
+	if is_inside_tree() and scene_parent != null:
+		JuiceEffect.spawn_impact_pop(scene_parent, global_position, Color(0.65, 0.58, 0.52), (nearest.global_position - global_position).normalized())
+	AudioManager.play_sfx("whoosh_heavy", 0.5, 0.9)
 
 ## 聚宝蟾：回合末产出金币触发视觉动效
 func trigger_wave_harvest_fx() -> void:
@@ -579,9 +566,6 @@ func _draw() -> void:
 			elif _custom_fx_type == "yulu_dew":
 				# 玉露鹿：甘霖雨丝下落 + 地面上升绿色光点
 				_draw_fx_yulu_dew(1.0 - _action_fx, core_r)
-			elif _custom_fx_type == "rock_smash":
-				# 磐石猿：地面放射状裂纹 + 碎石崩点
-				_draw_fx_rock_smash(1.0 - _action_fx, core_r)
 			elif _custom_fx_type == "xuangui_shield":
 				# 玄甲龟：六边形龟甲盾纹闪光
 				_draw_fx_turtle_shield(1.0 - _action_fx, core_r)
@@ -675,23 +659,6 @@ func _draw_fx_yulu_dew(prog: float, core_r: float) -> void:
 		var rad2: float = core_r * (0.8 + 0.6 * prog)
 		var rise: float = (1.0 - prog) * 10.0
 		_circle(Vector2(cos(ang2) * rad2, core_r * 0.8 - rise), maxf(0.6, 2.4 * (1.0 - prog)), Color(0.62, 1.0, 0.72, alpha * 0.85))
-
-## 磐石猿：地面放射状裂纹 + 碎石崩点
-func _draw_fx_rock_smash(prog: float, core_r: float) -> void:
-	var alpha: float = (1.0 - prog) * 0.85
-	var out_r: float = core_r * (1.2 + 2.6 * prog)
-	for k in range(8):
-		var a: float = TAU * float(k) / 8.0 + 0.4
-		var p_in := Vector2(cos(a), sin(a)) * (core_r * 0.6)
-		var p_out := Vector2(cos(a), sin(a)) * out_r
-		draw_line(p_in, p_out, Color(0.42, 0.34, 0.26, alpha), 2.2)
-		var mid: Vector2 = p_in.lerp(p_out, 0.6)
-		var fa: float = a + 0.4
-		draw_line(mid, mid + Vector2(cos(fa), sin(fa)) * (out_r - mid.length()) * 0.5, Color(0.42, 0.34, 0.26, alpha * 0.7), 1.4)
-	for k in range(6):
-		var ang: float = TAU * float(k) / 6.0 + 1.1
-		var d: float = out_r * (0.7 + 0.3 * sin(float(k) * 2.3))
-		_circle(Vector2(cos(ang), sin(ang)) * d, maxf(0.8, 3.0 * (1.0 - prog)), Color(0.55, 0.46, 0.36, alpha))
 
 ## 玄甲龟：六边形龟甲盾纹闪光
 func _draw_fx_turtle_shield(prog: float, core_r: float) -> void:

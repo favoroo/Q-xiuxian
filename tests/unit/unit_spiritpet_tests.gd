@@ -62,10 +62,22 @@ func _test_attack_pets_formulas() -> void:
 	_c.check(BalanceSpiritPet.THUNDER_CHAIN_MAX == 3, "雷灵雀：连锁目标上限 3")
 	# 磐石猿：1 波基准 34
 	_c.near(BalanceSpiritPet.smash_damage(1, 1.0), 34.0, EPS, "磐石猿：1 波基准 34")
-	_c.near(BalanceSpiritPet.smash_radius(1.0), 160.0, EPS, "磐石猿：震地半径基准 160")
-	_c.near(BalanceSpiritPet.smash_radius(0.1), 100.0, EPS, "磐石猿：震地半径钳地板 100")
-	_c.near(BalanceSpiritPet.smash_radius(3.0), 320.0, EPS, "磐石猿：震地半径钳上限 320")
-	_c.near(BalanceSpiritPet.SMASH_SLOW_DURATION, 3.5, EPS, "磐石猿：减速时长 3.5s（对齐冷却）")
+	_c.near(BalanceSpiritPet.smash_radius(1.0), 160.0, EPS, "磐石猿：落点半径基准 160")
+	_c.near(BalanceSpiritPet.smash_radius(0.1), 100.0, EPS, "磐石猿：落点半径钳地板 100")
+	_c.near(BalanceSpiritPet.smash_radius(3.0), 320.0, EPS, "磐石猿：落点半径钳上限 320")
+	_c.near(BalanceSpiritPet.SMASH_SLOW_DURATION, 3.5, EPS, "磐石猿：减速时长 3.5s")
+	# 磐石猿：远程掷石参数（2026-10-24 原地震地改飞石落点震击）
+	_c.near(BalanceSpiritPet.BOULDER_RANGE, 360.0, EPS, "磐石猿：飞石索敌射程 360")
+	_c.near(BalanceSpiritPet.BOULDER_SPEED, 300.0, EPS, "磐石猿：飞石飞行速度 300")
+	_c.near(BalanceSpiritPet.SMASH_KNOCKBACK, 220.0, EPS, "磐石猿：落点震退 220")
+	# 磐石猿：文案与生效常量同源（对齐 unit_consistency 的 desc/apply 口径）
+	var shiyuan_def: Dictionary = PetData.get_def("shiyuan")
+	_c.check(String(shiyuan_def.get("desc", "")).contains("3.5"), "磐石猿描述：冷却 3.5 秒与 base_cooldown 同源")
+	_c.near(float(shiyuan_def.get("base_cooldown", 0.0)), 3.5, EPS, "磐石猿 base_cooldown = 3.5")
+	_c.near(float(shiyuan_def.get("base_value", 0.0)), BalanceSpiritPet.smash_radius(1.0), EPS, "磐石猿 base_value = 1 倍乘区落点半径")
+	_c.check(String(shiyuan_def.get("desc", "")).contains(str(int(BalanceSpiritPet.smash_radius(1.0)))), "磐石猿描述：落点半径与 smash_radius 同源")
+	_c.check(shiyuan_def.get("role") == "control", "磐石猿定位保持控制系")
+	_c.check(int(shiyuan_def.get("base_price", 0)) == 38, "磐石猿价格对齐控制档")
 
 ## 聚宝蟾金钱镖：替代原土石/金舌鞭击
 func _test_juchan_tongue_formulas() -> void:

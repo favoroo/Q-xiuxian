@@ -54,23 +54,14 @@ const CARD_PAD_X := 8.0
 ## 卡片设计下限：118→100。旧下限在窄屏上会把卡顶到min之上，面板于是**反过来吃掉 PANEL_AIR_X**
 ## （720 宽时画出来的边只剩 15.6 而声明是 20）；放到 100 之后这一档不再触底，让位算术才算数。
 const MIN_CARD_W := 100.0
-## 卡间缝隙：用户口径「左右间距小一点」，18 的上限砍到 10（20:9 屏上 15→10）
-const CARD_GAP_MIN := 5.0
-const CARD_GAP_MAX := 10.0
+## 卡间缝隙：ALLOC_CARD_GAP_MIN/MAX 已收拢 ShopCardLayout（用户口径「左右间距小一点」，18 上限砍到 10）
 const CARD_MIN_H := 250.0
 ## Panel stylebox 的左右内容边距（与 .tscn 的 StyleBoxFlat_panel.content_margin_left/right 同源）
 const PANEL_CONTENT_SIDE := 12.0
 ## .tscn 里 MarginContainer 的左右边距初值，摆位时按 lean 现调（见 chrome_side）
 const CHROME_INNER_SIDE := 8.0
-## 面板与屏幕之间的呼吸量：上下合计 24（各 12），左右各 34（画出来的斜切角之外再留）
-const SCREEN_PAD_Y := 24.0
-const PANEL_AIR_X := 34.0
-const PANEL_MIN_H := 420.0
-## 面板 stylebox 的斜切（弧度），与 LevelUpDialog.tscn 的 StyleBoxFlat_panel.skew 同源
-## 2026-10-19 新野兽派换肤全直角化：归零（= GameStyle.SLANT_PLATE）。判据会核对两边没漂。
-const PANEL_SKEW_RAD := 0.0
-## 卡片 stylebox 的斜切（弧度），与 _create_card_entry 里 style.skew 同源（直角化归零）
-const CARD_SKEW_RAD := 0.0
+## 面板摆位常量（SCREEN_PAD_Y/PANEL_AIR_X/PANEL_MIN_H/PANEL_SKEW_RAD/CARD_SKEW_RAD）
+## 已收拢进 ShopCardLayout 的 ALLOC_* / PANEL_* 档（与 WaveShop 同一份数，改口径只动那一处）
 ## 选中/未选中的缩放倍率：放大倍率同时决定这一行上下要留多少余量（pop_gutter_y）
 const SEL_SCALE := 1.03
 const DIM_SCALE := 0.97
@@ -127,11 +118,11 @@ var _card_entries: Array[Dictionary] = []
 
 ## 这一档屏高下面板该占的高
 static func panel_h_for(screen_h: float) -> float:
-	return ShopCardLayout.panel_h_for(screen_h, PANEL_MIN_H, SCREEN_PAD_Y)
+	return ShopCardLayout.panel_h_for(screen_h, ShopCardLayout.PANEL_MIN_H, ShopCardLayout.PANEL_SCREEN_PAD_Y)
 
 ## 斜切把面板画出来的左右边推到布局盒外多少
 static func skew_x(h: float) -> float:
-	return ShopCardLayout.skew_x(PANEL_SKEW_RAD, h)
+	return ShopCardLayout.skew_x(ShopCardLayout.ALLOC_PANEL_SKEW_RAD, h)
 
 ## 内容层单边占位 = Panel 内容边距 + MarginContainer 现调的那一份（取整，与节点逐单位一致）。
 ## 平行四边形让底边整体比顶边多挪一个 skew_x(h)：右下角那颗按钮离画出来的右边只剩「占位 - skew_x」
@@ -143,12 +134,12 @@ static func chrome_x(h: float) -> float:
 
 ## 滚动区左右要留的白（卡高不超过面板高，按面板高算最坏情况）
 static func card_pad_x(h: float) -> float:
-	return ShopCardLayout.card_pad_x(CARD_SKEW_RAD, h)
+	return ShopCardLayout.card_pad_x(ShopCardLayout.ALLOC_CARD_SKEW_RAD, h)
 
 ## 面板布局盒里的内容宽 = 屏幕宽 - 面板占位 - 面板两头画出来的斜切 - 两头呼吸量
 static func panel_inner_w(screen: Vector2) -> float:
 	var h := panel_h_for(screen.y)
-	return maxf(0.0, screen.x - chrome_x(h) - (skew_x(h) + PANEL_AIR_X) * 2.0)
+	return maxf(0.0, screen.x - chrome_x(h) - (skew_x(h) + ShopCardLayout.ALLOC_PANEL_AIR_X) * 2.0)
 
 ## 卡片行可用的宽 = 内容宽 - 滚动区两头给卡角留的白
 static func avail_w(screen: Vector2) -> float:
@@ -156,7 +147,7 @@ static func avail_w(screen: Vector2) -> float:
 
 ## 卡间缝隙：宽屏上松一点，窄屏上不抢卡片的宽
 static func gap_for(avail: float) -> float:
-	return ShopCardLayout.gap_for(avail, 0.010, CARD_GAP_MIN, CARD_GAP_MAX)
+	return ShopCardLayout.gap_for(avail, 0.010, ShopCardLayout.ALLOC_CARD_GAP_MIN, ShopCardLayout.ALLOC_CARD_GAP_MAX)
 
 ## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
 static func card_w_for(screen: Vector2, n: int) -> float:

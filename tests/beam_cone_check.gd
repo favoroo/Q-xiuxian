@@ -107,7 +107,7 @@ func _test_beam() -> void:
 
 	# 4) tick 折算同源：单跳伤害 == 整管 × TICK / 有效冷却（暴击则 ×暴击倍率，两种都认）
 	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
-	var base: float = w._final_damage() * FloatingWeapon.BEAM_TICK / eff_cd
+	var base: float = w._final_damage() * ChannelHandler.BEAM_TICK / eff_cd
 	var crit_v: float = base * GameManager.get_crit_mult()
 	_c.check(absf(foe.last_amount - base) < 0.05 or absf(foe.last_amount - crit_v) < 0.05,
 		"光束单跳伤害与纸面同源（期望 %.2f 或暴击 %.2f，实得 %.2f）" % [base, crit_v, foe.last_amount])
@@ -156,7 +156,7 @@ func _test_cone() -> void:
 	_c.check(w.cone_renderer != null and w.cone_renderer.visible, "喷吐起喷后渲染器亮起")
 	_c.near(w.cone_renderer.length, cone_len, 0.5,
 		"渲染锥长 == 判定锥长（期望 %.1f，实得 %.1f）" % [cone_len, w.cone_renderer.length])
-	_c.near(w.cone_renderer.half_width, cone_len * tan(deg_to_rad(FloatingWeapon.CONE_HALF_ANGLE)), 0.5,
+	_c.near(w.cone_renderer.half_width, cone_len * tan(deg_to_rad(ChannelHandler.CONE_HALF_ANGLE)), 0.5,
 		"渲染锥宽 == 判定半角正切（画多宽==判多宽）")
 	_c.check(in_foe.hit_count >= 1, "锥内桩敌挨打")
 	_c.check(in_foe.burn_calls >= 1, "锥内桩敌被点燃（proc_burn 下发）")
@@ -165,7 +165,7 @@ func _test_cone() -> void:
 
 	# 4) tick 折算同源
 	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
-	var base: float = w._final_damage() * FloatingWeapon.CONE_TICK / eff_cd
+	var base: float = w._final_damage() * ChannelHandler.CONE_TICK / eff_cd
 	var crit_v: float = base * GameManager.get_crit_mult()
 	_c.check(absf(in_foe.last_amount - base) < 0.05 or absf(in_foe.last_amount - crit_v) < 0.05,
 		"喷吐单跳伤害与纸面同源（期望 %.2f 或暴击 %.2f，实得 %.2f）" % [base, crit_v, in_foe.last_amount])

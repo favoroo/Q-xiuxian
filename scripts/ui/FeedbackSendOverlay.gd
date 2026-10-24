@@ -25,6 +25,7 @@ var state: State = State.SENDING
 var _clock: float = 0.0
 var _last_redraw: float = 0.0
 var _elapsed: float = 0.0
+var _last_wait_secs: int = -1   ## 上次写进等待提示的整秒数（文本去重用）
 
 var _dim: ColorRect
 var _card: PanelContainer
@@ -134,6 +135,7 @@ func show_sending(stage: String = "正在发送反馈…") -> void:
 	_clock = 0.0
 	_last_redraw = 0.0
 	_elapsed = 0.0
+	_last_wait_secs = -1
 	visible = true
 	_spinner.visible = true
 	_scan.visible = true
@@ -194,7 +196,11 @@ func _process(delta: float) -> void:
 	_clock += delta
 	_elapsed += delta
 	if _elapsed >= 8.0:
-		_elapsed_lbl.text = "网络较慢，已等待 %d 秒…" % int(_elapsed)
+		# 文本去重：秒数不变不重拼（与 GameHUD 各 Label 同一纪律）
+		var secs := int(_elapsed)
+		if secs != _last_wait_secs:
+			_last_wait_secs = secs
+			_elapsed_lbl.text = "网络较慢，已等待 %d 秒…" % secs
 	if _clock - _last_redraw >= REDRAW_INTERVAL:
 		_last_redraw = _clock
 		_spinner.clock = _clock

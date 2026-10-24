@@ -68,9 +68,17 @@ static func _talisman(r: ProceduralWeaponRenderer) -> void:
 	r.draw_line(Vector2(L * 0.30, hw * 0.25), Vector2(-L * 0.10, hw * 0.60), BC.INK, 1.8, true)
 	BC.star_studs(r, r.star, Vector2(L * 0.12, hw * 0.5), Vector2(L * 0.12, -hw * 0.5), BC.INK)
 
-# ---------------- 扇：低分段硬边扇面 + 撞色环带 + 三根粗骨（样稿种子，勿改风格） ----------------
+# ---------------- 扇族分型：燎原扇(折扇基准) / 风扇·芭蕉扇(整叶扇) ----------------
 ## 扇只出现在横扫武器上：无出膛点契约，扇面半径可略大于 tip_len（旧画法同款口径）。
 static func _fan(r: ProceduralWeaponRenderer) -> void:
+	match String(r.weapon_id):
+		"bajiao_fan":
+			_fan_leaf(r)
+		_:
+			_fan_folding(r)
+
+## 燎原扇（火，扇族基准）：低分段硬边折扇 + 撞色环带 + 三根粗骨（样稿种子，勿改风格）
+static func _fan_folding(r: ProceduralWeaponRenderer) -> void:
 	var pal: Dictionary = BC.pal(r.element)
 	var R: float = maxf(r.tip_len, 22.0) * 1.02
 	var half := deg_to_rad(52.0)
@@ -100,6 +108,25 @@ static func _fan(r: ProceduralWeaponRenderer) -> void:
 	BC.star_studs(r, r.star,
 		Vector2(cos(-half * 0.5), sin(-half * 0.5)) * R * 0.55,
 		Vector2(cos(half * 0.5), sin(half * 0.5)) * R * 0.55, pal["accent"])
+
+## 风扇·芭蕉扇（水）：硬边整叶扇 + 中脉侧脉 + 叶柄——与折扇的半圆骨架完全两种读法
+static func _fan_leaf(r: ProceduralWeaponRenderer) -> void:
+	var pal: Dictionary = BC.pal(r.element)
+	var R: float = maxf(r.tip_len, 22.0) * 1.02
+	# 芭蕉叶：硬边七点叶形（叶尖精确落 (R,0)，后根收窄）
+	BC.flat(r, PackedVector2Array([
+		Vector2(R, 0.0), Vector2(R * 0.62, -R * 0.34), Vector2(R * 0.16, -R * 0.42),
+		Vector2(-R * 0.10, -R * 0.16), Vector2(-R * 0.10, R * 0.16),
+		Vector2(R * 0.16, R * 0.42), Vector2(R * 0.62, R * 0.34),
+	]), pal["body"], 2.4)
+	# 中脉 + 两条侧脉（叶骨，硬直线）
+	r.draw_line(Vector2(-R * 0.06, 0.0), Vector2(R * 0.92, 0.0), BC.INK, 2.2, true)
+	r.draw_line(Vector2(R * 0.28, 0.0), Vector2(R * 0.60, -R * 0.24), BC.INK, 1.6, true)
+	r.draw_line(Vector2(R * 0.28, 0.0), Vector2(R * 0.60, R * 0.24), BC.INK, 1.6, true)
+	# 叶柄 + 方钉
+	BC.bar(r, Vector2(-R * 0.08, 0.0), Vector2(-R * 0.38, 0.0), 3.2, BC.INK)
+	BC.square(r, Vector2(-R * 0.06, 0.0), 2.2, pal["accent"])
+	BC.star_studs(r, r.star, Vector2(R * 0.78, -R * 0.15), Vector2(R * 0.78, R * 0.15), pal["accent"])
 
 # ---------------- 鞭：硬折线锯齿鞭身（之字形粗带，由粗到细）+ 撞色短柄 + 墨钉 ----------------
 static func _whip(r: ProceduralWeaponRenderer) -> void:

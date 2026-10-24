@@ -272,6 +272,11 @@ var _hit_tilt_wobble: float = 0.0
 ## 相位由渲染节拍推进（与 _time 同源），幅度入 GameBalance 常量区。
 var _stagger_phase: float = 0.0
 const STAGGER_SWAY_RAD := 0.055     ## 罚站摇晃幅度（弧度 ≈3.2°）：够看出晃、不破坏轮廓
+## 受击手感分级（曾内联在 take_damage/_die/_explode 里，调手感要全文搜数字）：
+const HIT_KB_ELITE_SCALE := 0.55    ## 精英受击韧性：击退冲量与硬直时长乘此系数（大体格打不动）
+const HIT_KB_CRIT_MULT := 1.25      ## 暴击击退增幅（与 KNOCKBACK_MAX_SPEED_CRIT 配套）
+const HIT_SFX_CRIT_VOL_MULT := 1.35 ## 暴击入肉声响度倍率（叠在 hit_sfx_volume 的伤害驱动响度上）
+const KILL_PITCH_ELITE_MULT := 1.12 ## 精英击杀音阶抬档（_die 与自爆 _explode 同一口径）
 
 ## 屏外减负（2026-10-10 第 6 波卡顿优化）：出屏边距与节流判定缓存
 const CULL_MARGIN := 64.0
@@ -298,7 +303,7 @@ var _has_elite_light: bool = false
 static var _pools: Dictionary = {}     ## scene_path -> Array[EnemyBase]
 static var pool_created_count: int = 0 ## 探针断言用：复用两轮零增长
 static var pool_reused_count: int = 0
-static var _explode_snap_pool: Array = []  ## 裂魂铃链爆快照复用栈（每层递归独占一张，clear 回栈容量不丢）
+static var _explode_snap_pool: Array = []  ## live_enemies 快照复用栈（击杀链/光环/治疗共用；每层递归独占一张，clear 回栈容量不丢）
 
 ## —— 全局大面积特效时间戳闸（2026-10-16 演出去噪）——
 ## 静态时间戳闸（Time.get_ticks_msec）：同屏大面积演出（焦痕/爆炸环）走「最后一次放行后
@@ -1212,13 +1217,35 @@ func _tick_hit_stun(delta: float) -> bool:
 ## 行为支路推进：远程风筝 / 扑咬状态机 / 自爆引信 / 火球 / 产卵 / 光环 / 闪现。
 ## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
 func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
-	# 金蟾系：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）
-	# 软墙绕场滑行（2026-10-15 行为优化）：旧版只「清零朝墙外分量改沿墙滑行」，滑行方向
-	# 每帧按玩家相对位置重算、恰在墙中线随位置翻号 ⇒ 玩家一偏离场心，金蟾被径向逃推一路
-	# 楔进角落趴窝（角落死锁分支要两轴同时触界才救，太晚；墙中段翻向还会抖振失速）。
-	# 现在贴墙瞬间把滑行方向锁进 _flee_slide（选「远离近端墙角」的环流侧），沿墙期间保持
-	# 锁存不随玩家翻向；被推抵相邻墙带时原地转 90° 接下一面墙（绕场环流）；只有被击退
-	# 脱离墙带才释放回径向逃离。观感：贴边界带绕场流窜，不进角、不贴墙原地抽搐。
+	# 行为支路分发（2026-10-24 切片）：各敌型按自己的开关字段独立推进，同一敌人带多个
+	# 开关时全部顺序执行（保持旧语义，非 elif 互斥）。唯一提前出口是自爆结算。
+	# 各支路实现即下方 _tick_* 方法（体注释随块走）；起手/结算等招式函数见「行为支路」各分区。
+	_tick_flee_slide(delta, dir, eff_speed)
+	_tick_kite_range(dir, dist_sq, eff_speed)
+	_tick_charge_lunge(delta, player, dir, dist_sq)
+	if _tick_explode_fuse(delta, player, dist_sq):
+		return true
+	_tick_bolt_cast(delta, player, dist_sq)
+	_tick_minion_spawn(delta)
+	_tick_buff_aura_pulse(delta)
+	_tick_teleport_step(delta, player)
+	_tick_elite_slam_step(delta, player, dist_sq)
+	# 变异震地余波独立推进：预警段被硬直/其他支路打断也要把已承诺的段数结完
+	_tick_slam_echo(delta, player)
+	_tick_rock_barrage_step(delta, player, dist_sq)
+	_tick_ring_bolt_step(delta, dist_sq)
+	_tick_field_cast(delta, player, dist_sq)
+	_tick_blink_strike_step(delta, player)
+	_tick_heal_pulse(delta)
+	_tick_poison_cast(delta, player, dist_sq)
+	return false
+
+# ---------------- 行为支路 tick（2026-10-24 自 _tick_behaviors 切片） ----------------
+
+## 金蟾系移动：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）。软墙环流滑行
+## （2026-10-15 行为优化）：贴墙把滑行方向锁进 _flee_slide 沿墙环流，抵相邻墙带转 90° 接续，
+## 被击退脱离墙带才释放回径向逃离 —— 绕场流窜不进角、不贴墙原地抽搐。
+func _tick_flee_slide(delta: float, dir: Vector2, eff_speed: float) -> void:
 	if always_flee and not _pp_stun:
 		var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 		var t_edge: float = wall_lim - FLEE_WALL_BAND
@@ -1254,6 +1281,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			flee_dir = (-global_position).normalized() if global_position.length_squared() > 0.0001 else Vector2.UP
 		_pp_target_vel = flee_dir.normalized() * eff_speed
 
+
+
+## 远程怪移动：保持距离，近了退、远了进、合适距离环绕游走。
+func _tick_kite_range(dir: Vector2, dist_sq: float, eff_speed: float) -> void:
 	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
 	if not always_flee and not _pp_stun and preferred_range > 0.0:
 		var dist := sqrt(dist_sq)
@@ -1262,6 +1293,12 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 		elif dist <= preferred_range + 30.0:
 			_pp_target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
 
+
+
+## 妖狼系长扑四态状态机（移动出口 _pp_target_vel）：站桩预警 → 直线冲刺 → 收势刹车 → 落空罚站
+## （变异链冲段间短预警）。预警带长度/真实位移/扫掠判定三件事同源取自 GameBalance.charge_reach；
+## 冲刺/收势两段自己把 velocity 写死（下面 charge_locked 那一段因此跳过吸附插值）。
+func _tick_charge_lunge(delta: float, player: Node2D, dir: Vector2, dist_sq: float) -> void:
 	# 妖狼系长扑（移动出口 _pp_target_vel）：
 	#   跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
 	# 长扑的三件事必须同源，都取自 GameBalance.charge_reach：预警带长度、真实位移、扫掠判定。
@@ -1337,6 +1374,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			play_squash(Vector2(0.82, 1.2), 0.24)
 			AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
 
+
+
+## 丹爆傀儡：贴近点燃引信，原地颤抖后自爆；返回 true = 已结算自爆，调用方立即结束本帧。
+func _tick_explode_fuse(delta: float, player: Node2D, dist_sq: float) -> bool:
 	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
 	if explode_radius > 0.0:
 		if _fuse < 0.0:
@@ -1364,7 +1405,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 					procedural_view.position.x = 0.0
 				_explode(player)
 				return true
+	return false
 
+## 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）。
+func _tick_bolt_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）
 	if bolt_interval > 0.0 and _fuse < 0.0:
 		if _bolt_windup_t >= 0.0:
@@ -1380,6 +1424,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 				_bolt_timer = bolt_interval
 				_start_bolt_windup()
 
+
+
+## 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）。
+func _tick_minion_spawn(delta: float) -> void:
 	# 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）
 	if spawn_minion_interval > 0.0 and minion_scene != null and _fuse < 0.0:
 		_minion_timer -= delta
@@ -1388,6 +1436,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			if GameManager.enemy_count < GameBalance.ZHUMU_MINION_CAP:
 				_spawn_minion()
 
+
+
+## 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速。
+func _tick_buff_aura_pulse(delta: float) -> void:
 	# 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速
 	if buff_radius > 0.0:
 		_buff_timer -= delta
@@ -1395,6 +1447,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_buff_timer = 0.25
 			_pulse_buff_aura()
 
+
+
+## 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）。
+func _tick_teleport_step(delta: float, player: Node2D) -> void:
 	# 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）
 	if teleport_interval > 0.0 and _fuse < 0.0:
 		_teleport_timer -= delta
@@ -1402,6 +1458,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_teleport_timer = teleport_interval
 			_teleport_near_player(player)
 
+
+
+## 铁甲魔傀·震地：预警圈「填满式」倒计时 → 结算（与 Boss 震地同一套视觉语言）。
+func _tick_elite_slam_step(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 铁甲魔傀·震地：预警圈「填满式」倒计时 → 结算（与 Boss 震地同一套视觉语言）
 	if slam_interval > 0.0 and _fuse < 0.0:
 		if _elite_slam_windup_t >= 0.0:
@@ -1420,6 +1480,11 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 	# 变异震地余波独立推进：预警段被硬直/其他支路打断也要把已承诺的段数结完
 	_tick_slam_echo(delta, player)
 
+
+
+## 铁甲魔傀·落石轰炸：起手锁多个落点 → 每个落点亮填满式预警圈 → 逐个结算。首点锁玩家预判位
+## （rock_lead），其余绕首点按 rock_spread 散布 —— 克制原地站桩与匀速跑位。
+func _tick_rock_barrage_step(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 铁甲魔傀·落石轰炸：起手锁多个落点 → 每个落点亮填满式预警圈 → 逐个结算。
 	# 首点锁玩家预判位（rock_lead），其余绕首点按 rock_spread 散布 —— 克制原地站桩与匀速跑位。
 	if rock_interval > 0.0 and _fuse < 0.0:
@@ -1441,6 +1506,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 				_rock_timer = rock_interval
 				_start_rock_barrage(player)
 
+
+
+## 赤雷兽·雷环齐射：短前摇站定提亮 → 全向均布弧线雷弹（旋臂压迫走位）。
+func _tick_ring_bolt_step(delta: float, dist_sq: float) -> void:
 	# 赤雷兽·雷环齐射：短前摇站定提亮 → 全向均布弧线雷弹（旋臂压迫走位）
 	if ring_bolt_interval > 0.0 and _fuse < 0.0:
 		if _ring_bolt_windup_t >= 0.0:
@@ -1459,6 +1528,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 				_ring_bolt_timer = ring_bolt_interval
 				_start_ring_bolt_cast()
 
+
+
+## 剑煞邪修·雷剑域：在玩家脚下铺持续伤害领域（复用毒潭骨架，染血煞色）。
+func _tick_field_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 剑煞邪修·雷剑域：在玩家脚下铺持续伤害领域（复用毒潭骨架，染血煞色）
 	if field_interval > 0.0 and _fuse < 0.0:
 		if _field_windup_t >= 0.0:
@@ -1476,6 +1549,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 				_field_target = player.global_position
 				_start_field_cast()
 
+
+
+## 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打。
+func _tick_blink_strike_step(delta: float, player: Node2D) -> void:
 	# 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打
 	if blink_strike_interval > 0.0 and _fuse < 0.0:
 		_blink_strike_timer -= delta
@@ -1483,6 +1560,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_blink_strike_timer = blink_strike_interval
 			_blink_strike(player)
 
+
+
+## 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）。
+func _tick_heal_pulse(delta: float) -> void:
 	# 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）
 	if heal_interval > 0.0 and _fuse < 0.0:
 		_heal_timer -= delta
@@ -1490,6 +1571,10 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 			_heal_timer = heal_interval
 			_pulse_heal()
 
+
+
+## 毒妖系：周期性朝玩家所在地投一片毒潭（持续伤害区域，进入即按周期掉血）。
+func _tick_poison_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 毒妖系：周期性朝玩家所在地投一片毒潭（持续伤害区域，进入即按周期掉血）
 	if poison_interval > 0.0 and _fuse < 0.0:
 		if _poison_windup_t >= 0.0:
@@ -1510,10 +1595,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 				_poison_target = player.global_position
 				_start_poison_cast()
 
-	return false
 
-## 速度解算：冲刺/收势锁定段由状态机逐帧写死（不交给插值、不被硬直夺走）；
-## 受击卡肉定格期完全静止且保持击退冲量；硬直期间位移纯由击退主导并快速衰减；平时吸附插值追击
 func _resolve_velocity(delta: float) -> void:
 	# 扑咬前扑段与长扑冲刺同一条口径：锁定段由状态机逐帧写死，不交给吸附插值、不被硬直夺走
 	var charge_locked := _charge_active > 0.0 or _charge_brake > 0.0 \
@@ -1774,8 +1856,8 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			AudioManager.play_sfx("enemy_hit_crit", 0.85, 1.25)
 
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
-	var elite_scale: float = 0.55 if is_elite else 1.0
-	var crit_kb_mult: float = 1.25 if is_crit else 1.0
+	var elite_scale: float = HIT_KB_ELITE_SCALE if is_elite else 1.0
+	var crit_kb_mult: float = HIT_KB_CRIT_MULT if is_crit else 1.0
 	var raw_kb := knockback * (GameBalance.KNOCKBACK_IMPULSE_SCALE * elite_scale * crit_kb_mult)
 	var max_spd: float = GameBalance.KNOCKBACK_MAX_SPEED_CRIT if is_crit else GameBalance.KNOCKBACK_MAX_SPEED_NORMAL
 	if raw_kb.length() > max_spd:
@@ -1807,7 +1889,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 			# 2026-10-23 暴击双播改单播：crit 配方自带完整五层主体（骨裂头+撕裂+punch+sub），
 			# 再叠一声 enemy_hit 只会双倍占 16 通道池、且两 key 节流闸不同步（hit 18ms / crit 40ms）
 			# 导致连击暴击「hit 在响、crit 被吞」。现在一声到位，音高仍随伤害下压。
-			AudioManager.play_sfx("enemy_hit_crit", 1.35 * dmg_vol,
+			AudioManager.play_sfx("enemy_hit_crit", HIT_SFX_CRIT_VOL_MULT * dmg_vol,
 				GameManager.rng.randf_range(0.95, 1.05) * dmg_pitch)
 		GameManager.crit_hit_stop()
 		# 镜头震动特权留给精英/首领：普通小怪暴击不发镜头冲击、缩放与创伤，
@@ -1964,7 +2046,7 @@ func _explode(player: Node2D) -> void:
 		GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
 	# 自爆也算战果：进击杀连击音阶（精英基准抬档同 _die 口径）
-	AudioManager.register_kill_pitch(die_pitch_base * 1.12)
+	AudioManager.register_kill_pitch(die_pitch_base * KILL_PITCH_ELITE_MULT)
 	AudioManager.play_sfx("enemy_death_elite", 0.9)
 	if player.global_position.distance_to(global_position) <= explode_radius:
 		# 目标可能是被嘲讽改追的灵兽：Player 走两参受创链路，其余鸭子分派单参（同短咬口径）
@@ -2785,179 +2867,8 @@ func _die() -> void:
 		_field_ring.queue_free()
 	_field_ring = null
 
-	# 金蟾系：击杀额外爆金币（回合末消散/自爆不算战果）
-	if stone_reward > 0 and not _no_drop:
-		GameManager.add_spirit_stones(stone_reward)
-		DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -GameBalance.STONE_FLOAT_OFFSET), stone_reward, false, "+%d 金币" % stone_reward)
-		AudioManager.play_sfx("gem_pickup", 0.9)
-
-	# 击杀反馈分级震屏（死亡爆散视觉已于 2026-10-12 整体下线：击杀反馈 = 尸体塌缩 + 跳字 + 音效）
-	# 2026-10-13 轻量重建：一小撮敌种主色碎屑 + 微环（JuiceEffect 侧有帧预算闸 + 视口门控，
-	# 不与尸体塌缩抢戏），只在伤害击杀路径放；回合末消散走 dissolve 不经过这里
-	if procedural_view != null and procedural_view.config != null:
-		JuiceEffect.spawn_death_burst(get_parent(), global_position, procedural_view.config.col_primary, is_elite)
-		# 击杀余韵（2026-10-14 P1）：敌种主色贴地残晕，给每秒多次的击杀留 0.55s 地面读数。
-		# 池容量 16 与寿命 0.55s 双重兜底，极高频击杀下自动复用最旧残晕，不会糊满地面
-		var glow_r: float = 26.0 if not is_elite else 38.0
-		GroundDecal.spawn_tinted(get_parent(), global_position, glow_r, procedural_view.config.col_primary)
-		# 死亡演出（精简去躁：普通小怪死亡已有贴地残晕与塌缩消散，省去高频 DEATH_WISP 粒子；精英/Boss 保持完整灵光碎屑 + 冲击环）：
-		if not _no_drop:
-			if is_elite or death_corpse_linger:
-				var burst_scale: float = 1.8 if death_corpse_linger else 1.25
-				var wave_r: float = 72.0 if death_corpse_linger else 48.0
-				FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", burst_scale)
-				JuiceEffect.spawn_shockwave(get_parent(), global_position, wave_r, GameStyle.FX_HDR_GOLD, 0.22)
-				# 幽魂消散（2026-10-19）：塌缩前一刻器尖/灵核蓄满再炸开，给厚血敌人一个「气数已尽」的收束
-				FxParticlePool.burst(FxParticlePool.DEATH_WISP, global_position, "shadow", burst_scale, true)
-	if is_elite:
-		GameManager.kick_camera(knockback_velocity, GameBalance.DEATH_KICK_CAMERA)
-		# 暴击斩杀精英/首领启用 HEAVY 档（此前预留未用）：更重的创伤/顿帧/缩放冲击
-		if _death_crit_kill:
-			GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-		else:
-			GameManager.feedback(GameManager.FeedbackTier.LARGE)
-		# 击杀连击音阶：播音前登记本命音高基准并推阶梯（elite 基准抬半档与普通怪分层）
-		AudioManager.register_kill_pitch(die_pitch_base * 1.12)
-		AudioManager.play_sfx("enemy_death_elite", 1.0)
-	else:
-		# 普通敌人死亡不推镜头，保持视野平稳；击杀确认感由死亡消散、音效与击杀连击音阶表达
-		AudioManager.register_kill_pitch(die_pitch_base)
-		AudioManager.play_sfx("enemy_death", 0.90)
-
-	var gem_count = 1 if not is_elite else GameBalance.ELITE_GEM_COUNT
-	if _no_drop:
-		gem_count = 0
-	if heal_orb_drop > 0 and gem_count > 0:
-		gem_count = 0
-		# 回复珠走对象池（2026-10-11，与宝石同一条路）
-		var orb := HealOrb.acquire_or_new(get_parent())
-		orb.global_position = global_position
-		orb.heal_amount = float(heal_orb_drop)
-		orb.activate()
-	# 灵植夫·灵药滋生：死亡按概率额外掉一颗回复珠（与本体掉落独立，不占金币位）。
-	# 2026-10-21 灵草袋同走这条概率腿：角色天赋 + 道具 hook 相加后夹 100%。
-	var orb_chance: float = minf(1.0, GameManager.heal_orb_chance + GameManager.item_hook_sum("heal_orb_chance"))
-	if orb_chance > 0.0 and not _no_drop and GameManager.rng.randf() < orb_chance:
-		var extra_orb := HealOrb.acquire_or_new(get_parent())
-		extra_orb.global_position = global_position + Vector2(
-			GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS),
-				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS))
-		extra_orb.heal_amount = HealOrb.BASE_HEAL
-		extra_orb.activate()
-	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
-	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
-	var ex_base := GameManager.item_hook_sum("kill_explode")
-	if ex_base > 0.0 and not _no_drop:
-		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
-		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
-		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
-		# live_enemies 快照走静态复用数组栈（2026-10-19 零 GC 专项）：
-		# 旧写法每次击杀 duplicate() 一次新数组，群杀链爆时同帧几十次分配。
-		# 递归安全：链式 take_damage 里嵌套的 _die 会再取一张快照（每层独占一张），
-		# 用完 clear() 回栈容量不丢，稳态零分配。
-		var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
-		snap.append_array(GameManager.live_enemies)
-		for e in snap:
-			if e == null or not is_instance_valid(e) or e.dying or e == self:
-				continue
-			if e.is_in_group("chests") or e.is_in_group("herbs"):
-				continue
-			var ex_off: Vector2 = e.global_position - global_position
-			if ex_off.length() > ex_radius:
-				continue
-			var ex_dir := ex_off.normalized() if ex_off.length_squared() > 0.0001 else Vector2.UP
-			e.take_damage(ex_dmg, ex_dir * ex_impulse)
-		snap.clear()
-		_explode_snap_pool.push_back(snap)
-		# 2026-10-16 演出去噪：伤害/击退照常逐次结算（玩法零改动），金色爆炸环走全局限频——
-		# 旧写法每次击杀一发 90px 环，清怪高潮连环爆炸时是冲击环雨。伤害与环同源只是读法惯例，
-		# 环限频不改爆炸链实际范围；链爆读数由受击方 take_damage 自己的受击反馈补足。
-		if _fx_gap_gate(KILL_EXPLODE_FX_MIN_GAP_MS, "kill_explode_fx"):
-			JuiceEffect.spawn_shockwave(get_parent(), global_position, ex_radius, GameStyle.GOLD_FX_EDGE, 0.25)
-	for i in range(gem_count):
-		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
-		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-		var offset = Vector2.ZERO if gem_count == 1 else Vector2(
-				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS),
-				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS))
-		gem.global_position = global_position + offset
-		# 小怪经验走反割草补偿倍率（BalanceWave.mob_kill_exp）：预算 -20% 后单只 ×1.25 找平每波收入。
-		# 精英在下面立即被 ELITE_GEM_EXP 覆写，不吃这条。金币腿（stone_value=-1 随 exp_value 同值）
-		# 自动同比放大 —— 数量 ×0.8 × 单只 ×1.25 = 每波金币收入持平；碎金档显式置 1 枚不受影响。
-		gem.exp_value = GameBalance.mob_kill_exp(exp_reward)
-		gem.is_gold = is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
-		if is_elite:
-			gem.exp_value = GameBalance.ELITE_GEM_EXP
-		else:
-			# 碎金档（2026-10-13 体验重塑）：普通怪按回合概率掉基础碎金/金砂片 ——
-			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，符合小怪掉零钱直觉且平抑后期通胀。
-			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎金率见 BalanceEconomy。
-			if GameManager.rng.randf() < GameBalance.gem_shard_chance(GameManager.wave_number):
-				gem.is_shard = true
-				gem.stone_value = GameBalance.GEM_SHARD_STONE_VALUE
-		gem.activate()
-
-	set_physics_process(false)
-	$CollisionShape2D.set_deferred("disabled", true)
-	$Hurtbox/CollisionShape2D.set_deferred("disabled", true)
-	# 尸体停帧后 _tick_hit_fx / _tick_hit_visuals 都不再跑：闪白、挤压、受击微反冲一律就地归位，
-	# 别让尸体挂着半截闪白或歪着半格消散
-	_squash_t = 0.0
-	juice_scale = Vector2.ONE
-	_flash_t = 0.0
-	_flash_swap_t = 0.0
-	_hit_jiggle_offset = Vector2.ZERO
-	anim_sprite.position = Vector2.ZERO
-	if procedural_view != null:
-		procedural_view.position = Vector2.ZERO
-	_write_flash_channel(0.0)
-
-	# 死灭动画分级（2026-10-15）：小怪保持「膨胀 0.045s → 塌缩 0.14s」快节奏（高频事件不宜加重）；
-	# 精英膨胀后多一段踉跄倾倒再塌缩（慢半拍，倒地有重量感）；Boss 倾倒后尸体滞留慢渐隐
-	#（不缩零，谢幕读数更足）。安全性：进本段前物理/碰撞已断，回合末 dissolve() 对 dying 短路，
-	# 拉长演出只多留几帧绘制，不影响回收与清场。
-	# 倾倒方向跟随致命一刀的受力侧（_hit_tilt 符号：后仰角与击退水平分量同号），垂直击杀默认右倾。
-	var topple_sign := signf(_hit_tilt) if _hit_tilt != 0.0 else 1.0
-	var tw = create_tween()
-	var swell_scale := anim_base_scale * Vector2(GameBalance.CORPSE_SWELL_SCALE, GameBalance.CORPSE_SWELL_SCALE)
-	tw.tween_property(anim_sprite, "scale", swell_scale, 0.045)\
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	if procedural_view != null:
-		tw.parallel().tween_property(procedural_view, "scale", swell_scale, 0.045)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-	if is_elite or death_corpse_linger:
-		# 踉跄/倾倒段：精英与 Boss 共有的「慢半拍」
-		var topple_rad: float = GameBalance.BOSS_DEATH_TOPPLE_RAD if death_corpse_linger else GameBalance.ELITE_DEATH_TOPPLE_RAD
-		var topple_dur: float = 0.15 if death_corpse_linger else GameBalance.ELITE_DEATH_STAGGER_DUR
-		tw.chain().tween_property(anim_sprite, "rotation", topple_sign * topple_rad, topple_dur)\
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		if procedural_view != null:
-			tw.parallel().tween_property(procedural_view, "rotation", topple_sign * topple_rad, topple_dur)\
-				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-	if death_corpse_linger:
-		# Boss：倒地后尸体滞留一停，再只淡出不塌缩（「大妖伏诛」1.2s 消融）
-		tw.chain().tween_interval(GameBalance.BOSS_DEATH_LINGER_DUR)
-		tw.set_parallel(true)
-		var fade_dur: float = 1.2
-		tw.tween_property(anim_sprite, "modulate:a", 0.0, fade_dur)
-		if procedural_view != null:
-			tw.tween_property(procedural_view, "modulate:a", 0.0, fade_dur)
-		if shadow_sprite != null and shadow_sprite.visible:
-			tw.tween_property(shadow_sprite, "modulate:a", 0.0, fade_dur)
-		_start_dissolve(fade_dur, GameStyle.FX_HDR_GOLD, tw)
-	else:
-		# 小怪（0.4s）/精英（0.8s）：原地消融塌缩消散（T-3.1 接入 dissolve shader）
-		var collapse_dur: float = 0.8 if is_elite else 0.4
-		var edge_col: Color = GameStyle.FX_HDR_GOLD if is_elite else GameStyle.FX_HDR_SHADOW
-		tw.set_parallel(true)
-		tw.tween_property(anim_sprite, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-		tw.tween_property(anim_sprite, "modulate:a", 0.0, collapse_dur)
-		if procedural_view != null:
-			tw.tween_property(procedural_view, "scale", Vector2.ZERO, collapse_dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
-			tw.tween_property(procedural_view, "modulate:a", 0.0, collapse_dur)
-		_start_dissolve(collapse_dur, edge_col, tw)
-	# 尸体不再沿击退方向滑出：致命一刀既已击杀，就不该再有击退位移 ——
-	# 原地塌缩才是「这一下打死了」的读数（旧斩杀击飞会在消散中把尸体推出最多 42px）
-	tw.chain().tween_callback(_recycle_or_free)
+	# 死亡解析已拆 enemy_death/EnemyDeathFx.gd（2026-10-24）：反馈分级 → 掉落结算 → 尸体演出。
+	# 顺序有讲究：反馈先于掉落（震屏/音阶先响，再算裂魂铃链爆）；尸体演出收尾（含回池回调）。
+	EnemyDeathFx.feedback(self)
+	EnemyDeathFx.drops(self)
+	EnemyDeathFx.corpse(self)

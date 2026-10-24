@@ -141,6 +141,7 @@ func _test_five_elements_system() -> void:
 	_c.check(GameBalance.upgrade_benefits_weapon({"move_speed_mult": 0.08}, "bajiao_fan"), "移速提升让风扇受益（异名映射）")
 	_c.check(GameBalance.upgrade_benefits_weapon({"harvest": 8.0}, "jubao_chi"), "收益提升让聚宝金尺受益")
 	_c.check(GameBalance.upgrade_benefits_weapon({"bonus_pierce": 1.0}, "gengjin_feijian"), "破甲透劲让弹丸类飞剑受益")
+	_c.check(GameBalance.upgrade_benefits_weapon({"bonus_pierce": 1.0}, "jiguan_nu"), "破甲透劲让机关台机关弩受益（TurretUnit 出膛同走 pierce_left）")
 	_c.check(not GameBalance.upgrade_benefits_weapon({"bonus_pierce": 1.0}, "qingyun_sword"), "破甲透劲不让近战青云剑受益")
 	_c.check(not GameBalance.upgrade_benefits_weapon({"dodge": 0.07}, "qingyun_sword")
 		and not GameBalance.upgrade_benefits_weapon({"pickup_range_mult": 0.4}, "lingdie")

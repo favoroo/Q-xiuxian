@@ -96,13 +96,15 @@ const DEFS: Dictionary = {
 							"sfx": "metal_dart",
 							# 机制差异化重构：暴雨梨花式瞬间倾泻细针，与飞刀割草拉开差异
 							# 2026-10-14 弹丸数瘦身：8→5 发（群体雪球收敛，单体伤害不变）
+							# 2026-10-24 群体再收敛：5→4 发——多发弹丸各自独立全额（不吃逐跳衰减），
+							# 5 发时铺面 DPS 52 比弹射族 37.5 高 39%；4 发收到 41.6 与弹射族齐平，单体口径不变
 							"damage": 13.0, "cooldown": 1.25, "range": 255.0,
 							"knockback": 85.0,
 							"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
 							"tip": Vector2(22, -6), "shape": "needles",
-							"desc": "倾泻5发密如暴雨的追踪细针，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
+							"desc": "倾泻4发密如暴雨的追踪细针，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
 						"bullet": "res://assets/art/bullet_silver_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
-						"pierce": 1, "projectile_count": 5, "spread_angle": 0.42,
+						"pierce": 1, "projectile_count": 4, "spread_angle": 0.42,
 						"tags": ["sword", "metal"],
 						"stat_scalings": {"ranged_damage": 0.8, "crit_rate": 30.0},
 					},
@@ -192,10 +194,12 @@ const DEFS: Dictionary = {
 						"tags": ["wide", "water"],
 						"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
 					},
-				"xuanbing_feizhen": {
-					"name": "冰针", "behavior": Behavior.PROJECTILE,
-					"sfx": "metal_dart",
-					"damage": 14.0, "cooldown": 1.0, "range": 265.0,
+					"xuanbing_feizhen": {
+						"name": "冰针", "behavior": Behavior.PROJECTILE,
+						"sfx": "metal_dart",
+						# 2026-10-24 点杀带顶回调：28.0 DPS 顶着 22~28 带天花板且吃满 265 射程
+						# （点杀乘积 7420 全场最高）→ 降到带中 25.0，冰缓功能位不动
+						"damage": 12.5, "cooldown": 1.0, "range": 265.0,
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
 				"tip": Vector2(-18, 12), "shape": "needles",
@@ -574,10 +578,12 @@ const DEFS: Dictionary = {
 						"tags": ["contraption", "sword", "metal"],
 						"stat_scalings": {"contraption_damage": 1.0, "melee_damage": 0.5},
 					},
-					"penhuo_jiguanshou": {
-						"name": "喷火兽", "behavior": Behavior.TURRET,
-						"sfx": "flame_jet",
-						"damage": 11.0, "cooldown": 4.2, "range": 195.0,
+						"penhuo_jiguanshou": {
+							"name": "喷火兽", "behavior": Behavior.TURRET,
+							"sfx": "flame_jet",
+							# 2026-10-24 机关带内回调：灼烧按 0.42s 开火间隔全程常驻，11 伤时 30.6/座
+							# 超机关带顶（25.0）两成余 → 降 9 伤到 25.0/座与剑阵盘齐平
+							"damage": 9.0, "cooldown": 4.2, "range": 195.0,
 						"turret_fire_cd": 0.42, "turret_lifetime": 10.0, "turret_cap": 2,
 						"knockback": 100.0,
 						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
@@ -670,10 +676,11 @@ const DEFS: Dictionary = {
 					"tags": ["wide", "water"],
 					"stat_scalings": {"ranged_damage": 0.8, "move_speed_bonus": 28.0},
 				},
-					"hanquan_shou": {
-						"name": "寒泉兽", "behavior": Behavior.TURRET,
-						"sfx": "metal_dart",
-						"damage": 9.0, "cooldown": 4.0, "range": 210.0,
+						"hanquan_shou": {
+							"name": "寒泉兽", "behavior": Behavior.TURRET,
+							"sfx": "metal_dart",
+							# 2026-10-24 机关带底回填：20.0/座 比带内次低（藤萝 21.5）还低一截 → 10 伤到 22.2
+							"damage": 10.0, "cooldown": 4.0, "range": 210.0,
 						"turret_fire_cd": 0.45, "turret_lifetime": 10.0, "turret_cap": 2,
 						"knockback": 90.0,
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
@@ -917,7 +924,8 @@ const DEFS: Dictionary = {
 							"taomu_jian": {
 								"name": "桃木剑", "behavior": Behavior.MELEE,
 								"sfx": "whoosh_light", "sfx_impact": "impact_blade",
-								# 机制差异化重构：辟邪纯阳剑芒，中远距离宽弧远扫（range 175/arc 1.25）+ 强力震退，吃范围加成
+								# 机制差异化重构：辟邪纯阳剑芒宽弧远扫 + 强力震退，吃范围加成
+								# （2026-10-24 修陈旧注释：原写 range 175 与数据 124 不符，以数据为准）
 								"damage": 31.0, "cooldown": 1.10, "range": 124.0,
 								"knockback": 380.0,
 								# 2026-10-18 media-gen 专属重绘：千年雷击桃木剑，深沉暗红木质与七星连珠刻痕
@@ -989,7 +997,8 @@ const DEFS: Dictionary = {
 							"zihong_jing": {
 								"name": "紫虹镜", "behavior": Behavior.BEAM,
 								"sfx": "flute_wave",
-								"damage": 22.0, "cooldown": 1.15, "range": 265.0,
+								# 2026-10-24 回填：单体口径 19.1 全场最低（光束贯穿一线的群体定位不动）→ 23 伤到 20.0
+								"damage": 23.0, "cooldown": 1.15, "range": 265.0,
 								"knockback": 80.0,
 								# 2026-10-18 media-gen 专属重绘：八面棱角玄铁紫玉晶镜，冷月冷冽雷芒
 								"price": 42, "icon": "res://assets/art/weapon_zihong_jing.png",

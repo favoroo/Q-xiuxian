@@ -102,8 +102,8 @@ const DEFS: Dictionary = {
 		"role": "control",
 		"base_price": 38,
 		"base_cooldown": 3.5,
-		"base_value": 160.0, ## 震地半径 px，伤害见 BalanceSpiritPet.smash_damage
-		"desc": "重砸地面击退周围敌人并减速",
+		"base_value": 160.0, ## 落点震击半径 px，伤害见 BalanceSpiritPet.smash_damage
+		"desc": "每 3.5 秒掷出巨石轰击远处敌人，落点 160 范围震伤击退并减速",
 		"color": Color(0.65, 0.58, 0.52),      # 岩灰
 		"halo_color": Color(0.78, 0.72, 0.66, 0.35),
 		"decor": "ape_brows",

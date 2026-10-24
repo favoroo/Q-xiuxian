@@ -372,25 +372,25 @@ func _test_melee_arc() -> void:
 		w.current_target = target
 		# 打击帧本体停在后撤 8px 的 windup 位，桩体碰撞圆 r=20 罩得住这点偏差
 		var aim := (TARGET_AT - w.position).normalized()
-		var foe := _make_stub_enemy(w.position + aim * FloatingWeapon.MELEE_LUNGE)
+		var foe := _make_stub_enemy(w.position + aim * MeleeHandler.MELEE_LUNGE)
 		await get_tree().physics_frame
 		w._perform_melee_attack()
-		var judged := w._melee_arc_radius()
+		var judged: float = MeleeHandler.arc_radius(w)
 		# 出生帧（打击帧 callback 之前同步可读）：月牙内缘贴剑尖、且严格小于终态 —— 剑气从剑上扫出去
-		var spawn_inner := w.slash_sprite.position.x + FloatingWeapon.SLASH_ART_INNER * w.slash_sprite.scale.x
-		_c.near(spawn_inner, w.muzzle_len + FloatingWeapon.SLASH_SPAWN_INSET, 0.5,
+		var spawn_inner: float = w.slash_sprite.position.x + MeleeHandler.SLASH_ART_INNER * w.slash_sprite.scale.x
+		_c.near(spawn_inner, w.muzzle_len + MeleeHandler.SLASH_SPAWN_INSET, 0.5,
 			"%s 弧光出生内缘贴剑尖（剑尖 %.1fpx，内缘 %.1fpx）" % [label, w.muzzle_len, spawn_inner])
-		_c.check(FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x < judged,
-			"%s 弧光出生小于判定圆（%.1f < %.1f，扫放存在）" % [label, FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x, judged])
+		_c.check(MeleeHandler.SLASH_ART_OUTER * w.slash_sprite.scale.x < judged,
+			"%s 弧光出生小于判定圆（%.1f < %.1f，扫放存在）" % [label, MeleeHandler.SLASH_ART_OUTER * w.slash_sprite.scale.x, judged])
 		# 终态（扫放完成后）：外缘 == 判定半径、轴心 == 判定圆心 —— 画多大==判多大不因扫放而破
 		# （0.4s > 前摇 0.05 + 亮扫 0.10 + 淡出 0.08 的全程，慢帧环境也够走完）
 		await get_tree().create_timer(0.4).timeout
 		_c.check(foe.hit_count > 0,
 			"%s 挥砍咬到判定圆内的桩敌（命中 %d 次；门控后只有命中路径走得到弧光终态）" % [label, foe.hit_count])
-		var drawn := FloatingWeapon.SLASH_ART_OUTER * w.slash_sprite.scale.x
+		var drawn := MeleeHandler.SLASH_ART_OUTER * w.slash_sprite.scale.x
 		_c.near(drawn, judged, 0.5, "%s 弧光外缘 == 判定圆半径（判定 %.1fpx，画到 %.1fpx）" % [label, judged, drawn])
-		_c.near(w.slash_sprite.position.x, FloatingWeapon.MELEE_LUNGE, 0.5,
-			"%s 弧光轴心 == 判定圆心（本体前突 %.0f px）" % [label, FloatingWeapon.MELEE_LUNGE])
+		_c.near(w.slash_sprite.position.x, MeleeHandler.MELEE_LUNGE, 0.5,
+			"%s 弧光轴心 == 判定圆心（本体前突 %.0f px）" % [label, MeleeHandler.MELEE_LUNGE])
 		# 月牙张角 ±70°：挥砍摆幅必须小于它，那一帧打出去的方向才始终被画出来的那一片罩住
 		var sweep := rad_to_deg(deg_to_rad(45.0) * w.arc_scale)
 		_c.check(sweep <= SLASH_ART_HALF_DEG,
@@ -408,7 +408,7 @@ func _test_melee_arc() -> void:
 		far_target.position = far_w.position + Vector2(40.0, 0.0)
 		_world.add_child(far_target)
 		far_w.current_target = far_target
-		var far_foe := _make_stub_enemy(far_w.position + Vector2(FloatingWeapon.MELEE_LUNGE, 0.0))
+		var far_foe := _make_stub_enemy(far_w.position + Vector2(MeleeHandler.MELEE_LUNGE, 0.0))
 		GameManager.player.position = Vector2(4000.0, 4000.0)
 		await get_tree().physics_frame
 		far_w._perform_melee_attack()
@@ -471,8 +471,8 @@ func _test_sweep_arc() -> void:
 			"%s 横扫打中前方扇形内的桩敌（命中 %d 次）" % [label, front_foe.hit_count])
 		_c.equals(back_foe.hit_count, 0,
 			"%s 横扫打不着身后的桩敌（扇形判定，不是近战那种 360° 圆）" % label)
-		var reach := w._sweep_arc_radius()
-		var drawn := FloatingWeapon.SWEEP_ART_OUTER * w.sweep_sprite.scale.x
+		var reach: float = SweepHandler.arc_radius(w)
+		var drawn := SweepHandler.SWEEP_ART_OUTER * w.sweep_sprite.scale.x
 		_c.near(drawn, reach, 0.5, "%s 扇面外缘 == 判定半径（判定 %.1fpx，画到 %.1fpx）" % [label, reach, drawn])
 		var aim_ang := aim.angle()
 		_c.near(rad_to_deg(absf(angle_difference(w.sweep_sprite.global_rotation, aim_ang))), 0.0, 2.0,

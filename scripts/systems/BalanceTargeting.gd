@@ -294,8 +294,12 @@ static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[St
 				if not out.has(k):
 					out.append(k)
 			"bonus_pierce":
-				if int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE)) \
-						== WeaponData.Behavior.PROJECTILE and not out.has(k):
+				# 弹丸类（悬浮 PROJECTILE + 机关台 TURRET）出膛都走
+				# p.pierce_left = capped_pierce(基础 + bonus_pierce)（ProjectileHandler/TurretUnit），
+				# 两类都吃破甲透劲——口径与 PierceLimit.has_max_pierce、StatsTipFactory.weapon_feats 同源。
+				var _beh := int(WeaponData.get_def(w_id).get("behavior", WeaponData.Behavior.MELEE))
+				if (_beh == WeaponData.Behavior.PROJECTILE or _beh == WeaponData.Behavior.TURRET) \
+						and not out.has(k):
 					out.append(k)
 			_:
 				if k.begins_with("element_damage_"):
@@ -314,7 +318,7 @@ static func upgrade_benefit_reasons(apply: Dictionary, w_id: String) -> Array[St
 ## 口径与伤害结算逐条对齐：
 ##   全局乘区（武器伤害/攻击间隔/攻击范围/全元素/斩将）→ 全体武器受益；
 ##   单元素真解 → 按 WeaponData.element_of 五行 tags 匹配；
-##   破甲透劲（bonus_pierce）→ 只喂弹丸类（FloatingWeapon.p.pierce_left）；
+##   破甲透劲（bonus_pierce）→ 只喂弹丸类（悬浮 PROJECTILE + 机关台 TURRET，出膛都走 p.pierce_left）；
 ##   stat_scalings 键 → 武器配了该属性转化系数才算；
 ##   其余（闪避/拾取/金币/幸运/经验/重掷/反伤等玩家功能属性）→ 不作用于武器。
 ## 判据与 upgrade_benefit_reasons 同一条链：有链路才算受益，不另写一遍分支。

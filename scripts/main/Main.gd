@@ -230,7 +230,8 @@ func _ready() -> void:
 func resume_from_save() -> void:
 	var saved_phase := RunSave.load_into(GameManager)
 	if saved_phase < 0:
-		# 坏档降级：按没有存档处理，回落主菜单
+		# 坏档降级：按没有存档处理，回落主菜单（点按钮的时机 UI 已就绪，直接 toast 告知）
+		UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
 		RunSave.clear_save()
 		start_menu.open()
 		return

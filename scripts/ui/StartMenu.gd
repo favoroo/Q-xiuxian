@@ -75,6 +75,7 @@ const AUTHOR_TAP_COUNT := 5
 const AUTHOR_TAP_WINDOW := 3.0
 var _author_taps: int = 0
 var _author_last_tap_ms: int = 0
+var _corrupt_save_noted: bool = false   ## 续玩档坏档提示只弹一次（反复回菜单不刷屏）
 
 # Hero 大方块与内部控件
 var _hero_card: PanelContainer
@@ -703,6 +704,16 @@ func open() -> void:
 		var joy = parent_node.get_node_or_null("VirtualJoystick")
 		if joy != null:
 			joy.visible = false
+	# 坏档可见化（2026-10-24）：进度档读坏（autoload 期暂存）在这里补弹 toast；
+	# 续玩档「文件在但摘要解析不出」原先表现为按钮默默消失，玩家无从得知，一并提示。
+	# 一次性闸：同一次进程里坏档提示只弹一回，反复回菜单不刷屏。
+	if GameManager.pending_load_alert != "":
+		UpdateManager.show_toast(GameManager.pending_load_alert, GameStyle.BAD, 3.5)
+		GameManager.pending_load_alert = ""
+	elif not _corrupt_save_noted and RunSave.peek_summary().is_empty() \
+			and FileAccess.file_exists(RunSave.SAVE_PATH):
+		_corrupt_save_noted = true
+		UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
 	# 中断续玩：按存档有无决定「继续游戏」按钮的显隐与文案（无档藏按钮不留空位）
 	if _resume_btn != null and is_instance_valid(_resume_btn):
 		var summary := RunSave.peek_summary()

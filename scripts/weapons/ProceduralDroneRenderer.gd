@@ -10,17 +10,16 @@ extends Node2D
 ## 旧「冷冽国风」画法的柔和光晕 / 透光羽 / 流光点 / 飘带 / 云雷纹已全部砍除
 ## （_soft_glow 已删，本文件不再引用 GameStyle 取色）。
 ## 状态输入（宿主每帧灌入）全部保留，一律以硬边几何表达，不回退柔光：
-##   speed_ratio 驱动态度（飘带甩幅 / 灵尘）· bank_angle 只倾躯体组（足影不随动）·
+##   speed_ratio 驱动态度（焰苗摆幅 / 灵尘）· bank_angle 只倾躯体组（足影不随动）·
 ##   hp_ratio 低于 0.3 显墨色裂纹 · charge_ratio 显蓄力灵光球 ·
 ##   spawn_glow 出场一拍（撞色硬边六角环从外向本体收拢 + 方钉内聚）· _anim_time 相位。
 
 const BC = preload("res://scripts/weapons/shapes/BrutalistCommon.gd")
 
 ## 灵珑（祭坛灵兽）专属平涂配色：不挂五元素 tag，不进 BC.PAL，常量只落这一处
-const LING_BODY := Color(0.42, 0.80, 0.76)    ## 灵青主色（焰形真身大块）
-const LING_DEEP := Color(0.30, 0.62, 0.60)    ## 主色暗档（身侧飘带）
-const LING_ACCENT := Color(0.96, 0.85, 0.30)  ## 撞色（双角 / 蓄力球 / 出场环 / 星钉）
-const LING_PALE := Color(0.93, 0.97, 0.94)    ## 月白内焰（唯一亮层，平涂不透光）
+const LING_BODY := Color(0.42, 0.80, 0.76)    ## 灵青主色（圆灵真身大块）
+const LING_ACCENT := Color(0.96, 0.85, 0.30)  ## 撞色（金焰苗 / 灵尘双星 / 蓄力球 / 出场环 / 星钉）
+const LING_PALE := Color(0.93, 0.97, 0.94)    ## 月白脸窗（唯一亮层，平涂不透光）
 
 enum DroneKind {
 	LINGDIE,        ## 灵蝶：木色硬边四翅 + 翅尖撞色三角 + 墨身方头
@@ -29,7 +28,7 @@ enum DroneKind {
 	HAOJIN_LUN,     ## 昊金轮：旋转六棱轮盘 + 三根贯穿墨辐 + 撞色轴心
 	LIHUO_YA,       ## 离火鸦：火色硬翼 + 墨描圆身 + 撞色焰尾三杆
 	XUANWU_PEI,     ## 玄武佩：双环玉璧（主色宽环 + 撞色细环）+ 墨系绳
-	YUAN_LING,      ## 灵珑：祭坛召唤灵兽，焰形灵魄真身（平涂版：硬边焰身 + 撞色双角）
+	YUAN_LING,      ## 灵珑：祭坛召唤灵兽，圆球光灵真身（平涂版：正圆灵魄 + 金焰苗 + 双耳芽）
 	JINMING_LING,   ## 金鸣铃：白金铃身 + 口缘撞色带 + 反摆墨铃舌
 	MULING_OU,      ## 木灵偶：木色偶人 + 墨关节方钉 + 胸口撞色方章
 	BINGPO_ZHU,     ## 冰魄珠：六棱珠体 + 环绕六片冰晶三角 + 撞色内棱
@@ -42,10 +41,10 @@ enum DroneKind {
 @export var star: int = 1
 
 ## 速度权重（0=悬停 1=全速）：仅灵珑（YUAN_LING）消费，由宿主按实际移速灌入，
-## 驱动身侧飘带甩幅 / 焰尖摆幅 / 尾后移动方钉灵尘
+## 驱动焰苗摆幅 / 尾后移动方钉灵尘
 var speed_ratio: float = 0.0
 
-## 侧倾角（弧度）：仅灵珑消费 —— 按朝向系下的横向走位 bank，只倾躯体组（飘带/焰身/双角/
+## 侧倾角（弧度）：仅灵珑消费 —— 按朝向系下的横向走位 bank，只倾躯体组（耳芽/焰苗/
 ## 双眸/裂纹/蓄力球随动，足下影块与出场环不随）；宿主按 velocity.x * 朝向符号归一灌入，
 ## 左右镜像由 scale.x 承担
 var bank_angle: float = 0.0
@@ -61,6 +60,11 @@ var charge_ratio: float = 0.0
 ## 出场辉光（1→0 自减）：仅灵珑消费，宿主（SpiritBeast）召唤出场时灌 1 ——
 ## 撞色硬边六角环从外圈向本体收拢 + 六颗方钉内聚，衔接祭坛冲击环的「现身」一拍
 var spawn_glow: float = 0.0
+
+## 受击闪白（1→0 自减）：仅灵珑消费，宿主（SpiritBeast）受击时灌 1 ——
+## 平涂色块（圆身/耳芽/焰苗）整体向月白提亮一拍回落，墨环保持纯黑：
+## 不走宿主 modulate 全节点提亮（那会把墨描边一起提灰，毁野兽派轮廓）
+var hit_flash: float = 0.0
 
 var _anim_time: float = 0.0
 
@@ -86,6 +90,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_anim_time += delta
 	spawn_glow = maxf(0.0, spawn_glow - delta / 0.35)
+	hit_flash = maxf(0.0, hit_flash - delta / 0.16)
 	if _draw_phase <= 0.0:
 		_draw_phase = _redraw_interval()
 		redraw_count += 1
@@ -341,16 +346,20 @@ func _draw_jade_pendant() -> void:
 	BC.square(self, off + Vector2(10.5, 0.0), 1.4, BC.INK, 1.0)
 	BC.star_studs(self, star, off + Vector2(0.0, 10.5), off + Vector2(0.0, -10.5), accent)
 
-# ----------------- 7. 灵珑（祭坛灵兽：平涂版焰形灵魄） -----------------
-## 焰形灵魄「灵珑」野兽派转化（2026-10-24 平涂重绘）：保留上尖下圆的左右镜像对称
-## 焰形真身与全部状态输入，画风换硬边平涂 ——
-##   · 焰身一大块灵青平涂 + 粗墨描边 + 硬投影，内焰压一块月白（唯一亮层，平涂不透光）；
-##   · 头顶双角改撞色硬三角（打碎水滴剪影），身侧飘带改两段式硬折墨描杆（甩幅随 speed_ratio）；
-##   · 三层柔光晕圈 / 轨道光尘星子 / 焰心对旋道纹 / 额心道印 / 腮晕全部砍除；
-##   · 足下灵雾改硬边影块（低分段椭圆平涂暗影），出场辉光改撞色六角环收拢 + 方钉内聚；
-##   · 生命由灵目墨色浓淡与濒死墨裂纹传达，蓄力灵光球改撞色圆盘 + 墨方钉旋绕。
+# ----------------- 7. 灵珑（祭坛灵兽：圆球光灵） -----------------
+## 「灵珑」圆球光灵重做（2026-10-24 三次修改）：推倒人脸脸窗方案 —— 无脸圆球 +
+## 特征部件，形体语言对齐随行灵兽 PetData 的圆球光灵（灵动可爱口径），画风仍归
+## 野兽派平涂（硬投影 + 粗墨环），保留全部状态输入 ——
+##   · 正圆灵青圆盘（BC.disc），呼吸半径 13.5±0.8；生命低落整体转暗（无脸下生命由本体传达）；
+##   · 无脸：仅左上月白高光一点，随灵息呼吸明灭；
+##   · 头顶金焰苗（单块双焰舌硬边多边形，随 speed 摆幅摇曳）+ 耳芽两粒（深灵青小圆耳，
+##     画在圆身之前、根部藏进墨环后，修旧双角「浮针」断开感）；
+##   · 环绕灵尘双星（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前绕后遮挡，灵动一拍）；
+##   · 足下硬边影块、出场撞色六角环收拢 + 方钉内聚、濒死墨裂纹、蓄力撞色圆盘 +
+##     墨方钉旋绕、尾后移动灵尘全部保留。
 ## 本体沿 y 轴镜像对称，面朝 +x 语义由蓄力球与移动灵尘承担，scale.x 翻转后形态不变；
-## bank_angle 只倾躯体组（足影/出场环不随动），speed_ratio 驱动飘带甩幅 / 焰尖摆 / 尾后灵尘。
+## bank_angle 只倾躯体组（圆身旋转不变免转点，耳芽/焰苗/高光/裂纹/蓄力球随动，
+## 足影/出场环不随动），speed_ratio 驱动焰苗摆幅 / 尾后灵尘。
 func _draw_yuan_ling() -> void:
 	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）；濒死程度与灵息闪烁
 	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
@@ -358,6 +367,8 @@ func _draw_yuan_ling() -> void:
 	var flicker: float = 1.0 - low * (0.5 + 0.5 * sin(_anim_time * 14.0)) * 0.45
 	# 出场辉光：1→0 自减，硬边现身一拍
 	var sg: float = clampf(spawn_glow, 0.0, 1.0)
+	# 受击闪白：1→0 自减（约 0.16s），平涂块提亮回落
+	var hf: float = clampf(hit_flash, 0.0, 1.0)
 	# 常用色（撞色 / 墨，带 alpha 派生色多处用，先取好）
 	var acc := LING_ACCENT
 	var ink := BC.INK
@@ -387,60 +398,46 @@ func _draw_yuan_ling() -> void:
 			draw_rect(Rect2(sq_c - Vector2(hs, hs), Vector2(hs * 2.0, hs * 2.0)),
 				Color(acc.r, acc.g, acc.b, sg))
 
-	# 3. 身侧硬折飘带（左右各一：两段式墨描杆，甩幅随 speed_ratio —— 「态度」载体；随 bank）
-	var whip: float = 2.0 + 5.0 * speed_ratio
+	# 3. 耳芽两粒（深灵青小圆耳，画在圆身之前、根部藏进墨环后 —— 修旧双角「浮针」断开感；随 bank）
 	for side in [-1.0, 1.0]:
-		var sway1: float = sin(_anim_time * 6.0 + side * 1.3) * whip
-		var sway2: float = sin(_anim_time * 6.0 + side * 1.3 + 0.9) * whip
-		var rib := PackedVector2Array([
-			pivot + Vector2(side * core_r * 0.55, core_r * 0.28),
-			pivot + Vector2(side * (core_r * 0.55 + 8.0), core_r * 0.55 + sway1 * 0.5),
-			pivot + Vector2(side * (core_r * 0.55 + 15.0), core_r * 0.95 + sway2),
-		])
-		rib = _rot_pts(rib, pivot, bank_angle)
-		BC.bar(self, rib[0], rib[1], 2.6, LING_DEEP)
-		BC.bar(self, rib[1], rib[2], 1.8, LING_DEEP)
+		var ear_c := _rot_one(pivot + Vector2(side * core_r * 0.66, -core_r * 0.80), pivot, bank_angle)
+		draw_circle(ear_c, core_r * 0.20 + 1.1, ink)
+		draw_circle(ear_c, core_r * 0.20, LING_BODY.darkened(0.25).lerp(LING_PALE, hf * 0.75))
 
-	# 4. 头顶双角（撞色硬三角，随呼吸轻摇，打碎水滴剪影；随 bank）
+	# 4. 环绕灵尘双星（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前 —— 绕到身后被灵魄
+	#    挡住、绕到两侧探头，是真「环绕」而不是贴面漂浮；随 bank）
+	for i in range(2):
+		var oa: float = _anim_time * 1.7 + PI * float(i)
+		var op := _rot_one(pivot + Vector2(cos(oa) * (core_r + 7.5),
+			sin(oa) * (core_r * 0.32 + 1.0) - 1.0), pivot, bank_angle)
+		var osz: float = 1.8 - 0.4 * float(i)
+		draw_rect(Rect2(op - Vector2(osz, osz), Vector2(osz * 2.0, osz * 2.0)),
+			Color(acc.r, acc.g, acc.b, 0.9))
+
+	# 5. 正圆灵魄身（圆对 bank 旋转不变，disc 免转点；硬投影 + 粗墨环 + 灵青平涂；
+	#    生命低落时圆身整体转暗 —— 无脸口径下生命仍由本体传达）
+	var body_col: Color = LING_BODY.darkened(0.30 * (1.0 - spirit)).lerp(LING_PALE, hf * 0.75)
+	BC.disc(self, pivot, core_r, body_col, 2.4)
+
+	# 6. 头顶金焰苗（单块双焰舌硬边多边形：主舌高挑、侧舌外倾，根部压住墨环；
+	#    随 speed 摆幅摇曳；随 bank）
 	var crest_sway: float = sin(_anim_time * 2.4) * (0.06 + 0.12 * speed_ratio)
-	for side in [-1.0, 1.0]:
-		var horn := PackedVector2Array([
-			pivot + Vector2(side * core_r * 0.18, -core_r * 0.86),
-			pivot + Vector2(side * core_r * 0.62 + crest_sway * 5.0, -core_r * 1.62),
-			pivot + Vector2(side * core_r * 0.44, -core_r * 0.98),
-		])
-		BC.flat(self, _rot_pts(horn, pivot, bank_angle), acc, 1.4)
+	var crown := PackedVector2Array([
+		pivot + Vector2(-core_r * 0.26, -core_r * 0.62),
+		pivot + Vector2(-core_r * 0.30 - crest_sway * 6.0, -core_r * 1.12),
+		pivot + Vector2(-core_r * 0.08, -core_r * 0.92),
+		pivot + Vector2(core_r * 0.10 + crest_sway * 18.0, -core_r * 1.52),
+		pivot + Vector2(core_r * 0.22, -core_r * 0.86),
+		pivot + Vector2(core_r * 0.26, -core_r * 0.62),
+	])
+	BC.flat(self, _rot_pts(crown, pivot, bank_angle), acc.lerp(LING_PALE, hf * 0.6), 1.4)
 
-	# 5. 焰形灵身（上尖下圆对称轮廓：右半点阵镜像拼合，焰尖随呼吸轻摆；随 bank）
-	var tip_sway: float = sin(_anim_time * 2.2) * (0.8 + 1.2 * speed_ratio)
-	var half: Array[Vector2] = [
-		Vector2(0.00, 1.02), Vector2(0.58, 0.88), Vector2(0.94, 0.42),
-		Vector2(0.90, -0.18), Vector2(0.66, -0.68), Vector2(0.34, -1.08), Vector2(0.00, -1.52),
-	]
-	var flame := PackedVector2Array()
-	for p in half:
-		var f: float = clampf(-p.y / 1.52, 0.0, 1.0)
-		flame.append(pivot + Vector2(p.x * core_r + tip_sway * f, p.y * core_r))
-	for i in range(half.size() - 2, -1, -1):
-		var p2: Vector2 = half[i]
-		var f2: float = clampf(-p2.y / 1.52, 0.0, 1.0)
-		flame.append(pivot + Vector2(-p2.x * core_r + tip_sway * f2, p2.y * core_r))
-	BC.flat(self, _rot_pts(flame, pivot, bank_angle), LING_BODY, 2.4)
-	# 内焰月白亮层（同轮廓缩小下沉，平涂不透光）
-	var inner := PackedVector2Array()
-	for q in flame:
-		inner.append(pivot + (q - pivot) * 0.58 + Vector2(0.0, core_r * 0.16))
-	BC.flat(self, _rot_pts(inner, pivot, bank_angle), LING_PALE, 1.2)
+	# 7. 月白高光一点（无脸口径：单点亮斑代替五官，随灵息呼吸明灭；随 bank）
+	var hl_a: float = 0.55 + 0.25 * sin(_anim_time * 2.6)
+	draw_circle(_rot_one(pivot + Vector2(-core_r * 0.30, -core_r * 0.34), pivot, bank_angle),
+		core_r * 0.17, Color(LING_PALE.r, LING_PALE.g, LING_PALE.b, hl_a))
 
-	# 6. 灵动双眸（墨圆底 + 月白方高光；生命越低越暗 —— 生命由本体传达；随 bank）
-	var eye_a: float = (0.35 + 0.65 * clampf(hp_ratio, 0.0, 1.0)) * flicker
-	for side in [-1.0, 1.0]:
-		var eye_pos := _rot_one(pivot + Vector2(side * 4.6, -core_r * 0.10), pivot, bank_angle)
-		draw_circle(eye_pos, 2.4, Color(ink.r, ink.g, ink.b, eye_a))
-		draw_rect(Rect2(eye_pos + Vector2(-1.0, -1.4), Vector2(1.4, 1.4)),
-			Color(LING_PALE.r, LING_PALE.g, LING_PALE.b, eye_a))
-
-	# 7. 濒死裂纹（hp_ratio < 0.3 浮现的墨色裂痕，左右镜像一对，随灵息闪烁；随 bank）
+	# 8. 濒死裂纹（hp_ratio < 0.3 浮现的墨色裂痕，左右镜像一对，随灵息闪烁；随 bank）
 	if low > 0.0:
 		var crack_a: float = (0.35 + 0.45 * low) * flicker
 		var crack_col := Color(ink.r, ink.g, ink.b, crack_a)
@@ -454,7 +451,7 @@ func _draw_yuan_ling() -> void:
 			crack_l.append(Vector2(pivot.x - (p3.x - pivot.x), p3.y))
 		draw_polyline(_rot_pts(crack_l, pivot, bank_angle), crack_col, 1.3, true)
 
-	# 8. 面前蓄力灵光球（charge_ratio 驱动：撞色圆盘涨大 + 三颗墨方钉旋绕，硬边零辉光；随 bank）
+	# 9. 面前蓄力灵光球（charge_ratio 驱动：撞色圆盘涨大 + 三颗墨方钉旋绕，硬边零辉光；随 bank）
 	if charge_ratio > 0.01:
 		var cp := _rot_one(pivot + Vector2(18.5, 0.0), pivot, bank_angle)
 		var cr: float = 2.0 + 5.0 * charge_ratio
@@ -466,7 +463,7 @@ func _draw_yuan_ling() -> void:
 			draw_rect(Rect2(sq_p - Vector2(1.2, 1.2), Vector2(2.4, 2.4)),
 				Color(ink.r, ink.g, ink.b, ca))
 
-	# 9. 移动灵尘（speed_ratio > 0.2：尾后三颗撞色小方钉，随速度显隐）
+	# 10. 移动灵尘（speed_ratio > 0.2：尾后三颗撞色小方钉，随速度显隐）
 	if speed_ratio > 0.2:
 		for i in range(3):
 			var di := float(i)
@@ -476,10 +473,10 @@ func _draw_yuan_ling() -> void:
 			draw_rect(Rect2(mp - Vector2(1.4, 1.4) * ds, Vector2(2.8, 2.8) * ds),
 				Color(acc.r, acc.g, acc.b, 0.85 * ds))
 
-	# 10. 升星方钉（焰身两肩；灵兽宿主不设 star，恒 1 时自动不画）
+	# 11. 升星方钉（耳芽中心；灵兽宿主不设 star，恒 1 时自动不画）
 	BC.star_studs(self, star,
-		_rot_one(pivot + Vector2(-4.0, -core_r * 0.55), pivot, bank_angle),
-		_rot_one(pivot + Vector2(4.0, -core_r * 0.55), pivot, bank_angle), acc)
+		_rot_one(pivot + Vector2(-core_r * 0.66, -core_r * 0.80), pivot, bank_angle),
+		_rot_one(pivot + Vector2(core_r * 0.66, -core_r * 0.80), pivot, bank_angle), acc)
 
 # ----------------- 8. 金鸣铃（金 · 白金铃身 + 反摆墨铃舌） -----------------
 ## 旧画法转化：云雷横纹/符点莹光/声波弧全砍。白金铃身平涂 + 口缘撞色带 + 墨拱钮，

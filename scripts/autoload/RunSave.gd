@@ -84,6 +84,9 @@ static func save_from(gm: Node, phase: int) -> bool:
 		for w in p.get_equipped_weapons_data():
 			ws.append({"id": String(w.get("id", "")), "star": int(w.get("star", 1))})
 	if ws.is_empty():
+		# 该分支只在异常态（跑局中却拿不到上阵武器）触发，正常流程至少 1 把；静默会导致
+		# 「自动存档看似在跑但从没落盘」的隐性丢档，必须留痕
+		push_warning("RunSave: 上阵武器列表为空，本次局内存档跳过（wave=%d）" % gm.wave_number)
 		return false
 	d["weapons"] = ws
 	d["phase"] = phase
