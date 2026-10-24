@@ -261,6 +261,12 @@ static func lifesteal_weapon_mult(behavior: int) -> float:
 		_:
 			return LIFESTEAL_MULT_RAPID
 
+## 吸血总触发概率 =（本体 + 木系羁绊 + 技能短时加成）× 攻击方式系数（纯函数）。
+## 技能加成与加点/道具同口径：只加触发概率、每次仍回 1 点，照样吃武器类型折扣与每秒全局闸。
+## 用加法而不是乘法：0 吸血的角色也能吃到无敌的技能加成，乘法会在无吸血时整条失效。
+static func lifesteal_chance(base: float, synergy: float, buff: float, behavior: int) -> float:
+	return maxf(0.0, base + synergy + buff) * lifesteal_weapon_mult(behavior)
+
 ## 加点 apply 字段 → 武器 stat_scalings 键的映射（upgrade_benefits_weapon 用）。
 ## 与上面 weapon_stat_bonus 的折算 match 同源：武器 stat_scalings 里配了这个键才真吃这条属性。
 ## max_hp→max_hp_bonus / crit_mult→crit_mult_bonus / move_speed_mult→move_speed_bonus 是三处异名。

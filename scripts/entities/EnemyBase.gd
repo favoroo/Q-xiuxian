@@ -1845,16 +1845,6 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 击杀点反馈由 _die() 的死亡爆散一力承担（视觉不丢，只是不再双发）
 	var lethal := current_hp <= 0.0
 
-	# 金光护体·金光剑气附伤：无敌期间直击命中敌人附带金光剑气打击与金芒斩击
-	if not from_dot and amount > 0.0 and GameManager.buff_sword_ki_ratio > 0.0 and not lethal:
-		var ki_dmg := amount * GameManager.buff_sword_ki_ratio
-		current_hp -= ki_dmg
-		lethal = current_hp <= 0.0
-		if not _offscreen:
-			DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -18.0), int(ki_dmg), true, "剑气")
-			FxParticlePool.burst(FxParticlePool.Kind.HIT_SPARK, global_position, "gold", 1.25, false, knockback.normalized())
-			AudioManager.play_sfx("enemy_hit_crit", 0.85, 1.25)
-
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
 	var elite_scale: float = HIT_KB_ELITE_SCALE if is_elite else 1.0
 	var crit_kb_mult: float = HIT_KB_CRIT_MULT if is_crit else 1.0

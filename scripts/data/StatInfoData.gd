@@ -224,6 +224,8 @@ static func rules(id: String) -> Array[String]:
 				int(BalanceTargeting.LIFESTEAL_MULT_RAPID * 100.0)])
 			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
 			out.append("木系羁绊的加成与升级、道具合在一起算，共用同一个每秒闸。")
+			out.append("无敌技能期间额外 +%d%% 触发概率（与其他来源叠加），每次仍只回 1 点。" % [
+				int(round(float(SkillData.get_def("aegis").get("lifesteal_boost", 0.0)) * 100.0))])
 		"damage":
 			out.append("面板 = 升级/道具/角色乘区 × 流派羁绊乘区，以 100% 为基准。")
 			out.append("暴击是另一个乘区，与这一条相乘，不互相打折。")

@@ -84,9 +84,9 @@ static func haste(p, st: Dictionary) -> void:
 static func aegis(p, st: Dictionary) -> void:
 	var dur: float = float(st["duration"])
 	p.invulnerable_time = maxf(p.invulnerable_time, dur)
-	# 金光护体：无敌期间武器击退力度大幅提升，并激活金光剑气附伤（活跃窗口走完由 _on_skill_effect_end 精确回滚）
+	# 金光护体：无敌期间武器击退力度大幅提升、吸血触发概率提升（活跃窗口走完由 _on_skill_effect_end 精确回滚）
 	GameManager.buff_knockback_mult = float(st.get("knockback_boost", 1.0))
-	GameManager.buff_sword_ki_ratio = float(st.get("sword_ki_ratio", 0.50))
+	GameManager.buff_lifesteal_boost = float(st.get("lifesteal_boost", 0.50))
 	p.play_squash(Vector2(0.82, 1.22), 0.24)
 	if p.skill_vfx != null:
 		p.skill_vfx.on_aegis_start(dur)

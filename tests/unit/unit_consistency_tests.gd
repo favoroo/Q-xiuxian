@@ -287,7 +287,7 @@ func _test_skill_desc_apply() -> void:
 			if not hit:
 				probs.append("power=%s 与文案百分比不一致（期望 %s%%）" % [d["power"], want])
 		# 附加效果的数值也要在文案里对得上账（2026-10-11 技能改版新增字段）
-		for extra_key in ["dodge_add", "pet_heal_pct", "sword_ki_ratio"]:
+		for extra_key in ["dodge_add", "pet_heal_pct", "lifesteal_boost"]:
 			if d.has(extra_key) and float(d[extra_key]) > 0.0 and "%" in desc:
 				var want_extra := float(d[extra_key]) * 100.0
 				var hit := false

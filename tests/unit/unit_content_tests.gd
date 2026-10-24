@@ -260,6 +260,13 @@ func _test_new_stat_fields() -> void:
 	_c.near(BalanceTargeting.lifesteal_weapon_mult(WeaponData.Behavior.BURST), 0.4, EPS, "范围落雷吸血系数 40%")
 	for rapid in [WeaponData.Behavior.DRONE, WeaponData.Behavior.TURRET, WeaponData.Behavior.BEAM, WeaponData.Behavior.CONE]:
 		_c.near(BalanceTargeting.lifesteal_weapon_mult(rapid), 0.25, EPS, "高频接触类（%d）吸血系数 25%%" % rapid)
+	# 无敌技能加成走同一条链路：加法叠加本体+羁绊后，再乘攻击方式折扣（0 吸血的角色也能吃到）
+	_c.near(BalanceTargeting.lifesteal_chance(0.0, 0.0, 0.5, WeaponData.Behavior.MELEE), 0.5, EPS,
+			"无吸血基础时无敌加成给出 50% 近战触发概率")
+	_c.near(BalanceTargeting.lifesteal_chance(0.0, 0.0, 0.5, WeaponData.Behavior.PROJECTILE), 0.2, EPS,
+			"无敌加成同样吃远程 40% 折扣")
+	_c.near(BalanceTargeting.lifesteal_chance(0.3, 0.1, 0.5, WeaponData.Behavior.DRONE), 0.225, EPS,
+			"本体+羁绊+技能加成先相加再乘高频 25% 折扣")
 
 func _test_item_system() -> void:
 	# 数据表完整性：apply 键都在白名单内、档位合法、图标就位、定价为正

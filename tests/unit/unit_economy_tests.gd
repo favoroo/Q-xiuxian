@@ -51,10 +51,10 @@ func _test_pricing() -> void:
 
 	# 回气丹回多少：货架卡、气血徽记拆解与 ShopSystem 的 heal() 三处共用这一条，
 	# 卡上不许印一个兑现不了的量（缺血不够就按缺血截断，满血就是 0）
-	_c.near(GameBalance.potion_heal_amount(120.0), 60.0, EPS, "名义量 = 上限 × POTION_HEAL_RATIO")
+	_c.near(GameBalance.potion_heal_amount(120.0), 30.0, EPS, "名义量 = 上限 × POTION_HEAL_RATIO（0.25：原 0.5 太顶，对齐铜匣葫芦档）")
 	_c.near(GameBalance.potion_heal_amount(0.0), 0.0, EPS, "空载（没有 Player）回 0，不出 NaN")
 	_c.near(GameBalance.potion_effective_heal(120.0, 100.0), 20.0, EPS, "缺血 20 → 只回得上 20")
-	_c.near(GameBalance.potion_effective_heal(120.0, 50.0), 60.0, EPS, "缺血够 → 回满名义量")
+	_c.near(GameBalance.potion_effective_heal(120.0, 50.0), 30.0, EPS, "缺血够 → 回满名义量（0.25：原 60 太顶）")
 	_c.near(GameBalance.potion_effective_heal(120.0, 120.0), 0.0, EPS, "满血 → 0（买就是白花钱）")
 	_c.near(GameBalance.potion_effective_heal(0.0, 0.0), 0.0, EPS, "空载 → 0")
 	# 危险档只有一把尺：HUD 血字与灵石阁徽记都走 hp_is_low，阈值挪了两边一起动

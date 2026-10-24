@@ -458,7 +458,7 @@ var buff_knockback_mult: float = 1.0   ## 金光护体短时击退乘区（knock
 var force_crit_left: float = 0.0       ## 冲刺必暴剩余秒（roll_crit 消费，Player 每帧递减，>0 时所有攻击必暴）
 var shadow_amp_mult: float = 1.0       ## 影层增伤乘区（影者攒着就生效：Player 在攒层/兑现两写点按 ShadowStepData.amp_mult 维护，落地清空回 1.0）
 var buff_damage_mult: float = 1.0      ## 服丹短时全伤害乘区（FloatingWeapon._final_damage 消费，到期由 Player 精确回 1.0）
-var buff_sword_ki_ratio: float = 0.0   ## 金光护体短时金光剑气附伤比例（EnemyBase.take_damage 消费，到期回 0.0）
+var buff_lifesteal_boost: float = 0.0  ## 金光护体短时吸血概率加成（try_lifesteal 消费，到期回 0.0）
 
 # 武器羁绊加成（由 recalc_synergies 每回合/换装时重算）
 var stat_bonus_pierce: int = 0      ## 升级/道具：弹丸额外穿透基础
@@ -839,15 +839,20 @@ func get_weapon_stat_bonus(w_id: String, star: int = 1) -> float:
 ## behavior：命中武器的攻击方式（WeaponData.Behavior）。吸血概率按武器类型打折：
 ##   近战/横扫全额、远程/范围 40%、环绕/机关/光束/喷吐 25%（算式见 BalanceTargeting.lifesteal_weapon_mult）。
 ##   不分类时高频武器会独吞每秒闸，近战反而拿不到几口，与「贴脸换续航」的意图相反。
+## buff_lifesteal_boost 是无敌技能窗口内的加法加成，与本体/羁绊同一条链路，走同一份折扣与每秒闸。
 func try_lifesteal(behavior: int = WeaponData.Behavior.MELEE) -> void:
-	var total_ls := (lifesteal + synergy_lifesteal) * BalanceTargeting.lifesteal_weapon_mult(behavior)
+	var total_ls := BalanceTargeting.lifesteal_chance(
+			lifesteal, synergy_lifesteal, buff_lifesteal_boost, behavior)
 	if total_ls <= 0.0 or player == null or not is_instance_valid(player):
 		return
 	if _lifesteal_procs >= LIFESTEAL_MAX_PER_SEC:
 		return
 	if rng.randf() < total_ls:
 		_lifesteal_procs += 1
-		player.heal(1.0, true)
+		var gained = player.heal(1.0, true)
+		# 只有无敌窗口才发世界层反馈；顶满血 gained=0 不弹假跳字（与 heal 的记账口径一致）
+		if buff_lifesteal_boost > 0.0 and float(gained) > 0.0:
+			player.call("on_lifesteal_proc")
 
 ## 回合间收益结算：无偿发放等额金币+经验；蛮兵的杀气让收益每回合流失；随后收益自我复利（增长截止回合见常量区）
 ## budget_comp_exp：刷怪预算未花完部分的折算经验补差（WaveSpawner 传入，BalanceEconomy.budget_compensation_exp），

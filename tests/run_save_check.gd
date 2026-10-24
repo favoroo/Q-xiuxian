@@ -83,7 +83,7 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		"is_game_over",           # 有局才有存档，存档时必为 false
 		# —— 技能 buff 层：短时增益到期归零，恢复即空（对玩家有利）——
 		"buff_move_speed_mult", "buff_attack_speed_mult", "buff_dodge",
-		"buff_knockback_mult", "buff_damage_mult", "buff_sword_ki_ratio", "force_crit_left", "shadow_amp_mult",
+		"buff_knockback_mult", "buff_damage_mult", "buff_lifesteal_boost", "force_crit_left", "shadow_amp_mult",
 		"buff_pickup_range_mult",
 		# —— 散修角色专属被动：读档按 cultivator_id 重走 CultivatorSystem.apply_modifiers 还原 ——
 		"scattered_mode", "scattered_bonus_per_class", "scattered_penalty_per_synergy",

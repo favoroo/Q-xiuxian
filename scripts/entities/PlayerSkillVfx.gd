@@ -5,7 +5,8 @@ extends Node2D
 ## 负责表现角色在施放技能瞬间与增益持续期间的国风空灵修仙视觉效果：
 ##   1. 金光护体 (aegis): 贴合身形的暖金半透明椭球护罩（罩体填充 + 球面纬线 + 亮边高光 +
 ##      公转能量流光 + 呼吸脉动 + 弹出登场 + 粒子化崩解碎散）——唯一允许低透明罩体填充的技能，
-##      填充 alpha 压在 0.12 以内保持通透，杜绝"死皮感"的大面积糊罩
+##      填充 alpha 压在 0.12 以内保持通透，杜绝"死皮感"的大面积糊罩；
+##      窗口内吸血触发时罩壁泛涟漪、数道灵光收进体内（吸血概率加成的可见回执）
 ##   2. 疾风咒 (haste): 脚下双层疾风轮 + 贴身螺旋上升气流 + 向上生腾的风丝灵气粒子
 ##      （不环身画法阵、不遮角色，与护罩构图彻底区分）
 ##   3. 神行术 (gale): 御风破空矢量身法虚影 + 脚底透视双层风轮 + 飘逸风灵飘带
@@ -28,6 +29,9 @@ const SHIELD_CENTER := Vector2(0.0, 3.0)
 const SHIELD_RX := 18.0
 const SHIELD_RY := 28.0
 const AEGIS_APPEAR_DUR := 0.16              ## 护罩弹出登场时长
+const AEGIS_FEED_LIFE := 0.32               ## 吸血灵光从罩壁收进体内的单程时长
+const AEGIS_FEED_COUNT := 3                 ## 每次吸血触发的内收灵光道数
+const AEGIS_FEED_FLASH_DECAY := 3.5         ## 吸血涟漪强度每秒衰减（1→0 约 0.29 秒）
 
 ## 疾风咒脚下疾风轮几何（锚定真实脚底 y≈22）
 const HASTE_FEET := Vector2(0.0, 22.0)
@@ -56,6 +60,8 @@ var aegis_rot: float = 0.0
 var aegis_appear: float = 1.0  ## 罩体弹出登场进度 0→1（1 为稳态）
 var aegis_shatter_progress: float = -1.0  ## >=0 时播放消散碎裂动画
 var aegis_shatter_sparks: Array[Dictionary] = [] ## {pos, vel, alpha, size}
+var aegis_feed_flash: float = 0.0            ## 吸血涟漪强度 1→0（驱动罩壁外扩环与填充提亮）
+var aegis_feeds: Array[Dictionary] = []      ## {ang, t} 从罩壁收向体内的灵光，t 0→1
 
 # 2. 疾风咒状态
 var haste_active: bool = false
@@ -236,10 +242,21 @@ func on_aegis_start(duration: float) -> void:
 	aegis_appear = 0.0
 	aegis_shatter_progress = -1.0
 	aegis_shatter_sparks.clear()
+	aegis_feed_flash = 0.0
+	aegis_feeds.clear()
 	_notify_procedural_view("aegis", true, 1.0)
 	# 释放瞬间触发对应色粒子（金光护体：浩然金 / FX_HDR_GOLD）
 	var center_pos: Vector2 = player.global_position + (Vector2(SHIELD_CENTER.x, SHIELD_CENTER.y * _body_scale.y) if player != null else Vector2.ZERO)
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, center_pos, "gold", 1.1, true)
+	queue_redraw()
+
+## 无敌期间吸血生效：罩壁泛起一圈暖金涟漪，并从罩壁追加数道灵光收向体内（回血跳字由 Player 负责）
+func on_lifesteal_proc() -> void:
+	if not aegis_active:
+		return
+	aegis_feed_flash = 1.0
+	for i in range(AEGIS_FEED_COUNT):
+		aegis_feeds.append({"ang": randf() * TAU, "t": 0.0})
 	queue_redraw()
 
 ## 回春术施放（改灵光四周螺旋汇聚：空洞骑士 Focus 汇聚感）
@@ -397,12 +414,21 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 	if aegis_active:
 		needs_redraw = true
 		aegis_rot += delta * 2.5
+		# 吸血涟漪与内收灵光（纯表现态，随护体窗口一起收尾）
+		aegis_feed_flash = maxf(0.0, aegis_feed_flash - delta * AEGIS_FEED_FLASH_DECAY)
+		for fi in range(aegis_feeds.size() - 1, -1, -1):
+			var feed: Dictionary = aegis_feeds[fi]
+			feed["t"] = float(feed["t"]) + delta / AEGIS_FEED_LIFE
+			if float(feed["t"]) >= 1.0:
+				aegis_feeds.remove_at(fi)
 		if aegis_appear < 1.0:
 			aegis_appear = minf(1.0, aegis_appear + delta / AEGIS_APPEAR_DUR)
 		aegis_timer -= delta
 		if aegis_timer <= 0.0:
 			aegis_active = false
 			aegis_shatter_progress = 0.0  ## 启动消散碎裂动效
+			aegis_feed_flash = 0.0
+			aegis_feeds.clear()
 			_notify_procedural_view("aegis", false)
 			# 生成崩散碎星粒子（从护罩轮廓向四周迸散，随体型缩放）
 			aegis_shatter_sparks.clear()
@@ -1012,13 +1038,14 @@ func _draw_aegis_shield() -> void:
 
 		var col_edge := GameStyle.FX_HDR_GOLD  # 接 FX_HDR_GOLD 超白浩然金描边
 		var col_main := GameStyle.AURUM        # 暖金主色
+		var feed := clampf(aegis_feed_flash, 0.0, 1.0)  # 吸血涟漪强度 1→0
 
-		# 1. 罩体半透明填充（极低 alpha，通透不糊人）
+		# 1. 罩体半透明填充（极低 alpha，通透不糊人；吸血触发时随涟漪轻微提亮）
 		var body_pts := PackedVector2Array()
 		for i in range(33):
 			var a := float(i) * (TAU / 32.0)
 			body_pts.append(c + Vector2(cos(a) * s_rx, sin(a) * s_ry))
-		draw_colored_polygon(body_pts, Color(col_main.r, col_main.g, col_main.b, 0.10 * fade))
+		draw_colored_polygon(body_pts, Color(col_main.r, col_main.g, col_main.b, (0.10 + 0.07 * feed) * fade))
 
 		# 2. 球面纬线（3 条按椭球截面收窄的透视扁弧，撑起立体罩感）
 		for k in range(3):
@@ -1041,6 +1068,15 @@ func _draw_aegis_shield() -> void:
 		draw_polyline(rim_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.95 * fade), 2.2, true)
 		draw_polyline(rim_in_pts, Color(1.0, 1.0, 1.0, 0.38 * fade), 1.0, true)
 
+		# 3.5 吸血涟漪：罩壁外扩一圈暖金细环（强度 1→0 时向外扩散并淡出）
+		if feed > 0.001:
+			var rip := 1.0 + (1.0 - feed) * 0.22
+			var ripple_pts := PackedVector2Array()
+			for i in range(33):
+				var a := float(i) * (TAU / 32.0)
+				ripple_pts.append(c + Vector2(cos(a) * s_rx * rip, sin(a) * s_ry * rip))
+			draw_polyline(ripple_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.65 * feed * fade), 2.6, true)
+
 		# 4. 左上高光弧（光源反射，强化球体受光）
 		var hl_pts := PackedVector2Array()
 		for i in range(13):
@@ -1056,6 +1092,18 @@ func _draw_aegis_shield() -> void:
 			draw_line(fp_prev, fp, Color(col_edge.r, col_edge.g, col_edge.b, 0.6 * fade), 1.6, true)
 			draw_circle(fp, 2.1, Color(col_edge.r, col_edge.g, col_edge.b, 0.92 * fade))
 			draw_circle(fp, 1.0, Color(1.0, 1.0, 1.0, 0.95 * fade))
+
+		# 5.5 吸血灵光内收：从罩壁收向角色体内（t 0→1，拖尾朝罩壁、头端淡入身体）
+		for fd in aegis_feeds:
+			var at := clampf(float(fd["t"]), 0.0, 1.0)
+			var f_ang := float(fd["ang"])
+			var rim_pos := Vector2(cos(f_ang) * s_rx, sin(f_ang) * s_ry)
+			var head := rim_pos.lerp(c, at)
+			var tail := rim_pos.lerp(c, maxf(0.0, at - 0.22))
+			var f_fade := (1.0 - at) * fade
+			draw_line(tail, head, Color(col_edge.r, col_edge.g, col_edge.b, 0.55 * f_fade), 1.6, true)
+			draw_circle(head, 1.9, Color(col_edge.r, col_edge.g, col_edge.b, 0.90 * f_fade))
+			draw_circle(head, 0.9, Color(1.0, 1.0, 1.0, 0.90 * f_fade))
 
 		# 6. 脚底落地光晕（罩体接地暗示，替代旧金莲大阵）
 		var ground_y := c.y + s_ry * 0.86

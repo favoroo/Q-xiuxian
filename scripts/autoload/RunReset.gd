@@ -120,7 +120,7 @@ static func reset(gm: Node) -> void:
 	gm.buff_dodge = 0.0
 	gm.buff_knockback_mult = 1.0
 	gm.buff_damage_mult = 1.0
-	gm.buff_sword_ki_ratio = 0.0
+	gm.buff_lifesteal_boost = 0.0
 	gm.force_crit_left = 0.0
 	gm.shadow_amp_mult = 1.0
 	gm._exp_chain = GameBalance.EXP_FIRST_LEVEL

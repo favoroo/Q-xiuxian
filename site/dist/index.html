@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>剑士</title>
-<meta name="description" content="《剑士》是一款修仙题材的俯视角自动攻击幸存者游戏。20 名角色、70 件武器、103 件道具、7 只灵兽，武器自动索敌，你只管走位与构筑。浏览器直接试玩，安卓手机免费下载。">
+<meta name="description" content="《剑士》是一款修仙题材的俯视角自动攻击幸存者游戏。21 名角色、70 件武器、102 件道具、7 只灵兽，武器自动索敌，你只管走位与构筑。浏览器直接试玩，安卓手机免费下载。">
 <meta name="theme-color" content="#000000">
 <meta property="og:title" content="剑士">
 <meta property="og:description" content="俯视角自动攻击幸存者。选角色、配武器、带灵兽、扛过 20 波妖魔。浏览器可直接试玩。">
-<meta property="og:image" content="img/shot_field.png?v=24">
+<meta property="og:image" content="img/shot_field.png?v=27">
 <meta property="og:type" content="website">
 <link rel="icon" href="img/app_icon.png">
-<link rel="stylesheet" href="tokens.css?v=24">
-<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="tokens.css?v=27">
+<link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
 
@@ -57,8 +57,9 @@
       </div>
       <figure class="hero-shot">
         <div class="frame">
-          <video class="hero-video" controls playsinline preload="metadata" poster="img/shot_field.png?v=24" width="960" height="540">
-            <source src="video/promo.mp4?v=24" type="video/mp4">
+          <video class="hero-video" controls playsinline preload="none" poster="img/shot_field.webp?v=27" width="960" height="540">
+            <source src="video/promo.av1.mp4?v=27" type='video/mp4; codecs="av01.0.04M.08"'>
+            <source src="video/promo.mp4?v=27" type="video/mp4">
             您的浏览器不支持视频播放。
           </video>
         </div>
@@ -71,9 +72,9 @@
   <section class="band">
     <div class="wrap band-in">
       <div class="stat"><b data-count="waves">20</b><span>波通关</span></div>
-      <div class="stat"><b data-count="roles">20</b><span>名角色</span></div>
+      <div class="stat"><b data-count="roles">21</b><span>名角色</span></div>
       <div class="stat"><b data-count="weapons">70</b><span>件武器</span></div>
-      <div class="stat"><b data-count="items">103</b><span>件道具</span></div>
+      <div class="stat"><b data-count="items">102</b><span>件道具</span></div>
       <div class="stat"><b data-count="pets">7</b><span>只灵兽</span></div>
       <div class="stat"><b data-count="skills">7</b><span>个技能</span></div>
     </div>
@@ -86,22 +87,22 @@
       <div class="sec-body slab">
         <div class="cards">
           <article class="card plate">
-            <div class="frame"><img src="img/shot_combat.png?v=24" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_combat.webp?v=27" alt="实机：角色在敌潮中自动攻击，伤害数字跳出" width="960" height="540" loading="lazy"></div>
             <h3>自动战斗</h3>
             <p>身上的武器自己找目标、自己出手。你要做的是别被围住，以及决定下一步买什么。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_alloc.png?v=24" alt="实机：回合末升级加点界面，一屏 5 张候选卡" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_alloc.webp?v=27" alt="实机：回合末升级加点界面，一屏 5 张候选卡" width="960" height="540" loading="lazy"></div>
             <h3>升级加点</h3>
             <p>每波结束后从 <b data-rule="play.offer">5</b> 张卡里选 1 张，不满意可以免费刷新 <b data-rule="play.free_reroll">1</b> 次。成长方向全在你手里。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_shop.png?v=24" alt="实机：商店界面，5 个货架格陈列武器、道具与灵兽" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_shop.webp?v=27" alt="实机：商店界面，5 个货架格陈列武器、道具与灵兽" width="960" height="540" loading="lazy"></div>
             <h3>商店</h3>
             <p>波与波之间用金币买武器、道具和灵兽，<b data-rule="play.shop_slots">5</b> 个货架，看不上可以花钱重掷，也能锁定留到下一波。</p>
           </article>
           <article class="card plate">
-            <div class="frame"><img src="img/shot_synergy.png?v=24" alt="实机：等级与属性面板，右侧列出羁绊与元素共鸣的阶梯加成" width="960" height="540" loading="lazy"></div>
+            <div class="frame"><img src="img/shot_synergy.webp?v=27" alt="实机：等级与属性面板，右侧列出羁绊与元素共鸣的阶梯加成" width="960" height="540" loading="lazy"></div>
             <h3>羁绊与元素共鸣</h3>
             <p>集齐 2 / 4 / 6 件同系武器解锁阶梯加成。同一把武器既算器类也算五行，构筑会互相咬合。</p>
           </article>
@@ -113,7 +114,7 @@
   <section id="roles" class="section">
     <div class="wrap">
       <h2 class="sec-title">角色</h2>
-      <p class="sec-sub"><span data-count="roles">20</span> 名角色，每一个都是一笔交易：给一条很爽的加成，同时收一样很疼的代价。每人都能带一个随行技能，个别角色还有第二个。</p>
+      <p class="sec-sub"><span data-count="roles">21</span> 名角色，每一个都是一笔交易：给一条很爽的加成，同时收一样很疼的代价。每人都能带一个随行技能，个别角色还有第二个。</p>
       <div class="sec-body slab">
         <div class="roles" id="roleGrid"></div>
       </div>
@@ -127,7 +128,7 @@
       <div class="sec-body slab">
         <div class="filters" id="armFilters" role="group" aria-label="按器类与五行筛选"></div>
         <div class="detail" id="armDetail" aria-live="polite">
-          <img id="armDetailIcon" src="img/w00.png" alt="" width="44" height="44">
+          <img id="armDetailIcon" src="img/w00.webp" alt="" width="44" height="44">
           <div class="detail-txt">
             <b id="armDetailName">长剑</b>
             <span id="armDetailDesc">近身挥砍，受近战伤害与暴击率加成</span>
@@ -152,11 +153,11 @@
   <section id="items" class="section">
     <div class="wrap">
       <h2 class="sec-title">道具</h2>
-      <p class="sec-sub"><span data-count="items">103</span> 件被动道具，在商店买到就生效，没有栏位限制、可以叠。<b>卡框的颜色就是档位</b>：普通、稀有、史诗、传说，越靠后越贵也越狠。</p>
+      <p class="sec-sub"><span data-count="items">102</span> 件被动道具，在商店买到就生效，没有栏位限制、可以叠。<b>卡框的颜色就是档位</b>：普通、稀有、史诗、传说，越靠后越贵也越狠。</p>
       <div class="sec-body slab">
         <div class="filters" id="itemFilters" role="group" aria-label="按档位筛选"></div>
         <div class="detail" id="itemDetail" aria-live="polite">
-          <img id="itemDetailIcon" src="img/item_jubaopen.png" alt="" width="44" height="44">
+          <img id="itemDetailIcon" src="img/item_jubaopen.webp" alt="" width="44" height="44">
           <div class="detail-txt">
             <b id="itemDetailName">储蓄罐</b>
             <span id="itemDetailDesc">每回合结束白得金币与经验</span>
@@ -240,7 +241,7 @@
   </div>
 </footer>
 
-<script src="data.js?v=25"></script>
-<script src="app.js?v=25"></script>
+<script src="data.js?v=27"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

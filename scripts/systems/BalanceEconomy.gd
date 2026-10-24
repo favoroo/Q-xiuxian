@@ -40,7 +40,9 @@ static func potion_price(base: int, wave: int, price_mult: float) -> int:
 ## 回复药回复量：按生命上限的比例。货架卡上印的数、生命详情卡里说的数、ShopSystem 真喂给
 ## heal() 的数，三处都从这一个出口拿（2026-10-11 用户：「商店界面也要显示生命，
 ## 不然也不知道回复道具要不要买」——要能判断，卡面上的数就必须是真会兑现的那个数）。
-const POTION_HEAL_RATIO := 0.5
+## 2026-10-24 由 0.5 收到 0.25：原值一口回半管血，压平了走位/躲技能/压血线的紧张感，
+## 且随 max HP 滚雪球（后期 max 300 一口 150）。0.25 对齐铜匣葫芦 30% 上限这一档单口量级。
+const POTION_HEAL_RATIO := 0.25
 
 static func potion_heal_amount(max_hp: float) -> float:
 	return maxf(0.0, max_hp) * POTION_HEAL_RATIO

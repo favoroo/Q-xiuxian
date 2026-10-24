@@ -18,7 +18,7 @@
 
   /* 图标的缓存版本：img/*.png 是「同名覆盖」更新，不换 URL 浏览器就一直吃旧图。
      data.js 只给路径带不了版本号，所以改图后要把这里也 +1（与 index.html 的 ?v= 同步）。 */
-  var IMG_V = "?v=25";
+  var IMG_V = "?v=27";
   function imgUrl(u) { return u ? u + IMG_V : u; }
 
   /* 低动效偏好一次判掉：JS 侧的揭示/数字滚动/上色扫屏全按它走，

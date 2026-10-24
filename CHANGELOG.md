@@ -1,3 +1,21 @@
+## 2026-10-24 #45
+版本号从 0.0.76 跨到 **0.1.0**（minor 位进位，标记阶段性版本）。`Version.gd` 的 `APP_VERSION` 与 `export_presets.cfg` 的 `version/name`、`version/code` 严格同源，code 按 `major*10000+minor*100+patch` 口径由 76 改 100（沿用 `release.py` 的 `version_code_from_version` 公式，别手写别的推导）。发布口径同 `xiuxian-release`：Android APK 双端 Release + `web-deploy` 更新 GitHub Pages 宣传站。
+
+## 2026-10-24 #44
+宣传站瘦身（首屏约 1.5MB → 0.44MB，点播视频 17.4MB → 9.0MB）。**四处根因**：①字体两个 woff2 各 625KB 全量下发，而全站文案只有 1084 个字——`export_site_data.py` 新增 `subset_site_fonts()`，扫 index/app/data.js 现用字符集裁出 `*-subset.woff2`（152KB/个，CSS 改引用子集）；**全量字体挪到 `site/fonts/`（不进部署目录），子集从它重裁**，绝不就地覆盖（子集不可逆，裁完新字就永久丢了）。**坑**：`tools/inspect.py` 会 shadow 标准库，直接在导出器进程 import fontTools 会让 dataclasses 报 `module 'inspect' has no attribute 'signature'`，故子集化走 `python -m fontTools.subset` 子进程（cwd=仓库根）。②图标 PNG→WebP 无损（平涂+硬描边，体积降 35%~40%，`w*` 432KB/`item_*` 214KB），导出器 `copy_icon()` 直接落 `.webp` 并新增 `prune_stale_icons()` 清旧 PNG（保留 `pet_*`/`app_icon`/`shot_field.png`——og:image 爬虫不认 webp）。③实机截图 PNG→WebP q90（729KB→226KB），detail 面板两处占位图同步换 `.webp`。④视频按新母版重编：AV1 1080p CRF42（9.0MB，SSIM 0.9933）为主源 + H.264 720p（8.4MB）兜底，`preload="none"` 不再自动抓流；AV1 码串用 `av01.0.04M.08`（ffprobe level=8=4.0），Chrome canPlayType 返回 probably。涉及 `tools/export_site_data.py`、`site/dist/{index.html,app.js,styles.css}`、`site/fonts/`、`site/dist/img|fonts|video`。顺带修 `meta description` 与数字带兜底文案的过期数字（角色 20→21、道具 103→102）。
+
+## 2026-10-24 #43
+宣传站图标第二轮跟新：武器图（含飞剑）重绘后再同步 25 张到站点并部署。导出器 `ui_icon_path()` 链路已就位，重跑 `tools/export_site_data.py` 即搬图；**坑**：`img/*.png` 是同名覆盖，必须把 `site/dist/app.js` 的 `IMG_V` 与 `index.html` 的 `?v=` 一起递增（本次 25→26），只部署文件不换 URL 老访客仍是旧图缓存。涉及 `site/dist/img/w*.png`、`site/dist/app.js`、`site/dist/index.html`。
+
+## 2026-10-24 #42
+无敌技能「金光剑气附伤」换成「武器吸血概率加成」（用户口径：攻击附带剑气改成增加武器的吸血效果）。**根因**：旧实现是在 `EnemyBase.take_damage` 里对已结算的 `amount` 再乘 0.50 二次扣血——伤害与真实命中隐式双计，且表现（金色火花/「剑气」跳字/暴击音）全挂在敌人受击口，任何武器命中都会触发，读不出是技能效果。改法：删掉该段，改用吸血链路——`SkillData` 的 `sword_ki_ratio` 换成 `lifesteal_boost: 0.50`，新增 `GameManager.buff_lifesteal_boost`（ActiveSkills 写 / Player._on_skill_effect_end 回滚 / RunReset 清零，与 `buff_knockback_mult` 四处对称），`BalanceTargeting.lifesteal_chance()` 把「本体+木系羁绊+技能加成」先相加再乘武器类型折扣（加法而非乘法：0 吸血角色也能吃到加成），仍受每秒 3 次全局闸。表现侧去掉剑气三件套，改为 `PlayerSkillVfx.on_lifesteal_proc()`：护罩外扩涟漪 + 3 道灵光从罩壁收进体内（纯表现随机用全局 `randf()`，不碰 `GameManager.rng`），`Player.heal()` 改为返回实际回复量，`try_lifesteal` 只在 `gained>0` 时弹绿色「+1」跳字（顶满血不发假账）。文案同源：SkillData desc、StatInfoData 吸血规则（数字现读 SkillData）、site/dist/data.js 单条同步。回归：SkillCheck 115 项 + RunSaveCheck 45 项 + --core 6 项 ALL PASS。
+
+## 2026-10-24 #41
+商店「回复药」回复量收紧：`BalanceEconomy.POTION_HEAL_RATIO` 0.5 → 0.25。**根因**：原值一口回 50% 最大生命（120 基线 = 60 HP），是全项目最大单口回复量，压平了走位/躲技能/压血线的紧张感；且百分比随 max HP 滚雪球（后期 max 300 一口回 150）。0.25 对齐铜匣葫芦 30% 上限这一档单口量级（120 基线 = 30 HP）。货架卡/生命徽记/属性面板读数走同源 `potion_heal_amount`/`potion_effective_heal` 自动更新，无需改文案。涉及 `scripts/systems/BalanceEconomy.gd`、`tests/unit/unit_economy_tests.gd`（名义量 60→30、缺血够场景 60→30）。
+
+## 2026-10-24 #40
+正式包体积虚胖 22.5MB。**根因：`export_filter="all_resources"` 会把工程根目录下所有被引擎识别为资源的文件扫进包**——`build/flicker_v4_*/` 等 GPU 诊断目录里的 `*.translation`（Godot 认识的资源类型）等 61 个文件被当普通资源打进了 v0.0.35 起的全部正式 APK（约占包体 19%），而 `export_presets.cfg` 的 `exclude_filter` 一直没排 `build/*`。修：Android/Web 两个预设均补 `build/*`。仓库卫生顺手清：根目录 `tmp_codex_*.png*` 8 个临时文件删除；`.git` 里 filter-repo（2026-10-15）执行后未 gc 遗留的 1319 个全不可达孤儿对象经 `git reflog expire --expire=now --all && git gc --prune=now` 回收（599MB→164MB，`.git/filter-repo` 元数据备份至 `~/Archives/qxiuxian-build-archive/dotgit-filter-repo-backup/`）；`build/` 40 组旧 APK+签名归档至 `~/Archives/qxiuxian-build-archive/apks/`（flicker 原始采样同步归档），现场只留最近 3 版。
+
 ## 2026-10-24 #39
 灵珑被敌人踩进人堆的拥挤状态优化（用户截图：红怪直接盖在灵兽剪影上糊成一团）。根因两条：灵兽无碰撞体积（铁律 layer/mask=0），敌人纯路过踩上来无任何分离力；EntitiesLayer 开 y_sort，灵兽与怪几乎同 y 时绘制排序随机，怪体直接盖脸。两手修：① `SpiritBeast._ready` 置 `z_index=1`（z 压过 y_sort，被踩时灵兽剪影永在最上不被盖）；② 拥挤软分离——`BalanceSpiritBeast` 新常量 `CROWD_RADIUS=42`/`CROWD_PUSH_SPEED=110`（GameBalance 转发），`_resolve_contact_bites` 重构为 `_resolve_contact_bites(delta)` 单循环两件事：42px 内敌人按距离线性衰减贡献远离向推量合成漂移（直接积分位置 + 边界 clamp，被围时缓缓挤出人堆），30px 内照旧啃咬结算（无敌帧挡频次不变，咬合方向顺手复用分离向量灌 `take_damage` 的 `from_dir`）。签名重构踩坑 16（live_enemies 无类型元素上 `:=` 推断必炸），`e.global_position` 显式提类型后过。回归：--core 6 项 + SpiritBeastCheck 23 项 ALL PASS。
 

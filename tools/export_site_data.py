@@ -27,6 +27,7 @@
 import json
 import re
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -495,22 +496,24 @@ def weapon_cn_behavior(raw: str) -> str:
 # ============================================================================
 
 def copy_icon(res_path: str, dest: Path, size: int = 0) -> str:
-    """res://x/y.png → site/dist/img/xxx.png，返回站点相对路径；size>0 时等比缩到该边长。"""
+    """res://x/y.png → site/dist/img/xxx.webp（无损），返回站点相对路径；size>0 时等比缩到该边长。
+
+    图标全是平涂色块 + 硬描边，WebP 无损比 PNG 体积小 30%~40% 且零画质损失，
+    站点首屏要滚二十来张卡（武器/道具/角色各一批），一批批省下来就是几百 KB。
+    """
     if not res_path.startswith("res://"):
         return ""
     src = ROOT / res_path[len("res://"):]
     if not src.exists():
         print(f"  ! 图标缺失：{src}", file=sys.stderr)
         return ""
-    dest = IMG / dest.name
-    if size:
-        from PIL import Image
-        with Image.open(src) as im:
-            im = im.convert("RGBA")
+    dest = (IMG / dest.name).with_suffix(".webp")
+    from PIL import Image
+    with Image.open(src) as im:
+        im = im.convert("RGBA")
+        if size:
             im.thumbnail((size, size), Image.LANCZOS)
-            im.save(dest, "PNG", optimize=True)
-    else:
-        dest.write_bytes(src.read_bytes())
+        im.save(dest, "WEBP", lossless=True, method=6)
     return f"img/{dest.name}"
 
 
@@ -526,6 +529,72 @@ def ui_icon_path(res_path: str) -> str:
     rel = Path(res_path[len("res://"):])
     ui_rel = rel.parent / "ui" / rel.name
     return "res://" + ui_rel.as_posix() if (ROOT / ui_rel).exists() else res_path
+
+
+def prune_stale_icons(used: set) -> None:
+    """删掉 data.js 已经不再引用的旧 PNG（图标改成 .webp 后，同名旧图必须清掉）。
+
+    只清打印机产物（武器/角色/道具/技能图标）；`pet_*`（tools/crop_site_pet_icons.py 切图）、
+    `app_icon`、`shot_field.png`（og:image 社交抓取，爬虫不认 webp，而正文用的是 .webp）是独立素材，
+    不在导出链路里生成，一律保留。
+    """
+    keep = ("pet_", "app_icon", "shot_field.png")
+    for p in IMG.glob("*.png"):
+        if p.name.startswith(keep):
+            continue
+        if f"img/{p.name}" not in used:
+            p.unlink()
+            print(f"  清掉过期图标 {p.name}")
+
+
+def subset_site_fonts() -> None:
+    """把站点字体裁到「页面真正用到的字」，产出 fonts/MiSans-*-subset.woff2（CSS 引用它）。
+
+    两个字体各 625KB，但全站文案只有约一千个不同的字（CJK 959），九成字形白下载。
+    字符集从落盘的 index.html / app.js / data.js 现扫，文案一改字集自动跟着改；再补可打印
+    ASCII 兜住运行时拼的数字与符号。**原始 woff2 不许就地覆盖**——子集是不可逆截断，
+    原地裁完以后新增的字就永久丢了；所以全量字体放 `site/fonts/`（不进部署目录），
+    每次都从它重新裁出 `site/dist/fonts/*-subset.woff2`。
+
+    子集化走子进程 `python -m fontTools.subset`：`tools/` 下有个 `inspect.py`，
+    直接在本进程 import fontTools 会让 dataclasses 取到它（`import inspect` 被脚本目录抢先），
+    报 `module 'inspect' has no attribute 'signature'`；-m 的 sys.path 是仓库根，不踩这个坑。
+    """
+    try:
+        import fontTools  # noqa: F401
+    except ImportError:
+        print("  ! 没装 fontTools/brotli，跳过字体子集化", file=sys.stderr)
+        return
+
+    chars = {chr(c) for c in range(0x20, 0x7F)}
+    for name in ("index.html", "app.js", "data.js", "tokens.css"):
+        p = SITE / name
+        if p.exists():
+            chars |= set(p.read_text(encoding="utf-8"))
+    chars = {c for c in chars if c.isprintable() and not c.isspace()}
+    text = "".join(sorted(chars))
+
+    txt = SITE / ".font_charset.tmp"
+    txt.write_text(text, encoding="utf-8")
+    out_dir = SITE / "fonts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for src in sorted((SITE.parent / "fonts").glob("MiSans-*.woff2")):
+        out = out_dir / (src.stem + "-subset.woff2")
+        tmp = out.with_suffix(".tmp")
+        proc = subprocess.run(
+            [sys.executable, "-m", "fontTools.subset", str(src), f"--text-file={txt}",
+             f"--output-file={tmp}", "--flavor=woff2", "--layout-features=*",
+             "--no-hinting", "--desubroutinize"],
+            cwd=str(ROOT), capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            print(f"  ! {src.name} 子集化失败：{(proc.stderr or proc.stdout).strip()[:200]}",
+                  file=sys.stderr)
+            tmp.unlink(missing_ok=True)
+            continue
+        tmp.replace(out)
+        print(f"  字体 {out.name}: {src.stat().st_size // 1024}KB → {out.stat().st_size // 1024}KB（{len(text)} 字）")
+    txt.unlink(missing_ok=True)
 
 
 
@@ -836,6 +905,10 @@ def main() -> int:
         return 1
 
     print(f"data.js {len(out) // 1024} KB · tokens.css {len(tokens)} 项 · 图标目录 {IMG.relative_to(ROOT.parent)}")
+
+    used_icons = {item["i"] for key in ("weapons", "items", "roles", "skills", "pets") for item in back[key]}
+    prune_stale_icons(used_icons)
+    subset_site_fonts()
     return 0
 
 

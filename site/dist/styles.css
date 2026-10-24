@@ -21,16 +21,18 @@
    —— 唯一的移动端适配：字号下限 12px，密集小字一律提到 12px（游戏内 10 号字靠的是矢量渲染，
       浏览器小屏上读不动）。 */
 
+/* 子集字体由 tools/export_site_data.py 按页面现用字符集裁出（625KB → 约 152KB/个）：
+   页面主文案的每个字都在 charset 里，改了文案重跑导出即可，别改成引用全量字体。 */
 @font-face {
   font-family: "MiSans";
-  src: url("fonts/MiSans-Semibold.woff2") format("woff2");
+  src: url("fonts/MiSans-Semibold-subset.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "MiSans";
-  src: url("fonts/MiSans-Heavy.woff2") format("woff2");
+  src: url("fonts/MiSans-Heavy-subset.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   font-display: swap;

@@ -434,15 +434,16 @@ func sync_drones() -> void:
 				orb.setup(d_star, d_id, orbs)
 			orb_idx += 1
 
-func heal(amount: float, quiet: bool = false) -> void:
+## 回复生命，返回真正回上来的量（顶满血返回 0.0）。返回值供吸血反馈判账：没回上血就不弹「+1」。
+func heal(amount: float, quiet: bool = false) -> float:
 	if amount <= 0.0:
-		return
+		return 0.0
 	var before := current_health
 	current_health = minf(max_health, current_health + amount)
 	# 只报真正回上来的那部分；顶满时一口没回，不发挤压/音效/+X（报了就是假账）
 	var gained := current_health - before
 	if gained <= 0.01:
-		return
+		return 0.0
 	# 满血吸血命中极频繁，信号必须过了 gained 闸再发，否则 HUD 每次命中都重建血条补间（2026-10-13 掉帧根因）
 	# 静默涓流再叠一层时间闸（2026-10-24）：站定流每帧 ~0.04 的微涨逐帧发信号仍是 60 信号/秒，
 	# HUD 侧回血三补间每次都 kill+create；攒 0.4s 发一次终值（见 _quiet_heal_last_ms 注释）
@@ -462,10 +463,11 @@ func heal(amount: float, quiet: bool = false) -> void:
 		GameManager.buff_move_speed_mult = 1.0 + GameManager.item_hook_sum("heal_buff_speed")
 		_skill_buffs["heal_buff"] = dur
 	if quiet:
-		return
+		return gained
 	play_squash(Vector2(0.88, 1.16), 0.18)
 	AudioManager.play_sfx("heal", 0.9)
 	DamageNumber.spawn(get_parent(), global_position, int(gained), false, "+" + str(int(gained)))
+	return gained
 
 # ---------------- 随行技能（实现已拆 player_skills/：主动五连 ActiveSkills、爆发四件套 BurstSkills） ----------------
 
@@ -541,9 +543,15 @@ func _on_skill_effect_end() -> void:
 	match _skill_active_kind:
 		SkillData.Kind.IFRAME:
 			GameManager.buff_knockback_mult = 1.0
-			GameManager.buff_sword_ki_ratio = 0.0
+			GameManager.buff_lifesteal_boost = 0.0
 	_skill_active_kind = -1
 	_begin_skill_cooldown()
+
+## 无敌期间吸血生效的世界层反馈（GameManager.try_lifesteal 只在真回上血时调用）
+func on_lifesteal_proc() -> void:
+	if skill_vfx != null:
+		skill_vfx.on_lifesteal_proc()
+	DamageNumber.spawn(get_parent(), global_position + Vector2(0.0, -26.0), 1, false, "+1")
 
 ## HUD 额外技能按钮入口（随角色绑定，如影者的影爆、药王的药爆）。false = 没放出来（无技能/战斗外/CD中/资源没攒上），调用方发拒绝反馈。
 ## 免冷却类（BURST）由资源层门控，带冷却类（如药爆 HEAL）由 extra_skill_cd_left 门控。
