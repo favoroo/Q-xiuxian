@@ -19,6 +19,10 @@ const MOVE_ACCEL: float = 1700.0
 const MOVE_DECEL: float = 2200.0
 ## 停步时程序化角色 squash 回弹时长（秒）：停步不再把 scale 直接压平，按这个节奏收敛
 const IDLE_SETTLE_TIME: float = 0.12
+## 奔跑 squash 弹性幅度（2026-10-24）：原 0.065 让 scale.y ±6.5% 与渲染器身体浮沉同相叠峰，
+## 读成「跟着脚步一蹦一跳」。现降为 0.015 —— 只留一丝踏步弹性提示「在跑」，
+## 垂直起伏主体交给渲染器的解耦漂移（HollowKnightCultivatorRenderer 的 GLIDE_*）。
+const MOVE_BOUNCE_AMP: float = 0.015
 
 @export var max_health: float = BASE_MAX_HEALTH
 var current_health: float = BASE_MAX_HEALTH
@@ -100,6 +104,12 @@ var _dash_dir: Vector2 = Vector2.DOWN
 var _dash_speed: float = 0.0
 var _thunder_cd: float = 1.5       ## 天雷倒计时（雷法真君；开局 1.5s 首雷见面礼，之后按 ThunderData.INTERVAL）
 var _crowd_tick: float = 0.0       ## 蛮兵·陷阵感知节流（0.2s 一数，与 HUD 读数同频）
+## 静默回血信号节流（2026-10-24 掉帧根因）：站定流每物理帧涓流回复（~0.04/帧）虽过 heal()
+## 的 gained 闸，但逐帧发 player_hp_changed 会让 HUD 每秒创建上百个回血补间；
+## 涓流攒 QUIET_HEAL_SIGNAL_INTERVAL_MS 才发一次终值。信号带绝对值，迟到不错账；
+## 残余未发部分有界（≤0.4s 回复量 ≈ 1 HP），任何下一次血量事件都会带新值自愈。
+var _quiet_heal_last_ms: int = 0
+const QUIET_HEAL_SIGNAL_INTERVAL_MS := 400
 
 # ---------------- 踏影（闪避出口，数值全在 ShadowStepData） ----------------
 ## 影层队列：每次闪避成功把「躲掉的那一刀」的原值按 FIFO 存进来，影爆（额外技能）一键全部踩碎兑现。
@@ -435,7 +445,15 @@ func heal(amount: float, quiet: bool = false) -> void:
 	if gained <= 0.01:
 		return
 	# 满血吸血命中极频繁，信号必须过了 gained 闸再发，否则 HUD 每次命中都重建血条补间（2026-10-13 掉帧根因）
-	GameManager.player_hp_changed.emit(current_health, max_health)
+	# 静默涓流再叠一层时间闸（2026-10-24）：站定流每帧 ~0.04 的微涨逐帧发信号仍是 60 信号/秒，
+	# HUD 侧回血三补间每次都 kill+create；攒 0.4s 发一次终值（见 _quiet_heal_last_ms 注释）
+	if quiet:
+		var now_ms := Time.get_ticks_msec()
+		if now_ms - _quiet_heal_last_ms >= QUIET_HEAL_SIGNAL_INTERVAL_MS:
+			_quiet_heal_last_ms = now_ms
+			GameManager.player_hp_changed.emit(current_health, max_health)
+	else:
+		GameManager.player_hp_changed.emit(current_health, max_health)
 	GameManager.total_hp_healed += gained
 	# 灵髓丹气：回复生命后触发短时增伤与加速
 	var heal_dmg: float = GameManager.item_hook_sum("heal_buff_damage")
@@ -1025,7 +1043,10 @@ func _physics_process(delta: float) -> void:
 				gait_phase_counter -= 0.5
 				JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 14), velocity)
 			# 土豆兄弟式步态弹性（Squash & Stretch）：垂直弹跳与横向挤压形变
-			var bounce_amp := 0.065 * clampf(speed_ratio, 0.6, 1.25)
+			# 2026-10-24：幅度由 0.065 降到 0.015（MOVE_BOUNCE_AMP）——原值与渲染器身体浮沉
+			# 同相位叠峰，视觉上是「一蹦一跳」；现在 squash 只做极轻的踏步弹性，
+			# 上下漂移改由渲染器独立慢相位双频驱动（身飘、脚仍踩步点）。
+			var bounce_amp := MOVE_BOUNCE_AMP * clampf(speed_ratio, 0.6, 1.25)
 			var hover_bob := sin(gait_phase_counter * TAU) * bounce_amp
 			procedural_view.scale = current_base * 1.5 * Vector2(1.0 - hover_bob * 0.7, 1.0 + hover_bob)
 			procedural_view.set_facing_dir(facing, anim_sprite.flip_h)

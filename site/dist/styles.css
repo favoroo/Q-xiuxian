@@ -250,7 +250,13 @@ a { color: inherit; text-decoration: none; }
   border: var(--bw) solid var(--ink);
   box-shadow: var(--sh-btn);
 }
-.sec-sub { margin: 20px 0 0; max-width: 66ch; color: var(--grey); font-size: 14.5px; }
+.sec-sub {
+  margin: 20px 0 0;
+  color: var(--grey);
+  font-size: 14.5px;
+  line-height: 1.65;
+  text-wrap: balance;
+}
 .sec-sub b { color: var(--chalk); }
 .sec-body { margin-top: 24px; }
 

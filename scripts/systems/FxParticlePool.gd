@@ -221,7 +221,7 @@ static func _hit_feedback_allowed(owner: int, target: Node, pos: Vector2, is_cri
 		return false
 	# ① 致命不发：尸体 0.185s 就塌缩，火花 0.22s 会在空处留一道白闪。
 	#    两个来源取并集：调用方显式告知（EnemyBase 在 _die() 之前调用）+ 已置位的 dying（武器侧）。
-	if is_lethal or target.get("dying") == true:
+	if is_lethal or target.get(&"dying") == true:
 		return false
 	# ② 屏外不发：命中不可见。无玩家（判据/菜单）时以自身位置为中心，恒放行
 	var player: Node2D = GameManager.player
@@ -230,7 +230,7 @@ static func _hit_feedback_allowed(owner: int, target: Node, pos: Vector2, is_cri
 		return false
 	if owner == HitOwner.WEAPON:
 		# ③ 精英/Boss 非暴击不发（EnemyBase 专属火花承担）；暴击放行（EnemyBase 跳过暴击）
-		if target.get("is_elite") == true and not is_crit:
+		if target.get(&"is_elite") == true and not is_crit:
 			return false
 	elif owner == HitOwner.ENEMY:
 		# ④ 精英/Boss 火花全局节奏闸：静态时间戳（同 EnemyBase._fx_gap_gate 口径），

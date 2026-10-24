@@ -187,8 +187,16 @@ func set_visual_config(cfg: CultivatorVisualConfig) -> void:
 
 ## 步频基准（与 Player.gd 的 gait_phase_counter 推进同源：delta * 2.4 * speed_k）
 const GAIT_RATE := 2.4
-## 奔跑身体浮沉幅度（px）：与 Player 的 squash 弹跳同相位同频
-const RUN_FLOAT_AMP := 2.4
+## 奔跑悬浮漂移（2026-10-24）：身体上下起伏与脚步解耦，改「飘」不再「蹦」。
+## 旧实现是 sin(gait_phase*TAU) 的 ±2.4px —— 与 Player 的 squash 弹跳同相位同频，
+## 两个波峰每步一起顶到最高点，读成「跟着脚步一蹦一跳」。
+## 现为主频 ~1.2Hz 叠 0.43× 慢副频（副频带 _idle_phase 错相），合成幅度 ±1.3px：
+## 波峰不再踩在落地点上，节拍器感消失，剩下缓慢的悬浮起伏。
+const GLIDE_MAIN_AMP := 0.9     ## 主频振幅（px）
+const GLIDE_SUB_AMP := 0.4      ## 慢副频振幅（px）
+const GLIDE_SUB_FREQ := 0.43    ## 副频相对主频
+const GLIDE_BASE_FREQ := 1.15   ## 主频（Hz）：远低于 2.4Hz 步频，两者不同拍
+const GLIDE_SPEED_GAIN := 0.35  ## 移速对主频的增益（满速 ≈1.55Hz）
 ## RUN↔IDLE 动作交叉淡化时长（秒）：停步不再瞬间换公式/压平弹跳
 const ACTION_BLEND_TIME := 0.18
 
@@ -201,6 +209,10 @@ var _run_blend: float = 0.0
 ## 斗篷行波相位（连续积分，不直接取 _time/gait_phase）：动作切换时相位不跳变，
 ## 频率随 _run_blend 从待机慢呼吸平滑过渡到步频，布料不会瞬移
 var _cloak_phase: float = 0.0
+## 悬浮漂移相位（连续积分，2026-10-24）：身体上下起伏的唯一时基。
+## 不取 gait_phase —— 那是脚步的节拍；身体要「飘」，就不能踩着落地点起跳。
+## 连续积分保证变速时相位不跳变（改频率只改推进速率）。
+var _float_phase: float = 0.0
 
 ## 行波上下文（_draw_modular_cloak 注入，供 _sway_x/_sway_y 消费）
 var _cw_amp: float = 0.0              ## 行波振幅基准（px）
@@ -225,17 +237,36 @@ func _process(delta: float) -> void:
 	var cloak_rate := lerpf(idle_freq * 0.62, run_cloak_rate, _run_blend)
 	_cloak_phase = fmod(_cloak_phase + cloak_rate * delta, TAU)
 
+	# 悬浮漂移相位：与步频完全独立的时间基，移速只让漂移略快一点（1.15→1.55Hz），
+	# 永远追不上 2.4Hz 的脚步，所以两者不会锁相成「每步一蹦」。
+	# 注意：这里**不能** fmod 回绕 —— 副频取 _float_phase * GLIDE_SUB_FREQ（非整数倍），
+	# 相位一旦从 TAU 跳回 0，副频项会瞬移 ~2.7 弧度，每 0.7s 抖一下。
+	# GDScript float 是 64 位双精度，连续累加数小时也不掉精度。
+	var glide_rate := TAU * GLIDE_BASE_FREQ * (1.0 + GLIDE_SPEED_GAIN * clampf(_speed_smooth, 0.0, 1.2))
+	_float_phase += glide_rate * delta
+
 	_tick_blink(delta)
 
 ## 待机呼吸浮沉（px）：体型越大越沉缓，相位按 instance_id 错开
 func _idle_float_y() -> float:
 	var idle_freq := 2.6 / maxf(body_scale, 0.6)
-	var idle_amp := 1.8 * clampf(body_scale, 0.8, 1.25)
+	var idle_amp := 1.4 * clampf(body_scale, 0.8, 1.25)
 	return sin(_time * idle_freq + _idle_phase) * idle_amp
 
-## 奔跑浮沉（px）：与 Player.gd:1005 的 squash 弹跳、:1000 的落地放尘同源 gait_phase
+## 奔跑悬浮漂移（px）：与脚步解耦的双频慢漂（2026-10-24）。
+## 旧实现 sin(gait_phase*TAU)*2.4 与 Player 的 squash 弹跳同相叠峰 → 「一蹦一跳」；
+## 现改吃独立的 _float_phase，主频 + 慢副频破节拍器感，合成峰值 ±1.3px。
 func _run_float_y() -> float:
-	return sin(gait_phase * TAU) * RUN_FLOAT_AMP
+	return sin(_float_phase) * GLIDE_MAIN_AMP \
+			+ sin(_float_phase * GLIDE_SUB_FREQ + _idle_phase) * GLIDE_SUB_AMP
+
+## 漂移归一化值（-1~1）：影子/武器随动共用的同一股浮沉，保证身-影-兵同相位。
+## 除以合成峰值，把 ±1.3px 映射回 ±1 供各处的幅度系数直接乘。
+func _glide_norm() -> float:
+	var amp := GLIDE_MAIN_AMP + GLIDE_SUB_AMP
+	if amp <= 0.0001:
+		return 0.0
+	return _run_float_y() / amp
 
 ## 身体浮沉唯一出口：待机/奔跑按 _run_blend 交叉淡化，起停不跳变
 func _body_float_y() -> float:
@@ -461,8 +492,7 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
-	# 2026-10-23 步态同源：身体浮沉不再用独立 _time*5.2（5.2Hz），改吃 gait_phase——
-	# 与 Player 的 squash 弹跳、落地放尘同一相位同一频率，三者不再各走各的。
+	# 2026-10-24 悬浮漂移：身体浮沉改吃独立 _float_phase（不再与脚步同相），
 	# 走 _body_float_y() 而非 _run_float_y()：IDLE→RUN 的 0.18s 内从待机浮沉交叉淡入
 	var float_y := _body_float_y()
 	# 双频斗篷衣摆：主波相位滞后身体 1/4 步循环（布料惯性，随步频自适应），
@@ -471,9 +501,11 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	var cloak_amp := lerpf(2.0, 3.3 * (0.9 + 0.18 * sin(gait_phase * TAU)), _run_blend)
 	var cloak_t := _cloak_phase
 
-	var bob := sin(gait_phase * TAU)
-	var shadow_alpha := 0.44 - bob * 0.07
-	var shadow_rx := (16.5 - bob * 1.1) * width_scale
+	# 影子/武器随动取漂移的归一化值（不再吃步态相位）：身-影-兵同相位，
+	# 幅度已按漂移量级调小，影子只做极轻的收放提示「人在浮着」而非「在蹦」
+	var bob := _glide_norm() * _run_blend
+	var shadow_alpha := 0.44 - bob * 0.05
+	var shadow_rx := (16.5 - bob * 0.8) * width_scale
 	_draw_ground_shadow(Vector2(0, 32), shadow_rx, 4.4, shadow_alpha)
 	_draw_immortal_motes(float_y)
 

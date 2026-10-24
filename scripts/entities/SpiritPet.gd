@@ -255,7 +255,7 @@ func _act_leique() -> void:
 	for e in GameManager.live_enemies:
 		if e == nearest or not is_instance_valid(e) or not (e is Node2D):
 			continue
-		if e.get("dying") == true:
+		if e.get(&"dying") == true:
 			continue
 		var n2d := e as Node2D
 		var d_sq := nearest.global_position.distance_squared_to(n2d.global_position)
@@ -312,7 +312,7 @@ func _act_xuangui() -> void:
 	for e in GameManager.live_enemies:
 		if not is_instance_valid(e) or not (e is Node2D):
 			continue
-		if e.get("dying") == true:
+		if e.get(&"dying") == true:
 			continue
 		var n2d := e as Node2D
 		var diff := n2d.global_position - center
@@ -461,7 +461,7 @@ func _act_shiyuan() -> void:
 	for e in GameManager.live_enemies:
 		if not is_instance_valid(e) or not (e is Node2D):
 			continue
-		if e.get("dying") == true:
+		if e.get(&"dying") == true:
 			continue
 		var n2d := e as Node2D
 		var diff := n2d.global_position - center
@@ -496,7 +496,7 @@ func _find_nearest_enemy(max_range: float) -> Node2D:
 	for e in GameManager.live_enemies:
 		if not is_instance_valid(e) or not (e is Node2D):
 			continue
-		if e.get("dying") == true:
+		if e.get(&"dying") == true:
 			continue
 		var n2d := e as Node2D
 		var d := global_position.distance_squared_to(n2d.global_position)

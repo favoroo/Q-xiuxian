@@ -722,6 +722,9 @@ func _open_enemy_tip(eid: String, is_elite: bool, anchor: Control) -> void:
 		icon_tex = EnemyIconCapture.peek(eid, is_elite, EnemyIconCapture.DETAIL_SIZE)
 		if icon_tex == null:
 			icon_tex = await EnemyIconCapture.capture(eid, is_elite, EnemyIconCapture.DETAIL_SIZE)
+			# 捕获含最长 120 帧的等待：期间整页翻动可能把本对话框重建释放，醒来先验自身
+			if not is_instance_valid(self):
+				return
 		if icon_tex == null:
 			icon_tex = EnemyIconCapture.peek(eid, is_elite)
 		# 遭遇过才给强度行：没见过的东西只露「出没/收录」，与卡面不放威胁签同一口径。

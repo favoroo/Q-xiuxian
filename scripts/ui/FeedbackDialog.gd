@@ -408,6 +408,10 @@ func _wait_viewport_portrait() -> void:
 	var deadline := Time.get_ticks_msec() + ORIENTATION_WAIT_MS
 	while Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
+		# 等待期间对话框可能被关掉释放（Android 选图链路）：醒来先验自身，
+		# 已释放实例上的 get_viewport() 是二次崩溃点
+		if not is_instance_valid(self):
+			return
 		var vp := get_viewport().get_visible_rect().size
 		if vp.y > vp.x:
 			return
@@ -477,6 +481,9 @@ func _finish_android_pick() -> void:
 	var deadline := Time.get_ticks_msec() + ORIENTATION_WAIT_MS
 	while Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
+		# 同 _wait_viewport_portrait：等待方向恢复期间对话框可能被释放
+		if not is_instance_valid(self):
+			return
 		var vp := get_viewport().get_visible_rect().size
 		if vp.x >= vp.y:
 			break

@@ -84,6 +84,10 @@ var _hp_block_base_border := Color(0, 0, 0, 0)
 var _hp_heal_flash: Panel = null
 var _hp_heal_tween: Tween = null
 var _hp_label_heal_tween: Tween = null
+var _hp_icon_heal_tween: Tween = null
+## 回血演出量级闸（与金币 SHARDS_PULSE_MIN_GAIN 同思路）：站定涓流等每拍 <0.5 的微涨
+## 不播整套三补间强调（血条/文字照常走），只有事件型回复（吸血/回复珠一口 ≥0.5）才值得闪
+const HEAL_FX_MIN_GAIN := 0.5
 var _hp_notch: Control = null
 ## —— HUD 脉冲色硬上限（2026-10-20 真机 UI 频闪根治）——
 ## 项目开了 viewport/hdr_2d + Environment.glow_hdr_threshold=1.0，任何分量 >1.0 的颜色
@@ -507,8 +511,9 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 	# 受创两段式（2026-10-15）：扣血拍红条立即直写（受创可读性优先，不做缓动），
 	# 白影条延迟 0.25s 后 0.3s 追平 —— 红白落差就是「这一刀有多疼」的量尺；
 	# 回血拍红条保持既有补间，白影同步跟随（治疗不留白影差）。
+	var heal_gain: float = (cur - _hp_last_cur) if _hp_last_cur >= 0.0 else 0.0
 	var is_damage := _hp_last_cur >= 0.0 and cur < _hp_last_cur
-	var is_heal := _hp_last_cur >= 0.0 and cur > _hp_last_cur
+	var is_heal := heal_gain > 0.0
 	_hp_last_cur = cur
 
 	# 满血微亮：满血纯白高光，未满血温润纸白
@@ -530,7 +535,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		_hp_ghost_tween.tween_property(hp_ghost_bar, "value", cur, 0.3)\
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	else:
-		if is_heal:
+		if is_heal and heal_gain >= HEAL_FX_MIN_GAIN:
 			_play_heal_fx()
 		if _hp_tween != null and _hp_tween.is_valid():
 			_hp_tween.kill()
@@ -624,10 +629,12 @@ func _play_heal_fx() -> void:
 		_hp_label_heal_tween.tween_property(hp_label, "modulate", Color.WHITE, 0.15)
 
 	if hp_icon != null:
+		if _hp_icon_heal_tween != null and _hp_icon_heal_tween.is_valid():
+			_hp_icon_heal_tween.kill()
 		hp_icon.pivot_offset = hp_icon.size * 0.5
 		hp_icon.scale = Vector2(1.2, 1.2)
-		var icon_tw := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-		icon_tw.tween_property(hp_icon, "scale", Vector2.ONE, 0.22)\
+		_hp_icon_heal_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_hp_icon_heal_tween.tween_property(hp_icon, "scale", Vector2.ONE, 0.22)\
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## Lv 徽记升级组合动画：squash 回弹 + 底色金闪 + 数字脉冲 + 单圈斜切光环/星屑（HudLevelBadgeFx）。

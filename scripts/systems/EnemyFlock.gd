@@ -26,6 +26,9 @@ const COMBINE_SLACK := 1.15
 ## 复杂度 O(n)。桶容器是 static 复用（_draw 同款做法：主线程串行，无重入风险）。
 static var _grid: Dictionary = {}
 static var _grid_cell: float = 0.0
+## 桶对象池（2026-10-24）：重建网格时旧桶清空回收入池、建桶从池里复用，
+## 让「稳态零分配」成立（旧写法 clear 后逐格 new Array()，每帧 10~25 次分配）
+static var _bucket_pool: Array = []
 
 ## 分离排斥：半径内同伴按「贴得越近推得越狠」累加，归一化后封顶 max_push。
 ## others 传 GameManager.live_enemies 本体（不复制数组，避免每帧分配）。
@@ -41,7 +44,9 @@ static func separation_push(self_pos: Vector2, others: Array, self_id: int, radi
 	# 只查 3×3 邻域（格边长 = 半径 ⇒ 半径内的邻居必在这 9 格里）
 	for gx in range(cx - 1, cx + 2):
 		for gy in range(cy - 1, cy + 2):
-			var bucket: Array = _grid.get(Vector2i(gx, gy), [])
+			# 单参 get（缺键返 null）：两参版的 [] 默认值每次调用都实例化一个空数组，
+			# 35 敌 × 9 格 ≈ 315 次空数组分配/物理帧（2026-10-24）
+			var bucket = _grid.get(Vector2i(gx, gy))
 			if bucket == null:
 				continue
 			for o in bucket:
@@ -76,20 +81,27 @@ static func _ensure_grid(others: Array, radius: float) -> void:
 	if _grid_frame == Engine.get_physics_frames():
 		return
 	_grid_frame = Engine.get_physics_frames()
+	# 旧桶清空回收入池再清表：建桶从池里 pop_back 复用，稳态零分配（见 _bucket_pool 注释）
+	for key in _grid:
+		var old: Array = _grid[key]
+		old.clear()
+		_bucket_pool.push_back(old)
 	_grid.clear()
 	_grid_cell = radius
 	for o in others:
 		if o == null or not is_instance_valid(o):
 			continue
-		if o.get("dying") == true:
+		# StringName 版 get：字面量 "dying" 每次都要现做字符串哈希（每敌每帧一次），
+		# &"dying" 驻留预哈希；保持鸭子类型不改强转 —— 单测桩（unit_flock_tests）不是 EnemyBase
+		if o.get(&"dying") == true:
 			continue
 		var gp: Vector2 = o.global_position
 		var key := Vector2i(int(floor(gp.x / radius)), int(floor(gp.y / radius)))
 		# Dictionary.get 返回 Variant，直接标 Array 会在缺键时把 Nil 塞进 Array 变量并抛错。
-		# 先取 Variant 再判空，缺键时才建桶。
+		# 先取 Variant 再判空，缺键时才建桶（桶从池里取，池空才 new）。
 		var found = _grid.get(key)
 		if found == null:
-			var new_bucket: Array = []
+			var new_bucket: Array = _bucket_pool.pop_back() if _bucket_pool.size() > 0 else []
 			_grid[key] = new_bucket
 			new_bucket.append(o)
 		else:

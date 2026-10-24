@@ -2194,11 +2194,20 @@ func _fire_bolt(player: Node2D) -> void:
 
 func _pulse_buff_aura() -> void:
 	var radius_sq := buff_radius * buff_radius
-	for e in GameManager.live_enemies:
+	# 快照遍历照 _die 击杀链的 _explode_snap_pool 模式（2026-10-24）：receive_aura 今天只写
+	# 字段不动登记表，但「对同伴生效」的循环一旦后续加入可致死效果，循环内 swap-remove 会
+	# 静默跳过末尾同伴；钉死在快照上，验活口径也与击杀链对齐
+	var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
+	snap.append_array(GameManager.live_enemies)
+	for e in snap:
+		if e == null or not is_instance_valid(e):
+			continue
 		if e == self or not (e is EnemyBase) or e.dying:
 			continue
 		if global_position.distance_squared_to(e.global_position) <= radius_sq:
 			e.receive_aura(buff_speed_mult, 400)
+	snap.clear()
+	_explode_snap_pool.push_back(snap)
 
 ## 被鼓妖光环覆盖：取最高倍率，过期待遇由 _physics_process 自动清除。
 ## 首次被罩到（边沿）发一圈冲击波提示「它被加速了」；常驻脉冲只续期不再发，防刷屏。
@@ -2558,7 +2567,13 @@ func _blink_strike(player: Node2D) -> void:
 func _pulse_heal() -> void:
 	var radius_sq := heal_radius * heal_radius
 	var healed_any := false
-	for e in GameManager.live_enemies:
+	# 快照遍历同 _pulse_buff_aura（2026-10-24）：receive_heal 不致死，钉死快照后
+	# 后续加「过疗反噬」之类可致死效果不会再踩循环内 swap-remove 的坑
+	var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
+	snap.append_array(GameManager.live_enemies)
+	for e in snap:
+		if e == null or not is_instance_valid(e):
+			continue
 		if e == self or not (e is EnemyBase) or e.dying:
 			continue
 		if global_position.distance_squared_to(e.global_position) > radius_sq:
@@ -2567,6 +2582,8 @@ func _pulse_heal() -> void:
 			continue
 		e.receive_heal(heal_amount)
 		healed_any = true
+	snap.clear()
+	_explode_snap_pool.push_back(snap)
 	# 2026-10-16 演出去噪：演出环每跳只发一次（旧写法 if 缩进在 for 内，一跳奶到 N 个
 	# 残血同伴就同帧叠 N 个 240px 大绿圈 + N 重音效——治疗环是全游戏最大的冲击环，群奶糊屏）。
 	# 治疗本身照常逐个结算；「谁在被奶」的受者读数由 receive_heal 里的 heal_rise 逐个亮，不丢信息。

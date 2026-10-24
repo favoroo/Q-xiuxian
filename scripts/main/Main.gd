@@ -957,6 +957,11 @@ func _bake_static_decor(map: Node2D, half: float, ground_decor: GroundDecorLayer
 	var sprite := await BakedDecorTexture.bake(half)
 	if sprite == null:
 		return
+	# bake 内部有 4+ 帧 await：期间玩家重开（reload_current_scene）会把 Main 连同三层一起放掉，
+	# 醒来必须整体复验；任一失效就当场释放烘焙产物返回 —— 不挂树成孤儿，旧层视觉随场景已不存在
+	if not is_instance_valid(map) or not is_instance_valid(ground_decor) or not is_instance_valid(arena_vis):
+		sprite.queue_free()
+		return
 	# 层序：插在 GroundDecor 原位置（烘焙图包含其内容），ArenaVisual 的动态部分
 	# 仍在其上（树序在后），StaticDecor 内容被烘焙图替代后藏宿主的静态子层
 	map.add_child(sprite)

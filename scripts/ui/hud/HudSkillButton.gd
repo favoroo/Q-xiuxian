@@ -398,12 +398,8 @@ func _process(_delta: float) -> void:
 		_extra_cd_sample_cd -= get_process_delta_time()
 		if _extra_timing or _extra_cd_sample_cd <= 0.0:
 			_extra_cd_sample_cd = EXTRA_CD_SAMPLE_INTERVAL
-			var e_cd = player.get("extra_skill_cd_left")
-			if e_cd is float or e_cd is int:
-				cd_left = float(e_cd)
-			var e_tot = player.get("extra_skill_cd_total")
-			if e_tot is float or e_tot is int:
-				cd_total = maxf(0.01, float(e_tot))
+			cd_left = player.extra_skill_cd_left
+			cd_total = maxf(0.01, player.extra_skill_cd_total)
 			_extra_timing = cd_left > 0.0
 	var on_active := active_left > 0.0
 	var on_cd := cd_left > 0.0
