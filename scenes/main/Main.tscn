@@ -72,10 +72,10 @@ color = Color(0.85, 0.88, 0.96, 1)
 
 [node name="GroundTiles" type="ColorRect" parent="MapLayer" unique_id=1252057493]
 material = SubResource("ShaderMaterial_ground")
-offset_left = -1272.0
-offset_top = 574.0
-offset_right = 3528.0
-offset_bottom = 5374.0
+offset_left = -2400.0
+offset_top = -2400.0
+offset_right = 2400.0
+offset_bottom = 2400.0
 mouse_filter = 2
 
 [node name="ObeliskCenter" parent="MapLayer" unique_id=2002725960 instance=ExtResource("3_ob")]

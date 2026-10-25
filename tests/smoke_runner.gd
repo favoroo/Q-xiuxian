@@ -44,6 +44,15 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	# 0. 地面着色矩形必须盖住战台：它是 4800×4800 的 ColorRect，位置一歪整块地面就不进画面，
+	#    全屏只剩深渊黑底（2026-10-25 v0.1.1 真机「整个调色变很暗」的根因）。
+	var gt := main.get_node_or_null("MapLayer/GroundTiles") as ColorRect
+	var need: float = GameManager.MAP_HALF_EXTENT + 200.0
+	var gt_ok := gt != null and gt.position.x <= -need and gt.position.y <= -need \
+		and gt.position.x + gt.size.x >= need and gt.position.y + gt.size.y >= need
+	_check(gt_ok, "地面矩形覆盖战台（实得 %s）" % (
+		"缺失" if gt == null else "%s %s" % [str(gt.position), str(gt.size)]))
+
 	# 1. 道统 + 本命法器（绕过 UI，直接走逻辑层）
 	GameManager.cultivator_id = "fuzhen"
 	GameManager.start_run("qingyun_sword")

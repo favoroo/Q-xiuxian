@@ -1,3 +1,6 @@
+## 2026-10-25 #14
+Fixed: v0.1.1 战斗画面整体发黑——地面「青玉石板」整块没渲染。**根因**：`Main.tscn` 被编辑器重存时 `MapLayer/GroundTiles`（4800×4800 ColorRect，`ground_tile.gdshader` 靠 UV 铺世界）的矩形从 `(-2400,-2400)…(2400,2400)` 被挪成 `(-1272,574)…(3528,5374)`，尺寸没变但整块地面落到战台下方（y 574 起），相机视野内只剩深渊黑底；HUD 是 CanvasLayer 不吃 `CanvasModulate`，所以只有世界变暗，看着像「调色/LDR 坏了」。**守卫**：`tests/smoke_runner.gd` 开局断言 `GroundTiles` 覆盖 `MAP_HALF_EXTENT+200`，同一次重存若再挪动会直接红。**注意**：同一次重存还把 `glow_levels/*` 的 `true/false` 写成 `1.0/0.0`、删掉了等于默认值的 `glow_hdr_threshold/scale`，这些是等价改写，不是变暗原因。涉及 `scenes/main/Main.tscn`、`tests/smoke_runner.gd`。
+
 ## 2026-10-25 #13
 Fixed: 开始菜单在 4:3 档（CI 实测 960×720）带「◆ 新解锁」前缀时整排矩阵被撑到 973 出屏。**根因**：副标题直接给 `Label.text` 赋值，Label 的内容最小宽会反向决定卡片宽——卡宽预算 259，前缀把「战绩/图鉴」副行的内容最小宽涨到 290；16:9 档（540 高、字号 12）行短看不出来，CI 的 720 高画布把字号放大到 14 才暴露。**改法**：`StartMenu` 新增 `_set_entry_sub` / `_wrap_entry_sub`，原始副文案存 `sub_raw`，按「卡宽 − 左右内距 − 行内缝 − 箭标宽」用 `GameStyle.wrap_cjk` 切硬换行；`_apply_small_metrics` 改字号后重切；顺带修未读前缀读掉后强调色不退（`_tint_entry_sub`）。**坑**：CI 的 `root.size` 高度设置在 Linux headless 下不生效，画布按 1280×720 override 出的 4:3 尺寸跑，等于给所有屏多量了平板档——不是测试写错，是真实档位。涉及 `scripts/ui/StartMenu.gd`。
 
