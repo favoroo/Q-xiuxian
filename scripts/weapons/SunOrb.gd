@@ -180,13 +180,23 @@ func _try_damage(area: Area2D, contact_count: int = 1) -> void:
 
 		GameManager.try_lifesteal(WeaponData.Behavior.DRONE)
 		_play_hit_pulse()
-		AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.0)
+		# 星级开火音分档（★3 轻亮 / ★4 降调增厚），与其余武器族同一入口
+		if star >= 3:
+			AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.08 if star == 3 else 1.2,
+				1.04 if star == 3 else 0.95)
+		else:
+			AudioManager.play_sfx(WeaponData.sfx_for(drone_id), 1.0)
 
 ## 触敌反馈：道具扑闪一下（压扁弹回 + 亮闪）；0.16s 内连扫多敌不重复分配 Tween
+## 2026-10-25 星级分档：★3 爆闪鎏金、★4 电光青 HDR（触敌是御灵唯一的开火反馈，
+## 旧写法恒为暖白金，极境御灵扫过敌群时和★1 完全一个样）。
 func _play_hit_pulse() -> void:
 	if _pulse_tween != null and _pulse_tween.is_running():
 		return
-	sprite.modulate = Color(1.7, 1.7, 1.35)
+	var pulse_col := Color(1.7, 1.7, 1.35)
+	if star >= 3:
+		pulse_col = GameStyle.star_fx_color(star, 0)
+	sprite.modulate = pulse_col
 	sprite.scale = _base_sprite_scale * Vector2(1.25, 0.8) * (1.0 + 0.14 * float(star - 1))
 	_pulse_tween = create_tween()
 	_pulse_tween.set_parallel(true)

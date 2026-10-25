@@ -70,6 +70,12 @@ static func drops(e) -> void:
 				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS))
 		extra_orb.heal_amount = HealOrb.BASE_HEAL
 		extra_orb.activate()
+	# 杀戮节奏（神通）：每次击杀返还一部分所有武器的当前冷却。
+	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不返还，清场不该白拿加速。
+	var cd_refund: float = GameManager.item_hook_sum("kill_cd_refund")
+	if cd_refund > 0.0 and not e._no_drop and GameManager.player != null \
+			and GameManager.player.has_method("refund_weapon_cooldowns"):
+		GameManager.player.refund_weapon_cooldowns(cd_refund)
 	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
 	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
 	var ex_base := GameManager.item_hook_sum("kill_explode")

@@ -104,7 +104,9 @@ func _create_line(w: float, col: Color) -> Line2D:
 	return line
 
 ## 激活动画（出膛）：全量重置坐标、折线点与淡出 Tween
-func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: float = 1.0) -> void:
+## core_tint：芯线色覆盖（alpha==0 = 不覆盖，走原逻辑）。★3/★4 追加雷用它把
+## 白热芯也染上星级色相 —— 只染光晕层时追加雷读起来仍是「一道白雷套金边」。
+func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: float = 1.0, core_tint: Color = Color(0, 0, 0, 0)) -> void:
 	_setup_lines()
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
@@ -124,7 +126,9 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 		_line_glow.visible = false
 
 	var core_c: Color
-	if glow_active:
+	if core_tint.a > 0.0:
+		core_c = core_tint
+	elif glow_active:
 		core_c = CORE_COLOR if tint_col == GLOW_COLOR else GameStyle.FX_HDR_CORE
 	else:
 		core_c = LDR_CORE_COLOR

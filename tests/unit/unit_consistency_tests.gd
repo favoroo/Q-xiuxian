@@ -137,7 +137,7 @@ static func _allow_hit(allow: Array, v: float) -> bool:
 ## 核心判据（2026-10-11 改版后）：
 ## ① apply 每个字段都在 FIELD_FORM 登记展示口径（卡面加成行由 BonusRows 生成，登记即可显示）；
 ## ② 文案残余数字都能被字段解释（或走 ORPHAN_ALLOW）——desc 已不复述数值，机制性数字除外
-static func _check_desc_matches_apply(_c: TestCheck, table: String, id: String, desc: String, apply: Dictionary, extra_pct_claims: Array = []) -> void:
+static func _check_desc_matches_apply(_c: TestCheck, table: String, id: String, desc: String, apply: Dictionary, extra_pct_claims: Array = [], extra_flat_claims: Array = []) -> void:
 	var toks := _extract_tokens(_strip_bbcode(desc))
 	var claimed_pct: Array = []
 	var claimed_flat: Array = []
@@ -166,6 +166,9 @@ static func _check_desc_matches_apply(_c: TestCheck, table: String, id: String, 
 
 	for p in extra_pct_claims:
 		claimed_pct.append(int(round(float(p) * 100.0)))
+	# 机制性计数（弹丸数 / 槽位数 / 爆炸伤害）按「个数」解释文案里的裸数字
+	for f in extra_flat_claims:
+		claimed_flat.append(float(f))
 
 	var allow: Array = ORPHAN_ALLOW.get(id, [])
 	for t in toks.pct:
@@ -247,11 +250,21 @@ func _test_icon_assets_exist() -> void:
 func _test_item_desc_apply() -> void:
 	for item_id in ItemData.all_ids():
 		var d := ItemData.get_def(item_id)
-		# wave_heal_pct / revive 走独立机制字段，有数字时也算已被文案解释
-		var extra: Array = []
+		# 机制钩子（不进 apply 的额外字段）里的数字同样是「文案数字有据可查」的来源：
+		# 万矢箭「多 1 发弹丸」= projectile_count_bonus、神通「槽位 +1」= weapon_slot_bonus、
+		# 裂魂铃「40 伤」= kill_explode。全部数值型额外字段都算已解释（wave_heal_pct / revive 同路）。
+		var extra_pct: Array = []
 		if d.has("wave_heal_pct"):
-			extra.append(float(d["wave_heal_pct"]))
-		_check_desc_matches_apply(_c, "ItemData", String(item_id), String(d.get("desc", "")), d.get("apply", {}), extra)
+			extra_pct.append(float(d["wave_heal_pct"]))
+		var extra_flat: Array = []
+		for k in d.keys():
+			var key := String(k)
+			if key == "id" or key == "tier" or key == "price" or key == "apply" or key == "wave_heal_pct":
+				continue
+			var v = d[k]
+			if v is int or v is float:
+				extra_flat.append(float(v))
+		_check_desc_matches_apply(_c, "ItemData", String(item_id), String(d.get("desc", "")), d.get("apply", {}), extra_pct, extra_flat)
 
 ## 角色道具软亲和标签守卫（2026-10-24）：item_tags 已收进 CultivatorData.DEFS 条目（原先的
 ## 独立 ITEM_TAGS 手工副本漏抄一个 = 该角色道具亲和静默退化成空、商店推荐全部失明，无任何报错）。

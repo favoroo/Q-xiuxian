@@ -41,6 +41,21 @@ static func spawn_hit_spark(w, enemy: Node, knock: Vector2, is_crit: bool = fals
 	var spark_elem: Variant = "crit" if is_crit else w._arc_element()
 	FxParticlePool.weapon_hit_spark(enemy, spark_pos, spark_elem, spark_scale, is_crit, kb_dir)
 
+## 星级开火音（2026-10-25）：★3/★4 的「听感分档」。
+## 此前开火音只按武器 id 取（sfx_for），星级在耳朵里完全没有分量——九把★1 堆出一把
+## 极境武器，开火声却和★1 一模一样。这里只铺一层轻量叠色，不改数据表、不加新音频资源：
+## ★4 降调增厚（更像重器），★3 轻微升亮（更清脆）。命中音不动——打击反馈的层次
+## 归 sfx_impact_for 与 AudioManager 的连击升调管，叠两层会糊掉「有没有咬到肉」的读数。
+static func fire_sfx(w, key: String, base_scale: float = 1.0) -> void:
+	var star: int = int(w.star)
+	if star >= 4:
+		# 降调：-5% 基频 + 轻微抖动，听感更厚更沉（极境的「重」）
+		AudioManager.play_sfx(key, base_scale * 1.2, randf_range(0.93, 0.97))
+	elif star >= 3:
+		AudioManager.play_sfx(key, base_scale * 1.08, randf_range(1.02, 1.06))
+	else:
+		AudioManager.play_sfx(key, base_scale)
+
 ## 土系重击地面贴花接入（开山斧/崩山剑/奔浪锤等命中敌群时克制留痕）
 ## 全武器共享一道全局时间闸（静态时间戳，非逐实例倒计时）——裂痕是重击砸地的
 ## 偶发留痕，不是每次命中的常规反馈；命中演出本身（月牙/扇面/闪光/材质声）不受影响

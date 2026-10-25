@@ -7,6 +7,9 @@ extends CharacterBody2D
 ## 组与碰撞（两条铁律，动了会被全场武器追着打 / 回合末被清场）：
 ##   - 只挂 "allies" 组 —— 绝不进 enemies/turrets/gems/chests，那四组 WaveSpawner.end_wave 全清；
 ##     正因为它不在那四组里，生命不耗尽就跨回合一直在场。
+##   - 回合寿命（2026-10-25 重设计）：自召唤波起算共在场 GameBalance.SPIRIT_BEAST_LIFETIME_WAVES（3）
+##     个回合，第 4 个回合开始时消散（_on_wave_changed 寿命闸）；同场上限 MAX_ACTIVE（3）由
+##     祭坛召唤侧顶替最老一只来强制执行。
 ##   - 本体 collision_layer/mask 全 0：与敌人无任何物理碰撞体积（旧版挂 player 层会被敌人
 ##     move_and_slide 双向推挤，「撞着敌人跑」）；玩家武器索敌全走 mask=4（enemies 层），
 ##     也打不到它。移动直接积分 global_position，不走 move_and_slide。
@@ -30,11 +33,15 @@ extends CharacterBody2D
 const BULLET_TEXTURE: Texture2D = preload("res://assets/art/bullet_spirit_pellet.png")
 const PROJECTILE_SCENE: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 
+## 召唤波次（也是本回合血量/伤害的成长基准；祭坛顶替逻辑按它找「最老」的一只）
+var summon_wave: int = 1
+## 配色档位（0 灵青 / 1 赤焰 / 2 紫电）：祭坛召唤时取场上未占用的最小档，同场不撞色
+var palette_idx: int = 0
+
 var max_hp: float = 100.0
 var current_hp: float = 100.0
 var current_target: Node2D = null
 
-var _wave: int = 1
 var _dying: bool = false
 var _attack_timer: float = 0.0
 var _search_timer: float = 0.0
@@ -56,15 +63,19 @@ func _ready() -> void:
 	# 永远画在敌人上层（z 压过 EntitiesLayer 的 y_sort）：灵兽无碰撞体积，敌人纯路过会踩上来，
 	# 被踩时剪影不能被怪体盖掉糊成一团（2026-10-24 拥挤状态优化）
 	z_index = 1
-	_wave = maxi(GameManager.wave_number, 1)
-	max_hp = GameBalance.spirit_beast_max_hp(_wave)
+	summon_wave = maxi(GameManager.wave_number, 1)
+	max_hp = GameBalance.spirit_beast_max_hp(summon_wave)
 	current_hp = max_hp
 
 	_renderer = ProceduralDroneRenderer.new()
 	_renderer.kind = ProceduralDroneRenderer.DroneKind.YUAN_LING
+	_renderer.palette_idx = clampi(palette_idx, 0, ProceduralDroneRenderer.PALETTES.size() - 1)
 	add_child(_renderer)
 
 	GameManager.register_ally(self)
+	# 寿命闸（2026-10-25 重设计）：回合开始时自召唤波起算满 LIFETIME_WAVES 即消散
+	if not GameManager.wave_changed.is_connected(_on_wave_changed):
+		GameManager.wave_changed.connect(_on_wave_changed)
 
 	# 出场弹起 + 现身辉光（晕圈强闪、灵尘收拢一拍，衔接祭坛冲击环）
 	scale = Vector2(0.2, 0.2)
@@ -75,6 +86,29 @@ func _ready() -> void:
 	_attack_timer = GameManager.rng.randf_range(0.2, 0.5)
 	_search_timer = GameManager.rng.randf_range(0.0, GameBalance.SPIRIT_BEAST_SEARCH_INTERVAL)
 	_orbit_sign = 1.0 if GameManager.rng.randf() < 0.5 else -1.0
+
+## 寿命到期 / 满员顶替的消散口子：不是战死，不播受击音，只余一缕灰蓝灵屑
+func expire_for_replacement() -> void:
+	if _dying:
+		return
+	_dying = true
+	set_physics_process(false)
+	var fx_host: Node = get_tree().current_scene
+	if fx_host != null:
+		ObeliskFx.play_spent_wisp(fx_host, global_position)
+	AudioManager.play_sfx("impact_blunt", 0.3, 1.5)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(self, "scale", Vector2(0.1, 0.1), 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(self, "modulate:a", 0.0, 0.3)
+	tw.chain().tween_callback(queue_free)
+
+## 回合开始：自召唤波起算满寿命即消散（召唤当波算第 1 回合，共在场 3 个回合）
+func _on_wave_changed(wave_number: int) -> void:
+	if _dying:
+		return
+	if wave_number - summon_wave >= GameBalance.SPIRIT_BEAST_LIFETIME_WAVES:
+		expire_for_replacement()
 
 func _exit_tree() -> void:
 	GameManager.unregister_ally(self)
@@ -203,7 +237,7 @@ func _update_attack(delta: float) -> void:
 ## 吐一发灵羽：追踪小幅修正（homing_target）配风筝走位，命中/击杀掉落全走敌人 take_damage 那一条；
 ## 每发后坐 + 音调递进，蓄力余辉随剩余发数递减（charge_ratio 1→0）
 func _fire_one() -> void:
-	var dmg: float = GameBalance.spirit_beast_damage(_wave) * (1.0 + GameManager.engineering_damage + GameManager.synergy_engineering_damage)
+	var dmg: float = GameBalance.spirit_beast_damage(summon_wave) * (1.0 + GameManager.engineering_damage + GameManager.synergy_engineering_damage)
 	var dir := _aim_dir
 	if current_target != null and is_instance_valid(current_target):
 		var to_target: Vector2 = current_target.global_position - global_position

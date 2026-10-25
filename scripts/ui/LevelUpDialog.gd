@@ -317,12 +317,12 @@ func _show_points_tip() -> void:
 			["剩余加点", "%d 次" % pending, GameStyle.PAPER],
 			["每次消耗", "1 点", GameStyle.PAPER],
 		],
-		"body": "战斗中升级不打断节奏，升级点数暂存，回合结束后在此统一领悟加点。",
+		"body": "升级不打断战斗，回合结束在此统一加点。",
 		"notes": [
-			"每次确认选择一条属性消耗 1 点。",
-			"本回合点数全部加完后即可前往商店。",
+			"每次确认消耗 1 点。",
+			"点数加完即可前往商店。",
 		],
-		"foot": "可随时按右上角「属 性」查看当前完整属性与加点。",
+		"foot": "右上角「属 性」可查完整属性。",
 	})
 
 func _pulse_points_badge() -> void:
@@ -376,7 +376,7 @@ func _on_alloc_finished() -> void:
 
 func _layout_for_viewport() -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	var n: int = GameManager.UPGRADE_OFFER_COUNT
+	var n: int = _card_columns()
 	var h: float = panel_h_for(screen.y)
 	_card_w = card_w_for(screen, n)
 	panel.custom_minimum_size = Vector2(panel_w_for(screen, n), h)
@@ -435,6 +435,14 @@ func _refresh() -> void:
 	_populate_cards()
 	_refresh_bars()
 
+## 候选来源与列数：普通悟道读 alloc_offers / UPGRADE_OFFER_COUNT，
+## 子类 SuperAllocDialog 覆写成超级悟道候选（摆位/选中/确认流程完全复用，只换数据源）。
+func _offers() -> Array:
+	return GameManager.alloc_offers
+
+func _card_columns() -> int:
+	return GameManager.UPGRADE_OFFER_COUNT
+
 func _refresh_bars() -> void:
 	var pending: int = GameManager.pending_upgrade_points
 	var total: int = GameManager.alloc_points_total
@@ -469,12 +477,12 @@ func _update_confirm_btn() -> void:
 func _update_gate_label() -> void:
 	var pending: int = GameManager.pending_upgrade_points
 	var rest := "还剩 %d 点未加" % pending if pending > 0 else "点已加完 · 稍候进商店"
-	if selected_index < 0 or selected_index >= GameManager.alloc_offers.size():
+	if selected_index < 0 or selected_index >= _offers().size():
 		gate_label.text = "点中一张卡，再按右侧「确认选择」 · %s" % rest
 		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	else:
 		gate_label.text = "已选【%s】 · %s" % [
-			GameManager.alloc_offers[selected_index].get("title", "?"), rest]
+			_offers()[selected_index].get("title", "?"), rest]
 		GameStyle.label(gate_label, 13, GameStyle.JADE_DK)
 
 func _populate_cards() -> void:
@@ -487,8 +495,8 @@ func _populate_cards() -> void:
 
 	# 一屏候选只抄一份「加之前」的属性影子：五张卡的预读都跟这一份对表，屏内不会自相矛盾
 	var forecast := StatForecast.open()
-	for i in range(GameManager.alloc_offers.size()):
-		var data: Dictionary = GameManager.alloc_offers[i]
+	for i in range(_offers().size()):
+		var data: Dictionary = _offers()[i]
 		var entry := _create_card_entry(data, i, forecast)
 		_card_entries.append(entry)
 		var card_col: Control = entry["root"]
@@ -539,14 +547,14 @@ func open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 		var names: Array[String] = []
 		for k in reasons:
 			names.append(StatInfoData.field_name(String(k)))
-		note = "这条悟道【%s】走的正是「%s」这条链路，所以这件装备会跟着变强。" % [
+		note = "【%s】走「%s」链路，这件装备跟着变强。" % [
 			String(up.get("title", "")), "、".join(names)]
 	StatsTipFactory.open_weapon_tip(self, anchor, w, false, note)
 
 ## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ★」，未选中的退回「×层数」。
 ## 底部 gate_label 同时把「已选【名字】+ 还剩几点」写在明面上。
 func _select_card(index: int) -> void:
-	if index < 0 or index >= GameManager.alloc_offers.size():
+	if index < 0 or index >= _offers().size():
 		return
 	if selected_index == index:
 		return
@@ -561,7 +569,7 @@ func _select_card(index: int) -> void:
 		var badge: Label = entry["state_badge"]
 		var title_lbl: Label = entry["title_lbl"]
 		var is_sel: bool = (i == selected_index)
-		var owned := int(GameManager.upgrade_counts.get(GameManager.alloc_offers[i].get("id", ""), 0))
+		var owned := int(GameManager.upgrade_counts.get(_offers()[i].get("id", ""), 0))
 
 		_center_pivot(card)
 		var tw := card.create_tween()

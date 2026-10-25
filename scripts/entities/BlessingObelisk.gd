@@ -1,12 +1,12 @@
 class_name BlessingObelisk
 extends Node2D
 
-## 聚灵阵 — 玩家主动长按激活的阵法节点。
-## 玩家进入范围后 HUD 显示激活按钮，长按充能，松手前完成则触发全屏灵气冲击
-## 并召唤一只灵兽助战（2026-10-11 强化：灵兽有生命、嘲讽附近敌人、跨回合存活直到战死）；
-## 松手过早或离开范围则中断充能、进度归零。
-## 触发后进入「耗尽灰相」：熄灯、光圈撤掉、石碑去色 —— 一眼看出这座已经用掉了
-## （三座界碑共用同一份 .tscn，所以褪灰材质必须 resource_local_to_scene，见 .tscn）。
+## 聚灵阵 — 玩家主动长按激活的阵法节点（2026-10-25 重设计：单祭坛 · 每回合金币启动）。
+## 玩家进入范围后 HUD 显示激活按钮，长按充能；充满即扣金币并演出「灵石注入」——
+## 金铢从玩家身上飞入晶柱，注入完成才爆发：全屏灵气冲击 + 召唤灵兽助战。
+## 启动后本回合进入「耗尽灰相」；下一回合开始（wave_changed）自动复燃、可再次启动。
+## 金币不够时在 start_charge 入口硬拦（HUD 键是真按得下去的），横幅 + 报错音。
+## 价格常驻画在碑顶：够钱鎏金、不够朱砂标差额、灰相墨灰 —— 抬眼就知道这回合要不要来。
 ##
 ## 进度读数画在阵法上（用户 2026-10-09 真机）：长按那颗键时拇指正盖在键上，HUD 的
 ## 充能条被手挡得死死的 —— 眼睛本来就只能盯着阵法，进度不出现在阵法上等于没有进度。
@@ -18,12 +18,6 @@ extends Node2D
 
 ## 充能时长（秒）—— 2026-10-11 由 1.5 压到 0.8：缩短站桩窗口，降低引导期间被集火的风险
 const CHARGE_TIME: float = 0.8
-## 触发伤害
-const BLESSING_DAMAGE: float = 85.0
-## 击退力度
-const KNOCK_FORCE: float = 320.0
-## 掉落金色金币数量
-const GEM_COUNT: int = 5
 ## 爆闪之后转入灰相的时长（秒）
 const SPENT_FADE_TIME: float = 0.55
 ## 耗尽态去色程度（0~1，喂给 desaturate.gdshader）
@@ -46,6 +40,8 @@ const ARC_WARM_FROM: float = 0.62
 const READOUT_LABEL_POS := Vector2(0, -104)
 ## 读数淡入/淡出时长（秒）：只做「别闪」，不改进度真值
 const READOUT_FADE_TIME: float = 0.15
+## 常驻价格标签摆位：比充能读数再高一档（充能时读数接管，价格让位隐藏）
+const PRICE_LABEL_POS := Vector2(0, -124)
 
 ## 与 HUD 通信的信号
 signal activation_available(obelisk: BlessingObelisk)
@@ -57,7 +53,10 @@ signal blessing_triggered(obelisk: BlessingObelisk)
 
 var is_player_inside: bool = false
 var is_charging: bool = false
-var is_triggered: bool = false
+## 本回合已启动（灰相）。2026-10-25 重设计：不再是「一局一次」，wave_changed 时自动复燃。
+var spent_this_wave: bool = false
+## 金币注入进行中：钱已扣、金铢在飞、爆发未放 —— 期间不许再进充能，回合中途结束也不中断
+var is_infusing: bool = false
 var charge_time: float = 0.0
 
 @onready var light: PointLight2D = get_node_or_null("PointLight2D") as PointLight2D
@@ -66,12 +65,14 @@ var charge_time: float = 0.0
 ## 石碑褪灰走着色器：modulate 乘不出灰色（蓝底乘灰还是蓝），必须按亮度压色
 @onready var stone_mat: ShaderMaterial = (get_node("Sprite2D").material if has_node("Sprite2D") else null) as ShaderMaterial
 
-var gem_scene: PackedScene = preload("res://scenes/entities/AstralGem.tscn")
-## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，生命不耗尽跨回合一直在场
+## 祭坛灵兽（2026-10-11 祭坛强化）：激活时召唤一只，2026-10-25 起最多同场 3 只、存活 3 回合
 var beast_scene: PackedScene = preload("res://scenes/entities/SpiritBeast.tscn")
 
 ## 程序化矢量阵台渲染器
 var _obelisk_renderer: ProceduralObeliskRenderer = null
+
+## 复燃时要把灯光颜色 tween 回出厂值（tscn 里的青蓝），_ready 存底
+var _light_base_color: Color = Color(0.45, 0.85, 1.0)
 
 ## 充能期间的粒子效果 —— 灵气汇聚
 var _charge_particles: CPUParticles2D = null
@@ -84,6 +85,11 @@ var _readout_fade: Tween = null
 var _readout_pct: int = -1
 ## 世界侧读数的进度真值：与 _process 里那条 ratio 同一个数，判据也读它
 var _readout_ratio: float = 0.0
+
+## 常驻价格标签：待用「启动 N 金币」/ 不够标差额 / 灰相「已沉寂 · 下回合恢复」
+var _price_label: Label = null
+## 价格标签当前显示态（text+color），防 stats_updated 高频刷同文案
+var _price_state_key: String = ""
 
 ## 碑脚走针环：轨道一整圈 + 进度弧 + 弧头。颜色由外部按进度从主蓝拉到点缀黄。
 ## 尺寸/颜色一律由外层 _build_charge_readout() 灌进来（不在内类里自取外层常量：
@@ -113,6 +119,7 @@ class ChargeArc:
 func _ready() -> void:
 	if light != null:
 		light.energy = 1.2
+		_light_base_color = light.color
 	if circle_sprite != null:
 		circle_sprite.rotation = 0.0
 
@@ -132,6 +139,13 @@ func _ready() -> void:
 
 	_setup_charge_particles()
 	_build_charge_readout()
+	_build_price_label()
+	# 回合更替（复燃 + 价格随波上涨）与金币变动（差额实时刷新）都挂全局信号
+	if not GameManager.wave_changed.is_connected(_on_wave_changed):
+		GameManager.wave_changed.connect(_on_wave_changed)
+	if not GameManager.stats_updated.is_connected(_on_stats_updated):
+		GameManager.stats_updated.connect(_on_stats_updated)
+	_refresh_price_label()
 
 func _setup_charge_particles() -> void:
 	# 界碑充能粒子（T-3.6）：外圈螺旋向心吸入（空洞骑士 Focus 灵气聚流）
@@ -208,6 +222,82 @@ func _build_charge_readout() -> void:
 		stone_mat.set_shader_parameter("fill_ratio", 0.0)
 		stone_mat.set_shader_parameter("amount", 0.0)
 
+## 常驻价格标签（2026-10-25 重设计）：抬眼就知道这回合启动要多少钱。
+## 待用「启动 N 金币」（金币语义鎏金）；不够钱改朱砂并标差额；灰相「已沉寂 · 下回合恢复」。
+func _build_price_label() -> void:
+	_price_label = Label.new()
+	var ls := LabelSettings.new()
+	ls.font = GameStyle.body_font()
+	ls.font_size = 14
+	ls.outline_size = 5
+	ls.outline_color = Color(0.02, 0.03, 0.06, 0.92)
+	_price_label.label_settings = ls
+	_price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_price_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_price_label.custom_minimum_size = Vector2(160, 20)
+	_price_label.position = PRICE_LABEL_POS - Vector2(80, 10)
+	_price_label.z_index = 0
+	add_child(_price_label)
+
+## 价格标签刷新（金币语义色走 GameStyle：够钱 JADE / 不够 BAD / 灰相 PAPER_DIM）
+func _refresh_price_label() -> void:
+	if _price_label == null:
+		return
+	_price_label.visible = not (is_charging or is_infusing)
+	if spent_this_wave:
+		_set_price("已沉寂 · 下回合恢复", GameStyle.PAPER_DIM)
+		return
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+	if GameManager.spirit_stones >= cost:
+		_set_price("启动 %d 金币" % cost, GameStyle.JADE)
+	else:
+		_set_price("启动 %d 金币 · 差 %d" % [cost, cost - GameManager.spirit_stones], GameStyle.BAD)
+
+func _set_price(text: String, col: Color) -> void:
+	var key := text + str(col)
+	if key == _price_state_key:
+		return
+	_price_state_key = key
+	_price_label.text = text
+	_price_label.label_settings.font_color = col
+
+## 回合开始：价格随波上涨；上回合灰相的祭坛在此复燃
+func _on_wave_changed(_wave_number: int) -> void:
+	if not spent_this_wave:
+		_refresh_price_label()
+		return
+	spent_this_wave = false
+	_revive_from_spent()
+	# 复燃后再刷价：先刷会把「已沉寂」照搬上屏，复燃的碑却写着沉寂就是 bug
+	_refresh_price_label()
+
+func _on_stats_updated(_kills: int, _game_time: float, _stones: int) -> void:
+	_refresh_price_label()
+
+## 灰相反向：灯光复燃、石碑回色、阵盘重亮，泽青灵环宣告「下回合又能用了」
+func _revive_from_spent() -> void:
+	var tw := create_tween()
+	if light != null:
+		light.enabled = true
+		tw.tween_property(light, "energy", 1.2, 0.4)
+		tw.parallel().tween_property(light, "color", _light_base_color, 0.4)
+	if circle_sprite != null:
+		circle_sprite.visible = true
+		tw.parallel().tween_property(circle_sprite, "modulate:a", 1.0, 0.4)
+	if stone_mat != null:
+		tw.parallel().tween_property(stone_mat, ^"shader_parameter/amount", 0.0, 0.4)
+		tw.parallel().tween_property(stone_mat, ^"shader_parameter/fill_ratio", 0.0, 0.4)
+	if _obelisk_renderer != null:
+		_obelisk_renderer.is_spent = false
+		tw.parallel().tween_property(_obelisk_renderer, "spent_blend", 0.0, 0.4)
+	var host: Node = get_parent()
+	if host != null:
+		JuiceEffect.spawn_shockwave(host, global_position, 40.0, Color(0.45, 0.9, 1.0), 0.3)
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, Color(0.45, 0.85, 1.0, 1.0), 1.0, true)
+	# 玩家正好站在阵里：复活即把激活键请回来，不必让他走出去再进来
+	if is_player_inside:
+		activation_available.emit(self)
+
 ## 读数上屏（淡入）：淡的只是外观，进度真值由 _set_readout_ratio 单独维护
 func _show_readout() -> void:
 	if _readout == null:
@@ -264,10 +354,10 @@ func _process(delta: float) -> void:
 		_obelisk_renderer.is_player_inside = is_player_inside
 		_obelisk_renderer.is_charging = is_charging
 		_obelisk_renderer.ring_rotation = circle_sprite.rotation
-	if is_triggered:
+	if spent_this_wave or is_infusing:
 		return
 	if is_charging:
-		# 回合结束守门：敌潮平息后再充满 = 空场释放，白白耗掉这座跨回合共用的碑。
+		# 回合结束守门：敌潮平息后再充满 = 空场释放，白白耗掉这回合唯一的碑。
 		# 回合一离开 FIGHT 阶段立即按取消处理（进度归零，碑保留到下一回合）。
 		var spawner = GameManager.wave_spawner
 		if spawner != null and spawner.phase != WaveSpawner.Phase.FIGHT:
@@ -279,19 +369,29 @@ func _process(delta: float) -> void:
 		_set_readout_ratio(ratio)
 		# 充能视觉反馈：光能随进度提升
 		light.energy = 1.2 + ratio * 2.3
+		# 灯色随进度青→金（2026-10-25 供金主题：连灯色一起往金价靠）
+		light.color = _light_base_color.lerp(Color(1.0, 0.9, 0.6), ratio * 0.7)
 		# 灵符环旋转加速 —— 充能越快转越急
 		circle_sprite.rotation += delta * (1.8 + ratio * 5.0)
 		if charge_time >= CHARGE_TIME:
-			_trigger_blessing()
+			_begin_infusion()
 
 ## HUD 调用：玩家按下激活按钮
 func start_charge() -> void:
-	if is_triggered or not is_player_inside:
+	if spent_this_wave or is_infusing or not is_player_inside:
+		return
+	## 金币闸（2026-10-25 重设计）：不够就横幅 + 报错音，不进充能。
+	## HUD 圆键是真按得下去的（不像商店先置灰），必须在这里硬拦。
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+	if GameManager.spirit_stones < cost:
+		GameManager.announcement_triggered.emit("金币不够启动祭坛")
+		AudioManager.play_sfx("ui_error", 0.9)
 		return
 	is_charging = true
 	charge_time = 0.0
 	_set_readout_ratio(0.0)
 	_show_readout()
+	_refresh_price_label()
 	charge_started.emit(self)
 	if _charge_particles != null:
 		_charge_particles.emitting = true
@@ -307,27 +407,82 @@ func stop_charge() -> void:
 		# 未完成 → 取消，进度归零（碑上的读数跟着一起归零，不许留半截看着像还在充）
 		charge_time = 0.0
 		light.energy = 1.2
+		light.color = _light_base_color
 		circle_sprite.rotation = 0.0
 		_set_readout_ratio(0.0)
 		_hide_readout()
+		_refresh_price_label()
 		charge_cancelled.emit(self)
 
-func _trigger_blessing() -> void:
-	is_triggered = true
+## 充满即成交：先扣钱，再演「灵石注入」，注入完成才爆发（2026-10-25 重设计）。
+## 钱到手就不退：注入中途玩家阵亡 / 回合结束都照常爆发，不因中断吃哑巴亏。
+func _begin_infusion() -> void:
 	is_charging = false
 	if _charge_particles != null:
 		_charge_particles.emitting = false
+	is_infusing = true
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
+	GameManager.spirit_stones -= cost
+	GameManager.total_stones_spent += cost
+	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
+	# 供金声：拾金音降音高变体（沉一点的「入账」，不新增音频资产）
+	AudioManager.play_sfx("gem_pickup", 0.9, 0.82)
+	# 供金扣费飘字挂玩家头顶：钱从玩家身上出；碑顶那片是价格/读数的地盘，别挤在一起
+	_spawn_cost_float_text(cost, player_pos)
+	# 注入演出：金铢从玩家身上沿弧线飞入晶柱；晶柱随金币落进「饮金」渐亮
+	var fx_host: Node = get_parent()
+	if fx_host != null:
+		ObeliskFx.play_coin_infusion(fx_host, global_position, player_pos)
+	if _obelisk_renderer != null:
+		var itw := create_tween()
+		itw.tween_property(_obelisk_renderer, "infuse_ratio", 1.0, ObeliskFx.INFUSION_DUR)
+	_refresh_price_label()
+	var tw := create_tween()
+	tw.tween_interval(ObeliskFx.INFUSION_DUR)
+	tw.tween_callback(_release_blessing)
+
+## 供金扣费飘字：金色「-N」从玩家头顶上浮淡出（低频事件，一次性 Label 自释放；
+## 不走 DamageNumber——它的自定义文案固定治疗绿，扣费用绿字会读错）
+func _spawn_cost_float_text(cost: int, from_pos: Vector2) -> void:
+	var host: Node = get_parent()
+	if host == null:
+		return
+	var lbl := Label.new()
+	var ls := LabelSettings.new()
+	ls.font = GameStyle.body_font()
+	ls.font_size = 16
+	ls.font_color = GameStyle.JADE
+	ls.outline_size = 5
+	ls.outline_color = Color(0.02, 0.03, 0.06, 0.92)
+	lbl.label_settings = ls
+	lbl.text = "-%d" % cost
+	lbl.z_index = 5
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(lbl)
+	lbl.global_position = from_pos + Vector2(-30.0, -76.0)
+	var tw := lbl.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position:y", lbl.position.y - 26.0, 0.8).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, 0.8).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(lbl.queue_free)
+
+## 注入完成 → 爆发：全屏冲击 + 召灵兽 + 转灰相（伤害/击退走随波公式）
+func _release_blessing() -> void:
+	is_infusing = false
+	spent_this_wave = true
 	## 进度读数收工：兑现由冲击波接管，环再留着就是多余的读数
 	_hide_readout()
 	blessing_triggered.emit(self)
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	GameManager.announcement_triggered.emit("◆ 祭坛激活 · 灵兽现身助战 ◆")
-	## 激活演出（2026-10-21）：地面双环扩散 + 通天青玉光柱 + 超白核心闪白，
-	## 由 ObeliskFx 一次性自释放节点接管（存活 0.55s 后自灭，不常驻不占预算）。
+	GameManager.announcement_triggered.emit("◆ 灵石注阵 · 灵兽现身助战 ◆")
+	## 激活演出（2026-10-25 强化）：三重地面环 + 通天青金光柱 + 全屏冲击环，
+	## 由 ObeliskFx 一次性自释放节点接管（不常驻不占预算）。
 	var fx_host: Node = get_parent()
 	if fx_host != null:
 		ObeliskFx.play_activation(fx_host, global_position)
+		ObeliskFx.play_shock_ring(fx_host, global_position)
 	# 一次性喷发粒子：低频事件，绕过同帧限流（金色灵气光柱向上喷）
 	FxParticlePool.burst(FxParticlePool.LEVEL_PILLAR, global_position, GameStyle.FX_HDR_GOLD, 1.0, true)
 	if _obelisk_renderer != null:
@@ -335,19 +490,16 @@ func _trigger_blessing() -> void:
 	_summon_spirit_beast()
 	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，
 	# radius 传 INF 即「全场」；方向走 GameBalance.knock_dir，永不把敌人往玩家身上推）
+	var dmg: float = GameBalance.obelisk_blessing_damage(GameManager.wave_number)
+	var knock: float = GameBalance.obelisk_knock_force(GameManager.wave_number)
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
 	for enemy in EnemyFilter.collect(GameManager.live_enemies, global_position, INF):
-		var knock = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * KNOCK_FORCE
-		enemy.take_damage(BLESSING_DAMAGE, knock, true)
-	# 掉落金色金币
-	for i in range(GEM_COUNT):
-		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）
-		var gem := AstralGem.acquire_or_new(gem_scene, get_tree().current_scene)
-		var offset = Vector2(GameManager.rng.randf_range(-40.0, 40.0), GameManager.rng.randf_range(-40.0, 40.0))
-		gem.global_position = global_position + offset
-		gem.is_gold = true
-		gem.exp_value = 10
-		gem.activate()
+		var knock_vec = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * knock
+		enemy.take_damage(dmg, knock_vec, true)
+		# 受击金花：给「全场都被扫到」逐个盖章（JuiceEffect 池化，超量由池限流兜底）
+		if fx_host != null:
+			JuiceEffect.spawn_impact_pop(fx_host, enemy.global_position, GameStyle.FX_HDR_GOLD, knock_vec.normalized())
+	_refresh_price_label()
 	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相。
 	# 2026-10-21：以 spent_blend 连续形变（下沉/褪色/收束）取代原先 0.55s 后的硬切剪影。
 	var tw = create_tween()
@@ -365,25 +517,38 @@ func _trigger_blessing() -> void:
 	if fx_host != null:
 		ObeliskFx.play_spent_wisp(fx_host, global_position)
 
-## 召唤灵兽助战（2026-10-11 祭坛强化）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
-## 灵兽挂 allies 组、不在回合末清理四组里，生命不耗尽就跨回合一直在场；
-## 每座祭坛 is_triggered 只触发一次 ⇒ 天然「每座一只、全场最多三只」。
+## 召唤灵兽助战（2026-10-25 重设计）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
+## 同场上限 GameBalance.SPIRIT_BEAST_MAX_ACTIVE（3）：满员顶替召唤波最早的那只；
+## 配色取场上未占用的最小档位 —— 场上同时存在的灵兽永不撞色。
 func _summon_spirit_beast() -> void:
 	var host: Node = GameManager.player.get_parent() if GameManager.player != null else get_tree().current_scene
 	if host == null:
 		return
+	var beasts: Array[SpiritBeast] = []
+	for ally in GameManager.live_allies:
+		if ally is SpiritBeast and is_instance_valid(ally):
+			beasts.append(ally)
+	if beasts.size() >= GameBalance.SPIRIT_BEAST_MAX_ACTIVE:
+		var oldest: SpiritBeast = beasts[0]
+		for b in beasts:
+			if b.summon_wave < oldest.summon_wave:
+				oldest = b
+		# 先把将散的摘出选色名单再消散：它的配色档要当场让给新灵兽，
+		# 不然新灵兽会避开一个马上空出来的档、跟某只活着的撞色
+		beasts.erase(oldest)
+		oldest.expire_for_replacement()
 	var beast := beast_scene.instantiate() as SpiritBeast
+	beast.palette_idx = ProceduralDroneRenderer.pick_palette_idx(beasts)
 	host.add_child(beast)
 	beast.global_position = global_position + Vector2(
 		GameManager.rng.randf_range(-36.0, 36.0),
 		GameManager.rng.randf_range(-36.0, 36.0))
-	# 现身演出（2026-10-21）：落点先起青玉聚灵漩涡，再起一圈扩散环 + 上扬灵光。
-	# 漩涡/扩散环由 ObeliskFx 一次性节点自绘（0.32s 自灭）；灵光走既有粒子池（低频事件绕过限流）。
+	# 现身演出（2026-10-25）：落点起同色聚灵漩涡（ObeliskFx 0.32s 自灭）+ 扩散环 + 灵光
 	if host != null:
 		ObeliskFx.play_beast_entrance(host, beast.global_position)
-	FxParticlePool.burst(FxParticlePool.SOUL_ORB, beast.global_position, Color(0.58, 0.95, 0.98, 1.0), 1.0, true)
-	# 现身一拍：灵兽落点扩散一圈泽青灵气环（复用 JuiceEffect 对象池，与灵珑配色同源）
-	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, Color(0.58, 0.95, 0.98), 0.3)
+	var body_col: Color = ProceduralDroneRenderer.body_color(beast.palette_idx)
+	FxParticlePool.burst(FxParticlePool.SOUL_ORB, beast.global_position, body_col, 1.0, true)
+	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, body_col, 0.3)
 
 ## 灰相收口：灯直接关掉、范围环不再占位（看不见却还在的圈就是 bug）
 func _enter_spent_look() -> void:
@@ -393,14 +558,16 @@ func _enter_spent_look() -> void:
 		_obelisk_renderer.is_spent = true
 
 func _on_interaction_area_body_entered(body: Node2D) -> void:
-	if body is Player and not is_triggered:
+	if body is Player:
+		# 进出登记与灰相解耦：灰相期间照常记录位置，复燃时才好把激活键请回来
 		is_player_inside = true
-		activation_available.emit(self)
+		if not spent_this_wave and not is_infusing:
+			activation_available.emit(self)
 
 func _on_interaction_area_body_exited(body: Node2D) -> void:
 	if body is Player:
 		if is_charging:
 			stop_charge()
 		is_player_inside = false
-		if not is_triggered:
+		if not spent_this_wave and not is_infusing:
 			activation_unavailable.emit(self)

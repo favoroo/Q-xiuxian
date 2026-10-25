@@ -33,11 +33,12 @@ func _ready() -> void:
 	for i in range(6):
 		await get_tree().process_frame
 	_shoot("before")
-	# 走真实链路：进范围 → 长按 → 充能满自动触发
+	# 走真实链路：进范围 → 长按 → 金币注入 → 自动触发（2026-10-25 先给足启动价）
 	_spent.is_player_inside = true
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
 	_spent.start_charge()
 	var guard := 0
-	while not _spent.is_triggered and guard < 300:
+	while not _spent.spent_this_wave and guard < 600:
 		await get_tree().create_timer(0.05, true, false, true).timeout
 		guard += 1
 	await get_tree().create_timer(1.2, true, false, true).timeout

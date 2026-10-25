@@ -23,27 +23,27 @@ const COL_TEXT_W := 300.0
 const PAGES: Array[Dictionary] = [
 	{
 		"title": "战斗与技能",
-		"body": "左下摇杆走位，武器自动攻击——你只管躲伤害、捡金币和经验。\n右下圆钮是技能，手动放、有冷却；部分角色还有第二颗额外技能钮。打不过就跑，边退边打。",
+		"body": "左摇杆移动，右按钮放技能。\n武器自动攻击，你只管走位躲伤害。",
 		"image": "res://assets/art/tutorial/shot_combat.png",
 	},
 	{
 		"title": "装备标签羁绊",
-		"body": "每件武器带「器类 + 五行」两个标签。\n点右上「属性」看羁绊栏：同标签凑齐 2 / 4 / 6 件，逐级解锁加成——阵容越纯越强。",
+		"body": "每件武器带「器类 + 五行」标签。\n同标签凑 2 / 4 / 6 件解锁羁绊，阵容越纯越强。",
 		"image": "res://assets/art/tutorial/shot_synergy.png",
 	},
 	{
 		"title": "商店与升星",
-		"body": "商店 5 格货架：看中的点「锁定」留到下回合；不满意可「重掷」，费用逐次递增。\n集齐 3 把同名同星武器可合成升星，每星伤害翻倍。",
+		"body": "看中的点「锁定」留到下回合；「重掷」换一批，费用递增。\n3 把同名同星合成升星，伤害翻倍。",
 		"image": "res://assets/art/tutorial/shot_shop.png",
 	},
 	{
 		"title": "悟道加点",
-		"body": "升级不打断战斗，攒到回合结束统一加点。\n一屏 5 张候选，点中再按「确认」；每回合 1 次免费刷新，之后花金币。",
+		"body": "升级不打断战斗，回合结束统一加点。\n点卡再按「确认」；每回合 1 次免费刷新。",
 		"image": "res://assets/art/tutorial/shot_alloc.png",
 	},
 	{
 		"title": "场景交互物",
-		"body": "聚灵阵：走入光圈长按激活，全屏重创敌人并掉金币，每座限用一次，留给 Boss。\n宝箱：打 3 下砸开，分木/铜/玉三档，越稀有掉越多，玉匣直接送道具。",
+		"body": "聚灵阵：花金币长按启动，全屏重创敌人并召唤灵兽，每回合一次。\n宝箱：打 3 下砸开，越稀有掉越多，玉匣必送道具。",
 		"image": "res://assets/art/tutorial/shot_field.png",
 	},
 ]
@@ -239,7 +239,7 @@ func _on_back_pressed() -> void:
 	left_via_back = true
 	close()
 
-## 构建单页：左实机截图 + 右（页题 + 正文顶对齐），正文 wrap_cjk 硬换行
+## 构建单页：左实机截图 + 右（页题 + 正文顶对齐），正文 wrap_bbcode 硬换行
 func _build_page(p: Dictionary) -> Control:
 	var page := PanelContainer.new()
 	page.mouse_filter = Control.MOUSE_FILTER_IGNORE

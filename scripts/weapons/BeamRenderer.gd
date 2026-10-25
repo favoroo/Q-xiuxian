@@ -9,7 +9,8 @@ extends Node2D
 var length: float = 0.0
 var beam_width: float = 10.0
 var tint: Color = Color(0.70, 0.55, 1.0)
-
+## 芯线色（三层同形的 HDR 核心那一层）：默认幽夜紫超白；★3/★4 由 beam_on 下发星级色
+var _core_tint: Color = GameStyle.FX_HDR_SHADOW
 const SEGS := 12
 ## 重绘节流按帧率档位取双档（2026-10-15 VisualRate 档位联动）：束流端点跟随移动实体，
 ## 60fps 档 20Hz 是每 3 帧一画、「位置顺画面卡」，翻倍到 40Hz；低档 20Hz 维持 perf_probe 预算。
@@ -45,10 +46,13 @@ func _setup_light() -> void:
 	add_child(_tip_light)
 
 ## 亮起/续命：每帧下发当前几何（长度随射线命中变化）
-func beam_on(p_length: float, p_width: float, p_tint: Color) -> void:
+## core_override：芯线色覆盖（alpha==0 = 走默认 FX_HDR_SHADOW 幽夜紫）。
+## ★3/★4 用它把整束（光晕/主束/芯/端头光/命中灯全从 tint+core 派生）换成星级色。
+func beam_on(p_length: float, p_width: float, p_tint: Color, core_override: Color = Color(0, 0, 0, 0)) -> void:
 	length = p_length
 	beam_width = p_width
 	tint = p_tint
+	_core_tint = core_override if core_override.a > 0.0 else GameStyle.FX_HDR_SHADOW
 	if not visible:
 		visible = true
 		set_process(true)
@@ -95,7 +99,7 @@ func _draw() -> void:
 	glow.a = 0.22
 	var mid := tint
 	mid.a = 0.55
-	var core := GameStyle.FX_HDR_SHADOW
+	var core := _core_tint
 
 	draw_polyline(_pts_buf, glow, beam_width * 0.8)
 	draw_polyline(_pts_buf, mid, beam_width * 0.38)

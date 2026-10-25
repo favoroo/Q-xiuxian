@@ -12,6 +12,11 @@ const HP_GROWTH := 1.10         ## 每回合生命复利倍率（低于敌人 1.
 const BASE_DAMAGE := 28.0       ## 1 波召唤时的灵羽单发伤害（2026-10-15 三连灵羽弹重做：16→28，一轮 3 发）
 const DAMAGE_GROWTH := 1.08     ## 每回合伤害复利倍率
 
+# ---------------- 寿命与同场上限（2026-10-25 祭坛重设计） ----------------
+
+const LIFETIME_WAVES := 3       ## 灵兽存活回合数：自召唤波起算，第 3 个回合开始时消散（同场最多 3 只 ⇒ 滚动顶替）
+const MAX_ACTIVE := 3           ## 同场灵兽数上限：满员再启动祭坛 → 顶替召唤波最早的那只
+
 ## 召唤灵兽生命
 static func max_hp_for_wave(wave: int) -> float:
 	return BASE_HP * pow(HP_GROWTH, float(maxi(wave, 1) - 1))

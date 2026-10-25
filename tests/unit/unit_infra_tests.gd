@@ -250,8 +250,9 @@ func _test_start_in_endless() -> void:
 	GameManager.reset_run()
 
 func _test_achievement_and_meta_save() -> void:
-	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 35, "成就共配置 35 条（17 奖励型 + 18 纯荣誉型）")
+	# 1. 数据表完整性与反查自洽（2026-10-25 新手节奏重做：39 条成就、全部带实物奖励）
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 39, "成就共配置 39 条（17 角色 + 16 道具 + 6 武器，零纯荣誉）")
+	var reward_kinds := {"cultivator": 0, "item": 0, "weapon": 0, "none": 0}
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
@@ -259,16 +260,45 @@ func _test_achievement_and_meta_save() -> void:
 			"成就 %s 分类归属四大类之一" % aid)
 		var rtype := String(adef.get("reward_type", ""))
 		var rid := String(adef.get("reward_id", ""))
+		reward_kinds[rtype] = int(reward_kinds.get(rtype, 0)) + 1
 		if rtype == "cultivator":
 			_c.check(not CultivatorData.get_def(rid).is_empty(), "成就 %s 奖励修士 %s 在修士表中存在" % [aid, rid])
 			_c.equals(AchievementData.cultivator_unlock_achievement(rid).get("id", ""), aid, "反查修士 %s 解锁成就一致" % rid)
 		elif rtype == "item":
 			_c.check(not ItemData.get_def(rid).is_empty(), "成就 %s 奖励法宝 %s 在法宝表中存在" % [aid, rid])
 			_c.equals(AchievementData.item_unlock_achievement(rid).get("id", ""), aid, "反查法宝 %s 解锁成就一致" % rid)
+		elif rtype == "weapon":
+			_c.check(not WeaponData.get_def(rid).is_empty(), "成就 %s 奖励武器 %s 在武器表中存在" % [aid, rid])
+			_c.equals(AchievementData.weapon_unlock_achievement(rid).get("id", ""), aid, "反查武器 %s 解锁成就一致" % rid)
 		else:
-			_c.equals(rtype, "none", "成就 %s 非角色/法宝奖励时必须为纯荣誉 none 型" % aid)
-			_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 8, "初始默认开放 8 名基础修士")
-		_c.equals(AchievementData.DEFAULT_ITEMS.size(), ItemData.DEFS.size() - 4, "初始默认开放全部基础法宝（全 %d 件除去 4 件成就解锁）" % ItemData.DEFS.size())
+			_c.equals(rtype, "none", "成就 %s 奖励类型合法（%s）" % [aid, rtype])
+	_c.equals(int(reward_kinds["none"]), 0, "零纯荣誉成就：每条达成都有实物回报（玩家才愿意追）")
+	_c.equals(int(reward_kinds["cultivator"]), 17, "17 条成就解锁角色（21 名角色 = 4 默认 + 17 成就）")
+	_c.equals(int(reward_kinds["weapon"]), AchievementData.LOCKED_WEAPONS.size(), "锁定武器数与武器奖励型成就数一致")
+	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 4, "初始默认开放 4 名基础修士（新手第一局只看 4 张卡）")
+	_c.equals(AchievementData.DEFAULT_ITEMS.size(), ItemData.shop_ids().size() - 16,
+		"初始默认开放 %d 件法宝（全 %d 件除去 16 件成就解锁）" % [
+			ItemData.shop_ids().size() - 16, ItemData.shop_ids().size()])
+	_c.equals(AchievementData.default_weapons().size(), WeaponData.DEFS.size() - 6,
+		"初始默认开放 %d 把武器（全 %d 把除去 6 把成就解锁）" % [
+			WeaponData.DEFS.size() - 6, WeaponData.DEFS.size()])
+
+	# 1.0 锁定武器不许是开局自选武器（否则等于把一个流派的入门件锁了）
+	var locked_starter: Array = []
+	for wid in AchievementData.LOCKED_WEAPONS:
+		if wid in WeaponData.STARTER_IDS:
+			locked_starter.append(wid)
+	_c.check(locked_starter.is_empty(), "锁定的武器不含开局自选件（冲突: %s）" % str(locked_starter))
+
+	# 1.0b 每个器类在「全解锁」后仍 >= 4 把：四条「单局 4 件同系」成就必须真的凑得出来
+	var class_counts := {}
+	for wid in WeaponData.DEFS.keys():
+		for t in WeaponData.tags_of(String(wid)):
+			if t in WeaponData.CLASSES:
+				class_counts[t] = int(class_counts.get(t, 0)) + 1
+	for cls in WeaponData.CLASSES:
+		_c.check(int(class_counts.get(cls, 0)) >= 4, "器类 %s 解锁后仍有 %d 把（>=4 才凑得出同系成就）" % [
+			cls, int(class_counts.get(cls, 0))])
 
 	# 1.1 解锁覆盖：每名角色都必须有途径——要么默认解锁，要么反查得到成就。
 	# 御兽师曾两处都没列（7 默认 + 12 成就 = 19），选角页永远「暂无收录途径」，
@@ -279,6 +309,18 @@ func _test_achievement_and_meta_save() -> void:
 		if not is_default and AchievementData.cultivator_unlock_achievement(cid).is_empty():
 			no_way.append(cid)
 	_c.check(no_way.is_empty(), "所有角色均有解锁途径（无途径: %s）" % str(no_way))
+
+	# 1.1b 武器同理：每把武器要么在默认池里，要么反查到解锁成就。
+	# 缺了这条，新加武器忘挂成就时会静默变成「图鉴里永远未收录、商店永远抽不到」的死件。
+	var w_no_way: Array = []
+	var default_wpns := AchievementData.default_weapons()
+	for wid in WeaponData.DEFS.keys():
+		var w := String(wid)
+		if w in default_wpns:
+			continue
+		if AchievementData.weapon_unlock_achievement(w).is_empty():
+			w_no_way.append(w)
+	_c.check(w_no_way.is_empty(), "所有武器均有解锁途径（无途径: %s）" % str(w_no_way))
 
 	# 2. 法宝过滤入池：未解锁法宝绝不上架
 	var rng := RandomNumberGenerator.new()
@@ -295,6 +337,8 @@ func _test_achievement_and_meta_save() -> void:
 	# 备份当前玩家真实进度
 	var orig_cults := GameManager.unlocked_cultivators.duplicate()
 	var orig_items := GameManager.unlocked_items.duplicate()
+	var orig_wpns := GameManager.unlocked_weapons.duplicate()
+	var orig_unread := GameManager.unread_unlocks.duplicate()
 	var orig_achs := GameManager.unlocked_achievements.duplicate()
 	var orig_stats := GameManager.career_stats.duplicate()
 	var orig_records := GameManager.cultivator_best_danger.duplicate()
@@ -304,6 +348,8 @@ func _test_achievement_and_meta_save() -> void:
 	# 3. 模拟结算与成就达成触发
 	GameManager.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
 	GameManager.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
+	GameManager.unlocked_weapons = AchievementData.default_weapons()
+	GameManager.unread_unlocks = []
 	GameManager.unlocked_achievements = []
 	GameManager.career_stats = {
 		"total_runs": 0, "total_wins": 0, "total_kills": 0,
@@ -356,6 +402,8 @@ func _test_achievement_and_meta_save() -> void:
 	GameManager._save_progress()
 	GameManager.unlocked_cultivators = []
 	GameManager.unlocked_items = []
+	GameManager.unlocked_weapons = []
+	GameManager.unread_unlocks = []
 	GameManager.unlocked_achievements = []
 	GameManager.career_stats = {}
 	GameManager.cultivator_best_danger = {}
@@ -369,10 +417,21 @@ func _test_achievement_and_meta_save() -> void:
 	_c.equals(int(GameManager.cultivator_best_danger.get("jianchi", -1)), 1, "读档后剑痴 D1 印记恢复")
 	_c.check(GameManager.is_cultivator_danger_cleared("jianchi", 1), "读档后剑痴 D1 封印恢复")
 	_c.equals(GameManager.run_history.size(), 2, "读档后战报恢复")
+	# 未读解锁标记也要跨局持久：否则玩家退出再进，「新」角标就没了
+	_c.check(GameManager.unread_unlocks.has("cultivator:meiying"), "读档后未读解锁标记保持（新角色角标不丢）")
+	_c.check(GameManager.unread_unlocks.has("item:pojia_zhui"), "读档后未读道具解锁标记保持")
+	# 销标记：看过了就没了，且幂等
+	GameManager.mark_unlock_read("cultivator", "meiying")
+	_c.check(not GameManager.is_unlock_unread("cultivator", "meiying"), "mark_unlock_read 销掉未读标记")
+	GameManager.mark_unlock_read("cultivator", "meiying")
+	_c.check(not GameManager.is_unlock_unread("cultivator", "meiying"), "重复销标记幂等")
+	_c.check(GameManager.is_unlock_unread("item", "pojia_zhui"), "只销掉点过的那一条，别的未读还在")
 
 	# 还原测试前的玩家真实进度
 	GameManager.unlocked_cultivators = orig_cults
 	GameManager.unlocked_items = orig_items
+	GameManager.unlocked_weapons = orig_wpns
+	GameManager.unread_unlocks = orig_unread
 	GameManager.unlocked_achievements = orig_achs
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_records

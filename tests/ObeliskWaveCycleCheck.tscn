@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://buv5ae07vyel1"]
+
+[ext_resource type="Script" path="res://tests/obelisk_wave_cycle_check.gd" id="1_chk"]
+
+[node name="ObeliskWaveCycleCheck" type="Node"]
+script = ExtResource("1_chk")

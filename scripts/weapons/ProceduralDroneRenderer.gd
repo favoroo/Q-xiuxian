@@ -16,10 +16,32 @@ extends Node2D
 
 const BC = preload("res://scripts/weapons/shapes/BrutalistCommon.gd")
 
-## 灵珑（祭坛灵兽）专属平涂配色：不挂五元素 tag，不进 BC.PAL，常量只落这一处
-const LING_BODY := Color(0.42, 0.80, 0.76)    ## 灵青主色（圆灵真身大块）
-const LING_ACCENT := Color(0.96, 0.85, 0.30)  ## 撞色（金焰苗 / 灵尘双星 / 蓄力球 / 出场环 / 星钉）
-const LING_PALE := Color(0.93, 0.97, 0.94)    ## 月白脸窗（唯一亮层，平涂不透光）
+## 灵珑（祭坛灵兽）三套平涂配色（2026-10-25 重设计）：同场多只灵兽不撞色，
+## 档位由祭坛召唤侧按「场上未占用最小档」分配（pick_palette_idx）。
+## body/accent/pale 三键与旧 LING_BODY/LING_ACCENT/LING_PALE 同义，0 档即原配色。
+const PALETTES := [
+	{"body": Color(0.42, 0.80, 0.76), "accent": Color(0.96, 0.85, 0.30), "pale": Color(0.93, 0.97, 0.94)},  # 0 灵青（原配色）
+	{"body": Color(0.95, 0.42, 0.34), "accent": Color(1.0, 0.78, 0.30), "pale": Color(0.97, 0.93, 0.88)},   # 1 赤焰
+	{"body": Color(0.58, 0.48, 0.96), "accent": Color(0.82, 0.90, 1.0), "pale": Color(0.93, 0.95, 1.0)},    # 2 紫电
+]
+
+## 配色档位：仅灵珑（YUAN_LING）消费，宿主（SpiritBeast）召唤时灌入
+var palette_idx: int = 0
+
+## 本档主色：祭坛现身演出（灵光/灵环）取同色，让登场一拍与灵兽本体一个色系
+static func body_color(idx: int) -> Color:
+	return PALETTES[clampi(idx, 0, PALETTES.size() - 1)]["body"]
+
+## 从场上灵兽列表挑一个未被占用的最小配色档（全占满时按数量取模回落）
+static func pick_palette_idx(beasts: Array) -> int:
+	var used := {}
+	for b in beasts:
+		if b != null and is_instance_valid(b):
+			used[int(b.palette_idx)] = true
+	for i in PALETTES.size():
+		if not used.has(i):
+			return i
+	return beasts.size() % PALETTES.size()
 
 enum DroneKind {
 	LINGDIE,        ## 灵蝶：木色硬边四翅 + 翅尖撞色三角 + 墨身方头
@@ -361,6 +383,11 @@ func _draw_jade_pendant() -> void:
 ## bank_angle 只倾躯体组（圆身旋转不变免转点，耳芽/焰苗/高光/裂纹/蓄力球随动，
 ## 足影/出场环不随动），speed_ratio 驱动焰苗摆幅 / 尾后灵尘。
 func _draw_yuan_ling() -> void:
+	# 本只灵珑的调色板（2026-10-25 三套配色：同场不撞色，宿主灌 palette_idx）
+	var ling_pal: Dictionary = PALETTES[clampi(palette_idx, 0, PALETTES.size() - 1)]
+	var ling_body: Color = ling_pal["body"]
+	var ling_acc: Color = ling_pal["accent"]
+	var ling_pale: Color = ling_pal["pale"]
 	# 灵息强度：满血 1.0，随生命衰减（保底 0.25 不致全熄）；濒死程度与灵息闪烁
 	var spirit: float = 0.25 + 0.75 * clampf(hp_ratio, 0.0, 1.0)
 	var low: float = clampf((0.30 - hp_ratio) / 0.30, 0.0, 1.0)
@@ -370,7 +397,7 @@ func _draw_yuan_ling() -> void:
 	# 受击闪白：1→0 自减（约 0.16s），平涂块提亮回落
 	var hf: float = clampf(hit_flash, 0.0, 1.0)
 	# 常用色（撞色 / 墨，带 alpha 派生色多处用，先取好）
-	var acc := LING_ACCENT
+	var acc := ling_acc
 	var ink := BC.INK
 
 	# 悬浮呼吸起伏（灵身随呼吸整体上浮下沉，与旧拍同频）
@@ -402,7 +429,7 @@ func _draw_yuan_ling() -> void:
 	for side in [-1.0, 1.0]:
 		var ear_c := _rot_one(pivot + Vector2(side * core_r * 0.66, -core_r * 0.80), pivot, bank_angle)
 		draw_circle(ear_c, core_r * 0.20 + 1.1, ink)
-		draw_circle(ear_c, core_r * 0.20, LING_BODY.darkened(0.25).lerp(LING_PALE, hf * 0.75))
+		draw_circle(ear_c, core_r * 0.20, ling_body.darkened(0.25).lerp(ling_pale, hf * 0.75))
 
 	# 4. 环绕灵尘双星（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前 —— 绕到身后被灵魄
 	#    挡住、绕到两侧探头，是真「环绕」而不是贴面漂浮；随 bank）
@@ -416,7 +443,7 @@ func _draw_yuan_ling() -> void:
 
 	# 5. 正圆灵魄身（圆对 bank 旋转不变，disc 免转点；硬投影 + 粗墨环 + 灵青平涂；
 	#    生命低落时圆身整体转暗 —— 无脸口径下生命仍由本体传达）
-	var body_col: Color = LING_BODY.darkened(0.30 * (1.0 - spirit)).lerp(LING_PALE, hf * 0.75)
+	var body_col: Color = ling_body.darkened(0.30 * (1.0 - spirit)).lerp(ling_pale, hf * 0.75)
 	BC.disc(self, pivot, core_r, body_col, 2.4)
 
 	# 6. 头顶金焰苗（单块双焰舌硬边多边形：主舌高挑、侧舌外倾，根部压住墨环；
@@ -430,12 +457,12 @@ func _draw_yuan_ling() -> void:
 		pivot + Vector2(core_r * 0.22, -core_r * 0.86),
 		pivot + Vector2(core_r * 0.26, -core_r * 0.62),
 	])
-	BC.flat(self, _rot_pts(crown, pivot, bank_angle), acc.lerp(LING_PALE, hf * 0.6), 1.4)
+	BC.flat(self, _rot_pts(crown, pivot, bank_angle), acc.lerp(ling_pale, hf * 0.6), 1.4)
 
 	# 7. 月白高光一点（无脸口径：单点亮斑代替五官，随灵息呼吸明灭；随 bank）
 	var hl_a: float = 0.55 + 0.25 * sin(_anim_time * 2.6)
 	draw_circle(_rot_one(pivot + Vector2(-core_r * 0.30, -core_r * 0.34), pivot, bank_angle),
-		core_r * 0.17, Color(LING_PALE.r, LING_PALE.g, LING_PALE.b, hl_a))
+		core_r * 0.17, Color(ling_pale.r, ling_pale.g, ling_pale.b, hl_a))
 
 	# 8. 濒死裂纹（hp_ratio < 0.3 浮现的墨色裂痕，左右镜像一对，随灵息闪烁；随 bank）
 	if low > 0.0:

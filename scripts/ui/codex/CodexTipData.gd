@@ -22,6 +22,8 @@ const BEHAVIOR_NAMES := {
 }
 
 ## 武器详情：攻击方式 / 基础伤害 / 间隔 / 范围 / 买入价 + 穿透·齐射·异常 + 属性受益
+## 未实战收录（CodexCollection）时只给名字与一句话定位，数值与词条一律不剧透（2026-10-25 锁图鉴）。
+## 注意：title 始终是真实武器名 —— 图鉴卡的 tip_title 与它必须一致，否则热区判据会判「弹错卡」。
 static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 	var def := WeaponData.get_def(wid)
 	if def.is_empty():
@@ -31,6 +33,23 @@ static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 		if t in WeaponData.ELEMENTS:
 			elem = String(t)
 	var chip_color: Color = GameStyle.ELEMENT_COLORS.get(elem, GameStyle.GOLD)
+
+	if not CodexCollection.is_weapon_seen(wid):
+		var lock_foot := foot
+		if lock_foot == "":
+			lock_foot = AchievementData.weapon_unlock_hint_text(wid, "解锁条件：")
+			if lock_foot == AchievementData.NO_UNLOCK_HINT:
+				lock_foot = "收录条件：在金币阁买下这件武器"
+		return {
+			"title": String(def.get("name", wid)),
+			"icon": String(def.get("icon", "")),
+			"chip": " 未收录 ",
+			"chip_color": GameStyle.GREY,
+			"rows": [],
+			"body": "尚未用过这件武器。买下或获得一次后，这里会显示它的完整数值与特性。",
+			"notes": [],
+			"foot": lock_foot,
+		}
 
 	# 行名与货架卡/详情卡用同一套词（2026-10-11 用户「看不懂」口径的同类问题）：
 	# 「伤害」加「基础」两字：图鉴这一列是数据表纸面值，本局加成不在这里。
@@ -71,12 +90,31 @@ static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 
 
 ## 道具详情：品阶 / 原价 / 出售返还 + apply 加成行 + desc 逐行 notes
+## 未实战收录时只留品阶与原价，加成行与说明不剧透（2026-10-25 锁图鉴）。
 static func item_payload(iid: String, foot: String = "") -> Dictionary:
 	var def := ItemData.get_def(iid)
 	if def.is_empty():
 		return {}
 	var tier_num := int(def.get("tier", 1))
 	var tier_col := ItemData.tier_color(tier_num)
+
+	if not CodexCollection.is_item_seen(iid):
+		var lock_foot := foot
+		if lock_foot == "":
+			lock_foot = AchievementData.unlock_hint_text(iid, true, "收录条件：")
+			if lock_foot == AchievementData.NO_UNLOCK_HINT:
+				lock_foot = "收录条件：在金币阁买下或开玉匣获得一次"
+		return {
+			"title": String(def.get("name", iid)),
+			"icon": String(def.get("icon", "")),
+			"chip": " 未收录 ",
+			"chip_color": GameStyle.GREY,
+			"rows": [["品阶", ItemData.tier_label(tier_num), tier_col]],
+			"notes": [],
+			"body": "尚未拿到过这件法宝。买到或开出一次后，这里会显示它的完整效果。",
+			"foot": lock_foot,
+		}
+
 	var rows: Array = [
 		["品阶", ItemData.tier_label(tier_num), tier_col],
 		# 词与商店那张详情卡对齐（2026-10-12 道具可出售）：这一行是数据表里的基准价，

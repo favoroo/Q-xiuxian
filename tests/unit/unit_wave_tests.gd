@@ -266,15 +266,34 @@ func _test_danger_system() -> void:
 		_c.check(GameBalance.danger_dmg_mult(d + 1) > GameBalance.danger_dmg_mult(d), "伤害档间严格递增 D%d→D%d" % [d, d + 1])
 		_c.check(GameBalance.danger_count_mult(d + 1) > GameBalance.danger_count_mult(d), "妖潮档间严格递增 D%d→D%d" % [d, d + 1])
 
-	# 4 档全部开放（2026-10-20）：任意档位都能直接选中，不再有解锁梯子
-	GameManager.danger_level = 0
+	# 逐级通关解锁（2026-10-25）：可选上限 = 生涯最高通关难度 + 1，未通关只开 D0。
+	# 备份/还原玩家的真实生涯档，避免测试把别人的进度压低。
+	var orig_bdc := int(GameManager.career_stats.get("best_danger_cleared", -1))
+	GameManager.career_stats["best_danger_cleared"] = -1
+	_c.equals(GameManager.max_danger_unlocked(), 0, "从未通关时只开放「简单」")
 	for d in range(GameBalance.DANGER_MAX + 1):
 		GameManager.set_danger(d)
-		_c.equals(GameManager.danger_level, d, "危险度 %d 开局即可直接选中" % d)
+		_c.equals(GameManager.danger_level, 0, "未通关时点 D%d 被夹回 D0" % d)
+	_c.check(GameManager.is_danger_unlocked(0), "D0 默认可用")
+	_c.check(not GameManager.is_danger_unlocked(1), "D1 未通关前不可用")
+
+	# 通关 Dk → D(k+1) 开放
+	for cleared in range(GameBalance.DANGER_MAX):
+		GameManager.career_stats["best_danger_cleared"] = cleared
+		_c.equals(GameManager.max_danger_unlocked(), cleared + 1, "通关 D%d 后开放到 D%d" % [cleared, cleared + 1])
+		_c.check(GameManager.is_danger_unlocked(cleared + 1), "通关 D%d 后 D%d 可选" % [cleared, cleared + 1])
+		if cleared + 2 <= GameBalance.DANGER_MAX:
+			_c.check(not GameManager.is_danger_unlocked(cleared + 2), "通关 D%d 后 D%d 仍锁着" % [cleared, cleared + 2])
+
+	# 顶档通关后不再往上涨（越界夹到顶档）
+	GameManager.career_stats["best_danger_cleared"] = GameBalance.DANGER_MAX
+	_c.equals(GameManager.max_danger_unlocked(), GameBalance.DANGER_MAX, "顶档通关后上限仍是顶档")
 	GameManager.set_danger(99)
 	_c.equals(GameManager.danger_level, GameBalance.DANGER_MAX, "越界档位夹到顶档")
 	GameManager.set_danger(-5)
 	_c.equals(GameManager.danger_level, 0, "负档夹到简单")
+	GameManager.career_stats["best_danger_cleared"] = orig_bdc
+	GameManager.danger_level = 0
 
 	# 名号与封印表长度与档数同步
 	_c.equals(AchievementData.DANGER_NAMES.size(), GameBalance.DANGER_MAX + 1, "难度名号数与档数一致")

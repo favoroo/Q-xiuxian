@@ -1,11 +1,13 @@
 extends Node
 
-## 祭坛灵兽判据（2026-10-11 远程吐息重做，真实 Main 场景，不打 mock）：
-##   ① 祭坛触发即召唤：_trigger_blessing 后 allies 登记 +1，气血按当前波次取表
+## 祭坛灵兽判据（2026-10-11 远程吐息重做；2026-10-25 祭坛金币启动 + 灵兽寿命重设计，
+## 真实 Main 场景，不打 mock）：
+##   ① 祭坛触发即召唤：扣费注入爆发后 allies 登记 +1，气血按当前波次取表
 ##   ② 嘲讽：玩家在反方向远处，敌人仍改追嘲讽圈内的灵兽（替玩家分担火力的牙齿）
 ##   ③ 吐息与承伤：丹弹打得敌人掉血（灵兽在战斗）；敌人贴近后灵兽也掉血（近身啃咬真咬得到它）
 ##   ④ 受击无敌帧 + 战死注销：同帧两刀只结算一刀；血量耗尽消散并从 allies 注销
 ##   ⑤ 跨波存活：end_wave 清场（敌人消散）后灵兽仍在场 —— 血量没耗完就一直在
+##   ⑥ 回合寿命：自召唤波起算满 SPIRIT_BEAST_LIFETIME_WAVES（3）个回合，回合开始即消散并注销
 ## 运行: godot --headless --path . res://tests/SpiritBeastCheck.tscn
 
 const EPS := 0.6
@@ -68,18 +70,25 @@ func _run() -> void:
 	await _case_invincible_and_death()
 	if _beast != null and is_instance_valid(_beast):
 		await _case_cross_wave()
+		await _case_lifetime()
 
 	Engine.time_scale = 1.0
 	_quit()
 
-## ① 祭坛触发即召唤（直接调生产入口 _trigger_blessing，不走 HUD 长按模拟）
+## ① 祭坛触发即召唤（直接调生产入口 _begin_infusion：扣费 → 注入 0.45s → 爆发召灵兽），
+## 不走 HUD 长按模拟；金币前置给足本回合启动价
 func _case_summon() -> void:
 	var obelisk := get_node_or_null("/root/Main/MapLayer/ObeliskCenter") as BlessingObelisk
-	_c.check(obelisk != null, "① 前置：祭坛节点在（MapLayer/ObeliskCenter）")
+	_c.check(obelisk != null, "① 前置：祭坛节点在（MapLayer/ObeliskCenter，单祭坛）")
 	if obelisk == null:
 		return
-	obelisk._trigger_blessing()
-	await _settle(4)
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1))
+	var stones_before: int = GameManager.spirit_stones
+	obelisk._begin_infusion()
+	# 等注入 tween 走完（0.45s 游戏秒）→ _release_blessing 召灵兽
+	await _settle(60)
+	_c.check(GameManager.spirit_stones == stones_before - GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)),
+		"① 启动扣走本回合启动价金币（剩 %d）" % GameManager.spirit_stones)
 	_c.equals(GameManager.live_allies.size(), 1, "① 祭坛触发：allies 登记 +1")
 	if GameManager.live_allies.is_empty():
 		return
@@ -154,6 +163,24 @@ func _case_cross_wave() -> void:
 	_c.check(is_instance_valid(_beast) and not _beast.is_queued_for_deletion(),
 		"⑤ 跨波存活：灵兽血量没耗完，波末清场后仍在场")
 	_c.check(GameManager.live_allies.has(_beast), "⑤ 跨波存活：allies 登记仍在")
+
+## ⑥ 回合寿命（2026-10-25 重设计）：寿命内跨波不散，满 SPIRIT_BEAST_LIFETIME_WAVES
+## 个回合后的回合开始（wave_changed）即消散并注销 —— 直接调灵兽自己的寿命闸，不广播假波次
+func _case_lifetime() -> void:
+	_c.check(is_instance_valid(_beast), "⑥ 前置：灵兽还在场")
+	if not is_instance_valid(_beast):
+		return
+	# 寿命内最后一回合开始：仍在场
+	_beast._on_wave_changed(_beast.summon_wave + GameBalance.SPIRIT_BEAST_LIFETIME_WAVES - 1)
+	await _settle(2)
+	_c.check(is_instance_valid(_beast) and not _beast._dying,
+		"⑥ 寿命内：第 %d 回合开始仍在场（召唤波 %d）" % [
+				GameBalance.SPIRIT_BEAST_LIFETIME_WAVES, _beast.summon_wave])
+	# 满寿命回合开始：消散 + 注销
+	_beast._on_wave_changed(_beast.summon_wave + GameBalance.SPIRIT_BEAST_LIFETIME_WAVES)
+	await _settle(60)
+	_c.check(not is_instance_valid(_beast), "⑥ 寿命尽头：灵兽已消散")
+	_c.check(not GameManager.live_allies.has(_beast), "⑥ 寿命尽头：已从 allies 注销")
 
 func _spawn_slime(pos: Vector2) -> EnemyBase:
 	var slime: EnemyBase = (load("res://scenes/entities/SlimeEnemy.tscn") as PackedScene).instantiate() as EnemyBase

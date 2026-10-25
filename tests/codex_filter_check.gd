@@ -20,6 +20,11 @@ var _manual: ManualDialog
 func _ready() -> void:
 	get_tree().root.size = VIEWPORT_SIZE
 	Engine.time_scale = 4.0
+	# 2026-10-25 锁图鉴：未实战收录的武器只显示名字与剪影，不画数值行与三签。
+	# 本判据量的是「已收录卡面的三签是否齐全」，所以先把全表登记成已收录；
+	# 未收录态由 UnlockProgressionCheck 单独钉住。
+	for wid in WeaponData.DEFS.keys():
+		CodexCollection.record_weapon(String(wid))
 	_manual = ManualDialog.new()
 	add_child(_manual)
 	_manual.open()

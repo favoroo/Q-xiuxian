@@ -53,6 +53,8 @@ static func apply_main_item_pity(gm: Node, wave: int) -> void:
 	var weights: Array = []
 	for id in ItemData.DEFS.keys():
 		var iid := String(id)
+		if ItemData.is_granted_only(iid):
+			continue
 		if not gm.unlocked_items.is_empty() and not (iid in gm.unlocked_items):
 			continue
 		if not PierceLimit.filter_item_id(gm, iid):
@@ -125,16 +127,23 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 					"sold": false, "locked": false,
 				}
 	var w_id := weighted_weapon_pick(gm)
+	# ★2 成品（2026-10-25）：武器格有概率直接刷成 2 星，给升星路补一条金币捷径。
+	# 临门一脚（手里同名 ★2 已 2 件，差 1 合 ★3）时抬概率地板 —— 追梦加权负责让同名多刷，
+	# 这里负责让「刷出来的那件正好是 ★2」。无头/单测环境 count_copies 全走鸭子接口，安全。
+	var star := 1
+	var near_merge2: bool = (WeaponInventory.count_copies(gm, w_id, 2) % 3) == 2
+	if gm.rng.randf() < GameBalance.weapon_star2_chance(wave, gm.luck, near_merge2):
+		star = 2
 	var base := int(WeaponData.get_def(w_id).get("price", 20))
 	return {
-		"kind": "weapon", "id": w_id,
-		"price": GameBalance.weapon_price(base, wave, gm.shop_price_mult),
+		"kind": "weapon", "id": w_id, "star": star,
+		"price": GameBalance.weapon_offer_price(base, wave, star, gm.shop_price_mult),
 		"sold": false, "locked": false,
 	}
 
 ## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权 + 同名追梦加权抽武器
 static func weighted_weapon_pick(gm: Node) -> String:
-	var pool: Array = WeaponData.SHOP_POOL
+	var pool: Array = unlocked_weapon_pool(gm)
 	var counts := SynergySystem.tag_counts(gm)
 	var luck_mult := GameBalance.shop_luck_mult(gm.luck)
 	var weights: Array = []
@@ -146,6 +155,18 @@ static func weighted_weapon_pick(gm: Node) -> String:
 		weights.append(w)
 	var idx := GameBalance.weighted_pick_index(weights, gm.rng.randf())
 	return String(pool[idx])
+
+## 可上货架的武器池（2026-10-25 武器解锁）：按 unlocked_weapons 过滤。
+## 池被滤空时回落全池 —— 与 ItemData.pick_id 同一兜底口径，货架绝不留空格。
+## unlocked_weapons 为空数组同样视为「不过滤」（异常档兜底，正常档 ProgressStore 会回灌默认池）。
+static func unlocked_weapon_pool(gm: Node) -> Array:
+	if gm == null or gm.unlocked_weapons.is_empty():
+		return WeaponData.SHOP_POOL
+	var pool: Array = []
+	for w_id in WeaponData.SHOP_POOL:
+		if String(w_id) in gm.unlocked_weapons:
+			pool.append(w_id)
+	return pool if not pool.is_empty() else WeaponData.SHOP_POOL
 
 ## 同名追梦加权（2026-10-24）：按手里这把武器的最高星级与同星件数取倍率。
 ## 三合一是「3 件换 1 件」，合成后标签件数掉 2 ⇒ 流派亲和反而变弱，越合越刷不到自己那把，
@@ -204,7 +225,8 @@ static func buy_offer(gm: Node, index: int) -> bool:
 				AudioManager.play_sfx("ui_error", 0.9)
 				return false
 		_:
-			ok = WeaponInventory.add_weapon(gm, offer.get("id", ""))
+			# 货架可以卖 ★2 成品：星数随 offer 走，缺省 ★1（保底塞进来的武器与旧存档都不带 star 键）
+			ok = WeaponInventory.add_weapon(gm, offer.get("id", ""), int(offer.get("star", 1)))
 			if not ok:
 				gm.announcement_triggered.emit("装备与背包都满了，先出售一些吧")
 				AudioManager.play_sfx("ui_error", 0.9)

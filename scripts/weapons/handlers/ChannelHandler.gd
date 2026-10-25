@@ -40,6 +40,37 @@ static func cone_half_angle(w) -> float:
 static func star3_dmg_mult(w) -> float:
 	return float(WeaponData.awaken_perk(w.behavior, w.star).get("dmg_mult", 1.0))
 
+## 星级束色（2026-10-25）：★1/★2 保持武器本来的五行器光，★3 向鎏金混 45%，
+## ★4 向电光青混 60%——宽度之外再给一条「颜色分档」的读数。
+## 只混不变（保留五行身份：水镜仍是水镜，只是更烫）。
+static func beam_tint(w, base: Color) -> Color:
+	var star: int = int(w.star)
+	if star < 3:
+		return base
+	var target: Color = GameStyle.star_fx_ldr(star, 0)
+	var mix: float = 0.45 if star < 4 else 0.6
+	return base.lerp(target, mix)
+
+## 束流芯线色：默认幽夜紫；★4 换电光青 HDR（整束最亮那一层直接换色，泛光同源）
+static func beam_core_tint(w) -> Color:
+	var star: int = int(w.star)
+	if star >= 3:
+		return GameStyle.star_fx_color(star, 0)
+	return Color(0, 0, 0, 0)
+
+## 喷吐锥色：★3 鎏金 / ★4 电光青（火葫芦的冷焰极境）
+static func cone_tint(w) -> Color:
+	var star: int = int(w.star)
+	if star >= 3:
+		return GameStyle.star_fx_ldr(star, 0)
+	return Color(0, 0, 0, 0)
+
+## 起喷亮闪色：★3 鎏金 / ★4 电光青 HDR，低星保留原本的淡紫白
+static func channel_cast_color(star: int) -> Color:
+	if star >= 3:
+		return GameStyle.star_fx_color(star, 0)
+	return Color(1.4, 1.25, 1.5)
+
 ## 光束长度射线与判定矩形的静态复用对象（单线程使用安全，尺寸/变换每次调用重设）
 static var _beam_ray_query: PhysicsRayQueryParameters2D = null
 static var _beam_shape: RectangleShape2D = null
@@ -51,8 +82,8 @@ static func perform_channel(w) -> void:
 	if not w._channel_on:
 		w._channel_on = true
 		w._beam_need_cast = true
-		AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), 0.9)
-		w._flash_sprite(Color(1.4, 1.25, 1.5), 0.14)
+		StrikeFx.fire_sfx(w, WeaponData.sfx_for(w.weapon_def_id), 0.9)
+		w._flash_sprite(channel_cast_color(w.star), 0.14)
 	w._channel_left = CHANNEL_HOLD
 
 static func stop(w) -> void:
@@ -86,7 +117,10 @@ static func tick(w, delta: float) -> void:
 		# 2026-10-24 ★3 觉醒「贯日」：判定盒本身 ×beam_width_mult（deal_beam_damage 同源），
 		# 视觉 = 新判定宽 × w_mult（±16% 辉光宽容照旧）。
 		var w_mult: float = 1.0 + 0.08 * float(w.star - 1)
-		w.beam_renderer.beam_on(w._beam_len, BEAM_HALF_WIDTH * 2.0 * beam_width_mult(w) * w_mult, w._get_aura_color())
+		# 2026-10-25 ★3/★4 束色分档：三层（光晕/主束/芯/端头灯）全从 tint+core 派生，
+		# 只在这一处下发即可整束换色——旧写法只变宽不变色，极境光束读着只是「粗了一点的普通束」。
+		w.beam_renderer.beam_on(w._beam_len, BEAM_HALF_WIDTH * 2.0 * beam_width_mult(w) * w_mult,
+			beam_tint(w, w._get_aura_color()), beam_core_tint(w))
 		if w._channel_tick <= 0.0:
 			w._channel_tick = BEAM_TICK
 			deal_beam_damage(w)
@@ -94,7 +128,7 @@ static func tick(w, delta: float) -> void:
 		# 锥长从器口起算：判定圆心 == 器口、半径 == 锥长，渲染器同源下发
 		# （锥角经 cone_half_angle 下发：★3 觉醒「燎原」判定与视觉同步加宽）
 		var cone_len: float = maxf(40.0, reach - w.muzzle_len)
-		w.cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(cone_half_angle(w))))
+		w.cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(cone_half_angle(w))), cone_tint(w))
 		if w._channel_tick <= 0.0:
 			w._channel_tick = CONE_TICK
 			deal_cone_damage(w, cone_len)

@@ -361,6 +361,13 @@ func get_weapon_count() -> int:
 	equipped_cleanup()
 	return weapon_holder.get_child_count()
 
+## 杀戮节奏（神通）：击杀返还全部上阵武器的当前冷却（鸭类型访问，武器侧提供 refund_cooldown）
+func refund_weapon_cooldowns(pct: float) -> void:
+	equipped_cleanup()
+	for w in weapon_holder.get_children():
+		if is_instance_valid(w) and w.has_method("refund_cooldown"):
+			w.refund_cooldown(pct)
+
 func _recalculate_weapon_slots() -> void:
 	var count = get_weapon_count()
 	if count == 0:

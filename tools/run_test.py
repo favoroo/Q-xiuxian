@@ -45,8 +45,11 @@ CORE_TESTS = [
 ALL_SKIP_PATTERNS = ("Preview", "AudioGallery")
 # 名字不带 Preview 但同样 headless 跑不了的：WeaponHeadFusionCheck 要真实窗口出图（文件头有说明），
 # WeaponProbe 是"一件法器一进程"的手动实测台（非判据，必须带 -- --only <weapon> 参数），
-# ChestLookProbe 是把匣子三段画到 /tmp/chest_stages.png 的出图台（无像素时自己打 NO PIXELS 退 1）
-ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookProbe.tscn"}
+# ChestLookProbe 是把匣子三段画到 /tmp/chest_stages.png 的出图台（无像素时自己打 NO PIXELS 退 1）。
+# ToneCapture（真机抓拍，文件头自标「非判据」）与 AudioGameOverProbe / AudioSoakProbe
+# （2026-10-25 音频满幅自愈的诊断遗产：前者是挂起复现器、后者是 380s 浸泡）在 --all 里只会白等超时。
+ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookProbe.tscn",
+	"ToneCapture.tscn", "AudioGameOverProbe.tscn", "AudioSoakProbe.tscn"}
 
 # 真在干活的慢判据：默认 35s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
 SLOW_TEST_LIMITS = {

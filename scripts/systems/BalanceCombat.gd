@@ -366,6 +366,21 @@ static func knock_dir(source: Vector2, enemy_pos: Vector2, player_pos: Vector2) 
 		return away                              # 纯对撞（玩家—敌人—落点共线）：直接外推
 	return out.normalized()
 
+# ---------------- 聚灵阵释放（2026-10-25 祭坛重设计：伤害随波成长，别让固定 85 后期挠痒） ----------------
+
+const OBELISK_DAMAGE_BASE := 120.0   ## 1 波全屏伤害（原固定 85：W1 抬到 120 让首次启动就有「大招感」）
+const OBELISK_DAMAGE_GROWTH := 1.14  ## 每回合伤害复利（缓于敌血 1.16：相对威力随波缓降，鼓励灵兽价值 > 伤害价值）
+const OBELISK_KNOCK_BASE := 340.0    ## 1 波击退力度
+const OBELISK_KNOCK_WAVE_STEP := 10.0 ## 每回合击退加成（线性小步，与伤害复利同向）
+
+## 全屏冲击伤害
+static func obelisk_blessing_damage(wave: int) -> float:
+	return OBELISK_DAMAGE_BASE * pow(OBELISK_DAMAGE_GROWTH, float(maxi(wave, 1) - 1))
+
+## 全屏击退力度
+static func obelisk_knock_force(wave: int) -> float:
+	return OBELISK_KNOCK_BASE + float(maxi(wave, 1) - 1) * OBELISK_KNOCK_WAVE_STEP
+
 # ---------------- 同目标短窗集火韧性（防一帧蒸发，保障受击打击感） ----------------
 
 const FOCUS_FIRE_WINDOW := 0.22      ## 集火保护短窗（秒）

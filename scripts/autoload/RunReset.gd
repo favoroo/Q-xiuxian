@@ -179,6 +179,10 @@ static func reset(gm: Node) -> void:
 	gm.stash = []
 	gm.upgrade_history.clear()
 	gm.upgrade_counts.clear()
+	# 超级悟道会话（2026-10-25）：候选/已结算关卡/已拿卡三件套，新开一局全部归零
+	gm.super_alloc_offers.clear()
+	gm.super_alloc_done_waves.clear()
+	gm.super_cards_taken.clear()
 	gm.last_run_new_achievements = []
 	gm.last_run_new_records = []
 	gm.peak_stones = 0

@@ -18,6 +18,9 @@ signal shop_closed
 ## 回合后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
 signal alloc_opened
 signal alloc_finished
+## 超级悟道（每 5 关逆天五选一）：先于普通加点弹出，选完才回到 alloc → shop
+signal super_alloc_opened
+signal super_alloc_finished
 signal pending_points_changed(pending: int)
 signal screen_damage_pulsed(color: Color, duration: float)
 signal screen_shockwave_triggered(pos: Vector2, strength: float, duration: float)
@@ -135,14 +138,18 @@ func unregister_ally(a: Node) -> void:
 	live_allies.erase(a)
 	ally_count = live_allies.size()
 
-# 危险度（D0 ~ D3 共 4 档，2026-10-20 起全部开放、不再逐档解锁）：开始菜单自由选择
+# 危险度（D0 ~ D3 共 4 档，2026-10-25 起逐级通关解锁）：开始菜单可选范围见 max_danger_unlocked()
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
 var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（reset_run 不动它）
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
 var unlocked_cultivators: Array = []   ## 已解锁角色 ID 列表
 var unlocked_items: Array = []         ## 已解锁道具 ID 列表
+var unlocked_weapons: Array = []       ## 已解锁武器 ID 列表（2026-10-25 新增，商店抽池按它过滤）
 var unlocked_achievements: Array = []  ## 已达成的成就 ID 列表
+## 未读解锁标记（2026-10-25）：元素形如 "cultivator:duoshe" / "item:pojia_zhui" / "weapon:jianling"。
+## 结算屏发放时写入，玩家在主菜单/选人/图鉴里点开该条目后由 mark_unlock_read 销掉。
+var unread_unlocks: Array = []
 var career_stats: Dictionary = {
 	"total_runs": 0,
 	"total_wins": 0,
@@ -252,9 +259,39 @@ func is_item_unlocked(item_id: String) -> bool:
 		return true
 	return item_id in unlocked_items
 
+## 检查武器是否已解锁入池（2026-10-25）：开局自选武器恒可用，不受成就门控
+func is_weapon_unlocked(wid: String) -> bool:
+	if author_mode:
+		return true
+	if wid in WeaponData.STARTER_IDS:
+		return true
+	return wid in unlocked_weapons
+
 ## 检查成就是否已达成
 func is_achievement_unlocked(ach_id: String) -> bool:
 	return ach_id in unlocked_achievements
+
+# ---------------- 未读解锁标记（2026-10-25 解锁提示升级） ----------------
+
+## 解锁 key 统一拼法：类型:对象 id（结算屏写入、各界面读取，别处不再手拼字符串）
+static func unlock_key(kind: String, id: String) -> String:
+	return kind + ":" + id
+
+## 是否还有没被玩家点开看过的解锁条目
+func has_unread_unlocks() -> bool:
+	return not unread_unlocks.is_empty()
+
+## 某个对象是否处于「刚解锁、还没看过」状态
+func is_unlock_unread(kind: String, id: String) -> bool:
+	return unlock_key(kind, id) in unread_unlocks
+
+## 玩家看过了：销掉未读标记并落盘（重复调用幂等，未命中不写盘）
+func mark_unlock_read(kind: String, id: String) -> void:
+	var key := unlock_key(kind, id)
+	if not (key in unread_unlocks):
+		return
+	unread_unlocks.erase(key)
+	_save_progress()
 
 ## 查询某位角色已通关的最高危险度（未通关返回 -1）
 func get_cultivator_best_danger(cid: String) -> int:
@@ -308,9 +345,22 @@ func get_cultivator_record(cid: String) -> Dictionary:
 		"best_kills": int(rec.get("best_kills", 0)),
 	}
 
-## 选择危险度：4 档全部开放，只夹合法区间
+## 已解锁的最高难度（2026-10-25 逐级解锁）：由「生涯最高通关难度」派生，
+## 不新增存档字段 —— 老档只要通过关，读档后自然就有对应档位。
+## 从未通关 → 只开放 D0；通关 D0 → 开放 D1；依此类推，顶档通关后恒为顶档。
+func max_danger_unlocked() -> int:
+	var best := int(career_stats.get("best_danger_cleared", -1))
+	return clampi(best + 1, 0, GameBalance.DANGER_MAX)
+
+## 某个难度档是否已解锁（作者模式全开，只做读侧短路、不写档）
+func is_danger_unlocked(d: int) -> bool:
+	if author_mode:
+		return true
+	return d >= 0 and d <= max_danger_unlocked()
+
+## 选择危险度：夹到已解锁区间（未解锁档位点不动，UI 另给锁定态）
 func set_danger(d: int) -> void:
-	danger_level = clampi(d, 0, GameBalance.DANGER_MAX)
+	danger_level = clampi(d, 0, max_danger_unlocked())
 
 ## 设置是否从主菜单直接进入无尽试炼
 func set_start_in_endless(enabled: bool) -> void:
@@ -506,6 +556,11 @@ var alloc_points_total: int = 0   ## 本次结算开局时攒下的点数（面�
 var alloc_reroll_cost: int = 2
 var alloc_reroll_count: int = 0
 var alloc_reroll_free_left: int = 0
+
+## 超级悟道会话：候选（三流派+两通用）、已结算过的关卡、本局已拿过的卡
+var super_alloc_offers: Array[Dictionary] = []
+var super_alloc_done_waves: Array[int] = []
+var super_cards_taken: Array[String] = []
 
 ## 已持有道具（被动道具）的 id 列表：无限持有、买即生效，数据定义见 ItemData
 var items: Array = []
@@ -792,9 +847,11 @@ func get_effective_dodge() -> float:
 	var extra_still := item_hook_sum("still_dodge") if still_time > 0.0 else 0.0
 	return BalanceCombat.effective_dodge(dodge + extra_still, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
-## 上阵武器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）
+## 上阵武器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）；
+## 神通【开天辟地】经 item_hook_sum("weapon_slot_bonus") 在本局上限之上 +1
 func max_weapon_slots() -> int:
-	return weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
+	var base: int = weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
+	return base + int(item_hook_sum("weapon_slot_bonus"))
 
 ## 多武器神识分流系数：按当前上阵武器总数（悬浮武器 + 环绕灵物）计算单把直击伤害折算。
 ## 环绕灵宝按半权计入（召唤物自主作战不占神识），机关炮台仍按全额。
@@ -957,6 +1014,9 @@ func add_item(item_id: String) -> bool:
 	_hook_cache.clear()
 	_stat_dict_frame = -1  # 属性字典 memo 立即作废：道具当帧就得生效
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
+	# 图鉴实战收录（2026-10-25 锁图鉴）：买到/拿到过一次才在图鉴里揭晓完整词条。
+	# 埋点放在 add_item 这一个口上 —— 商店购买、玉匣白送、作者面板全走它。
+	CodexCollection.record_item(item_id)
 	return true
 
 ## 出售一件道具（2026-10-12 用户：「商店里的这些道具，如果有买到不想要的，也可以卖掉」）：
@@ -967,6 +1027,10 @@ func add_item(item_id: String) -> bool:
 func sell_item(item_id: String) -> bool:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
+		return false
+	if ItemData.is_no_sell(item_id):
+		announcement_triggered.emit("【%s】是神通，不可出售" % String(def.get("name", item_id)))
+		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	var i: int = items.find(item_id)
 	if i < 0:
@@ -1081,7 +1145,12 @@ func slots_used() -> int:
 	return WeaponInventory.slots_used(self)
 
 func add_weapon(w_id: String, star: int = 1) -> bool:
-	return WeaponInventory.add_weapon(self, w_id, star)
+	var ok := WeaponInventory.add_weapon(self, w_id, star)
+	# 图鉴实战收录（2026-10-25 锁图鉴）：开局自选、商店买下、合成产出都算「用过」。
+	# 只在真的加进背包后记 —— 加失败（槽位满/未知 id）不该点亮图鉴。
+	if ok:
+		CodexCollection.record_weapon(w_id)
+	return ok
 
 func count_copies(w_id: String, star: int) -> int:
 	return WeaponInventory.count_copies(self, w_id, star)

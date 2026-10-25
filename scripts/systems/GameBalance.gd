@@ -237,6 +237,11 @@ const RARITY_LEGEND_CAP := BalanceEconomy.RARITY_LEGEND_CAP
 const POTION_CHANCE := BalanceEconomy.POTION_CHANCE
 const ITEM_CHANCE := BalanceEconomy.ITEM_CHANCE
 const PET_CHANCE := BalanceEconomy.PET_CHANCE
+const STAR2_UNLOCK_WAVE := BalanceEconomy.STAR2_UNLOCK_WAVE
+const STAR2_PER_WAVE := BalanceEconomy.STAR2_PER_WAVE
+const STAR2_CAP := BalanceEconomy.STAR2_CAP
+const STAR2_NEAR_MERGE_FLOOR := BalanceEconomy.STAR2_NEAR_MERGE_FLOOR
+const STAR2_PRICE_MULT := BalanceEconomy.STAR2_PRICE_MULT
 const POTION_HEAL_RATIO := BalanceEconomy.POTION_HEAL_RATIO
 const TAG_AFFINITY_MIN_COPIES := BalanceEconomy.TAG_AFFINITY_MIN_COPIES
 const TAG_AFFINITY_MULT_L1 := BalanceEconomy.TAG_AFFINITY_MULT_L1
@@ -352,6 +357,8 @@ const SPIRIT_BEAST_MOVE_ACCEL := BalanceSpiritBeast.MOVE_ACCEL
 const SPIRIT_BEAST_HIT_INVINCIBLE := BalanceSpiritBeast.HIT_INVINCIBLE
 const SPIRIT_BEAST_SEARCH_INTERVAL := BalanceSpiritBeast.SEARCH_INTERVAL
 const SPIRIT_BEAST_IDLE_FOLLOW_DIST := BalanceSpiritBeast.IDLE_FOLLOW_DIST
+const SPIRIT_BEAST_LIFETIME_WAVES := BalanceSpiritBeast.LIFETIME_WAVES
+const SPIRIT_BEAST_MAX_ACTIVE := BalanceSpiritBeast.MAX_ACTIVE
 
 # 藏宝匣（宝箱）：数量 / 三档 / 击数 / 掉落 → BalanceChest
 const CHEST_BREAK_HITS := BalanceChest.CHEST_BREAK_HITS
@@ -370,6 +377,14 @@ static func exp_to_next(prev_needed: int) -> int:
 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.weapon_price(base, wave, price_mult)
+
+## 货架武器售价（★2 成品按 STAR2_PRICE_MULT 乘级）：卡面印的数与 buy_offer 扣的钱共用这一条
+static func weapon_offer_price(base: int, wave: int, star: int, price_mult: float) -> int:
+	return BalanceEconomy.weapon_offer_price(base, wave, star, price_mult)
+
+## 单个武器格出 ★2 成品的概率（解锁波次 / 波次成长 × 福缘 / 封顶 / 临门一脚地板）
+static func weapon_star2_chance(wave: int, luck: float, near_merge: bool) -> float:
+	return BalanceEconomy.weapon_star2_chance(wave, luck, near_merge)
 
 static func item_price(base: int, wave: int, price_mult: float) -> int:
 	return BalanceEconomy.item_price(base, wave, price_mult)
@@ -390,6 +405,17 @@ static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
 
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return BalanceEconomy.reroll_cost(wave, reroll_count, price_mult)
+
+## 聚灵阵启动价（2026-10-25 祭坛重设计）→ BalanceEconomy
+static func obelisk_activation_cost(wave: int) -> int:
+	return BalanceEconomy.obelisk_activation_cost(wave)
+
+## 聚灵阵释放伤害 / 击退（2026-10-25 祭坛重设计）→ BalanceCombat
+static func obelisk_blessing_damage(wave: int) -> float:
+	return BalanceCombat.obelisk_blessing_damage(wave)
+
+static func obelisk_knock_force(wave: int) -> float:
+	return BalanceCombat.obelisk_knock_force(wave)
 
 static func harvest_gain(harvest: float) -> int:
 	return BalanceEconomy.harvest_gain(harvest)

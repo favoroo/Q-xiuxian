@@ -11,6 +11,11 @@ extends Control
 @onready var endless_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/EndlessButton
 @onready var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
 
+## 解锁卡尺寸（2026-10-25）：图标 48 见方 + 两行文字 + 右端「新」角签。
+## 卡宽按 960 设计宽留足（结算面板本身约 560 宽），三条并排会超出 ⇒ 由 _unlocks_box 纵向堆叠。
+const UNLOCK_CARD_W := 420.0
+const UNLOCK_ICON := 40.0
+
 var _menu_btn: Button
 var _revive_btn: Button
 var _unlocks_box: VBoxContainer
@@ -273,27 +278,75 @@ func _refresh_unlocks() -> void:
 		var adef := AchievementData.get_def(aid)
 		if adef.is_empty():
 			continue
-		var rtype := String(adef.get("reward_type", ""))
-		var rname := String(adef.get("reward_name", ""))
-		var prefix := "新角色解锁" if rtype == "cultivator" else "新道具解锁"
-		var chip := Label.new()
-		if rtype == "none":
-			# 纯荣誉成就没有奖励对象，文案不硬拼「解锁：」
-			chip.text = " ◆ 成就「%s」达成 ◆ " % String(adef.get("name", ""))
-		else:
-			chip.text = " ◆ 成就「%s」· %s：%s ◆ " % [adef.get("name", ""), prefix, rname]
-		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
-		# 暗玉徽章配暗底亮字（JADE 已调深，与 JADE_DK 同明度会糊）
-		GameStyle.label(chip, 12, GameStyle.CHALK)
-		_unlocks_box.add_child(chip)
+		_unlocks_box.add_child(_make_unlock_card(adef))
 	if newly.size() > max_show:
 		var more := Label.new()
 		more.text = "（另有 %d 项成就达成，可于主菜单「战绩」查阅）" % (newly.size() - max_show)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
 		_unlocks_box.add_child(more)
+
+## 单条解锁卡（2026-10-25 解锁提示升级）：图标 + 成就名 + 「新角色/道具/武器：X」+ 右端「新」角签。
+## 旧写法只是一行纯文字 chip —— 结算屏是全项目唯一展示解锁的通道，纯文字等于把奖励藏了。
+## 图标取成就自己的 icon 字段（以前完全没用上），48×48 与图鉴/货架卡同一档。
+func _make_unlock_card(adef: Dictionary) -> Control:
+	var rtype := String(adef.get("reward_type", ""))
+	var label := AchievementData.reward_label(adef)
+	var reward_name := String(adef.get("reward_name", ""))
+
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	card.custom_minimum_size = Vector2(UNLOCK_CARD_W, 0)
+	var sb := GameStyle.block(GameStyle.JADE_DK, GameStyle.SLANT_BLOCK, Vector2(3, 4))
+	sb.content_margin_left = 8.0
+	sb.content_margin_right = 8.0
+	sb.content_margin_top = 5.0
+	sb.content_margin_bottom = 5.0
+	card.add_theme_stylebox_override("panel", sb)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	card.add_child(row)
+
+	# 左：奖励对象图标（成就 icon 字段；缺图时留空框，与图鉴卡同一兜底口径）
+	var icon_box := PanelContainer.new()
+	icon_box.custom_minimum_size = Vector2(UNLOCK_ICON, UNLOCK_ICON)
+	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_box.add_theme_stylebox_override("panel",
+		GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE, 1, 0.0))
+	var icon_path := String(adef.get("icon", ""))
+	var icon_tex := GameStyle.icon_texture_rect(icon_path, Vector2(UNLOCK_ICON - 4, UNLOCK_ICON - 4))
+	icon_box.add_child(icon_tex)
+	row.add_child(icon_box)
+
+	# 中：两行文字（成就名 / 解锁了什么）
+	var text_box := VBoxContainer.new()
+	text_box.add_theme_constant_override("separation", 1)
+	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(text_box)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "成就「%s」" % String(adef.get("name", ""))
+	GameStyle.label(title_lbl, 12, GameStyle.CHALK, 0, GameStyle.INK, true)
+	text_box.add_child(title_lbl)
+
+	var sub_lbl := Label.new()
+	if label.is_empty():
+		sub_lbl.text = "达成"
+	else:
+		sub_lbl.text = "%s：%s" % [label, reward_name]
+	GameStyle.label(sub_lbl, 11, GameStyle.JADE)
+	text_box.add_child(sub_lbl)
+
+	# 右：「新」角签（与主菜单/选人角标同一枚字，玩家能把它和别处的红点对上）
+	var new_chip := Label.new()
+	new_chip.text = " 新 "
+	new_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	new_chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+	GameStyle.label(new_chip, 10, GameStyle.INK_TEXT)
+	row.add_child(new_chip)
+	return card
 
 ## 新纪录标签：本局刷新的生涯/道统纪录（金 chips，上限 3 条）
 func _refresh_records() -> void:

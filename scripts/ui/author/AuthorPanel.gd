@@ -63,6 +63,11 @@ var _weapon_box: VBoxContainer
 var _item_grid: GridContainer
 var _pet_grid: GridContainer
 
+# 商店页
+var _shop_view: AuthorShopView = null
+
+signal manual_requested(tag: String)
+
 func _get_title_text() -> String:
 	return "作 者 模 式"
 
@@ -95,6 +100,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	add_tab_button(1, "◆ 战斗", 76.0)
 	add_tab_button(2, "◆ 武器", 76.0)
 	add_tab_button(3, "◆ 道具", 76.0)
+	add_tab_button(4, "◆ 商店", 76.0)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -110,6 +116,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_pages.append(_build_combat_page(content_panel))
 	_pages.append(_build_weapon_page(content_panel))
 	_pages.append(_build_item_page(content_panel))
+	_pages.append(_build_shop_page(content_panel))
 	switch_tab(0)
 
 func _on_opened() -> void:
@@ -122,8 +129,16 @@ func _on_opened() -> void:
 	_rebuild_weapon_grid()
 	_rebuild_item_grid()
 	_rebuild_pet_grid()
+	if _shop_view != null:
+		_shop_view.refresh(false)
+
+func _on_tab_switched(index: int) -> void:
+	if index == 4 and _shop_view != null:
+		_shop_view.refresh(false)
 
 func _on_closed() -> void:
+	if _shop_view != null:
+		DetailTip.close_all(_shop_view)
 	# 战斗中被 HUD 打开时，关面板要把暂停还回去；商店/悟道期间打开前本来就是暂停，保持。
 	# 结算屏路径（直接胜利/失败）由 _keep_paused_on_close 钉住暂停，否则树一解暂停，
 	# 结算对话框的入场动画与 GameOver 流程会被 WaveSpawner 抢跑。
@@ -218,6 +233,8 @@ func _add_stones(amount: int) -> void:
 	_refresh_state_labels()
 	# 商店/悟道面板开着时，金币读数、价格键的「买得起/差 N」与刷新键的可用态都要当场重画
 	state_changed.emit("stones")
+	if _shop_view != null:
+		_shop_view.refresh_readouts()
 
 func _refresh_state_labels() -> void:
 	if _level_value_lbl != null:
@@ -314,6 +331,8 @@ func _clear_stash() -> void:
 	GameManager.notify_weapons_updated(GameManager.get_weapons_summary())
 	# 商店开着时陈列行要当场收掉这些格子（原先只发 weapons_updated，商店不监听）
 	inventory_changed.emit("weapon")
+	if _shop_view != null:
+		_shop_view.refresh_inventory()
 	GameManager.announcement_triggered.emit("背包已清空")
 	AudioManager.play_sfx("sell", 0.9)
 
@@ -323,6 +342,8 @@ func _heal_full() -> void:
 		p.heal(p.max_health)
 		# 商店顶栏的生命徽记与回复药卡「这一口回多少」都按当前血量现算：补满后必须重画
 		state_changed.emit("hp")
+		if _shop_view != null:
+			_shop_view.refresh_readouts()
 
 func _end_wave_now() -> void:
 	if GameManager.wave_spawner == null:
@@ -526,6 +547,7 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 			"color": GameStyle.STAR4_NEON if is_top else GameStyle.JADE,
 			"edge_color": GameStyle.STAR4_NEON_EDGE if is_top else GameStyle.JADE_EDGE,
 			"text_color": GameStyle.INK_TEXT,
+			"keep_open": true,
 			"callback": func() -> void: _buy_weapon(wid, want),
 		})
 	payload["actions"] = [row]
@@ -625,6 +647,8 @@ func _grant(kind: String, id: String, star: int = 1) -> void:
 	var ok := AuthorMode.grant(GameManager, kind, id, star)
 	if ok:
 		inventory_changed.emit(kind)
+		if _shop_view != null:
+			_shop_view.refresh_inventory()
 	else:
 		AudioManager.play_sfx("ui_error", 0.9)
 		match kind:
@@ -634,6 +658,16 @@ func _grant(kind: String, id: String, star: int = 1) -> void:
 				GameManager.announcement_triggered.emit("这件道具本局限购一件")
 			"pet":
 				GameManager.announcement_triggered.emit("灵兽栏已满或已持有")
+
+# ---------------- 分页 5：商店 ----------------
+
+func _build_shop_page(parent: Control) -> Control:
+	_shop_view = AuthorShopView.new(self)
+	_shop_view.state_changed.connect(func(k: String) -> void: state_changed.emit(k))
+	_shop_view.inventory_changed.connect(func(k: String) -> void: inventory_changed.emit(k))
+	_shop_view.manual_requested.connect(func(tag: String) -> void: manual_requested.emit(tag))
+	parent.add_child(_shop_view)
+	return _shop_view
 
 # ---------------- 通用小件 ----------------
 

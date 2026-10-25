@@ -54,7 +54,7 @@ static func perform(w) -> void:
 		w.sweep_sprite.visible = false
 		w.sweep_sprite.modulate.a = 0.0
 
-	AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MeleeHandler.MELEE_WHOOSH_SCALE)
+	StrikeFx.fire_sfx(w, WeaponData.sfx_for(w.weapon_def_id), MeleeHandler.MELEE_WHOOSH_SCALE)
 	var tw = w.create_tween()
 	# 1. 蓄力前摇：重器后撤更深、压扁拉长更夸张（横扫的「沉」先在蓄力里交代）
 	tw.tween_property(w, "position", windup_pos, SWEEP_WINDUP).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -103,21 +103,22 @@ static func perform(w) -> void:
 				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MeleeHandler.MELEE_WHOOSH_SCALE * 0.6)
 				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
 				if echo_hits > 0:
-					w._flash_sprite(MeleeHandler.echo_glow_color(w.star), 0.12)
-					play_echo_sweep(w, aim_angle, reach, w.star)
+					w._flash_sprite(MeleeHandler.echo_glow_color(w.star, seg), 0.12)
+					play_echo_sweep(w, aim_angle, reach, w.star, seg)
 					AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MeleeHandler.MELEE_IMPACT_SCALE * 0.7, SWEEP_IMPACT_PITCH)
 			)
 			tw.tween_property(w, "rotation", aim_angle + half_ang * seg_sign, 0.11).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 
 ## ★3 觉醒 / ★4 极境的追加扇面：与主扇面同一几何（外缘 == 判定半径、张角 == 判定半角），
 ## 直接从满形亮起、亮一拍即散 —— 主扫的「扩张扫放」已经演过一遍，回掠要的是干脆。
-static func play_echo_sweep(w, aim_angle: float, reach: float, star: int = 3) -> void:
+## seg 为追加段号：★4 两段青紫交替，读得出「第几段」。
+static func play_echo_sweep(w, aim_angle: float, reach: float, star: int = 3, seg: int = 0) -> void:
 	var spr: WeaponArcRenderer = w.get_echo_slash(WeaponArcRenderer.ArcMode.SWEEP)
 	spr.global_position = w.global_position
 	spr.global_rotation = aim_angle
 	spr.scale = Vector2.ONE * (reach / SWEEP_ART_OUTER)
 	spr.visible = true
-	spr.modulate = MeleeHandler.echo_slash_color(star)
+	spr.modulate = MeleeHandler.echo_slash_color(star, seg)
 	var etw: Tween = w.create_tween()
 	etw.tween_interval(0.07)
 	etw.tween_property(spr, "modulate:a", 0.0, SWEEP_SLASH_FADE)

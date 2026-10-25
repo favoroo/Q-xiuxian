@@ -4,6 +4,10 @@ extends RefCounted
 ## 道具（被动道具）数据库：独立于武器的被动物品，买即生效、无限持有、无栏位限制
 ## 档位 tier 1~4（普通/稀有/史诗/传说，对齐土豆兄弟道具档位）：决定基准价与出现权重，
 ## 档位解锁回合与权重公式在 GameBalance.item_tier_weights，定价在 GameBalance.item_price。
+## tier 5「逆天」是超级悟道专属的神通（2026-10-25）：带 granted_only + no_sell 两标记，
+## 不进商店货架池（_pick_id_filtered / ShopSystem.apply_main_item_pity 都跳过）、不进图鉴
+## （ManualDialog 只扫 1~4 档）、不可出售（GameManager.sell_item 直接拒收）。
+## 每局只经 SuperUpgradeData 赠送一次，玩法上等价于一件「祝福」。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
 ## 与悟道加点共用同一条属性链路。卡面/详情卡的加成行由 BonusRows 从 apply 直接生成（正绿负红），
@@ -41,6 +45,9 @@ extends RefCounted
 ##   melee_lifesteal_flat —— 开山重刃谱：近战命中吸血固定值（FloatingWeapon.gd）
 ##   skill_cooldown_mult —— 凝神符：随行技能冷却缩减比例（SkillData.final_stats）
 ##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：回合结束永久成长（GameManager.apply_harvest）
+## 2026-10-25 超级悟道（神通）新增两条机制钩子：
+##   weapon_slot_bonus —— 开天辟地：上阵武器槽位 +1（GameManager.max_weapon_slots 读侧叠加）
+##   kill_cd_refund    —— 杀戮节奏：击杀返还所有武器当前冷却比例（EnemyDeathFx.drops 读侧）
 ## 2026-10-21 角色专属玩法补充（同样走额外字段，item_hook_sum 现算）：
 ##   dmg_per_nearby_enemy + dmg_per_nearby_enemy_cap —— 战旗：附近敌人越多全伤害越高（CultivatorSystem.damage_mult）
 ##   dmg_per_unique_item + dmg_per_unique_item_cap   —— 藏珍卷：每持有一种不同道具全伤害加成（同上）
@@ -56,13 +63,14 @@ extends RefCounted
 ## 上架价 = 基准价 + 2×(回合−1)（BalanceEconomy.ITEM_WAVE_STEP），所以后期那件退货是亏的：
 ## 亏多少由详情卡上「原价 / 出售返还」两行自己摆出来，不藏。
 
-const TIER_LABELS := {1: "普通", 2: "稀有", 3: "史诗", 4: "传说"}
+const TIER_LABELS := {1: "普通", 2: "稀有", 3: "史诗", 4: "传说", 5: "逆天"}
 const SELL_RATIO: float = 0.5  ## 出售回收比例（对齐 WeaponData.SELL_RATIO / PetData.SELL_RATIO）
 const TIER_COLORS := {
 	1: GameStyle.RARITY_COMMON,
 	2: GameStyle.RARITY_RARE,
 	3: GameStyle.RARITY_EPIC,
 	4: GameStyle.RARITY_LEGEND,
+	5: GameStyle.RARITY_MYTHIC,
 }
 
 const DEFS: Dictionary = {
@@ -782,6 +790,230 @@ const DEFS: Dictionary = {
 				"projectile_count_bonus": 1,
 				"unique": true,
 			},
+		# ==================== 神通（tier 5 · 逆天 · 超级悟道专属） ====================
+		# 只由 SuperUpgradeData 赠送，绝不进商店货架池（granted_only）、不可出售（no_sell）。
+		# 数值与机制口径见 scripts/data/SuperUpgradeData.gd 的卡面定义；此处只放宽落地字段。
+		"shen_jianqi": {
+			"name": "剑气凌霄", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_kaishan_jianyi.png",
+			"desc": "近战伤害与攻击范围大幅提升",
+			"apply": {"melee_damage": 15.0, "attack_range_mult": 0.25},
+		},
+		"shen_yizhanyang": {
+			"name": "以战养战", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_jifeng_xue.png",
+			"desc": "近战命中时额外吸取生命",
+			"apply": {"melee_damage": 10.0},
+			"melee_lifesteal_flat": 2.0,
+		},
+		"shen_zhuixing": {
+			"name": "追星逐月", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_qianfu_lianhuan.png",
+			"desc": "远程武器多 1 发弹丸",
+			"apply": {},
+			"projectile_count_bonus": 1,
+		},
+		"shen_guanchuan": {
+			"name": "贯穿星辰", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_wanshi_jian.png",
+			"desc": "远程伤害提升，弹丸额外穿透 2 个敌人",
+			"apply": {"ranged_damage": 10.0, "bonus_pierce": 2.0},
+		},
+		"shen_wuxing": {
+			"name": "五行归一", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_wuxing_pei.png",
+			"desc": "五行元素伤害全面提升",
+			"apply": {"element_damage_all": 0.20, "elemental_damage": 8.0},
+		},
+		"shen_zaie": {
+			"name": "灾厄燎原", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_lihuo_shenjing.png",
+			"desc": "元素伤害大幅提升，灼烧与中毒一并变强",
+			"apply": {"elemental_damage": 18.0},
+		},
+		"shen_hengsao": {
+			"name": "横扫八荒", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_kaishan_jianyi.png",
+			"desc": "横扫类武器范围大幅扩张",
+			"apply": {"melee_damage": 10.0},
+			"wide_range_mult": 0.35,
+		},
+		"shen_wanling": {
+			"name": "万灵朝元", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_wanling_fan.png",
+			"desc": "召唤物与灵兽伤害大幅提升",
+			"apply": {"engineering_damage": 15.0, "pet_damage_mult": 0.25},
+		},
+		"shen_shouxue": {
+			"name": "兽血沸腾", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_yushou_ling.png",
+			"desc": "灵兽栏 +1，灵兽出手更快",
+			"apply": {"pet_cooldown_mult_mul": 0.75, "pet_slots": 1.0},
+		},
+		"shen_huoli": {
+			"name": "火力覆盖", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_tiangong_fatiao.png",
+			"desc": "机关炮台开火间隔大幅缩短",
+			"apply": {"contraption_damage": 12.0},
+			"turret_haste": 0.30,
+		},
+		"shen_shentong": {
+			"name": "神通广大", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_ningshen_fu.png",
+			"desc": "随行技能冷却大幅缩短",
+			"apply": {"skill_cooldown_mult": 0.30, "attack_speed_mult_mul": 0.95},
+		},
+		"shen_shenxing": {
+			"name": "神行百变", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_shenxing_xue.png",
+			"desc": "移速提升，移速越高全伤害越高",
+			"apply": {"move_speed_mult": 0.20},
+			"dmg_per_move_speed": 0.06,
+		},
+		"shen_dianjin": {
+			"name": "点石成金", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_dianjin_jue.png",
+			"desc": "暴击率与暴击伤害全面提升",
+			"apply": {"crit_rate": 0.15, "crit_mult": 0.50},
+		},
+		"shen_kumu": {
+			"name": "枯木逢春", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_yimu_sui.png",
+			"desc": "生命回复与吸血同步提升",
+			"apply": {"hp_regen": 3.0, "lifesteal": 0.08},
+		},
+		"shen_ruoshui": {
+			"name": "弱水三千", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuanshui_po.png",
+			"desc": "攻击更快，移速大幅提升",
+			"apply": {"attack_speed_mult_mul": 0.88, "move_speed_mult": 0.20},
+		},
+		"shen_lihuo": {
+			"name": "离火焚天", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_lihuo_shenjing.png",
+			"desc": "火系伤害大幅提升；击杀引发爆燃",
+			"apply": {"element_damage_fire": 0.30},
+			"kill_explode": 25.0, "kill_explode_radius": 90.0,
+		},
+		"shen_houtu": {
+			"name": "后土载物", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_houtu_shenyuan.png",
+			"desc": "护甲与反震大幅提升",
+			"apply": {"armor": 8.0, "thorns": 0.40},
+		},
+		"shen_jingji": {
+			"name": "荆棘道心", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_fanzhen_tongjia.png",
+			"desc": "反震伤害翻倍",
+			"apply": {"thorns": 1.0, "armor": 4.0},
+		},
+		"shen_wanjun": {
+			"name": "万军辟易", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_zhanqi.png",
+			"desc": "附近敌人越多全伤害越高",
+			"apply": {"melee_damage": 10.0},
+			"dmg_per_nearby_enemy": 0.015, "dmg_per_nearby_enemy_cap": 0.30,
+		},
+		"shen_shengsheng": {
+			"name": "生生不息", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_huichun_hulu.png",
+			"desc": "生命上限与生命回复大幅提升",
+			"apply": {"max_hp": 40.0, "hp_heal": 40.0, "hp_regen": 4.0},
+		},
+		"shen_xuehai": {
+			"name": "血海滔天", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuehai_fu.png",
+			"desc": "吸血与生命上限大幅提升",
+			"apply": {"lifesteal": 0.12, "max_hp": 40.0, "hp_heal": 40.0},
+		},
+		"shen_kaitian": {
+			"name": "开天辟地", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_luban_suo.png",
+			"desc": "上阵武器槽位 +1",
+			"apply": {},
+			"weapon_slot_bonus": 1,
+		},
+		"shen_shalu": {
+			"name": "杀戮节奏", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_tongji_chi.png",
+			"desc": "每次击杀使所有武器当前冷却缩短",
+			"apply": {},
+			"kill_cd_refund": 0.08,
+		},
+		"shen_xueji": {
+			"name": "血祭盛宴", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_liehun_ling.png",
+			"desc": "击杀时引发大范围爆炸",
+			"apply": {},
+			"kill_explode": 35.0, "kill_explode_radius": 90.0,
+		},
+		"shen_beishui": {
+			"name": "背水一战", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_ranxue_fu.png",
+			"desc": "生命流失越多，全伤害越高",
+			"apply": {},
+			"dmg_per_missing_hp": 0.04,
+		},
+		"shen_guzhu": {
+			"name": "孤注一掷", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_sanmei_guizhen.png",
+			"desc": "上阵武器每空一格，全伤害提升",
+			"apply": {},
+			"dmg_per_empty_slot": 0.18,
+		},
+		"shen_yijing": {
+			"name": "以静制动", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_panshi_yin.png",
+			"desc": "站定片刻后全伤害大幅提升",
+			"apply": {},
+			"still_damage": 0.60, "still_seconds": 0.8,
+		},
+		"shen_jubao": {
+			"name": "聚宝通灵", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_jubao_pen.png",
+			"desc": "持有的金币越多，全伤害越高",
+			"apply": {},
+			"dmg_per_100_stones": 0.04, "stone_dmg_cap": 0.35,
+		},
+		"shen_duobao": {
+			"name": "多宝道藏", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_cangzhen_juan.png",
+			"desc": "持有的不同道具越多，全伤害越高",
+			"apply": {},
+			"dmg_per_unique_item": 0.03, "dmg_per_unique_item_cap": 0.30,
+		},
+		"shen_bumie": {
+			"name": "不死金身", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_bumie_jinshen.png",
+			"desc": "生命上限与护甲大幅提升",
+			"apply": {"max_hp": 100.0, "hp_heal": 100.0, "armor": 6.0},
+		},
+		"shen_moyan": {
+			"name": "魔焰锻体", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuepan_guyu.png",
+			"desc": "武器伤害暴涨，代价是生命上限下降",
+			"apply": {"weapon_damage_mult": 0.60, "max_hp": -30.0, "hp_heal": -30.0},
+		},
+		"shen_dixue": {
+			"name": "滴血重生", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_naling_zhuo.png",
+			"desc": "获得 1 次复活机会",
+			"apply": {"revive_charges": 1.0, "max_hp": 50.0, "hp_heal": 50.0},
+		},
+		"shen_yixing": {
+			"name": "移形换影", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_liuyun_qianyin.png",
+			"desc": "闪避提升；闪避成功时回复生命",
+			"apply": {"dodge": 0.12},
+			"dodge_heal_chance": 0.5, "dodge_heal_hp": 5.0,
+		},
+		"shen_yucuo": {
+			"name": "愈挫愈勇", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuewen_fu.png",
+			"desc": "每次受击叠加增伤，层数越多全伤害越高",
+			"apply": {},
+			"on_hit_damage_bonus": 0.04,
+		},
 	}
 
 static func get_def(id: String) -> Dictionary:
@@ -791,10 +1023,26 @@ static func all_ids() -> Array:
 	return DEFS.keys()
 
 static func tier_label(tier: int) -> String:
-	return TIER_LABELS.get(clampi(tier, 1, 4), "普通")
+	return TIER_LABELS.get(clampi(tier, 1, 5), "普通")
 
 static func tier_color(tier: int) -> Color:
-	return TIER_COLORS.get(clampi(tier, 1, 4), TIER_COLORS[1])
+	return TIER_COLORS.get(clampi(tier, 1, 5), TIER_COLORS[1])
+
+## 神通：只由超级悟道赠送，不进商店货架池、不进图鉴（tier 5 不在图鉴档位页内）
+static func is_granted_only(id: String) -> bool:
+	return bool(get_def(id).get("granted_only", false))
+
+## 神通不可出售（哈迪斯式祝福：拿了就是本局的一部分，不退货）
+static func is_no_sell(id: String) -> bool:
+	return bool(get_def(id).get("no_sell", false))
+
+## 可上货架的道具 id（排除神通）：图鉴计数与任何全表遍历用它，别用 all_ids()
+static func shop_ids() -> Array:
+	var out: Array = []
+	for id in DEFS.keys():
+		if not is_granted_only(String(id)):
+			out.append(id)
+	return out
 
 ## 物品标签：从 apply / 额外字段自动派生，供 ItemOfferSystem 做构筑亲和。
 ## 不手工维护 tags 数组 —— 数值一改标签跟着变，避免「标签说近战、实际加远程」的脏数据。
@@ -829,6 +1077,7 @@ const HOOK_TAGS := {
 	"dmg_per_max_hp": "tank", "dmg_per_100_stones": "economy",
 	"dmg_per_missing_hp": "lifesteal", "dmg_per_empty_slot": "generic",
 	"wave_heal_pct": "heal", "chest_magnet": "chest", "revive": "tank",
+	"weapon_slot_bonus": "generic", "kill_cd_refund": "haste",
 }
 
 static func tags_of(id: String) -> Array:
@@ -884,6 +1133,8 @@ static func _pick_id_filtered(luck: float, wave: int, bought: Array, rng: Random
 	var pool: Array = []
 	var weights: Array = []
 	for id in DEFS.keys():
+		if is_granted_only(String(id)):
+			continue
 		if not unlocked_items.is_empty() and not (id in unlocked_items):
 			continue
 		# 满穿透时不进穿透道具（破虚符/裂空锥/洞虚针），判定收口在 PierceLimit

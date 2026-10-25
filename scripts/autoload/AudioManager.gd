@@ -327,6 +327,7 @@ func _load_audio_assets() -> void:
 	_register_sfx("unequip", _sfx_paths("unequip", 1))
 	_register_sfx("merge_success", _sfx_paths("merge_success", 2))
 	_register_sfx("weapon_awaken", _sfx_paths("weapon_awaken", 2))
+	_register_sfx("merge_charge", _sfx_paths("merge_charge", 2))
 	_register_sfx("ui_click", _sfx_paths("ui_click", 3))
 	_register_sfx("ui_confirm", _sfx_paths("ui_confirm", 2))
 	_register_sfx("ui_back", _sfx_paths("ui_back", 1))

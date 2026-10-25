@@ -264,6 +264,8 @@ func _build_weapons_page(parent: Control) -> Control:
 
 func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	# 载荷在 CodexTipData：作者面板的购买弹窗读同一份，两屏数字不会各写一套
+	# 点开即销「新」角标（2026-10-25）：玩家已经看过这件武器的详情了
+	GameManager.mark_unlock_read("weapon", wid)
 	DetailTip.show_over(self, anchor, CodexTipData.weapon_payload(wid))
 
 # ----------------- 分页 2：道具图鉴 -----------------
@@ -279,7 +281,10 @@ func _rebuild_items_page() -> void:
 	for c in _items_box.get_children():
 		c.queue_free()
 	_items_box.add_child(_make_text_card(
-		String(ManualData.RULE_CARDS["items"]["title"]), String(ManualData.RULE_CARDS["items"]["body"])))
+		String(ManualData.RULE_CARDS["items"]["title"]),
+		String(ManualData.RULE_CARDS["items"]["body"]) +
+			"\n已收录 %d/%d 件：没拿到过的法宝只显示名字，买到或开出一次即可点亮。" % [
+				CodexCollection.item_seen_count(), ItemData.shop_ids().size()]))
 
 	for tier in [1, 2, 3, 4]:
 		var tier_col: Color = ItemData.tier_color(tier)
@@ -298,19 +303,39 @@ func _rebuild_items_page() -> void:
 
 		for iid in ItemData.DEFS.keys():
 			var def: Dictionary = ItemData.DEFS[iid]
+			# 神通（超级悟道专属 tier 5）不收录：不进商店、不进图鉴（2026-10-25）
+			if ItemData.is_granted_only(String(iid)):
+				continue
 			if int(def.get("tier", 1)) != tier:
 				continue
 			var unlocked := GameManager.is_item_unlocked(iid)
+			# 实战收录（2026-10-25 锁图鉴）：解锁只代表进了商店池，
+			# 真正「见过」要在局内拿到过一次 —— 没拿过就只有名字与压暗剪影。
+			var seen := CodexCollection.is_item_seen(String(iid))
+			var sub := ""
+			if not seen:
+				sub = "未收录"
+			elif not unlocked:
+				sub = "未解锁"
 			var card := _make_entry_card(
 				String(def.get("icon", "")), String(def.get("name", iid)),
-				"" if unlocked else "未收录", GameStyle.GREY,
+				sub, GameStyle.GREY,
 				func(anchor: Control): _open_item_tip(iid, anchor))
-			if not unlocked:
+			card.set_meta("codex_seen", seen)
+			# 刚解锁但还没点开看过：名字前面挂「新」，点开详情即销（2026-10-25）
+			if GameManager.is_unlock_unread("item", String(iid)):
+				var nm_lbl := card.get_meta("name_lbl") as Label
+				if nm_lbl != null:
+					nm_lbl.text = "新 " + nm_lbl.text
+					nm_lbl.add_theme_color_override("font_color", GameStyle.JADE)
+			if not seen:
 				(card.get_meta("icon_tex") as TextureRect).modulate = GameStyle.disabled_modulate()
 			grid.add_child(card)
 
 func _open_item_tip(iid: String, anchor: Control) -> void:
 	# 载荷在 CodexTipData：作者面板的购买弹窗读同一份
+	# 点开即销「新」角标（2026-10-25）
+	GameManager.mark_unlock_read("item", iid)
 	DetailTip.show_over(self, anchor, CodexTipData.item_payload(iid))
 
 # ----------------- 分页 3：悟道图鉴 -----------------
@@ -541,28 +566,31 @@ func _make_cultivator_row(cid: String, def: Dictionary) -> Control:
 	text_col.add_child(epithet_lbl)
 
 	var equip_str: String = String(def.get("start_equip", ""))
-	if not equip_str.is_empty():
+	if unlocked and not equip_str.is_empty():
 		var equip_lbl := Label.new()
 		equip_lbl.text = "◆ " + equip_str
 		GameStyle.label(equip_lbl, 12, GameStyle.JADE_DK)
 		text_col.add_child(equip_lbl)
 
-	for pro in def.get("pros", []):
-		var pro_lbl := Label.new()
-		pro_lbl.text = "＋ " + String(pro)
-		GameStyle.label(pro_lbl, 12, GameStyle.GOOD_DK)
-		text_col.add_child(pro_lbl)
-	# 额外技能单独一段（幽夜紫）：与选角界面同一份文案、同一个色语义（数字现读机制表）
-	for x_line in CultivatorData.get_extra_desc(cid):
-		var x_lbl := Label.new()
-		x_lbl.text = String(x_line)
-		GameStyle.label(x_lbl, 12, GameStyle.SHADOW)
-		text_col.add_child(x_lbl)
-	for con in def.get("cons", []):
-		var con_lbl := Label.new()
-		con_lbl.text = "－ " + String(con)
-		GameStyle.label(con_lbl, 12, GameStyle.BAD)
-		text_col.add_child(con_lbl)
+	# 天赋/绝技/代价只在解锁后展开（2026-10-25 锁图鉴）：未解锁角色看图鉴只该知道
+	# 「有这么个角色 + 怎么解锁」，词条留到解锁那一刻再揭晓。
+	if unlocked:
+		for pro in def.get("pros", []):
+			var pro_lbl := Label.new()
+			pro_lbl.text = "＋ " + String(pro)
+			GameStyle.label(pro_lbl, 12, GameStyle.GOOD_DK)
+			text_col.add_child(pro_lbl)
+		# 额外技能单独一段（幽夜紫）：与选角界面同一份文案、同一个色语义（数字现读机制表）
+		for x_line in CultivatorData.get_extra_desc(cid):
+			var x_lbl := Label.new()
+			x_lbl.text = String(x_line)
+			GameStyle.label(x_lbl, 12, GameStyle.SHADOW)
+			text_col.add_child(x_lbl)
+		for con in def.get("cons", []):
+			var con_lbl := Label.new()
+			con_lbl.text = "－ " + String(con)
+			GameStyle.label(con_lbl, 12, GameStyle.BAD)
+			text_col.add_child(con_lbl)
 
 	# 解锁状态
 	var status_lbl := Label.new()

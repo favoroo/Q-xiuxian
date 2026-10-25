@@ -102,6 +102,7 @@ func _main_cases() -> void:
 	await _swipe_must_not_open()
 	await _tips_fit_three_widths()
 	await _check_merge_corner_badge()
+	await _check_star2_card()
 
 ## 验证商品右上角圆形合成标记：
 ## 当玩家持有 2 把同名 1 星武器时，货架上的同名卡片右上角显示圆形「合」标记（主题色底+黑字），
@@ -132,6 +133,46 @@ func _check_merge_corner_badge() -> void:
 	_c.check(badge1 == null, "未达合成条件的商品卡片右上角不显示合成标记")
 	await _open_close()
 
+## ★2 成品卡（2026-10-25 用户：「二星武器要有特殊标记，不然容易看漏」「背包两个二星 +
+## 刷出同名二星时合成标记也要有」）：卡名星号、图标 ★2、可点开的「★2 成品」签，
+## 以及「已有 2 件 ★2 同名 → 货架同名 ★2 亮合标」这一条点名场景。
+func _check_star2_card() -> void:
+	await _open_pinned_shop(int(VP.x))
+	var cards := _cards()
+	_c.check(cards.size() >= 2, "货架卡片数充足（★2 判据）")
+	if cards.size() < 2:
+		return
+	var card := cards[1] as Control
+	var title_lbl := card.find_child("TitleLabel", true, false) as Label
+	_c.check(title_lbl != null and title_lbl.text.contains("★★"),
+			"★2 成品的卡名带星号（实得「%s」）" % (title_lbl.text if title_lbl != null else "null"))
+	var star_lbl := card.find_child("OfferStarLabel", true, false) as Label
+	_c.check(star_lbl != null and star_lbl.text == "★2", "图标框右下挂 ★2 星标（看得见，不靠猜）")
+	var chip := card.find_child("StarOfferBadge", true, false) as Label
+	_c.check(chip != null and chip.text.strip_edges() == "★2 成品", "色签行有「★2 成品」签")
+	if chip != null:
+		var payload := await _tap(chip, "「★2 成品」签")
+		var want := "%s 成品 · %s" % [WeaponData.star_text(2),
+				String(WeaponData.get_def("gengjin_feijian").get("name", "?"))]
+		_c.equals(String(payload.get("title", "")), want, "点「★2 成品」签弹出成品说明")
+		_c.check(_joined(payload).contains("星级分开计数"), "说明卡讲明星级分开计数（★1 替不了 ★2）")
+
+	# 背包里已有 2 件 ★2 同名武器 → 货架刷出同名 ★2 时右上角「合」必须亮
+	GameManager.add_weapon("gengjin_feijian", 2)
+	GameManager.add_weapon("gengjin_feijian", 2)
+	await _settle(2)
+	await _open_pinned_shop(int(VP.x))
+	var cards2 := _cards()
+	var card_b := cards2[1] as Control
+	var badge := card_b.find_child("MergeCornerBadge", true, false) as Label
+	_c.check(badge != null, "已有 2 件 ★2 同名时，货架同名 ★2 卡亮「合」")
+	if badge != null:
+		var payload := await _tap(badge, "★2 卡的「合」标")
+		_c.equals(String(payload.get("title", "")), "可合成 · %s" % String(
+				WeaponData.get_def("gengjin_feijian").get("name", "?")), "★2 的合标弹出合成详情")
+		_c.check(_joined(payload).contains("★★ → ★★★"), "★2 合成详情按 ★2 讲合成后星数")
+	await _open_close()
+
 ## 开一次钉好的货架：五把法器 = 五种攻击方式，流派签与可合成角标都齐
 func _open_pinned_shop(width: int) -> void:
 	DetailTip.close_all(_shop)
@@ -143,8 +184,13 @@ func _open_pinned_shop(width: int) -> void:
 	var offers: Array = GameManager.shop_offers
 	for i in range(mini(offers.size(), SAMPLE_IDS.size())):
 		var def := WeaponData.get_def(SAMPLE_IDS[i])
-		offers[i] = {"kind": "weapon", "id": SAMPLE_IDS[i],
-			"price": int(def.get("price", 20)), "sold": false, "locked": false}
+		# 第 2 张钉成 ★2 成品（2026-10-25 货架直售）：卡名星号 / 图标星标 / 「★2 成品」签 /
+		# 合成角标按星判定，全部落在这一张上判。价格走与 ShopSystem 同一条公式。
+		var star := 2 if i == 1 else 1
+		offers[i] = {"kind": "weapon", "id": SAMPLE_IDS[i], "star": star,
+			"price": GameBalance.weapon_offer_price(int(def.get("price", 20)),
+					maxi(GameManager.wave_number, 1), star, GameManager.shop_price_mult),
+			"sold": false, "locked": false}
 	_shop._on_shop_opened()
 	# 等真实时间：卡是错峰缩放入场的，headless 一帧不到 1ms，等帧数会量到还在动的矩形
 	await get_tree().create_timer(0.8).timeout
@@ -208,6 +254,11 @@ func _check_content(payload: Dictionary, tip: Dictionary, label: String) -> void
 		"merge":
 			_c.check(joined.contains("3 件换 1 件"),
 					"%s 的卡上印了三合一会掉羁绊件数这件事" % label)
+		"offer_star":
+			_c.check(joined.contains("星级分开计数"),
+					"%s 的卡上讲明 ★1 与 ★2 的三合一各算各的" % label)
+			_c.check(joined.contains("售价"),
+					"%s 的卡上印了 ★2 的售价倍率" % label)
 
 ## 划过去不算点：色签在滚动区里，按下那一拍同时被 ScrollContainer 拿去 latch 拖货架
 func _swipe_must_not_open() -> void:
@@ -255,6 +306,10 @@ func _want_title(tip: Dictionary) -> String:
 			return _synergy_title(String(tip.get("tag", "")))
 		"merge":
 			return "可合成 · %s" % String(WeaponData.get_def(w_id).get("name", "?"))
+		"offer_star":
+			var s := int(tip.get("star", 2))
+			return "%s 成品 · %s" % [WeaponData.star_text(s),
+					String(WeaponData.get_def(w_id).get("name", "?"))]
 	return ""
 
 ## 详情卡标题「剑系 (2/6)」= 手里 2 件、满档要 6 件（分母是满档件数，不是下一档）。

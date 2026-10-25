@@ -54,7 +54,8 @@ var payload: Dictionary = {}
 func card_rect() -> Rect2:
 	if _card == null or not is_instance_valid(_card):
 		return Rect2()
-	return _card.get_global_rect()
+	## 视觉实占矩形：超高兜底缩放不进 get_size()，这里按 scale 如实放大/缩小回报
+	return Rect2(_card.get_global_position(), _card.get_size() * _card.scale)
 
 ## 在 host 上、贴着 anchor 开一张详情卡。
 static func show_over(host: Control, anchor: Control, data: Dictionary) -> DetailTip:
@@ -439,6 +440,16 @@ func _place() -> void:
 		x = _src.position.x - cs.x - GAP
 	if x < MARGIN:
 		x = clampf(_src.position.x, MARGIN, maxf(MARGIN, area.x - cs.x - MARGIN))
+
+	# 超高兜底（2026-10-25）：内容涨过屏幕时把整卡等比缩回屏内 —— 一行内容都不删，
+	# 宁可字小一点也不让关闭键/下半张卡掉出屏外（修 BenefitTap/HudHotzone 卡 536~594 出屏）。
+	# 缩放不进 get_size()，摆位与 card_rect 都按缩后高算。
+	var max_h := area.y - 2.0 * MARGIN
+	if cs.y > max_h and cs.y > 0.0:
+		_card.scale = Vector2.ONE * (max_h / cs.y)
+		cs.y = max_h
+	else:
+		_card.scale = Vector2.ONE
 
 	var y := _src.end.y + GAP
 	if y + cs.y > area.y - MARGIN:

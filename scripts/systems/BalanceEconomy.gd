@@ -26,6 +26,17 @@ const REROLL_COUNT_WAVE_SCALE := 0.4    ## 本回合每重掷一次的递增量 
 static func weapon_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * WEAVE_WAVE_STEP) * price_mult)
 
+## 货架武器的实际售价：★1 就是 weapon_price；★2 起的直购成品按级乘 STAR2_PRICE_MULT。
+## ★2 卖 2.7×（三合一平价是 3×）：省掉两次追梦刷新与两个栏位，但不至于冲垮 ★1 材料轨道。
+## ★3 起货架不卖，公式仍按 2.7^(星-1) 兜底，留给作者模式/以后调参用。
+const STAR2_PRICE_MULT := 2.7
+
+static func weapon_offer_price(base: int, wave: int, star: int, price_mult: float) -> int:
+	var p := float(weapon_price(base, wave, price_mult))
+	if star >= 2:
+		p *= pow(STAR2_PRICE_MULT, float(clampi(star, 2, WeaponData.MAX_STAR) - 1))
+	return maxi(1, int(round(p)))
+
 ## 道具（被动道具）定价：与武器同一公式，基准价来自 ItemData 按档位定
 static func item_price(base: int, wave: int, price_mult: float) -> int:
 	return int(float(base + (maxi(wave, 1) - 1) * ITEM_WAVE_STEP) * price_mult)
@@ -56,6 +67,15 @@ static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	var w := maxi(wave, 1)
 	var count_step := maxi(1, int(floor(float(w) * REROLL_COUNT_WAVE_SCALE)))
 	return int(float(REROLL_BASE + w * REROLL_WAVE_STEP + maxi(reroll_count, 0) * count_step) * price_mult)
+
+# ---------------- 聚灵阵启动价（2026-10-25 祭坛重设计：免费一次性 → 每回合金币启动）----------------
+
+const OBELISK_COST_BASE := 45      ## 1 波启动价（≈一件 tier3 道具，开局一波收入约 81 的六成）
+const OBELISK_COST_WAVE_STEP := 3  ## 每回合加价（比货架 +2 略陡：越晚启动越贵，鼓励早用）
+
+## 启动聚灵阵的金币价（W1=45 → W20=102），不乘 price_mult：祭坛不是货架货，不吃难度价格乘区
+static func obelisk_activation_cost(wave: int) -> int:
+	return OBELISK_COST_BASE + (maxi(wave, 1) - 1) * OBELISK_COST_WAVE_STEP
 
 # ---------------- 收益（回合末无偿发放并自我复利）----------------
 
@@ -184,6 +204,30 @@ static func rarity_weights(luck: float, wave: int = 1) -> Dictionary:
 const POTION_CHANCE := 0.05            ## 每个货架位出回复药的概率（特供：约4波见1次）
 const ITEM_CHANCE := 0.35              ## 每个货架位出道具的概率（2026-10-13 由 0.45 下调：道具无栏位硬顶，过供会滚属性）
 const PET_CHANCE := 0.05               ## 每个货架位出随行灵兽的概率（御兽师有额外加成）
+
+# ---------------- 货架 ★2 成品（2026-10-25）----------------
+## 武器格有概率直接刷成 ★2 成品，给「3 件换 1 件」的升星路补一条金币捷径：
+## ★3 需 3 件 ★2（≈8.1 倍 ★1 基准价）、★4 需 9 件（≈24 倍），用钱换时间，不白送。
+## 三重闸门：解锁波次（前期买不起也凑不出）→ 波次线性成长 × 福缘 → 封顶；
+## 手里同名 ★2 已 2 件（差 1 合 ★3）时抬到地板值，保证「临门一脚」刷得出来。
+
+const STAR2_UNLOCK_WAVE := 4       ## ★2 成品最早出现的回合（前 3 波经济与构筑都没起步）
+const STAR2_PER_WAVE := 0.02       ## 解锁后每个武器格每波 +2% 线性成长
+const STAR2_CAP := 0.18            ## 单个武器格出 ★2 的概率上限（约每 2 次商店见 1 件）
+const STAR2_NEAR_MERGE_FLOOR := 0.35  ## 同名 ★2 已 2 件（差 1 合 ★3）时的概率地板
+
+## 单个武器格出 ★2 成品的概率。luck 乘区复用 shop_luck_mult（与货架权重同一把尺），
+## near_merge 由调用方按 count_copies(id, 2) % 3 == 2 现判。
+static func weapon_star2_chance(wave: int, luck: float, near_merge: bool) -> float:
+	var w := maxi(wave, 1)
+	if w < STAR2_UNLOCK_WAVE:
+		return 0.0
+	var c := minf(STAR2_CAP,
+			STAR2_PER_WAVE * float(w - STAR2_UNLOCK_WAVE + 1) * shop_luck_mult(luck))
+	if near_merge:
+		c = maxf(c, STAR2_NEAR_MERGE_FLOOR)
+	return c
+
 const TAG_AFFINITY_MIN_COPIES := 2     ## 同流派持有数达到该值才触发亲和（第一档）
 const TAG_AFFINITY_MULT_L1 := 2.0      ## 梯度亲和第一档：持有 ≥MIN_COPIES 件 → ×L1
 const TAG_AFFINITY_TIER2_COPIES := 4   ## 梯度亲和第二档门槛：持有 ≥4 件 → ×L2（深专精吸力）

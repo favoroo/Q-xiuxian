@@ -62,6 +62,8 @@ static func make_entry_card(icon: String, name: String, sub: String, sub_color: 
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(name_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	vbox.add_child(name_lbl)
+	# 暴露名字 Label：调用方要挂「新」角标时直接改它，不必再遍历子树找 Label
+	card.set_meta("name_lbl", name_lbl)
 
 	if not chips.is_empty():
 		# 色签成排：摆得下就一行，摆不下自动折第二行（图鉴卡窄，双器类武器有 4 签）

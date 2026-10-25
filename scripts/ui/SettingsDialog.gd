@@ -116,7 +116,7 @@ func _build_audio_page() -> Control:
 	scroll.add_child(vbox)
 
 	var tip := Label.new()
-	tip.text = "音效细调。支持静音与音量滑杆调节，实时生效并自动保存。"
+	tip.text = "音效细调，实时生效自动保存。"
 	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
@@ -256,7 +256,7 @@ func _build_display_page() -> Control:
 		vbox,
 		"shake_intensity",
 		"屏幕震动",
-		"只在击杀精英、受击等关键时刻震动；点按切换 关闭 / 轻 / 标准 / 强",
+		"只在关键时刻震动；点按切换 关闭 / 轻 / 标准 / 强",
 		func() -> String: return "震屏 · %s" % SettingsManager.shake_level_label(),
 		func() -> bool: return SettingsManager.shake_mult() > 0.0,
 		func(): SettingsManager.set_val(&"display", &"shake_intensity", SettingsManager.shake_level_next())
@@ -269,18 +269,18 @@ func _build_display_page() -> Control:
 		vbox,
 		"render_quality",
 		"画面清晰度",
-		"高清（原生高分渲染，极致清晰）/ 流畅（固定视口拉伸，低配防掉帧）",
+		"高清＝原生渲染；流畅＝拉伸视口防掉帧",
 		func() -> String: return "清晰度 · %s" % SettingsManager.render_quality_label(),
 		func() -> bool: return SettingsManager.render_quality() == &"high",
 		func(): SettingsManager.set_val(&"display", &"render_quality", SettingsManager.render_quality_next())
 	)
 	# T-6.1 热浪扭曲：可选高档位默认关（back buffer copy 低端机有掉帧风险），排最后不抢眼
-	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥与火雨区域画面热浪扭曲（高端画质，低配设备可能掉帧，默认关）")
+	_add_toggle_row(vbox, "heat_distortion", "热浪扭曲", "火锥火雨的热浪扭曲（低配可能掉帧）")
 	# T-6.2 受击屏幕冲击波：可选高档位默认关
-	_add_toggle_row(vbox, "screen_shockwave", "受击冲击波", "遭受强敌重击时从受击点扩散屏幕径向扭曲环（高端画质，默认关）")
+	_add_toggle_row(vbox, "screen_shockwave", "受击冲击波", "强敌重击时从受击点扩散扭曲环")
 	# 辉光（2026-10-17 真机 GPU 专项）：最大的单项画质税，默认开，低帧自动关。
 	# 移动端不碰 HDR 帧缓冲后（2026-10-20）glow pass 本身可安全开启，故文案回到常态描述。
-	_add_toggle_row(vbox, "glow", "辉光", "画面亮部起辉光效（暴击绯金、灵光等）。关掉可大幅省电提帧，低帧时会自动关闭")
+	_add_toggle_row(vbox, "glow", "辉光", "亮部辉光；关掉省电提帧，低帧自动关")
 
 	GameStyle.scrollable(scroll)
 	return scroll
@@ -461,11 +461,11 @@ func _build_controls_page() -> Control:
 	scroll.add_child(vbox)
 
 	var tip := Label.new()
-	tip.text = "技能键与祭坛键的位置与大小都在调整模式里改：点选按钮后拖动摆放，滑杆只调选中的那颗，全程实时保存。"
+	tip.text = "位置与大小在调整模式里改：点选后拖动，滑杆调大小，实时保存。"
 	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
 	vbox.add_child(tip)
 
-	_add_action_row(vbox, "按钮位置与大小", "进入调整模式，点选技能键或祭坛键，拖动摆放、滑杆调大小",
+	_add_action_row(vbox, "按钮位置与大小", "点选技能键或祭坛键，拖动摆放、滑杆调大小",
 		"进入调整模式", _enter_btn_edit_mode, false)
 	_add_action_row(vbox, "恢复默认布局", "两个按钮的位置与大小一起回到出厂摆位",
 		"恢复默认", func(): SettingsManager.reset_button_layout(), true)

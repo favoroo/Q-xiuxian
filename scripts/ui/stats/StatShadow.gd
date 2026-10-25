@@ -24,7 +24,7 @@ const COPIED: Array[String] = [
 	"dodge", "lifesteal", "luck", "harvest", "xp_gain_mult", "knockback_mult",
 	"elite_damage", "free_rerolls", "shop_price_mult", "stat_bonus_pierce",
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
-		"chest_reward_mult", "spirit_stones",
+		"chest_reward_mult", "spirit_stones", "revive_charges",
 		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
 		"skill_cooldown_mult",
 		# —— 羁绊与技能乘区：影子不改它们，但读数要按同一式子合起来算 ——
@@ -77,6 +77,7 @@ var chest_count_bonus: int = 0
 var chest_quality: float = 0.0
 var chest_reward_mult: float = 1.0
 var spirit_stones: int = 0
+var revive_charges: int = 0
 var pet_damage_mult: float = 1.0
 var pet_effect_mult: float = 1.0
 var pet_cooldown_mult: float = 1.0
@@ -120,6 +121,12 @@ class PlayerMirror extends RefCounted:
 	func increase_max_hp(amount: float, heal_amount: float) -> void:
 		max_health += amount
 		current_health = minf(max_health, current_health + heal_amount)
+
+	## 负上限（魔焰锻体这类代价卡）走与 Player.decrease_max_hp 同一算式，
+	## 否则预读会把「当前生命 -30」算成真扣，与落地读数对不上。
+	func decrease_max_hp(amount: float) -> void:
+		max_health = maxf(1.0, max_health - amount)
+		current_health = minf(current_health, max_health)
 
 static func from_gm(gm: Object) -> StatShadow:
 	var s := StatShadow.new()

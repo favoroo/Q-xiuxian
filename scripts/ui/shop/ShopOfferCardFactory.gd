@@ -8,7 +8,7 @@ extends RefCounted
 ## 构建一张货架卡：行①图标与名号同行、行②色签+锁定、行③加成行块+说明、行④价格/购买
 ## forecast 由宿主一次开屏只抄一份影子传入（与悟道 _populate_cards 同构）；
 ## 测试直接调本工厂时不传，item 分支内部现开一份兜底。
-static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_count: int = 4,
+static func create_card(shop, offer: Dictionary, index: int, total_count: int = 4,
 		forecast: StatForecast = null) -> Control:
 	var card_w := WaveShop.offer_card_w(shop._screen, total_count)
 	var inner_w: float = WaveShop.card_inner_w(card_w)
@@ -25,8 +25,8 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	var sold: bool = offer.get("sold", false)
 	var price: int = int(offer.get("price", 0))
 
-	# 行①：图标与名号同行（附拥有数量/星级分布）
-	vbox.add_child(_create_card_head(shop, offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", "")), data.w_id))
+	# 行①：图标与名号同行（附拥有数量/星级分布；★2 成品在图标框右下再挂 ★n）
+	vbox.add_child(_create_card_head(shop, offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", "")), data.w_id, int(data.get("star", 1))))
 	# 行②：色签流 + 锁定开关同行
 	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.rec_reasons, data.tag_keys, data.w_id))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
@@ -62,7 +62,7 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 
 	card.add_child(vbox)
 	if data.merge_ready:
-		card.add_child(_create_merge_corner_badge(shop, data.w_id))
+		card.add_child(_create_merge_corner_badge(shop, data.w_id, int(data.get("star", 1))))
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	GameStyle.swipeable(card)
 	return card
@@ -91,6 +91,9 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 	var edge_color: Color = GameStyle.GOLD_DK
 	var behavior_chip: Array = []
 	var owned_text := ""
+	# 商品自身的星级：只有武器会带 ★2（货架从 STAR2_UNLOCK_WAVE 起可能刷出直购成品），
+	# 其余货类恒 ★1 —— 卡面读数、合成角标、★2 标记全部按这一个数走，别在下面各写一份。
+	var star: int = clampi(int(offer.get("star", 1)), 1, WeaponData.MAX_STAR)
 	# 「荐」推荐标（RecommendSystem 在 roll_shop 里打分写入 offer）：已售出的格子不再亮标
 	var recommended: bool = bool(offer.get("recommended", false)) and not bool(offer.get("sold", false))
 	var rec_reasons: Array = offer.get("recommend_reasons", [])
@@ -152,7 +155,9 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 	else:
 		var w_id: String = String(offer.get("id", ""))
 		def = WeaponData.get_def(w_id)
-		title = def.get("name", "?")
+		# ★2 成品的卡名带上星号（「★★ 青云剑」）：名字是整张卡最先被扫到的地方，
+		# 只靠一颗角标不够——用户 2026-10-25 明确要求「二星武器要有特殊标记，不然容易看漏」。
+		title = def.get("name", "?") if star < 2 else WeaponData.full_name(w_id, star)
 		icon_path = def.get("icon", "")
 		tag = def.get("tag", "")
 		owned_text = WeaponInventory.format_owned_summary(GameManager, w_id)
@@ -175,10 +180,12 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 			chip_color = GameStyle.JADE
 			chip_text_color = GameStyle.INK_TEXT
 			edge_color = GameStyle.JADE
-		# 买下即凑齐三合一：手里同名同星差 1 把凑满 3 件（如正好 2 把，货架只卖 1 星，买这把就满 3）——
+		# 买下即凑齐三合一：按「商品自己的星级」数手里的同名同星件数，差 1 把凑满 3 件——
 		# 统一由商品卡片右上角显示圆形主题色「合」标记指示，TagRow 不再挂文字签。
+		# 2026-10-25 起货架也会卖 ★2 成品：判据从写死 star=1 改为按 offer 星数，
+		# 背包 2 件 ★2 + 货架同名 ★2 时同样亮「合」（用户点名要的场景）。
 		merge_ready = not bool(offer.get("sold", false)) \
-				and (GameManager.count_copies(w_id, 1) % 3) == 2
+				and (GameManager.count_copies(w_id, star) % 3) == 2
 		desc = def.get("desc", "")
 		# 攻击方式色签（近战朱砂 / 非近战主蓝）：def.tag 首段会被流派进度覆盖，
 		# 货架上一直看不出近战远程（2026-10-11 用户），behavior 才是结构真话。
@@ -196,12 +203,14 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 		# 引擎实测「单发伤害」+ 最宽读数（"999 → 9999.9"）= 135 已破格，同一档两字行名是 111。
 		# 这条预算由单测「货架卡每一行都装得进 124 卡内宽」钉着，行名再长一档当场红；
 		# 全称「单发伤害」写在两张详情卡上（那里定宽 306，装得下）。
+		# 读数是「买到手的那一件」的：★2 成品按 2 星现算（伤害 ×2 / 间隔 ×0.92），
+		# 与 CardName、合成角标、买入结算同一个 star，别拿 ★1 的纸面值糊一张高价卡。
 		var slots_after := WeaponDamageReadout.slot_count_after_purchase()
 		stat_rows = [["伤害", WeaponDamageReadout.arrow_text(
-				WeaponData.damage_for(w_id, 1),
-				WeaponDamageReadout.per_hit(w_id, 1, slots_after)), GameStyle.JADE]]
+				WeaponData.damage_for(w_id, star),
+				WeaponDamageReadout.per_hit(w_id, star, slots_after)), GameStyle.JADE]]
 		stat_rows.append([WeaponDamageReadout.per_second_label(w_id),
-				BonusRows.fmt_num(WeaponDamageReadout.per_second(w_id, 1, slots_after)),
+				BonusRows.fmt_num(WeaponDamageReadout.per_second(w_id, star, slots_after)),
 				GameStyle.JADE])
 		stat_rows.append(["攻击范围", "%.0f" % float(def.get("range", 0.0)), GameStyle.PAPER])
 		var card_feats := WeaponData.card_feats(def)
@@ -212,11 +221,14 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 	# （临门一档的 JADE 边、道具档位边、药水边都保留原语义，「荐」签足以表达）
 	if recommended and edge_color == GameStyle.GOLD_DK:
 		edge_color = GameStyle.GOLD_EDGE
+	# ★2 成品同享亮边：高星货必须一眼跳出来；中性边才提亮，JADE「临门一档」语义优先
+	if star >= 2 and edge_color == GameStyle.GOLD_DK:
+		edge_color = GameStyle.GOLD_EDGE
 
 	return {
 		"kind": kind, "is_potion": is_potion, "is_item": is_item, "def": def,
 		"title": title, "icon_path": icon_path, "tag": tag, "tag_parts": tag_parts,
-		"tag_keys": tag_keys, "w_id": w_id_of_offer(offer),
+		"tag_keys": tag_keys, "w_id": w_id_of_offer(offer), "star": star,
 		"part_hot": part_hot, "desc": desc, "stat_rows": stat_rows, "merge_ready": merge_ready,
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
 		"edge_color": edge_color, "behavior_chip": behavior_chip,
@@ -311,7 +323,7 @@ static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContai
 	return card
 
 ## 行①：图标框（五行外框 + 元素特性下边框）与名号同行（右侧上下排列名号与持有信息），名号按 card_name_w 切硬换行
-static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "", w_id: String = "") -> HBoxContainer:
+static func _create_card_head(shop, offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "", w_id: String = "", star: int = 1) -> HBoxContainer:
 	var head := HBoxContainer.new()
 	head.name = "CardHead"
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -364,6 +376,12 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 		icon_box.mouse_filter = Control.MOUSE_FILTER_PASS
 		GameStyle.tap(icon_box, func() -> void: ShopChipTips.open(shop, icon_box, {"kind": "element", "w_id": wid}))
 
+	# ★2 成品：图标框右下挂 ★n（与背包陈列格同一副文字语言）。
+	# 货架原先从不显示商品星级（恒卖 ★1）；2026-10-25 起 ★2 会直接上架，星标必须跟着图走。
+	if star >= 2:
+		var star_lbl := GameStyle.star_label(icon_box, star, 12)
+		star_lbl.name = "OfferStarLabel"	# 判据按名找（代码建节点默认名会被引擎改名）
+
 	head.add_child(icon_box)
 
 	var name_w: float = WaveShop.card_name_w(card_w)
@@ -408,7 +426,7 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 ## 每一颗色签都点得出解释（2026-10-11 用户：「点击也要弹出来对应的解释，加成怎么样加成哪些」）：
 ## chip_tips 与 chip_defs 同序，{} 表示这颗没解释可看（回复药/道具的档位签）。
 ## 热区挂在签上、锚点也回送签本身：这两件事在 HUD 那批徽记上栽过一次（lambda 按值捕获 null）。
-static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], rec_reasons: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
+static func _create_card_tag_row(shop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], rec_reasons: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -436,6 +454,27 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 		GameStyle.label(rec_lbl, 10, GameStyle.INK_TEXT)
 		_mark_chip_tappable(rec_lbl, {"kind": "recommend"})
 		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(shop, rec_lbl, rec_reasons, offer))
+
+	# ★2 成品签：摆在「荐」之后、攻击方式之前 —— 它说的是「这件货本身是什么」，
+	# 比流派进度更先决。主题色底（跟随换肤）+ 墨字，点按讲清「星级分开计数」这条关键规则：
+	# ★1 与 ★2 各算各的三合一，3 件 ★2 才合 ★3（合并轨道不同，买错星等于白花钱）。
+	var offer_star := clampi(int(offer.get("star", 1)), 1, WeaponData.MAX_STAR)
+	if offer_star >= 2:
+		# 签文用「★2」数字式（与背包格右下星标同一写法，小字号最好认）；卡名走 full_name 的 ★★ 式
+		var star_txt := " ★%d 成品 " % offer_star
+		var st_lbl := Label.new()
+		st_lbl.name = "StarOfferBadge"
+		st_lbl.text = star_txt
+		st_lbl.custom_minimum_size = Vector2(GameStyle.compact_chip_pin_w(
+				star_txt, GameStyle.body_font(), 10), 0)
+		st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		st_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		st_lbl.add_theme_stylebox_override("normal", GameStyle.compact_chip(GameStyle.GOLD))
+		tag_flow.add_child(st_lbl)
+		GameStyle.label(st_lbl, 10, GameStyle.INK_TEXT)
+		var star_tip := {"kind": "offer_star", "w_id": w_id, "star": offer_star}
+		_mark_chip_tappable(st_lbl, star_tip)
+		GameStyle.tap(st_lbl, func() -> void: ShopChipTips.open(shop, st_lbl, star_tip))
 
 	var chip_defs: Array = []
 	var chip_tips: Array = []
@@ -493,7 +532,7 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 	return tag_row
 
 ## 行④：价格/购买按钮（已售出、缺钱、道具已持有、装备背包全满四类禁用口径）
-static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int, sold: bool, price: int, is_item: bool, def: Dictionary, kind: String) -> Button:
+static func _create_card_price_btn(shop, offer: Dictionary, index: int, sold: bool, price: int, is_item: bool, def: Dictionary, kind: String) -> Button:
 	var btn := Button.new()
 	btn.custom_minimum_size = Vector2(0, WaveShop.CARD_PRICE_H)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -529,9 +568,10 @@ static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int
 	)
 	return btn
 
-## 商品右上角圆形合成标记：当手里差 1 件即可凑齐三合一时（如已有 2 件 1 星），
+## 商品右上角圆形合成标记：按「商品自身星级」数，手里同名同星差 1 件即可凑齐三合一时
+## （如已有 2 件 ★1 而货架卖 ★1；或已有 2 件 ★2 而货架卖 ★2），
 ## 在商品卡片右上角显示圆形标记，背景为主题色（GOLD，跟随换肤），黑字「合」。
-static func _create_merge_corner_badge(shop: WaveShop, w_id: String) -> Control:
+static func _create_merge_corner_badge(shop, w_id: String, star: int = 1) -> Control:
 	var overlay := Control.new()
 	overlay.name = "MergeCornerOverlay"
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -575,7 +615,7 @@ static func _create_merge_corner_badge(shop: WaveShop, w_id: String) -> Control:
 	badge.offset_bottom = badge_size - 1.0
 
 	GameStyle.tap(badge, func() -> void:
-		ShopChipTips.open_merge(shop, badge, w_id)
+		ShopChipTips.open_merge(shop, badge, w_id, star)
 	)
 
 	overlay.add_child(badge)

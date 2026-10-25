@@ -300,7 +300,9 @@ func _test_shop_determinism() -> void:
 		match String(offer.get("kind", "")):
 			"weapon":
 				var base := int(WeaponData.get_def(offer["id"]).get("price", 20))
-				_c.equals(int(offer["price"]), GameBalance.weapon_price(base, 6, GameManager.shop_price_mult), "法器价与 GameBalance 一致（%s）" % offer["id"])
+				# 2026-10-25 起货架会卖 ★2 成品：价格按商品星数走 weapon_offer_price
+				var wstar := int(offer.get("star", 1))
+				_c.equals(int(offer["price"]), GameBalance.weapon_offer_price(base, 6, wstar, GameManager.shop_price_mult), "法器价与 GameBalance 一致（%s ★%d）" % [offer["id"], wstar])
 			"item":
 				var ibase := int(ItemData.get_def(offer["id"]).get("price", 20))
 				_c.equals(int(offer["price"]), GameBalance.item_price(ibase, 6, GameManager.shop_price_mult), "法宝价与 GameBalance 一致（%s）" % offer["id"])
@@ -313,6 +315,51 @@ func _test_shop_determinism() -> void:
 	GameManager.rng.seed = 1234567
 	GameManager.roll_shop(true)
 	_c.equals(str(GameManager.shop_offers), str(first), "同种子 → 同一副货架")
+
+## ★2 成品直售（2026-10-25）：货架武器格按概率刷成 ★2，概率与定价的唯一真话在 BalanceEconomy。
+## 用户诉求：方便快速合 ★3/★4；货架卖 ★2 必须贵得有理由（≈2.7×），且低波次不许提前上架。
+func _test_weapon_star2_offer() -> void:
+	# 概率口径：解锁波次前恒 0；之后每波线性成长 × 福缘，封顶；临门一脚抬地板
+	_c.near(GameBalance.weapon_star2_chance(1, 0.0, false), 0.0, EPS, "第 1 波不出 ★2")
+	_c.near(GameBalance.weapon_star2_chance(GameBalance.STAR2_UNLOCK_WAVE - 1, 0.0, false), 0.0, EPS, "解锁前一波仍为 0")
+	_c.near(GameBalance.weapon_star2_chance(GameBalance.STAR2_UNLOCK_WAVE, 0.0, false), GameBalance.STAR2_PER_WAVE, EPS, "解锁波 = 单波步长")
+	_c.near(GameBalance.weapon_star2_chance(20, 0.0, false), GameBalance.STAR2_CAP, EPS, "高波封顶")
+	_c.check(GameBalance.weapon_star2_chance(20, 0.0, false) <= GameBalance.STAR2_CAP, "概率永不越过上限")
+	_c.check(GameBalance.weapon_star2_chance(8, 100.0, false) > GameBalance.weapon_star2_chance(8, 0.0, false), "福缘抬高 ★2 概率")
+	_c.near(GameBalance.weapon_star2_chance(6, 0.0, true), GameBalance.STAR2_NEAR_MERGE_FLOOR, EPS, "同名 ★2 差一件时概率抬到地板")
+
+	# 定价：★1 沿用旧式；★2 = ★1 × 2.7 取整
+	var base := 30
+	_c.equals(GameBalance.weapon_offer_price(base, 5, 1, 1.0), GameBalance.weapon_price(base, 5, 1.0), "★1 售价与旧公式一致")
+	_c.equals(GameBalance.weapon_offer_price(base, 5, 2, 1.0),
+			int(round(float(GameBalance.weapon_price(base, 5, 1.0)) * GameBalance.STAR2_PRICE_MULT)), "★2 售价 = ★1 × 2.7")
+
+	# 集成：低波次绝不出现 ★2
+	GameManager.reset_run()
+	GameManager.rng.seed = 424242
+	for i in range(40):
+		var low := ShopSystem.gen_offer(GameManager, 2)
+		if String(low.get("kind", "")) == "weapon":
+			_c.equals(int(low.get("star", 1)), 1, "第 2 波武器格恒 ★1")
+			break
+
+	# 高波次 + 满福缘：能刷出 ★2，且每件价格/星数自洽（固定种子，判据可复现）
+	GameManager.reset_run()
+	GameManager.luck = 100.0
+	GameManager.rng.seed = 20261025
+	var saw_star2 := false
+	for i in range(200):
+		var off := ShopSystem.gen_offer(GameManager, 20)
+		if String(off.get("kind", "")) != "weapon":
+			continue
+		var st := int(off.get("star", 1))
+		_c.check(st in [1, 2], "武器格星数只有 ★1/★2（实得 %d）" % st)
+		var b := int(WeaponData.get_def(String(off["id"])).get("price", 20))
+		_c.equals(int(off["price"]), GameBalance.weapon_offer_price(b, 20, st, GameManager.shop_price_mult),
+				"高价格售价与星数同源（%s ★%d）" % [off["id"], st])
+		saw_star2 = saw_star2 or st == 2
+	_c.check(saw_star2, "第 20 波 200 次武器格抽取里出现过 ★2 成品")
+	GameManager.reset_run()
 
 func _test_main_tag_pity() -> void:
 	GameManager.reset_run()

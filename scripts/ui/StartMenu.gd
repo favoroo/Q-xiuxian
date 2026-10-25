@@ -257,7 +257,7 @@ func _build_center_matrix() -> void:
 
 	# 右下 2：新手指南（元素橙色块）
 	var guide_res := _build_entry_block(
-		"GUIDE", "新手指南", "六页图文 · 随时重温",
+		"GUIDE", "新手指南", "图文指南 · 随时重温",
 		GameStyle.ELEMENT, GameStyle.INK_TEXT, GameStyle.ELEMENT,
 		_on_guide_pressed
 	)
@@ -622,17 +622,33 @@ func _apply_small_metrics(small_h: float) -> void:
 # ---------------- 状态刷新 ----------------
 
 func _refresh_danger_row() -> void:
-	# 4 档全部开放（2026-10-20）：没有锁定态，只有选中/未选中两种样子
+	# 逐级通关解锁（2026-10-25）：未解锁档位画成锁定态 —— 灰底 + 「×」前缀，
+	# 点它不切换（按钮 disabled），头部提示行说明解锁条件。
+	var top := GameManager.max_danger_unlocked()
 	for d in range(_danger_buttons.size()):
 		var btn := _danger_buttons[d]
-		btn.disabled = false
-		btn.text = DANGER_NAMES[d]
-		if d == GameManager.danger_level:
+		var unlocked := GameManager.is_danger_unlocked(d)
+		btn.disabled = not unlocked
+		btn.text = DANGER_NAMES[d] if unlocked else ("×" + DANGER_NAMES[d])
+		if d == GameManager.danger_level and unlocked:
 			# 选中态 hover 不换浅面：点完指针仍停在键上，换 JADE_EDGE 会整块泛白成淡黄。
 			# 悬停反馈交给硬阴影 (3,4)→(5,6) 硬切；pressed 面由 JADE 压暗派生，点击反馈仍在。
 			GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+		elif not unlocked:
+			GameStyle.button(btn, GameStyle.INK.lightened(0.06), GameStyle.LINE, 12, GameStyle.GREY, GameStyle.SLANT_BUTTON)
 		else:
 			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
+	_refresh_danger_hint(top)
+
+## 难度区头部提示：全解锁时只写「难度选择」，还有锁时补一句解锁条件。
+## 复用已有的头部标签而不新增一行 —— 首页竖向预算已排满（StartMenuCompositionProbe 量过卡内空洞）。
+func _refresh_danger_hint(top: int) -> void:
+	if _danger_head_lbl == null or not is_instance_valid(_danger_head_lbl):
+		return
+	if top >= GameBalance.DANGER_MAX:
+		_danger_head_lbl.text = "难度选择"
+	else:
+		_danger_head_lbl.text = "难度选择 · 通关「%s」解锁下一档" % DANGER_NAMES[top]
 
 func _refresh_endless_toggle() -> void:
 	if _endless_btn == null or not is_instance_valid(_endless_btn):
@@ -680,8 +696,22 @@ func _refresh_dynamic_texts() -> void:
 		var i_cnt := GameManager.unlocked_items.size()
 		_manual_sub_lbl.text = "角色 %d/%d · 道具 %d/%d" % [
 			c_cnt, CultivatorData.all_ids().size(),
-			i_cnt, ItemData.all_ids().size()
+			i_cnt, ItemData.shop_ids().size()
 		]
+
+	# 2b. 新解锁角标（2026-10-25）：结算屏发放的解锁在玩家点开对应条目之前一直算「新」。
+	# 用副标题前缀而不是新加控件 —— 首页布局是满的，多一个节点就会顶破卡片（LayoutCheck 量过）。
+	# 战绩页承载角色，图鉴页承载道具/武器，两处分开报，玩家知道该点哪张卡。
+	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
+		var new_cult := _count_unread_kinds(["cultivator"])
+		if new_cult > 0:
+			_career_sub_lbl.text = "◆ 新角色 %d · %s" % [new_cult, _career_sub_lbl.text]
+			_career_sub_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
+	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
+		var new_gear := _count_unread_kinds(["item", "weapon"])
+		if new_gear > 0:
+			_manual_sub_lbl.text = "◆ 新解锁 %d · %s" % [new_gear, _manual_sub_lbl.text]
+			_manual_sub_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
 
 	# 3. 天地律动设置副行
 	if _settings_sub_lbl != null and is_instance_valid(_settings_sub_lbl):
@@ -691,6 +721,16 @@ func _refresh_dynamic_texts() -> void:
 		_settings_sub_lbl.text = "%s · 震屏「%s」" % [vol_str, SettingsManager.shake_level_label()]
 
 	_refresh_sound_badge()
+
+## 数一数未读解锁里属于指定类型（cultivator/item/weapon）的条数。
+## 未读标记的 key 形如 "item:pojia_zhui"，只比对冒号前那段。
+func _count_unread_kinds(kinds: Array) -> int:
+	var n := 0
+	for key in GameManager.unread_unlocks:
+		var kind := String(key).get_slice(":", 0)
+		if kind in kinds:
+			n += 1
+	return n
 
 # ---------------- 打开 / 关闭与入场动效 ----------------
 

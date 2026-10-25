@@ -30,6 +30,13 @@ const PAL := {
 static func pal(elem: String) -> Dictionary:
 	return PAL.get(elem, PAL["metal"])
 
+## 宿主 element 元数据的安全读法：没有挂时回落空串（pal() 兜底到 metal accent）。
+## 对缺失元数据直接上 String 强转是 String(null)——不存在的构造器，
+## ★3 金边分支每帧报 Script Error（2026-10-25 ShakeProbe 2601 条实锤）。
+static func elem_of(r: Node2D) -> String:
+	var v = r.get("element")
+	return v if v is String else ""
+
 ## 平涂块：硬投影 + 粗墨描边（贴形外线）+ 纯色填充。ow = 露出外侧的描边厚度。
 ## ★3 在墨描之下先走一道加宽 accent 描线：内侧被墨描与填充盖住，外缘露出金边
 ## ——深底背景上剪影最外圈变金，是升星最直读的信号。
@@ -50,7 +57,7 @@ static func flat(r: Node2D, pts: PackedVector2Array, fill: Color, ow: float = 2.
 		r.draw_polyline(closed, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
 		r.draw_polyline(closed, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
 	elif st >= 3 and ow + 2.4 >= STAR_INK_MIN:
-		r.draw_polyline(closed, pal(String(r.get("element")))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
+		r.draw_polyline(closed, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
 	r.draw_polyline(closed, INK, ink_w, true)
 	r.draw_colored_polygon(pts, fill)
 
@@ -65,7 +72,7 @@ static func bar(r: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void
 		r.draw_line(a, b, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
 		r.draw_line(a, b, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
 	elif st >= 3 and w + 2.4 >= STAR_INK_MIN:
-		r.draw_line(a, b, pal(String(r.get("element")))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
+		r.draw_line(a, b, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
 	r.draw_line(a, b, INK, ink_w, true)
 	r.draw_line(a, b, col, w, true)
 
@@ -90,14 +97,14 @@ static func disc(r: Node2D, c: Vector2, radius: float, fill: Color, ow: float = 
 		r.draw_circle(c, radius + STAR4_NEON_PEEP, NEON_CYAN_HDR)
 		r.draw_circle(c, radius + STAR4_NEON_PEEP * 0.5, NEON_VIOLET)
 	elif st >= 3 and radius >= 5.0:
-		r.draw_circle(c, radius + STAR_EDGE_PEEP, pal(String(r.get("element")))["accent"])
+		r.draw_circle(c, radius + STAR_EDGE_PEEP, pal(elem_of(r))["accent"])
 	r.draw_circle(c, radius, INK)
 	r.draw_circle(c, radius - inset, fill)
 	if st >= 4 and radius >= 5.0:
 		r.draw_arc(c, radius - inset * 0.5, 0.0, TAU, 28, NEON_CYAN_HDR, minf(inset * 0.55, 1.8), true)
 	elif st >= 3 and radius >= 5.0:
 		r.draw_arc(c, radius - inset * 0.5, 0.0, TAU, 28,
-			pal(String(r.get("element")))["accent"], minf(inset * 0.55, 1.6), true)
+			pal(elem_of(r))["accent"], minf(inset * 0.55, 1.6), true)
 
 ## 圆环带（鼓环/镜框）：墨底 + 撞色环。升星只加厚墨底，撞色环带宽保持
 static func ring(r: Node2D, c: Vector2, radius: float, w: float, col: Color) -> void:

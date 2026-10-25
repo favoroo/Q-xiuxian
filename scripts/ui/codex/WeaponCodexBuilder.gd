@@ -52,10 +52,11 @@ static func rebuild(dialog: ManualDialog) -> void:
 	var elem_tag := dialog.weapon_element_filter
 	if cls_tag == "" and elem_tag == "":
 		box.add_child(dialog._make_text_card("武器规则",
-			"武器只能在回合间商店购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n★3 觉醒专属招式，★4 再跃一档「极境」；手里有同名武器时货架更容易刷出它。\n点任意武器卡看射程、冷却与属性受益。" % [
+			"武器只能在回合间商店购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n★3 觉醒专属招式，★4 再跃一档「极境」；手里有同名武器时货架更容易刷出它。\n点任意武器卡看射程、冷却与属性受益。\n已收录 %d/%d 把：没用过的武器只显示名字，买一次即可点亮。" % [
 				WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
 				String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
-				WeaponData.MAX_STAR]))
+				WeaponData.MAX_STAR,
+				CodexCollection.weapon_seen_count(), WeaponData.DEFS.size()]))
 		for elem in WeaponData.ELEMENTS:
 			box.add_child(_group_header(
 				"── %s行武器 ──" % String(StatInfoData.ELEMENT_NAMES.get(elem, elem)),
@@ -188,25 +189,42 @@ static func _weapon_grid(dialog: ManualDialog, keep: Callable) -> GridContainer:
 
 
 static func _make_weapon_card(dialog: ManualDialog, wid: String, def: Dictionary) -> PanelContainer:
-	var stat_line := STAT_LINE_FMT % [
-		int(def.get("damage", 0)),
-		String.num(float(def.get("cooldown", 1.0)), 2),
-		int(def.get("price", 0)),
-	]
+	# 实战收录（2026-10-25 锁图鉴）：没在局内用过就只给名字与压暗剪影，
+	# 数值行与三签一律不画 —— 想知道这把怎么打，先买一次。
+	var seen := CodexCollection.is_weapon_seen(wid)
+	var stat_line := ""
+	var chips: Array = []
+	if seen:
+		stat_line = STAT_LINE_FMT % [
+			int(def.get("damage", 0)),
+			String.num(float(def.get("cooldown", 1.0)), 2),
+			int(def.get("price", 0)),
+		]
+		chips = card_chips(wid, def)
 	var card := dialog._make_entry_card(
 		String(def.get("icon", "")), String(def.get("name", wid)),
-		"", GameStyle.PAPER_DIM,
+		"" if seen else "未收录", GameStyle.GREY,
 		func(anchor: Control): dialog._open_weapon_tip(wid, anchor),
-		stat_line, card_chips(wid, def))
+		stat_line, chips)
 	card.set_meta("wid", wid)		# 判据按 id 现算期望签文，不从卡面文字反推
+	card.set_meta("codex_seen", seen)
+	# 刚解锁但还没点开看过：名字后面挂一枚「新」（2026-10-25）。点开详情即销。
+	if GameManager.is_unlock_unread("weapon", wid):
+		var name_lbl := card.get_meta("name_lbl") as Label
+		if name_lbl != null:
+			name_lbl.text = "新 " + name_lbl.text
+			name_lbl.add_theme_color_override("font_color", GameStyle.JADE)
 	# 元素件 = 图标框那一圈暖橙红描边（图鉴与商店/属性面板同一口径）。
 	# 原先贴右上角的「元素」色块已撤：48 见方的图标框上它要遮掉一角，而这一屏是要人扫着比的。
 	var icon_tex := card.get_meta("icon_tex") as TextureRect
-	if icon_tex != null and GameStyle.is_elemental(wid):
-		var icon_box := icon_tex.get_parent() as Control
-		if icon_box != null:
-			icon_box.add_theme_stylebox_override("panel",
-					GameStyle.outlined_panel(GameStyle.INK, GameStyle.ELEMENT, 1, 0.0))
+	if icon_tex != null:
+		if not seen:
+			icon_tex.modulate = GameStyle.disabled_modulate()
+		elif GameStyle.is_elemental(wid):
+			var icon_box := icon_tex.get_parent() as Control
+			if icon_box != null:
+				icon_box.add_theme_stylebox_override("panel",
+						GameStyle.outlined_panel(GameStyle.INK, GameStyle.ELEMENT, 1, 0.0))
 	return card
 
 

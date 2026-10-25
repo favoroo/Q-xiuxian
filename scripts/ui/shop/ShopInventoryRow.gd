@@ -8,7 +8,7 @@ extends RefCounted
 ## 单格武器槽：不用 Button —— BaseButton 在自己的 gui_input 里 accept_event()，「按下」
 ## 那一拍不往父级冒泡 ⇒ 手指压在槽位上就划不动整排，而满仓 30 格里几乎全是槽位。
 ## 属性面板的槽位同一口径（PanelContainer + GameStyle.tap，见 PlayerStatsDialog._refresh_weapons）。
-static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: String, tile: float) -> Control:
+static func create_inv_slot(shop, item: Dictionary, index: int, pool: String, tile: float) -> Control:
 	var id: String = item.get("id", "")
 	var star: int = int(item.get("star", 1))
 	var mergeable: bool = star < WeaponData.MAX_STAR and GameManager.count_copies(id, star) >= 3
@@ -124,7 +124,7 @@ static func create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 ## 上阵空格：上阵区固定摆满上限格数（2026-10-11 用户：没佩戴的也要显示空格子），
 ## 描边带一点上阵区的金，与背包凹槽区分；只作拖拽落点（背包件拖到空格＝装备），
 ## 不吃输入（同背包空位：几何命中落点，gui_input 收不到也就不会被误拎起）
-static func create_empty_equipped_slot(shop: WaveShop, index: int, tile: float) -> Control:
+static func create_empty_equipped_slot(shop, index: int, tile: float) -> Control:
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(tile, tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -139,7 +139,7 @@ static func create_empty_equipped_slot(shop: WaveShop, index: int, tile: float) 
 	return slot
 
 ## 背包分隔签：「背包 n/9」；兼作拖拽落点 —— 上阵件拖到这一签上＝卸入背包
-static func create_stash_divider(shop: WaveShop) -> Control:
+static func create_stash_divider(shop) -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -166,7 +166,7 @@ static func create_items_divider() -> Control:
 	return chip
 
 ## 已持有道具的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
-static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Control:
+static func create_item_chip(shop, item_id: String, tile: float) -> Control:
 	var def := ItemData.get_def(item_id)
 	var chip = PanelContainer.new()
 	chip.custom_minimum_size = Vector2(tile, tile)
@@ -195,18 +195,20 @@ static func create_item_chip(shop: WaveShop, item_id: String, tile: float) -> Co
 ## 2026-10-12 用户：「商店里的这些道具啊，如果有买到不想要的，也可以卖掉」—— 武器与灵兽一直
 ## 卖得掉，道具这一类原先点进去只有读数没有操作：买错了整局背着（被动道具不占槽、没法卸），
 ## 这一屏是唯一能反悔的地方。出售走 GameManager.sell_item，加过的属性同一条链路退回。
-static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> void:
+static func open_item_tip(shop, item_id: String, anchor: Control) -> void:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
 		return
 	var tier_num: int = int(def.get("tier", 1))
 	var tier_col: Color = ItemData.tier_color(tier_num)
+	var no_sell := ItemData.is_no_sell(item_id)
 	var refund := ItemData.sell_price(item_id)
-	var rows: Array = [
-		["品阶", ItemData.tier_label(tier_num), tier_col],
-		["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM],
-		["出售返还", "%d 金币" % refund, GameStyle.JADE],
-	]
+	var rows: Array = [["品阶", ItemData.tier_label(tier_num), tier_col]]
+	if no_sell:
+		rows.append(["来源", "超级悟道", tier_col])
+	else:
+		rows.append(["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM])
+		rows.append(["出售返还", "%d 金币" % refund, GameStyle.JADE])
 	# 加成行（2026-10-11 土豆兄弟式改版）：BonusRows 从 apply 生成，与货架卡同一把尺子
 	rows.append_array(BonusRows.apply_rows(def.get("apply", {})))
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
@@ -215,10 +217,15 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 		var s := String(line).strip_edges()
 		if not s.is_empty():
 			notes.append(s)
-	notes.append("出售按原价一半回收金币，加过的属性当场退回（与武器、灵兽同一条口径）。")
+	if no_sell:
+		notes.append("神通来自超级悟道，本局永久生效，不可出售。")
+	else:
+		notes.append("出售按原价一半回收金币，加过的属性当场退回（与武器、灵兽同一条口径）。")
 	var unique := bool(def.get("unique", false))
 	var foot := "每回合商店会刷新更多道具。"
-	if unique:
+	if no_sell:
+		foot = "神通不可出售：它已经是你这一局的一部分。"
+	elif unique:
 		foot = "本局限购一件：出售后这一件不再上架。"
 	# 万兽笼这类「退了当场灵兽栏超编」的：键摆着但按不动，理由印在键上
 	# （与武器详情卡「装备已满」「背包已满」那颗灰键同一条口径 —— 不许按下去什么也没发生）
@@ -229,17 +236,29 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 	var on_sell := func():
 		if GameManager.sell_item(item_id):
 			shop.refresh(false)
-	var actions: Array = [[{
-		"text": "先出售灵兽" if over_pets else "出售 (+%d 金币)" % refund,
-		"disabled": over_pets,
-		"color": GameStyle.BAD,
-		"edge_color": GameStyle.BAD_DK,
-		"text_color": GameStyle.PAPER,
-		"callback": on_sell,
-	}]]
-	DetailTip.show_over(shop, anchor, {
+	var actions: Array = []
+	if no_sell:
+		actions = [[{
+			"text": "神通不可出售",
+			"disabled": true,
+			"color": GameStyle.GREY,
+			"edge_color": GameStyle.GREY,
+			"text_color": GameStyle.PAPER,
+			"callback": func(): pass,
+		}]]
+	else:
+		actions = [[{
+			"text": "先出售灵兽" if over_pets else "出售 (+%d 金币)" % refund,
+			"disabled": over_pets,
+			"color": GameStyle.BAD,
+			"edge_color": GameStyle.BAD_DK,
+			"text_color": GameStyle.PAPER,
+			"callback": on_sell,
+		}]]
+	var host: Control = shop.get_tip_host() if shop.has_method("get_tip_host") else (shop as Control)
+	DetailTip.show_over(host, anchor, {
 		"title": String(def.get("name", item_id)),
-		"chip": "被动道具",
+		"chip": "神通" if no_sell else "被动道具",
 		"chip_color": tier_col,
 		"rows": rows,
 		"body": "被动道具：自动生效，不占武器槽，整局持续有效。",
@@ -249,7 +268,7 @@ static func open_item_tip(shop: WaveShop, item_id: String, anchor: Control) -> v
 	})
 
 ## 背包空位：凹槽提示容量；兼作拖拽落点（拖到空位＝卸到队尾 / 背包件挪到队尾）
-static func create_empty_stash_slot(shop: WaveShop, tile: float) -> Control:
+static func create_empty_stash_slot(shop, tile: float) -> Control:
 	var slot = PanelContainer.new()
 	slot.custom_minimum_size = Vector2(maxf(20.0, tile * 0.6), tile)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -273,7 +292,7 @@ static func create_pets_divider() -> Control:
 	return chip
 
 ## 已持有灵兽的小徽记：绘制无脸圆球光灵（与货架卡同一画法，见 PetIconDraw），支持点按弹出 DetailTip 详解卡与出售操作
-static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Control:
+static func create_pet_chip(shop, pet_id: String, tile: float) -> Control:
 	var def := PetData.get_def(pet_id)
 	var chip = PanelContainer.new()
 	chip.custom_minimum_size = Vector2(tile, tile)
@@ -295,7 +314,7 @@ static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Cont
 	return chip
 
 ## 灵兽详情卡：包含定位/技能描述/出售返还按钮
-static func open_pet_tip(shop: WaveShop, pet_id: String, anchor: Control) -> void:
+static func open_pet_tip(shop, pet_id: String, anchor: Control) -> void:
 	var def := PetData.get_def(pet_id)
 	if def.is_empty():
 		return
@@ -318,7 +337,8 @@ static func open_pet_tip(shop: WaveShop, pet_id: String, anchor: Control) -> voi
 			"callback": on_sell,
 		}
 	]
-	DetailTip.show_over(shop, anchor, {
+	var host: Control = shop.get_tip_host() if shop.has_method("get_tip_host") else (shop as Control)
+	DetailTip.show_over(host, anchor, {
 		"title": String(def.get("name", pet_id)),
 		"chip": "灵兽",
 		"chip_color": color,

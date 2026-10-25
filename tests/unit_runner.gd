@@ -29,7 +29,8 @@ func _ready() -> void:
 	var spiritbeast := UnitSpiritBeastTests.new(_c)
 	var spiritpet := UnitSpiritPetTests.new(_c)
 	var flock := UnitFlockTests.new(_c)
-	var modules: Array[Node] = [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast, spiritpet, flock]
+	var supers := UnitSuperTests.new(_c)
+	var modules: Array[Node] = [economy, combat, wave, upgrade, targeting, content, infra, consistency, spiritbeast, spiritpet, flock, supers]
 	for m in modules:
 		add_child(m)
 
@@ -56,7 +57,12 @@ func _ready() -> void:
 		[upgrade, "_test_upgrade_table"],
 		[upgrade, "_test_upgrade_roll_filters"],
 		[upgrade, "_test_alloc_session"],
+		# 2026-10-25 超级悟道：卡表/候选配比/赠礼落地（每个用例自带 reset_run，不影响后续顺序）
+		[supers, "_test_super_table"],
+		[supers, "_test_super_roll"],
+		[supers, "_test_super_apply"],
 		[economy, "_test_shop_determinism"],
+		[economy, "_test_weapon_star2_offer"],
 		[economy, "_test_main_tag_pity"],
 		[economy, "_test_shop_tag_soft_bias"],
 		[economy, "_test_dream_affinity"],
@@ -98,6 +104,8 @@ func _ready() -> void:
 		[consistency, "_test_theme_swap_runtime"],
 		[spiritbeast, "_test_spirit_beast_scaling"],
 		[spiritbeast, "_test_spirit_beast_constants"],
+		[spiritbeast, "_test_obelisk_economy_and_lifetime"],
+		[spiritbeast, "_test_spirit_beast_palette"],
 		[spiritpet, "_test_fengdiao_vortex_formulas"],
 		[spiritpet, "_test_fengdiao_ring_geometry"],
 		[spiritpet, "_test_fengdiao_data_desc_consistency"],

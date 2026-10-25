@@ -31,11 +31,13 @@ const EPS := 0.03
 var _c := TestCheck.new()
 var _hud: GameHUD
 var _ob: BlessingObelisk
-## 第二座碑：验「三座碑各灌各的」，材质没 local_to_scene 时会在这里露馅
+## 第二座碑：验「各灌各的」，材质没 local_to_scene 时会在这里露馅
 var _ob2: BlessingObelisk
 var _btn: Button
 var _ring: SkillButtonView.CircleProgressOverlay
 var _center := Vector2.ZERO
+## 金币前置快照：触发后按差额断扣费
+var _stones_before: int = 0
 
 func _ready() -> void:
 	call_deferred("_dispatch")
@@ -89,6 +91,9 @@ func _run() -> void:
 		"走针环半径 %.0f 明显收在判定圈 %.0f 之内（范围视觉不许被进度糊大）" % [BlessingObelisk.ARC_RADIUS, shape.radius])
 
 	# 四、派发通路自证：真打进引擎的按下能不能叫醒那颗键
+	# 金币前置（2026-10-25 祭坛改金币启动）：给足本回合启动价的富余，充能才进得去
+	_stones_before = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
+	GameManager.spirit_stones = _stones_before
 	_hud.show_obelisk_activation(_ob)
 	await get_tree().create_timer(0.3).timeout
 	if not await _dispatch_works():
@@ -128,7 +133,7 @@ func _run() -> void:
 	_c.check(absf(_ring.ratio - last) <= EPS, "键面那一圈与阵法读数同源（键面 %.3f / 阵法 %.3f）" % [_ring.ratio, last])
 	# 各灌各的：另一座碑此刻必须还是空的（褪灰材质若没 local_to_scene，这里会一起亮）
 	_c.check(not _ob2.is_readout_shown() and _ob2.readout_ratio() == 0.0,
-		"同一时刻另一座碑没跟着亮（三座碑各灌各的）")
+		"同一时刻另一座碑没跟着亮（各灌各的，材质 local_to_scene 隔离）")
 
 	# 六、中途松手 ⇒ 阵法读数归零并撤下，不许留半截看着像还在充
 	await _press(_center, false)
@@ -157,23 +162,25 @@ func _run() -> void:
 	await _press(ring_pt, false)
 	_c.check(not _ob.is_charging, "在走针那一片抬起 ⇒ 停住")
 
-	# 七、按住到满 ⇒ 触发那一帧读数正好画满一整圈（不许「已经放了但看着还差一截」）
+	# 七、按住到满 ⇒ 扣费进注入，读数定格画满一整圈（不许「已经放了但看着还差一截」）
 	await _press(_center, true)
 	guard = 0
-	while not _ob.is_triggered and guard < 400:
+	while not _ob.spent_this_wave and guard < 600:
 		await get_tree().process_frame
 		guard += 1
-	_c.check(_ob.is_triggered, "按住到 CHARGE_TIME ⇒ 自动触发")
+	_c.check(_ob.spent_this_wave, "按住到 CHARGE_TIME ⇒ 扣费注入后自动触发（进灰相）")
+	_c.check(GameManager.spirit_stones == _stones_before - GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)),
+		"启动扣走本回合启动价金币（剩 %d / 前置 %d）" % [GameManager.spirit_stones, _stones_before])
 	_c.check(_ob.readout_ratio() >= 1.0 - EPS, "触发那一帧阵法读数画满（实得 %.3f）" % _ob.readout_ratio())
 	_c.check(_ob._readout_arc.ratio >= 1.0 - EPS, "触发那一帧走针环画满一整圈")
 	_c.check(_ob._readout_label.text == "100%", "触发那一帧碑顶写着 100%%（实得 %s）" % _ob._readout_label.text)
-	await get_tree().create_timer(0.35).timeout
+	await get_tree().create_timer(1.2).timeout
 	_c.check(not _ob.is_readout_shown(), "触发后读数收掉（兑现交给冲击波，环再留着就是多余读数）")
 
-	# 八、用完的碑不许再亮进度
+	# 八、本回合用完的碑不许再亮进度
 	_ob.start_charge()
-	_c.check(not _ob.is_charging, "已耗尽的界碑不再接单")
-	_c.check(not _ob.is_readout_shown(), "已耗尽的界碑不许再亮进度读数")
+	_c.check(not _ob.is_charging, "本回合已启动的界碑不再接单")
+	_c.check(not _ob.is_readout_shown(), "本回合已启动的界碑不许再亮进度读数")
 
 ## 一处判据：阵法上那三处读数是否都跟着同一个进度
 func _tracks(ob: BlessingObelisk, internal: float) -> bool:
@@ -241,6 +248,8 @@ func _selftest() -> void:
 	_btn = _hud._obelisk_btn
 	_ring = _hud._obelisk_ring
 	# 不依赖派发：直接走 HUD 之外最短的一条真链路把进度推到一半
+	# 金币前置（2026-10-25 祭坛改金币启动）：不给钱 start_charge 会硬拦
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
 	_ob.start_charge()
 	var guard := 0
 	while _ob.charge_time < BlessingObelisk.CHARGE_TIME * 0.55 and guard < 400:

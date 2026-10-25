@@ -24,7 +24,8 @@ extends RefCounted
 ##   cult_mults     Dictionary  {武器id: 角色特性单武器伤害系数}（CultivatorSystem.damage_mult）
 ##   slots_used     int         上阵槽位现况
 ##   slots_max      int         上阵槽位上限
-##   copies1        Dictionary  {武器id: 手里 1 星同名件数}（三合一判定）
+##   copies1        Dictionary  {武器id: 手里 1 星同名件数}（★1 三合一判定）
+##   copies2        Dictionary  {武器id: 手里 2 星同名件数}（★2 三合一判定；货架会卖 ★2 成品）
 ##   stones         int         金币现况（货架候选的买得起判定）
 ##   wave           int         当前波（≥1）
 ##   victory_wave   int         胜利波（GameManager.VICTORY_WAVE）
@@ -303,8 +304,9 @@ static func score_apply(apply: Dictionary, ctx: Dictionary) -> Dictionary:
 	var score := W_BUILD * b + W_FIT * a + W_SYN * c + W_TIMING * 1.0
 	return {"score": score, "b": b, "a": a, "c": c, "reasons": reasons}
 
-## 货架武器候选
-static func score_weapon(w_id: String, ctx: Dictionary) -> Dictionary:
+## 货架武器候选。star = 这一件的星级（缺省 ★1；货架从 2026-10-25 起会卖 ★2 成品）：
+## 边际收益要按「买到手的那一件」算，三合一判定也要查同星件数 —— ★1 与 ★2 各算各的轨道。
+static func score_weapon(w_id: String, ctx: Dictionary, star: int = 1) -> Dictionary:
 	var stats: Dictionary = ctx.get("stats", {})
 	var elem: Dictionary = ctx.get("element_damage", {})
 	var cult_mults: Dictionary = ctx.get("cult_mults", {})
@@ -312,38 +314,46 @@ static func score_weapon(w_id: String, ctx: Dictionary) -> Dictionary:
 	var slots_used := int(ctx.get("slots_used", 1))
 	var slots_max := maxi(1, int(ctx.get("slots_max", 6)))
 	var reasons: Array[String] = []
+	var s := clampi(star, 1, WeaponData.MAX_STAR)
 
 	# ---- B 构建边际收益 ----
 	var cult_mult := float(cult_mults.get(w_id, 1.0))
 	var is_drone := int(WeaponData.get_def(w_id).get("behavior", -1)) == WeaponData.Behavior.DRONE
 	var drone_now := count_drones(ctx.get("weapons", []))
 	var total0 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, -1)
-	var merge_ready := int(ctx.get("copies1", {}).get(w_id, 0)) == 2
+	# 三合一判定与卡面/合成角标同式：同星同名 % 3 == 2 才是「买下即凑满」。
+	# 只有 ★1/★2 会出现在货架，★3 起没有对应的 copies 表（作者模式发放，不参与推荐）。
+	var copies: Dictionary = {}
+	if s == 1:
+		copies = ctx.get("copies1", {})
+	elif s == 2:
+		copies = ctx.get("copies2", {})
+	var merge_ready := s < WeaponData.MAX_STAR and (int(copies.get(w_id, 0)) % 3) == 2
 	var full := slots_used >= slots_max
 	var b := 0.0
 	if merge_ready:
-		# 三合一：3×★1 变 1×★2，净收益 = 升星单件增量（还腾 2 个槽位，协同因子另给满分）
+		# 三合一：3×★n 变 1×★(n+1)，净收益 = 升星单件增量（还腾 2 个槽位，协同因子另给满分）
 		var drone_after_merge := maxi(0, drone_now - 2) if is_drone else drone_now
-		var dps1 := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now)
-		var dps2 := weapon_expected_dps(w_id, 2, stats, elem, cult_mult, maxi(1, slots_used - 1), contr, drone_after_merge)
+		var dps1 := weapon_expected_dps(w_id, s, stats, elem, cult_mult, slots_used, contr, drone_now)
+		var dps2 := weapon_expected_dps(w_id, s + 1, stats, elem, cult_mult, maxi(1, slots_used - 1), contr, drone_after_merge)
 		b = clampf((dps2 - dps1) / maxf(total0, 1.0) / REF_DMG, 0.0, 1.0)
 		if dps1 > 0.0:
-			reasons.append("买下即可三合一升星（单件伤害 ×%.1f）" % (dps2 / dps1))
+			reasons.append("买下即可三合一升至 ★%d（单件伤害 ×%.1f）" % [s + 1, dps2 / dps1])
 	elif not full:
 		# 直接入阵：现有武器按「买下之后」的槽位数重算分流税，新件按同口径投影
 		var slots_after := mini(slots_used + 1, slots_max)
 		var drone_after := drone_now + (1 if is_drone else 0)
 		var total1 := total_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_after, contr, drone_after) \
-				+ weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after)
+				+ weapon_expected_dps(w_id, s, stats, elem, cult_mult, slots_after, contr, drone_after)
 		var gain := total1 / maxf(total0, 1.0) - 1.0
 		b = clampf(gain / REF_DMG, 0.0, 1.0)
 		reasons.append("到手每秒约 %s（上阵总伤 %s%d%%）" % [
-			_num(weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_after, contr, drone_after)),
+			_num(weapon_expected_dps(w_id, s, stats, elem, cult_mult, slots_after, contr, drone_after)),
 			"+" if gain >= 0.0 else "-", _pct(absf(gain))])
 	else:
 		# 槽位满：只能进背包，不即时生效——给个「可替换」评估而不是零分
 		var weakest := _weakest_dps(ctx.get("weapons", []), stats, elem, cult_mults, slots_used, contr, drone_now)
-		var dps_new := weapon_expected_dps(w_id, 1, stats, elem, cult_mult, slots_used, contr, drone_now)
+		var dps_new := weapon_expected_dps(w_id, s, stats, elem, cult_mult, slots_used, contr, drone_now)
 		b = 0.20 if dps_new >= 0.8 * weakest else 0.05
 		reasons.append("槽位已满 · 入背包（可替换现役最弱）")
 
@@ -376,7 +386,7 @@ static func score_offer(offer: Dictionary, ctx: Dictionary) -> Dictionary:
 		"item":
 			out = score_apply(ItemData.get_def(String(offer.get("id", ""))).get("apply", {}), ctx)
 		_:
-			out = score_weapon(String(offer.get("id", "")), ctx)
+			out = score_weapon(String(offer.get("id", "")), ctx, int(offer.get("star", 1)))
 	var price := int(offer.get("price", 0))
 	if price > int(ctx.get("stones", 0)) and float(out["score"]) > 0.0:
 		out["score"] = float(out["score"]) * UNAFFORDABLE_MULT

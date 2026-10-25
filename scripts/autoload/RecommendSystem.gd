@@ -55,25 +55,37 @@ static func build_ctx(gm: Node) -> Dictionary:
 	stats["thorns"] = gm.thorns_pct
 
 	var weapons: Array = []
+	# 同名同星件数按星分开记：货架会卖 ★1 与 ★2 两种成品，三合一各算各的轨道
+	# （2026-10-25：原来只有 copies1，★2 商品的三合一判定会被错算成 ★1 的件数）。
 	var copies1: Dictionary = {}
+	var copies2: Dictionary = {}
 	var has_player_weapons: bool = gm.player != null and is_instance_valid(gm.player) \
 			and gm.player.has_method("get_equipped_weapons_data")
 	if has_player_weapons:
 		for w in gm.player.get_equipped_weapons_data():
 			var wid := String(w.get("id", ""))
-			weapons.append({"id": wid, "star": int(w.get("star", 1))})
-			if int(w.get("star", 1)) == 1:
+			var wstar := int(w.get("star", 1))
+			weapons.append({"id": wid, "star": wstar})
+			if wstar == 1:
 				copies1[wid] = int(copies1.get(wid, 0)) + 1
+			elif wstar == 2:
+				copies2[wid] = int(copies2.get(wid, 0)) + 1
 	for d in gm.drones:
 		var wid := WeaponInventory.drone_id(d)
 		var star := WeaponInventory.drone_star(d)
 		weapons.append({"id": wid, "star": star})
 		if star == 1:
 			copies1[wid] = int(copies1.get(wid, 0)) + 1
+		elif star == 2:
+			copies2[wid] = int(copies2.get(wid, 0)) + 1
 	for e in gm.stash:
-		if int(e.get("star", 1)) == 1:
+		var estar := int(e.get("star", 1))
+		if estar == 1:
 			var wid := String(e.get("id", ""))
 			copies1[wid] = int(copies1.get(wid, 0)) + 1
+		elif estar == 2:
+			var wid2 := String(e.get("id", ""))
+			copies2[wid2] = int(copies2.get(wid2, 0)) + 1
 
 	var cult_mults: Dictionary = {}
 	for w in weapons:
@@ -91,6 +103,7 @@ static func build_ctx(gm: Node) -> Dictionary:
 		"slots_used": WeaponInventory.slots_used(gm),
 		"slots_max": gm.max_weapon_slots(),
 		"copies1": copies1,
+		"copies2": copies2,
 		"stones": int(gm.spirit_stones),
 		"wave": maxi(int(gm.wave_number), 1),
 		"victory_wave": int(gm.VICTORY_WAVE),

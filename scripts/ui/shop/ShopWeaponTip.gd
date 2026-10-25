@@ -4,7 +4,7 @@ extends RefCounted
 ## 商店武器悬浮详情卡：全部属性 + 流派进度 + 快捷操作（三合一 / 装备卸换 / 出售）。
 ## 从 WaveShop 拆出：宿主仍是 shop（DetailTip 判据按宿主收卡），操作回调经 shop 门面刷新。
 
-static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anchor: Control) -> void:
+static func open(shop, item: Dictionary, pool: String, index: int, anchor: Control) -> void:
 	var id: String = String(item.get("id", ""))
 	var def := WeaponData.get_def(id)
 	if def.is_empty():
@@ -163,7 +163,8 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 					shop.selected = {}
 					shop.refresh(false)
 				, func() -> Rect2:
-					return _row_rect_matching(shop, final_src, id, star + 1))
+					return _row_rect_matching(shop, final_src, id, star + 1)
+				, star + 1)
 		}])
 
 	var row_ops: Array = []
@@ -224,7 +225,8 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 		"actions": actions,
 	}
 
-	var tip := DetailTip.show_over(shop, anchor, tip_data)
+	var host: Control = shop.get_tip_host() if shop.has_method("get_tip_host") else (shop as Control)
+	var tip := DetailTip.show_over(host, anchor, tip_data)
 	if tip != null:
 		tip.closed.connect(func() -> void:
 			if shop.selected.get("pool", "") == pool and int(shop.selected.get("index", -1)) == index:
@@ -236,7 +238,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 ## 每项 {"src": {"pool","index"}, "rect": 全局矩形}，src 抄的是槽位 drag_src 的登记口径。
 ## 消耗哪两件必须复刻 WeaponInventory 的选取顺序（背包 0→、灵宝 0→、悬浮武器从尾部←），
 ## 否则 4 件以上时飞的格子与实际被吃掉的格子对不上，重建后「飞走的格子又长回来」。
-static func _collect_merge_sources(shop: WaveShop, w_id: String, star: int,
+static func _collect_merge_sources(shop, w_id: String, star: int,
 		keeper_pool: String, keeper_index: int, anchor: Control) -> Array:
 	var out: Array = [{
 		"src": {"pool": keeper_pool, "index": keeper_index},
@@ -301,7 +303,7 @@ static func _row_item_for(src: Dictionary) -> Dictionary:
 
 ## 按 src（pool/index）在当前陈列行里找格位的全局矩形，并核对该格确实是 w_id 的 new_star 件
 ## （合成会删格子、整行左移，重建后的下标要现算现比；核不上返回空矩形 = 结果图标停在原地）
-static func _row_rect_matching(shop: WaveShop, src: Dictionary, w_id: String, new_star: int) -> Rect2:
+static func _row_rect_matching(shop, src: Dictionary, w_id: String, new_star: int) -> Rect2:
 	if shop == null or not is_instance_valid(shop) or shop.owned_container == null:
 		return Rect2()
 	var want_pool := String(src.get("pool", ""))
@@ -321,7 +323,7 @@ static func _row_rect_matching(shop: WaveShop, src: Dictionary, w_id: String, ne
 ## 按 src 把当前陈列行里那一格的原件藏掉（modulate 透明，不改尺寸不破布局判据）：
 ## 按键那一刻旧行正在被 queue_free、新行还没摆完，两个都找得到就都藏 ——
 ## 飞行体从开卡时抓好的矩形起飞，原件不藏会同时出现「格子里一个 + 飞行中一个」。
-static func _hide_row_slots(shop: WaveShop, src: Dictionary) -> void:
+static func _hide_row_slots(shop, src: Dictionary) -> void:
 	if shop == null or not is_instance_valid(shop) or shop.owned_container == null:
 		return
 	var want_pool := String(src.get("pool", ""))

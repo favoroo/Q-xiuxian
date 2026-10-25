@@ -107,6 +107,8 @@ func _ready() -> void:
 			)
 		if lvl_dialog.has_signal("author_requested"):
 			lvl_dialog.author_requested.connect(author_panel.open)
+	# 超级悟道面板：运行时挂到 UILayer 末尾（Main.tscn 为多 Agent 共享场景文件，不往里加节点）
+	_mount_super_alloc_dialog()
 	if $UILayer.has_node("WaveShop"):
 		var wave_shop: Control = $UILayer/WaveShop
 		wave_shop.stats_requested.connect(func():
@@ -192,9 +194,9 @@ func _ready() -> void:
 	if not GameManager.game_over_triggered.is_connected(_on_game_over_reset_vignette):
 		GameManager.game_over_triggered.connect(_on_game_over_reset_vignette)
 
-	# 聚灵阵信号接线：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
+	# 聚灵阵信号接线（2026-10-25 重设计为单祭坛）：界碑的激活/充能/触发事件通知 HUD 显示对应 UI
 	var hud: GameHUD = $UILayer/GameHUD
-	for ob_name in ["ObeliskCenter", "ObeliskEast", "ObeliskWest"]:
+	for ob_name in ["ObeliskCenter"]:
 		if $MapLayer.has_node(ob_name):
 			var ob = $MapLayer.get_node(ob_name) as BlessingObelisk
 			ob.activation_available.connect(hud.show_obelisk_activation)
@@ -203,7 +205,7 @@ func _ready() -> void:
 			ob.charge_progress_updated.connect(hud.on_obelisk_charge_progress)
 			ob.charge_cancelled.connect(hud.on_obelisk_charge_cancelled)
 			ob.blessing_triggered.connect(hud.on_obelisk_blessing_triggered)
-			if ob.is_player_inside and not ob.is_triggered:
+			if ob.is_player_inside and not ob.spent_this_wave:
 				hud.show_obelisk_activation(ob)
 
 	# BGM 交给 AudioManager 的状态机：开局在主菜单与选人阶段播放 menu，进入回合后由 WaveSpawner 切 battle/trial
@@ -259,6 +261,11 @@ func resume_from_save() -> void:
 	# 「继续游戏进来后啥也点不了」的根因）。改用 GameManager.wave_spawner（_ready 已登记）更稳。
 	var spawner := GameManager.wave_spawner as WaveSpawner
 	match saved_phase:
+		WaveSpawner.Phase.SUPER_ALLOC:
+			spawner.phase = WaveSpawner.Phase.SUPER_ALLOC
+			# 面板从存档 super_alloc_offers 原样重建（与 ALLOC 同一条口径：不重 roll）
+			GameManager.super_alloc_opened.emit()
+			AudioManager.play_bgm_key("shop")
 		WaveSpawner.Phase.ALLOC:
 			spawner.phase = WaveSpawner.Phase.ALLOC
 			# 面板从存档 alloc_offers 原样重建卡片（_on_alloc_opened 不重 roll），
@@ -272,6 +279,25 @@ func resume_from_save() -> void:
 		_:
 			# FIGHT/CLEARING：本波从头重打，金币/经验/血量以最后一次自动存档为准
 			_run_resumed_fight(spawner)
+
+## 超级悟道面板挂载：场景由 LevelUpDialog.tscn 派生（根脚本换 SuperAllocDialog.gd），
+## 三颗顶栏键与普通悟道同一套接线（属性 / 暂停 / 作者）。
+func _mount_super_alloc_dialog() -> void:
+	var scene := load("res://scenes/ui/SuperAllocDialog.tscn") as PackedScene
+	if scene == null:
+		return
+	var dlg: Control = scene.instantiate()
+	dlg.name = "SuperAllocDialog"
+	$UILayer.add_child(dlg)
+	if dlg.has_signal("pause_requested"):
+		dlg.pause_requested.connect(func(): pause_menu.open(false))
+	if dlg.has_signal("stats_requested"):
+		dlg.stats_requested.connect(func():
+			_stats_return_to_pause = false
+			stats_dialog.open(false)
+		)
+	if dlg.has_signal("author_requested"):
+		dlg.author_requested.connect(author_panel.open)
 
 ## FIGHT 恢复路径单独一拍：start_wave 会按存档波次重建（预算/匣子/金蟾抽定 + HUD 对齐），
 ## 解暂停后 WaveSpawner._process 才接管刷怪。defer 到下一帧，让本帧先跳过 WAITING 分支。
@@ -741,6 +767,9 @@ func _on_author_inventory_changed(_kind: String) -> void:
 	var lvl_dialog := get_node_or_null("UILayer/LevelUpDialog") as Control
 	if lvl_dialog != null and lvl_dialog.visible and lvl_dialog.has_method("refresh_offers"):
 		lvl_dialog.refresh_offers()
+	var super_dialog := get_node_or_null("UILayer/SuperAllocDialog") as Control
+	if super_dialog != null and super_dialog.visible and super_dialog.has_method("refresh_offers"):
+		super_dialog.refresh_offers()
 
 ## 作者面板改金币/等级/生命：按 kind 调对应刷新入口（商店内部走既有的 refresh(false)
 ## 通道，重建价格键的「买得起/差 N」与生命徽记；悟道只刷顶栏读数，不重 roll 候选）。
@@ -766,6 +795,9 @@ func _on_author_state_changed(kind: String) -> void:
 				pass
 	if lvl_dialog != null and lvl_dialog.visible and lvl_dialog.has_method("refresh_bars"):
 		lvl_dialog.refresh_bars()
+	var super_dialog := get_node_or_null("UILayer/SuperAllocDialog") as Control
+	if super_dialog != null and super_dialog.visible and super_dialog.has_method("refresh_bars"):
+		super_dialog.refresh_bars()
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if bool(SettingsManager.get_val(&"display", &"screen_flash", true)):

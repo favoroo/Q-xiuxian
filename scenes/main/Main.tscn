@@ -1,46 +1,44 @@
-[gd_scene load_steps=27 format=3 uid="uid://cmain001"]
+[gd_scene format=3 uid="uid://cmain001"]
 
-[ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
-[ext_resource type="Shader" path="res://assets/shaders/ground_tile.gdshader" id="2_tile"]
+[ext_resource type="Script" uid="uid://c15le5mwa1664" path="res://scripts/main/Main.gd" id="1_main"]
+[ext_resource type="Shader" uid="uid://bdgme0atm2sjj" path="res://assets/shaders/ground_tile.gdshader" id="2_tile"]
 [ext_resource type="PackedScene" uid="uid://cobelisk001" path="res://scenes/entities/BlessingObelisk.tscn" id="3_ob"]
 [ext_resource type="PackedScene" uid="uid://cplayer001" path="res://scenes/entities/Player.tscn" id="4_player"]
-[ext_resource type="Script" path="res://scripts/systems/WaveSpawner.gd" id="5_spawner"]
-[ext_resource type="Shader" path="res://assets/shaders/vignette_soft.gdshader" id="6_vig"]
-[ext_resource type="Script" path="res://scripts/controllers/SmoothCamera.gd" id="7_cam"]
+[ext_resource type="Script" uid="uid://nmj8nmiw42p3" path="res://scripts/systems/WaveSpawner.gd" id="5_spawner"]
+[ext_resource type="Shader" uid="uid://c2el3rjna7f72" path="res://assets/shaders/vignette_soft.gdshader" id="6_vig"]
+[ext_resource type="Script" uid="uid://dmwi3vkrrymls" path="res://scripts/controllers/SmoothCamera.gd" id="7_cam"]
 [ext_resource type="PackedScene" uid="uid://cjoy001" path="res://scenes/ui/VirtualJoystick.tscn" id="8_joy"]
 [ext_resource type="PackedScene" uid="uid://chud001" path="res://scenes/ui/GameHUD.tscn" id="9_hud"]
 [ext_resource type="PackedScene" uid="uid://clvl001" path="res://scenes/ui/LevelUpDialog.tscn" id="10_lvl"]
 [ext_resource type="PackedScene" uid="uid://cgameover001" path="res://scenes/ui/GameOverDialog.tscn" id="11_go"]
 [ext_resource type="PackedScene" uid="uid://cselect001" path="res://scenes/ui/StartWeaponSelect.tscn" id="12_sel"]
 [ext_resource type="PackedScene" uid="uid://cshop001" path="res://scenes/ui/WaveShop.tscn" id="13_shop"]
-[ext_resource type="Script" path="res://scripts/ui/PauseMenu.gd" id="14_pause"]
-[ext_resource type="PackedScene" path="res://scenes/ui/StartMenu.tscn" id="15_menu"]
-[ext_resource type="Script" path="res://scripts/ui/PlayerStatsDialog.gd" id="16_stats"]
-[ext_resource type="Script" path="res://scripts/ui/CultivatorSelect.gd" id="17_cult"]
-[ext_resource type="PackedScene" path="res://scenes/ui/SettingsDialog.tscn" id="18_settings"]
-[ext_resource type="Script" path="res://scripts/ui/CareerDialog.gd" id="19_career"]
-[ext_resource type="PackedScene" path="res://scenes/ui/ManualDialog.tscn" id="20_manual"]
+[ext_resource type="Script" uid="uid://sln255l3xifp" path="res://scripts/ui/PauseMenu.gd" id="14_pause"]
+[ext_resource type="PackedScene" uid="uid://d0a0ytng14d4r" path="res://scenes/ui/StartMenu.tscn" id="15_menu"]
+[ext_resource type="Script" uid="uid://dd2vercoftfg8" path="res://scripts/ui/PlayerStatsDialog.gd" id="16_stats"]
+[ext_resource type="Script" uid="uid://b780k61nmed5x" path="res://scripts/ui/CultivatorSelect.gd" id="17_cult"]
+[ext_resource type="PackedScene" uid="uid://bbds0cfug5dej" path="res://scenes/ui/SettingsDialog.tscn" id="18_settings"]
+[ext_resource type="Script" uid="uid://dte40m1d67jgr" path="res://scripts/ui/CareerDialog.gd" id="19_career"]
+[ext_resource type="PackedScene" uid="uid://dxfdgpx0ojij6" path="res://scenes/ui/ManualDialog.tscn" id="20_manual"]
 [ext_resource type="PackedScene" uid="uid://skillsel001" path="res://scenes/ui/SkillSelect.tscn" id="21_skill"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TutorialDialog.tscn" id="22_tutorial"]
-[ext_resource type="Script" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
-[ext_resource type="Script" path="res://scripts/main/AtmosphereGate.gd" id="24_atmo"]
-[ext_resource type="PackedScene" path="res://scenes/ui/AuthorPanel.tscn" id="25_author"]
-[ext_resource type="PackedScene" path="res://scenes/ui/FeedbackDialog.tscn" id="26_feedback"]
+[ext_resource type="Script" uid="uid://dw8glgl7duyhg" path="res://scripts/systems/FxParticlePool.gd" id="23_fx"]
+[ext_resource type="Script" uid="uid://ckeosbxtoxn0k" path="res://scripts/main/AtmosphereGate.gd" id="24_atmo"]
+[ext_resource type="PackedScene" uid="uid://dr84i361xmhme" path="res://scenes/ui/AuthorPanel.tscn" id="25_author"]
+[ext_resource type="PackedScene" uid="uid://qbneo41pkpge" path="res://scenes/ui/FeedbackDialog.tscn" id="26_feedback"]
 [ext_resource type="PackedScene" path="res://scenes/ui/CoCreateDialog.tscn" id="27_cocreate"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
 tonemap_mode = 3
 glow_enabled = true
-glow_levels/1 = true
-glow_levels/2 = false
-glow_levels/3 = false
+glow_levels/1 = 1.0
+glow_levels/2 = 0.0
+glow_levels/3 = 0.0
 glow_intensity = 0.4
 glow_strength = 0.7
 glow_bloom = 0.04
 glow_blend_mode = 0
-glow_hdr_threshold = 1.0
-glow_hdr_scale = 2.0
 glow_hdr_luminance_cap = 6.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
@@ -61,58 +59,52 @@ shader_parameter/tint_color = Color(0.05, 0.08, 0.14, 0.14)
 shader_parameter/vignette_intensity = 0.48
 shader_parameter/vignette_opacity = 0.58
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1570937814]
 script = ExtResource("1_main")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=39129586]
 environment = SubResource("Environment_hd2d")
 
-[node name="ToneModulate" type="CanvasModulate" parent="."]
+[node name="ToneModulate" type="CanvasModulate" parent="." unique_id=946887472]
 color = Color(0.85, 0.88, 0.96, 1)
 
-[node name="MapLayer" type="Node2D" parent="."]
+[node name="MapLayer" type="Node2D" parent="." unique_id=363008596]
 
-[node name="GroundTiles" type="ColorRect" parent="MapLayer"]
+[node name="GroundTiles" type="ColorRect" parent="MapLayer" unique_id=1252057493]
 material = SubResource("ShaderMaterial_ground")
-offset_left = -2400.0
-offset_top = -2400.0
-offset_right = 2400.0
-offset_bottom = 2400.0
+offset_left = -1272.0
+offset_top = 574.0
+offset_right = 3528.0
+offset_bottom = 5374.0
 mouse_filter = 2
 
-[node name="ObeliskCenter" parent="MapLayer" instance=ExtResource("3_ob")]
+[node name="ObeliskCenter" parent="MapLayer" unique_id=2002725960 instance=ExtResource("3_ob")]
 position = Vector2(0, -116)
 
-[node name="ObeliskEast" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(326, -153)
-
-[node name="ObeliskWest" parent="MapLayer" instance=ExtResource("3_ob")]
-position = Vector2(-326, 153)
-
-[node name="EntitiesLayer" type="Node2D" parent="."]
+[node name="EntitiesLayer" type="Node2D" parent="." unique_id=1297158772]
 y_sort_enabled = true
 
-[node name="Player" parent="EntitiesLayer" instance=ExtResource("4_player")]
+[node name="Player" parent="EntitiesLayer" unique_id=72618915 instance=ExtResource("4_player")]
 
-[node name="WaveSpawner" type="Node2D" parent="EntitiesLayer"]
+[node name="WaveSpawner" type="Node2D" parent="EntitiesLayer" unique_id=1856302852]
 script = ExtResource("5_spawner")
 
-[node name="AtmosphereLayer" type="Node2D" parent="."]
+[node name="AtmosphereLayer" type="Node2D" parent="." unique_id=1785444646]
 z_index = 40
 script = ExtResource("24_atmo")
 
-[node name="FxParticlePool" type="Node2D" parent="."]
+[node name="FxParticlePool" type="Node2D" parent="." unique_id=294675132]
 z_index = 35
 script = ExtResource("23_fx")
 
-[node name="SmoothCamera" type="Camera2D" parent="."]
+[node name="SmoothCamera" type="Camera2D" parent="." unique_id=1283753887]
 zoom = Vector2(1.1, 1.1)
 script = ExtResource("7_cam")
 
-[node name="PostProcessLayer" type="CanvasLayer" parent="."]
+[node name="PostProcessLayer" type="CanvasLayer" parent="." unique_id=2044252169]
 layer = 2
 
-[node name="SoftVignette" type="ColorRect" parent="PostProcessLayer"]
+[node name="SoftVignette" type="ColorRect" parent="PostProcessLayer" unique_id=627952227]
 material = SubResource("ShaderMaterial_vignette")
 anchors_preset = 15
 anchor_right = 1.0
@@ -121,46 +113,53 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="UILayer" type="CanvasLayer" parent="."]
+[node name="UILayer" type="CanvasLayer" parent="." unique_id=1881216875]
 layer = 10
 
-[node name="VirtualJoystick" parent="UILayer" instance=ExtResource("8_joy")]
+[node name="VirtualJoystick" parent="UILayer" unique_id=343976999 instance=ExtResource("8_joy")]
 
-[node name="GameHUD" parent="UILayer" instance=ExtResource("9_hud")]
+[node name="GameHUD" parent="UILayer" unique_id=921365525 instance=ExtResource("9_hud")]
 
-[node name="LevelUpDialog" parent="UILayer" instance=ExtResource("10_lvl")]
+[node name="LevelUpDialog" parent="UILayer" unique_id=192279356 instance=ExtResource("10_lvl")]
 
-[node name="GameOverDialog" parent="UILayer" instance=ExtResource("11_go")]
+[node name="GameOverDialog" parent="UILayer" unique_id=675470493 instance=ExtResource("11_go")]
 
-[node name="StartWeaponSelect" parent="UILayer" instance=ExtResource("12_sel")]
+[node name="StartWeaponSelect" parent="UILayer" unique_id=1723333390 instance=ExtResource("12_sel")]
 
-[node name="CultivatorSelect" type="Control" parent="UILayer"]
+[node name="CultivatorSelect" type="Control" parent="UILayer" unique_id=655969645]
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("17_cult")
 
-[node name="SkillSelect" parent="UILayer" instance=ExtResource("21_skill")]
+[node name="SkillSelect" parent="UILayer" unique_id=1849095943 instance=ExtResource("21_skill")]
 
-[node name="StartMenu" parent="UILayer" instance=ExtResource("15_menu")]
+[node name="StartMenu" parent="UILayer" unique_id=533691519 instance=ExtResource("15_menu")]
 
-[node name="WaveShop" parent="UILayer" instance=ExtResource("13_shop")]
+[node name="WaveShop" parent="UILayer" unique_id=722058522 instance=ExtResource("13_shop")]
 
-[node name="PauseMenu" type="Control" parent="UILayer"]
+[node name="PauseMenu" type="Control" parent="UILayer" unique_id=447224072]
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("14_pause")
 
-[node name="PlayerStatsDialog" type="Control" parent="UILayer"]
+[node name="PlayerStatsDialog" type="Control" parent="UILayer" unique_id=1518040814]
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("16_stats")
 
-[node name="SettingsDialog" parent="UILayer" instance=ExtResource("18_settings")]
+[node name="SettingsDialog" parent="UILayer" unique_id=409585951 instance=ExtResource("18_settings")]
 
-[node name="CareerDialog" type="Control" parent="UILayer"]
+[node name="CareerDialog" type="Control" parent="UILayer" unique_id=576532312]
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("19_career")
 
-[node name="ManualDialog" parent="UILayer" instance=ExtResource("20_manual")]
+[node name="ManualDialog" parent="UILayer" unique_id=1720568378 instance=ExtResource("20_manual")]
 
-[node name="TutorialDialog" parent="UILayer" instance=ExtResource("22_tutorial")]
+[node name="TutorialDialog" parent="UILayer" unique_id=683777240 instance=ExtResource("22_tutorial")]
 
-[node name="AuthorPanel" parent="UILayer" instance=ExtResource("25_author")]
+[node name="AuthorPanel" parent="UILayer" unique_id=2067867040 instance=ExtResource("25_author")]
 
-[node name="FeedbackDialog" parent="UILayer" instance=ExtResource("26_feedback")]
+[node name="FeedbackDialog" parent="UILayer" unique_id=55641808 instance=ExtResource("26_feedback")]
 
-[node name="CoCreateDialog" parent="UILayer" instance=ExtResource("27_cocreate")]
-
+[node name="CoCreateDialog" parent="UILayer" unique_id=1229678765 instance=ExtResource("27_cocreate")]

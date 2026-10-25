@@ -96,11 +96,11 @@ func handle_input(event: InputEvent) -> void:
 		_active_ob.stop_charge()
 		_style_btn(false)
 
-## 键盘路由判据（GameHUD 分流 E 键用）：按钮亮着且挂着还没触发过的阵法
+## 键盘路由判据（GameHUD 分流 E 键用）：按钮亮着且挂着本回合还没用过的阵法
 func can_key_charge() -> bool:
-	return visible and not _edit_mode and _active_ob != null and not _active_ob.is_triggered
+	return visible and not _edit_mode and _active_ob != null and not _active_ob.spent_this_wave
 
-## 键盘 E 按下：与键面按住同一套充能状态（start_charge 自带 is_triggered/入阵门）
+## 键盘 E 按下：与键面按住同一套充能状态（start_charge 自带灰相/金币/入阵门）
 func key_press() -> void:
 	if _edit_mode or _key_holding or _active_ob == null:
 		return
@@ -124,7 +124,7 @@ func _kill_anim_tween() -> void:
 
 ## 玩家进入聚灵阵范围：显示激活按钮
 func show_obelisk_activation(ob: BlessingObelisk) -> void:
-	if ob == null or ob.is_triggered:
+	if ob == null or ob.spent_this_wave:
 		return
 	var was_same_active := (_active_ob == ob)
 	_active_ob = ob
@@ -212,7 +212,7 @@ func _process(_delta: float) -> void:
 	if _edit_mode:
 		return
 	if _active_ob != null:
-		if not is_instance_valid(_active_ob) or _active_ob.is_triggered or not _active_ob.is_player_inside:
+		if not is_instance_valid(_active_ob) or _active_ob.spent_this_wave or not _active_ob.is_player_inside:
 			hide_obelisk_activation(_active_ob)
 		elif not visible and (_anim_tween == null or not _anim_tween.is_valid()):
 			show_obelisk_activation(_active_ob)

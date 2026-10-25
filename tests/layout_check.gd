@@ -281,6 +281,23 @@ func _screens() -> Array[Dictionary]:
 			{"tag": "结算", "path": "res://scenes/ui/GameOverDialog.tscn", "open": "_on_game_over"},
 	]
 
+## 结算屏解锁区最坏样本（2026-10-25 解锁大卡）：三条带图标的解锁卡同时出现，
+## 且各取「名字最长」的那几条成就 —— 空列表时整块隐藏，不灌样本这一屏就量不到。
+func _stress_unlocks() -> void:
+	GameManager.last_run_new_achievements = []
+	# 按「成就名 + 奖励名」总长排序取前三条：最长的才代表真机最坏情况
+	var ranked: Array = []
+	for a in AchievementData.ACHIEVEMENTS:
+		var weight := String(a.get("name", "")).length() + String(a.get("reward_name", "")).length()
+		ranked.append([weight, String(a.get("id", ""))])
+	ranked.sort_custom(func(x, y): return int(x[0]) > int(y[0]))
+	for i in range(mini(3, ranked.size())):
+		GameManager.last_run_new_achievements.append(String(ranked[i][1]))
+
+## 量完还原：别把应力样本留到下一屏（成就列表是全局状态）
+func _clear_unlocks() -> void:
+	GameManager.last_run_new_achievements = []
+
 func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 	var node: Control = null
 	var res := load(spec["path"])
@@ -304,6 +321,9 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		"_on_alloc_opened":
 			node._on_alloc_opened()
 		"_on_game_over":
+			# 解锁大卡是结算屏最高的一块内容（图标 + 两行文字 + 角签），
+			# 空列表时整块隐藏 ⇒ 不灌样本就永远量不到（2026-10-25 加卡后补上）。
+			_stress_unlocks()
 			node._on_game_over(false)
 		"_on_shop_opened":
 			node._on_shop_opened()
@@ -380,6 +400,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		String(spec["tag"]), int(screen.x), bad.size(),
 		("" if bad.is_empty() else "\n      " + "\n      ".join(bad))])
 	node.queue_free()
+	_clear_unlocks()
 	if spec.has("shelf_slots"):
 		# 灌给灵石阁的满仓样本只属于这一屏：留着会让后面的属性面板量到「背包 9 件 + 上阵 3 只」
 		# 那一档，报出来的毛病不是它这一屏的账。

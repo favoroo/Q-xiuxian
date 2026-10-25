@@ -1,11 +1,12 @@
 extends Node
 
 ## EnemyFilter 共享过滤口径判据：影爆/盾势/落雷/蛮兵计数/祭坛冲击波统一走的那份
-## 「遍历 enemies 组 → 剔除无效/垂死/自体/匣子/灵草 → 半径圈」现在只有一份定义。
+## 「遍历 live_enemies 登记表 → 剔除无效/垂死/自体 → 半径圈」现在只有一份定义。
 ## 本判据钉住三件事：
 ##   1. 基本圈定：圈内怪在列、圈外怪不在、垂死怪不在、最近的取得到
-##   2. 「不算敌人」豁免：匣子/灵草即使被挂进 enemies 组也不许进结果
-##      （这是本口径存在的意义——将来新增「组里但不算敌人」的东西只改 EnemyFilter 一处）
+##   2. 「不算敌人」豁免在登记源头（2026-10-24 登记表重构，见 EnemyFilter.gd 头注）：
+##      collect 只读 GameManager.live_enemies 登记表，匣子/灵草这类「在 enemies 组里
+##      也不算敌人」的东西从不登记进来 —— 旧版逐敌查 chests/herbs 组的豁免已删。
 ##   3. 自体豁免：裂魂铃式「不炸自己」由 from_self 参数承担
 ## 运行: godot --headless --path . res://tests/EnemyFilterCheck.tscn
 ## 退出码 0 且末行 ENEMYFILTER_RESULT: ALL PASS
@@ -71,28 +72,34 @@ func _run() -> void:
 	_check(got.is_empty(), "垂死怪（dying 置位）不进圈定结果")
 	inner.dying = false
 
-	# ---------- 3. 「不算敌人」豁免：匣子/灵草即使混进 enemies 组也被剔除 ----------
-	# 这是口径统一的正面判据：将来任何「在 enemies 组里但不算敌人」的新东西
-	# （召唤物、圈套等）只在 EnemyFilter 加一行，Player/EnemyBase 全部自动跟上。
-	# 注意 inner 还活着且不挂 chests —— 它就该在结果里；断言的是匣子/灵草不在列。
-	var chest_like := _spawn_enemy(Vector2(60, 0))
-	chest_like.add_to_group("chests")   # 模拟「在 enemies 组里但算匣子」
-	var herb_like := _spawn_enemy(Vector2(70, 0))
-	herb_like.add_to_group("herbs")     # 灵草前瞻位：同样豁免
+	# ---------- 3. 「不算敌人」豁免在登记源头（2026-10-24 登记表重构）----------
+	# 旧版在 collect 里逐敌查 chests/herbs 组；重构后查询只读 live_enemies 登记表，
+	# 匣子（SpiritChest 是 Node2D）/灵草这类「在 enemies 组里也不算敌人」的东西从不登记进来
+	# （逐敌查两条裸字符串组是白付的哈希，见 EnemyFilter.gd 头注）。
+	# 钉新契约：匣子/灵草样对象不在登记表 ⇒ 查询三件套天然看不到它们；
+	# 将来真有「算敌人但不该被技能打到」的 EnemyBase，在登记/垂死源头拦，别在查询里逐敌查组。
+	var chest_like := Node2D.new()      # SpiritChest 同款：Node2D，不挂 EnemyBase 脚本
+	chest_like.add_to_group("chests")
+	_world.add_child(chest_like)
+	var herb_like := Node2D.new()       # 灵草前瞻位：同样只存在于组里、不进登记表
+	herb_like.add_to_group("herbs")
+	_world.add_child(herb_like)
+	_check(not GameManager.live_enemies.has(chest_like) and not GameManager.live_enemies.has(herb_like),
+		"匣子/灵草样对象不在 live_enemies 登记表（豁免在登记源头，不在查询）")
 	got = EnemyFilter.collect(GameManager.live_enemies, origin, 100.0)
 	_check(not got.has(chest_like) and not got.has(herb_like),
-		"匣子/灵草即使挂在 enemies 组也不进圈定结果")
-	_check(got.has(inner), "不挂豁免组的普通怪照常在列（inner）")
+		"匣子/灵草样对象不进圈定结果")
+	_check(got.has(inner), "普通怪照常在列（inner）")
 	_check(EnemyFilter.count_in_range(GameManager.live_enemies, origin, 100.0) == got.size(),
 		"count_in_range 与 collect 同口径（%d/%d）" % [EnemyFilter.count_in_range(GameManager.live_enemies, origin, 100.0), got.size()])
 
-	# 清掉普通怪后：圈里只剩匣子/灵草 ⇒ collect 空、nearest null
+	# 清掉普通怪后：登记表里没有别的敌人 ⇒ collect 空、nearest null
 	inner.queue_free()
 	await get_tree().process_frame
 	_check(EnemyFilter.collect(GameManager.live_enemies, origin, 100.0).is_empty(),
-		"圈里只剩匣子/灵草 ⇒ collect 为空")
+		"登记表清空（只剩组里的匣子/灵草样对象）⇒ collect 为空")
 	_check(EnemyFilter.nearest(GameManager.live_enemies, origin, 100.0) == null,
-		"nearest 同口径豁免（圈里只剩匣子/灵草 ⇒ null）")
+		"nearest 同口径（登记表没有敌人 ⇒ null）")
 
 	# ---------- 4. 自体豁免（裂魂铃口径：不炸自己） ----------
 	var self_e := _spawn_enemy(Vector2(20, 0))

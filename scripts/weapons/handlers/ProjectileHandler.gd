@@ -134,10 +134,10 @@ static func perform(w) -> void:
 		w.muzzle_flash.rotation = randf() * TAU
 		w._muzzle_scale0 = randf_range(0.42, 0.52)
 		w.muzzle_flash.scale = Vector2.ONE * w._muzzle_scale0
-		w.muzzle_flash.modulate = w._muzzle_color()
+		w.muzzle_flash.modulate = muzzle_color(w)
 		w.muzzle_flash.visible = true
 		w._muzzle_t = w.MUZZLE_TIME
-	w._flash_sprite(Color(1.35, 1.35, 1.35), 0.12)
+	w._flash_sprite(star_flash_color(w.star), 0.12)
 
 	var p_count: int = maxi(1, int(w.def.get("projectile_count", 1)))
 	var tags: Array = WeaponData.tags_of(w.weapon_def_id)
@@ -221,7 +221,7 @@ static func perform(w) -> void:
 				ProjectileHandler._spawn_phantom(w, locked, p.direction,
 					final_dmg * echo_ratio, p_bounce, echo_ratio, w.star, seg)
 
-	AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id))
+	StrikeFx.fire_sfx(w, WeaponData.sfx_for(w.weapon_def_id))
 
 ## 觉醒幻影弹出膛：与主弹同纹理/同追踪/同航程，伤害/击退/异常量按 ratio 打折，
 ## 出生点逐道落后主弹半个身位（读着是残影拖尾）；色温在 activate 之后覆盖——
@@ -256,9 +256,30 @@ static func _spawn_phantom(w, locked: Node2D, dir: Vector2, dmg: float, bounce: 
 	ph.modulate = phantom_tint(star, seg)
 	ph.lifetime = (w.attack_range * w._range_mult() + PROJECTILE_TRAVEL_MARGIN) / maxf(1.0, ph.speed)
 
+## 枪口闪光色：五行异常色（沿用武器 _muzzle_color）在 ★3/★4 混入星级色——
+## ★3 鎏金、★4 电光青。出膛那一瞬就先把「这把不是普通武器」读出来。
+static func muzzle_color(w) -> Color:
+	var base: Color = w._muzzle_color()
+	var star: int = int(w.star)
+	if star < 3:
+		return base
+	return base.lerp(GameStyle.star_fx_ldr(star, 0), 0.55 if star < 4 else 0.72)
+
+## 本体亮闪色：低星超白，★3 鎏金，★4 电光青（HDR 分量 >1 自动泛光）
+static func star_flash_color(star: int) -> Color:
+	if star >= 3:
+		return GameStyle.star_fx_color(star, 0)
+	return Color(1.35, 1.35, 1.35)
+
 ## 幻影弹色温：★3 觉醒金；★4 两道分别是电光青（HDR，b 远超 1 触发泛光）与太虚紫。
 ## 与 UI 的 STAR4_NEON / STAR4_NEON_EDGE 同一副色语言（战斗里读作霓虹残影）。
+## 色值统一取自 GameStyle.star_fx_color（2026-10-25），本处只补半透 alpha 分档。
 static func phantom_tint(star: int, seg: int) -> Color:
+	var col: Color = GameStyle.star_fx_color(star, seg)
 	if star >= WeaponData.MAX_STAR:
-		return Color(0.55, 1.90, 2.50, 0.72) if seg % 2 == 0 else Color(1.75, 0.75, 2.50, 0.65)
-	return Color(1.5, 1.2, 0.55, 0.62)
+		col.a = 0.72 if seg % 2 == 0 else 0.65
+	elif star >= 3:
+		col.a = 0.62
+	else:
+		col.a = 0.5
+	return col

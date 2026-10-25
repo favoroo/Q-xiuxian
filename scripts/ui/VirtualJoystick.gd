@@ -135,13 +135,21 @@ func _input(event: InputEvent) -> void:
         if touch_id == 999:
             _update_joystick(event.position)
 
+var _fade_tween: Tween = null   ## 淡出 tween 句柄：新按下必须先杀旧淡出，见 _start_joystick 注释
+
 func _start_joystick(pos: Vector2, id: int) -> void:
     touch_id = id
     is_active = true
+    # 先杀上一轮松手留下的淡出 tween：它的尾部回调挂着 base.visible=false，
+    # 快速换向（松手后 0.15s 内再按下）时正好落在新触摸进行中，表现为「摇杆闪一下就消失」
+    # 且走位仍在生效（用户 2026-10-24，判据 tests/JoystickRaceProbe）。
+    if _fade_tween != null and _fade_tween.is_valid():
+        _fade_tween.kill()
+    _fade_tween = null
     base.global_position = pos - base.size * 0.5
     knob.position = (base.size - knob.size) * 0.5
     base.visible = true
-    
+
     var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
     tw.tween_property(self, "modulate:a", 0.65, 0.12)
     output = Vector2.ZERO
@@ -172,10 +180,12 @@ func _stop_joystick() -> void:
     is_active = false
     output = Vector2.ZERO
     joystick_updated.emit(output)
-    
-    var tw = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-    tw.tween_property(self, "modulate:a", 0.0, 0.15)
-    tw.tween_callback(func(): base.visible = false)
+
+    if _fade_tween != null and _fade_tween.is_valid():
+        _fade_tween.kill()
+    _fade_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+    _fade_tween.tween_property(self, "modulate:a", 0.0, 0.15)
+    _fade_tween.tween_callback(func(): base.visible = false)
 
 func get_direction() -> Vector2:
     var key_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")

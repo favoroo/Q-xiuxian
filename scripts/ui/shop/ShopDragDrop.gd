@@ -64,7 +64,7 @@ const VERB_UNEQUIP := "卸下"
 const VERB_MOVE := "移动"
 const VERB_EXCHANGE := "换位"
 
-var _shop: WaveShop
+var _shop = null
 ## 登记表：[{node: Control, src: Dictionary}]；整行每次点按/操作后重建，
 ## 旧格子 queue_free 后由 is_instance_valid + is_queued_for_deletion 惰性剔除
 var _slots: Array = []
@@ -90,7 +90,7 @@ var _hover_bg := Color()
 var _hover_w := 0
 var _hover_mod := Color()
 
-func _init(shop: WaveShop) -> void:
+func _init(shop) -> void:
 	_shop = shop
 
 # ---------------- 登记 ----------------

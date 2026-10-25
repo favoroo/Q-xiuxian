@@ -1,40 +1,59 @@
 class_name ObeliskFx
 extends Node2D
 
-## 祭坛（聚灵阵）演出节点 —— 三种一次性自释放演出，纯 _draw 时间轴。
+## 祭坛（聚灵阵）演出节点 —— 一次性自释放演出，纯 _draw 时间轴。
 ## 仿 player_level_ritual.gd 范式：无贴图 / 无粒子节点 / 无光源，全走矢量绘制；
-## 存活 ≤0.65s 后 queue_free，绝不常驻、不占 FxBudget 灯与发射器名额。
-## 作用：把「激活爆发 / 灵兽登场 / 熄灭余烬」这些只演一次的东西从 BlessingObelisk
-## 里拆出来，宿主只管一条 create_tween 的数值收尾，视觉全在这里。
+## 存活 ≤0.9s 后 queue_free，绝不常驻、不占 FxBudget 灯与发射器名额。
+## 作用：把「金币注入 / 激活爆发 / 全屏冲击环 / 灵兽登场 / 熄灭余烬」这些只演一次的
+## 东西从 BlessingObelisk 里拆出来，宿主只管一条 create_tween 的数值收尾，视觉全在这里。
+## 2026-10-25 祭坛重设计：新增金币注入（玩家身上的灵石飞入祭坛）与全屏冲击环，
+## 激活光柱加高加金幕 —— 单祭坛后预算全给这一座。
 
-enum Mode { ACTIVATION, BEAST_ENTRANCE, SPENT_WISP }
+enum Mode { ACTIVATION, BEAST_ENTRANCE, SPENT_WISP, COIN_INFUSION, SHOCK_RING }
 
-const ACTIVATION_DUR := 0.55   ## 激活爆发总时长
+const ACTIVATION_DUR := 0.7    ## 激活爆发总时长（2026-10-25 光柱加高后由 0.55 拉长）
 const BEAST_DUR := 0.32        ## 灵兽聚灵现身时长
 const SPENT_DUR := 0.65        ## 熄灭余烬时长
+const INFUSION_DUR := 0.45     ## 金币注入总时长（最后一枚到位即爆发，宿主据此排爆发时序）
+const SHOCK_DUR := 0.5         ## 全屏冲击环时长
 const HZ := 40.0               ## 演出期间重绘节流（短命节点，40Hz 足够顺滑）
 
 ## 地面环 2.5D 俯视压扁系数（与全场地面特效同款观感）
 const GROUND_SQUASH := 0.62
 
-## 通天光柱几何（抄 player_level_ritual 的成熟双层梯形配方，改成青玉色系）
-const PILLAR_UP_DUR := 0.12
-const PILLAR_TOTAL := 0.34
+## 金币注入几何：7 枚金铢错峰从玩家飞向晶柱（贝塞尔弧 + 拖尾 + 抵达闪）
+const COIN_COUNT := 7
+const COIN_STAGGER := 0.05     ## 相邻两枚的出发间隔（秒）
+const COIN_FLIGHT := 0.3       ## 单枚飞行时长（秒）
+const COIN_ARRIVE_R := 10.0    ## 落点（晶柱中腹，本地坐标）
+
+## 通天光柱几何（抄 player_level_ritual 的成熟双层梯形配方，改成青玉+鎏金三幕）
+const PILLAR_UP_DUR := 0.14
+const PILLAR_TOTAL := 0.45
 const PILLAR_BASE_W := 26.0
 const PILLAR_TOP_W := 52.0
 const PILLAR_CORE_BASE_W := 10.0
 const PILLAR_CORE_TOP_W := 20.0
-const PILLAR_HEIGHT := 210.0
+const PILLAR_GOLD_BASE_W := 34.0   ## 外层鎏金幕（比青玉幕宽一档、矮一档）
+const PILLAR_GOLD_TOP_W := 66.0
+const PILLAR_HEIGHT := 300.0   ## 2026-10-25 由 210 加高：单祭坛的大招要有顶天立地的架势
 const PILLAR_SEGMENTS := 8
+
+## 全屏冲击环几何：从祭坛扩散到屏幕边缘的细金白环（把「全场受击」画在脸上）
+const SHOCK_MAX_R := 1400.0
 
 ## 青玉主色（与灵珑泽青同源，祭坛的冷冽仙气基调）
 const JADE_FX := Color(0.45, 0.9, 1.0, 1.0)
+## 鎏金供金主色（金币注入 / 金幕 / 冲击环外缘，金币语义走 GameStyle.JADE 同调）
+const GOLD_FX := Color(1.0, 0.82, 0.30, 1.0)
 
 var _mode: int = Mode.ACTIVATION
 var _t: float = 0.0
 var _dur: float = ACTIVATION_DUR
 var _redraw_timer: float = 0.0
 var _seed: float = 0.0
+## 金币注入的起点偏移（玩家位置 − 祭坛位置，本地坐标画出飞行起点）
+var _coin_from := Vector2.ZERO
 
 static func play_activation(host: Node, pos: Vector2) -> void:
 	_spawn(host, pos, Mode.ACTIVATION)
@@ -44,6 +63,20 @@ static func play_beast_entrance(host: Node, pos: Vector2) -> void:
 
 static func play_spent_wisp(host: Node, pos: Vector2) -> void:
 	_spawn(host, pos, Mode.SPENT_WISP)
+
+## 金币注入：alt_pos 处起 FX，金币从 player_pos 飞向祭坛晶柱（演出随机走 instance_id 本地种子）
+static func play_coin_infusion(host: Node, altar_pos: Vector2, player_pos: Vector2) -> void:
+	if host == null or not is_instance_valid(host):
+		return
+	var fx := ObeliskFx.new()
+	fx._mode = Mode.COIN_INFUSION
+	fx._coin_from = player_pos - altar_pos
+	fx.z_index = 0
+	host.add_child(fx)
+	fx.global_position = altar_pos
+
+static func play_shock_ring(host: Node, pos: Vector2) -> void:
+	_spawn(host, pos, Mode.SHOCK_RING)
 
 static func _spawn(host: Node, pos: Vector2, mode: int) -> void:
 	if host == null or not is_instance_valid(host):
@@ -61,6 +94,10 @@ func _ready() -> void:
 			_dur = ACTIVATION_DUR
 		Mode.BEAST_ENTRANCE:
 			_dur = BEAST_DUR
+		Mode.COIN_INFUSION:
+			_dur = INFUSION_DUR
+		Mode.SHOCK_RING:
+			_dur = SHOCK_DUR
 		_:
 			_dur = SPENT_DUR
 	queue_redraw()
@@ -80,26 +117,33 @@ func _draw() -> void:
 			_draw_activation(_t / _dur)
 		Mode.BEAST_ENTRANCE:
 			_draw_beast(_t / _dur)
+		Mode.COIN_INFUSION:
+			_draw_infusion()
+		Mode.SHOCK_RING:
+			_draw_shock()
 		Mode.SPENT_WISP:
 			_draw_spent(_t / _dur)
 
 # ==============================================================================
-# 1. 激活爆发：地面双环扩散 + 核心闪白 + 通天青玉光柱
+# 1. 激活爆发：三重地面环 + 核心闪白 + 通天青金光柱
 # ==============================================================================
 func _draw_activation(p: float) -> void:
-	## 1.1 地面扩散双环（青玉外环 + 超白内环，错峰）
+	## 1.1 地面扩散三重环（青玉外环 + 超白内环 + 鎏金大环，错峰铺开）
 	_draw_ground_ring(p, 0.0, 132.0, JADE_FX)
 	_draw_ground_ring(p, 0.11, 92.0, Color(GameStyle.FX_HDR_CORE, 1.0))
+	_draw_ground_ring(p, 0.05, 170.0, GOLD_FX)
 
-	## 1.2 脚下核心闪白（前 0.18s 过曝后回落）
-	if _t < 0.18:
-		var fp: float = _t / 0.18
-		var r: float = 32.0 * (1.0 - fp * 0.45)
+	## 1.2 脚下核心闪白（前 0.22s 过曝后回落）
+	if _t < 0.22:
+		var fp: float = _t / 0.22
+		var r: float = 38.0 * (1.0 - fp * 0.45)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
-		AdaptiveDraw.circle(self, Vector2.ZERO, r, Color(GameStyle.FX_HDR_CORE, 0.85 * (1.0 - fp)))
+		AdaptiveDraw.circle(self, Vector2.ZERO, r, Color(GameStyle.FX_HDR_CORE, 0.9 * (1.0 - fp)))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+		AdaptiveDraw.circle(self, Vector2.ZERO, r * 1.6, Color(GOLD_FX, 0.35 * (1.0 - fp)))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	## 1.3 通天光柱
+	## 1.3 通天光柱（青玉幕 + 鎏金幕 + 超白柱芯）
 	_draw_pillar()
 
 func _draw_ground_ring(p: float, delay: float, max_r: float, col: Color) -> void:
@@ -153,7 +197,13 @@ func _draw_pillar() -> void:
 		var d0: float = pow(1.0 - t0, 1.35)
 		var d1: float = pow(1.0 - t1, 1.35)
 		var sd: float = (d0 + d1) * 0.5
-		# 外层青玉光幕
+		# 外层鎏金幕（供金余韵：金币注入的色记忆，最宽最淡）
+		var w0g: float = lerpf(PILLAR_GOLD_BASE_W, PILLAR_GOLD_TOP_W, t0)
+		var w1g: float = lerpf(PILLAR_GOLD_BASE_W, PILLAR_GOLD_TOP_W, t1)
+		draw_colored_polygon(
+			PackedVector2Array([Vector2(-w0g, y0), Vector2(w0g, y0), Vector2(w1g, y1), Vector2(-w1g, y1)]),
+			Color(GOLD_FX, fade * 0.16 * sd))
+		# 中层青玉光幕
 		draw_colored_polygon(
 			PackedVector2Array([Vector2(-w0o, y0), Vector2(w0o, y0), Vector2(w1o, y1), Vector2(-w1o, y1)]),
 			Color(0.45, 0.9, 1.0, fade * 0.42 * sd))
@@ -163,7 +213,62 @@ func _draw_pillar() -> void:
 			Color(GameStyle.FX_HDR_CORE, fade * 0.9 * sd))
 
 # ==============================================================================
-# 2. 灵兽登场：青玉聚灵漩涡 + 扩散环
+# 2. 金币注入：7 枚金铢从玩家沿贝塞尔弧错峰飞入晶柱，带拖尾与抵达闪
+# ==============================================================================
+func _draw_infusion() -> void:
+	## 每枚金币的出发时刻：i * COIN_STAGGER；飞行 COIN_FLIGHT 秒
+	for i in COIN_COUNT:
+		var t0: float = float(i) * COIN_STAGGER
+		var ct: float = clampf((_t - t0) / COIN_FLIGHT, 0.0, 1.0)
+		if ct <= 0.0:
+			continue
+		## 横向错开 + 左右交替的弧顶（演出随机走 _seed，不碰玩法 RNG）
+		var side: float = 1.0 if i % 2 == 0 else -1.0
+		var spread: float = 0.55 + 0.45 * fposmod(_seed * (float(i) + 1.0) * 0.37, 1.0)
+		var from := _coin_from + Vector2(side * (10.0 + spread * 14.0), -4.0)
+		var to := COIN_ARRIVE_R * Vector2(0, -1) + Vector2(side * 2.0, 0)
+		var ctrl := from.lerp(to, 0.5) + Vector2(side * 26.0 * spread, -34.0 - spread * 18.0)
+		## 缓入：起手被「吸」的迟滞，临近祭坛加速
+		var et: float = ct * ct
+		var pos: Vector2 = from.lerp(ctrl, et).lerp(ctrl.lerp(to, et), et)
+		## 拖尾：沿轨迹回采两帧，越靠后越淡越小
+		for k in 2:
+			var tt: float = maxf(et - 0.06 * float(k + 1), 0.0)
+			var tpos: Vector2 = from.lerp(ctrl, tt).lerp(ctrl.lerp(to, tt), tt)
+			AdaptiveDraw.circle(self, tpos, 2.6 - float(k) * 0.8, Color(GOLD_FX, 0.35 - 0.12 * float(k)))
+		## 金铢本体：鎏金核 + 超白高光
+		AdaptiveDraw.circle(self, pos, 3.2, Color(GOLD_FX, 0.95))
+		AdaptiveDraw.circle(self, pos + Vector2(-0.8, -0.8), 1.3, Color(GameStyle.FX_HDR_CORE, 0.95))
+		## 抵达闪：落进晶柱的一瞬一圈小金环
+		if ct >= 1.0:
+			var since: float = _t - t0 - COIN_FLIGHT
+			if since < 0.12:
+				var q: float = since / 0.12
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+				draw_arc(to, 3.0 + q * 14.0, 0.0, TAU, 20, Color(GOLD_FX, 0.8 * (1.0 - q)), 2.0, true)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# ==============================================================================
+# 3. 全屏冲击环：细金白环从祭坛扩散到屏幕边缘，宣告「全场受击」
+# ==============================================================================
+func _draw_shock() -> void:
+	var p: float = _t / _dur
+	var e: float = 1.0 - pow(1.0 - p, 2.6)   # ease-out：起手猛冲、远端缓收
+	var r: float = lerpf(70.0, SHOCK_MAX_R, e)
+	var a: float = (1.0 - p) * 0.85
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+	# 外缘鎏金 + 内芯超白双描
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 96, Color(GOLD_FX, a * 0.7), 3.0, true)
+	draw_arc(Vector2.ZERO, r - 4.0, 0.0, TAU, 96, Color(GameStyle.FX_HDR_CORE, a), 2.0, true)
+	# 尾随青玉第二环（错峰 0.08s），呼应阵法底色
+	var q: float = clampf((_t - 0.08) / _dur, 0.0, 1.0)
+	if q > 0.0 and q < 1.0:
+		var r2: float = lerpf(70.0, SHOCK_MAX_R, 1.0 - pow(1.0 - q, 2.6))
+		draw_arc(Vector2.ZERO, r2, 0.0, TAU, 96, Color(JADE_FX, (1.0 - q) * 0.45), 2.0, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# ==============================================================================
+# 4. 灵兽登场：青玉聚灵漩涡 + 扩散环
 # ==============================================================================
 func _draw_beast(p: float) -> void:
 	var converge: float = clampf(p / 0.7, 0.0, 1.0)
@@ -194,7 +299,7 @@ func _draw_beast(p: float) -> void:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================
-# 3. 熄灭余烬：几缕冷灰蓝灵屑上升淡出，给「余温散尽」一点回味
+# 5. 熄灭余烬：几缕冷灰蓝灵屑上升淡出，给「余温散尽」一点回味
 # ==============================================================================
 func _draw_spent(p: float) -> void:
 	for i in 7:

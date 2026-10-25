@@ -47,7 +47,11 @@ func _dismiss() -> void:
 	# 悟道/商店/结算弹窗全部就地消化，别让面板暂停整棵树卡死推进
 	while GameManager.has_pending_upgrades() and not GameManager.alloc_offers.is_empty():
 		GameManager.take_alloc_upgrade(0)
-	for node_name in ["LevelUpDialog", "WaveShop", "PlayerStatsDialog", "PauseMenu", "SettingsDialog", "GameOverDialog"]:
+	# 超级悟道（每 5 波一档，2026-10-25 新增）：就地拿第 0 张推进相位 ——
+	# 不消化它 phase 永远卡在 SUPER_ALLOC，波间等待循环要白转 200×0.2s（实测把长局拖过 240s 超时）
+	if not GameManager.super_alloc_offers.is_empty():
+		SuperAllocSession.take(GameManager, 0)
+	for node_name in ["LevelUpDialog", "WaveShop", "PlayerStatsDialog", "PauseMenu", "SettingsDialog", "GameOverDialog", "SuperAllocDialog"]:
 		var n := get_node_or_null("/root/Main/UILayer/" + node_name)
 		if n != null and n.visible:
 			n.visible = false

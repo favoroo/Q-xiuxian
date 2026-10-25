@@ -78,7 +78,7 @@ static func perform(w) -> void:
 	# 三段式近战节奏：前摇微撤蓄势 (0.05s) → 极速瞬扫涂抹 (0.04s) → 弹性卸力回正 (0.13s)
 	# 音效跟着这套节奏分两层：起手一声破空（动作，挥空也得有），咬到肉才补材质声（战果）。
 	# 旧写法只有一层、且挂在打击帧 —— 于是一把剑和一根棍子听起来完全一样。
-	AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MELEE_WHOOSH_SCALE)
+	StrikeFx.fire_sfx(w, WeaponData.sfx_for(w.weapon_def_id), MELEE_WHOOSH_SCALE)
 	var tw = w.create_tween()
 	# 1. 蓄力前摇（Anticipation）：刀身轻微后撤、微缩积蓄张力
 	tw.tween_property(w, "position", windup_pos, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -133,30 +133,30 @@ static func perform(w) -> void:
 				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MELEE_WHOOSH_SCALE * 0.6)
 				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
 				if echo_hits > 0:
-					w._flash_sprite(echo_glow_color(w.star), 0.10)
-					play_echo_slash(w, slash_scale_end, w.star)
+					w._flash_sprite(echo_glow_color(w.star, seg), 0.10)
+					play_echo_slash(w, slash_scale_end, w.star, seg)
 					AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MELEE_IMPACT_SCALE * 0.7)
 			)
 			tw.tween_property(w, "rotation", aim_angle + swing * seg_sign, 0.09).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 
-## 追加斩的闪光色温：★3 觉醒金 / ★4 太虚霓虹紫青（与刀光同源，别处不再各写一份）
-static func echo_glow_color(star: int) -> Color:
-	if star >= WeaponData.MAX_STAR:
-		return Color(1.15, 1.75, 2.45)
-	return Color(1.6, 1.4, 0.7)
+## 追加斩的闪光色温：★3 觉醒鎏金 / ★4 太虚霓虹青紫逐段交替（与刀光同源，别处不再各写一份）。
+## 色值统一在 GameStyle.star_fx_color（2026-10-25：唯一取色入口，五族共用）。
+static func echo_glow_color(star: int, seg: int = 0) -> Color:
+	return GameStyle.star_fx_color(star, seg)
 
-## 追加斩的月牙色：★3 暖金，★4 电光青紫（UI 与战斗同色语言）
-static func echo_slash_color(star: int) -> Color:
-	if star >= WeaponData.MAX_STAR:
-		return Color(0.55, 1.85, 2.45, 1.0)
-	return Color(1.0, 0.88, 0.45, 1.0)
+## 追加斩的月牙色：★3 暖金，★4 电光青/太虚紫逐段交替（UI 与战斗同色语言）
+static func echo_slash_color(star: int, seg: int = 0) -> Color:
+	var col: Color = GameStyle.star_fx_color(star, seg)
+	col.a = 1.0
+	return col
 
 ## ★3 觉醒 / ★4 极境追加斩的月牙：直接在判定外缘亮起（主斩的"出鞘扫放"已经演过一遍，
 ## 追加段要的是"回锋"的干脆——亮一拍即散），略小半号区分主次。
-static func play_echo_slash(w, scale_end: float, star: int = 3) -> void:
+## seg 为追加段号：★4 两段青紫交替，读得出"第几段"。
+static func play_echo_slash(w, scale_end: float, star: int = 3, seg: int = 0) -> void:
 	var spr: WeaponArcRenderer = w.get_echo_slash(WeaponArcRenderer.ArcMode.MELEE)
 	spr.visible = true
-	spr.modulate = echo_slash_color(star)
+	spr.modulate = echo_slash_color(star, seg)
 	spr.position = Vector2(MELEE_LUNGE, 0.0)
 	spr.scale = Vector2.ONE * scale_end * 0.9
 	spr.rotation = 0.0

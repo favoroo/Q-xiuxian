@@ -25,6 +25,8 @@ var _cooldown_timer: float = 0.0
 var _lifetime_timer: float = 0.0
 var _is_dying: bool = false
 var _spin_angle: float = 0.0
+## 开火计数：★4 青/紫逐发交替的相位（只影响视觉配色，不参与任何判定）
+var _shot_count: int = 0
 
 ## 索敌节流（2026-10-11，与 FloatingWeapon 同款）：intersect_shape 最多 15Hz
 const TARGET_SEARCH_INTERVAL := 0.066
@@ -312,16 +314,24 @@ func _fire() -> void:
 		p.burn_dur = float(_def.get("burn_dur", 2.5))
 
 	p.activate()
+	# ★3/★4 极境弹丸染色（2026-10-25）：必须在 activate 之后——activate 会把池化残值
+	# 洗回 WHITE（见 BladeProjectile.activate 的异常色温清零），提前染会被清掉。
+	if star >= 3:
+		p.modulate = GameStyle.star_fx_color(star, _shot_count)
 	# 寿命按索敌半径补齐（2026-10-20）：炮台索敌吃攻击范围乘区，弹丸航程却固定为
 	# 弹速 × BASE_LIFETIME；寿命收紧到 1.0 后，叠了范围的炮台会锁定飞不到的目标。
 	# 只补到「够得着最远目标」为止，不随乘区无限拉长弹道
 	p.lifetime = maxf(p.lifetime, _eff_range() / p.speed + 0.05)
 
 	# 开火反馈（T-2.8）：枪口 HDR 闪光起辉 + 2-3 粒元素碎屑 + 核心亮闪 + 后坐抖动与音效
+	# 2026-10-25 星级分档：★3 枪口转鎏金、★4 青紫逐发交替（弹丸染色同源）——旧写法炮台
+	# 除了器身描边之外开火毫无星级读数，极境机关看起来和★1 打的是同一种弹。
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
 		muzzle_flash.scale = Vector2.ONE * randf_range(0.35, 0.45)
 		var flash_col := GameStyle.fx_hdr_element(_elem, GameStyle.FX_HDR_CORE)
+		if star >= 3:
+			flash_col = GameStyle.star_fx_color(star, _shot_count)
 		muzzle_flash.modulate = flash_col
 		muzzle_flash.visible = true
 		var mtw := create_tween()
@@ -333,14 +343,15 @@ func _fire() -> void:
 	# 炮口微粒喷射（绕过受击限流闸，不抢占命中火花名额；2026-10-16 减量 scale 0.6→0.45 并顺向）
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.45, true, aim_dir)
 
-	core_sprite.modulate = Color(1.4, 1.35, 1.2)
+	core_sprite.modulate = GameStyle.star_fx_color(star, _shot_count) if star >= 3 else Color(1.4, 1.35, 1.2)
+	_shot_count += 1
 	var ftw := create_tween()
 	ftw.tween_property(core_sprite, "modulate", Color.WHITE, 0.1)
 
 	core_sprite.position = -aim_dir * 3.5
 	var rtw := create_tween()
 	rtw.tween_property(core_sprite, "position", Vector2.ZERO, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	AudioManager.play_sfx(WeaponData.sfx_for(weapon_def_id), 0.95)
+	StrikeFx.fire_sfx(self, WeaponData.sfx_for(weapon_def_id), 0.95)
 
 func dismiss() -> void:
 	if _is_dying:

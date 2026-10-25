@@ -285,11 +285,13 @@ func _test_item_system() -> void:
 		for key in def.get("apply", {}).keys():
 			if not (key in fields):
 				bad_keys.append("%s.%s" % [item_id, key])
-		var tier := int(def.get("tier", 0))
-		if tier < 1 or tier > 4:
-			bad_meta.append("%s.tier=%d" % [item_id, tier])
-		if int(def.get("price", 0)) <= 0:
-			bad_meta.append("%s.price" % item_id)
+		# 神通（tier 5 / 赠送专属）不走商店档位与定价，只查 apply 白名单与图标
+		if not ItemData.is_granted_only(String(item_id)):
+			var tier := int(def.get("tier", 0))
+			if tier < 1 or tier > 4:
+				bad_meta.append("%s.tier=%d" % [item_id, tier])
+			if int(def.get("price", 0)) <= 0:
+				bad_meta.append("%s.price" % item_id)
 		var icon_path: String = def.get("icon", "")
 		if icon_path.is_empty() or not ResourceLoader.exists(icon_path):
 			bad_meta.append("%s.icon" % item_id)
@@ -453,7 +455,12 @@ func _test_cultivator_system() -> void:
 
 	# 卡面分段（用户 2026-10-11：攒影/影爆的说明单独开一段，不和其他天赋放在一块）。
 	# 从生产入口量：真建一遍选角界面、读那几段渲染出来的文字，不看表读表。
+	# 2026-10-25 锁图鉴：未解锁角色的词条不再展开 ⇒ 这里必须先解锁影者再量卡面
+	# （测完还原，不污染玩家的真实解锁档）。
 	GameManager.cultivator_id = "meiying"
+	var orig_cults_cs := GameManager.unlocked_cultivators.duplicate()
+	if not ("meiying" in GameManager.unlocked_cultivators):
+		GameManager.unlocked_cultivators.append("meiying")
 	var cs_mei := CultivatorSelect.new()
 	add_child(cs_mei)
 	cs_mei.show_select()   # 一次成型：不再 _select_cultivator，免得 queue_free 的旧一代混进计数
@@ -472,6 +479,21 @@ func _test_cultivator_system() -> void:
 	_c.check(str(card_rows.get("绝技", [])).contains("+%d%%" % int(roundf(ShadowStepData.AMP_PER_STACK * 100.0))),
 			"段内每层增伤数与本表 AMP_PER_STACK 同源")
 	cs_mei.queue_free()
+	GameManager.unlocked_cultivators = orig_cults_cs
+
+	# 未解锁角色的详情卡不展开词条（2026-10-25 锁图鉴）：
+	# 影者若被锁，卡面只剩一张「？？？ + 解锁条件」提示，天赋/绝技/代价三段都不该出现。
+	var orig_cults_lock := GameManager.unlocked_cultivators.duplicate()
+	GameManager.unlocked_cultivators.erase("meiying")
+	GameManager.cultivator_id = "meiying"
+	var cs_locked := CultivatorSelect.new()
+	add_child(cs_locked)
+	cs_locked.show_select()
+	var locked_rows := _detail_info_rows(cs_locked._detail_panel)
+	_c.check(not locked_rows.has("天赋") and not locked_rows.has("代价"),
+			"未解锁角色的天赋/代价段不展开（实得分段 %s）" % str(locked_rows.keys()))
+	cs_locked.queue_free()
+	GameManager.unlocked_cultivators = orig_cults_lock
 
 	# 独臂刀圣（One Armed 原型）：上阵槽上限为 3，伤害 ×1.5（2026-10-12 战意重做后下调）、施法更快
 	GameManager.reset_run()
@@ -827,8 +849,9 @@ func _test_turret_and_new_cultivators() -> void:
 		"", "【独行侠】无累计进度口径返回空串")
 	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
 		"", "【万器宗师】无累计进度口径返回空串")
-	# 成就总数 = 35（2026-10-24 追加 6 条硬核挑战；此前 29：2026-10-22 新增「百家杂艺」解锁散修）
-	_c.equals(int(AchievementData.all_ids().size()), 35, "成就总数 = 35")
+	# 成就总数 = 39（2026-10-25 新手节奏重做：原 18 条纯荣誉全部挂上道具/武器奖励，
+	# 并新增 4 条低门槛角色成就；此前 35 = 2026-10-24 追加 6 条硬核挑战）
+	_c.equals(int(AchievementData.all_ids().size()), 39, "成就总数 = 39")
 
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()

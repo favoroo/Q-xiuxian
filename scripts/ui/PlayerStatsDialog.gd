@@ -403,7 +403,7 @@ func _refresh_synergies() -> void:
 
 	if tags.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "当前尚未装备武器。装备同系（如剑系、火系）武器满 2 / 4 / 6 件即可触发阶梯共鸣加成。"
+		empty_lbl.text = "尚未装备武器。同系武器满 2 / 4 / 6 件触发共鸣加成。"
 		GameStyle.label(empty_lbl, 12, GameStyle.PAPER_DIM)
 		_synergy_flow.add_child(empty_lbl)
 		return
@@ -421,12 +421,12 @@ func _open_synergy_tip(tag: String, anchor: Control) -> void:
 		if tag in WeaponData.tags_of(wid):
 			match_weapons.append(String(WeaponData.get_def(wid).get("name", wid)))
 	var notes: Array[String] = [
-		"上阵同系武器（含同名多把）达到门槛件数即自动激活对应阶梯。",
+		"上阵同系武器满门槛即自动激活阶梯。",
 		"本流派武器：" + "、".join(match_weapons) + "。",
 	]
 	var tip := SynergyUI.open_tip(self, anchor, tag,
 		"流派总加成：" + SynergyUI.synergy_desc(tag),
-		"背包中的备用武器不计入上阵数量。",
+		"背包武器不计入上阵数量。",
 		notes
 	)
 	_highlight_while_open(anchor, tip)

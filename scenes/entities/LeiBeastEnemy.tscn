@@ -33,7 +33,7 @@ charge_brake_time = 0.25
 charge_hit_radius = 34.0
 charge_damage_mul = 1.0
 charge_whiff_stagger = 0.9
-charge_aim_lead = 0.28
+charge_aim_lead = 0.14
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 24.0)

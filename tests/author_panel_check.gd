@@ -74,6 +74,7 @@ func _ready() -> void:
 	_check_pet_tip()
 	await _check_shop_state_sync()
 	await _check_shop_refresh_link()
+	await _check_embedded_shop_tab()
 
 	_c.check(_panel.visible, "全程作者面板没被误关")
 	get_tree().quit(0 if _c.report("AUTHOR_PANEL_RESULT") else 1)
@@ -168,20 +169,28 @@ func _check_weapon_tip_purchase() -> void:
 	await _settle(3)
 	_c.equals(GameManager.slots_used(), before + 1, "点「买 2 星」后上阵 +1")
 	_c.equals(_last_star(), 2, "到手的是 2 星")
-	_c.check(DetailTip.live(_panel) == null, "购买后详情窗收起")
+	_c.check(DetailTip.live(_panel) != null, "购买后详情窗不消失（支持连点批量购买）")
 	_c.equals(_last_inventory_kind, "weapon", "购买成功发 inventory_changed(weapon)")
 
-	# 最高档（★4）必须真能买、且到手就是顶星 —— 作者模式是调 ★4 极境数值的唯一入口
-	await _tap(card)
-	var tip4 := DetailTip.live(_panel)
-	_c.check(tip4 != null, "再次点长剑卡弹出详情窗")
-	if tip4 == null:
-		return
+	# 在同一详情窗内直接连买最高档（★4）：不需要重新点卡开窗
 	var before4 := GameManager.slots_used()
-	await _press_action(tip4, "买 %d 星" % WeaponData.MAX_STAR)
+	await _press_action(tip, "买 %d 星" % WeaponData.MAX_STAR)
 	await _settle(3)
-	_c.equals(GameManager.slots_used(), before4 + 1, "点「买 %d 星」后上阵 +1" % WeaponData.MAX_STAR)
+	_c.equals(GameManager.slots_used(), before4 + 1, "同一窗内连点「买 %d 星」后上阵 +1" % WeaponData.MAX_STAR)
 	_c.equals(_last_star(), WeaponData.MAX_STAR, "到手的是最高星级 ★%d" % WeaponData.MAX_STAR)
+	_c.check(DetailTip.live(_panel) != null, "连买多把后详情窗仍保持打开")
+
+	# 点卡片外空白处（屏幕边缘）才会收起
+	var blank_p := Vector2(10.0, 10.0)
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.position = blank_p
+		ev.global_position = blank_p
+		ev.pressed = pressed
+		get_tree().root.push_input(ev)
+	await _settle(3)
+	_c.check(DetailTip.live(_panel) == null, "点空白处后详情窗收起")
 
 # ---------------- 道具 / 灵兽详情窗 ----------------
 
@@ -287,6 +296,45 @@ func _check_shop_refresh_link() -> void:
 	_panel.inventory_changed.emit("weapon")
 	await _settle(2)
 	_c.equals(_first_slot_id(), hidden_before, "商店未打开时不重建陈列行")
+
+# ---------------- 内嵌商店 Tab ----------------
+
+func _check_embedded_shop_tab() -> void:
+	_panel.switch_tab(4)
+	await _settle(3)
+	var sv: AuthorShopView = _panel._shop_view
+	_c.check(sv != null and sv.visible, "作者面板成功切换到【◆ 商店】Tab")
+	_c.check(sv.offers_container != null and sv.offers_container.get_child_count() > 0,
+		"商店 Tab 货架已生成商品（%d 格）" % (sv.offers_container.get_child_count() if sv.offers_container != null else 0))
+	_c.check(sv.owned_container != null and sv.owned_container.get_child_count() > 0,
+		"商店 Tab 陈列行已生成（%d 格）" % (sv.owned_container.get_child_count() if sv.owned_container != null else 0))
+	_c.check(sv.stones_label != null and sv.stones_label.text.contains(str(GameManager.spirit_stones)),
+		"商店 Tab 顶栏金币读数同步正确（%s）" % (sv.stones_label.text if sv.stones_label != null else ""))
+
+	# 测试重掷货架
+	sv.reroll_btn.pressed.emit()
+	await _settle(3)
+	_c.check(GameManager.shop_offers.size() > 0, "重掷后货架商品依然存在")
+
+	# 测试点陈列行的武器能弹出详情卡
+	var first_slot := _find_first_weapon_slot(sv.owned_container)
+	_c.check(first_slot != null, "陈列行内找到上阵武器槽位")
+	if first_slot != null:
+		await _tap(first_slot)
+		var tip := DetailTip.live(sv)
+		_c.check(tip != null, "点击陈列行武器槽位成功弹出详情卡")
+		if tip != null:
+			var acts := _action_texts(tip)
+			_c.check(acts.has("卸入背包") or acts.has("装 备"), "详情卡内具备换装操作键（实得 %s）" % str(acts))
+			DetailTip.close_all(sv)
+			await _settle(2)
+			_c.check(DetailTip.live(sv) == null, "关闭后详情卡顺利收起")
+
+func _find_first_weapon_slot(root: Control) -> Control:
+	for ch in root.get_children():
+		if ch is Control and ch.has_meta("drag_src"):
+			return ch as Control
+	return null
 
 func _first_slot_id() -> int:
 	if _shop.owned_container.get_child_count() == 0:

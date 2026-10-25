@@ -179,6 +179,9 @@ func _test_roundtrip() -> void:
 
 	# 真实开局并推进一个有肉的状态：加点 + 道具 + 换装攒星 + 待加点 + 金币经验
 	_fresh_start("fuzhen", "qingyun_sword")
+	# 危险度 2026-10-25 起逐级通关解锁（set_danger 夹到已解锁区间）：
+	# 先种生涯通关档 D1 ⇒ D2 才点得动，否则 set_danger(2) 被夹回 1、存档里就没有 2 可恢复
+	GameManager.career_stats["best_danger_cleared"] = 1
 	GameManager.set_danger(2)
 	var spawner: WaveSpawner = GameManager.wave_spawner
 	get_tree().paused = false

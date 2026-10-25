@@ -773,7 +773,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 	for child in weapons_bar.get_children():
 		child.queue_free()
 
-	for i in range(WeaponData.MAX_SLOTS):
+	for i in range(GameManager.max_weapon_slots()):
 		var slot := PanelContainer.new()
 		slot.custom_minimum_size = Vector2(36, 36)
 

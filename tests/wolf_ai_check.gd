@@ -1,7 +1,7 @@
 extends Node
 
 ## 妖狼（LeiBeastEnemy，图 = warrior_red_8dir ⇒ 青灰妖狼）扑击行为判据。
-## 钉死八件事：
+## 钉死十件事：
 ##   ① 出生缓冲（旧 _charge_timer 初值 0.0 ⇒ 出屏第一帧就预警）
 ##   ② 远带走长扑    ③ 超出上沿谁都不出手（不许无限追扑）
 ##   ④ 近带（< charge_min_range 120px）不出手长扑（需要跑道），继续追击
@@ -9,6 +9,8 @@ extends Node
 ##   ⑥ 预警带长度 = GameBalance.charge_reach（不许虚报到玩家身上）
 ##   ⑦ 真冲出去的位移 = 画的带（逐帧量到速度归位，纸面/视觉/位移三方同尺）
 ##   ⑧ 静止玩家在线上必被这一冲在冲刺段内撂倒，侧身躲出走廊零结算且罚站
+##   ⑨ 预警末段锁向：进入锁窗（CHARGE_AIM_LOCK_WINDOW）后预警线端点定住，不跟玩家跑位刷新
+##   ⑩ 锁窗后玩家自移出走廊：零结算且罚站（走位策略在锁窗后必然生效）
 ## 运行: godot --headless --path . res://tests/WolfAiCheck.tscn
 ## 只摆一个裸 world + 真 Player + 一只狼，不跑波次（别的怪会污染阶段读数）。
 
@@ -62,6 +64,8 @@ func _run() -> void:
 	await _case_travel_matches_line()
 	await _case_lunge_delivers()
 	await _case_sidestep_whiffs()
+	await _case_aim_lock_freezes_line()
+	await _case_post_lock_sidestep_whiffs()
 
 	_world.queue_free()
 	Engine.time_scale = 1.0
@@ -288,4 +292,67 @@ func _case_sidestep_whiffs() -> void:
 	_c.check(hits == 0, "躲出走廊（横移 60 > 半宽 %.0f）这一冲零结算（结算 %d 次）" % [wolf.charge_hit_radius, hits])
 	_c.check(stagger_pos != Vector2.INF, "冲空了要罚站（落空收势硬直 = 玩家的反打窗口）")
 	_c.check(stagger_drift <= 10.0, "罚站期间不追人（站桩 %.1fs 内位移 %.1fpx）" % [wolf.charge_whiff_stagger, stagger_drift])
+	wolf.queue_free()
+
+## 等到预警进入末段锁窗（_charge_aim_locked 置位）那一帧，期间狼钉在 dist 处
+func _wait_until_aim_locked(wolf: EnemyBase, dist: float) -> void:
+	var t := 0.0
+	while not wolf._charge_aim_locked and t < 6.0:
+		wolf.global_position = _player.global_position + Vector2(dist, 0.0)
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+
+## ⑨ 预警末段锁向：进入锁窗后预警线端点定住，不再跟玩家跑位每帧刷新
+## （2026-10-25 玩家反馈「走到哪都被锁」：旧写法整段预警线跟着玩家速度刷新，读起来就是锁定）
+func _case_aim_lock_freezes_line() -> void:
+	var wolf := _spawn_wolf(320.0)
+	await _wait_until_aim_locked(wolf, 320.0)
+	_c.check(wolf._charge_aim_locked, "锁线前置：预警走到末段已锁向（time_scale=8 下锁窗约 2 帧，当帧抓住）")
+	var line0: Line2D = wolf._charge_warning_line
+	if line0 == null or line0.get_point_count() < 2:
+		_c.check(false, "锁线前置失败：预警线不可读（后续漂移读数跳过）")
+		wolf.queue_free()
+		_player.global_position = Vector2.ZERO
+		await get_tree().physics_frame
+		return
+	var p0: Vector2 = line0.get_point_position(1)
+	# 锁窗内把玩家挪走（等效「玩家正在跑位」）：线端点必须一动不动
+	var drift := 0.0
+	var t := 0.0
+	while wolf._charge_windup > 0.0 and t < 1.0:
+		wolf.global_position = _player.global_position + Vector2(320.0, 0.0)
+		_player.global_position = Vector2(0.0, 120.0)
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		if wolf._charge_warning_line != null and wolf._charge_warning_line.get_point_count() >= 2:
+			drift = maxf(drift, p0.distance_to(wolf._charge_warning_line.get_point_position(1)))
+	_c.check(drift <= 0.5,
+		"锁窗内预警线端点定住（玩家大幅跑位线漂移 %.2fpx，旧写法整段预警都跟人刷新）" % drift)
+	wolf.queue_free()
+	_player.global_position = Vector2.ZERO
+	await get_tree().physics_frame
+
+## ⑩ 锁窗后玩家自移出走廊：锁向已定不再追踪，自己横移出走廊 → 零结算 + 落空罚站
+## （与 ⑧ 的区别：⑧ 是起跑帧把玩家挪开，⑩ 是锁窗内玩家自己走开 —— 走位策略从此必然生效）
+func _case_post_lock_sidestep_whiffs() -> void:
+	var wolf := _spawn_wolf(320.0)
+	await _wait_until_aim_locked(wolf, 320.0)
+	_c.check(wolf._charge_aim_locked, "自移前置：预警走到末段已锁向")
+	# 玩家锁窗内自己横移 60px 出走廊（半宽 34），之后站定不再动
+	_player.global_position = Vector2(0.0, 60.0)
+	var hits := 0
+	var was_hit := false
+	var staggered := false
+	var t := 0.0
+	while t < 2.4:
+		await get_tree().physics_frame
+		t += maxf(wolf.get_physics_process_delta_time(), 0.0)
+		var is_hit: bool = wolf._charge_hit
+		if is_hit and not was_hit:
+			hits += 1
+		was_hit = is_hit
+		if wolf._charge_stagger > 0.0:
+			staggered = true
+	_c.check(hits == 0, "锁窗后自移出走廊：零结算（结算 %d 次，锁向后冲刺不再追踪）" % hits)
+	_c.check(staggered, "锁窗后躲开照样吃落空罚站（躲开的奖励口径不变）")
 	wolf.queue_free()

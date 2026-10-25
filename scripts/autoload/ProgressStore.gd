@@ -52,6 +52,18 @@ static func load_into(gm: Node) -> void:
 		else:
 			gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
 
+		# 武器解锁（2026-10-25 新增）。老档兼容靠「键在不在」分流，不靠版本号：
+		#   · 老档（有档但没这个键）→ 视为全解锁，老玩家资产一件不许少；
+		#   · 新档 → 按存档里的列表，稍后统一补默认池。
+		var wpns = cfg.get_value("progress", "unlocked_weapons", [])
+		if cfg.has_section_key("progress", "unlocked_weapons") and wpns is Array:
+			gm.unlocked_weapons = wpns.duplicate()
+		else:
+			gm.unlocked_weapons = WeaponData.DEFS.keys().duplicate()
+
+		var unread = cfg.get_value("progress", "unread_unlocks", [])
+		gm.unread_unlocks = unread.duplicate() if unread is Array else []
+
 		var achs = cfg.get_value("progress", "unlocked_achievements", [])
 		gm.unlocked_achievements = achs.duplicate() if achs is Array else []
 
@@ -145,6 +157,8 @@ static func load_into(gm: Node) -> void:
 			gm.pending_load_alert = "◆ 进度存档损坏，已从零开始 ◆"
 		gm.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
 		gm.unlocked_items = AchievementData.DEFAULT_ITEMS.duplicate()
+		gm.unlocked_weapons = AchievementData.default_weapons()
+		gm.unread_unlocks = []
 		gm.unlocked_achievements = []
 		gm.cultivator_best_danger = {}
 		gm.cultivator_danger_clears = {}
@@ -160,6 +174,11 @@ static func load_into(gm: Node) -> void:
 	for iid in AchievementData.DEFAULT_ITEMS:
 		if not (iid in gm.unlocked_items):
 			gm.unlocked_items.append(iid)
+	# 武器：老档在上面的分支里已是全量，这里只给新档补默认池；
+	# 已由成就解锁的武器不会被 default_weapons() 覆盖（它只往列表里追加，不重建）。
+	for wid in AchievementData.default_weapons():
+		if not (wid in gm.unlocked_weapons):
+			gm.unlocked_weapons.append(wid)
 	# 剔除已不在道具表里的旧 id（改版删件时会有，如 2026-10-12 的卸匣锥）：
 	# 留着它「道具 N/M」会多算一件不存在的道具，且玉匣白送时可能抽到空定义。
 	for i in range(gm.unlocked_items.size() - 1, -1, -1):
@@ -169,6 +188,29 @@ static func load_into(gm: Node) -> void:
 	for i in range(gm.unlocked_cultivators.size() - 1, -1, -1):
 		if not CultivatorData.DEFS.has(String(gm.unlocked_cultivators[i])):
 			gm.unlocked_cultivators.remove_at(i)
+	# 武器同理：剔除已不在武器表里的旧 id（图鉴「已收录 n/m」的分子靠它不虚报）
+	for i in range(gm.unlocked_weapons.size() - 1, -1, -1):
+		if not WeaponData.DEFS.has(String(gm.unlocked_weapons[i])):
+			gm.unlocked_weapons.remove_at(i)
+	# 未读标记同理：指向已删对象的孤儿标记会让「新」角标永远销不掉
+	for i in range(gm.unread_unlocks.size() - 1, -1, -1):
+		var key := String(gm.unread_unlocks[i])
+		var parts := key.split(":", true, 1)
+		if parts.size() != 2:
+			gm.unread_unlocks.remove_at(i)
+			continue
+		var kind := parts[0]
+		var oid := parts[1]
+		var alive := false
+		match kind:
+			"cultivator":
+				alive = CultivatorData.DEFS.has(oid)
+			"item":
+				alive = ItemData.DEFS.has(oid)
+			"weapon":
+				alive = WeaponData.DEFS.has(oid)
+		if not alive:
+			gm.unread_unlocks.remove_at(i)
 	# 成就同理：剔除已不在成就表里的旧 id
 	for i in range(gm.unlocked_achievements.size() - 1, -1, -1):
 		if AchievementData.get_def(String(gm.unlocked_achievements[i])).is_empty():
@@ -199,7 +241,9 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("meta", "save_version", SAVE_VERSION)
 	cfg.set_value("progress", "unlocked_cultivators", gm.unlocked_cultivators)
 	cfg.set_value("progress", "unlocked_items", gm.unlocked_items)
+	cfg.set_value("progress", "unlocked_weapons", gm.unlocked_weapons)
 	cfg.set_value("progress", "unlocked_achievements", gm.unlocked_achievements)
+	cfg.set_value("progress", "unread_unlocks", gm.unread_unlocks)
 	cfg.set_value("progress", "skin_selections", gm.skin_selections)
 
 	cfg.set_value("stats", "total_runs", int(gm.career_stats.get("total_runs", 0)))
@@ -373,8 +417,12 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
 	if victory:
 		# 生涯最高通关难度（成就进度「最高通关 X」口径，难度达成型成就判定不受它影响）
-		gm.career_stats["best_danger_cleared"] = maxi(
-			int(gm.career_stats.get("best_danger_cleared", -1)), gm.danger_level)
+		var prev_best_danger := int(gm.career_stats.get("best_danger_cleared", -1))
+		gm.career_stats["best_danger_cleared"] = maxi(prev_best_danger, gm.danger_level)
+		# 逐级解锁播报（2026-10-25）：本局首次把生涯最高通关档推高一档 ⇒ 下一档刚解锁。
+		# 判定与 GameManager.max_danger_unlocked() 同一套账（best + 1），不会出现「播了却点不了」。
+		if gm.danger_level > prev_best_danger and gm.danger_level < GameBalance.DANGER_MAX:
+			gm.last_run_new_records.append("难度解锁 · 「%s」" % AchievementData.danger_name(gm.danger_level + 1))
 
 	# 每角色生涯档案累加
 	var rec: Dictionary = gm.cultivator_records.get(cid_rec, {})
@@ -442,15 +490,80 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	if not gm.last_run_new_achievements.is_empty():
 		gm.achievements_unlocked.emit(gm.last_run_new_achievements)
 
-## 发放成就奖励："none" 纯荣誉型只点亮成就本身，不动角色/道具池
+## 局内成就即时判定（2026-10-25 解锁提示升级）：
+## 只在回合结束时调一次（不是逐帧轮询），把「打到第 5 波」「攒够 100 金币」这类
+## 本局中途就能满足的成就当场结掉 —— 玩家不用等到死掉/通关才知道自己解锁了什么。
+## 与结算路径共用 evaluate_new_unlocks 与发奖逻辑，口径不会分叉；
+## run_ctx 里 victory 恒为 false（还没打完），所以「通关类」成就照旧只在结算时判定。
+## 返回本次新达成的成就 ID 列表（供 HUD 横幅逐条播报）。
+static func check_live_achievements(gm: Node) -> Array[String]:
+	var out: Array[String] = []
+	if gm.author_mode or not gm.run_started or gm.is_game_over:
+		return out
+	var run_ctx := {
+		"victory": false,
+		"endless": gm.endless_mode,
+		"danger": gm.danger_level,
+		"wave": gm.wave_number,
+		"level": gm.level,
+		"kills": gm.kills,
+		"max_stones": maxi(gm.spirit_stones, gm.peak_stones),
+		"max_dodge": maxf(gm.get_effective_dodge(), gm.peak_dodge),
+		"max_harvest": maxf(gm.harvest, gm.peak_harvest),
+		"damage_taken_count": gm.total_damage_taken_count,
+		"hp_healed": gm.total_hp_healed,
+		"stones_spent": gm.total_stones_spent,
+		"skill_casts": gm.skill_cast_count,
+		"weapon_count": gm.owned_weapon_count(),
+		"item_count": gm.items.size(),
+		"max_summons": gm.max_concurrent_summons,
+		"max_class_counts": gm.max_class_counts,
+		"max_element_spread": gm.max_element_spread,
+	}
+	for aid in AchievementData.evaluate_new_unlocks(run_ctx, gm.career_stats, gm.unlocked_achievements):
+		gm.unlocked_achievements.append(aid)
+		gm.last_run_new_achievements.append(aid)
+		_apply_achievement_reward(gm, aid)
+		out.append(aid)
+	if not out.is_empty():
+		save_from(gm)
+		gm.achievements_unlocked.emit(out)
+	return out
+
+## 成就达成播报文案（局内横幅与结算屏共用一套口径，别在两处各拼一遍）
+static func achievement_banner_text(aid: String) -> String:
+	var adef := AchievementData.get_def(aid)
+	if adef.is_empty():
+		return ""
+	var rtype := String(adef.get("reward_type", ""))
+	var label := AchievementData.reward_label(adef)
+	if label.is_empty():
+		return "◆ 成就「%s」达成 ◆" % String(adef.get("name", ""))
+	return "◆ 成就「%s」· %s：%s ◆" % [
+		String(adef.get("name", "")), label, String(adef.get("reward_name", ""))]
+
+## 发放成就奖励：按 reward_type 把对象塞进对应解锁池，并记一条未读标记供各界面挂「新」角标。
+## "none" 纯荣誉型只点亮成就本身（2026-10-25 起已无条目使用，保留兜底分支）。
 static func _apply_achievement_reward(gm: Node, aid: String) -> void:
 	var adef := AchievementData.get_def(aid)
 	var rtype := String(adef.get("reward_type", ""))
 	var rid := String(adef.get("reward_id", ""))
-	if rtype == "cultivator" and not rid.is_empty() and not (rid in gm.unlocked_cultivators):
+	if rid.is_empty():
+		return
+	var added := false
+	if rtype == "cultivator" and not (rid in gm.unlocked_cultivators):
 		gm.unlocked_cultivators.append(rid)
-	elif rtype == "item" and not rid.is_empty() and not (rid in gm.unlocked_items):
+		added = true
+	elif rtype == "item" and not (rid in gm.unlocked_items):
 		gm.unlocked_items.append(rid)
+		added = true
+	elif rtype == "weapon" and not (rid in gm.unlocked_weapons):
+		gm.unlocked_weapons.append(rid)
+		added = true
+	if added:
+		var key := GameManager.unlock_key(rtype, rid)
+		if not (key in gm.unread_unlocks):
+			gm.unread_unlocks.append(key)
 
 ## 渡劫成功战报快照：只取可序列化的白名单字段（name/star/icon 等纯数据，绝不带节点引用）
 static func _make_victory_snapshot(gm: Node, cid: String, wave: int) -> Dictionary:

@@ -32,6 +32,13 @@ var spent_blend: float = 0.0:
 ## 激活闪白强度（1→0 衰减），由 BlessingObelisk.trigger 时置 1
 var activation_flash: float = 0.0
 
+## 供金注入比（0..1）：金币注入演出期间由宿主 tween 灌入 —— 晶柱「饮金」渐亮，
+## 金脉自基座沿晶面爬升。2026-10-25 重设计新增（单祭坛后细节预算全给这一座）。
+var infuse_ratio: float = 0.0:
+	set(val):
+		infuse_ratio = clampf(val, 0.0, 1.0)
+		_dirty = true
+
 @export var fill_ratio: float = 0.0:
 	set(val):
 		fill_ratio = clampf(val, 0.0, 1.0)
@@ -61,9 +68,10 @@ func _process(delta: float) -> void:
 	if activation_flash > 0.0:
 		activation_flash = maxf(0.0, activation_flash - delta / FLASH_DUR)
 
-	# 节流间隔：静止 20Hz；充能/熄灭形变/闪白这一座升到满帧率（跟随帧率档）
+	# 节流间隔：静止 20Hz；充能/供金注入/熄灭形变/闪白这一座升到满帧率（跟随帧率档）
 	var interval: float = REDRAW_INTERVAL
-	if is_charging or activation_flash > 0.0 or (spent_blend > 0.0 and spent_blend < 0.999):
+	if is_charging or activation_flash > 0.0 or (infuse_ratio > 0.0 and infuse_ratio < 0.999) \
+			or (spent_blend > 0.0 and spent_blend < 0.999):
 		interval = VisualRate.interval(60.0, 30.0)
 
 	if _dirty or _draw_phase <= 0.0:
@@ -120,6 +128,26 @@ func _draw_altar_ground_runes() -> void:
 		var on: float = clampf((lit - tick_frac) / 0.12, 0.0, 1.0)
 		var col_tick := col_line_dim.lerp(Color(1.0, 0.9, 0.45, alpha_base), on) if is_charging else col_line_dim
 		draw_line(tdir * (r_outer + 1.5), tdir * (r_outer + 1.5 + tick_len), col_tick, 1.0)
+
+	# 1.25 四正位金铢符（2026-10-25 供金语义）：外方内圆的铜钱印，充能进度逐枚点亮成鎏金，
+	# 平时随灵息错相明灭 —— 抬眼就把「这阵是拿金币喂的」讲明白
+	for k in range(4):
+		var coin_ang := (TAU / 4.0) * float(k)
+		var coin_dir := Vector2(cos(coin_ang), sin(coin_ang))
+		var coin_pos := coin_dir * 36.0
+		var coin_frac := fposmod(coin_ang + PI / 2.0, TAU) / TAU
+		var lit_coin: float = clampf((lit - coin_frac) / 0.12, 0.0, 1.0)
+		var breathe: float = 0.55 + 0.45 * sin(_time * 2.0 + float(k) * 1.57)
+		var coin_a := lerpf(alpha_base * 0.5 * breathe, alpha_base * 1.6, lit_coin)
+		var coin_col := col_line_dim.lerp(Color(1.0, 0.85, 0.4), lit_coin)
+		# 外圆 + 内方孔（方孔用 4 段折线，凑「外圆内方」的铜钱印）
+		draw_arc(coin_pos, 4.2, 0, TAU, 12, Color(coin_col, coin_a), 1.4, true)
+		var sq := 1.7
+		draw_polyline(PackedVector2Array([
+			coin_pos + Vector2(-sq, -sq), coin_pos + Vector2(sq, -sq),
+			coin_pos + Vector2(sq, sq), coin_pos + Vector2(-sq, sq),
+			coin_pos + Vector2(-sq, -sq),
+		]), Color(coin_col, coin_a * 0.9), 1.0, true)
 
 	# 8 方位星宿卦爻刻印与引线
 	var num_nodes := 8
@@ -206,15 +234,15 @@ func _draw_charge_column() -> void:
 # 2. 中央悬浮玄晶灵塔（Floating Void Crystal Spire）
 # ==============================================================================
 func _draw_floating_crystal_spire() -> void:
-	# 悬浮微动（1.6Hz 正弦）；熄灭形变时下沉收敛
+	# 悬浮微动（1.6Hz 正弦）；熄灭形变时下沉收敛；充能灌灵时整柱缓缓上升
 	var bob_amp: float = 3.5 * (1.0 - spent_blend)
-	var bob_y: float = sin(_time * 2.2) * bob_amp - 12.0 + spent_blend * 6.0
+	var bob_y: float = sin(_time * 2.2) * bob_amp - 12.0 + spent_blend * 6.0 - fill_ratio * 4.0
 	var core_pos := Vector2(0, bob_y)
 
 	# 2.0 地面落影（2026-10-18 补）：双层软影垫在基座下，悬浮玄晶有落点
 	_draw_ground_shadow(Vector2(0, 12), 26.0, 6.0, 0.5)
 
-	# 2.1 阵台玄铁基座（紧贴地面）
+	# 2.1 阵台玄铁基座（2026-10-25 精致化：双层玄铁 + 正面三枚金槽）——紧贴地面
 	var base_poly := PackedVector2Array([
 		Vector2(-22, 6),
 		Vector2(22, 6),
@@ -223,12 +251,28 @@ func _draw_floating_crystal_spire() -> void:
 	])
 	draw_colored_polygon(base_poly, Color(0.08, 0.10, 0.15, 0.95))
 	draw_polyline(base_poly, Color(0.28, 0.38, 0.50, 0.9), 1.3, true)
+	# 下层加宽的承重沿（双层基座，比单层厚一档的体量感）
+	var base_low := PackedVector2Array([
+		Vector2(-26, 14),
+		Vector2(26, 14),
+		Vector2(19, 19),
+		Vector2(-19, 19)
+	])
+	draw_colored_polygon(base_low, Color(0.06, 0.08, 0.12, 0.95))
+	draw_polyline(base_low, Color(0.22, 0.30, 0.42, 0.85), 1.2, true)
 	# 基座符文凹槽微光（熄灭时随之暗下）
 	var slot_a: float = (0.5 + sin(_time * 3.0) * 0.2) * (1.0 - spent_blend)
 	draw_line(Vector2(-14, 10), Vector2(14, 10), Color(0.25, 0.85, 1.0, slot_a), 1.5)
+	# 正面三枚供金槽（金铢落位的小圆印，注入比越高越亮 —— 供金的「收讫回执」）
+	for s_i in range(3):
+		var slot_x: float = -10.0 + 10.0 * float(s_i)
+		var slot_col := Color(0.55, 0.60, 0.35, 0.4 * (1.0 - spent_blend))
+		if infuse_ratio > 0.0:
+			slot_col = slot_col.lerp(Color(1.0, 0.85, 0.4, 0.95 * (1.0 - spent_blend)), infuse_ratio)
+		draw_circle(Vector2(slot_x, 16.2), 1.8, slot_col)
 
-	# 2.2 悬浮中央主晶（高 48px，宽 18px）
-	var spire_h: float = 48.0 * (1.0 - spent_blend * 0.35)
+	# 2.2 悬浮中央主晶（2026-10-25 由 48 拔高到 64px，宽 18px）
+	var spire_h: float = 64.0 * (1.0 - spent_blend * 0.35)
 	var spire_w: float = 18.0
 	var hw: float = spire_w * 0.5
 	var top := core_pos + Vector2(0, -spire_h * 0.6)
@@ -249,6 +293,13 @@ func _draw_floating_crystal_spire() -> void:
 	if is_charging:
 		col_light = col_light.lerp(Color(1.0, 0.92, 0.55), glow_power * 0.85)
 		col_ridge = col_ridge.lerp(Color(1.0, 1.0, 0.85), glow_power * 0.9)
+
+	# 供金饮金（2026-10-25）：注入期间晶面向鎏金过渡 —— 供进来的钱「看得见」
+	if infuse_ratio > 0.0:
+		var gold := Color(1.0, 0.84, 0.42)
+		col_mid = col_mid.lerp(gold.darkened(0.15), infuse_ratio * 0.55)
+		col_light = col_light.lerp(gold.lightened(0.15), infuse_ratio * 0.75)
+		col_ridge = col_ridge.lerp(Color(1.0, 0.95, 0.8), infuse_ratio * 0.8)
 
 	# 激活闪白：整柱向超白过曝
 	if activation_flash > 0.0:
@@ -284,7 +335,13 @@ func _draw_floating_crystal_spire() -> void:
 		draw_line(Vector2(-hw * (1.0 - fill_ratio * 0.3), fill_y), Vector2(hw * (1.0 - fill_ratio * 0.3), fill_y), fill_col, 2.0)
 		draw_circle(Vector2(0, fill_y), 2.5, Color(1.0, 1.0, 0.9, 0.95))
 
-	# 2.3 两枚随侍悬晶（左、右环绕小菱晶）；熄灭时收拢淡出
+	# 供金金脉（2026-10-25）：注入比越高，金线自基座沿晶面爬得越高 —— 钱化灵的实际进度
+	if infuse_ratio > 0.02 and spent_blend < 0.05:
+		var vein_y: float = lerpf(bottom.y, top.y, infuse_ratio * 0.85)
+		draw_line(Vector2(-hw * 0.45, vein_y + 4.0), Vector2(hw * 0.5, vein_y), Color(1.0, 0.86, 0.45, 0.85), 1.3, true)
+		draw_circle(Vector2(hw * 0.5, vein_y), 1.8, Color(1.0, 0.95, 0.8, 0.9))
+
+	# 2.3 三枚随侍悬晶（左、右环绕 + 顶上悬珠一枚）；熄灭时收拢淡出
 	if spent_blend < 0.5:
 		var orb_alpha: float = 1.0 - spent_blend * 2.0
 		var orb_angle := _time * 2.0
@@ -293,6 +350,9 @@ func _draw_floating_crystal_spire() -> void:
 		var p_right_orb := core_pos + Vector2(cos(orb_angle + PI) * orb_dist, sin(orb_angle + PI) * 5.0 - 4.0)
 		_draw_mini_floating_gem(p_left_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
 		_draw_mini_floating_gem(p_right_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
+		# 顶上悬珠（2026-10-25 加第三枚）：主晶顶尖之上的小菱晶，随灵息缓摆
+		var p_top_orb := core_pos + Vector2(sin(_time * 1.3) * 4.0, -spire_h * 0.62 - 10.0)
+		_draw_mini_floating_gem(p_top_orb, Color(col_light, orbit_a(col_light, orb_alpha)), Color(col_ridge, orbit_a(col_ridge, orb_alpha)))
 
 ## 取色并套上整体透明度的辅助（保留原色 RGB，只压 alpha）
 func orbit_a(c: Color, mul: float) -> float:

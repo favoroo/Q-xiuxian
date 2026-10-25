@@ -7,7 +7,9 @@ extends Node2D
 ## 关底锁关（2026-10-22 起从 Boss 回合扩到精英回合）：Boss/精英未伏诛时表走完也不收尾，
 ## 必须由玩家亲手击杀关底才进结算（用户口径：「有精英怪的关卡必须打完精英怪才能结束」）。
 
-enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP }
+## SUPER_ALLOC 追加在末尾（不插中间）：RunSave 存的是 Phase 整型，插在中间会让老档的
+## ALLOC/SHOP 读到错位相位。
+enum Phase { WAITING, FIGHT, CLEARING, ALLOC, SHOP, SUPER_ALLOC }
 
 ## 同屏上限：2026-10-10 打击感重塑由 55 下调至 35，2026-10-11 随「回合内总刷入预算」下调至 28，
 ## 2026-10-11 缩图后下调至 18（2026-10-15 扩图至 560，支持并发合围动态 cap）—— 密度与机动兼顾
@@ -136,6 +138,7 @@ func _ready() -> void:
 	GameManager.wave_spawner = self
 	GameManager.shop_closed.connect(_on_shop_closed)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
+	GameManager.super_alloc_finished.connect(_on_super_alloc_finished)
 	# 敌人场景改为线程加载（2026-10-21 启动卡顿专项）：原先在 _ready 里同步 load 16 个
 	# 怪种 + 3 个精英场景，压在引擎启动阻塞段。现在只是发起异步请求（不阻塞），
 	# 真正取用时机远晚于加载完成（选人→选技能→选武器→第一波 1.7s 预警），
@@ -531,7 +534,17 @@ func open_shop() -> void:
 
 ## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到金币阁。
 ## 战斗中的升级只攒点不弹面板（2026-10-09 用户指令：「在战斗过程中触发加点的体验不好」）。
+## 2026-10-25：第 5/10/15 关先弹「超级悟道」五选一，选完再回到普通加点 → 商店。
 func _enter_wave_break() -> void:
+	# 局内成就即时判定（2026-10-25）：回合结束时把本局中途已满足的成就当场结掉，
+	# 玩家不用等到阵亡/通关才知道解锁了什么。只在回合末跑一次，不逐帧轮询。
+	_announce_live_achievements()
+	if not _jumping and SuperAllocSession.should_open(GameManager):
+		phase = Phase.SUPER_ALLOC
+		SuperAllocSession.open(GameManager)
+		# 中断续玩：面板开着时退出，读档按存档候选原样重建（不重 roll）
+		RunSave.autosave_current(GameManager)
+		return
 	if GameManager.has_pending_upgrades():
 		phase = Phase.ALLOC
 		GameManager.open_alloc_session()
@@ -540,6 +553,27 @@ func _enter_wave_break() -> void:
 		return
 	phase = Phase.SHOP
 	_open_shop_inner()
+
+## 回合末成就播报：逐条走 HUD 现成的金色斜切横幅（announcement_triggered）。
+## 多条同时达成时不叠着弹 —— HUD 横幅是单条通道，后一条会顶掉前一条，
+## 所以这里只播第一条（最醒目的那条），其余交给结算屏与战绩页查阅。
+func _announce_live_achievements() -> void:
+	var newly := ProgressStore.check_live_achievements(GameManager)
+	if newly.is_empty():
+		return
+	var msg := ProgressStore.achievement_banner_text(String(newly[0]))
+	if msg.is_empty():
+		return
+	GameManager.announcement_triggered.emit(msg)
+	AudioManager.play_sfx("level_up", 0.55)
+
+## 超级悟道选完：回到回合间隙闸口，按顺序继续普通加点 / 商店
+func _on_super_alloc_finished() -> void:
+	if _jumping:
+		return
+	if phase != Phase.SUPER_ALLOC:
+		return
+	_enter_wave_break()
 
 ## 点数加完：接着开商店（alloc_finished 由 GameManager 发，UI 不直接指挥流程）
 func _on_alloc_finished() -> void:
@@ -576,6 +610,17 @@ func jump_to_wave(n: int) -> void:
 		_jumping = true
 		GameManager.force_end_alloc("跳关")
 		_jumping = false
+	elif phase == Phase.SUPER_ALLOC:
+		# 超级悟道面板没有可强收的会话：记账本关已结算并直接藏面板，别让它盖住新波
+		_jumping = true
+		SuperAllocSession._finish(GameManager)
+		_jumping = false
+		var super_ui: Node = null
+		var scene2 := get_tree().current_scene
+		if scene2 != null:
+			super_ui = scene2.get_node_or_null("UILayer/SuperAllocDialog")
+		if super_ui != null and super_ui is CanvasItem:
+			(super_ui as CanvasItem).visible = false
 	elif phase == Phase.SHOP:
 		# current_scene 在测试/工具场景里可能是测试宿主（没有 UILayer）：先按 current_scene 找，
 		# 找不到再退回 root 下的 Main —— 绝不能因为找不到节点就让商店盖着新波。

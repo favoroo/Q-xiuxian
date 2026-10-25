@@ -3,7 +3,7 @@ extends Node2D
 ## 聚灵阵激活演出的逐帧出图台（非判据，不参与绿灯）：真链路长按充满 → 触发 → 逐帧抓拍。
 ## 覆盖：① 充能中的阵盘/灵气丝/升灵光柱 ② 灵兽登场 ③ 激活爆发（双环+通天光柱+闪白）
 ## ④ 熄灭变灰的连续形变。
-## 说明：触发同帧会召唤灵兽并撒 5 颗金币，会挡住碑体本身；故抓完灵兽后先清场，
+## 说明：触发会召唤灵兽（2026-10-25 起不再撒金币），会挡住碑体本身；故抓完灵兽后先清场，
 ## 再抓「干净的」爆发与熄灭帧，纯为肉眼验收。
 ## 运行（不能加 --headless，headless 不渲染、get_image 拿到空图）：
 ##   $G --path . res://tests/ObeliskActivationPreview.tscn
@@ -43,10 +43,11 @@ func _ready() -> void:
 	await _wait(0.35)
 	_shoot("charging")
 
-	# ② 真实长按到满触发
+	# ② 真实长按到满触发（2026-10-25 金币启动：先给足启动价；触发含 0.45s 金币注入）
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
 	_ob.is_charging = true
 	var guard := 0
-	while not _ob.is_triggered and guard < 400:
+	while not _ob.spent_this_wave and guard < 900:
 		await get_tree().process_frame
 		guard += 1
 	await _wait(0.05)
@@ -61,8 +62,8 @@ func _ready() -> void:
 	await _until(0.46); _shoot("burst3")          # 熄灭形变前段
 	await _until(0.85); _shoot("spent")           # 全灰相
 
-	print("ACT PREVIEW done: triggered=%s light.enabled=%s spent_blend=%.2f" % [
-		str(_ob.is_triggered), str(_ob.light.enabled),
+	print("ACT PREVIEW done: spent_this_wave=%s light.enabled=%s spent_blend=%.2f" % [
+		str(_ob.spent_this_wave), str(_ob.light.enabled),
 		_ob._obelisk_renderer.spent_blend if _ob._obelisk_renderer != null else -1.0])
 	get_tree().quit(0)
 

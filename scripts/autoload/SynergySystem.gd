@@ -105,7 +105,9 @@ static func apply_main_tag_pity(gm: Node, wave: int) -> void:
 	if gm._no_main_tag_waves < GameBalance.MAIN_TAG_PITY_WAVES:
 		return
 	var candidates: Array = []
-	for w_id in WeaponData.SHOP_POOL:
+	# 保底候选同样受武器解锁门控（2026-10-25）：否则保底会把还没解锁的武器塞进货架，
+	# 等于绕过成就体系直接发奖。池口径与商店抽卡共用 ShopSystem.unlocked_weapon_pool。
+	for w_id in ShopSystem.unlocked_weapon_pool(gm):
 		if main in WeaponData.tags_of(w_id):
 			candidates.append(w_id)
 	if candidates.is_empty():

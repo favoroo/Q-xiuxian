@@ -111,35 +111,55 @@ static func _tablet(r: ProceduralWeaponRenderer) -> void:
 		_:
 			_tablet_paizi(r)
 
-## 雷牌（土，牌族基准）：矩形牌身 + 撞色圆头 + 墨箍（样稿种子，勿改风格）
-## 旧画法转化：矩形牌身（底角斜切）+ 低分段半圆牌头（顶点精确落 (L,0)，整块撞色）+
-## 头心穿绳墨孔 + 两道横箍，砍掉云卷/雷纹/滚边。
+## 雷牌（土，牌族基准）：矩形牌身 + 撞色圆牌头 + 牌心雷纹 + 上下墨箍
+## 旧画法转化：矩形牌身（底角斜切）+ 半圆牌头（顶点精确落 (L,0)，整块撞色）+
+## 头心穿绳圆孔 + 吞口箍/尾箍，砍掉云卷/滚边，只留一道雷纹当唯一纹样。
+## 图标验收（2026-10-25）：牌头由 4 段加细到 8 段、挂孔由方块改圆、牌心补雷纹折线，
+## 原先「马赛克感」来自低分段折边 + 三块大色块拼贴，128px 图标下读不出是雷牌。
 static func _tablet_paizi(r: ProceduralWeaponRenderer) -> void:
 	var pal: Dictionary = BC.pal(r.element)
 	var L: float = r.tip_len
 	var hw: float = clampf(L * 0.40, 6.0, 9.0)
 	var cap_c: float = L - hw
-	var bot_x: float = -L * 0.82
+	var bot_x: float = -L * 0.80
 	# 牌身：矩形 + 尾端两角斜切
 	BC.flat(r, PackedVector2Array([
 		Vector2(cap_c, -hw), Vector2(cap_c, hw),
-		Vector2(bot_x + hw * 0.5, hw), Vector2(bot_x, hw * 0.45),
-		Vector2(bot_x, -hw * 0.45), Vector2(bot_x + hw * 0.5, -hw),
+		Vector2(bot_x + hw * 0.55, hw), Vector2(bot_x, hw * 0.35),
+		Vector2(bot_x, -hw * 0.35), Vector2(bot_x + hw * 0.55, -hw),
 	]), pal["body"])
-	# 圆牌头：4 段硬边半圆帽，整块撞色（符头色带同款口径）
+	# 圆牌头：8 段硬边半圆帽（段数够细，缩进 UI 图标不再是多边形台阶），整块撞色
 	var cap := PackedVector2Array()
-	for i in range(5):
-		var a: float = -PI * 0.5 + PI * float(i) / 4.0
+	for i in range(9):
+		var a: float = -PI * 0.5 + PI * float(i) / 8.0
 		cap.append(Vector2(cap_c + cos(a) * hw, sin(a) * hw))
 	cap.append(Vector2(cap_c, hw))
 	cap.append(Vector2(cap_c, -hw))
 	BC.flat(r, cap, pal["accent"], 2.0)
-	# 穿绳孔（头心墨方）
-	BC.square(r, Vector2(cap_c + hw * 0.38, 0.0), 1.8, BC.INK, 1.0)
-	# 两道横箍（吞口箍 + 尾箍）
-	BC.bar(r, Vector2(L * 0.40, -hw * 0.72), Vector2(L * 0.40, hw * 0.72), 2.2, BC.INK)
-	BC.bar(r, Vector2(-L * 0.34, -hw * 0.46), Vector2(-L * 0.34, hw * 0.46), 1.8, BC.INK)
-	BC.star_studs(r, r.star, Vector2(L * 0.05, 0.0), Vector2(-L * 0.55, 0.0), pal["accent"])
+	# 穿绳孔：圆孔（方块孔在图标里读成一格马赛克）
+	r.draw_circle(Vector2(cap_c + hw * 0.44, 0.0), hw * 0.25, BC.INK)
+	# 牌心雷纹：一块 ⚡ 实心折线（左倾闪电），牌面唯一纹样；实心多边形不用描边，
+	# 细线折线在缩放后会糊成一团斜杠，六角折边才是图标尺度下能读出的雷形
+	var top_x: float = L * 0.34
+	var span: float = L * 0.62
+	var half_lat: float = hw * 0.62
+	r.draw_colored_polygon(PackedVector2Array([
+		_bolt_pt(top_x, span, half_lat, 0.555, 0.00),
+		_bolt_pt(top_x, span, half_lat, 0.000, 0.60),
+		_bolt_pt(top_x, span, half_lat, 0.500, 0.60),
+		_bolt_pt(top_x, span, half_lat, 0.444, 1.00),
+		_bolt_pt(top_x, span, half_lat, 1.000, 0.40),
+		_bolt_pt(top_x, span, half_lat, 0.500, 0.40),
+	]), BC.INK)
+	# 上下墨箍（吞口箍 + 尾箍），中间整段留白给雷纹
+	r.draw_line(Vector2(L * 0.44, -hw * 0.74), Vector2(L * 0.44, hw * 0.74), BC.INK, 2.0, true)
+	r.draw_line(Vector2(-L * 0.52, -hw * 0.84), Vector2(-L * 0.52, hw * 0.84), BC.INK, 1.8, true)
+	BC.star_studs(r, r.star, Vector2(-L * 0.66, -hw * 0.50), Vector2(-L * 0.66, hw * 0.50), pal["accent"])
+
+## 雷纹归一化坐标 → 牌面坐标：lat 0~1 为横向（-half_lat..+half_lat），down 0~1 为
+## 从 top_x 沿牌身向下的行程（共 span）。归一化形状取自标准闪电折线，别按像素手调。
+static func _bolt_pt(top_x: float, span: float, half_lat: float, lat: float, down: float) -> Vector2:
+	return Vector2(top_x - span * down, (lat - 0.5) * 2.0 * half_lat)
 
 ## 金霄雷令（金）：上尖六棱令牌 + 撞色横带 + 令心墨印——尖顶令与矩形牌剪影不同
 static func _tablet_ling(r: ProceduralWeaponRenderer) -> void:

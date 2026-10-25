@@ -29,6 +29,10 @@ static func force_end_alloc(gm: Node, reason: String) -> void:
 static func roll_alloc_offers(gm: Node) -> void:
 	# 学者·博学：候选数在基准之上加成（alloc_offer_bonus，缺省 0）
 	gm.alloc_offers = gm.roll_upgrades(gm.UPGRADE_OFFER_COUNT + gm.alloc_offer_bonus)
+	# 图鉴实战收录（2026-10-25 锁图鉴）：悟道卡只要进过候选池就算「见过」——
+	# 玩家没选它也算知道了这张卡长什么样，图鉴不该继续锁着。
+	for off in gm.alloc_offers:
+		CodexCollection.record_upgrade(String(off.get("id", "")))
 	# 「荐」标：按当前角色+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
 	RecommendSystem.mark_alloc_offers(gm)
 

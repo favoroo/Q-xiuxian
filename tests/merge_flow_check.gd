@@ -5,7 +5,9 @@ extends Node
 ##      那两个原有格子起飞（详情卡 close 会先重建陈列行，接线若抓错节点/抓到没排布局的
 ##      新节点，这里直接打红）；
 ##   ② 迸发帧（~0.21s）合成真的落地：2 星 +1、1 星清零；
-##   ③ 尾段演完演出层自毁，商店还能正常操作。
+##   ③ 尾段演完演出层自毁，商店还能正常操作；
+##   ④ 分档（2026-10-25）：★2→★3「觉醒」同一条生产链走慢节奏 —— 蓄力层在场、
+##      蓄力期数据不落地、0.61s 迸发帧 ★3 +1 / ★2 清零、「★★★」星章在场、按时自毁。
 ## 运行: $G --headless --path . res://tests/MergeFlowCheck.tscn
 
 const W := "qingyun_sword"
@@ -134,6 +136,61 @@ func _run() -> void:
 	await get_tree().create_timer(0.45).timeout
 	_c.check(_shop.get_node_or_null("MergeFx") == null, "尾段结束演出层自毁")
 	_c.check(_shop.visible, "演完商店还开着，玩家接着操作")
+
+	# —— ④ 分档端到端：★2→★3「觉醒」—— 与 ★1→★2 同一条生产链，走慢节奏 ——
+	GameManager.add_weapon(W, 2)
+	GameManager.add_weapon(W, 2)
+	_shop.refresh(false)
+	await get_tree().create_timer(0.4).timeout
+	await _frame(2)
+	_c.equals(GameManager.count_copies(W, 2), 3,
+			"补 2 把 2 星后凑齐 3 把（实得 %d）" % GameManager.count_copies(W, 2))
+	var aw_slot2 := _slot_node("equipped", 2)
+	_c.check(aw_slot2 != null, "陈列行里找得到 2 星 keeper 格位")
+	if aw_slot2 == null:
+		_done()
+		return
+	var aw_summary: Array = GameManager.get_weapons_summary()
+	var aw_item: Dictionary = aw_summary[2]
+	_c.equals(int(aw_item.get("star", 1)), 2, "第 2 格是 2 星")
+
+	_shop.selected = {"pool": "equipped", "index": 2}
+	ShopWeaponTip.open(_shop, aw_item, "equipped", 2, aw_slot2)
+	var aw_tip := DetailTip.live(_shop)
+	_c.check(aw_tip != null, "★2 详情卡在场")
+	var aw_cb := Callable()
+	if aw_tip != null:
+		for row in (aw_tip.payload.get("actions", []) as Array):
+			for act in (row as Array):
+				var d: Dictionary = act
+				if String(d.get("text", "")).contains("三合一"):
+					aw_cb = d.get("callback", Callable())
+	_c.check(aw_cb.is_valid(), "★2 详情卡里有三合一回调")
+	if not aw_cb.is_valid():
+		_done()
+		return
+	DetailTip.close_all(_shop)
+	aw_cb.call()
+	await _frame(1)
+
+	var ov3 := _shop.get_node_or_null("MergeFx") as Control
+	_c.check(ov3 != null, "★2→★3 挂出演出层")
+	if ov3 != null:
+		_c.check(ov3.get_node_or_null("MergeCharge") != null, "★2→★3 挂出蓄力层（觉醒档）")
+	_c.equals(GameManager.count_copies(W, 3), 0, "蓄力期合成未落地")
+
+	# 迸发 ~0.61s + 余量
+	await get_tree().create_timer(0.85).timeout
+	_c.equals(GameManager.count_copies(W, 3), 1, "★3 合成落地：多出 1 把 3 星")
+	_c.equals(GameManager.count_copies(W, 2), 0, "同名 2 星清零")
+	if is_instance_valid(ov3):
+		var st3 := ov3.get_node_or_null("MergeStarStamp") as Label
+		_c.check(st3 != null and st3.text == "★★★", "迸发帧挂出「★★★」星章")
+
+	# 自毁 ~1.13s + 余量
+	await get_tree().create_timer(0.65).timeout
+	_c.check(_shop.get_node_or_null("MergeFx") == null, "★3 演出按时自毁")
+	_c.check(_shop.visible, "★3 演完商店还开着")
 
 	_shop.visible = false
 	get_tree().paused = false

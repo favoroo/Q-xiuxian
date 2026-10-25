@@ -31,10 +31,14 @@ const LOW_RATIO := 0.1          ## 危险档样本（低于 GameBalance.HP_LOW_R
 const POTION_PRICE := 11
 ## 按下后原地的微动：必须明显小于 GameStyle.TAP_SLACK，否则「根本点不动」也会被判成通过
 const JITTER := 4.0
-## 灰面的亮度带：面板是纯黑（0），亮面键是 0.6 以上（金币那颗 0.81），
-## 中间这一档才是「看得见、但明摆着按不动」的灰
+## 灰面的亮度带：面板是纯黑（0），下限拦「混成黑=看不见」（2026-10-11 用户指令的根）。
+## 上限原为 0.45（旧配色时代的中灰）；2026-10-19 新野兽派换肤后禁用面改走亮纸灰
+## DISABLED_FACE(#ddd8ca，亮度约 0.85)，「按不动」的语义由 GREY 字色与价格/差额文案承担，
+## 判据只保证「看得见的实心面」这层底线。
 const GRAY_MIN := 0.08
-const GRAY_MAX := 0.45
+## 「灰」的真判别器是低饱和（新野兽派后：能按的键都是高饱和彩色，禁用面是中性纸灰），
+## 亮度只保底下限；金币键 (1.0,0.82,0.25) 亮度 0.81 但色距 0.75，不会被误判成灰
+const GRAY_MAX_SAT := 0.15
 
 var _c := TestCheck.new()
 var _main: Node
@@ -246,10 +250,16 @@ func _top_bar() -> HBoxContainer:
 func _topbar_min_w() -> float:
 	var m := 0.0
 	var kids := _top_bar().get_children()
+	var counted := 0
 	for ch in kids:
+		# 只量「真占地方」的子项：HBox 不给不可见子项摆位（作者键平时隐藏），
+		# 量它会把幻影宽度算进「顶栏要多少」，制造假超宽
+		if ch is Control and not (ch as Control).visible:
+			continue
 		if ch is Control and (ch as Control).size_flags_horizontal != Control.SIZE_EXPAND_FILL:
 			m += (ch as Control).get_combined_minimum_size().x
-	return m + float(_top_bar().get_theme_constant("separation")) * float(maxi(kids.size() - 1, 0))
+			counted += 1
+	return m + float(_top_bar().get_theme_constant("separation")) * float(maxi(counted - 1, 0))
 
 ## 徽记该印的那串字：词 + 与 HUD 同格式的分数（写死一处，三档屏共用）
 func _want_chip_text() -> String:
@@ -351,7 +361,7 @@ static func _face_of(btn: Button) -> Color:
 ## 混出来就是黑的 —— 那正是「没有按钮」的成因，这里用 alpha 与亮度两把尺一起拦。
 static func _is_gray(face: Color) -> bool:
 	return face.a > 0.9 and face.get_luminance() >= GRAY_MIN \
-			and face.get_luminance() <= GRAY_MAX
+			and (maxf(face.r, maxf(face.g, face.b)) - minf(face.r, minf(face.g, face.b))) <= GRAY_MAX_SAT
 
 static func _disabled_text_readable(btn: Button) -> bool:
 	var col: Color = btn.get_theme_color("font_disabled_color")

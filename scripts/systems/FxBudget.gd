@@ -18,8 +18,8 @@ const LIGHT_CAP_GEM := 5
 ## 2. 玩家弹丸（BladeProjectile.gd）：多飞剑齐射时的动态光照名额
 const LIGHT_CAP_PROJECTILE := 6
 
-## 3. 场景祭坛界碑（BlessingObelisk.gd）：东/西/中三座界碑常驻柔光
-const LIGHT_CAP_OBELISK := 3
+## 3. 场景祭坛界碑（BlessingObelisk.gd）：单座界碑常驻柔光（2026-10-25 重设计为单祭坛）
+const LIGHT_CAP_OBELISK := 1
 
 ## 4. 环绕灵宝阳珠（SunOrb.gd）：至阳真火环绕体常驻光晕
 const LIGHT_CAP_SUN_ORB := 1

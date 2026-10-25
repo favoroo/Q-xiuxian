@@ -279,7 +279,7 @@ func _case_death_bolts() -> void:
 func _case_charge_aim_lead() -> void:
 	var beast := _spawn_enemy("res://scenes/entities/LeiBeastEnemy.tscn", Vector2(-5000, -5000))
 	await get_tree().process_frame
-	_c.near(beast.charge_aim_lead, 0.28, 0.001, "前置：雷兽场景配了 0.28s 预判")
+	_c.near(beast.charge_aim_lead, 0.14, 0.001, "前置：雷兽场景配了 0.14s 预判（2026-10-25 自 0.28 减半）")
 
 	# 玩家向 +x 匀速跑：预判方向应偏向玩家速度前方
 	_player.global_position = beast.global_position + Vector2(300, 0)

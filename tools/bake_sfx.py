@@ -738,6 +738,19 @@ SFX = {
                    noise(b, dur=0.12, peak=0.05, ftype="highpass", f0=3600, f1=2000, t0=0.2),
                    space(b, delay=0.11, fb=0.32, mix=0.15)),
     ],
+    # ★3/★4 合成蓄力（2026-10-25）：上行 FM 扫频 + 渐强灵光 + 带通噪气口，铺满演出
+    # pre-burst 窗（≈0.6s），迸发帧正好接 weapon_awaken 定音。只给悬念不给结论，
+    # 「爆发」留给爆开那一刻 —— 音量压低一档（0.30），别跟后面的定音抢戏。
+    "merge_charge": [
+        lambda b: (fm_tone(b, f0=262, f1=1047, dur=0.52, peak=0.13, ratio=2.0, idx0=0.6, idx1=2.4),
+                   shimmer(b, f0=1400, f1=3200, dur=0.50, peak=0.05, t0=0.06),
+                   noise(b, dur=0.50, peak=0.045, ftype="bandpass", f0=800, f1=2800, t0=0.04),
+                   space(b, delay=0.10, fb=0.30, mix=0.14)),
+        lambda b: (fm_tone(b, f0=233, f1=932, dur=0.50, peak=0.12, ratio=2.0, idx0=0.6, idx1=2.2),
+                   shimmer(b, f0=1600, f1=3400, dur=0.48, peak=0.045, t0=0.06),
+                   noise(b, dur=0.48, peak=0.04, ftype="bandpass", f0=900, f1=3000, t0=0.04),
+                   space(b, delay=0.10, fb=0.28, mix=0.13)),
+    ],
     # ★3 觉醒（2026-10-24）：比普通三合一隆重一档 —— 低频铜锣定音（FM 大下行扫频）
     # + 上行五连琶音 + 长灵光尾 + 更深空间残响。9 把武器堆出来的时刻，要一听就知道不是普通合成。
     "weapon_awaken": [
@@ -967,6 +980,7 @@ TARGET_PEAK = {
     "ui_confirm": 0.24,
     "merge_success": TARGET_PEAK_LOUD,
     "weapon_awaken": TARGET_PEAK_LOUD,
+    "merge_charge": 0.30,
     "wave_start": TARGET_PEAK_LOUD,
     "boss_raid": 0.42,
     "victory": 0.40,

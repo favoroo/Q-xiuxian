@@ -86,8 +86,10 @@ func _quit() -> void:
 # ================================ ① 逐件回退 ================================
 
 ## 每一件法宝：买入 → 至少有一项读数动了（尺子活着）→ 卖出 → 全部读数回到买入前。
+## 神通（tier 5 / granted_only / no_sell）不在「可出售」语义内，不参与往返：
+## 它们的不可售由 SuperAllocCheck / unit_super_tests 单独钉住。
 func _round_trip_every_item() -> void:
-	var ids: Array = ItemData.all_ids()
+	var ids: Array = ItemData.shop_ids()
 	_c.check(ids.size() >= 50, "采到 %d 件法宝（少于 50 件说明 ItemData 没读全）" % ids.size())
 	var bad: Array[String] = []
 	var with_apply := 0

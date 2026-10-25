@@ -134,6 +134,8 @@ var _charge_warning_line: Line2D = null  ## 冲刺预警线节点
 var _charge_brake: float = 0.0     ## >0 收势刹车锁定段（这一段的位移同样是承诺出去的一部分）
 var _charge_stagger: float = 0.0   ## >0 落空罚站：不追人、任人打（冲刺的代价，与预警的兑现配成一对）
 var _charge_hit: bool = false      ## 这一冲已经结算过（一次冲刺只碾一下）
+var _charge_aim_locked: bool = false  ## 预警末段已提前锁向：预警线端点随之定住，不再跟玩家速度刷新
+const CHARGE_AIM_LOCK_WINDOW := 0.25  ## 预警末段锁向窗口（秒）：预警最后这段方向与预警线一起锁死
 var _fuse: float = -1.0   ## >=0 表示引信已点燃
 const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = 引信烧完 = 自爆结算
 const FLEE_WALL_BAND := 80.0       ## 金蟾软墙警告带（px）：带内背离墙外的逃离分量清零改沿墙滑行；贴墙滑行向锁存防角落抖振
@@ -1039,7 +1041,7 @@ func _physics_process(delta: float) -> void:
 	_resolve_contact_damage(target, pos_before_move)
 
 ## 嘲讽目标选择（2026-10-11 祭坛灵兽）：嘲讽圈内有灵兽则追最近的灵兽，否则维持追玩家。
-## 灵兽最多 3 只（三座祭坛各召唤一只），全表扫描开销可忽略。
+## 灵兽最多 3 只（单祭坛每回合至多启动一次、满员顶替），全表扫描开销可忽略。
 ## 2026-10-24 短路：无灵兽时（绝大多数对局）每敌每物理帧的空表遍历是白烧（35 敌 × 60Hz ≈ 2100 次/秒），
 ## 用 ally_count 计数镜像先挡掉，零遍历直接返回玩家。
 func _taunt_target(player: Node2D) -> Node2D:
@@ -1312,9 +1314,16 @@ func _tick_charge_lunge(delta: float, player: Node2D, dir: Vector2, dist_sq: flo
 		if _charge_windup > 0.0:
 			_charge_windup -= delta
 			_pp_target_vel = Vector2.ZERO
+			# 末段锁向（2026-10-25 玩家反馈「走到哪都被锁」）：整段预警线跟着跑位每帧刷新，
+			# 读起来就是锁定。最后 CHARGE_AIM_LOCK_WINDOW 秒提前锁死方向，线端点定住 ——
+			# 「线停了」就是明确的躲避信号；急停/变向从此必能走出走廊（锁向用锁定向的
+			# 玩家速度，出手帧不再重算）。预警总长本就小于窗口时退化为起手即锁。
+			if not _charge_aim_locked and _charge_windup <= CHARGE_AIM_LOCK_WINDOW:
+				_charge_dir = _charge_aim_dir(player, dir)
+				_charge_aim_locked = true
 			_update_charge_warning(player)
 			if _charge_windup <= 0.0:
-				_start_charge(_charge_aim_dir(player, dir))
+				_start_charge(_charge_dir if _charge_aim_locked else _charge_aim_dir(player, dir))
 
 		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
 		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
@@ -1359,6 +1368,7 @@ func _tick_charge_lunge(delta: float, player: Node2D, dir: Vector2, dist_sq: flo
 				_chain_t = -1.0
 				_charge_windup = charge_windup_time * chain_windup_mult
 				_charge_windup_total = _charge_windup
+				_charge_aim_locked = false
 				play_squash(Vector2(0.82, 1.2), 0.2)
 				AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
 
@@ -1369,6 +1379,7 @@ func _tick_charge_lunge(delta: float, player: Node2D, dir: Vector2, dist_sq: flo
 			_charge_timer = charge_interval
 			_charge_windup = charge_windup_time
 			_charge_windup_total = _charge_windup
+			_charge_aim_locked = false
 			_chain_left = maxi(chain_charges - 1, 0)
 			# 起手反馈：下蹲蓄势 + 低音量哨声（全预警体系里原本唯一「静默起手」的，现在齐了）
 			play_squash(Vector2(0.82, 1.2), 0.24)
@@ -2019,6 +2030,7 @@ func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 	knockback_velocity = pull_velocity
 	if _charge_windup > 0.0:
 		_charge_windup = -1.0
+		_charge_aim_locked = false
 		_clear_charge_warning()
 
 ## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
@@ -2140,14 +2152,17 @@ func _update_charge_warning(player: Node2D) -> void:
 	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）。
 	# 线长与扫掠判定、与判据 ⑧ 的实测位移，三处都取自 GameBalance.charge_reach 这一个式子。
 	# 预判型（charge_aim_lead>0）画预判点方向：玩家看线就能读出「它在算我的跑位」，
-	# 每帧跟玩家速度更新，出手那帧在 _start_charge 里锁死 —— 线始终就是真冲刺路径。
-	# 端点方向：预判型冲向预判点（方向每帧跟玩家速度），普通型正对玩家。
-	# 线长仍被 clamp 到 charge_reach 真实可达距离 —— 画出来的永远就是冲得到的那段。
-	var aim_target: Vector2 = player.global_position + player.velocity * charge_aim_lead
-	var local_target: Vector2 = aim_target - global_position
+	# 每帧跟玩家速度更新；末段锁向后改画已锁的 _charge_dir（单位向量 × reach，长度不变）——
+	# 线端点定住不再跟人，「线停了」就是「要冲了」。两种态线长都 == 真实可达距离。
 	var reach: float = GameBalance.charge_reach(move_speed * charge_speed_mul, charge_duration, charge_brake_time)
-	if local_target.length() > reach:
-		local_target = local_target.normalized() * reach
+	var local_target: Vector2
+	if _charge_aim_locked:
+		local_target = _charge_dir * reach
+	else:
+		var aim_target: Vector2 = player.global_position + player.velocity * charge_aim_lead
+		local_target = aim_target - global_position
+		if local_target.length() > reach:
+			local_target = local_target.normalized() * reach
 	# 原地覆写点 1 位置，避免每帧 clear_points + add_point 重建 PackedVector2Array
 	if _charge_warning_line.get_point_count() < 2:
 		_charge_warning_line.clear_points()
@@ -2158,7 +2173,9 @@ func _update_charge_warning(player: Node2D) -> void:
 
 	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）。
 	# 基线从 0.15 提到 0.20：0.05~0.25 的旧区间在亮地面/密集弹幕里几乎读不出来。
-	var alpha: float = 0.20 + 0.12 * sin(_charge_windup * 12.0)
+	# 锁向后停闪、定在 0.34（略高于闪烁峰 0.32）：端点停住 + 亮度走稳，
+	# 双信号合成「方向已定」的读数。
+	var alpha: float = 0.34 if _charge_aim_locked else 0.20 + 0.12 * sin(_charge_windup * 12.0)
 	_charge_warning_line.default_color.a = alpha
 
 ## 清理预警线

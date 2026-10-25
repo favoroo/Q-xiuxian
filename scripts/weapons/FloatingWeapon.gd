@@ -152,6 +152,10 @@ var echo_slash_sprite: WeaponArcRenderer = null
 
 var muzzle_flash: Sprite2D
 var aura_sprite: Sprite2D = null
+## ★4 极境常驻气场（太虚霓虹双弧）：懒建，降到★4 以下即卸。
+## 与器身描边互补——描边贴器形轮廓，气场是绕本体的独立几何，小件也读得出极境身份。
+const StarAuraFxScript := preload("res://scripts/weapons/StarAuraFx.gd")
+var _star4_aura: Node2D = null
 var _base_sprite_scale := Vector2(0.55, 0.55)
 ## 矢量法器/机关本体。非 null 时 Sprite2D 被隐蔽，由它出画面。
 ## 未实现的大类保持 null ⇒ 继续显示旧贴图（逐批灰度，不破现状）。
@@ -212,6 +216,19 @@ func setup(def_id: String, star_level: int) -> void:
 		elif _proc_renderer is ProceduralTurretRenderer:
 			(_proc_renderer as ProceduralTurretRenderer).star = star
 		_proc_renderer.queue_redraw()
+	_refresh_star4_aura()
+
+## ★4 极境常驻气场：升到极境时挂上，降星（或重建渲染器）时卸掉。
+## 只在树内才建节点（setup 会在 add_child 之前被调一次）。
+func _refresh_star4_aura() -> void:
+	var want: bool = star >= WeaponData.MAX_STAR and is_inside_tree()
+	if want and _star4_aura == null:
+		_star4_aura = StarAuraFxScript.new()
+		_star4_aura.name = "Star4Aura"
+		add_child(_star4_aura)
+	elif not want and _star4_aura != null:
+		_star4_aura.queue_free()
+		_star4_aura = null
 
 func _ready() -> void:
 	slash_sprite.visible = false
@@ -227,6 +244,8 @@ func _ready() -> void:
 	dynamic_angle = base_angle
 	if def.is_empty():
 		setup(weapon_def_id, star)
+	# setup() 通常在 add_child 之前调用（此时还不在树里，气场建不出来）：进树后补挂一次
+	_refresh_star4_aura()
 	slash_sprite.configure(WeaponArcRenderer.ArcMode.MELEE, _arc_element())
 	if def.has("icon"):
 		sprite.texture = load(def["icon"])
@@ -647,6 +666,14 @@ func set_fire_held(held: bool) -> void:
 ## 只清计时器，不强切 is_attacking：正在挥出的那一拍动作与判定同拍，截断会让这一刀落在空处。
 func reset_attack_cooldown() -> void:
 	cooldown_timer = 0.0
+
+## 杀戮节奏（神通）：击杀返还一部分当前冷却。以「本次实际攻击间隔」为一份，
+## 而不是按剩余秒数折算 —— 否则攻速越快，同样的返还比例越没感觉。
+func refund_cooldown(pct: float) -> void:
+	if pct <= 0.0:
+		return
+	var unit: float = attack_cooldown * GameManager.get_effective_attack_speed_mult()
+	cooldown_timer = maxf(0.0, cooldown_timer - unit * pct)
 
 ## 每拍冷却相位抖动（2026-10-22）：旧写法每次都精确重置同一时长，同冷却武器一旦相位对上
 ## 就永久锁相——全场武器齐挥齐收、像一台机器在打拍子（首跳错相只能救第一次）。

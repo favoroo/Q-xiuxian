@@ -195,106 +195,103 @@ static func rules(id: String) -> Array[String]:
 	var out: Array[String] = []
 	match id:
 		"hp":
-			out.append("最大生命 = 角色基础 × 角色生命系数，再加升级与道具的增量、召唤羁绊的额外生命。")
-			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，且保底 %d 点：护甲再高也抹不平最后一击。" % [
+			out.append("最大生命 = 角色基础 × 生命系数，再加升级、道具与召唤羁绊。")
+			out.append("受击实伤 = 伤害 ÷ (1 + 护甲 × %s)，保底 %d 点。" % [
 				_fmt(GameBalance.ARMOR_COEF), int(GameBalance.DAMAGE_FLOOR)])
-			out.append("三条回血路：生命回复每秒持续回、吸血命中概率回、回合结束结算（收益与回复葫芦）。")
+			out.append("回血三路：回复每秒回、吸血命中回、回合末收益结算。")
 		"regen":
-			out.append("每帧按「回复量 × 时间」累加，满血时不溢出、也不折抵成别的收益。")
-			out.append("木系羁绊额外加在这一条上，详情里单列一行。")
-			out.append("与吸血是两回事：这条是持续回，那条是命中掷概率、一次只回 1 点。")
+			out.append("满血时不溢出，也不折成别的收益。")
+			out.append("与吸血不同：这条持续回，那条按命中概率回。")
 		"armor":
-			out.append("减伤 = 1 − 1 ÷ (1 + 护甲 × %s)：收益递减但没有上限，堆得越高每点越不值钱。" % _fmt(GameBalance.ARMOR_COEF))
-			out.append("面板减伤不含「保底 %d 点」这一刀，所以高护甲挨小伤害时实际比面板略差。" % int(GameBalance.DAMAGE_FLOOR))
-			out.append("土系羁绊与道具「龟甲」加在这条上；「狂暴药」用护甲换伤害，会倒扣。")
+			out.append("减伤 = 1 − 1 ÷ (1 + 护甲 × %s)，收益递减、无上限。" % _fmt(GameBalance.ARMOR_COEF))
+			out.append("面板减伤不含「保底 %d 点」，高护甲挨小伤时实际略差。" % int(GameBalance.DAMAGE_FLOOR))
+			out.append("土系羁绊、「龟甲」加成；「狂暴药」倒扣。")
 		"dodge":
 			# 上限必须现读「硬上限 + 角色抬升」：只读 DODGE_CAP 会对影者写出一句假话
 			#（她的卡面写着 90%，详解却劝她到 60% 就停手）。
-			out.append("硬上限 %.0f%%：到顶后再点不会涨，多的额度是浪费。" % [
+			out.append("硬上限 %.0f%%，到顶白加。" % [
 				(GameManager.DODGE_CAP + GameManager.dodge_cap_bonus) * 100.0])
-			out.append("判定在护甲之前：闪避成功等于这次攻击完全没发生，不减伤、也不触发反震。")
-			out.append("闪避成功另有 %.2f 秒短无敌，免得怪群贴身时下一帧又判定一次。" % ShadowStepData.GUARD_SEC)
-			out.append(("每躲掉一刀攒 1 层影（最多 %d 层）：影在身上时武器伤害每层 +%d%%，"
-				+ "点「影爆」可随时踩碎，把躲掉的伤害还给周身敌人并推开。") % [
-					ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0)])
+			out.append("判定在护甲前：闪避成功＝这一下完全没发生。")
+			out.append("成功后 %.2f 秒短无敌。" % ShadowStepData.GUARD_SEC)
+			out.append("每躲一刀攒 1 层影（至多 %d 层）：每层武器伤害 +%d%%，「影爆」踩碎反伤周身。" % [
+				ShadowStepData.MAX_STACKS, int(ShadowStepData.AMP_PER_STACK * 100.0)])
 		"lifesteal":
-			out.append("每次生效只回 1 点生命：概率越高越稳，不会一次回一大截。")
-			out.append("触发概率按武器类型打折：近战与横扫全额，远程与范围 %d%%，环绕/机关/光束/喷吐 %d%%。" % [
+			out.append("每次生效只回 1 点。")
+			out.append("概率按武器打折：近战全额，远程/范围 %d%%，环绕/机关 %d%%。" % [
 				int(BalanceTargeting.LIFESTEAL_MULT_RANGED * 100.0),
 				int(BalanceTargeting.LIFESTEAL_MULT_RAPID * 100.0)])
-			out.append("每秒至多触发 %d 次：高频武器刷不出无限续航。" % GameManager.LIFESTEAL_MAX_PER_SEC)
-			out.append("木系羁绊的加成与升级、道具合在一起算，共用同一个每秒闸。")
-			out.append("无敌技能期间额外 +%d%% 触发概率（与其他来源叠加），每次仍只回 1 点。" % [
+			out.append("每秒至多 %d 次。" % GameManager.LIFESTEAL_MAX_PER_SEC)
+			out.append("无敌期间概率额外 +%d%%。" % [
 				int(round(float(SkillData.get_def("aegis").get("lifesteal_boost", 0.0)) * 100.0))])
 		"damage":
-			out.append("面板 = 升级/道具/角色乘区 × 流派羁绊乘区，以 100% 为基准。")
-			out.append("暴击是另一个乘区，与这一条相乘，不互相打折。")
-			out.append("单件武器还能把别的属性折成伤害，点武器图标看它吃什么属性。")
+			out.append("面板 = 升级/道具/角色 × 流派羁绊乘区。")
+			out.append("暴击另算一个乘区，相乘不打折。")
+			out.append("单件武器还能折别的属性成伤害，点图标看账单。")
 		"melee_dmg":
-			out.append("按点数直接增加所有挥砍横扫类近战武器的基础伤害。")
-			out.append("长剑、烈焰刀、藤鞭、风扇等近战武器均直接享受本项加成。")
+			out.append("按点数加近战武器基础伤害。")
+			out.append("长剑、烈焰刀、藤鞭等直接受益。")
 		"ranged_dmg":
-			out.append("按点数直接增加所有飞剑飞针与飞射类远程武器的基础伤害。")
-			out.append("飞剑、飞刀、冰针、毒符等远程武器直接享受本项加成。")
+			out.append("按点数加远程武器基础伤害。")
+			out.append("飞剑、飞刀、毒符等直接受益。")
 		"elemental_dmg":
-			out.append("按点数增加详情卡写了「受元素伤害加成」的武器伤害，并提升灼烧、中毒等跳字的每秒伤害。")
-			out.append("直接提升火符灼烧与毒符中毒的每秒跳字伤害，火系与木系角色首选。")
+			out.append("加成「受元素伤害加成」武器，灼烧/中毒跳字也吃。")
+			out.append("火系与木系角色首选。")
 		"engineering_dmg":
-			out.append("按点数直接增加所有环绕类召唤武器的基础接触伤害。")
-			out.append("护蝶、冰莲、古钟等召唤武器均享受全额加成，机关师核心流派。")
+			out.append("按点数加环绕类召唤武器伤害。")
+			out.append("护蝶、冰莲、古钟等全额享受。")
 		"contraption_dmg":
-			out.append("按点数直接增加所有地面机关炮台与阵盘的基础伤害。")
-			out.append("机关弩、剑阵盘、喷火兽等机关武器均享受全额加成，机关师核心流派。")
+			out.append("按点数加炮台与阵盘类机关武器伤害。")
+			out.append("机关弩、剑阵盘等全额享受。")
 		"haste":
-			out.append("攻击间隔按乘算叠：每层各乘一次，越点越省，不是百分比相加。")
-			out.append("下限 = 攻击间隔 ×%s：到下限后再点不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
-			out.append("面板显示的是相对 1.00 的缩减量，所以 -12% 与 -14% 叠起来是 -23%，不是 -26%。")
+			out.append("按乘算叠：每层各乘一次，不是百分比相加。")
+			out.append("下限 ×%s，到底不再变快。" % _fmt(GameManager.ATTACK_SPEED_FLOOR))
+			out.append("-12% 与 -14% 叠起来是 -23%，不是 -26%。")
 		"speed":
-			out.append("实际移速 = 角色基础移速 × (1 + 升级/道具加成 + 羁绊加成)。")
-			out.append("角色的负面代偿直接乘在这一条上，所以读数可能是负的（如守卫 -15%）。")
-			out.append("个别角色会锁死某条升级（如守卫锁「移速提升」），被锁的那条不再出现在候选里。")
+			out.append("实际移速 = 角色基础 × (1 + 加成与羁绊)。")
+			out.append("负面代偿也乘在这条上，读数可能是负的。")
+			out.append("个别角色锁死某条升级，候选里不再出现。")
 		"range":
-			out.append("乘在每件武器的射程上；剑系羁绊额外加这一条。")
-			out.append("近战武器同样吃它——挥斩的弧更长，不是只有远程受益。")
+			out.append("乘在每件武器的射程上，剑系羁绊加成。")
+			out.append("近战也吃：挥斩的弧更长。")
 		"crit":
-			out.append("概率与倍率是两件事：先按概率判定会不会心，命中后再按倍率放大那一刀。")
-			out.append("暴击率有软上限 %d%%：到顶之后再加是白加。" % int(GameManager.CRIT_RATE_CAP * 100.0))
-			out.append("暴击伤害按倍率相加，只影响会心那一刀，普通攻击完全不吃。")
-			out.append("金系羁绊同时抬这两处；部分武器还会把暴击率直接折成额外伤害。")
+			out.append("先按概率判会不会心，命中后按倍率放大。")
+			out.append("暴击率软上限 %d%%，到顶白加。" % int(GameManager.CRIT_RATE_CAP * 100.0))
+			out.append("暴伤只影响会心那一刀。")
+			out.append("金系羁绊同抬两处。")
 		"luck":
-			out.append("每点使高稀有（稀有/史诗/传说）概率 ×(1+%s%%)，先乘后封顶。" % _fmt(GameBalance.RARITY_LUCK_PER_POINT * 100.0))
-			out.append("高稀有概率随波次提高、各有上限；堆到极高后收益会停住。")
-			out.append("对商店货架与悟道候选同时生效，只是提高概率，不是必出。")
+			out.append("每点使稀有/史诗/传说概率 ×(1+%s%%)。" % _fmt(GameBalance.RARITY_LUCK_PER_POINT * 100.0))
+			out.append("各有上限，堆极高后收益停住。")
+			out.append("对货架与悟道同时生效，只提概率不保出。")
 		"harvest":
-			out.append("回合结束按等额发放：收益 8 就是金币与经验各 +8，与击杀掉落另算。")
-			out.append("每回合自我复利 ×%s，涨到第 %d 波为止，之后持平。" % [
+			out.append("回合末等额发放：收益 8 ＝ 金币与经验各 +8。")
+			out.append("每回合复利 ×%s，第 %d 波封顶。" % [
 				_fmt(GameBalance.HARVEST_GROWTH), GameManager.HARVEST_GROWTH_WAVE_CAP])
-			out.append("经验与金币同源，所以收益高 = 升级快 = 升级次数多。")
+			out.append("收益高＝升级快。")
 		"xp_gain":
-			out.append("经验获取倍率：只放大吸收经验光球时的升级经验，不影响金币获取。")
-			out.append("主要由稀有升级「经验加成」与史诗道具「经验石」提供。")
+			out.append("只放大经验光球，不影响金币。")
+			out.append("「经验加成」与「经验石」提供。")
 		"shop_price":
-			out.append("商店所有在售武器、道具及重掷费用的全局价格折算比例。")
-			out.append("角色自带八折特权，道具「折扣券」可进一步叠加折让。")
+			out.append("全店价格的折算比例。")
+			out.append("角色八折、道具「折扣券」可再叠。")
 		"bonus_pierce":
-			out.append("飞剑飞符穿透敌人数量的额外增量。")
-			out.append("弹射羁绊核心收益，升级「穿透强化」与道具「破虚符」也可叠加。")
+			out.append("飞剑飞符等弹丸的额外穿透。")
+			out.append("弹射羁绊核心收益，可叠「穿透强化」「破虚符」。")
 		"thorns":
-			out.append("受到敌方近身碰撞掉血时，立刻按敌方碰撞伤害的该比例反弹给攻击者。")
-			out.append("守卫自带反震特权，升级「护体罡气」与道具「反震铜甲」可不断累加。")
+			out.append("近身碰撞掉血时，按比例反弹伤害。")
+			out.append("守卫自带，「护体罡气」「反震铜甲」可叠。")
 		"elite_dmg":
-			out.append("对精英与守关 Boss 的独立伤害乘区加成。")
-			out.append("升级「精英伤害」与道具「破甲针」生效，不影响寻常小怪。")
+			out.append("对精英与 Boss 的独立乘区。")
+			out.append("不影响小怪。")
 		"free_rerolls":
-			out.append("每回合进入商店时无需花费金币即可免费重掷货架的次数。")
-			out.append("道具「重掷令」提供，用完后重掷费用才开始按正常递增结算。")
+			out.append("每回合开店免费重掷的次数。")
+			out.append("「重掷令」提供，用完才开始扣金币。")
 		"kills":
-			out.append("只是读数：不吃任何加成，也不参与结算公式。")
-			out.append("精英与 Boss 同样计入；它们多掉的金币走另一条账。")
+			out.append("纯读数，不吃加成。")
+			out.append("精英与 Boss 也计入。")
 		"stones":
-			out.append("来源四条：击杀掉落、收益回合末发放、提前清场的余时赏、升级「金币补给」当场给一笔。")
-			out.append("余时赏：本回合敌人已全部刷出、又被你清空时当场收尾，剩下的秒数折成金币。")
-			out.append("只在局内有效，局末不结转下局；商店的重掷费用逐次递增。")
+			out.append("来源：击杀、回合末收益、提前清场余时赏。")
+			out.append("余时赏＝提前清场剩下的秒数折金币。")
+			out.append("局末不结转。")
 	return out
 
 ## 这一行能被哪些途径抬高：扫悟道表与道具表的 apply，命中本行吃的字段就报名字。

@@ -47,13 +47,13 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 		var tag_names: Array[String] = []
 		for t in allowed:
 			tag_names.append(String(WeaponData.SYNERGIES.get(String(t), {}).get("name", t)))
-		notes.append("角色适配：商店大幅偏向「%s」系武器，仍有少量他派漏出。" % "、".join(tag_names))
+		notes.append("商店偏向「%s」系武器。" % "、".join(tag_names))
 	var locked: Array = def.get("locked_upgrades", [])
 	if not locked.is_empty():
 		var titles: Array[String] = []
 		for uid in locked:
 			titles.append(String(UpgradeData.get_upgrade_def(String(uid)).get("title", uid)))
-		notes.append("加点锁定：「%s」与本角色无缘，升级候选中不会出现。" % "、".join(titles))
+		notes.append("加点锁定：「%s」不会出现在候选里。" % "、".join(titles))
 
 	return DetailTip.show_over(host, anchor, {
 		"title": "%s · 角色特性" % String(def.get("name", "")),
@@ -62,7 +62,7 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 		"rows": rows,
 		"body": "「%s」" % String(def.get("epithet", "")),
 		"notes": notes,
-		"foot": "加成与代偿开局即生效、全程不变；具体数值已计入左侧属性行与各条详解。",
+		"foot": "加成与代偿全程不变，数值已计入左侧属性行。",
 	})
 
 ## 道具详情卡
@@ -82,7 +82,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 
 	var desc_lines: Array = String(def.get("desc", "")).split("\n")
 	var notes: Array[String] = [
-		"被动道具：购入即永久生效，不占用上阵武器槽位。",
+		"被动道具：买即生效，不占武器槽。",
 	]
 	for line in desc_lines:
 		var s := String(line).strip_edges()
@@ -96,7 +96,7 @@ static func open_item_tip(host: Control, anchor: Control, item_id: String, count
 		"rows": rows,
 		"body": "被动道具：属性加成与悟道同源叠加。",
 		"notes": notes,
-		"foot": "在回合间商店可继续购置更多道具。",
+		"foot": "商店可继续买更多道具。",
 	})
 
 ## 空/封印武器位详情卡
@@ -110,12 +110,12 @@ static func open_empty_slot_tip(host: Control, anchor: Control, index: int) -> C
 			["当前上阵", "%d 件" % GameManager.get_weapons_summary().size()],
 			["背包", "%d 件" % GameManager.stash.size()],
 		],
-		"body": "本角色限制了上阵武器槽上限，此槽位不可装备。" if locked else "这一格还空着。武器按获得顺序自动补上阵武器位，不需要手动摆。",
+		"body": "角色槽位上限锁死，此槽不可装备。" if locked else "这格空着：武器按获得顺序自动补位。",
 		"notes": [
-			"上阵 %d 格全满之后，新买的武器进背包，只用于合成与出售。" % max_slots,
-			"上阵武器的数量（如 2/6、4/6、6/6）决定流派羁绊的激活档位。",
+			"上阵满 %d 格后，新武器进背包（合成/出售用）。" % max_slots,
+			"上阵件数决定流派羁绊档位。",
 		],
-		"foot": "回合间在商店买武器即可补上空槽。",
+		"foot": "商店买武器即可补上。",
 	})
 
 ## 武器详情卡
@@ -210,7 +210,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		# 紧凑单行公式与升星句：详情卡定宽 306，多折一行卡底就顶出视口（BenefitIconTapCheck 判出屏）
 		"单发 =（基础×星级 + 属性加伤）× 全局×羁绊×角色×五行×分流；暴击/斩将另算。",
 		WeaponDamageReadout.bonus_bill_text(id, star),
-		"升星：同名满 3 件在商店合成，伤害 ×%s、间隔 ×%s，最高 %s（觉醒 + 极境招式）。" % [
+		"升星：同名 3 件合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
 	if not benefit_note.is_empty():
@@ -219,7 +219,7 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
 		GameManager.count_copies(id, star), GameManager.weapon_sell_price(id, star)]
 	if from_stash:
-		foot += "\n在背包里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
+		foot += "\n背包中：不出手、不吃羁绊，仅供合成与出售。"
 
 	return DetailTip.show_over(host, anchor, {
 		"title": "%s %s" % [String(def.get("name", "武器")), WeaponData.star_text(star)],
@@ -286,8 +286,8 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 		rows.append(["状态", "已叠满，不再出现在候选里", GameStyle.GREY])
 
 	var notes: Array[String] = [
-		"升级只攒点数，每回合敌潮平息后统一加点；选定即生效、不可撤销，同一条最多领悟 %d 次，叠满后从池子里剔除。" % cap,
-		"领悟时卡片上写的那点幅度，就是真正落地的幅度：不会另有一本账。",
+		"回合结束统一加点，选定即生效不可撤销；同一条最多 %d 次。" % cap,
+		"卡面幅度＝落地幅度，没有第二本账。",
 	]
 	var stat_id := ""
 	for key in apply.keys():
@@ -295,13 +295,13 @@ static func open_history_tip(host: Control, anchor: Control, item: Dictionary) -
 		if not sid.is_empty():
 			stat_id = sid
 			break
-	var foot := "" if stat_id.is_empty() else "这一条落在左侧「%s」那一行，点它可以看来源拆解。" % StatInfoData.title(stat_id)
+	var foot := "" if stat_id.is_empty() else "落在左侧「%s」行，点它看来源。" % StatInfoData.title(stat_id)
 
 	# 纯数值项的 desc 已不再复述数字（卡面加成行由 BonusRows 从 apply 生成，见 UpgradeData 头注），
 	# 「解释」由口径说明兜底——判据 StatsTipCheck 要求每张点开的卡都有解释行
 	var body := String(item.get("desc", ""))
 	if body.is_empty():
-		body = "这一条的加成幅度就是上面几行读数：与生效数值同源，选中即生效、不可撤销。"
+		body = "加成幅度就是上面几行读数，与生效同源。"
 
 	return DetailTip.show_over(host, anchor, {
 		"title": String(item.get("title", "升级")),

@@ -348,6 +348,10 @@ static func _dump_collections(gm: Node, d: Dictionary) -> void:
 	# 定型数组：整包快照（元素含 Color，ConfigFile 原生支持）
 	d["alloc_offers"] = gm.alloc_offers.duplicate(true)
 	d["upgrade_history"] = gm.upgrade_history.duplicate(true)
+	# 超级悟道（2026-10-25）：已结算关卡 / 已拿卡 / 当前候选（面板开着时退出要原样重建）
+	d["super_alloc_offers"] = gm.super_alloc_offers.duplicate(true)
+	d["super_alloc_done_waves"] = gm.super_alloc_done_waves.duplicate()
+	d["super_cards_taken"] = gm.super_cards_taken.duplicate()
 
 static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.kills = int(d.get("kills", 0))
@@ -480,6 +484,23 @@ static func _fill_collections(gm: Node, d: Dictionary) -> void:
 		var arr = d.get(f, null)
 		if arr is Array:
 			gm.set(f, (arr as Array).duplicate(true))
+	# 超级悟道三个定型数组：同样原地重建（Array[int] / Array[String] / Array[Dictionary]）
+	var sdo = d.get("super_alloc_offers", null)
+	gm.super_alloc_offers.clear()
+	if sdo is Array:
+		for e in sdo:
+			if e is Dictionary:
+				gm.super_alloc_offers.append(e)
+	var sdw = d.get("super_alloc_done_waves", null)
+	gm.super_alloc_done_waves.clear()
+	if sdw is Array:
+		for w in sdw:
+			gm.super_alloc_done_waves.append(int(w))
+	var sct = d.get("super_cards_taken", null)
+	gm.super_cards_taken.clear()
+	if sct is Array:
+		for c in sct:
+			gm.super_cards_taken.append(String(c))
 	# 背包条目是购买时刻的字段快照（id/name/star/icon/tag 整包存盘）：跨版本更新若改过
 	# 武器图标/文案，老档会顶着旧图，而货架卡读实时表 ⇒ 商店上下面不上（2026-10-24 灵兽
 	# 图标不同款问题的武器版）。还原后按实时表重刷可刷字段（id/star 保留）；表里已查不到

@@ -47,7 +47,7 @@ const GUIDE: Dictionary = {
 		"attack": "冲撞撕咬",
 		"tough": "厚",
 		"swift": "寻常",
-		"counter": "看预警带亮起就【急停或变向】，它冲的是你刚才的路线",
+		"counter": "预警带【定住】就是要冲了，急停或变向就能躲开",
 	},
 	"flower": {
 		"desc": "跑得快的花妖，成群【黏人】。",
@@ -128,7 +128,7 @@ const GUIDE: Dictionary = {
 		"attack": "长距突进",
 		"tough": "极厚",
 		"swift": "寻常",
-		"counter": "预警带亮起就急停变向，别沿直线跑",
+		"counter": "预警带【定住】就是要冲了，急停变向，别沿直线跑",
 	},
 	"jiansha": {
 		"desc": "【三连剑气】压场的剑煞邪修，别站直线。",

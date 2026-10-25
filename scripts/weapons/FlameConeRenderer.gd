@@ -8,6 +8,10 @@ extends Node2D
 
 var length: float = 100.0
 var half_width: float = 40.0
+## 星级着色（★3/★4 由 ChannelHandler 下发）：alpha==0 时走原本的火色三层
+var _tint: Color = Color(0, 0, 0, 0)
+## 元素粒子流的五行取色：星级着色时不改元素（灼烧仍是火），只改视觉锥色
+const _EMBER_ELEM := "fire"
 
 ## 重绘节流按帧率档位取双档（2026-10-15 VisualRate 档位联动）：火锥几何每帧跟随弹道下发，
 ## 60fps 档 20Hz 是每 3 帧一画，翻倍到 40Hz；低档 20Hz 维持 perf_probe 预算。
@@ -27,9 +31,12 @@ func _ready() -> void:
 	_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 
 ## 亮起/续命：每帧下发当前几何
-func cone_on(p_length: float, p_half_width: float) -> void:
+## p_tint：星级着色（alpha==0 = 默认火色）。★3 鎏金焰 / ★4 冷青焰 ——
+## 三层锥与顺流火星全部从这一个色派生，宽角之外再给一条颜色读数。
+func cone_on(p_length: float, p_half_width: float, p_tint: Color = Color(0, 0, 0, 0)) -> void:
 	length = p_length
 	half_width = p_half_width
+	_tint = p_tint
 	if not visible:
 		visible = true
 		_open = 0.0
@@ -81,14 +88,25 @@ func _draw() -> void:
 	# 三层同形火锥：外暗赤 / 中炽橙 / 内炽阳超白（接 FX_HDR_FIRE 泛光起辉）
 	# 2026-10-15 视觉克制化：三层透明度 0.30/0.55/0.50 → 0.24/0.45/0.40，
 	# 几何 length/half_width 判定同源不动，只降叠加油墨感
-	_cone_poly(l, w, Color(0.85, 0.25, 0.12, 0.24), 1.0)
-	_cone_poly(l * 0.78, w * 0.66, Color(1.0, 0.55, 0.15, 0.45), 0.8)
-	_cone_poly(l * 0.5, w * 0.38, GameStyle.FX_HDR_FIRE, 0.4)
+	# 2026-10-25 星级着色：★3/★4 三层全部向星级色偏移（外淡星色 / 中浓星色 / 内星级 HDR 超白）
+	var outer_col := Color(0.85, 0.25, 0.12, 0.24)
+	var mid_col := Color(1.0, 0.55, 0.15, 0.45)
+	var core_col := GameStyle.FX_HDR_FIRE
+	if _tint.a > 0.0:
+		core_col = Color(_tint.r * 1.5, _tint.g * 1.5, _tint.b * 1.5, 1.0)
+		outer_col = Color(_tint.r, _tint.g, _tint.b, 0.26)
+		mid_col = Color(_tint.r * 1.15, _tint.g * 1.15, _tint.b * 1.15, 0.48)
+	_cone_poly(l, w, outer_col, 1.0)
+	_cone_poly(l * 0.78, w * 0.66, mid_col, 0.8)
+	_cone_poly(l * 0.5, w * 0.38, core_col, 0.4)
 	# 顺流火星：四粒火屑沿锥面向前飘，越远越小越淡
 	for i in 4:
 		var p := fposmod(_anim * 2.6 + float(i) * 0.29, 1.0)
 		var pos := Vector2(l * p, w * 0.6 * sin(float(i) * 2.3 + p * 5.0) * p)
-		draw_circle(pos, 2.0 * (1.0 - p) + 0.8, Color(1.0, 0.75, 0.35, 0.8 * (1.0 - p)))
+		var spark_col := Color(1.0, 0.75, 0.35, 0.8 * (1.0 - p))
+		if _tint.a > 0.0:
+			spark_col = Color(_tint.r * 1.3, _tint.g * 1.3, _tint.b * 1.3, 0.8 * (1.0 - p))
+		draw_circle(pos, 2.0 * (1.0 - p) + 0.8, spark_col)
 
 ## 锥面：根部窄口、沿程按 x^0.75 外扩、侧缘带火舌凸齿（jag 抖动作用于侧缘宽度，绝不自相交）。
 ## 顶点写进成员缓冲复用（_draw 每次 3 次调用 × 40Hz，原先每次新建数组 ≈ 120 次分配/秒），

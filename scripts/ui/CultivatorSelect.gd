@@ -229,6 +229,8 @@ func _select_cultivator(cid: String) -> void:
 	_play_cultivator_voice(cid)
 	var old_id := _selected_id
 	_selected_id = cid
+	# 看过即销「新」角标（2026-10-25）：玩家已经在详情卡里见过这个角色的全部信息了
+	GameManager.mark_unlock_read("cultivator", cid)
 	var vis_w := get_viewport().get_visible_rect().size.x
 	if vis_w <= 0.0:
 		vis_w = 960.0
@@ -370,6 +372,15 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	var col_w := text_col_w(vis_w)
 
+	# 未解锁角色：只报「达成什么成就解锁 + 当前进度」，不展开天赋/绝技/代价
+	# （2026-10-25 锁图鉴）。旧写法把 13 个锁定角色的完整词条全摊开 —— 新玩家第一局
+	# 就面对 21 份长文，而且解锁那一刻毫无揭秘感。
+	if not is_unlocked:
+		mid_col.add_child(_make_locked_hint(cid, col_w))
+		GameStyle.swipeable(mid_col)
+		_build_locked_bottom(cid)
+		return
+
 	# (a) 初始装备
 	var raw_equip := CultivatorData.get_start_equip(cid)
 	if not raw_equip.is_empty():
@@ -410,63 +421,84 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 	bottom_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_detail_content.add_child(bottom_bar)
 
-	if is_unlocked:
-		var choose_btn := Button.new()
-		choose_btn.text = "选 择 此 角 色"
-		choose_btn.custom_minimum_size = Vector2(0, 44)
-		choose_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		choose_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		choose_btn.focus_mode = Control.FOCUS_NONE
-		GameStyle.button(choose_btn, GameStyle.GOLD, GameStyle.JADE, 15, GameStyle.INK_TEXT, 6.0, GameStyle.INK_TEXT)
-		choose_btn.pressed.connect(func(): _choose(cid))
-		bottom_bar.add_child(choose_btn)
-	else:
-		var ach := AchievementData.cultivator_unlock_achievement(cid)
-		var ach_name := String(ach.get("name", "特定成就"))
-		var lock_row := HBoxContainer.new()
-		lock_row.add_theme_constant_override("separation", 8)
-		lock_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		bottom_bar.add_child(lock_row)
+	var choose_btn := Button.new()
+	choose_btn.text = "选 择 此 角 色"
+	choose_btn.custom_minimum_size = Vector2(0, 44)
+	choose_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	choose_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	choose_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(choose_btn, GameStyle.GOLD, GameStyle.JADE, 15, GameStyle.INK_TEXT, 6.0, GameStyle.INK_TEXT)
+	choose_btn.pressed.connect(func(): _choose(cid))
+	bottom_bar.add_child(choose_btn)
 
-		# 左：解锁条件 + 当前进度（可点卡，点按出成就详解浮卡 —— 「这是什么」点按可得）
-		var cond_card := PanelContainer.new()
-		cond_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cond_card.mouse_filter = Control.MOUSE_FILTER_STOP
-		var c_sb := GameStyle.side_card(GameStyle.GOLD_DK)
-		c_sb.content_margin_left = 10.0
-		c_sb.content_margin_right = 10.0
-		c_sb.content_margin_top = 4.0
-		c_sb.content_margin_bottom = 4.0
-		cond_card.add_theme_stylebox_override("panel", c_sb)
+## 未解锁角色的详情卡中部：一张「?? · 达成成就【X】解锁」提示卡 + 当前进度。
+## 天赋/绝技/代价一律不显示 —— 想知道这角色怎么玩，先把它解锁出来（锁图鉴口径）。
+func _make_locked_hint(cid: String, col_w: float) -> Control:
+	var ach := AchievementData.cultivator_unlock_achievement(cid)
+	var ach_name := String(ach.get("name", "特定成就"))
+	var cond := String(ach.get("cond_desc", ""))
+	var prog := AchievementData.progress_text(String(ach.get("id", "")), GameManager.career_stats)
 
-		var cond_box := VBoxContainer.new()
-		cond_box.add_theme_constant_override("separation", 1)
-		cond_box.alignment = BoxContainer.ALIGNMENT_CENTER
-		cond_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cond_card.add_child(cond_box)
+	var card := PanelContainer.new()
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := GameStyle.side_card(GameStyle.GOLD_DK)
+	sb.content_margin_left = 12.0
+	sb.content_margin_right = 12.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_bottom = 10.0
+	card.add_theme_stylebox_override("panel", sb)
 
-		var cond_lbl := Label.new()
-		cond_lbl.text = "达成成就【%s】解锁" % ach_name
-		GameStyle.label(cond_lbl, 12, GameStyle.PAPER_DIM)
-		cond_box.add_child(cond_lbl)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(box)
 
-		var prog_txt := AchievementData.progress_text(String(ach.get("id", "")), GameManager.career_stats)
+	var title := Label.new()
+	title.text = "？ ？ ？"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(title, 18, GameStyle.GREY, 0, GameStyle.INK, true)
+	box.add_child(title)
+
+	var sub := Label.new()
+	sub.text = "尚未入门 · 解锁后可查看天赋与代价"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	GameStyle.label(sub, 11, GameStyle.PAPER_DIM)
+	box.add_child(sub)
+
+	var cond_lbl := Label.new()
+	cond_lbl.text = GameStyle.wrap_cjk("达成成就【%s】：%s" % [ach_name, cond],
+			GameStyle.body_font(), TXT, col_w)
+	cond_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cond_lbl.custom_minimum_size = Vector2(col_w, 0)
+	GameStyle.label(cond_lbl, TXT, GameStyle.PAPER)
+	box.add_child(cond_lbl)
+
+	if not prog.is_empty():
 		var prog_lbl := Label.new()
-		prog_lbl.text = ("当前进度：%s · 点看详情" % prog_txt) if not prog_txt.is_empty() else "点看解锁详情"
+		prog_lbl.text = "当前进度：%s" % prog
+		prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(prog_lbl, 10, GameStyle.GOLD)
-		cond_box.add_child(prog_lbl)
+		box.add_child(prog_lbl)
 
-		lock_row.add_child(cond_card)
-		GameStyle.tap(cond_card, func() -> void: _open_lock_tip(ach, cond_card))
+	GameStyle.tap(card, func() -> void: _open_lock_tip(ach, card))
+	return card
 
-		var lock_btn := Button.new()
-		lock_btn.text = "未 解 锁"
-		lock_btn.custom_minimum_size = Vector2(100, 42)
-		lock_btn.disabled = true
-		lock_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		lock_btn.focus_mode = Control.FOCUS_NONE
-		GameStyle.button(lock_btn, GameStyle.INK, GameStyle.LINE, 13, GameStyle.GREY, 6.0)
-		lock_row.add_child(lock_btn)
+## 未解锁角色的底部栏：只有一颗禁用的「未解锁」按钮（解锁条件已在中部提示卡里说清）
+func _build_locked_bottom(cid: String) -> void:
+	var bottom_bar := MarginContainer.new()
+	bottom_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_content.add_child(bottom_bar)
+
+	var lock_btn := Button.new()
+	lock_btn.text = "未 解 锁"
+	lock_btn.custom_minimum_size = Vector2(0, 44)
+	lock_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lock_btn.disabled = true
+	lock_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	lock_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(lock_btn, GameStyle.INK, GameStyle.LINE, 15, GameStyle.GREY, 6.0)
+	bottom_bar.add_child(lock_btn)
 
 ## 锁定条点按详情浮卡：解锁条件 + 当前进度 + 奖励（进度口径 = career_stats 单局生涯最佳）
 func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
@@ -775,7 +807,11 @@ func _update_small_card_selection(cid: String) -> void:
 		name_lbl.add_theme_color_override("font_color", name_col)
 
 	if tag_lbl != null:
-		if is_selected:
+		# 未读优先（与 _create_small_card 同一套判定）：看过之后才回到选中/未解锁/空三态
+		if GameManager.is_unlock_unread("cultivator", cid):
+			tag_lbl.text = "新"
+			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
+		elif is_selected:
 			tag_lbl.text = "◆"
 			tag_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
 		elif not is_unlocked:
@@ -863,7 +899,12 @@ func _create_small_card(cid: String, inner_w: float) -> Control:
 	hbox.add_child(badge_box)
 
 	var tag_lbl := Label.new()
-	if is_selected:
+	# 「新」角标优先于选中/未解锁标记（2026-10-25）：刚解锁的角色要能被一眼找到。
+	# 点选该卡即销标记（_select_cultivator 里调 mark_unlock_read），下次进来就回到常态。
+	if GameManager.is_unlock_unread("cultivator", cid):
+		tag_lbl.text = "新"
+		GameStyle.label(tag_lbl, 11, GameStyle.JADE_DK, 0, GameStyle.INK, true)
+	elif is_selected:
 		tag_lbl.text = "◆"
 		GameStyle.label(tag_lbl, 12, GameStyle.JADE_DK)
 	elif not is_unlocked:
