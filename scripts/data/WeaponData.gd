@@ -2,7 +2,8 @@ class_name WeaponData
 extends RefCounted
 
 ## 武器静态数据库：所有武器的数值/行为/价格/五行/属性受益唯一定义处
-## 星级：集齐 3 把同名同星，在回合间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，最高 ★3
+## 星级：集齐 3 把同名同星，在回合间商店手动合成 +1 星，伤害 ×2.0/星，冷却 ×0.92/星，
+## 最高 ★4（★3 觉醒专属招式、★4 神兵极境再跃一档）
 ## 双标签系统：器类（剑系/符箓/雷法/御灵/广域）+ 五行（锐金/青木/玄水/离火/厚土）
 ## 器类归属口径（2026-10-10 定，用户：「柳叶飞刀怎么是符箓啊？不应该是剑系吗」）：
 ##   剑系 = 金属锋刃器，近战白刃与远程飞射都算（剑/刀/针 ⇒ 庚金飞剑、柳叶飞刀、暴雨梨花针、玄冰飞针都在内）；
@@ -36,13 +37,52 @@ extends RefCounted
 ## 喷吐=锥形火焰（2026-10-13 新增：器口前方锥形持续灼烧，tick 折算保证纸面 DPS 即实伤）。
 enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET, SWEEP, BEAM, CONE }
 
-const MAX_STAR: int = 3
+const MAX_STAR: int = 4
 const MAX_SLOTS: int = 6
 const MAX_STASH_SLOTS: int = 9
 const STAR_DAMAGE_MULT: float = 2.0
 const STAR_COOLDOWN_MULT: float = 0.92
+## 常规出售回收比例（买进来的东西半价退）
 const SELL_RATIO: float = 0.5
+## 开局白送的初始武器回收比例：按原价退，玩家不想要这流派就能平价换掉，
+## 不会被「已经拿了」绑架。只对那一件生效一次，卖完即恢复 SELL_RATIO。
+const STARTER_SELL_RATIO: float = 1.0
 const STAR_SELL_MULT: float = 1.6
+
+## ★3 觉醒（2026-10-24）：三星武器按行为族追加专属机制，等效增伤约 +50%（合成要 9 把
+## ★1 等价物，★3 必须有一眼看得见的质变；八族全部明确反超「3 把 ★2 同投入」基准，
+## 分流后的对照线是 3×2.17×0.769 ≈ 5.0 倍 ★1，觉醒倍率一律 ≥1.5 才够）。
+## 觉醒不产生新武器节点、不占槽、不吃神识分流；追加打击的伤害缩放一律在出膛/出手侧
+## 完成（弹丸实体不进 star，防循环依赖坑）；束流族的 dmg_mult 在 tick 侧乘
+## （ChannelHandler.star3_dmg_mult），喷吐灼烧从 cycle_dmg 派生所以一并放大，与尺子同源。
+## name/desc 是卡面与详情文案唯一真话；ratio 等参数是运行时与 sustained_single_dps 判据唯一真话。
+const STAR3_AWAKEN: Dictionary = {
+	Behavior.MELEE: {"name": "回风斩", "desc": "挥砍后追加一段回旋斩（50% 伤害）", "ratio": 0.5},
+	Behavior.SWEEP: {"name": "回掠", "desc": "横扫后反向回扫一次（50% 伤害）", "ratio": 0.5},
+	Behavior.PROJECTILE: {"name": "剑影", "desc": "每次开火追加一轮幻影弹（50% 伤害）", "ratio": 0.5},
+	Behavior.BURST: {"name": "双雷", "desc": "同一波落第二道雷（60% 伤害）", "ratio": 0.6},
+	Behavior.DRONE: {"name": "灵威", "desc": "分身总伤害 +50%，贴得更满", "divisor": 2.0},
+	Behavior.TURRET: {"name": "主炮", "desc": "全部炮台开火间隔 ×0.65", "cd_mult": 0.65},
+	Behavior.BEAM: {"name": "贯日", "desc": "光束加宽一倍，威力 +50%", "width_mult": 2.0, "dmg_mult": 1.5},
+	Behavior.CONE: {"name": "燎原", "desc": "喷吐锥角大幅加宽，威力 +50%", "half_angle": 44.0, "dmg_mult": 1.5},
+}
+
+## ★4 神兵极境（2026-10-24）：三星之上再合一次（3 把 ★3 = 27 把 ★1 等价物），八族在 ★3
+## 觉醒之上二段质变，等效增伤约 ★1 的 23.6~25.1 倍（约 3.3 把 ★3 之和，且只占 1 个槽、
+## 不吃神识分流）。数值刻意「超模」：追梦 27 把材料的终局回报必须一眼看得见。
+## 与 STAR3_AWAKEN 同构（count/ratio/divisor/cd_mult/width_mult/half_angle/dmg_mult），
+## 差异只在档位——count 是追加段数（★3 恒 1），ratio 是每段伤害系数。
+## 尺子折算与运行时一律经 awaken_perk(behavior, star) 取，别在两处各写一份 match。
+const STAR4_ASCEND: Dictionary = {
+	Behavior.MELEE: {"name": "绝影三连", "desc": "挥砍后连追两段紫电回旋斩（各 65% 伤害）", "count": 2, "ratio": 0.65},
+	Behavior.SWEEP: {"name": "千钧狂澜", "desc": "横扫后往返回扫两次（各 65% 伤害）", "count": 2, "ratio": 0.65},
+	Behavior.PROJECTILE: {"name": "万剑齐发", "desc": "每次开火连追两轮霓虹幻影弹（各 65% 伤害）", "count": 2, "ratio": 0.65},
+	Behavior.BURST: {"name": "天劫三雷", "desc": "同一波连落三道雷（劫雷各 70% 伤害）", "count": 2, "ratio": 0.7},
+	Behavior.DRONE: {"name": "四象灵尊", "desc": "分身增至四具，总伤害 ×2.5", "divisor": 1.6},
+	Behavior.TURRET: {"name": "神机齐射", "desc": "炮台上限再 +1，全部开火间隔 ×0.42", "cd_mult": 0.42},
+	Behavior.BEAM: {"name": "贯日天河", "desc": "光束再加宽，威力 ×2.3", "width_mult": 2.6, "dmg_mult": 2.3},
+	Behavior.CONE: {"name": "焚天燎原", "desc": "喷吐锥角再扩，威力 ×2.3", "half_angle": 56.0, "dmg_mult": 2.3},
+}
 
 const CLASSES: Array[String] = ["sword", "talisman", "wide", "thunder", "spirit", "contraption"]
 const ELEMENTS: Array[String] = ["metal", "wood", "water", "fire", "earth"]
@@ -1353,10 +1393,71 @@ static func card_feats(def: Dictionary) -> String:
 		out.resize(2)
 	return "·".join(out)
 
-## 环绕灵宝的分身具数：★1 一具、★2 一分为二、★3 一分为三（Player.sync_drones 按此生成）。
-## 单武器总纸面伤害仍走 damage_for 的星级翻倍曲线，分身只均摊结算、抬贴身覆盖与占空比。
+## 环绕灵宝的分身具数：★1 一具、★2 一分为二、★3 一分为三、★4 一分为四
+## （Player.sync_drones 按此生成）。★1/★2 单武器总纸面伤害仍走 damage_for 的星级翻倍曲线，
+## 分身只均摊结算、抬贴身覆盖与占空比；★3 起改用觉醒表的 divisor 摊分（除数小于具数 ⇒ 总伤反超纸面）。
 static func drone_orb_count(star: int) -> int:
 	return clampi(star, 1, MAX_STAR)
+
+## 环绕灵宝每具分身的摊分除数：★1/★2 = 具数（总伤不变），★3/★4 = 觉醒表除数（总伤反超纸面）。
+static func drone_orb_divisor(star: int) -> float:
+	var s := clampi(star, 1, MAX_STAR)
+	if s >= 3:
+		return float(awaken_perk(Behavior.DRONE, s).get("divisor", float(s)))
+	return float(drone_orb_count(star))
+
+## 行为族在某星级的觉醒条目（★3 = 初段觉醒 / ★4 = 神兵极境；更低星或未登记返回空字典）。
+## 运行时（各 handler、SunOrb、TurretUnit）与尺子 sustained_single_dps 一律走这一个出口，
+## 别在两处各写一份 match——加族/调档时漏改一边就会出现「卡面数字和实际刀不一致」。
+static func awaken_perk(behavior: int, star: int) -> Dictionary:
+	var s := clampi(star, 1, MAX_STAR)
+	if s >= 4:
+		return STAR4_ASCEND.get(behavior, {})
+	if s == 3:
+		return STAR3_AWAKEN.get(behavior, {})
+	return {}
+
+## 该武器在指定星级的觉醒词条（缺条返回空字典，调用方按 is_empty 决定画不画）
+static func awaken_perk_of(id: String, star: int) -> Dictionary:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return {}
+	return awaken_perk(int(def.get("behavior", Behavior.MELEE)), star)
+
+## 该武器的 ★3 觉醒词条（按行为族查表；缺条返回空字典，调用方按 is_empty 决定画不画）
+static func star3_perk(id: String) -> Dictionary:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return {}
+	return STAR3_AWAKEN.get(int(def.get("behavior", Behavior.MELEE)), {})
+
+## 该武器的 ★4 极境词条（同上，未到四星也能取——详情卡用它做灰色预告）
+static func star4_perk(id: String) -> Dictionary:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return {}
+	return STAR4_ASCEND.get(int(def.get("behavior", Behavior.MELEE)), {})
+
+## 觉醒文案一行（商店合成预告与详情卡 notes 共用同一出口，别各写一份）
+static func star3_perk_text(id: String) -> String:
+	var perk: Dictionary = star3_perk(id)
+	if perk.is_empty():
+		return ""
+	return "★3 觉醒 · %s：%s" % [String(perk.get("name", "")), String(perk.get("desc", ""))]
+
+## 觉醒行的「值」侧短文案（详情卡 rows 用，行名已是「★3 觉醒」，值里不再重复）
+static func star3_perk_desc(id: String) -> String:
+	var perk: Dictionary = star3_perk(id)
+	if perk.is_empty():
+		return ""
+	return "%s：%s" % [String(perk.get("name", "")), String(perk.get("desc", ""))]
+
+## ★4 极境行的「值」侧短文案（口径同 star3_perk_desc）
+static func star4_perk_desc(id: String) -> String:
+	var perk: Dictionary = star4_perk(id)
+	if perk.is_empty():
+		return ""
+	return "%s：%s" % [String(perk.get("name", "")), String(perk.get("desc", ""))]
 
 static func damage_for(id: String, star: int) -> float:
 	var def: Dictionary = DEFS.get(id, {})
@@ -1376,12 +1477,14 @@ static func knockback_for(id: String, fallback: float = 180.0) -> float:
 		return fallback
 	return float(def.get("knockback", fallback))
 
-static func sell_price(id: String, star: int) -> int:
+## 回收价：基准价 × ratio × 星级系数。ratio 缺省是常规半价，
+## 初始武器那一件传 STARTER_SELL_RATIO 走原价（判定与消耗见 WeaponInventory.sell_price_for）。
+static func sell_price(id: String, star: int, ratio: float = SELL_RATIO) -> int:
 	var def: Dictionary = DEFS.get(id, {})
 	if def.is_empty():
 		return 0
 	var base := int(def.get("price", 10))
-	return int(ceil(float(base) * SELL_RATIO * pow(STAR_SELL_MULT, float(star - 1))))
+	return int(ceil(float(base) * ratio * pow(STAR_SELL_MULT, float(star - 1))))
 
 const _EMPTY_ARRAY: Array = []
 
@@ -1464,6 +1567,8 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 	var cd := maxf(0.05, cooldown_for(id, star))
 	if int(def.get("behavior", Behavior.MELEE)) == Behavior.TURRET:
 		var fire_cd: float = maxf(0.1, float(def.get("turret_fire_cd", 0.75)))
+		# ★3 主炮 / ★4 神机齐射：全部炮台开火间隔乘 cd_mult（运行时 TurretUnit 同源）
+		fire_cd *= float(awaken_perk(Behavior.TURRET, star).get("cd_mult", 1.0))
 		var t_dps: float = dmg / fire_cd
 		if def.get("proc_burn", false):
 			t_dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 2.5)) / fire_cd)
@@ -1477,9 +1582,23 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 	if def.get("proc_poison", false):
 		dps += dmg * float(def.get("poison_ratio", 0.3)) * minf(1.0, float(def.get("poison_dur", 2.5)) / cd)
 	# 环绕接触天生带"占空比税"：纸面 DPS × 接触占空比 = 有效单体 DPS（实伤口径）。
-	# ★2/★3 分身后多具同环扫掠，占空比随星抬升（★1 保持 0.75 实测基准，档带不漂移）。
+	# ★2 起分身后多具同环扫掠，占空比随星抬升（★1 保持 0.75 实测基准，档带不漂移）。
 	if int(def.get("behavior", Behavior.MELEE)) == Behavior.DRONE:
 		dps *= GameBalance.spirit_contact_duty(star)
+	# 觉醒折算（2026-10-24）：★3 初段觉醒 / ★4 神兵极境同一条口径 —— 追加打击族按
+	# count×ratio 抬单目标 DPS；御灵按摊分除数反推总伤（具数 ÷ 除数）；束流按 dmg_mult 抬威力
+	# （加宽/扩角另算群体覆盖，单目标口径只认 dmg_mult）。参数唯一真话在 STAR3_AWAKEN/STAR4_ASCEND。
+	var perk := awaken_perk(int(def.get("behavior", Behavior.MELEE)), star)
+	if not perk.is_empty():
+		var b := int(def.get("behavior", Behavior.MELEE))
+		match b:
+			Behavior.MELEE, Behavior.SWEEP, Behavior.PROJECTILE, Behavior.BURST:
+				var extra: float = float(perk.get("ratio", 0.0)) * float(perk.get("count", 1))
+				dps *= 1.0 + extra
+			Behavior.DRONE:
+				dps *= float(drone_orb_count(star)) / drone_orb_divisor(star)
+			Behavior.BEAM, Behavior.CONE:
+				dps *= float(perk.get("dmg_mult", 1.0))
 	return dps
 
 ## 该武器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。

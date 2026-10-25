@@ -9,6 +9,8 @@ signal stats_updated(kills: int, game_time: float, spirit_stones: int)
 signal game_over_triggered(victory: bool)
 signal upgrade_applied(upgrade_id: String)
 signal announcement_triggered(text: String)
+## 武器合成至 ★3 觉醒 / ★4 神兵极境（WeaponInventory.merge_weapon 发出；HUD 接它做庆祝反馈）
+signal weapon_awakened(w_id: String)
 signal weapons_updated(weapons: Array)
 signal wave_changed(wave_number: int)
 signal shop_opened
@@ -437,6 +439,8 @@ var scattered_mode: float = 0.0          ## 散修·博采众长开关（>0 启�
 var scattered_bonus_per_class: float = 0.0     ## 散修：每种「单独持有、未成档」器类的全伤害加成（+0.15）
 var scattered_penalty_per_synergy: float = 0.0 ## 散修：每触发一条器类羁绊的全伤害惩罚（-0.20；五行共鸣不计）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
+var total_stones_spent: int = 0         ## 单局累计花掉的金币（一毛不拔成就判定）
+var skill_cast_count: int = 0           ## 单局主动施放技能次数（手指休假成就判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复生命量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）
 var max_class_counts: Dictionary = {}   ## 单局各器类同时上阵峰值 {class_tag: int}（灵符子/霸王解锁判定）
@@ -521,6 +525,11 @@ var pets: Array = []
 # 武器库存：上阵 = 悬浮武器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
 var stash: Array = []    # 背包，元素 {id: String, star: int}
+
+## 初始武器（开局白送的那一件）：卖出之前按原价回收，兑现一次即失效。
+## 目的：不让「已经拿了」绑架流派选择 —— 不想要就能平价换掉，而不是亏半价硬留。
+var starter_weapon_id: String = ""
+var starter_sell_bonus_pending: bool = false
 
 # 本局历史悟道加点记录
 var upgrade_history: Array[Dictionary] = []
@@ -1037,6 +1046,9 @@ func start_run(starter_id: String) -> void:
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	# 额外技能随角色绑定（不走选择界面）：按道统查表，没有 extra_skill 键的角色保持空串
 	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
+	# 初始武器留个记号：卖出这一件之前按原价回收（见 WeaponInventory.sell_price_for）
+	starter_weapon_id = starter_id
+	starter_sell_bonus_pending = true
 	add_weapon(starter_id)
 	if endless_mode:
 		announcement_triggered.emit("◆ 无尽模式 · 战至终局 ◆")
@@ -1089,6 +1101,10 @@ func merge_weapon(w_id: String, star: int, keep: Dictionary) -> bool:
 func get_weapons_summary() -> Array:
 	return WeaponInventory.get_weapons_summary(self)
 
+## 当前持有武器总数（上阵 + 御灵 + 背包）：孤剑走天涯结算用
+func owned_weapon_count() -> int:
+	return WeaponInventory.get_weapons_summary(self).size() + stash.size()
+
 func notify_weapons_updated(weapons: Array) -> void:
 	recalc_synergies()
 	var cur_summons: int = drones.size()
@@ -1116,6 +1132,10 @@ func notify_weapons_updated(weapons: Array) -> void:
 
 func sell_weapon(index: int) -> bool:
 	return WeaponInventory.sell_weapon(self, index)
+
+## 武器能退多少金币：卡面报价与实际到手同源（初始武器那一件走原价）
+func weapon_sell_price(w_id: String, star: int) -> int:
+	return WeaponInventory.sell_price_for(self, w_id, star)
 
 func equip_from_stash(index: int) -> bool:
 	return WeaponInventory.equip_from_stash(self, index)

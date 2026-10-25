@@ -21,9 +21,15 @@ const DEFS: Dictionary = {
 			"duration": 0.16,     # 闪避位移耗时（秒）
 			"iframe": 0.35,       # 无敌总时长（秒）：覆盖位移全程 + 落地脱身余量
 			"distance": 110.0,    # 闪避距离（像素）
+			# 落地震开（2026-10-24 用户现场：闪到怪脸上，无敌一结束就立刻吃接触伤）。
+			# 位移走受击硬直滑行段（初速按 KNOCKBACK_DECAY_STUN=12 指数急刹），
+			# 520 初速的净位移 ≈ 520 × (1-e^(-12×0.20)) / 12 ≈ 36px；定身时长盖过落地后剩余的 ~0.19s 无敌。
+			"land_push_radius": 76.0,  # 落点震开判定半径（像素）：同时是环特效半径（画多大 == 判多大）
+			"land_push_impulse": 520.0, # 落点震开初速（px/s，精英 ×0.55、Boss ×0.18）
+			"land_push_stun": 0.20,    # 落点震开定身时长（秒）：受击硬直滑行段没有硬直就没有位移
 			"crit_window": 1.0,   # 闪避后必定暴击窗口（秒）
 			"attack_reset": 1,    # 落地即重置所有在役武器的攻击间隔（技能重置普攻，落地那一拍立刻出手）
-			"desc": "向当前方向闪避，短暂无敌；闪避后 1 秒内攻击必定暴击，并重置全部武器攻击间隔",
+			"desc": "向当前方向闪避，短暂无敌；落地震开贴身敌人，之后 1 秒内攻击必定暴击，并重置全部武器攻击间隔",
 		},
 		"shadowburst": {
 			"name": "影爆",
@@ -101,7 +107,7 @@ static func all_ids() -> Array:
 static func is_enhanced_for_cultivator(_skill_id: String, _cid: String) -> bool:
 	return false
 
-## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, attack_reset, knockback_boost, lifesteal_boost, pet_heal_pct, pet_duration}
+## 基础值 + 道具合并：{kind, cooldown, duration, power, distance, iframe, dodge_add, crit_window, attack_reset, knockback_boost, lifesteal_boost, pet_heal_pct, pet_duration, land_push_radius, land_push_impulse, land_push_stun}
 ## 冷却语义：效果活跃窗口（duration / 闪避=iframe）走完才进冷却，cooldown 是「结束后」的等待值
 static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 	var def: Dictionary = get_def(skill_id)
@@ -121,6 +127,9 @@ static func final_stats(skill_id: String, _cid: String = "") -> Dictionary:
 		"lifesteal_boost": float(def.get("lifesteal_boost", 0.0)),
 		"pet_heal_pct": float(def.get("pet_heal_pct", 0.0)),
 		"pet_duration": float(def.get("pet_duration", 0.0)),
+		"land_push_radius": float(def.get("land_push_radius", 0.0)),
+		"land_push_impulse": float(def.get("land_push_impulse", 0.0)),
+		"land_push_stun": float(def.get("land_push_stun", 0.0)),
 	}
 	# 技能冷却缩减：加点/新道具走正式属性，旧凝神符仍走 item hook；两腿相加后统一夹顶。
 	var cd_reduction := minf(GameManager.SKILL_CD_CAP,

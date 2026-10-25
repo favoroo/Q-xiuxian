@@ -33,7 +33,6 @@ GameManager="*res://scripts/autoload/GameManager.gd"
 
 [debug]
 
-debug/file_logging/enable_file_logging=true
 gdscript/warnings/unassigned_variable=2
 gdscript/warnings/unassigned_variable_op_assign=2
 gdscript/warnings/unreachable_code=2
@@ -43,6 +42,7 @@ gdscript/warnings/standalone_ternary=2
 gdscript/warnings/incompatible_ternary=2
 gdscript/warnings/integer_division=2
 gdscript/warnings/narrowing_conversion=2
+debug/file_logging/enable_file_logging=true
 
 [display]
 
@@ -52,7 +52,6 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/handheld/orientation=0
 
 [gui]
 
@@ -74,7 +73,6 @@ pointing/emulate_touch_from_mouse=true
 [physics]
 
 3d/physics_engine="Jolt Physics"
-common/physics_interpolation=false
 
 [rendering]
 
@@ -83,5 +81,3 @@ rendering_device/driver.windows="d3d12"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0, 0, 0, 1)
-2d/snap/snap_2d_vertices_to_pixel=false
-viewport/hdr_2d=false

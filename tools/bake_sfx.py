@@ -738,6 +738,18 @@ SFX = {
                    noise(b, dur=0.12, peak=0.05, ftype="highpass", f0=3600, f1=2000, t0=0.2),
                    space(b, delay=0.11, fb=0.32, mix=0.15)),
     ],
+    # ★3 觉醒（2026-10-24）：比普通三合一隆重一档 —— 低频铜锣定音（FM 大下行扫频）
+    # + 上行五连琶音 + 长灵光尾 + 更深空间残响。9 把武器堆出来的时刻，要一听就知道不是普通合成。
+    "weapon_awaken": [
+        lambda b: (fm_tone(b, f0=196, f1=98, dur=0.50, peak=0.17, ratio=1.5, idx0=3.0, idx1=0.3),
+                   _arp(b, [523, 659, 784, 1047, 1568], t_step=0.09, dur=0.42, peak=0.13, echo=0.05),
+                   shimmer(b, f0=2200, f1=3200, dur=0.45, peak=0.05, t0=0.30),
+                   space(b, delay=0.12, fb=0.42, mix=0.20)),
+        lambda b: (fm_tone(b, f0=175, f1=87, dur=0.50, peak=0.17, ratio=1.5, idx0=2.8, idx1=0.3),
+                   _arp(b, [587, 740, 880, 1175, 1760], t_step=0.085, dur=0.40, peak=0.12, echo=0.045),
+                   shimmer(b, f0=2400, f1=3400, dur=0.42, peak=0.045, t0=0.28),
+                   space(b, delay=0.12, fb=0.40, mix=0.19)),
+    ],
     # UI：玉叩清音 —— FM 短铃（高调制指数出亮音头）+ 微灵光尾。
     # 旧版 35ms 纯 FM + 噪点太短太闷，与 gem_pickup / stat_alloc 同族但更短更克制。
     "ui_click": [
@@ -954,6 +966,7 @@ TARGET_PEAK = {
     "stat_alloc": 0.24,
     "ui_confirm": 0.24,
     "merge_success": TARGET_PEAK_LOUD,
+    "weapon_awaken": TARGET_PEAK_LOUD,
     "wave_start": TARGET_PEAK_LOUD,
     "boss_raid": 0.42,
     "victory": 0.40,

@@ -16,6 +16,8 @@ extends RefCounted
 
 ## 通用暗描边色（与宿主 _fill_outlined 外圈同色系）
 const _INK := Color(0.06, 0.07, 0.10, 0.90)
+## ★4 极境霓虹取色：与野兽派族模块同一处真话（BrutalistCommon 的 NEON_CYAN_HDR / NEON_VIOLET）
+const BC = preload("res://scripts/weapons/shapes/BrutalistCommon.gd")
 ## 玄铁匣身色（机括匣铁胎：比夜地亮两档，避免融进背景）
 const _IRON := Color(0.30, 0.33, 0.42)
 ## 骨白（针身/钉身等冷兵亮面，不随五行走）
@@ -750,7 +752,10 @@ static func _draw_shuriken(r: ProceduralWeaponRenderer) -> void:
 		var ang := float(k) * PI * 0.5
 		var tip_k := Vector2(L, 0.0).rotated(ang)
 		AdaptiveDraw.circle(r, tip_k, 0.8, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.6))
-	# ★3 极品升星：四尖之间环绕一道冷月旋风光环
-	if r.star >= 3:
+	# ★3 极品升星：四尖之间环绕一道冷月旋风光环；★4 极境换成太虚霓虹双色环
+	if r.star >= 4:
+		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
+		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.72, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
+	elif r.star >= 3:
 		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, Color(edge.r, edge.g, edge.b, 0.45), 1.1, true)
 

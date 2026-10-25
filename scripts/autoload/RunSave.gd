@@ -227,6 +227,9 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["peak_dodge"] = gm.peak_dodge
 	d["peak_harvest"] = gm.peak_harvest
 	d["cultivator_id"] = gm.cultivator_id
+	# 初始武器的原价回收额度：老档没有这两个键 → 空 id / false，按常规半价处理
+	d["starter_weapon_id"] = gm.starter_weapon_id
+	d["starter_sell_bonus_pending"] = gm.starter_sell_bonus_pending
 	# —— 隐藏账本（突破古玉成长 / 经验门槛链 / 玉匣送出计数 / 主流派保底计数）——
 	d["_exp_chain"] = gm._exp_chain
 	d["chest_item_grants"] = gm.chest_item_grants
@@ -308,6 +311,8 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["move_damage_penalty"] = gm.move_damage_penalty
 	d["move_haste_penalty"] = gm.move_haste_penalty
 	d["total_damage_taken_count"] = gm.total_damage_taken_count
+	d["total_stones_spent"] = gm.total_stones_spent
+	d["skill_cast_count"] = gm.skill_cast_count
 	d["total_hp_healed"] = gm.total_hp_healed
 	d["max_concurrent_summons"] = gm.max_concurrent_summons
 	d["max_element_spread"] = gm.max_element_spread
@@ -362,6 +367,8 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.peak_dodge = float(d.get("peak_dodge", 0.0))
 	gm.peak_harvest = float(d.get("peak_harvest", 0.0))
 	gm.cultivator_id = String(d.get("cultivator_id", ""))
+	gm.starter_weapon_id = String(d.get("starter_weapon_id", ""))
+	gm.starter_sell_bonus_pending = bool(d.get("starter_sell_bonus_pending", false))
 	gm._exp_chain = int(d.get("_exp_chain", GameBalance.EXP_FIRST_LEVEL))
 	gm.chest_item_grants = int(d.get("chest_item_grants", 0))
 	gm._no_main_tag_waves = int(d.get("_no_main_tag_waves", 0))
@@ -439,6 +446,8 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.move_damage_penalty = float(d.get("move_damage_penalty", 0.0))
 	gm.move_haste_penalty = float(d.get("move_haste_penalty", 0.0))
 	gm.total_damage_taken_count = int(d.get("total_damage_taken_count", 0))
+	gm.total_stones_spent = int(d.get("total_stones_spent", 0))
+	gm.skill_cast_count = int(d.get("skill_cast_count", 0))
 	gm.total_hp_healed = float(d.get("total_hp_healed", 0.0))
 	gm.max_concurrent_summons = int(d.get("max_concurrent_summons", 0))
 	gm.max_element_spread = int(d.get("max_element_spread", 0))
@@ -471,6 +480,21 @@ static func _fill_collections(gm: Node, d: Dictionary) -> void:
 		var arr = d.get(f, null)
 		if arr is Array:
 			gm.set(f, (arr as Array).duplicate(true))
+	# 背包条目是购买时刻的字段快照（id/name/star/icon/tag 整包存盘）：跨版本更新若改过
+	# 武器图标/文案，老档会顶着旧图，而货架卡读实时表 ⇒ 商店上下面不上（2026-10-24 灵兽
+	# 图标不同款问题的武器版）。还原后按实时表重刷可刷字段（id/star 保留）；表里已查不到
+	# 的陈旧 id 原样保留，别把玩家仅存的旧件刷成空白。
+	for e in (gm.stash as Array):
+		if not (e is Dictionary):
+			continue
+		var se: Dictionary = e
+		var s_def := WeaponData.get_def(String(se.get("id", "")))
+		if s_def.is_empty():
+			continue
+		for k in ["name", "icon", "tag"]:
+			var sv: String = s_def.get(k, "")
+			if not sv.is_empty():
+				se[k] = sv
 	# 定型数组不能整包赋值（Array[Dictionary] 通道），只能原地清空再逐个塞
 	var offers = d.get("alloc_offers", null)
 	gm.alloc_offers.clear()

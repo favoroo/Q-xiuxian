@@ -173,6 +173,11 @@ static func weapon_stat_bonus(stat_scalings: Dictionary, player_stats: Dictionar
 		bonus += float(v)
 	return bonus
 
+## 属性转化的星级效率（2026-10-24 扩到四档）：★1 1.0 / ★2 1.25 / ★3 1.5 / ★4 2.0。
+## ★4 这一跳（1.5→2.0）比前几档都陡：神兵极境要「堆属性也值」，否则 27 把材料的终局
+## 回报在成型的属性流里反而被三把 ★3 摊薄（每把各吃一份转化）。表是唯一真话。
+const STAR_STAT_EFFICIENCY: Array[float] = [1.0, 1.25, 1.5, 2.0]
+
 ## 纯函数：属性 → 这把武器的逐项裸伤明细 {stat_scalings 键: 该项加了多少裸伤}，已含星级效率。
 ## 卡面与详情弹窗的「属性加伤账单」直接读它：玩家看到的是每项贡献的伤害数，不是系数百分比
 ## （armor 3.5 这类系数按百分比印出来会显示成「护甲(+4%)」，max_hp_bonus 0.12 更是直接四舍五入成「+0%」）。
@@ -180,7 +185,7 @@ static func weapon_stat_bonus_parts(stat_scalings: Dictionary, player_stats: Dic
 	var parts: Dictionary = {}
 	if stat_scalings.is_empty():
 		return parts
-	var star_mult: float = 1.0 + 0.25 * float(clampi(star, 1, 3) - 1)
+	var star_mult: float = STAR_STAT_EFFICIENCY[clampi(star, 1, WeaponData.MAX_STAR) - 1]
 	for key in stat_scalings.keys():
 		var coef: float = float(stat_scalings[key])
 		var val: float = 0.0
@@ -395,7 +400,7 @@ static func spirit_orbit_angular_speed(
 	var eff_cd_mult: float = clampf(attack_speed_mult * synergy_haste_mult, 0.25, 1.5)
 	var haste_scale: float = 1.0 / eff_cd_mult
 	var combat_scale: float = 1.18 if in_combat else 1.0
-	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, 3) - 1)
+	var star_scale: float = 1.0 + 0.08 * float(clampi(max_star, 1, WeaponData.MAX_STAR) - 1)
 	var lone_scale: float = SPIRIT_LONE_SPEED_MULT[clampi(orb_count, 1, 3) - 1]
 	return base_speed * haste_scale * combat_scale * star_scale * lone_scale
 
@@ -404,13 +409,15 @@ static func spirit_orbit_angular_speed(
 ## WeaponData.sustained_single_dps 的 DRONE 分支按此折算，让平衡判据用"实伤口径"钉数值。
 const SPIRIT_CONTACT_DUTY := 0.75
 
-## 接触占空比按星级抬升：升星后一具灵宝分身为二/为三（Player.sync_drones 按星生数），
+## 接触占空比按星级抬升：升星后一具灵宝分身为二/三/四（Player.sync_drones 按星生数），
 ## 多具同环扫掠让敌人处于可结算位置的占比更高。★1 保持实测基准 0.75，御灵 DPS 带 [30,38] 不动。
-const SPIRIT_CONTACT_DUTY_PER_STAR: Array[float] = [0.75, 0.81, 0.84]
+## ★4 追加 0.88（四具满环）：占空比是"能不能碰到"的上限税，越接近 1 收益越平，
+## 所以 ★4 这一档只给 +0.04 —— 神兵极境的爆发力放在摊分除数（1.6）而不是这里。
+const SPIRIT_CONTACT_DUTY_PER_STAR: Array[float] = [0.75, 0.81, 0.84, 0.88]
 
 ## 纯函数：某星级的环绕灵宝接触结算占空比（WeaponData.sustained_single_dps 与平衡仿真共用同一把尺）
 static func spirit_contact_duty(star: int = 1) -> float:
-	return float(SPIRIT_CONTACT_DUTY_PER_STAR[clampi(star, 1, 3) - 1])
+	return float(SPIRIT_CONTACT_DUTY_PER_STAR[clampi(star, 1, WeaponData.MAX_STAR) - 1])
 
 ## 计算多枚环绕灵宝的动态目标半径与战斗激战状态（纯函数：无节点依赖、无副作用）
 ## orb_angles: Array[float]，每枚灵宝当前在玩家身周的公转角（弧度）

@@ -20,6 +20,8 @@ static func reset(gm: Node) -> void:
 	gm.wave_number = 0
 	gm.endless_mode = false
 	gm.run_started = false
+	gm.starter_weapon_id = ""
+	gm.starter_sell_bonus_pending = false
 	gm.weapon_damage_mult = 1.0
 	gm.melee_damage = 0.0
 	gm.ranged_damage = 0.0
@@ -99,6 +101,8 @@ static func reset(gm: Node) -> void:
 	gm.scattered_bonus_per_class = 0.0
 	gm.scattered_penalty_per_synergy = 0.0
 	gm.total_damage_taken_count = 0
+	gm.total_stones_spent = 0
+	gm.skill_cast_count = 0
 	gm.total_hp_healed = 0.0
 	gm.max_concurrent_summons = 0
 	gm.max_class_counts = {}

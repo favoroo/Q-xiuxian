@@ -9,6 +9,10 @@ extends RefCounted
 ## _gale_cap_* 等）仍是 Player 成员，本模块只读写不持有。
 
 const SPIRIT_HEALER_SCENE: PackedScene = preload("res://scenes/entities/SpiritHealer.tscn")  ## 治疗灵兽（renewal 附带召唤）
+## 落地震开的精英韧性：与 EnemyBase.HIT_KB_ELITE_SCALE 同值同口径（大体格推不动）。
+## 不复用那个常量是有意的 —— ActiveSkills 已被 Player 引用，而 EnemyBase 又引用 Player，
+## 这里再直引 EnemyBase 会在既有类循环上再加一条边（踩过「循环依赖把 PackedScene 打成空」的坑）。
+const SHOVE_ELITE_SCALE := 0.55
 
 ## 无输入时按当前朝向给冲刺方向（facing + flip_h 还原 8 方向单位向量）
 static func facing_vec(p) -> Vector2:
@@ -54,6 +58,39 @@ static func dash(p, st: Dictionary) -> void:
 	if p.is_procedural and p.procedural_view != null:
 		p.procedural_view.play_dash(p._dash_time)
 	AudioManager.play_sfx("skill_dash", 1.0)
+
+## 落地震开（用户现场 2026-10-24：闪到怪脸上 → 无敌余量只剩 ~0.19s → 帧末立刻吃接触伤）。
+## 落点圈内的敌人沿「远离玩家」方向推开并短时定身，把「落地即挨打」换成「有一拍脱身」。
+## 只推不伤，位移走 EnemyBase.apply_vortex_pin（受击硬直滑行段 + 钉身）：
+## 不走 take_damage(0.0, ...) —— 那条路会给目标记一次集火保护（0.22s 内下一刀 ×0.70），
+## 正好削掉闪避落地那记必暴刀，还会跳「0」字、放命中音。数值与判定半径在 SkillData.dash 的
+## land_push_* 字段；环特效半径 = 判定半径（画多大 == 判多大）。
+static func dash_land_shove(p) -> void:
+	var st := SkillData.final_stats("dash", GameManager.cultivator_id)
+	var radius: float = float(st.get("land_push_radius", 0.0))
+	var impulse: float = float(st.get("land_push_impulse", 0.0))
+	var stun: float = float(st.get("land_push_stun", 0.0))
+	if radius <= 0.0 or impulse <= 0.0 or stun <= 0.0:
+		return
+	var push: float = impulse * GameManager.knockback_mult
+	var shoved := 0
+	# 过滤口径统一走 EnemyFilter（藏宝匣/灵草/垂死一律不算敌人）
+	for e in EnemyFilter.collect(GameManager.live_enemies, p.global_position, radius):
+		var off: Vector2 = e.global_position - p.global_position
+		# 与玩家重合时没有径向可言：沿冲刺朝向推（与影爆的退化口径一致，绝不会推向玩家）
+		var dir: Vector2 = off.normalized() if off.length_squared() > 0.0001 else p._dash_dir
+		# 精英/Boss 抗震开：与武器击退同一把尺子（大体格推不动），硬直同时打折
+		var resist: float = SHOVE_ELITE_SCALE if e.is_elite else 1.0
+		if e.death_corpse_linger:  # Boss 标记（基类不反向引用 BossEnemy，同 EnemyBase._die 口径）
+			resist *= GameBalance.BOSS_KNOCKBACK_RESIST
+		e.apply_vortex_pin(dir * push * resist, stun * resist)
+		shoved += 1
+	if shoved <= 0:
+		return
+	var parent_node: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
+	if parent_node != null:
+		JuiceEffect.spawn_shockwave(parent_node, p.global_position, radius,
+			Color(GameStyle.FX_HDR_WATER.r, GameStyle.FX_HDR_WATER.g, GameStyle.FX_HDR_WATER.b, 0.6), 0.20)
 
 static func gale(p, st: Dictionary) -> void:
 	GameManager.buff_move_speed_mult = 1.0 + float(st["power"])

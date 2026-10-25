@@ -20,11 +20,25 @@ static func stat_color(key: String, v: float) -> Color:
 			good = v < 1.0
 	return GameStyle.GOOD_DK if good else GameStyle.BAD
 
+## 「新上限自带满血」折叠尺（2026-10-24 用户：有多少生命上限就跟着回多少血，卡面不用单写回血）：
+## hp_heal 与同 apply 里的 max_hp 同值成对时是同一份口径，幅度行与「当前→购买后」预读
+## 都只写生命上限一行。四类消费出口（apply_rows / StatForecast._lines_for /
+## LevelUpCardFactory / ShopOfferCardFactory.item_stat_rows）共用这一把尺，
+## 卡面与预报模型才不会各折各的。不等值的回血（未来做「回得更多」的件）照常单列。
+static func folded_keys(apply: Dictionary) -> Array:
+	if apply.has("hp_heal") and apply.has("max_hp") \
+			and absf(float(apply["hp_heal"]) - float(apply["max_hp"])) <= 0.001:
+		return ["hp_heal"]
+	return []
+
 ## apply 字典 → [名字, 幅度文本, 颜色] 行数组，DetailTip.rows 可直接拼用
 static func apply_rows(apply: Dictionary) -> Array:
+	var folded := folded_keys(apply)
 	var rows: Array = []
 	for key in apply.keys():
 		var k := String(key)
+		if k in folded:
+			continue
 		var v := float(apply[key])
 		rows.append([StatInfoData.field_name(k), StatInfoData.format_amount(k, v), stat_color(k, v)])
 	return rows

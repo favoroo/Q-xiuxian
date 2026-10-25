@@ -113,6 +113,11 @@ func _test_five_elements_system() -> void:
 	_c.near(GameBalance.weapon_stat_bonus(earth_scalings, {"armor": 10.0}, 1), 35.0, EPS, "10 护甲在 ★1 番天印下转化 +35 基础伤")
 	_c.near(GameBalance.weapon_stat_bonus(earth_scalings, {"armor": 10.0}, 2), 43.75, EPS, "★2 属性转化系数 ×1.25 (+43.75)")
 	_c.near(GameBalance.weapon_stat_bonus(earth_scalings, {"armor": 10.0}, 3), 52.5, EPS, "★3 属性转化系数 ×1.50 (+52.5)")
+	# ★4 神兵极境：属性转化再跃一档到 ×2.00 —— 27 把材料的终局要「堆属性也值」，
+	# 否则成型属性流里反而被三把 ★3 各吃一份转化摊薄
+	_c.near(GameBalance.weapon_stat_bonus(earth_scalings, {"armor": 10.0}, 4), 70.0, EPS, "★4 属性转化系数 ×2.00 (+70)")
+	_c.check(BalanceTargeting.STAR_STAT_EFFICIENCY[3] > BalanceTargeting.STAR_STAT_EFFICIENCY[2] * 1.3,
+		"★4 这一跳比 ★2→★3 更陡（1.5→2.0 而非 +0.25 等差）")
 
 	var wood_scalings := {"hp_regen": 4.5}
 	_c.near(GameBalance.weapon_stat_bonus(wood_scalings, {"hp_regen": 2.0}, 1), 9.0, EPS, "2.0 气血回复在青木藤鞭下转化 +9 基础伤")
@@ -246,10 +251,12 @@ func _test_new_stat_fields() -> void:
 	GameManager.reroll_shop()
 	_c.equals(GameManager.reroll_free_left, 1, "第一次重掷消耗免费次数")
 	_c.equals(GameManager.spirit_stones, stones_before, "免费重掷不扣灵石")
+	_c.equals(GameManager.total_stones_spent, 0, "免费重掷不计消费")
 	GameManager.reroll_shop()
 	GameManager.reroll_shop()
 	_c.equals(GameManager.reroll_free_left, 0, "免费次数用完")
 	_c.equals(GameManager.spirit_stones, stones_before - GameBalance.reroll_cost(3, 0, 1.0), "第三次重掷开始付灵石（按第 1 次付费价）")
+	_c.equals(GameManager.total_stones_spent, GameBalance.reroll_cost(3, 0, 1.0), "付费重掷累计进消费账本")
 	GameManager.reset_run()
 
 	# 吸血按攻击方式分档：近战/横扫全额，远程/范围打折，高频接触类再压一档。
@@ -288,6 +295,19 @@ func _test_item_system() -> void:
 			bad_meta.append("%s.icon" % item_id)
 	_c.check(bad_keys.is_empty(), "法宝 apply 字段都在白名单内（非法: %s）" % str(bad_keys))
 	_c.check(bad_meta.is_empty(), "法宝 档位/价格/图标 元数据齐全（异常: %s）" % str(bad_meta))
+
+	# hp_heal 恒与 max_hp 同值成对＝新上限自带满血（卡面按 BonusRows.folded_keys 折叠不单列，
+	# 回复就发生在上限落地那一手）；不等值的孤儿回血没有界面承载它——道具/悟道两表全量扫
+	var bad_heal_pair: Array = []
+	for iid_pair in ItemData.all_ids():
+		var iapp: Dictionary = ItemData.get_def(String(iid_pair)).get("apply", {})
+		if iapp.has("hp_heal") and absf(float(iapp["hp_heal"]) - float(iapp.get("max_hp", -1.0))) > 0.001:
+			bad_heal_pair.append(String(iid_pair))
+	for up_pair in UpgradeData.UPGRADES:
+		var uapp: Dictionary = up_pair.get("apply", {})
+		if uapp.has("hp_heal") and absf(float(uapp["hp_heal"]) - float(uapp.get("max_hp", -1.0))) > 0.001:
+			bad_heal_pair.append(String(up_pair.get("id", "?")))
+	_c.check(bad_heal_pair.is_empty(), "hp_heal 与 max_hp 同值成对（新上限自带满血），破例: %s" % str(bad_heal_pair))
 
 	# 档位权重：第 1 波只有普通，传说第 14 波才解锁；福缘乘区抬高高档
 	var w1: Array = GameBalance.item_tier_weights(0.0, 1)
@@ -638,6 +658,15 @@ func _test_turret_and_new_cultivators() -> void:
 	_c.equals(WeaponData.drone_orb_count(1), 1, "★1 灵宝单具")
 	_c.equals(WeaponData.drone_orb_count(2), 2, "★2 灵宝分身为二")
 	_c.equals(WeaponData.drone_orb_count(3), 3, "★3 灵宝分身为三")
+	_c.equals(WeaponData.drone_orb_count(4), 4, "★4 极境四象灵尊分身为四")
+	# ★3 觉醒「灵威」：摊分除数由具数 3 降到 2.0 ⇒ 总伤 +50%（sustained_single_dps 同步折算）
+	_c.near(WeaponData.drone_orb_divisor(1), 1.0, EPS, "★1 灵宝摊分除数 = 具数")
+	_c.near(WeaponData.drone_orb_divisor(2), 2.0, EPS, "★2 灵宝摊分除数 = 具数")
+	_c.near(WeaponData.drone_orb_divisor(3), 2.0, EPS, "★3 觉醒灵威摊分除数 2.0")
+	# ★4 极境：四具 ÷ 1.6 = 总伤 ×2.5（相对 ★1 纸面）
+	_c.near(WeaponData.drone_orb_divisor(4), 1.6, EPS, "★4 极境摊分除数 1.6（四具总伤 ×2.5）")
+	_c.near(float(WeaponData.drone_orb_count(4)) / WeaponData.drone_orb_divisor(4), 2.5, EPS,
+		"★4 御灵总伤倍率 = 具数 ÷ 除数 = 2.5")
 	GameManager.reset_run()
 
 	# 7.6 灵符子（fuxiu）：符箓专精 +35%，非符箓 -25%（non_tag_damage 通用键首用）
@@ -727,6 +756,40 @@ func _test_turret_and_new_cultivators() -> void:
 		"承伤 1 次不达成【金光护体】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": false, "damage_taken_count": 0}, {}),
 		"未通关不达成【金光护体】")
+	# 2026-10-24 硬核挑战：噩梦无伤 / 零消费 / 单武器 / 零技能 / 无尽40 / 零道具
+	_c.check(AchievementData.is_condition_met("ach_feat_nightmare_flawless",
+		{"victory": true, "danger": 3, "damage_taken_count": 0}, {}),
+		"噩梦无伤通关达成【碎梦无痕】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_flawless",
+		{"victory": true, "danger": 2, "damage_taken_count": 0}, {}),
+		"非噩梦难度无伤不达成【碎梦无痕】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_flawless",
+		{"victory": true, "danger": 3, "damage_taken_count": 1}, {}),
+		"噩梦受击 1 次不达成【碎梦无痕】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless_40", {"endless": true, "wave": 40}, {}),
+		"无尽第 40 波达成【肝穿地心】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"endless": true, "wave": 39}, {}),
+		"无尽第 39 波不达成【肝穿地心】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"victory": true, "wave": 40}, {}),
+		"非无尽路径 40 波不达成【肝穿地心】")
+	_c.check(AchievementData.is_condition_met("ach_feat_thrift", {"victory": true, "stones_spent": 0}, {}),
+		"零消费通关达成【一毛不拔】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"victory": true, "stones_spent": 2}, {}),
+		"花过金币不达成【一毛不拔】")
+	_c.check(AchievementData.is_condition_met("ach_feat_lone_weapon", {"victory": true, "weapon_count": 1}, {}),
+		"仅一件武器通关达成【孤剑走天涯】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_lone_weapon", {"victory": true, "weapon_count": 2}, {}),
+		"两件武器不达成【孤剑走天涯】")
+	_c.check(AchievementData.is_condition_met("ach_feat_skill_abstain", {"victory": true, "skill_casts": 0}, {}),
+		"零技能施放通关达成【手指休假】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_skill_abstain", {"victory": true, "skill_casts": 1}, {}),
+		"放过技能不达成【手指休假】")
+	_c.check(AchievementData.is_condition_met("ach_feat_no_items", {"victory": true, "item_count": 0}, {}),
+		"零法宝通关达成【两袖清风】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_no_items", {"victory": true, "item_count": 1}, {}),
+		"带过法宝不达成【两袖清风】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"victory": true}, {}),
+		"缺结算字段时不误判【一毛不拔】")
 	_c.check(AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 3}),
 		"随行技能通关 3 次达成【万法由心】")
 	_c.check(not AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 2}),
@@ -764,8 +827,8 @@ func _test_turret_and_new_cultivators() -> void:
 		"", "【独行侠】无累计进度口径返回空串")
 	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
 		"", "【万器宗师】无累计进度口径返回空串")
-	# 成就总数 = 29（2026-10-22 新增「百家杂艺」解锁散修；此前 28：2026-10-20 难度收为 4 档，删去地狱/极限两条难度成就）
-	_c.equals(int(AchievementData.all_ids().size()), 29, "成就总数 = 29")
+	# 成就总数 = 35（2026-10-24 追加 6 条硬核挑战；此前 29：2026-10-22 新增「百家杂艺」解锁散修）
+	_c.equals(int(AchievementData.all_ids().size()), 35, "成就总数 = 35")
 
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()

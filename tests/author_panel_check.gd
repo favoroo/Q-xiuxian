@@ -1,7 +1,7 @@
 extends Node
 
 ## 作者面板判据：武器页筛选与卡面三签、所有条目「点卡开详情窗 → 窗内购买」、
-## 武器窗内 1/2/3 星三键、购买后 inventory_changed 联动商店陈列行刷新、
+## 武器窗内 1 ~ MAX_STAR 全档购买键（★4 极境含在内）、购买后 inventory_changed 联动商店陈列行刷新、
 ## 金币/等级/生命改动后 state_changed 联动商店读数即时刷新。
 ## 运行: $G --headless --path . res://tests/AuthorPanelCheck.tscn
 ##
@@ -127,7 +127,7 @@ func _check_weapon_filters() -> void:
 		await _tap(all_elem)
 	_c.equals(_cards_in(_panel._weapon_box).size(), _weapon_total(), "清筛选回全量 %d 把" % _weapon_total())
 
-# ---------------- 武器详情窗：三颗星级购买键 ----------------
+# ---------------- 武器详情窗：全档星级购买键 ----------------
 
 func _check_weapon_tip_purchase() -> void:
 	var card := _find_card(_panel._weapon_box, "wid", "qingyun_sword")
@@ -142,8 +142,27 @@ func _check_weapon_tip_purchase() -> void:
 		return
 	_c.equals(String(tip.payload.get("title", "")), "长剑", "详情窗标题是长剑")
 	var acts := _action_texts(tip)
-	_c.check(acts.has("买 1 星") and acts.has("买 2 星") and acts.has("买 3 星"),
-		"详情窗有 1 / 2 / 3 星三颗购买键（实得 %s）" % str(acts))
+	# 键数跟着 WeaponData.MAX_STAR 走：升 ★4 那批（2026-10-24）就是靠这条钉住
+	# 「面板上买不到最高档」——原先写死三颗键，加档后作者模式永远拿不到 ★4。
+	var want_keys: Array[String] = []
+	for s in range(1, WeaponData.MAX_STAR + 1):
+		want_keys.append("买 %d 星" % s)
+	var missing: Array[String] = []
+	for k in want_keys:
+		if not acts.has(k):
+			missing.append(k)
+	_c.check(missing.is_empty(),
+		"详情窗有 1 ~ %d 星全部购买键（缺 %s / 实得 %s）" % [WeaponData.MAX_STAR, str(missing), str(acts)])
+	var buy_keys: Array[String] = []
+	for k in acts:
+		if k.begins_with("买 "):
+			buy_keys.append(k)
+	_c.equals(buy_keys.size(), WeaponData.MAX_STAR, "购买键数 == 最高星级（不多出废键）")
+	# 四颗键并排不能把卡片撑宽：DetailTip 卡宽钉在 306（720 窄屏上的安全宽），
+	# 按钮最小宽 = 文字宽 + 内边距，键数再涨一颗就会顶破 —— 那时必须改两行摆而不是加宽卡。
+	var card_w := tip.card_rect().size.x
+	_c.check(card_w <= DetailTip.CARD_W + 1.0,
+		"%d 颗购买键并排不撑宽详情卡（卡宽 %.1f ≤ %.1f）" % [buy_keys.size(), card_w, DetailTip.CARD_W])
 	_c.equals(GameManager.slots_used(), before, "只点卡不直接购买")
 	await _press_action(tip, "买 2 星")
 	await _settle(3)
@@ -151,6 +170,18 @@ func _check_weapon_tip_purchase() -> void:
 	_c.equals(_last_star(), 2, "到手的是 2 星")
 	_c.check(DetailTip.live(_panel) == null, "购买后详情窗收起")
 	_c.equals(_last_inventory_kind, "weapon", "购买成功发 inventory_changed(weapon)")
+
+	# 最高档（★4）必须真能买、且到手就是顶星 —— 作者模式是调 ★4 极境数值的唯一入口
+	await _tap(card)
+	var tip4 := DetailTip.live(_panel)
+	_c.check(tip4 != null, "再次点长剑卡弹出详情窗")
+	if tip4 == null:
+		return
+	var before4 := GameManager.slots_used()
+	await _press_action(tip4, "买 %d 星" % WeaponData.MAX_STAR)
+	await _settle(3)
+	_c.equals(GameManager.slots_used(), before4 + 1, "点「买 %d 星」后上阵 +1" % WeaponData.MAX_STAR)
+	_c.equals(_last_star(), WeaponData.MAX_STAR, "到手的是最高星级 ★%d" % WeaponData.MAX_STAR)
 
 # ---------------- 道具 / 灵兽详情窗 ----------------
 

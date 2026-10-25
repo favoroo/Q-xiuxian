@@ -42,7 +42,7 @@ enum TurretShape {
 func configure(p_shape: TurretShape, p_element: String, p_star: int) -> void:
 	shape = p_shape
 	element = p_element
-	star = clampi(p_star, 1, 3)
+	star = clampi(p_star, 1, WeaponData.MAX_STAR)
 	queue_redraw()
 
 ## 数据表 "turret_shape" 字段 → 枚举（未登记/未实现的一律 GENERIC，调用方据此保留贴图）

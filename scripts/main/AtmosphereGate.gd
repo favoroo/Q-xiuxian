@@ -39,7 +39,9 @@ func _ready() -> void:
 	if not GameManager.wave_changed.is_connected(_on_wave_changed):
 		GameManager.wave_changed.connect(_on_wave_changed)
 
-func _on_fullscreen_ui_opened() -> void:
+## game_over_triggered 带 1 个 victory 参数、shop_opened/alloc_opened 带 0 个：
+## 默认参数两种连接都接得住（不带参时阵亡与商店同走暂停氛围）
+func _on_fullscreen_ui_opened(_victory: bool = false) -> void:
 	# 主菜单（wave_number == 0）不拦：氛围是主菜单背景的一部分
 	if GameManager.wave_number < 1:
 		return

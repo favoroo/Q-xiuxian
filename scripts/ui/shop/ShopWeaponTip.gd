@@ -66,6 +66,14 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	var feats := StatsTipFactory.weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])
+	# ★3 觉醒 / ★4 极境两行：合成前就看得见「升到几星会解锁什么」（未达成灰色预告，达成亮色）——
+	# 文案唯一真话在 WeaponData.star3_perk_desc / star4_perk_desc，别处不许再拼一份。
+	var perk_desc := WeaponData.star3_perk_desc(id)
+	if not perk_desc.is_empty():
+		rows.append(["★3 觉醒", perk_desc, GameStyle.GOLD if star >= 3 else GameStyle.PAPER_DIM])
+	var asc_desc := WeaponData.star4_perk_desc(id)
+	if not asc_desc.is_empty():
+		rows.append(["★4 极境", asc_desc, GameStyle.STAR4_NEON if star >= WeaponData.MAX_STAR else GameStyle.PAPER_DIM])
 	# 元素件这一行就是那圈暖橙红描边的解释（2026-10-12 用户：角标遮图，改用边框颜色说这件事）。
 	# 描边是这一屏唯一的提示，点开必须还能读到字，否则颜色就成了没人教的暗号（同 GameStyle.is_elemental）。
 	if GameStyle.is_elemental(id):
@@ -74,7 +82,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 		rows.append(["元素加成", "系数 ×%.1f · 当前元素伤害 %+.1f" % [e_coef, e_edmg], GameStyle.ELEMENT])
 
 	var copies_total := GameManager.count_copies(id, star)
-	var price := WeaponData.sell_price(id, star)
+	var price := GameManager.weapon_sell_price(id, star)
 	var notes: Array[String] = [
 		WeaponDamageReadout.bonus_bill_text(id, star),
 	]
@@ -83,9 +91,20 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 	else:
 		notes.append("三合一升星：同名同星集满 3 件可合成升星（当前持有 %d/3 件）。" % copies_total)
 
-	var foot := "同名同星 %d 件 · 出售可得 %d 金币" % [copies_total, price]
+	# 报价差异必须写明白：初始武器与后来买到的同名副本卖价不同，玩家只能从这里看出来。
+	# 只改文案不加行 —— 这张卡本来就在 540 高度边缘，多一行会顶出视口。
+	var starter_price: bool = WeaponInventory.starter_bonus_applies(GameManager, id)
+	var foot := "同名同星 %d 件 · %s %d 金币" % [
+		copies_total, "初始武器原价回收" if starter_price else "出售可得", price]
 	if in_stash:
 		foot += "\n在背包中：未装备、不参与攻击，可用于三合一升星或换装装备。"
+
+	# 合成演出的起飞点/落点：keeper 是点开的这一格，另外两件从陈列行里按同名同星扫出来。
+	# 现在抓而不是等按下再抓：卡片开着时遮罩挡着滚动，这一刻的矩形就是玩家眼睛里的位置
+	# （详情卡一关，槽位会被重建，新节点得等下一帧才有 rect）
+	var merge_sources: Array = []
+	if mergeable:
+		merge_sources = _collect_merge_sources(shop, id, star, pool, index, anchor)
 
 	var actions: Array = []
 	if mergeable:
@@ -101,10 +120,50 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 				elif item.get("is_drone", false):
 					keep["pool"] = "drone"
 					keep["index"] = int(item.get("drone_index", -1))
-				if not GameManager.merge_weapon(id, star, keep):
+				# 详情卡开着时遮罩挡着操作，状态不会变；这里再核一次只是兜底 ——
+				# 凑不齐三件就别播合成演出，免得动画放完却没合成
+				if GameManager.count_copies(id, star) < 3:
 					AudioManager.play_sfx("ui_error", 0.9)
-				shop.selected = {}
-				shop.refresh(false)
+					shop.selected = {}
+					shop.refresh(false)
+					return
+				# 把两件被消耗的图标从各自格子里拎起来，飞进 keeper 那一格再合成（2026-10-24 用户
+				# 要的就是「那几个图标一起移动到要合成的那个位置」）。起飞/落点矩形在开卡那一刻
+				# 就抓好了（merge_sources）—— 按键时旧行正被 queue_free、新行还没排布局，现抓只
+				# 能抓到零矩形。原件（含重建出来的同名格子）当场藏掉，迸发帧 refresh 一并重建。
+				var target_rect := Rect2()
+				var fly_rects: Array[Rect2] = []
+				for i in range(merge_sources.size()):
+					var entry: Dictionary = merge_sources[i]
+					var rect: Rect2 = entry.get("rect", Rect2())
+					if i == 0:
+						target_rect = rect
+					else:
+						fly_rects.append(rect)
+						_hide_row_slots(shop, entry.get("src", {}))
+				var icon_path := String(def.get("icon", ""))
+				if icon_path.is_empty():
+					icon_path = String(item.get("icon", ""))
+				# 同池里排在 keeper 之前的副本被吃掉后，keeper 会向左补位：算出重建后的下标，
+				# 让结果图标滑行跟到格子的最终位置（不然会停在原地、格子已挪走）
+				var keeper_shift := 0
+				for i in range(1, merge_sources.size()):
+					var cs: Dictionary = (merge_sources[i] as Dictionary).get("src", {})
+					if String(cs.get("pool", "")) == pool and int(cs.get("index", -1)) < index:
+						keeper_shift += 1
+				var final_src := {"pool": pool, "index": index - keeper_shift}
+				# 合成延到演出的迸发帧执行：merge_success / weapon_awaken 音效、陈列行刷新出的
+				# 新星图标、keeper 上的迸发同帧落地，声画才对齐（演出本身是纯表现层，见 MergeFx 头注）
+				MergeFx.play_slots(shop, icon_path, fly_rects, target_rect, func() -> void:
+					if not GameManager.merge_weapon(id, star, keep):
+						AudioManager.play_sfx("ui_error", 0.9)
+					# 演出这 0.2 秒里商店被关掉的极端路径兜底：合成数据已落地，只是没面板可刷
+					if not is_instance_valid(shop):
+						return
+					shop.selected = {}
+					shop.refresh(false)
+				, func() -> Rect2:
+					return _row_rect_matching(shop, final_src, id, star + 1))
 		}])
 
 	var row_ops: Array = []
@@ -138,7 +197,7 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 		})
 
 	row_ops.append({
-		"text": "售 %d 金币" % price,
+		"text": ("原价售 %d" if starter_price else "售 %d 金币") % price,
 		"color": GameStyle.BAD,
 		"edge_color": GameStyle.BAD_DK,
 		"text_color": GameStyle.CHALK,
@@ -172,3 +231,104 @@ static func open(shop: WaveShop, item: Dictionary, pool: String, index: int, anc
 				shop.selected = {}
 				shop._refresh_inventory()
 		)
+
+## 合成演出的参与者：第 0 项是 keeper（点开的这一格），随后是两件被消耗的副本。
+## 每项 {"src": {"pool","index"}, "rect": 全局矩形}，src 抄的是槽位 drag_src 的登记口径。
+## 消耗哪两件必须复刻 WeaponInventory 的选取顺序（背包 0→、灵宝 0→、悬浮武器从尾部←），
+## 否则 4 件以上时飞的格子与实际被吃掉的格子对不上，重建后「飞走的格子又长回来」。
+static func _collect_merge_sources(shop: WaveShop, w_id: String, star: int,
+		keeper_pool: String, keeper_index: int, anchor: Control) -> Array:
+	var out: Array = [{
+		"src": {"pool": keeper_pool, "index": keeper_index},
+		"rect": anchor.get_global_rect() if anchor != null and is_instance_valid(anchor) else Rect2(),
+	}]
+	if shop == null or not is_instance_valid(shop) or shop.owned_container == null:
+		return out
+	# 陈列行按池分桶（行的排列：悬浮武器 → 灵宝 → 分隔签 → 背包）
+	var stash_hits: Array = []
+	var drone_hits: Array = []
+	var wpn_hits: Array = []
+	for child in shop.owned_container.get_children():
+		if not (child is Control) or not child.has_meta("drag_src"):
+			continue
+		var src: Dictionary = child.get_meta("drag_src")
+		var sp := String(src.get("pool", ""))
+		var si := int(src.get("index", -1))
+		if sp != "equipped" and sp != "stash":
+			continue
+		if sp == keeper_pool and si == keeper_index:
+			continue
+		var it := _row_item_for(src)
+		if it.is_empty() or String(it.get("id", "")) != w_id or int(it.get("star", 1)) != star:
+			continue
+		var entry := {"src": {"pool": sp, "index": si}, "rect": (child as Control).get_global_rect()}
+		if sp == "stash":
+			stash_hits.append(entry)
+		elif bool(it.get("is_drone", false)):
+			drone_hits.append(entry)
+		else:
+			wpn_hits.append(entry)
+	# 复刻引擎消耗顺序：背包先、灵宝次、悬浮武器取尾部，满 2 件即止
+	var consumed: Array = []
+	for e in stash_hits:
+		if consumed.size() >= 2:
+			break
+		consumed.append(e)
+	for e in drone_hits:
+		if consumed.size() >= 2:
+			break
+		consumed.append(e)
+	var k := wpn_hits.size() - 1
+	while k >= 0 and consumed.size() < 2:
+		consumed.append(wpn_hits[k])
+		k -= 1
+	out.append_array(consumed)
+	return out
+
+## 陈列行 src（pool/index）→ 那件武器/灵宝的数据：上阵池按 summary 口径（悬浮武器在前、
+## 灵宝在后），背包池按 stash 下标。空格 / 分隔签 / 越界一律空字典。
+static func _row_item_for(src: Dictionary) -> Dictionary:
+	var pool := String(src.get("pool", ""))
+	var idx := int(src.get("index", -1))
+	if pool == "equipped":
+		var summary: Array = GameManager.get_weapons_summary()
+		if idx >= 0 and idx < summary.size():
+			return summary[idx]
+	elif pool == "stash":
+		if idx >= 0 and idx < GameManager.stash.size():
+			return GameManager.stash[idx]
+	return {}
+
+## 按 src（pool/index）在当前陈列行里找格位的全局矩形，并核对该格确实是 w_id 的 new_star 件
+## （合成会删格子、整行左移，重建后的下标要现算现比；核不上返回空矩形 = 结果图标停在原地）
+static func _row_rect_matching(shop: WaveShop, src: Dictionary, w_id: String, new_star: int) -> Rect2:
+	if shop == null or not is_instance_valid(shop) or shop.owned_container == null:
+		return Rect2()
+	var want_pool := String(src.get("pool", ""))
+	var want_index := int(src.get("index", -1))
+	for child in shop.owned_container.get_children():
+		if not (child is Control) or not child.has_meta("drag_src"):
+			continue
+		var s: Dictionary = child.get_meta("drag_src")
+		if String(s.get("pool", "")) != want_pool or int(s.get("index", -1)) != want_index:
+			continue
+		var it := _row_item_for(s)
+		if String(it.get("id", "")) == w_id and int(it.get("star", 1)) == new_star:
+			return (child as Control).get_global_rect()
+		return Rect2()
+	return Rect2()
+
+## 按 src 把当前陈列行里那一格的原件藏掉（modulate 透明，不改尺寸不破布局判据）：
+## 按键那一刻旧行正在被 queue_free、新行还没摆完，两个都找得到就都藏 ——
+## 飞行体从开卡时抓好的矩形起飞，原件不藏会同时出现「格子里一个 + 飞行中一个」。
+static func _hide_row_slots(shop: WaveShop, src: Dictionary) -> void:
+	if shop == null or not is_instance_valid(shop) or shop.owned_container == null:
+		return
+	var want_pool := String(src.get("pool", ""))
+	var want_index := int(src.get("index", -2))
+	for child in shop.owned_container.get_children():
+		if not (child is Control) or not child.has_meta("drag_src"):
+			continue
+		var s: Dictionary = child.get_meta("drag_src")
+		if String(s.get("pool", "")) == want_pool and int(s.get("index", -1)) == want_index:
+			(child as Control).modulate.a = 0.0

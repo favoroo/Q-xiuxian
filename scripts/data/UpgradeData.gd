@@ -12,7 +12,8 @@ extends RefCounted
 ##                         hp_regen / crit_rate / crit_mult / dodge /
 ##                         lifesteal / luck / harvest / spirit_stones
 ##   特殊：attack_speed_mult_mul（乘算，地板见 GameManager.ATTACK_SPEED_FLOOR）、
-##        max_hp + hp_heal（改的是玩家节点，需要 GameManager 代一手）
+##        max_hp + hp_heal（改的是玩家节点，需要 GameManager 代一手）；
+##        hp_heal 恒与 max_hp 同值成对＝新上限自带满血，卡面折叠不单列（BonusRows.folded_keys）
 ## 字段白名单在 GameManager.apply_upgrade()，写错会在运行时 push_warning 里暴露。
 
 const RARITY_COLORS := {
@@ -115,7 +116,9 @@ const UPGRADES: Array[Dictionary] = [
 	},
 	{
 		"id": "hp_up",
-		"apply": {"max_hp": 25.0, "hp_heal": 30.0},
+		# 2026-10-24 回血 30→25 对齐全表口径：hp_heal 恒与 max_hp 同值成对（新上限自带满血），
+		# 卡面按 BonusRows.folded_keys 折叠、不单列回血行；不等值的孤儿回血没有界面承载它。
+		"apply": {"max_hp": 25.0, "hp_heal": 25.0},
 		"title": "生命提升",
 		"desc": "",
 		"rarity": "rare",

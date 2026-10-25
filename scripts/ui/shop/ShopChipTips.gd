@@ -86,11 +86,20 @@ static func open_merge(shop: WaveShop, anchor: Control, w_id: String) -> void:
 		["单发伤害", "×%s" % _num(WeaponData.STAR_DAMAGE_MULT), GameStyle.GOOD],
 		["出手间隔", "×%s（更快）" % _num(WeaponData.STAR_COOLDOWN_MULT), GameStyle.GOOD],
 	]
+	# ★3 觉醒 / ★4 极境预告：三合一的终点是专属招式，凑材料的奔头在这两行（文案与详情卡同源）
+	var perk_desc := WeaponData.star3_perk_desc(w_id)
+	if not perk_desc.is_empty():
+		rows.append(["★3 觉醒", perk_desc, GameStyle.PAPER_DIM])
+	var asc_desc := WeaponData.star4_perk_desc(w_id)
+	if not asc_desc.is_empty():
+		rows.append(["★4 极境", asc_desc, GameStyle.PAPER_DIM])
 	var notes: Array[String] = [
 		"货架只卖 ★1：买下这一把就凑满 3 件，回陈列行点它，详情卡里有【三合一】那颗键。",
 		"3 件换 1 件：合成后上阵少 2 件 → 流派羁绊的件数也跟着掉 2 件，凑档优先、升星其次。",
-		"最高 %s（%d 档），每升一星属性转化的那部分伤害再多 +25%%。" % [
-			WeaponData.star_text(WeaponData.MAX_STAR), WeaponData.MAX_STAR],
+		"最高 %s（%d 档），每升一星属性转化的那部分伤害再多 +25%%；升到 %s 觉醒专属招式，再往上合出 %s 极境。" % [
+			WeaponData.star_text(WeaponData.MAX_STAR), WeaponData.MAX_STAR,
+			WeaponData.star_text(3), WeaponData.star_text(WeaponData.MAX_STAR)],
+		"手里已有同名武器时，货架会明显更容易刷出它（★越高越容易），凑材料不用硬等。",
 	]
 	DetailTip.show_over(shop, anchor, {
 		"title": "可合成 · %s" % String(def.get("name", "这把武器")),

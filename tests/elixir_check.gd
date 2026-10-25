@@ -99,8 +99,10 @@ func _test_heal_and_aoe_damage() -> void:
 	var want_heal := ElixirData.heal_amount(p.max_health)
 	var want_dmg := ElixirData.burst_damage(2.0)
 
+	var casts_before := GameManager.skill_cast_count
 	var ok := p.try_activate_extra_skill()
 	_c.check(ok, "药爆施放成功（try_activate_extra_skill）")
+	_c.equals(GameManager.skill_cast_count, casts_before + 1, "额外技能成功施放也计入技能次数")
 	_c.near(p.current_health, 50.0 + want_heal, EPS,
 		"自身回血 %.1f（= 气血 100 × %.0f%%）" % [want_heal, ElixirData.HEAL_HP_RATIO * 100.0])
 	_c.near(hp_in - inside.current_hp, want_dmg, 0.5,

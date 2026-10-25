@@ -30,13 +30,14 @@ var _pulse_tween: Tween = null
 var _drone_renderer: ProceduralDroneRenderer = null
 
 ## 由 Player.sync_drones 下发星级与道具 id（必须在节点可用后调用）
-## orb_total：该武器分身出的灵宝具数（WeaponData.drone_orb_count）。总纸面 DPS 与单具版一致：
+## orb_total：该武器分身出的灵宝具数（WeaponData.drone_orb_count）。★1/★2 总纸面 DPS 与单具版一致：
 ## 每具结算 1/N 基础与 1/N 属性折算，多具同环扫掠换更高贴身覆盖（BalanceTargeting 占空比按星抬升）。
+## ★3 灵威 / ★4 四象灵尊：摊分除数改走 WeaponData.drone_orb_divisor（除数 < 具数 ⇒ 总伤反超纸面）。
 func setup(star_level: int, weapon_id: String = "lingdie", orb_total: int = 1) -> void:
 	star = clampi(star_level, 1, WeaponData.MAX_STAR)
 	orb_count = maxi(1, orb_total)
 	drone_id = weapon_id if not weapon_id.is_empty() else "lingdie"
-	base_damage = WeaponData.damage_for(drone_id, star) / float(orb_count)
+	base_damage = WeaponData.damage_for(drone_id, star) / WeaponData.drone_orb_divisor(star)
 	hit_cooldown = WeaponData.cooldown_for(drone_id, star)
 	var def := WeaponData.get_def(drone_id)
 	max_orbit_reach = maxf(150.0, float(def.get("range", 205.0)))
@@ -63,12 +64,9 @@ func _apply_star_visuals() -> void:
 	var def := WeaponData.get_def(drone_id)
 	if def.has("icon") and ResourceLoader.exists(def["icon"]):
 		sprite.texture = load(def["icon"])
-	# 高星灵宝更大更金：★1 青/原色 → ★2 偏金 → ★3 金亮
+	# 高星灵宝更大更亮：★1 原色 → ★2 偏金 → ★3 金亮 → ★4 太虚霓虹（紫电琉璃）
 	sprite.scale = _base_sprite_scale * (1.0 + 0.14 * float(star - 1))
-	var tint := Color(1, 1, 1)
-	if star >= 2:
-		tint = Color(1.0, 0.95, 0.72) if star == 2 else Color(1.0, 0.88, 0.45)
-	sprite.modulate = tint
+	sprite.modulate = _star_tint()
 
 	# 挂载纯矢量动态灵宝视觉
 	if _drone_renderer == null:
@@ -115,7 +113,8 @@ var _cached_multi_mult: float = 1.0
 var _dmg_cache_valid: bool = false
 
 func _refresh_dmg_cache() -> void:
-	_cached_stat_bonus = GameManager.get_weapon_stat_bonus(drone_id, star) / float(orb_count)
+	# 摊分除数与 base_damage 同源（drone_orb_divisor）：★3 灵威除数 2.5 < 具数 3，总伤 +20%
+	_cached_stat_bonus = GameManager.get_weapon_stat_bonus(drone_id, star) / WeaponData.drone_orb_divisor(star)
 	_cached_multi_mult = GameManager.get_multi_weapon_damage_mult()
 	_dmg_cache_valid = true
 
@@ -196,7 +195,9 @@ func _play_hit_pulse() -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _star_tint() -> Color:
-	if star >= 3:
+	if star >= 4:
+		return Color(0.72, 0.95, 1.25)
+	if star == 3:
 		return Color(1.0, 0.88, 0.45)
 	if star == 2:
 		return Color(1.0, 0.95, 0.72)

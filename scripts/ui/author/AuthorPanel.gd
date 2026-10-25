@@ -6,7 +6,7 @@ extends BaseModalDialog
 ## 四个分页：
 ##   ◆ 状态：人物等级 / 跳关 / 金币
 ##   ◆ 战斗：无敌 / 一击必杀 / 时间加速 / 直接胜利·失败
-##   ◆ 武器：全武器图鉴式浏览（类型/五行筛选 + 卡面三签），点卡开详情窗、窗内选 1/2/3 星免费购买
+##   ◆ 武器：全武器图鉴式浏览（类型/五行筛选 + 卡面三签），点卡开详情窗、窗内按星免费购买（1 ~ MAX_STAR）
 ##   ◆ 道具：全道具 + 灵兽，点卡开详情窗、窗内免费购买
 ##
 ## 口径：
@@ -420,7 +420,7 @@ func _rebuild_weapon_grid() -> void:
 		return
 	for c in _weapon_box.get_children():
 		c.queue_free()
-	_weapon_box.add_child(_make_hint("点卡片查看详情，在弹窗里选 1 / 2 / 3 星免费获得（上阵满则自动进背包）。类型与元素两条筛选可同时选中，取交集。"))
+	_weapon_box.add_child(_make_hint("点卡片查看详情，在弹窗里选星级免费获得（上阵满则自动进背包）。类型与元素两条筛选可同时选中，取交集。"))
 
 	var cls_tag := weapon_class_filter
 	var elem_tag := weapon_element_filter
@@ -513,24 +513,22 @@ func _open_weapon_tip(wid: String, anchor: Control) -> void:
 	var payload := CodexTipData.weapon_payload(wid, "作者模式：免费获得，不扣金币，也不写存档")
 	if payload.is_empty():
 		return
-	# 三个星级各一颗键：点哪颗就按哪一星发货（2026-10-22 用户口径）
-	payload["actions"] = [[
-		{
-			"text": "买 1 星",
-			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
-			"callback": func() -> void: _buy_weapon(wid, 1),
-		},
-		{
-			"text": "买 2 星",
-			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
-			"callback": func() -> void: _buy_weapon(wid, 2),
-		},
-		{
-			"text": "买 3 星",
-			"color": GameStyle.JADE, "edge_color": GameStyle.JADE_EDGE, "text_color": GameStyle.INK_TEXT,
-			"callback": func() -> void: _buy_weapon(wid, 3),
-		},
-	]]
+	# 每个星级一颗键：点哪颗就按哪一星发货（2026-10-22 用户口径）。
+	# 键数按 WeaponData.MAX_STAR 现算 —— 2026-10-24 加 ★4 时这里原先写死三颗，
+	# 面板上就永远买不到新档；升档只改 MAX_STAR，这一排自己跟。
+	var row: Array = []
+	for s in range(1, WeaponData.MAX_STAR + 1):
+		var want: int = s
+		var is_top := want >= WeaponData.MAX_STAR
+		row.append({
+			"text": "买 %d 星" % want,
+			# 顶档键走 ★4 霓虹青（与 HUD/商店槽位的极境描边同一副色），一眼看出这是最高档
+			"color": GameStyle.STAR4_NEON if is_top else GameStyle.JADE,
+			"edge_color": GameStyle.STAR4_NEON_EDGE if is_top else GameStyle.JADE_EDGE,
+			"text_color": GameStyle.INK_TEXT,
+			"callback": func() -> void: _buy_weapon(wid, want),
+		})
+	payload["actions"] = [row]
 	DetailTip.show_over(self, anchor, payload)
 
 func _buy_weapon(wid: String, star: int) -> void:

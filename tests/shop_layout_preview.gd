@@ -76,9 +76,14 @@ func _pin_offers() -> void:
 		offers[1] = {"kind": "item", "id": "taiyi_jindan", "price": 88,
 			"sold": false, "locked": false}
 	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
-	for i in range(mini(long_ids.size(), maxi(offers.size() - 2, 0))):
+	for i in range(mini(long_ids.size(), maxi(offers.size() - 3, 0))):
 		offers[2 + i] = {"kind": "weapon", "id": long_ids[i], "price": 41,
 			"sold": false, "locked": i % 2 == 0}
+	# 末格钉灵兽（最长文案的灵风貂）：灵兽卡没有加成行，说明是它卡面上唯一的文字块
+	# ⇒ 2026-10-24「灵兽商店卡什么文字都没有了」那一格只有出图看得见
+	if offers.size() >= 3:
+		offers[offers.size() - 1] = {"kind": "pet", "id": "fengdiao", "price": 38,
+			"sold": false, "locked": false}
 
 func _shoot(size: Vector2i, tag: String, count: int, stones: int = 500) -> void:
 	DisplayServer.window_set_size(size)

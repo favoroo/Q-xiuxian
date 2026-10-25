@@ -18,11 +18,12 @@ extends Node
 ##   godot --headless --path . res://tests/ShopItemForecastCheck.tscn
 ##   godot --headless --path . res://tests/ShopItemForecastCheck.tscn -- --selftest
 
-## 到账链条的代表样本：六字段最坏卡 / 攻速乘算两个方向 / 负代偿 / max_hp+hp_heal 成对 /
-## 物价乘算 / 5 字长行名（宽度兜底档）/ 有预读+机制项混排
+## 到账链条的代表样本：六字段最坏卡 / 攻速乘算两个方向 / 负代偿 / max_hp+hp_heal 成对
+## （卡面折叠为上限一行，真买仍按「新上限自带满血」结算）/ 物价乘算 /
+## 5 字长行名（宽度兜底档）/ 有预读+机制项混排
 const CHAIN_IDS: Array[String] = [
 	"taiyi_jindan", "qingxin_cha", "xuewen_fu", "hupi_qun",
-	"zhekou_yufu", "pojia_zhui", "wanling_fan",
+	"zhekou_yufu", "pojia_zhui", "wanling_fan", "xuanwu_yin",
 ]
 ## 满血/GREY 与夹顶样本：闪避顶到 DODGE_CAP 后幻纱的闪避行必须「买了等于没买」
 const DODGE_CAP_PROBE_ID := "huansha"
@@ -92,8 +93,10 @@ func _run_model_matches_all_items() -> void:
 			continue
 		var data: Dictionary = ShopOfferCardFactory.resolve_offer_data({"kind": "item", "id": iid})
 		var rows: Array = data.get("stat_rows", [])
-		if rows.size() != apply.size():
-			bad.append("%s 行数 %d ≠ apply 字段数 %d" % [iid, rows.size(), apply.size()])
+		# hp_heal 与 max_hp 同值成对时卡面折叠不单列（与模型同一把尺），行数按可见字段数对表
+		var expect_n: int = apply.size() - BonusRows.folded_keys(apply).size()
+		if rows.size() != expect_n:
+			bad.append("%s 行数 %d ≠ apply 可见字段数 %d" % [iid, rows.size(), expect_n])
 			continue
 		var model := _model_index(StatForecast.open().shop_lines_for(apply))
 		for r in rows:
@@ -195,8 +198,9 @@ static func _row_vs_model(val_txt: String, val_col, line: Dictionary, k: String,
 
 # ============================ ④ 真实到账链条 ============================
 
-## 残血 50%：max_hp/hp_heal 两行才各自有独立读数（满血时两行会撞成同一串）。
-## 同步执行、中间不 await：生命回复不再偷跑，链条才量得出「承诺 == 到账」。
+## 残血 50% 起手：真买路径顺带结算「新上限自带满血」（hp_heal 已随 max_hp 折叠成一行、
+## 不再单列承诺，但上限落地那一手照旧回血）。同步执行、中间不 await：
+## 生命回复不再偷跑，链条才量得出「承诺 == 到账」。
 func _run_chain_against_real_purchase() -> void:
 	_set_hp_ratio(0.5)
 	var bad: Array[String] = []

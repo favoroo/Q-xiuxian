@@ -171,6 +171,21 @@ func _run() -> void:
 	_check(merged, "三合一合成成功")
 	_check(GameManager.active_synergies.has("talisman"), "羁绊表含符箓")
 
+	# 6b. ★4 神兵极境链路（2026-10-24）：★3 → ★4 必须真的能合、且星级上限不再是 3
+	#     （★1→★2→★3 各合一次即可，27 把的完整追梦在单测里按尺子钉，这里只验链路通）
+	_check(WeaponData.MAX_STAR == 4, "星级上限已抬到 ★4")
+	GameManager.stash.clear()
+	GameManager.stash.append({"id": "huoyan_fu", "star": 3})
+	GameManager.stash.append({"id": "huoyan_fu", "star": 3})
+	GameManager.stash.append({"id": "huoyan_fu", "star": 3})
+	_check(GameManager.merge_weapon("huoyan_fu", 3, {"pool": "stash", "index": 0}), "★3 三合一升 ★4 成功")
+	_check(GameManager.count_copies("huoyan_fu", 4) == 1, "背包里出现一把 ★4 火焰符")
+	_check(not GameManager.merge_weapon("huoyan_fu", 4, {"pool": "stash", "index": 0}),
+		"★4 已是顶星，再合被拒（不越界）")
+	_check(WeaponData.star_text(4) == "★★★★", "★4 星标渲染四个实心星")
+	_check(not WeaponData.star4_perk_desc("huoyan_fu").is_empty(), "★4 极境文案有出口")
+	GameManager.stash.clear()
+
 	# 7. 跳到 13 波验证新敌种 + 藏宝匣
 	GameManager.player.max_health = 99999.0
 	GameManager.player.current_health = 99999.0

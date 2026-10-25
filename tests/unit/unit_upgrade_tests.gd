@@ -177,11 +177,13 @@ func _test_alloc_session() -> void:
 	var stones := GameManager.spirit_stones
 	_c.check(GameManager.reroll_alloc(), "免费刷新一次")
 	_c.equals(GameManager.spirit_stones, stones, "免费刷新不扣灵石")
+	_c.equals(GameManager.total_stones_spent, 0, "免费刷新不计消费")
 	_c.equals(GameManager.alloc_reroll_free_left, 0, "免费额度用光")
 	_c.check(GameManager.can_reroll_alloc(), "灵石够就能继续刷")
 	var price1 := GameManager.alloc_reroll_cost
 	_c.check(GameManager.reroll_alloc(), "第二次刷新付灵石")
 	_c.equals(GameManager.spirit_stones, stones - price1, "按报价扣灵石（-%d）" % price1)
+	_c.equals(GameManager.total_stones_spent, price1, "付费刷新累计进消费账本")
 	_c.equals(GameManager.alloc_reroll_cost, GameBalance.reroll_cost(4, 1, 1.0), "再刷一档涨价（与货架同曲线）")
 
 	# 加完最后 1 点：发 alloc_finished、清空候选

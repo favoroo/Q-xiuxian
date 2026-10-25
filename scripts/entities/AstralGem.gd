@@ -121,6 +121,8 @@ func activate() -> void:
 	# 池化复用是从回收点瞬移到掉落点：不重置物理插值，真机帧率抖动时首帧会渲染旧位置滑行
 	reset_physics_interpolation()
 	visible = true
+	if loot_renderer != null:
+		loot_renderer.set_process(true)   ## 唤醒子渲染器（recycle 时显式休眠的）
 	target_player = null
 	current_speed = -40.0
 	_pop_time = 0.0
@@ -164,6 +166,10 @@ func recycle() -> void:
 	_active_gems.erase(get_instance_id())
 	remove_from_group("gems")
 	set_physics_process(false)
+	# 子渲染器随本体休眠：set_process 不递归子节点、visible=false 也不停子节点 _process，
+	# 不显式关的话池里上百颗宝石的渲染器每渲染帧照跑 sin 浮动与屏外剔除换算
+	if loot_renderer != null:
+		loot_renderer.set_process(false)
 	$CollisionShape2D.set_deferred("disabled", true)
 	set_deferred("monitorable", false)
 	visible = false

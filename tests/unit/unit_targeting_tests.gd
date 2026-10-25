@@ -127,6 +127,62 @@ func _test_ranged_focus_dps() -> void:
 	_c.check(WeaponData.sustained_single_dps("huoyan_fu", 3) > WeaponData.sustained_single_dps("huoyan_fu", 2),
 		"星级越高单体 DPS 越高（尺子跟 damage_for/cooldown_for 同向）")
 
+	# 1.9 ★3 觉醒（2026-10-24）：每个行为族 ★3 的单体 DPS 必须比「纯星级翻倍 + 冷却」
+	# 再多一档 —— 觉醒是三星的质变承诺，尺子不许看不见它。
+	# 无觉醒的理论上限：伤害 ×2 / 冷却 ×0.92 ⇒ 2.17（炮台 fire_cd 不随星变 ⇒ 2.00）。
+	# 下面的门槛按「实测下沿 − 小余量」取（灼烧/剧毒常驻量随冷却饱和会吃掉零点几），
+	# 仍显著高于无觉醒上限，所以任一行为族掉出觉醒都会立刻红。
+	var awaken_floor := {
+		WeaponData.Behavior.MELEE: 3.10,
+		WeaponData.Behavior.SWEEP: 3.10,
+		WeaponData.Behavior.PROJECTILE: 3.10,
+		WeaponData.Behavior.BURST: 3.30,
+		WeaponData.Behavior.DRONE: 3.15,
+		WeaponData.Behavior.TURRET: 2.75,
+		WeaponData.Behavior.BEAM: 3.10,
+		WeaponData.Behavior.CONE: 3.15,
+	}
+	for w_id in WeaponData.DEFS.keys():
+		var b := int((WeaponData.DEFS[w_id] as Dictionary).get("behavior", WeaponData.Behavior.MELEE))
+		if not awaken_floor.has(b):
+			continue
+		var d2 := WeaponData.sustained_single_dps(w_id, 2)
+		if d2 <= 0.0:
+			continue
+		var ratio := WeaponData.sustained_single_dps(w_id, 3) / d2
+		_c.check(ratio >= float(awaken_floor[b]),
+			"%s（%s）★3/★2 DPS 跳变 %.2f× ≥ %.2f×（觉醒已进尺子）" % [
+				w_id, WeaponData.behavior_label(WeaponData.get_def(w_id)), ratio, float(awaken_floor[b])])
+
+	# 1.95 ★4 神兵极境（2026-10-24）：★4/★3 的跳变同样必须显著高于「纯面板翻倍」。
+	# 纯星级口径上限：伤害 ×2 / 冷却 ×0.92 ⇒ 2.174（炮台 fire_cd 不随星变 ⇒ 2.000）。
+	# 极境把八族再抬一档，公式值：追加打击族 2.174×(1+2×0.65)/(1+0.5) = 3.33；
+	# 落雷 2.174×2.4/1.6 = 3.26；御灵 2.174×(0.88×4/1.6)/(0.84×3/2.0) = 3.80；
+	# 炮台 2×(0.65/0.42) = 3.10；束流 2.174×(2.3/1.5) = 3.33。
+	# 门槛取「实测下沿 − 小余量」（带灼烧/剧毒的族会被 minf(1, dur/cd) 的饱和吃掉零点几），
+	# 仍远高于纯面板上限 —— 任一族的极境被摘掉都会立刻红。
+	var ascend_floor := {
+		WeaponData.Behavior.MELEE: 3.18,
+		WeaponData.Behavior.SWEEP: 3.18,
+		WeaponData.Behavior.PROJECTILE: 3.18,
+		WeaponData.Behavior.BURST: 3.12,
+		WeaponData.Behavior.DRONE: 3.70,
+		WeaponData.Behavior.TURRET: 2.92,
+		WeaponData.Behavior.BEAM: 3.20,
+		WeaponData.Behavior.CONE: 3.20,
+	}
+	for w_id in WeaponData.DEFS.keys():
+		var b := int((WeaponData.DEFS[w_id] as Dictionary).get("behavior", WeaponData.Behavior.MELEE))
+		if not ascend_floor.has(b):
+			continue
+		var d3 := WeaponData.sustained_single_dps(w_id, 3)
+		if d3 <= 0.0:
+			continue
+		var ratio4 := WeaponData.sustained_single_dps(w_id, WeaponData.MAX_STAR) / d3
+		_c.check(ratio4 >= float(ascend_floor[b]),
+			"%s（%s）★4/★3 DPS 跳变 %.2f× ≥ %.2f×（极境已进尺子）" % [
+				w_id, WeaponData.behavior_label(WeaponData.get_def(w_id)), ratio4, float(ascend_floor[b])])
+
 	# 2. 分类自洽：点杀位这一档不许空（空了就等于这条判据没人守着）
 	var focus: Array[String] = []
 	for w_id in ranged:

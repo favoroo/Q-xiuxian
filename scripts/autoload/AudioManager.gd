@@ -32,9 +32,14 @@ const AMBIENCE_DB := -14.0
 const AMBIENCE_KEYS := {"battle": true, "trial": true, "shop": true}
 
 ## Boss 战的 BGM 闷音（LowPass）：开场压闷制造紧张感，伏诛/转阶段即解除。
-## 截止 22050Hz 即 44.1k 输出的 Nyquist，等效直通，不做旁路开关省一次爆音风险。
+## 2026-10-24 满幅事故整改（根因链见 CHANGELOG）：引擎播放器流热换与音频线程有竞态，
+## 偶发 NaN 样本会被低通的双二阶延迟寄存器永久捕获（与 cutoff 值无关；真机上满幅直流
+## 被系统保护限幅成「全局没声音」，重启才恢复）。整改三件套：
+## ① 常态旁路——非 Boss 期低通整体 bypass，链上没有有状态组件，NaN 至多一声咔哒；
+## ② CLEAR 不再压 Nyquist（22050 恰把极点放上单位圆，18000 留足裕量）；
+## ③ Master 挂 capture 看门狗，持续满幅 2s 即自愈重建并留 logcat 现场。
 const MUFFLE_CUTOFF := 900.0
-const CLEAR_CUTOFF := 22050.0
+const CLEAR_CUTOFF := 18000.0
 const SETTINGS_PATH := "user://audio.cfg"
 const DEFAULT_LINEAR := {"BGM": 1.0, "SFX": 1.0, "Voice": 1.0}
 
@@ -45,6 +50,8 @@ var bgm_tween: Tween = null
 var ambience_player: AudioStreamPlayer = null
 var _ambience_tween: Tween = null
 var _bgm_lowpass: AudioEffectLowPassFilter = null
+var _bgm_effect_idx: int = -1        ## 闷音低通在 BGM 总线上的效果槽位（旁路开关要用）
+var _muffle_on: bool = false         ## 闷音意图态（解除补间途中效果器仍启用，不能拿总线态当意图态）
 var _muffle_tween: Tween = null
 var voice_player: AudioStreamPlayer
 var sfx_players: Array[AudioStreamPlayer] = []
@@ -112,6 +119,25 @@ const SFX_GAP_MS := {
 }
 var _last_sfx_ms: Dictionary = {}
 
+# ---------------- 满幅自愈看门狗（2026-10-24）----------------
+# 引擎播放器流热换与音频线程的竞态偶发 NaN 样本，一旦被有状态组件（低通寄存器/变采样器）
+# 捕获就持续满幅输出——真机上被系统保护限幅成「全局没声音」，重启才恢复。整改①②已把
+# 常态链上的有状态组件清空，这里是兜底：Master 挂 capture 量实际混音，连续 2 个 1s 窗
+# 有 ≥50% 样本钉在满幅（正常混音瞬态削波只有零星几帧，永到不了 50%）即判管线死亡，
+# 重建低通 + 全播放器停稳复播，把「永远没声音」降级为一声咔哒 + 一条 logcat 现场。
+const WATCHDOG_WINDOW_SEC := 1.0
+const WATCHDOG_TRIGGER_WINDOWS := 2
+const WATCHDOG_PEG_RATIO := 0.5
+const WATCHDOG_COOLDOWN_SEC := 20.0
+var _watch_capture: AudioEffectCapture = null
+var _watch_effect_idx: int = -1
+var _watch_win_t: float = 0.0
+var _watch_peg: int = 0
+var _watch_frames: int = 0
+var _watch_streak: int = 0
+var _watch_cooldown: float = 0.0
+var _watch_recoveries: int = 0
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -134,18 +160,27 @@ func _ready() -> void:
 	ambience_player.bus = BUS_BGM
 	add_child(ambience_player)
 
-	# Boss 闷音效果器常驻 BGM 总线（截止拉到 Nyquist 等效直通，不做热插拔）
+	# Boss 闷音效果器常驻 BGM 总线但常态旁路（set_bgm_muffle 负责启停旁路）：
+	# 2026-10-24 起不再让双二阶常挂链上——它是有状态组件，引擎偶发的 NaN 样本
+	# 一旦进它的延迟寄存器就永久满幅（真机听感=全局没声音）。旁路态不参与混音，无此风险。
 	var bgm_idx := AudioServer.get_bus_index(BUS_BGM)
 	if bgm_idx >= 0:
 		_bgm_lowpass = AudioEffectLowPassFilter.new()
 		_bgm_lowpass.cutoff_hz = CLEAR_CUTOFF
 		AudioServer.add_bus_effect(bgm_idx, _bgm_lowpass)
+		_bgm_effect_idx = AudioServer.get_bus_effect_count(bgm_idx) - 1
+		AudioServer.set_bus_effect_enabled(bgm_idx, _bgm_effect_idx, false)
 
 	for i in range(SFX_PLAYER_COUNT):
 		var p := AudioStreamPlayer.new()
 		p.bus = BUS_SFX
 		add_child(p)
 		sfx_players.append(p)
+
+	# 满幅看门狗的采集口（被动旁挂，不影响声音）
+	_watch_capture = AudioEffectCapture.new()
+	AudioServer.add_bus_effect(0, _watch_capture)
+	_watch_effect_idx = AudioServer.get_bus_effect_count(0) - 1
 
 	call_deferred("_ensure_audio_loaded")
 	_load_settings()
@@ -182,6 +217,71 @@ func _process(delta: float) -> void:
 		# 否则隔半分钟再杀一只会沿用旧阶梯高位（frenzy_idle 在游戏中才累计，菜单不涨）
 		if GameManager != null and GameManager.frenzy_idle >= KILL_COMBO_WINDOW and _kill_combo_count != 0:
 			_kill_combo_count = 0
+	_tick_watchdog(delta)
+
+## 满幅看门狗：统计 Master 实际混音里钉在 |样本|≥0.99 的占比，持续过半即自愈
+func _tick_watchdog(delta: float) -> void:
+	if _watch_capture == null:
+		return
+	_watch_cooldown = maxf(0.0, _watch_cooldown - delta)
+	var wavail := _watch_capture.get_frames_available()
+	if wavail > 0:
+		var buf := _watch_capture.get_buffer(wavail)
+		for f in buf:
+			if absf(f.x) >= 0.99 or absf(f.y) >= 0.99:
+				_watch_peg += 1
+		_watch_frames += wavail
+	_watch_win_t += delta
+	if _watch_win_t < WATCHDOG_WINDOW_SEC:
+		return
+	var pegged: bool = _watch_frames > 0 \
+		and float(_watch_peg) / float(_watch_frames) >= WATCHDOG_PEG_RATIO
+	_watch_win_t = 0.0
+	_watch_peg = 0
+	_watch_frames = 0
+	if not pegged:
+		_watch_streak = 0
+		return
+	_watch_streak += 1
+	if _watch_streak >= WATCHDOG_TRIGGER_WINDOWS and _watch_cooldown <= 0.0:
+		_watch_streak = 0
+		_recover_audio_pipeline()
+		_watch_cooldown = WATCHDOG_COOLDOWN_SEC
+
+## 管线自愈：闷音低通整器重建（清 NaN 寄存器）+ 全播放器停稳后重起 BGM/环境音
+func _recover_audio_pipeline() -> void:
+	_watch_recoveries += 1
+	push_warning("AudioManager: 满幅混音自愈 #%d（连续 %d 窗 ≥%d%% 样本钉满幅）——重建低通并复播 BGM" % [
+		_watch_recoveries, WATCHDOG_TRIGGER_WINDOWS, int(WATCHDOG_PEG_RATIO * 100)])
+	# 1) 低通整器重建：旁路态下这步基本是空操作，闷音中触发则保持闷音并清干净寄存器
+	var bgm_idx := AudioServer.get_bus_index(BUS_BGM)
+	if bgm_idx >= 0 and _bgm_effect_idx >= 0:
+		var was_enabled: bool = AudioServer.is_bus_effect_enabled(bgm_idx, _bgm_effect_idx)
+		var was_muffled: bool = _bgm_lowpass != null and _bgm_lowpass.cutoff_hz <= MUFFLE_CUTOFF + 100.0
+		if _muffle_tween != null and _muffle_tween.is_valid():
+			_muffle_tween.kill()
+		AudioServer.remove_bus_effect(bgm_idx, _bgm_effect_idx)
+		_bgm_lowpass = AudioEffectLowPassFilter.new()
+		_bgm_lowpass.cutoff_hz = MUFFLE_CUTOFF if (was_enabled and was_muffled) else CLEAR_CUTOFF
+		AudioServer.add_bus_effect(bgm_idx, _bgm_lowpass)
+		_bgm_effect_idx = AudioServer.get_bus_effect_count(bgm_idx) - 1
+		AudioServer.set_bus_effect_enabled(bgm_idx, _bgm_effect_idx, was_enabled and was_muffled)
+		_muffle_on = was_enabled and was_muffled
+	# 2) 播放器全停稳（掐断变采样器/解码器的驻留态）再瞬时复播当前 BGM 与环境音
+	for p in sfx_players:
+		if p.playing:
+			p.stop()
+	if voice_player != null and voice_player.playing:
+		voice_player.stop()
+	var cur_key := String(bgm_key)
+	if ambience_player != null and ambience_player.playing:
+		ambience_player.stop()
+	for bp in bgm_players:
+		bp.stop()
+	bgm_key = &""
+	if cur_key != "":
+		# play_bgm_key 首播路径直接全音量起奏；环境音由其内部 _sync_ambience 淡入接手
+		play_bgm_key(cur_key, true)
 # ---------------- 音效注册表 ----------------
 
 func _load_audio_assets() -> void:
@@ -226,6 +326,7 @@ func _load_audio_assets() -> void:
 	_register_sfx("equip", _sfx_paths("equip", 2))
 	_register_sfx("unequip", _sfx_paths("unequip", 1))
 	_register_sfx("merge_success", _sfx_paths("merge_success", 2))
+	_register_sfx("weapon_awaken", _sfx_paths("weapon_awaken", 2))
 	_register_sfx("ui_click", _sfx_paths("ui_click", 3))
 	_register_sfx("ui_confirm", _sfx_paths("ui_confirm", 2))
 	_register_sfx("ui_back", _sfx_paths("ui_back", 1))
@@ -417,10 +518,17 @@ func play_bgm_key(key: String, instant: bool = false) -> void:
 	# 交叉淡化：新的从空闲 player 载入播放，旧的同步停掉/淡出
 	var idle_idx := 1 - bgm_next
 	var idle: AudioStreamPlayer = bgm_players[idle_idx]
+	# 竞态加固（2026-10-24）：上一轮淡出的 stop 回调若被 tween.kill() 取消，idle 会带着
+	# 旧流残留在播——在播状态下换流正是引擎偶发 NaN 样本的窗口，先显式停稳再换。
+	if idle.playing:
+		idle.stop()
 	idle.stream = stream
 
 	if bgm_tween != null and bgm_tween.is_valid():
 		bgm_tween.kill()
+		# 被砍掉的旧淡出补一枪 stop：残响玩家会让下一次交叉淡化多占一个声部
+		if active.playing and not is_instant:
+			active.stop()
 
 	if is_instant:
 		# 极速瞬时切换：新曲直接全音量起，旧曲 0.1s 迅速收尾
@@ -473,16 +581,35 @@ func _sync_ambience(key: String) -> void:
 		_ambience_tween.tween_callback(ambience_player.stop)
 
 ## Boss 战 BGM 闷音开关：登场压闷（900Hz 低通），伏诛/转阶段解除。Tween 防爆音。
+## 2026-10-24 起效果器非常驻：开闷音先在透明档（CLEAR）接入再压到 900，解除时先回升到
+## 透明档再整器旁路——常态链上没有有状态组件，引擎偶发 NaN 样本进不了双二阶寄存器。
 func set_bgm_muffle(on: bool) -> void:
 	if _bgm_lowpass == null:
 		return
-	var target := MUFFLE_CUTOFF if on else CLEAR_CUTOFF
+	var bgm_idx := AudioServer.get_bus_index(BUS_BGM)
+	if bgm_idx < 0 or _bgm_effect_idx < 0:
+		return
+	if on == _muffle_on:
+		return  # 已在目标意图态（含每次转波都来的解除调用），别空转 tween
+	_muffle_on = on
 	if _muffle_tween != null and _muffle_tween.is_valid():
 		_muffle_tween.kill()
-	_muffle_tween = create_tween()
-	_muffle_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	_muffle_tween.tween_property(_bgm_lowpass, "cutoff_hz", target, 0.8)\
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if on:
+		# 开闷音：透明档接入（解除补间中途折返则从当前档位续压），再压到 900Hz
+		_bgm_lowpass.cutoff_hz = maxf(_bgm_lowpass.cutoff_hz, MUFFLE_CUTOFF)
+		AudioServer.set_bus_effect_enabled(bgm_idx, _bgm_effect_idx, true)
+		_muffle_tween = create_tween()
+		_muffle_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_muffle_tween.tween_property(_bgm_lowpass, "cutoff_hz", MUFFLE_CUTOFF, 0.8)\
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		_muffle_tween = create_tween()
+		_muffle_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		_muffle_tween.tween_property(_bgm_lowpass, "cutoff_hz", CLEAR_CUTOFF, 0.8)\
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_muffle_tween.chain().tween_callback(func() -> void:
+			if AudioServer.get_bus_index(BUS_BGM) == bgm_idx:
+				AudioServer.set_bus_effect_enabled(bgm_idx, _bgm_effect_idx, false))
 
 ## 兼容旧调用：直接给一条流就播（Main 之外不该再有别处这么用）
 func play_bgm(stream: AudioStream) -> void:

@@ -197,19 +197,27 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 	var feats := weapon_feats(def)
 	if not feats.is_empty():
 		rows.append(["特性", feats])
+	# ★3 觉醒 / ★4 极境两行：与商店详情卡同一行、同一文案出口（star3_perk_desc / star4_perk_desc），
+	# 未达成灰色预告、达成亮色 —— 合成前就知道升到几星解锁什么。
+	var perk_desc := WeaponData.star3_perk_desc(id)
+	if not perk_desc.is_empty():
+		rows.append(["★3 觉醒", perk_desc, GameStyle.GOLD if star >= 3 else GameStyle.PAPER_DIM])
+	var asc_desc := WeaponData.star4_perk_desc(id)
+	if not asc_desc.is_empty():
+		rows.append(["★4 极境", asc_desc, GameStyle.STAR4_NEON if star >= WeaponData.MAX_STAR else GameStyle.PAPER_DIM])
 
 	var notes: Array[String] = [
 		# 紧凑单行公式与升星句：详情卡定宽 306，多折一行卡底就顶出视口（BenefitIconTapCheck 判出屏）
 		"单发 =（基础×星级 + 属性加伤）× 全局×羁绊×角色×五行×分流；暴击/斩将另算。",
 		WeaponDamageReadout.bonus_bill_text(id, star),
-		"升星：同名满 3 件在商店合成，伤害 ×%s、间隔 ×%s，最高 %s。" % [
+		"升星：同名满 3 件在商店合成，伤害 ×%s、间隔 ×%s，最高 %s（觉醒 + 极境招式）。" % [
 			_num(WeaponData.STAR_DAMAGE_MULT), _num(WeaponData.STAR_COOLDOWN_MULT), WeaponData.star_text(WeaponData.MAX_STAR)],
 	]
 	if not benefit_note.is_empty():
 		notes.push_front(benefit_note)
 
 	var foot := "同名同星 %d 件 · 出售可得 %d 枚" % [
-		GameManager.count_copies(id, star), WeaponData.sell_price(id, star)]
+		GameManager.count_copies(id, star), GameManager.weapon_sell_price(id, star)]
 	if from_stash:
 		foot += "\n在背包里：未上阵、不出手、不吃羁绊，只用于合成与出售。"
 

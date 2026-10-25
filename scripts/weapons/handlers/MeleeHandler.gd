@@ -117,7 +117,57 @@ static func perform(w) -> void:
 	# 3. 卸力后仰（Recovery）：TRANS_BACK 弹性回正 —— 终点是「实时」轨道位，不再弹回挥砍前的旧快照
 	tw.chain().tween_callback(func(): w._begin_recover(0.13, Tween.TRANS_BACK))
 
-static func deal_damage(w, aim_dir: Vector2) -> int:
+	# 4. ★3 觉醒「回风斩」/ ★4 极境「绝影三连」：主斩落点紧接若干段反向回旋斩
+	# （每段 ratio 伤害，参数唯一真话在 WeaponData.STAR3_AWAKEN / STAR4_ASCEND，经 awaken_perk 取）。
+	# 回调与收招同拍起跑（收招 tween 只动 position/scale，rotation 归这条链，
+	# 整段仍压在 is_attacking 窗口内，待机朝向插值不会来抢）；
+	# 追加月牙走 w.get_echo_slash 独立节点——主斩剑光此刻仍在扫放/淡出，共用会被拦腰截断。
+	var perk: Dictionary = WeaponData.awaken_perk(WeaponData.Behavior.MELEE, w.star)
+	if not perk.is_empty():
+		var echo_ratio: float = float(perk.get("ratio", 0.5))
+		var echo_count: int = maxi(1, int(perk.get("count", 1)))
+		for seg in range(echo_count):
+			# 段与段之间来回摆：偶数段反向、奇数段正向（0 段 = -swing，与主斩同向回锋）
+			var seg_sign: float = -1.0 if seg % 2 == 0 else 0.85
+			tw.chain().tween_callback(func():
+				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MELEE_WHOOSH_SCALE * 0.6)
+				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
+				if echo_hits > 0:
+					w._flash_sprite(echo_glow_color(w.star), 0.10)
+					play_echo_slash(w, slash_scale_end, w.star)
+					AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MELEE_IMPACT_SCALE * 0.7)
+			)
+			tw.tween_property(w, "rotation", aim_angle + swing * seg_sign, 0.09).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+
+## 追加斩的闪光色温：★3 觉醒金 / ★4 太虚霓虹紫青（与刀光同源，别处不再各写一份）
+static func echo_glow_color(star: int) -> Color:
+	if star >= WeaponData.MAX_STAR:
+		return Color(1.15, 1.75, 2.45)
+	return Color(1.6, 1.4, 0.7)
+
+## 追加斩的月牙色：★3 暖金，★4 电光青紫（UI 与战斗同色语言）
+static func echo_slash_color(star: int) -> Color:
+	if star >= WeaponData.MAX_STAR:
+		return Color(0.55, 1.85, 2.45, 1.0)
+	return Color(1.0, 0.88, 0.45, 1.0)
+
+## ★3 觉醒 / ★4 极境追加斩的月牙：直接在判定外缘亮起（主斩的"出鞘扫放"已经演过一遍，
+## 追加段要的是"回锋"的干脆——亮一拍即散），略小半号区分主次。
+static func play_echo_slash(w, scale_end: float, star: int = 3) -> void:
+	var spr: WeaponArcRenderer = w.get_echo_slash(WeaponArcRenderer.ArcMode.MELEE)
+	spr.visible = true
+	spr.modulate = echo_slash_color(star)
+	spr.position = Vector2(MELEE_LUNGE, 0.0)
+	spr.scale = Vector2.ONE * scale_end * 0.9
+	spr.rotation = 0.0
+	var etw: Tween = w.create_tween()
+	etw.tween_interval(0.06)
+	etw.tween_property(spr, "modulate:a", 0.0, SLASH_FADE_TIME)
+	etw.tween_callback(func(): spr.visible = false)
+
+## dmg_ratio：★3 觉醒追加打击的伤害系数（默认 1.0 = 主斩）。追加段吸血/固定回血不重复结算，
+## 击退与异常伤害随系数等比缩小（灼烧/剧毒取 max 生效，弱化刷新不会盖掉主斩的强异常）。
+static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 	var results: Array = w._query_enemies(arc_radius(w), w.global_position + aim_dir * MELEE_LUNGE, 24)
 	var hit_count := 0
 	# 返回值语义 = 「可见命中数」：屏外目标的伤害/击退/异常照常结算，但不计入计数——
@@ -125,9 +175,9 @@ static func deal_damage(w, aim_dir: Vector2) -> int:
 	var player: Node2D = GameManager.player
 	var vp_center: Vector2 = player.global_position if player != null else w.global_position
 	# 整刀属性管线只算一次：同刀乘区为常量（最多 24 目标共享），避免逐目标重算 _final_damage（9-13 次 item_hook_sum + 20 键 dict + equipped_cleanup 全子节点遍历）
-	var base_dmg: float = w._final_damage()
+	var base_dmg: float = w._final_damage() * dmg_ratio
 	# 2026-10-14 风险溢价：近战击退兜底 240→280（贴脸换控场），弹丸仍 140
-	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 280.0)
+	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 280.0) * dmg_ratio
 	# 五行异常开关与近战吸血同为整刀常量：原来逐目标 item_hook_sum 全量遍历 items，
 	# 24 目标 × 8 武器每挥砍近千次字典查找。注意异常施加保持 has_method 鸭类型——
 	# 武器脚本硬引用 EnemyBase（as EnemyBase）实测会把弹丸 preload 打成空 PackedScene（循环类依赖坑）
@@ -160,10 +210,12 @@ static func deal_damage(w, aim_dir: Vector2) -> int:
 					dmg * float(w.def.get("burn_ratio", 0.45)), float(w.def.get("burn_dur", 3.0)),
 					proc_chill, float(w.def.get("chill_dur", 2.5)),
 					proc_poison, dmg * float(w.def.get("poison_ratio", 0.35)), float(w.def.get("poison_dur", 3.0)))
-			GameManager.try_lifesteal(w.behavior)
-			# 开山重刃谱：近战命中额外吸收生命
-			if can_flat_heal:
-				player.heal(flat_ls, true)
+			# 吸血与固定回血只在主斩结算（追加打击不双计）
+			if dmg_ratio >= 1.0:
+				GameManager.try_lifesteal(w.behavior)
+				# 开山重刃谱：近战命中额外吸收生命
+				if can_flat_heal:
+					player.heal(flat_ls, true)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
 	return hit_count

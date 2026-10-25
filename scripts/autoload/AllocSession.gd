@@ -62,6 +62,7 @@ static func reroll_alloc(gm: Node) -> bool:
 			AudioManager.play_sfx("ui_error", 0.9)
 			return false
 		gm.spirit_stones -= gm.alloc_reroll_cost
+		gm.total_stones_spent += gm.alloc_reroll_cost
 		gm.alloc_reroll_count += 1
 		gm.alloc_reroll_cost = GameBalance.reroll_cost(gm.wave_number, gm.alloc_reroll_count, gm.shop_price_mult)
 	roll_alloc_offers(gm)

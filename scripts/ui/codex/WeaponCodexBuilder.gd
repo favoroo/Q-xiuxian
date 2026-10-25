@@ -52,7 +52,7 @@ static func rebuild(dialog: ManualDialog) -> void:
 	var elem_tag := dialog.weapon_element_filter
 	if cls_tag == "" and elem_tag == "":
 		box.add_child(dialog._make_text_card("武器规则",
-			"武器只能在回合间商店购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n点任意武器卡看射程、冷却与属性受益。" % [
+			"武器只能在回合间商店购买：上阵 %d 槽，背包 %d 格。\n集齐 3 把同名同星可合成升星：每星伤害 ×%s、攻击间隔 ×%s，最高 ★%d。\n★3 觉醒专属招式，★4 再跃一档「极境」；手里有同名武器时货架更容易刷出它。\n点任意武器卡看射程、冷却与属性受益。" % [
 				WeaponData.MAX_SLOTS, WeaponData.MAX_STASH_SLOTS,
 				String.num(WeaponData.STAR_DAMAGE_MULT, 1), String.num(WeaponData.STAR_COOLDOWN_MULT, 2),
 				WeaponData.MAX_STAR]))

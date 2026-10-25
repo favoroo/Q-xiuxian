@@ -134,6 +134,8 @@ func activate() -> void:
 	if _loot_renderer != null:
 		_loot_renderer.is_waiting = false
 	set_physics_process(true)
+	if _loot_renderer != null:
+		_loot_renderer.set_process(true)   ## 唤醒子渲染器（recycle 时显式休眠的）
 	set_deferred("monitoring", true)
 	set_deferred("monitorable", true)
 	_shape.set_deferred("disabled", false)
@@ -152,6 +154,8 @@ func recycle() -> void:
 		_bob_tween.kill()
 	remove_from_group("gems")
 	set_physics_process(false)
+	if _loot_renderer != null:
+		_loot_renderer.set_process(false)   ## 子渲染器随本体休眠：set_process 不递归子节点
 	_shape.set_deferred("disabled", true)
 	set_deferred("monitoring", false)
 	set_deferred("monitorable", false)

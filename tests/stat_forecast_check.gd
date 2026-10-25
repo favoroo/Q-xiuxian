@@ -48,7 +48,9 @@ const AT_CAP: Dictionary = {"dodge": 0.9, "crit_rate": 0.9, "attack_speed_mult":
 
 const EPS := 0.0001
 ## 面板有行的字段 = StatInfoData.STAT_FIELDS 的 value 摊平；hp_heal 另算 —— 它落在
-## 「生命值」那一行的当前值上（满血时当场夹顶，正是要写实的例子）
+## 「生命值」那一行的当前值上（满血时当场夹顶，正是要写实的例子）。
+## 2026-10-24 起 hp_heal 与 max_hp 同值成对时在出口折叠（BonusRows.folded_keys），
+## 登记表仍认它：裸 hp_heal 或未来不等值的件照样出注脚
 const EXTRA_PANEL_FIELDS: Array[String] = ["hp_heal"]
 ## 钉进一屏真候选的四条：夹顶那条、双字段那条、面板无行那条（不许长注脚）、混合生存+生命那条
 const PINNED: Array[String] = ["crit_up", "hp_up", "chest_count_up", "temper"]
@@ -222,8 +224,8 @@ func _run_notes_fit_narrowest_card() -> void:
 
 func _run_card_renders_notes() -> void:
 	# 静音生命回复：卡面注脚在 _on_alloc_opened 里同步取数，模型在 settle 几帧后另取一份，
-	# 中间只要有一次回复跳字，current_hp 就漂一档，hp_heal 注脚会差 1 点血（实测 2/3 概率红）。
-	# 回复不是这一枪要量的东西，冻结掉，两头取数才逐位可比（同 ShopReadoutCheck._quiet_arena）。
+	# 中间只要有一次回复跳字，current_hp 读数就漂一档（hp_heal 注脚已随 max_hp 折叠，
+	# 静音留作防御：未来若钉回带 current_hp 注脚的卡，两头取数仍逐位可比）。
 	GameManager.hp_regen = 0.0
 	GameManager.synergy_hp_regen = 0.0
 	_pin_offers()

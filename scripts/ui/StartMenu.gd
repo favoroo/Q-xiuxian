@@ -69,12 +69,15 @@ var _sound_badge_btn: Button
 var _top_set_btn: Button
 var _author_badge_btn: Button
 
-# —— 作者模式入口：右上设置徽章 3 秒内连点 5 次 ——
+# —— 作者模式入口：右上设置徽章 3 秒内连点 5 次，或长按 3 秒 ——
 ## 不写存档（GameManager.author_mode 是会话成员），下次启动自然回普通模式。
 const AUTHOR_TAP_COUNT := 5
 const AUTHOR_TAP_WINDOW := 3.0
+const AUTHOR_HOLD_SEC := 3.0           ## 长按进入作者模式的按住秒数
 var _author_taps: int = 0
 var _author_last_tap_ms: int = 0
+var _settings_hold_tween: Tween = null ## 长按倒数计时（运行中即表示「正按住」）
+var _settings_hold_fired: bool = false ## 长按已触发：松手那一下 pressed 只做收尾，不再开设置
 var _corrupt_save_noted: bool = false   ## 续玩档坏档提示只弹一次（反复回菜单不刷屏）
 
 # Hero 大方块与内部控件
@@ -168,8 +171,9 @@ func _build_top_bar() -> void:
 	_top_bar.add_child(_sound_badge_btn)
 
 	_top_set_btn = _make_badge_button("设置", Vector2(74, 36),
-		GameStyle.NAVY2, GameStyle.GOLD, GameStyle.PAPER, _on_settings_pressed)
+		GameStyle.NAVY2, GameStyle.GOLD, GameStyle.PAPER, _on_top_set_pressed)
 	_top_bar.add_child(_top_set_btn)
+	_attach_author_hold(_top_set_btn)
 
 func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Color,
 		font_col: Color, callback: Callable) -> Button:
@@ -891,6 +895,14 @@ func _on_settings_pressed() -> void:
 		return
 	settings_requested.emit()
 
+## 右上设置徽章专属的 pressed 收口：长按 3 秒刚触发过作者模式切换时，
+## 这一下松手只做收尾（不开设置、不计连点），否则按满 3 秒还会再弹设置面板。
+func _on_top_set_pressed() -> void:
+	if _settings_hold_fired:
+		_settings_hold_fired = false
+		return
+	_on_settings_pressed()
+
 ## 连点计数：返回 true 表示这一下已消费为作者模式切换（调用方不要再开设置）。
 ## 用真实毫秒而不是帧数：低帧设备上连点间隔不该被帧率放大。
 func _count_author_tap() -> bool:
@@ -901,12 +913,52 @@ func _count_author_tap() -> bool:
 	_author_taps += 1
 	if _author_taps < AUTHOR_TAP_COUNT:
 		return false
+	_trigger_author_toggle()
+	return true
+
+## 连点满 5 次与长按满 5 秒的共同落点：切换作者模式并广播提示。
+## 连点计数一并清零，长按后的松手不会把旧计数带进下一次窗口。
+func _trigger_author_toggle() -> void:
 	_author_taps = 0
 	GameManager.set_author_mode(not GameManager.author_mode)
 	GameManager.announcement_triggered.emit(
 		"◆ 作者模式已开启 ◆" if GameManager.author_mode else "作者模式已关闭")
 	AudioManager.play_sfx("ui_confirm", 0.9)
-	return true
+
+## 长按入口接线：按住满 AUTHOR_HOLD_SEC 秒切换作者模式。
+## 刻意零视觉反馈（不动文案不动色）——入口是隐藏彩蛋，按住过程不能给旁人任何提示；
+## 滑出徽章即作废（mouse_exited 杀计时），松开恢复正常点按。
+func _attach_author_hold(btn: Button) -> void:
+	btn.button_down.connect(_on_settings_hold_down)
+	btn.button_up.connect(_on_settings_hold_up)
+	btn.mouse_exited.connect(_on_settings_hold_leave)
+
+func _on_settings_hold_down() -> void:
+	_settings_hold_fired = false
+	_cancel_settings_hold()
+	if _top_set_btn == null or not is_instance_valid(_top_set_btn):
+		return
+	var tw := create_tween()
+	_settings_hold_tween = tw
+	tw.tween_interval(AUTHOR_HOLD_SEC)
+	tw.tween_callback(_on_settings_hold_complete)
+
+func _on_settings_hold_up() -> void:
+	_cancel_settings_hold()
+
+func _on_settings_hold_leave() -> void:
+	if _settings_hold_tween != null and _settings_hold_tween.is_valid():
+		_cancel_settings_hold()
+
+func _on_settings_hold_complete() -> void:
+	_settings_hold_tween = null
+	_settings_hold_fired = true
+	_trigger_author_toggle()
+
+func _cancel_settings_hold() -> void:
+	if _settings_hold_tween != null and _settings_hold_tween.is_valid():
+		_settings_hold_tween.kill()
+	_settings_hold_tween = null
 
 ## 首页顶栏作者徽章：开启时显示，作为状态提示（同时是关闭入口的视觉锚点）
 func _refresh_author_badge() -> void:

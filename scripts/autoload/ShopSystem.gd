@@ -132,7 +132,7 @@ static func gen_offer(gm: Node, wave: int) -> Dictionary:
 		"sold": false, "locked": false,
 	}
 
-## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权抽武器
+## 梯度亲和（含双流派共鸣叠加）+ 流派偏好软加权 + 同名追梦加权抽武器
 static func weighted_weapon_pick(gm: Node) -> String:
 	var pool: Array = WeaponData.SHOP_POOL
 	var counts := SynergySystem.tag_counts(gm)
@@ -142,9 +142,23 @@ static func weighted_weapon_pick(gm: Node) -> String:
 		var w := luck_mult
 		w *= GameBalance.tag_affinity_combo(counts, WeaponData.tags_of(w_id))
 		w *= GameBalance.tag_filter_mult(WeaponData.tags_of(w_id), gm.shop_tag_filter)
+		w *= _dream_affinity_mult(gm, String(w_id))
 		weights.append(w)
 	var idx := GameBalance.weighted_pick_index(weights, gm.rng.randf())
 	return String(pool[idx])
+
+## 同名追梦加权（2026-10-24）：按手里这把武器的最高星级与同星件数取倍率。
+## 三合一是「3 件换 1 件」，合成后标签件数掉 2 ⇒ 流派亲和反而变弱，越合越刷不到自己那把，
+## 27 把 ★1 的追梦在数学上走不完。这一层只补同名武器的权重，不动标签亲和的算法。
+static func _dream_affinity_mult(gm: Node, w_id: String) -> float:
+	var best_star := 0
+	var best_copies := 0
+	for s in range(1, WeaponData.MAX_STAR + 1):
+		var c := WeaponInventory.count_copies(gm, w_id, s)
+		if c > 0:
+			best_star = s
+			best_copies = c
+	return GameBalance.owned_weapon_affinity_mult(best_star, best_copies)
 
 static func toggle_lock(gm: Node, index: int) -> void:
 	if index < 0 or index >= gm.shop_offers.size():
@@ -197,7 +211,9 @@ static func buy_offer(gm: Node, index: int) -> bool:
 				return false
 	if not ok:
 		return false
-	gm.spirit_stones -= int(offer.get("price", 0))
+	var price_paid := int(offer.get("price", 0))
+	gm.spirit_stones -= price_paid
+	gm.total_stones_spent += price_paid
 	offer["sold"] = true
 	gm.stats_updated.emit(gm.kills, gm.game_time, gm.spirit_stones)
 	AudioManager.play_sfx("shop_buy", 1.0)
@@ -210,6 +226,7 @@ static func reroll_shop(gm: Node) -> bool:
 		if gm.spirit_stones < gm.reroll_cost:
 			return false
 		gm.spirit_stones -= gm.reroll_cost
+		gm.total_stones_spent += gm.reroll_cost
 		gm.reroll_count += 1
 	roll_shop(gm, false)
 	gm.stats_updated.emit(gm.kills, gm.game_time, gm.spirit_stones)

@@ -47,9 +47,12 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 	sb.content_margin_bottom = 2.0
 	slot.add_theme_stylebox_override("panel", sb)
 
-	var icon_path: String = item.get("icon", "")
+	# 图标与货架卡同源读实时表：条目里的 icon 是购买时刻的快照（存档整包还原），跨版本
+	# 换图会顶着旧图而卡面已是新图（2026-10-24 灵兽图标同款问题）；快照只给表里已查不到的
+	# 陈旧 id 兜底，防格子刷成空白。
+	var icon_path: String = WeaponData.get_def(id).get("icon", "")
 	if icon_path.is_empty():
-		icon_path = WeaponData.get_def(id).get("icon", "")
+		icon_path = item.get("icon", "")
 
 	var icon_tex := GameStyle.icon_texture_rect(icon_path)
 	slot.add_child(icon_tex)
@@ -60,6 +63,8 @@ static func create_inv_slot(shop: WaveShop, item: Dictionary, index: int, pool: 
 
 	# 星级跟着格子长：44 格上 11 号字还行，60 格上就缩成灰了
 	GameStyle.star_label(slot, star, int(round(clampf(tile * 0.24, 12.0, 16.0))))
+	# ★4 极境：框内侧贴一圈太虚紫内衬（外框仍说五行，极境身份另起一条通道）
+	GameStyle.apply_star4_trim(slot, star)
 
 	# 可合成角标：左上角「合」字（与右下 ★n 同一副文字语言，共用 PanelContainer 铺满子节点
 	# 的对齐写法，不画底以免整格刷黄）。2026-10-18 用户：JADE 亮黄边与金系古金撞色 ⇒ 合成
@@ -267,7 +272,7 @@ static func create_pets_divider() -> Control:
 	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
 	return chip
 
-## 已持有灵兽的小徽记：绘制焰形光灵（与游戏内 SpiritPet 本体同源的焰形对称轮廓），支持点按弹出 DetailTip 详解卡与出售操作
+## 已持有灵兽的小徽记：绘制无脸圆球光灵（与货架卡同一画法，见 PetIconDraw），支持点按弹出 DetailTip 详解卡与出售操作
 static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Control:
 	var def := PetData.get_def(pet_id)
 	var chip = PanelContainer.new()
@@ -282,28 +287,7 @@ static func create_pet_chip(shop: WaveShop, pet_id: String, tile: float) -> Cont
 	preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.draw.connect(func():
-		var sz := preview.size
-		var center := sz * 0.5
-		var r: float = sz.x * 0.28
-		var halo: Color = def.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
-		preview.draw_circle(center, r * 1.5, halo)
-		# 焰形对称轮廓（右半点阵镜像拼合，与 SpiritPet._flame_poly 同源）
-		var half: Array[Vector2] = [
-			Vector2(0.00, 1.00), Vector2(0.60, 0.86), Vector2(0.94, 0.40),
-			Vector2(0.88, -0.20), Vector2(0.62, -0.70), Vector2(0.32, -1.05), Vector2(0.00, -1.38)
-		]
-		var body := PackedVector2Array()
-		for p in half:
-			body.append(center + Vector2(p.x * r, p.y * r))
-		for i in range(half.size() - 2, -1, -1):
-			var p: Vector2 = half[i]
-			body.append(center + Vector2(-p.x * r, p.y * r))
-		preview.draw_colored_polygon(body, color)
-		body.append(body[0])
-		preview.draw_polyline(body, color.darkened(0.25), 1.0, true)
-		# 对称双高光灵瞳
-		preview.draw_circle(center + Vector2(-r * 0.26, -r * 0.30), r * 0.20, Color(1.0, 1.0, 1.0, 0.85))
-		preview.draw_circle(center + Vector2(r * 0.26, -r * 0.30), r * 0.20, Color(1.0, 1.0, 1.0, 0.85))
+		PetIconDraw.draw_orb(preview, def)
 	)
 	chip.add_child(preview)
 

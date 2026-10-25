@@ -415,6 +415,10 @@ static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 static func shop_luck_mult(luck: float) -> float:
 	return BalanceEconomy.shop_luck_mult(luck)
 
+## 同名追梦加权：持有 ★1/★2/★3 同名武器时货架刷出该武器的倍率（合成会掉件数，得把空缺补回来）
+static func owned_weapon_affinity_mult(max_star: int, copies_at_max: int) -> float:
+	return BalanceEconomy.owned_weapon_affinity_mult(max_star, copies_at_max)
+
 static func item_tier_weights(luck: float, wave: int) -> Array:
 	return BalanceEconomy.item_tier_weights(luck, wave)
 

@@ -65,6 +65,10 @@ func _ready() -> void:
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, REDRAW_INTERVAL)
 
 func _process(delta: float) -> void:
+	# 池化宿主回收只隐藏自身，子节点 _process 不会连带停（set_process 不递归、visible 不拦 _process）；
+	# is_visible_in_tree() 连祖先一起判定，宿主隐藏时在此整体短路兜底（宿主侧 recycle 另有 set_process 开关）
+	if not is_visible_in_tree():
+		return
 	_time += delta
 	if self_bob:
 		var cur_bob := sin(_time * BOB_SPEED) * BOB_AMP

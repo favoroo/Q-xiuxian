@@ -52,6 +52,10 @@ func _ready() -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	# 池化弹丸回收只隐藏本体，子渲染器 _process 不随宿主 set_physics_process(false) 停；
+	# is_visible_in_tree() 连祖先判定，休眠弹在此短路（BladeProjectile._recycle 另有 set_process 开关）
+	if not is_visible_in_tree():
+		return
 	_lifetime_acc += delta
 	_draw_phase += delta
 	var interval := _redraw_interval()

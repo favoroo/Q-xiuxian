@@ -312,7 +312,7 @@ func _test_magnet() -> void:
 
 	# 直接往 hook 缓存注入一份磁吸（等效于持有过一件带 chest_magnet 的道具）
 	GameManager._hook_cache["chest_magnet"] = 1.0
-	GameManager._hook_cache_items_size = GameManager.items.size()
+	GameManager._hook_cache_items_size = GameManager.items.hash()   ## 失效判据已改内容指纹（2026-10-24），注入用例同步
 	_c.check(GameManager.item_hook_sum("chest_magnet") > 0.0, "磁吸机制字段被 item_hook_sum 读到")
 	var c2 := _make_chest(BalanceChest.TIER_WOOD)
 	await get_tree().process_frame

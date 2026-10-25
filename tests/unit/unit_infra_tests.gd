@@ -251,7 +251,7 @@ func _test_start_in_endless() -> void:
 
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 29, "成就共配置 29 条（17 奖励型 + 12 纯荣誉型）")
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 35, "成就共配置 35 条（17 奖励型 + 18 纯荣誉型）")
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)

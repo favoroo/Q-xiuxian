@@ -345,6 +345,74 @@ func _test_shop_tag_soft_bias() -> void:
 	_c.check(saw_non_sword, "剑痴软加权下 30 次刷新内必出现非剑系法器（不再全是青云剑）")
 	GameManager.reset_run()
 
+## 同名追梦加权（2026-10-24）：三合一是 3 件换 1 件，合成后标签件数掉 2 ⇒ 流派亲和变弱，
+## 越合越刷不到自己那把，27 把 ★1 的 ★4 追梦在数学上走不完。这一层按「手里同名最高星级」
+## 给该武器单独加权，把合成掉掉的件数补回来。
+func _test_dream_affinity() -> void:
+	# 未持有 → 不加权
+	_c.near(GameBalance.owned_weapon_affinity_mult(0, 0), 1.0, EPS, "未持有同名武器时不加权")
+	# 逐星抬升，且严格单调（★越高越该刷得出来）
+	var m1: float = GameBalance.owned_weapon_affinity_mult(1, 1)
+	var m2: float = GameBalance.owned_weapon_affinity_mult(2, 1)
+	var m3: float = GameBalance.owned_weapon_affinity_mult(3, 1)
+	_c.near(m1, 2.2, EPS, "持有 ★1 → ×2.2")
+	_c.near(m2, 4.5, EPS, "持有 ★2 → ×4.5")
+	_c.near(m3, 8.0, EPS, "持有 ★3 → ×8.0")
+	_c.check(m1 < m2 and m2 < m3, "追梦权重随星级严格单调抬升")
+	# 临门一脚（同星已有 2 件）再乘一档：差一件就该真的刷得出来
+	_c.near(GameBalance.owned_weapon_affinity_mult(2, 2), 4.5 * 1.6, EPS, "★2 已有 2 件 → 临门一脚 ×1.6")
+	_c.near(GameBalance.owned_weapon_affinity_mult(3, 2), 8.0 * 1.6, EPS, "★3 已有 2 件 → 临门一脚 ×1.6")
+	_c.check(GameBalance.owned_weapon_affinity_mult(3, 2) > GameBalance.owned_weapon_affinity_mult(3, 1),
+		"临门一脚比单件更强")
+	# 已铸成 ★4 → 追梦达成，回落 1.0（不再把货架锁死在这一把上）
+	_c.near(GameBalance.owned_weapon_affinity_mult(4, 1), 1.0, EPS, "已有 ★4 时回落 1.0")
+	# 上限压在 8.0 档 × 临门 1.6 = 12.8：再高会让货架坍缩成单一武器，没有构筑选择
+	_c.check(GameBalance.owned_weapon_affinity_mult(3, 2) <= 12.8, "追梦权重上限 ≤12.8（不坍缩货架）")
+
+	# 接进货架：持有 ★3 同名武器后，该武器刷出频率必须显著高于未持有基线
+	GameManager.reset_run()
+	GameManager.wave_number = 10
+	var target := "qingyun_sword"
+	var n_without := 0
+	GameManager.rng.seed = 777001
+	for i in range(120):
+		if ShopSystem.weighted_weapon_pick(GameManager) == target:
+			n_without += 1
+	GameManager.stash = [{"id": target, "star": 3}]
+	var n_with := 0
+	GameManager.rng.seed = 777001
+	for i in range(120):
+		if ShopSystem.weighted_weapon_pick(GameManager) == target:
+			n_with += 1
+	_c.check(n_with > n_without * 2,
+		"持有 ★3 同名后刷出次数翻倍以上（%d → %d / 120 次）" % [n_without, n_with])
+	GameManager.reset_run()
+
+## 初始武器平价回收：开局白送的那一件按原价退，卖一次即失效（避免为回本硬留流派）
+func _test_starter_weapon_resale() -> void:
+	GameManager.reset_run()
+	# 常规口径仍是半价；原价口径不吃 0.5 折扣，但保留星级系数
+	_c.equals(WeaponData.sell_price("qingyun_sword", 1), 13, "常规回收 = 基准价 25 × 50% 上取整")
+	_c.equals(WeaponData.sell_price("qingyun_sword", 1, WeaponData.STARTER_SELL_RATIO), 25, "初始武器按原价回收")
+	_c.equals(WeaponData.sell_price("qingyun_sword", 2, WeaponData.STARTER_SELL_RATIO), 40, "★2 初始武器走星级系数仍是原价口径")
+
+	GameManager.starter_weapon_id = "qingyun_sword"
+	GameManager.starter_sell_bonus_pending = true
+	_c.equals(GameManager.weapon_sell_price("qingyun_sword", 1), 25, "报价与实际到手同源：初始武器报原价")
+	_c.equals(GameManager.weapon_sell_price("gengjin_feijian", 1),
+			WeaponData.sell_price("gengjin_feijian", 1), "其他武器报价不受初始武器影响")
+
+	# 从背包卖出同名副本同样算兑现一次（副本本身不可区分），之后回到半价
+	GameManager.spirit_stones = 0
+	GameManager.stash = [{"id": "qingyun_sword", "star": 1}]
+	_c.check(GameManager.sell_stash(0), "初始武器从背包售出成功")
+	_c.equals(GameManager.spirit_stones, 25, "第一件到手原价 25")
+	_c.check(not GameManager.starter_sell_bonus_pending, "原价额度只兑现一次")
+	GameManager.stash = [{"id": "qingyun_sword", "star": 1}]
+	_c.check(GameManager.sell_stash(0), "再卖一件同名副本成功")
+	_c.equals(GameManager.spirit_stones, 25 + 13, "第二件恢复半价 13")
+	GameManager.reset_run()
+
 func _make_all_non_spirit_offers(wave: int) -> Array:
 	# 4 个全为青云剑（tags=["sword"]，不含 spirit）的货架，用于保底测试的确定输入
 	var w_id := "qingyun_sword"

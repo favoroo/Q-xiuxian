@@ -91,13 +91,16 @@ func _run() -> void:
 		"疾风咒脚下风轮锚定真实脚底且覆盖身宽（feet y:%.0f, RX:%.0f）" % [PlayerSkillVfx.HASTE_FEET.y, PlayerSkillVfx.HASTE_WHEEL_RX])
 
 	# ---- 神行术：移速/闪避双乘区 + 效果活跃窗口（冷却不走、活跃中拒绝再放）+ 到期精确回滚 ----
+	var casts_before := GameManager.skill_cast_count
 	_c.check(player.try_activate_skill(), "神行术首次释放成功")
+	_c.equals(GameManager.skill_cast_count, casts_before + 1, "成功施放计入技能次数账本")
 	_c.near(GameManager.buff_move_speed_mult, 1.8, 0.001, "神行术写入移速乘区 1.8（移速+80%）")
 	_c.near(GameManager.buff_dodge, 0.6, 0.001, "神行术写入闪避加成 0.6（闪避+60%）")
 	_c.check(vfx.gale_active, "神行术激活角色足底御风特效")
 	_c.check(player.skill_active_left > 0.0, "释放后进入效果活跃窗口")
 	_c.near(player.skill_cd_left, 0.0, 0.001, "活跃窗口内冷却尚未起转（效果结束才计冷却）")
 	_c.check(not player.try_activate_skill(), "效果活跃中再次释放被拒绝")
+	_c.equals(GameManager.skill_cast_count, casts_before + 1, "被拒绝的施放不计技能次数")
 	# buff 到期精确回滚（拨快倒计时，不等满 4 秒）
 	player._skill_buffs["gale"] = 0.02
 	vfx.gale_timer = 0.02

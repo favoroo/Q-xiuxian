@@ -145,6 +145,11 @@ var cone_renderer: FlameConeRenderer = null
 @onready var muzzle_point: Marker2D = $MuzzlePoint
 @onready var slash_sprite: WeaponArcRenderer = $SlashEffect
 
+## ★3 觉醒追加打击（回风斩/回掠）专用的第二道弧光，懒建。
+## 主斩月牙的扫放/淡出窗口（0.05→0.23s）与追加打击重叠，共用 $SlashEffect
+## 会把主视觉拦腰截断——追加打击一律走这个独立节点。
+var echo_slash_sprite: WeaponArcRenderer = null
+
 var muzzle_flash: Sprite2D
 var aura_sprite: Sprite2D = null
 var _base_sprite_scale := Vector2(0.55, 0.55)
@@ -416,6 +421,21 @@ func _begin_recover(duration: float, trans: int) -> void:
 	, 0.0, 1.0, duration).set_trans(trans).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "scale", Vector2.ONE, duration).set_trans(Tween.TRANS_SINE)
 	tw.chain().tween_callback(func(): is_attacking = false)
+
+## ★3 觉醒追加打击的第二道弧光：与主斩同模式同元素，层级对齐 $SlashEffect，
+## 金色由调用方 modulate 覆盖。只在 ★3 武器第一次追加打击时创建（全生命周期复用）。
+func get_echo_slash(mode: WeaponArcRenderer.ArcMode) -> WeaponArcRenderer:
+	if echo_slash_sprite == null:
+		echo_slash_sprite = WeaponArcRenderer.new()
+		echo_slash_sprite.configure(mode, _arc_element())
+		# 横扫扇面钉世界坐标（与 _setup_sweep_sprite 同一约定）：扇面留在挥出那一帧的方位，
+		# 不随本体收势转走；近战月牙跟随本体（局部坐标）。
+		echo_slash_sprite.top_level = (mode == WeaponArcRenderer.ArcMode.SWEEP)
+		echo_slash_sprite.z_index = slash_sprite.z_index
+		echo_slash_sprite.visible = false
+		echo_slash_sprite.modulate.a = 0.0
+		add_child(echo_slash_sprite)
+	return echo_slash_sprite
 
 
 

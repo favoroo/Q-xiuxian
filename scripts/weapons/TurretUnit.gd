@@ -52,6 +52,9 @@ func setup(def_id: String, star_level: int) -> void:
 	_def = WeaponData.get_def(def_id)
 	base_damage = WeaponData.damage_for(def_id, star)
 	fire_cooldown = float(_def.get("turret_fire_cd", 0.8))
+	# ★3 主炮 / ★4 神机齐射：全部炮台开火间隔乘 cd_mult（WeaponData.awaken_perk，
+	# 与 sustained_single_dps 判据同源）
+	fire_cooldown *= float(WeaponData.awaken_perk(WeaponData.Behavior.TURRET, star).get("cd_mult", 1.0))
 	attack_range = float(_def.get("range", 220.0))
 	lifetime = float(_def.get("turret_lifetime", 12.0))
 	_lifetime_timer = lifetime

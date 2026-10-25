@@ -101,6 +101,36 @@ func _main_cases() -> void:
 	await _tap_every_chip()
 	await _swipe_must_not_open()
 	await _tips_fit_three_widths()
+	await _check_merge_corner_badge()
+
+## 验证商品右上角圆形合成标记：
+## 当玩家持有 2 把同名 1 星武器时，货架上的同名卡片右上角显示圆形「合」标记（主题色底+黑字），
+## 点击能够弹出合成详情卡；没有满 2 件的卡片不显示该标记。
+func _check_merge_corner_badge() -> void:
+	await _open_pinned_shop(int(VP.x))
+	var cards := _cards()
+	_c.check(cards.size() >= 2, "货架卡片数充足")
+	var card0 := cards[0] as Control
+	var badge: Label = card0.find_child("MergeCornerBadge", true, false) as Label
+	_c.check(badge != null, "可合成武器卡片右上角存在 MergeCornerBadge")
+	if badge != null:
+		_c.equals(badge.text, "合", "标记文字为「合」")
+		_c.equals(badge.get_theme_color("font_color"), GameStyle.INK, "标记文字为黑色墨字")
+		var sb := badge.get_theme_stylebox("normal") as StyleBoxFlat
+		_c.check(sb != null, "标记具备 StyleBoxFlat 背景")
+		if sb != null:
+			_c.equals(sb.corner_radius_top_left, 10, "标记为正圆圆角（半径 10）")
+			_c.equals(sb.corner_radius_bottom_right, 10, "标记四角皆为圆角")
+		# 点按圆形标记，验证能弹出详情卡
+		var payload := await _tap(badge, "右上角「合」字徽标")
+		var w_name := String(WeaponData.get_def("qingyun_sword").get("name", "这把武器"))
+		_c.equals(String(payload.get("title", "")), "可合成 · %s" % w_name, "点击右上角「合」标记成功弹出合成详情")
+
+	# 第二张卡（gengjin_feijian）手里只有 0 件，不应该有 MergeCornerBadge
+	var card1 := cards[1] as Control
+	var badge1 := card1.find_child("MergeCornerBadge", true, false)
+	_c.check(badge1 == null, "未达合成条件的商品卡片右上角不显示合成标记")
+	await _open_close()
 
 ## 开一次钉好的货架：五把法器 = 五种攻击方式，流派签与可合成角标都齐
 func _open_pinned_shop(width: int) -> void:

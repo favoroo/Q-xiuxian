@@ -416,6 +416,7 @@ func activate() -> void:
 		if path_str != _last_kind_path:
 			_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
 			_last_kind_path = path_str
+		_vector_renderer.set_process(true)   ## 唤醒子渲染器（回收时显式休眠的）
 		_vector_renderer.queue_redraw()
 	_apply_elemental_tint()
 	if _trail != null:
@@ -446,6 +447,8 @@ func _recycle() -> void:
 		_trail.reset()
 	_release_light()
 	set_physics_process(false)
+	if _vector_renderer != null:
+		_vector_renderer.set_process(false)   ## 子渲染器随本体休眠：set_process 不递归子节点，弹池休眠期不再空转节流计数
 	set_deferred("monitoring", false)
 	$CollisionShape2D.set_deferred("disabled", true)
 	visible = false

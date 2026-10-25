@@ -8,6 +8,8 @@ extends RefCounted
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
 ## 与悟道加点共用同一条属性链路。卡面/详情卡的加成行由 BonusRows 从 apply 直接生成（正绿负红），
 ## desc 只写 apply 之外的机制说明，不再手抄数值——数字与生效幅度天然同源。
+## hp_heal 恒与同 apply 里的 max_hp 同值成对（新上限自带满血），卡面折叠不单列（BonusRows.folded_keys）；
+## 新件别写不等值的回血数，不等值时回血行会重新冒出来。
 ## 独特机制走额外字段（由对应系统消费，不进 apply）：
 ##   wave_heal_pct —— 回合末按生命上限百分比回血（GameManager.apply_harvest 结算）
 ##   revive        —— 致死一击时消耗本道具免死并回半血（GameManager.try_revive）
@@ -869,7 +871,7 @@ static func sell_price(id: String) -> int:
 ## gm 可选透传（满穿透闸 PierceLimit：阵容穿透顶到上限后穿透道具停刷）；
 ## 池空返回 ""，调用方落回武器位
 static func pick_id(luck: float, wave: int, bought: Array, rng: RandomNumberGenerator, unlocked_items: Array = [], gm: Node = null) -> String:
-	# 先按构筑感知过滤收一版池（玩剑系就不刷纯召唤/机关/单元素/灵兽/寻宝件）；
+	# 先按构筑感知过滤收一版池（玩剑系就不刷纯召唤/机关/单元素/灵兽件；宝箱件是经济件不过闸）；
 	# 池被过滤空时回退到未过滤池，绝不让货架落空（2026-10-20）
 	var picked := _pick_id_filtered(luck, wave, bought, rng, unlocked_items, gm, true)
 	if picked != "":

@@ -25,6 +25,21 @@ const BEAM_HIT_OVERHANG := 24.0
 ## 起喷当帧强制立判（武器 _beam_need_cast），首跳伤害长度不滞后。
 const BEAM_CAST_INTERVAL := 0.1
 
+## ★3 觉醒「贯日」/ ★4 极境「贯日天河」：光束判定宽度倍率。
+## 判定盒与视觉束宽都从这里取——画多宽==判多宽，只改一边违反分层铁律 7。
+static func beam_width_mult(w) -> float:
+	return float(WeaponData.awaken_perk(WeaponData.Behavior.BEAM, w.star).get("width_mult", 1.0))
+
+## ★3 觉醒「燎原」/ ★4 极境「焚天燎原」：喷吐锥形半角（度），判定过滤与视觉锥宽同源下发。
+static func cone_half_angle(w) -> float:
+	return float(WeaponData.awaken_perk(WeaponData.Behavior.CONE, w.star).get("half_angle", CONE_HALF_ANGLE))
+
+## 束流威力倍率（dmg_mult）：加宽/扩角之外本体也升温。
+## 乘在 _final_damage 之后：喷吐的灼烧从 cycle_dmg 派生所以一并放大，
+## 与尺子 sustained_single_dps 的 BEAM/CONE 分支（整管 ×dmg_mult）同源。
+static func star3_dmg_mult(w) -> float:
+	return float(WeaponData.awaken_perk(w.behavior, w.star).get("dmg_mult", 1.0))
+
 ## 光束长度射线与判定矩形的静态复用对象（单线程使用安全，尺寸/变换每次调用重设）
 static var _beam_ray_query: PhysicsRayQueryParameters2D = null
 static var _beam_shape: RectangleShape2D = null
@@ -68,15 +83,18 @@ static func tick(w, delta: float) -> void:
 		w._beam_len = lerpf(w._beam_len, w._beam_len_target, minf(delta * 14.0, 1.0))
 		# 星升视觉膨胀收一档（2026-10-15 克制化 0.18→0.08）：判定盒（deal_beam_damage
 		# 恒 BEAM_HALF_WIDTH*2.0）本就不乘它，纯视觉；★3 视觉宽 13.6→11.6，不再比判定宽出 1/3
+		# 2026-10-24 ★3 觉醒「贯日」：判定盒本身 ×beam_width_mult（deal_beam_damage 同源），
+		# 视觉 = 新判定宽 × w_mult（±16% 辉光宽容照旧）。
 		var w_mult: float = 1.0 + 0.08 * float(w.star - 1)
-		w.beam_renderer.beam_on(w._beam_len, BEAM_HALF_WIDTH * 2.0 * w_mult, w._get_aura_color())
+		w.beam_renderer.beam_on(w._beam_len, BEAM_HALF_WIDTH * 2.0 * beam_width_mult(w) * w_mult, w._get_aura_color())
 		if w._channel_tick <= 0.0:
 			w._channel_tick = BEAM_TICK
 			deal_beam_damage(w)
 	else:
 		# 锥长从器口起算：判定圆心 == 器口、半径 == 锥长，渲染器同源下发
+		# （锥角经 cone_half_angle 下发：★3 觉醒「燎原」判定与视觉同步加宽）
 		var cone_len: float = maxf(40.0, reach - w.muzzle_len)
-		w.cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(CONE_HALF_ANGLE)))
+		w.cone_renderer.cone_on(cone_len, cone_len * tan(deg_to_rad(cone_half_angle(w))))
 		if w._channel_tick <= 0.0:
 			w._channel_tick = CONE_TICK
 			deal_cone_damage(w, cone_len)
@@ -111,11 +129,12 @@ static func deal_beam_damage(w) -> void:
 	var from: Vector2 = w.muzzle_point.global_position
 	var dir: Vector2 = Vector2.RIGHT.rotated(w.global_rotation)
 	var judge_len: float = w._beam_len + BEAM_HIT_OVERHANG
-	_beam_shape.size = Vector2(judge_len, BEAM_HALF_WIDTH * 2.0)
+	# ★3 觉醒「贯日」判定盒加宽：与 beam_on 的视觉束宽同一倍率出口（beam_width_mult）
+	_beam_shape.size = Vector2(judge_len, BEAM_HALF_WIDTH * 2.0 * beam_width_mult(w))
 	_beam_query.transform = Transform2D(w.global_rotation, from + dir * judge_len * 0.5)
 	var results: Array = w.get_world_2d().direct_space_state.intersect_shape(_beam_query, 16)
 	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
-	var tick_dmg: float = w._final_damage() * BEAM_TICK / eff_cd
+	var tick_dmg: float = w._final_damage() * BEAM_TICK / eff_cd * star3_dmg_mult(w)
 	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 60.0) * 0.15  # 持续束只留一点点推感
 	for res in results:
 		var col = res["collider"]
@@ -136,10 +155,11 @@ static func deal_beam_damage(w) -> void:
 static func deal_cone_damage(w, cone_len: float) -> void:
 	var from: Vector2 = w.muzzle_point.global_position
 	var aim_dir: Vector2 = Vector2.RIGHT.rotated(w.global_rotation)
-	var half_ang := deg_to_rad(CONE_HALF_ANGLE)
+	# 锥角经 cone_half_angle 取：★3 觉醒「燎原」判定与视觉锥宽同源加宽
+	var half_ang := deg_to_rad(cone_half_angle(w))
 	var results: Array = w._query_enemies(cone_len, from, 24)
 	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
-	var cycle_dmg: float = w._final_damage()
+	var cycle_dmg: float = w._final_damage() * star3_dmg_mult(w)
 	var tick_dmg: float = cycle_dmg * CONE_TICK / eff_cd
 	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 95.0) * 0.25
 	var proc_burn: bool = w.def.get("proc_burn", false)

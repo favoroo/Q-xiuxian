@@ -122,7 +122,7 @@ static func perform(w) -> void:
 	if w.current_target != null:
 		# 与武器 _process 的朝向同源：本体已经按预判点拧正，出膛方向必须同一份预判，
 		# 否则视觉指向前置点、弹道却飞当前位置，读起来是"瞄偏了"
-		aim_dir = (lead_aim_pos(w, w.current_target) - w.global_position).normalized()
+		aim_dir = (ProjectileHandler.lead_aim_pos(w, w.current_target) - w.global_position).normalized()
 		# 开火这一帧就把发射帧拧到目标方位：贴图补偿跟着走，剑尖与出膛方向同轴
 		w._apply_facing(aim_dir.angle())
 
@@ -174,10 +174,10 @@ static func perform(w) -> void:
 			var first_t: Node2D = volley[0]
 			if first_t != null and is_instance_valid(first_t) and first_t.get("is_elite") == true and idx == 1:
 				locked = first_t
-		if locked != null and is_instance_valid(locked):
-			var to_lock: Vector2 = lead_aim_pos(w, locked) - w.muzzle_point.global_position
-			if to_lock.length_squared() > 1.0:
-				shot_dir = to_lock.normalized()
+				if locked != null and is_instance_valid(locked):
+					var to_lock: Vector2 = ProjectileHandler.lead_aim_pos(w, locked) - w.muzzle_point.global_position
+					if to_lock.length_squared() > 1.0:
+						shot_dir = to_lock.normalized()
 		p.homing_target = locked
 		p.direction = shot_dir.rotated(offset_ang)
 		p.damage = final_dmg
@@ -208,4 +208,57 @@ static func perform(w) -> void:
 		# 现改为按每把武器自身 range 定量，锁多远的怪就飞多远（近战/横扫的 range 也已改为真实命中半径）。
 		p.lifetime = (w.attack_range * w._range_mult() + PROJECTILE_TRAVEL_MARGIN) / maxf(1.0, p.speed)
 
+		# ★3 觉醒「剑影」/ ★4 极境「万剑齐发」：每发主弹拖 count 道幻影弹（各 ratio 伤害），
+		# 逐道落后半个身位出膛 —— 读着是主弹的残影追着咬同一个目标，而不是新的一轮齐射。
+		# 伤害缩放在出膛侧完成（damage 直接打折），弹丸实体不感知星级（循环依赖坑 12）；
+		# 幻影只复制数据表基础弹数（idx < base_count），道具加发（projectile_count_bonus）不翻倍。
+		var base_count: int = maxi(1, int(w.def.get("projectile_count", 1)))
+		var perk: Dictionary = WeaponData.awaken_perk(WeaponData.Behavior.PROJECTILE, w.star)
+		if not perk.is_empty() and idx < base_count:
+			var echo_ratio: float = float(perk.get("ratio", 0.5))
+			var echo_count: int = maxi(1, int(perk.get("count", 1)))
+			for seg in range(echo_count):
+				ProjectileHandler._spawn_phantom(w, locked, p.direction,
+					final_dmg * echo_ratio, p_bounce, echo_ratio, w.star, seg)
+
 	AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id))
+
+## 觉醒幻影弹出膛：与主弹同纹理/同追踪/同航程，伤害/击退/异常量按 ratio 打折，
+## 出生点逐道落后主弹半个身位（读着是残影拖尾）；色温在 activate 之后覆盖——
+## activate 会把池化残值洗回白色与异常色温，幻影不分五行、统一走觉醒色。
+## ★3 单道暖金；★4 两道分别为电光青与太虚紫（色差让「两段」读得出来，不糊成一条粗尾）。
+static func _spawn_phantom(w, locked: Node2D, dir: Vector2, dmg: float, bounce: int, ratio: float,
+		star: int = 3, seg: int = 0) -> void:
+	var ph: BladeProjectile = BladeProjectile.acquire_or_new(w.projectile_scene, w.get_tree().current_scene)
+	ph.global_position = w.muzzle_point.global_position - dir * (16.0 + 14.0 * float(seg))
+	ph.homing_target = locked
+	ph.direction = dir
+	ph.damage = dmg
+	ph.knockback_base = WeaponData.knockback_for(w.weapon_def_id, 140.0) * ratio
+	ph.pierce_left = WeaponData.capped_pierce(w.pierce + GameManager.bonus_pierce)
+	ph.bounce_left = bounce
+	ph.bullet_texture = w._bullet_tex
+	ph.bullet_scale = w._bullet_scale * 0.92
+	ph.spin = w._bullet_spins
+	ph.source_behavior = WeaponData.Behavior.PROJECTILE
+	if w.def.get("proc_burn", false):
+		ph.proc_burn = true
+		ph.burn_dps = dmg * float(w.def.get("burn_ratio", 0.4))
+		ph.burn_dur = float(w.def.get("burn_dur", 3.0))
+	if float(w.def.get("proc_chill", 0.0)) > 0.0:
+		ph.proc_chill = float(w.def.get("proc_chill", 0.35))
+		ph.chill_dur = float(w.def.get("chill_dur", 2.0))
+	if w.def.get("proc_poison", false):
+		ph.proc_poison = true
+		ph.poison_dps = dmg * float(w.def.get("poison_ratio", 0.3))
+		ph.poison_dur = float(w.def.get("poison_dur", 2.5))
+	ph.activate()
+	ph.modulate = phantom_tint(star, seg)
+	ph.lifetime = (w.attack_range * w._range_mult() + PROJECTILE_TRAVEL_MARGIN) / maxf(1.0, ph.speed)
+
+## 幻影弹色温：★3 觉醒金；★4 两道分别是电光青（HDR，b 远超 1 触发泛光）与太虚紫。
+## 与 UI 的 STAR4_NEON / STAR4_NEON_EDGE 同一副色语言（战斗里读作霓虹残影）。
+static func phantom_tint(star: int, seg: int) -> Color:
+	if star >= WeaponData.MAX_STAR:
+		return Color(0.55, 1.90, 2.50, 0.72) if seg % 2 == 0 else Color(1.75, 0.75, 2.50, 0.65)
+	return Color(1.5, 1.2, 0.55, 0.62)

@@ -14,7 +14,9 @@ extends RefCounted
 ##   - `as EnemyBase` 为 null ⇒ 跳过（登记表本就只收 EnemyBase，防御性保留）
 ##   - `not is_instance_valid(e)` / `e.dying` ⇒ 跳过（垂死的还有塌缩动画，不再吃伤害）
 ##   - `e == from_self` ⇒ 跳过（裂魂铃自爆不炸自己；Player 侧传 null）
-##   - chests / herbs 组 ⇒ 跳过（防御性保留：登记表暂无此类，成本为零）
+##   - chests / herbs 组检查已删（2026-10-24）：登记表只收 EnemyBase（SpiritChest 是 Node2D 从不登记，
+##     herbs 组全仓无成员），两条裸字符串 is_in_group 每敌每次现算哈希纯属白付；
+##     将来真有「算敌人但不该被技能打到」的 EnemyBase，在登记/垂死源头拦，别在这里逐敌查组
 ##   - 距离：`origin 到 e 的距离 ≤ radius`；radius 传 INF 即「全场」（祭坛冲击波口径）
 ##
 ## 不收进来的：物理查询版（Player._scan_orb_enemies、武器统筹、TurretUnit、FloatingWeapon、
@@ -27,8 +29,6 @@ static func collect(live: Array, origin: Vector2, radius: float, from_self: Node
 	for node in live:
 		var e := node as EnemyBase
 		if e == null or not is_instance_valid(e) or e.dying or e == from_self:
-			continue
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
 			continue
 		if origin.distance_to(e.global_position) > radius:
 			continue
@@ -43,8 +43,6 @@ static func count_in_range(live: Array, origin: Vector2, radius: float) -> int:
 		var e := node as EnemyBase
 		if e == null or not is_instance_valid(e) or e.dying:
 			continue
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
-			continue
 		if origin.distance_squared_to(e.global_position) <= r2:
 			n += 1
 	return n
@@ -57,8 +55,6 @@ static func nearest(live: Array, origin: Vector2, max_dist: float) -> EnemyBase:
 	for node in live:
 		var e := node as EnemyBase
 		if e == null or not is_instance_valid(e) or e.dying:
-			continue
-		if e.is_in_group("chests") or e.is_in_group("herbs"):
 			continue
 		var d: float = origin.distance_to(e.global_position)
 		if d < best_d:

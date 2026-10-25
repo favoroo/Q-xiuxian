@@ -45,6 +45,8 @@ const BD_READINGS: Dictionary = {
 	"bonus_pierce": ["bonus_pierce", "%d"],
 	"thorns": ["thorns_pct", "%.0f%%"],
 	"max_hp": ["max_hp", "%.0f"],
+	# hp_heal 落在「生命值」那一行的当前值上；与 max_hp 同值成对时按 BonusRows.folded_keys
+	# 折叠不单列（2026-10-24 用户：有多少生命上限就跟着回多少血，卡面只写上限一行）
 	"hp_heal": ["current_hp", "%.0f"],
 }
 
@@ -86,8 +88,11 @@ func _lines_for(apply: Dictionary, compact: bool) -> Array[Dictionary]:
 	StatSystem.apply_stat_fields(after, apply, "forecast")
 	var after_bd := StatBreakdown.breakdown(after)
 	var out: Array[Dictionary] = []
+	var folded := BonusRows.folded_keys(apply)
 	for key in apply.keys():
 		var k := String(key)
+		if k in folded:
+			continue
 		var src: Array = _reading_of(k)
 		if src.is_empty():
 			continue

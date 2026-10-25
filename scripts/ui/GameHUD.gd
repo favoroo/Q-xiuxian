@@ -154,6 +154,7 @@ func _ready() -> void:
 	GameManager.player_leveled_up.connect(_on_leveled_up)
 	GameManager.stats_updated.connect(_on_stats_updated)
 	GameManager.announcement_triggered.connect(show_announcement)
+	GameManager.weapon_awakened.connect(_on_weapon_awakened)
 	GameManager.weapons_updated.connect(_on_weapons_updated)
 	GameManager.wave_changed.connect(_on_wave_changed)
 	_on_wave_changed(GameManager.wave_number)
@@ -792,6 +793,7 @@ func _on_weapons_updated(weapons: Array) -> void:
 			slot.add_child(tex_rect)
 
 			GameStyle.star_label(slot, int(w.get("star", 1)), 10)
+			GameStyle.apply_star4_trim(slot, int(w.get("star", 1)))
 
 		weapons_bar.add_child(slot)
 		# 整块都是热区：图框与 ★ 只是显示件，子树压成 IGNORE 才不会在槽面中间挖按不动的洞
@@ -820,3 +822,15 @@ func show_announcement(msg: String) -> void:
 	tw.tween_property(banner, "scale", Vector2.ONE, 0.1)
 	tw.tween_interval(1.9)
 	tw.tween_property(banner, "modulate:a", 0.0, 0.35)
+
+## ★3 觉醒 / ★4 神兵极境庆祝：全屏脉冲（复用 vignette 脉冲通道；色温 b=0.35 ≥ 0.3，
+## 不会误入 Main._on_screen_damage_pulsed 里受击冲击波的「红闪」色温判定）。
+## ★4 用太虚紫（r < b）与 ★3 的暖金分开 —— 同为全屏脉冲，颜色一眼能分出档次。
+func _on_weapon_awakened(w_id: String) -> void:
+	var top_star := 0
+	for s in WeaponInventory.star_distribution(GameManager, w_id).keys():
+		top_star = maxi(top_star, int(s))
+	if top_star >= WeaponData.MAX_STAR:
+		GameManager.screen_damage_pulsed.emit(GameStyle.STAR4_NEON_EDGE, 0.75)
+	else:
+		GameManager.screen_damage_pulsed.emit(Color(1.0, 0.85, 0.35), 0.6)

@@ -88,19 +88,55 @@ static func perform(w) -> void:
 	# 3. 沉重收势：回弹时间比近战长一档；终点同样取实时轨道位
 	tw.chain().tween_callback(func(): w._begin_recover(SWEEP_RECOVER, Tween.TRANS_BACK))
 
+	# 4. ★3 觉醒「回掠」/ ★4 极境「千钧狂澜」：主扫落点紧接往返回扫
+	# （每段 ratio 伤害，参数唯一真话在 WeaponData.STAR3_AWAKEN / STAR4_ASCEND，经 awaken_perk 取）。
+	# 与近战回风斩同一条纪律：收招 tween 只动 position/scale，rotation 归这条链，
+	# 整段压在 is_attacking 窗口内；追加扇面走 w.get_echo_slash 独立节点（top_level 世界坐标，
+	# 与主扇面同一约定），不与仍在扫放/淡出的主扇面抢 sweep_sprite。
+	var perk: Dictionary = WeaponData.awaken_perk(WeaponData.Behavior.SWEEP, w.star)
+	if not perk.is_empty():
+		var echo_ratio: float = float(perk.get("ratio", 0.5))
+		var echo_count: int = maxi(1, int(perk.get("count", 1)))
+		for seg in range(echo_count):
+			var seg_sign: float = -1.0 if seg % 2 == 0 else 0.85
+			tw.chain().tween_callback(func():
+				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MeleeHandler.MELEE_WHOOSH_SCALE * 0.6)
+				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
+				if echo_hits > 0:
+					w._flash_sprite(MeleeHandler.echo_glow_color(w.star), 0.12)
+					play_echo_sweep(w, aim_angle, reach, w.star)
+					AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MeleeHandler.MELEE_IMPACT_SCALE * 0.7, SWEEP_IMPACT_PITCH)
+			)
+			tw.tween_property(w, "rotation", aim_angle + half_ang * seg_sign, 0.11).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+
+## ★3 觉醒 / ★4 极境的追加扇面：与主扇面同一几何（外缘 == 判定半径、张角 == 判定半角），
+## 直接从满形亮起、亮一拍即散 —— 主扫的「扩张扫放」已经演过一遍，回掠要的是干脆。
+static func play_echo_sweep(w, aim_angle: float, reach: float, star: int = 3) -> void:
+	var spr: WeaponArcRenderer = w.get_echo_slash(WeaponArcRenderer.ArcMode.SWEEP)
+	spr.global_position = w.global_position
+	spr.global_rotation = aim_angle
+	spr.scale = Vector2.ONE * (reach / SWEEP_ART_OUTER)
+	spr.visible = true
+	spr.modulate = MeleeHandler.echo_slash_color(star)
+	var etw: Tween = w.create_tween()
+	etw.tween_interval(0.07)
+	etw.tween_property(spr, "modulate:a", 0.0, SWEEP_SLASH_FADE)
+	etw.tween_callback(func(): spr.visible = false)
+
 ## 横扫扇形结算：圆形查询后按角度过滤 —— 只结算 aim_dir ±（半角+宽容）内的敌人
 ## （贴脸 SWEEP_CLOSE_GRACE 不看角度），身后的怪这一扫够不着。返回值语义同近战 = 可见命中数，
 ## 打击帧回调拿它门控扇面/材质声/反冲。属性管线、暴击、异常、吸血与近战同一份代码形状。
-static func deal_damage(w, aim_dir: Vector2) -> int:
+## dmg_ratio：★3 觉醒回掠的伤害系数（默认 1.0 = 主扫）；吸血/固定回血只在主扫结算。
+static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 	var origin: Vector2 = w.global_position
 	var half_ang := deg_to_rad(SWEEP_HALF_ANGLE + SWEEP_ANGLE_SLACK)
 	var results: Array = w._query_enemies(arc_radius(w), origin, 24)
 	var hit_count := 0
 	var player: Node2D = GameManager.player
 	var vp_center: Vector2 = player.global_position if player != null else w.global_position
-	var base_dmg: float = w._final_damage()
+	var base_dmg: float = w._final_damage() * dmg_ratio
 	# 2026-10-14 风险溢价：横扫击退兜底 240→300（重控场分支，与表内 340—680 一致）
-	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 300.0)
+	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 300.0) * dmg_ratio
 	var proc_burn: bool = w.def.get("proc_burn", false)
 	var proc_chill: float = float(w.def.get("proc_chill", 0.0))
 	var proc_poison: bool = w.def.get("proc_poison", false)
@@ -134,8 +170,10 @@ static func deal_damage(w, aim_dir: Vector2) -> int:
 					dmg * float(w.def.get("burn_ratio", 0.45)), float(w.def.get("burn_dur", 3.0)),
 					proc_chill, float(w.def.get("chill_dur", 2.5)),
 					proc_poison, dmg * float(w.def.get("poison_ratio", 0.35)), float(w.def.get("poison_dur", 3.0)))
-			GameManager.try_lifesteal(w.behavior)
-			# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
-			if can_flat_heal:
-				player.heal(flat_ls, true)
+			# 吸血与固定回血只在主扫结算（回掠不双计）
+			if dmg_ratio >= 1.0:
+				GameManager.try_lifesteal(w.behavior)
+				# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
+				if can_flat_heal:
+					player.heal(flat_ls, true)
 	return hit_count

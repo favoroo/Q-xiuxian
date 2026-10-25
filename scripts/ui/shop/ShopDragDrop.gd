@@ -242,6 +242,7 @@ func _build_ghost(item: Dictionary, tile: float) -> void:
 	var icon := GameStyle.icon_texture_rect(icon_path)
 	ghost.add_child(icon)
 	GameStyle.star_label(ghost, int(item.get("star", 1)), 12)
+	GameStyle.apply_star4_trim(ghost, int(item.get("star", 1)))
 	_shop.add_child(ghost)
 	ghost.custom_minimum_size = Vector2(gsize, gsize)
 	ghost.size = Vector2(gsize, gsize)

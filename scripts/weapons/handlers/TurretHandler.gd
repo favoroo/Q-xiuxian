@@ -17,6 +17,9 @@ static func perform(w) -> void:
 		if t == null or not is_instance_valid(t) or t._is_dying:
 			w.active_turrets.remove_at(i)
 
+	# 炮台上限随星抬升：★1 cap / ★2 cap+1 / ★3 cap+2 / ★4 极境「神机齐射」cap+3。
+	# 这条线性档就是极境的「多布一台」，不再额外加码 —— 6 把炮台武器全 ★4 时场上最多
+	# 6×6 台机体，再加会顶爆索敌查询与节点数（性能红线优先于纸面数字）。
 	var cap: int = int(w.def.get("turret_cap", 2)) + (w.star - 1)
 	if w.active_turrets.size() >= cap:
 		var oldest: TurretUnit = w.active_turrets.pop_front() as TurretUnit

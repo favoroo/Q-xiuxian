@@ -189,8 +189,12 @@ static func _build_apply_block(apply: Dictionary, font_size: int, row_w: float, 
 	var notes: Dictionary = {}
 	for line in forecast.lines_for(apply):
 		notes[String(line["key"])] = line
+	# hp_heal 与 max_hp 同值成对时折叠不单列（与模型注脚同一把尺 BonusRows.folded_keys）
+	var folded := BonusRows.folded_keys(apply)
 	for key in apply.keys():
 		var k := String(key)
+		if k in folded:
+			continue
 		var v := float(apply[key])
 		var group := VBoxContainer.new()
 		group.name = "ApplyGroup_%s" % k

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://pkghdr0fc5k7"]
+
+[ext_resource type="Script" path="res://tests/audio_muffle_check.gd" id="1"]
+
+[node name="AudioMuffleCheck" type="Node"]
+script = ExtResource("1")

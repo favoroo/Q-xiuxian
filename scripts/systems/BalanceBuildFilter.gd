@@ -5,8 +5,13 @@ extends RefCounted
 ## 让 5 张悟道卡、货架道具真正都是能点的。
 ##
 ## 用户口径：「值得选的东西太少」+「加拾取范围、加击退这种不管玩什么流派都没用的」。
-## 前者一半是「废卡占位」造成的 —— 玩剑系时还刷召唤/机关/单元素/灵兽/寻宝的卡。
+## 前者一半是「废卡占位」造成的 —— 玩剑系时还刷召唤/机关/单元素/灵兽的卡。
 ## 本模块只做「要不要把它刷给你」这一个判断，不删内容、不改数值。
+##
+## 宝箱系三项（数量/品质/掉落）与藏宝图/点金诀**不设构筑闸**：匣子每回合照刷、金币与回复
+## 对所有流派都有效，属经济件（与收益/幸运同档）。2026-10-20 曾按「寻宝流已入场」硬闸，
+## 但唯一不受闸的入场券纳灵盘 2026-10-22 下架后闸门死锁——宝箱卡自己拦自己，寻宝流永远
+## 入不了场，2026-10-24 起解除。
 ##
 ## 纯静态、只读 WeaponData 与传入的 gm 字段；gm 为空（单测纯池）时一律放行 = 原行为。
 ## 兜底：调用方在过滤后候选不足时回退到未过滤池，绝不让候选/货架变少。
@@ -35,15 +40,11 @@ const UPGRADE_ELEMENT := {
 	"fire_up": "fire", "earth_up": "earth",
 }
 
-## 灵兽 / 寻宝条件的加点 id 前缀（pet_ 单独按 has_pets 判，chest_ 按寻宝流判）
-const CHEST_UPGRADE_PREFIX := "chest_"
-
 ## 道具里认定「纯某类别」的字段集合：只有整件道具的 apply + hook 全落在一个条件桶里才过滤，
 ## 带生命/移速等通用收益的混装件（如聚灵阵图）永远放行，避免误伤。
 const PET_ITEM_KEYS := [
 	"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
 ]
-const CHEST_ITEM_KEYS := ["chest_count", "chest_quality", "chest_reward"]
 
 ## 当前持有武器 id（上阵悬浮武器 + 环绕灵宝 + 背包备选）。
 ## 背包也算持有：手里攥着剑，就该刷近战卡；否则玩家「有剑却抽不到近战强化」。
@@ -84,26 +85,6 @@ static func has_any_pet(gm: Node) -> bool:
 		return false
 	return not gm.get("pets").is_empty() or String(gm.get("cultivator_id")) == "yushou"
 
-## 是否已走寻宝流：点过任一宝箱加点，或持有任一宝箱道具，或宝箱属性已被抬起
-static func has_chest_build(gm: Node) -> bool:
-	if gm == null:
-		return false
-	if float(gm.get("chest_count_bonus")) > 0.0 or float(gm.get("chest_quality")) > 0.0 \
-			or float(gm.get("chest_reward_mult")) > 1.0:
-		return true
-	var counts: Dictionary = gm.get("upgrade_counts")
-	for uid in counts.keys():
-		if String(uid).begins_with(CHEST_UPGRADE_PREFIX) and int(counts[uid]) > 0:
-			return true
-	for iid in gm.get("items"):
-		var d: Dictionary = ItemData.get_def(String(iid))
-		for k in CHEST_ITEM_KEYS:
-			if d.has(k):
-				return true
-		if bool(d.get("chest_magnet", false)):
-			return true
-	return false
-
 ## 某条悟道加点当前是否该刷出（true = 放行）
 static func upgrade_allowed(gm: Node, uid: String) -> bool:
 	if gm == null:
@@ -114,8 +95,7 @@ static func upgrade_allowed(gm: Node, uid: String) -> bool:
 		return has_element(gm, String(UPGRADE_ELEMENT[uid]))
 	if uid.begins_with("pet_"):
 		return has_any_pet(gm)
-	if uid.begins_with(CHEST_UPGRADE_PREFIX):
-		return has_chest_build(gm)
+	# 宝箱三项是经济件，不设构筑闸（见文件头）——曾按寻宝流硬闸，纳灵盘下架后死锁
 	return true
 
 ## 某件道具当前是否该刷新。只过滤「纯条件件」，混装件一律放行。
@@ -180,15 +160,7 @@ static func item_allowed(gm: Node, id: String) -> bool:
 	if all_pet:
 		return has_any_pet(gm)
 
-	# 纯寻宝件
-	var all_chest := true
-	for k in keys:
-		if not (k in CHEST_ITEM_KEYS):
-			all_chest = false
-			break
-	if all_chest:
-		return has_chest_build(gm)
-
+	# 宝箱件（藏宝图/点金诀）是经济件，不设构筑闸（见文件头）
 	return true
 
 # ---------------- 2026-10-21 道具构筑亲和 / 轻保底 ----------------

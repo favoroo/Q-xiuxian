@@ -293,8 +293,9 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			if GameStyle.is_elemental(w_wid):
 				GameStyle.apply_elemental_bottom_bar(slot, true, 2.5)
 
-			# 星级
+			# 星级（★4 极境另贴内侧霓虹衬框）
 			GameStyle.star_label(slot, int(w.get("star", 1)), 11)
+			GameStyle.apply_star4_trim(slot, int(w.get("star", 1)))
 
 			GameStyle.tap(slot, func() -> void: dialog._open_weapon_tip(w, false, slot))
 		else:
@@ -333,8 +334,9 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 			if GameStyle.is_elemental(s_wid):
 				GameStyle.apply_elemental_bottom_bar(s_slot, true, 2.0)
 
-			# 补星级
+			# 补星级（★4 极境另贴内侧霓虹衬框）
 			GameStyle.star_label(s_slot, int(item.get("star", 1)), 10)
+			GameStyle.apply_star4_trim(s_slot, int(item.get("star", 1)))
 
 			if not def.is_empty():
 				s_slot.mouse_filter = Control.MOUSE_FILTER_STOP

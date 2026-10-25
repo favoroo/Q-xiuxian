@@ -230,6 +230,30 @@ static func tag_filter_mult(weapon_tags: Array, filter_tags: Array) -> float:
 static func shop_luck_mult(luck: float) -> float:
 	return clampf(1.0 + luck * LUCK_SHOP_PER_POINT, 0.1, 10.0)
 
+# ---------------- 同名追梦加权（2026-10-24）----------------
+
+## 三合一升星会「3 件换 1 件」：合成后手里同名武器只剩 1 把，标签件数掉 2，
+## 于是流派亲和（按标签件数加权）反而在升星后变弱 —— 想凑 27 把 ★1 追 ★4 时，
+## 越合越刷不到自己那把，追梦在数学上根本走不完。
+## 这里按「手里同名武器的最高星级」给该武器单独的权重倍率，把升星的空缺补回来：
+## 持有 ★1 ×2.2 / ★2 ×4.5 / ★3 ×8.0；已有 ★4 且没有低星散件时回落 1.0（追梦已达成）。
+## 上限压在 8.0：再高会让货架坍缩成单一武器，玩家就没有构筑选择的余地了。
+const DREAM_AFFINITY_BY_STAR: Array[float] = [2.2, 4.5, 8.0]
+## 临门一脚（同星已凑到 2 件，再 1 件就能合）额外乘的加成：让「差一件」真的刷得出来
+const DREAM_AFFINITY_NEAR_MERGE := 1.6
+
+## 纯函数：同名追梦权重倍率。max_star = 手里该武器最高星级（0 = 未持有）；
+## copies_at_max = 该星级现有件数（≥2 视为临门一脚）。
+static func owned_weapon_affinity_mult(max_star: int, copies_at_max: int) -> float:
+	if max_star <= 0:
+		return 1.0
+	if max_star >= WeaponData.MAX_STAR:
+		return 1.0
+	var m: float = DREAM_AFFINITY_BY_STAR[clampi(max_star, 1, WeaponData.MAX_STAR) - 1]
+	if copies_at_max >= 2:
+		m *= DREAM_AFFINITY_NEAR_MERGE
+	return m
+
 # ---------------- 道具（被动道具）档位权重 ----------------
 
 ## 各档位最早出现的回合（下标 1~4 对应 tier 1~4，0 为占位）：高档道具随回合解锁

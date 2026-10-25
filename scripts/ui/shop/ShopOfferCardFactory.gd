@@ -33,22 +33,24 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	var stat_rows: Array = data.stat_rows
 	if not stat_rows.is_empty():
 		vbox.add_child(BonusRows.build_rows_block(stat_rows, 12, inner_w))
-		if not String(data.desc).is_empty():
-			var desc_rt := RichTextLabel.new()
-			desc_rt.bbcode_enabled = true
-			desc_rt.fit_content = true
-			desc_rt.scroll_active = false
-			desc_rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			desc_rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			desc_rt.custom_minimum_size = Vector2(inner_w, 0)
-			desc_rt.add_theme_font_override("normal_font", GameStyle.body_font())
-			desc_rt.add_theme_font_override("bold_font", GameStyle.emph_font())
-			desc_rt.add_theme_font_size_override("normal_font_size", 12)
-			desc_rt.add_theme_font_size_override("bold_font_size", 12)
-			desc_rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
-			desc_rt.text = GameStyle.wrap_bbcode(
-				GameStyle.colorize_terms(data.desc), GameStyle.body_font(), 12, inner_w)
-			vbox.add_child(desc_rt)
+	# 说明与加成行是两件事，各判各的空：灵兽卡没有加成行（stat_rows 恒空），
+	# 原先嵌在上面那个 if 里 ⇒ 灵兽卡整张只剩名号和价格，机制说明一个字都不显示
+	if not String(data.desc).is_empty():
+		var desc_rt := RichTextLabel.new()
+		desc_rt.bbcode_enabled = true
+		desc_rt.fit_content = true
+		desc_rt.scroll_active = false
+		desc_rt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_rt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		desc_rt.custom_minimum_size = Vector2(inner_w, 0)
+		desc_rt.add_theme_font_override("normal_font", GameStyle.body_font())
+		desc_rt.add_theme_font_override("bold_font", GameStyle.emph_font())
+		desc_rt.add_theme_font_size_override("normal_font_size", 12)
+		desc_rt.add_theme_font_size_override("bold_font_size", 12)
+		desc_rt.add_theme_color_override("default_color", GameStyle.PAPER_DIM)
+		desc_rt.text = GameStyle.wrap_bbcode(
+			GameStyle.colorize_terms(data.desc), GameStyle.body_font(), 12, inner_w)
+		vbox.add_child(desc_rt)
 	# 弹性占位：纯加成卡（如药水、desc 已清空的道具）也要把价格键钉在卡底，
 	# 不然货架把卡拉成等高后价格悬在半空、卡底留一大段黑
 	var stretch := Control.new()
@@ -59,6 +61,8 @@ static func create_card(shop: WaveShop, offer: Dictionary, index: int, total_cou
 	vbox.add_child(_create_card_price_btn(shop, offer, index, sold, price, data.is_item, data.def, data.kind))
 
 	card.add_child(vbox)
+	if data.merge_ready:
+		card.add_child(_create_merge_corner_badge(shop, data.w_id))
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	GameStyle.swipeable(card)
 	return card
@@ -171,13 +175,10 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 			chip_color = GameStyle.JADE
 			chip_text_color = GameStyle.INK_TEXT
 			edge_color = GameStyle.JADE
-		# 买下即凑齐三合一：手里同名同星正好 2 把（货架只卖 1 星，买这把就满 3）——
-		# 「可合成」文字签，与背包槽位「合」角标同一副语言。==2 才提示：
-		# 手里已有 3 把说明早已凑齐（该先去合成），买了变 4 把不叫「凑齐」。
-		# 2026-10-18 用户：原先的 JADE 亮黄卡边与金/土系黄族色签撞车 ⇒ 卡边不再表达可合成，
-		# 边框语义只留「临门一档」（will_activate 的 JADE 边），可合成由文字签独立说话。
+		# 买下即凑齐三合一：手里同名同星差 1 把凑满 3 件（如正好 2 把，货架只卖 1 星，买这把就满 3）——
+		# 统一由商品卡片右上角显示圆形主题色「合」标记指示，TagRow 不再挂文字签。
 		merge_ready = not bool(offer.get("sold", false)) \
-				and GameManager.count_copies(w_id, 1) == 2
+				and (GameManager.count_copies(w_id, 1) % 3) == 2
 		desc = def.get("desc", "")
 		# 攻击方式色签（近战朱砂 / 非近战主蓝）：def.tag 首段会被流派进度覆盖，
 		# 货架上一直看不出近战远程（2026-10-11 用户），behavior 才是结构真话。
@@ -246,8 +247,12 @@ static func item_stat_rows(apply: Dictionary, forecast: StatForecast, row_w: flo
 	for line in forecast.shop_lines_for(apply):
 		notes[String(line["key"])] = line
 	var rows: Array = []
+	# hp_heal 与 max_hp 同值成对时折叠不单列（与模型预读同一把尺 BonusRows.folded_keys）
+	var folded := BonusRows.folded_keys(apply)
 	for key in apply.keys():
 		var k := String(key)
+		if k in folded:
+			continue
 		var v := float(apply[key])
 		var name_txt := StatInfoData.field_name(k)
 		var val_txt := StatInfoData.format_amount(k, v)
@@ -340,15 +345,7 @@ static func _create_card_head(shop: WaveShop, offer: Dictionary, card_w: float, 
 		pet_preview.custom_minimum_size = Vector2(WaveShop.CARD_ICON - 4.0, WaveShop.CARD_ICON - 4.0)
 		pet_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		pet_preview.draw.connect(func():
-			var pdef := PetData.get_def(p_id)
-			var c: Color = pdef.get("color", Color(0.9, 0.9, 0.9))
-			var halo: Color = pdef.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
-			var sz: Vector2 = pet_preview.size
-			var center := sz * 0.5
-			var r: float = sz.x * 0.28
-			pet_preview.draw_circle(center, r * 1.6, halo)
-			pet_preview.draw_circle(center, r, c)
-			pet_preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+			PetIconDraw.draw_orb(pet_preview, PetData.get_def(p_id))
 		)
 		icon_box.add_child(pet_preview)
 	else:
@@ -445,21 +442,21 @@ static func _create_card_tag_row(shop: WaveShop, offer: Dictionary, index: int, 
 	if not behavior_chip.is_empty():
 		chip_defs.append(behavior_chip)
 		chip_tips.append({"kind": "behavior", "w_id": w_id})
-		if tag_parts.is_empty():
+	# 档位/流派签与攻击方式签是两件事，各判各的：behavior_chip 只有武器卡有，
+	# 原先档位签嵌在它那个 if 里 ⇒ 道具/回复药/灵兽卡整排色签一颗都没有，只剩锁定键
+	# （2026-10-24 用户：战旗卡上连「史诗·道具」都看不见）
+	if tag_parts.is_empty():
+		if not tag.is_empty():
 			chip_defs.append([tag, chip_color, GameStyle.on_face_text(chip_color)])
-			chip_tips.append({})	# 药水/道具这一颗没有阶梯可解释（卡上那几行加成就是它的全部）
-		else:
-			for i in range(tag_parts.size()):
-				var hot_i: bool = bool(part_hot[i])
-				var chip_face: Color = GameStyle.JADE if hot_i else chip_color
-				chip_defs.append([tag_parts[i],
-					chip_face,
-					GameStyle.on_face_text(chip_face)])
-				chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
-	# 「买下即凑齐三合一」角标：绿面墨字，与背包槽位「合」角标同一副语言
-	if merge_ready:
-		chip_defs.append(["可合成", GameStyle.JADE, GameStyle.INK_TEXT])
-		chip_tips.append({"kind": "merge", "w_id": w_id})
+			chip_tips.append({})	# 药水/道具/灵兽这一颗没有阶梯可解释（卡上那几行就是它的全部）
+	else:
+		for i in range(tag_parts.size()):
+			var hot_i: bool = bool(part_hot[i])
+			var chip_face: Color = GameStyle.JADE if hot_i else chip_color
+			chip_defs.append([tag_parts[i],
+				chip_face,
+				GameStyle.on_face_text(chip_face)])
+			chip_tips.append({"kind": "synergy", "tag": String(tag_keys[i]), "w_id": w_id})
 	for ci in range(chip_defs.size()):
 		var cd: Array = chip_defs[ci]
 		var chip_txt: String = " %s " % cd[0]
@@ -521,7 +518,7 @@ static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int
 		btn.disabled = true
 		btn.text = "已 持 有"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots() \
-		and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
+			and GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
 		btn.disabled = true
 		btn.text = "装备背包已满"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots():
@@ -531,3 +528,56 @@ static func _create_card_price_btn(shop: WaveShop, offer: Dictionary, index: int
 			shop.refresh(false)
 	)
 	return btn
+
+## 商品右上角圆形合成标记：当手里差 1 件即可凑齐三合一时（如已有 2 件 1 星），
+## 在商品卡片右上角显示圆形标记，背景为主题色（GOLD，跟随换肤），黑字「合」。
+static func _create_merge_corner_badge(shop: WaveShop, w_id: String) -> Control:
+	var overlay := Control.new()
+	overlay.name = "MergeCornerOverlay"
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var badge_size := 20.0
+	var badge := Label.new()
+	badge.name = "MergeCornerBadge"
+	badge.text = "合"
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	badge.custom_minimum_size = Vector2(badge_size, badge_size)
+	badge.size = Vector2(badge_size, badge_size)
+	badge.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = GameStyle.GOLD
+	var r := int(round(badge_size * 0.5))
+	sb.corner_radius_top_left = r
+	sb.corner_radius_top_right = r
+	sb.corner_radius_bottom_right = r
+	sb.corner_radius_bottom_left = r
+	sb.border_width_left = 1
+	sb.border_width_top = 1
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	sb.border_color = GameStyle.INK
+	GameStyle.register_theme_box(sb, &"bg_color", &"main")
+
+	badge.add_theme_stylebox_override("normal", sb)
+	badge.add_theme_font_override("font", GameStyle.emph_font())
+	badge.add_theme_font_size_override("font_size", 11)
+	badge.add_theme_color_override("font_color", GameStyle.INK)
+
+	badge.anchor_left = 1.0
+	badge.anchor_right = 1.0
+	badge.anchor_top = 0.0
+	badge.anchor_bottom = 0.0
+	badge.offset_left = -badge_size + 8.0
+	badge.offset_right = 8.0
+	badge.offset_top = -1.0
+	badge.offset_bottom = badge_size - 1.0
+
+	GameStyle.tap(badge, func() -> void:
+		ShopChipTips.open_merge(shop, badge, w_id)
+	)
+
+	overlay.add_child(badge)
+	return overlay
+

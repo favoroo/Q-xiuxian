@@ -99,6 +99,14 @@ const SHADOW_DK := Color("3a1f52")          ## 幽夜紫暗底（影层角标的
 const POISON := Color(0.35, 0.75, 0.45)     ## 剧毒绿 = 敌方投毒毒潭/持续伤害区域专用（与增益绿 GOOD 的语义
 ## 相反：GOOD 是给玩家的治疗，POISON 是敌人放的地面持续伤害，黑底上同档亮度但只用于世界空间危险区）
 
+## ★4 神兵极境「太虚霓虹（紫电琉璃）」专用色（2026-10-24）：
+## 与战斗内器身描边同一副色语言（BrutalistCommon.NEON_CYAN_HDR / NEON_VIOLET 的 LDR 版）。
+## 为什么不复用 JADE/GOLD：★1~★3 的星级读数统一是暖黄（JADE），★4 必须一眼分档 ——
+## 电光青在纯黑舞台上与暖金完全异相，且与五行五色（金/木/水/火/土）都不撞。
+const STAR4_NEON := Color("6ef2ff")         ## 电光青：★4 星标文字 / 极境行高亮
+const STAR4_NEON_EDGE := Color("b366ff")    ## 太虚紫：★4 内衬框 / 全屏脉冲
+const STAR4_NEON_DK := Color("1d5c6b")      ## 电光青暗底（描边/角标芯片底，配 STAR4_NEON 亮字）
+
 # 稀有度 / 品阶统一色值（普通暖灰 / 稀有灵蓝 / 史诗幽紫 / 传说浩然金 —— 哈迪斯式四档，按黑底可读调亮）
 const RARITY_COMMON := Color(0.72, 0.70, 0.65)   ## 普通：纸白暖灰（不发辉）
 const RARITY_RARE := Color(0.28, 0.68, 0.98)     ## 稀有：灵蓝（水系/天蓝同调）
@@ -588,35 +596,60 @@ static func wrap_bbcode(text: String, font: Font, font_size: int, max_w: float,
 
 static func _wrap_bbcode_one(seg: String, font: Font, font_size: int, budget: float) -> String:
 	var line := ""
-	var last_vis_at := -1     # line 里最后一个「可见字符」的下标（行首禁则要把它带下去）
+	var last_vis_at := -1     # line 里最后一个「可见原子」的起点（行首禁则要把它带下去）
 	var done := ""
+	for atom in _bbcode_atoms(seg, font, font_size, budget):
+		# 标签整颗挂在当前行，不占宽、也不参与折行判断
+		if atom.length() > 1 and atom[0] == "[" and atom[atom.length() - 1] == "]":
+			line += atom
+			continue
+		# 必须精确量「接上这一格之后」的可见宽，不能拿「整行宽 + 单字宽」估算：
+		# 逐字相加漏掉字距，长句会低估几个像素，手工折出的行仍比 budget 宽，
+		# 引擎再二次折一次就多出一行（2026-10-23 详情卡因此超高 19px 顶出视口）。
+		if last_vis_at >= 0 and _visible_w(line + atom, font, font_size) > budget:
+			if atom.length() == 1 and NO_LINE_START.contains(atom):
+				done += line.substr(0, last_vis_at) + "\n"
+				line = line.substr(last_vis_at) + atom
+			else:
+				done += line + "\n"
+				line = atom
+			last_vis_at = 0
+		else:
+			last_vis_at = line.length()
+			line += atom
+	return done + line
+
+## 折行原子：BBCode 标签整颗一颗、英文/数字词整颗一颗、中文按字。
+## 2026-10-24 出图现场：灵兽说明「220px 内敌人」被逐字切成「220 / px」「1 / 20px」——
+## 本函数原先按单字走，而 wrap_cjk 早就按词走；两边口径必须一致，否则同一句话
+## 在 Label 卡上读得通、在 RichTextLabel 卡上就是坏字。
+## 单个词就超宽（长英文串）才退化成按字拆，不许撑破卡片。
+static func _bbcode_atoms(seg: String, font: Font, font_size: int, budget: float) -> Array[String]:
+	var out: Array[String] = []
 	var i := 0
 	while i < seg.length():
 		var ch := seg[i]
 		if ch == "[":
 			var close := seg.find("]", i)
 			if close >= 0:
-				var tag := seg.substr(i, close - i + 1)
-				line += tag
+				out.append(seg.substr(i, close - i + 1))
 				i = close + 1
 				continue
-		# 必须精确量「接上这个字之后」的可见宽，不能拿「整行宽 + 单字宽」估算：
-		# 逐字相加漏掉字距，长句会低估几个像素，手工折出的行仍比 budget 宽，
-		# 引擎再二次折一次就多出一行（2026-10-23 详情卡因此超高 19px 顶出视口）。
-		var probe := line + ch
-		if _visible_w(probe, font, font_size) > budget and last_vis_at >= 0:
-			if ch.length() == 1 and NO_LINE_START.contains(ch):
-				done += line.substr(0, last_vis_at) + "\n"
-				line = line.substr(last_vis_at) + ch
+		if _is_word_char(ch):
+			var j := i + 1
+			while j < seg.length() and _is_word_char(seg[j]):
+				j += 1
+			var word := seg.substr(i, j - i)
+			if _visible_w(word, font, font_size) > budget:
+				for k in range(word.length()):
+					out.append(word[k])
 			else:
-				done += line + "\n"
-				line = ch
-			last_vis_at = -1
-		else:
-			last_vis_at = line.length()
-			line += ch
+				out.append(word)
+			i = j
+			continue
+		out.append(ch)
 		i += 1
-	return done + line
+	return out
 
 ## 一段 BBCode 里可见字符的宽（标签不算）
 static func _visible_w(s: String, font: Font, font_size: int) -> float:
@@ -1012,15 +1045,20 @@ static func apply_elemental_bottom_bar(parent: Control, is_elem: bool, height: f
 	parent.add_child(bar)
 	return bar
 
-## 武器星级 Label（统一字号、描边、右下角对齐）
+## 武器星级 Label（统一字号、描边、右下角对齐）。
+## ★1~★3 暖黄 JADE（历史口径不动）；★4 极境换电光青 + 深紫描边 —— 一眼分档。
 static func star_label(parent: Control, star: int, font_size: int = 11) -> Label:
 	var lbl := Label.new()
 	lbl.text = "★%d" % star
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", body_font())
 	lbl.add_theme_font_size_override("font_size", font_size)
-	lbl.add_theme_color_override("font_color", JADE)
-	lbl.add_theme_color_override("font_outline_color", INK)
+	if star >= 4:
+		lbl.add_theme_color_override("font_color", STAR4_NEON)
+		lbl.add_theme_color_override("font_outline_color", STAR4_NEON_DK)
+	else:
+		lbl.add_theme_color_override("font_color", JADE)
+		lbl.add_theme_color_override("font_outline_color", INK)
 	lbl.add_theme_constant_override("outline_size", 3)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
@@ -1028,6 +1066,30 @@ static func star_label(parent: Control, star: int, font_size: int = 11) -> Label
 	lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(lbl)
 	return lbl
+
+## ★4 极境内衬框：在槽位内侧贴一圈 1px 太虚紫描边（不拦输入）。
+## 为什么是「内衬」而不是改外框：外框恒说五行属性（2026-10-18 用户口径，见 ShopInventoryRow），
+## 极境身份只能在框内侧另起一条通道 —— 与「合」字角标、★n 星标同一副"框内文字/线条"语言。
+## 返回该线节点（判据可按 name 找 "Star4Trim"），非 ★4 直接返回 null。
+static func apply_star4_trim(slot: Control, star: int) -> Control:
+	if star < 4:
+		return null
+	var trim := Panel.new()
+	trim.name = "Star4Trim"
+	trim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	trim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	trim.offset_left = 1.0
+	trim.offset_top = 1.0
+	trim.offset_right = -1.0
+	trim.offset_bottom = -1.0
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color.TRANSPARENT
+	sb.draw_center = false
+	sb.set_border_width_all(1)
+	sb.border_color = STAR4_NEON_EDGE
+	trim.add_theme_stylebox_override("panel", sb)
+	slot.add_child(trim)
+	return trim
 
 static func label(l: Label, size: int, color: Color = PAPER, outline: int = 0,
 		outline_col: Color = INK, display: bool = false) -> Label:

@@ -34,6 +34,20 @@ static func perform(w) -> void:
 	for i in range(3):
 		tw.tween_property(w, "position", cast_pos + Vector2(randf_range(-2.5, 2.5), randf_range(-2.5, 2.5)), 0.035)
 	tw.tween_callback(func(): spawn_lightning(w, target_pos))
+	# ★3 觉醒「双雷」/ ★4 极境「天劫三雷」：主雷落点后一拍，在同一落点附近追加 count 道
+	# （每道 ratio 伤害，参数唯一真话在 WeaponData.STAR3_AWAKEN / STAR4_ASCEND，经 awaken_perk 取）。
+	# 落点小幅偏移——几道雷完全叠在一起读着像一道粗雷，错开才读得出「多」；
+	# 偏移量影响命中范围，属判定随机，走 GameManager.rng（铁律 3）。
+	var perk: Dictionary = WeaponData.awaken_perk(WeaponData.Behavior.BURST, w.star)
+	if not perk.is_empty():
+		var echo_ratio: float = float(perk.get("ratio", 0.6))
+		var echo_count: int = maxi(1, int(perk.get("count", 1)))
+		for seg in range(echo_count):
+			# 逐道加大错开半径：第二道在 0.4R、第三道再往外一档，三道雷铺开成三角而非一线
+			var ring: float = 0.4 + 0.22 * float(seg)
+			var echo_pos: Vector2 = target_pos + Vector2.RIGHT.rotated(GameManager.rng.randf() * TAU) * w.burst_radius * w._range_mult() * ring
+			tw.tween_interval(0.08)
+			tw.tween_callback(func(): spawn_lightning(w, echo_pos, echo_ratio))
 	tw.tween_property(w, "position", orig_pos + strike_dir * 12.0, 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	w._tw_modulate(tw, Color(1.9, 1.85, 1.45), 0.05)
 	tw.tween_property(w, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -43,8 +57,10 @@ static func perform(w) -> void:
 	w._tw_modulate(tw, Color.WHITE, 0.18)
 	tw.tween_callback(func(): w.is_attacking = false)
 
-## 引雷：锯齿闪电从武器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算
-static func spawn_lightning(w, target_pos: Vector2) -> void:
+## 引雷：锯齿闪电从武器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算。
+## dmg_ratio：★3 觉醒「双雷」第二道的伤害系数（默认 1.0 = 主雷）；追加道电柱略细、
+## 伤害/击退/异常量随系数打折（异常取 max 生效，弱化刷新盖不掉主雷的强异常）。
+static func spawn_lightning(w, target_pos: Vector2, dmg_ratio: float = 1.0) -> void:
 	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
 	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
 	var player: Node2D = GameManager.player
@@ -52,6 +68,8 @@ static func spawn_lightning(w, target_pos: Vector2) -> void:
 	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
 		var bolt: LightningBolt = LightningBolt.acquire(battle_layer)
 		var w_mult: float = 1.0 + 0.18 * float(w.star - 1)
+		if dmg_ratio < 1.0:
+			w_mult *= 0.8
 		var b_tint: Color = w.def.get("burst_tint", LightningBolt.GLOW_COLOR)
 		bolt.activate(w.muzzle_point.global_position, target_pos, b_tint, w_mult)
 
@@ -59,9 +77,9 @@ static func spawn_lightning(w, target_pos: Vector2) -> void:
 	var burst: Node2D = ThunderBurst.acquire(battle_layer, w.burst_scene)
 	burst.global_position = target_pos
 	burst.radius = w.burst_radius * w._range_mult()
-	var final_dmg: float = w._final_damage()
+	var final_dmg: float = w._final_damage() * dmg_ratio
 	burst.damage = final_dmg
-	burst.knockback_base = WeaponData.knockback_for(w.weapon_def_id, 200.0)
+	burst.knockback_base = WeaponData.knockback_for(w.weapon_def_id, 200.0) * dmg_ratio
 	burst.tint = w.def.get("burst_tint", burst.tint)
 	burst.burst_kind = String(w.def.get("burst_kind", "thunder"))
 	# 落点音必须在 activate() 之前下发：activate 里就播它

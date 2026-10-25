@@ -59,6 +59,7 @@ func _ready() -> void:
 		[economy, "_test_shop_determinism"],
 		[economy, "_test_main_tag_pity"],
 		[economy, "_test_shop_tag_soft_bias"],
+		[economy, "_test_dream_affinity"],
 		[targeting, "_test_weapon_targeting"],
 		[infra, "_test_audio_wiring"],
 		[infra, "_test_settings_manager"],
@@ -114,6 +115,8 @@ func _ready() -> void:
 			[flock, "_test_flock_orbit"],
 			[flock, "_test_lunge_geometry"],
 			[flock, "_test_lunge_state_machine"],
+			# 2026-10-24 初始武器原价回收（开局白送的那件不绑架流派，卖一次即失效）
+			[economy, "_test_starter_weapon_resale"],
 		]
 	for entry in plan:
 		var mod: Node = entry[0]

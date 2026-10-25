@@ -260,12 +260,16 @@ static func undo_mult(cur: float, v: float, floor: float) -> float:
 ## 仍留在 gm 身上（RunReset/gm 自身三处失效点不动），这里只按 gm 的字段读写。
 
 ## 同名字段 hook 的叠加求和（如多件回春葫芦的 wave_heal_pct 相加）。
-## 走 _hook_cache 避免每次弹丸命中 3~4 次 O(items) 全表扫描；items 增删时失效，
-## 另对 items.size() 兜底以兼容测试里直接 items.clear() 的写法。
+## 走 _hook_cache 避免每次弹丸命中 3~4 次 O(items) 全表扫描。
+## 失效判据用 Array.hash() 内容指纹（2026-10-24）：原先只比 items.size()，「卖出 A 买入 B」
+## 数量不变会命中陈旧缓存读错数值（正确性 bug 兼性能问题）；指纹在 C++ 侧一次算完，
+## 兼容测试里直接 items.clear() 的写法（空表指纹 ≠ 旧指纹照常失效）。
+## 字段名 _hook_cache_items_size 沿用（gm 上已有、三处失效点不动），值语义从 size 改为指纹。
 static func item_hook_sum(gm: Object, hook: String) -> float:
-	if gm.items.size() != gm._hook_cache_items_size:
+	var stamp: int = gm.items.hash()
+	if stamp != gm._hook_cache_items_size:
 		gm._hook_cache.clear()
-		gm._hook_cache_items_size = gm.items.size()
+		gm._hook_cache_items_size = stamp
 	if gm._hook_cache.has(hook):
 		return float(gm._hook_cache[hook])
 	var total := 0.0

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://t1e7mmhrbnye"]
+
+[ext_resource type="Script" path="res://tests/audio_gameover_probe.gd" id="1"]
+
+[node name="AudioGameOverProbe" type="Node"]
+script = ExtResource("1")

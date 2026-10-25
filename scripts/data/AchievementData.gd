@@ -8,7 +8,8 @@ extends RefCounted
 ##   2. 初始开放 8 名代表性角色 + 90 件基础道具，其余 12 名进阶角色与 4 件高阶道具通过里程碑解锁；
 ##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段），
 ##      纯荣誉成就 reward_type = "none"（只点亮、不发奖励，不碰解锁经济）。
-##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条纯荣誉趣味成就（30 条总计）。
+##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条纯荣誉趣味成就。
+##   5. 2026-10-24 追加 6 条硬核挑战成就（噩梦无伤/零消费/单武器/零技能/无尽40波/零道具，35 条总计）。
 
 ## 危险度档位名号（D0 ~ D3，2026-10-20 由 6 档收缩为 4 档）
 const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦"]
@@ -211,12 +212,32 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_nodamage",
 			"name": "金光护体",
-			"cond_desc": "无伤通关一整局——敌人连你衣角都没碰到",
+			"cond_desc": "无伤通关一整局——怪物打你像在给护体金光抛光",
 			"category": "trial",
 			"reward_type": "none",
 			"reward_id": "",
 			"reward_name": "",
 			"icon": "res://assets/art/item_jingang_fumo_jia.png",
+		},
+		{
+			"id": "ach_feat_nightmare_flawless",
+			"name": "碎梦无痕",
+			"cond_desc": "在「噩梦」难度下无伤通关——怪物打不到你，只好回去写检讨",
+			"category": "trial",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/item_jingang_shenxiang.png",
+		},
+		{
+			"id": "ach_feat_endless_40",
+			"name": "肝穿地心",
+			"cond_desc": "无尽模式打到第40波——肝已经捐给修仙界了，署名还是你",
+			"category": "trial",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_liuhuo_feijian.png",
 		},
 	# ---------------- 流派：武器构筑 ----------------
 		{
@@ -318,6 +339,36 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 			"reward_id": "sanxiu",
 			"reward_name": "散修",
 			"icon": "res://assets/art/cultivator_sanxiu_icon.png",
+		},
+		{
+			"id": "ach_feat_lone_weapon",
+			"name": "孤剑走天涯",
+			"cond_desc": "只带一件武器通关——武器栏空得能跑马",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_qingteng_jian.png",
+		},
+		{
+			"id": "ach_feat_skill_abstain",
+			"name": "手指休假",
+			"cond_desc": "通关全程一次技能键都没按——手指说它这局只负责拿手机",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/skill_dash.png",
+		},
+		{
+			"id": "ach_feat_no_items",
+			"name": "两袖清风",
+			"cond_desc": "通关时一件法宝都没带——背包比脸还干净",
+			"category": "style",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/item_wujian_shi.png",
 		},
 	# ---------------- 历练：生涯累计 ----------------
 		{
@@ -451,6 +502,16 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 			"reward_name": "",
 			"icon": "res://assets/art/cultivator_shixue_icon.png",
 		},
+		{
+			"id": "ach_feat_thrift",
+			"name": "一毛不拔",
+			"cond_desc": "通关全程一枚金币都没花——铁公鸡见了你都得递烟",
+			"category": "luck",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/item_jubaopen.png",
+		},
 ]
 
 ## 通关过的最高危险度对应的境界称号（-1 未通关返回空串）
@@ -505,6 +566,8 @@ static func unlock_hint_text(id: String, is_item: bool, prefix: String) -> Strin
 ## run_ctx 字段：victory(bool), endless(bool), danger(int), wave(int), level(int), kills(int),
 ##              max_stones(int), max_dodge(float), max_harvest(float),
 ##              damage_taken_count(int), hp_healed(float),
+##              stones_spent(int 本局花掉金币), skill_casts(int 主动技能次数),
+##              weapon_count(int 结算时持有武器总数), item_count(int 结算时法宝数),
 ##              max_summons(int), max_class_counts(Dictionary {器类tag: 同时上阵峰值}),
 ##              max_element_spread(int 单局同时上阵的五行元素种数峰值)
 ## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int),
@@ -571,6 +634,18 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return int(run_ctx.get("damage_taken_count", 0)) >= 25
 		"ach_feat_nodamage":
 			return victory and int(run_ctx.get("damage_taken_count", 0)) == 0
+		"ach_feat_nightmare_flawless":
+			return victory and danger >= 3 and int(run_ctx.get("damage_taken_count", 0)) == 0
+		"ach_feat_endless_40":
+			return endless and wave >= 40
+		"ach_feat_lone_weapon":
+			return victory and int(run_ctx.get("weapon_count", 0)) == 1
+		"ach_feat_skill_abstain":
+			return victory and int(run_ctx.get("skill_casts", -1)) == 0
+		"ach_feat_no_items":
+			return victory and int(run_ctx.get("item_count", -1)) == 0
+		"ach_feat_thrift":
+			return victory and int(run_ctx.get("stones_spent", -1)) == 0
 		"ach_style_rebel":
 			return int(career_stats.get("wins_no_skill_enhance", 0)) >= 3
 		"ach_style_loner":

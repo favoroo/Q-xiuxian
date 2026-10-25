@@ -504,6 +504,7 @@ func try_activate_skill() -> bool:
 			ActiveSkills.aegis(self, st)
 		SkillData.Kind.HEAL:
 			ActiveSkills.renewal(self, st)
+	GameManager.skill_cast_count += 1
 	return true
 
 ## 效果活跃窗口时长（秒）：冲刺按无敌窗口，持续型按 duration，其余（瞬发）为 0
@@ -574,6 +575,7 @@ func try_activate_extra_skill() -> bool:
 			play_squash(Vector2(1.18, 0.84), 0.18)
 			if sid == "elixir":
 				BurstSkills.release_elixir(self)
+			GameManager.skill_cast_count += 1
 			return true
 		SkillData.Kind.BURST:
 			# 蓄能释放：没攒上按不动（按钮侧给抖动拒绝反馈），攒上随时能放、无 CD
@@ -581,6 +583,7 @@ func try_activate_extra_skill() -> bool:
 				return false
 			play_squash(Vector2(1.18, 0.84), 0.18)
 			BurstSkills.release_shadow_step(self)
+			GameManager.skill_cast_count += 1
 			return true
 	return false
 
@@ -625,9 +628,12 @@ func _set_weapon_fire_held(held: bool) -> void:
 			(child as FloatingWeapon).set_fire_held(held)
 
 ## 落地那一帧：先解起手闸，再清空攻击间隔 —— 顺序不能反，否则解除前武器已按旧间隔起手。
+## 末尾补一记「落地震开」：冲刺 110px 会直接落在怪身上（玩家碰撞层不收敌人），
+## 无敌余量只剩 ~0.19s，不推开就是帧末立刻吃接触伤。数值/判定半径在 SkillData.dash 的 land_push_*。
 func _on_dash_landed() -> void:
 	_set_weapon_fire_held(false)
 	reset_weapon_attack_intervals()
+	ActiveSkills.dash_land_shove(self)
 
 ## 把所有在役武器的攻击间隔清零（闪避落地）。
 ## 只动计时器，不打断正在挥出的那一拍——动作与判定同拍，截断会吞掉这一刀。

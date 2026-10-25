@@ -440,14 +440,7 @@ func _make_pet_entry_card(pdef: Dictionary, on_press: Callable) -> PanelContaine
 	pet_preview.custom_minimum_size = Vector2(40, 40)
 	pet_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pet_preview.draw.connect(func():
-		var c: Color = pdef.get("color", Color(0.9, 0.9, 0.9))
-		var halo: Color = pdef.get("halo_color", Color(1.0, 1.0, 1.0, 0.3))
-		var sz: Vector2 = pet_preview.size
-		var center := sz * 0.5
-		var r: float = sz.x * 0.28
-		pet_preview.draw_circle(center, r * 1.6, halo)
-		pet_preview.draw_circle(center, r, c)
-		pet_preview.draw_circle(center + Vector2(-r * 0.25, -r * 0.25), r * 0.35, Color(1.0, 1.0, 1.0, 0.85))
+		PetIconDraw.draw_orb(pet_preview, pdef)
 	)
 	icon_box.add_child(pet_preview)
 	icon_center.add_child(icon_box)

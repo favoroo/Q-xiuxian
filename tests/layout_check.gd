@@ -111,6 +111,11 @@ func _check_all_table_texts() -> void:
 		var itxt := GameStyle.wrap_cjk(String(ItemData.get_def(iid).get("desc", "")), body, 12, s_inner)
 		if GameStyle.line_max_w(itxt, body, 12) > s_inner + EPS:
 			bad.append("法宝 %s 的说明在 %d 宽货架卡里仍超宽" % [iid, int(s_inner)])
+	# 灵兽卡同样只有说明这一栏文字（没有加成行）⇒ 也得按最窄货架卡量
+	for pid in PetData.all_ids():
+		var ptxt := GameStyle.wrap_cjk(String(PetData.get_def(String(pid)).get("desc", "")), body, 12, s_inner)
+		if GameStyle.line_max_w(ptxt, body, 12) > s_inner + EPS:
+			bad.append("灵兽 %s 的说明在 %d 宽货架卡里仍超宽" % [pid, int(s_inner)])
 	# 道统名单：列宽按最窄那一档屏算（960 是 canvas_items+expand 的下限）
 	var col_w := CultivatorSelect.text_col_w(960.0)
 	for cid in CultivatorData.all_ids():
@@ -206,10 +211,16 @@ func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 			"kind": "item", "id": "taiyi_jindan", "price": 88, "sold": false, "locked": false,
 		}
 	var long_ids: Array[String] = ["chiyan_dao", "liuye_feidao", "wulei_paizi"]
-	for i in range(mini(long_ids.size(), maxi(offers.size() - 2, 0))):
+	# 末格钉灵兽（最长文案的灵风貂，4 行说明）：灵兽卡没有加成行，
+	# 说明就是它卡面上唯一的文字块 ⇒ 也得进最坏样本（2026-10-24 用户：「灵兽商店卡什么文字都没有了」）
+	for i in range(mini(long_ids.size(), maxi(offers.size() - 3, 0))):
 		offers[2 + i] = {
 			"kind": "weapon", "id": long_ids[i], "price": 41,
 			"sold": false, "locked": i % 2 == 0,
+		}
+	if offers.size() >= 3:
+		offers[offers.size() - 1] = {
+			"kind": "pet", "id": "fengdiao", "price": 38, "sold": false, "locked": false,
 		}
 	GameManager.items.clear()
 	# 法宝全灌（unique 除外）：限购件灌进背包会把钉在货架上的极效药丸打成「已持有」，
@@ -377,6 +388,29 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		GameManager.recalc_synergies()
 	await get_tree().process_frame
 
+## 卡上真有说明块吗：找卡 VBox 里那段非空的 RichTextLabel。
+## 只认「文字真上了树」，不认「代码里写了 desc」—— 说明被 if 拦在门外时两者正是分家的。
+static func card_draws_desc(vbox: VBoxContainer) -> bool:
+	if vbox == null:
+		return false
+	for ch in vbox.get_children():
+		if ch is RichTextLabel and not String((ch as RichTextLabel).text).strip_edges().is_empty():
+			return true
+	return false
+
+## 色签行里真画出签了吗：TagFlow 里除锁定键之外还有 Label（档位签/流派签/荐/可合成）。
+## 与 card_draws_desc 同一类尺子：只认「签真上了树」，不认「代码里填了 tag 字段」。
+static func card_draws_tag_chip(card: Control) -> bool:
+	if card == null:
+		return false
+	var flow := card.find_child("TagFlow", true, false) as Container
+	if flow == null:
+		return false
+	for ch in flow.get_children():
+		if ch is Label and not String((ch as Label).text).strip_edges().is_empty():
+			return true
+	return false
+
 ## 用户报的那一格（2026-10-09 真机）：货架卡再长，「重掷 / 出战」这一排与顶栏标题必须整颗在屏内
 ## —— 它们是灵石阁唯一的出口，看不见等于把玩家关在面板里。通用 _walk 量的是每个控件，
 ## 这三颗单独点名：以后谁再动摆位，报的是「出口不在屏内」而不是一串 rect。
@@ -401,6 +435,36 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 	if not shelf_fits(need_h, scroll.size.y):
 		bad.append("货架要上下滑：最高那张卡要 %.0f 高，滚动区只给 %.0f（差 %.0f）" % [
 			need_h, scroll.size.y, need_h - scroll.size.y])
+	# 「卡上有说明」也得点名量（2026-10-24 用户：「这个灵兽的商店卡片为什么什么文字都没有了」）。
+	# 通用 _walk 只量「画出来的文字装不装得下」，文字整块没上树它照样全绿 ——
+	# 当时的根因正是说明被嵌进「有加成行」的 if 里，而灵兽卡 stat_rows 恒空。
+	# 期望文案按 kind 直接从数据表读（不调 resolve_offer_data：那条路会现开一份属性影子），
+	# 卡序与货架格序一致。回复药是纯加成卡、desc 本来就空，不算漏。
+	var offers_arr: Array = GameManager.shop_offers
+	var cards: Array = shop.offers_container.get_children()
+	for ci in range(mini(cards.size(), offers_arr.size())):
+		var offer: Dictionary = offers_arr[ci]
+		var kind := String(offer.get("kind", "weapon"))
+		var oid := String(offer.get("id", ""))
+		var want_desc := ""
+		if kind == "weapon":
+			want_desc = String(WeaponData.get_def(oid).get("desc", ""))
+		elif kind == "item":
+			want_desc = String(ItemData.get_def(oid).get("desc", ""))
+		elif kind == "pet":
+			want_desc = String(PetData.get_def(oid).get("desc", ""))
+		if want_desc.is_empty():
+			continue
+		var vbox := (cards[ci] as Control).get_child(0) as VBoxContainer
+		if not card_draws_desc(vbox):
+			bad.append("货架第 %d 格（kind=%s id=%s）没有说明文字，数据表 desc=「%s」" % [
+				ci, kind, oid, want_desc])
+		# 色签同样点名量：档位签与流派签原先都嵌在「有攻击方式签」的 if 里，
+		# 而 behavior_chip 只有武器卡才有 ⇒ 道具/回复药/灵兽卡整排色签一颗都不画，
+		# 卡上只剩一个「锁定」键（2026-10-24 用户：战旗卡上连「史诗·道具」都看不见）。
+		# 武器卡的流派签由 ShopChipTapCheck 逐颗点名，这里只兜「非武器卡一颗签都没有」。
+		if kind != "weapon" and not card_draws_tag_chip(cards[ci] as Control):
+			bad.append("货架第 %d 格（kind=%s id=%s）色签行是空的，只剩锁定键" % [ci, kind, oid])
 	# 陈列行（上阵 + 背包 + 法宝）：槽位先按件数压到下限，还摆不下就整排横滑
 	# （2026-10-09 用户真机：「装备太多了，可以左右滑动啊，不然很多装备都操作不了了」）。
 	# 这一条只钉「摆不平就得有得滑」；处处起手划得起来 + 滑到底看得见末格 + 摆得平不许露滑条
@@ -796,6 +860,51 @@ func _selftest() -> void:
 	_check_gutters()
 	_check_safe_insets()
 	_check_right_anchored_chip()
+	_check_card_desc_drawn()
+
+## 「卡上有说明」那把尺的牙齿（2026-10-24 用户：灵兽商店卡什么文字都没有了）。
+## 按修复前的形状原样造一遍：说明块被拦在「有加成行」的 if 门外 ⇒ card_draws_desc 必须说没有。
+## 旁边留一张真画了说明的卡当正例，证明「没画」不是「尺子找不到卡」。
+func _check_card_desc_drawn() -> void:
+	var empty := VBoxContainer.new()
+	_c.check(not card_draws_desc(empty), "反例 没有说明块的卡被认成「没文字」")
+	var blocked := VBoxContainer.new()
+	var rows := Control.new()
+	rows.name = "BonusRowsBlock"
+	blocked.add_child(rows)
+	_c.check(not card_draws_desc(blocked),
+		"反例 修复前的形状：说明被嵌在「有加成行」的 if 里、灵兽卡只剩加成块 ⇒ 认出没有文字")
+	var drawn := VBoxContainer.new()
+	var desc_rt := RichTextLabel.new()
+	desc_rt.text = "向最近敌人发射穿透火弹"
+	drawn.add_child(desc_rt)
+	_c.check(card_draws_desc(drawn), "正例 说明块真上了树就放行")
+	var blank := VBoxContainer.new()
+	blank.add_child(RichTextLabel.new())
+	_c.check(not card_draws_desc(blank), "反例 空说明块不算「有文字」")
+	for n in [empty, blocked, drawn, blank]:
+		(n as Node).free()
+	# 色签那把尺：非武器卡整排签都没画出来时，TagFlow 里只剩锁定键
+	var bare_card := Control.new()
+	var flow := HFlowContainer.new()
+	flow.name = "TagFlow"
+	var lock := Button.new()
+	lock.text = "锁定"
+	flow.add_child(lock)
+	bare_card.add_child(flow)
+	_c.check(not card_draws_tag_chip(bare_card),
+		"反例 修复前的形状：档位签被嵌在「有攻击方式签」的 if 里 ⇒ 道具卡 TagFlow 只剩锁定键")
+	var tagged_card := Control.new()
+	var flow2 := HFlowContainer.new()
+	flow2.name = "TagFlow"
+	var chip := Label.new()
+	chip.text = " 史诗·道具 "
+	flow2.add_child(chip)
+	flow2.add_child(Button.new())
+	tagged_card.add_child(flow2)
+	_c.check(card_draws_tag_chip(tagged_card), "正例 档位签真上了树就放行")
+	for n in [bare_card, tagged_card]:
+		(n as Node).free()
 
 ## 右锚芯片那三把尺的反例/正例。数字就是 2026-10-16 探针（PanelContainer + PRESET_TOP_RIGHT、
 ## offset_left 按空文案钉成 40 宽）量出来的那一档：换成「余妖 13/19」后最小尺寸要 74，

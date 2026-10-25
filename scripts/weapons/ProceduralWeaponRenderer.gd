@@ -18,6 +18,8 @@ extends Node2D
 ## 器形族模块库（scripts/weapons/shapes/）：重绘接管的器形优先走族模块新画法，
 ## 未接管的一律回退本文件旧画法（灰度增量，不破现状）。新增/重绘器形只改族模块，别动本文件。
 const WeaponShapeLibrary = preload("res://scripts/weapons/shapes/WeaponShapeLibrary.gd")
+## 野兽派共用调色板/构件：本文件的 ★4 霓虹脊线取色与族模块同一处真话（别在这儿再写一份色值）
+const BC = preload("res://scripts/weapons/shapes/BrutalistCommon.gd")
 
 enum WeaponShape {
 	SWORD,     ## 直剑：双刃平行、末端收锋
@@ -63,7 +65,7 @@ func configure(p_shape: WeaponShape, p_element: String, p_tip_len: float, p_star
 	shape = p_shape
 	element = p_element
 	tip_len = maxf(p_tip_len, 8.0)
-	star = clampi(p_star, 1, 3)
+	star = clampi(p_star, 1, WeaponData.MAX_STAR)
 	upright = p_upright
 	weapon_id = p_weapon_id
 	queue_redraw()
@@ -276,6 +278,7 @@ func _draw_hilt(pal: Dictionary, w: float) -> void:
 ##  ★1：器尖一点寒芒
 ##  ★2：寒芒变大 + 刃身浮出两粒冷光星点（器身开始「活」起来）
 ##  ★3：再叠一道贯穿刃脊的流转辉线（结构性强化，贴图时代只能整体变色）
+##  ★4：辉线换太虚霓虹双色（电光青 HDR + 太虚紫），器尖再套一圈霓虹外环
 func _draw_star_fx(pal: Dictionary, tip: Vector2, ridge_a: Vector2, ridge_b: Vector2) -> void:
 	var r := 0.85 + 0.22 * float(star - 1)
 	AdaptiveDraw.circle(self, tip, r * 1.25, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.28))
@@ -285,7 +288,12 @@ func _draw_star_fx(pal: Dictionary, tip: Vector2, ridge_a: Vector2, ridge_b: Vec
 		var mid := ridge_b.lerp(ridge_a, 0.55)
 		AdaptiveDraw.circle(self, mid, 1.0, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9))
 		AdaptiveDraw.circle(self, ridge_b.lerp(ridge_a, 0.3), 0.9, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.75))
-	if star >= 3:
+	if star >= 4:
+		# 极境：电光青脊线 + 太虚紫外描 + 器尖霓虹环（HDR 分量 >1 走引擎泛光）
+		draw_line(ridge_b, ridge_a, BC.NEON_CYAN_HDR, 1.6, true)
+		draw_line(ridge_b, ridge_a, BC.NEON_VIOLET, 0.8, true)
+		draw_arc(tip, r * 1.9, 0.0, TAU, 20, BC.NEON_CYAN_HDR, 0.7, true)
+	elif star >= 3:
 		draw_line(ridge_b, ridge_a, Color(1.0, 1.0, 1.0, 0.8), 1.3, true)
 		draw_line(ridge_b, ridge_a, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9), 0.6, true)
 
@@ -387,7 +395,8 @@ func _ink(pal: Dictionary) -> Color:
 	return pal["dark"].darkened(0.42)
 
 ## 器心起辉（竖置重器共用）：器心一点灵光 + 升星结构强化
-##  ★2 两侧浮出灵光点、★3 叠一道环身辉圈（贴图时代只能整体变色）
+##  ★2 两侧浮出灵光点、★3 叠一道环身辉圈（贴图时代只能整体变色）、
+##  ★4 换太虚霓虹双色环（电光青外圈 + 太虚紫内圈，紫电琉璃）
 func _draw_core_fx(pal: Dictionary, center: Vector2, r0: float) -> void:
 	var r := r0 * (1.0 + 0.20 * float(star - 1))
 	AdaptiveDraw.circle(self, center, r * 2.0, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.22))
@@ -398,7 +407,10 @@ func _draw_core_fx(pal: Dictionary, center: Vector2, r0: float) -> void:
 			var a := PI * 0.5 + PI * float(i)
 			AdaptiveDraw.circle(self, center + Vector2(cos(a), sin(a)) * r * 2.4, r * 0.42,
 				Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.85))
-	if star >= 3:
+	if star >= 4:
+		AdaptiveDraw.arc(self, center, r * 2.9, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
+		AdaptiveDraw.arc(self, center, r * 2.4, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
+	elif star >= 3:
 		AdaptiveDraw.arc(self, center, r * 2.7, 0.0, TAU,
 			Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.55), 1.0, true)
 

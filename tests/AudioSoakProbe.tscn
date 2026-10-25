@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://pqaciweq5yk7"]
+
+[ext_resource type="Script" path="res://tests/audio_soak_probe.gd" id="1"]
+
+[node name="AudioSoakProbe" type="Node"]
+script = ExtResource("1")
