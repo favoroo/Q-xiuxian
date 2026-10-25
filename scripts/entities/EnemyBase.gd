@@ -312,7 +312,7 @@ static var _explode_snap_pool: Array = []  ## live_enemies 快照复用栈（击
 ## GAP 内全静默」，无论多少只怪同帧同秒触发。用时间戳不用共享倒计时——倒计时被多实例
 ## 各自扣一遍会加速漏闸。GDScript 坑：位移 << 不吃负操作数，初值只写普通负数。
 const GROUND_SCORCH_MIN_GAP_MS := 5000   ## 自爆焦痕：屏上至多一块，与贴花 2.3s 寿命衔接（2026-10-19 去裂痕化同步翻倍）
-const KILL_EXPLODE_FX_MIN_GAP_MS := 700  ## 裂魂铃爆炸环：清怪高潮不再冲击环雨，保留节奏读数
+const KILL_EXPLODE_FX_MIN_GAP_MS := 250  ## 爆炸演出限频（2026-10-25 由 700 放宽：连环尸爆是血祭盛宴的爽点，只掐到不成环雨）
 static var _last_scorch_ms: int = -999999
 static var _last_kill_explode_fx_ms: int = -999999
 

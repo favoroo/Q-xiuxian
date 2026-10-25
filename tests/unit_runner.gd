@@ -57,10 +57,13 @@ func _ready() -> void:
 		[upgrade, "_test_upgrade_table"],
 		[upgrade, "_test_upgrade_roll_filters"],
 		[upgrade, "_test_alloc_session"],
-		# 2026-10-25 超级悟道：卡表/候选配比/赠礼落地（每个用例自带 reset_run，不影响后续顺序）
+		# 2026-10-25 超级悟道「三道」：卡表/道途阶段门控/候选算法/赠礼落地/链电数值
+		# （每个用例自带 reset_run，不影响后续顺序）
 		[supers, "_test_super_table"],
+		[supers, "_test_super_stage_gate"],
 		[supers, "_test_super_roll"],
 		[supers, "_test_super_apply"],
+		[supers, "_test_chain_balance"],
 		[economy, "_test_shop_determinism"],
 		[economy, "_test_weapon_star2_offer"],
 		[economy, "_test_main_tag_pity"],
@@ -123,8 +126,8 @@ func _ready() -> void:
 			[flock, "_test_flock_orbit"],
 			[flock, "_test_lunge_geometry"],
 			[flock, "_test_lunge_state_machine"],
-			# 2026-10-24 初始武器原价回收（开局白送的那件不绑架流派，卖一次即失效）
-			[economy, "_test_starter_weapon_resale"],
+			# 2026-10-25 武器回收按星级（★1 原价、★2 起折价）
+			[economy, "_test_weapon_resale_by_star"],
 		]
 	for entry in plan:
 		var mod: Node = entry[0]

@@ -244,6 +244,8 @@ func _act_leique() -> void:
 	# 1. 主目标受创与麻痹打断
 	if nearest.has_method("take_damage"):
 		nearest.take_damage(primary_dmg, Vector2.ZERO, true)
+	# 神通钩子（兽群链电 / 灵蕴五行）：直击落点统一走 OnHitEffects.on_pet_hit
+	OnHitEffects.on_pet_hit(self, nearest, primary_dmg)
 	if nearest.has_method("apply_vortex_pin"):
 		nearest.apply_vortex_pin(Vector2.ZERO, BalanceSpiritPet.THUNDER_STUN_DURATION)
 
@@ -263,6 +265,7 @@ func _act_leique() -> void:
 		if d_sq <= 190.0 * 190.0:
 			if e.has_method("take_damage"):
 				e.take_damage(chain_dmg, Vector2.ZERO, true)
+				OnHitEffects.on_pet_hit(self, n2d, chain_dmg)
 			if e.has_method("apply_vortex_pin"):
 				e.apply_vortex_pin(Vector2.ZERO, BalanceSpiritPet.THUNDER_STUN_DURATION * 0.75)
 			_chain_targets_pos.append(to_local(n2d.global_position))
@@ -434,7 +437,10 @@ func _act_fengdiao() -> void:
 			pull_vec = pull_vec.normalized() * BalanceSpiritPet.pull_impulse(travel) * elite_scale * (GameBalance.BOSS_KNOCKBACK_RESIST if is_boss else 1.0)
 		else:
 			pull_vec = Vector2.ZERO
-		en.take_damage(dmg * GameManager.elite_damage_mult_for(en), Vector2.ZERO)
+		var dealt: float = dmg * GameManager.elite_damage_mult_for(en)
+		en.take_damage(dealt, Vector2.ZERO)
+		# 神通钩子（兽群链电 / 灵蕴五行）：罡风直击也在「灵兽直击」口径内
+		OnHitEffects.on_pet_hit(self, en, dealt)
 		en.apply_vortex_pin(pull_vec, BalanceSpiritPet.pin_duration(elite_scale * en.hit_stun_resist * (0.25 if is_boss else 1.0)))
 		# 附加风阻减速
 		if en.has_method("apply_chill"):

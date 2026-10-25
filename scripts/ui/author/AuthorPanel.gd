@@ -3,11 +3,13 @@ extends BaseModalDialog
 
 ## 作者模式面板（仅 GameManager.author_mode 时由 HUD/商店/悟道顶栏打开）。
 ##
-## 四个分页：
+## 五个分页：
 ##   ◆ 状态：人物等级 / 跳关 / 金币
 ##   ◆ 战斗：无敌 / 一击必杀 / 时间加速 / 直接胜利·失败
 ##   ◆ 武器：全武器图鉴式浏览（类型/五行筛选 + 卡面三签），点卡开详情窗、窗内按星免费购买（1 ~ MAX_STAR）
 ##   ◆ 道具：全道具 + 灵兽，点卡开详情窗、窗内免费购买
+##   ◆ 商店：完整商店（AuthorShopView）
+##   ◆ 悟道：普通悟道 + 超级悟道免费加/删测试台（AuthorAllocView，删除走从初值重放）
 ##
 ## 口径：
 ## - 打开即 `get_tree().paused = true`（继承 BaseModalDialog 的暂停式模态），关面板不主动解暂停：
@@ -66,7 +68,13 @@ var _pet_grid: GridContainer
 # 商店页
 var _shop_view: AuthorShopView = null
 
+# 悟道页
+var _alloc_view: AuthorAllocView = null
+
 signal manual_requested(tag: String)
+
+## 分页标题文案（新页追加在末尾；别动 0~4 的下标 —— _show_weapon_tag 与判据都按它跳页）
+const TAB_LABELS: Array[String] = ["状态", "战斗", "武器", "道具", "商店", "悟道"]
 
 func _get_title_text() -> String:
 	return "作 者 模 式"
@@ -78,13 +86,18 @@ func _get_panel_size() -> Vector2:
 	var vp := get_viewport_rect().size
 	if vp.x <= 0.0:
 		vp = Vector2(960, 540)
-	return Vector2(minf(900.0, vp.x - 40.0), minf(500.0, vp.y - 32.0))
+	# 高按 ShopCardLayout 的面板呼吸量算（上下各 12），不再钉死 500：
+	# 【◆ 商店】页要装下货架卡（960×540 下卡高 284）+ 陈列行，500 差一截，
+	# 价格键会被挤出滚动视口（2026-10-25 探针：卡高 284 / 视口 247，得先滚才看得见价格）。
+	return Vector2(minf(900.0, vp.x - 40.0),
+			minf(vp.y - ShopCardLayout.PANEL_SCREEN_PAD_Y, 560.0))
 
 func _get_panel_margins() -> Vector4:
-	return Vector4(18, 12, 18, 12)
+	# 上下 12 → 10：省下的竖向预算给【◆ 商店】页的货架（960×540 下面板里每一格都要争）
+	return Vector4(18, 10, 18, 10)
 
 func _get_vbox_separation() -> int:
-	return 8
+	return 6
 
 func _get_tab_bar_separation() -> int:
 	return 6
@@ -96,11 +109,11 @@ func _get_close_btn_min_size() -> Vector2:
 	return Vector2(76, 32)
 
 func _build_body(root_vbox: VBoxContainer) -> void:
-	add_tab_button(0, "◆ 状态", 76.0)
-	add_tab_button(1, "◆ 战斗", 76.0)
-	add_tab_button(2, "◆ 武器", 76.0)
-	add_tab_button(3, "◆ 道具", 76.0)
-	add_tab_button(4, "◆ 商店", 76.0)
+	# tab 宽度按可用宽现算：6 个 tab 在 720 宽视口下用 76 会顶出面板、压到关闭键
+	# （面板内宽 ~437，6×76+5×6=486 溢出）。桌面 960 仍是 76，窄屏自动收窄。
+	var tab_w := _tab_width()
+	for i in range(TAB_LABELS.size()):
+		add_tab_button(i, "◆ %s" % TAB_LABELS[i], tab_w)
 
 	var content_panel := PanelContainer.new()
 	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -117,7 +130,21 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_pages.append(_build_weapon_page(content_panel))
 	_pages.append(_build_item_page(content_panel))
 	_pages.append(_build_shop_page(content_panel))
+	_pages.append(_build_alloc_page(content_panel))
 	switch_tab(0)
+
+## 六个 tab 均分「面板内宽 − 标题块实测宽 − 关闭键 − 顶部栏间距」，夹在 [60, 76]。
+## 标题块宽度用 get_combined_minimum_size 实测（_build_modal_chrome 已把文案装好）。
+func _tab_width() -> float:
+	var vp := get_viewport_rect().size
+	if vp.x <= 0.0:
+		vp = Vector2(960, 540)
+	var inner := minf(900.0, vp.x - 40.0) - _get_panel_margins().x - _get_panel_margins().z
+	var reserved := _title_box.get_combined_minimum_size().x + float(_get_close_btn_min_size().x) \
+			+ 2.0 * float(_get_top_bar_separation())
+	var avail := inner - reserved
+	return clampf(floorf((avail - float(_get_tab_bar_separation()) * float(TAB_LABELS.size() - 1))
+			/ float(TAB_LABELS.size())), 60.0, 76.0)
 
 func _on_opened() -> void:
 	_keep_paused_on_close = false
@@ -131,14 +158,20 @@ func _on_opened() -> void:
 	_rebuild_pet_grid()
 	if _shop_view != null:
 		_shop_view.refresh(false)
+	if _alloc_view != null:
+		_alloc_view.refresh()
 
 func _on_tab_switched(index: int) -> void:
 	if index == 4 and _shop_view != null:
 		_shop_view.refresh(false)
+	if index == 5 and _alloc_view != null:
+		_alloc_view.refresh()
 
 func _on_closed() -> void:
 	if _shop_view != null:
 		DetailTip.close_all(_shop_view)
+	if _alloc_view != null:
+		DetailTip.close_all(_alloc_view)
 	# 战斗中被 HUD 打开时，关面板要把暂停还回去；商店/悟道期间打开前本来就是暂停，保持。
 	# 结算屏路径（直接胜利/失败）由 _keep_paused_on_close 钉住暂停，否则树一解暂停，
 	# 结算对话框的入场动画与 GameOver 流程会被 WaveSpawner 抢跑。
@@ -665,9 +698,42 @@ func _build_shop_page(parent: Control) -> Control:
 	_shop_view = AuthorShopView.new(self)
 	_shop_view.state_changed.connect(func(k: String) -> void: state_changed.emit(k))
 	_shop_view.inventory_changed.connect(func(k: String) -> void: inventory_changed.emit(k))
-	_shop_view.manual_requested.connect(func(tag: String) -> void: manual_requested.emit(tag))
+	# 「查看该流派武器」：面板自己就是图鉴，直接切到◆武器页并按这一路筛选 ——
+	# 不往 Main 发 manual_requested 去叠一层 ManualDialog：那会让作者面板背后再压一个
+	# 全屏模态，关图鉴后还得记着回到第几页（2026-10-25 探针发现这条信号原先没人接，点了没反应）。
+	# 仍然照发 manual_requested，外部（Main / 判据）想接就有得接。
+	_shop_view.manual_requested.connect(func(tag: String) -> void:
+		manual_requested.emit(tag)
+		_show_weapon_tag(tag)
+	)
 	parent.add_child(_shop_view)
 	return _shop_view
+
+# ---------------- 分页 6：悟道 ----------------
+
+## 悟道加点测试台：免费加/删普通与超级悟道，删除由 AuthorStatRebuild 从初值重放属性层。
+## 加删后发 state_changed("alloc")：Main 转去刷新开着的悟道/超级悟道面板（层数角标）与商店读数。
+func _build_alloc_page(parent: Control) -> Control:
+	_alloc_view = AuthorAllocView.new(self)
+	_alloc_view.state_changed.connect(func(k: String) -> void: state_changed.emit(k))
+	parent.add_child(_alloc_view)
+	return _alloc_view
+
+## 切到◆武器页并预选一路筛选：类型标签走类型行、五行标签走五行行（与图鉴同一套口径）
+func _show_weapon_tag(tag: String) -> void:
+	var t := String(tag)
+	if t in WeaponData.CLASSES:
+		weapon_class_filter = t
+		weapon_element_filter = ""
+	elif t in WeaponData.ELEMENTS:
+		weapon_class_filter = ""
+		weapon_element_filter = t
+	else:
+		weapon_class_filter = ""
+		weapon_element_filter = ""
+	_restyle_filter_chips()
+	_rebuild_weapon_grid()
+	switch_tab(2)
 
 # ---------------- 通用小件 ----------------
 

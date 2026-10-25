@@ -162,6 +162,10 @@ func _stress_hud(hud: Control) -> void:
 		hud.wave_left.show_as_worst_case()
 		hud.wave_left.set_readout(3, 9)
 		hud.wave_left.set_readout(HudWaveLeft.WORST_LEFT, HudWaveLeft.WORST_TOTAL)
+	# 魔君血条平时隐藏（只在 Boss 波上屏），不灌样本这一格等于没量 ——
+	# 通用 _walk 会量它出不出屏，_check_boss_bar 另按「贴底居中」点名量
+	if hud.boss_bar() != null:
+		hud.boss_bar().show_as_worst_case()
 	hud.kills_label.text = "击杀 12847"
 	hud.shards_label.text = "金币 99999"
 	var box: HBoxContainer = hud.get("_synergy_box")
@@ -225,8 +229,8 @@ func _stress_shop(count: int = GameManager.SHOP_BASE_SLOTS) -> void:
 	GameManager.items.clear()
 	# 法宝全灌（unique 除外）：限购件灌进背包会把钉在货架上的极效药丸打成「已持有」，
 	# 预览行退化成幅度行，这一屏就量不到预览卡了（2026-10-21 道具卡预览）。
-	# 陈列行的最坏情况不是「两件」而是「满仓」——满仓 6 上阵 + 9 背包 + 十几法宝
-	# = 30 格摆不平 ⇒ OwnedScroll 露一条 8 单位高的滑条，那 8 单位是从货架的竖向预算里扣的。
+	# 陈列行的最坏情况不是「两件」而是「满仓」——满仓 6 上阵 + 5 背包 + 十几法宝
+	# = 26 格摆不平 ⇒ OwnedScroll 露一条 8 单位高的滑条，那 8 单位是从货架的竖向预算里扣的。
 	for id in ItemData.all_ids():
 		if bool(ItemData.get_def(String(id)).get("unique", false)):
 			continue
@@ -392,6 +396,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 	var bad := _walk(node, screen, float(spec.get("edge_gap", 0.0)))
 	if String(spec["tag"]) == "顶栏 HUD":
 		bad.append_array(_check_wave_left_chip(node as GameHUD, screen))
+		bad.append_array(_check_boss_bar(node as GameHUD, screen))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
 	if String(spec["tag"]) == "波后悟道结算":
@@ -419,7 +424,7 @@ static func card_draws_desc(vbox: VBoxContainer) -> bool:
 			return true
 	return false
 
-## 色签行里真画出签了吗：TagFlow 里除锁定键之外还有 Label（档位签/流派签/荐/可合成）。
+## 色签行里真画出签了吗：TagFlow 里除锁定键之外还有 Label（档位签/流派签/可合成）。
 ## 与 card_draws_desc 同一类尺子：只认「签真上了树」，不认「代码里填了 tag 字段」。
 static func card_draws_tag_chip(card: Control) -> bool:
 	if card == null:
@@ -521,11 +526,13 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 ## ① 状态条与标题同一排（画出来的上下范围真的交叠，不是「名义上在顶栏」）；
 ## ② 面板真的只剩三排（顶栏 / 卡片行 / 操作条）——谁再往中间塞一整排读数就报红；
 ## ③ 顶栏这一排摆得下：整排要的最小宽 ≤ 面板内容宽，并点名最宽的那一颗（挤人的就是它）。
+## 2026-10-25 用户：「这个提示看不清，没什么作用，去掉」——状态条整体下线，①作废，
+## 剩 ②③ 仍钉着：谁往中间塞回一整排读数、或把顶栏挤爆，这一格照样报红。
 ## 尺子全走运行时节点自己的账（combined_minimum_size + 现读的 separation/stylebox），不抄像素。
 func _check_levelup_rows(lvl: LevelUpDialog, screen: Vector2) -> Array[String]:
 	var bad: Array[String] = []
-	if lvl == null or lvl.info_band == null or lvl.top_bar == null:
-		return ["悟道面板没有顶栏/状态条（尺子空转，这一格没量到）"]
+	if lvl == null or lvl.top_bar == null:
+		return ["悟道面板没有顶栏（尺子空转，这一格没量到）"]
 	var vbox: VBoxContainer = lvl.get_node(
 		"CenterContainer/Panel/MarginContainer/VBox") as VBoxContainer
 	var rows: Array[String] = []
@@ -533,17 +540,6 @@ func _check_levelup_rows(lvl: LevelUpDialog, screen: Vector2) -> Array[String]:
 		rows.append(String(ch.name))
 	if rows != ["TopBar", "CardScroll", "ActionBar"]:
 		bad.append("加点面板中间还有空行：VBox 实得 %s（应为顶栏/卡片行/操作条三排）" % str(rows))
-	var info_r: Rect2 = lvl.info_band.get_global_rect()
-	var title_r: Rect2 = lvl.title_label.get_global_rect()
-	# 同一排 = 竖向真的交叠（两者左右并排，横向本就不相交，不能用 Rect2.intersects）
-	if not (info_r.position.y < title_r.end.y and title_r.position.y < info_r.end.y):
-		bad.append("状态条没和标题同一排：状态条 y %.1f~%.1f 与标题 y %.1f~%.1f 不相交" % [
-			info_r.position.y, info_r.end.y, title_r.position.y, title_r.end.y])
-	# 20:9 真机档必须是**一行**：换成两行就是把省下的 36 单位又吃回去（窄屏兜底的硬换行只许
-	# 出现在摆不平的那一档，见 LevelUpDialog._info_room_w）。
-	if screen.x >= 1200.0 and lvl.info_label.text.contains("\n"):
-		bad.append("状态条在 20:9 档折成 %d 行，顶栏变高 ⇒ 卡片行没真的拿到那一排（文案=「%s」）" % [
-			lvl.info_label.text.split("\n").size(), lvl.info_label.text.replace("\n", "|")])
 	var need_w: float = lvl.top_bar.get_combined_minimum_size().x
 	var avail_w: float = LevelUpDialog.panel_inner_w(screen)
 	if need_w > avail_w + EPS:
@@ -599,6 +595,45 @@ static func chip_right_over(rect: Rect2, screen_x: float, edge_x: float) -> floa
 ## 尺子②：布局盒至少要装得下自己那串文案（装不下 = 引擎会把盒子朝右下撑出屏）
 static func chip_box_fits(box_w: float, need_w: float) -> bool:
 	return box_w + 1.0 >= need_w
+
+## 魔君血条点名量（2026-10-25 用户：「显示在接近这个界面中间，就挡住了很多东西」）。
+## 旧摆位 PRESET_CENTER_TOP + offset_top=140 在 960×540 上落在 y 140..178 —— 屏幕正中偏上，
+## 正是玩家与敌潮扎堆的那一片。这条把「贴底居中」钉成判据：
+##   ① 底缘与屏幕底的距离 == BOTTOM_MARGIN（给手势条留的那一档，不许贴死）
+##   ② 顶部离屏幕顶超过半屏（旧摆位那种「在屏心」直接红）
+##   ③ 左右居中，且整块在屏内（屏宽 720 的平板档也量）
+##   ④ 与右下技能键不重叠（血条压住技能键等于战斗中少一颗键）
+func _check_boss_bar(hud: GameHUD, screen: Vector2) -> Array[String]:
+	var bad: Array[String] = []
+	if hud == null:
+		return ["顶栏不是 GameHUD，魔君血条这一格没量到"]
+	var bar: HudBossBar = hud.boss_bar()
+	if bar == null:
+		return ["顶栏没有魔君血条（HudBossBar 未构建）"]
+	bar.show_as_worst_case()
+	var r: Rect2 = bar.get_global_rect()
+	var bottom_gap: float = screen.y - r.end.y
+	if absf(bottom_gap - HudBossBar.BOTTOM_MARGIN) > EPS:
+		bad.append("魔君血条底缘离屏底 %.1f，应贴 BOTTOM_MARGIN=%.0f（盒 y %.0f..%.0f，屏高 %.0f）" % [
+			bottom_gap, HudBossBar.BOTTOM_MARGIN, r.position.y, r.end.y, screen.y])
+	if r.position.y < screen.y * 0.5:
+		bad.append("魔君血条顶在屏上半（y=%.0f < 半屏 %.0f）⇒ 回到挡视野的老摆位了" % [
+			r.position.y, screen.y * 0.5])
+	var center_x: float = r.position.x + r.size.x * 0.5
+	if absf(center_x - screen.x * 0.5) > EPS:
+		bad.append("魔君血条没横向居中（中心 %.1f，屏心 %.1f）" % [center_x, screen.x * 0.5])
+	if not rect_on_screen(r, screen):
+		bad.append("魔君血条出屏：x %.0f..%.0f y %.0f..%.0f（屏 %.0fx%.0f）" % [
+			r.position.x, r.end.x, r.position.y, r.end.y, screen.x, screen.y])
+	var skill_rect := Rect2(hud.skill_btn_center_px() - hud.skill_btn_size_px() * 0.5,
+		hud.skill_btn_size_px())
+	if r.intersects(skill_rect):
+		bad.append("魔君血条压住技能键：条 %s ∩ 键 %s" % [str(r), str(skill_rect)])
+	# 用回读的名号确认应力样本真灌进去了（不然量的是空文案那一档宽）
+	if bar.readout_title() != HudBossBar.WORST_TITLE:
+		bad.append("魔君血条没灌成最坏名号：实得「%s」应为「%s」" % [
+			bar.readout_title(), HudBossBar.WORST_TITLE])
+	return bad
 
 ## 整棵树逐个控件量三件事：① 这一格在屏内 ② 它**画出来**的那一圈也在屏内
 ## ③ 这一格里的每一行文字装得下。

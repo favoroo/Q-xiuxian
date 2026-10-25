@@ -435,29 +435,37 @@ func _test_dream_affinity() -> void:
 		"持有 ★3 同名后刷出次数翻倍以上（%d → %d / 120 次）" % [n_without, n_with])
 	GameManager.reset_run()
 
-## 初始武器平价回收：开局白送的那一件按原价退，卖一次即失效（避免为回本硬留流派）
-func _test_starter_weapon_resale() -> void:
+## 武器回收按星级：★1 按基准价原价退（试错/换流派不亏），★2 起折价（仍低于合成材料投入）
+func _test_weapon_resale_by_star() -> void:
 	GameManager.reset_run()
-	# 常规口径仍是半价；原价口径不吃 0.5 折扣，但保留星级系数
-	_c.equals(WeaponData.sell_price("qingyun_sword", 1), 13, "常规回收 = 基准价 25 × 50% 上取整")
-	_c.equals(WeaponData.sell_price("qingyun_sword", 1, WeaponData.STARTER_SELL_RATIO), 25, "初始武器按原价回收")
-	_c.equals(WeaponData.sell_price("qingyun_sword", 2, WeaponData.STARTER_SELL_RATIO), 40, "★2 初始武器走星级系数仍是原价口径")
+	# 长剑基准价 25：★1 全价；★2 = 25 × 50% × 1.6；★3 = 25 × 50% × 1.6²
+	_c.equals(WeaponData.sell_price("qingyun_sword", 1), 25, "★1 按基准价原价回收")
+	_c.equals(WeaponData.sell_price("qingyun_sword", 2), 20, "★2 折价回收 = 基准价 × 50% × 星级系数")
+	_c.equals(WeaponData.sell_price("qingyun_sword", 3), 32, "★3 折价回收 = 基准价 × 50% × 星级系数²")
 
-	GameManager.starter_weapon_id = "qingyun_sword"
-	GameManager.starter_sell_bonus_pending = true
-	_c.equals(GameManager.weapon_sell_price("qingyun_sword", 1), 25, "报价与实际到手同源：初始武器报原价")
+	_c.equals(GameManager.weapon_sell_price("qingyun_sword", 1), 25, "报价与实际到手同源：★1 原价")
 	_c.equals(GameManager.weapon_sell_price("gengjin_feijian", 1),
-			WeaponData.sell_price("gengjin_feijian", 1), "其他武器报价不受初始武器影响")
+			WeaponData.sell_price("gengjin_feijian", 1), "所有 ★1 武器走同一条原价口径")
 
-	# 从背包卖出同名副本同样算兑现一次（副本本身不可区分），之后回到半价
+	# 八折角色：回收价与买入价同乘商店价系数，否则「买入→卖出」就是刷钱循环
+	GameManager.shop_price_mult = 0.8
+	_c.equals(WeaponData.sell_price("qingyun_sword", 1, GameManager.shop_price_mult), 20,
+			"★1 原价退吃商店价系数（八折角色退 20，与 1 波买入价同价）")
+	_c.equals(GameManager.weapon_sell_price("qingyun_sword", 1), 20, "回收报价走同一条乘区")
+	GameManager.shop_price_mult = 1.0
+
+	# 从背包卖出两件同名 ★1 都是原价（不再有「初始武器额度」这种一次性例外）
 	GameManager.spirit_stones = 0
 	GameManager.stash = [{"id": "qingyun_sword", "star": 1}]
-	_c.check(GameManager.sell_stash(0), "初始武器从背包售出成功")
+	_c.check(GameManager.sell_stash(0), "★1 从背包售出成功")
 	_c.equals(GameManager.spirit_stones, 25, "第一件到手原价 25")
-	_c.check(not GameManager.starter_sell_bonus_pending, "原价额度只兑现一次")
 	GameManager.stash = [{"id": "qingyun_sword", "star": 1}]
-	_c.check(GameManager.sell_stash(0), "再卖一件同名副本成功")
-	_c.equals(GameManager.spirit_stones, 25 + 13, "第二件恢复半价 13")
+	_c.check(GameManager.sell_stash(0), "再卖一件同名 ★1 成功")
+	_c.equals(GameManager.spirit_stones, 50, "第二件同样原价 25（没有一次性额度）")
+	# ★2 折价：三件 ★1（75）合成后只退 20，倒卖不成立
+	GameManager.stash = [{"id": "qingyun_sword", "star": 2}]
+	_c.check(GameManager.sell_stash(0), "★2 从背包售出成功")
+	_c.equals(GameManager.spirit_stones, 70, "★2 到手折价 20")
 	GameManager.reset_run()
 
 func _make_all_non_spirit_offers(wave: int) -> Array:

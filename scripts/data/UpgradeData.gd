@@ -95,8 +95,10 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 6,
 	},
 	{
+		# 2026-10-25 修同档完爆：原 2/层被淬体（3 护甲+15 生命，同档同 6 层）严格碾压成死卡。
+		# 纯护甲卡每层护甲必须压过混搭卡（4 > 3）：本卡是「堆甲专精」，淬体仍是攻守混搭。
 		"id": "armor_up",
-		"apply": {"armor": 2.0},
+		"apply": {"armor": 4.0},
 		"title": "护甲提升",
 		"desc": "按百分比减免每次受击伤害",
 		"rarity": "common",
@@ -209,8 +211,10 @@ const UPGRADES: Array[Dictionary] = [
 		"max_stacks": 8,
 	},
 	{
+		# 2026-10-25 修稀有度倒挂：原 8/层低于普通档贪婪的 10/层还白少 3 幸运，稀有反而更弱。
+		# 纯收益卡每层须压过贪婪的收益腿（12 > 10），贪婪保留幸运作混搭副腿。
 		"id": "harvest_up",
-		"apply": {"harvest": 8.0},
+		"apply": {"harvest": 12.0},
 		"title": "收益提升",
 		"desc": "每回合结束白得金币与经验",
 		"rarity": "rare",
@@ -474,8 +478,10 @@ const UPGRADES: Array[Dictionary] = [
 			},
 		# ==================== 2026-10-21 结构补档（机关史诗 / 技能流 / 闪避史诗 / 商店折扣） ====================
 		{
+			# 2026-10-25 对齐兄弟卡：万灵朝元同为「6 伤害 + 护主生命」的史诗档，生命 15 vs 10
+			# 是补档时随手写的不对称。统一 15；层数 4 vs 5 保留作各自的调参余地。
 			"id": "grand_contraption",
-			"apply": {"contraption_damage": 6.0, "max_hp": 10.0, "hp_heal": 10.0},
+			"apply": {"contraption_damage": 6.0, "max_hp": 15.0, "hp_heal": 15.0},
 			"title": "万机归元",
 			"desc": "机关护主，附带护体罡气",
 			"rarity": "epic",

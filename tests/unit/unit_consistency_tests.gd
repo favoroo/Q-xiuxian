@@ -267,7 +267,7 @@ func _test_item_desc_apply() -> void:
 		_check_desc_matches_apply(_c, "ItemData", String(item_id), String(d.get("desc", "")), d.get("apply", {}), extra_pct, extra_flat)
 
 ## 角色道具软亲和标签守卫（2026-10-24）：item_tags 已收进 CultivatorData.DEFS 条目（原先的
-## 独立 ITEM_TAGS 手工副本漏抄一个 = 该角色道具亲和静默退化成空、商店推荐全部失明，无任何报错）。
+## 独立 ITEM_TAGS 手工副本漏抄一个 = 该角色道具亲和静默退化成空，无任何报错）。
 ## 新角色条目必须带非空 item_tags，漏配在这里显性报红。
 func _test_cultivator_item_tags() -> void:
 	var missing: Array[String] = []

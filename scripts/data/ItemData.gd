@@ -48,6 +48,18 @@ extends RefCounted
 ## 2026-10-25 超级悟道（神通）新增两条机制钩子：
 ##   weapon_slot_bonus —— 开天辟地：上阵武器槽位 +1（GameManager.max_weapon_slots 读侧叠加）
 ##   kill_cd_refund    —— 杀戮节奏：击杀返还所有武器当前冷却比例（EnemyDeathFx.drops 读侧）
+## 2026-10-25 超级悟道「三道」重构后的机制钩子（全部读侧现算，不进 apply）：
+##   melee_range_mult —— 剑气凌霄：近战/横扫判定半径倍率（MeleeHandler/SweepHandler.arc_radius）
+##   sword_qi          —— 万剑归宗：近战累计命中到阈值放环形剑气（OnHitEffects.tick_sword_qi）
+##   projectile_count_bonus / projectile_damage_mult —— 万箭齐发：多发但单发打折（ProjectileHandler）
+##   projectile_bounce_bonus —— 弹幕回响：弹丸出膛时叠加弹射次数（ProjectileHandler）
+##   attack_chain_lightning  —— 紫电：每 N 次攻击放连锁闪电（FloatingWeapon._perform_attack）
+##   kill_chain_lightning    —— 雷劫：击杀时放连锁闪电（EnemyDeathFx.drops）
+##   crit_sky_bolt / chain_hop_bonus —— 天罚：暴击落雷 + 链电跳数加成（OnHitEffects / ChainLightning）
+##   projectile_chain_lightning —— 雷霆弹幕（共鸣）：弹丸命中时也链电（OnHitEffects.on_projectile_hit）
+##   thorns_electric   —— 反震电场：受击时向周围放电（Player.take_damage → OnHitEffects）
+##   wuxing_rotation_chance —— 五行轮转：命中按几率附加随机五行异常（OnHitEffects._roll_wuxing）
+## 数值口径统一在 scripts/systems/BalanceChain.gd，调参只改那一处。
 ## 2026-10-21 角色专属玩法补充（同样走额外字段，item_hook_sum 现算）：
 ##   dmg_per_nearby_enemy + dmg_per_nearby_enemy_cap —— 战旗：附近敌人越多全伤害越高（CultivatorSystem.damage_mult）
 ##   dmg_per_unique_item + dmg_per_unique_item_cap   —— 藏珍卷：每持有一种不同道具全伤害加成（同上）
@@ -124,7 +136,7 @@ const DEFS: Dictionary = {
 			"name": "龟甲", "tier": 2, "price": 24,
 			"icon": "res://assets/art/item_guijia_fu.png",
 			"desc": "",
-			"apply": {"armor": 3.0},
+			"apply": {"armor": 4.0},
 		},
 		"yushou_ling": {
 			"name": "驭兽铃", "tier": 2, "price": 28,
@@ -425,7 +437,7 @@ const DEFS: Dictionary = {
 					"name": "机簧核心", "tier": 3, "price": 48,
 					"icon": "res://assets/art/item_jiguan_hexin.png",
 					"desc": "机关伤害与攻速提升",
-					"apply": {"contraption_damage": 4.0, "attack_speed_mult_mul": 0.92},
+					"apply": {"contraption_damage": 5.0, "attack_speed_mult_mul": 0.92},
 				},
 
 			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/宝箱掉落」同一条链路） ----
@@ -749,7 +761,7 @@ const DEFS: Dictionary = {
 				"apply": {"engineering_damage": 5.0, "pet_damage_mult": 0.15, "move_speed_mult": -0.04},
 			},
 			"tianji_suo": {
-				"name": "天机锁", "tier": 3, "price": 46,
+				"name": "天机锁", "tier": 3, "price": 48,
 				"icon": "res://assets/art/item_tianji_suo.png",
 				"desc": "天机咬合：机关运转更快；福缘 -2",
 				"apply": {"contraption_damage": 6.0, "attack_speed_mult_mul": 0.94, "luck": -2.0},
@@ -792,140 +804,139 @@ const DEFS: Dictionary = {
 			},
 		# ==================== 神通（tier 5 · 逆天 · 超级悟道专属） ====================
 		# 只由 SuperUpgradeData 赠送，绝不进商店货架池（granted_only）、不可出售（no_sell）。
-		# 数值与机制口径见 scripts/data/SuperUpgradeData.gd 的卡面定义；此处只放宽落地字段。
+		# 道途/阶段元数据在 scripts/data/SuperUpgradeData.gd；此处只管「这件神通干什么」。
+		# 2026-10-25 重构：删掉全部纯数值放大卡（与普通悟道无区别），只留机制卡与真代价卡。
+		# 机制卡一律 apply 留空、机制数字写进顶层字段（一致性测试会把顶层数值当「已解释」），
+		# desc 只写一句人话，不重复 apply 里的数字。
+
+		# ---- 剑道 ----
 		"shen_jianqi": {
 			"name": "剑气凌霄", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_kaishan_jianyi.png",
-			"desc": "近战伤害与攻击范围大幅提升",
-			"apply": {"melee_damage": 15.0, "attack_range_mult": 0.25},
-		},
-		"shen_yizhanyang": {
-			"name": "以战养战", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_jifeng_xue.png",
-			"desc": "近战命中时额外吸取生命",
-			"apply": {"melee_damage": 10.0},
-			"melee_lifesteal_flat": 2.0,
-		},
-		"shen_zhuixing": {
-			"name": "追星逐月", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_qianfu_lianhuan.png",
-			"desc": "远程武器多 1 发弹丸",
+			"desc": "近战与横扫的攻击范围翻倍",
 			"apply": {},
-			"projectile_count_bonus": 1,
+			"melee_range_mult": 1.0,
 		},
-		"shen_guanchuan": {
-			"name": "贯穿星辰", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+		"shen_wanjian_guizong": {
+			"name": "万剑归宗", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_lijian_shi.png",
+			"desc": "近战每数刀迸发一道环形剑气",
+			"apply": {},
+			"sword_qi": 1.0,
+		},
+
+		# ---- 箭道 ----
+		"shen_wanjian_qifa": {
+			"name": "万箭齐发", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_wanshi_jian.png",
-			"desc": "远程伤害提升，弹丸额外穿透 2 个敌人",
-			"apply": {"ranged_damage": 10.0, "bonus_pierce": 2.0},
+			"desc": "远程多 2 发弹丸，单发伤害略降",
+			"apply": {},
+			"projectile_count_bonus": 2.0,
+			"projectile_damage_mult": 0.85,
 		},
-		"shen_wuxing": {
-			"name": "五行归一", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+		"shen_tanmu": {
+			"name": "弹幕回响", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_qianfu_lianhuan.png",
+			"desc": "弹丸命中后额外弹射",
+			"apply": {},
+			"projectile_bounce_bonus": 2.0,
+		},
+		"shen_jianyu": {
+			"name": "箭雨倾盆", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_liannu_shi.png",
+			"desc": "远程武器每隔数次出手，朝敌群落下一轮箭雨",
+			"apply": {},
+			"arrow_rain_every": 6.0,
+		},
+
+		# ---- 雷法 ----
+		"shen_zidian": {
+			"name": "紫电", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_leiling_zhu.png",
+			"desc": "攻击间隔积累到一定程度放出连锁闪电",
+			"apply": {},
+			"attack_chain_lightning": 1.0,
+		},
+		"shen_leijie": {
+			"name": "雷劫", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_liehun_ling.png",
+			"desc": "击杀时向附近敌人放出闪电",
+			"apply": {},
+			"kill_chain_lightning": 1.0,
+		},
+		"shen_tianfa": {
+			"name": "天罚", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_jinmang_souhun.png",
+			"desc": "暴击时额外落下一道天雷",
+			"apply": {},
+			"crit_sky_bolt": 1.0,
+			"chain_hop_bonus": 1.0,
+		},
+
+		# ---- 体修 ----
+		"shen_fanzhen_dianchang": {
+			"name": "反震电场", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_fanzhen_tongjia.png",
+			"desc": "受到伤害时向周围敌人放电",
+			"apply": {},
+			"thorns_electric": 1.0,
+		},
+		"shen_xuehai": {
+			"name": "血海护盾", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuehai_fu.png",
+			"desc": "满血时吸血的溢出结成血盾，盾碎时向周身放电",
+			"apply": {},
+			"lifesteal_overflow_shield": 1.0,
+		},
+
+		# ---- 五行 ----
+		"shen_wuxing_lunzhuan": {
+			"name": "五行轮转", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_wuxing_pei.png",
-			"desc": "五行元素伤害全面提升",
-			"apply": {"element_damage_all": 0.20, "elemental_damage": 8.0},
+			"desc": "命中时可能附加随机五行异常",
+			"apply": {},
+			"wuxing_rotation_chance": 0.35,
 		},
-		"shen_zaie": {
-			"name": "灾厄燎原", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_lihuo_shenjing.png",
-			"desc": "元素伤害大幅提升，灼烧与中毒一并变强",
-			"apply": {"elemental_damage": 18.0},
+		"shen_wuxing_guiyi": {
+			"name": "五行归一", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_hunyuan_zhu.png",
+			"desc": "每次命中同时附加灼烧、冰缓与剧毒",
+			"apply": {},
+			"wuxing_all": 1.0,
 		},
-		"shen_hengsao": {
-			"name": "横扫八荒", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_kaishan_jianyi.png",
-			"desc": "横扫类武器范围大幅扩张",
-			"apply": {"melee_damage": 10.0},
-			"wide_range_mult": 0.35,
-		},
-		"shen_wanling": {
-			"name": "万灵朝元", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_wanling_fan.png",
-			"desc": "召唤物与灵兽伤害大幅提升",
-			"apply": {"engineering_damage": 15.0, "pet_damage_mult": 0.25},
-		},
+
+		# ---- 灵兽 ----
 		"shen_shouxue": {
 			"name": "兽血沸腾", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_yushou_ling.png",
 			"desc": "灵兽栏 +1，灵兽出手更快",
 			"apply": {"pet_cooldown_mult_mul": 0.75, "pet_slots": 1.0},
 		},
-		"shen_huoli": {
-			"name": "火力覆盖", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_tiangong_fatiao.png",
-			"desc": "机关炮台开火间隔大幅缩短",
-			"apply": {"contraption_damage": 12.0},
-			"turret_haste": 0.30,
+		"shen_shouqun": {
+			"name": "兽群", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_wanshou_long.png",
+			"desc": "灵兽栏 +2，灵兽的直击附带闪电",
+			"apply": {"pet_slots": 2.0},
+			"pet_chain_lightning": 1.0,
 		},
-		"shen_shentong": {
-			"name": "神通广大", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_ningshen_fu.png",
-			"desc": "随行技能冷却大幅缩短",
-			"apply": {"skill_cooldown_mult": 0.30, "attack_speed_mult_mul": 0.95},
+
+		# ---- 跨道共鸣 ----
+		"shen_leiting_danmu": {
+			"name": "雷霆弹幕", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_qianfu_lianhuan.png",
+			"desc": "弹丸命中时也放出连锁闪电",
+			"apply": {},
+			"projectile_chain_lightning": 1.0,
 		},
-		"shen_shenxing": {
-			"name": "神行百变", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_shenxing_xue.png",
-			"desc": "移速提升，移速越高全伤害越高",
-			"apply": {"move_speed_mult": 0.20},
-			"dmg_per_move_speed": 0.06,
+		"shen_lingyun_wuxing": {
+			"name": "灵蕴五行", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_tongling.png",
+			"desc": "灵兽直击时大概率附加随机五行异常",
+			"apply": {},
+			"pet_wuxing_chance": 0.6,
 		},
-		"shen_dianjin": {
-			"name": "点石成金", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_dianjin_jue.png",
-			"desc": "暴击率与暴击伤害全面提升",
-			"apply": {"crit_rate": 0.15, "crit_mult": 0.50},
-		},
-		"shen_kumu": {
-			"name": "枯木逢春", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_yimu_sui.png",
-			"desc": "生命回复与吸血同步提升",
-			"apply": {"hp_regen": 3.0, "lifesteal": 0.08},
-		},
-		"shen_ruoshui": {
-			"name": "弱水三千", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_xuanshui_po.png",
-			"desc": "攻击更快，移速大幅提升",
-			"apply": {"attack_speed_mult_mul": 0.88, "move_speed_mult": 0.20},
-		},
-		"shen_lihuo": {
-			"name": "离火焚天", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_lihuo_shenjing.png",
-			"desc": "火系伤害大幅提升；击杀引发爆燃",
-			"apply": {"element_damage_fire": 0.30},
-			"kill_explode": 25.0, "kill_explode_radius": 90.0,
-		},
-		"shen_houtu": {
-			"name": "后土载物", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_houtu_shenyuan.png",
-			"desc": "护甲与反震大幅提升",
-			"apply": {"armor": 8.0, "thorns": 0.40},
-		},
-		"shen_jingji": {
-			"name": "荆棘道心", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_fanzhen_tongjia.png",
-			"desc": "反震伤害翻倍",
-			"apply": {"thorns": 1.0, "armor": 4.0},
-		},
-		"shen_wanjun": {
-			"name": "万军辟易", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_zhanqi.png",
-			"desc": "附近敌人越多全伤害越高",
-			"apply": {"melee_damage": 10.0},
-			"dmg_per_nearby_enemy": 0.015, "dmg_per_nearby_enemy_cap": 0.30,
-		},
-		"shen_shengsheng": {
-			"name": "生生不息", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_huichun_hulu.png",
-			"desc": "生命上限与生命回复大幅提升",
-			"apply": {"max_hp": 40.0, "hp_heal": 40.0, "hp_regen": 4.0},
-		},
-		"shen_xuehai": {
-			"name": "血海滔天", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_xuehai_fu.png",
-			"desc": "吸血与生命上限大幅提升",
-			"apply": {"lifesteal": 0.12, "max_hp": 40.0, "hp_heal": 40.0},
-		},
+
+		# ---- 仪式（无道途，随时可出） ----
 		"shen_kaitian": {
 			"name": "开天辟地", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_luban_suo.png",
@@ -943,50 +954,9 @@ const DEFS: Dictionary = {
 		"shen_xueji": {
 			"name": "血祭盛宴", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_liehun_ling.png",
-			"desc": "击杀时引发大范围爆炸",
+			"desc": "击杀引发尸爆，死者越壮爆炸越狠",
 			"apply": {},
-			"kill_explode": 35.0, "kill_explode_radius": 90.0,
-		},
-		"shen_beishui": {
-			"name": "背水一战", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_ranxue_fu.png",
-			"desc": "生命流失越多，全伤害越高",
-			"apply": {},
-			"dmg_per_missing_hp": 0.04,
-		},
-		"shen_guzhu": {
-			"name": "孤注一掷", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_sanmei_guizhen.png",
-			"desc": "上阵武器每空一格，全伤害提升",
-			"apply": {},
-			"dmg_per_empty_slot": 0.18,
-		},
-		"shen_yijing": {
-			"name": "以静制动", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_panshi_yin.png",
-			"desc": "站定片刻后全伤害大幅提升",
-			"apply": {},
-			"still_damage": 0.60, "still_seconds": 0.8,
-		},
-		"shen_jubao": {
-			"name": "聚宝通灵", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_jubao_pen.png",
-			"desc": "持有的金币越多，全伤害越高",
-			"apply": {},
-			"dmg_per_100_stones": 0.04, "stone_dmg_cap": 0.35,
-		},
-		"shen_duobao": {
-			"name": "多宝道藏", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_cangzhen_juan.png",
-			"desc": "持有的不同道具越多，全伤害越高",
-			"apply": {},
-			"dmg_per_unique_item": 0.03, "dmg_per_unique_item_cap": 0.30,
-		},
-		"shen_bumie": {
-			"name": "不死金身", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_bumie_jinshen.png",
-			"desc": "生命上限与护甲大幅提升",
-			"apply": {"max_hp": 100.0, "hp_heal": 100.0, "armor": 6.0},
+			"kill_explode": 120.0, "kill_explode_radius": 170.0, "kill_explode_hp_ratio": 0.25,
 		},
 		"shen_moyan": {
 			"name": "魔焰锻体", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
@@ -1007,12 +977,12 @@ const DEFS: Dictionary = {
 			"apply": {"dodge": 0.12},
 			"dodge_heal_chance": 0.5, "dodge_heal_hp": 5.0,
 		},
-		"shen_yucuo": {
-			"name": "愈挫愈勇", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
-			"icon": "res://assets/art/item_xuewen_fu.png",
-			"desc": "每次受击叠加增伤，层数越多全伤害越高",
-			"apply": {},
-			"on_hit_damage_bonus": 0.04,
+		"shen_xianji": {
+			"name": "献祭", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_xuepan_guyu.png",
+			"desc": "武器槽 -1，其余武器伤害大涨",
+			"apply": {"weapon_damage_mult": 0.60},
+			"weapon_slot_bonus": -1,
 		},
 	}
 
@@ -1078,7 +1048,18 @@ const HOOK_TAGS := {
 	"dmg_per_missing_hp": "lifesteal", "dmg_per_empty_slot": "generic",
 	"wave_heal_pct": "heal", "chest_magnet": "chest", "revive": "tank",
 	"weapon_slot_bonus": "generic", "kill_cd_refund": "haste",
-}
+		# 2026-10-25 超级悟道机制卡（链电 / 剑气 / 五行轮转 / 范围与弹丸变异）
+		"melee_range_mult": "melee", "sword_qi": "melee",
+		"projectile_damage_mult": "projectile", "projectile_bounce_bonus": "projectile",
+		"attack_chain_lightning": "thunder", "kill_chain_lightning": "thunder",
+		"crit_sky_bolt": "thunder", "chain_hop_bonus": "thunder",
+		"projectile_chain_lightning": "thunder",
+		"thorns_electric": "tank", "wuxing_rotation_chance": "elemental",
+		# 二阶段（箭雨 / 血盾 / 归一 / 兽群 / 灵蕴 / 尸爆口径）
+		"arrow_rain_every": "ranged", "lifesteal_overflow_shield": "lifesteal",
+		"wuxing_all": "elemental", "pet_chain_lightning": "pet",
+		"pet_wuxing_chance": "pet", "kill_explode_hp_ratio": "elemental",
+	}
 
 static func tags_of(id: String) -> Array:
 	var d: Dictionary = get_def(id)

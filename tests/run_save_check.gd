@@ -103,6 +103,8 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		# —— 帧内缓存/节流计数：不参与任何持久语义 ——
 		"_lifesteal_procs", "_lifesteal_window", "_hud_tick",
 		"_still_cache_valid", "_hook_cache_items_size",
+		# 神通机制 hook 快照（2026-10-25）：items 指纹派生缓存，读档后首次访问自会重算
+		"_super_hook_snap", "_super_hook_stamp",
 		# —— 结算展示位：game_over 前由 ProgressStore 消费，局内存档不背它 ——
 		"last_run_new_achievements", "last_run_new_records",
 		# —— 活体登记表：恢复时场上必然无怪（回合边界语义），_exit_tree 自己维护 ——

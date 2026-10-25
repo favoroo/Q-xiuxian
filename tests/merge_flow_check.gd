@@ -41,12 +41,22 @@ func _run() -> void:
 		return
 	_quiet_arena()
 	_shop._on_shop_opened()
+	# 判据直接开店，绕过了回合流程 ⇒ 货架是空的；补一次 roll 才有「合成时货架不该重建」的对照
+	GameManager.roll_shop(false)
+	_shop.refresh(false)
 	# 等真实时间：行是重建出来的，headless 一帧不到 1ms，等帧数量到的是还没摆位的矩形
 	await get_tree().create_timer(0.8).timeout
 	await _frame(2)
 
 	_c.check(GameManager.count_copies(W, 1) >= 3,
 			"手里凑齐 3 把同名 1 星（实得 %d）" % GameManager.count_copies(W, 1))
+	# 合成只该重铺陈列行：货架 5 张大卡与报价都是原账。逮住第一张大卡的实例，
+	# 迸发后它还必须活着 —— 旧写法在爆点调 refresh(false) 会把它 queue_free 掉，
+	# 那笔重建开销正是合成动画顿一下的来源
+	var offer0: Control = null
+	if _shop.offers_container.get_child_count() > 0:
+		offer0 = _shop.offers_container.get_child(0) as Control
+	_c.check(offer0 != null, "货架第一张大卡在场（对照用）")
 	# keeper 选第 3 格（index 2）：两件被消耗的前面两格，重建后 keeper 向左补两格 ——
 	# 正好压住「结果图标要滑行跟到格子新位置」这条收尾
 	var slot0 := _slot_node("equipped", 0)
@@ -112,6 +122,13 @@ func _run() -> void:
 	await get_tree().create_timer(0.35).timeout
 	_c.equals(GameManager.count_copies(W, 2), 1, "合成落地：多出 1 把 2 星")
 	_c.equals(GameManager.count_copies(W, 1), 0, "同名 1 星清零")
+	# 轻量刷新锁定：货架大卡还是原来那张实例（没被重建），陈列行则确实换成了新的
+	if offer0 != null and is_instance_valid(offer0):
+		_c.check(_shop.offers_container.get_child_count() > 0
+				and _shop.offers_container.get_child(0) == offer0,
+				"合成只重铺陈列行，货架大卡没有重建")
+	else:
+		_c.check(false, "货架大卡不该在合成时被销毁")
 	_c.check(is_instance_valid(overlay), "迸发后演出层还在（结果图标的尾段余韵）")
 	var pic: Control = null
 	if is_instance_valid(overlay):

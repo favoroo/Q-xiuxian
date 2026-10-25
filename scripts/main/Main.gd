@@ -774,8 +774,10 @@ func _on_author_inventory_changed(_kind: String) -> void:
 ## 作者面板改金币/等级/生命：按 kind 调对应刷新入口（商店内部走既有的 refresh(false)
 ## 通道，重建价格键的「买得起/差 N」与生命徽记；悟道只刷顶栏读数，不重 roll 候选）。
 ## - stones：商店顶栏金币、货架价格键、重掷键；悟道刷新键与底栏文案
-## - level：悟道面板顶栏「连升 N 级 / 剩余加点」（等级还折了待加点）
+## - level：悟道面板顶栏剩余加点徽记（等级还折了待加点）
 ## - hp：商店生命徽记与回复药卡「这一口回多少」
+## - alloc：悟道测试台改了加点/神通（2026-10-25）—— shop_price_mult 被重算影响货架价格键，
+##   加点层数变化影响悟道卡面 ×N 角标与候选可用性，都要当场重画
 func _on_author_state_changed(kind: String) -> void:
 	var wave_shop := get_node_or_null("UILayer/WaveShop") as Control
 	var lvl_dialog := get_node_or_null("UILayer/LevelUpDialog") as Control
@@ -791,13 +793,22 @@ func _on_author_state_changed(kind: String) -> void:
 			"stones", "hp":
 				if wave_shop.has_method("refresh_readouts"):
 					wave_shop.refresh_readouts()
+			"alloc":
+				if wave_shop.has_method("refresh_readouts"):
+					wave_shop.refresh_readouts()
 			"level":
 				pass
 	if lvl_dialog != null and lvl_dialog.visible and lvl_dialog.has_method("refresh_bars"):
 		lvl_dialog.refresh_bars()
+	if kind == "alloc" and lvl_dialog != null and lvl_dialog.visible \
+			and lvl_dialog.has_method("refresh_offers"):
+		lvl_dialog.refresh_offers()
 	var super_dialog := get_node_or_null("UILayer/SuperAllocDialog") as Control
 	if super_dialog != null and super_dialog.visible and super_dialog.has_method("refresh_bars"):
 		super_dialog.refresh_bars()
+	if kind == "alloc" and super_dialog != null and super_dialog.visible \
+			and super_dialog.has_method("refresh_offers"):
+		super_dialog.refresh_offers()
 
 func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 	if bool(SettingsManager.get_val(&"display", &"screen_flash", true)):

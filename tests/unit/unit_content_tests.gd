@@ -431,6 +431,7 @@ func _test_cultivator_system() -> void:
 	GameManager.dodge = 1.0
 	_c.near(GameManager.get_effective_dodge(), 0.9, EPS, "魅影闪避上限 90%（其余人 60%）")
 	_c.check("armor_up" in GameManager.locked_upgrades, "魅影锁死罡气护体")
+	_c.check("temper" in GameManager.locked_upgrades, "魅影锁死淬体（护甲系加点全锁，兑现角色卡「护甲无法通过加点提升」）")
 	_c.near(GameManager.hp_regen, 1.5, EPS, "魅影初始回复 +1.5/秒（高回复定位）")
 	_c.near(GameManager.weapon_damage_mult, 0.80, EPS, "魅影全武器伤害 -20%（负面代偿）")
 	if GameManager.player != null:
@@ -1081,6 +1082,7 @@ func _test_cultivator_frenzy_thunder_shop() -> void:
 	_c.equals(GameManager.reroll_free_left, 0, "非商人无免费重掷")
 	_c.equals(GameManager.reroll_cost, GameBalance.reroll_cost(1, 0, 1.0), "非商人重掷全价（乘区 1.0）")
 	GameManager.reset_run()
+	GameManager.cultivator_id = ""
 
 ## 2026-10-12 流派闭环：法宝转化件（item_hook_sum 现算）+ 武器交叉格补洞 + 蛮兵陷阵/守财奴财可通神
 func _test_conversion_items_and_hooks() -> void:
@@ -1169,6 +1171,7 @@ func _test_conversion_items_and_hooks() -> void:
 	GameManager.spirit_stones = 1000
 	_c.near(GameManager.cultivator_damage_mult("qingyun_sword"), 1.35, EPS, "剑痴无陷阵/财可通神（仍只有剑系 +35%）")
 	GameManager.reset_run()
+	GameManager.cultivator_id = ""
 
 	# ==================== 2026-10-12 深度联动与站定流法宝（14 件）机制测试 ====================
 	# 1. 站定/入定流

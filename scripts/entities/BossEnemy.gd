@@ -3,7 +3,7 @@ extends EnemyBase
 
 ## 关卡 Boss：固定 Boss 回合（第 10/20 波、无尽每 5 波）登场，参考土豆兄弟的大 Boss 与弹幕射击设计。
 ## 特征：
-##   1. 超厚血条，顶部 HUD 专设 Boss 血条（boss_hp_changed / boss_defeated 信号驱动，带节流防掉帧）
+##   1. 超厚血条，HUD 底部贴边专设 Boss 血条（boss_hp_changed / boss_defeated 信号驱动，带节流防掉帧）
 ##   2. 7 种丰富攻击模式轮换：
 ##      - RING: 双层交错弧线环弹（顺/逆时针交错弧线，二阶段追加直穿环）
 ##      - BURST_FAN: 扇形连射狙击（逐波加速压迫横向走位）

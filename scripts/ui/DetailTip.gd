@@ -57,9 +57,30 @@ func card_rect() -> Rect2:
 	## 视觉实占矩形：超高兜底缩放不进 get_size()，这里按 scale 如实放大/缩小回报
 	return Rect2(_card.get_global_position(), _card.get_size() * _card.scale)
 
+## 宿主解析：卡必须挂在**一层全屏 Control** 上，因为遮罩与摆位全靠 `size` / `global_position`
+## 就是整块屏幕（见 _open/_place）。有些宿主本身不是全屏 Control —— 例如作者模式里嵌在面板
+## VBox 中的商店视图：它被外层容器按内容排版，anchors 不起作用、高度被压成 0、原点也落在面板
+## 中间，卡片于是被算到屏幕底边之外（2026-10-25 用户：作者模式商店点装备「弹窗看不到，卖不掉」）。
+## 约定：宿主可选实现 `get_tip_host()` 交出真正全屏的那一层；这里统一解析一次，
+## show_over / close_all / live 三个入口都走它 —— 于是模块里传「商店视图」也收得掉挂在面板上的卡。
+static func host_of(host: Control) -> Control:
+	var cur: Control = host
+	# 最多跟三层：A → 全屏宿主 → 无（防 get_tip_host 互相指回来时打成死循环）
+	for _i in range(3):
+		if cur == null or not is_instance_valid(cur) or not cur.has_method("get_tip_host"):
+			break
+		var nxt: Variant = cur.call("get_tip_host")
+		if not (nxt is Control) or nxt == cur:
+			break
+		cur = nxt as Control
+	if cur == null or not is_instance_valid(cur):
+		return null
+	return cur
+
 ## 在 host 上、贴着 anchor 开一张详情卡。
 static func show_over(host: Control, anchor: Control, data: Dictionary) -> DetailTip:
-	if host == null or not is_instance_valid(host) or anchor == null or not is_instance_valid(anchor):
+	host = host_of(host)
+	if host == null or anchor == null or not is_instance_valid(anchor):
 		return null
 	close_all(host)
 	var tip := DetailTip.new()
@@ -70,6 +91,7 @@ static func show_over(host: Control, anchor: Control, data: Dictionary) -> Detai
 
 ## 收起宿主上所有还活着的详情卡；返回「确实收掉了一张」，供「返回键先退一层」判断用。
 static func close_all(host: Control) -> bool:
+	host = host_of(host)
 	if host == null:
 		return false
 	var any := false
@@ -82,6 +104,7 @@ static func close_all(host: Control) -> bool:
 ## 宿主上当前那张还活着的卡（正在淡出的旧卡不算 —— 收起要等 0.1 秒 tween，
 ## 期间它还在子节点列表里，判据若拿它会读到上一张卡的内容）
 static func live(host: Control) -> DetailTip:
+	host = host_of(host)
 	if host == null:
 		return null
 	for c in host.get_children():

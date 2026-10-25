@@ -4,12 +4,13 @@ extends RefCounted
 ## 角色流派（角色）特性子系统（2026-10-11 从 GameManager._apply_cultivator 抽离）：
 ## 开局应用正负代偿 mods，以及流派化的单武器伤害系数。
 
-## 开局应用角色流派的正负代偿
-static func apply_cultivator(gm: Node) -> void:
-	var def := CultivatorData.get_def(gm.cultivator_id)
-	if def.is_empty():
-		return
-	var mods: Dictionary = def.get("mods", {})
+## 角色流派里「会与道具/悟道加点叠加到同一批字段」的数值 mods（2026-10-25 抽出）。
+## 只收 StatSystem.apply_stat_fields 白名单能写的字段 —— 这是作者模式「删除加点后重算」
+## 需要重放的那一份。apply_cultivator 里其余字段（灵兽/灵蝶/贴图/经验门槛/羁绊门槛等）
+## 要么不可重入（开局副作用），要么从不被道具/加点触碰，都不进这里。
+## ⚠ 注意 shop_price_mult / thorns_pct / dodge_cap_bonus 是**赋值**不是叠加，其余为 += / *=。
+static func apply_stat_mods(gm: Node) -> void:
+	var mods: Dictionary = CultivatorData.get_def(gm.cultivator_id).get("mods", {})
 	gm.crit_rate += float(mods.get("crit_rate", 0.0))
 	gm.armor += float(mods.get("armor", 0.0))
 	gm.harvest += float(mods.get("harvest", 0.0))
@@ -20,16 +21,27 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.attack_speed_mult = maxf(gm.ATTACK_SPEED_FLOOR, gm.attack_speed_mult * float(mods.get("haste_mult", 1.0)))
 	gm.thorns_pct = float(mods.get("thorns", 0.0))
 	gm.shop_price_mult = float(mods.get("shop_price", 1.0))
+	gm.elemental_damage += float(mods.get("elemental", 0.0))
+	gm.engineering_damage += float(mods.get("engineering", 0.0))
+	gm.contraption_damage += float(mods.get("contraption", 0.0))
+	gm.hp_regen += float(mods.get("hp_regen", 0.0))
+	gm.free_rerolls += int(mods.get("free_rerolls", 0))
+	gm.pet_slots_bonus += int(mods.get("pet_slots", 0))
+	gm.pet_damage_mult += float(mods.get("pet_damage_mult", 0.0))
+
+## 开局应用角色流派的正负代偿
+static func apply_cultivator(gm: Node) -> void:
+	var def := CultivatorData.get_def(gm.cultivator_id)
+	if def.is_empty():
+		return
+	var mods: Dictionary = def.get("mods", {})
+	apply_stat_mods(gm)
 	gm.spirit_threshold_adj = int(mods.get("spirit_threshold_adj", 0))
 	gm.contraption_threshold_adj = int(mods.get("contraption_threshold_adj", 0))
 	gm.stone_interest_rate = float(mods.get("stone_interest_rate", 0.0))
 	gm.stone_interest_cap = int(mods.get("stone_interest_cap", 30))
 	gm.on_hit_damage_bonus = float(mods.get("on_hit_damage_bonus", 0.0))
 	gm.on_hit_damage_cap_stacks = int(mods.get("on_hit_damage_cap_stacks", 10))
-	gm.elemental_damage += float(mods.get("elemental", 0.0))
-	gm.engineering_damage += float(mods.get("engineering", 0.0))
-	gm.contraption_damage += float(mods.get("contraption", 0.0))
-	gm.hp_regen += float(mods.get("hp_regen", 0.0))
 	gm.weapon_slots_override = int(mods.get("weapon_slots_max", 0))
 	gm.enemy_count_mult = float(mods.get("enemy_count_mult", 1.0))
 	gm.harvest_decay = float(mods.get("harvest_decay", 0.0))
@@ -43,7 +55,6 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.alloc_free_reroll_bonus = int(mods.get("alloc_free_reroll_bonus", 0))
 	gm.collection_damage_per_unique = float(mods.get("collection_damage_per_unique", 0.0))
 	gm.frenzy_enabled = float(mods.get("frenzy", 0.0))
-	gm.free_rerolls += int(mods.get("free_rerolls", 0))
 	gm.reroll_price_mult = float(mods.get("reroll_price", 1.0))
 	gm.thunder_strike = float(mods.get("thunder_strike", 0.0))
 	gm.crowd_damage_per_enemy = float(mods.get("crowd_damage_per_enemy", 0.0))
@@ -64,9 +75,7 @@ static func apply_cultivator(gm: Node) -> void:
 	gm.scattered_mode = float(mods.get("scattered_mode", 0.0))
 	gm.scattered_bonus_per_class = float(mods.get("scattered_bonus_per_class", 0.0))
 	gm.scattered_penalty_per_synergy = float(mods.get("scattered_penalty_per_synergy", 0.0))
-	gm.pet_slots_bonus += int(mods.get("pet_slots", 0))
 	gm.pet_offer_chance_bonus = float(mods.get("pet_offer_chance_bonus", 0.0))
-	gm.pet_damage_mult += float(mods.get("pet_damage_mult", 0.0))
 	var start_pet: String = String(mods.get("start_pet", ""))
 	if not start_pet.is_empty():
 		gm.add_pet(start_pet)

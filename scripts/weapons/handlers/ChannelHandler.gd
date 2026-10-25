@@ -170,6 +170,9 @@ static func deal_beam_damage(w) -> void:
 	var eff_cd: float = maxf(0.05, w.attack_cooldown * GameManager.get_effective_attack_speed_mult())
 	var tick_dmg: float = w._final_damage() * BEAM_TICK / eff_cd * star3_dmg_mult(w)
 	var kb_force: float = WeaponData.knockback_for(w.weapon_def_id, 60.0) * 0.15  # 持续束只留一点点推感
+	# 机制快照整个 tick 取一次（束流每 tick 打多个目标，逐敌读 hook 是最高频浪费）
+	var mech := OnHitEffects.snapshot()
+	var has_mech: bool = OnHitEffects.any_enabled()
 	for res in results:
 		var col = res["collider"]
 		var parent = col.get_parent() if col != null else null
@@ -183,6 +186,10 @@ static func deal_beam_damage(w) -> void:
 			var knock: Vector2 = GameManager.knockback_vec(w.global_position, enemy.global_position, kb_force)
 			enemy.take_damage(dmg, knock, is_crit)
 			GameManager.try_lifesteal(w.behavior)
+			# 超级悟道机制卡的命中后效果（束流同一入口）。束流是 tick 结算、每秒十几次，
+			# 链电/落雷由 ChainLightning 自己的毫秒闸限流，不会刷屏。
+			if has_mech:
+				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)
 
 ## 喷吐 tick 结算：器口为圆心查锥长半径的圆，再按半角过滤（贴脸宽容与横扫同口径），
 ## 命中挂灼烧。tick 伤害同源折算 ⇒ 纸面 dmg/cd + 常驻灼烧即实伤。
@@ -199,6 +206,8 @@ static func deal_cone_damage(w, cone_len: float) -> void:
 	var proc_burn: bool = w.def.get("proc_burn", false)
 	var burn_dps: float = cycle_dmg * float(w.def.get("burn_ratio", 0.4))
 	var burn_dur: float = float(w.def.get("burn_dur", 2.5))
+	var mech := OnHitEffects.snapshot()
+	var has_mech: bool = OnHitEffects.any_enabled()
 	for res in results:
 		var col = res["collider"]
 		var parent = col.get_parent() if col != null else null
@@ -216,3 +225,5 @@ static func deal_cone_damage(w, cone_len: float) -> void:
 			enemy.take_damage(dmg, knock, is_crit)
 			ProcStatus.apply(enemy, proc_burn, burn_dps, burn_dur, 0.0, 0.0, false, 0.0, 0.0)
 			GameManager.try_lifesteal(w.behavior)
+			if has_mech:
+				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)

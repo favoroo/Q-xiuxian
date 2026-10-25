@@ -1,11 +1,12 @@
 extends Node
 
-## 超级悟道面板与落地专项校验（2026-10-25）
+## 超级悟道面板与落地专项校验（2026-10-25，同日随「三道」体系重构改写）
 ## 覆盖：
 ## 1. 相位枚举兼容：SUPER_ALLOC 追加在末尾，老档存下的 ALLOC/SHOP 整型相位不位移。
-## 2. 面板装配：场景可加载、5 张卡铺出、标题/逆天红/无刷新键、候选 3 流派 + 2 通用。
+## 2. 面板装配：场景可加载、5 张卡铺出、标题/逆天红/无刷新键、
+##    候选按道途出（同道途 ≤2 张、带道途签、第一次不含进阶/共鸣卡）。
 ## 3. 选卡落地：赠神通入背包、本关记账、发 super_alloc_finished、面板淡出、流程闸口不再重弹。
-## 4. 读档口径：候选/已结算/已拿三数组都能原样灌回（RunSave 走 append 重建）。
+## 4. 读档口径：候选/已结算/已拿三数组都能原样灌回（RunSave 走 append 重建 + 死卡过滤）。
 ##
 ## 运行方式：
 ##   godot --headless --path . res://tests/SuperAllocCheck.tscn
@@ -58,13 +59,30 @@ func _run_dialog_check() -> void:
 	_check(not dlg.reroll_btn.visible, "超级悟道没有刷新键")
 	_check(dlg._points_badge == null or not dlg._points_badge.visible, "超级悟道不显示待加点徽记")
 
-	var build_n := 0
+	# 道途制：候选不再按固定 3 流派 + 2 通用配比，而是按道途（同道途 ≤2 张）
+	var line_counts: Dictionary = {}
+	var premature: Array = []
 	for o in GameManager.super_alloc_offers:
 		if String(o.get("rarity", "")) != "mythic":
 			_check(false, "候选稀有度应为 mythic（%s 实为 %s）" % [o.get("id", "?"), o.get("rarity", "?")])
-		if String(o.get("kind", "")) == "build":
-			build_n += 1
-	_check(build_n == 3, "候选为 3 张流派卡 + 2 张通用卡（流派 %d）" % build_n)
+		var line := String(o.get("line", ""))
+		if not line.is_empty():
+			line_counts[line] = int(line_counts.get(line, 0)) + 1
+		var cdef := SuperUpgradeData.get_def(String(o.get("id", "")))
+		if int(cdef.get("stage", 0)) >= 2 or String(cdef.get("kind", "")) == "resonance":
+			premature.append(String(o.get("id", "?")))
+	var max_line := 0
+	for k in line_counts.keys():
+		max_line = maxi(max_line, int(line_counts[k]))
+	_check(max_line <= SuperUpgradeData.MAX_PER_LINE,
+		"同道途同屏不超过 %d 张（实为 %d）" % [SuperUpgradeData.MAX_PER_LINE, max_line])
+	_check(premature.is_empty(), "第一次悟道不出进阶/共鸣卡（越阶: %s）" % str(premature))
+	# 卡面道途签：有道途的卡必须带 chip，仪式卡不带（空串）
+	var missing_chip: Array = []
+	for o in GameManager.super_alloc_offers:
+		if not String(o.get("line", "")).is_empty() and String(o.get("lane_chip", "")).is_empty():
+			missing_chip.append(String(o.get("id", "?")))
+	_check(missing_chip.is_empty(), "道途卡都带「新道/延续/大成」签（缺: %s）" % str(missing_chip))
 
 	# 入场防误触窗口 0.14s：直接放行手指（判据不等动画）
 	dlg._can_interact = true

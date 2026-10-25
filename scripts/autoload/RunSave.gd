@@ -227,9 +227,6 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["peak_dodge"] = gm.peak_dodge
 	d["peak_harvest"] = gm.peak_harvest
 	d["cultivator_id"] = gm.cultivator_id
-	# 初始武器的原价回收额度：老档没有这两个键 → 空 id / false，按常规半价处理
-	d["starter_weapon_id"] = gm.starter_weapon_id
-	d["starter_sell_bonus_pending"] = gm.starter_sell_bonus_pending
 	# —— 隐藏账本（突破古玉成长 / 经验门槛链 / 玉匣送出计数 / 主流派保底计数）——
 	d["_exp_chain"] = gm._exp_chain
 	d["chest_item_grants"] = gm.chest_item_grants
@@ -286,6 +283,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["on_hit_damage_bonus"] = gm.on_hit_damage_bonus
 	d["on_hit_damage_cap_stacks"] = gm.on_hit_damage_cap_stacks
 	d["guard_stance"] = gm.guard_stance
+	d["shield_hp"] = gm.shield_hp   ## 血海护盾存量：跨回合保留，随档存取（区别于盾势 shield_charge 的当帧蓄能豁免）
 	d["heal_orb_chance"] = gm.heal_orb_chance
 	d["heal_overflow_mult"] = gm.heal_overflow_mult
 	d["alloc_offer_bonus"] = gm.alloc_offer_bonus
@@ -371,8 +369,6 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.peak_dodge = float(d.get("peak_dodge", 0.0))
 	gm.peak_harvest = float(d.get("peak_harvest", 0.0))
 	gm.cultivator_id = String(d.get("cultivator_id", ""))
-	gm.starter_weapon_id = String(d.get("starter_weapon_id", ""))
-	gm.starter_sell_bonus_pending = bool(d.get("starter_sell_bonus_pending", false))
 	gm._exp_chain = int(d.get("_exp_chain", GameBalance.EXP_FIRST_LEVEL))
 	gm.chest_item_grants = int(d.get("chest_item_grants", 0))
 	gm._no_main_tag_waves = int(d.get("_no_main_tag_waves", 0))
@@ -425,6 +421,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.on_hit_damage_bonus = float(d.get("on_hit_damage_bonus", 0.0))
 	gm.on_hit_damage_cap_stacks = int(d.get("on_hit_damage_cap_stacks", 10))
 	gm.guard_stance = float(d.get("guard_stance", 0.0))
+	gm.shield_hp = float(d.get("shield_hp", 0.0))
 	gm.heal_orb_chance = float(d.get("heal_orb_chance", 0.0))
 	gm.heal_overflow_mult = float(d.get("heal_overflow_mult", 1.0))
 	gm.alloc_offer_bonus = int(d.get("alloc_offer_bonus", 0))
@@ -490,6 +487,10 @@ static func _fill_collections(gm: Node, d: Dictionary) -> void:
 	if sdo is Array:
 		for e in sdo:
 			if e is Dictionary:
+				# 候选里可能有旧版本已删除的卡（2026-10-25 卡池从 34 张缩到 18 张并改道途制）：
+				# 按当前卡表过滤，面板不会铺出查不到定义的空卡。
+				if SuperUpgradeData.get_def(String((e as Dictionary).get("id", ""))).is_empty():
+					continue
 				gm.super_alloc_offers.append(e)
 	var sdw = d.get("super_alloc_done_waves", null)
 	gm.super_alloc_done_waves.clear()

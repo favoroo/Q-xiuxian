@@ -6,7 +6,8 @@ extends Node2D
 ## 金铢从玩家身上飞入晶柱，注入完成才爆发：全屏灵气冲击 + 召唤灵兽助战。
 ## 启动后本回合进入「耗尽灰相」；下一回合开始（wave_changed）自动复燃、可再次启动。
 ## 金币不够时在 start_charge 入口硬拦（HUD 键是真按得下去的），横幅 + 报错音。
-## 价格常驻画在碑顶：够钱鎏金、不够朱砂标差额、灰相墨灰 —— 抬眼就知道这回合要不要来。
+## 启动价显示在 HUD 激活键的键面小字上（HudObeliskButton，2026-10-26 起）——
+## 碑体本身不挂任何常驻悬浮文字（用户：很怪）。
 ##
 ## 进度读数画在阵法上（用户 2026-10-09 真机）：长按那颗键时拇指正盖在键上，HUD 的
 ## 充能条被手挡得死死的 —— 眼睛本来就只能盯着阵法，进度不出现在阵法上等于没有进度。
@@ -40,8 +41,6 @@ const ARC_WARM_FROM: float = 0.62
 const READOUT_LABEL_POS := Vector2(0, -104)
 ## 读数淡入/淡出时长（秒）：只做「别闪」，不改进度真值
 const READOUT_FADE_TIME: float = 0.15
-## 常驻价格标签摆位：比充能读数再高一档（充能时读数接管，价格让位隐藏）
-const PRICE_LABEL_POS := Vector2(0, -124)
 
 ## 与 HUD 通信的信号
 signal activation_available(obelisk: BlessingObelisk)
@@ -85,11 +84,6 @@ var _readout_fade: Tween = null
 var _readout_pct: int = -1
 ## 世界侧读数的进度真值：与 _process 里那条 ratio 同一个数，判据也读它
 var _readout_ratio: float = 0.0
-
-## 常驻价格标签：待用「启动 N 金币」/ 不够标差额 / 灰相「已沉寂 · 下回合恢复」
-var _price_label: Label = null
-## 价格标签当前显示态（text+color），防 stats_updated 高频刷同文案
-var _price_state_key: String = ""
 
 ## 碑脚走针环：轨道一整圈 + 进度弧 + 弧头。颜色由外部按进度从主蓝拉到点缀黄。
 ## 尺寸/颜色一律由外层 _build_charge_readout() 灌进来（不在内类里自取外层常量：
@@ -139,13 +133,9 @@ func _ready() -> void:
 
 	_setup_charge_particles()
 	_build_charge_readout()
-	_build_price_label()
-	# 回合更替（复燃 + 价格随波上涨）与金币变动（差额实时刷新）都挂全局信号
+	# 回合更替时灰相复燃（价格显示在 HUD 激活键上，随波上涨由键自己读现价，碑不再挂常驻字）
 	if not GameManager.wave_changed.is_connected(_on_wave_changed):
 		GameManager.wave_changed.connect(_on_wave_changed)
-	if not GameManager.stats_updated.is_connected(_on_stats_updated):
-		GameManager.stats_updated.connect(_on_stats_updated)
-	_refresh_price_label()
 
 func _setup_charge_particles() -> void:
 	# 界碑充能粒子（T-3.6）：外圈螺旋向心吸入（空洞骑士 Focus 灵气聚流）
@@ -222,57 +212,11 @@ func _build_charge_readout() -> void:
 		stone_mat.set_shader_parameter("fill_ratio", 0.0)
 		stone_mat.set_shader_parameter("amount", 0.0)
 
-## 常驻价格标签（2026-10-25 重设计）：抬眼就知道这回合启动要多少钱。
-## 待用「启动 N 金币」（金币语义鎏金）；不够钱改朱砂并标差额；灰相「已沉寂 · 下回合恢复」。
-func _build_price_label() -> void:
-	_price_label = Label.new()
-	var ls := LabelSettings.new()
-	ls.font = GameStyle.body_font()
-	ls.font_size = 14
-	ls.outline_size = 5
-	ls.outline_color = Color(0.02, 0.03, 0.06, 0.92)
-	_price_label.label_settings = ls
-	_price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_price_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_price_label.custom_minimum_size = Vector2(160, 20)
-	_price_label.position = PRICE_LABEL_POS - Vector2(80, 10)
-	_price_label.z_index = 0
-	add_child(_price_label)
-
-## 价格标签刷新（金币语义色走 GameStyle：够钱 JADE / 不够 BAD / 灰相 PAPER_DIM）
-func _refresh_price_label() -> void:
-	if _price_label == null:
-		return
-	_price_label.visible = not (is_charging or is_infusing)
-	if spent_this_wave:
-		_set_price("已沉寂 · 下回合恢复", GameStyle.PAPER_DIM)
-		return
-	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
-	if GameManager.spirit_stones >= cost:
-		_set_price("启动 %d 金币" % cost, GameStyle.JADE)
-	else:
-		_set_price("启动 %d 金币 · 差 %d" % [cost, cost - GameManager.spirit_stones], GameStyle.BAD)
-
-func _set_price(text: String, col: Color) -> void:
-	var key := text + str(col)
-	if key == _price_state_key:
-		return
-	_price_state_key = key
-	_price_label.text = text
-	_price_label.label_settings.font_color = col
-
-## 回合开始：价格随波上涨；上回合灰相的祭坛在此复燃
+## 回合开始：上回合灰相的祭坛在此复燃（启动价的显示在 HUD 激活键上，键自己读现价）
 func _on_wave_changed(_wave_number: int) -> void:
-	if not spent_this_wave:
-		_refresh_price_label()
-		return
-	spent_this_wave = false
-	_revive_from_spent()
-	# 复燃后再刷价：先刷会把「已沉寂」照搬上屏，复燃的碑却写着沉寂就是 bug
-	_refresh_price_label()
-
-func _on_stats_updated(_kills: int, _game_time: float, _stones: int) -> void:
-	_refresh_price_label()
+	if spent_this_wave:
+		spent_this_wave = false
+		_revive_from_spent()
 
 ## 灰相反向：灯光复燃、石碑回色、阵盘重亮，泽青灵环宣告「下回合又能用了」
 func _revive_from_spent() -> void:
@@ -391,7 +335,6 @@ func start_charge() -> void:
 	charge_time = 0.0
 	_set_readout_ratio(0.0)
 	_show_readout()
-	_refresh_price_label()
 	charge_started.emit(self)
 	if _charge_particles != null:
 		_charge_particles.emitting = true
@@ -411,7 +354,6 @@ func stop_charge() -> void:
 		circle_sprite.rotation = 0.0
 		_set_readout_ratio(0.0)
 		_hide_readout()
-		_refresh_price_label()
 		charge_cancelled.emit(self)
 
 ## 充满即成交：先扣钱，再演「灵石注入」，注入完成才爆发（2026-10-25 重设计）。
@@ -437,7 +379,6 @@ func _begin_infusion() -> void:
 	if _obelisk_renderer != null:
 		var itw := create_tween()
 		itw.tween_property(_obelisk_renderer, "infuse_ratio", 1.0, ObeliskFx.INFUSION_DUR)
-	_refresh_price_label()
 	var tw := create_tween()
 	tw.tween_interval(ObeliskFx.INFUSION_DUR)
 	tw.tween_callback(_release_blessing)
@@ -499,7 +440,6 @@ func _release_blessing() -> void:
 		# 受击金花：给「全场都被扫到」逐个盖章（JuiceEffect 池化，超量由池限流兜底）
 		if fx_host != null:
 			JuiceEffect.spawn_impact_pop(fx_host, enemy.global_position, GameStyle.FX_HDR_GOLD, knock_vec.normalized())
-	_refresh_price_label()
 	# 触发视觉：光能爆闪一下作为兑现，随后彻底熄灯、光圈散尽、石碑褪成灰相。
 	# 2026-10-21：以 spent_blend 连续形变（下沉/褪色/收束）取代原先 0.55s 后的硬切剪影。
 	var tw = create_tween()

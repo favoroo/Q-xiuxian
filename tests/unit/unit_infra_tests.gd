@@ -183,7 +183,21 @@ func _test_floating_btn_defaults() -> void:
 		ov.size = Vector2(d, d)   # 三颗键同径（外观基准钉在 SKILL_BTN_SIZE 一个数上）
 		var arc_r := ov.arc_radius()
 		ov.free()
-		# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
+		# 四·五、祭坛键价格小字（2026-10-26 从碑顶悬浮字收进键面）：三位数价「888金币」是最宽真实
+		#     样张（启动价 W20=102，无尽后期也就三位数），它要和主文案一样收在走针环内缘之内 ——
+		#     价格行压到走针环上，充能读数就被字盖住了
+		var price_w: float = f.get_string_size("888金币",
+				HORIZONTAL_ALIGNMENT_CENTER, -1.0, HudObeliskButton.PRICE_FONT).x
+		var price_corner := Vector2(price_w * 0.5,
+				HudObeliskButton.PRICE_TOP + HudObeliskButton.PRICE_FONT - d * 0.5).length()
+		var price_ov := SkillButtonView.CircleProgressOverlay.new()
+		price_ov.size = Vector2(d, d)
+		var price_arc_r: float = price_ov.arc_radius()
+		price_ov.free()
+		_c.check(price_corner <= price_arc_r,
+				"祭坛键价格小字收在走针环之内（最宽样张角半径 %.1f <= 环内缘 %.1f）" % [price_corner, price_arc_r])
+
+	# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
 		var ob_btn := HudObeliskButton.new()
 		add_child(ob_btn)
 		var dummy_ob := BlessingObelisk.new()
@@ -612,11 +626,13 @@ func _test_modal_pause_buttons() -> void:
 	_c.equals(int(state["lvl_pause"]), 1, "点击加点面板暂停按钮触发 pause_requested")
 	_c.equals(int(state["lvl_stats"]), 1, "点击加点面板属性按钮触发 stats_requested")
 
-	# 1.1 LevelUpDialog 顶栏圆形待加点徽记与连升文案校验（2026-10-12）
+	# 1.1 LevelUpDialog 顶栏圆形待加点徽记校验（2026-10-12；回合徽条 2026-10-25 已下线）
 	var points_badge := lvl_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/TopBar/PointsBadge") as PanelContainer
 	_c.check(points_badge != null, "加点面板顶栏含待加点圆形徽记 PointsBadge")
 	var points_label := points_badge.get_node_or_null("PointsLabel") as Label if points_badge != null else null
 	_c.check(points_label != null, "徽记内含 PointsLabel 显示剩余点数")
+	_c.check(lvl_dlg.get_node_or_null("CenterContainer/Panel/MarginContainer/VBox/InfoBand") == null,
+		"顶栏回合徽条已下线，不得复活")
 
 	var orig_pending := GameManager.pending_upgrade_points
 	var orig_total := GameManager.alloc_points_total
@@ -625,14 +641,11 @@ func _test_modal_pause_buttons() -> void:
 	lvl_dlg._refresh_bars()
 	if points_label != null:
 		_c.equals(points_label.text, "3", "初始待加点徽记数字为 3")
-	_c.check("连升 3 级" in lvl_dlg.info_label.text, "连升多级时 InfoLabel 明确提示连升等级")
-	_c.check("剩余加点 3 次" in lvl_dlg.info_label.text, "连升多级时提示剩余加点 3 次")
 
 	GameManager.pending_upgrade_points = 2
 	lvl_dlg._refresh_bars()
 	if points_label != null:
 		_c.equals(points_label.text, "2", "加点后徽记数字扣减为 2")
-	_c.check("剩余加点 2 次" in lvl_dlg.info_label.text, "加点后提示剩余加点 2 次")
 	GameManager.pending_upgrade_points = orig_pending
 	GameManager.alloc_points_total = orig_total
 

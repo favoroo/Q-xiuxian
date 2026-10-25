@@ -178,6 +178,8 @@ var _synergy_box: HBoxContainer = null
 var _hp_chip: ShopHpChip = null
 ## 顶栏「作者」按钮（仅作者模式可见）
 var _author_btn: Button = null
+## 暂停键长按作者模式彩蛋的助手句柄（_on_pause_pressed 收口松手用）
+var _pause_author_hold: HudAuthorHold = null
 ## 本次开面板那档屏：卡宽/缝隙/面板高按它现算（与 LevelUpDialog 同一口径，只在打开时量一次）
 var _screen: Vector2 = Vector2(960, 540)
 
@@ -236,8 +238,10 @@ func _ready() -> void:
 	pause_btn.custom_minimum_size = Vector2(72, 32)
 	pause_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
-	pause_btn.pressed.connect(func(): pause_requested.emit())
+	pause_btn.pressed.connect(_on_pause_pressed)
 	top_bar.add_child(pause_btn)
+	# 长按 2 秒切作者模式（与战斗 HUD / 首页设置徽章同一彩蛋）：松手那一下由 consume_press 吃掉
+	_pause_author_hold = HudAuthorHold.attach(self, pause_btn)
 
 	# 「图鉴」插在「属性」左边：买武器的间隙随时查流派武器总表；
 	# 更顺的一条路是点上面羁绊签（如「召唤 (6/5)」）详情卡里的直达按钮（见 _open_shop_synergy_tip）
@@ -409,19 +413,7 @@ func refresh(animate: bool = true) -> void:
 	# 且 _drag 态会在 _input 里持续 set_input_as_handled 吞噬全屏输入。任何 refresh 前先结清。
 	if drag_ctl != null:
 		drag_ctl._cancel_all()
-	stones_label.text = "金币 %d" % GameManager.spirit_stones
-	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
-	# 生命读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
-	var hp_stats: Dictionary = GameManager.get_player_stat_dict()
-	_hp_chip.set_value(float(hp_stats.get("current_hp", 0.0)), float(hp_stats.get("max_hp", 0.0)))
-	if GameManager.reroll_free_left > 0:
-		reroll_btn.text = "免费重掷 (剩 %d 次)" % GameManager.reroll_free_left
-		reroll_btn.disabled = false
-	else:
-		reroll_btn.text = "重掷货架 (%d 金币)" % GameManager.reroll_cost
-		# 重掷也是一笔要花钱的货：钱不够就转成那颗看得见的灰键（与货架价格键同一条口径），
-		# 不许按下去什么也没发生（原先 buy 之外的这条路径静默 return false，连个反馈都没有）
-		reroll_btn.disabled = GameManager.spirit_stones < GameManager.reroll_cost
+	_refresh_top_readouts()
 	_refresh_synergy_bar()
 
 	for child in offers_container.get_children():
@@ -442,6 +434,35 @@ func refresh(animate: bool = true) -> void:
 		# 统一卡片入场配方（支点/回弹/错峰全在 GameStyle.pop_in 里，布局前调用安全）
 		GameStyle.pop_in(c, float(i) * 0.045)
 
+	_refresh_inventory()
+
+## 顶栏读数：金币/波次/生命徽记/重掷键。只改文本与状态、不建节点，所以轻量刷新也照走一遍
+## ——「什么变了才刷什么」的分支留在这个函数里，调用点不用各自记得补。
+func _refresh_top_readouts() -> void:
+	stones_label.text = "金币 %d" % GameManager.spirit_stones
+	wave_label.text = "第 %d 波之前 · 购买武器" % (GameManager.wave_number + 1)
+	# 生命读数：开店、买入、锁定、重掷后都重画（吞一颗丹下去，这一格当场就该变）
+	var hp_stats: Dictionary = GameManager.get_player_stat_dict()
+	_hp_chip.set_value(float(hp_stats.get("current_hp", 0.0)), float(hp_stats.get("max_hp", 0.0)))
+	if GameManager.reroll_free_left > 0:
+		reroll_btn.text = "免费重掷 (剩 %d 次)" % GameManager.reroll_free_left
+		reroll_btn.disabled = false
+	else:
+		reroll_btn.text = "重掷货架 (%d 金币)" % GameManager.reroll_cost
+		# 重掷也是一笔要花钱的货：钱不够就转成那颗看得见的灰键（与货架价格键同一条口径），
+		# 不许按下去什么也没发生（原先 buy 之外的这条路径静默 return false，连个反馈都没有）
+		reroll_btn.disabled = GameManager.spirit_stones < GameManager.reroll_cost
+
+## 只重建陈列行（上阵/御灵/背包/道具/灵兽）：三合一只动武器库存，货架 5 张大卡与报价键
+## 都还是原账，整屏重铺纯属白做功。2026-10-25 用户反馈「合成动画还有点卡顿」——
+## 迸发帧正好压在这次刷新上，几十个节点的重建（5 张货架卡 + 30 格 + StatForecast 影子）
+## 吃掉一帧预算，肉眼就是爆点那一顿。合成改走这条轻量通道，别改回 refresh(false)。
+func refresh_owned() -> void:
+	DetailTip.close_all(self)
+	if drag_ctl != null:
+		drag_ctl._cancel_all()
+	_refresh_top_readouts()
+	_refresh_synergy_bar()
 	_refresh_inventory()
 
 ## 作者面板改金币/生命后由 Main 调用：顶栏金币、货架价格键（买得起/差 N）、重掷键、
@@ -534,6 +555,12 @@ func _refresh_action_bar() -> void:
 func _on_author_mode_changed(_enabled: bool) -> void:
 	if _author_btn != null and is_instance_valid(_author_btn):
 		_author_btn.visible = GameManager.author_mode
+
+## 暂停键 pressed 收口：长按刚触发过作者模式切换时，这一下松手只做收尾（不开暂停菜单）。
+func _on_pause_pressed() -> void:
+	if _pause_author_hold != null and _pause_author_hold.consume_press():
+		return
+	pause_requested.emit()
 
 func _on_reroll() -> void:
 	DetailTip.close_all(self)

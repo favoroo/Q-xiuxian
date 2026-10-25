@@ -5,23 +5,11 @@ extends RefCounted
 ## 70+ 个单局成员的显式类型化清零（不用字符串 set，保住静态检查）。
 ## 新增单局成员时在这里补一行默认值——头注就是提醒你这件事的。
 
-static func reset(gm: Node) -> void:
-	Engine.time_scale = 1.0
-	gm._hitstop_token += 1
-	gm.rng.randomize()
-	gm.kills = 0
-	gm.game_time = 0.0
-	gm.spirit_stones = 0
-	gm.level = 1
-	gm.experience = 0
-	gm.experience_to_next = GameBalance.EXP_FIRST_LEVEL
-	gm.is_game_over = false
-	gm.pending_upgrade_points = 0
-	gm.wave_number = 0
-	gm.endless_mode = false
-	gm.run_started = false
-	gm.starter_weapon_id = ""
-	gm.starter_sell_bonus_pending = false
+## 属性层初值：**只收 StatSystem.apply_stat_fields 能写的那些 GameManager 字段**
+## （外加角色 mods 会覆盖的 dodge_cap_bonus）。抽成独立函数是为了让作者模式的
+## 「删除加点后重算属性」与开局复位共用同一份初值 —— 复制第二份初值表迟早漂。
+## 不在这里的：spirit_stones（钱包，重算不许动）、max_hp（在 Player 节点上，重算单独算）。
+static func reset_stat_fields(gm: Node) -> void:
 	gm.weapon_damage_mult = 1.0
 	gm.melee_damage = 0.0
 	gm.ranged_damage = 0.0
@@ -47,14 +35,39 @@ static func reset(gm: Node) -> void:
 	gm.free_rerolls = 0
 	gm.revive_charges = 1  # 每局默认 1 次「轮回重生」复活（加点在此之上叠加）
 	gm.element_damage = {}
-	gm.locked_upgrades = []
 	gm.chest_count_bonus = 0
 	gm.chest_quality = 0.0
-	gm.chest_break_bonus = 0
 	gm.chest_reward_mult = 1.0
+	gm.thorns_pct = 0.0
+	gm.shop_price_mult = 1.0
+	gm.dodge_cap_bonus = 0.0
+	gm.stat_bonus_pierce = 0
+	gm.bonus_pierce = 0
+	gm.pet_slots_bonus = 0
+	gm.pet_damage_mult = 1.0
+	gm.pet_effect_mult = 1.0
+	gm.pet_cooldown_mult = 1.0
+
+static func reset(gm: Node) -> void:
+	Engine.time_scale = 1.0
+	gm._hitstop_token += 1
+	gm.rng.randomize()
+	gm.kills = 0
+	gm.game_time = 0.0
+	gm.spirit_stones = 0
+	gm.level = 1
+	gm.experience = 0
+	gm.experience_to_next = GameBalance.EXP_FIRST_LEVEL
+	gm.is_game_over = false
+	gm.pending_upgrade_points = 0
+	gm.wave_number = 0
+	gm.endless_mode = false
+	gm.run_started = false
+	reset_stat_fields(gm)  # 属性层初值：作者模式「删除加点后重算」与开局复位共用同一份
+	gm.locked_upgrades = []
+	gm.chest_break_bonus = 0
 	gm.chest_item_grants = 0
 	gm.cultivator_id = ""
-	gm.thorns_pct = 0.0
 	gm.spirit_threshold_adj = 0
 	gm.contraption_threshold_adj = 0
 	gm.stone_interest_rate = 0.0
@@ -65,6 +78,7 @@ static func reset(gm: Node) -> void:
 	gm.on_hit_damage_timer = 0.0
 	gm.guard_stance = 0.0
 	gm.shield_charge = 0.0
+	gm.shield_hp = 0.0
 	gm.heal_orb_chance = 0.0
 	gm.heal_overflow_mult = 1.0
 	gm.alloc_offer_bonus = 0
@@ -108,7 +122,6 @@ static func reset(gm: Node) -> void:
 	gm.max_class_counts = {}
 	gm.max_element_spread = 0
 	gm._wave_end_growth = {"max_hp": 0.0, "hp_regen": 0.0, "lifesteal": 0.0}
-	gm.dodge_cap_bonus = 0.0
 	gm.weapon_slots_override = 0
 	gm.enemy_count_mult = 1.0
 	gm.harvest_decay = 0.0
@@ -128,9 +141,7 @@ static func reset(gm: Node) -> void:
 	gm.force_crit_left = 0.0
 	gm.shadow_amp_mult = 1.0
 	gm._exp_chain = GameBalance.EXP_FIRST_LEVEL
-	gm.stat_bonus_pierce = 0
 	gm.synergy_bonus_pierce = 0
-	gm.bonus_pierce = 0
 	gm.synergy_damage_mult = 1.0
 	gm.synergy_range_mult = 1.0
 	gm.synergy_haste_mult = 1.0
@@ -155,7 +166,6 @@ static func reset(gm: Node) -> void:
 	gm.reroll_cost = 2
 	gm.reroll_count = 0
 	gm.reroll_free_left = 0
-	gm.shop_price_mult = 1.0
 	gm.shop_tag_filter = []
 	gm._no_main_tag_waves = 0
 	gm._no_main_item_waves = 0
@@ -167,13 +177,11 @@ static func reset(gm: Node) -> void:
 	gm.items = []
 	gm._still_cache_valid = false
 	gm._hook_cache.clear()
+	gm._super_hook_snap.clear()
+	gm._super_hook_stamp = -1
 	gm._hook_cache_items_size = -1
 	gm.items_bought = []
 	gm.pets = []
-	gm.pet_slots_bonus = 0
-	gm.pet_damage_mult = 1.0
-	gm.pet_effect_mult = 1.0
-	gm.pet_cooldown_mult = 1.0
 	gm.pet_offer_chance_bonus = 0.0
 	gm.drones = []
 	gm.stash = []

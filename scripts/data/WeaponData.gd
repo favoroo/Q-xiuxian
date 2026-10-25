@@ -39,15 +39,15 @@ enum Behavior { MELEE, PROJECTILE, BURST, DRONE, TURRET, SWEEP, BEAM, CONE }
 
 const MAX_STAR: int = 4
 const MAX_SLOTS: int = 6
-const MAX_STASH_SLOTS: int = 9
+const MAX_STASH_SLOTS: int = 5
 const STAR_DAMAGE_MULT: float = 2.0
 const STAR_COOLDOWN_MULT: float = 0.92
-## 常规出售回收比例（买进来的东西半价退）
+## ★2 起的出售回收比例（★1 原价退，见 sell_ratio_for）
 const SELL_RATIO: float = 0.5
-## 开局白送的初始武器回收比例：按原价退，玩家不想要这流派就能平价换掉，
-## 不会被「已经拿了」绑架。只对那一件生效一次，卖完即恢复 SELL_RATIO。
-const STARTER_SELL_RATIO: float = 1.0
 const STAR_SELL_MULT: float = 1.6
+## 回收价向上取整前先抹掉二进制浮点尾巴：25 × 0.5 × 1.6² 会算成 32.00000000000001，
+## 不抹就会被 ceil 成 33（卡面报价与实际到手一起错）。
+const SELL_EPSILON: float = 1e-9
 
 ## ★3 觉醒（2026-10-24）：三星武器按行为族追加专属机制，等效增伤约 +50%（合成要 9 把
 ## ★1 等价物，★3 必须有一眼看得见的质变；八族全部明确反超「3 把 ★2 同投入」基准，
@@ -99,7 +99,7 @@ const DEFS: Dictionary = {
 				# 2026-10-10 素材返工（旧图为像素风白剑，与新画风脱节）：换空洞冷冽矢量风青云剑，
 				# tip 由 tools/fit_weapon_icon.py 实测打印后原样抄入。
 				"tip": Vector2(22, -20), "shape": "sword",
-				"desc": "近身挥砍，受近战伤害与暴击率加成", "tag": "近战·剑系·金",
+				"desc": "近身挥砍，干脆利落", "tag": "近战·剑系·金",
 				"tags": ["sword", "metal"],
 				"stat_scalings": {"melee_damage": 1.0, "crit_rate": 40.0},
 			},
@@ -112,7 +112,7 @@ const DEFS: Dictionary = {
 						# 2026-10-09 素材返工（旧图是弯的、且旧标定 (20,-14) 落在剑首那头上）：
 						# 新图为笔直双刃剑斜铺，tip 由 tools/fit_weapon_icon.py 实测打印后原样抄入。
 						"tip": Vector2(22, -16), "shape": "sword",
-						"desc": "自动追击锁定敌人，受远程伤害与暴击伤害加成", "tag": "远程·剑系·金",
+						"desc": "自动追击锁定敌人", "tag": "远程·剑系·金",
 						"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
 						"pierce": 1,
 						"tags": ["sword", "metal"],
@@ -125,7 +125,7 @@ const DEFS: Dictionary = {
 					"knockback": 110.0,
 					"price": 35, "icon": "res://assets/art/weapon_dagger.png",
 					"tip": Vector2(21, -24), "shape": "dagger",
-					"desc": "扇形射出3把飞刀各锁1敌，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
+					"desc": "扇形射出3把飞刀各锁1敌", "tag": "远程·剑系·金",
 					"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.6, "bullet_spin": false,
 					"pierce": 1, "projectile_count": 3, "spread_angle": 0.20,
 					"tags": ["sword", "metal"],
@@ -142,7 +142,7 @@ const DEFS: Dictionary = {
 							"knockback": 85.0,
 							"price": 36, "icon": "res://assets/art/weapon_needle_pouch.png",
 							"tip": Vector2(22, -6), "shape": "needles",
-							"desc": "倾泻4发密如暴雨的追踪细针，受远程伤害与暴击率加成", "tag": "远程·剑系·金",
+							"desc": "倾泻4发密如暴雨的追踪细针", "tag": "远程·剑系·金",
 						"bullet": "res://assets/art/bullet_silver_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 						"pierce": 1, "projectile_count": 4, "spread_angle": 0.42,
 						"tags": ["sword", "metal"],
@@ -158,7 +158,7 @@ const DEFS: Dictionary = {
 						"price": 35, "icon": "res://assets/art/weapon_shoulijian.png",
 						# 四芒星径向对称：tip 只取出膛距离（外刃半径），方向补偿对它无意义
 						"tip": Vector2(20, 0), "shape": "shuriken",
-						"desc": "掷出旋转手里剑连锁弹射3次，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
+						"desc": "掷出旋转手里剑连锁弹射3次", "tag": "远程·弹射·金",
 						"bullet": "res://assets/art/bullet_shuriken.png", "bullet_scale": 0.55, "bullet_spin": true,
 						"pierce": 1, "bounce_count": 3,
 						# 2026-10-20 从 sword 改判 talisman（用户口径：「应该放进弹射吧」）：
@@ -176,7 +176,7 @@ const DEFS: Dictionary = {
 						"knockback": 340.0,
 					"price": 28, "icon": "res://assets/art/weapon_vine_whip.png",
 					"tip": Vector2(22, 0), "shape": "whip", "upright": true,
-					"desc": "横扫前方大片敌群并附带中毒，受近战与元素伤害加成", "tag": "近战·横扫·木",
+					"desc": "横扫前方大片敌群并附带中毒", "tag": "近战·横扫·木",
 					"arc_scale": 1.35, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
 					"tags": ["wide", "wood"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.6, "hp_regen": 4.5},
@@ -189,7 +189,7 @@ const DEFS: Dictionary = {
 					"price": 32, "icon": "res://assets/art/weapon_wood_talisman.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
 					"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-					"desc": "追踪弹射并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
+					"desc": "追踪弹射并叠毒", "tag": "远程·弹射·木",
 					"bullet": "res://assets/art/bullet_wood_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 					"tags": ["talisman", "wood"],
@@ -201,7 +201,7 @@ const DEFS: Dictionary = {
 						"damage": 23.0, "cooldown": 0.48, "range": 200.0,
 						"knockback": 160.0,
 						"price": 40, "icon": "res://assets/art/sun_orb.png",
-						"desc": "环绕周身触碰即伤，受召唤伤害与吸血加成", "tag": "召唤·环绕·木",
+						"desc": "环绕周身触碰即伤", "tag": "召唤·环绕·木",
 						"tags": ["spirit", "wood"],
 						"stat_scalings": {"engineering_damage": 1.0, "lifesteal": 100.0},
 					},
@@ -212,7 +212,7 @@ const DEFS: Dictionary = {
 					"knockback": 120.0,
 					"price": 34, "icon": "res://assets/art/weapon_sling.png",
 					"tip": Vector2(20, -18), "shape": "sling",
-					"desc": "弹丸连锁弹射并附带中毒，受远程与元素伤害加成", "tag": "远程·横扫·木",
+					"desc": "弹丸连锁弹射并附带中毒", "tag": "远程·横扫·木",
 					"bullet": "res://assets/art/bullet_spirit_pellet.png", "bullet_scale": 0.55, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 3,
 					"proc_poison": true, "poison_ratio": 0.25, "poison_dur": 2.5,
@@ -229,7 +229,7 @@ const DEFS: Dictionary = {
 								"knockback": 520.0,
 							"price": 26, "icon": "res://assets/art/weapon_fan.png",
 							"tip": Vector2(0, -15), "shape": "fan",
-							"desc": "横扫扇出寒冰风刃减速敌群，受近战伤害与移速加成", "tag": "近战·横扫·水",
+							"desc": "横扫扇出寒冰风刃减速敌群", "tag": "近战·横扫·水",
 						"arc_scale": 1.35, "proc_chill": 0.35, "chill_dur": 2.5,
 						"tags": ["wide", "water"],
 						"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
@@ -243,7 +243,7 @@ const DEFS: Dictionary = {
 				"knockback": 95.0,
 				"price": 30, "icon": "res://assets/art/weapon_ice_needle.png",
 				"tip": Vector2(-18, 12), "shape": "needles",
-				"desc": "射出2枚冰针追踪并减速，受远程伤害与移速加成", "tag": "远程·剑系·水",
+				"desc": "射出2枚冰针追踪并减速", "tag": "远程·剑系·水",
 				"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.6, "bullet_spin": false,
 				"pierce": 1, "projectile_count": 2, "spread_angle": 0.18, "proc_chill": 0.35, "chill_dur": 2.0,
 				"tags": ["sword", "water"],
@@ -255,7 +255,7 @@ const DEFS: Dictionary = {
 					"damage": 24.0, "cooldown": 0.50, "range": 200.0,
 					"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_ice_lotus.png",
-					"desc": "环绕护体触碰即减速，受召唤伤害与攻击间隔加成", "tag": "召唤·环绕·水",
+					"desc": "环绕护体触碰即减速", "tag": "召唤·环绕·水",
 					"proc_chill": 0.40, "chill_dur": 2.5,
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
@@ -268,7 +268,7 @@ const DEFS: Dictionary = {
 						"knockback": 320.0,
 					"price": 44, "icon": "res://assets/art/weapon_flute.png",
 					"tip": Vector2(20, 0), "shape": "flute", "upright": true,
-					"desc": "音波震荡大范围强减速，受元素伤害与移速加成", "tag": "元素·雷法·水",
+					"desc": "音波震荡大范围强减速", "tag": "元素·雷法·水",
 					"burst_radius": 88.0, "burst_tint": Color(0.35, 0.75, 1.0),
 					"burst_kind": "sonic",
 					"proc_chill": 0.50, "chill_dur": 2.8,
@@ -285,7 +285,7 @@ const DEFS: Dictionary = {
 					"price": 30, "icon": "res://assets/art/weapon_staff.png",
 					# 斜挂黄纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修躺倒翻面）
 					"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-					"desc": "掷出2张燃烧符追踪引燃，受元素与远程伤害加成", "tag": "元素·弹射·火",
+					"desc": "掷出2张燃烧符追踪引燃", "tag": "元素·弹射·火",
 					"bullet": "res://assets/art/bullet_fire_talisman.png", "bullet_scale": 0.5, "bullet_spin": true,
 					"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
 					"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
@@ -299,7 +299,7 @@ const DEFS: Dictionary = {
 						"knockback": 380.0,
 						"price": 36, "icon": "res://assets/art/weapon_fire_blade.png",
 						"tip": Vector2(22, -14), "shape": "saber",
-						"desc": "大范围火焰重刀引燃敌人，受近战与元素伤害加成", "tag": "近战·剑系·火",
+						"desc": "大范围火焰重刀引燃敌人", "tag": "近战·剑系·火",
 					"arc_scale": 1.25, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 					"tags": ["sword", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "range_bonus": 25.0},
@@ -312,7 +312,7 @@ const DEFS: Dictionary = {
 							"knockback": 200.0,
 						"price": 40, "icon": "res://assets/art/weapon_fire_lantern.png",
 						"tip": Vector2(22, 0), "shape": "lantern", "upright": true,
-						"desc": "降下火雨轰击区域并点燃火海，受元素伤害加成", "tag": "元素·雷法·火",
+						"desc": "降下火雨轰击区域并点燃火海", "tag": "元素·雷法·火",
 						"burst_radius": 85.0, "burst_tint": Color(1.0, 0.52, 0.18),
 						"burst_kind": "fire_rain",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
@@ -326,7 +326,7 @@ const DEFS: Dictionary = {
 						"knockback": 95.0,
 						"price": 36, "icon": "res://assets/art/weapon_fire_calabash.png",
 						"tip": Vector2(22, -18), "shape": "calabash",
-						"desc": "持续喷吐火焰点燃前方敌群，受元素与远程伤害加成", "tag": "元素·喷吐·火",
+						"desc": "持续喷吐火焰点燃前方敌群", "tag": "元素·喷吐·火",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["wide", "fire"],
 						"stat_scalings": {"elemental_damage": 1.2, "ranged_damage": 0.6, "damage_bonus": 20.0},
@@ -341,7 +341,7 @@ const DEFS: Dictionary = {
 							"knockback": 280.0,
 						"price": 40, "icon": "res://assets/art/weapon_thunder.png",
 						"tip": Vector2(22, 0), "shape": "tablet", "upright": true,
-						"desc": "落雷轰击区域大范围击退，受元素伤害与护甲加成", "tag": "元素·雷法·土",
+						"desc": "落雷轰击区域大范围击退", "tag": "元素·雷法·土",
 						"burst_radius": 80.0, "burst_tint": Color(0.62, 0.86, 1.0),
 						"burst_kind": "earth",  # 土系雷法走地裂扬尘：与金雷锥/金霄雷令的雷柱拉开形态
 						"tags": ["thunder", "earth"],
@@ -355,7 +355,7 @@ const DEFS: Dictionary = {
 							"knockback": 360.0,
 						"price": 42, "icon": "res://assets/art/weapon_earth_seal.png",
 						"tip": Vector2(20, 0), "shape": "seal", "upright": true,
-						"desc": "巨印从天砸下，受元素伤害与护甲加成", "tag": "元素·横扫·土",
+						"desc": "巨印从天砸下，一击震碎一片", "tag": "元素·横扫·土",
 						"burst_radius": 95.0, "burst_tint": Color(0.88, 0.74, 0.46),
 						"burst_kind": "seal",
 						"tags": ["wide", "earth"],
@@ -368,7 +368,7 @@ const DEFS: Dictionary = {
 								"damage": 31.0, "cooldown": 0.65, "range": 205.0,
 								"knockback": 340.0,
 							"price": 44, "icon": "res://assets/art/weapon_earth_bell.png",
-							"desc": "环绕周身撞击击退敌群，受召唤伤害与最大生命加成", "tag": "召唤·环绕·土",
+							"desc": "环绕周身撞击击退敌群", "tag": "召唤·环绕·土",
 							"tags": ["spirit", "earth"],
 							"stat_scalings": {"engineering_damage": 1.0, "max_hp_bonus": 0.12},
 						},
@@ -381,7 +381,7 @@ const DEFS: Dictionary = {
 							"knockback": 480.0,
 							"price": 38, "icon": "res://assets/art/weapon_earth_shield.png",
 							"tip": Vector2(22, -12), "shape": "shield",
-								"desc": "厚重大盾超宽弧面横推强力击飞来敌，受近战伤害、护甲与生命加成", "tag": "近战·剑系·土",
+								"desc": "厚重大盾超宽弧面横推强力击飞来敌", "tag": "近战·剑系·土",
 						"arc_scale": 1.55,
 						"tags": ["sword", "earth"],
 						"stat_scalings": {"melee_damage": 0.8, "armor": 3.0, "max_hp_bonus": 0.15},
@@ -402,7 +402,7 @@ const DEFS: Dictionary = {
 						"price": 34, "icon": "res://assets/art/weapon_jinzhen_fu.png",
 						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
 						"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-						"desc": "连射2枚金针高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
+						"desc": "连射2枚金针高速追击", "tag": "远程·弹射·金",
 						"bullet": "res://assets/art/bullet_gold_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
 						"tags": ["talisman", "metal"],
@@ -416,7 +416,7 @@ const DEFS: Dictionary = {
 					"price": 32, "icon": "res://assets/art/weapon_xuanbing_fu.png",
 					# 横躺卷轴是自然姿态：upright 保持不转（2026-10-18 修翻面跳动）
 					"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-					"desc": "冰符弹射2次并冰缓敌人，受远程伤害与移速加成", "tag": "远程·弹射·水",
+					"desc": "冰符弹射2次并冰缓敌人", "tag": "远程·弹射·水",
 					"bullet": "res://assets/art/bullet_ice_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_chill": 0.35, "chill_dur": 2.0,
 					"tags": ["talisman", "water"],
@@ -429,7 +429,7 @@ const DEFS: Dictionary = {
 					"knockback": 380.0,
 					"price": 38, "icon": "res://assets/art/weapon_zhenshan_fu.png",
 					"tip": Vector2(22, 0), "shape": "talisman",
-					"desc": "重符缓出沉重击退，受远程伤害与护甲加成", "tag": "远程·弹射·土",
+					"desc": "重符缓出沉重击退", "tag": "远程·弹射·土",
 					"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1,
 					"tags": ["talisman", "earth"],
@@ -443,7 +443,7 @@ const DEFS: Dictionary = {
 							"knockback": 390.0,
 						"price": 38, "icon": "res://assets/art/weapon_jinjiao_jian.png",
 						"tip": Vector2(22, 0), "shape": "shears",
-						"desc": "横扫金蛟大剪剪开敌阵，受近战伤害与暴击率加成", "tag": "近战·横扫·金",
+						"desc": "横扫金蛟大剪剪开敌阵", "tag": "近战·横扫·金",
 						"arc_scale": 1.45,
 						"tags": ["wide", "metal"],
 						"stat_scalings": {"melee_damage": 1.0, "crit_rate": 35.0},
@@ -455,7 +455,7 @@ const DEFS: Dictionary = {
 						"knockback": 300.0,
 						"price": 30, "icon": "res://assets/art/weapon_qingteng_jian.png",
 					"tip": Vector2(22, -12), "shape": "sword",
-					"desc": "青藤缠绕之剑命中叠毒，受近战伤害与吸血加成", "tag": "近战·剑系·木",
+					"desc": "青藤缠绕之剑命中叠毒", "tag": "近战·剑系·木",
 					"proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 					"tags": ["sword", "wood"],
 					"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
@@ -468,7 +468,7 @@ const DEFS: Dictionary = {
 					"knockback": 220.0,
 					"price": 46, "icon": "res://assets/art/weapon_jinlei_zhui.png",
 					"tip": Vector2(22, 8), "shape": "awl", "upright": true,
-					"desc": "金雷贯顶单点重击，受元素伤害与暴击率加成", "tag": "元素·雷法·金",
+					"desc": "金雷贯顶单点重击", "tag": "元素·雷法·金",
 					"burst_radius": 75.0, "burst_tint": Color(1.0, 0.85, 0.4),
 					"tags": ["thunder", "metal"],
 					"stat_scalings": {"elemental_damage": 1.2, "crit_rate": 30.0},
@@ -481,7 +481,7 @@ const DEFS: Dictionary = {
 						"knockback": 200.0,
 					"price": 44, "icon": "res://assets/art/weapon_chunlei_gu.png",
 					"tip": Vector2(22, 0), "shape": "drum", "upright": true,
-					"desc": "春雷滚滚落点范围叠毒，受元素伤害与生命回复加成", "tag": "元素·雷法·木",
+					"desc": "春雷滚滚落点范围叠毒", "tag": "元素·雷法·木",
 					"burst_radius": 90.0, "burst_tint": Color(0.5, 0.85, 0.5),
 					"burst_kind": "drum",
 					"proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
@@ -495,7 +495,7 @@ const DEFS: Dictionary = {
 							"damage": 20.0, "cooldown": 0.40, "range": 195.0,
 							"knockback": 200.0,
 						"price": 42, "icon": "res://assets/art/weapon_haojin_lun.png",
-						"desc": "金轮环绕切割，受召唤伤害与暴击率加成", "tag": "召唤·环绕·金",
+						"desc": "金轮环绕周身疾转切割", "tag": "召唤·环绕·金",
 						"tags": ["spirit", "metal"],
 						"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 					},
@@ -506,7 +506,7 @@ const DEFS: Dictionary = {
 							"damage": 21.0, "cooldown": 0.55, "range": 195.0,
 							"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_lihuo_ya.png",
-						"desc": "火鸦环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "召唤·环绕·火",
+						"desc": "火鸦环绕扑击引燃敌人", "tag": "召唤·环绕·火",
 						"proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["spirit", "fire"],
 						"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
@@ -520,7 +520,7 @@ const DEFS: Dictionary = {
 					"knockback": 280.0,
 					"price": 36, "icon": "res://assets/art/weapon_xueyin_dao.png",
 					"tip": Vector2(-22, 20), "shape": "saber",
-					"desc": "狂刀快斩痛饮敌血，受近战伤害与吸血加成", "tag": "近战·剑系·火",
+					"desc": "狂刀快斩痛饮敌血", "tag": "近战·剑系·火",
 					"proc_burn": true, "burn_ratio": 0.25, "burn_dur": 2.0,
 					"tags": ["sword", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "lifesteal": 90.0},
@@ -533,7 +533,7 @@ const DEFS: Dictionary = {
 							"knockback": 340.0,
 						"price": 30, "icon": "res://assets/art/weapon_jubao_chi.png",
 						"tip": Vector2(22, -10), "shape": "ruler",
-						"desc": "横扫财气金尺越旺打得越狠，受近战伤害与收益加成", "tag": "近战·横扫·金",
+						"desc": "横扫财气金尺越旺打得越狠", "tag": "近战·横扫·金",
 						"arc_scale": 1.3,
 						"tags": ["wide", "metal"],
 						"stat_scalings": {"melee_damage": 0.8, "harvest": 1.2},
@@ -545,7 +545,7 @@ const DEFS: Dictionary = {
 							"knockback": 100.0,
 							"price": 34, "icon": "res://assets/art/weapon_tougu_ding.png",
 							"tip": Vector2(22, -12), "shape": "nail",
-							"desc": "透骨钉射出并叠毒，受远程与元素伤害加成", "tag": "远程·弹射·木",
+							"desc": "透骨钉射出并叠毒", "tag": "远程·弹射·木",
 						"bullet": "res://assets/art/bullet_bone_spike.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 						"tags": ["talisman", "wood"],
@@ -559,7 +559,7 @@ const DEFS: Dictionary = {
 							"knockback": 680.0,
 						"price": 34, "icon": "res://assets/art/weapon_benlang_chui.png",
 						"tip": Vector2(22, 14), "shape": "hammer", "upright": true,
-						"desc": "横扫崩浪重锤击飞敌群并冰缓，受近战伤害与移速加成", "tag": "近战·横扫·水",
+						"desc": "横扫崩浪重锤击飞敌群并冰缓", "tag": "近战·横扫·水",
 						"arc_scale": 1.35, "proc_chill": 0.40, "chill_dur": 2.5,
 						"tags": ["wide", "water"],
 						"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
@@ -572,7 +572,7 @@ const DEFS: Dictionary = {
 								"knockback": 340.0,
 								"price": 36, "icon": "res://assets/art/weapon_liuling_jian.png",
 								"tip": Vector2(22, -8), "shape": "mace", "upright": true,
-							"desc": "六棱重锏疾速重砸破阵制敌，受近战伤害与极高护甲加成", "tag": "近战·剑系·土",
+							"desc": "六棱重锏疾速重砸破阵制敌", "tag": "近战·剑系·土",
 						"tags": ["sword", "earth"],
 						"stat_scalings": {"melee_damage": 1.0, "armor": 3.5},
 					},
@@ -583,7 +583,7 @@ const DEFS: Dictionary = {
 								"damage": 35.0, "cooldown": 0.75, "range": 200.0,
 								"knockback": 420.0,
 							"price": 44, "icon": "res://assets/art/weapon_xuanwu_pei.png",
-							"desc": "玄武玉佩环绕震退来敌，受召唤伤害与护甲加成", "tag": "召唤·环绕·土",
+							"desc": "玄武玉佩环绕震退来敌", "tag": "召唤·环绕·土",
 							"tags": ["spirit", "earth"],
 							"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5, "max_hp_bonus": 0.10},
 						},
@@ -597,7 +597,7 @@ const DEFS: Dictionary = {
 						"knockback": 120.0,
 						"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
 						"tip": Vector2(22, -20), "turret_shape": "crossbow", "upright": true,
-						"desc": "布设自动索敌的机关弩台，受机关伤害与暴击率加成", "tag": "机关·金",
+						"desc": "布设自动索敌的机关弩台", "tag": "机关·金",
 						"bullet": "res://assets/art/bullet_gold_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1,
 						"tags": ["contraption", "metal"],
@@ -612,7 +612,7 @@ const DEFS: Dictionary = {
 						"knockback": 140.0,
 						"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
 						"tip": Vector2(22, 0), "turret_shape": "array_disc", "upright": true,
-						"desc": "布设御剑阵盘疾射飞剑，受机关与近战伤害加成", "tag": "机关·剑系·金",
+						"desc": "布设御剑阵盘疾射飞剑", "tag": "机关·剑系·金",
 						"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1,
 						"tags": ["contraption", "sword", "metal"],
@@ -628,7 +628,7 @@ const DEFS: Dictionary = {
 						"knockback": 100.0,
 						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
 						"tip": Vector2(22, -10), "turret_shape": "beast", "upright": true,
-						"desc": "布设喷火机关兽持续灼烧敌群，受机关与元素伤害加成", "tag": "机关·火",
+						"desc": "布设喷火机关兽持续灼烧敌群", "tag": "机关·火",
 						"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
 						"pierce": 1, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["contraption", "fire"],
@@ -652,7 +652,7 @@ const DEFS: Dictionary = {
 							"knockback": 150.0,
 							"price": 38, "icon": "res://assets/art/weapon_liuhuo_feijian.png",
 							"tip": Vector2(20, 2), "shape": "sword",
-							"desc": "双柄炽炎飞剑交错射出各引燃敌人，受元素与远程伤害加成", "tag": "元素·剑系·火",
+							"desc": "双柄炽炎飞剑交错射出各引燃敌人", "tag": "元素·剑系·火",
 							"bullet": "res://assets/art/bullet_fire_sword.png", "bullet_scale": 0.6, "bullet_spin": false,
 							"pierce": 1, "projectile_count": 2, "spread_angle": 0.14,
 							"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
@@ -667,7 +667,7 @@ const DEFS: Dictionary = {
 					"price": 34, "icon": "res://assets/art/weapon_zhenhuo_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
 					"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-					"desc": "三昧真火符烈焰灼烧，受元素与远程伤害加成", "tag": "元素·远程·弹射·火",
+					"desc": "三昧真火符烈焰灼烧", "tag": "元素·远程·弹射·火",
 					"bullet": "res://assets/art/bullet_true_fire_talisman.png", "bullet_scale": 0.65, "bullet_spin": true,
 					"pierce": 1, "proc_burn": true, "burn_ratio": 0.50, "burn_dur": 3.0,
 					"tags": ["talisman", "fire"],
@@ -682,7 +682,7 @@ const DEFS: Dictionary = {
 					"price": 40, "icon": "res://assets/art/weapon_leihuo_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法，器口只在瞄准轴取长度（2026-10-18 修歪斜翻面）
 					"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-					"desc": "雷火双符扇射2张引燃爆裂，受元素与远程伤害加成", "tag": "元素·雷法·火",
+					"desc": "雷火双符扇射2张引燃爆裂", "tag": "元素·雷法·火",
 					"bullet": "res://assets/art/bullet_thunder_fire_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "projectile_count": 2, "spread_angle": 0.12,
 					"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 3.0,
@@ -698,7 +698,7 @@ const DEFS: Dictionary = {
 					"knockback": 320.0,
 					"price": 32, "icon": "res://assets/art/weapon_hanshuang_jian.png",
 					"tip": Vector2(22, 0), "shape": "sword",
-					"desc": "霜刃挥砍冻缓敌人，受近战伤害与移速加成", "tag": "近战·剑系·水",
+					"desc": "霜刃挥砍冻缓敌人", "tag": "近战·剑系·水",
 					"arc_scale": 1.2, "proc_chill": 0.40, "chill_dur": 2.0,
 					"tags": ["sword", "water"],
 					"stat_scalings": {"melee_damage": 1.0, "move_speed_bonus": 25.0},
@@ -710,7 +710,7 @@ const DEFS: Dictionary = {
 					"knockback": 130.0,
 					"price": 34, "icon": "res://assets/art/weapon_langli_suo.png",
 					"tip": Vector2(22, 2), "shape": "shuttle",
-					"desc": "水梭连锁弹射3次冻缓敌群，受远程伤害与移速加成", "tag": "远程·横扫·水",
+					"desc": "水梭连锁弹射3次冻缓敌群", "tag": "远程·横扫·水",
 					"bullet": "res://assets/art/bullet_water_shuttle.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 3, "proc_chill": 0.35, "chill_dur": 2.0,
 					"tags": ["wide", "water"],
@@ -725,7 +725,7 @@ const DEFS: Dictionary = {
 						"knockback": 90.0,
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 						"tip": Vector2(20, -6), "turret_shape": "beast", "upright": true,
-						"desc": "布设寒泉机关兽连吐冰针冻缓敌群，受机关伤害与攻击间隔加成", "tag": "机关·水",
+						"desc": "布设寒泉机关兽连吐冰针冻缓敌群", "tag": "机关·水",
 						"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 						"pierce": 1, "proc_chill": 0.30, "chill_dur": 1.5,
 						"tags": ["contraption", "water"],
@@ -741,7 +741,7 @@ const DEFS: Dictionary = {
 					"price": 34, "icon": "res://assets/art/weapon_gudu_fu.png",
 					# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 修歪斜翻面）
 					"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-					"desc": "蛊虫毒符连锁弹射3次剧毒蔓延，受远程与元素伤害加成", "tag": "远程·弹射·木",
+					"desc": "蛊虫毒符连锁弹射3次剧毒蔓延", "tag": "远程·弹射·木",
 					"bullet": "res://assets/art/bullet_gu_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 3, "proc_poison": true, "poison_ratio": 0.35, "poison_dur": 3.0,
 					"tags": ["talisman", "wood"],
@@ -755,7 +755,7 @@ const DEFS: Dictionary = {
 						"knockback": 110.0,
 						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
 						"tip": Vector2(22, -16), "turret_shape": "trebuchet", "upright": true,
-						"desc": "布设藤萝弹射器毒镖叠毒，受机关伤害与生命回复加成", "tag": "机关·木",
+						"desc": "布设藤萝弹射器毒镖叠毒", "tag": "机关·木",
 						"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 						"tags": ["contraption", "wood"],
@@ -770,7 +770,7 @@ const DEFS: Dictionary = {
 					"knockback": 420.0,
 					"price": 38, "icon": "res://assets/art/weapon_bengshan_jian.png",
 					"tip": Vector2(22, 0), "shape": "sword",
-						"desc": "崩山重剑阔扫大力震退，受近战伤害与护甲加成", "tag": "近战·剑系·土",
+						"desc": "崩山重剑阔扫大力震退", "tag": "近战·剑系·土",
 					"arc_scale": 1.3,
 					"tags": ["sword", "earth"],
 					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
@@ -783,7 +783,7 @@ const DEFS: Dictionary = {
 						"knockback": 300.0,
 						"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
 						"tip": Vector2(22, 16), "turret_shape": "trebuchet", "upright": true,
-						"desc": "布设垒石投掷机抛石砸退敌群，受机关伤害与护甲加成", "tag": "机关·土",
+						"desc": "布设垒石投掷机抛石砸退敌群", "tag": "机关·土",
 						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["contraption", "earth"],
@@ -807,7 +807,7 @@ const DEFS: Dictionary = {
 						"damage": 22.0, "cooldown": 0.46, "range": 180.0,
 						"knockback": 210.0,
 					"price": 42, "icon": "res://assets/art/weapon_jinming_ling.png",
-					"desc": "金铃环绕震鸣切金，受召唤伤害与暴击率加成", "tag": "召唤·环绕·金",
+					"desc": "金铃环绕震鸣切金", "tag": "召唤·环绕·金",
 					"tags": ["spirit", "metal"],
 					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 				},
@@ -818,7 +818,7 @@ const DEFS: Dictionary = {
 						"damage": 25.0, "cooldown": 0.52, "range": 185.0,
 						"knockback": 180.0,
 					"price": 42, "icon": "res://assets/art/weapon_muling_ou.png",
-					"desc": "木偶人环绕护卫生生不息，受召唤伤害与生命回复加成", "tag": "召唤·环绕·木",
+					"desc": "木偶人环绕护卫生生不息", "tag": "召唤·环绕·木",
 					"tags": ["spirit", "wood"],
 					"stat_scalings": {"engineering_damage": 1.0, "hp_regen": 4.0},
 				},
@@ -829,7 +829,7 @@ const DEFS: Dictionary = {
 						"damage": 24.0, "cooldown": 0.50, "range": 185.0,
 						"knockback": 190.0,
 					"price": 42, "icon": "res://assets/art/weapon_bingpo_zhu.png",
-					"desc": "冰魄宝珠环绕冻缓来敌，受召唤伤害与攻击间隔加成", "tag": "召唤·环绕·水",
+					"desc": "冰魄宝珠环绕冻缓来敌", "tag": "召唤·环绕·水",
 					"proc_chill": 0.40, "chill_dur": 2.5,
 					"tags": ["spirit", "water"],
 					"stat_scalings": {"engineering_damage": 1.0, "cdr_bonus": 30.0},
@@ -841,7 +841,7 @@ const DEFS: Dictionary = {
 						"damage": 16.0, "cooldown": 0.36, "range": 180.0,
 						"knockback": 150.0,
 					"price": 42, "icon": "res://assets/art/weapon_chiyan_ying.png",
-					"desc": "火萤群环绕扑击引燃敌人，受召唤与元素伤害加成", "tag": "召唤·环绕·火",
+					"desc": "火萤群环绕扑击引燃敌人", "tag": "召唤·环绕·火",
 					"proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
 					"tags": ["spirit", "fire"],
 					"stat_scalings": {"engineering_damage": 1.0, "elemental_damage": 0.5},
@@ -853,7 +853,7 @@ const DEFS: Dictionary = {
 							"damage": 34.0, "cooldown": 0.70, "range": 185.0,
 							"knockback": 330.0,
 						"price": 42, "icon": "res://assets/art/weapon_tuling_shi.png",
-						"desc": "符文灵石环绕撞击震退敌群，受召唤伤害与护甲加成", "tag": "召唤·环绕·土",
+						"desc": "符文灵石环绕撞击震退敌群", "tag": "召唤·环绕·土",
 						"tags": ["spirit", "earth"],
 						"stat_scalings": {"engineering_damage": 1.0, "armor": 2.5},
 					},
@@ -865,7 +865,7 @@ const DEFS: Dictionary = {
 						"damage": 20.0, "cooldown": 0.42, "range": 180.0,
 						"knockback": 170.0,
 					"price": 44, "icon": "res://assets/art/weapon_jianling.png",
-					"desc": "剑形精魂环绕飞斩，受召唤伤害与暴击率加成", "tag": "召唤·剑系·金",
+					"desc": "剑形精魂环绕飞斩", "tag": "召唤·剑系·金",
 					"tags": ["spirit", "sword", "metal"],
 					"stat_scalings": {"engineering_damage": 1.0, "crit_rate": 30.0},
 				},
@@ -880,7 +880,7 @@ const DEFS: Dictionary = {
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
 						"tip": Vector2(22, -2), "turret_shape": "beast", "upright": true,
-						"desc": "布设符灯傀儡兽掷石守御，受机关与召唤伤害加成", "tag": "机关·召唤·土",
+						"desc": "布设符灯傀儡兽掷石守御", "tag": "机关·召唤·土",
 						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.55, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["contraption", "spirit", "earth"],
@@ -894,7 +894,7 @@ const DEFS: Dictionary = {
 							"knockback": 340.0,
 						"price": 40, "icon": "res://assets/art/weapon_lieshan_duo.png",
 						"tip": Vector2(20, 2), "shape": "bell", "upright": true,
-						"desc": "铎钟裂山震波轰击区域大力击退，受元素伤害与护甲加成", "tag": "元素·雷法·土",
+						"desc": "铎钟裂山震波轰击区域大力击退", "tag": "元素·雷法·土",
 						"burst_radius": 85.0, "burst_tint": Color(0.80, 0.66, 0.38),
 						"burst_kind": "earth",
 						"tags": ["thunder", "earth"],
@@ -909,7 +909,7 @@ const DEFS: Dictionary = {
 					"price": 36, "icon": "res://assets/art/weapon_jingzhe_fu.png",
 					# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
 					"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-					"desc": "惊蛰雷符弹射2次叠毒滋蔓，受远程与元素伤害加成", "tag": "远程·雷法·木",
+					"desc": "惊蛰雷符弹射2次叠毒滋蔓", "tag": "远程·雷法·木",
 					"bullet": "res://assets/art/bullet_jingzhe_fu.png", "bullet_scale": 0.6, "bullet_spin": true,
 					"pierce": 1, "bounce_count": 2, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 					"tags": ["talisman", "thunder", "wood"],
@@ -923,7 +923,7 @@ const DEFS: Dictionary = {
 						"knockback": 390.0,
 					"price": 36, "icon": "res://assets/art/weapon_liaoyuan_shan.png",
 					"tip": Vector2(22, 0), "shape": "fan",
-					"desc": "横扫燎原火风焚烧前方敌群，受近战与元素伤害加成", "tag": "近战·横扫·火",
+					"desc": "横扫燎原火风焚烧前方敌群", "tag": "近战·横扫·火",
 					"arc_scale": 1.35, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 3.0,
 					"tags": ["wide", "fire"],
 					"stat_scalings": {"melee_damage": 1.0, "elemental_damage": 0.8, "move_speed_bonus": 25.0},
@@ -936,7 +936,7 @@ const DEFS: Dictionary = {
 						"knockback": 620.0,
 					"price": 38, "icon": "res://assets/art/weapon_kaishan_fu.png",
 					"tip": Vector2(22, 0), "shape": "axe",
-					"desc": "横扫开山巨斧劈退正面敌群，受近战伤害与护甲加成", "tag": "近战·横扫·土",
+					"desc": "横扫开山巨斧劈退正面敌群", "tag": "近战·横扫·土",
 					"arc_scale": 1.3,
 					"tags": ["wide", "earth"],
 					"stat_scalings": {"melee_damage": 1.0, "armor": 2.5},
@@ -949,7 +949,7 @@ const DEFS: Dictionary = {
 							"price": 34, "icon": "res://assets/art/weapon_gengjin_fu.png",
 							# 竖纸符头朝上：upright 竖直悬浮施法（2026-10-18 统一符箓姿态，免旋转翻面）
 							"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-							"desc": "连射2张金符高速追击，受远程伤害与暴击率加成", "tag": "远程·弹射·金",
+							"desc": "连射2张金符高速追击", "tag": "远程·弹射·金",
 							"bullet": "res://assets/art/bullet_gengjin_fu.png", "bullet_scale": 0.55, "bullet_spin": false,
 							"pierce": 1, "projectile_count": 2, "spread_angle": 0.10,
 							"tags": ["talisman", "metal"],
@@ -971,7 +971,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：千年雷击桃木剑，深沉暗红木质与七星连珠刻痕
 								"price": 30, "icon": "res://assets/art/weapon_taomu_jian.png",
 								"tip": Vector2(22, -16), "shape": "sword",
-								"desc": "辟邪纯阳剑芒宽弧远扫强力击退，受近战伤害与范围加成", "tag": "近战·剑系·木",
+								"desc": "辟邪纯阳剑芒宽弧远扫强力击退", "tag": "近战·剑系·木",
 								"arc_scale": 1.25,
 								"tags": ["sword", "wood"],
 								"stat_scalings": {"melee_damage": 1.0, "range_bonus": 25.0},
@@ -984,7 +984,7 @@ const DEFS: Dictionary = {
 						"price": 32, "icon": "res://assets/art/weapon_guishui_fu.png",
 						# 竖直符纸无锋刃轴：upright 竖直悬浮施法（2026-10-18 随新图统一姿态）
 						"tip": Vector2(22, 0), "shape": "talisman", "upright": true,
-						"desc": "癸水阴符急速连发，受远程伤害与攻击间隔加成", "tag": "远程·弹射·水",
+						"desc": "癸水阴符急速连发", "tag": "远程·弹射·水",
 						"bullet": "res://assets/art/bullet_frost_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["talisman", "water"],
@@ -998,7 +998,7 @@ const DEFS: Dictionary = {
 							# 2026-10-18 media-gen 专属重绘：厚土岩甲符，玄铁硬轴与古藤玄黄符纸
 							"price": 32, "icon": "res://assets/art/weapon_houtu_fu.png",
 							"tip": Vector2(20, 0), "shape": "talisman", "upright": true,
-								"desc": "两张厚土符扇形铺开各锁1敌，受远程伤害与护甲加成", "tag": "远程·弹射·土",
+								"desc": "两张厚土符扇形铺开各锁1敌", "tag": "远程·弹射·土",
 								"bullet": "res://assets/art/bullet_stone_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 								"pierce": 1, "projectile_count": 2, "spread_angle": 0.22,
 							"tags": ["talisman", "earth"],
@@ -1013,7 +1013,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：五雷天师金牌令牌，雷云兽首吞口与金色雷纹
 								"price": 38, "icon": "res://assets/art/weapon_jinxiao_leiling.png",
 								"tip": Vector2(18, 4), "shape": "tablet", "upright": true,
-								"desc": "金霄神雷轰击一片敌群，受元素伤害与暴击伤害加成", "tag": "元素·雷法·金",
+								"desc": "金霄神雷轰击一片敌群", "tag": "元素·雷法·金",
 								"burst_radius": 78.0, "burst_tint": Color(1.0, 0.88, 0.45),
 								"tags": ["thunder", "metal"],
 								"stat_scalings": {"elemental_damage": 1.0, "crit_mult_bonus": 30.0},
@@ -1027,7 +1027,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：玄冥冰晶水雷珠，深邃玄晶与幽蓝冷电
 								"price": 38, "icon": "res://assets/art/weapon_xuanming_leizhu.png",
 								"tip": Vector2(22, 0), "shape": "bead", "upright": true,
-								"desc": "玄冥阴雷炸开冻缓敌群，受元素伤害与移速加成", "tag": "元素·雷法·水",
+								"desc": "玄冥阴雷炸开冻缓敌群", "tag": "元素·雷法·水",
 								"burst_radius": 70.0, "burst_tint": Color(0.45, 0.75, 1.0),
 								"burst_kind": "frost",
 								"proc_chill": 0.40, "chill_dur": 2.0,
@@ -1043,7 +1043,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：八面棱角玄铁紫玉晶镜，冷月冷冽雷芒
 								"price": 42, "icon": "res://assets/art/weapon_zihong_jing.png",
 								"tip": Vector2(22, 0), "shape": "mirror", "upright": true,
-								"desc": "持续照出紫电光束贯穿一线敌群，受元素伤害与暴击率加成", "tag": "元素·雷法·金",
+								"desc": "持续照出紫电光束贯穿一线敌群", "tag": "元素·雷法·金",
 								"tags": ["thunder", "metal"],
 								"stat_scalings": {"elemental_damage": 1.2, "crit_rate": 25.0},
 							},
@@ -1056,7 +1056,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：重型攻城青木灵炮，青铜墨木箍合与幽绿木灵光
 								"price": 38, "icon": "res://assets/art/weapon_qingmu_pao.png",
 								"tip": Vector2(22, -12), "turret_shape": "cannon", "upright": true,
-								"desc": "布设青木灵炮贯穿敌阵，受机关伤害与生命回复加成", "tag": "机关·木",
+								"desc": "布设青木灵炮贯穿敌阵", "tag": "机关·木",
 								"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
 								"pierce": 1,
 								"tags": ["contraption", "wood"],
@@ -1071,7 +1071,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：重型三联装攻城机关弩，玄冰冰晶弩臂与极寒飞针
 								"price": 40, "icon": "res://assets/art/weapon_ningbing_nu.png",
 								"tip": Vector2(22, -10), "turret_shape": "crossbow", "upright": true,
-									"desc": "布设凝冰机弩远程点杀冻缓敌人，受机关伤害与范围加成", "tag": "机关·水",
+									"desc": "布设凝冰机弩远程点杀冻缓敌人", "tag": "机关·水",
 								"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 								"pierce": 1, "proc_chill": 0.25, "chill_dur": 1.5,
 								"tags": ["contraption", "water"],
@@ -1086,7 +1086,7 @@ const DEFS: Dictionary = {
 								# 2026-10-18 media-gen 专属重绘：八角重甲玄石烽火台，狼烟火盆与赤红真火
 								"price": 40, "icon": "res://assets/art/weapon_fenghuo_tai.png",
 								"tip": Vector2(20, 0), "turret_shape": "tower", "upright": true,
-								"desc": "布设烽火台持续喷焰引燃敌群，受机关伤害与最大生命加成", "tag": "机关·火",
+								"desc": "布设烽火台持续喷焰引燃敌群", "tag": "机关·火",
 								"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
 								"pierce": 1, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
 								"tags": ["contraption", "fire"],
@@ -1477,14 +1477,23 @@ static func knockback_for(id: String, fallback: float = 180.0) -> float:
 		return fallback
 	return float(def.get("knockback", fallback))
 
-## 回收价：基准价 × ratio × 星级系数。ratio 缺省是常规半价，
-## 初始武器那一件传 STARTER_SELL_RATIO 走原价（判定与消耗见 WeaponInventory.sell_price_for）。
-static func sell_price(id: String, star: int, ratio: float = SELL_RATIO) -> int:
+## 回收比例：★1 按基准价原价退（买到不想要/试错换流派不亏），★2 起折价（SELL_RATIO）。
+## 参考云顶之弈的一星原价回收；升星件仍低于三合一所耗材料的总价，倒卖赚不到差价。
+static func sell_ratio_for(star: int) -> float:
+	return 1.0 if clampi(star, 1, MAX_STAR) <= 1 else SELL_RATIO
+
+## 回收价：★1 = 基准价 × 商店价系数（与货架同一条乘区，八折角色买进原价卖出会变成刷钱循环）；
+## 买价还带回合加价，所以原价退最多只回到买入价，倒卖无利可图。★2 起按折价公式。
+static func sell_price(id: String, star: int, price_mult: float = 1.0) -> int:
 	var def: Dictionary = DEFS.get(id, {})
 	if def.is_empty():
 		return 0
 	var base := int(def.get("price", 10))
-	return int(ceil(float(base) * ratio * pow(STAR_SELL_MULT, float(star - 1))))
+	var s := clampi(star, 1, MAX_STAR)
+	if s <= 1:
+		return maxi(1, int(float(base) * maxf(0.0, price_mult)))
+	var raw := float(base) * sell_ratio_for(s) * pow(STAR_SELL_MULT, float(s - 1))
+	return maxi(1, int(ceil(raw - SELL_EPSILON)))
 
 const _EMPTY_ARRAY: Array = []
 

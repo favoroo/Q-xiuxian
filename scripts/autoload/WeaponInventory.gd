@@ -217,22 +217,10 @@ static func get_weapons_summary(gm: Node) -> Array:
 		})
 	return list
 
-## 这一件现在能退多少金币：开局白送的初始武器在卖出前按原价回收（卖一次即失效），
-## 其余一律半价。UI 报价与结算必须共用这一条，否则卡面写一个数、到手另一个数。
+## 这一件现在能退多少金币：★1 按「基准价 × 当前商店价系数」原价回收，★2 起折价
+## （口径见 WeaponData.sell_price）。UI 报价与结算必须共用这一条，否则卡面写一个数、到手另一个数。
 static func sell_price_for(gm: Node, w_id: String, star: int) -> int:
-	var ratio := WeaponData.SELL_RATIO
-	if starter_bonus_applies(gm, w_id):
-		ratio = WeaponData.STARTER_SELL_RATIO
-	return WeaponData.sell_price(w_id, star, ratio)
-
-## 初始武器的原价额度还没用掉、且卖的正是那把（同名即算，副本本身不可区分）。
-static func starter_bonus_applies(gm: Node, w_id: String) -> bool:
-	return bool(gm.starter_sell_bonus_pending) and w_id == String(gm.starter_weapon_id)
-
-## 兑现一次即失效：之后再卖同名武器一律回到常规半价。
-static func consume_starter_bonus(gm: Node, w_id: String) -> void:
-	if starter_bonus_applies(gm, w_id):
-		gm.starter_sell_bonus_pending = false
+	return WeaponData.sell_price(w_id, star, gm.shop_price_mult)
 
 ## 按上阵 summary 下标出售（悬浮武器与灵蝶统一处理）
 static func sell_weapon(gm: Node, index: int) -> bool:
@@ -251,7 +239,6 @@ static func sell_weapon(gm: Node, index: int) -> bool:
 		gm.drones.remove_at(di)
 		if gm.player != null and gm.player.has_method("sync_drones"):
 			gm.player.sync_drones()
-		consume_starter_bonus(gm, d_id)
 	else:
 		var node: Node = item.get("node")
 		if node == null or not is_instance_valid(node):
@@ -259,7 +246,6 @@ static func sell_weapon(gm: Node, index: int) -> bool:
 		var w_id: String = String(item.get("id", ""))
 		price = sell_price_for(gm, w_id, int(item.get("star", 1)))
 		gm.player.remove_weapon_instance(node)
-		consume_starter_bonus(gm, w_id)
 	gm.spirit_stones += price
 	gm.stats_updated.emit(gm.kills, gm.game_time, gm.spirit_stones)
 	gm.notify_weapons_updated(get_weapons_summary(gm))
@@ -454,7 +440,6 @@ static func sell_stash(gm: Node, index: int) -> bool:
 	var w_id: String = String(entry.get("id", ""))
 	var price := sell_price_for(gm, w_id, int(entry.get("star", 1)))
 	gm.stash.remove_at(index)
-	consume_starter_bonus(gm, w_id)
 	gm.spirit_stones += price
 	gm.stats_updated.emit(gm.kills, gm.game_time, gm.spirit_stones)
 	gm.notify_weapons_updated(get_weapons_summary(gm))

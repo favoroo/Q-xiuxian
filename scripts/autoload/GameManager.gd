@@ -3,6 +3,8 @@ extends Node
 ## 全局状态中枢：经济（金币）、属性加点、武器持有与合成、回合推进、商店货架
 
 signal player_hp_changed(current_hp: float, max_hp: float)
+## 血海护盾变动（HUD 盾条刷新用；满血溢出结盾不走 player_hp_changed，独立一路轻信号）
+signal shield_changed(shield_hp: float, shield_cap: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
 signal player_leveled_up(level: int)
 signal stats_updated(kills: int, game_time: float, spirit_stones: int)
@@ -456,6 +458,9 @@ var on_hit_damage_stacks: int = 0
 var on_hit_damage_timer: float = 0.0
 var guard_stance: float = 0.0           ## 守卫：盾势机制开关（>0 启用；蓄能/爆发数值全在 GuardStanceData）
 var shield_charge: float = 0.0          ## 守卫：盾势槽当前蓄能（Player.take_damage 写入，蓄满当帧爆发清空）
+## 血海护盾（神通·体修进阶）：满血吸血溢出结成的吸收盾。与守卫盾势（shield_charge）是两回事：
+## 盾势是「护甲挡下的伤害存起来反弹」，本盾是「先于生命扣减的吸收池」。上限 BalanceChain.shield_cap。
+var shield_hp: float = 0.0
 var heal_orb_chance: float = 0.0        ## 灵植夫：敌人死亡额外掉回复珠概率（EnemyBase 掉落块消费）
 var heal_overflow_mult: float = 1.0     ## 灵植夫：回复珠溢出折金币倍率（HealOrb._collect 消费）
 var alloc_offer_bonus: int = 0          ## 学者：悟道候选数加成（AllocSession.roll_alloc_offers 消费）
@@ -570,6 +575,10 @@ var _still_cache_valid: bool = false
 var _still_cached: bool = false
 var _hook_cache: Dictionary = {}
 var _hook_cache_items_size: int = -1
+## 超级悟道机制 hook 的整包快照（2026-10-25）：命中路径一次指纹校验取全部机制读数，
+## 避免「每命中一次算 3~4 遍 items.hash()」。算式与键表在 StatSystem.super_hook_snapshot。
+var _super_hook_snap: Dictionary = {}
+var _super_hook_stamp: int = -1
 ## 本局购入（或被玉匣送过）的道具 id 账本：出售后 items 里没了这一件，但 unique 道具的
 ## 「每局限购一件」不许因为退货就解禁 —— 详情卡上「出售后本局不再出现」由这里兑现。
 var items_bought: Array = []
@@ -580,11 +589,6 @@ var pets: Array = []
 # 武器库存：上阵 = 悬浮武器节点 + 灵蝶星级数组；背包 = 仅用于合成/出售的仓库
 var drones: Array = []   # 上阵灵蝶的星级列表，如 [1, 2]
 var stash: Array = []    # 背包，元素 {id: String, star: int}
-
-## 初始武器（开局白送的那一件）：卖出之前按原价回收，兑现一次即失效。
-## 目的：不让「已经拿了」绑架流派选择 —— 不想要就能平价换掉，而不是亏半价硬留。
-var starter_weapon_id: String = ""
-var starter_sell_bonus_pending: bool = false
 
 # 本局历史悟道加点记录
 var upgrade_history: Array[Dictionary] = []
@@ -848,10 +852,11 @@ func get_effective_dodge() -> float:
 	return BalanceCombat.effective_dodge(dodge + extra_still, buff_dodge, DODGE_CAP, dodge_cap_bonus)
 
 ## 上阵武器槽位上限：独臂刀圣这类角色会覆盖（0 = 用 WeaponData.MAX_SLOTS）；
-## 神通【开天辟地】经 item_hook_sum("weapon_slot_bonus") 在本局上限之上 +1
+## 神通【开天辟地】经 item_hook_sum("weapon_slot_bonus") 在本局上限之上叠加，
+## 【献祭】则是 -1。下限 clamp 到 1：槽位被代价卡压到 0 会让武器全下阵、角色无法战斗。
 func max_weapon_slots() -> int:
 	var base: int = weapon_slots_override if weapon_slots_override > 0 else WeaponData.MAX_SLOTS
-	return base + int(item_hook_sum("weapon_slot_bonus"))
+	return maxi(1, base + int(item_hook_sum("weapon_slot_bonus")))
 
 ## 多武器神识分流系数：按当前上阵武器总数（悬浮武器 + 环绕灵物）计算单把直击伤害折算。
 ## 环绕灵宝按半权计入（召唤物自主作战不占神识），机关炮台仍按全额。
@@ -916,6 +921,15 @@ func try_lifesteal(behavior: int = WeaponData.Behavior.MELEE) -> void:
 	if rng.randf() < total_ls:
 		_lifesteal_procs += 1
 		var gained = player.heal(1.0, true)
+		# 血海护盾（神通）：顶满血时吸不到的溢出转成护盾存量（满血时 gained=0 ⇒ 整口 1.0 全溢出）。
+		# 走的是 heal 返回值的差值记账，不碰回血链路本身；heal 的 gained<=0.01 早退对它同样安全。
+		var overflow: float = 1.0 - float(gained)
+		if overflow > 0.0 and item_hook_sum("lifesteal_overflow_shield") > 0.0:
+			var cap := BalanceChain.shield_cap(player.max_health)
+			var next: float = minf(cap, shield_hp + overflow)
+			if next != shield_hp:
+				shield_hp = next
+				shield_changed.emit(shield_hp, cap)
 		# 只有无敌窗口才发世界层反馈；顶满血 gained=0 不弹假跳字（与 heal 的记账口径一致）
 		if buff_lifesteal_boost > 0.0 and float(gained) > 0.0:
 			player.call("on_lifesteal_proc")
@@ -1012,6 +1026,8 @@ func add_item(item_id: String) -> bool:
 	items.append(item_id)
 	_still_cache_valid = false
 	_hook_cache.clear()
+	_super_hook_snap.clear()
+	_super_hook_stamp = -1
 	_stat_dict_frame = -1  # 属性字典 memo 立即作废：道具当帧就得生效
 	_apply_stat_fields(def.get("apply", {}), "item:" + item_id)
 	# 图鉴实战收录（2026-10-25 锁图鉴）：买到/拿到过一次才在图鉴里揭晓完整词条。
@@ -1044,6 +1060,8 @@ func sell_item(item_id: String) -> bool:
 	items.remove_at(i)
 	_still_cache_valid = false
 	_hook_cache.clear()
+	_super_hook_snap.clear()
+	_super_hook_stamp = -1
 	_stat_dict_frame = -1  # 属性字典 memo 立即作废：退货当帧就得回退数值
 	# 图鉴种数账本（收藏家）：卖掉最后一件同种，种数 −1（与 consume_item 同一条回退）
 	if not has_item(item_id):
@@ -1078,6 +1096,8 @@ func consume_item(item_id: String) -> bool:
 	items.remove_at(i)
 	_still_cache_valid = false
 	_hook_cache.clear()
+	_super_hook_snap.clear()
+	_super_hook_stamp = -1
 	# 图鉴种数账本（收藏家）：消耗掉的若是最后一件同种道具，种数 -1
 	if not has_item(item_id):
 		unique_item_count = maxi(0, unique_item_count - 1)
@@ -1110,9 +1130,6 @@ func start_run(starter_id: String) -> void:
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	# 额外技能随角色绑定（不走选择界面）：按道统查表，没有 extra_skill 键的角色保持空串
 	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
-	# 初始武器留个记号：卖出这一件之前按原价回收（见 WeaponInventory.sell_price_for）
-	starter_weapon_id = starter_id
-	starter_sell_bonus_pending = true
 	add_weapon(starter_id)
 	if endless_mode:
 		announcement_triggered.emit("◆ 无尽模式 · 战至终局 ◆")
@@ -1202,7 +1219,7 @@ func notify_weapons_updated(weapons: Array) -> void:
 func sell_weapon(index: int) -> bool:
 	return WeaponInventory.sell_weapon(self, index)
 
-## 武器能退多少金币：卡面报价与实际到手同源（初始武器那一件走原价）
+## 武器能退多少金币：卡面报价与实际到手同源（★1 原价、★2 起折价）
 func weapon_sell_price(w_id: String, star: int) -> int:
 	return WeaponInventory.sell_price_for(self, w_id, star)
 

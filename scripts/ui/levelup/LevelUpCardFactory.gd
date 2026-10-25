@@ -12,7 +12,7 @@ extends RefCounted
 
 ## 装配一张悟道候选卡。返回组件引用字典（root/style/icon_panel_style/rarity_col/
 ## state_badge/title_lbl），选中态切换由宿主 _select_card 用这些引用重写样式。
-## 卡内需要调回宿主的三个交互入口：on_card_tapped / open_recommend_tip / open_benefit_tip。
+## 卡内需要调回宿主的两个交互入口：on_card_tapped / open_benefit_tip。
 static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		card_w: float, forecast: StatForecast) -> Dictionary:
 	var card := PanelContainer.new()
@@ -24,7 +24,7 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	var rarity_col: Color = data.get("border_color", GameStyle.rarity_color(rarity_str))
 	# T-5.1 稀有度卡框描边接 FX_HDR 对应档（普通白不发辉、金色档 HDR 超白起辉）：
 	var edge_col: Color = GameStyle.rarity_edge_color(rarity_str) if data.has("rarity") else GameStyle.rarity_edge_color(rarity_col)
-	var style_normal := GameStyle.card(edge_col, 3.0, Vector2(6, 6))
+	var style_normal := GameStyle.card(edge_col, GameStyle.SLANT_BLOCK, Vector2(4, 5))
 	style_normal.content_margin_left = LevelUpDialog.CARD_PAD_X
 	style_normal.content_margin_top = 10.0
 	style_normal.content_margin_right = LevelUpDialog.CARD_PAD_X
@@ -120,7 +120,7 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		"title_lbl": title_lbl,
 	}
 
-## 行①：稀有度色签 +「荐」推荐签 + 已修层数徽记
+## 行①：稀有度色签 + 已修层数徽记
 static func _create_top_row(dialog: LevelUpDialog, data: Dictionary, rarity_col: Color) -> HBoxContainer:
 	var hbox_top := HBoxContainer.new()
 	hbox_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -136,18 +136,21 @@ static func _create_top_row(dialog: LevelUpDialog, data: Dictionary, rarity_col:
 	rarity_lbl.add_theme_stylebox_override("normal", pill_style)
 	hbox_top.add_child(rarity_lbl)
 
-	# 「荐」推荐签（RecommendSystem 在 roll_alloc_offers 里按角色+构筑打分写入 offer）：
-	# 签是子节点，宿主 _select_card 重写卡体 stylebox 碰不到它；点按弹推荐理由，不影响选中逻辑
-	if bool(data.get("recommended", false)):
-		var rec_lbl := Label.new()
-		rec_lbl.name = "RecommendBadge"
-		rec_lbl.text = " 荐 "
-		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rec_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE))
-		hbox_top.add_child(rec_lbl)
-		GameStyle.label(rec_lbl, 11, GameStyle.INK_TEXT)
-		GameStyle.hotzone(rec_lbl)
-		GameStyle.tap(rec_lbl, func() -> void: dialog.open_recommend_tip(rec_lbl, data))
+	# 道途签（超级悟道专属）：显示「是否延续上次的道」与所属道途。
+	# 普通悟道 payload 没有 lane_label，这里整段不渲染，行为零变化。
+	# 文案形如「剑道·新道」/「雷法·延续」/「共鸣」，一行读得出「这次选它意味着什么」。
+	var lane_text := String(data.get("lane_label", ""))
+	var lane_chip_text := String(data.get("lane_chip", ""))
+	if not lane_text.is_empty() or not lane_chip_text.is_empty():
+		var lane_lbl := Label.new()
+		lane_lbl.name = "LaneBadge"
+		lane_lbl.text = " %s " % ("%s·%s" % [lane_text, lane_chip_text]
+			if not lane_text.is_empty() and not lane_chip_text.is_empty()
+			else (lane_text if not lane_text.is_empty() else lane_chip_text))
+		lane_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lane_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.PAPER_DIM))
+		hbox_top.add_child(lane_lbl)
+		GameStyle.label(lane_lbl, 11, GameStyle.NAVY)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -222,7 +225,7 @@ static func _append_benefit_row(dialog: LevelUpDialog, vbox: VBoxContainer,
 		benefited: Array, inner_w: float, data: Dictionary) -> void:
 	var n_bf := benefited.size()
 	var cap_lbl := Label.new()
-	cap_lbl.text = GameStyle.wrap_cjk("受益装备 · 点按看详情", GameStyle.body_font(), 11, inner_w)
+	cap_lbl.text = "受益装备"
 	cap_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap_lbl.custom_minimum_size = Vector2(inner_w, 0)
 	cap_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

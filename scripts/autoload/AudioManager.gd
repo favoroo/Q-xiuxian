@@ -89,6 +89,8 @@ const SFX_GAP_MS := {
 	"blade_shoot": 25,
 	"talisman_throw": 25,
 	"thunder_strike": 40,
+	"explosion_boom": 90,
+	"sword_qi_wave": 120,
 	"fan_gust": 35,
 	"orb_hit": 50,
 	# 器型族。取值原则：① 同族两把武器同帧齐射要合并成一声（防糊）
@@ -295,6 +297,9 @@ func _load_audio_assets() -> void:
 	_register_sfx("blade_shoot", _sfx_paths("blade_shoot", 2))
 	_register_sfx("talisman_throw", _sfx_paths("talisman_throw", 2))
 	_register_sfx("thunder_strike", _sfx_paths("thunder_strike", 2))
+	# 超级悟道二阶段神通演出（血祭尸爆 / 万剑归宗剑气）
+	_register_sfx("explosion_boom", _sfx_paths("explosion_boom", 2))
+	_register_sfx("sword_qi_wave", _sfx_paths("sword_qi_wave", 2))
 	_register_sfx("fan_gust", _sfx_paths("fan_gust", 2))
 	_register_sfx("orb_hit", _sfx_paths("orb_hit", 2))
 	# 器型族（近战双层：前摇 whoosh + 命中 impact；雷法双层：施法 sfx + 落点 sfx_impact）

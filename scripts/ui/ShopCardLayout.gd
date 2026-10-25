@@ -39,9 +39,10 @@ static func panel_h_for(screen_h: float, min_h: float = 420.0, pad_y: float = 24
 	return maxf(min_h, screen_h - pad_y)
 
 ## 滚动区左右要留的白：卡片斜切画出来的角比布局盒左右各宽 |skew|·h/2。
-## 加 2.0 像素防边缘截断。
+## 另保证留出选中放大与阴影余量（至少 8px），防边缘截断。
 static func card_pad_x(card_skew_rad: float, h: float) -> float:
-	return ceilf(absf(card_skew_rad) * h * 0.5) + 2.0
+	var skew_pad := ceilf(absf(card_skew_rad) * h * 0.5)
+	return maxf(skew_pad, 8.0) + 2.0
 
 ## 卡片里文字可用的宽（卡宽 - 两头内边距）
 static func card_inner_w(card_w: float, pad_x: float) -> float:

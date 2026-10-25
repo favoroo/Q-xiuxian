@@ -85,13 +85,7 @@ func _setup_header_bar() -> void:
 
 func show_select() -> void:
 	_transitioning = false
-	var cdef: Dictionary = CultivatorData.get_def(GameManager.cultivator_id)
-	var cname: String = String(cdef.get("name", ""))
-	var cepi: String = String(cdef.get("epithet", ""))
-	if not cname.is_empty():
-		sub_label.text = "已选角色 · %s「%s」 · 选择一个技能" % [cname, cepi]
-	else:
-		sub_label.text = "选择一个技能辅助战斗"
+	sub_label.text = "选择一个技能辅助战斗"
 	for child in cards_container.get_children():
 		child.queue_free()
 	_card_w = card_w_for(get_viewport_rect().size.x, SkillData.OFFER_IDS.size())

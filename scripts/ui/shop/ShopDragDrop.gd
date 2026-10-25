@@ -110,6 +110,14 @@ func register_slot(node: Control, src: Dictionary) -> void:
 func is_dragging() -> bool:
 	return not _drag.is_empty()
 
+## 宿主是否还看得见：WaveShop 是 UILayer 里的顶层（visible 即可），作者模式的商店视图
+## 则是面板里的子页 —— 面板一关它自己 visible 仍为 true，必须看「在树里显示」这一条。
+func _host_alive() -> bool:
+	var host: Control = _shop as Control
+	if host == null or not is_instance_valid(host):
+		return false
+	return host.is_visible_in_tree()
+
 ## 判据读数：幽灵图标画出来的矩形（没拎着返回空矩形）
 func ghost_rect() -> Rect2:
 	if _ghost == null or not is_instance_valid(_ghost):
@@ -158,8 +166,11 @@ func _press_cancel() -> void:
 	_press = {}
 
 func _input(event: InputEvent) -> void:
-	# 商店已关（出战的瞬间等）：把没结的手势就地结清，不许再吞玩家输入
-	if not _shop.visible:
+	# 宿主已关（出战的瞬间、作者面板被收起等）：把没结的手势就地结清，不许再吞玩家输入。
+	# 判 is_visible_in_tree() 而不是 visible：作者模式里的商店视图是面板的一个子页，面板一关
+	# 它自己的 visible 仍是 true（只是不在树里画出来），光看 visible 会漏判 ⇒ _drag 卡死后
+	# _input 持续 set_input_as_handled，整局点哪儿都没反应。
+	if not _host_alive():
 		if not _drag.is_empty() or not _press.is_empty():
 			_cancel_all()
 		return

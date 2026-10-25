@@ -458,6 +458,30 @@ SFX = {
                    tone(b, wtype="triangle", f0=185, f1=55, dur=0.19, peak=0.20),
                    noise(b, dur=0.24, peak=0.14, ftype="lowpass", f0=1700, f1=150, q=1.1)),
     ],
+    # 尸爆炸响（2026-10-25 血祭盛宴重做）：轰头 + 碎裂 + 气浪尾。低频轰头走 sat_tone
+    # 把能量搬进手机外放能出的 400~800Hz（同打击族铁律），sub 只给能放低频的设备垫底。
+    "explosion_boom": [
+        lambda b: (noise(b, dur=0.006, peak=0.14, ftype="highpass", f0=5200, atk=0.0004),
+                   noise(b, dur=0.16, peak=0.30, ftype="lowpass", f0=2600, f1=240, q=0.9, atk=0.001),
+                   sat_tone(b, f0=420, f1=120, dur=0.16, peak=0.30, atk=0.001, drive=3.6),
+                   tone(b, wtype="sine", f0=110, f1=34, dur=0.30, peak=0.26, atk=0.003),
+                   noise(b, dur=0.34, peak=0.12, ftype="lowpass", f0=900, f1=120, q=0.8, atk=0.01)),
+        lambda b: (noise(b, dur=0.005, peak=0.13, ftype="highpass", f0=4600, atk=0.0005),
+                   noise(b, dur=0.19, peak=0.28, ftype="bandpass", f0=1800, f1=300, q=1.0, atk=0.0015),
+                   sat_tone(b, f0=360, f1=100, dur=0.18, peak=0.30, atk=0.001, drive=3.8),
+                   tone(b, wtype="sine", f0=96, f1=30, dur=0.34, peak=0.27, atk=0.004),
+                   noise(b, dur=0.30, peak=0.11, ftype="lowpass", f0=800, f1=110, q=0.9, atk=0.012)),
+    ],
+    # 剑气冲击波（万剑归宗）：环状剑气不是「前摇破空」也不是「刃入肉」——金属擦亮上扫
+    # + 宽幅气流 + 刃芒 shimmer，与 whoosh_heavy（纯气流）拉开身份。
+    "sword_qi_wave": [
+        lambda b: (fm_tone(b, f0=1400, f1=2400, dur=0.12, peak=0.16, ratio=2.2, idx0=2.6, idx1=0.3, atk=0.004),
+                   noise(b, dur=0.16, peak=0.20, ftype="bandpass", f0=900, f1=3800, q=0.8, atk=0.004),
+                   shimmer(b, f0=2800, f1=4200, dur=0.14, peak=0.05, t0=0.05)),
+        lambda b: (fm_tone(b, f0=1200, f1=2100, dur=0.13, peak=0.15, ratio=2.5, idx0=2.4, idx1=0.28, atk=0.005),
+                   noise(b, dur=0.15, peak=0.19, ftype="bandpass", f0=1100, f1=3400, q=0.9, atk=0.005),
+                   shimmer(b, f0=2500, f1=3900, dur=0.13, peak=0.045, t0=0.055)),
+    ],
     "fan_gust": [
         lambda b: (noise(b, dur=0.24, peak=0.16, ftype="bandpass", f0=520, f1=1950, q=0.6),
                    noise(b, dur=0.26, peak=0.09, ftype="lowpass", f0=1400, f1=320, q=0.8)),
@@ -963,6 +987,10 @@ TARGET_PEAK = {
     "metal_dart": 0.34,
     "flame_jet": 0.36,
     "drum_boom": 0.55,
+    # 尸爆与剑气（2026-10-25）：爆炸要穿透 BGM 与打击群读「炸开了」，贴近雷击档；
+    # 剑气是 3 刀一次的节拍音，压在命中层之下
+    "explosion_boom": 0.58,
+    "sword_qi_wave": 0.42,
     "flute_wave": 0.48,
     "drone_flutter": 0.26,
     "drone_chime": 0.28,

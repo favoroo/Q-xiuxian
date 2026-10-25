@@ -20,6 +20,10 @@ signal author_requested
 ## 顶栏/卡片行/操作条三排，白占的 36 单位全落到 CardScroll。细账见 _setup_top_bar 头注，
 ## 判据 tests/LayoutCheck.tscn 的 _check_levelup_rows 钉住。
 ##
+## 2026-10-25 用户：「这个提示看不清，没什么作用，去掉」。顶栏那颗回合徽条（第 N 回合结束 ·
+## 连升/已完成）整体下线 —— 剩余点数由圆形徽记表达、回合数战斗 HUD 有；超级悟道的道途进度
+## 挪进底部机制说明签（SuperAllocDialog._update_gate_label），那是它唯一的读数位。
+##
 ## 2026-10-09 用户真机图：「两边有点溢出了，选中的那个卡片上下也有点溢出了」。
 ## 两头出屏：旧算术把「屏幕宽 - 面板占位」全分给 5 张卡 ⇒ 面板布局盒正好贴住屏幕左右边，
 ##   而它是斜切平行四边形（引擎绕布局盒竖直中线居中斜切），画出来的两个角各伸出 13.5 单位，
@@ -74,7 +78,7 @@ const BF_CELL_MAX := 30.0
 const BF_CELL_PAD := 3.0
 ## 格间缝（HFlowContainer 的 h/v_separation）
 const BF_CELL_GAP := 3
-## 幅度行下面那行「当前 X → Y」预读小字的字号：与「受益装备 · 点按看详情」同一档（11），
+## 幅度行下面那行「当前 X → Y」预读小字的字号：与卡上「受益装备」小字同一档（11），
 ## 是注脚不是正文。窄屏放不下时由 wrap_cjk 在箭头处切行，不砍字也不压字号。
 const FORECAST_FONT := 11
 
@@ -90,12 +94,9 @@ const FORECAST_FONT := 11
 @onready var cards_pad: MarginContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad
 @onready var cards_container: HBoxContainer = $CenterContainer/Panel/MarginContainer/VBox/CardScroll/CardsPad/CardsContainer
 @onready var title_label: Label = $CenterContainer/Panel/MarginContainer/VBox/TitleBand/TitleLabel
-@onready var info_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/InfoBand
-@onready var info_label: Label = $CenterContainer/Panel/MarginContainer/VBox/InfoBand/InfoLabel
 @onready var reroll_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/RerollButton
 @onready var confirm_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/ConfirmButton
-@onready var gate_label: Label = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/GateLabel
-## 顶栏（代码建，见 _setup_top_bar）：标题带 + 点数徽记 + 回合状态条 + 两颗键。
+## 顶栏（代码建，见 _setup_top_bar）：标题带 + 点数徽记 + 两颗键。
 ## 判据 LayoutCheck 现读这一排的 combined_minimum_size 核对「摆得下」，别处不再抄宽度。
 var top_bar: HBoxContainer = null
 
@@ -109,6 +110,8 @@ var _points_badge: PanelContainer = null
 var _points_label: Label = null
 var _badge_tween: Tween = null
 var _author_btn: Button = null
+## 暂停键长按作者模式彩蛋的助手句柄（_on_pause_pressed 收口松手用）
+var _pause_author_hold: HudAuthorHold = null
 var _last_pending: int = -1
 
 ## 保存每张卡片的组件引用以便切换选中/未选中视觉状态
@@ -177,8 +180,6 @@ func _ready() -> void:
 	panel.add_to_group(DawnJoystick.UI_PRESS_HOLD_GROUP)
 	_setup_top_bar()
 	GameStyle.label(title_label, 22, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-	GameStyle.label(info_label, 13, GameStyle.PAPER_DIM)
-	GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	GameStyle.button(reroll_btn, GameStyle.NAVY2, GameStyle.LINE, 14, GameStyle.PAPER)
 	GameStyle.button(confirm_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 16, GameStyle.INK_TEXT, 6.0)
 	# 这一屏现在真的要靠手指划（卡高超出滚动区）⇒ 那根滚动条得看得见、像游戏里的东西：
@@ -189,13 +190,10 @@ func _ready() -> void:
 	GameManager.alloc_opened.connect(_on_alloc_opened)
 	GameManager.alloc_finished.connect(_on_alloc_finished)
 
-## 顶栏：左侧标题色块 + 点数徽记 + 回合状态条，右侧「属性」与「暂停」按钮（与金币阁同一布局口径）。
-## 2026-10-22 用户真机（第 3 回合那屏）：「中间这个黑色的一行移到上面一点显示，不要单独站
-## 一行，把空间留给下面加点卡片显示」。原先「第 N 回合结束 · 待加点 X 次」是 VBox 里独立的一整排
-## 黑底带（LayoutCheck 量出 y 80~108 = 28 高 + 缝隙 8 = 白占 36 单位），卡片行于是被挤矮。
-## 现在把同一串读数并进顶栏，做成标题右边那颗小徽条（金币阁顶栏把「备战/金币」摆在同一排，
-## 这一屏照同一把尺子走），VBox 只剩顶栏 / 卡片行 / 操作条三排，36 单位全数还给卡片。
-## 摆得下由判据现量（_check_levelup_rows：同一排 + 只剩三排 + 整排最小宽 ≤ 面板内容宽）。
+## 顶栏：左侧标题色块 + 点数徽记，右侧「属性」与「暂停」按钮（与金币阁同一布局口径）。
+## 2026-10-22 用户真机：回合状态条从独立一排并进顶栏，省出 36 单位给卡片行；
+## 2026-10-25 用户：「这个提示看不清，没什么作用，去掉」——徽条整体下线，VBox 只剩
+## 顶栏/卡片行/操作条三排。摆得下由判据现量（_check_levelup_rows：三排 + 整排最小宽 ≤ 面板内容宽）。
 func _setup_top_bar() -> void:
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
 	var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
@@ -251,13 +249,6 @@ func _setup_top_bar() -> void:
 	)
 	top_bar.add_child(_points_badge)
 
-	# 状态条并进顶栏（用户 2026-10-22：别单独站一行，把高还给卡片）。贴着徽记走，
-	# 与金币阁 TopBar 同一读法：左边「这是什么 + 还剩几点」，右边留给两颗键。
-	vbox.remove_child(info_band)
-	info_band.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	info_band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top_bar.add_child(info_band)
-
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -280,8 +271,10 @@ func _setup_top_bar() -> void:
 	pause_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pause_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 4.0, GameStyle.INK_TEXT)
-	pause_btn.pressed.connect(func(): pause_requested.emit())
+	pause_btn.pressed.connect(_on_pause_pressed)
 	top_bar.add_child(pause_btn)
+	# 长按 2 秒切作者模式（与战斗 HUD / 首页设置徽章同一彩蛋）：松手那一下由 consume_press 吃掉
+	_pause_author_hold = HudAuthorHold.attach(self, pause_btn)
 
 	# 作者模式按钮：只在作者模式开启时出现，插在「属性」左边
 	_author_btn = Button.new()
@@ -302,6 +295,13 @@ func _setup_top_bar() -> void:
 func _on_author_mode_changed(_enabled: bool) -> void:
 	if _author_btn != null and is_instance_valid(_author_btn):
 		_author_btn.visible = GameManager.author_mode
+
+## 暂停键 pressed 收口：长按刚触发过作者模式切换时，这一下松手只做收尾（不开暂停菜单）。
+## 键盘 Esc 走 _unhandled_input 直发 pause_requested，不过这里（键盘没有长按入口）。
+func _on_pause_pressed() -> void:
+	if _pause_author_hold != null and _pause_author_hold.consume_press():
+		return
+	pause_requested.emit()
 
 func _show_points_tip() -> void:
 	if _points_badge == null:
@@ -395,25 +395,6 @@ func _layout_for_viewport() -> void:
 	content_margin.add_theme_constant_override("margin_left", side)
 	content_margin.add_theme_constant_override("margin_right", side)
 
-## 顶栏留给状态条的宽 = 面板内容宽 - 这一排其它控件各自要的最小宽 - 每一道的缝隙 - 状态条自己的边距。
-## 全部现读，别处不抄数字：标题带的最小宽由它自己的 stylebox 内边距/描边决定，徽记与两颗键各按
-## custom_minimum_size，缝隙读 top_bar 的 separation，边距读 info_band 的 stylebox。
-## 弹开用的 spacer 最小宽是 0，但它的缝隙照扣 —— 少扣一道就会把右边的「属性/暂停」挤出面板。
-func _info_room_w() -> float:
-	if top_bar == null or info_band == null:
-		return 120.0
-	var room: float = panel_inner_w(get_viewport().get_visible_rect().size)
-	var sep: float = float(top_bar.get_theme_constant("separation"))
-	for ch in top_bar.get_children():
-		if ch != info_band:
-			room -= (ch as Control).get_combined_minimum_size().x
-		room -= sep
-	var sb: StyleBoxFlat = info_band.get_theme_stylebox("panel") as StyleBoxFlat
-	if sb != null:
-		room -= sb.content_margin_left + sb.content_margin_right \
-			+ float(sb.border_width_left) + float(sb.border_width_right)
-	return maxf(60.0, room)
-
 # ---------------- 一屏候选 ----------------
 
 ## 供 Main 在作者面板改等级/加点后调用：点数与顶栏文案当场重画。
@@ -445,45 +426,28 @@ func _card_columns() -> int:
 
 func _refresh_bars() -> void:
 	var pending: int = GameManager.pending_upgrade_points
-	var total: int = GameManager.alloc_points_total
 	if _points_label != null:
 		_points_label.text = str(maxi(pending, 0))
 		if _last_pending >= 0 and pending < _last_pending and pending > 0:
 			_pulse_points_badge()
 	_last_pending = pending
 
-	var head: String = "第 %d 回合结束" % maxi(GameManager.wave_number, 1)
-	if total > 1:
-		head += " · 本回合连升 %d 级 · 剩余加点 %d 次" % [total, pending]
-	elif total == 1:
-		head += " · 待加点 1 次"
-	else:
-		head += " · 升级已完成"
+	# 顶栏回合徽条已下线（2026-10-25）：剩余点数由上面那颗圆形徽记表达，
+	# 连升几次点徽记弹详解可查，回合数战斗 HUD 有 —— 这里不再重复一遍看不清的读数。
 	title_label.text = "升 级 加 点"
-	# 顶栏这一排摆不下时按「顶栏剩下的宽」切硬换行（引擎 AUTOWRAP 在中文真机上不可靠），
-	# 平时是一行、白占的那一整排全给了卡片。尺子现读，与判据 _check_levelup_rows 同一口径。
-	info_label.text = GameStyle.wrap_cjk(head, GameStyle.body_font(), 13, _info_room_w())
 	reroll_btn.text = GameManager.alloc_reroll_label()
 	reroll_btn.disabled = not GameManager.can_reroll_alloc() or pending <= 0
 	_update_confirm_btn()
-	_update_gate_label()
 
 func _update_confirm_btn() -> void:
 	confirm_btn.text = "确认选择 ★"
 	confirm_btn.disabled = selected_index < 0 or not _can_interact or _is_confirming
 	confirm_btn.custom_minimum_size = Vector2(148, 44)
 
-## 底部这条读数把「选了哪一条」与「还剩几点」都摆在明面上（触屏无 hover，点了就得看得见）
+## 底部不再放「已选/还剩几点」读数：选中态由卡片金框 +「已选 ★」角标表达，剩余点数由顶栏徽记表达。
+## 普通悟道空实现；_select_card 里的调用必须保留——超级悟道子类继承选卡流程、重写本钩子放机制说明。
 func _update_gate_label() -> void:
-	var pending: int = GameManager.pending_upgrade_points
-	var rest := "还剩 %d 点未加" % pending if pending > 0 else "点已加完 · 稍候进商店"
-	if selected_index < 0 or selected_index >= _offers().size():
-		gate_label.text = "点中一张卡，再按右侧「确认选择」 · %s" % rest
-		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
-	else:
-		gate_label.text = "已选【%s】 · %s" % [
-			_offers()[selected_index].get("title", "?"), rest]
-		GameStyle.label(gate_label, 13, GameStyle.JADE_DK)
+	pass
 
 func _populate_cards() -> void:
 	# 整批重建前先收掉摊在暗底下的旧详情卡：它还挂在 self 上，不收就会停在新那一屏后面
@@ -507,7 +471,7 @@ func _populate_cards() -> void:
 	# 卡体是 PanelContainer（mouse_filter 默认 STOP），会把 CardScroll 起手锁定手指拖动要的
 	# 那一拍就地吃掉、不再向上冒泡 ⇒ 卡盖住多大面积就滑不动多大面积。
 	# 用户 2026-10-12 真机：「手在卡片上面去滑动是滑不动的，要挪到侧面没有卡片遮挡的地方才能滑」。
-	# 卡里那排受益装备图标与「荐」签也一起降成 PASS（否则它们各自是一小块划不动的死区）：
+	# 卡里那排受益装备图标也一起降成 PASS（否则它们各自是一小块划不动的死区）：
 	# 点它们仍只弹详解、不选卡，靠的是 GameStyle.tap 的「只兑现最里一层」认领，见那里。
 	GameStyle.swipeable(cards_container)
 
@@ -517,7 +481,7 @@ static func _center_pivot(c: Control) -> void:
 		c.pivot_offset = c.size * 0.5
 
 ## 卡片装配整体在 ui/levelup/LevelUpCardFactory（与商店 ShopOfferCardFactory 同构）：
-## 本文件只留面板流程（摆位/选中/刷新/确认），卡内交互经下面三个入口调回。
+## 本文件只留面板流程（摆位/选中/刷新/确认），卡内交互经下面两个入口调回。
 func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) -> Dictionary:
 	return LevelUpCardFactory.create_card(self, data, index, _card_w, forecast)
 
@@ -525,13 +489,6 @@ func _create_card_entry(data: Dictionary, index: int, forecast: StatForecast) ->
 func on_card_tapped(index: int) -> void:
 	if _can_interact and not _is_confirming:
 		_select_card(index)
-
-## 工厂回调：点「荐」签 = 看推荐理由（统一走 RecommendTip，与商店货架卡同一张卡）。
-## 理由是打分那一刻生成的只读快照（offer.recommend_reasons），不在 UI 里二次推算。
-func open_recommend_tip(anchor: Control, data: Dictionary) -> void:
-	if not _can_interact or _is_confirming:
-		return
-	RecommendTip.open(self, anchor, data.get("recommend_reasons", []), float(data.get("recommend_score", 0.0)))
 
 ## 点「受益装备」那一排的图标 = 看这件装备的详解，纯只读：不许顺手把这张卡选中
 ## （看东西这个动作不改写状态；选中仍要走卡体那一下 + 底部「确认选择」）。
@@ -552,7 +509,6 @@ func open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 	StatsTipFactory.open_weapon_tip(self, anchor, w, false, note)
 
 ## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ★」，未选中的退回「×层数」。
-## 底部 gate_label 同时把「已选【名字】+ 还剩几点」写在明面上。
 func _select_card(index: int) -> void:
 	if index < 0 or index >= _offers().size():
 		return

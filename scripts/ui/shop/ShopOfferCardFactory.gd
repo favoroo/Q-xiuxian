@@ -28,7 +28,7 @@ static func create_card(shop, offer: Dictionary, index: int, total_count: int = 
 	# 行①：图标与名号同行（附拥有数量/星级分布；★2 成品在图标框右下再挂 ★n）
 	vbox.add_child(_create_card_head(shop, offer, card_w, data.kind, data.title, data.icon_path, String(data.get("owned_text", "")), data.w_id, int(data.get("star", 1))))
 	# 行②：色签流 + 锁定开关同行
-	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.rec_reasons, data.tag_keys, data.w_id))
+	vbox.add_child(_create_card_tag_row(shop, offer, index, sold, data.tag, data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot, data.merge_ready, data.behavior_chip, data.tag_keys, data.w_id))
 	# 行③：加成行块（土豆兄弟式：伤害置顶 / 道具逐条加成，正绿负红）+ 机制·特性说明
 	var stat_rows: Array = data.stat_rows
 	if not stat_rows.is_empty():
@@ -94,9 +94,6 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 	# 商品自身的星级：只有武器会带 ★2（货架从 STAR2_UNLOCK_WAVE 起可能刷出直购成品），
 	# 其余货类恒 ★1 —— 卡面读数、合成角标、★2 标记全部按这一个数走，别在下面各写一份。
 	var star: int = clampi(int(offer.get("star", 1)), 1, WeaponData.MAX_STAR)
-	# 「荐」推荐标（RecommendSystem 在 roll_shop 里打分写入 offer）：已售出的格子不再亮标
-	var recommended: bool = bool(offer.get("recommended", false)) and not bool(offer.get("sold", false))
-	var rec_reasons: Array = offer.get("recommend_reasons", [])
 
 	if is_potion:
 		title = "回复药"
@@ -217,11 +214,7 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 		if not card_feats.is_empty():
 			stat_rows.append(["特性", card_feats, GameStyle.PAPER_DIM])
 
-	# 推荐位亮边：只在没有更具体边色语义时把中性深蓝底边提亮一档
-	# （临门一档的 JADE 边、道具档位边、药水边都保留原语义，「荐」签足以表达）
-	if recommended and edge_color == GameStyle.GOLD_DK:
-		edge_color = GameStyle.GOLD_EDGE
-	# ★2 成品同享亮边：高星货必须一眼跳出来；中性边才提亮，JADE「临门一档」语义优先
+	# ★2 成品亮边：高星货必须一眼跳出来；中性边才提亮，JADE「临门一档」语义优先
 	if star >= 2 and edge_color == GameStyle.GOLD_DK:
 		edge_color = GameStyle.GOLD_EDGE
 
@@ -232,7 +225,6 @@ static func resolve_offer_data(offer: Dictionary, forecast: StatForecast = null,
 		"part_hot": part_hot, "desc": desc, "stat_rows": stat_rows, "merge_ready": merge_ready,
 		"chip_color": chip_color, "chip_text_color": chip_text_color,
 		"edge_color": edge_color, "behavior_chip": behavior_chip,
-		"recommended": recommended, "rec_reasons": rec_reasons,
 		"owned_text": owned_text,
 	}
 
@@ -297,10 +289,6 @@ static func _row_fits(name_txt: String, val_txt: String, row_w: float = -1.0) ->
 			+ GameStyle.line_max_w(val_txt, body, 12) + 4.0
 	var budget: float = row_w if row_w > 0.0 else WaveShop.card_inner_w(WaveShop.CARD_W_MIN)
 	return need <= budget
-
-## 点「荐」签 = 看推荐理由：统一走 RecommendTip（与悟道卡同一张卡，不再各留一份实现）。
-static func _open_recommend_tip(host: Control, anchor: Control, reasons: Array, offer: Dictionary) -> void:
-	RecommendTip.open(host, anchor, reasons, float(offer.get("recommend_score", 0.0)))
 
 ## 把一颗色签登记成「点得动、且判据认得出它该弹哪张卡」。
 ## hotzone 负责收「按下」那一拍：外层 GameStyle.swipeable 随后会把它降成 PASS，
@@ -422,11 +410,10 @@ static func _create_card_head(shop, offer: Dictionary, card_w: float, kind: Stri
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关
 ## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）；
-## rec_reasons 非空时最先挂「荐」推荐签（点按弹推荐理由）
 ## 每一颗色签都点得出解释（2026-10-11 用户：「点击也要弹出来对应的解释，加成怎么样加成哪些」）：
 ## chip_tips 与 chip_defs 同序，{} 表示这颗没解释可看（回复药/道具的档位签）。
 ## 热区挂在签上、锚点也回送签本身：这两件事在 HUD 那批徽记上栽过一次（lambda 按值捕获 null）。
-static func _create_card_tag_row(shop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], rec_reasons: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
+static func _create_card_tag_row(shop, offer: Dictionary, index: int, sold: bool, tag: String, chip_color: Color, chip_text_color: Color, tag_parts: Array, part_hot: Array, merge_ready: bool = false, behavior_chip: Array = [], tag_keys: Array = [], w_id: String = "") -> HBoxContainer:
 	var tag_row := HBoxContainer.new()
 	tag_row.name = "TagRow"
 	tag_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -441,21 +428,7 @@ static func _create_card_tag_row(shop, offer: Dictionary, index: int, sold: bool
 	tag_flow.add_theme_constant_override("v_separation", 2)
 	tag_row.add_child(tag_flow)
 
-	# 「荐」推荐签：摆在整排色签最前（推荐是这张卡最要紧的一句话），点按看理由
-	if not rec_reasons.is_empty():
-		var rec_lbl := Label.new()
-		rec_lbl.name = "RecommendBadge"
-		rec_lbl.text = " 荐 "
-		rec_lbl.custom_minimum_size = Vector2(GameStyle.compact_chip_pin_w(" 荐 ", GameStyle.body_font(), 10), 0)
-		rec_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		rec_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rec_lbl.add_theme_stylebox_override("normal", GameStyle.compact_chip(GameStyle.JADE))
-		tag_flow.add_child(rec_lbl)
-		GameStyle.label(rec_lbl, 10, GameStyle.INK_TEXT)
-		_mark_chip_tappable(rec_lbl, {"kind": "recommend"})
-		GameStyle.tap(rec_lbl, func() -> void: _open_recommend_tip(shop, rec_lbl, rec_reasons, offer))
-
-	# ★2 成品签：摆在「荐」之后、攻击方式之前 —— 它说的是「这件货本身是什么」，
+	# ★2 成品签：摆在攻击方式之前 —— 它说的是「这件货本身是什么」，
 	# 比流派进度更先决。主题色底（跟随换肤）+ 墨字，点按讲清「星级分开计数」这条关键规则：
 	# ★1 与 ★2 各算各的三合一，3 件 ★2 才合 ★3（合并轨道不同，买错星等于白花钱）。
 	var offer_star := clampi(int(offer.get("star", 1)), 1, WeaponData.MAX_STAR)

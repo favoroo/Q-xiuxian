@@ -332,10 +332,20 @@ static func poison_tick_damage(poison_dps: float, elemental_damage: float) -> fl
 
 const KILL_EXPLODE_IMPULSE := 110.0     ## 爆炸震退冲量基数（再乘玩家击退属性）
 const KILL_EXPLODE_ELEM_COEF := 1.5     ## 元素伤害对爆炸的成长系数
+## 尸爆口径（2026-10-25 血祭盛宴重做）：HP% 部分的随波封顶 —— 防 Boss 十万血炸出天文数字
+const KILL_EXPLODE_HP_CAP_BASE := 400.0
+const KILL_EXPLODE_HP_CAP_GROWTH := 1.14
 
-## 击杀爆炸伤害 = 道具基数（ItemData 额外字段 kill_explode）+ 元素成长；半径在 kill_explode_radius
-static func kill_explode_damage(base: float, elemental_damage: float) -> float:
-	return maxf(0.0, base) + maxf(0.0, elemental_damage) * KILL_EXPLODE_ELEM_COEF
+## 击杀爆炸伤害 = 道具基数（ItemData 额外字段 kill_explode）+ 元素成长
+## + 被杀敌人最大生命 × hp_ratio（血祭盛宴的尸爆口径，封顶随波复利；普通裂魂铃 hp_ratio=0 不吃这条）。
+## 半径在 kill_explode_radius。
+static func kill_explode_damage(base: float, elemental_damage: float,
+		killed_max_hp: float = 0.0, hp_ratio: float = 0.0, wave: int = 1) -> float:
+	var dmg := maxf(0.0, base) + maxf(0.0, elemental_damage) * KILL_EXPLODE_ELEM_COEF
+	if hp_ratio > 0.0 and killed_max_hp > 0.0:
+		var cap := KILL_EXPLODE_HP_CAP_BASE * pow(KILL_EXPLODE_HP_CAP_GROWTH, float(maxi(wave, 1) - 1))
+		dmg += minf(killed_max_hp * hp_ratio, cap)
+	return dmg
 
 # ---------------- 震退方向 ----------------
 

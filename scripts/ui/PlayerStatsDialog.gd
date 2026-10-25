@@ -71,7 +71,6 @@ var _items_scroll: ScrollContainer
 var _items_flow: HFlowContainer
 var _history_scroll: ScrollContainer
 var _history_list: VBoxContainer
-var _history_count_lbl: Label
 var _current_bottom_tab: int = 0 # 0 = 随身道具, 1 = 悟道历程
 
 func _get_title_text() -> String:
@@ -103,12 +102,6 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	_meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_meta_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_tab_bar.add_child(_meta_label)
-
-	var hint_lbl := Label.new()
-	hint_lbl.text = "点任意条目查看加成拆解"
-	GameStyle.label(hint_lbl, 11, GameStyle.GREY)
-	hint_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_tab_bar.add_child(hint_lbl)
 
 	# 主体内容：左右分栏
 	var body_hbox := HBoxContainer.new()

@@ -73,11 +73,11 @@ var _sound_badge_btn: Button
 var _top_set_btn: Button
 var _author_badge_btn: Button
 
-# —— 作者模式入口：右上设置徽章 3 秒内连点 5 次，或长按 3 秒 ——
+# —— 作者模式入口：右上设置徽章 3 秒内连点 5 次，或长按 2 秒 ——
 ## 不写存档（GameManager.author_mode 是会话成员），下次启动自然回普通模式。
 const AUTHOR_TAP_COUNT := 5
 const AUTHOR_TAP_WINDOW := 3.0
-const AUTHOR_HOLD_SEC := 3.0           ## 长按进入作者模式的按住秒数
+const AUTHOR_HOLD_SEC := 2.0           ## 长按进入作者模式的按住秒数
 var _author_taps: int = 0
 var _author_last_tap_ms: int = 0
 var _settings_hold_tween: Tween = null ## 长按倒数计时（运行中即表示「正按住」）
@@ -995,7 +995,7 @@ func _on_settings_pressed() -> void:
 		return
 	settings_requested.emit()
 
-## 右上设置徽章专属的 pressed 收口：长按 3 秒刚触发过作者模式切换时，
+## 右上设置徽章专属的 pressed 收口：长按刚触发过作者模式切换时，
 ## 这一下松手只做收尾（不开设置、不计连点），否则按满 3 秒还会再弹设置面板。
 func _on_top_set_pressed() -> void:
 	if _settings_hold_fired:

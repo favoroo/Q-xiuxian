@@ -1049,7 +1049,7 @@ static func band_wipe(host: Control, col: Color = GOLD) -> void:
 ## 越小的格子越该把地方让给图 ⇒ 角标整套撤掉，改用边框颜色。
 ## 为什么是边框：货架大卡的图标框早就是这一副语言（ShopOfferCardFactory._create_card_head），
 ## 同一屏里小格跟大卡说同一句话，玩家不用学第二遍。
-## 边框被更高优先级的状态占用时（选中/可合成/推荐）谁赢，由各调用点自己排；
+## 边框被更高优先级的状态占用时（选中/可合成）谁赢，由各调用点自己排；
 ## 元素是「这件的固有属性」，状态是「这一刻能对它做什么」，后者盖前者。
 static func is_elemental(weapon_id: String) -> bool:
 	return not weapon_id.is_empty() and WeaponData.elemental_scaling_coef(weapon_id) > 0.0

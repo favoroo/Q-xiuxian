@@ -460,11 +460,6 @@ func _build_controls_page() -> Control:
 	vbox.add_theme_constant_override("separation", 10)
 	scroll.add_child(vbox)
 
-	var tip := Label.new()
-	tip.text = "位置与大小在调整模式里改：点选后拖动，滑杆调大小，实时保存。"
-	GameStyle.label(tip, 12, GameStyle.PAPER_DIM)
-	vbox.add_child(tip)
-
 	_add_action_row(vbox, "按钮位置与大小", "点选技能键或祭坛键，拖动摆放、滑杆调大小",
 		"进入调整模式", _enter_btn_edit_mode, false)
 	_add_action_row(vbox, "恢复默认布局", "两个按钮的位置与大小一起回到出厂摆位",

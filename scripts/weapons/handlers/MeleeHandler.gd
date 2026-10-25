@@ -36,10 +36,15 @@ const MELEE_STRETCH_MAX := 2.0  ## 突刺随射程乘区的前突上限倍数（
 const MELEE_WHOOSH_SCALE := 1.0
 const MELEE_IMPACT_SCALE := 1.0    ## 压在 enemy_hit（0.56 峰值）之下，三层同帧才不糊（2026-10-22 抬到 1.0，配合材质声峰值 +8）
 
-## 近战判定圆半径 —— 弧光外缘与 deal_damage 的查询圆共用这一个数
+## 近战判定圆半径 —— 弧光外缘与 deal_damage 的查询圆共用这一个数。
+## 两个倍率叠乘：
+##   wide_range_mult（老的「开山重刃谱」口径，只对 wide 标签生效）
+##   melee_range_mult（2026-10-25 神通【剑气凌霄】，对所有近战/横扫无条件生效 → 范围翻倍）
 static func arc_radius(w) -> float:
 	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(w.weapon_def_id).has("wide") else 1.0
-	return MELEE_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus
+	# 走快照取整包：命中路径每刀都会调本函数，逐字段 item_hook_sum 会重复算 items.hash()
+	var qi_bonus: float = 1.0 + float(StatSystem.super_hook_snapshot(GameManager).get("melee_range_mult", 0.0))
+	return MELEE_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus * qi_bonus
 
 ## 打击帧前突倍数：范围叠得越高剑往前送得越远，剑才追得上外扩的剑气（上限 2 倍防乱飘）
 static func thrust_mult(w) -> float:
@@ -187,6 +192,9 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 	var any_proc: bool = proc_burn or proc_chill > 0.0 or proc_poison
 	var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
 	var can_flat_heal: bool = flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal")
+	# 机制快照整刀取一次（同刀最多 24 目标共用），循环内不再逐敌读 hook
+	var mech := OnHitEffects.snapshot()
+	var has_mech: bool = OnHitEffects.any_enabled()
 
 	for res in results:
 		var col = res["collider"]
@@ -216,6 +224,13 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 				# 开山重刃谱：近战命中额外吸收生命
 				if can_flat_heal:
 					player.heal(flat_ls, true)
+			# 超级悟道机制卡的命中后效果（五行轮转 / 天罚 / 万剑归宗计数）：
+			# 统一走 OnHitEffects，避免每加一张卡就要回来改这个 handler
+			if has_mech:
+				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)
+				if dmg_ratio >= 1.0:
+					w._sword_qi_charge = OnHitEffects.tick_sword_qi(
+						w, enemy.global_position, dmg, int(w._sword_qi_charge), mech)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
 	return hit_count

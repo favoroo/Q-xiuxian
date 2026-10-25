@@ -149,7 +149,8 @@ const DEFS: Dictionary = {
 				"damage_mult": 0.80,
 			},
 			"allowed_tags": [],
-			"locked_upgrades": ["armor_up"],
+			# 2026-10-25 补锁淬体：cons 承诺「护甲无法通过加点提升」，淬体（护甲+生命）是漏网之鱼
+			"locked_upgrades": ["armor_up", "temper"],
 			"extra_skill": "shadowburst",
 		},
 				"dubi": {

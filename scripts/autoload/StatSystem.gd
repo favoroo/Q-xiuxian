@@ -278,6 +278,44 @@ static func item_hook_sum(gm: Object, hook: String) -> float:
 	gm._hook_cache[hook] = total
 	return total
 
+## 超级悟道机制卡的 hook 快照（2026-10-25）：一次指纹校验取出全部机制读数。
+## 为什么要这一层：命中路径（近战每目标、弹丸每发、束流每 tick）要读 3~4 个 hook，
+## 逐个调 item_hook_sum 就是每命中一次算 3~4 遍 items.hash()。束流 tick 10+ 次/秒 ×
+## 多目标时会被放大成每秒上千次指纹计算（PerfProbe 的 12ms 预算里是实打实的开销）。
+## 这里按同一个指纹算一遍、整包缓存，命中路径只做字典查找。
+## 返回字典的键与下面的读取清单一一对应；新增机制字段记得加到这里。
+static func super_hook_snapshot(gm: Object) -> Dictionary:
+	var stamp: int = gm.items.hash()
+	if gm._super_hook_stamp == stamp and not gm._super_hook_snap.is_empty():
+		return gm._super_hook_snap
+	gm._super_hook_stamp = stamp
+	# 统一走一次 items 遍历，避免每个字段各扫一遍
+	var totals := {}
+	for item_id in gm.items:
+		var d := ItemData.get_def(String(item_id))
+		if d.is_empty():
+			continue
+		for k in SUPER_HOOK_KEYS:
+			if d.has(k):
+				totals[k] = float(totals.get(k, 0.0)) + float(d[k])
+	var snap := {}
+	for k in SUPER_HOOK_KEYS:
+		snap[k] = float(totals.get(k, 0.0))
+	gm._super_hook_snap = snap
+	return snap
+
+## 超级悟道机制字段清单（super_hook_snapshot 的键）。
+## 只收「命中/出手/受击高频路径」会读的字段；其余低频 hook 继续走 item_hook_sum。
+const SUPER_HOOK_KEYS: Array[String] = [
+	"wuxing_rotation_chance", "crit_sky_bolt", "projectile_chain_lightning",
+	"sword_qi", "attack_chain_lightning", "kill_chain_lightning",
+	"thorns_electric", "chain_hop_bonus", "melee_range_mult",
+	"projectile_count_bonus", "projectile_bounce_bonus", "projectile_damage_mult",
+	# 二阶段（2026-10-25）：箭雨 / 血盾 / 五行归一 / 兽群 / 灵蕴五行
+	"arrow_rain_every", "lifesteal_overflow_shield", "wuxing_all",
+	"pet_chain_lightning", "pet_wuxing_chance",
+]
+
 ## 站定流机制是否激活：苦行僧模式或任一站定流法宝在场。
 ## 结果只在道具变化时变，缓存随 item_hook_sum 同一套失效点。
 static func has_still_mechanic(gm: Object) -> bool:

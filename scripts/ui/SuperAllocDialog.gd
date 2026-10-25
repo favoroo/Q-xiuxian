@@ -3,12 +3,19 @@ extends LevelUpDialog
 
 ## 超级悟道面板（2026-10-25）：继承普通悟道的摆位/选中/防误触流程，只换候选来源与文案。
 ##
-## 五选一（3 张流派 + 2 张通用）、不可刷新；点卡只选中，底部「确认领悟」才落地
-## （与普通悟道同一条防误触口径）。场景 SuperAllocDialog.tscn 由 LevelUpDialog.tscn 派生，
-## Main 运行时挂到 UILayer 末尾（Main.tscn 是多 Agent 共享场景文件，不往里加节点）。
+## 「三道」体系：候选按道途出（剑道/箭道/雷法/体修/五行/灵兽），每张卡带阶段。
+## 第一次超级悟道只能开道；第二次必出「延续」（已行之道的下一阶段）+ 一张新道；
+## 第三次出大成，或手握两条道时出共鸣。一局三次形成一条线，上次选什么直接决定这次能选什么。
+## 不可刷新；点卡只选中，底部「确认领悟」才落地（与普通悟道同一条防误触口径）。
+## 场景 SuperAllocDialog.tscn 由 LevelUpDialog.tscn 派生，Main 运行时挂到 UILayer 末尾
+## （Main.tscn 是多 Agent 共享场景文件，不往里加节点）。
 ##
 ## 生命周期：super_alloc_opened → 亮面板；选完发 super_alloc_finished → 复用基类淡出；
 ## 面板收起后由 WaveSpawner 接着走普通悟道 / 金币阁。
+
+## 底部机制说明签：基类已删底部读数（普通悟道空实现钩子），本场景 tscn 独立完整、
+## GateLabel 节点仍在，这里自持引用并重写钩子，只放界面上没有的机制说明。
+@onready var gate_label: Label = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/GateLabel
 
 func _ready() -> void:
 	super._ready()
@@ -50,13 +57,22 @@ func _on_super_alloc_opened() -> void:
 	tw.tween_callback(func(): _can_interact = true)
 
 func _refresh_bars() -> void:
+	# 顶栏回合徽条已下线（2026-10-25，随基类一起）：回合数 HUD 有、「5 选 1」卡面自明，
+	# 已行道途进度改由底部说明签承载（_update_gate_label）。
 	title_label.text = "超 级 悟 道"
-	info_label.text = GameStyle.wrap_cjk(
-		"第 %d 回合 · 逆天神通 5 选 1 · 选定不可更改" % maxi(GameManager.wave_number, 1),
-		GameStyle.body_font(), 13, _info_room_w())
 	reroll_btn.visible = false
 	_update_confirm_btn()
 	_update_gate_label()
+
+## 已行道途一栏：「已行：雷法 ×2 · 箭道 ×1」；还没开道时返回空串。
+func _lane_progress_text() -> String:
+	var counts := SuperUpgradeData.lane_counts(GameManager)
+	var parts: PackedStringArray = []
+	for line_key in SuperUpgradeData.LINE_LABELS.keys():
+		var n := int(counts.get(String(line_key), 0))
+		if n > 0:
+			parts.append("%s ×%d" % [SuperUpgradeData.line_label(String(line_key)), n])
+	return "" if parts.is_empty() else "已行：%s" % " · ".join(parts)
 
 func _update_confirm_btn() -> void:
 	confirm_btn.text = "确认领悟 ★"
@@ -64,12 +80,17 @@ func _update_confirm_btn() -> void:
 	confirm_btn.custom_minimum_size = Vector2(148, 44)
 
 func _update_gate_label() -> void:
-	var list := _offers()
-	if selected_index < 0 or selected_index >= list.size():
-		gate_label.text = "点中一张卡，再按右侧「确认领悟」 · 流派卡按当前构筑挑选"
+	# 「已选哪张」由卡片金框 +「已选 ★」角标表达，不再回念；这里只留机制说明，
+	# 未选中时顺带挂已行道途进度（顶栏徽条下线后这是它唯一读数位，2026-10-25）。
+	if selected_index < 0 or selected_index >= _offers().size():
+		var progress := _lane_progress_text()
+		gate_label.text = "三次悟道各开一道，选定不可更改" if progress.is_empty() \
+			else "%s，选过的道途会延续出下一阶段" % progress
 		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	else:
-		gate_label.text = "已选【%s】 · 确认后本局永久生效" % String(list[selected_index].get("title", "?"))
+		var card: Dictionary = _offers()[selected_index]
+		var chip := String(card.get("lane_chip", ""))
+		gate_label.text = "确认后本局永久生效" if chip.is_empty() else "%s · 确认后本局永久生效" % chip
 		GameStyle.label(gate_label, 13, GameStyle.JADE_DK)
 
 ## 超级悟道不可刷新（按钮已隐藏，这里再兜一层防误触）

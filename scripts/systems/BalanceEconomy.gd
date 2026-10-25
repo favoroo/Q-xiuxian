@@ -350,7 +350,7 @@ static func weighted_pick_index(weights: Array, roll: float) -> int:
 # ---------------- 流派羁绊 ----------------
 
 ## 门槛下移后的阶梯表：逐档 -shift，下移后最低只到 1 件。
-## 「角色把某系门槛降低」这件事的唯一折算口——档位结算、卡面进度、徽记读数、推荐打分都必须走它，
+## 「角色把某系门槛降低」这件事的唯一折算口——档位结算、卡面进度、徽记读数都必须走它，
 ## 任何一处直接拿原表 thresholds 比大小，门槛 -1 的角色就会看到一套差一件的假进度。
 static func synergy_thresholds(thresholds: Array, threshold_shift: int = 0) -> Array:
 	var out: Array = []

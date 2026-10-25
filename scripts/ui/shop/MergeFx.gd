@@ -124,6 +124,11 @@ static func play_slots(host: Control, icon_path: String,
 		charge = ChargeFx.spawn(overlay, target_center, target, is_apex, charge_dur,
 				CHARGE_SHARDS_APEX if is_apex else CHARGE_SHARDS_AWAKEN)
 		charge._shard_dur = SHARD_DUR
+	# ★3/★4 星章在起飞时就建好（透明待命）：★ 字形与描边在蓄力窗里先排版栅格化一遍，
+	# 迸发帧只翻透明度/拍缩放 —— 首次画字形有概率掉一帧，不能让它落在爆点上
+	var stamp: Label = null
+	if is_awaken:
+		stamp = _build_stamp(overlay, target_center, target, star)
 
 	var burst_at := SOLO_BURST_AT
 	var flew := 0
@@ -141,12 +146,16 @@ static func play_slots(host: Control, icon_path: String,
 		var lift := _tween(icon)
 		lift.tween_property(icon, "scale", Vector2(1.12, 1.12), LIFT) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		var fly := _tween(icon)
-		fly.tween_property(icon, "position", target_center - icon.size * 0.5, fly_dur) \
-				.set_delay(LIFT).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		# 飞行走一条浅弧而不是直线平移：两件从各自那侧兜着劲儿收进 keeper，一上一下对称。
+		# 弧高按起点到落点的距离取（确定性，不进随机源），远景时弧度大、贴脸时不夸张。
+		var from_c := icon.position + icon.size * 0.5
+		var bow := clampf(from_c.distance_to(target_center) * 0.16, 6.0, 20.0)
+		if i % 2 == 1:
+			bow = -bow
+		_fly_arc(icon, from_c, target_center, bow, LIFT, fly_dur)
 		var shrink := _tween(icon)
 		shrink.tween_property(icon, "scale", Vector2(0.55, 0.55), fly_dur) \
-				.set_delay(LIFT).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+				.set_delay(LIFT).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		var dissolve := _tween(icon)
 		dissolve.tween_property(icon, "modulate:a", 0.0, 0.06).set_delay(LIFT + fly_dur - 0.06)
 	if flew > 0:
@@ -163,8 +172,9 @@ static func play_slots(host: Control, icon_path: String,
 		if charge != null and is_instance_valid(charge):
 			charge.explode()
 		var pic := _burst(overlay, target_center, target, icon_path, star)
-		if is_awaken:
-			_make_stamp(overlay, target_center, target, star)
+		if stamp != null and is_instance_valid(stamp):
+			# 极境让星章慢半拍跟上：爆闪先亮、章再落，层次比全部同帧炸开清楚
+			_reveal_stamp(overlay, stamp, 0.03 if is_apex else 0.0)
 		if is_apex:
 			_make_beam(overlay, target_center, target)
 			if is_instance_valid(host):
@@ -312,10 +322,10 @@ static func _make_beam(overlay: Control, center: Vector2, target: Vector2) -> vo
 				.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tout.tween_callback(beam.queue_free)
 
-## ★3/★4 星章：「★★★」/「★★★★」从 keeper 上方拍入、停一拍、浮起淡出。
+## ★3/★4 星章：「★★★」/「★★★★」的牌子，起飞时就建好（理由见 play_slots），透明待命。
 ## 结果图标本身不画星（刷新后的槽位右下角就是新的 ★n），星章是给「这一刻」的记号，
 ## 飘在格子外不影响并轨。颜色：★3 鎏金 JADE，★4 霓虹青 STAR4_NEON。
-static func _make_stamp(overlay: Control, center: Vector2, target: Vector2, star: int) -> void:
+static func _build_stamp(overlay: Control, center: Vector2, target: Vector2, star: int) -> Label:
 	var is_apex: bool = star >= 4
 	var lbl := Label.new()
 	lbl.name = "MergeStarStamp"
@@ -333,29 +343,50 @@ static func _make_stamp(overlay: Control, center: Vector2, target: Vector2, star
 	lbl.position = center - Vector2(box.x * 0.5, target.y * 0.5 + box.y)
 	lbl.pivot_offset = box * 0.5
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.add_child(lbl)
 	lbl.scale = Vector2(0.5, 0.5)
 	lbl.modulate.a = 0.0
+	overlay.add_child(lbl)
+	return lbl
+
+## 迸发帧把星章拍到最上层（它是提前建的，躺着时在飞行体下面）并演「拍入 → 停一拍 → 浮起淡出」。
+## delay 给极境一点错峰，让星章跟在爆闪后面出现。
+static func _reveal_stamp(overlay: Control, lbl: Label, delay: float) -> void:
+	overlay.move_child(lbl, overlay.get_child_count() - 1)
 	# 拍入：淡入 + BACK 弹到 1.12，再收回 1.0
 	var tin := _tween(lbl)
 	tin.set_parallel(true)
-	tin.tween_property(lbl, "modulate:a", 1.0, 0.08)
-	tin.tween_property(lbl, "scale", Vector2(1.12, 1.12), 0.16) \
+	tin.tween_property(lbl, "modulate:a", 1.0, 0.08).set_delay(delay)
+	tin.tween_property(lbl, "scale", Vector2(1.12, 1.12), 0.16).set_delay(delay) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tin.chain().tween_property(lbl, "scale", Vector2.ONE, 0.10) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	# 浮起淡出：约 0.26s 后上浮 14px 并退场，总寿命 ≈ STAMP_DUR + 淡出
 	var tout := _tween(lbl)
 	tout.set_parallel(true)
-	tout.tween_property(lbl, "position:y", lbl.position.y - 14.0, 0.30).set_delay(0.26) \
+	tout.tween_property(lbl, "position:y", lbl.position.y - 14.0, 0.30).set_delay(delay + 0.26) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tout.tween_property(lbl, "modulate:a", 0.0, 0.30).set_delay(0.26) \
+	tout.tween_property(lbl, "modulate:a", 0.0, 0.30).set_delay(delay + 0.26) \
 			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	tout.chain().tween_callback(lbl.queue_free)
 
+## 二次贝塞尔飞行：起点 → 垂直偏移的控制点 → keeper 中心。位移在 tween_method 里逐帧算，
+## 一条 tween 管一条轨迹（不再让 position 与 scale 两条 tween 抢时序）。
+## 缓动取 QUAD EASE_IN：起手别像 CUBIC 那样先「定住」几十毫秒，进 keeper 时仍在加速 —— 才像被吸进去。
+static func _fly_arc(icon: Control, from_c: Vector2, to_c: Vector2, bow: float,
+		delay: float, dur: float) -> void:
+	var half := icon.size * 0.5
+	var ctrl := (from_c + to_c) * 0.5 + (to_c - from_c).orthogonal().normalized() * bow
+	var tw := _tween(icon)
+	tw.tween_method(func(t: float) -> void:
+		if not is_instance_valid(icon):
+			return
+		var p := from_c.lerp(ctrl, t).lerp(ctrl.lerp(to_c, t), t)
+		icon.position = p - half
+	, 0.0, 1.0, dur).set_delay(delay).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
 ## 迸发后把结果图标滑行到 keeper 的最终位置：follow 回查重建排完布局后的全局矩形，
-## 差 1px 以内不动（keeper 在行首没挪位就是这种情况）。等三帧 = refresh 的两帧布局
-## + 一帧保险；overlay 若已自毁（极端时序）就什么都不做。
+## 差 1px 以内不动（keeper 在行首没挪位就是这种情况）。等三帧 = 陈列行重建一帧（调用方
+## 挪到迸发帧的下一帧）+ 容器排布局一帧 + 一帧保险；overlay 若已自毁（极端时序）就什么都不做。
 static func _glide_to_final(overlay: Control, pic: Control, origin: Vector2, follow: Callable) -> void:
 	if pic == null or not follow.is_valid():
 		return
@@ -369,7 +400,8 @@ static func _glide_to_final(overlay: Control, pic: Control, origin: Vector2, fol
 		if to.distance_to(pic.position) <= 1.0:
 			return
 		var tw := _tween(pic)
-		tw.tween_property(pic, "position", to, 0.13).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(pic, "position", to, 0.16) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	)
 
 ## 等 n 个渲染帧再跑 fn：lambda 协程，不阻塞、不进循环。

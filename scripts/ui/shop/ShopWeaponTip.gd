@@ -91,11 +91,8 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 	else:
 		notes.append("三合一升星：同名同星集满 3 件可合成升星（当前持有 %d/3 件）。" % copies_total)
 
-	# 报价差异必须写明白：初始武器与后来买到的同名副本卖价不同，玩家只能从这里看出来。
-	# 只改文案不加行 —— 这张卡本来就在 540 高度边缘，多一行会顶出视口。
-	var starter_price: bool = WeaponInventory.starter_bonus_applies(GameManager, id)
-	var foot := "同名同星 %d 件 · %s %d 金币" % [
-		copies_total, "初始武器原价回收" if starter_price else "出售可得", price]
+	# 回收口径按星级：★1 原价退，★2 起折价。这里印的数就是 sell_stash / sell_weapon 真到手的数。
+	var foot := "同名同星 %d 件 · 出售可得 %d 金币" % [copies_total, price]
 	if in_stash:
 		foot += "\n在背包中：未装备、不参与攻击，可用于三合一升星或换装装备。"
 
@@ -154,14 +151,23 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 				var final_src := {"pool": pool, "index": index - keeper_shift}
 				# 合成延到演出的迸发帧执行：merge_success / weapon_awaken 音效、陈列行刷新出的
 				# 新星图标、keeper 上的迸发同帧落地，声画才对齐（演出本身是纯表现层，见 MergeFx 头注）
-				MergeFx.play_slots(shop, icon_path, fly_rects, target_rect, func() -> void:
+				# 合成演出的画布必须是**全屏**的那一层：MergeFx 按 host.size 铺满、按
+				# host.get_global_rect().position 把全局矩形换算成覆盖层本地坐标。作者模式的
+				# 商店视图是面板 VBox 里的布局节点，锚点铺不开、会被排成 0 高 ⇒ 演出画在屏外
+				# （2026-10-25 探针：MergeFx 矩形 830×0 落在 y=526）。同 get_tip_host 一条口径。
+				var canvas: Control = _fx_canvas(shop)
+				MergeFx.play_slots(canvas, icon_path, fly_rects, target_rect, func() -> void:
 					if not GameManager.merge_weapon(id, star, keep):
 						AudioManager.play_sfx("ui_error", 0.9)
 					# 演出这 0.2 秒里商店被关掉的极端路径兜底：合成数据已落地，只是没面板可刷
 					if not is_instance_valid(shop):
 						return
 					shop.selected = {}
-					shop.refresh(false)
+					# 删掉两件后陈列行要重铺，但货架 5 张大卡与报价全是原账（三合一不花钱、
+					# 不换货），整屏 refresh(false) 纯属白做功。重铺还挪到下一帧：迸发帧本身
+					# 要建爆闪/双环/星章/光柱，30 格的构建一起压上来会让爆点掉帧
+					# （2026-10-25 用户反馈「合成动画还有点卡顿」）。
+					_refresh_owned_next_frame(shop)
 				, func() -> Rect2:
 					return _row_rect_matching(shop, final_src, id, star + 1)
 				, star + 1)
@@ -198,7 +204,7 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 		})
 
 	row_ops.append({
-		"text": ("原价售 %d" if starter_price else "售 %d 金币") % price,
+		"text": ("原价售 %d" if star <= 1 else "售 %d 金币") % price,
 		"color": GameStyle.BAD,
 		"edge_color": GameStyle.BAD_DK,
 		"text_color": GameStyle.CHALK,
@@ -334,3 +340,36 @@ static func _hide_row_slots(shop, src: Dictionary) -> void:
 		var s: Dictionary = child.get_meta("drag_src")
 		if String(s.get("pool", "")) == want_pool and int(s.get("index", -1)) == want_index:
 			(child as Control).modulate.a = 0.0
+
+## 合成迸发帧的陈列行重建挪到下一帧（理由见合成回调注释）：那一帧要建爆闪/双环/星章/光柱，
+## 30 格的构建压在同一个帧会让爆点掉帧。晚一帧（~16ms）看不出来；商店若这帧里被关掉就不刷。
+static func _refresh_owned_next_frame(shop) -> void:
+	if shop == null or not is_instance_valid(shop) or not (shop is Node):
+		return
+	var tree: SceneTree = (shop as Node).get_tree()
+	if tree == null:
+		return
+	var co := func() -> void:
+		await tree.process_frame
+		if not is_instance_valid(shop):
+			return
+		# 轻量通道只重建陈列行；作者版商店等其它宿主没有它就退回全量刷新
+		if shop.has_method("refresh_owned"):
+			shop.refresh_owned()
+		elif shop.has_method("refresh"):
+			shop.refresh(false)
+	co.call()
+
+## 演出画布：MergeFx 要求宿主是**全屏** Control（它拿 host.size 铺覆盖层、拿
+## host.get_global_rect().position 换算坐标）。真实商店 WaveShop 本身就是全屏根；
+## 作者模式的商店视图嵌在面板 VBox 里，得往外交给全屏的 AuthorPanel（同 get_tip_host 口径）。
+static func _fx_canvas(shop) -> Control:
+	if shop == null or not is_instance_valid(shop):
+		return null
+	if shop.has_method("get_tip_host"):
+		var host: Variant = shop.call("get_tip_host")
+		if host is Control and is_instance_valid(host as Control):
+			return host as Control
+	if shop is Control:
+		return shop as Control
+	return null

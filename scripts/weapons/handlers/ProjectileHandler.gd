@@ -141,11 +141,19 @@ static func perform(w) -> void:
 
 	var p_count: int = maxi(1, int(w.def.get("projectile_count", 1)))
 	var tags: Array = WeaponData.tags_of(w.weapon_def_id)
+	# 出手路径每轮都读三个变异 hook：统一走一次快照（一次指纹校验取整包）
+	var snap := StatSystem.super_hook_snapshot(GameManager)
 	if tags.has("talisman") or int(w.def.get("behavior", -1)) == WeaponData.Behavior.PROJECTILE:
-		p_count += int(round(GameManager.item_hook_sum("projectile_count_bonus")))
+		p_count += int(round(float(snap.get("projectile_count_bonus", 0.0))))
 	var p_spread: float = float(w.def.get("spread_angle", 0.2))
-	var p_bounce: int = int(w.def.get("bounce_count", 0))
-	var final_dmg: float = w._final_damage()
+	# 神通【弹幕回响】：出膛时给每发额外弹射次数（与武器自带 bounce_count 相加）
+	var p_bounce: int = int(w.def.get("bounce_count", 0)) \
+		+ int(round(float(snap.get("projectile_bounce_bonus", 0.0))))
+	# 神通【万箭齐发】：多发但单发打折（0.8 = 每发只打八成）。
+	# 必须在 _final_damage() 之后乘，否则元素/暴击等乘区会被重复折算。
+	var raw_dmg_mult := float(snap.get("projectile_damage_mult", 0.0))
+	var volley_dmg_mult: float = clampf(raw_dmg_mult, 0.1, 1.0) if raw_dmg_mult > 0.0 else 1.0
+	var final_dmg: float = w._final_damage() * volley_dmg_mult
 	# 弹丸外观按武器归位（2026-10-09 才真正接上）：WeaponData 的 bullet / bullet_scale / bullet_spin
 	# 三个字段 2026-10-08 就写进表里了，但出膛那一圈从来没读它 —— 运行时五把远程武器
 	# 打出去的全是 BladeProjectile.tscn 里那张公共火符（用户口径：「不知道从哪里发射出来的」）。

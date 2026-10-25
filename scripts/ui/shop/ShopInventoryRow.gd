@@ -220,7 +220,7 @@ static func open_item_tip(shop, item_id: String, anchor: Control) -> void:
 	if no_sell:
 		notes.append("神通来自超级悟道，本局永久生效，不可出售。")
 	else:
-		notes.append("出售按原价一半回收金币，加过的属性当场退回（与武器、灵兽同一条口径）。")
+		notes.append("出售按原价一半回收金币，加过的属性当场退回（与灵兽同一条口径）。")
 	var unique := bool(def.get("unique", false))
 	var foot := "每回合商店会刷新更多道具。"
 	if no_sell:

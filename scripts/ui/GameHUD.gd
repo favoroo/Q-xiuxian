@@ -39,6 +39,8 @@ var _extra_skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
 var _boss_bar_widget: HudBossBar = null
 var _author_btn: Button = null
+## 暂停键长按作者模式彩蛋的助手句柄（_on_pause_pressed 收口松手用）
+var _pause_author_hold: HudAuthorHold = null
 ## 顶栏回合倒计时（画在 WaveChip 里）：「第 N 波」这条读数的唯一写者是它，
 ## 本文件只在控件还没建好那一拍兜个底 —— 两处拼文案就会各说各话
 var wave_countdown: HudWaveCountdown = null
@@ -178,6 +180,7 @@ func _ready() -> void:
 	_build_pending_chip()
 	_build_level_flash()
 	_build_hp_bar_decorations()
+	HudShieldBar.attach(self)
 
 ## .tscn 烘焙主题色重涂：HP 块面/底边、等级徽记面/底边、波次字色。
 ## 这几个节点在场景里写死了品红（Color(1,0,0.431) 系），运行时改外观只能就地改属性。
@@ -335,6 +338,10 @@ func _build_widgets() -> void:
 func is_boss_bar_visible() -> bool:
 	return _boss_bar_widget != null and _boss_bar_widget.is_showing()
 
+## 供判据与预览台取血条真身：摆位断言（贴底居中）与底部放大出图都从这里拿
+func boss_bar() -> HudBossBar:
+	return _boss_bar_widget
+
 ## 供 HudEditOverlay 同步拖动代理与判据用：按钮视觉中心（设计坐标）
 func skill_btn_center_px() -> Vector2:
 	return _skill_widget.center_px()
@@ -457,8 +464,11 @@ func _build_top_buttons() -> void:
 	pause_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	pause_btn.focus_mode = Control.FOCUS_NONE
 	GameStyle.button(pause_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, 5.0, GameStyle.INK_TEXT)
-	pause_btn.pressed.connect(func(): pause_requested.emit())
+	pause_btn.pressed.connect(_on_pause_pressed)
 	$TopContainer/RightBox.add_child(pause_btn)
+	# 长按 2 秒切作者模式（与首页设置徽章同一彩蛋）：助手只管按住计时与切换，
+	# 松手那一下 pressed 回到 _on_pause_pressed，由 consume_press 吃掉、不开暂停菜单。
+	_pause_author_hold = HudAuthorHold.attach(self, pause_btn)
 
 	# 作者模式按钮：只在作者模式开启时出现，排在「属性」左边（不挤占最常用的暂停键）。
 	# 宽度刻意压到 42：960 宽最坏读数（12847/12847 · Lv.99 · 第 20 波 · 击杀 12847 · 金币 99999）
@@ -480,6 +490,12 @@ func _build_top_buttons() -> void:
 
 func _on_author_mode_changed(_enabled: bool) -> void:
 	_refresh_author_btn()
+
+## 暂停键 pressed 收口：长按刚触发过作者模式切换时，这一下松手只做收尾（不开暂停菜单）。
+func _on_pause_pressed() -> void:
+	if _pause_author_hold != null and _pause_author_hold.consume_press():
+		return
+	pause_requested.emit()
 
 func _refresh_author_btn() -> void:
 	if _author_btn != null and is_instance_valid(_author_btn):
@@ -509,6 +525,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v
 	hp_ghost_bar.max_value = max_v
+	# 血海护盾覆盖段：生命上限变化会改盾宽（盾信号只管盾量变，不管上限变）
+	HudShieldBar.refresh(self)
 	# 受创两段式（2026-10-15）：扣血拍红条立即直写（受创可读性优先，不做缓动），
 	# 白影条延迟 0.25s 后 0.3s 追平 —— 红白落差就是「这一刀有多疼」的量尺；
 	# 回血拍红条保持既有补间，白影同步跟随（治疗不留白影差）。

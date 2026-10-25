@@ -210,6 +210,9 @@ func _setup_sprite_frames() -> void:
 			procedural_view.position = anim_sprite.position
 			procedural_view.scale = init_scale
 			procedural_view.material = hit_flash_mat
+			# 角色视觉层级（2026-10-25）：置 z_index=1 保证角色身体与面部永在地面机关、
+			# 贴花与悬浮法器（z=0）之上，避免机关阵盘/齿轮直接盖在修士胸腹面孔上
+			procedural_view.z_index = 1
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			add_child(procedural_view)
@@ -217,6 +220,7 @@ func _setup_sprite_frames() -> void:
 			procedural_view.high_fps_mode = true
 			procedural_view.scale = init_scale
 			procedural_view.material = hit_flash_mat
+			procedural_view.z_index = 1
 			procedural_view.setup_character_id(GameManager.cultivator_id)
 			procedural_view.play_idle()
 			procedural_view.visible = true
@@ -232,6 +236,7 @@ func _setup_sprite_frames() -> void:
 	# sprite 影全链路一一配套。严禁当死代码顺手清除。
 	is_procedural = false
 	anim_sprite.visible = true
+	anim_sprite.z_index = 1
 	# 图集角色吃 RunMotion 驱动的 sprite 影（程序化角色用渲染器矢量影，二者互斥）
 	if shadow_sprite != null:
 		shadow_sprite.visible = true
@@ -1281,9 +1286,22 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		return
 
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
+	# 血海护盾（神通·体修进阶）：护甲减免后的伤害先吃护盾存量，余量才落血。
+	# 盾被打穿的这一刻触发破碎放电（OnHitEffects 统一入口，数值在 BalanceChain）。
+	if GameManager.shield_hp > 0.0:
+		var absorbed: float = minf(GameManager.shield_hp, reduced)
+		GameManager.shield_hp -= absorbed
+		reduced -= absorbed
+		GameManager.shield_changed.emit(GameManager.shield_hp,
+			BalanceChain.shield_cap(max_health))
+		if GameManager.shield_hp <= 0.0:
+			OnHitEffects.on_shield_broken(self)
 	current_health = maxf(0.0, current_health - reduced)
 	invulnerable_time = BASE_INVULNERABLE_TIME
 	GameManager.on_player_hit(reduced)
+	# 神通【反震电场】：真被打掉血才放电（闪避与无敌帧在更上面已早退）。
+	# 走 OnHitEffects 统一入口，数值在 BalanceChain，不会与反震的「反弹给攻击者」重复结算。
+	OnHitEffects.on_player_hurt(self)
 
 	# 守卫·盾势：被护甲挡下的那部分伤害存进盾势槽，蓄满当帧自动爆发（全自动，不用学操作）。
 	# 蓄能天然被受击无敌帧（BASE_INVULNERABLE_TIME）节流，贴身怪群也不会超频连炸；数值全在 GuardStanceData。

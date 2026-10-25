@@ -233,6 +233,12 @@ func _on_area_entered(area: Area2D) -> void:
 		ProcStatus.apply(enemy, proc_burn, burn_dps * decay, burn_dur,
 			proc_chill, chill_dur, proc_poison, poison_dps * decay, poison_dur)
 
+		# 超级悟道机制卡的弹丸侧命中效果（五行轮转 / 天罚 / 雷霆弹幕）：
+		# 统一走 OnHitEffects，与近战/横扫/束流同一入口（项目坑 12：全程鸭类型，不碰 EnemyBase）
+		# 命中是最高频路径：只在真有机制卡时才进函数（无神通时退化为一次静态布尔读）。
+		if OnHitEffects.any_enabled_fast():
+			OnHitEffects.on_projectile_hit(self, enemy, actual_dmg, is_crit)
+
 		# 受击火花 / 震屏 / 顿帧全部由被击一方 EnemyBase.take_damage 统一发放：
 		# 弹体侧再发一份就是同一次命中火花双发、创伤计两遍（方向读数糊掉 + 镜头一直摇的元凶）
 

@@ -56,6 +56,12 @@ var orbit_extents: Vector2 = DEFAULT_ORBIT_EXTENTS
 var dynamic_angle: float = 0.0     # 当前轨道角：有目标时滑向目标方位
 var current_target: Node2D = null
 var is_attacking: bool = false
+## 超级悟道【万剑归宗】的命中计数（每把武器独立）：近战/横扫命中累计到
+## BalanceChain.SWORD_QI_EVERY 就放一道环形剑气，随后归零。由 OnHitEffects.tick_sword_qi 维护。
+var _sword_qi_charge: int = 0
+## 超级悟道【紫电】的攻击计数：每 BalanceChain.CHAIN_EVERY_ATTACKS 次出手放一次连锁闪电。
+var _chain_attacks: int = 0
+var _arrow_rain_attacks: int = 0  ## 箭雨倾盆出手计数（只统计 PROJECTILE 行为）
 var bob_phase: float = 0.0
 ## 每实例独立相位（2026-10-22）：bob_phase 已有随机初相，但双频叠加与待机扫视需要
 ## 一个不与主频锁死的慢相位，否则同场武器仍会读成"一起呼吸"。_ready 里随机播种。
@@ -699,6 +705,60 @@ func _perform_attack() -> void:
 			SweepHandler.perform(self)
 		WeaponData.Behavior.BEAM, WeaponData.Behavior.CONE:
 			ChannelHandler.perform_channel(self)
+	_tick_chain_lightning()
+	_tick_arrow_rain()
+
+## 神通【紫电】：每 BalanceChain.CHAIN_EVERY_ATTACKS 次出手，从自身向最近敌人放一次连锁闪电。
+## 首跳伤害按武器面板实伤折算 —— 武器越强紫电越强，读起来是「你的攻击带电」而不是「白送固定伤害」。
+## 炮台不在此列（TurretHandler 召出的炮台独立开火，不走本方法）。
+func _tick_chain_lightning() -> void:
+	var snap := StatSystem.super_hook_snapshot(GameManager)
+	if float(snap.get("attack_chain_lightning", 0.0)) <= 0.0:
+		_chain_attacks = 0
+		return
+	_chain_attacks += 1
+	if _chain_attacks < BalanceChain.CHAIN_EVERY_ATTACKS:
+		return
+	_chain_attacks = 0
+	var hops: int = BalanceChain.MAX_HOPS + int(float(snap.get("chain_hop_bonus", 0.0)))
+	ChainLightning.strike(self, global_position, null, _final_damage(), hops)
+
+## 神通【箭雨倾盆】：远程武器每 BalanceChain.ARROW_RAIN_EVERY 次出手，朝当前目标区
+## 落一轮箭雨（伤害按武器面板实伤折算，与紫电同一条「武器派生」口径）。
+## 只有 PROJECTILE 行为计数 —— 这是箭道的大成卡，近战/束流不该蹭到。
+func _tick_arrow_rain() -> void:
+	if behavior != WeaponData.Behavior.PROJECTILE:
+		return
+	var snap := StatSystem.super_hook_snapshot(GameManager)
+	if float(snap.get("arrow_rain_every", 0.0)) <= 0.0:
+		_arrow_rain_attacks = 0
+		return
+	_arrow_rain_attacks += 1
+	if _arrow_rain_attacks < int(snap.get("arrow_rain_every", 0.0)):
+		return
+	_arrow_rain_attacks = 0
+	# 落点中心：当前锁定目标优先；没目标就找最近敌人；都找不到不放（不浪费这轮）。
+	# 手写最近循环而不调 EnemyFilter.nearest —— 后者签名带 EnemyBase 类型，
+	# 武器脚本沾类型引用会触发循环类依赖（项目坑 12）。
+	var center := Vector2.INF
+	if current_target != null and is_instance_valid(current_target):
+		center = (current_target as Node2D).global_position
+	else:
+		var best: Node2D = null
+		var best_d := 1200.0
+		for node in GameManager.live_enemies:
+			var e := node as Node2D
+			if e == null or not is_instance_valid(e) or bool(e.get("dying")):
+				continue
+			var d: float = global_position.distance_to(e.global_position)
+			if d < best_d:
+				best_d = d
+				best = e
+		if best != null:
+			center = best.global_position
+	if center == Vector2.INF:
+		return
+	ArrowRain.play(self, center, BalanceChain.arrow_rain_damage(_final_damage()))
 
 
 

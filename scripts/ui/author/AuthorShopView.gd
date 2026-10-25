@@ -33,14 +33,20 @@ var owned_container: HBoxContainer = null
 func _init(author_panel: Control) -> void:
 	_author_panel = author_panel
 
+## 详情卡宿主：必须交出外层**全屏**的 AuthorPanel，不能是本视图自己。
+## 本视图是面板 VBox 里的布局节点（高度由内容决定、全局原点在面板中间），而 DetailTip 的全屏
+## 遮罩与摆位都按宿主的 size / global_position 算 ⇒ 挂在自己身上，卡会被算到屏幕底边之外：
+## 玩家看到的就是「点了下面的装备图标，弹窗跑到屏幕外，卖都卖不掉」（2026-10-25 用户）。
 func get_tip_host() -> Control:
+	if _author_panel != null and is_instance_valid(_author_panel):
+		return _author_panel
 	return self
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_theme_constant_override("separation", 6)
+	add_theme_constant_override("separation", 4)
 
 	drag_ctl = ShopDragDrop.new(self)
 	drag_ctl.name = "ShopDragDrop"
@@ -121,19 +127,25 @@ func _build_ui() -> void:
 	add_child(_info_bar)
 
 	# 3. 货架滚动区域（横向滑动）
+	# 竖向必须 AUTO 而不是 DISABLED：ScrollContainer 只在**禁用**的那条轴上吃内容最小高，
+	# 禁竖滑 ⇒ 这一区的最小高被货架卡高钉死（960×540 下 292），面板装不下就整个撑出屏
+	# （2026-10-25 探针：面板高 545 > 屏 540，底边被切）。作者面板是调试弹窗，货架滑一点
+	# 无妨；真实商店那一屏「货架不许竖滑」的口径在 WaveShop 自己身上，不在这里。
 	offers_scroll = ScrollContainer.new()
 	offers_scroll.name = "OffersScroll"
 	offers_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	offers_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	offers_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	offers_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	offers_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	GameStyle.scrollable(offers_scroll)
 
 	var offers_pad := MarginContainer.new()
 	offers_pad.add_theme_constant_override("margin_left", int(WaveShop.OFFER_PAD_X))
 	offers_pad.add_theme_constant_override("margin_right", int(WaveShop.OFFER_PAD_X))
-	offers_pad.add_theme_constant_override("margin_top", 4)
-	offers_pad.add_theme_constant_override("margin_bottom", 4)
+	# 上下不再留 4：960×540 下面板给货架的预算比真实商店少一截（顶栏 + 羁绊行），
+	# 那 8 单位正是价格键「看得见 / 得先滚一下」的分界（2026-10-25 探针量过）
+	offers_pad.add_theme_constant_override("margin_top", 0)
+	offers_pad.add_theme_constant_override("margin_bottom", 0)
 	offers_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	offers_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -156,10 +168,13 @@ func _build_ui() -> void:
 	add_child(sep)
 
 	# 4. 陈列行滚动区域（上阵 + 背包 + 灵兽 + 道具）
+	# 高按槽位现算（槽 64 + 横滑条 + 一点呼吸），不钉 INV_SLOT + 14：钉死会在面板高
+	# 变小（窄屏/矮窗）时把货架那一区的预算吃光
 	owned_scroll = ScrollContainer.new()
 	owned_scroll.name = "OwnedScroll"
 	owned_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	owned_scroll.custom_minimum_size = Vector2(0, WaveShop.INV_SLOT + 14.0)
+	owned_scroll.size_flags_vertical = Control.SIZE_SHRINK_END
+	owned_scroll.custom_minimum_size = Vector2(0, WaveShop.INV_SLOT + 12.0)
 	owned_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	owned_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	GameStyle.scrollable(owned_scroll)
@@ -187,6 +202,19 @@ func refresh(animate: bool = false) -> void:
 		_screen = vp
 
 	# 顶栏读数
+	_refresh_readouts()
+
+	# 羁绊总览
+	_refresh_synergy_bar()
+
+	# 货架刷新
+	_refresh_offers(animate)
+
+	# 陈列行刷新
+	_refresh_inventory()
+
+## 顶栏读数（金币/生命徽记/重掷键）：只改文本与状态，不建节点
+func _refresh_readouts() -> void:
 	if stones_label != null:
 		stones_label.text = "%d 金币" % GameManager.spirit_stones
 	if _hp_chip != null:
@@ -210,21 +238,21 @@ func refresh(animate: bool = false) -> void:
 	# 重掷按钮状态
 	_update_reroll_button()
 
-	# 羁绊总览
-	_refresh_synergy_bar()
-
-	# 货架刷新
-	_refresh_offers(animate)
-
-	# 陈列行刷新
-	_refresh_inventory()
-
 func refresh_inventory() -> void:
 	selected = {}
 	refresh(false)
 
 func refresh_readouts() -> void:
 	refresh(false)
+
+## 合成本演的迸发帧专用：三合一只动陈列行，货架卡与报价都是原账（同 WaveShop.refresh_owned）
+func refresh_owned() -> void:
+	var vp := get_viewport_rect().size
+	if vp.x > 0.0 and vp.y > 0.0:
+		_screen = vp
+	_refresh_readouts()
+	_refresh_synergy_bar()
+	_refresh_inventory()
 
 func _update_reroll_button() -> void:
 	if reroll_btn == null:
@@ -248,6 +276,10 @@ func _refresh_synergy_bar() -> void:
 			_open_synergy_tip(tag, c)
 		)
 		_synergy_box.add_child(chip_lbl)
+	# 一个流派都没激活时整条隐藏：空着的那 22 单位竖向预算是货架的价格键活命的钱
+	# （960×540 下货架卡 283 高，差这几格就得先滚一下才看得见「买」）
+	if _info_bar != null:
+		_info_bar.visible = _synergy_box.get_child_count() > 0
 
 func _open_synergy_tip(tag: String, anchor: Control) -> void:
 	SynergyUI.open_tip(self, anchor, tag, "", "", [], [
@@ -278,7 +310,10 @@ func _refresh_offers(animate: bool) -> void:
 func _refresh_inventory() -> void:
 	if owned_container == null:
 		return
-	if selected.is_empty():
+	# 只在**本页可见**时收详情卡：宿主已经解析到外层 AuthorPanel，而武器页/道具页的
+	# 「买 N 星」详情窗正是靠 keep_open 常驻批量加购的 —— 在别页发货后顺手重铺陈列行时
+	# 若无条件 close_all(host)，会把这个弹窗一起收掉（回归 2026-10-25 #02 的连点购买）。
+	if selected.is_empty() and is_visible_in_tree():
 		DetailTip.close_all(self)
 
 	var keep_x: float = owned_scroll.scroll_horizontal

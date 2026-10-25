@@ -69,6 +69,8 @@ func _seed_full() -> void:
 	GameManager.stash.clear()
 	for wid in ["qingyun_sword", "huoyan_fu", "chiyan_dao", "liuye_feidao", "wulei_paizi",
 			"gengjin_feijian", "bajiao_fan", "fantian_yin", "fentian_baodeng"]:
+		if GameManager.stash.size() >= WeaponData.MAX_STASH_SLOTS:
+			break
 		var wdef: Dictionary = WeaponData.get_def(wid)
 		if wdef.is_empty():
 			continue

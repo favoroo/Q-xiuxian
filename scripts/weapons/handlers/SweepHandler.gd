@@ -26,10 +26,12 @@ const SWEEP_CLOSE_GRACE := 26.0   ## 贴脸宽容：距离小于它不看角度�
 const SWEEP_ANGLE_SLACK := 6.0    ## 角度宽容（度）：扇面 80°→88° 羽化边里擦到的也算中
 const SWEEP_IMPACT_PITCH := 0.9   ## 横扫命中音低沉一档，与近战的亮脆分层
 
-## 横扫扇形半径 —— 扇面外缘与 deal_damage 的查询半径共用这一个数（画多大==判多大）
+## 横扫判定圆半径 —— 扇面外缘与 deal_damage 的查询圆共用这一个数（画多大==判多大）。
+## melee_range_mult（神通【剑气凌霄】）与近战同口径：范围翻倍对横扫同样生效。
 static func arc_radius(w) -> float:
 	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(w.weapon_def_id).has("wide") else 1.0
-	return SWEEP_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus
+	var qi_bonus: float = 1.0 + float(StatSystem.super_hook_snapshot(GameManager).get("melee_range_mult", 0.0))
+	return SWEEP_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus * qi_bonus
 
 ## 横扫三段：深蓄力（0.09s）→ 大幅扫出（0.06s，本体扫过整片 160° 扇形）→ 沉重收势（0.17s）。
 ## 挥空门控与近战同口径：扇面/材质声/反冲只在真咬到肉时发，空挥保留完整动作与破空声。
@@ -144,6 +146,9 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 	var any_proc: bool = proc_burn or proc_chill > 0.0 or proc_poison
 	var flat_ls: float = GameManager.item_hook_sum("melee_lifesteal_flat")
 	var can_flat_heal: bool = flat_ls > 0.0 and player != null and is_instance_valid(player) and player.has_method("heal")
+	# 机制快照整扫取一次（同扫最多 24 目标共用）
+	var mech := OnHitEffects.snapshot()
+	var has_mech: bool = OnHitEffects.any_enabled()
 
 	for res in results:
 		var col = res["collider"]
@@ -177,4 +182,10 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 				# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
 				if can_flat_heal:
 					player.heal(flat_ls, true)
+			# 超级悟道机制卡的命中后效果（与近战同一入口）
+			if has_mech:
+				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)
+				if dmg_ratio >= 1.0:
+					w._sword_qi_charge = OnHitEffects.tick_sword_qi(
+						w, enemy.global_position, dmg, int(w._sword_qi_charge), mech)
 	return hit_count

@@ -33,8 +33,6 @@ static func roll_alloc_offers(gm: Node) -> void:
 	# 玩家没选它也算知道了这张卡长什么样，图鉴不该继续锁着。
 	for off in gm.alloc_offers:
 		CodexCollection.record_upgrade(String(off.get("id", "")))
-	# 「荐」标：按当前角色+构筑打分（开面板/翻屏/刷新都汇在这条路，只此一处）
-	RecommendSystem.mark_alloc_offers(gm)
 
 static func take_alloc_upgrade(gm: Node, index: int) -> bool:
 	if index < 0 or index >= gm.alloc_offers.size():

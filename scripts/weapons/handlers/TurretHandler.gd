@@ -28,7 +28,13 @@ static func perform(w) -> void:
 
 	var turret: TurretUnit = w.turret_scene.instantiate() as TurretUnit
 	turret.setup(w.weapon_def_id, w.star)
-	turret.global_position = spawn_pos + Vector2(GameManager.rng.randf_range(-22, 22), GameManager.rng.randf_range(-16, 16))
+	# 机关布设环形分布（2026-10-25）：旧写法直接在 spawn_pos 周围 ±22,±16 随机，
+	# 导致炮台直接生成在玩家身体/肚脐眼上，多台堆叠遮蔽角色本体。
+	# 改为在身周 38~58px 外环展开（Y 轴 0.75 俯视压扁），呈众星拱月守御阵列，避开身体重叠。
+	var angle: float = GameManager.rng.randf() * TAU
+	var dist: float = GameManager.rng.randf_range(38.0, 58.0)
+	var spawn_offset := Vector2(cos(angle) * dist, sin(angle) * dist * 0.75)
+	turret.global_position = spawn_pos + spawn_offset
 	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (w.get_tree().current_scene if w.get_tree() != null else w)
 	battle_layer.add_child(turret)
 	w.active_turrets.append(turret)

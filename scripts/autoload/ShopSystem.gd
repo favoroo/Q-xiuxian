@@ -24,9 +24,6 @@ static func roll_shop(gm: Node, new_wave: bool = false) -> void:
 		# 道具轻保底先跑：它可能顶掉一个武器格，武器保底随后再按剩余货架判断。
 		apply_main_item_pity(gm, wave)
 		SynergySystem.apply_main_tag_pity(gm, wave)
-	# 「荐」标：在回合首保底塞货之后统一打分（保底换上去的那件也要进推荐评比）；
-	# 锁定保留的旧货会被重新评分，重复调用幂等
-	RecommendSystem.mark_shop_offers(gm)
 
 ## 道具轻保底（2026-10-21）：连续 ITEM_PITY_WAVES 波货架没有出现
 ## 「主武器伤害类别 / 角色偏好标签」的道具时，把一个未锁定的武器格换成对应道具。

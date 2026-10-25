@@ -6,18 +6,25 @@ extends Control
 ## 摆位算术在 HudButtonLayout。
 
 const BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
-## 键面文案（用户 2026-10-11：「祭坛」只说了那是个什么东西，没说这颗键按下去干什么）。
-## 四个字必须分两行：单行「激活祭祀」在 22 字号下宽 88，而圆键去掉描边只剩 72 可用 ——
-## 一行排下去字会探出圆面，斜着看就是键在漏字。
-const BTN_TEXT := "激活\n祭祀"
-## 18 是「两行都不出圆面、也不压走针那一圈」的上限（字号实测口径见 UnitRunner 那条判据）：
-## 22 号两行外接框 44×62 → 角半径 38.0，正好顶在描边上；18 号 37×52 → 角半径 31.9，
+## 键面主文案（用户 2026-10-11：「祭坛」只说了那是个什么东西，没说这颗键按下去干什么）。
+## 2026-10-26 收成单词「激活」：价格从碑顶悬浮字挪进键面（见 _price），四字两行腾不出地方。
+const BTN_TEXT := "激活"
+## 18 是「不出圆面、也不压走针那一圈」的上限（字号实测口径见 UnitRunner 那条判据）：
+## 22 号两行外接框 44×62 → 角半径 38.0，正好顶在描边上；18 号单行 37×18 富余充足，
 ## 收进走针环半径（CircleProgressOverlay.arc_radius = 33.5）之内，按住充能时那一圈不会压在字上。
 ## 口径由 UnitRunner 钉（见 tests/unit/unit_infra_tests.gd）。
 const BTN_FONT := 18
+## 键面价格小字（2026-10-26：碑顶常驻悬浮字很怪，撤掉；价格挪到激活键上简短一行）。
+## 够钱「N金币」（奶白），不够「差N」（朱砂）—— 摆在主文案正下方，收在走针环之内。
+const PRICE_FONT := 12
+## 价格行顶边：主文案（Button 自绘垂直居中 29..47）下方起排，最底 62 仍在走针环内缘之上
+const PRICE_TOP := 48.0
 
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
+## 键面价格小字：读 GameManager 现价（随波上涨）与余额（不够转「差N」），文本变了才重写
+var _price: Label = null
+var _price_key: String = ""
 var _active_ob: BlessingObelisk = null
 ## 键盘 E 的按住态：只认键盘自己的按下/松开对，E 松开不会误停鼠标/触屏正在充的能
 var _key_holding := false
@@ -65,6 +72,21 @@ func _build_button() -> void:
 	_ring.progress_color = GameStyle.JADE
 	_ring.head_color = GameStyle.JADE_EDGE
 	_btn.add_child(_ring)
+
+	## 键面价格小字（2026-10-26）：碑顶不再悬浮任何常驻文字，启动价收进这颗键。
+	## 显示件纪律：mouse_filter 必须 IGNORE（在键面上截事件就是挖一条按不动的死带）。
+	_price = Label.new()
+	var pls := LabelSettings.new()
+	pls.font = GameStyle.body_font()
+	pls.font_size = PRICE_FONT
+	pls.outline_size = 3
+	pls.outline_color = Color(0.02, 0.03, 0.06, 0.9)
+	_price.label_settings = pls
+	_price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_price.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_price.size = Vector2(BTN_SIZE.x, 14)
+	_price.position = Vector2(0, PRICE_TOP)
+	_btn.add_child(_price)
 
 	# 键位提示签（桌面端/桌面浏览器专属）：E 长按激活，移动端无键盘不亮
 	if SkillButtonView.key_hint_enabled():
@@ -216,6 +238,30 @@ func _process(_delta: float) -> void:
 			hide_obelisk_activation(_active_ob)
 		elif not visible and (_anim_tween == null or not _anim_tween.is_valid()):
 			show_obelisk_activation(_active_ob)
+	_refresh_price()
+
+## 键面价格小字：读本回合现价与余额（2026-10-26 从碑顶悬浮字挪进键面）。
+## 够钱「N金币」奶白，不够「差N」朱砂 —— 文本没变不重写，钱每帧都在变也不能每帧重排。
+func _refresh_price() -> void:
+	if _price == null:
+		return
+	var key := ""
+	var col: Color = GameStyle.CHALK
+	if _active_ob != null and is_instance_valid(_active_ob) and visible:
+		var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+		if GameManager.spirit_stones >= cost:
+			key = "%d金币" % cost
+		else:
+			key = "差%d" % (cost - GameManager.spirit_stones)
+			col = GameStyle.BAD
+	if key != _price_key:
+		_price_key = key
+		_price.text = key
+	_price.label_settings.font_color = col
+
+## 键面价格小字（判据读它，与 get_btn/get_ring 同款取件口）
+func get_price_label() -> Label:
+	return _price
 
 ## 按钮视觉中心（设计坐标，含缩放摆位）
 func center_px() -> Vector2:

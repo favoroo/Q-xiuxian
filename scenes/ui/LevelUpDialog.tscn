@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://clvl001"]
+[gd_scene load_steps=3 format=3 uid="uid://clvl001"]
 
 [ext_resource type="Script" path="res://scripts/ui/LevelUpDialog.gd" id="1_lvl"]
 
@@ -28,19 +28,6 @@ skew = Vector2(0, 0)
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0, 0, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info_band"]
-content_margin_left = 14.0
-content_margin_top = 5.0
-content_margin_right = 14.0
-content_margin_bottom = 5.0
-bg_color = Color(0, 0, 0, 0.9)
-skew = Vector2(0, 0)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
 border_width_bottom = 3
 border_color = Color(0, 0, 0, 1)
 
@@ -100,18 +87,6 @@ theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 22
 text = "升 级 加 点"
 
-[node name="InfoBand" type="PanelContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_info_band")
-
-[node name="InfoLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/InfoBand"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.788, 0.769, 0.706, 1)
-theme_override_font_sizes/font_size = 13
-text = "回合结束统一加点"
-horizontal_alignment = 1
-
 [node name="CardScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -145,13 +120,9 @@ custom_minimum_size = Vector2(186, 44)
 layout_mode = 2
 text = "刷新升级"
 
-[node name="GateLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
+[node name="GateSpacer" type="Control" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.372549, 0.352941, 0.305882, 1)
-theme_override_font_sizes/font_size = 13
-text = "点中一张卡，再按右侧「确认选择」"
-vertical_alignment = 1
 
 [node name="ConfirmButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBox/ActionBar"]
 custom_minimum_size = Vector2(148, 44)

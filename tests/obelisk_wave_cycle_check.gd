@@ -129,16 +129,25 @@ func _case_pay_and_wave_cycle() -> void:
 	_c.check(not _obelisk.spent_this_wave, "④ 新回合 wave_changed ⇒ 灰相复燃（可再启动）")
 	_c.check(_obelisk.light.enabled, "④ 复燃：灯光重新点亮")
 
-	# ⑤ 价格随波上涨：价格标签文案与新回合启动价一致
+	# ⑤ 价格随波上涨：价格收在 HUD 激活键的键面小字上（2026-10-26 起碑顶不再悬浮常驻文字）
 	var cost2 := GameBalance.obelisk_activation_cost(next_wave)
 	_c.check(cost2 > cost, "⑤ 启动价随波上涨（%d → %d）" % [cost, cost2])
-	_c.check(_obelisk._price_label.text.contains(str(cost2)),
-		"⑤ 碑顶价格标签写着新价（实得：%s）" % _obelisk._price_label.text)
-	# 金币不足时标签转差额文案
-	GameManager.spirit_stones = 0
-	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, 0)
-	_c.check(_obelisk._price_label.text.contains("差"), "⑤ 身无分文 ⇒ 标签标出「差」多少（实得：%s）" % _obelisk._price_label.text)
-	GameManager.spirit_stones = cost2   # 留够下一Case的启动费
+	var hud := get_node_or_null("/root/Main/UILayer/GameHUD")
+	# 注意取 _obelisk_widget（真正的 HudObeliskButton）；_obelisk_btn 是它内部的 Button
+	var ob_btn: HudObeliskButton = hud._obelisk_widget if hud != null else null
+	_c.check(ob_btn != null and ob_btn.get_price_label() != null, "⑤ 前置：HUD 祭坛激活键与其价格小字在")
+	if ob_btn != null:
+		ob_btn.show_obelisk_activation(_obelisk)
+		await _settle(2)
+		var price_lbl: Label = ob_btn.get_price_label()
+		_c.check(price_lbl.text.contains(str(cost2)),
+			"⑤ 键面价格写着新价（实得：%s）" % price_lbl.text)
+		# 金币不足时价格转差额（朱砂）
+		GameManager.spirit_stones = 0
+		await _settle(2)
+		_c.check(price_lbl.text.contains("差"), "⑤ 身无分文 ⇒ 键面标出「差」多少（实得：%s）" % price_lbl.text)
+		GameManager.spirit_stones = cost2   # 留够下一Case的启动费
+		await _settle(2)
 
 ## ⑥ 满员顶替 + ⑦ 配色唯一：补两只占满 3 席，再启动 → 最老的消散、新兽补位、配色互不重复
 func _case_replacement_and_palette() -> void:
@@ -189,10 +198,14 @@ func _case_lifetime() -> void:
 	_c.check(not is_instance_valid(beast), "⑧ 满 3 回合 ⇒ 灵兽消散")
 	_c.check(not GameManager.live_allies.has(beast), "⑧ 消散后已从 allies 注销")
 
-## 收尾对照：灰相期间价格标签写「已沉寂 · 下回合恢复」
+## 收尾对照：灰相后激活键自动隐藏 —— 价格信息跟着键走，碑上不再有任何字
 func _case_restore_price() -> void:
-	_c.check(_obelisk._price_label.text.contains("已沉寂"),
-		"收尾：灰相期间价格标签写「已沉寂 · 下回合恢复」（实得：%s）" % _obelisk._price_label.text)
+	await _settle(30)   # 等 0.2s 淡出补间在 time_scale 下走完
+	var hud := get_node_or_null("/root/Main/UILayer/GameHUD")
+	# 注意取 _obelisk_widget（真正的 HudObeliskButton）；_obelisk_btn 是它内部的 Button
+	var ob_btn: HudObeliskButton = hud._obelisk_widget if hud != null else null
+	_c.check(ob_btn != null and not ob_btn.visible,
+		"收尾：灰相后激活键自动隐藏，键面价格随之撤下（碑体不再有任何悬浮文字）")
 
 func _quit() -> void:
 	if _c.report("OBELISK_WAVE_CYCLE_RESULT"):

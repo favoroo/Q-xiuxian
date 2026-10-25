@@ -16,7 +16,7 @@ extends Node
 ##    反例③ 钉另一头：手指正压在目标格中心而图标没压到 ⇒ 不许兑现。两头一起钉，判定才真的
 ##    搬到图标上，而不是"看起来搬了"。
 ##  · 上阵件拖到背包里的某一件＝互换：旧口径只认「拖回背包区＝卸下」，于是拖到那一件上也是
-##    丢进背包，要换的那件没换上（背包 9/9 时更是当场拒绝，只能先卖一件）。⑩ 钉互换，
+##    丢进背包，要换的那件没换上（背包满格时更是当场拒绝，只能先卖一件）。⑩ 钉互换，
 ##    ⑤ 钉「分隔签仍然只是卸下」—— 两条必须在同一把尺里，不然修一头塌另一头。
 ##
 ## 尺子清单：
@@ -26,7 +26,7 @@ extends Node
 ##   同池互换（i==j / 越界 / 混池＝false）；reorder_stash 顺移、越界夹取、原地不动＝false；
 ## ①b 同池替换顶在原格（灵宝改 drones[slot]，不排队尾）；互换的两个方向走同一条
 ##   equip_stash_into_slot（背包件→上阵格 与 上阵件→背包件 只是参数对调）；
-##   背包 9/9 时卸下被拒、互换照样成立（件数不变）；
+##   背包满格时卸下被拒、互换照样成立（件数不变）；
 ## ② 按住 HOLD_DELAY 才拎起：幽灵出现、原格压暗，且拎起时整排没被拖走；
 ## ③ 拖着走整排不许跟着滑（OwnedScroll 已在按下那一拍 latch，拖动中的 motion 必须被截走）；
 ## ④ 拖背包件到已佩戴的武器格放下＝替换那一格（上阵已满样本），数据对、选中清空、详情卡没残留；
@@ -137,13 +137,14 @@ func _test_inventory_ops() -> void:
 	_c.check(_stash_ids() == ["jinming_ling", "lingdie"],
 		"①b 拖下来的那件落在它腾出的背包位，实得 %s" % str(_stash_ids()))
 
-	# ①b 背包 9/9 满仓：卸下这条路会被拒，互换不受容量影响（件数不变）
+	# ①b 背包满仓：卸下这条路会被拒，互换不受容量影响（件数不变）
 	GameManager.drones = _fake_drone_ids(["lingdie", "haojin_lun"])
 	GameManager.stash = _fake_stash(["jinming_ling", "jianling", "muling_ou", "bingpo_zhu",
-			"tuling_shi", "hanquan_yulian", "hunyuan_zhong", "xuanwu_pei", "chiyan_ying"])
+			"tuling_shi"])
 	_c.check(not GameManager.unequip_to_stash(0), "满背包时卸下被拒（背包已满那条播报）")
 	_c.check(GameManager.equip_stash_into_slot(4, 0), "满背包时互换照样成立（不用先卖一件）")
-	_c.check(GameManager.stash.size() == WeaponData.MAX_STASH_SLOTS, "互换不动背包件数（仍 9/9）")
+	_c.check(GameManager.stash.size() == WeaponData.MAX_STASH_SLOTS, "互换不动背包件数（仍 %d/%d）" \
+			% [GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS])
 	_c.check(_drone_ids() == ["tuling_shi", "haojin_lun"],
 		"满仓互换后第 0 格是土灵石，实得 %s" % str(_drone_ids()))
 	_c.check(String(GameManager.stash[4].get("id", "")) == "lingdie",
@@ -186,7 +187,9 @@ func _test_gesture() -> void:
 	for t in _tiles():
 		if t.has_meta("drag_src"):
 			registered += 1
-	_c.check(registered >= 15, "上阵格+背包格+分隔签都登记成拖拽源/落点（%d 格）" % registered)
+	var expect_registered: int = WeaponData.MAX_SLOTS + 1 + GameManager.stash.size()
+	_c.check(registered >= expect_registered,
+		"上阵格+背包格+分隔签都登记成拖拽源/落点（%d 格，至少 %d）" % [registered, expect_registered])
 
 	await _check_hold_pickup()
 	await _check_drag_no_scroll()
@@ -196,7 +199,7 @@ func _test_gesture() -> void:
 	await _check_fast_swipe_still_scroll()
 	await _check_tap_still_works()
 	# ⑥b/⑥c/⑨/⑩ 各自重灌样本（上阵不满员才有空格、灵宝要有可分辨的 id），
-	# 排在 ⑦⑧ 之后不搅动它们认的「背包 9 件」现场
+	# 排在 ⑦⑧ 之后不搅动它们认的「背包 5 件」现场
 	await _check_drag_equipped_swap()
 	await _check_drag_stash_to_empty_slot()
 	await _check_aim_follows_icon()
@@ -205,15 +208,14 @@ func _test_gesture() -> void:
 	if "--selftest" in OS.get_cmdline_user_args():
 		await _selftest()
 
-## 灌样本：上阵 6 只灵蝶（满槽）+ 背包 8 件（头两件是灵宝类，headless 换装不走玩家节点）
-## + 法宝全量把整排撑到溢出（拖动中的 motion 是否截走才有判别力）。
+## 灌样本：上阵 6 只灵蝶（满槽）+ 背包 4 件（留一格给「卸下」判据；头两件是灵宝类，
+## headless 换装不走玩家节点）+ 法宝全量把整排撑到溢出（拖动中的 motion 是否截走才有判别力）。
 func _seed_row() -> void:
 	GameManager.drones.clear()
 	for i in range(WeaponData.MAX_SLOTS):
 		GameManager.drones.append({"id": "lingdie", "star": 1})
 	GameManager.stash.clear()
-	for wid in ["haojin_lun", "lihuo_ya", "qingyun_sword", "huoyan_fu", "chiyan_dao",
-			"liuye_feidao", "wulei_paizi", "gengjin_feijian"]:
+	for wid in ["haojin_lun", "lihuo_ya", "qingyun_sword", "huoyan_fu"]:
 		var wdef: Dictionary = WeaponData.get_def(wid)
 		if wdef.is_empty():
 			continue
@@ -261,7 +263,7 @@ func _check_hold_pickup() -> void:
 	_btn(p, false)
 	await _settle(2)
 	_c.check(not _shop.drag_ctl.is_dragging(), "原位松手＝空手，拖拽结束")
-	_c.check(GameManager.stash.size() == 8, "空手松手不动数据（背包仍 8 件）")
+	_c.check(GameManager.stash.size() == 4, "空手松手不动数据（背包仍 4 件）")
 	await _settle(12)  # 等飞回动画把幽灵收掉
 
 # ---------- ③ 拖动中整排不许跟着滑 ----------
@@ -290,7 +292,7 @@ func _check_drag_no_scroll() -> void:
 	await get_tree().process_frame
 	_btn(p, false)
 	await _settle(4)
-	_c.check(GameManager.stash.size() == 8, "拖远又拖回＝空手松手，数据不动（背包仍 8 件）")
+	_c.check(GameManager.stash.size() == 4, "拖远又拖回＝空手松手，数据不动（背包仍 4 件）")
 	await _settle(12)
 
 # ---------- ④ 背包件 → 上阵格＝换装 ----------
@@ -306,7 +308,7 @@ func _check_drag_stash_to_equipped() -> void:
 	_c.check(drones.size() == WeaponData.MAX_SLOTS, "换装后上阵数量不变（满槽）")
 	_c.check(WeaponInventory.drone_id(drones[1]) == "haojin_lun",
 		"背包件（昊金轮）顶在被指的这一格上，实得 %s" % str(_drone_ids()))
-	_c.check(GameManager.stash.size() == 8 and String(GameManager.stash[0].get("id", "")) == "lingdie",
+	_c.check(GameManager.stash.size() == 4 and String(GameManager.stash[0].get("id", "")) == "lingdie",
 		"换下的灵蝶回到背包被腾出的第 0 位，实得 %s" % str(_stash_ids()))
 	_c.check(_shop.selected.is_empty() and DetailTip.live(_shop) == null, "换装后选中清空、详情卡没残留")
 
@@ -320,8 +322,10 @@ func _check_drag_equipped_to_stash() -> void:
 	var pts := await _bring_pair_into_view(src, dst)
 	await _drag_hold(pts[0], pts[1])
 	_c.check(GameManager.drones.size() == WeaponData.MAX_SLOTS - 1, "上阵少了一件（%d）" % GameManager.drones.size())
-	_c.check(GameManager.stash.size() == 9 and String(GameManager.stash[8].get("id", "")) == "lingdie",
-		"卸下的灵蝶进了背包（背包 9/9，末位=lingdie），实得 %s" % str(_stash_ids()))
+	_c.check(GameManager.stash.size() == WeaponData.MAX_STASH_SLOTS \
+			and String(GameManager.stash[WeaponData.MAX_STASH_SLOTS - 1].get("id", "")) == "lingdie",
+		"卸下的灵蝶进了背包（背包 %d/%d，末位=lingdie），实得 %s" \
+		% [GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS, str(_stash_ids())])
 
 # ---------- ⑥ 背包件 → 另一个背包格＝排序 ----------
 
@@ -487,7 +491,8 @@ func _check_fast_swipe_still_scroll() -> void:
 	await get_tree().process_frame
 	_scroll.gui_input.disconnect(cb)
 	_c.check(not _shop.drag_ctl.is_dragging(), "按住后先划出去＝不拎起（是横滑）")
-	_c.check(GameManager.stash.size() == 9, "横滑一枪不动数据（背包仍 9 件）")
+	_c.check(GameManager.stash.size() == WeaponData.MAX_STASH_SLOTS,
+		"横滑一枪不动数据（背包仍 %d 件）" % GameManager.stash.size())
 	_c.check(motions[0] > 0, "待发阶段的 motion 没被截走，OwnedScroll 照常收到（%d 次）" % motions[0])
 	_scroll.scroll_horizontal = 0
 	await _settle(4)
@@ -528,7 +533,7 @@ func _selftest() -> void:
 		"反例① 按住 0.08 秒（< HOLD_DELAY %.2f）不许拎起" % ShopDragDrop.HOLD_DELAY)
 	_btn(p, false)
 	await _settle(4)
-	_c.check(GameManager.stash.size() == 9, "反例① 快速点按只选中不动数据")
+	_c.check(GameManager.stash.size() == WeaponData.MAX_STASH_SLOTS, "反例① 快速点按只选中不动数据")
 	_c.check(DetailTip.live(_shop) != null, "反例① 同一枪按点按口径弹出了详情卡（两套手势在同一格上并存）")
 	DetailTip.close_all(_shop)
 	await _settle(2)

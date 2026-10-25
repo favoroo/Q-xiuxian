@@ -76,12 +76,26 @@ static func drops(e) -> void:
 	if cd_refund > 0.0 and not e._no_drop and GameManager.player != null \
 			and GameManager.player.has_method("refund_weapon_cooldowns"):
 		GameManager.player.refund_weapon_cooldowns(cd_refund)
-	# 裂魂铃·击杀爆炸：尸体处一记小震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
+	# 神通【雷劫】：尸体处向附近敌人放一道连锁闪电（固定基值 + 元素加成，见 BalanceChain）。
+	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不算击杀战果。
+	# 链电自身有递归深度闸与毫秒限流：链电打死人不会再触发一层雷劫风暴。
+	if not e._no_drop:
+		var snap := StatSystem.super_hook_snapshot(GameManager)
+		if float(snap.get("kill_chain_lightning", 0.0)) > 0.0:
+			var hops: int = BalanceChain.MAX_HOPS + int(float(snap.get("chain_hop_bonus", 0.0)))
+			ChainLightning.strike(e.get_parent(), e.global_position, null,
+				BalanceChain.kill_chain_damage(GameManager.elemental_damage), hops)
+	# 裂魂铃·击杀爆炸：尸体处一记震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
 	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
+	# 2026-10-25 血祭盛宴重做：神通件带 kill_explode_hp_ratio（尸爆口径 —— 附加死者最大生命
+	# 比例的伤害，随波封顶），裂魂铃没有该字段、仍只吃基伤 + 元素。演出升级为 ExplosionFx
+	# 组合段（过曝芯 + 同源冲击环 + 血肉碎屑 + 地面焦痕），不再是一圈孤零零的细环。
 	var ex_base := GameManager.item_hook_sum("kill_explode")
 	if ex_base > 0.0 and not e._no_drop:
 		var ex_radius := GameManager.item_hook_sum("kill_explode_radius")
-		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage) * GameManager.buff_damage_mult
+		var ex_hp_ratio := GameManager.item_hook_sum("kill_explode_hp_ratio")
+		var ex_dmg := BalanceCombat.kill_explode_damage(ex_base, GameManager.elemental_damage,
+			float(e.max_hp), ex_hp_ratio, GameManager.wave_number) * GameManager.buff_damage_mult
 		var ex_impulse := BalanceCombat.KILL_EXPLODE_IMPULSE * GameManager.knockback_mult
 		var snap: Array = e._explode_snap_pool.pop_back() if not e._explode_snap_pool.is_empty() else []
 		snap.append_array(GameManager.live_enemies)
@@ -97,11 +111,14 @@ static func drops(e) -> void:
 			enemy.take_damage(ex_dmg, ex_dir * ex_impulse)
 		snap.clear()
 		e._explode_snap_pool.push_back(snap)
-		# 2026-10-16 演出去噪：伤害/击退照常逐次结算（玩法零改动），金色爆炸环走全局限频——
-		# 旧写法每次击杀一发 90px 环，清怪高潮连环爆炸时是冲击环雨。伤害与环同源只是读法惯例，
-		# 环限频不改爆炸链实际范围；链爆读数由受击方 take_damage 自己的受击反馈补足。
+		# 演出全局限频（KILL_EXPLODE_FX_MIN_GAP_MS，2026-10-25 由 700ms 放宽到 250ms：
+		# 连环爆炸正是这张卡的爽点，限太死会出现「炸了但什么都没看到」）。
+		# 限频只掐演出；伤害/击退在上面照常逐次结算（玩法零改动）。
 		if e._fx_gap_gate(e.KILL_EXPLODE_FX_MIN_GAP_MS, "kill_explode_fx"):
-			JuiceEffect.spawn_shockwave(e.get_parent(), e.global_position, ex_radius, GameStyle.GOLD_FX_EDGE, 0.25)
+			ExplosionFx.play(e.get_parent(), e.global_position, ex_radius)
+			GroundDecal.spawn(e.get_parent(), e.global_position, GroundDecal.Kind.SCORCH, ex_radius * 0.6)
+			GameManager.add_trauma(0.10)
+			AudioManager.play_sfx("explosion_boom", 0.8)
 	for i in range(gem_count):
 		# 宝石走对象池（2026-10-10 第 6 波卡顿优化）：击杀高频 instantiate/queue_free 归零
 		var gem := AstralGem.acquire_or_new(e.gem_scene, e.get_tree().current_scene)

@@ -389,6 +389,52 @@ static func spawn_death_burst(parent: Node, pos: Vector2, col: Color, elite: boo
 			Color(col.r, col.g, col.b, randf_range(0.65, 0.95)),
 			randf_range(1.5, 2.8))
 
+const BOLT_POP_FRAME_BUDGET := 4  ## 链电落点爆闪单渲染帧预算闸（链电本体另有 90ms 事件闸，这里兜齐射尾）
+static var _last_bolt_pop_frame: int = -1
+static var _bolt_pop_count_this_frame: int = 0
+
+## 链电落点爆闪（2026-10-25 超级悟道二阶段）：每一次链跳在目标身上炸一记 HDR 电光。
+## 与 spawn_impact_pop 的分工：湮灭闪是「弹丸没了」的低亮度读数；这是「雷电打中了」的
+## 落点确认 —— HDR 超白芯 + 外扩微环 + 电刺迸射，亮度档位明显高一级。
+static func spawn_bolt_pop(parent: Node, pos: Vector2, col: Color = Color(2.4, 2.3, 1.9)) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+	var current_frame := Engine.get_frames_drawn()
+	if current_frame != _last_bolt_pop_frame:
+		_last_bolt_pop_frame = current_frame
+		_bolt_pop_count_this_frame = 0
+	if _bolt_pop_count_this_frame >= BOLT_POP_FRAME_BUDGET:
+		return
+	_bolt_pop_count_this_frame += 1
+
+	var fx := _acquire()
+	fx._begin(EffectType.IMPACT_POP, pos, 0.14, Z_OVERLAY)
+	fx._add_ring(2.0, 14.0, col, 2.2)
+	# 中心 HDR 白芯（静粒子画成亮点）
+	fx._add_particle(Vector2.ZERO, Vector2.ZERO, 0.0, col, 3.6)
+	# 4 根电刺全向迸射
+	for i in range(4):
+		var a := randf() * TAU
+		var spd := randf_range(70.0, 130.0)
+		fx._add_particle(Vector2.ZERO, Vector2(cos(a), sin(a)) * spd, 5.0, col, 1.4)
+
+## 剑气放射刻度（万剑归宗）：环主波由 spawn_shockwave 负责，这里补 8 道从中心向外甩的
+## 短剑光 —— 只画环读起来像「涟漪」，加上放射刻度才是「剑气炸开」。
+static func spawn_radial_slash(parent: Node, pos: Vector2, radius: float) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+	var fx := _acquire()
+	fx._begin(EffectType.IMPACT_POP, pos, 0.2, Z_OVERLAY)
+	var col := GameStyle.FX_HDR_CORE
+	for i in range(8):
+		var a := float(i) * (TAU / 8.0)
+		var dir := Vector2(cos(a), sin(a))
+		fx._add_particle(dir * radius * 0.35, dir * radius * 2.2, 14.0, col, 2.0)
+
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:
 	if parent == null or not is_instance_valid(parent):

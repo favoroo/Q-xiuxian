@@ -55,11 +55,6 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	cult_head_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cult_head.add_child(cult_head_sp)
 
-	var cult_hint := Label.new()
-	cult_hint.text = "点按看角色全部特性"
-	GameStyle.label(cult_hint, 10, GameStyle.GREY)
-	cult_head.add_child(cult_hint)
-
 	dialog._cult_pros_lbl = Label.new()
 	GameStyle.label(dialog._cult_pros_lbl, 11, GameStyle.GOOD_DK)
 	cult_text.add_child(dialog._cult_pros_lbl)
@@ -212,10 +207,6 @@ static func build_right_panel(dialog: PlayerStatsDialog) -> Control:
 	h_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bot_header.add_child(h_spacer)
 
-	dialog._history_count_lbl = Label.new()
-	dialog._history_count_lbl.text = "点按图标或条目查看详情"
-	GameStyle.label(dialog._history_count_lbl, 11, GameStyle.PAPER_DIM)
-	bot_header.add_child(dialog._history_count_lbl)
 	bot_vbox.add_child(bot_header)
 
 	# 随身道具滚动区
