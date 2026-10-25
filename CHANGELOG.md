@@ -1,3 +1,6 @@
+## 2026-10-25 #12
+`tools/run_test.py` 失败时补打场景自己的 `[FAIL]` 断言与 RESULT 汇总。**根因**：退出码非 0 时只打印 `ERROR:` 行，而断言明细全在被捕获的 stdout 里——CI 上 LayoutCheck 红掉只看到「1 resources still in use at exit」（本地同样泄漏但判据全绿，属无关噪声），具体哪条断言红成了黑盒。涉及 `tools/run_test.py`。
+
 ## 2026-10-25 #11
 合成动画分档加强（用户：「★2→★3 / ★3→★4 的动画还要再加强，提升成就感」）。**根因**：MergeFx 虽已有 new_star 分档迸发（★4 白核+青紫双环 / ★3 鎏金），但时间轴全档一致（0.21s 迸发、0.55s 收场），档次差只靠换色。**架构**：演出改四拍「飞行放慢 → 蓄力 → 迸发 → 长停留」按结果星分三档——★2 默认档常量原样（快节奏不回退，判据锁定）、★3 觉醒 0.61s 迸发 + 0.42s 停留、★4 极境 0.71s + 0.52s；蓄力段新增 MergeFx.ChargeFx 内部类（`_draw` 自绘星屑汇聚 + 旋转菱形核脉冲，迸发帧原地转迸散，参数按序号取确定性值不进随机源、tween_method 驱动播完自毁，配置全走 spawn 参数——内层类不读外层 const）；迸发帧加 `MergeStarStamp` 星章（★3 鎏金 / ★4 霓虹青，拍入浮起淡出），★4 再加 `MergeDim` 全层压暗（插 0 号位垫底、迸发后退）+ `MergeBeam` 双层硬边光柱（pivot 钉底边、scale.y 从 0.12 长起）+ `GameStyle.slash_wipe` 青带扫屏；迸发帧仍 = 数据落地帧（weapon_awaken 同拍声画对齐）。**音效**：新烘 `merge_charge`（2 变体，0.53s 上行 FM riser，峰值 0.30 刻意低于 weapon_awaken 定音，从起飞播起铺满 pre-burst 窗），走 bake_sfx.py → AudioManager 注册 → 编辑器导入全流程。**坑**：GDScript lambda 按值捕获局部变量，测试里的 on_burst 计数器必须走成员变量（局部 `+=` 加在闭包副本上，前 2 项假红就是这么来的）。**判据**：merge_fx_check 45 项（新增默认档锁定「无蓄力层/无星章」+ ★3/★4 全链路）、merge_flow_check 34 项（★2→★3 真实灵石阁端到端：蓄力期数据不落地、0.61s 迸发 ★3+1/★2 清零、星章在场、按时自毁）；--core 6/6 绿。涉及 `scripts/ui/shop/MergeFx.gd`、`scripts/autoload/AudioManager.gd`、`tools/bake_sfx.py`、`assets/audio/sfx/merge_charge_{1,2}.wav`、`tests/{merge_fx_check,merge_flow_check}.gd`。
 

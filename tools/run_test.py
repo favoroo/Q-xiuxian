@@ -248,6 +248,17 @@ def run_single_test(scene_res: str, extra_args: list[str] = None, timeout: float
         return True
     else:
         print(f"❌ [FAIL] 退出码 {exit_code}，耗时 {dt:.2f}s")
+        # 断言失败时场景自己的 [FAIL] 行全在 stdout 里；不打出来，CI 只看到资源泄漏
+        # 之类的无关 ERROR，判据等于黑盒（2026-10-25 CI 排查踩过）。
+        fail_lines = [l for l in stdout_data.splitlines() if "[FAIL]" in l]
+        if fail_lines:
+            print("--- 失败断言 ---")
+            for l in fail_lines[:12]:
+                print(" ", l)
+        if result_lines:
+            print("--- RESULT 汇总 ---")
+            for l in result_lines[-2:]:
+                print(" ", l)
         if error_lines:
             print("--- 错误诊断 ---")
             for err in error_lines[:6]:
