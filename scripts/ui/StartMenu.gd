@@ -43,6 +43,10 @@ const SMALL_SEP_BASE := 4.0
 const SMALL_NAME_FONT_BASE := 24
 const SMALL_SUB_FONT_BASE := 12
 const SMALL_PAD_BASE := 12.0          # 卡片上下内距
+## 右侧卡内距与副行行内缝：切副文案的可用宽必须和这里同源，否则量出来是两本账
+const ENTRY_PAD_L := 18.0
+const ENTRY_PAD_R := 16.0
+const ENTRY_ROW_SEP := 6.0
 
 ## 竖向这一列怎么贴（2026-10-11 撤掉标题大匾之后重算）。
 ## 旧写法两段账：① 把「标题 + 矩阵 + 横幅」装进一个 VBox 整组居中 ⇒ 标题被推到 y=82，
@@ -95,10 +99,11 @@ var _resume_btn: Button
 
 # 右侧 2×2 大方块与动态副文案
 var _small_cards: Array[PanelContainer] = []
-var _entry_blocks: Array[Dictionary] = []   # 每块 {card, vbox, name_lbl, sub_lbl, void}
+var _entry_blocks: Array[Dictionary] = []   # 每块 {card, vbox, name_lbl, sub_lbl, chev, sub_raw, void}
 var _career_sub_lbl: Label
 var _manual_sub_lbl: Label
 var _settings_sub_lbl: Label
+var _small_w: float = BASE_SMALL_W          # 右列卡片当前宽（副文案切行与它同源）
 
 # 右下角检查更新按钮（右对齐容器托着，按钮随状态文案自己变宽）
 var _update_host: HBoxContainer
@@ -431,8 +436,8 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_SMALL_W, SMALL_H_BASE)
 	var normal_sb := GameStyle.block(face_col, GameStyle.SLANT_BLOCK, Vector2(5, 6))
-	normal_sb.content_margin_left = 18.0
-	normal_sb.content_margin_right = 16.0
+	normal_sb.content_margin_left = ENTRY_PAD_L
+	normal_sb.content_margin_right = ENTRY_PAD_R
 	normal_sb.content_margin_top = SMALL_PAD_BASE
 	normal_sb.content_margin_bottom = SMALL_PAD_BASE
 	card.add_theme_stylebox_override("panel", normal_sb)
@@ -462,7 +467,7 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 
 	# 底行：副说明 + 右侧箭标
 	var bot_row := HBoxContainer.new()
-	bot_row.add_theme_constant_override("separation", 6)
+	bot_row.add_theme_constant_override("separation", int(ENTRY_ROW_SEP))
 	vbox.add_child(bot_row)
 
 	var sub_lbl := Label.new()
@@ -499,12 +504,58 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 	var block := {
 		"card": card,
 		"sub_label": sub_lbl,
+		"sub_raw": sub_text,
+		"sub_col": sub_col,
+		"chev": chev_lbl,
 		"vbox": vbox,
 		"name_label": name_lbl,
 		"void": sp,
 	}
 	_entry_blocks.append(block)
+	# 建卡时就按当前列宽切一次：首帧不会把整行塞进卡里等下一次 resize 才收
+	_wrap_entry_sub(block)
 	return block
+
+## 副文案统一入口：先记原始文案（含「◆ 新解锁」前缀），再按当前卡宽切硬换行。
+## 直接赋 .text 会让 Label 的内容最小宽决定卡宽 —— 长度一变整排矩阵就顶出屏幕
+## （2026-10-25 CI 4:3 档：全新存档带前缀时 973 > 960）。
+func _set_entry_sub(lbl: Label, raw: String) -> void:
+	for blk in _entry_blocks:
+		if blk.get("sub_label") == lbl:
+			blk["sub_raw"] = raw
+			_wrap_entry_sub(blk)
+			return
+	lbl.text = raw
+
+## 取某张卡当前的原始副文案（不加前缀、不切行），前缀拼接前用它取底
+func _entry_sub_raw(lbl: Label) -> String:
+	for blk in _entry_blocks:
+		if blk.get("sub_label") == lbl:
+			return String(blk.get("sub_raw", ""))
+	return lbl.text
+
+## 按当前列宽切副文案：可用宽 = 卡宽 − 左右内距 − 行内缝 − 右端箭标。
+## 与 _build_entry_block 的排版同一份常量，别在这里另抄数字。
+func _wrap_entry_sub(blk: Dictionary) -> void:
+	var lbl: Label = blk.get("sub_label") as Label
+	if lbl == null or not is_instance_valid(lbl):
+		return
+	var chev: Label = blk.get("chev") as Label
+	var chev_w := 0.0
+	if chev != null and is_instance_valid(chev):
+		chev_w = chev.get_combined_minimum_size().x
+	var inner := _small_w - ENTRY_PAD_L - ENTRY_PAD_R - ENTRY_ROW_SEP - chev_w
+	lbl.text = GameStyle.wrap_cjk(String(blk.get("sub_raw", "")),
+		GameStyle.body_font(), lbl.get_theme_font_size("font_size"), inner)
+
+## 未读解锁时副文案转强调色，读掉之后要能退回原色（不然颜色会一直留在卡上）
+func _tint_entry_sub(lbl: Label, hot: bool) -> void:
+	for blk in _entry_blocks:
+		if blk.get("sub_label") == lbl:
+			var base_col: Color = blk.get("sub_col", GameStyle.PAPER)
+			lbl.add_theme_color_override("font_color",
+				GameStyle.JADE_DK if hot else base_col)
+			return
 
 ## 响应式排版：适配 720（4:3）/ 960（16:9）/ 1204（20:9），保证斜切块画出来绝不出屏
 func _layout_responsive() -> void:
@@ -546,6 +597,7 @@ func _layout_responsive() -> void:
 
 	var hero_w := roundf(BASE_HERO_W * f)
 	var small_w := roundf(BASE_SMALL_W * f)
+	_small_w = small_w
 
 	if _hero_card != null and is_instance_valid(_hero_card):
 		_hero_card.custom_minimum_size = Vector2(hero_w, hero_h)
@@ -614,6 +666,8 @@ func _apply_small_metrics(small_h: float) -> void:
 		vbox.add_theme_constant_override("separation", int(m["sep"]))
 		(blk["name_label"] as Label).add_theme_font_size_override("font_size", int(m["name_font"]))
 		(blk["sub_label"] as Label).add_theme_font_size_override("font_size", int(m["sub_font"]))
+		# 字号变了，副文案的可用宽也要按新字号重切（否则字变大后仍按旧行宽摆）
+		_wrap_entry_sub(blk)
 		var sb := card.get_theme_stylebox("panel") as StyleBoxFlat
 		if sb != null:
 			sb.content_margin_top = float(m["pad_y"])
@@ -685,40 +739,46 @@ func _refresh_dynamic_texts() -> void:
 		var wins := int(cs.get("total_wins", 0))
 		var kills := int(cs.get("total_kills", 0))
 		var b_wave := int(cs.get("best_wave", 0))
+		var career_txt := ""
 		if b_wave > 0:
-			_career_sub_lbl.text = "%d 胜 · 最高 %d 波 · 击杀 %d" % [wins, b_wave, kills]
+			career_txt = "%d 胜 · 最高 %d 波 · 击杀 %d" % [wins, b_wave, kills]
 		else:
-			_career_sub_lbl.text = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
+			career_txt = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
+		_set_entry_sub(_career_sub_lbl, career_txt)
 
 	# 2. 传道玉简副行（显示已解锁角色/道具数）
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
 		var c_cnt := GameManager.unlocked_cultivators.size()
 		var i_cnt := GameManager.unlocked_items.size()
-		_manual_sub_lbl.text = "角色 %d/%d · 道具 %d/%d" % [
+		_set_entry_sub(_manual_sub_lbl, "角色 %d/%d · 道具 %d/%d" % [
 			c_cnt, CultivatorData.all_ids().size(),
 			i_cnt, ItemData.shop_ids().size()
-		]
+		])
 
 	# 2b. 新解锁角标（2026-10-25）：结算屏发放的解锁在玩家点开对应条目之前一直算「新」。
 	# 用副标题前缀而不是新加控件 —— 首页布局是满的，多一个节点就会顶破卡片（LayoutCheck 量过）。
 	# 战绩页承载角色，图鉴页承载道具/武器，两处分开报，玩家知道该点哪张卡。
+	# 前缀会加长整行 ⇒ 统一走 _set_entry_sub 按卡宽切行（不切就会把矩阵顶出屏）。
 	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
 		var new_cult := _count_unread_kinds(["cultivator"])
 		if new_cult > 0:
-			_career_sub_lbl.text = "◆ 新角色 %d · %s" % [new_cult, _career_sub_lbl.text]
-			_career_sub_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
+			_set_entry_sub(_career_sub_lbl, "◆ 新角色 %d · %s" % [
+				new_cult, _entry_sub_raw(_career_sub_lbl)])
+		_tint_entry_sub(_career_sub_lbl, new_cult > 0)
 	if _manual_sub_lbl != null and is_instance_valid(_manual_sub_lbl):
 		var new_gear := _count_unread_kinds(["item", "weapon"])
 		if new_gear > 0:
-			_manual_sub_lbl.text = "◆ 新解锁 %d · %s" % [new_gear, _manual_sub_lbl.text]
-			_manual_sub_lbl.add_theme_color_override("font_color", GameStyle.JADE_DK)
+			_set_entry_sub(_manual_sub_lbl, "◆ 新解锁 %d · %s" % [
+				new_gear, _entry_sub_raw(_manual_sub_lbl)])
+		_tint_entry_sub(_manual_sub_lbl, new_gear > 0)
 
 	# 3. 天地律动设置副行
 	if _settings_sub_lbl != null and is_instance_valid(_settings_sub_lbl):
 		var vol := int(round(SettingsManager.get_bus_volume(&"Master") * 100.0))
 		var muted := SettingsManager.is_bus_muted(&"Master")
 		var vol_str := "静音" if muted else ("音量 %d%%" % vol)
-		_settings_sub_lbl.text = "%s · 震屏「%s」" % [vol_str, SettingsManager.shake_level_label()]
+		_set_entry_sub(_settings_sub_lbl, "%s · 震屏「%s」" % [
+			vol_str, SettingsManager.shake_level_label()])
 
 	_refresh_sound_badge()
 

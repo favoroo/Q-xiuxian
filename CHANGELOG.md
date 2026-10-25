@@ -1,3 +1,6 @@
+## 2026-10-25 #13
+Fixed: 开始菜单在 4:3 档（CI 实测 960×720）带「◆ 新解锁」前缀时整排矩阵被撑到 973 出屏。**根因**：副标题直接给 `Label.text` 赋值，Label 的内容最小宽会反向决定卡片宽——卡宽预算 259，前缀把「战绩/图鉴」副行的内容最小宽涨到 290；16:9 档（540 高、字号 12）行短看不出来，CI 的 720 高画布把字号放大到 14 才暴露。**改法**：`StartMenu` 新增 `_set_entry_sub` / `_wrap_entry_sub`，原始副文案存 `sub_raw`，按「卡宽 − 左右内距 − 行内缝 − 箭标宽」用 `GameStyle.wrap_cjk` 切硬换行；`_apply_small_metrics` 改字号后重切；顺带修未读前缀读掉后强调色不退（`_tint_entry_sub`）。**坑**：CI 的 `root.size` 高度设置在 Linux headless 下不生效，画布按 1280×720 override 出的 4:3 尺寸跑，等于给所有屏多量了平板档——不是测试写错，是真实档位。涉及 `scripts/ui/StartMenu.gd`。
+
 ## 2026-10-25 #12
 `tools/run_test.py` 失败时补打场景自己的 `[FAIL]` 断言与 RESULT 汇总。**根因**：退出码非 0 时只打印 `ERROR:` 行，而断言明细全在被捕获的 stdout 里——CI 上 LayoutCheck 红掉只看到「1 resources still in use at exit」（本地同样泄漏但判据全绿，属无关噪声），具体哪条断言红成了黑盒。涉及 `tools/run_test.py`。
 
