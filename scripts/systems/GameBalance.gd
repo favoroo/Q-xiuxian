@@ -410,9 +410,15 @@ static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 static func obelisk_activation_cost(wave: int) -> int:
 	return BalanceEconomy.obelisk_activation_cost(wave)
 
-## 聚灵阵释放伤害 / 击退（2026-10-25 祭坛重设计）→ BalanceCombat
+## 聚灵阵释放伤害 / 击退 / 按最大生命附加 / 斩杀线（2026-10-25 祭坛重设计 + 2026-10-26 后期价值补强）→ BalanceCombat
 static func obelisk_blessing_damage(wave: int) -> float:
 	return BalanceCombat.obelisk_blessing_damage(wave)
+
+static func obelisk_blessing_hp_ratio(wave: int) -> float:
+	return BalanceCombat.obelisk_blessing_hp_ratio(wave)
+
+static func obelisk_execute_threshold(wave: int) -> float:
+	return BalanceCombat.obelisk_execute_threshold(wave)
 
 static func obelisk_knock_force(wave: int) -> float:
 	return BalanceCombat.obelisk_knock_force(wave)

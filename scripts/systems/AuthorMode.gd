@@ -163,7 +163,7 @@ static func take_super(gm: Node, card_id: String) -> bool:
 	if gm == null or not gm.run_started or gm.player == null:
 		return false
 	if card_id in gm.super_cards_taken:
-		gm.announcement_triggered.emit("这张超级悟道已领悟")
+		gm.announcement_triggered.emit("这张飞升悟道已领悟")
 		AudioManager.play_sfx("ui_error", 0.9)
 		return false
 	if not SuperUpgradeData.apply(gm, card_id):

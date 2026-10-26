@@ -106,7 +106,7 @@ func _build_ui() -> void:
 	_scroll_box.add_child(_upgrade_grid)
 
 	_scroll_box.add_child(_make_separator())
-	_scroll_box.add_child(_make_section_title("超级悟道 · 全表", GameStyle.RARITY_MYTHIC))
+	_scroll_box.add_child(_make_section_title("飞升悟道 · 全表", GameStyle.RARITY_MYTHIC))
 	_scroll_box.add_child(_make_hint("不设阶段/灵兽门控，可任意组合；撤销连赠予的神通道具一起收走（属性与机制同步失效）。"))
 	_scroll_box.add_child(_make_filter_row("line", _super_filters()))
 	_super_grid = GridContainer.new()
@@ -462,7 +462,7 @@ func _clear_supers() -> void:
 	if not _ensure_run():
 		return
 	if AuthorMode.clear_supers(GameManager) == 0:
-		GameManager.announcement_triggered.emit("还没有超级悟道可清")
+		GameManager.announcement_triggered.emit("还没有飞升悟道可清")
 		return
 	AuthorStatRebuild.rebuild(GameManager)
 	_after_change()

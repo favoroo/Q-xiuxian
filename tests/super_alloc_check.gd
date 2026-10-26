@@ -55,9 +55,9 @@ func _run_dialog_check() -> void:
 	_check(get_tree().paused, "面板打开即暂停整棵树")
 	_check(GameManager.super_alloc_offers.size() == 5, "候选固定 5 张")
 	_check(dlg.cards_container.get_child_count() == 5, "面板铺出 5 张卡（实为 %d）" % dlg.cards_container.get_child_count())
-	_check(dlg.title_label.text == "超 级 悟 道", "标题为「超级悟道」")
-	_check(not dlg.reroll_btn.visible, "超级悟道没有刷新键")
-	_check(dlg._points_badge == null or not dlg._points_badge.visible, "超级悟道不显示待加点徽记")
+	_check(dlg.title_label.text == "飞 升 悟 道", "标题为「飞升悟道」")
+	_check(not dlg.reroll_btn.visible, "飞升悟道没有刷新键")
+	_check(dlg._points_badge == null or not dlg._points_badge.visible, "飞升悟道不显示待加点徽记")
 
 	# 道途制：候选不再按固定 3 流派 + 2 通用配比，而是按道途（同道途 ≤2 张）
 	var line_counts: Dictionary = {}

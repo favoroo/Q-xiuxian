@@ -136,6 +136,13 @@ func _ready() -> void:
 	# 回合更替时灰相复燃（价格显示在 HUD 激活键上，随波上涨由键自己读现价，碑不再挂常驻字）
 	if not GameManager.wave_changed.is_connected(_on_wave_changed):
 		GameManager.wave_changed.connect(_on_wave_changed)
+	# 切主题色时碑身灌灵立即跟新主题亮边（中场/菜单切主题，回战场即生效）
+	if not SettingsManager.theme_color_changed.is_connected(_apply_stone_fill_color):
+		SettingsManager.theme_color_changed.connect(_apply_stone_fill_color)
+
+func _exit_tree() -> void:
+	if SettingsManager.theme_color_changed.is_connected(_apply_stone_fill_color):
+		SettingsManager.theme_color_changed.disconnect(_apply_stone_fill_color)
 
 func _setup_charge_particles() -> void:
 	# 界碑充能粒子（T-3.6）：外圈螺旋向心吸入（空洞骑士 Focus 灵气聚流）
@@ -206,11 +213,16 @@ func _build_charge_readout() -> void:
 	_readout.add_child(_readout_label)
 
 	if stone_mat != null:
-		## 灌灵色仍从 GameStyle 取，不在着色器里留一份第二真话
-		stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_FX_EDGE)
+		_apply_stone_fill_color()
 		## fill_ratio/amount 先落成确定值：直接触发（判据不走充能）时 tween 读到 Nil 会报类型错
 		stone_mat.set_shader_parameter("fill_ratio", 0.0)
 		stone_mat.set_shader_parameter("amount", 0.0)
+
+## 灌灵色随玩家自选主题色亮边走；切主题时由 SettingsManager.theme_color_changed 触发刷新
+func _apply_stone_fill_color(_preset: StringName = &"") -> void:
+	if stone_mat == null:
+		return
+	stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
 
 ## 回合开始：上回合灰相的祭坛在此复燃（启动价的显示在 HUD 激活键上，键自己读现价）
 func _on_wave_changed(_wave_number: int) -> void:
@@ -270,8 +282,8 @@ func _set_readout_ratio(ratio: float) -> void:
 		_readout_arc.ratio = _readout_ratio
 		## 转黄只留给最后一档：线性拉色的话充到六成半就已经是土黄，看着像"卡住了"
 		var warm: float = smoothstep(ARC_WARM_FROM, 1.0, _readout_ratio)
-		_readout_arc.progress_color = GameStyle.GOLD_FX.lerp(GameStyle.JADE, warm)
-		_readout_arc.head_color = GameStyle.GOLD_FX_EDGE.lerp(GameStyle.JADE_EDGE, warm)
+		_readout_arc.progress_color = GameStyle.GOLD.lerp(GameStyle.JADE, warm)
+		_readout_arc.head_color = GameStyle.GOLD_EDGE.lerp(GameStyle.JADE_EDGE, warm)
 		_readout_arc.queue_redraw()
 	if _readout_label != null:
 		var pct: int = int(roundf(_readout_ratio * 100.0))
@@ -431,12 +443,30 @@ func _release_blessing() -> void:
 	_summon_spirit_beast()
 	# 对场上所有敌人造成伤害与击退（冲击波是全场光环演出，不是范围判定——口径走 EnemyFilter，
 	# radius 传 INF 即「全场」；方向走 GameBalance.knock_dir，永不把敌人往玩家身上推）
-	var dmg: float = GameBalance.obelisk_blessing_damage(GameManager.wave_number)
-	var knock: float = GameBalance.obelisk_knock_force(GameManager.wave_number)
+	# 2026-10-26 后期价值补强：单 flat 复利 1.14 缓于敌血 1.16，后期对厚血单位威力掉线；
+	# 在 flat 上叠加「按最大生命 %」分量（追敌血成长），并对已在斩杀线下的敌人直接致命一刀。
+	# 鸭类型访问 max_hp/current_hp（同坑 12/16：BlessingObelisk 不写 `as EnemyBase`，避免循环类依赖
+	# 把祭坛脚本打成空 PackedScene）；EnemyFilter.collect 仅返回 EnemyBase 派生实例，字段必存在。
+	var wave_num: int = GameManager.wave_number
+	var flat_dmg: float = GameBalance.obelisk_blessing_damage(wave_num)
+	var hp_ratio: float = GameBalance.obelisk_blessing_hp_ratio(wave_num)
+	var exec_thresh: float = GameBalance.obelisk_execute_threshold(wave_num)
+	var knock: float = GameBalance.obelisk_knock_force(wave_num)
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
 	for enemy in EnemyFilter.collect(GameManager.live_enemies, global_position, INF):
 		var knock_vec = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * knock
-		enemy.take_damage(dmg, knock_vec, true)
+		# 拼装伤害：flat + max_hp × 比例；max_hp <= 0 视为无字段退化态，退回纯 flat
+		var total_dmg: float = flat_dmg
+		var e_max_hp: float = float(enemy.max_hp) if enemy.get("max_hp") != null else 0.0
+		var e_cur_hp: float = float(enemy.current_hp) if enemy.get("current_hp") != null else 0.0
+		if e_max_hp > 0.0:
+			total_dmg += e_max_hp * hp_ratio
+		# 斩杀：受击前已在斩杀线下（current_hp/max_hp ≤ exec_thresh）且仍存活 → 抬到必死
+		# （与作者模式同款路径 current_hp + max_hp，走 take_damage 的既定死亡结算，
+		# 不绕过 Boss 二阶段 50% 与精英变异 60% —— 它们的触发线都在斩杀线之上，先于斩杀点火）
+		if e_max_hp > 0.0 and e_cur_hp > 0.0 and e_cur_hp <= e_max_hp * exec_thresh:
+			total_dmg = maxf(total_dmg, e_cur_hp + e_max_hp)
+		enemy.take_damage(total_dmg, knock_vec, true)
 		# 受击金花：给「全场都被扫到」逐个盖章（JuiceEffect 池化，超量由池限流兜底）
 		if fx_host != null:
 			JuiceEffect.spawn_impact_pop(fx_host, enemy.global_position, GameStyle.FX_HDR_GOLD, knock_vec.normalized())

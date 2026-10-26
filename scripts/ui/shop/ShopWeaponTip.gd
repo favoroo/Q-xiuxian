@@ -22,7 +22,7 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 	var per_hit: float = WeaponDamageReadout.per_hit(id, star, slots_here)
 	var cd := WeaponDamageReadout.effective_cd(id, star)
 	var base_range: float = float(def.get("range", 0.0))
-	var eff_range: float = base_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var eff_range: float = WeaponDamageReadout.effective_range(id)
 	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
 	var range_txt: String = "%.0f" % eff_range
 	if range_buffed:

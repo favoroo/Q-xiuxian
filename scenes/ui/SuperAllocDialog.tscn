@@ -85,7 +85,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_title_band")
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 22
-text = "超 级 悟 道"
+text = "飞 升 悟 道"
 
 [node name="CardScroll" type="ScrollContainer" parent="CenterContainer/Panel/MarginContainer/VBox"]
 layout_mode = 2

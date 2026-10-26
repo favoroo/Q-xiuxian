@@ -10,8 +10,16 @@ extends RefCounted
 ## 摆位常量（CARD_PAD_X / CARD_MIN_H / BF_CELL_* 等）仍归 LevelUpDialog 单一真源，
 ## 工厂只读不抄；卡宽 card_w 由宿主算好经 create_card 传入。
 
+## 飞升悟道（原超级悟道）卡底染色比例：宣纸白往逆天赤红里掺 14%。
+## 下限：8% 出的 #f7e4d9 太淡，缩成五张小卡后与普通卡看不出差别；
+## 上限：再深则 PAPER_DIM 次要字（注脚/受益装备标题）对比度掉到无障碍门槛 4.5 以下
+## （14% 时 5.14，22% 时只剩 4.61）。纸面墨字 PAPER 全程 13 以上，不受影响。
+const SUPER_BG_TINT := 0.14
+## 飞升卡描边比普通卡厚一档（左/右/底各 +1）：纸面染了红，边框要够分量才压得住
+const SUPER_EDGE_EXTRA := 1
+
 ## 装配一张悟道候选卡。返回组件引用字典（root/style/icon_panel_style/rarity_col/
-## state_badge/title_lbl），选中态切换由宿主 _select_card 用这些引用重写样式。
+## state_badge/title_lbl/bg_base），选中态切换由宿主 _select_card 用这些引用重写样式。
 ## 卡内需要调回宿主的两个交互入口：on_card_tapped / open_benefit_tip。
 static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		card_w: float, forecast: StatForecast) -> Dictionary:
@@ -24,7 +32,16 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	var rarity_col: Color = data.get("border_color", GameStyle.rarity_color(rarity_str))
 	# T-5.1 稀有度卡框描边接 FX_HDR 对应档（普通白不发辉、金色档 HDR 超白起辉）：
 	var edge_col: Color = GameStyle.rarity_edge_color(rarity_str) if data.has("rarity") else GameStyle.rarity_edge_color(rarity_col)
+	# 飞升悟道（2026-10-26）：普通悟道卡是纯宣纸白底，飞升卡整面淡红染 —— 两屏卡面
+	# 一眼分得开（只染底不改字色，纸面墨字对比度不变）。payload 无 is_super 即普通卡。
+	var is_super := bool(data.get("is_super", false))
+	var bg_base: Color = GameStyle.NAVY2.lerp(GameStyle.RARITY_MYTHIC, SUPER_BG_TINT) if is_super else GameStyle.NAVY2
 	var style_normal := GameStyle.card(edge_col, GameStyle.SLANT_BLOCK, Vector2(4, 5))
+	style_normal.bg_color = bg_base
+	if is_super:
+		style_normal.border_width_left += SUPER_EDGE_EXTRA
+		style_normal.border_width_right += SUPER_EDGE_EXTRA
+		style_normal.border_width_bottom += SUPER_EDGE_EXTRA
 	style_normal.content_margin_left = LevelUpDialog.CARD_PAD_X
 	style_normal.content_margin_top = 10.0
 	style_normal.content_margin_right = LevelUpDialog.CARD_PAD_X
@@ -40,8 +57,8 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	var hbox_top := _create_top_row(dialog, data, rarity_col)
 	vbox.add_child(hbox_top)
 
-	# 2. 中央图标（墨底白框）
-	var icon_panel_style := _create_icon_box(vbox, String(data.get("icon", "")))
+	# 2. 中央图标（墨底白框；飞升卡描边换逆天赤红，普通卡仍是中性线）
+	var icon_panel_style := _create_icon_box(vbox, String(data.get("icon", "")), is_super)
 
 	# 3. 名称（纸白大字，窄卡上自己切硬换行）
 	var title_lbl := Label.new()
@@ -116,6 +133,8 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 		"rarity_col": edge_col,
 		"rarity_base": rarity_col,
 		"rarity": rarity_str,
+		"is_super": is_super,
+		"bg_base": bg_base,
 		"state_badge": hbox_top.get_node_or_null("StateBadge"),
 		"title_lbl": title_lbl,
 	}
@@ -165,13 +184,15 @@ static func _create_top_row(dialog: LevelUpDialog, data: Dictionary, rarity_col:
 	hbox_top.add_child(state_badge)
 	return hbox_top
 
-## 行②：中央图标盒（墨底白框），样式返回给宿主供选中态改边框色
-static func _create_icon_box(vbox: VBoxContainer, icon_path: String) -> StyleBoxFlat:
+## 行②：中央图标盒（墨底描边框），样式返回给宿主供选中态改边框色。
+## 飞升卡描边用逆天赤红（与卡框同色系），普通卡仍是中性 LINE。
+static func _create_icon_box(vbox: VBoxContainer, icon_path: String, is_super: bool = false) -> StyleBoxFlat:
 	var icon_box := PanelContainer.new()
 	icon_box.custom_minimum_size = Vector2(56, 56)
 	icon_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 2, 0.0)
+	var icon_edge: Color = GameStyle.RARITY_MYTHIC if is_super else GameStyle.LINE
+	var icon_panel_style := GameStyle.outlined_panel(GameStyle.INK, icon_edge, 2, 0.0)
 	icon_box.add_theme_stylebox_override("panel", icon_panel_style)
 
 	var icon_tex := GameStyle.icon_texture_rect(icon_path, Vector2(42, 42))

@@ -218,7 +218,12 @@ var chill_slow: float = 0.0
 const STATUS_FX_INTERVAL := 0.45              ## 体表粒子续发间隔（错相靠 instance_id 相位）
 const STATUS_TINT_BURN := Color(1.55, 1.05, 0.8)   ## 灼烧暖橙提亮（对齐冰缓提亮思路，不压暗）
 const STATUS_TINT_POISON := Color(0.9, 1.45, 0.85) ## 剧毒青绿提亮
+const STATUS_TINT_CHILL := Color(1.15, 1.35, 1.7)  ## 冰缓冰蓝提亮（原写在 _effective_speed，2026-10-26 收到常量）
+## 三系同挂（五行归一）时的染色轮换周期：旧写法优先级把灼烧/剧毒全盖掉，
+## 归一这张卡在敌人身上永远是冰蓝色，玩家读不出「三系齐上」。现在按时间相位轮转主染色。
+const STATUS_TINT_ROTATE := 0.34              ## 每系停留时长（秒），三系一轮约 1 秒
 var _status_fx_cd: float = 0.0                ## 体表粒子续发计时（activate 时按 instance_id 错相）
+var _status_tint_t: float = 0.0               ## 三系轮换相位累计（只用真实时间推进，不碰 rng）
 
 @onready var anim_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var shadow_sprite: Sprite2D = get_node_or_null("Shadow") as Sprite2D
@@ -1145,21 +1150,21 @@ func _tick_damage_over_time(delta: float) -> bool:
 func _base_tint() -> Color:
 	return Color.WHITE
 
-## 五行异常体表视觉：低频续发体表粒子 + 灼烧/剧毒本体染色。
-## 染色优先级 冰缓（_effective_speed 链路）> 灼烧 > 剧毒 > 本体色；
+## 五行异常体表视觉：低频续发体表粒子 + 本体染色。
+## 2026-10-26：单系时仍按「冰缓 > 灼烧 > 剧毒」优先；**三系同挂（五行归一）时按时间相位轮换**
+## —— 旧写法三系齐上永远只显示冰蓝，玩家读不出归一这张卡到底干了什么。
 ## 引信/蓄力独占 modulate 时整段让位，不写不读。
 func _tick_status_fx(delta: float) -> void:
 	var burning := burn_timer > 0.0
 	var poisoned := poison_timer > 0.0
 	var chilled := chill_timer > 0.0
-	# 染色（灼烧/剧毒；冰缓在 _effective_speed 既有链路，此处不覆盖）；
-	# 异常消退当帧把本体色归还（只认自己写过的两档色，避免误洗引信/蓄力色）
-	if not chilled and _fuse < 0.0 and _bolt_windup_t < 0.0:
-		if burning:
-			anim_sprite.modulate = STATUS_TINT_BURN
-		elif poisoned:
-			anim_sprite.modulate = STATUS_TINT_POISON
-		elif anim_sprite.modulate == STATUS_TINT_BURN or anim_sprite.modulate == STATUS_TINT_POISON:
+	var tint := _status_tint(burning, poisoned, chilled, delta)
+	# 染色：异常消退当帧把本体色归还（只认自己写过的三档色，避免误洗引信/蓄力色）
+	if tint.a > 0.0 and _fuse < 0.0 and _bolt_windup_t < 0.0:
+		anim_sprite.modulate = tint
+	elif tint.a <= 0.0 and _fuse < 0.0 and _bolt_windup_t < 0.0:
+		if anim_sprite.modulate == STATUS_TINT_BURN or anim_sprite.modulate == STATUS_TINT_POISON \
+				or anim_sprite.modulate == STATUS_TINT_CHILL:
 			anim_sprite.modulate = _base_tint()
 	if not burning and not poisoned and not chilled:
 		return
@@ -1178,15 +1183,37 @@ func _tick_status_fx(delta: float) -> void:
 	if chilled:
 		FxParticlePool.burst(FxParticlePool.CHILL_AURA, fx_pos, "water")
 
+## 当前该显示哪一档染色（alpha==0 表示「不染色，归还本体色」）。
+## 单系/两系：按固定优先级（冰缓 > 灼烧 > 剧毒），与旧口径一致、行为不变；
+## 三系齐挂：按 _status_tint_t 相位轮转 火 → 冰 → 毒，每 STATUS_TINT_ROTATE 秒换一档。
+func _status_tint(burning: bool, poisoned: bool, chilled: bool, delta: float) -> Color:
+	if not burning and not poisoned and not chilled:
+		_status_tint_t = 0.0
+		return Color(0, 0, 0, 0)
+	if burning and poisoned and chilled:
+		_status_tint_t = fposmod(_status_tint_t + delta, STATUS_TINT_ROTATE * 3.0)
+		var slot: int = int(_status_tint_t / STATUS_TINT_ROTATE) % 3
+		match slot:
+			0:
+				return STATUS_TINT_BURN
+			1:
+				return STATUS_TINT_CHILL
+			_:
+				return STATUS_TINT_POISON
+	_status_tint_t = 0.0
+	if chilled:
+		return STATUS_TINT_CHILL
+	if burning:
+		return STATUS_TINT_BURN
+	return STATUS_TINT_POISON
+
 ## 有效移速 = 基础 ×（1-冰缓）× 光环；顺带处理冰缓染色与光环过期待遇失效
 func _effective_speed(delta: float) -> float:
 	var eff_speed: float = move_speed
 	if chill_timer > 0.0:
 		chill_timer -= delta
 		eff_speed = move_speed * (1.0 - chill_slow)
-		if _fuse < 0.0:
-			# 冰蓝色温改为提亮（旧版压暗红绿通道，深蓝地图上怪物直接隐形）
-			anim_sprite.modulate = Color(1.15, 1.35, 1.7)
+		# 冰蓝染色已收进 _tick_status_fx 的统一染色决策（三系同挂时轮换，不再被冰缓硬盖）
 		if chill_timer <= 0.0:
 			chill_slow = 0.0
 			if _fuse < 0.0:

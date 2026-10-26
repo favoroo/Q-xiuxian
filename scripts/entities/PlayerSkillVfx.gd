@@ -877,7 +877,7 @@ func _draw_vector_ghosts() -> void:
 ## 绘制【疾风咒】：脚下双层疾风轮 + 贴身螺旋上升气流 + 升腾风丝
 ## （不环身画法阵、不遮角色，与金光护体的椭球罩构图彻底区分）
 func _draw_haste_fx() -> void:
-	var col_main := Color(GameStyle.GOLD_FX, 0.82)       # 主蓝
+	var col_main := Color(GameStyle.GOLD, 0.82)       # 主题主色
 	var col_edge := Color(GameStyle.FX_HDR_WATER, 0.95)  # 霜华亮蓝（接 FX_HDR_WATER 超白起辉描边）
 	# 几何随角色体型插槽缩放（脚底锚点随身高、轮径/摆幅随体宽）
 	var bs := _body_scale
@@ -930,7 +930,7 @@ func _draw_haste_fx() -> void:
 	# 3. 向上飞升的蓝色风刃光丝（Sparks）
 	for sp in haste_sparks:
 		var ratio := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0)
-		var p_col := Color(GameStyle.GOLD_FX_EDGE.r, GameStyle.GOLD_FX_EDGE.g, GameStyle.GOLD_FX_EDGE.b, ratio * 0.95)
+		var p_col := Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, ratio * 0.95)
 		var p_pos := Vector2(sp["pos"])
 		var p_tail := p_pos - Vector2(sp["vel"]).normalized() * (10.0 * ratio)
 		draw_line(p_tail, p_pos, p_col, 2.0, true)
@@ -1251,12 +1251,12 @@ func _draw_thunder_sparks() -> void:
 		var a2 := a1 + 1.2
 		var p2 := bc + Vector2(cos(a2) * r1, sin(a2) * r1 * 0.8)
 		var pts := PackedVector2Array([p1, mid, p2])
-		draw_polyline(pts, Color(GameStyle.GOLD_FX_EDGE.r, GameStyle.GOLD_FX_EDGE.g, GameStyle.GOLD_FX_EDGE.b, alpha * 0.85), 1.6)
+		draw_polyline(pts, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, alpha * 0.85), 1.6)
 		draw_polyline(pts, Color(1.0, 1.0, 1.0, alpha * 0.95), 0.8)
 	for sp in thunder_sparks:
 		var sp_alpha := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0) * alpha
 		draw_circle(sp["pos"], 1.5, Color(1.0, 1.0, 1.0, sp_alpha))
-		draw_circle(sp["pos"], 2.4, Color(GameStyle.GOLD_FX_EDGE.r, GameStyle.GOLD_FX_EDGE.g, GameStyle.GOLD_FX_EDGE.b, sp_alpha * 0.6))
+		draw_circle(sp["pos"], 2.4, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, sp_alpha * 0.6))
 
 ## 绘制【盾势】玄金护体残弧（守卫）
 func _draw_guard_stance_fx() -> void:

@@ -4,6 +4,8 @@ extends RefCounted
 ## 近战（MELEE）行为实现（2026-10-24 自 FloatingWeapon 拆出）。
 ## 三段式节奏：前摇微撤蓄势 → 极速瞬扫 → 弹性卸力回正；判定是「圆心前突的 360° 圆」。
 ## 挥空门控：月牙/材质声/反冲只在真咬到肉时发，空挥保留完整动作与破空声。
+## 剑气凌霄（神通）生效时本体判定整段让位：这一刀就是飞出去的剑弧（SwordQiWave），
+## 不再是「一下近战 + 一下剑气」两段收账。
 ##
 ## 纪律：首参 w 为宿主武器（不标类型，鸭类型访问——武器侧硬类型引用会触发
 ## 循环类依赖，把弹丸 preload 打成空 PackedScene，项目坑 12）。
@@ -37,18 +39,14 @@ const MELEE_WHOOSH_SCALE := 1.0
 const MELEE_IMPACT_SCALE := 1.0    ## 压在 enemy_hit（0.56 峰值）之下，三层同帧才不糊（2026-10-22 抬到 1.0，配合材质声峰值 +8）
 
 ## 近战判定圆半径 —— 弧光外缘与 deal_damage 的查询圆共用这一个数。
-## 两个倍率叠乘：
-##   wide_range_mult（老的「开山重刃谱」口径，只对 wide 标签生效）
-##   melee_range_mult（2026-10-25 神通【剑气凌霄】，对所有近战/横扫无条件生效 → 范围翻倍）
+## 范围取本体乘区 w._body_range_mult()（含 wide_range_mult，不含剑气凌霄），
+## 保持本体判定圆与月牙尺寸干脆利落不虚胖；剑气凌霄的远距离打击由甩出的剑气波负责。
 static func arc_radius(w) -> float:
-	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(w.weapon_def_id).has("wide") else 1.0
-	# 走快照取整包：命中路径每刀都会调本函数，逐字段 item_hook_sum 会重复算 items.hash()
-	var qi_bonus: float = 1.0 + float(StatSystem.super_hook_snapshot(GameManager).get("melee_range_mult", 0.0))
-	return MELEE_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus * qi_bonus
+	return MELEE_ARC_RADIUS * w.arc_scale * w._body_range_mult()
 
-## 打击帧前突倍数：范围叠得越高剑往前送得越远，剑才追得上外扩的剑气（上限 2 倍防乱飘）
+## 打击帧前突倍数：随本体范围乘区前探（上限 2 倍防乱飘）
 static func thrust_mult(w) -> float:
-	return clampf(w._range_mult(), 1.0, MELEE_STRETCH_MAX)
+	return clampf(w._body_range_mult(), 1.0, MELEE_STRETCH_MAX)
 
 static func perform(w) -> void:
 	w.is_attacking = true
@@ -98,6 +96,8 @@ static func perform(w) -> void:
 	tw.chain().tween_callback(func():
 		w._flash_sprite(Color(1.5, 1.5, 1.5), 0.12)
 		var hits: int = deal_damage(w, aim_dir)
+		# 剑气凌霄：这一刀的全部伤害随剑弧飞出（hits 恒为 0），不再是「一下近战 + 一下剑气」
+		var wave = StrikeFx.try_fire_sword_qi_wave(w, aim_dir)
 		if hits > 0:
 			StrikeFx.try_spawn_earth_crack(w, w.global_position + aim_dir * MELEE_LUNGE, arc_radius(w) * 0.85)
 			w.slash_sprite.visible = true
@@ -114,6 +114,10 @@ static func perform(w) -> void:
 			AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MELEE_IMPACT_SCALE)
 			# 刀刃入肉阻力感：武器微反冲回弹
 			w.position -= aim_dir * 4.5
+		elif wave != null:
+			# 剑气凌霄：本体不判伤——刀光/材质声/反冲全部由飞出去的剑弧承担（波侧首击补材质声）；
+			# 只有土系重击留痕是按「挥了这一刀」留在地面，就地按武器标签补一次
+			StrikeFx.try_spawn_earth_crack(w, w.global_position + aim_dir * MELEE_LUNGE, arc_radius(w) * 0.85)
 	)
 	tw.tween_property(w, "position", thrust_pos, 0.04).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(w, "rotation", aim_angle + swing, 0.04).set_trans(Tween.TRANS_EXPO)
@@ -137,6 +141,8 @@ static func perform(w) -> void:
 			tw.chain().tween_callback(func():
 				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MELEE_WHOOSH_SCALE * 0.6)
 				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
+				# 剑气凌霄：追加段同样只放飞出的剑弧（按段伤害系数），不回头做本体判定
+				StrikeFx.try_fire_sword_qi_wave(w, aim_dir, echo_ratio)
 				if echo_hits > 0:
 					w._flash_sprite(echo_glow_color(w.star, seg), 0.10)
 					play_echo_slash(w, slash_scale_end, w.star, seg)
@@ -173,6 +179,10 @@ static func play_echo_slash(w, scale_end: float, star: int = 3, seg: int = 0) ->
 ## dmg_ratio：★3 觉醒追加打击的伤害系数（默认 1.0 = 主斩）。追加段吸血/固定回血不重复结算，
 ## 击退与异常伤害随系数等比缩小（灼烧/剧毒取 max 生效，弱化刷新不会盖掉主斩的强异常）。
 static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
+	# 剑气凌霄：本体圆判定整段让位 —— 这一刀的伤害全部由飞出的剑弧结算，
+	# 不许「一下近战 + 一下剑气」两段收账（用户口径）。
+	if StrikeFx.sword_qi_active():
+		return 0
 	var results: Array = w._query_enemies(arc_radius(w), w.global_position + aim_dir * MELEE_LUNGE, 24)
 	var hit_count := 0
 	# 返回值语义 = 「可见命中数」：屏外目标的伤害/击退/异常照常结算，但不计入计数——
@@ -224,13 +234,12 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 				# 开山重刃谱：近战命中额外吸收生命
 				if can_flat_heal:
 					player.heal(flat_ls, true)
-			# 超级悟道机制卡的命中后效果（五行轮转 / 天罚 / 万剑归宗计数）：
-			# 统一走 OnHitEffects，避免每加一张卡就要回来改这个 handler
+			# 超级悟道机制卡的命中后效果（五行轮转 / 天罚）：
+			# 统一走 OnHitEffects，避免每加一张卡就要回来改这个 handler。
+			# 万剑归宗不在此列（2026-10-26 改判）：它按【出手】攒剑意、全体剑器齐射，
+			# 入口在 FloatingWeapon._perform_attack → SwordPhantom.tick_attack。
 			if has_mech:
 				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)
-				if dmg_ratio >= 1.0:
-					w._sword_qi_charge = OnHitEffects.tick_sword_qi(
-						w, enemy.global_position, dmg, int(w._sword_qi_charge), mech)
 	# 一挥扫中一片也只算「打了几下」，不是「打了几件事」：
 	# 震屏与顿帧由 EnemyBase.take_damage 按目标重要性发放，武器侧不再重复叠加
 	return hit_count

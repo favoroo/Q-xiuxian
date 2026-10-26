@@ -389,12 +389,15 @@ static func _weighted_pick(candidates: Array, counts: Dictionary, tags: Dictiona
 
 ## 卡面数据只从绑定道具现取：title/desc/icon/apply 全在 ItemData（数值唯一真话），
 ## 卡上再挂 rarity + lane_label 让 LevelUpCardFactory 直接吃逆天红与道途签。
+## is_super 是飞升悟道（原超级悟道）的显式卡面标记：普通悟道 payload 没有这个键，
+## 卡工厂据它染淡红卡底、加粗红框、红图标框；普通卡一条分支都不进。
 static func card_payload(card: Dictionary) -> Dictionary:
 	var gid := String(card.get("grant_item", ""))
 	var idef := ItemData.get_def(gid)
 	var line := String(card.get("line", ""))
 	return {
 		"id": String(card.get("id", "")),
+		"is_super": true,
 		"grant_item": gid,
 		"kind": String(card.get("kind", "ritual")),
 		"line": line,

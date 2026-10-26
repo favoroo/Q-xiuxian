@@ -450,6 +450,23 @@ SFX = {
                    fm_tone(b, f0=1550, f1=1800, dur=0.05, peak=0.065, ratio=2.7, idx0=1.6),
                    tone(b, wtype="sine", f0=760, f1=1050, dur=0.045, peak=0.045)),
     ],
+    # 链电「滋啦」声（2026-10-26 飞升悟道演出升级）：紫电/雷劫/雷霆弹幕/兽群共用。
+    # 为什么单独一支：这四路是「命中后高频触发」的链式电弧，与 thunder_strike 那种
+    # 「一记天雷砸下来」的落雷完全不同的语感 —— 共用同一个音时玩家听到的全是落雷。
+    # 设计：极短高频电离碎响（16~20ms 脆头，无低频轰鸣）+ 一串快速下降的方波跳火，
+    # 读「电在怪身上窜」；不带空间尾巴，密集触发时不会糊成一片混响。
+    "chain_zap": [
+        lambda b: (noise(b, dur=0.020, peak=0.26, ftype="highpass", f0=5200, f1=3600, atk=0.0006),
+                   noise(b, dur=0.055, peak=0.19, ftype="bandpass", f0=3400, f1=1500, q=1.6, t0=0.008),
+                   tone(b, wtype="square", f0=1900, f1=900, dur=0.030, peak=0.075, t0=0.004),
+                   tone(b, wtype="square", f0=2400, f1=1150, dur=0.026, peak=0.060, t0=0.030),
+                   tone(b, wtype="sine", f0=420, f1=260, dur=0.045, peak=0.070, t0=0.004)),
+        lambda b: (noise(b, dur=0.016, peak=0.24, ftype="highpass", f0=5600, f1=4000, atk=0.0005),
+                   noise(b, dur=0.062, peak=0.17, ftype="bandpass", f0=2900, f1=1300, q=1.5, t0=0.006),
+                   tone(b, wtype="square", f0=1650, f1=820, dur=0.028, peak=0.070, t0=0.003),
+                   tone(b, wtype="square", f0=2150, f1=1000, dur=0.024, peak=0.055, t0=0.026),
+                   tone(b, wtype="sine", f0=380, f1=230, dur=0.040, peak=0.065, t0=0.003)),
+    ],
     "thunder_strike": [
         lambda b: (noise(b, dur=0.05, peak=0.24, ftype="highpass", f0=4200, f1=1400, q=0.8),
                    tone(b, wtype="sine", f0=150, f1=40, dur=0.26, peak=0.28),
@@ -974,6 +991,7 @@ TARGET_PEAK = {
     "blade_shoot": 0.34,
     "talisman_throw": TARGET_PEAK_LOUD,
     "thunder_strike": 0.55,
+    "chain_zap": 0.42,
     "fan_gust": TARGET_PEAK_LOUD,
     "orb_hit": 0.32,
     # 器型族：近战双层（前摇压低当铺垫，命中层抬上来但压在 enemy_hit 之下）

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://csupervfxchk01"]
+
+[ext_resource type="Script" path="res://tests/super_vfx_check.gd" id="1_check"]
+
+[node name="SuperVfxCheck" type="Node"]
+script = ExtResource("1_check")

@@ -33,6 +33,9 @@ static func format_combo(sum: int, count: int) -> String:
 static var _normal_settings: LabelSettings
 static var _crit_settings: LabelSettings
 static var _heal_settings: LabelSettings
+## 上次建样式表时记下的主题 id：切主题后下次 spawn 重建 LabelSettings，
+## 让 _crit_settings.font_color（随主题 static var）切主题后对新跳字立即生效
+static var _last_theme_id: StringName = &""
 
 static var _pool: Array[DamageNumber] = []
 static var _host: Node2D = null
@@ -93,10 +96,12 @@ static func combo_count() -> int:
 static func host_child_count() -> int:
 	return 0 if (_host == null or not is_instance_valid(_host)) else _host.get_child_count()
 
-## 样式表只建一次，所有跳字共享（避免 GC 抖动）
+## 样式表只建一次，所有跳字共享（避免 GC 抖动）；但暴击字色跟随玩家自选主题色，
+## 切主题后须重建 LabelSettings，否则 _crit_settings.font_color 仍烤着旧主题色
 static func _ensure_settings() -> void:
-	if _normal_settings != null:
+	if _normal_settings != null and GameStyle.current_theme() == _last_theme_id:
 		return
+	_last_theme_id = GameStyle.current_theme()
 
 	_normal_settings = LabelSettings.new()
 	_normal_settings.font = GameStyle.body_font()
@@ -108,7 +113,7 @@ static func _ensure_settings() -> void:
 	_crit_settings = LabelSettings.new()
 	_crit_settings.font = GameStyle.display_font()
 	_crit_settings.font_size = 20
-	_crit_settings.font_color = GameStyle.GOLD_FX  # 暴击 = 鎏金大字（玉色留给金币/增益读数）
+	_crit_settings.font_color = GameStyle.GOLD  # 暴击 = 主题色大字（玉色留给金币/增益读数）
 	_crit_settings.outline_size = 5
 	_crit_settings.outline_color = Color(0.04, 0.02, 0.0, 0.96)  # 纯色深描边（HDR 绯金描边太花，已回退）
 

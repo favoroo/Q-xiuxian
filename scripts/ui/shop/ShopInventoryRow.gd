@@ -205,7 +205,7 @@ static func open_item_tip(shop, item_id: String, anchor: Control) -> void:
 	var refund := ItemData.sell_price(item_id)
 	var rows: Array = [["品阶", ItemData.tier_label(tier_num), tier_col]]
 	if no_sell:
-		rows.append(["来源", "超级悟道", tier_col])
+		rows.append(["来源", "飞升悟道", tier_col])
 	else:
 		rows.append(["原价", "%d 金币" % int(def.get("price", 0)), GameStyle.PAPER_DIM])
 		rows.append(["出售返还", "%d 金币" % refund, GameStyle.JADE])
@@ -218,7 +218,7 @@ static func open_item_tip(shop, item_id: String, anchor: Control) -> void:
 		if not s.is_empty():
 			notes.append(s)
 	if no_sell:
-		notes.append("神通来自超级悟道，本局永久生效，不可出售。")
+		notes.append("神通来自飞升悟道，本局永久生效，不可出售。")
 	else:
 		notes.append("出售按原价一半回收金币，加过的属性当场退回（与灵兽同一条口径）。")
 	var unique := bool(def.get("unique", false))

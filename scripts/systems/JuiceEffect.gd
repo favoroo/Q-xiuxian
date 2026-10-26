@@ -420,21 +420,6 @@ static func spawn_bolt_pop(parent: Node, pos: Vector2, col: Color = Color(2.4, 2
 		var spd := randf_range(70.0, 130.0)
 		fx._add_particle(Vector2.ZERO, Vector2(cos(a), sin(a)) * spd, 5.0, col, 1.4)
 
-## 剑气放射刻度（万剑归宗）：环主波由 spawn_shockwave 负责，这里补 8 道从中心向外甩的
-## 短剑光 —— 只画环读起来像「涟漪」，加上放射刻度才是「剑气炸开」。
-static func spawn_radial_slash(parent: Node, pos: Vector2, radius: float) -> void:
-	if not _ready_to_spawn(parent):
-		return
-	if not _pos_in_viewport(parent, pos):
-		return
-	var fx := _acquire()
-	fx._begin(EffectType.IMPACT_POP, pos, 0.2, Z_OVERLAY)
-	var col := GameStyle.FX_HDR_CORE
-	for i in range(8):
-		var a := float(i) * (TAU / 8.0)
-		var dir := Vector2(cos(a), sin(a))
-		fx._add_particle(dir * radius * 0.35, dir * radius * 2.2, 14.0, col, 2.0)
-
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:
 	if parent == null or not is_instance_valid(parent):

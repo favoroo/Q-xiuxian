@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://cplayer001"]
+[gd_scene load_steps=11 format=3 uid="uid://cplayer001"]
 
 [ext_resource type="Script" path="res://scripts/entities/Player.gd" id="1_player"]
 [ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/entities/player_aura.gd" id="6_aura"]
 [ext_resource type="Script" path="res://scripts/entities/player_level_ritual.gd" id="7_ritual"]
 [ext_resource type="Script" path="res://scripts/entities/player_revive_ritual.gd" id="8_revive"]
+[ext_resource type="Script" path="res://scripts/entities/player_blood_shield.gd" id="9_blood_shield"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_player"]
 shader = ExtResource("2_shader")
@@ -48,6 +49,9 @@ scale = Vector2(0.5, 0.5)
 
 [node name="SkillVfx" type="Node2D" parent="."]
 script = ExtResource("5_skill_vfx")
+
+[node name="BloodShield" type="Node2D" parent="."]
+script = ExtResource("9_blood_shield")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 4)

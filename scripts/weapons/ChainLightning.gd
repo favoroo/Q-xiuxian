@@ -14,7 +14,15 @@ extends RefCounted
 ## 随机：落点抖动等纯表现随机走本模块本地 RNG，不碰 GameManager.rng（铁律 3/15）。
 
 ## 上一次链电事件的毫秒时间戳 + 深度：全局限流 + 递归闸
+## 2026-10-26：由「一条全局 90ms 闸」拆成「按路径独立闸」。
+## 旧写法七路雷电（紫电/雷劫/天罚/反震/盾碎/雷霆弹幕/兽群）抢同一条闸，一场团战里
+## 只有第一条能画出来，其余全被吞成「没触发」——玩家读不到是哪张卡在动。
+## 现在每路各持一条 BalanceChain.EVENT_GAP_MS 的闸：同一帧里紫电 + 雷劫 + 天罚
+## 同时触发时三条都会画出来（各自的闸只压自己这一路的重复触发）。
+## 总量兜底交给 LightningBolt 池容量（24）与 MAX_DEPTH 递归闸，不再设跨路径的全局闸
+## —— 全局闸正是「明明拿了卡却看不见」的根因。
 static var _last_event_ms: int = -999999
+static var _last_gate_ms: Dictionary = {}
 static var _depth: int = 0
 
 ## 短于此长度的电弧不画（弹丸贴脸命中时起点与目标重合，零长度折线只是噪点）
@@ -28,9 +36,12 @@ const BOLT_WIDTH := 1.15
 ## first_target 传 null 表示「从 from_pos 就地找最近敌人起跳」。
 ## damage 是首跳伤害（后续跳按 BalanceChain.HOP_RATIO 折损）。
 ## max_hops 传 0 用 BalanceChain.MAX_HOPS。
+## gate：演出闸的路径键（每路雷电各持一条，见文件头）；sfx 传空串用默认雷击音。
+## radius：起跳搜索半径（传 0 用 BalanceChain.CHAIN_RADIUS；反震电场走 THORNS_RADIUS）。
 ## 返回实际命中的目标数。
 static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: float,
-		max_hops: int = 0, tint: Color = Color(0, 0, 0, 0)) -> int:
+		max_hops: int = 0, tint: Color = Color(0, 0, 0, 0), gate: StringName = &"strike",
+		sfx: String = "thunder_strike", radius: float = 0.0) -> int:
 	if host == null or not is_instance_valid(host):
 		return 0
 	if damage <= 0.0:
@@ -39,11 +50,12 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	if _depth >= BalanceChain.MAX_DEPTH:
 		return 0
 	var hops: int = max_hops if max_hops > 0 else BalanceChain.MAX_HOPS
-	var targets := _pick_chain(first_target, from_pos, hops)
+	var search_r: float = radius if radius > 0.0 else BalanceChain.CHAIN_RADIUS
+	var targets := _pick_chain(first_target, from_pos, hops, search_r)
 	if targets.is_empty():
 		return 0
-	# 全局限流只掐「电弧演出」，伤害照常结算 —— 群杀时不该因为演出预算少打掉敌人
-	var draw_bolt: bool = _try_consume_event_gate()
+	# 限流只掐「电弧演出」，伤害照常结算 —— 群杀时不该因为演出预算少打掉敌人
+	var draw_bolt: bool = _try_consume_event_gate(gate)
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
 	var cursor: Vector2 = from_pos
 	# 演出折点：伤害循环里顺手记下每一段的起讫，结算完统一按节拍画（伤害绝不延迟）
@@ -72,7 +84,8 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 		cursor = enemy.global_position
 	_depth = maxi(0, _depth - 1)
 	if draw_bolt:
-		AudioManager.play_sfx("thunder_strike", 0.55)
+		if not sfx.is_empty():
+			AudioManager.play_sfx(sfx, 0.55)
 		_draw_staggered(host, segments, hit_points, bolt_tint)
 	return hit_n
 
@@ -117,17 +130,24 @@ static func _draw_staggered(host: Node, segments: Array, hit_points: Array, tint
 			JuiceEffect.spawn_bolt_pop(host, p, tint))
 
 ## 单点落雷（天罚用）：从上方劈到目标点，伤害 + 电弧。
-## 二阶段演出：主电弧加宽到 1.4，补一道 30ms 后的副电弧（双闪读「天雷」而不是「细线」），
-## 落点 HDR 爆闪 + 冲击环保留。
-static func sky_bolt(host: Node, target_pos: Vector2, damage: float, tint: Color = Color(0, 0, 0, 0)) -> void:
+## 2026-10-26 Fixed: 旧实现只画演出、**从不结算伤害** —— crit_bolt_damage 算完直接丢弃，
+## 天罚这张飞升卡实际是空转的。现在伤害由这里自己落地（目标按位置就近认领）。
+## 演出：主电弧加宽到 1.7 + 30ms 后副电弧（双闪读「天雷」），落点爆闪 + 火星上喷 + 冲击环。
+static func sky_bolt(host: Node, target_pos: Vector2, damage: float,
+		tint: Color = Color(0, 0, 0, 0), gate: StringName = &"tianfa") -> void:
 	if host == null or not is_instance_valid(host) or damage <= 0.0:
 		return
-	if not _try_consume_event_gate():
+	if not _try_consume_event_gate(gate):
 		return
+	# 伤害落地：优先认领落点处那个目标（暴击命中的敌人），找不到就打点上的怪
+	_apply_sky_bolt_damage(target_pos, damage)
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
 	var sky := target_pos + Vector2(0.0, -260.0)
-	_draw_bolt(host, sky, target_pos, bolt_tint, 1.4)
+	_draw_bolt(host, sky, target_pos, bolt_tint, 1.7)
 	JuiceEffect.spawn_bolt_pop(host, target_pos, bolt_tint)
+	# 落点火星上喷：纯白雷柱砸地，补一撮垂直上冲的余烬，读「砸出坑」而不是「闪了一下」
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, target_pos, "none", 1.3, true,
+		Vector2.UP, FxParticlePool.HitOwner.NONE)
 	var tree := host.get_tree()
 	if tree != null:
 		tree.create_timer(0.03).timeout.connect(func() -> void:
@@ -135,11 +155,37 @@ static func sky_bolt(host: Node, target_pos: Vector2, damage: float, tint: Color
 				return
 			_draw_bolt(host, sky + Vector2(6.0, 0.0), target_pos, bolt_tint, 0.9))
 	AudioManager.play_sfx("thunder_strike", 0.7)
-	JuiceEffect.spawn_shockwave(host, target_pos, 48.0, bolt_tint, 0.16)
+	JuiceEffect.spawn_shockwave(host, target_pos, SKY_BOLT_RING_RADIUS, bolt_tint, 0.16)
+
+## 天罚落点冲击环半径（px）。纯表现，不参与判定 —— 天罚是单点伤害，
+## 环只是把「砸下来了」这件事画得有分量，别误读成 AOE 范围。
+const SKY_BOLT_RING_RADIUS := 64.0
+## 天罚落点认领半径：落点附近这个距离内最近的那只敌人吃伤害。
+## 取 28px 是敌人碰撞体量级 —— 暴击命中的目标必然在落点中心，够不着说明它刚被打死/击飞。
+const SKY_BOLT_HIT_RADIUS := 28.0
+
+## 天罚伤害落地：按位置就近认领（不靠对象引用，避免 host 侧硬类型依赖）。
+static func _apply_sky_bolt_damage(target_pos: Vector2, damage: float) -> void:
+	var best: Node2D = null
+	var best_d: float = SKY_BOLT_HIT_RADIUS
+	var live: Array = GameManager.live_enemies
+	for node in live:
+		var e := node as Node2D
+		if e == null or not is_instance_valid(e):
+			continue
+		if bool(e.get("dying")) or not e.has_method("take_damage"):
+			continue
+		var d: float = target_pos.distance_to(e.global_position)
+		if d < best_d:
+			best_d = d
+			best = e
+	if best != null:
+		best.take_damage(damage, Vector2.ZERO, true)
 
 ## 挑一条链：首个目标（或从 origin 找最近的），之后每次找「离当前最近且没打过」的。
 ## 与 SpiritPet 连锁神雷同一条口径（60% 折损 / 最多 3 个），但这里允许玩家侧配置跳数。
-static func _pick_chain(first_target: Node2D, origin: Vector2, hops: int) -> Array:
+static func _pick_chain(first_target: Node2D, origin: Vector2, hops: int,
+		radius: float = 0.0) -> Array:
 	var out: Array = []
 	var used: Dictionary = {}
 	var cursor_pos: Vector2 = origin
@@ -149,7 +195,7 @@ static func _pick_chain(first_target: Node2D, origin: Vector2, hops: int) -> Arr
 		used[next_target.get_instance_id()] = true
 		cursor_pos = next_target.global_position
 	while out.size() < hops:
-		var found: Node2D = _nearest_unhit(cursor_pos, used)
+		var found: Node2D = _nearest_unhit(cursor_pos, used, radius)
 		if found == null:
 			break
 		out.append(found)
@@ -177,10 +223,10 @@ static func collect_in_radius(origin: Vector2, radius: float) -> Array:
 		out.append(e)
 	return out
 
-static func _nearest_unhit(origin: Vector2, used: Dictionary) -> Node2D:
+static func _nearest_unhit(origin: Vector2, used: Dictionary, radius: float = 0.0) -> Node2D:
 	var live: Array = GameManager.live_enemies
 	var best: Node2D = null
-	var best_d: float = BalanceChain.CHAIN_RADIUS
+	var best_d: float = radius if radius > 0.0 else BalanceChain.CHAIN_RADIUS
 	for node in live:
 		var e := node as Node2D
 		if e == null or not is_instance_valid(e):
@@ -197,11 +243,15 @@ static func _nearest_unhit(origin: Vector2, used: Dictionary) -> Node2D:
 			best = e
 	return best
 
-## 事件闸：返回 true 表示这次允许画电弧 + 播音效（伤害不受影响）
-static func _try_consume_event_gate() -> bool:
+## 事件闸：返回 true 表示这次允许画电弧 + 播音效（伤害不受影响）。
+## gate 为路径键（&"zidian" / &"leijie" / &"tianfa" / &"fanzhen" / &"xuehai" / &"danmu" / &"shouqun"…）：
+## 每路各持一条 BalanceChain.EVENT_GAP_MS 的闸，互不挤占。
+static func _try_consume_event_gate(gate: StringName = &"strike") -> bool:
 	var now := Time.get_ticks_msec()
-	if now - _last_event_ms < BalanceChain.EVENT_GAP_MS:
+	var last: int = int(_last_gate_ms.get(gate, -999999))
+	if now - last < BalanceChain.EVENT_GAP_MS:
 		return false
+	_last_gate_ms[gate] = now
 	_last_event_ms = now
 	return true
 
@@ -215,4 +265,5 @@ static func _draw_bolt(host: Node, from_pos: Vector2, to_pos: Vector2, tint: Col
 ## 供测试/重置用：清空限流与递归状态
 static func reset_gate() -> void:
 	_last_event_ms = -999999
+	_last_gate_ms.clear()
 	_depth = 0

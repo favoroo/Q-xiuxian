@@ -89,6 +89,9 @@ const SFX_GAP_MS := {
 	"blade_shoot": 25,
 	"talisman_throw": 25,
 	"thunder_strike": 40,
+	# 链电专用（2026-10-26）：紫电/雷劫/雷霆弹幕/兽群共用。30ms —— 比 thunder_strike
+	# 更短，因为链电是「命中后逐次」触发，节流太长会把连跳吞成一声。
+	"chain_zap": 30,
 	"explosion_boom": 90,
 	"sword_qi_wave": 120,
 	"fan_gust": 35,
@@ -297,6 +300,7 @@ func _load_audio_assets() -> void:
 	_register_sfx("blade_shoot", _sfx_paths("blade_shoot", 2))
 	_register_sfx("talisman_throw", _sfx_paths("talisman_throw", 2))
 	_register_sfx("thunder_strike", _sfx_paths("thunder_strike", 2))
+	_register_sfx("chain_zap", _sfx_paths("chain_zap", 2))
 	# 超级悟道二阶段神通演出（血祭尸爆 / 万剑归宗剑气）
 	_register_sfx("explosion_boom", _sfx_paths("explosion_boom", 2))
 	_register_sfx("sword_qi_wave", _sfx_paths("sword_qi_wave", 2))

@@ -372,6 +372,8 @@ func _exit_tree() -> void:
 	LightningBolt.clear_cache()
 	FxParticlePool.clear_cache()
 	BladeProjectile.clear_pool()
+	SwordQiWave.clear_pool()
+	SwordPhantom.clear_pool()
 	ThunderBurst.clear_pool()
 	EnemyBolt.clear_pool()
 	AstralGem.clear_pool()

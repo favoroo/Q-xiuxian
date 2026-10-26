@@ -50,7 +50,7 @@ extends RefCounted
 ##   kill_cd_refund    —— 杀戮节奏：击杀返还所有武器当前冷却比例（EnemyDeathFx.drops 读侧）
 ## 2026-10-25 超级悟道「三道」重构后的机制钩子（全部读侧现算，不进 apply）：
 ##   melee_range_mult —— 剑气凌霄：近战/横扫判定半径倍率（MeleeHandler/SweepHandler.arc_radius）
-##   sword_qi          —— 万剑归宗：近战累计命中到阈值放环形剑气（OnHitEffects.tick_sword_qi）
+##   sword_qi          —— 万剑归宗：剑系出手攒剑意，攒满全体剑器幻化齐射（SwordPhantom.tick_attack）
 ##   projectile_count_bonus / projectile_damage_mult —— 万箭齐发：多发但单发打折（ProjectileHandler）
 ##   projectile_bounce_bonus —— 弹幕回响：弹丸出膛时叠加弹射次数（ProjectileHandler）
 ##   attack_chain_lightning  —— 紫电：每 N 次攻击放连锁闪电（FloatingWeapon._perform_attack）
@@ -813,14 +813,14 @@ const DEFS: Dictionary = {
 		"shen_jianqi": {
 			"name": "剑气凌霄", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_kaishan_jianyi.png",
-			"desc": "近战与横扫的攻击范围翻倍",
+			"desc": "近战与横扫改为挥出远距离剑气，攻击距离翻倍",
 			"apply": {},
 			"melee_range_mult": 1.0,
 		},
 		"shen_wanjian_guizong": {
 			"name": "万剑归宗", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_lijian_shi.png",
-			"desc": "近战每数刀迸发一道环形剑气",
+			"desc": "剑系武器出手攒剑意，攒满全体剑器幻化齐射",
 			"apply": {},
 			"sword_qi": 1.0,
 		},

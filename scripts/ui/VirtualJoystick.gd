@@ -167,11 +167,13 @@ func _update_joystick(pos: Vector2) -> void:
     
     knob.position = (base.size - knob.size) * 0.5 + offset
     
+    # 出死区即满幅方向：手机端一律按默认移速走，推进距离只画摇杆头、不再进速度
+    # （2026-10-26 用户要求去掉「短滑慢移」；方向仍取拇指实际角度）
     var normalized_dist = offset.length() / max_radius
     if normalized_dist < deadzone:
         output = Vector2.ZERO
     else:
-        output = offset.normalized() * ((normalized_dist - deadzone) / (1.0 - deadzone))
+        output = offset.normalized()
     
     joystick_updated.emit(output)
 

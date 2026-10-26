@@ -29,8 +29,7 @@ static func any_enabled() -> bool:
 	_memo_any = float(snap.get("wuxing_rotation_chance", 0.0)) > 0.0 \
 		or float(snap.get("crit_sky_bolt", 0.0)) > 0.0 \
 		or float(snap.get("projectile_chain_lightning", 0.0)) > 0.0 \
-		or float(snap.get("wuxing_all", 0.0)) > 0.0 \
-		or float(snap.get("sword_qi", 0.0)) > 0.0
+		or float(snap.get("wuxing_all", 0.0)) > 0.0
 	return _memo_any
 
 ## 供测试/新开局重置记忆
@@ -66,20 +65,76 @@ static func _roll_wuxing(enemy: Object, damage: float, chance: float) -> void:
 		0:
 			ProcStatus.apply(enemy, true, damage * BalanceChain.WUXING_BURN_RATIO,
 				BalanceChain.WUXING_BURN_DUR, 0.0, 0.0, false, 0.0, 0.0)
+			_proc_pop(enemy, 0)
 		1:
 			ProcStatus.apply(enemy, false, 0.0, 0.0,
 				BalanceChain.WUXING_CHILL, BalanceChain.WUXING_CHILL_DUR, false, 0.0, 0.0)
+			_proc_pop(enemy, 1)
 		_:
 			ProcStatus.apply(enemy, false, 0.0, 0.0, 0.0, 0.0,
 				true, damage * BalanceChain.WUXING_POISON_RATIO, BalanceChain.WUXING_POISON_DUR)
+			_proc_pop(enemy, 2)
+
+## 异常施加瞬间的元素爆发（2026-10-26）：旧写法只在敌人身上留一层淡淡染色，
+## 而染色优先级是「冰缓 > 灼烧 > 剧毒」——五行归一三系同挂时玩家永远只看到蓝色。
+## 这里在**施加这一刻**放一簇对应元素色的粒子，让「刚刚挂上了什么」有一次性、可分辨的读数。
+## 索引：0=灼烧 1=冰缓 2=剧毒。
+##
+## 为什么走 bypass_budget + 本地帧闸：续发粒子的 FRAME_BUDGET_STATUS_AURA 只有 2/帧，
+## 施加瞬间若也挤那条闸，多目标命中时几乎全部被吞（正是要治的「看不见」）。
+## 但完全放开会让高频命中把 24 个发射器全抢走（抢占最旧的 = 抢掉死亡爆散/命中火花），
+## 所以这里自持一道 PROC_POP_FRAME_BUDGET 的独立闸，与续发粒子互不挤占、总量仍封顶。
+const PROC_POP_FRAME_BUDGET := 3
+static var _proc_pop_frame: int = -1
+static var _proc_pop_count: int = 0
+
+static func _proc_pop(enemy: Object, kind: int) -> void:
+	var node := enemy as Node2D
+	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+		return
+	var frame: int = Engine.get_physics_frames()
+	if frame != _proc_pop_frame:
+		_proc_pop_frame = frame
+		_proc_pop_count = 0
+	if _proc_pop_count >= PROC_POP_FRAME_BUDGET:
+		return
+	_proc_pop_count += 1
+	var pos := node.global_position + Vector2(0.0, -10.0)
+	match kind:
+		0:
+			FxParticlePool.burst(FxParticlePool.BURN_AURA, pos, "fire", 1.6, true)
+		1:
+			FxParticlePool.burst(FxParticlePool.CHILL_AURA, pos, "water", 1.6, true)
+		_:
+			FxParticlePool.burst(FxParticlePool.POISON_AURA, pos, "poison", 1.6, true)
+
+## 五行归一的三色齐上：同一帧发三簇会挤在同一个点上糊成一坨白，
+## 这里按 PROC_POP_STAGGER 秒依次补发，读得出「火 → 冰 → 毒」三下。
+const PROC_POP_STAGGER := 0.045
+
+static func _proc_pop_staggered(enemy: Object) -> void:
+	var node := enemy as Node2D
+	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+		return
+	_proc_pop(node, 0)
+	var tree := node.get_tree()
+	if tree == null:
+		return
+	for kind in [1, 2]:
+		var delay: float = PROC_POP_STAGGER * float(kind)
+		tree.create_timer(delay).timeout.connect(func() -> void:
+			if node == null or not is_instance_valid(node):
+				return
+			_proc_pop(node, kind))
 
 ## 天罚：暴击时在目标头顶劈一道雷（固定基值 + 元素加成，不随武器面板膨胀）
+## 2026-10-26：伤害已由 ChainLightning.sky_bolt 自己落地（旧实现只画不结算，卡是空转的）。
 static func _roll_sky_bolt(host: Node, enemy: Node2D, is_crit: bool, enabled: float) -> void:
 	if not is_crit or enabled <= 0.0:
 		return
 	ChainLightning.sky_bolt(host, enemy.global_position,
 		BalanceChain.crit_bolt_damage(GameManager.elemental_damage),
-		GameStyle.FX_HDR_LIGHTNING)
+		GameStyle.FX_HDR_LIGHTNING, &"tianfa")
 
 ## 取本帧的机制快照（命中循环外调一次，循环内复用）
 static func snapshot() -> Dictionary:
@@ -102,6 +157,8 @@ static func on_weapon_hit(host: Node, enemy: Node2D, damage: float, is_crit: boo
 			BalanceChain.WUXING_BURN_DUR,
 			BalanceChain.WUXING_CHILL, BalanceChain.WUXING_CHILL_DUR,
 			true, damage * BalanceChain.GUIYI_POISON_RATIO, BalanceChain.WUXING_POISON_DUR)
+		# 三系同挂：三簇元素粒子按 45ms 依次炸开，读「三色齐上」而不是一团糊
+		_proc_pop_staggered(enemy)
 	else:
 		_roll_wuxing(enemy, damage, wuxing)
 	_roll_sky_bolt(host, enemy, is_crit, bolt)
@@ -116,50 +173,37 @@ static func on_projectile_hit(host: Node, enemy: Node2D, damage: float, is_crit:
 	if float(s.get("projectile_chain_lightning", 0.0)) > 0.0:
 		# 首跳就是这一次命中的实伤（chain_hop_damage(damage, 0) == damage），
 		# 之后每跳按 HOP_RATIO 折损 —— 不要在这里再乘一次衰减，否则首跳凭空少 40%。
+		# 染色走 ★4 电光青（箭道共鸣的身份色），与紫电紫罗兰分开读。
 		ChainLightning.strike(host, enemy.global_position, enemy, damage,
-			_chain_hops(s))
+			_chain_hops(s), GameStyle.FX_HDR_STAR4_CYAN, &"danmu", "chain_zap")
 
-## 万剑归宗：近战命中累计到阈值后，在命中点放一道环形剑气。
-## charge 由武器侧持有（每把武器独立计数），返回值是「本次结算后的新计数」。
-static func tick_sword_qi(host: Node, center: Vector2, damage: float, charge: int,
-		snap: Dictionary = {}) -> int:
-	var s: Dictionary = snap if not snap.is_empty() else snapshot()
-	if float(s.get("sword_qi", 0.0)) <= 0.0:
-		return 0
-	var next: int = charge + 1
-	if next < BalanceChain.SWORD_QI_EVERY:
-		return next
-	_burst_sword_qi(host, center, BalanceChain.sword_qi_damage(damage))
-	return 0
-
-static func _burst_sword_qi(host: Node, center: Vector2, damage: float) -> void:
-	if host == null or not is_instance_valid(host) or damage <= 0.0:
-		return
-	var targets := ChainLightning.collect_in_radius(center, BalanceChain.SWORD_QI_RADIUS)
-	for enemy in targets:
-		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, Vector2.ZERO, false)
-	# 演出（2026-10-25 二阶段加强）：HDR 白金主环 + 放射剑光刻度 + 镜头微顿，
-	# 不再借「重器前摇」音效 —— 剑气有自己烘焙的 sword_qi_wave。
-	JuiceEffect.spawn_shockwave(host, center, BalanceChain.SWORD_QI_RADIUS,
-		GameStyle.FX_HDR_CORE, 0.24)
-	JuiceEffect.spawn_radial_slash(host, center, BalanceChain.SWORD_QI_RADIUS)
-	GameFeel.micro_kick(GameManager, Vector2.ZERO, 2.0)
-	AudioManager.play_sfx("sword_qi_wave", 0.65)
+## 万剑归宗已改判（2026-10-26）：不再走「命中后效果」这条路 —— 旧实现是每 3 次近战命中
+## 在命中点放一圈 150px 冲击波（玩家读不出打了谁、打了多少，也没有「万剑」的意象），
+## 现换成 SwordPhantom 幻影剑阵齐射（出手攒剑意 → 全体剑器各幻化一道齐射）。
+## 因此本文件不再有 tick_sword_qi / _burst_sword_qi，剑意计数也不在武器身上。
 
 ## 反震电场：玩家受击后向周围放电（固定基值 + 有效反震加成）
+## 2026-10-26 演出重做：改用 BalanceChain.THORNS_RADIUS（旧写法让这个常量成了死值，
+## 实际走的是链电通用 240px），并补一道同半径的冰蓝冲击环 —— 画多大 == 判多大，
+## 玩家一眼能看出「反震圈到哪」。染色走水系灵蓝，与紫电/雷劫/天罚彻底分开。
 static func on_player_hurt(player: Node2D) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	var s := snapshot()
 	if float(s.get("thorns_electric", 0.0)) <= 0.0:
 		return
+	var tint := GameStyle.FX_HDR_WATER
 	ChainLightning.strike(player, player.global_position, null,
 		BalanceChain.thorns_bolt_damage(GameManager.get_effective_thorns()),
-		_chain_hops(s), GameStyle.FX_HDR_LIGHTNING)
+		_chain_hops(s), tint, &"fanzhen", "chain_zap", BalanceChain.THORNS_RADIUS)
+	# 同源环：半径就是反震的搜索半径，与判定一字不差
+	JuiceEffect.spawn_shockwave(player.get_parent(), player.global_position,
+		BalanceChain.THORNS_RADIUS, tint, 0.20)
+	JuiceEffect.spawn_bolt_pop(player, player.global_position, tint)
 
 ## 血海护盾破碎：盾被打穿这一刻向周身放一片电（基值 + 生命比例 + 元素加成，BalanceChain）。
-## 放电走 ChainLightning（自带事件闸与深度闸），这里是低频大事件，补一记冲击环与震屏。
+## 2026-10-26 演出重做：血红染色 + 同半径冲击环 + 四向短弧 nova，
+## 读起来是「血盾炸开」而不是又一道普通白雷。
 static func on_shield_broken(player: Node2D) -> void:
 	if player == null or not is_instance_valid(player):
 		return
@@ -167,12 +211,14 @@ static func on_shield_broken(player: Node2D) -> void:
 	if float(s.get("lifesteal_overflow_shield", 0.0)) <= 0.0:
 		return
 	var dmg := BalanceChain.shield_break_damage(player.max_health, GameManager.elemental_damage)
+	var tint := GameStyle.FX_HDR_XUEHAI
 	ChainLightning.strike(player, player.global_position, null, dmg,
-		_chain_hops(s), GameStyle.FX_HDR_LIGHTNING)
+		_chain_hops(s), tint, &"xuehai", "chain_zap", BalanceChain.SHIELD_BREAK_RADIUS)
 	JuiceEffect.spawn_shockwave(player.get_parent(), player.global_position,
-		BalanceChain.SHIELD_BREAK_RADIUS, GameStyle.FX_HDR_LIGHTNING, 0.22)
+		BalanceChain.SHIELD_BREAK_RADIUS, tint, 0.22)
+	JuiceEffect.spawn_bolt_pop(player, player.global_position, tint)
 	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-	AudioManager.play_sfx("thunder_strike", 0.8)
+	AudioManager.play_sfx("thunder_strike", 0.9)
 
 ## 灵兽直击挂钩（兽群链电 + 灵蕴五行共用入口）：pet 传灵兽节点，鸭类型不标类型。
 ## 灵兽出手是低频事件（秒级），不调 any_enabled 快闸，直读快照即可。
@@ -181,8 +227,11 @@ static func on_pet_hit(pet: Node, enemy: Node2D, damage: float) -> void:
 		return
 	var s := snapshot()
 	if float(s.get("pet_chain_lightning", 0.0)) > 0.0 and pet != null and is_instance_valid(pet):
+		# 染色走木系青碧（灵兽的身份色），与玩家侧紫电/雷劫分开；音量压到 0.35，
+		# 免得跟灵兽自己的技能音抢（雷灵雀的连锁神雷也播 thunder_strike）。
 		ChainLightning.strike(pet, enemy.global_position, enemy,
-			damage * BalanceChain.PET_CHAIN_RATIO, BalanceChain.PET_CHAIN_HOPS)
+			damage * BalanceChain.PET_CHAIN_RATIO, BalanceChain.PET_CHAIN_HOPS,
+			GameStyle.FX_HDR_WOOD, &"shouqun", "chain_zap")
 	var wuxing := float(s.get("pet_wuxing_chance", 0.0))
 	if wuxing > 0.0:
 		_roll_wuxing(enemy, damage, wuxing)

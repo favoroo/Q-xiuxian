@@ -509,6 +509,8 @@ func open_benefit_tip(anchor: Control, w: Dictionary, up: Dictionary) -> void:
 	StatsTipFactory.open_weapon_tip(self, anchor, w, false, note)
 
 ## 选中态：鎏金框 + 标题转金 + 徽记换成「已选 ★」，未选中的退回「×层数」。
+## 飞升悟道（原超级悟道）卡走同一套流程，但强调色换逆天赤红、卡底用工厂算好的淡红染色
+## （entry["bg_base"]）——普通卡 bg_base 就是 NAVY2，行为与改前逐像素一致。
 func _select_card(index: int) -> void:
 	if index < 0 or index >= _offers().size():
 		return
@@ -524,6 +526,12 @@ func _select_card(index: int) -> void:
 		var rarity_col: Color = entry["rarity_col"]
 		var badge: Label = entry["state_badge"]
 		var title_lbl: Label = entry["title_lbl"]
+		var bg_base: Color = entry.get("bg_base", GameStyle.NAVY2)
+		var is_super: bool = bool(entry.get("is_super", false))
+		# 飞升卡选中强调色分两档：标题/角标要压在淡红卡底上读得出字，用压深赤红（对比 5.96）；
+		# 图标框是墨底上的描边，用原色亮赤红才醒目（3.01 的对比度在深底上不是问题）。
+		var accent_text: Color = GameStyle.RARITY_MYTHIC.darkened(0.35) if is_super else GameStyle.GOLD
+		var accent_edge: Color = GameStyle.RARITY_MYTHIC if is_super else GameStyle.GOLD
 		var is_sel: bool = (i == selected_index)
 		var owned := int(GameManager.upgrade_counts.get(_offers()[i].get("id", ""), 0))
 
@@ -533,11 +541,11 @@ func _select_card(index: int) -> void:
 		if is_sel:
 			tw.tween_property(card, "scale", Vector2(SEL_SCALE, SEL_SCALE), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color.WHITE, 0.12)
-			style.bg_color = GameStyle.NAVY2.lightened(0.10)
-			icon_st.border_color = GameStyle.GOLD
-			title_lbl.add_theme_color_override("font_color", GameStyle.GOLD)
+			style.bg_color = bg_base.lightened(0.10)
+			icon_st.border_color = accent_edge
+			title_lbl.add_theme_color_override("font_color", accent_text)
 			badge.text = "已选 ★"
-			badge.add_theme_color_override("font_color", GameStyle.GOLD)
+			badge.add_theme_color_override("font_color", accent_text)
 			# T-5.1 选中高光：按稀有度起辉（普通微白高光，金色档 HDR 强起辉）
 			var r_key: String = String(entry.get("rarity", "common"))
 			var sel_glow := GameStyle.rarity_select_glow(r_key)
@@ -547,9 +555,9 @@ func _select_card(index: int) -> void:
 		else:
 			tw.tween_property(card, "scale", Vector2(DIM_SCALE, DIM_SCALE), 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 			tw.tween_property(card, "modulate", Color.WHITE, 0.12)
-			style.bg_color = GameStyle.NAVY2
+			style.bg_color = bg_base
 			style.border_color = rarity_col
-			icon_st.border_color = GameStyle.LINE
+			icon_st.border_color = GameStyle.RARITY_MYTHIC if is_super else GameStyle.LINE
 			title_lbl.add_theme_color_override("font_color", GameStyle.PAPER)
 			badge.text = "×%d" % owned if owned > 0 else ""
 			badge.add_theme_color_override("font_color", GameStyle.GREY)

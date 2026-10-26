@@ -71,3 +71,58 @@ static func try_spawn_earth_crack(w, hit_pos: Vector2, hit_radius: float) -> voi
 	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (w.get_tree().current_scene if w.get_tree() != null else w)
 	if battle_layer != null and w.is_inside_tree():
 		GroundDecal.spawn(battle_layer, hit_pos, GroundDecal.Kind.CRACK, hit_radius)
+
+const SWORD_QI_SCENE: PackedScene = preload("res://scenes/weapons/SwordQiWave.tscn")
+
+## 剑气凌霄是否在生效（唯一判定口径，handler 与发射点共用）：
+## 生效后近战/横扫的【本体判定整段让位】—— 一次攻击就是挥出一道飞出去的剑弧，
+## 不是「一下近战 + 一下剑气」两段收账（用户口径）。
+static func sword_qi_active() -> bool:
+	var snap: Dictionary = StatSystem.super_hook_snapshot(GameManager)
+	return float(snap.get("melee_range_mult", 0.0)) > 0.0
+
+## 剑气凌霄（神通）：近战与横扫挥刀时向前劈出一道完整的月牙剑弧（SwordQiWave）。
+## 不是子弹：整道弧（±70° 锥形刃带 + 元素配色 + 拖尾）离体疾飞，弧带扫到谁就结算谁，
+## 航程按 effective_range() 反推（长剑 105 → 210px），这就是这一刀的全部伤害。
+## dmg_ratio：★3/★4 追加段的每段伤害系数（主斩 = 1.0）。
+## 返回剑气波实例（调用方可忽略；判据用它推进寿命验证回收），未发射时为 null。
+static func try_fire_sword_qi_wave(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> SwordQiWave:
+	if not w.is_inside_tree():
+		return null
+	if not sword_qi_active():
+		return null
+	var tree: SceneTree = w.get_tree()
+	if tree == null:
+		return null
+	var parent: Node = tree.current_scene if tree.current_scene != null else w.get_parent()
+	if parent == null:
+		return null
+	var wave: SwordQiWave = SwordQiWave.acquire_or_new(SWORD_QI_SCENE, parent)
+	if wave == null:
+		return null
+	var muzzle_pos: Vector2 = w.muzzle_point.global_position if w.muzzle_point != null else (w.global_position + aim_dir * 18.0)
+	# 波心落后出膛点一段，出生帧的刃带正好压在剑尖上（剑气从剑上劈出去）
+	wave.global_position = muzzle_pos - aim_dir * SwordQiWave.spawn_offset()
+	wave.direction = aim_dir
+	wave.speed = SwordQiWave.SPEED
+	wave.damage = w._final_damage() * dmg_ratio
+	wave.knockback_force = WeaponData.knockback_for(w.weapon_def_id, 280.0) * dmg_ratio
+	wave.element = w._arc_element()
+	wave.source_weapon = w
+	wave.source_behavior = w.behavior
+	wave.heal_full = dmg_ratio >= 1.0
+	wave.impact_sfx_key = WeaponData.sfx_impact_for(w.weapon_def_id)
+	wave.impact_pitch = 0.9 if w.behavior == WeaponData.Behavior.SWEEP else 1.0
+	# 五行异常装填（异常量按单次实伤等比，与近战同一口径）
+	wave.proc_burn = w.def.get("proc_burn", false)
+	wave.burn_ratio = float(w.def.get("burn_ratio", 0.45))
+	wave.burn_dur = float(w.def.get("burn_dur", 3.0))
+	wave.proc_chill = float(w.def.get("proc_chill", 0.0))
+	wave.chill_dur = float(w.def.get("chill_dur", 2.5))
+	wave.proc_poison = w.def.get("proc_poison", false)
+	wave.poison_ratio = float(w.def.get("poison_ratio", 0.35))
+	wave.poison_dur = float(w.def.get("poison_dur", 3.0))
+	wave.lifetime = SwordQiWave.travel_time_for(w.effective_range())
+	wave.activate()
+	AudioManager.play_sfx("sword_qi_wave", 0.5)
+	return wave

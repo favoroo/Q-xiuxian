@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cswordqichk01"]
+
+[ext_resource type="Script" path="res://tests/sword_qi_wave_check.gd" id="1_check"]
+
+[node name="SwordQiWaveCheck" type="Node"]
+script = ExtResource("1_check")

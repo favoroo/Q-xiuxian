@@ -214,6 +214,64 @@ func _run() -> void:
 	tb2._recycle()
 	_check(ThunderBurst._active_lights == 0, "落雷回收后活跃灯数全部归零")
 
+	# ---------- 5.7d 剑气波池（SwordQiWave，2026-10-26）：出膛 / 回池 / 复用零新建 ----------
+	# 剑气凌霄把近战改成「挥出完整剑弧」，这是每把近战武器每秒一次的高频实体，
+	# 必须走池化；验收钉三条：首次新建、回收后隐身出计、第二轮复用同一实例。
+	var qi_scene: PackedScene = load("res://scenes/weapons/SwordQiWave.tscn")
+	var qi_created0: int = SwordQiWave.created_count
+	var qi_a := SwordQiWave.acquire_or_new(qi_scene, world)
+	_check(qi_a != null, "剑气波池首轮可取实例")
+	if qi_a != null:
+		qi_a.direction = Vector2.RIGHT
+		qi_a.lifetime = 0.2
+		qi_a.activate()
+		_check(qi_a.visible and SwordQiWave.active_count >= 1, "剑气波出膛可见并计入活跃数")
+		_check(qi_a._arc != null and qi_a._arc.visible, "出膛时剑弧渲染器随本体亮起")
+		qi_a._recycle()
+		_check(not qi_a.visible and not qi_a._arc.visible, "回池后本体与剑弧一起撤场（三件套同拍）")
+		_check(SwordQiWave.created_count == qi_created0 + 1, "剑气池首轮新建 1 个 (%d)" % (SwordQiWave.created_count - qi_created0))
+		var qi_b := SwordQiWave.acquire_or_new(qi_scene, world)
+		_check(qi_b == qi_a and SwordQiWave.created_count == qi_created0 + 1, "剑气波第二轮 acquire 复用同一实例零新建")
+		if qi_b != null:
+			qi_b.direction = Vector2.LEFT
+			qi_b.lifetime = 0.2
+			qi_b.activate()
+			_check(qi_b._hit_count == 0 and qi_b._hit_ids.is_empty(), "复用出膛清空命中去重表（不误伤上一波的敌人）")
+			qi_b._recycle()
+		SwordQiWave.clear_pool()
+		_check(SwordQiWave.active_count == 0, "clear_pool 归零剑气活跃计数")
+
+	# ---------- 5.7e 幻影剑池（SwordPhantom，2026-10-26 万剑归宗重塑）：出膛 / 回池 / 复用零新建 ----------
+	# 万剑归宗一次开阵放出「玩家剑系数」道幻影（6 剑 = 6 道），是本轮新增的批量实体，
+	# 必须走池化；验收钉四条：首次新建、回收后隐身出计、第二轮复用同一实例、复用清残值。
+	var ph_scene: PackedScene = load("res://scenes/weapons/SwordPhantom.tscn")
+	var ph_created0: int = SwordPhantom.created_count
+	var ph_a := SwordPhantom.acquire_or_new(ph_scene, world)
+	_check(ph_a != null, "幻影剑池首轮可取实例")
+	if ph_a != null:
+		ph_a.direction = Vector2.RIGHT
+		ph_a.damage = 12.0
+		ph_a.activate()
+		_check(ph_a.visible and SwordPhantom.active_count >= 1, "幻影出膛可见并计入活跃数")
+		_check(ph_a._renderer != null and ph_a._renderer.visible or ph_a._use_fallback_blade,
+			"出膛时器形渲染器随本体亮起（或回落光刃兜底）")
+		ph_a._recycle()
+		_check(not ph_a.visible, "回池后幻影撤场（visible=false）")
+		_check(SwordPhantom.created_count == ph_created0 + 1,
+			"幻影池首轮新建 1 个 (%d)" % (SwordPhantom.created_count - ph_created0))
+		var ph_b := SwordPhantom.acquire_or_new(ph_scene, world)
+		_check(ph_b == ph_a and SwordPhantom.created_count == ph_created0 + 1,
+			"幻影第二轮 acquire 复用同一实例零新建")
+		if ph_b != null:
+			ph_b.direction = Vector2.LEFT
+			ph_b.activate()
+			_check(ph_b.target == null and ph_b.source_weapon == null and ph_b.damage == 0.0,
+				"复用出膛清空锁定目标/宿主/伤害残值")
+			ph_b._recycle()
+		SwordPhantom.clear_pool()
+		_check(SwordPhantom.active_count == 0 and SwordPhantom.charge() == 0,
+			"clear_pool 归零幻影活跃计数与剑意槽")
+
 	# ---------- 5.8 弹丸湮灭微闪（IMPACT_POP）与限流闸 ----------
 	var pop_pre := JuiceEffect.created_count()
 	for i in range(12):

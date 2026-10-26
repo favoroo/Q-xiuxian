@@ -42,6 +42,28 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 static func haste_product() -> float:
 	return GameManager.get_effective_attack_speed_mult()
 
+## 射程乘区：全局攻击范围 × 剑系羁绊 ×（近战/横扫专有范围乘区，如剑气凌霄、开山重刃谱）。
+## 消费方：FloatingWeapon._range_mult、Player._update_weapon_targets、ShopWeaponTip、StatsTipFactory。
+static func range_mult_for(w_id: String) -> float:
+	var def := WeaponData.get_def(w_id)
+	if def.is_empty():
+		return GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var mult: float = GameManager.attack_range_mult * GameManager.synergy_range_mult
+	var b := int(def.get("behavior", WeaponData.Behavior.MELEE))
+	if b == WeaponData.Behavior.MELEE or b == WeaponData.Behavior.SWEEP:
+		var qi_bonus: float = 1.0 + float(StatSystem.super_hook_snapshot(GameManager).get("melee_range_mult", 0.0))
+		mult *= qi_bonus
+		var tags: Array = def.get("tags", [])
+		if tags.has("wide"):
+			var wide_bonus: float = 1.0 + GameManager.item_hook_sum("wide_range_mult")
+			mult *= wide_bonus
+	return mult
+
+## 某把武器当前形态下的有效射程（基础射程 × 射程乘区）。
+static func effective_range(w_id: String) -> float:
+	var def := WeaponData.get_def(w_id)
+	return float(def.get("range", 0.0)) * range_mult_for(w_id)
+
 ## 你现在的实际攻击间隔（数据表值 × 攻速乘区）。与 FloatingWeapon 的 cooldown_timer 同一条式子。
 static func effective_cd(w_id: String, star: int) -> float:
 	return WeaponData.cooldown_for(w_id, clampi(star, 1, WeaponData.MAX_STAR)) * haste_product()

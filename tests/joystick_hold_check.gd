@@ -137,6 +137,11 @@ func _run() -> void:
 	await _touch_press(6, FREE_POS)
 	var claimed := _joy.touch_id
 	_c.check(_joy.is_active and claimed != -1, "先按空白 ⇒ 摇杆占住这根指针（touch_id=%d）" % claimed)
+	# 短滑满幅（2026-10-26 用户要求去掉「短滑慢移」）：刚过 6.4px 死区就得是单位方向，
+	# 幅度不许再进速度；改成按比例输出的话这里会掉到 0.1 以下直接红。
+	await _touch_drag(6, FREE_POS + Vector2(12, 0))
+	_c.check(is_equal_approx(_joy.output.length(), 1.0),
+		"刚出死区的短滑也是满幅方向（实得 %.3f，短滑不再降速）" % _joy.output.length())
 	await _touch_drag(6, FREE_POS + Vector2(40, 0))
 	_c.check(_joy.output.length() > 0.0, "拖出 deadzone ⇒ 有方向（实得 %.3f）" % _joy.output.length())
 	await _touch_press(7, HOLD_RECT.get_center())

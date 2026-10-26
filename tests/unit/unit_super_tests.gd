@@ -218,12 +218,65 @@ func _test_super_roll() -> void:
 
 func _test_super_apply() -> void:
 	GameManager.reset_run()
+	_c.check(not StrikeFx.sword_qi_active(), "未拿剑气凌霄时近战/横扫仍走本体判定")
 	# 机制卡：apply 为空，机制靠 hook 读侧生效
 	var before_range: float = GameManager.item_hook_sum("melee_range_mult")
 	_c.check(SuperUpgradeData.apply(GameManager, "super_jianqi"), "剑气凌霄落地成功")
 	_c.near(GameManager.item_hook_sum("melee_range_mult") - before_range, 1.0, EPS,
 		"剑气凌霄近战范围倍率 +100%")
 	_c.check(GameManager.items.has("shen_jianqi"), "神通进入道具持有列表")
+	_c.check(StrikeFx.sword_qi_active(), "剑气凌霄生效后近战/横扫改放剑气（本体不再判伤）")
+	_c.near(WeaponDamageReadout.range_mult_for("qingyun_sword"), 2.0, EPS,
+		"剑气凌霄让长剑射程乘区翻倍（1.0 → 2.0）")
+	_c.near(WeaponDamageReadout.effective_range("qingyun_sword"), 210.0, EPS,
+		"剑气凌霄让长剑有效索敌射程翻倍（105 → 210）")
+	_c.near(WeaponDamageReadout.range_mult_for("gengjin_feijian"), 1.0, EPS,
+		"剑气凌霄不影响远程飞剑射程乘区")
+	_c.near(WeaponDamageReadout.range_mult_for("qingmu_tengbian"), 2.0, EPS,
+		"剑气凌霄让藤鞭横扫射程乘区翻倍")
+	var dummy_w := FloatingWeapon.new()
+	dummy_w.weapon_def_id = "qingyun_sword"
+	dummy_w.behavior = WeaponData.Behavior.MELEE
+	dummy_w.attack_range = 105.0
+	_c.near(dummy_w.effective_range(), 210.0, EPS, "长剑有效索敌与开火射程翻倍为 210")
+	_c.near(dummy_w._body_range_mult(), 1.0, EPS, "长剑本体判定圆乘区维持 1.0 不虚胖")
+	_c.near(MeleeHandler.arc_radius(dummy_w), 75.0, EPS, "长剑本体挥砍判定半径维持标准 75px")
+	# 本体判定整段让位：剑气凌霄生效时 deal_damage 直接短路（伤害只由飞出的剑弧结算）
+	_c.check(MeleeHandler.deal_damage(dummy_w, Vector2.RIGHT) == 0,
+		"剑气凌霄生效后近战本体不再自行判伤（不留第二段收账）")
+	_c.check(SweepHandler.deal_damage(dummy_w, Vector2.RIGHT) == 0,
+		"剑气凌霄生效后横扫本体不再自行判伤")
+	dummy_w.free()
+
+	# 验证进树状态下近战武器触发 StrikeFx.try_fire_sword_qi_wave 甩出一道完整飞行剑弧（SwordQiWave）
+	var fw_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
+	var real_w = fw_scene.instantiate()
+	real_w.weapon_def_id = "qingyun_sword"
+	real_w.def = WeaponData.get_def("qingyun_sword")
+	real_w.behavior = WeaponData.Behavior.MELEE
+	real_w.attack_range = 105.0   # 真场景默认 150，这里钉成长剑标定值，断言才对得上 210
+	add_child(real_w)
+	var pre_active: int = SwordQiWave.active_count
+	var wave: SwordQiWave = StrikeFx.try_fire_sword_qi_wave(real_w, Vector2.RIGHT)
+	_c.check(wave != null, "剑气凌霄挥刀成功甩出一道飞行剑弧")
+	_c.check(SwordQiWave.active_count == pre_active + 1, "剑气波活跃计数 +1")
+	if wave != null:
+		_c.near(wave.lifetime, SwordQiWave.travel_time_for(210.0), EPS,
+			"剑气寿命按 210px 翻倍有效射程反推")
+		# 飞行距离护栏（2026-10-26 用户：「剑气的飞行距离短一点」）：
+		# 波心只飞到「刃缘前缘够到索敌距离」，不许整段飞满有效射程再白送一个外缘半径
+		var dist: float = SwordQiWave.travel_distance_for(210.0)
+		_c.check(dist < 210.0, "剑气波心飞行距离短于有效射程（实得 %.1f < 210）" % dist)
+		_c.check(dist + SwordQiWave.ART_OUTER * SwordQiWave.ART_SCALE >= 210.0,
+			"但刃缘仍覆盖满索敌距离（%.1f ≥ 210，锁定圈内不漏怪）"
+				% (dist + SwordQiWave.ART_OUTER * SwordQiWave.ART_SCALE))
+		var spawn_pos: Vector2 = wave.global_position
+		wave._physics_process(1.0)   # 推进 1s（远超寿命）→ 按寿命自行回收，模拟实战飞完消散
+		_c.check(wave.global_position.distance_to(spawn_pos) > 100.0, "剑气波是向前飞行的实体而非原地特效")
+		_c.check(not wave.visible, "剑气波到寿命后休眠（视觉撤场）")
+		_c.check(SwordQiWave.active_count == pre_active, "剑气波回收后活跃计数归零（池化不留账）")
+	real_w.queue_free()
+
 	var hist: Dictionary = GameManager.upgrade_history.back() if not GameManager.upgrade_history.is_empty() else {}
 	_c.check(String(hist.get("rarity", "")) == "mythic", "升级记录标记为逆天档")
 	_c.check(not GameManager.sell_item("shen_jianqi"), "神通不可出售")

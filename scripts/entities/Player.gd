@@ -975,7 +975,7 @@ func _update_weapon_targets() -> void:
 		var w = weapon_holder.get_child(i) as FloatingWeapon
 		if w != null and is_instance_valid(w):
 			_weapons_buf.append(w)
-			var w_range = w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+			var w_range: float = w.effective_range()
 			if w_range > max_range:
 				max_range = w_range
 
@@ -1033,7 +1033,7 @@ func _update_weapon_targets() -> void:
 		var prev_id := 0
 		if w.current_target != null and is_instance_valid(w.current_target):
 			prev_id = w.current_target.get_instance_id()
-		var w_range := w.attack_range * GameManager.attack_range_mult * GameManager.synergy_range_mult
+		var w_range := w.effective_range()
 		var wd := _acquire_pooled_dict(_weapons_dict_pool, i)
 		wd["base_angle"] = w.base_angle
 		wd["range"] = w_range
@@ -1438,7 +1438,7 @@ func play_victory_sequence() -> void:
 
 	# 3. 得道飞升姿态：修仙真身微浮升空 + 金玉双环绽放
 	play_squash(Vector2(0.85, 1.22), 0.55)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD_FX, 0.65)
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD, 0.65)
 	JuiceEffect.spawn_heal_rise(get_parent(), global_position)
 
 	var target_node: Node2D = anim_sprite

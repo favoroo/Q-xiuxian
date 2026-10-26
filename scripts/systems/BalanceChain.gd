@@ -37,11 +37,10 @@ const THORNS_BOLT_COEF := 40.0
 ## 反震放电的搜索半径
 const THORNS_RADIUS := 220.0
 
-## 万剑归宗（剑道进阶）：每 N 次近战命中放一道剑气冲击波
-const SWORD_QI_EVERY := 3
-## 剑气冲击波半径（px）与伤害占当刀实伤的比例（二阶段 130/0.55 → 150/0.75）
-const SWORD_QI_RADIUS := 150.0
-const SWORD_QI_RATIO := 0.75
+## 万剑归宗（剑道进阶）已改判（2026-10-26）：不再按「每 N 次命中放一圈冲击波」结算，
+## 数值与状态机整体迁到 scripts/weapons/SwordPhantom.gd（CHARGE_EVERY / DAMAGE_RATIO /
+## ACQUIRE_RADIUS 与凝形-疾射-消散手感常量都在那边，机制实现与常量同文件更近）。
+## 本文件只保留链电/五行/箭雨/血盾/兽群这些「命中后按固定基值结算」的口径。
 
 ## 紫电（雷法开道）：每 N 次武器出手放一次连锁闪电
 const CHAIN_EVERY_ATTACKS := 3
@@ -93,10 +92,6 @@ static func kill_chain_damage(elemental_damage: float) -> float:
 ## 反震电场伤害：thorns_pct 传 GameManager.get_effective_thorns()（0.4 = 40% 反震）
 static func thorns_bolt_damage(thorns_pct: float) -> float:
 	return THORNS_BOLT_BASE + maxf(0.0, thorns_pct) * THORNS_BOLT_COEF
-
-## 万剑归宗剑气冲击波伤害
-static func sword_qi_damage(melee_hit_damage: float) -> float:
-	return maxf(0.0, melee_hit_damage) * SWORD_QI_RATIO
 
 ## 箭雨单支伤害（按当次出手的武器面板实伤折算，与紫电同一条「武器派生」口径）
 static func arrow_rain_damage(weapon_damage: float) -> float:

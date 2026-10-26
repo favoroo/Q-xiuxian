@@ -1,10 +1,11 @@
 class_name SuperAllocDialog
 extends LevelUpDialog
 
-## 超级悟道面板（2026-10-25）：继承普通悟道的摆位/选中/防误触流程，只换候选来源与文案。
+## 飞升悟道面板（原超级悟道，2026-10-26 改名）：继承普通悟道的摆位/选中/防误触流程，
+## 只换候选来源、文案与一套专属赤红皮。
 ##
 ## 「三道」体系：候选按道途出（剑道/箭道/雷法/体修/五行/灵兽），每张卡带阶段。
-## 第一次超级悟道只能开道；第二次必出「延续」（已行之道的下一阶段）+ 一张新道；
+## 第一次飞升悟道只能开道；第二次必出「延续」（已行之道的下一阶段）+ 一张新道；
 ## 第三次出大成，或手握两条道时出共鸣。一局三次形成一条线，上次选什么直接决定这次能选什么。
 ## 不可刷新；点卡只选中，底部「确认领悟」才落地（与普通悟道同一条防误触口径）。
 ## 场景 SuperAllocDialog.tscn 由 LevelUpDialog.tscn 派生，Main 运行时挂到 UILayer 末尾
@@ -12,10 +13,17 @@ extends LevelUpDialog
 ##
 ## 生命周期：super_alloc_opened → 亮面板；选完发 super_alloc_finished → 复用基类淡出；
 ## 面板收起后由 WaveSpawner 接着走普通悟道 / 金币阁。
+##
+## 与普通悟道的视觉区分（2026-10-26，两层）：
+## ① 面板层 —— 标题带、确认键、面板外框一律逆天赤红（本文件 _apply_super_palette 重涂）；
+## ② 卡面层 —— LevelUpCardFactory 按 payload 的 is_super 染淡红卡底 + 加粗红框 + 红图标框。
 
 ## 底部机制说明签：基类已删底部读数（普通悟道空实现钩子），本场景 tscn 独立完整、
 ## GateLabel 节点仍在，这里自持引用并重写钩子，只放界面上没有的机制说明。
 @onready var gate_label: Label = $CenterContainer/Panel/MarginContainer/VBox/ActionBar/GateLabel
+## 标题带在基类 _setup_top_bar 里被移进 TopBar（VBox/TitleBand → VBox/TopBar/TitleBand），
+## 所以这里不能在 @onready 里写死路径，_apply_super_palette 现取。
+var title_band: PanelContainer = null
 
 func _ready() -> void:
 	super._ready()
@@ -31,6 +39,26 @@ func _ready() -> void:
 		reroll_btn.visible = false
 	if _points_badge != null:
 		_points_badge.visible = false
+	_apply_super_palette()
+
+## 面板级赤红皮：基类 _ready 已把标题带重涂成主题色并登记进主题回放表，
+## 这里换成逆天赤红（飞升专属色，不随玩家主题色变 —— 所以用新 StyleBoxFlat 覆盖、
+## 不再登记，主题切换时它保持红）。
+func _apply_super_palette() -> void:
+	title_band = get_node_or_null(
+		"CenterContainer/Panel/MarginContainer/VBox/TopBar/TitleBand") as PanelContainer
+	if title_band != null:
+		var tb_sb := title_band.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		tb_sb.bg_color = GameStyle.RARITY_MYTHIC
+		title_band.add_theme_stylebox_override("panel", tb_sb)
+	# 红底配纸白大字（on_face_text 按面色明暗自动判，深红面上给亮字）
+	GameStyle.label(title_label, 22, GameStyle.on_face_text(GameStyle.RARITY_MYTHIC), 0, GameStyle.INK, true)
+	GameStyle.button(confirm_btn, GameStyle.RARITY_MYTHIC, GameStyle.RARITY_MYTHIC.lightened(0.18),
+		16, GameStyle.CHALK, 6.0)
+	if panel != null:
+		var p_sb := panel.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+		p_sb.border_color = GameStyle.RARITY_MYTHIC
+		panel.add_theme_stylebox_override("panel", p_sb)
 
 func _offers() -> Array:
 	return GameManager.super_alloc_offers
@@ -59,7 +87,7 @@ func _on_super_alloc_opened() -> void:
 func _refresh_bars() -> void:
 	# 顶栏回合徽条已下线（2026-10-25，随基类一起）：回合数 HUD 有、「5 选 1」卡面自明，
 	# 已行道途进度改由底部说明签承载（_update_gate_label）。
-	title_label.text = "超 级 悟 道"
+	title_label.text = "飞 升 悟 道"
 	reroll_btn.visible = false
 	_update_confirm_btn()
 	_update_gate_label()
@@ -80,11 +108,11 @@ func _update_confirm_btn() -> void:
 	confirm_btn.custom_minimum_size = Vector2(148, 44)
 
 func _update_gate_label() -> void:
-	# 「已选哪张」由卡片金框 +「已选 ★」角标表达，不再回念；这里只留机制说明，
+	# 「已选哪张」由卡片描边 +「已选 ★」角标表达，不再回念；这里只留机制说明，
 	# 未选中时顺带挂已行道途进度（顶栏徽条下线后这是它唯一读数位，2026-10-25）。
 	if selected_index < 0 or selected_index >= _offers().size():
 		var progress := _lane_progress_text()
-		gate_label.text = "三次悟道各开一道，选定不可更改" if progress.is_empty() \
+		gate_label.text = "三次飞升各开一道，选定不可更改" if progress.is_empty() \
 			else "%s，选过的道途会延续出下一阶段" % progress
 		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	else:

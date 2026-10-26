@@ -14,7 +14,10 @@ extends Node2D
 const CORE_COLOR := GameStyle.FX_HDR_LIGHTNING
 const GLOW_COLOR := Color(0.55, 0.85, 1.0, 0.38)
 const LDR_CORE_COLOR := Color(0.82, 0.94, 1.0, 0.95)  ## glow 关闭时的备用清晰亮芯
-const POOL_CAP := 16
+## 池容量：2026-10-26 由 16 抬到 24 —— 七路雷电拆成各自独立的演出闸之后，
+## 同一次团战里可能同时出现紫电链 + 雷劫链 + 天罚落雷 + 反震环，16 个池体不够周转
+## （池满时 acquire 直接 new，回池时超出容量的 queue_free，高频下变成持续分配）。
+const POOL_CAP := 24
 
 # —— 基准线宽（配合 width_mult 等比缩放）——
 const BASE_WIDTH_GLOW := 4.5
@@ -103,6 +106,24 @@ func _create_line(w: float, col: Color) -> Line2D:
 	add_child(line)
 	return line
 
+## 芯线色由 tint 推导（2026-10-26 七路雷电分色）：
+## 旧写法只有光晕层吃 tint，芯线永远是白 —— 紫电/雷劫/血海各自染了外圈，
+## 中间仍是同一道白雷，远看还是一张卡。这里保住 tint 的色相把芯也染上：
+##   HDR 档（glow 开）：把最亮分量抬到 CORE_HDR_PEAK，色相不变、亮度与白芯同档；
+##   LDR 档（glow 关）：归一后向白提亮 —— 没有 bloom 时芯线仍要读得出「亮」。
+const CORE_HDR_PEAK := 2.5     ## 芯线最亮分量（与 FX_HDR_CORE 的 2.6 同档）
+const LDR_CORE_WHITEN := 0.55  ## LDR 芯向白提亮的比例（保住色相又不至于发灰）
+
+static func _core_color_for(tint_col: Color, glow_active: bool) -> Color:
+	var max_c := maxf(tint_col.r, maxf(tint_col.g, tint_col.b))
+	if max_c <= 0.001:
+		return CORE_COLOR if glow_active else LDR_CORE_COLOR
+	if glow_active:
+		var k: float = CORE_HDR_PEAK / max_c
+		return Color(tint_col.r * k, tint_col.g * k, tint_col.b * k, 1.0)
+	var base := Color(tint_col.r / max_c, tint_col.g / max_c, tint_col.b / max_c, 1.0)
+	return base.lerp(Color(1.0, 1.0, 1.0, 1.0), LDR_CORE_WHITEN)
+
 ## 激活动画（出膛）：全量重置坐标、折线点与淡出 Tween
 ## core_tint：芯线色覆盖（alpha==0 = 不覆盖，走原逻辑）。★3/★4 追加雷用它把
 ## 白热芯也染上星级色相 —— 只染光晕层时追加雷读起来仍是「一道白雷套金边」。
@@ -117,11 +138,15 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	var glow_active := bool(SettingsManager.get_val(&"display", &"glow", true)) and not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 
 	# 主干赋值：glow 关闭时隐藏光晕层（无 bloom 时宽半透明多边形只白耗带宽）
+	# 线宽与配色无论开关都要写（2026-10-26 池复用卫生）：池体是复用的，
+	# 上一次在 glow 开档写的 width/color 会留在节点上；只在开档写会让「关档期间
+	# 复用到的池体」带着上一轮的旧线宽 —— PoolCheck 的「按 width_mult 重置线宽」
+	# 断言正是踩到这个（关档后读到上一轮残留的 5.4）。
+	_line_glow.width = BASE_WIDTH_GLOW * width_mult
+	_line_glow.default_color = tint_col
 	if glow_active:
 		_line_glow.visible = true
 		_line_glow.points = main_points
-		_line_glow.width = BASE_WIDTH_GLOW * width_mult
-		_line_glow.default_color = tint_col
 	else:
 		_line_glow.visible = false
 
@@ -129,9 +154,9 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	if core_tint.a > 0.0:
 		core_c = core_tint
 	elif glow_active:
-		core_c = CORE_COLOR if tint_col == GLOW_COLOR else GameStyle.FX_HDR_CORE
+		core_c = CORE_COLOR if tint_col == GLOW_COLOR else _core_color_for(tint_col, true)
 	else:
-		core_c = LDR_CORE_COLOR
+		core_c = _core_color_for(tint_col, false)
 
 	_line_core.visible = true
 	_line_core.points = main_points
@@ -147,6 +172,10 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 		_line_branch_core.visible = true
 	else:
 		_line_branch_core.visible = false
+
+	# 余韵跟着这次电弧的色相走（旧写法固定雷光白：紫电散场后留两条白弧，读起来像换了张卡）
+	for arc_line in _afterglow:
+		arc_line.default_color = core_c
 
 	modulate.a = 1.0
 	visible = true

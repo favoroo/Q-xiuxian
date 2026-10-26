@@ -142,7 +142,7 @@ static func repel_aegis_surroundings(p) -> void:
 		e.take_damage(dmg, dir * impulse)
 	var parent_node: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
 	if parent_node != null:
-		JuiceEffect.spawn_shockwave(parent_node, p.global_position, repel_radius, GameStyle.GOLD_FX_EDGE, 0.28)
+		JuiceEffect.spawn_shockwave(parent_node, p.global_position, repel_radius, GameStyle.GOLD_EDGE, 0.28)
 
 static func renewal(p, st: Dictionary) -> void:
 	p.heal(p.max_health * float(st["power"]), true)

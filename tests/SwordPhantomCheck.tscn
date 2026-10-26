@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b14ngu1om5xqa"]
+
+[ext_resource type="Script" path="res://tests/sword_phantom_check.gd" id="1_check"]
+
+[node name="SwordPhantomCheck" type="Node"]
+script = ExtResource("1_check")

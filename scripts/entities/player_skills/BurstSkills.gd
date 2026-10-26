@@ -71,14 +71,14 @@ static func call_thunder(p) -> bool:
 		var dir := off.normalized() if off.length_squared() > 0.0001 else Vector2.UP
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(p.get_parent(), strike_pos, ThunderData.RADIUS,
-		GameStyle.GOLD_FX_EDGE, 0.3)
+		GameStyle.GOLD_EDGE, 0.3)
 	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
 	var bolt_parent: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
 	if bolt_parent != null:
 		var bolt := LightningBolt.acquire(bolt_parent)
 		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
 		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_FX_EDGE, 1.35)
+		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
 	if p.skill_vfx != null:
 		p.skill_vfx.on_thunder_cast()
 	p.play_squash(Vector2(1.08, 0.92), 0.12)

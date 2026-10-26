@@ -8,6 +8,7 @@ extends RefCounted
 ## 刀光是 WeaponArcRenderer 画的元素扇面（满亮 ±80° 与判定半角同源、外缘 124px 与近战月牙同画布约定），
 ## top_level 贴世界坐标 —— 扇面钉在挥出那一帧的方位上，不随本体收势转走，扇面几何 == 判定扇形。
 ## 节奏全面比近战沉：蓄力更深更久、前突更远、收势更慢、命中音低沉一档。
+## 剑气凌霄（神通）生效时本体扇形判定整段让位：这一扫就是飞出去的剑弧（SwordQiWave）。
 ##
 ## 纪律：首参 w 为宿主武器（不标类型，鸭类型访问——武器侧硬类型引用会触发
 ## 循环类依赖，把弹丸 preload 打成空 PackedScene，项目坑 12）。
@@ -27,11 +28,10 @@ const SWEEP_ANGLE_SLACK := 6.0    ## 角度宽容（度）：扇面 80°→88° 
 const SWEEP_IMPACT_PITCH := 0.9   ## 横扫命中音低沉一档，与近战的亮脆分层
 
 ## 横扫判定圆半径 —— 扇面外缘与 deal_damage 的查询圆共用这一个数（画多大==判多大）。
-## melee_range_mult（神通【剑气凌霄】）与近战同口径：范围翻倍对横扫同样生效。
+## 范围取本体乘区 w._body_range_mult()（含 wide_range_mult，不含剑气凌霄），
+## 保持扇面紧凑利落；剑气凌霄的远距离打击由甩出的剑气波负责。
 static func arc_radius(w) -> float:
-	var wide_bonus: float = (1.0 + GameManager.item_hook_sum("wide_range_mult")) if WeaponData.tags_of(w.weapon_def_id).has("wide") else 1.0
-	var qi_bonus: float = 1.0 + float(StatSystem.super_hook_snapshot(GameManager).get("melee_range_mult", 0.0))
-	return SWEEP_ARC_RADIUS * w.arc_scale * w._range_mult() * wide_bonus * qi_bonus
+	return SWEEP_ARC_RADIUS * w.arc_scale * w._body_range_mult()
 
 ## 横扫三段：深蓄力（0.09s）→ 大幅扫出（0.06s，本体扫过整片 160° 扇形）→ 沉重收势（0.17s）。
 ## 挥空门控与近战同口径：扇面/材质声/反冲只在真咬到肉时发，空挥保留完整动作与破空声。
@@ -65,6 +65,8 @@ static func perform(w) -> void:
 	tw.chain().tween_callback(func():
 		w._flash_sprite(Color(1.5, 1.5, 1.5), 0.14)
 		var hits: int = deal_damage(w, aim_dir)
+		# 剑气凌霄：这一扫的全部伤害随剑弧飞出（hits 恒为 0），不再做本体扇形判定
+		var wave = StrikeFx.try_fire_sword_qi_wave(w, aim_dir)
 		if hits > 0:
 			StrikeFx.try_spawn_earth_crack(w, w.global_position + aim_dir * (reach * 0.55), reach * 0.75)
 			if w.sweep_sprite != null:
@@ -82,7 +84,10 @@ static func perform(w) -> void:
 				w._sweep_slash_tween.chain().tween_property(w.sweep_sprite, "modulate:a", 0.0, SWEEP_SLASH_FADE)
 				w._sweep_slash_tween.chain().tween_callback(func(): w.sweep_sprite.visible = false)
 				AudioManager.play_sfx(WeaponData.sfx_impact_for(w.weapon_def_id), MeleeHandler.MELEE_IMPACT_SCALE, SWEEP_IMPACT_PITCH)
-				w.position -= aim_dir * SWEEP_RECOIL
+			w.position -= aim_dir * SWEEP_RECOIL
+		elif wave != null:
+			# 剑气凌霄：本体不判伤——扇面/材质声交给飞出的剑弧，土系重击留痕就地补一次
+			StrikeFx.try_spawn_earth_crack(w, w.global_position + aim_dir * (reach * 0.55), reach * 0.75)
 	)
 	tw.tween_property(w, "position", thrust_pos, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(w, "rotation", aim_angle + half_ang, SWEEP_STRIKE).set_trans(Tween.TRANS_EXPO)
@@ -104,6 +109,8 @@ static func perform(w) -> void:
 			tw.chain().tween_callback(func():
 				AudioManager.play_sfx(WeaponData.sfx_for(w.weapon_def_id), MeleeHandler.MELEE_WHOOSH_SCALE * 0.6)
 				var echo_hits: int = deal_damage(w, aim_dir, echo_ratio)
+				# 剑气凌霄：回掠段同样只放飞出的剑弧（按段伤害系数）
+				StrikeFx.try_fire_sword_qi_wave(w, aim_dir, echo_ratio)
 				if echo_hits > 0:
 					w._flash_sprite(MeleeHandler.echo_glow_color(w.star, seg), 0.12)
 					play_echo_sweep(w, aim_angle, reach, w.star, seg)
@@ -131,6 +138,9 @@ static func play_echo_sweep(w, aim_angle: float, reach: float, star: int = 3, se
 ## 打击帧回调拿它门控扇面/材质声/反冲。属性管线、暴击、异常、吸血与近战同一份代码形状。
 ## dmg_ratio：★3 觉醒回掠的伤害系数（默认 1.0 = 主扫）；吸血/固定回血只在主扫结算。
 static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
+	# 剑气凌霄：本体扇形判定整段让位 —— 这一扫的伤害全部由飞出的剑弧结算
+	if StrikeFx.sword_qi_active():
+		return 0
 	var origin: Vector2 = w.global_position
 	var half_ang := deg_to_rad(SWEEP_HALF_ANGLE + SWEEP_ANGLE_SLACK)
 	var results: Array = w._query_enemies(arc_radius(w), origin, 24)
@@ -182,10 +192,7 @@ static func deal_damage(w, aim_dir: Vector2, dmg_ratio: float = 1.0) -> int:
 				# 开山重刃谱：横扫同属近身挥砍，吸血钩子照旧生效
 				if can_flat_heal:
 					player.heal(flat_ls, true)
-			# 超级悟道机制卡的命中后效果（与近战同一入口）
+			# 超级悟道机制卡的命中后效果（与近战同一入口；万剑归宗按出手计数，不在此列）
 			if has_mech:
 				OnHitEffects.on_weapon_hit(w, enemy, dmg, is_crit, mech)
-				if dmg_ratio >= 1.0:
-					w._sword_qi_charge = OnHitEffects.tick_sword_qi(
-						w, enemy.global_position, dmg, int(w._sword_qi_charge), mech)
 	return hit_count

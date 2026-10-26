@@ -72,19 +72,28 @@ static func drops(e) -> void:
 		extra_orb.activate()
 	# 杀戮节奏（神通）：每次击杀返还一部分所有武器的当前冷却。
 	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不返还，清场不该白拿加速。
+	# 2026-10-26：返还那一刻在每把武器根部补一记金色微闪 —— 否则玩家完全读不到
+	# 「我的冷却被拉回去了」，只感觉武器好像突然变快。
 	var cd_refund: float = GameManager.item_hook_sum("kill_cd_refund")
 	if cd_refund > 0.0 and not e._no_drop and GameManager.player != null \
 			and GameManager.player.has_method("refund_weapon_cooldowns"):
 		GameManager.player.refund_weapon_cooldowns(cd_refund)
+		_pulse_weapon_roots(e, GameManager.player)
 	# 神通【雷劫】：尸体处向附近敌人放一道连锁闪电（固定基值 + 元素加成，见 BalanceChain）。
 	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不算击杀战果。
 	# 链电自身有递归深度闸与毫秒限流：链电打死人不会再触发一层雷劫风暴。
+	# 2026-10-26 演出重做：染色换绛紫红（与紫电紫罗兰、天罚金白分开），
+	# 并在尸体位置补一记「尸爆电弧」——从尸体向几个方向甩短弧，
+	# 读起来是「这具尸体炸出一圈电」，而不是凭空多一条白线。
 	if not e._no_drop:
 		var snap := StatSystem.super_hook_snapshot(GameManager)
 		if float(snap.get("kill_chain_lightning", 0.0)) > 0.0:
 			var hops: int = BalanceChain.MAX_HOPS + int(float(snap.get("chain_hop_bonus", 0.0)))
+			var tint := GameStyle.FX_HDR_LEIJIE
 			ChainLightning.strike(e.get_parent(), e.global_position, null,
-				BalanceChain.kill_chain_damage(GameManager.elemental_damage), hops)
+				BalanceChain.kill_chain_damage(GameManager.elemental_damage), hops,
+				tint, &"leijie", "chain_zap")
+			_leijie_corpse_nova(e, tint)
 	# 裂魂铃·击杀爆炸：尸体处一记震荡，半径 = 判定（同源），伤害随元素成长（BalanceCombat 公式）。
 	# 回合末消散（_no_drop）不触发：清场不算击杀战果，不该白拿爆炸链。
 	# 2026-10-25 血祭盛宴重做：神通件带 kill_explode_hp_ratio（尸爆口径 —— 附加死者最大生命
@@ -141,6 +150,58 @@ static func drops(e) -> void:
 				gem.is_shard = true
 				gem.stone_value = GameBalance.GEM_SHARD_STONE_VALUE
 		gem.activate()
+
+## 雷劫的「尸体电弧」（2026-10-26 演出升级）：从尸体位置向 4 个方向甩短弧。
+## 只是画面 —— 伤害全在 ChainLightning.strike 那条链里结算，这里一根电都不打人。
+## 随机走本地 RNG（以尸体 instance_id 播种）：演出段的随机不许碰 GameManager.rng（铁律 15）。
+##
+## 限流：群杀时每具尸体 4 条弧会把 LightningBolt 池（24）瞬间吃光，反把链电主干挤成新建。
+## 用 LEIJIE_NOVA_MIN_GAP_MS 掐「尸体电弧」这一层演出（链电伤害与主干弧完全不受影响）。
+const LEIJIE_NOVA_ARMS := 4
+const LEIJIE_NOVA_LEN_MIN := 46.0
+const LEIJIE_NOVA_LEN_MAX := 76.0
+const LEIJIE_NOVA_MIN_GAP_MS := 180
+## 尸体电弧自己的限流戳。不复用 EnemyBase._fx_gap_gate：它只有 scorch / kill_explode 两个槽，
+## 传新 slot 会落进 kill_explode 那一条，把血祭尸爆的限频一起顶掉。
+static var _last_leijie_nova_ms: int = -999999
+
+static func _leijie_corpse_nova(e, tint: Color) -> void:
+	var host: Node = e.get_parent()
+	if host == null or not is_instance_valid(host):
+		return
+	var now := Time.get_ticks_msec()
+	if now - _last_leijie_nova_ms < LEIJIE_NOVA_MIN_GAP_MS:
+		return
+	_last_leijie_nova_ms = now
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(e.get_instance_id() % 2147483647)
+	var from_pos: Vector2 = e.global_position
+	var base_ang: float = rng.randf() * TAU
+	for i in range(LEIJIE_NOVA_ARMS):
+		var ang: float = base_ang + TAU * float(i) / float(LEIJIE_NOVA_ARMS) \
+			+ rng.randf_range(-0.25, 0.25)
+		var reach: float = rng.randf_range(LEIJIE_NOVA_LEN_MIN, LEIJIE_NOVA_LEN_MAX)
+		var bolt := LightningBolt.acquire(host)
+		if bolt == null:
+			continue
+		bolt.activate(from_pos, from_pos + Vector2.from_angle(ang) * reach, tint, 0.7)
+
+## 杀戮节奏：冷却返还那一刻在每把武器根部点一记金色微闪（2026-10-26）。
+## 走 JuiceEffect 的 IMPACT_POP 帧预算（6/帧），一次击杀最多点亮几把，不糊屏。
+static func _pulse_weapon_roots(e, player: Node2D) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var holder := player.get("weapon_holder") as Node
+	if holder == null or not is_instance_valid(holder):
+		return
+	var host: Node = e.get_parent()
+	if host == null or not is_instance_valid(host):
+		return
+	for w in holder.get_children():
+		var node := w as Node2D
+		if node == null or not is_instance_valid(node):
+			continue
+		JuiceEffect.spawn_impact_pop(host, node.global_position, GameStyle.FX_HDR_GOLD)
 
 ## 尸体演出：停物理断碰撞、就地归位受击视觉残留，分级塌缩（小怪快/精英踉跄/Boss 滞留淡出）。
 ## 倾倒方向跟随致命一刀的受力侧（_hit_tilt 符号：后仰角与击退水平分量同号），垂直击杀默认右倾。

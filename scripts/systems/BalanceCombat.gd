@@ -383,9 +383,30 @@ const OBELISK_DAMAGE_GROWTH := 1.14  ## 每回合伤害复利（缓于敌血 1.1
 const OBELISK_KNOCK_BASE := 340.0    ## 1 波击退力度
 const OBELISK_KNOCK_WAVE_STEP := 10.0 ## 每回合击退加成（线性小步，与伤害复利同向）
 
-## 全屏冲击伤害
+## 按最大生命 % 的附加伤害分量（2026-10-26 新增）：flat 复利 1.14 缓于敌血 1.16，
+## 后期对 Boss/精英的相对威力持续掉线；这条按 max_hp 折算的附加分量跟着敌血走，
+## 保证后期一刀对厚血单位仍有交代（W1=2% → W20=11.5%，Boss W20 从 9% 削血提到 ~20%）。
+const OBELISK_HP_RATIO_BASE := 0.02       ## 1 波按最大生命的附加比例（2%）
+const OBELISK_HP_RATIO_WAVE_STEP := 0.005 ## 每回合 +0.5%（线性小步，W20=11.5%）
+
+## 斩杀线（2026-10-26 新增）：受击前已在斩杀线下的敌人直接致命一刀收尾，让后期祭坛
+## 从「全屏挨一刀」升级成「团本开怪+残血收割器」。前期阈值低（仅清将死垃圾）、
+## 后期阈值升到 ~20%，让残血 Boss/精英也能被祭坛一刀封喉（Boss 二阶段 50% 与精英变异 60%
+## 都在斩杀线之上，触发顺序不被绕过）。
+const OBELISK_EXECUTE_BASE := 0.12        ## 1 波斩杀线（最大生命的 12%）
+const OBELISK_EXECUTE_WAVE_STEP := 0.004  ## 每回合 +0.4%（W20≈19.6%）
+
+## 全屏冲击伤害（flat 分量；按最大生命 % 与斩杀另算，调用方在 BlessingObelisk 拼装）
 static func obelisk_blessing_damage(wave: int) -> float:
 	return OBELISK_DAMAGE_BASE * pow(OBELISK_DAMAGE_GROWTH, float(maxi(wave, 1) - 1))
+
+## 按最大生命折算的附加伤害比例（W1=2% → W20=11.5%）
+static func obelisk_blessing_hp_ratio(wave: int) -> float:
+	return OBELISK_HP_RATIO_BASE + float(maxi(wave, 1) - 1) * OBELISK_HP_RATIO_WAVE_STEP
+
+## 斩杀血线（≤ 此比例的敌人受祭坛冲击直接致命；W1=12% → W20≈19.6%）
+static func obelisk_execute_threshold(wave: int) -> float:
+	return OBELISK_EXECUTE_BASE + float(maxi(wave, 1) - 1) * OBELISK_EXECUTE_WAVE_STEP
 
 ## 全屏击退力度
 static func obelisk_knock_force(wave: int) -> float:

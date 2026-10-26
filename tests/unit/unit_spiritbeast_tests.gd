@@ -32,6 +32,27 @@ func _test_obelisk_economy_and_lifetime() -> void:
 	_c.check(BalanceCombat.OBELISK_DAMAGE_GROWTH < BalanceWave.ENEMY_HP_GROWTH,
 		"祭坛伤害成长缓于敌血复利（后期灵兽价值 > 伤害价值）")
 	_c.check(GameBalance.obelisk_knock_force(10) > GameBalance.obelisk_knock_force(1), "祭坛击退：随波次成长")
+	# 按最大生命附加分量 + 斩杀线（2026-10-26 新增：让后期祭坛对厚血单位仍有交代）
+	_c.near(GameBalance.obelisk_blessing_hp_ratio(1), BalanceCombat.OBELISK_HP_RATIO_BASE, EPS,
+		"祭坛按生命附加比例：1 波取基准")
+	_c.near(GameBalance.obelisk_blessing_hp_ratio(20),
+		BalanceCombat.OBELISK_HP_RATIO_BASE + 19.0 * BalanceCombat.OBELISK_HP_RATIO_WAVE_STEP, EPS,
+		"祭坛按生命附加比例：每波线性 +0.5%")
+	_c.check(GameBalance.obelisk_blessing_hp_ratio(20) > GameBalance.obelisk_blessing_hp_ratio(1),
+		"祭坛按生命附加比例：随波次成长")
+	_c.check(GameBalance.obelisk_blessing_hp_ratio(1) <= 0.05 and GameBalance.obelisk_blessing_hp_ratio(20) <= 0.15,
+		"祭坛按生命附加比例：W1≤5%、W20≤15%（避免一刀直接削掉小怪整管血）")
+	_c.near(GameBalance.obelisk_execute_threshold(1), BalanceCombat.OBELISK_EXECUTE_BASE, EPS,
+		"祭坛斩杀线：1 波取基准")
+	_c.near(GameBalance.obelisk_execute_threshold(20),
+		BalanceCombat.OBELISK_EXECUTE_BASE + 19.0 * BalanceCombat.OBELISK_EXECUTE_WAVE_STEP, EPS,
+		"祭坛斩杀线：每波线性 +0.4%")
+	_c.check(GameBalance.obelisk_execute_threshold(1) < GameBalance.BOSS_PHASE2_AT,
+		"祭坛斩杀线 < Boss 二阶段触发线（不会绕过二阶段）")
+	_c.check(GameBalance.obelisk_execute_threshold(20) < GameBalance.BOSS_PHASE2_AT,
+		"祭坛斩杀线 W20 仍 < Boss 二阶段线")
+	_c.check(GameBalance.obelisk_execute_threshold(20) < BalanceWave.ELITE_MUTATION_HP_PCT,
+		"祭坛斩杀线 < 精英变异触发线（不会绕过变异）")
 	# 寿命与同场上限（2026-10-25 重设计）
 	_c.equals(GameBalance.SPIRIT_BEAST_LIFETIME_WAVES, BalanceSpiritBeast.LIFETIME_WAVES, "灵兽寿命常量转发一致")
 	_c.equals(GameBalance.SPIRIT_BEAST_MAX_ACTIVE, BalanceSpiritBeast.MAX_ACTIVE, "灵兽同场上限常量转发一致")

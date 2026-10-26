@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cswordqi001"]
+
+[ext_resource type="Script" path="res://scripts/weapons/SwordQiWave.gd" id="1_qi"]
+
+[node name="SwordQiWave" type="Node2D"]
+script = ExtResource("1_qi")

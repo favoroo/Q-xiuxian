@@ -40,9 +40,9 @@ static var GOLD := Color("c5e803")       # 主题主色（默认荧绿；做底�
 static var GOLD_EDGE := Color("dbf45c")  # 主题亮边（hover/高光）
 static var GOLD_DK := Color("8ba300")    # 主题压暗（按压态/深底）
 
-## 战斗/世界空间特效的「固定品红基准」（不随 UI 主题色漂移）。
-## 用户口径：主题色只换 UI 层，战斗特效不动。玩家自选主题色后，暴击跳字、技能光效、
-## 敌人爆炸环、聚灵阵读环等世界空间视觉仍用这一套固定色，避免「选天青后敌人爆炸变青」。
+## 历史固定品红基准（保留作为站点导出色源与未来固定色兜底）。
+## 战斗/世界空间特效已统一改读 GOLD/GOLD_EDGE 主题三件套，跟随玩家自选主题色；
+## 这三个常量目前零运行时调用点，仅 tools/export_site_data.py 注释引用其字面值。
 const GOLD_FX := Color("ff006e")
 const GOLD_FX_EDGE := Color("ff69ac")
 const GOLD_FX_DK := Color("b0004e")
@@ -140,6 +140,13 @@ const FX_HDR_CRIT := Color(2.6, 1.8, 0.4)        ## 暴击绯金超白：暴击�
 const FX_HDR_HEAL := Color(0.8, 2.2, 1.2)        ## 治愈碧翠超白：回春、生机灵光
 const FX_HDR_SHADOW := Color(1.8, 1.2, 2.5)      ## 幽夜紫超白：暗影、影层释放、紫虹镜光束芯
 const FX_HDR_GOLD := Color(2.4, 2.0, 0.8)        ## 浩然金超白：境界升级、护罩高光
+
+# —— 飞升悟道·雷法三路的分色（2026-10-26 演出升级）——
+# 旧写法七路雷电（紫电/雷劫/天罚/反震/盾碎/雷霆弹幕/兽群）全用 FX_HDR_LIGHTNING 金白，
+# 屏幕上根本分不出是哪张卡在动。三枚语义色只给「玩家自己的神通」用，敌人放电仍走金白。
+const FX_HDR_ZIDIAN := Color(1.45, 0.72, 2.85)   ## 紫电：紫罗兰超白（攻击链电，把敌群串起来的那道）
+const FX_HDR_LEIJIE := Color(2.45, 0.55, 0.95)   ## 雷劫：绛紫红超白（击杀链电，尸体上炸开）
+const FX_HDR_XUEHAI := Color(2.55, 0.35, 0.45)   ## 血海：血红超白（护盾破碎放电）
 
 # 五行 HDR 起辉色（分量 > 1.0，与 ELEMENT_COLORS 对应，供火花/弹丸/光束/法阵取用）：
 const FX_HDR_METAL := Color(2.4, 1.9, 0.6)       ## 金系古金超白
