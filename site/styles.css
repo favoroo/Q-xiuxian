@@ -1,0 +1,664 @@
+/* 剑士 · 游戏介绍页样式
+   —— 颜色与尺寸一律来自 tokens.css（tools/export_site_data.py 从 scripts/ui/GameStyle.gd 现读产出，
+      禁止在本文件里再写一份色值或影偏移）。口径 = 游戏内「新野兽派」：
+      · 纯黑舞台 var(--ink) × 宣纸白面板 var(--panel) × 等宽纯黑粗框 var(--bw)
+        × 不透明纯黑硬偏移影（零模糊、零渐变、零柔光）× 全直角
+      · 色即功能：主题色 var(--hot) = 主行动/选中/标题带，点缀黄 var(--jade) = 金币与星级，
+        朱砂 var(--bad) = 代偿，增益绿 var(--good) = 加成，稀有度四档与五行色照表取
+      · 纸面上的字一律用压暗档（--good-dk / --bad-dk / --jade-dk），亮档只上黑底
+      · 卡片按游戏内 card() 的写法：顶 5px accent 带 + 侧 2px + 底 3px，同一支 accent 色；
+        列表行按 side_card()：左边一条 3px 竖带、行内不投影
+      · 动效照 GameStyle：按下 = 影归零 + 位移一个影量（ANIM_PRESS 只在松开时回弹，按下 0ms 硬切），
+        选中 = scale(var(--sel-scale)) 走 ANIM_SNAP，弹窗进入 = slam_in 从 var(--slam-from) 起
+        走 ANIM_SLAM；游戏里 slash_wipe 那条整屏直角带（--dur-wipe / --wipe-fade / --wipe-stagger）
+        站点不拿来当标题特效（2026-10-21 用户拍板关掉扫屏），只借它的时长给数据带数字滚动
+      · 浏览器里的补间口径（2026-10-21 与用户确认）：颜色/阴影给一条 --dur-press 的短补间，
+        位移/缩放走 --dur-snap —— 触屏上没有 hover 常驻，硬切看着像闪一下；按下仍然 0ms 到位。
+        游戏内没有「滚动揭示」这种东西，入场用的时长 = 令牌整数倍（见 :root 那三条站点自有变量），
+        距离与错峰同理，都是从 --bw / --dur-press 推出来的，不再另抄绝对值
+      · 舞台层大面板的黑影落在纯黑上看不见，这是游戏原样（dialog_panel 只坐在 0.85 暗幕上），
+        不造假影；舞台上的层次靠 card() 那条 accent 顶带与品红标题带表达
+   —— 唯一的移动端适配：字号下限 12px，密集小字一律提到 12px（游戏内 10 号字靠的是矢量渲染，
+      浏览器小屏上读不动）。 */
+
+/* 子集字体由 tools/export_site_data.py 按页面现用字符集裁出（625KB → 约 152KB/个）：
+   页面主文案的每个字都在 charset 里，改了文案重跑导出即可，别改成引用全量字体。 */
+@font-face {
+  font-family: "MiSans";
+  src: url("fonts/MiSans-Semibold-subset.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "MiSans";
+  src: url("fonts/MiSans-Heavy-subset.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --wrap: 1200px;
+  /* 站点自有（游戏内没有滚动揭示/数字滚动这类东西）。值全部从 GameStyle 令牌推：
+     抬起一个框宽、入场翻一个影量、错峰走半条按下时长 —— 不另立绝对数。 */
+  --rv-rise: calc(var(--bw) * 2);
+  --lift: var(--bw);
+  --rv-step: calc(var(--dur-press) / 2);
+  --rv-dur: calc(var(--dur-snap) * 2);
+  --slide-dur: calc(var(--dur-snap) * 2);
+  --tap: 40px;          /* 触屏热区下限（游戏内没有这种约束，站点自有） */
+  --ease-out: cubic-bezier(.33, 1, .68, 1);   /* 与 .tile.sel 那条缩放补间同一支曲线 */
+  --ease-in: cubic-bezier(.32, 0, .67, 0);    /* 游戏 slash_wipe 用的是 TRANS_CUBIC + EASE_IN */
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 78px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--chalk);
+  font-family: "MiSans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  overflow-x: hidden;
+}
+
+img { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+
+.wrap { width: 100%; max-width: var(--wrap); margin: 0 auto; padding: 0 22px; }
+
+/* —— 大面板：dialog_panel() 配方（纸白底 + 3px 纯黑框 + 8×9 硬影） —— */
+.slab {
+  background: var(--panel);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--sh-dialog);
+  color: var(--paper);
+  padding: 26px 24px 28px;
+}
+
+/* —— 顶栏：纯黑底 + 主题色 3px 下边带 —— */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--ink);
+  border-bottom: var(--bw) solid var(--hot);
+}
+.topbar-in { display: flex; align-items: center; gap: 12px; height: 62px; }
+/* 顶栏三块：品牌不缩、导航吃掉剩下来的宽度并自己横滑、按钮不缩。
+   少了这三条约束，中文按钮会被压成一列一个字（390 档实测「立即试玩」竖排三行）。 */
+.brand { display: flex; align-items: center; gap: 10px; flex: none; margin-right: auto; min-width: 0; }
+.brand-mark { width: 34px; height: 34px; border: var(--bw-thin) solid var(--hot); }
+.brand-name { font-weight: 900; font-size: 21px; letter-spacing: .06em; color: var(--chalk); white-space: nowrap; }
+
+.nav { position: relative; display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a {
+  display: flex; align-items: center;
+  min-height: var(--tap);
+  padding: 7px 12px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--grey);
+  border-bottom: var(--bw-thin) solid transparent;
+  touch-action: manipulation;
+}
+.nav a:hover, .nav a.on { color: var(--chalk); }
+/* 分区指示条：整条导航只有一根骨白→主题色的带子，靠它滑动指出当前分区，
+   不逐个签子换底色（那样一屏能同时亮六块，反而看不出在哪个分区）。 */
+.nav-ind {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 0; height: var(--bw-thin);
+  background: var(--hot);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--slide-dur) var(--ease-out),
+              width var(--slide-dur) var(--ease-out),
+              opacity var(--dur-press) linear;
+}
+.nav-ind[data-show="1"] { opacity: 1; }
+
+/* —— 按钮：block(主题色) 配方，按下走游戏内「物理压扁」 —— */
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  border: var(--bw) solid var(--ink);
+  background: var(--hot);
+  color: var(--on-hot);
+  box-shadow: var(--sh-btn);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.btn:hover { background: var(--hot-edge); color: var(--on-hot-edge); box-shadow: var(--sh-btn-hover); }
+.btn:active {
+  background: var(--hot-dk);
+  color: var(--on-hot-dk);
+  box-shadow: none;
+  transform: translate(var(--btn-sink)) scale(.97);
+}
+.btn-ghost { background: var(--panel); color: var(--paper); }
+.btn-ghost:hover { background: var(--chalk); }
+.btn-ghost:active { background: var(--slot); }
+.btn-sm { padding: 9px 15px; font-size: 13px; }
+.topbar-cta { padding: 8px 14px; font-size: 13px; white-space: nowrap; flex: none; touch-action: manipulation; }
+.btn { touch-action: manipulation; }
+
+/* —— HERO —— */
+.hero { padding: 54px 0 56px; }
+/* 首屏比正文区（1200）更宽：视频展示是首屏主角，640 宽的旧版会
+   把 1080p 画面缩到三分之一，像素风内容明显发糊、出锯齿 */
+.hero-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 44px;
+  align-items: center;
+  max-width: 1440px;
+}
+.hero-copy { min-width: 0; }
+.kicker { margin: 0 0 16px; font-size: 12px; letter-spacing: .18em; }
+.kicker span {
+  display: inline-block;
+  padding: 2px 9px;
+  background: var(--hot);
+  color: var(--on-hot);
+  border: var(--bw-thin) solid var(--ink);
+  box-shadow: var(--sh-mini);
+  font-weight: 900;
+}
+.kicker span + span { margin-left: 8px; background: var(--panel); color: var(--paper); }
+.hero h1 {
+  margin: 0 0 18px;
+  font-size: clamp(34px, 5.2vw, 62px);
+  font-weight: 900;
+  line-height: 1.12;
+  color: var(--chalk);
+}
+.hero h1 em {
+  font-style: normal;
+  background: var(--jade);
+  color: var(--ink);
+  padding: 0 10px;
+  box-shadow: var(--sh-chip);
+}
+.lead { margin: 0 0 26px; max-width: 44ch; color: var(--grey); font-size: 16px; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.fine { margin: 18px 0 0; max-width: 48ch; font-size: 12.5px; color: var(--grey); }
+
+/* 主题色切换：与游戏内 THEME_PRESETS 同一张表，色块就是可点的档 */
+.themes { display: flex; align-items: center; gap: 8px; margin: 20px 0 0; flex-wrap: wrap; }
+.themes > span { font-size: 12.5px; color: var(--grey); letter-spacing: .04em; white-space: nowrap; }
+.theme-sw-row { display: flex; gap: 8px; }
+.theme-sw {
+  width: 30px; height: 30px;
+  padding: 0;
+  border: var(--bw-thin) solid var(--ink);
+  box-shadow: var(--sh-mini);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.theme-sw:hover { border-color: var(--chalk); }
+.theme-sw[aria-pressed="true"] {
+  border: var(--bw) solid var(--chalk);
+  box-shadow: var(--sh-chip);
+}
+.theme-name { font-size: 12.5px; font-weight: 900; color: var(--chalk); letter-spacing: .06em; }
+
+/* 截图与视频框：黑舞台上给一条 accent 顶带（card() 那条 5px），细框收在旁边 */
+.frame { background: var(--ink); border-style: solid; border-width: var(--card-edge); border-color: var(--hot); }
+.frame img, .frame video { width: 100%; height: auto; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
+.hero-video { background: #000; }
+.hero-shot { margin: 0; }
+.hero-shot figcaption {
+  margin-top: 14px;
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: var(--grey);
+  text-align: right;
+}
+
+/* —— 数据带：主题色做底一律配墨黑字（GameStyle on_face_text 口径） —— */
+.band { background: var(--hot); color: var(--on-hot); border-top: var(--bw) solid var(--ink); border-bottom: var(--bw) solid var(--ink); }
+.band-in { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 18px 0; }
+.stat { text-align: center; padding: 0 4px; }
+.stat b { display: block; font-size: clamp(24px, 3.4vw, 40px); font-weight: 900; line-height: 1.1; color: var(--on-hot); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; letter-spacing: .06em; color: var(--on-hot); font-weight: 900; }
+
+/* —— 区块：标题带用 block(主题色) 那一档 —— */
+.section { padding: 62px 0; }
+.sec-title {
+  display: inline-block;
+  margin: 0;
+  padding: 4px 18px 6px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  background: var(--hot);
+  color: var(--on-hot);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--sh-btn);
+}
+.sec-sub {
+  margin: 20px 0 0;
+  color: var(--grey);
+  font-size: 14.5px;
+  line-height: 1.65;
+  text-wrap: balance;
+}
+.sec-sub b { color: var(--chalk); }
+.sec-body { margin-top: 24px; }
+
+/* —— 通用纸面卡：block() 配方（3px 纯黑框 + 4×5 硬影） —— */
+.plate {
+  background: var(--card);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--sh-block);
+  color: var(--paper);
+}
+.plate:hover { box-shadow: var(--sh-block), 6px 7px 0 var(--hot); }
+
+/* 玩法卡 */
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.card { padding: 14px 16px 18px; }
+.card .frame { border-color: var(--ink); box-shadow: var(--sh-card); margin-bottom: 14px; }
+.card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 900; letter-spacing: .05em; color: var(--paper); }
+.card p { margin: 0; font-size: 14px; color: var(--paper-dim); }
+
+/* —— 折叠展开键（角色/武器/道具）：secondary 用面，主色走 hover —— */
+[hidden] { display: none !important; }   /* 组件都写了 display:flex/grid，藏起来必须压过它 */
+.more {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-align: center;
+  color: var(--paper);
+  background: var(--panel);
+  border: var(--bw) solid var(--ink);
+  box-shadow: var(--sh-btn);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.more:hover { background: var(--hot); color: var(--on-hot); box-shadow: var(--sh-btn-hover); }
+.more:active { background: var(--hot-dk); color: var(--on-hot-dk); box-shadow: none; transform: translate(var(--btn-sink)); }
+.more .chev { font-style: normal; margin-left: 8px; font-size: 12px; }
+/* 触屏上焦点环不该在点按后留着，只有键盘走位才画 */
+.btn:focus-visible, .fbtn:focus-visible, .tile:focus-visible, .more:focus-visible, .theme-sw:focus-visible, .qa summary:focus-visible {
+  outline: var(--bw) solid var(--hot);
+  outline-offset: 2px;
+}
+
+/* 角色卡 */
+.roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.role { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
+.role-top { display: flex; align-items: center; gap: 11px; }
+/* 角色头像与游戏内选角卡同一个做法：CultivatorSelect 用 outlined_panel(INK, LINE, 1) 把
+   图标坐在纯黑凹槽里（图标是透明底，实测不透明像素只占 20%~64%，压纸白会露出一圈浅色底）。
+   边框跟着换成 --line：黑底上再画一圈纯墨边框等于没有，游戏里那圈本来就是中性深灰线。 */
+/* 游戏图标一律坐在纯黑凹槽里（与技能、角色同一条规矩）：这批切图全是透明底
+   （实测武器/道具不透明像素只占 3~6 成，角色 2~6 成），压在纸白卡面上会露出一圈浅色底；
+   游戏内本来就是 outlined_panel(INK, LINE, 1)。黑底上再画一圈纯墨边框等于没有，
+   所以带边框的那几处统一描中性深灰线 --line；武器/道具那面密网格不给边框，
+   让卡片自己那条五行属色/档位 accent 框当唯一边框，34px 的小格再套一圈会糊。 */
+.role-top img, .tile img, .detail img, .skill-top img { background: var(--ink); }
+.role-top img, .detail img, .skill-top img { border: var(--bw-thin) solid var(--line); }
+.role-top img { width: 42px; height: 42px; flex: none; }
+.role-name { font-size: 16.5px; font-weight: 900; letter-spacing: .04em; color: var(--paper); }
+.role-epi { font-size: 12px; color: var(--paper-dim); line-height: 1.45; }
+.role-line { display: flex; gap: 7px; font-size: 12.5px; line-height: 1.5; align-items: baseline; }
+.role-line i {
+  flex: none;
+  font-style: normal;
+  font-weight: 900;
+  width: 17px; height: 17px;
+  display: grid;
+  place-items: center;
+  border: var(--bw-thin) solid var(--ink);
+  background: var(--panel);
+  font-size: 12px;
+}
+.plus i { background: var(--good); color: var(--ink); }
+.minus i { background: var(--bad); color: var(--ink); }
+.role-line span { flex: 1; color: var(--paper); }
+.role-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.role-tags em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border: var(--bw-thin) solid var(--ink);
+  background: var(--slot);
+  color: var(--paper-dim);
+}
+.role-tags em.kit { background: var(--jade); color: var(--ink); }
+.role-tags em.ex { background: var(--hot); color: var(--on-hot); }
+
+/* —— 筛选签（游戏里的页签：选中态 = 主题色实底 + 墨黑字）与详情条（side_card 左竖带） —— */
+.fbtn, .tile { -webkit-appearance: none; appearance: none; font: inherit; color: inherit; }
+.filters { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 16px; }
+.fbtn {
+  display: inline-flex; align-items: center;
+  min-height: var(--tap);
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  color: var(--paper-dim);
+  background: var(--slot);
+  border: var(--bw-thin) solid var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.fbtn:hover { background: var(--panel); color: var(--paper); }
+.fbtn.on { background: var(--hot); color: var(--on-hot); border-width: var(--bw); box-shadow: var(--sh-chip); }
+.fbtn i { font-style: normal; display: inline-block; width: 9px; height: 9px; margin-right: 5px; border: 1px solid var(--ink); vertical-align: 1px; }
+.fcount { align-self: center; margin-left: 4px; font-size: 12px; letter-spacing: .06em; color: var(--paper-dim); font-weight: 900; }
+
+.detail {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 14px;
+  margin-bottom: 16px;
+  min-height: 68px;
+  background: var(--card);
+  border-style: solid; border-width: var(--side-edge); border-color: var(--hot);
+  color: var(--paper);
+}
+.detail img { flex: none; width: 44px; height: 44px; }   /* 底色与边框见上面那条统一规矩 */
+.detail-txt { display: flex; flex-direction: column; min-width: 0; }
+.detail-txt b { font-size: 16px; font-weight: 900; letter-spacing: .04em; color: var(--jade-dk); }
+.detail-txt span { font-size: 13px; color: var(--paper-dim); }
+
+/* —— 武器 / 道具网格：一律 card() 那条 accent 框（顶 5 / 侧 2 / 底 3） —— */
+.grid { display: grid; gap: 9px; }
+.arms { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.items { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  text-align: left;
+  background: var(--card);
+  border-style: solid; border-width: var(--card-edge); border-color: var(--line);
+  box-shadow: var(--sh-card);
+  cursor: pointer;
+}
+.tile img { flex: none; width: 34px; height: 34px; }
+.tile-txt { min-width: 0; }
+.tile-txt b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--paper);
+}
+.tile-txt span {
+  display: block;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--paper-dim);
+}
+.tile:hover { background: var(--slot); }
+/* 选中态照游戏内卡片：描边转点缀黄 + 整卡放大一档（颜色硬切，只有缩放走补间） */
+.tile.sel {
+  border-color: var(--jade);
+  background: var(--panel);
+  transform: scale(var(--sel-scale));
+}
+.tile.sel .tile-txt b { color: var(--jade-dk); }
+/* 游戏内选中卡的标记是名字前一个 ◆，站点照搬（只靠颜色对色弱不友好） */
+.tile.sel .tile-txt b::before { content: "◆ "; color: var(--jade-dk); }
+.tile[hidden] { display: none; }
+/* 道具档位 = RARITY_* 四档；武器 = 五行属色（都从 tokens 取，不在此写死） */
+.tile.t1 { border-color: var(--r-1); }
+.tile.t2 { border-color: var(--r-2); }
+.tile.t3 { border-color: var(--r-3); }
+.tile.t4 { border-color: var(--r-4); }
+.tile.e-metal { border-color: var(--m-metal); }
+.tile.e-wood { border-color: var(--m-wood); }
+.tile.e-water { border-color: var(--m-water); }
+.tile.e-fire { border-color: var(--m-fire); }
+.tile.e-earth { border-color: var(--m-earth); }
+
+/* —— 规则说明块：星级走点缀黄带、羁绊走主题色带（都是 card() 的 accent 参数） —— */
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 22px; }
+.rule { background: var(--card); border-style: solid; border-width: var(--card-edge); border-color: var(--jade); box-shadow: var(--sh-block); color: var(--paper); padding: 16px 18px; }
+.rule.syn-rule { border-color: var(--hot); }
+.rule h4 { margin: 0 0 8px; font-size: 15px; font-weight: 900; letter-spacing: .06em; color: var(--paper); }
+.rule p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--paper-dim); }
+.rule b { color: var(--jade-dk); }
+.rule .star { color: var(--jade-dk); font-weight: 900; }
+.syn { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.syn em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border: var(--bw-thin) solid var(--ink);
+  box-shadow: var(--sh-mini);
+  color: var(--ink);
+}
+
+/* —— 灵兽：黑底托发光灵球（游戏内 CareerDialog 角色行卡就保留 INK 黑底），
+      描边取 PetData 自己那颗灵球的色 —— */
+.pets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.pet {
+  padding: 14px;
+  background: var(--ink);
+  border: var(--bw-thin) solid var(--pet-color, var(--line));
+  color: var(--chalk);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.pet:hover { border-color: var(--hot); }
+.pet-orb { display: flex; align-items: center; gap: 11px; }
+.pet-orb > div { flex: 1; min-width: 0; }
+.orb-img { flex: none; width: 52px; height: 52px; object-fit: contain; }
+.pet-n { font-size: 16px; font-weight: 900; letter-spacing: .04em; }
+.pet-r {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border: var(--bw-thin) solid var(--ink);
+  color: var(--ink);
+}
+.pet p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--chalk); }
+.pet-meta { font-size: 12px; color: var(--grey); letter-spacing: .03em; }
+
+/* —— 技能：5 选 1 与角色自带分开标 —— */
+.skills { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.skill { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.skill-top { display: flex; align-items: center; gap: 11px; }
+/* 技能图标是纯白镂空画（实测画身 #fefefe），一律黑底白画 */
+.skill-top img {
+  flex: none;
+  width: 40px; height: 40px;   /* 底色与边框见上面那条统一规矩 */
+}
+.glyph {
+  display: grid; place-items: center;
+  font-size: 20px; font-weight: 900;
+  color: var(--on-hot); background: var(--hot);
+}
+.skill-n { font-size: 16px; font-weight: 900; color: var(--paper); }
+.skill-cd { font-size: 12px; color: var(--paper-dim); font-weight: 900; }
+.skill p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--paper-dim); }
+.skill-tag {
+  align-self: flex-start;
+  font-size: 12px; font-weight: 900;
+  padding: 2px 7px; border: var(--bw-thin) solid var(--ink);
+  color: var(--ink); background: var(--slot);
+}
+.skill-tag.bond { background: var(--hot); color: var(--on-hot); }
+
+/* —— 下载 —— */
+.gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 26px; }
+.get { padding: 18px 18px 20px; display: flex; flex-direction: column; align-items: flex-start; }
+.get-tag {
+  display: inline-block;
+  padding: 2px 9px;
+  font-size: 12px;
+  letter-spacing: .08em;
+  font-weight: 900;
+  border: var(--bw-thin) solid var(--ink);
+  box-shadow: var(--sh-mini);
+  background: var(--hot);
+  color: var(--on-hot);
+}
+.get h3 { margin: 13px 0 6px; font-size: 20px; font-weight: 900; color: var(--paper); }
+.get p { margin: 0 0 16px; font-size: 13.5px; color: var(--paper-dim); flex: 1; }
+.get .btn { margin: 0 8px 8px 0; }
+
+.qa {
+  background: var(--card);
+  border-style: solid; border-width: var(--side-edge); border-color: var(--line);
+  color: var(--paper);
+  margin-bottom: 12px;
+  padding: 0 16px;
+}
+.qa summary { padding: 13px 0; cursor: pointer; font-weight: 900; font-size: 14.5px; color: var(--paper); list-style: none; }
+.qa summary::-webkit-details-marker { display: none; }
+.qa summary::before { content: "+"; display: inline-block; width: 20px; color: var(--hot-dk); font-weight: 900; }
+.qa[open] summary::before { content: "−"; }
+.qa p { margin: 0 0 15px 20px; font-size: 13.5px; color: var(--paper-dim); }
+
+/* —— 页脚 —— */
+.foot { padding: 26px 0 42px; border-top: var(--bw) solid var(--line); }
+.foot-in { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.foot-id { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.foot-name { font-weight: 900; font-size: 16px; letter-spacing: .06em; color: var(--chalk); }
+.foot-name i { font-style: normal; color: var(--grey); font-size: 12px; letter-spacing: .1em; }
+.foot-author { font-size: 12px; padding: 2px 8px; border: var(--bw-thin) solid var(--line); color: var(--grey); }
+.foot-author b { color: var(--jade); font-weight: 900; }
+
+/* —— 动效：slam_in 拍桌进入 + 标题直角带上色（时长全走 tokens，tokens 现读 GameStyle） —— */
+@keyframes slam {
+  0% { opacity:0; transform: scale(var(--slam-from)); }
+  100% { opacity: 1; transform: none; }
+}
+.hero-shot .frame { animation: slam var(--dur-slam) cubic-bezier(.215, .61, .355, 1) both; }
+
+/* 交互反馈的统一补间：颜色/阴影一条 --dur-press，位移/缩放一条 --dur-snap。
+   按下态整条 transition 归零 —— 游戏里按下 0ms 硬切、松开才走 ANIM_PRESS 回弹，
+   反过来的话按钮手感是黏的。 */
+.btn, .more, .fbtn, .tile, .plate, .pet, .theme-sw, .qa, .detail, .nav a {
+  transition: background-color var(--dur-press) linear,
+              color var(--dur-press) linear,
+              border-color var(--dur-press) linear,
+              box-shadow var(--dur-snap) var(--ease-out),
+              transform var(--dur-snap) var(--ease-out);
+}
+.btn:active, .more:active, .fbtn:active, .tile:active, .theme-sw:active, .qa:active {
+  transition-duration: 0s;
+}
+/* 抬起一个框宽：硬偏移影留在原地，卡面往左上让出一个 --bw，影于是自己拉开一档。
+   只给成块的大卡，不给武器/道具那面密网格 —— 几十颗小格一起浮会整屏发抖。 */
+.cards .card:hover, .roles .role:hover, .pets .pet:hover, .skills .skill:hover,
+.gets .get:hover, .qa:hover {
+  transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1));
+}
+
+/* 首屏进入：静态值必须就是「可见」——上一版用 `@keyframes + fill both`，起始帧写在屏外，
+   结果凡是「动画不推进」的渲染（冻结截图 / 站点预览 Canvas）整段首屏文案是空的。
+   现在改成 JS 在同一帧里挂 .enter → 强制落地 → 立刻摘掉，靠 transition 补间进来：
+   JS 没跑 = 页面照常全可见；动画卡住 = 停在可见态。截图里的 --hide-scrollbars 之类不影响这个结论。 */
+.hero-copy > * {
+  transition: opacity var(--rv-dur) linear, transform var(--rv-dur) var(--ease-out);
+}
+.hero-copy > .enter { opacity: 0; transform: translateY(var(--rv-rise)); }
+
+/* 滚动入场（JS 只给「此刻还在首屏下方」的块挂 .rv，屏内正在读的东西一律不藏） */
+.rv { opacity: 0; transform: translateY(var(--rv-rise)); }
+.rv.on {
+  opacity: 1; transform: none;
+  transition: opacity var(--rv-dur) linear, transform var(--rv-dur) var(--ease-out);
+  transition-delay: var(--rv-delay, 0s);
+}
+/* 折叠展开：新露出来的格子逐颗顶上来，最多错 6 拍（70 件一路错开就约等于没动） */
+@keyframes pop { from { opacity: 0; transform: translateY(var(--rv-rise)); } to { opacity: 1; transform: none; } }
+.tile.pop { animation: pop var(--rv-dur) var(--ease-out) both; animation-delay: var(--rv-delay, 0s); }
+/* 详情条换件：整条顶一下再归位，把「点了这张卡 → 读的是这一件」连上 */
+@keyframes ping { from { opacity: .3; transform: translateX(calc(var(--bw) * -1)); } to { opacity: 1; transform: none; } }
+.detail.ping { animation: ping var(--dur-slam) var(--ease-out) both; }
+
+/* 分区标题不做扫屏/上色动效（用户 2026-10-21 拍板关掉）：标题是要被读的那一行，
+   给它加一闪而过的东西只会抢正文的注意力，静态实心那档本来就够硬。
+   游戏里 band_wipe 仍用于整屏切换，与这里无关；数据带数字滚动的时长照旧走 --dur-wipe。 */
+
+/* —— 响应式 —— */
+@media (max-width: 1040px) {
+  .arms { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .items { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .roles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pets, .skills { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .hero { padding: 38px 0 42px; }
+  .hero-in { grid-template-columns: 1fr; gap: 28px; }
+  .cards, .gets, .rules { grid-template-columns: 1fr; }
+  .section { padding: 46px 0; }
+  .band-in { grid-template-columns: repeat(3, 1fr); gap: 16px 2px; }
+  .slab { padding: 20px 16px 22px; }
+}
+@media (max-width: 620px) {
+  body { font-size: 15px; }
+  /* 顶栏挤到一屏时：按钮文案收成「试玩」两字（「立即」是修饰，砍掉不丢信息），
+     品牌与按钮都不参与压缩，宽度全留给能横滑的导航 */
+  html { scroll-padding-top: 66px; }
+  .cta-full { display: none; }
+  .roles, .pets, .skills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arms, .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topbar-in { height: 56px; gap: 8px; }
+  .topbar-cta { padding: 7px 10px; font-size: 12px; }
+  .brand { gap: 8px; }
+  .brand-name { font-size: 18px; }
+  .nav a { font-size: 13px; padding: 6px 10px; }
+  .cta-row .btn { flex: 1 1 100%; text-align: center; }
+  .sec-title { font-size: 22px; }
+  .frame { border-style: solid; }
+  .theme-sw { width: 36px; height: 36px; }
+  .hero-shot { margin-top: 4px; }
+}
+@media (max-width: 400px) {
+  .roles, .pets, .skills { grid-template-columns: 1fr; }
+  .arms, .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  /* 一处收口：低动效下所有补间与入场动画直接不要，页面停在最终的可见态。
+     揭示类动效的结束帧必须是「完整可见」，摘掉动画后不留任何遮盖或空块。 */
+  .hero-shot .frame, .tile.pop, .detail.ping { animation: none; }
+  .rv { opacity: 1; transform: none; }
+  .hero-copy > *, .hero-copy > .enter { opacity: 1; transform: none; }
+  .btn, .more, .fbtn, .tile, .plate, .pet, .theme-sw, .qa, .detail, .nav a, .hero-copy > * { transition: none; }
+  .cards .card:hover, .roles .role:hover, .pets .pet:hover, .skills .skill:hover,
+  .gets .get:hover, .qa:hover { transform: none; }
+  .nav-ind { transition: none; }
+}
