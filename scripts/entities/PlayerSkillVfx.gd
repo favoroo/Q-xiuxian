@@ -135,14 +135,13 @@ var crowd_aura_alpha: float = 0.0
 var shadowburst_progress: float = -1.0  ## >=0 播放影爆爆发演出 (0.0 -> 1.0)
 var shadowburst_shards: Array[Dictionary] = []  ## 影锥碎芒 {ang, spd, dist, len, size}
 
-# 17. 万剑归宗（剑意槽与剑阵驻场状态：头顶 4 把渐进充能小剑）
+# 17. 万剑归宗（剑意槽与剑阵驻场状态：头顶单柄充能小剑，开阵化作沙漏流逝）
 var sword_qi_visible: bool = false
 var sword_qi_charge: int = 0
 var sword_qi_cap: int = 20
 var sword_qi_formation: bool = false
 var sword_qi_formation_ratio: float = 0.0
 var _sword_qi_pop: float = 0.0
-var _sword_qi_pop_pip: int = -1
 var _sword_qi_pulse_timer: float = 0.0
 
 func _ready() -> void:
@@ -324,7 +323,7 @@ func on_shadow_spent() -> void:
 	spawn_ghost(GHOST_COLOR_SHADOW, ShadowStepData.BURST_FX_DURATION * 0.5)
 	queue_redraw()
 
-## 同步万剑归宗剑意槽（0..cap）与剑阵运转状态（头顶 4 把小剑，每把 5 层渐进充能）
+## 同步万剑归宗剑意槽（0..cap）与剑阵运转状态（头顶单柄小剑：逐刀充能、开阵沙漏流逝）
 func sync_sword_qi(charge: int, cap: int, in_formation: bool, formation_ratio: float, slot_visible: bool = true) -> void:
 	var changed := false
 	if sword_qi_visible != slot_visible:
@@ -332,9 +331,7 @@ func sync_sword_qi(charge: int, cap: int, in_formation: bool, formation_ratio: f
 		changed = true
 	if sword_qi_charge != charge:
 		if charge > sword_qi_charge:
-			var pip_size: int = maxi(1, int(float(cap) / 4.0))
 			_sword_qi_pop = 1.0
-			_sword_qi_pop_pip = clampi(int(float(charge - 1) / float(pip_size)), 0, 3)
 		sword_qi_charge = charge
 		changed = true
 	sword_qi_cap = cap
@@ -886,8 +883,8 @@ func _draw_shadow_pips() -> void:
 		draw_line(Vector2(start_x - gap * 0.6, top_y - 7.0),
 			Vector2(start_x + gap * float(n - 1) + gap * 0.6, top_y - 7.0), GameStyle.SHADOW_EDGE, 1.6)
 
-## 绘制【万剑归宗】剑意槽：头顶 4 把竖置小剑，每把 5 层（共 20 层），渐进充能点亮；
-## 攒满 4 把整排金色脉冲；开阵期间 4 把转纯金并随剩余驻场时间渐隐（兼作剑阵倒计时）。
+## 绘制【万剑归宗】剑意槽：头顶单柄竖置小剑（蓄势时由剑柄向剑尖渐进充能；
+## 满层金芒脉冲；开阵后化作沙漏倒计时由剑尖向剑柄缓缓流逝放空）。
 func _draw_sword_qi_pips() -> void:
 	if not sword_qi_visible and sword_qi_charge <= 0 and not sword_qi_formation:
 		return
@@ -896,75 +893,59 @@ func _draw_sword_qi_pips() -> void:
 	if shadow_stacks > 0:
 		top_y -= 14.0 * _body_scale.y
 
-	var cap := maxi(4, sword_qi_cap)
-	var pip_cap := maxi(1, int(float(cap) / 4.0))
-	var gap := 9.0
-	var start_x := -gap * 1.5
-	var outline_col := Color(GameStyle.CHALK.r, GameStyle.CHALK.g, GameStyle.CHALK.b, 0.28)
+	var c := Vector2(0.0, top_y)
+	var cap := maxi(1, sword_qi_cap)
+	var fill_ratio: float = 0.0
+	if sword_qi_formation:
+		# 开阵驻场：沙漏倒计时流逝（由 1.0 满格随剩余时间慢慢变空降至 0.0）
+		fill_ratio = clampf(sword_qi_formation_ratio, 0.0, 1.0)
+	else:
+		# 未开阵：按剑意层数渐进充能（0.0 -> 1.0）
+		fill_ratio = clampf(float(sword_qi_charge) / float(cap), 0.0, 1.0)
 
-	for i in range(4):
-		var c := Vector2(start_x + float(i) * gap, top_y)
-		var fill_ratio: float = 0.0
+	# 弹跳余量：刚攒上层数时弹性放大
+	var s: float = 1.0
+	if _sword_qi_pop > 0.0:
+		s = 1.0 + _sword_qi_pop * 0.25
+
+	var tip_y := c.y - 10.0 * s
+	var shoulder_y := c.y - 6.5 * s
+	var guard_y := c.y + 2.5 * s
+	var pommel_y := c.y + 8.5 * s
+	var blade_w := 2.0 * s
+	var guard_w := 4.2 * s
+	var pommel_r := 1.3 * s
+	var total_h := pommel_y - tip_y
+
+	var outline_col := Color(GameStyle.CHALK.r, GameStyle.CHALK.g, GameStyle.CHALK.b, 0.32)
+
+	# 1. 虚线/淡色描边：剑器容器轮廓始终可见
+	var blade_pts := PackedVector2Array([
+		Vector2(c.x, tip_y),
+		Vector2(c.x + blade_w, shoulder_y),
+		Vector2(c.x + blade_w, guard_y),
+		Vector2(c.x - blade_w, guard_y),
+		Vector2(c.x - blade_w, shoulder_y)
+	])
+	blade_pts.append(blade_pts[0])
+	draw_polyline(blade_pts, outline_col, 1.0)
+	draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), outline_col, 1.2 * s)
+	draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), outline_col, 1.2 * s)
+	draw_circle(Vector2(c.x, pommel_y), pommel_r, outline_col)
+
+	# 2. 充能填色（未开阵逐层充能；开阵沙漏倒计时流逝）
+	if fill_ratio > 0.0:
+		var fill_col: Color
 		if sword_qi_formation:
-			fill_ratio = 1.0
-		else:
-			var lower: int = i * pip_cap
-			var upper: int = (i + 1) * pip_cap
-			if sword_qi_charge >= upper:
-				fill_ratio = 1.0
-			elif sword_qi_charge <= lower:
-				fill_ratio = 0.0
-			else:
-				fill_ratio = float(sword_qi_charge - lower) / float(pip_cap)
-
-		# 弹跳余量：刚攒上层数的那一把跳动
-		var s: float = 1.0
-		if _sword_qi_pop > 0.0 and _sword_qi_pop_pip == i:
-			s = 1.0 + _sword_qi_pop * 0.35
-
-		var tip_y := c.y - 6.5 * s
-		var shoulder_y := c.y - 4.0 * s
-		var guard_y := c.y + 1.2 * s
-		var pommel_y := c.y + 5.2 * s
-		var guard_w := 2.2 * s
-		var blade_w := 1.2 * s
-
-		# 1. 虚线/淡色描边（未满部分始终看得出剑槽轮廓）
-		if fill_ratio < 1.0:
-			var blade_pts := PackedVector2Array([
-				Vector2(c.x, tip_y),
-				Vector2(c.x + blade_w, shoulder_y),
-				Vector2(c.x + blade_w, guard_y),
-				Vector2(c.x - blade_w, guard_y),
-				Vector2(c.x - blade_w, shoulder_y)
-			])
-			blade_pts.append(blade_pts[0])
-			draw_polyline(blade_pts, outline_col, 1.0)
-			draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), outline_col, 1.0)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), outline_col, 1.0)
-			draw_circle(Vector2(c.x, pommel_y), 0.8 * s, outline_col)
-
-		# 2. 充能填色
-		if sword_qi_formation:
-			# 剑阵驻场状态：纯金高亮，随剩余时间淡出倒计时
-			var fade: float = clampf(sword_qi_formation_ratio, 0.15, 1.0)
-			var col := Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, fade * 0.95)
-			var full_blade := PackedVector2Array([
-				Vector2(c.x, tip_y),
-				Vector2(c.x + blade_w, shoulder_y),
-				Vector2(c.x + blade_w, guard_y),
-				Vector2(c.x - blade_w, guard_y),
-				Vector2(c.x - blade_w, shoulder_y)
-			])
-			draw_colored_polygon(full_blade, col)
-			draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), col, 1.5 * s)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), col, 1.5 * s)
-			draw_circle(Vector2(c.x, pommel_y), 1.0 * s, col)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, tip_y),
-				Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, fade * 0.85), 1.0)
+			fill_col = Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, 0.95)
 		elif fill_ratio >= 1.0:
-			# 满把状态：饱满金芒 + 白芯
-			var col := Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, 0.92)
+			var pulse: float = 0.88 + 0.12 * sin(_sword_qi_pulse_timer * 11.0)
+			fill_col = Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, pulse)
+		else:
+			fill_col = Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.90)
+
+		if fill_ratio >= 1.0:
+			# 满格充满状态：饱满金芒 + 亮白芯线
 			var full_blade := PackedVector2Array([
 				Vector2(c.x, tip_y),
 				Vector2(c.x + blade_w, shoulder_y),
@@ -972,25 +953,23 @@ func _draw_sword_qi_pips() -> void:
 				Vector2(c.x - blade_w, guard_y),
 				Vector2(c.x - blade_w, shoulder_y)
 			])
-			draw_colored_polygon(full_blade, col)
+			draw_colored_polygon(full_blade, fill_col)
 			full_blade.append(full_blade[0])
-			draw_polyline(full_blade, Color(1.0, 1.0, 1.0, 0.70), 1.0)
-			draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), col, 1.4 * s)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), col, 1.4 * s)
-			draw_circle(Vector2(c.x, pommel_y), 0.9 * s, col)
+			draw_polyline(full_blade, Color(1.0, 1.0, 1.0, 0.75), 1.0)
+			draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
+			draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), fill_col, 1.5 * s)
+			draw_circle(Vector2(c.x, pommel_y), pommel_r, fill_col)
 			draw_line(Vector2(c.x, guard_y), Vector2(c.x, tip_y),
-				Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.75), 0.9)
-		elif fill_ratio > 0.0:
-			# 渐进充能状态：由剑柄向剑尖逐格攀升
-			var fill_col := Color(GameStyle.GOLD.r, GameStyle.GOLD.g, GameStyle.GOLD.b, 0.88)
-			var total_h: float = pommel_y - tip_y
+				Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.85), 1.1)
+		else:
+			# 渐进/流逝状态：从底部向上填充至水位线 fill_top
 			var fill_top: float = pommel_y - total_h * fill_ratio
-			# 剑柄与剑首
-			draw_line(Vector2(c.x, pommel_y), Vector2(c.x, maxf(fill_top, guard_y)), fill_col, 1.4 * s)
-			draw_circle(Vector2(c.x, pommel_y), 0.9 * s, fill_col)
+			# 剑首与剑柄
+			draw_circle(Vector2(c.x, pommel_y), pommel_r, fill_col)
+			draw_line(Vector2(c.x, pommel_y), Vector2(c.x, maxf(fill_top, guard_y)), fill_col, 1.5 * s)
 			# 护手
 			if fill_top <= guard_y:
-				draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.4 * s)
+				draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
 			# 剑身几何截断填充
 			if fill_top < guard_y:
 				if fill_top >= shoulder_y:
@@ -1001,6 +980,8 @@ func _draw_sword_qi_pips() -> void:
 						Vector2(c.x - blade_w, fill_top)
 					])
 					draw_colored_polygon(b_pts, fill_col)
+					draw_line(Vector2(c.x, guard_y), Vector2(c.x, fill_top),
+						Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.80), 1.0)
 				else:
 					var k := (shoulder_y - fill_top) / maxf(0.001, shoulder_y - tip_y)
 					var tip_w := blade_w * (1.0 - k)
@@ -1013,16 +994,8 @@ func _draw_sword_qi_pips() -> void:
 						Vector2(c.x - blade_w, shoulder_y)
 					])
 					draw_colored_polygon(b_pts, fill_col)
-
-	# 3. 攒满 4 把脉冲 / 剑阵共鸣线
-	if not sword_qi_formation and sword_qi_charge >= cap and cap > 0:
-		var pulse: float = 0.80 + 0.20 * sin(_sword_qi_pulse_timer * 11.0)
-		draw_line(Vector2(start_x - 4.0, top_y + 8.0), Vector2(start_x + gap * 3.0 + 4.0, top_y + 8.0),
-			Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, pulse * 0.85), 1.4)
-	elif sword_qi_formation:
-		var fade: float = clampf(sword_qi_formation_ratio, 0.15, 1.0)
-		draw_line(Vector2(start_x - 4.0, top_y - 9.0), Vector2(start_x + gap * 3.0 + 4.0, top_y - 9.0),
-			Color(GameStyle.FX_HDR_GOLD.r, GameStyle.FX_HDR_GOLD.g, GameStyle.FX_HDR_GOLD.b, fade * 0.75), 1.2)
+					draw_line(Vector2(c.x, guard_y), Vector2(c.x, fill_top),
+						Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.80), 1.0)
 
 ## 绘制程序化修仙角色的纯矢量流光身法虚影（彻底解决老版蓝衫小人残影 Bug）
 func _draw_vector_ghosts() -> void:

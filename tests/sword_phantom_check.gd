@@ -222,10 +222,9 @@ func _case_ui_sync() -> void:
 	_c.check(vfx.sword_qi_visible, "剑意开启后插槽置可见")
 	_c.check(vfx.sword_qi_charge == 7, "剑意层数同步准确（7 层）")
 	_c.check(vfx._sword_qi_pop > 0.0, "攒层触发小剑弹跳动效")
-	_c.check(vfx._sword_qi_pop_pip == 1, "第 2 把小剑触发弹跳（7 层落在第 2 把）")
 	vfx.sync_sword_qi(20, 20, true, 0.5, true)
 	_c.check(vfx.sword_qi_formation, "剑阵运转态同步准确")
-	_c.check(is_equal_approx(vfx.sword_qi_formation_ratio, 0.5), "剑阵剩余时间比率同步准确")
+	_c.check(is_equal_approx(vfx.sword_qi_formation_ratio, 0.5), "剑阵沙漏倒计时比率同步准确")
 
 # ---------------- 辅助 ----------------
 
