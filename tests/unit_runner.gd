@@ -57,10 +57,10 @@ func _ready() -> void:
 		[upgrade, "_test_upgrade_table"],
 		[upgrade, "_test_upgrade_roll_filters"],
 		[upgrade, "_test_alloc_session"],
-		# 2026-10-25 超级悟道「三道」：卡表/道途阶段门控/候选算法/赠礼落地/链电数值
+		# 2026-10-25 飞升悟道：卡表/卡池闸（2026-10-26 去阶段门控）/候选算法/赠礼落地/链电数值
 		# （每个用例自带 reset_run，不影响后续顺序）
 		[supers, "_test_super_table"],
-		[supers, "_test_super_stage_gate"],
+		[supers, "_test_super_pool_gate"],
 		[supers, "_test_super_roll"],
 		[supers, "_test_super_apply"],
 		[supers, "_test_chain_balance"],

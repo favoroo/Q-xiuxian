@@ -155,9 +155,9 @@ static func _create_top_row(dialog: LevelUpDialog, data: Dictionary, rarity_col:
 	rarity_lbl.add_theme_stylebox_override("normal", pill_style)
 	hbox_top.add_child(rarity_lbl)
 
-	# 道途签（超级悟道专属）：显示「是否延续上次的道」与所属道途。
+	# 道途签（飞升悟道专属）：标出所属道途。
 	# 普通悟道 payload 没有 lane_label，这里整段不渲染，行为零变化。
-	# 文案形如「剑道·新道」/「雷法·延续」/「共鸣」，一行读得出「这次选它意味着什么」。
+	# 文案形如「剑道」/「共鸣」，一行读得出「这张卡属于哪一路」（2026-10-26 去阶段后不再带「新道/延续/大成」）。
 	var lane_text := String(data.get("lane_label", ""))
 	var lane_chip_text := String(data.get("lane_chip", ""))
 	if not lane_text.is_empty() or not lane_chip_text.is_empty():

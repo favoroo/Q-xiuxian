@@ -7,7 +7,7 @@ extends VBoxContainer
 ## - 加点走 AuthorMode.add_upgrade（与真实结算同一条 apply 链路，不消耗待加点，守住 max_stacks）；
 ##   删除走 AuthorMode.remove_upgrade —— 账本改完由 AuthorStatRebuild 从初值重放整条属性层，
 ##   被上限夹住的字段也能精确回落（撤销会「宁可少扣」永远卡在 cap，见其头注）。
-## - 超级悟道不设阶段/灵兽门控（测试台要能任意组合），撤销连赠予的神通道具一起收走。
+## - 超级悟道不设任何门控（测试台要能任意组合），撤销连赠予的神通道具一起收走。
 ## - 点卡 = 看详情，加/删都在详情窗的键上（keep_open 支持连点批量）——与武器/道具页同口径。
 ## - 只影响本局；作者模式不写存档，退出作者模式随单局重置归零。
 
@@ -16,8 +16,7 @@ signal state_changed(kind: String)
 const RARITY_FILTERS: Array = [
 	["", "全部"], ["common", "普通"], ["rare", "稀有"], ["epic", "史诗"], ["legendary", "传说"],
 ]
-## 阶段名（道途卡 stage 1~3；共鸣/仪式卡没有阶段）
-const STAGE_NAMES: Array = ["", "一阶", "二阶", "三阶"]
+## 卡色签：道途/共鸣/仪式 + 已领悟（2026-10-26 去阶段后不再显示「一阶/二阶」）
 const CARD_W := CodexCardFactory.CARD_W
 const GRID_GAP := 8
 
@@ -289,16 +288,13 @@ func _rebuild_super_grid() -> void:
 	if _super_grid.get_child_count() == 0:
 		_super_grid.add_child(_make_hint("这一路没有卡。点上方「全部」放宽筛选。"))
 
-## 超级卡色签：道途/共鸣/仪式 + 阶段 + 已领悟
+## 超级卡色签：道途/共鸣/仪式 + 已领悟
 func _super_card_chips(card: Dictionary, taken: bool) -> Array:
 	var chips: Array = []
 	var line := String(card.get("line", ""))
 	var kind := String(card.get("kind", "ritual"))
 	if line != "":
 		chips.append([SuperUpgradeData.line_label(line), GameStyle.GOLD, GameStyle.INK_TEXT])
-		var stage := int(card.get("stage", 0))
-		if stage > 0 and stage < STAGE_NAMES.size():
-			chips.append([String(STAGE_NAMES[stage]), GameStyle.PAPER_DIM, GameStyle.PAPER])
 	else:
 		chips.append(["共鸣" if kind == "resonance" else "仪式", GameStyle.GOLD, GameStyle.INK_TEXT])
 	if taken:
@@ -387,16 +383,12 @@ func _open_super_tip(card_id: String, anchor: Control) -> void:
 	payload["actions"] = [acts]
 	DetailTip.show_over(get_tip_host(), anchor, payload)
 
-## 「剑道 · 二阶」/「共鸣」/「仪式」
+## 「剑道」/「共鸣」/「仪式」（2026-10-26 去阶段后不再缀「一阶/二阶」）
 func _super_lane_text(card: Dictionary) -> String:
 	var line := String(card.get("line", ""))
 	var kind := String(card.get("kind", "ritual"))
-	var txt := SuperUpgradeData.line_label(line) if line != "" \
+	return SuperUpgradeData.line_label(line) if line != "" \
 			else ("共鸣" if kind == "resonance" else "仪式")
-	var stage := int(card.get("stage", 0))
-	if stage > 0 and stage < STAGE_NAMES.size():
-		txt += " · %s" % String(STAGE_NAMES[stage])
-	return txt
 
 # ---------------- 动作 ----------------
 ##

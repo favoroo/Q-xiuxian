@@ -1,16 +1,15 @@
 extends Node2D
 
-## 万剑归宗幻影出图台（非判据，必须开窗跑 —— 无头截不到真实画面）：
+## 万剑归宗幻影剑阵出图台（非判据，必须开窗跑 —— 无头截不到真实画面）：
 ##   $G --path . res://tests/SwordPhantomPreview.tscn
 ## 产物 /tmp/sword_phantom_preview.png
 ##
-## 三区：
-##   上区  六把剑系武器的「真身 vs 幻影」并排 —— 验收「显示效果有一点点区别」：
-##         器形/器尖/星级完全一致，只换元素 HDR 色 + 加色混合 + 半透明。
-##   中区  凝形 → 疾射 → 消散的关键帧定格（真实 SwordPhantom 实例推进到该状态后停格），
-##         验收出场/消失动画读不读得出来。
-##   底区  一次开阵的真实俯视：6 把真剑（内环）+ 6 道幻影（外环同角）= 12 把同场，
-##         验收「万剑归宗」的视觉密度。
+## 本轮改动的验收点（用户口径「都没感受出来有幻象出来，改成幻象能持续一段时间」）：
+##   上区  六把剑系武器的「真身 vs 幻影」并排 —— 器形/器尖/星级一致，只换元素色温 + 加色混合 + 半透明
+##   中区  幻影出刀的四段关键帧（真实 SwordPhantom 实例推进到该状态后停格）：
+##         凝形（灵环推开）→ 驻场 → 挥出（弧光扫放）→ 消散
+##   底区  一次开阵的俯视：6 把真剑（内环 54×40）+ 6 道幻影（外环 112×86）= 12 把同场，
+##         验收「幻影待得住、数得清」
 
 const SWORDS := [
 	"qingyun_sword", "chiyan_dao", "gengjin_feijian",
@@ -18,25 +17,27 @@ const SWORDS := [
 ]
 ## 上区放大倍率（真身/幻影对比要看细节）
 const ZOOM := 2.6
-## 中区幻影放大倍率（实机 0.55 太小，看不清凝形环）
-const STATE_ZOOM := 3.2
+## 中区幻影放大倍率（实机 0.55 太小，看不清凝形环与弧光）
+const STATE_ZOOM := 2.2
 
 var _out_path := "/tmp/sword_phantom_preview.png"
 
 func _ready() -> void:
 	_parse_args()
-	DisplayServer.window_set_size(Vector2i(1100, 940))
+	get_window().content_scale_size = Vector2i(1240, 1080)
+	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	DisplayServer.window_set_size(Vector2i(1240, 1080))
 	var bg := ColorRect.new()
 	bg.color = Color(0.05, 0.06, 0.09)
-	bg.size = Vector2(1100, 940)
+	bg.size = Vector2(1240, 1080)
 	add_child(bg)
 
 	_compare_row()
 	_state_row()
-	_volley_row()
-	_label(Vector2(24, 18), "① 真身 vs 幻影：器形/器尖/星级一致，只换元素色温 + 加色混合 + 半透明")
-	_label(Vector2(24, 330), "② 出场与消失：凝形（灵环推开）→ 全尺寸 → 疾射（拖尾）→ 消散")
-	_label(Vector2(24, 590), "③ 一次开阵：6 把真剑（内环）+ 6 道幻影（外环同角）= 12 把同场")
+	_formation_row()
+	_label(Vector2(24, 16), "① 真身 vs 幻影：器形/器尖/星级一致，只换元素色温 + 加色混合 + 半透明")
+	_label(Vector2(24, 330), "② 出刀四段：凝形（灵环推开）→ 驻场（呼吸）→ 挥出（弧光扫放）→ 消散")
+	_label(Vector2(24, 660), "③ 一次开阵：6 把真剑（内环）+ 6 道幻影（外环）= 12 把同场，驻场数秒")
 
 	for _i in range(10):
 		await get_tree().process_frame
@@ -64,27 +65,27 @@ func _compare_row() -> void:
 		if def.is_empty():
 			continue
 		var element := WeaponData.element_of(wid)
-		var base := Vector2(120 + (i % 3) * 350, 100 + floori(float(i) / 3.0) * 115.0)
+		var base := Vector2(120 + (i % 3) * 380, 95 + floori(float(i) / 3.0) * 115.0)
 
 		_renderer(base, wid, element, 1.0, deg_to_rad(-18.0), ZOOM)
-		_label(base + Vector2(-46, 40), "真身 · %s" % def.get("name", "?"))
-		_renderer(base + Vector2(130, 0), wid, element, SwordPhantom.GHOST_ALPHA,
+		_label(base + Vector2(-56, 40), "真身 · %s" % def.get("name", "?"))
+		_renderer(base + Vector2(140, 0), wid, element, SwordPhantom.GHOST_ALPHA,
 			deg_to_rad(-18.0), ZOOM, true)
-		_label(base + Vector2(96, 40), "幻影")
+		_label(base + Vector2(106, 40), "幻影")
 
-## ② 三段关键帧（真实实体推进后停格）
+## ② 出刀四段（真实实体推进后停格）
 func _state_row() -> void:
 	var scene: PackedScene = load("res://scenes/weapons/SwordPhantom.tscn")
 	var slots := [
-		{"label": "凝形中（灵环推开）", "t": 0.045},
-		{"label": "凝形成型", "t": SwordPhantom.FORM_TIME},
-		{"label": "疾射（拖尾）", "t": SwordPhantom.FORM_TIME, "dash": true},
-		{"label": "消散（化光）", "t": SwordPhantom.FORM_TIME, "dash": true, "fade": 0.09},
+		{"label": "凝形中（灵环推开）", "t": 0.05},
+		{"label": "驻场（呼吸微光）", "t": SwordPhantom.FORM_TIME + 0.4},
+		{"label": "挥出（弧光扫放）", "t": SwordPhantom.FORM_TIME + 0.4, "slash": true},
+		{"label": "消散（化光）", "t": SwordPhantom.FORM_TIME + 0.4, "fade": 0.10},
 	]
 	for i in range(slots.size()):
 		var spec: Dictionary = slots[i]
 		var wrap := Node2D.new()
-		wrap.position = Vector2(135 + i * 245, 455)
+		wrap.position = Vector2(155 + i * 285, 500)
 		wrap.scale = Vector2.ONE * STATE_ZOOM
 		add_child(wrap)
 
@@ -93,23 +94,32 @@ func _state_row() -> void:
 		ph.weapon_def_id = "qingyun_sword"
 		ph.star = 1
 		ph.element = "metal"
-		ph.direction = Vector2.RIGHT
+		ph.orbit_phase = 0.0
 		ph.damage = 10.0
 		ph.activate()
+		# 剑阵里幻影朝向圈内最近敌人（或轨道外侧）；预览没有敌人，手动摆成「朝右上」这个典型姿态
+		ph.rotation = deg_to_rad(-35.0)
+		ph._apply_child_facing()
 		# 推进到目标状态后停格（关掉物理推进，画面定在这一帧）
 		var t: float = float(spec.get("t", 0.0))
-		ph._t = t
+		ph._age = t
+		ph._life_left = SwordPhantom.FORMATION_TIME - t
 		if t >= SwordPhantom.FORM_TIME:
-			ph._state = SwordPhantom.STATE_READY
+			ph._state = SwordPhantom.STATE_IDLE
 			ph.scale = Vector2.ONE
 			ph.modulate.a = SwordPhantom.GHOST_ALPHA
-			if bool(spec.get("dash", false)):
-				ph._state = SwordPhantom.STATE_DASH
+			if bool(spec.get("slash", false)):
+				# 挥出终点那一帧：弧光已扫到全尺寸、后摆归零、前突到位
+				ph._swing_age = SwordPhantom.SWING_WINDUP + SwordPhantom.SWING_ACTIVE
+				ph._swing_lunge = SwordPhantom.SLASH_LUNGE
+				ph._swing_back = 0.0
+				ph.scale = Vector2.ONE * (1.0 + SwordPhantom.SWING_PUNCH)
+				ph._update_slash_arc()
 			if bool(spec.get("fade", false)):
 				var k: float = float(spec.get("fade", 0.0)) / SwordPhantom.FADE_TIME
 				ph._state = SwordPhantom.STATE_FADE
 				ph.modulate.a = SwordPhantom.GHOST_ALPHA * (1.0 - k)
-				ph.scale = Vector2.ONE * lerpf(1.0, 1.25, k)
+				ph.scale = Vector2.ONE * lerpf(1.0, 1.28, k)
 		else:
 			# 凝形中：按 _tick_form 的同一组闭式解手算这一帧（activate 后 alpha 起点是 0）
 			var k: float = clampf(t / SwordPhantom.FORM_TIME, 0.0, 1.0)
@@ -119,11 +129,12 @@ func _state_row() -> void:
 			ph.modulate.a = SwordPhantom.GHOST_ALPHA * clampf(k / 0.45, 0.0, 1.0)
 		ph.set_physics_process(false)
 		ph.queue_redraw()
-		_label(Vector2(78 + i * 245, 490), String(spec.get("label", "")))
+		_label(Vector2(80 + i * 285, 545), String(spec.get("label", "")))
 
-## ③ 6 真剑内环 + 6 幻影外环同角（压扁的椭圆环，整体收在 940 高度内）
-func _volley_row() -> void:
-	var center := Vector2(550, 730)
+## ③ 6 真剑内环 + 6 幻影外环（压扁的椭圆，整体收在 980 高度内）
+func _formation_row() -> void:
+	var center := Vector2(620, 880)
+	# 内环：真剑轨道 54×40；外环：幻影轨道 112×86（按同一俯视比例压扁 0.52）
 	for i in range(SWORDS.size()):
 		var wid: String = SWORDS[i]
 		var def := WeaponData.get_def(wid)
@@ -132,8 +143,8 @@ func _volley_row() -> void:
 		var element := WeaponData.element_of(wid)
 		var ang := TAU * float(i) / float(SWORDS.size()) - PI * 0.5
 		var dir := Vector2(cos(ang), sin(ang) * 0.52)
-		_renderer(center + dir * 88.0, wid, element, 1.0, ang, 1.8)
-		_renderer(center + dir * 172.0, wid, element, SwordPhantom.GHOST_ALPHA, ang, 1.8, true)
+		_renderer(center + dir * 70.0, wid, element, 1.0, ang, 1.5)
+		_renderer(center + dir * 150.0, wid, element, SwordPhantom.GHOST_ALPHA, ang, 1.5, true)
 
 ## 画一把器形（ghost=true 时走幻影口径：元素 HDR + 加色混合 + 半透明）
 func _renderer(pos: Vector2, wid: String, element: String, alpha: float,

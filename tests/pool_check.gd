@@ -192,8 +192,9 @@ func _run() -> void:
 	var l_bolt_b := LightningBolt.acquire(world)
 	_check(l_bolt_b == l_bolt_a, "引雷第二次 acquire 复用同一实例")
 	l_bolt_b.activate(Vector2(20, 20), Vector2(80, 80), Color.WHITE, 1.2)
-	# 基准线宽 2026-10-18 简化 7.0→4.5：4.5 × 1.2 = 5.4
-	_check(l_bolt_b.visible and is_equal_approx(l_bolt_b._line_glow.width, 5.4), "引雷复用激活按 width_mult 重置线宽")
+	# 期望值必须跟常量同源（基准线宽改过一次 7.0→4.5→4.8，硬编码期望值每次都假红）
+	_check(l_bolt_b.visible and is_equal_approx(l_bolt_b._line_glow.width, LightningBolt.BASE_WIDTH_GLOW * 1.2),
+		"引雷复用激活按 width_mult 重置线宽")
 	# 5.7b 引雷与地面大阵层级守卫：宿主与特效线不抬高全局 z_index 盖压角色
 	_check(LightningBolt._host.z_index <= 0, "引雷池宿主 z_index 不抬高压人")
 	_check(l_bolt_b._line_core.z_index <= 0, "引雷折线 z_index 不盖压角色")
@@ -241,36 +242,42 @@ func _run() -> void:
 		SwordQiWave.clear_pool()
 		_check(SwordQiWave.active_count == 0, "clear_pool 归零剑气活跃计数")
 
-	# ---------- 5.7e 幻影剑池（SwordPhantom，2026-10-26 万剑归宗重塑）：出膛 / 回池 / 复用零新建 ----------
-	# 万剑归宗一次开阵放出「玩家剑系数」道幻影（6 剑 = 6 道），是本轮新增的批量实体，
-	# 必须走池化；验收钉四条：首次新建、回收后隐身出计、第二轮复用同一实例、复用清残值。
+	# ---------- 5.7e 幻影剑池（SwordPhantom，2026-10-26 万剑归宗三轮）：出阵 / 回池 / 复用零新建 ----------
+	# 万剑归宗一次开阵放出「玩家剑系数」道幻影（6 剑 = 6 道）并驻场数秒，
+	# 是本轮新增的批量实体，必须走池化；验收钉四条：首次新建、回收后隐身出计、
+	# 第二轮复用同一实例、复用清残值（含剑阵运转计数，漏清会让下一局直接判成「阵还在」）。
 	var ph_scene: PackedScene = load("res://scenes/weapons/SwordPhantom.tscn")
 	var ph_created0: int = SwordPhantom.created_count
 	var ph_a := SwordPhantom.acquire_or_new(ph_scene, world)
 	_check(ph_a != null, "幻影剑池首轮可取实例")
 	if ph_a != null:
-		ph_a.direction = Vector2.RIGHT
+		ph_a.weapon_def_id = "qingyun_sword"
 		ph_a.damage = 12.0
 		ph_a.activate()
-		_check(ph_a.visible and SwordPhantom.active_count >= 1, "幻影出膛可见并计入活跃数")
+		_check(ph_a.visible and SwordPhantom.active_count >= 1, "幻影出阵可见并计入活跃数")
+		_check(SwordPhantom.formation_active(), "出阵后剑阵进入运转态")
 		_check(ph_a._renderer != null and ph_a._renderer.visible or ph_a._use_fallback_blade,
-			"出膛时器形渲染器随本体亮起（或回落光刃兜底）")
+			"出阵时器形渲染器随本体亮起（或回落光刃兜底）")
 		ph_a._recycle()
 		_check(not ph_a.visible, "回池后幻影撤场（visible=false）")
+		_check(not SwordPhantom.formation_active(), "最后一道回池后剑阵退出运转态")
 		_check(SwordPhantom.created_count == ph_created0 + 1,
 			"幻影池首轮新建 1 个 (%d)" % (SwordPhantom.created_count - ph_created0))
 		var ph_b := SwordPhantom.acquire_or_new(ph_scene, world)
 		_check(ph_b == ph_a and SwordPhantom.created_count == ph_created0 + 1,
 			"幻影第二轮 acquire 复用同一实例零新建")
 		if ph_b != null:
-			ph_b.direction = Vector2.LEFT
+			ph_b.weapon_def_id = "chiyan_dao"
 			ph_b.activate()
-			_check(ph_b.target == null and ph_b.source_weapon == null and ph_b.damage == 0.0,
-				"复用出膛清空锁定目标/宿主/伤害残值")
+			_check(ph_b._target == null and ph_b.source_weapon == null and ph_b.damage == 0.0,
+				"复用出阵清空锁定目标/宿主/伤害残值")
+			_check(ph_b._slash_arc != null and not ph_b._slash_arc.visible,
+				"复用出阵时弧光从隐藏态起步（不带上一轮的残留弧）")
 			ph_b._recycle()
 		SwordPhantom.clear_pool()
 		_check(SwordPhantom.active_count == 0 and SwordPhantom.charge() == 0,
 			"clear_pool 归零幻影活跃计数与剑意槽")
+		_check(not SwordPhantom.formation_active(), "clear_pool 同时清掉剑阵运转态")
 
 	# ---------- 5.8 弹丸湮灭微闪（IMPACT_POP）与限流闸 ----------
 	var pop_pre := JuiceEffect.created_count()

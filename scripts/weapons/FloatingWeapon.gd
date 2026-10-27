@@ -56,8 +56,6 @@ var orbit_extents: Vector2 = DEFAULT_ORBIT_EXTENTS
 var dynamic_angle: float = 0.0     # 当前轨道角：有目标时滑向目标方位
 var current_target: Node2D = null
 var is_attacking: bool = false
-## 超级悟道【紫电】的攻击计数：每 BalanceChain.CHAIN_EVERY_ATTACKS 次出手放一次连锁闪电。
-var _chain_attacks: int = 0
 var _arrow_rain_attacks: int = 0  ## 箭雨倾盆出手计数（只统计 PROJECTILE 行为）
 var bob_phase: float = 0.0
 ## 每实例独立相位（2026-10-22）：bob_phase 已有随机初相，但双频叠加与待机扫视需要
@@ -713,37 +711,10 @@ func _perform_attack() -> void:
 			SweepHandler.perform(self)
 		WeaponData.Behavior.BEAM, WeaponData.Behavior.CONE:
 			ChannelHandler.perform_channel(self)
-	_tick_chain_lightning()
+	# 紫电已改判到命中侧（OnHitEffects._roll_zidian 按命中数计，2026-10-26 并行改动）
 	_tick_arrow_rain()
-	# 神通【万剑归宗】：剑系武器出手攒剑意，攒满即全体剑器幻化齐射（SwordPhantom 内部判剑系）
+	# 神通【万剑归宗】：剑系武器出手攒剑意，攒满即开幻影剑阵（驻场数秒、各自劈弧；SwordPhantom 内部判剑系）
 	SwordPhantom.tick_attack(self)
-
-## 神通【紫电】：每 BalanceChain.CHAIN_EVERY_ATTACKS 次出手，放一次连锁闪电。
-## 首跳伤害按武器面板实伤折算 —— 武器越强紫电越强，读起来是「你的攻击带电」而不是「白送固定伤害」。
-## 炮台不在此列（TurretHandler 召出的炮台独立开火，不走本方法）。
-##
-## 2026-10-26 演出重做：旧写法从「武器自身」起跳 —— 近战武器就贴在怪脸上，第一段弧短到
-## 被 MIN_BOLT_LEN 掐掉，玩家只看到自己正在砍的那只身上闪了一下白点，读不出「紫电」。
-## 现在改成从**玩家**起跳、首跳认领武器当前锁定的目标：电弧从玩家身上甩出去串住正在砍的
-## 敌人，再逐跳连到周围怪身上 —— 这才是「把各个敌人连起来」的画面。
-func _tick_chain_lightning() -> void:
-	var snap := StatSystem.super_hook_snapshot(GameManager)
-	if float(snap.get("attack_chain_lightning", 0.0)) <= 0.0:
-		_chain_attacks = 0
-		return
-	_chain_attacks += 1
-	if _chain_attacks < BalanceChain.CHAIN_EVERY_ATTACKS:
-		return
-	_chain_attacks = 0
-	var hops: int = BalanceChain.MAX_HOPS + int(float(snap.get("chain_hop_bonus", 0.0)))
-	var player: Node2D = GameManager.player
-	var origin: Vector2 = player.global_position if player != null and is_instance_valid(player) else global_position
-	var first: Node2D = current_target if current_target != null and is_instance_valid(current_target) else null
-	# 玩家身上起跳点补一记紫色爆闪：电弧的起点在角色身上，没有这一下会读成「凭空出现」
-	if player != null and is_instance_valid(player):
-		JuiceEffect.spawn_bolt_pop(player, origin, GameStyle.FX_HDR_ZIDIAN)
-	ChainLightning.strike(self, origin, first, _final_damage(), hops,
-		GameStyle.FX_HDR_ZIDIAN, &"zidian", "chain_zap")
 
 ## 神通【箭雨倾盆】：远程武器每 BalanceChain.ARROW_RAIN_EVERY 次出手，朝当前目标区
 ## 落一轮箭雨（伤害按武器面板实伤折算，与紫电同一条「武器派生」口径）。

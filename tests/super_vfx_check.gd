@@ -40,9 +40,10 @@ func _run() -> void:
 	_world.name = "SuperVfxWorld"
 	get_tree().root.add_child(_world)
 	await get_tree().process_frame
-	_c.set_min_checks(17)
+	_c.set_min_checks(20)
 
 	await _case_sky_bolt_damage()
+	await _case_zidian_on_hit()
 	await _case_gates_independent()
 	await _case_tint_reaches_core()
 	_case_thorns_radius_shared()
@@ -62,17 +63,56 @@ func _case_sky_bolt_damage() -> void:
 	await get_tree().process_frame
 	var hp_before: float = target.current_hp
 	var want: float = BalanceChain.crit_bolt_damage(GameManager.elemental_damage)
+	# 模式 A：传入坐标（向后兼容）
 	ChainLightning.sky_bolt(_world, target.global_position, want)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var hp_after: float = target.current_hp if is_instance_valid(target) else 0.0
 	var lost: float = hp_before - hp_after
-	# 集火保护只作用于 from_dot=false 的普通命中，而天罚正是普通命中 ——
-	# 首次命中倍率 1.0，所以掉血应等于 crit_bolt_damage。
 	_c.near(lost, want, 0.5, "天罚落点结算伤害（掉血 %.1f，期望 %.1f）" % [lost, want])
 	_c.check(lost > 0.0, "天罚不是只画电弧的空转卡")
+
+	# 模式 B：直接传入目标实体 Node2D（直贯天灵盖）
+	ChainLightning.reset_gate()
+	hp_before = target.current_hp
+	ChainLightning.sky_bolt(_world, target, want)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	hp_after = target.current_hp if is_instance_valid(target) else 0.0
+	var lost_direct: float = hp_before - hp_after
+	_c.check(lost_direct > 0.0, "天罚直击目标实体必中结算")
+
 	if is_instance_valid(target):
 		target.queue_free()
+	await get_tree().process_frame
+
+## ①-B 紫电电刀模式：攻击命中累积 3 次触发连锁闪电，以被击中怪为源头
+func _case_zidian_on_hit() -> void:
+	ChainLightning.reset_gate()
+	OnHitEffects.reset_memo()
+	var target1 := _spawn_enemy(Vector2(100.0, 0.0))
+	var target2 := _spawn_enemy(Vector2(160.0, 0.0))
+	await get_tree().process_frame
+	var snap := {"attack_chain_lightning": 1.0}
+	var hp2_before: float = target2.current_hp
+
+	# 前 2 次命中只蓄能
+	OnHitEffects.on_weapon_hit(_world, target1, 50.0, false, snap)
+	OnHitEffects.on_weapon_hit(_world, target1, 50.0, false, snap)
+	var hp2_mid: float = target2.current_hp
+	_c.equals(hp2_mid, hp2_before, "紫电前 2 次命中不触发连锁电弧")
+
+	# 第 3 次命中触发连锁闪电，弹射至 target2
+	OnHitEffects.on_weapon_hit(_world, target1, 50.0, false, snap)
+	await get_tree().process_frame
+	await get_tree().create_timer(0.1).timeout
+	var hp2_after: float = target2.current_hp if is_instance_valid(target2) else 0.0
+	_c.check(hp2_after < hp2_before, "第 3 次命中触发紫电弹射至相邻敌人")
+
+	if is_instance_valid(target1):
+		target1.queue_free()
+	if is_instance_valid(target2):
+		target2.queue_free()
 	await get_tree().process_frame
 
 ## ② 演出闸按路径独立：紫电与雷劫在同一毫秒各触发一次，两条都必须放行

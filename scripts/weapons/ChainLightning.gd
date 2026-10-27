@@ -33,7 +33,8 @@ const HOP_VISUAL_DELAY := 0.045
 const BOLT_WIDTH := 1.15
 
 ## 从 from_pos 向首个目标打一条链电，然后逐跳找最近未打过的敌人。
-## first_target 传 null 表示「从 from_pos 就地找最近敌人起跳」。
+## first_target：触发链电的首个目标（电刀模式下为触发攻击命中的敌人）。
+## 若 first_target 非空且 from_pos 在其身侧，首跳在此敌人身上爆发，电弧只在此敌人与周围敌人之间弹射连线。
 ## damage 是首跳伤害（后续跳按 BalanceChain.HOP_RATIO 折损）。
 ## max_hops 传 0 用 BalanceChain.MAX_HOPS。
 ## gate：演出闸的路径键（每路雷电各持一条，见文件头）；sfx 传空串用默认雷击音。
@@ -46,7 +47,7 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 		return 0
 	if damage <= 0.0:
 		return 0
-	# 递归闸：链电打死的人会再触发雷劫，深度超限直接掐断（这一层不打，不报错）
+	# 递归闸：链电打死的人会再触发雷劫，深度超限直接掐断
 	if _depth >= BalanceChain.MAX_DEPTH:
 		return 0
 	var hops: int = max_hops if max_hops > 0 else BalanceChain.MAX_HOPS
@@ -54,108 +55,125 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	var targets := _pick_chain(first_target, from_pos, hops, search_r)
 	if targets.is_empty():
 		return 0
-	# 限流只掐「电弧演出」，伤害照常结算 —— 群杀时不该因为演出预算少打掉敌人
 	var draw_bolt: bool = _try_consume_event_gate(gate)
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
 	var cursor: Vector2 = from_pos
-	# 演出折点：伤害循环里顺手记下每一段的起讫，结算完统一按节拍画（伤害绝不延迟）
+	# 演出折点：记下每一跳的起讫段与目标
 	var segments: Array = []
-	var hit_points: Array = []
+	var hop_targets: Array = []
 	_depth += 1
 	var hit_n := 0
+
 	for i in targets.size():
 		var enemy: Node2D = targets[i]
 		if enemy == null or not is_instance_valid(enemy):
 			continue
 		if bool(enemy.get("dying")):
 			continue
-		var dmg := BalanceChain.chain_hop_damage(damage, i)
-		if enemy.has_method("take_damage"):
-			# 链电不吃击退（否则会把怪推散、下一跳找不到人），也不标暴击：
-			# 暴击应该由天罚单点判定，链电每一跳都暴击等于全屏秒杀
-			enemy.take_damage(dmg, Vector2.ZERO, false)
-			hit_n += 1
-		if draw_bolt:
-			# 电弧长度过短时不画（弹丸在敌人身上命中时 from_pos 与首跳位置几乎重合，
-			# 会退化成零长度折线，读起来像闪了一下噪点）；落点爆闪照放（打中了就该亮）
-			if cursor.distance_to(enemy.global_position) > MIN_BOLT_LEN:
-				segments.append([cursor, enemy.global_position])
-			hit_points.append(enemy.global_position)
+		hit_n += 1
+		# 电弧段：从上一节点连向当前目标
+		# 若首跳即为触发怪且 cursor 与其重合，则不产生向自身的零长连线，直接作为起点
+		if cursor.distance_to(enemy.global_position) > MIN_BOLT_LEN:
+			segments.append([cursor, enemy.global_position, enemy, i])
+		else:
+			# 首跳自身受击
+			hop_targets.append([enemy, i, enemy.global_position])
 		cursor = enemy.global_position
+
 	_depth = maxi(0, _depth - 1)
-	if draw_bolt:
-		if not sfx.is_empty():
-			AudioManager.play_sfx(sfx, 0.55)
-		_draw_staggered(host, segments, hit_points, bolt_tint)
+
+	if not sfx.is_empty() and draw_bolt:
+		AudioManager.play_sfx(sfx, 0.55)
+
+	# 2026-10-26 LOL 电刀式同步结算：伤害与电弧逐跳精准同步，电窜到哪怪就抖到哪
+	_play_chain_hops(host, segments, hop_targets, damage, bolt_tint, draw_bolt)
 	return hit_n
 
-## 逐跳节拍演出：第 1 跳立刻画，后续每跳晚 HOP_VISUAL_DELAY —— 读「电在怪群间窜」，
-## 而不是「一条折线同时糊在 N 个点上」。定时器回调只画图，宿主先没了就当无事发生。
-static func _draw_staggered(host: Node, segments: Array, hit_points: Array, tint: Color) -> void:
-	for i in segments.size():
-		var seg: Array = segments[i]
-		var pop_pos: Vector2 = seg[1]
-		if i == 0:
-			_draw_bolt(host, seg[0], seg[1], tint)
-			JuiceEffect.spawn_bolt_pop(host, pop_pos, tint)
-			continue
-		var delay: float = HOP_VISUAL_DELAY * float(i)
+## 逐跳同步结算与演出：首跳即刻击中，后续跳随电弧传导逐段爆发
+static func _play_chain_hops(host: Node, segments: Array, direct_targets: Array,
+		base_damage: float, tint: Color, draw_bolt: bool) -> void:
+	# 1. 直接命中的首跳（自身起跳点）
+	for dt in direct_targets:
+		var enemy: Node2D = dt[0]
+		var idx: int = dt[1]
+		var pos: Vector2 = dt[2]
+		_apply_hop_hit(host, enemy, base_damage, idx, pos, tint, draw_bolt)
+
+	# 2. 逐段电弧弹射目标
+	for k in segments.size():
+		var seg: Array = segments[k]
 		var from_p: Vector2 = seg[0]
 		var to_p: Vector2 = seg[1]
+		var enemy: Node2D = seg[2]
+		var hop_idx: int = seg[3]
+
+		if k == 0 and direct_targets.is_empty():
+			# 无 direct 首跳时，第一段即刻结算
+			if draw_bolt:
+				_draw_bolt(host, from_p, to_p, tint)
+			_apply_hop_hit(host, enemy, base_damage, hop_idx, to_p, tint, draw_bolt)
+			continue
+
+		var delay: float = HOP_VISUAL_DELAY * float(k if direct_targets.is_empty() else k + 1)
 		var tree := host.get_tree()
 		if tree == null:
-			_draw_bolt(host, from_p, to_p, tint)
+			if draw_bolt:
+				_draw_bolt(host, from_p, to_p, tint)
+			_apply_hop_hit(host, enemy, base_damage, hop_idx, to_p, tint, draw_bolt)
 			continue
+
 		tree.create_timer(delay).timeout.connect(func() -> void:
 			if host == null or not is_instance_valid(host):
 				return
-			_draw_bolt(host, from_p, to_p, tint)
-			JuiceEffect.spawn_bolt_pop(host, pop_pos, tint))
-	# 段被长度闸掐掉的目标（贴脸跳）没有线段，爆闪仍按节拍补上
-	var drawn_ends: Array = []
-	for seg in segments:
-		drawn_ends.append(seg[1])
-	for j in hit_points.size():
-		var p: Vector2 = hit_points[j]
-		if p in drawn_ends:
-			continue
-		var delay2: float = HOP_VISUAL_DELAY * float(j)
-		var tree2 := host.get_tree()
-		if tree2 == null:
-			JuiceEffect.spawn_bolt_pop(host, p, tint)
-			continue
-		tree2.create_timer(delay2).timeout.connect(func() -> void:
-			if host == null or not is_instance_valid(host):
-				return
-			JuiceEffect.spawn_bolt_pop(host, p, tint))
+			if draw_bolt:
+				_draw_bolt(host, from_p, to_p, tint)
+			_apply_hop_hit(host, enemy, base_damage, hop_idx, to_p, tint, draw_bolt))
 
-## 单点落雷（天罚用）：从上方劈到目标点，伤害 + 电弧。
-## 2026-10-26 Fixed: 旧实现只画演出、**从不结算伤害** —— crit_bolt_damage 算完直接丢弃，
-## 天罚这张飞升卡实际是空转的。现在伤害由这里自己落地（目标按位置就近认领）。
-## 演出：主电弧加宽到 1.7 + 30ms 后副电弧（双闪读「天雷」），落点爆闪 + 火星上喷 + 冲击环。
-static func sky_bolt(host: Node, target_pos: Vector2, damage: float,
-		tint: Color = Color(0, 0, 0, 0), gate: StringName = &"tianfa") -> void:
+static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_idx: int,
+		pos: Vector2, tint: Color, draw_bolt: bool) -> void:
+	if enemy != null and is_instance_valid(enemy) and not bool(enemy.get("dying")):
+		var dmg := BalanceChain.chain_hop_damage(base_damage, hop_idx)
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(dmg, Vector2.ZERO, false)
+	if draw_bolt and host != null and is_instance_valid(host):
+		JuiceEffect.spawn_bolt_pop(host, pos, tint)
+
+## 单点落雷（天罚用）：自苍穹垂直贯穿劈下，目标明确、去繁就简、干净霸道。
+## target_input 可为被暴击的敌人 Node2D 或坐标 Vector2。若提供实体，天雷锁死目标天灵盖，伤害必中。
+static func sky_bolt(host: Node, target_input: Variant, damage: float,
+		tint: Color = Color(0, 0, 0, 0), gate: StringName = &"tianfa",
+		target_enemy: Node2D = null) -> void:
 	if host == null or not is_instance_valid(host) or damage <= 0.0:
 		return
 	if not _try_consume_event_gate(gate):
 		return
-	# 伤害落地：优先认领落点处那个目标（暴击命中的敌人），找不到就打点上的怪
-	_apply_sky_bolt_damage(target_pos, damage)
+
+	var target_pos: Vector2
+	var target_node: Node2D = null
+	if target_input is Node2D:
+		target_node = target_input as Node2D
+		target_pos = target_node.global_position
+	elif target_input is Vector2:
+		target_pos = target_input
+		target_node = target_enemy
+	else:
+		return
+
+	# 伤害必定精准落地：优先结算绑定的暴击目标，没有实体才就近认领
+	if target_node != null and is_instance_valid(target_node) and not bool(target_node.get("dying")):
+		if target_node.has_method("take_damage"):
+			# 标暴击=true：暴击闪白+垂直微击退顿挫+暴击跳字
+			target_node.take_damage(damage, Vector2.DOWN * 8.0, true)
+	else:
+		_apply_sky_bolt_damage(target_pos, damage)
+
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
-	var sky := target_pos + Vector2(0.0, -260.0)
-	_draw_bolt(host, sky, target_pos, bolt_tint, 1.7)
+	# 天顶纯粹雷柱（垂直直落 280px，粗度 2.0，雷霆贯顶）
+	var sky := target_pos + Vector2(0.0, -280.0)
+	_draw_bolt(host, sky, target_pos, bolt_tint, 2.0)
+	# 命中点电离爆散
 	JuiceEffect.spawn_bolt_pop(host, target_pos, bolt_tint)
-	# 落点火星上喷：纯白雷柱砸地，补一撮垂直上冲的余烬，读「砸出坑」而不是「闪了一下」
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, target_pos, "none", 1.3, true,
-		Vector2.UP, FxParticlePool.HitOwner.NONE)
-	var tree := host.get_tree()
-	if tree != null:
-		tree.create_timer(0.03).timeout.connect(func() -> void:
-			if host == null or not is_instance_valid(host):
-				return
-			_draw_bolt(host, sky + Vector2(6.0, 0.0), target_pos, bolt_tint, 0.9))
-	AudioManager.play_sfx("thunder_strike", 0.7)
-	JuiceEffect.spawn_shockwave(host, target_pos, SKY_BOLT_RING_RADIUS, bolt_tint, 0.16)
+	AudioManager.play_sfx("thunder_strike", 0.75)
 
 ## 天罚落点冲击环半径（px）。纯表现，不参与判定 —— 天罚是单点伤害，
 ## 环只是把「砸下来了」这件事画得有分量，别误读成 AOE 范围。

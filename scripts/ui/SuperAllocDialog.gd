@@ -4,10 +4,10 @@ extends LevelUpDialog
 ## 飞升悟道面板（原超级悟道，2026-10-26 改名）：继承普通悟道的摆位/选中/防误触流程，
 ## 只换候选来源、文案与一套专属赤红皮。
 ##
-## 「三道」体系：候选按道途出（剑道/箭道/雷法/体修/五行/灵兽），每张卡带阶段。
-## 第一次飞升悟道只能开道；第二次必出「延续」（已行之道的下一阶段）+ 一张新道；
-## 第三次出大成，或手握两条道时出共鸣。一局三次形成一条线，上次选什么直接决定这次能选什么。
-## 不可刷新；点卡只选中，底部「确认领悟」才落地（与普通悟道同一条防误触口径）。
+## 候选来源（2026-10-26 去阶段门控）：全表 − 已拿过 − 未过闸（灵兽卡要手上已有灵兽、
+## 共鸣卡要两条道各 ≥1 张）里加权随机五选一 —— 没有「先开道才轮到进阶」的顺序解锁，
+## 每一屏抽到什么就是什么。不可刷新；点卡只选中，底部「确认领悟」才落地
+## （与普通悟道同一条防误触口径）。
 ## 场景 SuperAllocDialog.tscn 由 LevelUpDialog.tscn 派生，Main 运行时挂到 UILayer 末尾
 ## （Main.tscn 是多 Agent 共享场景文件，不往里加节点）。
 ##
@@ -112,8 +112,8 @@ func _update_gate_label() -> void:
 	# 未选中时顺带挂已行道途进度（顶栏徽条下线后这是它唯一读数位，2026-10-25）。
 	if selected_index < 0 or selected_index >= _offers().size():
 		var progress := _lane_progress_text()
-		gate_label.text = "三次飞升各开一道，选定不可更改" if progress.is_empty() \
-			else "%s，选过的道途会延续出下一阶段" % progress
+		gate_label.text = "飞升五选一，选定不可更改" if progress.is_empty() \
+			else "%s，选定不可更改" % progress
 		GameStyle.label(gate_label, 13, GameStyle.PAPER_DIM)
 	else:
 		var card: Dictionary = _offers()[selected_index]

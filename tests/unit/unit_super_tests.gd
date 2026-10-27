@@ -1,9 +1,9 @@
 class_name UnitSuperTests
 extends UnitTestsBase
 
-## 单测模块：超级悟道「三道」体系（卡表 / 道途阶段门控 / 候选算法 / 赠礼落地 / 不可售与不进商店）。
-## 2026-10-25 重构：从「3 流派 + 2 通用」的固定配比改为「开道 → 延续 → 大成/共鸣」的
-## 道途制，本文件同步改写为验证道途语义，而不是验证固定占比。
+## 单测模块：飞升悟道（卡表 / 卡池闸 / 候选算法 / 赠礼落地 / 不可售与不进商店）。
+## 2026-10-26 去阶段门控：候选改成「全表 − 已拿过 − 未过闸」的纯随机池，本文件同步
+## 改写为验证卡池与两道真闸（灵兽闸 / 共鸣闸），不再验证阶段解锁链。
 ## 契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证。
 ## 每个用例开头 reset_run，结尾也 reset_run —— 本模块会真的往 gm 里塞神通道具与武器。
 
@@ -31,13 +31,11 @@ func _test_super_table() -> void:
 		for k in (idef.get("apply", {}) as Dictionary).keys():
 			if not (String(k) in fields):
 				bad_apply.append("%s.%s" % [cid, k])
-		# 道途卡（kind=lane）必须声明 line 与 stage≥1，且 line 在 LINE_LABELS 里
+		# 道途卡（kind=lane）必须声明 line，且 line 在 LINE_LABELS 里
 		if String(card.get("kind", "")) == "lane":
 			var line := String(card.get("line", ""))
 			if line.is_empty() or not SuperUpgradeData.LINE_LABELS.has(line):
 				bad_lane.append(cid)
-			if int(card.get("stage", 0)) < 1:
-				bad_lane.append("%s(stage)" % cid)
 		# 共鸣卡必须声明 requires_lines 且非空
 		if String(card.get("kind", "")) == "resonance" \
 				and (card.get("requires_lines", []) as Array).is_empty():
@@ -47,16 +45,21 @@ func _test_super_table() -> void:
 	_c.check(bad_apply.is_empty(), "神通 apply 字段都在白名单内（非法: %s）" % str(bad_apply))
 	_c.check(bad_lane.is_empty(), "道途/共鸣卡元数据完整（问题: %s）" % str(bad_lane))
 
-	# 每条道途都必须有 stage1 开道卡，否则该道永远进不了池子
-	var stage1_lines: Dictionary = {}
+	# 去阶段门控（2026-10-26）：卡表里不该再残留 stage 字段；每条道途要有卡（否则道途签是死签）
+	var stale_stage: Array = []
 	for card in SuperUpgradeData.CARDS:
-		if String(card.get("kind", "")) == "lane" and int(card.get("stage", 1)) == 1:
-			stage1_lines[String(card.get("line", ""))] = true
-	var missing_start: Array = []
+		if card.has("stage"):
+			stale_stage.append(String(card.get("id", "")))
+	_c.check(stale_stage.is_empty(), "卡表不再带 stage 字段（残留: %s）" % str(stale_stage))
+	var lines_with_cards: Dictionary = {}
+	for card in SuperUpgradeData.CARDS:
+		if String(card.get("kind", "")) == "lane":
+			lines_with_cards[String(card.get("line", ""))] = true
+	var empty_lines: Array = []
 	for line_key in SuperUpgradeData.LINE_LABELS.keys():
-		if not stage1_lines.has(String(line_key)):
-			missing_start.append(line_key)
-	_c.check(missing_start.is_empty(), "每条道途都有一张开道卡（缺: %s）" % str(missing_start))
+		if not lines_with_cards.has(String(line_key)):
+			empty_lines.append(line_key)
+	_c.check(empty_lines.is_empty(), "每条道途都有卡（缺: %s）" % str(empty_lines))
 
 	# 触发关：固定 5/10/15；无尽模式 20 关后每逢 5 的倍数；胜利关 20 本身不触发
 	_c.check(SuperUpgradeData.is_super_wave(5, false), "第 5 关触发超级悟道")
@@ -85,43 +88,25 @@ func _test_super_table() -> void:
 	_c.check(picked_shen.is_empty(), "商店抽取不会开出神通（意外: %s）" % str(picked_shen))
 	GameManager.reset_run()
 
-## 阶段门控：stage1 随时可用；stage2 需该道已拥有 ≥1；stage3 需 ≥2；共鸣需两条道各 ≥1
-func _test_super_stage_gate() -> void:
+## 卡池闸（2026-10-26 去阶段门控）：只剩灵兽闸与共鸣闸，任何卡从第一次飞升起就可选
+func _test_super_pool_gate() -> void:
 	var counts: Dictionary = {}
-	var stage2 := SuperUpgradeData.get_def("super_wanjian_guizong")
-	var stage1 := SuperUpgradeData.get_def("super_jianqi")
-	_c.check(SuperUpgradeData.is_card_available(stage1, counts, false),
-		"未开道时 stage1 可选")
-	_c.check(not SuperUpgradeData.is_card_available(stage2, counts, false),
-		"未开道时 stage2 不可选（阶段门控）")
-	counts["sword"] = 1
-	_c.check(SuperUpgradeData.is_card_available(stage2, counts, false),
-		"已开剑道 1 张后 stage2 可选")
-	var stage3 := SuperUpgradeData.get_def("super_tianfa")
-	counts["thunder"] = 1
-	_c.check(not SuperUpgradeData.is_card_available(stage3, counts, false),
-		"雷法仅 1 张时 stage3 不可选")
-	counts["thunder"] = 2
-	_c.check(SuperUpgradeData.is_card_available(stage3, counts, false),
-		"雷法 2 张后 stage3 可选")
-
-	# 二阶段道途门控：箭道 stage3 / 体修·五行·灵兽 stage2
-	var jianyu := SuperUpgradeData.get_def("super_jianyu")
-	_c.check(not SuperUpgradeData.is_card_available(jianyu, {"arrow": 1}, false),
-		"箭道仅 1 张时箭雨倾盆不可选")
-	_c.check(SuperUpgradeData.is_card_available(jianyu, {"arrow": 2}, false),
-		"箭道 2 张后箭雨倾盆可选")
-	_c.check(not SuperUpgradeData.is_card_available(
-		SuperUpgradeData.get_def("super_xuehai"), {}, false),
-		"未开体修时血海护盾不可选")
+	# 阶段概念已取消：没拿过任何卡时，原来的 2/3 阶卡与 1 阶卡一样随时可选
 	_c.check(SuperUpgradeData.is_card_available(
-		SuperUpgradeData.get_def("super_xuehai"), {"body": 1}, false),
-		"体修 1 张后血海护盾可选")
+		SuperUpgradeData.get_def("super_jianqi"), counts, false), "剑气凌霄随时可选")
 	_c.check(SuperUpgradeData.is_card_available(
-		SuperUpgradeData.get_def("super_wuxing_guiyi"), {"wuxing": 1}, false),
-		"五行 1 张后五行归一可选")
+		SuperUpgradeData.get_def("super_wanjian_guizong"), counts, false),
+		"万剑归宗不依赖剑气凌霄（未开剑道也随时可选）")
+	_c.check(SuperUpgradeData.is_card_available(
+		SuperUpgradeData.get_def("super_tianfa"), counts, false), "天罚未开雷法也随时可选")
+	_c.check(SuperUpgradeData.is_card_available(
+		SuperUpgradeData.get_def("super_jianyu"), counts, false), "箭雨倾盆未开箭道也随时可选")
+	_c.check(SuperUpgradeData.is_card_available(
+		SuperUpgradeData.get_def("super_xuehai"), counts, false), "血海护盾未开体修也随时可选")
+	_c.check(SuperUpgradeData.is_card_available(
+		SuperUpgradeData.get_def("super_wuxing_guiyi"), counts, false), "五行归一未开五行也随时可选")
 
-	# 共鸣：需要雷法 + 箭道各 ≥1
+	# 共鸣闸：requires_lines 里每条道途各 ≥1 张（「共鸣」二字的定义，不是阶段解锁）
 	var reso := SuperUpgradeData.get_def("super_leiting_danmu")
 	var two: Dictionary = {"thunder": 1}
 	_c.check(not SuperUpgradeData.is_card_available(reso, two, false),
@@ -139,7 +124,7 @@ func _test_super_stage_gate() -> void:
 	_c.check(SuperUpgradeData.is_card_available(ly, {"beast": 1, "wuxing": 1}, true),
 		"灵兽 + 五行各 1 张且有灵兽时灵蕴五行可选")
 
-	# 灵兽闸：无灵兽时兽血沸腾不可选
+	# 灵兽闸：无灵兽时灵兽卡整张空转（+灵兽栏 / 灵兽链电都无处落）
 	var beast := SuperUpgradeData.get_def("super_shouxue")
 	_c.check(not SuperUpgradeData.is_card_available(beast, {}, false),
 		"无灵兽时兽血沸腾不可选")
@@ -147,10 +132,31 @@ func _test_super_stage_gate() -> void:
 		"有灵兽时兽血沸腾可选")
 	_c.check(not SuperUpgradeData.is_card_available(
 		SuperUpgradeData.get_def("super_shouqun"), {"beast": 1}, false),
-		"无灵兽时兽群不可选（即使灵兽道已开）")
+		"无灵兽时兽群不可选")
 	_c.check(SuperUpgradeData.is_card_available(
-		SuperUpgradeData.get_def("super_shouqun"), {"beast": 1}, true),
-		"灵兽道 1 张且有灵兽时兽群可选")
+		SuperUpgradeData.get_def("super_shouqun"), counts, true),
+		"有灵兽时兽群可选（不再要求灵兽道已拥有卡）")
+
+	# 权重：道途卡一律同权（与「该道途已拿几张」无关），共鸣最高，仪式最低，命中构筑 ×1.5
+	var bare: Dictionary = {}
+	_c.near(SuperUpgradeData.card_weight(
+		SuperUpgradeData.get_def("super_jianqi"), bare), SuperUpgradeData.W_LANE, EPS,
+		"道途卡基础权重")
+	_c.near(SuperUpgradeData.card_weight(
+		SuperUpgradeData.get_def("super_tianfa"), bare), SuperUpgradeData.W_LANE, EPS,
+		"原来的 3 阶卡不再额外加权（同权）")
+	_c.near(SuperUpgradeData.card_weight(reso, bare), SuperUpgradeData.W_RESONANCE, EPS,
+		"共鸣卡权重最高")
+	_c.near(SuperUpgradeData.card_weight(
+		SuperUpgradeData.get_def("super_kaitian"), bare), SuperUpgradeData.W_RITUAL, EPS,
+		"仪式卡权重最低")
+	_c.near(SuperUpgradeData.card_weight(
+		SuperUpgradeData.get_def("super_jianqi"), {"melee": true}),
+		SuperUpgradeData.W_LANE * SuperUpgradeData.W_BUILD_BONUS, EPS,
+		"命中构筑标签的道途卡权重 ×1.5")
+	_c.near(SuperUpgradeData.card_weight(
+		SuperUpgradeData.get_def("super_kaitian"), {"melee": true}),
+		SuperUpgradeData.W_RITUAL, EPS, "仪式卡没有 need 标签，不吃构筑加权")
 
 func _test_super_roll() -> void:
 	GameManager.reset_run()
@@ -159,39 +165,45 @@ func _test_super_roll() -> void:
 	_c.check(tags.has("melee") and tags.has("crit"),
 		"构筑标签包含角色 item_tags（实为 %s）" % str(tags.keys()))
 
-	# ① 第一次悟道：只能开道 —— 候选里不许出现 stage≥2 或共鸣卡
+	# ① 纯随机池：五张候选，同屏不重复、同道途 ≤ MAX_PER_LINE，且每张都过了闸
 	var offers := SuperUpgradeData.roll_offers(GameManager)
 	_c.check(offers.size() == SuperUpgradeData.OFFER_COUNT,
 		"候选固定 %d 张（实为 %d）" % [SuperUpgradeData.OFFER_COUNT, offers.size()])
-	var premature: Array = []
-	for o in offers:
-		var cdef := SuperUpgradeData.get_def(String(o.get("id", "")))
-		if int(cdef.get("stage", 0)) >= 2 or String(cdef.get("kind", "")) == "resonance":
-			premature.append(o.get("id", "?"))
-	_c.check(premature.is_empty(), "第一次悟道不出进阶/共鸣卡（越阶: %s）" % str(premature))
 	_c.check(_has_unique_ids(offers), "同屏候选不重复")
 	_c.check(_max_same_line(offers) <= SuperUpgradeData.MAX_PER_LINE,
 		"同屏同道途不超过 %d 张（实为 %d）" % [SuperUpgradeData.MAX_PER_LINE, _max_same_line(offers)])
+	var bad_gate: Array = []
+	for o in offers:
+		if not SuperUpgradeData.is_card_available(
+				SuperUpgradeData.get_def(String(o.get("id", ""))), {}, false):
+			bad_gate.append(o.get("id", "?"))
+	_c.check(bad_gate.is_empty(), "候选都过了卡池闸（越闸: %s）" % str(bad_gate))
 
-	# ② 已开剑道一张后：必须出现「延续」卡（剑道 stage2 或已有道途的后续阶段）
-	GameManager.super_cards_taken.append("super_jianqi")
-	var offers2: Array = []
-	for i in range(12):
-		var o2 := SuperUpgradeData.roll_offers(GameManager)
-		var has_cont := false
-		for o in o2:
-			if String(o.get("lane_chip", "")) == "延续" or String(o.get("lane_chip", "")) == "大成":
-				has_cont = true
-		if has_cont and o2.size() == SuperUpgradeData.OFFER_COUNT:
-			offers2 = o2
+	# ② 去阶段门控：没开任何道时，原来的 2/3 阶卡也在同一个池子里（多抽几轮必见）
+	var advanced_ids: Array = ["super_wanjian_guizong", "super_tianfa", "super_jianyu", "super_xuehai"]
+	var saw_advanced := false
+	for i in range(60):
+		for o in SuperUpgradeData.roll_offers(GameManager):
+			if String(o.get("id", "")) in advanced_ids:
+				saw_advanced = true
+				break
+		if saw_advanced:
 			break
-	_c.check(not offers2.is_empty(), "已开一道后候选里出现延续/大成卡")
+	_c.check(saw_advanced, "未开道时原来的 2/3 阶卡也在随机池里（60 轮没抽到）")
 
-	# ③ 手握两条道后，共鸣卡进入可用池
-	var counts: Dictionary = {"thunder": 1, "arrow": 1}
-	var reso := SuperUpgradeData.get_def("super_leiting_danmu")
-	_c.check(SuperUpgradeData.is_card_available(reso, counts, false),
-		"雷法 + 箭道各 1 张时共鸣卡进池")
+	# ③ 手握两条道后，共鸣卡进池（这道闸还在：它就是「共鸣」二字的定义）
+	GameManager.super_cards_taken.append("super_zidian")
+	GameManager.super_cards_taken.append("super_wanjian_qifa")
+	var saw_reso := false
+	for i in range(40):
+		for o in SuperUpgradeData.roll_offers(GameManager):
+			if String(o.get("id", "")) == "super_leiting_danmu":
+				saw_reso = true
+				break
+		if saw_reso:
+			break
+	_c.check(saw_reso, "雷法 + 箭道各 1 张后共鸣卡进池（40 轮没抽到）")
+	GameManager.super_cards_taken.clear()
 
 	# ④ 卡面数据现取自道具定义（标题/apply 同源）
 	var mismatch: Array = []

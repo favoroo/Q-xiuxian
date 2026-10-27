@@ -20,14 +20,14 @@ const LDR_CORE_COLOR := Color(0.82, 0.94, 1.0, 0.95)  ## glow 关闭时的备用
 const POOL_CAP := 24
 
 # —— 基准线宽（配合 width_mult 等比缩放）——
-const BASE_WIDTH_GLOW := 4.5
-const BASE_WIDTH_CORE := 1.8
-const BASE_WIDTH_BRANCH := 1.1
+const BASE_WIDTH_GLOW := 4.8
+const BASE_WIDTH_CORE := 2.0
+const BASE_WIDTH_BRANCH := 1.2
 
-# —— 电弧余韵（T-2.5，微型电弧从命中点消散）——
-const ARC_AFTERGLOW_COUNT := 2     ## 2 条微型电弧（精简克制）
-const ARC_AFTERGLOW_LIFE := 0.15   ## 余韵窗口（s）
-const ARC_AFTERGLOW_LEN := 15.0    ## 单条微弧最大长度（px）
+# —— 电弧余韵（T-2.5，微型电弧从命中点消散，短促收敛）——
+const ARC_AFTERGLOW_COUNT := 2     ## 2 条微型电弧
+const ARC_AFTERGLOW_LIFE := 0.08   ## 余韵窗口（s，迅捷消散，不拖泥带水）
+const ARC_AFTERGLOW_LEN := 12.0    ## 单条微弧最大长度（px）
 const ARC_AFTERGLOW_WIDTH := 1.0   ## 微弧线宽（细芯）
 
 static var _pool: Array[LightningBolt] = []
@@ -180,8 +180,9 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	modulate.a = 1.0
 	visible = true
 
+	# 2026-10-26 视觉优化：电弧极速击穿收束（0.075s），告别贴图般漫长的渐隐
 	_tween = create_tween()
-	_tween.tween_property(self, "modulate:a", 0.0, 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tween.tween_property(self, "modulate:a", 0.0, 0.075).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	# 电弧余韵：拥挤档跳过余韵直接回池，非拥挤档保留微弱余韵
 	if not is_crowded:
 		_tween.tween_callback(_spawn_afterglow)
@@ -213,13 +214,14 @@ func _after_afterglow() -> void:
 	_recycle()
 
 func _build_jagged_points(from_pos: Vector2, to_pos: Vector2) -> PackedVector2Array:
-	# 2026-10-18 简化：折段间距 22→28，抖幅 14→9，线条更平直利落，折点少约 25%
-	return build_jagged_points(from_pos, to_pos, 28.0, 9.0)
+	# 2026-10-26 视觉优化：段长 28→14，折点细腻，告别大折角塑料棍观感
+	return build_jagged_points(from_pos, to_pos, 14.0, 7.5)
 
 ## 锯齿折线生成（主干/微弧共用一把尺，T-2.5 参数化）：seg_len 控制折段密度、
-## amp_max 控制法向抖幅（主干沿程 sin 包络缩放，微弧短且直、抖幅直接给满）
+## amp_max 控制法向抖幅（双层正弦 + 高斯高频抖颤，形成真实电击穿轮廓）
 static func build_jagged_points(from_pos: Vector2, to_pos: Vector2, seg_len: float, amp_max: float) -> PackedVector2Array:
-	var segs := maxi(int(from_pos.distance_to(to_pos) / seg_len), 3)
+	var dist := from_pos.distance_to(to_pos)
+	var segs := maxi(int(dist / seg_len), 4)
 	var dir := to_pos - from_pos
 	var side := dir.orthogonal().normalized()
 	var points := PackedVector2Array()
@@ -227,7 +229,10 @@ static func build_jagged_points(from_pos: Vector2, to_pos: Vector2, seg_len: flo
 		var t := float(i) / float(segs)
 		var p := dir * t
 		if i > 0 and i < segs:
-			var amp := amp_max * sin(t * PI)
+			# 大体沿程包络 + 局部高频折颤，还原闪电跳跃电离感
+			var envelope := sin(t * PI)
+			var jitter := randf_range(-0.4, 0.4)
+			var amp := amp_max * (envelope * 0.75 + jitter * 0.25)
 			p += side * randf_range(-amp, amp)
 		points.append(p)
 	return points

@@ -29,7 +29,8 @@ static func any_enabled() -> bool:
 	_memo_any = float(snap.get("wuxing_rotation_chance", 0.0)) > 0.0 \
 		or float(snap.get("crit_sky_bolt", 0.0)) > 0.0 \
 		or float(snap.get("projectile_chain_lightning", 0.0)) > 0.0 \
-		or float(snap.get("wuxing_all", 0.0)) > 0.0
+		or float(snap.get("wuxing_all", 0.0)) > 0.0 \
+		or float(snap.get("attack_chain_lightning", 0.0)) > 0.0
 	return _memo_any
 
 ## 供测试/新开局重置记忆
@@ -38,6 +39,7 @@ static func reset_memo() -> void:
 	_memo_any = false
 	_fast_frame = -1
 	_fast_any = false
+	_zidian_hit_count = 0
 
 ## 弹丸命中等「每帧可能上百次」的调用点专用：再叠一层按物理帧的布尔缓存。
 ## any_enabled() 每次都要算一次 items.hash()（20 件道具约几微秒），44 发弹丸齐射时
@@ -127,20 +129,38 @@ static func _proc_pop_staggered(enemy: Object) -> void:
 				return
 			_proc_pop(node, kind))
 
-## 天罚：暴击时在目标头顶劈一道雷（固定基值 + 元素加成，不随武器面板膨胀）
-## 2026-10-26：伤害已由 ChainLightning.sky_bolt 自己落地（旧实现只画不结算，卡是空转的）。
+## 紫电命中充能计数（类似电刀：命中积累充能，每 CHAIN_EVERY_ATTACKS 次爆发）
+static var _zidian_hit_count: int = 0
+
+## 天罚：暴击时在目标头顶劈一道天雷（固定基值 + 元素加成，不随武器面板膨胀）
+## 2026-10-26 重构：直接传入 enemy 节点，天雷自苍穹直劈受击目标天灵盖，伤害精准必中，画面干净利落。
 static func _roll_sky_bolt(host: Node, enemy: Node2D, is_crit: bool, enabled: float) -> void:
 	if not is_crit or enabled <= 0.0:
 		return
-	ChainLightning.sky_bolt(host, enemy.global_position,
+	ChainLightning.sky_bolt(host, enemy,
 		BalanceChain.crit_bolt_damage(GameManager.elemental_damage),
 		GameStyle.FX_HDR_LIGHTNING, &"tianfa")
+
+## 紫电：攻击命中敌人时积累充能，到期以被击中的敌人为源头释放连锁闪电（英雄联盟电刀模式）
+## 绝不从玩家身上起跳，玩家身上绝不爆闪，连线只在怪与怪之间传导。
+static func _roll_zidian(host: Node, enemy: Node2D, damage: float, s: Dictionary) -> void:
+	if float(s.get("attack_chain_lightning", 0.0)) <= 0.0:
+		_zidian_hit_count = 0
+		return
+	_zidian_hit_count += 1
+	if _zidian_hit_count < BalanceChain.CHAIN_EVERY_ATTACKS:
+		return
+	_zidian_hit_count = 0
+	var hops := _chain_hops(s)
+	# 以被命中的 enemy 为起点和首跳目标，电弧直接从该敌人向周围敌人弹射
+	ChainLightning.strike(host, enemy.global_position, enemy, damage, hops,
+		GameStyle.FX_HDR_ZIDIAN, &"zidian", "chain_zap")
 
 ## 取本帧的机制快照（命中循环外调一次，循环内复用）
 static func snapshot() -> Dictionary:
 	return StatSystem.super_hook_snapshot(GameManager)
 
-## 近战/横扫/束流命中：五行轮转 / 五行归一 + 天罚
+## 近战/横扫/束流命中：五行轮转 / 五行归一 + 天罚 + 紫电
 static func on_weapon_hit(host: Node, enemy: Node2D, damage: float, is_crit: bool,
 		snap: Dictionary = {}) -> void:
 	if enemy == null or not is_instance_valid(enemy):
@@ -149,19 +169,20 @@ static func on_weapon_hit(host: Node, enemy: Node2D, damage: float, is_crit: boo
 	var guiyi := float(s.get("wuxing_all", 0.0))
 	var wuxing := float(s.get("wuxing_rotation_chance", 0.0))
 	var bolt := float(s.get("crit_sky_bolt", 0.0))
-	if wuxing <= 0.0 and bolt <= 0.0 and guiyi <= 0.0:
+	var zidian := float(s.get("attack_chain_lightning", 0.0))
+	if wuxing <= 0.0 and bolt <= 0.0 and guiyi <= 0.0 and zidian <= 0.0:
 		return
-	# 归一优先于轮转：两卡同拿时每次命中三系全挂（轮转那条概率腿不再掷，读法更干净）
+	# 归一优先于轮转：两卡同拿时每次命中三系全挂
 	if guiyi > 0.0:
 		ProcStatus.apply(enemy, true, damage * BalanceChain.GUIYI_BURN_RATIO,
 			BalanceChain.WUXING_BURN_DUR,
 			BalanceChain.WUXING_CHILL, BalanceChain.WUXING_CHILL_DUR,
 			true, damage * BalanceChain.GUIYI_POISON_RATIO, BalanceChain.WUXING_POISON_DUR)
-		# 三系同挂：三簇元素粒子按 45ms 依次炸开，读「三色齐上」而不是一团糊
 		_proc_pop_staggered(enemy)
 	else:
 		_roll_wuxing(enemy, damage, wuxing)
 	_roll_sky_bolt(host, enemy, is_crit, bolt)
+	_roll_zidian(host, enemy, damage, s)
 
 ## 弹丸命中：两条通用效果 + 雷霆弹幕（共鸣卡：弹丸命中时也引发链电）
 static func on_projectile_hit(host: Node, enemy: Node2D, damage: float, is_crit: bool,
