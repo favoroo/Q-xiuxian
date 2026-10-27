@@ -491,7 +491,17 @@ func _test_career_milestones() -> void:
 	GameManager.kills = 420
 	GameManager.spirit_stones = 130
 	GameManager.wave_number = 20
+	# 模拟回合末已播报过的局内解锁：结算时不许清空，否则结算屏只显示「最后这一下」的成就
+	GameManager.last_run_new_achievements = ["ach_midrun_marker"]
 	GameManager.trigger_game_over(true)
+
+	_c.check("ach_midrun_marker" in GameManager.last_run_new_achievements,
+		"结算保留局内已播报的成就（结算屏按整局汇总）")
+	_c.check(GameManager.last_run_new_achievements.size() > 1,
+		"结算新达成的成就与局内已解锁的并存（不是二选一）")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("新皮肤")),
+		"首胜同时解锁第 1 套皮肤并入结算播报")
 
 	var rec := GameManager.get_cultivator_record("shiyue")
 	_c.equals(int(rec["runs"]), 1, "石岳生涯局数 +1")

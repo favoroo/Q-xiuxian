@@ -61,6 +61,7 @@ func _run() -> void:
 	await _case_slash_hits_enemy()
 	await _case_no_charge_while_forming()
 	await _case_no_charge_without_targets()
+	await _case_ui_sync()
 
 	print("SWORD_PHANTOM_CHECK 判据跑完")
 	Engine.time_scale = 1.0
@@ -124,8 +125,8 @@ func _case_formation_lifetime() -> void:
 			var ph := child as SwordPhantom
 			if ph == null or ph._pooled or not ph.visible or ph._state == SwordPhantom.STATE_FORM:
 				continue
-			# 轨道是半长轴 112 / 半短轴 86 的椭圆；出刀前突最多 SLASH_LUNGE，
-			# 所以「离玩家的距离」必须落在 [86 - 前突, 112 + 前突] 这个环带里
+				# 轨道是半长轴 ORBIT_RADII.x / 半短轴 ORBIT_RADII.y 的椭圆；出刀前突最多 SLASH_LUNGE，
+				# 所以「离玩家的距离」必须落在 [ORBIT_RADII.y - 前突, ORBIT_RADII.x + 前突] 这个环带里
 			var d: float = _player.global_position.distance_to(ph.global_position)
 			var lo: float = SwordPhantom.ORBIT_RADII.y - SwordPhantom.SLASH_LUNGE - 1.0
 			var hi: float = SwordPhantom.ORBIT_RADII.x + SwordPhantom.SLASH_LUNGE + 1.0
@@ -211,6 +212,20 @@ func _case_no_charge_without_targets() -> void:
 		target.queue_free()
 	await _expire_formation()
 	GameManager.reset_run()
+
+## ⑧ 头顶剑意 UI 同步：PlayerSkillVfx 读数与 SwordPhantom 同步
+func _case_ui_sync() -> void:
+	_equip(_sword_ids())
+	var vfx := _player.skill_vfx
+	_c.check(vfx != null, "玩家身上挂有 PlayerSkillVfx 节点")
+	vfx.sync_sword_qi(7, 20, false, 0.0, true)
+	_c.check(vfx.sword_qi_visible, "剑意开启后插槽置可见")
+	_c.check(vfx.sword_qi_charge == 7, "剑意层数同步准确（7 层）")
+	_c.check(vfx._sword_qi_pop > 0.0, "攒层触发小剑弹跳动效")
+	_c.check(vfx._sword_qi_pop_pip == 1, "第 2 把小剑触发弹跳（7 层落在第 2 把）")
+	vfx.sync_sword_qi(20, 20, true, 0.5, true)
+	_c.check(vfx.sword_qi_formation, "剑阵运转态同步准确")
+	_c.check(is_equal_approx(vfx.sword_qi_formation_ratio, 0.5), "剑阵剩余时间比率同步准确")
 
 # ---------------- 辅助 ----------------
 

@@ -114,7 +114,12 @@ static func create_equipped_cap_chip(used: int, max_slots: int) -> Control:
 	var chip := PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE_DK, 1, 0.0))
+	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.JADE_DK, 1, 0.0)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 2.0
+	chip.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
 	lbl.text = "装备 %d/%d（上限%d件）" % [used, max_slots, max_slots]
 	chip.add_child(lbl)
@@ -143,12 +148,17 @@ static func create_stash_divider(shop) -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 2.0
+	chip.add_theme_stylebox_override("panel", sb)
 	var lbl = Label.new()
 	lbl.text = "背包 %d/%d" % [GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS]
 	chip.add_child(lbl)
-	# 暗井（INK 底）上的次要小字：GREY 翻转后偏暗，换暗底次级亮字
-	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
+	# 暗井（INK 底）上的亮字：换肤后暗底文字统一走 CHALK（原 PAPER_DIM 是纸面深灰墨字，黑底不可读）
+	GameStyle.label(lbl, 11, GameStyle.CHALK)
 	if shop != null:
 		shop.drag_register(chip, {"pool": "stash", "index": -1, "kind": "end"})
 	return chip
@@ -158,11 +168,16 @@ static func create_items_divider() -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 2.0
+	chip.add_theme_stylebox_override("panel", sb)
 	var lbl = Label.new()
 	lbl.text = "道具 %d" % GameManager.items.size()
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
+	GameStyle.label(lbl, 11, GameStyle.CHALK)
 	return chip
 
 ## 已持有道具的小徽记：按档位描边，支持点按弹出 DetailTip 详解卡
@@ -284,11 +299,16 @@ static func create_pets_divider() -> Control:
 	var chip = PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chip.add_theme_stylebox_override("panel", GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0))
+	var sb := GameStyle.outlined_panel(GameStyle.INK, GameStyle.LINE, 1, 0.0)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 2.0
+	chip.add_theme_stylebox_override("panel", sb)
 	var lbl = Label.new()
 	lbl.text = "灵兽 %d/%d" % [GameManager.pets.size(), GameManager.max_pet_slots()]
 	chip.add_child(lbl)
-	GameStyle.label(lbl, 11, GameStyle.PAPER_DIM)
+	GameStyle.label(lbl, 11, GameStyle.CHALK)
 	return chip
 
 ## 已持有灵兽的小徽记：绘制无脸圆球光灵（与货架卡同一画法，见 PetIconDraw），支持点按弹出 DetailTip 详解卡与出售操作

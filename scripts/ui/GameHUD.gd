@@ -333,6 +333,8 @@ func _build_widgets() -> void:
 	# 只读 spawner 两个 int，5Hz 轮询
 	wave_left = HudWaveLeft.new()
 	add_child(wave_left)
+	# 金蟾屏幕边缘指引与落单遁逃指示器
+	add_child(HudLooterPointer.new())
 
 ## 供冒烟测试与调试断言：血条当前是否上屏
 func is_boss_bar_visible() -> bool:

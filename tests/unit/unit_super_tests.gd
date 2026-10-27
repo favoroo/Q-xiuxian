@@ -346,6 +346,14 @@ func _test_super_apply() -> void:
 		_c.near(GameManager.item_hook_sum(hook), expect, EPS,
 			"机制卡 %s 的 hook %s 读数正确" % [cid, hook])
 
+	# 燃血催诀（2026-10-27）：飞升表里唯一的技能冷却入口，走 apply 正式属性而非 hook。
+	# 钉子钉到 SkillData 换算后的秒数，防止将来改 SKILL_CD_CAP / final_stats 时这张卡静默失效。
+	GameManager.reset_run()
+	_c.check(SuperUpgradeData.apply(GameManager, "super_cuijue"), "燃血催诀落地成功")
+	_c.near(GameManager.skill_cooldown_mult, 0.40, EPS, "燃血催诀技能冷却缩减 40%")
+	_c.near(float(SkillData.final_stats("gale", "")["cooldown"]), 7.5 * 0.60, EPS,
+		"燃血催诀让疾行冷却 7.5s → 4.5s")
+
 	# 会话层：take 后记账、发 finished、本关不再弹
 	GameManager.reset_run()
 	GameManager.wave_number = 5

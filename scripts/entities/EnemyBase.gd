@@ -141,7 +141,14 @@ const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = �
 const FLEE_WALL_BAND := 80.0       ## 金蟾软墙警告带（px）：带内背离墙外的逃离分量清零改沿墙滑行；贴墙滑行向锁存防角落抖振
 var _explode_ring: AoeTelegraph = null  ## 丹爆引信预警圈（挂身上跟随，半径 = explode_radius 同源）
 var _no_drop: bool = false
-var _flee_slide := Vector2.ZERO    ## 金蟾贴墙滑行方向锁存：x=贴上下墙的滑行向、y=贴左右墙的滑行向（0=未贴墙）
+var _flee_slide := Vector2.ZERO    ## 金蟾贴墙滑行方向锁存（兼容保留）
+# 金蟾（always_flee）逃窜状态机（2026-10-27 优化：视线内环流 + 避墙折返 + 挑逗得瑟 + 落单仓皇遁逃）：
+var _flee_run_timer: float = 0.0      ## 奔跑阶段剩余时长
+var _flee_pause_timer: float = 0.0    ## 挑逗得瑟停顿剩余时长（>0 时原地喘息）
+var _flee_orbit_sign: float = 1.0     ## 切向环绕方向：1.0 顺时针，-1.0 逆时针
+var _flee_panic: bool = false         ## 是否进入落单遁逃状态（常规怪清空仅剩金蟾时触发）
+var _flee_escape_timer: float = -1.0  ## 遁逃倒计时（<=0 遁地消失）
+var _flee_burrowing: bool = false     ## 是否正在执行遁地消失动画
 var _minion_timer: float = 0.0     ## 产卵计时
 var _teleport_timer: float = 0.0   ## 闪现计时
 var _buff_timer: float = 0.0       ## 光环脉冲计时（每 0.25s 刷新一次范围内同伴）
@@ -400,6 +407,12 @@ func activate() -> void:
 		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
 	_flee_slide = Vector2.ZERO
+	_flee_run_timer = 2.0
+	_flee_pause_timer = 0.0
+	_flee_orbit_sign = 1.0 if (GameManager.rng != null and GameManager.rng.randf() < 0.5) else -1.0
+	_flee_panic = false
+	_flee_escape_timer = -1.0
+	_flee_burrowing = false
 
 	# 敌人出生时的弹性跃出感
 	juice_scale = Vector2(0.3, 0.3)
@@ -1249,7 +1262,7 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 	# 行为支路分发（2026-10-24 切片）：各敌型按自己的开关字段独立推进，同一敌人带多个
 	# 开关时全部顺序执行（保持旧语义，非 elif 互斥）。唯一提前出口是自爆结算。
 	# 各支路实现即下方 _tick_* 方法（体注释随块走）；起手/结算等招式函数见「行为支路」各分区。
-	_tick_flee_slide(delta, dir, eff_speed)
+	_tick_flee_slide(delta, player, dir, dist_sq, eff_speed)
 	_tick_kite_range(dir, dist_sq, eff_speed)
 	_tick_charge_lunge(delta, player, dir, dist_sq)
 	if _tick_explode_fuse(delta, player, dist_sq):
@@ -1271,44 +1284,114 @@ func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float,
 
 # ---------------- 行为支路 tick（2026-10-24 自 _tick_behaviors 切片） ----------------
 
-## 金蟾系移动：恒背离玩家逃窜（土豆兄弟 Looter：击杀爆金币的限时宝藏怪）。软墙环流滑行
-## （2026-10-15 行为优化）：贴墙把滑行方向锁进 _flee_slide 沿墙环流，抵相邻墙带转 90° 接续，
-## 被击退脱离墙带才释放回径向逃离 —— 绕场流窜不进角、不贴墙原地抽搐。
-func _tick_flee_slide(delta: float, dir: Vector2, eff_speed: float) -> void:
-	if always_flee and not _pp_stun:
-		var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
-		var t_edge: float = wall_lim - FLEE_WALL_BAND
-		var flee_dir := -dir
-		if _flee_slide != Vector2.ZERO:
-			# 环流保持：仍贴着约束它的那面墙就照锁存方向流；抵上相邻墙带即转 90° 接下一面
-			if _flee_slide.x == 0.0:
-				if absf(global_position.x) <= t_edge:
-					_flee_slide = Vector2.ZERO
-				elif absf(global_position.y) >= t_edge and signf(_flee_slide.y) == signf(global_position.y):
-					_flee_slide = Vector2(-signf(global_position.x), 0.0)
+## 金蟾系移动：视线内中距离环流风筝 + 避墙折返 + 挑逗得瑟停顿 + 落单仓皇遁逃（2026-10-27 机制重构）。
+## 彻底摒弃贴外墙死磕滑行；保持在玩家屏幕视线内游走风筝，奔跑与歇步张弛有度，为近战/短手提供输出窗口。
+func _tick_flee_slide(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> void:
+	if not always_flee or _pp_stun or _flee_burrowing:
+		return
+
+	# 1. 落单仓皇遁逃推进（倒计时到期未伏诛，施展金光遁地离去并促成提前清场）
+	if _flee_panic:
+		if _flee_escape_timer > 0.0:
+			_flee_escape_timer -= delta
+			if _flee_escape_timer <= 0.0:
+				escape_burrow()
+				return
+
+	var dist := sqrt(dist_sq)
+
+	# 2. 挑逗得瑟停顿（落单仓皇逃跑时不歇步）
+	if not _flee_panic:
+		if _flee_pause_timer > 0.0:
+			_flee_pause_timer -= delta
+			# 玩家近身（< 100px）受惊提前开溜
+			if dist < 100.0:
+				_flee_pause_timer = 0.0
+				_flee_run_timer = 2.2
+				play_squash(Vector2(0.85, 1.25), 0.18)
 			else:
-				if absf(global_position.y) <= t_edge:
-					_flee_slide = Vector2.ZERO
-				elif absf(global_position.x) >= t_edge and signf(_flee_slide.x) == signf(global_position.x):
-					_flee_slide = Vector2(0.0, -signf(global_position.y))
-			if _flee_slide != Vector2.ZERO:
-				flee_dir = _flee_slide
-		if _flee_slide == Vector2.ZERO and flee_dir.length_squared() > 0.0001:
-			# 径向逃离触墙：锁存为「远离近端墙角」的环流方向（贴墙恰在中线上的罕见退化取顺时针）
-			if flee_dir.x > 0.0 and global_position.x > t_edge:
-				_flee_slide = Vector2(0.0, -signf(global_position.y) if global_position.y != 0.0 else 1.0)
-			elif flee_dir.x < 0.0 and global_position.x < -t_edge:
-				_flee_slide = Vector2(0.0, -signf(global_position.y) if global_position.y != 0.0 else 1.0)
-			elif flee_dir.y > 0.0 and global_position.y > t_edge:
-				_flee_slide = Vector2(-signf(global_position.x) if global_position.x != 0.0 else 1.0, 0.0)
-			elif flee_dir.y < 0.0 and global_position.y < -t_edge:
-				_flee_slide = Vector2(-signf(global_position.x) if global_position.x != 0.0 else 1.0, 0.0)
-			if _flee_slide != Vector2.ZERO:
-				flee_dir = _flee_slide
-		if flee_dir.length_squared() < 0.0001:
-			# 退化兜底（玩家与金蟾重合等罕见情形）：朝场心走，绝不原地钉死
-			flee_dir = (-global_position).normalized() if global_position.length_squared() > 0.0001 else Vector2.UP
-		_pp_target_vel = flee_dir.normalized() * eff_speed
+				_pp_target_vel = Vector2.ZERO
+				return
+		else:
+			_flee_run_timer -= delta
+			if _flee_run_timer <= 0.0:
+				if dist >= 140.0:
+					var rng := GameManager.rng
+					_flee_pause_timer = rng.randf_range(0.5, 0.75) if rng != null else 0.6
+					_flee_run_timer = rng.randf_range(2.0, 2.5) if rng != null else 2.2
+					if rng != null and rng.randf() < 0.5:
+						_flee_orbit_sign = -_flee_orbit_sign
+					_pp_target_vel = Vector2.ZERO
+					return
+				else:
+					_flee_run_timer = 1.0
+
+	# 3. 视线内环流与中距离风筝向量计算（dir 为指向玩家的单位向量，-dir 为纯背离玩家逃跑）
+	var tangent := Vector2(-dir.y, dir.x) * _flee_orbit_sign
+	var raw_flee := Vector2.ZERO
+
+	if dist < 160.0:
+		# 近身警戒带（<160px）：以背离逃离为主（满足 unit test 背离点积 < 0），混合切向弧线摆脱
+		raw_flee = (-dir * 0.75 + tangent * 0.45).normalized()
+	elif dist <= 270.0:
+		# 视线安全带（160~270px）：切向绕转戏耍为主，始终留在玩家屏幕视野内
+		raw_flee = (tangent * 0.85 - dir * 0.15).normalized()
+	else:
+		# 过远/脱屏带（>270px）：向心折返，主动回游玩家视野
+		raw_flee = (dir * 0.45 + tangent * 0.65).normalized()
+
+	# 4. 内场边界避让（反推回内场，杜绝贴墙死磕滑行）
+	var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
+	var safe_wall: float = wall_lim - 70.0
+	var push_in := Vector2.ZERO
+	if global_position.x > safe_wall:
+		push_in.x = -1.0
+	elif global_position.x < -safe_wall:
+		push_in.x = 1.0
+	if global_position.y > safe_wall:
+		push_in.y = -1.0
+	elif global_position.y < -safe_wall:
+		push_in.y = 1.0
+
+	if push_in != Vector2.ZERO:
+		raw_flee = (raw_flee * 0.35 + push_in.normalized() * 0.75).normalized()
+
+	if raw_flee.length_squared() < 0.0001:
+		raw_flee = (-global_position).normalized() if global_position.length_squared() > 0.0001 else Vector2.UP
+
+	var cur_speed := eff_speed * (1.15 if _flee_panic else 1.0)
+	_pp_target_vel = raw_flee * cur_speed
+
+## 金蟾进入落单仓皇遁逃（WaveSpawner 监测到常规敌潮清空时调用）
+func trigger_looter_panic() -> void:
+	if not always_flee or _flee_panic or dying or _flee_burrowing:
+		return
+	_flee_panic = true
+	_flee_escape_timer = 6.0
+	_flee_pause_timer = 0.0
+	_flee_run_timer = 6.0
+	GameManager.announcement_triggered.emit("◆ 金蟾见势不妙，慌忙遁逃！◆")
+	GameManager.shake_camera(3.0, 0.2)
+
+## 金蟾遁地离开（限时未伏诛，施展金光遁地钻走，自动结算提前清场）
+func escape_burrow() -> void:
+	if dying or _flee_burrowing:
+		return
+	_flee_burrowing = true
+	_pp_target_vel = Vector2.ZERO
+	velocity = Vector2.ZERO
+	if is_in_group("enemies"):
+		remove_from_group("enemies")
+	GameManager.unregister_enemy(self)
+	DamageNumber.spawn(get_parent(), global_position, 0, false, "遁地离去！")
+	FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", 0.9)
+	AudioManager.play_sfx("enemy_blink", 0.9)
+	var tw := create_tween()
+	tw.tween_property(self, "scale", Vector2.ZERO, 0.22).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
+	tw.tween_callback(func():
+		scale = Vector2.ONE
+		_recycle_or_free()
+	)
 
 
 
@@ -1857,7 +1940,10 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 				collider.take_damage(contact_damage)
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
-func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
+## chain_tint：链电身份色（alpha>0 时，本次伤害跳字走「独立条 + 该色」通道 ——
+## 链电逐跳各发一条、不被 0.25s 同目标聚合窗并进武器主跳字，见 DamageNumber.can_merge）。
+## 默认 alpha=0，所有既有调用（武器/DoT/反震…）行为不变。
+func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false, chain_tint: Color = Color(0, 0, 0, 0)) -> void:
 	if dying:
 		return
 	# 入口闸：负伤害会变成回血（并照走硬直/击退/闪白全套反馈），必须挡在结算前。
@@ -1895,6 +1981,10 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# 受击硬直定身（hit-stun）与后仰姿态：
 	# 受击当帧立即暂停主动 AI 追击速度，并在极速刹停后原地僵直定身；DoT tick 不触发硬直以保手感纯粹
 	if not from_dot:
+		if always_flee and _flee_pause_timer > 0.0:
+			_flee_pause_timer = 0.0
+			_flee_run_timer = 2.2
+			play_squash(Vector2(0.85, 1.25), 0.18)
 		var base_stun: float = GameBalance.HIT_STUN_CRIT if is_crit else GameBalance.HIT_STUN_NORMAL
 		hit_stun_timer = maxf(hit_stun_timer, base_stun * elite_scale * hit_stun_resist)
 		var freeze_dur: float = GameBalance.HIT_FREEZE_CRIT if is_crit else GameBalance.HIT_FREEZE_NORMAL
@@ -1965,8 +2055,12 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	# combo_key = 自身 instance_id：同一敌人短窗（0.25s）内的连续伤害由 DamageNumber 聚合成
 	# 一条（128×3），束流/喷吐/DoT 高频命中不再逐发刷屏、互顶看不清，池 96 溢出 new+free 抖动消失。
 	# 只合并显示条数，不合并伤害数值（集火保护仍按每发计）。
+	# 链电伤害（chain_tint.a>0）例外：独立条 + 身份色，逐跳可读（见 DamageNumber.can_merge）。
 	if not _offscreen:
-		DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit, "", get_instance_id())
+		if chain_tint.a > 0.0:
+			DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit, "", -1, chain_tint)
+		else:
+			DamageNumber.spawn(get_parent(), global_position, int(amount), is_crit, "", get_instance_id())
 	var squash_target := GameBalance.hit_squash_target(knockback, is_crit)
 	play_squash(squash_target, 0.16)
 

@@ -127,7 +127,9 @@ static func _core_color_for(tint_col: Color, glow_active: bool) -> Color:
 ## 激活动画（出膛）：全量重置坐标、折线点与淡出 Tween
 ## core_tint：芯线色覆盖（alpha==0 = 不覆盖，走原逻辑）。★3/★4 追加雷用它把
 ## 白热芯也染上星级色相 —— 只染光晕层时追加雷读起来仍是「一道白雷套金边」。
-func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: float = 1.0, core_tint: Color = Color(0, 0, 0, 0)) -> void:
+## allow_branch=false：链电传导弧专用 —— 不甩中段分支、不出空气余韵微弧，
+## 线端之外不许有电（电刀模式「电只在敌人身上与敌人之间的连线上」的演出闸口）。
+func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: float = 1.0, core_tint: Color = Color(0, 0, 0, 0), allow_branch: bool = true) -> void:
 	_setup_lines()
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
@@ -163,8 +165,8 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	_line_core.width = BASE_WIDTH_CORE * width_mult
 	_line_core.default_color = core_c
 
-	# 分支电弧赋值：拥挤档（同屏敌≥24）时跳过分支，专注主干
-	var branch_points := _build_branch_points(main_points, to_pos - from_pos) if not is_crowded else PackedVector2Array()
+	# 分支电弧赋值：拥挤档（同屏敌≥24）或链电传导弧（allow_branch=false）时跳过分支，专注主干
+	var branch_points := _build_branch_points(main_points, to_pos - from_pos) if allow_branch and not is_crowded else PackedVector2Array()
 	if branch_points.size() >= 2:
 		_line_branch_core.points = branch_points
 		_line_branch_core.width = BASE_WIDTH_BRANCH * width_mult
@@ -183,8 +185,9 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	# 2026-10-26 视觉优化：电弧极速击穿收束（0.075s），告别贴图般漫长的渐隐
 	_tween = create_tween()
 	_tween.tween_property(self, "modulate:a", 0.0, 0.075).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# 电弧余韵：拥挤档跳过余韵直接回池，非拥挤档保留微弱余韵
-	if not is_crowded:
+	# 电弧余韵：拥挤档/链电传导弧跳过余韵直接回池（余韵是向随机方向甩的微型弧 ——
+	# 链电模式下那正是「空气里也有电」的来源，电刀只在敌人身上炸，不往外散）
+	if not is_crowded and allow_branch:
 		_tween.tween_callback(_spawn_afterglow)
 	else:
 		_tween.tween_callback(_after_afterglow)

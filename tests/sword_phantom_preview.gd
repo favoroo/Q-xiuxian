@@ -8,8 +8,8 @@ extends Node2D
 ##   上区  六把剑系武器的「真身 vs 幻影」并排 —— 器形/器尖/星级一致，只换元素色温 + 加色混合 + 半透明
 ##   中区  幻影出刀的四段关键帧（真实 SwordPhantom 实例推进到该状态后停格）：
 ##         凝形（灵环推开）→ 驻场 → 挥出（弧光扫放）→ 消散
-##   底区  一次开阵的俯视：6 把真剑（内环 54×40）+ 6 道幻影（外环 112×86）= 12 把同场，
-##         验收「幻影待得住、数得清」
+##   底区  一次开阵的俯视：6 把真剑（内环 54×40）+ 6 道幻影（外环 88×68）= 12 把同场，
+##         验收「幻影待得住、数得清，内外双环距离适中」
 
 const SWORDS := [
 	"qingyun_sword", "chiyan_dao", "gengjin_feijian",
@@ -35,9 +35,11 @@ func _ready() -> void:
 	_compare_row()
 	_state_row()
 	_formation_row()
+	_sword_qi_pips_preview()
 	_label(Vector2(24, 16), "① 真身 vs 幻影：器形/器尖/星级一致，只换元素色温 + 加色混合 + 半透明")
 	_label(Vector2(24, 330), "② 出刀四段：凝形（灵环推开）→ 驻场（呼吸）→ 挥出（弧光扫放）→ 消散")
-	_label(Vector2(24, 660), "③ 一次开阵：6 把真剑（内环）+ 6 道幻影（外环）= 12 把同场，驻场数秒")
+	_label(Vector2(580, 660), "③ 一次开阵：6 把真剑（内环）+ 6 道幻影（外环）= 12 把同场，驻场数秒")
+	_label(Vector2(24, 660), "④ 剑意 UI：头顶 4 把渐进充能小剑（每把 5 层，共 20 层）")
 
 	for _i in range(10):
 		await get_tree().process_frame
@@ -133,8 +135,15 @@ func _state_row() -> void:
 
 ## ③ 6 真剑内环 + 6 幻影外环（压扁的椭圆，整体收在 980 高度内）
 func _formation_row() -> void:
-	var center := Vector2(620, 880)
-	# 内环：真剑轨道 54×40；外环：幻影轨道 112×86（按同一俯视比例压扁 0.52）
+	var center := Vector2(880, 880)
+	# 阵心角色头顶剑意（剑阵运转态倒计时）
+	var center_vfx := PlayerSkillVfx.new()
+	center_vfx.position = center
+	center_vfx.scale = Vector2.ONE * 1.4
+	add_child(center_vfx)
+	center_vfx.sync_sword_qi(20, 20, true, 0.70)
+
+	# 内环：真剑轨道 54×40；外环：幻影轨道 88×68（收近后内外环距更紧凑，按同一俯视比例压扁 0.52）
 	for i in range(SWORDS.size()):
 		var wid: String = SWORDS[i]
 		var def := WeaponData.get_def(wid)
@@ -144,15 +153,52 @@ func _formation_row() -> void:
 		var ang := TAU * float(i) / float(SWORDS.size()) - PI * 0.5
 		var dir := Vector2(cos(ang), sin(ang) * 0.52)
 		_renderer(center + dir * 70.0, wid, element, 1.0, ang, 1.5)
-		_renderer(center + dir * 150.0, wid, element, SwordPhantom.GHOST_ALPHA, ang, 1.5, true)
+		_renderer(center + dir * 115.0, wid, element, SwordPhantom.GHOST_ALPHA, ang, 1.5, true)
 
-## 画一把器形（ghost=true 时走幻影口径：元素 HDR + 加色混合 + 半透明）
+## ④ 剑意 UI 渐进充能状态展示（0/20、3/20、8/20、14/20、20/20 满层脉冲、剑阵运转）
+func _sword_qi_pips_preview() -> void:
+	var samples := [
+		{"charge": 0, "form": false, "ratio": 0.0, "label": "0/20 初始空槽"},
+		{"charge": 3, "form": false, "ratio": 0.0, "label": "3/20 第1把充 3/5"},
+		{"charge": 8, "form": false, "ratio": 0.0, "label": "8/20 满1把 + 充 3/5"},
+		{"charge": 14, "form": false, "ratio": 0.0, "label": "14/20 满2把 + 充 4/5"},
+		{"charge": 20, "form": false, "ratio": 0.0, "label": "20/20 满层金色脉冲"},
+		{"charge": 20, "form": true, "ratio": 0.65, "label": "剑阵运转驻场倒计时"},
+	]
+	for i in range(samples.size()):
+		var s: Dictionary = samples[i]
+		var col_idx := i % 2
+		var row_idx := int(float(i) / 2.0)
+		var pos := Vector2(85 + col_idx * 230, 750 + row_idx * 100)
+		var wrap := Node2D.new()
+		# vfx 内部以 -38.0 为头顶基准，加 38.0 补偿让小剑恰好落在 pos 上
+		wrap.position = pos + Vector2(0.0, 38.0 * 2.4)
+		wrap.scale = Vector2.ONE * 2.4   # 放大看清小剑细节
+		add_child(wrap)
+		var vfx := PlayerSkillVfx.new()
+		wrap.add_child(vfx)
+		vfx.sync_sword_qi(int(s["charge"]), 20, bool(s["form"]), float(s["ratio"]), true)
+		_label(pos + Vector2(-55, 18), String(s["label"]))
+
+## 画一把器形（ghost=true 时走幻影口径：光晕外壳 + 元素 HDR + 加色混合 + 半透明）
 func _renderer(pos: Vector2, wid: String, element: String, alpha: float,
 		angle: float, zoom: float, ghost: bool = false) -> void:
 	var def := WeaponData.get_def(wid)
 	var shape := ProceduralWeaponRenderer.shape_from_name(String(def.get("shape", "")))
 	var upright := bool(def.get("upright", false))
 	var tip: Vector2 = def.get("tip", Vector2(22, 0))
+	if ghost:
+		var halo := ProceduralWeaponRenderer.new()
+		halo.configure(shape, element, tip.length(), 1, upright, wid)
+		halo.material = SharedMaterials.add_blend()
+		halo.scale = Vector2.ONE * (zoom * 0.55 * SwordPhantom.HALO_SCALE_MULT)
+		halo.position = pos
+		halo.rotation = angle
+		var h_tint := GameStyle.fx_hdr_element(element)
+		h_tint.a = alpha * SwordPhantom.HALO_ALPHA
+		halo.modulate = h_tint
+		add_child(halo)
+
 	var r := ProceduralWeaponRenderer.new()
 	r.configure(shape, element, tip.length(), 1, upright, wid)
 	r.scale = Vector2.ONE * (zoom * 0.55)

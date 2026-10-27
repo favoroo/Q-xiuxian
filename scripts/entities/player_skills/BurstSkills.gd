@@ -73,12 +73,16 @@ static func call_thunder(p) -> bool:
 	JuiceEffect.spawn_shockwave(p.get_parent(), strike_pos, ThunderData.RADIUS,
 		GameStyle.GOLD_EDGE, 0.3)
 	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
+	# 2026-10-27 电刀化收尾：雷柱禁分支/余韵（allow_branch=false），空气里只留一条贯顶主干；
+	# 落点补缠身电，电落在敌人身上。落点横向抖动是纯表现，改走全局 randf ——
+	# 旧写法碰 GameManager.rng 会挪动后续掉落/伤害的随机序列（铁律 15）。
 	var bolt_parent: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
 	if bolt_parent != null:
 		var bolt := LightningBolt.acquire(bolt_parent)
-		var sky_x_offset: float = GameManager.rng.randf_range(-24.0, 24.0) if GameManager.rng != null else 0.0
+		var sky_x_offset := randf_range(-24.0, 24.0)
 		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35)
+		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35, Color(0, 0, 0, 0), false)
+		JuiceEffect.spawn_body_arcs(bolt_parent, strike_pos, GameStyle.GOLD_EDGE)
 	if p.skill_vfx != null:
 		p.skill_vfx.on_thunder_cast()
 	p.play_squash(Vector2(1.08, 0.92), 0.12)

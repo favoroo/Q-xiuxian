@@ -55,6 +55,11 @@ var _trail_root: Node2D = null
 var _trail_glow: Line2D = null
 var _trail_core: Line2D = null
 var _trail_pts := PackedVector2Array()
+var trail_enabled: bool = true:
+	set(v):
+		trail_enabled = v
+		if not trail_enabled:
+			_trail_reset()
 
 func configure(p_mode: ArcMode, p_element: String) -> void:
 	mode = p_mode
@@ -64,6 +69,8 @@ func _ready() -> void:
 	_draw_phase = fposmod(float(get_instance_id() % 97) * 0.001, _redraw_interval())
 	set_process(false)
 	_build_trail()
+	if not trail_enabled:
+		_trail_reset()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED:
@@ -121,7 +128,7 @@ func _make_trail_line(width: float, head_alpha: float) -> Line2D:
 ## 宽层吃元素主刃色、窄层吃 FX_HDR 白芯超白，线自身 modulate 乘渐变 alpha，
 ## 挥砍淡出时宿主的 modulate.a 会一并传播进来收尾。
 func _trail_sample() -> void:
-	if _trail_root == null:
+	if not trail_enabled or _trail_root == null:
 		return
 	var pal := _palette(element)
 	_trail_glow.modulate = pal["main"]

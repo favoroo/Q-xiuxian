@@ -57,6 +57,7 @@ func _run() -> void:
 	await _case_looter_flee()
 	await _case_looter_corner()
 	await _case_looter_stones()
+	await _case_looter_panic_and_escape()
 	await _case_mutation_once()
 	await _case_golem_slam()
 	_case_boss_not_mutated()
@@ -147,6 +148,25 @@ func _case_looter_stones() -> void:
 	jinchan.take_damage(99999.0, Vector2.ZERO)
 	await get_tree().process_frame
 	_c.equals(GameManager.spirit_stones - before, 25, "击杀金蟾 +25 金币")
+
+## ②c 金蟾：落单仓皇遁逃与遁地注销（限时未伏诛遁走，不再阻碍提前清场）
+func _case_looter_panic_and_escape() -> void:
+	var jinchan := _spawn_enemy("res://scenes/entities/JinChanEnemy.tscn", Vector2(200, 0))
+	await get_tree().process_frame
+	_c.check(jinchan.move_speed <= 180.0, "金蟾移速合理化（基础 <= 180）")
+	jinchan._flee_pause_timer = 0.5
+	jinchan.take_damage(1.0, Vector2.ZERO)
+	_c.equals(jinchan._flee_pause_timer, 0.0, "金蟾受击惊醒打断停顿")
+
+	jinchan.trigger_looter_panic()
+	_c.check(jinchan._flee_panic, "触发金蟾落单仓皇遁逃")
+	_c.check(jinchan._flee_escape_timer > 0.0, "开启遁逃倒计时")
+
+	var enemies_before := GameManager.enemy_count
+	jinchan.escape_burrow()
+	await get_tree().process_frame
+	_c.check(not jinchan.is_in_group("enemies"), "遁地后退出 enemies 组")
+	_c.equals(GameManager.enemy_count, enemies_before - 1, "遁地后敌人计数 -1")
 
 ## ④ 精英变异：只触发一次，三种精英各拿到自己的新行为
 func _case_mutation_once() -> void:

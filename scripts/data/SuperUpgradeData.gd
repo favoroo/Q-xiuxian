@@ -104,6 +104,7 @@ const CARDS: Array[Dictionary] = [
 	{"id": "super_dixue", "grant_item": "shen_dixue", "kind": "ritual"},
 	{"id": "super_yixing", "grant_item": "shen_yixing", "kind": "ritual"},
 	{"id": "super_xianji", "grant_item": "shen_xianji", "kind": "ritual"},
+	{"id": "super_cuijue", "grant_item": "shen_cuijue", "kind": "ritual"},
 ]
 
 ## 权重：共鸣最高（凑齐两条道后才出现，本身就是回报）> 道途卡 > 仪式卡；命中构筑 ×1.5

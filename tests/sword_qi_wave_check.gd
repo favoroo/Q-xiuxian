@@ -80,9 +80,13 @@ func _case_hits_far_enemy() -> void:
 		target.queue_free()
 		w.queue_free()
 		return
+	_c.check(wave._arc != null and not wave._arc.trail_enabled, "剑气波禁用拖尾渲染（trail_enabled=false）")
 	var hit := false
+	var trail_empty := true
 	for i in range(MAX_WAIT_FRAMES):
 		await get_tree().physics_frame
+		if is_instance_valid(wave) and wave._arc != null and wave._arc._trail_pts.size() > 0:
+			trail_empty = false
 		if not is_instance_valid(target):
 			hit = true
 			break
@@ -90,6 +94,7 @@ func _case_hits_far_enemy() -> void:
 			hit = true
 			break
 	_c.check(hit, "剑气咬到 200px 外的敌人（远超本体 75px 判定圆）")
+	_c.check(trail_empty, "剑气飞行全程不产生拖尾点（_trail_pts 恒为空）")
 	w.queue_free()
 	if is_instance_valid(target):
 		target.queue_free()

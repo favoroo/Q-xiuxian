@@ -5,7 +5,7 @@ extends Node2D
 ## 用户口径（两轮）：①「我要的不是发一个弹丸出去，而是一道完整的剑弧出去，这才叫剑气」；
 ## ②「直接改变这个近战武器的攻击方式，不管怎么攻击都是挥出一道剑气，而不是一下近战一下剑气」。
 ## 所以本实体是【近战/横扫开启剑气凌霄后的唯一伤害来源】：本体圆/扇面判定整段让位，
-## 整道弧（±70° 锥形刃带 + 元素配色 + HDR 亮芯 + 世界坐标短拖尾）就是那一刀。
+## 整道弧（±70° 锥形刃带 + 元素配色 + HDR 亮芯，无飞行长拖尾）就是那一刀。
 ##
 ## 判定与视觉同源（项目铁律 6）：每物理帧以波心查一圈敌人，再按方位过滤出
 ## 「前方 ±70°+宽容扇形」的目标 —— 剑弧是整片扫过去的气，贴身的也在扇区里；
@@ -96,6 +96,7 @@ static func travel_time_for(eff_range: float) -> float:
 
 func _ready() -> void:
 	_arc = WeaponArcRenderer.new()
+	_arc.trail_enabled = false
 	_arc.configure(WeaponArcRenderer.ArcMode.MELEE, element)
 	_arc.visible = false
 	_arc.modulate.a = 1.0
@@ -117,6 +118,7 @@ func activate() -> void:
 	_has_mech = OnHitEffects.any_enabled()
 	_mech = OnHitEffects.snapshot() if _has_mech else {}
 	if _arc != null:
+		_arc.trail_enabled = false
 		_arc.configure(WeaponArcRenderer.ArcMode.MELEE, element)
 		_arc.modulate = Color.WHITE
 		_arc.rotation = 0.0

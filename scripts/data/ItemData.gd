@@ -820,7 +820,7 @@ const DEFS: Dictionary = {
 		"shen_wanjian_guizong": {
 			"name": "万剑归宗", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_lijian_shi.png",
-			"desc": "剑系武器出手攒剑意，攒满幻化剑阵并驻场数秒",
+			"desc": "剑系武器出手攒剑意（头顶计数），攒满幻化剑阵并驻场数秒",
 			"apply": {},
 			"sword_qi": 1.0,
 		},
@@ -983,6 +983,16 @@ const DEFS: Dictionary = {
 			"desc": "武器槽 -1，其余武器伤害大涨",
 			"apply": {"weapon_damage_mult": 0.60},
 			"weapon_slot_bonus": -1,
+		},
+		# 2026-10-27 飞升悟道补「技能冷却」入口：此前飞升屏（5/10/15 回合）抽不到任何
+		# 减随行技能冷却的卡，只有普通悟道的凝神/坐忘与道具三档。取 40% 是对齐
+		# SKILL_CD_CAP(0.7) 的「一张卡走完大半程」：单独拿一次闪避 3→1.8s、治疗 15→9s；
+		# 再叠两张坐忘即到顶，不与上限空转。按飞升卡「要有真代价」的规矩配 -20 生命上限。
+		"shen_cuijue": {
+			"name": "燃血催诀", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_ningshen_fu.png",
+			"desc": "燃血催动口诀：随行技能冷却大幅缩短，代价是生命上限下降",
+			"apply": {"skill_cooldown_mult": 0.40, "max_hp": -20.0, "hp_heal": -20.0},
 		},
 	}
 

@@ -22,9 +22,11 @@ const COMBO_WINDOW := 0.25
 const COMBO_TEXT_INTERVAL := 0.08
 
 ## 聚合判定纯函数（单测钉判据用）：只有带 combo_key 且非文字类的伤害跳字参与聚合；
-## DoT tick 与暴击同样并入（暴击把整条升到鎏金样式），文字类读数保持逐条独立
+## DoT tick 与暴击同样并入（暴击把整条升到鎏金样式），文字类读数保持逐条独立。
+## combo_key 为负数（约定 -1）是「链电独立条」哨兵：逐跳各发一条、带身份色，绝不并入同目标
+## 聚合窗 —— 否则紫电/雷劫伤害被并进武器主跳字（128×2），玩家读不出链电打了多少。
 static func can_merge(combo_key: int, is_text_number: bool) -> bool:
-	return combo_key != 0 and not is_text_number
+	return combo_key > 0 and not is_text_number
 
 ## 聚合条文本：单发就是数字；2 连及以上显示累计值与 ×N 后缀（128×3）
 static func format_combo(sum: int, count: int) -> String:
@@ -33,6 +35,9 @@ static func format_combo(sum: int, count: int) -> String:
 static var _normal_settings: LabelSettings
 static var _crit_settings: LabelSettings
 static var _heal_settings: LabelSettings
+## 链电身份色跳字的共享样式表（按 tint 缓存）：每次链跳都 new LabelSettings 会在混战里持续分配，
+## 而每路雷电的 tint 是固定几种（紫电/雷劫/反震/血海…），按色缓存即可。
+static var _tinted_settings: Dictionary = {}
 ## 上次建样式表时记下的主题 id：切主题后下次 spawn 重建 LabelSettings，
 ## 让 _crit_settings.font_color（随主题 static var）切主题后对新跳字立即生效
 static var _last_theme_id: StringName = &""
@@ -77,6 +82,7 @@ var _combo_hits: int = 0
 static func clear_cache() -> void:
 	_pool.clear()
 	_combos.clear()
+	_tinted_settings.clear()
 	_host = null
 	_created = 0
 	_normal_settings = null
@@ -102,6 +108,8 @@ static func _ensure_settings() -> void:
 	if _normal_settings != null and GameStyle.current_theme() == _last_theme_id:
 		return
 	_last_theme_id = GameStyle.current_theme()
+	# 主题重建会换字体/主题色，染色样式表跟着作废（下次 spawn 按新字体重建）
+	_tinted_settings.clear()
 
 	_normal_settings = LabelSettings.new()
 	_normal_settings.font = GameStyle.body_font()
@@ -123,6 +131,26 @@ static func _ensure_settings() -> void:
 	_heal_settings.font_color = GameStyle.GOOD
 	_heal_settings.outline_size = 4
 	_heal_settings.outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+## 链电身份色跳字的样式（按 tint 缓存）：色相保留身份色、亮度提到暗底可读档。
+## 归一 + 向白提亮的口径与 LightningBolt 芯线同源（HDR tint 直接当字色会过曝/发灰，
+## 世界空间文本也不吃辉光），保证紫电紫、雷劫绯紫、反震灵蓝各自可辨。
+static func _settings_for_tint(tint: Color) -> LabelSettings:
+	var key: int = tint.to_rgba32()
+	if _tinted_settings.has(key):
+		return _tinted_settings[key]
+	var max_c := maxf(tint.r, maxf(tint.g, tint.b))
+	var col := Color(1.0, 1.0, 1.0, 1.0)
+	if max_c > 0.001:
+		col = Color(tint.r / max_c, tint.g / max_c, tint.b / max_c, 1.0).lerp(Color(1, 1, 1, 1), 0.45)
+	var s := LabelSettings.new()
+	s.font = GameStyle.body_font()
+	s.font_size = 15
+	s.font_color = col
+	s.outline_size = 4
+	s.outline_color = Color(0.02, 0.03, 0.06, 0.92)
+	_tinted_settings[key] = s
+	return s
 
 ## 池宿主：常驻场景根下的一个 Node2D，跳字全部挂在它下面、用完不摘（省掉反复 reparent）
 static func _ensure_host(scene: Node) -> void:
@@ -169,9 +197,10 @@ static func _scene_root_for(node: Node) -> Node:
 	return cur
 
 ## 生成一条跳字。parent 仅用于定位场景树，节点实际挂在池宿主下（保持既有调用签名）。
-## combo_key 非 0 且为数字类（无 custom_text）时参与同目标窗口聚合：
+## combo_key 为非 0 且为数字类（无 custom_text）时参与同目标窗口聚合：
 ## 同一敌人 COMBO_WINDOW 内的伤害并入同一条（累计 + ×N），高频集火不再刷屏顶字。
-static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false, custom_text: String = "", combo_key: int = 0) -> void:
+## combo_key < 0（约定 -1）= 独立条，不聚合；tint 的 alpha>0 时用该身份色渲染字（链电专用）。
+static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false, custom_text: String = "", combo_key: int = 0, tint: Color = Color(0, 0, 0, 0)) -> void:
 	# 开关走 GameFeel 每帧 memo：spawn 每次命中都调，原 get_val 每发 2 个 String 分配
 	if not GameFeel.damage_numbers_enabled():
 		return
@@ -209,7 +238,8 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 			settings = _crit_settings
 		else:
 			text = str(amount)
-			settings = _normal_settings
+			# 链电身份色（tint.alpha>0）：紫电/雷劫各自可辨的独立读数；普通命中仍走白字
+			settings = _settings_for_tint(tint) if tint.a > 0.0 else _normal_settings
 
 	var n := _acquire()
 	if n == null or not is_instance_valid(n):

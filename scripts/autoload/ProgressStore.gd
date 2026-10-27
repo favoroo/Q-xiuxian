@@ -371,14 +371,10 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 			"max_class_counts": gm.max_class_counts,
 			"max_element_spread": gm.max_element_spread,
 		}
-		gm.last_run_new_achievements = []
-		for aid in AchievementData.evaluate_new_unlocks(run_ctx_e, gm.career_stats, gm.unlocked_achievements):
-			gm.unlocked_achievements.append(aid)
-			gm.last_run_new_achievements.append(aid)
-			_apply_achievement_reward(gm, aid)
+		var ended_new := _settle_run_achievements(gm, run_ctx_e)
 		save_from(gm)
-		if not gm.last_run_new_achievements.is_empty():
-			gm.achievements_unlocked.emit(gm.last_run_new_achievements)
+		if not ended_new.is_empty():
+			gm.achievements_unlocked.emit(ended_new)
 		return
 
 	# ---------- 路径 2：正常结算 ----------
@@ -391,6 +387,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	var prev_best_kills := int(gm.career_stats.get("best_kills", 0))
 	var prev_best_wave := int(gm.career_stats.get("best_wave", 0))
 	var prev_wins: int = int(gm.get_cultivator_record(cid_rec).get("wins", 0))
+	var prev_best_danger := int(gm.career_stats.get("best_danger_cleared", -1))
 
 	gm.career_stats["total_runs"] = int(gm.career_stats.get("total_runs", 0)) + 1
 	if victory:
@@ -406,6 +403,16 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 
 	if victory and not gm.cultivator_id.is_empty():
 		var prev_d := int(gm.cultivator_best_danger.get(gm.cultivator_id, -1))
+		# 逐级解锁与新皮肤（2026-10-27）：实物/玩法层解锁排在最前，最先被结算屏展示
+		if gm.danger_level > prev_best_danger and gm.danger_level < GameBalance.DANGER_MAX:
+			gm.last_run_new_records.append("难度解锁 · 「%s」" % AchievementData.danger_name(gm.danger_level + 1))
+		var skin_idx := prev_wins
+		if skin_idx < SkinData.THEMES.size():
+			var skin_theme := SkinData.get_theme(skin_idx)
+			if not skin_theme.is_empty():
+				var cdef_skin := CultivatorData.get_def(cid_rec)
+				gm.last_run_new_records.append("新皮肤 · %s「%s」" % [
+					String(cdef_skin.get("name", "角色")), String(skin_theme.get("name", ""))])
 		if gm.danger_level > prev_d:
 			gm.cultivator_best_danger[gm.cultivator_id] = gm.danger_level
 			# 境界突破提示（该角色首次通关此难度 → 境界称号升档，纯荣誉不发奖励）
@@ -417,12 +424,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
 	if victory:
 		# 生涯最高通关难度（成就进度「最高通关 X」口径，难度达成型成就判定不受它影响）
-		var prev_best_danger := int(gm.career_stats.get("best_danger_cleared", -1))
 		gm.career_stats["best_danger_cleared"] = maxi(prev_best_danger, gm.danger_level)
-		# 逐级解锁播报（2026-10-25）：本局首次把生涯最高通关档推高一档 ⇒ 下一档刚解锁。
-		# 判定与 GameManager.max_danger_unlocked() 同一套账（best + 1），不会出现「播了却点不了」。
-		if gm.danger_level > prev_best_danger and gm.danger_level < GameBalance.DANGER_MAX:
-			gm.last_run_new_records.append("难度解锁 · 「%s」" % AchievementData.danger_name(gm.danger_level + 1))
 
 	# 每角色生涯档案累加
 	var rec: Dictionary = gm.cultivator_records.get(cid_rec, {})
@@ -480,15 +482,23 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		"max_class_counts": gm.max_class_counts,
 		"max_element_spread": gm.max_element_spread,
 	}
-	var newly := AchievementData.evaluate_new_unlocks(run_ctx, gm.career_stats, gm.unlocked_achievements)
-	gm.last_run_new_achievements = []
-	for aid in newly:
+	var ended_new := _settle_run_achievements(gm, run_ctx)
+	save_from(gm)
+	if not ended_new.is_empty():
+		gm.achievements_unlocked.emit(ended_new)
+
+## 结算成就收尾（无尽终局 / 正常结算两条路径共用）：只判定「结算这一刻新达成」的并追加。
+## 局内 check_live_achievements 已经结掉的成就不再回判，但**保留在 last_run_new_achievements 里** ——
+## 结算屏按整局汇总展示。旧写法在这里整体清空，结果中途解锁的成就只剩一闪而过的横幅，
+## 结算页一张卡都不显示，玩家以为没解锁。
+static func _settle_run_achievements(gm: Node, run_ctx: Dictionary) -> Array:
+	var ended_new: Array = []
+	for aid in AchievementData.evaluate_new_unlocks(run_ctx, gm.career_stats, gm.unlocked_achievements):
 		gm.unlocked_achievements.append(aid)
 		gm.last_run_new_achievements.append(aid)
 		_apply_achievement_reward(gm, aid)
-		save_from(gm)
-	if not gm.last_run_new_achievements.is_empty():
-		gm.achievements_unlocked.emit(gm.last_run_new_achievements)
+		ended_new.append(aid)
+	return ended_new
 
 ## 局内成就即时判定（2026-10-25 解锁提示升级）：
 ## 只在回合结束时调一次（不是逐帧轮询），把「打到第 5 波」「攒够 100 金币」这类

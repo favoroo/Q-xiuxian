@@ -692,6 +692,12 @@ func _physics_process(delta: float) -> void:
 	if skill_vfx != null:
 		if GameManager.frenzy_enabled > 0.0:
 			skill_vfx.sync_frenzy(GameManager.frenzy_stacks, FrenzyData.MAX_STACKS)
+		var has_sword_qi: bool = float(StatSystem.super_hook_snapshot(GameManager).get("sword_qi", 0.0)) > 0.0
+		if has_sword_qi:
+			skill_vfx.sync_sword_qi(SwordPhantom.charge(), SwordPhantom.CHARGE_EVERY,
+				SwordPhantom.formation_active(), SwordPhantom.formation_left() / SwordPhantom.FORMATION_TIME, true)
+		elif skill_vfx.sword_qi_visible:
+			skill_vfx.sync_sword_qi(0, SwordPhantom.CHARGE_EVERY, false, 0.0, false)
 		skill_vfx.update_vfx(delta, _move_is_moving, velocity)
 
 	# 6. 统一调度各武器索敌目标（多向分流 + 贴身危急集火 + 动态扇形展开）

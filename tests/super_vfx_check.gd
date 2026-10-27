@@ -12,6 +12,12 @@ extends Node
 ##   ④ 反震电场的演出环半径 == BalanceChain.THORNS_RADIUS == 判定搜索半径
 ##      （画多大 == 判多大，项目铁律 7；THORNS_RADIUS 此前是零引用死常量）。
 ##   ⑤ 五行归一三系同挂时染色会轮换，不再永远只显示冰蓝。
+##   ⑥ 电刀化（2026-10-27）：链电首跳只在触发敌身上结算、不做幻影目标；
+##      宝箱/灵草这类 3 参 take_damage 的交互物不得进链电目标表（5 参调用会直接报错）。
+##   ⑦ 链电伤害跳字是独立条：combo_key=-1 不进同目标聚合表、用身份色渲染。
+##   ⑧ 链电传导弧 allow_branch=false：不甩空气分支电弧。
+##   ⑨ 天罚雷柱同一条口径：贯顶雷柱禁分支/余韵（空气里只许一条干净主线），
+##      落点补缠身电；伤害走独立跳字（不并进武器暴击主跳字）。
 ##
 ## 运行: godot --headless --path . res://tests/SuperVfxCheck.tscn
 ## 退出码 0 且末行 SUPER_VFX_RESULT: ALL PASS
@@ -21,6 +27,10 @@ extends Node
 ##   - 把 LightningBolt 的芯线改回固定白芯 ⇒ ③ 报红
 ##   - 反震改回 CHAIN_RADIUS（240）⇒ ④ 报红
 ##   - _status_tint 改回「冰缓硬盖」⇒ ⑤ 报红
+##   - 链电改回「从玩家/尸体向敌人画入站长线」或首跳跳过自身 ⇒ ⑥ 报红
+##   - EnemyBase 跳字改回统一 combo_key=instance_id ⇒ ⑦ 报红
+##   - activate 默认对链电放行分支 ⇒ ⑧ 报红
+##   - sky_bolt 的 _draw_bolt 漏传 allow_branch=false / 漏传 tint ⇒ ⑨ 报红
 
 const EPS := 0.0001
 const MAX_WAIT_FRAMES := 180
@@ -44,6 +54,10 @@ func _run() -> void:
 
 	await _case_sky_bolt_damage()
 	await _case_zidian_on_hit()
+	await _case_chain_targets()
+	_case_chain_number_standalone()
+	_case_chain_bolt_no_air()
+	await _case_sky_bolt_no_air()
 	await _case_gates_independent()
 	await _case_tint_reaches_core()
 	_case_thorns_radius_shared()
@@ -113,6 +127,120 @@ func _case_zidian_on_hit() -> void:
 		target1.queue_free()
 	if is_instance_valid(target2):
 		target2.queue_free()
+	await get_tree().process_frame
+
+## ⑥ 电刀化目标口径：单敌只结算触发敌自身（不凭空多跳）；多敌按最近邻链跳；
+## 宝箱/灵草（3 参 take_damage）永不被选成链电目标。
+func _case_chain_targets() -> void:
+	ChainLightning.reset_gate()
+	# 交互物过滤：把一只普通敌人临时挂进 "chests" 组，模拟宝箱/灵草
+	var box := _spawn_enemy(Vector2(500.0, 300.0))
+	box.add_to_group("chests")
+	_c.check(not ChainLightning._is_chain_target(box),
+		"宝箱/灵草类交互物不进链电目标表（3 参 take_damage 不会被 5 参调用打到）")
+	box.remove_from_group("chests")
+
+	# 单敌：链长 = 1，首跳即锁定的敌自身（不画入站空气线）
+	var hp_before: float = box.current_hp
+	var n: int = ChainLightning.strike(_world, box.global_position + Vector2(80.0, 0.0), null, 30.0)
+	await get_tree().process_frame
+	_c.equals(n, 1, "半径内只有一只敌人时链长 = 1（不凭空多跳）")
+	_c.check(box.current_hp < hp_before, "首跳在锁定的敌人身上结算伤害")
+
+	# 多敌：首跳锁定给定敌，第二跳落到相邻敌
+	ChainLightning.reset_gate()
+	var a := _spawn_enemy(Vector2(220.0, 260.0))
+	var b := _spawn_enemy(Vector2(320.0, 260.0))
+	await get_tree().process_frame
+	var b_before: float = b.current_hp
+	var n2: int = ChainLightning.strike(_world, a.global_position, a, 40.0)
+	# 第二跳按 HOP_VISUAL_DELAY 延时结算；headless 的 SceneTreeTimer 与墙钟会漂移，
+	# 按墙钟自旋等 hp 变化（同 DamageComboCheck 口径），最多 300ms。
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 300 and is_instance_valid(b) and b.current_hp >= b_before:
+		await get_tree().process_frame
+	_c.check(n2 >= 2, "相邻敌人进入链式弹射（实得 %d 跳）" % n2)
+	_c.check(is_instance_valid(b) and b.current_hp < b_before, "第二跳伤害落在相邻敌人身上")
+
+	for e in [box, a, b]:
+		if is_instance_valid(e):
+			e.queue_free()
+	await get_tree().process_frame
+
+## ⑦ 链电伤害跳字是独立条：combo_key=-1 不进同目标聚合表，且按身份色渲染（紫罗兰系）
+func _case_chain_number_standalone() -> void:
+	_c.check(not DamageNumber.can_merge(-1, false), "链电独立条（combo_key=-1）不参与同目标聚合")
+	_c.check(DamageNumber.can_merge(4321, false), "普通同目标 key 仍参与聚合（口径不回退）")
+	var saved_numbers := bool(SettingsManager.get_val(&"display", &"damage_numbers", true))
+	SettingsManager.set_val(&"display", &"damage_numbers", true, false)
+	GameFeel.invalidate_memo()
+	var center := get_viewport().get_visible_rect().get_center()
+	var before: int = DamageNumber.active_count
+	var combos_before: int = DamageNumber.combo_count()
+	DamageNumber.spawn(_world, center, 12, false, "", -1, GameStyle.FX_HDR_ZIDIAN)
+	DamageNumber.spawn(_world, center, 9, false, "", -1, GameStyle.FX_HDR_ZIDIAN)
+	_c.equals(DamageNumber.active_count - before, 2,
+		"同一目标两跳链电各出一条独立跳字（走聚合只会出 1 条）")
+	_c.equals(DamageNumber.combo_count(), combos_before, "链电跳字不写入同目标聚合表")
+	var st: LabelSettings = DamageNumber._settings_for_tint(GameStyle.FX_HDR_ZIDIAN)
+	_c.check(st.font_color.b > st.font_color.r and st.font_color.r > st.font_color.g,
+		"链电跳字按身份色渲染（紫罗兰系 b>r>g，实得 %.2f/%.2f/%.2f）" % [
+			st.font_color.r, st.font_color.g, st.font_color.b])
+	SettingsManager.set_val(&"display", &"damage_numbers", saved_numbers, false)
+	GameFeel.invalidate_memo()
+
+## ⑧ 链电传导弧禁用空气分支：allow_branch=false 时只画主干芯线
+func _case_chain_bolt_no_air() -> void:
+	var bolt := LightningBolt.acquire(_world)
+	_c.check(bolt != null, "取到一条链电电弧实例")
+	if bolt == null:
+		return
+	bolt.activate(Vector2(100.0, 100.0), Vector2(260.0, 100.0), GameStyle.FX_HDR_ZIDIAN,
+		1.0, Color(0, 0, 0, 0), false)
+	_c.check(bolt._line_core.visible, "allow_branch=false 时主干芯线照常绘制")
+	_c.check(not bolt._line_branch_core.visible, "allow_branch=false 时不甩空气分支电弧")
+
+## ⑨ 天罚电刀化：贯顶雷柱与落点缠身电都禁分支/余韵（空气里只许一条干净主线），
+## 且这份伤害走独立跳字 —— 旧写法三段都会漏（分支由默认值放行；伤害并进武器暴击主跳字）。
+func _case_sky_bolt_no_air() -> void:
+	# 先等上一条用例（默认放行分支的 activate）的电弧演完回池，
+	# 否则统计会把旧弧的分支算到本次头上（headless 的 Tween 与墙钟不同步，按墙钟等）
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 160:
+		await get_tree().process_frame
+	ChainLightning.reset_gate()
+	var e := _spawn_enemy(get_viewport().get_visible_rect().get_center())
+	await get_tree().process_frame
+	# 跳字必须开着：这条断言要看到「新增一条」，否则空判
+	var saved_numbers := bool(SettingsManager.get_val(&"display", &"damage_numbers", true))
+	SettingsManager.set_val(&"display", &"damage_numbers", true, false)
+	GameFeel.invalidate_memo()
+	var combos_before: int = DamageNumber.combo_count()
+	var nums_before: int = DamageNumber.active_count
+
+	ChainLightning.sky_bolt(_world, e, 12.0)
+
+	_c.equals(DamageNumber.active_count - nums_before, 1, "天罚伤害独立出一条跳字")
+	_c.equals(DamageNumber.combo_count(), combos_before,
+		"天罚伤害不写入同目标聚合表（不并进武器暴击主跳字）")
+	var drawn := 0
+	var branched := 0
+	var host: Node = LightningBolt._host
+	if host != null and is_instance_valid(host):
+		for child in host.get_children():
+			var b := child as LightningBolt
+			if b == null or not b.visible or not b._line_core.visible:
+				continue
+			drawn += 1
+			if b._line_branch_core.visible:
+				branched += 1
+	_c.check(drawn >= 2, "天罚画出贯顶雷柱 + 落点缠身电（实得 %d 条）" % drawn)
+	_c.equals(branched, 0, "天罚不甩空气分支电弧 / 空气余韵")
+
+	SettingsManager.set_val(&"display", &"damage_numbers", saved_numbers, false)
+	GameFeel.invalidate_memo()
+	if is_instance_valid(e):
+		e.queue_free()
 	await get_tree().process_frame
 
 ## ② 演出闸按路径独立：紫电与雷劫在同一毫秒各触发一次，两条都必须放行

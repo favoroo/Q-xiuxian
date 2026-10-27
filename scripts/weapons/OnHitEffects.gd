@@ -207,6 +207,8 @@ static func on_projectile_hit(host: Node, enemy: Node2D, damage: float, is_crit:
 ## 2026-10-26 演出重做：改用 BalanceChain.THORNS_RADIUS（旧写法让这个常量成了死值，
 ## 实际走的是链电通用 240px），并补一道同半径的冰蓝冲击环 —— 画多大 == 判多大，
 ## 玩家一眼能看出「反震圈到哪」。染色走水系灵蓝，与紫电/雷劫/天罚彻底分开。
+## 2026-10-27 电刀化：玩家身上只有原地爆闪（起跳锚点），传导弧由 strike 锁最近敌起跳、
+## 只画敌人↔敌人之间 —— 旧写法从玩家坐标画一条入站长线，玩家看到的是「空气里的电」。
 static func on_player_hurt(player: Node2D) -> void:
 	if player == null or not is_instance_valid(player):
 		return
@@ -225,6 +227,8 @@ static func on_player_hurt(player: Node2D) -> void:
 ## 血海护盾破碎：盾被打穿这一刻向周身放一片电（基值 + 生命比例 + 元素加成，BalanceChain）。
 ## 2026-10-26 演出重做：血红染色 + 同半径冲击环 + 四向短弧 nova，
 ## 读起来是「血盾炸开」而不是又一道普通白雷。
+## 2026-10-27 电刀化：四向短弧 nova 已随全局电刀化下线（那是不带敌人的空气弧）；
+## 破盾点只留爆闪 + 冲击环，传导弧由 strike 自动锁最近敌起跳、只在敌人之间。
 static func on_shield_broken(player: Node2D) -> void:
 	if player == null or not is_instance_valid(player):
 		return

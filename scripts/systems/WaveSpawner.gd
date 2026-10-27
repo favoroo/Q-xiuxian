@@ -29,6 +29,12 @@ var _budget_exp_sum: float = 0.0  ## 已刷出敌人 exp_reward 累计（补差�
 const EARLY_CLEAR_CONFIRM := 0.4
 var _clear_hold: float = 0.0    ## 本回合已连续满足「敌潮已尽」的秒数
 
+## 成就横幅排队节奏：略大于 HUD 横幅自身补间总长（0.18 + 0.22 + 1.9 + 0.35），
+## 多条成就同时达成时一条播完再接下一条，不互相顶掉。
+const ANNOUNCE_CADENCE := 2.7
+var _announce_queue: Array[String] = []   ## 待播成就横幅文案
+var _announce_draining: bool = false      ## 排队播报协程是否在跑（防重入）
+
 # —— 分批清剿制与并发推进（2026-10-15）——
 var _batch_cooldown: float = 0.0    ## 清剿完一批后的喘息呼吸倒计时（秒）
 var _batch_hold_time: float = 0.0    ## 当前批次在场对峙时长（秒，防挂机/中后期合围）
@@ -286,9 +292,33 @@ func _process_fight(delta: float) -> void:
 			return
 	else:
 		_clear_hold = 0.0
+		_check_looter_panic()
 
 	if wave_timer <= 0.0:
 		end_wave()
+
+## 检查场上是否仅剩金蟾：常规敌潮预算已刷尽、小怪全被消灭，通知金蟾进入仓皇遁逃（限时 6 秒）
+func _check_looter_panic() -> void:
+	if _budget_used < _budget_total or _indicators_pending():
+		return
+	if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
+		return
+	if GameManager.enemy_count <= 0:
+		return
+	var has_regular: bool = false
+	var looters: Array = []
+	for e in GameManager.live_enemies:
+		if e == null or not is_instance_valid(e):
+			continue
+		if e.always_flee:
+			looters.append(e)
+		else:
+			has_regular = true
+			break
+	if not has_regular and not looters.is_empty():
+		for l in looters:
+			if l.has_method("trigger_looter_panic"):
+				l.trigger_looter_panic()
 
 ## 「敌潮已尽」：本回合刷怪预算全部刷入 + 场上一个活妖都没有（含尸体：dying 的还在登记表里，
 ## 所以要等塌缩动画落定才算清干净）。精英/魔君还没到场的头 1.5 秒一律不算，
@@ -555,17 +585,36 @@ func _enter_wave_break() -> void:
 	_open_shop_inner()
 
 ## 回合末成就播报：逐条走 HUD 现成的金色斜切横幅（announcement_triggered）。
-## 多条同时达成时不叠着弹 —— HUD 横幅是单条通道，后一条会顶掉前一条，
-## 所以这里只播第一条（最醒目的那条），其余交给结算屏与战绩页查阅。
+## HUD 横幅是单条通道（后一条会顶掉前一条），所以多项同时达成时按 ANNOUNCE_CADENCE
+## 排队播完 —— 只播第一条的话，玩家错过那 2 秒就再也看不到（结算屏只在本局结束时出现）。
 func _announce_live_achievements() -> void:
 	var newly := ProgressStore.check_live_achievements(GameManager)
 	if newly.is_empty():
 		return
-	var msg := ProgressStore.achievement_banner_text(String(newly[0]))
-	if msg.is_empty():
-		return
-	GameManager.announcement_triggered.emit(msg)
-	AudioManager.play_sfx("level_up", 0.55)
+	for aid in newly:
+		var msg := ProgressStore.achievement_banner_text(String(aid))
+		if not msg.is_empty():
+			_announce_queue.append(msg)
+	if not _announce_draining:
+		_drain_announcements()
+
+## 排队播报协程：定时器带 process_always，结算/加点暂停态下也照常走完。
+func _drain_announcements() -> void:
+	_announce_draining = true
+	while not _announce_queue.is_empty():
+		if not is_inside_tree():
+			_announce_queue.clear()
+			_announce_draining = false
+			return
+		# 局已终（结算屏已接管画面）：剩下的交给结算屏汇总，别在结算页上继续弹战斗横幅
+		if GameManager.is_game_over:
+			break
+		var msg: String = _announce_queue.pop_front()
+		GameManager.announcement_triggered.emit(msg)
+		AudioManager.play_sfx("level_up", 0.55)
+		await get_tree().create_timer(ANNOUNCE_CADENCE, true).timeout
+	_announce_queue.clear()
+	_announce_draining = false
 
 ## 超级悟道选完：回到回合间隙闸口，按顺序继续普通加点 / 商店
 func _on_super_alloc_finished() -> void:

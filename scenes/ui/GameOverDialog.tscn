@@ -4,9 +4,9 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 32.0
-content_margin_top = 26.0
+content_margin_top = 16.0
 content_margin_right = 32.0
-content_margin_bottom = 26.0
+content_margin_bottom = 16.0
 bg_color = Color(0.968627, 0.952941, 0.909804, 1)
 skew = Vector2(0, 0)
 border_width_left = 3

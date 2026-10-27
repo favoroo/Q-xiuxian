@@ -177,7 +177,7 @@ var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高�
 var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
 var skin_selections: Dictionary = {}         ## 每位角色已选皮肤 {cultivator_id: skin_idx}（缺省/-1 = 原色）
 var run_history: Array = []                  ## 最近 10 局历史战报列表
-var last_run_new_achievements: Array = []    ## 本局刚刚新达成的成就 ID（供结算弹窗展示）
+var last_run_new_achievements: Array = []    ## 本局新达成的成就 ID（局内即时判定 + 结算判定累计，供结算弹窗汇总展示）
 
 # 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
 var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}

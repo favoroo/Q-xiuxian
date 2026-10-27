@@ -420,6 +420,36 @@ static func spawn_bolt_pop(parent: Node, pos: Vector2, col: Color = Color(2.4, 2
 		var spd := randf_range(70.0, 130.0)
 		fx._add_particle(Vector2.ZERO, Vector2(cos(a), sin(a)) * spd, 5.0, col, 1.4)
 
+# —— 电刀式「缠身电」（2026-10-27 紫电电刀化）——
+## 蜷弧根数 / 蜷弧活动半径（px，≈敌体量）/ 线宽倍率（相对 LightningBolt 基准）
+const BODY_ARC_COUNT := 3
+const BODY_ARC_RADIUS := 15.0
+const BODY_ARC_WIDTH := 0.85
+## 拥挤档（同屏敌≥24）减到 2 根：弧本体在该档已禁分支与余韵，一并省 LightningBolt 池体
+const BODY_ARC_COUNT_CROWDED := 2
+
+## 缠身电：链电落到敌人身上时，3 根短锯齿弧在身体轮廓内随机缠绕，两端都不出身体半径。
+## 这是电刀模式的「被电到」读数 —— 电只在敌人身上闪，空气里一条线都不许有
+## （旧写法是敌人↔敌人之间的全长穿越线 + 从中段甩向空白的随机分支/余韵，玩家读起来就是一屏乱线）。
+## 走 LightningBolt 池且 allow_branch=false：不甩中段分支、不出空气余韵微弧。纯表现随机。
+static func spawn_body_arcs(parent: Node, pos: Vector2, col: Color = Color(2.4, 2.3, 1.9),
+		radius: float = BODY_ARC_RADIUS, count: int = BODY_ARC_COUNT) -> void:
+	if parent == null or not is_instance_valid(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+	var n: int = BODY_ARC_COUNT_CROWDED if FxBudget.crowded else count
+	for i in n:
+		# 两端各取身体半径内的随机点：端点绝不落到体外，读作「电缠在这只怪身上」
+		var a0 := randf() * TAU
+		var a1 := a0 + PI + randf_range(-0.7, 0.7)
+		var from_p := pos + Vector2.from_angle(a0) * radius * randf_range(0.45, 1.0)
+		var to_p := pos + Vector2.from_angle(a1) * radius * randf_range(0.45, 1.0)
+		var bolt := LightningBolt.acquire(parent)
+		if bolt == null:
+			continue
+		bolt.activate(from_p, to_p, col, BODY_ARC_WIDTH, Color(0, 0, 0, 0), false)
+
 ## 所有 spawn 的前置：拿到有效场景根并保证池宿主已就位
 static func _ready_to_spawn(parent: Node) -> bool:
 	if parent == null or not is_instance_valid(parent):

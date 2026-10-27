@@ -287,20 +287,31 @@ func _screens() -> Array[Dictionary]:
 
 ## 结算屏解锁区最坏样本（2026-10-25 解锁大卡）：三条带图标的解锁卡同时出现，
 ## 且各取「名字最长」的那几条成就 —— 空列表时整块隐藏，不灌样本这一屏就量不到。
+## 2026-10-27 补最坏高度：解锁区带「本局解锁」标题且溢出条数并进标题，
+## 新纪录最多 3 行（超额折成汇总签），这里按 5 条成就 + 6 条纪录一起灌。
 func _stress_unlocks() -> void:
 	GameManager.last_run_new_achievements = []
-	# 按「成就名 + 奖励名」总长排序取前三条：最长的才代表真机最坏情况
+	# 按「成就名 + 奖励名」总长排序取前几条：最长的才代表真机最坏情况
 	var ranked: Array = []
 	for a in AchievementData.ACHIEVEMENTS:
 		var weight := String(a.get("name", "")).length() + String(a.get("reward_name", "")).length()
 		ranked.append([weight, String(a.get("id", ""))])
 	ranked.sort_custom(func(x, y): return int(x[0]) > int(y[0]))
-	for i in range(mini(3, ranked.size())):
+	for i in range(mini(5, ranked.size())):
 		GameManager.last_run_new_achievements.append(String(ranked[i][1]))
+	GameManager.last_run_new_records = [
+		"生涯新纪录 · 抵御第 20 波",
+		"境界突破 · 机关师 晋入「元婴」",
+		"难度解锁 · 「大乘」",
+		"角色首胜 · 机关师",
+		"新皮肤 · 机关师「虹霓」",
+		"生涯新纪录 · 击杀 999 只",
+	]
 
 ## 量完还原：别把应力样本留到下一屏（成就列表是全局状态）
 func _clear_unlocks() -> void:
 	GameManager.last_run_new_achievements = []
+	GameManager.last_run_new_records = []
 
 func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 	var node: Control = null

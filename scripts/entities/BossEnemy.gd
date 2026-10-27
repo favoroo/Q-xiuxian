@@ -591,11 +591,11 @@ func _enter_phase2() -> void:
 	# 不再叠第二处反馈 —— 「同一次事件只许一处发反馈」口径）。
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
 
-func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false) -> void:
+func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false, chain_tint: Color = Color(0, 0, 0, 0)) -> void:
 	if dying:
 		return
 	# Boss 抗击退：几乎推不动，走位压力全靠技能
-	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit, from_dot)
+	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit, from_dot, chain_tint)
 	if dying:
 		return
 	# 大比例掉血的镜头回应（2026-10-14）：Boss 挨一刀超过最大生命该比例时给一笔轻创伤，

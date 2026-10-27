@@ -32,9 +32,10 @@ extends Node2D
 # ---------------- 机制常量（数值唯一真话） ----------------
 
 ## 剑意槽容量：剑系武器每次出手 +1，攒满开阵。
-## 10 层 = 1 把剑约 10 秒一轮、6 把剑约 1.7 秒一轮；再叠上 4 秒驻场，
-## 6 剑构筑读作「4 秒剑阵 / 1.7 秒收势」的呼吸节奏 —— 剑越多阵越密，这正是卡名的意思。
-const CHARGE_EVERY := 10
+## 20 层 = 1 把剑约 20 秒一轮、6 把剑约 3.3 秒一轮；再叠上 4 秒驻场，
+## 6 剑构筑读作「4 秒剑阵 / 3.3 秒收势」的呼吸节奏（10 层时 1.7s 收势太接近常驻，
+## 后期五六把剑叠得太快 —— 2026-10-27 用户口径）—— 剑越多阵越密，这正是卡名的意思。
+const CHARGE_EVERY := 20
 ## 剑阵驻场时长（秒）：用户「幻象能够持续好几秒」。4 秒够看清剑阵转小半圈、
 ## 够每道幻影劈 4~5 刀，又不至于长到变成常驻 buff。
 const FORMATION_TIME := 4.0
@@ -47,8 +48,9 @@ const ACQUIRE_RADIUS := 300.0
 # ---------------- 剑阵几何 ----------------
 
 ## 剑阵轨道半长轴/半短轴（px）：真剑轨道是 54×40（FloatingWeapon.DEFAULT_ORBIT_EXTENTS），
-## 幻影放在 112×86 的外圈 —— 一眼能数出「里面 6 把真的、外面 6 把虚的」。
-const ORBIT_RADII := Vector2(112.0, 86.0)
+## 幻影放在 88×68 的外圈 —— 比真剑外扩约六成，「内真外虚」两圈一眼可辨；
+## 初版 112×86 离角色太远，读起来像「大外面两个圈」（2026-10-27 用户口径收近）。
+const ORBIT_RADII := Vector2(88.0, 68.0)
 ## 剑阵自转速度（rad/s）：慢转，读作「阵在运转」而不是又一圈静态贴图
 const ORBIT_SPEED := 0.85
 
@@ -86,6 +88,17 @@ const GHOST_ALPHA := 0.85     ## 虚影不透明度：加色混合下 0.85 足�
 const BREATH_AMP := 0.13      ## 待机呼吸幅度（相对 GHOST_ALPHA）：驻场四秒，完全不动会被读成贴图
 const RETARGET_INTERVAL := 0.1  ## 索敌节流（10Hz）：6 道幻影 × 60fps 逐帧查询是白烧
 
+# ---------------- 虚幻感套件（2026-10-27：用户口径「更有虚幻的感觉」） ----------------
+# 三件套全部确定性 sin、以 _breath_phase（instance_id 播种）错相，不碰任何 RNG（铁律 15）；
+# 微漂只加在渲染子节点上，判定中心 == 节点本体，纹丝不动（画判同源不破）。
+
+const HALO_SCALE_MULT := 1.35 ## 光晕放大倍率：同器形柔光外壳，读作「能量体」而非半透明铁剑
+const HALO_ALPHA := 0.26      ## 光晕相对不透明度（再乘本体 modulate.a）
+const ECHO_ALPHA := 0.20      ## 轨道回声相对不透明度（再乘本体 modulate.a）
+const ECHO_LAG := 0.42        ## 回声滞后角（rad）：读作虚影掠过留下的残迹
+const SHIMMER_AMP := 0.16     ## 高频微闪幅度（叠在慢呼吸之上）：灵体不稳的细碎闪烁
+const DRIFT_AMP := 0.8        ## 渲染微漂幅度（px）：只漂视觉子节点，判定中心不动
+
 ## 对象池上限（一次开阵最多 6 道，留一倍余量）
 const POOL_CAP := 12
 
@@ -122,6 +135,8 @@ var _target: Node2D = null
 var _retarget_phase: float = 0.0
 
 var _renderer: ProceduralWeaponRenderer = null
+var _halo: ProceduralWeaponRenderer = null   ## 光晕外壳：放大同器形，能量体外辉
+var _echo: ProceduralWeaponRenderer = null   ## 轨道回声：top_level 滞后位残迹
 var _slash_arc: WeaponArcRenderer = null
 var _tint: Color = Color.WHITE
 var _upright: bool = false
@@ -319,6 +334,8 @@ func _tick_form() -> void:
 		_state = STATE_IDLE
 		scale = Vector2.ONE
 		modulate.a = GHOST_ALPHA
+		if _echo != null and not _use_fallback_blade:
+			_echo.visible = true   # 回声只在驻场段亮
 		queue_redraw()
 
 ## 驻场：走剑阵轨道 → 到点劈弧 → 时辰到了开始化光。
@@ -335,8 +352,32 @@ func _tick_idle(delta: float) -> void:
 	_update_slash_arc()
 	_tick_hit()
 	_tick_fire(delta)
-	# 驻场呼吸：四秒里器身不能完全不动，否则读成贴图
-	modulate.a = GHOST_ALPHA * (1.0 - BREATH_AMP * 0.5 + BREATH_AMP * 0.5 * sin(_age * 3.1 + _breath_phase))
+	# 驻场呼吸 + 高频微闪：慢呼吸防读成贴图，细碎 shimmer 读「灵体不稳」
+	var breath: float = 1.0 - BREATH_AMP * 0.5 + BREATH_AMP * 0.5 * sin(_age * 3.1 + _breath_phase)
+	var shimmer: float = 1.0 - SHIMMER_AMP * 0.5 + SHIMMER_AMP * 0.5 * sin(_age * 17.3 + _breath_phase * 3.7)
+	modulate.a = GHOST_ALPHA * breath * shimmer
+	# 渲染微漂：只漂视觉子节点（≤1px），判定中心 = 节点本体纹丝不动（画判同源不破）
+	var drift := Vector2(
+		sin(_age * 9.1 + _breath_phase), cos(_age * 7.3 + _breath_phase * 1.3)) * DRIFT_AMP
+	if _renderer != null:
+		_renderer.position = drift
+	if _halo != null:
+		_halo.position = drift * 1.6   # 光晕漂得比本体略散，辉光更「活」
+	_update_echo()
+
+## 轨道回声：同器形副本摆在轨道滞后位（ang − ECHO_LAG），读作虚影掠过留下的残迹。
+## 轨道解析可算，不用存位置历史；top_level 自己吃世界变换，透明度随本体 modulate 叠乘呼吸。
+func _update_echo() -> void:
+	if _echo == null or not _echo.visible:
+		return
+	var player: Node2D = GameManager.player
+	if player == null or not is_instance_valid(player):
+		return
+	var lag_ang: float = orbit_phase + _age * ORBIT_SPEED - ECHO_LAG
+	_echo.global_position = player.global_position + Vector2(
+		cos(lag_ang) * ORBIT_RADII.x, sin(lag_ang) * ORBIT_RADII.y)
+	# 竖置重器回声同守「世界竖直」，其余朝轨道切线（与无目标时的出刀朝向同源）
+	_echo.global_rotation = 0.0 if _upright else lag_ang + PI * 0.5
 
 ## 索敌（10Hz 节流 + 实例错相）：剑阵要打「圈内最近的那只」，不是永远追同一个
 func _tick_target(delta: float) -> void:
@@ -506,6 +547,12 @@ func _enter_fade() -> void:
 	_swing_lunge = 0.0
 	if _slash_arc != null:
 		_slash_arc.visible = false
+	if _echo != null:
+		_echo.visible = false
+	if _renderer != null:
+		_renderer.position = Vector2.ZERO
+	if _halo != null:
+		_halo.position = Vector2.ZERO
 	queue_redraw()
 
 ## 消散：化光散尽后回池
@@ -549,24 +596,53 @@ func _configure_visual() -> void:
 	_use_fallback_blade = wshape == ProceduralWeaponRenderer.WeaponShape.GENERIC
 	_tint = GameStyle.fx_hdr_element(element)
 	if _use_fallback_blade:
+		# 光刃兜底形态不配光晕/回声 —— 矢量器形都没有，虚影套件无从复制
 		if _renderer != null:
 			_renderer.visible = false
+		if _halo != null:
+			_halo.visible = false
+		if _echo != null:
+			_echo.visible = false
 		return
+	if _halo == null:
+		_halo = ProceduralWeaponRenderer.new()
+		_halo.name = "ProcPhantomHalo"
+		_halo.material = SharedMaterials.add_blend()
+		add_child(_halo)
+		move_child(_halo, 0)   # 光晕垫在主器形底下
 	if _renderer == null:
 		_renderer = ProceduralWeaponRenderer.new()
 		_renderer.name = "ProcPhantom"
 		_renderer.material = SharedMaterials.add_blend()
 		add_child(_renderer)
+	if _echo == null:
+		_echo = ProceduralWeaponRenderer.new()
+		_echo.name = "ProcPhantomEcho"
+		_echo.material = SharedMaterials.add_blend()
+		# top_level：回声吃「轨道滞后位」的世界变换，不吃本体转角/缩放
+		_echo.top_level = true
+		add_child(_echo)
+	_halo.configure(wshape, element, _blade_len, star, _upright, weapon_def_id)
+	_halo.scale = Vector2.ONE * VISUAL_SCALE * HALO_SCALE_MULT
+	_halo.modulate = Color(_tint.r, _tint.g, _tint.b, HALO_ALPHA)
+	_halo.visible = true
 	_renderer.configure(wshape, element, _blade_len, star, _upright, weapon_def_id)
 	_renderer.scale = Vector2.ONE * VISUAL_SCALE
 	_renderer.modulate = _tint
 	_renderer.visible = true
+	_echo.configure(wshape, element, _blade_len, star, _upright, weapon_def_id)
+	_echo.scale = Vector2.ONE * VISUAL_SCALE
+	_echo.modulate = Color(_tint.r, _tint.g, _tint.b, ECHO_ALPHA)
+	_echo.visible = false   # 回声只在驻场段亮（凝形/消散段隐藏）
 
 ## 竖置重器（锤/鞭/锏等）反向补偿转角，保持世界竖直 ——
 ## 与 FloatingWeapon._apply_facing 同一条规则，幻影的姿态读起来才和真剑一致。
 func _apply_child_facing() -> void:
+	var fix: float = (-rotation) if _upright else 0.0
 	if _renderer != null and _renderer.visible:
-		_renderer.rotation = (-rotation) if _upright else 0.0
+		_renderer.rotation = fix
+	if _halo != null and _halo.visible:
+		_halo.rotation = fix
 
 func _draw() -> void:
 	# 矢量器形未实现时的光刃兜底（与器尖同长，不引入贴图）
@@ -641,9 +717,15 @@ func _recycle() -> void:
 	_forming_count = maxi(0, _forming_count - 1)
 	set_physics_process(false)
 	visible = false
+	if _echo != null:
+		_echo.visible = false
 	if _slash_arc != null:
 		_slash_arc.visible = false
 		_slash_arc.modulate.a = 0.0
+	if _renderer != null:
+		_renderer.position = Vector2.ZERO
+	if _halo != null:
+		_halo.position = Vector2.ZERO
 	_target = null
 	source_weapon = null
 	source_behavior = WeaponData.Behavior.MELEE

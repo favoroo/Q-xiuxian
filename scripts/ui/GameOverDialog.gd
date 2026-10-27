@@ -11,10 +11,11 @@ extends Control
 @onready var endless_btn: Button = $CenterContainer/Panel/MarginContainer/VBox/EndlessButton
 @onready var title_band: PanelContainer = $CenterContainer/Panel/MarginContainer/VBox/TitleBand
 
-## 解锁卡尺寸（2026-10-25）：图标 48 见方 + 两行文字 + 右端「新」角签。
-## 卡宽按 960 设计宽留足（结算面板本身约 560 宽），三条并排会超出 ⇒ 由 _unlocks_box 纵向堆叠。
+## 解锁卡尺寸（2026-10-27 收紧）：3 张卡 + 3 条新纪录 + 4 颗按钮同时出现时，
+## 旧尺寸（图标 40 / 上下留白 5 / 字号 12+11）会把面板顶到 620 高、整块出 540 屏；
+## 图标 30 + 两行字号 11/10 压到约 38 高，两条信息一行不少。
 const UNLOCK_CARD_W := 420.0
-const UNLOCK_ICON := 40.0
+const UNLOCK_ICON := 30.0
 
 var _menu_btn: Button
 var _revive_btn: Button
@@ -49,7 +50,7 @@ func _ready() -> void:
 	title_band.move_child(strip, 0)
 
 	var vbox: VBoxContainer = $CenterContainer/Panel/MarginContainer/VBox
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 6)
 
 	_unlocks_box = VBoxContainer.new()
 	_unlocks_box.add_theme_constant_override("separation", 4)
@@ -127,10 +128,11 @@ func _on_game_over(victory: bool) -> void:
 		return
 	_play_reveal()
 
-## 战报文案：t=0 全零 → t=1 终值，数字滚动只改文本不换结构（LayoutCheck 量的是最终布局）
+## 战报文案：t=0 全零 → t=1 终值，数字滚动只改文本不换结构（LayoutCheck 量的是最终布局）。
+## 两行封顶（2026-10-27）：解锁卡 + 新纪录 + 四颗按钮同时在场时，第三行会把面板顶出 540 屏。
 func _stats_text(t: float) -> String:
 	var total := int(roundf(_r_secs_total * t))
-	return "%s生存时长 %02d:%02d · 等级 %d\n击杀 %d 只 · 随身金币 %d 枚" % [
+	return "%s生存 %02d:%02d · 等级 %d · 击杀 %d · 金币 %d" % [
 		_r_cult_line, int(total / 60.0), total % 60,
 		int(roundf(_r_level * t)), int(roundf(_r_kills * t)), int(roundf(_r_stones * t))
 	]
@@ -272,23 +274,30 @@ func _refresh_unlocks() -> void:
 		_unlocks_box.visible = false
 		return
 	_unlocks_box.visible = true
+	# 区块标题：列表现在装的是「整局」（含回合末横幅已播过的中途解锁），
+	# 不给标题玩家会以为只是最后这一下的奖励。溢出条数并进标题，
+	# 不再单占一行 —— 3 卡 + 3 纪录 + 4 按钮已经是这一屏的高度上限。
+	var head := Label.new()
 	var max_show := mini(newly.size(), 3)
+	if newly.size() > max_show:
+		head.text = "◆ 本 局 解 锁 %d 项（余下 %d 项见「战绩」） ◆" % [
+			newly.size(), newly.size() - max_show]
+	else:
+		head.text = "◆ 本 局 解 锁 ◆"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	GameStyle.label(head, 11, GameStyle.PAPER, 0, GameStyle.INK, true)
+	_unlocks_box.add_child(head)
 	for i in range(max_show):
 		var aid := String(newly[i])
 		var adef := AchievementData.get_def(aid)
 		if adef.is_empty():
 			continue
 		_unlocks_box.add_child(_make_unlock_card(adef))
-	if newly.size() > max_show:
-		var more := Label.new()
-		more.text = "（另有 %d 项成就达成，可于主菜单「战绩」查阅）" % (newly.size() - max_show)
-		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
-		_unlocks_box.add_child(more)
 
 ## 单条解锁卡（2026-10-25 解锁提示升级）：图标 + 成就名 + 「新角色/道具/武器：X」+ 右端「新」角签。
 ## 旧写法只是一行纯文字 chip —— 结算屏是全项目唯一展示解锁的通道，纯文字等于把奖励藏了。
-## 图标取成就自己的 icon 字段（以前完全没用上），48×48 与图鉴/货架卡同一档。
+## 图标取成就自己的 icon 字段（以前完全没用上）；尺寸见 UNLOCK_ICON 处的收紧说明。
 func _make_unlock_card(adef: Dictionary) -> Control:
 	var rtype := String(adef.get("reward_type", ""))
 	var label := AchievementData.reward_label(adef)
@@ -300,8 +309,8 @@ func _make_unlock_card(adef: Dictionary) -> Control:
 	var sb := GameStyle.block(GameStyle.JADE_DK, GameStyle.SLANT_BLOCK, Vector2(3, 4))
 	sb.content_margin_left = 8.0
 	sb.content_margin_right = 8.0
-	sb.content_margin_top = 5.0
-	sb.content_margin_bottom = 5.0
+	sb.content_margin_top = 3.0
+	sb.content_margin_bottom = 3.0
 	card.add_theme_stylebox_override("panel", sb)
 
 	var row := HBoxContainer.new()
@@ -328,7 +337,7 @@ func _make_unlock_card(adef: Dictionary) -> Control:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "成就「%s」" % String(adef.get("name", ""))
-	GameStyle.label(title_lbl, 12, GameStyle.CHALK, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 11, GameStyle.CHALK, 0, GameStyle.INK, true)
 	text_box.add_child(title_lbl)
 
 	var sub_lbl := Label.new()
@@ -336,7 +345,7 @@ func _make_unlock_card(adef: Dictionary) -> Control:
 		sub_lbl.text = "达成"
 	else:
 		sub_lbl.text = "%s：%s" % [label, reward_name]
-	GameStyle.label(sub_lbl, 11, GameStyle.JADE)
+	GameStyle.label(sub_lbl, 10, GameStyle.JADE)
 	text_box.add_child(sub_lbl)
 
 	# 右：「新」角签（与主菜单/选人角标同一枚字，玩家能把它和别处的红点对上）
@@ -348,7 +357,9 @@ func _make_unlock_card(adef: Dictionary) -> Control:
 	row.add_child(new_chip)
 	return card
 
-## 新纪录标签：本局刷新的生涯/道统纪录（金 chips，上限 3 条）
+## 新纪录标签：本局刷新的生涯/道统纪录（金 chips，最多 3 行）。
+## 2026-10-27：首通关一口气能刷出六条（击杀/波次/首胜/境界/难度/皮肤），
+## 超额不再另起一行 —— 把第 3 颗签换成汇总签，行数封顶 3。
 func _refresh_records() -> void:
 	for c in _records_box.get_children():
 		c.queue_free()
@@ -357,20 +368,24 @@ func _refresh_records() -> void:
 		_records_box.visible = false
 		return
 	_records_box.visible = true
-	var max_show := mini(records.size(), 3)
-	for i in range(max_show):
+	var detailed := mini(records.size(), 3)
+	if records.size() > detailed:
+		detailed -= 1   # 留最后一格给汇总签
+	for i in range(detailed):
 		var chip := Label.new()
 		chip.text = " ◆ %s ◆ " % String(records[i])
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		chip.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
-		GameStyle.label(chip, 12, GameStyle.INK_TEXT)
+		GameStyle.label(chip, 11, GameStyle.INK_TEXT)
 		_records_box.add_child(chip)
-	if records.size() > max_show:
+	if records.size() > detailed:
 		var more := Label.new()
-		more.text = "（另有 %d 条新纪录，可于主菜单「战绩」查阅）" % (records.size() - max_show)
+		more.text = " ◆ 另有 %d 条新纪录 · 见「战绩」 ◆ " % (records.size() - detailed)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		GameStyle.label(more, 11, GameStyle.PAPER_DIM)
+		more.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		more.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
+		GameStyle.label(more, 11, GameStyle.INK_TEXT)
 		_records_box.add_child(more)
 
 func _unhandled_input(event: InputEvent) -> void:
