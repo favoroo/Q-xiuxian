@@ -17,7 +17,13 @@ const DETAIL_SIZE := 128
 ## catalog id → EnemyVisualConfig 视觉 id：赤雷/剑煞的渲染分支认 `_elite` 后缀
 ## （EnemyBase 运行时 id 同形，见 EnemyData.ID_PREFIXES）；直接用 catalog id 会落进
 ## get_config 的 `_` 兜底臂被画成 golem（画多大==判多大级别的形象撒谎）。
-const VISUAL_ID := {"chilei": "chilei_elite", "jiansha": "jiansha_elite"}
+const VISUAL_ID := {
+	"chilei": "chilei_elite",
+	"jiansha": "jiansha_elite",
+	"xuanming": "xuanming_elite",
+	"xingpan": "xingpan_elite",
+	"wandu": "wandu_elite",
+}
 static var _cache: Dictionary = {}   ## eid(+#+elite) -> Texture2D | null（null 也缓存）
 static var _pending: Dictionary = {} ## 捕获中的 key：并发 await 同一张，不叠 SubViewport
 

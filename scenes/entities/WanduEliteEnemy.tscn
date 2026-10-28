@@ -1,0 +1,66 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/EnemyBase.gd" id="1_enemy"]
+[ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/art/shadow.png" id="3_shadow"]
+[ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="4_light"]
+[ext_resource type="PackedScene" path="res://scenes/entities/FengQunEnemy.tscn" id="5_minion"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wandu"]
+shader = ExtResource("2_shader")
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 24.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 32.0
+
+[node name="WanduEliteEnemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_enemy")
+max_hp = 1250.0
+move_speed = 92.0
+contact_damage = 25.0
+is_elite = true
+exp_reward = 10
+enemy_id = "wandu_elite"
+spritesheet_path = "res://assets/art/pawn_red_8dir.png"
+locomotion_mode = "hover"
+preferred_range = 290.0
+spawn_minion_interval = 6.0
+minion_scene = ExtResource("5_minion")
+spawn_minion_count = 2
+spawn_minion_cap = 14
+field_interval = 5.5
+field_radius = 115.0
+field_windup = 0.75
+field_dmg_mult = 0.8
+field_duration = 4.0
+poison_interval = 3.2
+poison_windup = 0.65
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 22.0)
+scale = Vector2(1.6, 1.6)
+texture = ExtResource("3_shadow")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+material = SubResource("ShaderMaterial_wandu")
+scale = Vector2(0.7, 0.7)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+color = Color(0.35, 0.95, 0.45, 1)
+energy = 0.55
+texture = ExtResource("4_light")
+texture_scale = 1.2

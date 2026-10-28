@@ -93,6 +93,8 @@ var death_corpse_linger: bool = false
 @export var death_bolt_dmg_mult: float = 0.6  ## 死亡弹幕伤害 = bolt_damage × 它（比活体火球软一档）
 @export var charge_aim_lead: float = 0.0   ## >0：长扑锁向冲向「玩家当前位置 + 玩家速度 × 它」（土豆兄弟 Goblin Shark 预判位）
 @export var bolt_windup: float = 0.0       ## >0：火球出手前的蓄力预告时长（站定 + 变色，出手瞬间锁向）；0 = 不蓄力直接发
+@export var bolt_speed_mult: float = 1.0   ## 敌弹弹速倍率（随波次按 GameBalance.enemy_bolt_speed_mult 注入）
+@export var bolt_curve_ang: float = 0.0    ## 敌弹自身弧线角速度（rad/s）
 
 # ---------------- 运行时状态 ----------------
 var current_hp: float = 60.0
@@ -509,11 +511,12 @@ func _capture_base_stats() -> void:
 		"field_duration": field_duration,
 		"blink_strike_interval": blink_strike_interval, "blink_strike_dist": blink_strike_dist,
 		"blink_strike_bolts": blink_strike_bolts, "blink_strike_bolt_arc": blink_strike_bolt_arc,
-		"poison_interval": poison_interval, "poison_radius": poison_radius,
-		"poison_windup": poison_windup, "poison_damage": poison_damage,
-		"poison_duration": poison_duration,
-		"root_scale": scale, "root_modulate": modulate,
-	}
+			"poison_interval": poison_interval, "poison_radius": poison_radius,
+			"poison_windup": poison_windup, "poison_damage": poison_damage,
+			"poison_duration": poison_duration,
+			"bolt_speed_mult": bolt_speed_mult, "bolt_curve_ang": bolt_curve_ang,
+			"root_scale": scale, "root_modulate": modulate,
+		}
 
 ## 池化复用的整备：出厂字段回滚 + 战斗运行时清零 + 视觉/物理节点归位。
 ## 新实例（_assembled=false，尚未进过树）直接跳过——出厂值本就干净，
@@ -536,6 +539,8 @@ func reset_for_reuse() -> void:
 	bolt_interval = _base_stats["bolt_interval"]
 	preferred_range = _base_stats["preferred_range"]
 	bolt_windup = _base_stats["bolt_windup"]
+	bolt_speed_mult = _base_stats.get("bolt_speed_mult", 1.0)
+	bolt_curve_ang = _base_stats.get("bolt_curve_ang", 0.0)
 	death_bolt_count = _base_stats["death_bolt_count"]
 	death_bolt_dmg_mult = _base_stats["death_bolt_dmg_mult"]
 	slam_interval = _base_stats["slam_interval"]
@@ -1970,6 +1975,9 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	var lethal := current_hp <= 0.0
 
 	# 击退冲量瞬发与武器分级（空洞骑士/死亡细胞风格：第 0 帧爆发、轻武器短击退~12px、重武器强击退~45px）
+	# 静止炮台精英/Boss不动如山：不受任何击退位移
+	if move_speed <= 0.0:
+		knockback = Vector2.ZERO
 	var elite_scale: float = HIT_KB_ELITE_SCALE if is_elite else 1.0
 	var crit_kb_mult: float = HIT_KB_CRIT_MULT if is_crit else 1.0
 	var raw_kb := knockback * (GameBalance.KNOCKBACK_IMPULSE_SCALE * elite_scale * crit_kb_mult)
@@ -2148,7 +2156,7 @@ func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 	if dying:
 		return
 	hit_stun_timer = maxf(hit_stun_timer, pin_sec)
-	knockback_velocity = pull_velocity
+	knockback_velocity = pull_velocity if move_speed > 0.0 else Vector2.ZERO
 	if _charge_windup > 0.0:
 		_charge_windup = -1.0
 		_charge_aim_locked = false
@@ -2186,6 +2194,7 @@ func _fire_death_bolts() -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = Vector2.from_angle(TAU * float(i) / float(maxi(1, death_bolt_count)))
+		bolt.speed = 300.0 * bolt_speed_mult
 		bolt.damage = bolt_damage * death_bolt_dmg_mult * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)
 		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.6, 0.8)
@@ -2235,6 +2244,7 @@ func _start_charge(dir: Vector2) -> void:
 				var bolt := EnemyBolt.acquire(get_parent())
 				bolt.global_position = global_position
 				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
+				bolt.speed = 300.0 * bolt_speed_mult
 				bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 缩放基准见 BalanceWave.BOLT_DMG_BASE_REF（邪修基础接触伤，四类怪共用）
 				bolt.activate()
 	_clear_charge_warning()
@@ -2379,25 +2389,29 @@ func _fire_bolt(player: Node2D) -> void:
 		spawn_pos = procedural_view.get_weapon_tip_global_pos()
 		procedural_view.trigger_recoil(base_dir)
 
-	var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
-	for i in range(maxi(1, bolt_count)):
-		# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
-		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = spawn_pos
-		var offset_ang := 0.0
-		if bolt_count > 1:
-			offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
-		bolt.direction = base_dir.rotated(offset_ang)
-		bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
-		bolt.sword_style = true
-		bolt.purple_style = is_jiansha
-		bolt.activate()
-	play_squash(Vector2(1.16, 0.84), 0.16)
-	AudioManager.play_sfx("enemy_bolt", 0.7)
-	if get_parent() != null:
-		# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气赤煞炽阳 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
-		var pop_col := GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_FIRE
-		JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
+		var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
+		var is_xuanming := (enemy_id == "xuanming_elite" or name.to_lower().begins_with("xuanming"))
+		for i in range(maxi(1, bolt_count)):
+			# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
+			var bolt := EnemyBolt.acquire(get_parent())
+			bolt.global_position = spawn_pos
+			var offset_ang := 0.0
+			if bolt_count > 1:
+				offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
+			bolt.direction = base_dir.rotated(offset_ang)
+			bolt.speed = 300.0 * bolt_speed_mult
+			if bolt_curve_ang != 0.0:
+				bolt.angular_speed = bolt_curve_ang
+			bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
+			bolt.sword_style = true
+			bolt.purple_style = is_jiansha or is_xuanming
+			bolt.activate()
+		play_squash(Vector2(1.16, 0.84), 0.16)
+		AudioManager.play_sfx("enemy_bolt", 0.7)
+		if get_parent() != null:
+			# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气赤煞炽阳 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
+			var pop_col := GameStyle.FX_HDR_CRIT if (is_jiansha or is_xuanming) else GameStyle.FX_HDR_FIRE
+			JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
 # ---------------- 行为支路：鼓妖光环 ----------------
@@ -2697,7 +2711,7 @@ func _fire_ring_bolts() -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = Vector2(cos(ang), sin(ang))
-		bolt.speed = ring_bolt_speed
+		bolt.speed = ring_bolt_speed * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.angular_speed = ring_bolt_curve_ang
 		bolt.activate()
@@ -2766,6 +2780,7 @@ func _blink_strike(player: Node2D) -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = base_dir.rotated(offset_ang)
+		bolt.speed = 300.0 * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.sword_style = true
 		bolt.purple_style = true
@@ -2873,12 +2888,13 @@ func _enter_mutation() -> void:
 			rock_count = GameBalance.MUT_GOLEM_ROCK_COUNT
 			_elite_slam_timer = 1.2
 		"chilei_elite":
-			# 二阶段：长扑周期缩短 + 侧翼洒弹 + 三连冲 + 雷环增发
+			# 二阶段：长扑周期缩短 + 侧翼洒弹 + 三连冲 + 雷环增发（仅纯冲刺态无环弹时保持不加环）
 			charge_interval *= GameBalance.MUT_CHILEI_INTERVAL_MULT
 			charge_side_bolts = GameBalance.MUT_CHILEI_SIDE_BOLTS
 			chain_charges = GameBalance.MUT_CHILEI_CHAIN_CHARGES
 			chain_windup_mult = GameBalance.MUT_CHILEI_CHAIN_WINDUP_MULT
-			ring_bolt_count = GameBalance.MUT_CHILEI_RING_COUNT
+			if ring_bolt_interval > 0.0:
+				ring_bolt_count = GameBalance.MUT_CHILEI_RING_COUNT
 		"jiansha_elite":
 			# 二阶段：剑气 3→5 连、压近身、雷剑域扩域、解锁瞬身回斩
 			bolt_count = GameBalance.MUT_JIANSHA_BOLT_COUNT
@@ -2890,6 +2906,46 @@ func _enter_mutation() -> void:
 			blink_strike_bolts = GameBalance.MUT_JIANSHA_BLINK_BOLTS
 			blink_strike_bolt_arc = GameBalance.MUT_JIANSHA_BLINK_BOLT_ARC
 			_blink_strike_timer = 1.5
+		"xuanming_elite":
+			# 二阶段：玄冥魔尊狂暴，移速提升，雷环增发至12发，落石增发至4点，解锁瞬身回斩
+			move_speed *= 1.25
+			ring_bolt_count = 12
+			ring_bolt_interval *= 0.65
+			rock_count = 4
+			rock_interval *= 0.70
+			blink_strike_interval = 5.0
+			blink_strike_dist = 220.0
+			blink_strike_bolts = 3
+			blink_strike_bolt_arc = 0.20
+			_blink_strike_timer = 1.2
+		"xingpan_elite":
+			# 二阶段：星盘全功率运转，弧线环弹增至 16 发、周期缩短，扇形连射增至 6 发，并解锁星陨落石
+			ring_bolt_count = GameBalance.MUT_XINGPAN_RING_COUNT
+			ring_bolt_interval *= GameBalance.MUT_XINGPAN_RING_INTERVAL_MULT
+			bolt_count = GameBalance.MUT_XINGPAN_BOLT_COUNT
+			rock_interval = GameBalance.MUT_XINGPAN_ROCK_INTERVAL
+			rock_count = 3
+			rock_radius = 85.0
+			rock_windup = 0.85
+			rock_dmg_mult = 0.9
+			rock_spread = 135.0
+			rock_lead = 0.30
+			_rock_timer = 1.2
+		"wandu_elite":
+			# 二阶段：万毒狂暴，投毒与召唤冷却大幅缩短，禁区扩域，并解锁自卫毒环弹
+			move_speed *= 1.2
+			poison_interval *= GameBalance.MUT_WANDU_POISON_INTERVAL_MULT
+			field_radius *= GameBalance.MUT_WANDU_FIELD_RADIUS_MULT
+			field_interval *= 0.70
+			if spawn_minion_interval > 0.0:
+				spawn_minion_interval *= GameBalance.MUT_WANDU_SPAWN_INTERVAL_MULT
+			ring_bolt_interval = 4.2
+			ring_bolt_count = 10
+			ring_bolt_speed = 165.0
+			ring_bolt_dmg_mult = 0.7
+			ring_bolt_windup = 0.35
+			ring_bolt_curve_ang = 0.5
+			_ring_bolt_timer = 1.0
 		_:
 			return
 	_mutated = true

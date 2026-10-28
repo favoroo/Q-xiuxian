@@ -264,4 +264,74 @@ func _test_boss_patterns_and_charge() -> void:
 	boss._die()
 	boss.queue_free()
 	GameManager.player = null
+	await _test_boss_archetypes_and_new_elites()
+
+func _test_boss_archetypes_and_new_elites() -> void:
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var p := _make_player()
+	p.global_position = Vector2(680.0, 270.0)
+
+	# 1. 玄天千机尊（W25 不动炮台）：移速为 0、免疫击退、具备 TURRET_SHIFT 换桩
+	var qianji := boss_scene.instantiate() as BossEnemy
+	qianji.boss_id = "qianji"
+	add_child(qianji)
+	qianji.global_position = Vector2(480.0, 270.0)
+	qianji._attack_timer = 999.0
+	_c.near(qianji.move_speed, 0.0, 0.01, "玄天千机尊为静止炮台（move_speed == 0）")
+	_c.check(BossEnemy.Pattern.TURRET_SHIFT in qianji._patterns, "玄天千机尊包含阵眼换桩招式")
+	qianji.take_damage(10.0, Vector2(500.0, 0.0))
+	_c.near(qianji.knockback_velocity.length(), 0.0, 0.01, "玄天千机尊完全免疫击退位移")
+	var pos_before := qianji.global_position
+	qianji._cast_turret_shift(p)
+	_c.check(qianji.global_position.distance_to(pos_before) > 30.0, "玄天千机尊换桩瞬移改变阵位")
+	qianji._die()
+	qianji.queue_free()
+
+	# 2. 血煞修罗（W20 狂战连冲）与 幽冥剑魄尊（W35 瞬步回斩）
+	var xiuluo := boss_scene.instantiate() as BossEnemy
+	xiuluo.boss_id = "xiuluo"
+	add_child(xiuluo)
+	xiuluo.global_position = Vector2(400.0, 270.0)
+	xiuluo._attack_timer = 999.0
+	_c.check(BossEnemy.Pattern.CHAIN_CHARGE in xiuluo._patterns, "血煞修罗主打多段折返连冲")
+	xiuluo._cast_chain_charge(p)
+	_c.check(xiuluo._chain_charges_left >= 2, "血煞修罗连冲启动后剩余连冲段数 >= 2")
+	xiuluo._die()
+	xiuluo.queue_free()
+
+	var jianpo := boss_scene.instantiate() as BossEnemy
+	jianpo.boss_id = "jianpo"
+	add_child(jianpo)
+	jianpo.global_position = Vector2(300.0, 270.0)
+	jianpo._attack_timer = 999.0
+	var bolts_before := EnemyBolt.active_count
+	jianpo._cast_blink_slash(p)
+	_c.check(jianpo.global_position.distance_to(p.global_position) <= GameBalance.BOSS_BLINK_SLASH_DIST + 40.0,
+		"幽冥剑魄尊瞬步贴近玩家周围")
+	_c.check(EnemyBolt.active_count > bolts_before, "幽冥剑魄尊瞬步回斩发射扇形剑气")
+	jianpo._die()
+	jianpo.queue_free()
+
+	# 3. 新精英：玄天星盘（静止炮台）与 万毒祭司（毒阵召唤）
+	var xingpan_scene: PackedScene = load("res://scenes/entities/XingpanEliteEnemy.tscn")
+	var xingpan := xingpan_scene.instantiate() as EnemyBase
+	add_child(xingpan)
+	xingpan.global_position = Vector2(480.0, 270.0)
+	_c.near(xingpan.move_speed, 0.0, 0.01, "玄天星盘精英 move_speed == 0（静止炮台）")
+	xingpan.take_damage(10.0, Vector2(400.0, 0.0))
+	_c.near(xingpan.knockback_velocity.length(), 0.0, 0.01, "玄天星盘精英免疫击退")
+	xingpan.queue_free()
+
+	var wandu_scene: PackedScene = load("res://scenes/entities/WanduEliteEnemy.tscn")
+	var wandu := wandu_scene.instantiate() as EnemyBase
+	add_child(wandu)
+	_c.check(wandu.poison_interval > 0.0 and wandu.field_interval > 0.0, "万毒祭司精英兼具剧毒沼泽与雷煞禁区")
+	wandu.queue_free()
+
+	if EnemyBolt._host != null:
+		for child in EnemyBolt._host.get_children():
+			if child is EnemyBolt and not child._pooled:
+				child._recycle()
+	p.queue_free()
+	GameManager.player = null
 

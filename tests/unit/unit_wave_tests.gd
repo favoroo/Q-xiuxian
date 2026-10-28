@@ -29,10 +29,10 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.wave_spawn_budget(6), 21, "第 6 波预算 21")
 	_c.equals(GameBalance.wave_spawn_budget(10), 30, "第 10 波预算 30")
 	_c.equals(GameBalance.wave_spawn_budget(20), 52, "第 20 波预算 52")
-	# 2026-10-15 深层续涨：>20 波预算自 W20=52 续 +3/波，封顶 DEEP_BUDGET_MAX（115）。
-	_c.equals(GameBalance.wave_spawn_budget(21), 55, "深层第 21 波预算 55（续涨 +3）")
-	_c.equals(GameBalance.wave_spawn_budget(30), 82, "深层第 30 波预算 82")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 115")
+	# 2026-10-15 深层续涨：>20 波预算自 W20=52 续 +4/波，封顶 DEEP_BUDGET_MAX（135）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 56, "深层第 21 波预算 56（续涨 +4）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 92, "深层第 30 波预算 92")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 135")
 	var budget_prev := 0
 	var budget_nondecreasing := true
 	for w in range(1, 61):
@@ -64,9 +64,9 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.mob_kill_exp(0), 0, "非法 exp 0 不放大")
 
 	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
-	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.09")
+	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.12")
 	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "20 波段梯度仍为 1.06 复利（正常局零回归）")
-	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH, EPS, "第 21 波血量梯度 = 深层复利 1.18")
+	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH, EPS, "第 21 波血量梯度 = 深层复利 1.22")
 	# 深层复利必须真的比旧梯子快，否则三涨名存实亡
 	_c.check(GameBalance.enemy_dmg_mult(30) > GameBalance.ENEMY_DMG_BASE_MULT * pow(GameBalance.ENEMY_DMG_GROWTH, 29), "深层敌伤快于旧 1.06 外推")
 	_c.check(GameBalance.enemy_hp_mult(30) > pow(GameBalance.ENEMY_HP_GROWTH, 29), "深层血量快于旧 1.16 外推")
@@ -81,11 +81,22 @@ func _test_wave_scaling() -> void:
 		dmg_prev = d
 		hp_prev = h
 	_c.check(deep_monotonic, "伤害/生命倍率全程严格递增（分段处无塌陷、不读 autoload 的纯函数单调）")
-	# 深层同屏密度：≤20 波恒 1.0，此后 +6%/波、封顶 2.0
+	# 深层同屏密度：≤20 波恒 1.0，此后 +8%/波、封顶 2.2
 	_c.near(GameBalance.endless_swarm_mult(20), 1.0, EPS, "20 波前同屏密度不放大")
 	_c.near(GameBalance.endless_swarm_mult(1), 1.0, EPS, "第 1 波同屏密度不放大（正常局零影响）")
-	_c.near(GameBalance.endless_swarm_mult(21), 1.06, EPS, "深层第 21 波同屏密度 +6%")
-	_c.near(GameBalance.endless_swarm_mult(99), GameBalance.DEEP_SWARM_MAX, EPS, "同屏密度放大封顶 ×2.0")
+	_c.near(GameBalance.endless_swarm_mult(21), 1.08, EPS, "深层第 21 波同屏密度 +8%")
+	_c.near(GameBalance.endless_swarm_mult(99), GameBalance.DEEP_SWARM_MAX, EPS, "同屏密度放大封顶 ×2.2")
+
+	# 弹速与攻击间隔缩放断言
+	_c.near(GameBalance.enemy_bolt_speed_mult(1), 1.0, EPS, "第 1 波弹速基线 1.0")
+	_c.check(GameBalance.enemy_bolt_speed_mult(20) > 1.20, "第 20 波弹速成长 > 1.20")
+	_c.check(GameBalance.enemy_bolt_speed_mult(30) > GameBalance.enemy_bolt_speed_mult(20), "无尽深层弹速继续成长")
+	_c.near(GameBalance.enemy_attack_cd_mult(1), 1.0, EPS, "第 1 波技能冷却基线 1.0")
+	_c.check(GameBalance.enemy_attack_cd_mult(20) <= 0.86, "第 20 波技能冷却收紧 ≤ 0.86")
+	_c.check(GameBalance.enemy_attack_cd_mult(35) < GameBalance.enemy_attack_cd_mult(20), "深层攻击冷却进一步加快")
+	_c.equals(GameBalance.enemy_bonus_bolts(1), 0, "前期小怪无额外齐射")
+	_c.equals(GameBalance.enemy_bonus_bolts(16), 1, "第 16 波起小怪额外 +1 发齐射")
+	_c.equals(GameBalance.enemy_bonus_bolts(25), 2, "第 25 波起小怪额外 +2 发齐射")
 
 func _test_boss_waves() -> void:
 	_c.check(GameBalance.is_boss_wave(10), "第 10 波是固定 Boss 关")
@@ -101,16 +112,18 @@ func _test_boss_waves() -> void:
 	_c.check(not GameBalance.is_boss_wave(26), "无尽 26 波不是 Boss")
 	_c.check(not GameBalance.is_boss_wave(28), "无尽 28 波不是 Boss")
 
-	# 10/20 波让位给魔君，精英退守 5/15 与无尽每 3 波（Boss 波让位）
+	# 10/20 波让位给魔君，无尽模式非 Boss 关每关逢精英（逢 5 关出 Boss）
 	_c.check(GameBalance.is_elite_wave(5), "第 5 波精英保留")
 	_c.check(GameBalance.is_elite_wave(15), "第 15 波精英保留")
 	_c.check(not GameBalance.is_elite_wave(10), "第 10 波不再刷精英（Boss 关）")
 	_c.check(not GameBalance.is_elite_wave(20), "第 20 波不再刷精英（Boss 关）")
 	_c.check(not GameBalance.is_elite_wave(21), "非无尽模式 21 波不是精英")
-	_c.check(GameBalance.is_elite_wave(21, true), "无尽 21 波恢复每 3 波精英")
+	_c.check(GameBalance.is_elite_wave(21, true), "无尽 21 波每关精英")
+	_c.check(GameBalance.is_elite_wave(22, true), "无尽 22 波每关精英")
+	_c.check(not GameBalance.is_elite_wave(25, true), "无尽 25 波是 Boss 不是精英（逢 5 波逢魔君后让位）")
 	_c.check(not GameBalance.is_elite_wave(30, true), "无尽 30 波是 Boss 不是精英")
-	_c.check(GameBalance.is_elite_wave(27, true), "无尽 27 波精英（非 Boss 的 3 倍数）")
-	_c.check(not GameBalance.is_elite_wave(25, true), "无尽 25 波是 Boss 不是精英（每 5 波逢魔君后让位）")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 1, "21 波单精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 2, "31 波起双精英同场")
 
 	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距
 	_c.near(GameBalance.boss_hp(10) / GameBalance.boss_hp(1), GameBalance.enemy_hp_mult(10), EPS, "Boss 血量与敌人同一条成长曲线")
@@ -162,7 +175,7 @@ func _test_enemy_mix() -> void:
 	for w in range(1, 25):
 		for i in range(100):
 			seen[WaveSpawner.pick_scene_key(w, float(i) / 100.0)] = true
-	_c.equals(seen.keys().size(), 12, "十二种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
+	_c.equals(seen.keys().size(), 14, "十四种怪在配比表里都真的会被选到（key 拼错=悄悄全刷史莱姆）")
 
 	# 批三新敌种：高 roll 段从史莱姆的保底份额里切走，逐波解锁
 	_c.equals(WaveSpawner.pick_band_key(1, 0.80), "slime", "第 1 波高 roll 仍是史莱姆（新敌种未解锁）")
@@ -174,6 +187,8 @@ func _test_enemy_mix() -> void:
 	_c.equals(WaveSpawner.pick_band_key(9, 0.96), "guyao", "第 9 波鼓妖解锁（加速光环）")
 	_c.equals(WaveSpawner.pick_band_key(13, 0.99), "guyao", "蛛母未解锁时其份额落回鼓妖带（闸门让位）")
 	_c.equals(WaveSpawner.pick_band_key(14, 0.99), "zhumu", "第 14 波蛛母解锁（产卵孵化）")
+	_c.equals(WaveSpawner.pick_band_key(16, 0.97), "hanpo", "第 16 波寒魄妖解锁（三发冰魄）")
+	_c.equals(WaveSpawner.pick_band_key(19, 0.99), "mowei", "第 19 波血煞魔卫解锁（重装魔卫）")
 
 	# 毒妖（2026-10-13 投毒）：与花妖共段 [0.42, flower_edge)，判序在前切走 35%。
 	# 共段的代价是必须同时钉住「两边都还在」——只断言解锁会让花妖被悄悄整段吃掉而不被发现
@@ -193,6 +208,8 @@ func _test_wave_theme() -> void:
 	_c.equals(EnemyData.debut_group(7), ["yingmei"], "第 7 波登场组 = 影魅（unlock_wave 7）")
 	_c.equals(EnemyData.debut_group(12), [], "第 12 波无新解锁（W9 之后到 W14 才有下一个）")
 	_c.equals(EnemyData.debut_group(14), ["zhumu"], "第 14 波登场组 = 百目妖")
+	_c.equals(EnemyData.debut_group(16), ["hanpo"], "第 16 波登场组 = 寒魄妖")
+	_c.equals(EnemyData.debut_group(19), ["mowei"], "第 19 波登场组 = 血煞魔卫")
 	# 登场段真的吃进 pick_scene_key 头部：roll < 0.20 必出登场组内的怪，且组内均分
 	for w in range(1, 21):
 		var group: Array = EnemyData.debut_group(w)
@@ -329,15 +346,14 @@ func _test_enemy_id_prefixes() -> void:
 			missing.append(String(key))
 	_c.check(missing.is_empty(), "MOBS 每种怪都在 ID_PREFIXES 登记了前缀（漏登记会静默降级成史莱姆外观）：%s" % str(missing))
 
-	# ID_PREFIXES 相对 MOBS 多出来的必须是「已知非 MOBS 来源」四类：Boss、精英池两个（id 不带
-	# 后缀，与 _eid 的 _elite 后缀有意不同形）、金蟾（LOOTER_DEF）。冒出第五类就是漏登记或写错。
+	# ID_PREFIXES 相对 MOBS 多出来的必须是「已知非 MOBS 来源」四类：Boss、精英池、金蟾（LOOTER_DEF）。
 	var non_mobs: Array = []
 	for id in EnemyData.ID_PREFIXES:
 		if not EnemyData.MOBS.has(String(id)):
 			non_mobs.append(String(id))
 	non_mobs.sort()
-	_c.equals(non_mobs, ["boss", "chilei_elite", "golem", "jiansha_elite", "jinchan"],
-		"ID_PREFIXES 比 MOBS 多的恰好是 boss / 两个精英 id / 金蟾（冒出别的就是漏登记）")
+	_c.equals(non_mobs, ["boss", "chilei_elite", "golem", "jiansha_elite", "jinchan", "wandu_elite", "xingpan_elite", "xuanming_elite"],
+		"ID_PREFIXES 比 MOBS 多的恰好是 boss / 精英 ids / 金蟾（冒出别的就是漏登记）")
 	# 反向：精英池与 Boss/金蟾的前缀也必须在表里，否则它们的怪会静默降级成史莱姆外观
 	for row in EnemyData.ELITE_POOL:
 		var eid := String(row.get("id", ""))
@@ -345,6 +361,16 @@ func _test_enemy_id_prefixes() -> void:
 			"精英 %s 在前缀表里有登记（带或不带 _elite 后缀）" % eid)
 	_c.check(EnemyData.ID_PREFIXES.has("boss") and EnemyData.ID_PREFIXES.has("jinchan"),
 		"Boss 与金蟾在前缀表里有登记")
+	_c.equals(EnemyData.ELITE_POOL.size(), 6, "精英池扩充为 6 种差异化原型")
+	_c.equals(EnemyData.BOSS_POOL.size(), 6, "Boss 池覆盖 10~40 波 6 大魔君")
+	_c.equals(GameBalance.boss_id_for_wave(10), "chiyan", "W10 Boss 为赤炎魔将")
+	_c.equals(GameBalance.boss_id_for_wave(20), "xiuluo", "W20 Boss 为血煞修罗（冲刺狂战）")
+	_c.equals(GameBalance.boss_id_for_wave(25), "qianji", "W25 Boss 为玄天千机尊（不动炮台）")
+	_c.equals(GameBalance.boss_id_for_wave(30), "wangu", "W30 Boss 为万蛊蚀天母（禁区统御）")
+	_c.equals(GameBalance.boss_id_for_wave(35), "jianpo", "W35 Boss 为幽冥剑魄尊（瞬身剑客）")
+	_c.equals(GameBalance.boss_id_for_wave(40), "xinmo", "W40 Boss 为九幽心魔尊（终极全能）")
+	_c.equals(GameBalance.boss_id_for_wave(45), "chiyan", "W45 起按序轮回循环首轮 chiyan")
+	_c.equals(GameBalance.boss_id_for_wave(50), "xiuluo", "W50 轮回循环次轮 xiuluo")
 
 	var overlapping: Array = []
 	for a in EnemyData.ID_PREFIXES:

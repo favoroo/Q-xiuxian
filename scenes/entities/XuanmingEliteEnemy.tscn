@@ -1,0 +1,72 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/EnemyBase.gd" id="1_enemy"]
+[ext_resource type="Shader" path="res://assets/shaders/hit_flash.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/art/shadow.png" id="3_shadow"]
+[ext_resource type="Texture2D" path="res://assets/art/light_radial.png" id="4_light"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xuanming"]
+shader = ExtResource("2_shader")
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 24.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 32.0
+
+[node name="XuanmingEliteEnemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_enemy")
+max_hp = 1350.0
+move_speed = 110.0
+contact_damage = 28.0
+is_elite = true
+exp_reward = 10
+enemy_id = "xuanming_elite"
+spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
+locomotion_mode = "hover"
+preferred_range = 250.0
+bolt_interval = 1.9
+bolt_damage = 18.0
+bolt_count = 2
+bolt_spread = 0.18
+bolt_windup = 0.35
+ring_bolt_interval = 4.8
+ring_bolt_count = 8
+ring_bolt_speed = 160.0
+ring_bolt_dmg_mult = 0.75
+ring_bolt_windup = 0.4
+ring_bolt_curve_ang = 0.45
+rock_interval = 6.2
+rock_count = 3
+rock_radius = 85.0
+rock_windup = 0.9
+rock_dmg_mult = 0.9
+rock_spread = 140.0
+rock_lead = 0.35
+
+[node name="Shadow" type="Sprite2D" parent="."]
+position = Vector2(0.0, 22.0)
+scale = Vector2(1.6, 1.6)
+texture = ExtResource("3_shadow")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+material = SubResource("ShaderMaterial_xuanming")
+scale = Vector2(0.70, 0.70)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+color = Color(0.65, 0.4, 1, 1)
+energy = 0.55
+texture = ExtResource("4_light")
+texture_scale = 1.2

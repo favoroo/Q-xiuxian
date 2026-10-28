@@ -97,15 +97,27 @@ const MOBS: Dictionary = {
 		"unlock_wave": 6,
 		"band_share": 0.35,    ## 与花妖共段时切走给自己的比例
 	},
-	"zhumu": {
-		"display": "百目妖",
-		"scene_path": "res://scenes/entities/ZhuMuEnemy.tscn",
-		"unlock_wave": 14,
-		"band_lo": 0.98,       ## 产卵孵化群怪
-	},
-}
+		"zhumu": {
+			"display": "百目妖",
+			"scene_path": "res://scenes/entities/ZhuMuEnemy.tscn",
+			"unlock_wave": 14,
+			"band_lo": 0.98,       ## 产卵孵化群怪
+		},
+		"hanpo": {
+			"display": "寒魄妖",
+			"scene_path": "res://scenes/entities/HanPoEnemy.tscn",
+			"unlock_wave": 16,
+			"band_lo": 0.965,      ## 三连弧线冰魄，死后溅射
+		},
+		"mowei": {
+			"display": "血煞魔卫",
+			"scene_path": "res://scenes/entities/MoWeiEnemy.tscn",
+			"unlock_wave": 19,
+			"band_lo": 0.988,      ## 重装预判冲撞 + 震地冲击
+		},
+	}
 
-## 精英轮换池：按出场次数取模轮换（铁甲魔傀 → 赤雷兽 → 剑煞邪修），称号随行播报
+## 精英轮换池：按出场次数取模轮换（铁甲魔傀 → 赤雷兽 → 剑煞邪修 → 玄冥魔尊），称号随行播报
 const ELITE_POOL: Array = [
 	{
 		"id": "golem",
@@ -125,10 +137,91 @@ const ELITE_POOL: Array = [
 		"scene_path": "res://scenes/entities/JianshaEliteEnemy.tscn",
 		"title": "剑客亡灵",
 	},
+	{
+		"id": "xuanming",
+		"display": "玄冥魔尊",
+		"scene_path": "res://scenes/entities/XuanmingEliteEnemy.tscn",
+		"title": "玄冥魔尊",
+	},
+	{
+		"id": "xingpan",
+		"display": "玄天星盘",
+		"scene_path": "res://scenes/entities/XingpanEliteEnemy.tscn",
+		"title": "玄天星盘",
+	},
+	{
+		"id": "wandu",
+		"display": "万毒祭司",
+		"scene_path": "res://scenes/entities/WanduEliteEnemy.tscn",
+		"title": "万毒祭司",
+	},
 ]
 
 ## Boss：场景与数值注入（生命/伤害公式在 BalanceWave，由 WaveSpawner._spawn_boss 运行时覆写）
 const BOSS_SCENE_PATH: String = "res://scenes/entities/BossEnemy.tscn"
+
+const BOSS_POOL: Dictionary = {
+	"chiyan": {
+		"id": "chiyan",
+		"wave": 10,
+		"display": "赤炎魔将",
+		"title": "赤炎魔将",
+		"move_speed": 68.0,
+		"attack_interval": 3.8,
+		"hp_mult": 1.0,
+		"archetype": "balanced",
+	},
+	"xiuluo": {
+		"id": "xiuluo",
+		"wave": 20,
+		"display": "血煞修罗",
+		"title": "血煞修罗",
+		"move_speed": 112.0,
+		"attack_interval": 3.0,
+		"hp_mult": 1.0,
+		"archetype": "berserker",
+	},
+	"qianji": {
+		"id": "qianji",
+		"wave": 25,
+		"display": "玄天千机尊",
+		"title": "玄天千机尊",
+		"move_speed": 0.0,
+		"attack_interval": 2.9,
+		"hp_mult": 1.08,
+		"archetype": "turret",
+	},
+	"wangu": {
+		"id": "wangu",
+		"wave": 30,
+		"display": "万蛊蚀天母",
+		"title": "万蛊蚀天母",
+		"move_speed": 62.0,
+		"attack_interval": 3.3,
+		"hp_mult": 1.05,
+		"archetype": "zoner",
+	},
+	"jianpo": {
+		"id": "jianpo",
+		"wave": 35,
+		"display": "幽冥剑魄尊",
+		"title": "幽冥剑魄尊",
+		"move_speed": 96.0,
+		"attack_interval": 2.8,
+		"hp_mult": 0.95,
+		"archetype": "assassin",
+	},
+	"xinmo": {
+		"id": "xinmo",
+		"wave": 40,
+		"display": "九幽心魔尊",
+		"title": "九幽心魔尊",
+		"move_speed": 82.0,
+		"attack_interval": 2.7,
+		"hp_mult": 1.15,
+		"archetype": "overlord",
+	},
+}
 
 ## 金蟾（土豆兄弟 Looter 对应位）：回合中限时刷出的逃跑宝藏怪，
 ## 不占刷怪预算、不吃同屏上限；存活时「提前清场」会等它。
@@ -163,11 +256,16 @@ const ID_PREFIXES: Dictionary = {
 	"duyao": "duyao",
 	"yingmei": "yingmei",
 	"zhumu": "zhumu",
-	"lingyi": "lingyi",
-	"jinchan": "jinchan",
-	"chilei_elite": "chilei",
-	"jiansha_elite": "jiansha",
-}
+		"lingyi": "lingyi",
+		"jinchan": "jinchan",
+		"chilei_elite": "chilei",
+		"jiansha_elite": "jiansha",
+		"xuanming_elite": "xuanming",
+		"xingpan_elite": "xingpan",
+		"wandu_elite": "wandu",
+		"hanpo": "hanpo",
+		"mowei": "mowei",
+	}
 
 # ---------------- 登场聚焦与每波主打怪（2026-10-16，学土豆兄弟的波次主题） ----------------
 ## 问题：解锁即永久混池 ⇒ 每一波都是同一锅概率汤，没有「这波主打什么」的记忆点。
@@ -256,9 +354,13 @@ static func pick_band_key(w: int, roll: float) -> String:
 		return "duyao"
 	if w >= MOBS["flower"]["unlock_wave"] and roll < flower_edge(w):
 		return "flower"
-	# 高 roll 段：从最稀有往回判（百目妖 0.98 → … → 蜂群 0.78），闸门未开自动让位给下一格
+	# 高 roll 段：从最稀有往回判（血煞魔卫 0.988 → 百目妖 0.98 → 寒魄妖 0.965 → 鼓妖 0.955 → … → 蜂群 0.78），闸门未开自动让位给下一格
+	if w >= MOBS["mowei"]["unlock_wave"] and roll >= MOBS["mowei"]["band_lo"]:
+		return "mowei"
 	if w >= MOBS["zhumu"]["unlock_wave"] and roll >= MOBS["zhumu"]["band_lo"]:
 		return "zhumu"
+	if w >= MOBS["hanpo"]["unlock_wave"] and roll >= MOBS["hanpo"]["band_lo"]:
+		return "hanpo"
 	if w >= MOBS["guyao"]["unlock_wave"] and roll >= MOBS["guyao"]["band_lo"]:
 		return "guyao"
 	if w >= MOBS["yingmei"]["unlock_wave"] and roll >= MOBS["yingmei"]["band_lo"]:

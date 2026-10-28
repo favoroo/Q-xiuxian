@@ -285,7 +285,17 @@ func _draw() -> void:
 			_draw_lingyi()
 		"jinchan":
 			_draw_jinchan()
-		"boss":
+		"hanpo":
+			_draw_hanpo()
+		"mowei":
+			_draw_mowei()
+		"xuanming_elite":
+			_draw_xuanming_elite()
+		"xingpan_elite":
+			_draw_xingpan_elite()
+		"wandu_elite":
+			_draw_wandu_elite()
+		"boss", "boss_chiyan", "boss_xiuluo", "boss_qianji", "boss_wangu", "boss_jianpo", "boss_xinmo":
 			_draw_boss(config.is_final_boss)
 		_:
 			if config.is_boss:
@@ -2090,3 +2100,305 @@ func _draw_jinchan() -> void:
 	_circle(head_pos + Vector2(4, 0), 2.6, config.col_void)
 	_circle(head_pos + Vector2(-4, -0.5) + _gaze_offset(1.1), 1.1, config.col_glow)
 	_circle(head_pos + Vector2(4, -0.5) + _gaze_offset(1.1), 1.1, config.col_glow)
+
+## 17. 寒魄妖 (九幽霜魄，三发弧线冰魄，死后溅射)
+func _draw_hanpo() -> void:
+	var float_y := sin(_time * 2.6 + _phase_seed) * 2.2
+	var center := Vector2(0, -3 + float_y)
+	var surge := clampf(special_state, 0.0, 1.0)
+
+	# 地影
+	_draw_soft_shadow(Vector2(0, 15), 13.0, 3.8, 0.42, Color(0.04, 0.08, 0.12))
+
+	# 环绕三枚浮空玄冰魄晶（施法时外扩提亮）
+	var orbit_r := 15.0 + surge * 4.0
+	var orbit_rot := _time * 2.5
+	for i in range(3):
+		var a := orbit_rot + TAU * float(i) / 3.0
+		var p_crystal := center + Vector2(cos(a), sin(a)) * orbit_r
+		var shard_pts := PackedVector2Array([
+			p_crystal + Vector2(0, -3.8),
+			p_crystal + Vector2(2.0, 0),
+			p_crystal + Vector2(0, 3.8),
+			p_crystal + Vector2(-2.0, 0)
+		])
+		draw_stroked_polygon(shard_pts, config.col_secondary, config.col_accent, 1.0)
+		_circle(p_crystal, 1.0, config.col_glow)
+
+	# 冰晶道袍躯壳
+	var hem := sin(_time * 3.0) * 1.5
+	var robe_pts := PackedVector2Array([
+		center + Vector2(-7.5, -6.0),
+		center + Vector2(7.5, -6.0),
+		center + Vector2(10.0, 5.0),
+		center + Vector2(11.0, 12.0 + hem),
+		center + Vector2(0.0, 14.0 - hem * 0.5),
+		center + Vector2(-11.0, 12.0 - hem),
+		center + Vector2(-10.0, 5.0)
+	])
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.3)
+	# 胸前菱形霜核
+	var core_pts := PackedVector2Array([
+		center + Vector2(0, -2.0),
+		center + Vector2(3.5, 2.0),
+		center + Vector2(0, 6.0),
+		center + Vector2(-3.5, 2.0)
+	])
+	draw_colored_polygon(core_pts, config.col_glow)
+
+	# 苍白霜面与极寒双瞳
+	var head_pos := center + Vector2(0, -9.0)
+	draw_filled_ellipse(head_pos, 5.2, 4.8, config.col_void)
+	_circle(head_pos + Vector2(-2.2, -0.5), 1.4, config.col_glow)
+	_circle(head_pos + Vector2(2.2, -0.5), 1.4, config.col_glow)
+	# 极寒双角
+	draw_line(head_pos + Vector2(-3.5, -3.0), head_pos + Vector2(-6.5, -8.0), config.col_secondary, 1.6, true)
+	draw_line(head_pos + Vector2(3.5, -3.0), head_pos + Vector2(6.5, -8.0), config.col_secondary, 1.6, true)
+
+## 18. 血煞魔卫 (重装重铠魔卫，持巨骨重盾，冲撞+震地)
+func _draw_mowei() -> void:
+	var charge := clampf(special_state, 0.0, 1.0)
+	var float_y := sin(_time * 2.2 + _phase_seed) * 1.5 - charge * 3.5
+	var center := Vector2(0, -2 + float_y)
+
+	# 厚重地影
+	_draw_soft_shadow(Vector2(0, 17), 18.0 - charge * 2.0, 5.0, 0.55)
+
+	# 重装血煞胸甲
+	var plate_pts := PackedVector2Array([
+		center + Vector2(-11.0, 9.0),
+		center + Vector2(-13.0, -3.0),
+		center + Vector2(0.0, -10.0),
+		center + Vector2(13.0, -3.0),
+		center + Vector2(11.0, 9.0),
+		center + Vector2(0.0, 12.0)
+	])
+	draw_stroked_polygon(plate_pts, config.col_primary, _contour_color(), 1.6)
+
+	# 胸铠血槽纹路
+	draw_line(center + Vector2(0, -8), center + Vector2(0, 9), config.col_accent, 1.6, true)
+	draw_line(center + Vector2(-9, -1), center + Vector2(-3, 6), config.col_accent, 1.2, true)
+	draw_line(center + Vector2(9, -1), center + Vector2(3, 6), config.col_accent, 1.2, true)
+
+	# 左侧巨盾（厚实骨铁塔盾，带血煞尖刺）
+	var shield_x := -13.0 if not flip_h else 13.0
+	var shield_pos := center + Vector2(shield_x, 2.0 - charge * 2.0)
+	var shield_pts := PackedVector2Array([
+		shield_pos + Vector2(-4.0, -11.0),
+		shield_pos + Vector2(4.0, -11.0),
+		shield_pos + Vector2(5.0, 6.0),
+		shield_pos + Vector2(0.0, 12.0),
+		shield_pos + Vector2(-5.0, 6.0)
+	])
+	draw_stroked_polygon(shield_pts, config.col_secondary, _contour_color(), 1.5)
+	# 盾面血煞符印
+	draw_circle(shield_pos + Vector2(0, 0), 2.2, config.col_glow)
+
+	# 恶鬼骨面与血瞳
+	var head_pos := center + Vector2(0, -8.0)
+	draw_filled_ellipse(head_pos, 5.5, 5.0, config.col_void)
+	_circle(head_pos + Vector2(-2.2, 0), 1.5, config.col_glow)
+	_circle(head_pos + Vector2(2.2, 0), 1.5, config.col_glow)
+	# 冲天鬼角
+	draw_line(head_pos + Vector2(-3.5, -3.0), head_pos + Vector2(-7.5, -9.5), config.col_secondary, 2.0, true)
+	draw_line(head_pos + Vector2(3.5, -3.0), head_pos + Vector2(7.5, -9.5), config.col_secondary, 2.0, true)
+
+## 19. 玄冥魔尊 (精英：幽冥玄煞，旋臂冥雷环+落石大阵+瞬身回斩)
+func _draw_xuanming_elite() -> void:
+	var charge := clampf(special_state, 0.0, 1.0)
+	var float_y := sin(_time * 2.0 + _phase_seed) * 2.0 - charge * 4.0
+	var center := Vector2(0, -3 + float_y)
+
+	# 庞大精英地影
+	_draw_soft_shadow(Vector2(0, 20), 24.0, 6.5, 0.60)
+
+	# 背部幽冥法轮环（缓慢自转 + 狂暴时加速）
+	var ring_rot := _time * (0.8 + charge * 1.5)
+	var ring_r := 23.0
+	_arc(center + Vector2(0, -4), ring_r, 0.0, TAU, 32, config.col_accent * Color(1, 1, 1, 0.55), 1.5, true)
+	for k in range(8):
+		var a := ring_rot + TAU * float(k) / 8.0
+		var orb_pos := center + Vector2(0, -4) + Vector2(cos(a), sin(a)) * ring_r
+		_circle(orb_pos, 1.8, config.col_glow)
+
+	# 玄冥魔神墨袍与重肩甲
+	var robe_pts := PackedVector2Array([
+		center + Vector2(-15.0, -6.0),
+		center + Vector2(-12.0, -11.0),
+		center + Vector2(0.0, -14.0),
+		center + Vector2(12.0, -11.0),
+		center + Vector2(15.0, -6.0),
+		center + Vector2(17.0, 10.0),
+		center + Vector2(11.0, 16.0),
+		center + Vector2(0.0, 14.0),
+		center + Vector2(-11.0, 16.0),
+		center + Vector2(-17.0, 10.0)
+	])
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.6)
+
+	# 肩部玄铁骨刺
+	draw_line(center + Vector2(-14, -8), center + Vector2(-20, -15), config.col_secondary, 2.4, true)
+	draw_line(center + Vector2(14, -8), center + Vector2(20, -15), config.col_secondary, 2.4, true)
+
+	# 胸口玄冥炉心
+	draw_soft_glow(center + Vector2(0, 1), 14.0, config.col_glow * Color(1, 1, 1, 0.6 + charge * 0.4), 2)
+	_circle(center + Vector2(0, 1), 3.2, config.col_secondary)
+
+	# 冥神鬼冠头面
+	var head_pos := center + Vector2(0, -11.0)
+	draw_filled_ellipse(head_pos, 6.2, 5.5, config.col_void)
+	_circle(head_pos + Vector2(-2.8, -0.5), 1.8, config.col_glow)
+	_circle(head_pos + Vector2(2.8, -0.5), 1.8, config.col_glow)
+	# 冲天骨冠
+	draw_polyline(PackedVector2Array([
+		head_pos + Vector2(-4.0, -4.5),
+		head_pos + Vector2(0.0, -12.0),
+		head_pos + Vector2(4.0, -4.5)
+	]), config.col_secondary, 1.8, true)
+
+## 20. 玄天星盘 (精英：静止弹幕炮台，双层逆向星刻环+四角镇物棱晶+璀璨星核)
+func _draw_xingpan_elite() -> void:
+	var charge := clampf(special_state, 0.0, 1.0)
+	var burst := clampf(recoil, 0.0, 1.0)
+	var center := Vector2(0, -2)
+
+	# 坚实沉重的大型地影（不动如山）
+	_draw_soft_shadow(Vector2(0, 18), 24.0, 6.0, 0.65)
+
+	# 1. 八角玄天星盘底座（八边形厚甲盘）
+	var base_pts := PackedVector2Array()
+	var base_r := 21.0
+	for i in range(8):
+		var ang := float(i) * TAU / 8.0 + PI / 8.0
+		base_pts.append(center + Vector2(cos(ang), sin(ang)) * base_r)
+	draw_stroked_polygon(base_pts, config.col_primary, _contour_color(), 1.8)
+
+	# 八角内衬金错纹路
+	var inner_pts := PackedVector2Array()
+	var inner_r := 16.5
+	for i in range(8):
+		var ang := float(i) * TAU / 8.0 + PI / 8.0
+		inner_pts.append(center + Vector2(cos(ang), sin(ang)) * inner_r)
+	draw_polyline(inner_pts, config.col_accent * Color(1, 1, 1, 0.65), 1.2, true)
+	if inner_pts.size() > 0:
+		draw_line(inner_pts[inner_pts.size() - 1], inner_pts[0], config.col_accent * Color(1, 1, 1, 0.65), 1.2, true)
+
+	# 2. 正反双层旋转刻度环
+	# 外层顺时针旋转刻度环（蓄力时收束提速）
+	var rot_speed_outer := (0.6 + charge * 2.2)
+	var rot_outer := _time * rot_speed_outer
+	var ring_outer_r := 18.0 - charge * 2.0 + burst * 2.5
+	_arc(center, ring_outer_r, 0.0, TAU, 32, config.col_secondary * Color(1, 1, 1, 0.75), 1.6, true)
+	for k in range(8):
+		var a := rot_outer + TAU * float(k) / 8.0
+		var pt := center + Vector2(cos(a), sin(a)) * ring_outer_r
+		_circle(pt, 1.4, config.col_glow)
+
+	# 内层逆时针旋转符文环
+	var rot_speed_inner := -(0.8 + charge * 2.5)
+	var rot_inner := _time * rot_speed_inner
+	var ring_inner_r := 12.0 - charge * 1.5
+	_arc(center, ring_inner_r, 0.0, TAU, 28, config.col_accent, 1.4, true)
+	for k in range(4):
+		var a := rot_inner + TAU * float(k) / 4.0
+		var p1 := center + Vector2(cos(a), sin(a)) * (ring_inner_r - 2.0)
+		var p2 := center + Vector2(cos(a), sin(a)) * (ring_inner_r + 2.0)
+		draw_line(p1, p2, config.col_glow, 1.5, true)
+
+	# 3. 四角悬浮镇物棱晶（随时间微浮，向外伸展）
+	var crystal_dist := 22.0 + sin(_time * 2.4) * 1.2 + charge * 2.0
+	for k in range(4):
+		var a := float(k) * TAU / 4.0 + PI / 4.0
+		var c_pos := center + Vector2(cos(a), sin(a)) * crystal_dist
+		var dir := Vector2(cos(a), sin(a))
+		var norm := Vector2(-dir.y, dir.x)
+		var cry_pts := PackedVector2Array([
+			c_pos + dir * 4.5,
+			c_pos + norm * 2.2,
+			c_pos - dir * 2.5,
+			c_pos - norm * 2.2
+		])
+		draw_stroked_polygon(cry_pts, config.col_secondary, config.col_glow, 1.2)
+		draw_line(center + Vector2(cos(a), sin(a)) * inner_r, c_pos - dir * 2.0, config.col_accent * Color(1, 1, 1, 0.45), 1.0, true)
+
+	# 4. 中央璀璨星核阵眼（极光辉光，蓄力时爆亮）
+	var glow_r := 12.0 + charge * 8.0 + burst * 6.0
+	var glow_alpha := 0.6 + charge * 0.4
+	draw_soft_glow(center, glow_r, config.col_glow * Color(1, 1, 1, glow_alpha), 2)
+	_circle(center, 4.8 + charge * 1.2, config.col_void)
+	_circle(center, 3.2 + charge * 0.8, config.col_glow)
+	_circle(center, 1.5, Color(1.0, 1.0, 1.0, 0.95))
+
+## 21. 万毒祭司 (精英：南荒九幽万毒祭司，墨绿蛊袍+双角蛊骨冠+三方环绕毒香炉)
+func _draw_wandu_elite() -> void:
+	var charge := clampf(special_state, 0.0, 1.0)
+	var float_y := sin(_time * 2.2 + _phase_seed) * 2.2 - charge * 3.0
+	var center := Vector2(0, -4 + float_y)
+
+	# 悬浮地影
+	_draw_soft_shadow(Vector2(0, 19), 20.0, 5.5, 0.55)
+
+	# 1. 祭司周身环绕飘浮的 3 枚碧绿毒香炉 / 蛊火宝珠
+	var orb_rot := _time * (1.2 + charge * 1.8)
+	var orb_dist := 21.0 + sin(_time * 2.8) * 1.5 + charge * 4.0
+	for k in range(3):
+		var a := orb_rot + TAU * float(k) / 3.0
+		var orb_pos := center + Vector2(cos(a) * orb_dist, sin(a) * (orb_dist * 0.65) - 2.0)
+		draw_soft_glow(orb_pos, 8.0 + charge * 4.0, config.col_glow * Color(1, 1, 1, 0.55), 2)
+		_circle(orb_pos, 3.0, config.col_primary)
+		_circle(orb_pos, 2.0, config.col_glow)
+		_circle(orb_pos, 1.0, Color(0.9, 1.0, 0.85, 0.95))
+		var smoke_end := orb_pos + Vector2(sin(_time * 3.5 + float(k)) * 3.0, -6.0)
+		draw_line(orb_pos, smoke_end, config.col_accent * Color(1, 1, 1, 0.5), 1.2, true)
+
+	# 2. 墨绿巫蛊祭袍躯干
+	var robe_pts := PackedVector2Array([
+		center + Vector2(-12.0, -8.0),
+		center + Vector2(-9.0, -13.0),
+		center + Vector2(0.0, -15.0),
+		center + Vector2(9.0, -13.0),
+		center + Vector2(12.0, -8.0),
+		center + Vector2(14.0, 8.0),
+		center + Vector2(9.0, 16.0),
+		center + Vector2(0.0, 13.0),
+		center + Vector2(-9.0, 16.0),
+		center + Vector2(-14.0, 8.0)
+	])
+	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.6)
+
+	# 祭袍两侧垂挂的翠毒妖纹破布条
+	draw_line(center + Vector2(-10.0, 10.0), center + Vector2(-12.0, 20.0), config.col_accent, 1.8, true)
+	draw_line(center + Vector2(10.0, 10.0), center + Vector2(12.0, 20.0), config.col_accent, 1.8, true)
+
+	# 3. 胸口幽绿蛊阵印记
+	draw_soft_glow(center + Vector2(0, 0), 11.0, config.col_glow * Color(1, 1, 1, 0.5 + charge * 0.4), 2)
+	for k in range(3):
+		var a := float(k) * TAU / 3.0 - PI / 2.0
+		var rune_p := center + Vector2(0, 0) + Vector2(cos(a), sin(a)) * 3.6
+		draw_line(center + Vector2(0, 0), rune_p, config.col_accent, 1.5, true)
+	_circle(center + Vector2(0, 0), 2.0, config.col_glow)
+
+	# 4. 惨白蛊骨冠与头面
+	var head_pos := center + Vector2(0, -12.0)
+	draw_filled_ellipse(head_pos, 5.5, 5.0, config.col_void)
+	var horn_l := PackedVector2Array([
+		head_pos + Vector2(-3.0, -3.0),
+		head_pos + Vector2(-7.5, -8.0),
+		head_pos + Vector2(-11.0, -14.0),
+		head_pos + Vector2(-8.5, -13.0),
+		head_pos + Vector2(-5.0, -6.0)
+	])
+	var horn_r := PackedVector2Array([
+		head_pos + Vector2(3.0, -3.0),
+		head_pos + Vector2(7.5, -8.0),
+		head_pos + Vector2(11.0, -14.0),
+		head_pos + Vector2(8.5, -13.0),
+		head_pos + Vector2(5.0, -6.0)
+	])
+	draw_stroked_polygon(horn_l, config.col_secondary, _contour_color(), 1.2)
+	draw_stroked_polygon(horn_r, config.col_secondary, _contour_color(), 1.2)
+
+	# 狭长幽绿蛊瞳（带视线锁敌偏移）
+	var pupil_shift := _local_aim_cache * 1.0
+	_circle(head_pos + Vector2(-2.2, 0.0) + pupil_shift, 1.4, config.col_glow)
+	_circle(head_pos + Vector2(2.2, 0.0) + pupil_shift, 1.4, config.col_glow)

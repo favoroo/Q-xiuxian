@@ -27,8 +27,13 @@ enum Pattern {
 	SKY_FIRE,    ## 追踪天火连环轰炸
 	SLAM,        ## 震地冲击（附二阶段/近远派生）
 	SUMMON,      ## 召唤妖群 + 弹幕掩护
+	CHAIN_CHARGE, ## 多段折返连冲
+	TURRET_SHIFT, ## 阵眼换桩瞬移 + 双环震爆
+	HAZARD_FIELD, ## 连环禁区封锁
+	BLINK_SLASH,  ## 瞬步贴脸扇形回斩
 }
 
+@export var boss_id: String = ""
 @export var boss_title: String = "敌潮Boss"
 @export var final_boss: bool = false      ## 第 20 波魔尊：换紫皮、放大身形、全招式全开
 @export var attack_interval: float = GameBalance.BOSS_ATTACK_INTERVAL  ## 特殊攻击循环间隔
@@ -37,6 +42,7 @@ var _attack_timer: float = 2.4    ## 开场缓冲，让玩家先看清魔君登�
 var _pattern_idx: int = 0
 var _phase2: bool = false
 var _tint: Color = Color.WHITE    ## 常态染色（二阶段转红/紫，演出后回染）
+var _purple_bolts: bool = false        ## 幽紫魔弹口径：仅旧最终Boss与九幽心魔尊使用
 
 # 血条信号节流
 var _hp_emit_acc: float = 0.0
@@ -70,8 +76,8 @@ func _sync_cast_pose() -> void:
 		pose = clampf(1.0 - _charge_windup / maxf(GameBalance.BOSS_CHARGE_WINDUP, 0.001), 0.0, 1.0)
 	elif _spiral_active:
 		pose = 0.5   # 引导喷吐：恒定收束指向态
-	elif _fan_waves_left > 0 or _sky_fire_strikes_left > 0:
-		pose = 0.35  # 连射/天火后台推进：轻收束读数
+	elif _fan_waves_left > 0 or _sky_fire_strikes_left > 0 or _hazard_fields_left > 0:
+		pose = 0.35  # 连射/天火/禁区后台推进：轻收束读数
 	procedural_view.special_state = pose
 	var casting := pose > 0.001
 	if _pose_casting and not casting:
@@ -94,6 +100,14 @@ var _sky_fire_strikes_left: int = 0
 var _sky_fire_spawn_timer: float = 0.0
 var _active_sky_fires: Array[Dictionary] = []
 
+# 连环冲刺状态机
+var _chain_charges_left: int = 0
+
+# 禁区封锁状态机
+var _hazard_fields_left: int = 0
+var _hazard_spawn_timer: float = 0.0
+var _active_hazard_fields: Array[Dictionary] = []
+
 ## 出招轮换表：按波次与阶段动态编排
 var _patterns: Array = []
 
@@ -104,7 +118,16 @@ var _minion_scenes: Array = [
 ]
 
 func _ready() -> void:
-	if final_boss:
+	if boss_id != "":
+		if "BOSS_POOL" in EnemyData and EnemyData.BOSS_POOL.has(boss_id):
+			var cfg: Dictionary = EnemyData.BOSS_POOL[boss_id]
+			move_speed = float(cfg.get("move_speed", move_speed))
+		if boss_id == "qianji":
+			move_speed = 0.0
+		elif boss_id == "wangu":
+			preferred_range = 240.0
+		_apply_boss_visuals()
+	elif final_boss:
 		spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
 		anim_sprite.scale *= 1.16
 		var light := get_node_or_null("PointLight2D") as PointLight2D
@@ -129,46 +152,131 @@ func _ready() -> void:
 	# 死亡演出分级（2026-10-15）：Boss 伏诛走「倾倒 → 尸体滞留慢渐隐」，不随小怪塌缩
 	death_corpse_linger = true
 
+	_purple_bolts = final_boss and (boss_id == "" or boss_id == "xinmo")
 	_setup_patterns()
 	super._ready()
+	if procedural_view != null and boss_id != "":
+		procedural_view.setup("boss_" + boss_id, true, true, final_boss)
 	# 登场即上屏：HUD 血条由此信号点亮
 	GameManager.boss_hp_changed.emit(current_hp, max_hp, boss_title)
 	# Boss 战 BGM 压闷制造紧张感（伏诛/转阶段由 _die 与 play_bgm_key 负责解除）
 	AudioManager.set_bgm_muffle(true)
 
+func _apply_boss_visuals() -> void:
+	var light := get_node_or_null("PointLight2D") as PointLight2D
+	if boss_id == "chiyan":
+		_tint = Color(1.7, 0.5, 0.45)
+		if light != null:
+			light.color = Color(1.0, 0.45, 0.3)
+			light.energy = 0.75
+	elif boss_id == "xiuluo":
+		_tint = Color(1.3, 0.4, 0.4)
+		hit_stun_resist = 0.2
+		if light != null:
+			light.color = Color(0.95, 0.25, 0.2)
+			light.energy = 0.85
+	elif boss_id == "qianji":
+		_tint = Color(0.5, 0.85, 1.1)
+		hit_stun_resist = 0.0
+		if light != null:
+			light.color = Color(0.35, 0.8, 0.95)
+			light.energy = 0.85
+	elif boss_id == "wangu":
+		_tint = Color(0.5, 1.25, 0.6)
+		hit_stun_resist = 0.2
+		if light != null:
+			light.color = Color(0.3, 0.9, 0.4)
+			light.energy = 0.8
+	elif boss_id == "jianpo":
+		_tint = Color(0.9, 1.1, 1.3)
+		hit_stun_resist = 0.15
+		if light != null:
+			light.color = Color(0.7, 0.9, 1.0)
+			light.energy = 0.8
+	elif boss_id == "xinmo" or final_boss:
+		spritesheet_path = "res://assets/art/warrior_purple_8dir.png"
+		if anim_sprite != null:
+			anim_sprite.scale *= 1.16
+		_tint = Color(1.15, 0.85, 1.35)
+		hit_stun_resist = 0.25
+		if light != null:
+			light.color = Color(0.8, 0.45, 1.0)
+			light.energy = 0.85
+	if anim_sprite != null:
+		anim_sprite.modulate = _tint
+
 func _setup_patterns() -> void:
-	if final_boss:
-		# 第 20 波魔尊：全招式全面施展
-		_patterns = [
-			Pattern.RING,
-			Pattern.BURST_FAN,
-			Pattern.SKY_FIRE,
-			Pattern.CHARGE,
-			Pattern.SPIRAL,
-			Pattern.SPLIT_BOMB,
-			Pattern.SLAM,
-			Pattern.SUMMON,
-		]
-	elif _phase2:
-		# 第 10 波狂暴形态：解锁天火与螺旋
-		_patterns = [
-			Pattern.RING,
-			Pattern.BURST_FAN,
-			Pattern.SKY_FIRE,
-			Pattern.CHARGE,
-			Pattern.SPIRAL,
-			Pattern.SLAM,
-			Pattern.SUMMON,
-		]
-	else:
-		# 第 10 波常态起手
-		_patterns = [
-			Pattern.RING,
-			Pattern.BURST_FAN,
-			Pattern.CHARGE,
-			Pattern.SLAM,
-			Pattern.SUMMON,
-		]
+	if boss_id == "":
+		if final_boss:
+			# 第 20 波魔尊：全招式全面施展
+			_patterns = [
+				Pattern.RING,
+				Pattern.BURST_FAN,
+				Pattern.SKY_FIRE,
+				Pattern.CHARGE,
+				Pattern.SPIRAL,
+				Pattern.SPLIT_BOMB,
+				Pattern.SLAM,
+				Pattern.SUMMON,
+			]
+		elif _phase2:
+			# 第 10 波狂暴形态：解锁天火与螺旋
+			_patterns = [
+				Pattern.RING,
+				Pattern.BURST_FAN,
+				Pattern.SKY_FIRE,
+				Pattern.CHARGE,
+				Pattern.SPIRAL,
+				Pattern.SLAM,
+				Pattern.SUMMON,
+			]
+		else:
+			# 第 10 波常态起手
+			_patterns = [
+				Pattern.RING,
+				Pattern.BURST_FAN,
+				Pattern.CHARGE,
+				Pattern.SLAM,
+				Pattern.SUMMON,
+			]
+		return
+
+	match boss_id:
+		"chiyan":
+			if _phase2:
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.SKY_FIRE, Pattern.CHARGE, Pattern.SPIRAL, Pattern.SLAM, Pattern.SUMMON]
+			else:
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.CHARGE, Pattern.SLAM, Pattern.SUMMON]
+		"xiuluo":
+			if _phase2:
+				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SLAM, Pattern.BLINK_SLASH, Pattern.CHAIN_CHARGE, Pattern.RING, Pattern.SLAM]
+			else:
+				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SLAM, Pattern.CHARGE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.SLAM]
+		"qianji":
+			if _phase2:
+				_patterns = [Pattern.SPIRAL, Pattern.SPLIT_BOMB, Pattern.SKY_FIRE, Pattern.TURRET_SHIFT, Pattern.RING, Pattern.SPIRAL, Pattern.SPLIT_BOMB]
+			else:
+				_patterns = [Pattern.SPIRAL, Pattern.RING, Pattern.SPLIT_BOMB, Pattern.TURRET_SHIFT, Pattern.BURST_FAN, Pattern.RING]
+		"wangu":
+			if _phase2:
+				_patterns = [Pattern.HAZARD_FIELD, Pattern.SUMMON, Pattern.SKY_FIRE, Pattern.SPLIT_BOMB, Pattern.HAZARD_FIELD, Pattern.SPIRAL]
+			else:
+				_patterns = [Pattern.HAZARD_FIELD, Pattern.SUMMON, Pattern.SPLIT_BOMB, Pattern.BURST_FAN, Pattern.HAZARD_FIELD, Pattern.RING]
+		"jianpo":
+			if _phase2:
+				_patterns = [Pattern.BLINK_SLASH, Pattern.CHAIN_CHARGE, Pattern.BURST_FAN, Pattern.BLINK_SLASH, Pattern.SKY_FIRE, Pattern.SPIRAL]
+			else:
+				_patterns = [Pattern.BLINK_SLASH, Pattern.BURST_FAN, Pattern.CHARGE, Pattern.BLINK_SLASH, Pattern.RING, Pattern.BURST_FAN]
+		"xinmo":
+			if _phase2:
+				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.BLINK_SLASH, Pattern.SPLIT_BOMB, Pattern.HAZARD_FIELD, Pattern.SKY_FIRE, Pattern.TURRET_SHIFT, Pattern.SLAM]
+			else:
+				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.HAZARD_FIELD, Pattern.SPLIT_BOMB, Pattern.BLINK_SLASH, Pattern.SKY_FIRE, Pattern.SLAM, Pattern.RING]
+		_:
+			if _phase2 or final_boss:
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.SKY_FIRE, Pattern.CHARGE, Pattern.SPIRAL, Pattern.SLAM, Pattern.SUMMON]
+			else:
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.CHARGE, Pattern.SLAM, Pattern.SUMMON]
 
 ## Boss 出招大脑：与 EnemyBase._physics_process 的移动/接触伤害并行运行
 func _process(delta: float) -> void:
@@ -203,9 +311,10 @@ func _process(delta: float) -> void:
 		_tick_spiral(delta)
 		return
 
-	# 4. 后台招式推进（扇形连射与天火定点）
+	# 4. 后台招式推进（扇形连射、天火定点与禁区封锁）
 	_tick_burst_fan(delta, player)
 	_tick_sky_fires(delta, player)
+	_tick_hazard_fields(delta, player)
 
 	# 5. 主技能循环定时器
 	_attack_timer -= delta
@@ -236,6 +345,14 @@ func _cast_next(player: Node2D) -> void:
 			_cast_slam()
 		Pattern.SUMMON:
 			_cast_summon(player)
+		Pattern.CHAIN_CHARGE:
+			_cast_chain_charge(player)
+		Pattern.TURRET_SHIFT:
+			_cast_turret_shift(player)
+		Pattern.HAZARD_FIELD:
+			_cast_hazard_field(player)
+		Pattern.BLINK_SLASH:
+			_cast_blink_slash(player)
 
 # ---------------- 招式 1：双层交错弧线环弹 ----------------
 
@@ -259,7 +376,7 @@ func _fire_ring_layer(layer: int) -> void:
 	var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_RING_DMG_MULT)
 	var ang_spd := 0.0
 	var offset_ang := 0.0
-	var spd := GameBalance.BOSS_BOLT_SPEED
+	var spd := GameBalance.BOSS_BOLT_SPEED * bolt_speed_mult
 
 	if layer == 1:
 		ang_spd = GameBalance.BOSS_RING_CURVE_ANG   # 顺时针弧线
@@ -269,7 +386,7 @@ func _fire_ring_layer(layer: int) -> void:
 		offset_ang = TAU / float(count * 2)
 	elif layer == 3:
 		ang_spd = 0.0                              # 直线高速穿透环
-		spd = GameBalance.BOSS_BOLT_SPEED * 1.25
+		spd = GameBalance.BOSS_BOLT_SPEED * 1.25 * bolt_speed_mult
 		offset_ang = TAU / float(count * 4)
 
 	for i in range(count):
@@ -281,7 +398,7 @@ func _fire_ring_layer(layer: int) -> void:
 		bolt.damage = dmg
 		bolt.scale_factor = GameBalance.BOSS_BOLT_SCALE
 		bolt.angular_speed = ang_spd
-		bolt.purple_style = final_boss
+		bolt.purple_style = _purple_bolts
 		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.65)
 	GameManager.add_trauma(0.12)
@@ -306,7 +423,7 @@ func _tick_burst_fan(delta: float, player: Node2D) -> void:
 		var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
 		var count := GameBalance.BOSS_FAN_COUNT
 		var spread := GameBalance.BOSS_FAN_SPREAD
-		var spd := GameBalance.BOSS_FAN_BASE_SPEED + float(wave_idx - 1) * 45.0
+		var spd := (GameBalance.BOSS_FAN_BASE_SPEED + float(wave_idx - 1) * 45.0) * bolt_speed_mult
 		var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_FAN_DMG_MULT)
 		for i in range(count):
 			var ang_offset := (float(i) - float(count - 1) * 0.5) * spread
@@ -316,7 +433,7 @@ func _tick_burst_fan(delta: float, player: Node2D) -> void:
 			bolt.speed = spd
 			bolt.damage = dmg
 			bolt.scale_factor = 1.3
-			bolt.purple_style = final_boss
+			bolt.purple_style = _purple_bolts
 			bolt.activate()
 		AudioManager.play_sfx("enemy_bolt", 0.6, 1.0 + float(wave_idx) * 0.08)
 
@@ -349,11 +466,11 @@ func _tick_spiral(delta: float) -> void:
 			var bolt := EnemyBolt.acquire(get_parent())
 			bolt.global_position = global_position
 			bolt.direction = Vector2(cos(arm_ang), sin(arm_ang))
-			bolt.speed = GameBalance.BOSS_SPIRAL_BOLT_SPEED
+			bolt.speed = GameBalance.BOSS_SPIRAL_BOLT_SPEED * bolt_speed_mult
 			bolt.angular_speed = GameBalance.BOSS_SPIRAL_ANGULAR
 			bolt.damage = dmg
 			bolt.scale_factor = 1.2
-			bolt.purple_style = final_boss
+			bolt.purple_style = _purple_bolts
 			bolt.activate()
 		AudioManager.play_sfx("enemy_bolt", 0.45)
 	if _spiral_timer <= 0.0:
@@ -375,12 +492,12 @@ func _cast_split_bomb(player: Node2D) -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = dir
-		bolt.speed = GameBalance.BOSS_SPLIT_BOMB_SPEED
+		bolt.speed = GameBalance.BOSS_SPLIT_BOMB_SPEED * bolt_speed_mult
 		bolt.scale_factor = GameBalance.BOSS_SPLIT_BOMB_SCALE
 		bolt.damage = maxf(1.0, contact_damage * GameBalance.BOSS_SPLIT_BOMB_DMG_MULT)
 		bolt.split_timer = GameBalance.BOSS_SPLIT_BOMB_FUSE
 		bolt.split_count = GameBalance.BOSS_SPLIT_BOMB_CHILD_COUNT
-		bolt.split_speed = GameBalance.BOSS_SPLIT_BOMB_CHILD_SPEED
+		bolt.split_speed = GameBalance.BOSS_SPLIT_BOMB_CHILD_SPEED * bolt_speed_mult
 		bolt.split_scale = GameBalance.BOSS_SPLIT_BOMB_CHILD_SCALE
 		bolt.split_damage = maxf(1.0, contact_damage * GameBalance.BOSS_SPLIT_CHILD_DMG_MULT)
 		bolt.purple_style = true
@@ -418,7 +535,7 @@ func _start_charge(dir: Vector2) -> void:
 				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
 				bolt.damage = dmg
 				bolt.scale_factor = 1.2
-				bolt.purple_style = final_boss
+				bolt.purple_style = _purple_bolts
 				bolt.activate()
 	AudioManager.play_sfx("enemy_slam", 0.85)
 	GameManager.add_trauma(0.12)
@@ -428,6 +545,58 @@ func _settle_charge_recovery() -> void:
 	super._settle_charge_recovery()
 	if _phase2 or final_boss:
 		_fire_mini_ring(8, 255.0, 1.1)
+	if _chain_charges_left > 0:
+		_chain_charges_left -= 1
+		var p = GameManager.player
+		if p != null and not dying:
+			_charge_stagger = 0.0
+			_charge_dir = (p.global_position - global_position).normalized()
+			var gap: float = GameBalance.BOSS_CHAIN_CHARGE_GAP
+			_charge_windup = gap
+			_charge_windup_total = gap
+			_update_charge_warning(p)
+			play_squash(Vector2(1.22, 0.78), gap)
+			AudioManager.play_sfx("enemy_fuse", 0.7)
+			if _chain_charges_left == 0:
+				charge_whiff_stagger = 0.55
+	else:
+		charge_whiff_stagger = 0.25
+
+# ---------------- 招式 9：多段折返连冲 ----------------
+
+func _cast_chain_charge(player: Node2D) -> void:
+	var total_cnt: int = GameBalance.BOSS_CHAIN_CHARGE_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_CHAIN_CHARGE_COUNT
+	_chain_charges_left = maxi(1, total_cnt) - 1
+	charge_whiff_stagger = 0.55 if _chain_charges_left == 0 else 0.0
+	_cast_charge(player)
+
+# ---------------- 招式 10：阵眼换桩瞬移 + 双环震爆 ----------------
+
+func _cast_turret_shift(player: Node2D) -> void:
+	if dying or get_parent() == null:
+		return
+	var center := Vector2(480.0, 270.0)
+	var p_pos := player.global_position if (player != null and is_instance_valid(player)) else center
+	var from_center := (p_pos - center)
+	var away_dir := -from_center.normalized() if from_center.length_squared() > 1.0 else Vector2.LEFT
+	var jitter := (GameManager.rng.randf() - 0.5) * 0.7
+	var new_pos := center + away_dir.rotated(jitter) * GameBalance.BOSS_TURRET_TELEPORT_RADIUS
+	new_pos.x = clampf(new_pos.x, 90.0, 870.0)
+	new_pos.y = clampf(new_pos.y, 90.0, 450.0)
+
+	# 1. 原位留小环弹与震波
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 60.0, GameStyle.FX_HDR_GOLD if final_boss else GameStyle.BAD, 0.26)
+	_fire_mini_ring(8, 200.0, 1.0)
+	AudioManager.play_sfx("enemy_fuse", 0.7)
+
+	# 2. 瞬移到新阵点
+	global_position = new_pos
+	JuiceEffect.spawn_shockwave(get_parent(), new_pos, 85.0, GameStyle.FX_HDR_GOLD if final_boss else GameStyle.BAD, 0.3)
+	play_squash(Vector2(0.78, 1.25), 0.25)
+	_pose_burst()
+
+	# 3. 爆一圈弧线环弹
+	_fire_ring_layer(1)
 
 # ---------------- 招式 6：追踪天火连环轰炸 ----------------
 
@@ -555,10 +724,10 @@ func _fire_mini_ring(count: int, spd: float, scl: float) -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = Vector2(cos(ang), sin(ang))
-		bolt.speed = spd
+		bolt.speed = spd * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.scale_factor = scl
-		bolt.purple_style = final_boss
+		bolt.purple_style = _purple_bolts
 		bolt.activate()
 
 func _fire_cover_spread(player: Node2D) -> void:
@@ -570,19 +739,147 @@ func _fire_cover_spread(player: Node2D) -> void:
 		var bolt := EnemyBolt.acquire(get_parent())
 		bolt.global_position = global_position
 		bolt.direction = base_dir.rotated(ang)
-		bolt.speed = 260.0
+		bolt.speed = 260.0 * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.scale_factor = 1.2
-		bolt.purple_style = final_boss
+		bolt.purple_style = _purple_bolts
 		bolt.activate()
+
+# ---------------- 招式 11：连环禁区封锁 ----------------
+
+func _cast_hazard_field(player: Node2D) -> void:
+	_hazard_fields_left = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_HAZARD_FIELD_COUNT
+	_hazard_spawn_timer = 0.0
+	play_squash(Vector2(0.9, 1.2), 0.3)
+	_pose_burst()
+
+func _tick_hazard_fields(delta: float, player: Node2D) -> void:
+	if _hazard_fields_left > 0:
+		_hazard_spawn_timer -= delta
+		if _hazard_spawn_timer <= 0.0:
+			_hazard_spawn_timer = 0.18
+			_hazard_fields_left -= 1
+			var total_cnt: int = GameBalance.BOSS_HAZARD_FIELD_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_HAZARD_FIELD_COUNT
+			var idx: int = total_cnt - _hazard_fields_left
+			var p_pos := player.global_position if (player != null and is_instance_valid(player)) else global_position
+			var p_vel: Vector2 = player.velocity if (player is CharacterBody2D) else Vector2.ZERO
+			var offset := Vector2.ZERO
+			if idx > 1:
+				if p_vel.length_squared() > 100.0:
+					offset = p_vel.normalized() * (60.0 * float(idx - 1)) + Vector2.from_angle(float(idx) * 2.3) * 35.0
+				else:
+					offset = Vector2.from_angle(float(idx) * 2.1) * (80.0 + float(idx) * 25.0)
+			var target_pos := p_pos + offset
+			target_pos.x = clampf(target_pos.x, 90.0, 870.0)
+			target_pos.y = clampf(target_pos.y, 90.0, 450.0)
+
+			var tg := AoeTelegraph.new()
+			tg.radius = GameBalance.BOSS_HAZARD_FIELD_RADIUS
+			tg.progress = 0.0
+			get_parent().add_child(tg)
+			tg.global_position = target_pos
+			_active_hazard_fields.append({
+				"telegraph": tg,
+				"timer": GameBalance.BOSS_HAZARD_FIELD_WINDUP,
+				"pos": target_pos
+			})
+			AudioManager.play_sfx("enemy_fuse", 0.6)
+
+	var i := 0
+	while i < _active_hazard_fields.size():
+		var field: Dictionary = _active_hazard_fields[i]
+		field.timer -= delta
+		var tg: AoeTelegraph = field.get("telegraph")
+		if tg != null and is_instance_valid(tg):
+			tg.progress = 1.0 - field.timer / GameBalance.BOSS_HAZARD_FIELD_WINDUP
+		if field.timer <= 0.0:
+			_resolve_single_hazard_field(field.pos)
+			if tg != null and is_instance_valid(tg):
+				tg.queue_free()
+			_active_hazard_fields.remove_at(i)
+		else:
+			i += 1
+
+func _resolve_single_hazard_field(pos: Vector2) -> void:
+	if dying or get_parent() == null:
+		return
+	var pool := PoisonPool.acquire(get_parent())
+	pool.global_position = pos
+	pool.damage = maxf(1.0, contact_damage * GameBalance.BOSS_HAZARD_FIELD_DMG_MULT)
+	pool.duration = GameBalance.BOSS_HAZARD_FIELD_DURATION
+	pool.scale_factor = GameBalance.BOSS_HAZARD_FIELD_RADIUS / PoisonPool.RADIUS
+	pool.activate()
+	pool.modulate = Color(1.55, 0.45, 0.55) if (final_boss or boss_id == "xinmo") else Color(0.35, 1.35, 0.55)
+	JuiceEffect.spawn_shockwave(get_parent(), pos, GameBalance.BOSS_HAZARD_FIELD_RADIUS, GameStyle.BAD, 0.28)
+	AudioManager.play_sfx("enemy_poison", 1.0, 0.85)
+
+# ---------------- 招式 12：瞬步贴脸扇形回斩 ----------------
+
+func _cast_blink_slash(player: Node2D) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+		return
+	var p_pos := player.global_position
+	var p_vel: Vector2 = player.velocity if (player is CharacterBody2D) else Vector2.ZERO
+	var behind_dir: Vector2
+	if p_vel.length_squared() > 100.0:
+		behind_dir = -p_vel.normalized().rotated((GameManager.rng.randf() - 0.5) * 0.8)
+	else:
+		behind_dir = Vector2.from_angle(GameManager.rng.randf() * TAU)
+	var target_pos := p_pos + behind_dir * GameBalance.BOSS_BLINK_SLASH_DIST
+	target_pos.x = clampf(target_pos.x, 90.0, 870.0)
+	target_pos.y = clampf(target_pos.y, 90.0, 450.0)
+
+	JuiceEffect.spawn_shockwave(get_parent(), global_position, 50.0, GameStyle.BAD, 0.22)
+	global_position = target_pos
+	JuiceEffect.spawn_shockwave(get_parent(), target_pos, 60.0, GameStyle.FX_HDR_GOLD if final_boss else GameStyle.BAD, 0.25)
+	AudioManager.play_sfx("enemy_slam", 0.85)
+	play_squash(Vector2(1.25, 0.8), 0.2)
+	_pose_burst()
+
+	var bolts_count: int = GameBalance.BOSS_BLINK_SLASH_BOLTS_P2 if (_phase2 or final_boss) else GameBalance.BOSS_BLINK_SLASH_BOLTS
+	var to_p: Vector2 = (player.global_position - global_position).normalized()
+	var base_ang := to_p.angle()
+	var spread: float = GameBalance.BOSS_BLINK_SLASH_SPREAD
+	var spd: float = GameBalance.BOSS_BLINK_SLASH_SPEED * bolt_speed_mult
+	var dmg: float = maxf(1.0, contact_damage * GameBalance.BOSS_BLINK_SLASH_DMG_MULT)
+	for i in range(bolts_count):
+		var ang_offset := (float(i) - float(bolts_count - 1) * 0.5) * spread
+		var bolt := EnemyBolt.acquire(get_parent())
+		bolt.global_position = global_position
+		bolt.direction = Vector2.from_angle(base_ang + ang_offset)
+		bolt.speed = spd
+		bolt.damage = dmg
+		bolt.scale_factor = 1.25
+		bolt.sword_style = true
+		bolt.purple_style = _purple_bolts
+		bolt.activate()
+	AudioManager.play_sfx("enemy_bolt", 0.7, 1.1)
 
 # ---------------- 二阶段与死亡结算 ----------------
 
 func _enter_phase2() -> void:
 	_phase2 = true
-	_tint = Color(1.5, 0.5, 1.8) if final_boss else Color(1.4, 0.6, 0.6)
-	anim_sprite.modulate = _tint
-	move_speed *= GameBalance.BOSS_PHASE2_SPEED_MULT
+	if boss_id == "xiuluo":
+		_tint = Color(1.7, 0.3, 0.3)
+	elif boss_id == "qianji":
+		_tint = Color(0.6, 1.1, 1.4)
+	elif boss_id == "wangu":
+		_tint = Color(0.6, 1.5, 0.7)
+	elif boss_id == "jianpo":
+		_tint = Color(1.1, 1.3, 1.6)
+	elif boss_id == "xinmo" or final_boss:
+		_tint = Color(1.5, 0.5, 1.8)
+	else:
+		_tint = Color(1.4, 0.6, 0.6)
+	if anim_sprite != null:
+		anim_sprite.modulate = _tint
+
+	if boss_id == "qianji":
+		move_speed = 0.0
+		attack_interval *= 0.8
+	else:
+		move_speed *= GameBalance.BOSS_PHASE2_SPEED_MULT
+
 	_setup_patterns()
 	play_squash(Vector2(1.3, 0.75), 0.35)
 	GameManager.announcement_triggered.emit("◆ %s · 狂暴形态 ◆" % boss_title)
@@ -594,8 +891,9 @@ func _enter_phase2() -> void:
 func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_dot: bool = false, chain_tint: Color = Color(0, 0, 0, 0)) -> void:
 	if dying:
 		return
-	# Boss 抗击退：几乎推不动，走位压力全靠技能
-	super.take_damage(amount, knockback * GameBalance.BOSS_KNOCKBACK_RESIST, is_crit, from_dot, chain_tint)
+	# Boss 抗击退：几乎推不动，走位压力全靠技能（千机尊完全不动）
+	var kb: Vector2 = Vector2.ZERO if boss_id == "qianji" else (knockback * GameBalance.BOSS_KNOCKBACK_RESIST)
+	super.take_damage(amount, kb, is_crit, from_dot, chain_tint)
 	if dying:
 		return
 	# 大比例掉血的镜头回应（2026-10-14）：Boss 挨一刀超过最大生命该比例时给一笔轻创伤，
@@ -620,6 +918,8 @@ func _die() -> void:
 	_spiral_active = false
 	_fan_waves_left = 0
 	_sky_fire_strikes_left = 0
+	_hazard_fields_left = 0
+	_chain_charges_left = 0
 	_clear_charge_warning()
 	if _slam_ring != null:
 		_slam_ring.visible = false
@@ -628,6 +928,11 @@ func _die() -> void:
 		if tg != null and is_instance_valid(tg):
 			tg.queue_free()
 	_active_sky_fires.clear()
+	for field in _active_hazard_fields:
+		var tg: AoeTelegraph = field.get("telegraph")
+		if tg != null and is_instance_valid(tg):
+			tg.queue_free()
+	_active_hazard_fields.clear()
 
 	GameManager.add_spirit_stones(GameBalance.BOSS_STONE_REWARD)
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)

@@ -100,6 +100,13 @@ const MUT_CHILEI_SIDE_BOLTS := BalanceWave.MUT_CHILEI_SIDE_BOLTS
 const MUT_JIANSHA_BOLT_COUNT := BalanceWave.MUT_JIANSHA_BOLT_COUNT
 const MUT_JIANSHA_INTERVAL_MULT := BalanceWave.MUT_JIANSHA_INTERVAL_MULT
 const MUT_JIANSHA_RANGE := BalanceWave.MUT_JIANSHA_RANGE
+const MUT_XINGPAN_RING_COUNT := BalanceWave.MUT_XINGPAN_RING_COUNT
+const MUT_XINGPAN_RING_INTERVAL_MULT := BalanceWave.MUT_XINGPAN_RING_INTERVAL_MULT
+const MUT_XINGPAN_BOLT_COUNT := BalanceWave.MUT_XINGPAN_BOLT_COUNT
+const MUT_XINGPAN_ROCK_INTERVAL := BalanceWave.MUT_XINGPAN_ROCK_INTERVAL
+const MUT_WANDU_POISON_INTERVAL_MULT := BalanceWave.MUT_WANDU_POISON_INTERVAL_MULT
+const MUT_WANDU_FIELD_RADIUS_MULT := BalanceWave.MUT_WANDU_FIELD_RADIUS_MULT
+const MUT_WANDU_SPAWN_INTERVAL_MULT := BalanceWave.MUT_WANDU_SPAWN_INTERVAL_MULT
 # 精英常驻招式（2026-10-22）→ BalanceWave
 const GOLEM_SLAM_INTERVAL := BalanceWave.GOLEM_SLAM_INTERVAL
 const GOLEM_SLAM_RADIUS := BalanceWave.GOLEM_SLAM_RADIUS
@@ -138,6 +145,7 @@ const MUT_JIANSHA_BLINK_BOLTS := BalanceWave.MUT_JIANSHA_BLINK_BOLTS
 const MUT_JIANSHA_BLINK_BOLT_ARC := BalanceWave.MUT_JIANSHA_BLINK_BOLT_ARC
 const ELITE_WAVES := BalanceWave.ELITE_WAVES
 const BOSS_WAVES := BalanceWave.BOSS_WAVES
+const BOSS_CYCLE_IDS := BalanceWave.BOSS_CYCLE_IDS
 const BOSS_HP_BASE := BalanceWave.BOSS_HP_BASE
 const BOSS_CONTACT_BASE := BalanceWave.BOSS_CONTACT_BASE
 const BOSS_ATTACK_INTERVAL := BalanceWave.BOSS_ATTACK_INTERVAL
@@ -196,6 +204,23 @@ const BOSS_PHASE2_INTERVAL_MULT := BalanceWave.BOSS_PHASE2_INTERVAL_MULT
 const BOSS_PHASE2_SPEED_MULT := BalanceWave.BOSS_PHASE2_SPEED_MULT
 const BOSS_KNOCKBACK_RESIST := BalanceWave.BOSS_KNOCKBACK_RESIST
 const BOSS_STONE_REWARD := BalanceWave.BOSS_STONE_REWARD
+const BOSS_CHAIN_CHARGE_COUNT := BalanceWave.BOSS_CHAIN_CHARGE_COUNT
+const BOSS_CHAIN_CHARGE_COUNT_P2 := BalanceWave.BOSS_CHAIN_CHARGE_COUNT_P2
+const BOSS_CHAIN_CHARGE_GAP := BalanceWave.BOSS_CHAIN_CHARGE_GAP
+const BOSS_TURRET_TELEPORT_EVERY := BalanceWave.BOSS_TURRET_TELEPORT_EVERY
+const BOSS_TURRET_TELEPORT_RADIUS := BalanceWave.BOSS_TURRET_TELEPORT_RADIUS
+const BOSS_HAZARD_FIELD_COUNT := BalanceWave.BOSS_HAZARD_FIELD_COUNT
+const BOSS_HAZARD_FIELD_COUNT_P2 := BalanceWave.BOSS_HAZARD_FIELD_COUNT_P2
+const BOSS_HAZARD_FIELD_RADIUS := BalanceWave.BOSS_HAZARD_FIELD_RADIUS
+const BOSS_HAZARD_FIELD_DURATION := BalanceWave.BOSS_HAZARD_FIELD_DURATION
+const BOSS_HAZARD_FIELD_WINDUP := BalanceWave.BOSS_HAZARD_FIELD_WINDUP
+const BOSS_HAZARD_FIELD_DMG_MULT := BalanceWave.BOSS_HAZARD_FIELD_DMG_MULT
+const BOSS_BLINK_SLASH_DIST := BalanceWave.BOSS_BLINK_SLASH_DIST
+const BOSS_BLINK_SLASH_BOLTS := BalanceWave.BOSS_BLINK_SLASH_BOLTS
+const BOSS_BLINK_SLASH_BOLTS_P2 := BalanceWave.BOSS_BLINK_SLASH_BOLTS_P2
+const BOSS_BLINK_SLASH_SPREAD := BalanceWave.BOSS_BLINK_SLASH_SPREAD
+const BOSS_BLINK_SLASH_SPEED := BalanceWave.BOSS_BLINK_SLASH_SPEED
+const BOSS_BLINK_SLASH_DMG_MULT := BalanceWave.BOSS_BLINK_SLASH_DMG_MULT
 const DANGER_MAX := BalanceWave.DANGER_MAX
 const DANGER_HP_BASE := BalanceWave.DANGER_HP_BASE
 const DANGER_HP_PER := BalanceWave.DANGER_HP_PER
@@ -532,8 +557,29 @@ static func poison_radius(wave: int) -> float:
 static func is_boss_wave(n: int) -> bool:
 	return BalanceWave.is_boss_wave(n)
 
+static func boss_id_for_wave(wave: int) -> String:
+	return BalanceWave.boss_id_for_wave(wave)
+
 static func is_elite_wave(n: int, endless: bool = false) -> bool:
 	return BalanceWave.is_elite_wave(n, endless)
+
+static func elite_spawn_count_for_wave(n: int, endless: bool = false) -> int:
+	return BalanceWave.elite_spawn_count_for_wave(n, endless)
+
+static func enemy_bolt_speed_mult(wave: int) -> float:
+	return BalanceWave.enemy_bolt_speed_mult(wave)
+
+static func enemy_attack_cd_mult(wave: int) -> float:
+	return BalanceWave.enemy_attack_cd_mult(wave)
+
+static func enemy_bonus_bolts(wave: int) -> int:
+	return BalanceWave.enemy_bonus_bolts(wave)
+
+static func stage_mood_tier(wave: int) -> int:
+	return BalanceWave.stage_mood_tier(wave)
+
+static func stage_theme_for_wave(wave: int) -> Dictionary:
+	return BalanceWave.stage_theme_for_wave(wave)
 
 static func boss_hp(wave: int) -> float:
 	return BalanceWave.boss_hp(wave)

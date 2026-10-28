@@ -14,6 +14,13 @@ var _time: float = 0.0
 var half_extent: float = 480.0
 var _flow_bands: Array[BoundaryFlowBand] = []
 var _static_decor: StaticDecor = null
+var _flow_mat: ShaderMaterial = null
+
+# 动态天象主题参数（每5波由 GameBalance.stage_theme_for_wave 注入）
+var _taiji_col_cyan: Color = Color(0.25, 0.70, 0.90)
+var _taiji_col_gold: Color = Color(0.85, 0.70, 0.25)
+var _taiji_rot_mult: float = 0.07
+var _talisman_flow_period: float = 8.0
 
 ## 重绘节流（2026-10-11 第 6 波卡顿优化，2026-10-14 再降）：本层动画全是慢速量
 ## （灵脉 90s/圈自转 + 呼吸正弦 + 结界脉冲），10Hz 重绘肉眼无感 —— 高频重绘是白烧。
@@ -63,18 +70,41 @@ func _draw() -> void:
 func _ensure_flow_bands() -> void:
 	if not _flow_bands.is_empty():
 		return
-	var mat := ShaderMaterial.new()
-	mat.shader = BOUNDARY_FLOW_SHADER
+	if _flow_mat == null:
+		_flow_mat = ShaderMaterial.new()
+		_flow_mat.shader = BOUNDARY_FLOW_SHADER
 	var placeholder_tex := PlaceholderTexture2D.new()
 	for seg in 4:
 		var band := BoundaryFlowBand.new()
 		band.segment = seg
 		band.half = half_extent
 		band.texture = placeholder_tex
-		band.material = mat
+		band.material = _flow_mat
 		band.visible = false  # _ensure_visibility 定位后再亮
 		add_child(band)
 		_flow_bands.append(band)
+
+## 动态天象主题切换（纯函数字典输入，零 CPU 重绘增幅）：
+## 切换结界流光边缘色彩、流速、脉动与大阵/符印灵韵
+func apply_stage_theme(theme: Dictionary) -> void:
+	if theme.is_empty():
+		return
+	_taiji_col_cyan = theme.get("taiji_cyan", Color(0.25, 0.70, 0.90))
+	_taiji_col_gold = theme.get("taiji_gold", Color(0.85, 0.70, 0.25))
+	_taiji_rot_mult = theme.get("taiji_rot_speed", 0.07)
+	_talisman_flow_period = theme.get("talisman_flow_period", 8.0)
+	_ensure_flow_bands()
+	if _flow_mat != null:
+		var bar_base: Color = theme.get("barrier_base", Color(0.12, 0.36, 0.58, 0.65))
+		var bar_flow: Color = theme.get("barrier_flow", Color(0.55, 1.35, 2.00, 0.95))
+		var is_boss: bool = theme.get("is_boss", false)
+		if is_boss:
+			bar_flow = bar_flow.lightened(0.12)
+		_flow_mat.set_shader_parameter("base_color", bar_base)
+		_flow_mat.set_shader_parameter("flow_color", bar_flow)
+		_flow_mat.set_shader_parameter("flow_speed", theme.get("flow_speed", 0.035) * (1.25 if is_boss else 1.0))
+		_flow_mat.set_shader_parameter("pulse_speed", theme.get("pulse_speed", 0.9) * (1.3 if is_boss else 1.0))
+	queue_redraw()
 
 # ==============================================================================
 # 1. 中心太极四象大阵（Central Taiji & Quad Array）
@@ -88,12 +118,12 @@ func _draw_central_taiji_array() -> void:
 
 	# 柔和灵脉呼吸（低对比度，确保绝对不抢战斗视线）
 	var breath: float = sin(_time * 0.8) * 0.04 + 0.22
-	var col_cyan := Color(0.25, 0.70, 0.90, breath)
-	var col_gold := Color(0.85, 0.70, 0.25, breath * 0.85)
+	var col_cyan := Color(_taiji_col_cyan.r, _taiji_col_cyan.g, _taiji_col_cyan.b, breath)
+	var col_gold := Color(_taiji_col_gold.r, _taiji_col_gold.g, _taiji_col_gold.b, breath * 0.85)
 	var col_dark := Color(0.08, 0.15, 0.24, breath * 0.6)
 
 	# 极慢灵脉自转（每 90 秒转一圈，如同天地运转）
-	var rot: float = _time * 0.07
+	var rot: float = _time * _taiji_rot_mult
 	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
 
 	# 外同心双环（弧段按半径自适应修剪：145px 半径 48 段已远超肉眼分辨）
@@ -152,17 +182,17 @@ func _draw_central_taiji_array() -> void:
 func _draw_talisman_pulse() -> void:
 	var h: float = half_extent
 	var node_pulse := sin(_time * 1.6) * 0.15 + 0.85
-	var col_node_rim := Color(0.30, 0.75, 0.95, 0.65 * node_pulse)
-	var col_node_core := Color(0.95, 0.85, 0.35, 0.80 * node_pulse)
+	var col_node_rim := Color(_taiji_col_cyan.r, _taiji_col_cyan.g, _taiji_col_cyan.b, 0.65 * node_pulse)
+	var col_node_core := Color(_taiji_col_gold.r, _taiji_col_gold.g, _taiji_col_gold.b, 0.80 * node_pulse)
 	var node_spacing := 68.0
 	var node_count := int((h * 2.0 - 180.0) / node_spacing)
 	var node_start := -h + 90.0 + (h * 2.0 - 180.0 - float(node_count) * node_spacing) * 0.5
 	var r_dist: float = h - 14.0  # 正好嵌在流光带（h-22 到 h-6）中心轴线上
 
-	# 流光涟漪：当前激活符印 index（沿四边循环，周期 8s）
+	# 流光涟漪：当前激活符印 index（沿四边循环，周期 _talisman_flow_period）
 	# 总符印数 = (node_count + 1) * 4（四边，每边 node_count+1 个）
 	var total_nodes := float(node_count + 1) * 4.0
-	var flow_period := 8.0  # 流转一圈周期（秒）
+	var flow_period := _talisman_flow_period  # 流转一圈周期（秒）
 	var active_idx := int(fmod(_time / flow_period, 1.0) * total_nodes)
 
 	var node_global_idx := 0  # 全局符印序号（跨四边连续编号）

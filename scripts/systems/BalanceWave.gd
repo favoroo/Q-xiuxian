@@ -73,16 +73,16 @@ const WAVE_SPAWN_BUDGET_BASE := 8.0
 const WAVE_SPAWN_BUDGET_PER_WAVE := 2.2
 const WAVE_SPAWN_BUDGET_MAX := 54.0
 # 2026-10-13 无尽深层三涨：正常局 20 波通关，故「波数 > 20」即等价无尽深层，曲线分段
-# 无需读 endless_mode（保持纯函数）。深层段预算从 W20 的 52 只起每波 +3，
-# 到 115 硬顶；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
+# 无需读 endless_mode（保持纯函数）。深层段预算从 W20 的 52 只起每波 +4，
+# 到 135 硬顶；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
 # 走 endless_swarm_mult。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（正常局通关波，> 此值走深层曲线）
-const DEEP_BUDGET_PER_WAVE := 3.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
-const DEEP_BUDGET_MAX := 115.0          ## 深层预算硬顶（约 W41 饱和）
-const DEEP_DMG_GROWTH := 1.09            ## 深层每波伤害复利（20 波段是 1.06；W40 单下 ≈11.5×基线）
-const DEEP_HP_GROWTH := 1.18             ## 深层每波生命复利（20 波段是 1.16；W40 血 ≈225×基线）
-const DEEP_SWARM_PER_WAVE := 0.06        ## 深层每波同屏密度增量（+6%/波，随危险度/角色倍率同乘）
-const DEEP_SWARM_MAX := 2.0              ## 深层同屏密度放大硬顶（约 W37 触顶）
+const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
+const DEEP_BUDGET_MAX := 135.0          ## 深层预算硬顶（约 W41 饱和）
+const DEEP_DMG_GROWTH := 1.12            ## 深层每波伤害复利（20 波段是 1.06；深层加速提档）
+const DEEP_HP_GROWTH := 1.22             ## 深层每波生命复利（20 波段是 1.16；深层加速提档）
+const DEEP_SWARM_PER_WAVE := 0.08        ## 深层每波同屏密度增量（+8%/波，随危险度/角色倍率同乘）
+const DEEP_SWARM_MAX := 2.2              ## 深层同屏密度放大硬顶
 
 ## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算。
 ## ≤20 波走曲线封顶 54；深层从 W20=52 续 +3/波，封顶 DEEP_BUDGET_MAX。
@@ -173,6 +173,13 @@ const MUT_CHILEI_SIDE_BOLTS := 1             ## 烈雷兽变异：冲刺起步�
 const MUT_JIANSHA_BOLT_COUNT := 5            ## 剑客亡灵变异：剑气 3→5 连
 const MUT_JIANSHA_INTERVAL_MULT := 0.7       ## 剑客亡灵变异：剑气间隔缩短倍率
 const MUT_JIANSHA_RANGE := 180.0             ## 剑客亡灵变异：风筝距离 280→180（压近身）
+const MUT_XINGPAN_RING_COUNT := 16          ## 玄天星盘变异后环弹发数
+const MUT_XINGPAN_RING_INTERVAL_MULT := 0.65## 玄天星盘变异后环弹间隔倍率
+const MUT_XINGPAN_BOLT_COUNT := 6           ## 玄天星盘变异后扇形狙击发数
+const MUT_XINGPAN_ROCK_INTERVAL := 4.8      ## 玄天星盘变异后解锁落石间隔
+const MUT_WANDU_POISON_INTERVAL_MULT := 0.6 ## 万毒祭司变异后投毒冷却倍率
+const MUT_WANDU_FIELD_RADIUS_MULT := 1.25   ## 万毒祭司变异后禁区扩域倍率
+const MUT_WANDU_SPAWN_INTERVAL_MULT := 0.65 ## 万毒祭司变异后召唤冷却倍率
 
 # ---------------- 精英常驻招式（2026-10-22，W5/W15 精英从「血厚木桩」升级为双招式） ----------------
 ## 设计口径：精英的招牌技能从「60% 血线变异才解锁」改为「进场即常驻」，
@@ -208,7 +215,7 @@ const CHILEI_RING_CURVE_ANG := 0.45      ## 雷环弧线角速度（rad/s，正�
 const MUT_CHILEI_RING_COUNT := 12        ## 变异雷环弹数
 
 ## 赤雷兽·三连冲（变异升格：长扑不再单发，冲完接短预警再冲）
-const MUT_CHILEI_CHAIN_CHARGES := 3      ## 变异后一轮长扑的连续冲刺段数
+const MUT_CHILEI_CHAIN_CHARGES := 4      ## 变异后一轮长扑的连续冲刺段数
 const MUT_CHILEI_CHAIN_GAP := 0.35       ## 链冲段间短预警间隔（秒）
 const MUT_CHILEI_CHAIN_WINDUP_MULT := 0.6 ## 后续冲刺的预警时长倍率（首段仍用场景原值）
 
@@ -346,6 +353,7 @@ const SPAWN_PUSH_CHEST := 180.0         ## 藏宝匣：推开距离（不走径�
 const ELITE_WAVES := [5, 15]             ## 精英回合：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
 const BOSS_WAVE_MAX: int = 20            ## 常量缓存 BOSS_WAVES.max()，避免每帧重复全表求最大值
+const BOSS_CYCLE_IDS := ["chiyan", "xiuluo", "qianji", "wangu", "jianpo", "xinmo"]
 const BOSS_HP_BASE := 6200.0             ## Boss 基础生命（2026-10-15 反割草对冲：神识分流 0.12→0.15 收紧后微降 6500→6200，
                                          ## Boss TTK 保持中性 W10≈66s / W20≈46s，割草收敛全部由小怪侧与分流侧承担；
                                          ## 成型 ~46s、极端 6 剑 ~13s）
@@ -407,14 +415,221 @@ const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
 const BOSS_KNOCKBACK_RESIST := 0.18      ## Boss 击退系数（越低越推不动）
 const BOSS_STONE_REWARD := 150           ## Boss 击杀额外金币奖励
 
+## 六大魔君新招式平衡常量（供 BossEnemy.gd 读取）
+const BOSS_CHAIN_CHARGE_COUNT := 3          ## 修罗/狂战多段连冲次数（一阶段 3 连，二阶段 +2）
+const BOSS_CHAIN_CHARGE_COUNT_P2 := 5       ## 二阶段连冲次数
+const BOSS_CHAIN_CHARGE_GAP := 0.22         ## 连冲段间短蓄力时长（秒）
+const BOSS_TURRET_TELEPORT_EVERY := 3       ## 静止炮台 Boss 每释放 N 招瞬移换桩一次
+const BOSS_TURRET_TELEPORT_RADIUS := 210.0  ## 炮台换桩距场地中心的环半径
+const BOSS_HAZARD_FIELD_COUNT := 3          ## 场地封锁招式单次铺设雷毒禁区数（二阶段 +2）
+const BOSS_HAZARD_FIELD_COUNT_P2 := 5
+const BOSS_HAZARD_FIELD_RADIUS := 105.0     ## 禁区半径（视觉与判定同源）
+const BOSS_HAZARD_FIELD_DURATION := 4.0     ## 禁区持续时长（秒）
+const BOSS_HAZARD_FIELD_WINDUP := 0.75      ## 禁区预警时长（秒）
+const BOSS_HAZARD_FIELD_DMG_MULT := 0.65    ## 禁区每跳伤害系数
+const BOSS_BLINK_SLASH_DIST := 115.0        ## 瞬步贴脸斩闪现至玩家身侧距离
+const BOSS_BLINK_SLASH_BOLTS := 7           ## 瞬步回斩扇形飞剑数（二阶段 9）
+const BOSS_BLINK_SLASH_BOLTS_P2 := 9
+const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
+const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
+const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
+
 ## 固定 Boss 回合：10/20 波，20 回合后（无尽）每 5 波再逢魔君
 ## （2026-10-13：用户口径深层 Boss 战要保留且加密，10 → 5 波一场：25/30/35…）
 static func is_boss_wave(n: int) -> bool:
 	return n in BOSS_WAVES or (n > BOSS_WAVE_MAX and n % 5 == 0)
 
-## 精英回合：5/15 波；无尽模式 20 回合后每 3 波一次（Boss 回合让位）
+## 依波次确定专属 Boss 标识（10/20/25/30/35/40 专属，深层 5 波一轮循环）
+static func boss_id_for_wave(wave: int) -> String:
+	if wave <= 10:
+		return "chiyan"
+	if wave <= 20:
+		return "xiuluo"
+	if wave <= 25:
+		return "qianji"
+	if wave <= 30:
+		return "wangu"
+	if wave <= 35:
+		return "jianpo"
+	if wave <= 40:
+		return "xinmo"
+	var idx := maxi(0, int(float(wave - 45) / 5.0)) % BOSS_CYCLE_IDS.size()
+	return String(BOSS_CYCLE_IDS[idx])
+
+## 精英回合：5/15 波；无尽模式 20 回合后非 Boss 回合每关必逢精英（Boss 回合让位）
 static func is_elite_wave(n: int, endless: bool = false) -> bool:
-	return n in ELITE_WAVES or (endless and n > BOSS_WAVE_MAX and n % 3 == 0 and not is_boss_wave(n))
+	return n in ELITE_WAVES or (endless and n > BOSS_WAVE_MAX and not is_boss_wave(n))
+
+## 精英生成数量：无尽模式 31 波起精英关升格为双精英同场（首只开场、次只中场）
+static func elite_spawn_count_for_wave(n: int, endless: bool = false) -> int:
+	if not is_elite_wave(n, endless):
+		return 0
+	if endless and n >= 31:
+		return 2
+	return 1
+
+## 敌方弹丸飞行速度倍率（纯函数）：
+## 前期基础 1.0，1~20 波平缓成长至 1.22x，>20 波深层加速成长至封顶 1.65x
+static func enemy_bolt_speed_mult(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w <= DEEP_WAVE_THRESHOLD:
+		return 1.0 + float(w - 1) * 0.0115
+	var base := 1.0 + float(DEEP_WAVE_THRESHOLD - 1) * 0.0115
+	return minf(base + float(w - DEEP_WAVE_THRESHOLD) * 0.025, 1.65)
+
+## 敌方技能/攻击周期缩短倍率（纯函数，周期越短出手越快）：
+## 前期基础 1.0，1~20 波收紧至 0.85x，>20 波加速收紧至下限 0.55x
+static func enemy_attack_cd_mult(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w <= DEEP_WAVE_THRESHOLD:
+		return maxf(0.85, 1.0 - float(w - 1) * 0.0079)
+	var base := 1.0 - float(DEEP_WAVE_THRESHOLD - 1) * 0.0079
+	return maxf(0.55, base - float(w - DEEP_WAVE_THRESHOLD) * 0.018)
+
+## 远程怪齐射增发数量（纯函数）：
+## W1~15 为 0（单发火球）；W16~24 额外 +1 发（扇射雏形）；W25+ 额外 +2 发
+static func enemy_bonus_bolts(wave: int) -> int:
+	var w := maxi(wave, 1)
+	if w >= 25:
+		return 2
+	elif w >= 16:
+		return 1
+	return 0
+
+# ---------------- 五波一阶天象与场景氛围主题（纯函数） ----------------
+## 阶段天象档位：W1-5 -> 0, W6-10 -> 1, W11-15 -> 2, W16-20 -> 3, W21-25 -> 4, W26+ -> 5+
+static func stage_mood_tier(wave: int) -> int:
+	return int(float(maxi(wave, 1) - 1) / 5.0)
+
+## 场景天象主题字典（纯函数，所有颜色与速度参数由此产出）：
+## 供 Main 与 ArenaVisualLayer 对齐地砖、调色、结界边缘流光与灵枢符印
+static func stage_theme_for_wave(wave: int) -> Dictionary:
+	var w := maxi(wave, 1)
+	var tier := stage_mood_tier(w)
+	var is_boss := is_boss_wave(w)
+	
+	match tier:
+		0:
+			# 第 1~5 波：青冥灵台（清冷玄玉，青玉暖灰 + 幽冷玉蓝结界）
+			return {
+				"name": "青冥灵台",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": Color(0.208, 0.243, 0.263, 1.0),
+				"ground_gap": Color(0.10, 0.13, 0.15, 1.0),
+				"tone_modulate": Color(0.85, 0.88, 0.96, 1.0),
+				"barrier_base": Color(0.12, 0.36, 0.58, 0.65),
+				"barrier_flow": Color(0.55, 1.35, 2.00, 0.95),
+				"flow_speed": 0.035,
+				"pulse_speed": 0.9,
+				"taiji_cyan": Color(0.25, 0.70, 0.90),
+				"taiji_gold": Color(0.85, 0.70, 0.25),
+				"taiji_rot_speed": 0.07,
+				"talisman_flow_period": 8.0,
+			}
+		1:
+			# 第 6~10 波：寒魄雷劫（幽蓝寒潭 + 幽紫电弧结界）
+			return {
+				"name": "寒魄雷劫",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": Color(0.165, 0.205, 0.265, 1.0),
+				"ground_gap": Color(0.08, 0.11, 0.16, 1.0),
+				"tone_modulate": Color(0.80, 0.85, 1.02, 1.0),
+				"barrier_base": Color(0.20, 0.26, 0.60, 0.72),
+				"barrier_flow": Color(0.85, 1.25, 2.30, 1.00),
+				"flow_speed": 0.045,
+				"pulse_speed": 1.15,
+				"taiji_cyan": Color(0.35, 0.75, 1.00),
+				"taiji_gold": Color(0.70, 0.55, 0.95),
+				"taiji_rot_speed": 0.09,
+				"talisman_flow_period": 7.0,
+			}
+		2:
+			# 第 11~15 波：赤煞劫火（炽金焦岩 + 赤铜流火结界）
+			return {
+				"name": "赤煞劫火",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": Color(0.235, 0.195, 0.185, 1.0),
+				"ground_gap": Color(0.14, 0.09, 0.09, 1.0),
+				"tone_modulate": Color(0.95, 0.84, 0.80, 1.0),
+				"barrier_base": Color(0.55, 0.25, 0.14, 0.75),
+				"barrier_flow": Color(2.10, 1.15, 0.45, 1.00),
+				"flow_speed": 0.055,
+				"pulse_speed": 1.35,
+				"taiji_cyan": Color(0.95, 0.55, 0.25),
+				"taiji_gold": Color(1.00, 0.80, 0.30),
+				"taiji_rot_speed": 0.11,
+				"talisman_flow_period": 6.0,
+			}
+		3:
+			# 第 16~20 波：九幽血劫（玄黑血褐 + 朱砂血煞光幕）
+			return {
+				"name": "九幽血劫",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": Color(0.185, 0.135, 0.165, 1.0),
+				"ground_gap": Color(0.11, 0.06, 0.09, 1.0),
+				"tone_modulate": Color(0.92, 0.78, 0.85, 1.0),
+				"barrier_base": Color(0.60, 0.12, 0.22, 0.82),
+				"barrier_flow": Color(2.20, 0.55, 0.65, 1.05),
+				"flow_speed": 0.065,
+				"pulse_speed": 1.60,
+				"taiji_cyan": Color(0.95, 0.25, 0.35),
+				"taiji_gold": Color(0.85, 0.65, 0.25),
+				"taiji_rot_speed": 0.13,
+				"talisman_flow_period": 5.2,
+			}
+		4:
+			# 第 21~25 波：虚空紫极（极夜深紫 + 幽紫魔焰天幕）
+			return {
+				"name": "虚空紫极",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": Color(0.145, 0.125, 0.215, 1.0),
+				"ground_gap": Color(0.08, 0.06, 0.14, 1.0),
+				"tone_modulate": Color(0.88, 0.76, 1.00, 1.0),
+				"barrier_base": Color(0.48, 0.14, 0.68, 0.85),
+				"barrier_flow": Color(1.85, 0.75, 2.30, 1.10),
+				"flow_speed": 0.075,
+				"pulse_speed": 1.85,
+				"taiji_cyan": Color(0.75, 0.35, 0.95),
+				"taiji_gold": Color(0.95, 0.70, 0.35),
+				"taiji_rot_speed": 0.16,
+				"talisman_flow_period": 4.5,
+			}
+		_:
+			# 第 26 波+：混沌冥狱（高频流转金煞紫极，每 5 波高压轮换）
+			var sub_cycle := (tier - 5) % 3
+			var base_col := Color(0.13, 0.11, 0.18, 1.0)
+			var gap_col := Color(0.07, 0.05, 0.10, 1.0)
+			var bar_base := Color(0.55, 0.18, 0.35, 0.88)
+			var bar_flow := Color(2.30, 0.90, 1.40, 1.15)
+			if sub_cycle == 1:
+				base_col = Color(0.16, 0.12, 0.12, 1.0)
+				bar_base = Color(0.65, 0.15, 0.15, 0.88)
+				bar_flow = Color(2.40, 1.20, 0.40, 1.20)
+			elif sub_cycle == 2:
+				base_col = Color(0.11, 0.15, 0.18, 1.0)
+				bar_base = Color(0.15, 0.45, 0.55, 0.88)
+				bar_flow = Color(0.80, 2.00, 2.40, 1.15)
+			return {
+				"name": "混沌冥狱",
+				"tier": tier,
+				"is_boss": is_boss,
+				"ground_base": base_col,
+				"ground_gap": gap_col,
+				"tone_modulate": Color(0.92, 0.80, 0.92, 1.0),
+				"barrier_base": bar_base,
+				"barrier_flow": bar_flow,
+				"flow_speed": 0.085,
+				"pulse_speed": 2.1,
+				"taiji_cyan": Color(0.95, 0.45, 0.65),
+				"taiji_gold": Color(1.00, 0.85, 0.45),
+				"taiji_rot_speed": 0.20,
+				"talisman_flow_period": 3.8,
+			}
 
 ## Boss 生命：与普通敌人同一条 hp 曲线，靠基础值拉开厚度差距
 static func boss_hp(wave: int) -> float:

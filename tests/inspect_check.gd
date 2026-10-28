@@ -151,7 +151,7 @@ func _test_item_and_upgrade_icon_quality() -> void:
 
 func _test_enemy_visual_configs() -> void:
 	var catalog: Array = EnemyGuideData.catalog_ids()
-	_c.check(catalog.size() == 17, "EnemyGuideData 收录全量 17 种妖魔 (实际: %d)" % catalog.size())
+	_c.check(catalog.size() == 22, "EnemyGuideData 收录全量 22 种妖魔 (实际: %d)" % catalog.size())
 	
 	var missing: Array[String] = []
 	for eid in catalog:
@@ -160,8 +160,12 @@ func _test_enemy_visual_configs() -> void:
 			missing.append(String(eid))
 		elif cfg.col_primary == null or cfg.display_name.is_empty():
 			missing.append("%s (bad fields)" % String(eid))
+	for bid in EnemyData.BOSS_POOL.keys():
+		var bcfg := EnemyVisualConfig.get_config("boss_" + String(bid), true, true, false)
+		if bcfg == null or bcfg.display_name.is_empty():
+			missing.append("boss_%s" % String(bid))
 			
-	_c.check(missing.is_empty(), "全量 17 种妖魔视觉配置正常提供 (异常: %s)" % str(missing))
+	_c.check(missing.is_empty(), "全量 22 种妖魔及 6 大魔君视觉配置正常提供 (异常: %s)" % str(missing))
 
 func _test_vfx_integrity() -> void:
 	var elems := ["metal", "fire", "water", "wood", "earth", "thunder"]

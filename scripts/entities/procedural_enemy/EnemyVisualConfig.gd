@@ -269,28 +269,94 @@ static func make_jiansha_elite() -> EnemyVisualConfig:
 
 ## 15. 敌潮魔君 & 心魔魔尊 (BOSS / HOVER)
 static func make_boss(final_boss: bool = false) -> EnemyVisualConfig:
+	return make_boss_variant("boss_xinmo" if final_boss else "boss_chiyan", final_boss)
+
+## 6 大 Boss 视觉变体
+static func make_boss_variant(boss_key: String, final_boss: bool = false) -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()
+	# 全部魔君共用 "boss" 派发键（同一套魔轮/披风/魔刃绘制管线），身份差异全走配色与 is_final_boss；
+	# 键（boss_chiyan 等）只用于 get_config 缓存分区，不参与绘制分发。
 	cfg.enemy_id = "boss"
 	cfg.is_boss = true
-	cfg.is_final_boss = final_boss
 	cfg.locomotion = LocomotionType.HOVER
 	cfg.body_radius = 26.0
-	cfg.scale_factor = 1.6 if not final_boss else 1.85
-	if final_boss:
-		cfg.display_name = "最终Boss"
-		cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
-		cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
-		cfg.col_accent = Color(0.60, 0.30, 0.85, 0.95)   # 神魔紫焰法轮
-		cfg.col_glow = Color(0.85, 0.50, 1.0, 1.0)       # 虚空极光魔眼
-		cfg.ornament_type = "god_wheel"
-	else:
-		cfg.display_name = "赤炎魔将"
-		cfg.col_primary = Color(0.16, 0.10, 0.12, 1.0)   # 赤黑鬼王重铠
-		cfg.col_secondary = Color(0.92, 0.88, 0.82, 1.0) # 獠牙冲天骨面
-		cfg.col_accent = Color(0.85, 0.28, 0.20, 0.95)   # 煞气魔刃骨环
-		cfg.col_glow = Color(1.0, 0.40, 0.25, 1.0)       # 滚滚赤炎神瞳
-		cfg.ornament_type = "blade_ring"
 	cfg.eye_type = "twin_slits"
+	match boss_key:
+		"boss_chiyan", "boss":
+			cfg.display_name = "赤炎魔将"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.6 if not final_boss else 1.85
+			if final_boss:
+				cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
+				cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
+				cfg.col_accent = Color(0.60, 0.30, 0.85, 0.95)   # 神魔紫焰法轮
+				cfg.col_glow = Color(0.85, 0.50, 1.0, 1.0)       # 虚空极光魔眼
+				cfg.ornament_type = "god_wheel"
+			else:
+				cfg.col_primary = Color(0.16, 0.10, 0.12, 1.0)   # 赤黑鬼王重铠
+				cfg.col_secondary = Color(0.92, 0.88, 0.82, 1.0) # 獠牙冲天骨面
+				cfg.col_accent = Color(0.85, 0.28, 0.20, 0.95)   # 煞气魔刃骨环
+				cfg.col_glow = Color(1.0, 0.40, 0.25, 1.0)       # 滚滚赤炎神瞳
+				cfg.ornament_type = "blade_ring"
+		"boss_xiuluo":
+			# 第 20 波·血煞修罗（暗金血煞修罗战铠 + 狂战双刃轮）
+			cfg.display_name = "血煞修罗"
+			cfg.is_final_boss = false
+			cfg.scale_factor = 1.65
+			cfg.col_primary = Color(0.20, 0.08, 0.10, 1.0)   # 暗金血煞修罗战铠
+			cfg.col_secondary = Color(0.95, 0.82, 0.50, 1.0) # 修罗鎏金战冠
+			cfg.col_accent = Color(0.88, 0.18, 0.25, 0.95)   # 狂战双刃轮
+			cfg.col_glow = Color(1.0, 0.25, 0.30, 1.0)       # 嗜血狂战神瞳
+			cfg.ornament_type = "blade_ring"
+		"boss_qianji":
+			# 第 25 波·玄天千机尊（青铜星芒机关神座 + 八卦法轮）
+			cfg.display_name = "玄天千机尊"
+			cfg.is_final_boss = false
+			cfg.scale_factor = 1.7
+			cfg.col_primary = Color(0.14, 0.18, 0.22, 1.0)   # 青铜机关战甲
+			cfg.col_secondary = Color(0.85, 0.80, 0.65, 1.0) # 古铜千机神座
+			cfg.col_accent = Color(0.25, 0.75, 0.88, 0.95)   # 八卦天机法轮
+			cfg.col_glow = Color(0.35, 0.92, 1.0, 1.0)       # 天机灵辉
+			cfg.ornament_type = "god_wheel"
+		"boss_wangu":
+			# 第 30 波·万蛊蚀天母（墨绿幽冥蛊母骨冠 + 碧毒法轮）
+			cfg.display_name = "万蛊蚀天母"
+			cfg.is_final_boss = false
+			cfg.scale_factor = 1.7
+			cfg.col_primary = Color(0.08, 0.16, 0.12, 1.0)   # 幽冥蛊母冥甲
+			cfg.col_secondary = Color(0.88, 0.92, 0.82, 1.0) # 苍白蛊母骨冠
+			cfg.col_accent = Color(0.30, 0.82, 0.40, 0.95)   # 碧毒法轮
+			cfg.col_glow = Color(0.40, 1.0, 0.45, 1.0)       # 蚀骨幽绿蛊瞳
+			cfg.ornament_type = "god_wheel"
+		"boss_jianpo":
+			# 第 35 波·幽冥剑魄尊（霜白凛冽剑魂神铠 + 剑阵法轮）
+			cfg.display_name = "幽冥剑魄尊"
+			cfg.is_final_boss = false
+			cfg.scale_factor = 1.75
+			cfg.col_primary = Color(0.12, 0.15, 0.24, 1.0)   # 霜白幽冥剑袍
+			cfg.col_secondary = Color(0.92, 0.95, 1.0, 1.0)  # 极寒剑魂神冠
+			cfg.col_accent = Color(0.40, 0.70, 0.98, 0.95)   # 凛冽剑阵法轮
+			cfg.col_glow = Color(0.50, 0.88, 1.0, 1.0)       # 寒魄剑魄神芒
+			cfg.ornament_type = "god_wheel"
+		"boss_xinmo":
+			# 第 40 波·九幽心魔尊（紫黑虚空神铠 + 九幽神魔轮，顶配视觉）
+			cfg.display_name = "九幽心魔尊"
+			cfg.is_final_boss = true
+			cfg.scale_factor = 1.85
+			cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
+			cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
+			cfg.col_accent = Color(0.60, 0.30, 0.85, 0.95)   # 神魔紫焰法轮
+			cfg.col_glow = Color(0.85, 0.50, 1.0, 1.0)       # 虚空极光魔眼
+			cfg.ornament_type = "god_wheel"
+		_:
+			cfg.display_name = "赤炎魔将"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.6 if not final_boss else 1.85
+			cfg.col_primary = Color(0.16, 0.10, 0.12, 1.0)
+			cfg.col_secondary = Color(0.92, 0.88, 0.82, 1.0)
+			cfg.col_accent = Color(0.85, 0.28, 0.20, 0.95)
+			cfg.col_glow = Color(1.0, 0.40, 0.25, 1.0)
+			cfg.ornament_type = "blade_ring"
 	return cfg
 
 ## 16. 灵医：青囊药灵 (HOVER) —— 治疗同伴的辅助怪
@@ -325,6 +391,89 @@ static func make_jinchan() -> EnemyVisualConfig:
 	cfg.ornament_type = "coin"
 	return cfg
 
+## 18. 寒魄妖：九幽寒魄妖 (HOVER) —— 三发弧线冰魄，死后溅射
+static func make_hanpo() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "hanpo"
+	cfg.display_name = "寒魄妖"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.body_radius = 13.5
+	cfg.scale_factor = 1.05
+	cfg.col_primary = Color(0.12, 0.20, 0.32, 1.0)     # 深海寒冰蓝道袍
+	cfg.col_secondary = Color(0.85, 0.92, 0.98, 1.0)   # 霜晶骨甲
+	cfg.col_accent = Color(0.35, 0.65, 0.90, 0.85)     # 极寒霜纹
+	cfg.col_glow = Color(0.40, 0.90, 1.00, 1.0)        # 冰魄幽瞳
+	cfg.eye_type = "twin_slits"
+	cfg.ornament_type = "ice_shards"
+	return cfg
+
+## 19. 血煞魔卫：重装血铠魔卫 (HOVER) —— 预判冲刺 + 震地冲击
+static func make_mowei() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "mowei"
+	cfg.display_name = "血煞魔卫"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.body_radius = 16.0
+	cfg.scale_factor = 1.2
+	cfg.col_primary = Color(0.22, 0.10, 0.12, 1.0)     # 重装血铠
+	cfg.col_secondary = Color(0.88, 0.80, 0.72, 1.0)   # 巨骨肩甲
+	cfg.col_accent = Color(0.75, 0.22, 0.22, 0.9)      # 血煞战痕
+	cfg.col_glow = Color(1.0, 0.35, 0.20, 1.0)         # 暴怒金红魔瞳
+	cfg.eye_type = "slit"
+	cfg.ornament_type = "heavy_shield"
+	return cfg
+
+## 20. 玄冥魔尊（精英）：幽都玄冥魔尊 (HOVER) —— 雷环齐射 + 落石轰炸 + 瞬身回斩
+static func make_xuanming_elite() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "xuanming_elite"
+	cfg.display_name = "玄冥魔尊"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.is_elite = true
+	cfg.body_radius = 21.0
+	cfg.scale_factor = 1.4
+	cfg.col_primary = Color(0.12, 0.08, 0.18, 1.0)     # 玄冥墨袍
+	cfg.col_secondary = Color(0.92, 0.88, 0.95, 1.0)   # 冥神骨冠
+	cfg.col_accent = Color(0.65, 0.25, 0.85, 0.95)     # 幽紫冥火雷阵
+	cfg.col_glow = Color(0.85, 0.45, 1.0, 1.0)         # 玄冥魔光
+	cfg.eye_type = "twin_slits"
+	cfg.ornament_type = "void_halo"
+	return cfg
+
+## 21. 玄天星盘（精英）：玄天机关星盘 (HOVER) —— 弧线环弹 + 连发星矢 + 星陨落石 (静止炮台)
+static func make_xingpan_elite() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "xingpan_elite"
+	cfg.display_name = "玄天星盘"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.is_elite = true
+	cfg.body_radius = 22.0
+	cfg.scale_factor = 1.38
+	cfg.col_primary = Color(0.10, 0.16, 0.22, 1.0)     # 玄青金星盘甲
+	cfg.col_secondary = Color(0.92, 0.90, 0.80, 1.0)   # 星芒白金外环
+	cfg.col_accent = Color(0.25, 0.78, 0.92, 0.95)     # 天青阵纹
+	cfg.col_glow = Color(0.40, 0.95, 1.0, 1.0)         # 星核极光
+	cfg.eye_type = "round"
+	cfg.ornament_type = "astrolabe"
+	return cfg
+
+## 22. 万毒祭司（精英）：南荒九幽万毒祭司 (HOVER) —— 毒沼 + 禁区 + 召唤傀儡
+static func make_wandu_elite() -> EnemyVisualConfig:
+	var cfg := EnemyVisualConfig.new()
+	cfg.enemy_id = "wandu_elite"
+	cfg.display_name = "万毒祭司"
+	cfg.locomotion = LocomotionType.HOVER
+	cfg.is_elite = true
+	cfg.body_radius = 18.0
+	cfg.scale_factor = 1.32
+	cfg.col_primary = Color(0.10, 0.18, 0.12, 1.0)     # 墨绿巫蛊祭袍
+	cfg.col_secondary = Color(0.88, 0.92, 0.82, 1.0)   # 惨白骨冠
+	cfg.col_accent = Color(0.35, 0.85, 0.32, 0.95)     # 翠毒妖纹
+	cfg.col_glow = Color(0.45, 1.0, 0.38, 1.0)         # 幽绿蛊瞳
+	cfg.eye_type = "twin_slits"
+	cfg.ornament_type = "poison_censer"
+	return cfg
+
 ## 通用查找入口
 static var _cache: Dictionary = {}  ## eid|elite|boss|final -> 配置；配置创建后只读，可安全共享
 
@@ -338,6 +487,8 @@ static func get_config(eid: String, is_elite_flag: bool = false, is_boss_flag: b
 	return cfg
 
 static func _build_config(eid: String, is_elite_flag: bool, is_boss_flag: bool, is_final: bool) -> EnemyVisualConfig:
+	if eid.begins_with("boss_"):
+		return make_boss_variant(eid, is_final)
 	if is_boss_flag or eid == "boss":
 		return make_boss(is_final)
 	match eid:
@@ -373,6 +524,16 @@ static func _build_config(eid: String, is_elite_flag: bool, is_boss_flag: bool, 
 			return make_lingyi()
 		"jinchan":
 			return make_jinchan()
+		"hanpo":
+			return make_hanpo()
+		"mowei":
+			return make_mowei()
+		"xuanming_elite", "xuanming":
+			return make_xuanming_elite()
+		"xingpan_elite", "xingpan":
+			return make_xingpan_elite()
+		"wandu_elite", "wandu":
+			return make_wandu_elite()
 		_:
 			# 兜底：如果是精英则优先转入对应精英或通用
 			if is_elite_flag:

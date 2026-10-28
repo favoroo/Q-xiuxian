@@ -36,13 +36,16 @@ func _run() -> void:
 # ---------------- ① 数据表对账 ----------------
 func _test_data() -> void:
 	var ids: Array = EnemyGuideData.catalog_ids()
-	_c.equals(ids.size(), 17, "catalog 收录 17 种（12 常规 + 3 精英 + 魔君 + 金蟾）")
-	_c.equals(ids.slice(0, 12), EnemyData.mob_keys(), "常规 12 种与 EnemyData.MOBS 表序一致")
+	var mob_n := EnemyData.MOBS.size()
+	var elite_n := EnemyData.ELITE_POOL.size()
+	var total_n := mob_n + elite_n + 2
+	_c.equals(ids.size(), total_n, "catalog 收录 %d 种（%d 常规 + %d 精英 + 魔君 + 金蟾）" % [total_n, mob_n, elite_n])
+	_c.equals(ids.slice(0, mob_n), EnemyData.mob_keys(), "常规 %d 种与 EnemyData.MOBS 表序一致" % mob_n)
 	var elite_ids: Array = []
 	for e in EnemyData.ELITE_POOL:
 		elite_ids.append(String(e["id"]))
-	_c.equals(ids.slice(12, 15), elite_ids, "精英 3 种与 EnemyData.ELITE_POOL 对账")
-	_c.check(ids[15] == "boss" and ids[16] == "jinchan", "魔君/金蟾在表尾")
+	_c.equals(ids.slice(mob_n, mob_n + elite_n), elite_ids, "精英 %d 种与 EnemyData.ELITE_POOL 对账" % elite_n)
+	_c.check(ids[total_n - 2] == "boss" and ids[total_n - 1] == "jinchan", "魔君/金蟾在表尾")
 	var missing: Array[String] = []
 	for eid in ids:
 		if not EnemyGuideData.GUIDE.has(eid):
@@ -157,8 +160,8 @@ func _test_manual_page() -> void:
 	for g in grids:
 		cards += g.get_child_count()
 	_c.equals(grids.size(), 4, "四个分组网格都建出来")
-	_c.equals(cards, 17, "17 张卡全部就位（12 常规 + 3 精英 + 魔君 + 金蟾）")
-	# 遭遇/未遭遇与 EnemyCodex 同源：slime(②记)/boss、jinchan(③记) 卡不该灰显，guyao 该灰
+	_c.equals(cards, 22, "22 张卡全部就位（14 常规 + 6 精英 + 魔君 + 金蟾）")
+		# 遭遇/未遭遇与 EnemyCodex 同源：slime(②记)/boss、jinchan(③记) 卡不该灰显，guyao 该灰
 	_c.check(_icon_mod(grids[0], 0) == Color.WHITE, "slime 已遭遇 ⇒ 图标不灰")
 	_c.check(_icon_mod(grids[2], 0) == Color.WHITE, "魔君已遭遇 ⇒ 图标不灰")
 	_c.check(_icon_mod(grids[3], 0) == Color.WHITE, "金蟾已遭遇 ⇒ 图标不灰")
@@ -195,7 +198,7 @@ func _test_icon_capture() -> void:
 	var wrong: Array[String] = []
 	for cid in EnemyGuideData.catalog_ids():
 		var eid2 := String(cid)
-		var is_elite := eid2 in ["golem", "chilei", "jiansha"]
+		var is_elite := eid2 in ["golem", "chilei", "jiansha", "xuanming", "xingpan", "wandu"]
 		var visual := String(EnemyIconCapture.VISUAL_ID.get(eid2, eid2))
 		var cfg := EnemyVisualConfig.get_config(visual, is_elite, eid2 == "boss", false)
 		# 工厂的 enemy_id 与键同形（make_boss 也对 "boss"）⇒ 期望就是映射后的 visual id

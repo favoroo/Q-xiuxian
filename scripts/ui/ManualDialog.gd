@@ -669,9 +669,12 @@ func _rebuild_enemies_page() -> void:
 	_enemies_box.add_child(_make_text_card(
 		String(ManualData.RULE_CARDS["enemies"]["title"]), String(ManualData.RULE_CARDS["enemies"]["body"])))
 
+	var mob_n := EnemyData.MOBS.size()
+	var elite_n := EnemyData.ELITE_POOL.size()
+	var catalog := EnemyGuideData.catalog_ids()
 	var groups: Array = [
-		["常规妖物", EnemyGuideData.catalog_ids().slice(0, 12), false],
-		["精英劫", EnemyGuideData.catalog_ids().slice(12, 15), true],
+		["常规妖物", catalog.slice(0, mob_n), false],
+		["精英劫", catalog.slice(mob_n, mob_n + elite_n), true],
 		["魔君劫", ["boss"], false],
 		["招财金蟾", ["jinchan"], false],
 	]

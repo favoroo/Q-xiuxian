@@ -33,6 +33,9 @@ var _low_hp_tween: Tween = null     ## 低血量脉冲循环 tween 句柄（退�
 var _atmo_mood_tween: Tween = null   ## 煞气两态颜色渐变闸（新切换先杀旧 tween）
 var _atmo_baleful: bool = false      ## 当前氛围态 memo：波次重复 emit 不重放
 var _mist_sprites: Array[Sprite2D] = []  ## 常驻薄雾片引用（移动端减量/后续可关；原先丢失引用无法回收）
+var _arena_vis: ArenaVisualLayer = null  ## 战台结界与大阵图层引用（每5波天象换色驱动）
+var _stage_theme_tween: Tween = null     ## 阶段天象地面与色调过渡 Tween
+var _last_stage_tier: int = -1           ## 上次天象阶段档位（每5波一换）
 
 # —— T-4.3 环境光尘两态氛围（常态灵气光尘 / Boss·末 5 波煞气碎屑）——
 ## 灵尘按深度分两层：远层小而密、近层大而稀（更大更慢更低透明）；灵叶层沿用原样。
@@ -483,11 +486,47 @@ func _atmo_should_be_baleful(n: int) -> bool:
 	return GameBalance.is_boss_wave(n) or n >= GameManager.VICTORY_WAVE - 4
 
 func _on_wave_changed_atmo(n: int) -> void:
+	_update_stage_theme(n)
 	var baleful := _atmo_should_be_baleful(n)
 	if baleful == _atmo_baleful:
 		return
 	_atmo_baleful = baleful
 	_apply_atmo_mood(baleful)
+
+## 每5关天象与氛围渐变：切换结界边缘流光、地面石板明度与全局调色
+func _update_stage_theme(n: int) -> void:
+	var theme: Dictionary = GameBalance.stage_theme_for_wave(n)
+	var tier: int = int(theme.get("tier", 0))
+	var is_boss: bool = bool(theme.get("is_boss", false))
+	if _arena_vis != null and is_instance_valid(_arena_vis):
+		_arena_vis.apply_stage_theme(theme)
+	if tier == _last_stage_tier and not is_boss:
+		return
+	_last_stage_tier = tier
+
+	if _stage_theme_tween != null and _stage_theme_tween.is_valid():
+		_stage_theme_tween.kill()
+	_stage_theme_tween = create_tween().set_parallel()
+	_stage_theme_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+
+	# 1. 地面着色器参数渐变（基色 + 石缝色）
+	var map: Node2D = $MapLayer
+	if map != null:
+		var ground = map.get_node_or_null("GroundTiles")
+		if ground != null and ground.material is ShaderMaterial:
+			var gmat := ground.material as ShaderMaterial
+			var cur_base: Color = gmat.get_shader_parameter("base_color") if gmat.get_shader_parameter("base_color") != null else Color(0.208, 0.243, 0.263, 1.0)
+			var cur_gap: Color = gmat.get_shader_parameter("gap_color") if gmat.get_shader_parameter("gap_color") != null else Color(0.10, 0.13, 0.15, 1.0)
+			var target_base: Color = theme.get("ground_base", cur_base)
+			var target_gap: Color = theme.get("ground_gap", cur_gap)
+			_stage_theme_tween.tween_method(func(c: Color): gmat.set_shader_parameter("base_color", c), cur_base, target_base, 1.2)
+			_stage_theme_tween.tween_method(func(c: Color): gmat.set_shader_parameter("gap_color", c), cur_gap, target_gap, 1.2)
+
+	# 2. 全局色调 ToneModulate 渐变
+	var tone = get_node_or_null("ToneModulate") as CanvasModulate
+	if tone != null:
+		var target_tone: Color = theme.get("tone_modulate", Color(0.85, 0.88, 0.96, 1.0))
+		_stage_theme_tween.tween_property(tone, "color", target_tone, 1.2)
 
 ## 两态切换：颜色 1s tween 渐变（别跳变）；重力/初速直切（只影响新生成粒子，视觉天然平滑）
 func _apply_atmo_mood(baleful: bool) -> void:
@@ -986,8 +1025,10 @@ func _setup_map_bounds() -> void:
 
 	# 3. 战台程序化矢量层：中心太极四象大阵 + 四方灵脉槽 + 锁灵结界光墙与青铜镇魂阵角
 	var arena_vis := ArenaVisualLayer.new()
+	arena_vis.name = "ArenaVisualLayer"
 	arena_vis.half_extent = half
 	map.add_child(arena_vis)
+	_arena_vis = arena_vis
 
 	# 3.5 静态装饰烘焙（2026-10-17 真机 GPU 专项）：GroundDecor + ArenaVisual 的
 	# StaticDecor 都是「纯色确定性零重绘」矢量，离屏烘成一张 2× 纹理由单 Sprite 代替，
