@@ -409,8 +409,19 @@ func _body_range_mult() -> float:
 	return mult
 
 ## 实际有效攻击范围（基础射程 × 射程乘区）
+## 2026-10-28 性能治理：`_process` 的脱程判定每帧都要读它，而 _range_mult 里含一次
+## super_hook_snapshot 指纹校验 + item_hook_sum（20 件道具的 Array.hash）。
+## 乘区只在道具/加点/羁绊变化时变（都发生在帧与帧之间），按物理帧折叠即可：
+## 同一物理帧内多次求值只算一次。
+var _eff_range_frame: int = -1
+var _eff_range_cache: float = 0.0
+
 func effective_range() -> float:
-	return attack_range * _range_mult()
+	var frame := Engine.get_physics_frames()
+	if frame != _eff_range_frame:
+		_eff_range_frame = frame
+		_eff_range_cache = attack_range * _range_mult()
+	return _eff_range_cache
 
 ## 按行为解析手感权重（2026-10-22）：旧写法长剑与重锤共用一套轨道插值，全武器读起来同质。
 ## 这里只调"视觉跟随手感"，不碰任何判定几何与数值：轻器回轨快、转向灵；

@@ -314,6 +314,14 @@ const SUPER_HOOK_KEYS: Array[String] = [
 	# 二阶段（2026-10-25）：箭雨 / 血盾 / 五行归一 / 兽群 / 灵蕴五行
 	"arrow_rain_every", "lifesteal_overflow_shield", "wuxing_all",
 	"pet_chain_lightning", "pet_wuxing_chance",
+	# 伤害转化乘区（2026-10-28）：CultivatorSystem.damage_mult 原本逐字段调 item_hook_sum，
+	# 一次伤害读数要算 14 遍 items.hash()（每次命中都在跑，束流/环绕灵宝多目标时被放大）。
+	# 并进本快照后同一次伤害只做一次指纹校验 + 字典查找。
+	"dmg_per_move_speed", "dmg_per_armor", "dmg_per_100_stones", "stone_dmg_cap",
+	"still_damage", "still_seconds", "dmg_per_empty_slot",
+	"dmg_per_max_hp", "dmg_per_missing_hp", "on_hit_damage_bonus",
+	"dmg_per_unique_item", "dmg_per_unique_item_cap",
+	"dmg_per_nearby_enemy", "dmg_per_nearby_enemy_cap",
 ]
 
 ## 站定流机制是否激活：苦行僧模式或任一站定流法宝在场。

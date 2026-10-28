@@ -61,6 +61,13 @@ static func bake(half: float) -> Sprite2D:
 	# UPDATE_ONCE 的绘制在帧尾落纹理：等 3 帧（同 EnemyIconCapture 口径）
 	for i in range(3):
 		await tree.process_frame
+	# 2026-10-28 兜底（兼容渲染器实测烘焙失败）：process_frame 只保证逻辑帧走完，
+	# 不等 GPU 真正画完 —— gl_compatibility 下 3 个逻辑帧可能都还没提交这一帧的离屏渲染，
+	# get_image() 拿到空图就整段回退矢量层（每帧白付约 400 个绘制调用）。
+	# 改为再等一次 frame_post_draw：这是「本帧渲染已提交」的官方信号，两个后端都成立。
+	if not is_instance_valid(vp):
+		return null
+	await RenderingServer.frame_post_draw
 	var img: Image = null
 	if is_instance_valid(vp):
 		var tex := vp.get_texture()

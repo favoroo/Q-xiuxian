@@ -77,6 +77,9 @@ func _ready() -> void:
 	_setup_map_bounds()
 	_setup_stage_backdrop()
 	_setup_screen_shockwave()
+	# 全场地面投影层（2026-10-28 渲染性能治理）：所有地影集中到一个 CanvasItem 合批，
+	# 实体自己不再画影子。必须在刷怪前建好并占 EntitiesLayer 第一位，否则影子会盖在实体上。
+	GroundShadowLayer.ensure($EntitiesLayer)
 	# 开局在主菜单/选人阶段默认隐藏战斗 HUD 与虚拟摇杆，避免在主页背景中透出
 	$UILayer/GameHUD.visible = false
 	if joystick != null:

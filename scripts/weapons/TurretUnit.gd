@@ -326,31 +326,31 @@ func _fire() -> void:
 	# 开火反馈（T-2.8）：枪口 HDR 闪光起辉 + 2-3 粒元素碎屑 + 核心亮闪 + 后坐抖动与音效
 	# 2026-10-25 星级分档：★3 枪口转鎏金、★4 青紫逐发交替（弹丸染色同源）——旧写法炮台
 	# 除了器身描边之外开火毫无星级读数，极境机关看起来和★1 打的是同一种弹。
+	# 2026-10-28 性能治理：枪口闪 / 核心亮闪 / 后坐回位原先是三个独立 Tween（每发 3 个节点 + 6~7 个
+	# 属性步），满场 30 台炮台齐射时是集中分配热点。三者本来就同时长并行起跑，合成一个即可。
+	var shot_idx: int = _shot_count
+	core_sprite.modulate = GameStyle.star_fx_color(star, shot_idx) if star >= 3 else Color(1.4, 1.35, 1.2)
+	_shot_count += 1
+	core_sprite.position = -aim_dir * 3.5
+	var tw := create_tween()
+	tw.set_parallel(true)
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
 		muzzle_flash.scale = Vector2.ONE * randf_range(0.35, 0.45)
 		var flash_col := GameStyle.fx_hdr_element(_elem, GameStyle.FX_HDR_CORE)
 		if star >= 3:
-			flash_col = GameStyle.star_fx_color(star, _shot_count)
+			flash_col = GameStyle.star_fx_color(star, shot_idx)
 		muzzle_flash.modulate = flash_col
 		muzzle_flash.visible = true
-		var mtw := create_tween()
-		mtw.set_parallel(true)
-		mtw.tween_property(muzzle_flash, "scale", Vector2.ONE * 0.75, 0.08)
-		mtw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
-		mtw.chain().tween_callback(func(): muzzle_flash.visible = false)
+		tw.tween_property(muzzle_flash, "scale", Vector2.ONE * 0.75, 0.08)
+		tw.tween_property(muzzle_flash, "modulate:a", 0.0, 0.08)
+	tw.tween_property(core_sprite, "modulate", Color.WHITE, 0.1)
+	tw.tween_property(core_sprite, "position", Vector2.ZERO, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if muzzle_flash != null:
+		tw.chain().tween_callback(func(): muzzle_flash.visible = false)
 
 	# 炮口微粒喷射（绕过受击限流闸，不抢占命中火花名额；2026-10-16 减量 scale 0.6→0.45 并顺向）
 	FxParticlePool.burst(FxParticlePool.HIT_SPARK, muzzle_point.global_position, _elem, 0.45, true, aim_dir)
-
-	core_sprite.modulate = GameStyle.star_fx_color(star, _shot_count) if star >= 3 else Color(1.4, 1.35, 1.2)
-	_shot_count += 1
-	var ftw := create_tween()
-	ftw.tween_property(core_sprite, "modulate", Color.WHITE, 0.1)
-
-	core_sprite.position = -aim_dir * 3.5
-	var rtw := create_tween()
-	rtw.tween_property(core_sprite, "position", Vector2.ZERO, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	StrikeFx.fire_sfx(self, WeaponData.sfx_for(weapon_def_id), 0.95)
 
 func dismiss() -> void:

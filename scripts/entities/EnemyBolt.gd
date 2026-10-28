@@ -25,11 +25,11 @@ const CORE_COLOR_PURPLE := Color(0.94, 0.78, 1.0)   ## 幽紫高光芯
 const RIM_COLOR_PURPLE := Color(0.24, 0.05, 0.38)   ## 幽紫硬描边
 const OUTLINE_COLOR_PURPLE := Color(0.92, 0.75, 1.0, 0.70) ## 幽紫浅色细描边（冷紫高光）
 
-# 幽冥剑气配色（御剑邪修专属：冷冽幽蓝梭形剑芒）
-const BODY_COLOR_SWORD := Color(0.20, 0.75, 1.0)       ## 幽蓝剑气身
-const CORE_COLOR_SWORD := Color(0.90, 0.98, 1.0)       ## 极亮纯白霜雪剑芯
-const RIM_COLOR_SWORD := Color(0.06, 0.15, 0.35)       ## 深蓝锐利描边
-const OUTLINE_COLOR_SWORD := Color(0.75, 0.92, 1.0, 0.75)   ## 霜雪浅蓝细描边
+# 幽冥剑气配色（御剑邪修专属：朱砂赤煞破空三角剑芒，彻底与地面的幽蓝经验水晶区分开）
+const BODY_COLOR_SWORD := Color(0.96, 0.25, 0.18)       ## 朱砂赤焰剑气身
+const CORE_COLOR_SWORD := Color(1.0, 0.94, 0.80)        ## 暖白高热极亮剑芯
+const RIM_COLOR_SWORD := Color(0.38, 0.05, 0.06)        ## 暗黑焦红硬描边
+const OUTLINE_COLOR_SWORD := Color(1.0, 0.65, 0.45, 0.85) ## 亮红外刃微芒描边
 
 # 剑煞血光配色（剑煞邪修精英专属：血煞剑芒）
 const BODY_COLOR_JIANSHA := Color(0.85, 0.25, 0.50)    ## 血煞剑气身
@@ -280,7 +280,7 @@ func _draw() -> void:
 	# 4. 高光芯
 	draw_circle(Vector2.ZERO, radius * 0.45, core_c)
 
-## 幽冥剑气视觉绘制（几何尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
+## 幽冥剑气视觉绘制（紧凑破空掠翼三角剑芒，尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
 func _draw_sword_bolt() -> void:
 	var body_c := BODY_COLOR_JIANSHA if purple_style else BODY_COLOR_SWORD
 	var rim_c := RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
@@ -288,33 +288,29 @@ func _draw_sword_bolt() -> void:
 	var core_c := CORE_COLOR_JIANSHA if purple_style else CORE_COLOR_SWORD
 
 	var r := radius
-	# 锐利剑梭多边形（前尖达到 r，侧刃向后收束）
+	# 破空掠翼锐角三角形（前尖达 r，两翼向后平滑收束，尾部内收形成掠翼破空感，尺寸紧凑不超长）
 	var pts := PackedVector2Array([
-		Vector2(r, 0.0),
-		Vector2(-r * 0.2, -r * 0.65),
-		Vector2(-r * 0.75, -r * 0.25),
-		Vector2(-r * 0.55, 0.0),
-		Vector2(-r * 0.75, r * 0.25),
-		Vector2(-r * 0.2, r * 0.65)
+		Vector2(r, 0.0),                     # 锐利前尖
+		Vector2(-r * 0.75, -r * 0.70),       # 上尾翼
+		Vector2(-r * 0.40, 0.0),             # 尾部内收凹角（掠翼剑羽）
+		Vector2(-r * 0.75, r * 0.70)         # 下尾翼
 	])
 	draw_colored_polygon(pts, body_c)
 
 	var stroke_pts := PackedVector2Array([
 		Vector2(r, 0.0),
-		Vector2(-r * 0.2, -r * 0.65),
-		Vector2(-r * 0.75, -r * 0.25),
-		Vector2(-r * 0.55, 0.0),
-		Vector2(-r * 0.75, r * 0.25),
-		Vector2(-r * 0.2, r * 0.65),
+		Vector2(-r * 0.75, -r * 0.70),
+		Vector2(-r * 0.40, 0.0),
+		Vector2(-r * 0.75, r * 0.70),
 		Vector2(r, 0.0)
 	])
 	draw_polyline(stroke_pts, rim_c, 1.6, true)
-	# 细浅寒芒刃线（线宽 1.0，叠在深色描边上形成亮刃微芒）
+	# 细浅外刃亮芒线（线宽 1.0，叠在深色描边上形成亮刃反差）
 	draw_polyline(stroke_pts, outline_c, 1.0, true)
 
-	# 剑脊高能亮芯
-	draw_line(Vector2(-r * 0.45, 0.0), Vector2(r * 0.7, 0.0), core_c, 1.8, true)
-	draw_circle(Vector2(r * 0.1, 0.0), r * 0.25, core_c)
+	# 剑脊高能亮芯与剑心
+	draw_line(Vector2(-r * 0.25, 0.0), Vector2(r * 0.75, 0.0), core_c, 1.6, true)
+	draw_circle(Vector2(r * 0.05, 0.0), r * 0.20, core_c)
 
 func _physics_process(delta: float) -> void:
 	if angular_speed != 0.0:

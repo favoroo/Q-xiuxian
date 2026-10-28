@@ -562,6 +562,48 @@ func _run() -> void:
 	await get_tree().create_timer(0.2).timeout
 	_check(absf(Engine.time_scale - 1.0) < 0.001, "GameManager._process 到点还原 time_scale = 1.0")
 
+	# ================= 10. 地影集中层 + 波末清场分帧（2026-10-28 渲染/卡顿治理） =================
+	# 10a. 地影集中层：敌人渲染器不再自己画双层椭圆，改为向 GroundShadowLayer 上报槽位。
+	#      场上 12 只怪重绘过一轮后，该层必须登记到槽位（否则影子整体消失 = 视觉回归）。
+	GroundShadowLayer.ensure(world)
+	await get_tree().create_timer(0.2).timeout
+	var slots_before: int = GroundShadowLayer.debug_slot_count()
+	var ring: Array = []
+	for i in range(12):
+		var ne := slime_scene.instantiate() as EnemyBase
+		world.add_child(ne)
+		ne.global_position = player.global_position + Vector2(cos(float(i) * 0.7) * 90.0, sin(float(i) * 0.7) * 55.0)
+		ne.add_to_group("enemies")
+		ne.activate()
+		ring.append(ne)
+	# 敌人重绘是 20/30Hz 节流：等足一拍让全员都上报过
+	await get_tree().create_timer(0.25).timeout
+	var slots_after_spawn: int = GroundShadowLayer.debug_slot_count()
+	print("PERF: 地影槽位 摆阵前 %d → 12 只怪摆好后 %d" % [slots_before, slots_after_spawn])
+	_check(slots_after_spawn >= slots_before + 12,
+		"地影集中层登记了 12 只怪的影子槽位（%d → %d）" % [slots_before, slots_after_spawn])
+
+	# 10b. 波末清场分帧：end_wave 当刻全体敌人必须已退出战斗（dying，防「延迟那几帧被打死白掉战果」），
+	#      但消散演出的 Tween 每帧只许起 CLEANUP_BATCH_PER_FRAME 个（旧写法同帧起 12 个）。
+	var bench_spawner := WaveSpawner.new()
+	world.add_child(bench_spawner)
+	bench_spawner.set_process(false)
+	var tw_before := get_tree().get_processed_tweens().size()
+	bench_spawner.end_wave()
+	var tw_same_frame := get_tree().get_processed_tweens().size() - tw_before
+	var all_dying := true
+	for ne in ring:
+		if is_instance_valid(ne) and not ne.dying:
+			all_dying = false
+	print("PERF: 波末同帧起的消散 Tween = %d（上限 %d）" % [tw_same_frame, WaveSpawner.CLEANUP_BATCH_PER_FRAME])
+	_check(all_dying, "波末当刻全员退出战斗（dying），延迟的只是消散演出")
+	_check(tw_same_frame <= WaveSpawner.CLEANUP_BATCH_PER_FRAME,
+		"波末同帧起的消散 Tween ≤ %d（实得 %d，旧写法 = 敌人数）" % [WaveSpawner.CLEANUP_BATCH_PER_FRAME, tw_same_frame])
+	# 队列必须能排空（判据/作者模式会把 phase 直接改掉，所以排空不受阶段限制）
+	bench_spawner._drain_cleanup_queue()
+	bench_spawner._drain_cleanup_queue()
+	_check(bench_spawner._cleanup_enemies.is_empty(), "清场队列两帧内排空（12 只 ≤ 10/帧 + 1 批）")
+
 	world.remove_child(boss)
 	boss.free()
 	world.remove_child(boss_bar)

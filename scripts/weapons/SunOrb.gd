@@ -110,12 +110,22 @@ const POLL_INTERVAL := 0.066
 var _poll_timer: float = 0.0
 var _cached_stat_bonus: float = 0.0
 var _cached_multi_mult: float = 1.0
+var _cached_chain_mult: float = 1.0
+var _cached_def: Dictionary = {}
 var _dmg_cache_valid: bool = false
 
 func _refresh_dmg_cache() -> void:
 	# 摊分除数与 base_damage 同源（drone_orb_divisor）：★3 灵威除数 2.5 < 具数 3，总伤 +20%
 	_cached_stat_bonus = GameManager.get_weapon_stat_bonus(drone_id, star) / WeaponData.drone_orb_divisor(star)
 	_cached_multi_mult = GameManager.get_multi_weapon_damage_mult()
+	# 2026-10-28 性能治理：与目标无关的乘区链（含 cultivator_damage_mult 的道具指纹、
+	# element_damage_mult、WeaponData.get_def 字典拷贝）原先写在 _try_damage 里，
+	# 每次接触命中都要对每个目标重算一遍（一圈灵宝同时贴住 8~16 只怪时被放大十几倍）。
+	# 这些量只随道具/加点/武器构型变化，挪到每轮轮询（15Hz）刷新一次即可，伤害口径不变。
+	_cached_def = WeaponData.get_def(drone_id)
+	_cached_chain_mult = GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult \
+		* GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) \
+		* GameManager.element_damage_mult(drone_id) * _cached_multi_mult
 	_dmg_cache_valid = true
 
 func _physics_process(delta: float) -> void:
@@ -153,9 +163,10 @@ func _try_damage(area: Area2D, contact_count: int = 1) -> void:
 			for k in _hit_ms:
 				if now - int(_hit_ms[k]) >= cd_ms:
 					_hit_ms.erase(k)
-		var def := WeaponData.get_def(drone_id)
+		var def := _cached_def
 		if not _dmg_cache_valid:
 			_refresh_dmg_cache()
+			def = _cached_def
 		var total_base := base_damage + _cached_stat_bonus
 		var total_orbs: int = get_parent().get_child_count() if get_parent() != null else orb_count
 		var is_force_crit: bool = (GameManager.force_crit_left > 0.0)
@@ -168,7 +179,7 @@ func _try_damage(area: Area2D, contact_count: int = 1) -> void:
 			is_crit = (GameManager.rng.randf() < eff_crit_rate)
 		var crit_m := GameManager.get_crit_mult()
 		var focus_mult := GameBalance.spirit_focus_damage_mult(contact_count, total_orbs)
-		var dmg = total_base * GameManager.get_weapon_damage_mult() * GameManager.synergy_damage_mult * GameManager.shadow_amp_mult * GameManager.cultivator_damage_mult(drone_id) * GameManager.element_damage_mult(drone_id) * _cached_multi_mult * GameManager.elite_damage_mult_for(enemy) * focus_mult * (crit_m if is_crit else 1.0)
+		var dmg = total_base * _cached_chain_mult * GameManager.elite_damage_mult_for(enemy) * focus_mult * (crit_m if is_crit else 1.0)
 		var knock_force := WeaponData.knockback_for(drone_id, 165.0)
 		var knockback = GameManager.knockback_vec(global_position, enemy.global_position, knock_force)
 		enemy.take_damage(dmg, knockback, is_crit)

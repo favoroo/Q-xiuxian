@@ -49,7 +49,8 @@ ALL_SKIP_PATTERNS = ("Preview", "AudioGallery")
 # ToneCapture（真机抓拍，文件头自标「非判据」）与 AudioGameOverProbe / AudioSoakProbe
 # （2026-10-25 音频满幅自愈的诊断遗产：前者是挂起复现器、后者是 380s 浸泡）在 --all 里只会白等超时。
 ALL_SKIP_NAMES = {"WeaponHeadFusionCheck.tscn", "WeaponProbe.tscn", "ChestLookProbe.tscn",
-	"ToneCapture.tscn", "AudioGameOverProbe.tscn", "AudioSoakProbe.tscn"}
+	"ToneCapture.tscn", "AudioGameOverProbe.tscn", "AudioSoakProbe.tscn",
+	"PerfRenderBench.tscn"}  # 渲染开销对照台：固定阵型阶梯加怪，必须带窗口跑
 
 # 真在干活的慢判据：默认 35s 会把「跑完了但跑得久」误判成挂起。上限按实测给（括号里是本轮实测）。
 SLOW_TEST_LIMITS = {

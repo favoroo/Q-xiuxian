@@ -119,19 +119,13 @@ func _draw_ground_shadow(ground_y: float, rx: float, ry: float, base_alpha: floa
 	var eff_rx := rx * bob_factor
 	var eff_ry := ry * bob_factor
 	var eff_alpha := base_alpha * bob_factor
-	var center := Vector2(0.0, shadow_center_y)
-
-	# 双层软影：外层柔和弥散，内层接触暗核（全场 2026-10 统一高拟真接触投影）
-	for layer in range(2):
-		var k := 1.0 if layer == 0 else 0.58
-		var a := eff_alpha * 0.52 if layer == 0 else minf(eff_alpha * 1.55, 0.90)
-		var pts := PackedVector2Array()
-		pts.resize(16)
-		for i in range(16):
-			var ang := TAU * float(i) / 16.0
-			pts[i] = center + Vector2(cos(ang) * eff_rx * k, sin(ang) * eff_ry * k)
-		var depth := 1.0 if layer == 0 else 0.25
-		draw_colored_polygon(pts, Color(0.02 * depth, 0.03 * depth, 0.05 * depth, a))
+	# 双层软影（外弥散 + 内暗核）：2026-10-28 改由全场共享的 GroundShadowLayer 统一画。
+	# 原先每颗宝石在自己的 item 里画 2 个 16 边多边形 = 2 个绘制调用 + 2 次临时数组分配，
+	# 满场 140 颗就是 280 个调用/280 次分配只为几摊影子（20Hz 重绘时还在反复重建数组）。
+	# 这里只上报参数：影子位置由该层按 caster 全局变换现算，居中偏移带上贴地补偿。
+	var gs := get_global_transform().get_scale()
+	GroundShadowLayer.push(self, Vector2(0.0, shadow_center_y),
+		eff_rx * gs.x, eff_ry * gs.y, eff_alpha)
 
 # ==============================================================================
 # 1. 八面立体菱形水晶（Octahedral Crystal）

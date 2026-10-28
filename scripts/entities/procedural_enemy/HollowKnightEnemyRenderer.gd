@@ -84,6 +84,9 @@ var _time: float = 0.0
 ## 为零 = 无锁敌（待机/无目标），眼型退回静态。
 var _local_aim_cache: Vector2 = Vector2.ZERO
 
+## 本次绘制的水平镜像符号（_draw 里按 flip_h 现算）：地影上报要把它并进世界偏移。
+var _draw_flip_x: float = 1.0
+
 ## 残血读数（0~1，1=满血）：EnemyBase 每帧同步，供喘息/失序调制。
 var hp_ratio: float = 1.0:            ## 生命比例（渲染层只读，纯表现，不参与任何判定）
 	set(val):
@@ -223,6 +226,7 @@ func _draw() -> void:
 
 	# 全局朝向水平镜像与等比尺寸缩放处理
 	var root_scale_x := -1.0 if flip_h else 1.0
+	_draw_flip_x = root_scale_x
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(root_scale_x, 1.0) * (config.scale_factor * ENEMY_GLOBAL_SCALE))
 
 	# 视线缓存（2026-10-23 全敌种瞳孔锁敌）：把全局 aim_dir 转到本地绘制坐标系（含镜像），
@@ -385,17 +389,40 @@ func draw_filled_ellipse(pos: Vector2, rx: float, ry: float, col: Color) -> void
 	draw_colored_polygon(_circle_buf, col)
 
 ## 双层软地影（2026-10-18 阴影统一升级）：外层大而淡的弥散影 + 内层约六成大小的接触暗核，
-## 让实体「扎根地面」。仅在既有 _draw 内多画一个多边形，与本体同一 CanvasItem 批处理，
-## 吃现有 20/30Hz 节流与屏外剔除，零额外节点/材质开销。tint 供特殊敌种换调（如毒妖湿绿）。
+## 让实体「扎根地面」。
+## 2026-10-28 渲染性能治理：改由全场共享的 GroundShadowLayer 统一画 —— 原写法每只怪在自己
+## item 里画 2 个多边形椭圆 = 2 个绘制调用（满场 48 只 ≈ 百个调用只为几摊影子），
+## 且跨 CanvasItem 不合批。这里只上报参数：位置由该层按 caster 全局变换每帧现算（跟随移动），
+## 尺寸/透明度吃本渲染器的 20/30Hz 重绘节奏（与旧行为更新频率一致）。
+## tint 供特殊敌种换调（如毒妖湿绿）。
 func _draw_soft_shadow(pos: Vector2, rx: float, ry: float, alpha: float, tint := Color(0.04, 0.05, 0.08)) -> void:
-	draw_filled_ellipse(pos, rx, ry, Color(tint.r, tint.g, tint.b, alpha * 0.6))
-	draw_filled_ellipse(pos, rx * 0.66, ry * 0.66, Color(tint.r * 0.4, tint.g * 0.4, tint.b * 0.4, minf(alpha * 1.35, 0.88)))
+	if config == null:
+		return
+	var s: float = config.scale_factor * ENEMY_GLOBAL_SCALE
+	var gs := get_global_transform().get_scale()
+	var world_r: Vector2 = Vector2(rx * s * gs.x, ry * s * gs.y)
+	# 尸体缩小淡出时影子要跟着走：半径吃全局缩放（上面 gs 已含 view 的 scale），
+	# 透明度吃宿主 view 的 modulate —— 否则重绘停止前会留下一摊不淡不缩的黑影。
+	# （死亡 tween 改的是 procedural_view 的 scale/modulate，本渲染器只是它的子节点。）
+	var fade := 1.0
+	var host := get_parent() as CanvasItem
+	if host != null:
+		fade = host.modulate.a * host.self_modulate.a
+	GroundShadowLayer.push(self, Vector2(pos.x * _draw_flip_x * s, pos.y * s),
+		world_r.x, world_r.y, alpha * fade, tint)
 
-func draw_soft_glow(pos: Vector2, radius: float, col: Color, layers: int = 3) -> void:
-	for i in range(layers, 0, -1):
-		var r := radius * (float(i) / float(layers))
-		var a := col.a * (0.28 / float(i))
-		_circle(pos, r, Color(col.r, col.g, col.b, a))
+## 柔光晕（2026-10-28 渲染性能治理）：原先按 layers 叠 2~3 个多边形圆（每层一个绘制调用 +
+## 十几段顶点、每层一次临时数组），改为一张共享径向渐变贴图铺一个矩形：
+## 同 item 内连续同贴图矩形可合批，边缘也比叠圈更干净。
+## 旧叠层叠加后中心不透明度约 0.5×col.a，这里用单层 0.5 系数复现同一亮度观感。
+const GLOW_ALPHA_SCALE := 0.5
+
+func draw_soft_glow(pos: Vector2, radius: float, col: Color, _layers: int = 3) -> void:
+	if radius <= 0.01 or col.a <= 0.0:
+		return
+	draw_texture_rect(GroundShadowLayer.soft_texture(),
+		Rect2(pos.x - radius, pos.y - radius, radius * 2.0, radius * 2.0),
+		false, Color(col.r, col.g, col.b, col.a * GLOW_ALPHA_SCALE))
 
 func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, col_core: Color) -> void:
 	# 绘制狭长冷眸（外层幽光 + 内层锐核）

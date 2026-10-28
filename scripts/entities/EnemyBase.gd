@@ -2395,8 +2395,8 @@ func _fire_bolt(player: Node2D) -> void:
 	play_squash(Vector2(1.16, 0.84), 0.16)
 	AudioManager.play_sfx("enemy_bolt", 0.7)
 	if get_parent() != null:
-		# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气水系 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
-		var pop_col := GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_WATER
+		# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气赤煞炽阳 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
+		var pop_col := GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_FIRE
 		JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
 
 ## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
@@ -2944,9 +2944,19 @@ func _start_dissolve(duration: float, edge_col: Color, tw: Tween) -> void:
 ## 回合结束时的消散：不掉落、不计数
 # ---------------- 死亡与清场 ----------------
 
+## 波末消散拆两段（2026-10-28 卡顿尖峰治理）：
+## `_begin_dissolve` 立刻让这只怪退出战斗（dying/关物理/关碰撞/收预警），与旧行为逐帧等价 ——
+## 清场当刻必须就不再是可击杀、可结算的实体，否则延迟消散的那几帧里被打死会白掉战果；
+## `_play_dissolve_fx` 才是起 Tween + 挂溶解材质的演出段，可由刷怪器分帧调用
+## （48 只同帧建 48 个 Tween 正是回合末必掉一帧的根因）。直接调用时两段连跑，行为不变。
 func dissolve() -> void:
-	if dying or not is_inside_tree():
+	if not _begin_dissolve():
 		return
+	_play_dissolve_fx()
+
+func _begin_dissolve() -> bool:
+	if dying or not is_inside_tree():
+		return false
 	dying = true
 	set_physics_process(false)
 	# 清场路径不经过 _die 的 _clear_*：挂在父节点上的落石预警圈必须在这里收，
@@ -2956,6 +2966,10 @@ func dissolve() -> void:
 		_field_ring.visible = false
 	$CollisionShape2D.set_deferred("disabled", true)
 	$Hurtbox/CollisionShape2D.set_deferred("disabled", true)
+	return true
+
+## 消散演出段（0.4s 淡出缩拢 + 溶解 shader）；必须跟在 _begin_dissolve 之后
+func _play_dissolve_fx() -> void:
 	var tw = create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(anim_sprite, "modulate:a", 0.0, 0.4)

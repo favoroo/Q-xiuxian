@@ -171,6 +171,8 @@ func _scene_or_null(path: String) -> PackedScene:
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
+	# 清场队列不分阶段消化：判据/作者模式会把 phase 直接改成 ALLOC，卡在 CLEARING 里排不干净
+	_drain_cleanup_queue()
 	match phase:
 		Phase.WAITING:
 			if GameManager.run_started and GameManager.player != null:
@@ -401,6 +403,9 @@ func start_wave(n: int) -> void:
 	_boss_ref = null
 	_elite_ref = null
 	_overtime_noted = false
+	# 上一回合没摊完的清场队列不许带进新回合（重开/跳波会打断 CLEARING 的分帧消化）
+	_cleanup_enemies.clear()
+	_cleanup_turrets.clear()
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
 	_batch_cooldown = 0.0
@@ -495,20 +500,25 @@ func end_wave(early_secs: float = 0.0) -> void:
 			DamageNumber.spawn(get_parent(), p.global_position + Vector2(0.0, -34.0),
 				early_stones, false, "+%d 金币" % early_stones)
 	# 余怪消散（不掉落）
+	# 2026-10-28 卡顿尖峰治理：原写法在同一帧对场上所有敌人逐个起消散演出（每只一次
+	# create_tween + 一串属性步 + ShaderMaterial 挂载），48 只同屏时那一帧要建 50+ 个 Tween。
+	# 现按两段拆：当刻先让每只怪退出战斗（dying/关物理/关碰撞，与旧行为逐帧等价 ——
+	# 不会有「延迟那几帧被打死白掉战果」的窗口），演出段进队列，每帧起 ≤10 个。
 	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if enemy is EnemyBase:
-			enemy.dissolve()
+		if enemy is EnemyBase and (enemy as EnemyBase)._begin_dissolve():
+			_cleanup_enemies.append(enemy)
 	# 没砸开的藏宝匣同一口径收走：每回合重刷一批（数量曲线见 BalanceChest），不留档否则场地越打越满是箱子。
 	# 必须与上面那个 for 平级：这两轮循环原先缩进了 enemies 循环的体内 ⇒ 场上没怪时
 	# 匣子与炮台一个都不收（#24 刷怪预算把同屏顶满的旧口径改掉之后，回合末清空成了常态，
 	# 这条静默路径才露出来：ChestTargetingCheck 第 5 组三条一起报红）。
+	# 匣子只有个位数、且判据钉着「end_wave 当刻即 dying」，不排版（留给敌人与炮台分帧）。
 	for chest in get_tree().get_nodes_in_group("chests"):
 		if chest is SpiritChest:
 			(chest as SpiritChest).dissolve()
-	# 回合末收回场上机关炮台
+	# 回合末收回场上机关炮台（数量可达 30，撤场演出同样进队列摊帧）
 	for turret in get_tree().get_nodes_in_group("turrets"):
 		if turret is TurretUnit:
-			turret.dismiss()
+			_cleanup_turrets.append(turret)
 	# 地上金币全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折金币）
 	# 磁吸风暴分帧（2026-10-17 性能专项）：旧版同一帧把最多 140 颗宝石全部切进 60Hz
 	# 物理回调 + 各挂 Line2D 拖尾，正是回合末清场瞬间的掉帧尖峰来源。
@@ -521,6 +531,33 @@ func end_wave(early_secs: float = 0.0) -> void:
 # —— 回合末磁吸分帧（每物理帧 ≤ MAGNET_BATCH_PER_FRAME 颗）——
 const MAGNET_BATCH_PER_FRAME := 16
 var _magnet_queue: Array = []   ## 待磁吸宝石队列（出生序）；CLEARING 期间每帧消化一批
+
+# —— 回合末清场分帧（每渲染帧 ≤ CLEANUP_BATCH_PER_FRAME 个）——
+## 敌人消散 / 炮台撤场都要起演出（Tween + 溶解材质挂载），同帧全收会造一次性尖峰。
+## 10 个/帧：48 只 ≈ 5 帧摊完，清场等待窗 1s 足够。
+## 注意队列里放的是「已退出战斗、只等演出」的个体：敌人必须先在 end_wave 当刻走完
+## _begin_dissolve（dying/关物理/关碰撞），否则延迟的这几帧里还能被打死、白掉战果。
+const CLEANUP_BATCH_PER_FRAME := 10
+var _cleanup_enemies: Array = []
+var _cleanup_turrets: Array = []
+
+func _drain_cleanup_queue() -> void:
+	if _cleanup_enemies.is_empty() and _cleanup_turrets.is_empty():
+		return
+	if not _cleanup_enemies.is_empty():
+		var batch := mini(CLEANUP_BATCH_PER_FRAME, _cleanup_enemies.size())
+		for i in range(batch):
+			var enemy = _cleanup_enemies[i]
+			if enemy != null and is_instance_valid(enemy) and enemy.is_inside_tree():
+				enemy._play_dissolve_fx()
+		_cleanup_enemies = _cleanup_enemies.slice(batch)
+	if not _cleanup_turrets.is_empty():
+		var tbatch := mini(CLEANUP_BATCH_PER_FRAME, _cleanup_turrets.size())
+		for i in range(tbatch):
+			var turret = _cleanup_turrets[i]
+			if turret != null and is_instance_valid(turret) and turret.is_inside_tree():
+				turret.dismiss()
+		_cleanup_turrets = _cleanup_turrets.slice(tbatch)
 
 func _collect_gems_batched(player: Node2D) -> void:
 	_magnet_queue.clear()
