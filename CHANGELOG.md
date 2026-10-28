@@ -1,3 +1,15 @@
+## 2026-10-28 #01
+【TapTap提审·APK解析名与商店标题不一致拒审订正】**Fixed（根因）**：第三次提审被拒，驳回原因「游戏解析名【剑士-Swordsman】与详情页标题【剑士】不一致」——TapTap 对 Godot 包做深度解析，从 APK 内 `assets/project.binary` 读取 `application/config/name`（原为「剑士 (Swordsman)」）归一化成解析名，与商店标题「剑士Q」对不上；注意 Android manifest 标签（`package/name`，aapt 显示「剑士」）与该解析名是两条独立口径，改 manifest 标签不解决此拒审。**改动**：① `project.godot` `config/name` 改为 `剑士Q`；② `export_presets.cfg` `package/name` 同步改为 `剑士Q`、`version/code` 107→108（防 TapTap 包体库同版本号去重拒绝）；③ 重导签名 APK（`build/q-xiuxian-v0.1.7r2-arm64-v8a.apk`，aapt 全语言标签=剑士Q、project.binary 无 Swordsman 残留）→ `upload-apk`（apkId 1072010）→ `select-package` 重绑主包体（expected 口径回填）→ 预检 0 阻断 → 重新提交审核（状态回到 reviewing）。涉及 `project.godot`、`export_presets.cfg`、`build/taptap_materials/select-package-v108.json`。
+
+## 2026-10-27 #14
+【TapTap提审·撤回审核并正式定名为「剑士Q」重提】响应用户需求，调用 `withdraw-app-review` 撤回审核中版本至草稿状态，正式将游戏名称更改为简洁有力的 `剑士Q`。**改动**：① 游戏标题正式变更为 `剑士Q`，简介、开发者寄语、更新日志全线同步更名；② `tools/generate_taptap_banner.py` 重新渲染 1920×1080 官方横版宣传图（主标题「剑士Q」，大字粗体新野兽派排版），重新上传并回填 `banner_4` 字段；③ 提审预检 0 阻断，顺利重新提交审核（版本状态重新流转为 `reviewing`）。涉及 `tools/generate_taptap_banner.py`、`build/taptap_materials/`。
+
+## 2026-10-27 #13
+【TapTap提审·同名冲突订正为「剑士-Swordsman」并重提】**Fixed（根因）**：TapTap 首次提审被拒，驳回原因：「站内已有同名游戏“剑士”，请修改游戏标题以及相关素材后重新提交审核」。**改动**：① 游戏标题正式变更为 `剑士-Swordsman`，商店简介、开发者寄语、APK更新日志全线同步更名；② `tools/generate_taptap_banner.py` 重新生成横版宣传图（`banner_4`），主标题下置明黄色副标 `- Swordsman -`，并在安全区内对齐新游戏名；③ 重新上传宣传图并更新后台资料字段，完成预检后再次提交审核（版本 ID `1155294`，状态成功流转为 `reviewing`）。涉及 `tools/generate_taptap_banner.py`、`build/taptap_materials/`。
+
+## 2026-10-27 #12
+【商店/物料采集·渲染器色调一致性订正】**Fixed（根因）**：桌面端默认 Forward+（Metal）渲染带 `WorldEnvironment.tonemap_mode=3`（ACES 色调映射），使 2D 视口 UI 宣纸白（#f7f3e8）与主题荧绿（#c5e803）被全局压暗泛灰（荧绿由 (197,232,3) 压至 (142,205,0)，纸面由 (247,243,232) 泛黄灰至 (237,228,205)），导致在桌面截屏时与 Android 端 `gl_compatibility`（GLES3）真机呈现的高对比纯正调色不一致；商店物料抓取工具统一显式加 `--rendering-method gl_compatibility` 启动渲染，确保 100% 采集出对齐真机实装色彩的 1920×1080 官方截图与宣传图物料。涉及 `tools/store_capture/`、`tools/generate_taptap_banner.py`。
+
 ## 2026-10-27 #11
 【万剑归宗·头顶剑意UI重塑为单柄沙漏小剑】响应用户反馈：「4个太多了不太好看，改成1个，在一个里面显示层数进度；触发的时候不要上面那个横条，触发时变成沙漏慢慢变空」。**改动**：① 废弃头顶 4 把横排小剑与共鸣横线/顶条，改为头顶正中单柄竖直小剑（`tip_y -10 / shoulder_y -6.5 / guard_y +2.5 / pommel_y +8.5`），造型典雅挺拔、视野通透不遮挡；② **逐刀充能**：未开阵时由剑柄向剑尖按 `charge / CHARGE_EVERY` 逐刀渐进攀升，每次出手命中金光水位上涨 5% 并附带弹性弹跳动效；满 20 层整柄转为饱满金芒 + 亮白芯线脉冲；③ **沙漏倒计时流逝**：剑阵触发开阵后，不画任何多余横线，小剑充能转为纯金并化作沙漏倒计时，金芒水位线随剩余驻场时间由剑尖向剑柄缓缓流逝放空（4 秒内 100%→0% 逐渐见底），阵散完全流尽恢复空槽容器轮廓。**判据**：`tests/sword_phantom_check.gd` UI 同步断言更新并通过（26 项全绿）；`tests/sword_phantom_preview.gd` 现场展示订正为 6 档单柄小剑充能与沙漏流逝。涉及 `scripts/entities/PlayerSkillVfx.gd`、`tests/sword_phantom_check.gd`、`tests/sword_phantom_preview.gd`。
 

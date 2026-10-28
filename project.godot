@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="剑士 (Swordsman)"
+config/name="剑士Q"
 run/main_scene="res://scenes/main/Main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Mobile")
