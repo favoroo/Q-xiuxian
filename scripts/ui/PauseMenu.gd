@@ -9,6 +9,7 @@ extends Control
 signal stats_requested
 signal settings_requested
 signal manual_requested
+signal save_requested  ## 多存档：打开选位保存弹窗（Main 打开 SaveManageDialog 存档模式）
 
 var _unpause_on_close: bool = true
 var _closing: bool = false
@@ -19,6 +20,7 @@ var _retry_reset_tween: Tween
 var _close_tween: Tween
 var _update_btn: Button
 var _ver_label: Label
+var _subtitle: Label
 
 func _ready() -> void:
 	visible = false
@@ -70,6 +72,7 @@ func _build_ui() -> void:
 	var subtitle := GameStyle.label(Label.new(), 13, GameStyle.GREY)
 	subtitle.text = "战斗暂停 · 休整片刻"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_subtitle = subtitle
 	vbox.add_child(subtitle)
 
 	var spacer := Control.new()
@@ -79,7 +82,18 @@ func _build_ui() -> void:
 
 	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.GOLD, GameStyle.JADE, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
-	vbox.add_child(resume_btn)
+	resume_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# 存档与继续同排：整列排下去会多出一行（540 屏高已贴边），可存档位由弹窗再选
+	var save_btn := _mk_btn("存 档", 42, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
+	save_btn.custom_minimum_size = Vector2(84, 42)
+	save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	save_btn.pressed.connect(_on_save_pressed)
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 10)
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_row.add_child(resume_btn)
+	top_row.add_child(save_btn)
+	vbox.add_child(top_row)
 
 	# 六颗键分三排：整列排下去面板要 593 高 > 540 屏高，
 	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
@@ -220,7 +234,8 @@ func _has_paused_modal_behind() -> bool:
 	for name_str in [
 		"LevelUpDialog", "WaveShop", "StartMenu", "CultivatorSelect", "SkillSelect",
 		"StartWeaponSelect", "GameOverDialog", "PlayerStatsDialog", "SettingsDialog",
-		"ManualDialog", "TutorialDialog", "CareerDialog", "ChangelogDialog", "UpdateDialog"
+		"ManualDialog", "TutorialDialog", "CareerDialog", "ChangelogDialog", "UpdateDialog",
+		"SaveManageDialog"
 	]:
 		var n := p.get_node_or_null(name_str) as Control
 		if n != null and n.visible:
@@ -278,6 +293,8 @@ func open(unpause_on_close: Variant = null) -> void:
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
+	if _subtitle != null:
+		_subtitle.text = "战斗暂停 · 难度「%s」· 休整片刻" % ("噩梦" if GameManager.danger_level >= 1 else "普通")
 	visible = true
 	get_tree().paused = true
 	modulate.a = 0.0
@@ -328,6 +345,21 @@ func _on_settings_pressed() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reset_retry_confirm()
 	settings_requested.emit()
+
+## 多存档：藏起暂停菜单，交给 Main 打开选位弹窗（关闭后 Main 会再打开暂停菜单）
+func _on_save_pressed() -> void:
+	# 作者模式不写手动档：作弊局的快照留在存档位里，退出作者模式后读回来照样是作弊进度
+	if GameManager.author_mode:
+		UpdateManager.show_toast("◆ 作者模式下不能存档 ◆", GameStyle.BAD, 2.5)
+		return
+	if not GameManager.run_started or GameManager.is_game_over:
+		return
+	_kill_close_tween()
+	visible = false
+	_closing = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reset_retry_confirm()
+	save_requested.emit()
 
 func _reset_retry_confirm() -> void:
 	_retry_armed = false

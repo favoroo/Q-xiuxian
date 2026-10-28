@@ -3,14 +3,14 @@ extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）三页签：成就 / 角色 / 战斗记录
 ## 成就页：四分类（试炼/流派/历练/机缘）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
-## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 四难度封印格），
-##         封印按 GameManager.cultivator_danger_clears 位掩码点亮，境界按最高通关难度晋升
+## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 两难度封印格），
+##         封印按 GameManager.cultivator_danger_clears 位掩码点亮，境界按最高破境难度晋升
 ## 滚动区内的展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
 ## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 末尾）
 
 # 顶部概览数据标签（5 卡）
 var _runs_val_lbl: Label
-var _wins_val_lbl: Label
+var _danger_val_lbl: Label
 var _kills_val_lbl: Label
 var _wave_val_lbl: Label
 var _ach_val_lbl: Label
@@ -19,10 +19,10 @@ var _ach_val_lbl: Label
 var _ach_list_box: VBoxContainer
 var _cult_list_box: VBoxContainer
 var _log_list_box: VBoxContainer
-var _expanded_log_idx: int = -1  ## 渡劫实录当前展开的快照下标（-1 = 全部收起）
+var _expanded_log_idx: int = -1  ## 历战实录当前展开的快照下标（-1 = 全部收起）
 
-## 难度封印格的单字（与 AchievementData.DANGER_NAMES 对位，2026-10-20 收为 4 档）
-const SEAL_CHARS: Array[String] = ["简", "普", "困", "噩"]
+## 难度封印格的单字（与 AchievementData.DANGER_NAMES 对位，2026-10-28 收为 2 档）
+const SEAL_CHARS: Array[String] = ["普", "噩"]
 
 func _get_title_text() -> String:
 	return "战 绩  ·  游 戏 记 录"
@@ -48,7 +48,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 	root_vbox.add_child(stats_row)
 
 	_runs_val_lbl = _add_summary_card(stats_row, "游戏局数", "0 局")
-	_wins_val_lbl = _add_summary_card(stats_row, "通关", "0 胜")
+	_danger_val_lbl = _add_summary_card(stats_row, "最高难度", "未破境")
 	_kills_val_lbl = _add_summary_card(stats_row, "累计击杀", "0 只")
 	_wave_val_lbl = _add_summary_card(stats_row, "最高波数", "第 0 波")
 	_ach_val_lbl = _add_summary_card(stats_row, "成就", "0/0")
@@ -66,7 +66,7 @@ func _build_body(root_vbox: VBoxContainer) -> void:
 
 	_pages.append(_build_achievements_page(content_panel))
 	_pages.append(_build_cultivators_page(content_panel))
-	_pages.append(_build_victory_log_page(content_panel))
+	_pages.append(_build_record_log_page(content_panel))
 
 	switch_tab(0)
 
@@ -117,7 +117,7 @@ func _build_achievements_page(parent: Control) -> Control:
 	scroll.add_child(_ach_list_box)
 	return scroll
 
-# ----------------- 分页 2：角色（大色块卡 + 四难度封印） -----------------
+# ----------------- 分页 2：角色（大色块卡 + 两难度封印） -----------------
 
 func _build_cultivators_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
@@ -131,9 +131,9 @@ func _build_cultivators_page(parent: Control) -> Control:
 	scroll.add_child(_cult_list_box)
 	return scroll
 
-# ----------------- 分页 3：渡劫实录（战报快照 + 近期历战） -----------------
+# ----------------- 分页 3：历战实录（战报快照 + 近期历战） -----------------
 
-func _build_victory_log_page(parent: Control) -> Control:
+func _build_record_log_page(parent: Control) -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -150,13 +150,13 @@ func _refresh_data() -> void:
 	# 1. 刷新顶部生涯概览
 	var cs := GameManager.career_stats
 	var runs := int(cs.get("total_runs", 0))
-	var wins := int(cs.get("total_wins", 0))
 	var kills := int(cs.get("total_kills", 0))
 	var b_wave := int(cs.get("best_wave", 0))
-	var win_rate := (float(wins) / float(runs) * 100.0) if runs > 0 else 0.0
+	# 最高难度 = 生涯破境过的最高档（-1 = 从未破境）
+	var bd := int(cs.get("best_danger_cleared", -1))
 
 	_runs_val_lbl.text = "%d 局" % runs
-	_wins_val_lbl.text = "%d 胜 (%.0f%%)" % [wins, win_rate]
+	_danger_val_lbl.text = AchievementData.danger_name(bd) if bd >= 0 else "未破境"
 	_kills_val_lbl.text = "%d 只" % kills
 	_wave_val_lbl.text = "第 %d 波" % b_wave
 	_ach_val_lbl.text = "%d/%d" % [GameManager.unlocked_achievements.size(), AchievementData.ACHIEVEMENTS.size()]
@@ -193,7 +193,7 @@ func _refresh_data() -> void:
 	for cid in CultivatorData.DEFS.keys():
 		if GameManager.is_cultivator_unlocked(String(cid)):
 			unlocked_n += 1
-	_cult_list_box.add_child(_section_header("◆ 角色 · 已解锁 %d/%d · 通关对应难度即可点亮该档封印" % [
+	_cult_list_box.add_child(_section_header("◆ 角色 · 已解锁 %d/%d · 破境对应难度即可点亮该档封印" % [
 		unlocked_n, CultivatorData.DEFS.size()], GameStyle.GOLD))
 	var cgrid := GridContainer.new()
 	cgrid.columns = 2
@@ -204,7 +204,7 @@ func _refresh_data() -> void:
 		cgrid.add_child(_create_cultivator_card(String(cid)))
 	_cult_list_box.add_child(cgrid)
 
-	# 4. 刷新渡劫实录列表
+	# 4. 刷新历战实录列表
 	_rebuild_log_list()
 
 	# 5. 三页整棵子树放开「按下」冒泡：卡片是 PanelContainer（mouse_filter 默认 STOP），
@@ -229,17 +229,11 @@ func _category_color(cat: String) -> Color:
 		_:
 			return GameStyle.JADE
 
-## 难度档色（封印格与境界 chip 共用：难度越高色越烈）
+## 难度档色（封印格与境界 chip 共用：普通档绿、噩梦档金）
 func _danger_color(d: int) -> Color:
-	match d:
-		0:
-			return GameStyle.GOOD
-		1:
-			return GameStyle.GOLD
-		2:
-			return GameStyle.JADE
-		_:
-			return GameStyle.ELEMENT
+	if d == 0:
+		return GameStyle.GOOD
+	return GameStyle.GOLD
 
 ## 小节标题条
 func _section_header(text: String, color: Color = GameStyle.GOLD) -> Control:
@@ -367,12 +361,11 @@ func _open_achievement_tip(adef: Dictionary, anchor: Control) -> void:
 		"foot": "成就只作记录与解锁，不提供局内数值加成。",
 	})
 
-# ----------------- 角色大色块卡（境界 + 四难度封印） -----------------
+# ----------------- 角色大色块卡（境界 + 两难度封印） -----------------
 
 func _create_cultivator_card(cid: String) -> Control:
 	var unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var rec := GameManager.get_cultivator_record(cid)
-	var wins := int(rec["wins"])
 	var best_danger := GameManager.get_cultivator_best_danger(cid)
 	var mask := GameManager.get_cultivator_danger_mask(cid)
 	var has_realm := unlocked and best_danger >= 0
@@ -381,7 +374,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(380, 116)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# 卡框即境界色：通关过的角色一眼能看出打到了什么高度
+	# 卡框即境界色：破境过的角色一眼能看出打到了什么高度
 	var sb := GameStyle.outlined_panel(GameStyle.INK, realm_col if has_realm else GameStyle.LINE, 2, GameStyle.SLANT_BLOCK)
 	sb.content_margin_left = 10.0
 	sb.content_margin_right = 10.0
@@ -393,7 +386,7 @@ func _create_cultivator_card(cid: String) -> Control:
 	hbox.add_theme_constant_override("separation", 10)
 	card.add_child(hbox)
 
-	# 左侧头像大色块：有境界 = 境界色实底，未通关/未解锁 = 墨底
+	# 左侧头像大色块：有境界 = 境界色实底，未破境/未解锁 = 墨底
 	var icon_box := PanelContainer.new()
 	icon_box.custom_minimum_size = Vector2(84, 84)
 	icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -433,13 +426,13 @@ func _create_cultivator_card(cid: String) -> Control:
 		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(realm_col))
 		GameStyle.label(realm_lbl, 11, GameStyle.INK_TEXT)
 	else:
-		realm_lbl.text = " 未通关 "
+		realm_lbl.text = " 未破境 "
 		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.NAVY2))
 		GameStyle.label(realm_lbl, 11, GameStyle.PAPER_DIM)
 	realm_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_row.add_child(realm_lbl)
 
-	# 四难度封印格：通关过该档即点亮（未解锁角色全灭）
+	# 两难度封印格：破境过该档即点亮（未解锁角色全灭）
 	var seals := HBoxContainer.new()
 	seals.add_theme_constant_override("separation", 4)
 	seals.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -460,7 +453,7 @@ func _create_cultivator_card(cid: String) -> Control:
 		seals.add_child(seal)
 	# 封印格图例
 	var legend := Label.new()
-	legend.text = " 简→噩"
+	legend.text = " 普→噩"
 	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	GameStyle.label(legend, 10, GameStyle.GREY)
 	seals.add_child(legend)
@@ -473,8 +466,8 @@ func _create_cultivator_card(cid: String) -> Control:
 		detail_lbl.text = "达成成就「%s」后解锁" % aname if aname != "" else AchievementData.NO_UNLOCK_HINT
 		GameStyle.label(detail_lbl, 11, GameStyle.GREY)
 	else:
-		var endless_txt := "无尽第 %d 波" % int(rec["endless_best_wave"]) if int(rec["endless_best_wave"]) > 0 else "无尽未达"
-		detail_lbl.text = "通关 %d 次 · %s · 最高击杀 %d" % [wins, endless_txt, int(rec["best_kills"])]
+		detail_lbl.text = "最高第 %d 波 · 最高击杀 %d" % [
+			int(rec["best_wave"]), int(rec["best_kills"])]
 		GameStyle.label(detail_lbl, 11, GameStyle.with_alpha(GameStyle.CHALK, 0.65))
 	text_col.add_child(detail_lbl)
 
@@ -501,7 +494,6 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 		})
 		return
 	var rec := GameManager.get_cultivator_record(cid)
-	var wins := int(rec["wins"])
 	var best_danger := GameManager.get_cultivator_best_danger(cid)
 	var mask := GameManager.get_cultivator_danger_mask(cid)
 	var lit_n := 0
@@ -510,37 +502,36 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 			lit_n += 1
 	var rows: Array = [
 		["游戏局数", "%d 局" % int(rec["runs"]), GameStyle.PAPER],
-		["通关", "%d 次" % wins, GameStyle.JADE],
+		["最高波数", "第 %d 波" % int(rec["best_wave"]), GameStyle.PAPER],
 		["难度封印", "已点亮 %d/%d" % [lit_n, SEAL_CHARS.size()], GameStyle.GOLD],
-		["无尽最高", ("第 %d 波" % int(rec["endless_best_wave"])) if int(rec["endless_best_wave"]) > 0 else "未入无尽", GameStyle.PAPER],
 		["最高击杀", "%d 只" % int(rec["best_kills"]), GameStyle.PAPER],
-		["最高难度", AchievementData.danger_name(best_danger) if best_danger >= 0 else "未通关", GameStyle.GOLD],
+		["最高难度", AchievementData.danger_name(best_danger) if best_danger >= 0 else "未破境", GameStyle.GOLD],
 	]
 	DetailTip.show_over(self, anchor, {
 		"title": "%s · 角色记录" % cname,
 		"chip": "档案",
 		"chip_color": GameStyle.JADE,
 		"rows": rows,
-		"body": "境界「%s」" % AchievementData.realm_for_danger(best_danger) if best_danger >= 0 else "尚未通关，未入境界",
-		"foot": "通关对应难度即点亮该档封印；境界按通关过的最高难度晋升，仅作记录、不发奖励。",
+		"body": "境界「%s」" % AchievementData.realm_for_danger(best_danger) if best_danger >= 0 else "尚未破境，未入境界",
+		"foot": "在对应难度抵达第 %d 波即点亮该档封印；境界按破境过的最高难度晋升，仅作记录、不发奖励。" % GameManager.MILESTONE_WAVE,
 	})
 
-# ----------------- 渡劫实录行 -----------------
+# ----------------- 历战实录行 -----------------
 
 func _rebuild_log_list() -> void:
 	for c in _log_list_box.get_children():
 		c.queue_free()
 
-	_log_list_box.add_child(_section_header("◆ 通关记录 · 共 %d 次" % GameManager.victory_log.size()))
-	if GameManager.victory_log.is_empty():
+	_log_list_box.add_child(_section_header("◆ 历战实录 · 共 %d 次" % GameManager.record_log.size()))
+	if GameManager.record_log.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "暂无通关记录 · 完成 20 波即可记录"
+		empty_lbl.text = "暂无纪录 · 打得更远即可记录"
 		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		GameStyle.label(empty_lbl, 13, GameStyle.GREY)
 		_log_list_box.add_child(empty_lbl)
 	else:
-		for i in range(GameManager.victory_log.size()):
-			_log_list_box.add_child(_create_log_row(GameManager.victory_log[i], i))
+		for i in range(GameManager.record_log.size()):
+			_log_list_box.add_child(_create_log_row(GameManager.record_log[i], i))
 
 	_log_list_box.add_child(_spacer(6))
 	_log_list_box.add_child(_section_header("◆ 最近游戏 · 最近 %d 局" % GameManager.run_history.size()))
@@ -608,7 +599,7 @@ func _create_log_row(snap: Dictionary, idx: int) -> Control:
 	hbox.add_child(detail_lbl)
 
 	var v_tag := Label.new()
-	v_tag.text = " 通关 %s " % ("▲" if expanded else "◆")
+	v_tag.text = " 纪录 %s " % ("▲" if expanded else "◆")
 	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD))
 	GameStyle.label(v_tag, 11, GameStyle.INK_TEXT)
 	hbox.add_child(v_tag)
@@ -689,7 +680,7 @@ func _open_kit_tip(kit: Dictionary, is_item: bool, anchor: Control) -> void:
 			"chip": "道具",
 			"chip_color": GameStyle.GOLD,
 			"rows": [["类型", "携带的被动道具", GameStyle.PAPER]],
-			"body": "通关当局购买并持有的道具。",
+			"body": "本局购买并持有的道具。",
 			"foot": "道具买即生效、整局持有，详情可在图鉴查阅。",
 		})
 	else:
@@ -699,7 +690,7 @@ func _open_kit_tip(kit: Dictionary, is_item: bool, anchor: Control) -> void:
 			"chip": "武器",
 			"chip_color": GameStyle.JADE,
 			"rows": [["星级", "★%d" % star, GameStyle.JADE]],
-			"body": "通关当局装备的武器（含召唤武器）。",
+			"body": "本局装备的武器（含召唤武器）。",
 			"foot": "护蝶为环绕型召唤武器，其余为自动攻击的武器。",
 		})
 
@@ -737,9 +728,10 @@ func _stats_grid(snap: Dictionary) -> Control:
 
 func _create_history_row(entry: Dictionary) -> Control:
 	var row := PanelContainer.new()
-	var is_vic := bool(entry.get("victory", false))
-	var is_endless := bool(entry.get("endless", false))
-	var style := GameStyle.side_card(GameStyle.GOLD if is_vic else GameStyle.BAD, 0.0)
+	# 破境 = 该局抵达了破境波（GameManager.MILESTONE_WAVE）；没到就是止步
+	var wave := int(entry.get("wave", 1))
+	var broke := wave >= GameManager.MILESTONE_WAVE
+	var style := GameStyle.side_card(GameStyle.GOLD if broke else GameStyle.BAD, 0.0)
 	style.content_margin_left = 12.0
 	style.content_margin_right = 12.0
 	style.content_margin_top = 6.0
@@ -760,7 +752,6 @@ func _create_history_row(entry: Dictionary) -> Control:
 	GameStyle.label(c_lbl, 13, GameStyle.PAPER, 0, GameStyle.INK, true)
 	hbox.add_child(c_lbl)
 
-	var wave := int(entry.get("wave", 1))
 	var kills := int(entry.get("kills", 0))
 	var lvl := int(entry.get("level", 1))
 	var dur := float(entry.get("time", 0.0))
@@ -772,15 +763,10 @@ func _create_history_row(entry: Dictionary) -> Control:
 	hbox.add_child(detail_lbl)
 
 	var v_tag := Label.new()
-	if is_vic:
-		v_tag.text = " 通关 "
-	elif is_endless:
-		v_tag.text = " 无尽结束 "
-	else:
-		v_tag.text = " 阵亡 "
-	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if is_vic else GameStyle.BAD_DK))
+	v_tag.text = " 破境 " if broke else " 止步 "
+	v_tag.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.GOLD if broke else GameStyle.BAD_DK))
 	# 主蓝徽章配墨黑字，朱砂暗徽章配暗底亮字
-	GameStyle.label(v_tag, 11, GameStyle.INK_TEXT if is_vic else GameStyle.CHALK)
+	GameStyle.label(v_tag, 11, GameStyle.INK_TEXT if broke else GameStyle.CHALK)
 	hbox.add_child(v_tag)
 
 	return row

@@ -111,6 +111,7 @@ class ChargeArc:
 		draw_circle(Vector2.RIGHT.rotated(end_angle) * radius, width * 0.82, head_color)
 
 func _ready() -> void:
+	add_to_group("obelisks")
 	if light != null:
 		light.energy = 1.2
 		_light_base_color = light.color

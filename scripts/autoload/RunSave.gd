@@ -24,14 +24,22 @@ static var _loaded_payload: Dictionary = {}
 
 ## 是否有一份可恢复的存档（读 meta 区做轻校验，坏档视为无档）
 static func has_save() -> bool:
-	return not peek_summary().is_empty()
+	return has_save_at(SAVE_PATH)
 
-## 读存档摘要（主菜单「继续游戏」按钮文案用）：无档/坏档返回空字典
-static func peek_summary() -> Dictionary:
-	if not FileAccess.file_exists(SAVE_PATH):
+static func has_save_at(path: String) -> bool:
+	return not peek_at(path).is_empty()
+
+## 读存档摘要（主菜单「继续游戏」/ 多存档列表共用）：无档/坏档返回空字典。
+## payload 非空也在摘要层校验 —— 文件在但整包是空的坏档，列表直接标「损坏」，
+## 不会等到玩家点「读档」才炸。
+static func peek_at(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
 		return {}
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(path) != OK:
+		return {}
+	var payload = cfg.get_value("run", "payload", null)
+	if not (payload is Dictionary) or (payload as Dictionary).is_empty():
 		return {}
 	var wave := int(cfg.get_value("meta", "wave", 0))
 	if wave < 1:
@@ -39,15 +47,46 @@ static func peek_summary() -> Dictionary:
 	return {
 		"wave": wave,
 		"level": int(cfg.get_value("meta", "level", 1)),
-		"endless": bool(cfg.get_value("meta", "endless", false)),
 		"cid": String(cfg.get_value("meta", "cid", "")),
+		"danger": int(cfg.get_value("meta", "danger", 0)),
+		"play_time": float(cfg.get_value("meta", "play_time", 0.0)),
+		"time_unix": int(cfg.get_value("meta", "time_unix", 0)),
+		"run_id": String(cfg.get_value("meta", "run_id", "")),
+		"app_version": String(cfg.get_value("meta", "app_version", "")),
+		"save_version": int(cfg.get_value("meta", "save_version", 0)),
 	}
 
-## 删除存档（胜负结算后本局终结；返回主菜单不删 —— 那正是「不小心退出」的一种）
+static func peek_summary() -> Dictionary:
+	return peek_at(SAVE_PATH)
+
+## 删除存档（阵亡结算后本局终结；返回主菜单不删 —— 那正是「不小心退出」的一种）
 static func clear_save() -> void:
-	var dir := DirAccess.open("user://")
-	if dir != null and dir.file_exists("run_save.cfg"):
-		dir.remove("run_save.cfg")
+	clear_at(SAVE_PATH)
+
+static func clear_at(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		return
+	var dir := DirAccess.open(path.get_base_dir())
+	if dir != null and dir.file_exists(path.get_file()):
+		dir.remove(path.get_file())
+
+## 阶段归并：WAITING/CLEARING 一律按 FIGHT 存（本波从头重打），其余原样保留。
+## 自动存与手动存档位共用，别在第二处再抄一遍映射。
+static func resolve_phase(gm: Node) -> int:
+	if gm.wave_spawner == null:
+		return WaveSpawner.Phase.FIGHT
+	var phase: int = gm.wave_spawner.phase
+	if phase == WaveSpawner.Phase.WAITING or phase == WaveSpawner.Phase.CLEARING:
+		return WaveSpawner.Phase.FIGHT
+	return phase
+
+## 本局唯一标识的兜底：旧档（无 run_id）读入后补发一个，后续存档才能按局清理
+static func ensure_run_id(gm: Node) -> String:
+	var rid := String(gm.run_id)
+	if rid.is_empty():
+		rid = GameManager.make_run_id()
+		gm.run_id = rid
+	return rid
 
 ## 游戏内自动存档的统一入口（headless 判据一律不落盘，防测试污染真机档）。
 ## 阶段从 wave_spawner 现读：WAITING/CLEARING 归并进 FIGHT，ALLOC/SHOP 原样保留。
@@ -58,15 +97,14 @@ static func autosave_current(gm: Node) -> void:
 	# 会以普通模式复现一份跳关/全解锁的存档 —— 会话级开关必须连局内档一起堵。
 	if bool(gm.get("author_mode")):
 		return
-	var phase := WaveSpawner.Phase.FIGHT
-	if gm.wave_spawner != null:
-		phase = gm.wave_spawner.phase
-		if phase == WaveSpawner.Phase.WAITING or phase == WaveSpawner.Phase.CLEARING:
-			phase = WaveSpawner.Phase.FIGHT
-	save_from(gm, phase)
+	save_from(gm, resolve_phase(gm))
 
 ## 落盘整局快照。phase 由调用方给定（测试直呼；游戏内走 autosave_current）。
 static func save_from(gm: Node, phase: int) -> bool:
+	return save_to(gm, phase, SAVE_PATH)
+
+## 指定目标文件的落盘入口（多存档位复用同一份整包口径）。
+static func save_to(gm: Node, phase: int, path: String) -> bool:
 	if not gm.run_started or gm.is_game_over or gm.wave_number < 1:
 		return false
 	var p = gm.player
@@ -95,18 +133,21 @@ static func save_from(gm: Node, phase: int) -> bool:
 	cfg.set_value("meta", "save_version", SAVE_VERSION)
 	cfg.set_value("meta", "app_version", Version.APP_VERSION)
 	cfg.set_value("meta", "time_unix", Time.get_unix_time_from_system())
-	# 摘要四件套：主菜单「继续游戏」按钮不解析整包 payload 就能出文案
+	# 摘要三件套：主菜单「继续游戏」/ 多存档列表不解析整包 payload 就能出文案
 	cfg.set_value("meta", "wave", gm.wave_number)
 	cfg.set_value("meta", "level", gm.level)
-	cfg.set_value("meta", "endless", gm.endless_mode)
 	cfg.set_value("meta", "cid", gm.cultivator_id)
+	# 多存档（2026-10-28）：难度/时长/本局唯一 id 只喂列表显示与阵亡清档，读档判定仍看 payload
+	cfg.set_value("meta", "danger", gm.danger_level)
+	cfg.set_value("meta", "play_time", gm.game_time)
+	cfg.set_value("meta", "run_id", ensure_run_id(gm))
 	cfg.set_value("run", "payload", d)
-	var err := _atomic_save(cfg, SAVE_PATH)
+	var err := _atomic_save(cfg, path)
 	if err != OK:
-		push_warning("RunSave: 保存局内进度失败 err=%d，尝试重试" % err)
-		err = _atomic_save(cfg, SAVE_PATH)
+		push_warning("RunSave: 保存局内进度失败 err=%d path=%s，尝试重试" % [err, path])
+		err = _atomic_save(cfg, path)
 	if err != OK:
-		push_warning("RunSave: 重试保存局内进度仍失败 err=%d（放弃，等下个存档点）" % err)
+		push_warning("RunSave: 重试保存局内进度仍失败 err=%d path=%s（放弃，等下个存档点）" % [err, path])
 		return false
 	return true
 
@@ -139,28 +180,37 @@ static func _atomic_save(cfg: ConfigFile, target_path: String) -> Error:
 ## 2026-10-24 坏档可见化：无档（正常首次启动）保持静默；文件存在但解析/校验失败
 ## 一律 push_error 点名原因 —— 玩家报「续玩档丢了」时日志里能区分到底是哪种失败。
 static func load_into(gm: Node) -> int:
+	return load_from(gm, SAVE_PATH)
+
+## 指定文件灌回（多存档位复用同一份校验/灌回口径）。
+static func load_from(gm: Node, path: String) -> int:
 	_loaded_payload = {}
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(path):
 		return -1
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
-		push_error("RunSave: 续玩档存在但解析失败 path=%s（文件损坏或被截断），本次按无档处理" % SAVE_PATH)
+	if cfg.load(path) != OK:
+		push_error("RunSave: 续玩档存在但解析失败 path=%s（文件损坏或被截断），本次按无档处理" % path)
 		return -1
+	# 版本闸只告警不做迁移：目前新增的都是可选字段，缺字段按默认值读即可。
+	# 真出现破坏性改版时，再在这里按 saved_ver 分支迁移（ProgressStore 是现成范式）。
+	var saved_ver := int(cfg.get_value("meta", "save_version", 1))
+	if saved_ver > SAVE_VERSION:
+		push_warning("RunSave: 续玩档版本 %d 高于当前 %d，缺字段按默认值加载 path=%s" % [saved_ver, SAVE_VERSION, path])
 	var d = cfg.get_value("run", "payload", {})
 	if not (d is Dictionary):
-		push_error("RunSave: 续玩档 payload 非字典（实得类型 %d）path=%s" % [typeof(d), SAVE_PATH])
+		push_error("RunSave: 续玩档 payload 非字典（实得类型 %d）path=%s" % [typeof(d), path])
 		return -1
 	var data: Dictionary = d
 	if data.is_empty() or int(data.get("wave_number", 0)) < 1:
-		push_error("RunSave: 续玩档 payload 波数无效（wave_number=%s）path=%s" % [str(data.get("wave_number", "缺字段")), SAVE_PATH])
+		push_error("RunSave: 续玩档 payload 波数无效（wave_number=%s）path=%s" % [str(data.get("wave_number", "缺字段")), path])
 		return -1
 	if String(data.get("cultivator_id", "")).is_empty() \
 			or CultivatorData.get_def(String(data.get("cultivator_id", ""))).is_empty():
-		push_error("RunSave: 续玩档 cultivator_id 无效（%s）path=%s" % [String(data.get("cultivator_id", "")), SAVE_PATH])
+		push_error("RunSave: 续玩档 cultivator_id 无效（%s）path=%s" % [String(data.get("cultivator_id", "")), path])
 		return -1
 	var ws = data.get("weapons", [])
 	if not (ws is Array) or (ws as Array).is_empty():
-		push_error("RunSave: 续玩档 weapons 非数组或为空 path=%s" % SAVE_PATH)
+		push_error("RunSave: 续玩档 weapons 非数组或为空 path=%s" % path)
 		return -1
 	_fill_scalars(gm, data)
 	_fill_collections(gm, data)
@@ -219,14 +269,13 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["experience_to_next"] = gm.experience_to_next
 	d["pending_upgrade_points"] = gm.pending_upgrade_points
 	d["wave_number"] = gm.wave_number
-	d["endless_mode"] = gm.endless_mode
 	d["run_started"] = gm.run_started
 	d["danger_level"] = gm.danger_level
-	d["start_in_endless"] = gm.start_in_endless
 	d["peak_stones"] = gm.peak_stones
 	d["peak_dodge"] = gm.peak_dodge
 	d["peak_harvest"] = gm.peak_harvest
 	d["cultivator_id"] = gm.cultivator_id
+	d["run_id"] = gm.run_id
 	# —— 隐藏账本（突破古玉成长 / 经验门槛链 / 玉匣送出计数 / 主流派保底计数）——
 	d["_exp_chain"] = gm._exp_chain
 	d["chest_item_grants"] = gm.chest_item_grants
@@ -360,15 +409,15 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.experience_to_next = int(d.get("experience_to_next", GameBalance.EXP_FIRST_LEVEL))
 	gm.pending_upgrade_points = int(d.get("pending_upgrade_points", 0))
 	gm.wave_number = int(d.get("wave_number", 1))
-	gm.endless_mode = bool(d.get("endless_mode", false))
 	gm.run_started = bool(d.get("run_started", true))
 	# 老中断档可能存着收缩前的 D4/D5（2026-10-20 难度收为 4 档），夹回顶档再继续
 	gm.danger_level = clampi(int(d.get("danger_level", 0)), 0, GameBalance.DANGER_MAX)
-	gm.start_in_endless = bool(d.get("start_in_endless", false))
 	gm.peak_stones = int(d.get("peak_stones", 0))
 	gm.peak_dodge = float(d.get("peak_dodge", 0.0))
 	gm.peak_harvest = float(d.get("peak_harvest", 0.0))
 	gm.cultivator_id = String(d.get("cultivator_id", ""))
+	gm.run_id = String(d.get("run_id", ""))
+	ensure_run_id(gm)  # 旧档无 run_id：补发一个，后续阵亡才能按局清手动档
 	gm._exp_chain = int(d.get("_exp_chain", GameBalance.EXP_FIRST_LEVEL))
 	gm.chest_item_grants = int(d.get("chest_item_grants", 0))
 	gm._no_main_tag_waves = int(d.get("_no_main_tag_waves", 0))

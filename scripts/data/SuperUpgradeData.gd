@@ -28,8 +28,9 @@ const OFFER_COUNT := 5
 ## 只影响同屏采样，池子不够时会让位）
 const MAX_PER_LINE := 2
 
-## 固定触发关（胜利关 20 不在此列；无尽模式另由 is_super_wave 按 5 的倍数续上）
-const SUPER_WAVES: Array[int] = [5, 10, 15]
+## 触发波次：前中期 5/10/15/20 快速成型，深层 30/40/50 每 10 关大破境，50 关后封顶（全流程最多 7 次）
+const SUPER_WAVES: Array[int] = [5, 10, 15, 20, 30, 40, 50]
+const SUPER_WAVE_MAX: int = 50
 
 ## 道途名（卡面 chip 与面板提示用）
 const LINE_LABELS := {
@@ -146,11 +147,9 @@ static func all_ids() -> Array:
 static func line_label(line_key: String) -> String:
 	return String(LINE_LABELS.get(line_key, ""))
 
-## 本关是否该弹超级悟道：固定 5/10/15，或无尽模式 20 关后每逢 5 的倍数关。
-static func is_super_wave(wave: int, endless: bool) -> bool:
-	if wave in SUPER_WAVES:
-		return true
-	return endless and wave > 20 and wave % 5 == 0
+## 本关是否该弹飞升悟道：走 SUPER_WAVES 表（5/10/15/20/30/40/50），50 关后封顶。
+static func is_super_wave(wave: int, _endless: bool = false) -> bool:
+	return wave in SUPER_WAVES
 
 ## 当前构筑标签集合：武器 tags ∪ 武器 scaling 类别 ∪ 角色 item_tags（三源并查）。
 ## 用途已从「硬性配比」改为「加权」：命中构筑的卡更容易出现，但不再占死名额。

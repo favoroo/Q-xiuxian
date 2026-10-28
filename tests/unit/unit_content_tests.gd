@@ -738,23 +738,39 @@ func _test_turret_and_new_cultivators() -> void:
 		"五行同阵（5 元素齐聚）达成【五行同阵】")
 	_c.check(not AchievementData.is_condition_met("ach_style_wuxing", {"max_element_spread": 4}, {}),
 		"4 种元素不达成【五行同阵】")
-	_c.check(AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 3}, {}),
-		"通关噩梦（顶档）达成【噩梦常客】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare", {"victory": true, "danger": 2}, {}),
-		"通关困难不达成【噩梦常客】")
+	_c.check(AchievementData.is_condition_met("ach_feat_nightmare", {"danger": 1, "wave": 20}, {}),
+		"噩梦难度抵达第 20 波达成【噩梦常客】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare", {"danger": 0, "wave": 20}, {}),
+		"普通难度抵达第 20 波不达成【噩梦常客】")
 	# 2026-10-20 难度收为 4 档：地狱/极限两项成就随档位一起下线
 	_c.check(AchievementData.get_def("ach_feat_hell").is_empty(), "「地狱签证」已随档位收缩下线")
 	_c.check(AchievementData.get_def("ach_feat_extreme").is_empty(), "「撞墙到头」已随档位收缩下线")
-	_c.check(AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 25}, {}),
-		"无尽第 25 波达成【无尽行者】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"endless": true, "wave": 24}, {}),
-		"无尽第 24 波不达成【无尽行者】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"victory": true, "wave": 25}, {}),
-		"非无尽路径抵达 25 波不达成【无尽行者】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless", {"wave": 25}, {}),
+		"单局第 25 波达成【肝帝降临】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless", {"wave": 24}, {}),
+		"单局第 24 波不达成【肝帝降临】")
+	_c.check(AchievementData.is_condition_met("ach_cult_duoshe", {}, {"best_wave": 20}),
+		"生涯最高抵达第 20 波达成【羽化初登】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_duoshe", {}, {"best_wave": 19}),
+		"生涯最高抵达第 19 波不达成【羽化初登】")
+	_c.check(AchievementData.is_condition_met("ach_cult_dubi", {"danger": 1, "wave": 30}, {}),
+		"噩梦难度单局第 30 波达成【明知山有虎】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_dubi", {"danger": 1, "wave": 29}, {}),
+		"噩梦难度单局第 29 波不达成【明知山有虎】")
+	_c.check(not AchievementData.is_condition_met("ach_cult_dubi", {"danger": 0, "wave": 30}, {}),
+		"普通难度单局第 30 波不达成【明知山有虎】")
 	_c.check(AchievementData.is_condition_met("ach_grind_kills", {}, {"total_kills": 5000}),
 		"累计击杀 5000 达成【千杀灭生】")
-	_c.check(AchievementData.is_condition_met("ach_grind_wins", {}, {"total_wins": 10}),
-		"累计通关 10 次达成【十渡天劫】")
+	_c.check(AchievementData.is_condition_met("ach_grind_wins", {}, {"best_wave": 30}),
+		"生涯最高抵达第 30 波达成【三十三重天】")
+	_c.check(not AchievementData.is_condition_met("ach_grind_wins", {}, {"best_wave": 29}),
+		"生涯最高抵达第 29 波不达成【三十三重天】")
+	_c.check(AchievementData.is_condition_met("ach_item_kuilei", {}, {"total_runs": 5}),
+		"累计游玩 5 局达成【九死一生】")
+	_c.check(AchievementData.is_condition_met("ach_item_kuilei", {}, {"best_wave": 20}),
+		"生涯最高抵达第 20 波达成【九死一生】")
+	_c.check(not AchievementData.is_condition_met("ach_item_kuilei", {}, {"total_runs": 4, "best_wave": 19}),
+		"玩 4 局且最高第 19 波不达成【九死一生】")
 
 	# 7.8.2 成就进度短句（选人页解锁提示数据源，口径 = career_stats 单局生涯最佳）
 	_c.equals(AchievementData.progress_text("ach_cult_bawang", {"best_class_counts": {"wide": 2}}),
@@ -763,63 +779,81 @@ func _test_turret_and_new_cultivators() -> void:
 		"单局最佳 0/4 件", "无峰值记录时【横扫千军】进度从 0 起")
 	_c.equals(AchievementData.progress_text("ach_cult_kuangzhan", {"total_kills": 1230}),
 		"累计击杀 1230/1500", "【百战不殆】进度读累计击杀")
-	_c.equals(AchievementData.progress_text("ach_cult_duoshe", {"total_wins": 3}),
-		"已通关 3 次", "【初次通关】进度读累计通关")
+	_c.equals(AchievementData.progress_text("ach_cult_duoshe", {"best_wave": 16}),
+		"最高抵达第 16/20 波", "【羽化初登】进度读生涯最高抵达波数")
 	_c.equals(AchievementData.progress_text("ach_cult_dubi", {"best_danger_cleared": 1}),
-		"最高通关「普通」", "【明知山有虎】进度读最高通关难度")
+		"已破境「噩梦」", "【明知山有虎】进度读最高破境难度")
 	_c.equals(AchievementData.progress_text("ach_cult_dubi", {}),
-		"尚未通关任意难度", "从未通关时【极限挑战】显示兜底文案")
+		"尚未破境「噩梦」", "从未破境时【明知山有虎】显示兜底文案")
+	_c.equals(AchievementData.progress_text("ach_feat_endless", {"best_wave": 25}),
+		"最高抵达第 25/25 波", "【肝帝降临】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_feat_endless_40", {"best_wave": 38}),
+		"最高抵达第 38/40 波", "【肝穿地心】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_grind_wins", {"best_wave": 26}),
+		"最高抵达第 26/30 波", "【三十三重天】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_item_kuilei", {"total_runs": 3, "best_wave": 12}),
+		"已玩 3/5 局 · 最高第 12 波", "【九死一生】进度读局数与最高波数")
+	_c.equals(AchievementData.progress_text("ach_feat_nightmare", {"best_danger_cleared": 1}),
+		"已破境「噩梦」", "【噩梦常客】进度读最高破境难度")
+	_c.equals(AchievementData.progress_text("ach_feat_nightmare", {}),
+		"尚未破境「噩梦」", "从未破境时【噩梦常客】显示兜底文案")
 	_c.equals(AchievementData.progress_text("ach_feat_endless", {}),
-		"", "无量化口径的成就返回空串（调用方不显示进度行）")
+		"最高抵达第 0/25 波", "无记录时【肝帝降临】进度从 0 起")
+	# 无量化口径的成就仍返回空串（调用方据此隐藏进度行）
+	_c.equals(AchievementData.progress_text("ach_cult_meiying", {}),
+		"闪避峰值 0% · 击杀 0/500", "【影行者】进度读闪避峰值与累计击杀")
+	_c.equals(AchievementData.progress_text("ach_cult_jiguan", {}),
+		"单局最佳 0/4 个", "【巧夺天工】进度读单局召唤峰值")
+	_c.equals(AchievementData.progress_text("ach_cult_duobao", {}),
+		"单局最佳 0/250 金币", "【富甲一方】进度读单局金币峰值")
 
 	# 7.8.3 2026-10-15 新增趣味成就判定（纯荣誉型，reward_type="none"）
-	_c.check(AchievementData.is_condition_met("ach_feat_nodamage", {"victory": true, "damage_taken_count": 0}, {}),
-		"无伤通关达成【金光护体】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": true, "damage_taken_count": 1}, {}),
+	# 2026-10-28 无限闯关：所有「通关」型成就口径统一改成「单局抵达第 N 波」
+	_c.check(AchievementData.is_condition_met("ach_feat_nodamage", {"wave": 20, "damage_taken_count": 0}, {}),
+		"无伤抵达第 20 波达成【金光护体】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"wave": 20, "damage_taken_count": 1}, {}),
 		"承伤 1 次不达成【金光护体】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"victory": false, "damage_taken_count": 0}, {}),
-		"未通关不达成【金光护体】")
-	# 2026-10-24 硬核挑战：噩梦无伤 / 零消费 / 单武器 / 零技能 / 无尽40 / 零道具
+	_c.check(not AchievementData.is_condition_met("ach_feat_nodamage", {"wave": 19, "damage_taken_count": 0}, {}),
+		"未到第 20 波不达成【金光护体】")
+	# 2026-10-24 硬核挑战：噩梦无伤 / 零消费 / 单武器 / 零技能 / 第 40 波 / 零道具
 	_c.check(AchievementData.is_condition_met("ach_feat_nightmare_flawless",
-		{"victory": true, "danger": 3, "damage_taken_count": 0}, {}),
-		"噩梦无伤通关达成【碎梦无痕】")
+		{"wave": 20, "danger": 1, "damage_taken_count": 0}, {}),
+		"噩梦无伤抵达第 20 波达成【碎梦无痕】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_flawless",
-		{"victory": true, "danger": 2, "damage_taken_count": 0}, {}),
+		{"wave": 20, "danger": 0, "damage_taken_count": 0}, {}),
 		"非噩梦难度无伤不达成【碎梦无痕】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_flawless",
-		{"victory": true, "danger": 3, "damage_taken_count": 1}, {}),
+		{"wave": 20, "danger": 1, "damage_taken_count": 1}, {}),
 		"噩梦受击 1 次不达成【碎梦无痕】")
-	_c.check(AchievementData.is_condition_met("ach_feat_endless_40", {"endless": true, "wave": 40}, {}),
-		"无尽第 40 波达成【肝穿地心】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"endless": true, "wave": 39}, {}),
-		"无尽第 39 波不达成【肝穿地心】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"victory": true, "wave": 40}, {}),
-		"非无尽路径 40 波不达成【肝穿地心】")
-	_c.check(AchievementData.is_condition_met("ach_feat_thrift", {"victory": true, "stones_spent": 0}, {}),
-		"零消费通关达成【一毛不拔】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"victory": true, "stones_spent": 2}, {}),
+	_c.check(AchievementData.is_condition_met("ach_feat_endless_40", {"wave": 40}, {}),
+		"单局第 40 波达成【肝穿地心】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"wave": 39}, {}),
+		"单局第 39 波不达成【肝穿地心】")
+	_c.check(AchievementData.is_condition_met("ach_feat_thrift", {"wave": 20, "stones_spent": 0}, {}),
+		"零消费抵达第 20 波达成【一毛不拔】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"wave": 20, "stones_spent": 2}, {}),
 		"花过金币不达成【一毛不拔】")
-	_c.check(AchievementData.is_condition_met("ach_feat_lone_weapon", {"victory": true, "weapon_count": 1}, {}),
-		"仅一件武器通关达成【孤剑走天涯】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_lone_weapon", {"victory": true, "weapon_count": 2}, {}),
+	_c.check(AchievementData.is_condition_met("ach_feat_lone_weapon", {"wave": 20, "weapon_count": 1}, {}),
+		"仅一件武器抵达第 20 波达成【孤剑走天涯】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_lone_weapon", {"wave": 20, "weapon_count": 2}, {}),
 		"两件武器不达成【孤剑走天涯】")
-	_c.check(AchievementData.is_condition_met("ach_feat_skill_abstain", {"victory": true, "skill_casts": 0}, {}),
-		"零技能施放通关达成【手指休假】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_skill_abstain", {"victory": true, "skill_casts": 1}, {}),
+	_c.check(AchievementData.is_condition_met("ach_feat_skill_abstain", {"wave": 20, "skill_casts": 0}, {}),
+		"零技能施放抵达第 20 波达成【手指休假】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_skill_abstain", {"wave": 20, "skill_casts": 1}, {}),
 		"放过技能不达成【手指休假】")
-	_c.check(AchievementData.is_condition_met("ach_feat_no_items", {"victory": true, "item_count": 0}, {}),
-		"零法宝通关达成【两袖清风】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_no_items", {"victory": true, "item_count": 1}, {}),
+	_c.check(AchievementData.is_condition_met("ach_feat_no_items", {"wave": 20, "item_count": 0}, {}),
+		"零法宝抵达第 20 波达成【两袖清风】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_no_items", {"wave": 20, "item_count": 1}, {}),
 		"带过法宝不达成【两袖清风】")
-	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"victory": true}, {}),
+	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"wave": 20}, {}),
 		"缺结算字段时不误判【一毛不拔】")
-	_c.check(AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 3}),
-		"随行技能通关 3 次达成【万法由心】")
-	_c.check(not AchievementData.is_condition_met("ach_style_rebel", {}, {"wins_no_skill_enhance": 2}),
-		"随行技能通关 2 次不达成【万法由心】")
-	_c.check(AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 0}, {}),
-		"零召唤通关达成【独行侠】")
-	_c.check(not AchievementData.is_condition_met("ach_style_loner", {"victory": true, "max_summons": 1}, {}),
+	_c.check(AchievementData.is_condition_met("ach_style_rebel", {}, {"milestones_with_skill": 3}),
+		"带随行技能破境 3 次达成【万法由心】")
+	_c.check(not AchievementData.is_condition_met("ach_style_rebel", {}, {"milestones_with_skill": 2}),
+		"带随行技能破境 2 次不达成【万法由心】")
+	_c.check(AchievementData.is_condition_met("ach_style_loner", {"wave": 20, "max_summons": 0}, {}),
+		"零召唤抵达第 20 波达成【独行侠】")
+	_c.check(not AchievementData.is_condition_met("ach_style_loner", {"wave": 20, "max_summons": 1}, {}),
 		"有召唤不达成【独行侠】")
 	var omni_ctx := {"max_class_counts": {"sword": 1, "talisman": 1, "wide": 1, "thunder": 1, "spirit": 1, "contraption": 1}}
 	_c.check(AchievementData.is_condition_met("ach_style_omni", omni_ctx, {}),
@@ -831,15 +865,15 @@ func _test_turret_and_new_cultivators() -> void:
 		"单局 Lv.20 达成【升级狂魔】")
 	_c.check(not AchievementData.is_condition_met("ach_grind_level20", {"level": 19}, {}),
 		"单局 Lv.19 不达成【升级狂魔】")
-	_c.check(AchievementData.is_condition_met("ach_luck_turtle", {"victory": true, "damage_taken_count": 50}, {}),
-		"承伤 50 次通关达成【铁王八】")
-	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"victory": true, "damage_taken_count": 49}, {}),
+	_c.check(AchievementData.is_condition_met("ach_luck_turtle", {"wave": 20, "damage_taken_count": 50}, {}),
+		"承伤 50 次抵达第 20 波达成【铁王八】")
+	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"wave": 20, "damage_taken_count": 49}, {}),
 		"承伤 49 次不达成【铁王八】")
-	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"victory": false, "damage_taken_count": 50}, {}),
-		"未通关不达成【铁王八】")
+	_c.check(not AchievementData.is_condition_met("ach_luck_turtle", {"wave": 19, "damage_taken_count": 50}, {}),
+		"未到第 20 波不达成【铁王八】")
 	# 新成就进度文案
-	_c.equals(AchievementData.progress_text("ach_style_rebel", {"wins_no_skill_enhance": 2}),
-		"通关 2/3 次", "【万法由心】进度读通关累计")
+	_c.equals(AchievementData.progress_text("ach_style_rebel", {"milestones_with_skill": 2}),
+		"带技能破境 2/3 次", "【万法由心】进度读带技能破境累计")
 	_c.equals(AchievementData.progress_text("ach_grind_level20", {"best_level": 17}),
 		"单局最高 Lv.17/20", "【升级狂魔】进度读单局最高等级")
 	_c.equals(AchievementData.progress_text("ach_luck_turtle", {"best_hits_taken": 30}),

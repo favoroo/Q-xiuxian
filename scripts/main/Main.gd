@@ -34,6 +34,7 @@ var _atmo_mood_tween: Tween = null   ## 煞气两态颜色渐变闸（新切换�
 var _atmo_baleful: bool = false      ## 当前氛围态 memo：波次重复 emit 不重放
 var _mist_sprites: Array[Sprite2D] = []  ## 常驻薄雾片引用（移动端减量/后续可关；原先丢失引用无法回收）
 var _arena_vis: ArenaVisualLayer = null  ## 战台结界与大阵图层引用（每5波天象换色驱动）
+var _nightmare_fog: NightmareFogOverlay = null  ## 噩梦难度视野迷雾与方位微光遮罩
 var _stage_theme_tween: Tween = null     ## 阶段天象地面与色调过渡 Tween
 var _last_stage_tier: int = -1           ## 上次天象阶段档位（每5波一换）
 
@@ -53,6 +54,8 @@ const ATMO_GRAV_BALEFUL_NEAR := Vector2(0.0, 9.0) ## 煞气缓沉（近层）
 var _settings_return_to_pause: bool = false
 var _stats_return_to_pause: bool = false
 var _manual_return_to_pause: bool = false
+var _save_return_to_pause: bool = false
+var _save_dialog: Control = null          ## 存档管理弹窗（运行时挂载，见 _mount_save_manage_dialog）
 var _crowd_glow_cd: float = 0.0           ## glow 拥挤档轮询计时（1s 粒度，见 _poll_crowd_glow）
 var _env_res: Environment = null           ## WorldEnvironment 的 Environment 资源缓存（glow 档位写入目标）
 var _back_nav: Node = null                 ## 安卓返回键路由（scripts/systems/BackNavigator.gd）
@@ -80,6 +83,9 @@ func _ready() -> void:
 	_setup_map_bounds()
 	_setup_stage_backdrop()
 	_setup_screen_shockwave()
+	_setup_nightmare_fog()
+	if not GameManager.danger_changed.is_connected(_on_danger_changed_atmo):
+		GameManager.danger_changed.connect(_on_danger_changed_atmo)
 	# 全场地面投影层（2026-10-28 渲染性能治理）：所有地影集中到一个 CanvasItem 合批，
 	# 实体自己不再画影子。必须在刷怪前建好并占 EntitiesLayer 第一位，否则影子会盖在实体上。
 	GroundShadowLayer.ensure($EntitiesLayer)
@@ -115,6 +121,8 @@ func _ready() -> void:
 			lvl_dialog.author_requested.connect(author_panel.open)
 	# 超级悟道面板：运行时挂到 UILayer 末尾（Main.tscn 为多 Agent 共享场景文件，不往里加节点）
 	_mount_super_alloc_dialog()
+	# 多存档管理弹窗（2026-10-28）：同样运行时挂载，不动 Main.tscn
+	_mount_save_manage_dialog()
 	if $UILayer.has_node("WaveShop"):
 		var wave_shop: Control = $UILayer/WaveShop
 		wave_shop.stats_requested.connect(func():
@@ -159,6 +167,19 @@ func _ready() -> void:
 	# 中断续玩：主菜单「继续游戏」按钮 → 按存档重建整局
 	if start_menu.has_signal("resume_requested"):
 		start_menu.resume_requested.connect(resume_from_save)
+	# 多存档：首页「存 档」→ 存档管理（查看/读档/删除）；暂停菜单「存 档」→ 选位保存
+	if start_menu.has_signal("save_requested"):
+		start_menu.save_requested.connect(func():
+			_save_return_to_pause = false
+			if _save_dialog != null:
+				_save_dialog.open_manage()
+		)
+	if pause_menu.has_signal("save_requested"):
+		pause_menu.save_requested.connect(func():
+			_save_return_to_pause = true
+			if _save_dialog != null:
+				_save_dialog.open_save()
+		)
 	# 游戏共创：主菜单左下角按钮 → 共创弹窗（与意见反馈共用 FeedbackSender 发送链路）
 	if $UILayer.has_node("CoCreateDialog") and start_menu.has_signal("cocreation_requested"):
 		var cocreate_dialog: Control = $UILayer/CoCreateDialog
@@ -236,13 +257,20 @@ func _ready() -> void:
 ## 树从 _ready 起就是暂停态，全程保持暂停直到 FIGHT 路径显式解暂停——
 ## 否则 WaveSpawner 的 WAITING 分支会抢跑 start_wave(1)。
 func resume_from_save() -> void:
-	var saved_phase := RunSave.load_into(GameManager)
-	if saved_phase < 0:
-		# 坏档降级：按没有存档处理，回落主菜单（点按钮的时机 UI 已就绪，直接 toast 告知）
-		UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
-		RunSave.clear_save()
-		start_menu.open()
+	if load_saved_run(RunSave.SAVE_PATH):
 		return
+	# 坏档降级：按没有存档处理，回落主菜单（点按钮的时机 UI 已就绪，直接 toast 告知）
+	UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
+	RunSave.clear_save()
+	start_menu.open()
+
+## 从指定存档文件重建整局（自动中断档与 5 个手动存档位共用，2026-10-28）。
+## 成功返回 true（战场/面板已接管）；失败返回 false，由调用方决定提示与回落方式 ——
+## 手动存档读失败绝不能顺手把文件删了（玩家可能只是碰到坏档，还想去删它）。
+func load_saved_run(path: String) -> bool:
+	var saved_phase := RunSave.load_from(GameManager, path)
+	if saved_phase < 0:
+		return false
 	RunSave.apply_player(GameManager)
 	var backdrop = get_node_or_null("UILayer/StageBackdrop")
 	if backdrop != null:
@@ -261,6 +289,9 @@ func resume_from_save() -> void:
 	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
 	GameManager.pending_points_changed.emit(GameManager.pending_upgrade_points)
 	start_menu.visible = false
+	if _save_dialog != null and _save_dialog.visible:
+		# 读档成功：立刻收起管理弹窗（不播淡出），战场/面板随后接管
+		_save_dialog.dismiss()
 	# 注意层级：Main.tscn 里 EntitiesLayer 与 MapLayer 是兄弟（都直挂 Main 下），
 	# WaveSpawner 真实路径是 EntitiesLayer/WaveSpawner —— 写成 MapLayer/EntitiesLayer/...
 	# 会拿到 null，ALLOC/SHOP 分支当场崩、面板打不开、树保持暂停（2026-10-15 用户反馈
@@ -283,8 +314,9 @@ func resume_from_save() -> void:
 			AudioManager.play_bgm_key("shop")
 			GameManager.shop_opened.emit()
 		_:
-			# FIGHT/CLEARING：本波从头重打，金币/经验/血量以最后一次自动存档为准
+			# FIGHT/CLEARING：本波从头重打，金币/经验/血量以存档快照为准
 			_run_resumed_fight(spawner)
+	return true
 
 ## 超级悟道面板挂载：场景由 LevelUpDialog.tscn 派生（根脚本换 SuperAllocDialog.gd），
 ## 三颗顶栏键与普通悟道同一套接线（属性 / 暂停 / 作者）。
@@ -304,6 +336,28 @@ func _mount_super_alloc_dialog() -> void:
 		)
 	if dlg.has_signal("author_requested"):
 		dlg.author_requested.connect(author_panel.open)
+
+## 存档管理弹窗挂载（2026-10-28）：纯代码构建的 BaseModalDialog 子类，运行时挂到 UILayer 末尾
+## （Main.tscn 是多 Agent 共享场景文件，不往里加节点 —— 同 SuperAllocDialog 口径）。
+func _mount_save_manage_dialog() -> void:
+	var dlg := SaveManageDialog.new()
+	dlg.name = "SaveManageDialog"
+	$UILayer.add_child(dlg)
+	_save_dialog = dlg
+	dlg.load_requested.connect(_on_save_load_requested)
+	dlg.closed.connect(_on_save_dialog_closed)
+
+## 存档弹窗关闭：从暂停菜单进来的要回到暂停菜单（与属性/手册/设置同款回退）
+func _on_save_dialog_closed() -> void:
+	if _save_return_to_pause:
+		_save_return_to_pause = false
+		pause_menu.open()
+
+## 首页存档管理里点「读档」：按该位文件重建整局；坏档只提示不删文件
+func _on_save_load_requested(slot_index: int) -> void:
+	_save_return_to_pause = false
+	if not load_saved_run(SaveSlots.slot_path(slot_index)):
+		UpdateManager.show_toast("◆ 该存档已损坏，无法读取 ◆", GameStyle.BAD, 3.0)
 
 ## FIGHT 恢复路径单独一拍：start_wave 会按存档波次重建（预算/匣子/金蟾抽定 + HUD 对齐），
 ## 解暂停后 WaveSpawner._process 才接管刷怪。defer 到下一帧，让本帧先跳过 WAITING 分支。
@@ -363,6 +417,8 @@ func _exit_tree() -> void:
 	GameManager.joystick = null
 	if GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
 		GameManager.wave_changed.disconnect(_on_wave_changed_atmo)  # T-4.3 氛围监听随场景退订
+	if GameManager.has_signal("danger_changed") and GameManager.danger_changed.is_connected(_on_danger_changed_atmo):
+		GameManager.danger_changed.disconnect(_on_danger_changed_atmo)
 	if GameManager.screen_shockwave_triggered.is_connected(trigger_screen_shockwave):
 		GameManager.screen_shockwave_triggered.disconnect(trigger_screen_shockwave)
 	# 静态缓存（敌人共享帧集 / 敌人对象池 / 跳字池 / 特效池与样式表 / 弹丸及掉落物池）随场景释放，
@@ -475,15 +531,17 @@ func _setup_atmosphere() -> void:
 	# 3. 极低对比度缓动薄雾片（增加深邃空间感，零 PointLight2D 开销）
 	_setup_ambient_mist()
 
-	# 4. T-4.3 煞气变奏：Boss 波 / 最后 5 波切暗红「煞气碎屑」缓沉，波结束切回。
+	# 4. T-4.3 煞气变奏：Boss 波 / 深层波次（>20 波）切暗红「煞气碎屑」缓沉，波结束切回。
 	# 信号源用现成 GameManager.wave_changed + GameBalance.is_boss_wave（与 WaveSpawner 判波同一把尺），
-	# 不新增信号不改 WaveSpawner；「最后 5 波」口径：n >= VICTORY_WAVE - 4。
+	# 不新增信号不改 WaveSpawner；深层口径：n > GameManager.MILESTONE_WAVE。
 	if not GameManager.wave_changed.is_connected(_on_wave_changed_atmo):
 		GameManager.wave_changed.connect(_on_wave_changed_atmo)
 
-## 波次 → 氛围态：Boss 波或最后 5 波为煞气态，其余常态（含波间商店/结算回常态）
+## 波次 → 氛围态：噩梦模式下全程为煞气态；普通模式下 Boss 波与深层（>20 波）为煞气态，其余常态
 func _atmo_should_be_baleful(n: int) -> bool:
-	return GameBalance.is_boss_wave(n) or n >= GameManager.VICTORY_WAVE - 4
+	if GameManager.danger_level >= 1:
+		return true
+	return GameBalance.is_boss_wave(n) or n > GameManager.MILESTONE_WAVE
 
 func _on_wave_changed_atmo(n: int) -> void:
 	_update_stage_theme(n)
@@ -493,9 +551,14 @@ func _on_wave_changed_atmo(n: int) -> void:
 	_atmo_baleful = baleful
 	_apply_atmo_mood(baleful)
 
-## 每5关天象与氛围渐变：切换结界边缘流光、地面石板明度与全局调色
+func _on_danger_changed_atmo(_d: int) -> void:
+	if GameManager.wave_number >= 1:
+		_last_stage_tier = -1
+		_on_wave_changed_atmo(GameManager.wave_number)
+
+## 每5关天象与氛围渐变：切换结界边缘流光、地面石板明度与全局调色（噩梦注入血煞压暗偏色）
 func _update_stage_theme(n: int) -> void:
-	var theme: Dictionary = GameBalance.stage_theme_for_wave(n)
+	var theme: Dictionary = GameBalance.stage_theme_for_wave(n, GameManager.danger_level)
 	var tier: int = int(theme.get("tier", 0))
 	var is_boss: bool = bool(theme.get("is_boss", false))
 	if _arena_vis != null and is_instance_valid(_arena_vis):
@@ -892,7 +955,7 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 ## 结算时红晕渐隐复位（2026-10-15 用户反馈：阵亡红特效一直挂着不散）。
 ## 根因：阵亡后血量为 0，_process 濒死分支每帧刷红 vignette；结算屏一弹整树暂停，
 ## _process 停摆把红晕冻在最后一帧。此处用 PAUSE_PROCESS 补间让红晕在结算屏上缓缓退去。
-func _on_game_over_reset_vignette(_victory: bool) -> void:
+func _on_game_over_reset_vignette() -> void:
 	if vignette_rect == null or not (vignette_rect.material is ShaderMaterial):
 		return
 	_low_hp_phase = 0.0
@@ -936,6 +999,18 @@ func _setup_screen_shockwave() -> void:
 		parent.add_child(_vignette_copy)
 		parent.move_child(_vignette_copy, vignette_rect.get_index())
 		_sync_shockwave_channel()
+
+## 初始化噩梦难度专属视野迷雾与方位微光遮罩：
+## 挂载在 PostProcessLayer（SoftVignette 前，UILayer 下，不遮挡任何 UI）
+func _setup_nightmare_fog() -> void:
+	var ppl := get_node_or_null("PostProcessLayer")
+	if ppl == null:
+		return
+	_nightmare_fog = NightmareFogOverlay.new()
+	_nightmare_fog.name = "NightmareFogOverlay"
+	ppl.add_child(_nightmare_fog)
+	if vignette_rect != null:
+		ppl.move_child(_nightmare_fog, vignette_rect.get_index())
 
 ## 同步冲击波通道状态：开关关时挂纯暗角 shader（零 screen_texture 引用 → 零每帧
 ## BackBufferCopy）并禁用显式 BackBufferCopy 节点；开时挂冲击波 shader 并启用拷贝。

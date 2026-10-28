@@ -118,8 +118,6 @@ var shadow_ring: Array = []
 ## 阵亡谢幕进行中（演出窗口挡移动/技能/再受创）；结算触发后的收尾全走 is_game_over。
 ## 演出约 1s：塌伏 → 沉没消散 → trigger_game_over（结算面板自带 paused + defeat BGM）。
 var _dying: bool = false
-## 通关胜利演出进行中（得道飞升镜头推进 + 仙乐灵气环爆发）
-var _victorious: bool = false
 
 var floating_weapon_scene: PackedScene = preload("res://scenes/weapons/FloatingWeapon.tscn")
 var sun_orb_scene: PackedScene = preload("res://scenes/weapons/SunOrb.tscn")
@@ -670,8 +668,8 @@ func _physics_process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
 
-	# 阵亡或通关谢幕期：不再推进移动/技能，只剩演出 tween 在跑
-	if _dying or _victorious:
+	# 阵亡谢幕期：不再推进移动/技能，只剩演出 tween 在跑
+	if _dying:
 		return
 
 	# 主循环已按职责切片（2026-10-24，照 _tick_attack_react 先例）：计时 → 视觉衰减 →
@@ -1266,7 +1264,7 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 	# 作者模式·无敌：入口直接吞掉，连闪避/盾势/受击反馈都不走（站桩观察特效时最省心）
 	if GameManager.author_mode and AuthorMode.god_mode:
 		return
-	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying or _victorious:
+	if invulnerable_time > 0.0 or GameManager.is_game_over or _dying:
 		return
 
 	# 流云身法：闪避成功不掉血，换一段「残影」短无敌，并把躲掉的这一刀存进影里等着还回去。
@@ -1411,74 +1409,7 @@ func _play_death_sequence() -> void:
 	tw.tween_interval(0.2)
 	tw.tween_callback(func():
 		if not GameManager.is_game_over:
-			GameManager.trigger_game_over(false))
-
-## 通关胜利演出（2026-10-15）：荡平妖潮·得道飞升。
-## 镜头平滑推入特写（1.4x）+ 角色微浮升空 + 金玉双色灵气环爆发 + 仙乐定音，随后唤起通关结算。
-func play_victory_sequence() -> void:
-	if _victorious or _dying:
-		return
-	_victorious = true
-	_dash_time = 0.0
-	_set_weapon_fire_held(false)  # 冲刺中通关同样解闸
-	velocity = Vector2.ZERO
-	invulnerable_time = 9999.0
-
-	_hit_tilt = 0.0
-	_hit_jiggle_offset = Vector2.ZERO
-	if not is_procedural:
-		anim_sprite.position = Vector2.ZERO
-	if is_procedural and procedural_view != null:
-		procedural_view.position = Vector2.ZERO
-		procedural_view.rotation = 0.0
-		procedural_view.play_idle()
-	else:
-		RunMotion.select_anim(anim_sprite, _anim_idle, false)
-
-	# 1. 镜头平滑推入特写（0.65s CUBIC_OUT 放大 1.4x 聚焦玩家身位）
-	GameFeel.focus_camera(GameManager, global_position, 1.4, 0.65)
-
-	# 2. 仙乐定音与触觉反馈
-	AudioManager.play_sfx("obelisk_blessing", 1.0)
-	GameFeel.vibrate(60, 0.8)
-
-	# 3. 得道飞升姿态：修仙真身微浮升空 + 金玉双环绽放
-	play_squash(Vector2(0.85, 1.22), 0.55)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 64.0, GameStyle.GOLD, 0.65)
-	JuiceEffect.spawn_heal_rise(get_parent(), global_position)
-
-	var target_node: Node2D = anim_sprite
-	if is_procedural and procedural_view != null:
-		target_node = procedural_view
-
-	var tw := create_tween()
-	# 角色微升 10px 宛如得道凌空浮起，微泛仙灵暖光
-	tw.tween_property(target_node, "position:y", -10.0, 0.55)\
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(target_node, "modulate", Color(1.25, 1.2, 0.95), 0.55)
-
-	# 0.45s 时爆出第二重澄澈玉色灵气环（象征大乘圆满）
-	tw.tween_callback(func():
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, 96.0, GameStyle.JADE, 0.7)
-	)
-
-	# 留白定格 ~0.55s 尽显真身风采，随后 trigger_game_over(true)
-	tw.tween_interval(0.55)
-	tw.tween_callback(func():
-		if not GameManager.is_game_over:
-			GameManager.trigger_game_over(true)
-	)
-
-## 胜利状态复位（从结算弹窗选择「继续无尽」时调用，恢复正常物理与移动）
-func reset_victory_state() -> void:
-	_victorious = false
-	invulnerable_time = 0.0
-	anim_sprite.position = Vector2.ZERO
-	anim_sprite.modulate = Color.WHITE
-	if is_procedural and procedural_view != null:
-		procedural_view.position = Vector2.ZERO
-		procedural_view.modulate = Color.WHITE
-		procedural_view.rotation = 0.0
+			GameManager.trigger_game_over())
 
 ## 原地复活（2026-10-23）：阵亡结算屏点「原地复活」后由 GameOverDialog 调用。
 ## 视觉主体交给 PlayerReviveRitual（凝魂阵→魂火归体→通灵光柱→护体余韵），

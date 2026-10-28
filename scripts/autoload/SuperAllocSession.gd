@@ -6,14 +6,14 @@ extends RefCounted
 ## 候选抽法（3 张流派 + 2 张通用）与落地（赠送神通道具）都在 SuperUpgradeData。
 
 static func should_open(gm: Node) -> bool:
-	if not SuperUpgradeData.is_super_wave(gm.wave_number, gm.endless_mode):
+	if not SuperUpgradeData.is_super_wave(gm.wave_number):
 		return false
 	return not (gm.wave_number in gm.super_alloc_done_waves)
 
 static func open(gm: Node) -> void:
 	gm.super_alloc_offers = SuperUpgradeData.roll_offers(gm)
 	if gm.super_alloc_offers.is_empty():
-		# 卡池抽空（一局最多 3 次，正常不会发生）：记账放行，别把回合卡死
+		# 卡池抽空（卡池 24 张全拿完才会发生，正常跑不到）：记账放行，别把回合卡死
 		_finish(gm)
 		return
 	gm.super_alloc_opened.emit()

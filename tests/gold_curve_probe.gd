@@ -33,7 +33,7 @@ extends Node
 ##   B 半清：只灭了一半预算 ⇒ 另一半走补差（补差只给经验，金币腿不受影响）
 ##   C 提前清场：预算刷尽且场上清空 ⇒ 额外白拿余时赏
 
-const DANGER := 0          ## 简单档（危险度 0）为默认口径
+const DANGER := 0          ## 普通档（危险度 0）为默认口径
 const TRIALS := 6000      ## 配比采样次数
 
 func _ready() -> void:
@@ -89,7 +89,7 @@ func _run() -> void:
 		if GameBalance.is_boss_wave(wave):
 			boss_stones = float(GameBalance.BOSS_STONE_REWARD) \
 				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP)
-		elif GameBalance.is_elite_wave(wave, false):
+		elif GameBalance.is_elite_wave(wave):
 			elite_stones = float(GameBalance.ELITE_STONE_BONUS) \
 				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP)
 

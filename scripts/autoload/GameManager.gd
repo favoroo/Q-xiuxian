@@ -8,7 +8,7 @@ signal shield_changed(shield_hp: float, shield_cap: float)
 signal player_exp_changed(current_exp: int, target_exp: int, level: int)
 signal player_leveled_up(level: int)
 signal stats_updated(kills: int, game_time: float, spirit_stones: int)
-signal game_over_triggered(victory: bool)
+signal game_over_triggered
 signal upgrade_applied(upgrade_id: String)
 signal announcement_triggered(text: String)
 ## 武器合成至 ★3 觉醒 / ★4 神兵极境（WeaponInventory.merge_weapon 发出；HUD 接它做庆祝反馈）
@@ -30,6 +30,7 @@ signal boss_hp_changed(current_hp: float, max_hp: float, boss_title: String)
 signal boss_defeated(boss_title: String)
 signal achievements_unlocked(ach_ids: Array)
 signal pets_updated(pets: Array)
+signal danger_changed(new_danger: int)
 ## 作者模式开关变化（HUD/商店/悟道顶栏的「作者」按钮显隐、首页徽章刷新）
 signal author_mode_changed(enabled: bool)
 
@@ -39,7 +40,9 @@ signal author_mode_changed(enabled: bool)
 ## 兜底见 GameBalance「打击感：镜头创伤」段与 SmoothCamera 的每秒预算。
 enum FeedbackTier { SMALL, MEDIUM, LARGE, HEAVY }
 
-const VICTORY_WAVE: int = 20
+## 破境波：单局抵达此波即「破境」，用于难度解锁/封印/境界与 20 波 Boss 形态。
+## 不是胜利闸口 —— 本作没有通关，抵达后继续无限闯关，只有阵亡才结算。
+const MILESTONE_WAVE: int = 20
 ## 灵田可活动范围的半径（地图地砖 ±2400，超出边界的区域会被界碑拦下）
 ## 2026-10-11 缩图 680→500；2026-10-12 缩图 500→440；2026-10-15 扩图 440→560（1120×1120，面积约 +62%）；2026-10-17 缩图 560→480（960×960，面积约 -27%）：压缩跑路时间、提升局部密度，保留走位余地
 const MAP_HALF_EXTENT: float = 480.0
@@ -140,9 +143,8 @@ func unregister_ally(a: Node) -> void:
 	live_allies.erase(a)
 	ally_count = live_allies.size()
 
-# 危险度（D0 ~ D3 共 4 档，2026-10-25 起逐级通关解锁）：开始菜单可选范围见 max_danger_unlocked()
+# 危险度（D0 普通 / D1 噩梦 共 2 档，逐级破境解锁）：开始菜单可选范围见 max_danger_unlocked()
 var danger_level: int = 0          ## 本局危险度（开始菜单选择，reset_run 不动它）
-var start_in_endless: bool = false ## 从主菜单直接开启无尽试炼（reset_run 不动它）
 
 # 局外成就解锁与生涯统计系统（仿土豆兄弟纯成就解锁）
 var unlocked_cultivators: Array = []   ## 已解锁角色 ID 列表
@@ -154,7 +156,6 @@ var unlocked_achievements: Array = []  ## 已达成的成就 ID 列表
 var unread_unlocks: Array = []
 var career_stats: Dictionary = {
 	"total_runs": 0,
-	"total_wins": 0,
 	"total_kills": 0,
 	"best_wave": 0,
 	"best_kills": 0,
@@ -170,20 +171,20 @@ var career_stats: Dictionary = {
 	"best_healed": 0.0,            ## 单局累计回复峰值生涯最佳
 	"best_hits_taken": 0,          ## 单局承受伤害次数峰值生涯最佳
 	"best_level": 0,               ## 单局最高等级生涯最佳
-	"best_danger_cleared": -1,     ## 生涯最高通关难度（-1 = 尚未通关）
-	"wins_no_skill_enhance": 0,    ## 使用不契合技能通关累计次数（→ ach_style_rebel「就不听你话」）
+	"best_danger_cleared": -1,     ## 生涯最高破境难度（-1 = 尚未破境）
+	"milestones_with_skill": 0,    ## 带随行技能抵达破境波的累计次数（→ ach_style_rebel）
 }
-var cultivator_best_danger: Dictionary = {}  ## 每位角色通关过的最高危险度 {cultivator_id: danger_int}
-var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度通关位掩码 {cultivator_id: int}（位 d = 通关过难度 d）
+var cultivator_best_danger: Dictionary = {}  ## 每位角色破境过的最高危险度 {cultivator_id: danger_int}
+var cultivator_danger_clears: Dictionary = {}  ## 每位角色各难度破境位掩码 {cultivator_id: int}（位 d = 在难度 d 破境过）
 var skin_selections: Dictionary = {}         ## 每位角色已选皮肤 {cultivator_id: skin_idx}（缺省/-1 = 原色）
 var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局新达成的成就 ID（局内即时判定 + 结算判定累计，供结算弹窗汇总展示）
 
-# 道统功名与渡劫实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
-var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins, endless_best_wave, best_kills}}
-var victory_log: Array = []               ## 渡劫成功战报快照（新到旧，上限 VICTORY_LOG_CAP）
+# 道统功名与历战实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
+var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins(旧档遗留), best_wave, best_kills}}
+var record_log: Array = []                ## 历战实录快照（每次刷新生涯最高波数留一条，新到旧，上限 RECORD_LOG_CAP）
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
-const VICTORY_LOG_CAP: int = 50           ## 渡劫实录保留条数上限（控存档体积）
+const RECORD_LOG_CAP: int = 50            ## 历战实录保留条数上限（控存档体积）
 
 # 单局峰值追踪（供成就判定）
 var peak_stones: int = 0
@@ -295,20 +296,20 @@ func mark_unlock_read(kind: String, id: String) -> void:
 	unread_unlocks.erase(key)
 	_save_progress()
 
-## 查询某位角色已通关的最高危险度（未通关返回 -1）
+## 查询某位角色破境过的最高危险度（未破境返回 -1）
 func get_cultivator_best_danger(cid: String) -> int:
 	return int(cultivator_best_danger.get(cid, -1))
 
-## 查询某位角色各难度通关位掩码（位 d = 通关过难度 d）
+## 查询某位角色各难度破境位掩码（位 d = 在难度 d 破境过）
 func get_cultivator_danger_mask(cid: String) -> int:
 	return int(cultivator_danger_clears.get(cid, 0))
 
-## 某位角色是否通关过指定难度
+## 某位角色是否在指定难度破境过
 func is_cultivator_danger_cleared(cid: String, d: int) -> bool:
 	return (get_cultivator_danger_mask(cid) & (1 << d)) != 0
 
-## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「该角色累计通关次数 >= tier + 1」判定。
-## 2026-10-20 与难度解耦：不再看通关过哪一档，任意难度通关都记一次，攒够次数逐套解锁。
+## 皮肤是否已解锁：原色(-1)恒可用；主题皮肤按「该角色最高波数 >= 主题 wave 门槛」判定。
+## 旧档兜底：历史通关次数 wins 每条视为抵达过破境波，保证压缩前已解锁的皮肤不丢。
 func is_skin_unlocked(cid: String, skin_idx: int) -> bool:
 	if author_mode:
 		return true
@@ -317,8 +318,10 @@ func is_skin_unlocked(cid: String, skin_idx: int) -> bool:
 	var t := SkinData.get_theme(skin_idx)
 	if t.is_empty():
 		return false
-	var wins_needed := int(t.get("tier", 0)) + 1
-	return get_cultivator_record(cid).get("wins", 0) >= wins_needed
+	var rec := get_cultivator_record(cid)
+	if int(rec.get("best_wave", 0)) >= int(t.get("wave", 0)):
+		return true
+	return int(rec.get("wins", 0)) >= skin_idx + 1
 
 ## 查询某角色当前选用的皮肤（-1 = 原色；已选皮肤若未解锁则惰性回落原色兜底）
 func get_selected_skin(cid: String) -> int:
@@ -343,13 +346,12 @@ func get_cultivator_record(cid: String) -> Dictionary:
 	return {
 		"runs": int(rec.get("runs", 0)),
 		"wins": int(rec.get("wins", 0)),
-		"endless_best_wave": int(rec.get("endless_best_wave", 0)),
+		"best_wave": int(rec.get("best_wave", 0)),
 		"best_kills": int(rec.get("best_kills", 0)),
 	}
 
-## 已解锁的最高难度（2026-10-25 逐级解锁）：由「生涯最高通关难度」派生，
-## 不新增存档字段 —— 老档只要通过关，读档后自然就有对应档位。
-## 从未通关 → 只开放 D0；通关 D0 → 开放 D1；依此类推，顶档通关后恒为顶档。
+## 已解锁的最高难度（逐级破境解锁）：由「生涯最高破境难度」派生。
+## 从未破境 → 只开放 D0 普通；在普通破境 → 开放 D1 噩梦；顶档破境后恒为顶档。
 func max_danger_unlocked() -> int:
 	var best := int(career_stats.get("best_danger_cleared", -1))
 	return clampi(best + 1, 0, GameBalance.DANGER_MAX)
@@ -362,11 +364,10 @@ func is_danger_unlocked(d: int) -> bool:
 
 ## 选择危险度：夹到已解锁区间（未解锁档位点不动，UI 另给锁定态）
 func set_danger(d: int) -> void:
+	var prev := danger_level
 	danger_level = clampi(d, 0, max_danger_unlocked())
-
-## 设置是否从主菜单直接进入无尽试炼
-func set_start_in_endless(enabled: bool) -> void:
-	start_in_endless = enabled
+	if danger_level != prev:
+		danger_changed.emit(danger_level)
 
 ## 切换作者模式（会话级，不落盘）。关闭时把无敌/秒杀/时间加速一并复位，
 ## 防止退出作者模式后还留着 4 倍速或无敌跑普通局。
@@ -391,8 +392,11 @@ var pending_upgrade_points: int = 0
 
 # 回合
 var wave_number: int = 0
-var endless_mode: bool = false
 var run_started: bool = false
+
+## 本局唯一标识（2026-10-28 多存档）：手动存档按它归属到某一局，阵亡时只清本局的档。
+## 开局生成、随档存取；旧中断档没有这个键，读入时由 RunSave.ensure_run_id 补发。
+var run_id: String = ""
 
 ## 跨场景路由标记：局内「重新开始 / 再战一局」重载场景前置真，
 ## Main._ready 消费后跳过主菜单直落选角界面（不在 reset_run 里清，避免先于消费被抹掉）
@@ -1122,19 +1126,20 @@ func try_revive() -> bool:
 
 # ---------------- 武器系统 ----------------
 
+## 本局唯一 id：只用于「手动存档归属」（阵亡清本局的档），不参与任何玩法随机。
+static func make_run_id() -> String:
+	return "%d-%d" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec()]
+
 func start_run(starter_id: String) -> void:
+	run_id = make_run_id()
 	run_started = true
-	endless_mode = start_in_endless
 	_apply_cultivator()
 	# 随行技能转正：选择界面写的是 pending_skill_id；id 失效时回退缩地成寸
 	active_skill_id = pending_skill_id if SkillData.get_def(pending_skill_id).size() > 0 else "dash"
 	# 额外技能随角色绑定（不走选择界面）：按道统查表，没有 extra_skill 键的角色保持空串
 	extra_skill_id = CultivatorData.get_extra_skill_id(cultivator_id)
 	add_weapon(starter_id)
-	if endless_mode:
-		announcement_triggered.emit("◆ 无尽模式 · 战至终局 ◆")
-	else:
-		announcement_triggered.emit("◆ 生存战斗 · 击杀敌人 ◆")
+	announcement_triggered.emit("◆ 生存战斗 · 击杀敌人 ◆")
 
 ## 开局应用角色流派的正负代偿（规则在 CultivatorSystem，2026-10-11 抽离）
 func _apply_cultivator() -> void:
@@ -1341,30 +1346,23 @@ func pulse_damage_vignette(color: Color = Color(0.85, 0.12, 0.12, 0.65), duratio
 func trigger_screen_shockwave(pos: Vector2 = Vector2.INF, strength: float = 1.0, duration: float = 0.45) -> void:
 	screen_shockwave_triggered.emit(pos, strength, duration)
 
-func trigger_game_over(victory: bool = false) -> void:
+func trigger_game_over() -> void:
 	if is_game_over:
 		return
 	Engine.time_scale = 1.0
 	_hitstop_token += 1
 	_hitstop_deadline_ms = 0
 	is_game_over = true
-	# 本局已终结、战报已录入局外进度：中断续玩档随之作废
+	# 本局已终结、战报已录入局外进度：中断续玩档随之作废。
+	# 多存档（2026-10-28）：手动存档只清本局 run_id 相同的位，其他角色/其他局的档保留。
+	SaveSlots.clear_run_slots(run_id)
 	RunSave.clear_save()
-	_record_run_and_check_achievements(victory)
-	game_over_triggered.emit(victory)
+	_record_run_and_check_achievements()
+	game_over_triggered.emit()
 
-func _record_run_and_check_achievements(victory: bool) -> void:
+func _record_run_and_check_achievements() -> void:
 	# 作者模式：整局当作"沙盒"，不写生涯统计/成就/战报 —— 否则跳关+一击必杀几分钟
 	# 就能把全成就刷满，退出作者模式后也回不去。
 	if author_mode:
 		return
-	ProgressStore.record_run_and_check_achievements(self, victory)
-
-func continue_endless() -> void:
-	endless_mode = true
-	is_game_over = false
-	get_tree().paused = false
-	if player != null and is_instance_valid(player) and player.has_method("reset_victory_state"):
-		player.reset_victory_state()
-	if wave_spawner != null and wave_spawner.has_method("open_shop"):
-		wave_spawner.open_shop()
+	ProgressStore.record_run_and_check_achievements(self)

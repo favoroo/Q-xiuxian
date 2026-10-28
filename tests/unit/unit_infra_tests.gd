@@ -240,29 +240,6 @@ func _test_settings_and_reset_robustness() -> void:
 ## 修完之后靠两条钉住：① 创伤只发给"值得看的节点"（口径写在 GameBalance 段注释里）；
 ## ② 就算将来有人再拿高频事件乱发，每秒预算也把最坏震幅钉在轻颤级别。
 
-func _test_start_in_endless() -> void:
-	GameManager.reset_run()
-	_c.check(not GameManager.endless_mode, "默认开局非无尽模式")
-	_c.check(not GameManager.start_in_endless, "默认 start_in_endless 为 false")
-
-	# 设置从主菜单直接进入无尽试炼
-	GameManager.set_start_in_endless(true)
-	_c.check(GameManager.start_in_endless, "set_start_in_endless 生效")
-	GameManager.reset_run()
-	_c.check(GameManager.start_in_endless, "reset_run 保留主菜单无尽开关状态")
-
-	GameManager.cultivator_id = "jianchi"
-	GameManager.start_run("qingyun_sword")
-	_c.check(GameManager.endless_mode, "开启无尽开关后 start_run 自动激活 endless_mode")
-
-	# 恢复默认
-	GameManager.set_start_in_endless(false)
-	GameManager.reset_run()
-	GameManager.cultivator_id = "jianchi"
-	GameManager.start_run("qingyun_sword")
-	_c.check(not GameManager.endless_mode, "关闭后恢复普通模式")
-	GameManager.reset_run()
-
 func _test_achievement_and_meta_save() -> void:
 	# 1. 数据表完整性与反查自洽（2026-10-25 新手节奏重做：39 条成就、全部带实物奖励）
 	_c.equals(AchievementData.ACHIEVEMENTS.size(), 39, "成就共配置 39 条（17 角色 + 16 道具 + 6 武器，零纯荣誉）")
@@ -358,6 +335,9 @@ func _test_achievement_and_meta_save() -> void:
 	var orig_records := GameManager.cultivator_best_danger.duplicate()
 	var orig_clears := GameManager.cultivator_danger_clears.duplicate()
 	var orig_hist := GameManager.run_history.duplicate()
+	# 角色档案与历战实录同样会被结算写入，一并备份还原（别把测试数据写进玩家存档）
+	var orig_cult_recs := GameManager.cultivator_records.duplicate()
+	var orig_rlog := GameManager.record_log.duplicate()
 
 	# 3. 模拟结算与成就达成触发
 	GameManager.unlocked_cultivators = AchievementData.DEFAULT_CULTIVATORS.duplicate()
@@ -366,11 +346,13 @@ func _test_achievement_and_meta_save() -> void:
 	GameManager.unread_unlocks = []
 	GameManager.unlocked_achievements = []
 	GameManager.career_stats = {
-		"total_runs": 0, "total_wins": 0, "total_kills": 0,
+		"total_runs": 0, "total_kills": 0,
 		"best_wave": 0, "best_kills": 0, "total_stones": 0, "total_time": 0.0,
 	}
 	GameManager.cultivator_best_danger = {}
 	GameManager.cultivator_danger_clears = {}
+	GameManager.cultivator_records = {}
+	GameManager.record_log = []
 	GameManager.run_history = []
 
 	# 模拟一局：斩妖 600 只，单局持有 260 灵石，第 16 波战败
@@ -381,13 +363,13 @@ func _test_achievement_and_meta_save() -> void:
 	GameManager.spirit_stones = 260
 	GameManager.wave_number = 16
 	GameManager.game_time = 320.0
-	GameManager.trigger_game_over(false)
+	GameManager.trigger_game_over()
 
-	_c.check("ach_cult_meiying" in GameManager.unlocked_achievements, "累计斩妖达到 500 解锁【踏雪无痕】成就")
-	_c.check("meiying" in GameManager.unlocked_cultivators, "魅影修士已解锁")
+	_c.check("ach_cult_meiying" in GameManager.unlocked_achievements, "累计斩妖达到 500 解锁【影行者】成就")
+	_c.check("meiying" in GameManager.unlocked_cultivators, "影者已解锁")
 	_c.check("ach_cult_duobao" in GameManager.unlocked_achievements, "灵石达到 250 解锁【富甲一方】成就")
-	_c.check("duobao" in GameManager.unlocked_cultivators, "多宝道人已解锁")
-	_c.check("ach_item_pojia" in GameManager.unlocked_achievements, "抵御到第 16 波解锁【斩将夺旗】成就")
+	_c.check("duobao" in GameManager.unlocked_cultivators, "收藏家已解锁")
+	_c.check("ach_item_pojia" in GameManager.unlocked_achievements, "抵御到第 16 波解锁【深入敌后】成就")
 	_c.check("pojia_zhui" in GameManager.unlocked_items, "破甲锥法宝已入池")
 	_c.equals(int(GameManager.career_stats["total_runs"]), 1, "生涯修行场次 +1")
 	_c.equals(int(GameManager.career_stats["total_kills"]), 600, "生涯斩妖累计 600")
@@ -395,22 +377,23 @@ func _test_achievement_and_meta_save() -> void:
 	_c.equals(GameManager.run_history.size(), 1, "战报记录增加 1 条")
 	_c.equals(GameManager.is_cultivator_unlocked("meiying"), true, "is_cultivator_unlocked 接口自洽")
 
-	# 再模拟一局：独臂刀圣在 D1 渡劫成功
+	# 再模拟一局：剑痴在 D1 噩梦打到第 30 波阵亡（无限闯关只有一种结算）
 	GameManager.reset_run()
 	GameManager.cultivator_id = "jianchi"
 	GameManager.danger_level = 1
 	GameManager.kills = 300
 	GameManager.spirit_stones = 150
-	GameManager.wave_number = 20
-	GameManager.trigger_game_over(true)
+	GameManager.wave_number = 30
+	GameManager.trigger_game_over()
 
-	_c.check("ach_cult_dubi" in GameManager.unlocked_achievements, "通关 D1 解锁【孤峰问剑】成就")
-	_c.check("dubi" in GameManager.unlocked_cultivators, "独臂刀圣已解锁")
-	_c.check("ach_cult_duoshe" in GameManager.unlocked_achievements, "任意通关解锁【渡劫初成】成就")
-	_c.check("duoshe" in GameManager.unlocked_cultivators, "夺舍散人已解锁")
-	_c.equals(GameManager.get_cultivator_best_danger("jianchi"), 1, "剑痴通关印记更新为 D1")
+	_c.check("ach_cult_dubi" in GameManager.unlocked_achievements, "D1 抵达第 30 波解锁【明知山有虎】成就")
+	_c.check("dubi" in GameManager.unlocked_cultivators, "狂战士已解锁")
+	_c.check("ach_cult_duoshe" in GameManager.unlocked_achievements, "抵达第 20 波解锁【羽化初登】成就")
+	_c.check("duoshe" in GameManager.unlocked_cultivators, "学者已解锁")
+	_c.equals(int(GameManager.career_stats["best_wave"]), 30, "生涯最高波次抬到 30")
+	_c.equals(GameManager.get_cultivator_best_danger("jianchi"), 1, "剑痴破境印记更新为 D1")
 	_c.check(GameManager.is_cultivator_danger_cleared("jianchi", 1), "剑痴 D1 难度封印点亮")
-	_c.check(not GameManager.is_cultivator_danger_cleared("jianchi", 0), "剑痴 D0 未打过不点亮（封印按实际通关档位记账）")
+	_c.check(not GameManager.is_cultivator_danger_cleared("jianchi", 0), "剑痴 D0 未破境不点亮（封印按实际破境档位记账）")
 
 	# 4. 存档往返恢复校验：修改 → 存盘 → 清内存 → 读回
 	GameManager._save_progress()
@@ -450,22 +433,25 @@ func _test_achievement_and_meta_save() -> void:
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_records
 	GameManager.cultivator_danger_clears = orig_clears
+	GameManager.cultivator_records = orig_cult_recs
+	GameManager.record_log = orig_rlog
 	GameManager.run_history = orig_hist
 	GameManager._save_progress()
 	GameManager.reset_run()
 
-# ---------------- 道统功名与渡劫实录（2026-10-10 修仙志升级） ----------------
+# ---------------- 道统功名与历战实录（2026-10-28 无限闯关改版） ----------------
 
-## 覆盖：每角色生涯档案累加、无尽终局不双计生涯总量、渡劫快照白名单序列化、
-## 里程碑称号达标点亮（纯展示无奖励）、新字段落盘往返。
+## 覆盖：每角色生涯档案累加、破境（单局抵达第 20 波）点亮难度封印与境界称号、
+## 历战实录按「生涯新纪录」留快照（白名单序列化）、新字段落盘往返、
+## 老档难度 6→4→2 两级折叠迁移。
 
 func _test_career_milestones() -> void:
-	# 备份真实进度（含本轮新增的局外字段）
+	# 备份真实进度（含本轮涉及的局外字段）
 	var orig_stats := GameManager.career_stats.duplicate()
 	var orig_best_danger := GameManager.cultivator_best_danger.duplicate()
 	var orig_clears := GameManager.cultivator_danger_clears.duplicate()
 	var orig_records := GameManager.cultivator_records.duplicate()
-	var orig_vlog := GameManager.victory_log.duplicate()
+	var orig_rlog := GameManager.record_log.duplicate()
 	var orig_hist := GameManager.run_history.duplicate()
 	var orig_cults := GameManager.unlocked_cultivators.duplicate()
 	var orig_items := GameManager.unlocked_items.duplicate()
@@ -473,128 +459,164 @@ func _test_career_milestones() -> void:
 
 	# 清场
 	GameManager.career_stats = {
-		"total_runs": 0, "total_wins": 0, "total_kills": 0,
+		"total_runs": 0, "total_kills": 0,
 		"best_wave": 0, "best_kills": 0, "total_stones": 0, "total_time": 0.0,
+		"best_danger_cleared": -1, "milestones_with_skill": 0,
 	}
 	GameManager.cultivator_best_danger = {}
 	GameManager.cultivator_danger_clears = {}
 	GameManager.cultivator_records = {}
-	GameManager.victory_log = []
+	GameManager.record_log = []
 	GameManager.run_history = []
 	GameManager.unlocked_achievements = []
 	GameManager.last_run_new_records = []
 
-	# 1. 渡劫成功（20 波）：档案累加 + 快照落库 + 首胜纪录文案
+	# 1. 第一局：石岳 D0 第 16 波阵亡 —— 未到破境波，只记档案与新纪录快照
 	GameManager.reset_run()
 	GameManager.cultivator_id = "shiyue"
 	GameManager.danger_level = 0
 	GameManager.kills = 420
 	GameManager.spirit_stones = 130
-	GameManager.wave_number = 20
+	GameManager.wave_number = 16
 	# 模拟回合末已播报过的局内解锁：结算时不许清空，否则结算屏只显示「最后这一下」的成就
 	GameManager.last_run_new_achievements = ["ach_midrun_marker"]
-	GameManager.trigger_game_over(true)
+	GameManager.trigger_game_over()
 
 	_c.check("ach_midrun_marker" in GameManager.last_run_new_achievements,
 		"结算保留局内已播报的成就（结算屏按整局汇总）")
 	_c.check(GameManager.last_run_new_achievements.size() > 1,
 		"结算新达成的成就与局内已解锁的并存（不是二选一）")
-	_c.check(GameManager.last_run_new_records.any(
-		func(s: Variant) -> bool: return String(s).contains("新皮肤")),
-		"首胜同时解锁第 1 套皮肤并入结算播报")
 
 	var rec := GameManager.get_cultivator_record("shiyue")
 	_c.equals(int(rec["runs"]), 1, "石岳生涯局数 +1")
-	_c.equals(int(rec["wins"]), 1, "石岳渡劫成功 +1")
+	_c.equals(int(rec["best_wave"]), 16, "石岳最高抵达波数 16")
 	_c.equals(int(rec["best_kills"]), 420, "石岳斩妖之最 420")
-	_c.equals(GameManager.victory_log.size(), 1, "渡劫实录新增 1 条快照")
-	var snap: Dictionary = GameManager.victory_log[0]
+	_c.equals(int(rec["wins"]), 0, "新局不再累计通关次数（wins 只作旧档皮肤兜底）")
+	_c.equals(GameManager.record_log.size(), 1, "历战实录新增 1 条快照")
+	var snap: Dictionary = GameManager.record_log[0]
 	_c.check(not snap.has("node"), "快照顶层不含节点引用")
 	_c.equals(int(snap["kills"]), 420, "快照记录本局斩妖数")
-	_c.equals(int(snap["wave"]), GameManager.VICTORY_WAVE, "快照记录渡劫波次 20")
+	_c.equals(int(snap["wave"]), 16, "快照记录本局抵达波次 16")
 	_c.check(snap.has("weapons") and snap.has("items") and snap.has("stats"), "快照含法器/法宝/属性三段")
 	_c.check(String(snap.get("datetime", "")) != "", "快照带结算时刻")
 	_c.check(GameManager.last_run_new_records.any(
-		func(s: Variant) -> bool: return String(s).contains("首胜")), "首胜生成新纪录文案")
-	_c.check(GameManager.last_run_new_records.any(
-		func(s: Variant) -> bool: return String(s).contains("境界突破")), "首次通关 D0 生成境界突破文案")
-	_c.check(GameManager.last_run_new_records.any(
-		func(s: Variant) -> bool: return String(s).contains("炼气")), "D0 通关境界晋入「炼气」")
+		func(s: Variant) -> bool: return String(s).contains("生涯新纪录") and String(s).contains("第 16 波")),
+		"首局新纪录生成「生涯新纪录 · 抵达第 16 波」文案")
+	# 未到破境波：封印不点亮、无境界突破、无新皮肤
+	_c.check(not GameManager.is_cultivator_danger_cleared("shiyue", 0), "未到第 20 波不点亮 D0 封印")
 	_c.check(GameManager.last_run_new_records.all(
-		func(s: Variant) -> bool: return not String(s).contains("领取")), "境界突破文案不承诺领取奖励")
-	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "石岳 D0 难度封印点亮")
-	_c.check(not GameManager.is_cultivator_danger_cleared("shiyue", 1), "石岳 D1 未通关不点亮")
+		func(s: Variant) -> bool: return not String(s).contains("境界突破")), "未破境不生成境界突破文案")
+	_c.check(GameManager.last_run_new_records.all(
+		func(s: Variant) -> bool: return not String(s).contains("新皮肤")), "未破境不生成新皮肤文案")
+	_c.check(GameManager.last_run_new_records.all(
+		func(s: Variant) -> bool: return not String(s).contains("领取")), "破境文案不承诺领取奖励")
 
-	# 2. 继续无尽 → 第 25 波道殒：生涯总量不双计，只补无尽纪录与战报
-	GameManager.continue_endless()
-	GameManager.wave_number = 25
+	# 2. 第二局：石岳 D0 第 25 波阵亡 —— 破境（>=20）：点亮 D0 封印、晋入炼气、解锁噩梦难度
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shiyue"
+	GameManager.danger_level = 0
 	GameManager.kills = 700
-	GameManager.trigger_game_over(false)
+	GameManager.spirit_stones = 180
+	GameManager.wave_number = 25
+	GameManager.trigger_game_over()
 
-	_c.equals(int(GameManager.career_stats["total_runs"]), 1, "无尽终局不再累计生涯局数（无双计）")
-	_c.equals(int(GameManager.career_stats["total_kills"]), 420, "无尽终局不再重复累计斩妖")
+	_c.equals(int(GameManager.career_stats["total_runs"]), 2, "两局后生涯修行场次 2")
+	_c.equals(int(GameManager.career_stats["total_kills"]), 1120, "两局后生涯斩妖累计 1120")
 	_c.equals(int(GameManager.career_stats["best_wave"]), 25, "生涯最高波次更新为 25")
 	rec = GameManager.get_cultivator_record("shiyue")
-	_c.equals(int(rec["endless_best_wave"]), 25, "石岳无尽最高关数 25")
-	_c.equals(int(rec["best_kills"]), 700, "石岳斩妖之最抬升到 700")
-	_c.equals(GameManager.run_history.size(), 2, "渡劫与无尽道殒各留一条战报")
-	_c.check(bool(GameManager.run_history[0].get("endless", false)), "最新战报标记无尽道殒")
+	_c.equals(int(rec["best_wave"]), 25, "石岳最高抵达波数抬到 25")
+	_c.equals(int(rec["best_kills"]), 700, "石岳斩妖之最抬到 700")
+	_c.equals(GameManager.record_log.size(), 2, "历战实录再添 1 条快照")
+	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "破境 D0 ⇒ 石岳 D0 难度封印点亮")
+	_c.check(not GameManager.is_cultivator_danger_cleared("shiyue", 1), "石岳 D1 未破境不点亮")
+	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 0, "生涯最高破境难度记为 D0")
 	_c.check(GameManager.last_run_new_records.any(
-		func(s: Variant) -> bool: return String(s).contains("无尽")), "无尽新纪录文案生成")
-	_c.equals(GameManager.victory_log.size(), 1, "无尽道殒不进渡劫实录")
-	_c.check("ach_feat_endless" in GameManager.unlocked_achievements, "无尽抵达第 25 波达成【无尽行者】（无尽路径也判定成就）")
+		func(s: Variant) -> bool: return String(s).contains("境界突破") and String(s).contains("炼气")),
+		"D0 破境生成「晋入炼气」境界文案")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("难度解锁") and String(s).contains("噩梦")),
+		"D0 破境解锁下一档「噩梦」")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("新皮肤")),
+		"破境时播报新皮肤解锁")
+	_c.check("ach_feat_endless" in GameManager.unlocked_achievements, "单局抵达第 25 波达成【肝帝降临】")
 
-	# 3. 境界称号：按通关过的最高难度点亮，纯展示、不发放任何奖励
-	_c.equals(AchievementData.realm_for_danger(-1), "", "未通关无境界称号")
-	_c.equals(AchievementData.realm_for_danger(0), "炼气", "通关 D0 晋入炼气")
-	_c.equals(AchievementData.realm_for_danger(1), "筑基", "通关 D1 晋入筑基")
-	_c.equals(AchievementData.realm_for_danger(2), "金丹", "通关 D2 晋入金丹")
-	_c.equals(AchievementData.realm_for_danger(3), "元婴", "通关 D3（顶档）晋入元婴")
+	# 3. 第三局：石岳 D1 第 20 波阵亡 —— 噩梦档破境：点亮 D1 封印、晋入元婴
+	GameManager.reset_run()
+	GameManager.cultivator_id = "shiyue"
+	GameManager.danger_level = 1
+	GameManager.kills = 500
+	GameManager.spirit_stones = 200
+	GameManager.wave_number = 20
+	GameManager.trigger_game_over()
+
+	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 1), "噩梦破境 ⇒ 石岳 D1 难度封印点亮")
+	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "D0 封印保持点亮")
+	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 1, "生涯最高破境难度抬到 D1")
+	_c.equals(GameManager.get_cultivator_best_danger("shiyue"), 1, "石岳破境印记更新为 D1")
+	_c.check(GameManager.last_run_new_records.any(
+		func(s: Variant) -> bool: return String(s).contains("境界突破") and String(s).contains("元婴")),
+		"D1 破境生成「晋入元婴」境界文案")
+	# 噩梦已是顶档：没有下一档可解锁，不该再播报「难度解锁」
+	_c.check(GameManager.last_run_new_records.all(
+		func(s: Variant) -> bool: return not String(s).contains("难度解锁")),
+		"顶档破境不再播报「难度解锁」")
+	# 第 20 波没刷新生涯最高（第 2 局已 25 波）⇒ 不再添快照
+	_c.equals(GameManager.record_log.size(), 2, "未刷新生涯最高波次则不添实录快照")
+
+	# 3.1 境界称号：难度只有普通/噩梦两档，按破境过的最高难度点亮，纯展示、不发放任何奖励
+	_c.equals(AchievementData.realm_for_danger(-1), "", "未破境无境界称号")
+	_c.equals(AchievementData.realm_for_danger(0), "炼气", "破境 D0 晋入炼气")
+	_c.equals(AchievementData.realm_for_danger(1), "元婴", "破境 D1 晋入元婴")
 	_c.equals(AchievementData.realm_for_danger(184), "元婴", "超档仍取最高一档境界")
+	_c.equals(AchievementData.danger_name(0), "普通", "D0 档名为「普通」")
+	_c.equals(AchievementData.danger_name(1), "噩梦", "D1 档名为「噩梦」")
+	_c.equals(GameBalance.DANGER_MAX, 1, "难度只有普通/噩梦两档")
 
 	# 4. 存档往返：新字段落盘恢复无损
 	GameManager._save_progress()
 	GameManager.cultivator_records = {}
 	GameManager.cultivator_danger_clears = {}
-	GameManager.victory_log = []
+	GameManager.record_log = []
 	GameManager._load_progress()
-	_c.equals(GameManager.victory_log.size(), 1, "读档后渡劫实录恢复")
+	_c.equals(GameManager.record_log.size(), 2, "读档后历战实录恢复")
 	rec = GameManager.get_cultivator_record("shiyue")
-	_c.equals(int(rec["wins"]), 1, "读档后石岳渡劫次数恢复")
-	_c.equals(int(rec["endless_best_wave"]), 25, "读档后无尽最高关数恢复")
-	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "读档后石岳 D0 封印恢复（位掩码落盘）")
+	_c.equals(int(rec["best_wave"]), 25, "读档后石岳最高抵达波数恢复")
+	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 1), "读档后石岳 D1 封印恢复（位掩码落盘）")
+	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "读档后石岳 D0 封印恢复")
 
-	# 5. 老档压缩迁移（2026-10-20 难度 6→4 档）：D4/D5 战绩折进新顶档 D3，不许丢荣誉
-	# （本段改动的字段由函数末尾的统一还原段复位）
-	GameManager.cultivator_best_danger = {"k1": 5, "k2": 4, "k3": 3, "k4": 2}
+	# 5. 老档难度折叠迁移（2026-10-28 无限闯关）：6 档 → 4 档 → 2 档（普通 D0 / 噩梦 D1）
+	# 折叠是「有版本闸的一次性迁移」——**不是幂等函数**，这里只调一次，绝不重复调用。
+	GameManager.cultivator_best_danger = {"k1": 5, "k2": 4, "k3": 3, "k4": 2, "k5": 1, "k6": 0}
 	GameManager.cultivator_danger_clears = {
-		"k1": 0b111111,  # 通关过 D5（老档满格）
-		"k2": 0b011111,  # 通关过 D4
-		"k3": 0b001111,  # 通关过 D3（新顶档，本身合法）
-		"k4": 0b000111,  # 通关过 D2
+		"k1": 0b111111,  # 老档通关过 D0~D5
+		"k2": 0b011111,  # 老档通关过 D0~D4
+		"k3": 0b001111,  # 老档通关过 D0~D3
+		"k4": 0b000111,  # 老档通关过 D0~D2
+		"k5": 0b000011,  # 老档通关过 D0~D1
+		"k6": 0b000001,  # 老档通关过 D0
 	}
 	GameManager.career_stats["best_danger_cleared"] = 5
-	ProgressStore._compress_danger_progress(GameManager)
-	_c.equals(int(GameManager.cultivator_best_danger["k1"]), 3, "老档 D5 最高通关折进新顶档 D3")
-	_c.equals(int(GameManager.cultivator_best_danger["k2"]), 3, "老档 D4 最高通关折进新顶档 D3")
-	_c.equals(int(GameManager.cultivator_best_danger["k3"]), 3, "老档 D3 原样保留")
-	_c.equals(int(GameManager.cultivator_best_danger["k4"]), 2, "老档 D2 原样保留")
-	_c.equals(int(GameManager.cultivator_danger_clears["k1"]), 0b1111, "老档 D4/D5 封印折进 D3 后掩码不越界")
-	_c.equals(int(GameManager.cultivator_danger_clears["k2"]), 0b1111, "老档只有 D4 也点亮新顶档 D3 封印")
-	_c.equals(int(GameManager.cultivator_danger_clears["k3"]), 0b1111, "老档 D3 封印原样保留")
-	_c.equals(int(GameManager.cultivator_danger_clears["k4"]), 0b0111, "老档 D2 封印不高位污染")
-	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 3, "生涯最高通关难度同步夹到顶档")
-	# 迁移是幂等的：再跑一遍不变
-	ProgressStore._compress_danger_progress(GameManager)
-	_c.equals(int(GameManager.cultivator_danger_clears["k4"]), 0b0111, "重复迁移不改变已合规的位掩码")
-	_c.equals(int(GameManager.cultivator_best_danger["k4"]), 2, "重复迁移不改变已合规的最高难度")
+	ProgressStore._migrate_six_to_four(GameManager)
+	ProgressStore._collapse_danger_to_two(GameManager)
+	_c.equals(int(GameManager.cultivator_best_danger["k1"]), 1, "老档 D5 折进新顶档 D1")
+	_c.equals(int(GameManager.cultivator_best_danger["k2"]), 1, "老档 D4 折进新顶档 D1")
+	_c.equals(int(GameManager.cultivator_best_danger["k3"]), 1, "老档 D3 折进新顶档 D1")
+	_c.equals(int(GameManager.cultivator_best_danger["k4"]), 1, "老档 D2 折进新顶档 D1")
+	_c.equals(int(GameManager.cultivator_best_danger["k5"]), 0, "老档 D1 折进新普通档 D0")
+	_c.equals(int(GameManager.cultivator_best_danger["k6"]), 0, "老档 D0 原样留在普通档 D0")
+	_c.equals(int(GameManager.cultivator_danger_clears["k1"]), 0b11, "老档六档封印折成新两档全亮")
+	_c.equals(int(GameManager.cultivator_danger_clears["k4"]), 0b11, "老档 D0~D2 折成新 D0+D1 双封印")
+	_c.equals(int(GameManager.cultivator_danger_clears["k5"]), 0b01, "老档 bit0/bit1 并入新 bit0")
+	_c.equals(int(GameManager.cultivator_danger_clears["k6"]), 0b01, "老档 bit0 并入新 bit0")
+	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 1, "生涯最高破境难度 5 → 1")
 
 	# 还原测试前的玩家真实进度
 	GameManager.career_stats = orig_stats
 	GameManager.cultivator_best_danger = orig_best_danger
 	GameManager.cultivator_danger_clears = orig_clears
 	GameManager.cultivator_records = orig_records
-	GameManager.victory_log = orig_vlog
+	GameManager.record_log = orig_rlog
 	GameManager.run_history = orig_hist
 	GameManager.unlocked_cultivators = orig_cults
 	GameManager.unlocked_items = orig_items
@@ -695,14 +717,16 @@ func _test_modal_pause_buttons() -> void:
 
 # ---------------- 换色皮肤系统（2026-10-14） ----------------
 
-## 覆盖：主题表完整性、按该角色通关次数解锁（2026-10-20 与难度解耦）、
-## apply_to_config 副本换色不污染原配置、选择与落盘往返、锁定皮肤惰性回落、视图装配换色生效
+## 覆盖：主题表完整性、按该角色「最高抵达波数」解锁（2026-10-28 无限闯关改版，
+## 门槛由通关次数 tier 改为波数 wave）、旧档 wins 兜底、apply_to_config 副本换色
+## 不污染原配置、选择与落盘往返、锁定皮肤惰性回落、视图装配换色生效
 func _test_skin_system() -> void:
-	# 1. 主题表完整性
+	# 1. 主题表完整性（门槛键是 wave：解锁看该角色单局抵达过的最高波数）
 	_c.equals(SkinData.count(), 6, "皮肤主题共 6 套")
+	var expect_waves: Array[int] = [5, 10, 15, 25, 35, 50]
 	for i in range(SkinData.count()):
 		var t := SkinData.get_theme(i)
-		_c.equals(int(t.get("tier", -1)), i, "皮肤 %d tier 与通关次数门槛对位（tier + 1 次）" % i)
+		_c.equals(int(t.get("wave", -1)), expect_waves[i], "皮肤 %d 解锁门槛 = 第 %d 波" % [i, expect_waves[i]])
 		_c.check(not String(t.get("name", "")).is_empty(), "皮肤 %d 有名号" % i)
 		_c.check(t.get("cloak_outer") is Color and t.get("cloak_edge") is Color, "皮肤 %d 配色完整" % i)
 	_c.check(SkinData.get_theme(-1).is_empty() and SkinData.get_theme(99).is_empty(), "越界皮肤序号返回空")
@@ -711,23 +735,37 @@ func _test_skin_system() -> void:
 	var orig_records := GameManager.cultivator_records.duplicate()
 	var orig_skins := GameManager.skin_selections.duplicate()
 
-	# 2. 按通关次数解锁：4 胜 ⇒ 门槛 1~4 次的皮肤解锁，5 次以上的仍锁
-	GameManager.cultivator_records = {"shiyue": {"runs": 6, "wins": 4}}
+	# 2. 按最高抵达波数解锁：波数够门槛才亮，门槛逐套递增
+	GameManager.cultivator_records = {"shiyue": {"runs": 6, "best_wave": 4}}
 	GameManager.skin_selections = {}
 	_c.check(GameManager.is_skin_unlocked("shiyue", -1), "原色皮肤恒可用")
-	for i in range(4):
-		_c.check(GameManager.is_skin_unlocked("shiyue", i), "通关 4 次 ⇒ 皮肤 %d 解锁" % i)
-	_c.check(not GameManager.is_skin_unlocked("shiyue", 4), "通关 4 次 ⇒ 第 5 套皮肤仍锁")
-	_c.check(not GameManager.is_skin_unlocked("shiyue", 5), "通关 4 次 ⇒ 第 6 套皮肤仍锁")
-	_c.check(not GameManager.is_skin_unlocked("meiying", 0), "未通关角色皮肤全锁")
+	for i in range(6):
+		_c.check(not GameManager.is_skin_unlocked("shiyue", i), "最高抵达第 4 波 ⇒ 皮肤 %d 全锁（门槛最低的第 1 套也要第 5 波）" % i)
+	_c.check(not GameManager.is_skin_unlocked("meiying", 0), "未玩过的角色皮肤全锁")
 	_c.check(not GameManager.is_skin_unlocked("shiyue", 99), "越界皮肤序号判锁")
-	# 只说"玩过很多局"不算数：runs 再多，wins=0 也解不开
-	GameManager.cultivator_records = {"shiyue": {"runs": 99, "wins": 0}}
-	_c.check(not GameManager.is_skin_unlocked("shiyue", 0), "只玩不通关不解锁皮肤（只看 wins 不看 runs）")
-	# 难度不参与判定：同样的胜场在任何难度下解锁效果一致
-	GameManager.cultivator_records = {"shiyue": {"runs": 6, "wins": 6}}
-	_c.check(GameManager.is_skin_unlocked("shiyue", 5), "通关 6 次 ⇒ 6 套皮肤全解锁")
-	_c.check(GameManager.is_skin_unlocked("shiyue", 5), "解锁口径只看胜场，与难度无关")
+
+	# 最高抵达第 10 波：第 5 波、第 10 波两套解锁，第 15 波那套仍锁
+	GameManager.cultivator_records = {"shiyue": {"runs": 6, "best_wave": 10}}
+	_c.check(GameManager.is_skin_unlocked("shiyue", 0), "最高抵达第 10 波 ⇒ 第 1 套（门槛 5 波）解锁")
+	_c.check(GameManager.is_skin_unlocked("shiyue", 1), "最高抵达第 10 波 ⇒ 第 2 套（门槛 10 波）解锁")
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 2), "最高抵达第 10 波 ⇒ 第 3 套（门槛 15 波）仍锁")
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 3), "最高抵达第 10 波 ⇒ 第 4 套仍锁")
+
+	# 最高抵达第 50 波：六套全解锁
+	GameManager.cultivator_records = {"shiyue": {"runs": 6, "best_wave": 50}}
+	for i in range(6):
+		_c.check(GameManager.is_skin_unlocked("shiyue", i), "最高抵达第 50 波 ⇒ 皮肤 %d 解锁" % i)
+
+	# 旧档兜底：老存档只有 wins（通关次数）⇒ 按旧规则 wins >= 序号+1 仍算解锁，皮肤一件不许丢
+	GameManager.cultivator_records = {"shiyue": {"runs": 9, "wins": 4, "best_wave": 0}}
+	for i in range(4):
+		_c.check(GameManager.is_skin_unlocked("shiyue", i), "旧档 wins=4 ⇒ 皮肤 %d 按旧规则解锁" % i)
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 4), "旧档 wins=4 ⇒ 第 5 套仍锁")
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 5), "旧档 wins=4 ⇒ 第 6 套仍锁")
+
+	# 只说"玩过很多局"不算数：runs 再多，best_wave=0 且 wins=0 也解不开
+	GameManager.cultivator_records = {"shiyue": {"runs": 99, "wins": 0, "best_wave": 0}}
+	_c.check(not GameManager.is_skin_unlocked("shiyue", 0), "只玩不破境不解锁皮肤（不看 runs）")
 
 	# 3. apply_to_config：副本换色，原配置零污染，造型样式键不动
 	var base := CultivatorVisualConfig.get_config("jianchi")
@@ -749,7 +787,8 @@ func _test_skin_system() -> void:
 	_c.check(SkinData.apply_to_config(base, 4).chroma.is_empty(), "普通换色皮肤不带炫彩参数")
 
 	# 4. 选择与落盘往返 + 锁定皮肤惰性回落
-	GameManager.cultivator_records = {"shiyue": {"runs": 4, "wins": 4}}
+	#    best_wave=25 ⇒ 第 4 套（门槛 25 波）解锁、第 6 套（门槛 50 波）仍锁
+	GameManager.cultivator_records = {"shiyue": {"runs": 4, "best_wave": 25}}
 	GameManager.set_selected_skin("shiyue", 3)
 	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "皮肤选择生效")
 	GameManager.set_selected_skin("shiyue", 5)
@@ -759,15 +798,15 @@ func _test_skin_system() -> void:
 	GameManager.cultivator_records = {}
 	GameManager._load_progress()
 	_c.equals(GameManager.get_selected_skin("shiyue"), 3, "读档后皮肤选择恢复")
-	GameManager.cultivator_records = {"shiyue": {"runs": 1, "wins": 1}}
-	_c.equals(GameManager.get_selected_skin("shiyue"), -1, "胜场回退 ⇒ 已选皮肤惰性回落原色")
+	GameManager.cultivator_records = {"shiyue": {"runs": 1, "best_wave": 4}}
+	_c.equals(GameManager.get_selected_skin("shiyue"), -1, "最高波次回退 ⇒ 已选皮肤惰性回落原色")
 	GameManager.set_selected_skin("shiyue", -1)
 	_c.check(not GameManager.skin_selections.has("shiyue"), "选回原色后存档键擦除")
 
 	# 5. 视图装配：缺省走存档选择，显式 -1 回原色
 	var view := ProceduralCultivatorView.new()
 	add_child(view)
-	GameManager.cultivator_records = {"shiyue": {"runs": 4, "wins": 4}}
+	GameManager.cultivator_records = {"shiyue": {"runs": 4, "best_wave": 25}}
 	GameManager.skin_selections = {"shiyue": 2}
 	view.setup_character_id("shiyue")
 	_c.equals(view.renderer.config.cloak["col_outer"], SkinData.get_theme(2)["cloak_outer"], "视图按存档选择装配皮肤色")

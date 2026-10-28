@@ -80,12 +80,13 @@ func _build_row() -> void:
 	_fill_style = styles[1] as StyleBoxFlat
 	row.add_child(_bar)
 
-	# 50% 狂暴分界刻度：位置 = GameBalance.BOSS_PHASE2_AT（与 _enter_phase2 判定同源，画在哪 == 何时变）。
-	# 用锚点钉在轨中点（不写死 300 —— 实际宽由 HBox 分配），常态低调的点缀黄竖线，跨线时闪一下。
+	# 狂暴分界刻度：位置 = GameBalance.boss_phase2_hp_pct（与 _enter_phase2 判定同源，画在哪 == 何时变）。
+	# 用锚点钉在轨对应血线上（实际宽由 HBox 分配），常态低调的点缀黄竖线，跨线时闪一下。
+	var p2_at := GameBalance.boss_phase2_hp_pct(GameManager.danger_level)
 	_phase_tick = ColorRect.new()
 	_phase_tick.color = GameStyle.with_alpha(PHASE_TICK_BASE, PHASE_TICK_ALPHA)
-	_phase_tick.anchor_left = GameBalance.BOSS_PHASE2_AT
-	_phase_tick.anchor_right = GameBalance.BOSS_PHASE2_AT
+	_phase_tick.anchor_left = p2_at
+	_phase_tick.anchor_right = p2_at
 	_phase_tick.offset_left = -1.0
 	_phase_tick.offset_right = 1.0
 	_phase_tick.offset_top = 0.0
@@ -123,6 +124,9 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 			_fill_style.bg_color = GameStyle.BAD
 		if _phase_tick != null:
 			_phase_tick.modulate = Color.WHITE
+			var p2_ratio := GameBalance.boss_phase2_hp_pct(GameManager.danger_level)
+			_phase_tick.anchor_left = p2_ratio
+			_phase_tick.anchor_right = p2_ratio
 		modulate.a = 1.0
 		visible = true
 		# 登场：自屏底外顶上来 + 弹跳（与 banner / 等级徽章同款 BACK 缓动），配 boss_raid 低吼同拍。
@@ -140,7 +144,7 @@ func _on_boss_hp_changed(cur: float, max_v: float, title: String) -> void:
 		_fx_tween.tween_property(self, "offset_bottom", rest_bottom, 0.25)\
 			.from(rest_bottom + ENTER_LIFT).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		return
-	if not _phase2_marked and max_v > 0.0 and cur <= max_v * GameBalance.BOSS_PHASE2_AT:
+	if not _phase2_marked and max_v > 0.0 and cur <= max_v * GameBalance.boss_phase2_hp_pct(GameManager.danger_level):
 		_mark_phase2()
 	if absf(_bar.value - cur) > 0.5:
 		if _bar_tween != null and _bar_tween.is_valid():

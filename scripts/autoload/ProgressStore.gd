@@ -2,10 +2,12 @@ class_name ProgressStore
 extends RefCounted
 
 ## 局外元进度存档与成就结算子系统
-## 负责 user://progress.cfg 的读写、save_version 向前兼容、生涯统计累加、战报记录与成就解锁判定。
+## 负责 user://progress.cfg 的读写、save_version 向前兼容、生涯统计累加、历战实录与成就解锁判定。
+## 2026-10-28 无限闯关改版：只有「阵亡」一种结算（不再有通关/无尽终局两条路），
+## 难度压到两档（普通/噩梦），解锁口径改成「在难度 d 单局抵达第 20 波 = 破境」。
 
 const PROGRESS_PATH := "user://progress.cfg"
-const SAVE_VERSION: int = 2
+const SAVE_VERSION: int = 3
 const MAX_HISTORY_ENTRIES: int = 10
 
 ## 读取 best_class_counts（器类峰值生涯最佳），容错非字典存档
@@ -33,9 +35,9 @@ static func load_into(gm: Node) -> void:
 	var cfg := ConfigFile.new()
 	var load_err := cfg.load(PROGRESS_PATH)
 	if load_err == OK:
-		# 版本号只作诊断：向前兼容靠下方各字段的 additive 默认值兜底，没有迁移分支。
+		# 版本号除了诊断还兼作迁移闸：save_version < 3 的老档要在下面跑一次难度折叠。
 		# 读到高于当前版本的存档（降级安装）时提示一句但不拒绝加载 —— 老档回落默认值
-		# 比读不了档更可接受，真要做迁移时这里就是入口。
+		# 比读不了档更可接受。
 		var saved_ver := int(cfg.get_value("meta", "save_version", 1))
 		if saved_ver > SAVE_VERSION:
 			push_warning("ProgressStore: 存档版本 %d 高于当前 %d，缺字段将按默认值加载" % [saved_ver, SAVE_VERSION])
@@ -68,7 +70,6 @@ static func load_into(gm: Node) -> void:
 		gm.unlocked_achievements = achs.duplicate() if achs is Array else []
 
 		gm.career_stats["total_runs"] = int(cfg.get_value("stats", "total_runs", 0))
-		gm.career_stats["total_wins"] = int(cfg.get_value("stats", "total_wins", 0))
 		gm.career_stats["total_kills"] = int(cfg.get_value("stats", "total_kills", 0))
 		gm.career_stats["best_wave"] = int(cfg.get_value("stats", "best_wave", 0))
 		gm.career_stats["best_kills"] = int(cfg.get_value("stats", "best_kills", 0))
@@ -85,7 +86,14 @@ static func load_into(gm: Node) -> void:
 		gm.career_stats["best_hits_taken"] = int(cfg.get_value("stats", "best_hits_taken", 0))
 		gm.career_stats["best_level"] = int(cfg.get_value("stats", "best_level", 0))
 		gm.career_stats["best_danger_cleared"] = int(cfg.get_value("stats", "best_danger_cleared", -1))
-		gm.career_stats["wins_no_skill_enhance"] = int(cfg.get_value("stats", "wins_no_skill_enhance", 0))
+		# 破境计数（带随行技能破境累计次数）。新键 milestones_with_skill 优先；
+		# 老档没有这个键时回落旧键 wins_no_skill_enhance —— 老玩家进度不许丢。
+		var mws := 0
+		if cfg.has_section_key("stats", "milestones_with_skill"):
+			mws = int(cfg.get_value("stats", "milestones_with_skill", 0))
+		else:
+			mws = int(cfg.get_value("stats", "wins_no_skill_enhance", 0))
+		gm.career_stats["milestones_with_skill"] = mws
 
 		var cbd = cfg.get_value("records", "cultivator_best_danger", {})
 		gm.cultivator_best_danger = cbd.duplicate() if cbd is Dictionary else {}
@@ -103,10 +111,14 @@ static func load_into(gm: Node) -> void:
 
 		# 难度 6 档 → 4 档压缩迁移（2026-10-20）：老档里的 D4/D5 记录整体折进新顶档 D3，
 		# 保留「打到过最高档」的荣誉，不因档位收缩凭空丢封印与境界。
-		_compress_danger_progress(gm)
+		_migrate_six_to_four(gm)
 
 		var crec = cfg.get_value("records", "cultivator_records", {})
 		gm.cultivator_records = crec.duplicate() if crec is Dictionary else {}
+
+		# 每角色档案迁移（2026-10-28 无限闯关）：无尽试炼已下线，endless_best_wave 并进 best_wave；
+		# wins 原样保留（旧档皮肤解锁兜底仍读它）。
+		_migrate_cultivator_records(gm)
 
 		# 皮肤选择（换色皮肤，2026-10-14 新增；老档缺字段按空字典回落，全员原色）
 		var sksel = cfg.get_value("progress", "skin_selections", {})
@@ -120,11 +132,33 @@ static func load_into(gm: Node) -> void:
 				bd = maxi(bd, int(v))
 			gm.career_stats["best_danger_cleared"] = bd
 
-		var vlog = cfg.get_value("records", "victory_log", [])
-		gm.victory_log = vlog.duplicate() if vlog is Array else []
+		# 历战实录（新到旧）：新键 record_log 优先，缺失时回落旧键 victory_log。
+		var vlog: Array = []
+		var vlog_ok := true
+		if cfg.has_section_key("records", "record_log"):
+			var rl = cfg.get_value("records", "record_log", [])
+			if rl is Array:
+				vlog = rl.duplicate()
+			else:
+				vlog_ok = false
+		else:
+			var vl = cfg.get_value("records", "victory_log", [])
+			if vl is Array:
+				vlog = vl.duplicate()
+			else:
+				vlog_ok = false
+		gm.record_log = vlog
 
 		var hist = cfg.get_value("history", "recent_runs", [])
 		gm.run_history = hist.duplicate() if hist is Array else []
+
+		# 难度 4 档 → 2 档（普通/噩梦）一次性迁移：只在 saved_ver < 3 时跑，
+		# 必须放在 run_history / record_log 都读完之后（它要改写这两处的 danger 字段）。
+		# 该折叠不幂等（旧 D2/D3 折成新 D1 后再折一次会降成 D0）：迁移完立刻升版落盘，
+		# 否则玩家本次退出前没触发任何存档，下次启动会把噩梦档再折成普通。
+		if saved_ver < 3:
+			_collapse_danger_to_two(gm)
+			save_from(gm)
 
 		# 2026-10-24 坏字段可见化：文件能解析但字段类型不对（手改/写入中断）时原先静默回落
 		# 默认值，玩家侧读作「解锁/记录全没了」且日志零线索。异常字段集中点名一条。
@@ -141,8 +175,8 @@ static func load_into(gm: Node) -> void:
 			bad_fields.append("cultivator_danger_clears")
 		if not (crec is Dictionary):
 			bad_fields.append("cultivator_records")
-		if not (vlog is Array):
-			bad_fields.append("victory_log")
+		if not vlog_ok:
+			bad_fields.append("record_log")
 		if not (hist is Array):
 			bad_fields.append("recent_runs")
 		if not bad_fields.is_empty():
@@ -163,7 +197,7 @@ static func load_into(gm: Node) -> void:
 		gm.cultivator_best_danger = {}
 		gm.cultivator_danger_clears = {}
 		gm.cultivator_records = {}
-		gm.victory_log = []
+		gm.record_log = []
 		gm.run_history = []
 		gm.skin_selections = {}
 
@@ -219,22 +253,77 @@ static func load_into(gm: Node) -> void:
 ## 难度 6 档 → 4 档（D0~D3）老档压缩（2026-10-20 改版一次性迁移）：
 ## 老档的 D4/D5 战绩折进新顶档 D3，D0~D3 原样保留 —— 打过最高档的玩家不会因档位收缩丢记录。
 ## 位掩码先折叠高位再截断，避免 (1<<4)/(1<<5) 在 UI 里映射到不存在的档位。
-static func _compress_danger_progress(gm: Node) -> void:
-	var top := GameBalance.DANGER_MAX
-	var keep_mask := (1 << (top + 1)) - 1        # 新档位可表示的位宽，如 4 档 = 0b1111
+## 顶档固定为历史值 3（不是当前 GameBalance.DANGER_MAX）—— 这一步描述的是「6 档时代的 4 档」，
+## 用当前常量会随后续改版漂移，迁移就不可复现了。函数保持幂等。
+static func _migrate_six_to_four(gm: Node) -> void:
+	const TOP := 3
+	var keep_mask := (1 << (TOP + 1)) - 1        # 新档位可表示的位宽，如 4 档 = 0b1111
 	var high_bits := ~keep_mask                  # 被砍掉的高位，如 4 档 = 0b...11110000
 	for cid in gm.cultivator_best_danger.keys():
 		var best := int(gm.cultivator_best_danger[cid])
-		if best > top:
-			gm.cultivator_best_danger[cid] = top
+		if best > TOP:
+			gm.cultivator_best_danger[cid] = TOP
 	for cid in gm.cultivator_danger_clears.keys():
 		var mask := int(gm.cultivator_danger_clears[cid])
 		if mask & high_bits:
-			mask = (mask & keep_mask) | (1 << top)
+			mask = (mask & keep_mask) | (1 << TOP)
 		gm.cultivator_danger_clears[cid] = mask & keep_mask
 	var bdc := int(gm.career_stats.get("best_danger_cleared", -1))
-	if bdc > top:
-		gm.career_stats["best_danger_cleared"] = top
+	if bdc > TOP:
+		gm.career_stats["best_danger_cleared"] = TOP
+
+## 难度 4 档 → 2 档（普通 D0 / 噩梦 D1）老档压缩（2026-10-28 无限闯关改版一次性迁移）：
+## 旧 4 档 D0/D1 → 新 D0（普通），旧 D2/D3 → 新 D1（噩梦）；-1（从未破境）保持 -1。
+## 封印位掩码同理折叠：旧 bit0/bit1 → 新 bit0，旧 bit2/bit3 → 新 bit1。
+## run_history / record_log 里旧条目的 danger 字段一并改写，否则历史战报会指向不存在的档位。
+## **有版本闸的一次性迁移**：只在 saved_ver < 3 时调用（见 load_into），跑过之后存档版本升到 3，
+## 不会再进来 —— 反复折叠会把新档位也吃掉。
+static func _collapse_danger_to_two(gm: Node) -> void:
+	for cid in gm.cultivator_best_danger.keys():
+		gm.cultivator_best_danger[cid] = _fold_danger(int(gm.cultivator_best_danger[cid]))
+	for cid in gm.cultivator_danger_clears.keys():
+		gm.cultivator_danger_clears[cid] = _fold_danger_mask(int(gm.cultivator_danger_clears[cid]))
+	gm.career_stats["best_danger_cleared"] = _fold_danger(int(gm.career_stats.get("best_danger_cleared", -1)))
+	for entry in gm.run_history:
+		if entry is Dictionary:
+			var e: Dictionary = entry
+			e["danger"] = _fold_danger(int(e.get("danger", 0)))
+	for snap in gm.record_log:
+		if snap is Dictionary:
+			var s: Dictionary = snap
+			s["danger"] = _fold_danger(int(s.get("danger", 0)))
+
+## 单个难度档位折叠：-1 保持 -1（从未破境），0/1 → 0，>=2 → 1
+static func _fold_danger(d: int) -> int:
+	if d < 0:
+		return -1
+	return 0 if d <= 1 else 1
+
+## 封印位掩码折叠：旧 bit0/bit1 并入新 bit0，旧 bit2/bit3 并入新 bit1
+static func _fold_danger_mask(mask: int) -> int:
+	var out := 0
+	if mask & 0b0001:
+		out |= 0b01
+	if mask & 0b0010:
+		out |= 0b01
+	if mask & 0b0100:
+		out |= 0b10
+	if mask & 0b1000:
+		out |= 0b10
+	return out
+
+## 每角色档案迁移（2026-10-28 无限闯关）：无尽试炼下线，endless_best_wave 并进 best_wave（取 max），
+## 键本身抹掉（不再有「无尽」这个概念）；wins 原样保留 —— 旧档皮肤解锁仍靠它兜底。
+static func _migrate_cultivator_records(gm: Node) -> void:
+	for cid in gm.cultivator_records.keys():
+		var raw = gm.cultivator_records[cid]
+		if not (raw is Dictionary):
+			continue
+		var rec: Dictionary = raw
+		if rec.has("endless_best_wave"):
+			rec["best_wave"] = maxi(int(rec.get("best_wave", 0)), int(rec["endless_best_wave"]))
+			rec.erase("endless_best_wave")
+		gm.cultivator_records[cid] = rec
 
 static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	var cfg := ConfigFile.new()
@@ -247,7 +336,6 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("progress", "skin_selections", gm.skin_selections)
 
 	cfg.set_value("stats", "total_runs", int(gm.career_stats.get("total_runs", 0)))
-	cfg.set_value("stats", "total_wins", int(gm.career_stats.get("total_wins", 0)))
 	cfg.set_value("stats", "total_kills", int(gm.career_stats.get("total_kills", 0)))
 	cfg.set_value("stats", "best_wave", int(gm.career_stats.get("best_wave", 0)))
 	cfg.set_value("stats", "best_kills", int(gm.career_stats.get("best_kills", 0)))
@@ -264,12 +352,12 @@ static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	cfg.set_value("stats", "best_hits_taken", int(gm.career_stats.get("best_hits_taken", 0)))
 	cfg.set_value("stats", "best_level", int(gm.career_stats.get("best_level", 0)))
 	cfg.set_value("stats", "best_danger_cleared", int(gm.career_stats.get("best_danger_cleared", -1)))
-	cfg.set_value("stats", "wins_no_skill_enhance", int(gm.career_stats.get("wins_no_skill_enhance", 0)))
+	cfg.set_value("stats", "milestones_with_skill", int(gm.career_stats.get("milestones_with_skill", 0)))
 
 	cfg.set_value("records", "cultivator_best_danger", gm.cultivator_best_danger)
 	cfg.set_value("records", "cultivator_danger_clears", gm.cultivator_danger_clears)
 	cfg.set_value("records", "cultivator_records", gm.cultivator_records)
-	cfg.set_value("records", "victory_log", gm.victory_log)
+	cfg.set_value("records", "record_log", gm.record_log)
 	# 新手指南「下次不弹出」是玩家偏好，2026-10-11 起落 user://settings.cfg
 	# （SettingsManager.tutorial_muted），不再占用局外进度存档的 tutorial_seen 位。
 	cfg.set_value("history", "recent_runs", gm.run_history)
@@ -310,74 +398,15 @@ static func _atomic_save(cfg: ConfigFile, target_path: String) -> Error:
 		return r
 	return OK
 
-## 结算时汇总生涯统计、记录战报、判定新成就解锁并统一落盘
-## 两条路径：
-##   1. 无尽终局（endless_mode 且非 victory）——该局已在渡劫成功时记过一次，只补无尽纪录与战报，不再累计生涯总量
-##   2. 正常结算——累计生涯统计 + 每角色档案 + 渡劫成功快照 + 新纪录/里程碑提示 + 成就判定
-static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
-	var eff_wave := maxi(gm.wave_number, gm.VICTORY_WAVE if victory else 1)
+## 结算时汇总生涯统计、记录历战实录、判定新成就解锁并统一落盘。
+## 2026-10-28 无限闯关改版：只有一条结算路径 —— 阵亡即结算。
+## 破境口径：在难度 d 单局抵达第 GameManager.MILESTONE_WAVE 波 = 破境，
+## 点亮该档封印并解锁下一档；不再有「通关次数」这种累计量。
+static func record_run_and_check_achievements(gm: Node) -> void:
+	var eff_wave := maxi(gm.wave_number, 1)
 	var cid_rec: String = gm.cultivator_id if not gm.cultivator_id.is_empty() else "jianchi"
 	gm.last_run_new_records = []
 
-	# ---------- 路径 1：无尽终局（渡劫成功后继续无尽，或开局直入无尽试炼，最终道殒） ----------
-	if gm.endless_mode and not victory:
-		var prev_rec_e: Dictionary = gm.get_cultivator_record(cid_rec)
-		var rec_e: Dictionary = gm.cultivator_records.get(cid_rec, {})
-		# 若本局是从主菜单直接开启无尽模式，生涯局数依然累加（否则一局都不计入）
-		if gm.start_in_endless:
-			gm.career_stats["total_runs"] = int(gm.career_stats.get("total_runs", 0)) + 1
-			gm.career_stats["total_kills"] = int(gm.career_stats.get("total_kills", 0)) + gm.kills
-			gm.career_stats["total_stones"] = int(gm.career_stats.get("total_stones", 0)) + gm.spirit_stones
-			gm.career_stats["total_time"] = float(gm.career_stats.get("total_time", 0.0)) + gm.game_time
-			rec_e["runs"] = int(rec_e.get("runs", 0)) + 1
-		rec_e["endless_best_wave"] = maxi(int(rec_e.get("endless_best_wave", 0)), gm.wave_number)
-		rec_e["best_kills"] = maxi(int(rec_e.get("best_kills", 0)), gm.kills)
-		gm.cultivator_records[cid_rec] = rec_e
-		gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), gm.wave_number)
-		gm.career_stats["best_kills"] = maxi(int(gm.career_stats.get("best_kills", 0)), gm.kills)
-		_merge_best_run_stats(gm)
-		if rec_e["endless_best_wave"] > prev_rec_e["endless_best_wave"]:
-			gm.last_run_new_records.append("角色新纪录 · 无尽第 %d 波" % gm.wave_number)
-		gm.run_history.push_front({
-			"cultivator_id": cid_rec,
-			"danger": gm.danger_level,
-			"wave": gm.wave_number,
-			"kills": gm.kills,
-			"level": gm.level,
-			"victory": false,
-			"time": gm.game_time,
-			"endless": true,
-		})
-		while gm.run_history.size() > MAX_HISTORY_ENTRIES:
-			gm.run_history.pop_back()
-		# 无尽终局也判定成就（无尽行者这类只在无尽路径能达成；累计类照常兜底）
-		var run_ctx_e := {
-			"victory": false,
-			"endless": true,
-			"danger": gm.danger_level,
-			"wave": gm.wave_number,
-			"level": gm.level,
-			"kills": gm.kills,
-			"max_stones": maxi(gm.spirit_stones, gm.peak_stones),
-			"max_dodge": maxf(gm.get_effective_dodge(), gm.peak_dodge),
-			"max_harvest": maxf(gm.harvest, gm.peak_harvest),
-			"damage_taken_count": gm.total_damage_taken_count,
-			"hp_healed": gm.total_hp_healed,
-			"stones_spent": gm.total_stones_spent,
-			"skill_casts": gm.skill_cast_count,
-			"weapon_count": gm.owned_weapon_count(),
-			"item_count": gm.items.size(),
-			"max_summons": gm.max_concurrent_summons,
-			"max_class_counts": gm.max_class_counts,
-			"max_element_spread": gm.max_element_spread,
-		}
-		var ended_new := _settle_run_achievements(gm, run_ctx_e)
-		save_from(gm)
-		if not ended_new.is_empty():
-			gm.achievements_unlocked.emit(ended_new)
-		return
-
-	# ---------- 路径 2：正常结算 ----------
 	var eff_stones := maxi(gm.spirit_stones, gm.peak_stones)
 	var eff_dodge := maxf(gm.get_effective_dodge(), gm.peak_dodge)
 	var eff_harvest := maxf(gm.harvest, gm.peak_harvest)
@@ -386,53 +415,69 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	# 新纪录判定基准：结算前的旧值
 	var prev_best_kills := int(gm.career_stats.get("best_kills", 0))
 	var prev_best_wave := int(gm.career_stats.get("best_wave", 0))
-	var prev_wins: int = int(gm.get_cultivator_record(cid_rec).get("wins", 0))
 	var prev_best_danger := int(gm.career_stats.get("best_danger_cleared", -1))
+	# 该角色档案的结算前副本：破境时用来对比「之前未解锁、现在已解锁」的新皮肤
+	var prev_char_rec: Dictionary = gm.get_cultivator_record(cid_rec)
+	var prev_char_best_danger := int(gm.cultivator_best_danger.get(gm.cultivator_id, -1))
 
 	gm.career_stats["total_runs"] = int(gm.career_stats.get("total_runs", 0)) + 1
-	if victory:
-		gm.career_stats["total_wins"] = int(gm.career_stats.get("total_wins", 0)) + 1
-		# 「万法由心」进度：本局携带随行技能通关累加
-		if not gm.active_skill_id.is_empty():
-			gm.career_stats["wins_no_skill_enhance"] = int(gm.career_stats.get("wins_no_skill_enhance", 0)) + 1
 	gm.career_stats["total_kills"] = int(gm.career_stats.get("total_kills", 0)) + gm.kills
 	gm.career_stats["best_wave"] = maxi(int(gm.career_stats.get("best_wave", 0)), eff_wave)
 	gm.career_stats["best_kills"] = maxi(int(gm.career_stats.get("best_kills", 0)), gm.kills)
 	gm.career_stats["total_stones"] = int(gm.career_stats.get("total_stones", 0)) + gm.spirit_stones
 	gm.career_stats["total_time"] = float(gm.career_stats.get("total_time", 0.0)) + gm.game_time
 
-	if victory and not gm.cultivator_id.is_empty():
-		var prev_d := int(gm.cultivator_best_danger.get(gm.cultivator_id, -1))
-		# 逐级解锁与新皮肤（2026-10-27）：实物/玩法层解锁排在最前，最先被结算屏展示
-		if gm.danger_level > prev_best_danger and gm.danger_level < GameBalance.DANGER_MAX:
-			gm.last_run_new_records.append("难度解锁 · 「%s」" % AchievementData.danger_name(gm.danger_level + 1))
-		var skin_idx := prev_wins
-		if skin_idx < SkinData.THEMES.size():
-			var skin_theme := SkinData.get_theme(skin_idx)
-			if not skin_theme.is_empty():
-				var cdef_skin := CultivatorData.get_def(cid_rec)
-				gm.last_run_new_records.append("新皮肤 · %s「%s」" % [
-					String(cdef_skin.get("name", "角色")), String(skin_theme.get("name", ""))])
-		if gm.danger_level > prev_d:
-			gm.cultivator_best_danger[gm.cultivator_id] = gm.danger_level
-			# 境界突破提示（该角色首次通关此难度 → 境界称号升档，纯荣誉不发奖励）
-			var cdef_r := CultivatorData.get_def(gm.cultivator_id)
-			gm.last_run_new_records.append("境界突破 · %s 晋入「%s」" % [
-				String(cdef_r.get("name", "角色")), AchievementData.realm_for_danger(gm.danger_level)])
-		# 难度封印位掩码：点亮本局通关的这一档
-		var mask := int(gm.cultivator_danger_clears.get(gm.cultivator_id, 0))
-		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
-	if victory:
-		# 生涯最高通关难度（成就进度「最高通关 X」口径，难度达成型成就判定不受它影响）
-		gm.career_stats["best_danger_cleared"] = maxi(prev_best_danger, gm.danger_level)
+	# 本局是否破境（抵达破境波）
+	var broke: bool = eff_wave >= GameManager.MILESTONE_WAVE
 
 	# 每角色生涯档案累加
 	var rec: Dictionary = gm.cultivator_records.get(cid_rec, {})
 	rec["runs"] = int(rec.get("runs", 0)) + 1
-	if victory:
-		rec["wins"] = int(rec.get("wins", 0)) + 1
+	rec["best_wave"] = maxi(int(rec.get("best_wave", 0)), eff_wave)
 	rec["best_kills"] = maxi(int(rec.get("best_kills", 0)), gm.kills)
 	gm.cultivator_records[cid_rec] = rec
+
+	if broke and not gm.cultivator_id.is_empty():
+		# 逐级解锁与新皮肤（2026-10-28）：实物/玩法层解锁排在最前，最先被结算屏展示
+		if gm.danger_level > prev_best_danger and gm.danger_level < GameBalance.DANGER_MAX:
+			gm.last_run_new_records.append("难度解锁 · 「%s」" % AchievementData.danger_name(gm.danger_level + 1))
+		if gm.danger_level > prev_char_best_danger:
+			gm.cultivator_best_danger[gm.cultivator_id] = gm.danger_level
+			# 境界突破提示（该角色首次破境此难度 → 境界称号升档，纯荣誉不发奖励）
+			var cdef_r := CultivatorData.get_def(gm.cultivator_id)
+			gm.last_run_new_records.append("境界突破 · %s 晋入「%s」" % [
+				String(cdef_r.get("name", "角色")), AchievementData.realm_for_danger(gm.danger_level)])
+		# 难度封印位掩码：点亮本局破境的这一档
+		var mask := int(gm.cultivator_danger_clears.get(gm.cultivator_id, 0))
+		gm.cultivator_danger_clears[gm.cultivator_id] = mask | (1 << gm.danger_level)
+		# 新皮肤播报：按该角色最高波数门槛逐套对比，找出「之前未解锁、现在已解锁」的皮肤。
+		# 旧档兜底：wins >= skin_idx+1 的老规则也算解锁过（老玩家皮肤早就有，别重复播报）。
+		var now_best_wave := int(rec.get("best_wave", 0))
+		var now_wins := int(rec.get("wins", 0))
+		var prev_best_wave_char := int(prev_char_rec.get("best_wave", 0))
+		var prev_wins_char := int(prev_char_rec.get("wins", 0))
+		var cdef_skin := CultivatorData.get_def(cid_rec)
+		for si in range(SkinData.THEMES.size()):
+			var theme := SkinData.get_theme(si)
+			if theme.is_empty():
+				continue
+			var need_wave := int(theme.get("wave", 0))
+			var now_open := now_best_wave >= need_wave or now_wins >= si + 1
+			var was_open := prev_best_wave_char >= need_wave or prev_wins_char >= si + 1
+			if not now_open or was_open:
+				continue
+			gm.last_run_new_records.append("新皮肤 · %s「%s」" % [
+				String(cdef_skin.get("name", "角色")), String(theme.get("name", ""))])
+		# 首次破境播报
+		if prev_best_wave_char < GameManager.MILESTONE_WAVE:
+			gm.last_run_new_records.append("首次破境 · %s" % String(cdef_skin.get("name", "角色")))
+
+	if broke:
+		# 生涯最高破境难度（成就进度「最高破境 X」口径，难度达成型成就判定不受它影响）
+		gm.career_stats["best_danger_cleared"] = maxi(prev_best_danger, gm.danger_level)
+		# 「万法由心」进度：本局携带随行技能破境累加
+		if not gm.active_skill_id.is_empty():
+			gm.career_stats["milestones_with_skill"] = int(gm.career_stats.get("milestones_with_skill", 0)) + 1
 
 	var entry := {
 		"cultivator_id": cid_rec,
@@ -440,31 +485,26 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 		"wave": eff_wave,
 		"kills": gm.kills,
 		"level": gm.level,
-		"victory": victory,
 		"time": gm.game_time,
+		"record": eff_wave > prev_best_wave,
 	}
 	gm.run_history.push_front(entry)
 	while gm.run_history.size() > MAX_HISTORY_ENTRIES:
 		gm.run_history.pop_back()
 
-	# 渡劫成功：生成该局完整战报快照（白名单字段，剔除节点引用防炸档）
-	if victory:
-		gm.victory_log.push_front(_make_victory_snapshot(gm, cid_rec, eff_wave))
-		while gm.victory_log.size() > gm.VICTORY_LOG_CAP:
-			gm.victory_log.pop_back()
+	# 生涯新纪录：生成该局完整战报快照（白名单字段，剔除节点引用防炸档）
+	if eff_wave > prev_best_wave:
+		gm.record_log.push_front(_make_record_snapshot(gm, cid_rec, eff_wave))
+		while gm.record_log.size() > gm.RECORD_LOG_CAP:
+			gm.record_log.pop_back()
 
 	# 新纪录文案（供结算弹窗展示）
 	if gm.kills > prev_best_kills:
 		gm.last_run_new_records.append("生涯新纪录 · 击杀 %d 只" % gm.kills)
-	if victory and eff_wave > prev_best_wave:
-		gm.last_run_new_records.append("生涯新纪录 · 抵御第 %d 波" % eff_wave)
-	if victory and prev_wins == 0:
-		var cdef := CultivatorData.get_def(cid_rec)
-		gm.last_run_new_records.append("角色首胜 · %s" % String(cdef.get("name", "角色")))
+	if eff_wave > prev_best_wave:
+		gm.last_run_new_records.append("生涯新纪录 · 抵达第 %d 波" % eff_wave)
 
 	var run_ctx := {
-		"victory": victory,
-		"endless": false,
 		"danger": gm.danger_level,
 		"wave": eff_wave,
 		"level": gm.level,
@@ -487,7 +527,7 @@ static func record_run_and_check_achievements(gm: Node, victory: bool) -> void:
 	if not ended_new.is_empty():
 		gm.achievements_unlocked.emit(ended_new)
 
-## 结算成就收尾（无尽终局 / 正常结算两条路径共用）：只判定「结算这一刻新达成」的并追加。
+## 结算成就收尾：只判定「结算这一刻新达成」的并追加。
 ## 局内 check_live_achievements 已经结掉的成就不再回判，但**保留在 last_run_new_achievements 里** ——
 ## 结算屏按整局汇总展示。旧写法在这里整体清空，结果中途解锁的成就只剩一闪而过的横幅，
 ## 结算页一张卡都不显示，玩家以为没解锁。
@@ -502,17 +542,14 @@ static func _settle_run_achievements(gm: Node, run_ctx: Dictionary) -> Array:
 
 ## 局内成就即时判定（2026-10-25 解锁提示升级）：
 ## 只在回合结束时调一次（不是逐帧轮询），把「打到第 5 波」「攒够 100 金币」这类
-## 本局中途就能满足的成就当场结掉 —— 玩家不用等到死掉/通关才知道自己解锁了什么。
-## 与结算路径共用 evaluate_new_unlocks 与发奖逻辑，口径不会分叉；
-## run_ctx 里 victory 恒为 false（还没打完），所以「通关类」成就照旧只在结算时判定。
+## 本局中途就能满足的成就当场结掉 —— 玩家不用等到阵亡才知道自己解锁了什么。
+## 与结算路径共用 evaluate_new_unlocks 与发奖逻辑，口径不会分叉。
 ## 返回本次新达成的成就 ID 列表（供 HUD 横幅逐条播报）。
 static func check_live_achievements(gm: Node) -> Array[String]:
 	var out: Array[String] = []
 	if gm.author_mode or not gm.run_started or gm.is_game_over:
 		return out
 	var run_ctx := {
-		"victory": false,
-		"endless": gm.endless_mode,
 		"danger": gm.danger_level,
 		"wave": gm.wave_number,
 		"level": gm.level,
@@ -575,8 +612,8 @@ static func _apply_achievement_reward(gm: Node, aid: String) -> void:
 		if not (key in gm.unread_unlocks):
 			gm.unread_unlocks.append(key)
 
-## 渡劫成功战报快照：只取可序列化的白名单字段（name/star/icon 等纯数据，绝不带节点引用）
-static func _make_victory_snapshot(gm: Node, cid: String, wave: int) -> Dictionary:
+## 历战实录快照（生涯新纪录那一局）：只取可序列化的白名单字段（name/star/icon 等纯数据，绝不带节点引用）
+static func _make_record_snapshot(gm: Node, cid: String, wave: int) -> Dictionary:
 	var weapons: Array = []
 	for w in gm.get_weapons_summary():
 		weapons.append({

@@ -221,6 +221,14 @@ const BOSS_BLINK_SLASH_BOLTS_P2 := BalanceWave.BOSS_BLINK_SLASH_BOLTS_P2
 const BOSS_BLINK_SLASH_SPREAD := BalanceWave.BOSS_BLINK_SLASH_SPREAD
 const BOSS_BLINK_SLASH_SPEED := BalanceWave.BOSS_BLINK_SLASH_SPEED
 const BOSS_BLINK_SLASH_DMG_MULT := BalanceWave.BOSS_BLINK_SLASH_DMG_MULT
+const NIGHTMARE_DUAL_BOSS_HP_MULT := BalanceWave.NIGHTMARE_DUAL_BOSS_HP_MULT
+const NIGHTMARE_FOG_CLEAR_RADIUS := BalanceWave.NIGHTMARE_FOG_CLEAR_RADIUS
+const NIGHTMARE_FOG_FEATHER_RADIUS := BalanceWave.NIGHTMARE_FOG_FEATHER_RADIUS
+const NIGHTMARE_FOG_MAX_ALPHA := BalanceWave.NIGHTMARE_FOG_MAX_ALPHA
+const ELITE_MUTATION_HP_PCT_BASE := BalanceWave.ELITE_MUTATION_HP_PCT_BASE
+const ELITE_MUTATION_HP_PCT_NIGHTMARE := BalanceWave.ELITE_MUTATION_HP_PCT_NIGHTMARE
+const BOSS_PHASE2_HP_PCT_BASE := BalanceWave.BOSS_PHASE2_HP_PCT_BASE
+const BOSS_PHASE2_HP_PCT_NIGHTMARE := BalanceWave.BOSS_PHASE2_HP_PCT_NIGHTMARE
 const DANGER_MAX := BalanceWave.DANGER_MAX
 const DANGER_HP_BASE := BalanceWave.DANGER_HP_BASE
 const DANGER_HP_PER := BalanceWave.DANGER_HP_PER
@@ -534,7 +542,7 @@ static func enemy_hp_mult(wave: int) -> float:
 static func enemy_dmg_mult(wave: int) -> float:
 	return BalanceWave.enemy_dmg_mult(wave)
 
-## 无尽深层同屏密度倍率（≤20 波恒 1.0，曲线在 BalanceWave）
+## 深层（>20 波）同屏密度倍率（≤20 波恒 1.0，曲线在 BalanceWave）
 static func endless_swarm_mult(wave: int) -> float:
 	return BalanceWave.endless_swarm_mult(wave)
 
@@ -560,11 +568,11 @@ static func is_boss_wave(n: int) -> bool:
 static func boss_id_for_wave(wave: int) -> String:
 	return BalanceWave.boss_id_for_wave(wave)
 
-static func is_elite_wave(n: int, endless: bool = false) -> bool:
-	return BalanceWave.is_elite_wave(n, endless)
+static func is_elite_wave(n: int, _endless: bool = false) -> bool:
+	return BalanceWave.is_elite_wave(n, _endless)
 
-static func elite_spawn_count_for_wave(n: int, endless: bool = false) -> int:
-	return BalanceWave.elite_spawn_count_for_wave(n, endless)
+static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0) -> int:
+	return BalanceWave.elite_spawn_count_for_wave(n, arg2, arg3)
 
 static func enemy_bolt_speed_mult(wave: int) -> float:
 	return BalanceWave.enemy_bolt_speed_mult(wave)
@@ -578,8 +586,29 @@ static func enemy_bonus_bolts(wave: int) -> int:
 static func stage_mood_tier(wave: int) -> int:
 	return BalanceWave.stage_mood_tier(wave)
 
-static func stage_theme_for_wave(wave: int) -> Dictionary:
-	return BalanceWave.stage_theme_for_wave(wave)
+static func stage_theme_for_wave(wave: int, danger: int = 0) -> Dictionary:
+	return BalanceWave.stage_theme_for_wave(wave, danger)
+
+static func boss_spawn_count_for_wave(wave: int, danger: int = 0) -> int:
+	return BalanceWave.boss_spawn_count_for_wave(wave, danger)
+
+static func boss_dual_hp_mult(wave: int, danger: int = 0) -> float:
+	return BalanceWave.boss_dual_hp_mult(wave, danger)
+
+static func secondary_boss_id_for_wave(wave: int) -> String:
+	return BalanceWave.secondary_boss_id_for_wave(wave)
+
+static func elite_mutation_hp_pct(danger: int = 0) -> float:
+	return BalanceWave.elite_mutation_hp_pct(danger)
+
+static func boss_phase2_hp_pct(danger: int = 0) -> float:
+	return BalanceWave.boss_phase2_hp_pct(danger)
+
+static func danger_attack_cd_mult(danger: int = 0) -> float:
+	return BalanceWave.danger_attack_cd_mult(danger)
+
+static func danger_bolt_speed_mult(danger: int = 0) -> float:
+	return BalanceWave.danger_bolt_speed_mult(danger)
 
 static func boss_hp(wave: int) -> float:
 	return BalanceWave.boss_hp(wave)

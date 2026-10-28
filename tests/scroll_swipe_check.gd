@@ -52,9 +52,9 @@ const CASES: Array[Dictionary] = [
 	},
 	{
 		"cls": "CareerDialog", "name": "修仙志", "switch": "_switch_tab",
-		"pages": ["天道功绩", "道统功名", "渡劫实录"],
+		"pages": ["天道功绩", "道统功名", "历战实录"],
 		# 第三页额外走一遍「展开战报」：详情面板是点开后另挂的 STOP 卡片，重建路径与 open 不同
-		"expand": {"tab": 2, "label": "渡劫实录(展开)"},
+		"expand": {"tab": 2, "label": "历战实录(展开)"},
 	},
 	{
 		"cls": "SettingsDialog", "name": "游戏设置", "switch": "_switch_tab",
@@ -103,8 +103,8 @@ func _ready() -> void:
 	_c.check(_areas > 0 and _areas_ok == _areas, "%d/%d 处滚动区每一处落点都能起手拖动" % [_areas_ok, _areas])
 	get_tree().quit(0 if _c.report("SCROLL_SWIPE_RESULT") else 1)
 
-## 造真数据：让「渡劫实录 / 随身法宝 / 悟道历程」这些列表真有东西可滑。
-## 战报快照走生产同一个 builder（ProgressStore._make_victory_snapshot），不另编字段。
+## 造真数据：让「历战实录 / 随身法宝 / 悟道历程」这些列表真有东西可滑。
+## 战报快照走生产同一个 builder（ProgressStore._make_record_snapshot），不另编字段。
 func _seed() -> void:
 	GameManager.reset_run()
 	GameManager.cultivator_id = "shiyue"
@@ -118,11 +118,11 @@ func _seed() -> void:
 			"guijia_fu", "tongxuan_ling"]:
 		GameManager.add_item(iid)
 	for i in range(3):
-		GameManager.victory_log.push_front(
-			ProgressStore._make_victory_snapshot(GameManager, "shiyue", 20 - i))
+		GameManager.record_log.push_front(
+			ProgressStore._make_record_snapshot(GameManager, "shiyue", 20 - i))
 		GameManager.run_history.push_front({
 			"cultivator_id": "shiyue", "danger": 1, "wave": 18 - i, "kills": 700 - i * 40,
-			"level": 13 - i, "victory": i == 0, "time": 700.0 - i * 30.0,
+			"level": 13 - i, "time": 700.0 - i * 30.0, "record": i == 0,
 		})
 
 # ================================ 逐个弹窗 ================================
@@ -538,7 +538,7 @@ func _selftest() -> void:
 	if content != null:
 		pts = _sample_points(scrolls[0], content)
 	if scrolls.is_empty() or content == null or pts.is_empty() or content.get_child_count() == 0:
-		_c.check(false, "反例：修仙志·天道功绩没铺出可测的卡片（界面没建起来）")
+		_c.check(false, "反例：修仙志·成就页没铺出可测的卡片（界面没建起来）")
 		await _close(dlg)
 		return
 	var pos: Vector2 = (pts[0] as Array)[0]

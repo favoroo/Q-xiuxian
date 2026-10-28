@@ -272,6 +272,7 @@ func _screens() -> Array[Dictionary]:
 		{"tag": "属性面板·影者", "path": "res://scripts/ui/PlayerStatsDialog.gd", "open": "open",
 			"cultivator": "meiying"},
 		{"tag": "暂停菜单", "path": "res://scripts/ui/PauseMenu.gd", "open": "open"},
+			{"tag": "存档管理", "path": "res://scripts/ui/SaveManageDialog.gd", "open": "open"},
 			{"tag": "设置面板", "path": "res://scenes/ui/SettingsDialog.tscn", "open": "open"},
 			{"tag": "意见反馈", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open"},
 			{"tag": "意见反馈·发送中", "path": "res://scenes/ui/FeedbackDialog.tscn", "open": "open",
@@ -300,10 +301,10 @@ func _stress_unlocks() -> void:
 	for i in range(mini(5, ranked.size())):
 		GameManager.last_run_new_achievements.append(String(ranked[i][1]))
 	GameManager.last_run_new_records = [
-		"生涯新纪录 · 抵御第 20 波",
+		"生涯新纪录 · 抵达第 20 波",
 		"境界突破 · 机关师 晋入「元婴」",
-		"难度解锁 · 「大乘」",
-		"角色首胜 · 机关师",
+		"难度解锁 · 「噩梦」",
+		"首次破境 · 机关师",
 		"新皮肤 · 机关师「虹霓」",
 		"生涯新纪录 · 击杀 999 只",
 	]
@@ -339,7 +340,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 			# 解锁大卡是结算屏最高的一块内容（图标 + 两行文字 + 角签），
 			# 空列表时整块隐藏 ⇒ 不灌样本就永远量不到（2026-10-25 加卡后补上）。
 			_stress_unlocks()
-			node._on_game_over(false)
+			node._on_game_over()
 		"_on_shop_opened":
 			node._on_shop_opened()
 		_:

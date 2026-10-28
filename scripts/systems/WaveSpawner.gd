@@ -2,7 +2,7 @@ class_name WaveSpawner
 extends Node2D
 
 ## 回合状态机：WAITING(选武器) → FIGHT → CLEARING(清场吸附) → ALLOC(回合后悟道，有待加点才插队) → SHOP → 下一回合
-## 第 20 波通关「渡劫成功」（双精英心魔劫）；可继续无尽
+## 第 20 波是「破境波」（双精英心魔劫），不是终点；无限闯关，一路打到玩家阵亡
 ## FIGHT 的出口有两条（2026-10-12 起）：表走完，或「敌潮已尽」提前收尾 —— 判据见 _tide_spent()
 ## 关底锁关（2026-10-22 起从 Boss 回合扩到精英回合）：Boss/精英未伏诛时表走完也不收尾，
 ## 必须由玩家亲手击杀关底才进结算（用户口径：「有精英怪的关卡必须打完精英怪才能结束」）。
@@ -46,7 +46,7 @@ var phase: int = Phase.WAITING
 var _jumping: bool = false
 ## 回合号的唯一来源是 GameManager.wave_number。
 ## 这里只留一个只读访问器：以前本地也存了一份，只有 start_wave 会同步写，
-## 「继续无尽」等路径只改单例那份，两边会悄悄漂移，所以改成同一份数据。
+## 别的路径只改单例那份，两边会悄悄漂移，所以改成同一份数据。
 var wave_number: int:
 	get:
 		return GameManager.wave_number
@@ -65,9 +65,13 @@ var _boss_scene: PackedScene = preload("res://scenes/entities/BossEnemy.tscn")
 var _looter_scene: PackedScene = preload("res://scenes/entities/JinChanEnemy.tscn")
 
 var _boss_ref: BossEnemy = null  ## 本回合魔君引用（Boss 回合超时锁关轮询用）
+var _bosses_dispatched: int = 0  ## 本回合已派发或登场的 Boss 数量
+var _boss_relay_timer: float = 0.0 ## 击杀首尊 Boss 后接力生成第二尊 Boss 的缓冲倒计时
+var _boss_relay_announced: bool = false ## 接力预告播报是否已发
 var _elite_ref: EnemyBase = null ## 本回合精英引用（精英回合超时锁关轮询用；池化复用前必须清）
 var _elite_refs: Array[EnemyBase] = [] ## 本回合在场精英引用列表（支持后期双精英同场）
-var _elites_spawned: int = 0     ## 本回合已生成精英数量
+var _elites_dispatched: int = 0  ## 本回合已派发预警的精英数量（派发即占位，防止预警延迟期间多帧重复派发）
+var _elites_spawned: int = 0     ## 本回合已落地生效的精英数量
 var _overtime_noted: bool = false ## 关底锁关播报只发一次（Boss/精英共用，单回合只有一类关底）
 
 # —— 性能基线采样（2026-10-17 性能优化专项阶段 0）——
@@ -196,8 +200,8 @@ func _process(delta: float) -> void:
 
 
 ## 同屏敌人最终上限（2026-10-17 性能专项）：
-## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 无尽潮数倍率，
-## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=48 绝对硬顶 —— 深层无尽极端构建
+## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 深层潮数倍率，
+## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=48 绝对硬顶 —— 深层极端构建
 ## （危险 5 × 潮数 2.0 可叠到 ~95）不再失控，常规 20 波（峰值 ~33）不受影响。
 ## 2026-10-24 输入签名缓存：_process_fight 每帧取 2 次，但四个输入只在开局/换波时变；
 ## 签名（max_enemies/倍率/危险度/波数）不变直接返回缓存，变了对齐重算一次。
@@ -270,20 +274,40 @@ func _process_fight(delta: float) -> void:
 				_batch_hold_time = 0.0
 				spawn_timer = 1.0
 
-	# 精英回合：第 5/15 波；无尽模式 20 回合后非 Boss 关每关逢精英（31 波起双精英）
+	# 精英回合：第 5/15 波；深层（>20 波）非 Boss 关每关逢精英（随难度与波次升级多精英）
 	var is_elite_wave := _is_elite_wave(wave_number)
-	var target_elites := GameBalance.elite_spawn_count_for_wave(wave_number, GameManager.endless_mode)
+	var target_elites := _target_elites_count()
 	if not _is_boss_wave(wave_number) and is_elite_wave:
-		if _elites_spawned == 0 and wave_timer < wave_duration(wave_number) - 1.5:
+		if _elites_dispatched == 0 and wave_timer < wave_duration(wave_number) - 1.5:
 			elite_spawned = true
+			_elites_dispatched += 1
 			_spawn_elite(player)
-		elif _elites_spawned < target_elites and wave_timer <= wave_duration(wave_number) * 0.5:
-			_spawn_elite(player)
+		elif _elites_dispatched < target_elites:
+			var trigger_pct := 1.0 - float(_elites_dispatched) / float(target_elites)
+			if wave_timer <= wave_duration(wave_number) * trigger_pct:
+				_elites_dispatched += 1
+				_spawn_elite(player)
 
-	# 固定 Boss 回合：开场 1.5s 后魔君破阵（血条同步上屏）
-	if _is_boss_wave(wave_number) and not elite_spawned and wave_timer < wave_duration(wave_number) - 1.5:
-		elite_spawned = true
-		_spawn_boss(player)
+	# 固定 Boss 回合：开场 1.5s 后魔君破阵；噩梦双 Boss 关在首尊伏诛后 1.8s 接力第二尊魔君
+	if _is_boss_wave(wave_number):
+		var target_bosses := _target_bosses_count()
+		if _bosses_dispatched == 0 and not elite_spawned and wave_timer < wave_duration(wave_number) - 1.5:
+			elite_spawned = true
+			_bosses_dispatched = 1
+			_spawn_boss(player, false)
+		elif _bosses_dispatched < target_bosses and not _boss_still_alive():
+			if not _boss_relay_announced:
+				_boss_relay_announced = true
+				_boss_relay_timer = 1.8
+				GameManager.announcement_triggered.emit("◆ 噩梦劫变 · 第二尊魔君即将降临！ ◆")
+				AudioManager.play_sfx("boss_raid", 0.95)
+			if _boss_relay_timer > 0.0:
+				_boss_relay_timer -= delta
+				if _boss_relay_timer <= 0.0:
+					_bosses_dispatched += 1
+					if wave_timer < 25.0:
+						wave_timer = 25.0
+					_spawn_boss(player, true)
 
 	# 金蟾：回合中限时刷出的逃跑宝藏怪（土豆兄弟 Looter 对应位）
 	if _looter_pending and not _looter_done and wave_timer <= wave_duration(wave_number) * EnemyData.LOOTER_DEF["at_pct"]:
@@ -309,8 +333,14 @@ func _process_fight(delta: float) -> void:
 func _check_looter_panic() -> void:
 	if _budget_used < _budget_total or _indicators_pending():
 		return
-	if not elite_spawned and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
-		return
+	if _is_boss_wave(wave_number):
+		var target_bosses := _target_bosses_count()
+		if _bosses_dispatched < target_bosses or _boss_still_alive():
+			return
+	elif _is_elite_wave(wave_number):
+		var target_elites := _target_elites_count()
+		if _elites_dispatched < target_elites:
+			return
 	if GameManager.enemy_count <= 0:
 		return
 	var has_regular: bool = false
@@ -334,11 +364,16 @@ func _check_looter_panic() -> void:
 func _tide_spent() -> bool:
 	if _budget_used <= 0 or _budget_used < _budget_total:
 		return false
-	var needed_elites := 1 if _is_boss_wave(wave_number) else GameBalance.elite_spawn_count_for_wave(wave_number, GameManager.endless_mode)
-	if _elites_spawned < needed_elites and (_is_elite_wave(wave_number) or _is_boss_wave(wave_number)):
-		return false
 	if _indicators_pending():
 		return false
+	if _is_boss_wave(wave_number):
+		var target_bosses := _target_bosses_count()
+		if _bosses_dispatched < target_bosses or _boss_still_alive():
+			return false
+	elif _is_elite_wave(wave_number):
+		var target_elites := _target_elites_count()
+		if _elites_dispatched < target_elites or _elite_still_alive():
+			return false
 	return GameManager.enemy_count <= 0
 
 ## 关底锁关期：表已走完、关底还活着，常规刷怪已在 _process_fight 的锁关分支停手。
@@ -367,16 +402,16 @@ func wave_left_count() -> int:
 	left += GameManager.enemy_count
 	if not locked:
 		if _is_boss_wave(wave_number):
-			if not elite_spawned:
-				left += 1
+			var target_bosses := _target_bosses_count()
+			left += maxi(0, target_bosses - _bosses_dispatched)
 		elif _is_elite_wave(wave_number):
-			var target_elites := GameBalance.elite_spawn_count_for_wave(wave_number, GameManager.endless_mode)
-			left += maxi(0, target_elites - _elites_spawned)
+			var target_elites := _target_elites_count()
+			left += maxi(0, target_elites - _elites_dispatched)
 		if _looter_pending and not _looter_done:
 			left += 1
 	return left
 
-## 本波敌数总额 M：预算只数 + 精英/Boss +1（31波起精英关+2） + 金蟾档期 +1（与 wave_left_count 同一口径）。
+## 本波敌数总额 M：预算只数 + 精英/Boss（随难度与波次升级多精英/双Boss） + 金蟾档期 +1（与 wave_left_count 同一口径）。
 ## 锁关期（表已走完、关底未伏诛）预算不再兑现，M 同步收成「场上还剩多少」，
 ## 读数变成「余妖 1/1」而不是拿一份永远不会刷完的旧预算分母吓人。
 func wave_total_count() -> int:
@@ -384,9 +419,9 @@ func wave_total_count() -> int:
 		return SpawnIndicator.active_count + GameManager.enemy_count
 	var total: int = _budget_total
 	if _is_boss_wave(wave_number):
-		total += 1
+		total += _target_bosses_count()
 	elif _is_elite_wave(wave_number):
-		total += GameBalance.elite_spawn_count_for_wave(wave_number, GameManager.endless_mode)
+		total += _target_elites_count()
 	if _looter_pending:
 		total += 1
 	return total
@@ -395,11 +430,19 @@ func wave_total_count() -> int:
 func wave_duration(n: int) -> float:
 	return GameBalance.wave_duration(n)
 
-## 精英回合判定（曲线在 GameBalance）：第 5/15 波，无尽模式 20 回合后非 Boss 回合每关必逢精英
-func _is_elite_wave(n: int) -> bool:
-	return GameBalance.is_elite_wave(n, GameManager.endless_mode)
+## 当前波次目标 Boss 数量：第 20/40/60 波在噩梦难度下为双 Boss 车轮战
+func _target_bosses_count() -> int:
+	return GameBalance.boss_spawn_count_for_wave(wave_number, GameManager.danger_level)
 
-## Boss 回合判定（固定关卡）：第 10/20 波，无尽每 5 波
+## 当前波次目标精英数量：依据波次与危险度（GameManager.danger_level）确定
+func _target_elites_count() -> int:
+	return GameBalance.elite_spawn_count_for_wave(wave_number, GameManager.danger_level)
+
+## 精英回合判定（曲线在 GameBalance）：第 5/15 波，深层（>20 波）非 Boss 回合每关必逢精英
+func _is_elite_wave(n: int) -> bool:
+	return GameBalance.is_elite_wave(n)
+
+## Boss 回合判定（固定关卡）：第 10/20 波，深层每 5 波
 func _is_boss_wave(n: int) -> bool:
 	return GameBalance.is_boss_wave(n)
 
@@ -414,8 +457,12 @@ func start_wave(n: int) -> void:
 	max_enemies = GameBalance.max_enemies_cap(n)
 	elite_spawned = false
 	_boss_ref = null
+	_bosses_dispatched = 0
+	_boss_relay_timer = 0.0
+	_boss_relay_announced = false
 	_elite_ref = null
 	_elite_refs.clear()
+	_elites_dispatched = 0
 	_elites_spawned = 0
 	_overtime_noted = false
 	# 上一回合没摊完的清场队列不许带进新回合（重开/跳波会打断 CLEARING 的分帧消化）
@@ -436,16 +483,20 @@ func start_wave(n: int) -> void:
 	_looter_pending = n >= EnemyData.LOOTER_DEF["min_wave"] and GameManager.rng.randf() < EnemyData.LOOTER_DEF["chance"]
 	_looter_done = false
 	_spawn_chests()
+	var is_nightmare: bool = GameManager.danger_level >= 1
 	if _is_boss_wave(n):
-		GameManager.announcement_triggered.emit("◆ 第 %d 波 · Boss来袭 ◆" % n)
+		var b_msg := "◆ 第 %d 波 · 噩梦魔君来袭 ◆" if is_nightmare else "◆ 第 %d 波 · Boss来袭 ◆"
+		GameManager.announcement_triggered.emit(b_msg % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	elif _is_elite_wave(n):
-		GameManager.announcement_triggered.emit("◆ 第 %d 波 · 敌潮来袭 ◆" % n)
+		var e_msg := "◆ 第 %d 波 · 噩梦强敌来袭 ◆" if is_nightmare else "◆ 第 %d 波 · 敌潮来袭 ◆"
+		GameManager.announcement_triggered.emit(e_msg % n)
 		AudioManager.play_sfx("boss_raid", 0.9)
 		AudioManager.play_bgm_key("trial")
 	else:
-		GameManager.announcement_triggered.emit("◆ 第 %d 波 · 敌潮来袭 ◆" % n)
+		var w_msg := "◆ 第 %d 波 · 噩梦敌潮来袭 ◆" if is_nightmare else "◆ 第 %d 波 · 敌潮来袭 ◆"
+		GameManager.announcement_triggered.emit(w_msg % n)
 		AudioManager.play_sfx("wave_start", 0.9)
 		AudioManager.play_bgm_key("battle")
 	# 中断续玩：波次边界快照（新开局第一波 + 商店关进下一波共用这条）
@@ -599,20 +650,7 @@ func _drain_magnet_queue() -> void:
 	_magnet_queue = _magnet_queue.slice(batch)
 
 func _open_shop() -> void:
-	if wave_number >= GameManager.VICTORY_WAVE and not GameManager.endless_mode:
-		phase = Phase.SHOP
-		var player = GameManager.player
-		if DisplayServer.get_name() != "headless" and player != null and is_instance_valid(player) and player.has_method("play_victory_sequence"):
-			player.play_victory_sequence()
-		else:
-			GameManager.trigger_game_over(true)
-		return
 	_enter_wave_break()
-
-func open_shop() -> void:
-	## 结算界面「继续无尽」入口
-	if phase == Phase.SHOP:
-		_enter_wave_break()
 
 ## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到金币阁。
 ## 战斗中的升级只攒点不弹面板（2026-10-09 用户指令：「在战斗过程中触发加点的体验不好」）。
@@ -699,11 +737,10 @@ func _on_shop_closed() -> void:
 ## 作者模式·跳关：清场后直接开第 n 波。
 ## 不复制 end_wave 的收益结算（跳关是测试工具，不该凭空发灵韵/金币），只复刻「清场」那一段：
 ## 余怪消散、匣子/炮台回收、预警指示器归零、磁吸队列清空。之后按当前所处阶段收掉面板再开波。
-## n 夹在 1..VICTORY_WAVE（无尽模式允许超过，由调用方保证 endless_mode）。
+## 无限闯关：n 只夹在 1 以上，不再有通关上限，>20 波即深层。
 func jump_to_wave(n: int) -> void:
 	var target := maxi(1, n)
-	if not GameManager.endless_mode:
-		target = mini(target, GameManager.VICTORY_WAVE)
+	GameManager.is_game_over = false
 	# 1. 收掉可能开着的回合间面板：悟道面板会卡在 ALLOC 等 alloc_finished；
 	#    商店 UI 不监听 shop_closed（它自己在 _on_confirm 里隐藏），所以这里直接找节点藏起来 ——
 	#    不能发 shop_closed，那会经 _on_shop_closed 先开一次 wave+1，和后面的 start_wave 打架。
@@ -768,7 +805,7 @@ func _spawn_regular(player: Node2D) -> void:
 	if _budget_used >= _budget_total:
 		return
 	# 狂战蛮修等角色的 enemy_count_mult 与危险度的 danger_count_mult 同时放大同屏上限与每回合刷怪量；
-	# 无尽深层（>20 波）再乘 endless_swarm_mult（曲线在 BalanceWave，正常局恒 1.0）
+	# 深层（>20 波）再乘 endless_swarm_mult（曲线在 BalanceWave，≤20 恒 1.0）
 	var enemy_cap := _final_enemy_cap()
 	if GameManager.enemy_count >= enemy_cap:
 		return
@@ -917,9 +954,9 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 		1.0 - GameBalance.ENEMY_SPEED_VARIANCE,
 		1.0 + GameBalance.ENEMY_SPEED_VARIANCE
 	)
-	# 弹速随波次成长，攻击间隔加速收紧
-	enemy.bolt_speed_mult = GameBalance.enemy_bolt_speed_mult(wave_number)
-	var cd_mult: float = GameBalance.enemy_attack_cd_mult(wave_number)
+	# 弹速随波次成长，攻击间隔加速收紧（噩梦难度额外加速强化）
+	enemy.bolt_speed_mult = GameBalance.enemy_bolt_speed_mult(wave_number) * GameBalance.danger_bolt_speed_mult(GameManager.danger_level)
+	var cd_mult: float = GameBalance.enemy_attack_cd_mult(wave_number) * GameBalance.danger_attack_cd_mult(GameManager.danger_level)
 	if enemy.bolt_interval > 0.0:
 		enemy.bolt_interval *= cd_mult
 	if enemy.charge_interval > 0.0:
@@ -950,8 +987,8 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 
 ## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进。
 ## 登场演出（2026-10-14）：2 秒魔轮凝聚异象 → 破阵弹入，血条随本体 _ready 上屏。
-## 旧写法直接 add_child，只有横幅 + 震屏，连小怪的凝聚符印都没有。
-func _spawn_boss(player: Node2D) -> void:
+## 噩梦难度支持双 Boss 接力（is_secondary 控制次席魔君 ID 与折算血量）。
+func _spawn_boss(player: Node2D, is_secondary: bool = false) -> void:
 	var pos := _spawn_pos_away_from_player(player,
 		GameBalance.SPAWN_INSET_BOSS, GameBalance.SPAWN_MIN_DIST_BOSS, GameBalance.SPAWN_PUSH_BOSS)
 	EnemyCodex.record_seen("boss")
@@ -972,22 +1009,22 @@ func _spawn_boss(player: Node2D) -> void:
 		boss.global_position = pos
 		boss.add_to_group("enemies")
 		boss.add_to_group("boss")
-		var bid: String = GameBalance.boss_id_for_wave(wave_number)
+		var bid: String = GameBalance.secondary_boss_id_for_wave(wave_number) if is_secondary else GameBalance.boss_id_for_wave(wave_number)
 		var boss_cfg: Dictionary = EnemyData.BOSS_POOL.get(bid, {}) if ("BOSS_POOL" in EnemyData) else {}
 		boss.boss_id = bid
-		var hp_mult: float = float(boss_cfg.get("hp_mult", 1.0))
+		var hp_mult: float = float(boss_cfg.get("hp_mult", 1.0)) * GameBalance.boss_dual_hp_mult(wave_number, GameManager.danger_level)
 		boss.max_hp = GameBalance.boss_hp(wave_number) * hp_mult * GameBalance.danger_hp_mult(GameManager.danger_level)
 		boss.contact_damage = GameBalance.boss_contact_damage(wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level)
 		var base_interval: float = float(boss_cfg.get("attack_interval", GameBalance.BOSS_ATTACK_INTERVAL))
-		boss.attack_interval = base_interval * GameBalance.enemy_attack_cd_mult(wave_number)
-		boss.bolt_speed_mult = GameBalance.enemy_bolt_speed_mult(wave_number)
-		boss.final_boss = (wave_number >= GameManager.VICTORY_WAVE)
-		boss.boss_title = _boss_title()
+		boss.attack_interval = base_interval * GameBalance.enemy_attack_cd_mult(wave_number) * GameBalance.danger_attack_cd_mult(GameManager.danger_level)
+		boss.bolt_speed_mult = GameBalance.enemy_bolt_speed_mult(wave_number) * GameBalance.danger_bolt_speed_mult(GameManager.danger_level)
+		boss.final_boss = (wave_number >= GameManager.MILESTONE_WAVE)
+		boss.boss_title = _boss_title_for_id(bid)
 		_boss_ref = boss
 		parent.add_child(boss)
 		# 登场演出（T-5.4）：地面魔印大阵预警落位后，dissolve 逆向凝聚成形，爆发冲击环与创伤短震
 		boss.play_spawn_sequence(func():
-			GameManager.announcement_triggered.emit(_boss_announcement())
+			GameManager.announcement_triggered.emit(_boss_announcement_for_id(bid, is_secondary))
 		)
 
 ## 本回合魔君存活与否（Boss 回合超时锁关的判据）
@@ -1037,6 +1074,9 @@ func _announce_overtime(text: String) -> void:
 
 func _boss_title() -> String:
 	var bid: String = GameBalance.boss_id_for_wave(wave_number)
+	return _boss_title_for_id(bid)
+
+func _boss_title_for_id(bid: String) -> String:
 	var title: String = ""
 	if "BOSS_POOL" in EnemyData and EnemyData.BOSS_POOL.has(bid):
 		title = String(EnemyData.BOSS_POOL[bid].get("title", ""))
@@ -1047,9 +1087,15 @@ func _boss_title() -> String:
 	return "轮回·" + title
 
 func _boss_announcement() -> String:
-	var title := _boss_title()
+	var bid: String = GameBalance.boss_id_for_wave(wave_number)
+	return _boss_announcement_for_id(bid, false)
+
+func _boss_announcement_for_id(bid: String, is_secondary: bool) -> String:
+	var title := _boss_title_for_id(bid)
+	if is_secondary:
+		return "◆ 噩梦劫变 · 次席魔君「%s」突入战场！ ◆" % title
 	if wave_number == 20:
-		return "◆ 最终Boss战 · %s突入战场！" % title
+		return "◆ 破境Boss战 · %s突入战场！" % title
 	if wave_number > 40:
 		return "◆ 轮回魔君 · %s再次降临！" % title
 	if wave_number > 20:

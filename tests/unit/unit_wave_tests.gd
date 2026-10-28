@@ -104,26 +104,43 @@ func _test_boss_waves() -> void:
 	_c.check(not GameBalance.is_boss_wave(5), "第 5 波仍是精英不是 Boss")
 	_c.check(not GameBalance.is_boss_wave(15), "第 15 波仍是精英不是 Boss")
 	_c.check(not GameBalance.is_boss_wave(9), "非 Boss 波次不错判")
-	_c.check(GameBalance.is_boss_wave(30), "无尽 30 波再逢魔君")
+	_c.check(GameBalance.is_boss_wave(30), "深层 30 波再逢魔君")
 	# 2026-10-13 深层 Boss 加密：20 波后每 5 波一场（25/30/35…），非 5 倍数波次不是 Boss
-	_c.check(GameBalance.is_boss_wave(25), "无尽 25 波起每 5 波逢魔君")
-	_c.check(GameBalance.is_boss_wave(35), "无尽 35 波是 Boss")
-	_c.check(GameBalance.is_boss_wave(45), "无尽 45 波是 Boss")
-	_c.check(not GameBalance.is_boss_wave(26), "无尽 26 波不是 Boss")
-	_c.check(not GameBalance.is_boss_wave(28), "无尽 28 波不是 Boss")
+	_c.check(GameBalance.is_boss_wave(25), "深层 25 波起每 5 波逢魔君")
+	_c.check(GameBalance.is_boss_wave(35), "深层 35 波是 Boss")
+	_c.check(GameBalance.is_boss_wave(45), "深层 45 波是 Boss")
+	_c.check(not GameBalance.is_boss_wave(26), "深层 26 波不是 Boss")
+	_c.check(not GameBalance.is_boss_wave(28), "深层 28 波不是 Boss")
 
-	# 10/20 波让位给魔君，无尽模式非 Boss 关每关逢精英（逢 5 关出 Boss）
+	# 10/20 波让位给魔君，深层非 Boss 关每关逢精英（逢 5 关出 Boss）
 	_c.check(GameBalance.is_elite_wave(5), "第 5 波精英保留")
 	_c.check(GameBalance.is_elite_wave(15), "第 15 波精英保留")
 	_c.check(not GameBalance.is_elite_wave(10), "第 10 波不再刷精英（Boss 关）")
 	_c.check(not GameBalance.is_elite_wave(20), "第 20 波不再刷精英（Boss 关）")
-	_c.check(not GameBalance.is_elite_wave(21), "非无尽模式 21 波不是精英")
-	_c.check(GameBalance.is_elite_wave(21, true), "无尽 21 波每关精英")
-	_c.check(GameBalance.is_elite_wave(22, true), "无尽 22 波每关精英")
-	_c.check(not GameBalance.is_elite_wave(25, true), "无尽 25 波是 Boss 不是精英（逢 5 波逢魔君后让位）")
-	_c.check(not GameBalance.is_elite_wave(30, true), "无尽 30 波是 Boss 不是精英")
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 1, "21 波单精英")
-	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 2, "31 波起双精英同场")
+	_c.check(GameBalance.is_elite_wave(21), "深层 21 波每关精英")
+	_c.check(GameBalance.is_elite_wave(22), "深层 22 波每关精英")
+	_c.check(not GameBalance.is_elite_wave(25), "深层 25 波是 Boss 不是精英（逢 5 波逢魔君后让位）")
+	_c.check(not GameBalance.is_elite_wave(30), "深层 30 波是 Boss 不是精英")
+
+	# 精英数量难度与波次梯度断言（2 档体系：D0 普通 / D1 噩梦）：
+	# 1. 第 5 关全难度恒为 1 只单挑
+	_c.equals(GameBalance.elite_spawn_count_for_wave(5, 0), 1, "W5 D0 单精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(5, 1), 1, "W5 D1 单精英")
+
+	# 2. 第 15 关普通 1 只，噩梦（D1）升级为 2 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 0), 1, "W15 D0 单精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 1), 2, "W15 D1 双精英")
+
+	# 3. 深层无尽梯度：
+	# D0: 21~30 为 1 只，31+ 为 2 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 0), 1, "深层 D0 21波单精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(31, 0), 2, "深层 D0 31波双精英")
+	# 历史传参兼容 (wave, true)
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 1, "历史传参 21 波单精英兼容")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 2, "历史传参 31 波双精英兼容")
+	# D1: 21~35 为 2 只，36+ 为 3 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 1), 2, "深层 D1 21波双精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(36, 1), 3, "深层 D1 36波三精英")
 
 	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距
 	_c.near(GameBalance.boss_hp(10) / GameBalance.boss_hp(1), GameBalance.enemy_hp_mult(10), EPS, "Boss 血量与敌人同一条成长曲线")
@@ -269,54 +286,79 @@ func _test_wave_theme() -> void:
 	_c.near(GameBalance.BATCH_STALEMATE_TIMEOUT, 5.5, EPS, "对峙超时收紧到 5.5s（2026-10-16 紧凑化）")
 
 func _test_danger_system() -> void:
-	# 公式钉线（2026-10-20 收缩为 4 档，顶档维持原 D5 的封顶强度）
-	_c.equals(GameBalance.DANGER_MAX, 3, "危险度共 4 档（D0~D3）")
-	_c.near(GameBalance.danger_hp_mult(0), 1.08, EPS, "危险度 0 简单基线 ×1.08")
-	_c.near(GameBalance.danger_hp_mult(3), 2.58, EPS, "危险度 3 噩梦血量 ×2.58（= 原 D5 封顶）")
-	_c.near(GameBalance.danger_dmg_mult(3), 1.84, EPS, "危险度 3 噩梦伤害 ×1.84（= 原 D5 封顶）")
-	_c.near(GameBalance.danger_count_mult(3), 2.08, EPS, "危险度 3 噩梦妖潮 ×2.08（= 原 D5 封顶）")
-	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(3), EPS, "超档夹到 3")
-	_c.near(GameBalance.danger_hp_mult(-1), 1.08, EPS, "负档夹到 0")
-	# 档间单调递增，不能因为压缩出现持平或倒挂
+	# 公式钉线（2026-10-28 收缩为 2 档：D0 普通 / D1 噩梦）
+	_c.equals(GameBalance.DANGER_MAX, 1, "危险度共 2 档（D0 普通 / D1 噩梦）")
+	_c.near(GameBalance.danger_hp_mult(0), 1.16, EPS, "危险度 0 普通基线 ×1.16")
+	_c.near(GameBalance.danger_dmg_mult(0), 1.05, EPS, "危险度 0 普通伤害 ×1.05")
+	_c.near(GameBalance.danger_count_mult(0), 1.16, EPS, "危险度 0 普通妖潮 ×1.16")
+	_c.near(GameBalance.danger_hp_mult(1), 1.65, EPS, "危险度 1 噩梦血量 ×1.65（均衡档）")
+	_c.near(GameBalance.danger_dmg_mult(1), 1.40, EPS, "危险度 1 噩梦伤害 ×1.40（均衡档）")
+	_c.near(GameBalance.danger_count_mult(1), 1.45, EPS, "危险度 1 噩梦妖潮 ×1.45（均衡档）")
+	# 越界一律夹回有效档：超档夹到 D1 噩梦，负档夹到 D0 普通（三个乘区同一条夹法）
+	_c.near(GameBalance.danger_hp_mult(99), GameBalance.danger_hp_mult(1), EPS, "超档血量夹到 D1")
+	_c.near(GameBalance.danger_dmg_mult(99), GameBalance.danger_dmg_mult(1), EPS, "超档伤害夹到 D1")
+	_c.near(GameBalance.danger_count_mult(99), GameBalance.danger_count_mult(1), EPS, "超档妖潮夹到 D1")
+	_c.near(GameBalance.danger_hp_mult(-1), GameBalance.danger_hp_mult(0), EPS, "负档血量夹到 D0")
+	_c.near(GameBalance.danger_dmg_mult(-1), GameBalance.danger_dmg_mult(0), EPS, "负档伤害夹到 D0")
+	_c.near(GameBalance.danger_count_mult(-1), GameBalance.danger_count_mult(0), EPS, "负档妖潮夹到 D0")
+	# 档间单调递增
 	for d in range(GameBalance.DANGER_MAX):
 		_c.check(GameBalance.danger_hp_mult(d + 1) > GameBalance.danger_hp_mult(d), "血量档间严格递增 D%d→D%d" % [d, d + 1])
 		_c.check(GameBalance.danger_dmg_mult(d + 1) > GameBalance.danger_dmg_mult(d), "伤害档间严格递增 D%d→D%d" % [d, d + 1])
 		_c.check(GameBalance.danger_count_mult(d + 1) > GameBalance.danger_count_mult(d), "妖潮档间严格递增 D%d→D%d" % [d, d + 1])
 
-	# 逐级通关解锁（2026-10-25）：可选上限 = 生涯最高通关难度 + 1，未通关只开 D0。
+	# 噩梦专属机制纯函数断言
+	_c.equals(GameBalance.boss_spawn_count_for_wave(20, 0), 1, "普通 W20 单 Boss")
+	_c.equals(GameBalance.boss_spawn_count_for_wave(20, 1), 2, "噩梦 W20 双 Boss 接力")
+	_c.equals(GameBalance.boss_spawn_count_for_wave(40, 1), 2, "噩梦 W40 双 Boss 接力")
+	_c.equals(GameBalance.boss_spawn_count_for_wave(10, 1), 1, "噩梦 W10 单 Boss")
+	_c.near(GameBalance.boss_dual_hp_mult(20, 1), 0.78, EPS, "噩梦双 Boss 单尊血量 0.78x")
+	_c.near(GameBalance.boss_dual_hp_mult(10, 1), 1.0, EPS, "单 Boss 血量 1.0x")
+	_c.check(GameBalance.secondary_boss_id_for_wave(20) != GameBalance.boss_id_for_wave(20), "双 Boss 首尾魔君不重样")
+	_c.near(GameBalance.elite_mutation_hp_pct(0), 0.60, EPS, "普通精英变异血线 60%")
+	_c.near(GameBalance.elite_mutation_hp_pct(1), 0.70, EPS, "噩梦精英变异提前至 70%")
+	_c.near(GameBalance.boss_phase2_hp_pct(0), 0.50, EPS, "普通魔君狂暴血线 50%")
+	_c.near(GameBalance.boss_phase2_hp_pct(1), 0.60, EPS, "噩梦魔君狂暴提前至 60%")
+	_c.near(GameBalance.danger_attack_cd_mult(1), 0.90, EPS, "噩梦攻击间隔缩短 10%")
+	_c.near(GameBalance.danger_bolt_speed_mult(1), 1.08, EPS, "噩梦弹速提速 8%")
+	_c.near(GameBalance.NIGHTMARE_FOG_CLEAR_RADIUS, 165.0, EPS, "噩梦迷雾清晰视野 165px")
+
+	# 逐级破境解锁（2026-10-28）：可选上限 = 生涯最高破境难度 + 1，未破境只开 D0 普通。
 	# 备份/还原玩家的真实生涯档，避免测试把别人的进度压低。
 	var orig_bdc := int(GameManager.career_stats.get("best_danger_cleared", -1))
 	GameManager.career_stats["best_danger_cleared"] = -1
-	_c.equals(GameManager.max_danger_unlocked(), 0, "从未通关时只开放「简单」")
+	_c.equals(GameManager.max_danger_unlocked(), 0, "从未破境时只开放「普通」")
 	for d in range(GameBalance.DANGER_MAX + 1):
 		GameManager.set_danger(d)
-		_c.equals(GameManager.danger_level, 0, "未通关时点 D%d 被夹回 D0" % d)
+		_c.equals(GameManager.danger_level, 0, "未破境时点 D%d 被夹回 D0" % d)
 	_c.check(GameManager.is_danger_unlocked(0), "D0 默认可用")
-	_c.check(not GameManager.is_danger_unlocked(1), "D1 未通关前不可用")
+	_c.check(not GameManager.is_danger_unlocked(1), "D1 未破境前不可用")
 
-	# 通关 Dk → D(k+1) 开放
-	for cleared in range(GameBalance.DANGER_MAX):
-		GameManager.career_stats["best_danger_cleared"] = cleared
-		_c.equals(GameManager.max_danger_unlocked(), cleared + 1, "通关 D%d 后开放到 D%d" % [cleared, cleared + 1])
-		_c.check(GameManager.is_danger_unlocked(cleared + 1), "通关 D%d 后 D%d 可选" % [cleared, cleared + 1])
-		if cleared + 2 <= GameBalance.DANGER_MAX:
-			_c.check(not GameManager.is_danger_unlocked(cleared + 2), "通关 D%d 后 D%d 仍锁着" % [cleared, cleared + 2])
+	# 普通（D0）破境 → 开放到 D1 噩梦
+	GameManager.career_stats["best_danger_cleared"] = 0
+	_c.equals(GameManager.max_danger_unlocked(), 1, "普通破境后开放到 D1")
+	_c.check(GameManager.is_danger_unlocked(1), "普通破境后 D1 噩梦可选")
+	GameManager.set_danger(1)
+	_c.equals(GameManager.danger_level, 1, "普通破境后点 D1 生效")
 
-	# 顶档通关后不再往上涨（越界夹到顶档）
+	# 顶档破境：上限不再往上涨（越界夹到顶档）
 	GameManager.career_stats["best_danger_cleared"] = GameBalance.DANGER_MAX
-	_c.equals(GameManager.max_danger_unlocked(), GameBalance.DANGER_MAX, "顶档通关后上限仍是顶档")
+	_c.equals(GameManager.max_danger_unlocked(), GameBalance.DANGER_MAX, "顶档破境后上限仍是顶档")
 	GameManager.set_danger(99)
 	_c.equals(GameManager.danger_level, GameBalance.DANGER_MAX, "越界档位夹到顶档")
 	GameManager.set_danger(-5)
-	_c.equals(GameManager.danger_level, 0, "负档夹到简单")
+	_c.equals(GameManager.danger_level, 0, "负档夹到普通")
 	GameManager.career_stats["best_danger_cleared"] = orig_bdc
 	GameManager.danger_level = 0
 
 	# 名号与封印表长度与档数同步
-	_c.equals(AchievementData.DANGER_NAMES.size(), GameBalance.DANGER_MAX + 1, "难度名号数与档数一致")
-	_c.equals(AchievementData.REALM_TITLES.size(), GameBalance.DANGER_MAX + 1, "境界称号数与档数一致")
-	_c.equals(AchievementData.danger_name(GameBalance.DANGER_MAX), "噩梦", "顶档名号为噩梦")
-	_c.equals(AchievementData.realm_for_danger(GameBalance.DANGER_MAX), "元婴", "顶档境界为元婴")
+	_c.equals(AchievementData.DANGER_NAMES.size(), 2, "难度名号数 = 2 档（普通 / 噩梦）")
+	_c.equals(AchievementData.REALM_TITLES.size(), 2, "境界称号数 = 2 档（炼气 / 元婴）")
+	_c.equals(AchievementData.danger_name(0), "普通", "D0 名号为普通")
+	_c.equals(AchievementData.danger_name(1), "噩梦", "顶档名号为噩梦")
+	_c.equals(AchievementData.realm_for_danger(0), "炼气", "D0 境界为炼气")
+	_c.equals(AchievementData.realm_for_danger(1), "元婴", "顶档境界为元婴")
+	_c.equals(AchievementData.realm_for_danger(-1), "", "未破境没有境界称号")
 
 # 2026-10-12 新机制数值钉线：精英变异阈值 / 灵医奶量曲线 / 金蟾金币曲线 / 移速方差
 func _test_new_enemy_mechanics() -> void:
@@ -380,3 +422,170 @@ func _test_enemy_id_prefixes() -> void:
 			if String(b).begins_with(String(a)):
 				overlapping.append("%s 是 %s 的前缀" % [String(a), String(b)])
 	_c.check(overlapping.is_empty(), "前缀互不为前缀（否则遍历顺序决定猜哪个）：%s" % str(overlapping))
+
+## 验证精英与Boss派发防重门闩（防止预警指示器 1.1s 延迟期间每帧重复派发几十只精英）
+func _test_elite_dispatch_guard() -> void:
+	var parent := Node2D.new()
+	add_child(parent)
+	var player := Node2D.new()
+	player.name = "Player"
+	parent.add_child(player)
+	GameManager.player = player
+	GameManager.danger_level = 0
+	GameManager.reset_run()
+
+	var spawner := WaveSpawner.new()
+	parent.add_child(spawner)
+	spawner._ready()
+
+	# 1. 第 5 波精英关：多帧循环下只允许派发 1 只精英
+	spawner.start_wave(5)
+	_c.equals(spawner._elites_dispatched, 0, "W5 开场尚未派发精英")
+	# 推进到开场 1.5s 后（预警前摇触发段）
+	spawner.wave_timer = spawner.wave_duration(5) - 2.0
+	# 连续模拟 60 帧（整整 1 秒，覆盖 1.1s 预警延迟的大半）
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 1, "W5 连续 60 帧刷新下精英严格只派发 1 次（防重门闩生效）")
+	_c.check(spawner.elite_spawned, "W5 精英标志位已置位")
+
+	# 2. 第 15 波精英关：D0 普通只派发 1 只；D1 噩梦在开场和中场分别派发，共 2 只
+	GameManager.danger_level = 0
+	spawner.start_wave(15)
+	spawner.wave_timer = spawner.wave_duration(15) - 2.0
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 1, "W15 D0 连续 60 帧刷新下精英严格只派发 1 次")
+
+	# W15 在 D1（噩梦）下升级为 2 只
+	GameManager.danger_level = 1
+	spawner.start_wave(15)
+	spawner.wave_timer = spawner.wave_duration(15) - 2.0
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 1, "W15 D1 开场段派发第 1 只精英")
+	spawner.wave_timer = spawner.wave_duration(15) * 0.48
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 2, "W15 D1 中场段派发第 2 只精英")
+	GameManager.danger_level = 0
+
+	# 3. 深层第 31 波（双精英关）：开场派发 1 只，半场派发第 2 只，绝不超额
+	spawner.start_wave(31)
+	spawner.wave_timer = spawner.wave_duration(31) - 2.0
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 1, "W31 开场段严格派发第 1 只精英")
+	# 推进至中场（<= 50% 时长）
+	spawner.wave_timer = spawner.wave_duration(31) * 0.48
+	for _f in range(60):
+		spawner._process_fight(1.0 / 60.0)
+	_c.equals(spawner._elites_dispatched, 2, "W31 中场段严格派发第 2 只精英，且不随多帧重复递增")
+
+	# 4. Boss 回合（第 10 波）提前清场判据：魔君伏诛且杂兵清空后 _tide_spent() 必须能正确返回 true
+	spawner.start_wave(10)
+	spawner.wave_timer = spawner.wave_duration(10) - 2.0
+	spawner._process_fight(1.0 / 60.0)
+	_c.check(spawner.elite_spawned, "W10 Boss 已派发")
+	# 释放测试产生的指示器
+	for child in parent.get_children():
+		if child is SpawnIndicator:
+			(child as SpawnIndicator)._release()
+	# 模拟小怪预算已全部用尽
+	spawner._budget_used = spawner._budget_total
+	# Boss 存活时不能提前清场
+	var dummy_boss: BossEnemy = load("res://scenes/entities/BossEnemy.tscn").instantiate()
+	parent.add_child(dummy_boss)
+	spawner._boss_ref = dummy_boss
+	GameManager.enemy_count = 1
+	_c.check(not spawner._tide_spent(), "Boss 存活时不允许提前清场")
+	# Boss 伏诛，余妖为 0
+	dummy_boss.dying = true
+	GameManager.enemy_count = 0
+	_c.check(spawner._tide_spent(), "Boss 回合小怪耗尽且魔君伏诛后，_tide_spent() 能够正确返回 true")
+
+	# 清理测试场景与状态
+	dummy_boss.queue_free()
+	spawner.queue_free()
+	player.queue_free()
+	parent.queue_free()
+	GameManager.player = null
+	GameManager.reset_run()
+
+## 验证作者模式跳关逻辑（2026-10-28 无限闯关）：跳关只夹下限（maxi(1,n)），
+## 不再切换任何模式、也不再触发结算 —— 跳到第 21 波之后仍是同一局无限闯关。
+func _test_author_jump_to_wave() -> void:
+	# 1. 验证预设列表包含常规与深层魔君关卡
+	var expected_presets: Array[int] = [1, 5, 10, 15, 20, 25, 30, 35, 40, 50]
+	_c.equals(AuthorPanel.WAVE_PRESETS, expected_presets, "作者面板跳关预设包含 1~50 关键波次")
+
+	var parent := Node2D.new()
+	add_child(parent)
+	var player := Node2D.new()
+	player.name = "Player"
+	parent.add_child(player)
+	GameManager.player = player
+	GameManager.author_mode = true
+	GameManager.reset_run()
+
+	var spawner := WaveSpawner.new()
+	parent.add_child(spawner)
+	spawner._ready()
+
+	# 「不结算」的真判据：结算才会往 run_history / record_log 追加条目
+	# （ProgressStore.record_run_and_check_achievements 只在阵亡结算那一路径上调）。
+	# 只看 is_game_over 太弱 —— jump_to_wave 自己会把它置回 false。
+	var hist_before := GameManager.run_history.size()
+	var log_before := GameManager.record_log.size()
+
+	# 2. 常规波次内跳关（<= 20）：只改波号，不结算
+	spawner.jump_to_wave(1)
+	_c.equals(GameManager.wave_number, 1, "跳至第 1 波")
+	_c.check(not GameManager.is_game_over, "跳至第 1 波不结算")
+
+	spawner.jump_to_wave(20)
+	_c.equals(GameManager.wave_number, 20, "跳至第 20 波")
+	_c.check(not GameManager.is_game_over, "跳至第 20 波（破境波）不结算")
+	_c.equals(spawner.phase, WaveSpawner.Phase.FIGHT, "跳至第 20 波后仍在本波战斗中")
+
+	# 3. 跳至深层（> 20）：仍是同一局无限闯关，不切模式、不结算
+	spawner.jump_to_wave(21)
+	_c.equals(GameManager.wave_number, 21, "跳至第 21 波成功，未被夹断在 20")
+	_c.check(not GameManager.is_game_over, "跳至第 21 波不结算（无限闯关无胜利闸口）")
+	_c.equals(spawner.phase, WaveSpawner.Phase.FIGHT, "跳至第 21 波后仍在战斗阶段")
+
+	spawner.jump_to_wave(30)
+	_c.equals(GameManager.wave_number, 30, "跳至第 30 波（万毒魔尊）成功")
+	_c.check(not GameManager.is_game_over, "跳至第 30 波不结算")
+
+	spawner.jump_to_wave(40)
+	_c.equals(GameManager.wave_number, 40, "跳至第 40 波（心魔魔尊）成功")
+	_c.check(not GameManager.is_game_over, "跳至第 40 波不结算")
+
+	# 4. 从深层跳回常规波次：仍是同一局，不结算
+	spawner.jump_to_wave(10)
+	_c.equals(GameManager.wave_number, 10, "从 40 跳回第 10 波")
+	_c.check(not GameManager.is_game_over, "跳回第 10 波不结算")
+
+	# 5. 低波次也不结算（无限闯关里没有「通关」这件事）
+	spawner.jump_to_wave(5)
+	_c.equals(GameManager.wave_number, 5, "跳至第 5 波")
+	_c.check(not GameManager.is_game_over, "跳至第 5 波仍不结算")
+
+	# 6. 一路跳下来没有触发过结算：战报账本一条没多
+	_c.equals(GameManager.run_history.size(), hist_before, "连跳 1/20/21/30/40/10/5 波未触发结算（run_history 未追加）")
+	_c.equals(GameManager.record_log.size(), log_before, "连跳未触发结算（record_log 未追加）")
+
+	# 7. 非法负波次与 0 夹至第 1 波
+	spawner.jump_to_wave(-5)
+	_c.equals(GameManager.wave_number, 1, "负数跳关被下限夹回第 1 波")
+	spawner.jump_to_wave(0)
+	_c.equals(GameManager.wave_number, 1, "零波次跳关被下限夹回第 1 波")
+
+	# 清理测试场景与状态
+	spawner.queue_free()
+	player.queue_free()
+	parent.queue_free()
+	GameManager.player = null
+	GameManager.set_author_mode(false)
+	GameManager.reset_run()

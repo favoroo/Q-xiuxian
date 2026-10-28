@@ -10,14 +10,17 @@ extends RefCounted
 ##      每条达成都有实物回报，前几局几乎每局都能解锁点什么。
 ##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段）。
 ##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条趣味成就。
-##   5. 2026-10-24 追加 6 条硬核挑战成就（噩梦无伤/零消费/单武器/零技能/无尽40波/零道具）。
+##   5. 2026-10-24 追加 6 条硬核挑战成就（噩梦无伤/零消费/单武器/零技能/深层40波/零道具）。
 ##   6. 2026-10-25 原 18 条纯荣誉成就全部挂上实物奖励（道具/武器），reward_type = "none" 仅作兜底保留。
+##   7. 2026-10-28 无限闯关改造：20 波不再是胜利而是「破境波」，所有局都能继续往下打。
+##      全部 victory/endless 布尔判定废止，改成「单局抵达/打到第 N 波」与「在该难度破境」；
+##      难度由 4 档压成 2 档（普通 / 噩梦），境界称号同步由 4 阶收成 2 阶。
 
-## 危险度档位名号（D0 ~ D3，2026-10-20 由 6 档收缩为 4 档）
-const DANGER_NAMES: Array[String] = ["简单", "普通", "困难", "噩梦"]
+## 危险度档位名号（D0 ~ D1，2026-10-28 由 4 档收缩为 2 档：普通 / 噩梦）
+const DANGER_NAMES: Array[String] = ["普通", "噩梦"]
 
-## 境界称号：按该角色通关过的最高危险度点亮（D0 炼气 ~ D3 元婴，未通关为空）
-const REALM_TITLES: Array[String] = ["炼气", "筑基", "金丹", "元婴"]
+## 境界称号：按该角色破境过的最高危险度点亮（D0 炼气 ~ D1 元婴，未破境为空）
+const REALM_TITLES: Array[String] = ["炼气", "元婴"]
 
 ## 成就分类（顺序即「战绩」页分节展示顺序）
 const CATEGORY_ORDER: Array[String] = ["trial", "style", "grind", "luck"]
@@ -156,19 +159,19 @@ const DEFAULT_ITEMS: Array[String] = [
 ## 锁定的 6 把全部是「同器类里已经有 ≥4 把别的可用」的高阶招牌件，解锁前商店抽不到；
 ## 由 6 条硬核挑战成就发放（见 ach_feat_nodamage 等）。
 const LOCKED_WEAPONS: Array[String] = [
-	"jianling",          # 剑灵 · 环绕/剑系/金 —— 金光护体（无伤通关）
-	"jinlei_zhui",       # 金雷锥 · 雷法/金 —— 碎梦无痕（噩梦无伤通关）
-	"bihai_chaoyindi",   # 音笛 · 雷法/水 —— 肝穿地心（无尽 40 波）
+	"jianling",          # 剑灵 · 环绕/剑系/金 —— 金光护体（无伤抵达第 20 波）
+	"jinlei_zhui",       # 金雷锥 · 雷法/金 —— 碎梦无痕（噩梦无伤抵达第 20 波）
+	"bihai_chaoyindi",   # 音笛 · 雷法/水 —— 肝穿地心（单局打到第 40 波）
 	"kuilei_shou",       # 傀儡兽 · 机关/御灵/土 —— 五雷正法（单局 4 件雷法）
 	"fantian_yin",       # 巨印 · 广域/土 —— 五行同阵（单局五行各 1 件）
-	"jianzhen_pan",      # 剑阵盘 · 机关/剑系/金 —— 两袖清风（通关时零法宝）
+	"jianzhen_pan",      # 剑阵盘 · 机关/剑系/金 —— 两袖清风（抵达第 20 波时零法宝）
 ]
 
 ## 成就定义表（按 category 聚组排布；UI 按 CATEGORY_ORDER 分节展示）
 ## reward_type: "cultivator"（解锁新道统） | "item"（解锁新道具入池） | "weapon"（解锁新武器入池）
 ##              | "none"（纯荣誉，不发奖励 —— 2026-10-25 起已无条目使用，保留作兜底）
 const ACHIEVEMENTS: Array[Dictionary] = [
-	# ---------------- 试炼：通关与难度挑战 ----------------
+	# ---------------- 试炼：破境与难度挑战 ----------------
 		{
 			"id": "ach_cult_duoshe",
 			"name": "羽化初登",
@@ -182,7 +185,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_cult_dubi",
 			"name": "明知山有虎",
-			"cond_desc": "通关「普通」或更高难度——修仙哪有不疯的，你先疯了一步",
+			"cond_desc": "在「噩梦」难度打到第30波——明知山有虎，你不仅上了山还住了下来",
 			"category": "trial",
 		"reward_type": "cultivator",
 		"reward_id": "dubi",
@@ -192,13 +195,13 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_nightmare",
 			"name": "噩梦常客",
-			"cond_desc": "通关「噩梦」难度——你在梦里杀怪，醒着也一样",
+			"cond_desc": "在「噩梦」难度打到第20波——噩梦对你来说像回家",
 			"category": "trial",
-			"reward_type": "item",
-			"reward_id": "zhanqi",
-			"reward_name": "战旗",
-			"icon": "res://assets/art/weapon_jingzhe_fu.png",
-		},
+		"reward_type": "item",
+		"reward_id": "zhanqi",
+		"reward_name": "战旗",
+		"icon": "res://assets/art/weapon_jingzhe_fu.png",
+	},
 		{
 			"id": "ach_item_pojia",
 			"name": "深入敌后",
@@ -212,41 +215,41 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_endless",
 			"name": "肝帝降临",
-			"cond_desc": "无尽模式打到第25波——肝在哭，但你在笑",
+			"cond_desc": "单局打到第25波——肝在哭，但你在笑",
 			"category": "trial",
-			"reward_type": "item",
-			"reward_id": "liehun_ling",
-			"reward_name": "裂魂铃",
-			"icon": "res://assets/art/weapon_liuhuo_feijian.png",
-		},
+		"reward_type": "item",
+		"reward_id": "liehun_ling",
+		"reward_name": "裂魂铃",
+		"icon": "res://assets/art/weapon_liuhuo_feijian.png",
+	},
 		{
 			"id": "ach_feat_nodamage",
 			"name": "金光护体",
-			"cond_desc": "无伤通关一整局——怪物打你像在给护体金光抛光",
+			"cond_desc": "单局无伤打到第20波——怪物打你像在给护体金光抛光",
 			"category": "trial",
-			"reward_type": "weapon",
-			"reward_id": "jianling",
-			"reward_name": "剑灵",
-			"icon": "res://assets/art/item_jingang_fumo_jia.png",
-		},
+		"reward_type": "weapon",
+		"reward_id": "jianling",
+		"reward_name": "剑灵",
+		"icon": "res://assets/art/item_jingang_fumo_jia.png",
+	},
 		{
 			"id": "ach_feat_nightmare_flawless",
 			"name": "碎梦无痕",
-			"cond_desc": "在「噩梦」难度下无伤通关——怪物打不到你，只好回去写检讨",
+			"cond_desc": "在「噩梦」难度无伤打到第20波——怪物打不到你，只好回去写检讨",
 			"category": "trial",
-			"reward_type": "weapon",
-			"reward_id": "jinlei_zhui",
-			"reward_name": "金雷锥",
-			"icon": "res://assets/art/item_jingang_shenxiang.png",
-		},
+		"reward_type": "weapon",
+		"reward_id": "jinlei_zhui",
+		"reward_name": "金雷锥",
+		"icon": "res://assets/art/item_jingang_shenxiang.png",
+	},
 		{
 			"id": "ach_feat_endless_40",
 			"name": "肝穿地心",
-			"cond_desc": "无尽模式打到第40波——肝已经捐给修仙界了，署名还是你",
+			"cond_desc": "单局打到第40波——肝已经捐给修仙界了，署名还是你",
 			"category": "trial",
-			"reward_type": "weapon",
-			"reward_id": "bihai_chaoyindi",
-			"reward_name": "音笛",
+		"reward_type": "weapon",
+		"reward_id": "bihai_chaoyindi",
+		"reward_name": "音笛",
 			"icon": "res://assets/art/weapon_liuhuo_feijian.png",
 		},
 		# ---------------- 新手起步：前几局就能达成，让新玩家一直有「下一次解锁」 ----------------
@@ -334,7 +337,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_style_rebel",
 			"name": "万法由心",
-			"cond_desc": "自由搭配随行技能通关3次——万法无常，随心而动",
+			"cond_desc": "自由搭配随行技能破境3次——万法无常，随心而动",
 			"category": "style",
 			"reward_type": "item",
 			"reward_id": "xuehai_fu",
@@ -344,7 +347,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_style_loner",
 			"name": "独行侠",
-			"cond_desc": "不带任何召唤或机关武器通关——一个人修仙，一个人渡劫",
+			"cond_desc": "不带任何召唤或机关武器打到第20波——一个人修仙，一个人渡劫",
 			"category": "style",
 			"reward_type": "item",
 			"reward_id": "panshi_yin",
@@ -374,7 +377,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_lone_weapon",
 			"name": "孤剑走天涯",
-			"cond_desc": "只带一件武器通关——武器栏空得能跑马",
+			"cond_desc": "只带一件武器打到第20波——武器栏空得能跑马",
 			"category": "style",
 			"reward_type": "item",
 			"reward_id": "wanshi_jian",
@@ -384,7 +387,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_skill_abstain",
 			"name": "手指休假",
-			"cond_desc": "通关全程一次技能键都没按——手指说它这局只负责拿手机",
+			"cond_desc": "打到第20波且全程一次技能键都没按——手指说它这局只负责拿手机",
 			"category": "style",
 			"reward_type": "item",
 			"reward_id": "cangzhen_juan",
@@ -394,7 +397,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_no_items",
 			"name": "两袖清风",
-			"cond_desc": "通关时一件法宝都没带——背包比脸还干净",
+			"cond_desc": "打到第20波时一件法宝都没带——背包比脸还干净",
 			"category": "style",
 			"reward_type": "weapon",
 			"reward_id": "jianzhen_pan",
@@ -434,8 +437,8 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		},
 		{
 			"id": "ach_grind_wins",
-			"name": "十渡天劫",
-			"cond_desc": "累计通关10次——老天爷劈了你十次都没劈死，开始考虑换人了",
+			"name": "三十三重天",
+			"cond_desc": "单局打到第30波——你已经数不清这是第几重天了",
 			"category": "grind",
 			"reward_type": "item",
 			"reward_id": "xuepan_guyu",
@@ -445,7 +448,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_item_kuilei",
 			"name": "九死一生",
-			"cond_desc": "累计游玩5局，或通关1次——死了很多次，但活下来了，这就是修仙",
+			"cond_desc": "累计游玩5局，或单局打到第20波——死了很多次，但活下来了，这就是修仙",
 			"category": "grind",
 		"reward_type": "item",
 		"reward_id": "tisi_kuilei",
@@ -526,7 +529,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_luck_turtle",
 			"name": "铁王八",
-			"cond_desc": "单局挨打50次还能通关——你到底是肉做的还是铁打的？",
+			"cond_desc": "单局挨打50次还能打到第20波——你到底是肉做的还是铁打的？",
 			"category": "luck",
 			"reward_type": "item",
 			"reward_id": "bumie_jinshen",
@@ -536,7 +539,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		{
 			"id": "ach_feat_thrift",
 			"name": "一毛不拔",
-			"cond_desc": "通关全程一枚金币都没花——铁公鸡见了你都得递烟",
+			"cond_desc": "打到第20波且一枚金币都没花——铁公鸡见了你都得递烟",
 			"category": "luck",
 			"reward_type": "item",
 			"reward_id": "daoyun_jing",
@@ -566,7 +569,7 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 		},
 	]
 
-## 通关过的最高危险度对应的境界称号（-1 未通关返回空串）
+## 破境过的最高危险度对应的境界称号（-1 未破境返回空串）
 static func realm_for_danger(d: int) -> String:
 	if d < 0:
 		return ""
@@ -651,18 +654,18 @@ static func reward_label(ach: Dictionary) -> String:
 	return ""
 
 ## 判定单条成就在当前局与生涯累计下是否达成
-## run_ctx 字段：victory(bool), endless(bool), danger(int), wave(int), level(int), kills(int),
+## run_ctx 字段：danger(int), wave(int), level(int), kills(int),
 ##              max_stones(int), max_dodge(float), max_harvest(float),
 ##              damage_taken_count(int), hp_healed(float),
 ##              stones_spent(int 本局花掉金币), skill_casts(int 主动技能次数),
 ##              weapon_count(int 结算时持有武器总数), item_count(int 结算时法宝数),
 ##              max_summons(int), max_class_counts(Dictionary {器类tag: 同时上阵峰值}),
 ##              max_element_spread(int 单局同时上阵的五行元素种数峰值)
-## career_stats 字段：total_runs(int), total_wins(int), total_kills(int), best_wave(int),
-##              wins_no_skill_enhance(int 无契合技能通关累计次数)
+## career_stats 字段：total_runs(int), total_kills(int), best_wave(int),
+##              milestones_with_skill(int 带技能破境累计次数)
+## 2026-10-28 无限闯关：victory/endless 两个布尔已废止 —— 所有局都能超过 20 波，
+## 判定口径统一改成「单局抵达/打到第 N 波」与「在该难度破境」。
 static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: Dictionary) -> bool:
-	var victory := bool(run_ctx.get("victory", false))
-	var endless := bool(run_ctx.get("endless", false))
 	var danger := int(run_ctx.get("danger", 0))
 	var wave := int(run_ctx.get("wave", 0))
 	var level := int(run_ctx.get("level", 1))
@@ -671,15 +674,14 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 	var max_harvest := float(run_ctx.get("max_harvest", 0.0))
 
 	var total_runs := int(career_stats.get("total_runs", 0))
-	var total_wins := int(career_stats.get("total_wins", 0))
 	var total_kills := int(career_stats.get("total_kills", 0))
 	var best_wave := maxi(wave, int(career_stats.get("best_wave", 0)))
 
 	match ach_id:
 		"ach_cult_duoshe":
-			return victory or total_wins >= 1
+			return best_wave >= 20
 		"ach_cult_dubi":
-			return (victory and danger >= 1)
+			return wave >= 30 and danger >= 1
 		# 新手起步四条：前几局就能达成，负责把「第一次解锁」提前到第 1~3 局
 		"ach_cult_yushou":
 			return best_wave >= 5
@@ -690,11 +692,11 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 		"ach_cult_kuxingseng":
 			return total_runs >= 3
 		"ach_feat_nightmare":
-			return victory and danger >= 3
+			return wave >= 20 and danger >= 1
 		"ach_item_pojia":
 			return best_wave >= 15
 		"ach_feat_endless":
-			return endless and wave >= 25
+			return wave >= 25
 		"ach_cult_juechen":
 			return int(Dictionary(run_ctx.get("max_class_counts", {})).get("sword", 0)) >= 4
 		"ach_cult_fuxiu":
@@ -714,9 +716,9 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 		"ach_grind_kills":
 			return total_kills >= 5000
 		"ach_grind_wins":
-			return total_wins >= 10
+			return best_wave >= 30
 		"ach_item_kuilei":
-			return total_runs >= 5 or victory or total_wins >= 1
+			return total_runs >= 5 or best_wave >= 20
 		"ach_item_wuxing":
 			return level >= 15
 		"ach_cult_duobao":
@@ -730,23 +732,23 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 		"ach_cult_shixue":
 			return int(run_ctx.get("damage_taken_count", 0)) >= 25
 		"ach_feat_nodamage":
-			return victory and int(run_ctx.get("damage_taken_count", 0)) == 0
+			return wave >= 20 and int(run_ctx.get("damage_taken_count", 0)) == 0
 		"ach_feat_nightmare_flawless":
-			return victory and danger >= 3 and int(run_ctx.get("damage_taken_count", 0)) == 0
+			return wave >= 20 and danger >= 1 and int(run_ctx.get("damage_taken_count", 0)) == 0
 		"ach_feat_endless_40":
-			return endless and wave >= 40
+			return wave >= 40
 		"ach_feat_lone_weapon":
-			return victory and int(run_ctx.get("weapon_count", 0)) == 1
+			return wave >= 20 and int(run_ctx.get("weapon_count", 0)) == 1
 		"ach_feat_skill_abstain":
-			return victory and int(run_ctx.get("skill_casts", -1)) == 0
+			return wave >= 20 and int(run_ctx.get("skill_casts", -1)) == 0
 		"ach_feat_no_items":
-			return victory and int(run_ctx.get("item_count", -1)) == 0
+			return wave >= 20 and int(run_ctx.get("item_count", -1)) == 0
 		"ach_feat_thrift":
-			return victory and int(run_ctx.get("stones_spent", -1)) == 0
+			return wave >= 20 and int(run_ctx.get("stones_spent", -1)) == 0
 		"ach_style_rebel":
-			return int(career_stats.get("wins_no_skill_enhance", 0)) >= 3
+			return int(career_stats.get("milestones_with_skill", 0)) >= 3
 		"ach_style_loner":
-			return victory and int(run_ctx.get("max_summons", 0)) == 0
+			return wave >= 20 and int(run_ctx.get("max_summons", 0)) == 0
 		"ach_style_omni":
 			var mcc := Dictionary(run_ctx.get("max_class_counts", {}))
 			for cls in WeaponData.CLASSES:
@@ -764,13 +766,13 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 		"ach_grind_level20":
 			return level >= 20
 		"ach_luck_turtle":
-			return victory and int(run_ctx.get("damage_taken_count", 0)) >= 50
+			return wave >= 20 and int(run_ctx.get("damage_taken_count", 0)) >= 50
 	return false
 
 ## 成就进度短句：按生涯统计给出「当前进度」一句，供选人页解锁提示与成就卡点按详情复用。
 ## 纯函数 —— 只读入参 career_stats，不碰 autoload，与 is_condition_met 同一套数值口径。
 ## 读的 career_stats["best_*"] 是「单局生涯最佳」，由 ProgressStore 结算时并入并落盘；
-## 无量化口径的成就（如无尽行者）返回空串，调用方不显示进度行。
+## 无量化口径的成就返回空串，调用方不显示进度行。
 static func progress_text(aid: String, career_stats: Dictionary) -> String:
 	var cc: Dictionary = career_stats.get("best_class_counts", {})
 	var stones := int(career_stats.get("best_stones", 0))
@@ -783,16 +785,13 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 	var level := int(career_stats.get("best_level", 0))
 	var dg := int(career_stats.get("best_danger_cleared", -1))
 	var runs := int(career_stats.get("total_runs", 0))
-	var wins := int(career_stats.get("total_wins", 0))
 	var kills := int(career_stats.get("total_kills", 0))
 	var best_wave := int(career_stats.get("best_wave", 0))
 	match aid:
 		"ach_cult_duoshe":
-			return "已通关 %d 次" % wins
+			return "最高抵达第 %d/20 波" % best_wave
 		"ach_cult_dubi":
-			if dg >= 0:
-				return "最高通关「%s」" % danger_name(dg)
-			return "尚未通关任意难度"
+			return "已破境「噩梦」" if dg >= 1 else "尚未破境「噩梦」"
 		"ach_cult_yushou":
 			return "最高抵达第 %d/5 波" % best_wave
 		"ach_cult_lingzhifu":
@@ -801,6 +800,8 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 			return "单局最佳 %d/100 金币" % stones
 		"ach_cult_kuxingseng":
 			return "已游玩 %d/3 局" % runs
+		"ach_feat_nightmare":
+			return "已破境「噩梦」" if dg >= 1 else "尚未破境「噩梦」"
 		"ach_cult_juechen":
 			return "单局最佳 %d/4 件" % int(cc.get("sword", 0))
 		"ach_cult_fuxiu":
@@ -827,13 +828,17 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 		"ach_grind_kills":
 			return "累计击杀 %d/5000" % kills
 		"ach_grind_wins":
-			return "累计通关 %d/10" % wins
+			return "最高抵达第 %d/30 波" % best_wave
 		"ach_item_kuilei":
-			return "已玩 %d/5 局 · 通关 %d 次" % [runs, wins]
+			return "已玩 %d/5 局 · 最高第 %d 波" % [runs, best_wave]
 		"ach_item_wuxing":
 			return "单局最高 Lv.%d/15" % level
 		"ach_item_pojia":
 			return "最高抵达第 %d 波" % best_wave
+		"ach_feat_endless":
+			return "最高抵达第 %d/25 波" % best_wave
+		"ach_feat_endless_40":
+			return "最高抵达第 %d/40 波" % best_wave
 		"ach_cult_duobao":
 			return "单局最佳 %d/250 金币" % stones
 		"ach_cult_shoucainu":
@@ -845,8 +850,8 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 		"ach_cult_shixue":
 			return "单局承伤 %d/25 次" % hits
 		"ach_style_rebel":
-			var wne := int(career_stats.get("wins_no_skill_enhance", 0))
-			return "通关 %d/3 次" % wne
+			var mws := int(career_stats.get("milestones_with_skill", 0))
+			return "带技能破境 %d/3 次" % mws
 		"ach_grind_level20":
 			return "单局最高 Lv.%d/20" % level
 		"ach_luck_turtle":

@@ -181,10 +181,10 @@ func _test_roundtrip() -> void:
 
 	# 真实开局并推进一个有肉的状态：加点 + 道具 + 换装攒星 + 待加点 + 金币经验
 	_fresh_start("fuzhen", "qingyun_sword")
-	# 危险度 2026-10-25 起逐级通关解锁（set_danger 夹到已解锁区间）：
-	# 先种生涯通关档 D1 ⇒ D2 才点得动，否则 set_danger(2) 被夹回 1、存档里就没有 2 可恢复
-	GameManager.career_stats["best_danger_cleared"] = 1
-	GameManager.set_danger(2)
+	# 危险度 2026-10-28 起逐级破境解锁（set_danger 夹到已解锁区间）：
+	# 先种生涯破境档 D0 ⇒ D1（噩梦）才点得动，否则 set_danger(1) 被夹回 0、存档里就没有 1 可恢复
+	GameManager.career_stats["best_danger_cleared"] = 0
+	GameManager.set_danger(1)
 	var spawner: WaveSpawner = GameManager.wave_spawner
 	get_tree().paused = false
 	await get_tree().process_frame
@@ -205,6 +205,7 @@ func _test_roundtrip() -> void:
 	GameManager.add_weapon("wulei_paizi", 2)
 	GameManager.rng.seed = 424242
 	GameManager.peak_stones = 88
+	GameManager.run_id = "run-save-check"
 
 	var p = GameManager.player
 	p.current_health = 61.0
@@ -213,7 +214,8 @@ func _test_roundtrip() -> void:
 	_check(RunSave.save_from(GameManager, WaveSpawner.Phase.FIGHT), "现场层：推进后的局可落盘")
 	var saved_phase := RunSave.peek_summary()
 	_equals(int(saved_phase.get("wave", 0)), 7, "摘要层：波次 7 进 meta")
-	_equals(bool(saved_phase.get("endless", true)), false, "摘要层：非无尽局")
+	_equals(String(saved_phase.get("cid", "")), "fuzhen", "摘要层：角色 id 进 meta")
+	_equals(String(saved_phase.get("run_id", "")), "run-save-check", "摘要层：本局 run_id 进 meta")
 
 	# 篡改（等价 reset_run 把一切清零后又被别的局写过）
 	GameManager.reset_run()
@@ -227,6 +229,7 @@ func _test_roundtrip() -> void:
 
 	# —— 标量全等 ——
 	_equals(GameManager.cultivator_id, "fuzhen", "恢复后角色 id")
+	_equals(GameManager.run_id, "run-save-check", "恢复后本局 run_id（阵亡清档按它归属）")
 	_equals(GameManager.wave_number, 7, "恢复后波次")
 	_equals(GameManager.kills, 123, "恢复后击杀")
 	_equals(GameManager.spirit_stones, 88, "恢复后金币")
@@ -235,7 +238,7 @@ func _test_roundtrip() -> void:
 	_equals(GameManager.experience_to_next, 100, "恢复后经验门槛")
 	_equals(GameManager._exp_chain, 90, "恢复后经验门槛链（隐藏账本）")
 	_equals(GameManager.pending_upgrade_points, 2, "恢复后待加点数")
-	_equals(GameManager.danger_level, 2, "恢复后危险度")
+	_equals(GameManager.danger_level, 1, "恢复后危险度（噩梦）")
 	_check(GameManager.run_started, "恢复后 run_started 置真（WaveSpawner 才会接管）")
 
 	# —— 加点层：upgrade_counts 对账 + 属性终值（atk_up 直接抬 weapon_damage_mult）——

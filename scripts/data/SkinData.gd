@@ -3,16 +3,17 @@ extends RefCounted
 
 ## 角色换色皮肤主题表（纯静态数据，唯一真话源）
 ## 每角色：默认「原色」+ 6 套全员共享主题皮肤（第 6 套「虹霓」为动态炫彩）。
-## 2026-10-20 与难度解耦：tier 不再对应难度档位，改为「该角色累计通关次数」门槛（tier + 1 次，任意难度）。
-## 解锁判定不走本表：GameManager.is_skin_unlocked() 读该角色记录里的 wins 累计。
+## 2026-10-28 无限闯关改造：tier 改为 wave —— 解锁看「该角色单局抵达过的最高波数」，
+## 不再看通关次数（20 波只是破境波而非终点，攒通关次数的路子已失效）。
+## 解锁判定不走本表：GameManager.is_skin_unlocked() 读该角色记录里的 best_wave 与 wave 比较。
 ## 皮肤只换配色（斗篷内/外/缘拼色 + 眼色 + 武器色 + 骨色微调），不改造型样式键。
 ## 炫彩主题额外带 "chroma" 参数：渲染器按时间沿色环流转缘边/眼瞳/武器流光，袍面保持黑底只叠油膜虹彩。
 
-## 主题数组下标即 skin_idx（0~5）；tier = 解锁所需的该角色通关次数 - 1（1~6 次）
+## 主题数组下标即 skin_idx（0~5）；wave = 解锁所需的该角色最高抵达波数（5 / 10 / 15 / 25 / 35 / 50）
 const THEMES: Array[Dictionary] = [
-	{   # 1 胜 —— 苍竹：青玉竹影，偏青的碧色与剑士本相墨绿拉开区分
+	{   # 第 5 波 —— 苍竹：青玉竹影，偏青的碧色与剑士本相墨绿拉开区分
 		"name": "苍竹",
-		"tier": 0,
+		"wave": 5,
 		"cloak_outer": Color(0.07, 0.22, 0.21),   # 沉潭青
 		"cloak_inner": Color(0.14, 0.42, 0.38),   # 青玉碧
 		"cloak_edge": Color(0.46, 0.90, 0.74),    # 新竹翠芒
@@ -22,9 +23,9 @@ const THEMES: Array[Dictionary] = [
 		"weapon_shadow": Color(0.58, 0.75, 0.66),
 		"weapon_accent": Color(0.48, 0.94, 0.70, 0.9),
 	},
-	{   # 2 胜 —— 赤霄：赤焰丹霞，暖意金边
+	{   # 第 10 波 —— 赤霄：赤焰丹霞，暖意金边
 		"name": "赤霄",
-		"tier": 1,
+		"wave": 10,
 		"cloak_outer": Color(0.27, 0.08, 0.09),   # 玄赤深红
 		"cloak_inner": Color(0.52, 0.15, 0.13),   # 朱砂赤
 		"cloak_edge": Color(0.96, 0.58, 0.22),    # 焰橙鎏光
@@ -36,9 +37,9 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.98, 0.95, 0.90),    # 骨色微暖，与赤袍相合
 		"bone_shadow": Color(0.82, 0.76, 0.69),
 	},
-	{   # 3 胜 —— 霜华：冰川寒玉，清冷霜锋
+	{   # 第 15 波 —— 霜华：冰川寒玉，清冷霜锋
 		"name": "霜华",
-		"tier": 2,
+		"wave": 15,
 		"cloak_outer": Color(0.10, 0.16, 0.30),   # 玄冰深蓝
 		"cloak_inner": Color(0.22, 0.38, 0.58),   # 冰川青蓝
 		"cloak_edge": Color(0.56, 0.86, 1.0),     # 霜华寒芒
@@ -50,9 +51,9 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.94, 0.97, 1.0),     # 骨色偏冷，霜意统一
 		"bone_shadow": Color(0.71, 0.79, 0.91),
 	},
-	{   # 4 胜 —— 紫府：紫气东来，华贵神秘
+	{   # 第 25 波 —— 紫府：紫气东来，华贵神秘
 		"name": "紫府",
-		"tier": 3,
+		"wave": 25,
 		"cloak_outer": Color(0.19, 0.10, 0.30),   # 玄紫深檀
 		"cloak_inner": Color(0.38, 0.20, 0.53),   # 紫府罗缎
 		"cloak_edge": Color(0.86, 0.50, 1.0),     # 紫微流光
@@ -62,9 +63,9 @@ const THEMES: Array[Dictionary] = [
 		"weapon_shadow": Color(0.70, 0.62, 0.83),
 		"weapon_accent": Color(0.86, 0.55, 1.0, 0.9),
 	},
-	{   # 5 胜 —— 鎏金：玄衣金缕，尊荣威仪
+	{   # 第 35 波 —— 鎏金：玄衣金缕，尊荣威仪
 		"name": "鎏金",
-		"tier": 4,
+		"wave": 35,
 		"cloak_outer": Color(0.16, 0.12, 0.06),   # 玄铜墨褐
 		"cloak_inner": Color(0.42, 0.30, 0.10),   # 沉金暗缎
 		"cloak_edge": Color(1.0, 0.80, 0.30),     # 鎏金亮边
@@ -76,9 +77,9 @@ const THEMES: Array[Dictionary] = [
 		"bone_white": Color(0.97, 0.95, 0.88),    # 骨色微暖含金
 		"bone_shadow": Color(0.80, 0.75, 0.62),
 	},
-	{   # 6 胜 —— 虹霓：墨底油膜幻彩，缘边/眼瞳/武器流光沿色环流转（炫彩皮肤）
+	{   # 第 50 波 —— 虹霓：墨底油膜幻彩，缘边/眼瞳/武器流光沿色环流转（炫彩皮肤）
 		"name": "虹霓",
-		"tier": 5,
+		"wave": 50,
 		"cloak_outer": Color(0.063, 0.045, 0.100), # 墨底玄紫（低明度保黑底，色相随时间流转）
 		"cloak_inner": Color(0.092, 0.085, 0.170), # 墨底靛青
 		"cloak_edge": Color(0.38, 0.93, 1.0),      # 基准冷青（炫彩相位锚点）

@@ -1,9 +1,9 @@
 extends Node
 
-## 长局压力判据（soak）：连续推满 20 波到胜利闸口 + 重开一局再战 3 波。
+## 长局压力判据（soak）：连续推满 20 波破境但不结算 + 重开一局再战 3 波。
 ## 目的：RunReset / 波末清场 / 对象池的全部泄漏假设只在长局里暴露——
 ## 现有判据最远只跳波到第 13 波（smoke_runner），从未连续跑过 2 波以上，
-## 「第 20 波终局闸口」与「重开一局」两条路径没有任何测试覆盖。
+## 「第 20 波破境波收拢」与「重开一局」两条路径没有任何测试覆盖。
 ##
 ## 判据口径（全部「有界」型，不追「归零」——池按设计合法扩容跨波常驻）。
 ## 采样时机统一在「波间收拢后」：end_wave 清场 + phase 进入 ALLOC/SHOP 之后再取数，
@@ -22,8 +22,11 @@ var _c := TestCheck.new()
 
 ## 每波真实战斗的模拟秒数（Engine.time_scale=8 下 ≈ 实际 0.5s/波，20 波 ~10s 真实战斗）
 const FIGHT_SECONDS := 4.0
-## 节点数平台期滑量：收拢态下第 20 波对第 12 波允许的最大增量
-const NODE_LATE_DRIFT := 60.0
+## 节点数平台期滑量：收拢态下第 20 波对第 12 波允许的最大增量。
+## 2026-10-28 双难度改版：普通档敌潮密度由 ×1.08 提到 ×1.16（+7.4%），
+## 同屏基线整体上移；本项是漏检的粗粒度红线（残组/池/内存/补间各有独立判据），
+## 刷新 RNG 会让同屏数上下浮动百余节点，给到 200 只为滤噪声，不放松真正的泄漏信号。
+const NODE_LATE_DRIFT := 200.0
 ## 静态内存平台期滑量：允许图集等一次性解码跳变
 const MEM_LATE_DRIFT := 6.0 * 1024.0 * 1024.0
 ## 在跑补间数平台期滑量
@@ -71,11 +74,20 @@ func _run() -> void:
 	get_tree().paused = false
 	_check(GameManager.run_started, "开局就绪")
 
-	var residue_total: int = await _run_run(1, GameManager.VICTORY_WAVE)
+	var residue_total: int = await _run_run(1, GameManager.MILESTONE_WAVE)
 
 	# —— 长局终判 —— #
-	_check(GameManager.is_game_over and GameManager.wave_number >= GameManager.VICTORY_WAVE,
-		"第 %d 波胜利闸口已触发（is_game_over=%s wave=%d）" % [GameManager.VICTORY_WAVE, str(GameManager.is_game_over), GameManager.wave_number])
+	# 2026-10-28 无限闯关：第 20 波是破境波（不是胜利闸口）⇒ 打完不结算，继续进波间。
+	# spawner 现取（GameManager.wave_spawner）：长局末尾还是同一个 WaveSpawner（重开一局前没换场）。
+	var final_spawner: WaveSpawner = GameManager.wave_spawner
+	var final_phase := -1
+	if final_spawner != null:
+		final_phase = final_spawner.phase
+	_check(not GameManager.is_game_over,
+		"第 %d 波破境后不结算（is_game_over=%s wave=%d）" % [
+			GameManager.MILESTONE_WAVE, str(GameManager.is_game_over), GameManager.wave_number])
+	_check(final_phase == WaveSpawner.Phase.ALLOC or final_phase == WaveSpawner.Phase.SHOP,
+		"第 %d 波破境后进入波间（phase=%d）" % [GameManager.MILESTONE_WAVE, final_phase])
 	_check(residue_total == 0, "20 波波末组零残留（累计 %d）" % residue_total)
 
 	# 节点数平台化：收拢态下第 20 波对第 12 波不许再明显增长（前中期池扩容合法，后期必须稳住）
@@ -155,7 +167,7 @@ func _run_run(from_wave: int, to_wave: int) -> int:
 		# 真实战斗若干模拟秒：让刷怪/索敌/掉落/池扩容都真实发生
 		await _wait_clean(FIGHT_SECONDS)
 		spawner.end_wave()
-		# 等清场收拢进波间（ALLOC/SHOP）；终局波走 _open_shop 的胜利闸口
+		# 等清场收拢进波间（ALLOC/SHOP）；2026-10-28 无限闯关：破境波不再结算，照样进波间
 		var wait_break := 0
 		while spawner.phase != WaveSpawner.Phase.ALLOC and spawner.phase != WaveSpawner.Phase.SHOP and wait_break < 200:
 			await get_tree().create_timer(0.2).timeout

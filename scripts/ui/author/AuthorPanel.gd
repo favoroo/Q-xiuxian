@@ -5,7 +5,7 @@ extends BaseModalDialog
 ##
 ## 五个分页：
 ##   ◆ 状态：人物等级 / 跳关 / 金币
-##   ◆ 战斗：无敌 / 一击必杀 / 时间加速 / 直接胜利·失败
+##   ◆ 战斗：无敌 / 一击必杀 / 时间加速 / 直接结算
 ##   ◆ 武器：全武器图鉴式浏览（类型/五行筛选 + 卡面三签），点卡开详情窗、窗内按星免费购买（1 ~ MAX_STAR）
 ##   ◆ 道具：全道具 + 灵兽，点卡开详情窗、窗内免费购买
 ##   ◆ 商店：完整商店（AuthorShopView）
@@ -25,7 +25,7 @@ extends BaseModalDialog
 ## - 所有按钮都走 GameStyle.button（唯一取色入口 + 统一点击音）。
 
 const LEVEL_PRESETS: Array[int] = [1, 5, 10, 20, 30, 50]
-const WAVE_PRESETS: Array[int] = [1, 5, 10, 15, 20]
+const WAVE_PRESETS: Array[int] = [1, 5, 10, 15, 20, 25, 30, 35, 40, 50]
 ## 条目卡宽与格缝（与 CodexCardFactory 同源）：列数按面板可用宽现算，
 ## 窄屏（720）落 3 列、桌面（900 面板）落 5 列，绝不把整排顶出面板
 const CARD_W := CodexCardFactory.CARD_W
@@ -39,7 +39,7 @@ signal inventory_changed(kind: String)
 signal state_changed(kind: String)
 
 var _was_paused_before_open: bool = false
-## 关面板时是否强制保持暂停（直接胜利/失败后结算屏要靠树暂停冻结，不能被本面板解掉）
+## 关面板时是否强制保持暂停（直接结算后结算屏要靠树暂停冻结，不能被本面板解掉）
 var _keep_paused_on_close: bool = false
 ## 关面板时是否强制解除暂停（跳关/本波直接结束：关闭动画要 0.12s，若按「打开前是暂停」
 ## 还原，新开的波会被这 0.12s 后的回调重新暂停住 —— 必须显式要求解暂停）
@@ -49,6 +49,7 @@ var _force_unpause_on_close: bool = false
 var _level_value_lbl: Label
 var _wave_value_lbl: Label
 var _stones_value_lbl: Label
+var _danger_value_lbl: Label
 
 # 战斗页开关按钮
 var _god_btn: Button
@@ -173,7 +174,7 @@ func _on_closed() -> void:
 	if _alloc_view != null:
 		DetailTip.close_all(_alloc_view)
 	# 战斗中被 HUD 打开时，关面板要把暂停还回去；商店/悟道期间打开前本来就是暂停，保持。
-	# 结算屏路径（直接胜利/失败）由 _keep_paused_on_close 钉住暂停，否则树一解暂停，
+	# 结算屏路径（直接结算）由 _keep_paused_on_close 钉住暂停，否则树一解暂停，
 	# 结算对话框的入场动画与 GameOver 流程会被 WaveSpawner 抢跑。
 	# 跳关/结束本波路径由 _force_unpause_on_close 强制解暂停（新波必须能跑起来）。
 	if _keep_paused_on_close:
@@ -205,18 +206,27 @@ func _build_state_page(parent: Control) -> Control:
 
 	box.add_child(_make_separator())
 	box.add_child(_make_section_title("跳关", GameStyle.JADE))
-	box.add_child(_make_hint("清掉场上敌人/宝箱/炮台/预警后直接开波。跳关不发回合末收益，方便定点测 Boss 与高波内容。"))
-	var wave_row := HFlowContainer.new()
-	wave_row.add_theme_constant_override("h_separation", 8)
-	wave_row.add_theme_constant_override("v_separation", 6)
-	box.add_child(wave_row)
+	box.add_child(_make_hint("清掉场上敌人/宝箱/炮台/预警后直接开波。跳关不发回合末收益，方便定点测 Boss 与深层内容（20 波以上即深层）。"))
+	var wave_rel_row := HFlowContainer.new()
+	wave_rel_row.add_theme_constant_override("h_separation", 8)
+	wave_rel_row.add_theme_constant_override("v_separation", 6)
+	box.add_child(wave_rel_row)
 	_wave_value_lbl = _make_value_label("第 1 波")
-	wave_row.add_child(_wave_value_lbl)
-	wave_row.add_child(_make_button("－ 1 波", func(): _jump_relative(-1), 72))
-	wave_row.add_child(_make_button("＋ 1 波", func(): _jump_relative(1), 72))
-	for n in WAVE_PRESETS:
-		var target: int = n
-		wave_row.add_child(_make_button("W%d" % target, func(): _jump_to(target), 56))
+	wave_rel_row.add_child(_wave_value_lbl)
+	wave_rel_row.add_child(_make_button("－ 10 波", func(): _jump_relative(-10), 76))
+	wave_rel_row.add_child(_make_button("－ 5 波", func(): _jump_relative(-5), 72))
+	wave_rel_row.add_child(_make_button("－ 1 波", func(): _jump_relative(-1), 72))
+	wave_rel_row.add_child(_make_button("＋ 1 波", func(): _jump_relative(1), 72))
+	wave_rel_row.add_child(_make_button("＋ 5 波", func(): _jump_relative(5), 72))
+	wave_rel_row.add_child(_make_button("＋ 10 波", func(): _jump_relative(10), 76))
+
+	var wave_preset_row := HFlowContainer.new()
+	wave_preset_row.add_theme_constant_override("h_separation", 8)
+	wave_preset_row.add_theme_constant_override("v_separation", 6)
+	box.add_child(wave_preset_row)
+	for wave_target in WAVE_PRESETS:
+		var target: int = wave_target
+		wave_preset_row.add_child(_make_button("W%d" % target, func(): _jump_to(target), 56))
 
 	box.add_child(_make_separator())
 	box.add_child(_make_section_title("金币", GameStyle.GOLD))
@@ -231,8 +241,33 @@ func _build_state_page(parent: Control) -> Control:
 	stone_row.add_child(_make_button("＋10 000", func(): _add_stones(10000), 92))
 	stone_row.add_child(_make_button("＋100 000", func(): _add_stones(100000), 100))
 
+	box.add_child(_make_separator())
+	box.add_child(_make_section_title("难度", GameStyle.BAD))
+	box.add_child(_make_hint("实时切换普通(D0)与噩梦(D1)难度。噩梦模式自带迷雾视野限制、双Boss车轮战与强敌凶化。"))
+	var danger_row := HFlowContainer.new()
+	danger_row.add_theme_constant_override("h_separation", 8)
+	danger_row.add_theme_constant_override("v_separation", 6)
+	box.add_child(danger_row)
+	_danger_value_lbl = _make_value_label("普通 (D0)")
+	danger_row.add_child(_danger_value_lbl)
+	danger_row.add_child(_make_button("切为「普通」", func(): _set_danger_to(0), 96))
+	danger_row.add_child(_make_button("切为「噩梦」", func(): _set_danger_to(1), 96))
+	danger_row.add_child(_make_button("开关迷雾", func(): _toggle_fog_preview(), 96))
+
 	GameStyle.swipeable(scroll)
 	return scroll
+
+func _set_danger_to(d: int) -> void:
+	GameManager.set_danger(d)
+	_refresh_state_labels()
+	GameManager.announcement_triggered.emit("已切换为难度「%s」" % ("噩梦" if d >= 1 else "普通"))
+
+func _toggle_fog_preview() -> void:
+	NightmareFogOverlay.force_fog_preview = not NightmareFogOverlay.force_fog_preview
+	GameManager.danger_changed.emit(GameManager.danger_level)
+	_refresh_state_labels()
+	var txt := "迷雾视野已开启" if NightmareFogOverlay.force_fog_preview else "迷雾预览已关闭"
+	GameManager.announcement_triggered.emit(txt)
 
 func _adjust_level(delta: int) -> void:
 	_set_level_to(GameManager.level + delta)
@@ -276,6 +311,11 @@ func _refresh_state_labels() -> void:
 		_wave_value_lbl.text = "第 %d 波" % GameManager.wave_number
 	if _stones_value_lbl != null:
 		_stones_value_lbl.text = "%d 金币" % GameManager.spirit_stones
+	if _danger_value_lbl != null:
+		var d_str := "噩梦 (D1)" if GameManager.danger_level >= 1 else "普通 (D0)"
+		if NightmareFogOverlay.force_fog_preview:
+			d_str += " · 迷雾强制开"
+		_danger_value_lbl.text = d_str
 
 # ---------------- 分页 2：战斗 ----------------
 
@@ -298,13 +338,12 @@ func _build_combat_page(parent: Control) -> Control:
 
 	box.add_child(_make_separator())
 	box.add_child(_make_section_title("结算", GameStyle.JADE))
-	box.add_child(_make_hint("直接触发结算屏，测胜利/失败演出、成就弹窗与返回流程（作者模式下不记录生涯与成就）。"))
+	box.add_child(_make_hint("直接触发阵亡结算屏，测结算演出、成就弹窗与返回流程（作者模式下不记录生涯与成就）。"))
 	var row2 := HFlowContainer.new()
 	row2.add_theme_constant_override("h_separation", 10)
 	row2.add_theme_constant_override("v_separation", 6)
 	box.add_child(row2)
-	row2.add_child(_make_button("直接胜利", func(): _force_end(true), 120))
-	row2.add_child(_make_button("直接失败", func(): _force_end(false), 120))
+	row2.add_child(_make_button("直接结算", func(): _force_end(), 120))
 
 	box.add_child(_make_separator())
 	box.add_child(_make_section_title("其他快捷", GameStyle.JADE))
@@ -347,13 +386,13 @@ func _style_toggle(btn: Button, label: String, on: bool) -> void:
 	GameStyle.button(btn, GameStyle.GOLD if on else GameStyle.NAVY2,
 		GameStyle.GOLD_EDGE, 13, GameStyle.INK_TEXT, 4.0, GameStyle.INK_TEXT)
 
-func _force_end(victory: bool) -> void:
+func _force_end() -> void:
 	_keep_paused_on_close = true
 	# 商店开着时直接结算：商店是 UILayer 里排在结算屏之后的兄弟，不先收起会整块盖住
-	# 结算屏（玩家只看到商店，以为「直接胜利」没反应）。Main 接到这条把商店藏掉。
+	# 结算屏（玩家只看到商店，以为「直接结算」没反应）。Main 接到这条把商店藏掉。
 	state_changed.emit("game_over")
 	close()
-	GameManager.trigger_game_over(victory)
+	GameManager.trigger_game_over()
 
 ## 清空背包（上阵不动）：测试换装/合成时不必一件件点出售
 func _clear_stash() -> void:

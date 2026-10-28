@@ -13,7 +13,6 @@ var _wait := 6.0
 var _out := "tests/inspect/tone_capture.png"
 var _status := false   ## true 时抓拍前给全场敌人挂灼烧+剧毒+冰缓（验收五行异常体表视觉）
 var _danger := 0       ## >0 时强置危险度（压测用，绕开解锁钳制）
-var _endless := false  ## true 时开无尽模式（深层波次压测用）
 var _keep_hdr := false ## true 时不切 LDR（保留桌面 HDR2D/ACES，仅供排障对照）
 
 func _ready() -> void:
@@ -29,8 +28,6 @@ func _run() -> void:
 			"--danger": _danger = int(String(args[i + 1]))
 		if String(args[i]) == "--status":
 			_status = true
-		if String(args[i]) == "--endless":
-			_endless = true
 		if String(args[i]) == "--hdr":
 			_keep_hdr = true
 
@@ -51,8 +48,6 @@ func _run() -> void:
 		await get_tree().process_frame
 	if _danger > 0:
 		GameManager.danger_level = _danger
-	if _endless:
-		GameManager.endless_mode = true
 	for w_id in ["wulei_paizi", "chiyan_dao", "huoyan_fu"]:
 		GameManager.add_weapon(w_id, 3)
 	_dismiss_dialogs()

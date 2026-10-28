@@ -39,7 +39,7 @@ func _spawn_enemy(scene_path: String, at: Vector2) -> EnemyBase:
 	e.global_position = at
 	e.add_to_group("enemies")
 	_world.add_child(e)
-	e.move_speed = 0.0        ## 不许自己走位污染读数（击退位移仍走 _resolve_velocity 硬直滑行段）
+	e.move_speed = 0.01       ## 近似静止（EnemyBase 对 move_speed<=0 的静止单位免疫击退，留 0.01 只让 AI 位移可忽略）
 	e.contact_damage = 0.0    ## 接触伤害/反震不参与本判据
 	return e
 

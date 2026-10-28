@@ -1968,7 +1968,7 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 		amount = maxf(amount, current_hp + max_hp)
 	current_hp -= amount
 	# 精英变异血线检查（只触发一次；Boss 走自己的二阶段，_enter_mutation 内部按敌种分发）
-	if not _mutated and is_elite and current_hp > 0.0 and current_hp <= max_hp * GameBalance.ELITE_MUTATION_HP_PCT:
+	if not _mutated and is_elite and current_hp > 0.0 and current_hp <= max_hp * GameBalance.elite_mutation_hp_pct(GameManager.danger_level):
 		_enter_mutation()
 	# 致命一刀不再发命中火花：尸体 0.185s 就塌缩没，火花要放 0.22s，会在空处留一道白闪；
 	# 击杀点反馈由 _die() 的死亡爆散一力承担（视觉不丢，只是不再双发）

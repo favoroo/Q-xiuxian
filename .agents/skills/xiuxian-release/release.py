@@ -23,9 +23,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 VERSION_GD = REPO_ROOT / 'scripts' / 'autoload' / 'Version.gd'
+CHANGELOG_DATA = REPO_ROOT / 'scripts' / 'data' / 'ChangelogData.gd'
 PRESETS_CFG = REPO_ROOT / 'export_presets.cfg'
 BUILD_DIR = REPO_ROOT / 'build'
 META_FILE = BUILD_DIR / 'release-meta.json'
+
+# 发布说明守则（与 SKILL.md §3 同源）：只写玩家能感知的变化
+NOTES_MAX_ITEMS = 5
+NOTES_MAX_CHARS = 25
+NOTES_ALLOWED_SECTIONS = ('新增内容', '调整', '问题修复')
+NOTES_BANNED_TERMS = (
+    '池化', '对象池', '节流', '信号', '节点', 'await', '渲染器', '工厂',
+    '口径', '探针', 'HUD', '合批', '分帧', '重构', '缓存', '日志', '接口',
+    '测试', '站点',
+)
 
 GODOT_BIN = os.environ.get('GODOT_BIN', os.environ.get('G', '/Applications/Godot.app/Contents/MacOS/Godot'))
 KEYTOOL_BIN = os.environ.get('KEYTOOL_BIN', '/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/keytool')
@@ -593,10 +604,92 @@ def prune_old_apks(keep_gh: int, keep_gitee: int, tokens: dict, dry_run: bool = 
         log(f'✓ Gitee 带 APK 的 Release 共 {len(gt_list)} 个')
 
 
+def _notes_bullets(notes: str) -> tuple:
+    """返回 (条目文本列表, 出现的段标题列表)，只认 `- ` 与 `### ` 行。"""
+    bullets, sections = [], []
+    for raw in notes.splitlines():
+        s = raw.strip()
+        if s.startswith('### '):
+            sections.append(s[4:].strip())
+        elif s.startswith('- '):
+            text = s[2:].replace('**', '').strip()
+            if text:
+                bullets.append(text)
+    return bullets, sections
+
+
+def validate_notes(notes: str) -> list:
+    """按玩家视角守则校验 Release 说明，返回错误列表（空表示通过）。"""
+    errors = []
+    bullets, sections = _notes_bullets(notes)
+
+    if not bullets:
+        errors.append('没有任何条目（以 "- " 开头的行）')
+    if len(bullets) > NOTES_MAX_ITEMS:
+        errors.append(f'条目 {len(bullets)} 条，超过 {NOTES_MAX_ITEMS} 条')
+
+    for b in bullets:
+        if len(b) > NOTES_MAX_CHARS:
+            errors.append(f'条目 {len(b)} 字，超过 {NOTES_MAX_CHARS} 字：{b}')
+        hits = [t for t in NOTES_BANNED_TERMS if t.lower() in b.lower()]
+        if hits:
+            errors.append(f'含开发者黑话（{"/".join(hits)}）：{b}')
+
+    bad = [s for s in sections if s not in NOTES_ALLOWED_SECTIONS]
+    if bad:
+        errors.append('段标题只允许 ' + '/'.join(NOTES_ALLOWED_SECTIONS) +
+                      '，出现了：' + '/'.join(bad))
+
+    return errors
+
+
+def top_changelog_version() -> str:
+    """读游戏内更新记录的第一个版本号（ChangelogData.gd 顶条）。"""
+    try:
+        text = CHANGELOG_DATA.read_text(encoding='utf-8')
+    except OSError:
+        return ''
+    m = re.search(r'"version"\s*:\s*"(v[0-9.]+)"', text)
+    return m.group(1) if m else ''
+
+
+def check_changelog_sync(version: str) -> None:
+    """提示游戏内「更新记录」是否已追上本次发布（只告警，不拦发布）。"""
+    top = top_changelog_version()
+    target = f'v{version}'
+    if not top:
+        log('⚠ 未读到 ChangelogData.gd 顶条版本，跳过更新记录同步检查')
+    elif top != target:
+        log(f'⚠ 游戏内更新记录顶条为 {top}，本次发布 {target}；'
+            f'请补齐 scripts/data/ChangelogData.gd 后再提交')
+
+
 def cmd_publish(args) -> None:
     target_ver = args.version.lstrip('vV')
     tag = f'v{target_ver}'
     rel_name = f'剑士 {tag}'
+
+    notes = ''
+    if args.notes_file:
+        notes_p = Path(args.notes_file)
+        if not notes_p.exists():
+            die(f'说明文件不存在: {notes_p}')
+        notes = notes_p.read_text(encoding='utf-8')
+    if not notes:
+        notes = (f'## {rel_name}\n\n### 问题修复\n'
+                 f'- 优化游戏体验，修复若干已知问题\n')
+
+    errors = validate_notes(notes)
+    if errors:
+        for e in errors:
+            print(f'  ✗ {e}', file=sys.stderr)
+        if args.skip_notes_check:
+            log('⚠ 说明校验未通过，但已指定 --skip-notes-check，继续发布')
+        else:
+            die('Release 说明不合规（玩家视角守则见 SKILL.md §3）；'
+                '确需跳过加 --skip-notes-check')
+
+    check_changelog_sync(target_ver)
 
     tokens = {
         'gh': get_github_token(),
@@ -604,7 +697,7 @@ def cmd_publish(args) -> None:
     }
 
     if args.dry_run:
-        log('【Dry-Run】执行预检与令牌验证通过，不执行实际发布操作。')
+        log('【Dry-Run】说明校验与令牌验证通过，不执行实际发布操作。')
         return
 
     meta = wait_for_build(target_ver, args.timeout)
@@ -615,13 +708,8 @@ def cmd_publish(args) -> None:
     branch = current_branch()
     push_both(branch, tag)
 
-    notes = ''
-    if args.notes_file:
-        notes_p = Path(args.notes_file)
-        if notes_p.exists():
-            notes = notes_p.read_text(encoding='utf-8')
-    if not notes:
-        notes = f'## {rel_name}\n\n剑士发布版本 {tag}。\n\n**SHA-256**: `{meta["sha256"]}`'
+    if '**SHA-256**' not in notes:
+        notes = notes.rstrip() + f'\n\n**SHA-256**: `{meta["sha256"]}`'
 
     rel_ids = create_release(tag, rel_name, notes, tokens)
     upload_apks(rel_ids, apk_path, apk_name, tokens)
@@ -647,6 +735,8 @@ def main():
     p_pub = sub.add_parser('publish', help='第二阶段：推送代码并双端发布 Release')
     p_pub.add_argument('--version', required=True, help='版本号，如 0.0.1')
     p_pub.add_argument('--notes-file', help='Release 说明 Markdown 文件路径')
+    p_pub.add_argument('--skip-notes-check', action='store_true',
+                       help='跳过玩家视角说明校验（默认不合规即拒绝发布）')
     p_pub.add_argument('--timeout', type=int, default=900, help='等待构建元数据超时（秒）')
     p_pub.add_argument('--keep-gh', type=int, default=10, help='GitHub 保留最近 N 个版本的 APK 附件')
     p_pub.add_argument('--keep-gitee', type=int, default=3, help='Gitee 保留最近 N 个版本的 APK 附件')

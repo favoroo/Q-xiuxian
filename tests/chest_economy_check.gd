@@ -129,9 +129,9 @@ func _test_pure() -> void:
 		"退回量比铜匣还厚：堆上去的档位不许越堆越亏")
 	_c.equals(GameBalance.CHEST_JADE_ITEM_GRANT_CAP, 2, "每局玉匣最多送 2 件法宝（掏空灵石阁的保险丝）")
 
-	# 危险度乘区：越难越稀少，顶档（噩梦）葫芦概率压到基准的 37.5%
+	# 危险度乘区：越难越稀少，顶档（噩梦）葫芦概率压到基准的 65%（均衡档，不过度剥夺恢复机会）
 	_c.near(GameBalance.danger_heal_chance_mult(0), 1.0, 0.001, "简单档乘区 = 1.0（基准）")
-	_c.near(GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX), 0.375, 0.001, "噩梦档乘区 = 0.375（0.4×0.375=0.15）")
+	_c.near(GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX), 0.65, 0.001, "噩梦档乘区 = 0.65（0.4×0.65=0.26）")
 	_c.check(GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX) < GameBalance.danger_heal_chance_mult(0),
 		"乘区随危险度单调递减")
 	for d in range(GameBalance.DANGER_MAX):
@@ -139,8 +139,8 @@ func _test_pure() -> void:
 			"葫芦乘区档间严格递减 D%d→D%d" % [d, d + 1])
 	_c.near(GameBalance.danger_heal_chance_mult(9), GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX), 0.001,
 		"危险度超档 clamp 到 DANGER_MAX，不溢出")
-	_c.near(float(r0["heal_chance"]) * GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX), 0.15, 0.001,
-		"噩梦档木匣实掉葫芦概率 = 0.15")
+	_c.near(float(r0["heal_chance"]) * GameBalance.danger_heal_chance_mult(GameBalance.DANGER_MAX), 0.26, 0.001,
+		"噩梦档木匣实掉葫芦概率 = 0.26")
 
 # ---------------- 2+3) 来源层与现场层 ----------------
 

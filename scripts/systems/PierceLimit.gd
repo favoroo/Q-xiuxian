@@ -30,7 +30,7 @@ const PIERCE_ITEM_IDS: Array[String] = ["poxu_lingfu", "wuji_tianchuan_zhen"]
 ##   全基础 1 阵容 + bonus 2 → 出膛 3：满，停刷
 ## 玩家一件弹丸都没有时（不可能开局，防御性兜底）按未满处理，照常刷。
 static func has_max_pierce(gm: Node) -> bool:
-	if gm.player == null or not is_instance_valid(gm.player):
+	if gm.player == null or not is_instance_valid(gm.player) or not gm.player.has_method("get_equipped_weapons_data"):
 		return false
 	var found_pierceable := false
 	for w in gm.player.get_equipped_weapons_data():

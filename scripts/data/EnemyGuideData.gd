@@ -180,7 +180,7 @@ const GUIDE: Dictionary = {
 	},
 	# —— 魔君 ——
 	"boss": {
-		"desc": "镇守十波大关与无尽深层的诸天魔君（赤炎、修罗、千机、万蛊、剑魄、心魔），各有专属杀招与【半血狂暴】质变。",
+		"desc": "镇守十波大关与深层的诸天魔君（赤炎、修罗、千机、万蛊、剑魄、心魔），各有专属杀招与【半血狂暴】质变。",
 		"tags": ["Boss", "狂暴"],
 		"attack": "多段招式·狂暴",
 		"tough": "极厚",
@@ -221,14 +221,14 @@ static func display_name(eid: String) -> String:
 	return eid
 
 ## 首次出没波次文案：常规怪读闸门；精英 5/15 波；魔君 10/20 波；金蟾第 3 波起逢场出现
-static func first_seen_text(eid: String, endless: bool = false) -> String:
+static func first_seen_text(eid: String) -> String:
 	if EnemyData.MOBS.has(eid):
 		var w := int(EnemyData.MOBS[eid].get("unlock_wave", 1))
 		return "出没：第 %d 波起" % w if w > 1 else "出没：第 1 波起"
 	if eid in ["golem", "chilei", "jiansha", "xuanming", "xingpan", "wandu"]:
 		return "出没：第 5 / 15 波起 精英劫"
 	if eid == "boss":
-		return "出没：第 10 到 40 波及无尽魔君劫"
+		return "出没：第 10 / 20 波，之后每 5 波"
 	if eid == "jinchan":
 		return "出没：第 %d 波起 逢场出现" % int(EnemyData.LOOTER_DEF["min_wave"])
 	return ""

@@ -159,19 +159,6 @@ func _test_screen_shake_budget() -> void:
 	SettingsManager.set_val(&"display", &"shake_intensity", orig_level)
 	fcam.free()
 
-	# 8. 玩家通关飞升演出状态机测试
-	var p_scene: PackedScene = load("res://scenes/entities/Player.tscn")
-	var test_player: Player = p_scene.instantiate()
-	add_child(test_player)
-	_c.check(not test_player._victorious, "玩家初始不在胜利演出态")
-	test_player.play_victory_sequence()
-	_c.check(test_player._victorious, "play_victory_sequence 后进入胜利演出态")
-	_c.check(test_player.invulnerable_time >= 9000.0, "胜利演出期获绝对无敌保护")
-	test_player.reset_victory_state()
-	_c.check(not test_player._victorious, "reset_victory_state 成功复位胜利演出态")
-	_c.near(test_player.invulnerable_time, 0.0, EPS, "复位后无敌时间恢复")
-	test_player.free()
-
 func _test_knock_direction() -> void:
 	var p := Vector2.ZERO
 	var src := Vector2(300.0, 0.0)                 # 落点：玩家正东 300 的敌人（正是分配位，不是最近位）

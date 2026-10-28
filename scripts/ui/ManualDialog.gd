@@ -706,7 +706,7 @@ func _rebuild_enemies_page() -> void:
 				"", EnemyGuideData.display_name(eid),
 				"" if seen else "未收录", GameStyle.GREY,
 				func(anchor: Control): _open_enemy_tip(eid, is_elite, anchor),
-				EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), chips)
+				EnemyGuideData.first_seen_text(eid), chips)
 			if not seen:
 				# 未遭遇不捕图不剧透形象：灰显的是空占位框（与道具页「图标压暗」同理——
 				# 没见过的东西不该在图鉴里先亮出来）
@@ -768,7 +768,7 @@ func _open_enemy_tip(eid: String, is_elite: bool, anchor: Control) -> void:
 		body = GameStyle.wrap_bbcode(text, GameStyle.body_font(), 13, DetailTip.INNER_W)
 	else:
 		notes.append(_desc_plain(desc))
-	rows.append(["出没", EnemyGuideData.first_seen_text(eid, GameManager.endless_mode), GameStyle.PAPER])
+	rows.append(["出没", EnemyGuideData.first_seen_text(eid), GameStyle.PAPER])
 	rows.append(["收录", "已遭遇" if seen else "未遭遇", GameStyle.GOOD if seen else GameStyle.GREY])
 	var payload := {
 		"title": EnemyGuideData.display_name(eid),

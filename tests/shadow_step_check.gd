@@ -88,7 +88,7 @@ func _make_enemy(at: Vector2) -> EnemyBase:
 	e.global_position = at
 	e.max_hp = 999999.0
 	e.current_hp = 999999.0
-	e.move_speed = 0.0        ## 不许自己凑过来污染读数
+	e.move_speed = 0.01       ## 近似静止（EnemyBase 对 move_speed<=0 的静止单位免疫击退，留 0.01 只让 AI 位移可忽略）
 	e.contact_damage = 0.0    ## 接触伤害不参与本判据
 	e.add_to_group("enemies")
 	return e

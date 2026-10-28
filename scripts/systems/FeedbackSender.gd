@@ -84,19 +84,17 @@ static func build_diagnostics(tag: String = TAG_FEEDBACK) -> String:
 		if not cdef.is_empty():
 			cname = String(cdef.get("name", GameManager.cultivator_id))
 		var secs := int(GameManager.game_time)
-		lines.append("局内进度: 第 %d 波 / Lv.%d / 击杀 %d / 时长 %02d:%02d / 角色 %s / 难度 %s / 无尽 %s" % [
+		lines.append("局内进度: 第 %d 波 / Lv.%d / 击杀 %d / 时长 %02d:%02d / 角色 %s / 难度 %s" % [
 			GameManager.wave_number, GameManager.level, GameManager.kills,
 			int(secs / 60.0), secs % 60, cname,
 			AchievementData.danger_name(GameManager.danger_level),
-			"是" if GameManager.endless_mode else "否",
 		])
 	else:
 		lines.append("局内进度: 未在局内（主菜单或结算界面）")
 
 	var stats: Dictionary = GameManager.career_stats
-	lines.append("生涯统计: 局数 %d / 通关 %d / 最高波次 %d / 总击杀 %d" % [
+	lines.append("生涯统计: 局数 %d / 最高波次 %d / 总击杀 %d" % [
 		int(stats.get("total_runs", 0)),
-		int(stats.get("total_wins", 0)),
 		int(stats.get("best_wave", 0)),
 		int(stats.get("total_kills", 0)),
 	])

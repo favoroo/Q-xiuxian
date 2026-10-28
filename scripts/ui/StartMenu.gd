@@ -3,19 +3,21 @@ extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
 ##   ① 顶栏贴角级联徽章带（右：快速静音 + 游戏设置）
-##   ② 左 1 主方块（Hero「开始渡劫」，内嵌 4 档危险度与「无尽试炼」直通开关）+ 右 2×2 矩阵大方块
+##   ② 左 1 主方块（Hero「开始游戏」，内嵌 2 档危险度 + 「无限闯关」静态标识）+ 右 2×2 矩阵大方块
 ##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
 ##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
 ##   ③ 右下角一颗「检查更新」小按钮、左下角一颗「游戏共创」小按钮 —— 各贴屏底一角，不再拉通宽横幅
-## 点「开始渡劫」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
+## 2026-10-28 无限闯关改版：无尽试炼开关下线，首页只留「无限闯关」这枚静态标识（不再有交互）。
+## 点「开始游戏」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
 
 signal settings_requested
 signal career_requested
 signal manual_requested
 signal cocreation_requested  ## 游戏共创：主菜单左下角「游戏共创」按钮（Main 接 CoCreateDialog.open）
 signal resume_requested  ## 中断续玩：主菜单「继续游戏」按钮（Main.resume_from_save 消费）
+signal save_requested  ## 多存档：主菜单「存 档」按钮（Main 打开 SaveManageDialog 管理模式）
 
-const DANGER_NAMES := ["简单", "普通", "困难", "噩梦"]
+const DANGER_NAMES := ["普通", "噩梦"]
 
 ## 核心矩阵基准尺寸（960×540 下）。`*_BASE` 是「卡内排版」的起点档：
 ## 卡片按屏现算的高度高于基准时，多出来的那一截由 `hero_metrics()` / `small_metrics()`
@@ -33,8 +35,8 @@ const CORNER_BTN_H := 26.0            # 右下角「检查更新」小按钮高
 const HERO_SEP_BASE := 7.0            # Hero 内各行间距
 const HERO_TITLE_FONT_BASE := 32
 const HERO_DANGER_HEAD_FONT_BASE := 11
-const ENDLESS_BTN_H_BASE := 28.0
-const DANGER_BTN_H_BASE := 28.0       # 危险度那一排四颗键的高
+const MODE_BADGE_H_BASE := 28.0       ## 「无限闯关」静态标识的高
+const DANGER_BTN_H_BASE := 28.0       # 危险度那一排两颗键的高
 const DANGER_PAD_BASE := 6.0          # 危险度衬板上下内距
 const START_BTN_H_BASE := 42.0        # 底部整条出战主按钮高
 
@@ -93,9 +95,10 @@ var _danger_vbox: VBoxContainer
 var _danger_head_lbl: Label
 var _hero_void: Control              # Hero 中间那根吃富余的弹簧（量「卡内空洞」用）
 var _danger_buttons: Array[Button] = []
-var _endless_btn: Button
+var _mode_badge: Label            ## 「无限闯关」静态标识（不抢眼、不交互）
 var _hero_start_btn: Button
 var _resume_btn: Button
+var _save_btn: Button
 
 # 右侧 2×2 大方块与动态副文案
 var _small_cards: Array[PanelContainer] = []
@@ -229,7 +232,7 @@ func _build_center_matrix() -> void:
 
 	# 右上 1：修仙志（点缀黄色块）
 	var career_res := _build_entry_block(
-		"CAREER", "战 绩", "0 胜 · 击杀 0 只",
+		"CAREER", "战 绩", "最高 0 波 · 击杀 0 只",
 		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.JADE,
 		_on_career_pressed
 	)
@@ -309,7 +312,7 @@ func _build_center_matrix() -> void:
 	_cocreate_host.add_child(_cocreate_btn)
 	_anim_blocks.append(_cocreate_btn)
 
-## 左侧整柱 Hero 大方块：开始渡劫 + 4 档危险度 + 无尽试炼开关
+## 左侧整柱 Hero 大方块：开始游戏 + 2 档危险度 + 「无限闯关」静态标识
 func _build_hero_block() -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H_BASE)
@@ -326,7 +329,7 @@ func _build_hero_block() -> PanelContainer:
 	card.add_child(vbox)
 	_hero_vbox = vbox
 
-	# 顶部角签行 + 无尽试炼直通开关
+	# 顶部角签行 + 「无限闯关」静态标识
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 8)
 	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -340,20 +343,43 @@ func _build_hero_block() -> PanelContainer:
 	top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_row.add_child(top_spacer)
 
-	# 无尽模式切换开关（紧贴危险度上方/主块右上）
-	_endless_btn = Button.new()
-	_endless_btn.custom_minimum_size = Vector2(138, ENDLESS_BTN_H_BASE)
-	_endless_btn.focus_mode = Control.FOCUS_NONE
-	_endless_btn.pressed.connect(_on_endless_toggle_pressed)
-	top_row.add_child(_endless_btn)
+	# 无限闯关模式标识（2026-10-28）：无尽试炼开关下线后，位置原位改成静态标签 ——
+	# 保留「本局是无限闯关」这条信息，但不抢眼、不可点（纯 Label，不挂 pressed）。
+	_mode_badge = Label.new()
+	_mode_badge.text = "◆ 无限闯关"
+	_mode_badge.custom_minimum_size = Vector2(138, MODE_BADGE_H_BASE)
+	_mode_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_mode_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_mode_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_mode_badge.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
+	GameStyle.label(_mode_badge, 11, GameStyle.on_face_text(GameStyle.JADE_DK))
+	top_row.add_child(_mode_badge)
 
-	# 大标题
+	# 标题行：大标题 + 右侧「存 档」小键。
+	# 存档键放这里而不是底部再叠一行 —— Hero 卡竖向预算已排满（底部再塞一键会顶破，
+	# 缩 hero_metrics 又会把字号/键高的比例带歪），标题行右侧本来就是空的。
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(title_row)
+
 	_hero_title = Label.new()
 	_hero_title.text = "开 始 游 戏"
+	_hero_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
-	vbox.add_child(_hero_title)
+	title_row.add_child(_hero_title)
 
-	# 危险度选择区（纯黑内嵌衬板，让 4 档按钮在金色大块上清晰醒目）
+	_save_btn = Button.new()
+	_save_btn.text = "存 档"
+	_save_btn.custom_minimum_size = Vector2(72, 28)
+	_save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_save_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_save_btn.focus_mode = Control.FOCUS_NONE
+	GameStyle.button(_save_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
+	_save_btn.pressed.connect(_on_save_pressed)
+	title_row.add_child(_save_btn)
+
+	# 危险度选择区（纯黑内嵌衬板，让 2 档按钮在金色大块上清晰醒目）
 	_danger_box = PanelContainer.new()
 	var d_sb := GameStyle.panel(GameStyle.with_alpha(Color.BLACK, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
 	d_sb.content_margin_left = 8.0
@@ -425,7 +451,6 @@ func _build_hero_block() -> PanelContainer:
 	vbox.add_child(_resume_btn)
 
 	_refresh_danger_row()
-	_refresh_endless_toggle()
 	return card
 
 ## 右列 2×2 实底大色块构建器（整块可点，内置角签、大名号、副文案、右下箭标）
@@ -617,7 +642,7 @@ static func hero_metrics(hero_h: float) -> Dictionary:
 	return {
 		"sep": clampf(HERO_SEP_BASE + extra * 0.07, HERO_SEP_BASE, 12.0),
 		"title_font": clampi(HERO_TITLE_FONT_BASE + int(extra * 0.06), HERO_TITLE_FONT_BASE, 38),
-		"endless_h": clampf(ENDLESS_BTN_H_BASE + extra * 0.10, ENDLESS_BTN_H_BASE, 36.0),
+		"mode_h": clampf(MODE_BADGE_H_BASE + extra * 0.10, MODE_BADGE_H_BASE, 36.0),
 		"danger_h": clampf(DANGER_BTN_H_BASE + extra * 0.12, DANGER_BTN_H_BASE, 40.0),
 		"danger_pad": clampf(DANGER_PAD_BASE + extra * 0.06, DANGER_PAD_BASE, 11.0),
 		"danger_head_font": clampi(HERO_DANGER_HEAD_FONT_BASE + int(extra * 0.03),
@@ -643,7 +668,8 @@ func _apply_hero_metrics(hero_h: float, hero_w: float) -> void:
 	_hero_vbox.add_theme_constant_override("separation", int(m["sep"]))
 	_hero_title.add_theme_font_size_override("font_size", int(m["title_font"]))
 	_danger_head_lbl.add_theme_font_size_override("font_size", int(m["danger_head_font"]))
-	_endless_btn.custom_minimum_size = Vector2(138.0, float(m["endless_h"]))
+	if _mode_badge != null and is_instance_valid(_mode_badge):
+		_mode_badge.custom_minimum_size = Vector2(138.0, float(m["mode_h"]))
 	var d_sb := _danger_box.get_theme_stylebox("panel") as StyleBoxFlat
 	if d_sb != null:
 		d_sb.content_margin_top = float(m["danger_pad"])
@@ -676,8 +702,8 @@ func _apply_small_metrics(small_h: float) -> void:
 # ---------------- 状态刷新 ----------------
 
 func _refresh_danger_row() -> void:
-	# 逐级通关解锁（2026-10-25）：未解锁档位画成锁定态 —— 灰底 + 「×」前缀，
-	# 点它不切换（按钮 disabled），头部提示行说明解锁条件。
+	# 逐级解锁（2026-10-28 改口径）：在上一档难度抵达破境波即解锁下一档 —— 未解锁档位画成锁定态
+	# （灰底 + 「×」前缀，点它不切换，按钮 disabled），头部提示行说明解锁条件。
 	var top := GameManager.max_danger_unlocked()
 	for d in range(_danger_buttons.size()):
 		var btn := _danger_buttons[d]
@@ -700,26 +726,13 @@ func _refresh_danger_hint(top: int) -> void:
 	if _danger_head_lbl == null or not is_instance_valid(_danger_head_lbl):
 		return
 	if top >= GameBalance.DANGER_MAX:
-		_danger_head_lbl.text = "难度选择"
+		if GameManager.danger_level >= 1:
+			_danger_head_lbl.text = "难度选择 · 噩梦：迷雾视野 · 魔君双生 · 强敌凶化"
+		else:
+			_danger_head_lbl.text = "难度选择 · 普通：适中敌潮，稳步求道"
 	else:
-		_danger_head_lbl.text = "难度选择 · 通关「%s」解锁下一档" % DANGER_NAMES[top]
-
-func _refresh_endless_toggle() -> void:
-	if _endless_btn == null or not is_instance_valid(_endless_btn):
-		return
-	var on := GameManager.start_in_endless
-	if on:
-		_endless_btn.text = "◆ 无尽模式 · [开]"
-		GameStyle.button(_endless_btn, GameStyle.GOOD, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BAND)
-		if _hero_start_btn != null:
-			_hero_start_btn.text = "直 入 无 尽  》"
-			GameStyle.button(_hero_start_btn, GameStyle.GOOD, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
-	else:
-		_endless_btn.text = "无尽模式 · [关]"
-		GameStyle.button(_endless_btn, GameStyle.NAVY2, GameStyle.JADE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
-		if _hero_start_btn != null:
-			_hero_start_btn.text = "开 始 游 戏  》"
-			GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+		_danger_head_lbl.text = "难度选择 · 在「%s」打到第 %d 波解锁下一档" % [
+			DANGER_NAMES[top], GameManager.MILESTONE_WAVE]
 
 func _refresh_sound_badge() -> void:
 	if _sound_badge_btn == null or not is_instance_valid(_sound_badge_btn):
@@ -736,14 +749,14 @@ func _refresh_dynamic_texts() -> void:
 	# 1. 修仙志卡片副行
 	if _career_sub_lbl != null and is_instance_valid(_career_sub_lbl):
 		var cs := GameManager.career_stats
-		var wins := int(cs.get("total_wins", 0))
 		var kills := int(cs.get("total_kills", 0))
 		var b_wave := int(cs.get("best_wave", 0))
+		var runs := int(cs.get("total_runs", 0))
 		var career_txt := ""
 		if b_wave > 0:
-			career_txt = "%d 胜 · 最高 %d 波 · 击杀 %d" % [wins, b_wave, kills]
+			career_txt = "最高 %d 波 · 击杀 %d · %d 局" % [b_wave, kills, runs]
 		else:
-			career_txt = "%d 胜 · 累计击杀 %d 只" % [wins, kills]
+			career_txt = "累计击杀 %d 只 · %d 局" % [kills, runs]
 		_set_entry_sub(_career_sub_lbl, career_txt)
 
 	# 2. 传道玉简副行（显示已解锁角色/道具数）
@@ -825,13 +838,9 @@ func open() -> void:
 		if not summary.is_empty():
 			var cid := String(summary.get("cid", ""))
 			var c_name := String(CultivatorData.get_def(cid).get("name", "修士"))
-			if bool(summary.get("endless", false)):
-				_resume_btn.text = "继续游戏 · %s无尽第%d波  》" % [c_name, int(summary.get("wave", 1))]
-			else:
-				_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(summary.get("wave", 1))]
+			_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(summary.get("wave", 1))]
 	_layout_responsive()
 	_refresh_danger_row()
-	_refresh_endless_toggle()
 	_refresh_dynamic_texts()
 	visible = true
 	modulate.a = 0.0
@@ -871,9 +880,10 @@ func _on_danger_pressed(d: int) -> void:
 	GameManager.set_danger(d)
 	_refresh_danger_row()
 
-func _on_endless_toggle_pressed() -> void:
-	GameManager.set_start_in_endless(not GameManager.start_in_endless)
-	_refresh_endless_toggle()
+## 多存档：打开存档管理弹窗（查看/读档/删除），首页留在遮罩后不淡出
+## —— 与「修仙志 / 图鉴 / 游戏共创」同一交互。
+func _on_save_pressed() -> void:
+	save_requested.emit()
 
 ## 中断续玩：淡出菜单后通知 Main 按存档重建整局（Main.resume_from_save）
 func _on_resume_pressed() -> void:

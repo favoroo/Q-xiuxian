@@ -17,7 +17,7 @@ extends RefCounted
 # 每波总刷入只数、单批规模、刷怪间隔全部不变（峰值同屏不变、不加怪）。
 # 这条表在 10-15 分批清剿制下只是**上限**：真正结束一回合的是「预算刷尽 + 场上清空」
 # （WaveSpawner._tide_spent 提前出口，余秒折余时赏）。所以本档拉长的实际收益落在
-# 「打不完预算的那一段」——中后期与无尽深层原本 70s 到点、剩下的怪根本没刷出来，
+# 「打不完预算的那一段」——中后期与深层波次原本 70s 到点、剩下的怪根本没刷出来，
 # 现在多给的那 10s 让它们刷得出来；前期能打完预算的波，长度仍由击杀速度决定。
 const WAVE_DURATION_BASE := 33.0
 const WAVE_DURATION_PER_WAVE := 2.9
@@ -72,11 +72,13 @@ static func batch_refill_threshold(wave: int) -> int:
 const WAVE_SPAWN_BUDGET_BASE := 8.0
 const WAVE_SPAWN_BUDGET_PER_WAVE := 2.2
 const WAVE_SPAWN_BUDGET_MAX := 54.0
-# 2026-10-13 无尽深层三涨：正常局 20 波通关，故「波数 > 20」即等价无尽深层，曲线分段
-# 无需读 endless_mode（保持纯函数）。深层段预算从 W20 的 52 只起每波 +4，
+# 2026-10-13 深层三涨：20 波是破境波，故「波数 > 20」即等价深层波次，曲线分段
+# 无需读任何模式开关（保持纯函数）。深层段预算从 W20 的 52 只起每波 +4，
 # 到 135 硬顶；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
 # 走 endless_swarm_mult。
-const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（正常局通关波，> 此值走深层曲线）
+# 2026-10-28 无限闯关：20 波不再是终点，只是「破境波」；DEEP_WAVE_THRESHOLD 与
+# GameManager.MILESTONE_WAVE 同值，但纯函数层不读 autoload，故此处独立登记一份。
+const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（破境波，> 此值走深层曲线；同 GameManager.MILESTONE_WAVE）
 const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
 const DEEP_BUDGET_MAX := 135.0          ## 深层预算硬顶（约 W41 饱和）
 const DEEP_DMG_GROWTH := 1.12            ## 深层每波伤害复利（20 波段是 1.06；深层加速提档）
@@ -95,9 +97,9 @@ static func wave_spawn_budget(wave: int) -> int:
 
 ## 动态同屏敌人上限（纯函数，2026-10-15 分批清剿制）：
 ## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
-## 深层无尽结合 endless_swarm_mult 持续增长（封顶 26）。
+## 深层波次结合 endless_swarm_mult 持续增长（封顶 26）。
 ## 2026-10-17 性能专项绝对硬顶（用户拍板）：cap 只在刷怪口夹「基础值」，
-## WaveSpawner 的最终同屏数还会乘 danger_count_mult（顶档 D3 = 2.08）与角色敌潮倍率，
+## WaveSpawner 的最终同屏数还会乘 danger_count_mult（顶档 D1 噩梦 = 2.08）与角色敌潮倍率，
 ## 深层极端构建可叠到 ~95 只 —— 那是节点规模的绝对上限来源，帧率无法数学保证。
 ## MAX_ENEMIES_HARD_CAP 48 是「任何乘区叠满后」的最终同屏硬顶（20 波内常规峰值 ~33 不受影响）。
 const MAX_ENEMIES_HARD_CAP := 48
@@ -262,7 +264,7 @@ static func spawn_interval(wave: int) -> float:
 	return maxf(SPAWN_INTERVAL_MIN, SPAWN_INTERVAL_BASE - float(maxi(wave, 1)) * SPAWN_INTERVAL_PER_WAVE)
 
 ## 单批刷怪规模（2026-10-15 分批清剿制）：
-## 前期（W1~6）4~5 只，中期（W7~12）5~6 只，后期（W13~18）6~7 只，关底（W19+）7~8 只，深层无尽最高 8~9 只。
+## 前期（W1~6）4~5 只，中期（W7~12）5~6 只，后期（W13~18）6~7 只，关底（W19+）7~8 只，深层波次最高 8~9 只。
 ## roll 必须由调用方给（如 GameManager.rng.randf()）
 static func spawn_batch(wave: int, roll: float) -> int:
 	var w := float(maxi(wave, 1))
@@ -280,8 +282,8 @@ static func enemy_hp_mult(wave: int) -> float:
 ## 敌人伤害的唯一倍率出口：整体基线 × 每回合复利。
 ## 调用方（WaveSpawner 刷怪/Boss 注入、EnemyBase 产卵·分裂·召唤小怪）只乘这一条，
 ## 敌弹伤害按 contact_damage/BOLT_DMG_BASE_REF 反推、Boss 环弹与震地按系数派生，全链路同源。
-## 2026-10-13 深层分段：正常局（≤20 波）走 ENEMY_DMG_GROWTH 旧梯子不动；>20 波从
-## W20 值续按 DEEP_DMG_GROWTH 复利（分段处连续），治「无尽后期挨打不痛」。
+## 2026-10-13 深层分段：20 波内走 ENEMY_DMG_GROWTH 旧梯子不动；>20 波从
+## W20 值续按 DEEP_DMG_GROWTH 复利（分段处连续），治「深层挨打不痛」。
 static func enemy_dmg_mult(wave: int) -> float:
 	var w := maxi(wave, 1)
 	var base := ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(mini(w, DEEP_WAVE_THRESHOLD) - 1))
@@ -289,7 +291,8 @@ static func enemy_dmg_mult(wave: int) -> float:
 		return base
 	return base * pow(DEEP_DMG_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
 
-## 无尽深层同屏密度倍率：≤20 波恒 1.0（正常局零影响），深层每波 +6%、封顶 ×2.0。
+## 深层（>20 波）同屏密度倍率：≤20 波恒 1.0（20 波内零影响），深层每波 +8%、封顶 ×2.2。
+## 纯波次函数，不读 autoload、不看模式开关；函数名 endless_swarm_mult 保留为历史口径。
 ## 调用方 WaveSpawner._spawn_regular 乘在同屏上限上，与 danger_count_mult、
 ## 角色敌潮倍率同乘——只放天花板，刷入量仍由 wave_spawn_budget 闸住。
 static func endless_swarm_mult(wave: int) -> float:
@@ -434,7 +437,17 @@ const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
 const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
 const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
 
-## 固定 Boss 回合：10/20 波，20 回合后（无尽）每 5 波再逢魔君
+# ---------------- 噩梦难度专属常量与迷雾视野 ----------------
+const NIGHTMARE_DUAL_BOSS_HP_MULT := 0.78  ## 噩梦双 Boss 车轮战单尊生命折算（合计 1.56 倍血量，爽快不刮痧）
+const NIGHTMARE_FOG_CLEAR_RADIUS := 165.0  ## 噩梦迷雾清晰内圈半径（设计单位，真正缩小视野范围）
+const NIGHTMARE_FOG_FEATHER_RADIUS := 240.0 ## 噩梦迷雾边缘羽化外沿半径（超出即进入浓黑浓雾）
+const NIGHTMARE_FOG_MAX_ALPHA := 1.0       ## 迷雾外圈完全遮蔽（100% 浓雾，外部敌人与地形全被遮蔽）
+const ELITE_MUTATION_HP_PCT_BASE := 0.60   ## 普通精英变异血线（<=60%）
+const ELITE_MUTATION_HP_PCT_NIGHTMARE := 0.70 ## 噩梦精英变异提前至 <=70%
+const BOSS_PHASE2_HP_PCT_BASE := 0.50      ## 普通 Boss 二阶段血线（<=50%）
+const BOSS_PHASE2_HP_PCT_NIGHTMARE := 0.60 ## 噩梦 Boss 二阶段狂暴提前至 <=60%
+
+## 固定 Boss 回合：10/20 波，深层（>20 波）每 5 波再逢魔君
 ## （2026-10-13：用户口径深层 Boss 战要保留且加密，10 → 5 波一场：25/30/35…）
 static func is_boss_wave(n: int) -> bool:
 	return n in BOSS_WAVES or (n > BOSS_WAVE_MAX and n % 5 == 0)
@@ -456,17 +469,80 @@ static func boss_id_for_wave(wave: int) -> String:
 	var idx := maxi(0, int(float(wave - 45) / 5.0)) % BOSS_CYCLE_IDS.size()
 	return String(BOSS_CYCLE_IDS[idx])
 
-## 精英回合：5/15 波；无尽模式 20 回合后非 Boss 回合每关必逢精英（Boss 回合让位）
-static func is_elite_wave(n: int, endless: bool = false) -> bool:
-	return n in ELITE_WAVES or (endless and n > BOSS_WAVE_MAX and not is_boss_wave(n))
+## 精英回合：5/15 波；深层（>20 波）非 Boss 回合每关必逢精英（Boss 回合让位）
+## 2026-10-28 无限闯关改造：原「无尽模式」开关已被取消（所有局都可超过 20 波），
+## 语义固定为原无尽口径：n > BOSS_WAVE_MAX 且不是 Boss 波 ⇒ 精英波。
+static func is_elite_wave(n: int, _endless: bool = false) -> bool:
+	return n in ELITE_WAVES or (n > BOSS_WAVE_MAX and not is_boss_wave(n))
 
-## 精英生成数量：无尽模式 31 波起精英关升格为双精英同场（首只开场、次只中场）
-static func elite_spawn_count_for_wave(n: int, endless: bool = false) -> int:
-	if not is_elite_wave(n, endless):
+## 精英生成数量（纯函数）：依据波次与危险度（0~1 档，D0 普通 / D1 噩梦）确定精英怪刷新数量。
+## - 主线（≤20 波）：第 5 波恒 1 只；第 15 波在 D1 噩梦升级为 2 只
+## - 深层（>20 波）：
+##   D0: 21~30 波 1 只，31+ 波 2 只
+##   D1: 21~35 波 2 只，36+ 波 3 只
+## 签名兼任 (n, danger) 与历史 (n, _endless, danger) 两种传参口径
+static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0) -> int:
+	if not is_elite_wave(n):
 		return 0
-	if endless and n >= 31:
+	var danger: int = 0
+	if typeof(arg2) == TYPE_BOOL:
+		danger = arg3
+	elif typeof(arg2) == TYPE_INT:
+		danger = arg2
+	var d := clampi(danger, 0, DANGER_MAX)
+	if n <= BOSS_WAVE_MAX:
+		if n == 15 and d >= 1:
+			return 2
+		return 1
+	if d == 0:
+		return 2 if n >= 31 else 1
+	else:
+		return 3 if n >= 36 else 2
+
+## Boss 刷新数量（纯函数）：第 20/40/60 波在噩梦难度下打双 Boss 接力车轮战
+static func boss_spawn_count_for_wave(wave: int, danger: int = 0) -> int:
+	if not is_boss_wave(wave):
+		return 0
+	if danger >= 1 and wave >= 20 and wave % 20 == 0:
 		return 2
 	return 1
+
+## 双 Boss 回合血量折算倍率（纯函数，单尊 0.78x，防长线刮痧）
+static func boss_dual_hp_mult(wave: int, danger: int = 0) -> float:
+	if boss_spawn_count_for_wave(wave, danger) > 1:
+		return NIGHTMARE_DUAL_BOSS_HP_MULT
+	return 1.0
+
+## 依波次确定第二尊接力魔君 ID（与首尊互补不重样）
+static func secondary_boss_id_for_wave(wave: int) -> String:
+	if wave == 20:
+		return "jianpo"   ## W20 首尊修罗（近战狂战），次尊剑魄（刺客回斩）
+	elif wave == 40:
+		return "xiuluo"   ## W40 首尊心魔（极煞统领），次尊修罗（近战冲阵）
+	elif wave == 60:
+		return "qianji"   ## W60 首尊轮转，次尊千机（机关炮台阵）
+	var first_id := boss_id_for_wave(wave)
+	var idx := BOSS_CYCLE_IDS.find(first_id)
+	if idx >= 0:
+		var sec_idx := (idx + 3) % BOSS_CYCLE_IDS.size()
+		return String(BOSS_CYCLE_IDS[sec_idx])
+	return "chiyan"
+
+## 精英变异血线（纯函数）：普通 60%，噩梦提前至 70%
+static func elite_mutation_hp_pct(danger: int = 0) -> float:
+	return ELITE_MUTATION_HP_PCT_NIGHTMARE if danger >= 1 else ELITE_MUTATION_HP_PCT_BASE
+
+## Boss 二阶段狂暴血线（纯函数）：普通 50%，噩梦提前至 60%
+static func boss_phase2_hp_pct(danger: int = 0) -> float:
+	return BOSS_PHASE2_HP_PCT_NIGHTMARE if danger >= 1 else BOSS_PHASE2_HP_PCT_BASE
+
+## 危险度对敌方攻击 CD 的缩短倍率（纯函数）：噩梦加快 10%
+static func danger_attack_cd_mult(danger: int = 0) -> float:
+	return 0.90 if danger >= 1 else 1.0
+
+## 危险度对敌方弹速的倍率（纯函数）：噩梦提速 8%
+static func danger_bolt_speed_mult(danger: int = 0) -> float:
+	return 1.08 if danger >= 1 else 1.0
 
 ## 敌方弹丸飞行速度倍率（纯函数）：
 ## 前期基础 1.0，1~20 波平缓成长至 1.22x，>20 波深层加速成长至封顶 1.65x
@@ -503,15 +579,16 @@ static func stage_mood_tier(wave: int) -> int:
 
 ## 场景天象主题字典（纯函数，所有颜色与速度参数由此产出）：
 ## 供 Main 与 ArenaVisualLayer 对齐地砖、调色、结界边缘流光与灵枢符印
-static func stage_theme_for_wave(wave: int) -> Dictionary:
+static func stage_theme_for_wave(wave: int, danger: int = 0) -> Dictionary:
 	var w := maxi(wave, 1)
 	var tier := stage_mood_tier(w)
 	var is_boss := is_boss_wave(w)
+	var out: Dictionary = {}
 	
 	match tier:
 		0:
 			# 第 1~5 波：青冥灵台（清冷玄玉，青玉暖灰 + 幽冷玉蓝结界）
-			return {
+			out = {
 				"name": "青冥灵台",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -529,7 +606,7 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 			}
 		1:
 			# 第 6~10 波：寒魄雷劫（幽蓝寒潭 + 幽紫电弧结界）
-			return {
+			out = {
 				"name": "寒魄雷劫",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -547,7 +624,7 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 			}
 		2:
 			# 第 11~15 波：赤煞劫火（炽金焦岩 + 赤铜流火结界）
-			return {
+			out = {
 				"name": "赤煞劫火",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -565,7 +642,7 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 			}
 		3:
 			# 第 16~20 波：九幽血劫（玄黑血褐 + 朱砂血煞光幕）
-			return {
+			out = {
 				"name": "九幽血劫",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -583,7 +660,7 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 			}
 		4:
 			# 第 21~25 波：虚空紫极（极夜深紫 + 幽紫魔焰天幕）
-			return {
+			out = {
 				"name": "虚空紫极",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -614,7 +691,7 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 				base_col = Color(0.11, 0.15, 0.18, 1.0)
 				bar_base = Color(0.15, 0.45, 0.55, 0.88)
 				bar_flow = Color(0.80, 2.00, 2.40, 1.15)
-			return {
+			out = {
 				"name": "混沌冥狱",
 				"tier": tier,
 				"is_boss": is_boss,
@@ -631,6 +708,20 @@ static func stage_theme_for_wave(wave: int) -> Dictionary:
 				"talisman_flow_period": 3.8,
 			}
 
+	# 噩梦难度专属血煞色调修正：石板更暗、石缝幽红、天象压暗带赤紫冷调
+	if danger >= 1:
+		var gb: Color = out["ground_base"]
+		var gg: Color = out["ground_gap"]
+		var tm: Color = out["tone_modulate"]
+		var bb: Color = out["barrier_base"]
+		var bf: Color = out["barrier_flow"]
+		out["ground_base"] = gb.darkened(0.16).lerp(Color(0.20, 0.10, 0.13, 1.0), 0.35)
+		out["ground_gap"] = gg.lerp(Color(0.24, 0.05, 0.07, 1.0), 0.55)
+		out["tone_modulate"] = tm.lerp(Color(0.86, 0.74, 0.86, 1.0), 0.50)
+		out["barrier_base"] = bb.lerp(Color(0.65, 0.12, 0.25, 0.86), 0.45)
+		out["barrier_flow"] = bf.lerp(Color(2.15, 0.65, 0.85, 1.15), 0.40)
+	return out
+
 ## Boss 生命：与普通敌人同一条 hp 曲线，靠基础值拉开厚度差距
 static func boss_hp(wave: int) -> float:
 	return BOSS_HP_BASE * enemy_hp_mult(wave)
@@ -638,17 +729,20 @@ static func boss_hp(wave: int) -> float:
 static func boss_contact_damage(wave: int) -> float:
 	return ceilf(BOSS_CONTACT_BASE * enemy_dmg_mult(wave))
 
-# ---------------- 危险度（全部开放的难度梯度，D0 ~ D3 共 4 档） ----------------
-## 2026-10-20 收缩口径：6 档压成 4 档（简单/普通/困难/噩梦），开局全部可选。
-## 顶档（D3 噩梦）的封顶倍率与原 D5 极限完全一致，只是每档步进拉大，少爬两级台阶。
+# ---------------- 危险度（全部开放的难度梯度，D0 ~ D1 共 2 档） ----------------
+## 2026-10-28 梯度重塑：普通(D0)与噩梦(D1)两档。
+## 普通(D0)：基线生命 ×1.16、伤害 ×1.05、敌潮 ×1.16
+## 噩梦(D1)（均衡档，配合迷雾与双 Boss 机制）：
+## 生命 ×1.65（+42%）、伤害 ×1.40（+33%）、敌潮 ×1.45（+25%）
+## 步进 PER 分别为：HP 0.49 / DMG 0.35 / COUNT 0.29
 
-const DANGER_MAX := 3
-const DANGER_HP_BASE := 1.08    ## 简单档基线生命（不再是 ×1.0 纯裸，给入门档一点压力）
-const DANGER_HP_PER := 0.50    ## 每档敌人生命 +50%（3 档爬到原 D5 的 ×2.58）
-const DANGER_DMG_BASE := 1.04  ## 简单档基线伤害
-const DANGER_DMG_PER := 0.2666667  ## 每档敌人伤害 +26.67%（3 档爬到原 D5 的 ×1.84）
-const DANGER_COUNT_BASE := 1.08  ## 简单档基线敌潮规模
-const DANGER_COUNT_PER := 0.3333333  ## 每档敌潮规模 +33.33%（3 档爬到原 D5 的 ×2.08）
+const DANGER_MAX := 1
+const DANGER_HP_BASE := 1.16    ## 普通档(D0)基线生命
+const DANGER_HP_PER := 0.49     ## 每档敌人生命步进（D1 = 1.16 + 0.49 = ×1.65，均衡档）
+const DANGER_DMG_BASE := 1.05   ## 普通档(D0)基线伤害
+const DANGER_DMG_PER := 0.35    ## 每档敌人伤害步进（D1 = 1.05 + 0.35 = ×1.40，均衡档）
+const DANGER_COUNT_BASE := 1.16 ## 普通档(D0)基线敌潮规模
+const DANGER_COUNT_PER := 0.29  ## 每档敌潮规模步进（D1 = 1.16 + 0.29 = ×1.45，均衡档）
 
 static func danger_hp_mult(danger: int) -> float:
 	return DANGER_HP_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_HP_PER

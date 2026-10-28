@@ -65,6 +65,7 @@ func _ready() -> void:
 	)
 	_panel.open()
 	await _settle(3)
+	await _check_state_page_jump_wave()
 	_panel.switch_tab(2)
 	await _settle(2)
 
@@ -78,6 +79,26 @@ func _ready() -> void:
 
 	_c.check(_panel.visible, "全程作者面板没被误关")
 	get_tree().quit(0 if _c.report("AUTHOR_PANEL_RESULT") else 1)
+
+# ---------------- 状态页：跳关控制与预设 ----------------
+
+func _check_state_page_jump_wave() -> void:
+	_panel.switch_tab(0)
+	await _settle(2)
+	var all_btns: Array[Button] = _buttons_of(_panel)
+	var btn_texts: Array[String] = []
+	for b in all_btns:
+		btn_texts.append(String(b.text))
+
+	# 1. 验证相对跳关按钮（含连跳 5 关、10 关）
+	var expected_rel_btns := ["－ 10 波", "－ 5 波", "－ 1 波", "＋ 1 波", "＋ 5 波", "＋ 10 波"]
+	for txt in expected_rel_btns:
+		_c.check(btn_texts.has(txt), "状态页包含相对跳关按钮「%s」" % txt)
+
+	# 2. 验证目标预设按钮（W1 ~ W50 关键波次）
+	var expected_preset_btns := ["W1", "W5", "W10", "W15", "W20", "W25", "W30", "W35", "W40", "W50"]
+	for txt in expected_preset_btns:
+		_c.check(btn_texts.has(txt), "状态页包含定点跳关预设按钮「%s」" % txt)
 
 # ---------------- 武器页：筛选 + 卡面三签 ----------------
 

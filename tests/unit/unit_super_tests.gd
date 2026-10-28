@@ -61,15 +61,11 @@ func _test_super_table() -> void:
 			empty_lines.append(line_key)
 	_c.check(empty_lines.is_empty(), "每条道途都有卡（缺: %s）" % str(empty_lines))
 
-	# 触发关：固定 5/10/15；无尽模式 20 关后每逢 5 的倍数；胜利关 20 本身不触发
-	_c.check(SuperUpgradeData.is_super_wave(5, false), "第 5 关触发超级悟道")
-	_c.check(SuperUpgradeData.is_super_wave(10, false), "第 10 关触发超级悟道")
-	_c.check(SuperUpgradeData.is_super_wave(15, false), "第 15 关触发超级悟道")
-	_c.check(not SuperUpgradeData.is_super_wave(4, false), "第 4 关不触发")
-	_c.check(not SuperUpgradeData.is_super_wave(20, false), "第 20 关胜利关不触发")
-	_c.check(not SuperUpgradeData.is_super_wave(25, false), "普通模式不会打到 25 关")
-	_c.check(SuperUpgradeData.is_super_wave(25, true), "无尽模式第 25 关触发")
-	_c.check(not SuperUpgradeData.is_super_wave(20, true), "无尽模式第 20 关（胜利关）不触发")
+	# 触发关（无限闯关新节奏）：前中期 5/10/15/20 快速成型，深层 30/40/50 每 10 关大破境，50 关后封顶
+	for w in [5, 10, 15, 20, 30, 40, 50]:
+		_c.check(SuperUpgradeData.is_super_wave(w), "第 %d 关触发飞升悟道" % w)
+	for w in [1, 4, 6, 9, 11, 14, 16, 19, 21, 25, 35, 45, 51, 60, 99]:
+		_c.check(not SuperUpgradeData.is_super_wave(w), "第 %d 关不触发飞升悟道" % w)
 
 	# 神通不进商店池：shop_ids 排除、pick_id 永不抽出
 	GameManager.reset_run()
@@ -315,7 +311,7 @@ func _test_super_apply() -> void:
 
 	# 灵兽栏 +1
 	GameManager.reset_run()
-	var pet_before := GameManager.max_pet_slots()
+	var pet_before: int = GameManager.max_pet_slots()
 	_c.check(SuperUpgradeData.apply(GameManager, "super_shouxue"), "兽血沸腾落地成功")
 	_c.check(GameManager.max_pet_slots() == pet_before + 1, "兽血沸腾让灵兽栏 +1")
 

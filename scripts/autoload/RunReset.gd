@@ -61,8 +61,8 @@ static func reset(gm: Node) -> void:
 	gm.is_game_over = false
 	gm.pending_upgrade_points = 0
 	gm.wave_number = 0
-	gm.endless_mode = false
 	gm.run_started = false
+	gm.run_id = ""
 	reset_stat_fields(gm)  # 属性层初值：作者模式「删除加点后重算」与开局复位共用同一份
 	gm.locked_upgrades = []
 	gm.chest_break_bonus = 0

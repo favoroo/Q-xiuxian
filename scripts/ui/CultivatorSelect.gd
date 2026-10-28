@@ -411,7 +411,7 @@ func _rebuild_detail_card(cid: String, vis_w: float) -> void:
 
 	GameStyle.swipeable(mid_col)
 
-	# 2.5 皮肤切换栏（按该角色通关次数解锁换色皮肤；未解锁角色整排置灰）
+	# 2.5 皮肤切换栏（按该角色最高波数解锁换色皮肤；未解锁角色整排置灰）
 	_skin_row = _make_skin_row(cid, is_unlocked)
 	_detail_content.add_child(_skin_row)
 
@@ -531,7 +531,7 @@ func _open_lock_tip(ach: Dictionary, anchor: Control) -> void:
 		"foot": "进度取生涯单局最佳记录，达成后自动解锁该角色。",
 	})
 
-# ---------------- 皮肤切换栏（按该角色通关次数解锁换色皮肤） ----------------
+# ---------------- 皮肤切换栏（按该角色最高波数解锁换色皮肤） ----------------
 
 ## 皮肤栏：「皮肤」色签 + 原色槽 + 6 套主题色槽
 func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
@@ -557,12 +557,12 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 			is_unlocked, cur_idx == -1))
 
 	for i in range(SkinData.count()):
-		var t := SkinData.get_theme(i)
-		var slot_open := is_unlocked and GameManager.is_skin_unlocked(cid, i)
+		var t: Dictionary = SkinData.get_theme(i)
+		var slot_open: bool = is_unlocked and GameManager.is_skin_unlocked(cid, i)
 		strip.add_child(_make_skin_slot(cid, i,
-				Color(t.get("cloak_inner", GameStyle.NAVY2)),
-				Color(t.get("cloak_edge", GameStyle.LINE)),
-				slot_open, is_unlocked and cur_idx == i))
+			Color(t.get("cloak_inner", GameStyle.NAVY2)),
+			Color(t.get("cloak_edge", GameStyle.LINE)),
+			slot_open, is_unlocked and cur_idx == i))
 
 	return strip
 
@@ -649,9 +649,10 @@ func _refresh_roster_skin(_cid: String) -> void:
 ## 未解锁皮肤点按详情浮卡：解锁条件 + 当前进度（「这是什么」点按可得）
 func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 	var t := SkinData.get_theme(skin_idx)
-	var wins_needed := int(t.get("tier", 0)) + 1
-	var wins := int(GameManager.get_cultivator_record(cid).get("wins", 0))
-	var body := "任意难度通关都计数；攒够次数后，该角色的这套皮肤自动解锁。"
+	# 2026-10-28 无限闯关：皮肤门槛从「通关次数」改成「该角色单局抵达过的最高波数」
+	var need_wave := int(t.get("wave", 0))
+	var best_wave := int(GameManager.get_cultivator_record(cid).get("best_wave", 0))
+	var body := "任意难度都计数；最高波数达标后，该角色的这套皮肤自动解锁。"
 	if t.has("chroma"):
 		body += "\n虹霓皮肤：袍身保持墨黑，缘边、眼瞳与武器流光会随时间流转虹彩。"
 	DetailTip.show_over(self, anchor, {
@@ -659,8 +660,8 @@ func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 		"chip": "未解锁",
 		"chip_color": GameStyle.GREY,
 		"rows": [
-			["解锁条件", "该角色通关 %d 次" % wins_needed, GameStyle.GOLD],
-			["当前进度", "已通关 %d 次" % wins, GameStyle.GOOD if wins >= wins_needed else GameStyle.GREY],
+			["解锁条件", "该角色最高第 %d 波" % need_wave, GameStyle.GOLD],
+			["当前进度", "最高第 %d 波" % best_wave, GameStyle.GOOD if best_wave >= need_wave else GameStyle.GREY],
 		],
 		"body": body,
 	})

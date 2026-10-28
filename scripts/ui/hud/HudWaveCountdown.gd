@@ -30,7 +30,7 @@ const SEP := " · "
 const BAR_H := 3.0
 ## 最后这么多秒整颗芯片转朱砂 —— 与生命告急同一色语义：这一回合的表要见底了
 const URGENT_SECS := 5
-## 顶栏最坏样本取的波号：无尽回合的号比关卡第 20 波更长，而波长在这里早已封顶 ⇒ 两者同时最长
+## 顶栏最坏样本取的波号：深层波次的号比关卡第 20 波更长，而波长在这里早已封顶 ⇒ 两者同时最长
 const WORST_WAVE := 99
 
 ## 判据灌最坏样本时置 true：锁住刷新，免得控件每帧把 demo 文案盖回当前回合
@@ -111,7 +111,7 @@ func _is_countdown_wave() -> bool:
 		return false
 	if GameBalance.is_boss_wave(GameManager.wave_number):
 		return false
-	if GameBalance.is_elite_wave(GameManager.wave_number, GameManager.endless_mode):
+	if GameBalance.is_elite_wave(GameManager.wave_number):
 		return float(spawner.wave_timer) > 0.0
 	return true
 

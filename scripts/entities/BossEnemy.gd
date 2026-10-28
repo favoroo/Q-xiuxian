@@ -903,8 +903,8 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	if not from_dot and not is_crit and _heavy_hit_cd <= 0.0 and amount >= max_hp * GameBalance.BOSS_HEAVY_HIT_PCT:
 		_heavy_hit_cd = GameBalance.BOSS_HEAVY_HIT_COOLDOWN
 		GameManager.add_trauma(GameBalance.BOSS_HEAVY_HIT_TRAUMA)
-	if not _phase2 and current_hp <= max_hp * GameBalance.BOSS_PHASE2_AT:
-		_enter_phase2()
+		if not _phase2 and current_hp <= max_hp * GameBalance.boss_phase2_hp_pct(GameManager.danger_level):
+			_enter_phase2()
 	_hp_emit_acc += amount
 	if _hp_emit_acc >= max_hp * 0.005 or _hp_emit_cd <= 0.0:
 		_hp_emit_acc = 0.0
