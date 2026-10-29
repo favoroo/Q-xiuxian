@@ -121,14 +121,14 @@ func _draw_gather(p: float, gold: Color) -> void:
 			var sz := (3.0 - 1.0 * dp)
 			
 			# 外层浩然金光斑 + 内层超白亮核（WorldEnvironment glow 颗颗起辉）
-			draw_circle(pos, sz, Color(gold, a * 0.85))
-			draw_circle(pos, sz * 0.45, Color(GameStyle.FX_HDR_CORE, a * 0.95))
+			AdaptiveDraw.circle(self, pos, sz, Color(gold, a * 0.85), 3.2)
+			AdaptiveDraw.circle(self, pos, sz * 0.45, Color(GameStyle.FX_HDR_CORE, a * 0.95), 3.2)
 	
 	# 汇聚后程（p > 0.7）：丹田中心凝聚超白金核，预备爆发
 	if p > 0.70:
 		var core_p := (p - 0.70) / 0.30
-		draw_circle(center, 4.0 + 4.5 * core_p, Color(gold, 0.65 * core_p))
-		draw_circle(center, 2.0 + 2.5 * core_p, Color(GameStyle.FX_HDR_CORE, 0.90 * core_p))
+		AdaptiveDraw.circle(self, center, 4.0 + 4.5 * core_p, Color(gold, 0.65 * core_p), 3.2)
+		AdaptiveDraw.circle(self, center, 2.0 + 2.5 * core_p, Color(GameStyle.FX_HDR_CORE, 0.90 * core_p), 3.2)
 
 ## 爆发段：脚下金色 HDR 双层梯形光柱（0.11s 拔起直冲天际，后程平滑收束）+ 脚底透视光盘
 func _draw_pillar(p: float, gold: Color) -> void:

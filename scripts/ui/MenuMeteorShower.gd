@@ -22,6 +22,9 @@ const SPEED_MAX := 340.0
 ## 水平下倾角区间（度）：左上 → 右下，每颗略有差异
 const ANGLE_MIN := 20.0
 const ANGLE_MAX := 38.0
+## 噩梦态（血雨）下倾角区间（度）：从斜斜划过改成近乎直落的血雨
+const NIGHT_ANGLE_MIN := 55.0
+const NIGHT_ANGLE_MAX := 72.0
 ## 体型区间（倍率）
 const SCALE_MIN := 0.8
 const SCALE_MAX := 1.6
@@ -79,11 +82,19 @@ const SPARK_SIZE_MIN := 1.2
 const SPARK_SIZE_MAX := 2.2
 ## 火花向白插值的比例：火星偏白，与 tint 主色拉开层次
 const SPARK_WHITENESS := 0.45
+## 噩梦态火花偏白比例：血雨的火星不该发白，压低到几乎同色
+const NIGHT_SPARK_WHITENESS := 0.14
 
-## 流星配色（重复项 = 权重）：纸白为主调，主题色/点缀黄次之，朱砂/幽紫点染
+## 情绪插值时长（s）：切难度时星点/火花配色在这段时间里过渡
+const MOOD_TIME := 0.6
+
+## 流星配色（重复项 = 权重）：普通态纸白为主调，主题色/点缀黄次之，朱砂/幽紫点染。
+## 噩梦态整盘换「血雨」：血朱为主、幽紫次之、骨白点染 —— 主题色在夜色里整体让位。
+## 两套必须等长且按位一一对应（逐项 lerp）；在飞的流星保留出生时刻的旧色，
+## 随各自重生（0.8~2.6s）自然换完，不硬切。
 ## 注意：主题色 GOLD 已改为运行时可变（static var），不能再写进 const 数组 ⇒ 改为按需现取。
 func _palette() -> Array[Color]:
-	return [
+	var day: Array[Color] = [
 		GameStyle.CHALK,
 		GameStyle.CHALK,
 		GameStyle.CHALK,
@@ -94,19 +105,47 @@ func _palette() -> Array[Color]:
 		GameStyle.BAD,
 		GameStyle.SHADOW,
 	]
+	var night: Array[Color] = [
+		GameStyle.CHALK,
+		GameStyle.NIGHT_TEXT_DIM,
+		GameStyle.NIGHT_SEAL_EDGE,
+		GameStyle.NIGHT_SEAL,
+		GameStyle.NIGHT_SEAL_DK,
+		GameStyle.NIGHT_SEAL,
+		GameStyle.SHADOW,
+		GameStyle.NIGHT_SEAL_EDGE,
+		GameStyle.SHADOW,
+	]
+	var out: Array[Color] = []
+	for i in range(day.size()):
+		out.append(day[i].lerp(night[i], _night))
+	return out
 
-## 星点配色：只取冷调（纸白/主题亮边），暖色星点远看像噪点
+## 星点配色：普通态只取冷调（纸白/主题亮边），暖色星点远看像噪点；
+## 噩梦态转骨白 / 灰紫 / 血朱暗点，与血雨同调。
 func _star_palette() -> Array[Color]:
-	return [
+	var day: Array[Color] = [
 		GameStyle.CHALK,
 		GameStyle.CHALK,
 		GameStyle.GOLD_EDGE,
 	]
+	var night: Array[Color] = [
+		GameStyle.CHALK,
+		GameStyle.NIGHT_TEXT_DIM,
+		GameStyle.NIGHT_SEAL_EDGE,
+	]
+	var out: Array[Color] = []
+	for i in range(day.size()):
+		out.append(day[i].lerp(night[i], _night))
+	return out
 
 
 var _meteors: Array[Dictionary] = []
 var _stars: Array[Dictionary] = []
 var _time := 0.0
+## 情绪：0 = 普通天象，1 = 噩梦血雨（切难度时补间，只影响配色/角度，不影响判定）
+var _night := 0.0
+var _mood_tween: Tween
 
 static func install(host: Control) -> MenuMeteorShower:
 	var fx := MenuMeteorShower.new()
@@ -122,6 +161,26 @@ static func install(host: Control) -> MenuMeteorShower:
 	fx.set_meta("layout_bleed", true)
 	host.add_child(fx)
 	return fx
+
+## 切「血雨」：只动情绪插值（配色/下倾角/火星偏白），不重建任何星体。
+## animate=false 用于开菜单时静默对齐当前难度（不闪不补间）。
+func set_nightmare(active: bool, animate: bool = true) -> void:
+	var target := 1.0 if active else 0.0
+	if _mood_tween != null and _mood_tween.is_valid():
+		_mood_tween.kill()
+		_mood_tween = null
+	if not animate or absf(_night - target) < 0.001:
+		_night = target
+		queue_redraw()
+		return
+	_mood_tween = create_tween()
+	_mood_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_mood_tween.tween_method(_set_mood, _night, target, MOOD_TIME) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+func _set_mood(v: float) -> void:
+	_night = v
+	queue_redraw()
 
 func _ready() -> void:
 	for i in range(METEOR_COUNT):
@@ -145,12 +204,15 @@ func _seed_stars() -> void:
 			"base_a": GameManager.rng.randf_range(0.10, 0.30),
 			"tw_speed": GameManager.rng.randf_range(0.5, 1.6),
 			"phase": GameManager.rng.randf_range(0.0, TAU),
-			"tint": _star_palette()[GameManager.rng.randi_range(0, _star_palette().size() - 1)],
+			# 存调色板索引而不是色值：星点常驻不重生，只有按索引逐帧取色才能跟着难度换色
+			"tint_idx": GameManager.rng.randi_range(0, _star_palette().size() - 1),
 		})
 
 func _respawn(m: Dictionary) -> void:
 	var vp := _vp_size()
-	var ang := deg_to_rad(GameManager.rng.randf_range(ANGLE_MIN, ANGLE_MAX))
+	var ang_min := lerpf(ANGLE_MIN, NIGHT_ANGLE_MIN, _night)
+	var ang_max := lerpf(ANGLE_MAX, NIGHT_ANGLE_MAX, _night)
+	var ang := deg_to_rad(GameManager.rng.randf_range(ang_min, ang_max))
 	var speed := GameManager.rng.randf_range(SPEED_MIN, SPEED_MAX)
 	m["vx"] = cos(ang) * speed
 	m["vy"] = sin(ang) * speed
@@ -201,11 +263,13 @@ func _draw() -> void:
 ## 背景星点：极淡小圆，各自慢闪（alpha 呼吸），铺出纯黑的空间纵深
 func _draw_stars() -> void:
 	var vp := _vp_size()
+	# 一帧只算一次调色板：42 颗星逐颗现算会白白摊出 42 份数组
+	var pal := _star_palette()
 	for st in _stars:
 		var tw := 0.5 + 0.5 * sin(_time * st["tw_speed"] + st["phase"])
 		var a: float = st["base_a"] * (0.35 + 0.65 * tw)
 		draw_circle(Vector2(st["u"] * vp.x, st["v"] * vp.y), st["size"],
-			GameStyle.with_alpha(st["tint"], a))
+			GameStyle.with_alpha(pal[int(st["tint_idx"])], a))
 
 func _draw_meteor(m: Dictionary) -> void:
 	var head := Vector2(m["x"], m["y"])
@@ -310,7 +374,8 @@ func _step_sparks(m: Dictionary, delta: float) -> void:
 
 ## 火花：沿拖尾迸出的小辉点，随寿命缩到一点，偏白显火星
 func _draw_sparks(m: Dictionary) -> void:
-	var hot: Color = m["tint"].lerp(Color.WHITE, SPARK_WHITENESS)
+	# 血雨的火星不该发白：偏白比例随情绪压向 NIGHT_SPARK_WHITENESS
+	var hot: Color = m["tint"].lerp(Color.WHITE, lerpf(SPARK_WHITENESS, NIGHT_SPARK_WHITENESS, _night))
 	var alpha: float = m["alpha"]
 	for sp: Dictionary in m["sparks"]:
 		var life_max: float = sp["life_max"]

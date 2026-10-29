@@ -8,6 +8,44 @@ extends Node2D
 @export var weapon_def_id: String = "jiguan_nu"
 @export var star: int = 1
 
+## 对象池（2026-10-29）：机关武器每次冷却都在布设新炮台、到寿/超上限再消散，
+## 旧写法每台 instantiate + queue_free —— 满场 30 台时节点、材质与 Tween 连续抖动。
+## 按场景路径分桶；消散演出走完回池，复用前由 begin_life() 统一复位可见状态。
+const POOL_CAP_PER_SCENE := 12
+static var _pools: Dictionary = {}
+
+var _pool_key: String = ""
+var _fire_tween: Tween = null
+var _dismiss_tween: Tween = null
+## 布设它的武器（FloatingWeapon）：回池时必须从宿主的 active_turrets 摘除，
+## 否则该武器下次「超上限弹最旧」会把已被另一把武器复用的池体 dismiss 掉。
+var _owner_weapon: Node = null
+
+## 从池中取一台（优先复用出树休眠体），调用方负责 setup → add_child → begin_life
+static func acquire_or_new(scene: PackedScene) -> TurretUnit:
+	if scene == null:
+		return null
+	var key := scene.resource_path
+	var bucket: Array = _pools.get(key, [])
+	var turret: TurretUnit = null
+	while not bucket.is_empty() and turret == null:
+		var cand := bucket.pop_back() as TurretUnit
+		if cand != null and is_instance_valid(cand):
+			turret = cand
+	if turret == null:
+		turret = scene.instantiate() as TurretUnit
+	turret._pool_key = key
+	return turret
+
+## 场景 teardown 统一释放休眠体（出树节点不受 free 传播，不手动清会成孤儿）
+static func clear_pool() -> void:
+	for key in _pools:
+		var bucket: Array = _pools[key]
+		for t in bucket:
+			if is_instance_valid(t):
+				(t as Node).free()
+	_pools.clear()
+
 var base_damage: float = 18.0
 var fire_cooldown: float = 0.8
 var attack_range: float = 220.0
@@ -78,34 +116,60 @@ func _ready() -> void:
 	if _elem == "":
 		_elem = "metal"
 	queue_redraw()
-	if _def.has("icon") and ResourceLoader.exists(_def["icon"]):
-		core_sprite.texture = load(_def["icon"])
 	_setup_proc_renderer()
-	# 出场微小弹起动画
+	_setup_muzzle_flash()
+
+## 单次布设生命周期的开场：入场弹起 + 落地钝响。
+## 新建实例由宿主在 add_child 后调用；池化复用实例同样走这里（_ready 一生只跑一次，
+## 不能把可见状态复位挂在 _ready 上）。
+func begin_life() -> void:
+	_is_dying = false
+	current_target = null
+	_shot_count = 0
 	scale = Vector2(0.2, 0.2)
 	modulate.a = 0.0
+	core_sprite.rotation = 0.0
+	core_sprite.position = Vector2.ZERO
+	core_sprite.modulate = Color.WHITE
+	# 器形/图标随武器与星级重新对齐（同一池服务所有机关武器）
+	_elem = WeaponData.element_of(weapon_def_id)
+	if _elem == "":
+		_elem = "metal"
+	_update_core_icon()
+	_setup_proc_renderer()
+	queue_redraw()
+	if muzzle_flash != null:
+		muzzle_flash.visible = false
+		muzzle_flash.modulate.a = 1.0
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(self, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "modulate:a", 1.0, 0.15)
 	# 布设：机关砸进地面那一记钝响。不许借用 orb_hit（那是灵宝触敌的暖金钟）
 	AudioManager.play_sfx("impact_blunt", 0.9)
-	_setup_muzzle_flash()
+
+func _update_core_icon() -> void:
+	if _def.has("icon") and ResourceLoader.exists(_def["icon"]):
+		core_sprite.texture = load(_def["icon"])
 
 ## 矢量机关本体：只在本批已实现器形时挂载，并把旧贴图隐蔽。
 ## 坐标契约见 ProceduralTurretRenderer 头注释：器形沿 +X 画、炮口落在本地 x=16（×1.5=24），
 ## 与 CoreSprite/MuzzlePoint 的本地 (24,0) 同源 ⇒ 出膛点零改动。
+## 池化复用（2026-10-29）：同一池服务所有机关武器，每次复出都要按新器形重配，或按 GENERIC 退回贴图。
 func _setup_proc_renderer() -> void:
-	if _proc_renderer != null:
-		return
 	var tshape := ProceduralTurretRenderer.shape_from_name(String(_def.get("turret_shape", "")))
 	if tshape == ProceduralTurretRenderer.TurretShape.GENERIC:
+		if _proc_renderer != null:
+			_proc_renderer.visible = false
+		core_sprite.self_modulate.a = 1.0
 		return
-	_proc_renderer = ProceduralTurretRenderer.new()
-	_proc_renderer.name = "ProcTurret"
+	if _proc_renderer == null:
+		_proc_renderer = ProceduralTurretRenderer.new()
+		_proc_renderer.name = "ProcTurret"
+		# 挂在 CoreSprite 下：继承它的 0.55 缩放与 rotation，索敌转向自动同拍
+		core_sprite.add_child(_proc_renderer)
 	_proc_renderer.configure(tshape, _elem, star)
-	# 挂在 CoreSprite 下：继承它的 0.55 缩放与 rotation，索敌转向自动同拍
-	core_sprite.add_child(_proc_renderer)
+	_proc_renderer.visible = true
 	core_sprite.self_modulate.a = 0.0
 
 func _setup_muzzle_flash() -> void:
@@ -332,7 +396,8 @@ func _fire() -> void:
 	core_sprite.modulate = GameStyle.star_fx_color(star, shot_idx) if star >= 3 else Color(1.4, 1.35, 1.2)
 	_shot_count += 1
 	core_sprite.position = -aim_dir * 3.5
-	var tw := create_tween()
+	_fire_tween = create_tween()
+	var tw := _fire_tween
 	tw.set_parallel(true)
 	if muzzle_flash != null:
 		muzzle_flash.rotation = randf() * TAU
@@ -357,8 +422,36 @@ func dismiss() -> void:
 	if _is_dying:
 		return
 	_is_dying = true
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(self, "scale", Vector2(0.2, 0.2), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_property(self, "modulate:a", 0.0, 0.2)
-	tw.chain().tween_callback(queue_free)
+	if _fire_tween != null and _fire_tween.is_valid():
+		_fire_tween.kill()
+	if muzzle_flash != null:
+		muzzle_flash.visible = false
+	_dismiss_tween = create_tween()
+	_dismiss_tween.set_parallel(true)
+	_dismiss_tween.tween_property(self, "scale", Vector2(0.2, 0.2), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_dismiss_tween.tween_property(self, "modulate:a", 0.0, 0.2)
+	_dismiss_tween.chain().tween_callback(_recycle)
+
+## 消散演出结束：回池休眠（出树 + 停处理），池满才真正释放
+func _recycle() -> void:
+	if _dismiss_tween != null and _dismiss_tween.is_valid():
+		_dismiss_tween.kill()
+	if _fire_tween != null and _fire_tween.is_valid():
+		_fire_tween.kill()
+	current_target = null
+	if _owner_weapon != null and is_instance_valid(_owner_weapon):
+		var owned: Array = _owner_weapon.active_turrets
+		owned.erase(self)
+	_owner_weapon = null
+	if _pool_key.is_empty():
+		queue_free()
+		return
+	var parent := get_parent()
+	if parent != null:
+		parent.remove_child(self)
+	var bucket: Array = _pools.get(_pool_key, [])
+	if bucket.size() >= POOL_CAP_PER_SCENE:
+		free()
+		return
+	bucket.append(self)
+	_pools[_pool_key] = bucket

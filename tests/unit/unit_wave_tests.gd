@@ -321,7 +321,7 @@ func _test_danger_system() -> void:
 	_c.near(GameBalance.boss_phase2_hp_pct(1), 0.60, EPS, "噩梦魔君狂暴提前至 60%")
 	_c.near(GameBalance.danger_attack_cd_mult(1), 0.90, EPS, "噩梦攻击间隔缩短 10%")
 	_c.near(GameBalance.danger_bolt_speed_mult(1), 1.08, EPS, "噩梦弹速提速 8%")
-	_c.near(GameBalance.NIGHTMARE_FOG_CLEAR_RADIUS, 165.0, EPS, "噩梦迷雾清晰视野 165px")
+	_c.near(GameBalance.NIGHTMARE_FOG_CLEAR_RADIUS, 200.0, EPS, "噩梦迷雾清晰视野 200px")
 
 	# 逐级破境解锁（2026-10-28）：可选上限 = 生涯最高破境难度 + 1，未破境只开 D0 普通。
 	# 备份/还原玩家的真实生涯档，避免测试把别人的进度压低。

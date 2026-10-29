@@ -121,6 +121,7 @@ func _sample(tag: String) -> void:
 	var proc_s: Array[float] = []
 	var phys_s: Array[float] = []
 	var draw_max := 0
+	var draw_sum := 0
 	var prim_max := 0
 	var fps_sum := 0.0
 	var frames := 0
@@ -130,7 +131,9 @@ func _sample(tag: String) -> void:
 		frames += 1
 		proc_s.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 		phys_s.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
-		draw_max = maxi(draw_max, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
+		var draws_now := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+		draw_max = maxi(draw_max, draws_now)
+		draw_sum += draws_now
 		prim_max = maxi(prim_max, int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)))
 		fps_sum += float(Engine.get_frames_per_second())
 		if _player != null and is_instance_valid(_player):
@@ -140,9 +143,9 @@ func _sample(tag: String) -> void:
 		return
 	proc_s.sort()
 	var proc_med := proc_s[proc_s.size() >> 1]
-	print("[BENCH] %s fps=%.1f proc_med=%.2fms proc_avg=%.2fms phys=%.2fms draws=%d prims=%d" % [
+	print("[BENCH] %s fps=%.1f proc_med=%.2fms proc_avg=%.2fms phys=%.2fms draws=%d draws_avg=%.0f prims=%d" % [
 		tag, fps_sum / float(frames), proc_med, _mean(proc_s), _mean(phys_s),
-		draw_max, prim_max])
+		draw_max, float(draw_sum) / float(frames), prim_max])
 	# 归因用：烘焙是否已生效（生效后 MapLayer 的静态矢量层会退场）
 	print("[BENCH] baked=%s" % str(BakedDecorTexture.is_baked()))
 

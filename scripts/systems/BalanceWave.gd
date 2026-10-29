@@ -439,8 +439,8 @@ const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
 
 # ---------------- 噩梦难度专属常量与迷雾视野 ----------------
 const NIGHTMARE_DUAL_BOSS_HP_MULT := 0.78  ## 噩梦双 Boss 车轮战单尊生命折算（合计 1.56 倍血量，爽快不刮痧）
-const NIGHTMARE_FOG_CLEAR_RADIUS := 165.0  ## 噩梦迷雾清晰内圈半径（设计单位，真正缩小视野范围）
-const NIGHTMARE_FOG_FEATHER_RADIUS := 240.0 ## 噩梦迷雾边缘羽化外沿半径（超出即进入浓黑浓雾）
+const NIGHTMARE_FOG_CLEAR_RADIUS := 200.0  ## 噩梦迷雾清晰内圈半径（设计单位，真正缩小视野范围）
+const NIGHTMARE_FOG_FEATHER_RADIUS := 285.0 ## 噩梦迷雾边缘羽化外沿半径（超出即进入浓黑浓雾）
 const NIGHTMARE_FOG_MAX_ALPHA := 1.0       ## 迷雾外圈完全遮蔽（100% 浓雾，外部敌人与地形全被遮蔽）
 const ELITE_MUTATION_HP_PCT_BASE := 0.60   ## 普通精英变异血线（<=60%）
 const ELITE_MUTATION_HP_PCT_NIGHTMARE := 0.70 ## 噩梦精英变异提前至 <=70%

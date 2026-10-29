@@ -272,13 +272,13 @@ func _draw() -> void:
 	var core_c := CORE_COLOR_PURPLE if purple_style else CORE_COLOR
 	# 绘制口径：画多大判多大（半径严格在 radius 之内）
 	# 1. 弹体球身
-	draw_circle(Vector2.ZERO, radius, body_c)
+	AdaptiveDraw.circle(self, Vector2.ZERO, radius, body_c, 3.2)
 	# 2. 内层暗色硬描边（线宽 1.4，内压立体感）
 	draw_arc(Vector2.ZERO, maxf(radius - 1.2, 1.0), 0.0, TAU, 24, rim_c, 1.4, true)
 	# 3. 最外层细浅描边（线宽 1.0，外沿严格吻合 radius 判定圆，暗调地表上高反差勾边）
 	draw_arc(Vector2.ZERO, maxf(radius - 0.5, 0.5), 0.0, TAU, 24, outline_c, 1.0, true)
 	# 4. 高光芯
-	draw_circle(Vector2.ZERO, radius * 0.45, core_c)
+	AdaptiveDraw.circle(self, Vector2.ZERO, radius * 0.45, core_c, 3.2)
 
 ## 幽冥剑气视觉绘制（紧凑破空掠翼三角剑芒，尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
 func _draw_sword_bolt() -> void:
@@ -310,7 +310,7 @@ func _draw_sword_bolt() -> void:
 
 	# 剑脊高能亮芯与剑心
 	draw_line(Vector2(-r * 0.25, 0.0), Vector2(r * 0.75, 0.0), core_c, 1.6, true)
-	draw_circle(Vector2(r * 0.05, 0.0), r * 0.20, core_c)
+	AdaptiveDraw.circle(self, Vector2(r * 0.05, 0.0), r * 0.20, core_c, 3.2)
 
 func _physics_process(delta: float) -> void:
 	if angular_speed != 0.0:

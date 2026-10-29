@@ -276,8 +276,8 @@ func _draw() -> void:
 				var deb_a := a * clampf((grow - 0.35) / 0.65, 0.0, 1.0)
 				for deb in _debris:
 					var dpos := Vector2(deb.x, deb.y) * grow
-					draw_circle(dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a))
-					draw_circle(dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a))
+					AdaptiveDraw.circle(self, dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a), 3.2)
+					AdaptiveDraw.circle(self, dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a), 3.2)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		Kind.SCORCH:
 			# 俯视透视压扁：贴合冷调地砖
@@ -323,7 +323,7 @@ func _draw() -> void:
 				var e := _embers[i]
 				var tw := 0.55 + 0.45 * sin(_age * 9.0 + _ember_phase[i])
 				var epos := Vector2(e.x, e.y * GROUND_SQUASH) + Vector2(0.0, -life_t * 3.0)
-				draw_circle(epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a))
+				AdaptiveDraw.circle(self, epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a), 3.2)
 			# 烟缕：三缕残烟自烬痕升起，摇曳消散（顶端收在包络圈内）
 			for i in range(_wisps.size()):
 				var w := _wisps[i]

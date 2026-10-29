@@ -3,11 +3,12 @@ extends Control
 
 ## P5/dudu-cocos 大色块矩阵风格首页：
 ##   ① 顶栏贴角级联徽章带（右：快速静音 + 游戏设置）
-##   ② 左 1 主方块（Hero「开始游戏」，内嵌 2 档危险度 + 「无限闯关」静态标识）+ 右 2×2 矩阵大方块
+##   ② 左 1 主方块（Hero「开始游戏」，内嵌 2 档危险度）+ 右 2×2 矩阵大方块
 ##      —— 2026-10-11 用户：「顶部那个『渡个劫』标题去掉，其他按钮卡片纵向再大一点」
 ##      ⇒ 大匾标题连它身后那条墨色斜带一起撤掉，省下来的 108 单位竖向空间全给方块长高。
 ##   ③ 右下角一颗「检查更新」小按钮、左下角一颗「游戏共创」小按钮 —— 各贴屏底一角，不再拉通宽横幅
-## 2026-10-28 无限闯关改版：无尽试炼开关下线，首页只留「无限闯关」这枚静态标识（不再有交互）。
+## 2026-10-28 无限闯关改版：无尽试炼开关下线。2026-10-29 用户要求撤掉卡片右上那枚
+## 「◆ 无限闯关」角标（太丑）—— 模式信息不再在首页重复标注，Hero 顶部只剩 PLAY 角签。
 ## 点「开始游戏」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
 
 signal settings_requested
@@ -35,7 +36,7 @@ const CORNER_BTN_H := 26.0            # 右下角「检查更新」小按钮高
 const HERO_SEP_BASE := 7.0            # Hero 内各行间距
 const HERO_TITLE_FONT_BASE := 32
 const HERO_DANGER_HEAD_FONT_BASE := 11
-const MODE_BADGE_H_BASE := 28.0       ## 「无限闯关」静态标识的高
+const HERO_TOP_ROW_H_BASE := 28.0      ## Hero 顶部角签行高（原「无限闯关」角标高，撤标后留作留白）
 const DANGER_BTN_H_BASE := 28.0       # 危险度那一排两颗键的高
 const DANGER_PAD_BASE := 6.0          # 危险度衬板上下内距
 const START_BTN_H_BASE := 42.0        # 底部整条出战主按钮高
@@ -70,6 +71,13 @@ const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把
 var _top_bar: HBoxContainer
 var _matrix_host: CenterContainer
 
+# 氛围层（2026-10-29 噩梦皮肤）：背景底色 / 血雨流星 / 四周血朱画框
+var _bg: ColorRect
+var _shower: MenuMeteorShower
+var _chrome: MenuNightmareChrome
+## 上一次套用的难度：吃掉 AuthorPanel「迷雾预览」那种同值重发的 danger_changed
+var _last_skin_danger: int = -1
+
 # 顶栏徽章控件
 var _sound_badge_btn: Button
 var _top_set_btn: Button
@@ -89,13 +97,14 @@ var _corrupt_save_noted: bool = false   ## 续玩档坏档提示只弹一次（�
 # Hero 大方块与内部控件
 var _hero_card: PanelContainer
 var _hero_vbox: VBoxContainer
+var _hero_top_row: HBoxContainer    # Hero 顶部角签行（撤掉无限闯关角标后只放 PLAY 签，行高照旧）
 var _hero_title: Label
+var _hero_tag_mark: Panel             # PLAY 角签左端色标（换肤时重铺血朱）
 var _danger_box: PanelContainer
 var _danger_vbox: VBoxContainer
 var _danger_head_lbl: Label
 var _hero_void: Control              # Hero 中间那根吃富余的弹簧（量「卡内空洞」用）
 var _danger_buttons: Array[Button] = []
-var _mode_badge: Label            ## 「无限闯关」静态标识（不抢眼、不交互）
 var _hero_start_btn: Button
 var _resume_btn: Button
 var _save_btn: Button
@@ -143,22 +152,41 @@ func _ready() -> void:
 	# 作者模式可能在首页之外（局内/结算）被关掉：回首页时徽章要跟当前状态一致
 	if not GameManager.author_mode_changed.is_connected(_on_author_mode_changed):
 		GameManager.author_mode_changed.connect(_on_author_mode_changed)
+	# 难度可能在首页之外被改（作者面板 / 程序化 set_danger）：整套氛围换肤由信号统一接管，
+	# 建卡路径已按 _skin() 建好，这里只记一次基准值（用于吃掉同值重发）。
+	_last_skin_danger = GameManager.danger_level
+	if not GameManager.danger_changed.is_connected(_on_danger_changed):
+		GameManager.danger_changed.connect(_on_danger_changed)
+	# 换主题色时 GameStyle 注册表会把「登记过」的大卡面 / 角签色标刷回主题色，
+	# 夜景（噩梦）必须在这里重新盖一遍夜色，否则整块 Hero 会单独变回主题色。
+	if not SettingsManager.theme_color_changed.is_connected(_on_theme_color_changed):
+		SettingsManager.theme_color_changed.connect(_on_theme_color_changed)
 
 func _build_background() -> void:
-	# 1. 纯黑不透明暗底
+	var k := _skin()
+
+	# 1. 不透明暗底（普通 = 纯黑舞台；噩梦 = 深紫黑 —— 卡片之间的缝全变紫，整屏立刻换气）
 	var bg := ColorRect.new()
 	bg.name = "BackgroundOverlay"
-	bg.color = GameStyle.INK
+	bg.color = Color(k["stage"])
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
+	_bg = bg
 
-	# 2. 流星雨装饰层（垫在纯黑底与卡片矩阵之间；headless 判据下不建）
+	# 2. 装饰层（垫在底色与卡片矩阵之间；headless 判据下不建）
 	if DisplayServer.get_name() != "headless":
-		MenuMeteorShower.install(self)
+		_shower = MenuMeteorShower.install(self)
+		# 画框只吃屏幕最外沿 6px，而矩阵左右各留 43px / 屏底按钮留 26px ⇒
+		# 压在卡片「下面」也照样整圈可见，永远盖不到任何可点控件
+		_chrome = MenuNightmareChrome.install(self)
+		if bool(k["night"]):
+			_shower.set_nightmare(true, false)
+			_chrome.set_nightmare(true, false)
 
 ## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
+	var k := _skin()
 	var top_margin := MarginContainer.new()
 	top_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top_margin.offset_top = TOP_BAR_INSET_TOP
@@ -175,29 +203,36 @@ func _build_top_bar() -> void:
 
 	# 右簇：声音快切徽章 + 设置徽章
 	_sound_badge_btn = _make_badge_button("音效 · 开", Vector2(96, 36),
-		GameStyle.NAVY2, GameStyle.GOLD, GameStyle.JADE, _on_sound_toggle_pressed)
+		Color(k["plate_face"]), Color(k["plate_hover"]), Color(k["sound_text"]),
+		Color(k["plate_hover_text"]), _on_sound_toggle_pressed)
 	_top_bar.add_child(_sound_badge_btn)
 
 	_top_set_btn = _make_badge_button("设置", Vector2(74, 36),
-		GameStyle.NAVY2, GameStyle.GOLD, GameStyle.PAPER, _on_top_set_pressed)
+		Color(k["plate_face"]), Color(k["plate_hover"]), Color(k["plate_text"]),
+		Color(k["plate_hover_text"]), _on_top_set_pressed)
 	_top_bar.add_child(_top_set_btn)
 	_attach_author_hold(_top_set_btn)
 
 func _make_badge_button(text: String, min_sz: Vector2, bg: Color, hover_bg: Color,
-		font_col: Color, callback: Callable) -> Button:
+		font_col: Color, hover_font_col: Color, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.custom_minimum_size = min_sz
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn.focus_mode = Control.FOCUS_NONE
-	# hover 面是彩块（GOLD），亮字压上去对比差，统一翻黑字
-	GameStyle.button(btn, bg, hover_bg, 13, font_col, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
+	# hover 面按皮肤给（普通态是主题色彩块 → 亮字压上去对比差，统一翻黑字；噩梦态是血朱 → 骨白）
+	GameStyle.button(btn, bg, hover_bg, 13, font_col, GameStyle.SLANT_BAND, hover_font_col)
 	btn.pressed.connect(callback)
 	return btn
 
 ## 中央主区：五块大色块矩阵（顶栏下方起算、上下气口居中）+ 右下角检查更新按钮（贴屏底屏右）
 ## 两块各挂各的容器，竖向落位由 `_layout_responsive()` 现算 —— 组内缝隙不再决定矩阵高低。
 func _build_center_matrix() -> void:
+	var k := _skin()
+	var faces: Array = k["card_faces"]
+	var marks: Array = k["tag_marks"]
+	var card_ink: Color = k["card_text"]
+
 	# 1. 五块实底大色块矩阵（左 Hero 整柱 + 右 2×2）
 	_matrix_host = CenterContainer.new()
 	_matrix_host.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -230,10 +265,10 @@ func _build_center_matrix() -> void:
 	bot_pair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right_grid.add_child(bot_pair)
 
-	# 右上 1：修仙志（点缀黄色块）
+	# 右上 1：修仙志（普通态点缀黄块 / 噩梦态暗铜）
 	var career_res := _build_entry_block(
 		"CAREER", "战 绩", "最高 0 波 · 击杀 0 只",
-		GameStyle.JADE, GameStyle.INK_TEXT, GameStyle.JADE,
+		Color(faces[0]), card_ink, Color(marks[0]),
 		_on_career_pressed
 	)
 	top_pair.add_child(career_res["card"])
@@ -241,10 +276,10 @@ func _build_center_matrix() -> void:
 	_anim_blocks.append(career_res["card"])
 	_career_sub_lbl = career_res["sub_label"]
 
-	# 右上 2：传道玉简（增益绿色块）
+	# 右上 2：传道玉简（普通态增益绿块 / 噩梦态暗玉）
 	var manual_res := _build_entry_block(
 		"MANUAL", "图鉴", "70 武器 · 103 道具 · 20 角色",
-		GameStyle.GOOD, GameStyle.INK_TEXT, GameStyle.GOOD,
+		Color(faces[1]), card_ink, Color(marks[1]),
 		_on_manual_pressed
 	)
 	top_pair.add_child(manual_res["card"])
@@ -252,10 +287,10 @@ func _build_center_matrix() -> void:
 	_anim_blocks.append(manual_res["card"])
 	_manual_sub_lbl = manual_res["sub_label"]
 
-	# 右下 1：天地律动·设置（纸白色块）
+	# 右下 1：天地律动·设置（普通态纸白块 / 噩梦态暗紫）
 	var settings_res := _build_entry_block(
 		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
-		GameStyle.NAVY2, GameStyle.INK_TEXT, GameStyle.GOLD,
+		Color(faces[2]), card_ink, Color(marks[2]),
 		_on_settings_pressed
 	)
 	bot_pair.add_child(settings_res["card"])
@@ -263,10 +298,10 @@ func _build_center_matrix() -> void:
 	_anim_blocks.append(settings_res["card"])
 	_settings_sub_lbl = settings_res["sub_label"]
 
-	# 右下 2：新手指南（元素橙色块）
+	# 右下 2：新手指南（普通态元素橙块 / 噩梦态暗炭）
 	var guide_res := _build_entry_block(
 		"GUIDE", "新手指南", "图文指南 · 随时重温",
-		GameStyle.ELEMENT, GameStyle.INK_TEXT, GameStyle.ELEMENT,
+		Color(faces[3]), card_ink, Color(marks[3]),
 		_on_guide_pressed
 	)
 	bot_pair.add_child(guide_res["card"])
@@ -284,14 +319,11 @@ func _build_center_matrix() -> void:
 	_update_btn.text = "检查更新"
 	_update_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
 	_update_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_update_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+	GameStyle.button(_update_btn, Color(k["corner_face"]), Color(k["corner_edge"]), 12,
+		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
 	# 状态文案（「已是最新版」「新版 v0.0.17!」）比默认四字长，按钮要贴字自己撑开；
-	# GameStyle.block 不带左右内距，这里补上，否则长文案会顶到斜切边。
-	for key in ["normal", "hover", "pressed"]:
-		var sbs := _update_btn.get_theme_stylebox(StringName(key)) as StyleBoxFlat
-		if sbs != null:
-			sbs.content_margin_left = 10.0
-			sbs.content_margin_right = 10.0
+	# 共用 _pad_button_h：换肤重铺按钮后还要再补一遍
+	_pad_button_h(_update_btn, 10.0)
 	_update_btn.pressed.connect(_on_update_pressed)
 	_update_host.add_child(_update_btn)
 	_anim_blocks.append(_update_btn)
@@ -307,16 +339,18 @@ func _build_center_matrix() -> void:
 	_cocreate_btn.text = "游戏共创"
 	_cocreate_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
 	_cocreate_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_cocreate_btn, GameStyle.GOLD, GameStyle.GOLD_EDGE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+	GameStyle.button(_cocreate_btn, Color(k["corner_face"]), Color(k["corner_edge"]), 12,
+		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
 	_cocreate_btn.pressed.connect(_on_cocreate_pressed)
 	_cocreate_host.add_child(_cocreate_btn)
 	_anim_blocks.append(_cocreate_btn)
 
-## 左侧整柱 Hero 大方块：开始游戏 + 2 档危险度 + 「无限闯关」静态标识
+## 左侧整柱 Hero 大方块：开始游戏 + 2 档危险度
 func _build_hero_block() -> PanelContainer:
+	var k := _skin()
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H_BASE)
-	var sb := GameStyle.block(GameStyle.GOLD, GameStyle.SLANT_BLOCK, Vector2(6, 7))
+	var sb := GameStyle.block(Color(k["hero_face"]), GameStyle.SLANT_BLOCK, Vector2(6, 7))
 	sb.content_margin_left = 18.0
 	sb.content_margin_right = 18.0
 	sb.content_margin_top = 12.0
@@ -329,31 +363,23 @@ func _build_hero_block() -> PanelContainer:
 	card.add_child(vbox)
 	_hero_vbox = vbox
 
-	# 顶部角签行 + 「无限闯关」静态标识
+	# 顶部角签行：只留 PLAY 角签（2026-10-29 撤掉右端「◆ 无限闯关」角标，用户嫌丑）。
+	# 行高仍按 hero_metrics 的 top_h 撑住 —— 撤角标不该把下面整摞元素往上挪，
+	# 那样省下来的 17 单位只会变成「卡内空洞」，把危险度区与出战键之间的绿带拉宽。
 	var top_row := HBoxContainer.new()
 	top_row.add_theme_constant_override("separation", 8)
 	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(top_row)
+	_hero_top_row = top_row
 
-	var tag_chip := GameStyle.corner_tag("PLAY", GameStyle.GOLD)
+	var tag_chip := GameStyle.corner_tag("PLAY", Color(k["play_mark"]))
 	top_row.add_child(tag_chip)
+	_hero_tag_mark = _tag_mark_of(tag_chip)
 
 	var top_spacer := Control.new()
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_row.add_child(top_spacer)
-
-	# 无限闯关模式标识（2026-10-28）：无尽试炼开关下线后，位置原位改成静态标签 ——
-	# 保留「本局是无限闯关」这条信息，但不抢眼、不可点（纯 Label，不挂 pressed）。
-	_mode_badge = Label.new()
-	_mode_badge.text = "◆ 无限闯关"
-	_mode_badge.custom_minimum_size = Vector2(138, MODE_BADGE_H_BASE)
-	_mode_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_mode_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_mode_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_mode_badge.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.JADE_DK))
-	GameStyle.label(_mode_badge, 11, GameStyle.on_face_text(GameStyle.JADE_DK))
-	top_row.add_child(_mode_badge)
 
 	# 标题行：大标题 + 右侧「存 档」小键。
 	# 存档键放这里而不是底部再叠一行 —— Hero 卡竖向预算已排满（底部再塞一键会顶破，
@@ -366,7 +392,7 @@ func _build_hero_block() -> PanelContainer:
 	_hero_title = Label.new()
 	_hero_title.text = "开 始 游 戏"
 	_hero_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, GameStyle.INK_TEXT, 0, GameStyle.INK, true)
+	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, Color(k["hero_text"]), 0, GameStyle.INK, true)
 	title_row.add_child(_hero_title)
 
 	_save_btn = Button.new()
@@ -375,13 +401,20 @@ func _build_hero_block() -> PanelContainer:
 	_save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_save_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_save_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_save_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.PAPER, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
+	GameStyle.button(_save_btn, Color(k["plate_face"]), Color(k["plate_hover"]), 13,
+		Color(k["plate_text"]), GameStyle.SLANT_BUTTON, Color(k["plate_hover_text"]))
 	_save_btn.pressed.connect(_on_save_pressed)
 	title_row.add_child(_save_btn)
 
-	# 危险度选择区（纯黑内嵌衬板，让 2 档按钮在金色大块上清晰醒目）
+	# 危险度选择区（内嵌衬板：普通态纯黑衬板，噩梦态更深并封一道血朱细边）
 	_danger_box = PanelContainer.new()
-	var d_sb := GameStyle.panel(GameStyle.with_alpha(Color.BLACK, 0.82), GameStyle.SLANT_PLATE, Vector2.ZERO)
+	var d_sb := GameStyle.panel(Color(k["danger_plate"]), GameStyle.SLANT_PLATE, Vector2.ZERO)
+	# 1px 边宽建卡时就给足（普通态边框全透明）：换肤只换颜色，绝不让布局抖一下
+	d_sb.border_width_left = 1
+	d_sb.border_width_top = 1
+	d_sb.border_width_right = 1
+	d_sb.border_width_bottom = 1
+	d_sb.border_color = Color(k["danger_border"])
 	d_sb.content_margin_left = 8.0
 	d_sb.content_margin_right = 8.0
 	d_sb.content_margin_top = DANGER_PAD_BASE
@@ -401,7 +434,7 @@ func _build_hero_block() -> PanelContainer:
 
 	var d_lbl := Label.new()
 	d_lbl.text = "难度选择"
-	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, GameStyle.with_alpha(GameStyle.CHALK, 0.75))
+	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, Color(k["danger_head"]))
 	_danger_head_lbl = d_lbl
 	d_head.add_child(d_lbl)
 
@@ -436,7 +469,8 @@ func _build_hero_block() -> PanelContainer:
 	_hero_start_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE)
 	_hero_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hero_start_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_hero_start_btn, GameStyle.JADE, GameStyle.JADE_EDGE, 18, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+	GameStyle.button(_hero_start_btn, Color(k["start_face"]), Color(k["start_edge"]), 18,
+		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
 	_hero_start_btn.pressed.connect(_on_start_pressed)
 	vbox.add_child(_hero_start_btn)
 
@@ -446,7 +480,8 @@ func _build_hero_block() -> PanelContainer:
 	_resume_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE * 0.72)
 	_resume_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_resume_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_resume_btn, GameStyle.NAVY2, GameStyle.JADE, 14, GameStyle.PAPER, GameStyle.SLANT_BUTTON)
+	GameStyle.button(_resume_btn, Color(k["plate_face"]), Color(k["resume_hover"]), 14,
+		Color(k["plate_text"]), GameStyle.SLANT_BUTTON, Color(k["resume_hover_text"]))
 	_resume_btn.pressed.connect(_on_resume_pressed)
 	vbox.add_child(_resume_btn)
 
@@ -454,7 +489,8 @@ func _build_hero_block() -> PanelContainer:
 	return card
 
 ## 右列 2×2 实底大色块构建器（整块可点，内置角签、大名号、副文案、右下箭标）
-## accent 只喂角签左端那道色标 —— 卡片面已经是纯亮色，签面固定墨黑，不再按卡面色反推字色。
+## accent 只喂角签左端那道色标 —— 签面恒为墨黑，字色由 ink_col 显式传（普通态墨字 / 噩梦态骨白）；
+## 噩梦态所有卡统一换血朱印记，块字典里同时记下原始 accent 供切回普通时还原。
 func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 		face_col: Color, ink_col: Color, accent: Color,
 		callback: Callable) -> Dictionary:
@@ -535,11 +571,25 @@ func _build_entry_block(tag_text: String, title_text: String, sub_text: String,
 		"vbox": vbox,
 		"name_label": name_lbl,
 		"void": sp,
+		# 换肤用：角签左端色标引用 + 本卡原本的 accent（普通态要能原样退回去）
+		"tag_mark": _tag_mark_of(chip),
+		"tag_accent": accent,
 	}
 	_entry_blocks.append(block)
 	# 建卡时就按当前列宽切一次：首帧不会把整行塞进卡里等下一次 resize 才收
 	_wrap_entry_sub(block)
 	return block
+
+## 取 corner_tag 的左端色标引用（结构：chip PanelContainer → row HBox → [色标 Panel, 字 Label]）。
+## 换肤要重铺这道标记，但 corner_tag 只返回外层 chip；NightmareMenuCheck 会断言这枚色标
+## 真的换了色 —— corner_tag 内部结构若被改动，判据会当场报红，而不是静默失效。
+static func _tag_mark_of(chip: Control) -> Panel:
+	if chip == null or not is_instance_valid(chip) or chip.get_child_count() == 0:
+		return null
+	var row := chip.get_child(0)
+	if row == null or row.get_child_count() == 0:
+		return null
+	return row.get_child(0) as Panel
 
 ## 副文案统一入口：先记原始文案（含「◆ 新解锁」前缀），再按当前卡宽切硬换行。
 ## 直接赋 .text 会让 Label 的内容最小宽决定卡宽 —— 长度一变整排矩阵就顶出屏幕
@@ -578,8 +628,8 @@ func _tint_entry_sub(lbl: Label, hot: bool) -> void:
 	for blk in _entry_blocks:
 		if blk.get("sub_label") == lbl:
 			var base_col: Color = blk.get("sub_col", GameStyle.PAPER)
-			lbl.add_theme_color_override("font_color",
-				GameStyle.JADE_DK if hot else base_col)
+			var hot_col: Color = _skin()["hot_text"]
+			lbl.add_theme_color_override("font_color", hot_col if hot else base_col)
 			return
 
 ## 响应式排版：适配 720（4:3）/ 960（16:9）/ 1204（20:9），保证斜切块画出来绝不出屏
@@ -642,7 +692,9 @@ static func hero_metrics(hero_h: float) -> Dictionary:
 	return {
 		"sep": clampf(HERO_SEP_BASE + extra * 0.07, HERO_SEP_BASE, 12.0),
 		"title_font": clampi(HERO_TITLE_FONT_BASE + int(extra * 0.06), HERO_TITLE_FONT_BASE, 38),
-		"mode_h": clampf(MODE_BADGE_H_BASE + extra * 0.10, MODE_BADGE_H_BASE, 36.0),
+		# 顶部角签行高：原本由「无限闯关」角标撑起（2026-10-29 该角标已撤），
+		# 公式与上限原样保留给这一行当纯留白，保证下面元素的位置与撤标前逐像素一致。
+		"top_h": clampf(HERO_TOP_ROW_H_BASE + extra * 0.10, HERO_TOP_ROW_H_BASE, 36.0),
 		"danger_h": clampf(DANGER_BTN_H_BASE + extra * 0.12, DANGER_BTN_H_BASE, 40.0),
 		"danger_pad": clampf(DANGER_PAD_BASE + extra * 0.06, DANGER_PAD_BASE, 11.0),
 		"danger_head_font": clampi(HERO_DANGER_HEAD_FONT_BASE + int(extra * 0.03),
@@ -666,10 +718,10 @@ func _apply_hero_metrics(hero_h: float, hero_w: float) -> void:
 		return
 	var m := hero_metrics(hero_h)
 	_hero_vbox.add_theme_constant_override("separation", int(m["sep"]))
+	if _hero_top_row != null and is_instance_valid(_hero_top_row):
+		_hero_top_row.custom_minimum_size = Vector2(0, float(m["top_h"]))
 	_hero_title.add_theme_font_size_override("font_size", int(m["title_font"]))
 	_danger_head_lbl.add_theme_font_size_override("font_size", int(m["danger_head_font"]))
-	if _mode_badge != null and is_instance_valid(_mode_badge):
-		_mode_badge.custom_minimum_size = Vector2(138.0, float(m["mode_h"]))
 	var d_sb := _danger_box.get_theme_stylebox("panel") as StyleBoxFlat
 	if d_sb != null:
 		d_sb.content_margin_top = float(m["danger_pad"])
@@ -699,11 +751,259 @@ func _apply_small_metrics(small_h: float) -> void:
 			sb.content_margin_top = float(m["pad_y"])
 			sb.content_margin_bottom = float(m["pad_y"])
 
+# ---------------- 氛围换肤（按难度） ----------------
+
+## 当前首页氛围调色板（唯一真话源）：普通态逐项还原现状配色，噩梦态换「血月夜」。
+## 所有「会重绘配色」的路径（各 _build_* / _refresh_danger_row / _refresh_sound_badge /
+## _tint_entry_sub / _apply_skin）都必须从这里取色 —— 任一处自己写死数字，
+## 下一次刷新就会把夜色洗回普通色（或反过来）。色值本体在 GameStyle 的 NIGHT_* 段。
+func _skin() -> Dictionary:
+	if GameManager.danger_level < 1:
+		return {
+			"night": false,
+			"stage": GameStyle.INK,
+			"hero_face": GameStyle.GOLD,
+			"hero_text": GameStyle.INK_TEXT,
+			"start_face": GameStyle.JADE,
+			"start_edge": GameStyle.JADE_EDGE,
+			"corner_face": GameStyle.GOLD,
+			"corner_edge": GameStyle.GOLD_EDGE,
+			"primary_text": GameStyle.INK_TEXT,
+			"primary_hover_text": GameStyle.INK_TEXT,
+			"plate_face": GameStyle.NAVY2,
+			"plate_text": GameStyle.PAPER,
+			"plate_hover": GameStyle.GOLD,
+			"plate_hover_text": GameStyle.INK_TEXT,
+			"resume_hover": GameStyle.JADE,
+			"resume_hover_text": GameStyle.PAPER,
+			"sound_text": GameStyle.JADE_DK,
+			"danger_plate": GameStyle.with_alpha(Color.BLACK, 0.82),
+			"danger_border": Color(0, 0, 0, 0),
+			"danger_head": GameStyle.with_alpha(GameStyle.CHALK, 0.75),
+			"chip_on": GameStyle.JADE,
+			"chip_on_hover": GameStyle.JADE,
+			"chip_on_text": GameStyle.INK_TEXT,
+			"chip_off": GameStyle.NAVY2,
+			"chip_off_hover": GameStyle.LINE,
+			"chip_off_text": GameStyle.PAPER_DIM,
+			"card_faces": [GameStyle.JADE, GameStyle.GOOD, GameStyle.NAVY2, GameStyle.ELEMENT],
+			"tag_marks": [GameStyle.JADE, GameStyle.GOOD, GameStyle.GOLD, GameStyle.ELEMENT],
+			"play_mark": GameStyle.GOLD,
+			"card_text": GameStyle.INK_TEXT,
+			"card_sub": GameStyle.with_alpha(GameStyle.INK_TEXT, 0.78),
+			"hot_text": GameStyle.JADE_DK,
+		}
+	return {
+		"night": true,
+		"stage": GameStyle.NIGHT_STAGE,
+		"hero_face": GameStyle.NIGHT_HERO,
+		"hero_text": GameStyle.CHALK,
+		"start_face": GameStyle.NIGHT_SEAL,
+		"start_edge": GameStyle.NIGHT_SEAL_EDGE,
+		"corner_face": GameStyle.NIGHT_SEAL,
+		"corner_edge": GameStyle.NIGHT_SEAL_EDGE,
+		"primary_text": GameStyle.CHALK,
+		"primary_hover_text": GameStyle.CHALK,
+		"plate_face": GameStyle.NIGHT_PLATE,
+		"plate_text": GameStyle.CHALK,
+		"plate_hover": GameStyle.NIGHT_SEAL,
+		"plate_hover_text": GameStyle.CHALK,
+		"resume_hover": GameStyle.NIGHT_SEAL,
+		"resume_hover_text": GameStyle.CHALK,
+		"sound_text": GameStyle.CHALK,
+		"danger_plate": GameStyle.with_alpha(GameStyle.NIGHT_STAGE.darkened(0.55), 0.92),
+		"danger_border": GameStyle.with_alpha(GameStyle.NIGHT_SEAL, 0.6),
+		"danger_head": GameStyle.with_alpha(GameStyle.NIGHT_SEAL_EDGE, 0.92),
+		"chip_on": GameStyle.NIGHT_SEAL,
+		"chip_on_hover": GameStyle.NIGHT_SEAL,
+		"chip_on_text": GameStyle.CHALK,
+		"chip_off": GameStyle.NIGHT_CHIP_OFF,
+		"chip_off_hover": GameStyle.NIGHT_PLATE_EDGE,
+		"chip_off_text": GameStyle.NIGHT_TEXT_DIM,
+		"card_faces": [GameStyle.NIGHT_CARD_CAREER, GameStyle.NIGHT_CARD_MANUAL,
+			GameStyle.NIGHT_CARD_CONFIG, GameStyle.NIGHT_CARD_GUIDE],
+		"tag_marks": [GameStyle.NIGHT_SEAL, GameStyle.NIGHT_SEAL,
+			GameStyle.NIGHT_SEAL, GameStyle.NIGHT_SEAL],
+		"play_mark": GameStyle.NIGHT_SEAL,
+		"card_text": GameStyle.CHALK,
+		"card_sub": GameStyle.with_alpha(GameStyle.CHALK, 0.78),
+		"hot_text": GameStyle.NIGHT_SEAL_EDGE,
+	}
+
+## 把当前难度对应的整套配色铺到已建好的控件上（建卡路径也读 _skin，这里负责「切换」）。
+## 颜色按新野兽派口径硬切（见 GameStyle 头注释：颜色/阴影瞬间硬切）；只有舞台底色走补间 ——
+## 那是整屏底而不是某块 UI 的态变，渐变不违反「无渐变」口径，也正好给出「天光压下来」的过渡。
+func _apply_skin(animate: bool) -> void:
+	_last_skin_danger = GameManager.danger_level
+	var k := _skin()
+	var night: bool = k["night"]
+
+	# 1. 舞台底色（普通 = 纯黑，噩梦 = 深紫黑）
+	if _bg != null and is_instance_valid(_bg):
+		var stage: Color = k["stage"]
+		if animate:
+			var bg_tw := create_tween()
+			bg_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+			bg_tw.tween_property(_bg, "color", stage, 0.45)
+		else:
+			_bg.color = stage
+
+	# 2. 氛围层（四周画框 / 血雨流星）：只补间透明度与配色，不重建任何层
+	if _chrome != null and is_instance_valid(_chrome):
+		_chrome.set_nightmare(night, animate)
+	if _shower != null and is_instance_valid(_shower):
+		_shower.set_nightmare(night, animate)
+
+	# 3. Hero 大卡：卡面 / 标题字 / PLAY 色标 / 三颗键
+	if _hero_card != null and is_instance_valid(_hero_card):
+		_restyle_block(_hero_card, Color(k["hero_face"]), Vector2(6, 7))
+	if _hero_title != null and is_instance_valid(_hero_title):
+		_hero_title.add_theme_color_override("font_color", Color(k["hero_text"]))
+	_restyle_tag_mark(_hero_tag_mark, Color(k["play_mark"]))
+	_repaint_button(_hero_start_btn, Color(k["start_face"]), Color(k["start_edge"]),
+		Color(k["primary_text"]), Color(k["primary_hover_text"]))
+	_repaint_button(_save_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
+		Color(k["plate_text"]), Color(k["plate_hover_text"]))
+	_repaint_button(_resume_btn, Color(k["plate_face"]), Color(k["resume_hover"]),
+		Color(k["plate_text"]), Color(k["resume_hover_text"]))
+
+	# 4. 危险度衬板（1px 边宽建卡时已给足，这里只换底色与边色，布局零抖动）
+	if _danger_box != null and is_instance_valid(_danger_box):
+		var d_sb := _danger_box.get_theme_stylebox("panel") as StyleBoxFlat
+		if d_sb != null:
+			d_sb.bg_color = Color(k["danger_plate"])
+			d_sb.border_color = Color(k["danger_border"])
+	if _danger_head_lbl != null and is_instance_valid(_danger_head_lbl):
+		_danger_head_lbl.add_theme_color_override("font_color", Color(k["danger_head"]))
+
+	# 5. 右列 2×2：卡面 / 名字 / 角签色标。色标与副文案底色要回写进块字典 ——
+	#    否则「未读高亮退色」会退到建卡那一刻的旧色，换难度后残留。
+	var faces: Array = k["card_faces"]
+	var marks: Array = k["tag_marks"]
+	var card_ink: Color = k["card_text"]
+	var card_sub: Color = k["card_sub"]
+	for i in range(_entry_blocks.size()):
+		var blk: Dictionary = _entry_blocks[i]
+		var card: PanelContainer = blk["card"]
+		if not is_instance_valid(card):
+			continue
+		if i < faces.size():
+			_restyle_block(card, Color(faces[i]), Vector2(5, 6))
+		if i < marks.size():
+			blk["tag_accent"] = Color(marks[i])
+			_restyle_tag_mark(blk.get("tag_mark") as Panel, Color(marks[i]))
+		var name_lbl := blk.get("name_label") as Label
+		if name_lbl != null and is_instance_valid(name_lbl):
+			name_lbl.add_theme_color_override("font_color", card_ink)
+		var chev := blk.get("chev") as Label
+		if chev != null and is_instance_valid(chev):
+			chev.add_theme_color_override("font_color", card_ink)
+		blk["sub_col"] = card_sub
+
+	# 6. 顶栏徽章 + 屏底两颗角按钮
+	_refresh_top_badges()
+	_refresh_corner_buttons()
+
+	# 7. 难度键 + 动态副文案（顺带把未读高亮与声音徽章按新色重铺一遍）
+	_refresh_danger_row()
+	_refresh_dynamic_texts()
+
+## 重铺一张实底大色块卡：新建实例（连内距一起搬过去），不就地改旧实例 ——
+## 主题色面在 GameStyle 的主题注册表里登记过，就地改会被下一次换主题色刷回去；
+## 新实例只要面不是主题色就天然不进注册表。面没变时直接跳过（重复 open 不产垃圾）。
+func _restyle_block(card: PanelContainer, face: Color, shadow: Vector2) -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	var old := card.get_theme_stylebox("panel") as StyleBoxFlat
+	if old != null and old.bg_color == face:
+		return
+	var sb := GameStyle.block(face, GameStyle.SLANT_BLOCK, shadow)
+	if old != null:
+		sb.content_margin_left = old.content_margin_left
+		sb.content_margin_right = old.content_margin_right
+		sb.content_margin_top = old.content_margin_top
+		sb.content_margin_bottom = old.content_margin_bottom
+	card.add_theme_stylebox_override("panel", sb)
+
+## 重铺角签左端那道 3px 色标（与 corner_tag 内部同款 panel 参数，只换色不换形）
+func _restyle_tag_mark(mark: Panel, accent: Color) -> void:
+	if mark == null or not is_instance_valid(mark):
+		return
+	var old := mark.get_theme_stylebox("panel") as StyleBoxFlat
+	if old != null and old.bg_color == accent:
+		return
+	mark.add_theme_stylebox_override("panel",
+		GameStyle.panel(accent, GameStyle.SLANT_BAND, Vector2.ZERO))
+
+## 按 skin 重铺一颗按钮：字号默认沿用当前 override（换肤只改颜色，绝不改排版）。
+## 绝不要就地改 GameStyle.button() 返回的 StyleBox —— 那是按色缓存的共享实例，
+## 就地改会顺着缓存污染全项目其它界面。
+func _repaint_button(btn: Button, face: Color, hover: Color, text: Color, hover_text: Color,
+		skew: float = GameStyle.SLANT_BUTTON, font_size: int = -1) -> void:
+	if btn == null or not is_instance_valid(btn):
+		return
+	var fs := font_size if font_size > 0 else btn.get_theme_font_size("font_size")
+	GameStyle.button(btn, face, hover, fs, text, skew, hover_text)
+
+## 顶栏设置徽章（声音徽章另走 _refresh_sound_badge，它还要跟静音态）
+func _refresh_top_badges() -> void:
+	if _top_set_btn == null or not is_instance_valid(_top_set_btn):
+		return
+	var k := _skin()
+	_repaint_button(_top_set_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
+		Color(k["plate_text"]), Color(k["plate_hover_text"]), GameStyle.SLANT_BAND)
+
+## 屏底两颗角按钮（检查更新 / 游戏共创）
+func _refresh_corner_buttons() -> void:
+	var k := _skin()
+	_repaint_button(_update_btn, Color(k["corner_face"]), Color(k["corner_edge"]),
+		Color(k["primary_text"]), Color(k["primary_hover_text"]))
+	_pad_button_h(_update_btn, 10.0)
+	_repaint_button(_cocreate_btn, Color(k["corner_face"]), Color(k["corner_edge"]),
+		Color(k["primary_text"]), Color(k["primary_hover_text"]))
+
+## 状态文案（「检查更新中...」「新版 v0.0.17!」）比默认四字长，按钮要贴字自己撑开；
+## GameStyle.block 不带左右内距，这里补上，否则长文案会顶到斜切边。
+## 重铺按钮后必须重补一遍（工厂会换回它自己的缓存实例）。
+func _pad_button_h(btn: Button, pad: float) -> void:
+	if btn == null or not is_instance_valid(btn):
+		return
+	for key in ["normal", "hover", "pressed"]:
+		var sbs := btn.get_theme_stylebox(StringName(key)) as StyleBoxFlat
+		if sbs != null:
+			sbs.content_margin_left = pad
+			sbs.content_margin_right = pad
+
+## 难度变化：整套氛围换肤（作者面板改难度 / 程序化 set_danger 也会走到这里）。
+## 与 _last_skin_danger 比对只为一件事：吃掉 AuthorPanel 迷雾预览那种「同值重发」——
+## 那种不该再打一次扫屏与音效。不可见时静默套用，别在后台播声音。
+func _on_danger_changed(_new_danger: int) -> void:
+	var changed := GameManager.danger_level != _last_skin_danger
+	_apply_skin(changed and visible)
+	if changed and visible:
+		_play_mood_sting(GameManager.danger_level >= 1)
+
+## 换主题色：GameStyle 注册表会把登记过的大卡面 / 角签色标刷回主题色，
+## 夜景（噩梦）必须在这里重新盖一遍夜色，否则整块 Hero 会单独变回主题色。
+func _on_theme_color_changed(_id: StringName) -> void:
+	_apply_skin(false)
+
+## 切难度的手感落点：进噩梦是压低音高的一记魔君低吼 + 一道半透明血带扫屏；
+## 回普通只给一声轻确认 + 主题色扫带。颜色本身硬切（项目口径），这一下只当标点。
+func _play_mood_sting(enter_night: bool) -> void:
+	if enter_night:
+		AudioManager.play_sfx("boss_raid", 0.42, 0.78)
+		GameStyle.slash_wipe(self, GameStyle.with_alpha(GameStyle.NIGHT_SEAL, 0.5))
+	else:
+		AudioManager.play_sfx("ui_confirm", 0.9)
+		GameStyle.slash_wipe(self, GameStyle.with_alpha(GameStyle.GOLD, 0.45))
+
 # ---------------- 状态刷新 ----------------
 
 func _refresh_danger_row() -> void:
 	# 逐级解锁（2026-10-28 改口径）：在上一档难度抵达破境波即解锁下一档 —— 未解锁档位画成锁定态
 	# （灰底 + 「×」前缀，点它不切换，按钮 disabled），头部提示行说明解锁条件。
+	var k := _skin()
 	var top := GameManager.max_danger_unlocked()
 	for d in range(_danger_buttons.size()):
 		var btn := _danger_buttons[d]
@@ -711,13 +1011,15 @@ func _refresh_danger_row() -> void:
 		btn.disabled = not unlocked
 		btn.text = DANGER_NAMES[d] if unlocked else ("×" + DANGER_NAMES[d])
 		if d == GameManager.danger_level and unlocked:
-			# 选中态 hover 不换浅面：点完指针仍停在键上，换 JADE_EDGE 会整块泛白成淡黄。
-			# 悬停反馈交给硬阴影 (3,4)→(5,6) 硬切；pressed 面由 JADE 压暗派生，点击反馈仍在。
-			GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE, 12, GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
+			# 选中态 hover 不换浅面：点完指针仍停在键上，换亮边会整块泛白成淡色。
+			# 悬停反馈交给硬阴影 (3,4)→(5,6) 硬切；pressed 面由面色压暗派生，点击反馈仍在。
+			GameStyle.button(btn, Color(k["chip_on"]), Color(k["chip_on_hover"]), 12,
+				Color(k["chip_on_text"]), GameStyle.SLANT_BUTTON)
 		elif not unlocked:
 			GameStyle.button(btn, GameStyle.INK.lightened(0.06), GameStyle.LINE, 12, GameStyle.GREY, GameStyle.SLANT_BUTTON)
 		else:
-			GameStyle.button(btn, GameStyle.NAVY2, GameStyle.LINE, 12, GameStyle.PAPER_DIM, GameStyle.SLANT_BUTTON)
+			GameStyle.button(btn, Color(k["chip_off"]), Color(k["chip_off_hover"]), 12,
+				Color(k["chip_off_text"]), GameStyle.SLANT_BUTTON)
 	_refresh_danger_hint(top)
 
 ## 难度区头部提示：全解锁时只写「难度选择」，还有锁时补一句解锁条件。
@@ -737,13 +1039,16 @@ func _refresh_danger_hint(top: int) -> void:
 func _refresh_sound_badge() -> void:
 	if _sound_badge_btn == null or not is_instance_valid(_sound_badge_btn):
 		return
+	var k := _skin()
 	var muted := SettingsManager.is_bus_muted(&"Master")
 	if muted:
 		_sound_badge_btn.text = "音效 · 关"
-		GameStyle.button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD, 13, GameStyle.CHALK, GameStyle.SLANT_BAND)
+		_repaint_button(_sound_badge_btn, GameStyle.BAD_DK, GameStyle.BAD,
+			GameStyle.CHALK, GameStyle.CHALK, GameStyle.SLANT_BAND)
 	else:
 		_sound_badge_btn.text = "音效 · 开"
-		GameStyle.button(_sound_badge_btn, GameStyle.NAVY2, GameStyle.GOLD, 13, GameStyle.JADE_DK, GameStyle.SLANT_BAND, GameStyle.INK_TEXT)
+		_repaint_button(_sound_badge_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
+			Color(k["sound_text"]), Color(k["plate_hover_text"]), GameStyle.SLANT_BAND)
 
 func _refresh_dynamic_texts() -> void:
 	# 1. 修仙志卡片副行
@@ -840,8 +1145,8 @@ func open() -> void:
 			var c_name := String(CultivatorData.get_def(cid).get("name", "修士"))
 			_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(summary.get("wave", 1))]
 	_layout_responsive()
-	_refresh_danger_row()
-	_refresh_dynamic_texts()
+	# 整套氛围按当前难度静默重铺：从噩梦局回菜单时首帧就是夜色，不会先闪一帧普通配色
+	_apply_skin(false)
 	visible = true
 	modulate.a = 0.0
 	var tw := create_tween()
@@ -877,8 +1182,9 @@ func close() -> void:
 # ---------------- 事件回调 ----------------
 
 func _on_danger_pressed(d: int) -> void:
+	# 只改状态：难度键高亮 / 提示行 / 整套氛围换肤统一由 danger_changed 接管
+	# （点未解锁档位时按钮 disabled 不可达；点已选档位时值不变、信号不发，也就无需重绘）
 	GameManager.set_danger(d)
-	_refresh_danger_row()
 
 ## 多存档：打开存档管理弹窗（查看/读档/删除），首页留在遮罩后不淡出
 ## —— 与「修仙志 / 图鉴 / 游戏共创」同一交互。
@@ -1076,7 +1382,7 @@ func _refresh_author_badge() -> void:
 		return
 	if _author_badge_btn == null or not is_instance_valid(_author_badge_btn):
 		_author_badge_btn = _make_badge_button("作者模式", Vector2(92, 36),
-			GameStyle.BAD_DK, GameStyle.BAD, GameStyle.CHALK, _on_author_badge_pressed)
+			GameStyle.BAD_DK, GameStyle.BAD, GameStyle.CHALK, GameStyle.INK_TEXT, _on_author_badge_pressed)
 		_top_bar.add_child(_author_badge_btn)
 		_top_bar.move_child(_author_badge_btn, 0)
 	_author_badge_btn.visible = GameManager.author_mode

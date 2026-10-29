@@ -183,7 +183,7 @@ func _draw_altar_ground_runes() -> void:
 	for m in range(6):
 		var ma := (TAU / 6.0) * float(m)
 		var mp := Vector2(cos(ma), sin(ma)) * r_inner
-		draw_circle(mp, 1.4, col_rune_gold)
+		AdaptiveDraw.circle(self, mp, 1.4, col_rune_gold, 3.2)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 1.3 充能时向心螺旋灵气丝（3 条臂，每臂 8 粒拖尾，向心加速吸入）
@@ -202,9 +202,9 @@ func _draw_altar_ground_runes() -> void:
 				var sdir := Vector2(cos(ang), sin(ang))
 				var a_dot := (1.0 - t_prog) * 0.85
 				var sz := 2.2 - 1.2 * t_prog
-				draw_circle(sdir * cur_r, sz, Color(stream_col, a_dot))
+				AdaptiveDraw.circle(self, sdir * cur_r, sz, Color(stream_col, a_dot), 3.2)
 				if t_prog > 0.55:
-					draw_circle(sdir * cur_r, sz * 0.5, Color(1.0, 1.0, 0.92, a_dot))
+					AdaptiveDraw.circle(self, sdir * cur_r, sz * 0.5, Color(1.0, 1.0, 0.92, a_dot), 3.2)
 
 # ==============================================================================
 # 1.5 升灵光柱：阵盘与悬晶之间自下而上升起的柔和梯形光柱（高度 ∝ fill_ratio）
@@ -269,7 +269,7 @@ func _draw_floating_crystal_spire() -> void:
 		var slot_col := Color(0.55, 0.60, 0.35, 0.4 * (1.0 - spent_blend))
 		if infuse_ratio > 0.0:
 			slot_col = slot_col.lerp(Color(1.0, 0.85, 0.4, 0.95 * (1.0 - spent_blend)), infuse_ratio)
-		draw_circle(Vector2(slot_x, 16.2), 1.8, slot_col)
+		AdaptiveDraw.circle(self, Vector2(slot_x, 16.2), 1.8, slot_col, 3.2)
 
 	# 2.2 悬浮中央主晶（2026-10-25 由 48 拔高到 64px，宽 18px）
 	var spire_h: float = 64.0 * (1.0 - spent_blend * 0.35)
@@ -333,13 +333,13 @@ func _draw_floating_crystal_spire() -> void:
 		var fill_y := lerpf(bottom.y, top.y, fill_ratio)
 		var fill_col := Color(1.0, 0.92, 0.45, 0.85)
 		draw_line(Vector2(-hw * (1.0 - fill_ratio * 0.3), fill_y), Vector2(hw * (1.0 - fill_ratio * 0.3), fill_y), fill_col, 2.0)
-		draw_circle(Vector2(0, fill_y), 2.5, Color(1.0, 1.0, 0.9, 0.95))
+		AdaptiveDraw.circle(self, Vector2(0, fill_y), 2.5, Color(1.0, 1.0, 0.9, 0.95), 3.2)
 
 	# 供金金脉（2026-10-25）：注入比越高，金线自基座沿晶面爬得越高 —— 钱化灵的实际进度
 	if infuse_ratio > 0.02 and spent_blend < 0.05:
 		var vein_y: float = lerpf(bottom.y, top.y, infuse_ratio * 0.85)
 		draw_line(Vector2(-hw * 0.45, vein_y + 4.0), Vector2(hw * 0.5, vein_y), Color(1.0, 0.86, 0.45, 0.85), 1.3, true)
-		draw_circle(Vector2(hw * 0.5, vein_y), 1.8, Color(1.0, 0.95, 0.8, 0.9))
+		AdaptiveDraw.circle(self, Vector2(hw * 0.5, vein_y), 1.8, Color(1.0, 0.95, 0.8, 0.9), 3.2)
 
 	# 2.3 三枚随侍悬晶（左、右环绕 + 顶上悬珠一枚）；熄灭时收拢淡出
 	if spent_blend < 0.5:

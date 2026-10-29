@@ -29,6 +29,13 @@ const VISUAL_SCALE := 0.82
 ## 累计重绘次数（PerfProbe 判据用）
 static var redraw_count: int = 0
 
+## _draw 内多边形复用缓冲（2026-10-29）：满场 140 颗宝石 × 20Hz 重绘时，原先每颗每次
+## 新建 6 个 PackedVector2Array 字面量 = 每秒上万次堆分配。draw_* 调用当刻即拷贝数据，
+## 静态缓冲在串行 _draw 中复用安全。按点数分桶，避免每次 resize 抖动。
+static var _poly3 := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+static var _poly4 := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+static var _poly5 := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+
 @export var loot_type: LootType = LootType.GEM_BLUE:
 	set(val):
 		if val == loot_type:
@@ -107,6 +114,8 @@ func _draw() -> void:
 			_draw_gold_shard()
 		LootType.HEAL_ORB:
 			_draw_heal_orb()
+	# 合批兜底：正常路径已在描边/贴图前 flush，这里防异常分支留下残批串到下一颗宝石
+	BatchDraw.flush(self)
 
 # ==============================================================================
 # 0. 地面柔光接触阴影（全场统一 2026-10-18 规范：外弥散 + 内暗核）
@@ -176,13 +185,11 @@ func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
 	var breathe: float = sin(_time * (TAU / 4.0)) * 0.18 + 0.82
 	col_glow.a *= breathe
 	var pulse: float = sin(_time * 3.5) * 0.08 + 1.0
-	var glow_poly := PackedVector2Array([
-		Vector2(0, -half_h * 1.32 * pulse),
-		Vector2(half_w * 1.32 * pulse, center_y),
-		Vector2(0, half_h * 1.32 * pulse),
-		Vector2(-half_w * 1.32 * pulse, center_y)
-	])
-	draw_colored_polygon(glow_poly, col_glow)
+	_poly4[0] = Vector2(0, -half_h * 1.32 * pulse)
+	_poly4[1] = Vector2(half_w * 1.32 * pulse, center_y)
+	_poly4[2] = Vector2(0, half_h * 1.32 * pulse)
+	_poly4[3] = Vector2(-half_w * 1.32 * pulse, center_y)
+	BatchDraw.poly(self, _poly4, col_glow)
 
 	# 4 个立体切面（双锥八面体投影）
 	var top := Vector2(0, -half_h)
@@ -192,42 +199,53 @@ func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
 	var core := Vector2(0, center_y)
 
 	# 上左面（次亮向光）
-	var face_tl := PackedVector2Array([top, core, left])
-	draw_colored_polygon(face_tl, col_mid)
+	_poly3[0] = top
+	_poly3[1] = core
+	_poly3[2] = left
+	BatchDraw.poly(self, _poly3, col_mid)
 
 	# 上右面（极亮强光切面）
-	var face_tr := PackedVector2Array([top, right, core])
-	draw_colored_polygon(face_tr, col_hi)
+	_poly3[0] = top
+	_poly3[1] = right
+	_poly3[2] = core
+	BatchDraw.poly(self, _poly3, col_hi)
 
 	# 下左面（深暗背阴底面）
-	var face_bl := PackedVector2Array([left, core, bottom])
-	draw_colored_polygon(face_bl, col_dark)
+	_poly3[0] = left
+	_poly3[1] = core
+	_poly3[2] = bottom
+	BatchDraw.poly(self, _poly3, col_dark)
 
 	# 下右面（折射次暗切面）
-	var face_br := PackedVector2Array([core, right, bottom])
-	draw_colored_polygon(face_br, col_mid.darkened(0.25))
+	_poly3[0] = core
+	_poly3[1] = right
+	_poly3[2] = bottom
+	BatchDraw.poly(self, _poly3, col_mid.darkened(0.25))
 
 	# 精致细节：上右强光面内部微晶折射光斑
 	if not is_shard:
-		var facet_inner := PackedVector2Array([
-			top * 0.65 + core * 0.35,
-			right * 0.60 + core * 0.40,
-			core
-		])
-		draw_colored_polygon(facet_inner, Color(col_hi.r, col_hi.g, col_hi.b, 0.45))
+		_poly3[0] = top * 0.65 + core * 0.35
+		_poly3[1] = right * 0.60 + core * 0.40
+		_poly3[2] = core
+		BatchDraw.poly(self, _poly3, Color(col_hi.r, col_hi.g, col_hi.b, 0.45))
 
-	# 中脊高光棱线与外轮廓（1.0 精致细线）
+	# 中脊高光棱线与外轮廓（1.0 精致细线）：描边前先提交填充面片批次（保持叠放次序）
+	BatchDraw.flush(self)
 	draw_line(top, bottom, col_hi, 1.0, true)
 	draw_line(left, right, col_edge.darkened(0.1), 0.9, true)
 	
-	var outline := PackedVector2Array([top, right, bottom, left, top])
-	draw_polyline(outline, col_edge, 1.0, true)
+	_poly5[0] = top
+	_poly5[1] = right
+	_poly5[2] = bottom
+	_poly5[3] = left
+	_poly5[4] = top
+	draw_polyline(_poly5, col_edge, 1.0, true)
 
 	# 晶核锐利耀斑闪光
 	var flare_alpha: float = (sin(_time * 4.0) * 0.5 + 0.5) * 0.85
 	if flare_alpha > 0.4:
 		var flare_col := Color(1.0, 1.0, 1.0, (flare_alpha - 0.4) * 1.6)
-		draw_circle(core, 1.2 * VISUAL_SCALE * (0.62 if is_shard else 1.0), flare_col)
+		BatchDraw.circle(self, core, 1.2 * VISUAL_SCALE * (0.62 if is_shard else 1.0), flare_col)
 
 # ==============================================================================
 # 1b. 碎金片 / 碎金屑（Gold Shard Nugget）
@@ -278,41 +296,52 @@ func _draw_gold_shard() -> void:
 
 	# 顺时针凸四边形外晕（严格无自交）
 	var pulse: float = sin(_time * 3.5) * 0.08 + 1.0
-	var glow_poly := PackedVector2Array([
-		p_top * 1.30 * pulse,
-		p_right * 1.30 * pulse,
-		p_bottom * 1.30 * pulse,
-		p_left * 1.30 * pulse
-	])
-	draw_colored_polygon(glow_poly, col_glow)
+	_poly4[0] = p_top * 1.30 * pulse
+	_poly4[1] = p_right * 1.30 * pulse
+	_poly4[2] = p_bottom * 1.30 * pulse
+	_poly4[3] = p_left * 1.30 * pulse
+	BatchDraw.poly(self, _poly4, col_glow)
 
 	# 4 个三角切面（全三角形，无退化与剖分崩溃风险）
-	var face_bright := PackedVector2Array([p_top, p_right, p_mid])
-	draw_colored_polygon(face_bright, col_hi)
+	_poly3[0] = p_top
+	_poly3[1] = p_right
+	_poly3[2] = p_mid
+	BatchDraw.poly(self, _poly3, col_hi)
 
-	var face_mid := PackedVector2Array([p_top, p_mid, p_left])
-	draw_colored_polygon(face_mid, col_mid)
+	_poly3[0] = p_top
+	_poly3[1] = p_mid
+	_poly3[2] = p_left
+	BatchDraw.poly(self, _poly3, col_mid)
 
-	var face_dark := PackedVector2Array([p_left, p_mid, p_bottom])
-	draw_colored_polygon(face_dark, col_dark)
+	_poly3[0] = p_left
+	_poly3[1] = p_mid
+	_poly3[2] = p_bottom
+	BatchDraw.poly(self, _poly3, col_dark)
 
-	var face_notch := PackedVector2Array([p_mid, p_right, p_bottom])
-	draw_colored_polygon(face_notch, col_mid.darkened(0.20))
+	_poly3[0] = p_mid
+	_poly3[1] = p_right
+	_poly3[2] = p_bottom
+	BatchDraw.poly(self, _poly3, col_mid.darkened(0.20))
 
-	# 内部金属棱线与高光外轮廓（精致 0.9 细线）
+	# 内部金属棱线与高光外轮廓（精致 0.9 细线）：描边前提交填充批次
+	BatchDraw.flush(self)
 	draw_line(p_top, p_bottom, col_hi, 0.9, true)
 	draw_line(p_left, p_right, col_edge.darkened(0.15), 0.8, true)
 	# 细节：金属折角反光短纹
 	draw_line(p_mid, (p_top + p_right) * 0.5, col_hi, 0.8, true)
 
-	var outline := PackedVector2Array([p_top, p_right, p_bottom, p_left, p_top])
-	draw_polyline(outline, col_edge, 0.9, true)
+	_poly5[0] = p_top
+	_poly5[1] = p_right
+	_poly5[2] = p_bottom
+	_poly5[3] = p_left
+	_poly5[4] = p_top
+	draw_polyline(_poly5, col_edge, 0.9, true)
 
 	# 顶点微小金属反光星芒
 	var flare_alpha: float = (sin(_time * 4.2) * 0.5 + 0.5) * 0.85
 	if flare_alpha > 0.45:
 		var flare_col := Color(1.0, 1.0, 0.85, (flare_alpha - 0.45) * 1.6)
-		draw_circle(p_mid, 0.9 * VISUAL_SCALE, flare_col)
+		BatchDraw.circle(self, p_mid, 0.9 * VISUAL_SCALE, flare_col)
 
 # ==============================================================================
 # 2. 碧翠回春葫芦 / 生机灵魄（Emerald Gourd / Soul Gem）
@@ -354,7 +383,7 @@ func _draw_heal_orb() -> void:
 	var breathe_heal: float = sin(_time * (TAU / 4.0)) * 0.2 + 0.8
 	col_halo.a *= breathe_heal
 	if not is_waiting:
-		draw_circle(Vector2(0, 1.0 * VISUAL_SCALE), 10.0 * VISUAL_SCALE * pulse, col_halo)
+		AdaptiveDraw.circle(self, Vector2(0, 1.0 * VISUAL_SCALE), 10.0 * VISUAL_SCALE * pulse, col_halo, 3.2)
 
 	# 仙家宝葫芦精致外轮廓（双肚收腰曲线）
 	# 上肚中心在 -h*0.14，下肚中心在 h*0.18，腰部在 h*0.02
@@ -405,13 +434,11 @@ func _draw_heal_orb() -> void:
 
 	# 精致向光面：右上侧弧形翡翠润泽高光面
 	if not is_waiting:
-		var hl_pts := PackedVector2Array([
-			c_lower + Vector2(r_lower_x * 0.15, -r_lower_y * 0.6),
-			c_lower + Vector2(r_lower_x * 0.75, 0.0),
-			c_lower + Vector2(r_lower_x * 0.40, r_lower_y * 0.6),
-			c_lower + Vector2(r_lower_x * 0.05, 0.0)
-		])
-		draw_colored_polygon(hl_pts, Color(col_body_light.r, col_body_light.g, col_body_light.b, 0.35))
+		_poly4[0] = c_lower + Vector2(r_lower_x * 0.15, -r_lower_y * 0.6)
+		_poly4[1] = c_lower + Vector2(r_lower_x * 0.75, 0.0)
+		_poly4[2] = c_lower + Vector2(r_lower_x * 0.40, r_lower_y * 0.6)
+		_poly4[3] = c_lower + Vector2(r_lower_x * 0.05, 0.0)
+		draw_colored_polygon(_poly4, Color(col_body_light.r, col_body_light.g, col_body_light.b, 0.35))
 
 	# 绘制精致外边缘线条（1.1px 细线）
 	draw_polyline(pts, col_rim, 1.1, true)
@@ -421,7 +448,7 @@ func _draw_heal_orb() -> void:
 	var tie_right := Vector2(waist_x + 0.5, waist_y)
 	draw_line(tie_left, tie_right, col_tie, 1.2, true)
 	# 系绳小结/坠饰
-	draw_circle(Vector2(waist_x * 0.2, waist_y + 1.2 * VISUAL_SCALE), 1.0 * VISUAL_SCALE, col_tie)
+	AdaptiveDraw.circle(self, Vector2(waist_x * 0.2, waist_y + 1.2 * VISUAL_SCALE), 1.0 * VISUAL_SCALE, col_tie, 3.2)
 
 	# 细节：顶端葫芦口圈与塞子
 	var plug_top := top_mouth + Vector2(0, -1.8 * VISUAL_SCALE)
@@ -432,7 +459,7 @@ func _draw_heal_orb() -> void:
 	var inner_center := Vector2(0, c_lower.y)
 	if not is_waiting:
 		var inner_pulse := sin(_time * 4.5) * 0.15 + 0.9
-		draw_circle(inner_center, 3.0 * VISUAL_SCALE * inner_pulse, col_core)
-		draw_circle(inner_center + Vector2(-0.8, -0.9) * VISUAL_SCALE, 0.9 * VISUAL_SCALE, Color(1.0, 1.0, 1.0, 0.92))
+		AdaptiveDraw.circle(self, inner_center, 3.0 * VISUAL_SCALE * inner_pulse, col_core, 3.2)
+		AdaptiveDraw.circle(self, inner_center + Vector2(-0.8, -0.9) * VISUAL_SCALE, 0.9 * VISUAL_SCALE, Color(1.0, 1.0, 1.0, 0.92), 3.2)
 	else:
-		draw_circle(inner_center, 2.2 * VISUAL_SCALE, col_core)
+		AdaptiveDraw.circle(self, inner_center, 2.2 * VISUAL_SCALE, col_core, 3.2)

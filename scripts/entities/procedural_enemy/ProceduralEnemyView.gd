@@ -98,6 +98,11 @@ func trigger_recoil(dir: Vector2 = Vector2.ZERO) -> void:
 	if renderer != null:
 		renderer.trigger_recoil(dir)
 
+## 机制事件脉冲（治疗/产卵等）：渲染器据此演一次动作，纯表现
+func trigger_cast_pulse() -> void:
+	if renderer != null:
+		renderer.trigger_cast_pulse()
+
 func get_weapon_tip_global_pos() -> Vector2:
 	if renderer != null:
 		return renderer.to_global(renderer.get_tip_local_pos())

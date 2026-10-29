@@ -232,10 +232,18 @@ func _tick_watchdog(delta: float) -> void:
 	var wavail := _watch_capture.get_frames_available()
 	if wavail > 0:
 		var buf := _watch_capture.get_buffer(wavail)
-		for f in buf:
+		# 2026-10-29 性能：满幅是「连续成段钉死」的管线故障，不需要逐帧判定。
+		# 每 4 个立体声帧抽 1 个采样，判定阈值与窗口口径不变（占比语义按抽样数归一）。
+		var sampled := 0
+		var i := 0
+		var n := buf.size()
+		while i < n:
+			var f := buf[i]
 			if absf(f.x) >= 0.99 or absf(f.y) >= 0.99:
 				_watch_peg += 1
-		_watch_frames += wavail
+			sampled += 1
+			i += 4
+		_watch_frames += sampled
 	_watch_win_t += delta
 	if _watch_win_t < WATCHDOG_WINDOW_SEC:
 		return

@@ -17,6 +17,7 @@ var spawn_callback: Callable
 var _time_left: float = DURATION
 var _redraw_timer: float = 0.0
 var _clock: float = 0.0
+var _phase: float = 0.0
 var _particle_timer: float = 0.0
 
 ## 在树实例计数：WaveSpawner._tide_spent 每帧查「是否还有凝聚中的指示器」，
@@ -104,6 +105,7 @@ func _ready() -> void:
 	# 保持 z_index = 0：在 EntitiesLayer 内，天然位于 MapLayer（地砖/地面装饰/结界）之上；
 	# 绝不设 >0（实体与弹丸默认为 z=0，设 >0 会直接盖在角色表面）
 	z_index = 0
+	_phase = fposmod(float(get_instance_id() % 31) * 0.37, TAU)
 
 ## 魔君凝聚时长：给玩家 2 秒看清落点跑位；WaveSpawner 在开场 1.5s 后才发起凝聚，
 ## 凝聚期内回合表早已走完但「Boss 未除敌潮不退」口径兜底，不影响节奏
@@ -154,7 +156,8 @@ func _duration() -> float:
 
 func _draw() -> void:
 	var t := progress  # 0.0 -> 1.0
-	var pulse := sin(_clock * 14.0) * 0.15 + 0.85
+	var c := _clock + _phase
+	var pulse := sin(c * 14.0) * 0.15 + 0.85
 	var r := indicator_radius
 
 	# 魔君异象（先画，垫底）：双层逆向旋转魔轮 + 斜向大十字，凝聚全程可见
@@ -163,7 +166,7 @@ func _draw() -> void:
 		var wheel_r := r * (0.55 + 0.25 * t)
 		var spokes: int = 8
 		for ring in range(2):
-			var rot := _clock * (1.6 if ring == 0 else -2.2) + float(ring) * 0.4
+			var rot := c * (1.6 if ring == 0 else -2.2) + float(ring) * 0.4
 			var seg_r := wheel_r * (1.0 if ring == 0 else 0.7)
 			for i in range(spokes):
 				var a := rot + float(i) * TAU / float(spokes)

@@ -6,8 +6,8 @@ shader_type canvas_item;
 
 uniform vec2 player_screen_uv = vec2(0.5, 0.5);
 uniform float aspect_ratio = 1.7777778; // 屏幕宽高比（width / height）
-uniform float clear_ratio = 0.305556;   // 165 / 540（清晰视野半径，约占屏幕半高的 60%）
-uniform float feather_ratio = 0.444444; // 240 / 540（羽化外沿，超出即完全进入浓黑迷雾）
+uniform float clear_ratio = 0.370370;   // 200 / 540（清晰视野半径，约占屏幕半高的 74%）
+uniform float feather_ratio = 0.527778; // 285 / 540（羽化外沿，超出即完全进入浓黑迷雾）
 uniform float max_alpha : hint_range(0.0, 1.0) = 1.0;
 uniform vec4 fog_color : source_color = vec4(0.015, 0.010, 0.025, 1.0);
 uniform vec4 fog_edge_tint : source_color = vec4(0.48, 0.12, 0.20, 1.0);

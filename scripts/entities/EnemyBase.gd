@@ -171,6 +171,7 @@ const GAIT_FREQ_SLITHER := 9.0   ## 蠕动 行进波角频率
 # 敌群集行为（2026-10-23）：分离排斥 + 包围方位，数学在 EnemyFlock（static 纯函数）。
 # orbit_bias 每命抽一次：正负决定从哪一侧包抄，绝对值决定绕多狠（0 = 直冲不改向）。
 var orbit_bias: float = 0.0            ## 包围方位偏置（弧度，activate 时按实例抽）
+var _kite_sign: float = 1.0  ## 远程绕行方向（+1 逆时针 / -1 顺时针）：实例派生，避免全体同向
 var flock_separation: float = 1.0      ## 分离排斥强度倍率（0 = 关闭；精英/Boss/金蟾不吃）
 var _flock_push: Vector2 = Vector2.ZERO  ## 本帧分离推力缓存（只作调试读数，不跨帧持有语义）
 
@@ -388,12 +389,18 @@ func _ready() -> void:
 		_rebuild_anim_name_cache()
 	activate()
 
+## 实例相位 0~1：只用于错开技能/开火节奏，不抽玩法 rng（可复现）
+func _instance_phase() -> float:
+	return fposmod(float(get_instance_id() % 97) * 0.6180339887, 1.0)
+
 ## 每命初始化：新实例由 _ready 调入；池化复用实例由刷怪口在配置完字段后显式调入（幂等）。
 ## 注意只放「每命都要重来」的事，一次性装配（视图/帧集/基准快照）在 _ready 的 _assembled 闸内。
 func activate() -> void:
 	if _active:
 		return
 	_active = true
+	var p := _instance_phase()
+	_kite_sign = 1.0 if ((get_instance_id() >> 4) & 1) == 0 else -1.0
 	# 首次出场时 _ready 还没跑（刷怪口 activate 先于 add_child），这里必须先解析 _eid：
 	# 否则按敌种分发的招式（扑咬）查空表，首命新实例永远装不上，只有死过回池的复用体才有。
 	# 与 _ready 里同一口径；_ready 后续再解析一次是幂等的。
@@ -420,23 +427,22 @@ func activate() -> void:
 	juice_scale = Vector2(0.3, 0.3)
 	play_squash(Vector2(1.18, 0.85), 0.22)
 
-	# 出生缓冲：封顶 1.0 秒（仍然不是「出屏第一帧就扑」，玩家有 1 秒看清这只怪逼近）。
-	# 旧写法直接取 charge_interval（4.0s），而狼移速 120px/s 从 380~480px 走到冲刺下沿
-	# （120px）只要 2.2~3.0s ⇒ 冷却就绪时狼已贴脸进短咬带，冲刺条件 dist>120px 永远不满足。
-	# 封顶 1.0s 而非 2.0s：v0.0.7 全局砍血后狼只有 45HP，2.0s+1.2s 预警=3.2s 站桩太长，
-	# 中等火力下狼在预警期间就被打死了，活不到冲刺出手那一下。
-	_charge_timer = minf(charge_interval, 1.0)
-	_minion_timer = spawn_minion_interval
-	_teleport_timer = teleport_interval
-	_elite_slam_timer = slam_interval
-	_heal_timer = heal_interval
+	# 出生缓冲与周期招式错相（BalanceCombat 常量区配置，只延后不提前）。
+	# 冲锋缓冲封顶 1.0s：旧写法取 charge_interval（4s），狼走到冲刺下沿时已贴脸，
+	# 「dist>120px」的起手条件永远不满足；1.0s 足够看清妖狼逼近，又活得到冲刺出手。
+	_bolt_timer = BalanceCombat.BOLT_FIRST_DELAY + p * BalanceCombat.BOLT_FIRST_JITTER
+	_charge_timer = minf(charge_interval, BalanceCombat.CHARGE_OPENING_DELAY) * (1.0 + p * BalanceCombat.COOLDOWN_PHASE_JITTER)
+	_minion_timer = spawn_minion_interval * (1.0 + p * BalanceCombat.COOLDOWN_PHASE_JITTER)
+	_teleport_timer = teleport_interval * (1.0 + p * BalanceCombat.COOLDOWN_PHASE_JITTER)
+	_elite_slam_timer = slam_interval * (1.0 + p * BalanceCombat.ELITE_COOLDOWN_PHASE_JITTER)
+	_heal_timer = heal_interval * (1.0 + p * BalanceCombat.COOLDOWN_PHASE_JITTER)
 	_refresh_elite_light()
-	_poison_timer = poison_interval
+	_poison_timer = poison_interval * (1.0 + p * BalanceCombat.COOLDOWN_PHASE_JITTER)
 	# 精英常驻招式：进场即就绪（首招不立刻砸脸，给玩家 1s 看清怪再起手）
-	_rock_timer = minf(rock_interval, 2.0) if rock_interval > 0.0 else 0.0
-	_ring_bolt_timer = minf(ring_bolt_interval, 1.6) if ring_bolt_interval > 0.0 else 0.0
-	_field_timer = minf(field_interval, 2.2) if field_interval > 0.0 else 0.0
-	_blink_strike_timer = blink_strike_interval
+	_rock_timer = (minf(rock_interval, 2.0) * (1.0 + p * BalanceCombat.ELITE_COOLDOWN_PHASE_JITTER)) if rock_interval > 0.0 else 0.0
+	_ring_bolt_timer = (minf(ring_bolt_interval, 1.6) * (1.0 + p * BalanceCombat.ELITE_COOLDOWN_PHASE_JITTER)) if ring_bolt_interval > 0.0 else 0.0
+	_field_timer = (minf(field_interval, 2.2) * (1.0 + p * BalanceCombat.ELITE_COOLDOWN_PHASE_JITTER)) if field_interval > 0.0 else 0.0
+	_blink_strike_timer = blink_strike_interval * (1.0 + p * BalanceCombat.ELITE_COOLDOWN_PHASE_JITTER)
 
 	# 屏外判定错相：35 只怪的 10Hz 查询摊到不同帧，不扎堆
 	_cull_timer = float(get_instance_id() % 6) * (CULL_INTERVAL / 6.0)
@@ -467,6 +473,8 @@ func activate() -> void:
 			if lunge == null:
 				lunge = EnemyLunge.new()
 			lunge.configure(lp)
+			# 扑咬不做出场错相：近战怪在冷却期会继续贴近，走进 LUNGE_MIN_RANGE 内就永久失去起手距离
+			#（MeleeLungeCheck 的 56.8px 起手用例实测被这条打红）。错相只用于远程/周期招式。
 
 ## 纯接触怪判定：没有任何远程/冲刺/自爆/投毒/召唤/光环/治疗/闪现/逃窜行为开关。
 ## 与 BalanceCombat.lunge_params 的配表互为双保险 —— 配表写错也不会让一只长扑怪多出一个扑咬。
@@ -591,7 +599,7 @@ func reset_for_reuse() -> void:
 	facing = "s"
 	_rebuild_anim_name_cache()
 	juice_scale = Vector2.ONE
-	_bolt_timer = 1.2
+	_bolt_timer = BalanceCombat.BOLT_FIRST_DELAY
 	_bolt_windup_t = -1.0
 	_bolt_windup_total = 0.0
 	_bolt_gather_cd = 0.0
@@ -1097,6 +1105,7 @@ func _flock_orbit_dir(dir: Vector2, dist_sq: float) -> Vector2:
 ## 本帧是否允许被同伴推开：只有「自由追击」态才吃分离力。
 ## 站桩预警/冲刺/收势/罚站/引信/火球蓄力/投毒/震地/落石/受击硬直 —— 一律钉住原地，
 ## 否则预警线画的点与真冲出去的点错位（画多大判多大的同源纪律），蓄力也会被顶成漂移。
+## 远程怪也吃分离（同距离不再叠成一只），但 orbit_bias 仍为 0。
 func _flock_steerable() -> bool:
 	if _pp_stun or _hit_freeze_timer > 0.0:
 		return false
@@ -1108,7 +1117,7 @@ func _flock_steerable() -> bool:
 		return false
 	if _elite_slam_windup_t >= 0.0 or _ring_bolt_windup_t >= 0.0 or _field_windup_t >= 0.0:
 		return false
-	if always_flee or preferred_range > 0.0:
+	if always_flee:
 		return false
 	# 扑咬各段（前摇站蹲 / 前扑 / 收势）一律钉住，不吃分离力：前扑位移必须与 lunge_reach 同源
 	if lunge != null and lunge.is_active():
@@ -1408,7 +1417,7 @@ func _tick_kite_range(dir: Vector2, dist_sq: float, eff_speed: float) -> void:
 		if dist < preferred_range - 30.0:
 			_pp_target_vel = -dir * eff_speed * 0.8
 		elif dist <= preferred_range + 30.0:
-			_pp_target_vel = Vector2(-dir.y, dir.x) * eff_speed * 0.5
+			_pp_target_vel = Vector2(-dir.y, dir.x) * _kite_sign * eff_speed * BalanceCombat.KITE_STRAFE_SPEED
 
 
 
@@ -1813,6 +1822,9 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 	var speed_ratio: float = (current_speed / move_speed) if move_speed > 0.0 else 1.0
 	# 受击硬直期间强制停步：不踏步、不迈腿；正常移动且实际位移足够才播跑步动画
 	var is_moving := (not _pp_stun) and current_speed > maxf(20.0, move_speed * 0.2)
+	var vel_dir := Vector2.ZERO
+	if is_moving and current_speed > 0.01:
+		vel_dir = velocity / current_speed
 
 	if locomotion_mode == "hover":
 		# 悬浮：不切腿帧（单姿势图集），浮沉/侧倾/纵向意图由程序驱动。
@@ -1821,9 +1833,6 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 		#（2026-10-09 用户现场：「踩着黑雾的为什么背对着走向我」——它其实在往后撤）。
 		# advance = 位移与面向的夹角余弦：+1 压过来 / -1 后撤 / ≈0 环绕侧滑。
 		# 受击定身期间归零：那一拍已有 play_squash + 微反冲在发反馈，不叠第二处。
-		var vel_dir := Vector2.ZERO
-		if is_moving and current_speed > 0.01:
-			vel_dir = velocity / current_speed
 		var advance := 0.0
 		if not _pp_stun:
 			advance = vel_dir.dot(dir)
@@ -1868,14 +1877,13 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			procedural_view.aim_dir = Vector2.ZERO
 		if _pp_stun:
 			procedural_view.bank_angle = _hit_tilt
+			procedural_view.advance = 0.0
 		elif _charge_stagger > 0.0:
 			# 罚站打懵（2026-10-23）：冲空了站着挨打，躯体低频左右晃（读作「晕了、站不稳」）。
 			# 与受击后仰同一通道（bank_angle），不另开旋转通道 —— 渲染器只认这一个倾角。
 			procedural_view.bank_angle = sin(_stagger_phase) * STAGGER_SWAY_RAD
-		elif locomotion_mode == "hover":
-			var vel_dir := Vector2.ZERO
-			if is_moving and current_speed > 0.01:
-				vel_dir = velocity / current_speed
+			procedural_view.advance = 0.0
+		else:
 			procedural_view.bank_angle = deg_to_rad(vel_dir.x * 6.5)
 			procedural_view.advance = vel_dir.dot(dir)
 		# 步态相位：仅移动时按 speed_ratio 推进（蠕动波频更高），渲染器摆翼/蠕波与位移同相
@@ -2463,6 +2471,8 @@ func _spawn_minion() -> void:
 	m.add_to_group("enemies")
 	m.activate()
 	get_parent().call_deferred("add_child", m)
+	if procedural_view != null:
+		procedural_view.trigger_cast_pulse()
 	play_squash(Vector2(1.22, 0.78), 0.2)
 	# 产卵不是击杀：pitch_override 直传，绕开击杀连击阶梯（也不推层）
 	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
@@ -2813,6 +2823,8 @@ func _pulse_heal() -> void:
 	# 残血同伴就同帧叠 N 个 240px 大绿圈 + N 重音效——治疗环是全游戏最大的冲击环，群奶糊屏）。
 	# 治疗本身照常逐个结算；「谁在被奶」的受者读数由 receive_heal 里的 heal_rise 逐个亮，不丢信息。
 	if healed_any:
+		if procedural_view != null:
+			procedural_view.trigger_cast_pulse()
 		JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
 		AudioManager.play_sfx("heal", 0.5)
 		play_squash(Vector2(1.18, 0.84), 0.18)

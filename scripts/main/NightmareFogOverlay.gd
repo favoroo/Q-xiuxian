@@ -7,8 +7,8 @@ extends ColorRect
 ## 在视野限制的同时，在内圈边缘为迷雾外的聚灵阵/藏宝匣绘制轻量微光指引，防止迷路。
 
 const FOG_SHADER := preload("res://assets/shaders/nightmare_fog.gdshader")
-const INDICATOR_RADIUS := 150.0  ## 指引图标绘制在清晰视野内沿（像素）
-const FAR_THRESHOLD := 175.0     ## 超过此世界距离视作身处迷雾外
+const INDICATOR_RADIUS := 185.0  ## 指引图标绘制在清晰视野内沿（像素）
+const FAR_THRESHOLD := 210.0     ## 超过此世界距离视作身处迷雾外
 
 ## 作者模式/调试下强制开启迷雾视野预览（普通模式下也能随时打开测试）
 static var force_fog_preview: bool = false

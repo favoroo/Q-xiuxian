@@ -438,6 +438,7 @@ func _exit_tree() -> void:
 	SwordPhantom.clear_pool()
 	ThunderBurst.clear_pool()
 	EnemyBolt.clear_pool()
+	TurretUnit.clear_pool()
 	AstralGem.clear_pool()
 	HealOrb.clear_pool()
 	SpawnIndicator.clear_pool()

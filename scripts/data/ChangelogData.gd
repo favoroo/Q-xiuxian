@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.10",
+			"date": "2026-10-29",
+			"title": "噩梦换肤与敌人动作协调",
+			"items": [
+				"首页噩梦难度换血月夜皮肤。",
+				"敌人受击后仰与走位侧倾更生动。",
+				"噩梦迷雾视野适度放宽更易看。",
+				"低端机大量敌人同屏更流畅。",
+			],
+		},
+		{
 			"version": "v0.1.9",
 			"date": "2026-10-29",
 			"title": "噩梦迷雾与无限闯关",

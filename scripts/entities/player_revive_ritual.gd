@@ -131,7 +131,7 @@ func _draw_array(p: float, gold: Color, core: Color) -> void:
 	for i in ARRAY_RUNES:
 		var ang := -_phase_seed - spin * 0.7 + float(i) * TAU / ARRAY_RUNES + TAU / ARRAY_RUNES * 0.78
 		var rp := Vector2(cos(ang), sin(ang)) * ARRAY_R_OUT
-		draw_circle(rp, 1.8, Color(core, 0.75 * a))
+		AdaptiveDraw.circle(self, rp, 1.8, Color(core, 0.75 * a), 3.2)
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
@@ -151,8 +151,8 @@ func _draw_soul_spiral(p: float, gold: Color, core: Color) -> void:
 			var pos := center + Vector2(cos(ang) * r, sin(ang) * r * 0.55)
 			var a := alpha_in * (0.9 - 0.28 * float(d) / float(SOUL_DOTS)) * (1.0 - dp * 0.45)
 			var sz := 3.2 - 1.2 * dp
-			draw_circle(pos, sz, Color(gold, a * 0.75))
-			draw_circle(pos, sz * 0.44, Color(core, a * 0.95))
+			AdaptiveDraw.circle(self, pos, sz, Color(gold, a * 0.75), 3.2)
+			AdaptiveDraw.circle(self, pos, sz * 0.44, Color(core, a * 0.95), 3.2)
 
 ## 两圈灵环由外向内收拢：复活是「聚」不是「散」，与冲击波方向相反
 func _draw_converging_rings(p: float, gold: Color) -> void:
@@ -172,8 +172,8 @@ func _draw_gather_core(p: float, gold: Color, core: Color) -> void:
 		return
 	var cp := (p - 0.62) / 0.38
 	var center := Vector2(0.0, -12.0)
-	draw_circle(center, 5.0 + 6.0 * cp, Color(gold, 0.55 * cp))
-	draw_circle(center, 2.4 + 3.2 * cp, Color(core, 0.95 * cp))
+	AdaptiveDraw.circle(self, center, 5.0 + 6.0 * cp, Color(gold, 0.55 * cp), 3.2)
+	AdaptiveDraw.circle(self, center, 2.4 + 3.2 * cp, Color(core, 0.95 * cp), 3.2)
 
 ## 还魂光柱：金白双层梯形（底亮顶消），拔起 0.10s 后平滑收束 + 脚底透视光盘
 func _draw_pillar(p: float, gold: Color, core: Color) -> void:
@@ -236,5 +236,5 @@ func _draw_guard_ring(gold: Color, core: Color) -> void:
 	for i in 4:
 		var ang := now * 1.6 + float(i) * TAU / 4.0
 		var rp := Vector2(cos(ang), sin(ang)) * (r + 3.0)
-		draw_circle(rp, 1.6, Color(core, 0.55 + 0.25 * pulse))
+		AdaptiveDraw.circle(self, rp, 1.6, Color(core, 0.55 + 0.25 * pulse), 3.2)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

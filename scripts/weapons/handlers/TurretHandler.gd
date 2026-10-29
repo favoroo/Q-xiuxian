@@ -26,7 +26,9 @@ static func perform(w) -> void:
 		if oldest != null and is_instance_valid(oldest):
 			oldest.dismiss()
 
-	var turret: TurretUnit = w.turret_scene.instantiate() as TurretUnit
+	var turret: TurretUnit = TurretUnit.acquire_or_new(w.turret_scene)
+	if turret == null:
+		return
 	turret.setup(w.weapon_def_id, w.star)
 	# 机关布设环形分布（2026-10-25）：旧写法直接在 spawn_pos 周围 ±22,±16 随机，
 	# 导致炮台直接生成在玩家身体/肚脐眼上，多台堆叠遮蔽角色本体。
@@ -37,6 +39,8 @@ static func perform(w) -> void:
 	turret.global_position = spawn_pos + spawn_offset
 	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (w.get_tree().current_scene if w.get_tree() != null else w)
 	battle_layer.add_child(turret)
+	turret.begin_life()
+	turret._owner_weapon = w
 	w.active_turrets.append(turret)
 
 	# 召唤沉身演出：下沉 + 金光亮闪 → 弹性回正（帧内状态机，零 Tween）

@@ -36,6 +36,11 @@ const WORST_WAVE := 99
 ## 判据灌最坏样本时置 true：锁住刷新，免得控件每帧把 demo 文案盖回当前回合
 var demo_lock: bool = false
 
+## 轮询节流（2026-10-29）：读数只有整秒在变，线长按 0.5px 阈值才重绘，
+## 10Hz 与 60Hz 肉眼等价（照 HudWaveLeft 的 POLL_INTERVAL 先例）。
+const POLL_INTERVAL := 0.1
+var _poll_acc: float = 0.0
+
 var _label: Label = null
 var _ratio: float = 0.0
 var _urgent: bool = false
@@ -56,7 +61,11 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	refresh_now()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_poll_acc += delta
+	if _poll_acc < POLL_INTERVAL:
+		return
+	_poll_acc = 0.0
 	refresh_now()
 
 ## 一次算完三件事：读数文字、线长比例、告急色。三者必须来自同一次取值，

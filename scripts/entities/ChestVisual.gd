@@ -142,7 +142,7 @@ func _draw() -> void:
 		draw_line(Vector2(8, lid_top_y(8.0) + 2), Vector2(8, BODY_BOT - 1), OUTLINE, 1.5)
 		draw_line(Vector2(-8, 18), Vector2(8, 18), OUTLINE, 1.2)
 		draw_line(Vector2(-8, 30), Vector2(8, 30), OUTLINE, 1.2)
-		draw_circle(Vector2(0, -20), 2.8, p.lock)
+		AdaptiveDraw.circle(self, Vector2(0, -20), 2.8, p.lock, 3.2)
 		draw_circle(Vector2(0, -20), 2.8, OUTLINE, false, 1.0)
 
 	# 两道箍带：盖段随盖顶轮廓斜收，身段直落到匣底；左棱受光 + 右棱压暗 + 盖段身段各一铆钉
@@ -156,9 +156,9 @@ func _draw() -> void:
 		draw_rect(Rect2(x0, BODY_TOP, STRAP_HW * 2.0, BODY_BOT - BODY_TOP), p.strap)
 		draw_line(Vector2(x0 + 1.5, lid_top_y(x0) + 1), Vector2(x0 + 1.5, BODY_BOT - 2), p.strap_hi, 2.0)
 		draw_line(Vector2(x1 - 1.5, lid_top_y(x1) + 1), Vector2(x1 - 1.5, BODY_BOT - 2), p.seam, 1.5)
-		draw_circle(Vector2(cx, 16), 2.5, p.strap_hi)
+		AdaptiveDraw.circle(self, Vector2(cx, 16), 2.5, p.strap_hi, 3.2)
 		draw_circle(Vector2(cx, 16), 2.5, OUTLINE, false, 1.0)
-		draw_circle(Vector2(cx, -20), 2.5, p.strap_hi)
+		AdaptiveDraw.circle(self, Vector2(cx, -20), 2.5, p.strap_hi, 3.2)
 		draw_circle(Vector2(cx, -20), 2.5, OUTLINE, false, 1.0)
 
 	# 四角金属包角：顶角挂盖檐投影下缘、底角避斜切走 45° 弯，宝箱的「硬件感」主要靠这层
@@ -178,13 +178,13 @@ func _draw() -> void:
 
 	if tier == BalanceChest.TIER_JADE:
 		# 朱砂嵌宝（加大一档 + 高光白芯）+ 下方小锁孔
-		draw_circle(Vector2(0, -2), 4.5, p.accent)
+		AdaptiveDraw.circle(self, Vector2(0, -2), 4.5, p.accent, 3.2)
 		draw_circle(Vector2(0, -2), 4.5, OUTLINE, false, 1.5)
-		draw_circle(Vector2(-1.4, -3.5), 1.4, GameStyle.FX_HDR_CORE)
+		AdaptiveDraw.circle(self, Vector2(-1.4, -3.5), 1.4, GameStyle.FX_HDR_CORE, 3.2)
 		draw_rect(Rect2(-1.5, 4, 3, 7), OUTLINE)
 	else:
 		# 锁孔：圆 + 竖槽
-		draw_circle(Vector2(0, 0), 3.2, OUTLINE)
+		AdaptiveDraw.circle(self, Vector2(0, 0), 3.2, OUTLINE, 3.2)
 		draw_rect(Rect2(-1.5, 1, 3, 8), OUTLINE)
 
 	# 全匣外轮廓最后压一遍：盖与身各自勾边，接缝线不勾（内部结构线）
@@ -209,8 +209,8 @@ func _draw_corner_brackets(p: Dictionary) -> void:
 		var hx: float = -HALF_W + CHAMFER + 1.0 if side < 0.0 else HALF_W - CHAMFER - 10.0
 		draw_rect(Rect2(hx, BODY_BOT - 5.0, 9.0, 3.5), p.strap)
 		# 包角铆钉
-		draw_circle(Vector2(vx + 2.0, BODY_TOP + 9.0), 1.8, p.strap_hi)
-		draw_circle(Vector2(vx + 2.0, BODY_BOT - CHAMFER - 5.0), 1.8, p.strap_hi)
+		AdaptiveDraw.circle(self, Vector2(vx + 2.0, BODY_TOP + 9.0), 1.8, p.strap_hi, 3.2)
+		AdaptiveDraw.circle(self, Vector2(vx + 2.0, BODY_BOT - CHAMFER - 5.0), 1.8, p.strap_hi, 3.2)
 
 ## 压扁椭圆近似（落地影用），20 边形足够平
 func _ellipse(center: Vector2, rx: float, ry: float) -> PackedVector2Array:

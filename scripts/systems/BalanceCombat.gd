@@ -5,6 +5,15 @@ extends RefCounted
 ## 五行异常状态（灼烧/剧毒）、震退方向、集火韧性。全部 static 纯函数。
 ## 与 GameBalance 同规约：不读 autoload、不碰节点、不调全局 randf()。
 
+# ---------------- 敌人招式出场错相 / 走位参数 ----------------
+
+const BOLT_FIRST_DELAY := 1.2 ## 远程首次出手缓冲（秒）：HoverIntentCheck 依赖它 ≥0.6s
+const BOLT_FIRST_JITTER := 0.8 ## 首次出手额外错相上限（秒）
+const CHARGE_OPENING_DELAY := 1.0 ## 冲锋首次冷却缓冲（秒）：WolfAiCheck 依赖它 ≥0.5s
+const COOLDOWN_PHASE_JITTER := 0.35 ## 周期技能首次冷却错相比例（0~35%，只延后）
+const ELITE_COOLDOWN_PHASE_JITTER := 0.3 ## 精英招式首次冷却错相比例
+const KITE_STRAFE_SPEED := 0.5 ## 远程保持距离带的切向绕行速度倍率（原写死 0.5）
+
 # ---------------- 护甲 / 受伤 ----------------
 
 const ARMOR_COEF := 0.08      ## 减伤 = 1 - 1/(1+护甲×0.08)

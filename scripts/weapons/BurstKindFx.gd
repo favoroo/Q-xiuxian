@@ -119,7 +119,7 @@ func _draw_fire_rain() -> void:
 			if fade > 0.0:
 				var c := Color(1.0, 0.55, 0.2, 0.5 * fade)
 				draw_set_transform(land, 0.0, Vector2(1.0, GROUND_SQUASH))
-				draw_circle(Vector2.ZERO, 4.0 + 3.0 * (1.0 - fade), c)
+				AdaptiveDraw.circle(self, Vector2.ZERO, 4.0 + 3.0 * (1.0 - fade), c, 3.2)
 				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 三层火核（照 ProceduralProjectileRenderer._draw_flame 的配色层次）
@@ -127,9 +127,9 @@ func _draw_flame_drop(pos: Vector2, s: float, a: float) -> void:
 	var tail := PackedVector2Array([
 		pos + Vector2(-s * 0.5, 0), pos + Vector2(0, -s * 2.2), pos + Vector2(s * 0.5, 0)])
 	draw_colored_polygon(tail, Color(0.85, 0.25, 0.12, 0.5 * a))
-	draw_circle(pos, s, Color(0.85, 0.25, 0.12, 0.75 * a))
-	draw_circle(pos, s * 0.62, Color(1.0, 0.65, 0.20, 0.9 * a))
-	draw_circle(pos, s * 0.3, GameStyle.FX_HDR_FIRE)
+	AdaptiveDraw.circle(self, pos, s, Color(0.85, 0.25, 0.12, 0.75 * a), 3.2)
+	AdaptiveDraw.circle(self, pos, s * 0.62, Color(1.0, 0.65, 0.20, 0.9 * a), 3.2)
+	AdaptiveDraw.circle(self, pos, s * 0.3, GameStyle.FX_HDR_FIRE, 3.2)
 
 ## 冰霜：冰刺从落点圈内拔地戳出（ stagger 生长），末端霜环淡去
 func _draw_frost() -> void:
@@ -245,5 +245,5 @@ func _draw_seal_dust() -> void:
 			var ang := float(k) * TAU / 10.0 + 0.15
 			var dir := Vector2(cos(ang), sin(ang))
 			var r := radius * (0.35 + 0.55 * p)
-			draw_circle(dir * r, 2.0, dust)
+			AdaptiveDraw.circle(self, dir * r, 2.0, dust, 3.2)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

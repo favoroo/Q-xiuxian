@@ -40,6 +40,7 @@ enum Pattern {
 
 var _attack_timer: float = 2.4    ## 开场缓冲，让玩家先看清魔君登场
 var _pattern_idx: int = 0
+var _last_pattern: int = -1
 var _phase2: bool = false
 var _tint: Color = Color.WHITE    ## 常态染色（二阶段转红/紫，演出后回染）
 var _purple_bolts: bool = false        ## 幽紫魔弹口径：仅旧最终Boss与九幽心魔尊使用
@@ -323,10 +324,53 @@ func _process(delta: float) -> void:
 		_attack_timer = attack_interval * mult
 		_cast_next(player)
 
+## Boss 选招权重（AI 行为，不改伤害）：远距离偏突进/远程，贴脸偏震地/环弹；上一招降权防连发。
+const PICK_WEIGHT_BASE := 1.0
+const PICK_WEIGHT_FAR := 2.2
+const PICK_WEIGHT_NEAR := 2.0
+const PICK_WEIGHT_WRONG_RANGE := 0.3
+const PICK_WEIGHT_REPEAT := 0.2
+const PICK_FAR_RANGE := 320.0
+const PICK_NEAR_RANGE := 140.0
+const PICK_FAR_PATTERNS := [Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.BLINK_SLASH]
+const PICK_NEAR_PATTERNS := [Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN]
+
+func _pick_pattern(player: Node2D) -> int:
+	var dist: float = global_position.distance_to(player.global_position)
+	var best_idx: int = 0
+	var best_w: float = -1.0
+	var tie_count: int = 0
+	for i in range(_patterns.size()):
+		var pat: int = _patterns[i]
+		var w: float = PICK_WEIGHT_BASE
+		if dist > PICK_FAR_RANGE:
+			if pat in PICK_FAR_PATTERNS:
+				w = PICK_WEIGHT_FAR
+			elif pat in PICK_NEAR_PATTERNS and pat != Pattern.BURST_FAN:
+				w = PICK_WEIGHT_WRONG_RANGE
+		elif dist < PICK_NEAR_RANGE:
+			if pat in PICK_NEAR_PATTERNS:
+				w = PICK_WEIGHT_NEAR
+			elif pat in PICK_FAR_PATTERNS and pat != Pattern.BURST_FAN:
+				w = PICK_WEIGHT_WRONG_RANGE
+		if pat == _last_pattern:
+			w *= PICK_WEIGHT_REPEAT
+		# 同权重候选按 _pattern_idx 轮换打破平局（确定性，不抽 rng）
+		if w > best_w + 0.0001:
+			best_w = w
+			best_idx = i
+			tie_count = 1
+		elif absf(w - best_w) <= 0.0001:
+			tie_count += 1
+			if _pattern_idx % tie_count == 0:
+				best_idx = i
+	return _patterns[best_idx]
+
 func _cast_next(player: Node2D) -> void:
 	if _patterns.is_empty():
 		return
-	var pattern: int = _patterns[_pattern_idx % _patterns.size()]
+	var pattern: int = _pick_pattern(player)
+	_last_pattern = pattern
 	_pattern_idx += 1
 	match pattern:
 		Pattern.RING:
