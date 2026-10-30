@@ -107,9 +107,11 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		"_super_hook_snap", "_super_hook_stamp",
 		# —— 结算展示位：game_over 前由 ProgressStore 消费，局内存档不背它 ——
 		"last_run_new_achievements", "last_run_new_records",
-		# —— 活体登记表：恢复时场上必然无怪（回合边界语义），_exit_tree 自己维护 ——
-		"enemy_count", "ally_count",
-	]
+			# —— 活体登记表：恢复时场上必然无怪（回合边界语义），_exit_tree 自己维护 ——
+			"enemy_count", "ally_count",
+			# —— 波次内战利品瞬态统计：波末摘要展示后即完成使命，换波自动重置 ——
+			"_wave_start_stones", "wave_loot_stones", "wave_loot_heals", "wave_loot_heal_hp", "wave_loot_heal_stones",
+		]
 
 ## 模拟「全新场景开局」：真实游戏每次 start_run 前都经历场景重载（Player 全新、
 ## 武器/御灵实例随场景清空）。测试复用同一个 Main 场景，必须手动补这场重载，

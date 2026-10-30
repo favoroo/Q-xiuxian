@@ -84,6 +84,8 @@ func _ready() -> void:
 		[content, "_test_cultivator_new_mechanics"],
 		[content, "_test_cultivator_frenzy_thunder_shop"],
 			[content, "_test_conversion_items_and_hooks"],
+			[content, "_test_wave_loot_summary_system"],
+			[content, "_test_elite_drop_and_item_entity_system"],
 			[wave, "_test_danger_system"],
 			[infra, "_test_achievement_and_meta_save"],
 			[infra, "_test_career_milestones"],

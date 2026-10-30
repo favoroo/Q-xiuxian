@@ -492,6 +492,8 @@ func _test_career_milestones() -> void:
 	_c.equals(int(rec["best_wave"]), 16, "石岳最高抵达波数 16")
 	_c.equals(int(rec["best_kills"]), 420, "石岳斩妖之最 420")
 	_c.equals(int(rec["wins"]), 0, "新局不再累计通关次数（wins 只作旧档皮肤兜底）")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 0), 16, "石岳普通最高波数 16")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 1), 0, "石岳噩梦未挑战，最高波数 0")
 	_c.equals(GameManager.record_log.size(), 1, "历战实录新增 1 条快照")
 	var snap: Dictionary = GameManager.record_log[0]
 	_c.check(not snap.has("node"), "快照顶层不含节点引用")
@@ -554,6 +556,8 @@ func _test_career_milestones() -> void:
 	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "D0 封印保持点亮")
 	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 1, "生涯最高破境难度抬到 D1")
 	_c.equals(GameManager.get_cultivator_best_danger("shiyue"), 1, "石岳破境印记更新为 D1")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 0), 25, "石岳普通最高波数保持 25")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 1), 20, "石岳噩梦最高波数 20（两档互不覆盖）")
 	_c.check(GameManager.last_run_new_records.any(
 		func(s: Variant) -> bool: return String(s).contains("境界突破") and String(s).contains("元婴")),
 		"D1 破境生成「晋入元婴」境界文案")
@@ -582,6 +586,8 @@ func _test_career_milestones() -> void:
 	_c.equals(GameManager.record_log.size(), 2, "读档后历战实录恢复")
 	rec = GameManager.get_cultivator_record("shiyue")
 	_c.equals(int(rec["best_wave"]), 25, "读档后石岳最高抵达波数恢复")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 0), 25, "读档后石岳普通最高波数恢复")
+	_c.equals(GameManager.get_cultivator_best_wave("shiyue", 1), 20, "读档后石岳噩梦最高波数恢复")
 	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 1), "读档后石岳 D1 封印恢复（位掩码落盘）")
 	_c.check(GameManager.is_cultivator_danger_cleared("shiyue", 0), "读档后石岳 D0 封印恢复")
 
@@ -610,6 +616,36 @@ func _test_career_milestones() -> void:
 	_c.equals(int(GameManager.cultivator_danger_clears["k5"]), 0b01, "老档 bit0/bit1 并入新 bit0")
 	_c.equals(int(GameManager.cultivator_danger_clears["k6"]), 0b01, "老档 bit0 并入新 bit0")
 	_c.equals(int(GameManager.career_stats["best_danger_cleared"]), 1, "生涯最高破境难度 5 → 1")
+
+	# 5.1 老档分难度最高波数回填（2026-10-30 角色卡改版）
+	# 只有跨难度 best_wave 时：先按 run_history / record_log 里带 danger 的战报拆开
+	GameManager.cultivator_records = {
+		"old_a": {"runs": 3, "best_wave": 24},
+		"old_b": {"runs": 2, "best_wave": 33},
+		"old_c": {"runs": 1, "best_wave": 12},
+	}
+	GameManager.cultivator_best_danger = {"old_a": 1, "old_b": 1}
+	GameManager.run_history = [
+		{"cultivator_id": "old_a", "danger": 0, "wave": 18},
+		{"cultivator_id": "old_a", "danger": 1, "wave": 24},
+		{"cultivator_id": "other", "danger": 1, "wave": 40},
+	]
+	GameManager.record_log = [
+		{"cultivator_id": "old_c", "danger": 0, "wave": 12},
+	]
+	ProgressStore._backfill_cultivator_danger_waves(GameManager)
+	_c.equals(GameManager.get_cultivator_best_wave("old_a", 0), 18, "老档回填普通最高波数（取最近战报）")
+	_c.equals(GameManager.get_cultivator_best_wave("old_a", 1), 24, "老档回填噩梦最高波数（取最近战报）")
+	_c.equals(GameManager.get_cultivator_best_wave("old_b", 1), 33, "无战报可拆的余量归最高破境难度")
+	_c.equals(GameManager.get_cultivator_best_wave("old_b", 0), 0, "没线索的另一档不凭空造数")
+	_c.equals(GameManager.get_cultivator_best_wave("old_c", 0), 12, "历战实录快照也可回填（未破境归普通）")
+	_c.equals(GameManager.get_cultivator_best_wave("old_c", 1), 0, "未破境的另一档保持 0")
+	# 幂等：回填过的字段不再重算
+	GameManager.run_history = []
+	GameManager.record_log = []
+	ProgressStore._backfill_cultivator_danger_waves(GameManager)
+	_c.equals(GameManager.get_cultivator_best_wave("old_a", 0), 18, "重复回填不改已写入的分难度波数")
+	_c.equals(GameManager.get_cultivator_best_wave("old_a", 1), 24, "重复回填保持噩梦数字")
 
 	# 还原测试前的玩家真实进度
 	GameManager.career_stats = orig_stats

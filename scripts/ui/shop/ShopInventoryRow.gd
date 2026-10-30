@@ -202,6 +202,19 @@ static func create_item_chip(shop, item_id: String, tile: float) -> Control:
 	icon_tex.offset_bottom = -5
 	chip.add_child(icon_tex)
 
+	# 本回合掉落新获得标记：右上角打金色「新」微签，方便玩家在金币阁一眼辨别并变卖
+	if item_id in GameManager.wave_loot_items:
+		var new_badge := Label.new()
+		new_badge.text = "新"
+		new_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		GameStyle.label(new_badge, 9, GameStyle.GOLD, 0, GameStyle.INK, true)
+		new_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		new_badge.offset_left = -13
+		new_badge.offset_top = 1
+		new_badge.offset_right = -2
+		new_badge.offset_bottom = 12
+		chip.add_child(new_badge)
+
 	# 划列表不算点按（同 create_inv_slot：整排在 OwnedScroll 里）
 	GameStyle.tap(chip, func(): open_item_tip(shop, item_id, chip))
 	return chip
@@ -232,10 +245,12 @@ static func open_item_tip(shop, item_id: String, anchor: Control) -> void:
 		var s := String(line).strip_edges()
 		if not s.is_empty():
 			notes.append(s)
-	if no_sell:
-		notes.append("神通来自飞升悟道，本局永久生效，不可出售。")
-	else:
-		notes.append("出售按原价一半回收金币，加过的属性当场退回（与灵兽同一条口径）。")
+		if no_sell:
+			notes.append("神通来自飞升悟道，本局永久生效，不可出售。")
+		else:
+			if item_id in GameManager.wave_loot_items:
+				notes.append("◆ 本回合宝箱掉落：若非所需，可在此变卖回收。")
+			notes.append("出售按原价一半回收金币，加过的属性当场退回（与灵兽同一条口径）。")
 	var unique := bool(def.get("unique", false))
 	var foot := "每回合商店会刷新更多道具。"
 	if no_sell:

@@ -402,6 +402,11 @@ const CHEST_TIER_SCALE := BalanceChest.TIER_SCALE
 const CHEST_JADE_ITEM_GRANT_CAP := BalanceChest.JADE_ITEM_GRANT_CAP
 const CHEST_REWARD_HEAL_CAP := BalanceChest.REWARD_HEAL_CAP
 
+# 精英怪掉落与偏财 → BalanceCombat
+const ELITE_ITEM_DROP_BASE_CHANCE := BalanceCombat.ELITE_ITEM_DROP_BASE_CHANCE
+const ELITE_BONUS_STONE_CHANCE := BalanceCombat.ELITE_BONUS_STONE_CHANCE
+const ELITE_BONUS_STONES := BalanceCombat.ELITE_BONUS_STONES
+
 # ---------------- 函数转发（签名原样，实现进主题类） ----------------
 
 # 经验 / 定价 / 灵韵 / 化灵 / 稀有度 / 货架 / 档位 / 羁绊 / 白名单 → BalanceEconomy
@@ -696,6 +701,11 @@ static func spirit_beast_max_hp(wave: int) -> float:
 
 static func spirit_beast_damage(wave: int) -> float:
 	return BalanceSpiritBeast.damage_for_wave(wave)
+
+## 精英怪道具掉落概率（BalanceCombat）
+static func elite_item_drop_chance(luck: float) -> float:
+	return BalanceCombat.elite_item_drop_chance(luck)
+
 
 # 藏宝匣（宝箱）：数量 / 三档 / 击数 / 掉落 → BalanceChest
 static func chest_count(wave: int, bonus: int) -> int:

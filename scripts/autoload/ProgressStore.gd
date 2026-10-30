@@ -158,6 +158,10 @@ static func load_into(gm: Node) -> void:
 		# 否则玩家本次退出前没触发任何存档，下次启动会把噩梦档再折成普通。
 		if saved_ver < 3:
 			_collapse_danger_to_two(gm)
+		# 老档每难度最高波数回填（2026-10-30 战绩角色卡改版）：必须放在难度折叠与
+		# run_history / record_log 都读完之后 —— 它要从这两处带 danger 的战报里还原数字。
+		_backfill_cultivator_danger_waves(gm)
+		if saved_ver < 3:
 			save_from(gm)
 
 		# 2026-10-24 坏字段可见化：文件能解析但字段类型不对（手改/写入中断）时原先静默回落
@@ -325,6 +329,59 @@ static func _migrate_cultivator_records(gm: Node) -> void:
 			rec.erase("endless_best_wave")
 		gm.cultivator_records[cid] = rec
 
+## 每难度最高波数空表（索引 = 难度档，值 = 该难度最高波数）
+static func _empty_danger_waves() -> Array:
+	var out: Array = []
+	for _i in range(GameBalance.DANGER_MAX + 1):
+		out.append(0)
+	return out
+
+## 老档回填每角色分难度最高波数（2026-10-30 战绩角色卡改版；幂等，只在字段缺失/长度不对时重建）：
+##   1) 先从 run_history（最近 10 局）与 record_log（历战实录快照）里按 cultivator_id + danger 取大，
+##      这两处是唯一带「这一局是什么难度」的存量数据；
+##   2) 仍高于回填值的余量归该角色破境过的最高难度（没破境归普通）—— 老档没有别的线索，
+##      宁可把历史最高波数记在它打过的最高档上，也不让角色卡出现「有最高波数但两块色标都是空」。
+static func _backfill_cultivator_danger_waves(gm: Node) -> void:
+	var width := GameBalance.DANGER_MAX + 1
+	for cid in gm.cultivator_records.keys():
+		var raw = gm.cultivator_records[cid]
+		if not (raw is Dictionary):
+			continue
+		var rec: Dictionary = raw
+		var existing = rec.get("best_wave_by_danger", null)
+		var by_d: Array = []
+		if existing is Array and existing.size() >= width:
+			by_d = existing.duplicate()
+		else:
+			by_d = _empty_danger_waves()
+			for entry in gm.run_history:
+				_absorb_danger_wave(by_d, entry, String(cid))
+			for snap in gm.record_log:
+				_absorb_danger_wave(by_d, snap, String(cid))
+		# 档案最高波数必须能在某一档里找到对应值；老档/坏档的余量补到最高破境档
+		var seen := 0
+		for v in by_d:
+			seen = maxi(seen, int(v))
+		var best := int(rec.get("best_wave", 0))
+		if best > seen:
+			var d := int(gm.cultivator_best_danger.get(cid, -1))
+			if d < 0:
+				d = 0
+			d = clampi(d, 0, by_d.size() - 1)
+			by_d[d] = maxi(int(by_d[d]), best)
+		rec["best_wave_by_danger"] = by_d
+		gm.cultivator_records[cid] = rec
+
+## 从一条战报/快照吸收指定角色在该难度的波数（字段缺失/类型不对直接跳过）
+static func _absorb_danger_wave(by_d: Array, entry: Variant, cid: String) -> void:
+	if not (entry is Dictionary):
+		return
+	var e: Dictionary = entry
+	if String(e.get("cultivator_id", "jianchi")) != cid:
+		return
+	var d := clampi(int(e.get("danger", 0)), 0, by_d.size() - 1)
+	by_d[d] = maxi(int(by_d[d]), int(e.get("wave", 0)))
+
 static func save_from(gm: Node, target_path: String = PROGRESS_PATH) -> Error:
 	var cfg := ConfigFile.new()
 	cfg.set_value("meta", "save_version", SAVE_VERSION)
@@ -435,6 +492,15 @@ static func record_run_and_check_achievements(gm: Node) -> void:
 	rec["runs"] = int(rec.get("runs", 0)) + 1
 	rec["best_wave"] = maxi(int(rec.get("best_wave", 0)), eff_wave)
 	rec["best_kills"] = maxi(int(rec.get("best_kills", 0)), gm.kills)
+	# 每难度最高波数（战绩角色卡的两块色标）：本局难度/波数就地取大，两档互不影响
+	var by_d: Array = rec.get("best_wave_by_danger", [])
+	if not (by_d is Array):
+		by_d = _empty_danger_waves()
+	while by_d.size() <= GameBalance.DANGER_MAX:
+		by_d.append(0)
+	var danger_idx := clampi(gm.danger_level, 0, GameBalance.DANGER_MAX)
+	by_d[danger_idx] = maxi(int(by_d[danger_idx]), eff_wave)
+	rec["best_wave_by_danger"] = by_d
 	gm.cultivator_records[cid_rec] = rec
 
 	if broke and not gm.cultivator_id.is_empty():

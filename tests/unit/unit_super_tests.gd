@@ -292,7 +292,7 @@ func _test_super_apply() -> void:
 
 	# 开天辟地：槽位 +1
 	GameManager.reset_run()
-	var base_slots := GameManager.max_weapon_slots()
+	var base_slots: int = GameManager.max_weapon_slots()
 	_c.check(SuperUpgradeData.apply(GameManager, "super_kaitian"), "开天辟地落地成功")
 	_c.check(GameManager.max_weapon_slots() == base_slots + 1,
 		"开天辟地让武器槽位 +1（%d → %d）" % [base_slots, GameManager.max_weapon_slots()])

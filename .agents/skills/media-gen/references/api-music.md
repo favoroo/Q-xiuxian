@@ -1,10 +1,22 @@
-# 音乐生成 API 实测笔记（2026-10-07 实测，官方文档见文末链接）
+# 音乐生成 API 实测笔记（2026-10-07 实测；2026-10-29 通道状态复核）
 
 ## 结论速查
 
 | 模型 | 端点 | 输出 | 实测耗时 |
 |---|---|---|---|
-| `lyria-3.5` | `/v1/chat/completions` | MP3 192kbps 44.1kHz 立体声 | ~34s，单段约 2 分钟 |
+| `lyria-3.5` | `/v1/chat/completions` | MP3 192kbps 44.1kHz 立体声 | ~34s，单段约 2 分钟（2026-10-07 实测） |
+| `lyria-3-pro-preview` | `/v1/chat/completions` | （备用模型，尚未成功出音频） | — |
+
+> ⚠️ **2026-10-29 实测：音乐通道整体不可用。** 网关 `/v1/models` 能列出
+> `lyria-3.5` 与 `lyria-3-pro-preview`，但两个模型走任何路径都在 ~8s 内返回
+> 400 `PROXY_GENERATION_DISABLED: (stream)GenerateContent is not supported`：
+> - `/v1/chat/completions`（含 `-m` 换模型）——400；
+> - `/v1beta/interactions`——网关并非原生透传，`stream:false/true` 分别被映射成
+>   generateContent/streamGenerateContent，同样 400（与 CHANGELOG 2026-10-07
+>   「interactions 透传 proto 字段不符」记录一致）；
+> - 官方文档称 lyria-3.5 原生走 interactions API，本网关靠 chat 映射——现在映射也被上游禁用，
+>   **需网关管理员侧启用生成通道后才能恢复**；恢复前 `gen_music.sh` 会报
+>   「各两次尝试均未拿到音频」退出 1，不会白等超时。
 
 > **它是「写歌」模型，不是音效模型。** 实测（2026-10-08）提示词写
 > `[0:00 - 0:01] a single 0.15 second UI button click sound only, ... then silence`，

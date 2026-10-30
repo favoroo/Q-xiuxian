@@ -73,6 +73,7 @@ var _elite_refs: Array[EnemyBase] = [] ## 本回合在场精英引用列表（�
 var _elites_dispatched: int = 0  ## 本回合已派发预警的精英数量（派发即占位，防止预警延迟期间多帧重复派发）
 var _elites_spawned: int = 0     ## 本回合已落地生效的精英数量
 var _overtime_noted: bool = false ## 关底锁关播报只发一次（Boss/精英共用，单回合只有一类关底）
+var _opening_shop: bool = false   ## 波末转入悟道/商店中的防重入守卫
 
 # —— 性能基线采样（2026-10-17 性能优化专项阶段 0）——
 ## debug 构建 + 环境变量 PERF_BASELINE=1 时激活，FIGHT 期间每 2s 打一行 CSV 快照
@@ -474,6 +475,8 @@ func start_wave(n: int) -> void:
 	_batch_hold_time = 0.0
 	_batch_in_combat = false
 	phase = Phase.FIGHT
+	_opening_shop = false
+	GameManager.start_wave_loot_tracking()
 	# 本回合刷怪预算：危险度与角色敌潮倍率与同屏上限同源同乘
 	_budget_total = int(round(float(GameBalance.wave_spawn_budget(n)) * GameBalance.danger_count_mult(GameManager.danger_level) * GameManager.enemy_count_mult))
 	_budget_used = 0
@@ -650,6 +653,14 @@ func _drain_magnet_queue() -> void:
 	_magnet_queue = _magnet_queue.slice(batch)
 
 func _open_shop() -> void:
+	if _opening_shop:
+		return
+	_opening_shop = true
+	var loot := GameManager.finalize_wave_loot()
+	if GameManager.wave_loot_summary_requested.get_connections().size() > 0:
+		GameManager.wave_loot_summary_requested.emit(loot)
+		await GameManager.wave_loot_summary_finished
+	_opening_shop = false
 	_enter_wave_break()
 
 ## 回合间隙的唯一闸口：先清掉攒下的悟道点数，加完了才轮到金币阁。

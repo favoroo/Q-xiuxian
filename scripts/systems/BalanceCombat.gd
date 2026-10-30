@@ -434,3 +434,14 @@ static func focus_fire_mult(recent_hits: int) -> float:
 	if recent_hits == 1:
 		return FOCUS_FIRE_HIT2_MULT
 	return FOCUS_FIRE_HIT3_MULT
+
+# ---------------- 精英怪掉落与偏财 ----------------
+
+const ELITE_ITEM_DROP_BASE_CHANCE := 0.25   ## 精英怪基础掉落法宝道具概率（25%）
+const ELITE_BONUS_STONE_CHANCE := 0.40      ## 未掉道具时触发大额灵石偏财概率（40%）
+const ELITE_BONUS_STONES := 20              ## 精英偏财大额金币数（+20 灵石）
+
+## 精英怪道具掉落概率：基础 25%，每点幸运提供轻微加成（每点 +5%），封顶 50% 保底 10%
+static func elite_item_drop_chance(luck: float) -> float:
+	return clampf(ELITE_ITEM_DROP_BASE_CHANCE * (1.0 + luck * 0.05), 0.10, 0.50)
+

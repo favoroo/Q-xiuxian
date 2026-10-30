@@ -127,7 +127,7 @@ func _test_pure() -> void:
 	_c.check(not bool(fb["grant_item"]), "送满上限后玉匣退回，不再白送法宝")
 	_c.check(int(fb["gem_count"]) > int(r1["gem_count"]) and int(fb["stones"]) > int(r1["stones"]),
 		"退回量比铜匣还厚：堆上去的档位不许越堆越亏")
-	_c.equals(GameBalance.CHEST_JADE_ITEM_GRANT_CAP, 2, "每局玉匣最多送 2 件法宝（掏空灵石阁的保险丝）")
+	_c.equals(GameBalance.CHEST_JADE_ITEM_GRANT_CAP, 3, "每局玉匣最多送 3 件法宝（掏空灵石阁的保险丝）")
 
 	# 危险度乘区：越难越稀少，顶档（噩梦）葫芦概率压到基准的 65%（均衡档，不过度剥夺恢复机会）
 	_c.near(GameBalance.danger_heal_chance_mult(0), 1.0, 0.001, "简单档乘区 = 1.0（基准）")

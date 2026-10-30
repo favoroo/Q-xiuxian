@@ -58,6 +58,9 @@ var _save_return_to_pause: bool = false
 var _save_dialog: Control = null          ## 存档管理弹窗（运行时挂载，见 _mount_save_manage_dialog）
 var _crowd_glow_cd: float = 0.0           ## glow 拥挤档轮询计时（1s 粒度，见 _poll_crowd_glow）
 var _env_res: Environment = null           ## WorldEnvironment 的 Environment 资源缓存（glow 档位写入目标）
+var _preview_budget_clamping: bool = false ## 预览像素预算正在夹窗口（防 size_changed 重入）
+var _preview_budget_toasted: bool = false  ## 预览像素预算提示只弹一次
+var _preview_budget_token: int = 0         ## 窗口尺寸防抖令牌（拖拽中只认最后一拍）
 var _back_nav: Node = null                 ## 安卓返回键路由（scripts/systems/BackNavigator.gd）
 
 func _ready() -> void:
@@ -119,10 +122,12 @@ func _ready() -> void:
 			)
 		if lvl_dialog.has_signal("author_requested"):
 			lvl_dialog.author_requested.connect(author_panel.open)
-	# 超级悟道面板：运行时挂到 UILayer 末尾（Main.tscn 为多 Agent 共享场景文件，不往里加节点）
-	_mount_super_alloc_dialog()
-	# 多存档管理弹窗（2026-10-28）：同样运行时挂载，不动 Main.tscn
-	_mount_save_manage_dialog()
+		# 超级悟道面板：运行时挂到 UILayer 末尾（Main.tscn 为多 Agent 共享场景文件，不往里加节点）
+		_mount_super_alloc_dialog()
+		# 多存档管理弹窗（2026-10-28）：同样运行时挂载，不动 Main.tscn
+		_mount_save_manage_dialog()
+		# 波末战利品摘要卡（多条目摘要：灵石/法宝/葫芦）
+		_mount_wave_loot_summary()
 	if $UILayer.has_node("WaveShop"):
 		var wave_shop: Control = $UILayer/WaveShop
 		wave_shop.stats_requested.connect(func():
@@ -347,6 +352,12 @@ func _mount_save_manage_dialog() -> void:
 	dlg.load_requested.connect(_on_save_load_requested)
 	dlg.closed.connect(_on_save_dialog_closed)
 
+## 波末战利品摘要卡挂载：纯代码构建控件，运行时挂到 UILayer 末尾
+func _mount_wave_loot_summary() -> void:
+	var summary := WaveLootSummary.new()
+	summary.name = "WaveLootSummary"
+	$UILayer.add_child(summary)
+
 ## 存档弹窗关闭：从暂停菜单进来的要回到暂停菜单（与属性/手册/设置同款回退）
 func _on_save_dialog_closed() -> void:
 	if _save_return_to_pause:
@@ -394,6 +405,33 @@ func _apply_render_quality() -> void:
 		win.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
 	else:
 		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	# 桌面预览像素预算（2026-10-29）：窗口放大超过 1080p 就等比缩回。
+	# 帧长随窗口面积线性上涨（720p≈60fps / 1080p≈45fps / 2K≈29fps，本机实测），
+	# 只缩窗口不改渲染倍数，画面始终 1:1 不糊。尺寸信号只在首次挂一次。
+	if not win.size_changed.is_connected(_on_window_size_changed_budget):
+		win.size_changed.connect(_on_window_size_changed_budget)
+	_apply_preview_budget()
+
+## 桌面预览像素预算首拍：启动窗口若已超 1080p 直接缩回
+func _apply_preview_budget() -> void:
+	if _preview_budget_clamping:
+		return
+	_preview_budget_clamping = true
+	var clamped: bool = PreviewBudget.apply(get_window())
+	if clamped and not _preview_budget_toasted:
+		_preview_budget_toasted = true
+		UpdateManager.show_toast(PreviewBudget.CAP_TOAST, GameStyle.JADE, 2.6)
+	_preview_budget_clamping = false
+
+## 窗口尺寸变更（用户拖拽 / 系统最大化）：防抖 0.25s 再夹 ——
+## 拖拽中每帧都会来 size_changed，逐帧夹会和手势打架；等尺寸稳定后只夹最终值一次。
+func _on_window_size_changed_budget() -> void:
+	_preview_budget_token += 1
+	var token := _preview_budget_token
+	await get_tree().create_timer(0.25).timeout
+	if token != _preview_budget_token or not is_inside_tree():
+		return
+	_apply_preview_budget()
 
 func _on_setting_changed(section: StringName, key: StringName, _value: Variant) -> void:
 	if section == &"display" and key == &"screen_shockwave":

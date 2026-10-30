@@ -67,6 +67,12 @@ static func reset(gm: Node) -> void:
 	gm.locked_upgrades = []
 	gm.chest_break_bonus = 0
 	gm.chest_item_grants = 0
+	gm._wave_start_stones = 0
+	gm.wave_loot_stones = 0
+	gm.wave_loot_items.clear()
+	gm.wave_loot_heals = 0
+	gm.wave_loot_heal_hp = 0.0
+	gm.wave_loot_heal_stones = 0
 	gm.cultivator_id = ""
 	gm.spirit_threshold_adj = 0
 	gm.contraption_threshold_adj = 0

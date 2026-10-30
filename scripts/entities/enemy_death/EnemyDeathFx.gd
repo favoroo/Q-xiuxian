@@ -50,6 +50,33 @@ static func drops(e) -> void:
 		DamageNumber.spawn(e.get_parent(), e.global_position + Vector2(0.0, -GameBalance.STONE_FLOAT_OFFSET), e.stone_reward, false, "+%d 金币" % e.stone_reward)
 		AudioManager.play_sfx("gem_pickup", 0.9)
 
+	# 精英怪专属战利品：概率掉落法宝实体 / 大额灵石偏财（无总数上限限制）
+	if e.is_elite and not e._no_drop:
+		var item_chance := GameBalance.elite_item_drop_chance(GameManager.luck)
+		var rolled_item := false
+		if GameManager.rng.randf() < item_chance:
+			var item_id := ItemData.pick_id(
+				GameManager.luck,
+				GameManager.wave_number,
+				GameManager.items_bought,
+				GameManager.rng,
+				GameManager.unlocked_items,
+				GameManager
+			)
+			if not item_id.is_empty():
+				rolled_item = true
+				var drop_parent: Node = e.get_parent() if e.get_parent() != null else (e.get_tree().current_scene if e.get_tree() != null else null)
+				if drop_parent != null:
+					ItemDropEntity.spawn(drop_parent, e.global_position, item_id)
+		# 未掉法宝时，按概率爆出大额灵石偏财
+		if not rolled_item and GameManager.rng.randf() < GameBalance.ELITE_BONUS_STONE_CHANCE:
+			var bonus_stones := GameBalance.ELITE_BONUS_STONES
+			GameManager.add_spirit_stones(bonus_stones)
+			var stone_parent: Node = e.get_parent() if e.get_parent() != null else (e.get_tree().current_scene if e.get_tree() != null else null)
+			if stone_parent != null:
+				DamageNumber.spawn(stone_parent, e.global_position + Vector2(0.0, -GameBalance.STONE_FLOAT_OFFSET), bonus_stones, false, "+%d 灵石" % bonus_stones)
+			AudioManager.play_sfx("gem_pickup", 0.95)
+
 	var gem_count = 1 if not e.is_elite else GameBalance.ELITE_GEM_COUNT
 	if e._no_drop:
 		gem_count = 0

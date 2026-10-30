@@ -65,7 +65,8 @@ $S/gen_music.sh -p "<STYLE.md 音乐风格> dungeon crawler loop, instrumental o
 | 生图（批量草稿/图标） | `gemini-3.1-flash-lite-image` | ~5s，1024² |
 | 语音（默认） | `gemini-3.8-flash-tts` | WAV 24kHz |
 | 语音（批量草稿） | `gemini-3.8-flash-lite-tts` | 更便宜 |
-| 音乐 | `lyria-3.5` | MP3 44.1kHz，单段约 2 分钟。**只能写整段音乐，做不了短音效**：实测索要「0.15 秒点击音」仍返回 56 秒素材。音效请改用本项目的 `tools/bake_sfx.py`（离线合成，见 usage-guide.md 能力边界表） |
+| 音乐（主） | `lyria-3.5` | MP3 44.1kHz，单段约 2 分钟。**只能写整段音乐，做不了短音效**：实测索要「0.15 秒点击音」仍返回 56 秒素材。音效请改用本项目的 `tools/bake_sfx.py`（离线合成，见 usage-guide.md 能力边界表） |
+| 音乐（备） | `lyria-3-pro-preview` | `gen_music.sh` 主模型两次未出音频时自动回退到它（`--fallback` 可改，传 `none` 关闭）。⚠️ 2026-10-29 实测：网关对**两个音乐模型**均回 400 `PROXY_GENERATION_DISABLED`，音乐通道整体待网关上游修复，见 api-music.md |
 | ~~sensenova-u1.5-lite~~ | 网关上游配置错误，**暂不可用**（修好后优先用于便宜批量生图） |
 | ~~gpt-image-*~~ | 通道无鉴权，不可用 |
 

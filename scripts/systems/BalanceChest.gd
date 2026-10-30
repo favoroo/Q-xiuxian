@@ -107,9 +107,9 @@ static func reward_of(tier: int) -> Dictionary:
 		_:
 			return REWARD_WOOD
 
-## 玉匣每局最多送出几件道具：一件道具值 15~90 金币，白送到 2 件已经是一条 build，
+## 玉匣每局最多送出几件道具：一件道具值 15~90 金币，白送到 3 件已经是一条 build，
 ## 再往上会把金币阁掏空成背景板。超上限的玉匣退回铜匣奖励 ×jade_fallback_mult。
-const JADE_ITEM_GRANT_CAP := 2
+const JADE_ITEM_GRANT_CAP := 3
 const JADE_FALLBACK_MULT := 1.5
 
 ## 单口匣子回复量上限：堆满一条寻宝流（悟道「宝箱掉落」+道具「满匣诀」）也不许一口回满血。

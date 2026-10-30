@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.11",
+			"date": "2026-10-30",
+			"title": "波末战利品与精英掉落",
+			"items": [
+				"波末弹出本回合所得清单。",
+				"精英怪概率掉落法宝实体。",
+				"首页噩梦模式加迷雾氛围层。",
+				"摘要卡可直接点击变卖法宝。",
+			],
+		},
+		{
 			"version": "v0.1.10",
 			"date": "2026-10-29",
 			"title": "噩梦换肤与敌人动作协调",

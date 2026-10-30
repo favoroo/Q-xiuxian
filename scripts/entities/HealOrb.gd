@@ -296,11 +296,12 @@ func _collect(p: Player) -> void:
 	# 灵植夫·灵药滋生：溢出折金币倍率（GameBalance 保持纯函数，角色乘区在调用侧兑现）
 	if stones > 0 and GameManager.heal_overflow_mult != 1.0:
 		stones = int(round(float(stones) * GameManager.heal_overflow_mult))
-	if stones > 0:
-		GameManager.add_spirit_stones(stones)
-		DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
-		AudioManager.play_sfx("gem_pickup", 1.25)
-	target_player = null
+		if stones > 0:
+			GameManager.add_spirit_stones(stones)
+			DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
+			AudioManager.play_sfx("gem_pickup", 1.25)
+		GameManager.record_wave_heal(landed, stones)
+		target_player = null
 	recycle()
 
 func _set_waiting(value: bool) -> void:

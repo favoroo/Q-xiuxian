@@ -1373,3 +1373,135 @@ func _test_item_pool_coverage() -> void:
 	GameManager.add_item("lingcao_dai")
 	_c.near(GameManager.item_hook_sum("heal_orb_chance"), 0.10, EPS, "灵草袋提供 +10% 回复珠概率")
 	GameManager.reset_run()
+
+func _test_wave_loot_summary_system() -> void:
+	GameManager.reset_run()
+	GameManager.spirit_stones = 100
+	GameManager.wave_number = 3
+	GameManager.start_wave_loot_tracking()
+
+	_c.equals(GameManager.wave_loot_stones, 0, "战利品金币初始为 0")
+	_c.check(GameManager.wave_loot_items.is_empty(), "战利品道具初始为空")
+	_c.equals(GameManager.wave_loot_heals, 0, "战利品葫芦初始为 0")
+
+	# 模拟战斗中收益：赚金币 50、吃 1 颗葫芦（回血 20、折算 4 灵石）、获得储蓄罐
+	GameManager.add_item("jubaopen")
+	GameManager.spirit_stones += 50
+	GameManager.record_wave_heal(20.0, 4)
+	GameManager.wave_loot_items.append("jubaopen")
+
+	var loot: Dictionary = GameManager.finalize_wave_loot()
+	_c.equals(int(loot.get("wave", 0)), 3, "战利品波次匹配")
+	_c.equals(int(loot.get("stones", 0)), 50, "战利品净赚金币 50")
+	_c.equals(int(loot.get("heals", 0)), 1, "战利品葫芦 1 颗")
+	_c.near(float(loot.get("heal_hp", 0.0)), 20.0, EPS, "战利品葫芦回血 20")
+	_c.equals(int(loot.get("heal_stones", 0)), 4, "战利品葫芦折算金币 4")
+	var items: Array = loot.get("items", [])
+	_c.equals(items.size(), 1, "战利品道具 1 件")
+	_c.equals(String(items[0]), "jubaopen", "战利品道具为储蓄罐")
+
+	# 验证 WaveLootSummary 视图构建与渲染
+	var summary := WaveLootSummary.new()
+	add_child(summary)
+	summary.popup_summary(loot, false)
+
+	_c.check("第 3 波" in summary._title_label.text, "战利品摘要标题包含第 3 波")
+	_c.equals(summary._gold_val_label.text, "+50", "战利品灵石收益显示 +50")
+	_c.check("1 颗" in summary._heals_val_label.text, "战利品葫芦显示 1 颗")
+	_c.check("恢复 20 生命" in summary._heals_val_label.text, "战利品葫芦显示回血 20")
+	_c.check("折算 +4 灵石" in summary._heals_val_label.text, "战利品葫芦显示折算 4 灵石")
+	_c.equals(summary._items_row_box.get_child_count(), 1, "战利品法宝行包含 1 项")
+
+	# 验证行内直接变卖按钮与交互
+	var item_row: HBoxContainer = summary._items_row_box.get_child(0) as HBoxContainer
+	var val_box: HBoxContainer = item_row.get_child(1) as HBoxContainer
+	var sell_btn: Button = null
+	for c in val_box.get_children():
+		if c is Button:
+			sell_btn = c as Button
+			break
+	_c.check(sell_btn != null, "法宝行内生成变卖按钮")
+	var refund := ItemData.sell_price("jubaopen")
+	_c.check(sell_btn.text.contains("变卖"), "按钮标注变卖")
+	var stones_before_sell := GameManager.spirit_stones
+
+	# 模拟点击变卖按钮
+	sell_btn.pressed.emit()
+	_c.check(not GameManager.has_item("jubaopen"), "摘要界面直接售卖后背包不再持有该法宝")
+	_c.equals(GameManager.spirit_stones, stones_before_sell + refund, "变卖后灵石实时到账")
+	_c.equals(sell_btn.text, "已变卖", "变卖后按钮状态切换为已变卖")
+	_c.check(sell_btn.disabled, "已变卖按钮处于禁用态")
+	_c.equals(summary._gold_val_label.text, "+%d" % (50 + refund), "战利品卡片上的灵石统计实时累加变卖所得")
+
+	# 验证金币阁道具小徽记的「新」角标与变卖提示
+	var chip: Control = ShopInventoryRow.create_item_chip(null, "jubaopen", 44.0)
+	var found_new_badge: bool = false
+	for child in chip.get_children():
+		if child is Label and (child as Label).text == "新":
+			found_new_badge = true
+			break
+	_c.check(not found_new_badge, "已变卖法宝不再打上「新」微签")
+	chip.queue_free()
+
+	# 验证关闭信号与清理
+	var closed_box := [false]
+	summary.summary_closed.connect(func(): closed_box[0] = true)
+	summary.dismiss()
+	_c.check(closed_box[0], "关闭摘要正常发出 summary_closed 信号")
+	summary.queue_free()
+	GameManager.reset_run()
+
+func _test_elite_drop_and_item_entity_system() -> void:
+	GameManager.reset_run()
+
+	# 1. 精英怪掉落概率与偏财计算断言
+	var chance_base := GameBalance.elite_item_drop_chance(0.0)
+	_c.near(chance_base, 0.25, 0.001, "0 幸运时精英怪掉落法宝概率为基准 25%")
+	var chance_lucky := GameBalance.elite_item_drop_chance(5.0)
+	_c.near(chance_lucky, 0.3125, 0.001, "5 幸运时精英怪掉落法宝概率提升至 31.25%")
+	var chance_capped := GameBalance.elite_item_drop_chance(100.0)
+	_c.near(chance_capped, 0.50, 0.001, "超高幸运下精英掉落法宝概率封顶 50%")
+	var chance_floor := GameBalance.elite_item_drop_chance(-20.0)
+	_c.near(chance_floor, 0.10, 0.001, "极低幸运下精英掉落法宝概率保底 10%")
+	_c.equals(GameBalance.ELITE_BONUS_STONES, 20, "精英怪偏财大额灵石数为 20")
+
+	# 2. ItemDropEntity 实体与数据属性初始化
+	var host := Node2D.new()
+	get_tree().root.add_child(host)
+	var drop := ItemDropEntity.spawn(host, Vector2(100.0, 100.0), "jubaopen")
+	_c.check(drop != null, "ItemDropEntity.spawn 成功创建实体")
+	_c.equals(drop.item_id, "jubaopen", "掉落物正确记录道具 ID")
+	_c.equals(drop.tier, 1, "储蓄罐正确识别为普通品质 (tier 1)")
+	_c.equals(drop.collision_layer, 16, "碰撞层严格挂在 Layer 5: loot (16)")
+	_c.check(drop.is_in_group("gems"), "掉落物加入 gems 组供波末清场自动吸附")
+
+	# 3. 磁吸与拾取入包联动
+	var mock_player := Node2D.new()
+	mock_player.global_position = Vector2(105.0, 105.0)
+	host.add_child(mock_player)
+	GameManager.start_wave_loot_tracking()
+
+	drop.magnet_to(mock_player)
+	_c.equals(drop.target_player, mock_player, "magnet_to 成功锁定玩家为追踪目标")
+
+	# 模拟飞抵拾取
+	drop._collect(mock_player)
+	_c.check(GameManager.has_item("jubaopen"), "拾取实体后道具成功装配入包")
+	_c.check("jubaopen" in GameManager.wave_loot_items, "拾取实体后道具进入本回合战利品记账")
+
+	# 4. 玉匣送出道具与上限判定
+	GameManager.chest_item_grants = 0
+	var granted1 := GameManager.chest_grant_item()
+	_c.check(granted1, "玉匣首次打破可成功送出道法道具")
+	_c.equals(GameManager.chest_item_grants, 1, "玉匣送出道具计数自增")
+
+	# 模拟达到上限
+	GameManager.chest_item_grants = GameBalance.CHEST_JADE_ITEM_GRANT_CAP
+	var granted_overflow := GameManager.chest_grant_item()
+	_c.check(not granted_overflow, "玉匣达到上限（3件）后拒绝送出并落回降级奖励")
+
+	mock_player.queue_free()
+	host.queue_free()
+	GameManager.reset_run()
+
+

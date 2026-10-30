@@ -3,8 +3,9 @@ extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）三页签：成就 / 角色 / 战斗记录
 ## 成就页：四分类（试炼/流派/历练/机缘）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
-## 角色页：大色块角色卡（左头像色块 + 境界称号 chip + 两难度封印格），
-##         封印按 GameManager.cultivator_danger_clears 位掩码点亮，境界按最高破境难度晋升
+## 角色页：大色块角色卡（左头像色块 + 最高境界 chip + 普通/噩梦两块波数色标），
+##         色标数字 = 该角色在该难度的最高波数（GameManager.cultivator_records[*].best_wave_by_danger），
+##         境界按最高破境难度晋升。
 ## 滚动区内的展开控件一律 PanelContainer + GameStyle.tap()（BaseButton 会吞滑动事件）
 ## 三页列表每次刷新都重建子树，所以重建末尾要重跑 GameStyle.swipeable()（见 _refresh_data 末尾）
 
@@ -20,9 +21,6 @@ var _ach_list_box: VBoxContainer
 var _cult_list_box: VBoxContainer
 var _log_list_box: VBoxContainer
 var _expanded_log_idx: int = -1  ## 历战实录当前展开的快照下标（-1 = 全部收起）
-
-## 难度封印格的单字（与 AchievementData.DANGER_NAMES 对位，2026-10-28 收为 2 档）
-const SEAL_CHARS: Array[String] = ["普", "噩"]
 
 func _get_title_text() -> String:
 	return "战 绩  ·  游 戏 记 录"
@@ -193,7 +191,7 @@ func _refresh_data() -> void:
 	for cid in CultivatorData.DEFS.keys():
 		if GameManager.is_cultivator_unlocked(String(cid)):
 			unlocked_n += 1
-	_cult_list_box.add_child(_section_header("◆ 角色 · 已解锁 %d/%d · 破境对应难度即可点亮该档封印" % [
+	_cult_list_box.add_child(_section_header("◆ 角色 · 已解锁 %d/%d · 色块 = 各难度最高波数" % [
 		unlocked_n, CultivatorData.DEFS.size()], GameStyle.GOLD))
 	var cgrid := GridContainer.new()
 	cgrid.columns = 2
@@ -229,11 +227,23 @@ func _category_color(cat: String) -> Color:
 		_:
 			return GameStyle.JADE
 
-## 难度档色（封印格与境界 chip 共用：普通档绿、噩梦档金）
+## 境界/卡框色（按最高破境难度：普通档绿、噩梦档金）
 func _danger_color(d: int) -> Color:
 	if d == 0:
 		return GameStyle.GOOD
 	return GameStyle.GOLD
+
+## 难度色标色（普通绿 / 噩梦朱砂）：色标只表达「这个难度的波数」，
+## 噩梦朱砂与首页噩梦皮肤同一套色语言，玩家对得上号。
+func _difficulty_color(d: int) -> Color:
+	return GameStyle.GOOD if d == 0 else GameStyle.BAD
+
+## 某难度的最高波数文案（未打过/未解锁分开说，别让玩家以为「0 波」是自己打出来的）
+func _danger_wave_text(d: int, waves: Array) -> String:
+	var w: int = int(waves[d]) if d < waves.size() else 0
+	if w > 0:
+		return "第 %d 波" % w
+	return "未解锁" if not GameManager.is_danger_unlocked(d) else "未挑战"
 
 ## 小节标题条
 func _section_header(text: String, color: Color = GameStyle.GOLD) -> Control:
@@ -361,18 +371,18 @@ func _open_achievement_tip(adef: Dictionary, anchor: Control) -> void:
 		"foot": "成就只作记录与解锁，不提供局内数值加成。",
 	})
 
-# ----------------- 角色大色块卡（境界 + 两难度封印） -----------------
+# ----------------- 角色大色块卡（最高境界 + 两难度最高波数） -----------------
 
 func _create_cultivator_card(cid: String) -> Control:
 	var unlocked: bool = GameManager.is_cultivator_unlocked(cid)
 	var rec := GameManager.get_cultivator_record(cid)
 	var best_danger := GameManager.get_cultivator_best_danger(cid)
-	var mask := GameManager.get_cultivator_danger_mask(cid)
 	var has_realm := unlocked and best_danger >= 0
 	var realm_col := _danger_color(best_danger) if has_realm else GameStyle.LINE
+	var waves: Array = rec.get("best_wave_by_danger", [])
 
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(380, 116)
+	card.custom_minimum_size = Vector2(380, 122)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# 卡框即境界色：破境过的角色一眼能看出打到了什么高度
 	var sb := GameStyle.outlined_panel(GameStyle.INK, realm_col if has_realm else GameStyle.LINE, 2, GameStyle.SLANT_BLOCK)
@@ -404,15 +414,17 @@ func _create_cultivator_card(cid: String) -> Control:
 	# 右侧信息列
 	var text_col := VBoxContainer.new()
 	text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_col.add_theme_constant_override("separation", 4)
+	text_col.add_theme_constant_override("separation", 5)
 	hbox.add_child(text_col)
 
+	# 首行：角色名 + 最高境界（写全「最高境界」，不再让玩家猜「炼气」是什么）
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 6)
 	text_col.add_child(name_row)
 
 	var name_lbl := Label.new()
 	name_lbl.text = String(cdef.get("name", "未知角色"))
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	GameStyle.label(name_lbl, 15, GameStyle.CHALK if unlocked else GameStyle.GREY, 0, GameStyle.INK, true)
 	name_row.add_child(name_lbl)
 
@@ -422,7 +434,7 @@ func _create_cultivator_card(cid: String) -> Control:
 		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(GameStyle.LINE))
 		GameStyle.label(realm_lbl, 11, GameStyle.GREY)
 	elif has_realm:
-		realm_lbl.text = " %s " % AchievementData.realm_for_danger(best_danger)
+		realm_lbl.text = " 最高境界 · %s " % AchievementData.realm_for_danger(best_danger)
 		realm_lbl.add_theme_stylebox_override("normal", GameStyle.chip(realm_col))
 		GameStyle.label(realm_lbl, 11, GameStyle.INK_TEXT)
 	else:
@@ -432,31 +444,14 @@ func _create_cultivator_card(cid: String) -> Control:
 	realm_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	name_row.add_child(realm_lbl)
 
-	# 两难度封印格：破境过该档即点亮（未解锁角色全灭）
-	var seals := HBoxContainer.new()
-	seals.add_theme_constant_override("separation", 4)
-	seals.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	text_col.add_child(seals)
-	for d in range(SEAL_CHARS.size()):
-		var lit := unlocked and (mask & (1 << d)) != 0
-		var seal := Label.new()
-		seal.text = SEAL_CHARS[d]
-		seal.custom_minimum_size = Vector2(24, 24)
-		seal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		seal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		if lit:
-			seal.add_theme_stylebox_override("normal", GameStyle.panel(_danger_color(d), 0.0, Vector2.ZERO))
-			GameStyle.label(seal, 11, GameStyle.INK_TEXT)
-		else:
-			seal.add_theme_stylebox_override("normal", GameStyle.slot())
-			GameStyle.label(seal, 11, GameStyle.GREY)
-		seals.add_child(seal)
-	# 封印格图例
-	var legend := Label.new()
-	legend.text = " 普→噩"
-	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	GameStyle.label(legend, 10, GameStyle.GREY)
-	seals.add_child(legend)
+	# 第二行：两块难度色标 —— 普通/噩梦各一块，块上大字 = 该难度最高波数
+	var badges := HBoxContainer.new()
+	badges.add_theme_constant_override("separation", 6)
+	badges.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_col.add_child(badges)
+	for d in range(AchievementData.DANGER_NAMES.size()):
+		var w: int = int(waves[d]) if d < waves.size() else 0
+		badges.add_child(_create_danger_wave_badge(d, w, unlocked))
 
 	# 生涯摘要行
 	var detail_lbl := Label.new()
@@ -466,8 +461,8 @@ func _create_cultivator_card(cid: String) -> Control:
 		detail_lbl.text = "达成成就「%s」后解锁" % aname if aname != "" else AchievementData.NO_UNLOCK_HINT
 		GameStyle.label(detail_lbl, 11, GameStyle.GREY)
 	else:
-		detail_lbl.text = "最高第 %d 波 · 最高击杀 %d" % [
-			int(rec["best_wave"]), int(rec["best_kills"])]
+		detail_lbl.text = "已战 %d 局 · 最高击杀 %d" % [
+			int(rec["runs"]), int(rec["best_kills"])]
 		GameStyle.label(detail_lbl, 11, GameStyle.with_alpha(GameStyle.CHALK, 0.65))
 	text_col.add_child(detail_lbl)
 
@@ -476,7 +471,61 @@ func _create_cultivator_card(cid: String) -> Control:
 	GameStyle.tap(card, func() -> void: _open_cultivator_tip(cid, card))
 	return card
 
-## 角色卡点按详情：已解锁看生涯档案与封印进度，未解锁看达成条件
+## 难度波数色标：一块一档（普通绿 / 噩梦朱砂），块上数字即该难度最高波数。
+## 未挑战/未解锁画成暗色凹槽并写清原因 —— 玩家一眼知道这块将来会填什么。
+func _create_danger_wave_badge(d: int, wave: int, char_unlocked: bool) -> Control:
+	var face := _difficulty_color(d)
+	var played := wave > 0
+	var diff_unlocked := char_unlocked and GameManager.is_danger_unlocked(d)
+
+	var badge := PanelContainer.new()
+	badge.custom_minimum_size = Vector2(0, 46)
+	badge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb: StyleBoxFlat
+	if played:
+		sb = GameStyle.block(face, 0.0, Vector2(2, 3))
+	else:
+		# 空槽底色比卡面亮一档，否则在纯黑卡上只剩一圈细线，看不出是「一块待填的槽」
+		sb = GameStyle.slot_of(GameStyle.INK.lightened(0.10), GameStyle.LINE, 1)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 2.0
+	badge.add_theme_stylebox_override("panel", sb)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 5)
+	badge.add_child(row)
+
+	var title := Label.new()
+	title.text = String(AchievementData.DANGER_NAMES[d])
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if played:
+		GameStyle.label(title, 11, GameStyle.with_alpha(GameStyle.on_face_text(face), 0.78))
+	else:
+		GameStyle.label(title, 11, GameStyle.GREY)
+	row.add_child(title)
+
+	var value := Label.new()
+	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if played:
+		value.text = "%d 波" % wave
+		GameStyle.label(value, 19, GameStyle.on_face_text(face), 0, GameStyle.INK, true)
+	elif not char_unlocked:
+		# 未解锁角色：两块只画空槽预告版式，解锁条件由境界 chip 与卡底一行说明，不再重复三次「未解锁」
+		value.text = "—"
+		GameStyle.label(value, 15, GameStyle.GREY)
+	elif not diff_unlocked:
+		value.text = "未解锁"
+		GameStyle.label(value, 11, GameStyle.GREY)
+	else:
+		value.text = "未挑战"
+		GameStyle.label(value, 11, GameStyle.GREY)
+	row.add_child(value)
+	return badge
+
+## 角色卡点按详情：已解锁看生涯档案与两难度最高波数，未解锁看达成条件
 func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 	var cdef := CultivatorData.get_def(cid)
 	var cname := String(cdef.get("name", "未知角色"))
@@ -495,17 +544,13 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 		return
 	var rec := GameManager.get_cultivator_record(cid)
 	var best_danger := GameManager.get_cultivator_best_danger(cid)
-	var mask := GameManager.get_cultivator_danger_mask(cid)
-	var lit_n := 0
-	for d in range(SEAL_CHARS.size()):
-		if (mask & (1 << d)) != 0:
-			lit_n += 1
+	var waves: Array = rec.get("best_wave_by_danger", [])
 	var rows: Array = [
 		["游戏局数", "%d 局" % int(rec["runs"]), GameStyle.PAPER],
-		["最高波数", "第 %d 波" % int(rec["best_wave"]), GameStyle.PAPER],
-		["难度封印", "已点亮 %d/%d" % [lit_n, SEAL_CHARS.size()], GameStyle.GOLD],
+		["普通最高", _danger_wave_text(0, waves), GameStyle.GOOD],
+		["噩梦最高", _danger_wave_text(1, waves), GameStyle.BAD],
 		["最高击杀", "%d 只" % int(rec["best_kills"]), GameStyle.PAPER],
-		["最高难度", AchievementData.danger_name(best_danger) if best_danger >= 0 else "未破境", GameStyle.GOLD],
+		["最高境界", AchievementData.realm_for_danger(best_danger) if best_danger >= 0 else "未破境", GameStyle.GOLD],
 	]
 	DetailTip.show_over(self, anchor, {
 		"title": "%s · 角色记录" % cname,
@@ -513,7 +558,7 @@ func _open_cultivator_tip(cid: String, anchor: Control) -> void:
 		"chip_color": GameStyle.JADE,
 		"rows": rows,
 		"body": "境界「%s」" % AchievementData.realm_for_danger(best_danger) if best_danger >= 0 else "尚未破境，未入境界",
-		"foot": "在对应难度抵达第 %d 波即点亮该档封印；境界按破境过的最高难度晋升，仅作记录、不发奖励。" % GameManager.MILESTONE_WAVE,
+		"foot": "两块色标分别记录普通/噩梦的最高波数；在任一难度打到第 %d 波即破境，境界按最高破境难度晋升。" % GameManager.MILESTONE_WAVE,
 	})
 
 # ----------------- 历战实录行 -----------------

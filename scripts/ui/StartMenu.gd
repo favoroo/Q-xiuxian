@@ -71,10 +71,11 @@ const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把
 var _top_bar: HBoxContainer
 var _matrix_host: CenterContainer
 
-# 氛围层（2026-10-29 噩梦皮肤）：背景底色 / 血雨流星 / 四周血朱画框
+# 氛围层（2026-10-29 噩梦皮肤）：背景底色 / 血雨流星 / 四周血朱画框 / 整屏迷雾
 var _bg: ColorRect
 var _shower: MenuMeteorShower
 var _chrome: MenuNightmareChrome
+var _fog: MenuNightmareFog
 ## 上一次套用的难度：吃掉 AuthorPanel「迷雾预览」那种同值重发的 danger_changed
 var _last_skin_danger: int = -1
 
@@ -180,9 +181,13 @@ func _build_background() -> void:
 		# 画框只吃屏幕最外沿 6px，而矩阵左右各留 43px / 屏底按钮留 26px ⇒
 		# 压在卡片「下面」也照样整圈可见，永远盖不到任何可点控件
 		_chrome = MenuNightmareChrome.install(self)
+		# 迷雾跟上面两层相反：要压在矩阵之上才算「在屏幕前飘」，
+		# 所以先按建层顺序装在这里，等控件全建完再由 _build_center_matrix 末尾提到最上层
+		_fog = MenuNightmareFog.install(self)
 		if bool(k["night"]):
 			_shower.set_nightmare(true, false)
 			_chrome.set_nightmare(true, false)
+			_fog.set_nightmare(true, false)
 
 ## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
@@ -344,6 +349,10 @@ func _build_center_matrix() -> void:
 	_cocreate_btn.pressed.connect(_on_cocreate_pressed)
 	_cocreate_host.add_child(_cocreate_btn)
 	_anim_blocks.append(_cocreate_btn)
+
+	# 4. 迷雾层要压在卡片矩阵之上（底色/流星/画框都在矩阵之下），等控件全部建完再提到最上层
+	if _fog != null and is_instance_valid(_fog):
+		move_child(_fog, -1)
 
 ## 左侧整柱 Hero 大方块：开始游戏 + 2 档危险度
 func _build_hero_block() -> PanelContainer:
@@ -753,10 +762,10 @@ func _apply_small_metrics(small_h: float) -> void:
 
 # ---------------- 氛围换肤（按难度） ----------------
 
-## 当前首页氛围调色板（唯一真话源）：普通态逐项还原现状配色，噩梦态换「血月夜」。
-## 所有「会重绘配色」的路径（各 _build_* / _refresh_danger_row / _refresh_sound_badge /
-## _tint_entry_sub / _apply_skin）都必须从这里取色 —— 任一处自己写死数字，
-## 下一次刷新就会把夜色洗回普通色（或反过来）。色值本体在 GameStyle 的 NIGHT_* 段。
+## 当前首页氛围调色板（唯一真话源）：
+## 2026-10-30 调整：响应用户反馈，噩梦模式下卡片不再变色（保持原汁原味的高级撞色与墨字），
+## 氛围感全量转移给「迷雾层 + 暗角煞气 + 深紫夜空 + 血雨流星 + 四周血朱画框」，
+## 危险度 chip 保持明确选中态。
 func _skin() -> Dictionary:
 	if GameManager.danger_level < 1:
 		return {
@@ -796,38 +805,38 @@ func _skin() -> Dictionary:
 	return {
 		"night": true,
 		"stage": GameStyle.NIGHT_STAGE,
-		"hero_face": GameStyle.NIGHT_HERO,
-		"hero_text": GameStyle.CHALK,
-		"start_face": GameStyle.NIGHT_SEAL,
-		"start_edge": GameStyle.NIGHT_SEAL_EDGE,
-		"corner_face": GameStyle.NIGHT_SEAL,
-		"corner_edge": GameStyle.NIGHT_SEAL_EDGE,
-		"primary_text": GameStyle.CHALK,
-		"primary_hover_text": GameStyle.CHALK,
-		"plate_face": GameStyle.NIGHT_PLATE,
-		"plate_text": GameStyle.CHALK,
-		"plate_hover": GameStyle.NIGHT_SEAL,
-		"plate_hover_text": GameStyle.CHALK,
-		"resume_hover": GameStyle.NIGHT_SEAL,
-		"resume_hover_text": GameStyle.CHALK,
-		"sound_text": GameStyle.CHALK,
-		"danger_plate": GameStyle.with_alpha(GameStyle.NIGHT_STAGE.darkened(0.55), 0.92),
+		# 卡片全量保持原色与墨字，不施加暗沉夜色
+		"hero_face": GameStyle.GOLD,
+		"hero_text": GameStyle.INK_TEXT,
+		"start_face": GameStyle.JADE,
+		"start_edge": GameStyle.JADE_EDGE,
+		"corner_face": GameStyle.GOLD,
+		"corner_edge": GameStyle.GOLD_EDGE,
+		"primary_text": GameStyle.INK_TEXT,
+		"primary_hover_text": GameStyle.INK_TEXT,
+		"plate_face": GameStyle.NAVY2,
+		"plate_text": GameStyle.PAPER,
+		"plate_hover": GameStyle.GOLD,
+		"plate_hover_text": GameStyle.INK_TEXT,
+		"resume_hover": GameStyle.JADE,
+		"resume_hover_text": GameStyle.PAPER,
+		"sound_text": GameStyle.JADE_DK,
+		# 危险度控制区：选中的「噩梦」呈现醒目血朱，机制提示行红调高亮
+		"danger_plate": GameStyle.with_alpha(Color.BLACK, 0.82),
 		"danger_border": GameStyle.with_alpha(GameStyle.NIGHT_SEAL, 0.6),
-		"danger_head": GameStyle.with_alpha(GameStyle.NIGHT_SEAL_EDGE, 0.92),
+		"danger_head": GameStyle.with_alpha(GameStyle.NIGHT_SEAL_EDGE, 0.95),
 		"chip_on": GameStyle.NIGHT_SEAL,
-		"chip_on_hover": GameStyle.NIGHT_SEAL,
+		"chip_on_hover": GameStyle.NIGHT_SEAL_EDGE,
 		"chip_on_text": GameStyle.CHALK,
-		"chip_off": GameStyle.NIGHT_CHIP_OFF,
-		"chip_off_hover": GameStyle.NIGHT_PLATE_EDGE,
-		"chip_off_text": GameStyle.NIGHT_TEXT_DIM,
-		"card_faces": [GameStyle.NIGHT_CARD_CAREER, GameStyle.NIGHT_CARD_MANUAL,
-			GameStyle.NIGHT_CARD_CONFIG, GameStyle.NIGHT_CARD_GUIDE],
-		"tag_marks": [GameStyle.NIGHT_SEAL, GameStyle.NIGHT_SEAL,
-			GameStyle.NIGHT_SEAL, GameStyle.NIGHT_SEAL],
-		"play_mark": GameStyle.NIGHT_SEAL,
-		"card_text": GameStyle.CHALK,
-		"card_sub": GameStyle.with_alpha(GameStyle.CHALK, 0.78),
-		"hot_text": GameStyle.NIGHT_SEAL_EDGE,
+		"chip_off": GameStyle.NAVY2,
+		"chip_off_hover": GameStyle.LINE,
+		"chip_off_text": GameStyle.PAPER_DIM,
+		"card_faces": [GameStyle.JADE, GameStyle.GOOD, GameStyle.NAVY2, GameStyle.ELEMENT],
+		"tag_marks": [GameStyle.JADE, GameStyle.GOOD, GameStyle.GOLD, GameStyle.ELEMENT],
+		"play_mark": GameStyle.GOLD,
+		"card_text": GameStyle.INK_TEXT,
+		"card_sub": GameStyle.with_alpha(GameStyle.INK_TEXT, 0.78),
+		"hot_text": GameStyle.JADE_DK,
 	}
 
 ## 把当前难度对应的整套配色铺到已建好的控件上（建卡路径也读 _skin，这里负责「切换」）。
@@ -848,11 +857,13 @@ func _apply_skin(animate: bool) -> void:
 		else:
 			_bg.color = stage
 
-	# 2. 氛围层（四周画框 / 血雨流星）：只补间透明度与配色，不重建任何层
+	# 2. 氛围层（四周画框 / 血雨流星 / 整屏迷雾）：只补间透明度与配色，不重建任何层
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_nightmare(night, animate)
 	if _shower != null and is_instance_valid(_shower):
 		_shower.set_nightmare(night, animate)
+	if _fog != null and is_instance_valid(_fog):
+		_fog.set_nightmare(night, animate)
 
 	# 3. Hero 大卡：卡面 / 标题字 / PLAY 色标 / 三颗键
 	if _hero_card != null and is_instance_valid(_hero_card):

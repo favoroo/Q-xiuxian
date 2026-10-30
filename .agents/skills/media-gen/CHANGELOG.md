@@ -3,6 +3,19 @@
 > 规则：任何 agent 修改本技能（脚本/参考文档/配置格式），必须在此追加一行：
 > `## 日期 摘要 (agent名)` + 要点列表。
 
+## 2026-10-29 gen_music.sh 增加备用模型回退链；实测音乐通道整体故障 (Qoder)
+
+- 按用户要求把网关新出现的 `lyria-3-pro-preview` 注册为音乐备用模型：
+  `gen_music.sh` 主模型（默认 `lyria-3.5`）两次未出音频自动回退 `--fallback`
+  （默认 pro-preview，传 `none` 或与 `-m` 相同则不回退），台账记录实际出图的模型。
+  回退链逻辑用「不存在主模型 → 回退 lyria-3.5」演练验证触发正确。
+- **实测两个音乐模型当前都不可用**：`lyria-3-pro-preview` 与 `lyria-3.5` 走
+  `/v1/chat/completions`、`/v1beta/interactions`（网关映射为 generateContent/
+  streamGenerateContent，非原生透传，与 10-07 记录一致）均 ~8s 内返回
+  400 `PROXY_GENERATION_DISABLED`。需网关上游启用生成后恢复，脚本无需再改。
+- 文档同步：`api-music.md` 结论速查加 pro-preview 行与 2026-10-29 故障警示；
+  `SKILL.md` 模型表音乐拆为主/备两行。
+
 ## 2026-10-07 初版 (ZCode)
 
 - 实测打通本机网关 `http://127.0.0.1:8317/v1`，统一走 `/v1/chat/completions`：

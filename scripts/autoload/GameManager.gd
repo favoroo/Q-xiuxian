@@ -33,6 +33,9 @@ signal pets_updated(pets: Array)
 signal danger_changed(new_danger: int)
 ## 作者模式开关变化（HUD/商店/悟道顶栏的「作者」按钮显隐、首页徽章刷新）
 signal author_mode_changed(enabled: bool)
+## 波末战利品多条目摘要（WaveSpawner._open_shop -> WaveLootSummary）
+signal wave_loot_summary_requested(loot: Dictionary)
+signal wave_loot_summary_finished
 
 ## 打击感分级。顿帧/缩放冲击按档给，**震屏（创伤）只发给"值得看的节点"**：
 ## 玩家受创、精英与首领的登场/震地/伏诛、界碑聚灵阵、落雷命中。
@@ -181,7 +184,7 @@ var run_history: Array = []                  ## 最近 10 局历史战报列表
 var last_run_new_achievements: Array = []    ## 本局新达成的成就 ID（局内即时判定 + 结算判定累计，供结算弹窗汇总展示）
 
 # 道统功名与历战实录（2026-10-10 修仙志升级，均局外持久化，不进 reset_run）
-var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins(旧档遗留), best_wave, best_kills}}
+var cultivator_records: Dictionary = {}   ## 每位角色生涯档案 {cid: {runs, wins(旧档遗留), best_wave, best_kills, best_wave_by_danger}}
 var record_log: Array = []                ## 历战实录快照（每次刷新生涯最高波数留一条，新到旧，上限 RECORD_LOG_CAP）
 var last_run_new_records: Array = []      ## 本局刷新的纪录文案（供结算弹窗展示）
 const RECORD_LOG_CAP: int = 50            ## 历战实录保留条数上限（控存档体积）
@@ -341,14 +344,25 @@ func set_selected_skin(cid: String, skin_idx: int) -> void:
 	_save_progress()
 
 ## 查询某位角色的生涯档案（无记录返回零值字典）
+## best_wave_by_danger：索引 = 难度档（0 普通 / 1 噩梦）的最高波数，战绩角色卡的两块色标就读它。
 func get_cultivator_record(cid: String) -> Dictionary:
 	var rec: Dictionary = cultivator_records.get(cid, {})
+	var by_d = rec.get("best_wave_by_danger", [])
 	return {
 		"runs": int(rec.get("runs", 0)),
 		"wins": int(rec.get("wins", 0)),
 		"best_wave": int(rec.get("best_wave", 0)),
 		"best_kills": int(rec.get("best_kills", 0)),
+		"best_wave_by_danger": by_d.duplicate() if by_d is Array else [],
 	}
+
+## 某位角色在指定难度下的最高波数（未打过/无档案返回 0；老档由 ProgressStore 回填）
+func get_cultivator_best_wave(cid: String, d: int) -> int:
+	var rec: Dictionary = cultivator_records.get(cid, {})
+	var by_d = rec.get("best_wave_by_danger", [])
+	if not (by_d is Array) or d < 0 or d >= by_d.size():
+		return 0
+	return int(by_d[d])
 
 ## 已解锁的最高难度（逐级破境解锁）：由「生涯最高破境难度」派生。
 ## 从未破境 → 只开放 D0 普通；在普通破境 → 开放 D1 噩梦；顶档破境后恒为顶档。
@@ -434,6 +448,14 @@ var chest_quality: float = 0.0   ## 宝箱品质：抬高铜匣/玉匣出现权�
 var chest_break_bonus: int = 0   ## 开箱省力兼容字段
 var chest_reward_mult: float = 1.0  ## 宝箱掉落：砸开的匣子掉得更多的乘区（SpiritChest._destroy 经 GameBalance.chest_reward_scaled 消费）
 var chest_item_grants: int = 0   ## 本局玉匣已送出的道具件数（上限见 BalanceChest.JADE_ITEM_GRANT_CAP）
+
+# —— 本回合战利品记账（供波末「本回合所得」多条目摘要显示）——
+var _wave_start_stones: int = 0         ## 回合开场时的金币快照
+var wave_loot_stones: int = 0          ## 本回合净赚金币总数
+var wave_loot_items: Array[String] = [] ## 本回合掉落获得的道具 ID 列表
+var wave_loot_heals: int = 0           ## 本回合拾取/结算的回春葫芦个数
+var wave_loot_heal_hp: float = 0.0     ## 本回合葫芦恢复的生命总量
+var wave_loot_heal_stones: int = 0     ## 本回合葫芦溢出折算的金币总量
 
 # 灵兽系统属性（随行伙伴）
 var pet_damage_mult: float = 1.0       ## 灵兽伤害倍率
@@ -1089,8 +1111,36 @@ func chest_grant_item() -> bool:
 	if not add_item(id):
 		return false
 	chest_item_grants += 1
+	wave_loot_items.append(id)
 	announcement_triggered.emit("◆ 玉匣破开 · 得【%s】◆" % String(ItemData.get_def(id).get("name", id)))
 	return true
+
+## 开启本回合战利品记账：重置统计、截取金币快照（WaveSpawner.start_wave 消费）
+func start_wave_loot_tracking() -> void:
+	_wave_start_stones = spirit_stones
+	wave_loot_stones = 0
+	wave_loot_items.clear()
+	wave_loot_heals = 0
+	wave_loot_heal_hp = 0.0
+	wave_loot_heal_stones = 0
+
+## 记录本回合回春葫芦拾取/结算数据（HealOrb._collect 消费）
+func record_wave_heal(landed: float, stones: int) -> void:
+	wave_loot_heals += 1
+	wave_loot_heal_hp += landed
+	wave_loot_heal_stones += stones
+
+## 终结本回合战利品并返回数据字典（WaveSpawner._open_shop 消费）
+func finalize_wave_loot() -> Dictionary:
+	wave_loot_stones = maxi(0, spirit_stones - _wave_start_stones)
+	return {
+		"wave": wave_number,
+		"stones": wave_loot_stones,
+		"items": wave_loot_items.duplicate(),
+		"heals": wave_loot_heals,
+		"heal_hp": wave_loot_heal_hp,
+		"heal_stones": wave_loot_heal_stones,
+	}
 
 ## 消耗一件道具（替死傀儡这类一次性机制用），返回是否真的消耗了
 func consume_item(item_id: String) -> bool:
