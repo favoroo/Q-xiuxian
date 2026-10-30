@@ -18,13 +18,16 @@ func _test_spirit_beast_scaling() -> void:
 
 func _test_obelisk_economy_and_lifetime() -> void:
 	# 启动价（2026-10-25 重设计）：1 波取基准、随波线性 +3、0/负波钳到 1 波
-	_c.equals(GameBalance.obelisk_activation_cost(1), BalanceEconomy.OBELISK_COST_BASE, "祭坛启动价：1 波取基准")
-	_c.equals(GameBalance.obelisk_activation_cost(20),
+	# 2026-10-30：本局第一次启动免费（已启动 0 次 ⇒ 0 金币，与波次无关）
+	_c.equals(GameBalance.obelisk_activation_cost(1, 0), 0, "祭坛启动价：本局首次启动免费")
+	_c.equals(GameBalance.obelisk_activation_cost(20, 0), 0, "祭坛启动价：首次免费与波次无关")
+	_c.equals(GameBalance.obelisk_activation_cost(1, 1), BalanceEconomy.OBELISK_COST_BASE, "祭坛启动价：第二次起 1 波取基准")
+	_c.equals(GameBalance.obelisk_activation_cost(20, 1),
 		BalanceEconomy.OBELISK_COST_BASE + 19 * BalanceEconomy.OBELISK_COST_WAVE_STEP, "祭坛启动价：每波线性 +3")
-	_c.equals(GameBalance.obelisk_activation_cost(0), GameBalance.obelisk_activation_cost(1), "祭坛启动价：0 波钳到 1 波")
-	_c.equals(GameBalance.obelisk_activation_cost(-5), GameBalance.obelisk_activation_cost(1), "祭坛启动价：负波钳到 1 波")
+	_c.equals(GameBalance.obelisk_activation_cost(0, 1), GameBalance.obelisk_activation_cost(1, 1), "祭坛启动价：0 波钳到 1 波")
+	_c.equals(GameBalance.obelisk_activation_cost(-5, 1), GameBalance.obelisk_activation_cost(1, 1), "祭坛启动价：负波钳到 1 波")
 	# 启动价量级护栏：开局一波收入（约 81）付得起一次启动，但不能付得起两次
-	_c.check(GameBalance.obelisk_activation_cost(1) >= 30 and GameBalance.obelisk_activation_cost(1) <= 60,
+	_c.check(GameBalance.obelisk_activation_cost(1, 1) >= 30 and GameBalance.obelisk_activation_cost(1, 1) <= 60,
 		"祭坛启动价落在「值得斟酌但不卡死」档（30~60）")
 	# 释放伤害/击退（随波成长）：1 波取基准、随波递增、缓于敌血复利（相对威力缓降）
 	_c.near(GameBalance.obelisk_blessing_damage(1), BalanceCombat.OBELISK_DAMAGE_BASE, EPS, "祭坛释放伤害：1 波取基准")

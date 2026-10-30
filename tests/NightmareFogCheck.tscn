@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/nightmare_fog_check.gd" id="1_fog"]
+
+[node name="NightmareFogCheck" type="Node"]
+script = ExtResource("1_fog")

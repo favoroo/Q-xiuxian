@@ -4,7 +4,7 @@ extends Node
 ## tmp_startmenu_<宽>x<高>[_<主题>|_night].png，供目检角签可读性与噩梦氛围。
 ## 每档顺手切一次主题色（荧绿 → 品红）再拍一张：角签色标必须跟着换肤，
 ## 不许停在建卡那一刻的旧色（ColorRect 那种不走注册表的写法就会漏）。
-## 最后切到噩梦难度再拍一张：舞台/大卡/四副卡/画框/血雨流星整套换血月夜。
+## 最后切到噩梦难度再拍一张：只该流星变血红（卡片/底色/徽章一律不动，用于对照）。
 ## 用法：$G --path . res://tests/StartMenuTagPreview.tscn
 
 const SIZES := [Vector2i(960, 540), Vector2i(1204, 540)]
@@ -36,7 +36,7 @@ func _ready() -> void:
 		await _shot(vp, "res://tmp_startmenu_%dx%d_pink.png" % [sz.x, sz.y])
 		GameStyle.apply_theme_color(&"lime")
 
-		# 噩梦现场：切难度 → 整屏换血月夜（底色 0.45s 补间 + 画框/血雨 0.6s）
+		# 噩梦现场：切难度 → 只有流星配色走 0.6s 情绪插值换成血红，其余画面不动
 		GameManager.set_danger(1)
 		await get_tree().create_timer(1.5).timeout
 		await _shot(vp, "res://tmp_startmenu_%dx%d_night.png" % [sz.x, sz.y])

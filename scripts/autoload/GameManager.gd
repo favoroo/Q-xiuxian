@@ -427,6 +427,7 @@ var attack_speed_mult: float = 1.0
 var move_speed_mult: float = 1.0
 var pickup_range_mult: float = 1.0
 var attack_range_mult: float = 1.0
+var fog_vision_bonus: float = 0.0   ## 迷雾视野加成（加算百分比，噩梦视野件给；渲染侧按 BalanceWave 硬顶夹）
 var armor: float = 0.0
 var hp_regen: float = 0.0
 var crit_rate: float = 0.05
@@ -521,6 +522,7 @@ var scattered_bonus_per_class: float = 0.0     ## 散修：每种「单独持有
 var scattered_penalty_per_synergy: float = 0.0 ## 散修：每触发一条器类羁绊的全伤害惩罚（-0.20；五行共鸣不计）
 var total_damage_taken_count: int = 0   ## 单局累计受击次数（嗜血魔修解锁判定）
 var total_stones_spent: int = 0         ## 单局累计花掉的金币（一毛不拔成就判定）
+var obelisk_activations: int = 0        ## 单局成功启动聚灵阵次数（0 = 首次启动免费，2026-10-30）
 var skill_cast_count: int = 0           ## 单局主动施放技能次数（手指休假成就判定）
 var total_hp_healed: float = 0.0        ## 单局累计回复生命量（药王解锁判定）
 var max_concurrent_summons: int = 0     ## 单局同时上阵机关/御灵峰值（机关师解锁判定）

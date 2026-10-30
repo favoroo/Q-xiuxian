@@ -82,12 +82,16 @@ func _case_summon() -> void:
 	_c.check(obelisk != null, "① 前置：祭坛节点在（MapLayer/ObeliskCenter，单祭坛）")
 	if obelisk == null:
 		return
-	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1))
+	# 首次免费档记作已消耗（2026-10-30）：本判据量的是「按下收费档」的召唤链路
+	GameManager.obelisk_activations = 1
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
 	var stones_before: int = GameManager.spirit_stones
+	var cost := GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
 	obelisk._begin_infusion()
 	# 等注入 tween 走完（0.45s 游戏秒）→ _release_blessing 召灵兽
 	await _settle(60)
-	_c.check(GameManager.spirit_stones == stones_before - GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)),
+	_c.check(GameManager.spirit_stones == stones_before - cost,
 		"① 启动扣走本回合启动价金币（剩 %d）" % GameManager.spirit_stones)
 	_c.equals(GameManager.live_allies.size(), 1, "① 祭坛触发：allies 登记 +1")
 	if GameManager.live_allies.is_empty():

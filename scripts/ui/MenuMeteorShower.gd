@@ -22,9 +22,6 @@ const SPEED_MAX := 340.0
 ## 水平下倾角区间（度）：左上 → 右下，每颗略有差异
 const ANGLE_MIN := 20.0
 const ANGLE_MAX := 38.0
-## 噩梦态（血雨）下倾角区间（度）：从斜斜划过改成近乎直落的血雨
-const NIGHT_ANGLE_MIN := 55.0
-const NIGHT_ANGLE_MAX := 72.0
 ## 体型区间（倍率）
 const SCALE_MIN := 0.8
 const SCALE_MAX := 1.6
@@ -49,6 +46,9 @@ const HALO_R := 12.0
 const CORE_R := 2.4
 ## 超白 HDR 芯半径（px）：借 WorldEnvironment 泛光微微起辉，是头部的最高光点
 const CORE_HDR_R := 1.3
+## 噩梦态 HDR 芯：血朱超白（分量 > 1 才会起辉，红通道拉满、绿蓝压低 ⇒ 泛光也是红的）。
+## 普通态仍用 GameStyle.FX_HDR_CORE（白芯），两档按 _night 逐项 lerp，不硬切。
+const BLOOD_HDR_CORE := Color(2.6, 0.30, 0.22)
 ## 头部半径脉动幅度与角频率（小数比例 / rad·s）：
 ## 流星在空中明暗呼吸，比死板的固定亮核有活气
 const PULSE_DEPTH := 0.08
@@ -89,7 +89,8 @@ const NIGHT_SPARK_WHITENESS := 0.14
 const MOOD_TIME := 0.6
 
 ## 流星配色（重复项 = 权重）：普通态纸白为主调，主题色/点缀黄次之，朱砂/幽紫点染。
-## 噩梦态整盘换「血雨」：血朱为主、幽紫次之、骨白点染 —— 主题色在夜色里整体让位。
+## 噩梦态整盘换「血雨」：全档血红（亮朱 / 主血朱 / 暗血朱三段明度拉开层次）——
+## 2026-10-30 用户口径：噩梦只把流星改血红，别的一概不动（角度、拖尾、星点数量全不变）。
 ## 两套必须等长且按位一一对应（逐项 lerp）；在飞的流星保留出生时刻的旧色，
 ## 随各自重生（0.8~2.6s）自然换完，不硬切。
 ## 注意：主题色 GOLD 已改为运行时可变（static var），不能再写进 const 数组 ⇒ 改为按需现取。
@@ -106,15 +107,15 @@ func _palette() -> Array[Color]:
 		GameStyle.SHADOW,
 	]
 	var night: Array[Color] = [
-		GameStyle.CHALK,
-		GameStyle.NIGHT_TEXT_DIM,
 		GameStyle.NIGHT_SEAL_EDGE,
+		GameStyle.NIGHT_SEAL,
+		GameStyle.NIGHT_SEAL,
+		GameStyle.NIGHT_SEAL_EDGE,
+		GameStyle.NIGHT_SEAL,
 		GameStyle.NIGHT_SEAL,
 		GameStyle.NIGHT_SEAL_DK,
+		GameStyle.NIGHT_SEAL_DK,
 		GameStyle.NIGHT_SEAL,
-		GameStyle.SHADOW,
-		GameStyle.NIGHT_SEAL_EDGE,
-		GameStyle.SHADOW,
 	]
 	var out: Array[Color] = []
 	for i in range(day.size()):
@@ -122,7 +123,7 @@ func _palette() -> Array[Color]:
 	return out
 
 ## 星点配色：普通态只取冷调（纸白/主题亮边），暖色星点远看像噪点；
-## 噩梦态转骨白 / 灰紫 / 血朱暗点，与血雨同调。
+## 噩梦态压成暗血朱星屑，与血雨同调。
 func _star_palette() -> Array[Color]:
 	var day: Array[Color] = [
 		GameStyle.CHALK,
@@ -130,8 +131,8 @@ func _star_palette() -> Array[Color]:
 		GameStyle.GOLD_EDGE,
 	]
 	var night: Array[Color] = [
-		GameStyle.CHALK,
-		GameStyle.NIGHT_TEXT_DIM,
+		GameStyle.NIGHT_SEAL,
+		GameStyle.NIGHT_SEAL_DK,
 		GameStyle.NIGHT_SEAL_EDGE,
 	]
 	var out: Array[Color] = []
@@ -162,7 +163,7 @@ static func install(host: Control) -> MenuMeteorShower:
 	host.add_child(fx)
 	return fx
 
-## 切「血雨」：只动情绪插值（配色/下倾角/火星偏白），不重建任何星体。
+## 切「血雨」：只动配色（流星/星点/火星偏白）的插值，不重建任何星体、不改飞行手感。
 ## animate=false 用于开菜单时静默对齐当前难度（不闪不补间）。
 func set_nightmare(active: bool, animate: bool = true) -> void:
 	var target := 1.0 if active else 0.0
@@ -210,9 +211,8 @@ func _seed_stars() -> void:
 
 func _respawn(m: Dictionary) -> void:
 	var vp := _vp_size()
-	var ang_min := lerpf(ANGLE_MIN, NIGHT_ANGLE_MIN, _night)
-	var ang_max := lerpf(ANGLE_MAX, NIGHT_ANGLE_MAX, _night)
-	var ang := deg_to_rad(GameManager.rng.randf_range(ang_min, ang_max))
+	# 下倾角两档共用：2026-10-30 起噩梦只改配色，不改飞行手感
+	var ang := deg_to_rad(GameManager.rng.randf_range(ANGLE_MIN, ANGLE_MAX))
 	var speed := GameManager.rng.randf_range(SPEED_MIN, SPEED_MAX)
 	m["vx"] = cos(ang) * speed
 	m["vy"] = sin(ang) * speed
@@ -303,13 +303,18 @@ func _draw_meteor(m: Dictionary) -> void:
 	draw_polyline_colors(pts, cols, TRAIL_WIDTH_OUT * sc, true)
 	draw_polyline_colors(pts, cols_in, TRAIL_WIDTH_IN * sc, true)
 
-	# 火球头部：外圈柔光晕 + 实心亮核 + 超白 HDR 芯。
+	# 火球头部：外圈柔光晕 + 实心亮核 + HDR 芯。
 	# 光晕用逐层 draw_circle 叠径向渐变（不碰贴图，天然无锯齿、不受全局 Nearest 影响）
 	var halo_r := HALO_R * sc * pulse
 	_draw_radial_halo(head, halo_r, tint, alpha * 0.5)
-	# 圆走抗锯齿重绘，避免低级多边形硬边
-	draw_circle(head, CORE_R * sc * pulse, GameStyle.with_alpha(tint.lerp(Color.WHITE, 0.3), alpha), true)
-	draw_circle(head, CORE_HDR_R * sc * pulse, GameStyle.with_alpha(GameStyle.FX_HDR_CORE, alpha * 0.9), true)
+	# 圆走抗锯齿重绘，避免低级多边形硬边。
+	# 噩梦态把「向白插值」压掉、HDR 芯也从超白换血朱超白 —— 否则白芯压过红尾，
+	# 整条流星读成白流星只在边上带点红（血雨的核心卖点就是"红到发亮"）。
+	var with_white := lerpf(0.30, 0.06, _night)
+	draw_circle(head, CORE_R * sc * pulse,
+		GameStyle.with_alpha(tint.lerp(Color.WHITE, with_white), alpha), true)
+	var hdr_core: Color = GameStyle.FX_HDR_CORE.lerp(BLOOD_HDR_CORE, _night)
+	draw_circle(head, CORE_HDR_R * sc * pulse, GameStyle.with_alpha(hdr_core, alpha * 0.9), true)
 
 	_draw_sparks(m)
 

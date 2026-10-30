@@ -65,6 +65,8 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.attack_range_mult += v
 			"pickup_range_mult":
 				gm.pickup_range_mult += v
+			"fog_vision_bonus":
+				gm.fog_vision_bonus += v
 			"hp_regen":
 				gm.hp_regen += v
 			"crit_rate":
@@ -170,6 +172,8 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 				gm.attack_range_mult -= v
 			"pickup_range_mult":
 				gm.pickup_range_mult -= v
+			"fog_vision_bonus":
+				gm.fog_vision_bonus -= v
 			"hp_regen":
 				gm.hp_regen -= v
 			"crit_rate":

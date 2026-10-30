@@ -20,6 +20,7 @@ static func reset_stat_fields(gm: Node) -> void:
 	gm.move_speed_mult = 1.0
 	gm.pickup_range_mult = 1.0
 	gm.attack_range_mult = 1.0
+	gm.fog_vision_bonus = 0.0
 	gm.armor = 0.0
 	gm.hp_regen = 0.0
 	gm.crit_rate = 0.05
@@ -122,6 +123,7 @@ static func reset(gm: Node) -> void:
 	gm.scattered_penalty_per_synergy = 0.0
 	gm.total_damage_taken_count = 0
 	gm.total_stones_spent = 0
+	gm.obelisk_activations = 0
 	gm.skill_cast_count = 0
 	gm.total_hp_healed = 0.0
 	gm.max_concurrent_summons = 0

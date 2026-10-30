@@ -4,6 +4,10 @@ extends UnitTestsBase
 ## 单测模块：音频接线 / 设置模块 / 开局无尽 / 成就与元进度存档 / 生涯里程碑（从 tests/unit_runner.gd 拆出，2026-10-11）。
 ## 调用顺序与判据契约（UNIT_RESULT: ALL PASS / 退出码）由 UnitRunner 统一保证；
 ## _c 与 EPS 继承自 UnitTestsBase，函数体与拆分前逐字一致。
+
+## 皮肤效果族调度库（无 class_name，按路径 preload —— 与渲染器同款接法）
+const SkinFxLibrary = preload("res://scripts/entities/procedural_cultivator/skin_fx/SkinFxLibrary.gd")
+
 func _test_audio_wiring() -> void:
 	var missing: Array = AudioManager.missing_paths()
 	_c.check(missing.is_empty(), "注册表里的音效文件全部就位（缺: %s）" % str(missing))
@@ -815,12 +819,31 @@ func _test_skin_system() -> void:
 	_c.equals(skinned.palette.get("cloak_outer"), skinned.cloak["col_outer"], "派生色盘已同步")
 	_c.check(SkinData.apply_to_config(base, -1) == base, "非法皮肤序号原样返回")
 
-	# 3.5 炫彩皮肤（虹霓）：主题带 chroma 参数，apply 后配置可被渲染器消费；普通主题不沾
-	var chroma_cfg := SkinData.apply_to_config(base, 5)
-	_c.check(not chroma_cfg.chroma.is_empty(), "第 6 套皮肤为炫彩，chroma 参数已写入配置")
-	_c.check(float(chroma_cfg.chroma.get("cycle", 0.0)) > 0.0, "炫彩循环周期有效")
-	_c.check((chroma_cfg.chroma.get("hue_offsets", {}) as Dictionary).has("cloak_edge"), "炫彩含缘边相位偏移")
-	_c.check(SkinData.apply_to_config(base, 4).chroma.is_empty(), "普通换色皮肤不带炫彩参数")
+	# 3.5 皮肤系列（2026-10-30 系列化重构）：每套都带 fx kind 且能被效果族库调度；
+	#     虹霓仍是 chroma 族（行为与 2026-10-22 原实现一致），原色不带 fx
+	var fx_kinds: Array = []
+	for i in range(SkinData.count()):
+		var theme := SkinData.get_theme(i)
+		var fx: Dictionary = theme.get("fx", {})
+		var kind := String(fx.get("kind", ""))
+		_c.check(not kind.is_empty(), "皮肤 %d「%s」带效果族 kind" % [i, String(theme.get("name", ""))])
+		_c.check(SkinFxLibrary.has_kind(kind), "皮肤 %d 的 kind「%s」已被效果族库注册" % [i, kind])
+		_c.check(not fx_kinds.has(kind), "皮肤 %d 的 kind「%s」不与其他系列重复" % [i, kind])
+		fx_kinds.append(kind)
+		# 族默认值必须可合并（未注册 kind 会返回空字典）
+		_c.check(not SkinFxLibrary.params(fx).is_empty(), "皮肤 %d 的效果参数可合并族默认值" % i)
+		# 皮肤槽色标条与效果说明是 UI 真话源，不许空
+		_c.check((SkinData.get_chip(i) as Array).size() >= 3, "皮肤 %d 有至少 3 段色标" % i)
+		_c.check(not SkinData.get_desc("jianchi", i).is_empty(), "皮肤 %d 有效果说明文案" % i)
+	_c.equals(String(SkinData.get_theme(5).get("fx", {}).get("kind", "")), "chroma", "第 6 套仍是虹霓（chroma 族）")
+	_c.check(SkinData.apply_to_config(base, 5).fx.has("kind"), "第 6 套 fx 已写入配置")
+	_c.check(SkinData.apply_to_config(base, -1) == base, "原色不带任何效果配置")
+
+	# 3.6 逐角色微调表：给了 cid 才叠加，不给保持系列配方（缺省表为空时两种调用等价）
+	var tune_a := SkinData.apply_to_config(base, 2, "jianchi")
+	var tune_b := SkinData.apply_to_config(base, 2)
+	_c.equals(tune_a.fx.get("kind"), tune_b.fx.get("kind"), "逐角色微调不改变系列 kind")
+	_c.equals(tune_a.cloak["col_outer"], tune_b.cloak["col_outer"], "无微调条目时逐角色调用与通用调用等价")
 
 	# 4. 选择与落盘往返 + 锁定皮肤惰性回落
 	#    best_wave=25 ⇒ 第 4 套（门槛 25 波）解锁、第 6 套（门槛 50 波）仍锁

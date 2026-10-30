@@ -198,14 +198,15 @@ func set_character(renderer_cls: GDScript, cfg: CultivatorVisualConfig = null) -
 	_init_renderer()
 
 ## 快速按道统 ID 配置角色（全套插槽预设自动化装配）
-## skin_idx：换色皮肤序号（0~5 见 SkinData.THEMES）。-1 = 强制原色；
+## skin_idx：皮肤系列序号（0~5 见 SkinData.THEMES）。-1 = 强制原色；
 ## 缺省 -2 哨兵 = 读 GameManager 里该角色已选皮肤（Player/选人界面均走这条，调用方无需感知）
 func setup_character_id(cid: String, skin_idx: int = -2) -> void:
 	if skin_idx == -2:
 		skin_idx = GameManager.get_selected_skin(cid)
 	var cfg := CultivatorVisualConfig.get_config(cid)
 	if skin_idx >= 0:
-		cfg = SkinData.apply_to_config(cfg, skin_idx)
+		# 传 cid 以叠加 SkinData.CHAR_TUNING 的逐角色撞色微调
+		cfg = SkinData.apply_to_config(cfg, skin_idx, cid)
 	config = cfg
 	if renderer is HollowKnightCultivatorRenderer:
 		(renderer as HollowKnightCultivatorRenderer).set_visual_config(cfg)

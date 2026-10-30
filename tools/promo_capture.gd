@@ -257,6 +257,8 @@ func _setup_altar() -> void:
 	await _settle(0.4)
 
 	# 长按充能：直接调实体的 start_charge（等价于 HUD 圆键按住），0.8s 充满自动进注金
+	# 首次免费档记作已消耗：这一镜要拍「金铢飞入」的收费档演出（2026-10-30）
+	GameManager.obelisk_activations = 1
 	print("MARK altar_charge frame=%d" % Engine.get_frames_drawn())
 	ob.start_charge()
 	await _settle(0.8)          # CHARGE_TIME：碑脚弧走满一圈

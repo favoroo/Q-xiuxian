@@ -44,7 +44,10 @@ func _ready() -> void:
 	_shoot("charging")
 
 	# ② 真实长按到满触发（2026-10-25 金币启动：先给足启动价；触发含 0.45s 金币注入）
-	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
+	# 2026-10-30 首次免费档记作已消耗：本预览要拍「金铢注入」的收费档演出
+	GameManager.obelisk_activations = 1
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations) * 2
 	_ob.is_charging = true
 	var guard := 0
 	while not _ob.spent_this_wave and guard < 900:

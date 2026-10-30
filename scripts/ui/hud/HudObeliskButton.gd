@@ -241,15 +241,19 @@ func _process(_delta: float) -> void:
 	_refresh_price()
 
 ## 键面价格小字：读本回合现价与余额（2026-10-26 从碑顶悬浮字挪进键面）。
-## 够钱「N金币」奶白，不够「差N」朱砂 —— 文本没变不重写，钱每帧都在变也不能每帧重排。
+## 本局第一次启动免费（2026-10-30）写「免费」；够钱「N金币」奶白，不够「差N」朱砂 ——
+## 文本没变不重写，钱每帧都在变也不能每帧重排。
 func _refresh_price() -> void:
 	if _price == null:
 		return
 	var key := ""
 	var col: Color = GameStyle.CHALK
 	if _active_ob != null and is_instance_valid(_active_ob) and visible:
-		var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
-		if GameManager.spirit_stones >= cost:
+		var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
+		if cost <= 0:
+			key = "免费"
+			col = GameStyle.JADE
+		elif GameManager.spirit_stones >= cost:
 			key = "%d金币" % cost
 		else:
 			key = "差%d" % (cost - GameManager.spirit_stones)

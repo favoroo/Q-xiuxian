@@ -91,8 +91,11 @@ func _run() -> void:
 		"走针环半径 %.0f 明显收在判定圈 %.0f 之内（范围视觉不许被进度糊大）" % [BlessingObelisk.ARC_RADIUS, shape.radius])
 
 	# 四、派发通路自证：真打进引擎的按下能不能叫醒那颗键
-	# 金币前置（2026-10-25 祭坛改金币启动）：给足本回合启动价的富余，充能才进得去
-	_stones_before = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
+	# 金币前置（2026-10-25 祭坛改金币启动；2026-10-30 本局首次免费）：把免费档记作已消耗，
+	# 让本判据量的是「按波收费」那条路（扣费断言另有其处）
+	GameManager.obelisk_activations = 1
+	_stones_before = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations) * 2
 	GameManager.spirit_stones = _stones_before
 	_hud.show_obelisk_activation(_ob)
 	await get_tree().create_timer(0.3).timeout
@@ -169,7 +172,8 @@ func _run() -> void:
 		await get_tree().process_frame
 		guard += 1
 	_c.check(_ob.spent_this_wave, "按住到 CHARGE_TIME ⇒ 扣费注入后自动触发（进灰相）")
-	_c.check(GameManager.spirit_stones == _stones_before - GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)),
+	_c.check(GameManager.spirit_stones == _stones_before - GameBalance.obelisk_activation_cost(
+			maxi(GameManager.wave_number, 1), GameManager.obelisk_activations - 1),
 		"启动扣走本回合启动价金币（剩 %d / 前置 %d）" % [GameManager.spirit_stones, _stones_before])
 	_c.check(_ob.readout_ratio() >= 1.0 - EPS, "触发那一帧阵法读数画满（实得 %.3f）" % _ob.readout_ratio())
 	_c.check(_ob._readout_arc.ratio >= 1.0 - EPS, "触发那一帧走针环画满一整圈")
@@ -248,8 +252,10 @@ func _selftest() -> void:
 	_btn = _hud._obelisk_btn
 	_ring = _hud._obelisk_ring
 	# 不依赖派发：直接走 HUD 之外最短的一条真链路把进度推到一半
-	# 金币前置（2026-10-25 祭坛改金币启动）：不给钱 start_charge 会硬拦
-	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
+	# 金币前置（2026-10-25 祭坛改金币启动；2026-10-30 首次免费档记作已消耗）
+	GameManager.obelisk_activations = 1
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations) * 2
 	_ob.start_charge()
 	var guard := 0
 	while _ob.charge_time < BlessingObelisk.CHARGE_TIME * 0.55 and guard < 400:

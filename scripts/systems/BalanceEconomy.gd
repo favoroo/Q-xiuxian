@@ -69,12 +69,17 @@ static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return int(float(REROLL_BASE + w * REROLL_WAVE_STEP + maxi(reroll_count, 0) * count_step) * price_mult)
 
 # ---------------- 聚灵阵启动价（2026-10-25 祭坛重设计：免费一次性 → 每回合金币启动）----------------
+## 2026-10-30：本局第一次启动免费（activations_done == 0）。给玩家一次零成本试用，
+## 先把「祭坛能救命」这件事教出去；之后每回合按波次收费。
 
 const OBELISK_COST_BASE := 45      ## 1 波启动价（≈一件 tier3 道具，开局一波收入约 81 的六成）
 const OBELISK_COST_WAVE_STEP := 3  ## 每回合加价（比货架 +2 略陡：越晚启动越贵，鼓励早用）
 
-## 启动聚灵阵的金币价（W1=45 → W20=102），不乘 price_mult：祭坛不是货架货，不吃难度价格乘区
-static func obelisk_activation_cost(wave: int) -> int:
+## 启动聚灵阵的金币价（W1=45 → W20=102），不乘 price_mult：祭坛不是货架货，不吃难度价格乘区。
+## activations_done = 本局已成功启动次数；0 表示还没用过 → 首次免费。
+static func obelisk_activation_cost(wave: int, activations_done: int) -> int:
+	if activations_done <= 0:
+		return 0
 	return OBELISK_COST_BASE + (maxi(wave, 1) - 1) * OBELISK_COST_WAVE_STEP
 
 # ---------------- 收益（回合末无偿发放并自我复利）----------------
@@ -311,6 +316,9 @@ const ITEM_TIER_EPIC_PER_WAVE := 2.0     ## 史诗档每波步长
 const ITEM_TIER_EPIC_CAP := 25.0
 const ITEM_TIER_LEGEND_PER_WAVE := 0.8   ## 传说档每波步长
 const ITEM_TIER_LEGEND_CAP := 8.0
+## 噩梦专属道具（视野件）在噩梦难度内的档位权重倍率：纯随机池下 126 件里单件单格约 0.5%，
+## 不加权一局 20 波大概只有一成多概率碰到某一件，道具等于白做。设 1.0 即恢复与普通道具同权。
+const ITEM_NIGHTMARE_ONLY_WEIGHT := 3.0
 
 ## 单档概率：未达解锁波为 0，之后 步长 ×(波次 − 解锁波) 线性增长，乘福缘后封顶
 static func _item_tier_growth(per_wave: float, cap: float, unlock_wave: int, wave: int, luck_mult: float) -> float:
@@ -392,4 +400,5 @@ static func upgrade_fields() -> Array:
 			"chest_count", "chest_quality", "chest_reward",
 			"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
 			"skill_cooldown_mult",
+			"fog_vision_bonus",
 		]

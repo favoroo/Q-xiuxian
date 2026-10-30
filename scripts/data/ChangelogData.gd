@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.12",
+			"date": "2026-10-30",
+			"title": "皮肤系列动效与迷雾视野",
+			"items": [
+				"六套角色皮肤各配专属动效系列。",
+				"商店新增三件扩大迷雾视野的法宝。",
+				"聚灵阵本局首次启动免费。",
+				"复活后噩梦迷雾不再消失。",
+			],
+		},
+		{
 			"version": "v0.1.11",
 			"date": "2026-10-30",
 			"title": "波末战利品与精英掉落",

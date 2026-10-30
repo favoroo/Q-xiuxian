@@ -58,10 +58,10 @@ extends Resource
 @export var bone_shadow: Color = Color(0.76, 0.82, 0.88)
 @export var void_black: Color = Color(0.06, 0.07, 0.10)
 
-## 炫彩皮肤动画参数（空字典 = 普通静态换色）
-## 由 SkinData.apply_to_config() 从主题 "chroma" 键整份拷入，渲染器只读消费：
-## cycle 秒/圈、hue_offsets 各部位相位偏移、sheen 袍面油膜强度、rim_glow 缘边常驻流光强度。
-@export var chroma: Dictionary = {}
+## 皮肤系列效果参数（空字典 = 原色，零效果开销）
+## 由 SkinData.apply_to_config() 从主题 "fx" 键整份拷入（至少含 "kind"），
+## 渲染器经 SkinFxLibrary.params() 合并族默认值后，只读消费各效果族模块。
+@export var fx: Dictionary = {}
 
 ## 向后兼容色盘字典
 @export var palette: Dictionary = {}

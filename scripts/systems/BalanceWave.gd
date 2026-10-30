@@ -442,10 +442,20 @@ const NIGHTMARE_DUAL_BOSS_HP_MULT := 0.78  ## 噩梦双 Boss 车轮战单尊生�
 const NIGHTMARE_FOG_CLEAR_RADIUS := 200.0  ## 噩梦迷雾清晰内圈半径（设计单位，真正缩小视野范围）
 const NIGHTMARE_FOG_FEATHER_RADIUS := 285.0 ## 噩梦迷雾边缘羽化外沿半径（超出即进入浓黑浓雾）
 const NIGHTMARE_FOG_MAX_ALPHA := 1.0       ## 迷雾外圈完全遮蔽（100% 浓雾，外部敌人与地形全被遮蔽）
+const NIGHTMARE_FOG_VISION_MAX := 0.8      ## 迷雾视野加成硬顶（三件视野道具合计 +80%；再叠也不许把雾买没）
 const ELITE_MUTATION_HP_PCT_BASE := 0.60   ## 普通精英变异血线（<=60%）
 const ELITE_MUTATION_HP_PCT_NIGHTMARE := 0.70 ## 噩梦精英变异提前至 <=70%
 const BOSS_PHASE2_HP_PCT_BASE := 0.50      ## 普通 Boss 二阶段血线（<=50%）
 const BOSS_PHASE2_HP_PCT_NIGHTMARE := 0.60 ## 噩梦 Boss 二阶段狂暴提前至 <=60%
+
+## 迷雾清晰内圈半径：base 200px + 道具/悟道给的百分比加成（加算、封顶 NIGHTMARE_FOG_VISION_MAX）。
+## 满配 360px ≈ 屏高 0.667：上下边缘全清晰、左右仍留约八成浓雾，迷雾机制买不没。
+static func nightmare_fog_clear_radius(vision_bonus: float) -> float:
+	return NIGHTMARE_FOG_CLEAR_RADIUS * (1.0 + clampf(vision_bonus, 0.0, NIGHTMARE_FOG_VISION_MAX))
+
+## 迷雾羽化外沿半径：与清晰内圈同比例放大（200:285 的环宽比例不变，边缘翻涌观感一致）
+static func nightmare_fog_feather_radius(vision_bonus: float) -> float:
+	return NIGHTMARE_FOG_FEATHER_RADIUS * (1.0 + clampf(vision_bonus, 0.0, NIGHTMARE_FOG_VISION_MAX))
 
 ## 固定 Boss 回合：10/20 波，深层（>20 波）每 5 波再逢魔君
 ## （2026-10-13：用户口径深层 Boss 战要保留且加密，10 → 5 波一场：25/30/35…）

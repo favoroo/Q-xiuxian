@@ -151,6 +151,10 @@ const DEFAULT_ITEMS: Array[String] = [
 		# 传说（tier 4）
 		# 2026-10-25 新手节奏重做：血蟠蛊玉 / 裂魂铃 / 磐石印 / 突破蛊玉 移出初始池，改由成就解锁
 		# （见 ach_grind_wins / ach_feat_endless / ach_style_loner / ach_grind_level20）
+		# 2026-10-30 噩梦专属视野件（nightmare_only 硬闸：普通难度抽不到，噩梦买了扩迷雾清晰圈）
+		"yinlu_deng",
+		"powu_deng",
+		"qianli_yan",
 	]
 
 ## 初始默认进入商店武器池的武器（2026-10-25 新增）

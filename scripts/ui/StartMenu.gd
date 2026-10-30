@@ -9,6 +9,8 @@ extends Control
 ##   ③ 右下角一颗「检查更新」小按钮、左下角一颗「游戏共创」小按钮 —— 各贴屏底一角，不再拉通宽横幅
 ## 2026-10-28 无限闯关改版：无尽试炼开关下线。2026-10-29 用户要求撤掉卡片右上那枚
 ## 「◆ 无限闯关」角标（太丑）—— 模式信息不再在首页重复标注，Hero 顶部只剩 PLAY 角签。
+## 2026-10-30 用户口径：噩梦模式**只**把背景流星雨调成血红，卡片/底色/周边装饰一律不动
+## （当日的换肤、血朱画框、整屏迷雾三件全部撤掉，别再把它们加回来）。
 ## 点「开始游戏」后淡出，交给 CultivatorSelect 选择角色（paused 链不中断）。
 
 signal settings_requested
@@ -71,11 +73,9 @@ const HERO_H_MAX := 400.0              # 主块长高的封顶：再多只是把
 var _top_bar: HBoxContainer
 var _matrix_host: CenterContainer
 
-# 氛围层（2026-10-29 噩梦皮肤）：背景底色 / 血雨流星 / 四周血朱画框 / 整屏迷雾
+# 氛围层：背景底色 / 流星雨（2026-10-30 精简口径：噩梦模式只把流星转血红，其余一律不动）
 var _bg: ColorRect
 var _shower: MenuMeteorShower
-var _chrome: MenuNightmareChrome
-var _fog: MenuNightmareFog
 ## 上一次套用的难度：吃掉 AuthorPanel「迷雾预览」那种同值重发的 danger_changed
 var _last_skin_danger: int = -1
 
@@ -158,15 +158,15 @@ func _ready() -> void:
 	_last_skin_danger = GameManager.danger_level
 	if not GameManager.danger_changed.is_connected(_on_danger_changed):
 		GameManager.danger_changed.connect(_on_danger_changed)
-	# 换主题色时 GameStyle 注册表会把「登记过」的大卡面 / 角签色标刷回主题色，
-	# 夜景（噩梦）必须在这里重新盖一遍夜色，否则整块 Hero 会单独变回主题色。
+	# 换主题色时 GameStyle 注册表会就地改写登记过的 StyleBox，但首页卡面/角签色标要按
+	# _skin() 现取的色重铺一遍才跟得上（两档难度配色一致，这里不再有噩梦分支）。
 	if not SettingsManager.theme_color_changed.is_connected(_on_theme_color_changed):
 		SettingsManager.theme_color_changed.connect(_on_theme_color_changed)
 
 func _build_background() -> void:
 	var k := _skin()
 
-	# 1. 不透明暗底（普通 = 纯黑舞台；噩梦 = 深紫黑 —— 卡片之间的缝全变紫，整屏立刻换气）
+	# 1. 不透明纯黑舞台：两档难度共用（2026-10-30 起噩梦不再换底色）
 	var bg := ColorRect.new()
 	bg.name = "BackgroundOverlay"
 	bg.color = Color(k["stage"])
@@ -175,19 +175,12 @@ func _build_background() -> void:
 	add_child(bg)
 	_bg = bg
 
-	# 2. 装饰层（垫在底色与卡片矩阵之间；headless 判据下不建）
+	# 2. 装饰层（垫在底色与卡片矩阵之间；headless 判据下不建）。
+	#    首页唯一的难度氛围件就是这层流星雨：噩梦只把流星调成血红，别的一概不动。
 	if DisplayServer.get_name() != "headless":
 		_shower = MenuMeteorShower.install(self)
-		# 画框只吃屏幕最外沿 6px，而矩阵左右各留 43px / 屏底按钮留 26px ⇒
-		# 压在卡片「下面」也照样整圈可见，永远盖不到任何可点控件
-		_chrome = MenuNightmareChrome.install(self)
-		# 迷雾跟上面两层相反：要压在矩阵之上才算「在屏幕前飘」，
-		# 所以先按建层顺序装在这里，等控件全建完再由 _build_center_matrix 末尾提到最上层
-		_fog = MenuNightmareFog.install(self)
-		if bool(k["night"]):
+		if _is_night():
 			_shower.set_nightmare(true, false)
-			_chrome.set_nightmare(true, false)
-			_fog.set_nightmare(true, false)
 
 ## 顶栏贴角级联徽章带（右上声音+设置）
 func _build_top_bar() -> void:
@@ -349,10 +342,6 @@ func _build_center_matrix() -> void:
 	_cocreate_btn.pressed.connect(_on_cocreate_pressed)
 	_cocreate_host.add_child(_cocreate_btn)
 	_anim_blocks.append(_cocreate_btn)
-
-	# 4. 迷雾层要压在卡片矩阵之上（底色/流星/画框都在矩阵之下），等控件全部建完再提到最上层
-	if _fog != null and is_instance_valid(_fog):
-		move_child(_fog, -1)
 
 ## 左侧整柱 Hero 大方块：开始游戏 + 2 档危险度
 func _build_hero_block() -> PanelContainer:
@@ -760,52 +749,17 @@ func _apply_small_metrics(small_h: float) -> void:
 			sb.content_margin_top = float(m["pad_y"])
 			sb.content_margin_bottom = float(m["pad_y"])
 
-# ---------------- 氛围换肤（按难度） ----------------
+# ---------------- 首页配色（两档难度共用） ----------------
 
-## 当前首页氛围调色板（唯一真话源）：
-## 2026-10-30 调整：响应用户反馈，噩梦模式下卡片不再变色（保持原汁原味的高级撞色与墨字），
-## 氛围感全量转移给「迷雾层 + 暗角煞气 + 深紫夜空 + 血雨流星 + 四周血朱画框」，
-## 危险度 chip 保持明确选中态。
+## 当前首页调色板（唯一真话源）。
+## 2026-10-30 精简口径（用户口径）：噩梦模式**只**把背景流星雨调成血红，其余一律不动 ——
+## 不换舞台底色、不换卡片配色、无血朱画框、无整屏迷雾。所以这里不再按难度分支，
+## 两档难度拿到的是同一份配色；难度差异只体现在 `MenuMeteorShower.set_nightmare()`。
+## 所有「会重绘配色」的路径（各 _build_* / _refresh_danger_row / _refresh_sound_badge /
+## _tint_entry_sub / _apply_skin）都必须从这里取色。
 func _skin() -> Dictionary:
-	if GameManager.danger_level < 1:
-		return {
-			"night": false,
-			"stage": GameStyle.INK,
-			"hero_face": GameStyle.GOLD,
-			"hero_text": GameStyle.INK_TEXT,
-			"start_face": GameStyle.JADE,
-			"start_edge": GameStyle.JADE_EDGE,
-			"corner_face": GameStyle.GOLD,
-			"corner_edge": GameStyle.GOLD_EDGE,
-			"primary_text": GameStyle.INK_TEXT,
-			"primary_hover_text": GameStyle.INK_TEXT,
-			"plate_face": GameStyle.NAVY2,
-			"plate_text": GameStyle.PAPER,
-			"plate_hover": GameStyle.GOLD,
-			"plate_hover_text": GameStyle.INK_TEXT,
-			"resume_hover": GameStyle.JADE,
-			"resume_hover_text": GameStyle.PAPER,
-			"sound_text": GameStyle.JADE_DK,
-			"danger_plate": GameStyle.with_alpha(Color.BLACK, 0.82),
-			"danger_border": Color(0, 0, 0, 0),
-			"danger_head": GameStyle.with_alpha(GameStyle.CHALK, 0.75),
-			"chip_on": GameStyle.JADE,
-			"chip_on_hover": GameStyle.JADE,
-			"chip_on_text": GameStyle.INK_TEXT,
-			"chip_off": GameStyle.NAVY2,
-			"chip_off_hover": GameStyle.LINE,
-			"chip_off_text": GameStyle.PAPER_DIM,
-			"card_faces": [GameStyle.JADE, GameStyle.GOOD, GameStyle.NAVY2, GameStyle.ELEMENT],
-			"tag_marks": [GameStyle.JADE, GameStyle.GOOD, GameStyle.GOLD, GameStyle.ELEMENT],
-			"play_mark": GameStyle.GOLD,
-			"card_text": GameStyle.INK_TEXT,
-			"card_sub": GameStyle.with_alpha(GameStyle.INK_TEXT, 0.78),
-			"hot_text": GameStyle.JADE_DK,
-		}
 	return {
-		"night": true,
-		"stage": GameStyle.NIGHT_STAGE,
-		# 卡片全量保持原色与墨字，不施加暗沉夜色
+		"stage": GameStyle.INK,
 		"hero_face": GameStyle.GOLD,
 		"hero_text": GameStyle.INK_TEXT,
 		"start_face": GameStyle.JADE,
@@ -821,13 +775,12 @@ func _skin() -> Dictionary:
 		"resume_hover": GameStyle.JADE,
 		"resume_hover_text": GameStyle.PAPER,
 		"sound_text": GameStyle.JADE_DK,
-		# 危险度控制区：选中的「噩梦」呈现醒目血朱，机制提示行红调高亮
 		"danger_plate": GameStyle.with_alpha(Color.BLACK, 0.82),
-		"danger_border": GameStyle.with_alpha(GameStyle.NIGHT_SEAL, 0.6),
-		"danger_head": GameStyle.with_alpha(GameStyle.NIGHT_SEAL_EDGE, 0.95),
-		"chip_on": GameStyle.NIGHT_SEAL,
-		"chip_on_hover": GameStyle.NIGHT_SEAL_EDGE,
-		"chip_on_text": GameStyle.CHALK,
+		"danger_border": Color(0, 0, 0, 0),
+		"danger_head": GameStyle.with_alpha(GameStyle.CHALK, 0.75),
+		"chip_on": GameStyle.JADE,
+		"chip_on_hover": GameStyle.JADE,
+		"chip_on_text": GameStyle.INK_TEXT,
 		"chip_off": GameStyle.NAVY2,
 		"chip_off_hover": GameStyle.LINE,
 		"chip_off_text": GameStyle.PAPER_DIM,
@@ -839,31 +792,24 @@ func _skin() -> Dictionary:
 		"hot_text": GameStyle.JADE_DK,
 	}
 
-## 把当前难度对应的整套配色铺到已建好的控件上（建卡路径也读 _skin，这里负责「切换」）。
-## 颜色按新野兽派口径硬切（见 GameStyle 头注释：颜色/阴影瞬间硬切）；只有舞台底色走补间 ——
-## 那是整屏底而不是某块 UI 的态变，渐变不违反「无渐变」口径，也正好给出「天光压下来」的过渡。
+## 是否处于噩梦难度（首页唯一会跟着变的东西：背景流星雨）
+func _is_night() -> bool:
+	return GameManager.danger_level >= 1
+
+## 把当前配色铺到已建好的控件上（建卡路径也读 _skin，这里负责「切换」）。
+## 两档难度配色一致 ⇒ 这里实际只做三件事：静默对齐舞台底色、把流星雨切到对应天象、
+## 顺带按最新主题色重铺一遍（换主题色时走同一条路）。颜色按新野兽派口径硬切（无渐变）。
 func _apply_skin(animate: bool) -> void:
 	_last_skin_danger = GameManager.danger_level
 	var k := _skin()
-	var night: bool = k["night"]
 
-	# 1. 舞台底色（普通 = 纯黑，噩梦 = 深紫黑）
+	# 1. 舞台底色（两档都是纯黑，硬写不补间）
 	if _bg != null and is_instance_valid(_bg):
-		var stage: Color = k["stage"]
-		if animate:
-			var bg_tw := create_tween()
-			bg_tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-			bg_tw.tween_property(_bg, "color", stage, 0.45)
-		else:
-			_bg.color = stage
+		_bg.color = Color(k["stage"])
 
-	# 2. 氛围层（四周画框 / 血雨流星 / 整屏迷雾）：只补间透明度与配色，不重建任何层
-	if _chrome != null and is_instance_valid(_chrome):
-		_chrome.set_nightmare(night, animate)
+	# 2. 唯一的难度氛围件：流星雨（噩梦 = 血红，普通 = 纸白）
 	if _shower != null and is_instance_valid(_shower):
-		_shower.set_nightmare(night, animate)
-	if _fog != null and is_instance_valid(_fog):
-		_fog.set_nightmare(night, animate)
+		_shower.set_nightmare(_is_night(), animate)
 
 	# 3. Hero 大卡：卡面 / 标题字 / PLAY 色标 / 三颗键
 	if _hero_card != null and is_instance_valid(_hero_card):
@@ -985,7 +931,7 @@ func _pad_button_h(btn: Button, pad: float) -> void:
 			sbs.content_margin_left = pad
 			sbs.content_margin_right = pad
 
-## 难度变化：整套氛围换肤（作者面板改难度 / 程序化 set_danger 也会走到这里）。
+## 难度变化：切天象（作者面板改难度 / 程序化 set_danger 也会走到这里）。
 ## 与 _last_skin_danger 比对只为一件事：吃掉 AuthorPanel 迷雾预览那种「同值重发」——
 ## 那种不该再打一次扫屏与音效。不可见时静默套用，别在后台播声音。
 func _on_danger_changed(_new_danger: int) -> void:
@@ -994,13 +940,12 @@ func _on_danger_changed(_new_danger: int) -> void:
 	if changed and visible:
 		_play_mood_sting(GameManager.danger_level >= 1)
 
-## 换主题色：GameStyle 注册表会把登记过的大卡面 / 角签色标刷回主题色，
-## 夜景（噩梦）必须在这里重新盖一遍夜色，否则整块 Hero 会单独变回主题色。
+## 换主题色：卡面/角签色标按新主题色重铺一遍（两档难度共用同一套配色）
 func _on_theme_color_changed(_id: StringName) -> void:
 	_apply_skin(false)
 
 ## 切难度的手感落点：进噩梦是压低音高的一记魔君低吼 + 一道半透明血带扫屏；
-## 回普通只给一声轻确认 + 主题色扫带。颜色本身硬切（项目口径），这一下只当标点。
+## 回普通只给一声轻确认 + 主题色扫带。扫带是一次性标点，不留在屏上。
 func _play_mood_sting(enter_night: bool) -> void:
 	if enter_night:
 		AudioManager.play_sfx("boss_raid", 0.42, 0.78)

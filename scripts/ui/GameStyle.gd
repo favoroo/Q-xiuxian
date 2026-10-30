@@ -78,24 +78,15 @@ static func theme_name(id: StringName) -> String:
 static func current_theme() -> StringName:
 	return _theme_id
 
-# —— 噩梦氛围（首页专用「难度皮肤」）——
-# 2026-10-29：首页选中「噩梦」时整屏换气 —— 舞台转深紫黑、开始游戏大卡转深渊紫、
-# 主行动/选中/角签印记统一换血朱、四张副卡压进各自的夜色。普通态一个都不使用（现状配色原样）。
-# 为什么另起 NIGHT_* 而不复用 GOLD/BAD：这是「按难度切换的皮肤」，不是语义色 ——
-# 玩家自选主题色在噩梦态整体让位，切回普通难度立刻还原，所以它必须与主题三件套脱钩。
-const NIGHT_STAGE := Color("170a20")        ## 舞台底：深紫黑（卡片之间的缝全变紫，整屏立刻换气）
-const NIGHT_HERO := Color("4a1460")         ## 开始游戏大卡面：深渊紫
-const NIGHT_SEAL := Color("c9332b")         ## 血朱：主行动按钮 / 选中态 / 角签印记 / 画框
-const NIGHT_SEAL_EDGE := Color("e8554a")    ## 血朱亮边（hover / 未读强调）
-const NIGHT_SEAL_DK := Color("8c2320")      ## 血朱暗底（按压面）
-const NIGHT_PLATE := Color("241631")        ## 次级暗紫面（存档键 / 继续键 / 顶栏徽章）
-const NIGHT_PLATE_EDGE := Color("3a2450")   ## 暗紫亮边（次级面 hover）
-const NIGHT_CHIP_OFF := Color("2a1838")     ## 难度未选中 chip 面
-const NIGHT_TEXT_DIM := Color("cdc4d6")     ## 暗面次级字（未选中 chip / 副说明）
-const NIGHT_CARD_CAREER := Color("5c4410")  ## 战绩卡：暗铜
-const NIGHT_CARD_MANUAL := Color("1a4f38")  ## 图鉴卡：暗玉
-const NIGHT_CARD_CONFIG := Color("3d2c4a")  ## 设置卡：暗紫
-const NIGHT_CARD_GUIDE := Color("5c2a18")   ## 新手指南卡：暗炭
+# —— 噩梦氛围（首页血雨流星专用）——
+# 2026-10-30 精简口径（用户口径）：首页切噩梦时**只有背景流星雨**转血红，卡片/底色/徽章
+# 一律不动。所以这里只剩流星层要用的三档血朱；2026-10-29 那套「整屏换血月夜」的
+# 舞台/大卡/副卡/次级面/文字暗色常量随换肤一起下线，别再加回来。
+# 为什么另起 NIGHT_* 而不复用 BAD：噩梦天象要「红到能起辉」的三段明度层次，
+# 语义色 BAD（朱砂=危险）只有一档，拖尾/火星/雾脊会糊成一条。
+const NIGHT_SEAL := Color("c9332b")         ## 血朱：血雨主调
+const NIGHT_SEAL_EDGE := Color("e8554a")    ## 血朱亮边：血雨亮头与星屑高光
+const NIGHT_SEAL_DK := Color("8c2320")      ## 血朱暗底：拖尾远端与暗星屑
 
 const JADE := Color("ffd23f")       # 点缀黄 = 金币/星级/选中强调（历史名 JADE 沿用；做底时配黑字）
 const JADE_EDGE := Color("ffe9a8")

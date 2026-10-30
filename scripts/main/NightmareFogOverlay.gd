@@ -7,8 +7,11 @@ extends ColorRect
 ## 在视野限制的同时，在内圈边缘为迷雾外的聚灵阵/藏宝匣绘制轻量微光指引，防止迷路。
 
 const FOG_SHADER := preload("res://assets/shaders/nightmare_fog.gdshader")
-const INDICATOR_RADIUS := 185.0  ## 指引图标绘制在清晰视野内沿（像素）
-const FAR_THRESHOLD := 210.0     ## 超过此世界距离视作身处迷雾外
+## 指引半径与「身处迷雾外」判定都按清晰半径的比例走：视野件（道具）放大清晰圈后必须一起放大，
+## 否则箭头缩在清晰区深处与雾边脱节，或者目标已经能看清了还亮着方位指引。
+const INDICATOR_RADIUS_RATIO := 0.925  ## 指引菱形落在清晰内沿（基准 185 / 200）
+const FAR_THRESHOLD_RATIO := 1.05      ## 超过此世界距离视作身处迷雾外（基准 210 / 200）
+const DESIGN_VIEW_HEIGHT := 540.0      ## 设计屏高：像素半径 → 屏幕归一比例（shader 的 d 单位）的分母
 
 ## 作者模式/调试下强制开启迷雾视野预览（普通模式下也能随时打开测试）
 static var force_fog_preview: bool = false
@@ -16,6 +19,11 @@ static var force_fog_preview: bool = false
 var _mat: ShaderMaterial = null
 var _time_acc: float = 0.0
 var _suspended: bool = false
+## 上次写进 shader 的视野加成（GameManager.fog_vision_bonus）：变化才重设 uniform，不逐帧写
+var _applied_vision: float = -1.0
+## 由清晰半径派生的指引读数（_apply_vision_params 按当前视野加成重算）
+var _indicator_radius: float = 0.0
+var _far_threshold: float = 0.0
 
 # 缓存场上目标（节流扫描，每 0.3s 扫一次）
 var _scan_cd: float = 0.0
@@ -41,18 +49,17 @@ func _ready() -> void:
 
 	_mat = ShaderMaterial.new()
 	_mat.shader = FOG_SHADER
-	_mat.set_shader_parameter("clear_ratio", GameBalance.NIGHTMARE_FOG_CLEAR_RADIUS / 540.0)
-	_mat.set_shader_parameter("feather_ratio", GameBalance.NIGHTMARE_FOG_FEATHER_RADIUS / 540.0)
 	_mat.set_shader_parameter("max_alpha", GameBalance.NIGHTMARE_FOG_MAX_ALPHA)
 	material = _mat
+	_apply_vision_params()
 	visible = false
 
 	if not GameManager.shop_opened.is_connected(_on_fullscreen_ui_opened):
 		GameManager.shop_opened.connect(_on_fullscreen_ui_opened)
 	if not GameManager.alloc_opened.is_connected(_on_fullscreen_ui_opened):
 		GameManager.alloc_opened.connect(_on_fullscreen_ui_opened)
-	if not GameManager.game_over_triggered.is_connected(_on_fullscreen_ui_opened):
-		GameManager.game_over_triggered.connect(_on_fullscreen_ui_opened)
+	if not GameManager.game_over_triggered.is_connected(_on_game_over):
+		GameManager.game_over_triggered.connect(_on_game_over)
 	if not GameManager.shop_closed.is_connected(_on_fullscreen_ui_closed):
 		GameManager.shop_closed.connect(_on_fullscreen_ui_closed)
 	if not GameManager.alloc_finished.is_connected(_on_fullscreen_ui_closed):
@@ -67,8 +74,8 @@ func _exit_tree() -> void:
 		GameManager.shop_opened.disconnect(_on_fullscreen_ui_opened)
 	if GameManager.alloc_opened.is_connected(_on_fullscreen_ui_opened):
 		GameManager.alloc_opened.disconnect(_on_fullscreen_ui_opened)
-	if GameManager.game_over_triggered.is_connected(_on_fullscreen_ui_opened):
-		GameManager.game_over_triggered.disconnect(_on_fullscreen_ui_opened)
+	if GameManager.game_over_triggered.is_connected(_on_game_over):
+		GameManager.game_over_triggered.disconnect(_on_game_over)
 	if GameManager.shop_closed.is_connected(_on_fullscreen_ui_closed):
 		GameManager.shop_closed.disconnect(_on_fullscreen_ui_closed)
 	if GameManager.alloc_finished.is_connected(_on_fullscreen_ui_closed):
@@ -78,8 +85,17 @@ func _exit_tree() -> void:
 	if GameManager.has_signal("danger_changed") and GameManager.danger_changed.is_connected(_on_danger_changed):
 		GameManager.danger_changed.disconnect(_on_danger_changed)
 
+## 全屏 UI（金币阁/悟道）挂起：面板一上屏就会置 get_tree().paused，这里只管先把雾收掉。
+## 阵亡**不**走这条挂起表 —— 见 _on_game_over。
 func _on_fullscreen_ui_opened() -> void:
 	_suspended = true
+	visible = false
+
+## 阵亡收屏但不挂起：结算屏会把树暂停住，_process 停摆，不在这里收屏的话
+## 迷雾会冻在结算画面上。之后「原地复活」只清 is_game_over、不发任何全屏 UI 关闭信号，
+## 靠 _process 恢复跑起来时的闸判定点亮即可 —— 若把阵亡也记进 _suspended，
+## 复活后整段迷雾会一直缺到下一波（2026-10-30 第 5 波迷雾消失的根因）。
+func _on_game_over() -> void:
 	visible = false
 
 func _on_fullscreen_ui_closed() -> void:
@@ -94,6 +110,11 @@ func _on_danger_changed(_d: int) -> void:
 	_check_visibility()
 
 func _check_visibility() -> void:
+	# 自愈：全屏挂起只在 UI 真占屏时成立（商店/悟道面板上屏即暂停）。
+	# 树已恢复却还挂着 —— 复活清掉 is_game_over、或任何漏发关闭信号的路径 —— 当场解开，
+	# 免得迷雾一直缺到下一次 wave_changed。
+	if _suspended and not get_tree().paused and not GameManager.is_game_over:
+		_suspended = false
 	var active: bool = ((GameManager.danger_level >= 1 or force_fog_preview)
 		and GameManager.run_started 
 		and GameManager.wave_number >= 1 
@@ -101,8 +122,24 @@ func _check_visibility() -> void:
 		and not GameManager.is_game_over)
 	visible = active
 
+## 按当前视野加成（GameManager.fog_vision_bonus，视野件给）重算清晰圈与派生读数。
+## 加成没变就早退：shader uniform 只在变化那一拍写一次，不逐帧回写。
+func _apply_vision_params() -> void:
+	var bonus: float = float(GameManager.fog_vision_bonus)
+	if is_equal_approx(bonus, _applied_vision):
+		return
+	_applied_vision = bonus
+	var clear_px: float = GameBalance.nightmare_fog_clear_radius(bonus)
+	_mat.set_shader_parameter("clear_ratio", clear_px / DESIGN_VIEW_HEIGHT)
+	_mat.set_shader_parameter("feather_ratio", GameBalance.nightmare_fog_feather_radius(bonus) / DESIGN_VIEW_HEIGHT)
+	_indicator_radius = clear_px * INDICATOR_RADIUS_RATIO
+	_far_threshold = clear_px * FAR_THRESHOLD_RATIO
+
 func _process(delta: float) -> void:
 	_check_visibility()
+	# 视野件在商店里买下时迷雾是挂起态（_process 早退），所以这一步放在可见性判早退之前：
+	# 下一波一亮屏就是新半径，不会先闪一帧旧圈。
+	_apply_vision_params()
 	if not visible:
 		return
 
@@ -165,9 +202,9 @@ func _draw() -> void:
 		if ob == null or not is_instance_valid(ob):
 			continue
 		var to_target: Vector2 = ob.global_position - player.global_position
-		if to_target.length() >= FAR_THRESHOLD:
+		if to_target.length() >= _far_threshold:
 			var dir := to_target.normalized()
-			var tip_pos := p_screen + dir * INDICATOR_RADIUS
+			var tip_pos := p_screen + dir * _indicator_radius
 			_draw_beacon_pip(tip_pos, dir, Color(0.35, 0.85, 1.0, 0.85 * pulse), 7.0)
 
 	# 2. 藏宝匣指引（琥珀金芒）
@@ -175,9 +212,9 @@ func _draw() -> void:
 		if chest == null or not is_instance_valid(chest):
 			continue
 		var to_target: Vector2 = chest.global_position - player.global_position
-		if to_target.length() >= FAR_THRESHOLD:
+		if to_target.length() >= _far_threshold:
 			var dir := to_target.normalized()
-			var tip_pos := p_screen + dir * (INDICATOR_RADIUS - 8.0)
+			var tip_pos := p_screen + dir * (_indicator_radius - 8.0)
 			_draw_beacon_pip(tip_pos, dir, Color(1.0, 0.82, 0.35, 0.80 * pulse), 5.5)
 
 ## 绘制贴在内沿方向的小菱形灵光标

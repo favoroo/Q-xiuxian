@@ -24,6 +24,9 @@ const FIELDS: Dictionary = {
 	"move_speed_mult": {"name": "移动速度", "unit": "pct"},
 	"attack_range_mult": {"name": "攻击范围", "unit": "pct"},
 	"pickup_range_mult": {"name": "拾取范围", "unit": "pct"},
+	# 噩梦视野件专用：只放大迷雾清晰圈（渲染侧封顶，见 BalanceWave.NIGHTMARE_FOG_VISION_MAX）。
+	# 只登记人话名给道具卡/详情卡用，不占属性面板行（面板高度已排满，且普通难度这行恒为 0）。
+	"fog_vision_bonus": {"name": "迷雾视野", "unit": "pct"},
 	"hp_regen": {"name": "生命回复", "unit": "rate"},
 	"crit_rate": {"name": "暴击率", "unit": "pct"},
 	"crit_mult": {"name": "暴击伤害", "unit": "pct"},

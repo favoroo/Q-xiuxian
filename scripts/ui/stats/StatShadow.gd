@@ -20,7 +20,7 @@ const COPIED: Array[String] = [
 	# —— 加点直接落的字段（StatSystem 白名单）——
 	"weapon_damage_mult", "melee_damage", "ranged_damage", "elemental_damage",
 	"engineering_damage", "contraption_damage", "attack_speed_mult", "armor", "move_speed_mult",
-	"attack_range_mult", "pickup_range_mult", "hp_regen", "crit_rate", "crit_mult",
+	"attack_range_mult", "pickup_range_mult", "fog_vision_bonus", "hp_regen", "crit_rate", "crit_mult",
 	"dodge", "lifesteal", "luck", "harvest", "xp_gain_mult", "knockback_mult",
 	"elite_damage", "free_rerolls", "shop_price_mult", "stat_bonus_pierce",
 	"bonus_pierce", "thorns_pct", "chest_count_bonus", "chest_quality",
@@ -58,6 +58,7 @@ var armor: float = 0.0
 var move_speed_mult: float = 1.0
 var attack_range_mult: float = 1.0
 var pickup_range_mult: float = 1.0
+var fog_vision_bonus: float = 0.0
 var hp_regen: float = 0.0
 var crit_rate: float = 0.05
 var crit_mult: float = 1.5

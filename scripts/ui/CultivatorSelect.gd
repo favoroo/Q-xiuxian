@@ -598,23 +598,23 @@ func _make_skin_slot(cid: String, skin_idx: int,
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		GameStyle.label(lock_lbl, 10, GameStyle.GREY)
 		slot.add_child(lock_lbl)
-	# 炫彩皮肤槽：底部压一道硬边四色棱镜条，呼应「黑底 + 虹彩缘」的特殊观感
-	if SkinData.get_theme(skin_idx).has("chroma"):
-		var prism := Control.new()
-		prism.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		prism.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		slot.add_child(prism)
-		var prism_cols: Array[Color] = [
-			Color(0.35, 0.95, 1.0), Color(0.55, 0.45, 1.0),
-			Color(1.0, 0.45, 0.85), Color(1.0, 0.80, 0.35),
-		]
-		for i in range(prism_cols.size()):
+	# 系列皮肤槽：底部压一道硬边三色色标条，直观标出该系列的「袍/缘/光」三段身份色
+	# （2026-10-30 皮肤系列化：原先只有虹霓写死四色棱镜条，现在 6 套都有各自色标）
+	var chip_cols := SkinData.get_chip(skin_idx)
+	if not chip_cols.is_empty():
+		var chip := Control.new()
+		chip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(chip)
+		var seg_w := 38.0 / float(chip_cols.size())
+		for i in range(chip_cols.size()):
 			var seg := ColorRect.new()
-			seg.color = prism_cols[i] if open else prism_cols[i].darkened(0.45).lerp(Color(0.5, 0.5, 0.5), 0.5)
-			seg.position = Vector2(1.0 + float(i) * 9.5, 36.0)
-			seg.size = Vector2(9.5, 3.0)
+			var base_col: Color = chip_cols[i]
+			seg.color = base_col if open else base_col.darkened(0.45).lerp(Color(0.5, 0.5, 0.5), 0.5)
+			seg.position = Vector2(1.0 + float(i) * seg_w, 36.0)
+			seg.size = Vector2(seg_w, 3.0)
 			seg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			prism.add_child(seg)
+			chip.add_child(seg)
 	GameStyle.tap(slot, func() -> void: _on_skin_slot_tapped(cid, skin_idx, slot))
 	return slot
 
@@ -652,9 +652,11 @@ func _open_skin_lock_tip(cid: String, skin_idx: int, anchor: Control) -> void:
 	# 2026-10-28 无限闯关：皮肤门槛从「通关次数」改成「该角色单局抵达过的最高波数」
 	var need_wave := int(t.get("wave", 0))
 	var best_wave := int(GameManager.get_cultivator_record(cid).get("best_wave", 0))
+	# 2026-10-30 皮肤系列化：每套皮肤自带一句效果说明（SkinData 主题的 desc 键）
 	var body := "任意难度都计数；最高波数达标后，该角色的这套皮肤自动解锁。"
-	if t.has("chroma"):
-		body += "\n虹霓皮肤：袍身保持墨黑，缘边、眼瞳与武器流光会随时间流转虹彩。"
+	var fx_desc := SkinData.get_desc(cid, skin_idx)
+	if not fx_desc.is_empty():
+		body += "\n" + fx_desc
 	DetailTip.show_over(self, anchor, {
 		"title": "皮肤 · %s" % String(t.get("name", "")),
 		"chip": "未解锁",

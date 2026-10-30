@@ -322,6 +322,14 @@ func _test_danger_system() -> void:
 	_c.near(GameBalance.danger_attack_cd_mult(1), 0.90, EPS, "噩梦攻击间隔缩短 10%")
 	_c.near(GameBalance.danger_bolt_speed_mult(1), 1.08, EPS, "噩梦弹速提速 8%")
 	_c.near(GameBalance.NIGHTMARE_FOG_CLEAR_RADIUS, 200.0, EPS, "噩梦迷雾清晰视野 200px")
+	# 视野件（2026-10-30）：加成按百分比放大清晰圈，三件叠满 +80% 封顶，羽化外沿始终在外
+	_c.near(GameBalance.nightmare_fog_clear_radius(0.0), 200.0, EPS, "迷雾视野无加成时清晰半径 200px")
+	_c.near(GameBalance.nightmare_fog_clear_radius(0.15), 230.0, EPS, "引路灯 +15% → 清晰半径 230px")
+	_c.near(GameBalance.nightmare_fog_clear_radius(0.8), 360.0, EPS, "视野加成 +80% → 清晰半径 360px")
+	_c.near(GameBalance.nightmare_fog_clear_radius(9.0), 360.0, EPS, "视野加成超顶被夹回 +80%（雾买不没）")
+	_c.near(GameBalance.nightmare_fog_feather_radius(0.8), 513.0, EPS, "羽化外沿同比例放大到 513px")
+	_c.check(GameBalance.nightmare_fog_feather_radius(0.8) > GameBalance.nightmare_fog_clear_radius(0.8),
+			"羽化外沿恒在清晰半径之外（封顶档也不退化硬边）")
 
 	# 逐级破境解锁（2026-10-28）：可选上限 = 生涯最高破境难度 + 1，未破境只开 D0 普通。
 	# 备份/还原玩家的真实生涯档，避免测试把别人的进度压低。

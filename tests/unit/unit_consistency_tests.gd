@@ -21,6 +21,7 @@ const FIELD_FORM := {
 	"weapon_damage_mult": FORM_PCT,
 	"move_speed_mult": FORM_PCT,
 	"pickup_range_mult": FORM_PCT,
+	"fog_vision_bonus": FORM_PCT,
 	"attack_range_mult": FORM_PCT,
 	"crit_rate": FORM_PCT,
 	"crit_mult": FORM_PCT,
@@ -172,7 +173,9 @@ static func _check_desc_matches_apply(_c: TestCheck, table: String, id: String, 
 
 	var allow: Array = ORPHAN_ALLOW.get(id, [])
 	for t in toks.pct:
-		if not (t in claimed_pct) and not _allow_hit(allow, float(t)):
+		# 显式数值比较：toks.pct 是 float（15.0），claimed_pct 里是 int（15），
+		# 直接用 in 会因跨类型不相等误报（与 _allow_hit 头注同一条陷阱）
+		if not _allow_hit(claimed_pct, float(t)) and not _allow_hit(allow, float(t)):
 			probs.append("文案数字 %d%% 未被任何字段解释" % t)
 	for t in toks.flat:
 		var ok := _allow_hit(allow, t)

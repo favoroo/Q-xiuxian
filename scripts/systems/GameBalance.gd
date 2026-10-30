@@ -225,6 +225,7 @@ const NIGHTMARE_DUAL_BOSS_HP_MULT := BalanceWave.NIGHTMARE_DUAL_BOSS_HP_MULT
 const NIGHTMARE_FOG_CLEAR_RADIUS := BalanceWave.NIGHTMARE_FOG_CLEAR_RADIUS
 const NIGHTMARE_FOG_FEATHER_RADIUS := BalanceWave.NIGHTMARE_FOG_FEATHER_RADIUS
 const NIGHTMARE_FOG_MAX_ALPHA := BalanceWave.NIGHTMARE_FOG_MAX_ALPHA
+const NIGHTMARE_FOG_VISION_MAX := BalanceWave.NIGHTMARE_FOG_VISION_MAX
 const ELITE_MUTATION_HP_PCT_BASE := BalanceWave.ELITE_MUTATION_HP_PCT_BASE
 const ELITE_MUTATION_HP_PCT_NIGHTMARE := BalanceWave.ELITE_MUTATION_HP_PCT_NIGHTMARE
 const BOSS_PHASE2_HP_PCT_BASE := BalanceWave.BOSS_PHASE2_HP_PCT_BASE
@@ -294,6 +295,7 @@ const ITEM_TIER_EPIC_PER_WAVE := BalanceEconomy.ITEM_TIER_EPIC_PER_WAVE
 const ITEM_TIER_EPIC_CAP := BalanceEconomy.ITEM_TIER_EPIC_CAP
 const ITEM_TIER_LEGEND_PER_WAVE := BalanceEconomy.ITEM_TIER_LEGEND_PER_WAVE
 const ITEM_TIER_LEGEND_CAP := BalanceEconomy.ITEM_TIER_LEGEND_CAP
+const ITEM_NIGHTMARE_ONLY_WEIGHT := BalanceEconomy.ITEM_NIGHTMARE_ONLY_WEIGHT
 
 # 护甲 / 创伤 / 硬直击退 / 长扑 / 异常状态 / 震退 / 集火 → BalanceCombat
 const ARMOR_COEF := BalanceCombat.ARMOR_COEF
@@ -444,9 +446,9 @@ static func potion_effective_heal(max_hp: float, cur_hp: float) -> float:
 static func reroll_cost(wave: int, reroll_count: int, price_mult: float) -> int:
 	return BalanceEconomy.reroll_cost(wave, reroll_count, price_mult)
 
-## 聚灵阵启动价（2026-10-25 祭坛重设计）→ BalanceEconomy
-static func obelisk_activation_cost(wave: int) -> int:
-	return BalanceEconomy.obelisk_activation_cost(wave)
+## 聚灵阵启动价（2026-10-25 祭坛重设计；2026-10-30 本局首次免费）→ BalanceEconomy
+static func obelisk_activation_cost(wave: int, activations_done: int) -> int:
+	return BalanceEconomy.obelisk_activation_cost(wave, activations_done)
 
 ## 聚灵阵释放伤害 / 击退 / 按最大生命附加 / 斩杀线（2026-10-25 祭坛重设计 + 2026-10-26 后期价值补强）→ BalanceCombat
 static func obelisk_blessing_damage(wave: int) -> float:
@@ -608,6 +610,13 @@ static func elite_mutation_hp_pct(danger: int = 0) -> float:
 
 static func boss_phase2_hp_pct(danger: int = 0) -> float:
 	return BalanceWave.boss_phase2_hp_pct(danger)
+
+## 噩梦迷雾清晰内圈 / 羽化外沿（视野道具按百分比放大，封顶 NIGHTMARE_FOG_VISION_MAX）→ BalanceWave
+static func nightmare_fog_clear_radius(vision_bonus: float = 0.0) -> float:
+	return BalanceWave.nightmare_fog_clear_radius(vision_bonus)
+
+static func nightmare_fog_feather_radius(vision_bonus: float = 0.0) -> float:
+	return BalanceWave.nightmare_fog_feather_radius(vision_bonus)
 
 static func danger_attack_cd_mult(danger: int = 0) -> float:
 	return BalanceWave.danger_attack_cd_mult(danger)

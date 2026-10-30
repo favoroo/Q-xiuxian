@@ -25,11 +25,14 @@ var col_gold_shadow: Color = Color(0.65, 0.48, 0.18)
 var col_jade: Color = Color(0.58, 0.94, 0.80)
 var col_tassel_red: Color = Color(0.88, 0.22, 0.18)
 
-# ----------------- 炫彩皮肤动画状态（虹霓） -----------------
-## 空字典 = 普通静态换色；非空 = 炫彩参数（SkinData 主题 "chroma" 整份拷入）
-var _chroma: Dictionary = {}
+# ----------------- 皮肤系列效果状态 -----------------
+## 皮肤效果族调度库（按 fx["kind"] 派发到 skin_fx/ 各模块）
+const SkinFxLibrary = preload("res://scripts/entities/procedural_cultivator/skin_fx/SkinFxLibrary.gd")
+
+## 空字典 = 原色（无效果，零开销快路）；非空 = 已合并族默认值的效果参数（含 kind）
+var _fx: Dictionary = {}
 ## 基准色快照：色相流转只改 H，S/V 一律取自快照（防多次流转后褪色/漂白）
-var _chroma_base: Dictionary = {}
+var _fx_base: Dictionary = {}
 
 # ----------------- 插槽参数缓存 -----------------
 var body_scale: float = 1.0
@@ -133,9 +136,10 @@ func _sync_config() -> void:
 	else:
 		col_gold = Color(0.96, 0.84, 0.32)
 
-	# 炫彩皮肤：缓存动画参数与基准色快照；非炫彩清空（防渲染器复用串色）
-	_chroma = config.chroma.duplicate(true) if not config.chroma.is_empty() else {}
-	_chroma_base = {
+	# 皮肤系列效果：合并族默认值 + 主题覆盖后缓存；原色（fx 空）清空并复位基准色
+	# （非效果皮肤必须在 _sync_config 里清空 _fx，否则同一渲染器实例换皮肤会串色）
+	_fx = SkinFxLibrary.params(config.fx)
+	_fx_base = {
 		"cloak_outer": col_cloak_outer,
 		"cloak_inner": col_cloak_inner,
 		"cloak_edge": col_cloak_edge,
@@ -150,32 +154,11 @@ func _sync_config() -> void:
 		"slash_arc": col_slash_arc,
 	}
 
-## 炫彩：把基准色色相沿色环旋转（phase + offset 圈），S/V 取自基准（可整体提饱和/提亮）
-func _chroma_shift(base: Color, phase: float, offset: float, sat_mul: float = 1.0, val_mul: float = 1.0) -> Color:
-	var h := fposmod(base.h + phase + offset, 1.0)
-	return Color.from_hsv(h, clampf(base.s * sat_mul, 0.0, 1.0), clampf(base.v * val_mul, 0.0, 1.0), base.a)
-
-## 重绘前钩子：炫彩皮肤按 _time 重算全部缓存色，普通皮肤零开销
+## 重绘前钩子：皮肤系列效果按 _time 重算缓存色，原色零开销
 func _on_before_redraw() -> void:
-	if _chroma.is_empty():
+	if _fx.is_empty():
 		return
-	var cycle := maxf(float(_chroma.get("cycle", 7.0)), 1.0)
-	var phase := fposmod(_time / cycle, 1.0)
-	var offs: Dictionary = _chroma.get("hue_offsets", {})
-	var locked: Array = _chroma.get("locked", [])
-	col_cloak_outer = _chroma_base["cloak_outer"] if locked.has("cloak_outer") else _chroma_shift(_chroma_base["cloak_outer"], phase, float(offs.get("cloak_outer", 0.0)))
-	col_cloak_inner = _chroma_base["cloak_inner"] if locked.has("cloak_inner") else _chroma_shift(_chroma_base["cloak_inner"], phase, float(offs.get("cloak_inner", 0.0)))
-	col_cloak_edge = _chroma_shift(_chroma_base["cloak_edge"], phase, float(offs.get("cloak_edge", 0.0)))
-	col_eye_glow = _chroma_shift(_chroma_base["eye_glow"], phase, float(offs.get("eye_glow", 0.0)))
-	col_eye_core = _chroma_shift(_chroma_base["eye_core"], phase, float(offs.get("eye_core", 0.0)), 2.2)
-	col_weapon_main = _chroma_shift(_chroma_base["weapon_main"], phase, float(offs.get("weapon_main", 0.0)), 1.6)
-	col_weapon_shadow = _chroma_shift(_chroma_base["weapon_shadow"], phase, float(offs.get("weapon_shadow", 0.0)))
-	col_weapon_accent = _chroma_shift(_chroma_base["weapon_accent"], phase, float(offs.get("weapon_accent", 0.0)))
-	col_gold = _chroma_shift(_chroma_base["gold"], phase, float(offs.get("gold", 0.0)))
-	col_jade = _chroma_shift(_chroma_base["jade"], phase, float(offs.get("jade", 0.0)))
-	col_tassel_red = _chroma_shift(_chroma_base["tassel"], phase, float(offs.get("tassel", 0.0)))
-	col_slash_arc = _chroma_shift(_chroma_base["slash_arc"], phase, float(offs.get("slash_arc", 0.0)), 1.4)
-	col_slash_glow = col_cloak_edge
+	SkinFxLibrary.on_frame(self, _fx)
 
 ## 动态设置视觉配置
 func set_visual_config(cfg: CultivatorVisualConfig) -> void:
@@ -411,29 +394,15 @@ func _calm_blink() -> float:
 	return 0.0
 
 ## 斗篷纵向伪光照渐变：肩部提亮、下摆压暗（逐顶点颜色插值，零 shader 成本）
-## 炫彩皮肤额外叠一层「油膜虹彩」：色相随衣褶坐标斜向偏移 + 明暗带交替，强度低以保黑底
+## 皮肤系列效果额外叠一层袍面色（油膜虹彩/竹节/霜纹等，由族模块决定；原色零开销）
 func _cloak_gradient(pts: PackedVector2Array, base: Color) -> PackedColorArray:
 	var cols := PackedColorArray()
-	var chroma_on := not _chroma.is_empty()
-	var phase := 0.0
-	var sheen := 0.0
-	var dx := 0.0
-	var dy := 0.0
-	if chroma_on:
-		phase = fposmod(_time / maxf(float(_chroma.get("cycle", 7.0)), 1.0), 1.0)
-		sheen = float(_chroma.get("sheen", 0.16))
-		dx = float(_chroma.get("sheen_dx", 0.012))
-		dy = float(_chroma.get("sheen_dy", 0.018))
+	var fx_on := not _fx.is_empty()
 	for p in pts:
 		var t := clampf((p.y + 6.0) / 36.0, 0.0, 1.0)
 		var c := base.lightened(0.10 * (1.0 - t)).darkened(0.30 * t)
-		if chroma_on:
-			# 袍身底色锁死不动，油膜虹彩靠 sheen 随相位漂移：film_h = 底色 + 时间相位 + 衣褶空间梯度
-			var film_h := fposmod(base.h + phase + p.x * dx + p.y * dy, 1.0)
-			# 油膜明暗带：斜向缓流，band 决定该点虹彩混入量
-			var band := 0.5 + 0.5 * sin((p.x * dx + p.y * dy + phase) * TAU * 2.0)
-			var film := Color.from_hsv(film_h, clampf(0.55 + 0.30 * band, 0.0, 1.0), clampf(c.v + 0.16 * band, 0.0, 1.0), c.a)
-			c = c.lerp(film, sheen * band)
+		if fx_on:
+			c = SkinFxLibrary.cloak_sheen(self, c, p, _fx)
 		cols.append(c)
 	return cols
 
@@ -650,6 +619,10 @@ func _draw_immortal_motes(float_y: float) -> void:
 	var my2 := sin(t2 * 1.4) * 7.0 + float_y - 2.0
 	var alpha2 := (cos(_time * 2.5 * speed_mul) * 0.5 + 0.5) * (0.28 + motes_boost * 0.45)
 	_circle(Vector2(mx2, my2), 0.9 + motes_boost * 0.6, Color(eff_eye.r, eff_eye.g, eff_eye.b, alpha2))
+
+	# 皮肤系列：常驻粒子（青屑/血雾/雪晶/墨烟/金屑）复用本绘制位，原色零开销
+	if not _fx.is_empty():
+		SkinFxLibrary.draw_motes(self, float_y, _fx)
 
 	# 技能爆发/法力激荡时，额外环绕 3 颗周天流光微粒子
 	if motes_boost > 0.1:
@@ -1442,12 +1415,13 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 	draw_line(head_center + Vector2(4 * hs, -7 * hs), head_center + Vector2(10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
 
 ## 插槽 3：眼睛神态与光芒
-## 炫彩皮肤：收窄眼部柔光半径并压 alpha，让骨白面壳保持干净，只留眼窝虹彩
+## 皮肤系列可收窄眼部柔光（如墨煞压到只剩一点），由族模块决定；原色零开销
 func _draw_eye_soft_glow(center: Vector2, radius: float, col: Color, layers: int = 3) -> void:
 	if suppress_eye_glow:
 		return
-	if not _chroma.is_empty():
-		draw_soft_glow(center, radius * 0.60, Color(col.r, col.g, col.b, col.a * 0.78), layers)
+	if not _fx.is_empty():
+		var adj := SkinFxLibrary.eye_glow_adjust(self, radius, col, _fx)
+		draw_soft_glow(center, float(adj["radius"]), adj["color"] as Color, layers)
 	else:
 		draw_soft_glow(center, radius, col, layers)
 
@@ -1600,30 +1574,10 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 	var base_w := 1.2 + cloak_shimmer_intensity * 0.8
 	draw_polyline(pts, eff_edge, base_w, true)
 
-	# 炫彩皮肤：缘边常驻彩虹描边（逐顶点色相环绕）+ 沿轮廓游走的棱镜光段，无需技能激活
-	if not _chroma.is_empty():
-		var chroma_cycle := maxf(float(_chroma.get("cycle", 7.0)), 1.0)
-		var rim_glow := float(_chroma.get("rim_glow", 0.32))
-		var cn := pts.size()
-		var cph := fposmod(_time / chroma_cycle, 1.0)
-		var edge_base: Color = _chroma_base["cloak_edge"]
-		var edge_h := edge_base.h
-		var rim_cols := PackedColorArray()
-		for i in range(cn):
-			var rh := fposmod(edge_h + cph + float(i) / float(cn), 1.0)
-			rim_cols.append(Color.from_hsv(rh, 0.80, 1.0, rim_glow))
-		draw_polyline_colors(pts, rim_cols, base_w + 0.5, true)
-
-		var comet_center := int(fposmod(_time * 0.22 + _idle_phase * 0.05, 1.0) * float(cn))
-		var comet_pts := PackedVector2Array()
-		var comet_cols := PackedColorArray()
-		for off in range(-3, 4):
-			var idx := (comet_center + off + cn) % cn
-			comet_pts.append(pts[idx])
-			var ch := fposmod(edge_h + cph + 0.5 + float(off) * 0.055, 1.0)
-			comet_cols.append(Color.from_hsv(ch, 0.90, 1.0, rim_glow * 0.9))
-		if comet_pts.size() >= 2:
-			draw_polyline_colors(comet_pts, comet_cols, base_w + 1.2, true)
+	# 皮肤系列：缘边专属描边（彩虹环流/竹节亮带/赤光脉动/冷光横扫/金属扫光/暗光游走）
+	# 由族模块决定，原色零开销；此段在基础描边之后、下摆微光之前
+	if not _fx.is_empty():
+		SkinFxLibrary.draw_rim(self, pts, base_w, _fx)
 
 	# 常驻下摆微光：沿下摆顶点叠一条细亮线，随行波轻闪（技能流光叠加其上）
 	var hem := PackedVector2Array()

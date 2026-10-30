@@ -6,7 +6,8 @@ extends Node
 ##
 ## 钉的机制：
 ##   ① 单祭坛：Main 场景里 BlessingObelisk 只有一座（MapLayer/ObeliskCenter）
-##   ② 金币闸：钱不够 start_charge 硬拦（不进充能、发「金币不够启动祭坛」横幅）；够了才进
+##   ①·五 本局首次免费：还没启动过 ⇒ 身无分文也能进充能，HUD 键面写「免费」，不弹「金币不够」
+##   ② 金币闸：首次免费消耗后钱不够 start_charge 硬拦（不进充能、发「金币不够启动祭坛」横幅）；够了才进
 ##   ③ 扣费记账：注入爆发后 spirit_stones 扣启动价、total_stones_spent 记账、祭坛进灰相
 ##   ④ 回合恢复：广播 wave_changed → 灰相复燃（spent_this_wave 清零、灯复燃）
 ##   ⑤ 价格随波上涨：第 n 回合启动价 = 45 + (n-1)*3，碑顶价格标签跟着换文案
@@ -68,6 +69,7 @@ func _run() -> void:
 	_obelisk = get_node_or_null("/root/Main/MapLayer/ObeliskCenter") as BlessingObelisk
 
 	_case_single_altar()
+	await _case_first_free()
 	await _case_gold_gate()
 	await _case_pay_and_wave_cycle()
 	await _case_replacement_and_palette()
@@ -90,6 +92,42 @@ func _case_single_altar() -> void:
 	_c.equals(count, 1, "① Main 场景里只有一座聚灵阵（重设计：单祭坛）")
 	_c.check(_obelisk != null, "① 前置：ObeliskCenter 可寻址")
 
+## ①·五 本局首次免费（2026-10-30）：还没启动过 ⇒ 身无分文也能进充能；键面写「免费」；
+## 激活次数为 0/1 时价格口径成对切换（0 = 免费，1 = 按波收费）。
+func _case_first_free() -> void:
+	_c.check(_obelisk != null, "①·五 前置：祭坛在")
+	if _obelisk == null:
+		return
+	_c.equals(GameManager.obelisk_activations, 0, "①·五 前置：本局还没启动过祭坛")
+	_obelisk.is_player_inside = true
+	GameManager.spirit_stones = 0
+	_banner_seen = ""
+	_obelisk.start_charge()
+	_c.check(_obelisk.is_charging, "①·五 首次启动免费：身无分文也放行（不进金币闸）")
+	_c.check(_banner_seen.is_empty(), "①·五 免费启动不弹「金币不够」横幅（实得：%s）" % _banner_seen)
+	_obelisk.stop_charge()
+	_c.equals(GameManager.obelisk_activations, 0, "①·五 中途松手不消耗免费档（下次仍免费）")
+
+	# HUD 键面：首次免费时价格小字写「免费」，且与纯函数口径同源
+	var hud := get_node_or_null("/root/Main/UILayer/GameHUD")
+	var ob_btn: HudObeliskButton = hud._obelisk_widget if hud != null else null
+	_c.check(ob_btn != null, "①·五 前置：HUD 祭坛激活键在")
+	if ob_btn != null:
+		ob_btn.show_obelisk_activation(_obelisk)
+		# 价格小字在 HUD 的 _process 里刷新；_settle 只等物理帧，8 倍速下一批物理帧
+		# 可能全挤在同一个 idle 帧里，必须显式让出 idle 帧才能读到本帧新价
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var price_lbl: Label = ob_btn.get_price_label()
+		_c.equals(price_lbl.text, "免费", "①·五 首次启动时键面写「免费」")
+		# 记下免费档已消耗：后续 Case 全部回到「按波收费」口径
+		GameManager.obelisk_activations = 1
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_c.check(price_lbl.text.contains(str(GameBalance.obelisk_activation_cost(
+				maxi(GameManager.wave_number, 1), GameManager.obelisk_activations))),
+			"①·五 免费档消耗后键面回到现价（实得：%s）" % price_lbl.text)
+
 ## ② 金币闸：钱不够不进充能并给横幅；钱够才放行
 func _case_gold_gate() -> void:
 	_c.check(_obelisk != null, "② 前置：祭坛在")
@@ -102,7 +140,8 @@ func _case_gold_gate() -> void:
 	_c.check(not _obelisk.is_charging, "② 身无分文 ⇒ start_charge 硬拦，不进充能")
 	_c.check(_banner_seen.contains("金币不够"), "② 硬拦时发了「金币不够」横幅（实得：%s）" % _banner_seen)
 	# 给足启动价 → 放行进入充能
-	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1))
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
 	_obelisk.start_charge()
 	_c.check(_obelisk.is_charging, "② 钱够 ⇒ 正常进入充能")
 	_obelisk.stop_charge()
@@ -110,13 +149,14 @@ func _case_gold_gate() -> void:
 
 ## ③ 扣费记账 + ④ 回合恢复 + ⑤ 价格随波上涨
 func _case_pay_and_wave_cycle() -> void:
-	var cost := GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1))
+	var cost := GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
 	GameManager.spirit_stones = cost
 	var spent_before: int = GameManager.total_stones_spent
 	_obelisk.start_charge()
 	# 等充能 0.8s + 注入 0.45s 全程走完 → _release_blessing（100 帧游戏秒 ≈ 1.67s）
 	await _settle(100)
 	_c.check(_obelisk.spent_this_wave, "③ 触发后祭坛进本回合灰相")
+	_c.equals(GameManager.obelisk_activations, 2, "③ 启动次数记账 +1（免费档 1 + 本次 1）")
 	_c.equals(GameManager.spirit_stones, 0, "③ 扣费：金币扣走启动价 %d" % cost)
 	_c.equals(GameManager.total_stones_spent, spent_before + cost, "③ 记账：total_stones_spent 同步累加")
 	_c.check(GameManager.live_allies.size() == 1, "③ 爆发后场上 1 只灵兽")
@@ -130,7 +170,7 @@ func _case_pay_and_wave_cycle() -> void:
 	_c.check(_obelisk.light.enabled, "④ 复燃：灯光重新点亮")
 
 	# ⑤ 价格随波上涨：价格收在 HUD 激活键的键面小字上（2026-10-26 起碑顶不再悬浮常驻文字）
-	var cost2 := GameBalance.obelisk_activation_cost(next_wave)
+	var cost2 := GameBalance.obelisk_activation_cost(next_wave, GameManager.obelisk_activations)
 	_c.check(cost2 > cost, "⑤ 启动价随波上涨（%d → %d）" % [cost, cost2])
 	var hud := get_node_or_null("/root/Main/UILayer/GameHUD")
 	# 注意取 _obelisk_widget（真正的 HudObeliskButton）；_obelisk_btn 是它内部的 Button

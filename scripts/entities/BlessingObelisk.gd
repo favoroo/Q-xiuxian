@@ -339,7 +339,8 @@ func start_charge() -> void:
 		return
 	## 金币闸（2026-10-25 重设计）：不够就横幅 + 报错音，不进充能。
 	## HUD 圆键是真按得下去的（不像商店先置灰），必须在这里硬拦。
-	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+	## 2026-10-30：本局第一次启动免费（cost = 0），身无分文也放行。
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
 	if GameManager.spirit_stones < cost:
 		GameManager.announcement_triggered.emit("金币不够启动祭坛")
 		AudioManager.play_sfx("ui_error", 0.9)
@@ -371,24 +372,28 @@ func stop_charge() -> void:
 
 ## 充满即成交：先扣钱，再演「灵石注入」，注入完成才爆发（2026-10-25 重设计）。
 ## 钱到手就不退：注入中途玩家阵亡 / 回合结束都照常爆发，不因中断吃哑巴亏。
+## 2026-10-30：本局第一次启动免费 —— 不扣费、不记消费、不飘字、不演金铢飞行，
+## 仍走同一段注入时长后爆发，且这次免费在此处被消耗（activations += 1）。
 func _begin_infusion() -> void:
 	is_charging = false
 	if _charge_particles != null:
 		_charge_particles.emitting = false
 	is_infusing = true
-	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number)
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
+	GameManager.obelisk_activations += 1
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
-	GameManager.spirit_stones -= cost
-	GameManager.total_stones_spent += cost
-	GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
-	# 供金声：拾金音降音高变体（沉一点的「入账」，不新增音频资产）
-	AudioManager.play_sfx("gem_pickup", 0.9, 0.82)
-	# 供金扣费飘字挂玩家头顶：钱从玩家身上出；碑顶那片是价格/读数的地盘，别挤在一起
-	_spawn_cost_float_text(cost, player_pos)
-	# 注入演出：金铢从玩家身上沿弧线飞入晶柱；晶柱随金币落进「饮金」渐亮
-	var fx_host: Node = get_parent()
-	if fx_host != null:
-		ObeliskFx.play_coin_infusion(fx_host, global_position, player_pos)
+	if cost > 0:
+		GameManager.spirit_stones -= cost
+		GameManager.total_stones_spent += cost
+		GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
+		# 供金声：拾金音降音高变体（沉一点的「入账」，不新增音频资产）
+		AudioManager.play_sfx("gem_pickup", 0.9, 0.82)
+		# 供金扣费飘字挂玩家头顶：钱从玩家身上出；碑顶那片是价格/读数的地盘，别挤在一起
+		_spawn_cost_float_text(cost, player_pos)
+		# 注入演出：金铢从玩家身上沿弧线飞入晶柱；晶柱随金币落进「饮金」渐亮
+		var fx_host: Node = get_parent()
+		if fx_host != null:
+			ObeliskFx.play_coin_infusion(fx_host, global_position, player_pos)
 	if _obelisk_renderer != null:
 		var itw := create_tween()
 		itw.tween_property(_obelisk_renderer, "infuse_ratio", 1.0, ObeliskFx.INFUSION_DUR)

@@ -292,6 +292,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["move_speed_mult"] = gm.move_speed_mult
 	d["pickup_range_mult"] = gm.pickup_range_mult
 	d["attack_range_mult"] = gm.attack_range_mult
+	d["fog_vision_bonus"] = gm.fog_vision_bonus
 	d["armor"] = gm.armor
 	d["hp_regen"] = gm.hp_regen
 	d["crit_rate"] = gm.crit_rate
@@ -359,6 +360,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["move_haste_penalty"] = gm.move_haste_penalty
 	d["total_damage_taken_count"] = gm.total_damage_taken_count
 	d["total_stones_spent"] = gm.total_stones_spent
+	d["obelisk_activations"] = gm.obelisk_activations
 	d["skill_cast_count"] = gm.skill_cast_count
 	d["total_hp_healed"] = gm.total_hp_healed
 	d["max_concurrent_summons"] = gm.max_concurrent_summons
@@ -432,6 +434,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.move_speed_mult = float(d.get("move_speed_mult", 1.0))
 	gm.pickup_range_mult = float(d.get("pickup_range_mult", 1.0))
 	gm.attack_range_mult = float(d.get("attack_range_mult", 1.0))
+	gm.fog_vision_bonus = float(d.get("fog_vision_bonus", 0.0))
 	gm.armor = float(d.get("armor", 0.0))
 	gm.hp_regen = float(d.get("hp_regen", 0.0))
 	gm.crit_rate = float(d.get("crit_rate", 0.05))
@@ -497,6 +500,7 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.move_haste_penalty = float(d.get("move_haste_penalty", 0.0))
 	gm.total_damage_taken_count = int(d.get("total_damage_taken_count", 0))
 	gm.total_stones_spent = int(d.get("total_stones_spent", 0))
+	gm.obelisk_activations = int(d.get("obelisk_activations", 0))
 	gm.skill_cast_count = int(d.get("skill_cast_count", 0))
 	gm.total_hp_healed = float(d.get("total_hp_healed", 0.0))
 	gm.max_concurrent_summons = int(d.get("max_concurrent_summons", 0))

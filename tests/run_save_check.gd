@@ -207,6 +207,7 @@ func _test_roundtrip() -> void:
 	GameManager.add_weapon("wulei_paizi", 2)
 	GameManager.rng.seed = 424242
 	GameManager.peak_stones = 88
+	GameManager.obelisk_activations = 2
 	GameManager.run_id = "run-save-check"
 
 	var p = GameManager.player
@@ -266,6 +267,7 @@ func _test_roundtrip() -> void:
 
 	# —— 峰值账本 ——
 	_equals(GameManager.peak_stones, 88, "恢复后金币峰值")
+	_equals(GameManager.obelisk_activations, 2, "恢复后祭坛启动次数（首次免费档不因读档复活）")
 
 	# —— 篡改字段确实被覆盖（防空灌假阳性）——
 	_check(GameManager.cultivator_id != "yushou", "恢复覆盖了被篡改的角色 id（灌回不是空转）")

@@ -34,8 +34,11 @@ func _ready() -> void:
 		await get_tree().process_frame
 	_shoot("before")
 	# 走真实链路：进范围 → 长按 → 金币注入 → 自动触发（2026-10-25 先给足启动价）
+	# 2026-10-30 首次免费档记作已消耗：本预览拍的是收费档的注入/灰相
 	_spent.is_player_inside = true
-	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(maxi(GameManager.wave_number, 1)) * 2
+	GameManager.obelisk_activations = 1
+	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations) * 2
 	_spent.start_charge()
 	var guard := 0
 	while not _spent.spent_this_wave and guard < 600:

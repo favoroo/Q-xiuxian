@@ -8,6 +8,9 @@ extends RefCounted
 ## 不进商店货架池（_pick_id_filtered / ShopSystem.apply_main_item_pity 都跳过）、不进图鉴
 ## （ManualDialog 只扫 1~4 档）、不可出售（GameManager.sell_item 直接拒收）。
 ## 每局只经 SuperUpgradeData 赠送一次，玩法上等价于一件「祝福」。
+## nightmare_only（2026-10-30）：只在噩梦难度（GameManager.danger_level >= 1）进抽池 ——
+## 硬闸开在 _pick_id_filtered 里（与 granted_only 同层，抽池兜底的未过滤全池也不放行），
+## 普通难度的货架 / 玉匣 / 精英掉落三条来源全不出；视野件用它，抽到就是废件。
 ##
 ## apply 复用加点字段白名单（GameBalance.upgrade_fields()），由 GameManager._apply_stat_fields 统一落地，
 ## 与悟道加点共用同一条属性链路。卡面/详情卡的加成行由 BonusRows 从 apply 直接生成（正绿负红），
@@ -802,6 +805,34 @@ const DEFS: Dictionary = {
 				"projectile_count_bonus": 1,
 				"unique": true,
 			},
+			# ==================== 噩梦专属 · 视野件（2026-10-30） ====================
+			# 只放大噩梦迷雾的清晰圈（apply 的 fog_vision_bonus 加算，渲染侧封顶 +80%）：
+			# nightmare_only 硬闸让它们只在噩梦出现，unique 保证每件每局最多一件 ——
+			# 三件买满正好到顶（15+25+40），两侧仍留浓雾，迷雾机制不会被买没。
+			"yinlu_deng": {
+				"name": "引路灯", "tier": 1, "price": 20,
+				"icon": "res://assets/art/item_yinlu_deng.png",
+				"desc": "噩梦迷雾视野变宽\n（每局限购一件）",
+				"apply": {"fog_vision_bonus": 0.15},
+				"nightmare_only": true,
+				"unique": true,
+			},
+			"powu_deng": {
+				"name": "破雾灯", "tier": 2, "price": 42,
+				"icon": "res://assets/art/item_powu_deng.png",
+				"desc": "噩梦迷雾视野进一步变宽\n（每局限购一件）",
+				"apply": {"fog_vision_bonus": 0.25},
+				"nightmare_only": true,
+				"unique": true,
+			},
+			"qianli_yan": {
+				"name": "千里眼", "tier": 3, "price": 68,
+				"icon": "res://assets/art/item_qianli_yan.png",
+				"desc": "噩梦迷雾视野大幅变宽\n（每局限购一件）",
+				"apply": {"fog_vision_bonus": 0.40},
+				"nightmare_only": true,
+				"unique": true,
+			},
 		# ==================== 神通（tier 5 · 逆天 · 超级悟道专属） ====================
 		# 只由 SuperUpgradeData 赠送，绝不进商店货架池（granted_only）、不可出售（no_sell）。
 		# 道途/阶段元数据在 scripts/data/SuperUpgradeData.gd；此处只管「这件神通干什么」。
@@ -1016,6 +1047,12 @@ static func is_granted_only(id: String) -> bool:
 static func is_no_sell(id: String) -> bool:
 	return bool(get_def(id).get("no_sell", false))
 
+## 噩梦专属件：只有 danger_level >= 1 的局才进抽池（视野件用，普通难度抽到等于废件）。
+## 抽池里的位置必须与 granted_only 同层（_pick_id_filtered 的硬闸），
+## 不能只靠 BalanceBuildFilter —— 池被过滤空时兜底那一轮会跳过构筑过滤。
+static func is_nightmare_only(id: String) -> bool:
+	return bool(get_def(id).get("nightmare_only", false))
+
 ## 可上货架的道具 id（排除神通）：图鉴计数与任何全表遍历用它，别用 all_ids()
 static func shop_ids() -> Array:
 	var out: Array = []
@@ -1126,6 +1163,9 @@ static func _pick_id_filtered(luck: float, wave: int, bought: Array, rng: Random
 	for id in DEFS.keys():
 		if is_granted_only(String(id)):
 			continue
+		# 噩梦专属件（视野件）：普通难度不进池。硬闸 —— 兜底那轮不过构筑过滤，这里必须自己拦
+		if is_nightmare_only(String(id)) and (gm == null or int(gm.danger_level) < 1):
+			continue
 		if not unlocked_items.is_empty() and not (id in unlocked_items):
 			continue
 		# 满穿透时不进穿透道具（破虚符/裂空锥/洞虚针），判定收口在 PierceLimit
@@ -1144,6 +1184,9 @@ static func _pick_id_filtered(luck: float, wave: int, bought: Array, rng: Random
 		# 构筑亲和（2026-10-21）：档位权重 × 当前武器类别/五行/角色偏好/已持有同类。
 		# gm 为空时倍率恒 1，单测的纯池抽取仍可钉住。
 		w *= BalanceBuildFilter.item_affinity(gm, String(id))
+		# 噩梦专属件在噩梦内加权：不受构筑亲和影响（它们没有构筑标签），纯随机池下否则几乎刷不到
+		if is_nightmare_only(String(id)):
+			w *= GameBalance.ITEM_NIGHTMARE_ONLY_WEIGHT
 		pool.append(id)
 		weights.append(w)
 	if pool.is_empty():

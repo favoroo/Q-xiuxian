@@ -19,6 +19,7 @@ const STAT_FIELDS: Array[String] = [
 	"weapon_damage_mult", "melee_damage", "ranged_damage", "elemental_damage",
 	"engineering_damage", "contraption_damage", "attack_speed_mult", "armor",
 	"move_speed_mult", "attack_range_mult", "pickup_range_mult", "hp_regen",
+	"fog_vision_bonus",
 	"crit_rate", "crit_mult", "dodge", "lifesteal", "luck", "xp_gain_mult",
 	"knockback_mult", "elite_damage", "skill_cooldown_mult", "free_rerolls",
 	"revive_charges", "thorns_pct", "chest_count_bonus", "chest_quality",
