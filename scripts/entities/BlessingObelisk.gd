@@ -542,12 +542,11 @@ func _summon_spirit_beast() -> void:
 	FxParticlePool.burst(FxParticlePool.SOUL_ORB, beast.global_position, body_col, 1.0, true)
 	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, body_col, 0.3)
 
-## 通天金光仪式（2026-11-01 pixelfx 车道 I）：底座破匣金光（chest_open，单发自回收）
-## + 碑顶通天金柱（loot_beam，循环帧需显式收束）。两者都只是叠在既有向量演出上的贴图层，
-## 与激活判定/扣费/伤害/计时零耦合：贴图被帧预算挡下时整段静默，祭坛照常兑现。
+## 通天金光仪式（2026-11-01 pixelfx 车道 I）：碑顶通天金柱（loot_beam，循环帧需显式收束）。
+## 只叠在既有向量演出上，与激活判定/扣费/伤害/计时零耦合：贴图被帧预算挡下时整段静默，祭坛照常兑现。
+## 同日下线 chest_open 底座那张：sheet 自画一整只匣子 + 一排骨币，立在碑座上就是「祭坛上凭空
+## 冒出一口宝箱」，观感与破匣现场同病，已从两处接入点一并撤掉（见 ChestBurstFx 文件头）。
 func _play_ritual_flipbook() -> void:
-	# 底座金光：贴地落点（anchor=bottom），画幅约 90px，像祭坛当场「开匣放光」
-	FxFlipbookPool.play(&"chest_open", global_position, {"scale_mult": 1.0})
 	# 重复激活（预览/强触发）先收掉上一条金柱，绝不留两条循环帧互叠
 	_stop_ritual_beam()
 	_ritual_beam = FxFlipbookPool.play(&"loot_beam", global_position + RITUAL_BEAM_OFFSET,

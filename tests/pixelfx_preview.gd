@@ -11,13 +11,16 @@ const ITEMS: Array[Dictionary] = [
 	{"id": &"crit_hit", "name": "暴击破片", "col": 2, "row": 0},
 	{"id": &"zap_hit", "name": "雷劫电结", "col": 3, "row": 0},
 
-	{"id": &"sword_slash", "name": "月牙刀光", "col": 0, "row": 1},
+	# 已下线：WeaponArcRenderer 自绘的月牙刀光已是挥砍读数，叠这张就是两弯月牙。仅留档。
+	{"id": &"sword_slash", "name": "月牙刀光(已下线)", "col": 0, "row": 1},
 	{"id": &"fire_breath", "name": "烈焰火锥", "col": 1, "row": 1},
 	{"id": &"arcane_beam", "name": "紫虹光束", "col": 2, "row": 1},
 	{"id": &"ice_spikes", "name": "玄冥冰刺", "col": 3, "row": 1},
 
 	{"id": &"earth_spike", "name": "裂山地裂", "col": 0, "row": 2},
-	{"id": &"chest_open", "name": "宝匣破开", "col": 1, "row": 2},
+	# 已下线：这张 sheet 自带整只匣子 + 一排骨币，叠在真匣子上就是「第二只箱子 + 假金币长条」，
+	# 破匣/祭坛两处接入点均已撤掉（见 ChestBurstFx 文件头）。只在本预览台留档。
+	{"id": &"chest_open", "name": "宝匣破开(已下线)", "col": 1, "row": 2},
 	{"id": &"collect_burst", "name": "灵宝拾取", "col": 2, "row": 2},
 	{"id": &"loot_beam", "name": "法宝光柱", "col": 3, "row": 2},
 ]

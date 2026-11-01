@@ -102,10 +102,10 @@ func activate() -> void:
 	# 火雨再立一根雷柱就是「文案说火雨画面是闪电」的旧错位）
 	if burst_kind == "thunder" or burst_kind == "":
 		JuiceEffect.spawn_sky_strike(get_parent(), global_position, tint)
-		# pixelfx 接入点（回退：注释下一行）
-		# 落雷序列帧与贴身光柱同点同位（锚点 bottom = 落点符阵贴地，主柱压身位）。
-		# 不传 modulate：贴图自带雷电配色与 HDR 起辉，星色口径由上方光柱/光斑承担。
-		FxFlipbookPool.play(&"lightning_strike", global_position)
+	# 2026-11-01 二次收束：不再叠 lightning_strike 序列帧。那张图单帧 240×264（0.85 缩放后
+	# 画幅 204×224，是身位光柱的 4 倍高、接近半屏），而落雷形态是每发范围武器都放一次的
+	# 高频演出 —— 多把雷系武器同开时同屏叠三四道 200px 巨雷，正是用户说的「雷又乱又乱」。
+	# 天罚（暴击那一发，低频高光）继续用这张图；范围武器落雷只留贴身光柱 + 落点环 + 光斑。
 	if _kind_fx == null:
 		_kind_fx = BurstKindFx.new()
 		_kind_fx.name = "KindFx"

@@ -1415,6 +1415,21 @@ func _test_wave_loot_summary_system() -> void:
 	# 验证行内直接变卖按钮与交互
 	var item_row: HBoxContainer = summary._items_row_box.get_child(0) as HBoxContainer
 	var val_box: HBoxContainer = item_row.get_child(1) as HBoxContainer
+
+	# 验证法宝行微标包含图标框与法宝名字
+	var badge: HBoxContainer = null
+	for c in val_box.get_children():
+		if c is HBoxContainer:
+			badge = c as HBoxContainer
+			break
+	_c.check(badge != null, "法宝行生成法宝微标容器")
+	var icon_box: PanelContainer = (badge.get_child(0) if badge != null and badge.get_child_count() > 0 else null) as PanelContainer
+	_c.check(icon_box != null, "法宝微标首位为图标框")
+	var icon_tex: TextureRect = (icon_box.get_child(0) if icon_box != null and icon_box.get_child_count() > 0 else null) as TextureRect
+	_c.check(icon_tex != null and icon_tex.texture != null, "法宝图标贴图有效加载")
+	var name_lbl: Label = (badge.get_child(1) if badge != null and badge.get_child_count() > 1 else null) as Label
+	_c.check(name_lbl != null and "储蓄罐" in name_lbl.text, "法宝微标展示法宝名称")
+
 	var sell_btn: Button = null
 	for c in val_box.get_children():
 		if c is Button:
@@ -1431,6 +1446,7 @@ func _test_wave_loot_summary_system() -> void:
 	_c.equals(GameManager.spirit_stones, stones_before_sell + refund, "变卖后灵石实时到账")
 	_c.equals(sell_btn.text, "已变卖", "变卖后按钮状态切换为已变卖")
 	_c.check(sell_btn.disabled, "已变卖按钮处于禁用态")
+	_c.check(badge.modulate.a < 0.6, "变卖后法宝微标半透明灰化")
 	_c.equals(summary._gold_val_label.text, "+%d" % (50 + refund), "战利品卡片上的灵石统计实时累加变卖所得")
 
 	# 验证金币阁道具小徽记的「新」角标与变卖提示

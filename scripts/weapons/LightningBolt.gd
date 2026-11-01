@@ -137,6 +137,9 @@ func activate(from_pos: Vector2, to_pos: Vector2, tint_col: Color, width_mult: f
 	global_position = from_pos
 	var main_points := _build_jagged_points(from_pos, to_pos)
 	var is_crowded := FxBudget.crowded
+	# 竖直落雷标记（2026-11-01 全竖直口径）：两端同 x 且自上而下即为「竖直天雷」。
+	# 只为判据留读数（super_vfx_check 钉「雷只许竖劈，不许斜劈/上劈」），不影响任何绘制。
+	set_meta(&"vertical_hop", is_equal_approx(from_pos.x, to_pos.x) and to_pos.y > from_pos.y)
 	var glow_active := bool(SettingsManager.get_val(&"display", &"glow", true)) and not bool(SettingsManager.get_val(&"display", &"glow_auto_off", false))
 
 	# 主干赋值：glow 关闭时隐藏光晕层（无 bloom 时宽半透明多边形只白耗带宽）

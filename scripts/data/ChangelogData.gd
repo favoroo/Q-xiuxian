@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.14",
+			"date": "2026-11-01",
+			"title": "雷击视觉整肃与战利品显示优化",
+			"items": [
+				"雷击改为从上往下垂直劈落。",
+				"近战挥砍刀光更干净利落。",
+				"破宝箱与祭坛光效更贴合。",
+				"战利品清单补充法宝图标。",
+			],
+		},
+		{
 			"version": "v0.1.13",
 			"date": "2026-11-01",
 			"title": "特效焕新与战斗公平",

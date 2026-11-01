@@ -182,11 +182,13 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 		var tier_col := ItemData.tier_color(tier_num)
 		var refund := ItemData.sell_price(item_id)
 		var no_sell := ItemData.is_no_sell(item_id)
+		var icon_path := String(def.get("icon", ""))
 
 		var row := HBoxContainer.new()
 		if i == 0:
 			var lbl_t := Label.new()
 			lbl_t.text = "掉落法宝"
+			lbl_t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			GameStyle.label(lbl_t, 13, GameStyle.PAPER_DIM)
 			row.add_child(lbl_t)
 		else:
@@ -196,19 +198,46 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 
 		var val_box := HBoxContainer.new()
 		val_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		val_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		val_box.alignment = BoxContainer.ALIGNMENT_END
 		val_box.add_theme_constant_override("separation", 8)
 
-		# 可点按看详情的法宝名微标
+		# 可点按看详情的法宝微标（图标 + 名称）
+		var item_badge := HBoxContainer.new()
+		item_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		item_badge.alignment = BoxContainer.ALIGNMENT_CENTER
+		item_badge.add_theme_constant_override("separation", 5)
+		item_badge.mouse_filter = Control.MOUSE_FILTER_PASS
+
+		# 图标外框（新野兽派纯黑直角底 + 品阶色边框）
+		var icon_box := PanelContainer.new()
+		icon_box.custom_minimum_size = Vector2(24, 24)
+		icon_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon_box.mouse_filter = Control.MOUSE_FILTER_PASS
+		icon_box.add_theme_stylebox_override("panel",
+			GameStyle.outlined_panel(GameStyle.INK, tier_col, 1, 0.0))
+
+		if not icon_path.is_empty():
+			var icon_tex := GameStyle.icon_texture_rect(icon_path, Vector2(20, 20))
+			icon_tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			icon_tex.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			icon_box.add_child(icon_tex)
+		item_badge.add_child(icon_box)
+
+		# 法宝名称
 		var name_lbl := Label.new()
 		name_lbl.text = "【%s】" % item_name
 		name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+		name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		GameStyle.label(name_lbl, 13, tier_col, 0, GameStyle.INK, true)
-		val_box.add_child(name_lbl)
+		item_badge.add_child(name_lbl)
+
+		val_box.add_child(item_badge)
 
 		# 直接变卖按钮（或不可售卖状态）
 		var sell_btn := Button.new()
 		sell_btn.custom_minimum_size = Vector2(86, 24)
+		sell_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		val_box.add_child(sell_btn)
 
 		if no_sell:
@@ -219,12 +248,12 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 			sell_btn.text = "变卖 (+%d)" % refund
 			GameStyle.button(sell_btn, GameStyle.BAD, GameStyle.BAD_DK, 11, GameStyle.PAPER, 0.0)
 			sell_btn.pressed.connect(func() -> void:
-				_sell_item(item_id, sell_btn, refund)
+				_sell_item(item_id, sell_btn, refund, item_badge)
 			)
 
-		# 点按法宝名弹出详情浮层，同样支持在详情卡内变卖
-		GameStyle.tap(name_lbl, func() -> void:
-			_open_item_detail(item_id, name_lbl, sell_btn, refund)
+		# 点按法宝微标（图标与名字）弹出详情浮层，同样支持在详情卡内变卖
+		GameStyle.tap(item_badge, func() -> void:
+			_open_item_detail(item_id, item_badge, sell_btn, refund, item_badge)
 		)
 
 		row.add_child(val_box)
@@ -277,7 +306,7 @@ func _refresh_gold_label() -> void:
 	_gold_val_label.text = "+%d" % stones
 
 ## 执行法宝变卖逻辑：调用 GameManager.sell_item，回退属性、增加灵石、刷新 UI
-func _sell_item(item_id: String, btn: Button, refund: int) -> void:
+func _sell_item(item_id: String, btn: Button, refund: int, badge: Control = null) -> void:
 	if _sold_items.get(item_id, false):
 		return
 	var def := ItemData.get_def(item_id)
@@ -292,6 +321,8 @@ func _sell_item(item_id: String, btn: Button, refund: int) -> void:
 		btn.disabled = true
 		btn.add_theme_stylebox_override("disabled", GameStyle.panel(GameStyle.DISABLED_FACE, 0.0))
 		btn.add_theme_color_override("font_disabled_color", GameStyle.GREY)
+		if badge != null:
+			badge.modulate = Color(1.0, 1.0, 1.0, 0.45)
 		# 实时刷新灵石显示
 		var cur_stones := int(_current_loot.get("stones", 0))
 		_current_loot["stones"] = cur_stones + refund
@@ -302,7 +333,7 @@ func _sell_item(item_id: String, btn: Button, refund: int) -> void:
 		DamageNumber.spawn(self, btn.global_position + Vector2(20.0, -10.0), refund, false, "+%d 灵石" % refund)
 
 ## 点按法宝名弹出详情浮层，同样支持在详情卡内变卖
-func _open_item_detail(item_id: String, anchor: Control, sell_btn: Button, refund: int) -> void:
+func _open_item_detail(item_id: String, anchor: Control, sell_btn: Button, refund: int, badge: Control = null) -> void:
 	var def := ItemData.get_def(item_id)
 	if def.is_empty():
 		return
@@ -365,13 +396,14 @@ func _open_item_detail(item_id: String, anchor: Control, sell_btn: Button, refun
 			"edge_color": GameStyle.BAD_DK,
 			"text_color": GameStyle.PAPER,
 			"callback": func():
-				_sell_item(item_id, sell_btn, refund),
+				_sell_item(item_id, sell_btn, refund, badge),
 		}]]
 
 	DetailTip.show_over(self, anchor, {
 		"title": String(def.get("name", item_id)),
 		"chip": "神通" if no_sell else "被动道具",
 		"chip_color": tier_col,
+		"icon": String(def.get("icon", "")),
 		"rows": rows,
 		"body": "被动道具：自动生效，不占武器槽，整局持续有效。",
 		"notes": notes,

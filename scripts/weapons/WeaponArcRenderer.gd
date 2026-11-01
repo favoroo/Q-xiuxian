@@ -27,19 +27,6 @@ const SWEEP_HALF := deg_to_rad(80.0)   ## 横扫月牙张角 == FloatingWeapon.S
 const SWEEP_INNER := 109.0      ## 横扫月牙中心内缘（中心厚度 15px，比近战 10px 宽，雄浑大月牙）
 const BODY_INSET := 8.0         ## 刃身顶缘内收量（T-2.1 内锐外羽）：亮刃切断在此，OUTER 顶缘留给羽化渐变
 
-## —— 刀芒叠加层（pixelfx melee/sword-slash，2026-11-01）——
-## 矢量三层刀光之外再叠一层贴图帧刀芒 + 碎屑：只做加法，判定几何、显隐生命周期与拖尾采样
-## 一律不动（显隐仍只由宿主 visible + modulate.a 驱动，本渲染器不额外持有时序状态、零 tween）。
-## 锚点取月牙内缘中点 == 出生帧贴住的剑尖（MeleeHandler「内缘贴剑尖」反解基准），朝向取刃光
-## 自身世界转角，五行色走同一张 _palette（★3/★4 追加斩的星色经宿主 modulate 一并折进去）。
-## 外缘预算（画多大==判多大）：sheet 受光像素距 pivot 最远 94.9 帧像素 × FxSheetData 基础缩放
-## 0.65 ≈ 61.7px（即 scale_mult = 1 时的世界半径）。取当前 scale 的 3 倍 ⇒ 世界半径
-## ≈ 0.52 × 判定半径（出生 scale 是终态 0.35 倍，3×0.35 ≈ 1.05 倍终态），而锚点离判定圆心
-## 只有 |MELEE_LUNGE - (muzzle_len + 2)| ≈ 12~15px —— 最紧配置（长剑 arc_scale 1.0 叠负范围词条、
-## 判定半径 61.5px）实得 12 + 39 ≈ 51px < 61.5px，刀芒外缘不出判定弧。
-const SLASH_FX_ID := &"sword_slash"
-const SLASH_FX_SCALE_MULT := 3.0
-
 const _ARC_STEPS := 30          ## 外缘采样段数
 ## 重绘节流（2026-10-14）：亮起窗口内原每帧无条件重绘，火舌/电弧微动 20Hz 足够
 ## 60fps 档（2026-10-15 VisualRate 档位联动）：刃光跟随挥砍运动，画面 3 帧一画会有
@@ -90,28 +77,13 @@ func _notification(what: int) -> void:
 		set_process(visible)
 		if visible:
 			queue_redraw()
-			_play_slash_fx()
 		else:
 			_anim = 0.0
 			_trail_reset()
 
-## 挥砍亮起的那一下往刀尖叠一层贴图刀芒（空挥/屏外命中已被宿主门控，走不到这里）。
-## 只挂"亮起"这一拍：宿主扫放/淡出照旧只动 position/scale/modulate.a，这里不碰宿主状态。
-func _play_slash_fx() -> void:
-	if mode != ArcMode.MELEE or not is_inside_tree() or not is_node_ready():
-		return
-	var pal := _palette(element)
-	# 星色经宿主 modulate 传进来（echo_slash_color）：只折 RGB，alpha 归 1 —— 显隐淡出归贴图序列自己
-	var tint: Color = pal["main"]
-	tint = Color(tint.r * modulate.r, tint.g * modulate.g, tint.b * modulate.b, 1.0)
-	var fx := FxFlipbookPool.play(SLASH_FX_ID, global_transform * Vector2(MELEE_INNER, 0.0), {
-		"dir": Vector2.RIGHT.rotated(global_rotation),
-		"scale_mult": maxf(absf(global_scale.x), absf(global_scale.y)) * SLASH_FX_SCALE_MULT,
-		"modulate": tint,
-	})
-	if fx != null:
-		# 池只管位置/缩放/水平镜像：贴图序列按刃光自身朝向摆正（否则不管朝哪儿都固定朝右上）
-		fx.global_rotation = global_rotation
+## 2026-11-01 下线 sword_slash 贴图刀芒（原车道 B 接入）：本渲染器自绘的就是月牙刀光
+## （_draw_crescent 六层锥形弧带 + 短拖尾），再往刀尖叠一张 crescent 序列帧 = 同一记挥砍
+## 出现两弯月牙，用户反馈「有点重复」。判定同源的矢量弧是唯一读数（铁律 7），贴图下线。
 
 func _process(delta: float) -> void:
 	_anim += delta

@@ -11,7 +11,10 @@ const RES_BASE_PATH := "res://assets/art/fx_pixelfx/"
 const CONFIGS: Dictionary = {
 	&"lightning_strike": {
 		"tres": "res://assets/art/fx_pixelfx/lightning_strike.tres",
-		"scale": 0.85,
+		# 2026-11-01 缩到 0.60（原 0.85）：原画幅 204×224 是身位光柱的 4 倍高、接近半屏，
+		# 天罚每次暴击都劈一道，多把武器同开时几道巨雷叠起来就是「雷很乱」。
+		# 0.60 ⇒ 画幅 144×158，仍是全场最大的一击，但不再压住半个战场。
+		"scale": 0.60,
 		"anchor": "bottom",
 		"pivot": Vector2(120, 240),
 		"frame_size": Vector2(240, 264),
@@ -64,6 +67,9 @@ const CONFIGS: Dictionary = {
 		"z_ground": true,
 		"element": "earth"
 	},
+	## 已下线（2026-11-01）：WeaponArcRenderer 自己画的就是月牙刀光（六层锥形弧带 + 短拖尾），
+	## 再叠这张 crescent 序列帧就是同一记挥砍出现两弯月牙（用户反馈「有点重复」）。
+	## 近战/横扫的刀光读数只认判定同源的矢量弧（铁律 7），这张图不再接任何挥砍。
 	&"sword_slash": {
 		"tres": "res://assets/art/fx_pixelfx/sword_slash.tres",
 		"scale": 0.65,
@@ -97,6 +103,9 @@ const CONFIGS: Dictionary = {
 		"z_ground": false,
 		"element": "fire"
 	},
+	## 已下线（2026-11-01）：这张 sheet 是「一整只匣子 + 一排骨币铺地」的独立小剧场，
+	## 叠在真匣子上会出现第二只完好的箱子与一条假金币长条，与真实掉落对不上。
+	## 破匣/祭坛都不再播它；要复用必须先在导出侧裁掉匣体与地排币，只留上方光爆。
 	&"chest_open": {
 		"tres": "res://assets/art/fx_pixelfx/chest_open.tres",
 		"scale": 0.80,

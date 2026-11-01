@@ -8,9 +8,11 @@ extends RefCounted
 ##
 ## 2026-10-27 电刀化（对标英雄联盟电刀）：旧写法每段都画「cursor → 敌人」的全长穿越线，
 ## 雷劫/反震/血海还从尸体/玩家坐标起跳，再叠 LightningBolt 的分支与空气余韵 ——
-## 玩家看到的是一屏没有归属的乱线。现在：首跳只在触发敌身上炸缠身电（不画入站线），
-## 后续只画敌人↔敌人传导弧（两端恒为敌人，专线禁分支/余韵），落点再炸缠身电。
-## 连线端点一律在画线当刻读敌人实时坐标，延时拍里敌人移动也不会把线留在空气里。
+## 玩家看到的是一屏没有归属的乱线。
+## 2026-11-01 全竖直落雷：每跳只在目标头顶竖劈一道雷（HOP_BOLT_DROP），
+## 敌人↔敌人之间的斜向穿越弧整段下线 —— 用户口径「雷只能从上往下劈，不要斜劈、不要从下往上劈」。
+## 传导感由逐跳延时表达（一道接一道劈在下一只怪头上），落点再炸缠身电。
+## 端点一律在画线当刻读敌人实时坐标，延时拍里敌人移动也不会把雷留在空气里。
 ## 命中跳字走 take_damage 的 chain_tint 通道（独立条 + 身份色），不并进武器主跳字。
 ##
 ## 严禁类型化引用 EnemyBase（项目坑 12：武器脚本硬引用敌人基类会把
@@ -32,8 +34,10 @@ static var _last_event_ms: int = -999999
 static var _last_gate_ms: Dictionary = {}
 static var _depth: int = 0
 
-## 短于此长度的电弧不画（弹丸贴脸命中时起点与目标重合，零长度折线只是噪点）
-const MIN_BOLT_LEN := 18.0
+## 逐跳落雷的竖直落差：雷只许自头顶竖直劈到身位，落差就是这个高度
+## （2026-11-01 用户口径「雷只能从上往下劈，不要斜劈、不要从下往上劈」）。
+## 与 JuiceEffect.SKY_STRIKE_HEIGHT(58) 同档略高：同为贴身材质的光柱/电弧，不拉空气长线。
+const HOP_BOLT_DROP := 78.0
 ## 逐跳演出的间隔（秒）：电一跳一跳传导的节拍。只延迟画图，伤害在 strike 当帧即时结算
 const HOP_VISUAL_DELAY := 0.045
 ## 链电弧线宽倍率（LightningBolt 基准 ×1.15：0.85 的旧口径在混战里细得看不见）
@@ -41,8 +45,10 @@ const BOLT_WIDTH := 1.15
 
 ## 从 from_pos 发起一次链电：首跳永远落在「触发的敌人」身上，之后逐跳找最近未打过的敌人。
 ## 电刀模式（2026-10-27 重做，对标 LOL 电刀）：
-##   - first_target 有效 = 触发的敌人（紫电/雷霆弹幕/兽群）。首跳**不画入站线**，
-##     只在它身体轮廓内炸一簇缠身电；玩家/武器/尸体绝不在空气里甩线。
+##   - 每一跳都只在那只敌人头顶竖直劈一道雷（2026-11-01 改为全竖直）：
+##     不再画敌人↔敌人之间的斜向穿越弧 —— 旧写法两端任意角度，玩家看到的
+##     是「从四面八方劈来、还有从下往上劈的」一屏乱线。
+##   - first_target 有效 = 触发的敌人（紫电/雷霆弹幕/兽群）。玩家/武器/尸体绝不在空气里甩线。
 ##   - first_target 为 null（雷劫/反震/血海）：由 from_pos 就近锁定第一只敌人当首跳，
 ##     from_pos 不参与画线；半径内锁不到敌人时直接返回 0（宁可不画，也不画空气）。
 ##   - 后续每跳只画「敌人↔敌人」中心的传导弧（allow_branch=false：不甩中段分支/空气余韵），
@@ -79,46 +85,37 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	# 与传导弧同吃演出闸：一次雷劫风暴只放一团，伤害结算不受影响。
 	if draw_bolt and gate == &"leijie":
 		FxFlipbookPool.play(&"zap_hit", from_pos)
-	# 首跳：只缠身，不画线（电刀触发瞬间「电在这只怪身上炸」）
+	# 首跳：头顶竖直落雷 + 缠身电（电刀触发瞬间「雷劈在这只怪身上」）
 	_apply_hop_hit(host, targets[0], damage, 0, bolt_tint, draw_bolt)
-	# 后续逐跳：一条敌人↔敌人传导弧 + 落点缠身电。位置在画线那一刻才读敌人实时坐标 ——
-	# 延时拍里敌人被击退/移动，弧也不会留在空气里（旧写法用的是选目标时的快照坐标）。
+	# 后续逐跳：每跳都只在目标头顶竖劈一道雷 + 落点缠身电。位置在画线那一刻才读敌人
+	# 实时坐标 —— 延时拍里敌人被击退/移动，雷也不会留在空气里（旧写法用选目标时的快照坐标）。
 	for i in range(1, targets.size()):
-		var prev: Node2D = targets[i - 1]
 		var enemy: Node2D = targets[i]
 		var hop_idx: int = i
 		var tree := host.get_tree()
 		if tree == null:
-			_draw_chain_segment(host, prev, enemy, bolt_tint, draw_bolt)
 			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt)
 			continue
 		var delay: float = HOP_VISUAL_DELAY * float(hop_idx)
 		tree.create_timer(delay).timeout.connect(func() -> void:
 			if host == null or not is_instance_valid(host):
 				return
-			_draw_chain_segment(host, prev, enemy, bolt_tint, draw_bolt)
 			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt))
 	return targets.size()
 
-## 单段传导弧：两端都必须是「此刻仍活着」的敌人 —— 任一端失效/已死就整段不画。
-## 旧写法失效时退回选目标那一刻的快照坐标，敌人被击退/打死后弧就留在空地或尸体上；
-## 电刀模式的口径是「空气里一条线都不许有」，宁可少画一段，也不画无归属的线。
-static func _draw_chain_segment(host: Node, prev: Node2D, enemy: Node2D,
-		tint: Color, draw_bolt: bool) -> void:
-	if not draw_bolt:
+## 竖直落雷（2026-11-01 全竖直口径）：从目标头顶 HOP_BOLT_DROP 处竖直劈到身位中心。
+## 只画主干、不甩分支与空气余韵（allow_branch=false）；两端都锚在目标身上，
+## 高度与贴身光柱同档，绝不出现「空气里一道斜线」。
+static func _draw_hop_bolt(host: Node, pos: Vector2, tint: Color) -> void:
+	var bolt := LightningBolt.acquire(host)
+	if bolt == null:
 		return
-	if prev == null or not is_instance_valid(prev) or bool(prev.get("dying")):
-		return
-	if enemy == null or not is_instance_valid(enemy) or bool(enemy.get("dying")):
-		return
-	var from_pos: Vector2 = prev.global_position
-	var to_pos: Vector2 = enemy.global_position
-	if from_pos.distance_to(to_pos) <= MIN_BOLT_LEN:
-		return
-	_draw_bolt(host, from_pos, to_pos, tint, BOLT_WIDTH, false)
+	bolt.activate(pos + Vector2(0.0, -HOP_BOLT_DROP), pos, tint,
+		BOLT_WIDTH, Color(0, 0, 0, 0), false)
 
-## 一次链跳的落地结算：伤害（带链电身份色跳字）+ 缠身电 + 落点爆闪。
+## 一次链跳的落地结算：伤害（带链电身份色跳字）+ 竖直落雷 + 缠身电 + 落点爆闪。
 ## 命中点读敌人实时坐标；目标已死则整跳跳过（伤害与画面一起跳过，不往空气里画）。
+## 画面上「传导」由逐跳延时（HOP_VISUAL_DELAY）表达：雷一道接一道劈在下一只怪头上。
 static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_idx: int,
 		tint: Color, draw_bolt: bool) -> void:
 	if enemy == null or not is_instance_valid(enemy) or bool(enemy.get("dying")):
@@ -134,6 +131,7 @@ static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_id
 		enemy.take_damage(dmg, Vector2.ZERO, false, false, tint)
 	_depth = maxi(0, _depth - 1)
 	if draw_bolt and host != null and is_instance_valid(host):
+		_draw_hop_bolt(host, pos, tint)
 		JuiceEffect.spawn_body_arcs(host, pos, tint)
 		JuiceEffect.spawn_bolt_pop(host, pos, tint)
 
@@ -299,13 +297,6 @@ static func _try_consume_event_gate(gate: StringName = &"strike") -> bool:
 	_last_gate_ms[gate] = now
 	_last_event_ms = now
 	return true
-
-static func _draw_bolt(host: Node, from_pos: Vector2, to_pos: Vector2, tint: Color,
-		width: float = BOLT_WIDTH, allow_branch: bool = true) -> void:
-	var bolt := LightningBolt.acquire(host)
-	if bolt == null:
-		return
-	bolt.activate(from_pos, to_pos, tint, width, Color(0, 0, 0, 0), allow_branch)
 
 ## 供测试/重置用：清空限流与递归状态
 static func reset_gate() -> void:

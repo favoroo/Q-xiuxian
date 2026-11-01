@@ -22,6 +22,8 @@ extends Node
 ##   ⑩ 全链路去线条化（2026-11-01）：ThunderBurst 不再立 200px 天空雷柱 + 顶端电弧，
 ##      BURST 出膛不再拉器口→落点引雷折线（9 把范围武器原先全先劈一道闪电），
 ##      雷系落点统一由贴身光柱承担。
+##   ⑪ 雷全竖直（2026-11-01）：链电逐跳只在目标头顶竖劈一道雷（落差 HOP_BOLT_DROP），
+##      敌人↔敌人之间的斜向穿越弧整段下线（用户口径「雷只能从上往下劈」）。
 ##
 ## 运行: godot --headless --path . res://tests/SuperVfxCheck.tscn
 ## 退出码 0 且末行 SUPER_VFX_RESULT: ALL PASS
@@ -36,6 +38,7 @@ extends Node
 ##   - activate 默认对链电放行分支 ⇒ ⑧ 报红
 ##   - sky_bolt 改回自 280px 天上拉折线（或重新调 spawn_body_arcs）⇒ ⑨ 报红
 ##   - ThunderBurst 改回 200px 天空雷柱 / BurstHandler 改回引雷折线 ⇒ ⑩ 报红
+##   - 链电改回 prev→enemy 斜向传导弧（或竖雷改成从下往上）⇒ ⑪ 报红
 
 const EPS := 0.0001
 const MAX_WAIT_FRAMES := 180
@@ -62,6 +65,7 @@ func _run() -> void:
 	await _case_chain_targets()
 	_case_chain_number_standalone()
 	_case_chain_bolt_no_air()
+	await _case_chain_bolt_vertical()
 	await _case_sky_bolt_no_air()
 	await _case_burst_no_sky_line()
 	await _case_gates_independent()
@@ -261,6 +265,59 @@ func _visible_bolt_count() -> int:
 		if b != null and b.visible and b._line_core.visible:
 			n += 1
 	return n
+
+## 当前可见的 LightningBolt 列表（按需过滤：链电竖雷判据要读两端坐标）
+func _visible_bolts() -> Array:
+	var out: Array = []
+	var host: Node = LightningBolt._host
+	if host == null or not is_instance_valid(host):
+		return out
+	for child in host.get_children():
+		var b := child as LightningBolt
+		if b != null and b.visible and b._line_core.visible and b._line_core.points.size() >= 2:
+			out.append(b)
+	return out
+
+## ⑪ 链电全竖直（2026-11-01）：逐跳只在目标头顶竖直劈到身位，敌人↔敌人斜向穿越弧整段下线。
+## 判据口径：凡是「长过缠身电（>40px）」的链电电弧，两端必须同 x 且自上而下。
+## 反例：改回 _draw_chain_segment 的 prev→enemy 连线 ⇒ 两端 x 不等 ⇒ 报红。
+func _case_chain_bolt_vertical() -> void:
+	# 等上一条用例的电弧演完回池（headless 的 Tween 与墙钟不同步，按墙钟等）
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 160:
+		await get_tree().process_frame
+	ChainLightning.reset_gate()
+	var a := _spawn_enemy(Vector2(340.0, 300.0))
+	var b := _spawn_enemy(Vector2(520.0, 380.0))
+	await get_tree().process_frame
+	# 首跳打 a，第二跳自动锁最近的 b（两跳都要画出来）
+	ChainLightning.strike(_world, a.global_position, a, 6.0)
+	# 电弧只亮 0.075s 就淡出：逐帧扫描窗口内出现过的每一条，按 instance_id 去重
+	# （等待+一次采样会漏掉先淡出的那一条）
+	var seen: Dictionary = {}
+	var t_end := Time.get_ticks_msec() + 220
+	while Time.get_ticks_msec() < t_end:
+		for bolt in _visible_bolts():
+			var id: int = bolt.get_instance_id()
+			if seen.has(id):
+				continue
+			var pts: PackedVector2Array = bolt._line_core.points
+			var top := pts[0]
+			var bottom := pts[pts.size() - 1]
+			if absf(bottom.y - top.y) <= 40.0:
+				continue  # 缠身电的短弧不参与本判据
+			seen[id] = true
+			_c.near(absf(bottom.x - top.x), 0.0, 0.01,
+				"链电传导雷两端同 x（不是斜向穿越弧，实际 dx=%.2f）" % absf(bottom.x - top.x))
+			_c.check(bottom.y > top.y, "链电传导雷自上而下劈（bottom.y=%.1f > top.y=%.1f）" % [bottom.y, top.y])
+			_c.near(absf(bottom.y - top.y), ChainLightning.HOP_BOLT_DROP, 0.01,
+				"链电竖雷落差 == HOP_BOLT_DROP")
+		await get_tree().process_frame
+	_c.check(seen.size() >= 2, "链电逐跳各劈一道竖直雷（实得 %d 道）" % seen.size())
+	for e in [a, b]:
+		if is_instance_valid(e):
+			e.queue_free()
+	await get_tree().process_frame
 
 ## 当前活跃的贴身落雷光柱（JuiceEffect 池里的 SKY_STRIKE）
 func _sky_strikes() -> Array:
