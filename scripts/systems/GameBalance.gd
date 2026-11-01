@@ -338,6 +338,14 @@ const BOSS_HEAVY_HIT_TRAUMA := BalanceCombat.BOSS_HEAVY_HIT_TRAUMA
 const BOSS_HEAVY_HIT_COOLDOWN := BalanceCombat.BOSS_HEAVY_HIT_COOLDOWN
 const ZHUMU_MINION_CAP := BalanceCombat.ZHUMU_MINION_CAP
 const CHARGE_BRAKE_END_SPEED_PCT := BalanceCombat.CHARGE_BRAKE_END_SPEED_PCT
+
+## 圆形 AoE 统一预警时长（画多大给多久，公平线公式见 BalanceCombat）
+static func aoe_windup(radius: float) -> float:
+	return BalanceCombat.aoe_windup(radius)
+
+## 持续领域类 AoE 首圈落点侧向偏移距离（不压顶治理，公式见 BalanceCombat）
+static func aoe_zone_edge_offset(radius: float) -> float:
+	return BalanceCombat.aoe_zone_edge_offset(radius)
 # 近战扑咬（纯接触怪的前摇出招）→ BalanceCombat
 const LUNGE_WINDUP := BalanceCombat.LUNGE_WINDUP
 const LUNGE_SPEED_MUL := BalanceCombat.LUNGE_SPEED_MUL

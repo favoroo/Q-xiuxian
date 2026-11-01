@@ -43,6 +43,7 @@ func _run() -> void:
 	_c.check(GameManager.get_effective_dodge() <= 0.0, "前置：新局无闪避（判定无随机性）")
 
 	await _case_slime_contact()
+	await _case_jinchan_contact()
 
 	print("CONTACT_DAMAGE_CHECK 判据跑完")
 	Engine.time_scale = 1.0
@@ -79,3 +80,26 @@ func _case_slime_contact() -> void:
 		var actual: float = hp_before - _player.current_health
 		_c.near(actual, expected, 0.01, "首次咬中扣血量与 GameBalance.incoming_damage 同源")
 	_c.check(is_instance_valid(e), "判据结束时敌人仍存活（反震/意外击杀会污染读数）")
+	e.queue_free()
+	await get_tree().process_frame
+
+## 金蟾（金蝉）即使与玩家直接贴身重叠或发生碰撞，也不产生任何接触伤害
+func _case_jinchan_contact() -> void:
+	var scene: PackedScene = load("res://scenes/entities/JinChanEnemy.tscn")
+	var jinchan := scene.instantiate() as EnemyBase
+	jinchan.global_position = _player.global_position
+	jinchan.add_to_group("enemies")
+	_world.add_child(jinchan)
+	await get_tree().process_frame
+
+	_c.equals(jinchan.contact_damage, 0.0, "前置：金蟾 contact_damage 配置为 0")
+	var hp_before: float = _player.current_health
+	for i in range(30):
+		jinchan.global_position = _player.global_position
+		await get_tree().physics_frame
+		_c.check(_player.current_health >= hp_before, "金蟾贴身重叠不造成任何伤害")
+
+	_c.near(_player.current_health, hp_before, 0.001, "多帧重叠接触后玩家血量保持满值")
+	jinchan.queue_free()
+	await get_tree().process_frame
+

@@ -111,6 +111,7 @@ func _case_looter_flee() -> void:
 	var jinchan := _spawn_enemy("res://scenes/entities/JinChanEnemy.tscn", Vector2(150, 0))
 	await get_tree().process_frame
 	_c.check(jinchan.always_flee, "前置：金蟾配了 always_flee")
+	_c.equals(jinchan.contact_damage, 0.0, "前置：金蟾不产生任何接触伤害（contact_damage=0）")
 	# 给吸附插值 0.5s 爬到满速
 	var t := 0.0
 	while t < 0.5:
@@ -178,7 +179,7 @@ func _case_mutation_once() -> void:
 	# 变异升格为二阶段强化（三连震 / 增点 / 链冲 / 扩域）。
 	_c.check(golem.slam_interval > 0.0, "前置：铁甲巨怪常驻震地（进场即有）")
 	_c.check(golem.rock_interval > 0.0, "前置：铁甲巨怪常驻落石（进场即有）")
-	_c.check(chilei.charge_side_bolts == 0, "前置：烈雷兽变异前没有侧射")
+	_c.check(chilei.chain_charges == 2, "前置：烈雷兽变异前为二连冲刺")
 	_c.check(jiansha.bolt_count == 3, "前置：剑客亡灵变异前三连剑气")
 
 	# 血线 60% 以上挨刀不触发
@@ -195,7 +196,7 @@ func _case_mutation_once() -> void:
 	_c.check(golem._mutated, "铁甲巨怪过血线触发变异")
 	_c.check(golem.slam_interval > 0.0, "铁甲巨怪变异保持震地")
 	_c.check(golem.slam_hits == GameBalance.MUT_GOLEM_SLAM_HITS, "铁甲巨怪变异震地升格多段（%d 段）" % golem.slam_hits)
-	_c.check(chilei._mutated and chilei.charge_side_bolts > 0, "烈雷兽变异获得冲刺侧射")
+	_c.check(chilei._mutated and chilei.chain_charges == GameBalance.MUT_CHILEI_CHAIN_CHARGES, "烈雷兽变异获得强化多连冲刺")
 	_c.check(jiansha._mutated and jiansha.bolt_count == GameBalance.MUT_JIANSHA_BOLT_COUNT, "剑客亡灵变异剑气加密")
 	_c.check(jiansha.preferred_range < 200.0, "剑客亡灵变异压近身（%.0f）" % jiansha.preferred_range)
 

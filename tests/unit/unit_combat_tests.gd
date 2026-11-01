@@ -294,6 +294,42 @@ func _test_elite_attack_constants() -> void:
 	_c.equals(GameBalance.JIANSHA_FIELD_DURATION, BalanceWave.JIANSHA_FIELD_DURATION, "GameBalance 转发 JIANSHA_FIELD_DURATION")
 	_c.equals(GameBalance.MUT_JIANSHA_BLINK_BOLTS, BalanceWave.MUT_JIANSHA_BLINK_BOLTS, "GameBalance 转发 MUT_JIANSHA_BLINK_BOLTS")
 
+func _test_aoe_fairness() -> void:
+	# 2026-10-31 AoE 预警公平线治理：预警时长与半径挂钩（画多大就给多久）。
+	# 公平线 = R/220 + 0.42，按玩家 210px/s 移速折算「跑出半径+身位」再加触屏 ~0.3s 反应余量。
+	# 1) 夹制边界：小圈保底节奏、大圈封顶拖沓
+	_c.near(GameBalance.aoe_windup(30.0), 0.75, EPS, "小圈预警保底 0.75s")
+	_c.near(GameBalance.aoe_windup(400.0), 1.25, EPS, "超大圈预警封顶 1.25s")
+	# 2) 单调不减：半径越大预警越长
+	var prev := -1.0
+	var monotonic := true
+	for r in [62.0, 85.0, 95.0, 105.0, 115.0, 130.0, 175.0]:
+		var w := GameBalance.aoe_windup(r)
+		if w < prev - EPS:
+			monotonic = false
+		prev = w
+	_c.check(monotonic, "预警时长随半径单调不减")
+	# 3) 逃生窗口不变式：现役最大半径域内，预警减去纯逃生耗时 ≥ 0.3s 触屏反应余量
+	var window_ok := true
+	for r in [62.0, 85.0, 95.0, 105.0, 115.0, 130.0, 175.0]:
+		if GameBalance.aoe_windup(r) - (r + 12.0) / 210.0 < 0.3 - EPS:
+			window_ok = false
+	_c.check(window_ok, "全程留 ≥0.3s 触屏反应窗（按 210px/s 跑出半径+身位折算）")
+	# 4) 标定：天火小圈节奏不变，震地/禁区大圈显著加时
+	_c.near(GameBalance.aoe_windup(GameBalance.BOSS_SKY_FIRE_RADIUS), GameBalance.BOSS_SKY_FIRE_WINDUP, 0.05,
+		"天火（R=95）预警与旧值同档，小圈节奏不变")
+	_c.check(GameBalance.aoe_windup(GameBalance.BOSS_SLAM_RADIUS) > GameBalance.BOSS_SLAM_WINDUP + 0.2,
+		"Boss 震地（R=175）预警显著加时")
+	_c.check(GameBalance.aoe_windup(GameBalance.BOSS_HAZARD_FIELD_RADIUS) > GameBalance.BOSS_HAZARD_FIELD_WINDUP + 0.1,
+		"连环禁区（R=105）预警加时")
+	# 5) 持续领域落点偏移：不压顶但不踢出圈外（玩家仍须侧移脱圈），夹 [35, 80]
+	_c.near(GameBalance.aoe_zone_edge_offset(30.0), 35.0, EPS, "小领域偏移保底 35px")
+	_c.near(GameBalance.aoe_zone_edge_offset(400.0), 80.0, EPS, "大领域偏移封顶 80px")
+	_c.check(GameBalance.aoe_zone_edge_offset(GameBalance.BOSS_HAZARD_FIELD_RADIUS) < GameBalance.BOSS_HAZARD_FIELD_RADIUS,
+		"禁区偏移小于半径：玩家仍在圈内，躲不开但只需侧移半步")
+	_c.check(GameBalance.aoe_zone_edge_offset(GameBalance.poison_radius(99)) < GameBalance.aoe_zone_edge_offset(GameBalance.BOSS_HAZARD_FIELD_RADIUS),
+		"毒潭偏移小于禁区偏移（半径同源缩放）")
+
 # ---------------- 属性面板读数：与 Player 实际口径同源 ----------------
 
 ## 疾风/神行在身时开面板，移速/攻速读数必须含神通 buff 层（2026-10-11 补漏：

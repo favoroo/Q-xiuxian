@@ -288,7 +288,7 @@ func _resolve_contact_bites(delta: float) -> void:
 		var push: Vector2 = diff / d if d > 0.001 else Vector2.UP
 		crowd += push * (1.0 - d / GameBalance.SPIRIT_BEAST_CROWD_RADIUS)
 		crowd_n += 1
-		if d_sq <= range_sq:
+		if d_sq <= range_sq and e.contact_damage > 0.0:
 			take_damage(e.contact_damage, push)
 	if crowd_n > 0:
 		global_position += crowd.normalized() * GameBalance.SPIRIT_BEAST_CROWD_PUSH_SPEED * delta
@@ -300,7 +300,7 @@ func _resolve_contact_bites(delta: float) -> void:
 ## （压扁 1.18/0.84 后 BACK_OUT 弹回）+ 顺咬合方向微弹退（renderer 位移通道，与吐息后坐同款）；
 ## 血量长期传达照旧走 hp_ratio（低落圆身转暗、濒死墨裂纹）
 func take_damage(amount: float, from_dir: Vector2 = Vector2.ZERO) -> void:
-	if _dying or _invincible_timer > 0.0:
+	if amount <= 0.0 or _dying or _invincible_timer > 0.0:
 		return
 	_invincible_timer = GameBalance.SPIRIT_BEAST_HIT_INVINCIBLE
 	current_hp -= amount

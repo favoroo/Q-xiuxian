@@ -2,15 +2,13 @@ class_name WaveLootSummary
 extends Control
 
 ## 波末战利品摘要卡（多条目摘要：灵石/法宝/葫芦各一行）
-## 在回合结束吸附清场后、进入悟道面板/金币阁之前弹出，展示本回合战斗中获得的全部战利品。
-## 特别当玉匣开出商店道具时醒目高亮并注明「可在金币阁出售」，让玩家清晰掌握背包变动。
+## 只在**本回合真掉到商店道具（法宝）**时弹出（闸在 WaveSpawner._open_shop）：此时卡片的价值
+## 是提醒玩家新法宝入包、当场就能变卖回收；平常回合（只有灵石/葫芦）不弹，直接进悟道/金币阁。
 ## 遵循 GameStyle 新野兽派直角规范，纯代码构建。
 
 signal summary_closed
 
 const CARD_WIDTH := 450.0
-const AUTO_DISMISS_NORMAL := 2.2
-const AUTO_DISMISS_WITH_ITEM := 3.0
 
 var _dim_bg: ColorRect
 var _center: CenterContainer
@@ -25,7 +23,6 @@ var _hint_label: Label
 
 var _is_showing: bool = false
 var _tween: Tween = null
-var _auto_dismiss_time: float = 0.0
 var _current_loot: Dictionary = {}
 var _sold_items: Dictionary = {}
 
@@ -148,7 +145,7 @@ func _make_separator(color: Color) -> ColorRect:
 	cr.color = color
 	return cr
 
-## 弹出战利品摘要并计时，关闭时触发 summary_closed 信号
+## 弹出战利品摘要（仅掉到法宝时），关闭时触发 summary_closed 信号
 func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> void:
 	if _is_showing:
 		return
@@ -162,6 +159,11 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 	var heal_hp := float(_current_loot.get("heal_hp", 0.0))
 	var heal_stones := int(_current_loot.get("heal_stones", 0))
 
+	# 契约：只有掉到法宝才弹（闸在 WaveSpawner._open_shop）；被误调时直接不展示，别弹空卡
+	if items.is_empty():
+		_is_showing = false
+		return
+
 	# 标题
 	_title_label.text = "◆ 第 %d 波所得 ◆" % wave
 
@@ -172,76 +174,61 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 	for c in _items_row_box.get_children():
 		c.queue_free()
 
-	if items.is_empty():
-		var empty_row := HBoxContainer.new()
-		var lbl_t := Label.new()
-		lbl_t.text = "掉落法宝"
-		GameStyle.label(lbl_t, 13, GameStyle.PAPER_DIM)
-		empty_row.add_child(lbl_t)
+	for i in range(items.size()):
+		var item_id := String(items[i])
+		var def := ItemData.get_def(item_id)
+		var item_name := String(def.get("name", item_id))
+		var tier_num := int(def.get("tier", 1))
+		var tier_col := ItemData.tier_color(tier_num)
+		var refund := ItemData.sell_price(item_id)
+		var no_sell := ItemData.is_no_sell(item_id)
 
-		var lbl_v := Label.new()
-		lbl_v.text = "无"
-		lbl_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lbl_v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		GameStyle.label(lbl_v, 13, GameStyle.PAPER_DIM)
-		empty_row.add_child(lbl_v)
-		_items_row_box.add_child(empty_row)
-	else:
-		for i in range(items.size()):
-			var item_id := String(items[i])
-			var def := ItemData.get_def(item_id)
-			var item_name := String(def.get("name", item_id))
-			var tier_num := int(def.get("tier", 1))
-			var tier_col := ItemData.tier_color(tier_num)
-			var refund := ItemData.sell_price(item_id)
-			var no_sell := ItemData.is_no_sell(item_id)
+		var row := HBoxContainer.new()
+		if i == 0:
+			var lbl_t := Label.new()
+			lbl_t.text = "掉落法宝"
+			GameStyle.label(lbl_t, 13, GameStyle.PAPER_DIM)
+			row.add_child(lbl_t)
+		else:
+			var spacer := Control.new()
+			spacer.custom_minimum_size = Vector2(56, 0)
+			row.add_child(spacer)
 
-			var row := HBoxContainer.new()
-			if i == 0:
-				var lbl_t := Label.new()
-				lbl_t.text = "掉落法宝"
-				GameStyle.label(lbl_t, 13, GameStyle.PAPER_DIM)
-				row.add_child(lbl_t)
-			else:
-				var spacer := Control.new()
-				spacer.custom_minimum_size = Vector2(56, 0)
-				row.add_child(spacer)
+		var val_box := HBoxContainer.new()
+		val_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		val_box.alignment = BoxContainer.ALIGNMENT_END
+		val_box.add_theme_constant_override("separation", 8)
 
-			var val_box := HBoxContainer.new()
-			val_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			val_box.alignment = BoxContainer.ALIGNMENT_END
-			val_box.add_theme_constant_override("separation", 8)
+		# 可点按看详情的法宝名微标
+		var name_lbl := Label.new()
+		name_lbl.text = "【%s】" % item_name
+		name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+		GameStyle.label(name_lbl, 13, tier_col, 0, GameStyle.INK, true)
+		val_box.add_child(name_lbl)
 
-			# 可点按看详情的法宝名微标
-			var name_lbl := Label.new()
-			name_lbl.text = "【%s】" % item_name
-			name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
-			GameStyle.label(name_lbl, 13, tier_col, 0, GameStyle.INK, true)
-			val_box.add_child(name_lbl)
+		# 直接变卖按钮（或不可售卖状态）
+		var sell_btn := Button.new()
+		sell_btn.custom_minimum_size = Vector2(86, 24)
+		val_box.add_child(sell_btn)
 
-			# 直接变卖按钮（或不可售卖状态）
-			var sell_btn := Button.new()
-			sell_btn.custom_minimum_size = Vector2(86, 24)
-			val_box.add_child(sell_btn)
-
-			if no_sell:
-				sell_btn.text = "不可售"
-				sell_btn.disabled = true
-				GameStyle.button(sell_btn, GameStyle.DISABLED_FACE, GameStyle.DISABLED_FACE, 11, GameStyle.PAPER_DIM, 0.0)
-			else:
-				sell_btn.text = "变卖 (+%d)" % refund
-				GameStyle.button(sell_btn, GameStyle.BAD, GameStyle.BAD_DK, 11, GameStyle.PAPER, 0.0)
-				sell_btn.pressed.connect(func() -> void:
-					_sell_item(item_id, sell_btn, refund)
-				)
-
-			# 点按法宝名弹出详情浮层，同样支持在详情卡内变卖
-			GameStyle.tap(name_lbl, func() -> void:
-				_open_item_detail(item_id, name_lbl, sell_btn, refund)
+		if no_sell:
+			sell_btn.text = "不可售"
+			sell_btn.disabled = true
+			GameStyle.button(sell_btn, GameStyle.DISABLED_FACE, GameStyle.DISABLED_FACE, 11, GameStyle.PAPER_DIM, 0.0)
+		else:
+			sell_btn.text = "变卖 (+%d)" % refund
+			GameStyle.button(sell_btn, GameStyle.BAD, GameStyle.BAD_DK, 11, GameStyle.PAPER, 0.0)
+			sell_btn.pressed.connect(func() -> void:
+				_sell_item(item_id, sell_btn, refund)
 			)
 
-			row.add_child(val_box)
-			_items_row_box.add_child(row)
+		# 点按法宝名弹出详情浮层，同样支持在详情卡内变卖
+		GameStyle.tap(name_lbl, func() -> void:
+			_open_item_detail(item_id, name_lbl, sell_btn, refund)
+		)
+
+		row.add_child(val_box)
+		_items_row_box.add_child(row)
 
 	# 回春葫芦
 	if heals > 0:
@@ -263,10 +250,7 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 		_continue_btn.text = "前往金币阁"
 
 	# 提示文字
-	if items.is_empty():
-		_hint_label.text = "[ 点击任意处继续 ]"
-	else:
-		_hint_label.text = "[ 点击法宝看属性 · 可直接点击变卖回收 ]"
+	_hint_label.text = "[ 点击法宝看属性 · 可直接点击变卖回收 ]"
 
 	visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -287,13 +271,6 @@ func popup_summary(loot: Dictionary, auto_dismiss_in_headless: bool = true) -> v
 	_tween.parallel().tween_property(_dim_bg, "modulate:a", 1.0, 0.16)
 	_tween.parallel().tween_property(_card_panel, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-	# 倒计时自动关闭：有法宝掉落时保持常开留给玩家决策，无法宝时 2.2s 自动跳过
-	if items.is_empty():
-		_auto_dismiss_time = AUTO_DISMISS_NORMAL
-		get_tree().create_timer(_auto_dismiss_time, false, false, true).timeout.connect(func():
-			if _is_showing:
-				dismiss()
-		)
 
 func _refresh_gold_label() -> void:
 	var stones := int(_current_loot.get("stones", 0))

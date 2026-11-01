@@ -53,6 +53,7 @@ var _heavy_hit_cd: float = 0.0   ## 大比例掉血镜头回应的独立冷却�
 # 震地状态机
 var _slam_pending: bool = false
 var _slam_timer: float = 0.0
+var _slam_windup_total: float = 0.0  ## 本次震地预警总时长（按半径公平线裁定，进度/姿态读数同源）
 var _slam_ring: AoeTelegraph = null
 
 # 螺旋风暴状态机
@@ -72,7 +73,7 @@ func _sync_cast_pose() -> void:
 		return
 	var pose := 0.0
 	if _slam_pending:
-		pose = clampf(1.0 - _slam_timer / maxf(GameBalance.BOSS_SLAM_WINDUP, 0.001), 0.0, 1.0)
+		pose = clampf(1.0 - _slam_timer / maxf(_slam_windup_total, 0.001), 0.0, 1.0)
 	elif _charge_windup > 0.0:
 		pose = clampf(1.0 - _charge_windup / maxf(GameBalance.BOSS_CHARGE_WINDUP, 0.001), 0.0, 1.0)
 	elif _spiral_active:
@@ -298,7 +299,7 @@ func _process(delta: float) -> void:
 	if _slam_pending:
 		_slam_timer -= delta
 		if _slam_ring != null:
-			_slam_ring.progress = 1.0 - _slam_timer / GameBalance.BOSS_SLAM_WINDUP
+			_slam_ring.progress = 1.0 - _slam_timer / maxf(_slam_windup_total, 0.001)
 		if _slam_timer <= 0.0:
 			_resolve_slam(player)
 		return
@@ -664,7 +665,7 @@ func _tick_sky_fires(delta: float, player: Node2D) -> void:
 			tg.global_position = strike_pos
 			_active_sky_fires.append({
 				"telegraph": tg,
-				"timer": GameBalance.BOSS_SKY_FIRE_WINDUP,
+				"timer": GameBalance.aoe_windup(GameBalance.BOSS_SKY_FIRE_RADIUS),
 				"pos": strike_pos
 			})
 			AudioManager.play_sfx("enemy_fuse", 0.6)
@@ -675,7 +676,7 @@ func _tick_sky_fires(delta: float, player: Node2D) -> void:
 		fire.timer -= delta
 		var tg: AoeTelegraph = fire.telegraph
 		if tg != null and is_instance_valid(tg):
-			tg.progress = 1.0 - fire.timer / GameBalance.BOSS_SKY_FIRE_WINDUP
+			tg.progress = 1.0 - fire.timer / maxf(float(fire.windup), 0.001)
 		if fire.timer <= 0.0:
 			_resolve_single_sky_fire(fire.pos, player)
 			if tg != null and is_instance_valid(tg):
@@ -700,7 +701,9 @@ func _resolve_single_sky_fire(pos: Vector2, player: Node2D) -> void:
 
 func _cast_slam() -> void:
 	_slam_pending = true
-	_slam_timer = GameBalance.BOSS_SLAM_WINDUP
+	# 预警时长按半径公平线裁定（R=175 → ~1.22s）：大圈给足跑出半径的逃生时间
+	_slam_windup_total = GameBalance.aoe_windup(GameBalance.BOSS_SLAM_RADIUS)
+	_slam_timer = _slam_windup_total
 	if _slam_ring == null:
 		_slam_ring = AoeTelegraph.new()
 		_slam_ring.radius = GameBalance.BOSS_SLAM_RADIUS
@@ -807,12 +810,17 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 			var idx: int = total_cnt - _hazard_fields_left
 			var p_pos := player.global_position if (player != null and is_instance_valid(player)) else global_position
 			var p_vel: Vector2 = player.velocity if (player is CharacterBody2D) else Vector2.ZERO
+			# 落点编排（禁区不压顶治理）：首圈沿速度侧向踢出半步，后续圈沿跑向逐个前压时
+			# 保持同侧收拢、站桩时绕身散布 —— 三片呈弧形封位而非包围，身后始终留安全走廊。
+			var side_dir: Vector2 = aoe_zone_side_dir(p_vel)
+			var edge: float = GameBalance.aoe_zone_edge_offset(GameBalance.BOSS_HAZARD_FIELD_RADIUS)
 			var offset := Vector2.ZERO
-			if idx > 1:
-				if p_vel.length_squared() > 100.0:
-					offset = p_vel.normalized() * (60.0 * float(idx - 1)) + Vector2.from_angle(float(idx) * 2.3) * 35.0
-				else:
-					offset = Vector2.from_angle(float(idx) * 2.1) * (80.0 + float(idx) * 25.0)
+			if idx == 0:
+				offset = side_dir * edge
+			elif p_vel.length_squared() > 100.0:
+				offset = p_vel.normalized() * (60.0 * float(idx)) + side_dir * (edge + 35.0 * float(idx - 1))
+			else:
+				offset = side_dir.rotated(float(idx) * 2.1) * (edge + 80.0 + float(idx) * 25.0)
 			var target_pos := p_pos + offset
 			target_pos.x = clampf(target_pos.x, 90.0, 870.0)
 			target_pos.y = clampf(target_pos.y, 90.0, 450.0)
@@ -824,7 +832,7 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 			tg.global_position = target_pos
 			_active_hazard_fields.append({
 				"telegraph": tg,
-				"timer": GameBalance.BOSS_HAZARD_FIELD_WINDUP,
+				"timer": GameBalance.aoe_windup(GameBalance.BOSS_HAZARD_FIELD_RADIUS),
 				"pos": target_pos
 			})
 			AudioManager.play_sfx("enemy_fuse", 0.6)
@@ -835,7 +843,7 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 		field.timer -= delta
 		var tg: AoeTelegraph = field.get("telegraph")
 		if tg != null and is_instance_valid(tg):
-			tg.progress = 1.0 - field.timer / GameBalance.BOSS_HAZARD_FIELD_WINDUP
+			tg.progress = 1.0 - field.timer / maxf(float(field.windup), 0.001)
 		if field.timer <= 0.0:
 			_resolve_single_hazard_field(field.pos)
 			if tg != null and is_instance_valid(tg):

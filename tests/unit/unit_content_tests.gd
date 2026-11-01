@@ -1449,6 +1449,16 @@ func _test_wave_loot_summary_system() -> void:
 	summary.dismiss()
 	_c.check(closed_box[0], "关闭摘要正常发出 summary_closed 信号")
 	summary.queue_free()
+
+	# 2026-11-01：摘要只在掉到商店道具（法宝）时弹；灵石/葫芦属常规收益，不打断结算
+	_c.check(WaveSpawner.should_show_loot_summary({"items": ["jubaopen"]}), "有法宝掉落时弹摘要")
+	_c.check(not WaveSpawner.should_show_loot_summary({"items": [], "stones": 50, "heals": 2}), "只有灵石/葫芦时不弹摘要")
+	_c.check(not WaveSpawner.should_show_loot_summary({}), "无 items 字段时不弹摘要")
+	var plain := WaveLootSummary.new()
+	add_child(plain)
+	plain.popup_summary({"wave": 3, "stones": 50, "items": [], "heals": 1, "heal_hp": 20.0, "heal_stones": 4}, false)
+	_c.check(not plain.visible and not plain._is_showing, "空法宝列表误调摘要时直接不展示")
+	plain.queue_free()
 	GameManager.reset_run()
 
 func _test_elite_drop_and_item_entity_system() -> void:
@@ -1503,5 +1513,27 @@ func _test_elite_drop_and_item_entity_system() -> void:
 	mock_player.queue_free()
 	host.queue_free()
 	GameManager.reset_run()
+
+func _test_jinchan_zero_damage() -> void:
+	var jinchan_scene: PackedScene = load("res://scenes/entities/JinChanEnemy.tscn")
+	var jinchan := jinchan_scene.instantiate() as EnemyBase
+	_c.equals(jinchan.contact_damage, 0.0, "金蟾基础 contact_damage 为 0")
+	_c.check(jinchan.always_flee, "金蟾为逃跑类型 (always_flee)")
+	_c.equals(jinchan.bolt_interval, 0.0, "金蟾无远程攻击")
+	_c.equals(jinchan.charge_interval, 0.0, "金蟾无冲刺攻击")
+	_c.equals(jinchan.slam_interval, 0.0, "金蟾无震地攻击")
+	_c.equals(jinchan.rock_interval, 0.0, "金蟾无落石攻击")
+	_c.equals(jinchan.poison_interval, 0.0, "金蟾无投毒攻击")
+	_c.equals(jinchan.explode_radius, 0.0, "金蟾无自爆攻击")
+
+	# 波次缩放后 contact_damage 依然为 0
+	var scaled_dmg := ceilf(jinchan.contact_damage * GameBalance.enemy_dmg_mult(20) * 1.5 * GameBalance.danger_dmg_mult(5))
+	_c.equals(scaled_dmg, 0.0, "金蟾即使在第20波+极高难度下 contact_damage 仍为 0")
+
+	# 池化出厂重置后 contact_damage 依然为 0
+	jinchan.reset_for_reuse()
+	_c.equals(jinchan.contact_damage, 0.0, "金蟾池化复用出厂重置后 contact_damage 保持为 0")
+
+	jinchan.queue_free()
 
 

@@ -1681,7 +1681,10 @@ func _tick_field_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 			_field_timer -= delta
 			if _field_timer <= 0.0 and dist_sq < 640000.0 and not _pp_stun:
 				_field_timer = field_interval
-				_field_target = player.global_position
+				# 首圈不压顶：沿速度侧向偏出半步（持续领域治理），站桩与直跑玩家都只需侧移脱圈
+				_field_target = player.global_position \
+						+ aoe_zone_side_dir(player.velocity if player is CharacterBody2D else Vector2.ZERO) \
+						* GameBalance.aoe_zone_edge_offset(field_radius)
 				_start_field_cast()
 
 
@@ -1727,7 +1730,10 @@ func _tick_poison_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 			_poison_timer -= delta
 			if _poison_timer <= 0.0 and dist_sq < poison_radius * poison_radius * 6.25:
 				_poison_timer = poison_interval
-				_poison_target = player.global_position
+				# 首潭不压顶：与雷剑域同一条持续领域治理，落点侧向偏出半步
+				_poison_target = player.global_position \
+						+ aoe_zone_side_dir(player.velocity if player is CharacterBody2D else Vector2.ZERO) \
+						* GameBalance.aoe_zone_edge_offset(poison_radius)
 				_start_poison_cast()
 
 
@@ -1920,17 +1926,22 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 		var closest: Vector2 = GameBalance.seg_closest_point(pos_before_move, global_position, target.global_position)
 		if closest.distance_to(target.global_position) <= charge_hit_radius:
 			_charge_hit = true
-			if target is Player:
-				var hp_before_charge: float = target.current_health
-				target.take_damage(contact_damage * charge_damage_mul, global_position)
-				# 石岳/玄武反震：与接触伤害同一个口径，实际被打中才反弹
-				var eff_thorns: float = GameManager.get_effective_thorns()
-				if eff_thorns > 0.0 and target.current_health < hp_before_charge:
-					take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
-			elif target.has_method("take_damage"):
-				target.take_damage(contact_damage * charge_damage_mul)
+			if contact_damage > 0.0:
+				if target is Player:
+					var hp_before_charge: float = target.current_health
+					target.take_damage(contact_damage * charge_damage_mul, global_position)
+					# 石岳/玄武反震：与接触伤害同一个口径，实际被打中才反弹
+					var eff_thorns: float = GameManager.get_effective_thorns()
+					if eff_thorns > 0.0 and target.current_health < hp_before_charge:
+						take_damage(contact_damage * eff_thorns, Vector2.ZERO, false)
+				elif target.has_method("take_damage"):
+					target.take_damage(contact_damage * charge_damage_mul)
 
 	# 4. 接触伤害判定：撞到谁咬谁（玩家走无敌帧/反震那套，灵兽走自己的受击无敌帧）
+	# 若 contact_damage <= 0.0（如金蟾/金蝉），不具备攻击性，直接跳过碰撞伤害判定
+	if contact_damage <= 0.0:
+		return
+
 	# thorns 读侧备忘（2026-10-17 性能专项）：站定护甲钩子走 item_hook_sum 缓存，但接触结算
 	# 每碰撞体都查一遍仍属重复读——同一物理帧多敌贴身时（群怪围玩家）每敌一次 Dictionary
 	# 链。挪到循环外读一次（站定态 60Hz 内不会变，失效点在 add_item/sell_item）。
@@ -2883,6 +2894,29 @@ func _clear_poison_ring() -> void:
 		_poison_ring.queue_free()
 	_poison_ring = null
 
+# ---------------- AoE 预警公平线（画多大就给多久，2026-10-31 治理） ----------------
+
+## AoE 预警时长按半径统一裁定（公平线公式见 BalanceCombat.aoe_windup）。
+## 在半径定档后调用：刷怪口 _scale_to_wave 末尾（毒潭半径随回合公式落定）与
+## 精英变异改半径之后；池化复用先回滚出厂快照再经 _scale_to_wave 重算，天然自洽。
+## 震地/落石/落域/毒潭四条支路的进度算式都除以对应 windup 字段，此处改字段即全量生效。
+func refresh_aoe_windups() -> void:
+	if slam_radius > 0.0:
+		slam_windup = GameBalance.aoe_windup(slam_radius)
+	if rock_radius > 0.0:
+		rock_windup = GameBalance.aoe_windup(rock_radius)
+	if field_radius > 0.0:
+		field_windup = GameBalance.aoe_windup(field_radius)
+	if poison_radius > 0.0:
+		poison_windup = GameBalance.aoe_windup(poison_radius)
+
+## 持续领域首圈落点的侧向：跑动玩家沿速度正交侧踢出，站桩玩家给固定斜向。
+## 搭配 aoe_zone_edge_offset 把「压顶圈」变「贴边圈」（BossEnemy 连环禁区同用）。
+func aoe_zone_side_dir(velocity: Vector2) -> Vector2:
+	if velocity.length_squared() > 100.0:
+		return velocity.orthogonal().normalized()
+	return Vector2.from_angle(1.05)
+
 # ---------------- 精英变异（Mutation） ----------------
 
 func _enter_mutation() -> void:
@@ -2892,7 +2926,6 @@ func _enter_mutation() -> void:
 			move_speed *= GameBalance.MUT_GOLEM_SPEED_MULT
 			slam_interval = GameBalance.MUT_GOLEM_SLAM_INTERVAL
 			slam_radius = GameBalance.MUT_GOLEM_SLAM_RADIUS
-			slam_windup = GameBalance.MUT_GOLEM_SLAM_WINDUP
 			slam_dmg_mult = GameBalance.MUT_GOLEM_SLAM_DMG_MULT
 			slam_hits = GameBalance.MUT_GOLEM_SLAM_HITS
 			slam_echo_gap = GameBalance.MUT_GOLEM_SLAM_ECHO_GAP
@@ -2938,7 +2971,6 @@ func _enter_mutation() -> void:
 			rock_interval = GameBalance.MUT_XINGPAN_ROCK_INTERVAL
 			rock_count = 3
 			rock_radius = 85.0
-			rock_windup = 0.85
 			rock_dmg_mult = 0.9
 			rock_spread = 135.0
 			rock_lead = 0.30
@@ -2961,6 +2993,8 @@ func _enter_mutation() -> void:
 		_:
 			return
 	_mutated = true
+	# 变异改过半径（铁甲震地 115→130、万毒禁区扩域等）后按公平线重裁预警时长
+	refresh_aoe_windups()
 	anim_sprite.modulate = Color(1.5, 0.65, 0.6)
 	play_squash(Vector2(1.3, 0.75), 0.3)
 	GameManager.announcement_triggered.emit("◆ 精英狂暴化 ◆")

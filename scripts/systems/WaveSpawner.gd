@@ -652,12 +652,18 @@ func _drain_magnet_queue() -> void:
 			gem.magnet_to(player)
 	_magnet_queue = _magnet_queue.slice(batch)
 
+## 摘要弹出闸：只有本回合真掉到商店道具（法宝）才值得打断结算。
+## 灵石/葫芦属于常规收益，玩家从 HUD 与下一屏就能看到，不再弹卡（2026-11-01 用户口径）。
+static func should_show_loot_summary(loot: Dictionary) -> bool:
+	var items: Array = loot.get("items", [])
+	return not items.is_empty()
+
 func _open_shop() -> void:
 	if _opening_shop:
 		return
 	_opening_shop = true
 	var loot := GameManager.finalize_wave_loot()
-	if GameManager.wave_loot_summary_requested.get_connections().size() > 0:
+	if should_show_loot_summary(loot) and GameManager.wave_loot_summary_requested.get_connections().size() > 0:
 		GameManager.wave_loot_summary_requested.emit(loot)
 		await GameManager.wave_loot_summary_finished
 	_opening_shop = false
@@ -995,6 +1001,9 @@ func _scale_to_wave(enemy: EnemyBase) -> void:
 		if enemy.poison_interval > 0.0:
 			enemy.poison_damage = GameBalance.poison_area_damage(wave_number)
 			enemy.poison_radius = GameBalance.poison_radius(wave_number)
+
+	# AoE 预警时长按半径公平线统一裁定（画多大给多久；变异再改半径时 _enter_mutation 末尾会重裁）
+	enemy.refresh_aoe_windups()
 
 ## 固定 Boss 关：生命/伤害按 GameBalance 回合公式注入，称号与演出随关卡推进。
 ## 登场演出（2026-10-14）：2 秒魔轮凝聚异象 → 破阵弹入，血条随本体 _ready 上屏。

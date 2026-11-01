@@ -9,34 +9,35 @@
 
 - **引擎** Godot 4.7（桌面 Forward+，Android 端 gl_compatibility）/ GDScript，主场景 `res://scenes/main/Main.tscn`
 - **平台** Android APK（`export_presets.cfg` arm64-v8a，包名 `com.favo.qxiuxian`），桌面调试 960×540；另有 Web 导出预设（产物进宣传站 `site/dist/`，归 `web-deploy` skill 管）
-- **版本** 见 [Version.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/Version.gd)，远端 GitHub `favoroo/Q-xiuxian` + Gitee `favo9/q-xiuxian`
-- **物理** Jolt，6 层碰撞层（1 world / 2 player / 3 enemies / 4 player_projectiles / 5 loot / 6 interactables），勿改
-- **核心循环** 选人 → 选武器 → 20 波战斗（`GameManager.VICTORY_WAVE`）→ 回合后统一悟道加点（一屏 `UPGRADE_OFFER_COUNT`=5 个候选、每回合 1 次免费刷新）→ 回合间金币阁（`SHOP_BASE_SLOTS`=5 格）→ 胜负结算
+- **版本** 见 [Version.gd](scripts/autoload/Version.gd)，远端 GitHub `favoroo/Q-xiuxian` + Gitee `favo9/q-xiuxian`
+- **物理** 2D 内置物理（`3d/physics_engine` 配的 Jolt 只作用于 3D，本项目 2D 不看它）；6 层碰撞层（1 world / 2 player / 3 enemies / 4 player_projectiles / 5 loot / 6 interactables），勿改
+- **核心循环** 选人 → 选武器 → 无限波次战斗（`GameManager.MILESTONE_WAVE`=20 为「破境波」，**无通关、阵亡才结算**）→ 回合后统一悟道加点（一屏 `UPGRADE_OFFER_COUNT`=5 个候选、每回合 1 次免费刷新）→ 回合间金币阁（`SHOP_BASE_SLOTS`=5 格）
 
 ## 快速定位
 
 | 要做什么 | 去哪里看 |
 |---------|---------|
-| 调数值/公式 | `scripts/systems/` 的 `Balance*.gd` 主题类（Wave/Economy/Combat/Targeting/BuildFilter/Recommend/SpiritBeast/SpiritPet/Chest，全 `static` 纯函数）；[GameBalance.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/GameBalance.gd) 只是无状态转发门面，新公式进主题类、别进门面 |
-| 调全局状态/上限常量 | [GameManager.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/GameManager.gd) 顶部常量区 |
-| 调悟道加点表 | [UpgradeData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/UpgradeData.gd)（`"apply"` 字典是生效幅度唯一真话） |
-| 改武器/角色/道具/技能数据 | `scripts/data/`（[WeaponData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/WeaponData.gd) / [CultivatorData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/CultivatorData.gd) / [ItemData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/ItemData.gd) / [SkillData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/SkillData.gd)） |
-| 改图鉴/成就/属性说明数据 | `scripts/data/`（[ManualData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/ManualData.gd) / [AchievementData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/AchievementData.gd) / [StatInfoData.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/data/StatInfoData.gd)） |
-| 改回合后加点/商店节奏 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) `_enter_wave_break` + [LevelUpDialog.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/LevelUpDialog.gd) + [WaveShop.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/WaveShop.gd) |
-| 改刷怪/回合配比 | [WaveSpawner.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/WaveSpawner.gd) |
-| 改玩家/敌人/Boss/场景交互物 | `scripts/entities/`（[Player.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/Player.gd) / [EnemyBase.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/EnemyBase.gd) / [BossEnemy.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/BossEnemy.gd) / [BlessingObelisk.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/BlessingObelisk.gd) / [SpiritChest.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/entities/SpiritChest.gd)） |
-| 改武器/弹丸追踪 | `scripts/weapons/`（[FloatingWeapon.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/FloatingWeapon.gd) / [BladeProjectile.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/BladeProjectile.gd)；七种攻击行为实现与手感常量在 `scripts/weapons/handlers/` 静态模块） |
-| 重绘/新增武器器形 | `scripts/weapons/shapes/` 族模块（[WeaponShapeLibrary.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/weapons/shapes/WeaponShapeLibrary.gd) 按 `_FAMILIES` 优先级调度；只改对应族文件，族模块一律按路径 preload **不加 `class_name`**，别动库与宿主 `ProceduralWeaponRenderer`） |
-| 改打击感/震屏 | [JuiceEffect.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/systems/JuiceEffect.gd) → `GameFeel.gd` → [SmoothCamera.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/controllers/SmoothCamera.gd)（创伤预算闸在 `BalanceCombat.trauma_grant`；受击火花/死亡爆散已整体下线，别顺手复活） |
-| 改 UI 样式/配色/字体 | [GameStyle.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/ui/GameStyle.gd)（**唯一取色入口**） |
-| 改音效/BGM | [AudioManager.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/AudioManager.gd) |
-| 改应用内更新 | [UpdateManager.gd](file:///Users/a1/Documents/01Code/Godot/t-1/scripts/autoload/UpdateManager.gd) |
-| 烘焙音效 | [tools/bake_sfx.py](file:///Users/a1/Documents/01Code/Godot/t-1/tools/bake_sfx.py)（media-gen 不含 SFX） |
-| 子集化字体 | [tools/subset_fonts.py](file:///Users/a1/Documents/01Code/Godot/t-1/tools/subset_fonts.py) + `font_charset.txt` |
-| 生成美术/语音/BGM | [.agents/skills/media-gen/](file:///Users/a1/Documents/01Code/Godot/t-1/.agents/skills/media-gen/SKILL.md) |
+| 调数值/公式 | `scripts/systems/` 的 `Balance*.gd` 主题类（Wave/Economy/Combat/Targeting/BuildFilter/SpiritBeast/SpiritPet/Chest/Chain，全 `static` 纯函数）；[GameBalance.gd](scripts/systems/GameBalance.gd) 只是无状态转发门面，新公式进主题类、别进门面 |
+| 调全局状态/上限常量 | [GameManager.gd](scripts/autoload/GameManager.gd) 顶部常量区 |
+| 调悟道加点表 | [UpgradeData.gd](scripts/data/UpgradeData.gd)（`"apply"` 字典是生效幅度唯一真话） |
+| 改武器/角色/道具/技能数据 | `scripts/data/`（[WeaponData.gd](scripts/data/WeaponData.gd) / [CultivatorData.gd](scripts/data/CultivatorData.gd) / [ItemData.gd](scripts/data/ItemData.gd) / [SkillData.gd](scripts/data/SkillData.gd)） |
+| 改图鉴/成就/属性说明数据 | `scripts/data/`（[ManualData.gd](scripts/data/ManualData.gd) / [AchievementData.gd](scripts/data/AchievementData.gd) / [StatInfoData.gd](scripts/data/StatInfoData.gd)） |
+| 改回合后加点/商店节奏 | [WaveSpawner.gd](scripts/systems/WaveSpawner.gd) `_enter_wave_break` + [LevelUpDialog.gd](scripts/ui/LevelUpDialog.gd) + [WaveShop.gd](scripts/ui/WaveShop.gd) |
+| 改刷怪/回合配比 | [WaveSpawner.gd](scripts/systems/WaveSpawner.gd) |
+| 改玩家/敌人/Boss/场景交互物 | `scripts/entities/`（[Player.gd](scripts/entities/Player.gd) / [EnemyBase.gd](scripts/entities/EnemyBase.gd) / [BossEnemy.gd](scripts/entities/BossEnemy.gd) / [BlessingObelisk.gd](scripts/entities/BlessingObelisk.gd) / [SpiritChest.gd](scripts/entities/SpiritChest.gd)） |
+| 改武器/弹丸追踪 | `scripts/weapons/`（[FloatingWeapon.gd](scripts/weapons/FloatingWeapon.gd) / [BladeProjectile.gd](scripts/weapons/BladeProjectile.gd)；七种攻击行为实现与手感常量在 `scripts/weapons/handlers/` 静态模块） |
+| 重绘/新增武器器形 | `scripts/weapons/shapes/` 族模块（[WeaponShapeLibrary.gd](scripts/weapons/shapes/WeaponShapeLibrary.gd) 按 `_FAMILIES` 优先级调度；只改对应族文件，族模块一律按路径 preload **不加 `class_name`**，别动库与宿主 `ProceduralWeaponRenderer`） |
+| 改打击感/震屏 | [JuiceEffect.gd](scripts/systems/JuiceEffect.gd) → `GameFeel.gd` → [SmoothCamera.gd](scripts/controllers/SmoothCamera.gd)（创伤预算闸在 `BalanceCombat.trauma_grant`；受击火花/死亡爆散已整体下线，别顺手复活） |
+| 改 UI 样式/配色/字体 | [GameStyle.gd](scripts/ui/GameStyle.gd)（**唯一取色入口**） |
+| 改音效/BGM | [AudioManager.gd](scripts/autoload/AudioManager.gd) |
+| 改应用内更新 | [UpdateManager.gd](scripts/autoload/UpdateManager.gd) |
+| 烘焙音效 | [tools/bake_sfx.py](tools/bake_sfx.py)（media-gen 不含 SFX） |
+| 子集化字体 | [tools/subset_fonts.py](tools/subset_fonts.py) + `font_charset.txt` |
+| 生成美术/语音/BGM | [.agents/skills/media-gen/](.agents/skills/media-gen/SKILL.md) |
 | 查历史改动 | [CHANGELOG.md](CHANGELOG.md)（已纳入版本控制） |
-| 发版/打 APK | [.agents/skills/xiuxian-release/](file:///Users/a1/Documents/01Code/Godot/t-1/.agents/skills/xiuxian-release/SKILL.md)（管 Android）；Web 导出/部署用 [.agents/skills/web-deploy/](file:///Users/a1/Documents/01Code/Godot/t-1/.agents/skills/web-deploy/SKILL.md)，两者互不干扰 |
-| 角色程序化美术 | [.agents/skills/hollow-cultivator/](file:///Users/a1/Documents/01Code/Godot/t-1/.agents/skills/hollow-cultivator/SKILL.md) 流水线规范；实现落 `scripts/entities/procedural_cultivator/` 等 procedural_* 子目录 |
+| 特效优化任务（VFX 多 Agent） | [progress.md](progress.md)（进度**唯一真话源**，开工前必读第一节协作协议）+ [vfx-optimization-plan.md](vfx-optimization-plan.md)（任务目标/步骤/验收） |
+| 发版/打 APK | [.agents/skills/xiuxian-release/](.agents/skills/xiuxian-release/SKILL.md)（管 Android）；Web 导出/部署用 [.agents/skills/web-deploy/](.agents/skills/web-deploy/SKILL.md)，两者互不干扰 |
+| 角色程序化美术 | [.agents/skills/hollow-cultivator/](.agents/skills/hollow-cultivator/SKILL.md) 流水线规范；实现落 `scripts/entities/procedural_cultivator/` 等 procedural_* 子目录 |
 
 ## 分层铁律
 
@@ -112,9 +113,9 @@ push/PR 到 main 会触发 CI 门禁（`.github/workflows/tests.yml` 跑 `--core
 本项目常由多个 Agent 并行修改，按此约定避让以减少文件冲突：
 
 - **共享串行文件**（同一时间全局只允许一个 Agent 改，改前先 `git status --short` 看是否已被占用）：`export_presets.cfg`、`project.godot`、`scripts/autoload/Version.gd`、`assets_raw/manifest.jsonl`、`tools/font_charset.txt` + `fonts/MiSans-*.woff2`、`scripts/ui/GameStyle.gd`（唯一取色入口）。
-- **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。2026-10-24 拆分后 `FloatingWeapon`（行为已拆 handlers/，本体只留轨道/索敌/冷却分发/开火视觉状态机）、`Player`（技能实现已拆 player_skills/，`_physics_process` 已切成 `_tick_*` 切片）、`EnemyBase`（死亡解析已拆 enemy_death/，`_tick_behaviors` 已切成 15 个敌型 `_tick_*`）冲突面显著缩小，改行为/技能/死亡优先去对应子目录。武器侧三件套（`FloatingWeapon` / `BladeProjectile` / `ThunderBurst` / `SunOrb`）是第二冲突区，五行异常施加一律走 `scripts/weapons/ProcStatus.gd`，不再手写 `has_method` 三行块。`tests/unit_runner.gd` 已拆成纯调度器，不再是热区；单测热区在 `tests/unit/unit_content_tests.gd` / `unit_infra_tests.gd`。
-- **static 伪 autoload**（`scripts/autoload/` 下 `extends RefCounted` 的 static 纯类，project.godot 未注册，经 `GameManager` 薄壳转发调用）：`StatSystem` / `ShopSystem` / `GameFeel` / `RunSave` / `RunReset` / `ProgressStore` / `CultivatorSystem` / `PetSystem` / `SynergySystem` / `RecommendSystem` / `AllocSession` / `WeaponInventory`。新子系统照这个模式建新文件，别往 `GameManager.gd` 里堆。
-- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 金币阁卡工厂与槽位；`scripts/ui/levelup/` 悟道卡工厂（`LevelUpCardFactory`，宿主 LevelUpDialog 只留面板流程）；`scripts/ui/stats/` 属性面板 builder；`scripts/ui/codex/` 图鉴卡工厂与敌形捕获；`scripts/ui/author/` 作者面板；`scripts/weapons/shapes/` 武器形状族模块；`scripts/weapons/handlers/` 攻击行为静态模块（Melee/Sweep/Projectile/Burst/Turret/Channel + 共用 StrikeFx，首参传宿主武器、鸭类型访问，行为常量随实现走）；`scripts/entities/player_skills/` 技能实现（ActiveSkills 主动五连 / BurstSkills 周身爆发四件套）；`scripts/entities/enemy_death/` 死亡解析（EnemyDeathFx 的 feedback/drops/corpse）；`scripts/entities/procedural_cultivator/` `procedural_enemy/` `procedural_loot/` 程序化渲染族；`scripts/systems/Balance*.gd` 数值公式；`scripts/autoload/StatSystem.gd` 属性落地与读侧投影（item_hook_sum / 属性字典）；`tests/unit/` 单测主题模块（wave/combat/economy/upgrade/targeting/content/infra/consistency/spiritbeast/spiritpet/flock 共 11 个）。
+- **核心热区大文件**（`GameManager.gd` / `Player.gd` / `EnemyBase.gd` / `GameHUD.gd` / `WaveShop.gd` / `LevelUpDialog.gd`）历史共改率最高，改前必须确认无人占用；新需求优先落子目录新文件，不再往大文件里堆。`FloatingWeapon` 行为在 handlers/（本体只留轨道/索敌/冷却分发/开火视觉状态机）、`Player` 技能在 player_skills/、`EnemyBase` 死亡解析在 enemy_death/，改行为/技能/死亡优先去对应子目录。武器侧三件套（`FloatingWeapon` / `BladeProjectile` / `ThunderBurst` / `SunOrb`）是第二冲突区，五行异常施加一律走 `scripts/weapons/ProcStatus.gd`，不再手写 `has_method` 三行块。`tests/unit_runner.gd` 已拆成纯调度器，不再是热区；单测热区在 `tests/unit/unit_content_tests.gd` / `unit_infra_tests.gd`。
+- **static 伪 autoload**（`scripts/autoload/` 下 `extends RefCounted` 的 static 纯类，project.godot 未注册，经 `GameManager` 薄壳转发调用）：`StatSystem` / `ShopSystem` / `GameFeel` / `RunSave` / `RunReset` / `ProgressStore` / `CultivatorSystem` / `PetSystem` / `SynergySystem` / `AllocSession` / `WeaponInventory`。新子系统照这个模式建新文件，别往 `GameManager.gd` 里堆。
+- **子目录归属**（拆分落位后的归属约定）：`scripts/ui/hud/` 战斗 HUD 控件；`scripts/ui/shop/` 金币阁卡工厂与槽位；`scripts/ui/levelup/` 悟道卡工厂（`LevelUpCardFactory`，宿主 LevelUpDialog 只留面板流程）；`scripts/ui/stats/` 属性面板 builder；`scripts/ui/codex/` 图鉴卡工厂与敌形捕获；`scripts/ui/author/` 作者面板；`scripts/weapons/shapes/` 武器形状族模块；`scripts/weapons/handlers/` 攻击行为静态模块（Melee/Sweep/Projectile/Burst/Turret/Channel + 共用 StrikeFx，首参传宿主武器、鸭类型访问，行为常量随实现走）；`scripts/entities/player_skills/` 技能实现（ActiveSkills 主动五连 / BurstSkills 周身爆发四件套）；`scripts/entities/enemy_death/` 死亡解析（EnemyDeathFx 的 feedback/drops/corpse）；`scripts/entities/procedural_cultivator/` `procedural_enemy/` `procedural_loot/` 程序化渲染族；`scripts/systems/Balance*.gd` 数值公式；`scripts/autoload/StatSystem.gd` 属性落地与读侧投影（item_hook_sum / 属性字典）；`tests/unit/` 单测主题模块（wave/combat/economy/upgrade/targeting/content/infra/consistency/spiritbeast/spiritpet/flock/super 共 12 个）。
 - `CHANGELOG.md` 为追加式，正常往上加即可，冲突面小。
 
 ## 变更日志（每次改代码必读必写）
