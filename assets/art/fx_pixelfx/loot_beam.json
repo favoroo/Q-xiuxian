@@ -1,0 +1,20 @@
+{
+  "id": "pickups/loot-beam",
+  "out_name": "loot_beam",
+  "frame_size": [
+    96,
+    176
+  ],
+  "pivot": [
+    48,
+    162
+  ],
+  "anchor": "bottom",
+  "scale": 0.7,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "gold",
+  "png_bytes": 202741,
+  "vram_kb": 1848
+}

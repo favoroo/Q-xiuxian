@@ -16,8 +16,12 @@ extends Node
 ##      宝箱/灵草这类 3 参 take_damage 的交互物不得进链电目标表（5 参调用会直接报错）。
 ##   ⑦ 链电伤害跳字是独立条：combo_key=-1 不进同目标聚合表、用身份色渲染。
 ##   ⑧ 链电传导弧 allow_branch=false：不甩空气分支电弧。
-##   ⑨ 天罚雷柱同一条口径：贯顶雷柱禁分支/余韵（空气里只许一条干净主线），
-##      落点补缠身电；伤害走独立跳字（不并进武器暴击主跳字）。
+##   ⑨ 天罚去线条化（2026-11-01）：不再自天顶拉 280px 折线（「空气里凭空一道线」的本体），
+##      改在目标身位点亮贴身光柱 + 落点环（不生成任何 LightningBolt）；
+##      伤害仍走独立跳字（不并进武器暴击主跳字）。
+##   ⑩ 全链路去线条化（2026-11-01）：ThunderBurst 不再立 200px 天空雷柱 + 顶端电弧，
+##      BURST 出膛不再拉器口→落点引雷折线（9 把范围武器原先全先劈一道闪电），
+##      雷系落点统一由贴身光柱承担。
 ##
 ## 运行: godot --headless --path . res://tests/SuperVfxCheck.tscn
 ## 退出码 0 且末行 SUPER_VFX_RESULT: ALL PASS
@@ -30,7 +34,8 @@ extends Node
 ##   - 链电改回「从玩家/尸体向敌人画入站长线」或首跳跳过自身 ⇒ ⑥ 报红
 ##   - EnemyBase 跳字改回统一 combo_key=instance_id ⇒ ⑦ 报红
 ##   - activate 默认对链电放行分支 ⇒ ⑧ 报红
-##   - sky_bolt 的 _draw_bolt 漏传 allow_branch=false / 漏传 tint ⇒ ⑨ 报红
+##   - sky_bolt 改回自 280px 天上拉折线（或重新调 spawn_body_arcs）⇒ ⑨ 报红
+##   - ThunderBurst 改回 200px 天空雷柱 / BurstHandler 改回引雷折线 ⇒ ⑩ 报红
 
 const EPS := 0.0001
 const MAX_WAIT_FRAMES := 180
@@ -58,6 +63,7 @@ func _run() -> void:
 	_case_chain_number_standalone()
 	_case_chain_bolt_no_air()
 	await _case_sky_bolt_no_air()
+	await _case_burst_no_sky_line()
 	await _case_gates_independent()
 	await _case_tint_reaches_core()
 	_case_thorns_radius_shared()
@@ -200,8 +206,9 @@ func _case_chain_bolt_no_air() -> void:
 	_c.check(bolt._line_core.visible, "allow_branch=false 时主干芯线照常绘制")
 	_c.check(not bolt._line_branch_core.visible, "allow_branch=false 时不甩空气分支电弧")
 
-## ⑨ 天罚电刀化：贯顶雷柱与落点缠身电都禁分支/余韵（空气里只许一条干净主线），
-## 且这份伤害走独立跳字 —— 旧写法三段都会漏（分支由默认值放行；伤害并进武器暴击主跳字）。
+## ⑨ 天罚去线条化：不再自天顶拉 280px 折线（空气里那一道线的本体），
+## 改在目标身位点亮贴身光柱 + 落点环；伤害仍走独立跳字。
+## 旧写法两条都会漏：雷柱出现在空气里；伤害并进武器暴击主跳字。
 func _case_sky_bolt_no_air() -> void:
 	# 先等上一条用例（默认放行分支的 activate）的电弧演完回池，
 	# 否则统计会把旧弧的分支算到本次头上（headless 的 Tween 与墙钟不同步，按墙钟等）
@@ -217,31 +224,103 @@ func _case_sky_bolt_no_air() -> void:
 	GameFeel.invalidate_memo()
 	var combos_before: int = DamageNumber.combo_count()
 	var nums_before: int = DamageNumber.active_count
+	var bolts_before := _visible_bolt_count()
+	var strikes_before := _sky_strikes().size()
+	var target_pos: Vector2 = e.global_position
 
 	ChainLightning.sky_bolt(_world, e, 12.0)
 
 	_c.equals(DamageNumber.active_count - nums_before, 1, "天罚伤害独立出一条跳字")
 	_c.equals(DamageNumber.combo_count(), combos_before,
 		"天罚伤害不写入同目标聚合表（不并进武器暴击主跳字）")
-	var drawn := 0
-	var branched := 0
-	var host: Node = LightningBolt._host
-	if host != null and is_instance_valid(host):
-		for child in host.get_children():
-			var b := child as LightningBolt
-			if b == null or not b.visible or not b._line_core.visible:
-				continue
-			drawn += 1
-			if b._line_branch_core.visible:
-				branched += 1
-	_c.check(drawn >= 2, "天罚画出贯顶雷柱 + 落点缠身电（实得 %d 条）" % drawn)
-	_c.equals(branched, 0, "天罚不甩空气分支电弧 / 空气余韵")
+	# 天罚不许再产生任何 LightningBolt —— 旧写法那条 280px 天空折线就是「空气里的线」本体
+	_c.equals(_visible_bolt_count() - bolts_before, 0,
+		"天罚不生成任何空中折线（LightningBolt 零新增）")
+	# 身位光柱必须落在目标身上：数量 +1、位置与目标重合
+	var strikes := _sky_strikes()
+	_c.equals(strikes.size() - strikes_before, 1, "天罚在目标身位点亮一道落雷光柱")
+	if strikes.size() > strikes_before:
+		var fx: JuiceEffect = strikes[strikes.size() - 1]
+		_c.near(fx.global_position.distance_to(target_pos), 0.0, 0.5,
+			"天罚光柱钉在目标身位（不出身、不飘空气）")
 
 	SettingsManager.set_val(&"display", &"damage_numbers", saved_numbers, false)
 	GameFeel.invalidate_memo()
 	if is_instance_valid(e):
 		e.queue_free()
 	await get_tree().process_frame
+
+## 当前可见的 LightningBolt 条数（天罚必须零新增：空中折线全部下线）
+func _visible_bolt_count() -> int:
+	var n := 0
+	var host: Node = LightningBolt._host
+	if host == null or not is_instance_valid(host):
+		return n
+	for child in host.get_children():
+		var b := child as LightningBolt
+		if b != null and b.visible and b._line_core.visible:
+			n += 1
+	return n
+
+## 当前活跃的贴身落雷光柱（JuiceEffect 池里的 SKY_STRIKE）
+func _sky_strikes() -> Array:
+	var out: Array = []
+	if JuiceEffect._host == null or not is_instance_valid(JuiceEffect._host):
+		return out
+	for child in JuiceEffect._host.get_children():
+		var fx := child as JuiceEffect
+		if fx != null and fx.visible and fx.effect_type == JuiceEffect.EffectType.SKY_STRIKE:
+			out.append(fx)
+	return out
+
+## ⑩ 五雷/BURST 落雷也去线条化（2026-11-01）：
+##   a) 落点不再立 200px 天空雷柱 + 顶端电弧（ThunderBurst 不得再有 SkyBeam/TopArc 子线）；
+##   b) 器口→落点不再拉 LightningBolt 引雷线（9 把范围武器原先全先劈一道闪电）；
+##   c) 雷系落点改由贴身光柱承担（SKY_STRIKE 数量 +1）。
+## 旧写法三条都会漏：雷柱是空气里的竖线，引雷线是横穿屏幕的折线（还带随机分支/余韵）。
+func _case_burst_no_sky_line() -> void:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 160:
+		await get_tree().process_frame
+	var strikes_before := _sky_strikes().size()
+	var bolts_before := _visible_bolt_count()
+	# 起手先直接量 ThunderBurst 本体：activate 后不许再存在任何 Line2D 子节点
+	var tb_scene: PackedScene = load("res://scenes/weapons/ThunderBurst.tscn")
+	var tb: ThunderBurst = ThunderBurst.acquire(_world, tb_scene)
+	tb.global_position = get_viewport().get_visible_rect().get_center()
+	tb.radius = 70.0
+	tb.damage = 1.0
+	tb.burst_kind = "thunder"
+	tb.activate()
+	var sky_lines := 0
+	for child in tb.get_children():
+		if child is Line2D:
+			sky_lines += 1
+	_c.equals(sky_lines, 0, "ThunderBurst 不再挂天空雷柱/顶端电弧折线")
+	_c.equals(_sky_strikes().size() - strikes_before, 1, "雷系落点改由贴身光柱承担（SKY_STRIKE +1）")
+	await get_tree().process_frame
+	tb._recycle()
+
+	# 再量整条出膛链路：假武器走 BurstHandler.spawn_lightning，不许产生任何 LightningBolt
+	var w := _FakeBurstWeapon.new()
+	_world.add_child(w)
+	BurstHandler.spawn_lightning(w, get_viewport().get_visible_rect().get_center())
+	_c.equals(_visible_bolt_count() - bolts_before, 0,
+		"BURST 出膛不再拉器口→落点引雷折线（LightningBolt 零新增）")
+	w.queue_free()
+	await get_tree().process_frame
+
+## BURST 出膛链路的最小假武器：只提供 spawn_lightning 读到的字段（鸭类型）
+class _FakeBurstWeapon extends Node2D:
+	var star: int = 1
+	var burst_radius: float = 70.0
+	var weapon_def_id: String = "jinlei_zhui"
+	var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
+	var def: Dictionary = {}
+	func _range_mult() -> float:
+		return 1.0
+	func _final_damage() -> float:
+		return 10.0
 
 ## ② 演出闸按路径独立：紫电与雷劫在同一毫秒各触发一次，两条都必须放行
 func _case_gates_independent() -> void:

@@ -4,7 +4,7 @@ extends Node2D
 ## 五雷法牌的落雷爆发：命中范围内所有敌人一次，短暂闪光后回池休眠
 ##
 ## 对象池（2026-10-11 第 6 波卡顿优化，照 EnemyBolt/AstralGem 模式）：雷法连发时
-## Node2D + PointLight2D + 雷柱子节点整套 instantiate/queue_free 归零，灯体随复用免重建。
+## Node2D + PointLight2D 整套 instantiate/queue_free 归零，灯体随复用免重建。
 ## 兼容约定：出膛方必须走 acquire(parent, scene) → 逐项写字段 → activate()（唯一调用方
 ## FloatingWeapon._spawn_lightning）；_ready 只建常驻设施不触发爆发，裸 add_child 不再自动起爆。
 
@@ -14,7 +14,7 @@ var knockback_base: float = 200.0
 ## 落点闪光色（由 FloatingWeapon 从 WeaponData.burst_tint 下发）：光环直径仍 == 判定直径，只换色相
 var tint: Color = Color(1.0, 0.95, 0.6)
 ## 落点形态（由 FloatingWeapon 从 WeaponData.burst_kind 下发，须在 activate() 前赋值）：
-## thunder（默认，天雷柱）/ fire_rain 火雨 / frost 冰刺 / sonic 音波 / drum 鼓震 / earth 地裂 / seal 坠印扬尘
+## thunder（默认，落点贴身雷光柱）/ fire_rain 火雨 / frost 冰刺 / sonic 音波 / drum 鼓震 / earth 地裂 / seal 坠印扬尘
 var burst_kind: String = "thunder"
 ## 落点音 key（由 FloatingWeapon 从 WeaponData.sfx_impact 下发，须在 activate() 前赋值）
 var sfx_impact_key: String = ""
@@ -77,41 +77,8 @@ var _struck: bool = false
 var _has_light: bool = false
 ## 落点形态渲染器：常驻子节点随池复用（activate 重铺字段），不随每发 instantiate
 var _kind_fx: BurstKindFx = null
-## 雷柱与顶端电弧：常驻子节点随池复用（2026-10-15 去分配：原先每发 new 1 Line2D + 1 Curve
-## + 3 Line2D 再 queue_free，雷法连发时是明确的每帧分配源；照 LightningBolt 一次建、activate 重铺）
-var _beam: Line2D = null
-var _beam_curve: Curve = null
-var _arcs: Array[Line2D] = []
 
-func _ready() -> void:
-	# 常驻设施（FxSprite/PointLight2D）由场景给出；爆发行为全部在 activate()，
-	# 池化首建时字段尚未写入，_ready 不读任何业务字段；休眠池关闭物理帧
-	set_physics_process(false)
-	_build_beam_nodes()
-
-## 雷柱与顶端电弧一次建好（_ready 常驻设施），activate 只重铺几何与透明度
-func _build_beam_nodes() -> void:
-	_beam = Line2D.new()
-	_beam.name = "SkyBeam"
-	_beam.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	_beam.end_cap_mode = Line2D.LINE_CAP_ROUND
-	_beam_curve = Curve.new()
-	_beam_curve.add_point(Vector2(0.25, 0.0))
-	_beam_curve.add_point(Vector2(1.0, 1.0))
-	_beam.width_curve = _beam_curve
-	add_child(_beam)
-	# 2026-10-18 简化：顶端电弧从 3 条缩减至 2 条，线宽 1.4→1.1，克制分散
-	for i in 2:
-		var arc := Line2D.new()
-		arc.name = "TopArc%d" % i
-		arc.width = 1.1
-		arc.begin_cap_mode = Line2D.LINE_CAP_ROUND
-		arc.end_cap_mode = Line2D.LINE_CAP_ROUND
-		arc.default_color = Color(GameStyle.FX_HDR_LIGHTNING.r, GameStyle.FX_HDR_LIGHTNING.g, GameStyle.FX_HDR_LIGHTNING.b, 0.9)  # 与雷柱同源的 HDR 超白
-		add_child(arc)
-		_arcs.append(arc)
-
-## 起爆激活：视觉重置 → 雷柱 → 演出与结算。复用时 _ready 已跑过一次，
+## 起爆激活：视觉重置 → 落点形态 → 演出与结算。复用时 _ready 已跑过一次，
 ## 所有依赖字段的状态必须在这里按当前字段值重铺（重置清单：tint/radius/sfx/_struck/burst_kind）
 func activate() -> void:
 	_pooled = false
@@ -124,18 +91,21 @@ func activate() -> void:
 		_active_lights += 1
 	light.energy = 0.0
 
-	# 雷柱与电弧是常驻子节点，先整体藏起再按形态决定是否亮出
-	_beam.visible = false
-	for arc in _arcs:
-		arc.visible = false
 	var base_scale := Vector2(1.0, GROUND_SQUASH)
 	fx_sprite.scale = base_scale * 0.2
 	fx_sprite.modulate = Color(tint.r, tint.g, tint.b, 0.0)
 	light.color = tint
-	# 天雷柱只给雷系（fire_rain/frost/earth 等的落点形态由 BurstKindFx 各自交代，
+	# 2026-11-01 去线条化：旧写法在落点立一根 200px 天空雷柱 + 2 条顶端电弧 ——
+	# 顶端悬在空气里，高星连发时满屏竖线。现在与天罚/天雷同口径，只在落点身位内
+	# 点亮一道贴身光柱（JuiceEffect.SKY_STRIKE，不生成任何 Line2D/折线）。
+	# 只给雷系（fire_rain/frost/earth 等的落点形态由 BurstKindFx 各自交代，
 	# 火雨再立一根雷柱就是「文案说火雨画面是闪电」的旧错位）
 	if burst_kind == "thunder" or burst_kind == "":
-		_spawn_sky_beam()
+		JuiceEffect.spawn_sky_strike(get_parent(), global_position, tint)
+		# pixelfx 接入点（回退：注释下一行）
+		# 落雷序列帧与贴身光柱同点同位（锚点 bottom = 落点符阵贴地，主柱压身位）。
+		# 不传 modulate：贴图自带雷电配色与 HDR 起辉，星色口径由上方光柱/光斑承担。
+		FxFlipbookPool.play(&"lightning_strike", global_position)
 	if _kind_fx == null:
 		_kind_fx = BurstKindFx.new()
 		_kind_fx.name = "KindFx"
@@ -145,7 +115,7 @@ func activate() -> void:
 	if burst_kind == "fire_rain":
 		HeatDistortionFx.report(get_tree().root, global_position, radius, 0.9, BurstKindFx.DUR + 0.2)
 
-	# 劈空收档（2026-10-11 频闪治理）：落点先只演「小印记」——低α小光环 + 窄雷柱 + 落点音。
+	# 劈空收档（2026-10-11 频闪治理）：落点先只演「小印记」——低α小光环 + 落点音。
 	# 同帧 deferred 的 _deal_damage 结算完战果后由 _bloom_or_recycle 分档：劈空快速收场，
 	# 劈到人再补全亮大闪（爆散环/震屏仍在 _deal_damage）。与 FloatingWeapon 近战 hits>0 门控同构。
 	var tw = create_tween()
@@ -195,65 +165,12 @@ func _recycle() -> void:
 	if _has_light:
 		_has_light = false
 		_active_lights = maxi(0, _active_lights - 1)
-	_beam_fade = -1.0
-	if _beam != null:
-		_beam.visible = false
-	for arc in _arcs:
-		arc.visible = false
-	set_physics_process(false)
 	if _kind_fx != null:
 		_kind_fx.deactivate()
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
 		return
 	_pool.append(self)
-
-## 天雷柱：从天而降的竖直雷光，强化「雷从天上来」的落点感知。
-## T-2.5 余韵：消散瞬间顶端电弧四散（复用 LightningBolt.build_jagged_points 一把锯齿尺），
-## 2 条短线从柱顶向斜上散开 HDR 渐隐——「雷柱散成电花」。
-## 节点全部常驻（_build_beam_nodes），这里只重铺几何/宽度并点亮，淡出用帧内插值状态机。
-const BEAM_TOP := Vector2(0.0, -200.0)
-const BEAM_FADE_DUR := 0.13
-var _beam_fade: float = -1.0  ## ≥0 = 淡出进行中（剩余秒数），-1 = 未在演
-
-func _spawn_sky_beam() -> void:
-	_beam.points = PackedVector2Array([BEAM_TOP, Vector2(0.0, 0.0)])
-	# 2026-10-18 视觉简化：柱宽系数 0.09→0.06、地板 6→4（雷柱是竖直演出线，
-	# 判定是水平圆 _dmg_shape.radius，缩柱宽不碰判定）
-	_beam.width = maxf(radius * 0.06, 4.0)
-	_beam.default_color = Color(GameStyle.FX_HDR_LIGHTNING.r * 0.85, GameStyle.FX_HDR_LIGHTNING.g * 0.85, GameStyle.FX_HDR_LIGHTNING.b * 0.85, 0.8)  # HDR 超白：天雷柱核心过辉光阈值起辉
-	_beam.modulate.a = 1.0
-	_beam.visible = true
-
-	# 顶端电弧：拥挤档（FxBudget.crowded）跳过顶端电弧，非拥挤档保留 2 条微弱电花
-	if not FxBudget.crowded:
-		for i in 2:
-			var arc := _arcs[i]
-			var dir := Vector2.UP.rotated(deg_to_rad(-40.0 + 80.0 * float(i)))
-			var tip := BEAM_TOP + dir.rotated(randf_range(-0.25, 0.25)) * randf_range(20.0, 32.0)
-			arc.points = LightningBolt.build_jagged_points(BEAM_TOP, tip, 10.0, 4.0)
-			arc.modulate.a = 1.0
-			arc.visible = true
-	_beam_fade = BEAM_FADE_DUR
-	set_physics_process(true)
-
-## 雷柱/电弧淡出帧内插值：替代每次落雷 4 个 Tween 的旧写法（_process 由 activate 间歇驱动不保证，
-## 这里由宿主 physics 帧推进；雷柱只活 0.13s，用 _physics_process 常驻推进开销可忽略）
-func _physics_process(delta: float) -> void:
-	if _beam_fade < 0.0:
-		set_physics_process(false)
-		return
-	_beam_fade -= delta
-	var t := clampf(_beam_fade / BEAM_FADE_DUR, 0.0, 1.0)
-	_beam.modulate.a = t * t  # TRANS_QUAD EASE_IN 的解析形
-	for arc in _arcs:
-		arc.modulate.a = 1.0 - (1.0 - t) * (1.0 - t)  # TRANS_QUAD EASE_OUT 的解析形
-	if _beam_fade <= 0.0:
-		_beam_fade = -1.0
-		_beam.visible = false
-		for arc in _arcs:
-			arc.visible = false
-		set_physics_process(false)
 
 func _deal_damage() -> void:
 	var space_state = get_world_2d().direct_space_state

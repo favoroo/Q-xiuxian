@@ -1543,10 +1543,18 @@ func _tick_explode_fuse(delta: float, player: Node2D, dist_sq: float) -> bool:
 	return false
 
 ## 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）。
+## 贴脸禁射（2026-11-01）：玩家进到近战距离内不起手、蓄力中则作废 —— 近战贴脸是
+## 「压掉直射」的奖励，而不是站在炮口上吃弹。环弹/死亡弹幕/冲刺侧弹不走这里，不受影响。
 func _tick_bolt_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 	# 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）
 	if bolt_interval > 0.0 and _fuse < 0.0:
 		if _bolt_windup_t >= 0.0:
+			# 贴脸判先于站定：本帧保留 _tick_kite_range 已写好的后撤速度，
+			# 否则「蓄力作废却原地站桩」，玩家读不出「它在拉开距离」。
+			if BalanceCombat.bolt_in_dead_zone(dist_sq):
+				_bolt_timer = BalanceCombat.BOLT_TOO_CLOSE_RETRY
+				_cancel_bolt_windup()
+				return
 			# 蓄力段：站定 + 本体提亮变色，出手方向每帧跟玩家（只作读法，出手那帧才锁死）
 			_pp_target_vel = Vector2.ZERO
 			_bolt_windup_dir = (player.global_position - global_position).normalized()
@@ -1556,8 +1564,11 @@ func _tick_bolt_cast(delta: float, player: Node2D, dist_sq: float) -> void:
 		else:
 			_bolt_timer -= delta
 			if _bolt_timer <= 0.0 and dist_sq < 396900.0 and not _pp_stun:
-				_bolt_timer = bolt_interval
-				_start_bolt_windup()
+				if BalanceCombat.bolt_in_dead_zone(dist_sq):
+					_bolt_timer = BalanceCombat.BOLT_TOO_CLOSE_RETRY
+				else:
+					_bolt_timer = bolt_interval
+					_start_bolt_windup()
 
 
 

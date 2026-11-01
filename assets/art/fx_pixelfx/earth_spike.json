@@ -1,0 +1,20 @@
+{
+  "id": "nature/earth-spike",
+  "out_name": "earth_spike",
+  "frame_size": [
+    272,
+    150
+  ],
+  "pivot": [
+    136,
+    132
+  ],
+  "anchor": "bottom",
+  "scale": 0.7,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "earth",
+  "png_bytes": 151990,
+  "vram_kb": 4781
+}

@@ -1,0 +1,20 @@
+{
+  "id": "fire/fire-breath",
+  "out_name": "fire_breath",
+  "frame_size": [
+    160,
+    116
+  ],
+  "pivot": [
+    12,
+    72
+  ],
+  "anchor": "left",
+  "scale": 0.75,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "fire",
+  "png_bytes": 379318,
+  "vram_kb": 1812
+}

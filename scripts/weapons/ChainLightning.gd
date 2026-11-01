@@ -72,6 +72,13 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
 	if not sfx.is_empty() and draw_bolt:
 		AudioManager.play_sfx(sfx, 0.55)
+	# pixelfx 接入点（回退：注释下一行）
+	# 雷劫＝击杀电结：尸体位置炸一小团电结（from_pos 就是尸体坐标）。
+	# 只认 leijie 这一路：紫电/弹幕/兽群的 from_pos 是命中敌身位，电团已由首跳缠身电承担；
+	# 反震/血海的 from_pos 是玩家身位，更不该在玩家脚下放「击杀电结」。
+	# 与传导弧同吃演出闸：一次雷劫风暴只放一团，伤害结算不受影响。
+	if draw_bolt and gate == &"leijie":
+		FxFlipbookPool.play(&"zap_hit", from_pos)
 	# 首跳：只缠身，不画线（电刀触发瞬间「电在这只怪身上炸」）
 	_apply_hop_hit(host, targets[0], damage, 0, bolt_tint, draw_bolt)
 	# 后续逐跳：一条敌人↔敌人传导弧 + 落点缠身电。位置在画线那一刻才读敌人实时坐标 ——
@@ -79,30 +86,33 @@ static func strike(host: Node, from_pos: Vector2, first_target: Node2D, damage: 
 	for i in range(1, targets.size()):
 		var prev: Node2D = targets[i - 1]
 		var enemy: Node2D = targets[i]
-		var prev_snap: Vector2 = prev.global_position
-		var to_snap: Vector2 = enemy.global_position
 		var hop_idx: int = i
 		var tree := host.get_tree()
 		if tree == null:
-			_draw_chain_segment(host, prev, prev_snap, enemy, to_snap, bolt_tint, draw_bolt)
+			_draw_chain_segment(host, prev, enemy, bolt_tint, draw_bolt)
 			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt)
 			continue
 		var delay: float = HOP_VISUAL_DELAY * float(hop_idx)
 		tree.create_timer(delay).timeout.connect(func() -> void:
 			if host == null or not is_instance_valid(host):
 				return
-			_draw_chain_segment(host, prev, prev_snap, enemy, to_snap, bolt_tint, draw_bolt)
+			_draw_chain_segment(host, prev, enemy, bolt_tint, draw_bolt)
 			_apply_hop_hit(host, enemy, damage, hop_idx, bolt_tint, draw_bolt))
 	return targets.size()
 
-## 单段传导弧：两端优先读敌人实时坐标（对象已失效才退回选目标时的快照），
-## 两端都在敌人身上才画 —— 这是「空气里不许有电」的最后一道闸。
-static func _draw_chain_segment(host: Node, prev: Node2D, prev_snap: Vector2,
-		enemy: Node2D, to_snap: Vector2, tint: Color, draw_bolt: bool) -> void:
+## 单段传导弧：两端都必须是「此刻仍活着」的敌人 —— 任一端失效/已死就整段不画。
+## 旧写法失效时退回选目标那一刻的快照坐标，敌人被击退/打死后弧就留在空地或尸体上；
+## 电刀模式的口径是「空气里一条线都不许有」，宁可少画一段，也不画无归属的线。
+static func _draw_chain_segment(host: Node, prev: Node2D, enemy: Node2D,
+		tint: Color, draw_bolt: bool) -> void:
 	if not draw_bolt:
 		return
-	var from_pos: Vector2 = prev.global_position if prev != null and is_instance_valid(prev) else prev_snap
-	var to_pos: Vector2 = enemy.global_position if enemy != null and is_instance_valid(enemy) else to_snap
+	if prev == null or not is_instance_valid(prev) or bool(prev.get("dying")):
+		return
+	if enemy == null or not is_instance_valid(enemy) or bool(enemy.get("dying")):
+		return
+	var from_pos: Vector2 = prev.global_position
+	var to_pos: Vector2 = enemy.global_position
 	if from_pos.distance_to(to_pos) <= MIN_BOLT_LEN:
 		return
 	_draw_bolt(host, from_pos, to_pos, tint, BOLT_WIDTH, false)
@@ -127,10 +137,11 @@ static func _apply_hop_hit(host: Node, enemy: Node2D, base_damage: float, hop_id
 		JuiceEffect.spawn_body_arcs(host, pos, tint)
 		JuiceEffect.spawn_bolt_pop(host, pos, tint)
 
-## 单点落雷（天罚用）：自苍穹垂直贯穿劈下，目标明确、去繁就简、干净霸道。
-## target_input 可为被暴击的敌人 Node2D 或坐标 Vector2。若提供实体，天雷锁死目标天灵盖，伤害必中。
-## 2026-10-27 电刀化收尾：雷柱只留一条干净主干（allow_branch=false —— 不甩中段分支、
-## 不出空气余韵微弧），落点补一簇缠身电，让「电落在敌人身上」这一下读得实。
+## 单点落雷（天罚用）：伤害锁死被暴击的目标，在它身位上亮一道贴身光柱。
+## target_input 可为被暴击的敌人 Node2D 或坐标 Vector2。若提供实体，伤害必中。
+## 2026-11-01 去线条化：旧写法自 target 上方 280px 拉一条锯齿雷柱（顶端悬在空气里），
+## 每次暴击都来一条；目标被暴击打死/击退后更是只剩「凭空一道线」。整段已下线，
+## 改由 JuiceEffect.spawn_sky_strike 在身位内画光柱 + 落点环（不生成任何 LightningBolt）。
 ## tint 同时透传给 take_damage：这份天罚伤害走独立跳字（combo_key=-1），
 ## 不再被并进武器暴击主跳字（旧写法读出来只有「64!」，看不出天罚还打了 100）。
 static func sky_bolt(host: Node, target_input: Variant, damage: float,
@@ -153,35 +164,45 @@ static func sky_bolt(host: Node, target_input: Variant, damage: float,
 		return
 
 	var bolt_tint: Color = tint if tint.a > 0.0 else GameStyle.FX_HDR_LIGHTNING
-	# 伤害必定精准落地：优先结算绑定的暴击目标，没有实体才就近认领
+	# 伤害必定精准落地：优先结算绑定的暴击目标，没有实体才就近认领。
+	# landed_pos = 实际吃到这份伤害的那个身位；没打到任何人时整段演出跳过 ——
+	# 天罚是单点伤害，光柱必须画在真挨打的那只怪身上，不往空地/尸体上放。
+	var landed_pos: Vector2 = Vector2.INF
 	if target_node != null and is_instance_valid(target_node) and not bool(target_node.get("dying")):
 		if _is_chain_target(target_node):
 			# 标暴击=true：暴击闪白+垂直微击退顿挫+暴击跳字；tint 让这条天罚伤害独立成条
+			landed_pos = target_node.global_position
 			target_node.take_damage(damage, Vector2.DOWN * 8.0, true, false, bolt_tint)
 		elif target_node.has_method("take_damage"):
 			# 宝箱/灵草是 3 参 take_damage（交互物不进链电 tint 通道）
+			landed_pos = target_node.global_position
 			target_node.take_damage(damage, Vector2.DOWN * 8.0, true)
 	else:
-		_apply_sky_bolt_damage(target_pos, damage, bolt_tint)
+		var claimed: Node2D = _apply_sky_bolt_damage(target_pos, damage, bolt_tint)
+		if claimed != null and is_instance_valid(claimed):
+			landed_pos = claimed.global_position
+	if landed_pos == Vector2.INF:
+		return
 
-	# 天顶纯粹雷柱（垂直直落 280px，粗度 2.0，雷霆贯顶）：单线贯顶，禁分支/余韵
-	var sky := target_pos + Vector2(0.0, -280.0)
-	_draw_bolt(host, sky, target_pos, bolt_tint, 2.0, false)
-	# 落点：缠身电（电在敌人身上）+ 电离爆散
-	JuiceEffect.spawn_body_arcs(host, target_pos, bolt_tint)
-	JuiceEffect.spawn_bolt_pop(host, target_pos, bolt_tint)
+	# 落雷演出（2026-11-01 去线条化）：贴身光柱 + 落点环，不向天空拉任何折线。
+	# 旧写法从 target_pos 上方 280px 拉一条锯齿雷柱，顶端没有锚点（悬在空气里），
+	# 且每次暴击都来一条 —— 玩家读作「空气里凭空冒出的一道线」；目标被暴击打死/击退
+	# 后更是只剩一条无归属的线。现在光柱底端钉在实际挨打的落点、顶端压在身位高度。
+	JuiceEffect.spawn_sky_strike(host, landed_pos, bolt_tint)
+	# pixelfx 接入点（回退：注释下一行）
+	# 天罚落雷序列帧叠在贴身光柱同一落点：符阵贴地、主柱压身位（FxSheetData anchor=bottom），
+	# 贴图自带雷电配色与 HDR 起辉，不再二次染色（tint 已由上方光柱与独立跳字表达）。
+	FxFlipbookPool.play(&"lightning_strike", landed_pos)
 	AudioManager.play_sfx("thunder_strike", 0.75)
 
-## 天罚落点冲击环半径（px）。纯表现，不参与判定 —— 天罚是单点伤害，
-## 环只是把「砸下来了」这件事画得有分量，别误读成 AOE 范围。
-const SKY_BOLT_RING_RADIUS := 64.0
 ## 天罚落点认领半径：落点附近这个距离内最近的那只敌人吃伤害。
 ## 取 28px 是敌人碰撞体量级 —— 暴击命中的目标必然在落点中心，够不着说明它刚被打死/击飞。
 const SKY_BOLT_HIT_RADIUS := 28.0
 
 ## 天罚伤害落地：按位置就近认领（不靠对象引用，避免 host 侧硬类型依赖）。
 ## tint 透传给 take_damage 的 chain_tint 尾巴，让这份伤害独立显示（见 sky_bolt）。
-static func _apply_sky_bolt_damage(target_pos: Vector2, damage: float, tint: Color) -> void:
+## 返回实际挨打的那只（没认领到返回 null）—— 演出侧按它的实时身位画光柱。
+static func _apply_sky_bolt_damage(target_pos: Vector2, damage: float, tint: Color) -> Node2D:
 	var best: Node2D = null
 	var best_d: float = SKY_BOLT_HIT_RADIUS
 	var live: Array = GameManager.live_enemies
@@ -195,6 +216,7 @@ static func _apply_sky_bolt_damage(target_pos: Vector2, damage: float, tint: Col
 			best = e
 	if best != null:
 		best.take_damage(damage, Vector2.ZERO, true, false, tint)
+	return best
 
 ## 挑一条链：首个目标（或从 origin 找最近的），之后每次找「离当前最近且没打过」的。
 ## 与 SpiritPet 连锁神雷同一条口径（60% 折损 / 最多 3 个），但这里允许玩家侧配置跳数。

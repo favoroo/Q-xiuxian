@@ -11,7 +11,9 @@ extends Node2D
 ##      （不环身画法阵、不遮角色，与护罩构图彻底区分）
 ##   3. 神行术 (gale): 御风破空矢量身法虚影 + 脚底透视双层风轮 + 飘逸风灵飘带
 ##   4. 缩地成寸 (dash): 瞬身纯白剑意锋芒 + 破空剑气割裂裂痕 + 矢量残影
+##      （中途两帧残影落点各补一缕微型庚金风息灵光，软光斑叠加不抢剑芒）
 ##   5. 回春术 (renewal): 地面九品青莲甘露阵 + 穿透升华的生机光羽与甘露灵丝
+##      （青莲升华瞬刻叠一发碧翠灵光爆发 collect_burst，作为「治疗兑现」的第二拍）
 ##
 ## 三色三形速查：无敌=暖金椭球罩 / 攻速=蓝色脚下风轮+升腾气流 / 移速=黄色脚下风轮+飘带。
 ## 罩体/风轮几何随角色体型插槽（config.body 的 scale×width_scale / scale×height_scale）等比缩放，
@@ -46,6 +48,10 @@ const GHOST_COLOR_SHADOW := Color(0.72, 0.45, 1.05, 0.55)    ## 幽夜紫半透�
 ## 瞬发技能演出时长（秒）：影爆读 ShadowStepData.BURST_FX_DURATION（数据表同源），
 ## 回春/盾势/战意没有专属数据表，时长常量落在这里
 const RENEWAL_FX_DURATION := 1.15   ## 回春术灵光汇聚演出总时长（旧 0.64s 太短，按下感知不到）
+## 回春术「青莲升华」触发点（0→1 进度）：汇聚灵光即将收进体内、青莲阵绽放到最盛的那一瞬。
+## 在此叠一发碧翠灵光爆发（FxFlipbookPool collect_burst），把反馈拆成两拍——
+## 按下当帧已有命中火花 + 上冲光柱 + 上飘灵光（「按到了」），升华这一发才是「甘露入体」的高潮。
+const RENEWAL_SUBLIME_AT := 0.72
 const GUARD_BURST_FX_DUR := 0.40    ## 盾势蓄满爆发罡气扩散时长（旧 0.24s）
 const FRENZY_BURST_FX_DUR := 0.45   ## 战意满层爆气光环时长（旧 0.28s）
 
@@ -86,6 +92,7 @@ var _dash_ghost_count: int = 0  ## 冲刺位移路径残影计数（位移全程
 # 5. 回春术状态
 var renewal_progress: float = -1.0  ## >=0 播放回春法阵与生机光柱 (0.0 -> 1.0)
 var renewal_particles: Array[Dictionary] = []
+var _renewal_sublime_fired: bool = false  ## 本次施放是否已放过青莲升华那一发（每个施放周期只放一次）
 
 # 6. 图集残影对象池 (Sprite2D，仅供图集模式兼容)
 var _ghost_pool: Array[Sprite2D] = []
@@ -272,6 +279,7 @@ func on_lifesteal_proc() -> void:
 func on_renewal_cast() -> void:
 	renewal_progress = 0.0
 	renewal_particles.clear()
+	_renewal_sublime_fired = false
 	_notify_procedural_view("renewal", true, 1.0)
 	# 释放瞬间触发对应色粒子（回春甘露：生机碧翠 / FX_HDR_HEAL）
 	var center_pos: Vector2 = player.global_position + (BODY_CENTER * _body_scale.y if player != null else Vector2.ZERO)
@@ -544,9 +552,11 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 		if _dash_ghost_count == 1 and elapsed >= dash_total_dur * 0.45:
 			_dash_ghost_count = 2
 			spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
+			_spawn_dash_wind_wisp()
 		elif _dash_ghost_count == 2 and elapsed >= dash_total_dur * 0.85:
 			_dash_ghost_count = 3
 			spawn_ghost(GHOST_COLOR_COLD_BLUE, GHOST_DURATION)
+			_spawn_dash_wind_wisp()
 	if dash_crit_timer > 0.0:
 		dash_crit_timer -= delta
 		if dash_crit_timer <= 0.0:
@@ -556,6 +566,13 @@ func update_vfx(delta: float, is_moving: bool, velocity: Vector2) -> void:
 	if renewal_progress >= 0.0:
 		needs_redraw = true
 		renewal_progress += delta / RENEWAL_FX_DURATION  ## 约 1.15s 走完汇聚与爆发（旧 0.64s 按下感知不到）
+		# 青莲升华：汇聚灵光刚要收进体内时补一发碧翠灵光爆发（序列帧池化播放，自回收不跟随）
+		if not _renewal_sublime_fired and renewal_progress >= RENEWAL_SUBLIME_AT:
+			_renewal_sublime_fired = true
+			FxFlipbookPool.play(&"collect_burst", global_position, {
+				"modulate": Color(0.6, 1.8, 0.8),
+				"scale_mult": 1.1,
+			})
 		var p_prog := clampf(renewal_progress, 0.0, 1.0)
 		for p in renewal_particles:
 			var init_r: float = float(p.get("init_radius", 70.0))
@@ -745,6 +762,15 @@ func spawn_ghost(color: Color, duration: float) -> void:
 	_ghost_life[idx] = duration
 	_ghost_max_life[idx] = duration
 	ghost.visible = true
+
+## 缩地成寸残影落点补一缕微型庚金风息灵光（SOUL_ORB 软光斑，0.45 缩量、同色系不发散）。
+## 瞬身本体已有剑芒锥 + 金属碎芒 + 三帧剪影，这里只在中途两帧残影处补「身法带起的风息」；
+## 技能施放属低频事件，走 bypass 预算，不挤占同帧受击火花名额。
+func _spawn_dash_wind_wisp() -> void:
+	if player == null:
+		return
+	FxParticlePool.burst(FxParticlePool.SOUL_ORB,
+		player.global_position + BODY_CENTER * _body_scale.y, "metal", 0.45, true)
 
 # ---------------- 动态图形绘制 ----------------
 

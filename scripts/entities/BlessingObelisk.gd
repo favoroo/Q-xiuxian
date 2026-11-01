@@ -24,6 +24,15 @@ const SPENT_FADE_TIME: float = 0.55
 ## 耗尽态去色程度（0~1，喂给 desaturate.gdshader）
 const SPENT_DESATURATE: float = 1.0
 
+## 通天金光仪式（2026-11-01 pixelfx 车道 I）：激活爆发时碑顶那条 pixelfx 金柱的驻留时长（秒）。
+## loot_beam 是循环帧不会自回收，必须显式 stop 归池；取一幕多一点，盖住全屏冲击环那一拍。
+const RITUAL_BEAM_TIME: float = 0.9
+## 金柱落点相对碑心的偏移：向上抬一档立在晶柱顶端（碑身画到 y≈-78），
+## 同时 ≥16px 顺带躲开 FxFlipbookPool 的同帧同点防糊屏闸（贴太近第二条会被静默丢弃）
+const RITUAL_BEAM_OFFSET := Vector2(0.0, -20.0)
+## 金柱额外缩放（贴图基础 0.70 × 1.2 ⇒ 画幅约 148px 高，压在碑身之上不压读数）
+const RITUAL_BEAM_SCALE: float = 1.2
+
 ## 走针环半径：贴着碑脚那一圈（碑底画到 y≈+36、半宽 35），刻意画在 95 判定圈之内 ——
 ## 它是「这座碑的进度」，不许冒充「站在哪儿算在范围内」（范围视觉与判定同源）。
 const ARC_RADIUS: float = 46.0
@@ -84,6 +93,8 @@ var _readout_fade: Tween = null
 var _readout_pct: int = -1
 ## 世界侧读数的进度真值：与 _process 里那条 ratio 同一个数，判据也读它
 var _readout_ratio: float = 0.0
+## 激活仪式的金柱句柄（loot_beam 是循环帧不自回收，句柄留底才能到点/出树时归还池）
+var _ritual_beam: AnimatedSprite2D = null
 
 ## 碑脚走针环：轨道一整圈 + 进度弧 + 弧头。颜色由外部按进度从主蓝拉到点缀黄。
 ## 尺寸/颜色一律由外层 _build_charge_readout() 灌进来（不在内类里自取外层常量：
@@ -142,6 +153,8 @@ func _ready() -> void:
 		SettingsManager.theme_color_changed.connect(_apply_stone_fill_color)
 
 func _exit_tree() -> void:
+	## 碑先于金柱出树（回合清场/换场景）：循环帧不许占着池位等下一次有人来收
+	_stop_ritual_beam()
 	if SettingsManager.theme_color_changed.is_connected(_apply_stone_fill_color):
 		SettingsManager.theme_color_changed.disconnect(_apply_stone_fill_color)
 
@@ -444,6 +457,9 @@ func _release_blessing() -> void:
 		ObeliskFx.play_shock_ring(fx_host, global_position)
 	# 一次性喷发粒子：低频事件，绕过同帧限流（金色灵气光柱向上喷）
 	FxParticlePool.burst(FxParticlePool.LEVEL_PILLAR, global_position, GameStyle.FX_HDR_GOLD, 1.0, true)
+	# pixelfx 通天金光仪式（2026-11-01 车道 I）：纯视觉叠加，判定半径/计时/伤害链一律不动。
+	# 贴图被帧预算挡下会静默返回 null —— 上面 ObeliskFx 的向量光柱照旧兜底，观感降级不误判。
+	_play_ritual_flipbook()
 	if _obelisk_renderer != null:
 		_obelisk_renderer.activation_flash = 1.0
 	_summon_spirit_beast()
@@ -525,6 +541,32 @@ func _summon_spirit_beast() -> void:
 	var body_col: Color = ProceduralDroneRenderer.body_color(beast.palette_idx)
 	FxParticlePool.burst(FxParticlePool.SOUL_ORB, beast.global_position, body_col, 1.0, true)
 	JuiceEffect.spawn_shockwave(host, beast.global_position, 30.0, body_col, 0.3)
+
+## 通天金光仪式（2026-11-01 pixelfx 车道 I）：底座破匣金光（chest_open，单发自回收）
+## + 碑顶通天金柱（loot_beam，循环帧需显式收束）。两者都只是叠在既有向量演出上的贴图层，
+## 与激活判定/扣费/伤害/计时零耦合：贴图被帧预算挡下时整段静默，祭坛照常兑现。
+func _play_ritual_flipbook() -> void:
+	# 底座金光：贴地落点（anchor=bottom），画幅约 90px，像祭坛当场「开匣放光」
+	FxFlipbookPool.play(&"chest_open", global_position, {"scale_mult": 1.0})
+	# 重复激活（预览/强触发）先收掉上一条金柱，绝不留两条循环帧互叠
+	_stop_ritual_beam()
+	_ritual_beam = FxFlipbookPool.play(&"loot_beam", global_position + RITUAL_BEAM_OFFSET,
+		{"scale_mult": RITUAL_BEAM_SCALE})
+	if _ritual_beam == null:
+		return
+	# 光柱只演激活这一拍：到点主动归还池（循环动画不会自动回收）
+	var tw := create_tween()
+	tw.tween_interval(RITUAL_BEAM_TIME)
+	tw.tween_callback(_stop_ritual_beam)
+
+## 金柱收束：必须显式 stop 归还池，否则一条循环帧会永久占着槽位停在原地。
+## 池满时最老的特效会被回收（visible=false，句柄失效），此时不再二次 stop，避免误伤复用者。
+func _stop_ritual_beam() -> void:
+	if _ritual_beam == null:
+		return
+	if is_instance_valid(_ritual_beam) and _ritual_beam.visible:
+		FxFlipbookPool.stop(_ritual_beam)
+	_ritual_beam = null
 
 ## 灰相收口：灯直接关掉、范围环不再占位（看不见却还在的圈就是 bug）
 func _enter_spent_look() -> void:

@@ -1,0 +1,136 @@
+{
+  "effects": [
+    {
+      "id": "lightning/lightning-strike",
+      "out_name": "lightning_strike",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.85,
+      "palette_key": "volt",
+      "anchor": "bottom",
+      "desc": "天罚/落雷：符阵充能+主柱落雷+地裂余韵"
+    },
+    {
+      "id": "impacts/hit-spark",
+      "out_name": "hit_spark",
+      "fps": 30,
+      "max_frames": 16,
+      "loop": false,
+      "scale": 0.45,
+      "palette_key": "gold",
+      "anchor": "center",
+      "desc": "近战/重击命中火花"
+    },
+    {
+      "id": "impacts/crit-hit",
+      "out_name": "crit_hit",
+      "fps": 24,
+      "max_frames": 20,
+      "loop": false,
+      "scale": 0.55,
+      "palette_key": "ember",
+      "anchor": "center",
+      "desc": "暴击命中破片"
+    },
+    {
+      "id": "ice/ice-spikes",
+      "out_name": "ice_spikes",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.75,
+      "palette_key": "ice",
+      "anchor": "bottom",
+      "desc": "玄冥雷珠/冰刺爆发"
+    },
+    {
+      "id": "nature/earth-spike",
+      "out_name": "earth_spike",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.7,
+      "palette_key": "earth",
+      "anchor": "bottom",
+      "desc": "裂山铎/地裂突刺"
+    },
+    {
+      "id": "melee/sword-slash",
+      "out_name": "sword_slash",
+      "fps": 30,
+      "max_frames": 18,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "metal",
+      "anchor": "center",
+      "desc": "近战月牙刀光"
+    },
+    {
+      "id": "arcane/arcane-beam",
+      "out_name": "arcane_beam",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.7,
+      "palette_key": "arcane",
+      "anchor": "left",
+      "desc": "紫虹镜激光束循环"
+    },
+    {
+      "id": "fire/fire-breath",
+      "out_name": "fire_breath",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.75,
+      "palette_key": "fire",
+      "anchor": "left",
+      "desc": "火葫芦烈焰锥流"
+    },
+    {
+      "id": "pickups/chest-open",
+      "out_name": "chest_open",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.8,
+      "palette_key": "gold",
+      "anchor": "bottom",
+      "desc": "开匣灵光爆散"
+    },
+    {
+      "id": "pickups/collect-burst",
+      "out_name": "collect_burst",
+      "fps": 24,
+      "max_frames": 20,
+      "loop": false,
+      "scale": 0.6,
+      "palette_key": "gold",
+      "anchor": "center",
+      "desc": "灵珠/法宝拾取光华"
+    },
+    {
+      "id": "pickups/loot-beam",
+      "out_name": "loot_beam",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.7,
+      "palette_key": "gold",
+      "anchor": "bottom",
+      "desc": "稀有法宝掉落地表光柱"
+    },
+    {
+      "id": "lightning/zap-hit",
+      "out_name": "zap_hit",
+      "fps": 24,
+      "max_frames": 20,
+      "loop": false,
+      "scale": 0.55,
+      "palette_key": "volt",
+      "anchor": "center",
+      "desc": "雷劫/触击电结"
+    }
+  ]
+}

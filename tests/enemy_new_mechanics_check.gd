@@ -352,6 +352,29 @@ func _case_bolt_windup() -> void:
 	xiexiu._cancel_bolt_windup()
 	_c.check(xiexiu._bolt_windup_t < 0.0, "硬直打断后蓄力段作废")
 	_c.equals(EnemyBolt.active_count, 0, "打断路径全程零发射（作废 ≠ 补发）")
+
+	# 贴脸禁射（2026-11-01）：玩家进到近战距离 → 不起手；蓄力中贴脸 → 作废；拉开恢复
+	xiexiu.hit_stun_timer = 0.0
+	xiexiu._pp_stun = false
+	var dt := 1.0 / 60.0
+	EnemyBolt.active_count = 0
+	xiexiu._bolt_timer = 0.0
+	xiexiu._tick_bolt_cast(dt, _player, 50.0 * 50.0)
+	_c.check(xiexiu._bolt_windup_t < 0.0, "贴脸 50px 不起手")
+	_c.near(xiexiu._bolt_timer, BalanceCombat.BOLT_TOO_CLOSE_RETRY, 0.001, "贴脸禁射后按重试间隔再试")
+	_c.equals(EnemyBolt.active_count, 0, "贴脸禁射路径零发射")
+
+	xiexiu._bolt_timer = 0.0
+	xiexiu._tick_bolt_cast(dt, _player, 400.0 * 400.0)
+	_c.check(xiexiu._bolt_windup_t > 0.0, "400px 正常起手")
+	xiexiu._tick_bolt_cast(dt, _player, 60.0 * 60.0)
+	_c.check(xiexiu._bolt_windup_t < 0.0, "蓄力中贴脸 → 本次蓄力作废")
+	_c.equals(EnemyBolt.active_count, 0, "作废路径不补发")
+
+	xiexiu._bolt_timer = 0.0
+	xiexiu._tick_bolt_cast(dt, _player, 200.0 * 200.0)
+	_c.check(xiexiu._bolt_windup_t > 0.0, "拉开到 200px 恢复起手")
+	xiexiu._cancel_bolt_windup()
 	xiexiu.queue_free()
 	await get_tree().process_frame
 

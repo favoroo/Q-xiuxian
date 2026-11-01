@@ -9,10 +9,18 @@ extends RefCounted
 
 const BOLT_FIRST_DELAY := 1.2 ## 远程首次出手缓冲（秒）：HoverIntentCheck 依赖它 ≥0.6s
 const BOLT_FIRST_JITTER := 0.8 ## 首次出手额外错相上限（秒）
+const BOLT_MIN_CAST_RANGE := 110.0 ## 贴脸禁射距离（px）：略高于最短近战射程 105 —— 玩家进到近战距离，直射先收起来
+const BOLT_TOO_CLOSE_RETRY := 0.4 ## 贴脸禁射重试间隔（秒）：不贴脸瞬间起手，留出「贴近压枪」的读法
 const CHARGE_OPENING_DELAY := 1.0 ## 冲锋首次冷却缓冲（秒）：WolfAiCheck 依赖它 ≥0.5s
 const COOLDOWN_PHASE_JITTER := 0.35 ## 周期技能首次冷却错相比例（0~35%，只延后）
 const ELITE_COOLDOWN_PHASE_JITTER := 0.3 ## 精英招式首次冷却错相比例
 const KITE_STRAFE_SPEED := 0.5 ## 远程保持距离带的切向绕行速度倍率（原写死 0.5）
+
+## 贴脸禁射判定（纯函数）：距离平方入参，阈值只在 BOLT_MIN_CAST_RANGE 一处。
+## 只闸瞄准直射（御剑/寒魄/精英齐射）——环弹、死亡弹幕、冲刺侧弹是自我防御型，
+## 玩家贴身反而更危险，不能一起收掉。
+static func bolt_in_dead_zone(dist_sq: float) -> bool:
+	return dist_sq < BOLT_MIN_CAST_RANGE * BOLT_MIN_CAST_RANGE
 
 # ---------------- AoE 预警公平线（2026-10-31 治理：画多大就给多久） ----------------
 

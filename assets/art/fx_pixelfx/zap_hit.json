@@ -1,0 +1,20 @@
+{
+  "id": "lightning/zap-hit",
+  "out_name": "zap_hit",
+  "frame_size": [
+    144,
+    112
+  ],
+  "pivot": [
+    76,
+    56
+  ],
+  "anchor": "center",
+  "scale": 0.55,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 20,
+  "palette_key": "volt",
+  "png_bytes": 78796,
+  "vram_kb": 1260
+}

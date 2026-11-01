@@ -1,0 +1,20 @@
+{
+  "id": "impacts/hit-spark",
+  "out_name": "hit_spark",
+  "frame_size": [
+    136,
+    80
+  ],
+  "pivot": [
+    44,
+    64
+  ],
+  "anchor": "center",
+  "scale": 0.45,
+  "fps": 30,
+  "loop": false,
+  "frames_count": 14,
+  "palette_key": "gold",
+  "png_bytes": 21613,
+  "vram_kb": 637
+}

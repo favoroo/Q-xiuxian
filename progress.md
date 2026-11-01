@@ -204,3 +204,42 @@
 ## 五、返工与问题区
 
 （暂无）
+
+---
+
+## 六、pixelfx 高质感特效接入阶段（2026-11-01 起）
+
+> 总体架构与逐件替换详表见 `pixelfx-integration-plan.md`。后续各子 Agent 按 Lane A~J 领取并独占对应文件。
+
+### P0 基础设施与首批核心特效（串行）
+
+| ID | 任务 | 状态 | 认领 | 占用文件 | 依赖 | 验收 | 完成记录 |
+|---|---|---|---|---|---|---|---|
+| PX-0.1 | vendored pixelfx 引擎 | ✅ | Agent-P0 | `tools/pixelfx/**` | 无 | CLI render 跑通 | 2026-11-01 ｜ 离线渲染生成通过 ｜ #05 |
+| PX-0.2 | 导出管线 export_pixelfx.py | ✅ | Agent-P0 | `tools/export_pixelfx.py`、`tools/pixelfx_manifest.json`、`assets/art/fx_pixelfx/**` | PX-0.1 | 导出 12 项 + 编辑器扫描 | 2026-11-01 ｜ 12项导出成功（PNG 2.1MB/VRAM 29.8MB） ｜ #05 |
+| PX-0.3 | 贴图配置 FxSheetData.gd | ✅ | Agent-P0 | `scripts/systems/FxSheetData.gd` | PX-0.2 | UnitRunner | 2026-11-01 ｜ 数据配置与 offset 换算就绪 ｜ #05 |
+| PX-0.4 | 贴图帧池 FxFlipbookPool.gd | ✅ | Agent-P0 | `scripts/systems/FxFlipbookPool.gd`、`scenes/main/Main.tscn`、`scripts/main/Main.gd` | PX-0.3 | core + 编辑器扫描 | 2026-11-01 ｜ 常驻池16槽与限流闸挂载完成 ｜ #05 |
+| PX-0.5 | HDR 提亮 shader 与双档 | ✅ | Agent-P0 | `assets/shaders/fx_sprite_hdr.gdshader` | PX-0.4 | core | 2026-11-01 ｜ 亮部起辉+双档降级生效 ｜ #05 |
+| PX-0.6 | 现场预览台 PixelfxPreview.tscn | ✅ | Agent-P0 | `tests/PixelfxPreview.tscn`、`tests/pixelfx_preview.gd` | PX-0.5 | 12项出图目检 | 2026-11-01 ｜ 实机出图目检全部合格（无假人/对位准确） ｜ #05 |
+| PX-0.7 | 登记与接入计划归档 | ✅ | Agent-P0 | `progress.md`、`CHANGELOG.md`、`pixelfx-integration-plan.md` | PX-0.6 | core 6/6 全绿 | 2026-11-01 ｜ 核心基线全绿，为后续并行子Agent铺平道路 ｜ #05 |
+
+### 第一批核心战斗车道（4 子 Agent 并行，已完成验收）
+
+| ID | 任务车道 | 状态 | 认领 | 占用文件 | 依赖 | 验收 | 完成记录 |
+|---|---|---|---|---|---|---|---|
+| PX-LANE-E | 车道 E：雷系全面升级（天罚落雷/雷劫电结/落雷爆发） | ✅ | Agent-E | `scripts/weapons/ChainLightning.gd`、`scripts/weapons/ThunderBurst.gd` | P0 | ThunderCheck + SuperVfxCheck | 2026-11-01 ｜ 专项与核心全 PASS，去空气乱线改贴身落雷 ｜ #06 |
+| PX-LANE-C | 车道 C：光束与火锥升级（紫虹光束/烈焰吐息） | ✅ | Agent-C | `scripts/weapons/BeamRenderer.gd`、`scripts/weapons/FlameConeRenderer.gd` | P0 | BeamConeCheck | 2026-11-01 ｜ 17项专项与核心全 PASS，跟随展开+适度拉伸 ｜ #07 |
+| PX-LANE-F | 车道 F：落雷爆发形态（裂山地裂/玄冥冰刺） | ✅ | Agent-F | `scripts/weapons/BurstKindFx.gd` | P0 | SuperVfxCheck + InspectCheck | 2026-11-01 ｜ 41项专项全 PASS，自绘转判定同源底盘 ｜ #07 |
+| PX-LANE-B | 车道 B：近战月牙刀光（剑类武器挥砍刀芒） | ✅ | Agent-B | `scripts/weapons/WeaponArcRenderer.gd` | P0 | WeaponAimCheck | 2026-11-01 ｜ 540项专项全 PASS，剑尖对位+五行染色 ｜ #07 |
+
+### 第二批综合视觉与仪式车道（4 子 Agent 并行，已完成验收）
+
+| ID | 任务车道 | 状态 | 认领 | 占用文件 | 依赖 | 验收 | 完成记录 |
+|---|---|---|---|---|---|---|---|
+| PX-LANE-A | 车道 A：打击反馈分频（暴击破片与重击火花） | ✅ | Agent-A | `scripts/weapons/BladeProjectile.gd` | P0 | HitFxVisibilityCheck + WeaponPerHitCheck | 2026-11-01 ｜ 暴击分频贴图化，普通命中轻量粒子 ｜ #08 |
+| PX-LANE-G | 车道 G：开匣与掉落升级（宝匣破开与灵宝光华） | ✅ | Agent-G | `scripts/entities/ChestBurstFx.gd`、`scripts/entities/AstralGem.gd` | P0 | ChestEconomyCheck | 2026-11-01 ｜ 宝匣破开金光迸射+拾取灵光爆发 ｜ #08 |
+| PX-LANE-I | 车道 I：界碑场景仪式（祭坛激活与通天金柱） | ✅ | Agent-I | `scripts/entities/BlessingObelisk.gd` | P0 | ObeliskReadoutCheck + ObeliskWaveCycleCheck | 2026-11-01 ｜ 碑顶通天神光+底座破散放光 ｜ #08 |
+| PX-LANE-J | 车道 J：随行技能强化（回春甘露与灵光凝聚） | ✅ | Agent-J | `scripts/entities/PlayerSkillVfx.gd` | P0 | SkillCheck + DashTravelProbe | 2026-11-01 ｜ 回春术青莲升华灵光爆发+残影轻量风息 ｜ #08 |
+
+
+

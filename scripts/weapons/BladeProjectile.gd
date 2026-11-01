@@ -222,9 +222,21 @@ func _on_area_entered(area: Area2D) -> void:
 		# 顺向喷溅：碎片随弹道飞（dir 非零 → ~100° 扇形），多武器齐射不再糊成全向白噪
 		# 2026-10-23 门控下沉：三条业务规则（精英非暴击不重复 / 致命不发 / 屏外不发）已收进
 		# FxParticlePool.weapon_hit_spark，本侧只报「打中了谁、是否暴击」，不再自己写 if。
-		var spark_scale: float = 1.5 if is_crit else 0.85
-		var spark_elem: Variant = "crit" if is_crit else _get_impact_element()
-		FxParticlePool.weapon_hit_spark(enemy, global_position, spark_elem, spark_scale, is_crit, direction)
+		#
+		# 2026-11-01 打击反馈分频（pixelfx D-2）：普通高频命中继续走零贴图 HIT_SPARK 粒子
+		# （帧耗最优）；暴击这类「玩家看得清的重击」改由 pixelfx 序列帧 crit_hit 承担
+		# （自带 2 帧白闪，与 EnemyBase.take_damage 的暴击顿帧同拍触发）。
+		# 同帧同点只许一层：sheet 抢到播放位就静默粒子；被 FxFlipbookPool 自带的 16px
+		# 同点去重 / FRAME_BUDGET_FLIPBOOK 帧闸挡下（返回 null）时回退粒子兜底，反馈不丢。
+		# 命中坐标取弹丸当拍位置（碰撞发生点），与粒子火花同源。
+		var hit_pos: Vector2 = global_position
+		# pixelfx 接入点（回退：注释下面一行）
+		var sheet_played: bool = is_crit and FxFlipbookPool.play(&"crit_hit", hit_pos,
+				{"dir": direction, "scale_mult": 1.0}) != null
+		if not sheet_played:
+			var spark_scale: float = 1.5 if is_crit else 0.85
+			var spark_elem: Variant = "crit" if is_crit else _get_impact_element()
+			FxParticlePool.weapon_hit_spark(enemy, hit_pos, spark_elem, spark_scale, is_crit, direction)
 
 		# 施加五行异常走 ProcStatus 收口（保持 has_method 鸭类型）。武器/弹丸脚本绝不能硬引用
 		# EnemyBase——实测 `as EnemyBase` 会让 preload(BladeProjectile.tscn) 在运行中退化成

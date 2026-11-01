@@ -1,0 +1,20 @@
+{
+  "id": "lightning/lightning-strike",
+  "out_name": "lightning_strike",
+  "frame_size": [
+    240,
+    264
+  ],
+  "pivot": [
+    120,
+    228
+  ],
+  "anchor": "bottom",
+  "scale": 0.85,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "volt",
+  "png_bytes": 342802,
+  "vram_kb": 7425
+}

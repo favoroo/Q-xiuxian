@@ -72,17 +72,12 @@ static func call_thunder(p) -> bool:
 		e.take_damage(dmg, dir * impulse)
 	JuiceEffect.spawn_shockwave(p.get_parent(), strike_pos, ThunderData.RADIUS,
 		GameStyle.GOLD_EDGE, 0.3)
-	# 天雷演出：天降神雷折线电弧穿云而落（与落点冲击环结合）
-	# 2026-10-27 电刀化收尾：雷柱禁分支/余韵（allow_branch=false），空气里只留一条贯顶主干；
-	# 落点补缠身电，电落在敌人身上。落点横向抖动是纯表现，改走全局 randf ——
-	# 旧写法碰 GameManager.rng 会挪动后续掉落/伤害的随机序列（铁律 15）。
-	var bolt_parent: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
-	if bolt_parent != null:
-		var bolt := LightningBolt.acquire(bolt_parent)
-		var sky_x_offset := randf_range(-24.0, 24.0)
-		var sky_pos := strike_pos + Vector2(sky_x_offset, -260.0)
-		bolt.activate(sky_pos, strike_pos, GameStyle.GOLD_EDGE, 1.35, Color(0, 0, 0, 0), false)
-		JuiceEffect.spawn_body_arcs(bolt_parent, strike_pos, GameStyle.GOLD_EDGE)
+	# 天雷演出（2026-11-01 去线条化）：贴身光柱 + 落点冲击环，不向天空拉折线。
+	# 旧写法自 strike_pos 上方 260px 拉一条锯齿雷柱 + 落点缠身电，顶端悬在空气里；
+	# 与天罚同口径下线，改由 JuiceEffect.spawn_sky_strike 在身位内点亮。
+	var fx_parent: Node = p.get_parent() if p.get_parent() != null else (p.get_tree().current_scene if p.get_tree() != null else p)
+	if fx_parent != null:
+		JuiceEffect.spawn_sky_strike(fx_parent, strike_pos, GameStyle.GOLD_EDGE)
 	if p.skill_vfx != null:
 		p.skill_vfx.on_thunder_cast()
 	p.play_squash(Vector2(1.08, 0.92), 0.12)

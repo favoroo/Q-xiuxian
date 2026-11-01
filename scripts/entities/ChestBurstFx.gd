@@ -4,6 +4,9 @@ extends Node2D
 ## 破匣爆开演出：碎板飞溅 + 落地尘环 + 锁牌弹出，纯 _draw 时间轴一次性节点。
 ## 仿 ObeliskFx 范式：无贴图 / 无粒子节点 / 无光源；存活 ≤0.5s 后 queue_free，
 ## 不进任何组、不占 FxBudget 灯与发射器名额。
+## 2026-11-01 车道 G：同一破匣点另叠一张 chest_open 序列帧（FxFlipbookPool 池化播放，
+## 吃帧预算闸）。贴图只演「匣开那一爆」的烟光，自绘碎板仍是限流/资源缺失时的兜底画面；
+## 掉落表、耐久与判定全在 SpiritChest 侧，本文件只多一次演出调用。
 ## 配色由宿主按档位从 ChestVisual.PALETTES 整包灌入，本节点不另起配色；
 ## 随机只用本地 RNG（instance_id 播种）—— 演出随机不许碰 GameManager.rng，
 ## 否则挪动后续玩法随机序列，测试钉不住（AGENTS.md 铁律 3）。
@@ -38,6 +41,12 @@ static func play(host: Node, pos: Vector2, tier: int, canvas_scale: Vector2) -> 
 	fx.scale = canvas_scale
 	host.add_child(fx)
 	fx.global_position = pos
+	# pixelfx 接入点（回退：注释下一行）
+	# 破匣序列帧叠在匣心原位（anchor=bottom ⇒ 帧底对齐破匣落点，与碎板尘环同一地面线）。
+	# scale_mult 保持 1.0：档位体型差已由自绘碎板按 canvas_scale 承担，序列帧是全场同尺的「开匣光爆」，
+	# 再乘档位倍率会让玉匣的烟光比匣子本身大一倍。帧预算闸（5/帧）挡下时返回 null，
+	# 自绘碎板照旧全量播放，演出不空。
+	FxFlipbookPool.play(&"chest_open", pos, {"scale_mult": 1.0})
 
 func _ready() -> void:
 	# 本地 RNG：种子取自 instance_id，每口匣子的碎板轨迹各不相同且不碰玩法随机

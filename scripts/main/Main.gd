@@ -471,6 +471,7 @@ func _exit_tree() -> void:
 	JuiceEffect.clear_cache()
 	LightningBolt.clear_cache()
 	FxParticlePool.clear_cache()
+	FxFlipbookPool.clear_cache()
 	BladeProjectile.clear_pool()
 	SwordQiWave.clear_pool()
 	SwordPhantom.clear_pool()

@@ -1,0 +1,20 @@
+{
+  "id": "ice/ice-spikes",
+  "out_name": "ice_spikes",
+  "frame_size": [
+    264,
+    112
+  ],
+  "pivot": [
+    24,
+    96
+  ],
+  "anchor": "bottom",
+  "scale": 0.75,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "ice",
+  "png_bytes": 332204,
+  "vram_kb": 3696
+}

@@ -26,6 +26,15 @@ var _tip_light: PointLight2D = null
 ## 顶点缓冲复用（照 ProjectileTrail 环形缓冲先例，避免每次重绘 new PackedVector2Array）
 var _pts_buf: PackedVector2Array = []
 
+## pixelfx 序列帧束层（车道 C，2026-11-01）：循环帧叠在矢量判定层之上，只装饰不改判定。
+## 横向按「帧右缘到 pivot」拉伸到实际束长（只拉 X 不变粗），帧右缘永不超过 length；
+## 池/配置缺失时 play 返回 null，保留原三层矢量束回退。
+const FX_ID := &"arcane_beam"
+var _fx: AnimatedSprite2D = null
+var _fx_base_scale: Vector2 = Vector2.ONE
+## 未拉伸时 pivot 到帧右缘的世界距离（spawn 时按 FxSheetData 配置算一次）
+var _fx_reach: float = 1.0
+
 func _ready() -> void:
 	visible = false
 	set_process(false)
@@ -56,17 +65,62 @@ func beam_on(p_length: float, p_width: float, p_tint: Color, core_override: Colo
 	if not visible:
 		visible = true
 		set_process(true)
+	# 束流循环帧：起喷/被池回收后重申请；帧预算挡下时保持 null，下个 tick 再试（不加判定影响）
+	if _fx == null or not is_instance_valid(_fx) or not _fx.visible:
+		_spawn_fx()
+	_sync_fx()
 
 func beam_off() -> void:
 	visible = false
 	set_process(false)
+	_stop_fx()
 	if _tip_light != null:
 		_tip_light.enabled = false
+
+## 申请循环帧句柄：follow 武器本体的器口变换，位置由池每帧跟随、旋转/拉伸由 _sync_fx 补齐
+func _spawn_fx() -> void:
+	if not is_inside_tree():
+		return
+	var conf: Dictionary = FxSheetData.get_config(FX_ID)
+	if conf.is_empty():
+		return
+	_fx = FxFlipbookPool.play(FX_ID, global_position, {"follow": self, "scale_mult": 1.0})
+	if _fx == null:
+		return
+	_fx_base_scale = _fx.scale
+	var frame_size: Vector2 = conf.get("frame_size", Vector2.ZERO)
+	var pivot: Vector2 = conf.get("pivot", Vector2.ZERO)
+	# 帧右缘到 pivot 的横向行程：拉伸按它折算，透明右边距一并算入 ⇒ 实际画幅不超过判定束长
+	_fx_reach = maxf(1.0, (frame_size.x - pivot.x) * _fx_base_scale.x)
+	_sync_fx()
+
+## 每帧对齐：位置钉器口、转角随武器、X 拉伸到当前束长（Y 不动，避免等比放大变粗）
+func _sync_fx() -> void:
+	if _fx == null:
+		return
+	if not is_instance_valid(_fx) or not _fx.visible:
+		# 被池按上限回收（visible=false）→ 丢句柄，下次 beam_on 重新申请
+		_fx = null
+		return
+	_fx.global_position = global_position
+	_fx.global_rotation = global_rotation
+	var stretch: float = maxf(0.05, length / _fx_reach)
+	_fx.scale = Vector2(_fx_base_scale.x * stretch, _fx_base_scale.y)
+
+## 循环特效收束：必须显式 stop 归还池（loop 动画不会自回收），否则句柄常驻占池位
+func _stop_fx() -> void:
+	if _fx != null:
+		FxFlipbookPool.stop(_fx)
+		_fx = null
 
 func _process(delta: float) -> void:
 	_anim += delta
 	_phase += delta
 	_spark_timer -= delta
+	if visible and (_fx == null or not is_instance_valid(_fx) or not _fx.visible):
+		_spawn_fx()
+	else:
+		_sync_fx()
 	if _spark_timer <= 0.0 and length > 10.0:
 		# 2026-10-16 攻击粒子减量：持续束流端头火花节拍 0.18→0.26s、scale 0.85→0.7，
 		# 多把束流武器同屏时端头碎屑不再线性叠糊
@@ -134,6 +188,7 @@ func _draw() -> void:
 		_tip_light.color = Color(tint.r, tint.g, tint.b, 0.9)
 
 func _exit_tree() -> void:
+	_stop_fx()
 	if _tip_light != null and is_instance_valid(_tip_light):
 		_tip_light.queue_free()
 		_tip_light = null

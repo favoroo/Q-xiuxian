@@ -25,6 +25,15 @@ var _phase: float = 0.0
 var _open: float = 0.0   ## 起喷张开度（0→1，0.08s 喷射展开）
 var _ember_timer: float = 0.0
 
+## pixelfx 序列帧火锥层（车道 C，2026-11-01）：循环帧叠在矢量判定锥之上，只装饰不改判定。
+## 横向按「帧右缘到 pivot」拉伸到当前锥长（只拉 X 不变粗），随 _open 同步张开；
+## 池/配置缺失时 play 返回 null，保留原三层矢量火锥回退。
+const FX_ID := &"fire_breath"
+var _fx: AnimatedSprite2D = null
+var _fx_base_scale: Vector2 = Vector2.ONE
+## 未拉伸时 pivot 到帧右缘的世界距离（spawn 时按 FxSheetData 配置算一次）
+var _fx_reach: float = 1.0
+
 func _ready() -> void:
 	visible = false
 	set_process(false)
@@ -42,17 +51,67 @@ func cone_on(p_length: float, p_half_width: float, p_tint: Color = Color(0, 0, 0
 		_open = 0.0
 		_ember_timer = 0.0
 		set_process(true)
+	# 火锥循环帧：起喷/被池回收后重申请；帧预算挡下时保持 null，下个 tick 再试（不加判定影响）
+	if _fx == null or not is_instance_valid(_fx) or not _fx.visible:
+		_spawn_fx()
+	_sync_fx()
 
 func cone_off() -> void:
 	visible = false
 	set_process(false)
 	_open = 0.0
+	_stop_fx()
+
+## 申请循环帧句柄：dir 走本体局部朝向（本节点挂在武器器口、随武器转），位置由池每帧跟随
+func _spawn_fx() -> void:
+	if not is_inside_tree():
+		return
+	var conf: Dictionary = FxSheetData.get_config(FX_ID)
+	if conf.is_empty():
+		return
+	_fx = FxFlipbookPool.play(FX_ID, global_position, {
+		"follow": self,
+		"dir": Vector2.RIGHT.rotated(rotation),
+		"scale_mult": 1.0,
+	})
+	if _fx == null:
+		return
+	_fx_base_scale = _fx.scale
+	var frame_size: Vector2 = conf.get("frame_size", Vector2.ZERO)
+	var pivot: Vector2 = conf.get("pivot", Vector2.ZERO)
+	# 帧右缘到 pivot 的横向行程：拉伸按它折算，透明右边距一并算入 ⇒ 外缘不超过判定锥长
+	_fx_reach = maxf(1.0, (frame_size.x - pivot.x) * _fx_base_scale.x)
+	_sync_fx()
+
+## 每帧对齐：位置钉器口、转角随武器、X 拉伸到当前绘制锥长（Y 不动，锥宽不虚胖）
+func _sync_fx() -> void:
+	if _fx == null:
+		return
+	if not is_instance_valid(_fx) or not _fx.visible:
+		# 被池按上限回收（visible=false）→ 丢句柄，下次 cone_on 重新申请
+		_fx = null
+		return
+	_fx.global_position = global_position
+	_fx.global_rotation = global_rotation
+	# 与 _draw 的 l 同源：起喷 0.08s 内随 _open 张开，任何时刻都不越过判定锥
+	var drawn_len: float = length * lerpf(0.35, 1.0, _open)
+	_fx.scale = Vector2(_fx_base_scale.x * maxf(0.05, drawn_len / _fx_reach), _fx_base_scale.y)
+
+## 循环特效收束：必须显式 stop 归还池（loop 动画不会自回收），否则句柄常驻占池位
+func _stop_fx() -> void:
+	if _fx != null:
+		FxFlipbookPool.stop(_fx)
+		_fx = null
 
 func _process(delta: float) -> void:
 	_anim += delta
 	_open = minf(1.0, _open + delta / 0.08)
 	_phase += delta
 	_ember_timer -= delta
+	if visible and (_fx == null or not is_instance_valid(_fx) or not _fx.visible):
+		_spawn_fx()
+	else:
+		_sync_fx()
 
 	# 锥口与锥身火舌粒子流（T-2.3）：节流喷发，局限于判定锥内
 	if _ember_timer <= 0.0 and length > 20.0 and _open > 0.25:
@@ -131,3 +190,6 @@ func _cone_poly(l: float, w: float, col: Color, jag: float) -> void:
 		var h := w * pow(t, 0.75) * wave
 		_poly_buf[POLY_STEPS + (POLY_STEPS - i) + 1] = Vector2(x, h)
 	draw_colored_polygon(_poly_buf, col)
+
+func _exit_tree() -> void:
+	_stop_fx()

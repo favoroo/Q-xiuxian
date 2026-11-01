@@ -98,6 +98,7 @@ func _ready() -> void:
 		[combat, "_test_charge_geometry"],
 		[combat, "_test_elite_attack_constants"],
 		[combat, "_test_aoe_fairness"],
+		[combat, "_test_bolt_dead_zone"],
 		[combat, "_test_stat_breakdown_buff"],
 		[targeting, "_test_spirit_orbit_dynamics"],
 		[content, "_test_turret_and_new_cultivators"],

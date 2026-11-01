@@ -1,0 +1,20 @@
+{
+  "id": "melee/sword-slash",
+  "out_name": "sword_slash",
+  "frame_size": [
+    136,
+    104
+  ],
+  "pivot": [
+    44,
+    92
+  ],
+  "anchor": "center",
+  "scale": 0.65,
+  "fps": 30,
+  "loop": false,
+  "frames_count": 18,
+  "palette_key": "metal",
+  "png_bytes": 54753,
+  "vram_kb": 1105
+}

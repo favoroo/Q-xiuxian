@@ -330,6 +330,19 @@ func _test_aoe_fairness() -> void:
 	_c.check(GameBalance.aoe_zone_edge_offset(GameBalance.poison_radius(99)) < GameBalance.aoe_zone_edge_offset(GameBalance.BOSS_HAZARD_FIELD_RADIUS),
 		"毒潭偏移小于禁区偏移（半径同源缩放）")
 
+## 2026-11-01 贴脸禁射（近战体验治理）：玩家进到近战距离，远程妖收起瞄准直射。
+## 判据钉三件事：阈值与最短近战射程对齐、边界是严格的 <、重试间隔不让人贴脸瞬发。
+func _test_bolt_dead_zone() -> void:
+	_c.check(BalanceCombat.BOLT_MIN_CAST_RANGE >= 105.0,
+		"禁射距离 %.0fpx ≥ 最短近战射程 105px（贴脸能打到它时才禁射）" % BalanceCombat.BOLT_MIN_CAST_RANGE)
+	var edge := BalanceCombat.BOLT_MIN_CAST_RANGE
+	_c.check(BalanceCombat.bolt_in_dead_zone((edge - 1.0) * (edge - 1.0)), "阈值内侧 1px 算贴脸")
+	_c.check(not BalanceCombat.bolt_in_dead_zone(edge * edge), "正好踩线不算贴脸（严格 <，边界留给正常起手）")
+	_c.check(not BalanceCombat.bolt_in_dead_zone((edge + 1.0) * (edge + 1.0)), "阈值外 1px 恢复正常起手")
+	_c.near(BalanceCombat.BOLT_TOO_CLOSE_RETRY, 0.4, EPS, "贴脸禁射重试间隔 0.4s（不是贴脸瞬发）")
+	_c.check(BalanceCombat.BOLT_TOO_CLOSE_RETRY < BalanceCombat.BOLT_FIRST_DELAY,
+		"重试间隔短于首发缓冲（贴脸拉开后能较快恢复威胁）")
+
 # ---------------- 属性面板读数：与 Player 实际口径同源 ----------------
 
 ## 疾风/神行在身时开面板，移速/攻速读数必须含神通 buff 层（2026-10-11 补漏：

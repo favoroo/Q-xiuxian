@@ -8,6 +8,13 @@ extends Node2D
 ##   thunder 默认雷系不画（雷柱/闪电已在 ThunderBurst/LightningBolt 里）
 ## 全部几何由判定半径 radius 一个量派生（画多大==判多大），纯 _draw 零粒子零灯光；
 ## 作为 ThunderBurst 的常驻子节点随池复用，activate_fx 重铺字段即重生，零 instantiate。
+##
+## pixelfx 序列帧接入（2026-11-01 车道 F）：earth（地裂）/ frost（冰刺）两形态改由
+## FxFlipbookPool 播放离线烘焙的源码序列帧承担主形态（earth_spike / ice_spikes），
+## 自绘层退成「与判定半径同源的贴地底盘」并按 SHEET_BASE_ALPHA 压暗 —— 序列帧只管质感，
+## 玩家仍能从底盘读出真实打击范围（铁律 7：画多大==判多大）。
+## 序列帧配置缺失 / 资源未导入 / 被物理帧预算掐掉时 play() 返回 null，_sheet_played=false，
+## 自动回退到下面原有的纯 _draw 形态（老画法一行未删，仍是唯一兜底）。
 
 var kind: String = "thunder"
 var radius: float = 80.0
@@ -19,8 +26,13 @@ const FIREBALLS := 5       ## 火雨落点数
 const FROST_SPIKES := 7    ## 冰刺数
 const SONIC_RINGS := 3     ## 音波环数
 const EARTH_CRACKS := 6    ## 地裂条数
+## 序列帧接管主形态后自绘底盘的透明度系数：地裂裂缝 / 冰刺霜环压到这个档位，
+## 只留「判定半径」的读法，不与 sheet 主体抢亮度（sheet 是主形态，底盘是范围脚注）。
+const SHEET_BASE_ALPHA := 0.5
 
 var _t: float = 0.0
+## 本次演出是否成功起了 pixelfx 序列帧（earth/frost 专用）：false 时自绘形态全量兜底。
+var _sheet_played: bool = false
 ## 重绘节流（2026-10-14）：演出窗口内原每帧无条件重绘，0.38s 演出 20Hz 足够流畅
 ## 60fps 档（2026-10-15 VisualRate 档位联动）：演出 0.38s 在 60fps 下只 23 帧，
 ## 20Hz 每 3 帧一画会露台阶，高帧档翻倍 40Hz；低档 20Hz 是 perf_probe 预算口径。
@@ -45,10 +57,20 @@ func activate_fx(p_kind: String, p_radius: float, p_tint: Color) -> void:
 	radius = p_radius
 	tint = p_tint
 	_t = 0.0
+	_sheet_played = false
 	if kind == "thunder" or kind == "":
 		visible = false
 		set_process(false)
 		return
+	# pixelfx 序列帧（2026-11-01 车道 F）：地裂/冰刺的主形态交给离线烘焙序列帧，
+	# 位置用 global_position（ThunderBurst 的落点）。play() 受物理帧预算闸与资源存在性保护，
+	# 返回 null（未导入/被限流/池未就绪）时不抛错，自绘形态按老画法全量兜底。
+	if kind == "earth":
+		# 地裂：贴地层（z_ground，低于角色），石头崩起不能盖住脚下的敌人与伤害跳字
+		_sheet_played = FxFlipbookPool.play(&"earth_spike", global_position, {"z_ground": true}) != null
+	elif kind == "frost":
+		# 冰刺：默认 Z_OVERLAY 档（冰柱从地下戳出，要盖在角色身位之上才读得出「刺穿」）
+		_sheet_played = FxFlipbookPool.play(&"ice_spikes", global_position) != null
 	visible = true
 	set_process(true)
 
@@ -132,7 +154,11 @@ func _draw_flame_drop(pos: Vector2, s: float, a: float) -> void:
 	AdaptiveDraw.circle(self, pos, s * 0.3, GameStyle.FX_HDR_FIRE, 3.2)
 
 ## 冰霜：冰刺从落点圈内拔地戳出（ stagger 生长），末端霜环淡去
+## 序列帧接管时（_sheet_played）冰刺本体交给 ice_spikes，本函数退到 _draw_frost_footprint 兜底。
 func _draw_frost() -> void:
+	if _sheet_played:
+		_draw_frost_footprint()
+		return
 	for i in FROST_SPIKES:
 		var ring_r := radius * (0.35 if i < 3 else 0.72)
 		var ang := float(i) * 2.399 + 0.4   # 黄金角散布
@@ -157,6 +183,17 @@ func _draw_frost() -> void:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 		draw_arc(Vector2.ZERO, radius * 0.9 * ring_p, 0.0, TAU, 40, Color(tint.r, tint.g, tint.b, ring_a), 2.0)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## 冰刺形态的贴地底盘（序列帧接管时的自绘层）：只留与判定半径同源的霜环 ——
+## 半径 0.9R 外缘仍由玩家肉眼可读（画多大==判多大），冰刺本体不重复画（sheet 已有整排冰柱）。
+func _draw_frost_footprint() -> void:
+	var ring_p: float = clampf(_t / 0.18, 0.0, 1.0)
+	var ring_a := 0.4 * SHEET_BASE_ALPHA * (1.0 - clampf((_t - 0.18) / (DUR - 0.18), 0.0, 1.0))
+	if ring_a <= 0.0:
+		return
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+	draw_arc(Vector2.ZERO, radius * 0.9 * ring_p, 0.0, TAU, 40, Color(tint.r, tint.g, tint.b, ring_a), 2.0)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 音波：三重细环递进扩散（音笛是声波不是雷，贴地环状推进）
 func _draw_sonic() -> void:
@@ -194,7 +231,11 @@ func _draw_drum() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 地裂：锯齿裂缝从爆心爬出去 + 碎石块崩起（裂山铎，贴地透视展开）
+## 序列帧接管时（_sheet_played）石柱崩起交给 earth_spike，本函数退到 _draw_earth_footprint 兜底。
 func _draw_earth() -> void:
+	if _sheet_played:
+		_draw_earth_footprint()
+		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	var p: float = clampf(_t / 0.16, 0.0, 1.0)
 	var fade := 1.0 - clampf((_t - 0.22) / (DUR - 0.22), 0.0, 1.0)
@@ -223,6 +264,32 @@ func _draw_earth() -> void:
 		draw_colored_polygon(PackedVector2Array([
 			pos + Vector2(-s, s * 0.5), pos + Vector2(0, -s), pos + Vector2(s, s * 0.4)]),
 			Color(tint.r * 0.85, tint.g * 0.8, tint.b * 0.7, 0.85 * fade))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## 地裂形态的贴地底盘（序列帧接管时的自绘层）：只留锯齿裂缝（0.55~0.9R，判定同源），
+## 碎石块交给 earth_spike 的崩起石柱，不重复画；整层压到 SHEET_BASE_ALPHA 让 sheet 当主体。
+func _draw_earth_footprint() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
+	var p: float = clampf(_t / 0.16, 0.0, 1.0)
+	var fade := (1.0 - clampf((_t - 0.22) / (DUR - 0.22), 0.0, 1.0)) * SHEET_BASE_ALPHA
+	if fade <= 0.0:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
+	var crack_col := Color(0.16, 0.11, 0.05, 0.8 * fade)
+	var glow := GameStyle.FX_HDR_EARTH
+	glow.a *= fade
+	for i in EARTH_CRACKS:
+		var ang := float(i) * TAU / float(EARTH_CRACKS) + 0.35
+		var dir := Vector2(cos(ang), sin(ang))
+		var tan := Vector2(-sin(ang), cos(ang))
+		var reach := radius * (0.55 + 0.35 * fposmod(float(i) * 0.61, 1.0)) * p
+		var pts := PackedVector2Array()
+		for k in 4:
+			var d := reach * float(k + 1) / 4.0
+			var jag := (3.5 if k % 2 == 0 else -3.5) * (1.0 - float(k) / 5.0)
+			pts.append(dir * d + tan * jag)
+		draw_polyline(pts, crack_col, 2.0)
+		draw_polyline(pts, glow, 0.8)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 ## 坠印扬尘（巨印落点形态，2026-10-15 重构）：一记快速砸开的重冲击环压场 + 贴地扬尘环

@@ -1,0 +1,20 @@
+{
+  "id": "pickups/chest-open",
+  "out_name": "chest_open",
+  "frame_size": [
+    176,
+    112
+  ],
+  "pivot": [
+    88,
+    96
+  ],
+  "anchor": "bottom",
+  "scale": 0.8,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "gold",
+  "png_bytes": 180278,
+  "vram_kb": 2310
+}

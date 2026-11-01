@@ -1,0 +1,20 @@
+{
+  "id": "arcane/arcane-beam",
+  "out_name": "arcane_beam",
+  "frame_size": [
+    264,
+    100
+  ],
+  "pivot": [
+    26,
+    84
+  ],
+  "anchor": "left",
+  "scale": 0.7,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "arcane",
+  "png_bytes": 299370,
+  "vram_kb": 2475
+}

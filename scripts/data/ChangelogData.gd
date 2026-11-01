@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.13",
+			"date": "2026-11-01",
+			"title": "特效焕新与战斗公平",
+			"items": [
+				"剑光、雷击与各类法术特效全面焕新。",
+				"破匣、拾宝与法宝掉落更有仪式感。",
+				"大范围攻击预警更有反应时间。",
+				"普通回合不再弹战利品清单。",
+			],
+		},
+		{
 			"version": "v0.1.12",
 			"date": "2026-10-30",
 			"title": "皮肤系列动效与迷雾视野",

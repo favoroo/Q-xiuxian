@@ -27,6 +27,7 @@
 [ext_resource type="PackedScene" uid="uid://dr84i361xmhme" path="res://scenes/ui/AuthorPanel.tscn" id="25_author"]
 [ext_resource type="PackedScene" uid="uid://qbneo41pkpge" path="res://scenes/ui/FeedbackDialog.tscn" id="26_feedback"]
 [ext_resource type="PackedScene" path="res://scenes/ui/CoCreateDialog.tscn" id="27_cocreate"]
+[ext_resource type="Script" path="res://scripts/systems/FxFlipbookPool.gd" id="28_flipbook"]
 
 [sub_resource type="Environment" id="Environment_hd2d"]
 background_mode = 3
@@ -96,6 +97,10 @@ script = ExtResource("24_atmo")
 [node name="FxParticlePool" type="Node2D" parent="." unique_id=294675132]
 z_index = 35
 script = ExtResource("23_fx")
+
+[node name="FxFlipbookPool" type="Node2D" parent="." unique_id=294675133]
+z_index = 35
+script = ExtResource("28_flipbook")
 
 [node name="SmoothCamera" type="Camera2D" parent="." unique_id=1283753887]
 zoom = Vector2(1.1, 1.1)

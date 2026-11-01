@@ -1,0 +1,20 @@
+{
+  "id": "impacts/crit-hit",
+  "out_name": "crit_hit",
+  "frame_size": [
+    216,
+    136
+  ],
+  "pivot": [
+    84,
+    106
+  ],
+  "anchor": "center",
+  "scale": 0.55,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 20,
+  "palette_key": "ember",
+  "png_bytes": 105668,
+  "vram_kb": 2295
+}

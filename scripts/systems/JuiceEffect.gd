@@ -12,7 +12,7 @@ extends Node2D
 ##   2) 粒子用并行数组而非「每颗粒子一个 Dictionary」；
 ##   3) 光环插值由 Tween.interpolate_value 改成 quad 缓出的闭式解。
 
-enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST, HEAL_RISE }
+enum EffectType { PICKUP_POP, STEP_DUST, SHOCKWAVE, IMPACT_POP, DEATH_BURST, HEAL_RISE, SKY_STRIKE }
 
 const POOL_CAP := 128        ## 常驻池上限，超出时临时新建并在用完后释放
 const Z_OVERLAY := 35        ## 常规特效层级（角色之上）
@@ -63,6 +63,7 @@ var _r_w: Array[float] = []
 
 var _overflow: bool = false
 var _draw_phase: float = 0.0  ## 距下次重绘的剩余时间（错相载体）
+var _strike_col: Color = Color(2.4, 2.3, 1.9)  ## SKY_STRIKE 光柱色（池体复用由 spawn 写入）
 
 static var _pool: Array[JuiceEffect] = []
 static var _host: Node2D = null
@@ -135,6 +136,7 @@ func _begin(type: int, pos: Vector2, life: float, z: int) -> void:
 	elapsed = 0.0
 	_p_count = 0
 	_r_count = 0
+	_strike_col = Color(2.4, 2.3, 1.9)
 	z_index = z
 	global_position = pos
 	modulate = Color(1, 1, 1, 1)
@@ -221,7 +223,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
-	var is_ground := effect_type == EffectType.SHOCKWAVE
+	# 落雷光柱的落点环也贴地（与冲击波同一俯视透视），光柱本体则在环之后正向绘制
+	var is_ground := effect_type == EffectType.SHOCKWAVE or effect_type == EffectType.SKY_STRIKE
 
 	# 0. 冲击光环（弧段数随半径自适应；若是地面冲击波则施加俯视透视压扁，消除立面悬浮感）
 	if is_ground:
@@ -233,6 +236,10 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, _r_cur[i], 0.0, TAU, clampi(int(_r_cur[i] * 1.2), 10, 32), col, width, true)
 	if is_ground:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# 0.5 天罚落雷：贴身光柱（脚底原点 → 身位高度），两端都不出目标身位
+	if effect_type == EffectType.SKY_STRIKE:
+		_draw_sky_strike(progress, alpha)
 
 	# 1. 灵尘：仍有速度时画成拖尾线段，静止后收成一个点
 	for i in range(_p_count):
@@ -246,6 +253,33 @@ func _draw() -> void:
 			draw_line(pos, tip, pcol, w, true)
 		else:
 			draw_circle(pos, w, pcol)
+
+## 天罚落雷的贴身光柱：梯形柱体从落点向上收窄，快速亮起后整根收熄。
+## 与 LightningBolt 的分工：这里不生成任何折线/分支 —— 旧写法自天顶拉 280px 折线，
+## 顶端悬在空气里，目标被暴击打死后只剩「凭空一道线」。光柱底端钉在落点、顶端压在
+## 身位高度（SKY_STRIKE_HEIGHT），玩家读到的是「雷砸在这只怪身上」。
+func _draw_sky_strike(progress: float, alpha: float) -> void:
+	# 前 18% 快速长满，之后随 alpha 收熄；alpha^1.6 让尾段干净（不拖一条长残影）
+	var grow := clampf(progress / 0.18, 0.0, 1.0)
+	var h: float = SKY_STRIKE_HEIGHT * (0.55 + 0.45 * grow)
+	var a := pow(alpha, 1.6)
+	var c := _strike_col
+	_draw_pillar(h, SKY_STRIKE_BASE_HALF_W, SKY_STRIKE_TOP_HALF_W, Color(c.r, c.g, c.b, a * 0.20))
+	_draw_pillar(h, SKY_STRIKE_BASE_HALF_W * 0.60, SKY_STRIKE_TOP_HALF_W * 0.75, Color(c.r, c.g, c.b, a * 0.52))
+	_draw_pillar(h, SKY_STRIKE_BASE_HALF_W * 0.25, SKY_STRIKE_TOP_HALF_W * 0.32,
+		Color(SKY_STRIKE_CORE.r, SKY_STRIKE_CORE.g, SKY_STRIKE_CORE.b, a * 0.95))
+	# 中段爆闪：给「砸中了」一记瞬时读数（不是一根常亮的灯柱）
+	draw_circle(Vector2(0.0, -h * 0.5), lerpf(9.0, 2.5, progress), Color(1.0, 1.0, 1.0, a * 0.8))
+
+## 梯形柱体：底边半宽 half_bottom、顶边半宽 half_top，从局部原点向上 h 像素。
+## draw_colored_polygon 一次填充，无顶点抖动/无随机折线 —— 这是「干净光柱」的关键。
+func _draw_pillar(h: float, half_bottom: float, half_top: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-half_bottom, 0.0),
+		Vector2(-half_top, -h),
+		Vector2(half_top, -h),
+		Vector2(half_bottom, 0.0),
+	]), col)
 
 # ----------------- 静态生成接口 -----------------
 
@@ -419,6 +453,31 @@ static func spawn_bolt_pop(parent: Node, pos: Vector2, col: Color = Color(2.4, 2
 		var a := randf() * TAU
 		var spd := randf_range(70.0, 130.0)
 		fx._add_particle(Vector2.ZERO, Vector2(cos(a), sin(a)) * spd, 5.0, col, 1.4)
+
+# —— 天罚落雷（2026-11-01 去线条化）——
+## 演出尺寸：柱高 ≈ 敌身位高度，底宽压在身位内；落点环 30px 与 sky_bolt
+## 的就近认领半径 28px 同档（环标落点、不标 AOE —— 天罚是单点伤害）。
+const SKY_STRIKE_LIFE := 0.18
+const SKY_STRIKE_HEIGHT := 58.0
+const SKY_STRIKE_BASE_HALF_W := 15.0
+const SKY_STRIKE_TOP_HALF_W := 3.0
+const SKY_STRIKE_RING_R := 30.0
+const SKY_STRIKE_CORE := Color(2.6, 2.5, 2.3)
+
+## 天罚落雷：一道贴身光柱从目标脚下亮到身位高度 + 贴地落点环。
+## 旧写法 sky_bolt 自 target 上方 280px 拉一条锯齿折线，顶端没有任何锚点（悬在空气里），
+## 且每次暴击都来一条 —— 玩家读作「空气里凭空冒出的一道线」。现在不生成任何折线：
+## 光柱底端 = 目标落点、顶端 = 身位高度，怎么看都钉在这只怪身上；目标被暴击打死时
+## 也只会落在它倒下的位置，不会飘到空地上。
+static func spawn_sky_strike(parent: Node, pos: Vector2, col: Color = Color(2.4, 2.3, 1.9)) -> void:
+	if not _ready_to_spawn(parent):
+		return
+	if not _pos_in_viewport(parent, pos):
+		return
+	var fx := _acquire()
+	fx._begin(EffectType.SKY_STRIKE, pos, SKY_STRIKE_LIFE, Z_OVERLAY)
+	fx._strike_col = col
+	fx._add_ring(SKY_STRIKE_RING_R * 0.18, SKY_STRIKE_RING_R, col, 2.6)
 
 # —— 电刀式「缠身电」（2026-10-27 紫电电刀化）——
 ## 蜷弧根数 / 蜷弧活动半径（px，≈敌体量）/ 线宽倍率（相对 LightningBolt 基准）

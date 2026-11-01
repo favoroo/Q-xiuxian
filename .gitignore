@@ -15,6 +15,7 @@ keystore/secret.txt
 
 # 本地规划文档（供分派执行 Agent 用，不入仓库）
 vfx-optimization-plan.md
+pixelfx-integration-plan.md
 
 # 本地 IDE / 工作区配置
 .qoder/

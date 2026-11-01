@@ -64,32 +64,18 @@ static func perform(w) -> void:
 	w._tw_modulate(tw, Color.WHITE, 0.18)
 	tw.tween_callback(func(): w.is_attacking = false)
 
-## 引雷：锯齿闪电从武器射向落雷点，落雷爆发在 ThunderBurst.activate() 里结算。
-## dmg_ratio：★3 觉醒「双雷」第二道的伤害系数（默认 1.0 = 主雷）；追加道电柱略细、
-## 伤害/击退/异常量随系数打折（异常取 max 生效，弱化刷新盖不掉主雷的强异常）。
-## star_seg：追加段号（-1 = 主雷）。★3/★4 追加道换星级色（★3 鎏金 / ★4 青紫交替），
-## 让「多出来的那道」在颜色上就读得出来——旧写法追加道与主雷同色、只错开落点，
-## 几道雷糊成一片，玩家只感到"更亮"而不是"更多"。
+## 落点爆发：伤害与落点视觉全部交给 ThunderBurst，器口不再拉「引雷」折线。
+## 2026-11-01 去线条化：旧写法从器口向落点拉一条 LightningBolt（默认还放行随机分支 +
+## 命中端空气余韵），而 9 把范围武器全都走这里 —— 天灯/冰珠/音笛也先劈一道闪电，
+## 与各自的落点形态文案对不上，高星连发时更是满屏乱线。整条器口→落点折线下线：
+## 起手读法由武器蓄力金光承担，落点读法由 ThunderBurst 的光斑/形态演出/雷音承担，
+## 雷系另在落点点一道贴身光柱（ThunderBurst.activate → JuiceEffect.spawn_sky_strike）。
+## dmg_ratio / star_seg：★3/★4 追加道的伤害系数与段号（段号决定落点星级色）。
 static func spawn_lightning(w, target_pos: Vector2, dmg_ratio: float = 1.0, star_seg: int = -1) -> void:
-	# 屏外落点不引雷：电柱从屏内的器口一路画到屏外，屏内那一段就是「凭空一道白光」。
-	# 伤害照常由 ThunderBurst 结算（落点视觉在屏外本就不可见，爆散环另有 JuiceEffect 视口兜底）。
 	var player: Node2D = GameManager.player
 	var battle_layer: Node = player.get_parent() if (player != null and player.get_parent() != null) else (w.get_tree().current_scene if w.get_tree() != null else w)
 	# 追加道的星级色：主雷(star_seg<0)保持武器本色的 burst_tint
 	var echo_star: bool = star_seg >= 0 and int(w.star) >= 3
-	var star_col: Color = GameStyle.star_fx_color(int(w.star), maxi(star_seg, 0)) if echo_star else Color(0, 0, 0)
-	if player == null or GameBalance.is_in_viewport(target_pos, player.global_position):
-		var bolt: LightningBolt = LightningBolt.acquire(battle_layer)
-		var w_mult: float = 1.0 + 0.18 * float(w.star - 1)
-		if dmg_ratio < 1.0:
-			w_mult *= 0.8
-		var b_tint: Color = w.def.get("burst_tint", LightningBolt.GLOW_COLOR)
-		var core_tint := Color(0, 0, 0, 0)
-		if echo_star:
-			b_tint = star_col
-			# 芯线同染（1.6 倍亮度保持「更亮的核心」层次），让追加雷整条都是星级色
-			core_tint = Color(star_col.r * 1.6, star_col.g * 1.6, star_col.b * 1.6, 1.0)
-		bolt.activate(w.muzzle_point.global_position, target_pos, b_tint, w_mult, core_tint)
 
 	# 落雷走对象池（2026-10-11 第 6 波卡顿优化）：acquire → 写字段 → activate 起爆
 	var burst: Node2D = ThunderBurst.acquire(battle_layer, w.burst_scene)
@@ -100,7 +86,7 @@ static func spawn_lightning(w, target_pos: Vector2, dmg_ratio: float = 1.0, star
 	burst.knockback_base = WeaponData.knockback_for(w.weapon_def_id, 200.0) * dmg_ratio
 	burst.tint = w.def.get("burst_tint", burst.tint)
 	if echo_star:
-		# 落点光斑/光环/雷柱同源换星色（ThunderBurst 内部所有视觉都从 tint 派生）
+		# 落点光斑/光柱同源换星色（ThunderBurst 内部所有视觉都从 tint 派生）
 		var ldr: Color = GameStyle.star_fx_ldr(int(w.star), maxi(star_seg, 0))
 		burst.tint = ldr
 	burst.burst_kind = String(w.def.get("burst_kind", "thunder"))

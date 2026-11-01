@@ -7,10 +7,21 @@ extends Area2D
 ##    是 Forward+ 2D 光照 pass 的最大成本项；超限灯灭（矢量辉光多边形仍在，视觉不空）；
 ## 3. 去 set_loops 常驻 Tween——浮动改由 ProceduralLootRenderer._process 手写 sin 驱动；
 ## 4. 软上限保险丝 GEM_SOFT_CAP——超过后最旧宝石被强制磁吸给玩家，不消失、无经验损失。
+##
+## 2026-11-01 车道 G（pixelfx 序列帧接入，只加演出不改掉落/数值）：
+## - 拾取瞬间在入体点炸一张 collect_burst（高频灵珠靠 FxFlipbookPool 的 5/帧闸与 16px 重叠去重
+##   自动限流，一波百颗齐吸也只放行稀疏几处）；
+## - 金宝（is_gold 且经验 ≥ ELITE_GEM_EXP：精英/Boss 那档）额外立一根循环 loot_beam 光柱当
+##   「此处有宝」的读点。loop 动画不会自回收，句柄由宝石自己持有、recycle/_exit_tree 显式归还
+##   （照 BeamRenderer 口径）；开匣那捧金灵石虽是 is_gold，但同帧 3~6 颗不上光柱（不抢战斗演出池位）。
 
 const POOL_CAP := 160          ## 池上限：单回合同存远小于此值
 const GEM_LIGHT_CAP := 5       ## 动态灯名额（与 BladeProjectile.LIGHT_CAP=6 独立计数）
 const GEM_SOFT_CAP := 140      ## 场上软上限：超过后强制最旧宝石磁吸给玩家（保险丝）
+## 稀有金宝的「此处有宝」光柱：loop 序列帧，不自回收，句柄由宝石本体持有。
+## 只立 LOOT_BEAM_HOLD 秒就收 —— 宝石能在地上躺一整个回合，常驻光柱会把 16 个池位吃光，
+## 反过来卡住武器束流/火锥这些同样吃池的循环特效（限流优先级：战斗演出 > 掉落装饰）。
+const LOOT_BEAM_HOLD := 1.0
 
 @export var exp_value: int = 1
 ## 金币腿入账值：-1 = 与 exp_value 同值（普通金币原口径）；>=0 = 按此值入账。
@@ -34,6 +45,9 @@ var acceleration: float = 850.0
 var _pop_time: float = 0.0
 var _pop_vel: Vector2 = Vector2.ZERO
 var _trail_line: Line2D = null
+var _beam_fx: AnimatedSprite2D = null   ## 金宝光柱句柄（loop 帧，不自回收，回收时显式归还）
+var _beam_hold: float = 0.0             ## 光柱剩余驻留秒数（走本体的 _process，不另起 Tween）
+var _beam_pending: bool = false         ## deferred 入场待补光柱（物理回调里掉出的金宝）
 
 @onready var sprite: Sprite2D = $Sprite2D
 var loot_renderer: ProceduralLootRenderer = null
@@ -147,6 +161,7 @@ func activate() -> void:
 	_active_gems[get_instance_id()] = self
 	_update_visual()
 	_try_acquire_light()
+	_spawn_beam()
 
 func recycle() -> void:
 	if _pooled:
@@ -155,6 +170,7 @@ func recycle() -> void:
 	target_player = null
 	_pop_time = 0.0
 	_pop_vel = Vector2.ZERO
+	_stop_beam()   ## 循环帧必须显式归还池，否则句柄随池复用一路占位（照 BeamRenderer._stop_fx）
 	if _trail_line != null:
 		_trail_line.clear_points()
 		_trail_line.visible = false
@@ -215,6 +231,10 @@ func _ready() -> void:
 		add_child(loot_renderer)
 	loot_renderer.self_bob = true   ## 浮动由渲染器 _process 手写 sin 驱动，不再用常驻 Tween
 	set_physics_process(false)      ## 静置宝石不跑物理；magnet_to 时再开
+	# 定义 _process 会让引擎自动开进程：没有金宝光柱的宝石（绝大多数）必须显式关掉，
+	# 否则池里上百颗休眠宝石每渲染帧空跑一次。光柱已在 deferred 入场那一拍立起来的就别关。
+	if _beam_hold <= 0.0:
+		set_process(false)
 	_update_visual()
 	_try_acquire_light()
 
@@ -247,10 +267,64 @@ func _ensure_trail() -> void:
 	_trail_line.visible = false
 	add_child(_trail_line)
 
+# ---------------- 金宝光柱（pixelfx loot_beam，loop 帧） ----------------
+## 只给「大灵石」立柱：is_gold 且单颗经验 ≥ ELITE_GEM_EXP（精英/Boss 那档）。
+## 为什么不按 is_gold 一律立：开一口匣子同帧掉 3~6 颗金灵石，每颗一根光是同屏 6 根柱子；
+## 而 loop 帧不自回收、16 个池位还要留给武器束流/火锥，掉落装饰不许抢战斗演出的名额。
+## 碎金档（is_shard）与普通灵珠同理不上光柱 —— 它们是全场最高频物件。
+func _spawn_beam() -> void:
+	_stop_beam()
+	if not is_gold or exp_value < GameBalance.ELITE_GEM_EXP:
+		return
+	if not is_inside_tree():
+		# 首建这一路在物理回调里走的是 deferred 入场（见 acquire_or_new）：activate() 当拍
+		# 还不在树内，FxFlipbookPool.play 的 global_position 落点与池挂载都无从谈起。
+		# 而金宝恰恰全是 _die / _destroy 的物理回调里掉的，所以挂进树的那一帧再补光柱。
+		_beam_pending = true
+		return
+	# pixelfx 接入点（回退：注释下一行）
+	# anchor=bottom ⇒ 帧底对齐宝石落点；follow 由池每帧跟随本体位置（宝石被磁吸前原地不动）。
+	_beam_fx = FxFlipbookPool.play(&"loot_beam", global_position, {"follow": self})
+	if _beam_fx == null:
+		return
+	# 限流挡下（同帧池满/帧预算用尽）时保持 null，不重试：光柱是装饰，宝石本体照常可见
+	_beam_hold = LOOT_BEAM_HOLD
+	set_process(true)
+
+## 归还循环帧句柄：loop 动画不自回收，不显式 stop 会一直占池位（照 BeamRenderer._stop_fx）。
+## 陷阱：池满时 _spawn 会抢最老的活跃项（POOL_CAP+4 之后），这根光柱可能已被借给别的特效 ——
+## 只有句柄仍挂着「跟随我」这条 meta 才归还，否则一律不动它（别人的演出不能替人 stop）。
+func _stop_beam() -> void:
+	_beam_pending = false
+	if _beam_fx != null and is_instance_valid(_beam_fx) \
+			and _beam_fx.has_meta("follow_target") and _beam_fx.get_meta("follow_target") == self:
+		FxFlipbookPool.stop(_beam_fx)
+	_beam_fx = null
+	_beam_hold = 0.0
+	# 光柱是本体唯一的 _process 用途：没有光柱就把 process 关掉，
+	# 池里上百颗休眠宝石不许每渲染帧空跑一次 delta 递减（与 loot_renderer 同口径的休眠纪律）
+	set_process(false)
+
+## deferred 入场那一帧补光柱（金宝从物理回调掉出时走这条）
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_ENTER_TREE and _beam_pending:
+		_beam_pending = false
+		_spawn_beam()
+
+func _process(delta: float) -> void:
+	if _beam_hold <= 0.0:
+		return
+	_beam_hold -= delta
+	# 被池按上限收回（visible=false 且 meta 已摘）→ 句柄已不归我，直接收摊别再碰它
+	if _beam_hold <= 0.0 or _beam_fx == null or not is_instance_valid(_beam_fx) or not _beam_fx.visible:
+		_stop_beam()
+
 func magnet_to(player: Node2D) -> void:
 	if target_player == null:
 		target_player = player
 		current_speed = -50.0
+		# 起飞就把光柱收掉：宝石飞向玩家时光柱钉在原地读起来像「凭空一根柱子」
+		_stop_beam()
 		_ensure_trail()
 		if _trail_line != null:
 			_trail_line.default_color = GameStyle.FX_HDR_GOLD if is_gold else GameStyle.FX_HDR_WATER
@@ -286,6 +360,11 @@ func _physics_process(delta: float) -> void:
 		if _trail_line != null:
 			_trail_line.clear_points()
 			_trail_line.visible = false
+		# pixelfx 接入点（回退：注释下一行）
+		# 入体点炸一张 collect_burst（scale_mult 0.8 让帧光比宝石本体略大一圈，读「吸进去」）。
+		# 一波百颗同帧齐吸时由 FxFlipbookPool 的 5/帧闸 + 16px 重叠去重自动稀疏化，
+		# 这里不做额外计数；限流挡下返回 null 也不影响下面经验入账。
+		FxFlipbookPool.play(&"collect_burst", global_position, {"scale_mult": 0.8})
 		JuiceEffect.spawn_pickup_pop(get_parent(), global_position, is_gold)
 		if target_player.has_method("play_squash"):
 			# 碎晶轻一档的 squash，给最低档一个更小的入口反馈
@@ -294,6 +373,7 @@ func _physics_process(delta: float) -> void:
 		recycle()
 
 func _exit_tree() -> void:
+	_stop_beam()   ## 场景销毁/池满真释放时也得把循环帧还回去
 	if _trail_line != null and is_instance_valid(_trail_line):
 		_trail_line.queue_free()
 		_trail_line = null

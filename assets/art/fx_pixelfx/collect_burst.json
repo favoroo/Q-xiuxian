@@ -1,0 +1,20 @@
+{
+  "id": "pickups/collect-burst",
+  "out_name": "collect_burst",
+  "frame_size": [
+    112,
+    108
+  ],
+  "pivot": [
+    56,
+    94
+  ],
+  "anchor": "center",
+  "scale": 0.6,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 20,
+  "palette_key": "gold",
+  "png_bytes": 63296,
+  "vram_kb": 945
+}
