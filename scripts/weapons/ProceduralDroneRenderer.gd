@@ -61,6 +61,10 @@ enum DroneKind {
 
 @export var kind: DroneKind = DroneKind.LINGDIE
 @export var star: int = 1
+## 祭坛灵兽阶段（1~4，2026-11-02）：仅 YUAN_LING 消费，宿主按「出生阶 + 存活回合」灌入。
+## 2 阶加灵尘/焰苗，3 阶加双角/破碎灵环，4 阶加四角/完整灵环/足下地环；
+## 体型缩放由宿主（SpiritBeast.stage_scale）统一负责，这里只加剪影与装饰。
+@export var stage: int = 1
 
 ## 速度权重（0=悬停 1=全速）：仅灵珑（YUAN_LING）消费，由宿主按实际移速灌入，
 ## 驱动焰苗摆幅 / 尾后移动方钉灵尘
@@ -404,11 +408,23 @@ func _draw_yuan_ling() -> void:
 	var bob: float = sin(_anim_time * 2.6) * 1.8
 	var pivot := Vector2(0.0, -2.0 + bob)
 	var core_r: float = 13.5 + 0.8 * sin(_anim_time * 2.4)
+	# 阶段剪影（2026-11-02）：1 阶保持原画；2 阶加灵尘/焰苗，3 阶起加角/破碎灵环，4 阶满配
+	var st: int = clampi(stage, 1, 4)
+	var mote_count: int = 2 + (st - 1) * 2
+	var crest_gain: float = 1.0 + 0.10 * float(st - 1)
 
 	# 1. 足下硬边影块（贴地低分段椭圆平涂暗影，出场时外扩；不随 bank）
 	draw_colored_polygon(
 		_ellipse_polygon(Vector2(0.0, 16.5), 16.0 + 6.0 * sg, 3.6, 8),
 		Color(ink.r, ink.g, ink.b, BC.SHADOW.a * (0.55 + 0.25 * sg)))
+
+	# 1.5 4 阶足下灵光地环（2026-11-02）：常驻的撞色扁环，呼吸涨缩 —— 巨灵落地有「压场」读数
+	if st >= 4:
+		var aura_r: float = core_r * 1.55 + sin(_anim_time * 2.0) * 2.0
+		draw_set_transform(Vector2(0.0, 16.5), 0.0, Vector2(1.0, 0.34))
+		draw_arc(Vector2.ZERO, aura_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, 0.42), 1.8, true)
+		draw_arc(Vector2.ZERO, aura_r - 4.0, 0.0, TAU, 24, Color(ink.r, ink.g, ink.b, 0.28), 1.0, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 2. 出场现身一拍（spawn_glow 1→0：撞色硬边六角环向本体收拢 + 六颗方钉内聚；不随 bank）
 	if sg > 0.01:
@@ -425,39 +441,77 @@ func _draw_yuan_ling() -> void:
 			draw_rect(Rect2(sq_c - Vector2(hs, hs), Vector2(hs * 2.0, hs * 2.0)),
 				Color(acc.r, acc.g, acc.b, sg))
 
+	# 2.5（2026-11-02 已下线）2 阶双尾灵带：用户反馈「飘带太丑」，整段移除；
+	# 2 阶的力量感改由灵尘 2→4 枚 + 焰苗加高承担，不再给灵兽加横向飘带。
+	# 3 阶破碎灵环 / 4 阶完整灵环（2026-11-02）：不随 bank 的背后灵光，越后期越完整
+	if st >= 3:
+		var halo_r: float = core_r * (1.42 if st == 3 else 1.56)
+		var halo_a: float = 0.30 + 0.10 * sin(_anim_time * 2.2)
+		if st == 3:
+			for k in range(3):
+				var ha0: float = _anim_time * 0.8 + TAU * float(k) / 3.0
+				draw_arc(pivot, halo_r, ha0, ha0 + TAU / 4.0, 12, Color(acc.r, acc.g, acc.b, halo_a), 1.8, true)
+		else:
+			draw_arc(pivot, halo_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, halo_a), 2.0, true)
+			for k in range(4):
+				var ha1: float = _anim_time * 0.8 + TAU * float(k) / 4.0
+				var hp := pivot + Vector2(cos(ha1), sin(ha1)) * halo_r
+				draw_rect(Rect2(hp - Vector2(1.6, 1.6), Vector2(3.2, 3.2)),
+					Color(acc.r, acc.g, acc.b, halo_a + 0.25))
+
 	# 3. 耳芽两粒（深灵青小圆耳，画在圆身之前、根部藏进墨环后 —— 修旧双角「浮针」断开感；随 bank）
 	for side in [-1.0, 1.0]:
 		var ear_c := _rot_one(pivot + Vector2(side * core_r * 0.66, -core_r * 0.80), pivot, bank_angle)
 		draw_circle(ear_c, core_r * 0.20 + 1.1, ink)
 		draw_circle(ear_c, core_r * 0.20, ling_body.darkened(0.25).lerp(ling_pale, hf * 0.75))
 
-	# 4. 环绕灵尘双星（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前 —— 绕到身后被灵魄
-	#    挡住、绕到两侧探头，是真「环绕」而不是贴面漂浮；随 bank）
-	for i in range(2):
-		var oa: float = _anim_time * 1.7 + PI * float(i)
+	# 4. 环绕灵尘（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前 —— 绕到身后被灵魄
+	#    挡住、绕到两侧探头，是真「环绕」而不是贴面漂浮；随 bank）。
+	#    数量随阶段 2/4/6/8 枚（2026-11-02），1 阶仍是原来的双星。
+	for i in range(mote_count):
+		var oa: float = _anim_time * 1.7 + TAU * float(i) / float(maxi(mote_count, 1))
 		var op := _rot_one(pivot + Vector2(cos(oa) * (core_r + 7.5),
 			sin(oa) * (core_r * 0.32 + 1.0) - 1.0), pivot, bank_angle)
-		var osz: float = 1.8 - 0.4 * float(i)
+		var osz: float = (1.8 - 0.4 * float(i)) if mote_count <= 2 else (1.7 - 0.12 * float(i % 4))
 		draw_rect(Rect2(op - Vector2(osz, osz), Vector2(osz * 2.0, osz * 2.0)),
 			Color(acc.r, acc.g, acc.b, 0.9))
 
 	# 5. 正圆灵魄身（圆对 bank 旋转不变，disc 免转点；硬投影 + 粗墨环 + 灵青平涂；
-	#    生命低落时圆身整体转暗 —— 无脸口径下生命仍由本体传达）
-	var body_col: Color = ling_body.darkened(0.30 * (1.0 - spirit)).lerp(ling_pale, hf * 0.75)
+	#    生命低落时圆身整体转暗；阶段越高圆身略沉一档，配合体型读出「厚重」）
+	var body_col: Color = ling_body.darkened(0.30 * (1.0 - spirit) + 0.05 * float(st - 1)).lerp(ling_pale, hf * 0.75)
 	BC.disc(self, pivot, core_r, body_col, 2.4)
 
 	# 6. 头顶金焰苗（单块双焰舌硬边多边形：主舌高挑、侧舌外倾，根部压住墨环；
-	#    随 speed 摆幅摇曳；随 bank）
+	#    随 speed 摆幅摇曳；随 bank；阶段越高焰苗越高）
 	var crest_sway: float = sin(_anim_time * 2.4) * (0.06 + 0.12 * speed_ratio)
 	var crown := PackedVector2Array([
 		pivot + Vector2(-core_r * 0.26, -core_r * 0.62),
-		pivot + Vector2(-core_r * 0.30 - crest_sway * 6.0, -core_r * 1.12),
-		pivot + Vector2(-core_r * 0.08, -core_r * 0.92),
-		pivot + Vector2(core_r * 0.10 + crest_sway * 18.0, -core_r * 1.52),
-		pivot + Vector2(core_r * 0.22, -core_r * 0.86),
+		pivot + Vector2(-core_r * 0.30 - crest_sway * 6.0, -core_r * 1.12 * crest_gain),
+		pivot + Vector2(-core_r * 0.08, -core_r * 0.92 * crest_gain),
+		pivot + Vector2(core_r * 0.10 + crest_sway * 18.0, -core_r * 1.52 * crest_gain),
+		pivot + Vector2(core_r * 0.22, -core_r * 0.86 * crest_gain),
 		pivot + Vector2(core_r * 0.26, -core_r * 0.62),
 	])
 	BC.flat(self, _rot_pts(crown, pivot, bank_angle), acc.lerp(ling_pale, hf * 0.6), 1.4)
+
+	# 6.5 3 阶双角 / 4 阶四角（2026-11-02）：墨边硬三角，越长越像精怪；
+	#     stage 3 一对大角，stage 4 再叠一对靠外的小角。随 bank。
+	if st >= 3:
+		for side in [-1.0, 1.0]:
+			var horn_a := PackedVector2Array([
+				pivot + Vector2(side * core_r * 0.54, -core_r * 0.56),
+				pivot + Vector2(side * core_r * (0.92 if st == 3 else 1.08), -core_r * (1.52 if st == 3 else 1.72)),
+				pivot + Vector2(side * core_r * 0.84, -core_r * 0.42),
+			])
+			BC.flat(self, _rot_pts(horn_a, pivot, bank_angle), ling_body.darkened(0.10), 1.3)
+		if st >= 4:
+			for side in [-1.0, 1.0]:
+				var horn_b := PackedVector2Array([
+					pivot + Vector2(side * core_r * 0.88, -core_r * 0.30),
+					pivot + Vector2(side * core_r * 1.28, -core_r * 0.92),
+					pivot + Vector2(side * core_r * 1.02, -core_r * 0.14),
+				])
+				BC.flat(self, _rot_pts(horn_b, pivot, bank_angle), ling_body.darkened(0.20), 1.2)
 
 	# 7. 月白高光一点（无脸口径：单点亮斑代替五官，随灵息呼吸明灭；随 bank）
 	var hl_a: float = 0.55 + 0.25 * sin(_anim_time * 2.6)

@@ -364,13 +364,6 @@ func get_weapon_count() -> int:
 	equipped_cleanup()
 	return weapon_holder.get_child_count()
 
-## 杀戮节奏（神通）：击杀返还全部上阵武器的当前冷却（鸭类型访问，武器侧提供 refund_cooldown）
-func refund_weapon_cooldowns(pct: float) -> void:
-	equipped_cleanup()
-	for w in weapon_holder.get_children():
-		if is_instance_valid(w) and w.has_method("refund_cooldown"):
-			w.refund_cooldown(pct)
-
 func _recalculate_weapon_slots() -> void:
 	var count = get_weapon_count()
 	if count == 0:
@@ -1283,10 +1276,15 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 			GameManager.shadow_amp_mult = ShadowStepData.amp_mult(shadow_ring)
 			if skill_vfx != null:
 				skill_vfx.on_shadow_gained(ShadowStepData.stacks_of(shadow_ring))
-		# 流云潜影玉：闪避成功概率回血
+		# 流云潜影玉/移形换影：闪避成功回血。固定值与「最大生命 × 比例」取高，
+		# 移形换影（pct=0.03）后期不会只剩一口 5 点；概率由 dodge_heal_chance 控制。
 		var dodge_heal_chance: float = GameManager.item_hook_sum("dodge_heal_chance")
 		if dodge_heal_chance > 0.0 and GameManager.rng.randf() < dodge_heal_chance:
-			heal(GameManager.item_hook_sum("dodge_heal_hp"))
+			var heal_amt := BalanceCombat.dodge_heal_amount(
+				GameManager.item_hook_sum("dodge_heal_hp"),
+				GameManager.item_hook_sum("dodge_heal_pct"), max_health)
+			if heal_amt > 0.0:
+				heal(heal_amt)
 		return
 
 	var reduced := GameBalance.incoming_damage(amount, GameManager.get_effective_armor())
@@ -1355,6 +1353,8 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		# 替死傀儡挡劫：消耗一件免死回半血，挡不了才真正倒下
 		if GameManager.try_revive():
 			return
+		# 死亡已成事实：立刻作废本局档并锁住落盘，堵掉死亡演出期间强退/切后台保档
+		GameManager.invalidate_run_save()
 		_play_death_sequence()
 
 ## 阵亡演出（2026-10-15 优化）：镜头平滑推入特写 + 塌落化光消散 + 结算弹窗无缝衔接。

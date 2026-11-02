@@ -39,7 +39,8 @@ extends RefCounted
 ##   still_attack_speed  —— 金刚神像：站定不动时攻击间隔缩减（GameManager.get_effective_attack_speed_mult）
 ##   dmg_per_empty_slot  —— 三昧归真：武器少于 4 把时每少 1 把全伤害加成（CultivatorSystem.damage_mult）
 ##   heal_buff_damage / heal_buff_speed / heal_buff_dur —— 灵髓丹气：吃药/回复珠后短时爆发（Player.heal）
-##   dodge_heal_chance / dodge_heal_hp —— 流云潜影玉：闪避成功概率回血（Player.take_damage）
+##   dodge_heal_chance / dodge_heal_hp / dodge_heal_pct —— 闪避成功回血（Player.take_damage）：
+##                        flat 与「最大生命 × pct」取高，低血上限时也有一口保底
 ##   crit_kill_stone_chance —— 金芒搜魂令：暴击击杀概率额外得金币（GameManager.register_kill）
 ##   turret_haste        —— 天工发条：机关炮台攻击间隔缩减（TurretUnit.gd）
 ##   drone_spin_speed    —— 天工发条：环绕物旋转速度加成（SunOrb.gd）
@@ -50,13 +51,14 @@ extends RefCounted
 ##   wave_end_max_hp / wave_end_regen / wave_end_lifesteal —— 突破古玉：回合结束永久成长（GameManager.apply_harvest）
 ## 2026-10-25 超级悟道（神通）新增两条机制钩子：
 ##   weapon_slot_bonus —— 开天辟地：上阵武器槽位 +1（GameManager.max_weapon_slots 读侧叠加）
-##   kill_cd_refund    —— 杀戮节奏：击杀返还所有武器当前冷却比例（EnemyDeathFx.drops 读侧）
+##   kill_haste        —— 杀戮节奏：击杀叠攻速（每层 +3%、10 层封顶，停杀按 KillHasteData 衰减；
+##                        GameManager.register_kill 攒层、get_effective_attack_speed_mult 消费）
 ## 2026-10-25 超级悟道「三道」重构后的机制钩子（全部读侧现算，不进 apply）：
 ##   melee_range_mult —— 剑气凌霄：近战/横扫判定半径倍率（MeleeHandler/SweepHandler.arc_radius）
 ##   sword_qi          —— 万剑归宗：剑系出手攒剑意，攒满幻化剑阵驻场数秒（SwordPhantom.tick_attack）
 ##   projectile_count_bonus / projectile_damage_mult —— 万箭齐发：多发但单发打折（ProjectileHandler）
 ##   projectile_bounce_bonus —— 弹幕回响：弹丸出膛时叠加弹射次数（ProjectileHandler）
-##   attack_chain_lightning  —— 紫电：每 N 次攻击放连锁闪电（FloatingWeapon._perform_attack）
+##   attack_chain_lightning  —— 紫电：每 N 次命中放连锁闪电（OnHitEffects._roll_zidian）
 ##   kill_chain_lightning    —— 雷劫：击杀时放连锁闪电（EnemyDeathFx.drops）
 ##   crit_sky_bolt / chain_hop_bonus —— 天罚：暴击落雷 + 链电跳数加成（OnHitEffects / ChainLightning）
 ##   projectile_chain_lightning —— 雷霆弹幕（共鸣）：弹丸命中时也链电（OnHitEffects.on_projectile_hit）
@@ -844,14 +846,14 @@ const DEFS: Dictionary = {
 		"shen_jianqi": {
 			"name": "剑气凌霄", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_kaishan_jianyi.png",
-			"desc": "近战与横扫改为挥出远距离剑气，攻击距离翻倍",
+			"desc": "近战/横扫类武器改为挥出远距离剑气，攻击距离翻倍",
 			"apply": {},
 			"melee_range_mult": 1.0,
 		},
 		"shen_wanjian_guizong": {
 			"name": "万剑归宗", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_lijian_shi.png",
-			"desc": "剑系武器出手攒剑意（头顶计数），攒满幻化剑阵并驻场数秒",
+			"desc": "剑系武器出手攒剑意（头顶计数）\n满 20 层幻化剑阵，驻场 4 秒",
 			"apply": {},
 			"sword_qi": 1.0,
 		},
@@ -875,7 +877,7 @@ const DEFS: Dictionary = {
 		"shen_jianyu": {
 			"name": "箭雨倾盆", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_liannu_shi.png",
-			"desc": "远程武器每隔数次出手，朝敌群落下一轮箭雨",
+			"desc": "弹丸类武器每 6 次出手\n朝敌群落下一轮箭雨",
 			"apply": {},
 			"arrow_rain_every": 6.0,
 		},
@@ -884,7 +886,7 @@ const DEFS: Dictionary = {
 		"shen_zidian": {
 			"name": "紫电", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_leiling_zhu.png",
-			"desc": "攻击间隔积累到一定程度放出连锁闪电",
+			"desc": "每命中 3 次，从被击中的敌人\n放出一道连锁闪电（最多连 3 个敌人）",
 			"apply": {},
 			"attack_chain_lightning": 1.0,
 		},
@@ -898,7 +900,7 @@ const DEFS: Dictionary = {
 		"shen_tianfa": {
 			"name": "天罚", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_jinmang_souhun.png",
-			"desc": "暴击时额外落下一道天雷",
+			"desc": "暴击时额外落下一道天雷\n所有连锁闪电多连 1 个敌人",
 			"apply": {},
 			"crit_sky_bolt": 1.0,
 			"chain_hop_bonus": 1.0,
@@ -924,7 +926,7 @@ const DEFS: Dictionary = {
 		"shen_wuxing_lunzhuan": {
 			"name": "五行轮转", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_wuxing_pei.png",
-			"desc": "命中时可能附加随机五行异常",
+			"desc": "命中时 35% 概率附加灼烧、冰缓\n或剧毒中的一种",
 			"apply": {},
 			"wuxing_rotation_chance": 0.35,
 		},
@@ -940,7 +942,7 @@ const DEFS: Dictionary = {
 		"shen_shouxue": {
 			"name": "兽血沸腾", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_yushou_ling.png",
-			"desc": "灵兽栏 +1，灵兽出手更快",
+			"desc": "灵兽栏 +1，灵兽出手间隔缩短 25%",
 			"apply": {"pet_cooldown_mult_mul": 0.75, "pet_slots": 1.0},
 		},
 		"shen_shouqun": {
@@ -962,7 +964,7 @@ const DEFS: Dictionary = {
 		"shen_lingyun_wuxing": {
 			"name": "灵蕴五行", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_tongling.png",
-			"desc": "灵兽直击时大概率附加随机五行异常",
+			"desc": "灵兽直击时 60% 概率附加\n灼烧、冰缓或剧毒中的一种",
 			"apply": {},
 			"pet_wuxing_chance": 0.6,
 		},
@@ -978,9 +980,9 @@ const DEFS: Dictionary = {
 		"shen_shalu": {
 			"name": "杀戮节奏", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_tongji_chi.png",
-			"desc": "每次击杀使所有武器当前冷却缩短",
+			"desc": "每次击杀攻速 +3%，最多 +30%\n停杀 3 秒后开始衰减",
 			"apply": {},
-			"kill_cd_refund": 0.08,
+			"kill_haste": 1.0,
 		},
 		"shen_xueji": {
 			"name": "血祭盛宴", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
@@ -1004,14 +1006,14 @@ const DEFS: Dictionary = {
 		"shen_yixing": {
 			"name": "移形换影", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_liuyun_qianyin.png",
-			"desc": "闪避提升；闪避成功时回复生命",
+			"desc": "闪避提升；闪避成功时回复生命\n（回复量随生命上限提高）",
 			"apply": {"dodge": 0.12},
-			"dodge_heal_chance": 0.5, "dodge_heal_hp": 5.0,
+			"dodge_heal_chance": 1.0, "dodge_heal_hp": 5.0, "dodge_heal_pct": 0.03,
 		},
 		"shen_xianji": {
 			"name": "献祭", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_xuepan_guyu.png",
-			"desc": "武器槽 -1，其余武器伤害大涨",
+			"desc": "上阵武器槽位减一，武器伤害大涨",
 			"apply": {"weapon_damage_mult": 0.60},
 			"weapon_slot_bonus": -1,
 		},
@@ -1085,7 +1087,7 @@ const HOOK_TAGS := {
 	"still_thorns": "still", "still_attack_speed": "still", "still_damage": "still",
 	"skill_cooldown_mult": "skill", "projectile_count_bonus": "projectile",
 	"wide_range_mult": "wide", "melee_lifesteal_flat": "lifesteal",
-	"heal_buff_damage": "heal", "dodge_heal_chance": "dodge",
+	"heal_buff_damage": "heal", "dodge_heal_chance": "dodge", "dodge_heal_pct": "dodge",
 	"turret_haste": "contraption", "drone_spin_speed": "summon",
 	"dmg_per_nearby_enemy": "crowd", "dmg_per_unique_item": "collection",
 	"on_hit_damage_bonus": "onhit", "heal_orb_chance": "heal",
@@ -1094,7 +1096,7 @@ const HOOK_TAGS := {
 	"dmg_per_max_hp": "tank", "dmg_per_100_stones": "economy",
 	"dmg_per_missing_hp": "lifesteal", "dmg_per_empty_slot": "generic",
 	"wave_heal_pct": "heal", "chest_magnet": "chest", "revive": "tank",
-	"weapon_slot_bonus": "generic", "kill_cd_refund": "haste",
+	"weapon_slot_bonus": "generic", "kill_haste": "haste",
 		# 2026-10-25 超级悟道机制卡（链电 / 剑气 / 五行轮转 / 范围与弹丸变异）
 		"melee_range_mult": "melee", "sword_qi": "melee",
 		"projectile_damage_mult": "projectile", "projectile_bounce_bonus": "projectile",

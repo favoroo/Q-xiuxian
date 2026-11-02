@@ -9,7 +9,7 @@ extends Node2D
 ## 2026-10-25 祭坛重设计：新增金币注入（玩家身上的灵石飞入祭坛）与全屏冲击环，
 ## 激活光柱加高加金幕 —— 单祭坛后预算全给这一座。
 
-enum Mode { ACTIVATION, BEAST_ENTRANCE, SPENT_WISP, COIN_INFUSION, SHOCK_RING }
+enum Mode { ACTIVATION, BEAST_ENTRANCE, SPENT_WISP, COIN_INFUSION, BLOOD_INFUSION, SHOCK_RING }
 
 const ACTIVATION_DUR := 0.7    ## 激活爆发总时长（2026-10-25 光柱加高后由 0.55 拉长）
 const BEAST_DUR := 0.32        ## 灵兽聚灵现身时长
@@ -54,6 +54,8 @@ var _redraw_timer: float = 0.0
 var _seed: float = 0.0
 ## 金币注入的起点偏移（玩家位置 − 祭坛位置，本地坐标画出飞行起点）
 var _coin_from := Vector2.ZERO
+## 注入主色：金币档鎏金，血祭档深红（2026-11-02）
+var _infuse_color: Color = GOLD_FX
 
 static func play_activation(host: Node, pos: Vector2) -> void:
 	_spawn(host, pos, Mode.ACTIVATION)
@@ -71,6 +73,18 @@ static func play_coin_infusion(host: Node, altar_pos: Vector2, player_pos: Vecto
 	var fx := ObeliskFx.new()
 	fx._mode = Mode.COIN_INFUSION
 	fx._coin_from = player_pos - altar_pos
+	fx.z_index = 0
+	host.add_child(fx)
+	fx.global_position = altar_pos
+
+## 血祭注入（2026-11-02）：同一套飞入轨迹，金铢换深红血珠；只在金币不足时由祭坛调用
+static func play_blood_infusion(host: Node, altar_pos: Vector2, player_pos: Vector2) -> void:
+	if host == null or not is_instance_valid(host):
+		return
+	var fx := ObeliskFx.new()
+	fx._mode = Mode.BLOOD_INFUSION
+	fx._coin_from = player_pos - altar_pos
+	fx._infuse_color = Color(0.88, 0.18, 0.22, 1.0)
 	fx.z_index = 0
 	host.add_child(fx)
 	fx.global_position = altar_pos
@@ -94,7 +108,7 @@ func _ready() -> void:
 			_dur = ACTIVATION_DUR
 		Mode.BEAST_ENTRANCE:
 			_dur = BEAST_DUR
-		Mode.COIN_INFUSION:
+		Mode.COIN_INFUSION, Mode.BLOOD_INFUSION:
 			_dur = INFUSION_DUR
 		Mode.SHOCK_RING:
 			_dur = SHOCK_DUR
@@ -117,7 +131,7 @@ func _draw() -> void:
 			_draw_activation(_t / _dur)
 		Mode.BEAST_ENTRANCE:
 			_draw_beast(_t / _dur)
-		Mode.COIN_INFUSION:
+		Mode.COIN_INFUSION, Mode.BLOOD_INFUSION:
 			_draw_infusion()
 		Mode.SHOCK_RING:
 			_draw_shock()
@@ -235,17 +249,17 @@ func _draw_infusion() -> void:
 		for k in 2:
 			var tt: float = maxf(et - 0.06 * float(k + 1), 0.0)
 			var tpos: Vector2 = from.lerp(ctrl, tt).lerp(ctrl.lerp(to, tt), tt)
-			AdaptiveDraw.circle(self, tpos, 2.6 - float(k) * 0.8, Color(GOLD_FX, 0.35 - 0.12 * float(k)))
-		## 金铢本体：鎏金核 + 超白高光
-		AdaptiveDraw.circle(self, pos, 3.2, Color(GOLD_FX, 0.95))
+			AdaptiveDraw.circle(self, tpos, 2.6 - float(k) * 0.8, Color(_infuse_color, 0.35 - 0.12 * float(k)))
+		## 金铢/血珠本体：主色核 + 超白高光
+		AdaptiveDraw.circle(self, pos, 3.2, Color(_infuse_color, 0.95))
 		AdaptiveDraw.circle(self, pos + Vector2(-0.8, -0.8), 1.3, Color(GameStyle.FX_HDR_CORE, 0.95))
-		## 抵达闪：落进晶柱的一瞬一圈小金环
+		## 抵达闪：落进晶柱的一瞬一圈同色小环
 		if ct >= 1.0:
 			var since: float = _t - t0 - COIN_FLIGHT
 			if since < 0.12:
 				var q: float = since / 0.12
 				draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
-				draw_arc(to, 3.0 + q * 14.0, 0.0, TAU, 20, Color(GOLD_FX, 0.8 * (1.0 - q)), 2.0, true)
+				draw_arc(to, 3.0 + q * 14.0, 0.0, TAU, 20, Color(_infuse_color, 0.8 * (1.0 - q)), 2.0, true)
 				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================

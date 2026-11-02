@@ -25,7 +25,7 @@ const TINT_WAITING := Color(0.50, 0.60, 0.53) ## 满血待命：看得见，但�
 ## 回收时必须 remove_from_group("gems")：回合末结算按组请珠，池里休眠的假珠不能入账。
 ## 兼容约定：裸 new() + add_child 的旧路径（HealOrbCheck/预览）保持原行为不受影响。
 const POOL_CAP := 64
-const BASE_HEAL := 3.0        ## 默认回生命：activate 复用时重置的基准（与字段初值同源）
+const BASE_HEAL := 3.0        ## 默认回生命：字段初值与 recycle 复位基准（activate 不再重置，见 acquire_or_new 注释）
 static var _pool: Array[HealOrb] = []
 static var _host: Node2D = null
 static var created_count: int = 0
@@ -45,7 +45,9 @@ static func _ensure_host(parent: Node) -> void:
 	_host.name = "HealOrbPool"
 	parent.add_child(_host)
 
-## 取一颗回复珠（优先复用）：调用方在调用后写 global_position/heal_amount 或 heal_pct，最后调 activate()
+## 取一颗回复珠（优先复用）：调用方在调用后写 global_position/heal_amount 或 heal_pct，最后调 activate()。
+## 回血参数由 recycle() 归零、activate() 不碰 —— 两个落点顺序可换，但 activate 里绝不能再写这两个字段
+## （2026-11-02 修：曾把 heal_pct 抹回 0，宝箱葫芦一律只回 3 点）。
 static func acquire_or_new(parent: Node) -> HealOrb:
 	_ensure_host(parent)
 	while not _pool.is_empty():
@@ -114,7 +116,8 @@ func _ready() -> void:
 	_start_bob()
 
 ## 出膛激活：池化后 _ready 只在首建时跑过，全部运行时状态在这里重铺
-##（改字段签名时对照这里）。heal_amount/heal_pct 先归默认，调用方按需覆盖。
+## 注意 heal_amount / heal_pct 不在这里归零 —— 调用方是「acquire → 写回血参数 → activate」的顺序，
+## 在 activate 里重置会把刚写的 15%/30% 葫芦抹成 BASE_HEAL（2026-11-02 修）。归零统一由 recycle() 做。
 func activate() -> void:
 	if _pooled:
 		active_count += 1
@@ -122,8 +125,6 @@ func activate() -> void:
 	# 池化复用是从回收点瞬移到掉落点：不重置物理插值，真机帧率抖动时首帧会渲染旧位置滑行
 	reset_physics_interpolation()
 	visible = true
-	heal_amount = BASE_HEAL
-	heal_pct = 0.0
 	target_player = null
 	_settling = false
 	current_speed = -40.0
@@ -150,6 +151,10 @@ func recycle() -> void:
 	active_count = maxi(0, active_count - 1)
 	target_player = null
 	_settling = false
+	# 回血参数在入池时归零：池里的珠子不许带着上一颗的 heal_pct/残丹数值见下一个调用方。
+	# 放在这里而不是 activate()，是因为调用方先写参数再 activate（见 acquire_or_new 注释）。
+	heal_amount = BASE_HEAL
+	heal_pct = 0.0
 	if _bob_tween != null and _bob_tween.is_valid():
 		_bob_tween.kill()
 	remove_from_group("gems")
@@ -296,12 +301,14 @@ func _collect(p: Player) -> void:
 	# 灵植夫·灵药滋生：溢出折金币倍率（GameBalance 保持纯函数，角色乘区在调用侧兑现）
 	if stones > 0 and GameManager.heal_overflow_mult != 1.0:
 		stones = int(round(float(stones) * GameManager.heal_overflow_mult))
-		if stones > 0:
-			GameManager.add_spirit_stones(stones)
-			DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
-			AudioManager.play_sfx("gem_pickup", 1.25)
-		GameManager.record_wave_heal(landed, stones)
-		target_player = null
+	# 兑现必须与倍率闸分开：默认 heal_overflow_mult == 1.0 时也要付钱
+	# （2026-11-02 修：v0.1.11 把整段缩进进了「倍率 != 1.0」分支，常规局溢出灵石一粒都不给）
+	if stones > 0:
+		GameManager.add_spirit_stones(stones)
+		DamageNumber.spawn(get_parent(), global_position, stones, false, "+%d 金币" % stones)
+		AudioManager.play_sfx("gem_pickup", 1.25)
+	GameManager.record_wave_heal(landed, stones)
+	target_player = null
 	recycle()
 
 func _set_waiting(value: bool) -> void:

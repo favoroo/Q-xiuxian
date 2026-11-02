@@ -30,6 +30,11 @@ static func _ensure_material() -> ShaderMaterial:
 			_hdr_material.shader = shader
 	return _hdr_material
 
+## 供非池化常驻件（祭坛环绕灵火 / 水晶灵光日轮）复用同一份 HDR 起辉材质：
+## 这些件不经过 play()，但亮部同样需要走项目统一的起辉通道。
+static func get_hdr_material() -> ShaderMaterial:
+	return _ensure_material()
+
 static func _ensure_instance(tree: SceneTree) -> FxFlipbookPool:
 	if instance != null and is_instance_valid(instance) and instance.is_inside_tree():
 		return instance

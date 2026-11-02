@@ -201,21 +201,22 @@ func _ready() -> void:
 
 # ---------------- 中断续玩（2026-10-15，落盘与恢复在 RunSave） ----------------
 
-## 战斗中自动存档间隔（秒）：波内金币/经验/血量以最后一次快照为准，本波从头重打
+## 战斗中自动存档间隔（秒）：波内金币/经验/血量以最后一次快照为准，本波从头重打。
+## 2026-11-02：已占存档位的局由 SaveSlots.autosave_current 写回该位，进度更新即更新该位。
 const AUTOSAVE_INTERVAL: float = 10.0
 var _autosave_cd: float = AUTOSAVE_INTERVAL
 
 ## 应用生命周期兜底：Android 上滑杀进程/Home 键、系统返回键、桌面关窗 ——
 ## 这些路径没有别的存档点，同步写一份。通知不受树暂停门控，商店/悟道面板开着也收得到；
-## 非局内态（没开局/已结算）由 RunSave.save_from 自行拒绝，无需在此判断。
+## 非局内态（没开局/已结算/本局已作废）由 SaveSlots/RunSave 自行拒绝，无需在此判断。
 ## （Godot 4.7 无 APPLICATION_TERMINATING 通知；Android 划掉应用也不发任何通知，
-## 兜底靠 PAUSED 这一根 —— 3 秒自动存已把窗口收窄到可接受）
+## 兜底靠 PAUSED 这一根 —— 10 秒自动存已把窗口收窄到可接受）
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_PAUSED, \
 		NOTIFICATION_WM_CLOSE_REQUEST, \
 		NOTIFICATION_WM_GO_BACK_REQUEST:
-			RunSave.autosave_current(self)
+			SaveSlots.autosave_current(self)
 
 ## 无头守护时长（秒）：兜底抓「真挂起」，不该顺手把「真在干活的慢判据」一起打死。
 ## 判据卡数涨上来后 45s 会变成误杀线（ManualHotzoneCheck 115 张卡 × 12 取样点实测 ~55s），
@@ -400,6 +401,9 @@ var level: int = 1
 var experience: int = 0
 var experience_to_next: int = GameBalance.EXP_FIRST_LEVEL
 var is_game_over: bool = false
+## 阵亡已成事实后置真：从致死判定到结算面板/复活之间拒绝一切落盘，
+## 防止死亡演出/结算界面期间切后台或强退把存档复活。reset_run 复位，原地复活手动清。
+var run_invalidated: bool = false
 
 ## 待加点数：升几级攒几点，回合结束统一结算（战斗中不弹面板）
 var pending_upgrade_points: int = 0
@@ -497,6 +501,8 @@ var unique_item_count: int = 0          ## 当前持有不同道具种数（add_
 var frenzy_enabled: float = 0.0       ## 狂战士：战意机制开关（>0 启用；每层幅度/上限/流失全在 FrenzyData）
 var frenzy_stacks: float = 0.0          ## 狂战士：战意当前层数（register_kill 攒，_process 计时流失）
 var frenzy_idle: float = 0.0            ## 距上次击杀的秒数（战意流失宽限计时）
+var kill_haste_stacks: float = 0.0      ## 杀戮节奏（神通）：击杀叠攻速当前层数（register_kill 攒，_process 流失）
+var kill_haste_idle: float = 0.0        ## 杀戮节奏：距上次击杀的秒数（叠层衰减宽限计时）
 var thunder_strike: float = 0.0         ## 雷法真君：天雷机制开关（>0 启用；数值全在 ThunderData，计时器在 Player）
 # ---- 角色轻钩子（2026-10-12，照嗜血 on_hit 先例：不建机制表，apply 时从 mods 落字段，damage_mult 现算） ----
 var crowd_damage_per_enemy: float = 0.0  ## 蛮兵·陷阵：感知圈内每只敌人的全伤害加成
@@ -625,6 +631,7 @@ var upgrade_counts: Dictionary = {}
 func reset_run() -> void:
 	# 70+ 单局成员的清零表在 RunReset（显式类型化赋值），新增成员记得去那边补默认值
 	RunReset.reset(self)
+	run_invalidated = false  # 新局/重开复位死亡落盘锁
 	_stat_dict_frame = -1  # 属性字典 memo 随之作废，防止同帧后续读旧属性
 	_autosave_cd = AUTOSAVE_INTERVAL  # 自动存档计时归位，新开局头几秒不落盘
 
@@ -645,6 +652,11 @@ func _process(delta: float) -> void:
 		frenzy_idle += delta
 		frenzy_stacks = FrenzyData.decay(frenzy_stacks, frenzy_idle, delta)
 
+	# 杀戮节奏（神通）：停杀超过宽限后按 KillHasteData 速率泄层
+	if kill_haste_stacks > 0.0:
+		kill_haste_idle += delta
+		kill_haste_stacks = KillHasteData.decay(kill_haste_stacks, kill_haste_idle, delta)
+
 	# 全局计时 / HUD 节流 / FIGHT 自动存档：所有角色同权（2026-10-15 修复：此块曾被错误
 	# 缩进进上面的狂战 if 内 —— 非狂战整局 game_time 恒 0、HUD 计时永远 00:00、
 	# 3 秒自动存档从不触发，中断续玩只剩回合边界快照与退游戏兜底）
@@ -660,12 +672,12 @@ func _process(delta: float) -> void:
 		if _hud_tick >= 0.2:
 			_hud_tick = 0.0
 			stats_updated.emit(kills, game_time, spirit_stones)
-		# 中断续玩自动存档：只在 FIGHT 计时（树一暂停就轮不到这里——ALLOC/SHOP 各有
-		# 阶段边界钩子），headless 下 RunSave 自拒，判据测试不落盘
+		# 自动存档：只在 FIGHT 计时（树一暂停就轮不到这里——ALLOC/SHOP 各有
+		# 阶段边界钩子）；已占位写存档位，未占位写中断档。headless/作废局自拒。
 		_autosave_cd += delta
 		if _autosave_cd >= AUTOSAVE_INTERVAL:
 			_autosave_cd = 0.0
-			RunSave.autosave_current(self)
+			SaveSlots.autosave_current(self)
 
 # ---------------- 经验 / 金币 ----------------
 
@@ -722,6 +734,14 @@ func register_kill(is_elite: bool = false, is_crit: bool = false) -> void:
 				var pvfx = player.get("skill_vfx")
 				if pvfx != null and pvfx.has_method("on_frenzy_max_burst"):
 					pvfx.on_frenzy_max_burst()
+	# 杀戮节奏（神通）：每次击杀 +1 层攻速，满层播报一次
+	if item_hook_sum("kill_haste") > 0.0:
+		var prev_haste := kill_haste_stacks
+		kill_haste_stacks = KillHasteData.add_stack(kill_haste_stacks)
+		kill_haste_idle = 0.0
+		if prev_haste < float(KillHasteData.MAX_STACKS) \
+				and kill_haste_stacks >= float(KillHasteData.MAX_STACKS):
+			announcement_triggered.emit("◆ 杀戮节奏·满层 ◆")
 	# 绝尘·斩灭凝神：击杀按敌人品级返还/预扣技能冷却
 	var cd_refund: float = kill_cd_reduction_elite if is_elite else kill_cd_reduction_normal
 	if cd_refund > 0.0 and player != null and is_instance_valid(player) and player.has_method("refund_skill_cooldown"):
@@ -841,9 +861,10 @@ func get_weapon_damage_mult() -> float:
 func get_crit_mult() -> float:
 	return minf(crit_mult + synergy_crit_mult, CRIT_MULT_CAP)
 
-## 最终施法间隔乘区：装备/加点层 × 羁绊层 × 技能 buff 层 × 站定神像/苦行僧加成（受 ATTACK_SPEED_FLOOR 保底，< 1.0 为更快）。
+## 最终施法间隔乘区：装备/加点层 × 羁绊层 × 技能 buff 层 × 杀戮节奏叠层 × 站定神像/苦行僧加成（受 ATTACK_SPEED_FLOOR 保底，< 1.0 为更快）。
 func get_effective_attack_speed_mult() -> float:
 	var base := attack_speed_mult * synergy_haste_mult * buff_attack_speed_mult
+	base *= KillHasteData.attack_speed_mult(kill_haste_stacks)
 	if still_time > 0.0:
 		var still_haste: float = item_hook_sum("still_attack_speed") + still_haste_bonus
 		if still_haste > 0.0:
@@ -950,11 +971,12 @@ func try_lifesteal(behavior: int = WeaponData.Behavior.MELEE) -> void:
 		_lifesteal_procs += 1
 		var gained = player.heal(1.0, true)
 		# 血海护盾（神通）：顶满血时吸不到的溢出转成护盾存量（满血时 gained=0 ⇒ 整口 1.0 全溢出）。
+		# 溢出按 BalanceChain.SHIELD_OVERFLOW_MULT 放大再入盾（旧口径 1:1 太慢，见该常量注释）。
 		# 走的是 heal 返回值的差值记账，不碰回血链路本身；heal 的 gained<=0.01 早退对它同样安全。
 		var overflow: float = 1.0 - float(gained)
 		if overflow > 0.0 and item_hook_sum("lifesteal_overflow_shield") > 0.0:
 			var cap := BalanceChain.shield_cap(player.max_health)
-			var next: float = minf(cap, shield_hp + overflow)
+			var next: float = minf(cap, shield_hp + BalanceChain.shield_gain(overflow))
 			if next != shield_hp:
 				shield_hp = next
 				shield_changed.emit(shield_hp, cap)
@@ -1174,6 +1196,8 @@ func try_revive() -> bool:
 		player_hp_changed.emit(player.current_health, player.max_health)
 	announcement_triggered.emit("◆ 替身娃娃碎裂 · 死里逃生 ◆")
 	AudioManager.play_sfx("level_up", 1.0)
+	# 立刻落盘锁住道具消耗：强退/切后台重进不能把替死傀儡刷回来
+	SaveSlots.autosave_current(self)
 	return true
 
 # ---------------- 武器系统 ----------------
@@ -1398,6 +1422,15 @@ func pulse_damage_vignette(color: Color = Color(0.85, 0.12, 0.12, 0.65), duratio
 func trigger_screen_shockwave(pos: Vector2 = Vector2.INF, strength: float = 1.0, duration: float = 0.45) -> void:
 	screen_shockwave_triggered.emit(pos, strength, duration)
 
+## 本局作废：立刻锁定落盘并删本局存档位 + 中断档。
+## Player.take_damage 在致死判定成立、替死傀儡没挡住时先调一次 —— 死亡演出约 1.15s，
+## 不提前作废的话玩家在演出期间切后台/强退就能把档留下来躲过死亡。
+## trigger_game_over 再兜底调一次（作者面板等直接结算路径）。
+func invalidate_run_save() -> void:
+	run_invalidated = true
+	SaveSlots.clear_run_slots(run_id)
+	RunSave.clear_save()
+
 func trigger_game_over() -> void:
 	if is_game_over:
 		return
@@ -1405,10 +1438,8 @@ func trigger_game_over() -> void:
 	_hitstop_token += 1
 	_hitstop_deadline_ms = 0
 	is_game_over = true
-	# 本局已终结、战报已录入局外进度：中断续玩档随之作废。
-	# 多存档（2026-10-28）：手动存档只清本局 run_id 相同的位，其他角色/其他局的档保留。
-	SaveSlots.clear_run_slots(run_id)
-	RunSave.clear_save()
+	# 本局已终结、战报已录入局外进度：本局存档位 + 中断档随之作废，其他局保留。
+	invalidate_run_save()
 	_record_run_and_check_achievements()
 	game_over_triggered.emit()
 

@@ -44,6 +44,7 @@ const BATCH_REFILL_MID_WAVE := BalanceWave.BATCH_REFILL_MID_WAVE
 const BATCH_REFILL_LATE_WAVE := BalanceWave.BATCH_REFILL_LATE_WAVE
 const ENEMY_HP_GROWTH := BalanceWave.ENEMY_HP_GROWTH
 const MOB_HP_BASE_MULT := BalanceWave.MOB_HP_BASE_MULT
+const ELITE_HP_BASE_MULT := BalanceWave.ELITE_HP_BASE_MULT
 const MOB_KILL_EXP_MULT := BalanceWave.MOB_KILL_EXP_MULT
 const ENEMY_DMG_GROWTH := BalanceWave.ENEMY_DMG_GROWTH
 const ENEMY_DMG_BASE_MULT := BalanceWave.ENEMY_DMG_BASE_MULT
@@ -402,6 +403,11 @@ const SPIRIT_BEAST_SEARCH_INTERVAL := BalanceSpiritBeast.SEARCH_INTERVAL
 const SPIRIT_BEAST_IDLE_FOLLOW_DIST := BalanceSpiritBeast.IDLE_FOLLOW_DIST
 const SPIRIT_BEAST_LIFETIME_WAVES := BalanceSpiritBeast.LIFETIME_WAVES
 const SPIRIT_BEAST_MAX_ACTIVE := BalanceSpiritBeast.MAX_ACTIVE
+const SPIRIT_BEAST_MAX_STAGE := BalanceSpiritBeast.MAX_STAGE
+
+# 祭坛灵脉阶 / 血祭 → BalanceObelisk（2026-11-02 祭坛成长线）
+const OBELISK_MAX_TIER := BalanceObelisk.MAX_TIER
+const OBELISK_BLOOD_HP_RATIO := BalanceObelisk.BLOOD_HP_RATIO
 
 # 藏宝匣（宝箱）：数量 / 三档 / 击数 / 掉落 → BalanceChest
 const CHEST_BREAK_HITS := BalanceChest.CHEST_BREAK_HITS
@@ -410,7 +416,6 @@ const CHEST_COUNT_CAP := BalanceChest.CHEST_COUNT_CAP
 const CHEST_TIER_COUNT := BalanceChest.TIER_COUNT
 const CHEST_TIER_SCALE := BalanceChest.TIER_SCALE
 const CHEST_JADE_ITEM_GRANT_CAP := BalanceChest.JADE_ITEM_GRANT_CAP
-const CHEST_REWARD_HEAL_CAP := BalanceChest.REWARD_HEAL_CAP
 
 # 精英怪掉落与偏财 → BalanceCombat
 const ELITE_ITEM_DROP_BASE_CHANCE := BalanceCombat.ELITE_ITEM_DROP_BASE_CHANCE
@@ -470,6 +475,36 @@ static func obelisk_execute_threshold(wave: int) -> float:
 
 static func obelisk_knock_force(wave: int) -> float:
 	return BalanceCombat.obelisk_knock_force(wave)
+
+## 祭坛灵脉阶（2026-11-02 成长线）：阶数 = max(波次阶, 启动次数阶) → BalanceObelisk
+static func obelisk_wave_tier(wave: int) -> int:
+	return BalanceObelisk.wave_tier(wave)
+
+static func obelisk_activation_tier(activations_done: int) -> int:
+	return BalanceObelisk.activation_tier(activations_done)
+
+static func obelisk_altar_tier(wave: int, activations_done: int) -> int:
+	return BalanceObelisk.altar_tier(wave, activations_done)
+
+static func obelisk_tier_name(tier: int) -> String:
+	return BalanceObelisk.tier_name(tier)
+
+## 血祭代价：最大生命 × 18%，至少 1 点
+static func obelisk_blood_cost(max_hp: float) -> int:
+	return BalanceObelisk.blood_cost(max_hp)
+
+## 阶数对祭坛爆发的增益（基础值仍在 BalanceCombat）
+static func obelisk_tier_damage_mult(tier: int) -> float:
+	return BalanceObelisk.tier_damage_mult(tier)
+
+static func obelisk_tier_hp_ratio_bonus(tier: int) -> float:
+	return BalanceObelisk.tier_hp_ratio_bonus(tier)
+
+static func obelisk_tier_execute_bonus(tier: int) -> float:
+	return BalanceObelisk.tier_execute_bonus(tier)
+
+static func obelisk_tier_knock_mult(tier: int) -> float:
+	return BalanceObelisk.tier_knock_mult(tier)
 
 static func harvest_gain(harvest: float) -> int:
 	return BalanceEconomy.harvest_gain(harvest)
@@ -713,11 +748,36 @@ static func hit_sfx_is_heavy(damage: float, max_hp: float) -> bool:
 	return BalanceCombat.hit_sfx_is_heavy(damage, max_hp)
 
 # 祭坛灵兽 → BalanceSpiritBeast
-static func spirit_beast_max_hp(wave: int) -> float:
-	return BalanceSpiritBeast.max_hp_for_wave(wave)
+static func spirit_beast_max_hp(wave: int, stage: int = 1) -> float:
+	return BalanceSpiritBeast.max_hp_for_wave(wave, stage)
 
-static func spirit_beast_damage(wave: int) -> float:
-	return BalanceSpiritBeast.damage_for_wave(wave)
+static func spirit_beast_damage(wave: int, stage: int = 1) -> float:
+	return BalanceSpiritBeast.damage_for_wave(wave, stage)
+
+## 灵兽阶段成长（2026-11-02）：出生阶 + 存活回合数，封顶 4 阶
+static func spirit_beast_stage(altar_tier: int, waves_survived: int) -> int:
+	return BalanceSpiritBeast.stage_for(altar_tier, waves_survived)
+
+static func spirit_beast_stage_hp_mult(stage: int) -> float:
+	return BalanceSpiritBeast.stage_hp_mult(stage)
+
+static func spirit_beast_stage_damage_mult(stage: int) -> float:
+	return BalanceSpiritBeast.stage_damage_mult(stage)
+
+static func spirit_beast_body_scale(stage: int) -> float:
+	return BalanceSpiritBeast.stage_body_scale(stage)
+
+static func spirit_beast_burst_count(stage: int) -> int:
+	return BalanceSpiritBeast.burst_count_for(stage)
+
+static func spirit_beast_pierce(stage: int) -> int:
+	return BalanceSpiritBeast.pierce_for(stage)
+
+static func spirit_beast_contact_range(stage: int) -> float:
+	return BalanceSpiritBeast.contact_range_for(stage)
+
+static func spirit_beast_crowd_radius(stage: int) -> float:
+	return BalanceSpiritBeast.crowd_radius_for(stage)
 
 ## 精英怪道具掉落概率（BalanceCombat）
 static func elite_item_drop_chance(luck: float) -> float:

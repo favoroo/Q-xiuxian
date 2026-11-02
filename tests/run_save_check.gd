@@ -32,11 +32,18 @@ func _equals(actual, expected, label: String) -> void:
 	_c.equals(actual, expected, label)
 
 func _run() -> void:
+	# 存档位判据隔离：不扫/不写开发机真实存档位
+	SaveSlots.set_storage_dir_for_tests("user://test_run_save_slots")
+	SaveSlots.clear_all()
+	RunSave.clear_save()
 	_test_structure()
 	await _test_roundtrip()
 	_finish()
 
 func _finish() -> void:
+	SaveSlots.clear_all()
+	SaveSlots.set_storage_dir_for_tests("")
+	RunSave.clear_save()
 	if _c.report("RUNSAVE_RESULT"):
 		get_tree().quit(0)
 	else:
@@ -85,10 +92,10 @@ func _reconciliation_skipped_fields() -> Array[String]:
 		"buff_move_speed_mult", "buff_attack_speed_mult", "buff_dodge",
 		"buff_knockback_mult", "buff_damage_mult", "buff_lifesteal_boost", "force_crit_left", "shadow_amp_mult",
 		"buff_pickup_range_mult",
+		# —— 杀戮节奏（2026-11-02 在途）：击杀叠层/停杀衰减计时，短时战斗瞬态，读档归零 ——
+		"kill_haste_stacks", "kill_haste_idle",
 		# —— 散修角色专属被动：读档按 cultivator_id 重走 CultivatorSystem.apply_modifiers 还原 ——
 		"scattered_mode", "scattered_bonus_per_class", "scattered_penalty_per_synergy",
-		# —— 轮回重生：局内复活次数（加点由 upgrades 字典回放重建）——
-		"revive_charges",
 		# —— 战斗瞬态：受击层数/战意/盾势/站定计时/感知圈计数，恢复归零（对玩家有利）——
 		"on_hit_damage_stacks", "on_hit_damage_timer", "shield_charge",
 		"frenzy_stacks", "frenzy_idle", "nearby_enemy_count", "still_time", "player_is_moving",
@@ -191,6 +198,15 @@ func _test_roundtrip() -> void:
 	get_tree().paused = false
 	await get_tree().process_frame
 
+	# CLEARING 不落盘：波末收益已发，存成 FIGHT 会让玩家重打本波再领一次
+	var saved_phase_before = spawner.phase
+	spawner.phase = WaveSpawner.Phase.CLEARING
+	_equals(RunSave.resolve_phase(GameManager), WaveSpawner.Phase.CLEARING,
+		"阶段层：resolve_phase 原样保留 CLEARING（交给 save_to 拒绝）")
+	_check(not RunSave.save_from(GameManager, WaveSpawner.Phase.CLEARING),
+		"阶段层：CLEARING 拒绝落盘")
+	spawner.phase = saved_phase_before
+
 	# 波次边界钩子已自动落了第 1 波的档；往下推状态
 	GameManager.wave_number = 7
 	GameManager.kills = 123
@@ -209,6 +225,7 @@ func _test_roundtrip() -> void:
 	GameManager.peak_stones = 88
 	GameManager.obelisk_activations = 2
 	GameManager.run_id = "run-save-check"
+	GameManager.revive_charges = 0  # 用完复活：必须按终值存，读档不能回满
 
 	var p = GameManager.player
 	p.current_health = 61.0
@@ -243,6 +260,7 @@ func _test_roundtrip() -> void:
 	_equals(GameManager.pending_upgrade_points, 2, "恢复后待加点数")
 	_equals(GameManager.danger_level, 1, "恢复后危险度（噩梦）")
 	_check(GameManager.run_started, "恢复后 run_started 置真（WaveSpawner 才会接管）")
+	_equals(GameManager.revive_charges, 0, "恢复后复活次数 = 存档终值 0（防读档回满）")
 
 	# —— 加点层：upgrade_counts 对账 + 属性终值（atk_up 直接抬 weapon_damage_mult）——
 	_equals(int(GameManager.upgrade_counts.get("atk_up", 0)), 1, "恢复后加点账本 atk_up=1")
@@ -294,3 +312,5 @@ func _test_roundtrip() -> void:
 func _exit_tree() -> void:
 	# 判据自清：测试档不留给真机（headless 下钩子本来不落盘，这条保手动跑也不漏）
 	RunSave.clear_save()
+	SaveSlots.clear_all()
+	SaveSlots.set_storage_dir_for_tests("")

@@ -172,7 +172,8 @@ func _ready() -> void:
 	# 中断续玩：主菜单「继续游戏」按钮 → 按存档重建整局
 	if start_menu.has_signal("resume_requested"):
 		start_menu.resume_requested.connect(resume_from_save)
-	# 多存档：首页「存 档」→ 存档管理（查看/读档/删除）；暂停菜单「存 档」→ 选位保存
+	# 多局存档：首页「存 档」→ 管理列表（继续/删除）；暂停菜单「存 档」直接写本局唯一位，
+	# 只有满位且本局还没占位时才走 save_requested → MAKE_ROOM（删一局并存本局）
 	if start_menu.has_signal("save_requested"):
 		start_menu.save_requested.connect(func():
 			_save_return_to_pause = false
@@ -183,7 +184,7 @@ func _ready() -> void:
 		pause_menu.save_requested.connect(func():
 			_save_return_to_pause = true
 			if _save_dialog != null:
-				_save_dialog.open_save()
+				_save_dialog.open_make_room()
 		)
 	# 游戏共创：主菜单左下角按钮 → 共创弹窗（与意见反馈共用 FeedbackSender 发送链路）
 	if $UILayer.has_node("CoCreateDialog") and start_menu.has_signal("cocreation_requested"):
@@ -262,14 +263,22 @@ func _ready() -> void:
 ## 树从 _ready 起就是暂停态，全程保持暂停直到 FIGHT 路径显式解暂停——
 ## 否则 WaveSpawner 的 WAITING 分支会抢跑 start_wave(1)。
 func resume_from_save() -> void:
-	if load_saved_run(RunSave.SAVE_PATH):
+	# 多局（2026-11-02）：优先续最近一局 —— 合并临时中断档 + 5 个存档位后取最新。
+	# 同一局若还留着旧快照，latest_save_path 只返回进度最前的一份，读档不会回退。
+	var path := SaveSlots.latest_save_path()
+	if not path.is_empty() and load_saved_run(path):
 		return
 	# 坏档降级：按没有存档处理，回落主菜单（点按钮的时机 UI 已就绪，直接 toast 告知）
-	UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
-	RunSave.clear_save()
+	if path.is_empty():
+		UpdateManager.show_toast("◆ 没有可继续的存档 ◆", GameStyle.BAD, 3.0)
+	else:
+		UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
+		# 只清坏掉的中断档；存档位留给列表里的「删除」处理，别顺手抹掉别局的临时档
+		if path == RunSave.SAVE_PATH:
+			RunSave.clear_save()
 	start_menu.open()
 
-## 从指定存档文件重建整局（自动中断档与 5 个手动存档位共用，2026-10-28）。
+## 从指定存档文件重建整局（临时中断档与已占位档共用；一局一位，2026-11-02）。
 ## 成功返回 true（战场/面板已接管）；失败返回 false，由调用方决定提示与回落方式 ——
 ## 手动存档读失败绝不能顺手把文件删了（玩家可能只是碰到坏档，还想去删它）。
 func load_saved_run(path: String) -> bool:
@@ -321,6 +330,9 @@ func load_saved_run(path: String) -> bool:
 		_:
 			# FIGHT/CLEARING：本波从头重打，金币/经验/血量以存档快照为准
 			_run_resumed_fight(spawner)
+	# 读档后只刷新 meta.time_unix + 补 run_id，不改整包：让「继续最近一局」指向刚读的局，
+	# 同时保留未识别字段；同一路径原地改，绝不产生第二份快照。
+	RunSave.touch_save(path, String(GameManager.run_id))
 	return true
 
 ## 超级悟道面板挂载：场景由 LevelUpDialog.tscn 派生（根脚本换 SuperAllocDialog.gd），
@@ -364,9 +376,17 @@ func _on_save_dialog_closed() -> void:
 		_save_return_to_pause = false
 		pause_menu.open()
 
-## 首页存档管理里点「读档」：按该位文件重建整局；坏档只提示不删文件
+## 首页存档管理里点「继续此局」：按该位文件重建整局；坏档只提示不删文件。
+## 旧快照（同一局还有更前的一份）一律拒绝读取 —— 一局一位，旧快照只能删。
 func _on_save_load_requested(slot_index: int) -> void:
 	_save_return_to_pause = false
+	var entry := SaveSlots.peek(slot_index)
+	if not bool(entry.get("occupied", false)) or bool(entry.get("corrupt", false)):
+		UpdateManager.show_toast("◆ 该存档已损坏，无法读取 ◆", GameStyle.BAD, 3.0)
+		return
+	if not bool(entry.get("loadable", true)):
+		UpdateManager.show_toast("◆ 该存档不是本局最新进度，无法读取 ◆", GameStyle.BAD, 3.0)
+		return
 	if not load_saved_run(SaveSlots.slot_path(slot_index)):
 		UpdateManager.show_toast("◆ 该存档已损坏，无法读取 ◆", GameStyle.BAD, 3.0)
 

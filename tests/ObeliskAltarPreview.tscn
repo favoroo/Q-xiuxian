@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/obelisk_altar_preview.gd" id="1_prev"]
+
+[node name="ObeliskAltarPreview" type="Node2D"]
+script = ExtResource("1_prev")

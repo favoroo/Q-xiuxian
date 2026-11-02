@@ -1,0 +1,20 @@
+{
+  "id": "holy/sunburst",
+  "out_name": "sunburst",
+  "frame_size": [
+    128,
+    128
+  ],
+  "pivot": [
+    64,
+    64
+  ],
+  "anchor": "center",
+  "scale": 0.55,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "gold",
+  "png_bytes": 243643,
+  "vram_kb": 1600
+}

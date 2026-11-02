@@ -1,0 +1,20 @@
+{
+  "id": "fire/spirit-flame",
+  "out_name": "spirit_flame",
+  "frame_size": [
+    80,
+    124
+  ],
+  "pivot": [
+    40,
+    94
+  ],
+  "anchor": "center",
+  "scale": 0.3,
+  "fps": 20,
+  "loop": true,
+  "frames_count": 24,
+  "palette_key": "gold",
+  "png_bytes": 133062,
+  "vram_kb": 1085
+}

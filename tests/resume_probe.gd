@@ -65,6 +65,9 @@ func _report(tag: String, main: Node) -> void:
 
 func _run() -> void:
 	Engine.time_scale = 8.0
+	# 存档位隔离：latest_save_path 只应看到本判据造的中断档
+	SaveSlots.set_storage_dir_for_tests("user://test_resume_probe_slots")
+	SaveSlots.clear_all()
 	RunSave.clear_save()
 	var phase_names := {"FIGHT": WaveSpawner.Phase.FIGHT, "ALLOC": WaveSpawner.Phase.ALLOC, "SHOP": WaveSpawner.Phase.SHOP}
 	for tag in ["FIGHT", "ALLOC", "SHOP"]:
@@ -101,8 +104,15 @@ func _run() -> void:
 		await _teardown(main2)
 
 	RunSave.clear_save()
+	SaveSlots.clear_all()
+	SaveSlots.set_storage_dir_for_tests("")
 	_c.report("RESUME_PROBE")
 	get_tree().quit(0 if _c.all_passed() else 1)
 
 func _ready() -> void:
 	call_deferred("_run")
+
+func _exit_tree() -> void:
+	SaveSlots.clear_all()
+	SaveSlots.set_storage_dir_for_tests("")
+	RunSave.clear_save()

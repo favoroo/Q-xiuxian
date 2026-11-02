@@ -1,10 +1,11 @@
 class_name SaveSlotCardFactory
 extends RefCounted
 
-## 存档位卡（2026-10-28）：SaveManageDialog 的列表行工厂。
+## 存档位卡（2026-10-28；2026-11-02 一局一位）：SaveManageDialog 的列表行工厂。
 ## 固定高 52、整卡可点（PanelContainer + GameStyle.tap）—— 滚动区里绝不能用 Button，
 ## BaseButton 会吞掉按下那一拍，整列就划不动（AGENTS.md 坑 11）。
 ## 五张卡的高度完全一致（空位/坏档也画满），列表不会因为有没有存档而跳动。
+## replace_mode=MAKE_ROOM 时已有局是「可替换」；MANAGE 下同一局的旧快照显示「旧快照」且不可读。
 
 const CARD_H := 52.0
 const PAD_L := 12.0
@@ -13,7 +14,7 @@ const PAD_Y := 7.0
 const NO_W := 34.0
 
 static func create(entry: Dictionary, selected: bool, on_tap: Callable,
-		save_mode: bool = false) -> Dictionary:
+		replace_mode: bool = false) -> Dictionary:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(0, CARD_H)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -68,7 +69,7 @@ static func create(entry: Dictionary, selected: bool, on_tap: Callable,
 	GameStyle.label(sub, 11, GameStyle.PAPER_DIM)
 	col.add_child(sub)
 
-	var state := GameStyle.chip_label(_state_text(entry, save_mode), _state_face(entry),
+	var state := GameStyle.chip_label(_state_text(entry, replace_mode), _state_face(entry),
 		Color(-1, -1, -1, -1), 11)
 	state.custom_minimum_size = Vector2(64, 0)
 	state.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -119,19 +120,25 @@ static func _sub_text(entry: Dictionary) -> String:
 		fmt_saved(int(entry.get("time_unix", 0))),
 	]
 
-static func _state_text(entry: Dictionary, save_mode: bool) -> String:
+static func _state_text(entry: Dictionary, replace_mode: bool) -> String:
 	if bool(entry.get("corrupt", false)):
 		return "损 坏"
 	if not bool(entry.get("occupied", false)):
 		return "空 位"
-	# 存档模式点已有档是「覆盖」，管理模式点它是「读取」—— 同一张卡按入口换动作提示
-	return "可 覆 盖" if save_mode else "可 读"
+	# 腾位模式点已有局是「替换」；管理模式下同一局的旧快照只可删、不可读
+	if replace_mode:
+		return "可 替 换"
+	if not bool(entry.get("loadable", true)):
+		return "旧 快 照"
+	return "可 读"
 
 static func _state_face(entry: Dictionary) -> Color:
 	if bool(entry.get("corrupt", false)):
 		return GameStyle.BAD_DK
 	if not bool(entry.get("occupied", false)):
 		return GameStyle.INK.lightened(0.12)
+	if not bool(entry.get("loadable", true)):
+		return GameStyle.INK.lightened(0.2)
 	return GameStyle.JADE_DK
 
 ## 游戏时长：不足 1 小时用 mm:ss，超过用 h:mm:ss

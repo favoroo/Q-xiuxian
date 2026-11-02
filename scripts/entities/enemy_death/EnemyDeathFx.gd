@@ -97,14 +97,10 @@ static func drops(e) -> void:
 				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS))
 		extra_orb.heal_amount = HealOrb.BASE_HEAL
 		extra_orb.activate()
-	# 杀戮节奏（神通）：每次击杀返还一部分所有武器的当前冷却。
-	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不返还，清场不该白拿加速。
-	# 2026-10-26：返还那一刻在每把武器根部补一记金色微闪 —— 否则玩家完全读不到
-	# 「我的冷却被拉回去了」，只感觉武器好像突然变快。
-	var cd_refund: float = GameManager.item_hook_sum("kill_cd_refund")
-	if cd_refund > 0.0 and not e._no_drop and GameManager.player != null \
-			and GameManager.player.has_method("refund_weapon_cooldowns"):
-		GameManager.player.refund_weapon_cooldowns(cd_refund)
+	# 杀戮节奏（神通）：叠层由 GameManager.register_kill 统一入账；这里只补「这一杀涨了攻速」
+	# 的可读反馈 —— 每把武器根部一记金色微闪（2026-10-26 加的读数，机制换成击杀叠层后保留）。
+	if GameManager.item_hook_sum("kill_haste") > 0.0 and GameManager.player != null \
+			and is_instance_valid(GameManager.player):
 		_pulse_weapon_roots(e, GameManager.player)
 	# 神通【雷劫】：尸体处向附近敌人放一道连锁闪电（固定基值 + 元素加成，见 BalanceChain）。
 	# 与 kill_explode 同一条战果闸：回合末消散（_no_drop）不算击杀战果。
@@ -178,7 +174,7 @@ static func drops(e) -> void:
 				gem.stone_value = GameBalance.GEM_SHARD_STONE_VALUE
 		gem.activate()
 
-## 杀戮节奏：冷却返还那一刻在每把武器根部点一记金色微闪（2026-10-26）。
+## 杀戮节奏：叠层那一刻在每把武器根部点一记金色微闪（2026-10-26）。
 ## 走 JuiceEffect 的 IMPACT_POP 帧预算（6/帧），一次击杀最多点亮几把，不糊屏。
 static func _pulse_weapon_roots(e, player: Node2D) -> void:
 	if player == null or not is_instance_valid(player):

@@ -38,6 +38,16 @@ var summon_wave: int = 1
 ## 配色档位（0 灵青 / 1 赤焰 / 2 紫电）：祭坛召唤时取场上未占用的最小档，同场不撞色
 var palette_idx: int = 0
 
+## 出生阶（召唤时祭坛灵脉阶）：0 = 未由祭坛指定，_ready 按当前波次/启动次数自动推导。
+## 祭坛在 add_child 前灌入，确保 _ready 取生命/体型时直接用新阶。
+var altar_tier: int = 0
+## 当前阶段（1~4）：出生阶 + 存活回合数，封顶 4；渲染器剪影与攻击质变都读它
+var stage: int = 1
+## 已存活回合数（召唤当回合为 0，每个 wave_changed +1）
+var waves_survived: int = 0
+## 阶段体型缩放（可补间：升阶时从旧值弹到新值；_physics_process 每帧写进 renderer.scale）
+var stage_scale: float = 1.0
+
 var max_hp: float = 100.0
 var current_hp: float = 100.0
 var current_target: Node2D = null
@@ -64,13 +74,23 @@ func _ready() -> void:
 	# 被踩时剪影不能被怪体盖掉糊成一团（2026-10-24 拥挤状态优化）
 	z_index = 1
 	summon_wave = maxi(GameManager.wave_number, 1)
-	max_hp = GameBalance.spirit_beast_max_hp(summon_wave)
+	# 出生阶 = 祭坛灵脉阶（2026-11-02）：祭坛在 add_child 前已灌入；直接实例化（测试/工具）时自动推导
+	if altar_tier <= 0:
+		altar_tier = GameBalance.obelisk_altar_tier(summon_wave, GameManager.obelisk_activations)
+	altar_tier = clampi(altar_tier, 1, GameBalance.SPIRIT_BEAST_MAX_STAGE)
+	stage = altar_tier
+	waves_survived = 0
+	max_hp = GameBalance.spirit_beast_max_hp(summon_wave, stage)
 	current_hp = max_hp
+	stage_scale = GameBalance.spirit_beast_body_scale(stage)
 
 	_renderer = ProceduralDroneRenderer.new()
 	_renderer.kind = ProceduralDroneRenderer.DroneKind.YUAN_LING
 	_renderer.palette_idx = clampi(palette_idx, 0, ProceduralDroneRenderer.PALETTES.size() - 1)
+	_renderer.stage = stage
 	add_child(_renderer)
+	# 首帧前就把体型摆到出生阶（_physics_process 之后每帧按 stage_scale 覆写）
+	_renderer.scale = Vector2(1.0, stage_scale)
 
 	GameManager.register_ally(self)
 	# 寿命闸（2026-10-25 重设计）：回合开始时自召唤波起算满 LIFETIME_WAVES 即消散
@@ -103,12 +123,45 @@ func expire_for_replacement() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.3)
 	tw.chain().tween_callback(queue_free)
 
-## 回合开始：自召唤波起算满寿命即消散（召唤当波算第 1 回合，共在场 3 个回合）
+## 回合开始：自召唤波起算满寿命即消散（召唤当波算第 1 回合，共在场 3 个回合）；
+## 寿命没到就按「出生阶 + 存活回合数」晋 1 阶（2026-11-02 分阶成长）。
 func _on_wave_changed(wave_number: int) -> void:
 	if _dying:
 		return
 	if wave_number - summon_wave >= GameBalance.SPIRIT_BEAST_LIFETIME_WAVES:
 		expire_for_replacement()
+		return
+	waves_survived = maxi(wave_number - summon_wave, 0)
+	var new_stage := GameBalance.spirit_beast_stage(altar_tier, waves_survived)
+	if new_stage > stage:
+		_apply_stage(new_stage)
+
+## 升阶：生命上限按阶段表重算，只把「上限增加的那一截」补进当前生命（保留已受伤害），
+## 体型弹到新档 + 同色冲击环/灵光/低音量升级音。不重置寿命、不回满血。
+func _apply_stage(new_stage: int) -> void:
+	if _dying:
+		return
+	var target_stage := clampi(new_stage, 1, GameBalance.SPIRIT_BEAST_MAX_STAGE)
+	if target_stage <= stage:
+		return
+	var old_max: float = max_hp
+	stage = target_stage
+	max_hp = GameBalance.spirit_beast_max_hp(summon_wave, stage)
+	current_hp = minf(max_hp, current_hp + maxf(max_hp - old_max, 0.0))
+	if _renderer != null:
+		_renderer.stage = stage
+		_renderer.hp_ratio = clampf(current_hp / max_hp, 0.0, 1.0)
+	# 体型补间：_physics_process 每帧把 stage_scale 写进 renderer.scale，所以补的是标量不是节点
+	var tw := create_tween()
+	tw.tween_property(self, "stage_scale", GameBalance.spirit_beast_body_scale(stage), 0.35) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# 晋阶演出（低频事件）：同色冲击环 + 灵光爆点 + 低音量升级音
+	var fx_host: Node = get_tree().current_scene
+	var col: Color = ProceduralDroneRenderer.body_color(palette_idx)
+	if fx_host != null:
+		JuiceEffect.spawn_shockwave(fx_host, global_position, 34.0 + 10.0 * float(stage), col, 0.35)
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, col, 0.8, true)
+	AudioManager.play_sfx("level_up", 0.55, 1.02 + 0.05 * float(stage))
 
 func _exit_tree() -> void:
 	GameManager.unregister_ally(self)
@@ -171,7 +224,8 @@ func _physics_process(delta: float) -> void:
 		# 竖直方向追击（face_dir.x≈0）与临界抖动都不翻
 		if face_dir != Vector2.ZERO and face_dir.x * _face_sign < -0.35:
 			_face_sign = -_face_sign
-		_renderer.scale.x = _face_sign
+		# 朝向镜像 × 阶段体型：阶段越大剪影越大，镜面翻转仍只作用 x 轴
+		_renderer.scale = Vector2(_face_sign * stage_scale, stage_scale)
 		_renderer.speed_ratio = clampf(velocity.length() / GameBalance.SPIRIT_BEAST_MOVE_SPEED, 0.0, 1.0)
 		# 悬浮侧倾：按朝向系下的横向走位 bank，一阶跟随 + 死区（环绕边界上不抖）
 		var bank_target := 0.0
@@ -224,7 +278,7 @@ func _update_attack(delta: float) -> void:
 		if _renderer != null:
 			_renderer.charge_ratio = clampf(1.0 - _charge_timer / GameBalance.SPIRIT_BEAST_CHARGE_TIME, 0.0, 1.0)
 		if _charge_timer <= 0.0:
-			_burst_left = GameBalance.SPIRIT_BEAST_BURST_COUNT
+			_burst_left = GameBalance.spirit_beast_burst_count(stage)
 			_burst_timer = 0.0
 		return
 	_attack_timer -= delta
@@ -237,7 +291,7 @@ func _update_attack(delta: float) -> void:
 ## 吐一发灵羽：追踪小幅修正（homing_target）配风筝走位，命中/击杀掉落全走敌人 take_damage 那一条；
 ## 每发后坐 + 音调递进，蓄力余辉随剩余发数递减（charge_ratio 1→0）
 func _fire_one() -> void:
-	var dmg: float = GameBalance.spirit_beast_damage(summon_wave) * (1.0 + GameManager.engineering_damage + GameManager.synergy_engineering_damage)
+	var dmg: float = GameBalance.spirit_beast_damage(summon_wave, stage) * (1.0 + GameManager.engineering_damage + GameManager.synergy_engineering_damage)
 	var dir := _aim_dir
 	if current_target != null and is_instance_valid(current_target):
 		var to_target: Vector2 = current_target.global_position - global_position
@@ -249,17 +303,18 @@ func _fire_one() -> void:
 	p.speed = GameBalance.SPIRIT_BEAST_PROJECTILE_SPEED
 	p.damage = dmg
 	p.knockback_base = 60.0          # 轻推即可：别一发把敌人推出嘲讽圈
-	p.pierce_left = 1
+	# 阶段穿透（2026-11-02）：1-3 阶单目标，4 阶可贯穿命中 2 个敌人
+	p.pierce_left = GameBalance.spirit_beast_pierce(stage)
 	p.bounce_left = 0
 	p.homing_target = current_target
 	p.bullet_texture = BULLET_TEXTURE
-	p.bullet_scale = 0.8
+	p.bullet_scale = 0.8 + 0.05 * float(stage - 1)
 	p.spin = false
 	p.activate()
 	p.lifetime = 0.9                 # activate 会把 lifetime 重置回 BASE_LIFETIME，必须在其后覆盖；覆盖甜区上沿 ×1.5 的飞行时长
 	# 吐息小后坐（纯视觉，不改判定）+ 余辉随剩余发数递减
 	if _renderer != null:
-		_renderer.charge_ratio = float(_burst_left) / float(maxi(GameBalance.SPIRIT_BEAST_BURST_COUNT, 1))
+		_renderer.charge_ratio = float(_burst_left) / float(maxi(GameBalance.spirit_beast_burst_count(stage), 1))
 		_renderer.position = -dir * 5.0
 		var recoil := create_tween()
 		recoil.tween_property(_renderer, "position", Vector2.ZERO, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -274,8 +329,11 @@ func _fire_one() -> void:
 func _resolve_contact_bites(delta: float) -> void:
 	var crowd := Vector2.ZERO
 	var crowd_n := 0
-	var range_sq: float = GameBalance.SPIRIT_BEAST_CONTACT_RANGE * GameBalance.SPIRIT_BEAST_CONTACT_RANGE
-	var crowd_sq: float = GameBalance.SPIRIT_BEAST_CROWD_RADIUS * GameBalance.SPIRIT_BEAST_CROWD_RADIUS
+	# 阶段越大，近身啃咬与拥挤感知半径同步放大（2026-11-02）：体型变大后不能让敌人「咬不到/叠在身上」
+	var contact_range: float = GameBalance.spirit_beast_contact_range(stage)
+	var crowd_radius: float = GameBalance.spirit_beast_crowd_radius(stage)
+	var range_sq: float = contact_range * contact_range
+	var crowd_sq: float = crowd_radius * crowd_radius
 	for e in GameManager.live_enemies:
 		if e == null or not is_instance_valid(e) or e.dying:
 			continue
@@ -286,7 +344,7 @@ func _resolve_contact_bites(delta: float) -> void:
 			continue
 		var d := sqrt(d_sq)
 		var push: Vector2 = diff / d if d > 0.001 else Vector2.UP
-		crowd += push * (1.0 - d / GameBalance.SPIRIT_BEAST_CROWD_RADIUS)
+		crowd += push * (1.0 - d / crowd_radius)
 		crowd_n += 1
 		if d_sq <= range_sq and e.contact_damage > 0.0:
 			take_damage(e.contact_damage, push)

@@ -25,6 +25,12 @@ var _ring: SkillButtonView.CircleProgressOverlay = null
 ## 键面价格小字：读 GameManager 现价（随波上涨）与余额（不够转「差N」），文本变了才重写
 var _price: Label = null
 var _price_key: String = ""
+## 键面主文案缓存：血祭态切「血祭」，普通态回「激活」——只在变化时重写，避免每帧排版
+var _face_key: String = BTN_TEXT
+## 当前是否血祭态（决定键面主色：朱砂 / 主色）
+var _blood_available: bool = false
+## 当前键面是否处于充能视觉态（重新上色时要保持按住态不被刷掉）
+var _visual_charging: bool = false
 var _active_ob: BlessingObelisk = null
 ## 键盘 E 的按住态：只认键盘自己的按下/松开对，E 松开不会误停鼠标/触屏正在充的能
 var _key_holding := false
@@ -92,9 +98,12 @@ func _build_button() -> void:
 	if SkillButtonView.key_hint_enabled():
 		_btn.add_child(SkillButtonView.make_key_chip("E"))
 
-## 键面样式：平时墨底蓝勾边，按住充能整面翻实蓝 —— 文案不动，状态由底色 + 那一圈说
+## 键面样式：平时墨底主色勾边，按住充能整面翻实色 —— 文案不动，状态由底色 + 那一圈说。
+## 血祭态主色转朱砂（2026-11-02）：键面文字、价格与描边一起改，玩家一眼知道这次不花金币花血。
 func _style_btn(charging: bool) -> void:
-	SkillButtonView.style_circle_action(_btn, GameStyle.GOLD, BTN_FONT, charging)
+	_visual_charging = charging
+	var accent: Color = GameStyle.BAD if _blood_available else GameStyle.GOLD
+	SkillButtonView.style_circle_action(_btn, accent, BTN_FONT, charging)
 
 ## 按钮输入处理：按下开始充能，松开结束充能（支持鼠标与多点触控）
 func handle_input(event: InputEvent) -> void:
@@ -241,13 +250,16 @@ func _process(_delta: float) -> void:
 	_refresh_price()
 
 ## 键面价格小字：读本回合现价与余额（2026-10-26 从碑顶悬浮字挪进键面）。
-## 本局第一次启动免费（2026-10-30）写「免费」；够钱「N金币」奶白，不够「差N」朱砂 ——
-## 文本没变不重写，钱每帧都在变也不能每帧重排。
+## 本局第一次启动免费（2026-10-30）写「免费」；够钱「N金币」奶白，不够「差N」朱砂。
+## 2026-11-02 血祭：金币不足但生命付得起时，主文案切「血祭」、价格写「耗18%」——
+## 有钱时永远优先金币，血祭只是没钱时的替代路径。
 func _refresh_price() -> void:
 	if _price == null:
 		return
 	var key := ""
 	var col: Color = GameStyle.CHALK
+	var face: String = BTN_TEXT
+	var blood := false
 	if _active_ob != null and is_instance_valid(_active_ob) and visible:
 		var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
 		if cost <= 0:
@@ -255,9 +267,21 @@ func _refresh_price() -> void:
 			col = GameStyle.JADE
 		elif GameManager.spirit_stones >= cost:
 			key = "%d金币" % cost
+		elif _active_ob.can_blood_ritual():
+			key = "耗18%"
+			col = GameStyle.BAD
+			face = "血祭"
+			blood = true
 		else:
 			key = "差%d" % (cost - GameManager.spirit_stones)
 			col = GameStyle.BAD
+	if face != _face_key:
+		_face_key = face
+		if _btn != null:
+			_btn.text = face
+	if blood != _blood_available:
+		_blood_available = blood
+		_style_btn(_visual_charging)
 	if key != _price_key:
 		_price_key = key
 		_price.text = key

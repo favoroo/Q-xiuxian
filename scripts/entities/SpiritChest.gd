@@ -3,10 +3,10 @@ extends Node2D
 
 ## 藏宝匣：竞技场内随机刷新的可破坏宝箱（Brotato 树木的修仙版）
 ## 挨够 GameBalance.chest_break_hits() 下砸开，掉什么按档位查 BalanceChest.reward_of（三档）：
-##   木匣 —— 约四成掉回春葫芦（回 15% 生命），约六成掉 3 颗金币
-##   铜匣 —— 同样的葫芦概率但回得更多，掉 6 颗金币
+##   木匣 —— 约四成掉回春葫芦（1 颗，固定回 3 点生命），约六成掉 3 颗金币
+##   铜匣 —— 同样的葫芦概率，掉 2 颗（单颗仍 3 点），另掉 8 颗金币 + 直接 8 金币
 ##   玉匣 —— 必送一件随机道具（与金币阁同一个 roller），另有金币；每局送出件数有顶，
-##           到顶后退回铜匣奖励 ×1.5（见 BalanceChest.jade_fallback_reward）
+##           到顶后退回铜匣奖励 ×1.5（3 颗葫芦 + 12 颗金币 + 12 金币，见 BalanceChest.jade_fallback_reward）
 ## 掉出的葫芦在满血时不会被吃掉，会压在灰相留在原地等玩家掉血（见 HealOrb）
 ## 持有「纳灵盘」道具时，砸开掉的掉落物当场飞进袖中（残血时葫芦也一同吸附）
 ## 挂在 4 号层（enemies）让武器判定能碰到；加入 chests 组 = 「可砸但不是威胁」的标记：
@@ -194,24 +194,33 @@ func _destroy() -> void:
 	# 葫芦概率 = 奖励表基准（简单档口径）× 危险度乘区：越难葫芦越稀少
 	var heal_chance := float(reward.get("heal_chance", 0.0)) * GameBalance.danger_heal_chance_mult(GameManager.danger_level)
 	if GameManager.rng.randf() < heal_chance:
-		_drop_heal(float(reward.get("heal_pct", 0.0)))
+		_drop_heal(float(reward.get("heal_hp", 0.0)), int(reward.get("heal_count", 1)))
 	else:
 		_drop_gems(int(reward.get("gem_count", 0)), int(reward.get("gem_exp", 1)))
 	queue_free()
 
-## 回春葫芦：满血时不会被吃掉，压在灰相原地等玩家掉血（这套等待逻辑在 HealOrb 自己手里）
-func _drop_heal(pct: float) -> void:
-	if pct <= 0.0:
+## 回春葫芦：单颗固定点数回复（2026-11-02 对标 Brotato 水果 3 HP，不按生命上限百分比）。
+## 档位差体现在颗数（木 1 / 铜 2 / 退回 3），多颗时散在匣心周围。
+## 满血时不会被吃掉，压在灰相原地等玩家掉血（这套等待逻辑在 HealOrb 自己手里）
+func _drop_heal(amount: float, count: int) -> void:
+	if amount <= 0.0 or count <= 0:
 		return
 	# 回复珠走对象池（2026-10-11，与宝石同一条路）
-	var fruit := HealOrb.acquire_or_new(get_parent())
-	fruit.global_position = global_position
-	fruit.heal_pct = pct
-	fruit.activate()
 	var magnet: bool = GameManager.item_hook_sum("chest_magnet") > 0.0
 	var player: Node2D = GameManager.player
-	if magnet and player != null and is_instance_valid(player):
-		fruit.magnet_to(player)
+	for i in range(count):
+		var fruit := HealOrb.acquire_or_new(get_parent())
+		var offset := Vector2.ZERO
+		if count > 1:
+			# 多颗才散开：单颗仍落在匣心，保持木匣原读数；散点半径与灵药滋生同一把尺子
+			offset = Vector2(
+				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS),
+				GameManager.rng.randf_range(-GameBalance.HEAL_ORB_SCATTER_RADIUS, GameBalance.HEAL_ORB_SCATTER_RADIUS))
+		fruit.global_position = global_position + offset
+		fruit.heal_amount = amount
+		fruit.activate()
+		if magnet and player != null and is_instance_valid(player):
+			fruit.magnet_to(player)
 
 ## 一捧金币：撒在匣心周围。持有「纳灵盘」时当场全部飞向玩家 —— 砸匣子不必再绕一趟走位
 func _drop_gems(count: int, exp_each: int) -> void:

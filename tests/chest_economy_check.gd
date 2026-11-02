@@ -12,8 +12,8 @@ extends Node
 ##
 ## 1) 纯函数层（BalanceChest 经 GameBalance 门面）：数量曲线与硬顶、三档权重的单调与
 ##    「品质为 0 时铜/玉仍有正权重」（第 1 波就该见到高档匣）、击数是定值、
-##    开箱收益乘区的放大与两条例外（每颗灵石修为值不放大 / 回复量有顶）、
-##    奖励表与改版前木匣口径一致（防偷偷改掉基准档）。
+##    开箱收益乘区的放大与两条例外（每颗灵石修为值不放大 / 葫芦回复按固定点数放大）、
+##    奖励表基准档口径（40% 葫芦、固定 3 点回复、3 颗灵石）。
 ## 2) 来源层：apply_upgrade / add_item 走真实落地链路后，GameManager 字段确实吃到幅度，
 ##    并且下一次 _spawn_chests 刷出的匣子数、击数、体型就是那些幅度（字段追到消费方）。
 ## 3) 现场层：Main 场景 + start_run，冻住波次状态机，量
@@ -91,16 +91,17 @@ func _test_pure() -> void:
 	# 开箱收益乘区：放大什么、不放大什么，两条例外要钉住
 	var s1: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_WOOD), 1.0)
 	_c.equals(int(s1["gem_count"]), 3, "×1 就是表上那份：木匣仍掉 3 颗经验球")
-	_c.near(float(s1["heal_pct"]), 0.15, 0.001, "×1 时葫芦仍回 15% 气血")
+	_c.equals(int(s1["heal_hp"]), 3, "×1 时葫芦固定回 3 点生命（2026-11-02 对标 Brotato 水果）")
 	var s2: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_WOOD), 2.0)
 	_c.equals(int(s2["gem_count"]), 6, "×2 ⇒ 经验球颗数翻倍")
-	_c.near(float(s2["heal_pct"]), 0.30, 0.001, "×2 ⇒ 葫芦回复翻倍")
+	_c.equals(int(s2["heal_hp"]), 6, "×2 ⇒ 葫芦回复点数抬到 6（固定值按乘区放大，取整）")
 	_c.equals(int(s2["gem_exp"]), int(s1["gem_exp"]), "每颗经验球值多少经验不放大（不顺手吹经验曲线）")
 	var s_cop: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 2.0)
-	_c.equals(int(s_cop["stones"]), 12, "×2 ⇒ 铜匣那笔金币翻倍")
-	var s_cap: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 9.0)
-	_c.near(float(s_cap["heal_pct"]), GameBalance.CHEST_REWARD_HEAL_CAP, 0.001,
-		"回复量有顶：堆满一条寻宝流也不许一口匣子回满血")
+	_c.equals(int(s_cop["stones"]), 16, "×2 ⇒ 铜匣那笔金币翻倍（8→16）")
+	_c.equals(int(s_cop["heal_count"]), 2, "颗数不随乘区放大：铜匣仍是 2 颗（乘区只抬单颗回复点数）")
+	_c.equals(int(GameBalance.chest_reward(BalanceChest.TIER_WOOD)["heal_hp"]),
+		int(GameBalance.chest_reward(BalanceChest.TIER_COPPER)["heal_hp"]),
+		"木/铜匣单颗回复同值 3 点：档位差由葫芦颗数与金币体现")
 	var s_jade: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_JADE), 2.0)
 	_c.check(bool(s_jade["grant_item"]), "玉匣那件法宝是「必送」不是「送得多」，缩放不动它")
 	var s_floor: Dictionary = GameBalance.chest_reward_scaled(GameBalance.chest_reward(BalanceChest.TIER_COPPER), 0.5)
@@ -114,17 +115,22 @@ func _test_pure() -> void:
 	# 奖励表：木匣与改版前逐字一致，玉匣才是要新增的东西
 	var r0: Dictionary = GameBalance.chest_reward(BalanceChest.TIER_WOOD)
 	_c.near(float(r0["heal_chance"]), 0.4, 0.001, "木匣基准档 40% 掉葫芦（原 60% 已下调）")
-	_c.near(float(r0["heal_pct"]), 0.15, 0.001, "木匣葫芦仍回 15% 气血")
+	_c.equals(int(r0["heal_hp"]), 3, "木匣葫芦固定回 3 点生命")
+	_c.equals(int(r0["heal_count"]), 1, "木匣葫芦 1 颗")
 	_c.equals(int(r0["gem_count"]), 3, "木匣仍掉 3 颗金灵石")
 	_c.check(not bool(r0["grant_item"]), "木匣不送法宝")
 	var r1: Dictionary = GameBalance.chest_reward(BalanceChest.TIER_COPPER)
-	_c.check(int(r1["gem_count"]) > int(r0["gem_count"]) and float(r1["heal_pct"]) > float(r0["heal_pct"]),
-		"铜匣掉落比木匣厚（高档必须真的更好）")
+	_c.check(int(r1["gem_count"]) > int(r0["gem_count"]) and int(r1["stones"]) > int(r0["stones"]),
+		"铜匣掉落比木匣厚（高档必须真的更好：金币颗数与直接金币都更高）")
+	_c.equals(int(r1["heal_count"]), 2, "铜匣葫芦 2 颗（单颗回复同值，档位差靠颗数）")
 	var r2: Dictionary = GameBalance.chest_reward(BalanceChest.TIER_JADE)
 	_c.check(bool(r2["grant_item"]), "玉匣送法宝")
 	_c.near(float(r2["heal_chance"]), 0.0, 0.001, "玉匣必掉灵石（磁吸那条链路因此可确定性判）")
+	_c.equals(int(r2["heal_count"]), 0, "玉匣不掉葫芦（头奖是法宝）")
 	var fb: Dictionary = GameBalance.chest_jade_fallback_reward()
 	_c.check(not bool(fb["grant_item"]), "送满上限后玉匣退回，不再白送法宝")
+	_c.equals(int(fb["heal_hp"]), 3, "退回档单颗葫芦仍是固定 3 点，不放缩回复量")
+	_c.equals(int(fb["heal_count"]), 3, "退回档葫芦 3 颗（铜匣 2 颗 ×1.5 取整）")
 	_c.check(int(fb["gem_count"]) > int(r1["gem_count"]) and int(fb["stones"]) > int(r1["stones"]),
 		"退回量比铜匣还厚：堆上去的档位不许越堆越亏")
 	_c.equals(GameBalance.CHEST_JADE_ITEM_GRANT_CAP, 3, "每局玉匣最多送 3 件法宝（掏空灵石阁的保险丝）")

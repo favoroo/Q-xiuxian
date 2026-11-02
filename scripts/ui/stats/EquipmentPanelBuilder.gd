@@ -253,7 +253,13 @@ static func refresh_weapons(dialog: PlayerStatsDialog) -> void:
 	if dialog._wp_title_lbl != null:
 		dialog._wp_title_lbl.text = "◆ 装备武器 (%d/%d)" % [summary.size(), max_slots]
 
-	for i in range(WeaponData.MAX_SLOTS):
+	# 7 格（开天辟地）时收紧间距：44px × 7 + 仓库 5 格仍在右侧栏宽度内，
+	# 不靠缩小点击格（44 是触屏可点下限）。
+	dialog._weapons_box.add_theme_constant_override(
+		"separation", 4 if max_slots > WeaponData.MAX_SLOTS else 8)
+	# 格子数跟着本局上限走：开天辟地 +1 / 献祭 -1 都要在属性面板看得见，
+	# 不能写死 WeaponData.MAX_SLOTS（第 7 把武器此前没有格子显示，2026-11-02 修）。
+	for i in range(maxi(WeaponData.MAX_SLOTS, max_slots)):
 		var slot := PanelContainer.new()
 		slot.custom_minimum_size = Vector2(44, 44)
 		slot.mouse_filter = Control.MOUSE_FILTER_STOP

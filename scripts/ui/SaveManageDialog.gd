@@ -1,15 +1,17 @@
 class_name SaveManageDialog
 extends BaseModalDialog
 
-## 存档管理弹窗（2026-10-28）：5 个手动存档位的查看 / 读档 / 删除 / 存入。
+## 多局存档管理弹窗（2026-10-28；2026-11-02 一局一位重构）
 ## 两种模式：
-##   MANAGE —— 首页「存 档」进入：选中一位 → 读档或删除
-##   SAVE   —— 暂停菜单「存 档」进入：选空位存入；5 位全满时改走「删除并存入」
+##   MANAGE    —— 首页「存 档」进入：5 局列表，选中一局 → 继续此局 / 删除。
+##   MAKE_ROOM —— 暂停菜单「存 档」遇 5 位全满且本局未占位时进入：
+##                选一局替换（二次确认），原子写入本局；旧局进度被删除。
+## 一局一位：这里不再提供「选空位另存一份」的入口；正常存档由 PauseMenu 直接写本局唯一位。
 ## 树暂停只置真不置假（打开前本来就在暂停态），关闭后由 Main 决定回暂停菜单还是读档恢复。
 
 signal load_requested(slot_index: int)
 
-enum Mode { MANAGE, SAVE }
+enum Mode { MANAGE, MAKE_ROOM }
 
 const SLOT_COUNT := SaveSlots.SLOT_COUNT
 
@@ -81,7 +83,7 @@ func _build_body(root: VBoxContainer) -> void:
 	actions.add_child(_delete)
 
 	var foot := Label.new()
-	foot.text = "自动存档不占存档位 · 阵亡后本局的手动存档一并清除"
+	foot.text = "每局只占 1 位 · 存入后进度自动更新 · 阵亡后本局存档删除"
 	GameStyle.label(foot, 11, GameStyle.GREY)
 	root.add_child(foot)
 
@@ -102,8 +104,9 @@ func open_manage() -> void:
 	_pending_mode = Mode.MANAGE
 	super.open()
 
-func open_save() -> void:
-	_pending_mode = Mode.SAVE
+## 满位腾位模式：只有暂停菜单在「5 位全满且本局未占位」时才调。
+func open_make_room() -> void:
+	_pending_mode = Mode.MAKE_ROOM
 	super.open()
 
 ## 读档成功时由 Main 调：立刻收起、不播淡出 —— 战场马上恢复，不能留半透明弹窗盖着。
@@ -118,8 +121,8 @@ func _on_opened() -> void:
 	_mode = _pending_mode
 	_arm = &""
 	_selected = -1
-	# 暂停进入时默认选中第一个空位：玩家点开就能直接「存入」，不用先找位置
-	if _mode == Mode.SAVE:
+	# 腾位模式若还有空位（并发/异常），默认选中空位；满位则必须由玩家选一局替换
+	if _mode == Mode.MAKE_ROOM:
 		_selected = SaveSlots.first_free_slot()
 	get_tree().paused = true
 	_rebuild()
@@ -140,28 +143,26 @@ func _rebuild() -> void:
 	for entry in SaveSlots.list_slots():
 		var si := int(entry.get("index", 1))
 		var res := SaveSlotCardFactory.create(entry, si == _selected,
-			func() -> void: _on_slot_pressed(si), _mode == Mode.SAVE)
+			func() -> void: _on_slot_pressed(si), _mode == Mode.MAKE_ROOM)
 		res["entry"] = entry
 		_list.add_child(res["card"])
 		_cards.append(res)
 	GameStyle.swipeable(_scroll)
-	_count_label.text = "已用 %d / %d" % [used, SLOT_COUNT]
+	_count_label.text = "已存 %d / %d 局" % [used, SLOT_COUNT]
 	_refresh_hint(used)
 	_refresh_actions()
 
 func _refresh_hint(used: int) -> void:
-	if _mode == Mode.SAVE and used >= SLOT_COUNT:
-		_hint.text = "◆ 存档已满 · 请选择要覆盖的存档（旧档将被替换）◆"
-		_hint.add_theme_color_override("font_color", GameStyle.BAD)
+	if _mode == Mode.MAKE_ROOM:
+		if used >= SLOT_COUNT:
+			_hint.text = "◆ 存档已满 · 选择一局替换（该局进度将被删除）◆"
+			_hint.add_theme_color_override("font_color", GameStyle.BAD)
+		else:
+			_hint.text = "选择空位存入本局（一局只占一位，存入后进度自动更新）"
+			_hint.add_theme_color_override("font_color", GameStyle.PAPER_DIM)
 		return
 	_hint.add_theme_color_override("font_color", GameStyle.PAPER_DIM)
-	if _mode == Mode.SAVE:
-		if used > 0:
-			_hint.text = "选择空位存入，或选中已有存档覆盖更新（战斗中存档会从本波开头继续）"
-		else:
-			_hint.text = "选择存档位保存当前进度（战斗中存档会从本波开头继续）"
-	else:
-		_hint.text = "最多保留 5 个存档 · 选中存档后可读档或删除"
+	_hint.text = "最多保留 %d 局 · 每局只占 1 位 · 选中后可继续或删除" % SLOT_COUNT
 
 func _on_slot_pressed(index: int) -> void:
 	if _selected == index and _arm == &"":
@@ -187,11 +188,13 @@ func _refresh_actions() -> void:
 	var entry := _selected_entry()
 	var occupied := not entry.is_empty() and bool(entry.get("occupied", false))
 	var corrupt := not entry.is_empty() and bool(entry.get("corrupt", false))
+	var loadable := not entry.is_empty() and bool(entry.get("loadable", true))
 	_delete.visible = _mode == Mode.MANAGE
 
 	if _mode == Mode.MANAGE:
-		_primary.text = "读 档"
-		_primary.disabled = not (occupied and not corrupt)
+		# 旧快照（同一局还有更前的一份）不可读，只能删：一局一位的兜底闸
+		_primary.text = "继 续 此 局"
+		_primary.disabled = not (occupied and not corrupt and loadable)
 		GameStyle.button(_primary, GameStyle.GOLD, GameStyle.JADE, 14,
 			GameStyle.INK_TEXT, GameStyle.SLANT_BUTTON)
 		_delete.disabled = not occupied
@@ -205,11 +208,10 @@ func _refresh_actions() -> void:
 				GameStyle.PAPER, GameStyle.SLANT_BUTTON)
 		return
 
-	# 存档模式：空位「存入」；已有存档（含损坏档）一律可覆盖 —— 同一局更新存档位
-	# 不该被「必须先删掉」拦住（2026-10-28 用户现场：第 2 波想覆盖刚存的第 1 波）。
+	# MAKE_ROOM：空位「存入本局」；已有局一律二次确认后替换
 	_primary.disabled = entry.is_empty()
 	if occupied:
-		_primary.text = "再点确认覆盖" if _arm == &"overwrite" else "覆 盖 存 档"
+		_primary.text = "再点确认替换" if _arm == &"replace" else "删 除 并 存 入"
 		GameStyle.button(_primary, GameStyle.BAD, GameStyle.JADE, 14,
 			GameStyle.CHALK, GameStyle.SLANT_BUTTON, GameStyle.INK_TEXT)
 	else:
@@ -223,29 +225,30 @@ func _on_primary_pressed() -> void:
 		return
 	if _mode == Mode.MANAGE:
 		if bool(entry.get("occupied", false)) and not bool(entry.get("corrupt", false)) \
-				and SaveSlots.valid_index(_selected):
+				and bool(entry.get("loadable", true)) and SaveSlots.valid_index(_selected):
 			load_requested.emit(_selected)
 		return
 
 	var occupied := bool(entry.get("occupied", false))
 	if occupied:
-		# 覆盖要二次点按确认；写失败时旧档原样保留（RunSave._atomic_save 先写 .tmp 再 rename）
-		if _arm != &"overwrite":
-			_arm = &"overwrite"
+		# 替换要二次点按确认；写失败时旧档原样保留（RunSave._atomic_save 先写 .tmp 再 rename）
+		if _arm != &"replace":
+			_arm = &"replace"
 			_start_arm_timer()
 			_refresh_actions()
 			return
 		_reset_arm()
-		if SaveSlots.save_current(GameManager, _selected, true):
-			UpdateManager.show_toast("◆ 已覆盖存档 %d ◆" % _selected, GameStyle.GOLD, 2.5)
+		if SaveSlots.save_run_to_slot(GameManager, _selected):
+			UpdateManager.show_toast("◆ 已替换存档位 %d · 本局已存入 ◆" % _selected,
+				GameStyle.GOLD, 2.5)
 			AudioManager.play_sfx("ui_confirm", 0.95)
 			close()
 		else:
 			UpdateManager.show_toast("◆ 存档失败，旧存档未改动 ◆", GameStyle.BAD, 3.0)
 		return
 
-	if SaveSlots.save_current(GameManager, _selected):
-		UpdateManager.show_toast("◆ 已保存到存档 %d ◆" % _selected, GameStyle.GOLD, 2.5)
+	if SaveSlots.save_run_to_slot(GameManager, _selected):
+		UpdateManager.show_toast("◆ 已存入存档位 %d ◆" % _selected, GameStyle.GOLD, 2.5)
 		AudioManager.play_sfx("ui_confirm", 0.95)
 		close()
 	else:

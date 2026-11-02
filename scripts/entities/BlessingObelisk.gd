@@ -67,6 +67,14 @@ var spent_this_wave: bool = false
 var is_infusing: bool = false
 var charge_time: float = 0.0
 
+## 祭坛灵脉阶（2026-11-02 成长线）：1~4，由 BalanceObelisk.altar_tier(波次, 启动次数) 实时推导，
+## 不单独进存档（启动次数与波次都已在存档里，读档后自动还原）。
+var _obelisk_tier: int = 1
+## 本次启动是否跨过阶位阈值：爆发横幅据此改「灵脉晋阶」文案
+var _tier_up_pending: bool = false
+## 本次充能是否血祭（金币不足时的替代路径）：扣血不扣钱，照常计入启动次数
+var _blood_mode: bool = false
+
 @onready var light: PointLight2D = get_node_or_null("PointLight2D") as PointLight2D
 @onready var circle_sprite: Node2D = get_node_or_null("ChargeCircle") as Node2D
 @onready var interaction_area: Area2D = get_node_or_null("InteractionArea") as Area2D
@@ -96,6 +104,11 @@ var _readout_ratio: float = 0.0
 ## 激活仪式的金柱句柄（loot_beam 是循环帧不自回收，句柄留底才能到点/出树时归还池）
 var _ritual_beam: AnimatedSprite2D = null
 
+## 召唤印记环绕火苗（2026-11-02）：累计成功召唤一次多一枚，纯表现层，不参与判定
+var _orbiters: ObeliskOrbiters = null
+## 水晶灵光日轮：垫在水晶背后的 pixelfx sunburst，阶数越高越大越亮
+var _crystal_aura: AnimatedSprite2D = null
+
 ## 碑脚走针环：轨道一整圈 + 进度弧 + 弧头。颜色由外部按进度从主蓝拉到点缀黄。
 ## 尺寸/颜色一律由外层 _build_charge_readout() 灌进来（不在内类里自取外层常量：
 ## 同一个脚本的内类反向引用外层 class_name 属于自引用解析，Godot 未必接）。
@@ -124,7 +137,6 @@ class ChargeArc:
 func _ready() -> void:
 	add_to_group("obelisks")
 	if light != null:
-		light.energy = 1.2
 		_light_base_color = light.color
 	if circle_sprite != null:
 		circle_sprite.rotation = 0.0
@@ -137,11 +149,19 @@ func _ready() -> void:
 	if old_circle != null:
 		old_circle.visible = false
 
+	# 灵脉阶在 _ready 就按「当前波次 + 已启动次数」定档：读档/中途进场时水晶直接是对的形态
+	_obelisk_tier = GameBalance.obelisk_altar_tier(GameManager.wave_number, GameManager.obelisk_activations)
 	if _obelisk_renderer == null:
 		_obelisk_renderer = ProceduralObeliskRenderer.new()
 		add_child(_obelisk_renderer)
 		# 确保层级在交互圈之下但在地面之上
 		move_child(_obelisk_renderer, 0)
+	_obelisk_renderer.tier = _obelisk_tier
+	if light != null:
+		light.energy = _tier_light_energy()
+	# 水晶灵光日轮先建（move_child 到 0 压到水晶之下），环绕火苗后建（浮在水晶之上）
+	_build_crystal_aura()
+	_build_orbiters()
 
 	_setup_charge_particles()
 	_build_charge_readout()
@@ -238,18 +258,97 @@ func _apply_stone_fill_color(_preset: StringName = &"") -> void:
 		return
 	stone_mat.set_shader_parameter("fill_color", GameStyle.GOLD_EDGE)
 
+## 水晶灵光日轮（2026-11-02）：pixelfx sunburst 常驻 loop，垫在程序化水晶背后。
+## 不占 FxFlipbookPool 池位（同场只有这一座祭坛），尺寸/亮度随灵脉阶抬升。
+func _build_crystal_aura() -> void:
+	if _crystal_aura != null:
+		return
+	var frames := FxSheetData.get_sprite_frames(&"sunburst")
+	if frames == null:
+		return
+	_crystal_aura = AnimatedSprite2D.new()
+	_crystal_aura.sprite_frames = frames
+	_crystal_aura.animation = &"default"
+	_crystal_aura.centered = true
+	# z=0 且 move_child 到 0：在祭坛渲染器（含地面阵盘/基座/水晶）之前画，
+	# 既能压在水晶背后，又不会被更早绘制的地砖层吞掉。
+	_crystal_aura.z_as_relative = false
+	_crystal_aura.z_index = 0
+	var mat := FxFlipbookPool.get_hdr_material()
+	if mat != null and not FxBudget.crowded:
+		_crystal_aura.material = mat
+	add_child(_crystal_aura)
+	move_child(_crystal_aura, 0)
+	_crystal_aura.play(&"default")
+
+## 召唤印记环绕火苗（2026-11-02）：每成功启动祭坛一次多一枚，最多 8 枚。
+## 数量读已存档的 obelisk_activations —— 读档/中途进场也能直接还原到正确数量。
+func _build_orbiters() -> void:
+	if _orbiters != null:
+		return
+	_orbiters = ObeliskOrbiters.new()
+	add_child(_orbiters)
+	_orbiters.set_tier(_obelisk_tier)
+	_orbiters.set_count(GameManager.obelisk_activations)
+
 ## 回合开始：上回合灰相的祭坛在此复燃（启动价的显示在 HUD 激活键上，键自己读现价）
 func _on_wave_changed(_wave_number: int) -> void:
+	_refresh_tier_from_wave()
 	if spent_this_wave:
 		spent_this_wave = false
 		_revive_from_spent()
 
+## 波次自然晋阶（每 5 波一档）：不依赖启动次数，W6/W11/W16 起来时水晶直接换档。
+## 只换形态 + 一圈小脉冲，不弹横幅（回合开始的横幅另有其人）。
+func _refresh_tier_from_wave() -> void:
+	var new_tier := GameBalance.obelisk_altar_tier(GameManager.wave_number, GameManager.obelisk_activations)
+	if new_tier <= _obelisk_tier:
+		return
+	_obelisk_tier = new_tier
+	if _obelisk_renderer != null:
+		_obelisk_renderer.tier = _obelisk_tier
+	if _orbiters != null:
+		_orbiters.set_tier(_obelisk_tier)
+	if light != null and not spent_this_wave:
+		light.energy = _tier_light_energy()
+	var host: Node = get_parent()
+	if host != null:
+		JuiceEffect.spawn_shockwave(host, global_position, 34.0 + 8.0 * float(_obelisk_tier), GameStyle.GOLD, 0.35)
+		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, GameStyle.GOLD, 0.8, true)
+
+## 灯光静止能量随阶数抬高：水晶越强，碑脚那圈光越亮
+func _tier_light_energy() -> float:
+	return 1.2 + 0.3 * float(_obelisk_tier - 1)
+
+## 血祭是否可用：仅金币不足、非首次免费、且生命扣完还能留 1 点时开放。
+## 充能中沿用本次已选模式（血祭按下后键面不能半路翻回「激活」）。
+func can_blood_ritual() -> bool:
+	if spent_this_wave or is_infusing:
+		return false
+	if is_charging:
+		return _blood_mode
+	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
+	if cost <= 0 or GameManager.spirit_stones >= cost:
+		return false
+	var player = GameManager.player
+	if player == null:
+		return false
+	return float(player.current_health) > float(blood_cost()) + 1.0
+
+## 血祭代价（按当前最大生命取 18%，至少 1 点）
+func blood_cost() -> int:
+	var player = GameManager.player
+	var max_hp: float = float(player.max_health) if player != null else 0.0
+	return GameBalance.obelisk_blood_cost(max_hp)
+
 ## 灰相反向：灯光复燃、石碑回色、阵盘重亮，泽青灵环宣告「下回合又能用了」
 func _revive_from_spent() -> void:
+	if _orbiters != null:
+		_orbiters.set_spent(false)
 	var tw := create_tween()
 	if light != null:
 		light.enabled = true
-		tw.tween_property(light, "energy", 1.2, 0.4)
+		tw.tween_property(light, "energy", _tier_light_energy(), 0.4)
 		tw.parallel().tween_property(light, "color", _light_base_color, 0.4)
 	if circle_sprite != null:
 		circle_sprite.visible = true
@@ -324,6 +423,17 @@ func _process(delta: float) -> void:
 		_obelisk_renderer.is_player_inside = is_player_inside
 		_obelisk_renderer.is_charging = is_charging
 		_obelisk_renderer.ring_rotation = circle_sprite.rotation
+		# 灵光日轮与环绕火苗跟随同一颗水晶的悬浮呼吸（耗尽形变时同步收光）
+		var core := _obelisk_renderer.crystal_core_position()
+		if _crystal_aura != null:
+			_crystal_aura.position = core
+			var aura_scale: float = 0.65 + 0.12 * float(_obelisk_tier - 1)
+			_crystal_aura.scale = Vector2(aura_scale, aura_scale)
+			var aura_alpha: float = (0.30 + 0.08 * float(_obelisk_tier - 1) + _readout_ratio * 0.35) \
+				* (1.0 - _obelisk_renderer.spent_blend)
+			_crystal_aura.modulate = Color(1.0, 1.0, 1.0, aura_alpha)
+		if _orbiters != null:
+			_orbiters.orbit_center = core + ObeliskOrbiters.ORBIT_CENTER_OFFSET
 	if spent_this_wave or is_infusing:
 		return
 	if is_charging:
@@ -337,8 +447,8 @@ func _process(delta: float) -> void:
 		var ratio: float = charge_time / CHARGE_TIME
 		charge_progress_updated.emit(self, ratio)
 		_set_readout_ratio(ratio)
-		# 充能视觉反馈：光能随进度提升
-		light.energy = 1.2 + ratio * 2.3
+		# 充能视觉反馈：光能随进度提升（静止基准随祭坛阶抬高）
+		light.energy = _tier_light_energy() + ratio * 2.3
 		# 灯色随进度青→金（2026-10-25 供金主题：连灯色一起往金价靠）
 		light.color = _light_base_color.lerp(Color(1.0, 0.9, 0.6), ratio * 0.7)
 		# 灵符环旋转加速 —— 充能越快转越急
@@ -351,13 +461,17 @@ func start_charge() -> void:
 	if spent_this_wave or is_infusing or not is_player_inside:
 		return
 	## 金币闸（2026-10-25 重设计）：不够就横幅 + 报错音，不进充能。
-	## HUD 圆键是真按得下去的（不像商店先置灰），必须在这里硬拦。
-	## 2026-10-30：本局第一次启动免费（cost = 0），身无分文也放行。
+	## 2026-11-02 血祭：金币不足但生命付得起 18% ⇒ 切血祭模式，照样进充能，扣血不扣钱。
+	## 本局第一次启动免费（2026-10-30）时 cost = 0，永远走普通档，不消耗生命。
 	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
+	_blood_mode = false
 	if GameManager.spirit_stones < cost:
-		GameManager.announcement_triggered.emit("金币不够启动祭坛")
-		AudioManager.play_sfx("ui_error", 0.9)
-		return
+		if can_blood_ritual():
+			_blood_mode = true
+		else:
+			GameManager.announcement_triggered.emit("金币不够启动祭坛")
+			AudioManager.play_sfx("ui_error", 0.9)
+			return
 	is_charging = true
 	charge_time = 0.0
 	_set_readout_ratio(0.0)
@@ -376,11 +490,12 @@ func stop_charge() -> void:
 	if charge_time < CHARGE_TIME:
 		# 未完成 → 取消，进度归零（碑上的读数跟着一起归零，不许留半截看着像还在充）
 		charge_time = 0.0
-		light.energy = 1.2
+		light.energy = _tier_light_energy()
 		light.color = _light_base_color
 		circle_sprite.rotation = 0.0
 		_set_readout_ratio(0.0)
 		_hide_readout()
+		_blood_mode = false
 		charge_cancelled.emit(self)
 
 ## 充满即成交：先扣钱，再演「灵石注入」，注入完成才爆发（2026-10-25 重设计）。
@@ -394,8 +509,36 @@ func _begin_infusion() -> void:
 	is_infusing = true
 	var cost := GameBalance.obelisk_activation_cost(GameManager.wave_number, GameManager.obelisk_activations)
 	GameManager.obelisk_activations += 1
+	# 启动次数 +1 后立即重算灵脉阶：跨过阈值的那一发就按新阶打伤害、召新阶灵兽
+	var tier_before := _obelisk_tier
+	_obelisk_tier = GameBalance.obelisk_altar_tier(GameManager.wave_number, GameManager.obelisk_activations)
+	_tier_up_pending = _obelisk_tier > tier_before
+	if _tier_up_pending:
+		if _obelisk_renderer != null:
+			_obelisk_renderer.tier = _obelisk_tier
+		if light != null:
+			light.energy = _tier_light_energy()
+	# 召唤印记 +1（累计启动次数），并同步阶数给火苗尺寸；越用越多，与水晶阶位分开读
+	if _orbiters != null:
+		_orbiters.set_tier(_obelisk_tier)
+		_orbiters.set_count(GameManager.obelisk_activations)
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
-	if cost > 0:
+	if _blood_mode:
+		# 血祭（2026-11-02）：扣当前生命（至少留 1 点），不扣金币、不记消费；
+		# 启动次数已在上面 +1，照常参与祭坛晋阶。直接改 current_health 是刻意绕过护甲/护盾，
+		# 也不走 Player.take_damage 的无敌帧/受击反馈链（这是仪式代价，不是挨打）。
+		var hp_cost := blood_cost()
+		var player = GameManager.player
+		if player != null:
+			player.current_health = maxf(1.0, float(player.current_health) - float(hp_cost))
+			GameManager.player_hp_changed.emit(player.current_health, player.max_health)
+			_spawn_cost_float_text(hp_cost, player_pos, GameStyle.BAD, "生命")
+			AudioManager.play_sfx("impact_blunt", 0.8, 0.62)
+			var blood_host: Node = get_parent()
+			if blood_host != null:
+				ObeliskFx.play_blood_infusion(blood_host, global_position, player_pos)
+				JuiceEffect.spawn_shockwave(blood_host, player_pos, 26.0, Color(0.85, 0.16, 0.20), 0.3)
+	elif cost > 0:
 		GameManager.spirit_stones -= cost
 		GameManager.total_stones_spent += cost
 		GameManager.stats_updated.emit(GameManager.kills, GameManager.game_time, GameManager.spirit_stones)
@@ -407,6 +550,8 @@ func _begin_infusion() -> void:
 		var fx_host: Node = get_parent()
 		if fx_host != null:
 			ObeliskFx.play_coin_infusion(fx_host, global_position, player_pos)
+	else:
+		_blood_mode = false
 	if _obelisk_renderer != null:
 		var itw := create_tween()
 		itw.tween_property(_obelisk_renderer, "infuse_ratio", 1.0, ObeliskFx.INFUSION_DUR)
@@ -414,21 +559,23 @@ func _begin_infusion() -> void:
 	tw.tween_interval(ObeliskFx.INFUSION_DUR)
 	tw.tween_callback(_release_blessing)
 
-## 供金扣费飘字：金色「-N」从玩家头顶上浮淡出（低频事件，一次性 Label 自释放；
-## 不走 DamageNumber——它的自定义文案固定治疗绿，扣费用绿字会读错）
-func _spawn_cost_float_text(cost: int, from_pos: Vector2) -> void:
+## 供金扣费飘字：默认金色「-N」从玩家头顶上浮淡出；血祭传朱砂色 + 「生命」后缀。
+## 低频事件，一次性 Label 自释放；不走 DamageNumber——它的自定义文案固定治疗绿，扣费用绿字会读错。
+## col 用透明色当「未指定」哨兵：默认走供金金，血祭另行传朱砂。
+func _spawn_cost_float_text(cost: int, from_pos: Vector2, col: Color = Color(0, 0, 0, 0), suffix: String = "") -> void:
 	var host: Node = get_parent()
 	if host == null:
 		return
+	var use_col: Color = GameStyle.JADE if col.a <= 0.0 else col
 	var lbl := Label.new()
 	var ls := LabelSettings.new()
 	ls.font = GameStyle.body_font()
 	ls.font_size = 16
-	ls.font_color = GameStyle.JADE
+	ls.font_color = use_col
 	ls.outline_size = 5
 	ls.outline_color = Color(0.02, 0.03, 0.06, 0.92)
 	lbl.label_settings = ls
-	lbl.text = "-%d" % cost
+	lbl.text = "-%d%s" % [cost, suffix]
 	lbl.z_index = 5
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	host.add_child(lbl)
@@ -443,12 +590,21 @@ func _spawn_cost_float_text(cost: int, from_pos: Vector2) -> void:
 func _release_blessing() -> void:
 	is_infusing = false
 	spent_this_wave = true
+	# 灰相同步：环绕火苗随祭坛一起降亮降速，下一回合复燃时再重亮
+	if _orbiters != null:
+		_orbiters.set_spent(true)
 	## 进度读数收工：兑现由冲击波接管，环再留着就是多余的读数
 	_hide_readout()
 	blessing_triggered.emit(self)
 	AudioManager.play_sfx("obelisk_blessing")
 	GameManager.feedback(GameManager.FeedbackTier.HEAVY)
-	GameManager.announcement_triggered.emit("◆ 灵石注阵 · 灵兽现身助战 ◆")
+	# 横幅三选一（2026-11-02）：晋阶 > 血祭 > 普通；晋阶那一发的水晶/灵兽已按新阶结算
+	if _tier_up_pending:
+		GameManager.announcement_triggered.emit("◆ 灵脉晋阶 · %s灵兽现身 ◆" % GameBalance.obelisk_tier_name(_obelisk_tier))
+	elif _blood_mode:
+		GameManager.announcement_triggered.emit("◆ 血祭注阵 · 灵兽现身助战 ◆")
+	else:
+		GameManager.announcement_triggered.emit("◆ 灵石注阵 · 灵兽现身助战 ◆")
 	## 激活演出（2026-10-25 强化）：三重地面环 + 通天青金光柱 + 全屏冲击环，
 	## 由 ObeliskFx 一次性自释放节点接管（不常驻不占预算）。
 	var fx_host: Node = get_parent()
@@ -470,10 +626,15 @@ func _release_blessing() -> void:
 	# 鸭类型访问 max_hp/current_hp（同坑 12/16：BlessingObelisk 不写 `as EnemyBase`，避免循环类依赖
 	# 把祭坛脚本打成空 PackedScene）；EnemyFilter.collect 仅返回 EnemyBase 派生实例，字段必存在。
 	var wave_num: int = GameManager.wave_number
-	var flat_dmg: float = GameBalance.obelisk_blessing_damage(wave_num)
-	var hp_ratio: float = GameBalance.obelisk_blessing_hp_ratio(wave_num)
-	var exec_thresh: float = GameBalance.obelisk_execute_threshold(wave_num)
-	var knock: float = GameBalance.obelisk_knock_force(wave_num)
+	# 阶数增益（2026-11-02）：基础公式仍在 BalanceCombat，这里只叠祭坛当前阶的乘区/加值
+	var flat_dmg: float = GameBalance.obelisk_blessing_damage(wave_num) \
+		* GameBalance.obelisk_tier_damage_mult(_obelisk_tier)
+	var hp_ratio: float = GameBalance.obelisk_blessing_hp_ratio(wave_num) \
+		+ GameBalance.obelisk_tier_hp_ratio_bonus(_obelisk_tier)
+	var exec_thresh: float = GameBalance.obelisk_execute_threshold(wave_num) \
+		+ GameBalance.obelisk_tier_execute_bonus(_obelisk_tier)
+	var knock: float = GameBalance.obelisk_knock_force(wave_num) \
+		* GameBalance.obelisk_tier_knock_mult(_obelisk_tier)
 	var player_pos: Vector2 = global_position if GameManager.player == null else GameManager.player.global_position
 	for enemy in EnemyFilter.collect(GameManager.live_enemies, global_position, INF):
 		var knock_vec = GameBalance.knock_dir(global_position, enemy.global_position, player_pos) * knock
@@ -508,6 +669,9 @@ func _release_blessing() -> void:
 	# 熄灭余烬：几缕冷灰蓝灵屑上升淡出（给「余温散尽」一点回味）
 	if fx_host != null:
 		ObeliskFx.play_spent_wisp(fx_host, global_position)
+	# 本次启动的临时模式到此收口：血祭/晋阶都只影响这一发
+	_blood_mode = false
+	_tier_up_pending = false
 
 ## 召唤灵兽助战（2026-10-25 重设计）：落在祭坛旁（小幅随机偏移走 rng，测试可钉）。
 ## 同场上限 GameBalance.SPIRIT_BEAST_MAX_ACTIVE（3）：满员顶替召唤波最早的那只；
@@ -531,6 +695,8 @@ func _summon_spirit_beast() -> void:
 		oldest.expire_for_replacement()
 	var beast := beast_scene.instantiate() as SpiritBeast
 	beast.palette_idx = ProceduralDroneRenderer.pick_palette_idx(beasts)
+	# 出生阶 = 祭坛当前灵脉阶（2026-11-02）：必须在 add_child 前灌入，_ready 直接按新阶取生命/体型
+	beast.altar_tier = _obelisk_tier
 	host.add_child(beast)
 	beast.global_position = global_position + Vector2(
 		GameManager.rng.randf_range(-36.0, 36.0),
@@ -571,6 +737,8 @@ func _stop_ritual_beam() -> void:
 func _enter_spent_look() -> void:
 	light.enabled = false
 	circle_sprite.visible = false
+	if _orbiters != null:
+		_orbiters.set_spent(true)
 	if _obelisk_renderer != null:
 		_obelisk_renderer.is_spent = true
 

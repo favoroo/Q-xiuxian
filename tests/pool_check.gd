@@ -179,9 +179,17 @@ func _run() -> void:
 	var orb_b := HealOrb.acquire_or_new(world)
 	_check(orb_b == orb_a and HealOrb.created_count == orb_created, "第二次 acquire 复用同一实例不新建")
 	orb_b.activate()
-	_check(orb_b.heal_pct == 0.0 and orb_b.heal_amount == HealOrb.BASE_HEAL, "复用激活重置回血参数")
+	_check(orb_b.heal_pct == 0.0 and orb_b.heal_amount == HealOrb.BASE_HEAL, "复用珠回血参数已被 recycle 归零")
 	_check(orb_b.is_in_group("gems") and orb_b.visible, "复用激活重新入组并可见")
 	orb_b.recycle()
+	# 调用方契约：acquire → 写回血参数 → activate，activate 不许把刚写的值抹掉
+	# （2026-11-02 回归：宝箱葫芦 15% 被 activate 重置成 3 点；旧判据只测了「复用归零」漏了这条）
+	var orb_c := HealOrb.acquire_or_new(world)
+	orb_c.heal_pct = 0.15
+	orb_c.activate()
+	_check(is_equal_approx(orb_c.heal_pct, 0.15) and is_equal_approx(orb_c.heal_amount, HealOrb.BASE_HEAL),
+		"写回血参数后 activate 不被抹掉（宝箱葫芦按 %% 回血的前提）")
+	orb_c.recycle()
 
 	# ---------- 5.7 引雷池（LightningBolt）：出膛 / 回收 / 复用 ----------
 	var l_bolt_a := LightningBolt.acquire(world)
@@ -323,6 +331,31 @@ func _run() -> void:
 	_check(mob_b.max_hp == expect_hp and mob_b.current_hp == expect_hp,
 		"复用激活血量 = 出厂 × 小怪血量系数（实际 %.1f vs %.1f）" % [mob_b.max_hp, expect_hp])
 	_check(GameManager.live_enemies.has(mob_b), "复用入树重新登记")
+	# 2026-11-02 精英厚度补强：精英不吃小怪 MOB_HP_BASE_MULT，改吃独立 ELITE_HP_BASE_MULT
+	#（小怪基数涨到 11.5 后，精英基础值原地不动会让它只剩同波小怪 1.6 倍厚）。
+	var elite_scene: PackedScene = load("res://scenes/entities/GolemEnemy.tscn")
+	var elite := EnemyBase.acquire_or_new(elite_scene)
+	elite.reset_for_reuse()
+	elite.add_to_group("enemies")
+	elite.global_position = Vector2(140, 100)
+	world.add_child(elite)
+	elite.activate()
+	var elite_base_hp: float = elite._base_stats["max_hp"]
+	var expect_elite_hp: float = ceilf(elite_base_hp * GameBalance.ELITE_HP_BASE_MULT)
+	_check(elite.max_hp == expect_elite_hp and elite.current_hp == expect_elite_hp,
+		"精英激活血量 = 出厂 × 精英厚度系数（%.0f × %.1f = %.0f，实际 %.0f）" % [
+			elite_base_hp, GameBalance.ELITE_HP_BASE_MULT, expect_elite_hp, elite.max_hp])
+	EnemyBase._recycle(elite)
+	# Boss 同带 is_elite 标记（BossEnemy.tscn），但血量由 boss_hp 独立注入 ——
+	# activate 的厚度乘区必须排除 Boss，否则 Boss 战会被静默拉长 2.5 倍。
+	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
+	var boss := boss_scene.instantiate() as BossEnemy
+	boss.max_hp = 12345.0
+	boss.activate()
+	_check(boss.max_hp == 12345.0 and boss.current_hp == 12345.0,
+		"Boss 不吃精英厚度乘区（注入 12345，实际 %.0f）" % boss.max_hp)
+	boss._release_elite_light()
+	boss.free()
 	EnemyBase._recycle(mob_b)
 	EnemyBase.clear_pools()
 	_check(EnemyBase.pool_idle_count() == 0, "clear_pools 清空休眠体")

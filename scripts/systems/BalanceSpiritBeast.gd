@@ -14,16 +14,56 @@ const DAMAGE_GROWTH := 1.08     ## 每回合伤害复利倍率
 
 # ---------------- 寿命与同场上限（2026-10-25 祭坛重设计） ----------------
 
-const LIFETIME_WAVES := 3       ## 灵兽存活回合数：自召唤波起算，第 3 个回合开始时消散（同场最多 3 只 ⇒ 滚动顶替）
+const LIFETIME_WAVES := 3       ## 灵兽存活回合数：召唤波起算共在场 3 个回合，第 4 个回合开始时消散（同场最多 3 只 ⇒ 滚动顶替）
 const MAX_ACTIVE := 3           ## 同场灵兽数上限：满员再启动祭坛 → 顶替召唤波最早的那只
 
-## 召唤灵兽生命
-static func max_hp_for_wave(wave: int) -> float:
-	return BASE_HP * pow(HP_GROWTH, float(maxi(wave, 1) - 1))
+# ---------------- 分阶成长（2026-11-02 祭坛成长线重做） ----------------
+## 灵兽出生阶段 = 召唤时的祭坛阶；之后每存活 1 个回合 +1 阶，最高 4 阶。
+## 3 阶起体型进入「精怪」档，4 阶为「巨灵」档；体型由宿主缩放渲染器节点，本表只给倍率真值。
 
-## 灵羽单发基础伤害（命中时再乘召唤伤害乘区，由调用方乘）
-static func damage_for_wave(wave: int) -> float:
-	return BASE_DAMAGE * pow(DAMAGE_GROWTH, float(maxi(wave, 1) - 1))
+const MAX_STAGE := 4
+## 阶段生命乘区（叠在波次成长之上）：1.0 / 1.18 / 1.42 / 1.75
+const STAGE_HP_MULT: Array[float] = [1.0, 1.18, 1.42, 1.75]
+## 阶段伤害乘区：1.0 / 1.14 / 1.34 / 1.60
+const STAGE_DAMAGE_MULT: Array[float] = [1.0, 1.14, 1.34, 1.60]
+## 阶段体型缩放：1.0 / 1.22 / 1.55 / 1.95（渲染器节点整体缩放，影子同步变大）
+const STAGE_BODY_SCALE: Array[float] = [1.0, 1.22, 1.55, 1.95]
+## 阶段连发数：1-2 阶保持三连，3 阶四连，4 阶五连
+const STAGE_BURST_COUNT: Array[int] = [3, 3, 4, 5]
+## 阶段穿透：4 阶灵羽可贯穿命中 2 个目标（pierce_left=2），其余单目标
+const STAGE_PIERCE: Array[int] = [1, 1, 1, 2]
+## 体型变大后近身啃咬/拥挤感知半径同步放大，避免敌人「咬不到/叠在身上」
+const STAGE_CONTACT_BONUS := 8.0   ## 每阶追加的近身啃咬半径（px）
+const STAGE_CROWD_BONUS := 10.0    ## 每阶追加的拥挤感知半径（px）
+
+## 灵兽当前阶段：出生阶 + 存活回合数，封顶 MAX_STAGE
+static func stage_for(altar_tier: int, waves_survived: int) -> int:
+	return clampi(maxi(altar_tier, 1) + maxi(waves_survived, 0), 1, MAX_STAGE)
+
+static func stage_hp_mult(stage: int) -> float:
+	return STAGE_HP_MULT[clampi(stage, 1, MAX_STAGE) - 1]
+
+static func stage_damage_mult(stage: int) -> float:
+	return STAGE_DAMAGE_MULT[clampi(stage, 1, MAX_STAGE) - 1]
+
+static func stage_body_scale(stage: int) -> float:
+	return STAGE_BODY_SCALE[clampi(stage, 1, MAX_STAGE) - 1]
+
+## 一轮连发数：3 阶 4 发、4 阶 5 发，其余沿用 ATTACK_INTERVAL 体系的 3 发
+static func burst_count_for(stage: int) -> int:
+	return STAGE_BURST_COUNT[clampi(stage, 1, MAX_STAGE) - 1]
+
+## 灵羽可命中目标数：4 阶 2，其余 1（pierce_left 语义见 BladeProjectile：命中一次减 1）
+static func pierce_for(stage: int) -> int:
+	return STAGE_PIERCE[clampi(stage, 1, MAX_STAGE) - 1]
+
+## 召唤灵兽生命（stage 默认 1 保持旧调用兼容）
+static func max_hp_for_wave(wave: int, stage: int = 1) -> float:
+	return BASE_HP * pow(HP_GROWTH, float(maxi(wave, 1) - 1)) * stage_hp_mult(stage)
+
+## 灵羽单发基础伤害（命中时再乘召唤伤害乘区，由调用方乘；stage 默认 1 保持旧调用兼容）
+static func damage_for_wave(wave: int, stage: int = 1) -> float:
+	return BASE_DAMAGE * pow(DAMAGE_GROWTH, float(maxi(wave, 1) - 1)) * stage_damage_mult(stage)
 
 # ---------------- 行为节奏 ----------------
 
@@ -44,3 +84,11 @@ const HIT_INVINCIBLE := 0.5     ## 受击无敌帧（秒）：近身啃咬逐帧
 const TAUNT_RADIUS := 200.0     ## 嘲讽半径：敌人在这个距离内有灵兽就改追灵兽
 const SEARCH_INTERVAL := 0.1    ## 索敌节流（秒）：灵兽最多 3 只，10Hz 重索足够
 const IDLE_FOLLOW_DIST := 90.0  ## 无敌人时巡游回玩家身边的触发距离
+
+## 近身啃咬判定距离：基础 CONTACT_RANGE，每阶 +8px（体型变大后同步放大）
+static func contact_range_for(stage: int) -> float:
+	return CONTACT_RANGE + STAGE_CONTACT_BONUS * float(clampi(stage, 1, MAX_STAGE) - 1)
+
+## 拥挤软分离感知半径：基础 CROWD_RADIUS，每阶 +10px
+static func crowd_radius_for(stage: int) -> float:
+	return CROWD_RADIUS + STAGE_CROWD_BONUS * float(clampi(stage, 1, MAX_STAGE) - 1)

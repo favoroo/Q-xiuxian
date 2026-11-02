@@ -166,6 +166,7 @@ func _test_floating_btn_defaults() -> void:
 	var inner_r := d * 0.5 - 2.0
 	var faces: Array[Array] = [
 		["祭坛键", HudObeliskButton.BTN_TEXT, HudObeliskButton.BTN_FONT],
+		["祭坛键·血祭", "血祭", HudObeliskButton.BTN_FONT],
 		["额外技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT],
 	]
 	for face in faces:
@@ -200,6 +201,13 @@ func _test_floating_btn_defaults() -> void:
 		price_ov.free()
 		_c.check(price_corner <= price_arc_r,
 				"祭坛键价格小字收在走针环之内（最宽样张角半径 %.1f <= 环内缘 %.1f）" % [price_corner, price_arc_r])
+		# 四·六、血祭价格「耗18%」（2026-11-02）：四字符比三位数金币窄，但仍要过同一把尺子
+		var blood_w: float = f.get_string_size("耗18%",
+				HORIZONTAL_ALIGNMENT_CENTER, -1.0, HudObeliskButton.PRICE_FONT).x
+		var blood_corner := Vector2(blood_w * 0.5,
+				HudObeliskButton.PRICE_TOP + HudObeliskButton.PRICE_FONT - d * 0.5).length()
+		_c.check(blood_corner <= price_arc_r,
+				"祭坛键血祭价格「耗18%%」收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [blood_corner, price_arc_r])
 
 	# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
 		var ob_btn := HudObeliskButton.new()

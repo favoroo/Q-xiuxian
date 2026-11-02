@@ -47,6 +47,7 @@ func _run() -> void:
 	_kill_player(player)
 	await _wait_game_over()
 	_check(GameManager.is_game_over, "致死一击后进入结算态")
+	_check(GameManager.run_invalidated, "致死判定即置落盘锁（不等死亡演出）")
 	_check(dlg.visible, "结算屏已显示")
 	_check(dlg._revive_btn.visible, "有复活次数时按钮可见")
 	_check(String(dlg._revive_btn.text).find("剩 1 次") >= 0,
@@ -59,6 +60,7 @@ func _run() -> void:
 	await get_tree().create_timer(1.7).timeout  # 退场淡出 0.2s + 还魂仪式 0.95s + 余量
 
 	_check(not GameManager.is_game_over, "复活后退出结算态")
+	_check(not GameManager.run_invalidated, "复活后解除落盘锁")
 	_check(not get_tree().paused, "复活后解除整场暂停")
 	_check(not dlg.visible, "结算屏已收起")
 	_check(not player._dying, "阵亡演出状态已复位")
@@ -72,6 +74,7 @@ func _run() -> void:
 	_kill_player(player)
 	await _wait_game_over()
 	_check(GameManager.is_game_over, "二次致死进入结算态")
+	_check(GameManager.run_invalidated, "二次致死重新置落盘锁")
 	_check(not dlg._revive_btn.visible, "次数用尽后复活按钮不再出现")
 
 	GameManager.author_mode = false

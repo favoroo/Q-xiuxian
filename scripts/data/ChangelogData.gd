@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.15",
+			"date": "2026-11-02",
+			"title": "存档进化与祭坛成长",
+			"items": [
+				"存档改为一局一位，进度自动保存。",
+				"祭坛灵脉四阶，灵兽分阶成长。",
+				"宝箱葫芦固定回复 3 点生命，空箱多掉金币。",
+				"杀戮节奏改为击杀叠加攻速，精英怪更耐打。",
+			],
+		},
+		{
 			"version": "v0.1.14",
 			"date": "2026-11-01",
 			"title": "雷击视觉整肃与战利品显示优化",

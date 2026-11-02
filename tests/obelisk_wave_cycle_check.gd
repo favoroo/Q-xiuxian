@@ -47,6 +47,9 @@ func _quiet_arena() -> void:
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy is EnemyBase:
 			enemy.dissolve()
+	# 血祭判据要能精确控血：关掉自然回复，避免低血量窗口被回血抬过门槛
+	GameManager.hp_regen = 0.0
+	GameManager.synergy_hp_regen = 0.0
 
 func _run() -> void:
 	SettingsManager.set_val(&"display", &"hit_stop", false, false)
@@ -122,23 +125,32 @@ func _case_first_free() -> void:
 		_c.equals(price_lbl.text, "免费", "①·五 首次启动时键面写「免费」")
 		# 记下免费档已消耗：后续 Case 全部回到「按波收费」口径
 		GameManager.obelisk_activations = 1
+		# 血祭会在金币不足时改写键面；这里先给足现价，验证的是「免费档 → 按波收费」的文案切换
+		GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
+			maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
 		await get_tree().process_frame
 		await get_tree().process_frame
 		_c.check(price_lbl.text.contains(str(GameBalance.obelisk_activation_cost(
 				maxi(GameManager.wave_number, 1), GameManager.obelisk_activations))),
 			"①·五 免费档消耗后键面回到现价（实得：%s）" % price_lbl.text)
+		# 下一 Case 从身无分文 + 低血（血祭也不可用）开始，验证纯金币硬闸
+		GameManager.spirit_stones = 0
 
-## ② 金币闸：钱不够不进充能并给横幅；钱够才放行
+## ② 金币闸：钱不够且血祭也付不起时硬拦并给横幅；钱够才放行
 func _case_gold_gate() -> void:
 	_c.check(_obelisk != null, "② 前置：祭坛在")
 	if _obelisk == null:
 		return
 	_obelisk.is_player_inside = true
 	GameManager.spirit_stones = 0
+	# 生命压到 1 点：血祭要求扣完至少留 1 点，此时不可用，金币闸才会真正硬拦
+	var hp_backup: float = _player.current_health
+	_player.current_health = 1.0
 	_banner_seen = ""
 	_obelisk.start_charge()
-	_c.check(not _obelisk.is_charging, "② 身无分文 ⇒ start_charge 硬拦，不进充能")
+	_c.check(not _obelisk.is_charging, "② 身无分文且血祭不可用 ⇒ start_charge 硬拦，不进充能")
 	_c.check(_banner_seen.contains("金币不够"), "② 硬拦时发了「金币不够」横幅（实得：%s）" % _banner_seen)
+	_player.current_health = hp_backup
 	# 给足启动价 → 放行进入充能
 	GameManager.spirit_stones = GameBalance.obelisk_activation_cost(
 		maxi(GameManager.wave_number, 1), GameManager.obelisk_activations)
@@ -177,15 +189,20 @@ func _case_pay_and_wave_cycle() -> void:
 	var ob_btn: HudObeliskButton = hud._obelisk_widget if hud != null else null
 	_c.check(ob_btn != null and ob_btn.get_price_label() != null, "⑤ 前置：HUD 祭坛激活键与其价格小字在")
 	if ob_btn != null:
+		# 先给足新价，验证键面写的是「按波收费」的现价（不是血祭文案）
+		GameManager.spirit_stones = cost2
 		ob_btn.show_obelisk_activation(_obelisk)
 		await _settle(2)
 		var price_lbl: Label = ob_btn.get_price_label()
 		_c.check(price_lbl.text.contains(str(cost2)),
 			"⑤ 键面价格写着新价（实得：%s）" % price_lbl.text)
-		# 金币不足时价格转差额（朱砂）
+		# 金币不足时价格转差额（朱砂）；同时把血也压到不够，避免血祭文案盖掉「差N」
+		var hp_backup: float = _player.current_health
+		_player.current_health = 1.0
 		GameManager.spirit_stones = 0
 		await _settle(2)
-		_c.check(price_lbl.text.contains("差"), "⑤ 身无分文 ⇒ 键面标出「差」多少（实得：%s）" % price_lbl.text)
+		_c.check(price_lbl.text.contains("差"), "⑤ 身无分文且血祭不可用 ⇒ 键面标出「差」多少（实得：%s）" % price_lbl.text)
+		_player.current_health = hp_backup
 		GameManager.spirit_stones = cost2   # 留够下一Case的启动费
 		await _settle(2)
 

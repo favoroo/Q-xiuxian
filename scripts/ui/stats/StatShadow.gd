@@ -169,6 +169,9 @@ func get_crit_rate() -> float:
 ## 与真身同式：最终施法间隔乘区
 func get_effective_attack_speed_mult() -> float:
 	var base := attack_speed_mult * synergy_haste_mult * buff_attack_speed_mult
+	# 杀戮节奏（神通）是战斗中的动态层数：影子不另存，直接向真身读（与 still_time 同法）
+	if _real != null:
+		base *= KillHasteData.attack_speed_mult(float(_real.kill_haste_stacks))
 	if _real != null and _real.still_time > 0.0:
 		var still_haste: float = item_hook_sum("still_attack_speed") + float(_real.still_haste_bonus)
 		if still_haste > 0.0:

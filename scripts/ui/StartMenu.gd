@@ -17,8 +17,8 @@ signal settings_requested
 signal career_requested
 signal manual_requested
 signal cocreation_requested  ## 游戏共创：主菜单左下角「游戏共创」按钮（Main 接 CoCreateDialog.open）
-signal resume_requested  ## 中断续玩：主菜单「继续游戏」按钮（Main.resume_from_save 消费）
-signal save_requested  ## 多存档：主菜单「存 档」按钮（Main 打开 SaveManageDialog 管理模式）
+signal resume_requested  ## 多局续玩：主菜单「继续游戏」按钮（Main.resume_from_save 续最近一局）
+signal save_requested  ## 多局存档：主菜单「存 档」按钮（Main 打开 SaveManageDialog 管理模式）
 
 const DANGER_NAMES := ["普通", "噩梦"]
 
@@ -1082,24 +1082,37 @@ func open() -> void:
 		var joy = parent_node.get_node_or_null("VirtualJoystick")
 		if joy != null:
 			joy.visible = false
+	# 多局续玩（2026-11-02）：真机首次进菜单先合并旧版「同一局多位」的快照，
+	# 只保留进度最前的一份；随后「继续游戏」续最近一局（中断档 + 5 位里取最新）。
+	# 判据 headless 只读中断档，不扫真机存档位，避免测试碰玩家真实存档。
+	var latest := {}
+	if DisplayServer.get_name() != "headless":
+		var merged := SaveSlots.migrate_legacy_once()
+		if merged > 0:
+			UpdateManager.show_toast("◆ 已整理同一局的多份旧存档 · 仅保留进度最前的一份 ◆",
+				GameStyle.GOLD, 3.5)
+		latest = SaveSlots.latest_save_summary()
+	else:
+		latest = RunSave.peek_summary()
 	# 坏档可见化（2026-10-24）：进度档读坏（autoload 期暂存）在这里补弹 toast；
-	# 续玩档「文件在但摘要解析不出」原先表现为按钮默默消失，玩家无从得知，一并提示。
+	# 存档「文件在但摘要解析不出」原先表现为按钮默默消失，玩家无从得知，一并提示。
 	# 一次性闸：同一次进程里坏档提示只弹一回，反复回菜单不刷屏。
 	if GameManager.pending_load_alert != "":
 		UpdateManager.show_toast(GameManager.pending_load_alert, GameStyle.BAD, 3.5)
 		GameManager.pending_load_alert = ""
-	elif not _corrupt_save_noted and RunSave.peek_summary().is_empty() \
-			and FileAccess.file_exists(RunSave.SAVE_PATH):
-		_corrupt_save_noted = true
-		UpdateManager.show_toast("◆ 上局存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
-	# 中断续玩：按存档有无决定「继续游戏」按钮的显隐与文案（无档藏按钮不留空位）
+	elif not _corrupt_save_noted and latest.is_empty():
+		var has_file := FileAccess.file_exists(RunSave.SAVE_PATH) \
+			if DisplayServer.get_name() == "headless" else SaveSlots.has_any_save_file()
+		if has_file:
+			_corrupt_save_noted = true
+			UpdateManager.show_toast("◆ 存档损坏，无法继续 ◆", GameStyle.BAD, 3.5)
+	# 按最近一局有无决定「继续游戏」按钮的显隐与文案（无档藏按钮不留空位）
 	if _resume_btn != null and is_instance_valid(_resume_btn):
-		var summary := RunSave.peek_summary()
-		_resume_btn.visible = not summary.is_empty()
-		if not summary.is_empty():
-			var cid := String(summary.get("cid", ""))
+		_resume_btn.visible = not latest.is_empty()
+		if not latest.is_empty():
+			var cid := String(latest.get("cid", ""))
 			var c_name := String(CultivatorData.get_def(cid).get("name", "修士"))
-			_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(summary.get("wave", 1))]
+			_resume_btn.text = "继续游戏 · %s第%d波  》" % [c_name, int(latest.get("wave", 1))]
 	_layout_responsive()
 	# 整套氛围按当前难度静默重铺：从噩梦局回菜单时首帧就是夜色，不会先闪一帧普通配色
 	_apply_skin(false)
@@ -1142,7 +1155,7 @@ func _on_danger_pressed(d: int) -> void:
 	# （点未解锁档位时按钮 disabled 不可达；点已选档位时值不变、信号不发，也就无需重绘）
 	GameManager.set_danger(d)
 
-## 多存档：打开存档管理弹窗（查看/读档/删除），首页留在遮罩后不淡出
+## 多局存档：打开管理列表（继续此局 / 删除），首页留在遮罩后不淡出
 ## —— 与「修仙志 / 图鉴 / 游戏共创」同一交互。
 func _on_save_pressed() -> void:
 	save_requested.emit()

@@ -99,3 +99,88 @@ func _test_spirit_beast_constants() -> void:
 	_c.check(GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO > 0.0 and GameBalance.SPIRIT_BEAST_STRAFE_SPEED_RATIO < 1.0, "环绕移速占比在 (0,1)")
 	_c.check(GameBalance.SPIRIT_BEAST_CONTACT_RANGE > 0.0, "近身啃咬判定距离为正")
 	_c.check(GameBalance.SPIRIT_BEAST_MOVE_SPEED > 110.0, "灵兽移速快过小怪基准（风筝甩得开近战怪）")
+
+## 祭坛灵脉阶（2026-11-02 成长线）：波次阶/启动阶/max 兜底/封顶/阶数增益口径
+func _test_obelisk_tier_growth() -> void:
+	# 波次阶：每 5 波 +1，W1-5=1 / W6-10=2 / W11-15=3 / W16+=4
+	_c.equals(BalanceObelisk.wave_tier(1), 1, "祭坛波次阶：W1=1")
+	_c.equals(BalanceObelisk.wave_tier(5), 1, "祭坛波次阶：W5=1")
+	_c.equals(BalanceObelisk.wave_tier(6), 2, "祭坛波次阶：W6=2（与天象阶段同拍）")
+	_c.equals(BalanceObelisk.wave_tier(11), 3, "祭坛波次阶：W11=3")
+	_c.equals(BalanceObelisk.wave_tier(16), 4, "祭坛波次阶：W16=4")
+	_c.equals(BalanceObelisk.wave_tier(99), BalanceObelisk.MAX_TIER, "祭坛波次阶：封顶 MAX_TIER")
+	_c.equals(BalanceObelisk.wave_tier(0), 1, "祭坛波次阶：0 波钳到 1")
+	# 启动阶：累计成功启动 3/6/10 次分别到 2/3/4 阶
+	_c.equals(BalanceObelisk.activation_tier(0), 1, "祭坛启动阶：0 次=1 阶")
+	_c.equals(BalanceObelisk.activation_tier(2), 1, "祭坛启动阶：2 次仍 1 阶")
+	_c.equals(BalanceObelisk.activation_tier(3), 2, "祭坛启动阶：3 次=2 阶")
+	_c.equals(BalanceObelisk.activation_tier(5), 2, "祭坛启动阶：5 次仍 2 阶")
+	_c.equals(BalanceObelisk.activation_tier(6), 3, "祭坛启动阶：6 次=3 阶")
+	_c.equals(BalanceObelisk.activation_tier(10), 4, "祭坛启动阶：10 次=4 阶")
+	_c.equals(BalanceObelisk.activation_tier(99), BalanceObelisk.MAX_TIER, "祭坛启动阶：封顶 MAX_TIER")
+	# 最终阶 = max(波次阶, 启动阶)：投资提前，波次兜底
+	_c.equals(BalanceObelisk.altar_tier(1, 0), 1, "祭坛阶：W1 未启动=1")
+	_c.equals(BalanceObelisk.altar_tier(1, 3), 2, "祭坛阶：W1 启动 3 次提前到 2 阶")
+	_c.equals(BalanceObelisk.altar_tier(16, 0), 4, "祭坛阶：不投资 W16 也靠波次到 4 阶")
+	_c.equals(BalanceObelisk.altar_tier(99, 99), BalanceObelisk.MAX_TIER, "祭坛阶：上限封顶")
+	_c.equals(GameBalance.obelisk_altar_tier(6, 0), 2, "GameBalance 转发祭坛阶一致")
+	_c.equals(GameBalance.obelisk_tier_name(1), "一阶", "阶位中文名：一阶")
+	_c.equals(GameBalance.obelisk_tier_name(4), "四阶", "阶位中文名：四阶")
+	# 阶数增益单调，且斩杀线叠加后仍低于 Boss 二阶段/精英变异
+	_c.check(BalanceObelisk.tier_damage_mult(1) == 1.0, "1 阶伤害乘区=1.0（基准不漂移）")
+	_c.check(BalanceObelisk.tier_damage_mult(4) > BalanceObelisk.tier_damage_mult(1), "阶数伤害乘区单调递增")
+	_c.check(BalanceObelisk.tier_knock_mult(4) > BalanceObelisk.tier_knock_mult(1), "阶数击退乘区单调递增")
+	_c.check(GameBalance.obelisk_execute_threshold(20) + GameBalance.obelisk_tier_execute_bonus(4) < GameBalance.BOSS_PHASE2_AT,
+		"4 阶 W20 斩杀线仍 < Boss 二阶段触发线")
+	_c.check(GameBalance.obelisk_execute_threshold(20) + GameBalance.obelisk_tier_execute_bonus(4) < BalanceWave.ELITE_MUTATION_HP_PCT,
+		"4 阶 W20 斩杀线仍 < 精英变异触发线")
+
+## 灵兽分阶（2026-11-02）：出生阶 + 存活回合数、封顶、生命/伤害/体型/连发/穿透/接触半径
+func _test_spirit_beast_stage_scaling() -> void:
+	_c.equals(BalanceSpiritBeast.MAX_STAGE, 4, "灵兽最高 4 阶")
+	_c.equals(BalanceSpiritBeast.stage_for(1, 0), 1, "分阶：1 阶出生、当回合=1")
+	_c.equals(BalanceSpiritBeast.stage_for(1, 1), 2, "分阶：存活 1 回合→2 阶")
+	_c.equals(BalanceSpiritBeast.stage_for(1, 2), 3, "分阶：存活 2 回合→3 阶")
+	_c.equals(BalanceSpiritBeast.stage_for(1, 3), 4, "分阶：存活 3 回合→4 阶")
+	_c.equals(BalanceSpiritBeast.stage_for(4, 3), BalanceSpiritBeast.MAX_STAGE, "分阶：封顶 4 阶")
+	_c.equals(BalanceSpiritBeast.stage_for(0, 0), 1, "分阶：出生阶钳到 1")
+	# 阶段乘区单调 + 叠在波次成长上
+	_c.check(BalanceSpiritBeast.stage_hp_mult(4) > BalanceSpiritBeast.stage_hp_mult(1), "阶段生命乘区单调递增")
+	_c.check(BalanceSpiritBeast.stage_damage_mult(4) > BalanceSpiritBeast.stage_damage_mult(1), "阶段伤害乘区单调递增")
+	_c.check(BalanceSpiritBeast.stage_body_scale(4) > BalanceSpiritBeast.stage_body_scale(1), "阶段体型缩放单调递增")
+	_c.near(GameBalance.spirit_beast_max_hp(1, 1), BalanceSpiritBeast.BASE_HP, EPS, "1 阶 1 波生命取基准")
+	_c.check(GameBalance.spirit_beast_max_hp(1, 4) > GameBalance.spirit_beast_max_hp(1, 1), "4 阶生命高于 1 阶（同波）")
+	_c.check(GameBalance.spirit_beast_damage(1, 4) > GameBalance.spirit_beast_damage(1, 1), "4 阶伤害高于 1 阶（同波）")
+	# 攻击质变：3 阶 4 连发、4 阶 5 连发 + 可命中 2 目标
+	_c.equals(GameBalance.spirit_beast_burst_count(1), 3, "1 阶连发数=3")
+	_c.equals(GameBalance.spirit_beast_burst_count(2), 3, "2 阶连发数=3")
+	_c.equals(GameBalance.spirit_beast_burst_count(3), 4, "3 阶连发数=4")
+	_c.equals(GameBalance.spirit_beast_burst_count(4), 5, "4 阶连发数=5")
+	_c.equals(GameBalance.spirit_beast_pierce(3), 1, "3 阶穿透=1（单目标）")
+	_c.equals(GameBalance.spirit_beast_pierce(4), 2, "4 阶穿透=2（可命中 2 个目标）")
+	# 体型变大后近身/拥挤半径同步放大
+	_c.check(GameBalance.spirit_beast_contact_range(4) > GameBalance.SPIRIT_BEAST_CONTACT_RANGE, "4 阶近身啃咬半径大于基础")
+	_c.check(GameBalance.spirit_beast_crowd_radius(4) > GameBalance.SPIRIT_BEAST_CROWD_RADIUS, "4 阶拥挤半径大于基础")
+
+## 环绕火苗数量（2026-11-02）：1 召唤 = 1 枚，封顶 8 枚；回退时同步减少
+func _test_obelisk_orbiters_cap() -> void:
+	var orbiters := ObeliskOrbiters.new()
+	add_child(orbiters)
+	orbiters.set_count(99)
+	_c.equals(orbiters.orbiter_count(), ObeliskOrbiters.MAX_ORBITERS,
+		"环绕火苗：累计召唤超过上限时封顶 %d 枚" % ObeliskOrbiters.MAX_ORBITERS)
+	orbiters.set_count(3)
+	_c.equals(orbiters.orbiter_count(), 3, "环绕火苗：召唤数回退时火苗同步减到 3")
+	orbiters.set_count(0)
+	_c.equals(orbiters.orbiter_count(), 0, "环绕火苗：召唤数归零时全部清空")
+	orbiters.queue_free()
+
+## 血祭代价（2026-11-02）：最大生命 18%、至少 1 点
+func _test_obelisk_blood_cost() -> void:
+	_c.check(BalanceObelisk.BLOOD_HP_RATIO > 0.0 and BalanceObelisk.BLOOD_HP_RATIO < 0.5,
+		"血祭比例在 (0,0.5)（不能一次烧掉半管血）")
+	_c.equals(BalanceObelisk.blood_cost(100.0), 18, "血祭代价：100 血=18")
+	_c.equals(BalanceObelisk.blood_cost(200.0), 36, "血祭代价：200 血=36")
+	_c.equals(BalanceObelisk.blood_cost(55.0), 10, "血祭代价：55 血向上取整=10")
+	_c.equals(BalanceObelisk.blood_cost(0.0), 1, "血祭代价：0 血上限也至少 1 点")
+	_c.equals(GameBalance.obelisk_blood_cost(100.0), 18, "GameBalance 转发血祭代价一致")

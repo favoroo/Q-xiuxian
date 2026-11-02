@@ -68,7 +68,12 @@ const ARROW_RAIN_DAMAGE_RATIO := 0.6
 
 ## 血海护盾（体修进阶）：满血时吸血溢出结成护盾
 ## 护盾上限 = 最大生命 × SHIELD_CAP_RATIO；盾被打穿那一刻向周身放电
-const SHIELD_CAP_RATIO := 0.6
+## 2026-11-02 调参：旧口径每次吸血固定回 1 HP、每秒最多 3 次 ⇒ 盾最多 3 HP/s，
+## 而旧上限是 60% 最大生命（500 血要 100 秒），一波根本攒不起来，盾碎放电几乎看不到。
+## 现在溢出按 SHIELD_OVERFLOW_MULT 放大、上限收到 40%：500 血约 17 秒结满，
+## 「结盾 → 碎盾放电」这条循环才在一波内跑得通。
+const SHIELD_CAP_RATIO := 0.4
+const SHIELD_OVERFLOW_MULT := 4.0
 const SHIELD_BREAK_BASE := 60.0
 const SHIELD_BREAK_HP_RATIO := 0.12
 const SHIELD_BREAK_RADIUS := 200.0
@@ -100,6 +105,10 @@ static func arrow_rain_damage(weapon_damage: float) -> float:
 ## 血海护盾上限
 static func shield_cap(max_hp: float) -> float:
 	return maxf(0.0, max_hp) * SHIELD_CAP_RATIO
+
+## 一次吸血溢出实际结成的盾量（溢出 × 倍率；GameManager.try_lifesteal 唯一入口）
+static func shield_gain(overflow: float) -> float:
+	return maxf(0.0, overflow) * SHIELD_OVERFLOW_MULT
 
 ## 血海护盾破碎放电伤害：固定基值 + 最大生命比例 + 元素加成
 ## （体修堆血，让「血牛」的盾碎反击也跟着厚）

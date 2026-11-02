@@ -139,6 +139,32 @@ const CONFIGS: Dictionary = {
 		"z_ground": false,
 		"element": "gold"
 	},
+	&"spirit_flame": {
+		"tres": "res://assets/art/fx_pixelfx/spirit_flame.tres",
+		# 2026-11-02 祭坛环绕灵火：每次成功召唤 +1 枚，围绕祭坛基座慢速环绕。
+		# 80×124 源画幅，0.30 缩放到 ~24×37，单枚不压水晶；loop 常驻，不走一次性回收。
+		"scale": 0.30,
+		"anchor": "center",
+		"pivot": Vector2(40, 94),
+		"frame_size": Vector2(80, 124),
+		"loop": true,
+		"hdr": true,
+		"z_ground": false,
+		"element": "gold"
+	},
+	&"sunburst": {
+		"tres": "res://assets/art/fx_pixelfx/sunburst.tres",
+		# 2026-11-02 祭坛水晶灵光：垫在水晶背后的金白日轮，阶数越高越大越亮。
+		# 128×128 源画幅，0.55 缩放到 ~70px；loop 常驻，由祭坛宿主控 alpha。
+		"scale": 0.55,
+		"anchor": "center",
+		"pivot": Vector2(64, 64),
+		"frame_size": Vector2(128, 128),
+		"loop": true,
+		"hdr": true,
+		"z_ground": false,
+		"element": "gold"
+	},
 	&"zap_hit": {
 		"tres": "res://assets/art/fx_pixelfx/zap_hit.tres",
 		"scale": 0.55,

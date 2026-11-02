@@ -53,6 +53,9 @@ const RULES: Array[Dictionary] = [
 	{"t": "长按启动", "s": S.BOLD},
 	{"t": "全屏重创", "s": S.GAIN},
 	{"t": "召唤灵兽", "s": S.GAIN},
+	{"t": "祭坛会晋阶", "s": S.GAIN},
+	{"t": "灵兽越到后期越大", "s": S.GAIN},
+	{"t": "血祭", "s": S.COST},
 	{"t": "打 3 下砸开", "s": S.BOLD},
 	{"t": "必送道具", "s": S.GAIN},
 
@@ -82,6 +85,13 @@ const RULES: Array[Dictionary] = [
 	{"t": "首次免费", "s": S.GAIN},
 	{"t": "救急不救穷", "s": S.BOLD},
 	{"t": "价随回合涨", "s": S.COIN},
+	{"t": "每 5 波自然晋 1 阶", "s": S.GAIN},
+	{"t": "基座多 1 枚环绕火苗", "s": S.GAIN},
+	{"t": "水晶看阶数，火苗看召唤次数", "s": S.BOLD},
+	{"t": "耗 18% 最大生命", "s": S.COST},
+	{"t": "每活 1 回合晋 1 阶", "s": S.GAIN},
+	{"t": "3 阶精怪", "s": S.BOLD},
+	{"t": "4 阶巨灵", "s": S.BOLD},
 	{"t": "至多 3 只同场", "s": S.BOLD},
 	{"t": "各活 3 回合", "s": S.BOLD},
 

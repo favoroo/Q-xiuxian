@@ -690,14 +690,6 @@ func set_fire_held(held: bool) -> void:
 func reset_attack_cooldown() -> void:
 	cooldown_timer = 0.0
 
-## 杀戮节奏（神通）：击杀返还一部分当前冷却。以「本次实际攻击间隔」为一份，
-## 而不是按剩余秒数折算 —— 否则攻速越快，同样的返还比例越没感觉。
-func refund_cooldown(pct: float) -> void:
-	if pct <= 0.0:
-		return
-	var unit: float = attack_cooldown * GameManager.get_effective_attack_speed_mult()
-	cooldown_timer = maxf(0.0, cooldown_timer - unit * pct)
-
 ## 每拍冷却相位抖动（2026-10-22）：旧写法每次都精确重置同一时长，同冷却武器一旦相位对上
 ## 就永久锁相——全场武器齐挥齐收、像一台机器在打拍子（首跳错相只能救第一次）。
 ## 每拍乘 ±COOLDOWN_JITTER 的随机系数：期望 DPS 不变（均值≈1.0），但相位持续漂移，

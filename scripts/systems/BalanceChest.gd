@@ -8,7 +8,7 @@ extends RefCounted
 ##
 ## 三档口径（玩家看到的名字在 ManualData，这里只管数值）：
 ##   木匣 0 —— 基准档，就是改版前那口匣子，出现权重恒最高
-##   铜匣 1 —— 掉落量约两倍，另给一笔金币
+##   铜匣 1 —— 掉落量约三倍（8 颗金币 + 直接 8 金币），葫芦掉 2 颗
 ##   玉匣 2 —— 必送一件道具（与金币阁同一个 roller，见 ItemData.pick_id），另有金币
 ##
 ## 为什么分档不加击数：高档匣若更耐砸，玩家堆「宝箱品质」反而换来更难兑现的目标，
@@ -81,20 +81,22 @@ static func break_hits(break_bonus: int) -> int:
 
 ## 奖励表（唯一真话，SpiritChest 逐项消费，卡面/图鉴文案与它同源）：
 ##   heal_chance —— 掉回春葫芦的概率，否则掉一捧金币
-##   heal_pct    —— 葫芦按生命上限的回复比例
+##   heal_count  —— 这次掉几颗葫芦（2026-11-02 档位区分：木 1 / 铜 2 / 退回 3）
+##   heal_hp     —— 单颗葫芦回多少点生命。固定值 3 点（对标 Brotato 水果/箱子 3 HP），
+##                  不再按生命上限百分比：三档单颗同值，档位差由颗数与金币表达
 ##   gem_count   —— 金币颗数，gem_exp 每颗经验
 ##   stones      —— 直接进袖的金币（0 = 不掉金币）
 ##   grant_item  —— 是否必送一件随机道具（只有玉匣）
 const REWARD_WOOD := {
-	"heal_chance": 0.4, "heal_pct": 0.15, "gem_count": 3, "gem_exp": 5,
+	"heal_chance": 0.4, "heal_count": 1, "heal_hp": 3.0, "gem_count": 3, "gem_exp": 5,
 	"stones": 0, "grant_item": false,
 }
 const REWARD_COPPER := {
-	"heal_chance": 0.4, "heal_pct": 0.30, "gem_count": 6, "gem_exp": 5,
-	"stones": 6, "grant_item": false,
+	"heal_chance": 0.4, "heal_count": 2, "heal_hp": 3.0, "gem_count": 8, "gem_exp": 5,
+	"stones": 8, "grant_item": false,
 }
 const REWARD_JADE := {
-	"heal_chance": 0.0, "heal_pct": 0.0, "gem_count": 5, "gem_exp": 5,
+	"heal_chance": 0.0, "heal_count": 0, "heal_hp": 0.0, "gem_count": 5, "gem_exp": 5,
 	"stones": 18, "grant_item": true,
 }
 
@@ -112,14 +114,12 @@ static func reward_of(tier: int) -> Dictionary:
 const JADE_ITEM_GRANT_CAP := 3
 const JADE_FALLBACK_MULT := 1.5
 
-## 单口匣子回复量上限：堆满一条寻宝流（悟道「宝箱掉落」+道具「满匣诀」）也不许一口回满血。
-const REWARD_HEAL_CAP := 0.60
-
-## 上限满后玉匣退回的量：按铜匣奖励整体放缩（葫芦概率/回复、金币颗数、金币都算上）
+## 上限满后玉匣退回的量：按铜匣奖励放缩（葫芦概率、葫芦颗数、金币颗数、金币都算上）。
+## heal_hp 不参与放缩：单颗固定 3 点（2026-11-02 口径）；退回档靠「3 颗葫芦 + 更高掉率 + 更多金币」补偿。
 static func jade_fallback_reward() -> Dictionary:
 	var base: Dictionary = REWARD_COPPER.duplicate()
 	base["heal_chance"] = minf(1.0, float(base["heal_chance"]) * JADE_FALLBACK_MULT)
-	base["heal_pct"] = float(base["heal_pct"]) * JADE_FALLBACK_MULT
+	base["heal_count"] = int(round(float(base["heal_count"]) * JADE_FALLBACK_MULT))
 	base["gem_count"] = int(round(float(base["gem_count"]) * JADE_FALLBACK_MULT))
 	base["stones"] = int(round(float(base["stones"]) * JADE_FALLBACK_MULT))
 	base["grant_item"] = false
@@ -127,16 +127,17 @@ static func jade_fallback_reward() -> Dictionary:
 
 # ---------------- 开箱收益乘区 ----------------
 
-## 悟道「宝箱掉落」与道具「满匣诀」把同一口匣子的兑现量整体放大（GameManager.chest_reward_mult）。
-##   放大：gem_count（金币颗数）、stones（金币）、heal_pct（葫芦回复比例，封顶 REWARD_HEAL_CAP）
-##   不放大：heal_chance（掉葫芦的概率——那条由危险度乘区单独管）、gem_exp（每颗金币经验，不吹经验曲线）、grant_item
+## 悟道「宝箱掉落」把同一口匣子的兑现量整体放大（GameManager.chest_reward_mult）。
+##   放大：gem_count（金币颗数）、stones（金币）、heal_hp（单颗葫芦回复点数，取整：3→4→5→6）
+##   不放大：heal_chance（掉葫芦的概率——那条由危险度乘区单独管）、heal_count（颗数只由档位定，
+##           乘区若把颗数也抬上去，满叠时地上一片葫芦）、gem_exp（每颗金币经验，不吹经验曲线）、grant_item
 ##   只抬不罚：mult < 1.0 按 1.0 算，字段被回退到 1.0 以下也不许把掉落砍下去。
 static func scale_reward(reward: Dictionary, mult: float) -> Dictionary:
 	var m := maxf(1.0, mult)
 	var out: Dictionary = reward.duplicate()
 	out["gem_count"] = int(round(float(out.get("gem_count", 0)) * m))
 	out["stones"] = int(round(float(out.get("stones", 0)) * m))
-	out["heal_pct"] = minf(float(out.get("heal_pct", 0.0)) * m, REWARD_HEAL_CAP)
+	out["heal_hp"] = int(round(float(out.get("heal_hp", 0.0)) * m))
 	return out
 
 # ---------------- 危险度乘区 ----------------

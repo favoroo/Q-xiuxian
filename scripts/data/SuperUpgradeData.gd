@@ -11,8 +11,9 @@ extends RefCounted
 ##   不再分阶段、不设「开道 → 延续 → 大成」的解锁链。凡是没拿过的卡，从第一次飞升
 ##   起就在池子里，五选一按权重随机（用户口径：roguelike 要的就是随机性，
 ##   「1 阶拿过才轮到 2 阶」这种顺序解锁没必要）。
-##   保留的两道闸都是机制性的，不是解锁：灵兽卡要求手上已有灵兽（否则整张卡空转）；
-##   共鸣卡要求 requires_lines 里每条道途各 ≥1 张 —— 这就是「共鸣」二字的定义。
+##   保留的闸都是机制性的，不是解锁：灵兽卡要求手上已有灵兽（否则整张卡空转）；
+##   共鸣卡要求 requires_lines 里每条道途各 ≥1 张 —— 这就是「共鸣」二字的定义；
+##   减槽卡（献祭）要求现有武器数不超过「上限 + 槽位增减」，否则会读出 6/5 并白拿加成。
 ##   道途（line）仍逐卡标注，只用于卡面签与作者面板筛选，不再参与门控。
 ##
 ## 与 UpgradeData 的分工不变：本表只说「给哪一张卡」，数值与机制全写在绑定的
@@ -195,13 +196,21 @@ static func lane_counts(gm: Node) -> Dictionary:
 		counts[line] = int(counts.get(line, 0)) + 1
 	return counts
 
-## 一张卡当前是否可选。2026-10-26 去阶段门控后只剩两道真闸：
+## 一张卡当前是否可选。2026-10-26 去阶段门控后只剩机制闸：
 ##   · 灵兽闸 —— requires_pets 的卡手上必须有灵兽（否则 pet_slots / 灵兽链电全是空转）
 ##   · 共鸣闸 —— requires_lines 里每条道途各已 ≥1 张（「共鸣」二字的定义）
+##   · 槽位闸 —— 减槽卡（献祭）不许把「现有武器数」压到上限以下（否则 6/6 时白拿 +60%，
+##     属性面板还会读出 6/5）。weapon_count / weapon_slots 传 -1 表示未知（纯数据测试），不闸。
 ## 其余卡一律可选，不分阶、不分先后。已拿过剔除由调用方（roll_offers）负责。
-static func is_card_available(card: Dictionary, counts: Dictionary, has_pets: bool) -> bool:
+static func is_card_available(card: Dictionary, counts: Dictionary, has_pets: bool,
+		weapon_count: int = -1, weapon_slots: int = -1) -> bool:
 	if bool(card.get("requires_pets", false)) and not has_pets:
 		return false
+	if weapon_count >= 0 and weapon_slots >= 0:
+		var slot_bonus := int(ItemData.get_def(String(card.get("grant_item", ""))).get(
+			"weapon_slot_bonus", 0))
+		if slot_bonus < 0 and weapon_count > weapon_slots + slot_bonus:
+			return false
 	if String(card.get("kind", "ritual")) != "resonance":
 		return true
 	for line in (card.get("requires_lines", []) as Array):
@@ -240,6 +249,8 @@ static func roll_offers(gm: Node) -> Array[Dictionary]:
 	var counts := lane_counts(gm)
 	var tags := build_tag_set(gm)
 	var has_pets: bool = not (gm.get("pets") as Array).is_empty() or String(gm.cultivator_id) == "yushou"
+	var weapon_count: int = WeaponInventory.slots_used(gm)
+	var weapon_slots: int = int(gm.call("max_weapon_slots"))
 	var rng: RandomNumberGenerator = gm.rng
 
 	var pool: Array = []
@@ -247,7 +258,7 @@ static func roll_offers(gm: Node) -> Array[Dictionary]:
 		var card: Dictionary = d
 		if String(card.get("id", "")) in taken:
 			continue
-		if not is_card_available(card, counts, has_pets):
+		if not is_card_available(card, counts, has_pets, weapon_count, weapon_slots):
 			continue
 		pool.append(card)
 
@@ -338,6 +349,12 @@ static func apply(gm: Node, card_id: String) -> bool:
 		return false
 	var gid := String(card.get("grant_item", ""))
 	if gid.is_empty() or ItemData.get_def(gid).is_empty():
+		return false
+	# 减槽卡在 6/6 这类越界局面直接拒绝落地：候选闸已拦，这里兜作者面板/直接调用
+	# （否则 max_weapon_slots 减 1 后仍留 6 件武器，属性面板读 6/5）。
+	var slot_bonus := int(ItemData.get_def(gid).get("weapon_slot_bonus", 0))
+	if slot_bonus < 0 \
+			and WeaponInventory.slots_used(gm) > int(gm.call("max_weapon_slots")) + slot_bonus:
 		return false
 	if not gm.add_item(gid):
 		return false

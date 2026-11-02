@@ -9,7 +9,7 @@ extends Control
 signal stats_requested
 signal settings_requested
 signal manual_requested
-signal save_requested  ## 多存档：打开选位保存弹窗（Main 打开 SaveManageDialog 存档模式）
+signal save_requested  ## 满位且本局未占位：请 Main 打开 MAKE_ROOM 腾位弹窗
 
 var _unpause_on_close: bool = true
 var _closing: bool = false
@@ -83,7 +83,7 @@ func _build_ui() -> void:
 	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.GOLD, GameStyle.JADE, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
 	resume_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# 存档与继续同排：整列排下去会多出一行（540 屏高已贴边），可存档位由弹窗再选
+	# 存档与继续同排：整列排下去会多出一行（540 屏高已贴边）；一局一位，直接存不必选位
 	var save_btn := _mk_btn("存 档", 42, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
 	save_btn.custom_minimum_size = Vector2(84, 42)
 	save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -346,7 +346,8 @@ func _on_settings_pressed() -> void:
 	_reset_retry_confirm()
 	settings_requested.emit()
 
-## 多存档：藏起暂停菜单，交给 Main 打开选位弹窗（关闭后 Main 会再打开暂停菜单）
+## 存档（一局一位）：本局已有位原地更新；无位自动占第一个空位；成功时暂停菜单保持打开。
+## 只有「满 5 位且本局还没占位」才藏起菜单交给 Main 开 MAKE_ROOM（删一局并存入本局）。
 func _on_save_pressed() -> void:
 	# 作者模式不写手动档：作弊局的快照留在存档位里，退出作者模式后读回来照样是作弊进度
 	if GameManager.author_mode:
@@ -354,6 +355,25 @@ func _on_save_pressed() -> void:
 		return
 	if not GameManager.run_started or GameManager.is_game_over:
 		return
+	if GameManager.run_invalidated:
+		UpdateManager.show_toast("◆ 本局已结束 · 无法存档 ◆", GameStyle.BAD, 2.5)
+		return
+	var spawner := GameManager.wave_spawner as WaveSpawner
+	if spawner != null and spawner.phase == WaveSpawner.Phase.CLEARING:
+		# 波末收益已发；此时存成 FIGHT 会让玩家重打本波再领一次
+		UpdateManager.show_toast("◆ 本波结算中 · 请稍候再存档 ◆", GameStyle.BAD, 2.0)
+		return
+	var existing := SaveSlots.find_slot_for_run(GameManager.run_id)
+	if existing > 0 or SaveSlots.first_free_slot() > 0:
+		var idx := SaveSlots.save_run(GameManager)
+		if idx > 0:
+			var msg := ("◆ 已更新存档位 %d ◆" % idx) if existing > 0 else ("◆ 已存入存档位 %d ◆" % idx)
+			UpdateManager.show_toast(msg, GameStyle.GOLD, 2.5)
+			AudioManager.play_sfx("ui_confirm", 0.95)
+		else:
+			UpdateManager.show_toast("◆ 存档失败，请稍后再试 ◆", GameStyle.BAD, 2.5)
+		return
+	# 满位且本局未占位：藏起暂停菜单，Main 打开腾位弹窗（关闭后回暂停菜单）
 	_kill_close_tween()
 	visible = false
 	_closing = false
@@ -386,6 +406,8 @@ func _on_retry_pressed() -> void:
 	if is_instance_valid(_retry_btn):
 		_retry_btn.text = "正在重置..."
 		_retry_btn.disabled = true
+	# 离场前补一次落盘：已占位更新该位，未占位刷新中断档（headless/作废局自拒）
+	SaveSlots.autosave_current(GameManager)
 	get_tree().paused = false
 	# 带标记重载：Main._ready 消费后跳过主菜单，直落选角界面重开一把
 	GameManager.restart_to_select = true
@@ -401,6 +423,8 @@ func _on_menu_pressed() -> void:
 	if is_instance_valid(_menu_btn):
 		_menu_btn.text = "正在返回..."
 		_menu_btn.disabled = true
+	# 离场前补一次落盘：已占位更新该位，未占位刷新中断档，回主菜单续的是最新进度
+	SaveSlots.autosave_current(GameManager)
 	get_tree().paused = false
 	GameManager.reset_run()
 	await get_tree().process_frame

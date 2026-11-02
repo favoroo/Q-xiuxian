@@ -133,6 +133,16 @@ func _test_super_pool_gate() -> void:
 		SuperUpgradeData.get_def("super_shouqun"), counts, true),
 		"有灵兽时兽群可选（不再要求灵兽道已拥有卡）")
 
+	# 槽位闸（献祭）：6/6 时拿不了 —— 否则 -1 后属性面板读 6/5，且相当于白拿 +60% 武器伤害。
+	# 5/6 时可用（减完正好 5/5，不再挤出越界状态）。
+	var xianji := SuperUpgradeData.get_def("super_xianji")
+	_c.check(not SuperUpgradeData.is_card_available(xianji, {}, false, 6, 6),
+		"6/6 满槽时献祭不可选（避免 6/5 与白拿）")
+	_c.check(SuperUpgradeData.is_card_available(xianji, {}, false, 5, 6),
+		"5/6 时献祭可选（减槽后仍在界内）")
+	_c.check(SuperUpgradeData.is_card_available(xianji, {}, false, 6, 7),
+		"已有开天 +1 槽时 6/7 也可选（减完 6/6）")
+
 	# 权重：道途卡一律同权（与「该道途已拿几张」无关），共鸣最高，仪式最低，命中构筑 ×1.5
 	var bare: Dictionary = {}
 	_c.near(SuperUpgradeData.card_weight(
@@ -169,9 +179,11 @@ func _test_super_roll() -> void:
 	_c.check(_max_same_line(offers) <= SuperUpgradeData.MAX_PER_LINE,
 		"同屏同道途不超过 %d 张（实为 %d）" % [SuperUpgradeData.MAX_PER_LINE, _max_same_line(offers)])
 	var bad_gate: Array = []
+	var wcount: int = GameManager.slots_used()
+	var wslots: int = GameManager.max_weapon_slots()
 	for o in offers:
 		if not SuperUpgradeData.is_card_available(
-				SuperUpgradeData.get_def(String(o.get("id", ""))), {}, false):
+				SuperUpgradeData.get_def(String(o.get("id", ""))), {}, false, wcount, wslots):
 			bad_gate.append(o.get("id", "?"))
 	_c.check(bad_gate.is_empty(), "候选都过了卡池闸（越闸: %s）" % str(bad_gate))
 
@@ -304,10 +316,23 @@ func _test_super_apply() -> void:
 	_c.check(GameManager.max_weapon_slots() == 1,
 		"献祭不会把武器槽压到 1 以下（实为 %d）" % GameManager.max_weapon_slots())
 
-	# 杀戮节奏 hook 读数
+	# 杀戮节奏：击杀叠攻速（+3%/层、10 层封顶、停杀 3 秒后衰减）
 	GameManager.reset_run()
 	_c.check(SuperUpgradeData.apply(GameManager, "super_shalu"), "杀戮节奏落地成功")
-	_c.near(GameManager.item_hook_sum("kill_cd_refund"), 0.08, EPS, "杀戮节奏 hook 读数 8%")
+	_c.near(GameManager.item_hook_sum("kill_haste"), 1.0, EPS, "杀戮节奏 hook 已启用")
+	for i in range(KillHasteData.MAX_STACKS + 3):
+		GameManager.register_kill(false)
+	_c.near(GameManager.kill_haste_stacks, float(KillHasteData.MAX_STACKS), EPS,
+		"击杀叠层封顶 %d 层" % KillHasteData.MAX_STACKS)
+	var full_haste := 1.0 / (1.0 + float(KillHasteData.MAX_STACKS) * KillHasteData.ATTACK_SPEED_PER_STACK)
+	_c.near(GameManager.get_effective_attack_speed_mult(), full_haste, 0.001,
+		"满层攻速乘区 = 1/1.3（+30% 攻速）")
+	_c.near(KillHasteData.decay(float(KillHasteData.MAX_STACKS), KillHasteData.DECAY_DELAY - 0.1, 1.0),
+		float(KillHasteData.MAX_STACKS), EPS, "宽限内不衰减")
+	_c.near(KillHasteData.decay(float(KillHasteData.MAX_STACKS), KillHasteData.DECAY_DELAY + 1.0, 1.0),
+		float(KillHasteData.MAX_STACKS) - KillHasteData.DECAY_PER_SEC, EPS,
+		"宽限后每秒流失 %d 层" % int(KillHasteData.DECAY_PER_SEC))
+	GameManager.reset_run()
 
 	# 灵兽栏 +1
 	GameManager.reset_run()
@@ -329,6 +354,7 @@ func _test_super_apply() -> void:
 		# 二阶段（2026-10-25）：箭雨 / 血盾 / 归一 / 兽群 / 灵蕴
 		["super_jianyu", "arrow_rain_every", 6.0],
 		["super_xuehai", "lifesteal_overflow_shield", 1.0],
+		["super_yixing", "dodge_heal_pct", 0.03],
 		["super_wuxing_guiyi", "wuxing_all", 1.0],
 		["super_shouqun", "pet_chain_lightning", 1.0],
 		["super_lingyun_wuxing", "pet_wuxing_chance", 0.6],
@@ -382,9 +408,14 @@ func _test_chain_balance() -> void:
 		"反震电场随反震成长")
 	# 二阶段数值表：箭雨 / 血盾 / 尸爆口径
 	_c.near(BalanceChain.arrow_rain_damage(100.0), 60.0, EPS, "箭雨单支按武器实伤 60% 折算")
-	_c.near(BalanceChain.shield_cap(200.0), 120.0, EPS, "血海护盾上限为最大生命 60%")
+	_c.near(BalanceChain.shield_cap(200.0), 80.0, EPS, "血海护盾上限为最大生命 40%")
+	_c.near(BalanceChain.shield_gain(1.0), 4.0, EPS, "吸血溢出按 4 倍结成护盾")
 	_c.check(BalanceChain.shield_break_damage(200.0, 0.0) > BalanceChain.SHIELD_BREAK_BASE,
 		"护盾破碎放电随最大生命加成")
+	_c.near(BalanceCombat.dodge_heal_amount(5.0, 0.0, 1000.0), 5.0, EPS,
+		"闪避回血无比例时用固定值兜底")
+	_c.near(BalanceCombat.dodge_heal_amount(5.0, 0.03, 1000.0), 30.0, EPS,
+		"闪避回血按最大生命 3% 成长")
 	# 血祭盛宴尸爆口径：附加死者生命 25%，封顶随波复利；裂魂铃（hp_ratio=0）不受影响
 	var ex_super := BalanceCombat.kill_explode_damage(120.0, 0.0, 1000.0, 0.25, 5)
 	_c.near(ex_super, 120.0 + 250.0, EPS, "尸爆附加死者生命 25%（W5 封顶 400 之上不触顶）")

@@ -106,6 +106,15 @@ const ORPHAN_ALLOW := {
 	"cangzhen_juan": [1, 1.5, 30],
 	"xuehai_fu": [1, 1.5, 10],
 	"wanshi_jian": [1],
+	# 2026-11-02 杀戮节奏（飞升神通）：每层 +3% 攻速、10 层封顶 +30%、停杀 3 秒后衰减
+	# （数值真源 KillHasteData；desc 只做玩家可读复述，不是生效字段）
+	"shen_shalu": [3, 30],
+	# 2026-11-02 飞升卡面口径修正：机制数字由各自运行时常量承载，不在 apply / 顶层字段里
+	"shen_wanjian_guizong": [20, 4],   # 满 20 层剑意 / 剑阵驻场 4 秒（SwordPhantom）
+	"shen_zidian": [3, 3],             # 每 3 次命中 / 最多连 3 个敌人（BalanceChain）
+	"shen_wuxing_lunzhuan": [35],      # 35% 概率（wuxing_rotation_chance 0.35 只进 flat，不支持 %）
+	"shen_lingyun_wuxing": [60],       # 60% 概率（pet_wuxing_chance 0.6 同上）
+	"shen_shouxue": [25],              # 间隔缩短 25%（pet_cooldown_mult_mul 0.75 同上）
 }
 
 static func _strip_bbcode(s: String) -> String:

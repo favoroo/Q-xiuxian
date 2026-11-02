@@ -24,7 +24,7 @@ extends RefCounted
 ##   - max_hp：剥出来单独累加，最后一次性写上限（不走 increase_max_hp，无跳字无挤压）
 ##   - harvest：每回合 harvest_next 复利，重放会抹掉累积增长 ⇒ 保留现值；
 ##     删采气卡时由 AuthorMode 按名义值扣减补偿
-## revive_charges 正常重放（与 RunSave 口径一致：存档不存它，读档按 upgrades 回放）。
+## revive_charges 正常重放（2026-11-02 起 RunSave 也按终值存它，防读档把用完的复活刷回来）。
 ##
 ## 重放顺序与真实逐次购买/加点的交错顺序不同：上限夹取类字段不受影响（重放复现夹取），
 ## 只有乘区撞地板的极端情形可能有极微小差异（攻速/物价/灵兽冷却地板）。

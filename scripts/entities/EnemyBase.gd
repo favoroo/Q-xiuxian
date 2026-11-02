@@ -409,10 +409,16 @@ func activate() -> void:
 		if eid.is_empty():
 			eid = _deduce_enemy_id()
 		_eid = eid
-	# 小怪整体加血（GameBalance.MOB_HP_BASE_MULT）：精英/Boss 不吃这条，它们的厚度由基础值拉开。
+	# 整体加血：小怪吃 MOB_HP_BASE_MULT，精英吃独立的 ELITE_HP_BASE_MULT（2026-11-02，
+	# 小怪基数涨到 11.5 后精英只剩同波小怪 1.6 倍厚，用户反馈「跟小怪没区别」）。
+	# Boss 两条都不吃——它沿用了 is_elite 标记（BossEnemy.tscn 也是 true），但血量由
+	# BalanceWave.boss_hp 统一注入，这里再乘就是叠第二层；识别口径与 _init_procedural_view 同源。
 	# 收口在 activate 这一处：WaveSpawner 刷怪、蛛母产卵、血蛹分裂、Boss 召唤全都经过这里，
 	# 不用在四个刷怪口各乘一遍。2026-10-10 用户口径：「敌人都是一击秒杀，感觉不到打击感」。
-	if not is_elite:
+	var is_boss_body: bool = _eid == "boss" or self.get("final_boss") != null
+	if is_elite and not is_boss_body:
+		max_hp = ceilf(max_hp * GameBalance.ELITE_HP_BASE_MULT)
+	elif not is_elite:
 		max_hp = ceilf(max_hp * GameBalance.MOB_HP_BASE_MULT)
 	current_hp = max_hp
 	_flee_slide = Vector2.ZERO

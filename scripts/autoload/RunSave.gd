@@ -1,15 +1,19 @@
 class_name RunSave
 extends RefCounted
 
-## 中断续玩（2026-10-15）：一局进度的落盘与恢复子系统
-## 负责 user://run_save.cfg 的读写。与局外元进度（ProgressStore/progress.cfg）完全隔离：
-## 局内档写坏半截不影响生涯/成就主档（同 EnemyCodex 的域隔离理由）。
+## 中断续玩 / 本局存档落盘子系统（2026-10-15；2026-11-02 一局一位重构）
+## 负责 user://run_save.cfg 的读写，以及「本局已占存档位」时的目标路由协作：
+## - 未在 SaveSlots 占位的局，自动存档写 SAVE_PATH（临时中断档）；
+## - 已占位的局由 SaveSlots.autosave_current 改写到对应 slot_N.cfg；
+##   本文件只提供 save_to/autosave_to_path 的落盘实现，不反向依赖 SaveSlots（避免类循环）。
+## 与局外元进度（ProgressStore/progress.cfg）完全隔离：局内档写坏半截不影响生涯/成就主档。
 ##
 ## 设计口径：
 ## - 快照存「字段终值」，绝不重放 add_item/apply_upgrade —— 属性叠加被上限夹过、
 ##   道具退货回退有损，重放会失真；玩家血量终值也一并存，避免恢复路径重复施加加成。
-## - 恢复只到「回合边界语义」：FIGHT/CLEARING 存为 FIGHT（本波从头打，波内收益以
-##   最后一次 3 秒自动存为准）；ALLOC/SHOP 原样恢复（含候选卡/货架与锁定项）。
+## - 恢复只到「回合边界语义」：FIGHT 存为 FIGHT（本波从头打，波内收益以最后一次
+##   10 秒自动存 + 波次/面板边界快照为准）；ALLOC/SHOP 原样恢复（含候选卡/货架与锁定项）。
+##   CLEARING 不落盘：波末收益已发，存成 FIGHT 会让玩家重打本波再领一次。
 ## - 技能 buff/战意/盾势/站定计时等瞬态不存，恢复即归零（对玩家有利）。
 ## - 新增单局成员时记得同步这里的存/读两侧（RunReset 头注同款提醒）；
 ##   tests/run_save_check.gd 用反射对账，漏存字段会报红。
@@ -29,9 +33,9 @@ static func has_save() -> bool:
 static func has_save_at(path: String) -> bool:
 	return not peek_at(path).is_empty()
 
-## 读存档摘要（主菜单「继续游戏」/ 多存档列表共用）：无档/坏档返回空字典。
-## payload 非空也在摘要层校验 —— 文件在但整包是空的坏档，列表直接标「损坏」，
-## 不会等到玩家点「读档」才炸。
+## 读存档摘要（主菜单「继续游戏」/ 多局列表共用）：无档/坏档返回空字典。
+## 以 payload 为真话源校验（与 load_from 同口径），列表层就能把坏档标成「损坏」，
+## 不会等玩家点「读档」才炸。meta 只补 payload 没有的 app_version/time_unix。
 static func peek_at(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
@@ -41,19 +45,47 @@ static func peek_at(path: String) -> Dictionary:
 	var payload = cfg.get_value("run", "payload", null)
 	if not (payload is Dictionary) or (payload as Dictionary).is_empty():
 		return {}
-	var wave := int(cfg.get_value("meta", "wave", 0))
+	var data: Dictionary = payload
+	var wave := int(data.get("wave_number", 0))
 	if wave < 1:
 		return {}
+	var cid := String(data.get("cultivator_id", ""))
+	if cid.is_empty() or CultivatorData.get_def(cid).is_empty():
+		return {}
+	var weapons = data.get("weapons", [])
+	if not (weapons is Array) or (weapons as Array).is_empty():
+		return {}
+	var rid := String(data.get("run_id", ""))
+	if rid.is_empty():
+		rid = String(cfg.get_value("meta", "run_id", ""))
 	return {
 		"wave": wave,
-		"level": int(cfg.get_value("meta", "level", 1)),
-		"cid": String(cfg.get_value("meta", "cid", "")),
-		"danger": int(cfg.get_value("meta", "danger", 0)),
-		"play_time": float(cfg.get_value("meta", "play_time", 0.0)),
+		"level": int(data.get("level", 1)),
+		"cid": cid,
+		"danger": int(data.get("danger_level", 0)),
+		"play_time": float(data.get("game_time", 0.0)),
 		"time_unix": int(cfg.get_value("meta", "time_unix", 0)),
-		"run_id": String(cfg.get_value("meta", "run_id", "")),
+		"run_id": rid,
 		"app_version": String(cfg.get_value("meta", "app_version", "")),
 		"save_version": int(cfg.get_value("meta", "save_version", 0)),
+	}
+
+## 只读 meta 区（不校验 payload）：给占位归属 / 阵亡清档 / 旧档迁移用。
+## 文件坏了但 meta 还在时也能认领本局，save_run 才能原地修复而不是另占新位。
+static func peek_meta_at(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var cfg := ConfigFile.new()
+	if cfg.load(path) != OK:
+		return {}
+	var rid := String(cfg.get_value("meta", "run_id", ""))
+	if rid.is_empty():
+		return {}
+	return {
+		"run_id": rid,
+		"wave": int(cfg.get_value("meta", "wave", 0)),
+		"level": int(cfg.get_value("meta", "level", 1)),
+		"time_unix": int(cfg.get_value("meta", "time_unix", 0)),
 	}
 
 static func peek_summary() -> Dictionary:
@@ -70,13 +102,14 @@ static func clear_at(path: String) -> void:
 	if dir != null and dir.file_exists(path.get_file()):
 		dir.remove(path.get_file())
 
-## 阶段归并：WAITING/CLEARING 一律按 FIGHT 存（本波从头重打），其余原样保留。
+## 阶段归并：WAITING 按 FIGHT 存（本波从头重打）；CLEARING 原样返回，由 save_to 拒绝。
+## 波末收益已在 end_wave 发放，若把 CLEARING 存成 FIGHT，读档会让玩家重打本波再领一次。
 ## 自动存与手动存档位共用，别在第二处再抄一遍映射。
 static func resolve_phase(gm: Node) -> int:
 	if gm.wave_spawner == null:
 		return WaveSpawner.Phase.FIGHT
 	var phase: int = gm.wave_spawner.phase
-	if phase == WaveSpawner.Phase.WAITING or phase == WaveSpawner.Phase.CLEARING:
+	if phase == WaveSpawner.Phase.WAITING:
 		return WaveSpawner.Phase.FIGHT
 	return phase
 
@@ -88,28 +121,48 @@ static func ensure_run_id(gm: Node) -> String:
 		gm.run_id = rid
 	return rid
 
-## 游戏内自动存档的统一入口（headless 判据一律不落盘，防测试污染真机档）。
-## 阶段从 wave_spawner 现读：WAITING/CLEARING 归并进 FIGHT，ALLOC/SHOP 原样保留。
-static func autosave_current(gm: Node) -> void:
+## 自动存档三道闸：headless 判据不落盘；作者模式不写（防作弊局留档）；本局作废后不写
+## （死亡演出/结算期间切后台或强退也不能把档复活）。
+static func autosave_allowed(gm: Node) -> bool:
 	if DisplayServer.get_name() == "headless":
-		return
-	# 作者模式：不写中断续玩档。作弊局若留下快照，退出作者模式后「继续游戏」
-	# 会以普通模式复现一份跳关/全解锁的存档 —— 会话级开关必须连局内档一起堵。
+		return false
 	if bool(gm.get("author_mode")):
-		return
-	save_from(gm, resolve_phase(gm))
+		return false
+	if bool(gm.get("run_invalidated")):
+		return false
+	return true
 
-## 落盘整局快照。phase 由调用方给定（测试直呼；游戏内走 autosave_current）。
+## 自动存档落盘到指定目标（未占位局传 SAVE_PATH，已占位局由 SaveSlots 传 slot 路径）。
+## 阶段从 wave_spawner 现读：WAITING 归并 FIGHT，CLEARING 由 save_to 拒绝。
+static func autosave_to_path(gm: Node, path: String) -> bool:
+	if not autosave_allowed(gm):
+		return false
+	return save_to(gm, resolve_phase(gm), path)
+
+## 未占位局的中断档入口（生产环境的占位路由在 SaveSlots.autosave_current）。
+## 保留这个入口给旧调用/测试兜底：只写 SAVE_PATH，不认领任何存档位。
+static func autosave_current(gm: Node) -> void:
+	autosave_to_path(gm, SAVE_PATH)
+
+## 落盘整局快照。phase 由调用方给定（测试直呼；游戏内自动存走 SaveSlots.autosave_current）。
 static func save_from(gm: Node, phase: int) -> bool:
 	return save_to(gm, phase, SAVE_PATH)
 
 ## 指定目标文件的落盘入口（多存档位复用同一份整包口径）。
 static func save_to(gm: Node, phase: int, path: String) -> bool:
+	# 本局作废锁：死亡演出/结算期间任何自动存档都不能把档写回来
+	if bool(gm.get("run_invalidated")):
+		return false
+	# CLEARING 不落盘：波末收益已发，存成 FIGHT 能重打本波重复领
+	if phase == WaveSpawner.Phase.CLEARING or phase < 0:
+		return false
 	if not gm.run_started or gm.is_game_over or gm.wave_number < 1:
 		return false
 	var p = gm.player
 	if p == null or not is_instance_valid(p):
 		return false
+	# 先补 run_id 再 dump：payload 与 meta 必须同一值，否则占位归属对不上（旧档空 id 尤其）
+	var rid := ensure_run_id(gm)
 	var d := {}
 	_dump_scalars(gm, d)
 	_dump_collections(gm, d)
@@ -140,7 +193,7 @@ static func save_to(gm: Node, phase: int, path: String) -> bool:
 	# 多存档（2026-10-28）：难度/时长/本局唯一 id 只喂列表显示与阵亡清档，读档判定仍看 payload
 	cfg.set_value("meta", "danger", gm.danger_level)
 	cfg.set_value("meta", "play_time", gm.game_time)
-	cfg.set_value("meta", "run_id", ensure_run_id(gm))
+	cfg.set_value("meta", "run_id", rid)
 	cfg.set_value("run", "payload", d)
 	var err := _atomic_save(cfg, path)
 	if err != OK:
@@ -174,6 +227,34 @@ static func _atomic_save(cfg: ConfigFile, target_path: String) -> Error:
 		dir.remove(tmp_name)
 		return r
 	return OK
+
+## 读档后原地刷新：只改 meta.time_unix 与 run_id（payload/meta 同步），不动整包字段。
+## 目的：让「继续游戏 = 最近一局」指向刚读的档，同时保留未来版本/未识别字段。
+static func touch_save(path: String, run_id: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	var cfg := ConfigFile.new()
+	if cfg.load(path) != OK:
+		return false
+	var payload = cfg.get_value("run", "payload", null)
+	if not (payload is Dictionary) or (payload as Dictionary).is_empty():
+		return false
+	var rid := run_id.strip_edges()
+	if not rid.is_empty():
+		(payload as Dictionary)["run_id"] = rid
+		cfg.set_value("run", "payload", payload)
+		cfg.set_value("meta", "run_id", rid)
+	cfg.set_value("meta", "time_unix", Time.get_unix_time_from_system())
+	return _atomic_save(cfg, path) == OK
+
+## 迁移用：把 src 整包原子复制到 dst（保留 save_version / 未识别字段）。
+static func copy_save(src: String, dst: String) -> bool:
+	if src == dst or not FileAccess.file_exists(src):
+		return false
+	var cfg := ConfigFile.new()
+	if cfg.load(src) != OK:
+		return false
+	return _atomic_save(cfg, dst) == OK
 
 ## 灌回一局状态（仅 autoload 字段；玩家实体交给 apply_player）。
 ## 返回存档时的阶段（WaveSpawner.Phase.*），无档/坏档返回 -1。
@@ -268,6 +349,7 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["experience"] = gm.experience
 	d["experience_to_next"] = gm.experience_to_next
 	d["pending_upgrade_points"] = gm.pending_upgrade_points
+	d["revive_charges"] = gm.revive_charges  ## 轮回重生剩余次数：按终值存，防读档回满
 	d["wave_number"] = gm.wave_number
 	d["run_started"] = gm.run_started
 	d["danger_level"] = gm.danger_level
@@ -412,6 +494,8 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.pending_upgrade_points = int(d.get("pending_upgrade_points", 0))
 	gm.wave_number = int(d.get("wave_number", 1))
 	gm.run_started = bool(d.get("run_started", true))
+	# 复活次数按终值回灌；旧档缺字段沿用 reset 后的默认（1）
+	gm.revive_charges = int(d.get("revive_charges", gm.revive_charges))
 	# 老中断档可能存着收缩前的 D4/D5（2026-10-20 难度收为 4 档），夹回顶档再继续
 	gm.danger_level = clampi(int(d.get("danger_level", 0)), 0, GameBalance.DANGER_MAX)
 	gm.peak_stones = int(d.get("peak_stones", 0))

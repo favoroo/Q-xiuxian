@@ -213,15 +213,26 @@ func _test_reference_build_ttks() -> void:
 	_c.check(std_w20_boss_ttk >= 30.0 and std_w20_boss_ttk <= 70.0,
 		"成型 Build 在第 20 波魔尊战时长 30~70s (实测 %.1fs, DPS=%.0f)" % [std_w20_boss_ttk, std_w20_dps])
 
-	# 3.3 精英怪 TTK（第 5 波铁甲魔傀 1000 * m5 ≈ 1750；第 15 波 1000 * m15 ≈ 7076）
+	# 3.3 精英怪 TTK（第 5 波铁甲魔傀 = 1000 × ELITE_HP_BASE_MULT × m5；第 15 波赤雷兽 1200 × 同乘区 × m15）
+	# 2026-11-02 精英厚度补强：参考 Build 从「3 把 ★1 最低配」上调到第 5 波实际常见成型度
+	#（5 把、两把 ★2、少量加点）——旧参考 Build 只够模拟起手，量不出「精英该比小怪耐打多久」。
 	var std_w5_dps := _simulate_build_dps(
-		[{"id": "qingyun_sword", "star": 1}, {"id": "gengjin_feijian", "star": 1}, {"id": "bajiao_fan", "star": 1}],
-		{"weapon_damage_mult": 1.15, "crit_rate": 0.08, "attack_speed_mult": 0.95, "elite_damage": 0.0},
+		[{"id": "qingyun_sword", "star": 2}, {"id": "gengjin_feijian", "star": 2},
+		 {"id": "bajiao_fan", "star": 1}, {"id": "huoyan_fu", "star": 1},
+		 {"id": "liuye_feidao", "star": 1}],
+		{
+			"weapon_damage_mult": 1.30, "melee_damage": 4.0, "ranged_damage": 4.0,
+			"crit_rate": 0.15, "crit_mult": 1.50, "attack_speed_mult": 0.90,
+			"elite_damage": 0.25,
+		},
 		true
 	)
-	var w5_elite_ttk := (1000.0 * GameBalance.enemy_hp_mult(5)) / std_w5_dps
-	_c.check(w5_elite_ttk >= 5.0 and w5_elite_ttk <= 25.0,
-		"第 5 波精英战时长 5~25s (实测 %.1fs)" % w5_elite_ttk)
+	var w5_elite_hp := 1000.0 * GameBalance.ELITE_HP_BASE_MULT * GameBalance.enemy_hp_mult(5)
+	var w5_elite_ttk := w5_elite_hp / std_w5_dps
+	_c.check(w5_elite_ttk >= 10.0 and w5_elite_ttk <= 35.0,
+		"第 5 波精英战时长 10~35s (实测 %.1fs, 气血 %.0f, DPS=%.0f)" % [w5_elite_ttk, w5_elite_hp, std_w5_dps])
+	print("ELITE_TTK 第 5 波精英：气血 %.0f / DPS %.0f / TTK %.1fs（精英厚度 ×%.1f）" % [
+		w5_elite_hp, std_w5_dps, w5_elite_ttk, GameBalance.ELITE_HP_BASE_MULT])
 
 	# 3.4 极端 6 把青云剑纯输出 Build（用户报的秒杀场景）
 	# 4把★3 + 2把★2, 攻击加点叠满 + 近战加点 + 狂血丹 + 破甲锥 + 金系满档

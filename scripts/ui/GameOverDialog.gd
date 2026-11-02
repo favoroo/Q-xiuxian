@@ -415,6 +415,9 @@ func _on_revive_pressed() -> void:
 		visible = false
 		get_tree().paused = false
 		GameManager.is_game_over = false
+		# 复活视作本局继续：解除死亡落盘锁。阵亡时已删掉的存档位不会自动恢复，
+		# 下一次自动存档/手动存档重新开始记录（一局一位仍成立）。
+		GameManager.run_invalidated = false
 		AudioManager.play_bgm_key(_battle_bgm_key())
 		if GameManager.player != null and is_instance_valid(GameManager.player)\
 			and GameManager.player.has_method("revive_from_death"):

@@ -131,6 +131,28 @@
       "palette_key": "volt",
       "anchor": "center",
       "desc": "雷劫/触击电结"
+    },
+    {
+      "id": "fire/spirit-flame",
+      "out_name": "spirit_flame",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.30,
+      "palette_key": "gold",
+      "anchor": "center",
+      "desc": "祭坛环绕灵火：每次成功召唤 +1 枚，环绕祭坛基座"
+    },
+    {
+      "id": "holy/sunburst",
+      "out_name": "sunburst",
+      "fps": 20,
+      "max_frames": 24,
+      "loop": true,
+      "scale": 0.55,
+      "palette_key": "gold",
+      "anchor": "center",
+      "desc": "祭坛水晶灵光日轮：垫在水晶背后，阶数越高越大越亮"
     }
   ]
 }

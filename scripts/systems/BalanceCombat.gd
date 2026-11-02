@@ -107,6 +107,11 @@ static func crit_rate(base: float, synergy: float, dodge_convert: float,
 static func effective_dodge(dodge: float, buff_dodge: float, cap: float, cap_bonus: float) -> float:
 	return minf(dodge + buff_dodge, cap + cap_bonus)
 
+## 闪避成功回血量：固定值与「最大生命 × 比例」取高。
+## 流云潜影玉只给固定值（pct=0）；移形换影带比例成长，后期不会退化成一口 5 点。
+static func dodge_heal_amount(flat: float, pct: float, max_hp: float) -> float:
+	return maxf(maxf(0.0, flat), maxf(0.0, max_hp) * maxf(0.0, pct))
+
 # ---------------- 打击感：镜头创伤（震屏） ----------------
 ## 震屏的唯一数学来源。口径（2026-10-08 用户口径：「一直摇不好，这效果要留给特殊场景」）：
 ##   1) 普通命中 / 普通小怪死亡 **一律不发创伤**，打击感交给挤压形变 + 受击火花 + 跳字 + 顿帧；
