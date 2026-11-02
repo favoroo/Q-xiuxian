@@ -1,3 +1,6 @@
+## 2026-11-03 #01
+【发布 v0.1.16 + site/dist 补入 .gitignore】release.py bump/build/publish 全绿双端发布；`site/dist/` 此前未跟踪也未忽略，`git add -A` 会把宣传站构建产物误收进发布提交，补 `.gitignore` 条目维持 2026-11-02 #12 口径（gh-pages 孤儿分支部署、不入版本控制）。涉及 `.gitignore`、`scripts/data/ChangelogData.gd`（v0.1.16 顶条）、`scripts/autoload/Version.gd`（0.1.16）。
+
 ## 2026-11-02 #17
 【局内一次性情境提示：四触发点气泡引导】新增 `HudContextTips`（`scripts/ui/hud/HudContextTips.gd`，CanvasLayer layer=12，GameHUD._ready 挂附，与 HudShieldBar 同模式）：首进商店 / 首刷藏宝匣 / 首遇精英 / 首进聚灵阵范围各弹一条轻量气泡（3.6s 自消 + 点按即收，非模态不暂停不抢输入，落点 y=132 避顶栏血条与横幅）。挂钩全信号驱动零轮询：`GameManager.context_tip_requested(tip_id)` 新信号，WaveShop._on_shop_opened / WaveSpawner._spawn_chests / _spawn_elite spawn_callback / BlessingObelisk 进范围四处无条件发，**门控全收在显示侧**（偏好已读直接吞，触发侧无状态）。偏好键 `ui/ctx_tip_*` 走 `SettingsManager.context_tip_seen/mark_context_tip_seen`，弹出当刻落盘 settings.cfg（`_validate_loaded_value` 坏值回退 false）。判据 `tests/context_tip_gate_check.gd` 29 项（首弹/落点在屏/不动暂停态/弹出即落盘回读/再看被吞/内存污染后重载仍不弹/未注册 id 不弹不落键）。**残留**：设置页无一键重置入口（spec 条件句，现有 TutorialDialog 无重置位故未加）；SmokeRunner 真开商店会在开发机 settings.cfg 落 shop 已读（预期副作用）。涉及 `scripts/ui/hud/HudContextTips.gd`、`scripts/autoload/{GameManager,SettingsManager}.gd`、`scripts/systems/WaveSpawner.gd`、`scripts/entities/BlessingObelisk.gd`、`scripts/ui/{GameHUD,WaveShop}.gd`、`tests/context_tip_gate_check.gd`。
 
