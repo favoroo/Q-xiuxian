@@ -54,3 +54,6 @@ __pycache__/
 .DS_Store
 
 .gh-pages-work/
+
+# Web 宣传站构建产物（gh-pages 孤儿分支部署，不入版本控制）
+site/dist/

@@ -29,7 +29,7 @@ static func attach(hud) -> void:
 	bar.show_percentage = false
 	bar.visible = false
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0, 0, 0, 0)
+	bg.bg_color = Color.TRANSPARENT
 	bg.draw_center = false
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = SHIELD_TINT

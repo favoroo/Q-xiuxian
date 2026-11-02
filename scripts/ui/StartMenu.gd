@@ -169,7 +169,7 @@ func _build_background() -> void:
 	# 1. 不透明纯黑舞台：两档难度共用（2026-10-30 起噩梦不再换底色）
 	var bg := ColorRect.new()
 	bg.name = "BackgroundOverlay"
-	bg.color = Color(k["stage"])
+	bg.color = k["stage"]
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -201,13 +201,13 @@ func _build_top_bar() -> void:
 
 	# 右簇：声音快切徽章 + 设置徽章
 	_sound_badge_btn = _make_badge_button("音效 · 开", Vector2(96, 36),
-		Color(k["plate_face"]), Color(k["plate_hover"]), Color(k["sound_text"]),
-		Color(k["plate_hover_text"]), _on_sound_toggle_pressed)
+		k["plate_face"], k["plate_hover"], k["sound_text"],
+		k["plate_hover_text"], _on_sound_toggle_pressed)
 	_top_bar.add_child(_sound_badge_btn)
 
 	_top_set_btn = _make_badge_button("设置", Vector2(74, 36),
-		Color(k["plate_face"]), Color(k["plate_hover"]), Color(k["plate_text"]),
-		Color(k["plate_hover_text"]), _on_top_set_pressed)
+		k["plate_face"], k["plate_hover"], k["plate_text"],
+		k["plate_hover_text"], _on_top_set_pressed)
 	_top_bar.add_child(_top_set_btn)
 	_attach_author_hold(_top_set_btn)
 
@@ -266,7 +266,7 @@ func _build_center_matrix() -> void:
 	# 右上 1：修仙志（普通态点缀黄块 / 噩梦态暗铜）
 	var career_res := _build_entry_block(
 		"CAREER", "战 绩", "最高 0 波 · 击杀 0 只",
-		Color(faces[0]), card_ink, Color(marks[0]),
+		faces[0], card_ink, marks[0],
 		_on_career_pressed
 	)
 	top_pair.add_child(career_res["card"])
@@ -277,7 +277,7 @@ func _build_center_matrix() -> void:
 	# 右上 2：传道玉简（普通态增益绿块 / 噩梦态暗玉）
 	var manual_res := _build_entry_block(
 		"MANUAL", "图鉴", "70 武器 · 103 道具 · 20 角色",
-		Color(faces[1]), card_ink, Color(marks[1]),
+		faces[1], card_ink, marks[1],
 		_on_manual_pressed
 	)
 	top_pair.add_child(manual_res["card"])
@@ -288,7 +288,7 @@ func _build_center_matrix() -> void:
 	# 右下 1：天地律动·设置（普通态纸白块 / 噩梦态暗紫）
 	var settings_res := _build_entry_block(
 		"CONFIG", "设置", "音效 · 画面 · 震屏设置",
-		Color(faces[2]), card_ink, Color(marks[2]),
+		faces[2], card_ink, marks[2],
 		_on_settings_pressed
 	)
 	bot_pair.add_child(settings_res["card"])
@@ -299,7 +299,7 @@ func _build_center_matrix() -> void:
 	# 右下 2：新手指南（普通态元素橙块 / 噩梦态暗炭）
 	var guide_res := _build_entry_block(
 		"GUIDE", "新手指南", "图文指南 · 随时重温",
-		Color(faces[3]), card_ink, Color(marks[3]),
+		faces[3], card_ink, marks[3],
 		_on_guide_pressed
 	)
 	bot_pair.add_child(guide_res["card"])
@@ -317,8 +317,8 @@ func _build_center_matrix() -> void:
 	_update_btn.text = "检查更新"
 	_update_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
 	_update_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_update_btn, Color(k["corner_face"]), Color(k["corner_edge"]), 12,
-		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
+	GameStyle.button(_update_btn, k["corner_face"], k["corner_edge"], 12,
+		k["primary_text"], GameStyle.SLANT_BUTTON, k["primary_hover_text"])
 	# 状态文案（「已是最新版」「新版 v0.0.17!」）比默认四字长，按钮要贴字自己撑开；
 	# 共用 _pad_button_h：换肤重铺按钮后还要再补一遍
 	_pad_button_h(_update_btn, 10.0)
@@ -337,8 +337,8 @@ func _build_center_matrix() -> void:
 	_cocreate_btn.text = "游戏共创"
 	_cocreate_btn.custom_minimum_size = Vector2(76, CORNER_BTN_H)
 	_cocreate_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_cocreate_btn, Color(k["corner_face"]), Color(k["corner_edge"]), 12,
-		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
+	GameStyle.button(_cocreate_btn, k["corner_face"], k["corner_edge"], 12,
+		k["primary_text"], GameStyle.SLANT_BUTTON, k["primary_hover_text"])
 	_cocreate_btn.pressed.connect(_on_cocreate_pressed)
 	_cocreate_host.add_child(_cocreate_btn)
 	_anim_blocks.append(_cocreate_btn)
@@ -348,7 +348,7 @@ func _build_hero_block() -> PanelContainer:
 	var k := _skin()
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(BASE_HERO_W, HERO_H_BASE)
-	var sb := GameStyle.block(Color(k["hero_face"]), GameStyle.SLANT_BLOCK, Vector2(6, 7))
+	var sb := GameStyle.block(k["hero_face"], GameStyle.SLANT_BLOCK, Vector2(6, 7))
 	sb.content_margin_left = 18.0
 	sb.content_margin_right = 18.0
 	sb.content_margin_top = 12.0
@@ -370,7 +370,7 @@ func _build_hero_block() -> PanelContainer:
 	vbox.add_child(top_row)
 	_hero_top_row = top_row
 
-	var tag_chip := GameStyle.corner_tag("PLAY", Color(k["play_mark"]))
+	var tag_chip := GameStyle.corner_tag("PLAY", k["play_mark"])
 	top_row.add_child(tag_chip)
 	_hero_tag_mark = _tag_mark_of(tag_chip)
 
@@ -390,7 +390,7 @@ func _build_hero_block() -> PanelContainer:
 	_hero_title = Label.new()
 	_hero_title.text = "开 始 游 戏"
 	_hero_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, Color(k["hero_text"]), 0, GameStyle.INK, true)
+	GameStyle.label(_hero_title, HERO_TITLE_FONT_BASE, k["hero_text"], 0, GameStyle.INK, true)
 	title_row.add_child(_hero_title)
 
 	_save_btn = Button.new()
@@ -399,20 +399,20 @@ func _build_hero_block() -> PanelContainer:
 	_save_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_save_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_save_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_save_btn, Color(k["plate_face"]), Color(k["plate_hover"]), 13,
-		Color(k["plate_text"]), GameStyle.SLANT_BUTTON, Color(k["plate_hover_text"]))
+	GameStyle.button(_save_btn, k["plate_face"], k["plate_hover"], 13,
+		k["plate_text"], GameStyle.SLANT_BUTTON, k["plate_hover_text"])
 	_save_btn.pressed.connect(_on_save_pressed)
 	title_row.add_child(_save_btn)
 
 	# 危险度选择区（内嵌衬板：普通态纯黑衬板，噩梦态更深并封一道血朱细边）
 	_danger_box = PanelContainer.new()
-	var d_sb := GameStyle.panel(Color(k["danger_plate"]), GameStyle.SLANT_PLATE, Vector2.ZERO)
+	var d_sb := GameStyle.panel(k["danger_plate"], GameStyle.SLANT_PLATE, Vector2.ZERO)
 	# 1px 边宽建卡时就给足（普通态边框全透明）：换肤只换颜色，绝不让布局抖一下
 	d_sb.border_width_left = 1
 	d_sb.border_width_top = 1
 	d_sb.border_width_right = 1
 	d_sb.border_width_bottom = 1
-	d_sb.border_color = Color(k["danger_border"])
+	d_sb.border_color = k["danger_border"]
 	d_sb.content_margin_left = 8.0
 	d_sb.content_margin_right = 8.0
 	d_sb.content_margin_top = DANGER_PAD_BASE
@@ -432,7 +432,7 @@ func _build_hero_block() -> PanelContainer:
 
 	var d_lbl := Label.new()
 	d_lbl.text = "难度选择"
-	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, Color(k["danger_head"]))
+	GameStyle.label(d_lbl, HERO_DANGER_HEAD_FONT_BASE, k["danger_head"])
 	_danger_head_lbl = d_lbl
 	d_head.add_child(d_lbl)
 
@@ -467,8 +467,8 @@ func _build_hero_block() -> PanelContainer:
 	_hero_start_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE)
 	_hero_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_hero_start_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_hero_start_btn, Color(k["start_face"]), Color(k["start_edge"]), 18,
-		Color(k["primary_text"]), GameStyle.SLANT_BUTTON, Color(k["primary_hover_text"]))
+	GameStyle.button(_hero_start_btn, k["start_face"], k["start_edge"], 18,
+		k["primary_text"], GameStyle.SLANT_BUTTON, k["primary_hover_text"])
 	_hero_start_btn.pressed.connect(_on_start_pressed)
 	vbox.add_child(_hero_start_btn)
 
@@ -478,8 +478,8 @@ func _build_hero_block() -> PanelContainer:
 	_resume_btn.custom_minimum_size = Vector2(0, START_BTN_H_BASE * 0.72)
 	_resume_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_resume_btn.focus_mode = Control.FOCUS_NONE
-	GameStyle.button(_resume_btn, Color(k["plate_face"]), Color(k["resume_hover"]), 14,
-		Color(k["plate_text"]), GameStyle.SLANT_BUTTON, Color(k["resume_hover_text"]))
+	GameStyle.button(_resume_btn, k["plate_face"], k["resume_hover"], 14,
+		k["plate_text"], GameStyle.SLANT_BUTTON, k["resume_hover_text"])
 	_resume_btn.pressed.connect(_on_resume_pressed)
 	vbox.add_child(_resume_btn)
 
@@ -776,7 +776,7 @@ func _skin() -> Dictionary:
 		"resume_hover_text": GameStyle.PAPER,
 		"sound_text": GameStyle.JADE_DK,
 		"danger_plate": GameStyle.with_alpha(Color.BLACK, 0.82),
-		"danger_border": Color(0, 0, 0, 0),
+		"danger_border": Color.TRANSPARENT,
 		"danger_head": GameStyle.with_alpha(GameStyle.CHALK, 0.75),
 		"chip_on": GameStyle.JADE,
 		"chip_on_hover": GameStyle.JADE,
@@ -805,7 +805,7 @@ func _apply_skin(animate: bool) -> void:
 
 	# 1. 舞台底色（两档都是纯黑，硬写不补间）
 	if _bg != null and is_instance_valid(_bg):
-		_bg.color = Color(k["stage"])
+		_bg.color = k["stage"]
 
 	# 2. 唯一的难度氛围件：流星雨（噩梦 = 血红，普通 = 纸白）
 	if _shower != null and is_instance_valid(_shower):
@@ -813,25 +813,25 @@ func _apply_skin(animate: bool) -> void:
 
 	# 3. Hero 大卡：卡面 / 标题字 / PLAY 色标 / 三颗键
 	if _hero_card != null and is_instance_valid(_hero_card):
-		_restyle_block(_hero_card, Color(k["hero_face"]), Vector2(6, 7))
+		_restyle_block(_hero_card, k["hero_face"], Vector2(6, 7))
 	if _hero_title != null and is_instance_valid(_hero_title):
-		_hero_title.add_theme_color_override("font_color", Color(k["hero_text"]))
-	_restyle_tag_mark(_hero_tag_mark, Color(k["play_mark"]))
-	_repaint_button(_hero_start_btn, Color(k["start_face"]), Color(k["start_edge"]),
-		Color(k["primary_text"]), Color(k["primary_hover_text"]))
-	_repaint_button(_save_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
-		Color(k["plate_text"]), Color(k["plate_hover_text"]))
-	_repaint_button(_resume_btn, Color(k["plate_face"]), Color(k["resume_hover"]),
-		Color(k["plate_text"]), Color(k["resume_hover_text"]))
+		_hero_title.add_theme_color_override("font_color", k["hero_text"])
+	_restyle_tag_mark(_hero_tag_mark, k["play_mark"])
+	_repaint_button(_hero_start_btn, k["start_face"], k["start_edge"],
+		k["primary_text"], k["primary_hover_text"])
+	_repaint_button(_save_btn, k["plate_face"], k["plate_hover"],
+		k["plate_text"], k["plate_hover_text"])
+	_repaint_button(_resume_btn, k["plate_face"], k["resume_hover"],
+		k["plate_text"], k["resume_hover_text"])
 
 	# 4. 危险度衬板（1px 边宽建卡时已给足，这里只换底色与边色，布局零抖动）
 	if _danger_box != null and is_instance_valid(_danger_box):
 		var d_sb := _danger_box.get_theme_stylebox("panel") as StyleBoxFlat
 		if d_sb != null:
-			d_sb.bg_color = Color(k["danger_plate"])
-			d_sb.border_color = Color(k["danger_border"])
+			d_sb.bg_color = k["danger_plate"]
+			d_sb.border_color = k["danger_border"]
 	if _danger_head_lbl != null and is_instance_valid(_danger_head_lbl):
-		_danger_head_lbl.add_theme_color_override("font_color", Color(k["danger_head"]))
+		_danger_head_lbl.add_theme_color_override("font_color", k["danger_head"])
 
 	# 5. 右列 2×2：卡面 / 名字 / 角签色标。色标与副文案底色要回写进块字典 ——
 	#    否则「未读高亮退色」会退到建卡那一刻的旧色，换难度后残留。
@@ -845,10 +845,10 @@ func _apply_skin(animate: bool) -> void:
 		if not is_instance_valid(card):
 			continue
 		if i < faces.size():
-			_restyle_block(card, Color(faces[i]), Vector2(5, 6))
+			_restyle_block(card, faces[i], Vector2(5, 6))
 		if i < marks.size():
-			blk["tag_accent"] = Color(marks[i])
-			_restyle_tag_mark(blk.get("tag_mark") as Panel, Color(marks[i]))
+			blk["tag_accent"] = marks[i]
+			_restyle_tag_mark(blk.get("tag_mark") as Panel, marks[i])
 		var name_lbl := blk.get("name_label") as Label
 		if name_lbl != null and is_instance_valid(name_lbl):
 			name_lbl.add_theme_color_override("font_color", card_ink)
@@ -907,17 +907,17 @@ func _refresh_top_badges() -> void:
 	if _top_set_btn == null or not is_instance_valid(_top_set_btn):
 		return
 	var k := _skin()
-	_repaint_button(_top_set_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
-		Color(k["plate_text"]), Color(k["plate_hover_text"]), GameStyle.SLANT_BAND)
+	_repaint_button(_top_set_btn, k["plate_face"], k["plate_hover"],
+		k["plate_text"], k["plate_hover_text"], GameStyle.SLANT_BAND)
 
 ## 屏底两颗角按钮（检查更新 / 游戏共创）
 func _refresh_corner_buttons() -> void:
 	var k := _skin()
-	_repaint_button(_update_btn, Color(k["corner_face"]), Color(k["corner_edge"]),
-		Color(k["primary_text"]), Color(k["primary_hover_text"]))
+	_repaint_button(_update_btn, k["corner_face"], k["corner_edge"],
+		k["primary_text"], k["primary_hover_text"])
 	_pad_button_h(_update_btn, 10.0)
-	_repaint_button(_cocreate_btn, Color(k["corner_face"]), Color(k["corner_edge"]),
-		Color(k["primary_text"]), Color(k["primary_hover_text"]))
+	_repaint_button(_cocreate_btn, k["corner_face"], k["corner_edge"],
+		k["primary_text"], k["primary_hover_text"])
 
 ## 状态文案（「检查更新中...」「新版 v0.0.17!」）比默认四字长，按钮要贴字自己撑开；
 ## GameStyle.block 不带左右内距，这里补上，否则长文案会顶到斜切边。
@@ -969,13 +969,13 @@ func _refresh_danger_row() -> void:
 		if d == GameManager.danger_level and unlocked:
 			# 选中态 hover 不换浅面：点完指针仍停在键上，换亮边会整块泛白成淡色。
 			# 悬停反馈交给硬阴影 (3,4)→(5,6) 硬切；pressed 面由面色压暗派生，点击反馈仍在。
-			GameStyle.button(btn, Color(k["chip_on"]), Color(k["chip_on_hover"]), 12,
-				Color(k["chip_on_text"]), GameStyle.SLANT_BUTTON)
+			GameStyle.button(btn, k["chip_on"], k["chip_on_hover"], 12,
+				k["chip_on_text"], GameStyle.SLANT_BUTTON)
 		elif not unlocked:
 			GameStyle.button(btn, GameStyle.INK.lightened(0.06), GameStyle.LINE, 12, GameStyle.GREY, GameStyle.SLANT_BUTTON)
 		else:
-			GameStyle.button(btn, Color(k["chip_off"]), Color(k["chip_off_hover"]), 12,
-				Color(k["chip_off_text"]), GameStyle.SLANT_BUTTON)
+			GameStyle.button(btn, k["chip_off"], k["chip_off_hover"], 12,
+				k["chip_off_text"], GameStyle.SLANT_BUTTON)
 	_refresh_danger_hint(top)
 
 ## 难度区头部提示：全解锁时只写「难度选择」，还有锁时补一句解锁条件。
@@ -1003,8 +1003,8 @@ func _refresh_sound_badge() -> void:
 			GameStyle.CHALK, GameStyle.CHALK, GameStyle.SLANT_BAND)
 	else:
 		_sound_badge_btn.text = "音效 · 开"
-		_repaint_button(_sound_badge_btn, Color(k["plate_face"]), Color(k["plate_hover"]),
-			Color(k["sound_text"]), Color(k["plate_hover_text"]), GameStyle.SLANT_BAND)
+		_repaint_button(_sound_badge_btn, k["plate_face"], k["plate_hover"],
+			k["sound_text"], k["plate_hover_text"], GameStyle.SLANT_BAND)
 
 func _refresh_dynamic_texts() -> void:
 	# 1. 修仙志卡片副行

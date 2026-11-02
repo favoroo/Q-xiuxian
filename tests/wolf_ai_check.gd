@@ -77,8 +77,9 @@ func _run() -> void:
 		get_tree().quit(1)
 
 ## 摆一只狼到玩家右侧 dist 处（_ready 里自带出生缓冲）
+## 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
 func _spawn_wolf(dist: float) -> EnemyBase:
-	var wolf: EnemyBase = load("res://scenes/entities/LeiBeastEnemy.tscn").instantiate() as EnemyBase
+	var wolf: EnemyBase = EnemyBase.acquire_or_new(load("res://scenes/entities/LeiBeastEnemy.tscn"))
 	wolf.global_position = _player.global_position + Vector2(dist, 0.0)
 	_world.add_child(wolf)
 	return wolf

@@ -17,15 +17,8 @@ radius = 22.5
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 42.0
-move_speed = 85.0
-contact_damage = 8.0
-exp_reward = 6
 spritesheet_path = "res://assets/art/monster_guyao_8dir.png"
 locomotion_mode = "hover"
-preferred_range = 210.0
-buff_radius = 230.0
-buff_speed_mult = 1.35
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 22.5)

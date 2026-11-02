@@ -25,6 +25,7 @@ func _ready() -> void:
 
 	_test_weapon_dps_normalization()
 	_test_enemy_and_boss_hp_scaling()
+	_test_enemy_stats_table_binding()
 	_test_reference_build_ttks()
 	_test_survivability()
 	_test_spawn_budget_binding()
@@ -137,6 +138,71 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 	var b20 := GameBalance.boss_hp(20)
 	_c.check(b10 >= 22000.0 and b10 <= 28000.0, "第 10 波 Boss 气血落在 2.2~2.8 万 (实得 %.0f)" % b10)
 	_c.check(b20 >= 100000.0 and b20 <= 120000.0, "第 20 波魔尊气血落在 10~12 万 (实得 %.0f)" % b20)
+
+# ---------------- 2b. 敌种出厂数值表回环（2026-11-02 收编护栏） ----------------
+## EnemyData.stats 是敌种出厂数值的唯一真话源，唯一应用点在 EnemyBase.acquire_or_new。
+## 本判据逐行把 MOBS/ELITE_POOL/LOOTER_DEF 经工厂实例化，逐字段回读断言：
+##   - 表值真的装配到实例上（防「表改了但没人读」）；
+##   - stats 里的字段名都是 EnemyBase 真属性（set 到不存在的字段只会静默报错，回读 null 立刻露馅）；
+##   - 同一怪种第二次 acquire 拿到的池化复用体数值与表一致（快照回滚同源护栏）。
+## 注 1：_recycle / reset_for_reuse 都碰 @onready 节点，实例必须先 add_child 装配再测池化路径。
+## 注 2：_capture_base_stats 快照只覆盖「出厂后会被 _scale_to_wave/变异原地改写」的字段子集，
+##       其余字段设计上从不被运行时改写 ⇒ 回滚验证只改快照覆盖字段，别把池体改脏。
+func _test_enemy_stats_table_binding() -> void:
+	var rows: Array[Dictionary] = []
+	for key in EnemyData.MOBS:
+		rows.append(EnemyData.MOBS[key])
+	for row in EnemyData.ELITE_POOL:
+		rows.append(row)
+	rows.append(EnemyData.LOOTER_DEF)
+
+	var total_fields := 0
+	for row in rows:
+		var label := String(row.get("display", row.get("id", "?")))
+		var scene_path := String(row.get("scene_path", ""))
+		var stats: Dictionary = row.get("stats", {})
+		_c.check(scene_path != "" and not stats.is_empty(),
+			"敌种【%s】表行带 scene_path 与非空 stats" % label)
+		if scene_path == "" or stats.is_empty():
+			continue
+		var scene: PackedScene = load(scene_path)
+		var e := EnemyBase.acquire_or_new(scene)
+		_c.check(e != null, "敌种【%s】工厂实例化成功" % label)
+		if e == null:
+			continue
+		for field in stats:
+			var got = e.get(field)
+			_c.check(got != null and got == stats[field],
+				"敌种【%s】出厂 %s == %s（实得 %s）" % [label, field, str(stats[field]), str(got)])
+			total_fields += 1
+		# 入树装配后验证快照回滚契约：只改「快照覆盖」字段（模拟 _scale_to_wave / 变异），
+		# reset_for_reuse 必须从出厂快照回滚到表值
+		add_child(e)
+		for field in stats:
+			if not e._base_stats.has(field):
+				continue
+			if typeof(stats[field]) == TYPE_INT:
+				e.set(field, -12345)
+			else:
+				e.set(field, -12345.0)
+		e.reset_for_reuse()
+		for field in stats:
+			var got1 = e.get(field)
+			_c.check(got1 == stats[field],
+				"敌种【%s】reset_for_reuse 后 %s 回滚到表值 %s" % [label, field, str(stats[field])])
+		# 池化回源：回收再取出，同一池体数值仍与表一致
+		EnemyBase._recycle(e)
+		var reused := EnemyBase.acquire_or_new(scene)
+		_c.check(reused == e, "敌种【%s】回收后复用同一池体（快照回滚路径被真实踩到）" % label)
+		reused.reset_for_reuse()
+		for field in stats:
+			var got2 = reused.get(field)
+			_c.check(got2 == stats[field],
+				"敌种【%s】池化复用后 %s 仍为表值 %s" % [label, field, str(stats[field])])
+		reused.free()
+	EnemyBase.clear_pools()
+	print("ENEMY_STATS 出厂数值表回环：%d 个敌种 × 共 %d 字段装配一致（含快照回滚与池化复用回读）" % [rows.size(), total_fields])
+
 
 # ---------------- 3. 三档参考 Build 仿真与击杀时长（TTK）----------------
 

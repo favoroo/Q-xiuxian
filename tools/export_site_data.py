@@ -778,7 +778,7 @@ def build() -> dict:
             "stash": gconst(wsrc, "MAX_STASH_SLOTS", "WeaponData"),
         },
         "play": {
-            "victory": gconst(gm_src, "VICTORY_WAVE", "GameManager"),
+            "milestone": gconst(gm_src, "MILESTONE_WAVE", "GameManager"),
             "first_seconds": round(w_base + w_per),
             "max_seconds": w_cap,
             "offer": gconst(gm_src, "UPGRADE_OFFER_COUNT", "GameManager"),
@@ -858,6 +858,10 @@ def check_tokens(tokens: dict, themes: list, staleness: bool = True) -> list:
 
 def main() -> int:
     check_only = "--check" in sys.argv
+    # build() 里 copy_icon 会直接往 IMG 写文件，目录必须先于 build 存在，
+    # 否则全新环境（site/dist/img 尚未生成）第一次导出就 FileNotFoundError。
+    if not check_only:
+        IMG.mkdir(parents=True, exist_ok=True)
     data = build()
     tokens = data.pop("tokens")
     themes = data["meta"]["themes"]

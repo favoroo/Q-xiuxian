@@ -86,7 +86,8 @@ func _case_slime_contact() -> void:
 ## 金蟾（金蝉）即使与玩家直接贴身重叠或发生碰撞，也不产生任何接触伤害
 func _case_jinchan_contact() -> void:
 	var scene: PackedScene = load("res://scenes/entities/JinChanEnemy.tscn")
-	var jinchan := scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var jinchan := EnemyBase.acquire_or_new(scene)
 	jinchan.global_position = _player.global_position
 	jinchan.add_to_group("enemies")
 	_world.add_child(jinchan)

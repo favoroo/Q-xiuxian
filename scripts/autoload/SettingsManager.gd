@@ -557,6 +557,16 @@ func tutorial_muted() -> bool:
 func set_tutorial_muted(muted: bool) -> void:
 	set_val(&"ui", &"tutorial_muted", muted)
 
+# ----------------- 情境提示（局内一次性气泡：首进商店/首遇藏宝匣/聚灵阵/精英怪） -----------------
+
+## 每个触发点一条独立的「已看过」键（ui/ctx_tip_<id>），进 SCHEMA 会让设置页多出四行
+## 开关（玩家没有来回切的需求），故只走 set_val 落盘；弹出当刻即写 true，杀进程也不复弹。
+func context_tip_seen(tip_id: StringName) -> bool:
+	return _to_bool(get_val(&"ui", StringName("ctx_tip_" + String(tip_id)), false), false)
+
+func mark_context_tip_seen(tip_id: StringName) -> void:
+	set_val(&"ui", StringName("ctx_tip_" + String(tip_id)), true)
+
 func _norm_xy(v: Variant, fallback: Vector2 = SKILL_BTN_XY_DEFAULT) -> Vector2:
 	if v is Vector2:
 		var p: Vector2 = v
@@ -736,6 +746,9 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 	if sec == "audio" and key.ends_with("_muted"):
 		return _to_bool(val, false)
 	if key == "tutorial_muted":
+		return _to_bool(val, false)
+	# 情境提示「已看过」键（ctx_tip_*）：坏值回退 false = 没看过，下次照弹不误事
+	if key.begins_with("ctx_tip_"):
 		return _to_bool(val, false)
 	if key == "screen_shake" or key == "damage_numbers" or key == "hit_stop" \
 			or key == "haptics" or key == "screen_flash" or key == "show_fps" \

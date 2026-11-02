@@ -10,13 +10,19 @@ extends RefCounted
 ## 不合成就是 6~20 个 draw call —— 这是敌人/掉落物/技能特效在低端机上的头号提交开销。
 ##
 ## 使用纪律（顺序正确性靠这三条保证，违反其一就会出现叠放错乱）：
-##   ① 只收集「填充多边形」；线/描边/贴图/文字等非填充原语之前必须先 flush()，
+##   ① 只收集「填充多边形」与「合批线」（line/polyline，斜接四边形并进同一三角形数组，
+##      顺序由索引序保证，无需 flush）；贴图/文字等其余原语之前必须先 flush()，
 ##      让合批命令落在与原来完全相同的位置；
 ##   ② 每个 _draw 结束前必须 flush()（静态缓冲全进程共用，残留会串到下一帧/下一个对象）；
 ##   ③ 同批内按顶点顺序栅格化，多边形之间的覆盖关系与逐次绘制一致（半透明面片先铺底后压上），
 ##      但不要把「必须画在某个非填充原语之上」的面片留在批里。
 ##
 ## 多边形按扇形三角化，要求凸多边形（宝石切面/圆/蛋形均由凸块拼成）。
+##
+## 线条合批（2026-11-02 高负载渲染专项）：原生 draw_line/draw_polyline 每根线 1 个 draw call，
+## 敌形描边/细节线单敌 10~25 根 = 满场数百次提交，是 48 敌同屏 draws 破两千的主因。
+## line()/polyline() 把线转成斜接四边形三角形并进合批（1~2px 细线放弃引擎抗锯齿，
+## Nearest 像素风下无感；半透明线接头用斜接拉伸避免端点叠斑）。
 
 static var _pts := PackedVector2Array()
 static var _cols := PackedColorArray()
@@ -50,6 +56,69 @@ static func circle(item: CanvasItem, center: Vector2, radius: float, col: Color,
 		_idx.append(base)
 		_idx.append(base + i)
 		_idx.append(base + i + 1)
+
+static var _miter: PackedVector2Array = PackedVector2Array()  ## polyline 斜接偏移复用缓冲
+
+## 收集一根线段（等宽四边形，2 三角形）
+static func line(item: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float = 1.0) -> void:
+	var d := b - a
+	var len := d.length()
+	if len < 0.001 or col.a <= 0.0:
+		return
+	var off: Vector2 = Vector2(-d.y, d.x) * (width * 0.5 / len)
+	_quad(a + off, b + off, b - off, a - off, col)
+
+## 收集一条折线（逐段四边形，内角斜接 —— 半透明描边接头处不会因重叠而加深出斑）
+static func polyline(item: CanvasItem, points: PackedVector2Array, col: Color, width: float = 1.0) -> void:
+	var n := points.size()
+	if n < 2 or col.a <= 0.0:
+		return
+	var half := width * 0.5
+	if _miter.size() < n:
+		_miter.resize(n)
+	# 逐点求偏移向量：端点取法线，内点取相邻两法线的斜接方向（限幅防尖角拉飞）
+	for i in n:
+		var dir: Vector2
+		if i == 0:
+			dir = (points[1] - points[0]).normalized()
+			_miter[i] = Vector2(-dir.y, dir.x) * half
+		elif i == n - 1:
+			dir = (points[n - 1] - points[n - 2]).normalized()
+			_miter[i] = Vector2(-dir.y, dir.x) * half
+		else:
+			var d0: Vector2 = (points[i] - points[i - 1]).normalized()
+			var d1: Vector2 = (points[i + 1] - points[i]).normalized()
+			var n0 := Vector2(-d0.y, d0.x)
+			var n1 := Vector2(-d1.y, d1.x)
+			var m := n0 + n1
+			if m.length_squared() < 0.0001:
+				_miter[i] = n1 * half  # 近 180° 回头线：退化用下一段法线
+			else:
+				m = m.normalized()
+				# 斜接长度 = half / cos(转角/2)；dot(m, n1) 即 cos，钳 0.4 防爆
+				var scale := half / maxf(m.dot(n1), 0.4)
+				_miter[i] = m * scale
+	for i in range(n - 1):
+		var a := points[i]
+		var b := points[i + 1]
+		if a.distance_squared_to(b) < 0.000001:
+			continue
+		_quad(a + _miter[i], b + _miter[i + 1], b - _miter[i + 1], a - _miter[i], col)
+
+static func _quad(p1: Vector2, p2: Vector2, p3: Vector2, p4: Vector2, col: Color) -> void:
+	var base := _pts.size()
+	_pts.append(p1)
+	_pts.append(p2)
+	_pts.append(p3)
+	_pts.append(p4)
+	for i in 4:
+		_cols.append(col)
+	_idx.append(base)
+	_idx.append(base + 1)
+	_idx.append(base + 2)
+	_idx.append(base)
+	_idx.append(base + 2)
+	_idx.append(base + 3)
 
 ## 提交当前批次（一次 draw call）
 static func flush(item: CanvasItem) -> void:

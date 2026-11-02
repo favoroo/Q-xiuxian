@@ -17,22 +17,9 @@ radius = 22.5
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 38.0
-move_speed = 95.0
-contact_damage = 14.0
-exp_reward = 6
 enemy_id = "hanpo"
 spritesheet_path = "res://assets/art/pawn_red_8dir.png"
 locomotion_mode = "hover"
-preferred_range = 240.0
-bolt_interval = 2.2
-bolt_damage = 16.0
-bolt_count = 3
-bolt_spread = 0.22
-bolt_windup = 0.35
-bolt_curve_ang = 0.35
-death_bolt_count = 6
-death_bolt_dmg_mult = 0.6
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 21.0)

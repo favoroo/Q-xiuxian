@@ -17,6 +17,9 @@ signal weapons_updated(weapons: Array)
 signal wave_changed(wave_number: int)
 signal shop_opened
 signal shop_closed
+## 新手情境提示请求（首进商店/首遇藏宝匣/聚灵阵/精英怪）：触发点无条件发，
+## 是否真弹由 HudContextTips 按 SettingsManager 的「已看过」键门控（每 id 只弹一次）
+signal context_tip_requested(tip_id: StringName)
 ## 回合后悟道结算（升级不再打断战斗，攒到回合结束统一加点）
 signal alloc_opened
 signal alloc_finished

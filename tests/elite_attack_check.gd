@@ -243,9 +243,9 @@ func _check_scene_config() -> void:
 	var golem_scene: PackedScene = load("res://scenes/entities/GolemEnemy.tscn")
 	var chilei_scene: PackedScene = load("res://scenes/entities/ChileiEliteEnemy.tscn")
 	var jiansha_scene: PackedScene = load("res://scenes/entities/JianshaEliteEnemy.tscn")
-	var g := golem_scene.instantiate() as EnemyBase
-	var c := chilei_scene.instantiate() as EnemyBase
-	var j := jiansha_scene.instantiate() as EnemyBase
+	var g := EnemyBase.acquire_or_new(golem_scene)
+	var c := EnemyBase.acquire_or_new(chilei_scene)
+	var j := EnemyBase.acquire_or_new(jiansha_scene)
 	_c.near(g.slam_interval, GameBalance.GOLEM_SLAM_INTERVAL, 0.001, "① 铁甲魔傀场景 slam_interval 与 BalanceWave 同源")
 	_c.near(g.slam_radius, GameBalance.GOLEM_SLAM_RADIUS, 0.001, "① 铁甲魔傀场景 slam_radius 与 BalanceWave 同源")
 	_c.near(g.rock_interval, GameBalance.GOLEM_ROCK_INTERVAL, 0.001, "① 铁甲魔傀场景 rock_interval 与 BalanceWave 同源")
@@ -283,7 +283,8 @@ func _spawn_standalone(path: String, pos: Vector2) -> EnemyBase:
 	var scene: PackedScene = load(path)
 	if scene == null:
 		return null
-	var e := scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var e := EnemyBase.acquire_or_new(scene)
 	e.global_position = pos
 	e.add_to_group("enemies")
 	get_tree().root.add_child(e)

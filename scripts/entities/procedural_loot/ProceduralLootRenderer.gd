@@ -117,6 +117,15 @@ func _draw() -> void:
 	# 合批兜底：正常路径已在描边/贴图前 flush，这里防异常分支留下残批串到下一颗宝石
 	BatchDraw.flush(self)
 
+## 线类原语合批入口（2026-11-02 高负载渲染专项）：原生 draw_line/draw_polyline 每根线
+## 1 个 draw call，百颗宝石同屏仅此一项就近千次提交；斜接四边形并进 BatchDraw 后
+## 单颗宝石全部线条随填充一起 1~2 次提交。参数与原生同形；antialiased 收下忽略。
+func _batch_line(from: Vector2, to: Vector2, color: Color, width: float = -1.0, _antialiased: bool = false) -> void:
+	BatchDraw.line(self, from, to, color, 1.0 if width <= 0.0 else width)
+
+func _batch_polyline(points: PackedVector2Array, color: Color, width: float = -1.0, _antialiased: bool = false) -> void:
+	BatchDraw.polyline(self, points, color, 1.0 if width <= 0.0 else width)
+
 # ==============================================================================
 # 0. 地面柔光接触阴影（全场统一 2026-10-18 规范：外弥散 + 内暗核）
 # ==============================================================================
@@ -231,15 +240,15 @@ func _draw_rhombus_crystal(is_gold: bool, is_shard: bool = false) -> void:
 
 	# 中脊高光棱线与外轮廓（1.0 精致细线）：描边前先提交填充面片批次（保持叠放次序）
 	BatchDraw.flush(self)
-	draw_line(top, bottom, col_hi, 1.0, true)
-	draw_line(left, right, col_edge.darkened(0.1), 0.9, true)
+	_batch_line(top, bottom, col_hi, 1.0, true)
+	_batch_line(left, right, col_edge.darkened(0.1), 0.9, true)
 	
 	_poly5[0] = top
 	_poly5[1] = right
 	_poly5[2] = bottom
 	_poly5[3] = left
 	_poly5[4] = top
-	draw_polyline(_poly5, col_edge, 1.0, true)
+	_batch_polyline(_poly5, col_edge, 1.0, true)
 
 	# 晶核锐利耀斑闪光
 	var flare_alpha: float = (sin(_time * 4.0) * 0.5 + 0.5) * 0.85
@@ -325,17 +334,17 @@ func _draw_gold_shard() -> void:
 
 	# 内部金属棱线与高光外轮廓（精致 0.9 细线）：描边前提交填充批次
 	BatchDraw.flush(self)
-	draw_line(p_top, p_bottom, col_hi, 0.9, true)
-	draw_line(p_left, p_right, col_edge.darkened(0.15), 0.8, true)
+	_batch_line(p_top, p_bottom, col_hi, 0.9, true)
+	_batch_line(p_left, p_right, col_edge.darkened(0.15), 0.8, true)
 	# 细节：金属折角反光短纹
-	draw_line(p_mid, (p_top + p_right) * 0.5, col_hi, 0.8, true)
+	_batch_line(p_mid, (p_top + p_right) * 0.5, col_hi, 0.8, true)
 
 	_poly5[0] = p_top
 	_poly5[1] = p_right
 	_poly5[2] = p_bottom
 	_poly5[3] = p_left
 	_poly5[4] = p_top
-	draw_polyline(_poly5, col_edge, 0.9, true)
+	_batch_polyline(_poly5, col_edge, 0.9, true)
 
 	# 顶点微小金属反光星芒
 	var flare_alpha: float = (sin(_time * 4.2) * 0.5 + 0.5) * 0.85
@@ -441,19 +450,19 @@ func _draw_heal_orb() -> void:
 		draw_colored_polygon(_poly4, Color(col_body_light.r, col_body_light.g, col_body_light.b, 0.35))
 
 	# 绘制精致外边缘线条（1.1px 细线）
-	draw_polyline(pts, col_rim, 1.1, true)
+	_batch_polyline(pts, col_rim, 1.1, true)
 
 	# 细节：葫芦束腰金丝系绳
 	var tie_left := Vector2(-waist_x - 0.5, waist_y)
 	var tie_right := Vector2(waist_x + 0.5, waist_y)
-	draw_line(tie_left, tie_right, col_tie, 1.2, true)
+	_batch_line(tie_left, tie_right, col_tie, 1.2, true)
 	# 系绳小结/坠饰
 	AdaptiveDraw.circle(self, Vector2(waist_x * 0.2, waist_y + 1.2 * VISUAL_SCALE), 1.0 * VISUAL_SCALE, col_tie, 3.2)
 
 	# 细节：顶端葫芦口圈与塞子
 	var plug_top := top_mouth + Vector2(0, -1.8 * VISUAL_SCALE)
-	draw_line(top_mouth + Vector2(-1.8 * VISUAL_SCALE, 0), top_mouth + Vector2(1.8 * VISUAL_SCALE, 0), col_tie, 1.1, true)
-	draw_line(top_mouth, plug_top, col_rim, 1.2, true)
+	_batch_line(top_mouth + Vector2(-1.8 * VISUAL_SCALE, 0), top_mouth + Vector2(1.8 * VISUAL_SCALE, 0), col_tie, 1.1, true)
+	_batch_line(top_mouth, plug_top, col_rim, 1.2, true)
 
 	# 内部浮动的晶莹灵核（下肚内部生机核）
 	var inner_center := Vector2(0, c_lower.y)

@@ -17,16 +17,7 @@ radius = 22.5
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 34.0
-move_speed = 92.0
-contact_damage = 9.0
-exp_reward = 5
 locomotion_mode = "hover"
-poison_interval = 4.5
-poison_radius = 62.0
-poison_windup = 0.6
-poison_damage = 3.0
-poison_duration = 5.0
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 22.5)

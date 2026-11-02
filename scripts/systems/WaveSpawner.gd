@@ -546,6 +546,9 @@ func _spawn_chests() -> void:
 			Vector2(GameBalance.SPAWN_PUSH_CHEST, 0.0))
 		chest.global_position = pos
 		get_parent().add_child(chest)
+	if count > 0:
+		# 首遇藏宝匣的一次性情境提示（HudContextTips 按「已看过」键门控，只在首次真弹）
+		GameManager.context_tip_requested.emit(&"chest")
 
 func end_wave(early_secs: float = 0.0) -> void:
 	phase = Phase.CLEARING
@@ -947,6 +950,8 @@ func _spawn_elite(player: Node2D) -> void:
 		_elites_spawned += 1
 		GameManager.announcement_triggered.emit("◆ %s突入战场！" % elite_title)
 		GameManager.shake_camera(5.0, 0.25)
+		# 首遇精英的一次性情境提示（HudContextTips 按「已看过」键门控，只在首次真弹）
+		GameManager.context_tip_requested.emit(&"elite")
 
 ## 金蟾：在远离玩家的位置刷一只携宝金蟾（击杀爆金币，见 EnemyBase.stone_reward）。
 ## 不占刷怪预算、不吃同屏上限；它活着时「提前清场」会等它（它是活体敌人），

@@ -227,7 +227,8 @@ func _find_all_pools() -> Array[PoisonPool]:
 ## ⑥⑦⑧ 毒妖支路：预警圈同源、落点锁死、到点才落潭
 func _case_duyao_windup() -> void:
 	var duyao_scene: PackedScene = load("res://scenes/entities/DuYaoEnemy.tscn")
-	var duyao := duyao_scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var duyao := EnemyBase.acquire_or_new(duyao_scene)
 	duyao.global_position = Vector2(300, 0)
 	duyao.add_to_group("enemies")
 	_world.add_child(duyao)
@@ -236,9 +237,9 @@ func _case_duyao_windup() -> void:
 	await get_tree().process_frame
 
 	_c.check(duyao.poison_interval > 0.0, "前置：毒妖配了 poison_interval")
-	# 裸世界不跑 WaveSpawner._scale_to_wave，毒潭半径停在场景初值；这里钉「预警圈与毒潭
+	# 裸世界不跑 WaveSpawner._scale_to_wave，毒潭半径停在 EnemyData 表初值；这里钉「预警圈与毒潭
 	# 判定半径同源」这件事本身（曲线注入由 unit_wave_tests 的 poison_radius 公式钉）
-	_c.near(duyao.poison_radius, 62.0, 0.01, "毒潭半径取场景初值 62（_scale_to_wave 未跑的裸世界）")
+	_c.near(duyao.poison_radius, 62.0, 0.01, "毒潭半径取表初值 62（_scale_to_wave 未跑的裸世界）")
 	_c.near(GameBalance.poison_radius(6), 62.0, 0.01, "回合曲线口径：第 6 波半径 62（解锁波不膨胀）")
 	_c.near(GameBalance.poison_radius(14), 74.0, 0.01, "回合曲线口径：第 14 波半径 74（62+8×1.5）")
 	_c.near(GameBalance.poison_radius(30), 84.0, 0.01, "回合曲线口径：第 30 波封顶 84（防后期地面糊满）")

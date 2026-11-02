@@ -130,15 +130,8 @@ func _run() -> void:
 ## 本波怪种配比 + 平均 exp_reward：按 EnemyData.pick_scene_key 真实采样。
 ## 返回 {"mix": {key: {share, exp, has_gem}}, "avg": 平均 exp}
 func _wave_mix(wave: int) -> Dictionary:
-	# exp_reward 与是否掉宝石都取自场景 .tscn 的真值（has_gem = 无 heal_orb_drop）
-	var info := {
-		"slime": {"exp": 3, "has_gem": true}, "danbao": {"exp": 3, "has_gem": false},
-		"xiexiu": {"exp": 5, "has_gem": true}, "leibeast": {"exp": 6, "has_gem": true},
-		"flower": {"exp": 4, "has_gem": true}, "fengqun": {"exp": 2, "has_gem": true},
-		"xueyong": {"exp": 4, "has_gem": true}, "yingmei": {"exp": 5, "has_gem": true},
-		"lingyi": {"exp": 6, "has_gem": true}, "guyao": {"exp": 6, "has_gem": true},
-		"duyao": {"exp": 5, "has_gem": true}, "zhumu": {"exp": 7, "has_gem": true},
-	}
+	# exp_reward 与是否掉宝石读自 EnemyData.stats（2026-11-02 收编后的唯一真话源；
+	# has_gem = 无 heal_orb_drop，与场景旧覆写口径一致）
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1000 + wave
 	var hits := {}
@@ -149,9 +142,11 @@ func _wave_mix(wave: int) -> Dictionary:
 	var exp_sum := 0.0
 	for key in hits:
 		var share := float(hits[key]) / float(TRIALS)
-		var d: Dictionary = info[key]
-		out[key] = {"share": share, "exp": float(d["exp"]), "has_gem": bool(d["has_gem"])}
-		exp_sum += share * float(d["exp"])
+		var stats: Dictionary = EnemyData.MOBS.get(key, {}).get("stats", {})
+		var exp_v := float(stats.get("exp_reward", 0))
+		var has_gem := int(stats.get("heal_orb_drop", 0)) <= 0
+		out[key] = {"share": share, "exp": exp_v, "has_gem": has_gem}
+		exp_sum += share * exp_v
 	return {"mix": out, "avg": exp_sum}
 
 ## 派生腿：血蛹死亡分裂 3 只史莱姆幼体（每只掉 3exp×1.75 金币腿，

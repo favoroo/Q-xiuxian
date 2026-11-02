@@ -371,7 +371,7 @@ func _update_theme_swatches() -> void:
 		sb.border_width_right = bw
 		sb.border_width_bottom = bw
 		if on:
-			sb.shadow_color = Color(0, 0, 0, 1)
+			sb.shadow_color = GameStyle.INK
 			sb.shadow_size = 1
 			sb.shadow_offset = Vector2(3, 3)
 		slot.add_theme_stylebox_override("panel", sb)

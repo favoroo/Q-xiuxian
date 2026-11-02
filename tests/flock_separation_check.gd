@@ -156,7 +156,8 @@ func _run_group(spawn_pos: Array[Vector2], with_separation: bool) -> float:
 
 func _spawn(scene_path: String, pos: Vector2) -> EnemyBase:
 	var scene: PackedScene = load(scene_path)
-	var e := scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var e := EnemyBase.acquire_or_new(scene)
 	e.global_position = pos
 	e.add_to_group("enemies")
 	_world.add_child(e)

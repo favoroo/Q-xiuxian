@@ -8,6 +8,15 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.16",
+			"date": "2026-11-03",
+			"title": "情境引导与流畅优化",
+			"items": [
+				"首进商店、宝箱、精英、聚灵阵有引导。",
+				"大量敌人同屏时战斗更流畅。",
+			],
+		},
+		{
 			"version": "v0.1.15",
 			"date": "2026-11-02",
 			"title": "存档进化与祭坛成长",

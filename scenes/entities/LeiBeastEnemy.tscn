@@ -17,23 +17,8 @@ radius = 24.0
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_enemy")
-max_hp = 45.0
-move_speed = 120.0
-contact_damage = 18.0
-exp_reward = 6
 spritesheet_path = "res://assets/art/warrior_red_8dir.png"
 locomotion_mode = "hover"
-charge_interval = 4.0
-charge_min_range = 120.0
-charge_max_range = 450.0
-charge_windup_time = 0.8
-charge_duration = 0.75
-charge_speed_mul = 3.2
-charge_brake_time = 0.25
-charge_hit_radius = 34.0
-charge_damage_mul = 1.0
-charge_whiff_stagger = 0.9
-charge_aim_lead = 0.14
 
 [node name="Shadow" type="Sprite2D" parent="."]
 position = Vector2(0.0, 24.0)

@@ -25,7 +25,7 @@ var _phase_tween: Tween = null
 
 ## 50% 刻度线的常态色（色表基准，与 _ready 初值同源）。用常量而不是「读当前色再回填」：
 ## 补间被打断时当前色会停在中间值，拿它当基准会把刻度永久留在闪过的颜色上。
-const PHASE_TICK_BASE := Color("ffd23f")  # GameStyle.JADE
+const PHASE_TICK_BASE := GameStyle.JADE
 const PHASE_TICK_ALPHA := 0.6
 
 ## 血条盒尺寸与贴底摆位（设计单位）：总宽/总高、底边距、进度条最小宽与高、名号字号。

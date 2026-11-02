@@ -746,6 +746,8 @@ func _on_interaction_area_body_entered(body: Node2D) -> void:
 	if body is Player:
 		# 进出登记与灰相解耦：灰相期间照常记录位置，复燃时才好把激活键请回来
 		is_player_inside = true
+		# 首次靠近聚灵阵的一次性情境提示（HudContextTips 按「已看过」键门控）
+		GameManager.context_tip_requested.emit(&"obelisk")
 		if not spent_this_wave and not is_infusing:
 			activation_available.emit(self)
 

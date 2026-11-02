@@ -1532,7 +1532,8 @@ func _test_elite_drop_and_item_entity_system() -> void:
 
 func _test_jinchan_zero_damage() -> void:
 	var jinchan_scene: PackedScene = load("res://scenes/entities/JinChanEnemy.tscn")
-	var jinchan := jinchan_scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var jinchan := EnemyBase.acquire_or_new(jinchan_scene)
 	_c.equals(jinchan.contact_damage, 0.0, "金蟾基础 contact_damage 为 0")
 	_c.check(jinchan.always_flee, "金蟾为逃跑类型 (always_flee)")
 	_c.equals(jinchan.bolt_interval, 0.0, "金蟾无远程攻击")

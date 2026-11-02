@@ -364,6 +364,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_shop_opened() -> void:
 	DetailTip.close_all(self)
+	# 首进商店的一次性情境提示（HudContextTips 按「已看过」键门控，只在首次真弹）
+	GameManager.context_tip_requested.emit(&"shop")
 	# 作者模式可能在商店开着时被关掉：每次开店顺手同步按钮显隐
 	if _author_btn != null and is_instance_valid(_author_btn):
 		_author_btn.visible = GameManager.author_mode	# 上一次商店会话可能残留拖拽手势（_drag/_press），开店即清，防悬空指针 + 输入吞锁

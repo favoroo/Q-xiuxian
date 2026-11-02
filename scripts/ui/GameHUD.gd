@@ -61,8 +61,8 @@ var _banner_tween: Tween = null ## 横幅补间持久句柄
 var _hp_low_tween: Tween = null
 ## 徽记底色要动，但场景 stylebox 是共享资源 ⇒ 首次升级时换成私有副本再动色
 var _lv_badge_style: StyleBoxFlat = null
-var _lv_badge_base_bg := Color(0, 0, 0, 0)
-var _lv_badge_base_border := Color(0, 0, 0, 0)
+var _lv_badge_base_bg := Color.TRANSPARENT
+var _lv_badge_base_border := Color.TRANSPARENT
 ## 经验条填充同样得脱场景共享资源自己一份：.tscn 里烘的是固定色，玩家换主题色它才跟得上
 var _exp_fill_style: StyleBoxFlat = null
 ## 全屏升级金光（_ready 里代码创建，压在 HUD 控件之下）
@@ -82,7 +82,7 @@ var _hp_text_max: int = -1      ## 上一次写进血条文本的整数上限（
 ## 血条装饰与动效句柄
 var _hp_fill_style: StyleBoxFlat = null
 var _hp_block_style: StyleBoxFlat = null
-var _hp_block_base_border := Color(0, 0, 0, 0)
+var _hp_block_base_border := Color.TRANSPARENT
 var _hp_heal_flash: Panel = null
 var _hp_heal_tween: Tween = null
 var _hp_label_heal_tween: Tween = null
@@ -181,6 +181,8 @@ func _ready() -> void:
 	_build_level_flash()
 	_build_hp_bar_decorations()
 	HudShieldBar.attach(self)
+	# 局内一次性情境提示气泡层（首进商店/首遇藏宝匣/聚灵阵/精英怪），信号驱动、按偏好键门控
+	HudContextTips.attach(self)
 
 ## .tscn 烘焙主题色重涂：HP 块面/底边、等级徽记面/底边、波次字色。
 ## 这几个节点在场景里写死了品红（Color(1,0,0.431) 系），运行时改外观只能就地改属性。
@@ -542,7 +544,7 @@ func _on_hp_changed(cur: float, max_v: float) -> void:
 		_hp_fill_style = hp_bar.get_theme_stylebox("fill").duplicate()
 		hp_bar.add_theme_stylebox_override("fill", _hp_fill_style)
 	var full := cur >= max_v - 0.001
-	_hp_fill_style.bg_color = Color(1.0, 1.0, 1.0, 1.0) if full else GameStyle.CHALK
+	_hp_fill_style.bg_color = Color.WHITE if full else GameStyle.CHALK
 
 	if _hp_ghost_tween != null and _hp_ghost_tween.is_valid():
 		_hp_ghost_tween.kill()

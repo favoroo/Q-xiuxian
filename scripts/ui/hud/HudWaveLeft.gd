@@ -55,7 +55,7 @@ func _ready() -> void:
 	offset_bottom = ROW_BOTTOM
 	offset_right = -EDGE_X
 	# 样式与同排 KillsChip 一致：黑底斜切芯片，纸白字（不抢波次蓝与金币黄的主次）
-	add_theme_stylebox_override("panel", GameStyle.chip(Color(0, 0, 0, 1)))
+	add_theme_stylebox_override("panel", GameStyle.chip(GameStyle.INK))
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 15)
 	_label.add_theme_color_override("font_color", GameStyle.CHALK)

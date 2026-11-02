@@ -552,16 +552,16 @@ func _make_skin_row(cid: String, is_unlocked: bool) -> Control:
 
 	# 原色槽：底色取角色本相斗篷内衬，迷你小人直观展示「本来的样子」
 	strip.add_child(_make_skin_slot(cid, -1,
-			Color(base_cfg.cloak.get("col_inner", GameStyle.NAVY2)),
-			Color(base_cfg.cloak.get("col_edge", GameStyle.LINE)),
+			base_cfg.cloak.get("col_inner", GameStyle.NAVY2),
+			base_cfg.cloak.get("col_edge", GameStyle.LINE),
 			is_unlocked, cur_idx == -1))
 
 	for i in range(SkinData.count()):
 		var t: Dictionary = SkinData.get_theme(i)
 		var slot_open: bool = is_unlocked and GameManager.is_skin_unlocked(cid, i)
 		strip.add_child(_make_skin_slot(cid, i,
-			Color(t.get("cloak_inner", GameStyle.NAVY2)),
-			Color(t.get("cloak_edge", GameStyle.LINE)),
+			t.get("cloak_inner", GameStyle.NAVY2),
+			t.get("cloak_edge", GameStyle.LINE),
 			slot_open, is_unlocked and cur_idx == i))
 
 	return strip

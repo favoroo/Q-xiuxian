@@ -116,7 +116,8 @@ func _test_boss_slam_outside() -> void:
 
 func _test_danbao_explode() -> void:
 	var scene: PackedScene = load("res://scenes/entities/DanBaoEnemy.tscn")
-	var e := scene.instantiate() as EnemyBase
+	# 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
+	var e := EnemyBase.acquire_or_new(scene)
 	add_child(e)
 	e.global_position = Vector2(480.0, 270.0)
 
@@ -314,7 +315,7 @@ func _test_boss_archetypes_and_new_elites() -> void:
 
 	# 3. 新精英：玄天星盘（静止炮台）与 万毒祭司（毒阵召唤）
 	var xingpan_scene: PackedScene = load("res://scenes/entities/XingpanEliteEnemy.tscn")
-	var xingpan := xingpan_scene.instantiate() as EnemyBase
+	var xingpan := EnemyBase.acquire_or_new(xingpan_scene)
 	add_child(xingpan)
 	xingpan.global_position = Vector2(480.0, 270.0)
 	_c.near(xingpan.move_speed, 0.0, 0.01, "玄天星盘精英 move_speed == 0（静止炮台）")
@@ -323,7 +324,7 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	xingpan.queue_free()
 
 	var wandu_scene: PackedScene = load("res://scenes/entities/WanduEliteEnemy.tscn")
-	var wandu := wandu_scene.instantiate() as EnemyBase
+	var wandu := EnemyBase.acquire_or_new(wandu_scene)
 	add_child(wandu)
 	_c.check(wandu.poison_interval > 0.0 and wandu.field_interval > 0.0, "万毒祭司精英兼具剧毒沼泽与雷煞禁区")
 	wandu.queue_free()

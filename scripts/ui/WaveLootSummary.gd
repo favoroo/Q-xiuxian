@@ -41,7 +41,7 @@ func _build_ui() -> void:
 	# 1. 半透明暗色背景（点击任意空白处关闭跳过）
 	_dim_bg = ColorRect.new()
 	_dim_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_dim_bg.color = Color(0.0, 0.0, 0.0, 0.52)
+	_dim_bg.color = GameStyle.with_alpha(GameStyle.INK, 0.52)
 	_dim_bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dim_bg.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:

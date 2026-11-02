@@ -1,6 +1,14 @@
 class_name EnemyBase
 extends CharacterBody2D
 
+## AI 支路静态模块（2026-11-02 拆出，按路径 preload 不加 class_name，与 weapons/shapes 同模式）：
+## tick 分发在 _tick_behaviors，行为实现随模块走；宿主只留状态字段与一行转发器
+## （转发器存在口径：BossEnemy 覆写虚分发 / 判据测试直调 / 宿主内部 _die 等调用）。
+const EnemyAiRanged = preload("res://scripts/entities/enemy_ai/EnemyAiRanged.gd")
+const EnemyAiCharge = preload("res://scripts/entities/enemy_ai/EnemyAiCharge.gd")
+const EnemyAiAoe = preload("res://scripts/entities/enemy_ai/EnemyAiAoe.gd")
+const EnemyAiSupport = preload("res://scripts/entities/enemy_ai/EnemyAiSupport.gd")
+
 ## 敌人通用基类（行为开关式上帝基类）：8 种行为支路靠 @export 开关组装，已按支路补分节注释。
 ## 组件化重构暂缓（2026-10-11 决策）：涉及每帧 AI/物理逻辑，留待大型敌人扩展需求出现时单独立项。
 # ---------------- 敌种行为开关（.tscn 按敌种配置；>0 启用对应行为支路） ----------------
@@ -137,10 +145,7 @@ var _charge_brake: float = 0.0     ## >0 收势刹车锁定段（这一段的位
 var _charge_stagger: float = 0.0   ## >0 落空罚站：不追人、任人打（冲刺的代价，与预警的兑现配成一对）
 var _charge_hit: bool = false      ## 这一冲已经结算过（一次冲刺只碾一下）
 var _charge_aim_locked: bool = false  ## 预警末段已提前锁向：预警线端点随之定住，不再跟玩家速度刷新
-const CHARGE_AIM_LOCK_WINDOW := 0.25  ## 预警末段锁向窗口（秒）：预警最后这段方向与预警线一起锁死
-var _fuse: float = -1.0   ## >=0 表示引信已点燃
-const EXPLODE_FUSE := 0.8  ## 丹爆引信时长（秒）：预警圈填满 = 引信烧完 = 自爆结算
-const FLEE_WALL_BAND := 80.0       ## 金蟾软墙警告带（px）：带内背离墙外的逃离分量清零改沿墙滑行；贴墙滑行向锁存防角落抖振
+var _fuse: float = -1.0   ## >=0 表示引信已点燃（引信时长 EXPLODE_FUSE 已随实现迁 EnemyAiAoe）
 var _explode_ring: AoeTelegraph = null  ## 丹爆引信预警圈（挂身上跟随，半径 = explode_radius 同源）
 var _no_drop: bool = false
 var _flee_slide := Vector2.ZERO    ## 金蟾贴墙滑行方向锁存（兼容保留）
@@ -734,9 +739,20 @@ static func acquire_or_new(scene: PackedScene) -> EnemyBase:
 		return null
 	fresh._poolable = true
 	fresh._pool_key = key
+	# 出厂数值真话在 EnemyData（2026-11-02 收编，场景 .tscn 只留视觉/身份/结构）：
+	# 必须赶在 _capture_base_stats 快照前装配，池化复用经快照回滚同源。
+	fresh._apply_data_stats()
 	fresh._capture_base_stats()
 	pool_created_count += 1
 	return fresh
+
+## 出厂数值装配：按场景路径查 EnemyData.stats 逐字段写入（绝对值，幂等）。
+## 未列字段吃类默认值，与旧 .tscn 未覆写时行为一致；直实例化（.instantiate()）不走这里，
+## 判据测试要拿「真实怪」一律走本类工厂 acquire_or_new（与 WaveSpawner 同一口径）。
+func _apply_data_stats() -> void:
+	var stats: Dictionary = EnemyData.stats_for_scene(_pool_key)
+	for field in stats:
+		set(field, stats[field])
 
 ## 回收一只敌人进池休眠：出树（_exit_tree 自动注销登记表）+ 退组 + 停表。
 ## 池满直接释放，不把池撑大（项目通行口径）。
@@ -1279,479 +1295,118 @@ func _tick_hit_stun(delta: float) -> bool:
 ## 行为支路推进：远程风筝 / 扑咬状态机 / 自爆引信 / 火球 / 产卵 / 光环 / 闪现。
 ## 期望速度统一写 _pp_target_vel；返回 true = 自爆已结算（_explode 内部已走死亡流），调用方立即结束本帧。
 func _tick_behaviors(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> bool:
-	# 行为支路分发（2026-10-24 切片）：各敌型按自己的开关字段独立推进，同一敌人带多个
-	# 开关时全部顺序执行（保持旧语义，非 elif 互斥）。唯一提前出口是自爆结算。
-	# 各支路实现即下方 _tick_* 方法（体注释随块走）；起手/结算等招式函数见「行为支路」各分区。
-	_tick_flee_slide(delta, player, dir, dist_sq, eff_speed)
-	_tick_kite_range(dir, dist_sq, eff_speed)
-	_tick_charge_lunge(delta, player, dir, dist_sq)
-	if _tick_explode_fuse(delta, player, dist_sq):
+	# 行为支路分发（2026-10-24 切片；2026-11-02 实现拆 scripts/entities/enemy_ai/ 四模块）：
+	# 各敌型按自己的开关字段独立推进，同一敌人带多个开关时全部顺序执行（保持旧语义，
+	# 非 elif 互斥）。唯一提前出口是自爆结算。体注释随实现迁往模块文件。
+	EnemyAiSupport.tick_flee_slide(self, delta, player, dir, dist_sq, eff_speed)
+	EnemyAiRanged.tick_kite_range(self, dir, dist_sq, eff_speed)
+	EnemyAiCharge.tick_charge_lunge(self, delta, player, dir, dist_sq)
+	if EnemyAiAoe.tick_explode_fuse(self, delta, player, dist_sq):
 		return true
-	_tick_bolt_cast(delta, player, dist_sq)
-	_tick_minion_spawn(delta)
-	_tick_buff_aura_pulse(delta)
-	_tick_teleport_step(delta, player)
-	_tick_elite_slam_step(delta, player, dist_sq)
+	EnemyAiRanged.tick_bolt_cast(self, delta, player, dist_sq)
+	EnemyAiSupport.tick_minion_spawn(self, delta)
+	EnemyAiSupport.tick_buff_aura_pulse(self, delta)
+	EnemyAiSupport.tick_teleport_step(self, delta, player)
+	EnemyAiAoe.tick_elite_slam_step(self, delta, player, dist_sq)
 	# 变异震地余波独立推进：预警段被硬直/其他支路打断也要把已承诺的段数结完
-	_tick_slam_echo(delta, player)
-	_tick_rock_barrage_step(delta, player, dist_sq)
-	_tick_ring_bolt_step(delta, dist_sq)
-	_tick_field_cast(delta, player, dist_sq)
-	_tick_blink_strike_step(delta, player)
-	_tick_heal_pulse(delta)
-	_tick_poison_cast(delta, player, dist_sq)
+	EnemyAiAoe.tick_slam_echo(self, delta, player)
+	EnemyAiAoe.tick_rock_barrage_step(self, delta, player, dist_sq)
+	EnemyAiRanged.tick_ring_bolt_step(self, delta, dist_sq)
+	EnemyAiAoe.tick_field_cast(self, delta, player, dist_sq)
+	EnemyAiRanged.tick_blink_strike_step(self, delta, player)
+	EnemyAiSupport.tick_heal_pulse(self, delta)
+	EnemyAiAoe.tick_poison_cast(self, delta, player, dist_sq)
 	return false
 
-# ---------------- 行为支路 tick（2026-10-24 自 _tick_behaviors 切片） ----------------
+# ---------------- 行为支路转发器（实现已拆 scripts/entities/enemy_ai/ 四模块，2026-11-02） ----------------
+## 保留口径：BossEnemy 覆写（_start_charge/_settle_charge_recovery 必须走宿主虚分发）、判据测试直调、
+## 宿主内部 _die/_physics_process/apply_vortex_pin 调用。各 _tick_* 支路已全量迁走，无转发器。
 
-## 金蟾系移动：视线内中距离环流风筝 + 避墙折返 + 挑逗得瑟停顿 + 落单仓皇遁逃（2026-10-27 机制重构）。
-## 彻底摒弃贴外墙死磕滑行；保持在玩家屏幕视线内游走风筝，奔跑与歇步张弛有度，为近战/短手提供输出窗口。
-func _tick_flee_slide(delta: float, player: Node2D, dir: Vector2, dist_sq: float, eff_speed: float) -> void:
-	if not always_flee or _pp_stun or _flee_burrowing:
-		return
-
-	# 1. 落单仓皇遁逃推进（倒计时到期未伏诛，施展金光遁地离去并促成提前清场）
-	if _flee_panic:
-		if _flee_escape_timer > 0.0:
-			_flee_escape_timer -= delta
-			if _flee_escape_timer <= 0.0:
-				escape_burrow()
-				return
-
-	var dist := sqrt(dist_sq)
-
-	# 2. 挑逗得瑟停顿（落单仓皇逃跑时不歇步）
-	if not _flee_panic:
-		if _flee_pause_timer > 0.0:
-			_flee_pause_timer -= delta
-			# 玩家近身（< 100px）受惊提前开溜
-			if dist < 100.0:
-				_flee_pause_timer = 0.0
-				_flee_run_timer = 2.2
-				play_squash(Vector2(0.85, 1.25), 0.18)
-			else:
-				_pp_target_vel = Vector2.ZERO
-				return
-		else:
-			_flee_run_timer -= delta
-			if _flee_run_timer <= 0.0:
-				if dist >= 140.0:
-					var rng := GameManager.rng
-					_flee_pause_timer = rng.randf_range(0.5, 0.75) if rng != null else 0.6
-					_flee_run_timer = rng.randf_range(2.0, 2.5) if rng != null else 2.2
-					if rng != null and rng.randf() < 0.5:
-						_flee_orbit_sign = -_flee_orbit_sign
-					_pp_target_vel = Vector2.ZERO
-					return
-				else:
-					_flee_run_timer = 1.0
-
-	# 3. 视线内环流与中距离风筝向量计算（dir 为指向玩家的单位向量，-dir 为纯背离玩家逃跑）
-	var tangent := Vector2(-dir.y, dir.x) * _flee_orbit_sign
-	var raw_flee := Vector2.ZERO
-
-	if dist < 160.0:
-		# 近身警戒带（<160px）：以背离逃离为主（满足 unit test 背离点积 < 0），混合切向弧线摆脱
-		raw_flee = (-dir * 0.75 + tangent * 0.45).normalized()
-	elif dist <= 270.0:
-		# 视线安全带（160~270px）：切向绕转戏耍为主，始终留在玩家屏幕视野内
-		raw_flee = (tangent * 0.85 - dir * 0.15).normalized()
-	else:
-		# 过远/脱屏带（>270px）：向心折返，主动回游玩家视野
-		raw_flee = (dir * 0.45 + tangent * 0.65).normalized()
-
-	# 4. 内场边界避让（反推回内场，杜绝贴墙死磕滑行）
-	var wall_lim: float = GameManager.MAP_HALF_EXTENT - 20.0
-	var safe_wall: float = wall_lim - 70.0
-	var push_in := Vector2.ZERO
-	if global_position.x > safe_wall:
-		push_in.x = -1.0
-	elif global_position.x < -safe_wall:
-		push_in.x = 1.0
-	if global_position.y > safe_wall:
-		push_in.y = -1.0
-	elif global_position.y < -safe_wall:
-		push_in.y = 1.0
-
-	if push_in != Vector2.ZERO:
-		raw_flee = (raw_flee * 0.35 + push_in.normalized() * 0.75).normalized()
-
-	if raw_flee.length_squared() < 0.0001:
-		raw_flee = (-global_position).normalized() if global_position.length_squared() > 0.0001 else Vector2.UP
-
-	var cur_speed := eff_speed * (1.15 if _flee_panic else 1.0)
-	_pp_target_vel = raw_flee * cur_speed
-
-## 金蟾进入落单仓皇遁逃（WaveSpawner 监测到常规敌潮清空时调用）
+## 金蟾逃窜（EnemyAiSupport）
 func trigger_looter_panic() -> void:
-	if not always_flee or _flee_panic or dying or _flee_burrowing:
-		return
-	_flee_panic = true
-	_flee_escape_timer = 6.0
-	_flee_pause_timer = 0.0
-	_flee_run_timer = 6.0
-	GameManager.announcement_triggered.emit("◆ 金蟾见势不妙，慌忙遁逃！◆")
-	GameManager.shake_camera(3.0, 0.2)
+	EnemyAiSupport.trigger_looter_panic(self)
 
-## 金蟾遁地离开（限时未伏诛，施展金光遁地钻走，自动结算提前清场）
 func escape_burrow() -> void:
-	if dying or _flee_burrowing:
-		return
-	_flee_burrowing = true
-	_pp_target_vel = Vector2.ZERO
-	velocity = Vector2.ZERO
-	if is_in_group("enemies"):
-		remove_from_group("enemies")
-	GameManager.unregister_enemy(self)
-	DamageNumber.spawn(get_parent(), global_position, 0, false, "遁地离去！")
-	FxParticlePool.burst(FxParticlePool.DEATH_BURST, global_position, "gold", 0.9)
-	AudioManager.play_sfx("enemy_blink", 0.9)
-	var tw := create_tween()
-	tw.tween_property(self, "scale", Vector2.ZERO, 0.22).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
-	tw.tween_callback(func():
-		scale = Vector2.ONE
-		_recycle_or_free()
-	)
+	EnemyAiSupport.escape_burrow(self)
 
+## 长扑冲刺（EnemyAiCharge；BossEnemy 覆写 _start_charge/_settle_charge_recovery）
+func _charge_aim_dir(player: Node2D, fallback: Vector2) -> Vector2:
+	return EnemyAiCharge.charge_aim_dir(self, player, fallback)
 
+func _start_charge(dir: Vector2) -> void:
+	EnemyAiCharge.start_charge(self, dir)
 
-## 远程怪移动：保持距离，近了退、远了进、合适距离环绕游走。
-func _tick_kite_range(dir: Vector2, dist_sq: float, eff_speed: float) -> void:
-	# 远程怪：保持距离，近了退、远了进、合适距离环绕游走
-	if not always_flee and not _pp_stun and preferred_range > 0.0:
-		var dist := sqrt(dist_sq)
-		if dist < preferred_range - 30.0:
-			_pp_target_vel = -dir * eff_speed * 0.8
-		elif dist <= preferred_range + 30.0:
-			_pp_target_vel = Vector2(-dir.y, dir.x) * _kite_sign * eff_speed * BalanceCombat.KITE_STRAFE_SPEED
+func _settle_charge_recovery() -> void:
+	EnemyAiCharge.settle_charge_recovery(self)
 
+func _update_charge_warning(player: Node2D) -> void:
+	EnemyAiCharge.update_charge_warning(self, player)
 
+func _clear_charge_warning() -> void:
+	EnemyAiCharge.clear_charge_warning(self)
 
-## 妖狼系长扑四态状态机（移动出口 _pp_target_vel）：站桩预警 → 直线冲刺 → 收势刹车 → 落空罚站
-## （变异链冲段间短预警）。预警带长度/真实位移/扫掠判定三件事同源取自 GameBalance.charge_reach；
-## 冲刺/收势两段自己把 velocity 写死（下面 charge_locked 那一段因此跳过吸附插值）。
-func _tick_charge_lunge(delta: float, player: Node2D, dir: Vector2, dist_sq: float) -> void:
-	# 妖狼系长扑（移动出口 _pp_target_vel）：
-	#   跑道够（charge_min_range ~ charge_max_range）→ 站桩预警 → 直线冲刺 → 收势（落空则罚站）
-	# 长扑的三件事必须同源，都取自 GameBalance.charge_reach：预警带长度、真实位移、扫掠判定。
-	# 冲刺/收势两段自己把 velocity 写死（下面 charge_locked 那一段因此跳过吸附插值）。
-	if charge_interval > 0.0:
-		_charge_timer -= delta
-		var min_sq: float = charge_min_range * charge_min_range
-		var max_sq: float = charge_max_range * charge_max_range
+## 丹爆自爆（EnemyAiAoe）
+func _explode(player: Node2D) -> void:
+	EnemyAiAoe.explode(self, player)
 
-		# 预警阶段：原地不动，画预警线
-		if _charge_windup > 0.0:
-			_charge_windup -= delta
-			_pp_target_vel = Vector2.ZERO
-			# 末段锁向（2026-10-25 玩家反馈「走到哪都被锁」）：整段预警线跟着跑位每帧刷新，
-			# 读起来就是锁定。最后 CHARGE_AIM_LOCK_WINDOW 秒提前锁死方向，线端点定住 ——
-			# 「线停了」就是明确的躲避信号；急停/变向从此必能走出走廊（锁向用锁定向的
-			# 玩家速度，出手帧不再重算）。预警总长本就小于窗口时退化为起手即锁。
-			if not _charge_aim_locked and _charge_windup <= CHARGE_AIM_LOCK_WINDOW:
-				_charge_dir = _charge_aim_dir(player, dir)
-				_charge_aim_locked = true
-			_update_charge_warning(player)
-			if _charge_windup <= 0.0:
-				_start_charge(_charge_dir if _charge_aim_locked else _charge_aim_dir(player, dir))
+func _fire_death_bolts() -> void:
+	EnemyAiAoe.fire_death_bolts(self)
 
-		# 冲刺阶段：起步即满速，位移由锁定段直接写进 velocity（同 Player 缩地成寸的口径）。
-		# 旧写法只交一个 target_vel，让下方 900 px/s² 的吸附插值从站桩预警的 0 速去爬峰速 384
-		# ⇒ 0.43s 才够到速度（锁定时长一半耗在起步上），冲刺结束后还留一段朝玩家拐弯的滑行尾巴
-		# ⇒ 「画的线」「撞的段」「判的范围」是三套数，玩家只要动一下就永远碰不到它
-		elif _charge_active > 0.0:
-			_charge_active -= delta
-			velocity = _charge_dir * move_speed * charge_speed_mul
-			_pp_target_vel = velocity
-			knockback_velocity = Vector2.ZERO
-			_clear_charge_warning()
-			if _charge_active <= 0.0:
-				_charge_brake = charge_brake_time
+func _ignite_explode_ring() -> void:
+	EnemyAiAoe.ignite_explode_ring(self)
 
-		# 收势刹车：峰速线性刹到站定。这一段也是承诺出去的位移，预警线按 GameBalance.charge_reach 已把它算进线长
-		elif _charge_brake > 0.0:
-			_charge_brake -= delta
-			var brake_k: float = maxf(_charge_brake / maxf(charge_brake_time, 0.0001), 0.0)
-			velocity = _charge_dir * (move_speed * charge_speed_mul) * brake_k
-			_pp_target_vel = velocity
-			knockback_velocity = Vector2.ZERO
-			if _charge_brake <= 0.0:
-				_settle_charge_recovery()
+func _clear_explode_ring() -> void:
+	EnemyAiAoe.clear_explode_ring(self)
 
-		# 落空罚站：冲空了就是白给，玩家看得见「它过去了、站着不动」⇒ 躲开这条路才有奖励，而不只是没被打到
-		elif _charge_stagger > 0.0:
-			_charge_stagger -= delta
-			_pp_target_vel = Vector2.ZERO
-			# 2026-10-23：罚站必须真的站住。旧写法只把期望速度归零，velocity 由
-			# _resolve_velocity 的 move_toward(900px/s²) 从收势末速慢慢刹 —— 罚站头 0.1s
-			# 仍以 40+ px/s 往前滑，判据量到 29.4px 位移（用户口径「罚站就是站桩挨打」）。
-			# 收势段的线性刹车已经把速度收到接近零，这里直接钉死，不留滑行尾巴。
-			velocity = Vector2.ZERO
-			knockback_velocity = Vector2.ZERO
-
-		# 链冲段间短预警（变异烈雷兽）：上一段收势后不罚站，短暂停顿再起手下一冲。
-		# 每段仍有完整预警线可读，玩家能连续侧移躲完整轮；链尾才吃落空罚站。
-		elif _chain_t >= 0.0:
-			_chain_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			if _chain_t <= 0.0:
-				_chain_t = -1.0
-				_charge_windup = charge_windup_time * chain_windup_mult
-				_charge_windup_total = _charge_windup
-				_charge_aim_locked = false
-				play_squash(Vector2(0.82, 1.2), 0.2)
-				AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
-
-		# 空闲：冷却到 + 跑道够 → 长扑预警（硬直中不起手：预警是冲刺的蓄力段，
-		# 被钉着还起手，后续 _start_charge 会从硬直滑行分支夺走位移，「定身」成空话）
-		# 雷环前摇期间不抢跑：两个前摇同时开会让「站定提亮」的读法互相打断。
-		elif charge_interval > 0.0 and _charge_timer <= 0.0 and dist_sq > min_sq and dist_sq < max_sq and not _pp_stun and _ring_bolt_windup_t < 0.0:
-			_charge_timer = charge_interval
-			_charge_windup = charge_windup_time
-			_charge_windup_total = _charge_windup
-			_charge_aim_locked = false
-			_chain_left = maxi(chain_charges - 1, 0)
-			# 起手反馈：下蹲蓄势 + 低音量哨声（全预警体系里原本唯一「静默起手」的，现在齐了）
-			play_squash(Vector2(0.82, 1.2), 0.24)
-			AudioManager.play_sfx("enemy_fuse", 0.35, GameManager.rng.randf_range(1.18, 1.32))
-
-
-
-## 丹爆傀儡：贴近点燃引信，原地颤抖后自爆；返回 true = 已结算自爆，调用方立即结束本帧。
-func _tick_explode_fuse(delta: float, player: Node2D, dist_sq: float) -> bool:
-	# 丹爆傀儡：贴近点燃引信，原地颤抖后自爆
-	if explode_radius > 0.0:
-		if _fuse < 0.0:
-			if dist_sq < 1600.0:
-				_fuse = EXPLODE_FUSE
-				_hit_jiggle_offset = Vector2.ZERO  # 引信颤抖要独占位移抖动，受击微反冲残量先归位
-				anim_sprite.modulate = Color(2.2, 0.9, 0.6)
-				play_squash(Vector2(1.2, 0.82), 0.3)
-				AudioManager.play_sfx("enemy_fuse", 1.0)   ## 引信是递进爆点的倒计时，不是灵宝触体的钟
-				_ignite_explode_ring()
-		else:
-			_fuse -= delta
-			_pp_target_vel = Vector2.ZERO
-			if _explode_ring != null:
-				_explode_ring.progress = 1.0 - _fuse / EXPLODE_FUSE
-			# 引信颤抖：旧写法只抖 anim_sprite，程序化白模下它是隐藏节点（视图藏在 procedural_view），
-			# 玩家看到的白模一动不动。两套载体同拍抖，哪套在用都读得到。
-			var fuse_jitter := GameManager.rng.randf_range(-1.6, 1.6)
-			anim_sprite.position.x = fuse_jitter
-			if procedural_view != null:
-				procedural_view.position.x = fuse_jitter
-			if _fuse <= 0.0:
-				anim_sprite.position.x = 0.0
-				if procedural_view != null:
-					procedural_view.position.x = 0.0
-				_explode(player)
-				return true
-	return false
-
-## 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）。
-## 贴脸禁射（2026-11-01）：玩家进到近战距离内不起手、蓄力中则作废 —— 近战贴脸是
-## 「压掉直射」的奖励，而不是站在炮口上吃弹。环弹/死亡弹幕/冲刺侧弹不走这里，不受影响。
+## 远程火球（EnemyAiRanged）
 func _tick_bolt_cast(delta: float, player: Node2D, dist_sq: float) -> void:
-	# 御剑邪修：保持距离的同时周期性发射火球（先蓄力预告，蓄力满才出手）
-	if bolt_interval > 0.0 and _fuse < 0.0:
-		if _bolt_windup_t >= 0.0:
-			# 贴脸判先于站定：本帧保留 _tick_kite_range 已写好的后撤速度，
-			# 否则「蓄力作废却原地站桩」，玩家读不出「它在拉开距离」。
-			if BalanceCombat.bolt_in_dead_zone(dist_sq):
-				_bolt_timer = BalanceCombat.BOLT_TOO_CLOSE_RETRY
-				_cancel_bolt_windup()
-				return
-			# 蓄力段：站定 + 本体提亮变色，出手方向每帧跟玩家（只作读法，出手那帧才锁死）
-			_pp_target_vel = Vector2.ZERO
-			_bolt_windup_dir = (player.global_position - global_position).normalized()
-			_tick_bolt_windup(delta)
-			if _bolt_windup_t <= 0.0:
-				_fire_bolt(player)
-		else:
-			_bolt_timer -= delta
-			if _bolt_timer <= 0.0 and dist_sq < 396900.0 and not _pp_stun:
-				if BalanceCombat.bolt_in_dead_zone(dist_sq):
-					_bolt_timer = BalanceCombat.BOLT_TOO_CLOSE_RETRY
-				else:
-					_bolt_timer = bolt_interval
-					_start_bolt_windup()
+	EnemyAiRanged.tick_bolt_cast(self, delta, player, dist_sq)
 
+func _start_bolt_windup() -> void:
+	EnemyAiRanged.start_bolt_windup(self)
 
+func _cancel_bolt_windup() -> void:
+	EnemyAiRanged.cancel_bolt_windup(self)
 
-## 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）。
-func _tick_minion_spawn(delta: float) -> void:
-	# 蛛母系：周期性产卵（受同屏上限约束，不冲破刷怪口的上限）
-	if spawn_minion_interval > 0.0 and minion_scene != null and _fuse < 0.0:
-		_minion_timer -= delta
-		if _minion_timer <= 0.0:
-			_minion_timer = spawn_minion_interval
-			if GameManager.enemy_count < GameBalance.ZHUMU_MINION_CAP:
-				_spawn_minion()
+func _fire_bolt(player: Node2D) -> void:
+	EnemyAiRanged.fire_bolt(self, player)
 
+func _fire_ring_bolts() -> void:
+	EnemyAiRanged.fire_ring_bolts(self)
 
+func _blink_strike(player: Node2D) -> void:
+	EnemyAiRanged.blink_strike(self, player)
 
-## 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速。
-func _tick_buff_aura_pulse(delta: float) -> void:
-	# 鼓妖光环：每 0.25s 给范围内同伴刷新一次加速
-	if buff_radius > 0.0:
-		_buff_timer -= delta
-		if _buff_timer <= 0.0:
-			_buff_timer = 0.25
-			_pulse_buff_aura()
+## 精英 AoE（EnemyAiAoe）
+func _resolve_elite_slam(player: Node2D) -> void:
+	EnemyAiAoe.resolve_elite_slam(self, player)
 
+func _start_rock_barrage(player: Node2D) -> void:
+	EnemyAiAoe.start_rock_barrage(self, player)
 
+func _resolve_rock_barrage(player: Node2D) -> void:
+	EnemyAiAoe.resolve_rock_barrage(self, player)
 
-## 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）。
-func _tick_teleport_step(delta: float, player: Node2D) -> void:
-	# 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）
-	if teleport_interval > 0.0 and _fuse < 0.0:
-		_teleport_timer -= delta
-		if _teleport_timer <= 0.0:
-			_teleport_timer = teleport_interval
-			_teleport_near_player(player)
+func _clear_rock_rings() -> void:
+	EnemyAiAoe.clear_rock_rings(self)
 
+func _start_field_cast() -> void:
+	EnemyAiAoe.start_field_cast(self)
 
+## 投毒（EnemyAiAoe）
+func _start_poison_cast() -> void:
+	EnemyAiAoe.start_poison_cast(self)
 
-## 铁甲魔傀·震地：预警圈「填满式」倒计时 → 结算（与 Boss 震地同一套视觉语言）。
-func _tick_elite_slam_step(delta: float, player: Node2D, dist_sq: float) -> void:
-	# 铁甲魔傀·震地：预警圈「填满式」倒计时 → 结算（与 Boss 震地同一套视觉语言）
-	if slam_interval > 0.0 and _fuse < 0.0:
-		if _elite_slam_windup_t >= 0.0:
-			_elite_slam_windup_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			if _elite_slam_ring != null:
-				_elite_slam_ring.progress = 1.0 - _elite_slam_windup_t / maxf(slam_windup, 0.001)
-			if _elite_slam_windup_t <= 0.0:
-				_resolve_elite_slam(player)
-		else:
-			_elite_slam_timer -= delta
-			# 与落石互斥：同一时刻只亮一种预警，避免双圈叠读
-			if _elite_slam_timer <= 0.0 and _rock_windup_t < 0.0 and dist_sq < slam_radius * slam_radius * 2.25:
-				_elite_slam_timer = slam_interval
-				_start_elite_slam()
-	# 变异震地余波独立推进：预警段被硬直/其他支路打断也要把已承诺的段数结完
-	_tick_slam_echo(delta, player)
+func _drop_poison() -> void:
+	EnemyAiAoe.drop_poison(self)
 
+func _clear_poison_ring() -> void:
+	EnemyAiAoe.clear_poison_ring(self)
 
+## 灵医治疗（EnemyAiSupport）
+func _pulse_heal() -> void:
+	EnemyAiSupport.pulse_heal(self)
 
-## 铁甲魔傀·落石轰炸：起手锁多个落点 → 每个落点亮填满式预警圈 → 逐个结算。首点锁玩家预判位
-## （rock_lead），其余绕首点按 rock_spread 散布 —— 克制原地站桩与匀速跑位。
-func _tick_rock_barrage_step(delta: float, player: Node2D, dist_sq: float) -> void:
-	# 铁甲魔傀·落石轰炸：起手锁多个落点 → 每个落点亮填满式预警圈 → 逐个结算。
-	# 首点锁玩家预判位（rock_lead），其余绕首点按 rock_spread 散布 —— 克制原地站桩与匀速跑位。
-	if rock_interval > 0.0 and _fuse < 0.0:
-		if _rock_windup_t >= 0.0:
-			_rock_windup_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			var rock_progress: float = 1.0 - _rock_windup_t / maxf(rock_windup, 0.001)
-			for ring in _rock_rings:
-				if ring != null and is_instance_valid(ring):
-					ring.progress = rock_progress
-			if _rock_windup_t <= 0.0:
-				_resolve_rock_barrage(player)
-		else:
-			_rock_timer -= delta
-			# 与冲刺/震地互斥：冲刺锁定段不砸石（落点追不上自己），震地预警中不叠第二种圈
-			if _rock_timer <= 0.0 and dist_sq < 640000.0 and not _pp_stun \
-					and _charge_windup < 0.0 and _charge_active <= 0.0 and _charge_brake <= 0.0 \
-					and _elite_slam_windup_t < 0.0:
-				_rock_timer = rock_interval
-				_start_rock_barrage(player)
-
-
-
-## 赤雷兽·雷环齐射：短前摇站定提亮 → 全向均布弧线雷弹（旋臂压迫走位）。
-func _tick_ring_bolt_step(delta: float, dist_sq: float) -> void:
-	# 赤雷兽·雷环齐射：短前摇站定提亮 → 全向均布弧线雷弹（旋臂压迫走位）
-	if ring_bolt_interval > 0.0 and _fuse < 0.0:
-		if _ring_bolt_windup_t >= 0.0:
-			_ring_bolt_windup_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			if procedural_view != null:
-				procedural_view.special_state = clampf(1.0 - _ring_bolt_windup_t / maxf(ring_bolt_windup, 0.001), 0.0, 1.0)
-			if _ring_bolt_windup_t <= 0.0:
-				_fire_ring_bolts()
-		else:
-			_ring_bolt_timer -= delta
-			# 与冲刺/落石互斥：冲刺锁定段或落石预警中不放环（冲刺中站定开环会撕裂位移）
-			if _ring_bolt_timer <= 0.0 and dist_sq < 640000.0 and not _pp_stun \
-					and _charge_windup < 0.0 and _charge_active <= 0.0 and _charge_brake <= 0.0 \
-					and _rock_windup_t < 0.0:
-				_ring_bolt_timer = ring_bolt_interval
-				_start_ring_bolt_cast()
-
-
-
-## 剑煞邪修·雷剑域：在玩家脚下铺持续伤害领域（复用毒潭骨架，染血煞色）。
-func _tick_field_cast(delta: float, player: Node2D, dist_sq: float) -> void:
-	# 剑煞邪修·雷剑域：在玩家脚下铺持续伤害领域（复用毒潭骨架，染血煞色）
-	if field_interval > 0.0 and _fuse < 0.0:
-		if _field_windup_t >= 0.0:
-			_field_windup_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			if _field_ring != null:
-				_field_ring.progress = 1.0 - _field_windup_t / maxf(field_windup, 0.001)
-				_field_ring.global_position = _field_target
-			if _field_windup_t <= 0.0:
-				_drop_field()
-		else:
-			_field_timer -= delta
-			if _field_timer <= 0.0 and dist_sq < 640000.0 and not _pp_stun:
-				_field_timer = field_interval
-				# 首圈不压顶：沿速度侧向偏出半步（持续领域治理），站桩与直跑玩家都只需侧移脱圈
-				_field_target = player.global_position \
-						+ aoe_zone_side_dir(player.velocity if player is CharacterBody2D else Vector2.ZERO) \
-						* GameBalance.aoe_zone_edge_offset(field_radius)
-				_start_field_cast()
-
-
-
-## 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打。
-func _tick_blink_strike_step(delta: float, player: Node2D) -> void:
-	# 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打
-	if blink_strike_interval > 0.0 and _fuse < 0.0:
-		_blink_strike_timer -= delta
-		if _blink_strike_timer <= 0.0 and not _pp_stun:
-			_blink_strike_timer = blink_strike_interval
-			_blink_strike(player)
-
-
-
-## 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）。
-func _tick_heal_pulse(delta: float) -> void:
-	# 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）
-	if heal_interval > 0.0 and _fuse < 0.0:
-		_heal_timer -= delta
-		if _heal_timer <= 0.0:
-			_heal_timer = heal_interval
-			_pulse_heal()
-
-
-
-## 毒妖系：周期性朝玩家所在地投一片毒潭（持续伤害区域，进入即按周期掉血）。
-func _tick_poison_cast(delta: float, player: Node2D, dist_sq: float) -> void:
-	# 毒妖系：周期性朝玩家所在地投一片毒潭（持续伤害区域，进入即按周期掉血）
-	if poison_interval > 0.0 and _fuse < 0.0:
-		if _poison_windup_t >= 0.0:
-			# 预警阶段：原地不动，落点圈填满 = 毒潭落下。
-			# 落点在起手那一帧锁死、之后不追踪玩家 —— 0.6s 还追踪的话玩家永远躲不开（同短咬口径）
-			_poison_windup_t -= delta
-			_pp_target_vel = Vector2.ZERO
-			if _poison_ring != null:
-				_poison_ring.progress = 1.0 - _poison_windup_t / maxf(poison_windup, 0.001)
-				# 预警圈每帧钉回落点：预警期间被击退/位移也不把圈带跑（落点早已锁死）
-				_poison_ring.global_position = _poison_target
-			if _poison_windup_t <= 0.0:
-				_drop_poison()
-		else:
-			_poison_timer -= delta
-			if _poison_timer <= 0.0 and dist_sq < poison_radius * poison_radius * 6.25:
-				_poison_timer = poison_interval
-				# 首潭不压顶：与雷剑域同一条持续领域治理，落点侧向偏出半步
-				_poison_target = player.global_position \
-						+ aoe_zone_side_dir(player.velocity if player is CharacterBody2D else Vector2.ZERO) \
-						* GameBalance.aoe_zone_edge_offset(poison_radius)
-				_start_poison_cast()
 
 
 func _resolve_velocity(delta: float) -> void:
@@ -2198,323 +1853,6 @@ func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 		_charge_aim_locked = false
 		_clear_charge_warning()
 
-## 自爆结算：范围内伤玩家，不掉落、不计击杀奖励
-# ---------------- 行为支路：自爆 ----------------
-
-func _explode(player: Node2D) -> void:
-	if dying:
-		return
-	_clear_explode_ring()
-	# 冲击波扫到 explode_radius 为止：扫过的范围就是受伤的范围（与判定同源）
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, explode_radius, GameStyle.BAD)
-	# 爆点留焦痕（纯视觉贴花，判定已在上方结算）。焦痕走全局共享闸（同 FloatingWeapon 裂痕
-	# 同一治理口径）：成群丹爆接连自爆不再把地面糊满黑斑，屏上至多一块焦痕。
-	if _fx_gap_gate(GROUND_SCORCH_MIN_GAP_MS, "scorch"):
-		GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.SCORCH, explode_radius * 0.7)
-	GameManager.feedback(GameManager.FeedbackTier.MEDIUM)
-	# 自爆也算战果：进击杀连击音阶（精英基准抬档同 _die 口径）
-	AudioManager.register_kill_pitch(die_pitch_base * KILL_PITCH_ELITE_MULT)
-	AudioManager.play_sfx("enemy_death_elite", 0.9)
-	if player.global_position.distance_to(global_position) <= explode_radius:
-		# 目标可能是被嘲讽改追的灵兽：Player 走两参受创链路，其余鸭子分派单参（同短咬口径）
-		if player is Player:
-			player.take_damage(contact_damage * 2.0, global_position)
-		elif player.has_method("take_damage"):
-			player.take_damage(contact_damage * 2.0)
-	_no_drop = true
-	_die()
-
-## 死亡弹幕：引信中途被击杀时向四周环形溅射（伤害走 bolt_damage 同一把回合缩放尺，幅度软一档）
-func _fire_death_bolts() -> void:
-	for i in range(maxi(1, death_bolt_count)):
-		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = global_position
-		bolt.direction = Vector2.from_angle(TAU * float(i) / float(maxi(1, death_bolt_count)))
-		bolt.speed = 300.0 * bolt_speed_mult
-		bolt.damage = bolt_damage * death_bolt_dmg_mult * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)
-		bolt.activate()
-	AudioManager.play_sfx("enemy_bolt", 0.6, 0.8)
-
-## 点燃丹爆引信预警圈：半径 = 判定半径（同源），引信烧完圈正好填满
-func _ignite_explode_ring() -> void:
-	if _explode_ring == null:
-		_explode_ring = AoeTelegraph.new()
-		_explode_ring.radius = explode_radius
-		add_child(_explode_ring)
-	_explode_ring.progress = 0.0
-	_explode_ring.visible = true
-
-## 清理丹爆预警圈（自爆结算 / 引信中途被杀时调用）
-func _clear_explode_ring() -> void:
-	if _explode_ring != null and is_instance_valid(_explode_ring):
-		_explode_ring.queue_free()
-	_explode_ring = null
-
-## 开始冲刺（预警结束后调用）：方向到此锁死，之后不再追踪玩家
-# ---------------- 行为支路：长扑冲刺 ----------------
-
-## 长扑锁向：charge_aim_lead > 0 时冲向「玩家当前位置 + 玩家速度 × lead」的预判点
-## （土豆兄弟 Goblin Shark 型：匀速直线跑位会被算进来，急停/变向则让它冲空）。
-## 玩家静止或无速度输入时退化为正对玩家的原方向，不引入额外误差。
-func _charge_aim_dir(player: Node2D, fallback: Vector2) -> Vector2:
-	if charge_aim_lead <= 0.0:
-		return fallback
-	var predicted: Vector2 = player.global_position + player.velocity * charge_aim_lead
-	var to_pred: Vector2 = predicted - global_position
-	return to_pred.normalized() if to_pred.length_squared() > 1.0 else fallback
-
-func _start_charge(dir: Vector2) -> void:
-	_charge_active = charge_duration
-	_charge_dir = dir
-	_charge_brake = 0.0
-	_charge_stagger = 0.0
-	_charge_hit = false
-	play_squash(Vector2(0.78, 1.24), 0.2)
-	# 起步扬尘：位移是瞬时满速，视觉就得卖「蹬地弹射」而不是「匀速滑出去」
-	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), dir)
-	# 烈雷兽变异：冲刺起步向左右两侧各放一排火球（犀牛 Mutation 同款）
-	if charge_side_bolts > 0:
-		var base_ang := dir.angle()
-		for side in [-1.0, 1.0]:
-			for i in range(charge_side_bolts):
-				var bolt := EnemyBolt.acquire(get_parent())
-				bolt.global_position = global_position
-				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
-				bolt.speed = 300.0 * bolt_speed_mult
-				bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 缩放基准见 BalanceWave.BOLT_DMG_BASE_REF（邪修基础接触伤，四类怪共用）
-				bolt.activate()
-	_clear_charge_warning()
-
-## 收势落空判定：要等整段承诺（冲刺 + 刹车）的扫掠都结算完才许罚站。
-## 冲刺归零那一帧的命中判定在本函数之后才跑（扫掠在 move_and_slide 之后），
-## 在冲刺段末尾判会漏掉"最后一帧才够到人"的那一冲 ⇒ 碾到了还罚站，玩家看不懂。
-## 落空才罚站（这是玩家侧身一步的奖励）；碾到人则不罚。
-## 链冲（变异烈雷兽）：还有剩余段数就不罚站，改走段间短预警；链尾才按原口径结算。
-func _settle_charge_recovery() -> void:
-	if _chain_left > 0:
-		_chain_left -= 1
-		_chain_t = GameBalance.MUT_CHILEI_CHAIN_GAP
-		return
-	if not _charge_hit and charge_whiff_stagger > 0.0:
-		_charge_stagger = charge_whiff_stagger
-		play_squash(Vector2(1.22, 0.78), 0.18)
-		# 2026-10-23：罚站起手当帧就把速度钉死。收势刹车走完时 velocity 还有 ~180px/s
-		# （brake_k 未完全归零），交给下一帧的 900px/s² 吸附插值刹会滑出 29px ——
-		# 判据实测「罚站 0.9s 内位移 29.4px」，与用户口径「罚站就是站桩挨打」相悖。
-		velocity = Vector2.ZERO
-		knockback_velocity = Vector2.ZERO
-
-## 更新冲刺预警线（预警期间每帧调用）
-func _update_charge_warning(player: Node2D) -> void:
-	if _charge_warning_line == null:
-		_charge_warning_line = Line2D.new()
-		# 带宽 = 判定走廊直径。Line2D 默认圆头端帽，所以画出来那颗胶囊就是
-		# 「玩家中心到本帧扫掠线段 ≤ charge_hit_radius」的点集本身 ⇒ 画多大 == 判多大
-		_charge_warning_line.width = charge_hit_radius * 2.0
-		_charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.2)
-		add_child(_charge_warning_line)
-
-	# 更新端点：画「真撞得到的那一段」，不是画到玩家身上。
-	# 旧写法线恒等于当前距离，玩家站在 450px 时线长 450、而冲刺只有 ~307px
-	# ⇒ 预告虚报 143px（看得见的那条线必须就是它真能撞到的范围）。
-	# 线长与扫掠判定、与判据 ⑧ 的实测位移，三处都取自 GameBalance.charge_reach 这一个式子。
-	# 预判型（charge_aim_lead>0）画预判点方向：玩家看线就能读出「它在算我的跑位」，
-	# 每帧跟玩家速度更新；末段锁向后改画已锁的 _charge_dir（单位向量 × reach，长度不变）——
-	# 线端点定住不再跟人，「线停了」就是「要冲了」。两种态线长都 == 真实可达距离。
-	var reach: float = GameBalance.charge_reach(move_speed * charge_speed_mul, charge_duration, charge_brake_time)
-	var local_target: Vector2
-	if _charge_aim_locked:
-		local_target = _charge_dir * reach
-	else:
-		var aim_target: Vector2 = player.global_position + player.velocity * charge_aim_lead
-		local_target = aim_target - global_position
-		if local_target.length() > reach:
-			local_target = local_target.normalized() * reach
-	# 原地覆写点 1 位置，避免每帧 clear_points + add_point 重建 PackedVector2Array
-	if _charge_warning_line.get_point_count() < 2:
-		_charge_warning_line.clear_points()
-		_charge_warning_line.add_point(Vector2.ZERO)
-		_charge_warning_line.add_point(local_target)
-	else:
-		_charge_warning_line.set_point_position(1, local_target)
-
-	# 闪烁效果：宽带只能压透明度，否则一条带子糊掉半个场地（稀缺反馈预算）。
-	# 基线从 0.15 提到 0.20：0.05~0.25 的旧区间在亮地面/密集弹幕里几乎读不出来。
-	# 锁向后停闪、定在 0.34（略高于闪烁峰 0.32）：端点停住 + 亮度走稳，
-	# 双信号合成「方向已定」的读数。
-	var alpha: float = 0.34 if _charge_aim_locked else 0.20 + 0.12 * sin(_charge_windup * 12.0)
-	_charge_warning_line.default_color.a = alpha
-
-## 清理预警线
-func _clear_charge_warning() -> void:
-	if _charge_warning_line != null:
-		_charge_warning_line.queue_free()
-		_charge_warning_line = null
-
-## 发射火球（御剑邪修；bolt_count>1 时按 bolt_spread 扇形展开，剑煞邪修三连击）
-# ---------------- 行为支路：远程火球 ----------------
-
-const BOLT_WINDUP_TINT := Color(1.9, 1.35, 0.85)  ## 蓄力本体暖色提亮（比自爆引信的 2.2 档淡，一读是「要出手」不是「要炸了」）
-const BOLT_GATHER_INTERVAL := 0.12  ## 蓄力期灵力汇聚粒子续发间隔（低频，走 FxParticlePool 的 SOUL_ORB 帧闸）
-const BOLT_GATHER_OFFSET := 26.0    ## 汇聚粒子相对器尖的初始偏移半径（从身周收束向器尖）
-
-## 起手蓄力：站定 + 变色 + 形变 + 低音量引信声。方向不在此锁（出手那帧才锁，蓄力期只作预告读法）
-func _start_bolt_windup() -> void:
-	_bolt_windup_t = maxf(bolt_windup, 0.05)
-	_bolt_windup_total = _bolt_windup_t
-	_bolt_gather_cd = 0.0
-	_bolt_base_tint = anim_sprite.modulate
-	anim_sprite.modulate = BOLT_WINDUP_TINT
-	play_squash(Vector2(1.14, 0.88), _bolt_windup_t)
-	AudioManager.play_sfx("enemy_fuse", 0.4)
-	# 起手当帧就进施法姿态（>0 即 casting），避免首帧剑仍停在巡航位再跳一下
-	if procedural_view != null:
-		procedural_view.special_state = 0.001
-
-## 蓄力期推进（每物理帧）：算 0→1 进度写进 special_state（驱动器尖聚能球由小到大），
-## 并低频续发向器尖收束的灵力微粒。器尖聚能 = 施法「正在攒劲」的可读读数。
-func _tick_bolt_windup(delta: float) -> void:
-	_bolt_windup_t -= delta
-	var progress: float = 0.0
-	if _bolt_windup_total > 0.001:
-		progress = clampf(1.0 - _bolt_windup_t / _bolt_windup_total, 0.0, 1.0)
-	if procedural_view != null:
-		procedural_view.special_state = progress
-		procedural_view.aim_dir = _bolt_windup_dir
-	# 灵力汇聚微粒：只对施法读法有意义的邪修系（有法剑器尖）发放，且走 SOUL_ORB 帧闸
-	if _bolt_gather_cd <= 0.0 and procedural_view != null:
-		_bolt_gather_cd = BOLT_GATHER_INTERVAL
-		var tip: Vector2 = procedural_view.get_weapon_tip_global_pos()
-		var out_dir: Vector2 = (_bolt_windup_dir if _bolt_windup_dir.length_squared() > 0.001 else Vector2.RIGHT)
-		# 从器尖反向偏移一圈外沿出发，粒子顺向收束到器尖（FX 内部有上浮/汇聚感）
-		var gather_pos: Vector2 = tip - out_dir * BOLT_GATHER_OFFSET
-		FxParticlePool.burst(FxParticlePool.SOUL_ORB, gather_pos, _bolt_gather_color(), 0.8, false, out_dir)
-	else:
-		_bolt_gather_cd -= delta
-
-## 灵力汇聚/打断四散的配色：剑煞血红、御剑幽蓝（与弹体色温同源）
-func _bolt_gather_color() -> Color:
-	var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
-	return GameStyle.FX_HDR_CRIT if is_jiansha else GameStyle.FX_HDR_WATER
-
-## 蓄力被打断（受击硬直等）时还原本体色，蓄力作废不补发（硬直窗口就是玩家的反打奖励）
-## 同时把已聚拢的灵力「炸散」：一撮微粒反向迸出，强化「打断成功」的反馈读数
-func _cancel_bolt_windup() -> void:
-	if _bolt_windup_t < 0.0:
-		return
-	_bolt_windup_t = -1.0
-	_bolt_windup_total = 0.0
-	anim_sprite.modulate = _bolt_base_tint
-	if procedural_view != null:
-		procedural_view.position.x = 0.0
-		procedural_view.special_state = 0.0
-		# 打断四散：从器尖处迸一小撮灵光（bypass 帧闸：低频、且这是玩家挣来的反馈，不该被受击火花挤掉）
-		var tip: Vector2 = procedural_view.get_weapon_tip_global_pos()
-		FxParticlePool.burst(FxParticlePool.SOUL_ORB, tip, _bolt_gather_color(), 1.0, true)
-
-func _fire_bolt(player: Node2D) -> void:
-	_bolt_windup_t = -1.0
-	_bolt_windup_total = 0.0
-	anim_sprite.modulate = _bolt_base_tint
-	# 出手方向最后锁死：蓄力期玩家已看过预告，锁死的是「预告过的那个方向」
-	var base_dir: Vector2 = (player.global_position - global_position).normalized()
-
-	# 出膛点对齐法剑器尖（避免从肚脐中心凭空刷出）
-	var spawn_pos: Vector2 = global_position
-	if procedural_view != null:
-		spawn_pos = procedural_view.get_weapon_tip_global_pos()
-		procedural_view.trigger_recoil(base_dir)
-
-		var is_jiansha := (enemy_id == "jiansha_elite" or name.to_lower().begins_with("jiansha"))
-		var is_xuanming := (enemy_id == "xuanming_elite" or name.to_lower().begins_with("xuanming"))
-		for i in range(maxi(1, bolt_count)):
-			# 火球走对象池（2026-10-11）：远程妖周期直射不再走 instantiate/free
-			var bolt := EnemyBolt.acquire(get_parent())
-			bolt.global_position = spawn_pos
-			var offset_ang := 0.0
-			if bolt_count > 1:
-				offset_ang = (float(i) - float(bolt_count - 1) * 0.5) * bolt_spread
-			bolt.direction = base_dir.rotated(offset_ang)
-			bolt.speed = 300.0 * bolt_speed_mult
-			if bolt_curve_ang != 0.0:
-				bolt.angular_speed = bolt_curve_ang
-			bolt.damage = bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)  # 随回合缩放比例与接触伤害一致（基准取邪修基础值 13）
-			bolt.sword_style = true
-			bolt.purple_style = is_jiansha or is_xuanming
-			bolt.activate()
-		play_squash(Vector2(1.16, 0.84), 0.16)
-		AudioManager.play_sfx("enemy_bolt", 0.7)
-		if get_parent() != null:
-			# 出膛爆闪色温与弹体同源（火球炽阳 / 剑气赤煞炽阳 / 剑煞绯金），HDR 起辉读得出「这是什么弹」
-			var pop_col := GameStyle.FX_HDR_CRIT if (is_jiansha or is_xuanming) else GameStyle.FX_HDR_FIRE
-			JuiceEffect.spawn_impact_pop(get_parent(), spawn_pos, pop_col, base_dir)
-
-## 鼓妖光环：范围内同伴获得短时加速（0.4s 有效期，光环脉冲每 0.25s 续期）
-# ---------------- 行为支路：鼓妖光环 ----------------
-
-func _pulse_buff_aura() -> void:
-	var radius_sq := buff_radius * buff_radius
-	# 快照遍历照 _die 击杀链的 _explode_snap_pool 模式（2026-10-24）：receive_aura 今天只写
-	# 字段不动登记表，但「对同伴生效」的循环一旦后续加入可致死效果，循环内 swap-remove 会
-	# 静默跳过末尾同伴；钉死在快照上，验活口径也与击杀链对齐
-	var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
-	snap.append_array(GameManager.live_enemies)
-	for e in snap:
-		if e == null or not is_instance_valid(e):
-			continue
-		if e == self or not (e is EnemyBase) or e.dying:
-			continue
-		if global_position.distance_squared_to(e.global_position) <= radius_sq:
-			e.receive_aura(buff_speed_mult, 400)
-	snap.clear()
-	_explode_snap_pool.push_back(snap)
-
-## 被鼓妖光环覆盖：取最高倍率，过期待遇由 _physics_process 自动清除。
-## 首次被罩到（边沿）发一圈冲击波提示「它被加速了」；常驻脉冲只续期不再发，防刷屏。
-func receive_aura(mult: float, duration_ms: int) -> void:
-	if dying:
-		return
-	_aura_speed_mult = maxf(_aura_speed_mult, mult)
-	_aura_until_ms = Time.get_ticks_msec() + duration_ms
-	if not _aura_shown:
-		_aura_shown = true
-		if procedural_view != null:
-			procedural_view.aura_level = 1.0
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, 22.0, GameStyle.JADE, 0.24)
-
-## 蛛母产卵：幼体在自身周围落点，生命/伤害按当前回合 × 危险度缩放（与 WaveSpawner._scale_to_wave 同一把尺子）
-# ---------------- 行为支路：产卵 / 闪现 / 分裂 ----------------
-
-func _spawn_minion() -> void:
-	if minion_scene == null:
-		return
-	var m := EnemyBase.acquire_or_new(minion_scene)
-	if m == null:
-		return
-	m.reset_for_reuse()
-	var angle := GameManager.rng.randf() * TAU
-	m.global_position = global_position + Vector2(cos(angle), sin(angle)) * GameBalance.MINION_SCATTER_RADIUS
-	m.max_hp = ceilf(m.max_hp * GameBalance.enemy_hp_mult(GameManager.wave_number) * GameBalance.danger_hp_mult(GameManager.danger_level))
-	m.contact_damage = ceilf(m.contact_damage * GameBalance.enemy_dmg_mult(GameManager.wave_number) * GameBalance.danger_dmg_mult(GameManager.danger_level))
-	m.add_to_group("enemies")
-	m.activate()
-	get_parent().call_deferred("add_child", m)
-	if procedural_view != null:
-		procedural_view.trigger_cast_pulse()
-	play_squash(Vector2(1.22, 0.78), 0.2)
-	# 产卵不是击杀：pitch_override 直传，绕开击杀连击阶梯（也不推层）
-	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
-
-## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一个淡出剪影当残影
-func _teleport_near_player(player: Node2D) -> void:
-	_spawn_teleport_ghost()
-	var angle := GameManager.rng.randf() * TAU
-	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * GameBalance.BLINK_DISTANCE
-	var lim: float = GameManager.MAP_HALF_EXTENT - GameBalance.BLINK_MAP_INSET
-	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	play_squash(Vector2(1.3, 0.7), 0.2)
-	AudioManager.play_sfx("enemy_blink", 0.8)   ## 妖异残影是「下坠」，不许借玩家缩地成寸的 dodge
-
 ## 闪现残影：在旧位置生成一个本体的半透明剪影，快速淡出（区别于命中火花）
 ## 程序化视图走矢量剪影（复用同一份 EnemyVisualConfig）；无程序化配置才回退图集帧。
 ## 2026-10-13：图集在程序化敌种下不再加载，这条回退分支当前不会命中，保留为兜底。
@@ -2599,317 +1937,6 @@ func _split_offspring() -> void:
 		child.add_to_group("enemies")
 		child.activate()
 		get_parent().call_deferred("add_child", child)
-
-# ---------------- 行为支路：精英变异·震地（铁甲巨怪） ----------------
-
-func _start_elite_slam() -> void:
-	_elite_slam_windup_t = slam_windup
-	if _elite_slam_ring == null:
-		_elite_slam_ring = AoeTelegraph.new()
-		add_child(_elite_slam_ring)
-	# 半径每帧按当前字段钉死：变异升档 / 池化复用后字段会变，圈必须与本次判定同源
-	_elite_slam_ring.radius = slam_radius
-	_elite_slam_ring.progress = 0.0
-	_elite_slam_ring.visible = true
-	AudioManager.play_sfx("enemy_fuse", 0.6)
-	play_squash(Vector2(0.82, 1.2), 0.4)
-
-func _resolve_elite_slam(player: Node2D) -> void:
-	_elite_slam_windup_t = -1.0
-	if _elite_slam_ring != null:
-		_elite_slam_ring.visible = false
-	if dying:
-		return
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, slam_radius, GameStyle.BAD)
-	# 落点留震裂（纯视觉贴花，判定已在下方结算）
-	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.CRACK, slam_radius)
-	AudioManager.play_sfx("enemy_slam", 0.8)
-	if player != null and player.global_position.distance_to(global_position) <= slam_radius:
-		var slam_dmg := maxf(1.0, contact_damage * slam_dmg_mult)
-		if player is Player:
-			player.take_damage(slam_dmg, global_position)
-		elif player.has_method("take_damage"):
-			player.take_damage(slam_dmg)
-	# 变异多段震地：首段结算后按 slam_echo_gap 间隔追加余波，半径逐段 ×slam_radius_grow。
-	# 余波不再亮预警圈（首段圈已给出「以本体为圆心」的读法），只靠冲击环 + 裂痕 + 音效读段。
-	# 震屏/反馈只在首段发一次（坑6：同一次挨打只许一处发反馈）。
-	if slam_hits > 1:
-		_slam_echo_left = slam_hits - 1
-		_slam_echo_t = slam_echo_gap
-		_slam_echo_radius = slam_radius * slam_radius_grow
-
-## 变异震地余波：按段间隔结算，半径逐段扩张；每段独立判玩家是否在圈内
-func _tick_slam_echo(delta: float, player: Node2D) -> void:
-	if _slam_echo_t < 0.0:
-		return
-	_slam_echo_t -= delta
-	if _slam_echo_t > 0.0:
-		return
-	if _slam_echo_left <= 0:
-		_slam_echo_t = -1.0
-		return
-	if dying or get_parent() == null:
-		_slam_echo_t = -1.0
-		return
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, _slam_echo_radius, GameStyle.BAD)
-	GroundDecal.spawn(get_parent(), global_position, GroundDecal.Kind.CRACK, _slam_echo_radius)
-	AudioManager.play_sfx("enemy_slam", 0.65, 1.08)
-	if player != null and is_instance_valid(player) and player.global_position.distance_to(global_position) <= _slam_echo_radius:
-		var slam_dmg := maxf(1.0, contact_damage * slam_dmg_mult)
-		if player is Player:
-			player.take_damage(slam_dmg, global_position)
-		elif player.has_method("take_damage"):
-			player.take_damage(slam_dmg)
-	_slam_echo_left -= 1
-	_slam_echo_radius *= slam_radius_grow
-	_slam_echo_t = slam_echo_gap if _slam_echo_left > 0 else -1.0
-
-# ---------------- 行为支路：铁甲魔傀·落石轰炸 ----------------
-
-## 起手落石：锁定 rock_count 个落点，每点挂一个填满式预警圈（半径 = rock_radius 同源）。
-## 首点锁玩家预判位（rock_lead），其余绕玩家均布 + 抖动散布 —— 原地站桩必吃首点，
-## 绕圈跑位则可能踩进散布点，逼迫玩家做「短距离变向」而不是无脑绕大圈。
-func _start_rock_barrage(player: Node2D) -> void:
-	_rock_windup_t = rock_windup
-	_rock_points.clear()
-	_clear_rock_rings()
-	var lead: Vector2 = player.velocity * rock_lead if player is CharacterBody2D else Vector2.ZERO
-	var first: Vector2 = player.global_position + lead
-	_rock_points.append(first)
-	var count: int = maxi(rock_count, 1)
-	for i in range(1, count):
-		# 均布角 + 随机相位抖动：多点不叠在同一方向，玩家读得出「这片区域都要躲」
-		var ang: float = TAU * float(i) / float(maxi(count - 1, 1)) + GameManager.rng.randf_range(-0.35, 0.35)
-		var dist: float = GameManager.rng.randf_range(rock_spread * 0.45, rock_spread)
-		_rock_points.append(first + Vector2(cos(ang), sin(ang)) * dist)
-	var parent := get_parent()
-	if parent == null:
-		return
-	for p in _rock_points:
-		var ring := AoeTelegraph.new()
-		ring.radius = rock_radius
-		ring.progress = 0.0
-		parent.add_child(ring)
-		ring.global_position = p
-		_rock_rings.append(ring)
-	play_squash(Vector2(0.84, 1.18), 0.3)
-	AudioManager.play_sfx("enemy_fuse", 0.6)
-
-## 落石结算：逐点判玩家是否在半径内；每点留焦痕与冲击环（画多大判多大）。
-## 音效只在首点发一次：多点同帧叠 3~4 重 enemy_slam 会糊成一片噪音。
-func _resolve_rock_barrage(player: Node2D) -> void:
-	_rock_windup_t = -1.0
-	_clear_rock_rings()
-	if dying or get_parent() == null:
-		return
-	var first := true
-	for p in _rock_points:
-		JuiceEffect.spawn_shockwave(get_parent(), p, rock_radius, GameStyle.BAD, 0.3)
-		GroundDecal.spawn(get_parent(), p, GroundDecal.Kind.SCORCH, rock_radius * 0.6)
-		if first:
-			AudioManager.play_sfx("enemy_slam", 0.85)
-			first = false
-		if player != null and is_instance_valid(player) and player.global_position.distance_to(p) <= rock_radius:
-			var rock_dmg := maxf(1.0, contact_damage * rock_dmg_mult)
-			if player is Player:
-				player.take_damage(rock_dmg, p)
-			elif player.has_method("take_damage"):
-				player.take_damage(rock_dmg)
-	_rock_points.clear()
-
-## 清理落石预警圈（结算 / 死亡 / 池化复用前调用）
-func _clear_rock_rings() -> void:
-	for ring in _rock_rings:
-		if ring != null and is_instance_valid(ring):
-			ring.queue_free()
-	_rock_rings.clear()
-
-# ---------------- 行为支路：赤雷兽·雷环齐射 ----------------
-
-## 雷环起手：短前摇站定，给玩家「要放全向环」的读法（前摇比震地短，但弹速慢可绕）
-func _start_ring_bolt_cast() -> void:
-	_ring_bolt_windup_t = maxf(ring_bolt_windup, 0.05)
-	play_squash(Vector2(1.16, 0.86), _ring_bolt_windup_t)
-	AudioManager.play_sfx("enemy_fuse", 0.5, 1.1)
-	if procedural_view != null:
-		procedural_view.special_state = 0.001
-
-## 雷环出膛：全向均布，弧线角速度让弹幕形成旋臂（正面缝隙会转走，不能站桩等）
-func _fire_ring_bolts() -> void:
-	_ring_bolt_windup_t = -1.0
-	if dying or get_parent() == null:
-		return
-	if procedural_view != null:
-		procedural_view.special_state = 0.0
-	var count: int = maxi(ring_bolt_count, 1)
-	var dmg := maxf(1.0, contact_damage * ring_bolt_dmg_mult)
-	var offset_ang := GameManager.rng.randf() * TAU
-	for i in range(count):
-		var ang := offset_ang + TAU * float(i) / float(count)
-		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = global_position
-		bolt.direction = Vector2(cos(ang), sin(ang))
-		bolt.speed = ring_bolt_speed * bolt_speed_mult
-		bolt.damage = dmg
-		bolt.angular_speed = ring_bolt_curve_ang
-		bolt.activate()
-	play_squash(Vector2(1.2, 0.8), 0.16)
-	AudioManager.play_sfx("enemy_bolt", 0.7)
-	if get_parent() != null:
-		JuiceEffect.spawn_impact_pop(get_parent(), global_position, GameStyle.BAD, Vector2.ZERO)
-
-# ---------------- 行为支路：剑煞邪修·雷剑域 ----------------
-
-## 落域起手：锁定玩家脚下，亮填满式预警圈（半径 = field_radius 同源）
-func _start_field_cast() -> void:
-	_field_windup_t = maxf(field_windup, 0.05)
-	if _field_ring == null:
-		_field_ring = AoeTelegraph.new()
-		add_child(_field_ring)
-	_field_ring.radius = field_radius
-	_field_ring.progress = 0.0
-	_field_ring.visible = true
-	_field_ring.global_position = _field_target
-	play_squash(Vector2(0.86, 1.16), field_windup)
-	AudioManager.play_sfx("enemy_fuse", 0.55, 0.9)
-
-## 落域：在锁定点铺一片持续伤害领域（复用 PoisonPool 骨架，血煞染色走 modulate 乘法）
-func _drop_field() -> void:
-	_field_windup_t = -1.0
-	if _field_ring != null:
-		_field_ring.visible = false
-	if dying or get_parent() == null:
-		return
-	var pool := PoisonPool.acquire(get_parent())
-	pool.global_position = _field_target
-	pool.damage = maxf(1.0, contact_damage * field_dmg_mult)
-	pool.duration = field_duration
-	# 预警圈半径 = field_radius ⇒ 领域判定必须同源：scale_factor 驱动外观与碰撞一起缩
-	pool.scale_factor = field_radius / PoisonPool.RADIUS
-	pool.activate()
-	# 血煞染色：modulate 是乘法，复用同一套毒潭几何不新增绘制路径。
-	# 必须在 activate 之后写（池化复用的 _reset_defaults 不管 modulate，毒妖路径会显式归白）
-	pool.modulate = Color(1.55, 0.45, 0.55)
-	JuiceEffect.spawn_shockwave(get_parent(), _field_target, field_radius, GameStyle.BAD, 0.28)
-	AudioManager.play_sfx("enemy_poison", 1.0, 0.85)
-	play_squash(Vector2(1.2, 0.8), 0.16)
-
-# ---------------- 行为支路：剑煞邪修·瞬身回斩（变异专属） ----------------
-
-## 瞬身到玩家侧翼 + 立刻扇形剑气反打：先给残影读「它换了位置」，再出弹读「从哪打来」。
-## 落点受界碑约束，避免卡进地图外；剑气走 sword_style + purple_style（剑煞血光配色）。
-func _blink_strike(player: Node2D) -> void:
-	if player == null or not is_instance_valid(player):
-		return
-	_spawn_teleport_ghost()
-	var angle := GameManager.rng.randf() * TAU
-	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * blink_strike_dist
-	var lim: float = GameManager.MAP_HALF_EXTENT - GameBalance.BLINK_MAP_INSET
-	global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	play_squash(Vector2(1.3, 0.7), 0.2)
-	AudioManager.play_sfx("enemy_blink", 0.8)
-	if dying or get_parent() == null:
-		return
-	var base_dir: Vector2 = (player.global_position - global_position).normalized()
-	var count: int = maxi(blink_strike_bolts, 1)
-	var dmg := bolt_damage * (contact_damage / GameBalance.BOLT_DMG_BASE_REF)
-	for i in range(count):
-		var offset_ang := (float(i) - float(count - 1) * 0.5) * blink_strike_bolt_arc * 2.0
-		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = global_position
-		bolt.direction = base_dir.rotated(offset_ang)
-		bolt.speed = 300.0 * bolt_speed_mult
-		bolt.damage = dmg
-		bolt.sword_style = true
-		bolt.purple_style = true
-		bolt.activate()
-	AudioManager.play_sfx("enemy_bolt", 0.65, 1.1)
-
-# ---------------- 行为支路：灵医治疗 ----------------
-
-func _pulse_heal() -> void:
-	var radius_sq := heal_radius * heal_radius
-	var healed_any := false
-	# 快照遍历同 _pulse_buff_aura（2026-10-24）：receive_heal 不致死，钉死快照后
-	# 后续加「过疗反噬」之类可致死效果不会再踩循环内 swap-remove 的坑
-	var snap: Array = _explode_snap_pool.pop_back() if not _explode_snap_pool.is_empty() else []
-	snap.append_array(GameManager.live_enemies)
-	for e in snap:
-		if e == null or not is_instance_valid(e):
-			continue
-		if e == self or not (e is EnemyBase) or e.dying:
-			continue
-		if global_position.distance_squared_to(e.global_position) > radius_sq:
-			continue
-		if e.current_hp >= e.max_hp:
-			continue
-		e.receive_heal(heal_amount)
-		healed_any = true
-	snap.clear()
-	_explode_snap_pool.push_back(snap)
-	# 2026-10-16 演出去噪：演出环每跳只发一次（旧写法 if 缩进在 for 内，一跳奶到 N 个
-	# 残血同伴就同帧叠 N 个 240px 大绿圈 + N 重音效——治疗环是全游戏最大的冲击环，群奶糊屏）。
-	# 治疗本身照常逐个结算；「谁在被奶」的受者读数由 receive_heal 里的 heal_rise 逐个亮，不丢信息。
-	if healed_any:
-		if procedural_view != null:
-			procedural_view.trigger_cast_pulse()
-		JuiceEffect.spawn_shockwave(get_parent(), global_position, heal_radius, GameStyle.GOOD, 0.35)
-		AudioManager.play_sfx("heal", 0.5)
-		play_squash(Vector2(1.18, 0.84), 0.18)
-
-func receive_heal(amount: float) -> void:
-	if dying:
-		return
-	# 入口闸：负治疗会静默扣血且不走 _die，血量与状态机错位（同 Player.heal 的 amount<=0 口径）
-	if amount <= 0.0:
-		return
-	current_hp = minf(max_hp, current_hp + amount)
-	if not _offscreen:
-		DamageNumber.spawn(get_parent(), global_position, int(amount), false, "+%d" % int(amount))
-		# 治疗可视出口（2026-10-14 P1）：受者身上升起青绿灵光，满屏也能读出「谁在被奶」
-		JuiceEffect.spawn_heal_rise(get_parent(), global_position)
-	play_squash(Vector2(1.1, 0.9), 0.14)
-
-# ---------------- 行为支路：投毒（持续伤害区域） ----------------
-
-## 起手投毒：锁定落点、亮预警圈、发蓄力形变与音效。
-## 预警圈（AoeTelegraph）半径 = poison_radius 本身 ⇒ 圈画多大，落下的毒潭就判多大。
-func _start_poison_cast() -> void:
-	_poison_windup_t = poison_windup
-	if _poison_ring == null:
-		_poison_ring = AoeTelegraph.new()
-		_poison_ring.radius = poison_radius
-		add_child(_poison_ring)
-	_poison_ring.progress = 0.0
-	_poison_ring.global_position = _poison_target  ## 预警圈挂在锁定落点（毒潭将落于此，而非施法者脚下）
-	_poison_ring.visible = true
-	play_squash(Vector2(0.86, 1.18), poison_windup)
-	AudioManager.play_sfx("enemy_fuse", 0.55)
-
-## 落潭：预警结束，在锁定落点铺一片毒潭（走对象池，见 PoisonPool）。
-## 伤害按回合 × 危险度缩放（与接触伤害同一条尺子：WaveSpawner 在 _scale_to_wave 里注入）。
-func _drop_poison() -> void:
-	_poison_windup_t = -1.0
-	if _poison_ring != null:
-		_poison_ring.visible = false
-	if dying or get_parent() == null:
-		return
-	var pool := PoisonPool.acquire(get_parent())
-	pool.global_position = _poison_target
-	pool.damage = maxf(1.0, poison_damage)
-	pool.duration = poison_duration
-	# 预警圈半径 = poison_radius ⇒ 落潭判定必须同源：scale_factor 驱动外观与碰撞一起缩
-	pool.scale_factor = poison_radius / PoisonPool.RADIUS
-	pool.activate()
-	JuiceEffect.spawn_shockwave(get_parent(), _poison_target, poison_radius, GameStyle.POISON, 0.28)
-	AudioManager.play_sfx("enemy_poison", 1.0, GameManager.rng.randf_range(0.92, 1.08))
-	play_squash(Vector2(1.2, 0.8), 0.16)
-
-## 清理投毒预警圈（死亡 / 池化复用前调用）
-func _clear_poison_ring() -> void:
-	if _poison_ring != null and is_instance_valid(_poison_ring):
-		_poison_ring.queue_free()
-	_poison_ring = null
 
 # ---------------- AoE 预警公平线（画多大就给多久，2026-10-31 治理） ----------------
 

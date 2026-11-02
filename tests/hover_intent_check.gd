@@ -205,8 +205,9 @@ func _case_layer_scene() -> void:
 	_world.queue_free()
 
 ## 摆一只邪修到玩家正下方 dist 处（截图那个方位：bank≈0，全靠纵向通道）
+## 出厂数值在 EnemyData.stats（2026-11-02 收编），只有工厂 acquire_or_new 会装配
 func _spawn_xiexiu(dist: float) -> EnemyBase:
-	var e: EnemyBase = load("res://scenes/entities/XieXiuEnemy.tscn").instantiate() as EnemyBase
+	var e: EnemyBase = EnemyBase.acquire_or_new(load("res://scenes/entities/XieXiuEnemy.tscn"))
 	e.global_position = _player.global_position + Vector2(0.0, dist)
 	_world.add_child(e)
 	return e

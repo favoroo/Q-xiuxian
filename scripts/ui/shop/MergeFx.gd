@@ -254,7 +254,7 @@ static func _make_ring(overlay: Control, center: Vector2, ring_size: float, col:
 	ring.scale = Vector2(0.35, 0.35)
 	if delay > 0.0:
 		ring.modulate.a = 0.0
-	var ring_box := GameStyle.outlined_panel(Color(0, 0, 0, 0), col, 3, 0.0)
+	var ring_box := GameStyle.outlined_panel(Color.TRANSPARENT, col, 3, 0.0)
 	ring_box.set_corner_radius_all(int(ring_size * 0.5))
 	ring.add_theme_stylebox_override("panel", ring_box)
 	overlay.add_child(ring)
