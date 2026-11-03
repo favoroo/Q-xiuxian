@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.21",
+			"date": "2026-11-04",
+			"title": "反向横屏与机关维护窗口",
+			"items": [
+				"手机横竖屏随意翻转都能玩。",
+				"机关维修要站定完成，期间停火。",
+				"机关耐久四十改三十，掉得更快。",
+				"修复一屏六卡时悟道面板超屏划不动。",
+			],
+		},
+		{
 			"version": "v0.1.20",
 			"date": "2026-11-03",
 			"title": "机关布设与收回修复",
