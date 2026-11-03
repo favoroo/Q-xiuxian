@@ -11,7 +11,8 @@ extends Node
 ##
 ## 口径声明（与线上完全一致的部分）：
 ##   · 刷怪预算      = BalanceWave.wave_spawn_budget(wave) × 危险度规模乘区 × 角色敌潮乘区
-##   · 单怪金币      = 宝石金币腿 = exp_reward × MOB_KILL_EXP_MULT（未中碎金档时）
+##   · 单怪金币      = 宝石金币腿 = mob_kill_stone(exp_reward)（未中碎金档时；只乘基础 1.75，
+##                     不跟深层经验补偿一起放大）
 ##                     中碎金档（概率 gem_shard_chance）：金币腿折到 1 枚
 ##                     丹爆傀儡（heal_orb_drop > 0）：掉回血珠，**不掉宝石** ⇒ 金币腿为 0
 ##                   精英：ELITE_GEM_COUNT(5) 颗 × ELITE_GEM_EXP + ELITE_STONE_BONUS
@@ -52,7 +53,7 @@ func _run() -> void:
 	var total := 0
 	var harvest_v := 0.0
 
-	for wave in range(1, 21):
+	for wave in range(1, 41):
 		var budget := int(round(float(GameBalance.wave_spawn_budget(wave)) * danger_count_mult))
 		var mix_result := _wave_mix(wave)   ## {mix: Dictionary, avg: float}
 		var mix: Dictionary = mix_result["mix"]
@@ -68,7 +69,7 @@ func _run() -> void:
 			var has_gem: bool = bool(row["has_gem"])
 			if not has_gem:
 				continue
-			var per_mob := (1.0 - shard_chance) * exp_v * float(GameBalance.MOB_KILL_EXP_MULT) \
+			var per_mob := (1.0 - shard_chance) * float(GameBalance.mob_kill_stone(int(exp_v))) \
 				+ shard_chance * float(GameBalance.GEM_SHARD_STONE_VALUE)
 			kill_stones += float(budget) * share * per_mob
 
@@ -83,15 +84,17 @@ func _run() -> void:
 		if wave >= int(EnemyData.LOOTER_DEF["min_wave"]):
 			looter = float(EnemyData.LOOTER_DEF["chance"]) * float(GameBalance.looter_stone_reward(wave))
 
-		# —— 精英（W5/W15）/ Boss（W10/W20）——
+		# —— 精英（W5/W15/深层每关）/ Boss（W10/W20/深层每 5 波）——
 		var boss_stones := 0.0
 		var elite_stones := 0.0
 		if GameBalance.is_boss_wave(wave):
-			boss_stones = float(GameBalance.BOSS_STONE_REWARD) \
-				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP)
+			boss_stones = float(GameBalance.boss_spawn_count_for_wave(wave, DANGER)) * (
+				float(GameBalance.BOSS_STONE_REWARD)
+				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP))
 		elif GameBalance.is_elite_wave(wave):
-			elite_stones = float(GameBalance.ELITE_STONE_BONUS) \
-				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP)
+			elite_stones = float(GameBalance.elite_spawn_count_for_wave(wave, DANGER)) * (
+				float(GameBalance.ELITE_STONE_BONUS)
+				+ float(GameBalance.ELITE_GEM_COUNT) * float(GameBalance.ELITE_GEM_EXP))
 
 		# —— 灵韵（harvest 复利）——
 		var harvest_gain := int(round(harvest_v))
@@ -107,7 +110,7 @@ func _run() -> void:
 		harvest_v = GameBalance.harvest_next(harvest_v, wave, GameManager.HARVEST_GROWTH_WAVE_CAP)
 
 	print("".lpad(104, "-"))
-	print("20 波累计：%d 枚金币（裸装、无灵韵、无道具加成）" % total)
+	print("40 波累计：%d 枚金币（裸装、无灵韵、无道具加成）" % total)
 	print("")
 	print("【提前清场余时赏】额外金币")
 	for secs in [5.0, 10.0, 20.0, 40.0]:
@@ -159,14 +162,14 @@ func _derived_stones(wave: int, mix: Dictionary) -> float:
 	var xueyong_share: float = 0.0
 	if mix.has("xueyong"):
 		xueyong_share = float(mix["xueyong"]["share"])
-	var per_slime := (1.0 - shard_chance) * 3.0 * float(GameBalance.MOB_KILL_EXP_MULT) \
+	var per_slime := (1.0 - shard_chance) * float(GameBalance.mob_kill_stone(3)) \
 		+ shard_chance * float(GameBalance.GEM_SHARD_STONE_VALUE)
 	var out: float = budget * xueyong_share * 3.0 * per_slime
 	# 百目妖（W14 起）：每 3.5 秒产 1 只蜂群（2exp），按 80s 回合上限估 ≈ 22 只/只
 	var zhumu_share: float = 0.0
 	if mix.has("zhumu"):
 		zhumu_share = float(mix["zhumu"]["share"])
-	var per_fengqun := (1.0 - shard_chance) * 2.0 * float(GameBalance.MOB_KILL_EXP_MULT) \
+	var per_fengqun := (1.0 - shard_chance) * float(GameBalance.mob_kill_stone(2)) \
 		+ shard_chance * float(GameBalance.GEM_SHARD_STONE_VALUE)
 	out += budget * zhumu_share * 22.0 * per_fengqun
 	return out

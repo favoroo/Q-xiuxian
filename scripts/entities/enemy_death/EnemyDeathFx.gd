@@ -158,14 +158,17 @@ static func drops(e) -> void:
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS),
 				GameManager.rng.randf_range(-GameBalance.GEM_SCATTER_RADIUS, GameBalance.GEM_SCATTER_RADIUS))
 		gem.global_position = e.global_position + offset
-		# 小怪经验走反割草补偿倍率（BalanceWave.mob_kill_exp）：预算 -20% 后单只 ×1.25 找平每波收入。
-		# 精英在下面立即被 ELITE_GEM_EXP 覆写，不吃这条。金币腿（stone_value=-1 随 exp_value 同值）
-		# 自动同比放大 —— 数量 ×0.8 × 单只 ×1.25 = 每波金币收入持平；碎金档显式置 1 枚不受影响。
-		gem.exp_value = GameBalance.mob_kill_exp(e.exp_reward)
+		# 小怪经验走反割草补偿 + 深层减量补偿（BalanceWave.mob_kill_exp）：预算收紧后单只放大，
+		# 每波总经验守恒。精英在下面立即被 ELITE_GEM_EXP 覆写，不吃这条。
+		# 2026-11-03 经验/金币拆腿：金币腿走 mob_kill_stone（只乘基础 1.75），不跟深层经验补偿一起放大，
+		# 否则深层「少刷怪」会变成单怪金币通胀；少掉的那部分金币由精英数量与精英宝石奖励补。
+		gem.exp_value = GameBalance.mob_kill_exp(e.exp_reward, GameManager.wave_number)
 		gem.is_gold = e.is_elite   ## 金宝视觉统一由 is_gold 驱动（灯色在 _update_visual 里跟色）
 		if e.is_elite:
 			gem.exp_value = GameBalance.ELITE_GEM_EXP
 		else:
+			# 金币腿显式写死基础值：不写会走 stone_value=-1 自动跟随 exp_value，把深层经验补偿带进金币。
+			gem.stone_value = GameBalance.mob_kill_stone(e.exp_reward)
 			# 碎金档（2026-10-13 体验重塑）：普通怪按回合概率掉基础碎金/金砂片 ——
 			# 经验腿足额给（exp_value 不动），只有金币腿折到 1，符合小怪掉零钱直觉且平抑后期通胀。
 			# 精英/Boss 金宝石不 roll，保住高光时刻足额回报；碎金率见 BalanceEconomy。

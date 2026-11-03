@@ -113,6 +113,15 @@ var _active_hazard_fields: Array[Dictionary] = []
 ## 出招轮换表：按波次与阶段动态编排
 var _patterns: Array = []
 
+# 决策超时保底（2026-11-03）：原地不动累计时长。炮台（move_speed=0）与贴脸站桩的
+# 近战 Boss 都靠它打破「长期不挪窝」——超提示线机动招加权，超强制线下次决策必出机动招。
+var _since_moved: float = 0.0
+var _prev_pos: Vector2 = Vector2.ZERO
+var _prev_pos_valid: bool = false
+## 招式陈旧度账：pattern → 上次使用时的决策序号（防饿死加权，确定性不抽 rng）
+var _pattern_last_cast: Dictionary = {}
+var _casts_total: int = 0
+
 var _minion_scenes: Array = [
 	preload("res://scenes/entities/SlimeEnemy.tscn"),
 	preload("res://scenes/entities/FlowerEnemy.tscn"),
@@ -284,6 +293,15 @@ func _setup_patterns() -> void:
 func _process(delta: float) -> void:
 	if GameManager.is_game_over or dying:
 		return
+	# 位移账：本帧位置有变化就清零「没挪窝」计时（追击/冲锋/瞬移都算挪窝），
+	# 否则累计 —— 互斥招式（震地/冲锋/螺旋）期间也照计，出来后才可能被强制机动。
+	if _prev_pos_valid:
+		if global_position.distance_squared_to(_prev_pos) > 4.0:
+			_since_moved = 0.0
+		else:
+			_since_moved += delta
+	_prev_pos = global_position
+	_prev_pos_valid = true
 	_hp_emit_cd -= delta
 	_heavy_hit_cd = maxf(0.0, _heavy_hit_cd - delta)
 	# 读招姿态接线（2026-10-19）：按 Boss 招式状态机维持 procedural_view.special_state 0→1，
@@ -325,22 +343,36 @@ func _process(delta: float) -> void:
 		_attack_timer = attack_interval * mult
 		_cast_next(player)
 
-## Boss 选招权重（AI 行为，不改伤害）：远距离偏突进/远程，贴脸偏震地/环弹；上一招降权防连发。
+## Boss 选招权重（AI 行为，不改伤害）：远距离偏突进/远程，贴脸偏震地/环弹；上一招降权防连发；
+## 按「多久没用」陈旧度加权防饿死（旧平局轮换规则会让部分招式永久坐板凳）；原地不动超时强制机动。
 const PICK_WEIGHT_BASE := 1.0
 const PICK_WEIGHT_FAR := 2.2
 const PICK_WEIGHT_NEAR := 2.0
 const PICK_WEIGHT_WRONG_RANGE := 0.3
 const PICK_WEIGHT_REPEAT := 0.2
+const PICK_STALENESS_BOOST := 0.6   ## 每搁置一次决策的权重增益
+const PICK_STALENESS_CAP := 2.4     ## 陈旧度增益上限（1+2.4=3.4 倍，仍压不过错位降权 0.3×距离偏好 2.2）
+const PICK_MOBILITY_HINT_MULT := 3.0 ## 超提示线后机动招额外倍率
 const PICK_FAR_RANGE := 320.0
 const PICK_NEAR_RANGE := 140.0
 const PICK_FAR_PATTERNS := [Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.BLINK_SLASH]
 const PICK_NEAR_PATTERNS := [Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN]
+## 机动招（位移类）：决策超时保底的候选集，按优先级取第一个在轮换表里的
+const MOBILITY_PATTERNS := [Pattern.TURRET_SHIFT, Pattern.BLINK_SLASH, Pattern.CHAIN_CHARGE, Pattern.CHARGE]
+
+## 机动招落点钳制边界：地图物理边界内缩 BOSS_ARENA_EDGE_INSET（与 EnemyBase 的 ±460 钳制同图）
+static func _arena_lim() -> float:
+	return GameManager.MAP_HALF_EXTENT - GameBalance.BOSS_ARENA_EDGE_INSET
 
 func _pick_pattern(player: Node2D) -> int:
 	var dist: float = global_position.distance_to(player.global_position)
+	# 决策超时强制档：长时间没挪窝且轮换表有机动招 → 直接出机动招（蹲坑硬上界）
+	if _since_moved >= GameBalance.BOSS_REPOSITION_FORCE_SEC:
+		for pat in MOBILITY_PATTERNS:
+			if pat in _patterns:
+				return pat
 	var best_idx: int = 0
 	var best_w: float = -1.0
-	var tie_count: int = 0
 	for i in range(_patterns.size()):
 		var pat: int = _patterns[i]
 		var w: float = PICK_WEIGHT_BASE
@@ -352,19 +384,21 @@ func _pick_pattern(player: Node2D) -> int:
 		elif dist < PICK_NEAR_RANGE:
 			if pat in PICK_NEAR_PATTERNS:
 				w = PICK_WEIGHT_NEAR
-			elif pat in PICK_FAR_PATTERNS and pat != Pattern.BURST_FAN:
+			elif pat in PICK_FAR_PATTERNS and pat != Pattern.BURST_FAN and pat != Pattern.BLINK_SLASH:
+				# 瞬步回斩与扇形狙同属「全距离可用」：贴脸降权会让刺客型 Boss 贴脸后永不瞬步
 				w = PICK_WEIGHT_WRONG_RANGE
+		# 防连发：上一招降权
 		if pat == _last_pattern:
 			w *= PICK_WEIGHT_REPEAT
-		# 同权重候选按 _pattern_idx 轮换打破平局（确定性，不抽 rng）
+		# 防饿死：按搁置决策数加权，每个招式都有出场机会（确定性，不抽 rng）
+		var stale: int = _casts_total - int(_pattern_last_cast.get(pat, -20))
+		w *= 1.0 + minf(float(maxi(0, stale)) * PICK_STALENESS_BOOST, PICK_STALENESS_CAP)
+		# 决策超时提示档：一段时间没挪窝 → 机动招额外加权
+		if _since_moved >= GameBalance.BOSS_REPOSITION_HINT_SEC and pat in MOBILITY_PATTERNS:
+			w *= PICK_MOBILITY_HINT_MULT
 		if w > best_w + 0.0001:
 			best_w = w
 			best_idx = i
-			tie_count = 1
-		elif absf(w - best_w) <= 0.0001:
-			tie_count += 1
-			if _pattern_idx % tie_count == 0:
-				best_idx = i
 	return _patterns[best_idx]
 
 func _cast_next(player: Node2D) -> void:
@@ -372,6 +406,8 @@ func _cast_next(player: Node2D) -> void:
 		return
 	var pattern: int = _pick_pattern(player)
 	_last_pattern = pattern
+	_pattern_last_cast[pattern] = _casts_total
+	_casts_total += 1
 	_pattern_idx += 1
 	match pattern:
 		Pattern.RING:
@@ -568,6 +604,10 @@ func _start_charge(dir: Vector2) -> void:
 	_charge_brake = 0.0
 	_charge_stagger = 0.0
 	_charge_hit = false
+	# 冲锋期间关掉对玩家的物理碰撞（2026-11-03）：贴身起冲会被玩家碰撞体挡成零位移
+	# （身体已嵌在玩家碰撞半径里，move_and_slide 全程滑动）——冲锋伤害本就走
+	# charge_hit_radius 线段扫掠、不靠身体碰撞，关掉后冲锋能穿身而过完成换位。
+	collision_mask &= ~2
 	play_squash(Vector2(0.78, 1.24), 0.2)
 	JuiceEffect.spawn_step_dust(get_parent(), global_position + Vector2(0, 12), dir)
 	if charge_side_bolts > 0 and get_parent() != null:
@@ -606,6 +646,8 @@ func _settle_charge_recovery() -> void:
 				charge_whiff_stagger = 0.55
 	else:
 		charge_whiff_stagger = 0.25
+	if _chain_charges_left <= 0:
+		collision_mask |= 2  # 冲锋全程结束才恢复对玩家的物理碰撞（连环冲段间保持穿透）
 
 # ---------------- 招式 9：多段折返连冲 ----------------
 
@@ -620,14 +662,23 @@ func _cast_chain_charge(player: Node2D) -> void:
 func _cast_turret_shift(player: Node2D) -> void:
 	if dying or get_parent() == null:
 		return
-	var center := Vector2(480.0, 270.0)
+	# 换桩落点以地图原点为心（2026-11-03 修复：旧屏幕坐标中心 (480,270) + 90~870 钳制会把
+	# 落点钳出 ±460 物理边界，被物理钳硬拉回边缘 —— 炮台越换桩越贴角落的根因）
+	var center := Vector2.ZERO
 	var p_pos := player.global_position if (player != null and is_instance_valid(player)) else center
 	var from_center := (p_pos - center)
 	var away_dir := -from_center.normalized() if from_center.length_squared() > 1.0 else Vector2.LEFT
 	var jitter := (GameManager.rng.randf() - 0.5) * 0.7
 	var new_pos := center + away_dir.rotated(jitter) * GameBalance.BOSS_TURRET_TELEPORT_RADIUS
-	new_pos.x = clampf(new_pos.x, 90.0, 870.0)
-	new_pos.y = clampf(new_pos.y, 90.0, 450.0)
+	# 落点重采样：玩家不动时 away_dir 恒定，jitter≈0 会让连续换桩落在原地（照样「不动」）；
+	# 用玩法 rng 最多重摇 4 次，保证新桩位与现位拉开距离（判定性随机，走 GameManager.rng）
+	for try in range(4):
+		if new_pos.distance_to(global_position) >= 140.0:
+			break
+		jitter = (GameManager.rng.randf() - 0.5) * PI
+		new_pos = center + away_dir.rotated(jitter) * GameBalance.BOSS_TURRET_TELEPORT_RADIUS
+	var lim := _arena_lim()
+	new_pos = new_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 	# 1. 原位留小环弹与震波
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, 60.0, GameStyle.FX_HDR_GOLD if final_boss else GameStyle.BAD, 0.26)
@@ -663,9 +714,11 @@ func _tick_sky_fires(delta: float, player: Node2D) -> void:
 			tg.progress = 0.0
 			get_parent().add_child(tg)
 			tg.global_position = strike_pos
+			var windup: float = GameBalance.aoe_windup(GameBalance.BOSS_SKY_FIRE_RADIUS)
 			_active_sky_fires.append({
 				"telegraph": tg,
-				"timer": GameBalance.aoe_windup(GameBalance.BOSS_SKY_FIRE_RADIUS),
+				"timer": windup,
+				"windup": windup,
 				"pos": strike_pos
 			})
 			AudioManager.play_sfx("enemy_fuse", 0.6)
@@ -822,17 +875,19 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 			else:
 				offset = side_dir.rotated(float(idx) * 2.1) * (edge + 80.0 + float(idx) * 25.0)
 			var target_pos := p_pos + offset
-			target_pos.x = clampf(target_pos.x, 90.0, 870.0)
-			target_pos.y = clampf(target_pos.y, 90.0, 450.0)
+			var lim := _arena_lim()
+			target_pos = target_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 			var tg := AoeTelegraph.new()
 			tg.radius = GameBalance.BOSS_HAZARD_FIELD_RADIUS
 			tg.progress = 0.0
 			get_parent().add_child(tg)
 			tg.global_position = target_pos
+			var windup: float = GameBalance.aoe_windup(GameBalance.BOSS_HAZARD_FIELD_RADIUS)
 			_active_hazard_fields.append({
 				"telegraph": tg,
-				"timer": GameBalance.aoe_windup(GameBalance.BOSS_HAZARD_FIELD_RADIUS),
+				"timer": windup,
+				"windup": windup,
 				"pos": target_pos
 			})
 			AudioManager.play_sfx("enemy_fuse", 0.6)
@@ -878,8 +933,8 @@ func _cast_blink_slash(player: Node2D) -> void:
 	else:
 		behind_dir = Vector2.from_angle(GameManager.rng.randf() * TAU)
 	var target_pos := p_pos + behind_dir * GameBalance.BOSS_BLINK_SLASH_DIST
-	target_pos.x = clampf(target_pos.x, 90.0, 870.0)
-	target_pos.y = clampf(target_pos.y, 90.0, 450.0)
+	var lim := _arena_lim()
+	target_pos = target_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, 50.0, GameStyle.BAD, 0.22)
 	global_position = target_pos
@@ -955,8 +1010,10 @@ func take_damage(amount: float, knockback: Vector2, is_crit: bool = false, from_
 	if not from_dot and not is_crit and _heavy_hit_cd <= 0.0 and amount >= max_hp * GameBalance.BOSS_HEAVY_HIT_PCT:
 		_heavy_hit_cd = GameBalance.BOSS_HEAVY_HIT_COOLDOWN
 		GameManager.add_trauma(GameBalance.BOSS_HEAVY_HIT_TRAUMA)
-		if not _phase2 and current_hp <= max_hp * GameBalance.boss_phase2_hp_pct(GameManager.danger_level):
-			_enter_phase2()
+	# 二阶段变身判定独立于重击创伤闸（2026-11-03 修复：此前误嵌在重击闸内，
+	# 单发伤害 <6% 最大生命的快速小伤害流派打到死都触发不了狂暴）
+	if not _phase2 and current_hp <= max_hp * GameBalance.boss_phase2_hp_pct(GameManager.danger_level):
+		_enter_phase2()
 	_hp_emit_acc += amount
 	if _hp_emit_acc >= max_hp * 0.005 or _hp_emit_cd <= 0.0:
 		_hp_emit_acc = 0.0
@@ -972,6 +1029,8 @@ func _die() -> void:
 	_sky_fire_strikes_left = 0
 	_hazard_fields_left = 0
 	_chain_charges_left = 0
+	_since_moved = 0.0
+	_prev_pos_valid = false
 	_clear_charge_warning()
 	if _slam_ring != null:
 		_slam_ring.visible = false

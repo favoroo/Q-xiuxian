@@ -29,10 +29,10 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.wave_spawn_budget(6), 21, "第 6 波预算 21")
 	_c.equals(GameBalance.wave_spawn_budget(10), 30, "第 10 波预算 30")
 	_c.equals(GameBalance.wave_spawn_budget(20), 52, "第 20 波预算 52")
-	# 2026-10-15 深层续涨：>20 波预算自 W20=52 续 +4/波，封顶 DEEP_BUDGET_MAX（135）。
-	_c.equals(GameBalance.wave_spawn_budget(21), 56, "深层第 21 波预算 56（续涨 +4）")
-	_c.equals(GameBalance.wave_spawn_budget(30), 92, "深层第 30 波预算 92")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 135")
+	# 2026-11-03 后期减量提质：深层预算自 W20=52 续 +1.5/波，封顶 DEEP_BUDGET_MAX（80）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 54, "深层第 21 波预算 54（续涨 +1.5）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 67, "深层第 30 波预算 67")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 80")
 	var budget_prev := 0
 	var budget_nondecreasing := true
 	for w in range(1, 61):
@@ -54,14 +54,29 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.max_enemies_cap(10), 10, "第 10 波同屏上限 10 只")
 	_c.equals(GameBalance.max_enemies_cap(20), 16, "第 20 波同屏上限 16 只")
 	_c.check(GameBalance.max_enemies_cap(30) > 16, "深层同屏上限高于 20 波")
-	# 2026-10-17 性能专项：绝对硬顶常量钉住（cap 基础值之外，最终同屏再乘危险/潮数后由它兜底）
-	_c.equals(GameBalance.MAX_ENEMIES_HARD_CAP, 48, "同屏敌人绝对硬顶 48（任何乘区叠满后的兜底）")
+	# 2026-11-03 后期减量提质：绝对硬顶 48→32；潮数只由 WaveSpawner._final_enemy_cap 乘一次
+	_c.equals(GameBalance.MAX_ENEMIES_HARD_CAP, 32, "同屏敌人绝对硬顶 32（任何乘区叠满后的兜底）")
+	_c.equals(GameBalance.max_enemies_cap(30), 20, "深层同屏基础上限 W30=20（未乘潮数/难度）")
+	_c.equals(GameBalance.max_enemies_cap(99), 26, "深层同屏基础上限封顶 26（未乘潮数/难度）")
+
+	# 2026-11-03 深层减量补偿：旧深层预算 / 新深层预算，经验按此补回，金币腿不跟涨
+	_c.equals(GameBalance.reference_spawn_budget(21), 56, "旧深层预算基准 W21=56")
+	_c.equals(GameBalance.reference_spawn_budget(40), 132, "旧深层预算基准 W40=132")
+	_c.near(GameBalance.deep_exp_comp_mult(20), 1.0, EPS, "≤20 波不做深层经验补偿")
+	_c.near(GameBalance.deep_exp_comp_mult(21), 56.0 / 54.0, EPS, "W21 深层经验补偿 ≈1.037")
+	_c.near(GameBalance.deep_exp_comp_mult(30), 92.0 / 67.0, EPS, "W30 深层经验补偿 ≈1.373")
+	_c.near(GameBalance.deep_exp_comp_mult(40), 132.0 / 80.0, EPS, "W40 深层经验补偿 =1.65")
+	_c.near(GameBalance.deep_exp_comp_mult(99), 135.0 / 80.0, EPS, "W99 深层经验补偿 1.6875（低于 1.70 上限）")
 
 	# 2026-10-15 分批清剿制：小怪掉落经验补偿倍率（预算 -26% 的倒数），掉落与补差均值同走一个出口
 	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.75, EPS, "小怪经验补偿倍率 1.75（改预算必须同步改它）")
 	_c.equals(GameBalance.mob_kill_exp(3), 5, "史莱姆 exp 3 → 实发 5（×1.75 取整）")
 	_c.equals(GameBalance.mob_kill_exp(5), 9, "邪修 exp 5 → 实发 9")
 	_c.equals(GameBalance.mob_kill_exp(0), 0, "非法 exp 0 不放大")
+	# 2026-11-03 经验/金币拆腿：深层经验吃补偿，金币腿只吃基础 1.75
+	_c.equals(GameBalance.mob_kill_exp(6, 40), 17, "W40 exp 6 → 实发 17（×1.75×1.65 取整）")
+	_c.equals(GameBalance.mob_kill_stone(6), 11, "W40 金币腿仍只乘 1.75 → 11 枚（不跟深层经验补偿）")
+	_c.equals(GameBalance.mob_kill_stone(0), 0, "非法 exp 0 金币腿也归零")
 
 	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
 	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.12")
@@ -131,16 +146,16 @@ func _test_boss_waves() -> void:
 	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 0), 1, "W15 D0 单精英")
 	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 1), 2, "W15 D1 双精英")
 
-	# 3. 深层无尽梯度：
-	# D0: 21~30 为 1 只，31+ 为 2 只
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 0), 1, "深层 D0 21波单精英")
-	_c.equals(GameBalance.elite_spawn_count_for_wave(31, 0), 2, "深层 D0 31波双精英")
+	# 3. 深层无尽梯度（2026-11-03 后期减量提质：精英 +1，补普通怪数量削减）：
+	# D0: 21+ 为 2 只，31+ 为 3 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 0), 2, "深层 D0 21波双精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(31, 0), 3, "深层 D0 31波三精英")
 	# 历史传参兼容 (wave, true)
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 1, "历史传参 21 波单精英兼容")
-	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 2, "历史传参 31 波双精英兼容")
-	# D1: 21~35 为 2 只，36+ 为 3 只
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 1), 2, "深层 D1 21波双精英")
-	_c.equals(GameBalance.elite_spawn_count_for_wave(36, 1), 3, "深层 D1 36波三精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 2, "历史传参 21 波双精英兼容")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 3, "历史传参 31 波三精英兼容")
+	# D1: 21+ 为 3 只，36+ 为 4 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 1), 3, "深层 D1 21波三精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(36, 1), 4, "深层 D1 36波四精英")
 
 	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距
 	_c.near(GameBalance.boss_hp(10) / GameBalance.boss_hp(1), GameBalance.enemy_hp_mult(10), EPS, "Boss 血量与敌人同一条成长曲线")
@@ -265,6 +280,31 @@ func _test_wave_theme() -> void:
 			var r := 0.35 + float(i) / 100.0 * 0.65
 			tail_seen[WaveSpawner.pick_scene_key(w, r)] = true
 	_c.check(tail_seen.keys().size() >= 10, "尾部区间仍能选到绝大多数怪种（实得 %d 种）" % tail_seen.keys().size())
+
+	# 2026-11-03 深层老手配比：>20 波在主打怪之后切一段高威胁怪，份额随波次 16%→30%
+	_c.near(EnemyData.deep_veteran_share(20), 0.0, EPS, "第 20 波及以前不出深层老手")
+	_c.near(EnemyData.deep_veteran_share(21), 0.16, EPS, "第 21 波老手份额 16%")
+	_c.near(EnemyData.deep_veteran_share(30), 0.25, EPS, "第 30 波老手份额 25%")
+	_c.near(EnemyData.deep_veteran_share(35), 0.30, EPS, "第 35 波老手份额封顶 30%")
+	_c.near(EnemyData.deep_veteran_share(99), EnemyData.DEEP_VETERAN_SHARE_MAX, EPS, "深层老手份额封顶 30%")
+	_c.equals(EnemyData.deep_veteran_key(0.0), "mowei", "老手权重首位 = 血煞魔卫")
+	_c.equals(EnemyData.deep_veteran_key(0.99), "zhumu", "老手权重末位 = 百目妖（低权重）")
+	var vet_ok := true
+	for row in EnemyData.DEEP_VETERAN_POOL:
+		var key := String(row["key"])
+		var mob: Dictionary = EnemyData.MOBS.get(key, {})
+		if mob.is_empty() or int(mob.get("unlock_wave", 0)) > EnemyData.DEEP_VETERAN_MIN_WAVE:
+			vet_ok = false
+	_c.check(vet_ok, "老手池全部是已解锁的常规怪（W21 前解锁）")
+	# 老手段真的吃进 pick_scene_key 头部：W21 [0.12,0.28)、W40 [0.12,0.42)
+	_c.check(EnemyData.deep_veteran_key(0.0) == WaveSpawner.pick_scene_key(21, 0.12),
+		"W21 roll 0.12 落老手段首位")
+	_c.check(EnemyData.DEEP_VETERAN_POOL.any(func(r): return String(r["key"]) == WaveSpawner.pick_scene_key(21, 0.27)),
+		"W21 roll 0.27 仍在老手段内")
+	_c.check(EnemyData.DEEP_VETERAN_POOL.any(func(r): return String(r["key"]) == WaveSpawner.pick_scene_key(40, 0.41)),
+		"W40 roll 0.41 仍在老手段内（份额 30%）")
+	_c.check(EnemyData.FEATURED_SHARE + EnemyData.DEEP_VETERAN_SHARE_MAX < 0.5,
+		"深层头部（主打 12% + 老手 30%）仍 < 50%，原分段带保留主体份额")
 
 	# 批次刷新阈值爬坡（2026-10-16 节奏紧凑化）：W1-3 → 1 / W4-9 → 2 / W10+ → 3
 	_c.equals(GameBalance.batch_refill_threshold(1), 1, "第 1 波刷新阈值 1（保留前期单批清剿喘息）")

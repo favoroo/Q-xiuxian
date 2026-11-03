@@ -5,7 +5,7 @@ extends Node
 ## ② 血祭：金币 0 + 生命足够 ⇒ HUD 键面「血祭/耗18%」、进充能、爆发后扣 18% 生命、
 ##    金币不变、启动次数 +1、灵兽出生阶=当前祭坛阶
 ## ③ 晋阶：启动次数跨 3 ⇒ 祭坛 2 阶、渲染器 tier=2、新灵兽出生阶=2
-## ④ 灵兽成长：存活 1/2 回合各 +1 阶、生命上限增加，满寿命消散
+## ④ 灵兽出生定格：跨回合阶段/生命上限不变（不再按存活回合晋阶），满寿命消散
 ## ⑤ 波次兜底：wave=16 + wave_changed ⇒ 祭坛 4 阶（不依赖启动次数）
 ## 运行: $G --headless --path . res://tests/ObeliskEvolutionCheck.tscn
 
@@ -70,7 +70,7 @@ func _run() -> void:
 	_case_initial_tier()
 	await _case_blood_ritual()
 	await _case_tier_up_on_activation()
-	await _case_beast_stage_growth()
+	await _case_beast_stage_fixed()
 	await _case_wave_floor_tier()
 
 	Engine.time_scale = 1.0
@@ -160,8 +160,8 @@ func _case_tier_up_on_activation() -> void:
 	_c.equals(newest.altar_tier, 2, "③ 新灵兽出生阶=晋阶后的 2 阶")
 	_c.equals(newest.stage, 2, "③ 新灵兽当回合阶段=2")
 
-## ④ 灵兽成长：新灵兽存活 1/2 回合各 +1 阶、生命上限增加，满寿命消散
-func _case_beast_stage_growth() -> void:
+## ④ 灵兽出生定格：新灵兽跨回合阶段/生命上限保持不变，满寿命消散
+func _case_beast_stage_fixed() -> void:
 	if GameManager.live_allies.size() < 2:
 		_c.check(false, "④ 前置：场上至少有 2 只灵兽")
 		return
@@ -169,21 +169,27 @@ func _case_beast_stage_growth() -> void:
 	if beast == null:
 		_c.check(false, "④ 前置：新灵兽可寻址")
 		return
-	var hp_before: float = beast.max_hp
-	var cur_before: float = beast.current_hp
-	var stage_before: int = beast.stage
+	# 用户报的场景：W1 召的第一只进 W2 不应变大（阶段出生即定格）
+	var oldest := GameManager.live_allies[0] as SpiritBeast
+	if oldest != null and oldest != beast:
+		var oldest_stage: int = oldest.stage
+		oldest._on_wave_changed(oldest.summon_wave + 1)
+		_c.equals(oldest.stage, oldest_stage,
+			"④ W1 召的灵兽进 W2 仍是出生阶 %d（不再变大）" % oldest_stage)
+	var stage_at_birth: int = beast.stage
+	var hp_at_birth: float = beast.max_hp
+	var cur_at_birth: float = beast.current_hp
 	beast._on_wave_changed(beast.summon_wave + 1)
 	await _settle(2)
-	_c.equals(beast.stage, mini(stage_before + 1, GameBalance.SPIRIT_BEAST_MAX_STAGE),
-		"④ 存活 1 回合 ⇒ 阶段 +1（%d→%d）" % [stage_before, beast.stage])
-	_c.check(beast.max_hp > hp_before, "④ 阶段 +1 ⇒ 生命上限增加（%.0f→%.0f）" % [hp_before, beast.max_hp])
-	_c.check(beast.current_hp >= cur_before, "④ 升阶只补上限差额，当前生命不倒退")
-	var hp_after_first: float = beast.max_hp
+	_c.equals(beast.stage, stage_at_birth,
+		"④ 存活 1 回合 ⇒ 阶段保持出生阶 %d（不晋阶）" % stage_at_birth)
+	_c.near(beast.max_hp, hp_at_birth, 0.01, "④ 存活 1 回合 ⇒ 生命上限不变（%.0f）" % hp_at_birth)
+	_c.near(beast.current_hp, cur_at_birth, 0.01, "④ 存活 1 回合 ⇒ 当前生命不被补")
 	beast._on_wave_changed(beast.summon_wave + 2)
 	await _settle(2)
-	_c.check(beast.stage >= mini(stage_before + 2, GameBalance.SPIRIT_BEAST_MAX_STAGE),
-		"④ 存活 2 回合 ⇒ 阶段再 +1（实得 %d）" % beast.stage)
-	_c.check(beast.max_hp >= hp_after_first, "④ 阶段继续成长 ⇒ 生命上限不回落")
+	_c.equals(beast.stage, stage_at_birth,
+		"④ 存活 2 回合 ⇒ 阶段仍是出生阶 %d" % stage_at_birth)
+	_c.near(beast.max_hp, hp_at_birth, 0.01, "④ 存活 2 回合 ⇒ 生命上限仍不变")
 	# 满寿命：召唤波起算第 3 个回合结束，下一次回合开始消散
 	beast._on_wave_changed(beast.summon_wave + GameBalance.SPIRIT_BEAST_LIFETIME_WAVES)
 	await _settle(60)

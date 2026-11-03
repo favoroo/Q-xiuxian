@@ -200,10 +200,11 @@ func _process(delta: float) -> void:
 			pass
 
 
-## 同屏敌人最终上限（2026-10-17 性能专项）：
+## 同屏敌人最终上限（2026-10-17 性能专项；2026-11-03 后期减量提质）：
 ## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 深层潮数倍率，
-## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=48 绝对硬顶 —— 深层极端构建
-## （危险 5 × 潮数 2.0 可叠到 ~95）不再失控，常规 20 波（峰值 ~33）不受影响。
+## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=32 绝对硬顶。
+## 潮数倍率只在这里乘一次：max_enemies_cap 深层段不再预先乘，否则同屏密度会被平方放大
+##（旧写法 W28 左右就顶到 48）。
 ## 2026-10-24 输入签名缓存：_process_fight 每帧取 2 次，但四个输入只在开局/换波时变；
 ## 签名（max_enemies/倍率/危险度/波数）不变直接返回缓存，变了对齐重算一次。
 var _cap_cache: int = 0
@@ -573,7 +574,7 @@ func end_wave(early_secs: float = 0.0) -> void:
 				early_stones, false, "+%d 金币" % early_stones)
 	# 余怪消散（不掉落）
 	# 2026-10-28 卡顿尖峰治理：原写法在同一帧对场上所有敌人逐个起消散演出（每只一次
-	# create_tween + 一串属性步 + ShaderMaterial 挂载），48 只同屏时那一帧要建 50+ 个 Tween。
+	# create_tween + 一串属性步 + ShaderMaterial 挂载），旧 48 只硬顶时那一帧要建 50+ 个 Tween。
 	# 现按两段拆：当刻先让每只怪退出战斗（dying/关物理/关碰撞，与旧行为逐帧等价 ——
 	# 不会有「延迟那几帧被打死白掉战果」的窗口），演出段进队列，每帧起 ≤10 个。
 	for enemy in get_tree().get_nodes_in_group("enemies"):
@@ -606,7 +607,7 @@ var _magnet_queue: Array = []   ## 待磁吸宝石队列（出生序）；CLEARI
 
 # —— 回合末清场分帧（每渲染帧 ≤ CLEANUP_BATCH_PER_FRAME 个）——
 ## 敌人消散 / 炮台撤场都要起演出（Tween + 溶解材质挂载），同帧全收会造一次性尖峰。
-## 10 个/帧：48 只 ≈ 5 帧摊完，清场等待窗 1s 足够。
+## 10 个/帧：32 只 ≈ 4 帧摊完，清场等待窗 1s 足够。
 ## 注意队列里放的是「已退出战斗、只等演出」的个体：敌人必须先在 end_wave 当刻走完
 ## _begin_dissolve（dying/关物理/关碰撞），否则延迟的这几帧里还能被打死、白掉战果。
 const CLEANUP_BATCH_PER_FRAME := 10
@@ -877,9 +878,9 @@ func _schedule_enemy_spawn(scene: PackedScene, pos: Vector2, is_elite: bool) -> 
 		_scale_to_wave(enemy)
 		enemy.activate()
 		parent.add_child(enemy)
-		# 补差均值与实际掉落同口径：小怪 exp_reward 过 mob_kill_exp 补偿倍率（EnemyBase._die 同一出口），
+		# 补差均值与实际掉落同口径：小怪 exp_reward 过 mob_kill_exp（含深层经验补偿）同一出口，
 		# 否则预算缺口 × 原值均值会少算玩家的实际单怪收入
-		_budget_exp_sum += float(GameBalance.mob_kill_exp(enemy.exp_reward))
+		_budget_exp_sum += float(GameBalance.mob_kill_exp(enemy.exp_reward, wave_number))
 		# 出场弹性缩放动画 (0.4 -> 1.0)
 		enemy.scale = Vector2.ONE * 0.4
 		var tw := enemy.create_tween()

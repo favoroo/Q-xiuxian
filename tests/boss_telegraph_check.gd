@@ -270,7 +270,7 @@ func _test_boss_patterns_and_charge() -> void:
 func _test_boss_archetypes_and_new_elites() -> void:
 	var boss_scene: PackedScene = load("res://scenes/entities/BossEnemy.tscn")
 	var p := _make_player()
-	p.global_position = Vector2(680.0, 270.0)
+	p.global_position = Vector2(300.0, 270.0)  # 场内坐标（地图物理边界 ±460，旧 680 在图外）
 
 	# 1. 玄天千机尊（W25 不动炮台）：移速为 0、免疫击退、具备 TURRET_SHIFT 换桩
 	var qianji := boss_scene.instantiate() as BossEnemy

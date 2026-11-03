@@ -33,6 +33,7 @@ const DEEP_DMG_GROWTH := BalanceWave.DEEP_DMG_GROWTH
 const DEEP_HP_GROWTH := BalanceWave.DEEP_HP_GROWTH
 const DEEP_SWARM_PER_WAVE := BalanceWave.DEEP_SWARM_PER_WAVE
 const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
+const DEEP_EXP_COMP_MAX := BalanceWave.DEEP_EXP_COMP_MAX
 const MAX_ENEMIES_HARD_CAP := BalanceWave.MAX_ENEMIES_HARD_CAP
 const BATCH_CLEAR_COOLDOWN := BalanceWave.BATCH_CLEAR_COOLDOWN
 const BATCH_STALEMATE_TIMEOUT := BalanceWave.BATCH_STALEMATE_TIMEOUT
@@ -210,6 +211,9 @@ const BOSS_CHAIN_CHARGE_COUNT_P2 := BalanceWave.BOSS_CHAIN_CHARGE_COUNT_P2
 const BOSS_CHAIN_CHARGE_GAP := BalanceWave.BOSS_CHAIN_CHARGE_GAP
 const BOSS_TURRET_TELEPORT_EVERY := BalanceWave.BOSS_TURRET_TELEPORT_EVERY
 const BOSS_TURRET_TELEPORT_RADIUS := BalanceWave.BOSS_TURRET_TELEPORT_RADIUS
+const BOSS_ARENA_EDGE_INSET := BalanceWave.BOSS_ARENA_EDGE_INSET
+const BOSS_REPOSITION_HINT_SEC := BalanceWave.BOSS_REPOSITION_HINT_SEC
+const BOSS_REPOSITION_FORCE_SEC := BalanceWave.BOSS_REPOSITION_FORCE_SEC
 const BOSS_HAZARD_FIELD_COUNT := BalanceWave.BOSS_HAZARD_FIELD_COUNT
 const BOSS_HAZARD_FIELD_COUNT_P2 := BalanceWave.BOSS_HAZARD_FIELD_COUNT_P2
 const BOSS_HAZARD_FIELD_RADIUS := BalanceWave.BOSS_HAZARD_FIELD_RADIUS
@@ -599,9 +603,21 @@ static func endless_swarm_mult(wave: int) -> float:
 static func healer_amount(wave: int) -> float:
 	return BalanceWave.healer_amount(wave)
 
-## 单只小怪击杀经验（含反割草补偿倍率，曲线在 BalanceWave）
-static func mob_kill_exp(exp_reward: int) -> int:
-	return BalanceWave.mob_kill_exp(exp_reward)
+## 单只小怪击杀经验（含反割草补偿倍率与深层减量补偿，曲线在 BalanceWave）
+static func mob_kill_exp(exp_reward: int, wave: int = 1) -> int:
+	return BalanceWave.mob_kill_exp(exp_reward, wave)
+
+## 单只小怪金币腿（只吃基础补偿倍率，不乘深层经验补偿）
+static func mob_kill_stone(exp_reward: int) -> int:
+	return BalanceWave.mob_kill_stone(exp_reward)
+
+## 深层经验补偿倍率（旧预算 / 新预算，≤20 波恒 1.0）
+static func deep_exp_comp_mult(wave: int) -> float:
+	return BalanceWave.deep_exp_comp_mult(wave)
+
+## 2026-11-03 调参前旧深层预算（只给经验补偿当基准）
+static func reference_spawn_budget(wave: int) -> int:
+	return BalanceWave.reference_spawn_budget(wave)
 
 static func looter_stone_reward(wave: int) -> int:
 	return BalanceWave.looter_stone_reward(wave)
@@ -754,9 +770,9 @@ static func spirit_beast_max_hp(wave: int, stage: int = 1) -> float:
 static func spirit_beast_damage(wave: int, stage: int = 1) -> float:
 	return BalanceSpiritBeast.damage_for_wave(wave, stage)
 
-## 灵兽阶段成长（2026-11-02）：出生阶 + 存活回合数，封顶 4 阶
-static func spirit_beast_stage(altar_tier: int, waves_survived: int) -> int:
-	return BalanceSpiritBeast.stage_for(altar_tier, waves_survived)
+## 灵兽阶段（2026-11-03）：出生即定格 = 召唤时的祭坛阶，不再随存活回合成长
+static func spirit_beast_birth_stage(altar_tier: int) -> int:
+	return BalanceSpiritBeast.birth_stage(altar_tier)
 
 static func spirit_beast_stage_hp_mult(stage: int) -> float:
 	return BalanceSpiritBeast.stage_hp_mult(stage)

@@ -73,21 +73,28 @@ const WAVE_SPAWN_BUDGET_BASE := 8.0
 const WAVE_SPAWN_BUDGET_PER_WAVE := 2.2
 const WAVE_SPAWN_BUDGET_MAX := 54.0
 # 2026-10-13 深层三涨：20 波是破境波，故「波数 > 20」即等价深层波次，曲线分段
-# 无需读任何模式开关（保持纯函数）。深层段预算从 W20 的 52 只起每波 +4，
-# 到 135 硬顶；伤害/生命复利同步提档（见 DEEP_*_GROWTH），同屏密度
-# 走 endless_swarm_mult。
+# 无需读任何模式开关（保持纯函数）。
 # 2026-10-28 无限闯关：20 波不再是终点，只是「破境波」；DEEP_WAVE_THRESHOLD 与
 # GameManager.MILESTONE_WAVE 同值，但纯函数层不读 autoload，故此处独立登记一份。
+# 2026-11-03 后期减量提质（用户口径「后期敌人数量太多了，没必要靠数量提难度，纯堆数量还会卡」）：
+# 深层段从「W20=52 起每波 +4、封顶 135」压到「每波 +1.5、封顶 80」——
+# 普通难度 W40 实际刷入约 153 → 93 只（-39%），把压力转给精英数量/深层高威胁配比。
+# 同屏硬顶同步 48 → 32（见 MAX_ENEMIES_HARD_CAP），并修掉 endless_swarm_mult 的平方放大。
+# 单怪经验按「旧预算 / 新预算」补回（deep_exp_comp_mult），金币腿走 mob_kill_stone 不跟涨。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（破境波，> 此值走深层曲线；同 GameManager.MILESTONE_WAVE）
-const DEEP_BUDGET_PER_WAVE := 4.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
-const DEEP_BUDGET_MAX := 135.0          ## 深层预算硬顶（约 W41 饱和）
+const DEEP_BUDGET_PER_WAVE := 1.5        ## 深层每波预算增量（自 W20 的 52 只起续算）
+const DEEP_BUDGET_MAX := 80.0            ## 深层预算硬顶（约 W39 饱和）
+## 2026-11-03 调参前旧深层曲线：只用于经验补偿基准，不参与刷怪。
+## 改深层预算时必须同步核对 deep_exp_comp_mult，否则每波经验收入会跟着数量一起下滑。
+const REF_DEEP_BUDGET_PER_WAVE := 4.0
+const REF_DEEP_BUDGET_MAX := 135.0
 const DEEP_DMG_GROWTH := 1.12            ## 深层每波伤害复利（20 波段是 1.06；深层加速提档）
 const DEEP_HP_GROWTH := 1.22             ## 深层每波生命复利（20 波段是 1.16；深层加速提档）
 const DEEP_SWARM_PER_WAVE := 0.08        ## 深层每波同屏密度增量（+8%/波，随危险度/角色倍率同乘）
 const DEEP_SWARM_MAX := 2.2              ## 深层同屏密度放大硬顶
 
 ## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算。
-## ≤20 波走曲线封顶 54；深层从 W20=52 续 +3/波，封顶 DEEP_BUDGET_MAX。
+## ≤20 波走曲线封顶 54；深层从 W20=52 续 +1.5/波，封顶 DEEP_BUDGET_MAX=80。
 static func wave_spawn_budget(wave: int) -> int:
 	var w := float(maxi(wave, 1))
 	if w <= float(DEEP_WAVE_THRESHOLD):
@@ -95,14 +102,20 @@ static func wave_spawn_budget(wave: int) -> int:
 	return int(round(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
 		+ (w - float(DEEP_WAVE_THRESHOLD)) * DEEP_BUDGET_PER_WAVE, DEEP_BUDGET_MAX)))
 
+## 2026-11-03 调参前旧深层预算（纯函数）：只给 deep_exp_comp_mult 当经验守恒基准。
+static func reference_spawn_budget(wave: int) -> int:
+	var w := float(maxi(wave, 1))
+	if w <= float(DEEP_WAVE_THRESHOLD):
+		return int(round(minf(WAVE_SPAWN_BUDGET_BASE + w * WAVE_SPAWN_BUDGET_PER_WAVE, WAVE_SPAWN_BUDGET_MAX)))
+	return int(round(minf(WAVE_SPAWN_BUDGET_BASE + float(DEEP_WAVE_THRESHOLD) * WAVE_SPAWN_BUDGET_PER_WAVE
+		+ (w - float(DEEP_WAVE_THRESHOLD)) * REF_DEEP_BUDGET_PER_WAVE, REF_DEEP_BUDGET_MAX)))
+
 ## 动态同屏敌人上限（纯函数，2026-10-15 分批清剿制）：
 ## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
-## 深层波次结合 endless_swarm_mult 持续增长（封顶 26）。
-## 2026-10-17 性能专项绝对硬顶（用户拍板）：cap 只在刷怪口夹「基础值」，
-## WaveSpawner 的最终同屏数还会乘 danger_count_mult（顶档 D1 噩梦 = 2.08）与角色敌潮倍率，
-## 深层极端构建可叠到 ~95 只 —— 那是节点规模的绝对上限来源，帧率无法数学保证。
-## MAX_ENEMIES_HARD_CAP 48 是「任何乘区叠满后」的最终同屏硬顶（20 波内常规峰值 ~33 不受影响）。
-const MAX_ENEMIES_HARD_CAP := 48
+## 深层波次沿基础曲线涨到 26（潮数倍率只在 WaveSpawner._final_enemy_cap 乘一次）。
+## 2026-11-03 后期减量提质：MAX_ENEMIES_HARD_CAP 48→32；此前 max_enemies_cap 深层段与
+## _final_enemy_cap 各乘一次 endless_swarm_mult，同屏密度被平方放大，W28 左右就顶到 48。
+const MAX_ENEMIES_HARD_CAP := 32
 
 static func max_enemies_cap(wave: int) -> int:
 	var w := maxi(wave, 1)
@@ -113,8 +126,7 @@ static func max_enemies_cap(wave: int) -> int:
 	elif w <= DEEP_WAVE_THRESHOLD:
 		return 12 + int(float(w - 12) * 0.5)
 	else:
-		var base := 16.0 + float(w - DEEP_WAVE_THRESHOLD) * 0.4
-		return int(round(minf(base * endless_swarm_mult(w), 26.0)))
+		return int(round(minf(16.0 + float(w - DEEP_WAVE_THRESHOLD) * 0.4, 26.0)))
 
 const ENEMY_HP_GROWTH := 1.16             ## 每回合生命复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础生命整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
@@ -124,9 +136,27 @@ const MOB_HP_BASE_MULT := 11.5
 ## 小怪击杀经验/金币腿补偿倍率：与 WAVE_SPAWN_BUDGET_* 联动（改预算必须同步改它）。
 ## 预算 -26% 后单怪掉落按 ×1.75 放大，让每波总经验收入完全守恒（10×1.75=17.5 对应原 14×1.25=17.5）。
 const MOB_KILL_EXP_MULT := 1.75
-## 单只小怪击杀经验（纯函数）：exp_reward × 补偿倍率取整。掉落（EnemyBase._die）与
-## 刷怪补差均值统计（WaveSpawner）共用这一个出口，两边口径不许漂。
-static func mob_kill_exp(exp_reward: int) -> int:
+## 2026-11-03 深层减量提质：深层预算再压约 -39%，单怪经验按「旧预算 / 新预算」补回，
+## 金币腿不跟涨（mob_kill_stone 只乘 1.75），避免减数量后金币通胀。
+const DEEP_EXP_COMP_MAX := 1.70
+
+## 深层经验补偿倍率（纯函数）：旧深层预算 / 新深层预算，≤20 波恒 1.0。
+static func deep_exp_comp_mult(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w <= DEEP_WAVE_THRESHOLD:
+		return 1.0
+	var ref := float(reference_spawn_budget(w))
+	var cur := float(maxi(wave_spawn_budget(w), 1))
+	return clampf(ref / cur, 1.0, DEEP_EXP_COMP_MAX)
+
+## 单只小怪击杀经验（纯函数）：exp_reward × 基础补偿 × 深层经验补偿。
+## 掉落（EnemyDeathFx）与刷怪补差均值统计（WaveSpawner）共用这一个出口，两边口径不许漂。
+static func mob_kill_exp(exp_reward: int, wave: int = 1) -> int:
+	return int(round(float(maxi(exp_reward, 0)) * MOB_KILL_EXP_MULT * deep_exp_comp_mult(wave)))
+
+## 单只小怪金币腿（纯函数）：只吃基础补偿倍率，不乘深层经验补偿 ——
+## 深层少刷的那部分金币由精英数量与精英宝石奖励补，不靠单怪金币通胀补。
+static func mob_kill_stone(exp_reward: int) -> int:
 	return int(round(float(maxi(exp_reward, 0)) * MOB_KILL_EXP_MULT))
 const ENEMY_DMG_GROWTH := 1.06            ## 每回合接触伤害复利倍率（前松后紧：W10≈1.69 / W20≈3.03）
 ## 敌伤整体基线倍率：所有敌人伤害的唯一总闸。
@@ -146,7 +176,9 @@ const ENEMY_DMG_GROWTH := 1.06            ## 每回合接触伤害复利倍率�
 const ENEMY_DMG_BASE_MULT := 0.80
 const ENEMY_STAT_VARIANCE := 0.10            ## 敌人属性 ±10% 随机浮动（同种怪个体差异）
 const ENEMY_SPEED_VARIANCE := 0.12           ## 敌人移速 ±12% 随机浮动（土豆兄弟式快慢梯队：同屏同种怪不再整齐划一）
-const ELITE_STONE_BONUS := 25             ## 精英击杀额外金币
+## 精英击杀额外金币（2026-11-03 后期减量提质：单只收益靠 ELITE_GEM_EXP 上调，
+## 这条定额不动，避免早期精英波金币膨胀）。
+const ELITE_STONE_BONUS := 25
 
 # ---------------- 敌群集行为（2026-10-23：分离排斥 / 包围方位） ----------------
 ## 背景：旧版全部直线插值追玩家，同屏 3 只以上收束到一点叠成一坨，读不出轮廓也读不出包夹意图。
@@ -314,7 +346,8 @@ const BOLT_DMG_BASE_REF := 13.0
 ## 同一个「掉落经济」不再被拆在两处。
 const ELITE_GEM_COUNT := 5              ## 精英宝石数（普通怪恒 1 颗）
 const GEM_SCATTER_RADIUS := 24.0        ## 多颗宝石的方形散布半径（±px；单颗不散）
-const ELITE_GEM_EXP := 8                ## 精英单颗宝石经验（普通怪吃自己的 exp_reward）
+const ELITE_GEM_EXP := 14               ## 精英单颗宝石经验/金币（普通怪吃自己的 exp_reward）
+                                        ## 2026-11-03：8→14，配合深层精英数量提升，单只总收益 65→95 金币
 const BLINK_DISTANCE := 210.0           ## 影魅闪现距离：绕玩家侧翼落到这个半径上
 const BLINK_MAP_INSET := 40.0           ## 闪现落点的边界内缩（不许闪出竞技场）
 const SPLIT_SCATTER_RADIUS := 26.0      ## 血蛆死亡分裂幼体的散布半径
@@ -433,6 +466,13 @@ const BOSS_CHAIN_CHARGE_COUNT_P2 := 5       ## 二阶段连冲次数
 const BOSS_CHAIN_CHARGE_GAP := 0.22         ## 连冲段间短蓄力时长（秒）
 const BOSS_TURRET_TELEPORT_EVERY := 3       ## 静止炮台 Boss 每释放 N 招瞬移换桩一次
 const BOSS_TURRET_TELEPORT_RADIUS := 210.0  ## 炮台换桩距场地中心的环半径
+## Boss 机动招落点的场心偏移内缩：换桩/瞬步/禁区等定向位移一律以地图原点为心、
+## 按 MAP_HALF_EXTENT 内缩本值钳制（旧屏幕坐标 (480,270)/90~870 钳制会把落点钳出
+## ±460 物理边界，被物理钳硬拉到边缘 = 炮台永远蹲角落的根因）
+const BOSS_ARENA_EDGE_INSET := 60.0
+## Boss 决策超时保底：原地不动超过提示秒数 → 机动招加权；超过强制秒数 → 下次决策必出机动招
+const BOSS_REPOSITION_HINT_SEC := 5.0
+const BOSS_REPOSITION_FORCE_SEC := 9.0
 const BOSS_HAZARD_FIELD_COUNT := 3          ## 场地封锁招式单次铺设雷毒禁区数（二阶段 +2）
 const BOSS_HAZARD_FIELD_COUNT_P2 := 5
 const BOSS_HAZARD_FIELD_RADIUS := 105.0     ## 禁区半径（视觉与判定同源）
@@ -496,9 +536,9 @@ static func is_elite_wave(n: int, _endless: bool = false) -> bool:
 
 ## 精英生成数量（纯函数）：依据波次与危险度（0~1 档，D0 普通 / D1 噩梦）确定精英怪刷新数量。
 ## - 主线（≤20 波）：第 5 波恒 1 只；第 15 波在 D1 噩梦升级为 2 只
-## - 深层（>20 波）：
-##   D0: 21~30 波 1 只，31+ 波 2 只
-##   D1: 21~35 波 2 只，36+ 波 3 只
+## - 深层（>20 波，2026-11-03 后期减量提质后）：
+##   D0: 21+ 波 2 只，31+ 波 3 只
+##   D1: 21+ 波 3 只，36+ 波 4 只
 ## 签名兼任 (n, danger) 与历史 (n, _endless, danger) 两种传参口径
 static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0) -> int:
 	if not is_elite_wave(n):
@@ -514,9 +554,9 @@ static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0)
 			return 2
 		return 1
 	if d == 0:
-		return 2 if n >= 31 else 1
+		return 3 if n >= 31 else 2
 	else:
-		return 3 if n >= 36 else 2
+		return 4 if n >= 36 else 3
 
 ## Boss 刷新数量（纯函数）：第 20/40/60 波在噩梦难度下打双 Boss 接力车轮战
 static func boss_spawn_count_for_wave(wave: int, danger: int = 0) -> int:

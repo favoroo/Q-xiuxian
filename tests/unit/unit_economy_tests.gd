@@ -160,9 +160,10 @@ func _test_gem_shard() -> void:
 	# 购买力硬护栏：第 1 波击杀期望金币必须能买得起首波基础武器（原价 25）
 	# 2026-10-15 分批清剿制：W1 预算 10 只，单怪 exp_reward 基准 3 × MOB_KILL_EXP_MULT(1.75) = 5.25
 	#（实际取整为 5），50% 碎金(1) + 50% 灵石(5) = 期望 3.0/只，10 × 3.0 = 30.0 ≥ 25
+	# 2026-11-03 经验/金币拆腿：金币腿改走 mob_kill_stone（W1 数值不变，口径对齐）
 	var w1_kills: int = GameBalance.wave_spawn_budget(1)
-	var w1_unit_exp := float(GameBalance.mob_kill_exp(3))
-	var w1_expected_stones: float = float(w1_kills) * ((1.0 - GameBalance.gem_shard_chance(1)) * w1_unit_exp + GameBalance.gem_shard_chance(1) * 1.0)
+	var w1_unit_stone := float(GameBalance.mob_kill_stone(3))
+	var w1_expected_stones: float = float(w1_kills) * ((1.0 - GameBalance.gem_shard_chance(1)) * w1_unit_stone + GameBalance.gem_shard_chance(1) * 1.0)
 	_c.check(w1_expected_stones >= 25.0,
 		"W1 击杀期望金币 %.1f ≥ 25（确保首回合稳买基础武器）" % w1_expected_stones)
 

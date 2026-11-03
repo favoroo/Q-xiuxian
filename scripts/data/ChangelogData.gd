@@ -8,6 +8,18 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.17",
+			"date": "2026-11-03",
+			"title": "后期减量提质与 Boss 整治",
+			"items": [
+				"后期敌人变少变强，同屏不再爆量。",
+				"深层精英怪变多，宝石更值钱。",
+				"灵兽出生多大就不再长大。",
+				"修复 Boss 长时间蹲角落不动。",
+				"修复小伤害流派打不出狂暴。",
+			],
+		},
+		{
 			"version": "v0.1.16",
 			"date": "2026-11-03",
 			"title": "情境引导与流畅优化",

@@ -41,11 +41,9 @@ var palette_idx: int = 0
 ## 出生阶（召唤时祭坛灵脉阶）：0 = 未由祭坛指定，_ready 按当前波次/启动次数自动推导。
 ## 祭坛在 add_child 前灌入，确保 _ready 取生命/体型时直接用新阶。
 var altar_tier: int = 0
-## 当前阶段（1~4）：出生阶 + 存活回合数，封顶 4；渲染器剪影与攻击质变都读它
+## 当前阶段（1~4）：出生即定格 = 召唤时的祭坛阶；渲染器剪影与攻击质变都读它
 var stage: int = 1
-## 已存活回合数（召唤当回合为 0，每个 wave_changed +1）
-var waves_survived: int = 0
-## 阶段体型缩放（可补间：升阶时从旧值弹到新值；_physics_process 每帧写进 renderer.scale）
+## 出生阶段体型缩放（_physics_process 每帧写进 renderer.scale；不再随存活回合变化）
 var stage_scale: float = 1.0
 
 var max_hp: float = 100.0
@@ -74,12 +72,12 @@ func _ready() -> void:
 	# 被踩时剪影不能被怪体盖掉糊成一团（2026-10-24 拥挤状态优化）
 	z_index = 1
 	summon_wave = maxi(GameManager.wave_number, 1)
-	# 出生阶 = 祭坛灵脉阶（2026-11-02）：祭坛在 add_child 前已灌入；直接实例化（测试/工具）时自动推导
+	# 出生阶 = 祭坛灵脉阶（2026-11-02；2026-11-03 起出生即定格）：祭坛在 add_child 前已灌入；
+	# 直接实例化（测试/工具）时自动推导。阶段只在这里定一次，之后不随存活回合变化。
 	if altar_tier <= 0:
 		altar_tier = GameBalance.obelisk_altar_tier(summon_wave, GameManager.obelisk_activations)
-	altar_tier = clampi(altar_tier, 1, GameBalance.SPIRIT_BEAST_MAX_STAGE)
-	stage = altar_tier
-	waves_survived = 0
+	stage = GameBalance.spirit_beast_birth_stage(altar_tier)
+	altar_tier = stage
 	max_hp = GameBalance.spirit_beast_max_hp(summon_wave, stage)
 	current_hp = max_hp
 	stage_scale = GameBalance.spirit_beast_body_scale(stage)
@@ -123,45 +121,13 @@ func expire_for_replacement() -> void:
 	tw.tween_property(self, "modulate:a", 0.0, 0.3)
 	tw.chain().tween_callback(queue_free)
 
-## 回合开始：自召唤波起算满寿命即消散（召唤当波算第 1 回合，共在场 3 个回合）；
-## 寿命没到就按「出生阶 + 存活回合数」晋 1 阶（2026-11-02 分阶成长）。
+## 回合开始只做寿命闸：自召唤波起算满寿命即消散（召唤当波算第 1 回合，共在场 3 个回合）。
+## 2026-11-03 起阶段在出生时定格，跨回合不再晋阶 —— 召唤出来多大就一直多大。
 func _on_wave_changed(wave_number: int) -> void:
 	if _dying:
 		return
 	if wave_number - summon_wave >= GameBalance.SPIRIT_BEAST_LIFETIME_WAVES:
 		expire_for_replacement()
-		return
-	waves_survived = maxi(wave_number - summon_wave, 0)
-	var new_stage := GameBalance.spirit_beast_stage(altar_tier, waves_survived)
-	if new_stage > stage:
-		_apply_stage(new_stage)
-
-## 升阶：生命上限按阶段表重算，只把「上限增加的那一截」补进当前生命（保留已受伤害），
-## 体型弹到新档 + 同色冲击环/灵光/低音量升级音。不重置寿命、不回满血。
-func _apply_stage(new_stage: int) -> void:
-	if _dying:
-		return
-	var target_stage := clampi(new_stage, 1, GameBalance.SPIRIT_BEAST_MAX_STAGE)
-	if target_stage <= stage:
-		return
-	var old_max: float = max_hp
-	stage = target_stage
-	max_hp = GameBalance.spirit_beast_max_hp(summon_wave, stage)
-	current_hp = minf(max_hp, current_hp + maxf(max_hp - old_max, 0.0))
-	if _renderer != null:
-		_renderer.stage = stage
-		_renderer.hp_ratio = clampf(current_hp / max_hp, 0.0, 1.0)
-	# 体型补间：_physics_process 每帧把 stage_scale 写进 renderer.scale，所以补的是标量不是节点
-	var tw := create_tween()
-	tw.tween_property(self, "stage_scale", GameBalance.spirit_beast_body_scale(stage), 0.35) \
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	# 晋阶演出（低频事件）：同色冲击环 + 灵光爆点 + 低音量升级音
-	var fx_host: Node = get_tree().current_scene
-	var col: Color = ProceduralDroneRenderer.body_color(palette_idx)
-	if fx_host != null:
-		JuiceEffect.spawn_shockwave(fx_host, global_position, 34.0 + 10.0 * float(stage), col, 0.35)
-		FxParticlePool.burst(FxParticlePool.SOUL_ORB, global_position, col, 0.8, true)
-	AudioManager.play_sfx("level_up", 0.55, 1.02 + 0.05 * float(stage))
 
 func _exit_tree() -> void:
 	GameManager.unregister_ally(self)

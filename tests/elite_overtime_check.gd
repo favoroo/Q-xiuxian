@@ -139,10 +139,11 @@ func _begin_wave(n: int) -> void:
 	_clear_field()
 	_lines.clear()
 
-## 精英从真实刷怪口落地：先占住 elite_spawned（防 _process_fight 自动再刷一只），
+## 精英从真实刷怪口落地：先占住 elite_spawned / _elites_dispatched（防 _process_fight 自动再刷），
 ## 再调 _spawn_elite → 等 SpawnIndicator 凝聚结束、callback 写回 _elite_ref。
 func _spawn_gatekeeper() -> EnemyBase:
 	_spawner.elite_spawned = true
+	_spawner._elites_dispatched = maxi(_spawner._elites_dispatched, 1)
 	_spawner._spawn_elite(GameManager.player)
 	await _wait_until(func(): return _spawner._elite_ref != null, 5.0)
 	return _spawner._elite_ref

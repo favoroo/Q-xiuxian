@@ -135,15 +135,17 @@ func _test_obelisk_tier_growth() -> void:
 	_c.check(GameBalance.obelisk_execute_threshold(20) + GameBalance.obelisk_tier_execute_bonus(4) < BalanceWave.ELITE_MUTATION_HP_PCT,
 		"4 阶 W20 斩杀线仍 < 精英变异触发线")
 
-## 灵兽分阶（2026-11-02）：出生阶 + 存活回合数、封顶、生命/伤害/体型/连发/穿透/接触半径
+## 灵兽分阶（2026-11-03 出生定格）：阶段 = 召唤时祭坛阶，不再随存活回合成长；
+## 封顶/生命/伤害/体型/连发/穿透/接触半径仍按阶段表。
 func _test_spirit_beast_stage_scaling() -> void:
 	_c.equals(BalanceSpiritBeast.MAX_STAGE, 4, "灵兽最高 4 阶")
-	_c.equals(BalanceSpiritBeast.stage_for(1, 0), 1, "分阶：1 阶出生、当回合=1")
-	_c.equals(BalanceSpiritBeast.stage_for(1, 1), 2, "分阶：存活 1 回合→2 阶")
-	_c.equals(BalanceSpiritBeast.stage_for(1, 2), 3, "分阶：存活 2 回合→3 阶")
-	_c.equals(BalanceSpiritBeast.stage_for(1, 3), 4, "分阶：存活 3 回合→4 阶")
-	_c.equals(BalanceSpiritBeast.stage_for(4, 3), BalanceSpiritBeast.MAX_STAGE, "分阶：封顶 4 阶")
-	_c.equals(BalanceSpiritBeast.stage_for(0, 0), 1, "分阶：出生阶钳到 1")
+	_c.equals(BalanceSpiritBeast.birth_stage(1), 1, "出生阶段：1 阶祭坛→1 阶")
+	_c.equals(BalanceSpiritBeast.birth_stage(2), 2, "出生阶段：2 阶祭坛→2 阶")
+	_c.equals(BalanceSpiritBeast.birth_stage(3), 3, "出生阶段：3 阶祭坛→3 阶")
+	_c.equals(BalanceSpiritBeast.birth_stage(4), 4, "出生阶段：4 阶祭坛→4 阶")
+	_c.equals(BalanceSpiritBeast.birth_stage(9), BalanceSpiritBeast.MAX_STAGE, "出生阶段：封顶 4 阶")
+	_c.equals(BalanceSpiritBeast.birth_stage(0), 1, "出生阶段：0 阶钳到 1")
+	_c.equals(GameBalance.spirit_beast_birth_stage(3), 3, "GameBalance 转发出生阶段一致")
 	# 阶段乘区单调 + 叠在波次成长上
 	_c.check(BalanceSpiritBeast.stage_hp_mult(4) > BalanceSpiritBeast.stage_hp_mult(1), "阶段生命乘区单调递增")
 	_c.check(BalanceSpiritBeast.stage_damage_mult(4) > BalanceSpiritBeast.stage_damage_mult(1), "阶段伤害乘区单调递增")

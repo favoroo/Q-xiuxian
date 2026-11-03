@@ -9,7 +9,7 @@ extends RefCounted
 ##   - 3 个 LOOTER_* 常量 → LOOTER_DEF
 ##   - WaveSpawner 的 16 个 preload 场景变量 → MOBS 行的 scene_path（WaveSpawner 启动时缓存）
 ##   - 精英池与称号表 → ELITE_POOL（title 字段随行）
-## 收编范围（2026-11-02 第二批，从 16 普通怪 + 6 精英 .tscn 平移，数值逐一对账，行为零变化）：
+## 收编范围（2026-11-02 第二批，从 14 普通怪 + 6 精英 .tscn 平移，数值逐一对账，行为零变化）：
 ##   - 各怪种 @export 数值覆写 → 各行 "stats" 子字典（出厂绝对值，未列字段吃 EnemyBase 类默认）
 ##   - 应用点唯一：EnemyBase.acquire_or_new 出厂时（_capture_base_stats 快照前），池化复用经快照回滚同源
 ##   - 场景 .tscn 只保留视觉/身份/结构：spritesheet_path、locomotion_mode、enemy_id、
@@ -377,6 +377,38 @@ const FEATURED_SHARE := 0.12       ## 每波主打怪份额（从已解锁怪按
 const FEATURED_ROTATION_STEP := 5  ## 主打轮换步长（质数步长，表长变化时仍能铺开、不总是同一只）
 const FEATURED_MIN_WAVE := 2       ## 主打怪起始波次（第 1 波保持纯教学：史莱姆 + 零星邪修）
 
+# ---------------- 深层老手配比（2026-11-03 后期减量提质） ----------------
+## 深层预算收紧后，把「少刷」省下的压力转成「怪更硬」：>20 波在头部切一块老手段，
+## 按权重抽血煞魔卫/寒魄妖/鼓妖/百目妖，剩余区间仍走原分段带。
+## 百目妖只给 5% 权重：它每 3.5s 产 1 只蜂群，权重高了会把节点数顶回去，与减量目标冲突。
+const DEEP_VETERAN_MIN_WAVE := 21       ## 深层老手起始波（与 BalanceWave.DEEP_WAVE_THRESHOLD+1 同义）
+const DEEP_VETERAN_SHARE_BASE := 0.15   ## 起始份额（W21 = 0.16）
+const DEEP_VETERAN_SHARE_PER_WAVE := 0.01
+const DEEP_VETERAN_SHARE_MAX := 0.30    ## 份额硬顶（W35+）
+const DEEP_VETERAN_POOL := [
+	{"key": "mowei", "weight": 0.35},
+	{"key": "hanpo", "weight": 0.35},
+	{"key": "guyao", "weight": 0.25},
+	{"key": "zhumu", "weight": 0.05},
+]
+
+## 深层老手段份额（纯函数）：≤20 波恒 0；W21 0.16 → W30 0.25 → W35+ 0.30。
+static func deep_veteran_share(wave: int) -> float:
+	var w := maxi(wave, 1)
+	if w < DEEP_VETERAN_MIN_WAVE:
+		return 0.0
+	return minf(DEEP_VETERAN_SHARE_MAX,
+		DEEP_VETERAN_SHARE_BASE + float(w - DEEP_VETERAN_MIN_WAVE + 1) * DEEP_VETERAN_SHARE_PER_WAVE)
+
+## 老手段内按累计权重取 key；roll ∈ [0,1)（调用方已把段内 roll 归一化）。
+static func deep_veteran_key(roll: float) -> String:
+	var acc := 0.0
+	for row in DEEP_VETERAN_POOL:
+		acc += float(row["weight"])
+		if roll < acc:
+			return String(row["key"])
+	return String(DEEP_VETERAN_POOL[DEEP_VETERAN_POOL.size() - 1]["key"])
+
 ## 本波登场组（纯函数）：恰好在本波解锁的怪（MOBS 表序）；无则空数组。
 ## 同波多只解锁（W3 丹爆+蜂群、W6 血蛹+毒妖）共享登场份额、按序对半切，
 ## 保证每只新怪都有且只有一波「登场秀」——玩家先见识机制，之后回落进混池。
@@ -418,6 +450,8 @@ static func featured_mob(wave: int) -> String:
 ## 配比判定：纯函数（给定回合与 roll ∈ [0,1) 返回怪种 key），被闸门锁住的种把份额让给下一格。
 ## 结构（2026-10-16）：头部先按序切 [0, DEBUT_SHARE) 登场组（组内均分）、
 ## [DEBUT_SHARE, +FEATURED_SHARE) 主打怪；剩余区间重标定回 [0,1) 交给 pick_band_key 的原分段带。
+## 2026-11-03 后期减量提质：主打怪之后再切一段深层老手（>20 波才开，见 deep_veteran_share），
+## 老手段按权重抽高威胁怪，剩余区间再重标定给原分段带。
 ## 仍然只消耗调用方一次 randf，不新增随机源（同种子刷怪序列的分布仍可被 balance_sim_check 钉住）。
 static func pick_scene_key(wave: int, roll: float) -> String:
 	var w := maxi(wave, 1)
@@ -434,6 +468,11 @@ static func pick_scene_key(wave: int, roll: float) -> String:
 		if roll < cursor + FEATURED_SHARE:
 			return featured
 		cursor += FEATURED_SHARE
+	var veteran_share := deep_veteran_share(w)
+	if veteran_share > 0.0:
+		if roll < cursor + veteran_share:
+			return deep_veteran_key((roll - cursor) / veteran_share)
+		cursor += veteran_share
 	if cursor <= 0.0:
 		return pick_band_key(w, roll)
 	return pick_band_key(w, (roll - cursor) / (1.0 - cursor))

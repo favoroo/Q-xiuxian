@@ -275,6 +275,9 @@ func _begin_wave(n: int) -> void:
 
 func _spawn_gatekeeper() -> EnemyBase:
 	_spawner.elite_spawned = true
+	# 手动落地也要占掉首发名额：否则 _process_fight 的精英派发会再补一只，
+	# 测招式时场上混进第二只精英，计时/落点读数全被污染。
+	_spawner._elites_dispatched = maxi(_spawner._elites_dispatched, 1)
 	_spawner._spawn_elite(GameManager.player)
 	await _wait_until(func(): return _spawner._elite_ref != null, 5.0)
 	return _spawner._elite_ref

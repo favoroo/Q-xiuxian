@@ -17,8 +17,8 @@ const DAMAGE_GROWTH := 1.08     ## 每回合伤害复利倍率
 const LIFETIME_WAVES := 3       ## 灵兽存活回合数：召唤波起算共在场 3 个回合，第 4 个回合开始时消散（同场最多 3 只 ⇒ 滚动顶替）
 const MAX_ACTIVE := 3           ## 同场灵兽数上限：满员再启动祭坛 → 顶替召唤波最早的那只
 
-# ---------------- 分阶成长（2026-11-02 祭坛成长线重做） ----------------
-## 灵兽出生阶段 = 召唤时的祭坛阶；之后每存活 1 个回合 +1 阶，最高 4 阶。
+# ---------------- 分阶（2026-11-02 祭坛成长线；2026-11-03 改为出生定格） ----------------
+## 灵兽阶段 = 召唤瞬间的祭坛阶，出生即定格：召唤出来多大就一直多大，不再随存活回合晋阶。
 ## 3 阶起体型进入「精怪」档，4 阶为「巨灵」档；体型由宿主缩放渲染器节点，本表只给倍率真值。
 
 const MAX_STAGE := 4
@@ -36,9 +36,9 @@ const STAGE_PIERCE: Array[int] = [1, 1, 1, 2]
 const STAGE_CONTACT_BONUS := 8.0   ## 每阶追加的近身啃咬半径（px）
 const STAGE_CROWD_BONUS := 10.0    ## 每阶追加的拥挤感知半径（px）
 
-## 灵兽当前阶段：出生阶 + 存活回合数，封顶 MAX_STAGE
-static func stage_for(altar_tier: int, waves_survived: int) -> int:
-	return clampi(maxi(altar_tier, 1) + maxi(waves_survived, 0), 1, MAX_STAGE)
+## 出生阶段：召唤时的祭坛阶钳到 1~MAX_STAGE；出生即定格，之后不再成长
+static func birth_stage(altar_tier: int) -> int:
+	return clampi(altar_tier, 1, MAX_STAGE)
 
 static func stage_hp_mult(stage: int) -> float:
 	return STAGE_HP_MULT[clampi(stage, 1, MAX_STAGE) - 1]
