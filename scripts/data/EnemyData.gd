@@ -477,8 +477,9 @@ const BOSS_SIGNATURES: Dictionary = {
 	"tianmo": {
 		"kind": "void_step",        ## 无相三连：连续三次瞬步贴脸回斩
 		"steps": 3,
-		# 0.36s > BOSS_VOID_STEP_WINDUP(0.30s)：给每段落点符环填满的窗口，三段不互相覆盖
-		"interval": 0.36,
+		# 0.50s > BOSS_VOID_STEP_WINDUP(0.44s)：给每段落点符环填满的窗口，三段不互相覆盖
+		#（2026-11-03 二次强化拉长前摇后同步上调，别只改常量不改这里 —— 下一段会被吞）
+		"interval": 0.50,
 	},
 	"hundun": {
 		"kind": "chaos_orb",        ## 混沌星散：一圈随机旋向/速度的四象弹

@@ -335,18 +335,6 @@ func _draw_floating_crystal_spire() -> void:
 	col_ridge = col_ridge.lerp(GameStyle.GOLD_EDGE, tier_gold * 0.30)
 	col_mid = col_mid.lerp(GameStyle.GOLD.darkened(0.35), tier_gold * 0.12)
 
-	# 3 阶起双侧晶棱：主晶两侧各一枚矮晶，读作「晶簇」而不是单根石头
-	if tier >= 3:
-		for side in [-1.0, 1.0]:
-			var s_base := core_pos + Vector2(side * spire_w * 0.92, spire_h * 0.34)
-			var s_h: float = spire_h * (0.34 if tier == 3 else 0.44)
-			var s_top := s_base + Vector2(side * 5.0, -s_h)
-			var s_w: float = spire_w * 0.26
-			draw_colored_polygon(PackedVector2Array([
-				s_top, s_base + Vector2(s_w, 0.0), s_base - Vector2(s_w, 0.0)
-			]), Color(col_mid, 0.92))
-			draw_line(s_top, s_base, Color(col_ridge, 0.7 * (1.0 - spent_blend)), 1.0, true)
-
 	# 灌灵高度对应的炽金/青白能量色
 	var glow_power: float = fill_ratio
 	if is_charging:
@@ -399,16 +387,6 @@ func _draw_floating_crystal_spire() -> void:
 		var vein_y: float = lerpf(bottom.y, top.y, infuse_ratio * 0.85)
 		draw_line(Vector2(-hw * 0.45, vein_y + 4.0), Vector2(hw * 0.5, vein_y), Color(1.0, 0.86, 0.45, 0.85), 1.3, true)
 		AdaptiveDraw.circle(self, Vector2(hw * 0.5, vein_y), 1.8, Color(1.0, 0.95, 0.8, 0.9), 3.2)
-
-	# 4 阶顶冠（2026-11-02）：主晶顶尖之上的横冠 + 三枚小晶，压出「巨灵祭坛」的冠冕感
-	if tier >= 4 and spent_blend < 0.5:
-		var crown_y: float = core_pos.y - spire_h * 0.72 - 12.0
-		draw_line(Vector2(-spire_w * 0.55, crown_y), Vector2(spire_w * 0.55, crown_y),
-			Color(col_ridge, 0.8 * (1.0 - spent_blend)), 1.2, true)
-		for k in range(3):
-			var cx: float = (float(k) - 1.0) * spire_w * 0.45
-			_draw_mini_floating_gem(Vector2(cx, crown_y - 4.0),
-				Color(col_light, 0.95 * (1.0 - spent_blend)), Color(col_ridge, 0.95 * (1.0 - spent_blend)))
 
 	# 2.3 三枚随侍悬晶（左、右环绕 + 顶上悬珠一枚）；熄灭时收拢淡出
 	if spent_blend < 0.5:

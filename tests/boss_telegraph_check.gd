@@ -278,7 +278,7 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	var qianji := boss_scene.instantiate() as BossEnemy
 	qianji.boss_id = "qianji"
 	add_child(qianji)
-	qianji.global_position = Vector2(480.0, 270.0)
+	qianji.global_position = Vector2(420.0, 270.0)   # 场内坐标：±460 物理钳制内，避免首帧被边界拉回
 	qianji._attack_timer = 999.0
 	_c.near(qianji.move_speed, 0.0, 0.01, "玄天千机尊为静止炮台（move_speed == 0）")
 	_c.check(BossEnemy.Pattern.TURRET_SHIFT in qianji._patterns, "玄天千机尊包含阵眼换桩招式")
@@ -287,9 +287,28 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	var pos_before := qianji.global_position
 	qianji._cast_turret_shift(p)
 	_c.check(qianji._blink_rift != null and qianji._blink_rift.visible, "玄天千机尊换桩起手亮落点符环")
+	_c.check(qianji._blink_rift.mode == BlinkRift.Mode.DEST and qianji._blink_rift.heavy,
+		"魔君档落点符环走 DEST 强化画法")
+	_c.check(qianji._blink_origin_rift != null and qianji._blink_origin_rift.visible,
+		"换桩起手在本体脚下亮吸积环（起手/落点两头可读）")
+	_c.check(is_equal_approx(qianji._warp_alpha, 1.0) and is_equal_approx(qianji._warp_scale, 1.0),
+		"起手帧本体仍是全尺寸全不透明（先看见人再收束）")
 	_c.check(qianji.global_position.distance_to(pos_before) < 1.0, "换桩前摇期不提前换位（画哪落哪）")
-	qianji._physics_process(GameBalance.BOSS_TURRET_SHIFT_WINDUP + 0.05)
+	# 前摇末段：本体收缩淡出，但尚未落到新阵眼（画哪落哪的承诺段）。
+	# 不断言「一像素不动」：CharacterBody2D 与场上残留碰撞体的退让属于物理噪声；
+	# 承诺段的真判据是「还没到落点」。
+	qianji._physics_process(GameBalance.BOSS_TURRET_SHIFT_WINDUP * 0.70)
+	_c.check(qianji._warp_scale < 0.95 and qianji._warp_alpha < 0.95,
+		"换桩前摇末段本体收缩淡出 (scale=%.2f alpha=%.2f)" % [qianji._warp_scale, qianji._warp_alpha])
+	_c.check(qianji.global_position.distance_to(qianji._blink_dest) > 100.0,
+		"收缩淡出期仍停在旧阵位（距落点还有 %.0fpx）" % qianji.global_position.distance_to(qianji._blink_dest))
+	qianji._physics_process(GameBalance.BOSS_TURRET_SHIFT_WINDUP * 0.35)
 	_c.check(qianji.global_position.distance_to(pos_before) > 30.0, "玄天千机尊换桩瞬移改变阵位")
+	_c.check(qianji._blink_origin_rift == null and qianji._blink_rift == null, "落地收掉两端符环")
+	_c.check(qianji._warp_reveal_t > 0.0, "落地进入胀回段（从落点胀回本体）")
+	qianji._physics_process(EnemyBase.WARP_REVEAL_TIME + 0.05)
+	_c.check(is_equal_approx(qianji._warp_alpha, 1.0) and is_equal_approx(qianji._warp_scale, 1.0),
+		"胀回结束本体恢复全尺寸全不透明")
 	qianji._die()
 	qianji.queue_free()
 
@@ -313,11 +332,15 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	var bolts_before := EnemyBolt.active_count
 	jianpo._cast_blink_slash(p)
 	_c.check(jianpo._blink_rift != null and jianpo._blink_rift.visible, "幽冥剑魄尊瞬步起手亮落点符环")
+	_c.check(jianpo._blink_origin_rift != null and jianpo._blink_origin_rift.visible,
+		"幽冥剑魄尊瞬步起手亮脚下吸积环")
 	_c.check(EnemyBolt.active_count == bolts_before, "瞬步前摇期不出扇形（落地之后才反打）")
 	jianpo._physics_process(GameBalance.BOSS_BLINK_SLASH_WINDUP + 0.05)
 	_c.check(jianpo.global_position.distance_to(p.global_position) <= GameBalance.BOSS_BLINK_SLASH_DIST + 40.0,
 		"幽冥剑魄尊瞬步贴近玩家周围")
 	_c.check(EnemyBolt.active_count > bolts_before, "幽冥剑魄尊瞬步回斩发射扇形剑气")
+	_c.check(jianpo._blink_origin_rift == null and jianpo._warp_reveal_t > 0.0,
+		"瞬步落地收吸积环并进入胀回段")
 	jianpo._die()
 	jianpo.queue_free()
 

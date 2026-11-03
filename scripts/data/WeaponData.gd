@@ -592,8 +592,8 @@ const DEFS: Dictionary = {
 					"jiguan_nu": {
 						"name": "机关弩", "behavior": Behavior.TURRET,
 						"sfx": "metal_dart",
-						"damage": 18.0, "cooldown": 3.5, "range": 270.0,
-						"turret_fire_cd": 0.75, "turret_stamina": 40.0,
+						"damage": 20.0, "cooldown": 3.5, "range": 270.0,
+						"turret_fire_cd": 0.75, "turret_stamina": 30.0,
 						"knockback": 120.0,
 						"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
 						"tip": Vector2(22, -20), "turret_shape": "crossbow", "upright": true,
@@ -607,8 +607,8 @@ const DEFS: Dictionary = {
 						"name": "剑阵盘", "behavior": Behavior.TURRET,
 						# 疾射飞剑 ⇒ 金属抛体离手族；whoosh_light 是近战前摇的铺垫层，当开火音发虚
 						"sfx": "blade_shoot",
-						"damage": 15.0, "cooldown": 4.0, "range": 250.0,
-						"turret_fire_cd": 0.60, "turret_stamina": 40.0,
+						"damage": 16.5, "cooldown": 4.0, "range": 250.0,
+						"turret_fire_cd": 0.60, "turret_stamina": 30.0,
 						"knockback": 140.0,
 						"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
 						"tip": Vector2(22, 0), "turret_shape": "array_disc", "upright": true,
@@ -621,10 +621,10 @@ const DEFS: Dictionary = {
 						"penhuo_jiguanshou": {
 							"name": "喷火兽", "behavior": Behavior.TURRET,
 							"sfx": "flame_jet",
-							# 2026-10-24 机关带内回调：灼烧按 0.42s 开火间隔全程常驻，11 伤时 30.6/座
-							# 超机关带顶（25.0）两成余 → 降 9 伤到 25.0/座与剑阵盘齐平
-							"damage": 9.0, "cooldown": 4.2, "range": 195.0,
-						"turret_fire_cd": 0.42, "turret_stamina": 40.0,
+							# 2026-10-24 机关带内回调：灼烧按 0.42s 开火间隔全程常驻，9 伤时 25.0/座与剑阵盘齐平。
+							# 2026-11-03 手动布设/维修改版：机关表整体 +10%（9→10 伤，27.8/座），补偿站位与维护负担。
+							"damage": 10.0, "cooldown": 4.2, "range": 195.0,
+						"turret_fire_cd": 0.42, "turret_stamina": 30.0,
 						"knockback": 100.0,
 						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
 						"tip": Vector2(22, -10), "turret_shape": "beast", "upright": true,
@@ -719,9 +719,10 @@ const DEFS: Dictionary = {
 						"hanquan_shou": {
 							"name": "寒泉兽", "behavior": Behavior.TURRET,
 							"sfx": "metal_dart",
-							# 2026-10-24 机关带底回填：20.0/座 比带内次低（藤萝 21.5）还低一截 → 10 伤到 22.2
-							"damage": 10.0, "cooldown": 4.0, "range": 210.0,
-						"turret_fire_cd": 0.45, "turret_stamina": 40.0,
+							# 2026-10-24 机关带底回填：10 伤时 22.2/座（带底）。
+							# 2026-11-03 手动布设/维修改版：机关表整体 +10%（10→11 伤，24.4/座），补偿站位与维护负担。
+							"damage": 11.0, "cooldown": 4.0, "range": 210.0,
+						"turret_fire_cd": 0.45, "turret_stamina": 30.0,
 						"knockback": 90.0,
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 						"tip": Vector2(20, -6), "turret_shape": "beast", "upright": true,
@@ -750,8 +751,8 @@ const DEFS: Dictionary = {
 					"tengluo_jiguan": {
 						"name": "藤萝机关", "behavior": Behavior.TURRET,
 						"sfx": "impact_crack",
-						"damage": 14.0, "cooldown": 3.6, "range": 255.0,
-						"turret_fire_cd": 0.65, "turret_stamina": 40.0,
+						"damage": 15.5, "cooldown": 3.6, "range": 255.0,
+						"turret_fire_cd": 0.65, "turret_stamina": 30.0,
 						"knockback": 110.0,
 						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
 						"tip": Vector2(22, -16), "turret_shape": "trebuchet", "upright": true,
@@ -778,8 +779,8 @@ const DEFS: Dictionary = {
 					"leishi_jiguan": {
 						"name": "垒石机关", "behavior": Behavior.TURRET,
 						"sfx": "impact_blunt",
-						"damage": 20.0, "cooldown": 4.5, "range": 230.0,
-						"turret_fire_cd": 0.9, "turret_stamina": 40.0,
+						"damage": 22.0, "cooldown": 4.5, "range": 230.0,
+						"turret_fire_cd": 0.9, "turret_stamina": 30.0,
 						"knockback": 300.0,
 						"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
 						"tip": Vector2(22, 16), "turret_shape": "trebuchet", "upright": true,
@@ -875,8 +876,8 @@ const DEFS: Dictionary = {
 						"name": "傀儡兽", "behavior": Behavior.TURRET,
 						# 三重共鸣（仿剑阵盘）：同时计入 机关+御灵 两条器类羁绊与土系羁绊
 						"sfx": "impact_crack",
-						"damage": 12.0, "cooldown": 3.8, "range": 240.0,
-						"turret_fire_cd": 0.55, "turret_stamina": 40.0,
+						"damage": 13.0, "cooldown": 3.8, "range": 240.0,
+						"turret_fire_cd": 0.55, "turret_stamina": 30.0,
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
 						"tip": Vector2(22, -2), "turret_shape": "beast", "upright": true,
@@ -1050,8 +1051,8 @@ const DEFS: Dictionary = {
 							"qingmu_pao": {
 								"name": "青木炮", "behavior": Behavior.TURRET,
 								"sfx": "impact_crack",
-								"damage": 13.0, "cooldown": 3.8, "range": 260.0,
-								"turret_fire_cd": 0.60, "turret_stamina": 40.0,
+								"damage": 14.5, "cooldown": 3.8, "range": 260.0,
+								"turret_fire_cd": 0.60, "turret_stamina": 30.0,
 								"knockback": 115.0,
 								# 2026-10-18 media-gen 专属重绘：重型攻城青木灵炮，青铜墨木箍合与幽绿木灵光
 								"price": 38, "icon": "res://assets/art/weapon_qingmu_pao.png",
@@ -1065,8 +1066,8 @@ const DEFS: Dictionary = {
 							"ningbing_nu": {
 								"name": "凝冰机弩", "behavior": Behavior.TURRET,
 								"sfx": "metal_dart",
-								"damage": 12.0, "cooldown": 4.0, "range": 280.0,
-								"turret_fire_cd": 0.55, "turret_stamina": 40.0,
+								"damage": 13.0, "cooldown": 4.0, "range": 280.0,
+								"turret_fire_cd": 0.55, "turret_stamina": 30.0,
 								"knockback": 95.0,
 								# 2026-10-18 media-gen 专属重绘：重型三联装攻城机关弩，玄冰冰晶弩臂与极寒飞针
 								"price": 40, "icon": "res://assets/art/weapon_ningbing_nu.png",
@@ -1080,8 +1081,8 @@ const DEFS: Dictionary = {
 							"fenghuo_tai": {
 								"name": "烽火台", "behavior": Behavior.TURRET,
 								"sfx": "flame_jet",
-								"damage": 10.0, "cooldown": 4.4, "range": 195.0,
-								"turret_fire_cd": 0.50, "turret_stamina": 40.0,
+								"damage": 11.0, "cooldown": 4.4, "range": 195.0,
+								"turret_fire_cd": 0.50, "turret_stamina": 30.0,
 								"knockback": 100.0,
 								# 2026-10-18 media-gen 专属重绘：八角重甲玄石烽火台，狼烟火盆与赤红真火
 								"price": 40, "icon": "res://assets/art/weapon_fenghuo_tai.png",
@@ -1329,7 +1330,7 @@ const BEHAVIOR_TIPS: Dictionary = {
 	Behavior.TURRET: {
 		"how": "在脚下空地手动布设一座机关，它自己索敌开火；开火越久磨损越重",
 		"notes": [
-			"按钮按一下布设一座；每把默认带一座（飞升可加一座），收回后要等整备冷却才能重放。",
+			"按钮按一下布设一座；每把默认带一座（飞升可加一座），收回后要等 2 秒整备才能重放。",
 			"机关开火会磨损，磨损后降速、磨到底停摆；靠近长按「维修」补满，页面上的耐久弧就是它的余量。",
 			"机关这一类独享「机关」羁绊的伤害档，别的武器不吃这一条。",
 		],

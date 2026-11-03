@@ -70,15 +70,10 @@ static func burst_damage(ring: Array, wave: int) -> float:
 	return stored_sum(ring) * STORE_RATIO * wave_power(wave)
 
 ## 波次同步系数：生命曲线 ÷ 伤害曲线的复利差值 × 威力底数。
-## 分段照抄 BalanceWave（≤20 波 1.16/1.06，深层 1.18/1.09）——以后调敌人成长曲线，
+## 直接走 BalanceWave.enemy_growth_ratio（深层三段曲线的唯一出口）——以后调敌人成长曲线，
 ## 影爆自动跟上，不用记得来这里改第二遍。
 static func wave_power(wave: int) -> float:
-	var w := maxi(wave, 1)
-	var main := float(mini(w, BalanceWave.DEEP_WAVE_THRESHOLD) - 1)
-	var deep := maxf(0.0, float(w - BalanceWave.DEEP_WAVE_THRESHOLD))
-	var hp := pow(BalanceWave.ENEMY_HP_GROWTH, main) * pow(BalanceWave.DEEP_HP_GROWTH, deep)
-	var dmg := pow(BalanceWave.ENEMY_DMG_GROWTH, main) * pow(BalanceWave.DEEP_DMG_GROWTH, deep)
-	return BURST_POWER * hp / dmg
+	return BURST_POWER * BalanceWave.enemy_growth_ratio(wave)
 
 ## 踏影这次冲刺多出来的无敌秒数
 static func iframe_bonus(ring: Array) -> float:

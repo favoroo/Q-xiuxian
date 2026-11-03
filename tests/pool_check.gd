@@ -394,7 +394,24 @@ func _run() -> void:
 	_check(br_b == br_a, "第二次 acquire 复用同一实例")
 	_check(BlinkRift.created_count == br_created0 + 1, "符环复用零新建 (%d)" % (BlinkRift.created_count - br_created0))
 	_check(is_equal_approx(br_b.radius, BlinkRift.RADIUS_BOSS) and br_b.progress == 0.0, "复用后档位/进度复位")
+	_check(br_b.heavy and br_b.mode == BlinkRift.Mode.DEST, "魔君档自动切强化画法（DEST）")
 	br_b.cancel()
+	# 进度归一（2026-11-03）：LIFETIME_PAD 只兜住落地那一拍，不能吞掉最后一截 ——
+	# 旧写法进度按 _duration + PAD 归一，0.30s 档在落地时只到 83%，符环缺一角就被宿主取消。
+	var br_c := BlinkRift.acquire(world, Vector2(160, 160), 0.30, GameStyle.BAD)
+	br_c._process(0.30)
+	_check(is_equal_approx(br_c.progress, 1.0), "符环在落地时刻填满（PAD 不吞进度）")
+	br_c.cancel()
+	# 三模式复用（2026-11-03 二次强化）：起手吸积 / 落地爆闪共用同一池，模式与强化档位必须复位
+	var br_d := BlinkRift.acquire_ex(world, Vector2(180, 180), 0.5, GameStyle.BAD,
+		BlinkRift.RADIUS_BOSS, BlinkRift.Mode.ORIGIN)
+	_check(br_d == br_c, "带模式 acquire_ex 复用同一实例")
+	_check(br_d.mode == BlinkRift.Mode.ORIGIN and br_d.heavy, "复用后模式复位为 ORIGIN + 强化档")
+	br_d.cancel()
+	var br_e := BlinkRift.acquire_ex(world, Vector2(200, 200), 0.34, GameStyle.BAD,
+		BlinkRift.RADIUS_BOSS, BlinkRift.Mode.ARRIVAL)
+	_check(br_e.mode == BlinkRift.Mode.ARRIVAL and br_e.heavy, "复用后模式切换为 ARRIVAL")
+	br_e.cancel()
 	BlinkRift.clear_pool()
 	_check(BlinkRift.created_count == 0, "BlinkRift.clear_pool 归零计数")
 

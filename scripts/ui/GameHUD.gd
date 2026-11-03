@@ -184,6 +184,9 @@ func _ready() -> void:
 	HudShieldBar.attach(self)
 	# 局内一次性情境提示气泡层（首进商店/首遇藏宝匣/聚灵阵/精英怪），信号驱动、按偏好键门控
 	HudContextTips.attach(self)
+	# 反向横屏（180° 翻转）时窗口/视口尺寸都不变，只有安全区左右互换 ⇒
+	# 必须轮询重算顶栏让位，否则刘海从左边换到右边后生命块被吃掉一半
+	HudOrientationWatcher.attach(self)
 
 ## .tscn 烘焙主题色重涂：HP 块面/底边、等级徽记面/底边、波次字色。
 ## 这几个节点在场景里写死了品红（Color(1,0,0.431) 系），运行时改外观只能就地改属性。

@@ -88,6 +88,7 @@ func _reconciliation_skipped_fields() -> Array[String]:
 	# 瞬态/派生/账外字段：不存是设计口径，逐条给理由
 	return [
 		"is_game_over",           # 有局才有存档，存档时必为 false
+		"surrendered",            # 投降即作废本局档并结算，读档局必为 false（v0.1.18 投降结算）
 		# —— 技能 buff 层：短时增益到期归零，恢复即空（对玩家有利）——
 		"buff_move_speed_mult", "buff_attack_speed_mult", "buff_dodge",
 		"buff_knockback_mult", "buff_damage_mult", "buff_lifesteal_boost", "force_crit_left", "shadow_amp_mult",

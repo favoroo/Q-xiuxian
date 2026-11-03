@@ -16,7 +16,7 @@ extends Node
 ##       ⑧ 弹丸打精英：EnemyBase 1 支 + 弹丸侧被闸挡 = 同帧 1 支（原为 2 支双发）；
 ##       ⑨ 弹丸致命一刀：武器侧不发（原仍发 1 支）；
 ##       ⑩ 弹丸屏外命中：武器侧不发（原无视口门控）；
-##       ⑪ 精英暴击：EnemyBase 跳过、武器侧放行 = 恰好 1 支（不重复也不空缺）。
+##       ⑪ 精英暴击：EnemyBase 跳过、武器侧放行 = 粒子/序列帧合计恰好 1 层（不重复也不空缺）。
 ##   ⑫-⑬ 2026-10-23 全局时间戳闸（替代每敌倒计时）：
 ##       ⑫ 束流 tick 连打（间隔 0.15s > 旧冷却 0.08s）→ 全局闸 220ms 收敛，4 tick 只发 2 支；
 ##       ⑬ 两只精英同帧各挨一刀 → 全局闸下只 1 支（每敌倒计时时代是 2 支）。
@@ -138,17 +138,21 @@ func _run() -> void:
 	var after10 := _pool._active_emitters.size()
 	_c.equals(after10 - before10, 0, "⑩ 屏外命中：武器侧不发火花（原无视口门控）")
 
-	# ⑪ 精英暴击：EnemyBase 跳过、武器侧按暴击规格放行 ⇒ 恰好 1 支（不重复也不空缺）
+	# ⑪ 精英暴击：EnemyBase 跳过、武器侧只补一层（粒子或 crit_hit 序列帧，2026-11-01 分频）
 	var elite_crit2 := _make(true, false, 9999.0)
 	var proj11 := _make_projectile(elite_crit2.global_position)
 	var before11 := _pool._active_emitters.size()
+	var fb_before := FxFlipbookPool.instance._active.size() if FxFlipbookPool.instance != null else 0
 	_reset_hit_budget()
 	GameManager.force_crit_left = 1.0   # 钉死必暴，不吃 rng
 	proj11._on_area_entered(_hurtbox_of(elite_crit2))
 	GameManager.force_crit_left = 0.0
+	var fb_after := FxFlipbookPool.instance._active.size() if FxFlipbookPool.instance != null else 0
 	var after11 := _pool._active_emitters.size()
-	_c.equals(after11 - before11, 1, "⑪ 精英暴击：恰好 1 支（EnemyBase 跳过，武器侧暴击规格补上）")
-	# 暴击规格：amount=6 的 HIT_SPARK，scale 应比非暴击大（弹丸暴击 1.5）
+	_c.equals((after11 - before11) + (fb_after - fb_before), 1,
+		"⑪ 精英暴击：粒子/序列帧合计恰好一层（粒子 %d + 序列帧 %d）" % [
+			after11 - before11, fb_after - fb_before])
+	# 暴击规格：只有走粒子兜底时才量（序列帧抢到播放位时粒子为 0 是契约）
 	if after11 > before11:
 		var em: GPUParticles2D = _pool._active_emitters[before11]
 		_c.check(em.amount == 6 and (em.process_material as ParticleProcessMaterial).scale_max > 0.3,

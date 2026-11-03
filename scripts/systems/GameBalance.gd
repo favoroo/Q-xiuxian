@@ -32,6 +32,14 @@ const DEEP_BUDGET_PER_WAVE := BalanceWave.DEEP_BUDGET_PER_WAVE
 const DEEP_BUDGET_MAX := BalanceWave.DEEP_BUDGET_MAX
 const DEEP_DMG_GROWTH := BalanceWave.DEEP_DMG_GROWTH
 const DEEP_HP_GROWTH := BalanceWave.DEEP_HP_GROWTH
+const DEEP_DMG_GROWTH_EARLY := BalanceWave.DEEP_DMG_GROWTH_EARLY
+const DEEP_HP_GROWTH_EARLY := BalanceWave.DEEP_HP_GROWTH_EARLY
+const DEEP_DMG_GROWTH_LATE := BalanceWave.DEEP_DMG_GROWTH_LATE
+const DEEP_HP_GROWTH_LATE := BalanceWave.DEEP_HP_GROWTH_LATE
+const DEEP_HP_RAMP_END := BalanceWave.DEEP_HP_RAMP_END
+const DEEP_HP_PLATEAU_WAVE := BalanceWave.DEEP_HP_PLATEAU_WAVE
+const DEEP_DMG_RAMP_END := BalanceWave.DEEP_DMG_RAMP_END
+const DEEP_DMG_PLATEAU_WAVE := BalanceWave.DEEP_DMG_PLATEAU_WAVE
 const DEEP_SWARM_PER_WAVE := BalanceWave.DEEP_SWARM_PER_WAVE
 const DEEP_SWARM_MAX := BalanceWave.DEEP_SWARM_MAX
 const DEEP_EXP_COMP_MAX := BalanceWave.DEEP_EXP_COMP_MAX
@@ -987,7 +995,3 @@ static func turret_is_open_ground(nearest_own_turret_dist: float) -> bool:
 ## 布设落点相对玩家的偏移
 static func turret_deploy_offset(last_move_dir: Vector2) -> Vector2:
 	return BalanceTurret.deploy_offset(last_move_dir)
-
-## 收回整备冷却
-static func turret_recall_cooldown(base_cooldown: float, attack_speed_mult: float) -> float:
-	return BalanceTurret.recall_cooldown(base_cooldown, attack_speed_mult)

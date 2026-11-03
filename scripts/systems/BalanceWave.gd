@@ -84,6 +84,15 @@ const WAVE_SPAWN_BUDGET_MAX := 54.0
 # 2026-11-03 二次减量：同屏硬顶再 32→24，深层预算 80→60（每波 +1.0，W28 触顶）——
 # W40 普通难度总刷入 93→70 只，配合单怪血量/攻击节奏与深层老手份额抬质量。
 # 经验仍按「旧基准 / 新预算」补回（DEEP_EXP_COMP_MAX 同步 1.70→2.25），金币腿口径不变。
+# 2026-11-03 深层三段化（本次优化）：旧版 21 波起一路 1.22 复利，而玩家侧 DPS 有硬顶
+# （武器 ★4/6 格、悟点 max_stacks、武器伤害软膝 2.0、经验/金币 W28 后不再指数增长），
+# 结果是 W25 后 TTK 指数上升、W45+ 的深层魔君在数学上不可达。改为三段：
+#   ① 21~25 过渡段 1.18/1.09：破境后第一波不再从 1.22/1.12 直接起跳（磨平断崖）；
+#   ② 26~32 主段 1.22/1.12（伤害到 35）：保住 30 波前后的硬；
+#   ③ 33 波起生命 1.05/波、36 波起伤害 1.03/波：深层体质饱和，把 40~60 波留成
+#      「可打但很苦」的长尾，而不是 1.22 无限复利堆出的砖墙。
+# 精英/Boss 与杂怪仍共用这一条曲线（比例恒定：精英 ≈5×同波杂怪，Boss ≈14×精英），
+# 不再另开两条乘法链；「Boss/精英血量解耦」由曲线本身的饱和实现。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（破境波，> 此值走深层曲线；同 GameManager.MILESTONE_WAVE）
 const DEEP_BUDGET_PER_WAVE := 1.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
 const DEEP_BUDGET_MAX := 60.0            ## 深层预算硬顶（约 W28 饱和）
@@ -91,8 +100,16 @@ const DEEP_BUDGET_MAX := 60.0            ## 深层预算硬顶（约 W28 饱和�
 ## 改深层预算时必须同步核对 deep_exp_comp_mult，否则每波经验收入会跟着数量一起下滑。
 const REF_DEEP_BUDGET_PER_WAVE := 4.0
 const REF_DEEP_BUDGET_MAX := 135.0
-const DEEP_DMG_GROWTH := 1.12            ## 深层每波伤害复利（20 波段是 1.06；深层加速提档）
-const DEEP_HP_GROWTH := 1.22             ## 深层每波生命复利（20 波段是 1.16；深层加速提档）
+const DEEP_DMG_GROWTH := 1.12            ## 深层伤害主段复利（20 波段是 1.06；21~25 先走 EARLY 过渡）
+const DEEP_HP_GROWTH := 1.22             ## 深层生命主段复利（20 波段是 1.16；21~25 先走 EARLY 过渡）
+const DEEP_DMG_GROWTH_EARLY := 1.09      ## 21~25 波伤害过渡复利（磨平 20→21 断崖）
+const DEEP_HP_GROWTH_EARLY := 1.18       ## 21~25 波生命过渡复利
+const DEEP_DMG_GROWTH_LATE := 1.03       ## 36 波后伤害缓坡（深层体质饱和，避免 W45+ 一击必死）
+const DEEP_HP_GROWTH_LATE := 1.05        ## 33 波后生命缓坡（把 40~60 波留在可打区间）
+const DEEP_HP_RAMP_END := 25             ## 生命过渡段终点（26 波起回主段 1.22）
+const DEEP_HP_PLATEAU_WAVE := 32         ## 生命主段终点（33 波起走 1.05 缓坡）
+const DEEP_DMG_RAMP_END := 25            ## 伤害过渡段终点（26 波起回主段 1.12）
+const DEEP_DMG_PLATEAU_WAVE := 35        ## 伤害主段终点（36 波起走 1.03 缓坡）
 const DEEP_SWARM_PER_WAVE := 0.05        ## 深层每波同屏密度增量（+5%/波，随危险度/角色倍率同乘）
 const DEEP_SWARM_MAX := 1.6              ## 深层同屏密度放大硬顶
 
@@ -319,24 +336,55 @@ static func spawn_batch(wave: int, roll: float) -> int:
 	base = mini(base, 8)
 	return base + (1 if roll < SPAWN_BATCH_BONUS_CHANCE else 0)
 
-static func enemy_hp_mult(wave: int) -> float:
-	var w := maxi(wave, 1)
+## 生命成长倍率（不含危险度/基数）：≤20 波 1.16 复利；21~25 过渡 1.18；
+## 26~32 主段 1.22；33 波起 1.05 缓坡（深层体质饱和）。分段处连续、单调。
+static func _hp_growth_mult(w: int) -> float:
+	var mult := pow(ENEMY_HP_GROWTH, float(mini(w, DEEP_WAVE_THRESHOLD) - 1))
 	if w <= DEEP_WAVE_THRESHOLD:
-		return pow(ENEMY_HP_GROWTH, float(w - 1))
-	## 深层从 W20 值续算，复利提档至 DEEP_HP_GROWTH（分段处连续、单调）
-	return pow(ENEMY_HP_GROWTH, float(DEEP_WAVE_THRESHOLD - 1)) * pow(DEEP_HP_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
+		return mult
+	var ramp := mini(w, DEEP_HP_RAMP_END) - DEEP_WAVE_THRESHOLD
+	if ramp > 0:
+		mult *= pow(DEEP_HP_GROWTH_EARLY, float(ramp))
+	var main := mini(w, DEEP_HP_PLATEAU_WAVE) - DEEP_HP_RAMP_END
+	if main > 0:
+		mult *= pow(DEEP_HP_GROWTH, float(main))
+	var late := w - DEEP_HP_PLATEAU_WAVE
+	if late > 0:
+		mult *= pow(DEEP_HP_GROWTH_LATE, float(late))
+	return mult
+
+## 伤害成长倍率（不含 ENEMY_DMG_BASE_MULT 绝对基线）：≤20 波 1.06；21~25 过渡 1.09；
+## 26~35 主段 1.12；36 波起 1.03 缓坡（深层伤害饱和，避免 W45+ 蹭一下必死）。
+static func _dmg_growth_mult(w: int) -> float:
+	var mult := pow(ENEMY_DMG_GROWTH, float(mini(w, DEEP_WAVE_THRESHOLD) - 1))
+	if w <= DEEP_WAVE_THRESHOLD:
+		return mult
+	var ramp := mini(w, DEEP_DMG_RAMP_END) - DEEP_WAVE_THRESHOLD
+	if ramp > 0:
+		mult *= pow(DEEP_DMG_GROWTH_EARLY, float(ramp))
+	var main := mini(w, DEEP_DMG_PLATEAU_WAVE) - DEEP_DMG_RAMP_END
+	if main > 0:
+		mult *= pow(DEEP_DMG_GROWTH, float(main))
+	var late := w - DEEP_DMG_PLATEAU_WAVE
+	if late > 0:
+		mult *= pow(DEEP_DMG_GROWTH_LATE, float(late))
+	return mult
+
+## 敌人生命倍率（含 MOB 基数前的纯波次乘区）：精英/Boss 与杂怪共用同一条曲线。
+static func enemy_hp_mult(wave: int) -> float:
+	return _hp_growth_mult(maxi(wave, 1))
 
 ## 敌人伤害的唯一倍率出口：整体基线 × 每回合复利。
 ## 调用方（WaveSpawner 刷怪/Boss 注入、EnemyBase 产卵·分裂·召唤小怪）只乘这一条，
 ## 敌弹伤害按 contact_damage/BOLT_DMG_BASE_REF 反推、Boss 环弹与震地按系数派生，全链路同源。
-## 2026-10-13 深层分段：20 波内走 ENEMY_DMG_GROWTH 旧梯子不动；>20 波从
-## W20 值续按 DEEP_DMG_GROWTH 复利（分段处连续），治「深层挨打不痛」。
 static func enemy_dmg_mult(wave: int) -> float:
+	return ENEMY_DMG_BASE_MULT * _dmg_growth_mult(maxi(wave, 1))
+
+## 生命成长 ÷ 伤害成长（不含 ENEMY_DMG_BASE_MULT 的绝对基线）：影爆等「按敌人成长同步」
+## 的伤害走这一个出口。分段与 enemy_hp_mult/enemy_dmg_mult 完全同源，别再抄第二份复利表。
+static func enemy_growth_ratio(wave: int) -> float:
 	var w := maxi(wave, 1)
-	var base := ENEMY_DMG_BASE_MULT * pow(ENEMY_DMG_GROWTH, float(mini(w, DEEP_WAVE_THRESHOLD) - 1))
-	if w <= DEEP_WAVE_THRESHOLD:
-		return base
-	return base * pow(DEEP_DMG_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
+	return _hp_growth_mult(w) / maxf(0.0001, _dmg_growth_mult(w))
 
 ## 深层（>20 波）同屏密度倍率：≤20 波恒 1.0（20 波内零影响），深层每波 +5%、封顶 ×1.6。
 ## 纯波次函数，不读 autoload、不看模式开关；函数名 endless_swarm_mult 保留为历史口径。
@@ -499,7 +547,10 @@ const BOSS_CHAIN_CHARGE_COUNT_P2 := 5       ## 二阶段连冲次数
 const BOSS_CHAIN_CHARGE_GAP := 0.22         ## 连冲段间短蓄力时长（秒）
 const BOSS_TURRET_TELEPORT_EVERY := 3       ## 静止炮台 Boss 每释放 N 招瞬移换桩一次
 const BOSS_TURRET_TELEPORT_RADIUS := 210.0  ## 炮台换桩距场地中心的环半径
-const BOSS_TURRET_SHIFT_WINDUP := 0.42      ## 换桩前摇：新阵眼落点亮符环，填满才换位
+## 换桩前摇 0.42→0.75（2026-11-03 二次强化）：W25 千机尊唯一的位移技，
+## 用户反馈「看不出在瞬移」。三阶段演出（脚下吸积 → 落点光柱 → 落地爆闪）需要更长的
+## 承诺段才读得完；同时给玩家一个能真正走掉的反应窗（与震地 0.9s 同档，但短于它）。
+const BOSS_TURRET_SHIFT_WINDUP := 0.75
 ## Boss 机动招落点的场心偏移内缩：换桩/瞬步/禁区等定向位移一律以地图原点为心、
 ## 按 MAP_HALF_EXTENT 内缩本值钳制（旧屏幕坐标 (480,270)/90~870 钳制会把落点钳出
 ## ±460 物理边界，被物理钳硬拉到边缘 = 炮台永远蹲角落的根因）
@@ -519,13 +570,19 @@ const BOSS_BLINK_SLASH_BOLTS_P2 := 9
 const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
 const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
 const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
-const BOSS_BLINK_SLASH_WINDUP := 0.40       ## 瞬步前摇：落点符环填满才落地，落地后才出扇形
-const BOSS_VOID_STEP_WINDUP := 0.30         ## 无相三连每段前摇（短于单发瞬步，保持连击密度）
+## 瞬步前摇 0.40→0.62（2026-11-03 二次强化）：与换桩同一套三阶段演出；
+## 落地后才出扇形，前摇拉长只增加可读性/可躲避窗口，不改变伤害与弹速。
+const BOSS_BLINK_SLASH_WINDUP := 0.62
+## 无相三连每段前摇 0.30→0.44：仍短于单发瞬步（保持连击压迫），但要够符环收满 + 本体收缩。
+## EnemyData 里 tianmo 的 `interval` 必须 ≥ 本值，否则下一段起手会被上一段前摇吞掉。
+const BOSS_VOID_STEP_WINDUP := 0.44
 
 # ---------------- 太苍龙君·飞龙俯冲（DIVE） ----------------
 const BOSS_DIVE_LEAP_DIST := 380.0       ## 拉升锚点距玩家的拉开距离（盘旋升空读招）
 const BOSS_DIVE_MIN_LEAP := 220.0        ## 换位后与玩家至少保留的助跑距离（锚点被墙钳回时改选另一侧）
-const BOSS_DIVE_LEAP_WINDUP := 0.38      ## 拉升换位前摇：锚点符环填满才升空，之后才是冲锋预警
+## 拉升换位前摇 0.38→0.62（2026-11-03 二次强化）：锚点符环 + 脚下吸积 + 本体收缩
+## 是「盘旋升空」这一招牌动作的前半段，需要足够时长才与后面的俯冲预警区分开。
+const BOSS_DIVE_LEAP_WINDUP := 0.62
 const BOSS_DIVE_WINDUP := 0.75           ## 俯冲预警时长（胶囊线填满）
 const BOSS_DIVE_SPEED_MUL := 7.2         ## 俯冲倍速（全场贯穿，明显高于破阵冲锋 3.2）
 const BOSS_DIVE_DURATION := 0.85         ## 俯冲实冲时长（配合倍速贯穿全图）
@@ -614,9 +671,9 @@ static func is_elite_wave(n: int, _endless: bool = false) -> bool:
 
 ## 精英生成数量（纯函数）：依据波次与危险度（0~1 档，D0 普通 / D1 噩梦）确定精英怪刷新数量。
 ## - 主线（≤20 波）：第 5 波恒 1 只；第 15 波在 D1 噩梦升级为 2 只
-## - 深层（>20 波，2026-11-03 后期减量提质后）：
-##   D0: 21+ 波 2 只，31+ 波 3 只
-##   D1: 21+ 波 3 只，36+ 波 4 只
+## - 深层（>20 波，2026-11-03 后期减量提质 + 深层三段化）：
+##   D0: 21~22 波 1 只（破境后先给一口喘息，不再一进深层就双精英）→ 23~30 波 2 只 → 31+ 波 3 只
+##   D1: 21~22 波 2 只 → 23~35 波 3 只 → 36+ 波 4 只
 ## 签名兼任 (n, danger) 与历史 (n, _endless, danger) 两种传参口径
 static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0) -> int:
 	if not is_elite_wave(n):
@@ -632,8 +689,12 @@ static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0)
 			return 2
 		return 1
 	if d == 0:
+		if n <= 22:
+			return 1
 		return 3 if n >= 31 else 2
 	else:
+		if n <= 22:
+			return 2
 		return 4 if n >= 36 else 3
 
 ## Boss 刷新数量（纯函数）：第 20/40/50/60/80/100 波在噩梦难度下打双 Boss 接力车轮战

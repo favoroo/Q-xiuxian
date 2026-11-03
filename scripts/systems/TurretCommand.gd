@@ -35,7 +35,7 @@ static func ready_count(player) -> int:
 		n += int(w.free_charges())
 	return n
 
-## 收回后的整备冷却剩余秒数：多把机关武器取最长的那条（按钮「整备 N秒」读数）
+## 收回后的整备倒数剩余秒数：多把机关武器取最长的那条（按钮「整备 N秒」读数）
 static func cooldown_left(player) -> float:
 	var left := 0.0
 	for w in mechanism_weapons(player):
@@ -78,26 +78,20 @@ static func nearest_turret(player, pos: Vector2, radius: float) -> TurretUnit:
 			best = t
 	return best
 
-## 离 pos 最近的一座「需要维修」的机关（不限距离；没有待修机关时返回 null）
-## HUD「N 座待修」芯片的方向提示用它：芯片告诉你有几台，收回键小字告诉你往哪走。
-static func nearest_service_turret(player, pos: Vector2) -> TurretUnit:
-	var best: TurretUnit = null
-	var best_d := 1.0e18
-	for t in deployed_turrets(player):
-		if not t.needs_service():
-			continue
-		var d := t.global_position.distance_squared_to(pos)
-		if d < best_d:
-			best_d = d
-			best = t
-	return best
-
 ## 到最近一座自己的机关的距离（没有则返回一个大数）
 static func nearest_turret_dist(player, pos: Vector2) -> float:
 	var best := 1.0e9
 	for t in deployed_turrets(player):
 		best = minf(best, t.global_position.distance_to(pos))
 	return best
+
+## 收回的目标：全场离 pos 最近的一座自己的机关（RECALL_RADIUS <= 0 时无视距离）。
+## HUD 的收回键显隐与 recall_nearest 都读它，保证「键亮着 == 按下去真能收」。
+static func recall_candidate(player, pos: Vector2) -> TurretUnit:
+	var radius := BalanceTurret.RECALL_RADIUS
+	if radius <= 0.0:
+		return nearest_turret(player, pos, 1.0e9)
+	return nearest_turret(player, pos, radius)
 
 ## 布设落点：玩家脚下沿移动反方向外沿（静止时偏下），避开压在身上；
 ## 按 GameManager.MAP_HALF_EXTENT - 26.0 做 XY 钳制，避免贴边时落点出结界。
@@ -140,24 +134,46 @@ static func deny_reason(player) -> String:
 
 # ---------------- 动作 ----------------
 
+## 最近一次布设失败的原因码（"" = 没失败）："cap" 编制满 / "scene" 机关场景实例化不出来 /
+## "internal" 其它。HUD 用它把「为什么布不了」说清 —— 以前无论哪一环掉了都只报一句
+## 「现在不能布设机关」，玩家看不懂、排查也无从下手。
+static var last_error: String = ""
+
 ## 布设一座：成功返回机关节点，失败返回 null。耐久沿用收回时带回的量（新机关 = 满耐久）。
 static func deploy_at_player(player) -> TurretUnit:
+	last_error = ""
 	if not can_deploy(player):
 		return null
 	var w = next_ready(player)
 	if w == null:
 		return null
-	var turret: TurretUnit = w.deploy_turret_at(deploy_candidate_pos(player))
+	var pos := deploy_candidate_pos(player)
+	# 布设演出的起点：玩家身上（器核从人物飞向落点）。非 Node2D 宿主（判据桩）传 INF 直接落地。
+	var from_pos := Vector2.INF
+	if player is Node2D:
+		from_pos = (player as Node2D).global_position
+	var turret: TurretUnit = w.deploy_turret_at(pos, from_pos)
+	if turret == null and TurretHandler.last_error == "scene":
+		# 场景缓存可能是空的/坏的（导出包里 preload 退化成空 PackedScene，坑 12 同源）：
+		# 丢掉缓存重读一次 —— 只重试这一回，不再让玩家对着按键点半天没反应。
+		w.reload_turret_scene()
+		turret = w.deploy_turret_at(pos, from_pos)
 	if turret == null:
+		last_error = TurretHandler.last_error
+		if last_error.is_empty():
+			last_error = "internal"
+		push_warning("[TURRET] 布设失败：%s" % last_error)
 		return null
 	w.on_turret_deployed()
 	return turret
 
-## 收回最近的一座机关（编制返还 + 整备冷却）。返回是否真的收回了。
+## 收回最近的一座机关（2026-11-03：不再限距离、不再起整备倒数）。返回是否真的收回了。
 ## 多编制下一把武器可能站着两座，所以必须点名收回「最近的那一座」，
 ## 不能像单编制时代那样笼统地让武器自己挑第一座。
+## 距离口径走 BalanceTurret.RECALL_RADIUS（当前 = 全场不限）：玩家在场边也能点收回，
+## 机关打不到宝箱时不用先跑过去。
 static func recall_nearest(player, pos: Vector2) -> bool:
-	var t := nearest_turret(player, pos, BalanceTurret.INTERACT_RADIUS)
+	var t := recall_candidate(player, pos)
 	if t == null:
 		return false
 	var owner = t._owner_weapon

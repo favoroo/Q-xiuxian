@@ -603,7 +603,7 @@ func end_wave(early_secs: float = 0.0) -> void:
 	for turret in get_tree().get_nodes_in_group("turrets"):
 		if turret is TurretUnit:
 			(turret as TurretUnit).on_wave_end()
-	# 悬浮武器波末整备：待布设机关编制回满、整备冷却清零（不影响普通武器）
+	# 悬浮武器波末整备：待布设机关编制回满、整备倒数清零（不影响普通武器）
 	var p = GameManager.player
 	if p != null and is_instance_valid(p):
 		var holder = p.get("weapon_holder") as Node

@@ -5,10 +5,10 @@ extends Node
 ##
 ## 钉的是「玩家看到的那颗键」：
 ##   ① 无机关武器 → 整颗收起；有编制 → 「布设 ×N」+ 副读数 = 下一把机关名；
-##   ② 靠近自己机关 → 「维修」（磨损）/「完好」（满耐久）+ 顶部「收回」角标；
+##   ② 靠近自己机关 → 「维修」（磨损）/「完好」（满耐久）+ 独立「收回」键（走远隐藏）；
 ##   ③ 长按维修：键面走针环推进、耐久实时回填、松手保留已修量；
-##   ④ 收回：编制返还 + 整备冷却期间不显示 + 冷却结束淡回；
-##   ⑤ 机关磨损且玩家不在旁边 → 「N 座待修」芯片仍挂在原位上（圆键收起也看得见）；
+##   ④ 收回：起固定 2 秒整备倒数（键面显示剩余秒数），倒数走完淡回布设态；
+##   ⑤ 机关磨损且玩家不在旁边 → 「N 座待修」芯片仍挂在原位上（走远也看得见）；
 ##   ⑥ 第二指（原生 ScreenTouch）能布设；键已进摇杆的 UI_HOLD 组（按住不长摇杆）。
 ##
 ## 本判据用真 GameHUD + 真按钮拾取（事件走 root.push_input 打真实矩形），
@@ -191,16 +191,15 @@ func _case_deploy_by_tap() -> void:
 			"机关落在脚边而不是玩家中心（不压人物）")
 	_c.equals(TurretCommand.ready_count(_player), 0, "编制已用完")
 	# 布设点就在脚边，玩家自然还在交互半径内 —— 先走远才算「不在机关旁」。
-	# v0.1.20：编制用完也不收起，改成「在场」并常驻独立收回键（用户真机找不到收回入口）。
+	# 编制用完也不收起，改成「在场」；布设键不再写收回提示。
 	_player.global_position += Vector2(320, 0)
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "编制用完且走远 → 在场态，不收起")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_SPENT, "键面写「在场」")
-	_c.equals(_btn.get_sub_label().text, "走近可收回", "副读数提示走近可收回")
+	_c.equals(_btn.get_sub_label().text, "", "布设键副读数不写收回提示")
 	_c.check(_btn.visible and _btn.is_circle_shown(), "在场态圆键仍然亮着")
-	_c.check(_btn.get_recall_btn().visible, "独立收回键常驻可见")
-	_c.check(_btn.get_recall_btn().modulate.a < 0.8, "走远后收回键压暗")
-	_c.equals(_btn.get_recall_sub().text, "左", "走远后收回键小字指向机关方向（机关在左）")
+	# 2026-11-03 用户口径：收回不限距离 —— 走远后收回键照样亮着，随时能收最近那座
+	_c.check(_btn.get_recall_btn().visible, "走远后独立收回键仍然可见（收回不限距离）")
 	_c.check(_btn.get_preview() == null or not _btn.get_preview().visible,
 		"离开布设态后落点预览收起")
 
@@ -217,7 +216,9 @@ func _case_near_modes() -> void:
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.OK, "靠近满耐久机关 → 完好态")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_OK, "键面写「完好」")
 	_c.check(_btn.get_recall_btn().visible, "靠近时独立收回键可见")
-	_c.equals(_btn.get_recall_sub().text, "可收回", "靠近时收回键小字写「可收回」")
+	_c.check(_btn.get_recall_icon() != null, "收回键有「机关 → 人物」图标")
+	_c.equals(_btn.get_recall_btn().text, "", "收回键不再用按钮文字（图标 + 单行小字）")
+	_c.equals(_btn.get_recall_sub().text, "可收回", "靠近时收回键只写单行「可收回」")
 	_c.check(not _btn.get_badge().visible, "无编制时编制角标隐藏")
 
 	t.durability = 30.0
@@ -225,6 +226,16 @@ func _case_near_modes() -> void:
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR, "机关磨损 → 维修态")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_REPAIR, "键面写「维修」")
 	_c.equals(_btn.get_sub_label().text, "30%", "副读数是当前耐久百分比")
+
+	# 维修触发距离 2026-11-03：90 → 150 → 120 → 110 → 95（放宽反而老在收回重摆时抢键）
+	_player.global_position = t.global_position + Vector2(90, 0)
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR, "贴到 90px（旧值附近）进维修态")
+	_player.global_position = t.global_position + Vector2(120, 0)
+	await _poll()
+	_c.check(_btn.mode() != HudMechanismButton.Mode.REPAIR, "超出 95px 交互半径后不再进维修态")
+	_player.global_position = t.global_position + Vector2(30, 0)
+	await _poll()
 
 # ---------------- ③ 长按维修 ----------------
 
@@ -248,7 +259,8 @@ func _case_repair_hold() -> void:
 	# 按到满：耐久回满、走针环到 1 之前就收手
 	_press_at(center)
 	await get_tree().create_timer(BalanceTurret.REPAIR_HOLD_SEC + 0.25).timeout
-	_c.near(t.durability, BalanceTurret.MAX_DURABILITY, 0.01, "长按满 0.8 秒把耐久修满")
+	_c.near(t.durability, BalanceTurret.MAX_DURABILITY, 0.01,
+		"长按满 %.1f 秒把耐久修满" % BalanceTurret.REPAIR_HOLD_SEC)
 	_release_at(center)
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.OK, "修满后回到完好态")
@@ -270,14 +282,17 @@ func _case_broken_and_service_chip() -> void:
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "走远后在场上机关仍可见 → 在场态")
 	_c.check(_btn.get_chip().visible, "待修芯片仍然可见")
 	_c.check(_btn.get_chip().text.contains("1"), "芯片写「1 座待修」")
-	_c.check(_btn.is_circle_shown(), "在场态圆键不收起（回收入口必须看得见）")
-	# 远处的收回键按下去要给明确提示，不能静默
-	_press_at(_recall_center())
+	_c.check(_btn.is_circle_shown(), "在场态圆键不收起")
+	# 走远后收回键照样亮着（2026-11-03 收回不限距离）：按 G 真的把最近那座收回来
+	_c.check(_btn.get_recall_btn().visible, "走远后收回键仍然可见（不再压暗 + 指方向）")
+	var turret_id := t.get_instance_id()
+	_btn.recall_by_key()
 	await get_tree().process_frame
-	_release_at(_recall_center())
-	await get_tree().process_frame
-	_c.check(_field_turret() != null, "走太远时收回键不会隔空收回")
-	_c.check(not UpdateManager.toast_probe().is_empty(), "走太远时点收回键会弹出「走近」提示")
+	_c.check(_field_turret() == null, "走远也能收回（不再要求走近）")
+	_c.check(is_instance_valid(t) and t._is_dying,
+		"收回的是走远前那座机关（id=%d）" % turret_id)
+	# 收回当刻编制返还：立刻可以重摆（没有整备倒数）
+	_c.check(bool(_fw.deploy_ready()), "收回当刻就能重新布设（无整备倒数）")
 
 	# 修好后芯片消失
 	_player.global_position = t.global_position + Vector2(30, 0)
@@ -302,12 +317,10 @@ func _case_recall() -> void:
 	_c.equals(_field_turret(), null, "点独立收回键后机关撤场")
 	_c.check(float(_fw.pending_turret_durability) > 0.0, "耐久随机关带回本体")
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.COOLDOWN, "整备冷却期间显示「整备」")
+	# 2026-11-03 用户口径：收回后不再等整备，当刻就能重摆
+	_c.near(float(_fw.redeploy_timer), 0.0, 0.001, "收回后没有整备倒数（RECALL_COOLDOWN_SEC = 0）")
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "收回当刻立刻恢复布设态")
 	_c.check(not _btn.get_recall_btn().visible, "机关已收回，收回键隐藏")
-
-	_fw.redeploy_timer = 0.0
-	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "整备冷却结束恢复布设态")
 	_c.check(_btn.get_badge().visible, "编制角标重新亮回来（收回角标压下后不能一黑到底）")
 	_c.check(_btn.get_badge().text.contains("1"), "编制已返还")
 
@@ -360,6 +373,42 @@ func _case_multi_touch_repair() -> void:
 	await get_tree().process_frame
 	_c.check(not t.is_repairing(), "index=1 release 停止维修")
 
+	# 热区重叠带（2026-11-03）：主键左缘距主心 50px，落在主键外扩热区 58 内、
+	# 收回键外扩热区 40 内（圆心距 82）。必须先判主键 —— 旧顺序会在这里把机关收回。
+	var overlap := _btn_center() + Vector2(-50.0, 0.0)
+	_c.check(overlap.distance_to(_recall_center()) <= HudMechanismButton.RECALL_SIZE * 0.5 + HudMechanismButton.RECALL_HIT_PAD,
+		"前提：取样点落在收回键外扩热区内（热区重叠带）")
+	var st2 := InputEventScreenTouch.new()
+	st2.position = overlap
+	st2.index = 1
+	st2.pressed = true
+	_btn.handle_engine_input(st2)
+	await get_tree().process_frame
+	_c.check(_field_turret() == t, "重叠带点按不误收机关（主键优先）")
+	_c.check(t.is_repairing(), "重叠带点按走主键维修")
+	var st2_rel := InputEventScreenTouch.new()
+	st2_rel.position = overlap
+	st2_rel.index = 1
+	st2_rel.pressed = false
+	_btn.handle_engine_input(st2_rel)
+	await get_tree().process_frame
+	_c.check(not t.is_repairing(), "重叠带松开停止维修")
+
+	# 暂停/失焦（2026-11-03）：暂停态收不到松开事件，必须主动收手；
+	# 否则回到战斗后没人按住也在回填耐久，F 的按住标志还会卡到下一次松开。
+	_btn.key_press()
+	await get_tree().process_frame
+	_c.check(t.is_repairing(), "F 长按开始维修")
+	_btn.notification(Node.NOTIFICATION_PAUSED)
+	await get_tree().process_frame
+	_c.check(not t.is_repairing(), "暂停通知主动收手（维修不跨暂停继续）")
+	_btn.key_press()
+	await get_tree().process_frame
+	_c.check(t.is_repairing(), "暂停收手后 F 未被锁死（再按能继续维修）")
+	_btn.key_release()
+	await get_tree().process_frame
+	_c.check(not t.is_repairing(), "松开 F 结束维修")
+
 # ---------------- ⑧ 双联布设（站原地「太近」+ 挪开可布设） ----------------
 
 func _case_dual_deploy() -> void:
@@ -367,10 +416,11 @@ func _case_dual_deploy() -> void:
 	if _field_turret() != null:
 		_btn._do_recall()
 		await get_tree().process_frame
-	_fw.redeploy_timer = 0.0
 	_fw.pending_turret_durability = -1.0
 	if _fw.get("pending_turret_durabilities") != null:
 		_fw.pending_turret_durabilities.clear()
+	# 上面收回起了 2 秒整备倒数：判据不等真实时间，直接清零模拟到点
+	_fw.redeploy_timer = 0.0
 
 	GameManager.items.append("shen_shuanglian")
 	await get_tree().process_frame
@@ -400,7 +450,7 @@ func _case_dual_deploy() -> void:
 	_c.equals(_fw.field_turrets().size(), 1, "点主键被拒，不新增机关")
 
 	# 把玩家沿远离机关方向挪约 40px 使落点 ≥64
-	# t1 在 (0, 26)，玩家挪到 (0, 66)：离 t1 为 40px (<=90)，落点在 (0, 92)，离 t1 为 66px (>=64)
+	# t1 在 (0, 26)，玩家挪到 (0, 66)：离 t1 为 40px（在维修交互半径内），落点在 (0, 92)，离 t1 为 66px (>=64)
 	_player.global_position = t1.global_position + Vector2(0, 40.0)
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "挪约 40px 使落点 ≥64 → DEPLOY")
@@ -411,14 +461,14 @@ func _case_dual_deploy() -> void:
 	_c.check(main_c.distance_to(recall_c) > HudMechanismButton.BTN_SIZE.x * 0.5,
 		"收回键不在主键热区内（不会再误触）")
 
-	# 放第二座成功，且此时玩家仍在第一座 90px 内
+	# 放第二座成功，且此时玩家仍在第一座的维修交互半径内
 	await get_tree().create_timer(0.2).timeout
 	_press_at(_btn_center())
 	_release_at(_btn_center())
 	await get_tree().process_frame
 	_c.equals(_fw.field_turrets().size(), 2, "再放第二座成功")
 	_c.check(_player.global_position.distance_to(t1.global_position) <= BalanceTurret.INTERACT_RADIUS,
-		"此时玩家仍在第一座 90px 内（证明靠近也能布设）")
+		"此时玩家仍在第一座的交互半径内（证明靠近也能布设）")
 
 # ---------------- ⑨ 收回防抖 ----------------
 
@@ -426,12 +476,12 @@ func _case_recall_debounce() -> void:
 	_c.equals(_fw.field_turrets().size(), 2, "前提：场上有两座机关")
 	var t1: TurretUnit = _fw.field_turrets()[0]
 	var t2: TurretUnit = _fw.field_turrets()[1]
-	# 玩家移到两座机关中间，使两座都在 90px 内
+	# 玩家移到两座机关中间，使两座都在维修交互半径内
 	_player.global_position = (t1.global_position + t2.global_position) * 0.5
 	_c.check(_player.global_position.distance_to(t1.global_position) <= BalanceTurret.INTERACT_RADIUS,
-		"第一座在 90px 交互范围内")
+		"第一座在交互范围内")
 	_c.check(_player.global_position.distance_to(t2.global_position) <= BalanceTurret.INTERACT_RADIUS,
-		"第二座在 90px 交互范围内")
+		"第二座在交互范围内")
 
 	# 快速调用两次 _do_recall（模拟原生按下 + 鼠标松开跨帧双发）
 	_btn._do_recall()
@@ -445,8 +495,9 @@ func _case_recall_debounce() -> void:
 	await get_tree().process_frame
 	_c.equals(_fw.field_turrets().size(), 0, "防抖结束后可收回第二座")
 
-	GameManager.items.erase("shen_shuanglian")
+	# 收回起了 2 秒整备倒数：判据不等真实时间，直接清零给下一段
 	_fw.redeploy_timer = 0.0
+	GameManager.items.erase("shen_shuanglian")
 	await _poll()
 
 # ---------------- ⑩ CLEARING 阶段布设 ----------------
@@ -474,10 +525,10 @@ func _case_clearing_deploy() -> void:
 		_c.check(not t._wave_active, "CLEARING 阶段布设的机关进入停火休眠态（_wave_active=false）")
 		_btn._do_recall()
 		await get_tree().process_frame
+		_fw.redeploy_timer = 0.0
 
 	fake_spawner.free()
 	GameManager.wave_spawner = null
-	_fw.redeploy_timer = 0.0
 	await _poll()
 
 # ---------------- ⑩b 波间 WAITING 布设 ----------------
@@ -502,10 +553,10 @@ func _case_waiting_deploy() -> void:
 	if t != null:
 		_btn._do_recall()
 		await get_tree().process_frame
+		_fw.redeploy_timer = 0.0
 
 	fake_spawner.free()
 	GameManager.wave_spawner = null
-	_fw.redeploy_timer = 0.0
 	await _poll()
 
 # ---------------- ⑪ 落点边界钳制 ----------------

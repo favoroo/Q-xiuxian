@@ -60,7 +60,11 @@ static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 	]
 	if is_turret:
 		rows.append(["开火间隔", "%s 秒" % String.num(WeaponData.turret_fire_interval(wid, 1), 2), GameStyle.PAPER])
-		rows.append(["收回整备", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER])
+		# 2026-11-03 收回不再有整备倒数：卡面直说「无需等待」，别再显示「0 秒」
+		if BalanceTurret.RECALL_COOLDOWN_SEC <= 0.0:
+			rows.append(["收回整备", "无需等待", GameStyle.PAPER])
+		else:
+			rows.append(["收回整备", "%d 秒" % int(BalanceTurret.RECALL_COOLDOWN_SEC), GameStyle.PAPER])
 	else:
 		rows.append(["攻击间隔", "%s 秒" % String.num(float(def.get("cooldown", 1.0)), 2), GameStyle.PAPER])
 	rows.append(["攻击范围", "%d" % int(def.get("range", 0)), GameStyle.PAPER])

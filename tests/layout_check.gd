@@ -28,6 +28,8 @@ const EPS := 1.0
 
 var _c := TestCheck.new()
 var _holder: Control
+## 开面板时那一批 5 张候选：6 卡应力屏（学者「博学」+1）会临时换成 6 张，量完按这份还原
+var _base_alloc_offers: Array[Dictionary] = []
 
 func _ready() -> void:
 	if "--selftest" in OS.get_cmdline_user_args():
@@ -50,6 +52,7 @@ func _run() -> void:
 	# 后面每个屏宽都按 GameManager.alloc_offers 现建一版面板来量。
 	GameManager.pending_upgrade_points = 2
 	GameManager.open_alloc_session()
+	_base_alloc_offers = GameManager.alloc_offers.duplicate(true)
 	for i in range(3):
 		GameManager.add_weapon("huoyan_fu")
 	_stress_shop()
@@ -264,6 +267,12 @@ func _screens() -> Array[Dictionary]:
 			"settle": 0.6},
 		{"tag": "波后悟道结算", "path": "res://scenes/ui/LevelUpDialog.tscn",
 			"open": "_on_alloc_opened", "select": 1, "edge_gap": EDGE_GAP},
+		# 学者「博学」把候选加到基准 +1：6 张卡按 5 张分宽就会把面板两头一起顶出屏
+		# （2026-11-03 用户真机：两边溢出且横滑关着）。这一档只量「面板在屏内 + 摆不下能横滑」，
+		# 不量 edge_gap：横滑时两侧卡本来就会滑出可视区，那不是贴边毛病。
+		{"tag": "波后悟道结算·6卡", "path": "res://scenes/ui/LevelUpDialog.tscn",
+			"open": "_on_alloc_opened", "select": 1,
+			"alloc_slots": GameManager.UPGRADE_OFFER_COUNT + 1},
 		{"tag": "灵石阁", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
 			"shop_select": true, "shelf_slots": GameManager.SHOP_BASE_SLOTS},
 		{"tag": "灵石阁·6格", "path": "res://scenes/ui/WaveShop.tscn", "open": "_on_shop_opened",
@@ -328,6 +337,10 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		# 换档货架要重掷 + 重钉最坏文案，再等一帧让容器按新格数排好
 		_stress_shop(int(spec["shelf_slots"]))
 		await get_tree().process_frame
+		await get_tree().process_frame
+	if spec.has("alloc_slots"):
+		# 候选数换档要在 _on_alloc_opened 之前落地：摆位算术读的是 GameManager.alloc_offers
+		_stress_alloc(int(spec["alloc_slots"]))
 		await get_tree().process_frame
 	match String(spec["open"]):
 		"open":
@@ -412,7 +425,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		bad.append_array(_check_mechanism_btn(node as GameHUD, screen))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
-	if String(spec["tag"]) == "波后悟道结算":
+	if String(spec["tag"]).begins_with("波后悟道结算"):
 		bad.append_array(_check_levelup_rows(node as LevelUpDialog, screen))
 	_c.check(bad.is_empty(), "%s · 屏宽 %d：无出屏、每行文字装得下（%d 处毛病）%s" % [
 		String(spec["tag"]), int(screen.x), bad.size(),
@@ -425,7 +438,27 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 		GameManager.stash.clear()
 		GameManager.drones.clear()
 		GameManager.recalc_synergies()
+	if spec.has("alloc_slots"):
+		# 6 张应力候选只属于这一屏：不还原，下一档屏宽的 5 卡基准会跟着变成 6 张
+		GameManager.alloc_offers = _base_alloc_offers.duplicate(true)
 	await get_tree().process_frame
+
+## 悟道候选换档应力（学者「博学」+1）：按「加成行数 → 说明字数」取最占地方的那几条。
+## 卡数一多每张就更窄，长属性名一行排不下会把卡片内容撑得比均分算术更宽 ——
+## 2026-11-03 用户真机 6 张卡把面板两头一起顶出屏，根因就是摆位仍按 5 张分宽。
+func _stress_alloc(count: int) -> void:
+	var scored: Array = []
+	for u in UpgradeData.UPGRADES:
+		var apply: Dictionary = u.get("apply", {})
+		scored.append({"id": String(u.get("id", "")),
+			"weight": apply.size() * 1000 + String(u.get("desc", "")).length()})
+	scored.sort_custom(func(a, b) -> bool: return int(a["weight"]) > int(b["weight"]))
+	var offers: Array[Dictionary] = []
+	for i in range(mini(count, scored.size())):
+		var d: Dictionary = UpgradeData.get_upgrade_def(String(scored[i]["id"])).duplicate()
+		d["border_color"] = UpgradeData.RARITY_COLORS.get(d.get("rarity", "common"), Color.WHITE)
+		offers.append(d)
+	GameManager.alloc_offers = offers
 
 ## 卡上真有说明块吗：找卡 VBox 里那段非空的 RichTextLabel。
 ## 只认「文字真上了树」，不认「代码里写了 desc」—— 说明被 if 拦在门外时两者正是分家的。
@@ -541,6 +574,8 @@ func _check_shop_exits(shop: Control, screen: Vector2) -> Array[String]:
 ## ③ 顶栏这一排摆得下：整排要的最小宽 ≤ 面板内容宽，并点名最宽的那一颗（挤人的就是它）。
 ## 2026-10-25 用户：「这个提示看不清，没什么作用，去掉」——状态条整体下线，①作废，
 ## 剩 ②③ 仍钉着：谁往中间塞回一整排读数、或把顶栏挤爆，这一格照样报红。
+## 2026-11-03 补④：候选数不固定（学者 +1 = 6 张）——卡片行摆得下必须锁死横滑，
+## 摆不下（卡宽已压到下限 / 内容最小宽更宽）必须开横滑，否则最外侧的卡既出屏又点不到。
 ## 尺子全走运行时节点自己的账（combined_minimum_size + 现读的 separation/stylebox），不抄像素。
 func _check_levelup_rows(lvl: LevelUpDialog, screen: Vector2) -> Array[String]:
 	var bad: Array[String] = []
@@ -565,6 +600,17 @@ func _check_levelup_rows(lvl: LevelUpDialog, screen: Vector2) -> Array[String]:
 				widest = String(ctl.name)
 		bad.append("顶栏摆不下：整排要 %.0f 宽，面板内容只给 %.0f，最宽的是 %s（%.0f）⇒ 属性/暂停会被挤出面板" % [
 			need_w, avail_w, widest, widest_w])
+	# ④ 卡片行（数量随候选数变）的横滑闸：摆不下必须有得滑，摆得下不许划得动
+	var row_need: float = lvl.cards_container.get_combined_minimum_size().x
+	var row_view: float = LevelUpDialog.cards_view_w(screen, lvl._card_columns())
+	var h_mode: int = lvl.card_scroll.horizontal_scroll_mode
+	var h_slide: bool = h_mode != ScrollContainer.SCROLL_MODE_DISABLED
+	if row_need > row_view + EPS and not h_slide:
+		bad.append("卡片行摆不下（要 %.0f 宽，只给 %.0f）却锁死横滑 ⇒ 最外侧的卡点不到" % [
+			row_need, row_view])
+	elif row_need <= row_view + EPS and h_slide:
+		bad.append("卡片行摆得下（要 %.0f ≤ %.0f）却开着横滑 ⇒ 划一下整排会动" % [
+			row_need, row_view])
 	return bad
 
 ## 第二排右缘那颗「余妖」芯片点名量（2026-10-16 用户真机：读数被屏幕切掉半截）。
@@ -1093,6 +1139,26 @@ func _check_safe_insets() -> void:
 	var wild := GameHUD.safe_insets(Rect2(0, 900, 100, 100), Rect2(0, 0, 1200, 540), 1.0)
 	_c.check(float(wild[1]) <= GameHUD.SAFE_CAP + 0.01 and float(wild[2]) <= GameHUD.SAFE_CAP + 0.01,
 		"反例⑧ 离谱的 safe area 读数被夹在上限内，不会把顶栏推到屏心（实得 %s）" % str(wild))
+	_check_orientation_watch()
+
+## 反向横屏（180° 翻转）的重算闸：翻转前后窗口/视口/方向值全不变，只有安全区左右互换。
+## 签名必须因此变化 —— 否则 HUD 不会重跑 _apply_safe_area，刘海换边后顶栏不让位。
+func _check_orientation_watch() -> void:
+	var win_pos := Vector2i(0, 0)
+	var win_size := Vector2i(2400, 1080)
+	var vp := Vector2(960, 540)
+	var sensor := int(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+	# 正向横屏：刘海在左
+	var fwd := HudOrientationWatcher.signature(
+		Rect2i(0, 0, 2400, 1080), win_pos, win_size, vp, sensor)
+	# 反向横屏：刘海换到右，safe area 左移出 x>0
+	var rev := HudOrientationWatcher.signature(
+		Rect2i(60, 0, 2340, 1080), win_pos, win_size, vp, sensor)
+	_c.check(fwd != rev,
+		"反例⑨ 180° 翻转：窗口/视口/方向都不变、只有安全区换边，签名必须跟着变（否则顶栏不重算）")
+	var same := HudOrientationWatcher.signature(
+		Rect2i(60, 0, 2340, 1080), win_pos, win_size, vp, sensor)
+	_c.check(rev == same, "正例 稳定态同一读数 ⇒ 签名不变（每拍零写入，不白跑 _apply_safe_area）")
 
 func _same(a: Array, b: Array) -> bool:
 	if a.size() != b.size():

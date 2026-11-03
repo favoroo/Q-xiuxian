@@ -4,7 +4,8 @@ extends Node2D
 ## 机关炮台/阵盘实体（2026-11-03 手动布设改版）：
 ## 由玩家在脚下空地手动布设（TurretHandler.deploy），一座机关 = 一把机关武器的全部编制。
 ## 独立索敌、**多管齐射**（★1 双管 … ★4 五管，管数 = 旧版炮台座数，总 DPS 逐星持平），
-## 开火会磨损耐久：磨到四成降速、磨到底停摆，靠近长按可维修（TurretUnit.begin_repair）。
+## 开火会磨损耐久：磨到四成降速、磨到底停摆，靠近长按可维修（TurretUnit.begin_repair；
+## 维修期间有灵气索 + 盘缘维护环演出，用时见 BalanceTurret.REPAIR_HOLD_SEC）。
 ## 回合末不再消散，进入整备（耐久回满、停火），下波继续在原位工作（on_wave_end）。
 ##
 ## 伤害吃机关伤害（contraption_damage）、机关羁绊（synergy_contraption_mult）与全套玩家乘区。
@@ -16,28 +17,94 @@ extends Node2D
 const POOL_CAP_PER_SCENE := 12
 static var _pools: Dictionary = {}
 
+## 布设/收回的地面法阵演出（纯表现层，独立于机关本体缩放，始终贴地）
+const PLACEMENT_FX := preload("res://scripts/weapons/TurretPlacementFx.gd")
+## 布设/收回的空中器核投送（2026-11-03：人物 → 落点 / 机关 → 人物）
+const TRANSFER_FX := preload("res://scripts/weapons/TurretTransferFx.gd")
+## 维修期间的灵气索 + 盘缘维护环（纯表现层）
+const REPAIR_FX := preload("res://scripts/weapons/TurretRepairFx.gd")
+
 var _pool_key: String = ""
 var _fire_tween: Tween = null
 var _dismiss_tween: Tween = null
+## 入场展开动画：布设后立刻收回时要掐掉，否则缩放/旋转两条 Tween 会互相抢
+var _life_tween: Tween = null
+
+## 器核飞行期间本体不显形、不索敌不开火：落点坐标已是判定真值，只是等动画到位
+var _arrived: bool = true
+var _arrive_timer: float = 0.0
+## 维修演出节点（挂在战场上，随 begin_repair / end_repair 生灭）
+var _repair_fx: Node2D = null
+## 维修中的盘缘维护环相位 / 碎屑节拍 / 修满扩散环（0..1，-1 = 不播）
+var _repair_phase: float = 0.0
+var _repair_spark_timer: float = 0.0
+var _repair_done_t: float = -1.0
 ## 布设它的武器（FloatingWeapon）：回池时必须从宿主的 active_turrets 摘除，
 ## 否则该武器下次布设会摸到已被另一把武器复用的池体。
 var _owner_weapon: Node = null
 
-## 从池中取一台（优先复用出树休眠体），调用方负责 setup → add_child → begin_life
+## 场景路径 / 根脚本路径：池键与兜底构建都要用（static 里没有宿主可读，路径写常量）
+const SCENE_PATH := "res://scenes/weapons/TurretUnit.tscn"
+const SCRIPT_PATH := "res://scripts/weapons/TurretUnit.gd"
+## 兜底构建用的贴图（只对 GENERIC 器形可见；有矢量器形的机关会自行把它隐蔽）
+const FALLBACK_ICON := "res://assets/art/weapon_needle_pouch.png"
+
+## 从池中取一台（优先复用出树休眠体），调用方负责 setup → add_child → begin_life。
+## 2026-11-03 真机修：机关场景/脚本在导出包里可能拿不到（坑 12 同源的空 PackedScene、
+## 场景根没挂上脚本）。以前这里直接返回 null ⇒ 玩家只看到一句「现在不能布设机关」，
+## 整把机关武器的输出全废。现在逐级兜底：空场景 → 代码按同结构搭一台（与 .tscn 同名同层级）。
 static func acquire_or_new(scene: PackedScene) -> TurretUnit:
-	if scene == null:
-		return null
-	var key := scene.resource_path
+	var key := ""
+	if scene != null:
+		key = scene.resource_path
 	var bucket: Array = _pools.get(key, [])
 	var turret: TurretUnit = null
 	while not bucket.is_empty() and turret == null:
 		var cand := bucket.pop_back() as TurretUnit
 		if cand != null and is_instance_valid(cand):
 			turret = cand
+	if turret == null and scene != null and scene.can_instantiate():
+		var inst := scene.instantiate()
+		turret = inst as TurretUnit
+		if turret == null and inst != null:
+			# 场景根没挂上脚本（导出包里脚本缺失/解析失败）：就地补挂，别让玩法整条失效
+			push_warning("[TURRET] %s 根节点没挂脚本，就地补挂" % SCENE_PATH)
+			inst.set_script(load(SCRIPT_PATH))
+			turret = inst as TurretUnit
+			if turret == null:
+				inst.free()
 	if turret == null:
-		turret = scene.instantiate() as TurretUnit
+		turret = _build_fallback_unit()
+		if turret != null:
+			push_warning("[TURRET] 机关场景不可用，退回代码构建（%s）" % SCENE_PATH)
+	if turret == null:
+		return null
 	turret._pool_key = key
 	return turret
+
+## 代码构建一台最小可用机关：节点名/层级与 TurretUnit.tscn 一致 ——
+## _ready 的 onready 三件套读 $CoreSprite、$CoreSprite/MuzzlePoint、$BaseRing。
+static func _build_fallback_unit() -> TurretUnit:
+	var script: Script = load(SCRIPT_PATH)
+	if script == null:
+		return null
+	var root := Node2D.new()
+	root.name = "TurretUnit"
+	var ring := Node2D.new()
+	ring.name = "BaseRing"
+	root.add_child(ring)
+	var sprite := Sprite2D.new()
+	sprite.name = "CoreSprite"
+	sprite.scale = Vector2(0.55, 0.55)
+	if ResourceLoader.exists(FALLBACK_ICON):
+		sprite.texture = load(FALLBACK_ICON)
+	root.add_child(sprite)
+	var muzzle := Marker2D.new()
+	muzzle.name = "MuzzlePoint"
+	muzzle.position = Vector2(24.0, 0.0)
+	sprite.add_child(muzzle)
+	root.set_script(script)
+	return root as TurretUnit
 
 ## 场景 teardown 统一释放休眠体（出树节点不受 free 传播，不手动清会成孤儿）
 static func clear_pool() -> void:
@@ -58,7 +125,7 @@ var durability: float = BalanceTurret.MAX_DURABILITY
 func effective_stamina() -> float:
 	return stamina_sec * maxf(0.2, GameManager.turret_stamina_mul)
 
-## 实际维修用时 = 0.8s × 维修用时乘区（越小越快）
+## 实际维修用时 = BalanceTurret.REPAIR_HOLD_SEC（3.5s）× 维修用时乘区（越小越快）
 func repair_hold_sec() -> float:
 	return BalanceTurret.repair_hold_sec(GameManager.turret_repair_haste_mul)
 
@@ -99,6 +166,10 @@ var _wave_active: bool = true
 ## 维修态：HUD 按住时 begin_repair，松开/离开范围 end_repair；回填在 _process 里连续推进。
 var _is_repairing: bool = false
 var _repair_from: float = BalanceTurret.MAX_DURABILITY
+## 起修点：玩家移动超过 REPAIR_MOVE_TOLERANCE 就中断（不是最短按住时长，只禁「边跑边修」）
+var _repair_anchor: Vector2 = Vector2.ZERO
+## 中断提示「维修需站定」的剩余显示秒数（头顶状态牌短暂压过别的读数）
+var _repair_cancel_t: float = 0.0
 
 ## 索敌节流（与 FloatingWeapon 同款）：intersect_shape 最多 15Hz
 const TARGET_SEARCH_INTERVAL := 0.066
@@ -106,6 +177,9 @@ var _search_timer: float = 0.0
 ## 索敌候选缓存（复用数组，避免每节拍小分配）
 var _cand_nodes: Array[Node2D] = []
 var _cand_dists: Array[float] = []
+## 藏宝匣候选（另册记账：活妖不够分齐射管数时才补位）
+var _chest_nodes: Array[Node2D] = []
+var _chest_dists: Array[float] = []
 
 static var _search_shape: CircleShape2D = null
 static var _search_query: PhysicsShapeQueryParameters2D = null
@@ -132,6 +206,8 @@ var _readout_key: String = ""
 var _worn_fx_timer: float = 0.0
 ## 耐久弧/警示环的脉动相位
 var _warn_phase: float = 0.0
+## 玩家是否站在维修交互半径内（且这座机关可修）：地面维修范围圈只在圈内亮起
+var _player_in_repair_range: bool = false
 
 func setup(def_id: String, star_level: int) -> void:
 	weapon_def_id = def_id
@@ -186,11 +262,12 @@ func _build_readout() -> void:
 	_readout_label.position = Vector2(-60, -50)
 	_readout.add_child(_readout_label)
 
-## 单次布设生命周期的开场：入场弹起 + 落地钝响。
-## 新建实例由宿主在 add_child 后调用；池化复用实例同样走这里（_ready 一生只跑一次，
-## 不能把可见状态复位挂在 _ready 上）。
+## 单次布设生命周期的开场：器核从人物飞到落点（from_pos 给出时）→ 地面法阵铺开 +
+## 本体展开扶正 + 落地钝响。新建实例由宿主在 add_child 后调用；池化复用实例同样走这里
+## （_ready 一生只跑一次，不能把可见状态复位挂在 _ready 上）。
 ## keep_durability ≥ 0 时沿用（收回重摆带走耐久，收回不是免费维修）；否则满耐久新机关。
-func begin_life(keep_durability: float = -1.0) -> void:
+## from_pos 是人物出发点的世界坐标；Vector2.INF = 不播投送（判据直调 / 波次整备原位复出）。
+func begin_life(keep_durability: float = -1.0, from_pos: Vector2 = Vector2.INF) -> void:
 	_is_dying = false
 	current_target = null
 	_targets.clear()
@@ -198,12 +275,20 @@ func begin_life(keep_durability: float = -1.0) -> void:
 	_shot_count = 0
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
+	_repair_done_t = -1.0
+	_repair_cancel_t = 0.0
+	_player_in_repair_range = false
+	_stop_repair_fx()
 	_wave_active = true
 	durability = clampf(keep_durability, 0.0, BalanceTurret.MAX_DURABILITY) if keep_durability >= 0.0 else BalanceTurret.MAX_DURABILITY
 	# 随机相位（布设时抽一次，走玩法 RNG —— 错峰影响开火节奏，属于判定侧）
 	_cooldown_timer = GameManager.rng.randf_range(0.1, 0.3)
 	_search_timer = GameManager.rng.randf_range(0.0, TARGET_SEARCH_INTERVAL)
-	scale = Vector2(0.2, 0.2)
+	# 入场基础态：半透明小体量。飞行期间 modulate.a = 0（本体完全不可见），
+	# 等器核到达再展开 —— 落点坐标从 add_child 当刻就是判定真值，动画不改坐标。
+	scale = Vector2(0.45, 0.45)
+	rotation = -0.18
+	modulate = Color.WHITE
 	modulate.a = 0.0
 	core_sprite.rotation = 0.0
 	core_sprite.position = Vector2.ZERO
@@ -222,10 +307,29 @@ func begin_life(keep_durability: float = -1.0) -> void:
 	if muzzle_flash != null:
 		muzzle_flash.visible = false
 		muzzle_flash.modulate.a = 1.0
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(self, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "modulate:a", 1.0, 0.15)
+	if from_pos.is_finite():
+		# 有出发点：先投送，落地那一拍才显形（_process 计时，不依赖 Tween）
+		_arrived = false
+		_arrive_timer = TRANSFER_FX.DEPLOY_SEC
+		_spawn_transfer_fx(TRANSFER_FX.KIND_DEPLOY,
+			from_pos + Vector2(0.0, -10.0), global_position)
+		AudioManager.play_sfx("metal_dart", 0.55)
+	else:
+		_arrived = true
+		_arrive_timer = 0.0
+		_materialize()
+
+## 器核到达落点：地面法阵铺开 + 本体展开扶正 + 落地钝响。
+## 只由 begin_life（无投送）或 _arrive（投送到位）调用一次。
+func _materialize() -> void:
+	_spawn_placement_fx(PLACEMENT_FX.KIND_DEPLOY)
+	if _life_tween != null and _life_tween.is_valid():
+		_life_tween.kill()
+	_life_tween = create_tween()
+	_life_tween.set_parallel(true)
+	_life_tween.tween_property(self, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_life_tween.tween_property(self, "rotation", 0.0, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_life_tween.tween_property(self, "modulate:a", 1.0, 0.10)
 	# 布设：机关砸进地面那一记钝响。不许借用 orb_hit（那是灵宝触敌的暖金钟）
 	AudioManager.play_sfx("impact_blunt", 0.9)
 
@@ -278,12 +382,37 @@ func needs_service() -> bool:
 func is_broken() -> bool:
 	return BalanceTurret.is_broken(durability)
 
+## 维修范围提示（2026-11-03 用户口径）：玩家走进交互半径、且这座机关有磨损时，
+## 脚下亮一圈虚线「你进维修圈了」；离开或修满即灭。
+## 纯表现层，判定仍由 HUD 读 TurretCommand.nearest_turret + INTERACT_RADIUS 同一口径。
+func _update_repair_range_hint() -> void:
+	var p = GameManager.player
+	var in_range := false
+	if p != null and is_instance_valid(p) and p is Node2D:
+		in_range = global_position.distance_to((p as Node2D).global_position) \
+			<= BalanceTurret.INTERACT_RADIUS
+	if in_range != _player_in_repair_range:
+		_player_in_repair_range = in_range
+		queue_redraw()
+	elif in_range and durability < BalanceTurret.MAX_DURABILITY - 0.001:
+		# 圈在亮着的时候要跟着相位呼吸，逐帧重画
+		queue_redraw()
+
 ## 开始维修（HUD 按住）：已满或正在修时是空操作
 func begin_repair() -> void:
 	if _is_dying or _is_repairing or durability >= BalanceTurret.MAX_DURABILITY - 0.001:
 		return
 	_repair_from = durability
 	_is_repairing = true
+	_repair_phase = 0.0
+	_repair_spark_timer = 0.0
+	_repair_cancel_t = 0.0
+	var p = GameManager.player
+	if p != null and is_instance_valid(p) and p is Node2D:
+		_repair_anchor = (p as Node2D).global_position
+	else:
+		_repair_anchor = Vector2.ZERO
+	_spawn_repair_fx()
 
 ## 结束维修（松手/离开范围/波末）：保留已修部分
 func end_repair() -> void:
@@ -291,6 +420,7 @@ func end_repair() -> void:
 		return
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
+	_stop_repair_fx()
 	_refresh_readout()
 
 func is_repairing() -> bool:
@@ -310,6 +440,8 @@ func on_wave_end() -> void:
 	_wave_active = false
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
+	_repair_cancel_t = 0.0
+	_stop_repair_fx()
 	_targets.clear()
 	current_target = null
 	_had_target = false
@@ -323,6 +455,8 @@ func set_wave_active(on: bool) -> void:
 	_wave_active = on
 	if not on:
 		_is_repairing = false
+		_repair_cancel_t = 0.0
+		_stop_repair_fx()
 		_targets.clear()
 		current_target = null
 		_had_target = false
@@ -337,6 +471,9 @@ func _play_ready_pulse() -> void:
 func _play_repair_done() -> void:
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
+	_stop_repair_fx()
+	# 修满一记扩散环（纯表现层）：让「维修结束」有一个可看见的收尾，不是数字跳满就没了
+	_repair_done_t = 0.0
 	_refresh_readout()
 	queue_redraw()
 	modulate = Color.WHITE
@@ -344,7 +481,8 @@ func _play_repair_done() -> void:
 	tw.tween_property(self, "modulate", Color(0.8, 1.4, 1.05), 0.10)
 	tw.tween_property(self, "modulate", Color.WHITE, 0.22)
 	AudioManager.play_sfx("ui_confirm", 0.7)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -6), _elem, 0.5, true)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -6),
+		GameStyle.JADE_EDGE, 0.6, true)
 
 ## 头顶状态牌：磨损「需维修 N%」/ 停摆「停摆」/ 维修中「维修中 N%」
 func _refresh_readout() -> void:
@@ -352,7 +490,11 @@ func _refresh_readout() -> void:
 		return
 	var text := ""
 	var col: Color = GameStyle.CHALK
-	if _is_repairing:
+	if _repair_cancel_t > 0.0:
+		# 维修被走位打断：短暂压过常规读数，告诉玩家「要站定」
+		text = "维修需站定"
+		col = GameStyle.GOLD_EDGE
+	elif _is_repairing:
 		text = "维修中 %d%%" % roundi(durability_ratio() * 100.0)
 		col = GameStyle.JADE
 	elif is_broken():
@@ -401,6 +543,69 @@ func _draw() -> void:
 		var warn_col: Color = GameStyle.BAD if is_broken() else GameStyle.GOLD_EDGE
 		draw_arc(Vector2.ZERO, r_outer + 8.0, 0.0, TAU, 40,
 			Color(warn_col.r, warn_col.g, warn_col.b, pulse), 1.6, true)
+
+	# 5. 维修中：盘缘维护环 + 维修进度弧（进度 = 本次长按从起修耐久修到满）
+	if _is_repairing:
+		var jc: Color = GameStyle.JADE
+		var je: Color = GameStyle.JADE_EDGE
+		var progress := repair_ratio()
+		var start_ang := -PI * 0.5
+		# 进度弧：从 12 点顺时针走一圈，和 HUD 键面走针环同口径
+		draw_arc(Vector2.ZERO, r_outer + 12.0, start_ang, start_ang + TAU * progress, 44,
+			Color(je.r, je.g, je.b, 0.95), 2.6, true)
+		# 三段旋转维护弧 + 反向短齿：像扳手在盘缘上走，一直是动的
+		for i in 3:
+			var a0 := _repair_phase + TAU * float(i) / 3.0
+			draw_arc(Vector2.ZERO, r_outer + 8.0, a0, a0 + 0.7, 10,
+				Color(jc.r, jc.g, jc.b, 0.85), 2.0, true)
+		for k in 4:
+			var ang := -_repair_phase * 1.5 + TAU * float(k) / 4.0
+			var dir := Vector2(cos(ang), sin(ang))
+			draw_line(dir * (r_outer + 4.0), dir * (r_outer + 7.0),
+				Color(je.r, je.g, je.b, 0.75), 1.4)
+		# 中心灵气呼吸：证明机关在回填
+		var breath := 0.5 + 0.5 * sin(_repair_phase * 2.0)
+		draw_circle(Vector2(0.0, -2.0), 2.5 + breath * 1.8,
+			Color(1.0, 1.0, 1.0, 0.22 + 0.18 * breath))
+
+	# 6. 修满扩散环：向外单圈收尾，别让「修好了」只剩数字跳满
+	if _repair_done_t >= 0.0:
+		var dt := _repair_done_t
+		var rr := lerpf(r_outer + 6.0, r_outer + 32.0, dt)
+		draw_arc(Vector2.ZERO, rr, 0.0, TAU, 40,
+			GameStyle.with_alpha(GameStyle.JADE_EDGE, (1.0 - dt) * 0.85), 2.4, true)
+
+	# 7. 维修范围提示：玩家进圈且这座机关可修时，脚下亮一圈虚线。
+	#    必须画成断续虚线 + 向内短齿：实线大圆在战场上会被读成敌人 AoE 预警。
+	if _player_in_repair_range and _arrived and not _is_dying \
+			and durability < BalanceTurret.MAX_DURABILITY - 0.001:
+		_draw_repair_range_hint()
+
+## 维修范围圈：28 段虚线 + 四个向内短齿 + 一圈极淡内环。
+## 半径 = BalanceTurret.INTERACT_RADIUS，与 HUD 切「维修」态用的是同一个数。
+## 虚线/短齿各用一次 draw_multiline（整圈 3 个 draw call），别 28 次 draw_arc。
+func _draw_repair_range_hint() -> void:
+	var rr := BalanceTurret.INTERACT_RADIUS
+	var pulse := 0.5 + 0.5 * sin(_warn_phase * 3.0)
+	var col: Color = GameStyle.JADE_EDGE
+	var spin := _warn_phase * 0.12
+	var segs := 28
+	var dash_pts := PackedVector2Array()
+	for i in segs:
+		var a0 := TAU * float(i) / float(segs) + spin
+		var a1 := a0 + TAU / float(segs) * 0.55
+		dash_pts.append(Vector2(cos(a0), sin(a0)) * rr)
+		dash_pts.append(Vector2(cos(a1), sin(a1)) * rr)
+	draw_multiline(dash_pts, Color(col.r, col.g, col.b, 0.14 + 0.10 * pulse), 1.3)
+	var tick_pts := PackedVector2Array()
+	for k in 4:
+		var ang := TAU * float(k) / 4.0 + spin
+		var dir := Vector2(cos(ang), sin(ang))
+		tick_pts.append(dir * (rr - 7.0))
+		tick_pts.append(dir * rr)
+	draw_multiline(tick_pts, Color(col.r, col.g, col.b, 0.28 + 0.18 * pulse), 1.2)
+	draw_arc(Vector2.ZERO, rr - 3.0, 0.0, TAU, 72,
+		Color(col.r, col.g, col.b, 0.05 + 0.03 * pulse), 1.0, true)
 
 func _durability_color(ratio: float) -> Color:
 	if is_broken():
@@ -475,9 +680,31 @@ func _draw_elem_accents(r_outer: float, edge_col: Color) -> void:
 # ---------------- 每帧 ----------------
 
 func _process(delta: float) -> void:
-	if GameManager.is_game_over:
-		return
 	if _is_dying:
+		return
+	# 器核飞行中：本体不索敌、不开火、不磨损，只等到达那一拍显形。
+	# 放在 is_game_over 之前：倒在半空中的布设也要落地收尾，不能留一台永久隐形的机关。
+	if not _arrived:
+		_arrive_timer -= delta
+		if _arrive_timer <= 0.0:
+			_arrived = true
+			_arrive_timer = 0.0
+			_materialize()
+		return
+	# 修满扩散环：独立于波次在战闸推进，波末那一下也要播完
+	if _repair_done_t >= 0.0:
+		_repair_done_t += delta / 0.32
+		if _repair_done_t >= 1.0:
+			_repair_done_t = -1.0
+		queue_redraw()
+	# 「维修需站定」提示：到点把头顶读数还原成正常状态
+	if _repair_cancel_t > 0.0:
+		_repair_cancel_t -= delta
+		if _repair_cancel_t <= 0.0:
+			_repair_cancel_t = 0.0
+			_readout_key = ""
+			_refresh_readout()
+	if GameManager.is_game_over:
 		return
 	if not _wave_active:
 		return
@@ -485,11 +712,33 @@ func _process(delta: float) -> void:
 	_cooldown_timer -= delta
 	_spin_angle += delta * 1.5
 	_warn_phase += delta
+	_update_repair_range_hint()
 
 	# 维修：连续回填（松手保留已修部分）；满了收工
 	if _is_repairing:
+		# 维修必须站定：玩家离开起修点超过容差就中断（已修部分保留）。
+		# 走位/被击退都会断，维修得挑安全窗口做 —— 这不是最短按住时长，只禁「边跑边修」。
+		var p = GameManager.player
+		if p != null and is_instance_valid(p) and p is Node2D \
+				and (p as Node2D).global_position.distance_to(_repair_anchor) > BalanceTurret.REPAIR_MOVE_TOLERANCE:
+			_is_repairing = false
+			_repair_from = BalanceTurret.MAX_DURABILITY
+			_stop_repair_fx()
+			_repair_cancel_t = 0.9
+			_readout_key = ""
+			_refresh_readout()
+			queue_redraw()
+			return
 		durability = minf(BalanceTurret.MAX_DURABILITY,
 			durability + BalanceTurret.repair_per_sec(GameManager.turret_repair_haste_mul) * delta)
+		# 盘缘维护环的旋转相位 + 间隔碎屑（纯表现层，不参与耐久判定）
+		_repair_phase += delta * 4.2
+		_repair_spark_timer -= delta
+		if _repair_spark_timer <= 0.0:
+			_repair_spark_timer = 0.14
+			var ang := randf() * TAU
+			var spark_pos := global_position + Vector2(cos(ang), sin(ang)) * randf_range(15.0, 26.0)
+			FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, GameStyle.JADE_EDGE, 0.3, true)
 		var ratio := repair_ratio()
 		if _readout_label != null:
 			_readout_key = "维修中 %d%%" % roundi(ratio * 100.0)
@@ -500,6 +749,9 @@ func _process(delta: float) -> void:
 			durability = BalanceTurret.MAX_DURABILITY
 			_play_repair_done()
 		queue_redraw()
+		# 维修时机关停火：维修不是白嫖 —— 这段时间这座机关不输出，玩家要权衡时机。
+		# 回填只在本块里推进，所以直接 return 不会跳过任何判定，只跳过下面的索敌/开火。
+		return
 	# 磨损/停摆的体表提示：橙环/红环脉动重画 + 低频碎屑（纯表现层，走帧预算闸）
 	if BalanceTurret.needs_service(durability):
 		queue_redraw()
@@ -574,6 +826,8 @@ func _refresh_targets() -> void:
 
 	_cand_nodes.clear()
 	_cand_dists.clear()
+	_chest_nodes.clear()
+	_chest_dists.clear()
 	var want := volley   # getter 现读一次，循环里不再重复取（齐射管数可被悟道/道具加成）
 	for res in results:
 		var col = res["collider"]
@@ -581,22 +835,33 @@ func _refresh_targets() -> void:
 		if parent == null or not parent.has_method("take_damage"):
 			continue
 		var enemy = parent as Node2D
-		if enemy == null or enemy.is_in_group("herbs") or enemy.is_in_group("chests"):
+		if enemy == null or enemy.is_in_group("herbs"):
 			continue
 		var d := global_position.distance_squared_to(enemy.global_position)
+		# 藏宝匣另册记账（2026-11-03）：旧写法 `is_in_group("chests") ⇒ continue` 让机关
+		# 永远不会去砸匣子 —— 玩家把机关摆在匣子边上却一直打不动，只能跑过去手动收。
+		# 口径与 FloatingWeapon._find_target / ProjectileHandler.volley_targets 一致：
+		# 场上还有活妖时只打妖，活妖不够填满齐射管数时才把多出来的管子分给匣子。
+		var bucket_nodes: Array[Node2D] = _chest_nodes if enemy.is_in_group("chests") else _cand_nodes
+		var bucket_dists: Array[float] = _chest_dists if enemy.is_in_group("chests") else _cand_dists
 		# 插入排序只维护前 want 个（want ≤ 6，24 个候选最多 144 次比较）
-		var pos := _cand_dists.size()
-		while pos > 0 and _cand_dists[pos - 1] > d:
+		var pos := bucket_dists.size()
+		while pos > 0 and bucket_dists[pos - 1] > d:
 			pos -= 1
 		if pos >= want:
 			continue
-		_cand_dists.insert(pos, d)
-		_cand_nodes.insert(pos, enemy)
-		if _cand_dists.size() > want:
-			_cand_dists.pop_back()
-			_cand_nodes.pop_back()
+		bucket_dists.insert(pos, d)
+		bucket_nodes.insert(pos, enemy)
+		if bucket_dists.size() > want:
+			bucket_dists.pop_back()
+			bucket_nodes.pop_back()
 	_targets.clear()
 	_targets.append_array(_cand_nodes)
+	# 活妖不够分：多出来的管子补到最近的匣子上（匣子掉补给，打它不亏）
+	for c in _chest_nodes:
+		if _targets.size() >= want:
+			break
+		_targets.append(c)
 
 func _final_damage() -> float:
 	var stat_bonus: float = GameManager.get_weapon_stat_bonus(weapon_def_id, star)
@@ -711,13 +976,60 @@ func _fire_feedback(aim_dir: Vector2) -> void:
 
 # ---------------- 消散 / 回池 ----------------
 
-## fold = true 时是「收回」：折叠上浮后回池（编制返还由调用方处理）。
+## 地面法阵演出：挂到机关所在战场层（不能挂机关子节点，否则会跟着缩放/上浮，
+## 地面层次就散了）。播完自毁，不参与判定。
+func _spawn_placement_fx(kind: int) -> void:
+	var layer := get_parent()
+	if layer == null or not is_instance_valid(layer):
+		return
+	var fx: Node2D = PLACEMENT_FX.new()
+	fx.name = "TurretPlacementFx"
+	layer.add_child(fx)
+	fx.global_position = global_position
+	fx.call("play", kind, _elem)
+
+## 空中器核投送：from_pos → to_pos。收回时 follow 传玩家，飞过去的过程中还能追人。
+func _spawn_transfer_fx(kind: int, from_pos: Vector2, to_pos: Vector2, follow: Node2D = null) -> void:
+	var layer := get_parent()
+	if layer == null or not is_instance_valid(layer):
+		return
+	var fx: Node2D = TRANSFER_FX.new()
+	fx.name = "TurretTransferFx"
+	layer.add_child(fx)
+	fx.global_position = Vector2.ZERO
+	fx.call("play", from_pos, to_pos, kind, _elem, follow)
+
+## 维修灵气索：挂在战场层（不能挂机关子节点，否则会跟着本体缩放/折叠一起抖）
+func _spawn_repair_fx() -> void:
+	if _repair_fx != null and is_instance_valid(_repair_fx):
+		return
+	var layer := get_parent()
+	if layer == null or not is_instance_valid(layer):
+		return
+	var fx: Node2D = REPAIR_FX.new()
+	fx.name = "TurretRepairFx"
+	layer.add_child(fx)
+	fx.global_position = Vector2.ZERO
+	fx.call("play", self, GameManager.player)
+	_repair_fx = fx
+
+func _stop_repair_fx() -> void:
+	if _repair_fx != null and is_instance_valid(_repair_fx):
+		if _repair_fx.has_method("stop"):
+			_repair_fx.call("stop")
+	_repair_fx = null
+
+## fold = true 时是「收回」：地面法阵收拢 + 本体上浮折叠后回池（编制返还由调用方处理）。
 func dismiss(fold: bool = false) -> void:
 	if _is_dying:
 		return
 	_is_dying = true
 	_is_repairing = false
+	_repair_cancel_t = 0.0
+	_stop_repair_fx()
 	_had_target = false
+	if _life_tween != null and _life_tween.is_valid():
+		_life_tween.kill()
 	if _fire_tween != null and _fire_tween.is_valid():
 		_fire_tween.kill()
 	if muzzle_flash != null:
@@ -727,19 +1039,33 @@ func dismiss(fold: bool = false) -> void:
 	_dismiss_tween = create_tween()
 	_dismiss_tween.set_parallel(true)
 	if fold:
-		_dismiss_tween.tween_property(self, "position", position + Vector2(0.0, -14.0), 0.18)
-		_dismiss_tween.tween_property(self, "scale", Vector2(0.35, 0.35), 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		# 收回要看得见「机关回到人物身上」：器核从机关脚下飞向玩家（玩家在走位也追得上）。
+		# 本体折叠 + 地面法阵收拢仍在原地播，两个演出同拍，收尾一起消失。
+		var player_node: Node2D = null
+		var p = GameManager.player
+		if p != null and is_instance_valid(p) and p is Node2D:
+			player_node = p as Node2D
+		if _arrived and player_node != null:
+			_spawn_transfer_fx(TRANSFER_FX.KIND_RECALL, global_position,
+				player_node.global_position + Vector2(0.0, -10.0), player_node)
+		_spawn_placement_fx(PLACEMENT_FX.KIND_RECALL)
+		_dismiss_tween.tween_property(self, "position", position + Vector2(0.0, -20.0), 0.26)
+		_dismiss_tween.tween_property(self, "scale", Vector2(0.24, 0.24), 0.26).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		_dismiss_tween.tween_property(self, "rotation", rotation + 0.6, 0.26).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	else:
 		_dismiss_tween.tween_property(self, "scale", Vector2(0.2, 0.2), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_dismiss_tween.tween_property(self, "modulate:a", 0.0, 0.2)
+	_dismiss_tween.tween_property(self, "modulate:a", 0.0, 0.24 if fold else 0.2)
 	_dismiss_tween.chain().tween_callback(_recycle)
 
 ## 消散演出结束：回池休眠（出树 + 停处理），池满才真正释放
 func _recycle() -> void:
+	_stop_repair_fx()
 	if _dismiss_tween != null and _dismiss_tween.is_valid():
 		_dismiss_tween.kill()
 	if _fire_tween != null and _fire_tween.is_valid():
 		_fire_tween.kill()
+	if _life_tween != null and _life_tween.is_valid():
+		_life_tween.kill()
 	current_target = null
 	_targets.clear()
 	if _owner_weapon != null and is_instance_valid(_owner_weapon):
@@ -754,7 +1080,11 @@ func _recycle() -> void:
 		parent.remove_child(self)
 	var bucket: Array = _pools.get(_pool_key, [])
 	if bucket.size() >= POOL_CAP_PER_SCENE:
-		free()
+		# 池满才真释放。**不要写裸 free()**：安卓 Release 模板（二进制 token 脚本）在
+		# reload 编译这个脚本时报 `Function "free()" not found in base self`，整份
+		# TurretUnit.gd 编译失败 ⇒ 机关场景实例化不出脚本 ⇒ 真机「布设键点了不出机关」。
+		# 全项目只此一处裸 free()（其余 9 处都是「对象.free()」，运行期解析不受影响）。
+		queue_free()
 		return
 	bucket.append(self)
 	_pools[_pool_key] = bucket

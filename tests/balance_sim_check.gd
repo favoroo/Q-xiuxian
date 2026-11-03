@@ -25,6 +25,7 @@ func _ready() -> void:
 
 	_test_weapon_dps_normalization()
 	_test_enemy_and_boss_hp_scaling()
+	_test_deep_wave_scaling()
 	_test_enemy_stats_table_binding()
 	_test_reference_build_ttks()
 	_test_survivability()
@@ -138,6 +139,53 @@ func _test_enemy_and_boss_hp_scaling() -> void:
 	var b20 := GameBalance.boss_hp(20)
 	_c.check(b10 >= 22000.0 and b10 <= 28000.0, "第 10 波 Boss 气血落在 2.2~2.8 万 (实得 %.0f)" % b10)
 	_c.check(b20 >= 100000.0 and b20 <= 120000.0, "第 20 波魔尊气血落在 10~12 万 (实得 %.0f)" % b20)
+
+# ---------------- 2c. 深层三段曲线与 W45 可达性（2026-11-03 优化） ----------------
+## 旧版 21 波起 1.22 无限复利，W45 魔君 1500 万血 / 满配 DPS 2 万要 12 分钟纯输出，
+## 而玩家 DPS 有硬顶（★4/6 格、悟点 max_stacks、软膝 2.0）⇒ 深层魔君不可达。
+## 现在改为 21~25 过渡（1.18/1.09）→ 26~32 主段（1.22/1.12）→ 33/36 起缓坡（1.05/1.03）。
+## 本段钉三件事：分段连续、W45 在满配 ★4 的 50~180s 击杀窗内、W45 杂怪不再砖墙。
+func _test_deep_wave_scaling() -> void:
+	# 2c.1 分段连续：边界前后比值正是该段复利
+	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH_EARLY, EPS, "W20→21 生命过渡 1.18（磨平破境断崖）")
+	_c.near(GameBalance.enemy_hp_mult(26) / GameBalance.enemy_hp_mult(25), GameBalance.DEEP_HP_GROWTH, EPS, "W25→26 生命回主段 1.22")
+	_c.near(GameBalance.enemy_hp_mult(33) / GameBalance.enemy_hp_mult(32), GameBalance.DEEP_HP_GROWTH_LATE, EPS, "W32→33 生命转缓坡 1.05")
+	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH_EARLY, EPS, "W20→21 伤害过渡 1.09")
+	_c.near(GameBalance.enemy_dmg_mult(26) / GameBalance.enemy_dmg_mult(25), GameBalance.DEEP_DMG_GROWTH, EPS, "W25→26 伤害回主段 1.12")
+	_c.near(GameBalance.enemy_dmg_mult(36) / GameBalance.enemy_dmg_mult(35), GameBalance.DEEP_DMG_GROWTH_LATE, EPS, "W35→36 伤害转缓坡 1.03")
+
+	# 2c.2 满配 ★4 建模仿真：6 把长剑全 ★4 + 软顶后的极限加点 + 羁绊。
+	# _simulate_build_dps 只算基础挥砍，不含 ★3/★4 觉醒追加段 ⇒ 再乘觉醒段倍率；
+	# 这是「诚实下限」（神识分流已计），用来量 W45 魔君到底还打不打得到。
+	var deep_dps := _simulate_build_dps(
+		[{"id": "qingyun_sword", "star": 4}, {"id": "qingyun_sword", "star": 4},
+		 {"id": "qingyun_sword", "star": 4}, {"id": "qingyun_sword", "star": 4},
+		 {"id": "qingyun_sword", "star": 4}, {"id": "qingyun_sword", "star": 4}],
+		{
+			"weapon_damage_mult": 2.38, "melee_damage": 12.0, "crit_rate": 0.37,
+			"crit_mult": 1.75, "attack_speed_mult": 0.60, "elite_damage": 1.0,
+			"synergy_damage_mult": 1.0, "synergy_haste_mult": 1.0,
+			"synergy_crit_rate": 0.20, "synergy_crit_mult": 0.75,
+		},
+		true
+	)
+	var perk3: Dictionary = WeaponData.STAR3_AWAKEN.get(WeaponData.Behavior.MELEE, {})
+	var perk4: Dictionary = WeaponData.STAR4_ASCEND.get(WeaponData.Behavior.MELEE, {})
+	var perk3_ratio := 1.0 + float(perk3.get("count", 1)) * float(perk3.get("ratio", 0.0))
+	var perk4_ratio := 1.0 + float(perk4.get("count", 1)) * float(perk4.get("ratio", 0.0))
+	deep_dps *= perk4_ratio / maxf(0.01, perk3_ratio)
+	var w45_boss_ttk := GameBalance.boss_hp(45) / maxf(1.0, deep_dps)
+	_c.check(deep_dps >= 15000.0, "满配 ★4 深层 Build DPS ≥1.5 万（实得 %.0f）" % deep_dps)
+	_c.check(w45_boss_ttk >= 50.0 and w45_boss_ttk <= 180.0,
+		"W45 魔君对满配 ★4 的 TTK 落在 50~180s（实得 %.1fs，气血 %.0f）" % [w45_boss_ttk, GameBalance.boss_hp(45)])
+	var w45_mob_hp := 45.0 * GameBalance.MOB_HP_BASE_MULT * GameBalance.enemy_hp_mult(45) * GameBalance.danger_hp_mult(0)
+	var w45_mob_ttk := w45_mob_hp / maxf(1.0, deep_dps)
+	_c.check(w45_mob_ttk <= 20.0, "W45 雷兽对满配 ★4 的 TTK ≤20s（实得 %.1fs，不再砖墙）" % w45_mob_ttk)
+	print("DEEP 深层曲线：W25 生命×%.1f / W30×%.1f / W35×%.1f / W45×%.1f｜满配★4 DPS %.0f｜W45 魔君 %.0f 血 TTK %.1fs｜W45 雷兽 TTK %.1fs" % [
+		GameBalance.enemy_hp_mult(25), GameBalance.enemy_hp_mult(30),
+		GameBalance.enemy_hp_mult(35), GameBalance.enemy_hp_mult(45),
+		deep_dps, GameBalance.boss_hp(45), w45_boss_ttk, w45_mob_ttk])
+
 
 # ---------------- 2b. 敌种出厂数值表回环（2026-11-02 收编护栏） ----------------
 ## EnemyData.stats 是敌种出厂数值的唯一真话源，唯一应用点在 EnemyBase.acquire_or_new。

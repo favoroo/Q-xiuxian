@@ -440,8 +440,11 @@ func _begin_android_pick() -> void:
 	_picking = true
 	_pending_pick_path = ""
 	var cur := DisplayServer.screen_get_orientation()
-	_restore_orientation = cur if cur == DisplayServer.SCREEN_PORTRAIT \
-		or cur == DisplayServer.SCREEN_LANDSCAPE else DisplayServer.SCREEN_LANDSCAPE
+	# 原样保存原方向：项目跑 SCREEN_SENSOR_LANDSCAPE（正/反横屏随重力），
+	# 若只认 PORTRAIT/LANDSCAPE，sensor 态会被兜底成固定正向横屏 ——
+	# 玩家用一次「反馈-选截图」就永久失去反向横屏（要重进游戏才恢复）。
+	# 反向横屏/反向竖屏同理，一律原样还原。
+	_restore_orientation = cur
 	if is_instance_valid(_message_edit):
 		_message_edit.release_focus()
 	_set_panel_visible_for_pick(false)

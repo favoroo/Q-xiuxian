@@ -50,6 +50,15 @@ signal author_requested
 ## 现在整行建完过一遍 GameStyle.swipeable（卡与卡内图标/角标降成 PASS），并把「松开=选中」
 ## 换成 GameStyle.tap 的完整手势识别（否则能滑之后，划一下列表就换一张选中）。
 ## 判据：tests/ScrollSwipeCheck.tscn（逐落点验按下能起手）+ tests/TapSwipeCheck.tscn（划动不误选）。
+##
+## 2026-11-03 用户真机（学者局，一屏 6 张卡）：「两边显示会溢出，也不能左右滑动查看」。
+## 根因是 `_card_columns()` 固定返回 UPGRADE_OFFER_COUNT（5），而学者「博学」给候选 +1
+## （AllocSession 按 5 + alloc_offer_bonus 发牌）⇒ 6 张卡仍按 5 张分宽，整行比面板宽，
+## CenterContainer 把超宽面板居中 ⇒ 两头一起出屏；CardScroll 的横滑又是关死的，划不动。
+## 现在两件事一起改（与 WaveShop 的货架同一套口径）：
+## ① 列数取实际候选数（`_card_columns()` = `_offers().size()`），几张卡就按几张分宽；
+## ② 面板宽钳在屏内（panel_max_w），卡宽已压到下限、或卡片内容最小宽比算术更宽时，
+##   卡片行开横滑（SCROLL_MODE_AUTO）—— 摆得平照旧锁死横滑，摆不下才允许左右划。
 
 ## 旧 CARD_W 留作「宽屏上限」：判据的文案表按 card_inner_w() 现算，不直接读它
 const CARD_W := 262.0
@@ -152,12 +161,14 @@ static func avail_w(screen: Vector2) -> float:
 static func gap_for(avail: float) -> float:
 	return ShopCardLayout.gap_for(avail, 0.010, ShopCardLayout.ALLOC_CARD_GAP_MIN, ShopCardLayout.ALLOC_CARD_GAP_MAX)
 
-## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间
+## n 张卡均分可用宽，夹在 [MIN_CARD_W, CARD_W] 之间。
+## 向下取整（与 WaveShop.offer_card_w 同一口径）：控件最小宽按像素向上取整，带小数的卡宽
+## 会让 n 张卡各多出 1~2 单位、把整行顶出 4~8 单位 ⇒ 摆得平的一屏也唤出横滑条。
 static func card_w_for(screen: Vector2, n: int) -> float:
 	if n <= 0:
 		return CARD_W
 	var avail := avail_w(screen)
-	return clampf((avail - gap_for(avail) * float(n - 1)) / float(n), MIN_CARD_W, CARD_W)
+	return floorf(clampf((avail - gap_for(avail) * float(n - 1)) / float(n), MIN_CARD_W, CARD_W))
 
 static func card_inner_w(card_w: float) -> float:
 	return ShopCardLayout.card_inner_w(card_w, CARD_PAD_X)
@@ -168,6 +179,26 @@ static func panel_w_for(screen: Vector2, n: int) -> float:
 	var avail := avail_w(screen)
 	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0)) \
 		+ card_pad_x(h) * 2.0 + chrome_x(h)
+
+## 面板布局盒的宽上限：再宽就贴住屏幕左右边（两头各留 ALLOC_PANEL_AIR_X 的呼吸量）。
+## 卡宽压到 MIN_CARD_W 仍摆不平 6 张时，面板按这个上限钉住、多出来的那截交给卡片行横滑。
+static func panel_max_w(screen: Vector2) -> float:
+	return maxf(0.0, screen.x - ShopCardLayout.ALLOC_PANEL_AIR_X * 2.0)
+
+## 卡片行可视宽 = 面板实际占的宽（钳上限后）- 面板内容占位 - 滚动区两头的卡角留白
+static func cards_view_w(screen: Vector2, n: int) -> float:
+	var h := panel_h_for(screen.y)
+	return maxf(0.0, minf(panel_w_for(screen, n), panel_max_w(screen)) \
+		- chrome_x(h) - card_pad_x(h) * 2.0)
+
+## n 张卡按算术摆出来的内容宽
+static func cards_content_w(screen: Vector2, n: int) -> float:
+	var avail := avail_w(screen)
+	return card_w_for(screen, n) * float(n) + gap_for(avail) * float(maxi(n - 1, 0))
+
+## 这一屏要不要靠横滑才看得全：只有卡宽已压到 MIN_CARD_W 时才会要（真机 20:9 上 6 张仍摆得平）
+static func cards_need_h_slide(screen: Vector2, n: int) -> bool:
+	return cards_content_w(screen, n) > cards_view_w(screen, n) + 0.5
 
 ## 选中要放大 ⇒ 这一行上下各让出的余量
 static func pop_gutter_y(screen_h: float) -> float:
@@ -379,8 +410,14 @@ func _layout_for_viewport() -> void:
 	var n: int = _card_columns()
 	var h: float = panel_h_for(screen.y)
 	_card_w = card_w_for(screen, n)
-	panel.custom_minimum_size = Vector2(panel_w_for(screen, n), h)
+	# 面板宽钳在屏内：卡宽压到下限还摆不平 6 张时，宁可卡片行横滑，也不许面板两头出屏
+	panel.custom_minimum_size = Vector2(minf(panel_w_for(screen, n), panel_max_w(screen)), h)
 	cards_container.add_theme_constant_override("separation", int(gap_for(avail_w(screen))))
+	# 摆得平锁死横滑（划一下不该让整排动），摆不平才开 —— 与 WaveShop 的货架同一口径
+	card_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO \
+			if cards_need_h_slide(screen, n) else ScrollContainer.SCROLL_MODE_DISABLED
+	card_scroll.scroll_horizontal = 0
+	card_scroll.scroll_vertical = 0
 	# 上下各让出放大余量：选中卡放大后仍在这行之内（判据 LayoutCheck 量这一点）
 	# 左右各让出卡角斜切量：不然滚动区把最外侧两张卡的角削平
 	var gutter := int(pop_gutter_y(screen.y))
@@ -416,13 +453,14 @@ func _refresh() -> void:
 	_populate_cards()
 	_refresh_bars()
 
-## 候选来源与列数：普通悟道读 alloc_offers / UPGRADE_OFFER_COUNT，
-## 子类 SuperAllocDialog 覆写成超级悟道候选（摆位/选中/确认流程完全复用，只换数据源）。
+## 候选来源与列数：普通悟道读 alloc_offers，列数取**实际候选数** —— 学者「博学」会把候选
+## 加到 UPGRADE_OFFER_COUNT + 1，若仍按常量分宽，第 6 张会把整行撑出面板（2026-11-03 用户真机）。
+## 子类 SuperAllocDialog 覆写成飞升悟道候选（摆位/选中/确认流程完全复用，只换数据源）。
 func _offers() -> Array:
 	return GameManager.alloc_offers
 
 func _card_columns() -> int:
-	return GameManager.UPGRADE_OFFER_COUNT
+	return maxi(_offers().size(), 1)
 
 func _refresh_bars() -> void:
 	var pending: int = GameManager.pending_upgrade_points
@@ -474,6 +512,22 @@ func _populate_cards() -> void:
 	# 卡里那排受益装备图标也一起降成 PASS（否则它们各自是一小块划不动的死区）：
 	# 点它们仍只弹详解、不选卡，靠的是 GameStyle.tap 的「只兑现最里一层」认领，见那里。
 	GameStyle.swipeable(cards_container)
+	# 卡宽的算术是均分，但卡片内容有自己的最小宽（长属性名与幅度同一行）：内容真比算术更宽时
+	# 同样要能横滑，否则滚动区把最小宽算进面板 ⇒ 面板又被顶出屏（2026-11-03 6 卡那一屏）。
+	_sync_h_scroll_mode()
+
+## 按「卡片行真实最小宽 vs 这一档屏给得出的可视宽」决定横滑开关：
+## 摆得平锁死（横着划一下不该让整排动），摆不平才开 AUTO。重建候选后回到最左。
+func _sync_h_scroll_mode() -> void:
+	if cards_container == null or card_scroll == null:
+		return
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var n: int = _card_columns()
+	var need_w: float = cards_container.get_combined_minimum_size().x
+	var view_w: float = cards_view_w(screen, n)
+	card_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO \
+			if need_w > view_w + 0.5 else ScrollContainer.SCROLL_MODE_DISABLED
+	card_scroll.scroll_horizontal = 0
 
 ## 支点 = 这一格自己的中心。不居中则放大时上下不对称（选中卡会往一边多顶出一截）。
 static func _center_pivot(c: Control) -> void:

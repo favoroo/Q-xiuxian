@@ -69,7 +69,8 @@ func _make_enemy(at: Vector2, elite: bool = false) -> EnemyBase:
 	e.global_position = at
 	e.max_hp = 999999.0
 	e.current_hp = 999999.0
-	e.move_speed = 0.0        ## 不许自己凑过来污染读数
+	e.move_speed = 0.01       ## 冻结 AI（不许自己凑过来）；必须 >0：0 会命中 v0.1.8 起的
+	                          ## 「静止炮台精英/Boss 不吃击退」闸，位移恒为 0
 	e.contact_damage = 0.0    ## 接触伤害不参与本判据（量的是位移）
 	e.lunge = null            ## 扑咬前摇/收势是锁定段，会把击退初速清掉
 	return e

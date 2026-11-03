@@ -88,12 +88,19 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.mob_kill_stone(0), 0, "非法 exp 0 金币腿也归零")
 
 	# 2026-10-13 深层难度：伤害/生命复利在 >20 波提档，分段处连续，≤20 波零回归
-	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH, EPS, "第 21 波敌伤梯度 = 深层复利 1.12")
+	# 2026-11-03 深层三段化：21~25 过渡（1.18/1.09）→ 26 起主段（1.22/1.12）→ 33/36 起缓坡
+	_c.near(GameBalance.enemy_dmg_mult(21) / GameBalance.enemy_dmg_mult(20), GameBalance.DEEP_DMG_GROWTH_EARLY, EPS, "第 21 波敌伤梯度 = 过渡复利 1.09")
+	_c.near(GameBalance.enemy_dmg_mult(26) / GameBalance.enemy_dmg_mult(25), GameBalance.DEEP_DMG_GROWTH, EPS, "第 26 波敌伤梯度 = 主段复利 1.12")
+	_c.near(GameBalance.enemy_dmg_mult(36) / GameBalance.enemy_dmg_mult(35), GameBalance.DEEP_DMG_GROWTH_LATE, EPS, "第 36 波敌伤梯度 = 缓坡 1.03")
 	_c.near(GameBalance.enemy_dmg_mult(20) / GameBalance.enemy_dmg_mult(10), pow(1.06, 10), EPS, "20 波段梯度仍为 1.06 复利（正常局零回归）")
-	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH, EPS, "第 21 波血量梯度 = 深层复利 1.22")
-	# 深层复利必须真的比旧梯子快，否则三涨名存实亡
+	_c.near(GameBalance.enemy_hp_mult(21) / GameBalance.enemy_hp_mult(20), GameBalance.DEEP_HP_GROWTH_EARLY, EPS, "第 21 波血量梯度 = 过渡复利 1.18")
+	_c.near(GameBalance.enemy_hp_mult(26) / GameBalance.enemy_hp_mult(25), GameBalance.DEEP_HP_GROWTH, EPS, "第 26 波血量梯度 = 主段复利 1.22")
+	_c.near(GameBalance.enemy_hp_mult(33) / GameBalance.enemy_hp_mult(32), GameBalance.DEEP_HP_GROWTH_LATE, EPS, "第 33 波血量梯度 = 缓坡 1.05")
+	# 深层复利必须真的比旧梯子快，否则三段化名存实亡（但 45 波必须留在可打区间）
 	_c.check(GameBalance.enemy_dmg_mult(30) > GameBalance.ENEMY_DMG_BASE_MULT * pow(GameBalance.ENEMY_DMG_GROWTH, 29), "深层敌伤快于旧 1.06 外推")
 	_c.check(GameBalance.enemy_hp_mult(30) > pow(GameBalance.ENEMY_HP_GROWTH, 29), "深层血量快于旧 1.16 外推")
+	_c.check(GameBalance.enemy_hp_mult(45) < 300.0, "W45 生命倍率 ≤300x（不再被 1.22 无限复利甩成砖墙，实得 %.1f）" % GameBalance.enemy_hp_mult(45))
+	_c.check(GameBalance.boss_hp(45) < 2500000.0, "W45 魔君血量 ≤250 万（满配 ★4 可打，实得 %.0f）" % GameBalance.boss_hp(45))
 	var dmg_prev := 0.0
 	var hp_prev := 0.0
 	var deep_monotonic := true
@@ -156,15 +163,18 @@ func _test_boss_waves() -> void:
 	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 0), 1, "W15 D0 单精英")
 	_c.equals(GameBalance.elite_spawn_count_for_wave(15, 1), 2, "W15 D1 双精英")
 
-	# 3. 深层无尽梯度（2026-11-03 后期减量提质：精英 +1，补普通怪数量削减）：
-	# D0: 21+ 为 2 只，31+ 为 3 只
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 0), 2, "深层 D0 21波双精英")
+	# 3. 深层无尽梯度（2026-11-03 后期减量提质 + 深层三段化：精英 +1，补普通怪数量削减）：
+	# D0: 21~22 为 1 只（破境后先给一口喘息），23~30 为 2 只，31+ 为 3 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 0), 1, "深层 D0 21波单精英（过渡段）")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(23, 0), 2, "深层 D0 23波双精英")
 	_c.equals(GameBalance.elite_spawn_count_for_wave(31, 0), 3, "深层 D0 31波三精英")
 	# 历史传参兼容 (wave, true)
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 2, "历史传参 21 波双精英兼容")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, true), 1, "历史传参 21 波单精英兼容")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(23, true), 2, "历史传参 23 波双精英兼容")
 	_c.equals(GameBalance.elite_spawn_count_for_wave(31, true), 3, "历史传参 31 波三精英兼容")
-	# D1: 21+ 为 3 只，36+ 为 4 只
-	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 1), 3, "深层 D1 21波三精英")
+	# D1: 21~22 为 2 只，23~35 为 3 只，36+ 为 4 只
+	_c.equals(GameBalance.elite_spawn_count_for_wave(21, 1), 2, "深层 D1 21波双精英")
+	_c.equals(GameBalance.elite_spawn_count_for_wave(23, 1), 3, "深层 D1 23波三精英")
 	_c.equals(GameBalance.elite_spawn_count_for_wave(36, 1), 4, "深层 D1 36波四精英")
 
 	# Boss 血条厚度：与普通敌人同曲线，靠基础值拉开 ~5~7 倍精英的差距

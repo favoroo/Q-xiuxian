@@ -7,12 +7,15 @@ extends Control
 ##   靠近机关 + 满耐久 + 有编制（落点为空） → 「布设 ×N」；
 ##   靠近机关 + 满耐久 + 有编制（落点被占） → 「太近」：抖动 + 报错音 + 文案提示，不再静默；
 ##   靠近机关 + 满耐久 + 无编制             → 「完好」：暗面键，按下给一句提示；
-##   场上已有机关但走远了 + 无编制           → 「在场」：键不收起，提示走近后可收回；
-##   收回后的整备冷却                        → 「整备」：显示剩余秒数。
+##   场上已有机关但走远了 + 无编制           → 「在场」：键不收起，只报状态，不写收回提示；
+##   收回后的 2 秒整备倒数                   → 「整备」：显示剩余秒数。
+##   状态都对却出不了机关（链路内部失败）     → 按 TurretCommand.last_error 说清是哪一环
+## （机关模型没加载出来 / 编制已满 / 请再试一次），不再统一报「现在不能布设机关」。
 ##
-## 独立「收回」键（用户真机反馈：顶部小角标看不见）：场上有自己的机关时常驻在主键左侧
-## （左缘不够就自动改到上方/右侧），靠近时亮起、远离时压暗；点按远离的收回键会明确提示
-## 「走近机关才能收回」，不再让玩家以为按钮没做。
+## 独立「收回」键（用户真机反馈：顶部小角标看不见）：只在玩家走进机关交互半径时出现
+## （主键左侧，左缘不够就自动改到上方/右侧），走远即整颗隐藏 —— 布设键只管布设与维修。
+## 键面 = 「机关 → 人物」图标 + 单行「可收回」：旧版「收回 / 可收回」两行字在 56 圆里又挤又重复。
+## 收回后起固定 2 秒整备倒数（BalanceTurret.RECALL_COOLDOWN_SEC），倒计时内按主键给提示、不布设。
 ##
 ## 外观/摆位/进度环全部复用现成设施：SkillButtonView.style_circle_action + CircleProgressOverlay
 ## + HudButtonLayout，键径与其他浮动键钉死同一个 SKILL_BTN_SIZE。
@@ -32,6 +35,10 @@ const CHIP_GAP := 6.0
 const RECALL_SIZE := 56.0
 const RECALL_GAP := 10.0
 const RECALL_FONT := 14
+## 收回键图标尺寸与位置：上图标、下「可收回」单行（旧版「收回 / 可收回」两行在 56 圆里太挤）
+const RECALL_ICON_SIZE := 28.0
+const RECALL_ICON_TOP := 4.0
+const RECALL_TEXT_TOP := 32.0
 ## 热区外扩：手机手指比鼠标粗，圆形判定比视觉圆再放宽一圈
 const HIT_PAD := 14.0
 const RECALL_HIT_PAD := 12.0
@@ -54,17 +61,45 @@ const POLL_INTERVAL := 0.1
 ## 布设落点预览（地面虚影 + 射程环）：纯表现层，判定口径与 TurretCommand 同源
 const DEPLOY_PREVIEW := preload("res://scripts/weapons/TurretDeployPreview.gd")
 
+## 收回键图标：上「机关盘」下「人物」+ 中间向下回收箭头。
+## 56 圆里只放「可收回」三个字太空，图标要一眼说出「机关收回人身上」，
+## 不画通用循环箭头（那读作刷新/重来，和收回不是一回事）。
+class RecallIcon extends Control:
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, 0.0)
+		var jade: Color = GameStyle.JADE
+		var chalk: Color = GameStyle.CHALK
+		var ink: Color = GameStyle.with_alpha(GameStyle.INK, 0.9)
+		# 1. 顶部机关：圆盘 + 左右短翼（读作机关座，不是普通圆点）
+		var disc := c + Vector2(0.0, 6.0)
+		draw_circle(disc, 4.8, ink)
+		draw_arc(disc, 4.2, 0.0, TAU, 16, jade, 1.7, true)
+		draw_line(disc + Vector2(-6.6, 0.0), disc + Vector2(-4.4, 0.0), jade, 1.5)
+		draw_line(disc + Vector2(4.4, 0.0), disc + Vector2(6.6, 0.0), jade, 1.5)
+		# 2. 回收箭头：机关下缘 → 人物头顶，箭头朝下
+		var tip := c + Vector2(0.0, 13.8)
+		draw_line(c + Vector2(0.0, 9.4), tip, jade, 1.8)
+		draw_colored_polygon(PackedVector2Array([
+			tip + Vector2(0.0, 1.4),
+			tip + Vector2(-2.8, -2.4),
+			tip + Vector2(2.8, -2.4)]), jade)
+		# 3. 下方人物：头 + 肩弧，收回到人身上
+		draw_circle(c + Vector2(0.0, 17.2), 2.1, chalk)
+		draw_arc(c + Vector2(0.0, 19.8), 5.1, PI * 0.12, PI * 0.88, 14, chalk, 1.6, true)
+
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
 var _sub: Label = null
 var _badge: Label = null
-## 独立收回键（不再用主键顶部的 22px 小角标）
+## 独立收回键（不再用主键顶部的 22px 小角标）：图标 + 单行「可收回」
 var _recall_btn: Button = null
-var _recall_label: Label = null
+var _recall_icon: Control = null
 var _recall_sub: Label = null
+## 收回键小字读数缓存（固定「可收回」，只在变化时重写）
 var _recall_sub_key: String = ""
-## 远离时收回键下方的小字方向（右上/左下/…）；靠近时显示「可收回」
-var _recall_dir_text: String = ""
 var _chip: Label = null
 ## 圆键容器：状态收起时整块隐藏（芯片挂在根上，不受它影响）
 var _circle_root: Control = null
@@ -167,7 +202,7 @@ func _build() -> void:
 	_badge.visible = false
 	_btn.add_child(_badge)
 
-	# 独立「收回」键：挂根节点（不随圆键收起），场上有机关键时常驻
+	# 独立「收回」键：挂根节点（不随圆键收起），只在靠近机关时出现
 	_recall_btn = Button.new()
 	_recall_btn.name = "RecallButton"
 	_recall_btn.text = ""
@@ -182,32 +217,26 @@ func _build() -> void:
 	_recall_btn.button_down.connect(_do_recall)
 	add_child(_recall_btn)
 
-	# 收回键内部两行：主字「收回」+ 小字方向（远离时指方向，靠近时「可收回」）
-	_recall_label = Label.new()
-	var rls := LabelSettings.new()
-	rls.font = GameStyle.body_font()
-	rls.font_size = 13
-	rls.outline_size = 2
-	rls.outline_color = Color(0.02, 0.03, 0.06, 0.9)
-	_recall_label.label_settings = rls
-	_recall_label.text = "收回"
-	_recall_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_recall_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_recall_label.position = Vector2(0, 3)
-	_recall_label.size = Vector2(RECALL_SIZE, 20)
-	_recall_btn.add_child(_recall_label)
+	# 收回键内部：上「机关 → 人物」图标，下「可收回」单行。
+	# 旧版是「收回」+「可收回」两行字，56 圆里又挤又重复，玩家一眼读不完。
+	_recall_icon = RecallIcon.new()
+	_recall_icon.name = "RecallIcon"
+	_recall_icon.size = Vector2(RECALL_ICON_SIZE, RECALL_ICON_SIZE)
+	_recall_icon.position = Vector2((RECALL_SIZE - RECALL_ICON_SIZE) * 0.5, RECALL_ICON_TOP)
+	_recall_btn.add_child(_recall_icon)
 
 	_recall_sub = Label.new()
 	var rss := LabelSettings.new()
 	rss.font = GameStyle.body_font()
-	rss.font_size = 9
+	rss.font_size = 10
 	rss.outline_size = 2
 	rss.outline_color = Color(0.02, 0.03, 0.06, 0.9)
 	_recall_sub.label_settings = rss
 	_recall_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_recall_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_recall_sub.position = Vector2(0, 31)
+	_recall_sub.position = Vector2(0, RECALL_TEXT_TOP)
 	_recall_sub.size = Vector2(RECALL_SIZE, 14)
+	_recall_sub.text = "可收回"
 	_recall_btn.add_child(_recall_sub)
 
 	# 「N 座待修」芯片：挂在根上（不随圆键一起收起），点按无动作（纯提示）
@@ -278,11 +307,13 @@ func handle_engine_input(event: InputEvent) -> void:
 		# 先现算一拍状态：10Hz 轮询在快速走位时可能还停在上一格，
 		# 直接用旧 mode 判会把「布设」误判成「完好」而静默吞掉这一下。
 		_poll_state()
-		if _recall_btn != null and _recall_btn.visible and _is_point_on_recall(touch.position):
-			_do_recall()
-			return
+		# 主键优先：两个圆的热区外扩后会在交界处重叠（主键半径 44+14 / 收回 28+12，
+		# 圆心距仅 82），先判收回会把「点主键左缘维修/布设」误判成收回（真的撤场 + 整备冷却）。
 		if _circle_root != null and _circle_root.visible and _is_point_on_btn(touch.position):
 			_press_primary(touch.index)
+			return
+		if _recall_btn != null and _recall_btn.visible and _is_point_on_recall(touch.position):
+			_do_recall()
 	elif _holding:
 		# 松开分支只认匹配的 index，左手松摇杆不打断右手维修
 		if touch.index == _hold_touch_index:
@@ -307,9 +338,17 @@ func can_key_act() -> bool:
 
 ## 键盘 G：收回（与独立收回键同一动作；不靠近机关时给提示）
 func recall_by_key() -> void:
-	if _edit_mode or _mode == Mode.HIDDEN:
+	if _edit_mode or _mode == Mode.HIDDEN or not _is_gameplay_active():
 		return
 	_do_recall()
+
+## 暂停/失焦时收不到按键或触点的松开事件：主动收手，避免回到战斗后
+## 「没人按住也在回填耐久」，以及 F 的按住标志卡到下一次真实松开。
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_PAUSED, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_key_holding = false
+			_release_primary(-999)
 
 func mode() -> int:
 	return _mode
@@ -347,7 +386,7 @@ func _press_primary(touch_index: int = -1) -> void:
 				_style_btn(true)
 		Mode.SPENT:
 			if Time.get_ticks_msec() >= _suppress_until:
-				_hint("机关已在场上，走近后可收回")
+				_hint("机关已在场上")
 		Mode.COOLDOWN:
 			if Time.get_ticks_msec() >= _suppress_until:
 				_hint("机关整备中，稍等片刻")
@@ -414,13 +453,27 @@ func _do_deploy() -> void:
 func _hint_deploy_denied(reason: String) -> void:
 	match reason:
 		"no_charge":
-			_hint("机关已在场上，走近后可收回")
+			_hint("机关已在场上")
 		"occupied":
 			_hint("离机关太近，走远一点")
 		"no_player":
 			_hint("尚未进入战斗")
 		_:
-			_hint("现在不能布设机关")
+			# 状态都对、链路自己失败了：按 TurretCommand 记下的原因码说清是哪一环，
+			# 别再统一报一句「现在不能布设机关」（玩家看不懂，排查也拿不到线索）。
+			_hint_deploy_failed()
+
+## 布设链路内部失败的具体文案：原因码同时写进设备日志（file_logging 开着，可查 godot.log）
+func _hint_deploy_failed() -> void:
+	var code := TurretCommand.last_error
+	push_warning("[TURRET] 机关布设内部失败：%s" % code)
+	match code:
+		"scene":
+			_hint("机关模型没加载出来")
+		"cap":
+			_hint("机关编制已满")
+		_:
+			_hint("布设失败，请再试一次")
 
 func _hint(text: String) -> void:
 	if text.is_empty():
@@ -441,13 +494,8 @@ func _do_recall() -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	if not TurretCommand.recall_nearest(player, player.global_position):
-		# 场上确实有机关但走太远：明确告诉玩家要走近，不做静默失败
-		var near := TurretCommand.nearest_turret(player, player.global_position,
-			BalanceTurret.INTERACT_RADIUS)
-		if near == null and _has_turret:
-			_hint("走近机关才能收回")
-		elif near == null:
-			_hint("场上没有机关")
+		# 收回已不限距离，唯一会失败的情况就是场上真没有机关（或机关正被收回）。
+		_hint("场上没有机关")
 		_play_reject_fx()
 		return
 	_release_primary(-999)
@@ -508,7 +556,6 @@ func _poll_state() -> void:
 	var has_weapon := false
 	var has_turret := false
 	var recall_near := false
-	var recall_dir := ""
 
 	if player != null and is_instance_valid(player):
 		var weapons: Array = TurretCommand.mechanism_weapons(player)
@@ -519,18 +566,12 @@ func _poll_state() -> void:
 			BalanceTurret.INTERACT_RADIUS)
 		var turrets: Array[TurretUnit] = TurretCommand.deployed_turrets(player)
 		has_turret = not turrets.is_empty()
-		if has_turret:
-			recall_near = TurretCommand.nearest_turret_dist(player, player.global_position) \
-				<= BalanceTurret.INTERACT_RADIUS
-			# 远处收回键的小字方向：优先指向最近一台「待修」的，没有待修就指向最近的机关
-			var goal: TurretUnit = TurretCommand.nearest_service_turret(player, player.global_position)
-			if goal == null:
-				goal = TurretCommand.nearest_turret(player, player.global_position, 1.0e9)
-			if goal != null and not recall_near:
-				recall_dir = _dir_text(player.global_position, goal.global_position)
+		# 收回不限距离（BalanceTurret.RECALL_RADIUS <= 0）：场上有机关就随时能收最近那座，
+		# 键亮着 == 按下去真能收（显隐与 recall_nearest 读同一个候选口）
+		recall_near = has_turret and TurretCommand.recall_candidate(player, player.global_position) != null
 
 		if next_target != null and next_target.durability_ratio() < 0.999:
-			# 1) 90px 内最近机关 durability_ratio() < 0.999 → Mode.REPAIR（维修优先）
+			# 1) 交互半径内最近机关 durability_ratio() < 0.999 → Mode.REPAIR（维修优先）
 			next_mode = Mode.REPAIR
 			accent = GameStyle.JADE
 			sub_text = "%d%%" % roundi(next_target.durability_ratio() * 100.0)
@@ -543,7 +584,7 @@ func _poll_state() -> void:
 			if w != null:
 				sub_text = String(WeaponData.get_def(String(w.weapon_def_id)).get("name", ""))
 		elif next_target != null:
-			# 3) 90px 内有机关
+			# 3) 交互半径内有机关
 			if ready > 0:
 				# 有编制但落点被占 → 「太近」+ 提示挪位
 				next_mode = Mode.TOO_CLOSE
@@ -560,12 +601,11 @@ func _poll_state() -> void:
 			accent = GameStyle.GOLD
 			badge_text = "×%d" % ready
 		elif has_turret:
-			# 5) 编制用尽、场上还有机关 → 键不收起，告诉玩家机关在哪
+			# 5) 编制用尽、场上还有机关 → 键不收起，只报「在场」状态（收回键靠近才出现）
 			next_mode = Mode.SPENT
 			accent = GameStyle.GREY
-			sub_text = "走近可收回"
 		elif has_weapon:
-			# 6) 有机关武器、无编制、场上无机关 = 收回后的整备冷却
+			# 6) 有机关武器、无编制、场上无机关 = 收回后的 2 秒整备倒数
 			next_mode = Mode.COOLDOWN
 			accent = GameStyle.GREY
 			var left := TurretCommand.cooldown_left(player)
@@ -583,7 +623,6 @@ func _poll_state() -> void:
 	_target = next_target
 	_has_turret = has_turret
 	_recall_near = recall_near
-	_recall_dir_text = recall_dir
 	# 芯片只在「附近这台本身不缺维修」时提示别处的机器（站在坏机关旁边时芯片是废话）
 	var near_needs := next_target != null and next_target.needs_service()
 	_apply_face(accent, sub_text, badge_text, service, near_needs)
@@ -617,20 +656,18 @@ func _apply_face(accent: Color, sub_text: String, badge_text: String, service: i
 				_badge.offset_left = _badge.offset_right - _badge.custom_minimum_size.x
 				_badge.offset_top = 3.0
 				_badge.offset_bottom = 3.0 + 14.0
-	# 独立收回键：场上有机关就常驻；靠近亮、远离暗（点它会给「走近」提示）
+	# 独立收回键：只在靠近自己的机关时出现（走远不占屏，也不在布设键上写收回提示）
 	if _recall_btn != null:
-		var want_recall := _has_turret and not _edit_mode
+		var want_recall := _has_turret and _recall_near and not _edit_mode
 		if _recall_btn.visible != want_recall:
 			_recall_btn.visible = want_recall
 		if want_recall:
-			_recall_btn.modulate.a = 1.0 if _recall_near else 0.55
-			var raccent: Color = GameStyle.JADE if _recall_near else GameStyle.GREY
+			_recall_btn.modulate.a = 1.0
+			var raccent: Color = GameStyle.JADE
 			if raccent != _recall_accent:
 				_recall_accent = raccent
 				SkillButtonView.style_circle_action(_recall_btn, raccent, RECALL_FONT)
-			var rsub := "可收回" if _recall_near else _recall_dir_text
-			if rsub.is_empty():
-				rsub = "走近"
+			var rsub := "可收回"
 			if rsub != _recall_sub_key:
 				_recall_sub_key = rsub
 				if _recall_sub != null:
@@ -686,8 +723,8 @@ func _apply_visibility() -> void:
 		_anim_tween.tween_property(self, "modulate:a", 1.0, 0.16)
 		_anim_tween.parallel().tween_property(self, "scale", _base_scale, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	else:
-		modulate.a = 1.0
-		scale = _base_scale
+		# 不把 alpha 强行拉回 1：淡入途中翻成收起时，从当前透明度接着淡出，
+		# 否则会先闪一帧全亮再消失（布设后 0.16s 内立刻收回就能看到）。
 		_anim_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 		_anim_tween.tween_property(self, "modulate:a", 0.0, 0.18)
 		_anim_tween.tween_callback(func() -> void:
@@ -824,6 +861,9 @@ func get_recall_btn() -> Button:
 func get_recall_sub() -> Label:
 	return _recall_sub
 
+func get_recall_icon() -> Control:
+	return _recall_icon
+
 func get_badge() -> Label:
 	return _badge
 
@@ -853,19 +893,6 @@ func _center_chip() -> void:
 	_chip.offset_right = BTN_SIZE.x + 20.0
 	_chip.offset_top = BTN_SIZE.y + CHIP_GAP
 	_chip.offset_bottom = BTN_SIZE.y + CHIP_GAP + 16.0
-
-## 远离时收回键的小字方向：主轴向优先，斜向给「右上/左下」两字
-func _dir_text(from: Vector2, to: Vector2) -> String:
-	var d := to - from
-	if d.length_squared() < 1.0:
-		return "近"
-	var hx := "右" if d.x >= 0.0 else "左"
-	var vy := "下" if d.y >= 0.0 else "上"
-	if absf(d.x) > absf(d.y) * 1.6:
-		return hx
-	if absf(d.y) > absf(d.x) * 1.6:
-		return vy
-	return hx + vy
 
 ## 收回键摆位：优先主键左侧；左缘放不下就改上方，还放不下改右侧。
 ## 只改 child.position（父节点的缩放/拖动仍由 HudButtonLayout 统一管）。

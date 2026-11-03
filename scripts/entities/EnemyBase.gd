@@ -232,6 +232,19 @@ var _blink_rift: BlinkRift = null      ## 落点符环（世界层；宿主伏�
 var _blink_on_arrive: Callable = Callable() ## 落地回调（Boss 在落地后才出招）
 var _blink_color: Color = GameStyle.BAD ## 本段瞬移的主题色（Boss 传自身 _fx_color）
 var _blink_radius: float = BlinkRift.RADIUS_NORMAL ## 符环/冲击环档位半径（纯表现）
+var _blink_origin_rift: BlinkRift = null ## 起手吸积环（Boss 档，画在本体脚下）
+
+## 瞬移体术（Boss 档，2026-11-03 二次强化）：前摇末段本体收缩、淡出，落地后从落点胀回。
+## 只改程序化视图的 scale/alpha，不碰碰撞体与判定；小怪档恒为 1/1（不参与演出）。
+## 读数分工：吸积环在本体脚下 = 「正在被抽离」，落点符环/光柱 = 「要落到这」，
+## 落地爆闪 = 「它到了」——三段一头一尾，满屏弹幕里也能看出这是一次瞬移而不是两次受击。
+const WARP_ALPHA_MIN := 0.16        ## 消失前最低不透明度（留一点轮廓，不变成纯隐身）
+const WARP_SCALE_MIN := 0.52        ## 消失前最小收缩比例（读「被吸进落点」）
+const WARP_REVEAL_TIME := 0.20      ## 落地胀回时长（秒）
+var _warp_heavy: bool = false       ## 本次瞬移是否走 Boss 强化演出
+var _warp_alpha: float = 1.0        ## 程序化视图透明度倍率（1 = 正常）
+var _warp_scale: float = 1.0        ## 程序化视图缩放倍率（1 = 正常）
+var _warp_reveal_t: float = 0.0     ## >0 = 落地胀回剩余秒数
 
 # 五行元素异常状态（灼烧/冰缓/剧毒）
 var burn_timer: float = 0.0
@@ -1470,6 +1483,16 @@ func _resolve_velocity(delta: float) -> void:
 ## 受击视觉零分配衰减（2026-10-11）：挤压回弹（TRANS_BACK EASE_OUT 同款过冲曲线）
 ## 与闪白衰减逐帧推进，替代原先每次受击 create_tween ×2 的分配热点
 func _tick_hit_fx(delta: float) -> void:
+	# 瞬移落地胀回（Boss 档）：起手缩到 0.52 / 0.16 透明，落地后 WARP_REVEAL_TIME 内胀回正常。
+	# 放在受击视觉同一条逐帧通道里：与挤压回弹并行叠乘，不另起 Tween（爆发瞬移时零分配）。
+	if _warp_reveal_t > 0.0:
+		_warp_reveal_t = maxf(0.0, _warp_reveal_t - delta)
+		var wk: float = 1.0 - _warp_reveal_t / WARP_REVEAL_TIME
+		_warp_alpha = lerpf(WARP_ALPHA_MIN, 1.0, wk)
+		_warp_scale = lerpf(WARP_SCALE_MIN, 1.0, wk)
+		if _warp_reveal_t <= 0.0:
+			_warp_alpha = 1.0
+			_warp_scale = 1.0
 	if _squash_t > 0.0:
 		_squash_t = maxf(0.0, _squash_t - delta)
 		var t := 1.0 - _squash_t / _squash_dur
@@ -1566,8 +1589,15 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 	if procedural_view != null:
 		procedural_view.facing = facing
 		procedural_view.flip_h = anim_sprite.flip_h
-		procedural_view.scale = anim_sprite.scale
-		procedural_view.modulate = anim_sprite.modulate
+		# 瞬移体术（仅 Boss 档非 1）：收缩/胀回只作用在矢量视图上，
+		# anim_sprite 与碰撞体保持原尺寸 —— 判定不因演出变形（分层铁律：渲染层只读状态）。
+		procedural_view.scale = (anim_sprite.scale * _warp_scale) if _warp_scale != 1.0 else anim_sprite.scale
+		if _warp_alpha < 0.999:
+			var view_col := anim_sprite.modulate
+			view_col.a *= _warp_alpha
+			procedural_view.modulate = view_col
+		else:
+			procedural_view.modulate = anim_sprite.modulate
 		procedural_view.is_moving = is_moving
 		procedural_view.speed_ratio = speed_ratio
 		# 残血读数（2026-10-23）：渲染层据此加大呼吸幅度、压低浮沉、加静态歪斜 —— 越残越「喘」。
@@ -1969,28 +1999,66 @@ func _begin_blink_telegraph(dest: Vector2, duration: float, col: Color, rad: flo
 	_blink_color = col
 	_blink_radius = rad
 	cast_rooted = true
+	# Boss 档三阶段演出（2026-11-03 二次强化）：起手就在本体脚下亮吸积环，
+	# 配合本体收缩淡出，「正在被抽离」和「要落到哪」两头同时可读。
+	# 小怪档保持轻量：只有落点符环，不加脚下环/本体淡出，避免群怪闪现满屏闪烁。
+	_warp_heavy = rad >= BlinkRift.HEAVY_TIER_MIN
+	_warp_alpha = 1.0
+	_warp_scale = 1.0
+	_warp_reveal_t = 0.0
+	if _blink_origin_rift != null and is_instance_valid(_blink_origin_rift):
+		_blink_origin_rift.cancel()
+		_blink_origin_rift = null
 	if _blink_rift != null and is_instance_valid(_blink_rift):
 		_blink_rift.cancel()
 	_blink_rift = BlinkRift.acquire(get_parent(), dest, duration, col, rad)
+	if _warp_heavy:
+		_blink_origin_rift = BlinkRift.acquire_ex(get_parent(), global_position, duration, col, rad,
+			BlinkRift.Mode.ORIGIN)
 	play_squash(Vector2(0.84, 1.16), 0.2)
 	if procedural_view != null:
 		procedural_view.special_state = 0.001
-	AudioManager.play_sfx("enemy_fuse", 0.4, 1.2)
+	# 魔君档压低音高 + 提音量：和落点符环一起形成「长嘶 → 爆响」的两拍听觉提示
+	AudioManager.play_sfx("enemy_fuse", 0.75 if _warp_heavy else 0.4, 0.85 if _warp_heavy else 1.2)
 
 ## 符环清理（落地/取消共用）：符环自驱到期也会回池，这里负责提前收。
 func _clear_blink_telegraph() -> void:
 	if _blink_rift != null and is_instance_valid(_blink_rift):
 		_blink_rift.cancel()
 	_blink_rift = null
+	if _blink_origin_rift != null and is_instance_valid(_blink_origin_rift):
+		_blink_origin_rift.cancel()
+	_blink_origin_rift = null
 
 ## 取消前摇：伏诛 / 回合末消散 / 定身打断 / 池化复用归位。
 func _cancel_blink_windup() -> void:
+	var had_warp: bool = _warp_heavy or _warp_alpha < 0.999 or _warp_scale < 0.999
 	_blink_windup_t = 0.0
 	_blink_windup_total = 0.0
 	_blink_kind = BLINK_KIND_NONE
 	_blink_on_arrive = Callable()
 	cast_rooted = false
+	_warp_heavy = false
+	_warp_alpha = 1.0
+	_warp_scale = 1.0
+	_warp_reveal_t = 0.0
 	_clear_blink_telegraph()
+	# 伏诛/清场时 _physics_process 已不会再同步视图，必须在这里把演出态就地还原，
+	# 否则尸体会带着 0.16 透明度与 0.52 缩放进入死亡淡出（看起来像「本来就快没了」）。
+	if had_warp:
+		_restore_warp_visual()
+
+## 演出态就地还原：透明度/缩放回到正常读数（只碰表现层，不碰 anim_base_scale）。
+func _restore_warp_visual() -> void:
+	_warp_alpha = 1.0
+	_warp_scale = 1.0
+	_warp_reveal_t = 0.0
+	if procedural_view == null:
+		return
+	var c := procedural_view.modulate
+	c.a = 1.0
+	procedural_view.modulate = c
+	procedural_view.scale = anim_sprite.scale if anim_sprite != null else procedural_view.scale
 
 ## 前摇推进（每物理帧）：只递减倒计时，到点落地。归属方在起手时已把落地回调挂好。
 func _tick_blink_windup(delta: float) -> void:
@@ -1998,6 +2066,12 @@ func _tick_blink_windup(delta: float) -> void:
 	_pp_target_vel = Vector2.ZERO
 	# 真钉地：只归零期望速度会留 0.1s 吸附滑行；前摇期要的是「站定收束」的承诺段
 	velocity = Vector2.ZERO
+	# Boss 档末端塌缩：后 65% 才开始收缩淡出（前半段保持本体可读，不会一上来就看不见人）
+	if _warp_heavy:
+		var t := clampf(1.0 - _blink_windup_t / maxf(_blink_windup_total, 0.001), 0.0, 1.0)
+		var k := smoothstep(0.35, 1.0, t)
+		_warp_alpha = lerpf(1.0, WARP_ALPHA_MIN, k)
+		_warp_scale = lerpf(1.0, WARP_SCALE_MIN, k)
 	if _blink_windup_t <= 0.0:
 		_finish_blink_windup()
 
@@ -2005,6 +2079,7 @@ func _tick_blink_windup(delta: float) -> void:
 ## 返回 true = 已真正换位；false = 宿主已伏诛/出树，调用方不要再出手。
 func _finish_blink_windup() -> bool:
 	var on_arrive := _blink_on_arrive
+	var heavy := _warp_heavy
 	_blink_windup_t = 0.0
 	_blink_windup_total = 0.0
 	_blink_kind = BLINK_KIND_NONE
@@ -2017,15 +2092,32 @@ func _finish_blink_windup() -> bool:
 	var dest := _blink_dest
 	var col := _blink_color
 	var rad := _blink_radius
+	# 残影在收缩态生成：小一号的「魂」离开原地，和本体胀回形成一缩一胀的对比
 	_spawn_teleport_ghost()
-	# 离开读法：旧位一圈外扩；去向读法已由符环在起手期给足
-	JuiceEffect.spawn_shockwave(get_parent(), origin, rad, col, 0.22)
+	if heavy:
+		# 离开读法：旧位双重外扩 + 向内收束灵光，读「原地炸开一个空洞」
+		JuiceEffect.spawn_shockwave(get_parent(), origin, rad * 1.35, col, 0.30)
+		JuiceEffect.spawn_shockwave(get_parent(), origin, rad * 0.75, col.lightened(0.35), 0.18)
+		JuiceEffect.spawn_pickup_pop(get_parent(), origin, false, col)
+	else:
+		# 小怪：旧位一圈外扩；去向读法已由符环在起手期给足
+		JuiceEffect.spawn_shockwave(get_parent(), origin, rad, col, 0.22)
 	global_position = dest
-	# 现身读法：落点冲击 + 向内收束微粒 + 从中心胀回本体（play_squash 起点小、回弹到 1）
-	JuiceEffect.spawn_shockwave(get_parent(), dest, rad * 1.25, col, 0.26)
-	JuiceEffect.spawn_pickup_pop(get_parent(), dest, false, col)
-	play_squash(Vector2(0.66, 0.66), 0.2)
-	AudioManager.play_sfx("enemy_blink", 0.8)
+	# 现身读法：落点爆闪（双环外扩 + 光柱塌落）+ 冲击环 + 从中心胀回本体
+	if heavy:
+		BlinkRift.acquire_ex(get_parent(), dest, 0.34, col, rad, BlinkRift.Mode.ARRIVAL)
+		JuiceEffect.spawn_shockwave(get_parent(), dest, rad * 1.55, col, 0.30)
+		AudioManager.play_sfx("enemy_blink", 1.0, 0.9)
+		# 落地先压到最小，再由 _tick_hit_fx 的 reveal 段胀回；play_squash 额外给一次过冲回弹
+		_warp_alpha = WARP_ALPHA_MIN
+		_warp_scale = WARP_SCALE_MIN
+		_warp_reveal_t = WARP_REVEAL_TIME
+		play_squash(Vector2(0.50, 0.50), 0.28)
+	else:
+		JuiceEffect.spawn_shockwave(get_parent(), dest, rad * 1.25, col, 0.26)
+		JuiceEffect.spawn_pickup_pop(get_parent(), dest, false, col)
+		play_squash(Vector2(0.66, 0.66), 0.2)
+		AudioManager.play_sfx("enemy_blink", 0.8)
 	if on_arrive.is_valid():
 		on_arrive.call()
 	return true

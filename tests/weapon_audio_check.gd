@@ -220,9 +220,16 @@ func _test_turret() -> void:
 	for def_id in _ids_of(WeaponData.Behavior.TURRET):
 		var t: TurretUnit = load("res://scenes/weapons/TurretUnit.tscn").instantiate()
 		t.setup(def_id, 1)
+		t.position = Vector2(80.0, -40.0)
 		AudioManager.begin_sfx_capture()
 		_world.add_child(t)                       ## _ready 里发布设音
 		await get_tree().process_frame
+		# 2026-11-03 起机关改成多管齐射：_fire() 要按 _targets 分敌出膛，
+		# 没有目标时直接返回（不扣耐久/不进冷却/不发音）。判据只量开火音，
+		# 直接塞一个有效目标，别让「空场不开火」把音效断言一起吞掉。
+		var target := _enemy_at(t.position + ENEMY_OFFSET)
+		t._targets.clear()
+		t._targets.append(target)
 		t._fire()                                  ## 开火音走表里第一层
 		await get_tree().create_timer(WAIT_FIRE).timeout
 		var captured := AudioManager.end_sfx_capture()
@@ -236,6 +243,7 @@ func _test_turret() -> void:
 			"%s 开火音 == 表现在值 %s（实收 %s）" % [def_id, WeaponData.sfx_for(def_id), str(seq)])
 		_c.check(not seq.has("orb_hit") and not seq.has("obelisk_blessing"),
 			"%s 布设与开火没借用灵宝钟/祝福铃（实收 %s）" % [def_id, str(seq)])
+		target.queue_free()
 		t.queue_free()
 
 # ---------------- ⑥ 敌我分源：敌人不许借用玩家武器音 ----------------

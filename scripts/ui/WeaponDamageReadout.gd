@@ -68,8 +68,8 @@ static func effective_range(w_id: String) -> float:
 	var def := WeaponData.get_def(w_id)
 	return float(def.get("range", 0.0)) * range_mult_for(w_id)
 
-## 你现在的实际攻击间隔（数据表值 × 攻速乘区）。与 FloatingWeapon 的 cooldown_timer 同一条式子。
-## 对机关而言保持「收回整备」冷却口径（实际开火间隔见 effective_fire_cd）。
+## 常规武器的实际攻击间隔（数据表值 × 攻速乘区）。与 FloatingWeapon 的 cooldown_timer 同一条式子；
+## 机关不吃这条（机关看开火间隔，见 effective_fire_cd）。
 static func effective_cd(w_id: String, star: int) -> float:
 	return WeaponData.cooldown_for(w_id, clampi(star, 1, WeaponData.MAX_STAR)) * haste_product()
 

@@ -48,7 +48,7 @@ const CORE_R := 2.4
 const CORE_HDR_R := 1.3
 ## 噩梦态 HDR 芯：血朱超白（分量 > 1 才会起辉，红通道拉满、绿蓝压低 ⇒ 泛光也是红的）。
 ## 普通态仍用 GameStyle.FX_HDR_CORE（白芯），两档按 _night 逐项 lerp，不硬切。
-const BLOOD_HDR_CORE := Color(2.6, 0.30, 0.22)
+## 色值定义在 GameStyle（UI 源码禁止出现 >1 的颜色字面量，GlowChannelCheck 钉这条）。
 ## 头部半径脉动幅度与角频率（小数比例 / rad·s）：
 ## 流星在空中明暗呼吸，比死板的固定亮核有活气
 const PULSE_DEPTH := 0.08
@@ -313,7 +313,7 @@ func _draw_meteor(m: Dictionary) -> void:
 	var with_white := lerpf(0.30, 0.06, _night)
 	draw_circle(head, CORE_R * sc * pulse,
 		GameStyle.with_alpha(tint.lerp(Color.WHITE, with_white), alpha), true)
-	var hdr_core: Color = GameStyle.FX_HDR_CORE.lerp(BLOOD_HDR_CORE, _night)
+	var hdr_core: Color = GameStyle.FX_HDR_CORE.lerp(GameStyle.FX_HDR_BLOOD, _night)
 	draw_circle(head, CORE_HDR_R * sc * pulse, GameStyle.with_alpha(hdr_core, alpha * 0.9), true)
 
 	_draw_sparks(m)

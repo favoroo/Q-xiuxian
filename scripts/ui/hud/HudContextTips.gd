@@ -27,7 +27,7 @@ const TIPS: Dictionary = {
 	&"chest": ["藏宝匣", "打碎掉金币和道具"],
 	&"obelisk": ["聚灵阵", "站进去充能领灵兽"],
 	&"elite": ["精英怪", "血厚招狠，击杀掉好货"],
-	&"mechanism": ["机关", "空地按「布设」，靠近长按「维修」，旁边「收回」键撤回"],
+	&"mechanism": ["机关", "空地按「布设」，靠近站定长按「维修」（机关停火），旁边「收回」键撤回"],
 }
 
 var _bubble: PanelContainer = null

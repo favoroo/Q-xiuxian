@@ -20,7 +20,6 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 	if in_stash and slots_here < GameManager.max_weapon_slots():
 		slots_here += 1
 	var per_hit: float = WeaponDamageReadout.per_hit(id, star, slots_here)
-	var cd := WeaponDamageReadout.effective_cd(id, star)
 	var base_range: float = float(def.get("range", 0.0))
 	var eff_range: float = WeaponDamageReadout.effective_range(id)
 	var range_buffed: bool = not is_equal_approx(eff_range, base_range)
@@ -55,9 +54,13 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 	]
 	if is_turret:
 		rows.append(["开火间隔", "%.2f 秒" % WeaponDamageReadout.effective_fire_cd(id, star)])
-		rows.append(["收回整备", "%.2f 秒" % cd])
+		# 2026-11-03 收回不再有整备倒数：卡面直说「无需等待」，别再显示「0.00 秒」
+		if BalanceTurret.RECALL_COOLDOWN_SEC <= 0.0:
+			rows.append(["收回整备", "无需等待"])
+		else:
+			rows.append(["收回整备", "%.2f 秒" % BalanceTurret.RECALL_COOLDOWN_SEC])
 	else:
-		rows.append(["攻击间隔", "%.2f 秒" % cd])
+		rows.append(["攻击间隔", "%.2f 秒" % WeaponDamageReadout.effective_cd(id, star)])
 	rows.append(["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER])
 
 	# 机关：布设上限 / 齐射管数 / 耐久（2026-11-03 手动布设改版）。

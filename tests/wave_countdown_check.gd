@@ -55,6 +55,13 @@ func _setup_run() -> void:
 	await get_tree().process_frame
 	GameManager.cultivator_id = "fuzhen"
 	GameManager.start_run("qingyun_sword")
+	# 判据只量读数，不让第 12 波的真怪把玩家打死：玩家一死 run_invalidated 会冻结回合推进，
+	# 第 ⑥ 段的「表到 0 收尾」就会在慢机上卡在 FIGHT（全量跑时实测过一次）。
+	var p = GameManager.player
+	if p != null and is_instance_valid(p):
+		p.max_health = 999999.0
+		p.current_health = 999999.0
+		p.invulnerable_time = 999999.0
 	get_tree().paused = false
 	await get_tree().process_frame
 	_spawner = GameManager.wave_spawner
@@ -76,7 +83,7 @@ func _run() -> void:
 
 	# ---- ① 第 1 波：秒数与线长都跟着 spawner 那一格 ----
 	_spawner.wave_timer = 12.4
-	await get_tree().process_frame
+	await _sync()
 	var total_1 := GameBalance.wave_duration(1)
 	_c.check(_secs_shown() == float(int(ceili(_spawner.wave_timer))),
 		"第 1 波 · 读数秒数 == ceili(spawner.wave_timer)（实得 %s / 表 %.2f）" % [_readout(), _spawner.wave_timer])
@@ -87,7 +94,7 @@ func _run() -> void:
 	# ---- ② 与整局时长无关：灌一个离谱的 game_time 当干扰 ----
 	GameManager.game_time = 1234.0
 	_spawner.wave_timer = 12.4
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_secs_shown() != 34.0 and _secs_shown() != 1234.0,
 		"读数不跟整局 game_time（灌了 1234s 干扰，实读 %s）" % _readout())
 
@@ -95,7 +102,7 @@ func _run() -> void:
 	_spawner.start_wave(12)
 	await get_tree().process_frame
 	_spawner.wave_timer = 22.0
-	await get_tree().process_frame
+	await _sync()
 	var total_12 := GameBalance.wave_duration(12)
 	_c.check(not _near(total_12, total_1), "第 12 波总长已随波次变长（%.1fs vs %.1fs）" % [total_12, total_1])
 	_c.check(_near(_wc.bar_ratio(), 22.0 / total_12),
@@ -104,17 +111,17 @@ func _run() -> void:
 
 	# ---- ④ 告急：最后 5 秒转朱砂，6 秒还不该转 ----
 	_spawner.wave_timer = 4.2
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_wc.is_urgent() and _wc.shown_color() == GameStyle.BAD,
 		"剩 4.2s 整颗芯片转朱砂（实得 %s）" % _readout())
 	_spawner.wave_timer = 6.0
-	await get_tree().process_frame
+	await _sync()
 	_c.check(not _wc.is_urgent() and _wc.shown_color() == GameStyle.GOLD,
 		"剩 6.0s 还是主蓝（实得 %s）" % _readout())
 
 	# ---- ⑤ 线画多长就是多长：不探出芯片、也不许只按布局框算 ----
 	_spawner.wave_timer = 22.0
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_wc.size.x > 0.0, "芯片内宽已量到（%.1f）" % _wc.size.x)
 	_c.check(_near(_wc.fill_width(), _wc.size.x * _wc.bar_ratio(), 0.02),
 		"线长 == 比例 × 芯片内宽（内宽 %.1f，画到 %.1f）" % [_wc.size.x, _wc.fill_width()])
@@ -124,6 +131,7 @@ func _run() -> void:
 	_spawner.wave_timer = 0.01
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_wc.refresh_now()   # 控件 10Hz 轮询：等生产路径收完尾后催一拍，量「读哪一格数」
 	_c.check(int(_spawner.phase) != int(WaveSpawner.Phase.FIGHT), "表走到 0 已由生产路径收尾（phase=%d）" % int(_spawner.phase))
 	_c.check(not _wc.has_bar() and _wc.fill_width() == 0.0,
 		"波次结束后线已收（读数 %s）" % _readout())
@@ -131,26 +139,27 @@ func _run() -> void:
 
 	# ---- ⑦ Boss 波（第 10 波）：不给倒计时、不画线（用户当轮指令） ----
 	_spawner.start_wave(10)
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_readout() == "第 10 波", "Boss 波读数不带时间（实得 %s）" % _readout())
 	_c.check(not _wc.has_bar(), "Boss 波芯片底部不画线")
 	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
 
 	# ---- ⑦ Boss/精英波：Boss 整条不出现；精英有表时报时，表走完锁关期退化成纯波号 ----
 	_spawner.start_wave(10)
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_readout() == "第 10 波", "Boss 波读数不带时间（实得 %s）" % _readout())
 	_c.check(not _wc.has_bar(), "Boss 波芯片底部不画线")
 	_c.check(_wc.fill_width() == 0.0, "Boss 波没画任何进度")
 	_spawner.start_wave(5)
 	_spawner.elite_spawned = true   # 判据只量读数，不让 _process 真去刷精英
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_readout().find(":") >= 0, "精英波有表时照常报时（实得 %s）" % _readout())
 	_c.check(_wc.has_bar(), "精英波有表时画进度线")
 	_spawner.wave_timer = 0.0
 	var elite_ref := _make_elite_ref()
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_wc.refresh_now()   # 锁关判定在轮询之外，催一拍再读
 	_c.check(_readout() == "第 5 波", "精英锁关期读数退化成纯波号（实得 %s）" % _readout())
 	_c.check(not _wc.has_bar() and _wc.fill_width() == 0.0,
 		"精英锁关期不画停在 0:00 的假进度")
@@ -185,7 +194,7 @@ func _selftest() -> void:
 		_c.check(false, "selftest 前置：现场没搭起来")
 		return
 	_spawner.wave_timer = 12.4
-	await get_tree().process_frame
+	await _sync()
 	var total_1 := GameBalance.wave_duration(1)
 
 	_c.check(_secs_shown() == float(int(ceili(_spawner.wave_timer))),
@@ -198,18 +207,18 @@ func _selftest() -> void:
 		"反例① 分母写死 60s 被拦住（那样算得 %.3f，实得 %.3f）" % [12.4 / 60.0, _wc.bar_ratio()])
 	# 反例② 读数拿整局时长凑（game_time 1234s 的尾巴是 34s）
 	GameManager.game_time = 1234.0
-	await get_tree().process_frame
+	await _sync()
 	_c.check(not _near(_secs_shown(), 34.0),
 		"反例② 读数改用整局 game_time 被拦住（那样会是 0:34，实得 %s）" % _readout())
 	GameManager.game_time = 0.0
 	# 反例③ 自己另起一张表：把 spawner 那格改掉后读数必须跟着改
 	_spawner.wave_timer = 7.3
-	await get_tree().process_frame
+	await _sync()
 	_c.check(_secs_shown() == 8.0,
 		"反例③ 控件自己攒表（读数不动）被拦住（改表后实得 %s）" % _readout())
 	# 反例④ Boss 波也画线 / 也报秒
 	_spawner.start_wave(10)
-	await get_tree().process_frame
+	await _sync()
 	_c.check(not _wc.has_bar() and _readout().find(":") < 0,
 		"反例④ Boss 波仍画线报秒被拦住（实得 %s）" % _readout())
 	# 反例⑤ 波次结束后线还停在 0:00
@@ -218,13 +227,14 @@ func _selftest() -> void:
 	_spawner.wave_timer = 0.01
 	await get_tree().process_frame
 	await get_tree().process_frame
+	_wc.refresh_now()
 	_c.check(int(_spawner.phase) != int(WaveSpawner.Phase.FIGHT) and not _wc.has_bar(),
 		"反例⑤ 波末留一条停着的假线被拦住（phase=%d，线 %s）" % [int(_spawner.phase), str(_wc.has_bar())])
 	# 反例⑥ 数字与线各说各话（数字说剩 8 秒、线还剩一半）
 	_spawner.start_wave(3)
 	await get_tree().process_frame
 	_spawner.wave_timer = 4.2
-	await get_tree().process_frame
+	await _sync()
 	# 线是连续的、数字进位到整秒（ceili），所以同源的定义是「线反推回剩余秒数」与读数
 	# 相差不足 1 秒 —— 差一整秒以上就说明两处不是同一个数。
 	var left_from_bar := _wc.bar_ratio() * GameBalance.wave_duration(3)
@@ -235,6 +245,13 @@ func _selftest() -> void:
 			0.5 * GameBalance.wave_duration(3), _secs_shown()])
 
 # ---------------- 取值小工具 ----------------
+
+## 控件自 2026-10-29 起按 10Hz 轮询刷新读数；改完 spawner 的数后显式催一拍再比。
+## 判据量的是「读的是不是那一格数」，轮询节拍另由 POLL_INTERVAL 约定，不在这里重复量。
+func _sync() -> void:
+	await get_tree().process_frame
+	if _wc != null:
+		_wc.refresh_now()
 
 ## 造一只「活着挡在场上」的精英引用：读数判据只需要锁关状态成立，不走 1.1s 凝聚演出
 func _make_elite_ref() -> EnemyBase:

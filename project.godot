@@ -52,6 +52,10 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+; 4 = SCREEN_SENSOR_LANDSCAPE：正向 + 反向横屏随重力感应（手机反过来拿也能玩）。
+; 缺省值 0 = SCREEN_LANDSCAPE，会把 android:screenOrientation 写死成正向横屏。
+; 注意：本节内的键名是相对的，写全路径会变成 display/display/window/... 而不生效。
+window/handheld/orientation=4
 
 [gui]
 

@@ -164,11 +164,17 @@ var _proc_renderer: Node2D = null
 
 var projectile_scene: PackedScene = preload("res://scenes/weapons/BladeProjectile.tscn")
 var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
-var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
+
+## 机关实体场景：**这里刻意不用 preload**。武器侧脚本互相引用时，preload 可能在导出包/真机上
+## 被静默打成空 PackedScene（坑 12 同源），症状正是「布设键有 ×N 读数、点下去却提示不能布设」——
+## TurretUnit.acquire_or_new 拿到空场景就返回 null，玩家侧完全看不出原因。
+## 改为首次布设时按需 load + 缓存；仍拿不到可实例化的场景时 reload_turret_scene() 丢掉缓存重读。
+const TURRET_SCENE_PATH := "res://scenes/weapons/TurretUnit.tscn"
+var _turret_scene: PackedScene = null
 
 var active_turrets: Array[TurretUnit] = []
-## 机关（TURRET）整备冷却（2026-11-03 手动布设改版）：收回后按 attack_cooldown × 攻速
-## 计时，到点才能重放。不设这条就能「抱着机关跑」，阵地玩法会退化成随身炮台。
+## 收回后的整备倒计时（2026-11-03 起 BalanceTurret.RECALL_COOLDOWN_SEC = 0：收回即可重摆）。
+## 链路保留，将来要加冷却只改那一个常量。
 var redeploy_timer: float = 0.0
 ## 收回时带回来的耐久（<0 = 没有待接管的值，按满耐久新布设）
 var pending_turret_durability: float = -1.0
@@ -603,8 +609,7 @@ func _process(delta: float) -> void:
 
 	_tick_fire_fx(delta)
 	cooldown_timer -= delta
-	# 机关整备冷却：独立计时，不吃上面那条「无目标就把冷却钳到 0」的规则
-	# （那条规则对机关会变成「周围没怪就能无限重摆」，正是收回冷却要防的事）。
+	# 机关整备倒数：独立计时，不吃「无目标就把冷却钳到 0」的规则
 	if redeploy_timer > 0.0:
 		redeploy_timer = maxf(0.0, redeploy_timer - delta)
 	bob_phase += delta * 3.5
@@ -698,8 +703,7 @@ func _process(delta: float) -> void:
 		_had_target = has_target
 
 		# 4. 攻击。机关（TURRET）不在这里出手（2026-11-03 手动布设改版）：
-		# 它的输出由玩家手动布设的地面机关负责，本体的 attack_cooldown 改作「收回整备冷却」
-		# （见 redeploy_timer），所以这里只留普通武器的自动出手。
+		# 它的输出由玩家手动布设的地面机关负责，本体不出手，所以这里只留普通武器的自动攻击。
 		if cooldown_timer <= 0.0 and not is_attacking and not fire_held:
 			if behavior != WeaponData.Behavior.TURRET and current_target != null:
 				_perform_attack()
@@ -737,7 +741,7 @@ func _perform_attack() -> void:
 			BurstHandler.perform(self)
 		WeaponData.Behavior.TURRET:
 			# 机关不走这里（2026-11-03）：布设由玩家手动触发（TurretHandler.deploy），
-			# 本体的 attack_cooldown 已改作收回整备冷却。留着分支只为枚举齐全时的可读性。
+			# 本体不出手。留着分支只为枚举齐全时的可读性。
 			pass
 		WeaponData.Behavior.SWEEP:
 			SweepHandler.perform(self)
@@ -874,14 +878,26 @@ func _perform_projectile_attack() -> void:
 func _perform_burst_attack() -> void:
 	BurstHandler.perform(self)
 
+## 机关场景（懒加载 + 可用性校验）：空场景/加载残留一律视为不可用，不缓存坏的。
+func turret_scene() -> PackedScene:
+	if _turret_scene == null or not _turret_scene.can_instantiate():
+		_turret_scene = load(TURRET_SCENE_PATH) as PackedScene
+	return _turret_scene
+
+## 丢掉缓存的机关场景，强制下次重新读盘（布设失败后重试一次用）
+func reload_turret_scene() -> PackedScene:
+	_turret_scene = null
+	return turret_scene()
+
 ## 机关布设转发面（判据直调）：不再有「冷却到点自动布设」，pos 由调用方给。
-func deploy_turret_at(pos: Vector2) -> TurretUnit:
+## from_pos = 人物出发点的世界坐标（器核投送演出的起点）；Vector2.INF = 不播投送。
+func deploy_turret_at(pos: Vector2, from_pos: Vector2 = Vector2.INF) -> TurretUnit:
 	var keep_durability: float = -1.0
 	if not pending_turret_durabilities.is_empty():
 		keep_durability = pending_turret_durabilities.pop_back()
 	elif pending_turret_durability >= 0.0:
 		keep_durability = pending_turret_durability
-	var t: TurretUnit = TurretHandler.deploy(self, pos, keep_durability)
+	var t: TurretUnit = TurretHandler.deploy(self, pos, keep_durability, from_pos)
 	if t == null:
 		if keep_durability >= 0.0:
 			pending_turret_durabilities.push_back(keep_durability)
@@ -889,7 +905,7 @@ func deploy_turret_at(pos: Vector2) -> TurretUnit:
 	pending_turret_durability = pending_turret_durabilities.back() if not pending_turret_durabilities.is_empty() else -1.0
 	return t
 
-# ---------------- 机关编制 / 整备冷却（2026-11-03 手动布设改版） ----------------
+# ---------------- 机关编制 / 整备倒数（2026-11-03 手动布设改版） ----------------
 
 func is_mechanism() -> bool:
 	return behavior == WeaponData.Behavior.TURRET
@@ -912,7 +928,7 @@ func field_turret() -> TurretUnit:
 	var list := field_turrets()
 	return list[0] if not list.is_empty() else null
 
-## 还有几份待布设编制（编制上限 - 在场数；整备冷却期间一律 0）
+## 还有几份待布设编制（编制上限 - 在场数；整备倒数期间一律 0）
 func free_charges() -> int:
 	if not is_mechanism() or redeploy_timer > 0.0:
 		return 0
@@ -923,8 +939,7 @@ func deploy_ready() -> bool:
 	return free_charges() > 0
 
 ## 收回指定的一台机关（多编制下必须点名，不能再默认收回 [0]）：
-## 折叠撤场、耐久带回本体、起整备冷却（整备是武器级的，一次收一座也要等冷却）。
-## 冷却 = 武器表 cooldown × 有效攻速（吃攻速加成，与旧版布设间隔同一乘区）。
+## 折叠撤场、耐久带回本体；整备倒数读 BalanceTurret.RECALL_COOLDOWN_SEC（当前 0 = 立刻可重摆）。
 func recall_turret(target: TurretUnit = null) -> bool:
 	var t: TurretUnit = target
 	if t == null or not is_instance_valid(t):
@@ -934,16 +949,14 @@ func recall_turret(target: TurretUnit = null) -> bool:
 	pending_turret_durability = t.durability
 	pending_turret_durabilities.append(t.durability)
 	t.dismiss(true)
-	redeploy_timer = BalanceTurret.recall_cooldown(
-		WeaponData.cooldown_for(weapon_def_id, star),
-		GameManager.get_effective_attack_speed_mult())
+	redeploy_timer = BalanceTurret.RECALL_COOLDOWN_SEC
 	return true
 
 ## 布设成功：编制用掉，收回带来的耐久已被新机关接管
 func on_turret_deployed() -> void:
 	pending_turret_durability = pending_turret_durabilities.back() if not pending_turret_durabilities.is_empty() else -1.0
 
-## 回合末整备：待布设编制回满、整备冷却清零
+## 回合末整备：待布设编制回满、整备倒数清零
 func on_wave_end() -> void:
 	pending_turret_durabilities.clear()
 	pending_turret_durability = -1.0
