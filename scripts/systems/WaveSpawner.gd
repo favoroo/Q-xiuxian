@@ -603,6 +603,14 @@ func end_wave(early_secs: float = 0.0) -> void:
 	for turret in get_tree().get_nodes_in_group("turrets"):
 		if turret is TurretUnit:
 			(turret as TurretUnit).on_wave_end()
+	# 悬浮武器波末整备：待布设机关编制回满、整备冷却清零（不影响普通武器）
+	var p = GameManager.player
+	if p != null and is_instance_valid(p):
+		var holder = p.get("weapon_holder") as Node
+		if holder != null and is_instance_valid(holder):
+			for weapon in holder.get_children():
+				if weapon != null and is_instance_valid(weapon) and weapon.has_method("on_wave_end"):
+					weapon.on_wave_end()
 	# 地上金币全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折金币）
 	# 磁吸风暴分帧（2026-10-17 性能专项）：旧版同一帧把最多 140 颗宝石全部切进 60Hz
 	# 物理回调 + 各挂 Line2D 拖尾，正是回合末清场瞬间的掉帧尖峰来源。

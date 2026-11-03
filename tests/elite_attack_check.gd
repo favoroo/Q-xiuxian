@@ -134,7 +134,9 @@ func _run() -> void:
 	# 收掉这只（回池路径走 _die → 塌缩；测试只关心字段回滚，见 ⑨）
 	golem.take_damage(9999999.0, Vector2.ZERO, false)
 
-	# ---- ⑥ W15 赤雷兽：冲刺伤害升档 + 雷环出弹 ----
+	# ---- ⑥ W15 赤雷兽：冲刺伤害升档 + 冲刺带侧翼雷弹 ----
+	# 2026-11-03：v0.1.8 已把赤雷兽改成纯二连折返冲（移除环弹），环弹职责交给星盘/玄冥；
+	# 旧判据仍在断言常驻雷环，自 v0.1.8 起长期假红，现按当前设计校正。
 	_begin_wave(15)
 	var chilei := await _spawn_gatekeeper()
 	_c.check(chilei != null and is_instance_valid(chilei), "⑥ 第 15 波赤雷兽已从真实刷怪口落地")
@@ -142,25 +144,18 @@ func _run() -> void:
 		return
 	_c.near(chilei.charge_damage_mul, 1.3, 0.001,
 		"⑥ 冲刺伤害倍率升档（1.0 → 1.3，不再是普通妖狼同档）")
-	_c.check(chilei.ring_bolt_interval > 0.0,
-		"⑥ 赤雷兽常驻雷环（ring_bolt_interval=%.2f > 0）" % chilei.ring_bolt_interval)
-	_park_player_near(chilei.global_position, 300.0)
-	var bolts_before := EnemyBolt.active_count
-	chilei._fire_ring_bolts()
-	await get_tree().process_frame
-	var spawned := EnemyBolt.active_count - bolts_before
-	_c.check(spawned == chilei.ring_bolt_count,
-		"⑥ 雷环出弹数 == ring_bolt_count（期望 %d，实得 %d）" % [chilei.ring_bolt_count, spawned])
+	_c.check(chilei.ring_bolt_interval == 0.0,
+		"⑥ 赤雷兽纯冲刺不挂雷环（ring_bolt_interval=%.2f）" % chilei.ring_bolt_interval)
+	_c.check(chilei.charge_side_bolts > 0,
+		"⑥ 冲刺起步带侧翼雷弹（charge_side_bolts=%d）" % chilei.charge_side_bolts)
 
-	# ---- ⑦ 变异：链冲 + 雷环增发 ----
+	# ---- ⑦ 变异：链冲 + 保留侧翼洒弹 ----
 	chilei.current_hp = chilei.max_hp * 0.5
 	chilei.take_damage(1.0, Vector2.ZERO, false)
 	await get_tree().process_frame
 	_c.check(chilei._mutated, "⑦ 赤雷兽过血线触发狂暴")
 	_c.check(chilei.chain_charges == GameBalance.MUT_CHILEI_CHAIN_CHARGES,
 		"⑦ 变异解锁三连冲（chain_charges=%d，期望 %d）" % [chilei.chain_charges, GameBalance.MUT_CHILEI_CHAIN_CHARGES])
-	_c.check(chilei.ring_bolt_count == GameBalance.MUT_CHILEI_RING_COUNT,
-		"⑦ 变异雷环增发（ring_bolt_count=%d，期望 %d）" % [chilei.ring_bolt_count, GameBalance.MUT_CHILEI_RING_COUNT])
 	_c.check(chilei.charge_side_bolts > 0, "⑦ 变异保留冲刺侧翼洒弹（charge_side_bolts=%d）" % chilei.charge_side_bolts)
 	chilei.take_damage(9999999.0, Vector2.ZERO, false)
 
@@ -214,7 +209,11 @@ func _run() -> void:
 		var pos_before := jiansha.global_position
 		var bolts_before2 := EnemyBolt.active_count
 		jiansha._blink_strike(GameManager.player)
-		await get_tree().process_frame
+		_c.check(jiansha._blink_rift != null and jiansha._blink_rift.visible, "⑧ 瞬身回斩起手亮落点符环")
+		_c.check(jiansha.global_position.distance_to(pos_before) < 1.0 \
+			and EnemyBolt.active_count == bolts_before2, "⑧ 瞬身前摇期不位移、不出剑气")
+		# 2026-11-03：瞬身改为「前摇填符环 → 落地 → 出剑气」，手动推进物理帧走完前摇
+		jiansha._physics_process(GameBalance.MUT_JIANSHA_BLINK_WINDUP + 0.05)
 		_c.check(jiansha.global_position.distance_to(pos_before) > 100.0,
 			"⑧ 瞬身回斩产生位移（%.0fpx）" % jiansha.global_position.distance_to(pos_before))
 		_c.check(EnemyBolt.active_count - bolts_before2 >= jiansha.blink_strike_bolts,
@@ -251,8 +250,7 @@ func _check_scene_config() -> void:
 	_c.near(g.rock_interval, GameBalance.GOLEM_ROCK_INTERVAL, 0.001, "① 铁甲魔傀场景 rock_interval 与 BalanceWave 同源")
 	_c.equals(g.rock_count, GameBalance.GOLEM_ROCK_COUNT, "① 铁甲魔傀场景 rock_count 与 BalanceWave 同源")
 	_c.near(c.charge_damage_mul, 1.3, 0.001, "① 赤雷兽冲刺伤害倍率 1.3（高于普通妖狼 1.0 档）")
-	_c.near(c.ring_bolt_interval, GameBalance.CHILEI_RING_INTERVAL, 0.001, "① 赤雷兽场景 ring_bolt_interval 与 BalanceWave 同源")
-	_c.equals(c.ring_bolt_count, GameBalance.CHILEI_RING_COUNT, "① 赤雷兽场景 ring_bolt_count 与 BalanceWave 同源")
+	_c.check(c.ring_bolt_interval == 0.0, "① 赤雷兽场景不挂雷环（纯冲刺设计）")
 	_c.near(j.field_interval, GameBalance.JIANSHA_FIELD_INTERVAL, 0.001, "① 剑煞场景 field_interval 与 BalanceWave 同源")
 	_c.near(j.field_radius, GameBalance.JIANSHA_FIELD_RADIUS, 0.001, "① 剑煞场景 field_radius 与 BalanceWave 同源")
 	g.free()

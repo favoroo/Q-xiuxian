@@ -215,6 +215,24 @@ var _field_ring: AoeTelegraph = null ## 落域预警圈
 var _blink_strike_timer: float = 0.0 ## 瞬身回斩周期计时
 var _charge_windup_total: float = 0.0 ## 本次冲刺预警总时长（链冲后段按倍率缩短，进度分母必须同源）
 
+# —— 瞬移前摇（2026-11-03 可读性专项）——
+## 旧链路是 `global_position = 目标点` 一帧硬切，瞬移前既无前摇也无落点提示。
+## 现在起手帧先锁落点、在地面亮符环（BlinkRift），填满才落地；前摇期钉地（cast_rooted），
+## 让玩家能读出「它要去哪」，并真的走得出去。伤害/射程/弹速一律不动。
+const BLINK_KIND_NONE := 0
+const BLINK_KIND_TELEPORT := 1   ## 影魅侧翼闪现
+const BLINK_KIND_STRIKE := 2     ## 剑煞瞬身回斩
+const BLINK_KIND_BOSS := 3       ## Boss 招式瞬移（由 BossEnemy 自己推进）
+var cast_rooted: bool = false          ## 瞬移前摇钉地：追击速度归零 + 不吃敌群分离
+var _blink_windup_t: float = 0.0       ## >0 = 前摇剩余秒数；到 0 由归属方落地
+var _blink_windup_total: float = 0.0   ## 本次前摇总时长（special_state 进度分母）
+var _blink_dest: Vector2 = Vector2.ZERO ## 起手帧锁定的落点（画哪落哪，不追玩家）
+var _blink_kind: int = BLINK_KIND_NONE ## 前摇归属（两套小怪 AI 互斥，Boss 走自己的 _process）
+var _blink_rift: BlinkRift = null      ## 落点符环（世界层；宿主伏诛/消散/复用前必须取消）
+var _blink_on_arrive: Callable = Callable() ## 落地回调（Boss 在落地后才出招）
+var _blink_color: Color = GameStyle.BAD ## 本段瞬移的主题色（Boss 传自身 _fx_color）
+var _blink_radius: float = BlinkRift.RADIUS_NORMAL ## 符环/冲击环档位半径（纯表现）
+
 # 五行元素异常状态（灼烧/冰缓/剧毒）
 var burn_timer: float = 0.0
 var burn_dps: float = 0.0
@@ -653,6 +671,8 @@ func reset_for_reuse() -> void:
 	_field_windup_t = -1.0
 	_field_target = Vector2.ZERO
 	_blink_strike_timer = 0.0
+	# 瞬移前摇归位：复用前必须取消符环并解除钉地，否则上一命的 pending 会带进下一波
+	_cancel_blink_windup()
 	_poison_timer = 0.0
 	_poison_windup_t = -1.0
 	_poison_target = Vector2.ZERO
@@ -1021,12 +1041,18 @@ func _physics_process(delta: float) -> void:
 	# 引入轻微加减速平滑，消除突然转向时的身躯瞬间硬切；
 	# 受击硬直（hit-stun）期间主动追击速度归零，位移纯由击退速度主导，呈现土豆兄弟式的受击定身与推开感
 	var chase_dir: Vector2 = _flock_orbit_dir(dir, dist_sq)
-	_pp_target_vel = Vector2.ZERO if _pp_stun else (chase_dir * eff_speed)
-	if _tick_behaviors(delta, target, dir, dist_sq, eff_speed):
+	# cast_rooted：瞬移前摇钉地，落点符环画在哪就从哪起跳，追击位移会把「起手点」拖走
+	_pp_target_vel = Vector2.ZERO if (_pp_stun or cast_rooted) else (chase_dir * eff_speed)
+	# 瞬移前摇是承诺段：只推进符环倒计时，扑咬/冲刺/产卵/治疗等行为支路全部让位。
+	# 起手帧已锁死落点，前摇期再插入别的招式会让「画哪落哪」失真。
+	var blink_pending: bool = _blink_windup_t > 0.0
+	if blink_pending:
+		_tick_blink_windup(delta)
+	elif _tick_behaviors(delta, target, dir, dist_sq, eff_speed):
 		return
 	# 2.2 近战扑咬（2026-10-23）：纯接触怪的出招段。前摇/收势段钉住不动，前扑段直接锁速度。
 	# 只在本帧没被其他行为支路接管时推进（_tick_behaviors 未 return 说明走的是常规追击）。
-	if lunge != null:
+	if lunge != null and not blink_pending:
 		var dist: float = sqrt(dist_sq)
 		var lunge_phase_before: int = lunge.phase
 		var lunge_vel: Vector2 = lunge.tick(delta, dist, to_player, move_speed, _pp_stun)
@@ -1138,6 +1164,8 @@ func _flock_steerable() -> bool:
 	if _bolt_windup_t >= 0.0 or _poison_windup_t >= 0.0:
 		return false
 	if _elite_slam_windup_t >= 0.0 or _ring_bolt_windup_t >= 0.0 or _field_windup_t >= 0.0:
+		return false
+	if cast_rooted:
 		return false
 	if always_flee:
 		return false
@@ -1569,7 +1597,10 @@ func _update_facing_and_anim(delta: float, dir: Vector2, dist_sq: float) -> void
 			_gait_phase += delta * speed_ratio * (GAIT_FREQ_SLITHER if locomotion_mode == "slither" else GAIT_FREQ_HOVER)
 		procedural_view.gait_phase = _gait_phase
 		# 蓄力/前摇进度同步（全运动模式通用，0→1 填满即出手；火球蓄力的真话源在 _tick_bolt_windup，这里不覆盖）
-		if _fuse >= 0.0:
+		if _blink_windup_t > 0.0:
+			# 瞬移前摇：与地面符环同拍收束，落地即归零
+			procedural_view.special_state = 1.0 - _blink_windup_t / maxf(_blink_windup_total, 0.001)
+		elif _fuse >= 0.0:
 			procedural_view.special_state = 1.0
 		elif _charge_windup >= 0.0:
 			procedural_view.special_state = 1.0 - _charge_windup / maxf(_charge_windup_total, 0.001)
@@ -1846,6 +1877,8 @@ func apply_poison(dps: float, duration: float) -> void:
 func apply_vortex_pin(pull_velocity: Vector2, pin_sec: float) -> void:
 	if dying:
 		return
+	# 定身打断瞬移前摇：被钉着还瞬走，「定身」就是空话（与冲锋预警同一条起手纪律）
+	_cancel_blink_windup()
 	hit_stun_timer = maxf(hit_stun_timer, pin_sec)
 	knockback_velocity = pull_velocity if move_speed > 0.0 else Vector2.ZERO
 	if _charge_windup > 0.0:
@@ -1922,6 +1955,80 @@ static func _recycle_vector_ghost(ghost: HollowKnightEnemyRenderer) -> void:
 		_ghost_idle.append(ghost)
 	else:
 		ghost.queue_free()
+
+# ---------------- 瞬移前摇（2026-11-03 可读性专项） ----------------
+
+## 前摇起手：锁定落点 + 地面符环 + 钉地 + 蓄力姿态。
+## duration 到点后由归属方调用 _finish_blink_windup() 落地；调用方负责在落地回调里出招。
+func _begin_blink_telegraph(dest: Vector2, duration: float, col: Color, rad: float) -> void:
+	if duration <= 0.0 or get_parent() == null:
+		return
+	_blink_windup_t = duration
+	_blink_windup_total = duration
+	_blink_dest = dest
+	_blink_color = col
+	_blink_radius = rad
+	cast_rooted = true
+	if _blink_rift != null and is_instance_valid(_blink_rift):
+		_blink_rift.cancel()
+	_blink_rift = BlinkRift.acquire(get_parent(), dest, duration, col, rad)
+	play_squash(Vector2(0.84, 1.16), 0.2)
+	if procedural_view != null:
+		procedural_view.special_state = 0.001
+	AudioManager.play_sfx("enemy_fuse", 0.4, 1.2)
+
+## 符环清理（落地/取消共用）：符环自驱到期也会回池，这里负责提前收。
+func _clear_blink_telegraph() -> void:
+	if _blink_rift != null and is_instance_valid(_blink_rift):
+		_blink_rift.cancel()
+	_blink_rift = null
+
+## 取消前摇：伏诛 / 回合末消散 / 定身打断 / 池化复用归位。
+func _cancel_blink_windup() -> void:
+	_blink_windup_t = 0.0
+	_blink_windup_total = 0.0
+	_blink_kind = BLINK_KIND_NONE
+	_blink_on_arrive = Callable()
+	cast_rooted = false
+	_clear_blink_telegraph()
+
+## 前摇推进（每物理帧）：只递减倒计时，到点落地。归属方在起手时已把落地回调挂好。
+func _tick_blink_windup(delta: float) -> void:
+	_blink_windup_t -= delta
+	_pp_target_vel = Vector2.ZERO
+	# 真钉地：只归零期望速度会留 0.1s 吸附滑行；前摇期要的是「站定收束」的承诺段
+	velocity = Vector2.ZERO
+	if _blink_windup_t <= 0.0:
+		_finish_blink_windup()
+
+## 前摇到点：旧位残影 → 落到锁定点 → 落地冲击 → 执行归属方的落地回调。
+## 返回 true = 已真正换位；false = 宿主已伏诛/出树，调用方不要再出手。
+func _finish_blink_windup() -> bool:
+	var on_arrive := _blink_on_arrive
+	_blink_windup_t = 0.0
+	_blink_windup_total = 0.0
+	_blink_kind = BLINK_KIND_NONE
+	_blink_on_arrive = Callable()
+	cast_rooted = false
+	_clear_blink_telegraph()
+	if dying or get_parent() == null:
+		return false
+	var origin := global_position
+	var dest := _blink_dest
+	var col := _blink_color
+	var rad := _blink_radius
+	_spawn_teleport_ghost()
+	# 离开读法：旧位一圈外扩；去向读法已由符环在起手期给足
+	JuiceEffect.spawn_shockwave(get_parent(), origin, rad, col, 0.22)
+	global_position = dest
+	# 现身读法：落点冲击 + 向内收束微粒 + 从中心胀回本体（play_squash 起点小、回弹到 1）
+	JuiceEffect.spawn_shockwave(get_parent(), dest, rad * 1.25, col, 0.26)
+	JuiceEffect.spawn_pickup_pop(get_parent(), dest, false, col)
+	play_squash(Vector2(0.66, 0.66), 0.2)
+	AudioManager.play_sfx("enemy_blink", 0.8)
+	if on_arrive.is_valid():
+		on_arrive.call()
+	return true
 
 ## 血蛹分裂：死亡时裂出 N 只幼体（幼体按当前回合 × 危险度缩放；自爆/消散不触发）
 func _split_offspring() -> void:
@@ -2104,6 +2211,8 @@ func _begin_dissolve() -> bool:
 	if dying or not is_inside_tree():
 		return false
 	dying = true
+	# 清场路径同样要收瞬移前摇：符环挂在父节点上，不取消会留在地面等自己到期
+	_cancel_blink_windup()
 	set_physics_process(false)
 	# 清场路径不经过 _die 的 _clear_*：挂在父节点上的落石预警圈必须在这里收，
 	# 否则回合末消散后圈还留在地面（自身子节点的 field/slam 圈随节点隐藏，可不动）
@@ -2131,6 +2240,8 @@ func _die() -> void:
 	if dying or not is_inside_tree():
 		return
 	dying = true
+	# 伏诛当帧就收瞬移前摇：不然尸体会先塌缩、符环还在替它预告一个不会发生的落地
+	_cancel_blink_windup()
 	GameManager.register_kill(is_elite, _death_crit_kill)
 	# 死亡弹幕（土豆兄弟 Pufferfish 型）：引信中途被击杀的丹爆傀儡溅射一圈丹火。
 	# 只认「被提前击杀」（_fuse > 0，引信还没烧完）；自己烧完的自爆走 _explode 已有 AoE 结算，

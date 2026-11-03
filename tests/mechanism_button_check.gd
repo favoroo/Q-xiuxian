@@ -31,6 +31,9 @@ class FakePlayer extends Node2D:
 		current_health = minf(max_health, current_health + amount)
 		return current_health - before
 
+class FakeSpawner extends Node:
+	var phase: int = 0
+
 var _c := TestCheck.new()
 var _hud: GameHUD = null
 var _btn: HudMechanismButton = null
@@ -61,6 +64,11 @@ func _run() -> void:
 	await _case_broken_and_service_chip()
 	await _case_recall()
 	await _case_second_finger()
+	await _case_multi_touch_repair()
+	await _case_dual_deploy()
+	await _case_recall_debounce()
+	await _case_clearing_deploy()
+	_case_landing_clamp()
 	await _check_joystick_group()
 	await _teardown()
 	if _c.report("MECHANISM_BTN_RESULT"):
@@ -285,6 +293,181 @@ func _case_second_finger() -> void:
 	await get_tree().process_frame
 	_c.check(_field_turret() != null, "第二指原生触摸也能布设")
 	await _poll()
+
+# ---------------- ⑦ 多指维修（左手摇杆不打断右手） ----------------
+
+func _case_multi_touch_repair() -> void:
+	var t := _field_turret()
+	_c.check(t != null, "前提：场上有机关")
+	if t == null:
+		return
+	_player.global_position = t.global_position + Vector2(30, 0)
+	t.durability = 30.0
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR, "进入维修态")
+
+	# 右手按住开始维修（touch index 1）
+	var st1 := InputEventScreenTouch.new()
+	st1.position = _btn_center()
+	st1.index = 1
+	st1.pressed = true
+	_btn.handle_engine_input(st1)
+	await get_tree().process_frame
+	_c.check(t.is_repairing(), "原生 press index=1 开始维修")
+
+	# 左手松开摇杆（touch index 0 release）不应打断右手维修
+	var st0 := InputEventScreenTouch.new()
+	st0.position = Vector2(100, 400)
+	st0.index = 0
+	st0.pressed = false
+	_btn.handle_engine_input(st0)
+	await get_tree().process_frame
+	_c.check(t.is_repairing(), "发 index=0 的 release，右手维修仍在继续")
+
+	# 右手松开（touch index 1 release）才停止维修
+	var st1_rel := InputEventScreenTouch.new()
+	st1_rel.position = _btn_center()
+	st1_rel.index = 1
+	st1_rel.pressed = false
+	_btn.handle_engine_input(st1_rel)
+	await get_tree().process_frame
+	_c.check(not t.is_repairing(), "index=1 release 停止维修")
+
+# ---------------- ⑧ 双联布设（站原地「太近」+ 挪开可布设） ----------------
+
+func _case_dual_deploy() -> void:
+	# 先收掉之前的机关，进入干净状态
+	if _field_turret() != null:
+		_btn._do_recall()
+		await get_tree().process_frame
+	_fw.redeploy_timer = 0.0
+	_fw.pending_turret_durability = -1.0
+	if _fw.get("pending_turret_durabilities") != null:
+		_fw.pending_turret_durabilities.clear()
+
+	GameManager.items.append("shen_shuanglian")
+	await get_tree().process_frame
+	_c.equals(TurretCommand.ready_count(_player), 2, "双联神机给 2 份编制")
+
+	_player.global_position = Vector2.ZERO
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "空地且有编制 → DEPLOY")
+
+	# 放第一座
+	_press_at(_btn_center())
+	_release_at(_btn_center())
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 1, "先放了一座")
+	var t1: TurretUnit = _fw.field_turrets()[0]
+
+	# 站原地不动：落点被占 → TOO_CLOSE「太近」
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.TOO_CLOSE, "站原地落点被占 → TOO_CLOSE")
+	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_TOO_CLOSE, "键面写「太近」")
+	_c.check(_btn.get_tag().visible, "TOO_CLOSE 模式下显示收回角标")
+
+	# 点主键不新增机关（走拒绝反馈）
+	_press_at(_btn_center())
+	_release_at(_btn_center())
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 1, "点主键被拒，不新增机关")
+
+	# 把玩家沿远离机关方向挪约 40px 使落点 ≥64
+	# t1 在 (0, 26)，玩家挪到 (0, 66)：离 t1 为 40px (<=90)，落点在 (0, 92)，离 t1 为 66px (>=64)
+	_player.global_position = t1.global_position + Vector2(0, 40.0)
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "挪约 40px 使落点 ≥64 → DEPLOY")
+	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_DEPLOY, "键面写「布设」")
+	_c.check(not _btn.get_tag().visible, "DEPLOY 态即使靠近机关也不显示收回角标（防误触）")
+
+	# 放第二座成功，且此时玩家仍在第一座 90px 内
+	await get_tree().create_timer(0.2).timeout
+	_press_at(_btn_center())
+	_release_at(_btn_center())
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 2, "再放第二座成功")
+	_c.check(_player.global_position.distance_to(t1.global_position) <= BalanceTurret.INTERACT_RADIUS,
+		"此时玩家仍在第一座 90px 内（证明靠近也能布设）")
+
+# ---------------- ⑨ 收回防抖 ----------------
+
+func _case_recall_debounce() -> void:
+	_c.equals(_fw.field_turrets().size(), 2, "前提：场上有两座机关")
+	var t1: TurretUnit = _fw.field_turrets()[0]
+	var t2: TurretUnit = _fw.field_turrets()[1]
+	# 玩家移到两座机关中间，使两座都在 90px 内
+	_player.global_position = (t1.global_position + t2.global_position) * 0.5
+	_c.check(_player.global_position.distance_to(t1.global_position) <= BalanceTurret.INTERACT_RADIUS,
+		"第一座在 90px 交互范围内")
+	_c.check(_player.global_position.distance_to(t2.global_position) <= BalanceTurret.INTERACT_RADIUS,
+		"第二座在 90px 交互范围内")
+
+	# 快速调用两次 _do_recall（模拟原生按下 + 鼠标松开跨帧双发）
+	_btn._do_recall()
+	_btn._do_recall()
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 1, "收回防抖生效：快速两次调用只收回了一座")
+
+	# 等待 200ms 防抖窗口过后，再次调用可以收回第二座
+	await get_tree().create_timer(0.25).timeout
+	_btn._do_recall()
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 0, "防抖结束后可收回第二座")
+
+	GameManager.items.erase("shen_shuanglian")
+	_fw.redeploy_timer = 0.0
+	await _poll()
+
+# ---------------- ⑩ CLEARING 阶段布设 ----------------
+
+func _case_clearing_deploy() -> void:
+	_c.equals(TurretCommand.ready_count(_player), 1, "编制返还为 1")
+	_player.global_position = Vector2(200, 200)
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "空地布设态")
+
+	var fake_spawner := FakeSpawner.new()
+	fake_spawner.phase = int(WaveSpawner.Phase.CLEARING)
+	GameManager.wave_spawner = fake_spawner
+
+	_c.check(_btn._is_gameplay_active(), "CLEARING 阶段允许布设交互")
+
+	# 避开 150ms deploy 防抖
+	await get_tree().create_timer(0.2).timeout
+	_btn._do_deploy()
+	await get_tree().process_frame
+
+	var t := _field_turret()
+	_c.check(t != null, "CLEARING 阶段布设成功")
+	if t != null:
+		_c.check(not t._wave_active, "CLEARING 阶段布设的机关进入停火休眠态（_wave_active=false）")
+		_btn._do_recall()
+		await get_tree().process_frame
+
+	fake_spawner.free()
+	GameManager.wave_spawner = null
+	_fw.redeploy_timer = 0.0
+	await _poll()
+
+# ---------------- ⑪ 落点边界钳制 ----------------
+
+func _case_landing_clamp() -> void:
+	var bound: float = GameManager.MAP_HALF_EXTENT - 26.0
+	# 玩家位于 (bound, 0)
+	_player.global_position = Vector2(bound, 0.0)
+	var pos := TurretCommand.deploy_candidate_pos(_player)
+	_c.check(pos.x <= bound, "右边界附近落点 x <= MAP_HALF_EXTENT - 26")
+
+	# 玩家超出边界
+	_player.global_position = Vector2(bound + 60.0, bound + 60.0)
+	pos = TurretCommand.deploy_candidate_pos(_player)
+	_c.near(pos.x, bound, 0.001, "超出右边界落点 x 钳制在 bound")
+	_c.near(pos.y, bound, 0.001, "超出下边界落点 y 钳制在 bound")
+
+	_player.global_position = Vector2(-bound - 60.0, -bound - 60.0)
+	pos = TurretCommand.deploy_candidate_pos(_player)
+	_c.near(pos.x, -bound, 0.001, "超出左边界落点 x 钳制在 -bound")
+	_c.near(pos.y, -bound, 0.001, "超出上边界落点 y 钳制在 -bound")
 
 func _check_joystick_group() -> void:
 	var btn: Button = _btn.get_btn()

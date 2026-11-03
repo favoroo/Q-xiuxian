@@ -286,6 +286,9 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	_c.near(qianji.knockback_velocity.length(), 0.0, 0.01, "玄天千机尊完全免疫击退位移")
 	var pos_before := qianji.global_position
 	qianji._cast_turret_shift(p)
+	_c.check(qianji._blink_rift != null and qianji._blink_rift.visible, "玄天千机尊换桩起手亮落点符环")
+	_c.check(qianji.global_position.distance_to(pos_before) < 1.0, "换桩前摇期不提前换位（画哪落哪）")
+	qianji._physics_process(GameBalance.BOSS_TURRET_SHIFT_WINDUP + 0.05)
 	_c.check(qianji.global_position.distance_to(pos_before) > 30.0, "玄天千机尊换桩瞬移改变阵位")
 	qianji._die()
 	qianji.queue_free()
@@ -309,6 +312,9 @@ func _test_boss_archetypes_and_new_elites() -> void:
 	jianpo._attack_timer = 999.0
 	var bolts_before := EnemyBolt.active_count
 	jianpo._cast_blink_slash(p)
+	_c.check(jianpo._blink_rift != null and jianpo._blink_rift.visible, "幽冥剑魄尊瞬步起手亮落点符环")
+	_c.check(EnemyBolt.active_count == bolts_before, "瞬步前摇期不出扇形（落地之后才反打）")
+	jianpo._physics_process(GameBalance.BOSS_BLINK_SLASH_WINDUP + 0.05)
 	_c.check(jianpo.global_position.distance_to(p.global_position) <= GameBalance.BOSS_BLINK_SLASH_DIST + 40.0,
 		"幽冥剑魄尊瞬步贴近玩家周围")
 	_c.check(EnemyBolt.active_count > bolts_before, "幽冥剑魄尊瞬步回斩发射扇形剑气")

@@ -280,6 +280,7 @@ const MUT_JIANSHA_BLINK_INTERVAL := 6.0  ## 瞬身周期（秒）
 const MUT_JIANSHA_BLINK_DIST := 230.0    ## 瞬身落点距玩家距离
 const MUT_JIANSHA_BLINK_BOLTS := 2       ## 回斩剑气数量
 const MUT_JIANSHA_BLINK_BOLT_ARC := 0.18 ## 回斩剑气张角（弧度，单侧）
+const MUT_JIANSHA_BLINK_WINDUP := 0.36   ## 瞬身前摇：落点符环填满才落地（精英档 0.35~0.40）
 
 ## 灵医每跳治疗量：随回合复利成长（与敌人伤害同一条 dmg 曲线，保治疗与输出同量级对抗。
 ## 2026-10-13 改走 enemy_hp_mult 同源出口，深层复利提档自动跟涨）
@@ -364,6 +365,7 @@ const ELITE_GEM_EXP := 14               ## 精英单颗宝石经验/金币（普
                                         ## 2026-11-03：8→14，配合深层精英数量提升，单只总收益 65→95 金币
 const BLINK_DISTANCE := 210.0           ## 影魅闪现距离：绕玩家侧翼落到这个半径上
 const BLINK_MAP_INSET := 40.0           ## 闪现落点的边界内缩（不许闪出竞技场）
+const BLINK_WINDUP := 0.32              ## 影魅闪现前摇：落点符环填满才落地（小怪轻量档）
 const SPLIT_SCATTER_RADIUS := 26.0      ## 血蛆死亡分裂幼体的散布半径
 const MINION_SCATTER_RADIUS := 34.0     ## 蛛母产卵落点半径
 const HEAL_ORB_SCATTER_RADIUS := 16.0   ## 灵药滋生额外回复珠的偏移半径（±px）
@@ -497,6 +499,7 @@ const BOSS_CHAIN_CHARGE_COUNT_P2 := 5       ## 二阶段连冲次数
 const BOSS_CHAIN_CHARGE_GAP := 0.22         ## 连冲段间短蓄力时长（秒）
 const BOSS_TURRET_TELEPORT_EVERY := 3       ## 静止炮台 Boss 每释放 N 招瞬移换桩一次
 const BOSS_TURRET_TELEPORT_RADIUS := 210.0  ## 炮台换桩距场地中心的环半径
+const BOSS_TURRET_SHIFT_WINDUP := 0.42      ## 换桩前摇：新阵眼落点亮符环，填满才换位
 ## Boss 机动招落点的场心偏移内缩：换桩/瞬步/禁区等定向位移一律以地图原点为心、
 ## 按 MAP_HALF_EXTENT 内缩本值钳制（旧屏幕坐标 (480,270)/90~870 钳制会把落点钳出
 ## ±460 物理边界，被物理钳硬拉到边缘 = 炮台永远蹲角落的根因）
@@ -516,10 +519,13 @@ const BOSS_BLINK_SLASH_BOLTS_P2 := 9
 const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
 const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
 const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
+const BOSS_BLINK_SLASH_WINDUP := 0.40       ## 瞬步前摇：落点符环填满才落地，落地后才出扇形
+const BOSS_VOID_STEP_WINDUP := 0.30         ## 无相三连每段前摇（短于单发瞬步，保持连击密度）
 
 # ---------------- 太苍龙君·飞龙俯冲（DIVE） ----------------
 const BOSS_DIVE_LEAP_DIST := 380.0       ## 拉升锚点距玩家的拉开距离（盘旋升空读招）
 const BOSS_DIVE_MIN_LEAP := 220.0        ## 换位后与玩家至少保留的助跑距离（锚点被墙钳回时改选另一侧）
+const BOSS_DIVE_LEAP_WINDUP := 0.38      ## 拉升换位前摇：锚点符环填满才升空，之后才是冲锋预警
 const BOSS_DIVE_WINDUP := 0.75           ## 俯冲预警时长（胶囊线填满）
 const BOSS_DIVE_SPEED_MUL := 7.2         ## 俯冲倍速（全场贯穿，明显高于破阵冲锋 3.2）
 const BOSS_DIVE_DURATION := 0.85         ## 俯冲实冲时长（配合倍速贯穿全图）

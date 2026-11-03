@@ -381,6 +381,23 @@ func _run() -> void:
 	SpawnIndicator.clear_pool()
 	_check(SpawnIndicator.created_count == 0, "clear_pool 归零计数")
 
+	# ---------- 5.11 瞬移落点符环池（2026-11-03）：出池 / 回池 / 复用零新建 / 档位复位 ----------
+	var br_created0: int = BlinkRift.created_count
+	var br_a := BlinkRift.acquire(world, Vector2(120, 120), 0.32, GameStyle.BAD, BlinkRift.RADIUS_ELITE)
+	_check(br_a != null and br_a.is_inside_tree(), "符环池首轮可出池入树")
+	_check(BlinkRift.created_count == br_created0 + 1, "符环池首轮新建 1 个 (%d)" % (BlinkRift.created_count - br_created0))
+	_check(is_equal_approx(br_a.radius, BlinkRift.RADIUS_ELITE), "精英档符环半径按档位就位 (%.0f)" % br_a.radius)
+	_check(BlinkRift.active_count >= 1, "在树符环计入 active_count")
+	br_a.cancel()
+	_check(br_a.get_parent() == null, "符环取消后出树")
+	var br_b := BlinkRift.acquire(world, Vector2(140, 140), 0.42, GameStyle.BAD, BlinkRift.RADIUS_BOSS)
+	_check(br_b == br_a, "第二次 acquire 复用同一实例")
+	_check(BlinkRift.created_count == br_created0 + 1, "符环复用零新建 (%d)" % (BlinkRift.created_count - br_created0))
+	_check(is_equal_approx(br_b.radius, BlinkRift.RADIUS_BOSS) and br_b.progress == 0.0, "复用后档位/进度复位")
+	br_b.cancel()
+	BlinkRift.clear_pool()
+	_check(BlinkRift.created_count == 0, "BlinkRift.clear_pool 归零计数")
+
 	# ---------- 6. 缓存清理不影响运行中对象 ----------
 	DamageNumber.clear_cache()
 	JuiceEffect.clear_cache()

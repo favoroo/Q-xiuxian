@@ -139,13 +139,15 @@ static func tick_buff_aura_pulse(e, delta: float) -> void:
 			pulse_buff_aura(e)
 
 ## 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）。
+## 2026-11-03 可读性：先锁落点、亮符环、钉地 0.32s，填满才落地；旧写法一帧硬切，
+## 玩家只看到「突然消失 → 贴脸出现」。落点起手帧锁定，不追玩家，走得出去。
 static func tick_teleport_step(e, delta: float, player: Node2D) -> void:
-	# 影魅系：周期性闪现到玩家侧翼（自爆引信点燃时不闪现，避免爆点漂移）
+	# 前摇推进由 EnemyBase._tick_blink_windup 统一负责（前摇期 _tick_behaviors 整体让位）
 	if e.teleport_interval > 0.0 and e._fuse < 0.0:
 		e._teleport_timer -= delta
 		if e._teleport_timer <= 0.0:
 			e._teleport_timer = e.teleport_interval
-			_teleport_near_player(e, player)
+			_begin_teleport(e, player)
 
 ## 灵医系：周期性治疗范围内同伴（土豆兄弟 Healer：制造优先击杀目标）。
 static func tick_heal_pulse(e, delta: float) -> void:
@@ -208,15 +210,16 @@ static func _spawn_minion(e) -> void:
 	# 产卵不是击杀：pitch_override 直传，绕开击杀连击阶梯（也不推层）
 	AudioManager.play_sfx("enemy_death", 0.5, 1.3)
 
-## 影魅闪现：瞬移到玩家侧翼 210px 处（落点受界碑约束），原地留一个淡出剪影当残影
-static func _teleport_near_player(e, player: Node2D) -> void:
-	e._spawn_teleport_ghost()
+## 影魅闪现起手：锁定玩家侧翼 210px 落点（受界碑约束），先在地面亮符环再落地。
+static func _begin_teleport(e, player: Node2D) -> void:
+	if player == null or not is_instance_valid(player):
+		return
 	var angle := GameManager.rng.randf() * TAU
 	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * GameBalance.BLINK_DISTANCE
 	var lim: float = GameManager.MAP_HALF_EXTENT - GameBalance.BLINK_MAP_INSET
-	e.global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	e.play_squash(Vector2(1.3, 0.7), 0.2)
-	AudioManager.play_sfx("enemy_blink", 0.8)   ## 妖异残影是「下坠」，不许借玩家缩地成寸的 dodge
+	pos = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	e._blink_kind = e.BLINK_KIND_TELEPORT
+	e._begin_blink_telegraph(pos, GameBalance.BLINK_WINDUP, GameStyle.BAD, BlinkRift.RADIUS_NORMAL)
 
 static func pulse_heal(e) -> void:
 	var radius_sq: float = e.heal_radius * e.heal_radius

@@ -64,7 +64,6 @@ func _draw() -> void:
 	# BatchDraw 静态缓冲全进程共用：入口先清残留，出口统一提交（2026-11-03 绘制合批）
 	BatchDraw.flush(self)
 	_ensure_flow_bands()
-	_draw_central_taiji_array()
 	_draw_talisman_pulse()
 	BatchDraw.flush(self)
 
@@ -108,76 +107,6 @@ func apply_stage_theme(theme: Dictionary) -> void:
 		_flow_mat.set_shader_parameter("flow_speed", theme.get("flow_speed", 0.035) * (1.25 if is_boss else 1.0))
 		_flow_mat.set_shader_parameter("pulse_speed", theme.get("pulse_speed", 0.9) * (1.3 if is_boss else 1.0))
 	queue_redraw()
-
-# ==============================================================================
-# 1. 中心太极四象大阵（Central Taiji & Quad Array）
-# ==============================================================================
-func _draw_central_taiji_array() -> void:
-	# 三圈半径随 half_extent 等比缩放（标准半场 440 下为 145 / 92 / 44）
-	var scale_f := half_extent / 440.0
-	var r_outer: float = 145.0 * scale_f
-	var r_mid: float = 92.0 * scale_f
-	var r_inner: float = 44.0 * scale_f
-
-	# 柔和灵脉呼吸（低对比度，确保绝对不抢战斗视线）
-	var breath: float = sin(_time * 0.8) * 0.04 + 0.22
-	var col_cyan := Color(_taiji_col_cyan.r, _taiji_col_cyan.g, _taiji_col_cyan.b, breath)
-	var col_gold := Color(_taiji_col_gold.r, _taiji_col_gold.g, _taiji_col_gold.b, breath * 0.85)
-	var col_dark := Color(0.08, 0.15, 0.24, breath * 0.6)
-
-	# 极慢灵脉自转（每 90 秒转一圈，如同天地运转）
-	var rot: float = _time * _taiji_rot_mult
-	# draw_set_transform 必须落在已提交批次之后：BatchDraw 记的是当前画布变换，
-	# 先 flush 再换坐标系（同 HollowKnightEnemyRenderer._draw 的接法）
-	BatchDraw.flush(self)
-	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
-
-	# 外同心双环（弧段按半径自适应修剪：145px 半径 48 段已远超肉眼分辨）
-	BatchDraw.arc(self, Vector2.ZERO, r_outer, 0.0, TAU, col_cyan, 1.8)
-	BatchDraw.arc(self, Vector2.ZERO, r_outer - 8.0, 0.0, TAU, col_dark, 1.0)
-
-	# 12 方位天干地支刻印点
-	for i in range(12):
-		var a := (TAU / 12.0) * float(i)
-		var p_node := Vector2(cos(a), sin(a)) * (r_outer - 4.0)
-		BatchDraw.circle(self, p_node, 1.8, col_gold)
-
-	# 中阵环（四象象限与八卦爻刻）
-	BatchDraw.arc(self, Vector2.ZERO, r_mid, 0.0, TAU, col_dark, 1.2)
-	for j in range(8):
-		var b := (TAU / 8.0) * float(j)
-		var dir := Vector2(cos(b), sin(b))
-		BatchDraw.line(self, dir * (r_inner + 8.0), dir * (r_mid - 6.0), col_cyan * 0.8, 1.0)
-		# 八卦爻位短横
-		var p_mid := dir * r_mid
-		BatchDraw.line(self, p_mid - dir.orthogonal() * 4.0, p_mid + dir.orthogonal() * 4.0, col_gold, 1.4)
-
-	# 内阵核：太极双鱼图腾
-	BatchDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, col_cyan, 1.5)
-
-	# 阴阳鱼 S 曲线刻线
-	var s_pts := PackedVector2Array()
-	var s_steps := 14
-	for k in range(s_steps + 1):
-		var t := float(k) / float(s_steps)
-		var ang := -PI * 0.5 + PI * t
-		var r_half := r_inner * 0.5
-		s_pts.append(Vector2(0, -r_half) + Vector2(cos(ang), sin(ang)) * r_half)
-	for k in range(s_steps + 1):
-		var t := float(k) / float(s_steps)
-		var ang := PI * 0.5 - PI * t
-		var r_half := r_inner * 0.5
-		s_pts.append(Vector2(0, r_half) + Vector2(cos(ang), sin(ang)) * r_half)
-	BatchDraw.polyline(self, s_pts, col_cyan, 1.4)
-
-	# 阴阳眼
-	BatchDraw.circle(self, Vector2(0, -r_inner * 0.5), 3.5, col_cyan)
-	BatchDraw.circle(self, Vector2(0, r_inner * 0.5), 3.5, col_dark)
-	BatchDraw.circle(self, Vector2(0, r_inner * 0.5), 1.5, col_gold)
-
-	# 还原坐标系：先把旋转坐标系下的批次提交，再复位
-	BatchDraw.flush(self)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================
 # 2. 结界灵枢符印脉冲（动态部分：描边与核心的慢呼吸 + 流光涟漪激活）
@@ -308,7 +237,6 @@ class StaticDecor:
 		BatchDraw.flush(self)
 		_draw_barrier_base()
 		_draw_talisman_diamonds()
-		_draw_quad_spirit_marks()
 		BatchDraw.flush(self)
 
 	# --------------------------------------------------------------------------
@@ -368,34 +296,6 @@ class StaticDecor:
 			Vector2(-h + 23.5, -h + 23.5)
 		]
 		BatchDraw.polyline(self, PackedVector2Array(inner_depth_rect), Color(0.02, 0.04, 0.06, 0.6), 1.0)
-
-	# --------------------------------------------------------------------------
-	# 3.3 四象方位灵纹（Quad Spirit Marks）：太极阵内环外缘的云雷纹角花
-	# --------------------------------------------------------------------------
-	## 在太极阵内环 r=44*scale_f 外缘，东西南北四方位各刻一组极简云雷纹角花：
-	## L 形主纹 + 内侧卷曲回纹，象征四象镇守。暗青色低对比，不抢太极阵主体。
-	func _draw_quad_spirit_marks() -> void:
-		var scale_f := half / 440.0
-		var r_base: float = 50.0 * scale_f  # 灵纹起始半径（内环 44 外缘）
-		var col_mark := Color(0.08, 0.15, 0.24, 0.35)
-		var col_curl := Color(0.25, 0.65, 0.85, 0.12)
-
-		for i in range(4):
-			var ang := PI * 0.5 * float(i)
-			var radial := Vector2(cos(ang), sin(ang))
-			var tangent := radial.orthogonal()
-
-			# L 形主纹：径向 6px + 切向 6px（指向阵心）
-			var p_corner := radial * r_base
-			var p_radial_end := radial * (r_base + 6.0 * scale_f)
-			var p_tangent_end := p_corner + tangent * 6.0 * scale_f
-			BatchDraw.line(self, p_corner, p_radial_end, col_mark, 1.2)
-			BatchDraw.line(self, p_corner, p_tangent_end, col_mark, 1.2)
-
-			# 内侧卷曲回纹：从 L 形拐点向外卷 180° 小弧
-			var curl_center := p_corner + radial * 2.0 * scale_f + tangent * 2.0 * scale_f
-			var curl_r := 1.8 * scale_f
-			BatchDraw.arc(self, curl_center, curl_r, ang + PI * 0.5, ang + PI * 1.5, col_curl, 0.9)
 
 	# --------------------------------------------------------------------------
 	# 3.2 结界灵枢符印底座（菱形暗色填色；描边/核心脉冲留在宿主 10Hz 动态层）

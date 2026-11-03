@@ -259,6 +259,36 @@ func _check_entity_lifecycle() -> void:
 	_turret.set_wave_active(true)
 	_c.check(_turret._wave_active, "下波开始重新接管")
 
+	# 空闲冷却钳制：无目标时 _cooldown_timer 扣成负数自动钳到 0
+	_turret.current_target = null
+	_turret._targets.clear()
+	_turret._had_target = false
+	_turret._cooldown_timer = -5.0
+	_turret._process(0.016)
+	_c.check(_turret._cooldown_timer >= 0.0,
+		"无目标空闲时负冷却被钳到 >= 0（实得 %.4f）" % _turret._cooldown_timer)
+
+	# 接目标首拍错峰：由闲转战首拍有 0~0.15s 错峰延迟
+	_turret._cooldown_timer = 0.0
+	_turret._had_target = false
+	_turret.current_target = _player
+	_turret._targets.append(_player)
+	_turret._process(0.016)
+	_c.check(_turret._had_target, "接敌后 _had_target 标为 true")
+	_c.check(_turret._cooldown_timer >= 0.0 and _turret._cooldown_timer <= 0.16,
+		"接目标首拍有 0~0.15 错峰（实得 %.4f）" % _turret._cooldown_timer)
+	_turret._targets.clear()
+	_turret.current_target = null
+	_turret._had_target = false
+
+	# 升星就地更新在役机关渲染器星钉
+	_turret.setup("jiguan_nu", 3)
+	if _turret._proc_renderer != null:
+		_c.equals(_turret._proc_renderer.star, 3, "升星就地更新在役机关矢量渲染器 star 钉数")
+	else:
+		_c.check(true, "该器形无矢量渲染器，跳过星钉断言")
+	_turret.setup("jiguan_nu", 1)
+
 # ---------------- 5. 手动布设 / 收回 ----------------
 
 func _check_deploy_and_recall() -> void:
@@ -307,10 +337,32 @@ func _check_deploy_and_recall() -> void:
 	_c.near(again.durability, 55.0, 0.01, "重放的机关沿用收回时的耐久")
 	_c.near(float(_fw.pending_turret_durability), -1.0, 0.01, "布设后清掉待接管耐久")
 
+	# 收回一座 20% 耐久机关：波末整备回满待布设耐久并清零冷却
+	again.durability = 20.0
+	var recalled_wave: bool = TurretCommand.recall_nearest(_player, _player.global_position)
+	_c.check(recalled_wave, "收回 20% 耐久机关成功")
+	_c.near(float(_fw.pending_turret_durability), 20.0, 0.01, "待布设记录 20% 耐久")
+	_c.check(float(_fw.redeploy_timer) > 0.0, "收回后处于整备冷却中")
+
+	# 模拟 WaveSpawner 波末循环（对 player.weapon_holder 子节点调 on_wave_end）
+	var p_holder = _player.get("weapon_holder") as Node
+	for w in p_holder.get_children():
+		if w != null and is_instance_valid(w) and w.has_method("on_wave_end"):
+			w.on_wave_end()
+	_c.near(float(_fw.redeploy_timer), 0.0, 0.001, "波末整备清零整备冷却")
+	_c.near(float(_fw.pending_turret_durability), -1.0, 0.01, "波末整备清空待接管耐久（回满）")
+	_c.check(_fw.pending_turret_durabilities.is_empty(), "待接管耐久队列已清空")
+	_c.check(bool(_fw.deploy_ready()), "下波开始待布设编制立即可用")
+
+	var wave_placed: TurretUnit = TurretCommand.deploy_at_player(_player)
+	await get_tree().process_frame
+	_c.check(wave_placed != null and is_instance_valid(wave_placed), "下波成功布设新机关")
+	_c.near(wave_placed.durability, BalanceTurret.MAX_DURABILITY, 0.01, "下波重放的机关为满耐久")
+
 	# 卖武器/卸下：机关立刻收回（旧版靠 10~12s 寿命兜底，新版没有寿命）
 	_holder.remove_child(_fw)
 	await get_tree().process_frame
-	_c.check(again._is_dying, "武器离场时在役机关随之消散")
+	_c.check(wave_placed._is_dying, "武器离场时在役机关随之消散")
 	_fw.queue_free()
 
 # ---------------- 6. 齐射取目标（一管一个） ----------------
@@ -365,6 +417,7 @@ func _check_proc_wiring() -> void:
 		_turret._refresh_targets()
 		_c.check(not _turret._targets.is_empty(), "%s 能锁到目标" % wid)
 		_turret._cooldown_timer = 0.0
+		_turret._had_target = true
 		_turret._process(0.016)
 		await get_tree().process_frame
 		var latest := _latest_projectile()
@@ -446,6 +499,7 @@ func _check_maintenance_progression() -> void:
 	_turret._search_timer = 1.0
 	_turret._targets.clear()
 	_turret._targets.append(_player)
+	_turret._had_target = true
 	_turret._process(0.016)
 	_c.check(_turret._cooldown_timer > 0.0, "带恒机芯时停摆仍以半速开火（冷却被重置）")
 	GameManager.items.erase("hengjixin")
@@ -485,6 +539,41 @@ func _check_extra_charges() -> void:
 	_c.check(b._is_dying, "收回的是最近的那一座（点名收回）")
 	_c.check(not a._is_dying, "另一座不受影响")
 	_c.equals(_fw.field_turrets().size(), 1, "收回后场上只剩一座")
+
+	# 双联两座各 20/80 耐久，分别收回，重放两座各自带回耐久
+	_fw.redeploy_timer = 0.0
+	_player.global_position = Vector2(400, 0)
+	b = TurretCommand.deploy_at_player(_player)
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 2, "重新布设满两座")
+
+	a.durability = 20.0
+	b.durability = 80.0
+	_fw.recall_turret(a)
+	_fw.recall_turret(b)
+	await get_tree().process_frame
+	_c.equals(_fw.field_turrets().size(), 0, "两座均已收回")
+	_c.equals(_fw.pending_turret_durabilities.size(), 2, "待布设队列记录 2 份耐久")
+
+	# 清零整备冷却后重放两座
+	_fw.redeploy_timer = 0.0
+	_player.global_position = Vector2(0, 0)
+	var t1: TurretUnit = TurretCommand.deploy_at_player(_player)
+	await get_tree().process_frame
+	_c.check(t1 != null and is_instance_valid(t1), "成功重放第一座")
+
+	_fw.redeploy_timer = 0.0
+	_player.global_position = Vector2(400, 0)
+	var t2: TurretUnit = TurretCommand.deploy_at_player(_player)
+	await get_tree().process_frame
+	_c.check(t2 != null and is_instance_valid(t2), "成功重放第二座")
+
+	var d_list: Array[float] = [t1.durability, t2.durability]
+	d_list.sort()
+	_c.near(d_list[0], 20.0, 0.01, "双联重放之一带回 20 耐久")
+	_c.near(d_list[1], 80.0, 0.01, "双联重放之二带回 80 耐久")
+	_c.near(float(_fw.pending_turret_durability), -1.0, 0.01, "两座均重放后待布设耐久清为 -1")
+	_c.check(_fw.pending_turret_durabilities.is_empty(), "两座均重放后待布设队列清空")
 
 	GameManager.items.erase("shen_shuanglian")
 	_holder.remove_child(_fw)

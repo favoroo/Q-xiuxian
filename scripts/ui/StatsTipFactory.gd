@@ -184,12 +184,12 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE_DK],
 		["属性加伤", "+%s" % BonusRows.fmt_num(bonus), _c(bonus)],
 	]
-	# 机关三行（2026-11-03 手动布设改版）：部署上限固定 1 座、齐射管数随星、耐久秒数。
+	# 机关三行（2026-11-03 手动布设改版）：布设上限 N 座、齐射管数随星、有效耐久秒数。
 	# 「单发伤害」是一管的纸面值（与运行时 blade 弹伤逐发同源），整把武器的输出看上一行「每秒伤害」。
 	if WeaponDamageReadout.is_turret(def):
-		rows.append(["部署上限", "1 座", GameStyle.PAPER])
+		rows.append(["布设上限", "%d 座" % WeaponDamageReadout.turret_cap(), GameStyle.PAPER])
 		rows.append(["齐射", "%d 管" % (WeaponData.turret_volley(star) + int(GameManager.turret_volley_bonus)), GameStyle.JADE_DK])
-		rows.append(["耐久", "%d 秒" % int(float(def.get("turret_stamina", 0.0))), GameStyle.PAPER])
+		rows.append(["耐久", "%d 秒" % int(roundf(WeaponDamageReadout.turret_stamina_sec(id))), GameStyle.PAPER])
 	rows = rows + factor_rows + [
 		["攻击范围", range_txt, GameStyle.JADE_DK if range_buffed else GameStyle.PAPER],
 	]

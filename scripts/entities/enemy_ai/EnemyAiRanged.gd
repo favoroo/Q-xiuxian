@@ -69,9 +69,10 @@ static func tick_ring_bolt_step(e, delta: float, dist_sq: float) -> void:
 				e._ring_bolt_timer = e.ring_bolt_interval
 				start_ring_bolt_cast(e)
 
-## 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打。
+## 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 落地后扇形剑气反打。
+## 2026-11-03 可读性：先锁落点、亮符环、钉地 0.36s，填满才落地；落地之后才出剑气。
 static func tick_blink_strike_step(e, delta: float, player: Node2D) -> void:
-	# 剑煞邪修·瞬身回斩（变异专属）：闪现侧翼 + 立刻扇形剑气反打
+	# 前摇推进由 EnemyBase._tick_blink_windup 统一负责（前摇期 _tick_behaviors 整体让位）
 	if e.blink_strike_interval > 0.0 and e._fuse < 0.0:
 		e._blink_strike_timer -= delta
 		if e._blink_strike_timer <= 0.0 and not e._pp_stun:
@@ -202,19 +203,24 @@ static func fire_ring_bolts(e) -> void:
 	if e.get_parent() != null:
 		JuiceEffect.spawn_impact_pop(e.get_parent(), e.global_position, GameStyle.BAD, Vector2.ZERO)
 
-## 瞬身到玩家侧翼 + 立刻扇形剑气反打：先给残影读「它换了位置」，再出弹读「从哪打来」。
-## 落点受界碑约束，避免卡进地图外；剑气走 sword_style + purple_style（剑煞血光配色）。
+## 瞬身回斩起手：锁定玩家侧翼落点（受界碑约束），先在地面亮符环；落地回调里才出剑气。
 static func blink_strike(e, player: Node2D) -> void:
-	if player == null or not is_instance_valid(player):
+	if player == null or not is_instance_valid(player) or e._blink_windup_t > 0.0:
 		return
-	e._spawn_teleport_ghost()
 	var angle := GameManager.rng.randf() * TAU
 	var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * e.blink_strike_dist
 	var lim: float = GameManager.MAP_HALF_EXTENT - GameBalance.BLINK_MAP_INSET
-	e.global_position = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
-	e.play_squash(Vector2(1.3, 0.7), 0.2)
-	AudioManager.play_sfx("enemy_blink", 0.8)
-	if e.dying or e.get_parent() == null:
+	pos = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+	e._blink_kind = e.BLINK_KIND_STRIKE
+	# 落地回调：先现身，再从新位置出剑气（前摇期只亮符环，不出弹）
+	e._blink_on_arrive = func():
+		_fire_blink_strike_bolts(e, player)
+	e._begin_blink_telegraph(pos, GameBalance.MUT_JIANSHA_BLINK_WINDUP, GameStyle.BAD, BlinkRift.RADIUS_ELITE)
+
+## 落地后的扇形剑气：从新位置朝玩家所在方向扇开（sword_style + purple_style）。
+## 伤害口径与旧版完全一致，只把出弹时机从「瞬移当帧」挪到「现身之后」。
+static func _fire_blink_strike_bolts(e, player: Node2D) -> void:
+	if e.dying or e.get_parent() == null or player == null or not is_instance_valid(player):
 		return
 	var base_dir: Vector2 = (player.global_position - e.global_position).normalized()
 	var count: int = maxi(e.blink_strike_bolts, 1)

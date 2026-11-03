@@ -42,6 +42,10 @@ static func per_hit(w_id: String, star: int, slot_count: int = -1) -> float:
 static func haste_product() -> float:
 	return GameManager.get_effective_attack_speed_mult()
 
+## 机关专属攻速乘区（如「天工发条」item_hook turret_haste，下限 0.2 与 TurretUnit 同步）
+static func turret_haste_mult() -> float:
+	return maxf(0.2, 1.0 - GameManager.item_hook_sum("turret_haste"))
+
 ## 射程乘区：全局攻击范围 × 剑系羁绊 ×（近战/横扫专有范围乘区，如剑气凌霄、开山重刃谱）。
 ## 消费方：FloatingWeapon._range_mult、Player._update_weapon_targets、ShopWeaponTip、StatsTipFactory。
 static func range_mult_for(w_id: String) -> float:
@@ -65,8 +69,16 @@ static func effective_range(w_id: String) -> float:
 	return float(def.get("range", 0.0)) * range_mult_for(w_id)
 
 ## 你现在的实际攻击间隔（数据表值 × 攻速乘区）。与 FloatingWeapon 的 cooldown_timer 同一条式子。
+## 对机关而言保持「收回整备」冷却口径（实际开火间隔见 effective_fire_cd）。
 static func effective_cd(w_id: String, star: int) -> float:
 	return WeaponData.cooldown_for(w_id, clampi(star, 1, WeaponData.MAX_STAR)) * haste_product()
+
+## 实际开火间隔（只给 UI 用）：机关 = 基础开火间隔 × 攻速乘区 × 机关专属加速；非机关返回常规 effective_cd。
+static func effective_fire_cd(w_id: String, star: int) -> float:
+	var def := WeaponData.get_def(w_id)
+	if is_turret(def):
+		return WeaponData.turret_fire_interval(w_id, star) * haste_product() * turret_haste_mult()
+	return effective_cd(w_id, star)
 
 ## 每秒伤害（对孤立目标的实伤口径）。
 ## 借用平衡判据 WeaponData.sustained_single_dps 的「形状」——它已经处理好了炮台自身的开火间隔、
@@ -79,12 +91,12 @@ static func per_second(w_id: String, star: int, slot_count: int = -1) -> float:
 		return 0.0
 	var s := clampi(star, 1, WeaponData.MAX_STAR)
 	var base: float = WeaponData.damage_for(w_id, s)
-	var haste := haste_product()
+	var haste := haste_product() * turret_haste_mult() if is_turret(def) else haste_product()
 	if base <= 0.0 or haste <= 0.0:
 		return 0.0
 	## 线性折算按「整把武器的每秒伤害」：机关多管齐射的管数已在 sustained_weapon_dps 里乘过，
 	## 本局的额外管数（「连环机括」）也一并折进去 —— 否则卡面承诺的 DPS 会比场上那座低一截。
-	## 机关武器同理：机关的开火间隔吃的是同一条攻速。
+	## 机关武器同理：机关的开火间隔吃的是同一条攻速与机关专属加速。
 	return WeaponData.sustained_weapon_dps(w_id, s, int(GameManager.turret_volley_bonus)) \
 		* (per_hit(w_id, s, slot_count) / base) / haste
 
@@ -101,6 +113,14 @@ static func turret_volley(w_id: String, star: int = 1) -> int:
 	if not is_turret(WeaponData.get_def(w_id)):
 		return 0
 	return WeaponData.turret_volley(star)
+
+## 机关布设上限（基础 1 座 +「双联神机」等加成）
+static func turret_cap() -> int:
+	return BalanceTurret.TURRETS_PER_WEAPON + int(GameManager.item_hook_sum("turret_charges_bonus"))
+
+## 机关有效耐久秒数（表值 × 耐久乘区）
+static func turret_stamina_sec(w_id: String) -> float:
+	return maxf(1.0, float(WeaponData.get_def(w_id).get("turret_stamina", BalanceTurret.STAMINA_SEC))) * GameManager.turret_stamina_mul
 
 ## 「纸面 → 你现在」一行话。两数相同就只写纸面值，不多画一个箭头骗人。
 ## digits: -1 走 BonusRows 的整数不带小数口径；间隔这类要两位小数的传 2。

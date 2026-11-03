@@ -78,28 +78,42 @@ static func nearest_turret_dist(player, pos: Vector2) -> float:
 		best = minf(best, t.global_position.distance_to(pos))
 	return best
 
-## 布设落点：玩家脚下沿移动反方向外沿（静止时偏下），避开压在身上
+## 布设落点：玩家脚下沿移动反方向外沿（静止时偏下），避开压在身上；
+## 按 GameManager.MAP_HALF_EXTENT - 26.0 做 XY 钳制，避免贴边时落点出结界。
 static func deploy_candidate_pos(player) -> Vector2:
 	if player == null or not is_instance_valid(player):
 		return Vector2.ZERO
 	var dir := Vector2.ZERO
 	if player is CharacterBody2D:
 		dir = (player as CharacterBody2D).velocity
-	return player.global_position + BalanceTurret.deploy_offset(dir)
+	var pos: Vector2 = player.global_position + BalanceTurret.deploy_offset(dir)
+	var bound: float = GameManager.MAP_HALF_EXTENT - 26.0
+	pos.x = clampf(pos.x, -bound, bound)
+	pos.y = clampf(pos.y, -bound, bound)
+	return pos
 
-## 是不是空地（2026-11-03 统一口径）：传玩家**所在位置**，与最近一座自己的机关距离 ≥ 交互半径。
-## 判玩家而不是判落点：HUD 的「靠近就切维修」用的就是这个半径，两处同源才不会出现
-## 「按钮显示布设、按下去却被拒」的死带（落点本身另有 26px 外沿偏移，两座最近可相距 ~64px）。
-static func is_open_ground(player, player_pos: Vector2) -> bool:
-	return BalanceTurret.is_open_ground(nearest_turret_dist(player, player_pos))
+## 坐标 pos 是否为空地（tests/turret_check.gd 在用）：pos 是落点坐标，
+## 与最近一座自己机关的距离必须 ≥ MIN_TURRET_SPACING。
+static func is_open_ground(player, pos: Vector2) -> bool:
+	return BalanceTurret.is_open_ground(nearest_turret_dist(player, pos))
 
-## 现在能不能布设（有编制 + 站的地方是空地）。返回拒绝原因供按钮做反馈，空串 = 可布设。
+## 预选落点是否为空地：deploy_candidate_pos(player) 到最近机关距离 ≥ MIN_TURRET_SPACING
+static func is_landing_open(player) -> bool:
+	if player == null or not is_instance_valid(player):
+		return false
+	return BalanceTurret.is_open_ground(nearest_turret_dist(player, deploy_candidate_pos(player)))
+
+## 是否可布设：有待布设编制且落点为空地
+static func can_deploy(player) -> bool:
+	return next_ready(player) != null and is_landing_open(player)
+
+## 现在能不能布设：先判 no_charge，再按落点判 occupied，空串 = 可布设
 static func deny_reason(player) -> String:
 	if player == null or not is_instance_valid(player):
 		return "no_player"
 	if next_ready(player) == null:
 		return "no_charge"
-	if not is_open_ground(player, player.global_position):
+	if not is_landing_open(player):
 		return "occupied"
 	return ""
 
@@ -107,10 +121,10 @@ static func deny_reason(player) -> String:
 
 ## 布设一座：成功返回机关节点，失败返回 null。耐久沿用收回时带回的量（新机关 = 满耐久）。
 static func deploy_at_player(player) -> TurretUnit:
+	if not can_deploy(player):
+		return null
 	var w = next_ready(player)
 	if w == null:
-		return null
-	if not is_open_ground(player, player.global_position):
 		return null
 	var turret: TurretUnit = w.deploy_turret_at(deploy_candidate_pos(player))
 	if turret == null:

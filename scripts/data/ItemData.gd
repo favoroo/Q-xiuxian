@@ -961,7 +961,7 @@ const DEFS: Dictionary = {
 		"shen_shuanglian": {
 			"name": "双联神机", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
 			"icon": "res://assets/art/item_tianji_suo.png",
-			"desc": "每把机关武器的编制翻倍：可同时布设两座\n但布设与维修的工作量也翻倍",
+			"desc": "每把机关武器可布设的座数翻倍：从 1 座增至两座\n布设与维修的工作量也翻倍",
 			"apply": {},
 			"turret_charges_bonus": 1.0,
 		},

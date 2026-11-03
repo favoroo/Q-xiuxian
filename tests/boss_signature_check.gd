@@ -131,7 +131,12 @@ func _test_dive_anchor(p: Player) -> void:
 	# 玩家贴右墙、Boss 在玩家更右侧：旧钳制会把锚点落回 Boss 原地，俯冲没有助跑
 	var boss := _make_boss("canglong", Vector2(400.0, 0.0))
 	p.global_position = Vector2(380.0, 0.0)
+	var origin := boss.global_position
 	boss._cast_dive(p)
+	_c.check(boss._blink_rift != null and boss._blink_rift.visible, "俯冲拉升起手亮落点符环")
+	_c.check(boss.global_position.distance_to(origin) < 1.0, "俯冲拉升前摇期不提前换位（画哪落哪）")
+	# 2026-11-03：换位改为「前摇填符环 → 落地」，手动推进物理帧把拉升前摇走完
+	boss._physics_process(GameBalance.BOSS_DIVE_LEAP_WINDUP + 0.05)
 	_c.check(boss.global_position.distance_to(p.global_position) >= GameBalance.BOSS_DIVE_MIN_LEAP,
 		"俯冲换位后与玩家至少保留 %.0fpx 助跑" % GameBalance.BOSS_DIVE_MIN_LEAP)
 	_c.check(boss._dive_pending, "俯冲进入预警态")

@@ -4,8 +4,10 @@ extends Control
 ## 机关按钮（2026-11-03 手动布设改版）：一颗键身兼多职 ——
 ##   不在机关旁 + 有编制 → 「布设 ×N」：点按在脚下空地落一座机关；
 ##   靠近机关 + 需维修   → 「维修」：长按连续回填耐久，键面走针环 = 回填进度；
-##   靠近机关 + 完好     → 「完好」：暗面键，按下无动作（只是告诉你这里没活干）。
-## 靠近机关时键面顶部另浮出「收回」角标：点按撤回编制（耐久随机关一起带回本体），
+##   靠近机关 + 满耐久 + 有编制（落点为空） → 「布设 ×N」：即使站在满耐久机关旁也能继续布设；
+##   靠近机关 + 满耐久 + 有编制（落点被占） → 「太近」：按下去抖动 + 报错音，不再静默；
+##   靠近机关 + 满耐久 + 无编制             → 「完好」：暗面键，按下无动作。
+## 靠近机关（维修/完好/太近）时键面顶部另浮出「收回」角标：点按撤回编制（耐久随机关一起带回本体），
 ## 武器进入整备冷却，到点后才能重放。
 ##
 ## 全部待办清空（无编制 + 不在机关旁）时圆键收起；只要有机关磨损/停摆，
@@ -30,11 +32,12 @@ const CHIP_GAP := 6.0
 const FACE_DEPLOY := "布设"
 const FACE_REPAIR := "维修"
 const FACE_OK := "完好"
+const FACE_TOO_CLOSE := "太近"
 ## 调整模式下的占位文案（与祭坛键的「激活」同款：先说这是什么东西）
 const FACE_EDIT := "机关"
 
 ## 状态机（判据读 mode() 做断言）
-enum Mode { HIDDEN, DEPLOY, REPAIR, OK }
+enum Mode { HIDDEN, DEPLOY, REPAIR, OK, TOO_CLOSE }
 
 ## 状态轮询间隔：机关状态变化节奏慢（维修由按住驱动，另行逐帧读），10Hz 足够
 const POLL_INTERVAL := 0.1
@@ -56,6 +59,7 @@ var _sub_key: String = ""
 var _badge_key: String = ""
 ## 正在按住维修（键面亮实底色 + 走针环推进）
 var _holding: bool = false
+var _hold_touch_index: int = -999
 ## 键盘 F 的按住态：只认键盘自己的按下/松开对
 var _key_holding: bool = false
 var _edit_mode: bool = false
@@ -65,6 +69,8 @@ var _poll_accum: float = 0.0
 var _shaking: bool = false
 var _last_press_frame: int = -1
 var _last_recall_frame: int = -1
+var _last_deploy_time: int = -10000
+var _last_recall_time: int = -10000
 
 func _ready() -> void:
 	visible = false
@@ -139,7 +145,7 @@ func _build() -> void:
 	# 收回自带 ui_back 音（与技能键的 ui_click 叠在一起会响两声）：预置 meta 跳过统一挂音
 	_tag.set_meta("sfx_wired", true)
 	GameStyle.button(_tag, GameStyle.INK, GameStyle.NAVY, 11, GameStyle.CHALK)
-	_tag.pressed.connect(_do_recall)
+	_tag.button_down.connect(_do_recall)
 	_btn.add_child(_tag)
 
 	# 「N 座待修」芯片：挂在根上（不随圆键一起收起），点按无动作（纯提示）
@@ -163,22 +169,28 @@ func _style_btn(holding: bool) -> void:
 # ---------------- 输入 ----------------
 
 func handle_input(event: InputEvent) -> void:
+	if not _is_gameplay_active():
+		return
 	var is_press := false
 	var is_release := false
+	var touch_index := -1
 	if event is InputEventScreenTouch:
-		if event.pressed:
+		var st := event as InputEventScreenTouch
+		touch_index = st.index
+		if st.pressed:
 			is_press = true
 		else:
 			is_release = true
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		touch_index = -1
 		if event.pressed:
 			is_press = true
 		else:
 			is_release = true
 	if is_press:
-		_press_primary()
+		_press_primary(touch_index)
 	elif is_release:
-		_release_primary()
+		_release_primary(touch_index)
 
 ## 原生第二指触摸（GameHUD._input 转发）：左手拉摇杆 + 右手布设/维修。
 ## 键面热区用圆形判定（与技能键同款），角标热区单独判（它压在键面顶部）。
@@ -189,27 +201,28 @@ func handle_engine_input(event: InputEvent) -> void:
 		return
 	var touch := event as InputEventScreenTouch
 	if touch.pressed:
-		if _tag != null and _tag.visible and _is_point_on(_tag, touch.position):
+		if _tag != null and _tag.visible and _is_point_on_tag(touch.position):
 			_do_recall()
 			return
-		if _circle_root.visible and _is_point_on(_btn, touch.position):
-			_press_primary()
+		if _circle_root != null and _circle_root.visible and _is_point_on_btn(touch.position):
+			_press_primary(touch.index)
 	elif _holding:
-		# 松开也是这一指：不判热区（手指滑出圆面也要能收手）
-		_release_primary()
+		# 松开分支只认匹配的 index，左手松摇杆不打断右手维修
+		if touch.index == _hold_touch_index:
+			_release_primary(touch.index)
 
 ## 键盘 F：与键面同一套动作（点按布设 / 长按维修）
 func key_press() -> void:
 	if _edit_mode or _key_holding:
 		return
 	_key_holding = true
-	_press_primary()
+	_press_primary(-2)
 
 func key_release() -> void:
 	if not _key_holding:
 		return
 	_key_holding = false
-	_release_primary()
+	_release_primary(-2)
 
 ## 键盘路由判据（GameHUD 分流 F 键用）
 func can_key_act() -> bool:
@@ -219,9 +232,12 @@ func can_key_act() -> bool:
 func recall_by_key() -> void:
 	if _edit_mode or _mode == Mode.HIDDEN:
 		return
-	if _mode != Mode.REPAIR and _mode != Mode.OK:
+	if _mode in [Mode.REPAIR, Mode.OK, Mode.TOO_CLOSE]:
+		_do_recall()
 		return
-	_do_recall()
+	if _mode == Mode.DEPLOY and _target != null and is_instance_valid(_target):
+		_do_recall()
+		return
 
 func mode() -> int:
 	return _mode
@@ -242,60 +258,86 @@ func _recall_frame_guard() -> bool:
 	_last_recall_frame = cur
 	return true
 
-func _press_primary() -> void:
+func _press_primary(touch_index: int = -1) -> void:
 	if _edit_mode or not _press_frame_guard():
 		return
 	match _mode:
 		Mode.DEPLOY:
 			_do_deploy()
+		Mode.TOO_CLOSE:
+			_play_reject_fx()
 		Mode.REPAIR:
 			if _target != null and is_instance_valid(_target):
 				_target.begin_repair()
 				_holding = true
+				_hold_touch_index = touch_index
 				_style_btn(true)
 		_:
 			pass
 
-func _release_primary() -> void:
+func _release_primary(touch_index: int = -999) -> void:
 	if not _holding:
 		return
+	if touch_index != -999 and touch_index != _hold_touch_index:
+		return
 	_holding = false
+	_hold_touch_index = -999
 	if _target != null and is_instance_valid(_target):
 		_target.end_repair()
 	if _ring != null:
 		_ring.set_ratio(0.0)
 	_style_btn(false)
 
-func _is_point_on(box: Control, pos: Vector2) -> bool:
-	if box == null or not is_instance_valid(box) or not box.is_visible_in_tree():
+func _is_point_on_btn(pos: Vector2) -> bool:
+	if _btn == null or not is_instance_valid(_btn) or not _btn.is_visible_in_tree():
 		return false
-	var r := box.get_global_rect().grow(8.0)
-	return r.has_point(pos)
+	var center := _btn.get_global_rect().get_center()
+	var r := BTN_SIZE.x * 0.5 * SettingsManager.mechanism_btn_scale() + 8.0
+	return pos.distance_to(center) <= r
+
+func _is_point_on_tag(pos: Vector2) -> bool:
+	if _tag == null or not is_instance_valid(_tag) or not _tag.is_visible_in_tree():
+		return false
+	var scale_f := SettingsManager.mechanism_btn_scale()
+	var center := _btn.get_global_rect().get_center()
+	var half_w := BTN_SIZE.x * 0.5 * scale_f
+	var top := center.y - BTN_SIZE.y * 0.5 * scale_f
+	var rect := Rect2(center.x - half_w, top, BTN_SIZE.x * scale_f, TAG_H * scale_f).grow(6.0)
+	return rect.has_point(pos)
 
 # ---------------- 动作 ----------------
 
 func _do_deploy() -> void:
+	var now := Time.get_ticks_msec()
+	if now - _last_deploy_time < 150:
+		return
+	_last_deploy_time = now
 	var player = GameManager.player
 	var turret := TurretCommand.deploy_at_player(player)
 	if turret == null:
 		_play_reject_fx()
 		return
+	var spawner: Node = GameManager.wave_spawner
+	if spawner != null and int(spawner.get("phase")) == int(WaveSpawner.Phase.CLEARING):
+		turret.set_wave_active(false)
 	_play_pop_fx()
 	# 一次性引导：首次真布设时弹一条情境提示（HudContextTips 自带去重门控）
 	GameManager.context_tip_requested.emit(&"mechanism")
 
 func _do_recall() -> void:
-	if _edit_mode or not _recall_frame_guard():
+	if _edit_mode:
 		return
+	var now := Time.get_ticks_msec()
+	if now - _last_recall_time < 200:
+		return
+	_last_recall_time = now
 	var player = GameManager.player
 	if player == null or not is_instance_valid(player):
 		return
 	if not TurretCommand.recall_nearest(player, player.global_position):
 		_play_reject_fx()
 		return
-	_holding = false
-	if _ring != null:
-		_ring.set_ratio(0.0)
+	_release_primary(-999)
 	AudioManager.play_sfx("ui_back", 0.7)
 	_poll_state()
 
@@ -331,10 +373,7 @@ func _process(delta: float) -> void:
 			_ring.set_ratio(_target.repair_ratio())
 		if not _target.is_repairing():
 			# 修满了：收手并复位
-			_holding = false
-			if _ring != null:
-				_ring.set_ratio(0.0)
-			_style_btn(false)
+			_release_primary(-999)
 	_poll_accum += delta
 	if _poll_accum < POLL_INTERVAL:
 		return
@@ -352,33 +391,42 @@ func _poll_state() -> void:
 	var service := 0
 
 	if player != null and is_instance_valid(player):
+		ready = TurretCommand.ready_count(player)
+		service = TurretCommand.service_count(player)
 		next_target = TurretCommand.nearest_turret(player, player.global_position,
 			BalanceTurret.INTERACT_RADIUS)
-		if next_target != null:
-			# 「能不能修」与「要不要报警」分开：只要没满就能修（磨到 40% 以下才报磨损），
-			# 否则修到 41% 那一刻键面就翻「完好」、长按再也按不动 —— 玩家永远修不满。
-			if next_target.durability_ratio() < 0.999:
-				next_mode = Mode.REPAIR
-				accent = GameStyle.JADE
-				sub_text = "%d%%" % roundi(next_target.durability_ratio() * 100.0)
+
+		if next_target != null and next_target.durability_ratio() < 0.999:
+			# 1) 90px 内最近机关 durability_ratio() < 0.999 → Mode.REPAIR（维修优先）
+			next_mode = Mode.REPAIR
+			accent = GameStyle.JADE
+			sub_text = "%d%%" % roundi(next_target.durability_ratio() * 100.0)
+		elif ready > 0 and TurretCommand.can_deploy(player):
+			# 2) 否则 ready > 0 且 TurretCommand.can_deploy(player) → Mode.DEPLOY
+			# （即使站在满耐久机关旁边也可布设；badge ×N；副读数 = 下一把机关名）
+			next_mode = Mode.DEPLOY
+			accent = GameStyle.GOLD
+			badge_text = "×%d" % ready
+			var w = TurretCommand.next_ready(player)
+			if w != null:
+				sub_text = String(WeaponData.get_def(String(w.weapon_def_id)).get("name", ""))
+		elif next_target != null:
+			# 3) 否则 90px 内有机关
+			if ready > 0:
+				# 若 ready > 0 但落点被占 → Mode.TOO_CLOSE，键面「太近」+ 副读数提示挪位
+				next_mode = Mode.TOO_CLOSE
+				accent = GameStyle.GREY
+				badge_text = "×%d" % ready
+				sub_text = "走远一点"
 			else:
 				next_mode = Mode.OK
 				accent = GameStyle.GREY
 				sub_text = "100%"
-		else:
-			ready = TurretCommand.ready_count(player)
-			if ready > 0:
-				next_mode = Mode.DEPLOY
-				accent = GameStyle.GOLD
-				badge_text = "×%d" % ready
-				var w = TurretCommand.next_ready(player)
-				if w != null:
-					sub_text = String(WeaponData.get_def(String(w.weapon_def_id)).get("name", ""))
-		service = TurretCommand.service_count(player)
+		# 4) 否则 Mode.HIDDEN
 
 	# 目标换了（或离开范围）：正在按的那次维修收手，避免修到一半换目标
 	if _target != next_target and _holding:
-		_release_primary()
+		_release_primary(-999)
 
 	_mode = next_mode
 	_target = next_target
@@ -414,9 +462,9 @@ func _apply_face(accent: Color, sub_text: String, badge_text: String, service: i
 				_badge.offset_left = _badge.offset_right - _badge.custom_minimum_size.x
 				_badge.offset_top = 3.0
 				_badge.offset_bottom = 3.0 + 14.0
-	# 「收回」角标与编制角标互斥（同一块地方），且只在真靠近机关时出现
+	# 「收回」角标：REPAIR/OK/TOO_CLOSE 时显示；DEPLOY 且靠近机关时不显示（避免误触）
 	if _tag != null:
-		_tag.visible = _mode == Mode.REPAIR or _mode == Mode.OK
+		_tag.visible = _mode in [Mode.REPAIR, Mode.OK, Mode.TOO_CLOSE]
 	# 角标显隐每拍按最终状态收口：只在文案变化时写 visible 的话，
 	# 从「维修（角标态）」走回「布设」时旧角标已经被收回角标压掉、再也不会亮回来
 	if _badge != null:
@@ -441,6 +489,8 @@ func _face_for_mode(m: int) -> String:
 			return FACE_REPAIR
 		Mode.OK:
 			return FACE_OK
+		Mode.TOO_CLOSE:
+			return FACE_TOO_CLOSE
 	return FACE_EDIT
 
 ## 收放：只在状态真的翻转时起 Tween（10Hz 轮询不能反复重建动画）。
@@ -490,8 +540,12 @@ func _is_gameplay_active() -> bool:
 	if not GameManager.run_started or GameManager.is_game_over:
 		return false
 	var spawner: Node = GameManager.wave_spawner
-	if spawner != null and int(spawner.get("phase")) != int(WaveSpawner.Phase.FIGHT):
-		return false
+	if spawner != null:
+		var phase = spawner.get("phase")
+		if phase != null:
+			var iphase := int(phase)
+			if iphase != int(WaveSpawner.Phase.FIGHT) and iphase != int(WaveSpawner.Phase.CLEARING):
+				return false
 	return true
 
 # ---------------- 调整模式 / 判据取件口 ----------------
@@ -500,7 +554,7 @@ func _is_gameplay_active() -> bool:
 func set_edit_mode(on: bool) -> void:
 	_edit_mode = on
 	_kill_anim_tween()
-	_holding = false
+	_release_primary(-999)
 	if on:
 		_mode = Mode.DEPLOY
 		_accent = GameStyle.GOLD

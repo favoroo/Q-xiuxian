@@ -86,15 +86,13 @@ const BROKEN_HASTE_FLOOR := 0.2
 
 ## 靠近多少像素内切换「维修 / 收回」态
 const INTERACT_RADIUS := 90.0
-## 布设空地半径 = 交互半径（2026-11-03 统一口径）：判断的是「玩家站的地方」离最近一座
-## 自己的机关够不够远，而不是「落点」。两者若各用各的数，就会出现「按钮显示布设、按下去
-## 却被拒」的死带（90~106px 那一圈）；现在布设态显示 ⟺ 一定放得下。
-## 落点本身仍沿移动反方向外沿偏移，所以两座机关实测最近可相距 ~64px（视觉上不重叠）。
-const MIN_TURRET_SPACING := INTERACT_RADIUS
+## 两座机关最近间距：布设判「落点」，维修/收回判「玩家位置」；
+## 两座机关最近可相距约 64px，视觉上不会重叠。
+const MIN_TURRET_SPACING := 64.0
 ## 布设落点相对玩家的外沿距离（沿移动反方向，避免压在人物身体上）
 const DEPLOY_OFFSET := 26.0
 
-## 落点是否为空地：玩家所在位置与最近一座自己机关的距离必须 ≥ MIN_TURRET_SPACING
+## 落点是否为空地：落点距离最近机关 ≥ MIN_TURRET_SPACING
 ## nearest_dist 由调用方用 TurretCommand 现算传入（纯函数不碰节点）
 static func is_open_ground(nearest_own_turret_dist: float) -> bool:
 	return nearest_own_turret_dist >= MIN_TURRET_SPACING

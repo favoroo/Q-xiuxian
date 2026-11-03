@@ -87,6 +87,7 @@ var _bullet_scale: float = 0.55
 var _bullet_spins: bool = false
 
 var _cooldown_timer: float = 0.0
+var _had_target: bool = false
 var _is_dying: bool = false
 var _spin_angle: float = 0.0
 ## 开火计数：★4 青/紫逐发交替的相位（只影响视觉配色，不参与任何判定）
@@ -149,6 +150,9 @@ func setup(def_id: String, star_level: int) -> void:
 		_bullet_tex = load(bullet_path) as Texture2D
 	_bullet_scale = float(_def.get("bullet_scale", 0.55))
 	_bullet_spins = bool(_def.get("bullet_spin", false))
+	if _proc_renderer != null:
+		_proc_renderer.star = star
+		_proc_renderer.queue_redraw()
 
 func _ready() -> void:
 	add_to_group("turrets")
@@ -190,6 +194,7 @@ func begin_life(keep_durability: float = -1.0) -> void:
 	_is_dying = false
 	current_target = null
 	_targets.clear()
+	_had_target = false
 	_shot_count = 0
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
@@ -307,6 +312,7 @@ func on_wave_end() -> void:
 	_repair_from = BalanceTurret.MAX_DURABILITY
 	_targets.clear()
 	current_target = null
+	_had_target = false
 	durability = BalanceTurret.MAX_DURABILITY
 	_refresh_readout()
 	queue_redraw()
@@ -319,6 +325,7 @@ func set_wave_active(on: bool) -> void:
 		_is_repairing = false
 		_targets.clear()
 		current_target = null
+		_had_target = false
 
 func _play_ready_pulse() -> void:
 	modulate = Color(1.0, 1.0, 1.0)
@@ -337,7 +344,7 @@ func _play_repair_done() -> void:
 	tw.tween_property(self, "modulate", Color(0.8, 1.4, 1.05), 0.10)
 	tw.tween_property(self, "modulate", Color.WHITE, 0.22)
 	AudioManager.play_sfx("ui_confirm", 0.7)
-	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -6), "wood", 0.5, true)
+	FxParticlePool.burst(FxParticlePool.HIT_SPARK, global_position + Vector2(0, -6), _elem, 0.5, true)
 
 ## 头顶状态牌：磨损「需维修 N%」/ 停摆「停摆」/ 维修中「维修中 N%」
 func _refresh_readout() -> void:
@@ -509,6 +516,9 @@ func _process(delta: float) -> void:
 	if is_broken() and broken_haste() <= 0.0:
 		current_target = null
 		_targets.clear()
+		_had_target = false
+		if _cooldown_timer < 0.0:
+			_cooldown_timer = 0.0
 		return
 
 	# 索敌与瞄准：15Hz 节流；一次查询拿到最多「齐射管数」个最近的敌人
@@ -520,6 +530,16 @@ func _process(delta: float) -> void:
 			current_target = null
 		else:
 			current_target = _targets[0]
+
+	# 空闲期冷却钳制与接敌首拍错峰（2026-11-03）：
+	# 无目标时冷却扣成负数钳到 0，避免空场蓄力齐射；接敌瞬间由闲转战补 0~0.15s 随机错峰，
+	# 避免空场后所有机关同帧齐射。
+	var has_target: bool = current_target != null and not _targets.is_empty()
+	if _cooldown_timer < 0.0 and not has_target:
+		_cooldown_timer = 0.0
+	if has_target and not _had_target:
+		_cooldown_timer = maxf(_cooldown_timer, GameManager.rng.randf_range(0.0, 0.15))
+	_had_target = has_target
 
 	if current_target != null and is_instance_valid(current_target):
 		var target_angle := (current_target.global_position - global_position).angle()
@@ -697,6 +717,7 @@ func dismiss(fold: bool = false) -> void:
 		return
 	_is_dying = true
 	_is_repairing = false
+	_had_target = false
 	if _fire_tween != null and _fire_tween.is_valid():
 		_fire_tween.kill()
 	if muzzle_flash != null:

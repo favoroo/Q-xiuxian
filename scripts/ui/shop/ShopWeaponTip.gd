@@ -43,6 +43,7 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 
 	# 「基础 × 星级」「属性转化」两行删掉：箭头行已经把"纸面 → 你现在"讲完，
 	# 系数从哪来改由下方账单句按伤害单位逐项交代（2026-10-11 用户：看不懂"属性加成"是什么）。
+	var is_turret := WeaponDamageReadout.is_turret(def)
 	var rows: Array = [
 		["当前位置", loc_txt, GameStyle.PAPER_DIM if in_stash else GameStyle.GOOD],
 		["攻击方式", WeaponData.behavior_label(def), StatsTipFactory.behavior_color(def)],
@@ -51,15 +52,20 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 		[WeaponDamageReadout.per_second_label(id), BonusRows.fmt_num(
 				WeaponDamageReadout.per_second(id, star, slots_here)), GameStyle.JADE],
 		["流派进度", " · ".join(syn_parts) if not syn_parts.is_empty() else "—", GameStyle.GOOD],
-		["攻击间隔", "%.2f 秒" % cd],
-		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 	]
-	# 机关：部署上限 / 齐射管数 / 耐久（2026-11-03 手动布设改版）。
+	if is_turret:
+		rows.append(["开火间隔", "%.2f 秒" % WeaponDamageReadout.effective_fire_cd(id, star)])
+		rows.append(["收回整备", "%.2f 秒" % cd])
+	else:
+		rows.append(["攻击间隔", "%.2f 秒" % cd])
+	rows.append(["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER])
+
+	# 机关：布设上限 / 齐射管数 / 耐久（2026-11-03 手动布设改版）。
 	# 「单发伤害」仍是一管的纸面值，整把武器的输出看上面那行「每秒伤害」（已含齐射）。
-	if WeaponDamageReadout.is_turret(def):
-		rows.append(["部署上限", "1 座", GameStyle.PAPER])
+	if is_turret:
+		rows.append(["布设上限", "%d 座" % WeaponDamageReadout.turret_cap(), GameStyle.PAPER])
 		rows.append(["齐射", "%d 管" % (WeaponData.turret_volley(star) + int(GameManager.turret_volley_bonus)), GameStyle.JADE])
-		rows.append(["耐久", "%d 秒" % int(float(def.get("turret_stamina", 0.0))), GameStyle.PAPER])
+		rows.append(["耐久", "%d 秒" % int(roundf(WeaponDamageReadout.turret_stamina_sec(id))), GameStyle.PAPER])
 	# 落雷/区域类：卡面「攻击范围」是锁敌落点圈，真正的爆炸半径是另一个字段（burst_radius）。
 	# 不补这行会出现「范围 265 的金雷锥炸得比范围 250 的巨印还小」的观感反差（2026-10-20 射程体系重做）。
 	if int(def.get("behavior", -1)) == WeaponData.Behavior.BURST:

@@ -172,6 +172,8 @@ var active_turrets: Array[TurretUnit] = []
 var redeploy_timer: float = 0.0
 ## 收回时带回来的耐久（<0 = 没有待接管的值，按满耐久新布设）
 var pending_turret_durability: float = -1.0
+## 收回时带回来的耐久队列（按收回顺序，双联等多编制多座收回时各自记账）
+var pending_turret_durabilities: Array[float] = []
 
 
 ## 物理查询对象 static 复用（2026-10-10 性能优化，照 BladeProjectile._search_shape 模式）：
@@ -874,7 +876,18 @@ func _perform_burst_attack() -> void:
 
 ## 机关布设转发面（判据直调）：不再有「冷却到点自动布设」，pos 由调用方给。
 func deploy_turret_at(pos: Vector2) -> TurretUnit:
-	return TurretHandler.deploy(self, pos, pending_turret_durability)
+	var keep_durability: float = -1.0
+	if not pending_turret_durabilities.is_empty():
+		keep_durability = pending_turret_durabilities.pop_back()
+	elif pending_turret_durability >= 0.0:
+		keep_durability = pending_turret_durability
+	var t: TurretUnit = TurretHandler.deploy(self, pos, keep_durability)
+	if t == null:
+		if keep_durability >= 0.0:
+			pending_turret_durabilities.push_back(keep_durability)
+		return null
+	pending_turret_durability = pending_turret_durabilities.back() if not pending_turret_durabilities.is_empty() else -1.0
+	return t
 
 # ---------------- 机关编制 / 整备冷却（2026-11-03 手动布设改版） ----------------
 
@@ -919,6 +932,7 @@ func recall_turret(target: TurretUnit = null) -> bool:
 	if t == null:
 		return false
 	pending_turret_durability = t.durability
+	pending_turret_durabilities.append(t.durability)
 	t.dismiss(true)
 	redeploy_timer = BalanceTurret.recall_cooldown(
 		WeaponData.cooldown_for(weapon_def_id, star),
@@ -927,7 +941,13 @@ func recall_turret(target: TurretUnit = null) -> bool:
 
 ## 布设成功：编制用掉，收回带来的耐久已被新机关接管
 func on_turret_deployed() -> void:
+	pending_turret_durability = pending_turret_durabilities.back() if not pending_turret_durabilities.is_empty() else -1.0
+
+## 回合末整备：待布设编制回满、整备冷却清零
+func on_wave_end() -> void:
+	pending_turret_durabilities.clear()
 	pending_turret_durability = -1.0
+	redeploy_timer = 0.0
 
 ## 卖武器 / 卸下 / 换装 / 场景释放时收回在役机关（2026-11-03）：
 ## 旧版炮台有 10~12s 寿命兜底，漏收回也只是多站几秒；新版机关不灭，

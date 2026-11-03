@@ -158,6 +158,8 @@ func _test_turret_shift_lands_in_bounds() -> void:
 	var lim: float = GameManager.MAP_HALF_EXTENT - 20.0
 	for i in range(3):
 		qianji._cast_turret_shift(p)
+		# 2026-11-03：换桩改为「前摇填符环 → 落地」，手动推进物理帧把前摇走完再量落点
+		qianji._physics_process(GameBalance.BOSS_TURRET_SHIFT_WINDUP + 0.05)
 		var pos: Vector2 = qianji.global_position
 		_c.check(maxf(absf(pos.x), absf(pos.y)) <= lim,
 			"换桩落点 %s 在物理边界 ±%.0f 内" % [str(pos), lim])
@@ -171,6 +173,11 @@ func _test_blink_slash_negative_quadrant() -> void:
 	var p := _make_player(Vector2(-300.0, -200.0))
 	var jianpo := _make_boss("jianpo", Vector2(300.0, 200.0), 2.8)
 	jianpo._cast_blink_slash(p)
+	# 前摇期不得提前落地：先断言仍在原地、符环已亮，再推进前摇量落点
+	var origin: Vector2 = jianpo.global_position
+	_c.check(jianpo.global_position.distance_to(origin) < 1.0 and jianpo._blink_rift != null,
+		"瞬步回斩起手：原地锁定落点并亮符环（不瞬移）")
+	jianpo._physics_process(GameBalance.BOSS_BLINK_SLASH_WINDUP + 0.05)
 	_c.check(jianpo.global_position.distance_to(p.global_position) <= GameBalance.BOSS_BLINK_SLASH_DIST + 40.0,
 		"玩家在负坐标象限：瞬步回斩落点仍贴脸（不被旧钳制拽去正象限）")
 	_recycle_bolts()

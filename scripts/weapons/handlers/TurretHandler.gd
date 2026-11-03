@@ -13,7 +13,6 @@ extends RefCounted
 
 ## 在 pos 落一座机关。keep_durability ≥ 0 用于「收回重摆」（耐久随机关一起回来）。
 static func deploy(w, pos: Vector2, keep_durability: float = -1.0) -> TurretUnit:
-	w.is_attacking = true
 	# 原地清理失效机关（旧写法每次布设新建一个 Array 拷贝，零分配版照旧）
 	for i in range(w.active_turrets.size() - 1, -1, -1):
 		var t: TurretUnit = w.active_turrets[i]
@@ -38,6 +37,7 @@ static func deploy(w, pos: Vector2, keep_durability: float = -1.0) -> TurretUnit
 	turret._owner_weapon = w
 	w.active_turrets.append(turret)
 
+	w.is_attacking = true
 	# 落位沉身演出：下沉 + 金光亮闪 → 弹性回正（帧内状态机，零 Tween）
 	w._begin_lunge(w.TURRET_DIP, 0.08, 0.12, true)
 	w._flash_sprite(Color(1.4, 1.3, 0.8), 0.12)

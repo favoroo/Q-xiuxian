@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.19",
+			"date": "2026-11-03",
+			"title": "瞬移预警与机关修复",
+			"items": [
+				"魔君与精英瞬移前先亮落点符环。",
+				"修复手机上机关布设键没反应。",
+				"战台地面去掉易误认成预警的纹阵。",
+				"机关卡面补开火间隔与布设上限。",
+			],
+		},
+		{
 			"version": "v0.1.18",
 			"date": "2026-11-03",
 			"title": "机关阵地与深层魔君",

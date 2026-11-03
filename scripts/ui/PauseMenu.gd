@@ -117,8 +117,8 @@ func _build_ui() -> void:
 	_add_row(vbox, [_retry_btn, _menu_btn])
 
 	# 投降结算（2026-11-03 玩家反馈）：打到目标波数想收手时，不必故意送死或重开一局。
-	# 单占一排、朱砂字压暗底：与上面两颗「离场」键拉开视觉层级，不跟返回主菜单抢手。
-	_surrender_btn = _mk_btn("投 降 结 算", 34, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.BAD, GameStyle.CHALK)
+	# 单占一排、与其他次键同款纸白字压暗底：靠位置和文案区分，不用红字抢眼。
+	_surrender_btn = _mk_btn("投 降 结 算", 34, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	_surrender_btn.pressed.connect(_on_surrender_pressed)
 	vbox.add_child(_surrender_btn)
 
@@ -409,7 +409,7 @@ func _reset_surrender_confirm() -> void:
 	if is_instance_valid(_surrender_btn):
 		_surrender_btn.text = "投 降 结 算"
 		_surrender_btn.disabled = false
-		GameStyle.button(_surrender_btn, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.BAD, 6.0, GameStyle.CHALK)
+		GameStyle.button(_surrender_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 
 ## 投降结算：与「重新开始」同一套二次确认（首击武装、3s 自动复位），
 ## 避免暂停时误触把整局直接结掉。确认后交给 Main 收起垫底弹窗、解暂停并播阵亡谢幕。

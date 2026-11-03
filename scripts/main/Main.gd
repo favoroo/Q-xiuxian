@@ -503,6 +503,7 @@ func _exit_tree() -> void:
 	AstralGem.clear_pool()
 	HealOrb.clear_pool()
 	SpawnIndicator.clear_pool()
+	BlinkRift.clear_pool()
 
 func _setup_atmosphere() -> void:
 	# 1. 远层灵气光尘（小而密：原灵尘档位瘦身提密度，主菜单暂停时也持续飘动）

@@ -81,7 +81,10 @@ func _sync_cast_pose() -> void:
 	if procedural_view == null:
 		return
 	var pose := 0.0
-	if _furnace_pending:
+	if _blink_windup_t > 0.0:
+		# 瞬移前摇：器身/法轮随落点符环同拍收束，落地瞬间归零发 recoil
+		pose = clampf(1.0 - _blink_windup_t / maxf(_blink_windup_total, 0.001), 0.0, 1.0)
+	elif _furnace_pending:
 		pose = clampf(1.0 - _furnace_timer / maxf(_furnace_windup_total, 0.001), 0.0, 1.0)
 	elif _slam_pending:
 		pose = clampf(1.0 - _slam_timer / maxf(_slam_windup_total, 0.001), 0.0, 1.0)
@@ -542,6 +545,13 @@ func _process(delta: float) -> void:
 	if player == null:
 		return
 
+	# 0. 瞬移前摇：落点符环填满才换位（推进在 EnemyBase._tick_blink_windup）。
+	# 这里只冻结出招循环与后台招式，避免前摇期又插一发别的招。
+	if _blink_windup_t > 0.0:
+		_pp_target_vel = Vector2.ZERO
+		velocity = Vector2.ZERO
+		return
+
 	# 1a. 镜影夹击：对侧镜影圈填满 → 虚像环弹 + 主身扇形（预警期互斥锁）
 	if _mirror_pending:
 		_mirror_timer -= delta
@@ -997,7 +1007,7 @@ func _cast_chain_charge(player: Node2D) -> void:
 # ---------------- 招式 10：阵眼换桩瞬移 + 双环震爆 ----------------
 
 func _cast_turret_shift(player: Node2D) -> void:
-	if dying or get_parent() == null:
+	if dying or get_parent() == null or _blink_windup_t > 0.0:
 		return
 	# 换桩落点以地图原点为心（2026-11-03 修复：旧屏幕坐标中心 (480,270) + 90~870 钳制会把
 	# 落点钳出 ±460 物理边界，被物理钳硬拉回边缘 —— 炮台越换桩越贴角落的根因）
@@ -1017,18 +1027,21 @@ func _cast_turret_shift(player: Node2D) -> void:
 	var lim := _arena_lim()
 	new_pos = new_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	# 1. 原位留小环弹与震波
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 60.0, _fx_color, 0.26)
-	_fire_mini_ring(8, 200.0, 1.0)
-	AudioManager.play_sfx("enemy_fuse", 0.7)
+	# 起手：旧桩位置锁进回调，落点先亮符环；前摇期不吐弹，落地后才补「旧桩还在开火」的一圈
+	var origin := global_position
+	_blink_kind = BLINK_KIND_BOSS
+	_blink_on_arrive = func():
+		_on_turret_shift_arrive(origin)
+		_pose_burst()
+	_begin_blink_telegraph(new_pos, GameBalance.BOSS_TURRET_SHIFT_WINDUP, _fx_color, BlinkRift.RADIUS_BOSS)
 
-	# 2. 瞬移到新阵点
-	global_position = new_pos
-	JuiceEffect.spawn_shockwave(get_parent(), new_pos, 85.0, _fx_color, 0.3)
-	play_squash(Vector2(0.78, 1.25), 0.25)
-	_pose_burst()
-
-	# 3. 爆一圈弧线环弹
+## 换桩落地：旧阵眼留一环小弹（告诉玩家「原来那根桩也在开火」），新阵点爆一圈弧线环弹。
+func _on_turret_shift_arrive(origin: Vector2) -> void:
+	if dying or get_parent() == null:
+		return
+	JuiceEffect.spawn_shockwave(get_parent(), origin, 60.0, _fx_color, 0.26)
+	_fire_mini_ring_at(origin, 8, 200.0, 1.0)
+	AudioManager.play_sfx("enemy_slam", 0.85)
 	_fire_ring_layer(1)
 
 # ---------------- 招式 6：追踪天火连环轰炸 ----------------
@@ -1156,13 +1169,17 @@ func _cast_summon(player: Node2D) -> void:
 # ---------------- 辅助弹幕发射 ----------------
 
 func _fire_mini_ring(count: int, spd: float, scl: float) -> void:
+	_fire_mini_ring_at(global_position, count, spd, scl)
+
+## 指定起爆点的迷你环弹：换桩落地后补「旧桩还在开火」的一圈，不能借用新位置。
+func _fire_mini_ring_at(at: Vector2, count: int, spd: float, scl: float) -> void:
 	if dying or get_parent() == null:
 		return
 	var dmg := maxf(1.0, contact_damage * 0.45)
 	for i in range(count):
 		var ang := TAU * float(i) / float(count)
 		var bolt := EnemyBolt.acquire(get_parent())
-		bolt.global_position = global_position
+		bolt.global_position = at
 		bolt.direction = Vector2(cos(ang), sin(ang))
 		bolt.speed = spd * bolt_speed_mult
 		bolt.damage = dmg
@@ -1266,8 +1283,9 @@ func _resolve_single_hazard_field(pos: Vector2) -> void:
 
 # ---------------- 招式 12：瞬步贴脸扇形回斩 ----------------
 
-func _cast_blink_slash(player: Node2D) -> void:
-	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+func _cast_blink_slash(player: Node2D, windup: float = -1.0) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player) \
+			or _blink_windup_t > 0.0:
 		return
 	var p_pos := player.global_position
 	var p_vel: Vector2 = player.velocity if (player is CharacterBody2D) else Vector2.ZERO
@@ -1280,13 +1298,19 @@ func _cast_blink_slash(player: Node2D) -> void:
 	var lim := _arena_lim()
 	target_pos = target_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 50.0, _fx_color, 0.22)
-	global_position = target_pos
-	JuiceEffect.spawn_shockwave(get_parent(), target_pos, 60.0, _fx_color, 0.25)
-	AudioManager.play_sfx("enemy_slam", 0.85)
-	play_squash(Vector2(1.25, 0.8), 0.2)
-	_pose_burst()
+	# 起手：落点锁定 + 符环；扇形挪到落地回调里出，玩家先看见「要落到这」再看见「从这打来」。
+	# 无相三连传入更短的前摇，保持连击密度；单发瞬步用 0.40s 给足反应窗。
+	var w: float = windup if windup > 0.0 else GameBalance.BOSS_BLINK_SLASH_WINDUP
+	_blink_kind = BLINK_KIND_BOSS
+	_blink_on_arrive = func():
+		_fire_blink_slash_fan(player)
+		_pose_burst()
+	_begin_blink_telegraph(target_pos, w, _fx_color, BlinkRift.RADIUS_BOSS)
 
+## 瞬步落地后的扇形回斩：从新位置朝玩家方向扇开。伤害/弹数口径与旧版完全一致。
+func _fire_blink_slash_fan(player: Node2D) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+		return
 	var bolts_count: int = GameBalance.BOSS_BLINK_SLASH_BOLTS_P2 if (_phase2 or final_boss) else GameBalance.BOSS_BLINK_SLASH_BOLTS
 	var to_p: Vector2 = (player.global_position - global_position).normalized()
 	var base_ang := to_p.angle()
@@ -1312,15 +1336,25 @@ func _cast_blink_slash(player: Node2D) -> void:
 ## 盘旋拉升 → 换位到玩家远侧 → 胶囊预警 → 全场贯穿俯冲 → 落点环爆收势。
 ## 复用冲锋机架（EnemyAiCharge 预警胶囊/扫掠判定同源），冲锋三件套临时换俯冲口径。
 func _cast_dive(player: Node2D) -> void:
-	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+	if dying or get_parent() == null or player == null or not is_instance_valid(player) \
+			or _blink_windup_t > 0.0:
 		return
 	# 拉升换位：撤到玩家远侧锚点（升天盘旋读招，落点钳在物理边界内）
 	var away: Vector2 = (global_position - player.global_position).normalized()
 	if away.length_squared() < 0.5:
 		away = Vector2.RIGHT
 	var anchor := _pick_dive_anchor(player, away)
-	JuiceEffect.spawn_shockwave(get_parent(), global_position, 55.0, _fx_color, 0.24)
-	global_position = anchor
+
+	# 起手：先把「要升到哪」亮在地面，符环填满才拉升；落地后再开冲锋预警胶囊。
+	_blink_kind = BLINK_KIND_BOSS
+	_blink_on_arrive = func():
+		_on_dive_arrive(player)
+	_begin_blink_telegraph(anchor, GameBalance.BOSS_DIVE_LEAP_WINDUP, _fx_color, BlinkRift.RADIUS_BOSS)
+
+## 俯冲拉升落点：拔高形变 + 冲锋三件套临时换俯冲口径 + 胶囊预警（复用 EnemyAiCharge 机架）。
+func _on_dive_arrive(player: Node2D) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+		return
 	play_squash(Vector2(0.8, 1.3), 0.3)   # 拉升拔高读数
 	# 冲锋参数换俯冲口径（收势在 _settle_charge_recovery 恢复）
 	_charge_duration_stash = charge_duration
@@ -1339,6 +1373,7 @@ func _cast_dive(player: Node2D) -> void:
 	charge_interval = 999999.0
 	_update_charge_warning(player)
 	AudioManager.play_sfx("enemy_fuse", 0.9, 0.85)
+	_pose_burst()
 
 ## 俯冲换位锚点：优先「玩家 + 远离方向 × 380」，被墙钳回时依次尝试对侧/切向，
 ## 保证至少 BOSS_DIVE_MIN_LEAP 的助跑距离，避免在墙角把「拉升换位」钳成原地俯冲。
@@ -1757,7 +1792,8 @@ func _sig_void_step(player: Node2D, def: Dictionary) -> void:
 func _sig_void_step_once(player: Node2D) -> void:
 	if dying or get_parent() == null or player == null or not is_instance_valid(player):
 		return
-	_cast_blink_slash(player)
+	# 无相三连每段用更短前摇（0.30s）：三段都要有落点符环，但总时长不能拖成站桩
+	_cast_blink_slash(player, GameBalance.BOSS_VOID_STEP_WINDUP)
 
 ## 混沌星散（元初兽）：一圈随机旋向/速度的四象弹，部分弹染成异色，读作「混沌不定」。
 func _sig_chaos_orb(player: Node2D, def: Dictionary) -> void:
