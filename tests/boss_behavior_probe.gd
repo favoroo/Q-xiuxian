@@ -201,6 +201,10 @@ func _test_all_bosses_activity() -> void:
 	var roster: Array = [
 		["", 3.8], ["chiyan", 3.8], ["xiuluo", 3.0], ["qianji", 2.9],
 		["wangu", 3.3], ["jianpo", 2.8], ["xinmo", 2.7],
+		# 深层专属魔君（W45~W100，2026-11-03）：同一活跃度/多样性口径
+		["zhaoying", 3.2], ["yinhun", 3.1], ["luding", 3.0],
+		["canglong", 2.9], ["jianzhong", 2.8], ["leijie", 2.7], ["kunwang", 3.0],
+		["kuijia", 2.8], ["fenghuang", 2.6], ["tianmo", 2.5], ["hundun", 2.5], ["wanjie", 2.4],
 	]
 	var p := _make_player(Vector2(0.0, 0.0))
 	for entry in roster:

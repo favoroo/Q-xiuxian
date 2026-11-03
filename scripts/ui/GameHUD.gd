@@ -33,10 +33,11 @@ const OBELISK_BTN_SIZE := HudObeliskButton.BTN_SIZE
 const OBELISK_BTN_TEXT := HudObeliskButton.BTN_TEXT
 const OBELISK_BTN_FONT := HudObeliskButton.BTN_FONT
 
-## 子控件（拆分自本文件）：技能键 / 额外技能键 / 祭坛键 / 魔君血条 / FPS 读数 / 待加点徽记
+## 子控件（拆分自本文件）：技能键 / 额外技能键 / 祭坛键 / 机关键 / 魔君血条 / FPS 读数 / 待加点徽记
 var _skill_widget: HudSkillButton = null
 var _extra_skill_widget: HudSkillButton = null
 var _obelisk_widget: HudObeliskButton = null
+var _mechanism_widget: HudMechanismButton = null
 var _boss_bar_widget: HudBossBar = null
 var _author_btn: Button = null
 ## 暂停键长按作者模式彩蛋的助手句柄（_on_pause_pressed 收口松手用）
@@ -308,7 +309,9 @@ static func safe_insets(safe: Rect2, win: Rect2, scale: float) -> Array[float]:
 
 # ---------------- 子控件构建与门面（判据 / 覆盖层 / Main 接线的兼容接口） ----------------
 
-## 构建五块子控件，add_child 顺序保持拆分前的树序（Boss 血条 → 祭坛键 → 技能键 → 额外技能键 → FPS）
+## 构建子控件，add_child 顺序保持拆分前的树序（Boss 血条 → 祭坛键 → 机关键 → 技能键
+## → 额外技能键 → FPS）。机关键（2026-11-03）排在技能键之前：它通常处于收起态，
+## 绘制序靠后反而会被技能键的弹入/冷却环压住，所以放在两者之间、与祭坛键同层。
 func _build_widgets() -> void:
 	_boss_bar_widget = HudBossBar.new()
 	add_child(_boss_bar_widget)
@@ -316,6 +319,9 @@ func _build_widgets() -> void:
 	add_child(_obelisk_widget)
 	_obelisk_btn = _obelisk_widget.get_btn()
 	_obelisk_ring = _obelisk_widget.get_ring()
+	# 机关键：布设 / 维修（长按）/ 收回 三态同键，情境键（无待办整颗收起）
+	_mechanism_widget = HudMechanismButton.new()
+	add_child(_mechanism_widget)
 	_skill_widget = HudSkillButton.new()
 	add_child(_skill_widget)
 	_skill_box = _skill_widget
@@ -365,16 +371,28 @@ func obelisk_btn_center_px() -> Vector2:
 func obelisk_btn_size_px() -> Vector2:
 	return _obelisk_widget.size_px()
 
+## 机关键（手动布设/维修/收回，2026-11-03）：拖代理、判据与 LayoutCheck 都从这里取真身
+func mechanism_btn_center_px() -> Vector2:
+	return _mechanism_widget.center_px()
+
+func mechanism_btn_size_px() -> Vector2:
+	return _mechanism_widget.size_px()
+
+func mechanism_widget() -> HudMechanismButton:
+	return _mechanism_widget
+
 func _on_skill_btn_input(event: InputEvent) -> void:
 	_skill_widget.handle_input(event)
 
 func _on_obelisk_btn_input(event: InputEvent) -> void:
 	_obelisk_widget.handle_input(event)
 
-## 全局输入拦截：触屏第二根手指直通（左手拉摇杆时右手点技能，系统不再发鼠标模拟，走原生 ScreenTouch）
+## 全局输入拦截：触屏第二根手指直通（左手拉摇杆时右手点技能/布设/维修，
+## 系统不再发鼠标模拟，走原生 ScreenTouch）
 func _input(event: InputEvent) -> void:
 	_skill_widget.handle_engine_input(event)
 	_extra_skill_widget.handle_engine_input(event)
+	_mechanism_widget.handle_engine_input(event)
 
 ## 触发技能释放（判据从 HUD 门面调用）
 func _trigger_skill_press() -> void:
@@ -399,11 +417,12 @@ func on_obelisk_charge_cancelled(ob: BlessingObelisk) -> void:
 func on_obelisk_blessing_triggered(ob: BlessingObelisk) -> void:
 	_obelisk_widget.on_obelisk_blessing_triggered(ob)
 
-## 进入/退出按钮调整模式：强制亮出三颗键交给覆盖层拖动（树此时是暂停态）
+## 进入/退出按钮调整模式：强制亮出四颗键交给覆盖层拖动（树此时是暂停态）
 func set_btn_edit_mode(on: bool) -> void:
 	_skill_widget.set_edit_mode(on)
 	_extra_skill_widget.set_edit_mode(on)
 	_obelisk_widget.set_edit_mode(on)
+	_mechanism_widget.set_edit_mode(on)
 
 ## 打开调整覆盖层（设置·操作页「进入调整模式」调用；on_done 在调整结束后回调用）
 func open_btn_edit_overlay(on_done: Callable = Callable()) -> void:
@@ -515,6 +534,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# E 松开半拍先收祭坛键盘充能（没在充时键内自判为空操作）
 	if event is InputEventKey and not event.pressed and event.keycode == KEY_E:
 		_obelisk_widget.key_release()
+	# F 松开先收机关维修长按（维修是长按生效，松手必须收）
+	if event is InputEventKey and not event.pressed and event.keycode == KEY_F:
+		_mechanism_widget.key_release()
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
 			if _skill_box != null and _skill_box.visible:
@@ -525,6 +547,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _obelisk_widget.can_key_charge():
 				_obelisk_widget.key_press()
 				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F:
+			# F 专职机关主键动作（点按布设 / 长按维修），键亮着才吃
+			if _mechanism_widget.can_key_act():
+				_mechanism_widget.key_press()
+				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_G:
+			# G 专职收回（靠近机关时才有意义，键内自判为空操作）
+			_mechanism_widget.recall_by_key()
+			get_viewport().set_input_as_handled()
 
 func _on_hp_changed(cur: float, max_v: float) -> void:
 	hp_bar.max_value = max_v

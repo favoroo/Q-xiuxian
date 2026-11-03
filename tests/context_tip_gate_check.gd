@@ -16,7 +16,7 @@ extends Node
 ## 注意：全程动 ctx_tip_* 四个键，收尾还原开发机原值（保护 user://settings.cfg）。
 
 const JITTER := 4.0
-const TIP_IDS: Array[StringName] = [&"shop", &"chest", &"obelisk", &"elite"]
+const TIP_IDS: Array[StringName] = [&"shop", &"chest", &"obelisk", &"elite", &"mechanism"]
 
 var _c := TestCheck.new()
 var _main: Node

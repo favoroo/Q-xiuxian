@@ -16,6 +16,9 @@ static func reset_stat_fields(gm: Node) -> void:
 	gm.elemental_damage = 0.0
 	gm.engineering_damage = 0.0
 	gm.contraption_damage = 0.0
+	gm.turret_stamina_mul = 1.0
+	gm.turret_repair_haste_mul = 1.0
+	gm.turret_volley_bonus = 0.0
 	gm.attack_speed_mult = 1.0
 	gm.move_speed_mult = 1.0
 	gm.pickup_range_mult = 1.0
@@ -60,6 +63,7 @@ static func reset(gm: Node) -> void:
 	gm.experience = 0
 	gm.experience_to_next = GameBalance.EXP_FIRST_LEVEL
 	gm.is_game_over = false
+	gm.surrendered = false
 	gm.pending_upgrade_points = 0
 	gm.wave_number = 0
 	gm.run_started = false

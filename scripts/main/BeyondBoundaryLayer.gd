@@ -94,6 +94,8 @@ func _process(_delta: float) -> void:
 			_fog_near.position = cam_pos * (PARALLAX_FACTOR - FOG_FACTOR_NEAR)
 
 func _draw() -> void:
+	# 纯静态剪影：原先每帧重放 ~100 条 draw_*，合批后整个背景只付 1 个 draw call
+	BatchDraw.flush(self)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4217  # 固定种子确保装饰确定性，不占用或污染 GameManager.rng 战斗流
 
@@ -124,8 +126,8 @@ func _draw() -> void:
 		north_pts.append(Vector2(peak_x, peak_y))
 	north_pts.append(Vector2(h + 180.0, -h - 20.0))
 	if north_pts.size() >= 3:
-		draw_colored_polygon(north_pts, col_shadow)
-		draw_polyline(north_pts, col_stone, 1.5)
+		BatchDraw.poly_any(self, north_pts, col_shadow)
+		BatchDraw.polyline(self, north_pts, col_stone, 1.5)
 
 		# 南侧断崖远影（y 在 +(h+30) ~ +(h+140) 之间）
 	var south_pts := PackedVector2Array()
@@ -138,8 +140,8 @@ func _draw() -> void:
 		south_pts.append(Vector2(s_x, s_y))
 	south_pts.append(Vector2(h + 180.0, h + 20.0))
 	if south_pts.size() >= 3:
-		draw_colored_polygon(south_pts, col_shadow)
-		draw_polyline(south_pts, col_stone, 1.5)
+		BatchDraw.poly_any(self, south_pts, col_shadow)
+		BatchDraw.polyline(self, south_pts, col_stone, 1.5)
 
 	# 东西两侧深渊中矗立的古刹残柱剪影
 	var pillar_xs := [-h - 60.0, -h - 130.0, h + 60.0, h + 130.0]
@@ -154,10 +156,11 @@ func _draw() -> void:
 			Vector2(px + sign_x * p_w * 0.8, py_base - p_h),
 			Vector2(px + sign_x * p_w, py_base)
 		])
-		draw_colored_polygon(pts, col_stone)
-		draw_polyline(pts, col_shadow, 1.5)
+		BatchDraw.poly_any(self, pts, col_stone)
+		BatchDraw.polyline(self, pts, col_shadow, 1.5)
 		# 柱顶微弱幽芒
-		draw_circle(Vector2(px + sign_x * p_w * 0.8, py_base - p_h), 3.0, col_faint_cyan)
+		BatchDraw.circle(self, Vector2(px + sign_x * p_w * 0.8, py_base - p_h), 3.0, col_faint_cyan)
+	BatchDraw.flush(self)
 
 ## T-4.2 远景竖直幽光柱：4 条（3-5 档取中），半透明梯形，底→顶分段渐隐。
 ## 只在北侧山脊带（y ≈ -h-40 ~ -h-190）分布，宽度 26-46px；纯 LDR 低透，氛围件不抢戏。
@@ -188,7 +191,7 @@ func _draw_soul_pillars(rng: RandomNumberGenerator, h: float) -> void:
 			])
 			var col := PILLAR_COLOR
 			col.a = (a0 + a1) * 0.5
-			draw_colored_polygon(seg, col)
+			BatchDraw.poly(self, seg, col)
 
 ## 2026-10-21 精致化：幽冥浮空岛剪影（Floating Islands）
 ## 北侧山脊后方更高处悬浮 2~3 座倒锥形巨石，底部垂落锁链/灵藤线条，
@@ -219,10 +222,10 @@ func _draw_floating_islands(rng: RandomNumberGenerator, h: float) -> void:
 			Vector2(cx + bot_w, cy + ih),
 			Vector2(cx - bot_w, cy + ih),
 		])
-		draw_colored_polygon(island_pts, col_island)
+		BatchDraw.poly(self, island_pts, col_island)
 
 		# 顶部平台边缘描线（微弱冷墨轮廓）
-		draw_line(Vector2(cx - top_w, cy), Vector2(cx + top_w, cy), col_vine, 1.2)
+		BatchDraw.line(self, Vector2(cx - top_w, cy), Vector2(cx + top_w, cy), col_vine, 1.2)
 
 		# 底部垂落 2~3 条锁链/灵藤（竖直线 + 末端小点）
 		var vine_count := rng.randi_range(2, 3)
@@ -231,9 +234,9 @@ func _draw_floating_islands(rng: RandomNumberGenerator, h: float) -> void:
 			var vine_top := cy + ih
 			var vine_len := rng.randf_range(15.0, 30.0)
 			var vine_bot := vine_top + vine_len
-			draw_line(Vector2(vx, vine_top), Vector2(vx, vine_bot), col_vine, 0.9)
+			BatchDraw.line(self, Vector2(vx, vine_top), Vector2(vx, vine_bot), col_vine, 0.9)
 			# 末端一枚极小垂珠
-			draw_circle(Vector2(vx, vine_bot + 1.5), 1.0, col_vine)
+			BatchDraw.circle(self, Vector2(vx, vine_bot + 1.5), 1.0, col_vine)
 
 ## 2026-10-21 精致化：远景「云隙光」横向光带（Cloud Gap Lights）
 ## 在远山与浮空岛之间，穿插 2~3 片极淡的横向光带（细长梯形），
@@ -260,7 +263,7 @@ func _draw_cloud_gap_lights(h: float) -> void:
 			Vector2(gx1, gy + gt * 0.5),
 			Vector2(gx0, gy + gt * 0.5),
 		])
-		draw_colored_polygon(gap_pts, col_gap_light)
+		BatchDraw.poly(self, gap_pts, col_gap_light)
 
 ## 2026-10-21 精致化：幽光柱内「灵光升腾」动态（Pillar Spirits）
 ## 每条光柱内挂 2~3 个细小光点（Sprite2D + light_radial.png），从柱底缓升到柱顶，

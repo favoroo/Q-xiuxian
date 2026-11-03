@@ -139,6 +139,10 @@ func _on_before_redraw() -> void:
 	pass
 
 func _draw() -> void:
+	# 玩家级渲染器 60Hz 重绘、单次 50~120 条矢量原语；统一进 BatchDraw 后
+	# 一次 _draw 只付 1~2 个 draw call（2026-11-03 绘制专项）。子类里遇到原生
+	# draw_polygon（逐顶点渐变斗篷）或 draw_set_transform 前会先 flush 保序。
+	BatchDraw.flush(self)
 	# 根据动作状态机分发到具体绘制函数
 	match current_action:
 		Action.IDLE:
@@ -151,6 +155,7 @@ func _draw() -> void:
 			_draw_attack(current_angle, attack_progress)
 		Action.HIT:
 			_draw_hit(current_angle, hit_progress)
+	BatchDraw.flush(self)
 
 # ----------------- 虚拟接口（由具体风格渲染器实现） -----------------
 
@@ -183,22 +188,22 @@ func _circle(center: Vector2, radius: float, col: Color) -> void:
 	for i in range(seg):
 		var ang := float(i) * TAU / float(seg)
 		_circle_buf[i] = center + Vector2(cos(ang), sin(ang)) * radius
-	draw_colored_polygon(_circle_buf, col)
+	BatchDraw.native_poly(self, _circle_buf, col)
 
 func _arc(center: Vector2, radius: float, start_angle: float, end_angle: float, _point_count: int, color: Color, width: float = 1.0, antialiased: bool = false) -> void:
 	var seg := clampi(int(radius * absf(end_angle - start_angle) * 0.22), 6, 32)
-	draw_arc(center, radius, start_angle, end_angle, seg, color, width, antialiased)
+	BatchDraw.arc(self, center, radius, start_angle, end_angle, color, width, antialiased)
 
 func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: Color, stroke_w: float = 2.0) -> void:
 	if pts.size() < 3:
 		return
-	draw_colored_polygon(pts, fill_col)
+	BatchDraw.native_poly(self, pts, fill_col)
 	var n := pts.size()
 	_stroke_buf.resize(n + 1)
 	for i in range(n):
 		_stroke_buf[i] = pts[i]
 	_stroke_buf[n] = pts[0]
-	draw_polyline(_stroke_buf, stroke_col, stroke_w, true)
+	BatchDraw.native_polyline(self, _stroke_buf, stroke_col, stroke_w, true)
 
 func draw_stroked_circle(center: Vector2, radius: float, fill_col: Color, stroke_col: Color, stroke_w: float = 2.0) -> void:
 	_circle(center, radius, fill_col)
@@ -220,7 +225,7 @@ func draw_filled_ellipse(center: Vector2, rx: float, ry: float, col: Color, segm
 	for i in range(segments):
 		var theta := (float(i) / float(segments)) * TAU
 		_circle_buf[i] = center + Vector2(cos(theta) * rx, sin(theta) * ry)
-	draw_colored_polygon(_circle_buf, col)
+	BatchDraw.native_poly(self, _circle_buf, col)
 
 func draw_soft_glow(center: Vector2, radius: float, col: Color, layers: int = 3) -> void:
 	for i in range(layers):

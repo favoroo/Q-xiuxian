@@ -16,7 +16,8 @@ static func stat_color(key: String, v: float) -> Color:
 		return GameStyle.PAPER
 	var good := v > 0.0
 	match key:
-		"attack_speed_mult_mul", "shop_price_mul":
+		"attack_speed_mult_mul", "shop_price_mul", "turret_repair_haste_mul":
+			# 乘算字段里 v < 1 才是增益（攻击间隔 / 物价 / 机关维修用时）
 			good = v < 1.0
 	return GameStyle.GOOD_DK if good else GameStyle.BAD
 

@@ -94,6 +94,7 @@ func _ready() -> void:
 		[infra, "_test_author_mode"],
 		[infra, "_test_modal_pause_buttons"],
 		[infra, "_test_fx_particle_pool"],
+		[infra, "_test_batch_draw_helpers"],
 		[combat, "_test_knock_direction"],
 		[combat, "_test_charge_geometry"],
 		[combat, "_test_elite_attack_constants"],

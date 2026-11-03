@@ -220,7 +220,7 @@ func _export_strip(frames: Array[Image]) -> void:
 		var img := frames[i]
 		var factor := float(img.get_width()) / maxf(size.x, 1.0)
 		var center := Vector2i(int(480.0 * factor), int(300.0 * factor))
-		var src_rect := Rect2i(center.x - CELL_W / 2, center.y - CELL_H / 2, CELL_W, CELL_H)
+		var src_rect := Rect2i(center.x - (CELL_W >> 1), center.y - (CELL_H >> 1), CELL_W, CELL_H)
 		var clipped := src_rect.intersection(Rect2i(0, 0, img.get_width(), img.get_height()))
 		if clipped.size.x <= 0 or clipped.size.y <= 0:
 			continue

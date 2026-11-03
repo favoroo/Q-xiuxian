@@ -84,6 +84,33 @@ const UPGRADES: Array[Dictionary] = [
 				"icon": "res://assets/art/upgrade_contraption.png",
 				"max_stacks": 6,
 			},
+		# ==================== 机关阵地（2026-11-03 手动布设改版） ====================
+		# 机关从「自动铺座」改成「手动布一座 + 磨损维修」后，维护本身成了要投资的维度：
+		# 养护管续航（耐久 + 维修），连环机括管火力上限。两张都只对机关流刷出（BalanceBuildFilter）。
+		{
+			# 每层：耐久 +20%（40s→48/56/64s）、维修用时 -20%（0.8→0.64/0.51/0.41s）。
+			# 设计意图：把「跑回去修」从负担变成顺手的事 —— 6 机关站桩流的续航卡，不直接加输出。
+			"id": "contraption_upkeep",
+			"apply": {"turret_stamina_mul": 1.2, "turret_repair_haste_mul": 0.8},
+			"title": "机关养护",
+			"desc": "机关更耐用，修起来也更快",
+			"rarity": "rare",
+			"rarity_label": "稀有",
+			"icon": "res://assets/art/upgrade_contraption_upkeep.png",
+			"max_stacks": 3,
+		},
+		{
+			# 一次性史诗：机关齐射多一管（★1 2→3 管、★4 5→6 管，约 +20~25% 机关输出）。
+			# 不叠层：管数是几何倍率，叠两层就把机关流派推到破表。
+			"id": "contraption_volley",
+			"apply": {"turret_volley_bonus": 1.0},
+			"title": "连环机括",
+			"desc": "机关多打一管",
+			"rarity": "epic",
+			"rarity_label": "史诗",
+			"icon": "res://assets/art/upgrade_contraption_volley.png",
+			"max_stacks": 1,
+		},
 	{
 		"id": "haste_up",
 		"apply": {"attack_speed_mult_mul": 0.88},

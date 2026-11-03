@@ -49,17 +49,17 @@ static func flat(r: Node2D, pts: PackedVector2Array, fill: Color, ow: float = 2.
 	var sh := PackedVector2Array()
 	for p in pts:
 		sh.append(p + Vector2(d, d))
-	r.draw_colored_polygon(sh, SHADOW)
+	BatchDraw.native_poly(r, sh, SHADOW)
 	var closed := pts.duplicate()
 	closed.append(pts[0])
 	var ink_w: float = star_ink_w(ow, st)
 	if st >= 4 and ow + 2.4 >= STAR_INK_MIN:
-		r.draw_polyline(closed, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
-		r.draw_polyline(closed, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
+		BatchDraw.native_polyline(r, closed, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
+		BatchDraw.native_polyline(r, closed, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
 	elif st >= 3 and ow + 2.4 >= STAR_INK_MIN:
-		r.draw_polyline(closed, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
-	r.draw_polyline(closed, INK, ink_w, true)
-	r.draw_colored_polygon(pts, fill)
+		BatchDraw.native_polyline(r, closed, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
+	BatchDraw.native_polyline(r, closed, INK, ink_w, true)
+	BatchDraw.native_poly(r, pts, fill)
 
 ## 粗杆（柄/骨/轴）：投影 + 墨描 + 纯色芯。升星加粗墨描；★3 走金边外缘、★4 走霓虹双色边
 ##（描线都在墨描之下、只露外缘，不顶掉杆芯色），小杆被 STAR_INK_MIN 豁免。
@@ -67,14 +67,14 @@ static func bar(r: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void
 	var st: int = star_of(r)
 	var d: float = star_shadow_off(st)
 	var ink_w: float = star_ink_w(w, st)
-	r.draw_line(a + Vector2(d, d), b + Vector2(d, d), SHADOW, ink_w, true)
+	BatchDraw.native_line(r, a + Vector2(d, d), b + Vector2(d, d), SHADOW, ink_w, true)
 	if st >= 4 and w + 2.4 >= STAR_INK_MIN:
-		r.draw_line(a, b, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
-		r.draw_line(a, b, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
+		BatchDraw.native_line(r, a, b, NEON_CYAN_HDR, ink_w + STAR4_NEON_PEEP * 2.0, true)
+		BatchDraw.native_line(r, a, b, NEON_VIOLET, ink_w + STAR4_NEON_PEEP, true)
 	elif st >= 3 and w + 2.4 >= STAR_INK_MIN:
-		r.draw_line(a, b, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
-	r.draw_line(a, b, INK, ink_w, true)
-	r.draw_line(a, b, col, w, true)
+		BatchDraw.native_line(r, a, b, pal(elem_of(r))["accent"], ink_w + STAR_EDGE_PEEP * 2.0, true)
+	BatchDraw.native_line(r, a, b, INK, ink_w, true)
+	BatchDraw.native_line(r, a, b, col, w, true)
 
 ## 方钉/方块构件（剑首、印钮、销钉）：走 flat，小件被 STAR_INK_MIN 自动豁免分档
 static func square(r: Node2D, c: Vector2, half: float, col: Color, ow: float = 1.4) -> void:
@@ -89,21 +89,21 @@ static func square(r: Node2D, c: Vector2, half: float, col: Color, ow: float = 1
 static func disc(r: Node2D, c: Vector2, radius: float, fill: Color, ow: float = 2.4) -> void:
 	var st: int = star_of(r)
 	var d: float = star_shadow_off(st)
-	r.draw_circle(c + Vector2(d, d), radius, SHADOW)
+	BatchDraw.native_circle(r, c + Vector2(d, d), radius, SHADOW)
 	var inset: float = ow
 	if radius >= 4.5:
 		inset = ow + 0.5 * float(st - 1)
 	if st >= 4 and radius >= 5.0:
-		r.draw_circle(c, radius + STAR4_NEON_PEEP, NEON_CYAN_HDR)
-		r.draw_circle(c, radius + STAR4_NEON_PEEP * 0.5, NEON_VIOLET)
+		BatchDraw.native_circle(r, c, radius + STAR4_NEON_PEEP, NEON_CYAN_HDR)
+		BatchDraw.native_circle(r, c, radius + STAR4_NEON_PEEP * 0.5, NEON_VIOLET)
 	elif st >= 3 and radius >= 5.0:
-		r.draw_circle(c, radius + STAR_EDGE_PEEP, pal(elem_of(r))["accent"])
-	r.draw_circle(c, radius, INK)
-	r.draw_circle(c, radius - inset, fill)
+		BatchDraw.native_circle(r, c, radius + STAR_EDGE_PEEP, pal(elem_of(r))["accent"])
+	BatchDraw.native_circle(r, c, radius, INK)
+	BatchDraw.native_circle(r, c, radius - inset, fill)
 	if st >= 4 and radius >= 5.0:
-		r.draw_arc(c, radius - inset * 0.5, 0.0, TAU, 28, NEON_CYAN_HDR, minf(inset * 0.55, 1.8), true)
+		BatchDraw.native_arc(r, c, radius - inset * 0.5, 0.0, TAU, 28, NEON_CYAN_HDR, minf(inset * 0.55, 1.8), true)
 	elif st >= 3 and radius >= 5.0:
-		r.draw_arc(c, radius - inset * 0.5, 0.0, TAU, 28,
+		BatchDraw.native_arc(r, c, radius - inset * 0.5, 0.0, TAU, 28,
 			pal(elem_of(r))["accent"], minf(inset * 0.55, 1.6), true)
 
 ## 圆环带（鼓环/镜框）：墨底 + 撞色环。升星只加厚墨底，撞色环带宽保持
@@ -112,8 +112,8 @@ static func ring(r: Node2D, c: Vector2, radius: float, w: float, col: Color) -> 
 	var ink_w: float = w + 2.0
 	if radius >= 4.5:
 		ink_w += minf(0.6, w * 0.3) * float(st - 1)
-	r.draw_arc(c, radius, 0.0, TAU, 28, INK, ink_w, true)
-	r.draw_arc(c, radius, 0.0, TAU, 28, col, w, true)
+	BatchDraw.native_arc(r, c, radius, 0.0, TAU, 28, INK, ink_w, true)
+	BatchDraw.native_arc(r, c, radius, 0.0, TAU, 28, col, w, true)
 
 ## 升星方钉（最直白的星级读数）：★2 在 a 落一颗撞色方钉，★3 再在 b 落一颗，
 ## ★4 在 a~b 中点补第三颗电光青神印（三钉 = 四星，霓虹色与描边同源）

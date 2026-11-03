@@ -137,13 +137,13 @@ static func _tablet_paizi(r: ProceduralWeaponRenderer) -> void:
 	cap.append(Vector2(cap_c, -hw))
 	BC.flat(r, cap, pal["accent"], 2.0)
 	# 穿绳孔：圆孔（方块孔在图标里读成一格马赛克）
-	r.draw_circle(Vector2(cap_c + hw * 0.44, 0.0), hw * 0.25, BC.INK)
+	BatchDraw.native_circle(r, Vector2(cap_c + hw * 0.44, 0.0), hw * 0.25, BC.INK)
 	# 牌心雷纹：一块 ⚡ 实心折线（左倾闪电），牌面唯一纹样；实心多边形不用描边，
 	# 细线折线在缩放后会糊成一团斜杠，六角折边才是图标尺度下能读出的雷形
 	var top_x: float = L * 0.34
 	var span: float = L * 0.62
 	var half_lat: float = hw * 0.62
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		_bolt_pt(top_x, span, half_lat, 0.555, 0.00),
 		_bolt_pt(top_x, span, half_lat, 0.000, 0.60),
 		_bolt_pt(top_x, span, half_lat, 0.500, 0.60),
@@ -152,8 +152,8 @@ static func _tablet_paizi(r: ProceduralWeaponRenderer) -> void:
 		_bolt_pt(top_x, span, half_lat, 0.500, 0.40),
 	]), BC.INK)
 	# 上下墨箍（吞口箍 + 尾箍），中间整段留白给雷纹
-	r.draw_line(Vector2(L * 0.44, -hw * 0.74), Vector2(L * 0.44, hw * 0.74), BC.INK, 2.0, true)
-	r.draw_line(Vector2(-L * 0.52, -hw * 0.84), Vector2(-L * 0.52, hw * 0.84), BC.INK, 1.8, true)
+	BatchDraw.native_line(r, Vector2(L * 0.44, -hw * 0.74), Vector2(L * 0.44, hw * 0.74), BC.INK, 2.0, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.52, -hw * 0.84), Vector2(-L * 0.52, hw * 0.84), BC.INK, 1.8, true)
 	BC.star_studs(r, r.star, Vector2(-L * 0.66, -hw * 0.50), Vector2(-L * 0.66, hw * 0.50), pal["accent"])
 
 ## 雷纹归一化坐标 → 牌面坐标：lat 0~1 为横向（-half_lat..+half_lat），down 0~1 为
@@ -189,8 +189,8 @@ static func _lantern(r: ProceduralWeaponRenderer) -> void:
 	# 灯腹：大圆盘
 	BC.disc(r, Vector2.ZERO, rad, pal["body"])
 	# 上下箍：两道垂直长轴的粗墨箍（纯墨线，避免杆影糊住灯腹）
-	r.draw_line(Vector2(rad * 0.52, -rad * 0.52), Vector2(rad * 0.52, rad * 0.52), BC.INK, 2.6, true)
-	r.draw_line(Vector2(-rad * 0.52, -rad * 0.52), Vector2(-rad * 0.52, rad * 0.52), BC.INK, 2.6, true)
+	BatchDraw.native_line(r, Vector2(rad * 0.52, -rad * 0.52), Vector2(rad * 0.52, rad * 0.52), BC.INK, 2.6, true)
+	BatchDraw.native_line(r, Vector2(-rad * 0.52, -rad * 0.52), Vector2(-rad * 0.52, rad * 0.52), BC.INK, 2.6, true)
 	# 顶部提环：4 段硬折小拱（柄色），拱脚落在灯腹圆周上，顶点落 (L*0.82, 0) 附近
 	var ax: float = L * 0.42
 	var rr: float = L * 0.40
@@ -247,7 +247,7 @@ static func _bell(r: ProceduralWeaponRenderer) -> void:
 		arch.append(Vector2(top_x + cos(b) * ri, sin(b) * ri))
 	BC.flat(r, arch, GRIP, 1.6)
 	# 铎舌：粗墨舌杆 + 方舌丸（悬向铎口）
-	r.draw_line(Vector2(L * 0.18, 0.0), Vector2(-L * 0.46, 0.0), BC.INK, 1.8, true)
+	BatchDraw.native_line(r, Vector2(L * 0.18, 0.0), Vector2(-L * 0.46, 0.0), BC.INK, 1.8, true)
 	BC.square(r, Vector2(-L * 0.50, 0.0), 1.7, BC.INK, 1.0)
 	BC.star_studs(r, r.star, Vector2(0.0, -L * 0.20), Vector2(0.0, L * 0.20), pal["accent"])
 
@@ -273,8 +273,8 @@ static func _mace(r: ProceduralWeaponRenderer) -> void:
 		Vector2(L * 0.76, w), Vector2(L * 0.76, -w),
 	]), pal["accent"], 1.4)
 	# 节环两道（纯墨线微宽出锏身，避免杆影把锏身切成碎块）
-	r.draw_line(Vector2(L * 0.40, -w * 1.08), Vector2(L * 0.40, w * 1.08), BC.INK, 2.6, true)
-	r.draw_line(Vector2(-L * 0.06, -w * 1.08), Vector2(-L * 0.06, w * 1.08), BC.INK, 2.6, true)
+	BatchDraw.native_line(r, Vector2(L * 0.40, -w * 1.08), Vector2(L * 0.40, w * 1.08), BC.INK, 2.6, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.06, -w * 1.08), Vector2(-L * 0.06, w * 1.08), BC.INK, 2.6, true)
 	# 柄端方钉（柄色帽）
 	BC.square(r, Vector2(-L * 0.90, 0.0), 2.4, GRIP, 1.0)
 	BC.star_studs(r, r.star, Vector2(L * 0.16, -w * 0.52), Vector2(L * 0.16, w * 0.52), pal["accent"])
@@ -293,7 +293,7 @@ static func _shield(r: ProceduralWeaponRenderer) -> void:
 		Vector2(-L * 0.74, hh), Vector2(L * 0.34, hh * 0.80),
 	]), pal["body"])
 	# 横箍：一道垂直长轴的纯墨箍（先画，压在盾脊之下）
-	r.draw_line(Vector2(-L * 0.20, -hh * 0.58), Vector2(-L * 0.20, hh * 0.58), BC.INK, 2.4, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.20, -hh * 0.58), Vector2(-L * 0.20, hh * 0.58), BC.INK, 2.4, true)
 	# 盾脊撞色条：沿长轴一块细长撞色（唯一撞色块，连续不打断）
 	BC.flat(r, PackedVector2Array([
 		Vector2(L * 0.80, -L * 0.05), Vector2(L * 0.80, L * 0.05),

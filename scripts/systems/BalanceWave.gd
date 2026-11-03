@@ -81,20 +81,23 @@ const WAVE_SPAWN_BUDGET_MAX := 54.0
 # 普通难度 W40 实际刷入约 153 → 93 只（-39%），把压力转给精英数量/深层高威胁配比。
 # 同屏硬顶同步 48 → 32（见 MAX_ENEMIES_HARD_CAP），并修掉 endless_swarm_mult 的平方放大。
 # 单怪经验按「旧预算 / 新预算」补回（deep_exp_comp_mult），金币腿走 mob_kill_stone 不跟涨。
+# 2026-11-03 二次减量：同屏硬顶再 32→24，深层预算 80→60（每波 +1.0，W28 触顶）——
+# W40 普通难度总刷入 93→70 只，配合单怪血量/攻击节奏与深层老手份额抬质量。
+# 经验仍按「旧基准 / 新预算」补回（DEEP_EXP_COMP_MAX 同步 1.70→2.25），金币腿口径不变。
 const DEEP_WAVE_THRESHOLD := 20          ## 深层分段点（破境波，> 此值走深层曲线；同 GameManager.MILESTONE_WAVE）
-const DEEP_BUDGET_PER_WAVE := 1.5        ## 深层每波预算增量（自 W20 的 52 只起续算）
-const DEEP_BUDGET_MAX := 80.0            ## 深层预算硬顶（约 W39 饱和）
+const DEEP_BUDGET_PER_WAVE := 1.0        ## 深层每波预算增量（自 W20 的 52 只起续算）
+const DEEP_BUDGET_MAX := 60.0            ## 深层预算硬顶（约 W28 饱和）
 ## 2026-11-03 调参前旧深层曲线：只用于经验补偿基准，不参与刷怪。
 ## 改深层预算时必须同步核对 deep_exp_comp_mult，否则每波经验收入会跟着数量一起下滑。
 const REF_DEEP_BUDGET_PER_WAVE := 4.0
 const REF_DEEP_BUDGET_MAX := 135.0
 const DEEP_DMG_GROWTH := 1.12            ## 深层每波伤害复利（20 波段是 1.06；深层加速提档）
 const DEEP_HP_GROWTH := 1.22             ## 深层每波生命复利（20 波段是 1.16；深层加速提档）
-const DEEP_SWARM_PER_WAVE := 0.08        ## 深层每波同屏密度增量（+8%/波，随危险度/角色倍率同乘）
-const DEEP_SWARM_MAX := 2.2              ## 深层同屏密度放大硬顶
+const DEEP_SWARM_PER_WAVE := 0.05        ## 深层每波同屏密度增量（+5%/波，随危险度/角色倍率同乘）
+const DEEP_SWARM_MAX := 1.6              ## 深层同屏密度放大硬顶
 
 ## 回合内总刷入预算（纯函数）：精英/Boss 与分裂·产卵·召唤等衍生怪不占预算。
-## ≤20 波走曲线封顶 54；深层从 W20=52 续 +1.5/波，封顶 DEEP_BUDGET_MAX=80。
+## ≤20 波走曲线封顶 54；深层从 W20=52 续 +1.0/波，封顶 DEEP_BUDGET_MAX=60（W28 触顶）。
 static func wave_spawn_budget(wave: int) -> int:
 	var w := float(maxi(wave, 1))
 	if w <= float(DEEP_WAVE_THRESHOLD):
@@ -111,11 +114,13 @@ static func reference_spawn_budget(wave: int) -> int:
 		+ (w - float(DEEP_WAVE_THRESHOLD)) * REF_DEEP_BUDGET_PER_WAVE, REF_DEEP_BUDGET_MAX)))
 
 ## 动态同屏敌人上限（纯函数，2026-10-15 分批清剿制）：
-## 前期（W1~5）5~8 只（单批），中期（W6~12）8~12 只（允许 2 批并发），后期（W13~20）12~16 只（2~3 批合围），
-## 深层波次沿基础曲线涨到 26（潮数倍率只在 WaveSpawner._final_enemy_cap 乘一次）。
+## 前期（W1~5）6~8 只（单批），中期（W6~12）8~11 只（允许 2 批并发），后期（W13~20）12~15 只（2~3 批合围），
+## 深层波次沿基础曲线涨到 20（潮数倍率只在 final_enemy_cap 乘一次）。
 ## 2026-11-03 后期减量提质：MAX_ENEMIES_HARD_CAP 48→32；此前 max_enemies_cap 深层段与
 ## _final_enemy_cap 各乘一次 endless_swarm_mult，同屏密度被平方放大，W28 左右就顶到 48。
-const MAX_ENEMIES_HARD_CAP := 32
+## 2026-11-03 二次减量：硬顶再 32→24，后期曲线放缓到 W20=15、深层基础上限 26→20；
+## 潮数倍率仍只乘一次（别把 endless_swarm_mult 写回 max_enemies_cap）。
+const MAX_ENEMIES_HARD_CAP := 24
 
 static func max_enemies_cap(wave: int) -> int:
 	var w := maxi(wave, 1)
@@ -124,21 +129,30 @@ static func max_enemies_cap(wave: int) -> int:
 	elif w <= 12:
 		return 8 + int(float(w - 5) * 0.57)
 	elif w <= DEEP_WAVE_THRESHOLD:
-		return 12 + int(float(w - 12) * 0.5)
+		return 12 + int(float(w - 12) * 0.4)
 	else:
-		return int(round(minf(16.0 + float(w - DEEP_WAVE_THRESHOLD) * 0.4, 26.0)))
+		return int(round(minf(15.0 + float(w - DEEP_WAVE_THRESHOLD) * 0.3, 20.0)))
+
+## 同屏最终上限（纯函数，唯一真话）：基础上限 × 角色敌潮倍率 × 危险度 × 深层潮数，
+## 再夹 MAX_ENEMIES_HARD_CAP。WaveSpawner._final_enemy_cap 只负责输入签名缓存。
+static func final_enemy_cap(base_cap: int, count_mult: float, danger: int, wave: int) -> int:
+	var raw := int(round(float(base_cap) * count_mult * danger_count_mult(danger) * endless_swarm_mult(wave)))
+	return mini(raw, MAX_ENEMIES_HARD_CAP)
 
 const ENEMY_HP_GROWTH := 1.16             ## 每回合生命复利倍率（W5≈1.81 / W10≈3.80 / W15≈8.00 / W20≈16.89）
 ## 小怪基础生命整体倍率（精英/Boss 不吃这条，它们的厚度由基础值拉开）。
 ## 2026-10-15 分批清剿制：配合刷怪预算 -26%，单怪血量基数由 8.5 提档至 11.5（+35% 肉度），
 ## 告别一击秒杀与纯割草，每个怪物的走位、弹幕与动作清晰可辨，击杀有扎实手感。
-const MOB_HP_BASE_MULT := 11.5
+## 2026-11-03 二次减量：同屏/深层总量再降，基数 11.5→12.0（+4.3%，W1 TTK 仍在 4~7s 窗内）。
+const MOB_HP_BASE_MULT := 12.0
 ## 小怪击杀经验/金币腿补偿倍率：与 WAVE_SPAWN_BUDGET_* 联动（改预算必须同步改它）。
 ## 预算 -26% 后单怪掉落按 ×1.75 放大，让每波总经验收入完全守恒（10×1.75=17.5 对应原 14×1.25=17.5）。
 const MOB_KILL_EXP_MULT := 1.75
 ## 2026-11-03 深层减量提质：深层预算再压约 -39%，单怪经验按「旧预算 / 新预算」补回，
 ## 金币腿不跟涨（mob_kill_stone 只乘 1.75），避免减数量后金币通胀。
-const DEEP_EXP_COMP_MAX := 1.70
+## 2026-11-03 二次减量：深层预算 80→60（W40 比值 132/60=2.2，W99 135/60=2.25），
+## 上限同步 1.70→2.25，保证减量后每波总经验与减量前持平。
+const DEEP_EXP_COMP_MAX := 2.25
 
 ## 深层经验补偿倍率（纯函数）：旧深层预算 / 新深层预算，≤20 波恒 1.0。
 static func deep_exp_comp_mult(wave: int) -> float:
@@ -323,9 +337,9 @@ static func enemy_dmg_mult(wave: int) -> float:
 		return base
 	return base * pow(DEEP_DMG_GROWTH, float(w - DEEP_WAVE_THRESHOLD))
 
-## 深层（>20 波）同屏密度倍率：≤20 波恒 1.0（20 波内零影响），深层每波 +8%、封顶 ×2.2。
+## 深层（>20 波）同屏密度倍率：≤20 波恒 1.0（20 波内零影响），深层每波 +5%、封顶 ×1.6。
 ## 纯波次函数，不读 autoload、不看模式开关；函数名 endless_swarm_mult 保留为历史口径。
-## 调用方 WaveSpawner._spawn_regular 乘在同屏上限上，与 danger_count_mult、
+## 调用方 final_enemy_cap 乘在同屏上限上，与 danger_count_mult、
 ## 角色敌潮倍率同乘——只放天花板，刷入量仍由 wave_spawn_budget 闸住。
 static func endless_swarm_mult(wave: int) -> float:
 	var w := maxi(wave, 1)
@@ -399,6 +413,22 @@ const ELITE_WAVES := [5, 15]             ## 精英回合：铁甲魔傀小头目
 const BOSS_WAVES := [10, 20]             ## 固定 Boss 关卡：血条上屏的魔君
 const BOSS_WAVE_MAX: int = 20            ## 常量缓存 BOSS_WAVES.max()，避免每帧重复全表求最大值
 const BOSS_CYCLE_IDS := ["chiyan", "xiuluo", "qianji", "wangu", "jianpo", "xinmo"]
+## 深层专属魔君固定登场表（2026-11-03，W45~W100 每 5 波一尊新 Boss）。
+## 45/50/55 为「刚进深层」过渡档（强度低于 60+），100+ 仍走 BOSS_CYCLE_IDS 六尊轮回，逐字不变。
+const BOSS_DEEP_WAVE_IDS: Dictionary = {
+	45: "zhaoying",   ## 照影魔君（镜：镜像对称夹击）
+	50: "yinhun",     ## 引魂使（幽冥：魂潮包围收网）
+	55: "luding",     ## 焚天炉君（丹炉：站桩蓄力全屏炉爆）
+	60: "canglong",   ## 太苍龙君（飞龙：盘旋拉升 → 全场俯冲）
+	65: "jianzhong",  ## 葬剑仙（剑冢：御剑瞬斩连发）
+	70: "leijie",     ## 雷劫神君（雷劫：落雷连环）
+	75: "kunwang",    ## 覆海鲲王（深海巨兽：冥水领域封锁）
+	80: "kuijia",     ## 千臂傀王（傀儡：傀潮召唤 + 机括连弩）
+	85: "fenghuang",  ## 离火凤皇（火凤：天火陨落，狂暴涅槃火环）
+	90: "tianmo",     ## 无相天魔（天魔：无相瞬杀高频贴脸）
+	95: "hundun",     ## 元初兽（混沌：出招表每次重组，不可预测）
+	100: "wanjie",    ## 道劫化身（天劫：全招式最高压）
+}
 const BOSS_HP_BASE := 6200.0             ## Boss 基础生命（2026-10-15 反割草对冲：神识分流 0.12→0.15 收紧后微降 6500→6200，
                                          ## Boss TTK 保持中性 W10≈66s / W20≈46s，割草收敛全部由小怪侧与分流侧承担；
                                          ## 成型 ~46s、极端 6 剑 ~13s）
@@ -454,6 +484,7 @@ const BOSS_SLAM_RADIUS := 175.0          ## 震地冲击半径
 const BOSS_SLAM_DMG_MULT := 1.35         ## 震地伤害 = 接触伤害 × 系数
 const BOSS_SUMMON_COUNT := 3             ## 召唤妖群数量
 const BOSS_SUMMON_CAP := 16              ## 场面敌人达到该数后召唤不再生效（2026-10-10 随整体减潮下调）
+const BOSS_DEEP_MINION_MIN_WAVE := 45    ## 深层 Boss 召唤物换用深层妖种的最低波次
 const BOSS_PHASE2_AT := 0.5              ## 二阶段触发血线（≤50%）
 const BOSS_PHASE2_INTERVAL_MULT := 0.7   ## 二阶段攻击间隔缩短倍率
 const BOSS_PHASE2_SPEED_MULT := 1.25     ## 二阶段移速提升
@@ -486,6 +517,43 @@ const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
 const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
 const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
 
+# ---------------- 太苍龙君·飞龙俯冲（DIVE） ----------------
+const BOSS_DIVE_LEAP_DIST := 380.0       ## 拉升锚点距玩家的拉开距离（盘旋升空读招）
+const BOSS_DIVE_MIN_LEAP := 220.0        ## 换位后与玩家至少保留的助跑距离（锚点被墙钳回时改选另一侧）
+const BOSS_DIVE_WINDUP := 0.75           ## 俯冲预警时长（胶囊线填满）
+const BOSS_DIVE_SPEED_MUL := 7.2         ## 俯冲倍速（全场贯穿，明显高于破阵冲锋 3.2）
+const BOSS_DIVE_DURATION := 0.85         ## 俯冲实冲时长（配合倍速贯穿全图）
+const BOSS_DIVE_DMG_MULT := 1.15         ## 俯冲撞击伤害系数（高于普通冲锋 0.65，单发大招）
+const BOSS_DIVE_TRAIL_INTERVAL := 0.12   ## 俯冲路径洒弹间隔
+const BOSS_DIVE_TRAIL_DMG_MULT := 0.45   ## 路径洒弹伤害系数
+const BOSS_DIVE_LAND_RING := 10          ## 落点收势环弹数（二阶段 14）
+const BOSS_DIVE_LAND_RING_P2 := 14
+
+# ---------------- 照影魔君·镜像夹击（MIRROR_FLANK） ----------------
+const BOSS_MIRROR_RING_COUNT := 10       ## 镜影虚像环弹数（二阶段 14）
+const BOSS_MIRROR_RING_COUNT_P2 := 14
+const BOSS_MIRROR_RING_SPEED := 235.0    ## 镜影环弹速（偏慢给反应窗）
+const BOSS_MIRROR_DMG_MULT := 0.5        ## 镜影夹击弹伤害系数
+const BOSS_MIRROR_FAN_COUNT := 5         ## 主身配合扇形弹数
+const BOSS_MIRROR_FAN_SPREAD := 0.17     ## 主身扇形角距
+const BOSS_MIRROR_FLANK_DIST := 260.0    ## 镜影落点距玩家的距离（放在玩家背对主身的一侧，保证交叉火力）
+const BOSS_MIRROR_WINDUP := 0.5          ## 镜影凝聚预警时长（虚像先亮圈再发环弹）
+
+# ---------------- 引魂使·魂潮收网（SOUL_TIDE） ----------------
+const BOSS_SOUL_TIDE_COUNT := 12         ## 魂潮包围弹数（二阶段 18）
+const BOSS_SOUL_TIDE_COUNT_P2 := 18
+const BOSS_SOUL_TIDE_RADIUS := 340.0     ## 包围网生成半径（以玩家为圆心）
+const BOSS_SOUL_TIDE_SPEED := 195.0      ## 收网内收弹速
+const BOSS_SOUL_TIDE_DMG_MULT := 0.5
+const BOSS_SOUL_TIDE_WINDUP := 0.55      ## 收网预警时长（玩家脚下先亮收网点再撒环）
+
+# ---------------- 焚天炉君·炉压崩天（FURNACE_BLAST） ----------------
+const BOSS_FURNACE_RADIUS := 260.0       ## 炉爆半径（大圈，预警按公平线自动裁定）
+const BOSS_FURNACE_DMG_MULT := 1.2       ## 炉爆中心伤害系数
+const BOSS_FURNACE_RING := 12            ## 炉爆后三环弹幕每层弹数
+const BOSS_FURNACE_RING_SPEED := 250.0
+const BOSS_FURNACE_RING_DMG_MULT := 0.5  ## 炉爆余焰弹伤害系数（此前误借用镜影系数，语义收口）
+
 # ---------------- 噩梦难度专属常量与迷雾视野 ----------------
 const NIGHTMARE_DUAL_BOSS_HP_MULT := 0.78  ## 噩梦双 Boss 车轮战单尊生命折算（合计 1.56 倍血量，爽快不刮痧）
 const NIGHTMARE_FOG_CLEAR_RADIUS := 200.0  ## 噩梦迷雾清晰内圈半径（设计单位，真正缩小视野范围）
@@ -511,7 +579,7 @@ static func nightmare_fog_feather_radius(vision_bonus: float) -> float:
 static func is_boss_wave(n: int) -> bool:
 	return n in BOSS_WAVES or (n > BOSS_WAVE_MAX and n % 5 == 0)
 
-## 依波次确定专属 Boss 标识（10/20/25/30/35/40 专属，深层 5 波一轮循环）
+## 依波次确定专属 Boss 标识（10/20/25/30/35/40 专属，W60~W100 深层专属表，其余深层 5 波一轮循环）
 static func boss_id_for_wave(wave: int) -> String:
 	if wave <= 10:
 		return "chiyan"
@@ -525,6 +593,10 @@ static func boss_id_for_wave(wave: int) -> String:
 		return "jianpo"
 	if wave <= 40:
 		return "xinmo"
+	# 深层专属表优先（W60~W100 新魔君），未覆盖的波次仍按旧六尊轮回（>100 轮换逐字不变）
+	var deep_id: String = String(BOSS_DEEP_WAVE_IDS.get(wave, ""))
+	if deep_id != "":
+		return deep_id
 	var idx := maxi(0, int(float(wave - 45) / 5.0)) % BOSS_CYCLE_IDS.size()
 	return String(BOSS_CYCLE_IDS[idx])
 
@@ -558,11 +630,11 @@ static func elite_spawn_count_for_wave(n: int, arg2: Variant = 0, arg3: int = 0)
 	else:
 		return 4 if n >= 36 else 3
 
-## Boss 刷新数量（纯函数）：第 20/40/60 波在噩梦难度下打双 Boss 接力车轮战
+## Boss 刷新数量（纯函数）：第 20/40/50/60/80/100 波在噩梦难度下打双 Boss 接力车轮战
 static func boss_spawn_count_for_wave(wave: int, danger: int = 0) -> int:
 	if not is_boss_wave(wave):
 		return 0
-	if danger >= 1 and wave >= 20 and wave % 20 == 0:
+	if danger >= 1 and wave >= 20 and (wave % 20 == 0 or wave == 50):
 		return 2
 	return 1
 
@@ -578,8 +650,14 @@ static func secondary_boss_id_for_wave(wave: int) -> String:
 		return "jianpo"   ## W20 首尊修罗（近战狂战），次尊剑魄（刺客回斩）
 	elif wave == 40:
 		return "xiuluo"   ## W40 首尊心魔（极煞统领），次尊修罗（近战冲阵）
+	elif wave == 50:
+		return "xiuluo"   ## W50 首尊引魂使（包围收网），次尊修罗（近战冲阵破网互补）
 	elif wave == 60:
 		return "qianji"   ## W60 首尊轮转，次尊千机（机关炮台阵）
+	elif wave == 80:
+		return "jianpo"   ## W80 首尊千臂傀王（召唤炮台），次尊剑魄（刺客回斩互补）
+	elif wave == 100:
+		return "xinmo"    ## W100 首尊道劫化身（全能压轴），次尊心魔（极煞统领）
 	var first_id := boss_id_for_wave(wave)
 	var idx := BOSS_CYCLE_IDS.find(first_id)
 	if idx >= 0:
@@ -613,19 +691,21 @@ static func enemy_bolt_speed_mult(wave: int) -> float:
 	return minf(base + float(w - DEEP_WAVE_THRESHOLD) * 0.025, 1.65)
 
 ## 敌方技能/攻击周期缩短倍率（纯函数，周期越短出手越快）：
-## 前期基础 1.0，1~20 波收紧至 0.85x，>20 波加速收紧至下限 0.55x
+## 前期基础 1.0，1~20 波收紧至 0.85x，>20 波加速收紧至下限 0.50x
 static func enemy_attack_cd_mult(wave: int) -> float:
 	var w := maxi(wave, 1)
 	if w <= DEEP_WAVE_THRESHOLD:
 		return maxf(0.85, 1.0 - float(w - 1) * 0.0079)
 	var base := 1.0 - float(DEEP_WAVE_THRESHOLD - 1) * 0.0079
-	return maxf(0.55, base - float(w - DEEP_WAVE_THRESHOLD) * 0.018)
+	return maxf(0.50, base - float(w - DEEP_WAVE_THRESHOLD) * 0.020)
 
 ## 远程怪齐射增发数量（纯函数）：
-## W1~15 为 0（单发火球）；W16~24 额外 +1 发（扇射雏形）；W25+ 额外 +2 发
+## W1~15 为 0（单发火球）；W16~24 额外 +1 发；W25~34 +2 发；W35+ +3 发
 static func enemy_bonus_bolts(wave: int) -> int:
 	var w := maxi(wave, 1)
-	if w >= 25:
+	if w >= 35:
+		return 3
+	elif w >= 25:
 		return 2
 	elif w >= 16:
 		return 1

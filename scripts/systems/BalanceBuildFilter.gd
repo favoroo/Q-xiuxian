@@ -32,6 +32,8 @@ const UPGRADE_CATEGORY := {
 	"elemental_up": "elemental", "grand_elemental": "elemental",
 	"engineering_up": "engineering", "grand_engineering": "engineering",
 	"contraption_up": "contraption", "grand_contraption": "contraption",
+	# 机关阵地维护/火力两张卡（2026-11-03）：只对机关流刷出（手上没有机关武器时是死卡）
+	"contraption_upkeep": "contraption", "contraption_volley": "contraption",
 }
 
 ## 加点 id → 需要的五行
@@ -44,6 +46,13 @@ const UPGRADE_ELEMENT := {
 ## 带生命/移速等通用收益的混装件（如聚灵阵图）永远放行，避免误伤。
 const PET_ITEM_KEYS := [
 	"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
+]
+
+## 机关阵地专属字段（2026-11-03 手动布设改版）：整件只带这些字段 = 纯机关件，
+## 玩剑/召唤的货架不该刷出「机关耐久 +30%」这种对当前构筑零作用的死卡。
+const CONTRAPTION_ITEM_KEYS := [
+	"turret_stamina_mul", "turret_repair_haste_mul", "turret_volley_bonus",
+	"turret_broken_haste", "turret_charges_bonus", "turret_haste",
 ]
 
 ## 当前持有武器 id（上阵悬浮武器 + 环绕灵宝 + 背包备选）。
@@ -108,10 +117,13 @@ static func item_allowed(gm: Node, id: String) -> bool:
 	var keys: Array = []
 	for k in (d.get("apply", {}) as Dictionary).keys():
 		keys.append(String(k))
-	# hook 字段同样计入（如 pet 类走额外字段的情形）
+	# hook 字段同样计入（如 pet 类走额外字段的情形；机关件同理）
 	for k in ["still_regen_pct", "still_dodge", "still_armor", "still_attack_speed",
 			"still_damage", "kill_explode"]:
 		if d.has(k):
+			keys.append(String(k))
+	for k in CONTRAPTION_ITEM_KEYS:
+		if d.has(k) and not (k in keys):
 			keys.append(String(k))
 	if keys.is_empty():
 		return true
@@ -159,6 +171,15 @@ static func item_allowed(gm: Node, id: String) -> bool:
 			break
 	if all_pet:
 		return has_any_pet(gm)
+
+	# 纯机关件（2026-11-03）：机关耐久/维修/齐射/停摆兜底只对机关流有意义
+	var all_contraption := true
+	for k in keys:
+		if not (k in CONTRAPTION_ITEM_KEYS):
+			all_contraption = false
+			break
+	if all_contraption:
+		return has_category(gm, "contraption")
 
 	# 宝箱件（藏宝图/点金诀）是经济件，不设构筑闸（见文件头）
 	return true

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cmechbtnchk01"]
+
+[ext_resource type="Script" path="res://tests/mechanism_button_check.gd" id="1_script"]
+
+[node name="MechanismButtonCheck" type="Node"]
+script = ExtResource("1_script")

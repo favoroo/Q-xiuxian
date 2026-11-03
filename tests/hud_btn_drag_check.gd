@@ -29,9 +29,17 @@ extends Node
 ## --selftest 把修复前的调用形状原样跑一遍，必须量到位置纹丝不动，才算有牙齿。
 
 const VIEWPORT_SIZE := Vector2i(960, 540)
-## 每颗键各自的落点偏移（设计像素）：三颗键若拖到同一个点就会叠在一起，
-## 之后"按哪颗"全看谁在上面 —— 判据量的是「按到谁」，必须各留各的位置
-const DRAG_OFFSETS: Array[Vector2] = [Vector2(-260, -60), Vector2(-420, -100), Vector2(-260, -40)]
+## 每颗键各自的落点偏移（设计像素）：四颗键若拖到同一个点就会叠在一起，
+## 之后"按哪颗"全看谁在上面 —— 判据量的是「按到谁」，必须各留各的位置。
+## 2026-11-03 键簇改 2×2（88 圆、横纵间距 112）后，落点也排成同规格的 2×2：
+## 技能/额外技能落 (594,370)/(594,258)，祭坛/机关落 (394,370)/(394,258) ——
+## 横 200、纵 112，四颗互不相交（旧偏移在 88 圆下会让额外与机关叠住）。
+const DRAG_OFFSETS: Array[Vector2] = [
+	Vector2(-260, -60),    # 技能   (854,430) → (594,370)
+	Vector2(-348, -60),    # 祭坛   (742,430) → (394,370)
+	Vector2(-260, -60),    # 额外技能 (854,318) → (594,258)
+	Vector2(-348, -60),    # 机关   (742,318) → (394,258)
+]
 ## 视觉中心与手指落点的容差（设计像素）：拖动是绝对定位，只允许浮点与半尺寸夹取余量
 const SNAP_EPS := 3.0
 ## HudEditOverlay.DRAG_NONE（脚本常量不走 get()，这里同值钉死）
@@ -44,7 +52,7 @@ var _ov: Control = null
 var _probe: bool = false
 var _last_motion := Vector2.ZERO
 
-## 三颗键一张表：名字 / 代理钮字段 / 设置项 / HUD 门面与 SettingsManager 的取数口径
+## 四颗键一张表：名字 / 代理钮字段 / 设置项 / HUD 门面与 SettingsManager 的取数口径
 const KEYS: Array[Dictionary] = [
 	{
 		"name": "技能键", "proxy": "_skill_proxy", "cfg": "skill_btn_xy",
@@ -57,9 +65,14 @@ const KEYS: Array[Dictionary] = [
 		"get_scale": "obelisk_btn_scale", "set_scale": "set_obelisk_btn_scale",
 	},
 	{
-		"name": "额外技能键", "proxy": "_extra_proxy", "cfg": "extra_btn_xy",
+		"name": "角色技能键", "proxy": "_extra_proxy", "cfg": "extra_btn_xy",
 		"get_px": "extra_skill_btn_center_px", "get_xy": "extra_btn_xy", "set_xy": "set_extra_btn_xy",
 		"get_scale": "extra_btn_scale", "set_scale": "set_extra_btn_scale",
+	},
+	{
+		"name": "机关键", "proxy": "_mechanism_proxy", "cfg": "mechanism_btn_xy",
+		"get_px": "mechanism_btn_center_px", "get_xy": "mechanism_btn_xy", "set_xy": "set_mechanism_btn_xy",
+		"get_scale": "mechanism_btn_scale", "set_scale": "set_mechanism_btn_scale",
 	},
 ]
 
@@ -259,12 +272,12 @@ func _check_slider_follows_selection() -> void:
 	await _tap(px)
 	await _settle(2)
 	var chip: Label = _ov.get("_sel_label")
-	_c.equals(String(chip.text), "额外技能", "点额外技能键后 chip 写「额外技能」（实得「%s」）" % chip.text)
+	_c.equals(String(chip.text), "角色技能", "点角色技能键后 chip 写「角色技能」（实得「%s」）" % chip.text)
 	var slider: HSlider = _ov.get("_size_slider")
 	var skill_before := SettingsManager.skill_btn_scale()
 	slider.value = 140.0
 	await _settle(2)
-	_c.near(SettingsManager.extra_btn_scale(), 1.4, 0.011, "滑杆把选中的额外技能键调到 140%")
+	_c.near(SettingsManager.extra_btn_scale(), 1.4, 0.011, "滑杆把选中的角色技能键调到 140%")
 	_c.near(SettingsManager.skill_btn_scale(), skill_before, 0.001,
 			"没选中的技能键大小不动（滑杆不串台，实得 %.2f）" % SettingsManager.skill_btn_scale())
 	slider.value = 100.0
@@ -310,9 +323,9 @@ func _check_reset_needs_confirm() -> void:
 func _check_labels() -> void:
 	var proxy: Button = _ov.get("_extra_proxy")
 	_c.check(not proxy.text.contains("extra"),
-			"额外技能键的拖动代理不再写英文（实得「%s」）" % proxy.text)
+			"角色技能键的拖动代理不再写英文（实得「%s」）" % proxy.text)
 	_c.check(not HudSkillButton.EXTRA_BTN_TEXT.contains("extra"),
-			"额外技能键真身的占位文案也不再写英文（实得「%s」）" % HudSkillButton.EXTRA_BTN_TEXT)
+			"角色技能键真身的占位文案也不再写英文（实得「%s」）" % HudSkillButton.EXTRA_BTN_TEXT)
 
 # ================================ 诊断与反例 ================================
 

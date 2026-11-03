@@ -247,6 +247,55 @@ def gen_contraption(ornate=False, ring=CRIMSON, out="upgrade_contraption.png"):
     auto_center_and_export(img, out)
 
 
+def gen_contraption_upkeep(ornate=False, ring=JADE, out="upgrade_contraption_upkeep.png"):
+    """机关养护（2026-11-03）：齿轮 + 一滴灵油。
+
+    与「机关强化」同族不同义：那张是伤害（赤红轮毂），这张是维护 —— 齿轮缩小并左下偏移，
+    右上让给青玉油滴（润滑/维修语义色）。机关改版后「回去修」是核心动作，卡面必须一眼读出「保养」。
+    """
+    img, d = create_super_canvas()
+    gx, gy = -13, 12
+    for i in range(8):
+        tooth = [(-5, -34), (5, -34), (5, -23), (-5, -23)]
+        poly_l(d, [(x + gx, y + gy) for x, y in rot_pts(tooth, 45 * i)], CHALK)
+    circ_l(d, gx, gy, 25, CHALK)
+    circ_l(d, gx, gy, 15, JADE)                                          # 轮毂
+    circ_l(d, gx, gy, 6, CLEAR)                                          # 中孔
+    droplet(d, 30, -22, 15, JADE)                                        # 灵油滴
+    circ_l(d, 21, 3, 4, JADE)                                            # 溅落的小油点
+    if ornate:
+        ornate_ring(img, ring)
+    auto_center_and_export(img, out)
+
+
+def gen_contraption_volley(ornate=False, ring=CRIMSON, out="upgrade_contraption_volley.png"):
+    """连环机括（2026-11-03）：机枢 + 三管齐射。
+
+    手动布设改版把「自动铺 N 座」换成「一座 N 管齐射」，这张卡就是「再多一管」：
+    左下小齿轮（机枢）+ 自轮毂向右上扇形射出的三支箭头（多管口径）。
+    """
+    img, d = create_super_canvas()
+    gx, gy = -26, 22
+    for i in range(6):
+        tooth = [(-5, -22), (5, -22), (5, -13), (-5, -13)]
+        poly_l(d, [(x + gx, y + gy) for x, y in rot_pts(tooth, 60 * i)], CHALK)
+    circ_l(d, gx, gy, 15, CHALK)
+    circ_l(d, gx, gy, 8, CRIMSON)
+    for ang, ln in ((-26.0, 46.0), (-8.0, 54.0), (10.0, 48.0)):
+        a = math.radians(ang)
+        ca, sa = math.cos(a), math.sin(a)
+        x0, y0 = gx + ca * 10.0, gy + sa * 10.0
+        x1, y1 = gx + ca * (12.0 + ln), gy + sa * (12.0 + ln)
+        # 杆加粗到 4.5：128 图标缩到卡面 48px 时 3 单位只剩 1px，管身会整根糊掉
+        line_l(d, [(x0, y0), (x1, y1)], CHALK, 4.5)
+        poly_l(d, [(x1 + ca * 8.0, y1 + sa * 8.0),
+                   (x1 - sa * 5.5, y1 + ca * 5.5),
+                   (x1 + sa * 5.5, y1 - ca * 5.5)], CRIMSON)
+    if ornate:
+        ornate_ring(img, ring)
+    auto_center_and_export(img, out)
+
+
 def gen_crit(ornate=False, ring=CRIMSON):
     img, d = create_super_canvas()
     ring_l(img, 0, 0, 38, 29, CHALK)
@@ -696,8 +745,10 @@ REGISTRY = {
     "elemental_grand": lambda: gen_elemental(True, out="upgrade_elemental_grand.png"),
     "engineering": gen_engineering,
     "engineering_grand": lambda: gen_engineering(True, out="upgrade_engineering_grand.png"),
-    "contraption": gen_contraption,
-    "contraption_grand": lambda: gen_contraption(True, out="upgrade_contraption_grand.png"),
+	"contraption": gen_contraption,
+	"contraption_grand": lambda: gen_contraption(True, out="upgrade_contraption_grand.png"),
+	"contraption_upkeep": gen_contraption_upkeep,
+	"contraption_volley": gen_contraption_volley,
     "crit": gen_crit,
     "critdmg": gen_critdmg,
     "pierce": gen_pierce,

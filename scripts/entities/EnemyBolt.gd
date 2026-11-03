@@ -96,6 +96,7 @@ var split_scale: float = 1.0     ## 子火球缩放系数
 var split_damage: float = 0.0    ## 子火球伤害（≤0 时按母弹 65% 折算）
 var purple_style: bool = false   ## 幽紫魔焰配色（第 20 波最终 Boss 及子母弹专属）
 var sword_style: bool = false    ## 幽冥剑气形态（御剑邪修专属：冷冽幽蓝梭形剑芒）
+var tint_color: Color = Color(0, 0, 0, 0) ## 主题色（alpha == 0 表示不启用主题色；>0 时优先级高于 purple_style，Boss 专属弹幕辨识用）
 
 ## 池状态与 _ready 建好的节点引用（复用时 activate 重铺要用）
 var _pooled: bool = false
@@ -120,6 +121,7 @@ func _reset_defaults() -> void:
 	split_damage = 0.0
 	purple_style = false
 	sword_style = false
+	tint_color = Color(0, 0, 0, 0)
 
 func _ready() -> void:
 	add_to_group("enemy_bolts")
@@ -157,6 +159,8 @@ func _ensure_trail() -> EnemyBoltTrail:
 
 ## 弹体描边色（拖尾同源取色，读得出「这是什么弹」）
 func _rim_color() -> Color:
+	if tint_color.a > 0.0:
+		return tint_color
 	if sword_style:
 		return RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
 	if purple_style:
@@ -165,6 +169,8 @@ func _rim_color() -> Color:
 
 ## 浅色细描边色（外沿高光反差轮廓）
 func _outline_color() -> Color:
+	if tint_color.a > 0.0:
+		return tint_color.lightened(0.35)
 	if sword_style:
 		return OUTLINE_COLOR_JIANSHA if purple_style else OUTLINE_COLOR_SWORD
 	if purple_style:
@@ -206,11 +212,7 @@ func activate() -> void:
 func intercept() -> void:
 	if _pooled:
 		return
-	var rim_c := RIM_COLOR
-	if sword_style:
-		rim_c = RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
-	elif purple_style:
-		rim_c = RIM_COLOR_PURPLE
+	var rim_c := _rim_color()
 	if is_inside_tree() and get_parent() != null:
 		JuiceEffect.spawn_impact_pop(get_parent(), global_position, rim_c, direction)
 	_recycle()
@@ -226,7 +228,8 @@ func _explode_split() -> void:
 	var child_scl := split_scale
 	var child_dmg := split_damage if split_damage > 0.0 else maxf(1.0, damage * 0.65)
 	var is_purple := purple_style
-	var rim_c := RIM_COLOR_PURPLE if is_purple else RIM_COLOR
+	var cur_tint := tint_color
+	var rim_c := _rim_color()
 	if is_inside_tree() and host_parent != null:
 		JuiceEffect.spawn_impact_pop(host_parent, cur_pos, rim_c, direction)
 	AudioManager.play_sfx("enemy_bolt", 0.75, 1.18)
@@ -242,6 +245,7 @@ func _explode_split() -> void:
 		child_bolt.damage = child_dmg
 		child_bolt.scale_factor = child_scl
 		child_bolt.purple_style = is_purple
+		child_bolt.tint_color = cur_tint
 		child_bolt.activate()
 
 ## 回收入池（替代 queue_free）：休眠物理与碰撞，池满或宿主失效才真释放
@@ -263,29 +267,63 @@ func _recycle() -> void:
 	_pool.append(self)
 
 func _draw() -> void:
+	# 单发敌弹 3~8 条矢量原语合成 1 个 draw call（2026-11-03 绘制专项）
+	BatchDraw.flush(self)
 	if sword_style:
 		_draw_sword_bolt()
+		BatchDraw.flush(self)
 		return
-	var body_c := BODY_COLOR_PURPLE if purple_style else BODY_COLOR
-	var rim_c := RIM_COLOR_PURPLE if purple_style else RIM_COLOR
-	var outline_c := OUTLINE_COLOR_PURPLE if purple_style else OUTLINE_COLOR
-	var core_c := CORE_COLOR_PURPLE if purple_style else CORE_COLOR
+	var body_c: Color
+	var rim_c: Color
+	var outline_c: Color
+	var core_c: Color
+	if tint_color.a > 0.0:
+		rim_c = tint_color
+		body_c = tint_color.darkened(0.35)
+		outline_c = tint_color.lightened(0.35)
+		core_c = tint_color.lightened(0.65)
+	elif purple_style:
+		body_c = BODY_COLOR_PURPLE
+		rim_c = RIM_COLOR_PURPLE
+		outline_c = OUTLINE_COLOR_PURPLE
+		core_c = CORE_COLOR_PURPLE
+	else:
+		body_c = BODY_COLOR
+		rim_c = RIM_COLOR
+		outline_c = OUTLINE_COLOR
+		core_c = CORE_COLOR
 	# 绘制口径：画多大判多大（半径严格在 radius 之内）
 	# 1. 弹体球身
-	AdaptiveDraw.circle(self, Vector2.ZERO, radius, body_c, 3.2)
+	BatchDraw.circle(self, Vector2.ZERO, radius, body_c, 3.2)
 	# 2. 内层暗色硬描边（线宽 1.4，内压立体感）
-	draw_arc(Vector2.ZERO, maxf(radius - 1.2, 1.0), 0.0, TAU, 24, rim_c, 1.4, true)
+	BatchDraw.arc(self, Vector2.ZERO, maxf(radius - 1.2, 1.0), 0.0, TAU, rim_c, 1.4)
 	# 3. 最外层细浅描边（线宽 1.0，外沿严格吻合 radius 判定圆，暗调地表上高反差勾边）
-	draw_arc(Vector2.ZERO, maxf(radius - 0.5, 0.5), 0.0, TAU, 24, outline_c, 1.0, true)
+	BatchDraw.arc(self, Vector2.ZERO, maxf(radius - 0.5, 0.5), 0.0, TAU, outline_c, 1.0)
 	# 4. 高光芯
-	AdaptiveDraw.circle(self, Vector2.ZERO, radius * 0.45, core_c, 3.2)
+	BatchDraw.circle(self, Vector2.ZERO, radius * 0.45, core_c, 3.2)
+	BatchDraw.flush(self)
 
 ## 幽冥剑气视觉绘制（紧凑破空掠翼三角剑芒，尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
 func _draw_sword_bolt() -> void:
-	var body_c := BODY_COLOR_JIANSHA if purple_style else BODY_COLOR_SWORD
-	var rim_c := RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
-	var outline_c := OUTLINE_COLOR_JIANSHA if purple_style else OUTLINE_COLOR_SWORD
-	var core_c := CORE_COLOR_JIANSHA if purple_style else CORE_COLOR_SWORD
+	var body_c: Color
+	var rim_c: Color
+	var outline_c: Color
+	var core_c: Color
+	if tint_color.a > 0.0:
+		rim_c = tint_color
+		body_c = tint_color.darkened(0.35)
+		outline_c = tint_color.lightened(0.35)
+		core_c = tint_color.lightened(0.65)
+	elif purple_style:
+		body_c = BODY_COLOR_JIANSHA
+		rim_c = RIM_COLOR_JIANSHA
+		outline_c = OUTLINE_COLOR_JIANSHA
+		core_c = CORE_COLOR_JIANSHA
+	else:
+		body_c = BODY_COLOR_SWORD
+		rim_c = RIM_COLOR_SWORD
+		outline_c = OUTLINE_COLOR_SWORD
+		core_c = CORE_COLOR_SWORD
 
 	var r := radius
 	# 破空掠翼锐角三角形（前尖达 r，两翼向后平滑收束，尾部内收形成掠翼破空感，尺寸紧凑不超长）
@@ -295,7 +333,7 @@ func _draw_sword_bolt() -> void:
 		Vector2(-r * 0.40, 0.0),             # 尾部内收凹角（掠翼剑羽）
 		Vector2(-r * 0.75, r * 0.70)         # 下尾翼
 	])
-	draw_colored_polygon(pts, body_c)
+	BatchDraw.native_poly(self, pts, body_c)
 
 	var stroke_pts := PackedVector2Array([
 		Vector2(r, 0.0),
@@ -304,13 +342,13 @@ func _draw_sword_bolt() -> void:
 		Vector2(-r * 0.75, r * 0.70),
 		Vector2(r, 0.0)
 	])
-	draw_polyline(stroke_pts, rim_c, 1.6, true)
+	BatchDraw.native_polyline(self, stroke_pts, rim_c, 1.6, true)
 	# 细浅外刃亮芒线（线宽 1.0，叠在深色描边上形成亮刃反差）
-	draw_polyline(stroke_pts, outline_c, 1.0, true)
+	BatchDraw.native_polyline(self, stroke_pts, outline_c, 1.0, true)
 
 	# 剑脊高能亮芯与剑心
-	draw_line(Vector2(-r * 0.25, 0.0), Vector2(r * 0.75, 0.0), core_c, 1.6, true)
-	AdaptiveDraw.circle(self, Vector2(r * 0.05, 0.0), r * 0.20, core_c, 3.2)
+	BatchDraw.native_line(self, Vector2(-r * 0.25, 0.0), Vector2(r * 0.75, 0.0), core_c, 1.6, true)
+	BatchDraw.circle(self, Vector2(r * 0.05, 0.0), r * 0.20, core_c, 3.2)
 
 func _physics_process(delta: float) -> void:
 	if angular_speed != 0.0:

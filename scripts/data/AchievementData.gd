@@ -6,15 +6,19 @@ extends RefCounted
 ## 设计原则：
 ##   1. 零局外数值膨胀：成就只解锁新角色（道统）/ 道具入池 / 武器入池，不破坏局内难度平衡；
 ##   2. 2026-10-25 新手节奏重做：初始只开放 4 名直观基础角色 + 86 件道具 + 64 把武器，
-##      其余 17 名角色 / 16 件道具 / 6 把武器全部由成就解锁 —— **39 条成就零纯荣誉**，
+##      其余 17 名角色 / 16 件道具 / 6 把武器全部由成就解锁 —— **39 条奖励成就零纯荣誉**，
+##      另有 4 条「离谱」彩蛋纯荣誉（2026-11-03 追加，只负责截图吹牛），
 ##      每条达成都有实物回报，前几局几乎每局都能解锁点什么。
-##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段）。
+##   3. 2026-10-12 重设计：成就按「试炼/流派/历练/机缘」四分类（category 字段）；
+##      2026-11-03 追加第五类「离谱」彩蛋（超出常规养成上限的波次挑战）。
 ##   4. 2026-10-15 幽默化重写：全量 cond_desc 文案改为幽默风格，新增 6 条趣味成就。
 ##   5. 2026-10-24 追加 6 条硬核挑战成就（噩梦无伤/零消费/单武器/零技能/深层40波/零道具）。
 ##   6. 2026-10-25 原 18 条纯荣誉成就全部挂上实物奖励（道具/武器），reward_type = "none" 仅作兜底保留。
 ##   7. 2026-10-28 无限闯关改造：20 波不再是胜利而是「破境波」，所有局都能继续往下打。
 ##      全部 victory/endless 布尔判定废止，改成「单局抵达/打到第 N 波」与「在该难度破境」；
 ##      难度由 4 档压成 2 档（普通 / 噩梦），境界称号同步由 4 阶收成 2 阶。
+##   8. 2026-11-03 追加「离谱」彩蛋类 4 条（噩梦第 50 波、第 60/80/100 波）：
+##      纯荣誉、无实物奖励 —— 它们只负责截图吹牛，别拿「每条都有实物回报」的规矩来卡。
 
 ## 危险度档位名号（D0 ~ D1，2026-10-28 由 4 档收缩为 2 档：普通 / 噩梦）
 const DANGER_NAMES: Array[String] = ["普通", "噩梦"]
@@ -23,12 +27,14 @@ const DANGER_NAMES: Array[String] = ["普通", "噩梦"]
 const REALM_TITLES: Array[String] = ["炼气", "元婴"]
 
 ## 成就分类（顺序即「战绩」页分节展示顺序）
-const CATEGORY_ORDER: Array[String] = ["trial", "style", "grind", "luck"]
+## 「离谱」是 2026-11-03 追加的彩蛋类（只收超出常规养成上限的波次挑战，纯荣誉）。
+const CATEGORY_ORDER: Array[String] = ["trial", "style", "grind", "luck", "absurd"]
 const CATEGORY_NAMES: Dictionary = {
 	"trial": "试炼",
 	"style": "流派",
 	"grind": "历练",
 	"luck": "机缘",
+	"absurd": "离谱",
 }
 
 ## 初始默认解锁的 4 名角色（2026-10-25 新手节奏重做：8 → 4）
@@ -59,6 +65,10 @@ const DEFAULT_ITEMS: Array[String] = [
 	"taiyi_jindan",
 	"luban_suo",
 	"jiguan_hexin",
+	# —— 2026-11-03 机关阵地配套（手动布设 + 耐久维修改版）：两件都不设解锁成就，
+	# 与机关基础件同池，机关流第一波就能开始凑续航/容错 ——
+	"jishu_you",
+	"hengjixin",
 	# —— 2026-10-11 扩池：以下原为已定义未入池道具（图鉴可见但货架抽不到），按档位补入 ——
 	# 普通（tier 1）
 	"hupi_qun",
@@ -571,6 +581,47 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 			"reward_name": "苦行僧",
 			"icon": "res://assets/art/cultivator_kuxingseng_icon.png",
 		},
+		# ---------------- 离谱：超出常规养成上限的彩蛋波次（纯荣誉，只负责截图吹牛） ----------------
+		{
+			"id": "ach_feat_nightmare_50",
+			"name": "噩梦加钟",
+			"cond_desc": "在「噩梦」难度打到第50波——噩梦想下班，你给它加了个钟",
+			"category": "absurd",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/cultivator_dubi_icon.png",
+		},
+		{
+			"id": "ach_feat_endless_60",
+			"name": "肝帝返聘",
+			"cond_desc": "单局打到第60波——肝已经退休了，又被你返聘回来",
+			"category": "absurd",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/cultivator_kuangzhan_icon.png",
+		},
+		{
+			"id": "ach_feat_endless_80",
+			"name": "服务器报警",
+			"cond_desc": "单局打到第80波——服务器开始怀疑人生，建议你自查",
+			"category": "absurd",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/weapon_jianzhen_pan.png",
+		},
+		{
+			"id": "ach_feat_endless_100",
+			"name": "请不要开挂",
+			"cond_desc": "单局打到第100波——后台已截图，请配合客服调查",
+			"category": "absurd",
+			"reward_type": "none",
+			"reward_id": "",
+			"reward_name": "",
+			"icon": "res://assets/art/item_jingang_shenxiang.png",
+		},
 	]
 
 ## 破境过的最高危险度对应的境界称号（-1 未破境返回空串）
@@ -741,6 +792,15 @@ static func is_condition_met(ach_id: String, run_ctx: Dictionary, career_stats: 
 			return wave >= 20 and danger >= 1 and int(run_ctx.get("damage_taken_count", 0)) == 0
 		"ach_feat_endless_40":
 			return wave >= 40
+		# 2026-11-03 离谱彩蛋：超出常规养成上限的波次，纯荣誉截图用
+		"ach_feat_nightmare_50":
+			return wave >= 50 and danger >= 1
+		"ach_feat_endless_60":
+			return wave >= 60
+		"ach_feat_endless_80":
+			return wave >= 80
+		"ach_feat_endless_100":
+			return wave >= 100
 		"ach_feat_lone_weapon":
 			return wave >= 20 and int(run_ctx.get("weapon_count", 0)) == 1
 		"ach_feat_skill_abstain":
@@ -843,6 +903,14 @@ static func progress_text(aid: String, career_stats: Dictionary) -> String:
 			return "最高抵达第 %d/25 波" % best_wave
 		"ach_feat_endless_40":
 			return "最高抵达第 %d/40 波" % best_wave
+		"ach_feat_nightmare_50":
+			return "已破境「噩梦」" if dg >= 1 else "尚未破境「噩梦」"
+		"ach_feat_endless_60":
+			return "最高抵达第 %d/60 波" % best_wave
+		"ach_feat_endless_80":
+			return "最高抵达第 %d/80 波" % best_wave
+		"ach_feat_endless_100":
+			return "最高抵达第 %d/100 波" % best_wave
 		"ach_cult_duobao":
 			return "单局最佳 %d/250 金币" % stones
 		"ach_cult_shoucainu":

@@ -444,6 +444,25 @@ const DEFS: Dictionary = {
 					"desc": "机关伤害与攻速提升",
 					"apply": {"contraption_damage": 5.0, "attack_speed_mult_mul": 0.92},
 				},
+				# ---- 2026-11-03 机关阵地配套（手动布设 + 耐久维修改版后新增的两条腿） ----
+				"jishu_you": {
+					# 续航腿：耐久 +30%（40s→52s），把「多久要回去修一次」拉长。
+					# 与悟道「机关养护」同一字段（pctmul 乘算），可叠。
+					"name": "机枢油", "tier": 2, "price": 28,
+					"icon": "res://assets/art/item_jishu_you.png",
+					"desc": "机关耐久提升，一次布设干得更久",
+					"apply": {"turret_stamina_mul": 1.3},
+				},
+				"hengjixin": {
+					# 容错腿：耐久耗尽不再完全停工，改为半速运转 —— 跑位期火力不至于归零。
+					# 霜降代价：维修仍是唯一满速路径（半速 50% 恒定低于修好的 100%），
+					# 所以这件买的是「可以晚点修」，不是「可以永远不修」。
+					"name": "恒机芯", "tier": 4, "price": 84,
+					"icon": "res://assets/art/item_hengjixin.png",
+					"desc": "机关磨到底也不停工：改为半速运转",
+					"apply": {},
+					"turret_broken_haste": 0.5,
+				},
 
 			# ---- 2026-10-11 寻宝流道具（与悟道「宝箱数量/宝箱品质/宝箱掉落」同一条链路） ----
 			# 兑现点全在 BalanceChest + WaveSpawner._spawn_chests + SpiritChest._destroy；
@@ -938,6 +957,15 @@ const DEFS: Dictionary = {
 			"wuxing_all": 1.0,
 		},
 
+		# ---- 机关（2026-11-03 手动布设改版）----
+		"shen_shuanglian": {
+			"name": "双联神机", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
+			"icon": "res://assets/art/item_tianji_suo.png",
+			"desc": "每把机关武器的编制翻倍：可同时布设两座\n但布设与维修的工作量也翻倍",
+			"apply": {},
+			"turret_charges_bonus": 1.0,
+		},
+
 		# ---- 灵兽 ----
 		"shen_shouxue": {
 			"name": "兽血沸腾", "tier": 5, "price": 0, "granted_only": true, "no_sell": true,
@@ -1080,6 +1108,9 @@ const TAG_FIELDS := {
 	"pet_damage_mult": "pet", "pet_effect_mult": "pet",
 	"pet_cooldown_mult_mul": "pet", "pet_slots": "pet",
 	"skill_cooldown_mult": "skill",
+	# 机关阵地三件套（2026-11-03）：耐久 / 维修用时 / 齐射管数
+	"turret_stamina_mul": "contraption", "turret_repair_haste_mul": "contraption",
+	"turret_volley_bonus": "contraption",
 }
 
 const HOOK_TAGS := {
@@ -1089,6 +1120,8 @@ const HOOK_TAGS := {
 	"wide_range_mult": "wide", "melee_lifesteal_flat": "lifesteal",
 	"heal_buff_damage": "heal", "dodge_heal_chance": "dodge", "dodge_heal_pct": "dodge",
 	"turret_haste": "contraption", "drone_spin_speed": "summon",
+	# 机关阵地（2026-11-03）：停摆兜底与额外编制
+	"turret_broken_haste": "contraption", "turret_charges_bonus": "contraption",
 	"dmg_per_nearby_enemy": "crowd", "dmg_per_unique_item": "collection",
 	"on_hit_damage_bonus": "onhit", "heal_orb_chance": "heal",
 	"kill_explode": "elemental", "dmg_per_move_speed": "speed",

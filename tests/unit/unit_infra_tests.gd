@@ -146,18 +146,35 @@ func _test_floating_btn_defaults() -> void:
 	_c.equals(SettingsManager.skill_btn_xy(), SettingsManager.SKILL_BTN_XY_DEFAULT,
 			"技能键出厂位取自 SKILL_BTN_XY_DEFAULT")
 	_c.equals(SettingsManager.extra_btn_xy(), SettingsManager.EXTRA_BTN_XY_DEFAULT,
-			"额外技能键出厂位取自 EXTRA_BTN_XY_DEFAULT（不是 SCHEMA 里另抄的一份）")
-	# 二、相邻两圆之间必须留得开：旧写法 0 空隙相切，量出来正好 0（三键两两同列检查）
-	var gap := (SettingsManager.skill_btn_xy().y - SettingsManager.obelisk_btn_xy().y) * design_h - d
-	_c.check(gap >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
-			"出厂摆位两圆圆边之间留 %.1f 设计像素（要求 >= %.0f；0 空隙时两圈描边贴成一颗）" % [
-					gap, SettingsManager.BTN_DEFAULT_EDGE_GAP])
-	_c.check(gap <= d, "两圆也没开成一里地（%.1f <= 键径 %.0f，同列叠放还要一眼看出是一对）" % [gap, d])
-	var gap_extra := (SettingsManager.obelisk_btn_xy().y - SettingsManager.extra_btn_xy().y) * design_h - d
-	_c.check(gap_extra >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
-			"额外技能键与祭坛键出厂圆边间距 %.1f（要求 >= %.0f，第三颗键进同列不挤堆）" % [
-					gap_extra, SettingsManager.BTN_DEFAULT_EDGE_GAP])
-	_c.check(gap_extra <= d, "额外技能键与祭坛键也没开成一里地（%.1f <= 键径 %.0f）" % [gap_extra, d])
+			"角色技能键出厂位取自 EXTRA_BTN_XY_DEFAULT（不是 SCHEMA 里另抄的一份）")
+	_c.equals(SettingsManager.mechanism_btn_xy(), SettingsManager.MECHANISM_BTN_XY_DEFAULT,
+			"机关键出厂位取自 MECHANISM_BTN_XY_DEFAULT")
+	# 二、2×2 键簇（2026-11-03）：同列与同排相邻两圆都要留 BTN_DEFAULT_EDGE_GAP。
+	#     旧摆位是 4 键竖列（键径 76、机关键另挂在竖列左上方一格），现在外列=战斗键、
+	#     内列=情境键，横纵间距都是 112；这里逐对量「圆边间距」，任何一对挤在一起都报红。
+	var skill := SettingsManager.skill_btn_xy()
+	var extra := SettingsManager.extra_btn_xy()
+	var obelisk := SettingsManager.obelisk_btn_xy()
+	var mech := SettingsManager.mechanism_btn_xy()
+	var pairs: Array[Array] = [
+		["技能键↔角色技能键（同列）", absf(skill.y - extra.y) * design_h],
+		["祭坛键↔机关键（同列）", absf(obelisk.y - mech.y) * design_h],
+		["技能键↔祭坛键（同排）", absf(skill.x - obelisk.x) * 960.0],
+		["角色技能键↔机关键（同排）", absf(extra.x - mech.x) * 960.0],
+	]
+	for pair in pairs:
+		var gap: float = float(pair[1]) - d
+		_c.check(gap >= SettingsManager.BTN_DEFAULT_EDGE_GAP - 0.01,
+				"%s：出厂圆边间距 %.1f（要求 >= %.0f；相切时两圈描边贴成一颗）" % [
+						String(pair[0]), gap, SettingsManager.BTN_DEFAULT_EDGE_GAP])
+		_c.check(gap <= d, "%s：也没开成一里地（%.1f <= 键径 %.0f）" % [String(pair[0]), gap, d])
+	# 键簇整体靠右下方，但要让开第二排余妖芯片带（66..93）与魔君血条（贴底 20 / 高 34）
+	var cluster_top := minf(minf(skill.y, extra.y), minf(obelisk.y, mech.y)) * design_h - d * 0.5
+	var cluster_bottom := maxf(maxf(skill.y, extra.y), maxf(obelisk.y, mech.y)) * design_h + d * 0.5
+	_c.check(cluster_top >= 94.0, "键簇顶缘 %.1f 让开第二排芯片带（要求 >= 94）" % cluster_top)
+	var bar_top := design_h - HudBossBar.BOTTOM_MARGIN - HudBossBar.BAR_H
+	_c.check(cluster_bottom <= bar_top - 6.0,
+			"键簇底缘 %.1f 高于魔君血条顶缘 %.0f（拇指区不压贴底读数）" % [cluster_bottom, bar_top])
 	# 三、键面文案收在圆面之内：量的是「画出来的那一圈」——文案外接框的对角半径
 	#     要小于圆面内缘（键径一半再收掉 _circle_box 那 2 像素描边）。
 	#     三颗浮动键的文案进同一张表，用同一把尺子（额外技能键的占位字面也走这里，
@@ -167,7 +184,11 @@ func _test_floating_btn_defaults() -> void:
 	var faces: Array[Array] = [
 		["祭坛键", HudObeliskButton.BTN_TEXT, HudObeliskButton.BTN_FONT],
 		["祭坛键·血祭", "血祭", HudObeliskButton.BTN_FONT],
-		["额外技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT],
+		["角色技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT],
+		["机关键·布设", HudMechanismButton.FACE_DEPLOY, HudMechanismButton.BTN_FONT],
+		["机关键·维修", HudMechanismButton.FACE_REPAIR, HudMechanismButton.BTN_FONT],
+		["机关键·完好", HudMechanismButton.FACE_OK, HudMechanismButton.BTN_FONT],
+		["机关键·占位", HudMechanismButton.FACE_EDIT, HudMechanismButton.BTN_FONT],
 	]
 	for face in faces:
 		var label: String = String(face[1])
@@ -208,6 +229,14 @@ func _test_floating_btn_defaults() -> void:
 				HudObeliskButton.PRICE_TOP + HudObeliskButton.PRICE_FONT - d * 0.5).length()
 		_c.check(blood_corner <= price_arc_r,
 				"祭坛键血祭价格「耗18%%」收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [blood_corner, price_arc_r])
+		# 四·七、机关键副读数（2026-11-03）：最长机关名四字「藤萝机关」用 SUB_FONT，
+		#     行顶 SUB_TOP、行高 14，必须和主文案一样收在走针环内缘之内
+		var sub_w: float = f.get_string_size("藤萝机关", HORIZONTAL_ALIGNMENT_CENTER, -1.0,
+				HudMechanismButton.SUB_FONT).x
+		var sub_corner := Vector2(sub_w * 0.5,
+				HudMechanismButton.SUB_TOP + 14.0 - d * 0.5).length()
+		_c.check(sub_corner <= price_arc_r,
+				"机关键副读数（最长机关名四字）收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [sub_corner, price_arc_r])
 
 	# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
 		var ob_btn := HudObeliskButton.new()
@@ -253,14 +282,15 @@ func _test_settings_and_reset_robustness() -> void:
 ## ② 就算将来有人再拿高频事件乱发，每秒预算也把最坏震幅钉在轻颤级别。
 
 func _test_achievement_and_meta_save() -> void:
-	# 1. 数据表完整性与反查自洽（2026-10-25 新手节奏重做：39 条成就、全部带实物奖励）
-	_c.equals(AchievementData.ACHIEVEMENTS.size(), 39, "成就共配置 39 条（17 角色 + 16 道具 + 6 武器，零纯荣誉）")
+	# 1. 数据表完整性与反查自洽（2026-10-25 新手节奏重做：39 条奖励成就；
+	#    2026-11-03 追加 4 条「离谱」彩蛋，纯荣誉无实物奖励）
+	_c.equals(AchievementData.ACHIEVEMENTS.size(), 43, "成就共配置 43 条（17 角色 + 16 道具 + 6 武器 + 4 离谱彩蛋）")
 	var reward_kinds := {"cultivator": 0, "item": 0, "weapon": 0, "none": 0}
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		_c.check(not adef.is_empty(), "成就 %s 定义存在" % aid)
 		_c.check(String(adef.get("category", "")) in AchievementData.CATEGORY_ORDER,
-			"成就 %s 分类归属四大类之一" % aid)
+			"成就 %s 分类归属五类之一" % aid)
 		var rtype := String(adef.get("reward_type", ""))
 		var rid := String(adef.get("reward_id", ""))
 		reward_kinds[rtype] = int(reward_kinds.get(rtype, 0)) + 1
@@ -275,7 +305,7 @@ func _test_achievement_and_meta_save() -> void:
 			_c.equals(AchievementData.weapon_unlock_achievement(rid).get("id", ""), aid, "反查武器 %s 解锁成就一致" % rid)
 		else:
 			_c.equals(rtype, "none", "成就 %s 奖励类型合法（%s）" % [aid, rtype])
-	_c.equals(int(reward_kinds["none"]), 0, "零纯荣誉成就：每条达成都有实物回报（玩家才愿意追）")
+	_c.equals(int(reward_kinds["none"]), 4, "纯荣誉成就只留「离谱」彩蛋 4 条（它们的价值是截图吹牛）")
 	_c.equals(int(reward_kinds["cultivator"]), 17, "17 条成就解锁角色（21 名角色 = 4 默认 + 17 成就）")
 	_c.equals(int(reward_kinds["weapon"]), AchievementData.LOCKED_WEAPONS.size(), "锁定武器数与武器奖励型成就数一致")
 	_c.equals(AchievementData.DEFAULT_CULTIVATORS.size(), 4, "初始默认开放 4 名基础修士（新手第一局只看 4 张卡）")
@@ -1010,3 +1040,39 @@ func _test_author_mode() -> void:
 	_c.near(AuthorMode.cycle_time_scale(), 1.0, 0.001, "时间倍率 4x → 1x")
 	Engine.time_scale = 1.0
 	GameManager.author_mode = orig_mode
+
+## BatchDraw 新增 helper 的几何契约（arc/rect/poly_any）：只验顶点/索引不越界、
+## 凹多边形三角化成功、flush 后缓冲归零。绘制结果仍由压测台截图目检。
+func _test_batch_draw_helpers() -> void:
+	BatchDraw.discard()
+	var host := Node2D.new()
+	add_child(host)
+
+	# 1. rect：4 顶点 / 6 索引
+	BatchDraw.rect(host, Rect2(0.0, 0.0, 10.0, 10.0), Color.WHITE)
+	_c.equals(BatchDraw.pending_vertex_count(), 4, "BatchDraw.rect 收集 4 顶点")
+	_c.equals(BatchDraw.pending_index_count(), 6, "BatchDraw.rect 收集 6 索引")
+	BatchDraw.flush(host)
+	_c.check(BatchDraw.pending_vertex_count() == 0 and BatchDraw.pending_index_count() == 0,
+		"BatchDraw.flush 后缓冲归零")
+
+	# 2. poly_any：凹多边形（箭头形）必须能三角化，且不能退化成扇形
+	var concave := PackedVector2Array([
+		Vector2(0.0, 0.0), Vector2(4.0, 0.0), Vector2(4.0, 4.0),
+		Vector2(2.0, 2.0), Vector2(0.0, 4.0), Vector2(0.0, 0.0),
+	])
+	BatchDraw.poly_any(host, concave, Color.WHITE)
+	_c.equals(BatchDraw.pending_vertex_count(), 5, "BatchDraw.poly_any 剥掉闭合重复点后收 5 顶点")
+	_c.equals(BatchDraw.pending_index_count(), 9, "BatchDraw.poly_any 凹五边形三角化出 9 索引（3 三角形）")
+	BatchDraw.discard()
+
+	# 3. arc：每段一个四边形（4 顶点/6 索引），段数按自适应公式落在 6~32
+	BatchDraw.arc(host, Vector2.ZERO, 100.0, 0.0, TAU, Color.WHITE, 1.0)
+	var arc_v := BatchDraw.pending_vertex_count()
+	var arc_i := BatchDraw.pending_index_count()
+	_c.check(arc_v >= 24 and arc_v <= 128 and arc_v % 4 == 0,
+		"BatchDraw.arc 段数落在 6~32（实得 %d 顶点）" % arc_v)
+	_c.equals(arc_i, (arc_v >> 2) * 6, "BatchDraw.arc 索引数与四边形段数同源")
+	BatchDraw.discard()
+
+	host.queue_free()

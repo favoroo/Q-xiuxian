@@ -8,6 +8,7 @@ extends RefCounted
 ##   BalanceTargeting 索敌分流/藏宝匣两段式索敌/武器属性折算/御灵轨道/神识分流
 ##   BalanceSpiritBeast 祭坛灵兽（生命成长/撕咬/嘲讽半径）
 ##   BalanceChest     藏宝匣（每回合数量/三档权重/击数/掉落表/玉匣送道具上限）
+##   BalanceTurret    机关（编制/齐射/耐久磨损/维修/交互半径/收回冷却）
 ## 本文件只做转发：旧引用（GameBalance.xxx，22 个文件）零改动；新增公式直接进主题类，
 ## 需要旧入口时在这里补一行转发。两条硬性约束对四个主题类同样生效：
 ##   1. 需要随机数的地方由调用方传入 rng 或已经抽好的 roll，这样单测可以固定种子做确定性断言；
@@ -201,6 +202,7 @@ const BOSS_SLAM_RADIUS := BalanceWave.BOSS_SLAM_RADIUS
 const BOSS_SLAM_DMG_MULT := BalanceWave.BOSS_SLAM_DMG_MULT
 const BOSS_SUMMON_COUNT := BalanceWave.BOSS_SUMMON_COUNT
 const BOSS_SUMMON_CAP := BalanceWave.BOSS_SUMMON_CAP
+const BOSS_DEEP_MINION_MIN_WAVE := BalanceWave.BOSS_DEEP_MINION_MIN_WAVE
 const BOSS_PHASE2_AT := BalanceWave.BOSS_PHASE2_AT
 const BOSS_PHASE2_INTERVAL_MULT := BalanceWave.BOSS_PHASE2_INTERVAL_MULT
 const BOSS_PHASE2_SPEED_MULT := BalanceWave.BOSS_PHASE2_SPEED_MULT
@@ -226,6 +228,36 @@ const BOSS_BLINK_SLASH_BOLTS_P2 := BalanceWave.BOSS_BLINK_SLASH_BOLTS_P2
 const BOSS_BLINK_SLASH_SPREAD := BalanceWave.BOSS_BLINK_SLASH_SPREAD
 const BOSS_BLINK_SLASH_SPEED := BalanceWave.BOSS_BLINK_SLASH_SPEED
 const BOSS_BLINK_SLASH_DMG_MULT := BalanceWave.BOSS_BLINK_SLASH_DMG_MULT
+const BOSS_DEEP_WAVE_IDS := BalanceWave.BOSS_DEEP_WAVE_IDS
+const BOSS_DIVE_LEAP_DIST := BalanceWave.BOSS_DIVE_LEAP_DIST
+const BOSS_DIVE_MIN_LEAP := BalanceWave.BOSS_DIVE_MIN_LEAP
+const BOSS_DIVE_WINDUP := BalanceWave.BOSS_DIVE_WINDUP
+const BOSS_DIVE_SPEED_MUL := BalanceWave.BOSS_DIVE_SPEED_MUL
+const BOSS_DIVE_DURATION := BalanceWave.BOSS_DIVE_DURATION
+const BOSS_DIVE_DMG_MULT := BalanceWave.BOSS_DIVE_DMG_MULT
+const BOSS_DIVE_TRAIL_INTERVAL := BalanceWave.BOSS_DIVE_TRAIL_INTERVAL
+const BOSS_DIVE_TRAIL_DMG_MULT := BalanceWave.BOSS_DIVE_TRAIL_DMG_MULT
+const BOSS_DIVE_LAND_RING := BalanceWave.BOSS_DIVE_LAND_RING
+const BOSS_DIVE_LAND_RING_P2 := BalanceWave.BOSS_DIVE_LAND_RING_P2
+const BOSS_MIRROR_RING_COUNT := BalanceWave.BOSS_MIRROR_RING_COUNT
+const BOSS_MIRROR_RING_COUNT_P2 := BalanceWave.BOSS_MIRROR_RING_COUNT_P2
+const BOSS_MIRROR_RING_SPEED := BalanceWave.BOSS_MIRROR_RING_SPEED
+const BOSS_MIRROR_DMG_MULT := BalanceWave.BOSS_MIRROR_DMG_MULT
+const BOSS_MIRROR_FAN_COUNT := BalanceWave.BOSS_MIRROR_FAN_COUNT
+const BOSS_MIRROR_FAN_SPREAD := BalanceWave.BOSS_MIRROR_FAN_SPREAD
+const BOSS_MIRROR_FLANK_DIST := BalanceWave.BOSS_MIRROR_FLANK_DIST
+const BOSS_MIRROR_WINDUP := BalanceWave.BOSS_MIRROR_WINDUP
+const BOSS_SOUL_TIDE_COUNT := BalanceWave.BOSS_SOUL_TIDE_COUNT
+const BOSS_SOUL_TIDE_COUNT_P2 := BalanceWave.BOSS_SOUL_TIDE_COUNT_P2
+const BOSS_SOUL_TIDE_RADIUS := BalanceWave.BOSS_SOUL_TIDE_RADIUS
+const BOSS_SOUL_TIDE_SPEED := BalanceWave.BOSS_SOUL_TIDE_SPEED
+const BOSS_SOUL_TIDE_DMG_MULT := BalanceWave.BOSS_SOUL_TIDE_DMG_MULT
+const BOSS_SOUL_TIDE_WINDUP := BalanceWave.BOSS_SOUL_TIDE_WINDUP
+const BOSS_FURNACE_RADIUS := BalanceWave.BOSS_FURNACE_RADIUS
+const BOSS_FURNACE_DMG_MULT := BalanceWave.BOSS_FURNACE_DMG_MULT
+const BOSS_FURNACE_RING := BalanceWave.BOSS_FURNACE_RING
+const BOSS_FURNACE_RING_SPEED := BalanceWave.BOSS_FURNACE_RING_SPEED
+const BOSS_FURNACE_RING_DMG_MULT := BalanceWave.BOSS_FURNACE_RING_DMG_MULT
 const NIGHTMARE_DUAL_BOSS_HP_MULT := BalanceWave.NIGHTMARE_DUAL_BOSS_HP_MULT
 const NIGHTMARE_FOG_CLEAR_RADIUS := BalanceWave.NIGHTMARE_FOG_CLEAR_RADIUS
 const NIGHTMARE_FOG_FEATHER_RADIUS := BalanceWave.NIGHTMARE_FOG_FEATHER_RADIUS
@@ -578,6 +610,10 @@ static func wave_spawn_budget(wave: int) -> int:
 static func max_enemies_cap(wave: int) -> int:
 	return BalanceWave.max_enemies_cap(wave)
 
+## 同屏最终上限（基础上限 × 角色敌潮 × 危险度 × 深层潮数，再夹硬顶）
+static func final_enemy_cap(base_cap: int, count_mult: float, danger: int, wave: int) -> int:
+	return BalanceWave.final_enemy_cap(base_cap, count_mult, danger, wave)
+
 ## 刷怪预算未花完部分的回合末经验补差（减潮不减收入）
 static func budget_compensation_exp(shortfall: int, avg_exp: float) -> int:
 	return BalanceEconomy.budget_compensation_exp(shortfall, avg_exp)
@@ -899,3 +935,53 @@ static func spirit_effective_crit_rate(player_crit_rate: float, orb_count: int =
 ## 环绕灵宝接触结算占空比（按星级）：sustained_single_dps 与平衡仿真共用的实伤折算尺
 static func spirit_contact_duty(star: int = 1) -> float:
 	return BalanceTargeting.spirit_contact_duty(star)
+
+# ---------------- 机关阵地（BalanceTurret） ----------------
+
+## 每把机关武器同时只能在场的机关数
+static func turrets_per_weapon() -> int:
+	return BalanceTurret.TURRETS_PER_WEAPON
+
+## 单发磨损量（传有效开火间隔；stamina 缺省走统一档，机关武器可用表字段覆盖）
+static func turret_wear_per_shot(eff_fire_interval: float, stamina_sec: float = BalanceTurret.STAMINA_SEC) -> float:
+	return BalanceTurret.wear_per_shot(eff_fire_interval, stamina_sec)
+
+## 耐久比例 0..1
+static func turret_durability_ratio(durability: float) -> float:
+	return BalanceTurret.durability_ratio(durability)
+
+## 磨损档（<40% 且未停摆）：开火间隔 ×1.5
+static func turret_is_worn(durability: float) -> bool:
+	return BalanceTurret.is_worn(durability)
+
+## 停摆（耐久归零，完全不开火）
+static func turret_is_broken(durability: float) -> bool:
+	return BalanceTurret.is_broken(durability)
+
+## 磨损档的开火间隔倍率
+static func turret_fire_interval_mult(durability: float) -> float:
+	return BalanceTurret.fire_interval_mult(durability)
+
+## 需要维修（磨损或停摆）——世界提示牌与 HUD 待修芯片共用
+static func turret_needs_service(durability: float) -> bool:
+	return BalanceTurret.needs_service(durability)
+
+## 长按维修秒数
+static func turret_repair_hold_sec() -> float:
+	return BalanceTurret.REPAIR_HOLD_SEC
+
+## 维修每秒回填量
+static func turret_repair_per_sec() -> float:
+	return BalanceTurret.repair_per_sec()
+
+## 布设落点空地名判定（传最近一座自己机关的距离）
+static func turret_is_open_ground(nearest_own_turret_dist: float) -> bool:
+	return BalanceTurret.is_open_ground(nearest_own_turret_dist)
+
+## 布设落点相对玩家的偏移
+static func turret_deploy_offset(last_move_dir: Vector2) -> Vector2:
+	return BalanceTurret.deploy_offset(last_move_dir)
+
+## 收回整备冷却
+static func turret_recall_cooldown(base_cooldown: float, attack_speed_mult: float) -> float:
+	return BalanceTurret.recall_cooldown(base_cooldown, attack_speed_mult)

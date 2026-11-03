@@ -300,6 +300,200 @@ const BOSS_POOL: Dictionary = {
 		"hp_mult": 1.15,
 		"archetype": "overlord",
 	},
+	# ---------------- 深层专属魔君（W45~W100 固定登场，2026-11-03） ----------------
+	# 100 波之后仍走 BOSS_CYCLE_IDS 六尊轮回，本表不进轮换。
+	# W45~W55 为「刚进深层」过渡档：血量/节奏低于 60+ 深层魔君，但压迫感高于 25~40。
+	"zhaoying": {
+		"id": "zhaoying",
+		"wave": 45,
+		"display": "镜花·照影魔君",
+		"title": "照影魔君",
+		"move_speed": 78.0,
+		"attack_interval": 3.2,
+		"hp_mult": 0.95,
+		"archetype": "mirror",
+	},
+	"yinhun": {
+		"id": "yinhun",
+		"wave": 50,
+		"display": "九泉·引魂使",
+		"title": "引魂使",
+		"move_speed": 85.0,
+		"attack_interval": 3.1,
+		"hp_mult": 1.0,
+		"archetype": "reaper",
+	},
+	"luding": {
+		"id": "luding",
+		"wave": 55,
+		"display": "赤鼎·焚天炉君",
+		"title": "焚天炉君",
+		"move_speed": 58.0,
+		"attack_interval": 3.0,
+		"hp_mult": 1.05,
+		"archetype": "siege",
+	},
+	"canglong": {
+		"id": "canglong",
+		"wave": 60,
+		"display": "太苍龙君·敖烈",
+		"title": "太苍龙君",
+		"move_speed": 118.0,
+		"attack_interval": 2.9,
+		"hp_mult": 1.10,
+		"archetype": "flyer",
+	},
+	"jianzhong": {
+		"id": "jianzhong",
+		"wave": 65,
+		"display": "剑冢·葬剑仙",
+		"title": "葬剑仙",
+		"move_speed": 96.0,
+		"attack_interval": 2.8,
+		"hp_mult": 1.05,
+		"archetype": "assassin",
+	},
+	"leijie": {
+		"id": "leijie",
+		"wave": 70,
+		"display": "紫霄·雷劫神君",
+		"title": "雷劫神君",
+		"move_speed": 105.0,
+		"attack_interval": 2.7,
+		"hp_mult": 1.10,
+		"archetype": "stormcaller",
+	},
+	"kunwang": {
+		"id": "kunwang",
+		"wave": 75,
+		"display": "北冥·覆海鲲王",
+		"title": "覆海鲲王",
+		"move_speed": 55.0,
+		"attack_interval": 3.0,
+		"hp_mult": 1.30,
+		"archetype": "zoner",
+	},
+	"kuijia": {
+		"id": "kuijia",
+		"wave": 80,
+		"display": "偃甲·千臂傀王",
+		"title": "千臂傀王",
+		"move_speed": 60.0,
+		"attack_interval": 2.8,
+		"hp_mult": 1.15,
+		"archetype": "summoner",
+	},
+	"fenghuang": {
+		"id": "fenghuang",
+		"wave": 85,
+		"display": "南明·离火凤皇",
+		"title": "离火凤皇",
+		"move_speed": 100.0,
+		"attack_interval": 2.6,
+		"hp_mult": 1.10,
+		"archetype": "pyre",
+	},
+	"tianmo": {
+		"id": "tianmo",
+		"wave": 90,
+		"display": "天外·无相天魔",
+		"title": "无相天魔",
+		"move_speed": 110.0,
+		"attack_interval": 2.5,
+		"hp_mult": 1.15,
+		"archetype": "assassin",
+	},
+	"hundun": {
+		"id": "hundun",
+		"wave": 95,
+		"display": "混沌·元初兽",
+		"title": "元初兽",
+		"move_speed": 85.0,
+		"attack_interval": 2.5,
+		"hp_mult": 1.20,
+		"archetype": "chaos",
+	},
+	"wanjie": {
+		"id": "wanjie",
+		"wave": 100,
+		"display": "万劫·道劫化身",
+		"title": "道劫化身",
+		"move_speed": 92.0,
+		"attack_interval": 2.4,
+		"hp_mult": 1.35,
+		"archetype": "overlord",
+	},
+}
+
+## 深层魔君签名招（BossEnemy.Pattern.SIGNATURE）：kind 决定行为，参数只在本表调。
+## 八尊原本只靠旧招表组合的魔君各补一个身份招；BossEnemy 只读不写，数值不散落在行为代码里。
+const BOSS_SIGNATURES: Dictionary = {
+	"jianzhong": {
+		"kind": "sword_rain",       ## 万剑归宗：玩家脚下亮圈，剑环从四周内收
+		"count": 12,
+		"radius": 190.0,
+		"speed": 300.0,
+		"windup": 0.55,
+		"dmg_mult": 0.55,
+	},
+	"leijie": {
+		"kind": "thunder_chain",    ## 连环天劫：连续三处落雷，每处炸开一圈雷弹
+		"strikes": 3,
+		"interval": 0.34,
+		"radius": 95.0,
+		"windup": 0.42,
+		"bolts": 8,
+		"speed": 270.0,
+		"dmg_mult": 0.5,
+	},
+	"kunwang": {
+		"kind": "tidal_wave",       ## 冥海潮汐：三道带缺口的外扩潮环，缺口逐波转动
+		"waves": 3,
+		"interval": 0.34,
+		"count": 20,
+		"gap_deg": 58.0,
+		"gap_step_deg": 46.0,
+		"speed": 220.0,
+		"dmg_mult": 0.45,
+	},
+	"kuijia": {
+		"kind": "arm_volley",       ## 千臂机括：四轮交替转向的机弩扇射
+		"waves": 4,
+		"interval": 0.24,
+		"fan": 7,
+		"spread": 0.13,
+		"turn_deg": 32.0,
+		"speed": 265.0,
+		"dmg_mult": 0.45,
+	},
+	"fenghuang": {
+		"kind": "phoenix_flame",    ## 离火涅槃：双层离火环 + 天火陨落
+		"rings": 2,
+		"ring_count": 18,
+		"speed": 250.0,
+		"dmg_mult": 0.45,
+		"sky": 3,
+	},
+	"tianmo": {
+		"kind": "void_step",        ## 无相三连：连续三次瞬步贴脸回斩
+		"steps": 3,
+		"interval": 0.22,
+	},
+	"hundun": {
+		"kind": "chaos_orb",        ## 混沌星散：一圈随机旋向/速度的四象弹
+		"count": 18,
+		"speed": 215.0,
+		"spin": 1.2,
+		"dmg_mult": 0.45,
+	},
+	"wanjie": {
+		"kind": "tribulation",      ## 万劫加身：双层劫环 + 天火 + 收束环
+		"rings": 2,
+		"ring_count": 20,
+		"speed": 270.0,
+		"dmg_mult": 0.5,
+		"sky": 4,
+	},
 }
 
 ## 金蟾（土豆兄弟 Looter 对应位）：回合中限时刷出的逃跑宝藏怪，
@@ -377,14 +571,16 @@ const FEATURED_SHARE := 0.12       ## 每波主打怪份额（从已解锁怪按
 const FEATURED_ROTATION_STEP := 5  ## 主打轮换步长（质数步长，表长变化时仍能铺开、不总是同一只）
 const FEATURED_MIN_WAVE := 2       ## 主打怪起始波次（第 1 波保持纯教学：史莱姆 + 零星邪修）
 
-# ---------------- 深层老手配比（2026-11-03 后期减量提质） ----------------
+# ---------------- 深层老手配比（2026-11-03 后期减量提质 / 二次减量） ----------------
 ## 深层预算收紧后，把「少刷」省下的压力转成「怪更硬」：>20 波在头部切一块老手段，
 ## 按权重抽血煞魔卫/寒魄妖/鼓妖/百目妖，剩余区间仍走原分段带。
 ## 百目妖只给 5% 权重：它每 3.5s 产 1 只蜂群，权重高了会把节点数顶回去，与减量目标冲突。
+## 2026-11-03 二次减量：份额 W21 16%→19.2%、W35+ 30%→36%，用高威胁老手补单怪质量；
+## 头部「主打 12% + 老手 36%」仍 < 50%，原分段带保留主体（单测钉住这条边界）。
 const DEEP_VETERAN_MIN_WAVE := 21       ## 深层老手起始波（与 BalanceWave.DEEP_WAVE_THRESHOLD+1 同义）
-const DEEP_VETERAN_SHARE_BASE := 0.15   ## 起始份额（W21 = 0.16）
-const DEEP_VETERAN_SHARE_PER_WAVE := 0.01
-const DEEP_VETERAN_SHARE_MAX := 0.30    ## 份额硬顶（W35+）
+const DEEP_VETERAN_SHARE_BASE := 0.18   ## 起始份额（W21 ≈ 0.192）
+const DEEP_VETERAN_SHARE_PER_WAVE := 0.012
+const DEEP_VETERAN_SHARE_MAX := 0.36    ## 份额硬顶（W35+）
 const DEEP_VETERAN_POOL := [
 	{"key": "mowei", "weight": 0.35},
 	{"key": "hanpo", "weight": 0.35},

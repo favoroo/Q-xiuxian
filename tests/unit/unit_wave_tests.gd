@@ -29,10 +29,10 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.wave_spawn_budget(6), 21, "第 6 波预算 21")
 	_c.equals(GameBalance.wave_spawn_budget(10), 30, "第 10 波预算 30")
 	_c.equals(GameBalance.wave_spawn_budget(20), 52, "第 20 波预算 52")
-	# 2026-11-03 后期减量提质：深层预算自 W20=52 续 +1.5/波，封顶 DEEP_BUDGET_MAX（80）。
-	_c.equals(GameBalance.wave_spawn_budget(21), 54, "深层第 21 波预算 54（续涨 +1.5）")
-	_c.equals(GameBalance.wave_spawn_budget(30), 67, "深层第 30 波预算 67")
-	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 80")
+	# 2026-11-03 二次减量：深层预算自 W20=52 续 +1.0/波，封顶 DEEP_BUDGET_MAX（60，W28 触顶）。
+	_c.equals(GameBalance.wave_spawn_budget(21), 53, "深层第 21 波预算 53（续涨 +1.0）")
+	_c.equals(GameBalance.wave_spawn_budget(30), 60, "深层第 30 波预算 60")
+	_c.equals(GameBalance.wave_spawn_budget(99), GameBalance.DEEP_BUDGET_MAX, "无尽深层预算封顶 60")
 	var budget_prev := 0
 	var budget_nondecreasing := true
 	for w in range(1, 61):
@@ -41,32 +41,41 @@ func _test_wave_scaling() -> void:
 			budget_nondecreasing = false
 		budget_prev = b
 	_c.check(budget_nondecreasing, "预算曲线逐波不降（触顶后持平，不回落）")
-	# 深层段在封顶前必须每波都真的多刷（否则「敌潮随深层涨」落空）
+	# 深层段在封顶前必须每波都真的多刷（W28 触顶后持平）
 	var deep_rises := 0
 	for w in range(21, 40):
 		if GameBalance.wave_spawn_budget(w) > GameBalance.wave_spawn_budget(w - 1):
 			deep_rises += 1
-	_c.equals(deep_rises, 19, "深层 21~39 波逐波续涨（封顶前不提前持平）")
+	_c.equals(deep_rises, 8, "深层 21~28 波逐波续涨（W28 封顶后持平）")
 
 	# 2026-10-15 分批清剿制：动态同屏上限
 	_c.equals(GameBalance.max_enemies_cap(1), 6, "第 1 波同屏上限 6 只")
 	_c.equals(GameBalance.max_enemies_cap(5), 8, "第 5 波同屏上限 8 只")
 	_c.equals(GameBalance.max_enemies_cap(10), 10, "第 10 波同屏上限 10 只")
-	_c.equals(GameBalance.max_enemies_cap(20), 16, "第 20 波同屏上限 16 只")
-	_c.check(GameBalance.max_enemies_cap(30) > 16, "深层同屏上限高于 20 波")
-	# 2026-11-03 后期减量提质：绝对硬顶 48→32；潮数只由 WaveSpawner._final_enemy_cap 乘一次
-	_c.equals(GameBalance.MAX_ENEMIES_HARD_CAP, 32, "同屏敌人绝对硬顶 32（任何乘区叠满后的兜底）")
-	_c.equals(GameBalance.max_enemies_cap(30), 20, "深层同屏基础上限 W30=20（未乘潮数/难度）")
-	_c.equals(GameBalance.max_enemies_cap(99), 26, "深层同屏基础上限封顶 26（未乘潮数/难度）")
+	_c.equals(GameBalance.max_enemies_cap(20), 15, "第 20 波同屏上限 15 只")
+	_c.check(GameBalance.max_enemies_cap(30) > GameBalance.max_enemies_cap(20), "深层同屏上限高于 20 波")
+	# 2026-11-03 二次减量：绝对硬顶 32→24；潮数只由 final_enemy_cap 乘一次
+	_c.equals(GameBalance.MAX_ENEMIES_HARD_CAP, 24, "同屏敌人绝对硬顶 24（任何乘区叠满后的兜底）")
+	_c.equals(GameBalance.max_enemies_cap(30), 18, "深层同屏基础上限 W30=18（未乘潮数/难度）")
+	_c.equals(GameBalance.max_enemies_cap(99), 20, "深层同屏基础上限封顶 20（未乘潮数/难度）")
+	# 最终上限 = 基础 × 角色 × 危险度 × 潮数 → 夹 24；用纯函数可直接钉住硬顶
+	_c.equals(GameBalance.final_enemy_cap(GameBalance.max_enemies_cap(1), 1.0, 0, 1), 7,
+		"W1 普通难度实际上限 7（6×1.16）")
+	_c.equals(GameBalance.final_enemy_cap(GameBalance.max_enemies_cap(20), 1.0, 0, 20), 17,
+		"W20 普通难度实际上限 17（15×1.16）")
+	_c.equals(GameBalance.final_enemy_cap(26, 1.5, 1, 40), 24,
+		"深层噩梦+角色倍率叠满仍夹 24 硬顶")
+	_c.equals(GameBalance.final_enemy_cap(20, 1.0, 0, 99), 24,
+		"深层基础上限 20 × 1.16 × 1.6 后仍夹 24")
 
 	# 2026-11-03 深层减量补偿：旧深层预算 / 新深层预算，经验按此补回，金币腿不跟涨
 	_c.equals(GameBalance.reference_spawn_budget(21), 56, "旧深层预算基准 W21=56")
 	_c.equals(GameBalance.reference_spawn_budget(40), 132, "旧深层预算基准 W40=132")
 	_c.near(GameBalance.deep_exp_comp_mult(20), 1.0, EPS, "≤20 波不做深层经验补偿")
-	_c.near(GameBalance.deep_exp_comp_mult(21), 56.0 / 54.0, EPS, "W21 深层经验补偿 ≈1.037")
-	_c.near(GameBalance.deep_exp_comp_mult(30), 92.0 / 67.0, EPS, "W30 深层经验补偿 ≈1.373")
-	_c.near(GameBalance.deep_exp_comp_mult(40), 132.0 / 80.0, EPS, "W40 深层经验补偿 =1.65")
-	_c.near(GameBalance.deep_exp_comp_mult(99), 135.0 / 80.0, EPS, "W99 深层经验补偿 1.6875（低于 1.70 上限）")
+	_c.near(GameBalance.deep_exp_comp_mult(21), 56.0 / 53.0, EPS, "W21 深层经验补偿 ≈1.057")
+	_c.near(GameBalance.deep_exp_comp_mult(30), 92.0 / 60.0, EPS, "W30 深层经验补偿 ≈1.533")
+	_c.near(GameBalance.deep_exp_comp_mult(40), 132.0 / 60.0, EPS, "W40 深层经验补偿 =2.2")
+	_c.near(GameBalance.deep_exp_comp_mult(99), 135.0 / 60.0, EPS, "W99 深层经验补偿 =2.25（恰好到上限）")
 
 	# 2026-10-15 分批清剿制：小怪掉落经验补偿倍率（预算 -26% 的倒数），掉落与补差均值同走一个出口
 	_c.near(GameBalance.MOB_KILL_EXP_MULT, 1.75, EPS, "小怪经验补偿倍率 1.75（改预算必须同步改它）")
@@ -74,7 +83,7 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.mob_kill_exp(5), 9, "邪修 exp 5 → 实发 9")
 	_c.equals(GameBalance.mob_kill_exp(0), 0, "非法 exp 0 不放大")
 	# 2026-11-03 经验/金币拆腿：深层经验吃补偿，金币腿只吃基础 1.75
-	_c.equals(GameBalance.mob_kill_exp(6, 40), 17, "W40 exp 6 → 实发 17（×1.75×1.65 取整）")
+	_c.equals(GameBalance.mob_kill_exp(6, 40), 23, "W40 exp 6 → 实发 23（×1.75×2.2 取整）")
 	_c.equals(GameBalance.mob_kill_stone(6), 11, "W40 金币腿仍只乘 1.75 → 11 枚（不跟深层经验补偿）")
 	_c.equals(GameBalance.mob_kill_stone(0), 0, "非法 exp 0 金币腿也归零")
 
@@ -96,11 +105,11 @@ func _test_wave_scaling() -> void:
 		dmg_prev = d
 		hp_prev = h
 	_c.check(deep_monotonic, "伤害/生命倍率全程严格递增（分段处无塌陷、不读 autoload 的纯函数单调）")
-	# 深层同屏密度：≤20 波恒 1.0，此后 +8%/波、封顶 2.2
+	# 深层同屏密度：≤20 波恒 1.0，此后 +5%/波、封顶 1.6
 	_c.near(GameBalance.endless_swarm_mult(20), 1.0, EPS, "20 波前同屏密度不放大")
 	_c.near(GameBalance.endless_swarm_mult(1), 1.0, EPS, "第 1 波同屏密度不放大（正常局零影响）")
-	_c.near(GameBalance.endless_swarm_mult(21), 1.08, EPS, "深层第 21 波同屏密度 +8%")
-	_c.near(GameBalance.endless_swarm_mult(99), GameBalance.DEEP_SWARM_MAX, EPS, "同屏密度放大封顶 ×2.2")
+	_c.near(GameBalance.endless_swarm_mult(21), 1.05, EPS, "深层第 21 波同屏密度 +5%")
+	_c.near(GameBalance.endless_swarm_mult(99), GameBalance.DEEP_SWARM_MAX, EPS, "同屏密度放大封顶 ×1.6")
 
 	# 弹速与攻击间隔缩放断言
 	_c.near(GameBalance.enemy_bolt_speed_mult(1), 1.0, EPS, "第 1 波弹速基线 1.0")
@@ -112,6 +121,7 @@ func _test_wave_scaling() -> void:
 	_c.equals(GameBalance.enemy_bonus_bolts(1), 0, "前期小怪无额外齐射")
 	_c.equals(GameBalance.enemy_bonus_bolts(16), 1, "第 16 波起小怪额外 +1 发齐射")
 	_c.equals(GameBalance.enemy_bonus_bolts(25), 2, "第 25 波起小怪额外 +2 发齐射")
+	_c.equals(GameBalance.enemy_bonus_bolts(35), 3, "第 35 波起小怪额外 +3 发齐射")
 
 func _test_boss_waves() -> void:
 	_c.check(GameBalance.is_boss_wave(10), "第 10 波是固定 Boss 关")
@@ -281,12 +291,12 @@ func _test_wave_theme() -> void:
 			tail_seen[WaveSpawner.pick_scene_key(w, r)] = true
 	_c.check(tail_seen.keys().size() >= 10, "尾部区间仍能选到绝大多数怪种（实得 %d 种）" % tail_seen.keys().size())
 
-	# 2026-11-03 深层老手配比：>20 波在主打怪之后切一段高威胁怪，份额随波次 16%→30%
+	# 2026-11-03 深层老手配比：>20 波在主打怪之后切一段高威胁怪，份额随波次 19.2%→36%
 	_c.near(EnemyData.deep_veteran_share(20), 0.0, EPS, "第 20 波及以前不出深层老手")
-	_c.near(EnemyData.deep_veteran_share(21), 0.16, EPS, "第 21 波老手份额 16%")
-	_c.near(EnemyData.deep_veteran_share(30), 0.25, EPS, "第 30 波老手份额 25%")
-	_c.near(EnemyData.deep_veteran_share(35), 0.30, EPS, "第 35 波老手份额封顶 30%")
-	_c.near(EnemyData.deep_veteran_share(99), EnemyData.DEEP_VETERAN_SHARE_MAX, EPS, "深层老手份额封顶 30%")
+	_c.near(EnemyData.deep_veteran_share(21), 0.192, EPS, "第 21 波老手份额 19.2%")
+	_c.near(EnemyData.deep_veteran_share(30), 0.30, EPS, "第 30 波老手份额 30%")
+	_c.near(EnemyData.deep_veteran_share(35), 0.36, EPS, "第 35 波老手份额封顶 36%")
+	_c.near(EnemyData.deep_veteran_share(99), EnemyData.DEEP_VETERAN_SHARE_MAX, EPS, "深层老手份额封顶 36%")
 	_c.equals(EnemyData.deep_veteran_key(0.0), "mowei", "老手权重首位 = 血煞魔卫")
 	_c.equals(EnemyData.deep_veteran_key(0.99), "zhumu", "老手权重末位 = 百目妖（低权重）")
 	var vet_ok := true
@@ -296,15 +306,15 @@ func _test_wave_theme() -> void:
 		if mob.is_empty() or int(mob.get("unlock_wave", 0)) > EnemyData.DEEP_VETERAN_MIN_WAVE:
 			vet_ok = false
 	_c.check(vet_ok, "老手池全部是已解锁的常规怪（W21 前解锁）")
-	# 老手段真的吃进 pick_scene_key 头部：W21 [0.12,0.28)、W40 [0.12,0.42)
+	# 老手段真的吃进 pick_scene_key 头部：W21 [0.12,0.312)、W40 [0.12,0.48)
 	_c.check(EnemyData.deep_veteran_key(0.0) == WaveSpawner.pick_scene_key(21, 0.12),
 		"W21 roll 0.12 落老手段首位")
 	_c.check(EnemyData.DEEP_VETERAN_POOL.any(func(r): return String(r["key"]) == WaveSpawner.pick_scene_key(21, 0.27)),
 		"W21 roll 0.27 仍在老手段内")
 	_c.check(EnemyData.DEEP_VETERAN_POOL.any(func(r): return String(r["key"]) == WaveSpawner.pick_scene_key(40, 0.41)),
-		"W40 roll 0.41 仍在老手段内（份额 30%）")
+		"W40 roll 0.41 仍在老手段内（份额 36%）")
 	_c.check(EnemyData.FEATURED_SHARE + EnemyData.DEEP_VETERAN_SHARE_MAX < 0.5,
-		"深层头部（主打 12% + 老手 30%）仍 < 50%，原分段带保留主体份额")
+		"深层头部（主打 12% + 老手 36%）仍 < 50%，原分段带保留主体份额")
 
 	# 批次刷新阈值爬坡（2026-10-16 节奏紧凑化）：W1-3 → 1 / W4-9 → 2 / W10+ → 3
 	_c.equals(GameBalance.batch_refill_threshold(1), 1, "第 1 波刷新阈值 1（保留前期单批清剿喘息）")
@@ -352,6 +362,10 @@ func _test_danger_system() -> void:
 	_c.equals(GameBalance.boss_spawn_count_for_wave(20, 1), 2, "噩梦 W20 双 Boss 接力")
 	_c.equals(GameBalance.boss_spawn_count_for_wave(40, 1), 2, "噩梦 W40 双 Boss 接力")
 	_c.equals(GameBalance.boss_spawn_count_for_wave(10, 1), 1, "噩梦 W10 单 Boss")
+	_c.equals(GameBalance.boss_spawn_count_for_wave(50, 1), 2, "噩梦 W50 双 Boss 接力（引魂使+修罗）")
+	_c.equals(GameBalance.boss_spawn_count_for_wave(50, 0), 1, "普通 W50 单 Boss")
+	_c.equals(GameBalance.secondary_boss_id_for_wave(50), "xiuluo", "W50 次席为血煞修罗（近战破网互补）")
+	_c.check(GameBalance.secondary_boss_id_for_wave(50) != GameBalance.boss_id_for_wave(50), "W50 双 Boss 首尾魔君不重样")
 	_c.near(GameBalance.boss_dual_hp_mult(20, 1), 0.78, EPS, "噩梦双 Boss 单尊血量 0.78x")
 	_c.near(GameBalance.boss_dual_hp_mult(10, 1), 1.0, EPS, "单 Boss 血量 1.0x")
 	_c.check(GameBalance.secondary_boss_id_for_wave(20) != GameBalance.boss_id_for_wave(20), "双 Boss 首尾魔君不重样")
@@ -452,15 +466,27 @@ func _test_enemy_id_prefixes() -> void:
 	_c.check(EnemyData.ID_PREFIXES.has("boss") and EnemyData.ID_PREFIXES.has("jinchan"),
 		"Boss 与金蟾在前缀表里有登记")
 	_c.equals(EnemyData.ELITE_POOL.size(), 6, "精英池扩充为 6 种差异化原型")
-	_c.equals(EnemyData.BOSS_POOL.size(), 6, "Boss 池覆盖 10~40 波 6 大魔君")
+	_c.equals(EnemyData.BOSS_POOL.size(), 18, "Boss 池覆盖 10~40 波 6 大魔君 + W45~W100 深层专属 12 尊")
 	_c.equals(GameBalance.boss_id_for_wave(10), "chiyan", "W10 Boss 为赤炎魔将")
 	_c.equals(GameBalance.boss_id_for_wave(20), "xiuluo", "W20 Boss 为血煞修罗（冲刺狂战）")
 	_c.equals(GameBalance.boss_id_for_wave(25), "qianji", "W25 Boss 为玄天千机尊（不动炮台）")
 	_c.equals(GameBalance.boss_id_for_wave(30), "wangu", "W30 Boss 为万蛊蚀天母（禁区统御）")
 	_c.equals(GameBalance.boss_id_for_wave(35), "jianpo", "W35 Boss 为幽冥剑魄尊（瞬身剑客）")
 	_c.equals(GameBalance.boss_id_for_wave(40), "xinmo", "W40 Boss 为九幽心魔尊（终极全能）")
-	_c.equals(GameBalance.boss_id_for_wave(45), "chiyan", "W45 起按序轮回循环首轮 chiyan")
-	_c.equals(GameBalance.boss_id_for_wave(50), "xiuluo", "W50 轮回循环次轮 xiuluo")
+	_c.equals(GameBalance.boss_id_for_wave(45), "zhaoying", "W45 Boss 为照影魔君（镜像夹击）")
+	_c.equals(GameBalance.boss_id_for_wave(50), "yinhun", "W50 Boss 为引魂使（魂潮收网）")
+	_c.equals(GameBalance.boss_id_for_wave(55), "luding", "W55 Boss 为焚天炉君（炉压崩天）")
+	_c.equals(GameBalance.boss_id_for_wave(60), "canglong", "W60 Boss 为太苍龙君（飞龙俯冲）")
+	_c.equals(GameBalance.boss_id_for_wave(65), "jianzhong", "W65 Boss 为葬剑仙（剑冢瞬斩）")
+	_c.equals(GameBalance.boss_id_for_wave(70), "leijie", "W70 Boss 为雷劫神君（落雷连环）")
+	_c.equals(GameBalance.boss_id_for_wave(75), "kunwang", "W75 Boss 为覆海鲲王（冥水领域）")
+	_c.equals(GameBalance.boss_id_for_wave(80), "kuijia", "W80 Boss 为千臂傀王（傀潮召唤）")
+	_c.equals(GameBalance.boss_id_for_wave(85), "fenghuang", "W85 Boss 为离火凤皇（涅槃火环）")
+	_c.equals(GameBalance.boss_id_for_wave(90), "tianmo", "W90 Boss 为无相天魔（无相瞬杀）")
+	_c.equals(GameBalance.boss_id_for_wave(95), "hundun", "W95 Boss 为元初兽（混沌洗牌）")
+	_c.equals(GameBalance.boss_id_for_wave(100), "wanjie", "W100 Boss 为道劫化身（万劫压轴）")
+	_c.equals(GameBalance.boss_id_for_wave(105), "chiyan", "W105 起 100 波后仍走六尊轮回（轮换规则不变）")
+	_c.equals(GameBalance.boss_id_for_wave(130), "xinmo", "W130 深层轮回 idx=(130-45)/5%6=5 仍命中 xinmo（轮换逐字不变）")
 
 	var overlapping: Array = []
 	for a in EnemyData.ID_PREFIXES:

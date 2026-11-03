@@ -64,6 +64,11 @@ static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 		rows.append(["穿透", "%d 敌" % int(def["pierce"]), GameStyle.PAPER])
 	if int(def.get("projectile_count", 1)) > 1:
 		rows.append(["齐射", "%d 发" % int(def["projectile_count"]), GameStyle.PAPER])
+	# 机关（2026-11-03 手动布设改版）：一座机关多管齐射（★1 两管…★4 五管），
+	# 且开火会磨损耐久 —— 图鉴这一列只印纸面值，升星加管写在 notes 里。
+	if int(def.get("behavior", 0)) == WeaponData.Behavior.TURRET:
+		rows.append(["齐射", "%d 管" % WeaponData.turret_volley(1), GameStyle.PAPER])
+		rows.append(["耐久", "%d 秒" % int(float(def.get("turret_stamina", 0.0))), GameStyle.PAPER])
 	for proc_key in PROC_NAMES.keys():
 		if def.has(proc_key):
 			rows.append(["异常状态", PROC_NAMES[proc_key], chip_color])
@@ -75,6 +80,8 @@ static func weapon_payload(wid: String, foot: String = "") -> Dictionary:
 		for key in scalings.keys():
 			names.append(GameBalance.stat_scaling_label(String(key)))
 		notes.append("属性受益：" + "、".join(names))
+	if int(def.get("behavior", 0)) == WeaponData.Behavior.TURRET:
+		notes.append("要手动布设；开火久了会磨损，靠近长按可维修，齐射管数随星级增加（最高 5 管）")
 	notes.append("集齐 3 把同名同星可在商店合成升星")
 
 	return {

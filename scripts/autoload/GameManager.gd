@@ -407,6 +407,9 @@ var is_game_over: bool = false
 ## 阵亡已成事实后置真：从致死判定到结算面板/复活之间拒绝一切落盘，
 ## 防止死亡演出/结算界面期间切后台或强退把存档复活。reset_run 复位，原地复活手动清。
 var run_invalidated: bool = false
+## 本局由暂停菜单「投降结算」主动终结（非受击阵亡）：结算屏据此隐藏「原地复活」——
+## 投降是玩家的收手决定；且投降可能发生在悟道/商店阶段，退回战斗会留下已收起的回合间面板。
+var surrendered: bool = false
 
 ## 待加点数：升几级攒几点，回合结束统一结算（战斗中不弹面板）
 var pending_upgrade_points: int = 0
@@ -430,6 +433,13 @@ var ranged_damage: float = 0.0      ## 远程伤害：加成所有飞射弹道�
 var elemental_damage: float = 0.0   ## 元素伤害：加成符箓、雷法及灼烧/剧毒跳字伤害
 var engineering_damage: float = 0.0 ## 召唤伤害：加成所有环绕护体灵宝
 var contraption_damage: float = 0.0 ## 机关伤害：加成所有地面机关炮台与阵盘
+# —— 机关阵地（2026-11-03 手动布设改版）：三条维护/火力杠杆，读侧在 TurretUnit / FloatingWeapon ——
+## 机关耐久乘区（pctmul，1.0 起）：耐久时长 = 数据表 turret_stamina × 该值
+var turret_stamina_mul: float = 1.0
+## 机关维修用时乘区（pctmul，1.0 起）：长按维修 = REPAIR_HOLD_SEC × 该值（越小越快）
+var turret_repair_haste_mul: float = 1.0
+## 机关齐射管数加成（pt）：实际管数 = WeaponData.turret_volley(星) + int(该值)
+var turret_volley_bonus: float = 0.0
 var attack_speed_mult: float = 1.0
 var move_speed_mult: float = 1.0
 var pickup_range_mult: float = 1.0

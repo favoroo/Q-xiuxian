@@ -2,18 +2,18 @@ extends Node
 
 ## 深层波次高负载压力基准（非判据，优化前后对照用；带窗口跑才有绘制调用数据）。
 ## 与 PerfRenderBench 的差别：那里冻结敌人、不装武器，只测「每敌固定渲染开销」；
-## 这里复刻 20+ 波真实战斗全链路 —— 32 敌（硬上限）追击/放弹 + Boss + 8 件三星武器
+## 这里复刻 20+ 波真实战斗全链路 —— 24 敌（硬上限）追击/放弹 + Boss + 8 件三星武器
 ## 齐射 + 伤害跳字 + 命中特效 + 百颗宝石磁吸，采帧时间分布（p50/p95/p99/最差）。
 ## 敌人设巨额 HP 保证数量恒定（不测死亡爆散，它有 FRAME_BUDGET 闸且非稳态负载）。
 ##
 ## 运行（窗口 + 移动管线，贴近真机口径）：
 ##   Godot --path . --rendering-method gl_compatibility res://tests/PerfStressBench.tscn
-## 参数：--enemies 32 --secs 4 --no-numbers（归因：S3 起关跳字）--no-vfx（预留）
+## 参数：--enemies 24 --secs 4 --no-numbers（归因：S3 起关跳字）--no-vfx（预留）
 ## 口径：关 vsync 量真实帧耗时；敌人不杀、玩家锁血、宝石手动铺场，逐段采样。
 ## 分阶段：S0 空场底噪 → S1 敌群（AI/物理/渲染）→ S2 全链路（+武器/弹丸/跳字/特效/宝石）
 ##   → S3 关跳字归因（仅 --no-numbers 时）。
 
-var _enemies_n := 32
+var _enemies_n := 24
 var _secs := 4.0
 var _attr_numbers := false   ## --no-numbers：追加一段「关伤害跳字」归因采样
 var _probe := false          ## --probe：S2 状态下逐层隐藏归因绘制调用
@@ -23,15 +23,15 @@ var _player: Node2D = null
 var _enemies: Array = []
 var _boss: Node = null
 
-## 敌人配比（合计 32 = GameBalance.MAX_ENEMIES_HARD_CAP）：近战群 + 远程放弹 + 深层老手 + 精英
+## 敌人配比（合计 24 = GameBalance.MAX_ENEMIES_HARD_CAP）：近战群 + 远程放弹 + 深层老手 + 精英
 const MOB_MIX := [
-	["res://scenes/entities/SlimeEnemy.tscn", 8],
-	["res://scenes/entities/FengQunEnemy.tscn", 5],
-	["res://scenes/entities/DanBaoEnemy.tscn", 4],
-	["res://scenes/entities/XieXiuEnemy.tscn", 4],
-	["res://scenes/entities/HanPoEnemy.tscn", 4],
-	["res://scenes/entities/MoWeiEnemy.tscn", 3],
-	["res://scenes/entities/GuYaoEnemy.tscn", 2],
+	["res://scenes/entities/SlimeEnemy.tscn", 6],
+	["res://scenes/entities/FengQunEnemy.tscn", 4],
+	["res://scenes/entities/DanBaoEnemy.tscn", 3],
+	["res://scenes/entities/XieXiuEnemy.tscn", 3],
+	["res://scenes/entities/HanPoEnemy.tscn", 3],
+	["res://scenes/entities/MoWeiEnemy.tscn", 2],
+	["res://scenes/entities/GuYaoEnemy.tscn", 1],
 	["res://scenes/entities/ChileiEliteEnemy.tscn", 1],
 	["res://scenes/entities/JianshaEliteEnemy.tscn", 1],
 ]
@@ -62,6 +62,9 @@ func _run() -> void:
 	# 关 vsync / 帧率帽：量真实单帧成本而非被显示刷新率钳制
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
+	# 压测窗口置顶（2026-11-03 归因修正）：窗口被编辑器/其他窗口遮住时 macOS 会停止呈现，
+	# RENDER_TOTAL_DRAW_CALLS_IN_FRAME 冻结在上一帧（曾实测全阶段恒 176），采样全失真。
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true)
 
 	var main = load("res://scenes/main/Main.tscn").instantiate()
 	get_tree().root.add_child(main)

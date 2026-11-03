@@ -62,7 +62,7 @@ const STAR3_AWAKEN: Dictionary = {
 	Behavior.PROJECTILE: {"name": "剑影", "desc": "每次开火追加一轮幻影弹（50% 伤害）", "ratio": 0.5},
 	Behavior.BURST: {"name": "双雷", "desc": "同一波落第二道雷（60% 伤害）", "ratio": 0.6},
 	Behavior.DRONE: {"name": "灵威", "desc": "分身总伤害 +50%，贴得更满", "divisor": 2.0},
-	Behavior.TURRET: {"name": "主炮", "desc": "全部炮台开火间隔 ×0.65", "cd_mult": 0.65},
+	Behavior.TURRET: {"name": "主炮", "desc": "机关开火间隔 ×0.65，齐射增至四管", "cd_mult": 0.65},
 	Behavior.BEAM: {"name": "贯日", "desc": "光束加宽一倍，威力 +50%", "width_mult": 2.0, "dmg_mult": 1.5},
 	Behavior.CONE: {"name": "燎原", "desc": "喷吐锥角大幅加宽，威力 +50%", "half_angle": 44.0, "dmg_mult": 1.5},
 }
@@ -79,7 +79,7 @@ const STAR4_ASCEND: Dictionary = {
 	Behavior.PROJECTILE: {"name": "万剑齐发", "desc": "每次开火连追两轮霓虹幻影弹（各 65% 伤害）", "count": 2, "ratio": 0.65},
 	Behavior.BURST: {"name": "天劫三雷", "desc": "同一波连落三道雷（劫雷各 70% 伤害）", "count": 2, "ratio": 0.7},
 	Behavior.DRONE: {"name": "四象灵尊", "desc": "分身增至四具，总伤害 ×2.5", "divisor": 1.6},
-	Behavior.TURRET: {"name": "神机齐射", "desc": "炮台上限再 +1，全部开火间隔 ×0.42", "cd_mult": 0.42},
+	Behavior.TURRET: {"name": "神机齐射", "desc": "机关开火间隔 ×0.42，齐射增至五管", "cd_mult": 0.42},
 	Behavior.BEAM: {"name": "贯日天河", "desc": "光束再加宽，威力 ×2.3", "width_mult": 2.6, "dmg_mult": 2.3},
 	Behavior.CONE: {"name": "焚天燎原", "desc": "喷吐锥角再扩，威力 ×2.3", "half_angle": 56.0, "dmg_mult": 2.3},
 }
@@ -593,7 +593,7 @@ const DEFS: Dictionary = {
 						"name": "机关弩", "behavior": Behavior.TURRET,
 						"sfx": "metal_dart",
 						"damage": 18.0, "cooldown": 3.5, "range": 270.0,
-						"turret_fire_cd": 0.75, "turret_lifetime": 12.0, "turret_cap": 2,
+						"turret_fire_cd": 0.75, "turret_stamina": 40.0,
 						"knockback": 120.0,
 						"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
 						"tip": Vector2(22, -20), "turret_shape": "crossbow", "upright": true,
@@ -608,7 +608,7 @@ const DEFS: Dictionary = {
 						# 疾射飞剑 ⇒ 金属抛体离手族；whoosh_light 是近战前摇的铺垫层，当开火音发虚
 						"sfx": "blade_shoot",
 						"damage": 15.0, "cooldown": 4.0, "range": 250.0,
-						"turret_fire_cd": 0.60, "turret_lifetime": 12.0, "turret_cap": 2,
+						"turret_fire_cd": 0.60, "turret_stamina": 40.0,
 						"knockback": 140.0,
 						"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
 						"tip": Vector2(22, 0), "turret_shape": "array_disc", "upright": true,
@@ -624,7 +624,7 @@ const DEFS: Dictionary = {
 							# 2026-10-24 机关带内回调：灼烧按 0.42s 开火间隔全程常驻，11 伤时 30.6/座
 							# 超机关带顶（25.0）两成余 → 降 9 伤到 25.0/座与剑阵盘齐平
 							"damage": 9.0, "cooldown": 4.2, "range": 195.0,
-						"turret_fire_cd": 0.42, "turret_lifetime": 10.0, "turret_cap": 2,
+						"turret_fire_cd": 0.42, "turret_stamina": 40.0,
 						"knockback": 100.0,
 						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
 						"tip": Vector2(22, -10), "turret_shape": "beast", "upright": true,
@@ -721,7 +721,7 @@ const DEFS: Dictionary = {
 							"sfx": "metal_dart",
 							# 2026-10-24 机关带底回填：20.0/座 比带内次低（藤萝 21.5）还低一截 → 10 伤到 22.2
 							"damage": 10.0, "cooldown": 4.0, "range": 210.0,
-						"turret_fire_cd": 0.45, "turret_lifetime": 10.0, "turret_cap": 2,
+						"turret_fire_cd": 0.45, "turret_stamina": 40.0,
 						"knockback": 90.0,
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 						"tip": Vector2(20, -6), "turret_shape": "beast", "upright": true,
@@ -751,7 +751,7 @@ const DEFS: Dictionary = {
 						"name": "藤萝机关", "behavior": Behavior.TURRET,
 						"sfx": "impact_crack",
 						"damage": 14.0, "cooldown": 3.6, "range": 255.0,
-						"turret_fire_cd": 0.65, "turret_lifetime": 12.0, "turret_cap": 2,
+						"turret_fire_cd": 0.65, "turret_stamina": 40.0,
 						"knockback": 110.0,
 						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
 						"tip": Vector2(22, -16), "turret_shape": "trebuchet", "upright": true,
@@ -779,7 +779,7 @@ const DEFS: Dictionary = {
 						"name": "垒石机关", "behavior": Behavior.TURRET,
 						"sfx": "impact_blunt",
 						"damage": 20.0, "cooldown": 4.5, "range": 230.0,
-						"turret_fire_cd": 0.9, "turret_lifetime": 10.0, "turret_cap": 2,
+						"turret_fire_cd": 0.9, "turret_stamina": 40.0,
 						"knockback": 300.0,
 						"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
 						"tip": Vector2(22, 16), "turret_shape": "trebuchet", "upright": true,
@@ -876,7 +876,7 @@ const DEFS: Dictionary = {
 						# 三重共鸣（仿剑阵盘）：同时计入 机关+御灵 两条器类羁绊与土系羁绊
 						"sfx": "impact_crack",
 						"damage": 12.0, "cooldown": 3.8, "range": 240.0,
-						"turret_fire_cd": 0.55, "turret_lifetime": 12.0, "turret_cap": 2,
+						"turret_fire_cd": 0.55, "turret_stamina": 40.0,
 						"knockback": 150.0,
 						"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
 						"tip": Vector2(22, -2), "turret_shape": "beast", "upright": true,
@@ -1051,7 +1051,7 @@ const DEFS: Dictionary = {
 								"name": "青木炮", "behavior": Behavior.TURRET,
 								"sfx": "impact_crack",
 								"damage": 13.0, "cooldown": 3.8, "range": 260.0,
-								"turret_fire_cd": 0.60, "turret_lifetime": 12.0, "turret_cap": 2,
+								"turret_fire_cd": 0.60, "turret_stamina": 40.0,
 								"knockback": 115.0,
 								# 2026-10-18 media-gen 专属重绘：重型攻城青木灵炮，青铜墨木箍合与幽绿木灵光
 								"price": 38, "icon": "res://assets/art/weapon_qingmu_pao.png",
@@ -1066,7 +1066,7 @@ const DEFS: Dictionary = {
 								"name": "凝冰机弩", "behavior": Behavior.TURRET,
 								"sfx": "metal_dart",
 								"damage": 12.0, "cooldown": 4.0, "range": 280.0,
-								"turret_fire_cd": 0.55, "turret_lifetime": 10.0, "turret_cap": 2,
+								"turret_fire_cd": 0.55, "turret_stamina": 40.0,
 								"knockback": 95.0,
 								# 2026-10-18 media-gen 专属重绘：重型三联装攻城机关弩，玄冰冰晶弩臂与极寒飞针
 								"price": 40, "icon": "res://assets/art/weapon_ningbing_nu.png",
@@ -1081,7 +1081,7 @@ const DEFS: Dictionary = {
 								"name": "烽火台", "behavior": Behavior.TURRET,
 								"sfx": "flame_jet",
 								"damage": 10.0, "cooldown": 4.4, "range": 195.0,
-								"turret_fire_cd": 0.50, "turret_lifetime": 11.0, "turret_cap": 2,
+								"turret_fire_cd": 0.50, "turret_stamina": 40.0,
 								"knockback": 100.0,
 								# 2026-10-18 media-gen 专属重绘：八角重甲玄石烽火台，狼烟火盆与赤红真火
 								"price": 40, "icon": "res://assets/art/weapon_fenghuo_tai.png",
@@ -1327,9 +1327,10 @@ const BEHAVIOR_TIPS: Dictionary = {
 		],
 	},
 	Behavior.TURRET: {
-		"how": "按冷却在脚下布设一座机关，它自己索敌开火、寿命到点消散",
+		"how": "在脚下空地手动布设一座机关，它自己索敌开火；开火越久磨损越重",
 		"notes": [
-			"同时最多站那么几座，摆满就撤掉最旧的一座顶上；升星多站一座。",
+			"按钮按一下布设一座；每把机关武器只带一座，收回后要等整备冷却才能重放。",
+			"机关开火会磨损，磨损后降速、磨到底停摆；靠近长按「维修」补满，页面上的耐久弧就是它的余量。",
 			"机关这一类独享「机关」羁绊的伤害档，别的武器不吃这一条。",
 		],
 	},
@@ -1459,6 +1460,13 @@ static func star4_perk_desc(id: String) -> String:
 		return ""
 	return "%s：%s" % [String(perk.get("name", "")), String(perk.get("desc", ""))]
 
+## 机关齐射管数（2026-11-03 手动布设改版）：★1 双管 / ★2 三管 / ★3 四管 / ★4 五管。
+## 与旧版「炮台座数 = turret_cap(2) + (星-1)」逐星一致 —— 每把机关武器从「自动铺 N 座」
+## 改成「手动放 1 座 N 管齐射」后，总 DPS 与多目标覆盖面逐星级完全持平（推导见 BalanceTurret 头注）。
+## 单发伤害 damage_for 不变，★3/★4 的 cd_mult 不变，只把座数换成管数。
+static func turret_volley(star: int) -> int:
+	return clampi(star, 1, MAX_STAR) + 1
+
 static func damage_for(id: String, star: int) -> float:
 	var def: Dictionary = DEFS.get(id, {})
 	if def.is_empty():
@@ -1552,7 +1560,7 @@ static func targets_per_shot(id: String) -> int:
 	if behavior == Behavior.DRONE:
 		return 3      ## 环绕接触：同时贴身的一般是两三尊
 	if behavior == Behavior.TURRET:
-		return 4      ## 机关炮台独立索敌
+		return turret_volley(1)  ## 机关：★1 双管齐射（升星加管、面数随之变宽）
 	if behavior == Behavior.SWEEP:
 		return 6      ## 横扫扇形：一扫一片，天生群体
 	return 6          ## 近战弧扫 / 落雷圆形：天生群体
@@ -1565,9 +1573,17 @@ static func is_focus_ranged(id: String) -> bool:
 	return int(def.get("behavior", -1)) == Behavior.PROJECTILE \
 		and targets_per_shot(id) <= FOCUS_RANGED_MAX_TARGETS
 
+## 机关单管开火间隔（表值 × 觉醒 cd_mult）。运行时 TurretUnit._eff_fire_cd 与两把尺子同源。
+static func turret_fire_interval(id: String, star: int = 1) -> float:
+	var def: Dictionary = DEFS.get(id, {})
+	var fire_cd: float = maxf(0.1, float(def.get("turret_fire_cd", 0.75)))
+	return fire_cd * float(awaken_perk(Behavior.TURRET, star).get("cd_mult", 1.0))
+
 ## 对一个孤立敌人的持续 DPS（不含玩家加成）。灼烧/剧毒按"单次施加的常驻量"折算：
 ## 冷却 < 异常时长 ⇒ 全程挂着（灼烧在 EnemyBase 里取 max 不叠层）；否则按占比折算。冰缓不加伤，不计。
 ## 2026-10-10 重标定：近战移除隐藏 ×1.35（面板即实伤），多发散射弹丸对单目标按最多 2 发命中折算。
+## 机关口径 = **单管**（不含齐射）：星级跳变等尺子要的是「设计强度」，整把武器的总 DPS 走
+## sustained_weapon_dps。两者分开是为了不让齐射把 ★3/★4 的跳变判据整体放大。
 static func sustained_single_dps(id: String, star: int = 1) -> float:
 	var def: Dictionary = DEFS.get(id, {})
 	if def.is_empty():
@@ -1575,9 +1591,7 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 	var dmg := damage_for(id, star)
 	var cd := maxf(0.05, cooldown_for(id, star))
 	if int(def.get("behavior", Behavior.MELEE)) == Behavior.TURRET:
-		var fire_cd: float = maxf(0.1, float(def.get("turret_fire_cd", 0.75)))
-		# ★3 主炮 / ★4 神机齐射：全部炮台开火间隔乘 cd_mult（运行时 TurretUnit 同源）
-		fire_cd *= float(awaken_perk(Behavior.TURRET, star).get("cd_mult", 1.0))
+		var fire_cd: float = turret_fire_interval(id, star)
 		var t_dps: float = dmg / fire_cd
 		if def.get("proc_burn", false):
 			t_dps += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 2.5)) / fire_cd)
@@ -1609,6 +1623,25 @@ static func sustained_single_dps(id: String, star: int = 1) -> float:
 			Behavior.BEAM, Behavior.CONE:
 				dps *= float(perk.get("dmg_mult", 1.0))
 	return dps
+
+## 整把武器的持续单体 DPS（不含玩家加成）：非机关 = sustained_single_dps；
+## 机关 = 单管直伤 × 齐射管数 + 单层灼烧（一次开火 N 管优先分给 N 个敌人，只剩一个时全打它，
+## 所以直伤吃满齐射；灼烧在同目标上取 max 不叠层 ⇒ 只折算一层）。
+## volley_bonus = 本局的额外管数（「连环机括」等），界面读数要按加了之后的真实管数算。
+## 界面（weapon readout / 详情卡）与平衡仿真展示「这把武器真正的每秒伤害」时走这一条。
+static func sustained_weapon_dps(id: String, star: int = 1, volley_bonus: int = 0) -> float:
+	var def: Dictionary = DEFS.get(id, {})
+	if def.is_empty():
+		return 0.0
+	if int(def.get("behavior", Behavior.MELEE)) != Behavior.TURRET:
+		return sustained_single_dps(id, star)
+	var dmg := damage_for(id, star)
+	var fire_cd: float = turret_fire_interval(id, star)
+	var barrels := float(turret_volley(star) + maxi(0, volley_bonus))
+	var direct: float = dmg * barrels / fire_cd
+	if def.get("proc_burn", false):
+		direct += dmg * float(def.get("burn_ratio", 0.4)) * minf(1.0, float(def.get("burn_dur", 2.5)) / fire_cd)
+	return direct
 
 ## 该武器是否吃「元素伤害」属性加成：stat_scalings 里配了 elemental_damage 系数才算。
 ## 返回系数（0 = 不吃），供各界面挂角标与悟道加点提示共用。

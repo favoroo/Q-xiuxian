@@ -61,9 +61,12 @@ func _ensure_visibility() -> void:
 			band.visible = should_show
 
 func _draw() -> void:
+	# BatchDraw 静态缓冲全进程共用：入口先清残留，出口统一提交（2026-11-03 绘制合批）
+	BatchDraw.flush(self)
 	_ensure_flow_bands()
 	_draw_central_taiji_array()
 	_draw_talisman_pulse()
+	BatchDraw.flush(self)
 
 ## 结界流光带懒挂载：首次 _draw（half_extent 已由 Main 定值）时创建，
 ## 三条与主光丝同长的梯形带（上下左右），shader TIME 驱动，之后 CPU 零重绘。
@@ -124,30 +127,33 @@ func _draw_central_taiji_array() -> void:
 
 	# 极慢灵脉自转（每 90 秒转一圈，如同天地运转）
 	var rot: float = _time * _taiji_rot_mult
+	# draw_set_transform 必须落在已提交批次之后：BatchDraw 记的是当前画布变换，
+	# 先 flush 再换坐标系（同 HollowKnightEnemyRenderer._draw 的接法）
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, rot, Vector2.ONE)
 
 	# 外同心双环（弧段按半径自适应修剪：145px 半径 48 段已远超肉眼分辨）
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_outer, 0.0, TAU, col_cyan, 1.8, true)
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_outer - 8.0, 0.0, TAU, col_dark, 1.0, true)
+	BatchDraw.arc(self, Vector2.ZERO, r_outer, 0.0, TAU, col_cyan, 1.8)
+	BatchDraw.arc(self, Vector2.ZERO, r_outer - 8.0, 0.0, TAU, col_dark, 1.0)
 
 	# 12 方位天干地支刻印点
 	for i in range(12):
 		var a := (TAU / 12.0) * float(i)
 		var p_node := Vector2(cos(a), sin(a)) * (r_outer - 4.0)
-		AdaptiveDraw.circle(self, p_node, 1.8, col_gold)
+		BatchDraw.circle(self, p_node, 1.8, col_gold)
 
 	# 中阵环（四象象限与八卦爻刻）
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_mid, 0.0, TAU, col_dark, 1.2, true)
+	BatchDraw.arc(self, Vector2.ZERO, r_mid, 0.0, TAU, col_dark, 1.2)
 	for j in range(8):
 		var b := (TAU / 8.0) * float(j)
 		var dir := Vector2(cos(b), sin(b))
-		draw_line(dir * (r_inner + 8.0), dir * (r_mid - 6.0), col_cyan * 0.8, 1.0)
+		BatchDraw.line(self, dir * (r_inner + 8.0), dir * (r_mid - 6.0), col_cyan * 0.8, 1.0)
 		# 八卦爻位短横
 		var p_mid := dir * r_mid
-		draw_line(p_mid - dir.orthogonal() * 4.0, p_mid + dir.orthogonal() * 4.0, col_gold, 1.4)
+		BatchDraw.line(self, p_mid - dir.orthogonal() * 4.0, p_mid + dir.orthogonal() * 4.0, col_gold, 1.4)
 
 	# 内阵核：太极双鱼图腾
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, col_cyan, 1.5, true)
+	BatchDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, col_cyan, 1.5)
 
 	# 阴阳鱼 S 曲线刻线
 	var s_pts := PackedVector2Array()
@@ -162,14 +168,15 @@ func _draw_central_taiji_array() -> void:
 		var ang := PI * 0.5 - PI * t
 		var r_half := r_inner * 0.5
 		s_pts.append(Vector2(0, r_half) + Vector2(cos(ang), sin(ang)) * r_half)
-	draw_polyline(s_pts, col_cyan, 1.4, true)
+	BatchDraw.polyline(self, s_pts, col_cyan, 1.4)
 
 	# 阴阳眼
-	AdaptiveDraw.circle(self, Vector2(0, -r_inner * 0.5), 3.5, col_cyan)
-	AdaptiveDraw.circle(self, Vector2(0, r_inner * 0.5), 3.5, col_dark)
-	AdaptiveDraw.circle(self, Vector2(0, r_inner * 0.5), 1.5, col_gold)
+	BatchDraw.circle(self, Vector2(0, -r_inner * 0.5), 3.5, col_cyan)
+	BatchDraw.circle(self, Vector2(0, r_inner * 0.5), 3.5, col_dark)
+	BatchDraw.circle(self, Vector2(0, r_inner * 0.5), 1.5, col_gold)
 
-	# 还原坐标系
+	# 还原坐标系：先把旋转坐标系下的批次提交，再复位
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ==============================================================================
@@ -226,11 +233,11 @@ func _draw_talisman_pulse() -> void:
 				n_pos + Vector2(-d_r, 0),
 				n_pos + Vector2(0, -d_r * 1.3)
 			])
-			draw_polyline(diamond, col_node_rim, 1.0)
+			BatchDraw.polyline(self, diamond, col_node_rim, 1.0)
 			# 核心半径按激活强度缩放，alpha 同步增强
 			var core_col := col_node_core
 			core_col.a = minf(core_col.a * glow_factor, 1.0)
-			AdaptiveDraw.circle(self, n_pos, 1.2 * glow_factor, core_col)
+			BatchDraw.circle(self, n_pos, 1.2 * glow_factor, core_col)
 
 			node_global_idx += 1
 
@@ -297,9 +304,12 @@ class StaticDecor:
 		_built_half = v
 
 	func _draw() -> void:
+		# 烘焙失败回退时这层每帧重放全部指令；合批后静态装饰也只付 1 个 draw call
+		BatchDraw.flush(self)
 		_draw_barrier_base()
 		_draw_talisman_diamonds()
 		_draw_quad_spirit_marks()
+		BatchDraw.flush(self)
 
 	# --------------------------------------------------------------------------
 	# 3.1 战台边缘界石台基（古石砌筑、榫卯咬合与台阶立体阴影）
@@ -312,9 +322,9 @@ class StaticDecor:
 			Vector2(h + 8.0, h + 8.0), Vector2(-h - 8.0, h + 8.0),
 			Vector2(-h - 8.0, -h - 8.0)
 		]
-		draw_polyline(PackedVector2Array(drop_rect), Color(0.015, 0.025, 0.04, 0.95), 16.0)
+		BatchDraw.polyline(self, PackedVector2Array(drop_rect), Color(0.015, 0.025, 0.04, 0.95), 16.0)
 		# 台阶最外围的一线微弱冷墨收边线
-		draw_polyline(PackedVector2Array(drop_rect), Color(0.05, 0.09, 0.14, 0.65), 1.5)
+		BatchDraw.polyline(self, PackedVector2Array(drop_rect), Color(0.05, 0.09, 0.14, 0.65), 1.5)
 
 		# (b) 压顶玄岩石基（h - 18 到 h）
 		var coping_rect := [
@@ -322,7 +332,7 @@ class StaticDecor:
 			Vector2(h - 8.0, h - 8.0), Vector2(-h + 8.0, h - 8.0),
 			Vector2(-h + 8.0, -h + 8.0)
 		]
-		draw_polyline(PackedVector2Array(coping_rect), Color(0.045, 0.075, 0.115, 0.98), 16.0)
+		BatchDraw.polyline(self, PackedVector2Array(coping_rect), Color(0.045, 0.075, 0.115, 0.98), 16.0)
 
 		# (c) 古石板榫卯砌缝（Masonry Joints）：规整石条砌筑感，每隔约 55px 一处砌缝
 		var joint_col_shadow := Color(0.015, 0.025, 0.035, 0.9)
@@ -334,15 +344,15 @@ class StaticDecor:
 		for idx in joint_count + 1:
 			var coord := start_offset + float(idx) * joint_spacing
 			# 上下两侧石缝（垂直线，y 跨越 [-h - 2, -h + 16] 与 [h - 16, h + 2]）
-			draw_line(Vector2(coord, -h - 2.0), Vector2(coord, -h + 16.0), joint_col_shadow, 1.4)
-			draw_line(Vector2(coord + 1.0, -h - 2.0), Vector2(coord + 1.0, -h + 16.0), joint_col_light, 0.8)
-			draw_line(Vector2(coord, h - 16.0), Vector2(coord, h + 2.0), joint_col_shadow, 1.4)
-			draw_line(Vector2(coord + 1.0, h - 16.0), Vector2(coord + 1.0, h + 2.0), joint_col_light, 0.8)
+			BatchDraw.line(self, Vector2(coord, -h - 2.0), Vector2(coord, -h + 16.0), joint_col_shadow, 1.4)
+			BatchDraw.line(self, Vector2(coord + 1.0, -h - 2.0), Vector2(coord + 1.0, -h + 16.0), joint_col_light, 0.8)
+			BatchDraw.line(self, Vector2(coord, h - 16.0), Vector2(coord, h + 2.0), joint_col_shadow, 1.4)
+			BatchDraw.line(self, Vector2(coord + 1.0, h - 16.0), Vector2(coord + 1.0, h + 2.0), joint_col_light, 0.8)
 			# 左右两侧石缝（水平线，x 跨越 [-h - 2, -h + 16] 与 [h - 16, h + 2]）
-			draw_line(Vector2(-h - 2.0, coord), Vector2(-h + 16.0, coord), joint_col_shadow, 1.4)
-			draw_line(Vector2(-h - 2.0, coord + 1.0), Vector2(-h + 16.0, coord + 1.0), joint_col_light, 0.8)
-			draw_line(Vector2(h - 16.0, coord), Vector2(h + 2.0, coord), joint_col_shadow, 1.4)
-			draw_line(Vector2(h - 16.0, coord + 1.0), Vector2(h + 2.0, coord), joint_col_light, 0.8)
+			BatchDraw.line(self, Vector2(-h - 2.0, coord), Vector2(-h + 16.0, coord), joint_col_shadow, 1.4)
+			BatchDraw.line(self, Vector2(-h - 2.0, coord + 1.0), Vector2(-h + 16.0, coord + 1.0), joint_col_light, 0.8)
+			BatchDraw.line(self, Vector2(h - 16.0, coord), Vector2(h + 2.0, coord), joint_col_shadow, 1.4)
+			BatchDraw.line(self, Vector2(h - 16.0, coord + 1.0), Vector2(h + 2.0, coord), joint_col_light, 0.8)
 
 		# (d) 台阶内缘倒角分界金纹（嵌在石基与战台地砖之间，h - 22）
 		var inner_filigree_rect := [
@@ -350,14 +360,14 @@ class StaticDecor:
 			Vector2(h - 22.0, h - 22.0), Vector2(-h + 22.0, h - 22.0),
 			Vector2(-h + 22.0, -h + 22.0)
 		]
-		draw_polyline(PackedVector2Array(inner_filigree_rect), Color(0.85, 0.70, 0.28, 0.45), 1.0)
+		BatchDraw.polyline(self, PackedVector2Array(inner_filigree_rect), Color(0.85, 0.70, 0.28, 0.45), 1.0)
 		# 并在内缘内侧衬一条极微暗线，增强石台阶的高差深度感
 		var inner_depth_rect := [
 			Vector2(-h + 23.5, -h + 23.5), Vector2(h - 23.5, -h + 23.5),
 			Vector2(h - 23.5, h - 23.5), Vector2(-h + 23.5, h - 23.5),
 			Vector2(-h + 23.5, -h + 23.5)
 		]
-		draw_polyline(PackedVector2Array(inner_depth_rect), Color(0.02, 0.04, 0.06, 0.6), 1.0)
+		BatchDraw.polyline(self, PackedVector2Array(inner_depth_rect), Color(0.02, 0.04, 0.06, 0.6), 1.0)
 
 	# --------------------------------------------------------------------------
 	# 3.3 四象方位灵纹（Quad Spirit Marks）：太极阵内环外缘的云雷纹角花
@@ -379,13 +389,13 @@ class StaticDecor:
 			var p_corner := radial * r_base
 			var p_radial_end := radial * (r_base + 6.0 * scale_f)
 			var p_tangent_end := p_corner + tangent * 6.0 * scale_f
-			draw_line(p_corner, p_radial_end, col_mark, 1.2)
-			draw_line(p_corner, p_tangent_end, col_mark, 1.2)
+			BatchDraw.line(self, p_corner, p_radial_end, col_mark, 1.2)
+			BatchDraw.line(self, p_corner, p_tangent_end, col_mark, 1.2)
 
 			# 内侧卷曲回纹：从 L 形拐点向外卷 180° 小弧
 			var curl_center := p_corner + radial * 2.0 * scale_f + tangent * 2.0 * scale_f
 			var curl_r := 1.8 * scale_f
-			AdaptiveDraw.arc(self, curl_center, curl_r, ang + PI * 0.5, ang + PI * 1.5, col_curl, 0.9)
+			BatchDraw.arc(self, curl_center, curl_r, ang + PI * 0.5, ang + PI * 1.5, col_curl, 0.9)
 
 	# --------------------------------------------------------------------------
 	# 3.2 结界灵枢符印底座（菱形暗色填色；描边/核心脉冲留在宿主 10Hz 动态层）
@@ -414,4 +424,4 @@ class StaticDecor:
 					n_pos + Vector2(-d_r, 0),
 					n_pos + Vector2(0, -d_r * 1.3)
 				])
-				draw_colored_polygon(diamond, Color(0.04, 0.09, 0.14, 0.9))
+				BatchDraw.poly_any(self, diamond, Color(0.04, 0.09, 0.14, 0.9))

@@ -25,6 +25,12 @@ var _current_speed: float = BASE_PULL_SPEED
 var _collected: bool = false
 var _trail_line: Line2D = null
 var _col_shape: CollisionShape2D = null
+## 重绘节流（2026-11-03 绘制专项）：原先每帧 queue_redraw + 每帧重排品阶文本，
+## 同屏多件法宝掉落时是纯 CPU/提交税。品阶/名字在 _setup_data 后不变，尺寸缓存一次即可。
+var _redraw_timer: float = 0.0
+var _label_font: Font = null
+var _label_text: String = ""
+var _label_size: Vector2 = Vector2.ZERO
 
 ## 静态工厂创建方法：负责挂载、定点与注入数据
 static func spawn(parent: Node, pos: Vector2, id: String) -> ItemDropEntity:
@@ -60,6 +66,11 @@ func _setup_data() -> void:
 	tier = clampi(int(def.get("tier", 1)), 1, 5)
 	tier_color = ItemData.tier_color(tier)
 	item_name = String(def.get("name", item_id))
+	# 品阶签牌文本/尺寸只在这里排一次；_draw 走缓存，避免每次重绘都查字形表
+	if not item_name.is_empty():
+		_label_font = GameStyle.body_font()
+		_label_text = "【%s】" % item_name
+		_label_size = _label_font.get_string_size(_label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 10)
 
 func _setup_pop() -> void:
 	if GameManager.rng != null:
@@ -94,6 +105,14 @@ func magnet_to(player: Node2D) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	_redraw_timer -= delta
+	if _redraw_timer > 0.0:
+		return
+	_redraw_timer = VisualRate.interval(40.0, 20.0)
+	# 屏外不重绘：法宝掉落常被磁吸前停留很久，没必要为看不见的呼吸动画付提交
+	var vp := get_viewport()
+	if vp != null and not vp.get_visible_rect().grow(64.0).has_point(vp.get_canvas_transform() * global_position):
+		return
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
@@ -153,6 +172,7 @@ func _collect(player: Node2D) -> void:
 func _draw() -> void:
 	if _collected:
 		return
+	BatchDraw.flush(self)
 
 	# 1. 地面椭圆暗影（随浮动微缩放）
 	var float_y: float = sin(_time * 4.2) * 3.5 - 9.0
@@ -164,7 +184,7 @@ func _draw() -> void:
 		Vector2(12.0 * shadow_scale, 2.0),
 		Vector2(0.0, 5.0 * shadow_scale + 2.0)
 	])
-	draw_colored_polygon(shadow_pts, shadow_col)
+	BatchDraw.poly(self, shadow_pts, shadow_col)
 
 	var center := Vector2(0.0, float_y)
 
@@ -177,7 +197,7 @@ func _draw() -> void:
 		var a := angle_offset + float(i) * (TAU / 8.0)
 		oct_pts.append(center + Vector2(cos(a), sin(a)) * ring_r)
 	oct_pts.append(oct_pts[0])
-	draw_polyline(oct_pts, ring_col, 1.2, false)
+	BatchDraw.polyline(self, oct_pts, ring_col, 1.2)
 
 	# 3. 四正位公转灵光小符
 	var orb_angle := -_time * 1.6
@@ -185,7 +205,7 @@ func _draw() -> void:
 	for i in range(4):
 		var a := orb_angle + float(i) * (PI * 0.5)
 		var p := center + Vector2(cos(a), sin(a)) * orb_dist
-		draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3.0, 3.0)), tier_color)
+		BatchDraw.rect(self, Rect2(p - Vector2(1.5, 1.5), Vector2(3.0, 3.0)), tier_color)
 
 	# 4. 核心双层旋转晶核
 	var rot := sin(_time * 2.2) * 0.18
@@ -202,8 +222,8 @@ func _draw() -> void:
 		center + Vector2(-h1 * sin_r, h1 * cos_r)
 	])
 	var body_col := Color(tier_color.r * 0.75, tier_color.g * 0.75, tier_color.b * 0.75, 0.85)
-	draw_colored_polygon(poly_outer, body_col)
-	draw_polyline(PackedVector2Array([poly_outer[0], poly_outer[1], poly_outer[2], poly_outer[3], poly_outer[0]]), tier_color, 1.5, false)
+	BatchDraw.poly(self, poly_outer, body_col)
+	BatchDraw.polyline(self, PackedVector2Array([poly_outer[0], poly_outer[1], poly_outer[2], poly_outer[3], poly_outer[0]]), tier_color, 1.5)
 
 	# 内菱形（高光核）
 	var w2 := 5.0
@@ -214,16 +234,21 @@ func _draw() -> void:
 		center + Vector2(w2 * cos_r, w2 * sin_r),
 		center + Vector2(-h2 * sin_r, h2 * cos_r)
 	])
-	draw_colored_polygon(poly_inner, Color(1.0, 1.0, 1.0, 0.9))
+	BatchDraw.poly(self, poly_inner, Color(1.0, 1.0, 1.0, 0.9))
 
 	# 5. 悬浮品阶微签牌（新野兽派黑底品阶框 + 墨白微字）
-	if not item_name.is_empty():
-		var font: Font = GameStyle.body_font()
-		var label_str := "【%s】" % item_name
-		var text_sz := font.get_string_size(label_str, HORIZONTAL_ALIGNMENT_CENTER, -1, 10)
+	if _label_font != null and not _label_text.is_empty():
+		var text_sz := _label_size
 		var tag_y := center.y - 20.0
 		var tag_rect := Rect2(Vector2(-text_sz.x * 0.5 - 3.0, tag_y - text_sz.y - 1.0), Vector2(text_sz.x + 6.0, text_sz.y + 2.0))
-		draw_rect(tag_rect, GameStyle.INK)
-		draw_rect(tag_rect, tier_color, false, 1.0)
+		BatchDraw.rect(self, tag_rect, GameStyle.INK)
+		BatchDraw.polyline(self, PackedVector2Array([
+			tag_rect.position, Vector2(tag_rect.end.x, tag_rect.position.y),
+			tag_rect.end, Vector2(tag_rect.position.x, tag_rect.end.y), tag_rect.position,
+		]), tier_color, 1.0)
+		# 文字不能进三角形批：先把签牌批次落地
+		BatchDraw.flush(self)
 		var text_pos := Vector2(-text_sz.x * 0.5, tag_y - 2.0)
-		draw_string(font, text_pos, label_str, HORIZONTAL_ALIGNMENT_CENTER, -1, 10, tier_color)
+		draw_string(_label_font, text_pos, _label_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 10, tier_color)
+	else:
+		BatchDraw.flush(self)

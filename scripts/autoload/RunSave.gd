@@ -370,6 +370,9 @@ static func _dump_scalars(gm: Node, d: Dictionary) -> void:
 	d["elemental_damage"] = gm.elemental_damage
 	d["engineering_damage"] = gm.engineering_damage
 	d["contraption_damage"] = gm.contraption_damage
+	d["turret_stamina_mul"] = gm.turret_stamina_mul
+	d["turret_repair_haste_mul"] = gm.turret_repair_haste_mul
+	d["turret_volley_bonus"] = gm.turret_volley_bonus
 	d["attack_speed_mult"] = gm.attack_speed_mult
 	d["move_speed_mult"] = gm.move_speed_mult
 	d["pickup_range_mult"] = gm.pickup_range_mult
@@ -514,6 +517,9 @@ static func _fill_scalars(gm: Node, d: Dictionary) -> void:
 	gm.elemental_damage = float(d.get("elemental_damage", 0.0))
 	gm.engineering_damage = float(d.get("engineering_damage", 0.0))
 	gm.contraption_damage = float(d.get("contraption_damage", 0.0))
+	gm.turret_stamina_mul = float(d.get("turret_stamina_mul", 1.0))
+	gm.turret_repair_haste_mul = float(d.get("turret_repair_haste_mul", 1.0))
+	gm.turret_volley_bonus = float(d.get("turret_volley_bonus", 0.0))
 	gm.attack_speed_mult = float(d.get("attack_speed_mult", 1.0))
 	gm.move_speed_mult = float(d.get("move_speed_mult", 1.0))
 	gm.pickup_range_mult = float(d.get("pickup_range_mult", 1.0))

@@ -2,7 +2,7 @@ class_name CareerDialog
 extends BaseModalDialog
 
 ## 修仙志（生涯功绩簿）三页签：成就 / 角色 / 战斗记录
-## 成就页：四分类（试炼/流派/历练/机缘）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
+## 成就页：五分类（试炼/流派/历练/机缘/离谱）× 大色块方卡网格 —— 已达成 = 分类色实底块，未达成 = 墨底灰像
 ## 角色页：大色块角色卡（左头像色块 + 最高境界 chip + 普通/噩梦两块波数色标），
 ##         色标数字 = 该角色在该难度的最高波数（GameManager.cultivator_records[*].best_wave_by_danger），
 ##         境界按最高破境难度晋升。
@@ -224,6 +224,8 @@ func _category_color(cat: String) -> Color:
 			return GameStyle.GOLD
 		"grind":
 			return GameStyle.GOOD
+		"absurd":
+			return GameStyle.STAR4_NEON
 		_:
 			return GameStyle.JADE
 

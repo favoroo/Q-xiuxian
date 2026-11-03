@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.18",
+			"date": "2026-11-03",
+			"title": "机关阵地与深层魔君",
+			"items": [
+				"机关武器改为手动布设，需维修续用。",
+				"深层魔君每五波换新，另有四尊登场。",
+				"暂停菜单可投降结算，记下本局波数。",
+				"修复 Boss 长期只放一两招。",
+			],
+		},
+		{
 			"version": "v0.1.17",
 			"date": "2026-11-03",
 			"title": "后期减量提质与 Boss 整治",

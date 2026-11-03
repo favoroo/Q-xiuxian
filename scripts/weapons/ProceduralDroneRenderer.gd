@@ -125,6 +125,7 @@ func _process(delta: float) -> void:
 		_draw_phase -= delta
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	match kind:
 		DroneKind.LINGDIE:
 			_draw_spirit_butterfly()
@@ -156,6 +157,7 @@ func _draw() -> void:
 # ----------------- 共用小构件 -----------------
 
 ## 五行归属：与 WeaponData 各御灵 tags 的五元素一致，取 BC.pal 平涂配色
+	BatchDraw.flush(self)
 func _elem() -> String:
 	match kind:
 		DroneKind.HANQUAN_YULIAN, DroneKind.BINGPO_ZHU:
@@ -233,8 +235,8 @@ func _draw_spirit_butterfly() -> void:
 	BC.bar(self, Vector2(0, -7.0), Vector2(0, 7.0), 3.0, BC.INK)
 	BC.square(self, Vector2(0, -8.8), 1.8, body.darkened(0.40), 1.2)
 	# 触角（两根硬墨线）
-	draw_line(Vector2(0, -10.0), Vector2(-4.0, -13.5), BC.INK, 1.4, true)
-	draw_line(Vector2(0, -10.0), Vector2(4.0, -13.5), BC.INK, 1.4, true)
+	BatchDraw.native_line(self, Vector2(0, -10.0), Vector2(-4.0, -13.5), BC.INK, 1.4, true)
+	BatchDraw.native_line(self, Vector2(0, -10.0), Vector2(4.0, -13.5), BC.INK, 1.4, true)
 	# 升星方钉（左右前翅中段）
 	BC.star_studs(self, star, Vector2(-5.0, -5.5), Vector2(5.0, -5.5), accent)
 
@@ -253,10 +255,10 @@ func _draw_ice_lotus() -> void:
 	# 八道墨色瓣缝（外环放射短墨线，把圆盘读成八瓣莲）
 	for i in range(8):
 		var a: float = rot + PI / 8.0 + TAU * float(i) / 8.0
-		draw_line(Vector2(cos(a), sin(a)) * 8.0, Vector2(cos(a), sin(a)) * 12.6, BC.INK, 1.6, true)
+		BatchDraw.native_line(self, Vector2(cos(a), sin(a)) * 8.0, Vector2(cos(a), sin(a)) * 12.6, BC.INK, 1.6, true)
 	# 莲心（撞色圆盘 + 小墨方芯 —— 芯用裸方点，方钉描边会吞掉撞色）
 	BC.disc(self, Vector2.ZERO, 4.8, accent, 1.4)
-	draw_rect(Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
+	BatchDraw.native_rect(self, Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
 	# 升星方钉（外盘对瓣位置）
 	BC.star_studs(self, star, Vector2(10.5, 0.0).rotated(rot), Vector2(-10.5, 0.0).rotated(rot), accent)
 
@@ -273,8 +275,8 @@ func _draw_ancient_bell() -> void:
 	for i in range(5):
 		var a: float = PI + PI * float(i) / 4.0
 		loop.append(Vector2(0, -10.0) + Vector2(cos(a), sin(a)) * 3.4)
-	draw_polyline(_rot_all(loop, sway), BC.INK, 3.6, true)
-	draw_polyline(_rot_all(loop, sway), body, 1.6, true)
+	BatchDraw.native_polyline(self, _rot_all(loop, sway), BC.INK, 3.6, true)
+	BatchDraw.native_polyline(self, _rot_all(loop, sway), body, 1.6, true)
 	# 钟身（上窄下阔硬梯形，随 sway 摆；拔高钟身避免读成斗笠）
 	var bell := PackedVector2Array([
 		Vector2(-5.0, -10.0), Vector2(5.0, -10.0),
@@ -306,10 +308,10 @@ func _draw_golden_wheel() -> void:
 	for i in range(3):
 		var a: float = rot + PI * float(i) / 3.0
 		var dir := Vector2(cos(a), sin(a))
-		draw_line(-dir * 11.0, dir * 11.0, BC.INK, 2.2, true)
+		BatchDraw.native_line(self, -dir * 11.0, dir * 11.0, BC.INK, 2.2, true)
 	# 轴心撞色盘 + 小墨方芯（裸方点，方钉描边会吞掉撞色）
 	BC.disc(self, Vector2.ZERO, 4.0, accent, 1.4)
-	draw_rect(Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
+	BatchDraw.native_rect(self, Rect2(Vector2(-0.8, -0.8), Vector2(1.6, 1.6)), BC.INK)
 	# 升星方钉（两根辐条中段，随轮转）
 	var sa: float = rot + PI / 6.0
 	var sb: float = rot + PI + PI / 6.0
@@ -343,12 +345,12 @@ func _draw_fire_crow() -> void:
 		Vector2(-3.4, -4.6), Vector2(-2.8, -7.6),
 	]), deep, 1.4)
 	# 撞色焰喙（顶出墨描边之外的硬三角）
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(-1.5, -8.0), Vector2(1.5, -8.0), Vector2(0.0, -11.0),
 	]), accent)
 	# 金目两粒（硬边方点，落在头身亮芯内）
-	draw_rect(Rect2(Vector2(-2.0, -6.4), Vector2(1.5, 1.5)), accent)
-	draw_rect(Rect2(Vector2(0.5, -6.4), Vector2(1.5, 1.5)), accent)
+	BatchDraw.native_rect(self, Rect2(Vector2(-2.0, -6.4), Vector2(1.5, 1.5)), accent)
+	BatchDraw.native_rect(self, Rect2(Vector2(0.5, -6.4), Vector2(1.5, 1.5)), accent)
 	# 升星方钉（腹身两侧）
 	BC.star_studs(self, star, Vector2(-2.4, 1.5), Vector2(2.4, 1.5), accent)
 
@@ -414,16 +416,18 @@ func _draw_yuan_ling() -> void:
 	var crest_gain: float = 1.0 + 0.10 * float(st - 1)
 
 	# 1. 足下硬边影块（贴地低分段椭圆平涂暗影，出场时外扩；不随 bank）
-	draw_colored_polygon(
+	BatchDraw.native_poly(self,
 		_ellipse_polygon(Vector2(0.0, 16.5), 16.0 + 6.0 * sg, 3.6, 8),
 		Color(ink.r, ink.g, ink.b, BC.SHADOW.a * (0.55 + 0.25 * sg)))
 
 	# 1.5 4 阶足下灵光地环（2026-11-02）：常驻的撞色扁环，呼吸涨缩 —— 巨灵落地有「压场」读数
 	if st >= 4:
 		var aura_r: float = core_r * 1.55 + sin(_anim_time * 2.0) * 2.0
+		BatchDraw.flush(self)
 		draw_set_transform(Vector2(0.0, 16.5), 0.0, Vector2(1.0, 0.34))
-		draw_arc(Vector2.ZERO, aura_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, 0.42), 1.8, true)
-		draw_arc(Vector2.ZERO, aura_r - 4.0, 0.0, TAU, 24, Color(ink.r, ink.g, ink.b, 0.28), 1.0, true)
+		BatchDraw.native_arc(self, Vector2.ZERO, aura_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, 0.42), 1.8, true)
+		BatchDraw.native_arc(self, Vector2.ZERO, aura_r - 4.0, 0.0, TAU, 24, Color(ink.r, ink.g, ink.b, 0.28), 1.0, true)
+		BatchDraw.flush(self)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 2. 出场现身一拍（spawn_glow 1→0：撞色硬边六角环向本体收拢 + 六颗方钉内聚；不随 bank）
@@ -433,12 +437,12 @@ func _draw_yuan_ling() -> void:
 		for i in range(7):
 			var a: float = TAU * float(i) / 6.0 - PI * 0.5
 			hexa.append(pivot + Vector2(cos(a), sin(a)) * ring_r)
-		draw_polyline(hexa, Color(acc.r, acc.g, acc.b, sg), 2.4, true)
+		BatchDraw.native_polyline(self, hexa, Color(acc.r, acc.g, acc.b, sg), 2.4, true)
 		for i in range(6):
 			var a2: float = TAU * float(i) / 6.0 + _anim_time * 2.0
 			var sq_c := pivot + Vector2(cos(a2), sin(a2)) * ring_r
 			var hs: float = 1.2 + 1.2 * sg
-			draw_rect(Rect2(sq_c - Vector2(hs, hs), Vector2(hs * 2.0, hs * 2.0)),
+			BatchDraw.native_rect(self, Rect2(sq_c - Vector2(hs, hs), Vector2(hs * 2.0, hs * 2.0)),
 				Color(acc.r, acc.g, acc.b, sg))
 
 	# 2.5（2026-11-02 已下线）2 阶双尾灵带：用户反馈「飘带太丑」，整段移除；
@@ -450,20 +454,20 @@ func _draw_yuan_ling() -> void:
 		if st == 3:
 			for k in range(3):
 				var ha0: float = _anim_time * 0.8 + TAU * float(k) / 3.0
-				draw_arc(pivot, halo_r, ha0, ha0 + TAU / 4.0, 12, Color(acc.r, acc.g, acc.b, halo_a), 1.8, true)
+				BatchDraw.native_arc(self, pivot, halo_r, ha0, ha0 + TAU / 4.0, 12, Color(acc.r, acc.g, acc.b, halo_a), 1.8, true)
 		else:
-			draw_arc(pivot, halo_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, halo_a), 2.0, true)
+			BatchDraw.native_arc(self, pivot, halo_r, 0.0, TAU, 28, Color(acc.r, acc.g, acc.b, halo_a), 2.0, true)
 			for k in range(4):
 				var ha1: float = _anim_time * 0.8 + TAU * float(k) / 4.0
 				var hp := pivot + Vector2(cos(ha1), sin(ha1)) * halo_r
-				draw_rect(Rect2(hp - Vector2(1.6, 1.6), Vector2(3.2, 3.2)),
+				BatchDraw.native_rect(self, Rect2(hp - Vector2(1.6, 1.6), Vector2(3.2, 3.2)),
 					Color(acc.r, acc.g, acc.b, halo_a + 0.25))
 
 	# 3. 耳芽两粒（深灵青小圆耳，画在圆身之前、根部藏进墨环后 —— 修旧双角「浮针」断开感；随 bank）
 	for side in [-1.0, 1.0]:
 		var ear_c := _rot_one(pivot + Vector2(side * core_r * 0.66, -core_r * 0.80), pivot, bank_angle)
-		draw_circle(ear_c, core_r * 0.20 + 1.1, ink)
-		draw_circle(ear_c, core_r * 0.20, ling_body.darkened(0.25).lerp(ling_pale, hf * 0.75))
+		BatchDraw.native_circle(self, ear_c, core_r * 0.20 + 1.1, ink)
+		BatchDraw.native_circle(self, ear_c, core_r * 0.20, ling_body.darkened(0.25).lerp(ling_pale, hf * 0.75))
 
 	# 4. 环绕灵尘（撞色小方钉沿扁椭圆慢速绕体，画在圆身之前 —— 绕到身后被灵魄
 	#    挡住、绕到两侧探头，是真「环绕」而不是贴面漂浮；随 bank）。
@@ -473,7 +477,7 @@ func _draw_yuan_ling() -> void:
 		var op := _rot_one(pivot + Vector2(cos(oa) * (core_r + 7.5),
 			sin(oa) * (core_r * 0.32 + 1.0) - 1.0), pivot, bank_angle)
 		var osz: float = (1.8 - 0.4 * float(i)) if mote_count <= 2 else (1.7 - 0.12 * float(i % 4))
-		draw_rect(Rect2(op - Vector2(osz, osz), Vector2(osz * 2.0, osz * 2.0)),
+		BatchDraw.native_rect(self, Rect2(op - Vector2(osz, osz), Vector2(osz * 2.0, osz * 2.0)),
 			Color(acc.r, acc.g, acc.b, 0.9))
 
 	# 5. 正圆灵魄身（圆对 bank 旋转不变，disc 免转点；硬投影 + 粗墨环 + 灵青平涂；
@@ -515,7 +519,7 @@ func _draw_yuan_ling() -> void:
 
 	# 7. 月白高光一点（无脸口径：单点亮斑代替五官，随灵息呼吸明灭；随 bank）
 	var hl_a: float = 0.55 + 0.25 * sin(_anim_time * 2.6)
-	draw_circle(_rot_one(pivot + Vector2(-core_r * 0.30, -core_r * 0.34), pivot, bank_angle),
+	BatchDraw.native_circle(self, _rot_one(pivot + Vector2(-core_r * 0.30, -core_r * 0.34), pivot, bank_angle),
 		core_r * 0.17, Color(ling_pale.r, ling_pale.g, ling_pale.b, hl_a))
 
 	# 8. 濒死裂纹（hp_ratio < 0.3 浮现的墨色裂痕，左右镜像一对，随灵息闪烁；随 bank）
@@ -526,11 +530,11 @@ func _draw_yuan_ling() -> void:
 			pivot + Vector2(4.5, -core_r * 0.62), pivot + Vector2(2.5, -core_r * 0.10),
 			pivot + Vector2(5.0, core_r * 0.35),
 		])
-		draw_polyline(_rot_pts(crack_r, pivot, bank_angle), crack_col, 1.6, true)
+		BatchDraw.native_polyline(self, _rot_pts(crack_r, pivot, bank_angle), crack_col, 1.6, true)
 		var crack_l := PackedVector2Array()
 		for p3 in crack_r:
 			crack_l.append(Vector2(pivot.x - (p3.x - pivot.x), p3.y))
-		draw_polyline(_rot_pts(crack_l, pivot, bank_angle), crack_col, 1.3, true)
+		BatchDraw.native_polyline(self, _rot_pts(crack_l, pivot, bank_angle), crack_col, 1.3, true)
 
 	# 9. 面前蓄力灵光球（charge_ratio 驱动：撞色圆盘涨大 + 三颗墨方钉旋绕，硬边零辉光；随 bank）
 	if charge_ratio > 0.01:
@@ -541,7 +545,7 @@ func _draw_yuan_ling() -> void:
 		for i in range(3):
 			var sa: float = _anim_time * 7.0 + TAU * float(i) / 3.0
 			var sq_p := cp + Vector2(cos(sa), sin(sa)) * (cr + 3.0)
-			draw_rect(Rect2(sq_p - Vector2(1.2, 1.2), Vector2(2.4, 2.4)),
+			BatchDraw.native_rect(self, Rect2(sq_p - Vector2(1.2, 1.2), Vector2(2.4, 2.4)),
 				Color(ink.r, ink.g, ink.b, ca))
 
 	# 10. 移动灵尘（speed_ratio > 0.2：尾后三颗撞色小方钉，随速度显隐）
@@ -551,7 +555,7 @@ func _draw_yuan_ling() -> void:
 			var mp := pivot + Vector2(-core_r - 4.0 - di * 5.0,
 				core_r * 0.2 + di * 2.0 + sin(_anim_time * 7.5 + di * 1.2) * 1.8)
 			var ds: float = (1.0 - di * 0.28) * clampf(speed_ratio, 0.0, 1.0)
-			draw_rect(Rect2(mp - Vector2(1.4, 1.4) * ds, Vector2(2.8, 2.8) * ds),
+			BatchDraw.native_rect(self, Rect2(mp - Vector2(1.4, 1.4) * ds, Vector2(2.8, 2.8) * ds),
 				Color(acc.r, acc.g, acc.b, 0.85 * ds))
 
 	# 11. 升星方钉（耳芽中心；灵兽宿主不设 star，恒 1 时自动不画）
@@ -574,8 +578,8 @@ func _draw_golden_bell() -> void:
 	for i in range(5):
 		var a: float = PI + PI * float(i) / 4.0
 		loop.append(Vector2(0, -9.5) + Vector2(cos(a), sin(a)) * 2.8)
-	draw_polyline(_rot_all(loop, sway), BC.INK, 3.2, true)
-	draw_polyline(_rot_all(loop, sway), body, 1.4, true)
+	BatchDraw.native_polyline(self, _rot_all(loop, sway), BC.INK, 3.2, true)
+	BatchDraw.native_polyline(self, _rot_all(loop, sway), body, 1.4, true)
 	# 铃身（上窄下阔钟形，随 sway 轻摆）
 	var bell := PackedVector2Array([
 		Vector2(-4.5, -9.5), Vector2(4.5, -9.5),
@@ -591,7 +595,7 @@ func _draw_golden_bell() -> void:
 	# 铃舌（随摆反向荡：墨杆 + 墨盘，悬在口缘下方不压撞色带）
 	var clapper_x := -sway * 40.0
 	BC.bar(self, Vector2(0, 7.5).rotated(sway), Vector2(clapper_x, 11.0), 1.6, BC.INK)
-	draw_circle(Vector2(clapper_x, 12.2), 1.9, BC.INK)
+	BatchDraw.native_circle(self, Vector2(clapper_x, 12.2), 1.9, BC.INK)
 	# 升星方钉（铃身两肩）
 	BC.star_studs(self, star, Vector2(-3.5, -5.5).rotated(sway), Vector2(3.5, -5.5).rotated(sway), accent)
 
@@ -617,8 +621,8 @@ func _draw_wood_puppet() -> void:
 	]), body, 1.8)
 	# 头（圆盘）+ 方眼两粒（硬边墨块，落在亮芯内）
 	BC.disc(self, off + Vector2(0, -7.2), 4.4, body, 1.4)
-	draw_rect(Rect2(off + Vector2(-2.0, -7.8), Vector2(1.3, 1.5)), BC.INK)
-	draw_rect(Rect2(off + Vector2(0.7, -7.8), Vector2(1.3, 1.5)), BC.INK)
+	BatchDraw.native_rect(self, Rect2(off + Vector2(-2.0, -7.8), Vector2(1.3, 1.5)), BC.INK)
+	BatchDraw.native_rect(self, Rect2(off + Vector2(0.7, -7.8), Vector2(1.3, 1.5)), BC.INK)
 	# 头顶灵芽（两根短杆）
 	BC.bar(self, off + Vector2(0, -11.0), off + Vector2(-2.4, -14.0), 1.6, limb)
 	BC.bar(self, off + Vector2(0, -11.0), off + Vector2(2.4, -14.0), 1.6, limb)
@@ -626,7 +630,7 @@ func _draw_wood_puppet() -> void:
 	BC.square(self, off + Vector2(0, 1.0), 2.0, accent, 1.2)
 	# 四肢关节墨钉（硬边）
 	for jp in [Vector2(-3.0, -1.5), Vector2(3.0, -1.5), Vector2(-1.8, 6.0), Vector2(1.8, 6.0)]:
-		draw_rect(Rect2(off + jp - Vector2(0.9, 0.9), Vector2(1.8, 1.8)), BC.INK)
+		BatchDraw.native_rect(self, Rect2(off + jp - Vector2(0.9, 0.9), Vector2(1.8, 1.8)), BC.INK)
 	# 升星方钉（双肩）
 	BC.star_studs(self, star, off + Vector2(-4.6, -3.4), off + Vector2(4.6, -3.4), accent)
 
@@ -676,8 +680,8 @@ func _draw_fire_firefly() -> void:
 	]), body, 1.6)
 	# 头（墨盘）与触须（两根墨线）
 	BC.disc(self, Vector2(0, -3.8), 2.6, BC.INK, 1.0)
-	draw_line(Vector2(-1.0, -5.8), Vector2(-2.8, -8.4), BC.INK, 1.2, true)
-	draw_line(Vector2(1.0, -5.8), Vector2(2.8, -8.4), BC.INK, 1.2, true)
+	BatchDraw.native_line(self, Vector2(-1.0, -5.8), Vector2(-2.8, -8.4), BC.INK, 1.2, true)
+	BatchDraw.native_line(self, Vector2(1.0, -5.8), Vector2(2.8, -8.4), BC.INK, 1.2, true)
 	# 尾灯（撞色圆盘，呼吸涨缩 —— 萤的一眼点，缩在腹尾不吞腹块）
 	var lamp_r: float = 2.2 + 0.6 * sin(_anim_time * 6.0)
 	BC.disc(self, Vector2(0, 5.6), lamp_r, accent, 1.0)
@@ -699,11 +703,11 @@ func _draw_earth_stone() -> void:
 	])
 	BC.flat(self, _rot_all(stone, rot), body, 2.2)
 	# 岩面裂纹两道（墨，镜像）
-	draw_line(Vector2(-4.0, -4.5).rotated(rot), Vector2(-1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
-	draw_line(Vector2(4.0, -4.5).rotated(rot), Vector2(1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
+	BatchDraw.native_line(self, Vector2(-4.0, -4.5).rotated(rot), Vector2(-1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
+	BatchDraw.native_line(self, Vector2(4.0, -4.5).rotated(rot), Vector2(1.5, 0.5).rotated(rot), BC.INK, 1.4, true)
 	# 镇岳符（撞色山形折线，一笔三峰）
 	var m := Vector2(0.0, 0.5).rotated(rot)
-	draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(self, PackedVector2Array([
 		m + Vector2(-3.6, 2.2), m + Vector2(-1.4, -2.0), m + Vector2(0.2, 0.8),
 		m + Vector2(2.0, -2.6), m + Vector2(4.2, 2.2),
 	]), accent, 2.0, true)
@@ -725,7 +729,7 @@ func _draw_sword_wisp() -> void:
 	])
 	BC.flat(self, _rot_all(blade, tilt), body, 2.0)
 	# 剑脊墨线
-	draw_line(Vector2(12.0, 0.0).rotated(tilt), Vector2(-4.5, 0.0).rotated(tilt), BC.INK, 1.2, true)
+	BatchDraw.native_line(self, Vector2(12.0, 0.0).rotated(tilt), Vector2(-4.5, 0.0).rotated(tilt), BC.INK, 1.2, true)
 	# 剑格（撞色横杆）
 	BC.bar(self, Vector2(-5.5, -4.2).rotated(tilt), Vector2(-5.5, 4.2).rotated(tilt), 2.8, accent)
 	# 剑柄（墨杆）与剑首（撞色方钉）

@@ -402,4 +402,6 @@ static func upgrade_fields() -> Array:
 			"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult_mul", "pet_slots",
 			"skill_cooldown_mult",
 			"fog_vision_bonus",
+			# 机关阵地（2026-11-03 手动布设改版）：耐久 / 维修用时 / 齐射管数
+			"turret_stamina_mul", "turret_repair_haste_mul", "turret_volley_bonus",
 		]

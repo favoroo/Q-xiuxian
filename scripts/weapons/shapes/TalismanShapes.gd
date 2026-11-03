@@ -68,7 +68,7 @@ static func _draw_talisman(r: ProceduralWeaponRenderer) -> void:
 	var pivot := Vector2(L * 0.02, 0.0)
 	for p in outline:
 		aura.append(pivot.lerp(p, 1.14))
-	r.draw_colored_polygon(aura, Color(edge.r, edge.g, edge.b, 0.12))
+	BatchDraw.native_poly(r, aura, Color(edge.r, edge.g, edge.b, 0.12))
 
 	# 符纸本体：暗底描边 + 纸白面
 	r._fill_outlined(outline, paper)
@@ -78,7 +78,7 @@ static func _draw_talisman(r: ProceduralWeaponRenderer) -> void:
 	for p in outline:
 		trim.append(pivot.lerp(p, 0.88))
 	trim.append(trim[0])
-	r.draw_polyline(trim, Color(edge.r, edge.g, edge.b, 0.75), 0.8, true)
+	BatchDraw.native_polyline(r, trim, Color(edge.r, edge.g, edge.b, 0.75), 0.8, true)
 
 	# 符头云勾：∩ 形勾云括弧抱住符头顶 + 中央一点卷云涡
 	var head := PackedVector2Array([
@@ -89,9 +89,9 @@ static func _draw_talisman(r: ProceduralWeaponRenderer) -> void:
 		Vector2(L * 0.80, hw * 0.40),
 		Vector2(L * 0.58, hw * 0.50),
 	])
-	r.draw_polyline(head, CINNABAR, STROKE_MIN + 0.2, true)
+	BatchDraw.native_polyline(r, head, CINNABAR, STROKE_MIN + 0.2, true)
 	# 卷云涡心一点朱砂（小半径弧在 26px 尺度会糊成六边形，实心点最稳）
-	AdaptiveDraw.circle(r, Vector2(L * 0.72, 0.0), hw * 0.16, CINNABAR)
+	BatchDraw.circle(r, Vector2(L * 0.72, 0.0), hw * 0.16, CINNABAR)
 
 	# 符身朱书：按五行变体（雷系符的 element 已归入火/木，随其主色走纹样）
 	match r.element:
@@ -111,16 +111,16 @@ static func _draw_talisman(r: ProceduralWeaponRenderer) -> void:
 	# 底部朱砂方印：符尾压一枚方印，印心留纸白十字（小尺度读成印文）
 	var sc := Vector2(-L * 0.66, 0.0)
 	var sq := maxf(hw * 0.36, 1.9)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		sc + Vector2(-sq, -sq), sc + Vector2(sq, -sq), sc + Vector2(sq, sq), sc + Vector2(-sq, sq),
 	]), Color(0.10, 0.05, 0.05, 0.85))
 	var sq2 := sq * 0.82
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		sc + Vector2(-sq2, -sq2), sc + Vector2(sq2, -sq2), sc + Vector2(sq2, sq2), sc + Vector2(-sq2, sq2),
 	]), CINNABAR)
-	r.draw_line(sc + Vector2(-sq2 * 0.6, 0.0), sc + Vector2(sq2 * 0.6, 0.0),
+	BatchDraw.native_line(r, sc + Vector2(-sq2 * 0.6, 0.0), sc + Vector2(sq2 * 0.6, 0.0),
 		Color(paper.r, paper.g, paper.b, 0.85), 0.9, true)
-	r.draw_line(sc + Vector2(0.0, -sq2 * 0.6), sc + Vector2(0.0, sq2 * 0.6),
+	BatchDraw.native_line(r, sc + Vector2(0.0, -sq2 * 0.6), sc + Vector2(0.0, sq2 * 0.6),
 		Color(paper.r, paper.g, paper.b, 0.85), 0.9, true)
 
 	# 符头灵芒（升星：★2 符身浮星点、★3 沿轴辉线）
@@ -130,22 +130,22 @@ static func _draw_talisman(r: ProceduralWeaponRenderer) -> void:
 
 ## 木/毒：虫曲纹 —— S 形虫脊 + 两对侧足曲（万木灵符/蛊毒符/惊蛰符）
 static func _glyph_worm(r: ProceduralWeaponRenderer, L: float, hw: float) -> void:
-	r.draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(r, PackedVector2Array([
 		Vector2(L * 0.44, 0.0),
 		Vector2(L * 0.22, -hw * 0.34),
 		Vector2(-L * 0.02, 0.0),
 		Vector2(-L * 0.24, hw * 0.34),
 		Vector2(-L * 0.44, 0.0),
 	]), CINNABAR, STROKE_MIN + 0.15, true)
-	r.draw_line(Vector2(L * 0.22, -hw * 0.34), Vector2(L * 0.28, -hw * 0.66), CINNABAR, STROKE_MIN, true)
-	r.draw_line(Vector2(-L * 0.24, hw * 0.34), Vector2(-L * 0.30, hw * 0.66), CINNABAR, STROKE_MIN, true)
-	r.draw_line(Vector2(-L * 0.02, -hw * 0.55), Vector2(-L * 0.02, hw * 0.55), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(L * 0.22, -hw * 0.34), Vector2(L * 0.28, -hw * 0.66), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.24, hw * 0.34), Vector2(-L * 0.30, hw * 0.66), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.02, -hw * 0.55), Vector2(-L * 0.02, hw * 0.55), CINNABAR, STROKE_MIN, true)
 
 ## 火/雷火：火舌三叉 —— 三道朝符头的焰尖折线（火炎符/真火符/雷火符）
 static func _glyph_flame(r: ProceduralWeaponRenderer, L: float, hw: float) -> void:
 	for i in range(3):
 		var x0 := L * (0.34 - float(i) * 0.24)
-		r.draw_polyline(PackedVector2Array([
+		BatchDraw.native_polyline(r, PackedVector2Array([
 			Vector2(x0 - L * 0.09, -hw * 0.52),
 			Vector2(x0, 0.0),
 			Vector2(x0 - L * 0.09, hw * 0.52),
@@ -153,7 +153,7 @@ static func _glyph_flame(r: ProceduralWeaponRenderer, L: float, hw: float) -> vo
 
 ## 金：回纹曲尺 —— 一道直角曲尺长笔 + 金针竖笔（金针符/庚金符）
 static func _glyph_meander(r: ProceduralWeaponRenderer, L: float, hw: float) -> void:
-	r.draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(r, PackedVector2Array([
 		Vector2(L * 0.42, -hw * 0.52),
 		Vector2(L * 0.42, hw * 0.16),
 		Vector2(L * 0.12, hw * 0.16),
@@ -162,7 +162,7 @@ static func _glyph_meander(r: ProceduralWeaponRenderer, L: float, hw: float) -> 
 		Vector2(-L * 0.18, hw * 0.30),
 		Vector2(-L * 0.44, hw * 0.30),
 	]), CINNABAR, STROKE_MIN + 0.1, true)
-	r.draw_line(Vector2(-L * 0.44, -hw * 0.42), Vector2(-L * 0.06, -hw * 0.42), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.44, -hw * 0.42), Vector2(-L * 0.06, -hw * 0.42), CINNABAR, STROKE_MIN, true)
 
 ## 水：涡旋波纹 —— 三枚渐小水涡沿轴排布（玄冰符/癸水符）
 ## 用采样螺旋折线而非 AdaptiveDraw.arc：小半径弧自适应段数只有 6 段，会画成开口六边形。
@@ -178,11 +178,11 @@ static func _glyph_spiral(r: ProceduralWeaponRenderer, L: float, hw: float) -> v
 			var a := PI * 0.9 + PI * 1.5 * float(s) / float(SEG)
 			var k := float(s) / float(SEG)
 			pts.append(Vector2(cx, y0) + Vector2(cos(a), sin(a)) * rad * (1.0 - k * 0.55))
-		r.draw_polyline(pts, CINNABAR, STROKE_MIN, true)
+		BatchDraw.native_polyline(r, pts, CINNABAR, STROKE_MIN, true)
 
 ## 土：山镇三横 —— 中脊一竖 + 两侧短横压底横（镇山符/厚土符）
 static func _glyph_mountain(r: ProceduralWeaponRenderer, L: float, hw: float) -> void:
-	r.draw_line(Vector2(-L * 0.34, 0.0), Vector2(L * 0.38, 0.0), CINNABAR, STROKE_MIN + 0.15, true)
-	r.draw_line(Vector2(-L * 0.34, -hw * 0.55), Vector2(-L * 0.34, hw * 0.55), CINNABAR, STROKE_MIN + 0.1, true)
-	r.draw_line(Vector2(-L * 0.34, -hw * 0.55), Vector2(L * 0.14, -hw * 0.55), CINNABAR, STROKE_MIN, true)
-	r.draw_line(Vector2(-L * 0.34, hw * 0.55), Vector2(L * 0.14, hw * 0.55), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.34, 0.0), Vector2(L * 0.38, 0.0), CINNABAR, STROKE_MIN + 0.15, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.34, -hw * 0.55), Vector2(-L * 0.34, hw * 0.55), CINNABAR, STROKE_MIN + 0.1, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.34, -hw * 0.55), Vector2(L * 0.14, -hw * 0.55), CINNABAR, STROKE_MIN, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.34, hw * 0.55), Vector2(L * 0.14, hw * 0.55), CINNABAR, STROKE_MIN, true)

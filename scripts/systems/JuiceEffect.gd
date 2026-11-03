@@ -221,6 +221,7 @@ func _process(delta: float) -> void:
 		_draw_phase -= delta
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	var progress := clampf(elapsed / lifetime, 0.0, 1.0)
 	var alpha := 1.0 - progress
 	# 落雷光柱的落点环也贴地（与冲击波同一俯视透视），光柱本体则在环之后正向绘制
@@ -228,13 +229,15 @@ func _draw() -> void:
 
 	# 0. 冲击光环（弧段数随半径自适应；若是地面冲击波则施加俯视透视压扁，消除立面悬浮感）
 	if is_ground:
+		BatchDraw.flush(self)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 	for i in range(_r_count):
 		var col: Color = _r_col[i]
 		col.a *= alpha
 		var width: float = maxf(1.0, _r_w[i] * (1.0 - progress * 0.6))
-		draw_arc(Vector2.ZERO, _r_cur[i], 0.0, TAU, clampi(int(_r_cur[i] * 1.2), 10, 32), col, width, true)
+		BatchDraw.native_arc(self, Vector2.ZERO, _r_cur[i], 0.0, TAU, clampi(int(_r_cur[i] * 1.2), 10, 32), col, width, true)
 	if is_ground:
+		BatchDraw.flush(self)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 0.5 天罚落雷：贴身光柱（脚底原点 → 身位高度），两端都不出目标身位
@@ -250,14 +253,15 @@ func _draw() -> void:
 		var w: float = _p_w[i]
 		if vel.length_squared() > 100.0:
 			var tip: Vector2 = pos + vel.normalized() * _p_len[i] * (1.0 - progress * 0.5)
-			draw_line(pos, tip, pcol, w, true)
+			BatchDraw.native_line(self, pos, tip, pcol, w, true)
 		else:
-			draw_circle(pos, w, pcol)
+			BatchDraw.native_circle(self, pos, w, pcol)
 
 ## 天罚落雷的贴身光柱：梯形柱体从落点向上收窄，快速亮起后整根收熄。
 ## 与 LightningBolt 的分工：这里不生成任何折线/分支 —— 旧写法自天顶拉 280px 折线，
 ## 顶端悬在空气里，目标被暴击打死后只剩「凭空一道线」。光柱底端钉在落点、顶端压在
 ## 身位高度（SKY_STRIKE_HEIGHT），玩家读到的是「雷砸在这只怪身上」。
+	BatchDraw.flush(self)
 func _draw_sky_strike(progress: float, alpha: float) -> void:
 	# 前 18% 快速长满，之后随 alpha 收熄；alpha^1.6 让尾段干净（不拖一条长残影）
 	var grow := clampf(progress / 0.18, 0.0, 1.0)
@@ -269,12 +273,12 @@ func _draw_sky_strike(progress: float, alpha: float) -> void:
 	_draw_pillar(h, SKY_STRIKE_BASE_HALF_W * 0.25, SKY_STRIKE_TOP_HALF_W * 0.32,
 		Color(SKY_STRIKE_CORE.r, SKY_STRIKE_CORE.g, SKY_STRIKE_CORE.b, a * 0.95))
 	# 中段爆闪：给「砸中了」一记瞬时读数（不是一根常亮的灯柱）
-	draw_circle(Vector2(0.0, -h * 0.5), lerpf(9.0, 2.5, progress), Color(1.0, 1.0, 1.0, a * 0.8))
+	BatchDraw.native_circle(self, Vector2(0.0, -h * 0.5), lerpf(9.0, 2.5, progress), Color(1.0, 1.0, 1.0, a * 0.8))
 
 ## 梯形柱体：底边半宽 half_bottom、顶边半宽 half_top，从局部原点向上 h 像素。
 ## draw_colored_polygon 一次填充，无顶点抖动/无随机折线 —— 这是「干净光柱」的关键。
 func _draw_pillar(h: float, half_bottom: float, half_top: float, col: Color) -> void:
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(-half_bottom, 0.0),
 		Vector2(-half_top, -h),
 		Vector2(half_top, -h),

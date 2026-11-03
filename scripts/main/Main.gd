@@ -186,6 +186,8 @@ func _ready() -> void:
 			if _save_dialog != null:
 				_save_dialog.open_make_room()
 		)
+	# 投降结算（2026-11-03 玩家反馈）：按当前进度主动结束本局
+	pause_menu.surrender_requested.connect(_on_surrender_requested)
 	# 游戏共创：主菜单左下角按钮 → 共创弹窗（与意见反馈共用 FeedbackSender 发送链路）
 	if $UILayer.has_node("CoCreateDialog") and start_menu.has_signal("cocreation_requested"):
 		var cocreate_dialog: Control = $UILayer/CoCreateDialog
@@ -1011,6 +1013,22 @@ func _on_screen_damage_pulsed(tint: Color, dur: float) -> void:
 				if GameManager.player != null and is_instance_valid(GameManager.player):
 					hit_pos = GameManager.player.global_position
 				trigger_screen_shockwave(hit_pos, 1.0, 0.45)
+
+## 暂停菜单「投降结算」（2026-11-03 玩家反馈）：打到目标波数想收手时按当前进度直接结算。
+## 暂停菜单可以从悟道/商店打开（open(false) 保暂停），那两块整屏面板还垫在底下：
+## 不先藏掉会盖住阵亡谢幕。收起后解暂停，交回 Player 走与真阵亡同一条谢幕 + 结算。
+## 不走 take_damage：投降不是受击，不该触发闪避/护盾/替死傀儡。
+func _on_surrender_requested() -> void:
+	var player = GameManager.player
+	if player == null or not is_instance_valid(player) or not player.has_method("surrender"):
+		return
+	for name_str in ["LevelUpDialog", "WaveShop", "SuperAllocDialog"]:
+		var dlg := get_node_or_null("UILayer/%s" % name_str) as Control
+		if dlg != null and dlg.visible:
+			dlg.visible = false
+	pause_menu.close(false)
+	get_tree().paused = false
+	player.surrender()
 
 ## 结算时红晕渐隐复位（2026-10-15 用户反馈：阵亡红特效一直挂着不散）。
 ## 根因：阵亡后血量为 0，_process 濒死分支每帧刷红 vignette；结算屏一弹整树暂停，

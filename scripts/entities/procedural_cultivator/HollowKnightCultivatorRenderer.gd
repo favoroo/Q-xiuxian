@@ -410,6 +410,7 @@ func _cloak_gradient(pts: PackedVector2Array, base: Color) -> PackedColorArray:
 
 func _draw_idle(angle: Angle) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	# 待机差异化呼吸（2026-10-14 P1）：频率按体型反比调——石岳(1.18)沉缓、灵蝶使(0.85)轻快；
@@ -459,6 +460,7 @@ func _draw_head_front_gaze(float_y: float, eye_pulse: float, gaze_off: float) ->
 
 func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	# 2026-10-24 悬浮漂移：身体浮沉改吃独立 _float_phase（不再与脚步同相），
@@ -498,6 +500,7 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 
 func _draw_dash(angle: Angle, progress: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	var dash_y := 4.0
@@ -510,7 +513,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 		draw_filled_ellipse(Vector2(-lag, dash_y + 24), 16.0 * width_scale, 3.8, Color(col_cloak_outer.r, col_cloak_outer.g, col_cloak_outer.b, 0.16 / float(i)))
 
 	draw_filled_ellipse(Vector2(0, 32), 20.0 * width_scale, 3.8, Color(0.04, 0.06, 0.09, 0.55))
-	draw_line(Vector2(-18, 31), Vector2(14, 31), col_eye_core, 1.0)
+	BatchDraw.native_line(self, Vector2(-18, 31), Vector2(14, 31), col_eye_core, 1.0)
 
 	match angle:
 		Angle.FRONT:
@@ -521,7 +524,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 			_draw_modular_weapon(Vector2(8, 7 + dash_y), deg_to_rad(65.0), Angle.SIDE)
 			_draw_cloak_dash_side(dash_y, dash_progress)
 			_draw_head_side(dash_y + 2, 0.45)
-			draw_line(Vector2(8, -5 + dash_y), Vector2(-22, -5 + dash_y), col_eye_glow, 1.8)
+			BatchDraw.native_line(self, Vector2(8, -5 + dash_y), Vector2(-22, -5 + dash_y), col_eye_glow, 1.8)
 		Angle.BACK:
 			_draw_modular_cloak(dash_y, dash_amp, dash_t, dash_drag, Angle.BACK)
 			_draw_modular_strap(dash_y)
@@ -532,6 +535,7 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 
 func _draw_attack(angle: Angle, progress: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	var float_y := sin(progress * PI) * -2.8
@@ -560,6 +564,7 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 
 func _draw_hit(angle: Angle, progress: float) -> void:
 	var total_scale := Vector2(body_scale * width_scale, body_scale * height_scale)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, total_scale)
 
 	var hit_flash := 1.0 - progress
@@ -633,7 +638,7 @@ func _draw_immortal_motes(float_y: float) -> void:
 			var extra_a := (sin(extra_t * 2.4) * 0.35 + 0.65) * clampf(motes_boost, 0.0, 1.0) * 0.8
 			_circle(Vector2(ex, ey), 1.2, Color(1.0, 1.0, 1.0, extra_a))
 			var tail_dir := -Vector2(cos(extra_t) * 18.0, -sin(extra_t * 1.2) * 13.2).normalized()
-			draw_line(Vector2(ex, ey), Vector2(ex, ey) + tail_dir * 5.0, Color(eff_col.r, eff_col.g, eff_col.b, extra_a * 0.65), 1.2)
+			BatchDraw.native_line(self, Vector2(ex, ey), Vector2(ex, ey) + tail_dir * 5.0, Color(eff_col.r, eff_col.g, eff_col.b, extra_a * 0.65), 1.2)
 
 func _draw_eye_trail(float_y: float) -> void:
 	if not _layer_on(Layer.MOTES):
@@ -644,9 +649,9 @@ func _draw_eye_trail(float_y: float) -> void:
 	var trail_len := 8.0 + (eye_glow_boost * 14.0)
 	var eye_p := Vector2(2.5, -14.0 + float_y)
 	var trail_alpha := 0.32 + eye_glow_boost * 0.35
-	draw_line(eye_p, eye_p + Vector2(-trail_len, 1.0), Color(eff_eye.r, eff_eye.g, eff_eye.b, trail_alpha), 1.1 + eye_glow_boost * 0.8)
+	BatchDraw.native_line(self, eye_p, eye_p + Vector2(-trail_len, 1.0), Color(eff_eye.r, eff_eye.g, eff_eye.b, trail_alpha), 1.1 + eye_glow_boost * 0.8)
 	if eye_glow_boost > 0.2:
-		draw_line(eye_p, eye_p + Vector2(-trail_len * 0.55, 0.6), Color(1.0, 1.0, 1.0, trail_alpha * 0.9), 1.0)
+		BatchDraw.native_line(self, eye_p, eye_p + Vector2(-trail_len * 0.55, 0.6), Color(1.0, 1.0, 1.0, trail_alpha * 0.9), 1.0)
 
 # ==================== 头部与面具插槽绘制 ====================
 
@@ -730,14 +735,14 @@ func _draw_modular_mask(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(0, -9 * hs)
 				]
 
-		draw_colored_polygon(mask_pts, col_bone)
+		BatchDraw.native_poly(self, mask_pts, col_bone)
 		var shadow_cut: PackedVector2Array = [
 			mask_pts[2], mask_pts[3], mask_pts[4],
 			head_center + Vector2(4 * hs, 2 * hs),
 			head_center + Vector2(0, 5 * hs)
 		]
-		draw_colored_polygon(shadow_cut, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.35))
-		draw_polyline(mask_pts, col_bone_shadow, 1.2, true)
+		BatchDraw.native_poly(self, shadow_cut, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.35))
+		BatchDraw.native_polyline(self, mask_pts, col_bone_shadow, 1.2, true)
 		_draw_forehead_sigil(head_center, hs, Angle.FRONT)
 
 	else:
@@ -789,22 +794,22 @@ func _draw_modular_mask(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-6.5 * hs, 0)
 				]
 
-		draw_colored_polygon(side_mask, col_bone)
+		BatchDraw.native_poly(self, side_mask, col_bone)
 		var cheek_pts: PackedVector2Array = [
 			head_center + Vector2(-2 * hs, 1 * hs),
 			side_mask[2], side_mask[3], side_mask[4]
 		]
-		draw_colored_polygon(cheek_pts, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.4))
-		draw_polyline(side_mask, col_bone_shadow, 1.2, true)
+		BatchDraw.native_poly(self, cheek_pts, Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.4))
+		BatchDraw.native_polyline(self, side_mask, col_bone_shadow, 1.2, true)
 		_draw_forehead_sigil(head_center, hs, Angle.SIDE)
 
 ## 额间道统纹样微雕
 func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void:
 	if horns_style == "bamboo_hat":
 		if angle == Angle.FRONT:
-			draw_line(head_center + Vector2(-2.5 * hs, -5 * hs), head_center + Vector2(3.5 * hs, 4 * hs), Color(0.45, 0.48, 0.55), 1.2)
+			BatchDraw.native_line(self, head_center + Vector2(-2.5 * hs, -5 * hs), head_center + Vector2(3.5 * hs, 4 * hs), Color(0.45, 0.48, 0.55), 1.2)
 		else:
-			draw_line(head_center + Vector2(1.0 * hs, -3 * hs), head_center + Vector2(4.5 * hs, 3 * hs), Color(0.45, 0.48, 0.55), 1.1)
+			BatchDraw.native_line(self, head_center + Vector2(1.0 * hs, -3 * hs), head_center + Vector2(4.5 * hs, 3 * hs), Color(0.45, 0.48, 0.55), 1.1)
 		return
 
 	if horns_style == "talisman":
@@ -813,10 +818,10 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 	match mask_style:
 		"square_rock":
 			if angle == Angle.FRONT:
-				draw_line(head_center + Vector2(-2.5 * hs, -4.5 * hs), head_center + Vector2(2.5 * hs, -4.5 * hs), col_gold, 1.2)
-				draw_line(head_center + Vector2(-1.5 * hs, -2.5 * hs), head_center + Vector2(1.5 * hs, -2.5 * hs), col_gold, 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(-2.5 * hs, -4.5 * hs), head_center + Vector2(2.5 * hs, -4.5 * hs), col_gold, 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -2.5 * hs), head_center + Vector2(1.5 * hs, -2.5 * hs), col_gold, 1.2)
 			else:
-				draw_line(head_center + Vector2(1.0 * hs, -4.5 * hs), head_center + Vector2(3.5 * hs, -4.5 * hs), col_gold, 1.1)
+				BatchDraw.native_line(self, head_center + Vector2(1.0 * hs, -4.5 * hs), head_center + Vector2(3.5 * hs, -4.5 * hs), col_gold, 1.1)
 
 		"round_petite":
 			var sigil_col := col_tassel_red if horns_style == "dao_bun" or horns_style == "twin_buns" else col_gold
@@ -827,36 +832,36 @@ func _draw_forehead_sigil(head_center: Vector2, hs: float, angle: Angle) -> void
 
 		"sharp_fox":
 			if angle == Angle.FRONT:
-				draw_line(head_center + Vector2(0, -6 * hs), head_center + Vector2(0, -2 * hs), col_eye_glow, 1.1)
-				draw_line(head_center + Vector2(-2 * hs, -5 * hs), head_center + Vector2(2 * hs, -5 * hs), col_eye_glow, 0.9)
+				BatchDraw.native_line(self, head_center + Vector2(0, -6 * hs), head_center + Vector2(0, -2 * hs), col_eye_glow, 1.1)
+				BatchDraw.native_line(self, head_center + Vector2(-2 * hs, -5 * hs), head_center + Vector2(2 * hs, -5 * hs), col_eye_glow, 0.9)
 			else:
-				draw_line(head_center + Vector2(2.5 * hs, -5 * hs), head_center + Vector2(2.5 * hs, -2 * hs), col_eye_glow, 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(2.5 * hs, -5 * hs), head_center + Vector2(2.5 * hs, -2 * hs), col_eye_glow, 1.0)
 
 		"stout_brute":
 			var brute_col := col_gold if horns_style == "barbarian_horns" else col_tassel_red
 			if horns_style == "barbarian_horns":
 				# 蛮兵专属：额心三道炽金战气裂痕，展现陷阵凶蛮
 				if angle == Angle.FRONT:
-					draw_line(head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-1.5 * hs, -2.0 * hs), brute_col, 1.3)
-					draw_line(head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -1.8 * hs), brute_col, 1.4)
-					draw_line(head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(1.5 * hs, -2.0 * hs), brute_col, 1.3)
+					BatchDraw.native_line(self, head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-1.5 * hs, -2.0 * hs), brute_col, 1.3)
+					BatchDraw.native_line(self, head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -1.8 * hs), brute_col, 1.4)
+					BatchDraw.native_line(self, head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(1.5 * hs, -2.0 * hs), brute_col, 1.3)
 				else:
-					draw_line(head_center + Vector2(1.5 * hs, -5.5 * hs), head_center + Vector2(3.5 * hs, -2.0 * hs), brute_col, 1.3)
-					draw_line(head_center + Vector2(3.2 * hs, -5.0 * hs), head_center + Vector2(5.2 * hs, -1.5 * hs), brute_col, 1.2)
+					BatchDraw.native_line(self, head_center + Vector2(1.5 * hs, -5.5 * hs), head_center + Vector2(3.5 * hs, -2.0 * hs), brute_col, 1.3)
+					BatchDraw.native_line(self, head_center + Vector2(3.2 * hs, -5.0 * hs), head_center + Vector2(5.2 * hs, -1.5 * hs), brute_col, 1.2)
 			else:
 				if angle == Angle.FRONT:
-					draw_line(head_center + Vector2(-2.5 * hs, -6 * hs), head_center + Vector2(2.5 * hs, -2 * hs), brute_col, 1.2)
-					draw_line(head_center + Vector2(2.5 * hs, -6 * hs), head_center + Vector2(-2.5 * hs, -2 * hs), brute_col, 1.2)
+					BatchDraw.native_line(self, head_center + Vector2(-2.5 * hs, -6 * hs), head_center + Vector2(2.5 * hs, -2 * hs), brute_col, 1.2)
+					BatchDraw.native_line(self, head_center + Vector2(2.5 * hs, -6 * hs), head_center + Vector2(-2.5 * hs, -2 * hs), brute_col, 1.2)
 				else:
-					draw_line(head_center + Vector2(1.0 * hs, -5 * hs), head_center + Vector2(4.0 * hs, -2 * hs), brute_col, 1.1)
+					BatchDraw.native_line(self, head_center + Vector2(1.0 * hs, -5 * hs), head_center + Vector2(4.0 * hs, -2 * hs), brute_col, 1.1)
 
 		"oval_chin", _:
 			if angle == Angle.FRONT:
-				draw_line(head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -2.5 * hs), col_eye_glow, 1.2)
-				draw_line(head_center + Vector2(-1.5 * hs, -5.0 * hs), head_center + Vector2(1.5 * hs, -5.0 * hs), col_eye_glow, 0.9)
+				BatchDraw.native_line(self, head_center + Vector2(0, -6.5 * hs), head_center + Vector2(0, -2.5 * hs), col_eye_glow, 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -5.0 * hs), head_center + Vector2(1.5 * hs, -5.0 * hs), col_eye_glow, 0.9)
 				_circle(head_center + Vector2(0, -2.5 * hs), 0.7 * hs, col_eye_core)
 			else:
-				draw_line(head_center + Vector2(2.6 * hs, -5.5 * hs), head_center + Vector2(2.6 * hs, -2.5 * hs), col_eye_glow, 1.1)
+				BatchDraw.native_line(self, head_center + Vector2(2.6 * hs, -5.5 * hs), head_center + Vector2(2.6 * hs, -2.5 * hs), col_eye_glow, 1.1)
 
 	# 额间道印通玄激活动态光晕
 	if sigil_boost > 0.05:
@@ -886,29 +891,29 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				head_center + Vector2(5.5 * hs, -4.5 * hs)
 			]
 			if angle == Angle.FRONT:
-				draw_colored_polygon(l_bhorn, col_bone)
-				draw_colored_polygon(r_bhorn, col_bone)
+				BatchDraw.native_poly(self, l_bhorn, col_bone)
+				BatchDraw.native_poly(self, r_bhorn, col_bone)
 				# 角身暗面阴影
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-5.5 * hs, -4.5 * hs),
 					head_center + Vector2(-14.0 * hs, -10.5 * hs),
 					head_center + Vector2(-20.0 * hs, -21.0 * hs),
 					head_center + Vector2(-15.0 * hs, -14.0 * hs)
 				]), col_bone_shadow)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(5.5 * hs, -4.5 * hs),
 					head_center + Vector2(14.0 * hs, -10.5 * hs),
 					head_center + Vector2(20.0 * hs, -21.0 * hs),
 					head_center + Vector2(15.0 * hs, -14.0 * hs)
 				]), col_bone_shadow)
-				draw_polyline(l_bhorn, col_bone_shadow, 1.3, true)
-				draw_polyline(r_bhorn, col_bone_shadow, 1.3, true)
+				BatchDraw.native_polyline(self, l_bhorn, col_bone_shadow, 1.3, true)
+				BatchDraw.native_polyline(self, r_bhorn, col_bone_shadow, 1.3, true)
 				# 根部粗狂铜金护箍环（加粗明显，形成强辨识度）
-				draw_line(head_center + Vector2(-4.5 * hs, -6.0 * hs), head_center + Vector2(-9.5 * hs, -9.5 * hs), col_gold, 2.4)
-				draw_line(head_center + Vector2(4.5 * hs, -6.0 * hs), head_center + Vector2(9.5 * hs, -9.5 * hs), col_gold, 2.4)
+				BatchDraw.native_line(self, head_center + Vector2(-4.5 * hs, -6.0 * hs), head_center + Vector2(-9.5 * hs, -9.5 * hs), col_gold, 2.4)
+				BatchDraw.native_line(self, head_center + Vector2(4.5 * hs, -6.0 * hs), head_center + Vector2(9.5 * hs, -9.5 * hs), col_gold, 2.4)
 				# 角尖战纹金芒
-				draw_line(head_center + Vector2(-12.0 * hs, -15.0 * hs), head_center + Vector2(-18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
-				draw_line(head_center + Vector2(12.0 * hs, -15.0 * hs), head_center + Vector2(18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(-12.0 * hs, -15.0 * hs), head_center + Vector2(-18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(12.0 * hs, -15.0 * hs), head_center + Vector2(18.5 * hs, -20.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
 			elif angle == Angle.SIDE:
 				var side_bhorn := [
 					head_center + Vector2(-2.0 * hs, -5.5 * hs),
@@ -917,15 +922,15 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-8.0 * hs, -18.0 * hs),
 					head_center + Vector2(2.5 * hs, -7.5 * hs)
 				]
-				draw_colored_polygon(side_bhorn, col_bone)
-				draw_polyline(side_bhorn, col_bone_shadow, 1.3, true)
-				draw_line(head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-6.5 * hs, -11.0 * hs), col_gold, 2.4)
-				draw_line(head_center + Vector2(-8.0 * hs, -14.0 * hs), head_center + Vector2(-14.5 * hs, -21.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
+				BatchDraw.native_poly(self, side_bhorn, col_bone)
+				BatchDraw.native_polyline(self, side_bhorn, col_bone_shadow, 1.3, true)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-6.5 * hs, -11.0 * hs), col_gold, 2.4)
+				BatchDraw.native_line(self, head_center + Vector2(-8.0 * hs, -14.0 * hs), head_center + Vector2(-14.5 * hs, -21.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.75), 1.2)
 			else:
-				draw_colored_polygon(l_bhorn, col_bone_shadow)
-				draw_colored_polygon(r_bhorn, col_bone_shadow)
-				draw_polyline(l_bhorn, col_bone, 1.0, true)
-				draw_polyline(r_bhorn, col_bone, 1.0, true)
+				BatchDraw.native_poly(self, l_bhorn, col_bone_shadow)
+				BatchDraw.native_poly(self, r_bhorn, col_bone_shadow)
+				BatchDraw.native_polyline(self, l_bhorn, col_bone, 1.0, true)
+				BatchDraw.native_polyline(self, r_bhorn, col_bone, 1.0, true)
 
 		"bull_horns":
 			var l_horn := [
@@ -943,12 +948,12 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				head_center + Vector2(6 * hs, -5 * hs)
 			]
 			if angle == Angle.FRONT:
-				draw_colored_polygon(l_horn, col_bone)
-				draw_colored_polygon(r_horn, col_bone)
-				draw_polyline(l_horn, col_bone_shadow, 1.2, true)
-				draw_polyline(r_horn, col_bone_shadow, 1.2, true)
-				draw_line(head_center + Vector2(-10 * hs, -10 * hs), head_center + Vector2(-13 * hs, -14 * hs), col_bone_shadow, 1.2)
-				draw_line(head_center + Vector2(10 * hs, -10 * hs), head_center + Vector2(13 * hs, -14 * hs), col_bone_shadow, 1.2)
+				BatchDraw.native_poly(self, l_horn, col_bone)
+				BatchDraw.native_poly(self, r_horn, col_bone)
+				BatchDraw.native_polyline(self, l_horn, col_bone_shadow, 1.2, true)
+				BatchDraw.native_polyline(self, r_horn, col_bone_shadow, 1.2, true)
+				BatchDraw.native_line(self, head_center + Vector2(-10 * hs, -10 * hs), head_center + Vector2(-13 * hs, -14 * hs), col_bone_shadow, 1.2)
+				BatchDraw.native_line(self, head_center + Vector2(10 * hs, -10 * hs), head_center + Vector2(13 * hs, -14 * hs), col_bone_shadow, 1.2)
 			elif angle == Angle.SIDE:
 				var side_horn := [
 					head_center + Vector2(-2 * hs, -6 * hs),
@@ -957,14 +962,14 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-7 * hs, -17 * hs),
 					head_center + Vector2(2 * hs, -8 * hs)
 				]
-				draw_colored_polygon(side_horn, col_bone)
-				draw_polyline(side_horn, col_bone_shadow, 1.2, true)
-				draw_line(head_center + Vector2(-8 * hs, -12 * hs), head_center + Vector2(-10 * hs, -16 * hs), col_bone_shadow, 1.1)
+				BatchDraw.native_poly(self, side_horn, col_bone)
+				BatchDraw.native_polyline(self, side_horn, col_bone_shadow, 1.2, true)
+				BatchDraw.native_line(self, head_center + Vector2(-8 * hs, -12 * hs), head_center + Vector2(-10 * hs, -16 * hs), col_bone_shadow, 1.1)
 			else:
-				draw_colored_polygon(l_horn, col_bone_shadow)
-				draw_colored_polygon(r_horn, col_bone_shadow)
-				draw_polyline(l_horn, col_bone, 1.0, true)
-				draw_polyline(r_horn, col_bone, 1.0, true)
+				BatchDraw.native_poly(self, l_horn, col_bone_shadow)
+				BatchDraw.native_poly(self, r_horn, col_bone_shadow)
+				BatchDraw.native_polyline(self, l_horn, col_bone, 1.0, true)
+				BatchDraw.native_polyline(self, r_horn, col_bone, 1.0, true)
 
 		"dao_bun":
 			var bun_c: Vector2 = head_center + Vector2(-1.5 * hs, -12 * hs) if angle == Angle.SIDE else head_center + Vector2(0, -12 * hs)
@@ -972,14 +977,14 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 			_circle(bun_c, 3.0 * hs, col_bone_shadow)
 			_arc(bun_c, 4.0 * hs, -0.4, 2.8, 12, col_bone_shadow, 1.1)
 			if angle == Angle.SIDE:
-				draw_line(bun_c + Vector2(-6 * hs, -1 * hs), bun_c + Vector2(7 * hs, 1 * hs), col_weapon_main, 1.8)
+				BatchDraw.native_line(self, bun_c + Vector2(-6 * hs, -1 * hs), bun_c + Vector2(7 * hs, 1 * hs), col_weapon_main, 1.8)
 				_circle(bun_c + Vector2(7 * hs, 1 * hs), 1.6, col_jade)
 				# 簪尾红绳穗：软部件随移动风压/步频二级摆动
-				draw_line(bun_c + Vector2(-5 * hs, -1 * hs), bun_c + Vector2(-7 * hs, 3 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
+				BatchDraw.native_line(self, bun_c + Vector2(-5 * hs, -1 * hs), bun_c + Vector2(-7 * hs, 3 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
 			else:
-				draw_line(bun_c + Vector2(-8 * hs, 0), bun_c + Vector2(8 * hs, 0), col_weapon_main, 1.8)
+				BatchDraw.native_line(self, bun_c + Vector2(-8 * hs, 0), bun_c + Vector2(8 * hs, 0), col_weapon_main, 1.8)
 				_circle(bun_c + Vector2(8 * hs, 0), 1.6, col_jade)
-				draw_line(bun_c + Vector2(-7 * hs, 0), bun_c + Vector2(-9 * hs, 4 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
+				BatchDraw.native_line(self, bun_c + Vector2(-7 * hs, 0), bun_c + Vector2(-9 * hs, 4 * hs) + _head_soft_sway(0.6), col_tassel_red, 1.2)
 
 		"twin_buns":
 			# 童子双丫髻：左右对称小髻 + 髻根红头绳，无横簪（驯兽师专属）
@@ -991,9 +996,9 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				_circle(bun_l, 2.8 * hs, col_bone_shadow)
 				_circle(bun_r, 3.2 * hs, col_bone)
 				_arc(bun_r, 2.4 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
-				draw_line(bun_r + Vector2(-2.2 * hs, 1.8 * hs), bun_r + Vector2(2.2 * hs, 1.8 * hs), col_tassel_red, 1.2)
+				BatchDraw.native_line(self, bun_r + Vector2(-2.2 * hs, 1.8 * hs), bun_r + Vector2(2.2 * hs, 1.8 * hs), col_tassel_red, 1.2)
 				# 髻根垂下的红绳穗：软部件随移动风压/步频二级摆动
-				draw_line(bun_r + Vector2(1.6 * hs, 2.2 * hs), bun_r + Vector2(2.4 * hs, 5.0 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
+				BatchDraw.native_line(self, bun_r + Vector2(1.6 * hs, 2.2 * hs), bun_r + Vector2(2.4 * hs, 5.0 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
 			else:
 				bun_l = head_center + Vector2(-6.5 * hs, -10 * hs)
 				bun_r = head_center + Vector2(6.5 * hs, -10 * hs)
@@ -1001,11 +1006,11 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				_circle(bun_r, 3.4 * hs, col_bone)
 				_arc(bun_l, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
 				_arc(bun_r, 2.6 * hs, -0.5, 2.6, 10, col_bone_shadow, 1.0)
-				draw_line(bun_l + Vector2(-2.4 * hs, 2.0 * hs), bun_l + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
-				draw_line(bun_r + Vector2(-2.4 * hs, 2.0 * hs), bun_r + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
+				BatchDraw.native_line(self, bun_l + Vector2(-2.4 * hs, 2.0 * hs), bun_l + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
+				BatchDraw.native_line(self, bun_r + Vector2(-2.4 * hs, 2.0 * hs), bun_r + Vector2(2.4 * hs, 2.0 * hs), col_tassel_red, 1.2)
 				# 双髻各垂一条红绳穗，lag 错相不同拍
-				draw_line(bun_l + Vector2(-1.6 * hs, 2.4 * hs), bun_l + Vector2(-2.4 * hs, 5.4 * hs) + _head_soft_sway(0.2), col_tassel_red, 1.1)
-				draw_line(bun_r + Vector2(1.6 * hs, 2.4 * hs), bun_r + Vector2(2.4 * hs, 5.4 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
+				BatchDraw.native_line(self, bun_l + Vector2(-1.6 * hs, 2.4 * hs), bun_l + Vector2(-2.4 * hs, 5.4 * hs) + _head_soft_sway(0.2), col_tassel_red, 1.1)
+				BatchDraw.native_line(self, bun_r + Vector2(1.6 * hs, 2.4 * hs), bun_r + Vector2(2.4 * hs, 5.4 * hs) + _head_soft_sway(1.4), col_tassel_red, 1.1)
 
 		"bamboo_hat":
 			var hat_c := head_center + Vector2(0, -9 * hs)
@@ -1017,10 +1022,10 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					hat_c + Vector2(16 * hs, 4 * hs),
 					hat_c + Vector2(2 * hs, -1 * hs)
 				]
-				draw_colored_polygon(hat_pts, Color(0.38, 0.32, 0.22))
-				draw_polyline(hat_pts, Color(0.68, 0.58, 0.40), 1.2, true)
-				draw_line(hat_c + Vector2(-7 * hs, -4 * hs), hat_c + Vector2(8 * hs, 1 * hs), Color(0.28, 0.22, 0.15), 1.2)
-				draw_line(hat_c + Vector2(0, 0), hat_c + Vector2(-1 * hs, 8 * hs), Color(0.12, 0.10, 0.08), 1.2)
+				BatchDraw.native_poly(self, hat_pts, Color(0.38, 0.32, 0.22))
+				BatchDraw.native_polyline(self, hat_pts, Color(0.68, 0.58, 0.40), 1.2, true)
+				BatchDraw.native_line(self, hat_c + Vector2(-7 * hs, -4 * hs), hat_c + Vector2(8 * hs, 1 * hs), Color(0.28, 0.22, 0.15), 1.2)
+				BatchDraw.native_line(self, hat_c + Vector2(0, 0), hat_c + Vector2(-1 * hs, 8 * hs), Color(0.12, 0.10, 0.08), 1.2)
 			elif angle == Angle.BACK:
 				var hat_pts: PackedVector2Array = [
 					hat_c + Vector2(-17 * hs, 2 * hs),
@@ -1028,8 +1033,8 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					hat_c + Vector2(17 * hs, 2 * hs),
 					hat_c + Vector2(0, 1 * hs)
 				]
-				draw_colored_polygon(hat_pts, Color(0.32, 0.26, 0.17))
-				draw_polyline(hat_pts, Color(0.62, 0.52, 0.35), 1.2, true)
+				BatchDraw.native_poly(self, hat_pts, Color(0.32, 0.26, 0.17))
+				BatchDraw.native_polyline(self, hat_pts, Color(0.62, 0.52, 0.35), 1.2, true)
 				_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.24, 0.19, 0.12), 1.2)
 			else:
 				var hat_pts: PackedVector2Array = [
@@ -1038,10 +1043,10 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					hat_c + Vector2(17 * hs, 3 * hs),
 					hat_c + Vector2(0, -2 * hs)
 				]
-				draw_colored_polygon(hat_pts, Color(0.38, 0.32, 0.22))
-				draw_polyline(hat_pts, Color(0.68, 0.58, 0.40), 1.2, true)
+				BatchDraw.native_poly(self, hat_pts, Color(0.38, 0.32, 0.22))
+				BatchDraw.native_polyline(self, hat_pts, Color(0.68, 0.58, 0.40), 1.2, true)
 				_arc(hat_c + Vector2(0, -3 * hs), 8.0 * hs, 0, PI, 16, Color(0.28, 0.22, 0.15), 1.2)
-				draw_line(hat_c + Vector2(0, -11 * hs), hat_c + Vector2(0, -2 * hs), Color(0.24, 0.20, 0.14), 1.4)
+				BatchDraw.native_line(self, hat_c + Vector2(0, -11 * hs), hat_c + Vector2(0, -2 * hs), Color(0.24, 0.20, 0.14), 1.4)
 				_circle(hat_c + Vector2(0, 0), 1.2, Color(0.12, 0.10, 0.08))
 
 		"talisman":
@@ -1056,10 +1061,10 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					t_pos + Vector2(0, 11.5 * hs) + t_sw,
 					t_pos + Vector2(-3.0 * hs, 13 * hs) + t_sw
 				]
-				draw_colored_polygon(t_pts, Color(0.92, 0.82, 0.28))
-				draw_line(t_pos + Vector2(0, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.3)
-				draw_line(t_pos + Vector2(-1.5 * hs, 4 * hs), t_pos + Vector2(1.5 * hs, 4 * hs), Color(0.85, 0.20, 0.15), 1.1)
-				draw_line(t_pos + Vector2(-1.2 * hs, 7 * hs) + t_sw * 0.5, t_pos + Vector2(1.2 * hs, 7 * hs) + t_sw * 0.5, Color(0.85, 0.20, 0.15), 1.1)
+				BatchDraw.native_poly(self, t_pts, Color(0.92, 0.82, 0.28))
+				BatchDraw.native_line(self, t_pos + Vector2(0, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.3)
+				BatchDraw.native_line(self, t_pos + Vector2(-1.5 * hs, 4 * hs), t_pos + Vector2(1.5 * hs, 4 * hs), Color(0.85, 0.20, 0.15), 1.1)
+				BatchDraw.native_line(self, t_pos + Vector2(-1.2 * hs, 7 * hs) + t_sw * 0.5, t_pos + Vector2(1.2 * hs, 7 * hs) + t_sw * 0.5, Color(0.85, 0.20, 0.15), 1.1)
 			elif angle == Angle.SIDE:
 				var t_pos := head_center + Vector2(5.5 * hs, -8 * hs)
 				var t_sw := _head_soft_sway(0.9) * 0.75
@@ -1069,10 +1074,10 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					t_pos + Vector2(0.5 * hs, 12 * hs) + t_sw,
 					t_pos + Vector2(-1.0 * hs, 12 * hs) + t_sw
 				]
-				draw_colored_polygon(t_pts, Color(0.92, 0.82, 0.28))
-				draw_line(t_pos + Vector2(0.8 * hs, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.2)
+				BatchDraw.native_poly(self, t_pts, Color(0.92, 0.82, 0.28))
+				BatchDraw.native_line(self, t_pos + Vector2(0.8 * hs, 2 * hs), t_pos + Vector2(0, 10 * hs) + t_sw * 0.8, Color(0.85, 0.20, 0.15), 1.2)
 			else:
-				draw_line(head_center + Vector2(-5 * hs, -8 * hs), head_center + Vector2(5 * hs, -8 * hs), Color(0.85, 0.20, 0.15), 1.3)
+				BatchDraw.native_line(self, head_center + Vector2(-5 * hs, -8 * hs), head_center + Vector2(5 * hs, -8 * hs), Color(0.85, 0.20, 0.15), 1.3)
 				_circle(head_center + Vector2(0, -8 * hs), 1.4, Color(0.85, 0.20, 0.15))
 
 		"gold_crown":
@@ -1082,13 +1087,13 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 				_circle(crown_c + Vector2(-3 * hs, 0), 3.0 * hs, col_gold_shadow)
 				_circle(crown_c + Vector2(2 * hs, -2 * hs), 3.8 * hs, col_gold)
 				_circle(crown_c + Vector2(2 * hs, -2 * hs), 1.5 * hs, col_void)
-				draw_rect(Rect2(crown_c + Vector2(1.2 * hs, -2.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
+				BatchDraw.native_rect(self, Rect2(crown_c + Vector2(1.2 * hs, -2.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
 			else:
 				_circle(crown_c + Vector2(-6 * hs, 0), 3.2 * hs, col_gold_shadow)
 				_circle(crown_c + Vector2(6 * hs, 0), 3.2 * hs, col_gold_shadow)
 				_circle(crown_c + Vector2(0, -3 * hs), 4.4 * hs, col_gold)
 				_circle(crown_c + Vector2(0, -3 * hs), 1.7 * hs, col_void)
-				draw_rect(Rect2(crown_c + Vector2(-0.8 * hs, -3.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
+				BatchDraw.native_rect(self, Rect2(crown_c + Vector2(-0.8 * hs, -3.8 * hs), Vector2(1.6 * hs, 1.6 * hs)), col_gold)
 
 		"butterfly_horns_petite":
 			# 灵蝶使专属：轻灵小蝶羽仙角（剑士骨角 0.68x 简约微型版，天青灵蓝流光）
@@ -1100,14 +1105,14 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-3.5 * hs, -15.0 * hs),
 					head_center + Vector2(1.5 * hs, -6.5 * hs)
 				]
-				draw_colored_polygon(side_horn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, side_horn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-2.0 * hs, -5.0 * hs),
 					head_center + Vector2(-7.5 * hs, -13.0 * hs),
 					head_center + Vector2(-9.5 * hs, -20.0 * hs),
 					head_center + Vector2(-5.0 * hs, -13.0 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-8.0 * hs, -18.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -6.5 * hs), head_center + Vector2(-8.0 * hs, -18.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
 			else:
 				var l_horn: PackedVector2Array = [
 					head_center + Vector2(-4.2 * hs, -3.5 * hs),
@@ -1123,22 +1128,22 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(9.8 * hs, -13.0 * hs),
 					head_center + Vector2(4.2 * hs, -3.5 * hs)
 				]
-				draw_colored_polygon(l_horn, col_bone)
-				draw_colored_polygon(r_horn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, l_horn, col_bone)
+				BatchDraw.native_poly(self, r_horn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-4.2 * hs, -3.5 * hs),
 					head_center + Vector2(-9.8 * hs, -13.0 * hs),
 					head_center + Vector2(-8.4 * hs, -20.0 * hs),
 					head_center + Vector2(-6.3 * hs, -13.0 * hs)
 				]), col_bone_shadow)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(2.0 * hs, -6.0 * hs),
 					head_center + Vector2(4.2 * hs, -14.0 * hs),
 					head_center + Vector2(8.4 * hs, -20.0 * hs),
 					head_center + Vector2(6.3 * hs, -13.0 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-2.8 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
-				draw_line(head_center + Vector2(2.8 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-2.8 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(2.8 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -17.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
 
 		"merchant_horns":
 			# 商人专属：平展从容玉骨角（角底束简金环，温润平缓横展）
@@ -1150,16 +1155,16 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-6.0 * hs, -17.0 * hs),
 					head_center + Vector2(1.5 * hs, -7.0 * hs)
 				]
-				draw_colored_polygon(m_horn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, m_horn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-2.5 * hs, -5.5 * hs),
 					head_center + Vector2(-8.5 * hs, -14.0 * hs),
 					head_center + Vector2(-12.5 * hs, -21.0 * hs),
 					head_center + Vector2(-7.5 * hs, -15.0 * hs)
 				]), col_bone_shadow)
 				# 根部简约金环带
-				draw_line(head_center + Vector2(-1.5 * hs, -6.0 * hs), head_center + Vector2(-4.5 * hs, -10.0 * hs), col_gold, 1.8)
-				draw_line(head_center + Vector2(-2.0 * hs, -7.0 * hs), head_center + Vector2(-10.5 * hs, -19.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -6.0 * hs), head_center + Vector2(-4.5 * hs, -10.0 * hs), col_gold, 1.8)
+				BatchDraw.native_line(self, head_center + Vector2(-2.0 * hs, -7.0 * hs), head_center + Vector2(-10.5 * hs, -19.0 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
 			else:
 				var l_mhorn: PackedVector2Array = [
 					head_center + Vector2(-5.0 * hs, -4.0 * hs),
@@ -1175,25 +1180,25 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(13.0 * hs, -13.5 * hs),
 					head_center + Vector2(5.0 * hs, -4.0 * hs)
 				]
-				draw_colored_polygon(l_mhorn, col_bone)
-				draw_colored_polygon(r_mhorn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, l_mhorn, col_bone)
+				BatchDraw.native_poly(self, r_mhorn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-5.0 * hs, -4.0 * hs),
 					head_center + Vector2(-13.0 * hs, -13.5 * hs),
 					head_center + Vector2(-13.5 * hs, -21.0 * hs),
 					head_center + Vector2(-9.5 * hs, -14.5 * hs)
 				]), col_bone_shadow)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(2.5 * hs, -6.5 * hs),
 					head_center + Vector2(7.0 * hs, -15.5 * hs),
 					head_center + Vector2(13.5 * hs, -21.0 * hs),
 					head_center + Vector2(9.5 * hs, -14.5 * hs)
 				]), col_bone_shadow)
 				# 根部简约金环束角
-				draw_line(head_center + Vector2(-3.5 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -9.5 * hs), col_gold, 1.8)
-				draw_line(head_center + Vector2(3.5 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -9.5 * hs), col_gold, 1.8)
-				draw_line(head_center + Vector2(-4.0 * hs, -7.0 * hs), head_center + Vector2(-11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
-				draw_line(head_center + Vector2(4.0 * hs, -7.0 * hs), head_center + Vector2(11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-3.5 * hs, -5.5 * hs), head_center + Vector2(-7.0 * hs, -9.5 * hs), col_gold, 1.8)
+				BatchDraw.native_line(self, head_center + Vector2(3.5 * hs, -5.5 * hs), head_center + Vector2(7.0 * hs, -9.5 * hs), col_gold, 1.8)
+				BatchDraw.native_line(self, head_center + Vector2(-4.0 * hs, -7.0 * hs), head_center + Vector2(-11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(4.0 * hs, -7.0 * hs), head_center + Vector2(11.5 * hs, -18.5 * hs), Color(col_gold.r, col_gold.g, col_gold.b, 0.65), 1.0)
 
 		"collector_horns":
 			# 收藏家专属：重宝双叠骨羽角（主挺拔 + 外侧微小副羽剪影，紫金灵光中脊）
@@ -1210,15 +1215,15 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-11.0 * hs, -14.0 * hs),
 					head_center + Vector2(-7.5 * hs, -11.0 * hs)
 				]
-				draw_colored_polygon(sub_h, col_bone_shadow)
-				draw_colored_polygon(main_h, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, sub_h, col_bone_shadow)
+				BatchDraw.native_poly(self, main_h, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-2.5 * hs, -6.0 * hs),
 					head_center + Vector2(-9.0 * hs, -16.0 * hs),
 					head_center + Vector2(-11.5 * hs, -24.0 * hs),
 					head_center + Vector2(-6.5 * hs, -16.5 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-1.5 * hs, -7.5 * hs), head_center + Vector2(-9.5 * hs, -21.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -7.5 * hs), head_center + Vector2(-9.5 * hs, -21.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.75), 1.0)
 			else:
 				var l_sub: PackedVector2Array = [
 					head_center + Vector2(-6.0 * hs, -6.0 * hs),
@@ -1244,24 +1249,24 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(11.5 * hs, -16.0 * hs),
 					head_center + Vector2(5.0 * hs, -4.5 * hs)
 				]
-				draw_colored_polygon(l_sub, col_bone_shadow)
-				draw_colored_polygon(r_sub, col_bone_shadow)
-				draw_colored_polygon(l_main, col_bone)
-				draw_colored_polygon(r_main, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, l_sub, col_bone_shadow)
+				BatchDraw.native_poly(self, r_sub, col_bone_shadow)
+				BatchDraw.native_poly(self, l_main, col_bone)
+				BatchDraw.native_poly(self, r_main, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-5.0 * hs, -4.5 * hs),
 					head_center + Vector2(-11.5 * hs, -16.0 * hs),
 					head_center + Vector2(-10.0 * hs, -25.0 * hs),
 					head_center + Vector2(-7.5 * hs, -16.0 * hs)
 				]), col_bone_shadow)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(2.5 * hs, -7.0 * hs),
 					head_center + Vector2(5.0 * hs, -17.5 * hs),
 					head_center + Vector2(10.0 * hs, -25.0 * hs),
 					head_center + Vector2(7.5 * hs, -16.0 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-3.5 * hs, -6.5 * hs), head_center + Vector2(-8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
-				draw_line(head_center + Vector2(3.5 * hs, -6.5 * hs), head_center + Vector2(8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-3.5 * hs, -6.5 * hs), head_center + Vector2(-8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(3.5 * hs, -6.5 * hs), head_center + Vector2(8.5 * hs, -22.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.7), 1.0)
 
 		"miser_horns":
 			# 守财奴专属：内敛月牙骨角（内扣挺拔，精瘦锐利，冷光中脊）
@@ -1273,14 +1278,14 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(-3.5 * hs, -16.5 * hs),
 					head_center + Vector2(1.5 * hs, -7.0 * hs)
 				]
-				draw_colored_polygon(s_horn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, s_horn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-2.5 * hs, -5.5 * hs),
 					head_center + Vector2(-7.0 * hs, -14.0 * hs),
 					head_center + Vector2(-8.0 * hs, -23.0 * hs),
 					head_center + Vector2(-5.0 * hs, -15.0 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-1.5 * hs, -7.0 * hs), head_center + Vector2(-6.5 * hs, -20.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-1.5 * hs, -7.0 * hs), head_center + Vector2(-6.5 * hs, -20.0 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
 			else:
 				var l_shorn: PackedVector2Array = [
 					head_center + Vector2(-4.5 * hs, -4.0 * hs),
@@ -1296,22 +1301,22 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(8.5 * hs, -14.5 * hs),
 					head_center + Vector2(4.5 * hs, -4.0 * hs)
 				]
-				draw_colored_polygon(l_shorn, col_bone)
-				draw_colored_polygon(r_shorn, col_bone)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, l_shorn, col_bone)
+				BatchDraw.native_poly(self, r_shorn, col_bone)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(-4.5 * hs, -4.0 * hs),
 					head_center + Vector2(-8.5 * hs, -14.5 * hs),
 					head_center + Vector2(-6.0 * hs, -23.5 * hs),
 					head_center + Vector2(-5.0 * hs, -14.5 * hs)
 				]), col_bone_shadow)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					head_center + Vector2(2.0 * hs, -6.5 * hs),
 					head_center + Vector2(3.2 * hs, -15.5 * hs),
 					head_center + Vector2(6.0 * hs, -23.5 * hs),
 					head_center + Vector2(5.0 * hs, -14.5 * hs)
 				]), col_bone_shadow)
-				draw_line(head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
-				draw_line(head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(-3.0 * hs, -6.0 * hs), head_center + Vector2(-5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
+				BatchDraw.native_line(self, head_center + Vector2(3.0 * hs, -6.0 * hs), head_center + Vector2(5.0 * hs, -20.5 * hs), Color(col_eye_glow.r, col_eye_glow.g, col_eye_glow.b, 0.65), 1.0)
 
 		"fox_ears":
 			if angle == Angle.SIDE:
@@ -1325,9 +1330,9 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(8 * hs, -21 * hs),
 					head_center + Vector2(4 * hs, -14 * hs)
 				]
-				draw_colored_polygon(rear_ear, col_bone_shadow)
-				draw_colored_polygon(front_ear, col_bone)
-				draw_colored_polygon([
+				BatchDraw.native_poly(self, rear_ear, col_bone_shadow)
+				BatchDraw.native_poly(self, front_ear, col_bone)
+				BatchDraw.native_poly(self, [
 					head_center + Vector2(2 * hs, -7 * hs),
 					head_center + Vector2(7 * hs, -18 * hs),
 					head_center + Vector2(3 * hs, -13 * hs)
@@ -1343,15 +1348,15 @@ func _draw_modular_headwear(head_center: Vector2, angle: Angle) -> void:
 					head_center + Vector2(11 * hs, -21 * hs),
 					head_center + Vector2(2 * hs, -14 * hs)
 				]
-				draw_colored_polygon(l_ear, col_bone)
-				draw_colored_polygon(r_ear, col_bone)
+				BatchDraw.native_poly(self, l_ear, col_bone)
+				BatchDraw.native_poly(self, r_ear, col_bone)
 				if angle == Angle.FRONT:
-					draw_colored_polygon([
+					BatchDraw.native_poly(self, [
 						head_center + Vector2(-4 * hs, -7 * hs),
 						head_center + Vector2(-9 * hs, -18 * hs),
 						head_center + Vector2(-3 * hs, -13 * hs)
 					], col_cloak_outer)
-					draw_colored_polygon([
+					BatchDraw.native_poly(self, [
 						head_center + Vector2(4 * hs, -7 * hs),
 						head_center + Vector2(9 * hs, -18 * hs),
 						head_center + Vector2(3 * hs, -13 * hs)
@@ -1372,14 +1377,14 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 			head_center + Vector2(-5 * hs, -20 * hs),
 			head_center + Vector2(2 * hs, -8 * hs)
 		]
-		draw_colored_polygon(side_horn, col_bone)
-		draw_colored_polygon(PackedVector2Array([
+		BatchDraw.native_poly(self, side_horn, col_bone)
+		BatchDraw.native_poly(self, PackedVector2Array([
 			head_center + Vector2(-3 * hs, -6 * hs),
 			head_center + Vector2(-11 * hs, -17 * hs),
 			head_center + Vector2(-14 * hs, -27 * hs),
 			head_center + Vector2(-7 * hs, -17 * hs)
 		]), col_bone_shadow)
-		draw_line(head_center + Vector2(-2 * hs, -8 * hs), head_center + Vector2(-12 * hs, -24 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.75), 1.0)
+		BatchDraw.native_line(self, head_center + Vector2(-2 * hs, -8 * hs), head_center + Vector2(-12 * hs, -24 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.75), 1.0)
 		return
 
 	var l_horn: PackedVector2Array = [
@@ -1389,14 +1394,14 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 		head_center + Vector2(-6 * hs, -19 * hs),
 		head_center + Vector2(-3 * hs, -8 * hs)
 	]
-	draw_colored_polygon(l_horn, col_bone)
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, l_horn, col_bone)
+	BatchDraw.native_poly(self, PackedVector2Array([
 		head_center + Vector2(-6 * hs, -4 * hs),
 		head_center + Vector2(-14 * hs, -17 * hs),
 		head_center + Vector2(-12 * hs, -27 * hs),
 		head_center + Vector2(-9 * hs, -17 * hs)
 	]), col_bone_shadow)
-	draw_line(head_center + Vector2(-4 * hs, -7 * hs), head_center + Vector2(-10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
+	BatchDraw.native_line(self, head_center + Vector2(-4 * hs, -7 * hs), head_center + Vector2(-10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
 
 	var r_horn: PackedVector2Array = [
 		head_center + Vector2(3 * hs, -8 * hs),
@@ -1405,14 +1410,14 @@ func _draw_butterfly_horns(head_center: Vector2, hs: float, angle: Angle) -> voi
 		head_center + Vector2(14 * hs, -17 * hs),
 		head_center + Vector2(6 * hs, -4 * hs)
 	]
-	draw_colored_polygon(r_horn, col_bone)
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, r_horn, col_bone)
+	BatchDraw.native_poly(self, PackedVector2Array([
 		head_center + Vector2(3 * hs, -8 * hs),
 		head_center + Vector2(6 * hs, -19 * hs),
 		head_center + Vector2(12 * hs, -27 * hs),
 		head_center + Vector2(9 * hs, -17 * hs)
 	]), col_bone_shadow)
-	draw_line(head_center + Vector2(4 * hs, -7 * hs), head_center + Vector2(10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
+	BatchDraw.native_line(self, head_center + Vector2(4 * hs, -7 * hs), head_center + Vector2(10 * hs, -23 * hs), Color(col_eye_core.r, col_eye_core.g, col_eye_core.b, 0.7), 1.0)
 
 ## 插槽 3：眼睛神态与光芒
 ## 皮肤系列可收窄眼部柔光（如墨煞压到只剩一点），由族模块决定；原色零开销
@@ -1451,12 +1456,12 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 
 		match eye_style:
 			"sharp_slit":
-				draw_line(l_eye + Vector2(-3.2 * hs, 0), l_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
-				draw_line(r_eye + Vector2(-3.2 * hs, 0), r_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
+				BatchDraw.native_line(self, l_eye + Vector2(-3.2 * hs, 0), l_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
+				BatchDraw.native_line(self, r_eye + Vector2(-3.2 * hs, 0), r_eye + Vector2(3.2 * hs, 0), c_void, 2.8)
 				_draw_eye_soft_glow(l_eye, 5.2 + glow_r, eff_glow_col, 2)
 				_draw_eye_soft_glow(r_eye, 5.2 + glow_r, eff_glow_col, 2)
-				draw_line(l_eye + Vector2(-1.6 * hs, 0), l_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
-				draw_line(r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
+				BatchDraw.native_line(self, l_eye + Vector2(-1.6 * hs, 0), l_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
+				BatchDraw.native_line(self, r_eye + Vector2(-1.6 * hs, 0), r_eye + Vector2(1.6 * hs, 0), c_core, 1.5)
 
 			"round_pupil":
 				draw_filled_ellipse(l_eye, 3.8 * hs, 3.8 * hs * sq, c_void)
@@ -1484,8 +1489,8 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 				var r_poly: PackedVector2Array = [
 					r_eye + Vector2(-3.5 * hs, -1.5 * hs * sq), r_eye + Vector2(3.5 * hs, 2 * hs * sq),
 					r_eye + Vector2(-3 * hs, 1.5 * hs * sq)]
-				draw_colored_polygon(l_poly, c_void)
-				draw_colored_polygon(r_poly, c_void)
+				BatchDraw.native_poly(self, l_poly, c_void)
+				BatchDraw.native_poly(self, r_poly, c_void)
 				_draw_eye_soft_glow(l_eye, 6.0 + glow_r, eff_glow_col, 2)
 				_draw_eye_soft_glow(r_eye, 6.0 + glow_r, eff_glow_col, 2)
 				draw_filled_ellipse(l_eye, 1.6 * hs, 1.6 * hs * sq, c_core)
@@ -1515,9 +1520,9 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 					eye_pos + Vector2(3.2 * hs, -1.6 * hs * sq),
 					eye_pos + Vector2(2.2 * hs, 0.8 * hs * sq)
 				]
-				draw_colored_polygon(slit_pts, c_void)
+				BatchDraw.native_poly(self, slit_pts, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.2 + glow_r, eff_glow_col, 2)
-				draw_line(eye_pos + Vector2(-1.8 * hs, 0.6 * hs * sq), eye_pos + Vector2(2.4 * hs, -0.8 * hs * sq), c_core, 1.2)
+				BatchDraw.native_line(self, eye_pos + Vector2(-1.8 * hs, 0.6 * hs * sq), eye_pos + Vector2(2.4 * hs, -0.8 * hs * sq), c_core, 1.2)
 
 			"angry_slit":
 				var angry_pts: PackedVector2Array = [
@@ -1525,7 +1530,7 @@ func _draw_modular_eyes(head_center: Vector2, angle: Angle, eye_pulse: float, bl
 					eye_pos + Vector2(3.2 * hs, 1.6 * hs * sq),
 					eye_pos + Vector2(-2.2 * hs, 1.4 * hs * sq)
 				]
-				draw_colored_polygon(angry_pts, c_void)
+				BatchDraw.native_poly(self, angry_pts, c_void)
 				_draw_eye_soft_glow(eye_pos, 5.8 + glow_r, eff_glow_col, 2)
 				draw_filled_ellipse(eye_pos + Vector2(0.4, 0.2 * sq), 1.5 * hs, 1.5 * hs * sq, c_core)
 
@@ -1572,7 +1577,7 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 	if cloak_shimmer_intensity > 0.02 and cloak_shimmer_color.a > 0.01:
 		eff_edge = default_edge.lerp(cloak_shimmer_color, clampf(cloak_shimmer_intensity * 0.85, 0.0, 1.0))
 	var base_w := 1.2 + cloak_shimmer_intensity * 0.8
-	draw_polyline(pts, eff_edge, base_w, true)
+	BatchDraw.native_polyline(self, pts, eff_edge, base_w, true)
 
 	# 皮肤系列：缘边专属描边（彩虹环流/竹节亮带/赤光脉动/冷光横扫/金属扫光/暗光游走）
 	# 由族模块决定，原色零开销；此段在基础描边之后、下摆微光之前
@@ -1587,7 +1592,7 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 	if hem.size() >= 2:
 		var hem_a := 0.24 + 0.10 * sin(_time * 5.2 + hem[0].x * 0.2) + cloak_shimmer_intensity * 0.15
 		var hem_c := Color(eff_edge.r, eff_edge.g, eff_edge.b, clampf(hem_a, 0.0, 1.0)).lightened(0.25)
-		draw_polyline(hem, hem_c, base_w * 0.9, true)
+		BatchDraw.native_polyline(self, hem, hem_c, base_w * 0.9, true)
 
 	if cloak_shimmer_intensity > 0.05:
 		var n := pts.size()
@@ -1600,8 +1605,8 @@ func _draw_cloak_rim_shimmer(pts: PackedVector2Array, default_edge: Color) -> vo
 			s_pts.append(pts[idx])
 		if s_pts.size() >= 2:
 			var s_alpha := clampf(cloak_shimmer_intensity, 0.0, 1.0)
-			draw_polyline(s_pts, Color(shimmer_c.r, shimmer_c.g, shimmer_c.b, s_alpha * 0.85), base_w + 1.5, true)
-			draw_polyline(s_pts, Color(1.0, 1.0, 1.0, s_alpha * 0.95), base_w * 0.8, true)
+			BatchDraw.native_polyline(self, s_pts, Color(shimmer_c.r, shimmer_c.g, shimmer_c.b, s_alpha * 0.85), base_w + 1.5, true)
+			BatchDraw.native_polyline(self, s_pts, Color(1.0, 1.0, 1.0, s_alpha * 0.95), base_w * 0.8, true)
 
 # ==================== 斗篷插槽绘制（端正挺拔躯干 + 逐顶点行波衣摆） ====================
 
@@ -1637,6 +1642,7 @@ func _draw_cloak_front_modular(float_y: float, _amp: float, _wave_t: float, extr
 		Vector2((14 + flare) * w + _sway_x(14.0 * w, 30.0), 30 + float_y + _sway_y(30.0)),
 		Vector2((15 + flare * 0.4) * w, 12 + float_y)
 	]
+	BatchDraw.flush(self)
 	draw_polygon(inner_pts, _cloak_gradient(inner_pts, col_cloak_inner))
 
 	# 胸前交领右衽领口（道门中衣与素雪白领）
@@ -1645,10 +1651,10 @@ func _draw_cloak_front_modular(float_y: float, _amp: float, _wave_t: float, extr
 		Vector2(5.0 * w, -5 + float_y),
 		Vector2(0, 5 + float_y)
 	]
-	draw_colored_polygon(collar_outer, Color(col_cloak_inner.r * 1.35, col_cloak_inner.g * 1.35, col_cloak_inner.b * 1.35))
-	draw_line(Vector2(-5.0 * w, -5 + float_y), Vector2(1.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.8), 1.2)
-	draw_line(Vector2(5.0 * w, -5 + float_y), Vector2(-1.0 * w, 2 + float_y), Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.4), 1.0)
-	draw_line(Vector2(0, 5 + float_y), Vector2(0, 11 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.6), 1.0)
+	BatchDraw.native_poly(self, collar_outer, Color(col_cloak_inner.r * 1.35, col_cloak_inner.g * 1.35, col_cloak_inner.b * 1.35))
+	BatchDraw.native_line(self, Vector2(-5.0 * w, -5 + float_y), Vector2(1.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.8), 1.2)
+	BatchDraw.native_line(self, Vector2(5.0 * w, -5 + float_y), Vector2(-1.0 * w, 2 + float_y), Color(col_bone_shadow.r, col_bone_shadow.g, col_bone_shadow.b, 0.4), 1.0)
+	BatchDraw.native_line(self, Vector2(0, 5 + float_y), Vector2(0, 11 + float_y), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.6), 1.0)
 
 	# 2. 外袍款式（下摆顶点走逐顶点行波）
 	var outer_pts: PackedVector2Array = []
@@ -1715,12 +1721,13 @@ func _draw_cloak_front_modular(float_y: float, _amp: float, _wave_t: float, extr
 				Vector2(9 * w, -2 + float_y)
 			]
 
+	BatchDraw.flush(self)
 	draw_polygon(outer_pts, _cloak_gradient(outer_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(outer_pts, col_cloak_edge)
 
 	# 内衬折痕线：底端跟随行波相位轻微摆动
-	draw_line(Vector2(-5 * w, 14 + float_y), Vector2(-4 * w + _sway_x(-4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
-	draw_line(Vector2(5 * w, 14 + float_y), Vector2(4 * w + _sway_x(4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	BatchDraw.native_line(self, Vector2(-5 * w, 14 + float_y), Vector2(-4 * w + _sway_x(-4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	BatchDraw.native_line(self, Vector2(5 * w, 14 + float_y), Vector2(4 * w + _sway_x(4.0 * w, 26.0) * 0.6, 26 + float_y + _sway_y(26.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 
 # ----------------- 侧面斗篷（端正挺拔躯干 + 逐顶点行波下摆） -----------------
 
@@ -1737,6 +1744,7 @@ func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra
 		Vector2(-4.5 * w - d * 0.2 + _sway_x(-4.5 * w, 28.0), 28 + float_y + _sway_y(28.0)),
 		Vector2(-4.0 * w, 12 + float_y)
 	]
+	BatchDraw.flush(self)
 	draw_polygon(inner_side, _cloak_gradient(inner_side, col_cloak_inner))
 
 	# 2. 侧面外袍主体（前摆与后摆水平高度完全对齐，下摆走逐顶点行波）
@@ -1764,8 +1772,8 @@ func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra
 				Vector2(-4.8 * w + _sway_x(-4.8 * w, 27.5), 27.5 + float_y + _sway_y(27.5)),
 				Vector2(-4.0 * w, 14 + float_y)
 			]
-			draw_colored_polygon(skirt_pts, col_cloak_inner)
-			draw_polyline(skirt_pts, col_gold, 1.0, true)
+			BatchDraw.native_poly(self, skirt_pts, col_cloak_inner)
+			BatchDraw.native_polyline(self, skirt_pts, col_gold, 1.0, true)
 
 			side_pts = [
 				Vector2(1.8, -6 + float_y),
@@ -1825,11 +1833,12 @@ func _draw_cloak_side_modular(float_y: float, _amp: float, _wave_t: float, extra
 				Vector2(-3.0 * w, -5 + float_y)
 			]
 
+	BatchDraw.flush(self)
 	draw_polygon(side_pts, _cloak_gradient(side_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(side_pts, col_cloak_edge)
 
-	draw_line(Vector2(1.8, -5 + float_y), Vector2(4.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.7), 1.1)
-	draw_line(Vector2(-1.5 * w, 3 + float_y), Vector2(-2.5 * w - d * 0.1 + _sway_x(-2.5 * w, 24.0) * 0.6, 24 + float_y + _sway_y(24.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
+	BatchDraw.native_line(self, Vector2(1.8, -5 + float_y), Vector2(4.5 * w, 5 + float_y), Color(col_bone.r, col_bone.g, col_bone.b, 0.7), 1.1)
+	BatchDraw.native_line(self, Vector2(-1.5 * w, 3 + float_y), Vector2(-2.5 * w - d * 0.1 + _sway_x(-2.5 * w, 24.0) * 0.6, 24 + float_y + _sway_y(24.0) * 0.5), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.45), 1.0)
 
 func _draw_cloak_dash_side(dash_y: float, progress: float = 1.0) -> void:
 	if not _layer_on(Layer.CLOAK):
@@ -1847,6 +1856,7 @@ func _draw_cloak_dash_side(dash_y: float, progress: float = 1.0) -> void:
 		Vector2(-14 * w, 0 + dash_y + flap * 0.6),
 		Vector2(-5 * w, -3 + dash_y)
 	]
+	BatchDraw.flush(self)
 	draw_polygon(dash_pts, _cloak_gradient(dash_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(dash_pts, col_cloak_edge)
 
@@ -1920,9 +1930,10 @@ func _draw_cloak_back_modular(float_y: float, _amp: float, _wave_t: float, extra
 				Vector2(9 * w, -2 + float_y)
 			]
 
+	BatchDraw.flush(self)
 	draw_polygon(back_pts, _cloak_gradient(back_pts, col_cloak_outer))
 	_draw_cloak_rim_shimmer(back_pts, col_cloak_edge)
-	draw_line(Vector2(0, -2 + float_y), Vector2(_sway_x(0.0, 24.0) * 0.3, 24 + float_y + _sway_y(24.0) * 0.4), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
+	BatchDraw.native_line(self, Vector2(0, -2 + float_y), Vector2(_sway_x(0.0, 24.0) * 0.3, 24 + float_y + _sway_y(24.0) * 0.4), Color(col_cloak_inner.r, col_cloak_inner.g, col_cloak_inner.b, 0.5), 1.1)
 
 # ==================== 背负本命武器插槽绘制 ====================
 
@@ -1935,8 +1946,8 @@ func _draw_modular_strap(float_y: float) -> void:
 			var l_bot := Vector2(-4, 14 + float_y)
 			var r_top := Vector2(6, -6 + float_y)
 			var r_bot := Vector2(4, 14 + float_y)
-			draw_line(l_top, l_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
-			draw_line(r_top, r_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
+			BatchDraw.native_line(self, l_top, l_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
+			BatchDraw.native_line(self, r_top, r_bot, Color(0.05, 0.08, 0.12, 0.95), 2.2)
 			_circle(Vector2(0, 4 + float_y), 2.8, col_bone)
 			_circle(Vector2(0, 4 + float_y), 1.4, col_void)
 			_circle(Vector2(0, 4 + float_y), 0.7, col_gold)
@@ -1946,8 +1957,8 @@ func _draw_modular_strap(float_y: float) -> void:
 		"diagonal", _:
 			var p_top := Vector2(7, -6 + float_y)
 			var p_bot := Vector2(-5, 12 + float_y)
-			draw_line(p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 2.4)
-			draw_line(p_top, p_bot, col_cloak_edge, 0.8)
+			BatchDraw.native_line(self, p_top, p_bot, Color(0.05, 0.08, 0.12, 0.95), 2.4)
+			BatchDraw.native_line(self, p_top, p_bot, col_cloak_edge, 0.8)
 			var center := (p_top + p_bot) * 0.5
 			_circle(center, 2.4, col_bone)
 			_circle(center, 1.2, col_void)
@@ -1965,17 +1976,17 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(-3.2, -15), t * Vector2(3.2, -15),
 				t * Vector2(3.2, 5), t * Vector2(-3.2, 5)
 			]
-			draw_colored_polygon(r_pts, col_weapon_main)
-			draw_colored_polygon(PackedVector2Array([
+			BatchDraw.native_poly(self, r_pts, col_weapon_main)
+			BatchDraw.native_poly(self, PackedVector2Array([
 				t * Vector2(0, -15), t * Vector2(3.2, -15),
 				t * Vector2(3.2, 5), t * Vector2(0, 5)
 			]), col_weapon_shadow)
-			draw_polyline(r_pts, Color(0.18, 0.20, 0.24), 1.2, true)
-			draw_line(t * Vector2(-1.5, -11), t * Vector2(1.5, -11), col_weapon_accent, 1.2)
-			draw_line(t * Vector2(0, -11), t * Vector2(0, 0), col_weapon_accent, 1.2)
-			draw_line(t * Vector2(-1.5, -5), t * Vector2(1.5, -5), col_weapon_accent, 1.2)
-			draw_line(t * Vector2(-1.5, 0), t * Vector2(1.5, 0), col_weapon_accent, 1.2)
-			draw_line(t * Vector2(0, 5), t * Vector2(0, 11), col_weapon_shadow, 2.6)
+			BatchDraw.native_polyline(self, r_pts, Color(0.18, 0.20, 0.24), 1.2, true)
+			BatchDraw.native_line(self, t * Vector2(-1.5, -11), t * Vector2(1.5, -11), col_weapon_accent, 1.2)
+			BatchDraw.native_line(self, t * Vector2(0, -11), t * Vector2(0, 0), col_weapon_accent, 1.2)
+			BatchDraw.native_line(self, t * Vector2(-1.5, -5), t * Vector2(1.5, -5), col_weapon_accent, 1.2)
+			BatchDraw.native_line(self, t * Vector2(-1.5, 0), t * Vector2(1.5, 0), col_weapon_accent, 1.2)
+			BatchDraw.native_line(self, t * Vector2(0, 5), t * Vector2(0, 11), col_weapon_shadow, 2.6)
 			_circle(t * Vector2(0, 11.5), 1.8, col_weapon_main)
 			_circle(t * Vector2(0, 11.5), 0.9, col_void)
 
@@ -1984,32 +1995,32 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(0, -14), t * Vector2(2.0, -8),
 				t * Vector2(1.8, 3), t * Vector2(-1.8, 3), t * Vector2(-2.0, -8)
 			]
-			draw_colored_polygon(s_pts, col_weapon_main)
-			draw_colored_polygon(PackedVector2Array([
+			BatchDraw.native_poly(self, s_pts, col_weapon_main)
+			BatchDraw.native_poly(self, PackedVector2Array([
 				t * Vector2(0, -14), t * Vector2(2.0, -8),
 				t * Vector2(1.8, 3), t * Vector2(0, 3)
 			]), col_weapon_shadow)
-			draw_line(t * Vector2(-3.2, 3), t * Vector2(3.2, 3), col_weapon_accent, 2.0)
+			BatchDraw.native_line(self, t * Vector2(-3.2, 3), t * Vector2(3.2, 3), col_weapon_accent, 2.0)
 			_circle(t * Vector2(-1.2, 3), 0.6, col_void)
 			_circle(t * Vector2(1.2, 3), 0.6, col_eye_core)
-			draw_line(t * Vector2(0, 3), t * Vector2(0, 9.5), col_weapon_main, 1.8)
+			BatchDraw.native_line(self, t * Vector2(0, 3), t * Vector2(0, 9.5), col_weapon_main, 1.8)
 			_circle(t * Vector2(0, 10), 1.4, col_weapon_accent)
 			if angle != Angle.FRONT:
-				draw_line(t * Vector2(0, 10), t * Vector2(-2.5, 14), Color(0.95, 0.85, 0.3), 1.2)
+				BatchDraw.native_line(self, t * Vector2(0, 10), t * Vector2(-2.5, 14), Color(0.95, 0.85, 0.3), 1.2)
 
 		"golden_abacus": # 乾坤金算盘（散修金算盘）
 			var ab_pts: PackedVector2Array = [
 				t * Vector2(-5.5, -12), t * Vector2(5.5, -12),
 				t * Vector2(5.5, 6), t * Vector2(-5.5, 6)
 			]
-			draw_colored_polygon(ab_pts, col_weapon_main)
-			draw_polyline(ab_pts, col_weapon_shadow, 1.2, true)
-			draw_line(t * Vector2(-5, -6), t * Vector2(5, -6), col_weapon_shadow, 1.4)
+			BatchDraw.native_poly(self, ab_pts, col_weapon_main)
+			BatchDraw.native_polyline(self, ab_pts, col_weapon_shadow, 1.2, true)
+			BatchDraw.native_line(self, t * Vector2(-5, -6), t * Vector2(5, -6), col_weapon_shadow, 1.4)
 			for b in [-3.2, 0, 3.2]:
 				_circle(t * Vector2(b, -9), 1.0, col_weapon_accent)
 				_circle(t * Vector2(b, -1), 1.0, col_weapon_accent)
 				_circle(t * Vector2(b, 2.5), 1.0, col_weapon_accent)
-			draw_line(t * Vector2(0, 6), t * Vector2(0, 11), col_weapon_shadow, 2.0)
+			BatchDraw.native_line(self, t * Vector2(0, 6), t * Vector2(0, 11), col_weapon_shadow, 2.0)
 
 		"shadow_daggers": # 阴煞双刃短刺（魅影幽娘）
 			for side in [-2.5, 2.5]:
@@ -2018,13 +2029,13 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 					dt * Vector2(0, -13), dt * Vector2(1.8, -7),
 					dt * Vector2(1.4, 2), dt * Vector2(-1.4, 2), dt * Vector2(-1.8, -7)
 				]
-				draw_colored_polygon(d_pts, col_weapon_main)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, d_pts, col_weapon_main)
+				BatchDraw.native_poly(self, PackedVector2Array([
 					dt * Vector2(0, -13), dt * Vector2(1.8, -7),
 					dt * Vector2(1.4, 2), dt * Vector2(0, 2)
 				]), col_weapon_shadow)
-				draw_line(dt * Vector2(0, -12), dt * Vector2(0, 1), col_weapon_accent, 1.0)
-				draw_line(dt * Vector2(0, 2), dt * Vector2(0, 7.5), col_weapon_shadow, 1.6)
+				BatchDraw.native_line(self, dt * Vector2(0, -12), dt * Vector2(0, 1), col_weapon_accent, 1.0)
+				BatchDraw.native_line(self, dt * Vector2(0, 2), dt * Vector2(0, 7.5), col_weapon_shadow, 1.6)
 				_circle(dt * Vector2(0, 8), 1.2, col_weapon_accent)
 
 		"broken_blade": # 厚背断马狂刀（独臂刀圣）
@@ -2032,11 +2043,11 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(-2.5, -14), t * Vector2(4.5, -10),
 				t * Vector2(4.0, 4), t * Vector2(-2.5, 4)
 			]
-			draw_colored_polygon(b_pts, col_weapon_main)
-			draw_line(t * Vector2(-2.5, -14), t * Vector2(-2.5, 4), col_weapon_shadow, 1.8)
-			draw_line(t * Vector2(0, -11), t * Vector2(0, 2), Color(0.85, 0.25, 0.20), 1.1)
+			BatchDraw.native_poly(self, b_pts, col_weapon_main)
+			BatchDraw.native_line(self, t * Vector2(-2.5, -14), t * Vector2(-2.5, 4), col_weapon_shadow, 1.8)
+			BatchDraw.native_line(self, t * Vector2(0, -11), t * Vector2(0, 2), Color(0.85, 0.25, 0.20), 1.1)
 			_circle(t * Vector2(0, 4.5), 2.8, col_weapon_shadow)
-			draw_line(t * Vector2(0, 5), t * Vector2(0, 11.5), Color(0.9, 0.88, 0.84), 2.2)
+			BatchDraw.native_line(self, t * Vector2(0, 5), t * Vector2(0, 11.5), Color(0.9, 0.88, 0.84), 2.2)
 			_circle(t * Vector2(0, 12), 1.8, col_weapon_main)
 
 		"bone_axe": # 巨兽头骨双刃战斧（狂战蛮修）
@@ -2047,34 +2058,34 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(7, 5), t * Vector2(3, -1),
 				t * Vector2(3, -7), t * Vector2(8, -13)
 			]
-			draw_colored_polygon(h_pts, col_weapon_main)
-			draw_colored_polygon(PackedVector2Array([
+			BatchDraw.native_poly(self, h_pts, col_weapon_main)
+			BatchDraw.native_poly(self, PackedVector2Array([
 				t * Vector2(0, -13), t * Vector2(8, -13),
 				t * Vector2(3, -7), t * Vector2(1, 0)
 			]), col_weapon_shadow)
-			draw_line(t * Vector2(0, -14), t * Vector2(0, 11), col_weapon_shadow, 2.4)
+			BatchDraw.native_line(self, t * Vector2(0, -14), t * Vector2(0, 11), col_weapon_shadow, 2.4)
 			_circle(t * Vector2(0, 11.5), 1.8, col_weapon_accent)
 
 		"soul_banner": # 墨竹引魂冥幡（夺舍散人）
-			draw_line(t * Vector2(0, -16), t * Vector2(0, 11), Color(0.18, 0.20, 0.22), 2.0)
-			draw_line(t * Vector2(-1, -14), t * Vector2(6.5, -14), Color(0.18, 0.20, 0.22), 1.4)
+			BatchDraw.native_line(self, t * Vector2(0, -16), t * Vector2(0, 11), Color(0.18, 0.20, 0.22), 2.0)
+			BatchDraw.native_line(self, t * Vector2(-1, -14), t * Vector2(6.5, -14), Color(0.18, 0.20, 0.22), 1.4)
 			var banner_pts: PackedVector2Array = [
 				t * Vector2(1, -13), t * Vector2(6.5, -13),
 				t * Vector2(5.5, 4), t * Vector2(1, 2)
 			]
-			draw_colored_polygon(banner_pts, col_weapon_main)
+			BatchDraw.native_poly(self, banner_pts, col_weapon_main)
 			_circle(t * Vector2(3.5, -5), 1.5, col_weapon_accent)
-			draw_line(t * Vector2(3.5, -8), t * Vector2(3.5, -2), col_eye_core, 1.0)
+			BatchDraw.native_line(self, t * Vector2(3.5, -8), t * Vector2(3.5, -2), col_eye_core, 1.0)
 
 		"treasure_chest": # 紫金百宝乾坤匣（多宝道人）
 			var box_pts: PackedVector2Array = [
 				t * Vector2(-6.5, -9), t * Vector2(6.5, -9),
 				t * Vector2(6.5, 7), t * Vector2(-6.5, 7)
 			]
-			draw_colored_polygon(box_pts, col_weapon_main)
-			draw_polyline(box_pts, col_weapon_shadow, 1.2, true)
-			draw_line(t * Vector2(-6.5, 0), t * Vector2(6.5, 0), col_weapon_accent, 1.6)
-			draw_line(t * Vector2(0, -9), t * Vector2(0, 7), col_weapon_accent, 1.6)
+			BatchDraw.native_poly(self, box_pts, col_weapon_main)
+			BatchDraw.native_polyline(self, box_pts, col_weapon_shadow, 1.2, true)
+			BatchDraw.native_line(self, t * Vector2(-6.5, 0), t * Vector2(6.5, 0), col_weapon_accent, 1.6)
+			BatchDraw.native_line(self, t * Vector2(0, -9), t * Vector2(0, 7), col_weapon_accent, 1.6)
 			_circle(t * Vector2(0, 0), 2.4, Color(1.0, 0.88, 0.35))
 			_circle(t * Vector2(0, 0), 1.2, col_jade)
 
@@ -2086,14 +2097,14 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				var blade_len := 16.5 - absf(float(i) - 1.5) * 3.0
 				var tip: Vector2 = t * Vector2(sin(spread) * 13.0, -blade_len)
 				var butt: Vector2 = t * Vector2(sin(spread) * 3.5, 8.5)
-				draw_line(butt, tip, col_weapon_shadow, 3.0)
-				draw_line(butt, tip, col_weapon_main, 1.8)
+				BatchDraw.native_line(self, butt, tip, col_weapon_shadow, 3.0)
+				BatchDraw.native_line(self, butt, tip, col_weapon_main, 1.8)
 				# 各兵刃的护手/刃镡：一眼看出是「不同来路」的兵器
 				var guard_at: Vector2 = t * Vector2(sin(spread) * 5.2, 1.5)
-				draw_line(guard_at, t * Vector2(guard_at.x + cos(spread) * 3.2, guard_at.y), col_weapon_accent, 1.6)
+				BatchDraw.native_line(self, guard_at, t * Vector2(guard_at.x + cos(spread) * 3.2, guard_at.y), col_weapon_accent, 1.6)
 			# 麻绳捆扎：两道横绳 + 绳结
-			draw_line(t * Vector2(-5.2, 2.2), t * Vector2(5.2, 2.2), col_weapon_accent, 2.0)
-			draw_line(t * Vector2(-4.4, 5.6), t * Vector2(4.4, 5.6), col_weapon_accent, 1.6)
+			BatchDraw.native_line(self, t * Vector2(-5.2, 2.2), t * Vector2(5.2, 2.2), col_weapon_accent, 2.0)
+			BatchDraw.native_line(self, t * Vector2(-4.4, 5.6), t * Vector2(4.4, 5.6), col_weapon_accent, 1.6)
 			_circle(t * Vector2(0, 3.9), 2.1, col_weapon_accent)
 			_circle(t * Vector2(0, 3.9), 0.9, col_void)
 
@@ -2105,19 +2116,19 @@ func _draw_modular_weapon(pos: Vector2, rot: float, angle: Angle) -> void:
 				t * Vector2(-2.0, 3),
 				t * Vector2(-2.4, -9)
 			]
-			draw_colored_polygon(nail_pts, col_weapon_main)
-			draw_colored_polygon(PackedVector2Array([
+			BatchDraw.native_poly(self, nail_pts, col_weapon_main)
+			BatchDraw.native_poly(self, PackedVector2Array([
 				t * Vector2(0, -15), t * Vector2(2.4, -9),
 				t * Vector2(2.0, 3), t * Vector2(0, 3)
 			]), col_weapon_shadow)
-			draw_line(t * Vector2(0, -13), t * Vector2(0, 2), col_weapon_accent, 1.1)
+			BatchDraw.native_line(self, t * Vector2(0, -13), t * Vector2(0, 2), col_weapon_accent, 1.1)
 			var guard_pts: PackedVector2Array = [
 				t * Vector2(-3.2, 3), t * Vector2(3.2, 3),
 				t * Vector2(2.2, 5.5), t * Vector2(-2.2, 5.5)
 			]
-			draw_colored_polygon(guard_pts, col_bone_shadow)
+			BatchDraw.native_poly(self, guard_pts, col_bone_shadow)
 			_circle(t * Vector2(0, 4.2), 0.9, col_jade)
-			draw_line(t * Vector2(0, 5.5), t * Vector2(0, 10.5), col_weapon_main, 2.0)
+			BatchDraw.native_line(self, t * Vector2(0, 5.5), t * Vector2(0, 10.5), col_weapon_main, 2.0)
 			_circle(t * Vector2(0, 11), 1.6, col_weapon_main)
 			_circle(t * Vector2(0, 11), 0.8, col_bone_shadow)
 
@@ -2147,5 +2158,5 @@ func _draw_slash_crescent(pos: Vector2, rot: float, radius: float, progress: flo
 	inner_pts.reverse()
 	var crescent_poly := outer_pts
 	crescent_poly.append_array(inner_pts)
-	draw_colored_polygon(crescent_poly, Color(col_slash_arc.r, col_slash_arc.g, col_slash_arc.b, alpha))
-	draw_polyline(outer_pts, Color(1.0, 1.0, 1.0, alpha), 1.6, true)
+	BatchDraw.native_poly(self, crescent_poly, Color(col_slash_arc.r, col_slash_arc.g, col_slash_arc.b, alpha))
+	BatchDraw.native_polyline(self, outer_pts, Color(1.0, 1.0, 1.0, alpha), 1.6, true)

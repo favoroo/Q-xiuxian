@@ -105,6 +105,7 @@ func _draw() -> void:
 ## 三环绘制主体：宿主画后弧（屏幕上半，y≤0），RingFrontLayer 回调画前弧（下半，y>0）。
 ## 环弧固定屏幕朝向、装饰件公转并按 sin(角) 分层，切割线恒在水平轴不穿帮（见文件头②）。
 func draw_rings(target: CanvasItem, front: bool) -> void:
+	BatchDraw.flush(target)
 	# 4s 周期呼吸明灭：基亮随档位抬升、谷值保底可见；峰值 alpha 0.60~0.76 × HDR 金 2.4
 	# ⇒ 有效分量 1.44~1.82 稳过 glow 阈值 1.0，泛光真正起辉（原 0.22~0.52 只有 0.53~1.25）
 	var wave := sin(_time * TAU / BREATH_PERIOD) * 0.5 + 0.5
@@ -125,13 +126,15 @@ func draw_rings(target: CanvasItem, front: bool) -> void:
 		var ease_out := 1.0 - (1.0 - k) * (1.0 - k)
 		var pulse_r: float = lerpf(PULSE_R0, RING_R[_tier - 1] + 12.0, ease_out)
 		var pulse_a: float = pow(1.0 - k, 1.5) * 0.85
+		BatchDraw.flush(target)
 		target.draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.48))
-		AdaptiveDraw.arc(target, Vector2.ZERO, pulse_r, arc_a, arc_b, GameStyle.with_alpha(base_hdr, pulse_a), 2.0, true)
+		BatchDraw.arc(target, Vector2.ZERO, pulse_r, arc_a, arc_b, GameStyle.with_alpha(base_hdr, pulse_a), 2.0, true)
 
 	# --- 第 1 圈（初境）：细同心主环 + 4 方位八卦爻标（公转，过底即入前弧） ---
 	var r1: float = RING_R[0]
+	BatchDraw.flush(target)
 	target.draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.48))  # 俯视透视扁率 0.48
-	AdaptiveDraw.arc(target, Vector2.ZERO, r1, arc_a, arc_b, col_glow, 1.2, true)
+	BatchDraw.arc(target, Vector2.ZERO, r1, arc_a, arc_b, col_glow, 1.2, true)
 	for i in 4:
 		var ang := (TAU / 4.0) * float(i) + _rot_inner
 		if (sin(ang) > 0.0) == front:
@@ -140,16 +143,16 @@ func draw_rings(target: CanvasItem, front: bool) -> void:
 	# --- 第 2 圈（中境）：外扩八方灵珠环（灵珠公转，绕到下方时压过脚前） ---
 	if _tier >= 2:
 		var r2: float = RING_R[1]
-		AdaptiveDraw.arc(target, Vector2.ZERO, r2, arc_a, arc_b, col_faint, 1.0, true)
+		BatchDraw.arc(target, Vector2.ZERO, r2, arc_a, arc_b, col_faint, 1.0, true)
 		for j in 8:
 			var ang_j := (TAU / 8.0) * float(j) + _rot_mid
 			if (sin(ang_j) > 0.0) == front:
-				AdaptiveDraw.circle(target, Vector2(cos(ang_j), sin(ang_j)) * r2, 1.8, col_glow)
+				BatchDraw.circle(target, Vector2(cos(ang_j), sin(ang_j)) * r2, 1.8, col_glow)
 
 	# --- 第 3 圈（圆满）：天元四正双爻阵环（4 组双短线公转，少而粗一眼可数） ---
 	if _tier >= 3:
 		var r3: float = RING_R[2]
-		AdaptiveDraw.arc(target, Vector2.ZERO, r3, arc_a, arc_b, col_faint * 0.85, 0.9, true)
+		BatchDraw.arc(target, Vector2.ZERO, r3, arc_a, arc_b, col_faint * 0.85, 0.9, true)
 		for k in 4:
 			var base_ang := (TAU / 4.0) * float(k) + _rot_outer
 			for s: float in [-1.0, 1.0]:
@@ -157,13 +160,15 @@ func draw_rings(target: CanvasItem, front: bool) -> void:
 				if (sin(ang_k) > 0.0) == front:
 					_draw_tick(target, r3, ang_k, col_glow, 1.4, 2.6)
 
+	BatchDraw.flush(target)
 	target.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	BatchDraw.flush(target)
 
 ## 沿环径向短爻标：ang 处从 r-off 画到 r+off（调用方已按 sin(角) 分好前后层）
 func _draw_tick(target: CanvasItem, r: float, ang: float, col: Color, width: float, off: float) -> void:
 	var p1 := Vector2(cos(ang), sin(ang)) * (r - off)
 	var p2 := Vector2(cos(ang), sin(ang)) * (r + off)
-	target.draw_line(p1, p2, col, width)
+	BatchDraw.native_line(target, p1, p2, col, width)
 
 ## 前弧子层：相对 z_index=+1 压过角色本体；_draw 只回借宿主画前半环（状态/绘制主体全在宿主）
 class RingFrontLayer extends Node2D:

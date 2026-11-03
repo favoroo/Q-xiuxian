@@ -55,6 +55,13 @@ static func apply_stat_fields(gm: Object, apply: Dictionary, source: String) -> 
 				gm.engineering_damage += v
 			"contraption_damage":
 				gm.contraption_damage += v
+			# 机关阵地三件套（2026-11-03 手动布设改版）：pctmul 走乘算、齐射管数走加算
+			"turret_stamina_mul":
+				gm.turret_stamina_mul = maxf(0.2, gm.turret_stamina_mul * v)
+			"turret_repair_haste_mul":
+				gm.turret_repair_haste_mul = maxf(0.2, gm.turret_repair_haste_mul * v)
+			"turret_volley_bonus":
+				gm.turret_volley_bonus += v
 			"attack_speed_mult_mul":
 				gm.attack_speed_mult = maxf(gm.ATTACK_SPEED_FLOOR, gm.attack_speed_mult * v)
 			"armor":
@@ -162,6 +169,12 @@ static func revert_stat_fields(gm: Object, apply: Dictionary, source: String) ->
 				gm.engineering_damage -= v
 			"contraption_damage":
 				gm.contraption_damage -= v
+			"turret_stamina_mul":
+				gm.turret_stamina_mul = undo_mult(gm.turret_stamina_mul, v, 0.2)
+			"turret_repair_haste_mul":
+				gm.turret_repair_haste_mul = undo_mult(gm.turret_repair_haste_mul, v, 0.2)
+			"turret_volley_bonus":
+				gm.turret_volley_bonus -= v
 			"attack_speed_mult_mul":
 				gm.attack_speed_mult = undo_mult(gm.attack_speed_mult, v, gm.ATTACK_SPEED_FLOOR)
 			"armor":

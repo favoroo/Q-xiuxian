@@ -409,6 +409,7 @@ func _check_screen(spec: Dictionary, screen: Vector2) -> void:
 	if String(spec["tag"]) == "顶栏 HUD":
 		bad.append_array(_check_wave_left_chip(node as GameHUD, screen))
 		bad.append_array(_check_boss_bar(node as GameHUD, screen))
+		bad.append_array(_check_mechanism_btn(node as GameHUD, screen))
 	if String(spec["tag"]) == "灵石阁":
 		bad.append_array(_check_shop_exits(node, screen))
 	if String(spec["tag"]) == "波后悟道结算":
@@ -645,6 +646,29 @@ func _check_boss_bar(hud: GameHUD, screen: Vector2) -> Array[String]:
 	if bar.readout_title() != HudBossBar.WORST_TITLE:
 		bad.append("魔君血条没灌成最坏名号：实得「%s」应为「%s」" % [
 			bar.readout_title(), HudBossBar.WORST_TITLE])
+	return bad
+
+## 机关键（2026-11-03）：默认位在右侧竖列顶端，平时是收起态 —— 通用 _walk 只量可见控件，
+## 所以这里显式把它点亮（编辑模式占位态 = 玩家在设置里拖它的样子），再量三件事：
+## 在屏内 / 不压魔君血条 / 不压第二排余妖芯片。量完还原收起态，不影响后续屏。
+func _check_mechanism_btn(hud: GameHUD, screen: Vector2) -> Array[String]:
+	var bad: Array[String] = []
+	if hud == null:
+		return ["顶栏不是 GameHUD，机关键这一格没量到"]
+	var w := hud.mechanism_widget()
+	if w == null:
+		return ["HUD 没有机关键（HudMechanismButton 未构建）"]
+	hud.set_btn_edit_mode(true)
+	var r: Rect2 = w.get_global_rect()
+	if not rect_on_screen(r, screen):
+		bad.append("机关键出屏：%s（屏 %.0fx%.0f）" % [str(r), screen.x, screen.y])
+	var bar: HudBossBar = hud.boss_bar()
+	if bar != null and bar.get_global_rect().intersects(r):
+		bad.append("机关键压住魔君血条：键 %s ∩ 条 %s" % [str(r), str(bar.get_global_rect())])
+	var left := hud.get("wave_left") as Control
+	if left != null and left.visible and left.get_global_rect().intersects(r):
+		bad.append("机关键压住余妖芯片：键 %s ∩ 芯片 %s" % [str(r), str(left.get_global_rect())])
+	hud.set_btn_edit_mode(false)
 	return bad
 
 ## 整棵树逐个控件量三件事：① 这一格在屏内 ② 它**画出来**的那一圈也在屏内

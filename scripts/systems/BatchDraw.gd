@@ -58,6 +58,102 @@ static func circle(item: CanvasItem, center: Vector2, radius: float, col: Color,
 		_idx.append(base + i + 1)
 
 static var _miter: PackedVector2Array = PackedVector2Array()  ## polyline 斜接偏移复用缓冲
+static var _arc_pts: PackedVector2Array = PackedVector2Array()  ## arc 采样点复用缓冲
+static var _rect_pts: PackedVector2Array = PackedVector2Array()  ## rect 顶点复用缓冲
+
+## 收集一根弧线（按 AdaptiveDraw.arc 同款段数公式转 polyline）。
+## 用途：武器/弹丸/阵法里的 draw_arc 大多是 1~2px 装饰弧，逐条原生提交会打断合批；
+## 转成斜接四边形后与填充面片共用一次 draw call。对 AA 有硬要求的极细弧仍可保留原生
+## draw_arc（调用前先 flush）。
+static func arc(item: CanvasItem, center: Vector2, radius: float, start_angle: float, end_angle: float, col: Color, width: float = 1.0, _antialiased: bool = false, segments: int = 0) -> void:
+	if radius <= 0.0 or col.a <= 0.0:
+		return
+	var span := absf(end_angle - start_angle)
+	if span < 0.0001:
+		return
+	# segments>0 = 调用方原生 draw_arc 的 point_count，照原样保留（AoE 预警大圈原本 48~64 段）；
+	# 0 = AdaptiveDraw 同款自适应（6~32 段），供 UI/小装饰弧用。两条上限分开，别让
+	# 自适应路径把大半径装饰圈也拉到 96 段（会白付三倍顶点）。
+	var seg := clampi(segments, 4, 96) if segments > 0 else clampi(int(radius * span * 0.22), 6, 32)
+	_arc_pts.resize(seg + 1)
+	var step := (end_angle - start_angle) / float(seg)
+	for i in range(seg + 1):
+		var ang := start_angle + step * float(i)
+		_arc_pts[i] = center + Vector2(cos(ang), sin(ang)) * radius
+	polyline(item, _arc_pts, col, width)
+
+## 收集一个轴对齐矩形（填充，2 三角形）
+static func rect(item: CanvasItem, r: Rect2, col: Color) -> void:
+	if col.a <= 0.0:
+		return
+	_rect_pts.resize(4)
+	_rect_pts[0] = r.position
+	_rect_pts[1] = Vector2(r.end.x, r.position.y)
+	_rect_pts[2] = r.end
+	_rect_pts[3] = Vector2(r.position.x, r.end.y)
+	poly(item, _rect_pts, col)
+
+## 收集任意简单多边形（自动三角化，凹多边形安全）。
+## 现有的 poly() 只做扇形三角化，要求凸多边形；弯刀月牙/斧刃/葫芦腰/手里剑这类凹形
+## 必须走这里，否则会画出穿帮的扇形。三角化只在每次 _draw 调用时做一次（器形/弹体
+## 本身有重绘节流，不作为每帧热路径）。
+static func poly_any(item: CanvasItem, points: PackedVector2Array, col: Color) -> void:
+	var n := points.size()
+	if n < 3 or col.a <= 0.0:
+		return
+	# 允许调用方传闭合多边形（首尾重复）：先剥掉重复尾点再三角化
+	if points[0].is_equal_approx(points[n - 1]):
+		n -= 1
+		if n < 3:
+			return
+	var poly_pts: PackedVector2Array = points if n == points.size() else points.slice(0, n)
+	var tri := Geometry2D.triangulate_polygon(poly_pts)
+	if tri.is_empty():
+		# 三角化失败（自交/退化）：退回凸扇形，至少保证不崩；内容本身已不合法
+		poly(item, poly_pts, col)
+		return
+	var base := _pts.size()
+	_pts.append_array(poly_pts)
+	for i in n:
+		_cols.append(col)
+	for i in tri:
+		_idx.append(base + int(i))
+
+# ---------------- 原生 draw_* 同名参数适配（便于存量渲染器机械迁移）----------------
+# 这些 helper 的参数顺序与 CanvasItem.draw_* 一致，只是多了首参 item；把
+# `draw_line(` 换成 `BatchDraw.native_line(self, ` / `r.draw_line(` 换成
+# `BatchDraw.native_line(r, ` 即可，不用逐处删 antialiased/point_count 参数。
+# 原生抗锯齿参数被忽略（BatchDraw 用斜接四边形；Nearest 像素风下差异极小）。
+
+static func native_line(item: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float = -1.0, _antialiased: bool = false) -> void:
+	line(item, a, b, col, 1.0 if width <= 0.0 else width)
+
+static func native_polyline(item: CanvasItem, points: PackedVector2Array, col: Color, width: float = -1.0, _antialiased: bool = false) -> void:
+	polyline(item, points, col, 1.0 if width <= 0.0 else width)
+
+static func native_poly(item: CanvasItem, points: PackedVector2Array, col: Color, _uvs: Variant = null, _texture: Variant = null) -> void:
+	poly_any(item, points, col)
+
+static func native_arc(item: CanvasItem, center: Vector2, radius: float, start_angle: float, end_angle: float, point_count: int, col: Color, width: float = -1.0, _antialiased: bool = false) -> void:
+	arc(item, center, radius, start_angle, end_angle, col, 1.0 if width <= 0.0 else width, false, point_count)
+
+static func native_rect(item: CanvasItem, r: Rect2, col: Color, filled: bool = true, width: float = -1.0, _antialiased: bool = false) -> void:
+	if filled:
+		rect(item, r, col)
+		return
+	_rect_pts.resize(5)
+	_rect_pts[0] = r.position
+	_rect_pts[1] = Vector2(r.end.x, r.position.y)
+	_rect_pts[2] = r.end
+	_rect_pts[3] = Vector2(r.position.x, r.end.y)
+	_rect_pts[4] = r.position
+	polyline(item, _rect_pts, col, 1.0 if width <= 0.0 else width)
+
+static func native_circle(item: CanvasItem, center: Vector2, radius: float, col: Color, filled: bool = true, width: float = -1.0, _antialiased: bool = false) -> void:
+	if filled:
+		circle(item, center, radius, col)
+	else:
+		arc(item, center, radius, 0.0, TAU, col, 1.0 if width <= 0.0 else width)
 
 ## 收集一根线段（等宽四边形，2 三角形）
 static func line(item: CanvasItem, a: Vector2, b: Vector2, col: Color, width: float = 1.0) -> void:
@@ -130,6 +226,13 @@ static func flush(item: CanvasItem) -> void:
 ## 丢弃未提交的批次（异常路径兜底，正常只走 flush）
 static func discard() -> void:
 	_clear()
+
+## 待提交顶点/索引数（单测与调试用；生产路径不读）
+static func pending_vertex_count() -> int:
+	return _pts.size()
+
+static func pending_index_count() -> int:
+	return _idx.size()
 
 static func _clear() -> void:
 	_pts.clear()

@@ -1,7 +1,7 @@
 class_name HudEditOverlay
 extends Control
 
-## 按钮调整模式覆盖层：把技能键 / 额外技能键 / 祭坛键亮在真实位置上，手指自由拖动摆放。
+## 按钮调整模式覆盖层：把技能键 / 额外技能键 / 祭坛键 / 机关键亮在真实位置上，手指自由拖动摆放。
 ## 位置以归一化中心点写回 SettingsManager（拖动中不落盘，松手才存）；
 ## 大小在设置·操作页的滑杆调。代理钮每帧与真实按钮互相同步：
 ## 真实按钮是摆位真话（含屏内夹取），拖动写设置 → HUD 套用 → 代理跟着走。
@@ -12,11 +12,13 @@ const DRAG_NONE: int = -1
 const DRAG_SKILL: int = 0
 const DRAG_OBELISK: int = 1
 const DRAG_EXTRA: int = 2
+const DRAG_MECHANISM: int = 3
 
 var _hud: GameHUD = null
 var _skill_proxy: Button = null
 var _obelisk_proxy: Button = null
 var _extra_proxy: Button = null
+var _mechanism_proxy: Button = null
 var _built: bool = false
 
 ## 选中态：滑杆永远只调选中的那颗（按下代理钮即选中）
@@ -85,7 +87,7 @@ func _build() -> void:
 	_obelisk_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_OBELISK))
 	add_child(_obelisk_proxy)
 
-	# 额外技能键代理：与真实键同款式同文案（它就是 HudSkillButton 的额外槽位）
+	# 角色技能键代理：与真实键同款式同文案（它就是 HudSkillButton 的额外槽位）
 	_extra_proxy = Button.new()
 	_extra_proxy.text = HudSkillButton.EXTRA_BTN_TEXT
 	_extra_proxy.custom_minimum_size = Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
@@ -94,6 +96,16 @@ func _build() -> void:
 	SkillButtonView.style_circle_button(_extra_proxy, HudSkillButton.EXTRA_BTN_FONT)
 	_extra_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_EXTRA))
 	add_child(_extra_proxy)
+
+	# 机关键代理：与真实键同款式同占位文案（布设/维修/收回三态同键，占位用「机关」）
+	_mechanism_proxy = Button.new()
+	_mechanism_proxy.text = HudMechanismButton.FACE_EDIT
+	_mechanism_proxy.custom_minimum_size = Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
+	_mechanism_proxy.mouse_filter = Control.MOUSE_FILTER_STOP
+	_mechanism_proxy.focus_mode = Control.FOCUS_NONE
+	SkillButtonView.style_circle_action(_mechanism_proxy, GameStyle.GOLD, HudMechanismButton.BTN_FONT)
+	_mechanism_proxy.gui_input.connect(_on_proxy_input.bind(DRAG_MECHANISM))
+	add_child(_mechanism_proxy)
 
 	var bottom_strip := CenterContainer.new()
 	bottom_strip.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -197,7 +209,7 @@ func _build_reset_confirm() -> void:
 
 	var body := Label.new()
 	# 中文硬换行：短句也拆两行，不赌引擎 autowrap（真机不可靠）
-	body.text = "三颗按钮的位置和大小\n都会回到出厂摆位。"
+	body.text = "四颗按钮的位置和大小\n都会回到出厂摆位。"
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	GameStyle.label(body, 13, GameStyle.PAPER_DIM)
 	vb.add_child(body)
@@ -248,6 +260,8 @@ func _proxy_of(drag_id: int) -> Button:
 			return _obelisk_proxy
 		DRAG_EXTRA:
 			return _extra_proxy
+		DRAG_MECHANISM:
+			return _mechanism_proxy
 	return null
 
 func _scale_getter(drag_id: int) -> float:
@@ -256,6 +270,8 @@ func _scale_getter(drag_id: int) -> float:
 			return SettingsManager.obelisk_btn_scale()
 		DRAG_EXTRA:
 			return SettingsManager.extra_btn_scale()
+		DRAG_MECHANISM:
+			return SettingsManager.mechanism_btn_scale()
 	return SettingsManager.skill_btn_scale()
 
 func _scale_setter(drag_id: int, v: float) -> void:
@@ -264,6 +280,8 @@ func _scale_setter(drag_id: int, v: float) -> void:
 			SettingsManager.set_obelisk_btn_scale(v)
 		DRAG_EXTRA:
 			SettingsManager.set_extra_btn_scale(v)
+		DRAG_MECHANISM:
+			SettingsManager.set_mechanism_btn_scale(v)
 		_:
 			SettingsManager.set_skill_btn_scale(v)
 
@@ -273,6 +291,8 @@ func _xy_setter(drag_id: int, norm: Vector2, auto_save: bool) -> void:
 			SettingsManager.set_obelisk_btn_xy(norm, auto_save)
 		DRAG_EXTRA:
 			SettingsManager.set_extra_btn_xy(norm, auto_save)
+		DRAG_MECHANISM:
+			SettingsManager.set_mechanism_btn_xy(norm, auto_save)
 		_:
 			SettingsManager.set_skill_btn_xy(norm, auto_save)
 
@@ -281,8 +301,9 @@ func _sel_name(drag_id: int) -> String:
 		DRAG_OBELISK:
 			return "祭坛按钮"
 		DRAG_EXTRA:
-			# 用户 2026-10-11：「额外技能按钮」太长，chip 里写「额外技能」就够指认这颗键
-			return "额外技能"
+			return "角色技能"
+		DRAG_MECHANISM:
+			return "机关按钮"
 	return "技能按钮"
 
 # ---------------- 每帧同步：真实按钮是摆位真话，代理钮贴上去 ----------------
@@ -295,6 +316,7 @@ func _process(_delta: float) -> void:
 	_sync_proxy(_skill_proxy, _hud.skill_btn_center_px(), SettingsManager.skill_btn_scale())
 	_sync_proxy(_obelisk_proxy, _hud.obelisk_btn_center_px(), SettingsManager.obelisk_btn_scale())
 	_sync_proxy(_extra_proxy, _hud.extra_skill_btn_center_px(), SettingsManager.extra_btn_scale())
+	_sync_proxy(_mechanism_proxy, _hud.mechanism_btn_center_px(), SettingsManager.mechanism_btn_scale())
 
 func _sync_proxy(p: Button, center: Vector2, scale_f: float) -> void:
 	if p == null:
@@ -392,7 +414,8 @@ func _update_size_ui() -> void:
 	_sel_label.text = _sel_name(_selected)
 
 func _update_selection_visuals() -> void:
-	for entry in [[DRAG_SKILL, _skill_proxy], [DRAG_OBELISK, _obelisk_proxy], [DRAG_EXTRA, _extra_proxy]]:
+	for entry in [[DRAG_SKILL, _skill_proxy], [DRAG_OBELISK, _obelisk_proxy],
+			[DRAG_EXTRA, _extra_proxy], [DRAG_MECHANISM, _mechanism_proxy]]:
 		var p: Button = entry[1]
 		if p != null:
 			p.modulate = GameStyle.with_alpha(Color.WHITE, 1.0 if _selected == int(entry[0]) else 0.5)
@@ -415,6 +438,8 @@ func _xy_getter(drag_id: int) -> Vector2:
 			return SettingsManager.obelisk_btn_xy()
 		DRAG_EXTRA:
 			return SettingsManager.extra_btn_xy()
+		DRAG_MECHANISM:
+			return SettingsManager.mechanism_btn_xy()
 	return SettingsManager.skill_btn_xy()
 
 func finish() -> void:

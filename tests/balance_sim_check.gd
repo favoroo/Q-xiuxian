@@ -321,9 +321,9 @@ func _test_reference_build_ttks() -> void:
 	_c.check(ext_w20_boss_ttk <= 20.0,
 		"极端 6 剑满配 Build 依然保留高爆发爽感：TTK <= 20.0s (实测 %.1fs)" % ext_w20_boss_ttk)
 
-	# 3.5 机关堡垒成型 Build TTK（2026-10-11 新增防护栏：机关炮台不入 DPS 档、cap = turret_cap + 星−1
-	# 且每把武器独立维持满并发，此前全库无判据看这个乘区。底线对齐极端 build 的「绝不秒杀」红线 ≥8.0s；
-	# 实测值打印供后续调参——若逼近 8s 或长期显著低于成型带 30s，再考虑压 turret_cap 或机关羁绊）
+	# 3.5 机关堡垒成型 Build TTK（2026-11-03 口径换代：机关从「自动布 N 座」改成
+	# 「手动布 1 座 N 管齐射」，座数 → 管数逐星等价 ⇒ 总 DPS 与旧版完全一样；
+	# 此判据继续守「绝不秒杀」红线 ≥8.0s。实测值打印供后续调参）
 	var turret_build_dps := _simulate_turret_build_dps(
 		["jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou", "hanquan_shou", "tengluo_jiguan", "leishi_jiguan"],
 		{
@@ -334,8 +334,8 @@ func _test_reference_build_ttks() -> void:
 	)
 	var turret_w20_boss_ttk := GameBalance.boss_hp(20) / turret_build_dps
 	_c.check(turret_w20_boss_ttk >= 8.0,
-		"机关堡垒成型 Build（6 机关全★2 满并发）绝不秒杀魔尊：TTK >= 8.0s (实测 %.1fs, DPS=%.0f)" % [turret_w20_boss_ttk, turret_build_dps])
-	print("TURRET 机关堡垒成型 Build：DPS=%.0f，W20 魔尊 TTK=%.1fs（机关羁绊×1.5 + 攻速 + 满并发 cap=3 口径，炮台弹丸不带 DoT）" % [turret_build_dps, turret_w20_boss_ttk])
+		"机关堡垒成型 Build（6 机关全★2 齐射三管）绝不秒杀魔尊：TTK >= 8.0s (实测 %.1fs, DPS=%.0f)" % [turret_w20_boss_ttk, turret_build_dps])
+	print("TURRET 机关堡垒成型 Build：DPS=%.0f，W20 魔尊 TTK=%.1fs（机关羁绊×1.5 + 攻速 + 全★2 齐射 3 管口径，灼烧只折算一层）" % [turret_build_dps, turret_w20_boss_ttk])
 
 	# 3.6 纯御灵 Build（2026-10-11 新增防护栏：用户口径「驯兽师全召唤打 Boss 磨血磨不动」）。
 	# 与既有成型断言的口径差异（全部是刻意的诚实化）：
@@ -451,11 +451,11 @@ func _simulate_build_dps(weapons: Array, stats: Dictionary, vs_elite: bool) -> f
 		total_dps += hit_dps
 	return total_dps
 
-## 机关堡垒 Build 专用仿真（2026-10-11）：TurretUnit 的吞吐口径与 _simulate_build_dps 的
-## 「冷却 = 布设间隔」不同——机关武器本体只负责布设，实际输出是 cap 座炮台按 turret_fire_cd 连射，
-## 且 fire_cd 不随星级缩放（TurretUnit.setup 只缩伤害）。满并发 = turret_cap + 星−1
-## （布设间隔 × 攻速 < 存在时长时恒可达）。炮台弹丸不带 proc（_perform_turret_attack 不设 proc_*），
-## 故不计灼烧/剧毒。只读静态表与入参，确定性。
+## 机关堡垒 Build 专用仿真（2026-11-03 换代）：机关武器本体不再自动布设，实际输出是
+## **1 座机关按齐射管数同时打若干目标**；管数 = 旧版「炮台座数 = turret_cap + 星−1」，
+## 所以全★2 时齐射 3 管、总 DPS 与旧口径逐项相等（判据见 TurretCheck 的等价断言）。
+## 单发伤害与 fire_cd 都不随齐射变化；灼烧在同一目标上取 max 不叠层 ⇒ 只折算一层。
+## 只读静态表与入参，确定性。
 func _simulate_turret_build_dps(weapon_ids: Array, stats: Dictionary) -> float:
 	var w_dmg_mult: float = BalanceCombat.effective_weapon_damage_mult(float(stats.get("weapon_damage_mult", 1.0)))
 	var atk_spd: float = float(stats.get("attack_speed_mult", 1.0))
@@ -474,9 +474,9 @@ func _simulate_turret_build_dps(weapon_ids: Array, stats: Dictionary) -> float:
 		var stat_bonus := GameBalance.weapon_stat_bonus(def.get("stat_scalings", {}), stats, 2)
 		var final_d := (WeaponData.damage_for(wid, 2) + stat_bonus) * w_dmg_mult \
 			* contraption_mult * multi_mult
-		var fire_cd := maxf(0.1, float(def.get("turret_fire_cd", 0.75))) * atk_spd
-		var cap := int(def.get("turret_cap", 2)) + 1   ## 全★2：cap = turret_cap + (star-1)
-		total_dps += final_d / fire_cd * float(cap) * expected_crit * elite_mult
+		var fire_cd := WeaponData.turret_fire_interval(wid, 2) * atk_spd
+		var volley := WeaponData.turret_volley(2)   ## 全★2 齐射 3 管（= 旧版 3 座满并发）
+		total_dps += final_d * float(volley) / fire_cd * expected_crit * elite_mult
 	return total_dps
 
 # ---------------- 5. 挨打侧生存余量（危险度 0 = 「简单」） ----------------

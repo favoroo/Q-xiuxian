@@ -77,6 +77,20 @@ func _run() -> void:
 	_c.equals(_visible_count(), 0, "全部跳字归池（无节点泄漏）")
 	_c.equals(DamageNumber.combo_count(), 0, "聚合表清零（无滞留登记，池复用个体身份不残留）")
 
+	# —— ⑥ 拥挤档普通白字软上限（2026-11-03 绘制专项）：112 条同屏 = 224 draws，
+	# 单条文字的两个 draw_string 在同一 CanvasItem 内也不合批（实测 100 条 = 200 draws），
+	# 只能从数量上收口。暴击/文字读数/链电身份色必须继续放行，战斗读数不丢。——
+	FxBudget.crowded = true
+	var cap := DamageNumber.ACTIVE_SOFT_CAP_CROWDED
+	for i in range(cap + 8):
+		DamageNumber.spawn(_world, inside, 1, false, "", 90000 + i)
+	_c.equals(_visible_count(), cap, "拥挤档普通白字停在软上限 %d 条（实得 %d）" % [cap, _visible_count()])
+	DamageNumber.spawn(_world, inside, 2, true, "", 0)
+	_c.equals(_visible_count(), cap + 1, "暴击不受拥挤档软上限限制")
+	DamageNumber.spawn(_world, inside, 9, false, "+9 金币", 0)
+	_c.equals(_visible_count(), cap + 2, "文字类读数不受拥挤档软上限限制")
+	FxBudget.crowded = false
+
 	if _c.report("DAMAGECOMBO_RESULT"):
 		get_tree().quit(0)
 	else:

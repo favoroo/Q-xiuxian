@@ -5,7 +5,11 @@ extends RefCounted
 ## 从 GameHUD 抽离，负责圆形冷却绘制遮罩、半透明墨面/流金样式以及按偏好设置定位。
 ## 圆键是战斗舞台上的刻意圆形件（新野兽派允许装饰性圆形），不走 GameStyle.button 的直角黑框。
 
-const SKILL_BTN_SIZE := 76.0
+## 浮动圆键直径（设计像素）：四颗键（技能/额外技能/祭坛/机关）共用这一个数。
+## 2026-11-03 76 → 88（+16%）：机关改版后右侧变成 2×2 键簇，拇指要在四颗键之间挪，
+## 76 在真机上偏小、键面读数（耐久 %／冷却秒数）挤；放大后键面文字与图标仍按
+## 锚点/相对偏移排布（HudSkillButton 的图标框、HudObeliskButton 的价格行都跟着圆径走）。
+const SKILL_BTN_SIZE := 88.0
 ## 圆键键面字号基准：一颗字（"技"）用 28；四字占位文案要降到 18 才收得进圆面
 ## （口径同 HudObeliskButton.BTN_FONT，由 UnitRunner 那条「文案外接框角半径 <= 内缘」钉住）
 const SKILL_BTN_FONT := 28

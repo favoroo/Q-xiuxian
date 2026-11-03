@@ -107,8 +107,10 @@ func _on_game_over() -> void:
 	_r_stones = GameManager.spirit_stones
 	_refresh_unlocks()
 	_refresh_records()
-	# 原地复活：还有次数才显示；文案带剩余次数，让玩家知道这是有限资源
-	_revive_btn.visible = GameManager.revive_charges > 0
+	# 原地复活：还有次数才显示；文案带剩余次数，让玩家知道这是有限资源。
+	# 投降结算不出现：那是玩家的收手决定，且可能发生在悟道/商店阶段 ——
+	# 退回战斗时回合间面板已被收起，会停在等不到 alloc/shop_finished 的空场。
+	_revive_btn.visible = GameManager.revive_charges > 0 and not GameManager.surrendered
 	_revive_btn.disabled = false
 	_revive_btn.text = "原 地 复 活（剩 %d 次）" % GameManager.revive_charges
 	visible = true

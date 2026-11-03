@@ -54,6 +54,12 @@ static func open(shop, item: Dictionary, pool: String, index: int, anchor: Contr
 		["攻击间隔", "%.2f 秒" % cd],
 		["攻击范围", range_txt, GameStyle.JADE if range_buffed else GameStyle.PAPER],
 	]
+	# 机关：部署上限 / 齐射管数 / 耐久（2026-11-03 手动布设改版）。
+	# 「单发伤害」仍是一管的纸面值，整把武器的输出看上面那行「每秒伤害」（已含齐射）。
+	if WeaponDamageReadout.is_turret(def):
+		rows.append(["部署上限", "1 座", GameStyle.PAPER])
+		rows.append(["齐射", "%d 管" % (WeaponData.turret_volley(star) + int(GameManager.turret_volley_bonus)), GameStyle.JADE])
+		rows.append(["耐久", "%d 秒" % int(float(def.get("turret_stamina", 0.0))), GameStyle.PAPER])
 	# 落雷/区域类：卡面「攻击范围」是锁敌落点圈，真正的爆炸半径是另一个字段（burst_radius）。
 	# 不补这行会出现「范围 265 的金雷锥炸得比范围 250 的巨印还小」的观感反差（2026-10-20 射程体系重做）。
 	if int(def.get("behavior", -1)) == WeaponData.Behavior.BURST:

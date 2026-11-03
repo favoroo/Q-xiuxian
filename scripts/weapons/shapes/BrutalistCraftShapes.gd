@@ -63,9 +63,9 @@ static func _talisman(r: ProceduralWeaponRenderer) -> void:
 	# 朱砂大印（固定朱红，不随五行走）
 	BC.square(r, Vector2(-L * 0.42, 0.0), 3.4, BC.CINNABAR)
 	# 一笔符：一横一竖一挑，粗墨
-	r.draw_line(Vector2(L * 0.30, -hw * 0.55), Vector2(-L * 0.06, -hw * 0.55), BC.INK, 1.8, true)
-	r.draw_line(Vector2(L * 0.30, -hw * 0.55), Vector2(L * 0.30, hw * 0.25), BC.INK, 1.8, true)
-	r.draw_line(Vector2(L * 0.30, hw * 0.25), Vector2(-L * 0.10, hw * 0.60), BC.INK, 1.8, true)
+	BatchDraw.native_line(r, Vector2(L * 0.30, -hw * 0.55), Vector2(-L * 0.06, -hw * 0.55), BC.INK, 1.8, true)
+	BatchDraw.native_line(r, Vector2(L * 0.30, -hw * 0.55), Vector2(L * 0.30, hw * 0.25), BC.INK, 1.8, true)
+	BatchDraw.native_line(r, Vector2(L * 0.30, hw * 0.25), Vector2(-L * 0.10, hw * 0.60), BC.INK, 1.8, true)
 	BC.star_studs(r, r.star, Vector2(L * 0.12, hw * 0.5), Vector2(L * 0.12, -hw * 0.5), BC.INK)
 
 # ---------------- 扇族分型：燎原扇(折扇基准) / 风扇·芭蕉扇(整叶扇) ----------------
@@ -101,7 +101,7 @@ static func _fan_folding(r: ProceduralWeaponRenderer) -> void:
 	# 三根粗扇骨
 	for i in range(3):
 		var a := -half + 2.0 * half * float(i) / 2.0
-		r.draw_line(Vector2.ZERO, Vector2(cos(a), sin(a)) * R * 0.78, BC.INK, 2.2, true)
+		BatchDraw.native_line(r, Vector2.ZERO, Vector2(cos(a), sin(a)) * R * 0.78, BC.INK, 2.2, true)
 	# 柄 + 方扇钉
 	BC.bar(r, Vector2.ZERO, Vector2(-R * 0.35, 0.0), 3.2, BC.INK)
 	BC.square(r, Vector2.ZERO, 2.4, pal["accent"])
@@ -120,9 +120,9 @@ static func _fan_leaf(r: ProceduralWeaponRenderer) -> void:
 		Vector2(R * 0.16, R * 0.42), Vector2(R * 0.62, R * 0.34),
 	]), pal["body"], 2.4)
 	# 中脉 + 两条侧脉（叶骨，硬直线）
-	r.draw_line(Vector2(-R * 0.06, 0.0), Vector2(R * 0.92, 0.0), BC.INK, 2.2, true)
-	r.draw_line(Vector2(R * 0.28, 0.0), Vector2(R * 0.60, -R * 0.24), BC.INK, 1.6, true)
-	r.draw_line(Vector2(R * 0.28, 0.0), Vector2(R * 0.60, R * 0.24), BC.INK, 1.6, true)
+	BatchDraw.native_line(r, Vector2(-R * 0.06, 0.0), Vector2(R * 0.92, 0.0), BC.INK, 2.2, true)
+	BatchDraw.native_line(r, Vector2(R * 0.28, 0.0), Vector2(R * 0.60, -R * 0.24), BC.INK, 1.6, true)
+	BatchDraw.native_line(r, Vector2(R * 0.28, 0.0), Vector2(R * 0.60, R * 0.24), BC.INK, 1.6, true)
 	# 叶柄 + 方钉
 	BC.bar(r, Vector2(-R * 0.08, 0.0), Vector2(-R * 0.38, 0.0), 3.2, BC.INK)
 	BC.square(r, Vector2(-R * 0.06, 0.0), 2.2, pal["accent"])
@@ -179,7 +179,7 @@ static func _ruler(r: ProceduralWeaponRenderer) -> void:
 		var t: float = float(i) / 4.0
 		var x: float = lerpf(L * 0.62, -L * 0.72, t)
 		var tl: float = hw * (0.80 if i % 2 == 0 else 0.45)
-		r.draw_line(Vector2(x, -tl), Vector2(x, tl), BC.INK, 1.4, true)
+		BatchDraw.native_line(r, Vector2(x, -tl), Vector2(x, tl), BC.INK, 1.4, true)
 	BC.star_studs(r, r.star, Vector2(L * 0.44, 0.0), Vector2(-L * 0.22, 0.0), pal["accent"])
 
 # ---------------- 梭：硬边六边梭形 + 器首撞色尖半 + 梭心穿线墨杆 ----------------
@@ -253,10 +253,10 @@ static func _flute(r: ProceduralWeaponRenderer) -> void:
 	# 四个方指孔（粗墨短竖，小尺度下比圆孔更可读）
 	for i in range(4):
 		var x: float = L * (0.50 - float(i) * 0.28)
-		r.draw_line(Vector2(x, -hw * 0.35), Vector2(x, hw * 0.35), BC.INK, 2.2, true)
+		BatchDraw.native_line(r, Vector2(x, -hw * 0.35), Vector2(x, hw * 0.35), BC.INK, 2.2, true)
 	# 两道端箍
-	r.draw_line(Vector2(L * 0.66, -hw), Vector2(L * 0.66, hw), BC.INK, 1.6, true)
-	r.draw_line(Vector2(-L * 0.80, -hw), Vector2(-L * 0.80, hw), BC.INK, 1.6, true)
+	BatchDraw.native_line(r, Vector2(L * 0.66, -hw), Vector2(L * 0.66, hw), BC.INK, 1.6, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.80, -hw), Vector2(-L * 0.80, hw), BC.INK, 1.6, true)
 	# 尾端流苏（短带，纸暗色芯；墨芯在深色底上不可见）
 	BC.bar(r, Vector2(-L * 0.92, 0.0), Vector2(-L * 1.08, L * 0.10), 2.0, BC.PAPER.darkened(0.35))
 	BC.star_studs(r, r.star, Vector2(-L * 0.50, 0.0), Vector2(-L * 0.66, 0.0), pal["accent"])

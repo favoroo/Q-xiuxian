@@ -76,8 +76,10 @@ const GRIP := Color(0.70, 0.68, 0.64)
 const MOUNT := Color(0.15, 0.16, 0.20)
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	# draw_set_transform 是「替换」而非「叠乘」：_draw_mount 里也会重设同款变换，
 	# 画完器形全程保持 ART_SCALE，否则器身退回 1.0 比例、炮口与 MuzzlePoint 分家。
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(ART_SCALE, ART_SCALE))
 	match shape:
 		TurretShape.CROSSBOW:
@@ -98,7 +100,9 @@ func _draw() -> void:
 ## 机座（炮台扎根盘面的暗色底盘 + 硬投影）。
 ## 注意：draw_set_transform 是「替换」而非「叠乘」，这里必须把 _draw 头部的 ART_SCALE
 ## 一起带上，否则后续器身会退回 1.0 比例、炮口与 MuzzlePoint 分家。
+	BatchDraw.flush(self)
 func _draw_mount(rx: float) -> void:
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(ART_SCALE, ART_SCALE))
 	BC.disc(self, Vector2.ZERO, rx, MOUNT, 0.8)
 
@@ -142,7 +146,7 @@ func _draw_crossbow() -> void:
 		# 臂梢墨方（弦的挂点）
 		BC.square(self, Vector2(-6.6, s * 11.8), 0.9, BC.INK, 0.6)
 	# 弩弦：两梢之间向后挂成 V（纸白，待发状态）
-	draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(self, PackedVector2Array([
 		Vector2(-6.6, -11.8), Vector2(-9.2, 0.0), Vector2(-6.6, 11.8),
 	]), BC.PAPER, 1.5, true)
 
@@ -152,7 +156,7 @@ func _draw_crossbow() -> void:
 		Vector2(-12.8, 3.4), Vector2(-15.0, 0.0), Vector2(-12.8, -3.4), Vector2(1.0, -2.8),
 	]), GRIP, 1.4)
 	# 弩槽：一道墨轨（旧双沟 + 荧光脊线砍成单线）
-	draw_line(Vector2(-8.0, 0.0), Vector2(14.2, 0.0), BC.INK, 1.3, true)
+	BatchDraw.native_line(self, Vector2(-8.0, 0.0), Vector2(14.2, 0.0), BC.INK, 1.3, true)
 
 	# 弩机匣：整块撞色方匣 + 墨机牙（唯一撞色块）
 	BC.square(self, Vector2(-0.8, 0.0), 3.8, pal["accent"], 1.3)
@@ -230,8 +234,8 @@ func _draw_cannon() -> void:
 		Vector2(-13.4, -4.6), Vector2(-7.8, -4.6), Vector2(-7.8, 4.6), Vector2(-13.4, 4.6),
 	]), pal["accent"], 1.3)
 	# 墨箍两道（旧三道铜箍 + 刻纹 + 木纹砍成两道墨线）
-	draw_line(Vector2(-4.6, -4.5), Vector2(-4.6, 4.5), BC.INK, 1.8, true)
-	draw_line(Vector2(2.6, -4.7), Vector2(2.6, 4.7), BC.INK, 1.8, true)
+	BatchDraw.native_line(self, Vector2(-4.6, -4.5), Vector2(-4.6, 4.5), BC.INK, 1.8, true)
+	BatchDraw.native_line(self, Vector2(2.6, -4.7), Vector2(2.6, 4.7), BC.INK, 1.8, true)
 	# 膛口：墨盘黑洞压在口端（炮口面仍到 x=16）
 	BC.disc(self, Vector2(15.4, 0.0), 3.2, BC.INK, 0.9)
 
@@ -305,8 +309,8 @@ func _draw_trebuchet() -> void:
 		pal["body"], 0.9)
 
 	# 配重（尾端吊石匣）：两根纸白吊索 + 柄色方匣（旧织纹/「土」字纹砍掉）
-	draw_line(tail_pt, Vector2(-13.4, 6.2), BC.PAPER, 1.1, true)
-	draw_line(tail_pt, Vector2(-10.2, 6.2), BC.PAPER, 1.1, true)
+	BatchDraw.native_line(self, tail_pt, Vector2(-13.4, 6.2), BC.PAPER, 1.1, true)
+	BatchDraw.native_line(self, tail_pt, Vector2(-10.2, 6.2), BC.PAPER, 1.1, true)
 	BC.flat(self, PackedVector2Array([
 		Vector2(-14.2, 6.0), Vector2(-9.0, 6.0), Vector2(-9.0, 10.2), Vector2(-14.2, 10.2),
 	]), GRIP, 1.1)
@@ -317,8 +321,8 @@ func _draw_trebuchet() -> void:
 
 	# 索兜 + 撞色石弹（兜中之物中心正落在 x=16 = 炮口；唯一撞色块）
 	var ammo := Vector2(MUZZLE_X, 0.0)
-	draw_line(tip_pt, ammo + Vector2(-2.6, -1.6), BC.PAPER, 1.1, true)
-	draw_line(tip_pt, ammo + Vector2(-1.4, 3.0), BC.PAPER, 1.1, true)
+	BatchDraw.native_line(self, tip_pt, ammo + Vector2(-2.6, -1.6), BC.PAPER, 1.1, true)
+	BatchDraw.native_line(self, tip_pt, ammo + Vector2(-1.4, 3.0), BC.PAPER, 1.1, true)
 	BC.flat(self, PackedVector2Array([
 		ammo + Vector2(-3.4, 1.2), ammo + Vector2(3.4, 1.2), ammo + Vector2(2.0, 4.0),
 		ammo + Vector2(-2.2, 4.0),

@@ -250,52 +250,57 @@ static func _sample_crack_growth(pts: PackedVector2Array, grow: float) -> Packed
 	return res
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	# 渐隐系数：留存期恒 1，末段线性降到 0（渐隐窗按 kind 分档，与 activate() 同源）
 	var a := clampf(_time_left / _fade_time, 0.0, 1.0)
 	match kind:
 		Kind.CRACK:
 			# 俯视透视压扁：对齐地面视角，消除发光硬线漂浮感
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 			# 0~0.12s 快速爆裂展开（平滑开方缓动，第 1 帧即见雏形）
 			var raw_grow := clampf(_age / GROW_TIME, 0.0, 1.0) if GROW_TIME > 0.0 else 1.0
 			var grow := sqrt(raw_grow)
 			var dent_r := radius * 0.42 * grow
 			# 凹痕羽化层：外圈极淡下陷影 + 本体 + 深心，软化边缘
-			draw_circle(Vector2.ZERO, dent_r * 1.35, Color(CRACK_DENT.r, CRACK_DENT.g, CRACK_DENT.b, CRACK_DENT.a * a * 0.35))
-			draw_circle(Vector2.ZERO, dent_r, Color(CRACK_DENT, CRACK_DENT.a * a))
-			draw_circle(Vector2.ZERO, dent_r * 0.45, Color(CRACK_DENT, CRACK_DENT.a * a * 1.3))
+			BatchDraw.native_circle(self, Vector2.ZERO, dent_r * 1.35, Color(CRACK_DENT.r, CRACK_DENT.g, CRACK_DENT.b, CRACK_DENT.a * a * 0.35))
+			BatchDraw.native_circle(self, Vector2.ZERO, dent_r, Color(CRACK_DENT, CRACK_DENT.a * a))
+			BatchDraw.native_circle(self, Vector2.ZERO, dent_r * 0.45, Color(CRACK_DENT, CRACK_DENT.a * a * 1.3))
 			for pts in _cracks:
 				var draw_pts := _sample_crack_growth(pts, grow)
 				if draw_pts.size() >= 2:
 					# 底层粗黑崩口阴影（2.8px，拉开与地砖缝隙的粗细反差）
-					draw_polyline(draw_pts, Color(CRACK_SHADOW, CRACK_SHADOW.a * a), 2.8)
+					BatchDraw.native_polyline(self, draw_pts, Color(CRACK_SHADOW, CRACK_SHADOW.a * a), 2.8)
 					# 表层断层冷光亮芯（1.2px，石质断层冷月高光）
-					draw_polyline(draw_pts, Color(CRACK_CORE, CRACK_CORE.a * a), 1.2)
+					BatchDraw.native_polyline(self, draw_pts, Color(CRACK_CORE, CRACK_CORE.a * a), 1.2)
 			# 伴随碎石随爆开向外就位并显现
 			if grow > 0.35:
 				var deb_a := a * clampf((grow - 0.35) / 0.65, 0.0, 1.0)
 				for deb in _debris:
 					var dpos := Vector2(deb.x, deb.y) * grow
-					AdaptiveDraw.circle(self, dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a), 3.2)
-					AdaptiveDraw.circle(self, dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a), 3.2)
+					BatchDraw.circle(self, dpos + Vector2(0.8, 1.0), deb.z, Color(CRACK_DEBRIS_SHADOW, CRACK_DEBRIS_SHADOW.a * deb_a), 3.2)
+					BatchDraw.circle(self, dpos, deb.z, Color(CRACK_DEBRIS, CRACK_DEBRIS.a * deb_a), 3.2)
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		Kind.SCORCH:
 			# 俯视透视压扁：贴合冷调地砖
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 			# 外圈烟熏扩散晕（羽化渐变，消除生硬贴纸圆感）
 			for b in _blobs:
-				draw_circle(Vector2(b.x, b.y), b.z * 1.25, Color(SCORCH_SMOKE.r, SCORCH_SMOKE.g, SCORCH_SMOKE.b, SCORCH_SMOKE.a * a))
+				BatchDraw.native_circle(self, Vector2(b.x, b.y), b.z * 1.25, Color(SCORCH_SMOKE.r, SCORCH_SMOKE.g, SCORCH_SMOKE.b, SCORCH_SMOKE.a * a))
 			for b in _blobs:
-				draw_circle(Vector2(b.x, b.y), b.z * 1.10, Color(SCORCH_BODY.r, SCORCH_BODY.g, SCORCH_BODY.b, 0.28 * a))
+				BatchDraw.native_circle(self, Vector2(b.x, b.y), b.z * 1.10, Color(SCORCH_BODY.r, SCORCH_BODY.g, SCORCH_BODY.b, 0.28 * a))
 			# 焦痕炭黑本体
 			for b in _blobs:
-				draw_circle(Vector2(b.x, b.y), b.z, Color(SCORCH_BODY, SCORCH_BODY.a * a))
+				BatchDraw.native_circle(self, Vector2(b.x, b.y), b.z, Color(SCORCH_BODY, SCORCH_BODY.a * a))
 			# 余烬核：外晕 + 核心，比焦黑更快熄灭（×a²），读「火刚烧过」
 			var ember_glow := Color(SCORCH_EMBER.r, SCORCH_EMBER.g, SCORCH_EMBER.b, 0.12 * a * a * a)
 			var ember_core := Color(SCORCH_EMBER, SCORCH_EMBER.a * a * a)
 			for b in _blobs:
-				draw_circle(Vector2(b.x, b.y), b.z * 0.55, ember_glow)
-				draw_circle(Vector2(b.x, b.y), b.z * 0.38, ember_core)
+				BatchDraw.native_circle(self, Vector2(b.x, b.y), b.z * 0.55, ember_glow)
+				BatchDraw.native_circle(self, Vector2(b.x, b.y), b.z * 0.38, ember_core)
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		Kind.FADE_GLOW:
 			# 击杀余韵「灵烬余痕」（2026-10-16 重设计）：冷灰断环符纹 + 闪烁烬点 + 升腾烟缕，
@@ -308,22 +313,24 @@ func _draw() -> void:
 			var ember_col := _tint.lightened(0.4).lerp(Color.WHITE, 0.3)
 			var wisp_col := GLOW_ASH.lerp(_tint, 0.45)
 			# 贴地层统一压扁（俯视贴地感，形态上与正圆预警圈再拉开一档）
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
-			draw_circle(Vector2.ZERO, radius * (0.9 - 0.2 * life_t), Color(GLOW_SHADE, GLOW_SHADE.a * a))
+			BatchDraw.native_circle(self, Vector2.ZERO, radius * (0.9 - 0.2 * life_t), Color(GLOW_SHADE, GLOW_SHADE.a * a))
 			var ring_r := radius * (1.0 - 0.22 * life_t)
 			for seg in _ring_segs:
-				draw_arc(Vector2.ZERO, ring_r * seg.z, seg.x, seg.x + seg.y, 10,
+				BatchDraw.native_arc(self, Vector2.ZERO, ring_r * seg.z, seg.x, seg.x + seg.y, 10,
 					Color(ring_col.r, ring_col.g, ring_col.b, 0.7 * a), 1.5, true)
 			# 内晕：极淡的敌色余温，随消散微缩
-			draw_circle(Vector2.ZERO, radius * 0.46 * (1.0 - 0.35 * life_t),
+			BatchDraw.native_circle(self, Vector2.ZERO, radius * 0.46 * (1.0 - 0.35 * life_t),
 				Color(_tint.r, _tint.g, _tint.b, 0.14 * a))
+			BatchDraw.flush(self)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			# 烬点：微光闪烁上浮，熄灭比整体更快（×a²）
 			for i in range(_embers.size()):
 				var e := _embers[i]
 				var tw := 0.55 + 0.45 * sin(_age * 9.0 + _ember_phase[i])
 				var epos := Vector2(e.x, e.y * GROUND_SQUASH) + Vector2(0.0, -life_t * 3.0)
-				AdaptiveDraw.circle(self, epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a), 3.2)
+				BatchDraw.circle(self, epos, e.z, Color(ember_col.r, ember_col.g, ember_col.b, 0.65 * tw * a * a), 3.2)
 			# 烟缕：三缕残烟自烬痕升起，摇曳消散（顶端收在包络圈内）
 			for i in range(_wisps.size()):
 				var w := _wisps[i]
@@ -331,5 +338,6 @@ func _draw() -> void:
 				var rise := life_t * radius * 0.4 * w.z
 				var sway := sin(_age * 2.4 + float(i) * 2.1) * 2.2
 				var tip := base + Vector2(sway, -rise - radius * 0.25 * w.z)
-				draw_line(base + Vector2(0.0, -rise * 0.3), tip,
+				BatchDraw.native_line(self, base + Vector2(0.0, -rise * 0.3), tip,
 					Color(wisp_col.r, wisp_col.g, wisp_col.b, 0.42 * a * a), 1.2, true)
+	BatchDraw.flush(self)

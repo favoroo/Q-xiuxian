@@ -187,6 +187,7 @@ func _sync_collision() -> void:
 			node.set_deferred("disabled", true)
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	# 渐隐系数：末期 FADE_TIME 内线性降到 0，替代到点硬消失
 	var fade := clampf(duration / FADE_TIME, 0.0, 1.0)
 	# 落地摊开系数：0.4 → 1 ease-out（视觉「摊开」；期间碰撞已生效 —— 摊形只会画得
@@ -195,25 +196,26 @@ func _draw() -> void:
 	var g := (0.4 + 0.6 * (1.0 - pow(1.0 - grow_t, 3.0))) * lerpf(0.75, 1.0, fade)
 
 	# 俯视透视压扁：与地面角度对齐，消除立面漂浮感
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 
 	# 多阶羽化湿迹浸润底晕：从外到内梯级衰减，使毒液轮廓柔和融进地砖纹理，消除硬边贴纸感
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.16 * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.16 * fade))
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.30 * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.30 * fade))
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
 	# 毒液本体
 	for b in _blobs:
-		draw_circle(Vector2(b.x, b.y) * g, b.z * g, Color(POOL_BODY.r, POOL_BODY.g, POOL_BODY.b, POOL_BODY.a * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * g, Color(POOL_BODY.r, POOL_BODY.g, POOL_BODY.b, POOL_BODY.a * fade))
 	# 液面暗流亮芯：向中心收缩的微光，读「液体还在流动」
 	for b in _blobs:
 		if b.z >= radius * 0.30:
-			draw_circle(Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(POOL_SHEEN.r, POOL_SHEEN.g, POOL_SHEEN.b, POOL_SHEEN.a * fade))
+			BatchDraw.native_circle(self, Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(POOL_SHEEN.r, POOL_SHEEN.g, POOL_SHEEN.b, POOL_SHEEN.a * fade))
 	# 暗斑质感
 	for s in _specks:
-		draw_circle(Vector2(s.x, s.y) * g, s.z * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
+		BatchDraw.native_circle(self, Vector2(s.x, s.y) * g, s.z * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
 	# 冒泡：逐泡独立相位「胀大→破掉」，破时挑一帧细亮环，读「这滩毒还活着」
 	for i in range(_bubbles.size()):
 		var b := _bubbles[i]
@@ -222,13 +224,15 @@ func _draw() -> void:
 		var br := b.z * pulse * g
 		if br <= 0.2:
 			continue
-		draw_circle(Vector2(b.x, b.y) * g, br, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, POOL_EDGE.a * fade * pulse))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, br, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, POOL_EDGE.a * fade * pulse))
 		if cycle > 0.8:
-			draw_arc(Vector2(b.x, b.y) * g, br + 1.2, 0.0, TAU, 10, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, (1.0 - cycle) * 2.0 * fade), 1.0, true)
+			BatchDraw.native_arc(self, Vector2(b.x, b.y) * g, br + 1.2, 0.0, TAU, 10, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, (1.0 - cycle) * 2.0 * fade), 1.0, true)
 
 	# 恢复变换
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	BatchDraw.flush(self)
 func _physics_process(delta: float) -> void:
 	# monitoring 是 deferred 开启的：activate 当帧还没 flush，overlap 扫描要等下一物理帧
 	if not monitoring:

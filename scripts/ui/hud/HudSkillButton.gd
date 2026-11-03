@@ -8,11 +8,10 @@ extends Control
 
 const BTN_SIZE := SkillButtonView.SKILL_BTN_SIZE
 
-## 额外技能键的键面占位文案：还没进局、或该角色没配额外技能时，这颗键平时是隐藏的，
-## 只有「按钮调整模式」要把它亮出来当拖动靶子。用户 2026-10-11：原先写英文 "extra"，
-## 看不出那是颗什么键 ⇒ 改成「额外技能」。四个字一行收不进 76 圆面（28 号四汉字宽约 112，
-## 圆面去掉描边只剩 72），按祭坛键同一口径分两行 + 18 号；口径由 UnitRunner 钉。
-const EXTRA_BTN_TEXT := "额外\n技能"
+## 角色技能键（随角色绑定的专属绝技，如影爆/药爆）的键面占位文案：还没进局、或该角色没配角色技能时，
+## 这颗键平时是隐藏的，只有「按钮调整模式」要把它亮出来当拖动靶子。
+## 分两行 + 18 号，收进圆面内缘。
+const EXTRA_BTN_TEXT := "角色\n技能"
 const EXTRA_BTN_FONT := 18
 
 ## 槽位绑定：false = 主随行技能键（读 active_skill_id）；true = 额外技能键（读 extra_skill_id，

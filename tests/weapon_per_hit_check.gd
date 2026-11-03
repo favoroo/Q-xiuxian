@@ -155,7 +155,8 @@ func _check_card_rows() -> void:
 	_c.check(ps_label.ends_with("每秒伤害"),
 			"第二行写成每秒伤害（实得「%s」）" % ps_label)
 	var turret_label := WeaponDamageReadout.per_second_label("jiguan_nu")
-	_c.equals(turret_label, "单座每秒伤害", "炮台类另标「单座」，不与整把法器的每秒伤害混成同一个词")
+	_c.equals(turret_label, "每秒伤害",
+		"机关已改成「一座多管齐射」，读数就是整把武器的输出，不再另标「单座」")
 	for key in WeaponData.DEFS.keys():
 		var w_id := String(key)
 		var d: Dictionary = ShopOfferCardFactory.resolve_offer_data({"kind": "weapon", "id": w_id})

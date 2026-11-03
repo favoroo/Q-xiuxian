@@ -6,7 +6,7 @@ extends RefCounted
 ## 坐标契约与宿主一致：画布像素空间沿 +X 绘制，器尖/器口/最远针尖精确落在 (r.tip_len, 0)；
 ## 屏上实机尺度约 26px（节点 scale 0.55），细节必须在该尺度可读。
 ## 可用宿主能力：r._palette() / r._fill_outlined() / r._draw_star_fx() / r._paper() / r._ink()、
-## r.tip_len / r.star / r.element / r.upright、AdaptiveDraw.circle(r, ...) / AdaptiveDraw.arc(r, ...)。
+## r.tip_len / r.star / r.element / r.upright、BatchDraw.circle(r, ...) / BatchDraw.arc(r, ...)。
 ##
 ## 画风：空洞冷冽国风 —— 骨白亮面 / 深色暗面 / 五行荧光 / 粗暗描边 / 纯平矢量色块，禁渐变禁柔光。
 ## 扇形展开、针束角度一律用数学展开（极坐标），不使用 draw_set_transform。
@@ -66,10 +66,10 @@ static func draw_shape(shape: int, r: ProceduralWeaponRenderer) -> bool:
 ## 单根细针：粗暗描边 + 骨白针身 + 针尖寒光点。
 static func _needle_line(r: ProceduralWeaponRenderer, base: Vector2, tip: Vector2,
 		width: float, shaft: Color, glint: Color) -> void:
-	r.draw_line(base, tip, _INK, width + 0.9, true)
-	r.draw_line(base, tip, shaft, width, true)
-	AdaptiveDraw.circle(r, tip, maxf(width * 0.8, 1.0), glint)
-	AdaptiveDraw.circle(r, tip, maxf(width * 0.35, 0.5), Color(1.0, 1.0, 1.0, 0.95))
+	BatchDraw.native_line(r, base, tip, _INK, width + 0.9, true)
+	BatchDraw.native_line(r, base, tip, shaft, width, true)
+	BatchDraw.circle(r, tip, maxf(width * 0.8, 1.0), glint)
+	BatchDraw.circle(r, tip, maxf(width * 0.35, 0.5), Color(1.0, 1.0, 1.0, 0.95))
 
 ## 一枚冰晶棱针：细长六棱钻（暗底 + 上亮下暗棱面 + 中脊高光 + 针尖寒芒）。
 ## dir 单位方向，len 针长，hw 最大半宽（靠根 1/3 处）。
@@ -80,16 +80,16 @@ static func _ice_prism(r: ProceduralWeaponRenderer, base: Vector2, dir: Vector2,
 	var body := PackedVector2Array([
 		base + perp * hw * 0.5, sh + perp * hw, base + dir * len, sh - perp * hw, base - perp * hw * 0.5,
 	])
-	r.draw_colored_polygon(body, _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, body, _INK)
+	BatchDraw.native_poly(r, PackedVector2Array([
 		base + perp * hw * 0.5, sh + perp * hw, base + dir * len, sh,
 	]), _ICE_LT)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		sh, base + dir * len, sh - perp * hw, base - perp * hw * 0.5,
 	]), _ICE_DK)
-	r.draw_line(sh, base + dir * len, Color(1.0, 1.0, 1.0, 0.85), 0.8, true)
-	r.draw_line(base + perp * hw * 0.5, sh + perp * hw, Color(edge.r, edge.g, edge.b, 0.55), 0.7, true)
-	AdaptiveDraw.circle(r, base + dir * len, 1.0, Color(1.0, 1.0, 1.0, 0.95))
+	BatchDraw.native_line(r, sh, base + dir * len, Color(1.0, 1.0, 1.0, 0.85), 0.8, true)
+	BatchDraw.native_line(r, base + perp * hw * 0.5, sh + perp * hw, Color(edge.r, edge.g, edge.b, 0.55), 0.7, true)
+	BatchDraw.circle(r, base + dir * len, 1.0, Color(1.0, 1.0, 1.0, 0.95))
 
 ## 把方向 dir 的针尖钉死到器尖 (L,0)：从 base 出发沿 dir 解出恰好的长度。
 static func _pin_to_tip(base: Vector2, dir: Vector2, L: float) -> Vector2:
@@ -103,7 +103,7 @@ static func _arc(r: ProceduralWeaponRenderer, c: Vector2, rad: float,
 	for i in range(seg + 1):
 		var a := lerpf(a0, a1, float(i) / float(seg))
 		pts.append(c + Vector2(cos(a), sin(a)) * rad)
-	r.draw_polyline(pts, col, w, true)
+	BatchDraw.native_polyline(r, pts, col, w, true)
 
 # ---------------- 暴雨针：玄铁机括针匣 + 扇形针束（金） ----------------
 ## 参考 weapon_needle_pouch：尾端斜切玄铁机括小匣（铁胎 + 金棱线 + 匣口朝 +X 大张、掀盖露针排），
@@ -124,38 +124,38 @@ static func _draw_needle_box(r: ProceduralWeaponRenderer) -> void:
 		Vector2(-L * 0.92, h * 0.88),    # 尾下
 		Vector2(-L * 0.98, 0.0),         # 尾端斜切尖
 	])
-	r.draw_colored_polygon(box, _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, box, _INK)
+	BatchDraw.native_poly(r, PackedVector2Array([
 		box[0] * 0.96, box[1] * 0.97, box[2] * 0.97, box[3] * 0.96, box[4] * 0.97,
 	]), _IRON)
 	# 匣面斜向铁脊高光（纯平一条，破掉大平板）
-	r.draw_line(Vector2(-L * 0.88, -h * 0.5), Vector2(mouth_x - L * 0.04, -h * 0.62),
+	BatchDraw.native_line(r, Vector2(-L * 0.88, -h * 0.5), Vector2(mouth_x - L * 0.04, -h * 0.62),
 		Color(1.0, 1.0, 1.0, 0.18), 1.4, true)
 	# 匣口金棱（大张的口沿）
-	r.draw_line(Vector2(mouth_x, -h), Vector2(mouth_x, h), edge, 1.8, true)
+	BatchDraw.native_line(r, Vector2(mouth_x, -h), Vector2(mouth_x, h), edge, 1.8, true)
 	# 口内暗膛 + 待发针排（匣口里能看见一排针尾，强化「机括连发」）
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(mouth_x, -h * 0.78), Vector2(mouth_x - L * 0.10, -h * 0.55),
 		Vector2(mouth_x - L * 0.10, h * 0.55), Vector2(mouth_x, h * 0.78),
 	]), Color(0.03, 0.03, 0.05, 0.95))
 	for i in range(5):
 		var ry := lerpf(-h * 0.5, h * 0.5, float(i) / 4.0)
-		r.draw_line(Vector2(mouth_x - L * 0.09, ry), Vector2(mouth_x - L * 0.01, ry),
+		BatchDraw.native_line(r, Vector2(mouth_x - L * 0.09, ry), Vector2(mouth_x - L * 0.01, ry),
 			Color(shaft.r, shaft.g, shaft.b, 0.8), 0.8, true)
 	# 掀开的匣盖（自口上唇向前上方斜挑的实心薄铁板：铁面 + 金边 + 内侧亮线）
 	var lid := PackedVector2Array([
 		Vector2(mouth_x - L * 0.02, -h * 0.98), Vector2(-L * 0.02, -L * 0.60),
 		Vector2(L * 0.06, -L * 0.46), Vector2(mouth_x + L * 0.06, -h * 0.70),
 	])
-	r.draw_colored_polygon(lid, _IRON.darkened(0.10))
-	r.draw_polyline(lid + PackedVector2Array([lid[0]]), Color(edge.r, edge.g, edge.b, 0.85), 1.0, true)
-	r.draw_line(Vector2(mouth_x + L * 0.02, -h * 0.80), Vector2(L * 0.02, -L * 0.52),
+	BatchDraw.native_poly(r, lid, _IRON.darkened(0.10))
+	BatchDraw.native_polyline(r, lid + PackedVector2Array([lid[0]]), Color(edge.r, edge.g, edge.b, 0.85), 1.0, true)
+	BatchDraw.native_line(r, Vector2(mouth_x + L * 0.02, -h * 0.80), Vector2(L * 0.02, -L * 0.52),
 		Color(1.0, 1.0, 1.0, 0.25), 1.0, true)
 	# 机括齿轮 + 铆钉
 	_arc(r, Vector2(-L * 0.58, h * 0.10), L * 0.085, 0.0, TAU, Color(edge.r, edge.g, edge.b, 0.85), 1.2)
-	AdaptiveDraw.circle(r, Vector2(-L * 0.58, h * 0.10), 0.9, edge)
+	BatchDraw.circle(r, Vector2(-L * 0.58, h * 0.10), 0.9, edge)
 	for rx in [-L * 0.84, -L * 0.44]:
-		AdaptiveDraw.circle(r, Vector2(rx, h * 0.60), 0.7, Color(edge.r, edge.g, edge.b, 0.6))
+		BatchDraw.circle(r, Vector2(rx, h * 0.60), 0.7, Color(edge.r, edge.g, edge.b, 0.6))
 
 	# ---- 扇形针束（14 根，长短参差，中心针钉死 (L,0)）----
 	const N := 14
@@ -187,7 +187,7 @@ static func _draw_ice_needles(r: ProceduralWeaponRenderer) -> void:
 	var mouth_x := -L * 0.30
 
 	# 寒气外晕（纯平低透明的冰蓝扇面）
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(mouth_x, 0.0), Vector2(L * 0.86, -L * 0.34),
 		Vector2(L, 0.0), Vector2(L * 0.86, L * 0.34),
 	]), Color(edge.r, edge.g, edge.b, 0.12))
@@ -209,7 +209,7 @@ static func _draw_ice_needles(r: ProceduralWeaponRenderer) -> void:
 		_ice_prism(r, base, (tip - base).normalized(), tip.distance_to(base), L * 0.085, edge)
 
 	# 束根冰晶结（针从一团寒气里长出）
-	AdaptiveDraw.circle(r, Vector2(mouth_x + L * 0.02, 0.0), L * 0.07, Color(_ICE_LT.r, _ICE_LT.g, _ICE_LT.b, 0.8))
+	BatchDraw.circle(r, Vector2(mouth_x + L * 0.02, 0.0), L * 0.07, Color(_ICE_LT.r, _ICE_LT.g, _ICE_LT.b, 0.8))
 	r._draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.55, 0.0), Vector2(mouth_x, 0.0))
 
 # ---------------- 透骨钉：方帽长钉 + 棱线 + 钉尖冷光（木/暗） ----------------
@@ -226,29 +226,29 @@ static func _draw_nail(r: ProceduralWeaponRenderer) -> void:
 		Vector2(L, 0.0), Vector2(L * 0.34, -w), Vector2(cap_x, -w * 0.9),
 		Vector2(cap_x, w * 0.9), Vector2(L * 0.34, w),
 	])
-	r.draw_colored_polygon(body, _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, body, _INK)
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(L * 0.34, -w), Vector2(cap_x, -w * 0.9), Vector2(cap_x, 0.0),
 	]), _BONE)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(cap_x, 0.0), Vector2(cap_x, w * 0.9), Vector2(L * 0.34, w),
 	]), _BONE.darkened(0.40))
 	# 中脊棱线（五行荧光）+ 侧棱刻面
-	r.draw_line(Vector2(L * 0.92, 0.0), Vector2(cap_x, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.0, true)
-	r.draw_line(Vector2(L * 0.38, -w * 0.45), Vector2(cap_x, -w * 0.42), Color(1.0, 1.0, 1.0, 0.35), 0.7, true)
+	BatchDraw.native_line(r, Vector2(L * 0.92, 0.0), Vector2(cap_x, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.0, true)
+	BatchDraw.native_line(r, Vector2(L * 0.38, -w * 0.45), Vector2(cap_x, -w * 0.42), Color(1.0, 1.0, 1.0, 0.35), 0.7, true)
 
 	# 玄铁方帽（尾端小铁块 + 顶面亮 + 金绿包边）
 	var cap := PackedVector2Array([
 		Vector2(cap_x, -w * 1.7), Vector2(cap_x, w * 1.7),
 		Vector2(-L * 0.68, w * 1.5), Vector2(-L * 0.72, 0.0), Vector2(-L * 0.68, -w * 1.5),
 	])
-	r.draw_colored_polygon(cap, _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, cap, _INK)
+	BatchDraw.native_poly(r, PackedVector2Array([
 		cap[0] * 0.96, cap[1] * 0.96, cap[2] * 0.95, cap[3] * 0.95, cap[4] * 0.95,
 	]), _IRON)
-	r.draw_line(Vector2(cap_x - L * 0.01, -w * 1.5), Vector2(cap_x - L * 0.01, w * 1.5),
+	BatchDraw.native_line(r, Vector2(cap_x - L * 0.01, -w * 1.5), Vector2(cap_x - L * 0.01, w * 1.5),
 		Color(edge.r, edge.g, edge.b, 0.7), 1.2, true)
-	r.draw_line(Vector2(-L * 0.66, -w * 1.2), Vector2(cap_x - L * 0.04, -w * 1.4),
+	BatchDraw.native_line(r, Vector2(-L * 0.66, -w * 1.2), Vector2(cap_x - L * 0.04, -w * 1.4),
 		Color(1.0, 1.0, 1.0, 0.3), 0.8, true)
 
 	r._draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.6, 0.0), Vector2(cap_x, 0.0))
@@ -272,9 +272,9 @@ static func _draw_shuttle(r: ProceduralWeaponRenderer) -> void:
 		var wing_o := PackedVector2Array()
 		for p in wing:
 			wing_o.append(Vector2(p.x, p.y * 1.18 + s * 0.7))
-		r.draw_colored_polygon(wing_o, _INK)
-		r.draw_colored_polygon(wing, fin)
-		r.draw_line(Vector2(L * 0.02, s * w * 0.5), Vector2(-L * 0.42, s * L * 0.34),
+		BatchDraw.native_poly(r, wing_o, _INK)
+		BatchDraw.native_poly(r, wing, fin)
+		BatchDraw.native_line(r, Vector2(L * 0.02, s * w * 0.5), Vector2(-L * 0.42, s * L * 0.34),
 			Color(1.0, 1.0, 1.0, 0.25), 0.8, true)
 
 	# 梭身（双尖透镜形）：暗底 + 铁芯身 + 两端骨白梭尖
@@ -282,25 +282,25 @@ static func _draw_shuttle(r: ProceduralWeaponRenderer) -> void:
 		Vector2(L, 0.0), Vector2(L * 0.16, -w), Vector2(tail * 0.42, -w * 0.6),
 		Vector2(tail, 0.0), Vector2(tail * 0.42, w * 0.6), Vector2(L * 0.16, w),
 	])
-	r.draw_colored_polygon(body, _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, body, _INK)
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(L * 0.16, -w), Vector2(tail * 0.42, -w * 0.6),
 		Vector2(tail, 0.0), Vector2(L * 0.16, 0.0),
 	]), pal["light"])
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(L * 0.16, w), Vector2(tail * 0.42, w * 0.6),
 		Vector2(tail, 0.0), Vector2(L * 0.16, 0.0),
 	]), pal["dark"])
 	# 铁芯中段（深色箍带，破掉整条骨白）
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L * 0.06, -w * 0.92), Vector2(-L * 0.30, -w * 0.78),
 		Vector2(-L * 0.30, w * 0.78), Vector2(L * 0.06, w * 0.92),
 	]), _IRON)
 	# 梭心线槽（贯穿流光）
-	r.draw_line(Vector2(L * 0.88, 0.0), Vector2(tail * 0.86, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.2, true)
+	BatchDraw.native_line(r, Vector2(L * 0.88, 0.0), Vector2(tail * 0.86, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.2, true)
 	# 梭心光（中点一颗冷光）
-	AdaptiveDraw.circle(r, Vector2(-L * 0.10, 0.0), 1.5, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.9))
-	AdaptiveDraw.circle(r, Vector2(-L * 0.10, 0.0), 0.7, Color(1.0, 1.0, 1.0, 0.95))
+	BatchDraw.circle(r, Vector2(-L * 0.10, 0.0), 1.5, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.9))
+	BatchDraw.circle(r, Vector2(-L * 0.10, 0.0), 0.7, Color(1.0, 1.0, 1.0, 0.95))
 
 	r._draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.55, 0.0), Vector2(tail * 0.5, 0.0))
 
@@ -319,33 +319,33 @@ static func _draw_sling(r: ProceduralWeaponRenderer) -> void:
 	var pouch := Vector2(L - bead_r - L * 0.02, 0.0)    # 珠心：前缘钉死 (L,0)
 
 	# 柄（尾端 -X → 分叉点）+ 缠绳握把
-	r.draw_line(Vector2(-L * 0.88, 0.0), fork, _INK, 5.2, true)
-	r.draw_line(Vector2(-L * 0.88, 0.0), fork, wood, 3.4, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.88, 0.0), fork, _INK, 5.2, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.88, 0.0), fork, wood, 3.4, true)
 	for i in range(3):
 		var x := lerpf(-L * 0.74, -L * 0.38, float(i) / 2.0)
-		r.draw_line(Vector2(x, -2.0), Vector2(x, 2.0), wood.darkened(0.45), 1.2, true)
+		BatchDraw.native_line(r, Vector2(x, -2.0), Vector2(x, 2.0), wood.darkened(0.45), 1.2, true)
 	# 两弓梢（分叉 → 上下弓梢）
 	for s in [-1.0, 1.0]:
-		r.draw_line(fork, Vector2(prong.x, s * pry), _INK, 4.2, true)
-		r.draw_line(fork, Vector2(prong.x, s * pry), wood, 2.6, true)
+		BatchDraw.native_line(r, fork, Vector2(prong.x, s * pry), _INK, 4.2, true)
+		BatchDraw.native_line(r, fork, Vector2(prong.x, s * pry), wood, 2.6, true)
 		# 弓梢缠绳头
-		r.draw_line(Vector2(prong.x - L * 0.05, s * (pry - L * 0.05)),
+		BatchDraw.native_line(r, Vector2(prong.x - L * 0.05, s * (pry - L * 0.05)),
 			Vector2(prong.x + L * 0.02, s * (pry + L * 0.02)), wood.darkened(0.45), 1.4, true)
-		AdaptiveDraw.circle(r, Vector2(prong.x + L * 0.02, s * (pry + L * 0.02)), 1.0, edge.darkened(0.1))
+		BatchDraw.circle(r, Vector2(prong.x + L * 0.02, s * (pry + L * 0.02)), 1.0, edge.darkened(0.1))
 	# 皮筋（两弓梢 → 皮兜两侧，绷紧的暗弦）
 	for s in [-1.0, 1.0]:
-		r.draw_line(Vector2(prong.x, s * pry), pouch + Vector2(-L * 0.05, s * bead_r * 0.9),
+		BatchDraw.native_line(r, Vector2(prong.x, s * pry), pouch + Vector2(-L * 0.05, s * bead_r * 0.9),
 			Color(0.10, 0.08, 0.07, 0.95), 1.1, true)
 	# 皮兜（承珠的小皮杯，压在珠后）
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		pouch + Vector2(-bead_r * 1.1, -bead_r * 1.3), pouch + Vector2(-bead_r * 0.2, -bead_r * 0.9),
 		pouch + Vector2(-bead_r * 0.2, bead_r * 0.9), pouch + Vector2(-bead_r * 1.1, bead_r * 1.3),
 	]), pal["handle"].lerp(pal["dark"], 0.3))
 	# 灵珠（兜内发光宝珠：暗圈 + 灵光核 + 高光点）
-	AdaptiveDraw.circle(r, pouch, bead_r + 0.8, _INK)
-	AdaptiveDraw.circle(r, pouch, bead_r, pal["light"])
-	AdaptiveDraw.circle(r, pouch, bead_r * 0.55, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.95))
-	AdaptiveDraw.circle(r, pouch + Vector2(-bead_r * 0.3, -bead_r * 0.3), bead_r * 0.25, Color(1.0, 1.0, 1.0, 0.9))
+	BatchDraw.circle(r, pouch, bead_r + 0.8, _INK)
+	BatchDraw.circle(r, pouch, bead_r, pal["light"])
+	BatchDraw.circle(r, pouch, bead_r * 0.55, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.95))
+	BatchDraw.circle(r, pouch + Vector2(-bead_r * 0.3, -bead_r * 0.3), bead_r * 0.25, Color(1.0, 1.0, 1.0, 0.9))
 
 	r._draw_star_fx(pal, Vector2(L, 0.0), pouch, fork)
 
@@ -378,11 +378,11 @@ static func _draw_calabash(r: ProceduralWeaponRenderer) -> void:
 	for i in range(SEG + 1):
 		var t := 1.0 - float(i) / float(SEG)
 		lit.append(Vector2(_gourd_x(t, L), -_gourd_r(t, L) * 0.45))
-	r.draw_colored_polygon(lit, Color(pal["light"].r, pal["light"].g, pal["light"].b, 0.35))
+	BatchDraw.native_poly(r, lit, Color(pal["light"].r, pal["light"].g, pal["light"].b, 0.35))
 
 	# 收腰金箍
 	var waist_x := _gourd_x(0.52, L)
-	r.draw_line(Vector2(waist_x, -_gourd_r(0.52, L)), Vector2(waist_x, _gourd_r(0.52, L)),
+	BatchDraw.native_line(r, Vector2(waist_x, -_gourd_r(0.52, L)), Vector2(waist_x, _gourd_r(0.52, L)),
 		edge.darkened(0.1), 1.8, true)
 
 	# 大腹火纹：两道金弧 + 中央火舌纹 + 太极心（大腹在尾端，火舌尖朝口 +X）
@@ -390,17 +390,17 @@ static func _draw_calabash(r: ProceduralWeaponRenderer) -> void:
 	var belly_r := _gourd_r(0.78, L)
 	_arc(r, belly_c, belly_r * 0.78, -PI * 0.55, PI * 0.55, Color(edge.r, edge.g, edge.b, 0.7), 1.0)
 	_arc(r, belly_c, belly_r * 0.52, PI * 0.45, PI * 1.55, Color(edge.r, edge.g, edge.b, 0.5), 1.0)
-	r.draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(r, PackedVector2Array([
 		belly_c + Vector2(-belly_r * 0.26, -belly_r * 0.30), belly_c + Vector2(belly_r * 0.08, 0.0),
 		belly_c + Vector2(-belly_r * 0.26, belly_r * 0.30),
 	]), Color(edge.r, edge.g, edge.b, 0.9), 1.1, true)
 	# 太极心（大腹中央一枚小阴阳点，骨白/暗墨两半）
-	AdaptiveDraw.circle(r, belly_c + Vector2(belly_r * 0.34, 0.0), 1.6, Color(0.92, 0.90, 0.82, 0.9))
-	AdaptiveDraw.circle(r, belly_c + Vector2(belly_r * 0.34, 0.0), 0.8, ink)
+	BatchDraw.circle(r, belly_c + Vector2(belly_r * 0.34, 0.0), 1.6, Color(0.92, 0.90, 0.82, 0.9))
+	BatchDraw.circle(r, belly_c + Vector2(belly_r * 0.34, 0.0), 0.8, ink)
 
 	# 藤蔓（自颈后向 -Y 卷出的卷须）
 	var vine := Color(0.30, 0.46, 0.26)
-	r.draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(r, PackedVector2Array([
 		Vector2(_gourd_x(0.12, L), -_gourd_r(0.12, L)),
 		Vector2(_gourd_x(0.08, L), -L * 0.26),
 		Vector2(_gourd_x(0.24, L), -L * 0.34),
@@ -411,12 +411,12 @@ static func _draw_calabash(r: ProceduralWeaponRenderer) -> void:
 	# 口塞 + 葫口（喷口即器尖，落在 (L,0)）
 	var mouth := Vector2(L, 0.0)
 	# 塞身（颈口一段木塞，拔起一半露喷口）
-	r.draw_line(Vector2(_gourd_x(0.04, L), 0.0), mouth - Vector2(L * 0.03, 0.0), pal["handle"], mouth_r * 1.5, true)
+	BatchDraw.native_line(r, Vector2(_gourd_x(0.04, L), 0.0), mouth - Vector2(L * 0.03, 0.0), pal["handle"], mouth_r * 1.5, true)
 	# 口沿金环
 	_arc(r, mouth - Vector2(L * 0.015, 0.0), mouth_r, -PI * 0.5, PI * 0.5, edge, 1.5)
 	# 喷口火光（器尖火芯）
-	AdaptiveDraw.circle(r, mouth, mouth_r * 0.75, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.9))
-	AdaptiveDraw.circle(r, mouth, mouth_r * 0.35, Color(1.0, 0.95, 0.85, 0.95))
+	BatchDraw.circle(r, mouth, mouth_r * 0.75, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.9))
+	BatchDraw.circle(r, mouth, mouth_r * 0.35, Color(1.0, 0.95, 0.85, 0.95))
 
 	r._draw_star_fx(pal, mouth, Vector2(_gourd_x(0.30, L), 0.0), belly_c)
 
@@ -451,44 +451,44 @@ static func _draw_flute(r: ProceduralWeaponRenderer) -> void:
 	var tail := -L * 0.84
 
 	# 管身（暗底 + 上亮下暗）
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(head, -hw - 0.7), Vector2(head, hw + 0.7), Vector2(tail, hw + 0.7), Vector2(tail, -hw - 0.7),
 	]), _INK)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(head, -hw), Vector2(head, 0.0), Vector2(tail, 0.0), Vector2(tail, -hw),
 	]), bamboo)
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(head, 0.0), Vector2(head, hw), Vector2(tail, hw), Vector2(tail, 0.0),
 	]), bamboo.darkened(0.30))
 
 	# 竹节横箍 3 道 + 首尾金口
 	for i in range(3):
 		var x := lerpf(head * 0.78, tail * 0.72, float(i) / 2.0)
-		r.draw_line(Vector2(x, -hw), Vector2(x, hw), Color(ink.r, ink.g, ink.b, 0.75), 1.1, true)
-	r.draw_line(Vector2(head - L * 0.05, -hw), Vector2(head - L * 0.05, hw), edge.darkened(0.1), 1.5, true)
-	r.draw_line(Vector2(tail + L * 0.05, -hw), Vector2(tail + L * 0.05, hw), edge.darkened(0.1), 1.5, true)
+		BatchDraw.native_line(r, Vector2(x, -hw), Vector2(x, hw), Color(ink.r, ink.g, ink.b, 0.75), 1.1, true)
+	BatchDraw.native_line(r, Vector2(head - L * 0.05, -hw), Vector2(head - L * 0.05, hw), edge.darkened(0.1), 1.5, true)
+	BatchDraw.native_line(r, Vector2(tail + L * 0.05, -hw), Vector2(tail + L * 0.05, hw), edge.darkened(0.1), 1.5, true)
 
 	# 膜孔（靠首端的贴笛膜方孔）+ 吹孔
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(head * 0.62, -hw * 0.42), Vector2(head * 0.72, -hw * 0.42),
 		Vector2(head * 0.72, hw * 0.42), Vector2(head * 0.62, hw * 0.42),
 	]), ink)
 	# 4 指孔（暗孔 + 一点反光）
 	for i in range(4):
 		var x := lerpf(head * 0.44, tail * 0.52, float(i) / 3.0)
-		AdaptiveDraw.circle(r, Vector2(x, 0.0), hw * 0.40, ink)
-		AdaptiveDraw.circle(r, Vector2(x - hw * 0.12, -hw * 0.12), hw * 0.14, Color(1.0, 1.0, 1.0, 0.25))
+		BatchDraw.circle(r, Vector2(x, 0.0), hw * 0.40, ink)
+		BatchDraw.circle(r, Vector2(x - hw * 0.12, -hw * 0.12), hw * 0.14, Color(1.0, 1.0, 1.0, 0.25))
 
 	# 尾端流苏穗（系绳 + 结珠 + 散开的蓝紫丝线，明显拖出尾外）
 	var tassel := Color(0.45, 0.50, 0.95)
 	var knot := Vector2(tail - L * 0.10, 0.0)
-	r.draw_line(Vector2(tail, 0.0), knot, edge, 1.2, true)
-	AdaptiveDraw.circle(r, knot, 1.5, edge.darkened(0.1))
+	BatchDraw.native_line(r, Vector2(tail, 0.0), knot, edge, 1.2, true)
+	BatchDraw.circle(r, knot, 1.5, edge.darkened(0.1))
 	for i in range(5):
 		var fy := lerpf(-1.0, 1.0, float(i) / 4.0)
-		r.draw_line(knot, knot + Vector2(-L * 0.16, fy * L * 0.15), tassel, 1.0, true)
+		BatchDraw.native_line(r, knot, knot + Vector2(-L * 0.16, fy * L * 0.15), tassel, 1.0, true)
 	# 穗口束线
-	r.draw_line(knot + Vector2(-L * 0.09, -L * 0.10), knot + Vector2(-L * 0.09, L * 0.10),
+	BatchDraw.native_line(r, knot + Vector2(-L * 0.09, -L * 0.10), knot + Vector2(-L * 0.09, L * 0.10),
 		Color(tassel.r, tassel.g, tassel.b, 0.7), 0.9, true)
 
 	r._draw_star_fx(pal, Vector2(head, 0.0), Vector2(head * 0.5, 0.0), Vector2(0.0, 0.0))
@@ -510,10 +510,10 @@ static func _draw_fan(r: ProceduralWeaponRenderer) -> void:
 
 	# 扇面底色（环形扇区）：暗底外扩一圈 → 纸白面 + 极轻五行底色
 	var paper: Color = r._paper(pal).lerp(pal["light"], 0.18)
-	r.draw_colored_polygon(_sector(P, R + 1.0, Ri - 0.8, half, SEG), _INK)
-	r.draw_colored_polygon(_sector(P, R, Ri, half, SEG), paper)
+	BatchDraw.native_poly(r, _sector(P, R + 1.0, Ri - 0.8, half, SEG), _INK)
+	BatchDraw.native_poly(r, _sector(P, R, Ri, half, SEG), paper)
 	# 下半压暗（阴阳折面感）
-	r.draw_colored_polygon(_sector(P, R, Ri, half, SEG, true), Color(pal["dark"].r, pal["dark"].g, pal["dark"].b, 0.22))
+	BatchDraw.native_poly(r, _sector(P, R, Ri, half, SEG, true), Color(pal["dark"].r, pal["dark"].g, pal["dark"].b, 0.22))
 
 	# 扇面纹（五行主题各一款）
 	if is_fire:
@@ -524,7 +524,7 @@ static func _draw_fan(r: ProceduralWeaponRenderer) -> void:
 				var a: float = a0 + s * 0.10
 				var d0 := Vector2(cos(a - 0.14), sin(a - 0.14))
 				var d1 := Vector2(cos(a + 0.14), sin(a + 0.14))
-				r.draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(r, PackedVector2Array([
 					P + d0 * (Ri + (R - Ri) * 0.30), P + d0 * R * 0.97,
 					P + Vector2(cos(a), sin(a)) * R * 0.78, P + d1 * R * 0.97,
 					P + d1 * (Ri + (R - Ri) * 0.30),
@@ -537,7 +537,7 @@ static func _draw_fan(r: ProceduralWeaponRenderer) -> void:
 			var fl := P + tipd * (R + L * 0.10)
 			var p1 := P + tipd.rotated(0.11) * R * 0.99
 			var p2 := P + tipd.rotated(-0.11) * R * 0.99
-			r.draw_colored_polygon(PackedVector2Array([p1, fl, p2]), Color(edge.r, edge.g, edge.b, 0.9))
+			BatchDraw.native_poly(r, PackedVector2Array([p1, fl, p2]), Color(edge.r, edge.g, edge.b, 0.9))
 	else:
 		# 水扇：两道冰蓝同心波纹 + 中央雪晶（六角菱星）
 		for i in range(2):
@@ -547,34 +547,34 @@ static func _draw_fan(r: ProceduralWeaponRenderer) -> void:
 		for i in range(6):
 			var a := TAU * float(i) / 6.0
 			var d := Vector2(cos(a), sin(a))
-			r.draw_line(cc, cc + d * L * 0.16, Color(edge.r, edge.g, edge.b, 0.85), 1.0, true)
-			r.draw_line(cc + d * L * 0.10, cc + d * L * 0.10 + d.rotated(0.6) * L * 0.05,
+			BatchDraw.native_line(r, cc, cc + d * L * 0.16, Color(edge.r, edge.g, edge.b, 0.85), 1.0, true)
+			BatchDraw.native_line(r, cc + d * L * 0.10, cc + d * L * 0.10 + d.rotated(0.6) * L * 0.05,
 				Color(edge.r, edge.g, edge.b, 0.6), 0.8, true)
-		AdaptiveDraw.circle(r, cc, 1.2, Color(1.0, 1.0, 1.0, 0.9))
+		BatchDraw.circle(r, cc, 1.2, Color(1.0, 1.0, 1.0, 0.9))
 
 	# 扇骨（8 根，自扇钉放射到外缘，深色清晰压在扇面上）
 	for i in range(8):
 		var a := lerpf(-half, half, float(i) / 7.0)
 		var d := Vector2(cos(a), sin(a))
-		r.draw_line(P + d * Ri * 0.42, P + d * R * 0.985, Color(ink.r, ink.g, ink.b, 0.95), 1.2, true)
+		BatchDraw.native_line(r, P + d * Ri * 0.42, P + d * R * 0.985, Color(ink.r, ink.g, ink.b, 0.95), 1.2, true)
 	# 外缘收口（深色边骨 + 五行亮棱）
 	_arc(r, P, R, -half, half, Color(0.08, 0.09, 0.13, 0.95), 2.6)
 	_arc(r, P, R + 1.0, -half, half, Color(edge.r, edge.g, edge.b, 0.9), 1.2)
 
 	# 扇柄（自扇钉向尾 -X，骨白亮柄）
 	var grip := P + Vector2(-L * 0.26, 0.0)
-	r.draw_line(P, grip, _INK, 3.4, true)
-	r.draw_line(P, grip, Color(0.82, 0.80, 0.72), 1.9, true)
+	BatchDraw.native_line(r, P, grip, _INK, 3.4, true)
+	BatchDraw.native_line(r, P, grip, Color(0.82, 0.80, 0.72), 1.9, true)
 	# 扇钉（汇聚点的金属钉）
-	AdaptiveDraw.circle(r, P, 1.9, _INK)
-	AdaptiveDraw.circle(r, P, 1.0, edge)
+	BatchDraw.circle(r, P, 1.9, _INK)
+	BatchDraw.circle(r, P, 1.0, edge)
 	# 扇尾坠（钉下系穗：短绳 + 结珠 + 丝线）
 	var t0 := grip + Vector2(-L * 0.02, L * 0.02)
-	r.draw_line(grip, t0, edge, 1.0, true)
-	AdaptiveDraw.circle(r, t0 + Vector2(-L * 0.03, 0.0), 1.0, edge.darkened(0.1))
+	BatchDraw.native_line(r, grip, t0, edge, 1.0, true)
+	BatchDraw.circle(r, t0 + Vector2(-L * 0.03, 0.0), 1.0, edge.darkened(0.1))
 	for i in range(3):
 		var fy := lerpf(-1.0, 1.0, float(i) / 2.0)
-		r.draw_line(t0 + Vector2(-L * 0.03, 0.0), t0 + Vector2(-L * 0.11, fy * L * 0.08),
+		BatchDraw.native_line(r, t0 + Vector2(-L * 0.03, 0.0), t0 + Vector2(-L * 0.11, fy * L * 0.08),
 			Color(edge.r, edge.g, edge.b, 0.7), 0.9, true)
 
 	r._draw_star_fx(pal, Vector2(L, 0.0), P + Vector2(cos(0.35), sin(0.35)) * R * 0.6,
@@ -604,7 +604,7 @@ static func _draw_awl(r: ProceduralWeaponRenderer) -> void:
 	var edge: Color = pal["edge"]
 	var tail := -L * 0.55
 	# 五行气外晕
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L * 1.02, 0.0), Vector2(L * 0.3, -w * 1.3), Vector2(tail, -w * 1.3),
 		Vector2(tail, w * 1.3), Vector2(L * 0.3, w * 1.3),
 	]), Color(edge.r, edge.g, edge.b, 0.12))
@@ -614,23 +614,23 @@ static func _draw_awl(r: ProceduralWeaponRenderer) -> void:
 		Vector2(tail - w * 0.35, 0.0), Vector2(tail, w), Vector2(L * 0.30, w),
 	])
 	r._fill_outlined(body, pal["light"])
-	r.draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(r, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(L * 0.30, 0.0), Vector2(tail - w * 0.2, 0.0),
 		Vector2(tail, w), Vector2(L * 0.30, w),
 	]), pal["dark"])
 	# 锥面一道雷纹折线（金雷锥的雷意）
-	r.draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(r, PackedVector2Array([
 		Vector2(L * 0.80, -w * 0.32), Vector2(L * 0.64, w * 0.04),
 		Vector2(L * 0.71, w * 0.10), Vector2(L * 0.52, w * 0.42),
 	]), Color(edge.r, edge.g, edge.b, 0.95), 1.0, true)
 	# 双箍环（靠尾三分之一，箍住锥尾）
 	for i in range(2):
 		var x := tail + L * (0.12 + 0.13 * float(i))
-		r.draw_line(Vector2(x, -w * 1.0), Vector2(x, w * 1.0), _INK, 2.0, true)
-		r.draw_line(Vector2(x, -w * 0.9), Vector2(x, w * 0.9), edge, 1.1, true)
+		BatchDraw.native_line(r, Vector2(x, -w * 1.0), Vector2(x, w * 1.0), _INK, 2.0, true)
+		BatchDraw.native_line(r, Vector2(x, -w * 0.9), Vector2(x, w * 0.9), edge, 1.1, true)
 		# 尾端小锥首
-		AdaptiveDraw.circle(r, Vector2(tail - w * 0.35, 0.0), w * 0.55, _INK)
-		AdaptiveDraw.circle(r, Vector2(tail - w * 0.35, 0.0), w * 0.32, edge)
+		BatchDraw.circle(r, Vector2(tail - w * 0.35, 0.0), w * 0.55, _INK)
+		BatchDraw.circle(r, Vector2(tail - w * 0.35, 0.0), w * 0.32, edge)
 		# 锥尖冷光
 		r._draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.7, 0.0), Vector2(L * 0.2, 0.0))
 
@@ -718,31 +718,31 @@ static func _draw_shuriken(r: ProceduralWeaponRenderer) -> void:
 	var halo := PackedVector2Array()
 	for p in outer_poly:
 		halo.append(p * 1.08)
-	r.draw_colored_polygon(halo, Color(edge.r, edge.g, edge.b, 0.12))
+	BatchDraw.native_poly(r, halo, Color(edge.r, edge.g, edge.b, 0.12))
 
 	# 3. 外暗底描边
 	var outer_bg := PackedVector2Array()
 	for p in outer_poly:
 		outer_bg.append(p * 1.035)
-	r.draw_colored_polygon(outer_bg, _INK)
+	BatchDraw.native_poly(r, outer_bg, _INK)
 
 	# 4. 玄铁暗钢主体
-	r.draw_colored_polygon(outer_poly, steel_dark)
+	BatchDraw.native_poly(r, outer_poly, steel_dark)
 
 	# 5. 四面雪亮内凹磨刃（Bevel）
 	for bp in bevel_polys:
-		r.draw_colored_polygon(bp, bevel_light)
+		BatchDraw.native_poly(r, bp, bevel_light)
 
 	# 6. 刃口流光线（内凹锋口亮冷金，外凸背弧微弱冷银高光）
 	for bl in belly_lines:
-		r.draw_polyline(bl, Color(edge.r, edge.g, edge.b, 0.95), 1.1, true)
+		BatchDraw.native_polyline(r, bl, Color(edge.r, edge.g, edge.b, 0.95), 1.1, true)
 	for bkl in back_lines:
-		r.draw_polyline(bkl, Color(1.0, 1.0, 1.0, 0.45), 0.8, true)
+		BatchDraw.native_polyline(r, bkl, Color(1.0, 1.0, 1.0, 0.45), 0.8, true)
 
 	# 7. 中心透孔（圆孔 + 内外金属环）
-	AdaptiveDraw.circle(r, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
-	AdaptiveDraw.arc(r, Vector2.ZERO, r_hole, 0.0, TAU, edge.darkened(0.15), 1.4, true)
-	AdaptiveDraw.arc(r, Vector2.ZERO, r_hole * 1.32, 0.0, TAU, Color(_INK.r, _INK.g, _INK.b, 0.75), 1.0, true)
+	BatchDraw.circle(r, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
+	BatchDraw.arc(r, Vector2.ZERO, r_hole, 0.0, TAU, edge.darkened(0.15), 1.4, true)
+	BatchDraw.arc(r, Vector2.ZERO, r_hole * 1.32, 0.0, TAU, Color(_INK.r, _INK.g, _INK.b, 0.75), 1.0, true)
 
 	# 8. 器尖起辉与升星光效
 	# ★1 主尖 (L,0) 一点寒芒
@@ -751,11 +751,11 @@ static func _draw_shuriken(r: ProceduralWeaponRenderer) -> void:
 	for k in range(1, 4):
 		var ang := float(k) * PI * 0.5
 		var tip_k := Vector2(L, 0.0).rotated(ang)
-		AdaptiveDraw.circle(r, tip_k, 0.8, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.6))
+		BatchDraw.circle(r, tip_k, 0.8, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.6))
 	# ★3 极品升星：四尖之间环绕一道冷月旋风光环；★4 极境换成太虚霓虹双色环
 	if r.star >= 4:
-		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
-		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.72, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
+		BatchDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
+		BatchDraw.arc(r, Vector2.ZERO, L * 0.72, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
 	elif r.star >= 3:
-		AdaptiveDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, Color(edge.r, edge.g, edge.b, 0.45), 1.1, true)
+		BatchDraw.arc(r, Vector2.ZERO, L * 0.88, 0.0, TAU, Color(edge.r, edge.g, edge.b, 0.45), 1.1, true)
 

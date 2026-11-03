@@ -65,6 +65,10 @@ const FIELD_FORM := {
 	"pet_cooldown_mult_mul": FORM_MUL,
 	"pet_slots": FORM_FLAT,
 	"skill_cooldown_mult": FORM_PCT,
+	# 2026-11-03 机关阵地：耐久与维修用时是乘数（1.2 → +20% / 0.8 → -20%），齐射是「几管」平值
+	"turret_stamina_mul": FORM_MUL,
+	"turret_repair_haste_mul": FORM_MUL,
+	"turret_volley_bonus": FORM_FLAT,
 }
 
 ## 文案中允许出现、但不被 apply 解释的数字（键为条目 id；百分比记整数值，平值记数值）

@@ -114,6 +114,8 @@ static func detect_kind_from_path(tex_path: String) -> ProjectileKind:
 	return ProjectileKind.GENERIC_BLADE
 
 func _draw() -> void:
+	# 单发弹体的 6~12 条矢量原语统一合成 1 个 draw call（2026-11-03 绘制专项）
+	BatchDraw.flush(self)
 	match kind:
 		ProjectileKind.SWORD_GOLD:
 			_draw_gengjin_sword()
@@ -163,6 +165,7 @@ func _draw() -> void:
 			_draw_gold_coin()
 		ProjectileKind.GENERIC_BLADE:
 			_draw_generic_blade()
+	BatchDraw.flush(self)
 
 # ----------------- 1. 庚金飞剑 (双刃骨白古剑 + 庚金锐芒 + 剑气尾迹) -----------------
 func _draw_gengjin_sword() -> void:
@@ -174,14 +177,14 @@ func _draw_gengjin_sword() -> void:
 		Vector2(-32.0, 0.0),
 		Vector2(-6.0, 3.8)
 	])
-	draw_colored_polygon(trail_outer, Color(0.95, 0.80, 0.35, 0.15))
+	BatchDraw.native_poly(self, trail_outer, Color(0.95, 0.80, 0.35, 0.15))
 
 	var trail_inner := PackedVector2Array([
 		Vector2(-10.0, -1.8),
 		Vector2(-24.0, 0.0),
 		Vector2(-10.0, 1.8)
 	])
-	draw_colored_polygon(trail_inner, Color(1.0, 0.92, 0.65, 0.30))
+	BatchDraw.native_poly(self, trail_inner, Color(1.0, 0.92, 0.65, 0.30))
 
 	# 剑气外晕 (微弱半透明冷金光晕)
 	var glow_poly := PackedVector2Array([
@@ -192,7 +195,7 @@ func _draw_gengjin_sword() -> void:
 		Vector2(-14.0, 2.0),
 		Vector2(-4.0, 4.5)
 	])
-	draw_colored_polygon(glow_poly, Color(0.95, 0.80, 0.35, 0.22))
+	BatchDraw.native_poly(self, glow_poly, Color(0.95, 0.80, 0.35, 0.22))
 
 	# 剑身主刃 (骨白双刃，锋尖位于 +X 轴 14.0)
 	var blade_top := PackedVector2Array([
@@ -201,7 +204,7 @@ func _draw_gengjin_sword() -> void:
 		Vector2(-10.0, -3.0),
 		Vector2(-11.0, 0.0)
 	])
-	draw_colored_polygon(blade_top, Color(0.92, 0.94, 0.98)) # 阳面骨白
+	BatchDraw.native_poly(self, blade_top, Color(0.92, 0.94, 0.98)) # 阳面骨白
 
 	var blade_bot := PackedVector2Array([
 		Vector2(14.0, 0.0),
@@ -209,17 +212,17 @@ func _draw_gengjin_sword() -> void:
 		Vector2(-10.0, 3.0),
 		Vector2(-2.0, 3.2)
 	])
-	draw_colored_polygon(blade_bot, Color(0.70, 0.76, 0.84)) # 阴面冷灰
+	BatchDraw.native_poly(self, blade_bot, Color(0.70, 0.76, 0.84)) # 阴面冷灰
 
 	# 中脊骨棱脊线 (亮金冷光锐线)
-	draw_line(Vector2(14.0, 0.0), Vector2(-11.0, 0.0), Color(1.0, 0.88, 0.45), 1.0, true)
+	BatchDraw.native_line(self, Vector2(14.0, 0.0), Vector2(-11.0, 0.0), Color(1.0, 0.88, 0.45), 1.0, true)
 
 	# 剑首剑格与剑柄
-	draw_line(Vector2(-10.0, -3.5), Vector2(-10.0, 3.5), Color(0.20, 0.18, 0.25), 1.5, true)
-	draw_line(Vector2(-10.0, 0.0), Vector2(-15.0, 0.0), Color(0.12, 0.12, 0.16), 1.5, true)
-	AdaptiveDraw.circle(self, Vector2(-15.5, 0.0), 1.2, Color(0.92, 0.76, 0.28))
+	BatchDraw.native_line(self, Vector2(-10.0, -3.5), Vector2(-10.0, 3.5), Color(0.20, 0.18, 0.25), 1.5, true)
+	BatchDraw.native_line(self, Vector2(-10.0, 0.0), Vector2(-15.0, 0.0), Color(0.12, 0.12, 0.16), 1.5, true)
+	BatchDraw.circle(self, Vector2(-15.5, 0.0), 1.2, Color(0.92, 0.76, 0.28))
 	# 剑尖锋芒 HDR 起辉（T-2.4 弹头自带光感）
-	AdaptiveDraw.circle(self, Vector2(14.0, 0.0), 1.2, GameStyle.FX_HDR_METAL)
+	BatchDraw.circle(self, Vector2(14.0, 0.0), 1.2, GameStyle.FX_HDR_METAL)
 
 # ----------------- 1b. 流火飞剑 (炽亮橙红烧刃 + 雪亮剑锋 + 火尾) -----------------
 func _draw_liuhuo_sword() -> void:
@@ -231,14 +234,14 @@ func _draw_liuhuo_sword() -> void:
 		Vector2(-34.0, 0.0),
 		Vector2(-6.0, 4.0)
 	])
-	draw_colored_polygon(trail_outer, Color(0.95, 0.30, 0.10, 0.18))
+	BatchDraw.native_poly(self, trail_outer, Color(0.95, 0.30, 0.10, 0.18))
 
 	var trail_inner := PackedVector2Array([
 		Vector2(-9.0, -2.0),
 		Vector2(-24.0, 0.0),
 		Vector2(-9.0, 2.0)
 	])
-	draw_colored_polygon(trail_inner, Color(1.0, 0.72, 0.20, 0.35))
+	BatchDraw.native_poly(self, trail_inner, Color(1.0, 0.72, 0.20, 0.35))
 
 	# 火尾外晕（暖橙半透明，比庚金的冷金晕更亮）
 	var glow_poly := PackedVector2Array([
@@ -249,7 +252,7 @@ func _draw_liuhuo_sword() -> void:
 		Vector2(-14.0, 2.2),
 		Vector2(-3.0, 4.8)
 	])
-	draw_colored_polygon(glow_poly, Color(1.0, 0.45, 0.12, 0.25))
+	BatchDraw.native_poly(self, glow_poly, Color(1.0, 0.45, 0.12, 0.25))
 
 	# 剑身上刃（炽亮橙红，阳面更亮）
 	var blade_top := PackedVector2Array([
@@ -258,7 +261,7 @@ func _draw_liuhuo_sword() -> void:
 		Vector2(-10.0, -3.0),
 		Vector2(-11.0, 0.0)
 	])
-	draw_colored_polygon(blade_top, Color(1.0, 0.62, 0.22))
+	BatchDraw.native_poly(self, blade_top, Color(1.0, 0.62, 0.22))
 	# 剑身下刃（暗红烧刃阴面）
 	var blade_bot := PackedVector2Array([
 		Vector2(15.0, 0.0),
@@ -266,7 +269,7 @@ func _draw_liuhuo_sword() -> void:
 		Vector2(-10.0, 3.0),
 		Vector2(-2.0, 3.4)
 	])
-	draw_colored_polygon(blade_bot, Color(0.82, 0.30, 0.10))
+	BatchDraw.native_poly(self, blade_bot, Color(0.82, 0.30, 0.10))
 
 	# 雪亮剑锋（接 FX_HDR_FIRE 炽阳超白起辉）
 	var tip_poly := PackedVector2Array([
@@ -274,13 +277,13 @@ func _draw_liuhuo_sword() -> void:
 		Vector2(8.0, -1.2),
 		Vector2(8.0, 1.2)
 	])
-	draw_colored_polygon(tip_poly, GameStyle.FX_HDR_FIRE)
+	BatchDraw.native_poly(self, tip_poly, GameStyle.FX_HDR_FIRE)
 	# 中脊火线
-	draw_line(Vector2(14.0, 0.0), Vector2(-10.0, 0.0), Color(1.0, 0.85, 0.40), 1.0, true)
+	BatchDraw.native_line(self, Vector2(14.0, 0.0), Vector2(-10.0, 0.0), Color(1.0, 0.85, 0.40), 1.0, true)
 	# 剑格剑柄（玄铁暗色收尾）
-	draw_line(Vector2(-9.5, -3.6), Vector2(-9.5, 3.6), Color(0.20, 0.14, 0.12), 1.5, true)
-	draw_line(Vector2(-9.5, 0.0), Vector2(-14.5, 0.0), Color(0.14, 0.10, 0.10), 1.5, true)
-	AdaptiveDraw.circle(self, Vector2(-15.0, 0.0), 1.2, Color(1.0, 0.55, 0.18))
+	BatchDraw.native_line(self, Vector2(-9.5, -3.6), Vector2(-9.5, 3.6), Color(0.20, 0.14, 0.12), 1.5, true)
+	BatchDraw.native_line(self, Vector2(-9.5, 0.0), Vector2(-14.5, 0.0), Color(0.14, 0.10, 0.10), 1.5, true)
+	BatchDraw.circle(self, Vector2(-15.0, 0.0), 1.2, Color(1.0, 0.55, 0.18))
 
 # ----------------- 2. 柳叶飞刀 (流线柳叶弯刃 + 青金光痕) -----------------
 func _draw_leaf_dagger() -> void:
@@ -290,7 +293,7 @@ func _draw_leaf_dagger() -> void:
 		Vector2(-26.0, 0.0),
 		Vector2(-6.0, 2.5)
 	])
-	draw_colored_polygon(trail, Color(0.25, 0.80, 0.60, 0.22))
+	BatchDraw.native_poly(self, trail, Color(0.25, 0.80, 0.60, 0.22))
 
 	var dagger_pts := PackedVector2Array([
 		Vector2(11.0, 0.0),
@@ -300,36 +303,36 @@ func _draw_leaf_dagger() -> void:
 		Vector2(-8.0, 2.0),
 		Vector2(2.0, 3.0)
 	])
-	draw_colored_polygon(dagger_pts, Color(0.88, 0.92, 0.96))
+	BatchDraw.native_poly(self, dagger_pts, Color(0.88, 0.92, 0.96))
 	# 背脊青金流光
-	draw_line(Vector2(11.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
+	BatchDraw.native_line(self, Vector2(11.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
 	# 刀尖锐芒（FX_HDR_WOOD 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(11.0, 0.0), 1.1, GameStyle.FX_HDR_WOOD)
+	BatchDraw.circle(self, Vector2(11.0, 0.0), 1.1, GameStyle.FX_HDR_WOOD)
 	# 刀尾配重
-	AdaptiveDraw.circle(self, Vector2(-9.0, 0.0), 1.2, Color(0.10, 0.12, 0.16))
+	BatchDraw.circle(self, Vector2(-9.0, 0.0), 1.2, Color(0.10, 0.12, 0.16))
 
 # ----------------- 3. 暴雨银针 (极细冷银破空针) -----------------
 func _draw_silver_needle() -> void:
 	# 破空长尾迹虚影 (细且长)
-	draw_line(Vector2(10.0, 0.0), Vector2(-32.0, 0.0), Color(0.90, 0.95, 1.0, 0.22), 2.2, true)
-	draw_line(Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(0.95, 0.98, 1.0, 0.50), 1.2, true)
+	BatchDraw.native_line(self, Vector2(10.0, 0.0), Vector2(-32.0, 0.0), Color(0.90, 0.95, 1.0, 0.22), 2.2, true)
+	BatchDraw.native_line(self, Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(0.95, 0.98, 1.0, 0.50), 1.2, true)
 	# 针体核心
-	draw_line(Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(0.98, 0.98, 1.0), 1.0, true)
+	BatchDraw.native_line(self, Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(0.98, 0.98, 1.0), 1.0, true)
 	# 针尖锐芒光点（FX_HDR_CORE 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
+	BatchDraw.circle(self, Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
 
 # ----------------- 3b. 庚金金针 (冷金破空锐针 + 环首倒刺) -----------------
 func _draw_gold_needle() -> void:
 	# 破空金色丝痕
-	draw_line(Vector2(10.0, 0.0), Vector2(-32.0, 0.0), Color(0.95, 0.82, 0.35, 0.22), 2.2, true)
-	draw_line(Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(1.0, 0.92, 0.55, 0.55), 1.2, true)
+	BatchDraw.native_line(self, Vector2(10.0, 0.0), Vector2(-32.0, 0.0), Color(0.95, 0.82, 0.35, 0.22), 2.2, true)
+	BatchDraw.native_line(self, Vector2(8.0, 0.0), Vector2(-20.0, 0.0), Color(1.0, 0.92, 0.55, 0.55), 1.2, true)
 	# 针体核心 (冷金锐锋)
-	draw_line(Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(1.0, 0.94, 0.70), 1.0, true)
+	BatchDraw.native_line(self, Vector2(10.0, 0.0), Vector2(-8.0, 0.0), Color(1.0, 0.94, 0.70), 1.0, true)
 	# 环首（针尾金环，与暴雨银针的纯细线拉开剪影）+ 倒刺
-	AdaptiveDraw.arc(self, Vector2(-9.0, 0.0), 2.0, 0.0, TAU, Color(0.95, 0.82, 0.35, 0.9), 1.0)
-	draw_line(Vector2(2.0, 0.0), Vector2(-1.0, -1.8), Color(1.0, 0.90, 0.55, 0.85), 0.9, true)
+	BatchDraw.arc(self, Vector2(-9.0, 0.0), 2.0, 0.0, TAU, Color(0.95, 0.82, 0.35, 0.9), 1.0)
+	BatchDraw.native_line(self, Vector2(2.0, 0.0), Vector2(-1.0, -1.8), Color(1.0, 0.90, 0.55, 0.85), 0.9, true)
 	# 针尖锐芒（FX_HDR_METAL 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_METAL)
+	BatchDraw.circle(self, Vector2(10.0, 0.0), 1.1, GameStyle.FX_HDR_METAL)
 
 # ----------------- 4. 玄冰飞针 (晶莹透光幽蓝冰锥) -----------------
 func _draw_ice_needle() -> void:
@@ -339,10 +342,10 @@ func _draw_ice_needle() -> void:
 		Vector2(-28.0, 0.0),
 		Vector2(-4.0, 2.5)
 	])
-	draw_colored_polygon(trail, Color(0.40, 0.80, 1.0, 0.20))
+	BatchDraw.native_poly(self, trail, Color(0.40, 0.80, 1.0, 0.20))
 
 	# 冰晶外晕
-	draw_line(Vector2(12.0, 0.0), Vector2(-10.0, 0.0), Color(0.40, 0.80, 1.0, 0.40), 3.0, true)
+	BatchDraw.native_line(self, Vector2(12.0, 0.0), Vector2(-10.0, 0.0), Color(0.40, 0.80, 1.0, 0.40), 3.0, true)
 	# 多面晶体锥体
 	var top_pts := PackedVector2Array([
 		Vector2(12.0, 0.0),
@@ -350,18 +353,18 @@ func _draw_ice_needle() -> void:
 		Vector2(-8.0, -1.5),
 		Vector2(-8.0, 0.0)
 	])
-	draw_colored_polygon(top_pts, Color(0.70, 0.92, 1.0))
+	BatchDraw.native_poly(self, top_pts, Color(0.70, 0.92, 1.0))
 	var bot_pts := PackedVector2Array([
 		Vector2(12.0, 0.0),
 		Vector2(-8.0, 0.0),
 		Vector2(-8.0, 1.5),
 		Vector2(-1.0, 2.0)
 	])
-	draw_colored_polygon(bot_pts, Color(0.30, 0.65, 0.95))
+	BatchDraw.native_poly(self, bot_pts, Color(0.30, 0.65, 0.95))
 	# 冰棱脊线
-	draw_line(Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.90, 0.98, 1.0), 0.8, true)
+	BatchDraw.native_line(self, Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.90, 0.98, 1.0), 0.8, true)
 	# 针尖冰晶寒芒（FX_HDR_WATER 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(12.0, 0.0), 1.1, GameStyle.FX_HDR_WATER)
+	BatchDraw.circle(self, Vector2(12.0, 0.0), 1.1, GameStyle.FX_HDR_WATER)
 
 # ----------------- 4b. 白骨煞刺 (森白锐骨锥刺) -----------------
 func _draw_bone_spike() -> void:
@@ -371,7 +374,7 @@ func _draw_bone_spike() -> void:
 		Vector2(-24.0, 0.0),
 		Vector2(-4.0, 3.0)
 	])
-	draw_colored_polygon(trail, Color(0.60, 0.72, 0.75, 0.18))
+	BatchDraw.native_poly(self, trail, Color(0.60, 0.72, 0.75, 0.18))
 
 	# 骨刺本体 (四边菱形锥)
 	var spike_pts := PackedVector2Array([
@@ -380,18 +383,18 @@ func _draw_bone_spike() -> void:
 		Vector2(-8.0, 0.0),
 		Vector2(0.0, 3.2)
 	])
-	draw_colored_polygon(spike_pts, Color(0.92, 0.93, 0.88)) # 骨白
+	BatchDraw.native_poly(self, spike_pts, Color(0.92, 0.93, 0.88)) # 骨白
 	# 阴暗棱面
 	var shade_pts := PackedVector2Array([
 		Vector2(13.0, 0.0),
 		Vector2(-8.0, 0.0),
 		Vector2(0.0, 3.2)
 	])
-	draw_colored_polygon(shade_pts, Color(0.68, 0.72, 0.68, 0.7))
+	BatchDraw.native_poly(self, shade_pts, Color(0.68, 0.72, 0.68, 0.7))
 	# 骨刺中脊
-	draw_line(Vector2(13.0, 0.0), Vector2(-8.0, 0.0), Color(0.40, 0.45, 0.44), 1.0, true)
+	BatchDraw.native_line(self, Vector2(13.0, 0.0), Vector2(-8.0, 0.0), Color(0.40, 0.45, 0.44), 1.0, true)
 	# 骨尖寒芒（FX_HDR_CORE 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(13.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
+	BatchDraw.circle(self, Vector2(13.0, 0.0), 1.1, GameStyle.FX_HDR_CORE)
 
 # ----------------- 5. 神符 (符纸形态 × 五行灵文 + 灵光飘带) -----------------
 ## 符纸形态（2026-10-13 形态分化）：9+ 种符箓旧写法清一色 16×10 长方形只换边框色，
@@ -404,8 +407,8 @@ func _draw_talisman(border_col: Color, rune_col: Color, shape: TalismanShape = T
 	var wave_y := sin(wave_t) * 1.2
 
 	# 符尾飘带流光 (自符底向后拖曳的两缕灵光)
-	draw_line(Vector2(-8.0, -3.0), Vector2(-24.0, -4.5 + wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
-	draw_line(Vector2(-8.0, 3.0), Vector2(-24.0, 4.5 - wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
+	BatchDraw.native_line(self, Vector2(-8.0, -3.0), Vector2(-24.0, -4.5 + wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
+	BatchDraw.native_line(self, Vector2(-8.0, 3.0), Vector2(-24.0, 4.5 - wave_y), border_col * Color(1, 1, 1, 0.35), 1.2, true)
 
 	var paper := Color(0.92, 0.88, 0.78)
 	var rune_pulse: Color = rune_col * (0.95 + 0.15 * sin(wave_t * 0.7))
@@ -413,55 +416,55 @@ func _draw_talisman(border_col: Color, rune_col: Color, shape: TalismanShape = T
 		TalismanShape.RECT:
 			# 方符：16×10 正气符纸
 			var rect := Rect2(-8.0, -5.0, 16.0, 10.0)
-			draw_rect(rect, paper, true)
-			draw_rect(rect, border_col, false, 1.0)
-			AdaptiveDraw.circle(self, Vector2(5.0, 0.0), 1.8, border_col)
-			draw_line(Vector2(3.0, 0.0), Vector2(-5.0, 0.0), rune_pulse, 1.2, true)
-			draw_line(Vector2(-1.0, -2.5), Vector2(-1.0, 2.5), rune_pulse, 1.0, true)
-			draw_line(Vector2(-4.0, -2.0), Vector2(-4.0, 2.0), rune_pulse, 0.8, true)
+			BatchDraw.native_rect(self, rect, paper, true)
+			BatchDraw.native_rect(self, rect, border_col, false, 1.0)
+			BatchDraw.circle(self, Vector2(5.0, 0.0), 1.8, border_col)
+			BatchDraw.native_line(self, Vector2(3.0, 0.0), Vector2(-5.0, 0.0), rune_pulse, 1.2, true)
+			BatchDraw.native_line(self, Vector2(-1.0, -2.5), Vector2(-1.0, 2.5), rune_pulse, 1.0, true)
+			BatchDraw.native_line(self, Vector2(-4.0, -2.0), Vector2(-4.0, 2.0), rune_pulse, 0.8, true)
 		TalismanShape.STRIP:
 			# 长条符：20×6 狭长令签
 			var rect := Rect2(-10.0, -3.0, 20.0, 6.0)
-			draw_rect(rect, paper, true)
-			draw_rect(rect, border_col, false, 1.0)
-			AdaptiveDraw.circle(self, Vector2(7.0, 0.0), 1.4, border_col)
-			draw_line(Vector2(4.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
-			draw_line(Vector2(-3.0, -1.5), Vector2(-3.0, 1.5), rune_pulse, 0.8, true)
+			BatchDraw.native_rect(self, rect, paper, true)
+			BatchDraw.native_rect(self, rect, border_col, false, 1.0)
+			BatchDraw.circle(self, Vector2(7.0, 0.0), 1.4, border_col)
+			BatchDraw.native_line(self, Vector2(4.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
+			BatchDraw.native_line(self, Vector2(-3.0, -1.5), Vector2(-3.0, 1.5), rune_pulse, 0.8, true)
 		TalismanShape.LEAF:
 			# 叶形符：前尖后圆的灵叶
 			var leaf := PackedVector2Array([
 				Vector2(10.0, 0.0), Vector2(3.0, -5.0), Vector2(-6.0, -4.0),
 				Vector2(-9.0, 0.0), Vector2(-6.0, 4.0), Vector2(3.0, 5.0)])
-			draw_colored_polygon(leaf, paper)
+			BatchDraw.native_poly(self, leaf, paper)
 			leaf.append(leaf[0])
-			draw_polyline(leaf, border_col, 1.0, true)
+			BatchDraw.native_polyline(self, leaf, border_col, 1.0, true)
 			# 叶脉灵文
-			draw_line(Vector2(8.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
-			draw_line(Vector2(2.0, 0.0), Vector2(-2.0, -2.6), rune_pulse, 0.8, true)
-			draw_line(Vector2(2.0, 0.0), Vector2(-2.0, 2.6), rune_pulse, 0.8, true)
+			BatchDraw.native_line(self, Vector2(8.0, 0.0), Vector2(-7.0, 0.0), rune_pulse, 1.0, true)
+			BatchDraw.native_line(self, Vector2(2.0, 0.0), Vector2(-2.0, -2.6), rune_pulse, 0.8, true)
+			BatchDraw.native_line(self, Vector2(2.0, 0.0), Vector2(-2.0, 2.6), rune_pulse, 0.8, true)
 		TalismanShape.CRYSTAL:
 			# 晶棱符：六棱冰晶
 			var hex := PackedVector2Array([
 				Vector2(10.0, 0.0), Vector2(4.0, -4.5), Vector2(-5.0, -4.5),
 				Vector2(-9.0, 0.0), Vector2(-5.0, 4.5), Vector2(4.0, 4.5)])
-			draw_colored_polygon(hex, paper)
+			BatchDraw.native_poly(self, hex, paper)
 			hex.append(hex[0])
-			draw_polyline(hex, border_col, 1.0, true)
+			BatchDraw.native_polyline(self, hex, border_col, 1.0, true)
 			# 晶心灵纹（内小菱形）
 			var core := PackedVector2Array([
 				Vector2(4.0, 0.0), Vector2(0.0, -2.0), Vector2(-4.0, 0.0), Vector2(0.0, 2.0), Vector2(4.0, 0.0)])
-			draw_polyline(core, rune_pulse, 1.0, true)
+			BatchDraw.native_polyline(self, core, rune_pulse, 1.0, true)
 		TalismanShape.JAGGED:
 			# 锯齿火边符：符尾撕出火焰卷边
 			var jag := PackedVector2Array([
 				Vector2(9.0, -4.5), Vector2(-7.0, -5.0), Vector2(-10.0, -2.5),
 				Vector2(-7.5, 0.0), Vector2(-10.0, 2.5), Vector2(-7.0, 5.0), Vector2(9.0, 4.5)])
-			draw_colored_polygon(jag, paper)
+			BatchDraw.native_poly(self, jag, paper)
 			jag.append(jag[0])
-			draw_polyline(jag, border_col, 1.0, true)
-			AdaptiveDraw.circle(self, Vector2(5.5, 0.0), 1.6, border_col)
+			BatchDraw.native_polyline(self, jag, border_col, 1.0, true)
+			BatchDraw.circle(self, Vector2(5.5, 0.0), 1.6, border_col)
 			# 火纹灵文（三折跃动）
-			draw_polyline(PackedVector2Array([
+			BatchDraw.native_polyline(self, PackedVector2Array([
 				Vector2(3.0, -1.5), Vector2(0.0, 1.5), Vector2(-3.0, -1.5), Vector2(-5.5, 1.0)]),
 				rune_pulse, 1.0, true)
 		TalismanShape.CHUNK:
@@ -469,11 +472,11 @@ func _draw_talisman(border_col: Color, rune_col: Color, shape: TalismanShape = T
 			var oct := PackedVector2Array([
 				Vector2(6.0, -5.0), Vector2(-4.0, -6.0), Vector2(-9.0, -2.5), Vector2(-9.0, 2.5),
 				Vector2(-4.0, 6.0), Vector2(6.0, 5.0), Vector2(9.0, 2.0), Vector2(9.0, -2.0)])
-			draw_colored_polygon(oct, paper)
+			BatchDraw.native_poly(self, oct, paper)
 			oct.append(oct[0])
-			draw_polyline(oct, border_col, 1.4, true)
+			BatchDraw.native_polyline(self, oct, border_col, 1.4, true)
 			# 山形灵纹
-			draw_polyline(PackedVector2Array([
+			BatchDraw.native_polyline(self, PackedVector2Array([
 				Vector2(-5.0, 2.5), Vector2(-1.5, -2.0), Vector2(1.5, 1.0), Vector2(4.5, -2.5)]),
 				rune_pulse, 1.2, true)
 		TalismanShape.DROPLET:
@@ -481,22 +484,22 @@ func _draw_talisman(border_col: Color, rune_col: Color, shape: TalismanShape = T
 			var drop := PackedVector2Array([
 				Vector2(10.0, 0.0), Vector2(3.0, -5.5), Vector2(-4.0, -5.0),
 				Vector2(-8.0, -1.5), Vector2(-8.0, 1.5), Vector2(-4.0, 5.0), Vector2(3.0, 5.5)])
-			draw_colored_polygon(drop, paper)
+			BatchDraw.native_poly(self, drop, paper)
 			drop.append(drop[0])
-			draw_polyline(drop, border_col, 1.0, true)
+			BatchDraw.native_polyline(self, drop, border_col, 1.0, true)
 			# 水波灵纹（圆心 + 半弧）
-			AdaptiveDraw.circle(self, Vector2(0.0, 0.0), 1.3, rune_pulse)
-			AdaptiveDraw.arc(self, Vector2(0.0, 0.0), 3.2, -1.2, 1.2, rune_pulse, 0.9)
+			BatchDraw.circle(self, Vector2(0.0, 0.0), 1.3, rune_pulse)
+			BatchDraw.arc(self, Vector2(0.0, 0.0), 3.2, -1.2, 1.2, rune_pulse, 0.9)
 		TalismanShape.STELE:
 			# 碑形符：上窄下宽的小石碑
 			var stele := PackedVector2Array([
 				Vector2(8.0, -4.0), Vector2(-6.0, -5.5), Vector2(-8.0, 5.5), Vector2(6.0, 4.5)])
-			draw_colored_polygon(stele, paper)
+			BatchDraw.native_poly(self, stele, paper)
 			stele.append(stele[0])
-			draw_polyline(stele, border_col, 1.2, true)
+			BatchDraw.native_polyline(self, stele, border_col, 1.2, true)
 			# 碑额横刻 + 竖纹
-			draw_line(Vector2(5.0, -2.5), Vector2(-4.0, -3.0), rune_pulse, 1.0, true)
-			draw_line(Vector2(0.0, -1.0), Vector2(-1.0, 3.5), rune_pulse, 1.0, true)
+			BatchDraw.native_line(self, Vector2(5.0, -2.5), Vector2(-4.0, -3.0), rune_pulse, 1.0, true)
+			BatchDraw.native_line(self, Vector2(0.0, -1.0), Vector2(-1.0, 3.5), rune_pulse, 1.0, true)
 
 # ----------------- 6. 三昧真火 (流光火核与烈火水滴 + 喷射焰尾) -----------------
 func _draw_flame() -> void:
@@ -508,7 +511,7 @@ func _draw_flame() -> void:
 		Vector2(-28.0, 0.0),
 		Vector2(-4.0, 3.5)
 	])
-	draw_colored_polygon(flame_trail, Color(0.95, 0.35, 0.10, 0.30))
+	BatchDraw.native_poly(self, flame_trail, Color(0.95, 0.35, 0.10, 0.30))
 
 	# 外层暗赤火煞
 	var outer_flame := PackedVector2Array([
@@ -519,7 +522,7 @@ func _draw_flame() -> void:
 		Vector2(-6.0, 4.0),
 		Vector2(2.0, 5.5 * pulse)
 	])
-	draw_colored_polygon(outer_flame, Color(0.85, 0.25, 0.15, 0.75))
+	BatchDraw.native_poly(self, outer_flame, Color(0.85, 0.25, 0.15, 0.75))
 
 	# 中层炽金烈焰
 	var mid_flame := PackedVector2Array([
@@ -530,21 +533,21 @@ func _draw_flame() -> void:
 		Vector2(-4.0, 2.5),
 		Vector2(1.0, 3.5 * pulse)
 	])
-	draw_colored_polygon(mid_flame, Color(1.0, 0.65, 0.20, 0.90))
+	BatchDraw.native_poly(self, mid_flame, Color(1.0, 0.65, 0.20, 0.90))
 
 	# 内层白炽真火灵核（FX_HDR_FIRE 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(2.0, 0.0), 2.2 * pulse, GameStyle.FX_HDR_FIRE)
+	BatchDraw.circle(self, Vector2(2.0, 0.0), 2.2 * pulse, GameStyle.FX_HDR_FIRE)
 
 # ----------------- 7. 连环灵弹 (翡翠灵珠 + 环绕星环 + 灵光彗尾) -----------------
 func _draw_spirit_pellet() -> void:
 	# 后随凝元灵尘虚影
-	AdaptiveDraw.circle(self, Vector2(-8.0, 0.0), 3.0, Color(0.20, 0.65, 0.45, 0.35))
-	AdaptiveDraw.circle(self, Vector2(-16.0, 0.0), 1.8, Color(0.20, 0.65, 0.45, 0.18))
+	BatchDraw.circle(self, Vector2(-8.0, 0.0), 3.0, Color(0.20, 0.65, 0.45, 0.35))
+	BatchDraw.circle(self, Vector2(-16.0, 0.0), 1.8, Color(0.20, 0.65, 0.45, 0.18))
 
 	# 翡翠灵珠核心
-	AdaptiveDraw.circle(self, Vector2.ZERO, 5.0, Color(0.20, 0.65, 0.45))
-	AdaptiveDraw.circle(self, Vector2(1.0, -1.0), 3.0, Color(0.45, 0.88, 0.68))
-	AdaptiveDraw.circle(self, Vector2(1.5, -1.5), 1.2, GameStyle.FX_HDR_WOOD) # 高光超白起辉
+	BatchDraw.circle(self, Vector2.ZERO, 5.0, Color(0.20, 0.65, 0.45))
+	BatchDraw.circle(self, Vector2(1.0, -1.0), 3.0, Color(0.45, 0.88, 0.68))
+	BatchDraw.circle(self, Vector2(1.5, -1.5), 1.2, GameStyle.FX_HDR_WOOD) # 高光超白起辉
 
 	# 环绕自转星环 (极细倾斜椭圆)
 	var ring_ang := _lifetime_acc * 8.0
@@ -554,13 +557,13 @@ func _draw_spirit_pellet() -> void:
 		var t := float(i) / float(segs) * TAU
 		var pt := Vector2(cos(t) * 7.5, sin(t) * 3.0).rotated(ring_ang)
 		ring_pts.append(pt)
-	draw_polyline(ring_pts, Color(0.70, 1.0, 0.85, 0.65), 1.0, true)
+	BatchDraw.native_polyline(self, ring_pts, Color(0.70, 1.0, 0.85, 0.65), 1.0, true)
 
 # ----------------- 7b. 浪里梭 (青碧流线纺锤 + 浪涛丝痕) -----------------
 func _draw_water_shuttle() -> void:
 	# 水痕尾迹（两道青蓝丝线向后拖，延长破空）
-	draw_line(Vector2(-6.0, -2.4), Vector2(-28.0, -4.6), Color(0.35, 0.75, 1.0, 0.40), 1.2, true)
-	draw_line(Vector2(-6.0, 2.4), Vector2(-28.0, 4.6), Color(0.35, 0.75, 1.0, 0.40), 1.2, true)
+	BatchDraw.native_line(self, Vector2(-6.0, -2.4), Vector2(-28.0, -4.6), Color(0.35, 0.75, 1.0, 0.40), 1.2, true)
+	BatchDraw.native_line(self, Vector2(-6.0, 2.4), Vector2(-28.0, 4.6), Color(0.35, 0.75, 1.0, 0.40), 1.2, true)
 	# 梭身上半（冷青阳面）
 	var body_top := PackedVector2Array([
 		Vector2(13.0, 0.0),
@@ -568,7 +571,7 @@ func _draw_water_shuttle() -> void:
 		Vector2(-9.0, -2.0),
 		Vector2(-11.0, 0.0)
 	])
-	draw_colored_polygon(body_top, Color(0.45, 0.85, 0.95))
+	BatchDraw.native_poly(self, body_top, Color(0.45, 0.85, 0.95))
 	# 梭身下半（玄青阴面）
 	var body_bot := PackedVector2Array([
 		Vector2(13.0, 0.0),
@@ -576,16 +579,16 @@ func _draw_water_shuttle() -> void:
 		Vector2(-9.0, 2.0),
 		Vector2(2.0, 3.6)
 	])
-	draw_colored_polygon(body_bot, Color(0.16, 0.45, 0.62))
+	BatchDraw.native_poly(self, body_bot, Color(0.16, 0.45, 0.62))
 	# 中线浪纹（银白波光线，随时间波动）
 	var wave := PackedVector2Array()
 	var phase_shift := _lifetime_acc * 6.0
 	for i in range(7):
 		var t := -9.0 + float(i) * 3.4
 		wave.append(Vector2(t, 0.55 * sin(float(i) * 2.1 + phase_shift)))
-	draw_polyline(wave, Color(0.85, 0.98, 1.0, 0.9), 0.9, true)
+	BatchDraw.native_polyline(self, wave, Color(0.85, 0.98, 1.0, 0.9), 0.9, true)
 	# 梭尖寒芒（FX_HDR_WATER 超白起辉）
-	AdaptiveDraw.circle(self, Vector2(13.0, 0.0), 1.0, GameStyle.FX_HDR_WATER)
+	BatchDraw.circle(self, Vector2(13.0, 0.0), 1.0, GameStyle.FX_HDR_WATER)
 
 # ----------------- 8. 通用法刃 (冷月气刃) -----------------
 func _draw_generic_blade() -> void:
@@ -595,7 +598,7 @@ func _draw_generic_blade() -> void:
 		Vector2(-24.0, 0.0),
 		Vector2(-4.0, 2.5)
 	])
-	draw_colored_polygon(trail, Color(0.85, 0.92, 0.98, 0.18))
+	BatchDraw.native_poly(self, trail, Color(0.85, 0.92, 0.98, 0.18))
 
 	var blade_pts := PackedVector2Array([
 		Vector2(12.0, 0.0),
@@ -603,10 +606,10 @@ func _draw_generic_blade() -> void:
 		Vector2(-8.0, 0.0),
 		Vector2(0.0, 3.5)
 	])
-	draw_colored_polygon(blade_pts, Color(0.90, 0.94, 0.98))
-	draw_line(Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
+	BatchDraw.native_poly(self, blade_pts, Color(0.90, 0.94, 0.98))
+	BatchDraw.native_line(self, Vector2(12.0, 0.0), Vector2(-8.0, 0.0), Color(0.35, 0.85, 0.65), 1.0, true)
 	# 刃尖寒光起辉
-	AdaptiveDraw.circle(self, Vector2(12.0, 0.0), 1.2, GameStyle.FX_HDR_CORE)
+	BatchDraw.circle(self, Vector2(12.0, 0.0), 1.2, GameStyle.FX_HDR_CORE)
 
 # ----------------- 7c. 手里剑 (四芒旋风飞镖 + 月牙磨刃 + 破空冷金残影) -----------------
 func _draw_shuriken() -> void:
@@ -615,8 +618,8 @@ func _draw_shuriken() -> void:
 	var r_hole := R * 0.22
 
 	# 飞旋破空残影气环（微弱冷月白晕）
-	AdaptiveDraw.arc(self, Vector2.ZERO, R * 0.95 * pulse, 0.0, TAU, Color(0.92, 0.95, 1.0, 0.15), 1.4)
-	AdaptiveDraw.arc(self, Vector2.ZERO, R * 0.72, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.20), 1.0)
+	BatchDraw.arc(self, Vector2.ZERO, R * 0.95 * pulse, 0.0, TAU, Color(0.92, 0.95, 1.0, 0.15), 1.4)
+	BatchDraw.arc(self, Vector2.ZERO, R * 0.72, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.20), 1.0)
 
 	# 构造四芒曲刃轮廓与磨刃面
 	var outer_poly := PackedVector2Array()
@@ -682,28 +685,28 @@ func _draw_shuriken() -> void:
 	var outer_bg := PackedVector2Array()
 	for p in outer_poly:
 		outer_bg.append(p * 1.05)
-	draw_colored_polygon(outer_bg, Color(0.06, 0.07, 0.10, 0.90))
+	BatchDraw.native_poly(self, outer_bg, Color(0.06, 0.07, 0.10, 0.90))
 
 	# 2. 玄铁暗钢身
-	draw_colored_polygon(outer_poly, Color(0.26, 0.30, 0.38))
+	BatchDraw.native_poly(self, outer_poly, Color(0.26, 0.30, 0.38))
 
 	# 3. 亮银内刃磨光面
 	for bp in bevel_polys:
-		draw_colored_polygon(bp, Color(0.90, 0.94, 0.98))
+		BatchDraw.native_poly(self, bp, Color(0.90, 0.94, 0.98))
 
 	# 4. 锋口冷金流光线
 	for bl in belly_lines:
-		draw_polyline(bl, Color(1.0, 0.88, 0.45), 1.0, true)
+		BatchDraw.native_polyline(self, bl, Color(1.0, 0.88, 0.45), 1.0, true)
 
 	# 5. 中心透孔
-	AdaptiveDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_hole, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.85), 1.0, true)
+	BatchDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
+	BatchDraw.arc(self, Vector2.ZERO, r_hole, 0.0, TAU, Color(1.0, 0.88, 0.45, 0.85), 1.0, true)
 
 	# 6. 四尖寒芒起辉
 	for k in range(4):
 		var ang := float(k) * PI * 0.5
 		var tip_pt := Vector2(R, 0.0).rotated(ang)
-		AdaptiveDraw.circle(self, tip_pt, 1.1, GameStyle.FX_HDR_METAL)
+		BatchDraw.circle(self, tip_pt, 1.1, GameStyle.FX_HDR_METAL)
 
 # ----------------- 7d. 聚宝金钱镖 (天圆地方古金钱 + 飞旋金芒 + 招财灵印) -----------------
 func _draw_gold_coin() -> void:
@@ -713,8 +716,8 @@ func _draw_gold_coin() -> void:
 	var half_hole := R * 0.28
 
 	# 1. 破空飞旋外芒气环（流金光轮 + 拖尾虚影）
-	AdaptiveDraw.arc(self, Vector2.ZERO, R * 1.35 * pulse, 0.0, TAU, Color(1.0, 0.88, 0.35, 0.16), 1.6)
-	AdaptiveDraw.arc(self, Vector2.ZERO, R * 1.12, 0.0, TAU, Color(1.0, 0.95, 0.55, 0.28), 1.0)
+	BatchDraw.arc(self, Vector2.ZERO, R * 1.35 * pulse, 0.0, TAU, Color(1.0, 0.88, 0.35, 0.16), 1.6)
+	BatchDraw.arc(self, Vector2.ZERO, R * 1.12, 0.0, TAU, Color(1.0, 0.95, 0.55, 0.28), 1.0)
 
 	# 破空金气拖尾（向 -X 轴延伸渐隐）
 	var trail_poly := PackedVector2Array([
@@ -722,38 +725,38 @@ func _draw_gold_coin() -> void:
 		Vector2(-26.0, 0.0),
 		Vector2(-4.0, 4.5)
 	])
-	draw_colored_polygon(trail_poly, Color(0.96, 0.80, 0.25, 0.20))
+	BatchDraw.native_poly(self, trail_poly, Color(0.96, 0.80, 0.25, 0.20))
 
 	# 2. 4 道对称的切向金色飞旋小锋刃（飞旋离心流光）
 	for k in range(4):
 		var a := float(k) * PI * 0.5 + _lifetime_acc * 14.0
 		var p_blade := Vector2(cos(a), sin(a)) * R
 		var p_tip := Vector2(cos(a + 0.35), sin(a + 0.35)) * (R * 1.28)
-		draw_line(p_blade, p_tip, Color(1.0, 0.92, 0.45, 0.65), 1.2, true)
+		BatchDraw.native_line(self, p_blade, p_tip, Color(1.0, 0.92, 0.45, 0.65), 1.2, true)
 
 	# 3. 铜钱主体外圆（天圆）
-	AdaptiveDraw.circle(self, Vector2.ZERO, R, Color(0.85, 0.68, 0.18))      # 古金底色
-	AdaptiveDraw.circle(self, Vector2.ZERO, R * 0.92, Color(0.98, 0.82, 0.24)) # 阳面灿金
-	AdaptiveDraw.arc(self, Vector2.ZERO, R, 0.0, TAU, Color(0.70, 0.50, 0.12), 1.2, true) # 鎏金外轮廓
+	BatchDraw.circle(self, Vector2.ZERO, R, Color(0.85, 0.68, 0.18))      # 古金底色
+	BatchDraw.circle(self, Vector2.ZERO, R * 0.92, Color(0.98, 0.82, 0.24)) # 阳面灿金
+	BatchDraw.arc(self, Vector2.ZERO, R, 0.0, TAU, Color(0.70, 0.50, 0.12), 1.2, true) # 鎏金外轮廓
 
 	# 4. 同心外郭凸缘（铸造压印线）
-	AdaptiveDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, Color(0.82, 0.62, 0.15), 1.0, true)
+	BatchDraw.arc(self, Vector2.ZERO, r_inner, 0.0, TAU, Color(0.82, 0.62, 0.15), 1.0, true)
 
 	# 5. 中心方孔（天圆地方）
 	var hole_rect := Rect2(-half_hole, -half_hole, half_hole * 2.0, half_hole * 2.0)
-	draw_rect(hole_rect, Color(0.10, 0.12, 0.16, 0.96), true) # 中心深色透空
-	draw_rect(hole_rect, Color(0.70, 0.52, 0.12), false, 1.0) # 内方孔铜郭线
+	BatchDraw.native_rect(self, hole_rect, Color(0.10, 0.12, 0.16, 0.96), true) # 中心深色透空
+	BatchDraw.native_rect(self, hole_rect, Color(0.70, 0.52, 0.12), false, 1.0) # 内方孔铜郭线
 
 	# 6. 四方招财灵纹刻线（上下左右小符文）
 	var mark_col := Color(0.75, 0.55, 0.12)
-	draw_line(Vector2(0, -r_inner + 1.2), Vector2(0, -half_hole - 1.0), mark_col, 1.0, true)
-	draw_line(Vector2(0, r_inner - 1.2), Vector2(0, half_hole + 1.0), mark_col, 1.0, true)
-	draw_line(Vector2(-r_inner + 1.2, 0), Vector2(-half_hole - 1.0, 0), mark_col, 1.0, true)
-	draw_line(Vector2(r_inner - 1.2, 0), Vector2(half_hole + 1.0, 0), mark_col, 1.0, true)
+	BatchDraw.native_line(self, Vector2(0, -r_inner + 1.2), Vector2(0, -half_hole - 1.0), mark_col, 1.0, true)
+	BatchDraw.native_line(self, Vector2(0, r_inner - 1.2), Vector2(0, half_hole + 1.0), mark_col, 1.0, true)
+	BatchDraw.native_line(self, Vector2(-r_inner + 1.2, 0), Vector2(-half_hole - 1.0, 0), mark_col, 1.0, true)
+	BatchDraw.native_line(self, Vector2(r_inner - 1.2, 0), Vector2(half_hole + 1.0, 0), mark_col, 1.0, true)
 
 	# 7. 边缘超白反光起辉点（FX_HDR_GOLD + FX_HDR_METAL）
 	var gleam_pos := Vector2(R * 0.65, -R * 0.65)
-	AdaptiveDraw.circle(self, gleam_pos, 1.3, GameStyle.FX_HDR_GOLD)
-	AdaptiveDraw.circle(self, -gleam_pos * 0.8, 0.9, GameStyle.FX_HDR_METAL)
+	BatchDraw.circle(self, gleam_pos, 1.3, GameStyle.FX_HDR_GOLD)
+	BatchDraw.circle(self, -gleam_pos * 0.8, 0.9, GameStyle.FX_HDR_METAL)
 
 

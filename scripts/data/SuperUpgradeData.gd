@@ -41,6 +41,7 @@ const LINE_LABELS := {
 	"body": "体修",
 	"wuxing": "五行",
 	"beast": "灵兽",
+	"contraption": "机关",
 }
 
 ## 卡表字段：
@@ -85,6 +86,13 @@ const CARDS: Array[Dictionary] = [
 		"need": ["elemental"]},
 	{"id": "super_wuxing_guiyi", "grant_item": "shen_wuxing_guiyi", "line": "wuxing", "kind": "lane",
 		"need": ["elemental"]},
+
+	# ==================== 机关（2026-11-03 手动布设改版新增道途） ====================
+	# 机关流此前在飞升屏没有任何卡：本道途只收「改变阵地规则」的卡，纯数值放大交给普通悟道。
+	# 双联神机 = 编制 +1（6 把机关武器从 6 座变 12 座）：输出接近翻倍，代价是布设与维修的工作量
+	# 也翻倍 —— 这就是机关流「手最忙、阵地最厚」的身份。
+	{"id": "super_shuanglian_shenji", "grant_item": "shen_shuanglian", "line": "contraption", "kind": "lane",
+		"need": ["contraption"]},
 
 	# ==================== 灵兽 ====================
 	{"id": "super_shouxue", "grant_item": "shen_shouxue", "line": "beast", "kind": "lane",

@@ -270,7 +270,8 @@ func _run() -> void:
 	var skill_btn: Button = hud.get("_skill_btn")
 	_c.check(skill_box != null and skill_btn != null, "HUD 技能按钮节点已构建")
 	_c.check(skill_box.visible, "战斗中技能按钮处于可见态")
-	_c.near(skill_btn.size.x, GameHUD.SKILL_BTN_SIZE, 1.0, "技能按钮尺寸符合规范 76px")
+	_c.near(skill_btn.size.x, GameHUD.SKILL_BTN_SIZE, 1.0,
+		"技能按钮尺寸符合规范 %.0fpx（与其余浮动键同径）" % GameHUD.SKILL_BTN_SIZE)
 
 	# 测试点按 HUD 按钮（鼠标模拟单点）触发释放：按下先开活跃窗口，冷却不走
 	player.skill_cd_left = 0.0

@@ -480,6 +480,39 @@ def m_gear(d, C):
     circ(d, 0, 0, 8, C["dark"])
 
 
+def m_oilpot(d, C):
+    # 机枢油（2026-11-03）：斜嘴油壶 + 滴落的灵油
+    # 壶腹
+    circ(d, -8, 10, 25, C["main"])
+    # 斜嘴（壶嘴朝右上）
+    poly(d, [(6, -4), (33, -25), (39, -18), (13, 6)], C["main"])
+    # 壶盖与提梁
+    rrect(d, -8, -17, 24, 8, 3, C["dark"])
+    line(d, [(-14, -22), (-14, -31), (6, -31)], C["dark"], 3)
+    # 滴落的灵油 + 壶身油光
+    droplet(d, 38, -30, 8, C["accent"])
+    circ(d, -36, 30, 4.5, C["accent"])
+    shine(d, -18, 0, 7)
+
+
+def m_gearcore(d, C):
+    # 恒机芯（2026-11-03）：八棱机匣 + 齿圈 + 中心灵核（与 m_gear 的纯齿轮区分）
+    oct_pts = [(math.cos(math.radians(45 * i + 22.5)) * 39,
+                math.sin(math.radians(45 * i + 22.5)) * 39) for i in range(8)]
+    poly(d, oct_pts, C["main"])
+    # 内层齿圈（暗色齿托住亮环）
+    for i in range(8):
+        tooth = rot([(-5, -29), (5, -29), (5, -20), (-5, -20)], 45 * i)
+        poly(d, tooth, C["dark"])
+    ring(d, 0, 0, 21, 12, C["accent"])
+    circ(d, 0, 0, 6, C["main"])
+    # 四角铆钉
+    for i in range(4):
+        a = math.radians(45 * i)
+        circ(d, math.cos(a) * 32, math.sin(a) * 32, 3, C["dark"])
+    shine(d, -14, -16, 6)
+
+
 def m_map(d, C):
     # 藏宝图 / 图谱（折页 + 路线 + X）
     poly(d, [(-38, -26), (-12, -32), (12, -24), (38, -30), (38, 26), (12, 32), (-12, 24), (-38, 30)], C["main"])
@@ -755,6 +788,9 @@ SPEC = {
     "jiguan_hexin": ("gear", BRONZE_C),
     "tongji_chi": ("gear", WOOD_C),
     "tiangong_fatiao": ("gear", IRON_C),
+    # 2026-11-03 机关阵地两件：油壶与机芯各用一个新母题，避免与上面三件齿轮件撞图
+    "jishu_you": ("oilpot", C(BRONZE, BRONZE_D, JADE)),
+    "hengjixin": ("gearcore", C(IRON, IRON_D, JADE)),
     "cangbao_tu": ("map", PAPER_C),
     "cangzhen_juan": ("map", GOLD_C),
     "kaishan_jianyi": ("map", WOOD_C),
@@ -802,7 +838,7 @@ TIER = {
     "jucai_dai":2,"poxu_lingfu":2,"fanzhen_tongjia":2,"luban_suo":2,"naling_zhuo":2,
     "tiangong_fatiao":2,"kaishan_jianyi":2,"ningshen_fu":2,"lingyan_fu":2,"pojun_fu":2,
     "liannu_shi":2,"wuxing_sha":2,"tongji_chi":2,"jingxin_fu":2,"huansha":2,"lingcao_dai":2,
-    "lingsui_danqi":2,"ruding_xiang":2,
+    "lingsui_danqi":2,"ruding_xiang":2,"jishu_you":2,
     # T3
     "wuxing_pei":3,"wujian_shi":3,"huichun_hulu":3,"pojia_zhui":3,"xiuluo_pei":3,
     "wanshou_long":3,"potian_zhui":3,"jingang_zhuo":3,"shenxing_xue":3,"leiling_zhu":3,
@@ -815,7 +851,7 @@ TIER = {
     "tisi_kuilei":4,"hunyuan_zhu":4,"taiyi_jindan":4,"zhuxian_sui":4,"xuanwu_yin":4,
     "tianji_pan":4,"wuji_tianchuan_zhen":4,"shanyue_jia":4,"xuepan_guyu":4,"liehun_ling":4,
     "panshi_yin":4,"sanmei_guizhen":4,"tupo_guyu":4,"bumie_jinshen":4,"tiangang_zhanyi":4,
-    "daoyun_jing":4,"wanshi_jian":4,
+    "daoyun_jing":4,"wanshi_jian":4,"hengjixin":4,
 }
 
 

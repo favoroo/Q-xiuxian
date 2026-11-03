@@ -27,6 +27,8 @@ const COPIED: Array[String] = [
 		"chest_reward_mult", "spirit_stones", "revive_charges",
 		"pet_damage_mult", "pet_effect_mult", "pet_cooldown_mult", "pet_slots_bonus",
 		"skill_cooldown_mult",
+		# 机关阵地（2026-11-03 手动布设改版）：耐久/维修用时乘区与齐射管数
+		"turret_stamina_mul", "turret_repair_haste_mul", "turret_volley_bonus",
 		# —— 羁绊与技能乘区：影子不改它们，但读数要按同一式子合起来算 ——
 	"synergy_damage_mult", "synergy_range_mult", "synergy_haste_mult",
 	"synergy_crit_rate", "synergy_crit_mult", "synergy_hp_regen", "synergy_lifesteal",
@@ -83,6 +85,10 @@ var pet_damage_mult: float = 1.0
 var pet_effect_mult: float = 1.0
 var pet_cooldown_mult: float = 1.0
 var pet_slots_bonus: int = 0
+# 机关阵地（2026-11-03）：与 GameManager 同名的三个字段（StatSystem 按同名落地）
+var turret_stamina_mul: float = 1.0
+var turret_repair_haste_mul: float = 1.0
+var turret_volley_bonus: float = 0.0
 var skill_cooldown_mult: float = 0.0
 
 # —— 羁绊 / 技能层 ——

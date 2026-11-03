@@ -31,9 +31,9 @@ static func open_cultivator_tip(host: Control, anchor: Control) -> Control:
 	var cons: Array = def.get("cons", [])
 	for i in range(cons.size()):
 		rows.append(["代偿 %d" % (i + 1), String(cons[i]), GameStyle.BAD])
-	# 额外技能单独一行一段（与选角界面同读机制表，不再混在「加成 N」里）
-	for x_line in CultivatorData.get_extra_desc(GameManager.cultivator_id):
-		rows.append(["额外技能", String(x_line), GameStyle.SHADOW])
+		# 角色技能单独一行一段（与选角界面同读机制表，不再混在「加成 N」里）
+		for x_line in CultivatorData.get_extra_desc(GameManager.cultivator_id):
+			rows.append(["角色技能", String(x_line), GameStyle.SHADOW])
 	if not GameManager.active_skill_id.is_empty():
 		var sdef := SkillData.get_def(GameManager.active_skill_id)
 		rows.append(["随行技能", String(sdef.get("name", GameManager.active_skill_id)), GameStyle.GOLD])
@@ -183,7 +183,14 @@ static func open_weapon_tip(host: Control, anchor: Control, w: Dictionary, from_
 		[WeaponDamageReadout.per_second_label(id),
 				BonusRows.fmt_num(WeaponDamageReadout.per_second(id, star)), GameStyle.JADE_DK],
 		["属性加伤", "+%s" % BonusRows.fmt_num(bonus), _c(bonus)],
-	] + factor_rows + [
+	]
+	# 机关三行（2026-11-03 手动布设改版）：部署上限固定 1 座、齐射管数随星、耐久秒数。
+	# 「单发伤害」是一管的纸面值（与运行时 blade 弹伤逐发同源），整把武器的输出看上一行「每秒伤害」。
+	if WeaponDamageReadout.is_turret(def):
+		rows.append(["部署上限", "1 座", GameStyle.PAPER])
+		rows.append(["齐射", "%d 管" % (WeaponData.turret_volley(star) + int(GameManager.turret_volley_bonus)), GameStyle.JADE_DK])
+		rows.append(["耐久", "%d 秒" % int(float(def.get("turret_stamina", 0.0))), GameStyle.PAPER])
+	rows = rows + factor_rows + [
 		["攻击范围", range_txt, GameStyle.JADE_DK if range_buffed else GameStyle.PAPER],
 	]
 	# 落雷/区域类：卡面「攻击范围」只是锁敌落点圈，真正炸多大看 burst_radius（2026-10-20 射程体系重做）。

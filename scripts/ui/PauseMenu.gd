@@ -10,13 +10,17 @@ signal stats_requested
 signal settings_requested
 signal manual_requested
 signal save_requested  ## 满位且本局未占位：请 Main 打开 MAKE_ROOM 腾位弹窗
+signal surrender_requested  ## 投降结算：请 Main 收起垫底弹窗、解暂停并播阵亡谢幕
 
 var _unpause_on_close: bool = true
 var _closing: bool = false
 var _retry_armed: bool = false
+var _surrender_armed: bool = false
 var _retry_btn: Button
 var _menu_btn: Button
+var _surrender_btn: Button
 var _retry_reset_tween: Tween
+var _surrender_reset_tween: Tween
 var _close_tween: Tween
 var _update_btn: Button
 var _ver_label: Label
@@ -60,7 +64,9 @@ func _build_ui() -> void:
 	panel.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
+	# 缝隙 14→12：面板高度已贴 540 屏上限，加「投降结算」这一行必须从纵向缝隙里挤
+	# （配合删掉标题下那块 4px 空块，实测面板仍留 ~20px 上下边距）。
+	vbox.add_theme_constant_override("separation", 12)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	margin.add_child(vbox)
 
@@ -74,11 +80,6 @@ func _build_ui() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle = subtitle
 	vbox.add_child(subtitle)
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 4)
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer)
 
 	var resume_btn := _mk_btn("继 续 游 戏", 42, GameStyle.GOLD, GameStyle.JADE, 17, GameStyle.PAPER, GameStyle.INK_TEXT)
 	resume_btn.pressed.connect(func(): close(true))
@@ -95,7 +96,7 @@ func _build_ui() -> void:
 	top_row.add_child(save_btn)
 	vbox.add_child(top_row)
 
-	# 六颗键分三排：整列排下去面板要 593 高 > 540 屏高，
+	# 七颗键分四排：整列排下去面板要 593 高 > 540 屏高，
 	# 音量条与版本号整块落在屏外点不到（判据 LayoutCheck 量 rect 才看得见）。
 	var stats_btn := _mk_btn("角 色 属 性", 36, GameStyle.NAVY2, GameStyle.JADE, 15, GameStyle.PAPER, GameStyle.INK_TEXT)
 	stats_btn.pressed.connect(_on_stats_pressed)
@@ -114,6 +115,12 @@ func _build_ui() -> void:
 	_menu_btn = _mk_btn("返 回 主 菜 单", 36, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER)
 	_menu_btn.pressed.connect(_on_menu_pressed)
 	_add_row(vbox, [_retry_btn, _menu_btn])
+
+	# 投降结算（2026-11-03 玩家反馈）：打到目标波数想收手时，不必故意送死或重开一局。
+	# 单占一排、朱砂字压暗底：与上面两颗「离场」键拉开视觉层级，不跟返回主菜单抢手。
+	_surrender_btn = _mk_btn("投 降 结 算", 34, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.BAD, GameStyle.CHALK)
+	_surrender_btn.pressed.connect(_on_surrender_pressed)
+	vbox.add_child(_surrender_btn)
 
 	# 快捷音量微调（与 SettingsManager 双向同步）
 	var vol_title := GameStyle.label(Label.new(), 12, GameStyle.GREY)
@@ -292,7 +299,7 @@ func open(unpause_on_close: Variant = null) -> void:
 		_unpause_on_close = not behind
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reset_retry_confirm()
+	_reset_confirmations()
 	if _subtitle != null:
 		_subtitle.text = "战斗暂停 · 难度「%s」· 休整片刻" % ("噩梦" if GameManager.danger_level >= 1 else "普通")
 	visible = true
@@ -307,7 +314,7 @@ func close(unpause: bool = true) -> void:
 		return
 	_closing = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_reset_retry_confirm()
+	_reset_confirmations()
 	_kill_close_tween()
 	_close_tween = create_tween()
 	_close_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
@@ -327,7 +334,7 @@ func _on_stats_pressed() -> void:
 	visible = false
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reset_retry_confirm()
+	_reset_confirmations()
 	stats_requested.emit()
 
 func _on_manual_pressed() -> void:
@@ -335,7 +342,7 @@ func _on_manual_pressed() -> void:
 	visible = false
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reset_retry_confirm()
+	_reset_confirmations()
 	manual_requested.emit()
 
 func _on_settings_pressed() -> void:
@@ -343,7 +350,7 @@ func _on_settings_pressed() -> void:
 	visible = false
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reset_retry_confirm()
+	_reset_confirmations()
 	settings_requested.emit()
 
 ## 存档（一局一位）：本局已有位原地更新；无位自动占第一个空位；成功时暂停菜单保持打开。
@@ -378,8 +385,12 @@ func _on_save_pressed() -> void:
 	visible = false
 	_closing = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reset_retry_confirm()
+	_reset_confirmations()
 	save_requested.emit()
+
+func _reset_confirmations() -> void:
+	_reset_retry_confirm()
+	_reset_surrender_confirm()
 
 func _reset_retry_confirm() -> void:
 	_retry_armed = false
@@ -390,9 +401,43 @@ func _reset_retry_confirm() -> void:
 		_retry_btn.text = "重 新 开 始"
 		GameStyle.button(_retry_btn, GameStyle.NAVY2, GameStyle.GOLD, 15, GameStyle.PAPER, 6.0, GameStyle.INK_TEXT)
 
+func _reset_surrender_confirm() -> void:
+	_surrender_armed = false
+	if _surrender_reset_tween != null and _surrender_reset_tween.is_valid():
+		_surrender_reset_tween.kill()
+		_surrender_reset_tween = null
+	if is_instance_valid(_surrender_btn):
+		_surrender_btn.text = "投 降 结 算"
+		_surrender_btn.disabled = false
+		GameStyle.button(_surrender_btn, GameStyle.NAVY2, GameStyle.BAD, 15, GameStyle.BAD, 6.0, GameStyle.CHALK)
+
+## 投降结算：与「重新开始」同一套二次确认（首击武装、3s 自动复位），
+## 避免暂停时误触把整局直接结掉。确认后交给 Main 收起垫底弹窗、解暂停并播阵亡谢幕。
+func _on_surrender_pressed() -> void:
+	if not _surrender_armed:
+		_surrender_armed = true
+		# 两颗红键不许同时处于武装态：同时亮着，玩家分不清点哪颗才会结算
+		_reset_retry_confirm()
+		if is_instance_valid(_surrender_btn):
+			_surrender_btn.text = "再点确认投降"
+			GameStyle.button(_surrender_btn, GameStyle.BAD, GameStyle.JADE, 14, GameStyle.CHALK, 6.0, GameStyle.INK_TEXT)
+		if _surrender_reset_tween != null and _surrender_reset_tween.is_valid():
+			_surrender_reset_tween.kill()
+		_surrender_reset_tween = create_tween()
+		_surrender_reset_tween.tween_interval(3.0)
+		_surrender_reset_tween.tween_callback(_reset_surrender_confirm)
+		return
+	_reset_surrender_confirm()
+	if is_instance_valid(_surrender_btn):
+		_surrender_btn.text = "正在结算..."
+		_surrender_btn.disabled = true
+	surrender_requested.emit()
+
 func _on_retry_pressed() -> void:
 	if not _retry_armed:
 		_retry_armed = true
+		# 与投降互斥：先解除投降的武装态
+		_reset_surrender_confirm()
 		if is_instance_valid(_retry_btn):
 			_retry_btn.text = "再点确认重开"
 			GameStyle.button(_retry_btn, GameStyle.BAD, GameStyle.JADE, 14, GameStyle.CHALK, 6.0, GameStyle.INK_TEXT)
@@ -419,7 +464,7 @@ func _on_retry_pressed() -> void:
 ## 与「重新开始」同规格：先禁用按钮 + 画出一帧「正在返回」再同步重载整树，
 ## 否则 press 当帧直接重建场景（实测同级操作 124~181ms），用户看到的是冻死无反馈
 func _on_menu_pressed() -> void:
-	_reset_retry_confirm()
+	_reset_confirmations()
 	if is_instance_valid(_menu_btn):
 		_menu_btn.text = "正在返回..."
 		_menu_btn.disabled = true

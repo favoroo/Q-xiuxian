@@ -400,9 +400,9 @@ static func _needles_rain(r: ProceduralWeaponRenderer) -> void:
 		var tip := Vector2(L, off * 0.35)
 		var tail := Vector2(-L * 0.66, off)
 		# 细针用 draw_line 直画（BC.bar 的描边对细针太肥）：硬投影 + 墨身 + 主色芯
-		r.draw_line(tail + Vector2(2.0, 2.0), tip + Vector2(2.0, 2.0), BC.SHADOW, 4.6, true)
-		r.draw_line(tail, tip, BC.INK, 2.2, true)
-		r.draw_line(tail, tip, pal["body"], 1.0, true)
+		BatchDraw.native_line(r, tail + Vector2(2.0, 2.0), tip + Vector2(2.0, 2.0), BC.SHADOW, 4.6, true)
+		BatchDraw.native_line(r, tail, tip, BC.INK, 2.2, true)
+		BatchDraw.native_line(r, tail, tip, pal["body"], 1.0, true)
 	# 束口（撞色竖箍缠住针尾）
 	BC.bar(r, Vector2(-L * 0.58, -L * 0.26), Vector2(-L * 0.58, L * 0.26), 2.6, pal["accent"])
 	BC.star_studs(r, r.star, Vector2(L * 0.45, 0.0), Vector2(-L * 0.30, 0.0), pal["accent"])
@@ -419,9 +419,9 @@ static func _needle_ice(r: ProceduralWeaponRenderer) -> void:
 		Vector2(L * 0.28, 0.0), Vector2(L * 0.06, L * 0.22), Vector2(-L * 0.06, 0.0),
 	]), pal["body"], 1.0)
 	# 主冰针：一根长冰凌（中心针精确顶 (L,0)）
-	r.draw_line(Vector2(-L * 0.42, 0.0) + Vector2(2.0, 2.0), Vector2(L, 0.0) + Vector2(2.0, 2.0), BC.SHADOW, 4.6, true)
-	r.draw_line(Vector2(-L * 0.42, 0.0), Vector2(L, 0.0), BC.INK, 2.2, true)
-	r.draw_line(Vector2(-L * 0.42, 0.0), Vector2(L, 0.0), pal["body"], 1.0, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.42, 0.0) + Vector2(2.0, 2.0), Vector2(L, 0.0) + Vector2(2.0, 2.0), BC.SHADOW, 4.6, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.42, 0.0), Vector2(L, 0.0), BC.INK, 2.2, true)
+	BatchDraw.native_line(r, Vector2(-L * 0.42, 0.0), Vector2(L, 0.0), pal["body"], 1.0, true)
 	# 尾箍（撞色）+ 星钉
 	BC.bar(r, Vector2(-L * 0.34, -L * 0.11), Vector2(-L * 0.34, L * 0.11), 2.2, pal["accent"])
 	BC.star_studs(r, r.star, Vector2(L * 0.60, 0.0), Vector2(-L * 0.14, 0.0), pal["accent"])

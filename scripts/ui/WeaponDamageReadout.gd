@@ -82,17 +82,25 @@ static func per_second(w_id: String, star: int, slot_count: int = -1) -> float:
 	var haste := haste_product()
 	if base <= 0.0 or haste <= 0.0:
 		return 0.0
-	## sustained_single_dps 按数据表间隔算，攻速乘区把节奏整体提快 1/haste 倍
-	## （机关武器同理：炮台开火间隔吃的是同一条攻速）
-	return WeaponData.sustained_single_dps(w_id, s) * (per_hit(w_id, s, slot_count) / base) / haste
+	## 线性折算按「整把武器的每秒伤害」：机关多管齐射的管数已在 sustained_weapon_dps 里乘过，
+	## 本局的额外管数（「连环机括」）也一并折进去 —— 否则卡面承诺的 DPS 会比场上那座低一截。
+	## 机关武器同理：机关的开火间隔吃的是同一条攻速。
+	return WeaponData.sustained_weapon_dps(w_id, s, int(GameManager.turret_volley_bonus)) \
+		* (per_hit(w_id, s, slot_count) / base) / haste
 
-## 机关武器的炮台是「多座各自开火」，平衡判据本身就不给它进 DPS 档，这里也不替它聚合，
-## 所以那一行必须叫「单座每秒伤害」，不能和别的武器的「每秒伤害」混成同一个词。
 ## 行名一律带「伤害」两字收尾（2026-10-11 用户：光写「每秒」没人知道是什么的每秒）：
 ## 卡面上「伤害 26 → 31.1」与「每秒伤害 31.6」是同一把武器的两个不同口径，
 ## 少了名词这两行看着像同一个数写了两遍。
-static func per_second_label(w_id: String) -> String:
-	return "单座每秒伤害" if is_turret(WeaponData.get_def(w_id)) else "每秒伤害"
+## 机关在 2026-11-03 从「自动布 N 座」改成「手动布 1 座 N 管齐射」后，这里的数就是
+## 整把武器的输出（管数已折算），不再是「单座」，所以行名统一收成「每秒伤害」。
+static func per_second_label(_w_id: String) -> String:
+	return "每秒伤害"
+
+## 机关的齐射管数（详情卡「齐射」行用；非机关返回 0）
+static func turret_volley(w_id: String, star: int = 1) -> int:
+	if not is_turret(WeaponData.get_def(w_id)):
+		return 0
+	return WeaponData.turret_volley(star)
 
 ## 「纸面 → 你现在」一行话。两数相同就只写纸面值，不多画一个箭头骗人。
 ## digits: -1 走 BonusRows 的整数不带小数口径；间隔这类要两位小数的传 2。

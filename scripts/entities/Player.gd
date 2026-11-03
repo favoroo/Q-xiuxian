@@ -1357,6 +1357,21 @@ func take_damage(amount: float, source_pos: Vector2 = Vector2.INF) -> void:
 		GameManager.invalidate_run_save()
 		_play_death_sequence()
 
+## 主动投降（暂停菜单「投降结算」，2026-11-03）：按当前进度直接走阵亡谢幕与结算。
+## 与 take_damage 致死分支的区别：投降不是受击，不触发闪避/护盾/替死傀儡/受击反馈；
+## 但同样先作废本局档 —— 谢幕约 1.15s，不先落锁的话玩家能在演出期间强退保档。
+## 演出与真阵亡完全同一条（镜头推近 → 塌伏消散 → trigger_game_over），
+## 结算屏照常录入生涯/成就/皮肤解锁。调用前 Main 已解暂停并收起暂停菜单。
+func surrender() -> void:
+	if GameManager.is_game_over or _dying:
+		return
+	GameManager.surrendered = true
+	# 血量落到 0 再谢幕：结算读的是最终读数，顶栏血条不该在谢幕里还挂着一截
+	current_health = 0.0
+	GameManager.player_hp_changed.emit(current_health, max_health)
+	GameManager.invalidate_run_save()
+	_play_death_sequence()
+
 ## 阵亡演出（2026-10-15 优化）：镜头平滑推入特写 + 塌落化光消散 + 结算弹窗无缝衔接。
 ## 期间 _dying 挡住移动/技能/再受创，敌人照常行动（不暂停整场，只谢幕玩家本体）；
 ## 镜头推近放大（1.35x）聚焦于倒地修士，消散谢幕后才 trigger_game_over。

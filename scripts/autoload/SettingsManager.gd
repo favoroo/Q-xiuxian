@@ -209,16 +209,33 @@ const SCHEMA: Array[Dictionary] = [
 	{
 		"section": "display",
 		"key": "extra_btn_xy",
-		"title": "额外技能按钮位置",
-		"desc": "额外技能键的屏幕位置（随角色）",
+		"title": "角色技能按钮位置",
+		"desc": "角色技能键的屏幕位置（随角色）",
 		"type": "layout",
 		"default": EXTRA_BTN_XY_DEFAULT,
 	},
 	{
 		"section": "display",
 		"key": "extra_btn_scale",
-		"title": "额外技能按钮大小",
-		"desc": "额外技能键的大小倍率",
+		"title": "角色技能按钮大小",
+		"desc": "角色技能键的大小倍率",
+		"type": "layout",
+		"default": 1.0,
+	},
+	# --------- 机关键（手动布设/维修/收回，2026-11-03 新增第 4 颗浮动键） ---------
+	{
+		"section": "display",
+		"key": "mechanism_btn_xy",
+		"title": "机关按钮位置",
+		"desc": "机关键的屏幕位置",
+		"type": "layout",
+		"default": MECHANISM_BTN_XY_DEFAULT,
+	},
+	{
+		"section": "display",
+		"key": "mechanism_btn_scale",
+		"title": "机关按钮大小",
+		"desc": "机关键的大小倍率",
 		"type": "layout",
 		"default": 1.0,
 	},
@@ -472,17 +489,38 @@ func set_theme_color(id: StringName) -> void:
 ## 缩放倍率上下限（操作页滑杆与拖动摆位共用同一夹取）
 const BTN_SCALE_MIN := 0.6
 const BTN_SCALE_MAX := 1.8
-## 归一化中心点默认值 = 960×540 基准下旧的「右下」摆位
-## 三颗键同径（76 圆），默认右下竖排成一列：额外键 816..892 × 192..268、
-## 祭坛键 816..892 × 292..368、技能键 816..892 × 392..468 —— 相邻两圆之间留
-## BTN_DEFAULT_EDGE_GAP 的设计像素空隙。以前祭坛与技能是 0 空隙（两圈描边正好相切），
-## 用户 2026-10-11 真机图：看着就是两颗键压在一起，且手指落在相切那条线上时拾取给谁全看
-## 运气。空隙口径由 UnitRunner 钉住。额外键多数角色没有，默认位只对有额外技能的角色生效。
+## 归一化中心点默认值：960×540 基准下的**右下 2×2 键簇**（2026-11-03 重排）。
+## 四颗键同径（88 圆），圆心横纵间距都是 112 ⇒ 相邻两圆圆边之间留 24 设计像素
+## （BTN_DEFAULT_EDGE_GAP）。旧版是一条 4 键竖列（130→430），键径 76、顶到余妖芯片、
+## 机关键还在竖列左上方一格；机关改版后四颗键都要用拇指在战斗里够，竖列太高太挤。
+##
+##         (854,318) 角色技能        (742,318) 机关
+##         (854,430) 技能            (742,430) 祭坛
+##
+##  · 外列 = 战斗键：技能在下、角色技能在上 —— 与旧版同列同顺序，肌肉记忆不变；
+##  · 内列 = 情境键：祭坛在下、机关在上 —— 都在「世界交互」语义下，且从右侧边缘往中间
+##    挪了一档（距右缘 ~102px），拇指不用贴边摸；
+##  · 键簇占 x 698..898 / y 274..474，720/960/1204 三档都不与魔君血条（贴底居中）、
+##    第二排余妖芯片（右缘 66..93）相交，也不碰金蟾边缘指引那条 36px 边带。
 const SKILL_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 430.0 / 540.0)
-const OBELISK_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 330.0 / 540.0)
-const EXTRA_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 230.0 / 540.0)
+const EXTRA_BTN_XY_DEFAULT := Vector2(854.0 / 960.0, 318.0 / 540.0)
+const OBELISK_BTN_XY_DEFAULT := Vector2(742.0 / 960.0, 430.0 / 540.0)
+const MECHANISM_BTN_XY_DEFAULT := Vector2(742.0 / 960.0, 318.0 / 540.0)
 ## 默认摆位下两颗键圆边之间的最小间距（设计像素，按 960×540 基准算）
 const BTN_DEFAULT_EDGE_GAP := 24.0
+
+func mechanism_btn_xy() -> Vector2:
+	return _norm_xy(get_val(&"display", &"mechanism_btn_xy", MECHANISM_BTN_XY_DEFAULT), MECHANISM_BTN_XY_DEFAULT)
+
+func set_mechanism_btn_xy(norm: Vector2, auto_save: bool = true) -> void:
+	set_val(&"display", &"mechanism_btn_xy", _norm_xy(norm, MECHANISM_BTN_XY_DEFAULT), auto_save)
+
+func mechanism_btn_scale() -> float:
+	return _btn_scale(get_val(&"display", &"mechanism_btn_scale", 1.0))
+
+func set_mechanism_btn_scale(scale_f: float, auto_save: bool = true) -> void:
+	set_val(&"display", &"mechanism_btn_scale", _btn_scale(scale_f), auto_save)
+
 
 func skill_btn_xy() -> Vector2:
 	return _norm_xy(get_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT), SKILL_BTN_XY_DEFAULT)
@@ -520,7 +558,7 @@ func extra_btn_scale() -> float:
 func set_extra_btn_scale(scale_f: float, auto_save: bool = true) -> void:
 	set_val(&"display", &"extra_btn_scale", _btn_scale(scale_f), auto_save)
 
-## 恢复三个按钮的出厂摆位（位置 + 大小一起回默认）
+## 恢复四颗按钮的出厂摆位（位置 + 大小一起回默认）
 func reset_button_layout() -> void:
 	set_val(&"display", &"skill_btn_xy", SKILL_BTN_XY_DEFAULT)
 	set_val(&"display", &"skill_btn_scale", 1.0)
@@ -528,22 +566,47 @@ func reset_button_layout() -> void:
 	set_val(&"display", &"obelisk_btn_scale", 1.0)
 	set_val(&"display", &"extra_btn_xy", EXTRA_BTN_XY_DEFAULT)
 	set_val(&"display", &"extra_btn_scale", 1.0)
+	set_val(&"display", &"mechanism_btn_xy", MECHANISM_BTN_XY_DEFAULT)
+	set_val(&"display", &"mechanism_btn_scale", 1.0)
 
-## v0.0.17 及更早的出厂摆位：祭坛键与技能键 0 空隙相切
-const OBELISK_BTN_XY_LEGACY := Vector2(854.0 / 960.0, 354.0 / 540.0)
+## 旧出厂摆位清单（2026-11-03 改成右下 2×2 键簇之前的各版本默认位）。
+## 只用于把「存档值正好等于某个旧出厂位」的老档跟到新默认位；玩家自己拖过的位置一律不碰。
+##   · 祭坛：v0.0.17 及更早 354（与技能键 0 空隙相切）→ 330（拉开 24）→ 现在 742,430
+##   · 角色技能：230（竖列第三格）→ 现在 854,318
+##   · 机关：854,130（上线首日，压余妖芯片）→ 754,130（竖列左侧一格）→ 现在 742,318
+const OBELISK_BTN_XY_LEGACY: Array = [
+	Vector2(854.0 / 960.0, 354.0 / 540.0),
+	Vector2(854.0 / 960.0, 330.0 / 540.0),
+]
+const EXTRA_BTN_XY_LEGACY: Array = [
+	Vector2(854.0 / 960.0, 230.0 / 540.0),
+]
+const MECHANISM_BTN_XY_LEGACY: Array = [
+	Vector2(854.0 / 960.0, 130.0 / 540.0),
+	Vector2(754.0 / 960.0, 130.0 / 540.0),
+]
 
 ## 出厂摆位换代的一次性跟随。
 ## 为什么需要：`_save_settings()` 是把整份 `_settings`（含从没碰过的默认项）一次写盘的，
 ## 所以老玩家只要改过任意一个设置，上一版的出厂坐标就已经落在存档里 —— 只改常量他们永远跟不到，
-## 屏幕上还是那颗相切的旧键。这里只认「存档值正好等于旧出厂位」这一种情况：
-## 玩家自己拖过的位置一律不碰。
+## 屏幕上还是旧摆位。这里只认「存档值正好等于某个旧出厂位」这一种情况。
 func _follow_legacy_layout_default() -> void:
 	if not _settings.has("display"):
 		return
 	var sec: Dictionary = _settings["display"]
-	var v: Variant = sec.get("obelisk_btn_xy", null)
-	if v is Vector2 and (v as Vector2).is_equal_approx(OBELISK_BTN_XY_LEGACY):
-		sec["obelisk_btn_xy"] = OBELISK_BTN_XY_DEFAULT
+	_follow_one_legacy_xy(sec, "obelisk_btn_xy", OBELISK_BTN_XY_LEGACY, OBELISK_BTN_XY_DEFAULT)
+	_follow_one_legacy_xy(sec, "extra_btn_xy", EXTRA_BTN_XY_LEGACY, EXTRA_BTN_XY_DEFAULT)
+	_follow_one_legacy_xy(sec, "mechanism_btn_xy", MECHANISM_BTN_XY_LEGACY, MECHANISM_BTN_XY_DEFAULT)
+
+## 单项跟随：存档坐标命中任一旧出厂位 ⇒ 写回新出厂位
+func _follow_one_legacy_xy(sec: Dictionary, key: String, legacy_list: Array, new_default: Vector2) -> void:
+	var v: Variant = sec.get(key, null)
+	if not (v is Vector2):
+		return
+	for legacy in legacy_list:
+		if (v as Vector2).is_equal_approx(legacy):
+			sec[key] = new_default
+			return
 
 # ----------------- 仙途指引（新手指南自动弹出） -----------------
 
@@ -736,6 +799,8 @@ func _validate_loaded_value(sec: String, key: String, val: Variant) -> Variant:
 			return OBELISK_BTN_XY_DEFAULT
 		elif key == "extra_btn_xy":
 			return EXTRA_BTN_XY_DEFAULT
+		elif key == "mechanism_btn_xy":
+			return MECHANISM_BTN_XY_DEFAULT
 		return SKILL_BTN_XY_DEFAULT
 	if key.ends_with("_btn_scale"):
 		return _btn_scale(val)

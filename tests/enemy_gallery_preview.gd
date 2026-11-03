@@ -1,8 +1,8 @@
 extends Control
 
 ## 剑士 · 空洞冷冽国风全敌种画廊 (Enemy Procedural Gallery)
-## 验证 22 大基础敌型与 6 大魔君变体的程序化矢量拟态与悬浮/飞行/爬行协调动作
-## 适配桌面 960×540 完整一屏 9×3 矩阵（27 张卡片）
+## 验证 22 大基础敌型与 18 大魔君变体（6 旧 + 12 深层）的程序化矢量拟态与悬浮/飞行/爬行协调动作
+## 适配桌面 960×540 完整一屏 10×4 矩阵（39 张卡片）
 
 const ENEMY_ENTRIES: Array[Dictionary] = [
 	# 第一排：基础小怪（9 种）
@@ -37,6 +37,20 @@ const ENEMY_ENTRIES: Array[Dictionary] = [
 	{"id": "boss_wangu", "name": "万蛊蚀天母", "motion": "蛊界", "desc": "碧毒法轮·禁区封锁", "elite": false, "boss": true, "final": false},
 	{"id": "boss_jianpo", "name": "幽冥剑魄尊", "motion": "极刃", "desc": "极寒神铠·瞬步回斩", "elite": false, "boss": true, "final": false},
 	{"id": "boss", "name": "心魔魔尊", "motion": "降世", "desc": "终局魔尊·紫焰神轮", "elite": false, "boss": true, "final": true},
+
+	# 第四排：深层专属魔君（W45~W100，12 尊）
+	{"id": "boss_zhaoying", "name": "镜花·照影魔君", "motion": "镜像", "desc": "水银镜光·镜像夹击", "elite": false, "boss": true, "final": true},
+	{"id": "boss_yinhun", "name": "九泉·引魂使", "motion": "魂潮", "desc": "魂火碧轮·魂潮收网", "elite": false, "boss": true, "final": true},
+	{"id": "boss_luding", "name": "赤鼎·焚天炉君", "motion": "炉压", "desc": "炉火金轮·炉压崩天", "elite": false, "boss": true, "final": true},
+	{"id": "boss_canglong", "name": "太苍龙君·敖烈", "motion": "龙翔", "desc": "沧海龙珠·飞天俯冲", "elite": false, "boss": true, "final": true},
+	{"id": "boss_jianzhong", "name": "剑冢·葬剑仙", "motion": "剑阵", "desc": "霜白剑光·万剑齐发", "elite": false, "boss": true, "final": true},
+	{"id": "boss_leijie", "name": "紫霄·雷劫神君", "motion": "降雷", "desc": "九霄雷轮·连环天劫", "elite": false, "boss": true, "final": true},
+	{"id": "boss_kunwang", "name": "北冥·覆海鲲王", "motion": "覆海", "desc": "沧浪重铠·冥水领域", "elite": false, "boss": true, "final": true},
+	{"id": "boss_kuijia", "name": "偃甲·千臂傀王", "motion": "傀御", "desc": "偃甲机轮·千臂傀潮", "elite": false, "boss": true, "final": true},
+	{"id": "boss_fenghuang", "name": "南明·离火凤皇", "motion": "涅槃", "desc": "离火翎羽·涅槃环爆", "elite": false, "boss": true, "final": true},
+	{"id": "boss_tianmo", "name": "天外·无相天魔", "motion": "无相", "desc": "虚空蚀环·三连瞬杀", "elite": false, "boss": true, "final": true},
+	{"id": "boss_hundun", "name": "混沌·元初兽", "motion": "混沌", "desc": "四象混沌·无序奇招", "elite": false, "boss": true, "final": true},
+	{"id": "boss_wanjie", "name": "万劫·道劫化身", "motion": "万劫", "desc": "紫金万劫·十二招全", "elite": false, "boss": true, "final": true},
 ]
 
 var _time: float = 0.0
@@ -83,11 +97,11 @@ func _process(delta: float) -> void:
 func _build_gallery() -> void:
 	var root_vbox := VBoxContainer.new()
 	root_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root_vbox.add_theme_constant_override("separation", 4)
+	root_vbox.add_theme_constant_override("separation", 3)
 	root_vbox.offset_left = 6
-	root_vbox.offset_top = 6
+	root_vbox.offset_top = 4
 	root_vbox.offset_right = -6
-	root_vbox.offset_bottom = -6
+	root_vbox.offset_bottom = -4
 	add_child(root_vbox)
 
 	# 顶部标题栏
@@ -98,19 +112,19 @@ func _build_gallery() -> void:
 
 	var title_lbl := Label.new()
 	title_lbl.text = "剑士 · 空洞冷冽国风全妖魔画廊"
-	GameStyle.label(title_lbl, 13, GameStyle.CHALK, 0, GameStyle.INK, true)
+	GameStyle.label(title_lbl, 12, GameStyle.CHALK, 0, GameStyle.INK, true)
 	header.add_child(title_lbl)
 
 	var sub_lbl := Label.new()
-	sub_lbl.text = "全 22 敌型 + 6 魔君变体 · 纯矢量拟态 · 待机·走步·蓄力全姿态动态看板"
-	GameStyle.label(sub_lbl, 10, GameStyle.GREY)
+	sub_lbl.text = "全 22 敌型 + 18 魔君变体（6 旧 + 12 深层）· 纯矢量拟态 · 待机·走步·蓄力全姿态动态看板"
+	GameStyle.label(sub_lbl, 9, GameStyle.GREY)
 	header.add_child(sub_lbl)
 
-	# 9 列 × 3 行 矩阵网格（27 张卡片）
+	# 10 列 × 4 行 矩阵网格（39 张卡片）
 	var grid := GridContainer.new()
-	grid.columns = 9
-	grid.add_theme_constant_override("h_separation", 4)
-	grid.add_theme_constant_override("v_separation", 4)
+	grid.columns = 10
+	grid.add_theme_constant_override("h_separation", 3)
+	grid.add_theme_constant_override("v_separation", 3)
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root_vbox.add_child(grid)
 
@@ -120,7 +134,7 @@ func _build_gallery() -> void:
 
 func _create_enemy_card(info: Dictionary) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(98, 150)
+	panel.custom_minimum_size = Vector2(90, 122)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -134,11 +148,11 @@ func _create_enemy_card(info: Dictionary) -> Control:
 	panel.add_theme_stylebox_override("panel", GameStyle.outlined_panel(Color(0.08, 0.10, 0.15), border_col, 1, 0.0))
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	vbox.offset_left = 3
-	vbox.offset_top = 3
-	vbox.offset_right = -3
-	vbox.offset_bottom = -3
+	vbox.add_theme_constant_override("separation", 1)
+	vbox.offset_left = 2
+	vbox.offset_top = 2
+	vbox.offset_right = -2
+	vbox.offset_bottom = -2
 	panel.add_child(vbox)
 
 	# 顶部标签栏
@@ -154,18 +168,18 @@ func _create_enemy_card(info: Dictionary) -> Control:
 		name_col = Color(1.0, 0.4, 0.9) if info.get("final", false) else Color(1.0, 0.5, 0.3)
 	elif info.get("elite", false):
 		name_col = GameStyle.GOLD
-	GameStyle.label(name_lbl, 9, name_col, true)
+	GameStyle.label(name_lbl, 8, name_col, true)
 	head_box.add_child(name_lbl)
 
 	var motion_lbl := Label.new()
 	motion_lbl.text = info["motion"]
 	motion_lbl.add_theme_stylebox_override("normal", GameStyle.chip(Color(0.12, 0.16, 0.24)))
-	GameStyle.label(motion_lbl, 8, GameStyle.JADE)
+	GameStyle.label(motion_lbl, 7, GameStyle.JADE)
 	head_box.add_child(motion_lbl)
 
 	# 中间视界展示区（居中悬浮/飞行/爬行矢量图元）
 	var viewport_box := Control.new()
-	viewport_box.custom_minimum_size = Vector2(92, 86)
+	viewport_box.custom_minimum_size = Vector2(88, 70)
 	viewport_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(viewport_box)
 
@@ -173,9 +187,9 @@ func _create_enemy_card(info: Dictionary) -> Control:
 	var renderer := HollowKnightEnemyRenderer.new()
 	renderer.config = cfg
 	var is_boss_type: bool = info.get("boss", false)
-	renderer.position = Vector2(46, 48 if is_boss_type else 42)
+	renderer.position = Vector2(45, 38 if is_boss_type else 34)
 	# 缩放微调保证同屏舒适度
-	renderer.scale = Vector2.ONE * (0.50 if is_boss_type else 0.72)
+	renderer.scale = Vector2.ONE * (0.40 if is_boss_type else 0.58)
 	viewport_box.add_child(renderer)
 	_renderers.append(renderer)
 
@@ -183,7 +197,7 @@ func _create_enemy_card(info: Dictionary) -> Control:
 	var desc_lbl := Label.new()
 	desc_lbl.text = info["desc"]
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	GameStyle.label(desc_lbl, 8, GameStyle.GREY)
+	GameStyle.label(desc_lbl, 7, GameStyle.GREY)
 	vbox.add_child(desc_lbl)
 
 	return panel

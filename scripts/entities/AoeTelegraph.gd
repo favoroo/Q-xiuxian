@@ -21,6 +21,7 @@ const LEAD_EDGE_W := 2.0        ## 填充前沿亮边线宽
 
 var radius: float = 100.0
 var progress: float = 0.0   ## 0→1，由持有者每帧赋值；到 1 即结算时刻
+var color: Color = GameStyle.BAD ## 预警圈颜色（默认红，Boss 可传主题色区分招式）
 var _clock: float = 0.0     ## 仅驱动呼吸闪烁的视觉时钟（不参与计时结算）
 
 ## 重绘节流（2026-10-14）：原每渲染帧无条件 queue_redraw，每个圈 2 条 48 段弧，
@@ -41,16 +42,18 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	var t := clampf(progress, 0.0, 1.0)
 	var ending := t >= END_HIGHLIGHT_AT
 	var pulse := sin(_clock * (PULSE_SPEED * (2.0 if ending else 1.0))) * PULSE_AMP
 	var edge_alpha := clampf(EDGE_ALPHA_BASE + pulse + (0.25 if ending else 0.0), 0.0, 1.0)
-	var c := GameStyle.BAD
+	var c := color
 	# 填充：从圆心长到判定半径，填满 = 炸
 	if t > 0.01:
-		draw_circle(Vector2.ZERO, radius * t, Color(c.r, c.g, c.b, FILL_ALPHA))
+		BatchDraw.native_circle(self, Vector2.ZERO, radius * t, Color(c.r, c.g, c.b, FILL_ALPHA))
 		# 填充前沿亮边：让「正在长大」这件事一眼可读
 		if t < 1.0:
-			draw_arc(Vector2.ZERO, radius * t, 0.0, TAU, 48, c.lightened(0.4), LEAD_EDGE_W, true)
+			BatchDraw.native_arc(self, Vector2.ZERO, radius * t, 0.0, TAU, 48, c.lightened(0.4), LEAD_EDGE_W, true)
 	# 外描边：就是判定边界本身，随进度加粗、末段高亮
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(c.r, c.g, c.b, edge_alpha), lerpf(EDGE_W_MIN, EDGE_W_MAX, t), true)
+	BatchDraw.native_arc(self, Vector2.ZERO, radius, 0.0, TAU, 48, Color(c.r, c.g, c.b, edge_alpha), lerpf(EDGE_W_MIN, EDGE_W_MAX, t), true)
+	BatchDraw.flush(self)

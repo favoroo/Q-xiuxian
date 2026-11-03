@@ -11,14 +11,14 @@ const BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_
 const BTN_TEXT := "激活"
 ## 18 是「不出圆面、也不压走针那一圈」的上限（字号实测口径见 UnitRunner 那条判据）：
 ## 22 号两行外接框 44×62 → 角半径 38.0，正好顶在描边上；18 号单行 37×18 富余充足，
-## 收进走针环半径（CircleProgressOverlay.arc_radius = 33.5）之内，按住充能时那一圈不会压在字上。
+## 收进走针环半径（CircleProgressOverlay.arc_radius，88 圆 = 39.5）之内，按住充能时那一圈不会压在字上。
 ## 口径由 UnitRunner 钉（见 tests/unit/unit_infra_tests.gd）。
 const BTN_FONT := 18
 ## 键面价格小字（2026-10-26：碑顶常驻悬浮字很怪，撤掉；价格挪到激活键上简短一行）。
 ## 够钱「N金币」（奶白），不够「差N」（朱砂）—— 摆在主文案正下方，收在走针环之内。
 const PRICE_FONT := 12
-## 价格行顶边：主文案（Button 自绘垂直居中 29..47）下方起排，最底 62 仍在走针环内缘之上
-const PRICE_TOP := 48.0
+## 价格行顶边：主文案（88 圆里 Button 自绘垂直居中约 35..53）下方起排，最底 68 仍在走针环内缘之上
+const PRICE_TOP := 54.0
 
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null

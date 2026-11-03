@@ -150,7 +150,6 @@ func _draw_hp_cracks(center: Vector2, radius: float) -> void:
 		var p0: Vector2 = center + Vector2(s[0].x, s[0].y) * radius
 		var p1: Vector2 = center + Vector2(s[1].x, s[1].y) * radius
 		var mid: Vector2 = (p0 + p1) * 0.5 + Vector2(-(p1 - p0).y, (p1 - p0).x).normalized() * 1.2
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([p0, mid, p1]), crack_col, 1.3, true)
 
 # —— 重绘节流（2026-10-10 性能优化）——
@@ -351,9 +350,9 @@ func _circle(center: Vector2, radius: float, col: Color) -> void:
 	BatchDraw.poly(self, _circle_buf, col)
 
 func _arc(center: Vector2, radius: float, start_angle: float, end_angle: float, _point_count: int, color: Color, width: float = 1.0, antialiased: bool = false) -> void:
-	var seg := clampi(int(radius * absf(end_angle - start_angle) * 0.22), 6, 32)
-	BatchDraw.flush(self)
-	draw_arc(center, radius, start_angle, end_angle, seg, color, width, antialiased)
+	# 2026-11-03：原生 draw_arc 每根一次提交且必须先 flush，单敌多根弧 = 多次提交；
+	# 改走 BatchDraw.arc 后与填充/线条共用一次 draw call（斜接四边形，Nearest 下无感）。
+	BatchDraw.arc(self, center, radius, start_angle, end_angle, color, width, antialiased)
 
 ## 步态纵向起伏：移动时与位移同相，停步自动归零（不残留）
 func _step_bob(amp: float) -> float:
@@ -424,7 +423,6 @@ func draw_stroked_polygon(pts: PackedVector2Array, fill_col: Color, stroke_col: 
 	for i in range(n):
 		_stroke_buf[i] = pts[i]
 	_stroke_buf[n] = pts[0]
-	BatchDraw.flush(self)
 	_batch_polyline(_stroke_buf, stroke_col, stroke_w * STROKE_W_SCALE, true)
 
 func draw_filled_ellipse(pos: Vector2, rx: float, ry: float, col: Color) -> void:
@@ -492,7 +490,6 @@ func draw_sharp_eye(pos: Vector2, width: float, height: float, col_glow: Color, 
 	BatchDraw.poly(self, pts, core_col)
 	# 高光竖线：跟着瞳孔走，锁敌时更亮（读作「眼里的反光在动」）
 	var hl_a: float = clampf(_gaze_glare() - 0.55, 0.55, 1.0)
-	BatchDraw.flush(self)
 	_batch_line(core_pos + Vector2(-width * 0.7, 0), core_pos + Vector2(width * 0.7, 0),
 		Color(1.0, 1.0, 1.0, hl_a), 1.2, true)
 
@@ -545,9 +542,7 @@ func _draw_slime() -> void:
 	_circle(core_pos, 0.7 * core_pulse, Color(0.40, 0.92, 0.60, 0.85))
 
 	# 沉浮暗骨碎片（沉在深渊内部的微细杂骨，暗骨色、纤细沉底，不喧宾夺主）
-	BatchDraw.flush(self)
 	_batch_line(Vector2(-5.2, 5.0 + nuc_y * 0.2), Vector2(-1.5, 1.6 + nuc_y * 0.2), config.col_secondary, 1.2, true)
-	BatchDraw.flush(self)
 	_batch_line(Vector2(2.8, 5.8 - nuc_y * 0.2), Vector2(6.4, 4.0 - nuc_y * 0.2), config.col_secondary, 1.0, true)
 
 	# 边缘滴落小珠：底缘三颗错相凝滴、拉丝坠落再收回（深血色拉丝）
@@ -558,7 +553,6 @@ func _draw_slime() -> void:
 		var drop_y := base_y + cycle * 4.2
 		var drop_r := lerpf(1.8, 0.5, cycle)
 		# 拉丝细颈连回本体（滴将断未断，随坠落渐淡）
-		BatchDraw.flush(self)
 		_batch_line(Vector2(bx, base_y - 1.0), Vector2(bx, drop_y),
 			Color(config.col_accent.r, config.col_accent.g, config.col_accent.b, 0.55 * (1.0 - cycle * 0.7)), 1.2, true)
 		_circle(Vector2(bx, drop_y), drop_r, Color(config.col_accent.r, config.col_accent.g, config.col_accent.b, 0.9 - cycle * 0.4))
@@ -578,7 +572,6 @@ func _draw_slime() -> void:
 	])
 	BatchDraw.poly(self, eye_pts, Color(0.18, 0.72, 0.36, 0.90))
 	# 竖向深渊狭瞳缝（黑瞳裂孔，冷冽阴森，纯黑无白）
-	BatchDraw.flush(self)
 	_batch_line(eye_pos + Vector2(0, -eh * 0.85), eye_pos + Vector2(0, eh * 0.85), config.col_void, 1.0, true)
 
 ## 2. 御剑邪修：幽冥剑客 (御剑悬浮滑行与器尖精准指向)
@@ -599,12 +592,9 @@ func _draw_xiexiu() -> void:
 	# 背负剑鞘（先画在袍后，斜背左肩→右胯，鞘口铜环与垂穗；上端探出肩线可见）
 	var sheath_a := Vector2(-9.5, -8 + float_y * 0.5)
 	var sheath_b := Vector2(5, 11 + float_y * 0.5)
-	BatchDraw.flush(self)
 	_batch_line(sheath_a, sheath_b, config.col_void, 4.2, true)
-	BatchDraw.flush(self)
 	_batch_line(sheath_a, sheath_b, config.col_accent, 1.2, true)
 	_circle(sheath_a, 2.2, config.col_secondary)
-	BatchDraw.flush(self)
 	_batch_line(sheath_a + Vector2(-1.5, 1.0), sheath_a + Vector2(-3.5 + hem_sway * 0.4, 6.5), Color(0.85, 0.25, 0.25, 0.85), 1.2, true)
 
 	# 破风墨黑长袍下摆（残破锯齿摆，飘动与悬浮同相）
@@ -620,12 +610,9 @@ func _draw_xiexiu() -> void:
 	])
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.3)
 	# 道袍中缝束带（冷紫滚边，增加修仙长袍层次感）
-	BatchDraw.flush(self)
 	_batch_line(Vector2(0, -4 + float_y), Vector2(0, 9 + float_y), config.col_accent, 1.5, true)
 	# 腰间束绦（暗紫腰带 + 垂下随飘绦带）
-	BatchDraw.flush(self)
 	_batch_line(Vector2(-6, 1 + float_y), Vector2(6, 1 + float_y), config.col_accent.lightened(0.15), 2.0, true)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		Vector2(-4, 2 + float_y),
 		Vector2(-4.5 + hem_sway * 0.5, 7 + float_y),
@@ -646,16 +633,13 @@ func _draw_xiexiu() -> void:
 	# 道髻束发：发髻圆坨（虚空黑带勾边）+ 横贯玉簪 + 脑后垂发（随飘）
 	_circle(head_pos + Vector2(0, -10.5), 2.6, config.col_void)
 	_arc(head_pos + Vector2(0, -10.5), 2.6, 0.0, TAU, 10, _contour_color(), 1.1, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(-3.5, -11.0), head_pos + Vector2(3.5, -10.0), config.col_accent.lightened(0.25), 1.4, true)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		head_pos + Vector2(-6, -6),
 		head_pos + Vector2(-7.5 - hem_sway * 0.5, 0),
 		head_pos + Vector2(-7 + hem_sway * 0.4, 6)
 	]), config.col_void, 2.2, true)
 	# 额前修罗血纹与冷冽单眸
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(0, -7), head_pos + Vector2(0, 2), Color(0.75, 0.20, 0.35, 0.85), 1.4, true)
 	draw_sharp_eye(head_pos + Vector2(2, -1), 3.5, 1.8, config.col_glow, Color.WHITE)
 
@@ -704,12 +688,9 @@ func _draw_xiexiu() -> void:
 	])
 	draw_stroked_polygon(blade_pts, config.col_secondary, config.col_glow, 1.4)
 	# 剑脊血槽刻纹（幽光流转）
-	BatchDraw.flush(self)
 	_batch_line(t_sword * Vector2(-12, 0), t_sword * Vector2(15, 0), config.col_glow, 1.2, true)
 	# 剑格护手与朱砂剑穗
-	BatchDraw.flush(self)
 	_batch_line(t_sword * Vector2(-12, -4.5), t_sword * Vector2(-12, 4.5), config.col_accent, 2.2, true)
-	BatchDraw.flush(self)
 	_batch_line(t_sword * Vector2(-16, 0), t_sword * Vector2(-22, 2.0), Color(0.85, 0.25, 0.25), 1.6, true)
 
 	# 蓄力期间：器尖高亮凝芒 + 锐利瞄准虚芒（给玩家极强的弹道与威胁读数）
@@ -726,7 +707,6 @@ func _draw_xiexiu() -> void:
 		# 前探瞄准虚芒针（向玩家方向伸出 22px，预示出膛轨道）
 		var aim_line_len := 22.0 * charge
 		var aim_line_end := tip_in_local + local_aim * aim_line_len
-		BatchDraw.flush(self)
 		_batch_line(tip_in_local, aim_line_end, Color(0.35, 0.85, 1.0, 0.7 * charge), 1.6, true)
 		BatchDraw.circle(self, aim_line_end, 1.6, Color(1.0, 1.0, 1.0, 0.85 * charge))
 
@@ -758,7 +738,6 @@ func _draw_danbao() -> void:
 		])
 		draw_stroked_polygon(leg_pts, bronze, config.col_void, 1.3)
 		# 蹄底横垫
-		BatchDraw.flush(self)
 		_batch_line(body_c + Vector2(fx - 2.6, 13.0 - foot_lift), body_c + Vector2(fx + 2.6, 13.0 - foot_lift), config.col_secondary, 1.6, true)
 
 	# —— 鼎形炉身：束颈 + 鼓腹，青铜主体（2026-10-20 外轮廓改骨白勾边，黑底可读） ——
@@ -801,12 +780,10 @@ func _draw_danbao() -> void:
 	var crack_w := 1.1 + (0.7 if is_critical else 0.0) + boil * 0.2
 	var crack_col: Color = Color(config.col_accent.r, config.col_accent.g, config.col_accent.b, 0.4) \
 		if not is_critical else Color(1.1, 0.3, 0.14, 0.95)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		body_c + Vector2(-7.5, -3.0), body_c + Vector2(-5.0, 1.0),
 		body_c + Vector2(-6.5, 5.5)
 	]), crack_col, crack_w, true)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		body_c + Vector2(7.0, -4.0), body_c + Vector2(4.5, 0.0),
 		body_c + Vector2(6.5, 4.5)
@@ -875,9 +852,7 @@ func _draw_fengqun() -> void:
 			tb * Vector2(-0.5, -1.6), tb * Vector2(-3.6, -1.1), tb * Vector2(-5.5, 0.0),
 			tb * Vector2(-3.6, 1.1), tb * Vector2(-0.5, 1.6),
 		]), config.col_secondary, config.col_void, 1.1)
-		BatchDraw.flush(self)
 		_batch_line(tb * Vector2(-1.8, -1.4), tb * Vector2(-1.8, 1.4), config.col_primary, 1.1, true)
-		BatchDraw.flush(self)
 		_batch_line(tb * Vector2(-3.6, -1.0), tb * Vector2(-3.6, 1.0), config.col_primary, 1.0, true)
 		_circle(tb * Vector2(-6.2, 0.0), 0.7, config.col_glow)
 
@@ -886,9 +861,7 @@ func _draw_fengqun() -> void:
 		_circle(tb * Vector2(2.7, 0.0), 1.1, config.col_secondary)
 		# 剧毒磷光复眼 + 前探触角
 		_circle(tb * Vector2(3.2, -0.3), 0.6, config.col_glow)
-		BatchDraw.flush(self)
 		_batch_line(tb * Vector2(3.3, -0.8), tb * Vector2(4.4, -1.9 - flap * 0.5), config.col_secondary, 0.7, true)
-		BatchDraw.flush(self)
 		_batch_line(tb * Vector2(3.3, 0.5), tb * Vector2(4.6, 0.3), config.col_secondary, 0.7, true)
 
 ## 5. 花妖：噬灵妖花 (空灵悬浮舒展，妖花前倾索食)
@@ -908,14 +881,11 @@ func _draw_flower() -> void:
 	# 花茎：从花头垂到根部，随前倾弯成弧线，茎上细刺
 	var stem_base := Vector2(0, 15.0)
 	var stem_mid := stem_base.lerp(center + Vector2(0, 8), 0.5) + Vector2(sin(lean) * 5.0, 0)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([center + Vector2(0, 7), stem_mid, stem_base]), config.col_accent, 2.6, true)
-	BatchDraw.flush(self)
 	_batch_line(stem_mid + Vector2(-2.5, 0), stem_mid + Vector2(2.5, 1.0), config.col_accent.lightened(0.2), 1.0, true)
 	# 根须三缕（贴地抓取的墨紫细须）
 	for i in [-1, 0, 1]:
 		var tw := sin(_time * 2.4 + float(i)) * 2.0
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			stem_base, stem_base + Vector2(float(i) * 3.5 + tw * 0.4, 1.5),
 			stem_base + Vector2(float(i) * 5.5 + tw, 3.0)
@@ -940,7 +910,6 @@ func _draw_flower() -> void:
 		var right := center + Vector2(cos(ang + 0.42), sin(ang + 0.42)) * (9.5 * petal_open)
 		draw_stroked_polygon(PackedVector2Array([center, left, tip, right]), config.col_primary, _contour_color(), 1.3)
 		# 瓣面血络中脉
-		BatchDraw.flush(self)
 		_batch_line(center + Vector2(cos(ang), sin(ang)) * 4.0, center + Vector2(cos(ang), sin(ang)) * 14.5 * petal_open,
 			config.col_accent.lightened(0.15), 1.0, true)
 		var ang_in := ang + PI / 5.0
@@ -1004,7 +973,6 @@ func _draw_xueyong() -> void:
 		var gy := -7.5 + float(g) * 5.0
 		var blink := 0.25 + 0.55 * maxf(sin(_time * 2.6 + float(g) * 1.7 + _phase_seed), 0.0)
 		var ghw := rx * sqrt(maxf(1.0 - (gy / ry) * (gy / ry), 0.04)) * 0.62
-		BatchDraw.flush(self)
 		_batch_line(center + Vector2(-ghw, gy), center + Vector2(ghw, gy),
 			Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, blink * 0.75), 1.6, true)
 
@@ -1022,16 +990,12 @@ func _draw_xueyong() -> void:
 			var hw := rx * sqrt(maxf(1.0 - ((dy + sag) / ry) * ((dy + sag) / ry), 0.04)) * (ry_eff / ry)
 			_band_buf[s] = center + Vector2((t * 2.0 - 1.0) * hw, dy + sag)
 		# 暗底宽描边 + 骨白带身 = 粗黑勾边缠带
-		BatchDraw.flush(self)
 		_batch_polyline(_band_buf, config.col_void, 4.8, true)
-		BatchDraw.flush(self)
 		_batch_polyline(_band_buf, config.col_secondary, 3.2, true)
 		# 布面织纹：沿带的暗色细中线
-		BatchDraw.flush(self)
 		_batch_polyline(_band_buf, config.col_primary.lightened(0.1), 0.8, true)
 		# 隔带朱砂封灵符线
 		if k % 2 == 1:
-			BatchDraw.flush(self)
 			_batch_polyline(_band_buf, Color(0.85, 0.15, 0.2, 0.9), 1.1, true)
 
 	# 顶端 2~3 根短触须微颤（将裂未裂的探知读点）
@@ -1040,7 +1004,6 @@ func _draw_xueyong() -> void:
 		var tw := sin(_time * 6.5 + float(i) * 2.2) * 1.6
 		var root := center + Vector2(bx, -ry + 1.5)
 		var tip := root + Vector2(bx * 0.5 + tw, -6.0)
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			root, root + Vector2(bx * 0.25 + tw * 0.5, -3.2), tip
 		]), config.col_secondary, 1.2, true)
@@ -1070,13 +1033,9 @@ func _draw_duyao() -> void:
 		_circle(thigh + Vector2(i * 2.5, 1.2), 1.0, config.col_accent.lightened(0.1))
 		# 折叠收拢的脚：贴地外撇，三趾骨白短爪（不外伸出轮廓）
 		var foot := body_c + Vector2(i * 9.5, 13.0)
-		BatchDraw.flush(self)
 		_batch_line(thigh + Vector2(i * 1.0, 6.5), foot, config.col_primary.lightened(0.1), 3.0, true)
-		BatchDraw.flush(self)
 		_batch_line(foot, foot + Vector2(i * 2.5, 1.5), config.col_secondary, 1.3, true)
-		BatchDraw.flush(self)
 		_batch_line(foot, foot + Vector2(i * 0.5, 2.5), config.col_secondary, 1.3, true)
-		BatchDraw.flush(self)
 		_batch_line(foot, foot + Vector2(i * -1.5, 2.0), config.col_secondary, 1.3, true)
 
 	# 厚皮躯体：宽扁蹲伏蛙形，肩窄胯宽
@@ -1094,11 +1053,8 @@ func _draw_duyao() -> void:
 
 	# 前趾两枚（腹下扒地）
 	for i in [-1.0, 1.0]:
-		BatchDraw.flush(self)
 		_batch_line(body_c + Vector2(i * 3.5, 12.5), body_c + Vector2(i * 4.5, 15.0), config.col_primary.darkened(0.1), 2.2, true)
-		BatchDraw.flush(self)
 		_batch_line(body_c + Vector2(i * 4.5, 15.0), body_c + Vector2(i * 3.2, 15.6), config.col_secondary, 1.0, true)
-		BatchDraw.flush(self)
 		_batch_line(body_c + Vector2(i * 4.5, 15.0), body_c + Vector2(i * 5.8, 15.6), config.col_secondary, 1.0, true)
 
 	# 背部毒囊疣粒：两排错列（后排 4 前排 3），苔绿鼓粒带暗勾边与高光
@@ -1130,13 +1086,11 @@ func _draw_duyao() -> void:
 	# 囊面绷起的毒液血丝（蓄力越足越显）
 	for i in range(3):
 		var va := float(i) * TAU / 3.0 + 0.6
-		BatchDraw.flush(self)
 		_batch_line(sac_c + Vector2(cos(va), sin(va)) * sac_r * 0.25,
 			sac_c + Vector2(cos(va), sin(va)) * sac_r * 0.8,
 			Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, 0.25 + charge * 0.6), 1.1, true)
 	_circle(sac_c, sac_r * (0.34 + charge * 0.12), config.col_glow)
 	# 囊体与躯体之间的毒液导管（蓄力时脉动加粗）
-	BatchDraw.flush(self)
 	_batch_line(sac_c + Vector2(3.0, sac_r * 0.7), body_c + Vector2(4.0, -7.0), config.col_secondary, 2.0 + charge * 1.2, true)
 
 	# 竖瞳（毒磷火色）：蓄力时亮度随进度提档
@@ -1146,18 +1100,15 @@ func _draw_duyao() -> void:
 
 	# 宽口缝上翘 + 口角毒涎（两角各挂一条错相滴落的毒丝）
 	var mouth_y: float = body_c.y + 6.0
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		body_c + Vector2(-6.0, mouth_y - 1.0), body_c + Vector2(0, mouth_y + 1.0), body_c + Vector2(6.0, mouth_y - 1.0)
 	]), config.col_void, 2.0, true)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		body_c + Vector2(-5.4, mouth_y - 1.2), body_c + Vector2(0, mouth_y + 0.6), body_c + Vector2(5.4, mouth_y - 1.2)
 	]), config.col_secondary, 1.2, true)
 	for i in [-1.0, 1.0]:
 		var drip := fposmod(_time * 1.5 + (0.5 if i < 0.0 else 0.0), 1.0)
 		var cx: float = i * 5.6
-		BatchDraw.flush(self)
 		_batch_line(body_c + Vector2(cx, mouth_y - 0.5), body_c + Vector2(cx + i * 0.4, mouth_y + drip * 6.5),
 			Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, 0.7 - drip * 0.5), 1.1, true)
 		_circle(body_c + Vector2(cx + i * 0.4, mouth_y + drip * 6.5), lerpf(1.3, 0.5, drip), config.col_glow)
@@ -1194,7 +1145,6 @@ func _draw_guyao() -> void:
 	# 鼓身下缘三道骨箍条（蒙皮箍骨感）
 	for i in [-1, 0, 1]:
 		var bx := float(i) * 7.5
-		BatchDraw.flush(self)
 		_batch_line(drum_center + Vector2(bx, 8.5), drum_center + Vector2(bx * 1.15, 11.5), config.col_secondary, 1.5, true)
 
 	# 鼓面太极魔纹与灵玉核心（补太极S分界线，阴阳魔纹读得清）
@@ -1210,7 +1160,6 @@ func _draw_guyao() -> void:
 		var rad_v := Vector2(cos(cloud_ang), sin(cloud_ang))
 		var tan_v := Vector2(-rad_v.y, rad_v.x)
 		var cloud_base := drum_center + rad_v * 6.2
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			cloud_base + tan_v * 2.0,
 			cloud_base - tan_v * 1.1,
@@ -1226,7 +1175,6 @@ func _draw_guyao() -> void:
 	# 鼓框两侧咬合的白骨獠牙
 	for i in [-1, 1]:
 		var fx := float(i) * 14.0
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			drum_center + Vector2(fx, -6),
 			drum_center + Vector2(fx + float(i) * 4.0, 0),
@@ -1239,7 +1187,6 @@ func _draw_guyao() -> void:
 		var tassel_top := drum_center + Vector2(float(i) * 5.0, 10.0)
 		var tassel_mid := tassel_top + Vector2(tassel_sway * 0.4, 3.2)
 		var tassel_end := tassel_mid + Vector2(tassel_sway, 3.0)
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([tassel_top, tassel_mid, tassel_end]), config.col_secondary, 1.2, true)
 		_circle(tassel_end, 1.1, config.col_secondary)
 
@@ -1255,9 +1202,7 @@ func _draw_guyao() -> void:
 			mallet_head = drum_center + Vector2(s * 18.0, -4.0 - (0.55 + sin(_time * 2.2 + s) * 0.06) * 2.0)
 		# 槌柄：虚空黑描边 + 骨白杆
 		var handle_end := mallet_head + Vector2(s * 6.5, -6.0)
-		BatchDraw.flush(self)
 		_batch_line(mallet_head, handle_end, config.col_void, 3.0, true)
-		BatchDraw.flush(self)
 		_batch_line(mallet_head, handle_end, config.col_secondary, 2.0, true)
 		# 槌头：骨球 + 灵玉高光点
 		_circle(mallet_head, 2.6, config.col_secondary)
@@ -1331,7 +1276,6 @@ func _draw_yingmei() -> void:
 		draw_filled_ellipse(head_pos + Vector2(float(i) * 2.6, -1.0), 1.7, 2.2, config.col_void)
 		_circle(head_pos + Vector2(float(i) * 2.6, -0.6) + _gaze_offset(1.7), 0.8, config.col_glow)
 	# 裂口嘴缝（面无表情，只一道竖裂）
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(0, 1.5), head_pos + Vector2(0, 4.5), config.col_void, 1.3, true)
 
 	# —— 双支向后弯曲的影骨角（角根埋进面具上缘，画在面具之上确保相连） ——
@@ -1369,7 +1313,6 @@ func _draw_zhumu() -> void:
 		var sx := float(i) * 5.0
 		var tw := sin(_time * 3.0 + float(i)) * 3.0 + _step_sway(2.2, float(i) * 0.35)
 		var tentacle_scale := 1.0 - spawn_k * 0.15
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			center + Vector2(sx, 12.0),
 			center + Vector2(sx + tw * 0.5, 12.0 + 6.0 * tentacle_scale),
@@ -1383,7 +1326,6 @@ func _draw_zhumu() -> void:
 	for i in range(6):
 		var vein_ang := float(i) * TAU / 6.0 + 0.4
 		var vein_rad := Vector2(cos(vein_ang), sin(vein_ang))
-		BatchDraw.flush(self)
 		_batch_line(center + vein_rad * 3.6, center + vein_rad * (5.6 if absf(vein_rad.x) > 0.6 else 4.2),
 			config.col_accent, 0.8, true)
 	var iris_pulse := 1.0 + sin(_time * 2.4 + _phase_seed) * 0.07
@@ -1414,7 +1356,6 @@ func _draw_zhumu() -> void:
 		var blink: float = sin(_time * spec[2] + spec[3] + _phase_seed * 0.61)
 		if blink <= -0.72:
 			# 闭眼：骨白眼缝横线 + 两端骨结（错开的眨眼节奏读得见）
-			BatchDraw.flush(self)
 			_batch_line(ep + Vector2(-er * 0.9, 0), ep + Vector2(er * 0.9, 0), config.col_secondary, 1.3, true)
 			_circle(ep + Vector2(-er * 0.9, 0), 0.5, config.col_secondary)
 			_circle(ep + Vector2(er * 0.9, 0), 0.5, config.col_secondary)
@@ -1427,7 +1368,6 @@ func _draw_zhumu() -> void:
 			for v in range(3):
 				var v_ang: float = float(v) * TAU / 3.0 + spec[3]
 				var v_dir := Vector2(cos(v_ang), sin(v_ang))
-				BatchDraw.flush(self)
 				_batch_line(ep + v_dir * (er * 0.5), ep + v_dir * (er * 1.5), config.col_accent, 0.7, true)
 		# 眸核微脉动（相位错开，密密麻麻的金红邪眸逐颗呼吸）
 		# 2026-10-23 视线：14 颗副眼瞳核同向偏移 —— 一整片眼阵齐刷刷盯过来，是这只怪最强的压迫感来源
@@ -1467,7 +1407,6 @@ func _stroke_oval(center: Vector2, rx: float, ry: float, col: Color, width: floa
 	for i in range(seg + 1):
 		var ang := float(i) * TAU / float(seg)
 		_oval_stroke_buf[i] = center + Vector2(cos(ang) * rx, sin(ang) * ry)
-	BatchDraw.flush(self)
 	_batch_polyline(_oval_stroke_buf, col, width, true)
 
 ## 11. 雷兽 / 赤雷兽 (雷鸦·振翅飞行兽)
@@ -1549,7 +1488,6 @@ func _draw_leibeast(is_elite: bool) -> void:
 			var tip0: Vector2 = w_pt + (wt * (fan[0] * sw) - w_pt) * (1.0 - charge * 0.26)
 			var d_out := (tip0 - w_pt).normalized()
 			var jag := tip0 + d_out * 2.4 + Vector2(1.8, -1.2)
-			BatchDraw.flush(self)
 			_batch_polyline(PackedVector2Array([
 				tip0, jag, tip0 + d_out * 4.4 + Vector2(-0.6, -2.6)
 			]), Color(config.col_glow.r, config.col_glow.g, config.col_glow.b, arc_a * 0.85), 1.1, true)
@@ -1592,7 +1530,6 @@ func _draw_leibeast(is_elite: bool) -> void:
 		config.col_primary.darkened(0.34), 2.0, true)
 	# 胸侧雷纹（折线闪电，蓄力时提亮；只做身份记号，压在前胸）
 	var bolt_col := config.col_accent.lerp(config.col_glow, charge * 0.7)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		bt * Vector2(3.2, -1.6), bt * Vector2(1.8, 0.6),
 		bt * Vector2(3.4, 1.0), bt * Vector2(2.0, 3.2)
@@ -1645,7 +1582,6 @@ func _draw_leibeast(is_elite: bool) -> void:
 	_circle(eye_p + Vector2(0.3, 0), 0.55, config.col_glow.lightened(0.55))
 	if charge > 0.5:
 		# 蓄力瞳焰拖尾（前探方向）
-		BatchDraw.flush(self)
 		_batch_line(eye_p + Vector2(eye_w, 0), eye_p + Vector2(eye_w + charge * 3.4, 0),
 			config.col_glow, 1.2, true)
 
@@ -1679,11 +1615,9 @@ func _draw_golem() -> void:
 
 	# 甲缝勾线：胸铠左右斜向分甲缝 + 中轴缝（青铜灵流铭纹，蓄力时随炉光提亮）
 	var seam_col := config.col_accent * Color(forge_bright, forge_bright, forge_bright, 0.9)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		center + Vector2(-15, -4), center + Vector2(-8, -1), center + Vector2(-10, 8),
 	]), seam_col, 1.2, true)
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		center + Vector2(15, -4), center + Vector2(8, -1), center + Vector2(10, 8),
 	]), seam_col, 1.2, true)
@@ -1732,22 +1666,18 @@ func _draw_golem() -> void:
 		])
 		draw_stroked_polygon(sh2_pts, config.col_primary, _contour_color(), 1.2)
 		# 甲脊骨刺（朝外上方三支）
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			center + Vector2(fx - 2.0, -12.5 + fy), center + Vector2(fx + float(i) * 2.0, -16.0 + fy),
 		]), config.col_secondary, 1.6, true)
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			center + Vector2(fx, -12.5 + fy), center + Vector2(fx + float(i) * 0.5, -16.8 + fy),
 		]), config.col_secondary, 1.6, true)
-		BatchDraw.flush(self)
 		_batch_polyline(PackedVector2Array([
 			center + Vector2(fx + 2.0, -12.5 + fy), center + Vector2(fx - float(i) * 1.5, -16.0 + fy),
 		]), config.col_secondary, 1.6, true)
 		# 盾面铆钉三颗（虚空黑沉孔） + 灵流铭线
 		for k in range(3):
 			_circle(center + Vector2(fx, -5.0 + float(k) * 4.5 + fy), 0.8, config.col_void)
-		BatchDraw.flush(self)
 		_batch_line(center + Vector2(fx - 3.0, 2.5 + fy), center + Vector2(fx + 3.0, 2.5 + fy), seam_col, 1.0, true)
 
 	# —— 双臂巨拳（画在肩甲与胸铠之上，拳体在前可读）：
@@ -1758,13 +1688,9 @@ func _draw_golem() -> void:
 		var elbow := center + Vector2(s * 14.0, 4.0 - lift * 7.0 + arm_sway)
 		var fist := center + Vector2(s * 12.5, 11.0 - lift * 17.0 + arm_sway)
 		# 上臂/前臂玄铁节杆（骨白亮边勾出深色杆体轮廓，黑底/胸铠上均可读）
-		BatchDraw.flush(self)
 		_batch_line(shoulder, elbow, config.col_secondary, 5.2, true)
-		BatchDraw.flush(self)
 		_batch_line(shoulder, elbow, config.col_primary, 3.6, true)
-		BatchDraw.flush(self)
 		_batch_line(elbow, fist, config.col_secondary, 5.2, true)
-		BatchDraw.flush(self)
 		_batch_line(elbow, fist, config.col_primary, 3.6, true)
 		_circle(elbow, 2.2, config.col_secondary)
 		# 巨拳：骨白铁拳（与骨盾同系，深色胸铠上高反差）+ 虚空黑指节铆钉
@@ -1779,7 +1705,6 @@ func _draw_golem() -> void:
 		# 蓄力满握：拳缝灵光渐亮（攒劲读数）
 		if charge > 0.3:
 			var grip := (charge - 0.3) / 0.7
-			BatchDraw.flush(self)
 			_batch_line(fist + Vector2(-3.0, 0.4), fist + Vector2(3.0, 0.4),
 				config.col_glow * Color(1, 1, 1, 0.7 * grip), 1.4, true)
 
@@ -1792,9 +1717,7 @@ func _draw_golem() -> void:
 	])
 	draw_stroked_polygon(head_pts, config.col_primary, config.col_secondary, 1.4)
 	# 额缝青铜铭线与目缝灵光（蓄力时目缝增亮成读数）
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(0, -20), center + Vector2(0, -17.5), config.col_accent, 1.2, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-4, -16), center + Vector2(4, -16),
 		config.col_glow.lightened(charge * 0.5), 1.8 + charge * 0.8, true)
 
@@ -1842,11 +1765,8 @@ func _draw_jiansha_elite() -> void:
 	])
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.5)
 	# 血煞交领（V 形红滚边）与中缝
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-5.5, -7.5), center + Vector2(0.0, -2.0), config.col_accent, 1.8, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(5.5, -7.5), center + Vector2(0.0, -2.0), config.col_accent, 1.8, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(0.0, -2.0), center + Vector2(0.0, 9.0), Color(config.col_accent.r, config.col_accent.g, config.col_accent.b, 0.5), 1.2, true)
 	# 胸口血煞灵核（蓄力时透亮）
 	var core_a := 0.55 + charge * 0.45
@@ -1876,7 +1796,6 @@ func _draw_jiansha_elite() -> void:
 	])
 	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.4)
 	# 面门血裂（额至颊一道邪纹）
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		head_pos + Vector2(2.5, -3.0), head_pos + Vector2(1.0, 0.5), head_pos + Vector2(3.0, 4.0)
 	]), Color(0.85, 0.15, 0.25, 0.9), 1.2, true)
@@ -1916,7 +1835,6 @@ func _draw_jiansha_elite() -> void:
 				t_sw * Vector2(-7.5, 1.3)
 			])
 			draw_stroked_polygon(sw_pts, config.col_accent, config.col_glow, 1.0)
-			BatchDraw.flush(self)
 			_batch_line(t_sw * Vector2(-4, 0), t_sw * Vector2(8, 0), config.col_secondary, 0.9, true)
 			# 主剑（收束扇中央那柄）：器尖标定 + 蓄力读数
 			if i == int(sword_n / 2.0):
@@ -1930,15 +1848,16 @@ func _draw_jiansha_elite() -> void:
 						_arc(tip, 5.0 + charge * 3.2, -PI * 0.7, PI * 0.7, 14,
 							Color(1.0, 0.55, 0.65, 0.75 * halo_a), 1.3, true)
 					var aim_line_end := tip + local_aim * (24.0 * charge)
-					BatchDraw.flush(self)
 					_batch_line(tip, aim_line_end, Color(1.0, 0.35, 0.50, 0.75 * charge), 1.8, true)
 					BatchDraw.circle(self, aim_line_end, 1.8, Color.WHITE)
 
 ## 14. 敌潮魔君 & 心魔魔尊 (BOSS / 魔神君临御空)
 ## 2026-10-19 强化：层叠肩甲+肩尖骨刺、盔梁面脊、背后魔焰披风飘带（_time 飘动）、
 ## 身侧魔刃与胸口旋转魔核；final 形态加更深虚空雾场与更冷幽光极光。
-## 读招姿态：special_state 0→1 蓄力时魔刃收束指向 aim_dir、魔轮缩紧提速、魔核增亮、
-## 上身前倾攒劲；recoil 爆发瞬间刃前探、轮外张、魔核闪白（蓄力/爆发两态可读）。
+## 2026-11-03 形象差异化：按 config.boss_style 分发 7 大流派轮廓形制
+## (demon / construct / spirit / swordsman / dragon / beast / void)
+## 读招姿态：special_state 0→1 蓄力时法器/剑阵收束指向 aim_dir、轮/环缩紧提速、核心增亮、
+## 上身前倾攒劲；recoil 爆发瞬间刃/爪/珠前探破空、轮/环外张、核心闪白（蓄力/爆发两态可读）。
 func _draw_boss(final_boss: bool) -> void:
 	var charge := clampf(special_state, 0.0, 1.0)
 	var burst := clampf(recoil, 0.0, 1.0)
@@ -1951,171 +1870,910 @@ func _draw_boss(final_boss: bool) -> void:
 	var float_y := sin(_time * 2.2) * 2.8 + _step_bob(2.0)
 	# 蓄力前倾攒劲，爆发瞬间前探后坐
 	var center := Vector2(charge * 2.2 + burst * 3.0, -4 + float_y)
+	var b_style := config.boss_style if (config != null and config.boss_style != "") else "demon"
 
-	# 霸者超大地影（蓄力时压得更实）
-	_draw_soft_shadow(Vector2(0, 26), 28.0 + charge * 1.5, 7.5, 0.65)
+	# 霸者超大地影（蓄力时压得更实；beast 体型更宽）
+	var shadow_rx := (34.0 if b_style == "beast" else 28.0) + charge * 1.5
+	var shadow_ry := 9.0 if b_style == "beast" else 7.5
+	_draw_soft_shadow(Vector2(0, 26), shadow_rx, shadow_ry, 0.65)
 
-	# —— final 形态：背后虚空雾场（吞光黑域）+ 外圈冷冽极光细环，魔尊压迫感 ——
-	if final_boss:
+	# 1. 虚空雾场（final_boss 或 void 风格：吞光黑域 + 外圈极光环）
+	if final_boss or b_style == "void":
 		var void_r := 30.0 + sin(_time * 1.6) * 1.2
 		draw_filled_ellipse(center + Vector2(0, -2), void_r * 0.9, void_r, Color(0.02, 0.015, 0.04, 0.55))
 		_arc(center + Vector2(0, -2), void_r, 0, TAU, 32, Color(0.05, 0.03, 0.09, 0.8), 2.2, true)
 		_arc(center, void_r + 3.0, _time * 0.5, _time * 0.5 + PI * 1.2, 24, config.col_glow * Color(1, 1, 1, 0.25), 1.2, true)
 
-	# —— 背后魔焰披风飘带：3 缕自肩后拖尾，_time 飘动，蓄力时焰色转亮 ——
-	var ribbon_col := config.col_accent * Color(1, 1, 1, 0.55 + charge * 0.3)
-	for i in range(3):
-		var sway := sin(_time * 2.6 + float(i) * 1.9) * 3.4 + _step_sway(2.6, float(i) * 0.5)
-		var rib_top := center + Vector2(-float(i) * 7.0 - 4.0, -8)
-		var rib_mid := rib_top + Vector2(-sway * 0.6 - 3.0, 12)
-		var rib_end := rib_mid + Vector2(-sway, 13)
-		BatchDraw.flush(self)
-		_batch_polyline(PackedVector2Array([rib_top, rib_mid, rib_end]), ribbon_col, 2.6, true)
+	# 2. 背后专属装饰挂件（万剑剑阵 / 齿轮机括 / 幽冥灵花飘带 / 龙翼龙珠 / 巨兽背刺 / 虚空蚀环 / 魔轮）
+	_draw_boss_back_ornament(b_style, center, charge, burst, surge, local_aim, final_boss)
 
-	# —— 背后魔轮（普通 4 骨刃环 / 魔尊 8 符文法轮）：蓄力缩紧提速、爆发外张 ——
-	var wheel_rot := _time * ((0.6 if not final_boss else 0.8) + charge * 1.6)
-	var blade_count := 8 if final_boss else 4
-	# final 法轮 32→29.5，与 body_radius+15% 延展预算对齐
-	var wheel_radius := (26.0 if not final_boss else 29.5) - charge * 2.5 + burst * 3.0
-	draw_soft_glow(center, wheel_radius * 1.1, config.col_glow * Color(1, 1, 1, 0.4 + surge * 0.3), 2)
-	_arc(center, wheel_radius * 0.8, 0, TAU, 32, config.col_accent, 2.0, true)
+	# 3. 身侧法器/兵刃（宗师主剑 / 机械重钳与火斗 / 引魂幡 / 苍龙牙刃 / 巨兽利爪 / 虚空裂痕 / 魔将重刃）
+	_draw_boss_flank_weapon(b_style, center, charge, burst, surge, local_aim)
 
-	for i in range(blade_count):
-		var ang := wheel_rot + float(i) * (TAU / float(blade_count))
-		var b_pos := center + Vector2(cos(ang), sin(ang)) * wheel_radius
-		var b_rot := ang + PI * 0.5
-		var t_b := Transform2D(b_rot, b_pos)
-		var b_pts := PackedVector2Array([
-			t_b * Vector2(-3, -7),
-			t_b * Vector2(0, -14), # 尖刃
-			t_b * Vector2(3, -7),
-			t_b * Vector2(0, 0)
-		])
-		draw_stroked_polygon(b_pts, config.col_secondary, config.col_glow, 1.6)
-		# 蓄力时刃根符点亮环（读数：法轮在聚能）
-		if charge > 0.35 and i % 2 == 0:
-			_circle(b_pos, 1.3 * charge, config.col_glow)
+	# 4. 躯干与下裳轮廓（炉腹 / 偃甲方铠 / 游魂法袍 / 剑仙道袍 / 龙身龙尾 / 宽体巨兽与厚尾 / 虚空斗篷 / 魔王重铠）
+	_draw_boss_torso(b_style, center, charge, burst, surge)
 
-	# —— 身侧魔刃（法器）：巡航斜悬，蓄力收束指向目标，爆发前探斩出 ——
-	var blade_pos := center + Vector2(-12.0, 6.0)
-	var blade_rot := deg_to_rad(210.0)
-	if charge > 0.0 or burst > 0.001:
-		blade_rot = local_aim.angle()
-		blade_pos = center + Vector2(4, -2) + local_aim * (burst * 9.0 - charge * 6.0)
-	var t_blade := Transform2D(blade_rot, blade_pos)
-	draw_soft_glow(blade_pos, 13.0 + surge * 7.0, config.col_glow * Color(1, 1, 1, 0.3 + surge * 0.45), 2)
-	var blade_pts := PackedVector2Array([
-		t_blade * Vector2(-14, -3),
-		t_blade * Vector2(15, -1.8),
-		t_blade * Vector2(21, 0), # 刃尖
-		t_blade * Vector2(15, 1.8),
-		t_blade * Vector2(-14, 3),
-	])
-	draw_stroked_polygon(blade_pts, config.col_secondary, config.col_glow, 1.5)
-	# 刃脊血槽与护格
-	BatchDraw.flush(self)
-	_batch_line(t_blade * Vector2(-10, 0), t_blade * Vector2(17, 0), config.col_glow, 1.2, true)
-	BatchDraw.flush(self)
-	_batch_line(t_blade * Vector2(-10, -5), t_blade * Vector2(-10, 5), config.col_accent, 2.2, true)
+	# 5. 肩甲轮廓（齿轮肩 / 轻羽肩 / 横剑护肩 / 龙鳞肩 / 兽肌肩 / 升腾残烟 / 魔王层叠肩）
+	_draw_boss_pauldrons(b_style, center, charge, burst, surge)
 
-	# 威严魔王重铠身躯与魔袍四摆
-	var armor_pts := PackedVector2Array([
-		center + Vector2(-16, 20),
-		center + Vector2(-19, -6),
-		center + Vector2(-10, -18),
-		center + Vector2(10, -18),
-		center + Vector2(19, -6),
-		center + Vector2(16, 20),
-		center + Vector2(0, 15)
-	])
-	draw_stroked_polygon(armor_pts, config.col_primary, _contour_color(), 1.6)
-	# 腹甲三段刻线（重铠层次）
-	for i in range(3):
-		var ab_y := 2.0 + float(i) * 5.0
-		BatchDraw.flush(self)
-		_batch_line(center + Vector2(-14.0 + float(i) * 1.5, ab_y), center + Vector2(14.0 - float(i) * 1.5, ab_y), config.col_accent * Color(1, 1, 1, 0.55), 1.2, true)
+	# 6. 胸口旋转灵核（机械机芯 / 魂蛊玉 / 剑心神印 / 龙元雷心 / 蛮荒凶煞核 / 虚空奇点 / 魔核）
+	_draw_boss_core(b_style, center, charge, burst, surge)
 
-	# —— 层叠肩甲：玄铁面 + 骨白缘 + 肩尖骨刺（外接圆在 body_radius 预算内）——
-	for s in [-1.0, 1.0]:
-		var pauld_pts := PackedVector2Array([
-			center + Vector2(s * 13, -16),
-			center + Vector2(s * 21, -11),
-			center + Vector2(s * 20, -2),
-			center + Vector2(s * 12, -6),
-		])
-		draw_stroked_polygon(pauld_pts, config.col_primary, _contour_color(), 1.5)
-		BatchDraw.flush(self)
-		_batch_line(center + Vector2(s * 12.8, -15), center + Vector2(s * 20.2, -10.3), config.col_secondary, 1.3, true)
-		BatchDraw.flush(self)
-		_batch_polyline(PackedVector2Array([center + Vector2(s * 20.0, -8), center + Vector2(s * 25.5, -13.5)]), config.col_secondary, 2.0, true)
-		_circle(center + Vector2(s * 16.5, -8), 1.0, config.col_secondary)
-
-	# —— 胸口旋转魔核：虚空晶壳 + 菱形核体，随蓄力/爆发增亮提速 ——
-	var core_rot := _time * (1.0 + surge * 3.2)
-	var core_r := 6.2 + surge * 2.2
-	draw_soft_glow(center, 9.0 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
-	draw_filled_ellipse(center, core_r * 1.18, core_r, config.col_void)
-	var core_pts := PackedVector2Array([
-		center + Vector2(cos(core_rot), sin(core_rot)) * core_r,
-		center + Vector2(cos(core_rot + PI * 0.5), sin(core_rot + PI * 0.5)) * core_r * 0.72,
-		center + Vector2(cos(core_rot + PI), sin(core_rot + PI)) * core_r,
-		center + Vector2(cos(core_rot + PI * 1.5), sin(core_rot + PI * 1.5)) * core_r * 0.72,
-	])
-	draw_stroked_polygon(core_pts, config.col_glow.lightened(surge * 0.5), config.col_void, 1.2)
-	_circle(center, 1.6 + surge * 1.4, Color(1.0, 1.0, 1.0, 0.85 + surge * 0.15))
-
-	# 鬼王骨面（盔梁中脊 + 面门血槽）与冲天魔角（心魔魔尊带九幽分叉魔冠）
+	# 7. 头颅面具与角冠（炉盖鼎耳 / 机关观察面 / 通天灵冠与蝶蛾角 / 剑冠发簪 / 龙角龙须与凤羽 / 阔吻蛮荒兽骨 / 镜面无相 / 鬼王骨面大魔角）
 	var head_pos := center + Vector2(0, -18)
-	var mask_pts := PackedVector2Array([
-		head_pos + Vector2(-9, 7),
-		head_pos + Vector2(-11, -5),
-		head_pos + Vector2(0, -13),
-		head_pos + Vector2(11, -5),
-		head_pos + Vector2(9, 7),
-		head_pos + Vector2(0, 11)
-	])
-	draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.5)
-	# 盔梁中脊与颊侧护板线（骨面分块，冷冽甲胄感）
-	BatchDraw.flush(self)
-	_batch_line(head_pos + Vector2(0, -12.5), head_pos + Vector2(0, 10), config.col_void, 1.4, true)
-	BatchDraw.flush(self)
-	_batch_line(head_pos + Vector2(-8.5, -3), head_pos + Vector2(-6.5, 6), config.col_void, 1.0, true)
-	BatchDraw.flush(self)
-	_batch_line(head_pos + Vector2(8.5, -3), head_pos + Vector2(6.5, 6), config.col_void, 1.0, true)
+	_draw_boss_head(b_style, head_pos, charge, burst, surge, final_boss)
 
-	# 巨大魔角（角根护甲块）
-	BatchDraw.flush(self)
-	_batch_polyline(PackedVector2Array([
-		head_pos + Vector2(-6, -6),
-		head_pos + Vector2(-14, -18),
-		head_pos + Vector2(-11, -25)
-	]), config.col_secondary, 2.4, true)
-	BatchDraw.flush(self)
-	_batch_polyline(PackedVector2Array([
-		head_pos + Vector2(6, -6),
-		head_pos + Vector2(14, -18),
-		head_pos + Vector2(11, -25)
-	]), config.col_secondary, 2.4, true)
-	_circle(head_pos + Vector2(-6.5, -7), 1.6, config.col_void)
-	_circle(head_pos + Vector2(6.5, -7), 1.6, config.col_void)
-
-	if final_boss:
-		# 皇冠分叉中央角 + 两侧小分叉（魔冠更盛）
-		BatchDraw.flush(self)
-		_batch_polyline(PackedVector2Array([
-			head_pos + Vector2(-3, -11),
-			head_pos + Vector2(0, -22),
-			head_pos + Vector2(3, -11)
-		]), config.col_accent, 1.8, true)
-		BatchDraw.flush(self)
-		_batch_line(head_pos + Vector2(-12.5, -19.5), head_pos + Vector2(-16.0, -23.0), config.col_accent, 1.4, true)
-		BatchDraw.flush(self)
-		_batch_line(head_pos + Vector2(12.5, -19.5), head_pos + Vector2(16.0, -23.0), config.col_accent, 1.4, true)
-
-	# 燃烧神魔双目（蓄力/爆发时瞳焰提亮）
+	# 8. 眼眸（依据 config.eye_type 严格区分 twin_slits / slit / round / void）
 	var eye_col := config.col_glow.lightened(surge * 0.45)
-	draw_sharp_eye(head_pos + Vector2(-4, 0), 4.2, 2.0, eye_col, Color.WHITE)
-	draw_sharp_eye(head_pos + Vector2(4, 0), 4.2, 2.0, eye_col, Color.WHITE)
+	_draw_boss_eyes(head_pos, eye_col)
+
+## Boss 背后专属装饰轮廓件（剑阵 / 齿轮机括 / 灵花飘带 / 龙翼龙珠 / 巨兽背刺 / 虚空蚀环 / 骨刃魔轮）
+func _draw_boss_back_ornament(b_style: String, center: Vector2, charge: float, burst: float, surge: float, local_aim: Vector2, final_boss: bool) -> void:
+	match b_style:
+		"swordsman":
+			# —— 剑阵（万剑悬空飞剑）：6 把（final 或剑冢 8 把）飞剑环绕 ——
+			# 待机圆环剑阵；蓄力时齐头指向 local_aim 扇形拉紧后缩；爆发时飞剑向前穿刺
+			var sword_count := 8 if (final_boss or (config != null and config.enemy_id == "boss_jianzhong")) else 6
+			var form_radius := 27.0 - charge * 3.5 + burst * 3.0
+			draw_soft_glow(center, form_radius * 1.05, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.3), 2)
+			_arc(center, form_radius * 0.78, 0, TAU, 32, config.col_accent * Color(1, 1, 1, 0.4), 1.4, true)
+			var base_rot := _time * (0.8 + charge * 2.0)
+			for i in range(sword_count):
+				var ang_frac := float(i) / float(sword_count)
+				var spread := (ang_frac - 0.5) * (PI * 0.95 - charge * 0.3)
+				var s_pos := Vector2.ZERO
+				var s_rot := 0.0
+				if charge > 0.0 or burst > 0.001:
+					var aim_ang := local_aim.angle()
+					var fan_ang := aim_ang + spread
+					var fan_r := form_radius * (0.85 + absf(ang_frac - 0.5) * 0.3)
+					s_pos = center + Vector2(cos(fan_ang), sin(fan_ang)) * fan_r - local_aim * (charge * 6.0) + local_aim * (burst * 14.0)
+					s_rot = aim_ang
+				else:
+					var circle_ang := base_rot + ang_frac * TAU
+					s_pos = center + Vector2(cos(circle_ang), sin(circle_ang)) * form_radius
+					s_rot = circle_ang + PI * 0.6
+				var t_s := Transform2D(s_rot, s_pos)
+				var sw_pts := PackedVector2Array([
+					t_s * Vector2(10.0, 0.0),
+					t_s * Vector2(3.0, -2.0),
+					t_s * Vector2(-6.0, -1.6),
+					t_s * Vector2(-6.0, 1.6),
+					t_s * Vector2(3.0, 2.0),
+				])
+				draw_stroked_polygon(sw_pts, config.col_secondary, config.col_glow, 1.3)
+				_batch_line(t_s * Vector2(-5.0, -3.5), t_s * Vector2(-5.0, 3.5), config.col_accent, 1.6, true)
+				_batch_line(t_s * Vector2(-8.0, 0.0), t_s * Vector2(7.0, 0.0), config.col_glow, 1.0, true)
+				if surge > 0.2:
+					_circle(t_s * Vector2(10.5, 0.0), 1.1 * surge, config.col_glow)
+
+		"construct":
+			# —— 环形机括与旋转机械齿轮（替换尖锐魔轮） ——
+			var gear_r := (27.5 if not final_boss else 30.5) - charge * 2.2 + burst * 2.6
+			var gear_rot := _time * (0.55 + charge * 2.0)
+			draw_soft_glow(center, gear_r * 1.05, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.3), 2)
+			_arc(center, gear_r, 0, TAU, 32, config.col_accent, 2.4, true)
+			_arc(center, gear_r * 0.74, 0, TAU, 28, config.col_secondary, 1.4, true)
+			for i in range(6):
+				var ang := gear_rot + float(i) * TAU / 6.0
+				var t_c := Transform2D(ang, center)
+				var tooth_pts := PackedVector2Array([
+					t_c * Vector2(gear_r * 0.92, -3.0),
+					t_c * Vector2(gear_r * 1.20, -2.0),
+					t_c * Vector2(gear_r * 1.20, 2.0),
+					t_c * Vector2(gear_r * 0.92, 3.0),
+				])
+				draw_stroked_polygon(tooth_pts, config.col_secondary, config.col_void, 1.2)
+			for i in range(4):
+				var sang := gear_rot + float(i) * PI * 0.5
+				var sdir := Vector2(cos(sang), sin(sang))
+				_batch_line(center + sdir * (gear_r * 0.28), center + sdir * (gear_r * 0.74), config.col_accent, 1.8, true)
+			if charge > 0.2:
+				for i in range(6):
+					var ang := gear_rot + float(i) * TAU / 6.0
+					_circle(center + Vector2(cos(ang), sin(ang)) * (gear_r * 1.15), 1.2 * charge, config.col_glow)
+
+		"spirit":
+			# —— 幽冥灵花与舒展飘带（去掉沉重魔轮） ——
+			var ribbon_col := config.col_accent * Color(1, 1, 1, 0.50 + charge * 0.35)
+			for i in range(4):
+				var rib_ang := PI * 0.65 + float(i) * (PI * 0.7 / 3.0)
+				var sway := sin(_time * 2.2 + float(i) * 1.8) * 3.6 + _step_sway(2.4, float(i) * 0.4)
+				var r_dir := Vector2(cos(rib_ang), sin(rib_ang))
+				var rib_top := center + Vector2(r_dir.x * 12.0, -6.0 + float(i) * 3.0)
+				var rib_mid := rib_top + Vector2(r_dir.x * 14.0 + sway * 0.5, 10.0)
+				var rib_end := rib_mid + Vector2(r_dir.x * 12.0 + sway, 14.0)
+				_batch_polyline(PackedVector2Array([rib_top, rib_mid, rib_end]), ribbon_col, 2.2, true)
+			var spirit_r := 25.0 - charge * 2.8 + burst * 3.2
+			draw_soft_glow(center, spirit_r * 1.05, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.25), 2)
+			for i in range(6):
+				var ang := _time * 0.65 + float(i) * TAU / 6.0
+				var p_pos := center + Vector2(cos(ang), sin(ang)) * spirit_r
+				var t_p := Transform2D(ang + PI * 0.5, p_pos)
+				var petal_pts := PackedVector2Array([
+					t_p * Vector2(-3.5, 0.0),
+					t_p * Vector2(0.0, -7.0),
+					t_p * Vector2(3.5, 0.0),
+					t_p * Vector2(0.0, 4.0),
+				])
+				draw_stroked_polygon(petal_pts, config.col_secondary, config.col_accent, 1.3)
+				_circle(p_pos, 1.2, config.col_glow)
+
+		"dragon":
+			# —— 龙骨神翼弧线 + 太苍龙珠 ——
+			for s in [-1.0, 1.0]:
+				var wing_root := center + Vector2(s * 8.0, -10.0)
+				var w_flap := sin(_time * 2.4) * 2.0 - charge * 3.0 + burst * 4.0
+				var w_tip1 := wing_root + Vector2(s * 22.0, -22.0 + w_flap)
+				var w_tip2 := wing_root + Vector2(s * 27.0, -12.0 + w_flap * 0.8)
+				var w_tip3 := wing_root + Vector2(s * 23.0, 0.0 + w_flap * 0.5)
+				_batch_polyline(PackedVector2Array([wing_root, w_tip1, wing_root + Vector2(s * 15.0, -8.0)]), config.col_secondary, 2.2, true)
+				_batch_polyline(PackedVector2Array([wing_root, w_tip2, wing_root + Vector2(s * 16.0, -2.0)]), config.col_accent, 1.8, true)
+				_batch_polyline(PackedVector2Array([wing_root, w_tip3]), config.col_accent * Color(1, 1, 1, 0.6), 1.4, true)
+				_batch_line(w_tip1, w_tip2, config.col_glow * Color(1, 1, 1, 0.45), 1.0, true)
+				_batch_line(w_tip2, w_tip3, config.col_glow * Color(1, 1, 1, 0.35), 1.0, true)
+			var pearl_ang := _time * (1.8 + charge * 3.2)
+			var pearl_rx := 28.0 - charge * 3.0 + burst * 3.0
+			var pearl_ry := 15.0
+			var pearl_pos := center + Vector2(cos(pearl_ang) * pearl_rx, sin(pearl_ang) * pearl_ry)
+			draw_soft_glow(pearl_pos, 9.0 + surge * 5.0, config.col_glow, 2)
+			_circle(pearl_pos, 3.2, config.col_secondary)
+			_circle(pearl_pos, 1.8, config.col_glow.lightened(0.4))
+			_arc(pearl_pos, 4.6, pearl_ang, pearl_ang + PI * 0.8, 12, config.col_accent, 1.3, true)
+
+		"beast":
+			# —— 巨兽背鳍与背刺排（替换魔轮，如鲲王/元初兽） ——
+			var spine_count := 5
+			var bristle := charge * 0.35
+			for i in range(spine_count):
+				var frac := float(i) / float(spine_count - 1)
+				var s_x := -14.0 + frac * 28.0
+				var base_h := 11.0 + sin(frac * PI) * 11.0
+				var s_h := (base_h + surge * 4.0)
+				var lean := (frac - 0.5) * (0.8 + bristle)
+				var base_pt := center + Vector2(s_x, -14.0 + absf(frac - 0.5) * 6.0)
+				var tip_pt := base_pt + Vector2(sin(lean) * s_h, -cos(lean) * s_h)
+				var sp_pts := PackedVector2Array([
+					base_pt + Vector2(-2.5, 0.0),
+					tip_pt,
+					base_pt + Vector2(2.5, 0.0),
+				])
+				draw_stroked_polygon(sp_pts, config.col_secondary, config.col_void, 1.4)
+				_batch_line(base_pt, tip_pt, config.col_accent, 1.2, true)
+				if surge > 0.3:
+					_circle(tip_pt, 1.2 * surge, config.col_glow)
+
+		"void":
+			# —— 虚空蚀环与折跃暗隙（无相天魔/照影） ——
+			var halo_r := 27.0 - charge * 4.0 + burst * 5.0
+			var pulse := sin(_time * 2.8) * 1.5
+			draw_soft_glow(center, halo_r * 1.1, config.col_glow * Color(1, 1, 1, 0.4 + surge * 0.3), 2)
+			_arc(center, halo_r, _time * 0.4, _time * 0.4 + PI * 0.9, 16, config.col_accent, 2.2, true)
+			_arc(center, halo_r, _time * 0.4 + PI * 1.1, _time * 0.4 + PI * 1.9, 16, config.col_glow, 1.6, true)
+			_arc(center, halo_r * 0.78, -_time * 0.6, -_time * 0.6 + PI * 1.2, 18, config.col_void.lightened(0.2), 2.0, true)
+			for i in range(3):
+				var ang := _time * 0.8 + float(i) * TAU / 3.0
+				var v_p := center + Vector2(cos(ang) * (halo_r * 0.85 + pulse), sin(ang) * (halo_r * 0.85))
+				draw_filled_ellipse(v_p, 3.2, 2.0, config.col_void)
+				_circle(v_p, 1.0, config.col_glow * Color(1, 1, 1, 0.6))
+
+		_: # "demon"
+			var ribbon_col := config.col_accent * Color(1, 1, 1, 0.55 + charge * 0.3)
+			for i in range(3):
+				var sway := sin(_time * 2.6 + float(i) * 1.9) * 3.4 + _step_sway(2.6, float(i) * 0.5)
+				var rib_top := center + Vector2(-float(i) * 7.0 - 4.0, -8)
+				var rib_mid := rib_top + Vector2(-sway * 0.6 - 3.0, 12)
+				var rib_end := rib_mid + Vector2(-sway, 13)
+				_batch_polyline(PackedVector2Array([rib_top, rib_mid, rib_end]), ribbon_col, 2.6, true)
+
+			var wheel_rot := _time * ((0.6 if not final_boss else 0.8) + charge * 1.6)
+			var blade_count := 8 if final_boss else 4
+			var wheel_radius := (26.0 if not final_boss else 29.5) - charge * 2.5 + burst * 3.0
+			draw_soft_glow(center, wheel_radius * 1.1, config.col_glow * Color(1, 1, 1, 0.4 + surge * 0.3), 2)
+			_arc(center, wheel_radius * 0.8, 0, TAU, 32, config.col_accent, 2.0, true)
+
+			for i in range(blade_count):
+				var ang := wheel_rot + float(i) * (TAU / float(blade_count))
+				var b_pos := center + Vector2(cos(ang), sin(ang)) * wheel_radius
+				var b_rot := ang + PI * 0.5
+				var t_b := Transform2D(b_rot, b_pos)
+				var b_pts := PackedVector2Array([
+					t_b * Vector2(-3, -7),
+					t_b * Vector2(0, -14),
+					t_b * Vector2(3, -7),
+					t_b * Vector2(0, 0)
+				])
+				draw_stroked_polygon(b_pts, config.col_secondary, config.col_glow, 1.6)
+				if charge > 0.35 and i % 2 == 0:
+					_circle(b_pos, 1.3 * charge, config.col_glow)
+
+## Boss 身侧专属法器/兵刃（宗师主剑 / 机械重钳与火斗 / 引魂幡 / 苍龙牙刃 / 巨兽利爪 / 虚空裂痕 / 魔将重刃）
+func _draw_boss_flank_weapon(b_style: String, center: Vector2, charge: float, burst: float, surge: float, local_aim: Vector2) -> void:
+	match b_style:
+		"beast":
+			var claw_pos := center + Vector2(-14.0 + local_aim.x * (burst * 7.0 - charge * 4.0), 12.0)
+			for i in range(3):
+				var c_off := float(i - 1) * 3.2
+				var c_pts := PackedVector2Array([
+					claw_pos + Vector2(c_off - 1.2, 0.0),
+					claw_pos + Vector2(c_off + 2.0 + surge * 2.0, 5.0),
+					claw_pos + Vector2(c_off - 0.4, 6.5),
+				])
+				draw_stroked_polygon(c_pts, config.col_secondary, config.col_void, 1.2)
+			if surge > 0.25:
+				_batch_line(claw_pos + Vector2(-4.0, 4.0), claw_pos + Vector2(8.0, 8.0), config.col_glow, 1.3, true)
+
+		"construct":
+			var is_furnace := config != null and (config.enemy_id == "boss_luding" or config.display_name.contains("炉"))
+			var w_pos := center + Vector2(-12.0, 6.0)
+			var w_rot := deg_to_rad(200.0)
+			if charge > 0.0 or burst > 0.001:
+				w_rot = local_aim.angle()
+				w_pos = center + Vector2(4, -2) + local_aim * (burst * 9.0 - charge * 5.0)
+			var t_w := Transform2D(w_rot, w_pos)
+			draw_soft_glow(w_pos, 12.0 + surge * 6.0, config.col_glow * Color(1, 1, 1, 0.3 + surge * 0.4), 2)
+			if is_furnace:
+				var burner_pts := PackedVector2Array([
+					t_w * Vector2(-8, -5), t_w * Vector2(8, -5),
+					t_w * Vector2(10, 3), t_w * Vector2(-6, 3)
+				])
+				draw_stroked_polygon(burner_pts, config.col_secondary, config.col_accent, 1.4)
+				_batch_line(t_w * Vector2(8, -1), t_w * Vector2(16 + surge * 6.0, -1), config.col_glow, 2.0, true)
+			else:
+				var pincer_gap := 4.0 + (charge * 3.5 - burst * 4.0)
+				_batch_line(t_w * Vector2(-10, 0), t_w * Vector2(4, 0), config.col_secondary, 2.5, true)
+				var upper_jaw := PackedVector2Array([t_w * Vector2(3, -1), t_w * Vector2(15, -pincer_gap), t_w * Vector2(16, -pincer_gap + 2.5), t_w * Vector2(4, 1)])
+				var lower_jaw := PackedVector2Array([t_w * Vector2(3, 1), t_w * Vector2(15, pincer_gap), t_w * Vector2(16, pincer_gap - 2.5), t_w * Vector2(4, -1)])
+				draw_stroked_polygon(upper_jaw, config.col_secondary, config.col_void, 1.2)
+				draw_stroked_polygon(lower_jaw, config.col_secondary, config.col_void, 1.2)
+
+		"spirit":
+			var banner_pos := center + Vector2(-12.0, 4.0)
+			var banner_rot := deg_to_rad(205.0)
+			if charge > 0.0 or burst > 0.001:
+				banner_rot = local_aim.angle()
+				banner_pos = center + Vector2(3, -2) + local_aim * (burst * 8.0 - charge * 5.0)
+			var t_bn := Transform2D(banner_rot, banner_pos)
+			draw_soft_glow(banner_pos, 12.0 + surge * 6.0, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.4), 2)
+			_batch_line(t_bn * Vector2(-12, 0), t_bn * Vector2(16, 0), config.col_secondary, 1.8, true)
+			var b_wave := sin(_time * 4.0) * 2.2
+			_batch_polyline(PackedVector2Array([
+				t_bn * Vector2(14, 0),
+				t_bn * Vector2(8, -4.0 + b_wave * 0.5),
+				t_bn * Vector2(-2, -6.0 + b_wave),
+				t_bn * Vector2(-10, -5.0 + b_wave * 0.7)
+			]), config.col_accent * Color(1, 1, 1, 0.7), 2.2, true)
+			_circle(t_bn * Vector2(17, 0), 2.2 + surge * 1.2, config.col_glow)
+
+		"swordsman":
+			var sw_pos := center + Vector2(-12.0, 5.0)
+			var sw_rot := deg_to_rad(210.0)
+			if charge > 0.0 or burst > 0.001:
+				sw_rot = local_aim.angle()
+				sw_pos = center + Vector2(4, -2) + local_aim * (burst * 10.0 - charge * 6.0)
+			var t_sw := Transform2D(sw_rot, sw_pos)
+			draw_soft_glow(sw_pos, 13.0 + surge * 8.0, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.45), 2)
+			var sword_main_pts := PackedVector2Array([
+				t_sw * Vector2(-15, -1.8),
+				t_sw * Vector2(16, -1.5),
+				t_sw * Vector2(24, 0.0),
+				t_sw * Vector2(16, 1.5),
+				t_sw * Vector2(-15, 1.8),
+			])
+			draw_stroked_polygon(sword_main_pts, config.col_secondary, config.col_glow, 1.4)
+			_batch_line(t_sw * Vector2(-11, -4.5), t_sw * Vector2(-11, 4.5), config.col_accent, 2.0, true)
+			_batch_line(t_sw * Vector2(-9, 0), t_sw * Vector2(19, 0), config.col_glow, 1.2, true)
+			var tassel_sway := sin(_time * 3.6) * 2.0
+			_batch_line(t_sw * Vector2(-15, 0), t_sw * Vector2(-21, tassel_sway), config.col_accent, 1.2, true)
+
+		"dragon":
+			var d_pos := center + Vector2(-12.0, 5.0)
+			var d_rot := deg_to_rad(210.0)
+			if charge > 0.0 or burst > 0.001:
+				d_rot = local_aim.angle()
+				d_pos = center + Vector2(4, -2) + local_aim * (burst * 9.0 - charge * 5.0)
+			var t_d := Transform2D(d_rot, d_pos)
+			draw_soft_glow(d_pos, 12.0 + surge * 7.0, config.col_glow * Color(1, 1, 1, 0.35 + surge * 0.4), 2)
+			var fang_pts := PackedVector2Array([
+				t_d * Vector2(-12, -2.5),
+				t_d * Vector2(8, -1.5),
+				t_d * Vector2(21, 0.0),
+				t_d * Vector2(10, 4.5),
+				t_d * Vector2(-10, 2.0),
+			])
+			draw_stroked_polygon(fang_pts, config.col_secondary, config.col_glow, 1.4)
+			_batch_line(t_d * Vector2(-8, 0), t_d * Vector2(16, 0), config.col_accent, 1.5, true)
+
+		"void":
+			var v_pos := center + Vector2(-12.0, 5.0)
+			var v_rot := deg_to_rad(210.0)
+			if charge > 0.0 or burst > 0.001:
+				v_rot = local_aim.angle()
+				v_pos = center + Vector2(4, -2) + local_aim * (burst * 10.0 - charge * 6.0)
+			var t_v := Transform2D(v_rot, v_pos)
+			draw_soft_glow(v_pos, 14.0 + surge * 8.0, config.col_glow * Color(1, 1, 1, 0.4 + surge * 0.4), 2)
+			var rift_w := 2.0 + surge * 1.5
+			_batch_polyline(PackedVector2Array([
+				t_v * Vector2(-14, 0),
+				t_v * Vector2(-3, -rift_w),
+				t_v * Vector2(5, rift_w),
+				t_v * Vector2(22 + surge * 6.0, 0),
+			]), config.col_glow, 1.8, true)
+			_batch_line(t_v * Vector2(-4, -4), t_v * Vector2(12, 3), config.col_accent, 1.2, true)
+
+		_: # "demon"
+			var blade_pos := center + Vector2(-12.0, 6.0)
+			var blade_rot := deg_to_rad(210.0)
+			if charge > 0.0 or burst > 0.001:
+				blade_rot = local_aim.angle()
+				blade_pos = center + Vector2(4, -2) + local_aim * (burst * 9.0 - charge * 6.0)
+			var t_blade := Transform2D(blade_rot, blade_pos)
+			draw_soft_glow(blade_pos, 13.0 + surge * 7.0, config.col_glow * Color(1, 1, 1, 0.3 + surge * 0.45), 2)
+			var blade_pts := PackedVector2Array([
+				t_blade * Vector2(-14, -3),
+				t_blade * Vector2(15, -1.8),
+				t_blade * Vector2(21, 0),
+				t_blade * Vector2(15, 1.8),
+				t_blade * Vector2(-14, 3),
+			])
+			draw_stroked_polygon(blade_pts, config.col_secondary, config.col_glow, 1.5)
+			_batch_line(t_blade * Vector2(-10, 0), t_blade * Vector2(17, 0), config.col_glow, 1.2, true)
+			_batch_line(t_blade * Vector2(-10, -5), t_blade * Vector2(-10, 5), config.col_accent, 2.2, true)
+
+## Boss 躯干与下裳轮廓（炉腹 / 偃甲方铠 / 游魂法袍 / 剑仙道袍 / 龙身龙尾 / 宽体巨兽与厚尾 / 虚空斗篷 / 魔王重铠）
+func _draw_boss_torso(b_style: String, center: Vector2, _charge: float, _burst: float, _surge: float) -> void:
+	match b_style:
+		"construct":
+			var is_furnace := config != null and (config.enemy_id == "boss_luding" or config.display_name.contains("炉"))
+			if is_furnace:
+				var furnace_pts := PackedVector2Array([
+					center + Vector2(-13, -18),
+					center + Vector2(13, -18),
+					center + Vector2(22, -3),
+					center + Vector2(23, 10),
+					center + Vector2(16, 23),
+					center + Vector2(-16, 23),
+					center + Vector2(-23, 10),
+					center + Vector2(-22, -3)
+				])
+				draw_stroked_polygon(furnace_pts, config.col_primary, _contour_color(), 1.7)
+				_batch_line(center + Vector2(-21, 3), center + Vector2(21, 3), config.col_secondary, 1.6, true)
+				_batch_line(center + Vector2(-19, 11), center + Vector2(19, 11), config.col_secondary, 1.4, true)
+				_batch_polyline(PackedVector2Array([center + Vector2(-13, 23), center + Vector2(-15, 28), center + Vector2(-11, 28)]), config.col_secondary, 1.8, true)
+				_batch_polyline(PackedVector2Array([center + Vector2(13, 23), center + Vector2(15, 28), center + Vector2(11, 28)]), config.col_secondary, 1.8, true)
+				_batch_line(center + Vector2(0, 23), center + Vector2(0, 28), config.col_secondary, 2.0, true)
+				_batch_line(center + Vector2(-8, 16), center + Vector2(8, 16), config.col_glow, 2.0, true)
+			else:
+				var mech_pts := PackedVector2Array([
+					center + Vector2(-16, -18),
+					center + Vector2(16, -18),
+					center + Vector2(21, -6),
+					center + Vector2(21, 18),
+					center + Vector2(-21, 18),
+					center + Vector2(-21, -6),
+				])
+				draw_stroked_polygon(mech_pts, config.col_primary, _contour_color(), 1.6)
+				_batch_line(center + Vector2(0, -17), center + Vector2(0, 17), config.col_void, 1.5, true)
+				_batch_line(center + Vector2(-20, 5), center + Vector2(20, 5), config.col_accent, 1.4, true)
+				for i in range(3):
+					_circle(center + Vector2(-10 + float(i) * 10, -5), 1.1, config.col_secondary)
+
+		"spirit":
+			var hem := sin(_time * 2.8) * 2.2 + _step_sway(1.8)
+			var robe_pts := PackedVector2Array([
+				center + Vector2(-13, -18),
+				center + Vector2(13, -18),
+				center + Vector2(15, -4),
+				center + Vector2(17, 10),
+				center + Vector2(10, 24 + hem),
+				center + Vector2(3, 17 - hem),
+				center + Vector2(-4, 23 + hem),
+				center + Vector2(-11, 17 - hem),
+				center + Vector2(-17, 10),
+				center + Vector2(-15, -4),
+			])
+			draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.5)
+			_batch_line(center + Vector2(-13, 2), center + Vector2(13, 2), config.col_accent, 1.4, true)
+			_batch_polyline(PackedVector2Array([center + Vector2(0, 2), center + Vector2(-2, 10), center + Vector2(1, 18)]), config.col_secondary, 1.2, true)
+
+		"swordsman":
+			var coat_pts := PackedVector2Array([
+				center + Vector2(-14, -18),
+				center + Vector2(14, -18),
+				center + Vector2(17, -5),
+				center + Vector2(15, 21),
+				center + Vector2(0, 18),
+				center + Vector2(-15, 21),
+				center + Vector2(-17, -5),
+			])
+			draw_stroked_polygon(coat_pts, config.col_primary, _contour_color(), 1.6)
+			_batch_line(center + Vector2(-10, -18), center + Vector2(4, -2), config.col_secondary, 1.5, true)
+			_batch_line(center + Vector2(10, -18), center + Vector2(-3, -4), config.col_secondary, 1.5, true)
+			_batch_line(center + Vector2(-15, 2), center + Vector2(15, 2), config.col_accent, 1.8, true)
+			_batch_line(center + Vector2(-14, 5), center + Vector2(14, 5), config.col_secondary, 1.2, true)
+			_batch_line(center + Vector2(0, 5), center + Vector2(0, 18), config.col_void, 1.2, true)
+
+		"dragon":
+			var dragon_pts := PackedVector2Array([
+				center + Vector2(-15, -18),
+				center + Vector2(15, -18),
+				center + Vector2(18, -4),
+				center + Vector2(15, 19),
+				center + Vector2(-15, 19),
+				center + Vector2(-18, -4),
+			])
+			draw_stroked_polygon(dragon_pts, config.col_primary, _contour_color(), 1.6)
+			for i in range(4):
+				var dy := -1.0 + float(i) * 4.5
+				_batch_line(center + Vector2(-11 + float(i) * 0.8, dy), center + Vector2(11 - float(i) * 0.8, dy), config.col_secondary, 1.3, true)
+			var tail_sway := sin(_time * 2.2) * 4.0 + _step_sway(2.5)
+			var tail_pts := PackedVector2Array([
+				center + Vector2(-6, 18),
+				center + Vector2(-15 + tail_sway * 0.5, 27),
+				center + Vector2(-26 + tail_sway, 32),
+				center + Vector2(-34 + tail_sway * 1.2, 28),
+				center + Vector2(-24 + tail_sway, 25),
+				center + Vector2(-11 + tail_sway * 0.4, 18),
+			])
+			draw_stroked_polygon(tail_pts, config.col_primary, _contour_color(), 1.4)
+			_batch_polyline(PackedVector2Array([
+				center + Vector2(-26 + tail_sway, 32),
+				center + Vector2(-36 + tail_sway * 1.3, 31),
+				center + Vector2(-38 + tail_sway * 1.4, 25)
+			]), config.col_accent, 2.0, true)
+
+		"beast":
+			var beast_pts := PackedVector2Array([
+				center + Vector2(-15, -18),
+				center + Vector2(15, -18),
+				center + Vector2(25, -6),
+				center + Vector2(26, 12),
+				center + Vector2(18, 22),
+				center + Vector2(-18, 22),
+				center + Vector2(-26, 12),
+				center + Vector2(-25, -6),
+			])
+			draw_stroked_polygon(beast_pts, config.col_primary, _contour_color(), 1.8)
+			_batch_line(center + Vector2(-18, 3), center + Vector2(18, 3), config.col_accent, 1.6, true)
+			_batch_line(center + Vector2(-14, 10), center + Vector2(14, 10), config.col_secondary, 1.4, true)
+			_batch_line(center + Vector2(-10, 16), center + Vector2(10, 16), config.col_accent, 1.2, true)
+			var btail_sway := sin(_time * 1.8) * 4.5 + _step_sway(3.0)
+			var btail_pts := PackedVector2Array([
+				center + Vector2(-12, 18),
+				center + Vector2(-22 + btail_sway * 0.6, 26),
+				center + Vector2(-33 + btail_sway, 24),
+				center + Vector2(-24 + btail_sway * 0.5, 18),
+			])
+			draw_stroked_polygon(btail_pts, config.col_primary, _contour_color(), 1.5)
+
+		"void":
+			var void_torso_pts := PackedVector2Array([
+				center + Vector2(-12, -18),
+				center + Vector2(12, -18),
+				center + Vector2(17, -5),
+				center + Vector2(19, 10),
+				center + Vector2(13, 20),
+				center + Vector2(4, 15),
+				center + Vector2(-5, 21),
+				center + Vector2(-14, 16),
+				center + Vector2(-18, 8),
+				center + Vector2(-16, -5),
+			])
+			draw_stroked_polygon(void_torso_pts, config.col_primary, _contour_color(), 1.5)
+			_batch_polyline(PackedVector2Array([
+				center + Vector2(-8, -8), center + Vector2(-2, 2), center + Vector2(-6, 12)
+			]), config.col_void.lightened(0.15), 1.6, true)
+
+		_: # "demon"
+			var armor_pts := PackedVector2Array([
+				center + Vector2(-16, 20),
+				center + Vector2(-19, -6),
+				center + Vector2(-10, -18),
+				center + Vector2(10, -18),
+				center + Vector2(19, -6),
+				center + Vector2(16, 20),
+				center + Vector2(0, 15)
+			])
+			draw_stroked_polygon(armor_pts, config.col_primary, _contour_color(), 1.6)
+			for i in range(3):
+				var ab_y := 2.0 + float(i) * 5.0
+				_batch_line(center + Vector2(-14.0 + float(i) * 1.5, ab_y), center + Vector2(14.0 - float(i) * 1.5, ab_y), config.col_accent * Color(1, 1, 1, 0.55), 1.2, true)
+
+## Boss 肩甲轮廓（齿轮肩 / 轻羽肩 / 横剑护肩 / 龙鳞肩 / 兽肌肩 / 升腾残烟 / 魔王层叠肩）
+func _draw_boss_pauldrons(b_style: String, center: Vector2, _charge: float, _burst: float, _surge: float) -> void:
+	match b_style:
+		"construct":
+			for s in [-1.0, 1.0]:
+				var pauld_pts := PackedVector2Array([
+					center + Vector2(s * 13, -16),
+					center + Vector2(s * 22, -12),
+					center + Vector2(s * 23, -2),
+					center + Vector2(s * 13, -4),
+				])
+				draw_stroked_polygon(pauld_pts, config.col_primary, _contour_color(), 1.5)
+				_batch_line(center + Vector2(s * 22, -12), center + Vector2(s * 25, -11), config.col_secondary, 2.2, true)
+				_batch_line(center + Vector2(s * 23, -7), center + Vector2(s * 26, -7), config.col_secondary, 2.2, true)
+				_batch_line(center + Vector2(s * 22, -2), center + Vector2(s * 25, -3), config.col_secondary, 2.2, true)
+				_circle(center + Vector2(s * 17, -8), 1.3, config.col_void)
+
+		"spirit":
+			var p_bob := sin(_time * 2.5) * 1.2
+			for s in [-1.0, 1.0]:
+				var p_pts := PackedVector2Array([
+					center + Vector2(s * 12, -16),
+					center + Vector2(s * 22, -15 + p_bob),
+					center + Vector2(s * 18, -4),
+					center + Vector2(s * 11, -8),
+				])
+				draw_stroked_polygon(p_pts, config.col_primary, _contour_color(), 1.4)
+				_batch_line(center + Vector2(s * 13, -15), center + Vector2(s * 21, -14 + p_bob), config.col_accent, 1.4, true)
+
+		"swordsman":
+			for s in [-1.0, 1.0]:
+				var sp_pts := PackedVector2Array([
+					center + Vector2(s * 12, -16),
+					center + Vector2(s * 24, -13),
+					center + Vector2(s * 22, -8),
+					center + Vector2(s * 12, -8),
+				])
+				draw_stroked_polygon(sp_pts, config.col_primary, _contour_color(), 1.5)
+				_batch_line(center + Vector2(s * 12, -11), center + Vector2(s * 25, -11), config.col_secondary, 1.8, true)
+
+		"dragon":
+			for s in [-1.0, 1.0]:
+				var dp_pts := PackedVector2Array([
+					center + Vector2(s * 13, -16),
+					center + Vector2(s * 23, -12),
+					center + Vector2(s * 21, -3),
+					center + Vector2(s * 12, -6),
+				])
+				draw_stroked_polygon(dp_pts, config.col_primary, _contour_color(), 1.5)
+				_batch_polyline(PackedVector2Array([
+					center + Vector2(s * 20, -10), center + Vector2(s * 26, -15), center + Vector2(s * 23, -6)
+				]), config.col_secondary, 1.6, true)
+
+		"beast":
+			for s in [-1.0, 1.0]:
+				var bp_pts := PackedVector2Array([
+					center + Vector2(s * 13, -16),
+					center + Vector2(s * 26, -11),
+					center + Vector2(s * 25, 0),
+					center + Vector2(s * 13, -4),
+				])
+				draw_stroked_polygon(bp_pts, config.col_primary, _contour_color(), 1.6)
+				_batch_polyline(PackedVector2Array([
+					center + Vector2(s * 23, -8), center + Vector2(s * 29, -14), center + Vector2(s * 27, -5)
+				]), config.col_secondary, 2.2, true)
+
+		"void":
+			for s in [-1.0, 1.0]:
+				_batch_polyline(PackedVector2Array([
+					center + Vector2(s * 14, -14),
+					center + Vector2(s * 20, -18 + sin(_time * 3.0) * 2.0),
+					center + Vector2(s * 24, -12)
+				]), config.col_accent * Color(1, 1, 1, 0.6), 1.6, true)
+
+		_: # "demon"
+			for s in [-1.0, 1.0]:
+				var pauld_pts := PackedVector2Array([
+					center + Vector2(s * 13, -16),
+					center + Vector2(s * 21, -11),
+					center + Vector2(s * 20, -2),
+					center + Vector2(s * 12, -6),
+				])
+				draw_stroked_polygon(pauld_pts, config.col_primary, _contour_color(), 1.5)
+				_batch_line(center + Vector2(s * 12.8, -15), center + Vector2(s * 20.2, -10.3), config.col_secondary, 1.3, true)
+				_batch_polyline(PackedVector2Array([center + Vector2(s * 20.0, -8), center + Vector2(s * 25.5, -13.5)]), config.col_secondary, 2.0, true)
+				_circle(center + Vector2(s * 16.5, -8), 1.0, config.col_secondary)
+
+## Boss 胸口旋转灵核（机械机芯 / 魂蛊玉 / 剑心神印 / 龙元雷心 / 蛮荒凶煞核 / 虚空奇点 / 魔核）
+func _draw_boss_core(b_style: String, center: Vector2, _charge: float, _burst: float, surge: float) -> void:
+	match b_style:
+		"construct":
+			var core_r := 6.5 + surge * 2.0
+			var rot := _time * (1.2 + surge * 3.5)
+			draw_soft_glow(center, 9.0 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
+			_circle(center, core_r, config.col_void)
+			_arc(center, core_r, 0, TAU, 24, config.col_secondary, 1.4, true)
+			for i in range(4):
+				var ang := rot + float(i) * PI * 0.5
+				var dir := Vector2(cos(ang), sin(ang))
+				_batch_line(center, center + dir * (core_r * 0.8), config.col_glow, 1.8, true)
+			_circle(center, 1.8, config.col_glow.lightened(0.5))
+
+		"spirit":
+			var core_r := 5.8 + surge * 1.8
+			draw_soft_glow(center, 8.5 + surge * 8.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.35), 3)
+			draw_filled_ellipse(center, core_r * 1.15, core_r, config.col_void)
+			_circle(center, core_r * 0.7, config.col_glow)
+			_circle(center, core_r * 0.35, Color(1.0, 1.0, 1.0, 0.9))
+			for i in range(3):
+				var orbit_ang := _time * 2.5 + float(i) * TAU / 3.0
+				var orb_p := center + Vector2(cos(orbit_ang) * (core_r * 1.4), sin(orbit_ang) * (core_r * 0.9))
+				_circle(orb_p, 1.0, config.col_glow)
+
+		"swordsman":
+			var core_r := 6.4 + surge * 2.4
+			draw_soft_glow(center, 9.5 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
+			draw_filled_ellipse(center, core_r * 0.9, core_r * 1.2, config.col_void)
+			var sw_core_pts := PackedVector2Array([
+				center + Vector2(0.0, -core_r * 1.2),
+				center + Vector2(core_r * 0.75, 0.0),
+				center + Vector2(0.0, core_r * 1.2),
+				center + Vector2(-core_r * 0.75, 0.0),
+			])
+			draw_stroked_polygon(sw_core_pts, config.col_glow.lightened(surge * 0.4), config.col_void, 1.2)
+			var beam_h := 11.0 + surge * 8.0
+			_batch_line(center + Vector2(0, -beam_h), center + Vector2(0, beam_h), Color.WHITE, 1.6, true)
+
+		"dragon":
+			var core_r := 6.5 + surge * 2.2
+			draw_soft_glow(center, 9.5 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
+			_circle(center, core_r, config.col_void)
+			_circle(center, core_r * 0.75, config.col_glow)
+			_circle(center, core_r * 0.35, Color.WHITE)
+			for i in range(3):
+				var ea := _time * 4.0 + float(i) * 2.1
+				var edir := Vector2(cos(ea), sin(ea))
+				_batch_line(center + edir * 2.0, center + edir * (core_r * 1.2), config.col_accent, 1.2, true)
+
+		"beast":
+			var core_r := 7.0 + surge * 2.0
+			draw_soft_glow(center, 9.0 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
+			draw_filled_ellipse(center, core_r * 1.2, core_r, config.col_void)
+			_circle(center, core_r * 0.65, config.col_glow)
+			for i in range(4):
+				var fang_ang := float(i) * PI * 0.5 + PI * 0.25
+				var f_pos := center + Vector2(cos(fang_ang), sin(fang_ang)) * (core_r * 0.95)
+				_batch_line(f_pos, center + Vector2(cos(fang_ang), sin(fang_ang)) * (core_r * 0.4), config.col_secondary, 1.6, true)
+
+		"void":
+			var core_r := 5.8 - surge * 1.5 + surge * 2.5
+			draw_soft_glow(center, 8.0 + surge * 11.0, config.col_glow * Color(1, 1, 1, 0.6), 3)
+			_circle(center, core_r, Color(0.01, 0.01, 0.02, 1.0))
+			_arc(center, core_r + 0.8, 0, TAU, 24, config.col_glow, 1.2, true)
+			if surge > 0.4:
+				_circle(center, 1.5 * surge, Color.WHITE)
+
+		_: # "demon"
+			var core_rot := _time * (1.0 + surge * 3.2)
+			var core_r := 6.2 + surge * 2.2
+			draw_soft_glow(center, 9.0 + surge * 10.0, config.col_glow * Color(1, 1, 1, 0.5 + surge * 0.4), 3)
+			draw_filled_ellipse(center, core_r * 1.18, core_r, config.col_void)
+			var core_pts := PackedVector2Array([
+				center + Vector2(cos(core_rot), sin(core_rot)) * core_r,
+				center + Vector2(cos(core_rot + PI * 0.5), sin(core_rot + PI * 0.5)) * core_r * 0.72,
+				center + Vector2(cos(core_rot + PI), sin(core_rot + PI)) * core_r,
+				center + Vector2(cos(core_rot + PI * 1.5), sin(core_rot + PI * 1.5)) * core_r * 0.72,
+			])
+			draw_stroked_polygon(core_pts, config.col_glow.lightened(surge * 0.5), config.col_void, 1.2)
+			_circle(center, 1.6 + surge * 1.4, Color(1.0, 1.0, 1.0, 0.85 + surge * 0.15))
+
+## Boss 头颅面具与角冠（炉盖鼎耳 / 机关观察面 / 通天灵冠与蝶蛾角 / 剑冠发簪 / 龙角龙须与凤羽 / 阔吻蛮荒兽骨 / 镜面无相 / 鬼王骨面大魔角）
+func _draw_boss_head(b_style: String, head_pos: Vector2, _charge: float, _burst: float, _surge: float, final_boss: bool) -> void:
+	match b_style:
+		"construct":
+			var is_furnace := config != null and (config.enemy_id == "boss_luding" or config.display_name.contains("炉"))
+			if is_furnace:
+				var lid_pts := PackedVector2Array([
+					head_pos + Vector2(-10, 6),
+					head_pos + Vector2(-12, -2),
+					head_pos + Vector2(0, -9),
+					head_pos + Vector2(12, -2),
+					head_pos + Vector2(10, 6),
+					head_pos + Vector2(0, 9)
+				])
+				draw_stroked_polygon(lid_pts, config.col_secondary, config.col_void, 1.5)
+				_batch_line(head_pos + Vector2(0, -8), head_pos + Vector2(0, 8), config.col_void, 1.4, true)
+				_circle(head_pos + Vector2(0, -11), 2.4, config.col_secondary)
+				_circle(head_pos + Vector2(0, -11), 1.2, config.col_glow)
+				for s in [-1.0, 1.0]:
+					var ear_pts := PackedVector2Array([
+						head_pos + Vector2(s * 8, -4),
+						head_pos + Vector2(s * 13, -15),
+						head_pos + Vector2(s * 10, -17),
+						head_pos + Vector2(s * 5, -6),
+					])
+					draw_stroked_polygon(ear_pts, config.col_secondary, config.col_void, 1.4)
+			else:
+				var mask_pts := PackedVector2Array([
+					head_pos + Vector2(-10, 6),
+					head_pos + Vector2(-11, -6),
+					head_pos + Vector2(0, -12),
+					head_pos + Vector2(11, -6),
+					head_pos + Vector2(10, 6),
+					head_pos + Vector2(0, 10)
+				])
+				draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.5)
+				_batch_line(head_pos + Vector2(-10, -1), head_pos + Vector2(10, -1), config.col_void, 1.2, true)
+				for s in [-1.0, 1.0]:
+					_circle(head_pos + Vector2(s * 11, -1), 2.2, config.col_accent)
+					_batch_line(head_pos + Vector2(s * 4, -11), head_pos + Vector2(s * 8, -20), config.col_secondary, 1.8, true)
+
+		"spirit":
+			var s_pts := PackedVector2Array([
+				head_pos + Vector2(-8, 6),
+				head_pos + Vector2(-9, -4),
+				head_pos + Vector2(0, -11),
+				head_pos + Vector2(9, -4),
+				head_pos + Vector2(8, 6),
+				head_pos + Vector2(0, 11)
+			])
+			draw_stroked_polygon(s_pts, config.col_secondary, config.col_void, 1.4)
+			var is_yinhun := config != null and (config.enemy_id == "boss_yinhun" or config.display_name.contains("魂"))
+			if is_yinhun:
+				_batch_polyline(PackedVector2Array([
+					head_pos + Vector2(-5, -8), head_pos + Vector2(-3, -24), head_pos + Vector2(3, -24), head_pos + Vector2(5, -8)
+				]), config.col_secondary, 1.8, true)
+				var w_rib := sin(_time * 2.8) * 2.5
+				_batch_line(head_pos + Vector2(0, -24), head_pos + Vector2(-4 + w_rib, -33), config.col_accent, 1.4, true)
+			else:
+				for s in [-1.0, 1.0]:
+					var an_sway := sin(_time * 3.0 + s) * 2.0
+					_batch_polyline(PackedVector2Array([
+						head_pos + Vector2(s * 4, -9),
+						head_pos + Vector2(s * 12, -18),
+						head_pos + Vector2(s * 16 + an_sway, -23)
+					]), config.col_secondary, 1.6, true)
+					_circle(head_pos + Vector2(s * 16 + an_sway, -23), 1.2, config.col_glow)
+
+		"swordsman":
+			var sm_pts := PackedVector2Array([
+				head_pos + Vector2(-8, 6),
+				head_pos + Vector2(-10, -4),
+				head_pos + Vector2(0, -12),
+				head_pos + Vector2(10, -4),
+				head_pos + Vector2(8, 6),
+				head_pos + Vector2(0, 11)
+			])
+			draw_stroked_polygon(sm_pts, config.col_secondary, config.col_void, 1.5)
+			_batch_line(head_pos + Vector2(0, -11), head_pos + Vector2(0, 10), config.col_void, 1.4, true)
+			_batch_polyline(PackedVector2Array([
+				head_pos + Vector2(-4, -10), head_pos + Vector2(-2, -21), head_pos + Vector2(2, -21), head_pos + Vector2(4, -10)
+			]), config.col_secondary, 1.8, true)
+			_batch_line(head_pos + Vector2(-8, -16), head_pos + Vector2(8, -16), config.col_accent, 1.6, true)
+			var hair_sway := sin(_time * 2.6) * 2.0
+			_batch_line(head_pos + Vector2(-3, -15), head_pos + Vector2(-8 + hair_sway, -4), config.col_accent, 1.2, true)
+
+		"dragon":
+			var is_feng := config != null and (config.enemy_id == "boss_fenghuang" or config.display_name.contains("凤"))
+			var dm_pts := PackedVector2Array([
+				head_pos + Vector2(-9, 7),
+				head_pos + Vector2(-11, -4),
+				head_pos + Vector2(0, -12),
+				head_pos + Vector2(11, -4),
+				head_pos + Vector2(9, 7),
+				head_pos + Vector2(0, 11)
+			])
+			draw_stroked_polygon(dm_pts, config.col_secondary, config.col_void, 1.5)
+			if is_feng:
+				for i in range(3):
+					var f_off := float(i - 1) * 4.5
+					var f_sway := sin(_time * 3.0 + float(i)) * 1.8
+					_batch_polyline(PackedVector2Array([
+						head_pos + Vector2(f_off * 0.6, -10),
+						head_pos + Vector2(f_off * 1.5, -20),
+						head_pos + Vector2(f_off * 2.4 + f_sway, -28 - (3.0 if i == 1 else 0.0))
+					]), config.col_accent, 1.8, true)
+					_circle(head_pos + Vector2(f_off * 2.4 + f_sway, -28 - (3.0 if i == 1 else 0.0)), 1.2, config.col_glow)
+			else:
+				for s in [-1.0, 1.0]:
+					_batch_polyline(PackedVector2Array([
+						head_pos + Vector2(s * 5, -8),
+						head_pos + Vector2(s * 12, -18),
+						head_pos + Vector2(s * 15, -26)
+					]), config.col_secondary, 2.4, true)
+					_batch_line(head_pos + Vector2(s * 11, -16), head_pos + Vector2(s * 7, -24), config.col_secondary, 1.8, true)
+					var w_whisker := sin(_time * 3.4 + s) * 2.6
+					_batch_polyline(PackedVector2Array([
+						head_pos + Vector2(s * 8, 4),
+						head_pos + Vector2(s * 13 + w_whisker * 0.5, 9),
+						head_pos + Vector2(s * 16 + w_whisker, 16)
+					]), config.col_accent, 1.2, true)
+
+		"beast":
+			var beast_mask_pts := PackedVector2Array([
+				head_pos + Vector2(-12, 6),
+				head_pos + Vector2(-13, -5),
+				head_pos + Vector2(0, -11),
+				head_pos + Vector2(13, -5),
+				head_pos + Vector2(12, 6),
+				head_pos + Vector2(0, 12)
+			])
+			draw_stroked_polygon(beast_mask_pts, config.col_secondary, config.col_void, 1.6)
+			_batch_line(head_pos + Vector2(-8, -2), head_pos + Vector2(8, -2), config.col_void, 1.5, true)
+			_batch_line(head_pos + Vector2(0, -10), head_pos + Vector2(0, 11), config.col_void, 1.6, true)
+			for s in [-1.0, 1.0]:
+				_batch_polyline(PackedVector2Array([
+					head_pos + Vector2(s * 10, 2),
+					head_pos + Vector2(s * 14, 8),
+					head_pos + Vector2(s * 12, 14)
+				]), config.col_secondary, 2.4, true)
+				_batch_line(head_pos + Vector2(s * 7, -9), head_pos + Vector2(s * 15, -17), config.col_secondary, 2.0, true)
+
+		"void":
+			var void_mask_pts := PackedVector2Array([
+				head_pos + Vector2(-8, 6),
+				head_pos + Vector2(-10, -4),
+				head_pos + Vector2(0, -11),
+				head_pos + Vector2(10, -4),
+				head_pos + Vector2(8, 6),
+				head_pos + Vector2(0, 10)
+			])
+			draw_stroked_polygon(void_mask_pts, config.col_secondary * Color(0.8, 0.8, 0.9, 0.9), config.col_void, 1.4)
+			_arc(head_pos + Vector2(0, -12), 11.0, PI * 0.9, TAU + PI * 0.1, 20, config.col_accent * Color(1, 1, 1, 0.6), 1.6, true)
+
+		_: # "demon"
+			var mask_pts := PackedVector2Array([
+				head_pos + Vector2(-9, 7),
+				head_pos + Vector2(-11, -5),
+				head_pos + Vector2(0, -13),
+				head_pos + Vector2(11, -5),
+				head_pos + Vector2(9, 7),
+				head_pos + Vector2(0, 11)
+			])
+			draw_stroked_polygon(mask_pts, config.col_secondary, config.col_void, 1.5)
+			_batch_line(head_pos + Vector2(0, -12.5), head_pos + Vector2(0, 10), config.col_void, 1.4, true)
+			_batch_line(head_pos + Vector2(-8.5, -3), head_pos + Vector2(-6.5, 6), config.col_void, 1.0, true)
+			_batch_line(head_pos + Vector2(8.5, -3), head_pos + Vector2(6.5, 6), config.col_void, 1.0, true)
+
+			_batch_polyline(PackedVector2Array([
+				head_pos + Vector2(-6, -6), head_pos + Vector2(-14, -18), head_pos + Vector2(-11, -25)
+			]), config.col_secondary, 2.4, true)
+			_batch_polyline(PackedVector2Array([
+				head_pos + Vector2(6, -6), head_pos + Vector2(14, -18), head_pos + Vector2(11, -25)
+			]), config.col_secondary, 2.4, true)
+			_circle(head_pos + Vector2(-6.5, -7), 1.6, config.col_void)
+			_circle(head_pos + Vector2(6.5, -7), 1.6, config.col_void)
+
+			if final_boss:
+				_batch_polyline(PackedVector2Array([
+					head_pos + Vector2(-3, -11), head_pos + Vector2(0, -22), head_pos + Vector2(3, -11)
+				]), config.col_accent, 1.8, true)
+				_batch_line(head_pos + Vector2(-12.5, -19.5), head_pos + Vector2(-16.0, -23.0), config.col_accent, 1.4, true)
+				_batch_line(head_pos + Vector2(12.5, -19.5), head_pos + Vector2(16.0, -23.0), config.col_accent, 1.4, true)
+
+## Boss 眼眸（依据 config.eye_type 严格区分 twin_slits / slit / round / void）
+func _draw_boss_eyes(head_pos: Vector2, eye_col: Color) -> void:
+	var eye_t := config.eye_type if config != null else "twin_slits"
+	var eye_pulse := 1.0 + sin(_time * 3.1 + _phase_seed) * 0.10
+	match eye_t:
+		"round":
+			# 圆眸/镜片/炉火圆眼 (如炉君、傀王、千机、雷劫、元初兽)
+			for s in [-1.0, 1.0]:
+				var pos := head_pos + Vector2(s * 4.2, 0.0)
+				draw_soft_glow(pos, 6.0 * eye_pulse, eye_col, 2)
+				_circle(pos, 3.2, config.col_void)
+				var gaze := _gaze_offset(2.2)
+				_circle(pos + gaze, 2.0, eye_col)
+				_circle(pos + gaze + Vector2(-0.7, -0.7), 0.8, Color(1.0, 1.0, 1.0, 0.9))
+		"slit":
+			# 竖向冷冽剑瞳/龙眸狭缝 (高 > 宽，如太苍龙君、剑魄、葬剑仙、凤皇、鲲王、照影)
+			for s in [-1.0, 1.0]:
+				var pos := head_pos + Vector2(s * 4.0, 0.0)
+				draw_soft_glow(pos, 5.0 * eye_pulse, eye_col, 2)
+				var gaze := _gaze_offset(1.8)
+				var core_pos := pos + gaze
+				var pts := PackedVector2Array([
+					core_pos + Vector2(-1.8, 0.0),
+					core_pos + Vector2(0.0, -4.8),
+					core_pos + Vector2(1.8, 0.0),
+					core_pos + Vector2(0.0, 4.8)
+				])
+				BatchDraw.poly(self, pts, Color.WHITE if special_state <= 0.35 else Color.WHITE.lerp(eye_col, 0.3))
+				var hl_a: float = clampf(_gaze_glare() - 0.5, 0.6, 1.0)
+				_batch_line(core_pos + Vector2(0.0, -4.0), core_pos + Vector2(0.0, 4.0), Color(1.0, 1.0, 1.0, hl_a), 1.1, true)
+		"void":
+			# 无相虚空眼窝 (如无相天魔)
+			for s in [-1.0, 1.0]:
+				var pos := head_pos + Vector2(s * 4.0, 0.0)
+				draw_filled_ellipse(pos, 3.8, 2.4, config.col_void)
+				var gaze := _gaze_offset(1.5)
+				_circle(pos + gaze, 1.0, eye_col * Color(1, 1, 1, 0.85))
+		_:
+			# 默认 twin_slits: 横向霸气神魔冷眸
+			draw_sharp_eye(head_pos + Vector2(-4, 0), 4.2, 2.0, eye_col, Color.WHITE)
+			draw_sharp_eye(head_pos + Vector2(4, 0), 4.2, 2.0, eye_col, Color.WHITE)
 
 ## 15. 灵医：青囊药灵 (荷叶帽药童灵，背葫举杵周期性施治)
 func _draw_lingyi() -> void:
@@ -2132,12 +2790,10 @@ func _draw_lingyi() -> void:
 	var gourd_c := center + Vector2(-10.0, -5.0 + sin(t * 9.0) * 1.2 * lift)
 	draw_filled_ellipse(gourd_c + Vector2(0, 3.0), 3.6, 4.0, config.col_secondary) # 大肚
 	draw_filled_ellipse(gourd_c + Vector2(0.8, -2.2), 2.2, 2.4, config.col_secondary) # 小肚
-	BatchDraw.flush(self)
 	_batch_line(gourd_c + Vector2(1.4, -4.2), gourd_c + Vector2(2.2, -6.4), config.col_accent, 1.6, true) # 葫芦口颈
 	if lift > 0.15:
 		draw_soft_glow(gourd_c + Vector2(2.2, -6.4), 5.0 * lift, config.col_glow, 2)
 	# 系葫斜绦（跨胸束带）
-	BatchDraw.flush(self)
 	_batch_line(gourd_c + Vector2(1.0, 0.0), center + Vector2(6.0, -5.5), config.col_accent, 1.2, true)
 
 	# —— 药童袍躯：窄肩宽摆，下缘荷叶式飘摆 ——
@@ -2155,9 +2811,7 @@ func _draw_lingyi() -> void:
 	])
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.4)
 	# 袍前十字徽记（月白绷带布条）
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-3.5, 0.0), center + Vector2(3.5, 0.0), config.col_secondary, 2.2, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(0.0, -3.5), center + Vector2(0.0, 3.5), config.col_secondary, 2.2, true)
 
 	# —— 右侧垂袖持杵：施治节拍把捣药杵高高举起 ——
@@ -2171,7 +2825,6 @@ func _draw_lingyi() -> void:
 	draw_stroked_polygon(sleeve_pts, config.col_primary, _contour_color(), 1.2)
 	# 捣药杵（骨白杵杆，尖朝上）
 	var pestle_top := hand + Vector2(1.5, -8.0 - lift * 2.0)
-	BatchDraw.flush(self)
 	_batch_line(hand + Vector2(0.5, 2.0), pestle_top, config.col_secondary, 2.6, true)
 	_circle(pestle_top, 1.8, config.col_secondary)
 	if lift > 0.15:
@@ -2198,16 +2851,11 @@ func _draw_lingyi() -> void:
 		head_pos + Vector2(0, -1.5)
 	])
 	draw_stroked_polygon(leaf_pts, config.col_accent, _contour_color(), 1.3)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(0, -8.0), head_pos + Vector2(-6.0, -3.2), config.col_primary, 0.8, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(0, -8.0), head_pos + Vector2(6.0, -3.2), config.col_primary, 0.8, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(0, -8.0), head_pos + Vector2(0, -2.0), config.col_primary, 0.8, true)
 	# 系帽颍带
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(-4.5, -2.0), head_pos + Vector2(-2.5, 4.0), config.col_secondary, 0.8, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(4.5, -2.0), head_pos + Vector2(2.5, 4.0), config.col_secondary, 0.8, true)
 
 ## 16. 金蟾：衔宝金蟾 (胖圆宝兽，口衔铜钱)
@@ -2301,9 +2949,7 @@ func _draw_hanpo() -> void:
 	_circle(head_pos + Vector2(-2.2, -0.5), 1.4, config.col_glow)
 	_circle(head_pos + Vector2(2.2, -0.5), 1.4, config.col_glow)
 	# 极寒双角
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(-3.5, -3.0), head_pos + Vector2(-6.5, -8.0), config.col_secondary, 1.6, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(3.5, -3.0), head_pos + Vector2(6.5, -8.0), config.col_secondary, 1.6, true)
 
 ## 18. 血煞魔卫 (重装重铠魔卫，持巨骨重盾，冲撞+震地)
@@ -2327,11 +2973,8 @@ func _draw_mowei() -> void:
 	draw_stroked_polygon(plate_pts, config.col_primary, _contour_color(), 1.6)
 
 	# 胸铠血槽纹路
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(0, -8), center + Vector2(0, 9), config.col_accent, 1.6, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-9, -1), center + Vector2(-3, 6), config.col_accent, 1.2, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(9, -1), center + Vector2(3, 6), config.col_accent, 1.2, true)
 
 	# 左侧巨盾（厚实骨铁塔盾，带血煞尖刺）
@@ -2354,9 +2997,7 @@ func _draw_mowei() -> void:
 	_circle(head_pos + Vector2(-2.2, 0), 1.5, config.col_glow)
 	_circle(head_pos + Vector2(2.2, 0), 1.5, config.col_glow)
 	# 冲天鬼角
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(-3.5, -3.0), head_pos + Vector2(-7.5, -9.5), config.col_secondary, 2.0, true)
-	BatchDraw.flush(self)
 	_batch_line(head_pos + Vector2(3.5, -3.0), head_pos + Vector2(7.5, -9.5), config.col_secondary, 2.0, true)
 
 ## 19. 玄冥魔尊 (精英：幽冥玄煞，旋臂冥雷环+落石大阵+瞬身回斩)
@@ -2393,9 +3034,7 @@ func _draw_xuanming_elite() -> void:
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.6)
 
 	# 肩部玄铁骨刺
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-14, -8), center + Vector2(-20, -15), config.col_secondary, 2.4, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(14, -8), center + Vector2(20, -15), config.col_secondary, 2.4, true)
 
 	# 胸口玄冥炉心
@@ -2408,7 +3047,6 @@ func _draw_xuanming_elite() -> void:
 	_circle(head_pos + Vector2(-2.8, -0.5), 1.8, config.col_glow)
 	_circle(head_pos + Vector2(2.8, -0.5), 1.8, config.col_glow)
 	# 冲天骨冠
-	BatchDraw.flush(self)
 	_batch_polyline(PackedVector2Array([
 		head_pos + Vector2(-4.0, -4.5),
 		head_pos + Vector2(0.0, -12.0),
@@ -2439,10 +3077,8 @@ func _draw_xingpan_elite() -> void:
 	for i in range(8):
 		var ang := float(i) * TAU / 8.0 + PI / 8.0
 		inner_pts.append(center + Vector2(cos(ang), sin(ang)) * inner_r)
-	BatchDraw.flush(self)
 	_batch_polyline(inner_pts, config.col_accent * Color(1, 1, 1, 0.65), 1.2, true)
 	if inner_pts.size() > 0:
-		BatchDraw.flush(self)
 		_batch_line(inner_pts[inner_pts.size() - 1], inner_pts[0], config.col_accent * Color(1, 1, 1, 0.65), 1.2, true)
 
 	# 2. 正反双层旋转刻度环
@@ -2465,7 +3101,6 @@ func _draw_xingpan_elite() -> void:
 		var a := rot_inner + TAU * float(k) / 4.0
 		var p1 := center + Vector2(cos(a), sin(a)) * (ring_inner_r - 2.0)
 		var p2 := center + Vector2(cos(a), sin(a)) * (ring_inner_r + 2.0)
-		BatchDraw.flush(self)
 		_batch_line(p1, p2, config.col_glow, 1.5, true)
 
 	# 3. 四角悬浮镇物棱晶（随时间微浮，向外伸展）
@@ -2482,7 +3117,6 @@ func _draw_xingpan_elite() -> void:
 			c_pos - norm * 2.2
 		])
 		draw_stroked_polygon(cry_pts, config.col_secondary, config.col_glow, 1.2)
-		BatchDraw.flush(self)
 		_batch_line(center + Vector2(cos(a), sin(a)) * inner_r, c_pos - dir * 2.0, config.col_accent * Color(1, 1, 1, 0.45), 1.0, true)
 
 	# 4. 中央璀璨星核阵眼（极光辉光，蓄力时爆亮）
@@ -2513,7 +3147,6 @@ func _draw_wandu_elite() -> void:
 		_circle(orb_pos, 2.0, config.col_glow)
 		_circle(orb_pos, 1.0, Color(0.9, 1.0, 0.85, 0.95))
 		var smoke_end := orb_pos + Vector2(sin(_time * 3.5 + float(k)) * 3.0, -6.0)
-		BatchDraw.flush(self)
 		_batch_line(orb_pos, smoke_end, config.col_accent * Color(1, 1, 1, 0.5), 1.2, true)
 
 	# 2. 墨绿巫蛊祭袍躯干
@@ -2532,9 +3165,7 @@ func _draw_wandu_elite() -> void:
 	draw_stroked_polygon(robe_pts, config.col_primary, _contour_color(), 1.6)
 
 	# 祭袍两侧垂挂的翠毒妖纹破布条
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(-10.0, 10.0), center + Vector2(-12.0, 20.0), config.col_accent, 1.8, true)
-	BatchDraw.flush(self)
 	_batch_line(center + Vector2(10.0, 10.0), center + Vector2(12.0, 20.0), config.col_accent, 1.8, true)
 
 	# 3. 胸口幽绿蛊阵印记
@@ -2542,7 +3173,6 @@ func _draw_wandu_elite() -> void:
 	for k in range(3):
 		var a := float(k) * TAU / 3.0 - PI / 2.0
 		var rune_p := center + Vector2(0, 0) + Vector2(cos(a), sin(a)) * 3.6
-		BatchDraw.flush(self)
 		_batch_line(center + Vector2(0, 0), rune_p, config.col_accent, 1.5, true)
 	_circle(center + Vector2(0, 0), 2.0, config.col_glow)
 

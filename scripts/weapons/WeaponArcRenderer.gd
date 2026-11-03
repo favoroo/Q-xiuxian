@@ -217,7 +217,7 @@ func _band_tapered(r_out: float, half: float, thick_max: float, col: Color, shap
 		var ro: float = _edge_radius(a, r_out) if shaped_edge else r_out
 		# 收尖端保留 0.8px 最小厚度：内外缘完全重合的零面积接缝会导致三角化失败
 		pts[_ARC_STEPS + 1 + i] = Vector2(cos(a), sin(a)) * (ro - maxf(thick_max * _taper(u), 0.8))
-	draw_colored_polygon(pts, col)
+	BatchDraw.native_poly(self, pts, col)
 
 ## 刃口亮线：贴外缘的细线（跟随火舌/岩缘形态内收 2px，不刺出刃带）
 func _edge_line(r_out: float, half: float, col: Color, width: float, shaped_edge: bool) -> void:
@@ -227,9 +227,11 @@ func _edge_line(r_out: float, half: float, col: Color, width: float, shaped_edge
 		var a := -half + (half * 2.0) * float(i) / float(_ARC_STEPS)
 		var ro: float = _edge_radius(a, r_out) if shaped_edge else r_out
 		pts[i] = Vector2(cos(a), sin(a)) * (ro - 2.0)
-	draw_polyline(pts, col, width)
+	BatchDraw.native_polyline(self, pts, col, width)
 
 func _draw() -> void:
+	# 六层锥形弧带 + 元素点缀合成 1 个 draw call（2026-11-03 绘制专项）
+	BatchDraw.flush(self)
 	var pal := _palette(element)
 	var main: Color = pal["main"]
 	var core: Color = pal["core"]
@@ -239,6 +241,7 @@ func _draw() -> void:
 	else:
 		_draw_sweep_crescent(main, core, glow)
 	_draw_accents(main, core, glow)
+	BatchDraw.flush(self)
 
 ## 近战月牙：两端收尖的锥形细刃（中心厚 10px），内锐外羽六层叠画（T-2.1）——
 ## 外羽两段（顶 OUTER 的 0.05 / 顶 OUTER-4 的 0.10 低透渐变，alpha→0 区段加宽）
@@ -290,7 +293,7 @@ func _draw_accents(main: Color, core: Color, glow: Color) -> void:
 				lead.append(Vector2(cos(a), sin(a)) * (OUTER - 3.0))
 			var c := core
 			c.a = 1.0
-			draw_polyline(lead, c, 1.8)
+			BatchDraw.native_polyline(self, lead, c, 1.8)
 		"water":
 			# 晶棱：-40°/0°/+40° 三枚小菱晶嵌在外缘
 			var c := core
@@ -300,7 +303,7 @@ func _draw_accents(main: Color, core: Color, glow: Color) -> void:
 				var dir := Vector2(cos(a), sin(a))
 				var tan := Vector2(-sin(a), cos(a))
 				var base := dir * (OUTER - 7.0)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					base + tan * 3.5, dir * OUTER, base - tan * 3.5, dir * (OUTER - 12.0)]), c)
 		"wood":
 			# 拖缘叶刺：后半缘一串回勾的小三角刺（藤蔓抽打感；起点让开收尖的尾端）
@@ -312,7 +315,7 @@ func _draw_accents(main: Color, core: Color, glow: Color) -> void:
 				var dir := Vector2(cos(a), sin(a))
 				var tan := Vector2(-sin(a), cos(a))
 				var base := dir * (OUTER - 5.0)
-				draw_colored_polygon(PackedVector2Array([
+				BatchDraw.native_poly(self, PackedVector2Array([
 					base, base + tan * 5.5 - dir * 3.0, base - dir * 5.0]), c)
 				deg += 16.0
 		"fire":
@@ -323,14 +326,14 @@ func _draw_accents(main: Color, core: Color, glow: Color) -> void:
 				var a := -half + half * 2.0 * ph
 				var r := OUTER - 6.0 - float(i) * 2.5
 				c.a = 0.9 * (1.0 - ph)
-				draw_circle(Vector2(cos(a), sin(a)) * r, 1.6, c)
+				BatchDraw.native_circle(self, Vector2(cos(a), sin(a)) * r, 1.6, c)
 		"earth":
 			# 碎岩纹：刃带内三条深色裂纹
 			var c := Color(0.25, 0.18, 0.08, 0.55)
 			for deg in [-28.0, 2.0, 34.0]:
 				var a := deg_to_rad(deg)
 				var dir := Vector2(cos(a), sin(a))
-				draw_line(dir * (OUTER - 11.0), dir * (OUTER - 3.5) + Vector2(-sin(a), cos(a)) * 2.5, c, 1.4)
+				BatchDraw.native_line(self, dir * (OUTER - 11.0), dir * (OUTER - 3.5) + Vector2(-sin(a), cos(a)) * 2.5, c, 1.4)
 		"thunder":
 			# 锯齿电弧：沿刃带中段折线窜动
 			var pts := PackedVector2Array()
@@ -341,4 +344,4 @@ func _draw_accents(main: Color, core: Color, glow: Color) -> void:
 				pts.append(Vector2(cos(a), sin(a)) * r)
 			var c := core
 			c.a = 0.9
-			draw_polyline(pts, c, 1.4)
+			BatchDraw.native_polyline(self, pts, c, 1.4)

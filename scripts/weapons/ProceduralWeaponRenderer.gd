@@ -177,12 +177,16 @@ static func _build_palette(elem: String) -> Dictionary:
 			}
 
 func _draw() -> void:
+	# BatchDraw 静态缓冲全进程共用：入口先清残留；出口/早退分支统一 flush。
+	# 器形绘制全部走 BatchDraw 适配器（2026-11-03 绘制专项），单把法器从 ~29 draws 压到 1。
+	BatchDraw.flush(self)
 	# 竖置重器：把"长轴 +X"的器形整体转 -90° ⇒ 画布长轴朝上（世界竖直，与旧贴图姿态一致）。
 	# 非竖置的符箓（镇山符）保持 +X，长轴跟随瞄准方向。
 	if upright:
 		draw_set_transform(Vector2.ZERO, -PI * 0.5, Vector2.ONE)
 	# 新画法分发：族模块已接管（返回 true）就直接画完返回，否则继续走下方旧画法
 	if WeaponShapeLibrary.draw_shape(shape, self):
+		BatchDraw.flush(self)
 		return
 	match shape:
 		WeaponShape.SWORD:
@@ -239,14 +243,15 @@ func _draw() -> void:
 			_draw_awl()
 		WeaponShape.SHURIKEN:
 			pass  ## 真实画法已由 WeaponShapeLibrary/FineShapes 接管提前返回
+	BatchDraw.flush(self)
 
-	# ---------------- 通用构件 ----------------
+# ---------------- 通用构件 ----------------
 
 ## 带暗色描边的填充多边形：外圈暗底 + 内缩亮面
 ## 注：描边厚度按「内缩比例」控制，比例越接近 1 描边越细。器身小（屏上约 12px 宽），
 ## 描边必须克制，否则整把剑糊成黑框。
 func _fill_outlined(pts: PackedVector2Array, fill: Color) -> void:
-	draw_colored_polygon(pts, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.native_poly(self, pts, Color(0.06, 0.07, 0.10, 0.85))
 	var c := Vector2.ZERO
 	for p in pts:
 		c += p
@@ -254,7 +259,7 @@ func _fill_outlined(pts: PackedVector2Array, fill: Color) -> void:
 	var inner := PackedVector2Array()
 	for p in pts:
 		inner.append(c.lerp(p, 0.955))
-	draw_colored_polygon(inner, fill)
+	BatchDraw.native_poly(self, inner, fill)
 
 ## 剑格 + 剑柄 + 剑首（三种器形共用）
 func _draw_hilt(pal: Dictionary, w: float) -> void:
@@ -268,11 +273,11 @@ func _draw_hilt(pal: Dictionary, w: float) -> void:
 	])
 	_fill_outlined(guard, pal["edge"].darkened(0.2))
 	# 剑柄
-	draw_line(Vector2(-1.0, 0.0), Vector2(-handle_len, 0.0), Color(0.06, 0.06, 0.08), 2.6, true)
-	draw_line(Vector2(-1.0, 0.0), Vector2(-handle_len, 0.0), pal["handle"], 1.7, true)
+	BatchDraw.native_line(self, Vector2(-1.0, 0.0), Vector2(-handle_len, 0.0), Color(0.06, 0.06, 0.08), 2.6, true)
+	BatchDraw.native_line(self, Vector2(-1.0, 0.0), Vector2(-handle_len, 0.0), pal["handle"], 1.7, true)
 	# 剑首
-	AdaptiveDraw.circle(self, Vector2(-handle_len, 0.0), 1.7, Color(0.06, 0.06, 0.08))
-	AdaptiveDraw.circle(self, Vector2(-handle_len, 0.0), 1.1, pal["edge"])
+	BatchDraw.circle(self, Vector2(-handle_len, 0.0), 1.7, Color(0.06, 0.06, 0.08))
+	BatchDraw.circle(self, Vector2(-handle_len, 0.0), 1.1, pal["edge"])
 
 ## 器尖 HDR 起辉 + 升星强化
 ##  ★1：器尖一点寒芒
@@ -281,21 +286,21 @@ func _draw_hilt(pal: Dictionary, w: float) -> void:
 ##  ★4：辉线换太虚霓虹双色（电光青 HDR + 太虚紫），器尖再套一圈霓虹外环
 func _draw_star_fx(pal: Dictionary, tip: Vector2, ridge_a: Vector2, ridge_b: Vector2) -> void:
 	var r := 0.85 + 0.22 * float(star - 1)
-	AdaptiveDraw.circle(self, tip, r * 1.25, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.28))
-	AdaptiveDraw.circle(self, tip, r, pal["hdr"])
-	AdaptiveDraw.circle(self, tip, r * 0.5, Color(1.0, 1.0, 1.0, 0.95))
+	BatchDraw.circle(self, tip, r * 1.25, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.28))
+	BatchDraw.circle(self, tip, r, pal["hdr"])
+	BatchDraw.circle(self, tip, r * 0.5, Color(1.0, 1.0, 1.0, 0.95))
 	if star >= 2:
 		var mid := ridge_b.lerp(ridge_a, 0.55)
-		AdaptiveDraw.circle(self, mid, 1.0, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9))
-		AdaptiveDraw.circle(self, ridge_b.lerp(ridge_a, 0.3), 0.9, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.75))
+		BatchDraw.circle(self, mid, 1.0, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9))
+		BatchDraw.circle(self, ridge_b.lerp(ridge_a, 0.3), 0.9, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.75))
 	if star >= 4:
 		# 极境：电光青脊线 + 太虚紫外描 + 器尖霓虹环（HDR 分量 >1 走引擎泛光）
-		draw_line(ridge_b, ridge_a, BC.NEON_CYAN_HDR, 1.6, true)
-		draw_line(ridge_b, ridge_a, BC.NEON_VIOLET, 0.8, true)
-		draw_arc(tip, r * 1.9, 0.0, TAU, 20, BC.NEON_CYAN_HDR, 0.7, true)
+		BatchDraw.native_line(self, ridge_b, ridge_a, BC.NEON_CYAN_HDR, 1.6, true)
+		BatchDraw.native_line(self, ridge_b, ridge_a, BC.NEON_VIOLET, 0.8, true)
+		BatchDraw.native_arc(self, tip, r * 1.9, 0.0, TAU, 20, BC.NEON_CYAN_HDR, 0.7, true)
 	elif star >= 3:
-		draw_line(ridge_b, ridge_a, Color(1.0, 1.0, 1.0, 0.8), 1.3, true)
-		draw_line(ridge_b, ridge_a, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9), 0.6, true)
+		BatchDraw.native_line(self, ridge_b, ridge_a, Color(1.0, 1.0, 1.0, 0.8), 1.3, true)
+		BatchDraw.native_line(self, ridge_b, ridge_a, Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.9), 0.6, true)
 
 # ---------------- 直剑（双刃，刃身平行、末端收锋） ----------------
 func _draw_sword() -> void:
@@ -307,7 +312,7 @@ func _draw_sword() -> void:
 	var ricasso := L * 0.06
 
 	# 外晕（五行气）
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(L * 1.02, 0.0), Vector2(shoulder, -w * 1.45),
 		Vector2(-2.0, -w * 1.15), Vector2(-2.0, w * 1.15), Vector2(shoulder, w * 1.45),
 	]), Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.13))
@@ -318,14 +323,14 @@ func _draw_sword() -> void:
 		Vector2(ricasso * 0.4, -w * 0.9), Vector2(0.0, -w * 0.7), Vector2(0.0, 0.0),
 	]), pal["light"])
 	# 阴面（下刃，压暗）
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(L, 0.0), Vector2(0.0, 0.0), Vector2(0.0, w * 0.7),
 		Vector2(ricasso * 0.4, w * 0.9), Vector2(ricasso, w), Vector2(shoulder, w),
 	]), pal["dark"])
 
 	# 中脊血槽 + 刃口高光
-	draw_line(Vector2(L * 0.96, 0.0), Vector2(ricasso, 0.0), pal["edge"], 1.1, true)
-	draw_line(Vector2(shoulder, -w), Vector2(L * 0.99, -w * 0.12), Color(1.0, 1.0, 1.0, 0.55), 0.8, true)
+	BatchDraw.native_line(self, Vector2(L * 0.96, 0.0), Vector2(ricasso, 0.0), pal["edge"], 1.1, true)
+	BatchDraw.native_line(self, Vector2(shoulder, -w), Vector2(L * 0.99, -w * 0.12), Color(1.0, 1.0, 1.0, 0.55), 0.8, true)
 
 	_draw_hilt(pal, w)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.9, 0.0), Vector2(L * 0.2, 0.0))
@@ -337,7 +342,7 @@ func _draw_saber() -> void:
 	var star_k := 1.0 + 0.05 * float(star - 1)
 	var w := clampf(L * 0.24, 4.4, 7.0) * star_k
 
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(L * 1.02, 0.0), Vector2(L * 0.55, -w * 1.35),
 		Vector2(-1.0, -w * 1.1), Vector2(-1.0, w * 1.3),
 		Vector2(L * 0.5, w * 1.45),
@@ -353,7 +358,7 @@ func _draw_saber() -> void:
 		Vector2(0.0, w * 0.6), Vector2(0.0, 0.0),
 	]), pal["light"])
 	# 刀腹锋口流光
-	draw_line(Vector2(L, 0.0), Vector2(L * 0.30, w * 1.0), pal["edge"], 1.2, true)
+	BatchDraw.native_line(self, Vector2(L, 0.0), Vector2(L * 0.30, w * 1.0), pal["edge"], 1.2, true)
 
 	_draw_hilt(pal, w)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.82, -w * 0.2), Vector2(L * 0.22, w * 0.8))
@@ -366,7 +371,7 @@ func _draw_dagger() -> void:
 	var w := clampf(L * 0.26, 4.0, 6.2) * star_k
 	var belly := L * 0.50
 
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		Vector2(L * 1.02, 0.0), Vector2(belly, -w * 1.35),
 		Vector2(-1.0, -w * 0.8), Vector2(-1.0, w * 0.8), Vector2(belly, w * 1.35),
 	]), Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.15))
@@ -377,7 +382,7 @@ func _draw_dagger() -> void:
 	_fill_outlined(PackedVector2Array([
 		Vector2(L, 0.0), Vector2(0.0, 0.0), Vector2(L * 0.14, w * 0.42), Vector2(belly, w),
 	]), pal["dark"])
-	draw_line(Vector2(L * 0.94, 0.0), Vector2(L * 0.08, 0.0), pal["edge"], 1.0, true)
+	BatchDraw.native_line(self, Vector2(L * 0.94, 0.0), Vector2(L * 0.08, 0.0), pal["edge"], 1.0, true)
 
 	_draw_hilt(pal, w)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.75, 0.0), Vector2(L * 0.2, 0.0))
@@ -399,19 +404,19 @@ func _ink(pal: Dictionary) -> Color:
 ##  ★4 换太虚霓虹双色环（电光青外圈 + 太虚紫内圈，紫电琉璃）
 func _draw_core_fx(pal: Dictionary, center: Vector2, r0: float) -> void:
 	var r := r0 * (1.0 + 0.20 * float(star - 1))
-	AdaptiveDraw.circle(self, center, r * 2.0, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.22))
-	AdaptiveDraw.circle(self, center, r, pal["hdr"])
-	AdaptiveDraw.circle(self, center, r * 0.5, Color(1.0, 1.0, 1.0, 0.95))
+	BatchDraw.circle(self, center, r * 2.0, Color(pal["hdr"].r, pal["hdr"].g, pal["hdr"].b, 0.22))
+	BatchDraw.circle(self, center, r, pal["hdr"])
+	BatchDraw.circle(self, center, r * 0.5, Color(1.0, 1.0, 1.0, 0.95))
 	if star >= 2:
 		for i in range(2):
 			var a := PI * 0.5 + PI * float(i)
-			AdaptiveDraw.circle(self, center + Vector2(cos(a), sin(a)) * r * 2.4, r * 0.42,
+			BatchDraw.circle(self, center + Vector2(cos(a), sin(a)) * r * 2.4, r * 0.42,
 				Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.85))
 	if star >= 4:
-		AdaptiveDraw.arc(self, center, r * 2.9, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
-		AdaptiveDraw.arc(self, center, r * 2.4, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
+		BatchDraw.arc(self, center, r * 2.9, 0.0, TAU, BC.NEON_CYAN_HDR, 1.2, true)
+		BatchDraw.arc(self, center, r * 2.4, 0.0, TAU, BC.NEON_VIOLET, 0.9, true)
 	elif star >= 3:
-		AdaptiveDraw.arc(self, center, r * 2.7, 0.0, TAU,
+		BatchDraw.arc(self, center, r * 2.7, 0.0, TAU,
 			Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.55), 1.0, true)
 
 # ---------------- 符箓（竖挂/横置符纸 + 朱砂印 + 灵纹） ----------------
@@ -432,21 +437,21 @@ func _draw_talisman() -> void:
 	]), paper)
 
 	# 符头/符尾横箍
-	draw_line(Vector2(L * 0.78, -hw * 0.88), Vector2(L * 0.78, hw * 0.88), ink, 1.6, true)
-	draw_line(Vector2(-L * 0.70, -hw * 0.94), Vector2(-L * 0.70, hw * 0.94), ink, 1.4, true)
+	BatchDraw.native_line(self, Vector2(L * 0.78, -hw * 0.88), Vector2(L * 0.78, hw * 0.88), ink, 1.6, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.70, -hw * 0.94), Vector2(-L * 0.70, hw * 0.94), ink, 1.4, true)
 
 	# 朱砂印（符尾近处的方印，固定朱红 —— 符箓的丹砂色不随五行走）
 	var sc := Vector2(-L * 0.42, 0.0)
 	var sq := hw * 0.42
-	draw_colored_polygon(PackedVector2Array([
+	BatchDraw.native_poly(self, PackedVector2Array([
 		sc + Vector2(-sq, -sq), sc + Vector2(sq, -sq), sc + Vector2(sq, sq), sc + Vector2(-sq, sq),
 	]), Color(0.62, 0.12, 0.10, 0.92))
 
 	# 灵纹：沿符轴的主脉 + 两道侧纹 + 一道横向符胆
-	draw_line(Vector2(L * 0.68, 0.0), Vector2(-L * 0.12, 0.0), ink, 1.1, true)
-	draw_line(Vector2(L * 0.5, -hw * 0.45), Vector2(L * 0.08, -hw * 0.45), ink, 0.9, true)
-	draw_line(Vector2(L * 0.5, hw * 0.45), Vector2(L * 0.08, hw * 0.45), ink, 0.9, true)
-	draw_line(Vector2(L * 0.34, -hw * 0.5), Vector2(L * 0.34, hw * 0.5),
+	BatchDraw.native_line(self, Vector2(L * 0.68, 0.0), Vector2(-L * 0.12, 0.0), ink, 1.1, true)
+	BatchDraw.native_line(self, Vector2(L * 0.5, -hw * 0.45), Vector2(L * 0.08, -hw * 0.45), ink, 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.5, hw * 0.45), Vector2(L * 0.08, hw * 0.45), ink, 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.34, -hw * 0.5), Vector2(L * 0.34, hw * 0.5),
 		Color(edge.r, edge.g, edge.b, 0.6), 0.8, true)
 
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.55, 0.0), Vector2(-L * 0.15, 0.0))
@@ -468,26 +473,26 @@ func _draw_fan() -> void:
 	for i in range(SEG + 1):
 		var a := -half + 2.0 * half * float(i) / float(SEG)
 		outer.append(Vector2(cos(a), sin(a)) * L)
-	draw_colored_polygon(outer, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.native_poly(self, outer, Color(0.06, 0.07, 0.10, 0.85))
 	# 内缩亮面
 	var inner := PackedVector2Array([Vector2.ZERO])
 	for i in range(SEG + 1):
 		var a := -half + 2.0 * half * float(i) / float(SEG)
 		inner.append(Vector2(cos(a), sin(a)) * L * 0.95)
-	draw_colored_polygon(inner, paper)
+	BatchDraw.native_poly(self, inner, paper)
 
 	# 扇骨（7 根，自扇钉辐射到外缘）
 	for i in range(7):
 		var a := -half + 2.0 * half * float(i) / 6.0
-		draw_line(Vector2.ZERO, Vector2(cos(a), sin(a)) * L * 0.97, ink, 1.0, true)
+		BatchDraw.native_line(self, Vector2.ZERO, Vector2(cos(a), sin(a)) * L * 0.97, ink, 1.0, true)
 	# 外缘弧光
-	AdaptiveDraw.arc(self, Vector2.ZERO, L * 0.96, -half, half, Color(edge.r, edge.g, edge.b, 0.85), 1.6, true)
+	BatchDraw.arc(self, Vector2.ZERO, L * 0.96, -half, half, Color(edge.r, edge.g, edge.b, 0.85), 1.6, true)
 	# 扇柄（自扇钉向后）
-	draw_line(Vector2.ZERO, Vector2(-L * 0.34, 0.0), Color(0.06, 0.06, 0.08), 3.0, true)
-	draw_line(Vector2.ZERO, Vector2(-L * 0.34, 0.0), pal["handle"], 1.8, true)
+	BatchDraw.native_line(self, Vector2.ZERO, Vector2(-L * 0.34, 0.0), Color(0.06, 0.06, 0.08), 3.0, true)
+	BatchDraw.native_line(self, Vector2.ZERO, Vector2(-L * 0.34, 0.0), pal["handle"], 1.8, true)
 	# 扇钉
-	AdaptiveDraw.circle(self, Vector2.ZERO, 2.0, Color(0.06, 0.06, 0.08))
-	AdaptiveDraw.circle(self, Vector2.ZERO, 1.2, edge)
+	BatchDraw.circle(self, Vector2.ZERO, 2.0, Color(0.06, 0.06, 0.08))
+	BatchDraw.circle(self, Vector2.ZERO, 1.2, edge)
 
 	_draw_star_fx(pal, Vector2(L * 0.94, 0.0), Vector2(L * 0.55, -L * 0.36), Vector2(L * 0.55, L * 0.36))
 
@@ -506,15 +511,15 @@ func _draw_seal() -> void:
 	]), pal["light"])
 
 	# 拱形提钮（半环，落在首端）
-	AdaptiveDraw.arc(self, Vector2(L * 0.52, 0.0), L * 0.30, -PI * 0.5, PI * 0.5,
+	BatchDraw.arc(self, Vector2(L * 0.52, 0.0), L * 0.30, -PI * 0.5, PI * 0.5,
 		Color(0.06, 0.07, 0.10, 0.9), 4.4, true)
-	AdaptiveDraw.arc(self, Vector2(L * 0.52, 0.0), L * 0.30, -PI * 0.5, PI * 0.5,
+	BatchDraw.arc(self, Vector2(L * 0.52, 0.0), L * 0.30, -PI * 0.5, PI * 0.5,
 		pal["dark"], 2.6, true)
 
 	# 印面刻痕（尾端横线 + 中央朱文竖线）
-	draw_line(Vector2(-L * 0.82, -hw * 0.9), Vector2(-L * 0.82, hw * 0.9), ink, 1.4, true)
-	draw_line(Vector2(-L * 0.66, 0.0), Vector2(-L * 0.02, 0.0), ink, 1.2, true)
-	draw_line(Vector2(-L * 0.34, -hw * 0.55), Vector2(-L * 0.34, hw * 0.55),
+	BatchDraw.native_line(self, Vector2(-L * 0.82, -hw * 0.9), Vector2(-L * 0.82, hw * 0.9), ink, 1.4, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.66, 0.0), Vector2(-L * 0.02, 0.0), ink, 1.2, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.34, -hw * 0.55), Vector2(-L * 0.34, hw * 0.55),
 		Color(pal["edge"].r, pal["edge"].g, pal["edge"].b, 0.7), 1.0, true)
 
 	_draw_core_fx(pal, Vector2(-L * 0.2, 0.0), 1.6)
@@ -536,11 +541,11 @@ func _draw_tablet() -> void:
 	]), body)
 
 	# 云纹（沿轴主脉）+ 两侧回纹
-	draw_line(Vector2(L * 0.66, 0.0), Vector2(-L * 0.22, 0.0), Color(edge.r, edge.g, edge.b, 0.85), 1.2, true)
-	draw_line(Vector2(L * 0.42, -hw * 0.5), Vector2(-L * 0.42, -hw * 0.5), ink, 1.0, true)
-	draw_line(Vector2(L * 0.42, hw * 0.5), Vector2(-L * 0.42, hw * 0.5), ink, 1.0, true)
+	BatchDraw.native_line(self, Vector2(L * 0.66, 0.0), Vector2(-L * 0.22, 0.0), Color(edge.r, edge.g, edge.b, 0.85), 1.2, true)
+	BatchDraw.native_line(self, Vector2(L * 0.42, -hw * 0.5), Vector2(-L * 0.42, -hw * 0.5), ink, 1.0, true)
+	BatchDraw.native_line(self, Vector2(L * 0.42, hw * 0.5), Vector2(-L * 0.42, hw * 0.5), ink, 1.0, true)
 	# 首端吞口（雷云兽首横箍）
-	draw_line(Vector2(L * 0.78, -hw * 0.78), Vector2(L * 0.78, hw * 0.78), edge.darkened(0.2), 2.2, true)
+	BatchDraw.native_line(self, Vector2(L * 0.78, -hw * 0.78), Vector2(L * 0.78, hw * 0.78), edge.darkened(0.2), 2.2, true)
 
 	_draw_core_fx(pal, Vector2(-L * 0.35, 0.0), 1.6)
 
@@ -562,20 +567,20 @@ func _draw_lantern() -> void:
 		var a := TAU * float(i) / float(SEG)
 		outer.append(Vector2(cos(a) * bx, sin(a) * by))
 		inner.append(Vector2(cos(a) * bx * 0.94, sin(a) * by * 0.94))
-	draw_colored_polygon(outer, Color(0.06, 0.07, 0.10, 0.85))
-	draw_colored_polygon(inner, pal["light"])
+	BatchDraw.native_poly(self, outer, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.native_poly(self, inner, pal["light"])
 
 	# 纵向灯骨（沿长轴三道，垂直于长轴方向错开）
 	for i in range(3):
 		var yo := (float(i) - 1.0) * by * 0.52
-		draw_line(Vector2(-bx * 0.86, yo), Vector2(bx * 0.86, yo), Color(ink.r, ink.g, ink.b, 0.55), 0.9, true)
+		BatchDraw.native_line(self, Vector2(-bx * 0.86, yo), Vector2(bx * 0.86, yo), Color(ink.r, ink.g, ink.b, 0.55), 0.9, true)
 
 	# 上下箍（垂直于长轴，落在长轴两端）
-	draw_line(Vector2(bx * 0.72, -by * 0.66), Vector2(bx * 0.72, by * 0.66), edge.darkened(0.3), 2.2, true)
-	draw_line(Vector2(-bx * 0.72, -by * 0.66), Vector2(-bx * 0.72, by * 0.66), edge.darkened(0.3), 2.2, true)
+	BatchDraw.native_line(self, Vector2(bx * 0.72, -by * 0.66), Vector2(bx * 0.72, by * 0.66), edge.darkened(0.3), 2.2, true)
+	BatchDraw.native_line(self, Vector2(-bx * 0.72, -by * 0.66), Vector2(-bx * 0.72, by * 0.66), edge.darkened(0.3), 2.2, true)
 	# 流苏（自下箍向尾端拖出）
-	draw_line(Vector2(-bx * 0.9, 0.0), Vector2(-bx - L * 0.34, 0.0), edge, 1.4, true)
-	draw_line(Vector2(-bx - L * 0.20, 0.0), Vector2(-bx - L * 0.28, L * 0.10), Color(edge.r, edge.g, edge.b, 0.6), 1.0, true)
+	BatchDraw.native_line(self, Vector2(-bx * 0.9, 0.0), Vector2(-bx - L * 0.34, 0.0), edge, 1.4, true)
+	BatchDraw.native_line(self, Vector2(-bx - L * 0.20, 0.0), Vector2(-bx - L * 0.28, L * 0.10), Color(edge.r, edge.g, edge.b, 0.6), 1.0, true)
 
 	_draw_core_fx(pal, Vector2.ZERO, 1.7)
 
@@ -597,18 +602,18 @@ func _draw_drum() -> void:
 		var a := TAU * float(i) / float(SEG)
 		outer.append(Vector2(cos(a) * r, sin(a) * r))
 		inner.append(Vector2(cos(a) * r * 0.90, sin(a) * r * 0.90))
-	draw_colored_polygon(outer, Color(0.06, 0.07, 0.10, 0.85))
-	draw_colored_polygon(inner, pal["light"].darkened(0.08))
+	BatchDraw.native_poly(self, outer, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.native_poly(self, inner, pal["light"].darkened(0.08))
 
 	# 内圈鼓框
-	AdaptiveDraw.arc(self, Vector2.ZERO, r * 0.72, 0.0, TAU, edge.darkened(0.2), 1.6, true)
+	BatchDraw.arc(self, Vector2.ZERO, r * 0.72, 0.0, TAU, edge.darkened(0.2), 1.6, true)
 	# 鼓面蒙皮纹（十字 + 斜纹，暗示绷紧的皮面）
-	draw_line(Vector2(-r * 0.62, 0.0), Vector2(r * 0.62, 0.0), Color(ink.r, ink.g, ink.b, 0.45), 0.9, true)
-	draw_line(Vector2(0.0, -r * 0.62), Vector2(0.0, r * 0.62), Color(ink.r, ink.g, ink.b, 0.45), 0.9, true)
+	BatchDraw.native_line(self, Vector2(-r * 0.62, 0.0), Vector2(r * 0.62, 0.0), Color(ink.r, ink.g, ink.b, 0.45), 0.9, true)
+	BatchDraw.native_line(self, Vector2(0.0, -r * 0.62), Vector2(0.0, r * 0.62), Color(ink.r, ink.g, ink.b, 0.45), 0.9, true)
 	# 一圈鼓钉（8 颗，压在鼓框上）
 	for i in range(8):
 		var a := TAU * float(i) / 8.0 + PI / 8.0
-		AdaptiveDraw.circle(self, Vector2(cos(a), sin(a)) * r * 0.81, 1.0, edge)
+		BatchDraw.circle(self, Vector2(cos(a), sin(a)) * r * 0.81, 1.0, edge)
 
 	_draw_core_fx(pal, Vector2.ZERO, 1.7)
 
@@ -630,15 +635,15 @@ func _draw_bell() -> void:
 	]), pal["light"].darkened(0.06))
 
 	# 铎口沿 + 身中两道弦纹
-	draw_line(Vector2(-L * 0.88, -bot_w * 1.0), Vector2(-L * 0.88, bot_w * 1.0), edge.darkened(0.2), 2.2, true)
-	draw_line(Vector2(-L * 0.35, -bot_w * 0.72), Vector2(-L * 0.35, bot_w * 0.72), Color(ink.r, ink.g, ink.b, 0.6), 1.1, true)
-	draw_line(Vector2(L * 0.05, -top_w * 1.05), Vector2(L * 0.05, top_w * 1.05), Color(ink.r, ink.g, ink.b, 0.6), 1.1, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.88, -bot_w * 1.0), Vector2(-L * 0.88, bot_w * 1.0), edge.darkened(0.2), 2.2, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.35, -bot_w * 0.72), Vector2(-L * 0.35, bot_w * 0.72), Color(ink.r, ink.g, ink.b, 0.6), 1.1, true)
+	BatchDraw.native_line(self, Vector2(L * 0.05, -top_w * 1.05), Vector2(L * 0.05, top_w * 1.05), Color(ink.r, ink.g, ink.b, 0.6), 1.1, true)
 
 	# 顶部提环
-	AdaptiveDraw.arc(self, Vector2(L * 0.95, 0.0), L * 0.10, -PI * 0.6, PI * 0.6, edge, 1.6, true)
+	BatchDraw.arc(self, Vector2(L * 0.95, 0.0), L * 0.10, -PI * 0.6, PI * 0.6, edge, 1.6, true)
 	# 铎舌
-	draw_line(Vector2(0.0, 0.0), Vector2(-L * 0.62, 0.0), ink, 1.2, true)
-	AdaptiveDraw.circle(self, Vector2(-L * 0.66, 0.0), 1.3, edge)
+	BatchDraw.native_line(self, Vector2(0.0, 0.0), Vector2(-L * 0.62, 0.0), ink, 1.2, true)
+	BatchDraw.circle(self, Vector2(-L * 0.66, 0.0), 1.3, edge)
 
 	_draw_core_fx(pal, Vector2(-L * 0.1, 0.0), 1.6)
 
@@ -650,10 +655,10 @@ func _draw_bell() -> void:
 ## 于是只看得见锤头/斧刃，武器读成"悬空的铁块"。
 func _draw_shaft(pal: Dictionary, length: float, width: float) -> void:
 	var wood: Color = pal["handle"].lerp(pal["light"], 0.45)
-	draw_line(Vector2(-length, 0.0), Vector2(0.0, 0.0), Color(0.06, 0.06, 0.08), width + 1.4, true)
-	draw_line(Vector2(-length, 0.0), Vector2(0.0, 0.0), wood, width, true)
+	BatchDraw.native_line(self, Vector2(-length, 0.0), Vector2(0.0, 0.0), Color(0.06, 0.06, 0.08), width + 1.4, true)
+	BatchDraw.native_line(self, Vector2(-length, 0.0), Vector2(0.0, 0.0), wood, width, true)
 	# 柄身一侧高光，避免整根糊成一条平色
-	draw_line(Vector2(-length, -width * 0.28), Vector2(0.0, -width * 0.28),
+	BatchDraw.native_line(self, Vector2(-length, -width * 0.28), Vector2(0.0, -width * 0.28),
 		Color(pal["light"].r, pal["light"].g, pal["light"].b, 0.55), width * 0.3, true)
 
 # ---------------- 鞭（短柄 + 多节渐细鞭身） ----------------
@@ -675,17 +680,17 @@ func _draw_whip() -> void:
 	var ribbon := top.duplicate()
 	for i in range(bot.size() - 1, -1, -1):
 		ribbon.append(bot[i])
-	draw_colored_polygon(ribbon, pal["light"].darkened(0.12))
+	BatchDraw.native_poly(self, ribbon, pal["light"].darkened(0.12))
 	# 鞭脊流光
 	var ridge := PackedVector2Array()
 	for i in range(SEG + 1):
 		var t := float(i) / float(SEG)
 		ridge.append(Vector2(lerpf(0.0, L, t), sin(t * PI * 2.2) * L * 0.14))
-	draw_polyline(ridge, Color(edge.r, edge.g, edge.b, 0.85), 1.2, true)
+	BatchDraw.native_polyline(self, ridge, Color(edge.r, edge.g, edge.b, 0.85), 1.2, true)
 	# 短柄
 	_draw_shaft(pal, L * 0.34, 3.0)
 	# 鞭梢灵光
-	AdaptiveDraw.circle(self, Vector2(L, sin(PI * 2.2) * L * 0.14), 1.6, pal["hdr"])
+	BatchDraw.circle(self, Vector2(L, sin(PI * 2.2) * L * 0.14), 1.6, pal["hdr"])
 	_draw_star_fx(pal, Vector2(L, sin(PI * 2.2) * L * 0.14), Vector2(L * 0.7, 0.0), Vector2(L * 0.3, 0.0))
 
 # ---------------- 盾（盾面 + 盾脊 + 中央盾钉） ----------------
@@ -700,11 +705,11 @@ func _draw_shield() -> void:
 		Vector2(-L * 0.90, 0.0), Vector2(-L * 0.74, hh), Vector2(L * 0.34, hh * 0.80),
 	]), pal["light"])
 	# 盾脊（沿长轴）+ 横箍
-	draw_line(Vector2(L * 0.84, 0.0), Vector2(-L * 0.80, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.6, true)
-	draw_line(Vector2(L * 0.02, -hh * 0.74), Vector2(L * 0.02, hh * 0.74), pal["dark"], 1.4, true)
+	BatchDraw.native_line(self, Vector2(L * 0.84, 0.0), Vector2(-L * 0.80, 0.0), Color(edge.r, edge.g, edge.b, 0.9), 1.6, true)
+	BatchDraw.native_line(self, Vector2(L * 0.02, -hh * 0.74), Vector2(L * 0.02, hh * 0.74), pal["dark"], 1.4, true)
 	# 中央盾钉
-	AdaptiveDraw.circle(self, Vector2(L * 0.04, 0.0), 2.0, Color(0.06, 0.06, 0.08))
-	AdaptiveDraw.circle(self, Vector2(L * 0.04, 0.0), 1.2, edge)
+	BatchDraw.circle(self, Vector2(L * 0.04, 0.0), 2.0, Color(0.06, 0.06, 0.08))
+	BatchDraw.circle(self, Vector2(L * 0.04, 0.0), 1.2, edge)
 	_draw_core_fx(pal, Vector2(L * 0.04, 0.0), 1.1)
 
 # ---------------- 斧（长柄 + 单侧月牙斧刃） ----------------
@@ -724,9 +729,9 @@ func _draw_axe() -> void:
 		blade.append(Vector2(L * 0.18 + cos(a) * L * 0.30, sin(a) * L * 0.34))
 	_fill_outlined(blade, pal["light"])
 	# 斧背厚脊
-	draw_line(Vector2(L * 0.20, -L * 0.40), Vector2(L * 0.20, L * 0.40), pal["dark"], 2.0, true)
+	BatchDraw.native_line(self, Vector2(L * 0.20, -L * 0.40), Vector2(L * 0.20, L * 0.40), pal["dark"], 2.0, true)
 	# 刃口流光
-	draw_polyline(PackedVector2Array([
+	BatchDraw.native_polyline(self, PackedVector2Array([
 		Vector2(L * 0.18 + cos(-PI * 0.40) * L * 0.82, sin(-PI * 0.40) * L * 0.86),
 		Vector2(L * 0.18 + L * 0.82, 0.0),
 		Vector2(L * 0.18 + cos(PI * 0.40) * L * 0.82, sin(PI * 0.40) * L * 0.86),
@@ -745,8 +750,8 @@ func _draw_hammer() -> void:
 		Vector2(L * 1.0, -hw), Vector2(L * 1.0, hw), Vector2(L * 0.42, hw * 1.05),
 		Vector2(L * 0.42, -hw * 1.05),
 	]), pal["light"].darkened(0.05))
-	draw_line(Vector2(L * 0.94, -hw), Vector2(L * 0.94, hw), edge.darkened(0.15), 1.6, true)
-	draw_line(Vector2(L * 0.48, -hw * 1.02), Vector2(L * 0.48, hw * 1.02), pal["dark"], 1.4, true)
+	BatchDraw.native_line(self, Vector2(L * 0.94, -hw), Vector2(L * 0.94, hw), edge.darkened(0.15), 1.6, true)
+	BatchDraw.native_line(self, Vector2(L * 0.48, -hw * 1.02), Vector2(L * 0.48, hw * 1.02), pal["dark"], 1.4, true)
 	_draw_core_fx(pal, Vector2(L * 0.7, 0.0), 1.2)
 
 # ---------------- 锏（六棱重锏 + 节环 + 锏首） ----------------
@@ -761,13 +766,13 @@ func _draw_mace() -> void:
 		Vector2(-L * 0.72, w), Vector2(-L * 0.80, 0.0), Vector2(-L * 0.72, -w),
 	]), pal["light"].darkened(0.06))
 	# 棱线
-	draw_line(Vector2(L * 0.90, 0.0), Vector2(-L * 0.74, 0.0), Color(edge.r, edge.g, edge.b, 0.7), 1.2, true)
+	BatchDraw.native_line(self, Vector2(L * 0.90, 0.0), Vector2(-L * 0.74, 0.0), Color(edge.r, edge.g, edge.b, 0.7), 1.2, true)
 	# 节环两道
 	for i in range(2):
 		var x := L * (0.5 - float(i) * 0.55)
-		draw_line(Vector2(x, -w * 0.9), Vector2(x, w * 0.9), pal["dark"], 1.6, true)
+		BatchDraw.native_line(self, Vector2(x, -w * 0.9), Vector2(x, w * 0.9), pal["dark"], 1.6, true)
 	# 锏首（柄端圆环）
-	AdaptiveDraw.arc(self, Vector2(-L * 0.92, 0.0), L * 0.10, 0.0, TAU, edge, 1.6, true)
+	BatchDraw.arc(self, Vector2(-L * 0.92, 0.0), L * 0.10, 0.0, TAU, edge, 1.6, true)
 	_draw_core_fx(pal, Vector2(L * 0.45, 0.0), 1.3)
 
 # ---------------- 尺（长条金尺 + 刻度） ----------------
@@ -786,8 +791,8 @@ func _draw_ruler() -> void:
 		var t := float(i) / 4.0
 		var x := lerpf(L * 0.84, -L * 0.78, t)
 		var len := hw * (0.85 if i % 2 == 0 else 0.5)
-		draw_line(Vector2(x, -len), Vector2(x, len), ink, 0.9, true)
-	draw_line(Vector2(L * 0.96, 0.0), Vector2(-L * 0.86, 0.0), Color(edge.r, edge.g, edge.b, 0.55), 0.8, true)
+		BatchDraw.native_line(self, Vector2(x, -len), Vector2(x, len), ink, 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.96, 0.0), Vector2(-L * 0.86, 0.0), Color(edge.r, edge.g, edge.b, 0.55), 0.8, true)
 	_draw_core_fx(pal, Vector2(-L * 0.2, 0.0), 1.2)
 
 # ---------------- 剪（双刃交叉 + 指环） ----------------
@@ -802,13 +807,13 @@ func _draw_shears() -> void:
 			Vector2(-L * 0.12, s * L * 0.02), Vector2(-L * 0.12, s * L * 0.16),
 		]), pal["light"])
 		# 刃口
-		draw_line(Vector2(L, s * L * 0.30), Vector2(-L * 0.08, s * L * 0.09),
+		BatchDraw.native_line(self, Vector2(L, s * L * 0.30), Vector2(-L * 0.08, s * L * 0.09),
 			Color(edge.r, edge.g, edge.b, 0.9), 1.2, true)
 		# 指环（固定 24 段：小半径下自适应段数会把圆画成六边形）
-		draw_arc(Vector2(-L * 0.62, s * L * 0.28), L * 0.20, 0.0, TAU, 24, edge.darkened(0.15), 1.8, true)
+		BatchDraw.native_arc(self, Vector2(-L * 0.62, s * L * 0.28), L * 0.20, 0.0, TAU, 24, edge.darkened(0.15), 1.8, true)
 	# 转轴
-	AdaptiveDraw.circle(self, Vector2(-L * 0.14, 0.0), 1.8, Color(0.06, 0.06, 0.08))
-	AdaptiveDraw.circle(self, Vector2(-L * 0.14, 0.0), 1.0, edge)
+	BatchDraw.circle(self, Vector2(-L * 0.14, 0.0), 1.8, Color(0.06, 0.06, 0.08))
+	BatchDraw.circle(self, Vector2(-L * 0.14, 0.0), 1.0, edge)
 	_draw_star_fx(pal, Vector2(L * 0.96, L * 0.22), Vector2(L * 0.6, L * 0.1), Vector2(L * 0.2, 0.0))
 
 # ---------------- 梭（两头尖的流线梭） ----------------
@@ -822,9 +827,9 @@ func _draw_shuttle() -> void:
 		Vector2(-L * 0.86, 0.0), Vector2(-L * 0.55, w * 0.72), Vector2(L * 0.34, w),
 	]), pal["light"])
 	# 梭心线槽
-	draw_line(Vector2(L * 0.72, 0.0), Vector2(-L * 0.62, 0.0), Color(edge.r, edge.g, edge.b, 0.75), 1.2, true)
-	draw_line(Vector2(L * 0.30, -w * 0.55), Vector2(-L * 0.40, -w * 0.4), pal["dark"], 0.9, true)
-	draw_line(Vector2(L * 0.30, w * 0.55), Vector2(-L * 0.40, w * 0.4), pal["dark"], 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.72, 0.0), Vector2(-L * 0.62, 0.0), Color(edge.r, edge.g, edge.b, 0.75), 1.2, true)
+	BatchDraw.native_line(self, Vector2(L * 0.30, -w * 0.55), Vector2(-L * 0.40, -w * 0.4), pal["dark"], 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.30, w * 0.55), Vector2(-L * 0.40, w * 0.4), pal["dark"], 0.9, true)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.5, 0.0), Vector2(-L * 0.2, 0.0))
 
 # ---------------- 钉（方帽长钉） ----------------
@@ -843,7 +848,7 @@ func _draw_nail() -> void:
 		Vector2(-L * 0.50, -w * 2.1), Vector2(-L * 0.50, w * 2.1),
 		Vector2(-L * 0.78, w * 1.9), Vector2(-L * 0.78, -w * 1.9),
 	]), pal["dark"])
-	draw_line(Vector2(L * 0.70, 0.0), Vector2(-L * 0.40, 0.0), Color(edge.r, edge.g, edge.b, 0.8), 0.9, true)
+	BatchDraw.native_line(self, Vector2(L * 0.70, 0.0), Vector2(-L * 0.40, 0.0), Color(edge.r, edge.g, edge.b, 0.8), 0.9, true)
 	_draw_star_fx(pal, Vector2(L * 0.86, 0.0), Vector2(L * 0.5, 0.0), Vector2(L * 0.05, 0.0))
 
 # ---------------- 针（成束细针） ----------------
@@ -854,12 +859,12 @@ func _draw_needles() -> void:
 	# 三根细针并排（上/中/下），针尖朝 +X
 	for i in range(3):
 		var off := (float(i) - 1.0) * L * 0.20
-		draw_line(Vector2(-L * 0.62, off), Vector2(L, off * 0.35),
+		BatchDraw.native_line(self, Vector2(-L * 0.62, off), Vector2(L, off * 0.35),
 			Color(0.06, 0.06, 0.08), 2.2, true)
-		draw_line(Vector2(-L * 0.62, off), Vector2(L, off * 0.35), pal["light"], 1.1, true)
-		AdaptiveDraw.circle(self, Vector2(L, off * 0.35), 0.8, edge)
+		BatchDraw.native_line(self, Vector2(-L * 0.62, off), Vector2(L, off * 0.35), pal["light"], 1.1, true)
+		BatchDraw.circle(self, Vector2(L, off * 0.35), 0.8, edge)
 	# 束口（尾端缠绳）
-	draw_line(Vector2(-L * 0.62, -L * 0.26), Vector2(-L * 0.62, L * 0.26), pal["handle"], 2.6, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.62, -L * 0.26), Vector2(-L * 0.62, L * 0.26), pal["handle"], 2.6, true)
 	_draw_star_fx(pal, Vector2(L * 0.9, 0.0), Vector2(L * 0.4, 0.0), Vector2(0.0, 0.0))
 
 # ---------------- 弹弓（Y 形弓架 + 皮兜） ----------------
@@ -869,13 +874,13 @@ func _draw_sling() -> void:
 	var edge: Color = pal["edge"]
 	# 弓架：柄 + 两根分叉
 	var frame: Color = pal["dark"].lerp(pal["light"], 0.35)
-	draw_line(Vector2(-L * 0.80, 0.0), Vector2(-L * 0.10, 0.0), Color(0.06, 0.06, 0.08), 4.4, true)
-	draw_line(Vector2(-L * 0.80, 0.0), Vector2(-L * 0.10, 0.0), frame, 2.8, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.80, 0.0), Vector2(-L * 0.10, 0.0), Color(0.06, 0.06, 0.08), 4.4, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.80, 0.0), Vector2(-L * 0.10, 0.0), frame, 2.8, true)
 	for s in [-1.0, 1.0]:
-		draw_line(Vector2(-L * 0.10, 0.0), Vector2(L * 0.72, s * L * 0.46), Color(0.06, 0.06, 0.08), 3.6, true)
-		draw_line(Vector2(-L * 0.10, 0.0), Vector2(L * 0.72, s * L * 0.46), frame, 2.1, true)
+		BatchDraw.native_line(self, Vector2(-L * 0.10, 0.0), Vector2(L * 0.72, s * L * 0.46), Color(0.06, 0.06, 0.08), 3.6, true)
+		BatchDraw.native_line(self, Vector2(-L * 0.10, 0.0), Vector2(L * 0.72, s * L * 0.46), frame, 2.1, true)
 	# 皮兜（两叉之间的弧）
-	AdaptiveDraw.arc(self, Vector2(L * 0.30, 0.0), L * 0.52, -PI * 0.36, PI * 0.36,
+	BatchDraw.arc(self, Vector2(L * 0.30, 0.0), L * 0.52, -PI * 0.36, PI * 0.36,
 		Color(edge.r, edge.g, edge.b, 0.85), 1.4, true)
 	_draw_core_fx(pal, Vector2(L * 0.30, 0.0), 1.3)
 
@@ -895,11 +900,11 @@ func _draw_calabash() -> void:
 		pts.append(Vector2(_calabash_x(t, L), _calabash_w(t, L)))
 	_fill_outlined(pts, pal["light"].darkened(0.05))
 	# 收腰箍
-	draw_line(Vector2(L * 0.12, -L * 0.13), Vector2(L * 0.12, L * 0.13), edge.darkened(0.2), 2.0, true)
+	BatchDraw.native_line(self, Vector2(L * 0.12, -L * 0.13), Vector2(L * 0.12, L * 0.13), edge.darkened(0.2), 2.0, true)
 	# 口塞（器首）
-	draw_line(Vector2(L * 0.74, -L * 0.10), Vector2(L * 0.74, L * 0.10), pal["handle"], 2.8, true)
+	BatchDraw.native_line(self, Vector2(L * 0.74, -L * 0.10), Vector2(L * 0.74, L * 0.10), pal["handle"], 2.8, true)
 	# 大腹灵纹弧
-	draw_arc(Vector2(-L * 0.30, 0.0), L * 0.30, -PI * 0.45, PI * 0.45, 20,
+	BatchDraw.native_arc(self, Vector2(-L * 0.30, 0.0), L * 0.30, -PI * 0.45, PI * 0.45, 20,
 		Color(edge.r, edge.g, edge.b, 0.5), 1.0, true)
 	_draw_core_fx(pal, Vector2(-L * 0.30, 0.0), 1.6)
 
@@ -933,13 +938,13 @@ func _draw_flute() -> void:
 	# 指孔 4 个
 	for i in range(4):
 		var x := L * (0.5 - float(i) * 0.28)
-		AdaptiveDraw.circle(self, Vector2(x, 0.0), hw * 0.42, ink)
+		BatchDraw.circle(self, Vector2(x, 0.0), hw * 0.42, ink)
 	# 端箍
-	draw_line(Vector2(L * 0.94, -hw), Vector2(L * 0.94, hw), edge.darkened(0.2), 1.6, true)
-	draw_line(Vector2(-L * 0.86, -hw), Vector2(-L * 0.86, hw), edge.darkened(0.2), 1.6, true)
+	BatchDraw.native_line(self, Vector2(L * 0.94, -hw), Vector2(L * 0.94, hw), edge.darkened(0.2), 1.6, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.86, -hw), Vector2(-L * 0.86, hw), edge.darkened(0.2), 1.6, true)
 	# 流苏
-	draw_line(Vector2(-L * 0.92, 0.0), Vector2(-L * 1.10, 0.0), edge, 1.2, true)
-	draw_line(Vector2(-L * 1.02, 0.0), Vector2(-L * 1.08, L * 0.18), Color(edge.r, edge.g, edge.b, 0.6), 1.0, true)
+	BatchDraw.native_line(self, Vector2(-L * 0.92, 0.0), Vector2(-L * 1.10, 0.0), edge, 1.2, true)
+	BatchDraw.native_line(self, Vector2(-L * 1.02, 0.0), Vector2(-L * 1.08, L * 0.18), Color(edge.r, edge.g, edge.b, 0.6), 1.0, true)
 	_draw_core_fx(pal, Vector2(L * 0.1, 0.0), 1.2)
 
 # ---------------- 镜（圆镜 + 边框 + 镜柄） ----------------
@@ -949,16 +954,16 @@ func _draw_mirror() -> void:
 	var r := L * 0.62
 	var edge: Color = pal["edge"]
 	# 镜面（暗底 + 亮面）
-	AdaptiveDraw.circle(self, Vector2.ZERO, r, Color(0.06, 0.07, 0.10, 0.85))
-	AdaptiveDraw.circle(self, Vector2.ZERO, r * 0.90, pal["light"])
+	BatchDraw.circle(self, Vector2.ZERO, r, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.circle(self, Vector2.ZERO, r * 0.90, pal["light"])
 	# 镜框
-	AdaptiveDraw.arc(self, Vector2.ZERO, r * 0.95, 0.0, TAU, edge.darkened(0.1), 2.0, true)
+	BatchDraw.arc(self, Vector2.ZERO, r * 0.95, 0.0, TAU, edge.darkened(0.1), 2.0, true)
 	# 镜面高光斜带
-	draw_line(Vector2(-r * 0.5, r * 0.35), Vector2(r * 0.3, -r * 0.5),
+	BatchDraw.native_line(self, Vector2(-r * 0.5, r * 0.35), Vector2(r * 0.3, -r * 0.5),
 		Color(1.0, 1.0, 1.0, 0.45), 1.6, true)
 	# 镜柄（朝尾端）
-	draw_line(Vector2(-r * 0.9, 0.0), Vector2(-L * 0.98, 0.0), Color(0.06, 0.06, 0.08), 3.2, true)
-	draw_line(Vector2(-r * 0.9, 0.0), Vector2(-L * 0.98, 0.0), pal["handle"], 2.0, true)
+	BatchDraw.native_line(self, Vector2(-r * 0.9, 0.0), Vector2(-L * 0.98, 0.0), Color(0.06, 0.06, 0.08), 3.2, true)
+	BatchDraw.native_line(self, Vector2(-r * 0.9, 0.0), Vector2(-L * 0.98, 0.0), pal["handle"], 2.0, true)
 	_draw_core_fx(pal, Vector2.ZERO, 1.6)
 
 # ---------------- 珠（多棱宝珠 + 内核） ----------------
@@ -972,14 +977,14 @@ func _draw_bead() -> void:
 	for i in range(6):
 		var a := TAU * float(i) / 6.0 + PI / 6.0
 		pts.append(Vector2(cos(a), sin(a)) * r)
-	draw_colored_polygon(pts, Color(0.06, 0.07, 0.10, 0.85))
+	BatchDraw.native_poly(self, pts, Color(0.06, 0.07, 0.10, 0.85))
 	var inner := PackedVector2Array()
 	for p in pts:
 		inner.append(p * 0.90)
-	draw_colored_polygon(inner, pal["light"].darkened(0.05))
+	BatchDraw.native_poly(self, inner, pal["light"].darkened(0.05))
 	# 棱线
 	for i in range(6):
-		draw_line(Vector2.ZERO, pts[i] * 0.9, Color(edge.r, edge.g, edge.b, 0.55), 0.9, true)
+		BatchDraw.native_line(self, Vector2.ZERO, pts[i] * 0.9, Color(edge.r, edge.g, edge.b, 0.55), 0.9, true)
 	# 珠心
 	_draw_core_fx(pal, Vector2.ZERO, 1.8)
 
@@ -997,8 +1002,8 @@ func _draw_awl() -> void:
 	# 箍环两道
 	for i in range(2):
 		var x := -L * (0.10 + float(i) * 0.34)
-		draw_line(Vector2(x, -w * 0.92), Vector2(x, w * 0.92), pal["dark"], 1.8, true)
-	draw_line(Vector2(L * 0.9, 0.0), Vector2(-L * 0.6, 0.0), Color(edge.r, edge.g, edge.b, 0.75), 1.0, true)
+		BatchDraw.native_line(self, Vector2(x, -w * 0.92), Vector2(x, w * 0.92), pal["dark"], 1.8, true)
+	BatchDraw.native_line(self, Vector2(L * 0.9, 0.0), Vector2(-L * 0.6, 0.0), Color(edge.r, edge.g, edge.b, 0.75), 1.0, true)
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.5, 0.0), Vector2(-L * 0.1, 0.0))
 
 # ---------------- 手里剑（四芒旋刃 + 月牙磨刃 + 中心透孔） ----------------
@@ -1007,8 +1012,8 @@ func _draw_shuriken() -> void:
 	var pal := _palette()
 	var L := tip_len
 	var r_hole := L * 0.20
-	AdaptiveDraw.circle(self, Vector2.ZERO, L, pal["dark"])
-	AdaptiveDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
+	BatchDraw.circle(self, Vector2.ZERO, L, pal["dark"])
+	BatchDraw.circle(self, Vector2.ZERO, r_hole, Color(0.06, 0.07, 0.10, 0.95))
 	_draw_star_fx(pal, Vector2(L, 0.0), Vector2(L * 0.6, 0.0), Vector2(r_hole * 1.5, 0.0))
 
 

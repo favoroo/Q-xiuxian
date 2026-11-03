@@ -65,6 +65,13 @@ func _run() -> void:
 	get_tree().root.add_child(_spawn_root)
 	_player = GameManager.player
 	print("[BENCH] start type=%s step=%d steps=%d secs=%.1f" % [_type, _step, _steps, _secs])
+	# 等异步静态装饰烘焙落定（bake 内部 4+ 帧 await，成功后切换 MapLayer 子层显隐）。
+	# 2026-11-03 归因修正：不等的话 baked 状态与 GroundDecor/Arena 可见性会在 probe 中途变化，
+	# draws 采样出现 ±200 的假漂移（同一次 probe 里隐藏某层反而 draw 变多）。
+	for _i in range(120):
+		if BakedDecorTexture.is_baked():
+			break
+		await get_tree().process_frame
 	# 静态装饰烘焙状态（归因固定开销用）：MapLayer 里谁还在可见状态、烘焙图有没有挂上
 	var map_layer := get_node_or_null("/root/Main/MapLayer")
 	if map_layer != null:

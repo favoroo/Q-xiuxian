@@ -178,6 +178,11 @@ func _scene_or_null(path: String) -> PackedScene:
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
+	# 本局已终（阵亡/投降谢幕约 1.15s，run_invalidated 在致命判定或投降当刻就置真）：
+	# 冻结整条回合推进，别在演出期间走到波末把悟道/商店弹出来 —— 那会把死亡特写盖住，
+	# 还会因面板自带 paused 把谢幕补间冻在半路。复活时 GameOverDialog 会清锁，下一帧自恢复。
+	if GameManager.run_invalidated:
+		return
 	# 清场队列不分阶段消化：判据/作者模式会把 phase 直接改成 ALLOC，卡在 CLEARING 里排不干净
 	_drain_cleanup_queue()
 	match phase:
@@ -200,10 +205,11 @@ func _process(delta: float) -> void:
 			pass
 
 
-## 同屏敌人最终上限（2026-10-17 性能专项；2026-11-03 后期减量提质）：
+## 同屏敌人最终上限（2026-10-17 性能专项；2026-11-03 二次减量）：
 ## max_enemies（波次曲线）× 角色敌潮倍率 × 危险度倍率 × 深层潮数倍率，
-## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=32 绝对硬顶。
-## 潮数倍率只在这里乘一次：max_enemies_cap 深层段不再预先乘，否则同屏密度会被平方放大
+## 再夹 GameBalance.MAX_ENEMIES_HARD_CAP=24 绝对硬顶。算式收口在
+## BalanceWave.final_enemy_cap（纯函数），这里只做输入签名缓存。
+## 潮数倍率只乘一次：max_enemies_cap 深层段不再预先乘，否则同屏密度会被平方放大
 ##（旧写法 W28 左右就顶到 48）。
 ## 2026-10-24 输入签名缓存：_process_fight 每帧取 2 次，但四个输入只在开局/换波时变；
 ## 签名（max_enemies/倍率/危险度/波数）不变直接返回缓存，变了对齐重算一次。
@@ -215,10 +221,8 @@ func _final_enemy_cap() -> int:
 	if sig == _cap_sig:
 		return _cap_cache
 	_cap_sig = sig
-	var raw := int(round(float(max_enemies) * GameManager.enemy_count_mult
-		* GameBalance.danger_count_mult(GameManager.danger_level)
-		* GameBalance.endless_swarm_mult(wave_number)))
-	_cap_cache = mini(raw, GameBalance.MAX_ENEMIES_HARD_CAP)
+	_cap_cache = GameBalance.final_enemy_cap(max_enemies, GameManager.enemy_count_mult,
+		GameManager.danger_level, wave_number)
 	return _cap_cache
 
 func _process_fight(delta: float) -> void:
@@ -469,7 +473,10 @@ func start_wave(n: int) -> void:
 	_overtime_noted = false
 	# 上一回合没摊完的清场队列不许带进新回合（重开/跳波会打断 CLEARING 的分帧消化）
 	_cleanup_enemies.clear()
-	_cleanup_turrets.clear()
+	# 场上机关（跨回合保留）重新接管索敌与开火 —— 回合末 on_wave_end 把它们停在了整备态
+	for turret in get_tree().get_nodes_in_group("turrets"):
+		if turret is TurretUnit:
+			(turret as TurretUnit).set_wave_active(true)
 	wave_timer = wave_duration(n)
 	spawn_timer = 0.6
 	_batch_cooldown = 0.0
@@ -588,10 +595,14 @@ func end_wave(early_secs: float = 0.0) -> void:
 	for chest in get_tree().get_nodes_in_group("chests"):
 		if chest is SpiritChest:
 			(chest as SpiritChest).dissolve()
-	# 回合末收回场上机关炮台（数量可达 30，撤场演出同样进队列摊帧）
+	# 回合末机关整备（2026-11-03 手动布设改版）：机关**不收回**，就地停火、耐久回满、
+	# 青色回满脉冲，商店/悟道期间随整棵树暂停冻结在原地，下一波继续在原位工作。
+	# 为什么不在这里 dismiss：用户选了「跨回合保留」，阵地位置本身就是玩家的经营成果；
+	# 而回合间是全屏商店（整树暂停），玩家走不到机关旁边，耐久若留到下一波就成了无法处理的债。
+	# 机关数量上限也从旧的 30 台降到武器把数（每把 1 座），不再需要分帧撤场。
 	for turret in get_tree().get_nodes_in_group("turrets"):
 		if turret is TurretUnit:
-			_cleanup_turrets.append(turret)
+			(turret as TurretUnit).on_wave_end()
 	# 地上金币全部吸进袖中；残丹/回春葫芦走结算（贴身才入口，没捡到的回不上的折金币）
 	# 磁吸风暴分帧（2026-10-17 性能专项）：旧版同一帧把最多 140 颗宝石全部切进 60Hz
 	# 物理回调 + 各挂 Line2D 拖尾，正是回合末清场瞬间的掉帧尖峰来源。
@@ -606,31 +617,23 @@ const MAGNET_BATCH_PER_FRAME := 16
 var _magnet_queue: Array = []   ## 待磁吸宝石队列（出生序）；CLEARING 期间每帧消化一批
 
 # —— 回合末清场分帧（每渲染帧 ≤ CLEANUP_BATCH_PER_FRAME 个）——
-## 敌人消散 / 炮台撤场都要起演出（Tween + 溶解材质挂载），同帧全收会造一次性尖峰。
-## 10 个/帧：32 只 ≈ 4 帧摊完，清场等待窗 1s 足够。
+## 敌人消散要起演出（Tween + 溶解材质挂载），同帧全收会造一次性尖峰。
+## 10 个/帧：24 只 ≈ 3 帧摊完，清场等待窗 1s 足够。
 ## 注意队列里放的是「已退出战斗、只等演出」的个体：敌人必须先在 end_wave 当刻走完
 ## _begin_dissolve（dying/关物理/关碰撞），否则延迟的这几帧里还能被打死、白掉战果。
+## 机关不再进这个队列（2026-11-03）：回合末它们只整备不清场。
 const CLEANUP_BATCH_PER_FRAME := 10
 var _cleanup_enemies: Array = []
-var _cleanup_turrets: Array = []
 
 func _drain_cleanup_queue() -> void:
-	if _cleanup_enemies.is_empty() and _cleanup_turrets.is_empty():
+	if _cleanup_enemies.is_empty():
 		return
-	if not _cleanup_enemies.is_empty():
-		var batch := mini(CLEANUP_BATCH_PER_FRAME, _cleanup_enemies.size())
-		for i in range(batch):
-			var enemy = _cleanup_enemies[i]
-			if enemy != null and is_instance_valid(enemy) and enemy.is_inside_tree():
-				enemy._play_dissolve_fx()
-		_cleanup_enemies = _cleanup_enemies.slice(batch)
-	if not _cleanup_turrets.is_empty():
-		var tbatch := mini(CLEANUP_BATCH_PER_FRAME, _cleanup_turrets.size())
-		for i in range(tbatch):
-			var turret = _cleanup_turrets[i]
-			if turret != null and is_instance_valid(turret) and turret.is_inside_tree():
-				turret.dismiss()
-		_cleanup_turrets = _cleanup_turrets.slice(tbatch)
+	var batch := mini(CLEANUP_BATCH_PER_FRAME, _cleanup_enemies.size())
+	for i in range(batch):
+		var enemy = _cleanup_enemies[i]
+		if enemy != null and is_instance_valid(enemy) and enemy.is_inside_tree():
+			enemy._play_dissolve_fx()
+	_cleanup_enemies = _cleanup_enemies.slice(batch)
 
 func _collect_gems_batched(player: Node2D) -> void:
 	_magnet_queue.clear()
@@ -1110,6 +1113,9 @@ func _boss_title_for_id(bid: String) -> String:
 		title = "赤炎魔将"
 	if wave_number <= 40:
 		return title
+	# 深层专属魔君（W60~W100）是首临而非轮回，不加「轮回·」前缀
+	if bid in GameBalance.BOSS_DEEP_WAVE_IDS.values():
+		return title
 	return "轮回·" + title
 
 func _boss_announcement() -> String:
@@ -1123,7 +1129,10 @@ func _boss_announcement_for_id(bid: String, is_secondary: bool) -> String:
 	if wave_number == 20:
 		return "◆ 破境Boss战 · %s突入战场！" % title
 	if wave_number > 40:
-		return "◆ 轮回魔君 · %s再次降临！" % title
+		# 深层专属魔君（W60~W100）是首临渡劫，不是「再次降临」的轮回老面孔
+		if not (bid in GameBalance.BOSS_DEEP_WAVE_IDS.values()):
+			return "◆ 轮回魔君 · %s再次降临！" % title
+		return "◆ 渡劫魔君 · %s降临战场！" % title
 	if wave_number > 20:
 		return "◆ 深层Boss战 · %s突入战场！" % title
 	return "◆ Boss回合 · %s突入战场！" % title

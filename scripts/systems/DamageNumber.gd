@@ -17,6 +17,12 @@ const POP_DUR_CRIT := 0.12
 ## 旧帽下 18~30 条走溢出 new+free 通道，每 0.9s 生命周期一轮 = 每秒几十次节点增删抖动；
 ## 聚合合并后真实需求上限≈敌数×2.5，160 帽把溢出压到零。
 const POOL_CAP := 160
+## 拥挤档普通跳字软上限（2026-11-03 绘制专项）：gl_compatibility 下每条跳字的
+## draw_string_outline + draw_string 是 2 个独立 draw call，同一 CanvasItem 内也不合批
+## （实测 100 条同字体文字 = 200 draws）。112 条同屏 = 224 draws，是继武器/地图之后
+## 最大的一块单类提交。拥挤档（同屏敌 ≥24）只限制「普通白字」的新增数量；
+## 暴击、文字读数、链电身份色（tint.a>0）与已有聚合条不受影响，战斗读数不丢。
+const ACTIVE_SOFT_CAP_CROWDED := 64
 ## 同目标伤害跳字聚合窗（秒）：同一敌人窗口内的连续伤害并入同一条（累计值 + ×N），
 ## 新伤到来时窗口滑动续期；束流/喷吐/DoT 高频命中不再刷屏顶字，池溢出 new+free 抖动消失。
 const COMBO_WINDOW := 0.25
@@ -232,6 +238,12 @@ static func spawn(parent: Node, pos: Vector2, amount: int, is_crit: bool = false
 	# 同目标窗口聚合：命中已绑定的活跃跳字 → 累计值 + ×N 后缀，当前位置原地重播弹出。
 	# 只吞 _acquire（少一条节点），不吞伤害数值 —— EnemyBase 的集火保护仍按每发计。
 	if can_merge(combo_key, custom_text != "") and _try_merge(combo_key, amount, is_crit, pos):
+		return
+
+	# 拥挤档普通白字软上限：只挡「新增普通条」，不挡已有聚合条（上面已尝试并入）、
+	# 暴击、文字读数与链电身份色。伤害数值照常结算，少的是溢出的重复飘字。
+	if FxBudget.crowded and not is_crit and custom_text == "" and tint.a <= 0.0 \
+			and active_count >= ACTIVE_SOFT_CAP_CROWDED:
 		return
 
 	var text := custom_text

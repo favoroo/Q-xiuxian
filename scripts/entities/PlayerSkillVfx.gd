@@ -776,6 +776,7 @@ func _spawn_dash_wind_wisp() -> void:
 
 func _draw() -> void:
 	# 绘制层级：相对于 Player 中心 (0, 0)
+	BatchDraw.flush(self)
 
 	# 0. 程序化角色纯矢量流光虚影（最底层）
 	if not _vector_ghosts.is_empty():
@@ -835,6 +836,7 @@ func _draw() -> void:
 	# 13. 万剑归宗剑意槽与剑阵驻场（头顶 4 把渐进充能小剑）
 	if sword_qi_visible or sword_qi_charge > 0 or sword_qi_formation:
 		_draw_sword_qi_pips()
+	BatchDraw.flush(self)
 
 ## 绘制【影爆】：踩碎影层的幽夜爆发——影环双层扩张 + 地面影波 + 影锥碎芒放射。
 ## 角色层贴身演出；判定半径那一圈由世界层 JuiceEffect 冲击环表达（画多大 == 判多大）。
@@ -850,8 +852,8 @@ func _draw_shadowburst_fx() -> void:
 	# 1. 周身影环双层扩张（ease-out 扫开：外暗影主环 + 内 HDR 亮环逆转）
 	var eo := 1.0 - pow(1.0 - p, 3.0)
 	var ring_r := lerpf(10.0 * bs.x, 64.0 * bs.x, eo)
-	draw_arc(bc, ring_r, 0.0, TAU, 28, col_main, maxf(1.0, 4.0 * fade), true)
-	draw_arc(bc, ring_r * 0.72, -p * 3.0, -p * 3.0 + TAU * 0.8, 22, col_edge, 1.5, true)
+	BatchDraw.native_arc(self, bc, ring_r, 0.0, TAU, 28, col_main, maxf(1.0, 4.0 * fade), true)
+	BatchDraw.native_arc(self, bc, ring_r * 0.72, -p * 3.0, -p * 3.0 + TAU * 0.8, 22, col_edge, 1.5, true)
 
 	# 2. 地面影波（透视扁环，比身躯环慢半拍启动，读「震开一圈」）
 	var g_p := clampf((p - 0.12) / 0.88, 0.0, 1.0)
@@ -862,7 +864,7 @@ func _draw_shadowburst_fx() -> void:
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)
 			g_pts.append(fc + Vector2(cos(a) * g_rx, sin(a) * g_rx * 0.42))
-		draw_polyline(g_pts, Color(GameStyle.SHADOW.r, GameStyle.SHADOW.g, GameStyle.SHADOW.b, (1.0 - g_p) * 0.7), 2.0, true)
+		BatchDraw.native_polyline(self, g_pts, Color(GameStyle.SHADOW.r, GameStyle.SHADOW.g, GameStyle.SHADOW.b, (1.0 - g_p) * 0.7), 2.0, true)
 
 	# 3. 影锥碎芒放射（放射影刺 + 白芯尖端，随外扩减速衰减）
 	for sh in shadowburst_shards:
@@ -871,14 +873,14 @@ func _draw_shadowburst_fx() -> void:
 		var dir := Vector2(cos(ang), sin(ang))
 		var base := bc + dir * (8.0 * bs.x + dist)
 		var tip := base + dir * float(sh["len"]) * (0.6 + 0.4 * fade)
-		draw_line(base, tip, col_main, maxf(1.0, float(sh["size"]) * fade), true)
-		AdaptiveDraw.circle(self, tip, 1.3 * fade + 0.4,
+		BatchDraw.native_line(self, base, tip, col_main, maxf(1.0, float(sh["size"]) * fade), true)
+		BatchDraw.circle(self, tip, 1.3 * fade + 0.4,
 			Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, fade * 0.9), 3.2)
 
 	# 4. 起爆强闪（首 30% 一圈亮紫贴身影廓，证明「踩碎了」）
 	if p < 0.30:
 		var f := 1.0 - p / 0.30
-		draw_arc(bc, 20.0 * bs.x * (1.0 + p), 0.0, TAU, 20,
+		BatchDraw.native_arc(self, bc, 20.0 * bs.x * (1.0 + p), 0.0, TAU, 20,
 			Color(GameStyle.SHADOW_EDGE.r, GameStyle.SHADOW_EDGE.g, GameStyle.SHADOW_EDGE.b, f * 0.85), 2.2, true)
 
 ## 绘制【踏影】影层读数：头顶一排幽夜紫菱形，一层就是一刀，攒满换成亮紫并压一条可释放底线。
@@ -901,12 +903,12 @@ func _draw_shadow_pips() -> void:
 		var pts := PackedVector2Array([
 			c + Vector2(0.0, -r), c + Vector2(r * 0.72, 0.0), c + Vector2(0.0, r), c + Vector2(-r * 0.72, 0.0)])
 		var alpha := 0.55 + 0.45 * float(i) / maxf(1.0, float(n - 1))
-		draw_colored_polygon(pts, Color(col.r, col.g, col.b, alpha))
+		BatchDraw.native_poly(self, pts, Color(col.r, col.g, col.b, alpha))
 		pts.append(pts[0])
-		draw_polyline(pts, Color(GameStyle.CHALK.r, GameStyle.CHALK.g, GameStyle.CHALK.b, 0.32), 1.0)
+		BatchDraw.native_polyline(self, pts, Color(GameStyle.CHALK.r, GameStyle.CHALK.g, GameStyle.CHALK.b, 0.32), 1.0)
 	if full:
 		# 满层底线画在行的上方：往下压会横穿耳尖，把读数切成两截
-		draw_line(Vector2(start_x - gap * 0.6, top_y - 7.0),
+		BatchDraw.native_line(self, Vector2(start_x - gap * 0.6, top_y - 7.0),
 			Vector2(start_x + gap * float(n - 1) + gap * 0.6, top_y - 7.0), GameStyle.SHADOW_EDGE, 1.6)
 
 ## 绘制【万剑归宗】剑意槽：头顶单柄竖置小剑（蓄势时由剑柄向剑尖渐进充能；
@@ -954,10 +956,10 @@ func _draw_sword_qi_pips() -> void:
 		Vector2(c.x - blade_w, shoulder_y)
 	])
 	blade_pts.append(blade_pts[0])
-	draw_polyline(blade_pts, outline_col, 1.0)
-	draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), outline_col, 1.2 * s)
-	draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), outline_col, 1.2 * s)
-	AdaptiveDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, outline_col, 3.2)
+	BatchDraw.native_polyline(self, blade_pts, outline_col, 1.0)
+	BatchDraw.native_line(self, Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), outline_col, 1.2 * s)
+	BatchDraw.native_line(self, Vector2(c.x, guard_y), Vector2(c.x, pommel_y), outline_col, 1.2 * s)
+	BatchDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, outline_col, 3.2)
 
 	# 2. 充能填色（未开阵逐层充能；开阵沙漏倒计时流逝）
 	if fill_ratio > 0.0:
@@ -979,23 +981,23 @@ func _draw_sword_qi_pips() -> void:
 				Vector2(c.x - blade_w, guard_y),
 				Vector2(c.x - blade_w, shoulder_y)
 			])
-			draw_colored_polygon(full_blade, fill_col)
+			BatchDraw.native_poly(self, full_blade, fill_col)
 			full_blade.append(full_blade[0])
-			draw_polyline(full_blade, Color(1.0, 1.0, 1.0, 0.75), 1.0)
-			draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, pommel_y), fill_col, 1.5 * s)
-			AdaptiveDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, fill_col, 3.2)
-			draw_line(Vector2(c.x, guard_y), Vector2(c.x, tip_y),
+			BatchDraw.native_polyline(self, full_blade, Color(1.0, 1.0, 1.0, 0.75), 1.0)
+			BatchDraw.native_line(self, Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
+			BatchDraw.native_line(self, Vector2(c.x, guard_y), Vector2(c.x, pommel_y), fill_col, 1.5 * s)
+			BatchDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, fill_col, 3.2)
+			BatchDraw.native_line(self, Vector2(c.x, guard_y), Vector2(c.x, tip_y),
 				Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.85), 1.1)
 		else:
 			# 渐进/流逝状态：从底部向上填充至水位线 fill_top
 			var fill_top: float = pommel_y - total_h * fill_ratio
 			# 剑首与剑柄
-			AdaptiveDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, fill_col, 3.2)
-			draw_line(Vector2(c.x, pommel_y), Vector2(c.x, maxf(fill_top, guard_y)), fill_col, 1.5 * s)
+			BatchDraw.circle(self, Vector2(c.x, pommel_y), pommel_r, fill_col, 3.2)
+			BatchDraw.native_line(self, Vector2(c.x, pommel_y), Vector2(c.x, maxf(fill_top, guard_y)), fill_col, 1.5 * s)
 			# 护手
 			if fill_top <= guard_y:
-				draw_line(Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
+				BatchDraw.native_line(self, Vector2(c.x - guard_w, guard_y), Vector2(c.x + guard_w, guard_y), fill_col, 1.5 * s)
 			# 剑身几何截断填充
 			if fill_top < guard_y:
 				if fill_top >= shoulder_y:
@@ -1005,8 +1007,8 @@ func _draw_sword_qi_pips() -> void:
 						Vector2(c.x + blade_w, fill_top),
 						Vector2(c.x - blade_w, fill_top)
 					])
-					draw_colored_polygon(b_pts, fill_col)
-					draw_line(Vector2(c.x, guard_y), Vector2(c.x, fill_top),
+					BatchDraw.native_poly(self, b_pts, fill_col)
+					BatchDraw.native_line(self, Vector2(c.x, guard_y), Vector2(c.x, fill_top),
 						Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.80), 1.0)
 				else:
 					var k := (shoulder_y - fill_top) / maxf(0.001, shoulder_y - tip_y)
@@ -1019,8 +1021,8 @@ func _draw_sword_qi_pips() -> void:
 						Vector2(c.x - tip_w, fill_top),
 						Vector2(c.x - blade_w, shoulder_y)
 					])
-					draw_colored_polygon(b_pts, fill_col)
-					draw_line(Vector2(c.x, guard_y), Vector2(c.x, fill_top),
+					BatchDraw.native_poly(self, b_pts, fill_col)
+					BatchDraw.native_line(self, Vector2(c.x, guard_y), Vector2(c.x, fill_top),
 						Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, 0.80), 1.0)
 
 ## 绘制程序化修仙角色的纯矢量流光身法虚影（彻底解决老版蓝衫小人残影 Bug）
@@ -1039,8 +1041,8 @@ func _draw_vector_ghosts() -> void:
 
 		# 绘制流光身形剪影：头部面具轮廓 + 飘逸斗篷下摆
 		var head_c := rel_pos + Vector2(0.0, -15.0)
-		AdaptiveDraw.circle(self, head_c, 8.5, Color(col.r, col.g, col.b, alpha * 0.45), 3.2)
-		draw_arc(head_c, 8.5, 0, TAU, 16, Color(1.0, 1.0, 1.0, alpha * 0.75), 1.0, true)
+		BatchDraw.circle(self, head_c, 8.5, Color(col.r, col.g, col.b, alpha * 0.45), 3.2)
+		BatchDraw.native_arc(self, head_c, 8.5, 0, TAU, 16, Color(1.0, 1.0, 1.0, alpha * 0.75), 1.0, true)
 
 		# 飘逸斗篷轮廓
 		var cloak_pts := PackedVector2Array([
@@ -1053,8 +1055,8 @@ func _draw_vector_ghosts() -> void:
 			rel_pos + Vector2(-13.0 * flip, 14.0),
 			rel_pos + Vector2(-10.0 * flip, -1.0)
 		])
-		draw_colored_polygon(cloak_pts, Color(col.r, col.g, col.b, alpha * 0.40))
-		draw_polyline(cloak_pts, Color(1.0, 1.0, 1.0, alpha * 0.85), 1.2, true)
+		BatchDraw.native_poly(self, cloak_pts, Color(col.r, col.g, col.b, alpha * 0.40))
+		BatchDraw.native_polyline(self, cloak_pts, Color(1.0, 1.0, 1.0, alpha * 0.85), 1.2, true)
 
 ## 绘制【疾风咒】：脚下双层疾风轮 + 贴身螺旋上升气流 + 升腾风丝
 ## （不环身画法阵、不遮角色，与金光护体的椭球罩构图彻底区分）
@@ -1080,9 +1082,9 @@ func _draw_haste_fx() -> void:
 			for s in range(steps + 1):
 				var a := a0 + span * (float(s) / float(steps))
 				pts.append(feet + Vector2(cos(a) * wheel_rx, sin(a) * wheel_ry))
-			draw_polyline(pts, col_edge, 2.0 if i == 0 else 1.4, true)
+			BatchDraw.native_polyline(self, pts, col_edge, 2.0 if i == 0 else 1.4, true)
 			# 轮端纯白破空锋点
-			AdaptiveDraw.circle(self, pts[steps], 2.2 if i == 0 else 1.6, Color.WHITE, 3.2)
+			BatchDraw.circle(self, pts[steps], 2.2 if i == 0 else 1.6, Color.WHITE, 3.2)
 
 	# 轮心贴地加速微弧（扁弧快转，蓄势感）
 	var hub_a := haste_rot * 2.2
@@ -1090,7 +1092,7 @@ func _draw_haste_fx() -> void:
 	for s in range(9):
 		var a := hub_a + 1.5 * (float(s) / 8.0)
 		hub_pts.append(feet + Vector2(cos(a) * 11.0 * bs.x, sin(a) * 4.0 * bs.x))
-	draw_polyline(hub_pts, col_main, 1.3, true)
+	BatchDraw.native_polyline(self, hub_pts, col_main, 1.3, true)
 
 	# 2. 贴身螺旋上升气流：3 条相位差 TAU/3 的流线从脚底绕升到头顶上方，逐段渐隐
 	var steps_c := 12
@@ -1104,10 +1106,10 @@ func _draw_haste_fx() -> void:
 			var p := Vector2(wob * (17.0 * (1.0 - t * 0.5) * bs.x), y)
 			if s > 0:
 				var seg_a := (1.0 - t) * 0.62 + 0.08
-				draw_line(prev_p, p, Color(col_main.r, col_main.g, col_main.b, seg_a), 1.8, true)
+				BatchDraw.native_line(self, prev_p, p, Color(col_main.r, col_main.g, col_main.b, seg_a), 1.8, true)
 			prev_p = p
 		# 流线顶端逸散微光
-		AdaptiveDraw.circle(self, prev_p, 1.5, Color(1, 1, 1, 0.55), 3.2)
+		BatchDraw.circle(self, prev_p, 1.5, Color(1, 1, 1, 0.55), 3.2)
 
 	# 3. 向上飞升的蓝色风刃光丝（Sparks）
 	for sp in haste_sparks:
@@ -1115,8 +1117,8 @@ func _draw_haste_fx() -> void:
 		var p_col := Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, ratio * 0.95)
 		var p_pos := Vector2(sp["pos"])
 		var p_tail := p_pos - Vector2(sp["vel"]).normalized() * (10.0 * ratio)
-		draw_line(p_tail, p_pos, p_col, 2.0, true)
-		AdaptiveDraw.circle(self, p_pos, 1.2, Color(1, 1, 1, ratio * 0.9), 3.2)
+		BatchDraw.native_line(self, p_tail, p_pos, p_col, 2.0, true)
+		BatchDraw.circle(self, p_pos, 1.2, Color(1, 1, 1, ratio * 0.9), 3.2)
 
 ## 绘制【神行术】：脚底御风双层青轮 + 身侧破风流光飘带
 func _draw_gale_wind() -> void:
@@ -1133,9 +1135,9 @@ func _draw_gale_wind() -> void:
 		for s in range(11):
 			var a := base_a + 1.8 * (float(s) / 10.0)
 			pts.append(FEET_CENTER + Vector2(cos(a) * wheel_rx, sin(a) * wheel_ry))
-		draw_polyline(pts, col_edge, 2.2, true)
+		BatchDraw.native_polyline(self, pts, col_edge, 2.2, true)
 		# 轮端纯白破空锋点
-		AdaptiveDraw.circle(self, pts[pts.size() - 1], 2.2, Color.WHITE, 3.2)
+		BatchDraw.circle(self, pts[pts.size() - 1], 2.2, Color.WHITE, 3.2)
 
 	# 内层风轮（对齐俯视透视椭圆）
 	var in_pts := PackedVector2Array()
@@ -1144,7 +1146,7 @@ func _draw_gale_wind() -> void:
 	for s in range(13):
 		var a := -gale_wind_phase + (PI * 1.2) * (float(s) / 12.0)
 		in_pts.append(FEET_CENTER + Vector2(cos(a) * in_rx, sin(a) * in_ry))
-	draw_polyline(in_pts, col_main, 1.4, true)
+	BatchDraw.native_polyline(self, in_pts, col_main, 1.4, true)
 
 	# 2. 身躯两侧上升的灵动青风流带（轻柔飘逸曲线，告别生硬粗折线）
 	for side_val in [-1.0, 1.0]:
@@ -1155,9 +1157,9 @@ func _draw_gale_wind() -> void:
 			var y := lerpf(16.0, -36.0, t)
 			var x: float = side * (24.0 + sin(gale_wind_phase * 0.8 + t * PI * 2.2) * 4.5)
 			ribbon.append(Vector2(x, y))
-		draw_polyline(ribbon, Color(col_main.r, col_main.g, col_main.b, 0.65), 1.8, true)
+		BatchDraw.native_polyline(self, ribbon, Color(col_main.r, col_main.g, col_main.b, 0.65), 1.8, true)
 		# 飘带尖端流萤微光
-		AdaptiveDraw.circle(self, ribbon[ribbon.size() - 1], 1.5, Color(1, 1, 1, 0.85), 3.2)
+		BatchDraw.circle(self, ribbon[ribbon.size() - 1], 1.5, Color(1, 1, 1, 0.85), 3.2)
 
 ## 绘制【缩地成寸】：破空剑气割裂裂痕（纯正仙侠剑步破空感，彻底剔除实心填色大三角锥）
 func _draw_dash_cone() -> void:
@@ -1169,9 +1171,9 @@ func _draw_dash_cone() -> void:
 	# 1. 中心主破障剑芒裂痕
 	var tip := BODY_CENTER + cone_dir * (52.0 * ratio)
 	var base_origin := BODY_CENTER - cone_dir * 12.0
-	draw_line(base_origin, tip, col_outer, 3.2, true)
-	draw_line(base_origin + cone_dir * 8.0, tip, col_core, 1.6, true)
-	AdaptiveDraw.circle(self, tip, 3.2, Color.WHITE, 3.2)
+	BatchDraw.native_line(self, base_origin, tip, col_outer, 3.2, true)
+	BatchDraw.native_line(self, base_origin + cone_dir * 8.0, tip, col_core, 1.6, true)
+	BatchDraw.circle(self, tip, 3.2, Color.WHITE, 3.2)
 
 	# 2. 左右两翼破空折线剑气（锐利破障）
 	var spread_ang := deg_to_rad(32.0)
@@ -1190,15 +1192,15 @@ func _draw_dash_cone() -> void:
 		BODY_CENTER + r_dir * (24.0 * ratio) + cone_dir * 6.0,
 		r_wing_tip
 	])
-	draw_polyline(l_pts, col_outer, 2.2, true)
-	draw_polyline(r_pts, col_outer, 2.2, true)
-	draw_polyline(l_pts, col_core, 1.2, true)
-	draw_polyline(r_pts, col_core, 1.2, true)
+	BatchDraw.native_polyline(self, l_pts, col_outer, 2.2, true)
+	BatchDraw.native_polyline(self, r_pts, col_outer, 2.2, true)
+	BatchDraw.native_polyline(self, l_pts, col_core, 1.2, true)
+	BatchDraw.native_polyline(self, r_pts, col_core, 1.2, true)
 
 	# 3. 破障碎刃星点
 	for i in range(4):
 		var spark_p := BODY_CENTER + cone_dir * (15.0 + float(i) * 9.0) + Vector2(-cone_dir.y, cone_dir.x) * (float(i % 2 * 2 - 1) * 8.0)
-		AdaptiveDraw.circle(self, spark_p, 1.6 * ratio, Color.WHITE, 3.2)
+		BatchDraw.circle(self, spark_p, 1.6 * ratio, Color.WHITE, 3.2)
 
 ## 绘制【金光护体】：暖金半透明椭球护罩（贴合身形，覆盖头顶到脚底）
 ## 唯一允许克制罩体填充的技能（填充 alpha ≤ 0.12 保持通透）：
@@ -1227,7 +1229,7 @@ func _draw_aegis_shield() -> void:
 		for i in range(33):
 			var a := float(i) * (TAU / 32.0)
 			body_pts.append(c + Vector2(cos(a) * s_rx, sin(a) * s_ry))
-		draw_colored_polygon(body_pts, Color(col_main.r, col_main.g, col_main.b, (0.10 + 0.07 * feed) * fade))
+		BatchDraw.native_poly(self, body_pts, Color(col_main.r, col_main.g, col_main.b, (0.10 + 0.07 * feed) * fade))
 
 		# 2. 球面纬线（3 条按椭球截面收窄的透视扁弧，撑起立体罩感）
 		for k in range(3):
@@ -1238,7 +1240,7 @@ func _draw_aegis_shield() -> void:
 			for i in range(25):
 				var a := float(i) * (TAU / 24.0)
 				lat_pts.append(Vector2(c.x + cos(a) * lw, ly + sin(a) * s_ry * 0.20))
-			draw_polyline(lat_pts, Color(col_main.r, col_main.g, col_main.b, 0.20 * fade), 1.0, true)
+			BatchDraw.native_polyline(self, lat_pts, Color(col_main.r, col_main.g, col_main.b, 0.20 * fade), 1.0, true)
 
 		# 3. 双层亮边：外圈暖金主描边 + 内衬白细线（能量壁质感）
 		var rim_pts := PackedVector2Array()
@@ -1247,8 +1249,8 @@ func _draw_aegis_shield() -> void:
 			var a := float(i) * (TAU / 32.0)
 			rim_pts.append(c + Vector2(cos(a) * s_rx, sin(a) * s_ry))
 			rim_in_pts.append(c + Vector2(cos(a) * (s_rx - 1.6), sin(a) * (s_ry - 1.6)))
-		draw_polyline(rim_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.95 * fade), 2.2, true)
-		draw_polyline(rim_in_pts, Color(1.0, 1.0, 1.0, 0.38 * fade), 1.0, true)
+		BatchDraw.native_polyline(self, rim_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.95 * fade), 2.2, true)
+		BatchDraw.native_polyline(self, rim_in_pts, Color(1.0, 1.0, 1.0, 0.38 * fade), 1.0, true)
 
 		# 3.5 吸血涟漪：罩壁外扩一圈暖金细环（强度 1→0 时向外扩散并淡出）
 		if feed > 0.001:
@@ -1257,23 +1259,23 @@ func _draw_aegis_shield() -> void:
 			for i in range(33):
 				var a := float(i) * (TAU / 32.0)
 				ripple_pts.append(c + Vector2(cos(a) * s_rx * rip, sin(a) * s_ry * rip))
-			draw_polyline(ripple_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.65 * feed * fade), 2.6, true)
+			BatchDraw.native_polyline(self, ripple_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.65 * feed * fade), 2.6, true)
 
 		# 4. 左上高光弧（光源反射，强化球体受光）
 		var hl_pts := PackedVector2Array()
 		for i in range(13):
 			var a := deg_to_rad(lerpf(-155.0, -65.0, float(i) / 12.0))
 			hl_pts.append(c + Vector2(cos(a) * (s_rx - 3.2), sin(a) * (s_ry - 3.2)))
-		draw_polyline(hl_pts, Color(1.0, 1.0, 1.0, 0.5 * fade), 2.4, true)
+		BatchDraw.native_polyline(self, hl_pts, Color(1.0, 1.0, 1.0, 0.5 * fade), 2.4, true)
 
 		# 5. 沿罩面公转的能量流光（4 枚能量光点 + 拖尾）
 		for i in range(4):
 			var fa := -aegis_rot * 1.6 + float(i) * (TAU / 4.0)
 			var fp := c + Vector2(cos(fa) * s_rx, sin(fa) * s_ry)
 			var fp_prev := c + Vector2(cos(fa - 0.26) * s_rx, sin(fa - 0.26) * s_ry)
-			draw_line(fp_prev, fp, Color(col_edge.r, col_edge.g, col_edge.b, 0.6 * fade), 1.6, true)
-			AdaptiveDraw.circle(self, fp, 2.1, Color(col_edge.r, col_edge.g, col_edge.b, 0.92 * fade), 3.2)
-			AdaptiveDraw.circle(self, fp, 1.0, Color(1.0, 1.0, 1.0, 0.95 * fade), 3.2)
+			BatchDraw.native_line(self, fp_prev, fp, Color(col_edge.r, col_edge.g, col_edge.b, 0.6 * fade), 1.6, true)
+			BatchDraw.circle(self, fp, 2.1, Color(col_edge.r, col_edge.g, col_edge.b, 0.92 * fade), 3.2)
+			BatchDraw.circle(self, fp, 1.0, Color(1.0, 1.0, 1.0, 0.95 * fade), 3.2)
 
 		# 5.5 吸血灵光内收：从罩壁收向角色体内（t 0→1，拖尾朝罩壁、头端淡入身体）
 		for fd in aegis_feeds:
@@ -1283,9 +1285,9 @@ func _draw_aegis_shield() -> void:
 			var head := rim_pos.lerp(c, at)
 			var tail := rim_pos.lerp(c, maxf(0.0, at - 0.22))
 			var f_fade := (1.0 - at) * fade
-			draw_line(tail, head, Color(col_edge.r, col_edge.g, col_edge.b, 0.55 * f_fade), 1.6, true)
-			AdaptiveDraw.circle(self, head, 1.9, Color(col_edge.r, col_edge.g, col_edge.b, 0.90 * f_fade), 3.2)
-			AdaptiveDraw.circle(self, head, 0.9, Color(1.0, 1.0, 1.0, 0.90 * f_fade), 3.2)
+			BatchDraw.native_line(self, tail, head, Color(col_edge.r, col_edge.g, col_edge.b, 0.55 * f_fade), 1.6, true)
+			BatchDraw.circle(self, head, 1.9, Color(col_edge.r, col_edge.g, col_edge.b, 0.90 * f_fade), 3.2)
+			BatchDraw.circle(self, head, 0.9, Color(1.0, 1.0, 1.0, 0.90 * f_fade), 3.2)
 
 		# 6. 脚底落地光晕（罩体接地暗示，替代旧金莲大阵）
 		var ground_y := c.y + s_ry * 0.86
@@ -1293,8 +1295,8 @@ func _draw_aegis_shield() -> void:
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)
 			glow_pts.append(Vector2(c.x + cos(a) * s_rx * 1.05, ground_y + sin(a) * 4.5))
-		draw_colored_polygon(glow_pts, Color(col_main.r, col_main.g, col_main.b, 0.10 * fade))
-		draw_polyline(glow_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.30 * fade), 1.2, true)
+		BatchDraw.native_poly(self, glow_pts, Color(col_main.r, col_main.g, col_main.b, 0.10 * fade))
+		BatchDraw.native_polyline(self, glow_pts, Color(col_edge.r, col_edge.g, col_edge.b, 0.30 * fade), 1.2, true)
 
 	elif aegis_shatter_progress >= 0.0:
 		# 结界到期破碎：纯粒子化向四周迸散（暖金碎星）
@@ -1303,9 +1305,9 @@ func _draw_aegis_shield() -> void:
 		for spk in aegis_shatter_sparks:
 			var sp_pos: Vector2 = spk["pos"]
 			var sp_sz: float = float(spk["size"]) * (1.0 - p * 0.4)
-			AdaptiveDraw.circle(self, sp_pos, sp_sz, Color(1, 1, 1, alpha * 0.95), 3.2)
+			BatchDraw.circle(self, sp_pos, sp_sz, Color(1, 1, 1, alpha * 0.95), 3.2)
 			var tail := sp_pos - Vector2(spk["vel"]).normalized() * (8.0 * (1.0 - p))
-			draw_line(tail, sp_pos, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, alpha * 0.85), 1.6)
+			BatchDraw.native_line(self, tail, sp_pos, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, alpha * 0.85), 1.6)
 
 		# 微细环形音爆裂纹（急速淡出，暖金，随体型缩放）
 		if p < 0.4:
@@ -1317,7 +1319,7 @@ func _draw_aegis_shield() -> void:
 			for i in range(25):
 				var a := float(i) * (TAU / 24.0)
 				shatter_pts.append(sc + Vector2(cos(a) * s_rx, sin(a) * s_ry))
-			draw_polyline(shatter_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - ring_p) * 0.75), 1.8, true)
+			BatchDraw.native_polyline(self, shatter_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - ring_p) * 0.75), 1.8, true)
 
 ## back-out 缓出（护罩登场弹出用，末端略过冲再回弹）
 func _back_out(t: float) -> float:
@@ -1333,24 +1335,26 @@ func _draw_renewal_fx() -> void:
 	var r := 16.0 + p * 36.0
 
 	# 1. 地面九品青莲甘露阵（层叠展开的生机青玉莲瓣与甘露环，俯视透视贴地）
+	BatchDraw.flush(self)
 	draw_set_transform(FEET_CENTER, 0.0, Vector2(1.0, 0.50))
 	var ring_col := Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, alpha * 0.95)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
-	draw_arc(Vector2.ZERO, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
+	BatchDraw.native_arc(self, Vector2.ZERO, r, 0.0, TAU, 32, ring_col, maxf(1.0, 3.2 * (1.0 - p)), true)
+	BatchDraw.native_arc(self, Vector2.ZERO, r * 0.65, -p * 2.5, -p * 2.5 + TAU * 0.85, 24, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, alpha * 0.85), 1.5, true)
 
 	# 1b. 脚下青莲法阵脉冲地环：比莲瓣阵慢半拍的大环，贴地铺展
 	var pulse_p := clampf(p * 1.2, 0.0, 1.0)
 	var ground_r := 22.0 + pulse_p * 54.0
 	var ground_a := (1.0 - pulse_p) * 0.55
 	if ground_a > 0.02:
-		draw_arc(Vector2.ZERO, ground_r, 0.0, TAU, 32,
+		BatchDraw.native_arc(self, Vector2.ZERO, ground_r, 0.0, TAU, 32,
 			Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, ground_a), 1.8, true)
 
 	# 莲瓣角标
 	for i in range(8):
 		var la := float(i) * (TAU / 8.0) + p * 0.8
 		var lp := Vector2(cos(la), sin(la)) * r
-		AdaptiveDraw.circle(self, lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE, 3.2)
+		BatchDraw.circle(self, lp, maxf(1.0, 2.8 * (1.0 - p * 0.5)), GameStyle.FX_HDR_CORE, 3.2)
+	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# 2. 空洞骑士 Focus 式：灵光自四周外圈向角色身躯中心螺旋汇聚
@@ -1364,12 +1368,12 @@ func _draw_renewal_fx() -> void:
 		var p_sz: float = float(pt.get("size", 2.2)) * (0.8 + 0.4 * sin(ang * 2.0))
 
 		# 翠绿生机灵光（FX_HDR_HEAL 起辉）+ 白炽灵核（FX_HDR_CORE）
-		AdaptiveDraw.circle(self, pos, p_sz, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.9), 3.2)
-		AdaptiveDraw.circle(self, pos, p_sz * 0.55, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, p_alpha * 0.95), 3.2)
+		BatchDraw.circle(self, pos, p_sz, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.9), 3.2)
+		BatchDraw.circle(self, pos, p_sz * 0.55, Color(GameStyle.FX_HDR_CORE.r, GameStyle.FX_HDR_CORE.g, GameStyle.FX_HDR_CORE.b, p_alpha * 0.95), 3.2)
 		# 螺旋向心汇聚的流光拖尾
 		var tail_dir := Vector2(cos(ang - 0.28), 0.0) * (cur_r * 0.15)
 		var tail_p := pos + tail_dir
-		draw_line(tail_p, pos, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.55), 1.2)
+		BatchDraw.native_line(self, tail_p, pos, Color(GameStyle.FX_HDR_HEAL.r, GameStyle.FX_HDR_HEAL.g, GameStyle.FX_HDR_HEAL.b, p_alpha * 0.55), 1.2)
 
 ## 绘制【药爆】：摔碎药罐的地面药液波纹、四散飞沫与升华药气
 func _draw_elixir_fx() -> void:
@@ -1385,7 +1389,7 @@ func _draw_elixir_fx() -> void:
 	for i in range(25):
 		var a := float(i) * (TAU / 24.0)
 		ring_pts.append(FEET_CENTER + Vector2(cos(a) * ring_rx, sin(a) * ring_ry))
-	draw_polyline(ring_pts, Color(col_good.r, col_good.g, col_good.b, alpha * 0.85), 2.0, true)
+	BatchDraw.native_polyline(self, ring_pts, Color(col_good.r, col_good.g, col_good.b, alpha * 0.85), 2.0, true)
 
 	# 内圈白细光环
 	if p < 0.6:
@@ -1396,7 +1400,7 @@ func _draw_elixir_fx() -> void:
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)
 			in_pts.append(FEET_CENTER + Vector2(cos(a) * in_rx, sin(a) * in_ry))
-		draw_polyline(in_pts, Color(1.0, 1.0, 1.0, (1.0 - in_p) * 0.75), 1.2, true)
+		BatchDraw.native_polyline(self, in_pts, Color(1.0, 1.0, 1.0, (1.0 - in_p) * 0.75), 1.2, true)
 
 	# 2. 四散飞溅的药沫与药液微滴
 	for spk in elixir_shards:
@@ -1404,13 +1408,13 @@ func _draw_elixir_fx() -> void:
 		var sp_sz: float = float(spk["size"]) * (1.0 - p * 0.4)
 		var is_leaf: bool = bool(spk.get("is_leaf", false))
 		var col := col_edge if is_leaf else col_good
-		AdaptiveDraw.circle(self, sp_pos, sp_sz, Color(col.r, col.g, col.b, alpha * 0.95), 3.2)
-		AdaptiveDraw.circle(self, sp_pos, sp_sz * 0.5, Color(1.0, 1.0, 1.0, alpha * 0.95), 3.2)
+		BatchDraw.circle(self, sp_pos, sp_sz, Color(col.r, col.g, col.b, alpha * 0.95), 3.2)
+		BatchDraw.circle(self, sp_pos, sp_sz * 0.5, Color(1.0, 1.0, 1.0, alpha * 0.95), 3.2)
 		# 飞溅短拖尾
 		var vel: Vector2 = spk["vel"]
 		if vel.length_squared() > 100.0:
 			var tail := sp_pos - vel.normalized() * (6.0 * (1.0 - p))
-			draw_line(tail, sp_pos, Color(col.r, col.g, col.b, alpha * 0.65), 1.2)
+			BatchDraw.native_line(self, tail, sp_pos, Color(col.r, col.g, col.b, alpha * 0.65), 1.2)
 
 	# 3. 自身周围升华的药香甘气（6 缕青碧药气，代表自身治疗）
 	for k in range(6):
@@ -1418,8 +1422,8 @@ func _draw_elixir_fx() -> void:
 		var kr := 10.0 + sin(p * PI + float(k)) * 6.0
 		var ky := lerpf(FEET_CENTER.y, BODY_CENTER.y - 12.0, p) + sin(float(k) * 1.5) * 4.0
 		var kp := Vector2(cos(ka) * kr, ky)
-		AdaptiveDraw.circle(self, kp, 1.6 * (1.0 - p * 0.3), Color(col_good.r, col_good.g, col_good.b, alpha * 0.8), 3.2)
-		AdaptiveDraw.circle(self, kp, 0.8, Color(1.0, 1.0, 1.0, alpha * 0.9), 3.2)
+		BatchDraw.circle(self, kp, 1.6 * (1.0 - p * 0.3), Color(col_good.r, col_good.g, col_good.b, alpha * 0.8), 3.2)
+		BatchDraw.circle(self, kp, 0.8, Color(1.0, 1.0, 1.0, alpha * 0.9), 3.2)
 
 ## 绘制【天雷】周身雷弧火花（雷法真君）
 func _draw_thunder_sparks() -> void:
@@ -1433,12 +1437,12 @@ func _draw_thunder_sparks() -> void:
 		var a2 := a1 + 1.2
 		var p2 := bc + Vector2(cos(a2) * r1, sin(a2) * r1 * 0.8)
 		var pts := PackedVector2Array([p1, mid, p2])
-		draw_polyline(pts, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, alpha * 0.85), 1.6)
-		draw_polyline(pts, Color(1.0, 1.0, 1.0, alpha * 0.95), 0.8)
+		BatchDraw.native_polyline(self, pts, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, alpha * 0.85), 1.6)
+		BatchDraw.native_polyline(self, pts, Color(1.0, 1.0, 1.0, alpha * 0.95), 0.8)
 	for sp in thunder_sparks:
 		var sp_alpha := clampf(float(sp["life"]) / float(sp["max_life"]), 0.0, 1.0) * alpha
-		AdaptiveDraw.circle(self, sp["pos"], 1.5, Color(1.0, 1.0, 1.0, sp_alpha), 3.2)
-		AdaptiveDraw.circle(self, sp["pos"], 2.4, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, sp_alpha * 0.6), 3.2)
+		BatchDraw.circle(self, sp["pos"], 1.5, Color(1.0, 1.0, 1.0, sp_alpha), 3.2)
+		BatchDraw.circle(self, sp["pos"], 2.4, Color(GameStyle.GOLD_EDGE.r, GameStyle.GOLD_EDGE.g, GameStyle.GOLD_EDGE.b, sp_alpha * 0.6), 3.2)
 
 ## 绘制【盾势】玄金护体残弧（守卫）
 func _draw_guard_stance_fx() -> void:
@@ -1460,8 +1464,8 @@ func _draw_guard_stance_fx() -> void:
 			for s in range(steps + 1):
 				var ang := a_start + a_span * (float(s) / float(steps))
 				arc_pts.append(sc + Vector2(cos(ang) * rx, sin(ang) * ry))
-			draw_polyline(arc_pts, Color(col_edge.r, col_edge.g, col_edge.b, alpha), width, true)
-			draw_polyline(arc_pts, Color(1.0, 1.0, 1.0, alpha * 0.4), maxf(1.0, width * 0.4), true)
+			BatchDraw.native_polyline(self, arc_pts, Color(col_edge.r, col_edge.g, col_edge.b, alpha), width, true)
+			BatchDraw.native_polyline(self, arc_pts, Color(1.0, 1.0, 1.0, alpha * 0.4), maxf(1.0, width * 0.4), true)
 
 		# 接近蓄满时（>=90%）在四极闪烁蓄力标示
 		if guard_charge_ratio >= 0.90:
@@ -1469,8 +1473,8 @@ func _draw_guard_stance_fx() -> void:
 			for i in range(4):
 				var pa := guard_rot + float(i) * (TAU * 0.25) + a_span * 0.5
 				var pp := sc + Vector2(cos(pa) * (rx + 2.5), sin(pa) * (ry + 2.5))
-				AdaptiveDraw.circle(self, pp, 2.0, Color(col_edge.r, col_edge.g, col_edge.b, pip_alpha), 3.2)
-				AdaptiveDraw.circle(self, pp, 1.0, Color(1.0, 1.0, 1.0, pip_alpha), 3.2)
+				BatchDraw.circle(self, pp, 2.0, Color(col_edge.r, col_edge.g, col_edge.b, pip_alpha), 3.2)
+				BatchDraw.circle(self, pp, 1.0, Color(1.0, 1.0, 1.0, pip_alpha), 3.2)
 
 	# 蓄满爆发当帧扩散冲击
 	if guard_burst_timer > 0.0:
@@ -1481,7 +1485,7 @@ func _draw_guard_stance_fx() -> void:
 		for i in range(25):
 			var a := float(i) * (TAU / 24.0)
 			b_pts.append(sc + Vector2(cos(a) * b_rx, sin(a) * b_ry))
-		draw_polyline(b_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - bp) * 0.8), 2.2, true)
+		BatchDraw.native_polyline(self, b_pts, Color(GameStyle.AURUM_EDGE.r, GameStyle.AURUM_EDGE.g, GameStyle.AURUM_EDGE.b, (1.0 - bp) * 0.8), 2.2, true)
 
 ## 绘制【战意】血煞腾空火星与战圈（狂战士）
 func _draw_frenzy_fx() -> void:
@@ -1492,8 +1496,8 @@ func _draw_frenzy_fx() -> void:
 		var sz: float = float(sp.get("size", 2.0))
 		var col := Color(0.95, 0.22, 0.16, ratio * 0.85)
 		var tail := p_pos + Vector2(0.0, 4.0 * ratio)
-		draw_line(tail, p_pos, col, sz, true)
-		AdaptiveDraw.circle(self, p_pos, sz * 0.5, Color(1.0, 0.7, 0.4, ratio * 0.95), 3.2)
+		BatchDraw.native_line(self, tail, p_pos, col, sz, true)
+		BatchDraw.circle(self, p_pos, sz * 0.5, Color(1.0, 0.7, 0.4, ratio * 0.95), 3.2)
 
 	# 2. 战意达到 10 层以上时在脚底绘制旋转血煞战印
 	if frenzy_stacks >= 10.0:
@@ -1501,19 +1505,19 @@ func _draw_frenzy_fx() -> void:
 		var r := 16.0 * _body_scale.x
 		var fc := FEET_CENTER * _body_scale.y
 		var col_ring := Color(0.92, 0.18, 0.15, 0.28 * f_ratio)
-		draw_arc(fc, r, 0.0, TAU, 20, col_ring, 1.2, true)
+		BatchDraw.native_arc(self, fc, r, 0.0, TAU, 20, col_ring, 1.2, true)
 		for i in range(4):
 			var a := float(i) * (TAU * 0.25)
 			var p1 := fc + Vector2(cos(a) * r, sin(a) * r)
 			var p2 := fc + Vector2(cos(a) * (r + 3.5), sin(a) * (r + 3.5))
-			draw_line(p1, p2, col_ring, 1.2)
+			BatchDraw.native_line(self, p1, p2, col_ring, 1.2)
 
 	# 3. 满层（20层）瞬时爆气光环
 	if frenzy_burst_timer > 0.0:
 		var p := 1.0 - frenzy_burst_timer / FRENZY_BURST_FX_DUR
 		var bc := BODY_CENTER * _body_scale.y
 		var r_burst := lerpf(12.0, 36.0, p) * _body_scale.x
-		draw_arc(bc, r_burst, 0.0, TAU, 24, Color(1.0, 0.25, 0.18, (1.0 - p) * 0.9), 2.4, true)
+		BatchDraw.native_arc(self, bc, r_burst, 0.0, TAU, 24, Color(1.0, 0.25, 0.18, (1.0 - p) * 0.9), 2.4, true)
 
 ## 绘制【斩灭凝神】剑意返照十字星芒（绝尘）
 func _draw_cd_refund_fx() -> void:
@@ -1521,9 +1525,9 @@ func _draw_cd_refund_fx() -> void:
 	var bc := BODY_CENTER * _body_scale.y
 	var s_len := 9.0 * alpha * _body_scale.x
 	var col_jade := GameStyle.JADE_EDGE
-	draw_line(bc - Vector2(s_len, 0.0), bc + Vector2(s_len, 0.0), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
-	draw_line(bc - Vector2(0.0, s_len), bc + Vector2(0.0, s_len), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
-	AdaptiveDraw.circle(self, bc, 2.2 * alpha, Color(1.0, 1.0, 1.0, alpha * 0.95), 3.2)
+	BatchDraw.native_line(self, bc - Vector2(s_len, 0.0), bc + Vector2(s_len, 0.0), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
+	BatchDraw.native_line(self, bc - Vector2(0.0, s_len), bc + Vector2(0.0, s_len), Color(col_jade.r, col_jade.g, col_jade.b, alpha * 0.9), 1.8)
+	BatchDraw.circle(self, bc, 2.2 * alpha, Color(1.0, 1.0, 1.0, alpha * 0.95), 3.2)
 
 ## 绘制【陷阵】脚底破阵刻印（蛮兵）
 func _draw_crowd_aura_fx() -> void:
@@ -1533,9 +1537,9 @@ func _draw_crowd_aura_fx() -> void:
 	for i in range(4):
 		var a_start := float(i) * (TAU * 0.25) + 0.18
 		var a_span := (TAU * 0.25) * 0.64
-		draw_arc(fc, r, a_start, a_start + a_span, 10, col, 1.4, true)
+		BatchDraw.native_arc(self, fc, r, a_start, a_start + a_span, 10, col, 1.4, true)
 		var tick_a := float(i) * (TAU * 0.25)
 		var p1 := fc + Vector2(cos(tick_a) * r, sin(tick_a) * r)
 		var p2 := fc + Vector2(cos(tick_a) * (r + 4.5), sin(tick_a) * (r + 4.5))
-		draw_line(p1, p2, col, 1.4)
+		BatchDraw.native_line(self, p1, p2, col, 1.4)
 

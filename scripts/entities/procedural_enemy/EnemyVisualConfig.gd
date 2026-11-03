@@ -31,6 +31,7 @@ enum LocomotionType {
 # 细节插槽类型
 @export var eye_type: String = "slit"       ## 眼眸类型 (slit, round, multi, twin_slits, evil_eye, void)
 @export var ornament_type: String = "none"  ## 专属挂饰 (sword, urn_lid, horns, drum, petals, talisman, halo, wheel, none)
+@export var boss_style: String = "demon"    ## Boss轮廓形制风格 (demon, construct, spirit, swordsman, dragon, beast, void)
 
 # -------------------- 工厂预设 --------------------
 
@@ -281,11 +282,14 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 	cfg.locomotion = LocomotionType.HOVER
 	cfg.body_radius = 26.0
 	cfg.eye_type = "twin_slits"
+	cfg.boss_style = "demon"
 	match boss_key:
 		"boss_chiyan", "boss":
 			cfg.display_name = "赤炎魔将"
 			cfg.is_final_boss = final_boss
 			cfg.scale_factor = 1.6 if not final_boss else 1.85
+			cfg.boss_style = "demon"
+			cfg.eye_type = "twin_slits"
 			if final_boss:
 				cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
 				cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
@@ -303,6 +307,8 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 			cfg.display_name = "血煞修罗"
 			cfg.is_final_boss = false
 			cfg.scale_factor = 1.65
+			cfg.boss_style = "demon"
+			cfg.eye_type = "twin_slits"
 			cfg.col_primary = Color(0.20, 0.08, 0.10, 1.0)   # 暗金血煞修罗战铠
 			cfg.col_secondary = Color(0.95, 0.82, 0.50, 1.0) # 修罗鎏金战冠
 			cfg.col_accent = Color(0.88, 0.18, 0.25, 0.95)   # 狂战双刃轮
@@ -313,6 +319,8 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 			cfg.display_name = "玄天千机尊"
 			cfg.is_final_boss = false
 			cfg.scale_factor = 1.7
+			cfg.boss_style = "construct"
+			cfg.eye_type = "round"
 			cfg.col_primary = Color(0.14, 0.18, 0.22, 1.0)   # 青铜机关战甲
 			cfg.col_secondary = Color(0.85, 0.80, 0.65, 1.0) # 古铜千机神座
 			cfg.col_accent = Color(0.25, 0.75, 0.88, 0.95)   # 八卦天机法轮
@@ -323,6 +331,8 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 			cfg.display_name = "万蛊蚀天母"
 			cfg.is_final_boss = false
 			cfg.scale_factor = 1.7
+			cfg.boss_style = "spirit"
+			cfg.eye_type = "twin_slits"
 			cfg.col_primary = Color(0.08, 0.16, 0.12, 1.0)   # 幽冥蛊母冥甲
 			cfg.col_secondary = Color(0.88, 0.92, 0.82, 1.0) # 苍白蛊母骨冠
 			cfg.col_accent = Color(0.30, 0.82, 0.40, 0.95)   # 碧毒法轮
@@ -333,6 +343,8 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 			cfg.display_name = "幽冥剑魄尊"
 			cfg.is_final_boss = false
 			cfg.scale_factor = 1.75
+			cfg.boss_style = "swordsman"
+			cfg.eye_type = "slit"
 			cfg.col_primary = Color(0.12, 0.15, 0.24, 1.0)   # 霜白幽冥剑袍
 			cfg.col_secondary = Color(0.92, 0.95, 1.0, 1.0)  # 极寒剑魂神冠
 			cfg.col_accent = Color(0.40, 0.70, 0.98, 0.95)   # 凛冽剑阵法轮
@@ -343,22 +355,170 @@ static func make_boss_variant(boss_key: String, final_boss: bool = false) -> Ene
 			cfg.display_name = "九幽心魔尊"
 			cfg.is_final_boss = true
 			cfg.scale_factor = 1.85
+			cfg.boss_style = "demon"
+			cfg.eye_type = "twin_slits"
 			cfg.col_primary = Color(0.10, 0.06, 0.16, 1.0)   # 紫黑虚空神铠
 			cfg.col_secondary = Color(0.88, 0.82, 0.95, 1.0) # 九幽魔冠骨面
 			cfg.col_accent = Color(0.60, 0.30, 0.85, 0.95)   # 神魔紫焰法轮
 			cfg.col_glow = Color(0.85, 0.50, 1.0, 1.0)       # 虚空极光魔眼
 			cfg.ornament_type = "god_wheel"
+		# ---------------- 深层专属魔君（W45~W100，2026-11-03） ----------------
+		"boss_zhaoying":
+			# 第 45 波·照影魔君（水银镜面铠 + 冰青镜光轮，虚影质感，过渡档体型偏小）
+			cfg.display_name = "镜花·照影魔君"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.7
+			cfg.boss_style = "void"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.14, 0.18, 0.24, 1.0)   # 水银镜面铠
+			cfg.col_secondary = Color(0.90, 0.94, 1.0, 1.0)  # 镜光银面
+			cfg.col_accent = Color(0.55, 0.80, 1.0, 0.95)    # 冰青镜光轮
+			cfg.col_glow = Color(0.70, 0.90, 1.0, 1.0)       # 镜瞳冷光
+			cfg.ornament_type = "god_wheel"
+		"boss_yinhun":
+			# 第 50 波·引魂使（幽冥暗青袍 + 魂火碧轮，引魂幡饰）
+			cfg.display_name = "九泉·引魂使"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.75
+			cfg.boss_style = "spirit"
+			cfg.eye_type = "twin_slits"
+			cfg.col_primary = Color(0.06, 0.14, 0.12, 1.0)   # 幽冥暗青袍
+			cfg.col_secondary = Color(0.78, 0.92, 0.85, 1.0) # 枯骨白幡面
+			cfg.col_accent = Color(0.35, 0.85, 0.60, 0.95)   # 魂火碧轮
+			cfg.col_glow = Color(0.55, 1.0, 0.75, 1.0)       # 魂火绿瞳
+			cfg.ornament_type = "petals"                     # 引魂幡条
+		"boss_luding":
+			# 第 55 波·焚天炉君（赤铜炉腹重铠 + 炉火金轮，炉口火光瞳，过渡档最重型）
+			cfg.display_name = "赤鼎·焚天炉君"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.9
+			cfg.boss_style = "construct"
+			cfg.eye_type = "round"
+			cfg.col_primary = Color(0.26, 0.10, 0.06, 1.0)   # 赤铜炉腹重铠
+			cfg.col_secondary = Color(0.92, 0.78, 0.55, 1.0) # 鎏金炉耳面
+			cfg.col_accent = Color(1.0, 0.50, 0.15, 0.95)    # 炉火金轮
+			cfg.col_glow = Color(1.0, 0.65, 0.25, 1.0)       # 炉口火光瞳
+			cfg.ornament_type = "god_wheel"
+		"boss_canglong":
+			# 第 60 波·太苍龙君（苍青龙鳞云铠 + 沧海龙珠轮，青色雷光龙瞳）
+			cfg.display_name = "太苍龙君·敖烈"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.9
+			cfg.boss_style = "dragon"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.08, 0.22, 0.24, 1.0)   # 苍青龙鳞云铠
+			cfg.col_secondary = Color(0.90, 0.92, 0.80, 1.0) # 月白龙须骨面
+			cfg.col_accent = Color(0.25, 0.80, 0.72, 0.95)   # 沧海龙珠轮
+			cfg.col_glow = Color(0.45, 1.0, 0.90, 1.0)       # 青色雷光龙瞳
+			cfg.ornament_type = "grand_horns"                # 冲天龙角
+		"boss_jianzhong":
+			# 第 65 波·葬剑仙（玄铁黑剑袍 + 霜白剑光轮，万剑悬空剑阵）
+			cfg.display_name = "剑冢·葬剑仙"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.75
+			cfg.boss_style = "swordsman"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.10, 0.11, 0.14, 1.0)   # 玄铁黑剑袍
+			cfg.col_secondary = Color(0.88, 0.90, 0.94, 1.0) # 霜白剑冢石面
+			cfg.col_accent = Color(0.55, 0.65, 0.85, 0.95)   # 霜白剑光轮
+			cfg.col_glow = Color(0.70, 0.82, 1.0, 1.0)       # 剑魄寒芒
+			cfg.ornament_type = "sword_formation"            # 万剑悬空剑阵
+		"boss_leijie":
+			# 第 70 波·雷劫神君（紫电雷纹道袍 + 九霄雷轮，白炽雷瞳）
+			cfg.display_name = "紫霄·雷劫神君"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.8
+			cfg.boss_style = "demon"
+			cfg.eye_type = "round"
+			cfg.col_primary = Color(0.16, 0.10, 0.24, 1.0)   # 紫电雷纹道袍
+			cfg.col_secondary = Color(0.92, 0.88, 0.98, 1.0) # 雷纹白玉面
+			cfg.col_accent = Color(0.65, 0.45, 1.0, 0.95)    # 九霄雷轮
+			cfg.col_glow = Color(0.85, 0.75, 1.0, 1.0)       # 白炽雷瞳
+			cfg.ornament_type = "god_wheel"
+		"boss_kunwang":
+			# 第 75 波·覆海鲲王（深海玄冥重铠 + 北冥沧浪轮，体型全场最大之一）
+			cfg.display_name = "北冥·覆海鲲王"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 2.0
+			cfg.boss_style = "beast"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.06, 0.12, 0.24, 1.0)   # 深海玄冥重铠
+			cfg.col_secondary = Color(0.82, 0.88, 0.94, 1.0) # 鲸白骨甲面
+			cfg.col_accent = Color(0.20, 0.55, 0.90, 0.95)   # 北冥沧浪轮
+			cfg.col_glow = Color(0.40, 0.75, 1.0, 1.0)       # 深渊寒瞳
+			cfg.ornament_type = "back_spikes"                # 鲸脊背鳍
+		"boss_kuijia":
+			# 第 80 波·千臂傀王（黄铜偃甲机铠 + 机括齿轮轮）
+			cfg.display_name = "偃甲·千臂傀王"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.95
+			cfg.boss_style = "construct"
+			cfg.eye_type = "round"
+			cfg.col_primary = Color(0.24, 0.18, 0.08, 1.0)   # 黄铜偃甲机铠
+			cfg.col_secondary = Color(0.88, 0.80, 0.60, 1.0) # 偃师机关面
+			cfg.col_accent = Color(0.90, 0.65, 0.25, 0.95)   # 机括齿轮轮
+			cfg.col_glow = Color(1.0, 0.80, 0.35, 1.0)       # 机关炉火瞳
+			cfg.ornament_type = "god_wheel"
+		"boss_fenghuang":
+			# 第 85 波·离火凤皇（朱红离火羽衣 + 南明离火轮，金红凤瞳）
+			cfg.display_name = "南明·离火凤皇"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.8
+			cfg.boss_style = "dragon"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.28, 0.08, 0.06, 1.0)   # 朱红离火羽衣
+			cfg.col_secondary = Color(0.95, 0.85, 0.60, 1.0) # 鎏金凤首面
+			cfg.col_accent = Color(1.0, 0.45, 0.15, 0.95)    # 南明离火轮
+			cfg.col_glow = Color(1.0, 0.65, 0.25, 1.0)       # 金红凤瞳
+			cfg.ornament_type = "petals"                     # 离火翎羽
+		"boss_tianmo":
+			# 第 90 波·无相天魔（墨黑无相魔躯 + 暗紫蚀魂轮，无形无面唯有一双魔瞳）
+			cfg.display_name = "天外·无相天魔"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.85
+			cfg.boss_style = "void"
+			cfg.eye_type = "slit"
+			cfg.col_primary = Color(0.05, 0.04, 0.09, 1.0)   # 墨黑无相魔躯
+			cfg.col_secondary = Color(0.30, 0.24, 0.42, 1.0) # 无相暗面
+			cfg.col_accent = Color(0.45, 0.25, 0.75, 0.95)   # 蚀魂暗紫轮
+			cfg.col_glow = Color(0.70, 0.45, 1.0, 1.0)       # 无相魔瞳
+			cfg.ornament_type = "void_halo"                  # 虚空蚀环
+		"boss_hundun":
+			# 第 95 波·元初兽（混沌灰白无相躯 + 霓虹混色混沌轮，四象不定）
+			cfg.display_name = "混沌·元初兽"
+			cfg.is_final_boss = final_boss
+			cfg.scale_factor = 1.9
+			cfg.boss_style = "beast"
+			cfg.eye_type = "round"
+			cfg.col_primary = Color(0.20, 0.20, 0.22, 1.0)   # 混沌灰白躯
+			cfg.col_secondary = Color(0.80, 0.80, 0.84, 1.0) # 元初石胎面
+			cfg.col_accent = Color(0.60, 0.90, 0.80, 0.95)   # 四象混沌轮
+			cfg.col_glow = Color(0.90, 1.0, 0.95, 1.0)       # 混沌清瞳
+			cfg.ornament_type = "god_wheel"
+		"boss_wanjie":
+			# 第 100 波·道劫化身（紫金劫云神铠 + 万劫法轮，白金劫瞳，体型与威压全场封顶）
+			cfg.display_name = "万劫·道劫化身"
+			cfg.is_final_boss = true
+			cfg.scale_factor = 2.05
+			cfg.boss_style = "demon"
+			cfg.eye_type = "twin_slits"
+			cfg.col_primary = Color(0.14, 0.09, 0.20, 1.0)   # 紫金劫云神铠
+			cfg.col_secondary = Color(0.94, 0.90, 0.98, 1.0) # 劫纹白金面
+			cfg.col_accent = Color(0.85, 0.60, 1.0, 0.95)    # 万劫法轮
+			cfg.col_glow = Color(1.0, 0.90, 1.0, 1.0)        # 白金劫瞳
+			cfg.ornament_type = "god_wheel"
 		_:
 			cfg.display_name = "赤炎魔将"
 			cfg.is_final_boss = final_boss
 			cfg.scale_factor = 1.6 if not final_boss else 1.85
+			cfg.boss_style = "demon"
+			cfg.eye_type = "twin_slits"
 			cfg.col_primary = Color(0.16, 0.10, 0.12, 1.0)
 			cfg.col_secondary = Color(0.92, 0.88, 0.82, 1.0)
 			cfg.col_accent = Color(0.85, 0.28, 0.20, 0.95)
 			cfg.col_glow = Color(1.0, 0.40, 0.25, 1.0)
 			cfg.ornament_type = "blade_ring"
 	return cfg
-
 ## 16. 灵医：青囊药灵 (HOVER) —— 治疗同伴的辅助怪
 static func make_lingyi() -> EnemyVisualConfig:
 	var cfg := EnemyVisualConfig.new()

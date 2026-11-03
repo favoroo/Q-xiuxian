@@ -206,13 +206,17 @@ func _test_codex_collection() -> void:
 # ---------------- ⑦ 奖励完整性 ----------------
 
 func _test_reward_integrity() -> void:
+	# 2026-11-03：「离谱」彩蛋允许纯荣誉（reward_type=none），其余成就必须有实物奖励
 	var no_reward: Array = []
 	for aid in AchievementData.all_ids():
 		var adef := AchievementData.get_def(aid)
 		var rtype := String(adef.get("reward_type", ""))
+		if String(adef.get("category", "")) == "absurd":
+			_c.equals(rtype, "none", "离谱彩蛋 %s 是纯荣誉（不做实物奖励）" % aid)
+			continue
 		if rtype == "none" or String(adef.get("reward_id", "")).is_empty():
 			no_reward.append(aid)
-	_c.check(no_reward.is_empty(), "39 条成就全部带实物奖励（空奖励: %s）" % str(no_reward))
+	_c.check(no_reward.is_empty(), "非离谱类成就全部带实物奖励（空奖励: %s）" % str(no_reward))
 
 	# 奖励 id 必须落在对应表里，且反查能回来（写错 id 会让玩家拿到空气）
 	var bad: Array = []

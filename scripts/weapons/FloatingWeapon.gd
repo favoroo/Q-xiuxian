@@ -167,6 +167,11 @@ var burst_scene: PackedScene = preload("res://scenes/weapons/ThunderBurst.tscn")
 var turret_scene: PackedScene = preload("res://scenes/weapons/TurretUnit.tscn")
 
 var active_turrets: Array[TurretUnit] = []
+## 机关（TURRET）整备冷却（2026-11-03 手动布设改版）：收回后按 attack_cooldown × 攻速
+## 计时，到点才能重放。不设这条就能「抱着机关跑」，阵地玩法会退化成随身炮台。
+var redeploy_timer: float = 0.0
+## 收回时带回来的耐久（<0 = 没有待接管的值，按满耐久新布设）
+var pending_turret_durability: float = -1.0
 
 
 ## 物理查询对象 static 复用（2026-10-10 性能优化，照 BladeProjectile._search_shape 模式）：
@@ -218,6 +223,17 @@ func setup(def_id: String, star_level: int) -> void:
 			(_proc_renderer as ProceduralTurretRenderer).star = star
 		_proc_renderer.queue_redraw()
 	_refresh_star4_aura()
+	# 升星就地重配在役机关（2026-11-03）：旧写法只对新布设的炮台生效，站场那台一直按旧星级
+	# 打（三合一升星后「怒气值满但输出没变」）。现在一把武器只有一座机关，当场刷新成本极低；
+	# 耐久按比例保留（升星不该顺带把磨损洗掉）。
+	if behavior == WeaponData.Behavior.TURRET:
+		for t in active_turrets:
+			if t == null or not is_instance_valid(t) or t._is_dying:
+				continue
+			var kept := t.durability_ratio()
+			t.setup(weapon_def_id, star)
+			t.durability = BalanceTurret.MAX_DURABILITY * kept
+			t.queue_redraw()
 
 ## ★4 极境常驻气场：升到极境时挂上，降星（或重建渲染器）时卸掉。
 ## 只在树内才建节点（setup 会在 add_child 之前被调一次）。
@@ -585,6 +601,10 @@ func _process(delta: float) -> void:
 
 	_tick_fire_fx(delta)
 	cooldown_timer -= delta
+	# 机关整备冷却：独立计时，不吃上面那条「无目标就把冷却钳到 0」的规则
+	# （那条规则对机关会变成「周围没怪就能无限重摆」，正是收回冷却要防的事）。
+	if redeploy_timer > 0.0:
+		redeploy_timer = maxf(0.0, redeploy_timer - delta)
 	bob_phase += delta * 3.5
 	# 空闲期冷却钳制（2026-10-22）：旧写法无目标时 cooldown_timer 一路扣成深负数，
 	# 等一群怪同时进射程，所有武器同一帧判定 <=0 ⇒ 集体齐射（「一起打」最直接的成因）。
@@ -603,21 +623,24 @@ func _process(delta: float) -> void:
 	# 1. 索敌：优先保留 Player 统筹分配的智能多向目标；若目标失效或脱离射程则安全回退
 	# 空目标与脱程重查统一走 15Hz + 错相：空目标分支曾逐渲染帧跑宽相位查询
 	# （8 法器 × 60fps ≈ 480 次/秒，武器一多就掉帧的头号热点）；
-	# 15Hz 仍快于 Player 10Hz 统筹分配，不影响开火节奏
-	if current_target == null or not is_instance_valid(current_target):
-		_retarget_phase -= delta
-		if _retarget_phase <= 0.0:
-			_retarget_phase = RETARGET_INTERVAL
-			current_target = _find_target()
-	else:
-		var player = GameManager.player
-		if player != null:
-			var max_reach := effective_range() * 1.2
-			if GameBalance.elliptical_distance(current_target.global_position - player.global_position) > max_reach:
-				_retarget_phase -= delta
-				if _retarget_phase <= 0.0:
-					_retarget_phase = RETARGET_INTERVAL
-					current_target = _find_target()
+	# 15Hz 仍快于 Player 10Hz 统筹分配，不影响开火节奏。
+	# 机关（TURRET）不索敌：输出全交给地面那座机关（TurretUnit 一次查询取 N 个目标），
+	# 本体只负责悬浮跟随与器形展示 —— 旧写法这里白跑一条逐武器查询、还白算朝向。
+	if behavior != WeaponData.Behavior.TURRET:
+		if current_target == null or not is_instance_valid(current_target):
+			_retarget_phase -= delta
+			if _retarget_phase <= 0.0:
+				_retarget_phase = RETARGET_INTERVAL
+				current_target = _find_target()
+		else:
+			var player = GameManager.player
+			if player != null:
+				var max_reach := effective_range() * 1.2
+				if GameBalance.elliptical_distance(current_target.global_position - player.global_position) > max_reach:
+					_retarget_phase -= delta
+					if _retarget_phase <= 0.0:
+						_retarget_phase = RETARGET_INTERVAL
+						current_target = _find_target()
 
 	# 2. 动态轨道：有目标时沿轨道滑向目标方位（自动换位），无目标时回归基础槽位
 	# 2026-10-22 修：整段原先嵌在「有目标」的 else 里 —— 场上没怪时武器既不回槽位也不呼吸，
@@ -672,9 +695,11 @@ func _process(delta: float) -> void:
 			cooldown_timer = maxf(cooldown_timer, GameManager.rng.randf_range(0.0, ACQUIRE_STAGGER))
 		_had_target = has_target
 
-		# 4. 攻击
+		# 4. 攻击。机关（TURRET）不在这里出手（2026-11-03 手动布设改版）：
+		# 它的输出由玩家手动布设的地面机关负责，本体的 attack_cooldown 改作「收回整备冷却」
+		# （见 redeploy_timer），所以这里只留普通武器的自动出手。
 		if cooldown_timer <= 0.0 and not is_attacking and not fire_held:
-			if behavior == WeaponData.Behavior.TURRET or current_target != null:
+			if behavior != WeaponData.Behavior.TURRET and current_target != null:
 				_perform_attack()
 
 	# 5. 束流推进（BEAM/CONE）：几何随朝向逐帧走，结算按 TICK 节拍
@@ -709,7 +734,9 @@ func _perform_attack() -> void:
 		WeaponData.Behavior.BURST:
 			BurstHandler.perform(self)
 		WeaponData.Behavior.TURRET:
-			TurretHandler.perform(self)
+			# 机关不走这里（2026-11-03）：布设由玩家手动触发（TurretHandler.deploy），
+			# 本体的 attack_cooldown 已改作收回整备冷却。留着分支只为枚举齐全时的可读性。
+			pass
 		WeaponData.Behavior.SWEEP:
 			SweepHandler.perform(self)
 		WeaponData.Behavior.BEAM, WeaponData.Behavior.CONE:
@@ -845,5 +872,71 @@ func _perform_projectile_attack() -> void:
 func _perform_burst_attack() -> void:
 	BurstHandler.perform(self)
 
-func _perform_turret_attack() -> void:
-	TurretHandler.perform(self)
+## 机关布设转发面（判据直调）：不再有「冷却到点自动布设」，pos 由调用方给。
+func deploy_turret_at(pos: Vector2) -> TurretUnit:
+	return TurretHandler.deploy(self, pos, pending_turret_durability)
+
+# ---------------- 机关编制 / 整备冷却（2026-11-03 手动布设改版） ----------------
+
+func is_mechanism() -> bool:
+	return behavior == WeaponData.Behavior.TURRET
+
+## 编制上限：基础 1 座 + 飞升神通「双联神机」的额外编制（item hook turret_charges_bonus）。
+## 现读 hook：神通是飞升当刻到手的，跨回合保留的机关武器必须立刻吃得上。
+func turret_cap() -> int:
+	return BalanceTurret.TURRETS_PER_WEAPON + int(GameManager.item_hook_sum("turret_charges_bonus"))
+
+## 场上自己的全部机关（失效节点就地清掉，调用方不必自己判有效）
+func field_turrets() -> Array[TurretUnit]:
+	for i in range(active_turrets.size() - 1, -1, -1):
+		var t: TurretUnit = active_turrets[i]
+		if t == null or not is_instance_valid(t) or t._is_dying:
+			active_turrets.remove_at(i)
+	return active_turrets
+
+## 场上第一座机关（没有则 null）—— 单编制武器的常用取件口
+func field_turret() -> TurretUnit:
+	var list := field_turrets()
+	return list[0] if not list.is_empty() else null
+
+## 还有几份待布设编制（编制上限 - 在场数；整备冷却期间一律 0）
+func free_charges() -> int:
+	if not is_mechanism() or redeploy_timer > 0.0:
+		return 0
+	return maxi(0, turret_cap() - field_turrets().size())
+
+## 还有没有待布设的编制（HUD 按钮 ×N 与「下一个可布设武器」共用）
+func deploy_ready() -> bool:
+	return free_charges() > 0
+
+## 收回指定的一台机关（多编制下必须点名，不能再默认收回 [0]）：
+## 折叠撤场、耐久带回本体、起整备冷却（整备是武器级的，一次收一座也要等冷却）。
+## 冷却 = 武器表 cooldown × 有效攻速（吃攻速加成，与旧版布设间隔同一乘区）。
+func recall_turret(target: TurretUnit = null) -> bool:
+	var t: TurretUnit = target
+	if t == null or not is_instance_valid(t):
+		t = field_turret()
+	if t == null:
+		return false
+	pending_turret_durability = t.durability
+	t.dismiss(true)
+	redeploy_timer = BalanceTurret.recall_cooldown(
+		WeaponData.cooldown_for(weapon_def_id, star),
+		GameManager.get_effective_attack_speed_mult())
+	return true
+
+## 布设成功：编制用掉，收回带来的耐久已被新机关接管
+func on_turret_deployed() -> void:
+	pending_turret_durability = -1.0
+
+## 卖武器 / 卸下 / 换装 / 场景释放时收回在役机关（2026-11-03）：
+## 旧版炮台有 10~12s 寿命兜底，漏收回也只是多站几秒；新版机关不灭，
+## 不在这里收回就会留一台「无主机关」永久站在场上。
+func _exit_tree() -> void:
+	for i in range(active_turrets.size() - 1, -1, -1):
+		var t: TurretUnit = active_turrets[i]
+		if t != null and is_instance_valid(t) and not t._is_dying:
+			t._owner_weapon = null
+			t.dismiss()
+	active_turrets.clear()
+

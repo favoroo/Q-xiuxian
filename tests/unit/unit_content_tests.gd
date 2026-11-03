@@ -615,13 +615,16 @@ func _detail_info_rows(host: Control) -> Dictionary:
 ## 纯径向就把「落点与玩家之间」那一圈敌人一波一波拱到身上 —— 不崩不报错，只有真机挨打才发现。
 
 func _test_turret_and_new_cultivators() -> void:
-	# 1. 机关法器基础定义与行为校验
+	# 1. 机关法器基础定义与行为校验（2026-11-03：寿命/座数字段废弃，改耐久 + 多管齐射）
 	for wid in ["jiguan_nu", "jianzhen_pan", "penhuo_jiguanshou"]:
 		var wdef := WeaponData.get_def(wid)
 		_c.equals(int(wdef.get("behavior", -1)), WeaponData.Behavior.TURRET, "%s 行为为 TURRET" % wid)
 		_c.check("contraption" in WeaponData.tags_of(wid), "%s 包含 contraption 机关标签" % wid)
-		_c.check(float(wdef.get("turret_lifetime", 0.0)) > 0.0, "%s 声明了炮台寿命" % wid)
+		_c.check(float(wdef.get("turret_stamina", 0.0)) > 0.0, "%s 声明了耐久时长" % wid)
 		_c.check(float(wdef.get("turret_fire_cd", 0.0)) > 0.0, "%s 声明了开火间隔" % wid)
+		_c.check(not wdef.has("turret_lifetime"), "%s 不再声明寿命（机关到点不消散）" % wid)
+		_c.check(not wdef.has("turret_cap"), "%s 不再声明座数（每把只带一座）" % wid)
+		_c.equals(WeaponData.turret_volley(1), 2, "%s ★1 双管齐射" % wid)
 
 	# 2. 机关羁绊阶梯结算
 	GameManager.reset_run()
@@ -789,6 +792,14 @@ func _test_turret_and_new_cultivators() -> void:
 		"最高抵达第 25/25 波", "【肝帝降临】进度读生涯最高抵达波数")
 	_c.equals(AchievementData.progress_text("ach_feat_endless_40", {"best_wave": 38}),
 		"最高抵达第 38/40 波", "【肝穿地心】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_feat_endless_60", {"best_wave": 55}),
+		"最高抵达第 55/60 波", "【肝帝返聘】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_feat_endless_80", {"best_wave": 78}),
+		"最高抵达第 78/80 波", "【服务器报警】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_feat_endless_100", {"best_wave": 88}),
+		"最高抵达第 88/100 波", "【请不要开挂】进度读生涯最高抵达波数")
+	_c.equals(AchievementData.progress_text("ach_feat_nightmare_50", {"best_danger_cleared": 1}),
+		"已破境「噩梦」", "【噩梦加钟】进度读最高破境难度")
 	_c.equals(AchievementData.progress_text("ach_grind_wins", {"best_wave": 26}),
 		"最高抵达第 26/30 波", "【三十三重天】进度读生涯最高抵达波数")
 	_c.equals(AchievementData.progress_text("ach_item_kuilei", {"total_runs": 3, "best_wave": 12}),
@@ -829,6 +840,25 @@ func _test_turret_and_new_cultivators() -> void:
 		"单局第 40 波达成【肝穿地心】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_endless_40", {"wave": 39}, {}),
 		"单局第 39 波不达成【肝穿地心】")
+	# 2026-11-03 「离谱」彩蛋：噩梦 50 / 60 / 80 / 100 波纯荣誉成就
+	_c.check(AchievementData.is_condition_met("ach_feat_nightmare_50", {"danger": 1, "wave": 50}, {}),
+		"噩梦难度第 50 波达成【噩梦加钟】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_50", {"danger": 0, "wave": 50}, {}),
+		"普通难度第 50 波不达成【噩梦加钟】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_nightmare_50", {"danger": 1, "wave": 49}, {}),
+		"噩梦难度第 49 波不达成【噩梦加钟】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless_60", {"wave": 60}, {}),
+		"单局第 60 波达成【肝帝返聘】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_60", {"wave": 59}, {}),
+		"单局第 59 波不达成【肝帝返聘】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless_80", {"wave": 80}, {}),
+		"单局第 80 波达成【服务器报警】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_80", {"wave": 79}, {}),
+		"单局第 79 波不达成【服务器报警】")
+	_c.check(AchievementData.is_condition_met("ach_feat_endless_100", {"wave": 100}, {}),
+		"单局第 100 波达成【请不要开挂】")
+	_c.check(not AchievementData.is_condition_met("ach_feat_endless_100", {"wave": 99}, {}),
+		"单局第 99 波不达成【请不要开挂】")
 	_c.check(AchievementData.is_condition_met("ach_feat_thrift", {"wave": 20, "stones_spent": 0}, {}),
 		"零消费抵达第 20 波达成【一毛不拔】")
 	_c.check(not AchievementData.is_condition_met("ach_feat_thrift", {"wave": 20, "stones_spent": 2}, {}),
@@ -884,9 +914,9 @@ func _test_turret_and_new_cultivators() -> void:
 		"", "【独行侠】无累计进度口径返回空串")
 	_c.equals(AchievementData.progress_text("ach_style_omni", {}),
 		"", "【万器宗师】无累计进度口径返回空串")
-	# 成就总数 = 39（2026-10-25 新手节奏重做：原 18 条纯荣誉全部挂上道具/武器奖励，
-	# 并新增 4 条低门槛角色成就；此前 35 = 2026-10-24 追加 6 条硬核挑战）
-	_c.equals(int(AchievementData.all_ids().size()), 39, "成就总数 = 39")
+	# 成就总数 = 43（2026-10-25 新手节奏重做：39 条奖励成就；
+	# 2026-11-03 追加 4 条「离谱」彩蛋：噩梦 50 / 60 / 80 / 100 波）
+	_c.equals(int(AchievementData.all_ids().size()), 43, "成就总数 = 43")
 
 	# 7.9 绝尘（斩灭凝神）：杀怪减神通 CD 与持续期预扣无缝衔接
 	GameManager.reset_run()

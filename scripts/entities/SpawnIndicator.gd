@@ -155,6 +155,7 @@ func _duration() -> float:
 	return BOSS_DURATION if is_boss else DURATION
 
 func _draw() -> void:
+	BatchDraw.flush(self)
 	var t := progress  # 0.0 -> 1.0
 	var c := _clock + _phase
 	var pulse := sin(c * 14.0) * 0.15 + 0.85
@@ -171,8 +172,8 @@ func _draw() -> void:
 			for i in range(spokes):
 				var a := rot + float(i) * TAU / float(spokes)
 				var dir := Vector2(cos(a), sin(a) * 0.55)  # 俯视压扁成椭圆环，贴地感
-				draw_line(dir * seg_r * 0.35, dir * seg_r, wheel_col, 2.0, true)
-			draw_arc(Vector2.ZERO, seg_r, 0.0, TAU, 40, Color(wheel_col.r, wheel_col.g, wheel_col.b, 0.45), 1.5, true)
+				BatchDraw.native_line(self, dir * seg_r * 0.35, dir * seg_r, wheel_col, 2.0, true)
+			BatchDraw.native_arc(self, Vector2.ZERO, seg_r, 0.0, TAU, 40, Color(wheel_col.r, wheel_col.g, wheel_col.b, 0.45), 1.5, true)
 
 	# 1. 地面妖气暗符印（十字煞印 + 内核）
 	var col_base := Color(GameStyle.BAD.r, GameStyle.BAD.g, GameStyle.BAD.b, 0.35 * pulse)
@@ -180,7 +181,7 @@ func _draw() -> void:
 	var col_dark := Color(0.15, 0.04, 0.08, 0.6)
 
 	# 底部暗阴影圆
-	draw_circle(Vector2.ZERO, r * 0.6, col_dark)
+	BatchDraw.native_circle(self, Vector2.ZERO, r * 0.6, col_dark)
 
 	# 2. 交叉煞纹 / 妖气尖刺（土豆兄弟经典十字尖刺构型）
 	var cross_len := r * (1.1 - t * 0.3)
@@ -190,13 +191,13 @@ func _draw() -> void:
 	elif is_elite:
 		cross_w = 3.5
 	# 四方煞针
-	draw_line(Vector2(-cross_len, 0), Vector2(cross_len, 0), col_base, cross_w)
-	draw_line(Vector2(0, -cross_len), Vector2(0, cross_len), col_base, cross_w)
+	BatchDraw.native_line(self, Vector2(-cross_len, 0), Vector2(cross_len, 0), col_base, cross_w)
+	BatchDraw.native_line(self, Vector2(0, -cross_len), Vector2(0, cross_len), col_base, cross_w)
 
 	# 斜角四煞短针
 	var diag_len := cross_len * 0.65
-	draw_line(Vector2(-diag_len, -diag_len), Vector2(diag_len, diag_len), col_base * 0.8, cross_w * 0.75)
-	draw_line(Vector2(diag_len, -diag_len), Vector2(-diag_len, diag_len), col_base * 0.8, cross_w * 0.75)
+	BatchDraw.native_line(self, Vector2(-diag_len, -diag_len), Vector2(diag_len, diag_len), col_base * 0.8, cross_w * 0.75)
+	BatchDraw.native_line(self, Vector2(diag_len, -diag_len), Vector2(-diag_len, diag_len), col_base * 0.8, cross_w * 0.75)
 
 	# 3. 凝聚收缩环（前 0.65 脉动，后 0.35 加速向圆心坍缩）
 	var ring_r: float
@@ -211,14 +212,15 @@ func _draw() -> void:
 		ring_r = lerpf(r, 2.0, ease(converge_t, 2.5))
 		ring_alpha = 0.8 + 0.2 * converge_t
 
-	draw_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(GameStyle.BAD.r, GameStyle.BAD.g, GameStyle.BAD.b, ring_alpha), 2.0 if not is_boss else 3.5, true)
+	BatchDraw.native_arc(self, Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(GameStyle.BAD.r, GameStyle.BAD.g, GameStyle.BAD.b, ring_alpha), 2.0 if not is_boss else 3.5, true)
 
 	# 4. 中心妖核红芒：随着进度由小变大并提亮
 	var core_r := lerpf(2.0, r * 0.45, t)
-	draw_circle(Vector2.ZERO, core_r, col_core)
+	BatchDraw.native_circle(self, Vector2.ZERO, core_r, col_core)
 	# 极小金白耀斑
 	if t > 0.7:
-		draw_circle(Vector2.ZERO, core_r * 0.4, Color(1.0, 0.9, 0.8, (t - 0.7) / 0.3))
+		BatchDraw.native_circle(self, Vector2.ZERO, core_r * 0.4, Color(1.0, 0.9, 0.8, (t - 0.7) / 0.3))
 	# 魔君末段：金白耀斑提前点亮成大光柱底，宣示大物将出
 	if is_boss and t > 0.55:
-		draw_circle(Vector2.ZERO, core_r * 0.55, Color(1.0, 0.85, 0.7, (t - 0.55) / 0.45 * 0.6))
+		BatchDraw.native_circle(self, Vector2.ZERO, core_r * 0.55, Color(1.0, 0.85, 0.7, (t - 0.55) / 0.45 * 0.6))
+	BatchDraw.flush(self)

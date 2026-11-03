@@ -2,7 +2,7 @@ extends Node
 
 ## Boss 震地冲击 / 丹爆自爆 AoE 反馈链判据：
 ##   1. Boss _cast_slam 后预警圈存在，半径 == GameBalance.BOSS_SLAM_RADIUS（视觉与判定同源）
-##   2. 预警推进由 Boss._process 驱动 progress（0.45s/0.9s → 填充 0.5），结算后圈隐藏
+##   2. 预警推进由 Boss._process 驱动 progress（半程 → 填充 0.5），结算后圈隐藏；时长读 aoe_windup
 ##   3. 结算：圈内玩家掉血且池中出现 SHOCKWAVE 冲击波；圈外不掉血但冲击波照放（看得见炸、没被打）
 ##   4. 丹爆：引信预警圈半径 == explode_radius（同源）；_explode 后出现 SHOCKWAVE 且预警圈引用清理
 ## 运行: godot --headless --path . res://tests/BossTelegraphCheck.tscn
@@ -66,8 +66,10 @@ func _test_boss_slam_inside() -> void:
 	_c.near(boss._slam_ring.radius, GameBalance.BOSS_SLAM_RADIUS, 0.01, "预警圈半径与判定半径同源（BOSS_SLAM_RADIUS）")
 	_c.near(boss._slam_ring.progress, 0.0, 0.01, "预警起始填充进度为 0")
 
-	boss._process(0.45)
-	_c.near(boss._slam_ring.progress, 0.5, 0.01, "预警推进 0.45s/0.9s → 填充进度 0.5")
+	# 预警时长按半径公平线裁定（随 BOSS_SLAM_RADIUS 变动），判据不再硬编码旧 0.9s
+	var slam_windup: float = GameBalance.aoe_windup(GameBalance.BOSS_SLAM_RADIUS)
+	boss._process(slam_windup * 0.5)
+	_c.near(boss._slam_ring.progress, 0.5, 0.01, "预警推进半程 → 填充进度 0.5")
 
 	# 等两帧让 AoeTelegraph 的 _process/_draw 真实跑一遍（绘制路径有错必须在这里爆出来）
 	await get_tree().process_frame
@@ -76,7 +78,7 @@ func _test_boss_slam_inside() -> void:
 	var waves_before := _count_shockwaves()
 	var hp_before := p.current_health
 	p.invulnerable_time = 0.0
-	boss._process(0.5)  # 引信烧完 → 结算
+	boss._process(slam_windup * 0.5 + 0.05)  # 引信烧完 → 结算
 	_c.check(p.current_health < hp_before, "圈内玩家被震地伤害命中（掉血）")
 	_c.check(_count_shockwaves() > waves_before, "结算时生成 SHOCKWAVE 扩散冲击波")
 	_c.check(not boss._slam_ring.visible, "结算后预警圈隐藏")
@@ -102,8 +104,8 @@ func _test_boss_slam_outside() -> void:
 	boss._cast_slam()
 	var waves_before := _count_shockwaves()
 	var hp_before := p.current_health
-	boss._process(0.5)
-	boss._process(0.5)  # 跨过 0.9s 引信 → 结算
+	# 跨过按半径公平线裁定的完整引信 → 结算（不硬编码旧 0.9s）
+	boss._process(GameBalance.aoe_windup(GameBalance.BOSS_SLAM_RADIUS) + 0.05)
 	# 等两帧让 SHOCKWAVE 的 _draw 真实执行一遍
 	await get_tree().process_frame
 	await get_tree().process_frame

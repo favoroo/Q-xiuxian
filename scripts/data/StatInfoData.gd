@@ -59,9 +59,14 @@ const FIELDS: Dictionary = {
 		"chest_reward": {"name": "宝箱掉落", "unit": "pct"},
 		"pet_damage_mult": {"name": "灵兽伤害", "unit": "pct"},
 		"pet_effect_mult": {"name": "灵兽效果", "unit": "pct"},
-		"pet_cooldown_mult_mul": {"name": "灵兽冷却", "unit": "pctmul"},
+			"pet_cooldown_mult_mul": {"name": "灵兽冷却", "unit": "pctmul"},
 			"pet_slots": {"name": "灵兽栏位", "unit": "pt"},
 			"skill_cooldown_mult": {"name": "技能冷却缩减", "unit": "pct"},
+		# 机关阵地（2026-11-03 手动布设改版）：只在悟道卡/道具详情行里出，不占属性面板行
+		# （面板高度已排满，且这三个数只对机关流有意义）
+		"turret_stamina_mul": {"name": "机关耐久", "unit": "pctmul"},
+		"turret_repair_haste_mul": {"name": "机关维修用时", "unit": "pctmul"},
+		"turret_volley_bonus": {"name": "机关齐射", "unit": "pt"},
 		}
 
 ## 五行名：element_damage_<key> 的人话名走它，与 WeaponData.ELEMENTS 同一批 key
