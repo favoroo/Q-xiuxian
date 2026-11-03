@@ -35,6 +35,13 @@ static func ready_count(player) -> int:
 		n += int(w.free_charges())
 	return n
 
+## 收回后的整备冷却剩余秒数：多把机关武器取最长的那条（按钮「整备 N秒」读数）
+static func cooldown_left(player) -> float:
+	var left := 0.0
+	for w in mechanism_weapons(player):
+		left = maxf(left, float(w.redeploy_timer))
+	return left
+
 ## 下一个该布设的机关武器（槽位序第一个「还有空余编制」的），没有则 null
 static func next_ready(player):
 	for w in mechanism_weapons(player):
@@ -67,6 +74,20 @@ static func nearest_turret(player, pos: Vector2, radius: float) -> TurretUnit:
 	for t in deployed_turrets(player):
 		var d := t.global_position.distance_squared_to(pos)
 		if d <= best_d:
+			best_d = d
+			best = t
+	return best
+
+## 离 pos 最近的一座「需要维修」的机关（不限距离；没有待修机关时返回 null）
+## HUD「N 座待修」芯片的方向提示用它：芯片告诉你有几台，收回键小字告诉你往哪走。
+static func nearest_service_turret(player, pos: Vector2) -> TurretUnit:
+	var best: TurretUnit = null
+	var best_d := 1.0e18
+	for t in deployed_turrets(player):
+		if not t.needs_service():
+			continue
+		var d := t.global_position.distance_squared_to(pos)
+		if d < best_d:
 			best_d = d
 			best = t
 	return best

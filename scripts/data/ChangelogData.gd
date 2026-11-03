@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.20",
+			"date": "2026-11-03",
+			"title": "机关布设与收回修复",
+			"items": [
+				"机关旁新增独立「收回」键，走远显示方向。",
+				"布设机关时地面显示落点与射程。",
+				"机关耐久六成就提示维修。",
+				"修复机关布设键偶发没反应。",
+			],
+		},
+		{
 			"version": "v0.1.19",
 			"date": "2026-11-03",
 			"title": "瞬移预警与机关修复",

@@ -29,8 +29,11 @@ const TURRETS_PER_WEAPON := 1
 const MAX_DURABILITY := 100.0
 ## 连续开火多少秒磨到底。波长约 36~80s，按接敌占空比折算每波长波也就修 1 次。
 const STAMINA_SEC := 40.0
-## 磨损档：耐久低于该比例开始降攻速，并进入「需维修」提示态
+## 磨损档：耐久低于该比例开始降攻速
 const WORN_RATIO := 0.40
+## 提前预警档：低于该比例就进「需维修」提示态（HUD 待修芯片 / 头顶状态牌），
+## 但真正降速仍要等 WORN_RATIO —— 给玩家留出走过去维修的时间，别等掉到四成才第一次提醒。
+const WARN_RATIO := 0.60
 ## 磨损档的开火间隔倍率（攻速 -33%）。维修一档即可恢复。
 const WORN_FIRE_INTERVAL_MULT := 1.5
 
@@ -56,9 +59,10 @@ static func is_broken(durability: float) -> bool:
 static func fire_interval_mult(durability: float) -> float:
 	return WORN_FIRE_INTERVAL_MULT if is_worn(durability) else 1.0
 
-## 需要玩家处理（磨损或停摆）——世界提示牌与 HUD「N 座待修」共用同一条判据
+## 需要玩家处理（磨损预警或停摆）——世界提示牌与 HUD「N 座待修」共用同一条判据。
+## 注意与 is_worn 分开：needs_service 是 60% 就提示，is_worn 才是 40% 降速。
 static func needs_service(durability: float) -> bool:
-	return is_worn(durability) or is_broken(durability)
+	return is_broken(durability) or durability_ratio(durability) < WARN_RATIO
 
 # ---------------- 维修 ----------------
 

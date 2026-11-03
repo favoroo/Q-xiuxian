@@ -358,7 +358,7 @@ func _refresh_readout() -> void:
 	elif is_broken():
 		text = "停摆"
 		col = GameStyle.BAD
-	elif BalanceTurret.is_worn(durability):
+	elif BalanceTurret.needs_service(durability):
 		text = "需维修 %d%%" % roundi(durability_ratio() * 100.0)
 		col = GameStyle.GOLD_EDGE
 	if text == _readout_key:

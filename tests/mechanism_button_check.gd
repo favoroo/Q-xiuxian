@@ -68,7 +68,9 @@ func _run() -> void:
 	await _case_dual_deploy()
 	await _case_recall_debounce()
 	await _case_clearing_deploy()
+	await _case_waiting_deploy()
 	_case_landing_clamp()
+	await _case_recall_layout_edge()
 	await _check_joystick_group()
 	await _teardown()
 	if _c.report("MECHANISM_BTN_RESULT"):
@@ -146,8 +148,8 @@ func _release_at(pos: Vector2) -> void:
 func _btn_center() -> Vector2:
 	return _btn.get_btn().get_global_rect().get_center()
 
-func _tag_center() -> Vector2:
-	return _btn.get_tag().get_global_rect().get_center()
+func _recall_center() -> Vector2:
+	return _btn.get_recall_btn().get_global_rect().get_center()
 
 func _field_turret() -> TurretUnit:
 	if _fw == null or not is_instance_valid(_fw):
@@ -169,7 +171,14 @@ func _case_deploy_by_tap() -> void:
 	_c.check(_btn.get_badge().visible, "编制角标可见")
 	_c.check(_btn.get_badge().text.contains("1"), "角标写 ×1")
 	_c.equals(_btn.get_sub_label().text, "机关弩", "副读数是下一把机关武器名")
-	_c.check(not _btn.get_tag().visible, "不靠近机关时不显示收回角标")
+	_c.check(not _btn.get_recall_btn().visible, "场上没有机关时收回键隐藏")
+	# 布设落点预览：主键处于布设态时，地面要有落点虚影 + 射程环
+	var preview := _btn.get_preview()
+	_c.check(preview != null and is_instance_valid(preview), "布设态生成落点预览")
+	if preview != null and is_instance_valid(preview):
+		_c.check(preview.visible, "布设态落点预览可见")
+		_c.near(preview.global_position.distance_to(
+			TurretCommand.deploy_candidate_pos(_player)), 0.0, 1.0, "预览落点与判定落点同源")
 
 	var center := _btn_center()
 	_press_at(center)
@@ -181,10 +190,19 @@ func _case_deploy_by_tap() -> void:
 		_c.check(t.global_position.distance_to(_player.global_position) > 1.0,
 			"机关落在脚边而不是玩家中心（不压人物）")
 	_c.equals(TurretCommand.ready_count(_player), 0, "编制已用完")
-	# 布设点就在脚边，玩家自然还在交互半径内 —— 先走远才算「不在机关旁」
+	# 布设点就在脚边，玩家自然还在交互半径内 —— 先走远才算「不在机关旁」。
+	# v0.1.20：编制用完也不收起，改成「在场」并常驻独立收回键（用户真机找不到收回入口）。
 	_player.global_position += Vector2(320, 0)
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.HIDDEN, "编制用完且走远 → 收起")
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "编制用完且走远 → 在场态，不收起")
+	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_SPENT, "键面写「在场」")
+	_c.equals(_btn.get_sub_label().text, "走近可收回", "副读数提示走近可收回")
+	_c.check(_btn.visible and _btn.is_circle_shown(), "在场态圆键仍然亮着")
+	_c.check(_btn.get_recall_btn().visible, "独立收回键常驻可见")
+	_c.check(_btn.get_recall_btn().modulate.a < 0.8, "走远后收回键压暗")
+	_c.equals(_btn.get_recall_sub().text, "左", "走远后收回键小字指向机关方向（机关在左）")
+	_c.check(_btn.get_preview() == null or not _btn.get_preview().visible,
+		"离开布设态后落点预览收起")
 
 # ---------------- ② 靠近切换维修/完好 + 收回角标 ----------------
 
@@ -198,8 +216,9 @@ func _case_near_modes() -> void:
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.OK, "靠近满耐久机关 → 完好态")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_OK, "键面写「完好」")
-	_c.check(_btn.get_tag().visible, "靠近时浮出收回角标")
-	_c.check(not _btn.get_badge().visible, "收回角标与编制角标互斥")
+	_c.check(_btn.get_recall_btn().visible, "靠近时独立收回键可见")
+	_c.equals(_btn.get_recall_sub().text, "可收回", "靠近时收回键小字写「可收回」")
+	_c.check(not _btn.get_badge().visible, "无编制时编制角标隐藏")
 
 	t.durability = 30.0
 	await _poll()
@@ -248,10 +267,17 @@ func _case_broken_and_service_chip() -> void:
 	# 玩家走远：圆键收起，但芯片要留在原位提示
 	_player.global_position = t.global_position + Vector2(320, 0)
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.HIDDEN, "走远后圆键收起")
-	_c.check(_btn.get_chip().visible, "圆键收起后待修芯片仍然可见")
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "走远后在场上机关仍可见 → 在场态")
+	_c.check(_btn.get_chip().visible, "待修芯片仍然可见")
 	_c.check(_btn.get_chip().text.contains("1"), "芯片写「1 座待修」")
-	_c.check(not _btn.is_circle_shown(), "芯片可见时圆键本体收起")
+	_c.check(_btn.is_circle_shown(), "在场态圆键不收起（回收入口必须看得见）")
+	# 远处的收回键按下去要给明确提示，不能静默
+	_press_at(_recall_center())
+	await get_tree().process_frame
+	_release_at(_recall_center())
+	await get_tree().process_frame
+	_c.check(_field_turret() != null, "走太远时收回键不会隔空收回")
+	_c.check(not UpdateManager.toast_probe().is_empty(), "走太远时点收回键会弹出「走近」提示")
 
 	# 修好后芯片消失
 	_player.global_position = t.global_position + Vector2(30, 0)
@@ -268,15 +294,16 @@ func _case_recall() -> void:
 		return
 	t.durability = 40.0
 	await _poll()
-	_c.check(_btn.get_tag().visible, "收回角标亮着")
-	var tag_c := _tag_center()
+	_c.check(_btn.get_recall_btn().visible, "收回键亮着")
+	var tag_c := _recall_center()
 	_press_at(tag_c)
 	_release_at(tag_c)
 	await get_tree().process_frame
-	_c.equals(_field_turret(), null, "点收回角标后机关撤场")
+	_c.equals(_field_turret(), null, "点独立收回键后机关撤场")
 	_c.check(float(_fw.pending_turret_durability) > 0.0, "耐久随机关带回本体")
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.HIDDEN, "整备冷却期间不显示布设态")
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.COOLDOWN, "整备冷却期间显示「整备」")
+	_c.check(not _btn.get_recall_btn().visible, "机关已收回，收回键隐藏")
 
 	_fw.redeploy_timer = 0.0
 	await _poll()
@@ -364,7 +391,7 @@ func _case_dual_deploy() -> void:
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.TOO_CLOSE, "站原地落点被占 → TOO_CLOSE")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_TOO_CLOSE, "键面写「太近」")
-	_c.check(_btn.get_tag().visible, "TOO_CLOSE 模式下显示收回角标")
+	_c.check(_btn.get_recall_btn().visible, "TOO_CLOSE 模式下收回键仍可见")
 
 	# 点主键不新增机关（走拒绝反馈）
 	_press_at(_btn_center())
@@ -378,7 +405,11 @@ func _case_dual_deploy() -> void:
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "挪约 40px 使落点 ≥64 → DEPLOY")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_DEPLOY, "键面写「布设」")
-	_c.check(not _btn.get_tag().visible, "DEPLOY 态即使靠近机关也不显示收回角标（防误触）")
+	_c.check(_btn.get_recall_btn().visible, "DEPLOY 态收回键独立可见")
+	var main_c := _btn_center()
+	var recall_c := _recall_center()
+	_c.check(main_c.distance_to(recall_c) > HudMechanismButton.BTN_SIZE.x * 0.5,
+		"收回键不在主键热区内（不会再误触）")
 
 	# 放第二座成功，且此时玩家仍在第一座 90px 内
 	await get_tree().create_timer(0.2).timeout
@@ -449,6 +480,34 @@ func _case_clearing_deploy() -> void:
 	_fw.redeploy_timer = 0.0
 	await _poll()
 
+# ---------------- ⑩b 波间 WAITING 布设 ----------------
+
+func _case_waiting_deploy() -> void:
+	_c.equals(TurretCommand.ready_count(_player), 1, "编制返还为 1（WAITING 前提）")
+	_player.global_position = Vector2(-200, -200)
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.DEPLOY, "WAITING 空地 → 布设态")
+
+	var fake_spawner := FakeSpawner.new()
+	fake_spawner.phase = int(WaveSpawner.Phase.WAITING)
+	GameManager.wave_spawner = fake_spawner
+	_c.check(_btn._is_gameplay_active(), "波间 WAITING 阶段允许布设（下一波开打前摆阵地）")
+
+	# 避开 150ms deploy 防抖
+	await get_tree().create_timer(0.2).timeout
+	_btn._do_deploy()
+	await get_tree().process_frame
+	var t := _field_turret()
+	_c.check(t != null, "WAITING 阶段布设成功")
+	if t != null:
+		_btn._do_recall()
+		await get_tree().process_frame
+
+	fake_spawner.free()
+	GameManager.wave_spawner = null
+	_fw.redeploy_timer = 0.0
+	await _poll()
+
 # ---------------- ⑪ 落点边界钳制 ----------------
 
 func _case_landing_clamp() -> void:
@@ -469,10 +528,26 @@ func _case_landing_clamp() -> void:
 	_c.near(pos.x, -bound, 0.001, "超出左边界落点 x 钳制在 -bound")
 	_c.near(pos.y, -bound, 0.001, "超出上边界落点 y 钳制在 -bound")
 
+# ---------------- ⑫ 收回键贴边摆位 ----------------
+
+func _case_recall_layout_edge() -> void:
+	# 主键拖到左上角时，左侧放不下 → 自动改到上方/右侧，收回键仍在屏内
+	SettingsManager.set_mechanism_btn_xy(Vector2(0.0, 0.0), false)
+	_btn._apply_layout()
+	await get_tree().process_frame
+	var rr := _btn.get_recall_btn().get_global_rect()
+	var vp := _btn.get_viewport_rect().size
+	_c.check(rr.position.x >= 0.0 and rr.position.y >= 0.0
+		and rr.end.x <= vp.x and rr.end.y <= vp.y,
+		"主键贴左上角时收回键仍完整留在屏内（实得 %s / 屏 %s）" % [str(rr), str(vp)])
+	SettingsManager.set_mechanism_btn_xy(SettingsManager.MECHANISM_BTN_XY_DEFAULT, false)
+	_btn._apply_layout()
+	await get_tree().process_frame
+
 func _check_joystick_group() -> void:
 	var btn: Button = _btn.get_btn()
 	_c.check(btn.is_in_group(DawnJoystick.UI_PRESS_HOLD_GROUP),
 		"机关键已进摇杆 UI_HOLD 组（按住维修不会在脚下长出摇杆）")
-	var tag: Button = _btn.get_tag()
-	_c.check(tag.is_in_group(DawnJoystick.UI_PRESS_HOLD_GROUP),
-		"收回角标同样豁免摇杆（点它不会误起摇杆）")
+	var recall: Button = _btn.get_recall_btn()
+	_c.check(recall.is_in_group(DawnJoystick.UI_PRESS_HOLD_GROUP),
+		"独立收回键同样豁免摇杆（点它不会误起摇杆）")

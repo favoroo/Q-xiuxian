@@ -166,6 +166,13 @@ func _check_durability_math() -> void:
 	_c.check(not BalanceTurret.is_worn(100.0), "满耐久不算磨损")
 	_c.check(BalanceTurret.is_worn(39.0), "耐久低于 40% 进入磨损档")
 	_c.check(not BalanceTurret.is_worn(41.0), "耐久高于 40% 不降速")
+	# 提前预警：60% 就提示玩家去维修，但真正降速仍要等 40%
+	_c.check(BalanceTurret.needs_service(50.0), "耐久 50% 就进入待修提示（提前预警）")
+	_c.check(not BalanceTurret.needs_service(70.0), "耐久 70% 不提示维修")
+	_c.check(not BalanceTurret.is_worn(50.0), "50% 只提示、不降速")
+	_c.check(BalanceTurret.needs_service(0.0), "停摆也算待修")
+	_c.check(BalanceTurret.WARN_RATIO > BalanceTurret.WORN_RATIO,
+		"预警阈值必须早于降速阈值（先提示、后惩罚）")
 	_c.near(BalanceTurret.fire_interval_mult(39.0), BalanceTurret.WORN_FIRE_INTERVAL_MULT, 0.001,
 		"磨损档开火间隔 ×%.1f" % BalanceTurret.WORN_FIRE_INTERVAL_MULT)
 	_c.near(BalanceTurret.fire_interval_mult(100.0), 1.0, 0.001, "完好档不降速")
