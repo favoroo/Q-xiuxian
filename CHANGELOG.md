@@ -1,3 +1,6 @@
+## 2026-11-03 #16
+【TapTap 剑士Q 渠道：v0.1.18 包体已上传并绑主包体，更新日志字段与提审暂缓】`upload-apk` 上传 `build/q-xiuxian-v0.1.18-arm64-v8a.apk`（`apkId` 1075205，包体库 `version_name` 0.1.18、状态 ready），随后按 `list-packages` 同次返回的 `package_slots.main.expected`（`kind=apk` / `apk_id=1073231`）走 `select-package` dry-run → `--yes`，写后读回确认主槽位已切到 `apk_id=1075205`、`current_bindings` 亦为 1075205。**未做（用户主动叫停）**：`package` 模块 `apk_whatsnew`（APK 更新日志）仍是 v0.1.7 首发文案未改；未跑 `prepare-review-snapshot` / `precheck-app-review` / `submit-app-review`，**本版尚未提审**。平台状态：Android `region_flag_android`=4「开放试玩」、iOS `region_flag_ios`=1「敬请期待」、`app_platforms`=MOBILE；`release_schedule`/`release_method` 当前为空（提交时需指定立即或精确定时，精确定时须 ≥ 当前+6h）。涉及 `scripts/autoload/Version.gd`（0.1.18）、`export_presets.cfg`、`scripts/data/ChangelogData.gd`（v0.1.18 顶条）。
+
 ## 2026-11-03 #15
 【发布 v0.1.18】release.py bump/build/publish 全绿双端发布；本轮含 #06 投降结算、#07 同屏合批优化、#08 深层专属魔君、#09~#10 机关阵地养成线、#11 深层过渡档三尊新魔君、#12 Boss 形象分化与签名招、#13 二次减量提质、#14 「离谱」成就类八组改动。版本 0.1.17→0.1.18（versionCode 118），APK `q-xiuxian-v0.1.18-arm64-v8a.apk`，SHA-256 `3a7c486fc36b6b6d8f175a3193a4d6b052dfc8165f62c746f30af50e5adda604`。门禁：核心 6/6 全绿（UnitRunner 4207 / SmokeRunner 72 / PoolCheck 103 / LayoutCheck 76 / FontCoverageCheck 14 / BalanceSimCheck 920）。涉及 `scripts/autoload/Version.gd`、`export_presets.cfg`、`scripts/data/ChangelogData.gd`（v0.1.18 顶条）、`CHANGELOG.md`。
 
