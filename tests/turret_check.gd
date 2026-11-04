@@ -316,25 +316,32 @@ func _check_entity_lifecycle() -> void:
 	_turret.end_repair()
 	_c.near(_turret.durability, partial, 0.001, "松手保留已修耐久（不回退）")
 
+	# 头顶「维修中 N%」读当前耐久，不是本次维修进度（旧写法一按就从 0% 涨，玩家以为耐久归零）
+	_turret.durability = 40.0
+	_turret.begin_repair()
+	_turret._process(0.0)
+	_c.equals(_turret._readout_label.text, "维修中 40%",
+		"维修中数字 = 当前耐久 40%，不是本次进度 0%")
+	_c.near(_turret.repair_ratio(), 0.0, 0.001, "进度环仍从 0 起（只给走针环 / 盘缘弧用）")
+	_turret.end_repair()
+
 	# 满耐久时 begin_repair 是空操作
 	_turret.durability = BalanceTurret.MAX_DURABILITY
 	_turret.begin_repair()
 	_c.check(not _turret.is_repairing(), "满耐久按维修是空操作")
 
-	# 维修要站定：走位超过容差 → 中断（已修部分保留，头顶短暂提示）
+	# 2026-11-04 取消站定限制：维修圈内可以边走边修（真机反馈站定太容易死）
 	_turret.durability = 0.0
 	_player.global_position = _turret.global_position + Vector2(30, 0)
 	_turret.begin_repair()
 	_turret._process(0.2)
 	var before_move := _turret.durability
-	_c.check(before_move > 0.0, "站定维修正常回填")
-	_player.global_position = _turret.global_position + Vector2(30 + BalanceTurret.REPAIR_MOVE_TOLERANCE + 5.0, 0)
-	_turret._process(0.05)
-	_c.check(not _turret.is_repairing(), "移动超过站定容差 → 维修中断")
-	_c.near(_turret.durability, before_move, 0.001, "中断保留已修耐久（不回退）")
-	_c.equals(_turret._readout_label.text, "维修需站定", "中断后头顶提示「维修需站定」")
-	_turret._process(1.0)
-	_c.check(_turret._readout_label.text != "维修需站定", "站定提示 0.9s 后消失")
+	_c.check(before_move > 0.0, "开始维修后正常回填")
+	_player.global_position = _turret.global_position + Vector2(70, 0)
+	_turret._process(0.2)
+	_c.check(_turret.is_repairing(), "在维修圈内移动不会中断维修")
+	_c.check(_turret.durability > before_move, "移动中耐久继续回填")
+	_turret.end_repair()
 
 	# 维修时机关停火：有目标、冷却到点也不出弹（维修不是白嫖，要挑安全窗口）
 	_turret.durability = 40.0

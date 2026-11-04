@@ -1,14 +1,15 @@
 extends Node
 
-## tests/mechanism_button_check.gd — 机关按钮（布设 / 维修 / 收回）四态与输入判据
+## tests/mechanism_button_check.gd — 机关按钮（布设 / 维修 / 收回）键面与输入判据
 ## 运行: python3 tools/run_test.py MechanismButtonCheck
 ##
 ## 钉的是「玩家看到的那颗键」：
-##   ① 无机关武器 → 整颗收起；有编制 → 「布设 ×N」+ 副读数 = 下一把机关名；
-##   ② 靠近自己机关 → 「维修」（磨损）/「完好」（满耐久）+ 独立「收回」键（走远隐藏）；
+##   ① 无机关武器 → 整颗收起；有编制 → 「布设 ×N」+ 副读数 = 下一把机关名 + 落点钉标图标；
+##   ② 靠近自己机关 → 「维修」（磨损，扳手图标）/「完好」（满耐久，无图标）；
 ##   ③ 长按维修：键面走针环推进、耐久实时回填、松手保留已修量；
-##   ④ 收回：起固定 2 秒整备倒数（键面显示剩余秒数），倒数走完淡回布设态；
-##   ⑤ 机关磨损且玩家不在旁边 → 「N 座待修」芯片仍挂在原位上（走远也看得见）；
+##   ④ 收回：独立收回键 / G 键都能撤场（收回不限距离），收回当刻返还编制；
+##   ⑤ 机关磨损且玩家不在旁边 → 键面「维修」+「走近修」引导 +「N 座待修」芯片；
+##      机关完好走远 → 主键收起（旧「在场」态 2026-11-04 下线），收回键仍亮；
 ##   ⑥ 第二指（原生 ScreenTouch）能布设；键已进摇杆的 UI_HOLD 组（按住不长摇杆）。
 ##
 ## 本判据用真 GameHUD + 真按钮拾取（事件走 root.push_input 打真实矩形），
@@ -171,6 +172,8 @@ func _case_deploy_by_tap() -> void:
 	_c.check(_btn.get_badge().visible, "编制角标可见")
 	_c.check(_btn.get_badge().text.contains("1"), "角标写 ×1")
 	_c.equals(_btn.get_sub_label().text, "机关弩", "副读数是下一把机关武器名")
+	var glyph = _btn.get_glyph()
+	_c.check(glyph != null and glyph.visible and glyph.kind == 0, "布设态键面亮落点钉标图标")
 	_c.check(not _btn.get_recall_btn().visible, "场上没有机关时收回键隐藏")
 	# 布设落点预览：主键处于布设态时，地面要有落点虚影 + 射程环
 	var preview := _btn.get_preview()
@@ -191,14 +194,14 @@ func _case_deploy_by_tap() -> void:
 			"机关落在脚边而不是玩家中心（不压人物）")
 	_c.equals(TurretCommand.ready_count(_player), 0, "编制已用完")
 	# 布设点就在脚边，玩家自然还在交互半径内 —— 先走远才算「不在机关旁」。
-	# 编制用完也不收起，改成「在场」；布设键不再写收回提示。
+	# 2026-11-04 用户口径：「在场」看不懂，下线 —— 机关完好 + 编制用尽 → 主键收起，
+	# 信息交给独立收回键（收回不限距离）。
 	_player.global_position += Vector2(320, 0)
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "编制用完且走远 → 在场态，不收起")
-	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_SPENT, "键面写「在场」")
-	_c.equals(_btn.get_sub_label().text, "", "布设键副读数不写收回提示")
-	_c.check(_btn.visible and _btn.is_circle_shown(), "在场态圆键仍然亮着")
-	# 2026-11-03 用户口径：收回不限距离 —— 走远后收回键照样亮着，随时能收最近那座
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.HIDDEN, "编制用完且走远、机关完好 → 主键收起")
+	_c.check(not _btn.is_circle_shown(), "收起时圆键不亮")
+	_c.check(_btn.get_btn().text != "在场", "键面不再出现「在场」")
+	# 收回不限距离（2026-11-03 口径）：走远后收回键照样亮着，随时能收最近那座
 	_c.check(_btn.get_recall_btn().visible, "走远后独立收回键仍然可见（收回不限距离）")
 	_c.check(_btn.get_preview() == null or not _btn.get_preview().visible,
 		"离开布设态后落点预览收起")
@@ -215,6 +218,7 @@ func _case_near_modes() -> void:
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.OK, "靠近满耐久机关 → 完好态")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_OK, "键面写「完好」")
+	_c.check(not _btn.get_glyph().visible, "完好态不亮键面图标")
 	_c.check(_btn.get_recall_btn().visible, "靠近时独立收回键可见")
 	_c.check(_btn.get_recall_icon() != null, "收回键有「机关 → 人物」图标")
 	_c.equals(_btn.get_recall_btn().text, "", "收回键不再用按钮文字（图标 + 单行小字）")
@@ -225,6 +229,7 @@ func _case_near_modes() -> void:
 	await _poll()
 	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR, "机关磨损 → 维修态")
 	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_REPAIR, "键面写「维修」")
+	_c.check(_btn.get_glyph().visible and _btn.get_glyph().kind == 1, "维修态键面亮扳手图标")
 	_c.equals(_btn.get_sub_label().text, "30%", "副读数是当前耐久百分比")
 
 	# 维修触发距离 2026-11-03：90 → 150 → 120 → 110 → 95（放宽反而老在收回重摆时抢键）
@@ -276,13 +281,16 @@ func _case_broken_and_service_chip() -> void:
 	_c.equals(_btn.get_sub_label().text, "0%", "停摆时副读数读到 0%")
 	_c.check(t.is_broken(), "耐久归零进入停摆")
 
-	# 玩家走远：圆键收起，但芯片要留在原位提示
+	# 玩家走远：场上有缺耐久机关 → 键面「维修」+「走近修」引导（旧「在场」已下线）
 	_player.global_position = t.global_position + Vector2(320, 0)
 	await _poll()
-	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "走远后在场上机关仍可见 → 在场态")
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.SPENT, "走远后场上有坏机关 → 维修引导态")
+	_c.equals(_btn.get_btn().text, HudMechanismButton.FACE_REPAIR, "键面写「维修」（不再写「在场」）")
+	_c.equals(_btn.get_sub_label().text, HudMechanismButton.FACE_SPENT_SUB, "副读数提示「走近修」")
+	_c.check(_btn.get_glyph().visible and _btn.get_glyph().kind == 1, "维修引导态亮扳手图标")
 	_c.check(_btn.get_chip().visible, "待修芯片仍然可见")
 	_c.check(_btn.get_chip().text.contains("1"), "芯片写「1 座待修」")
-	_c.check(_btn.is_circle_shown(), "在场态圆键不收起")
+	_c.check(_btn.is_circle_shown(), "维修引导态圆键亮着")
 	# 走远后收回键照样亮着（2026-11-03 收回不限距离）：按 G 真的把最近那座收回来
 	_c.check(_btn.get_recall_btn().visible, "走远后收回键仍然可见（不再压暗 + 指方向）")
 	var turret_id := t.get_instance_id()
@@ -469,6 +477,29 @@ func _case_dual_deploy() -> void:
 	_c.equals(_fw.field_turrets().size(), 2, "再放第二座成功")
 	_c.check(_player.global_position.distance_to(t1.global_position) <= BalanceTurret.INTERACT_RADIUS,
 		"此时玩家仍在第一座的交互半径内（证明靠近也能布设）")
+
+	# 维修目标优先级（2026-11-04）：两座都在半径内时，先修「最该修」的那座，不是最近那座
+	var t2: TurretUnit = _fw.field_turrets()[1]
+	t1.durability = 80.0
+	t2.durability = 20.0
+	_player.global_position = (t1.global_position + t2.global_position) * 0.5
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR, "两座都缺耐久 → 进维修态")
+	_c.check(_btn.get_target() == t2, "优先选中耐久更低的那座（最该修的）")
+
+	# 最近的满耐久、稍远那座缺耐久：仍要进维修态并选中缺耐久的那座
+	# （旧逻辑只认 nearest，会把整座坏机关忽略）
+	t1.durability = BalanceTurret.MAX_DURABILITY
+	t2.durability = 60.0
+	_player.global_position = t1.global_position + Vector2(10, 0)
+	await _poll()
+	_c.equals(_btn.mode(), HudMechanismButton.Mode.REPAIR,
+		"最近那座满耐久、旁边一座缺耐久 → 仍进维修态")
+	_c.check(_btn.get_target() == t2, "选中的是缺耐久那座（不是最近的满耐久）")
+
+	# 恢复满耐久，后续收回防抖用例仍按两座满耐久跑
+	t2.durability = BalanceTurret.MAX_DURABILITY
+	await _poll()
 
 # ---------------- ⑨ 收回防抖 ----------------
 

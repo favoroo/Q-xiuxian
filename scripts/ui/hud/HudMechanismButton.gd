@@ -1,14 +1,16 @@
 class_name HudMechanismButton
 extends Control
 
-## 机关按钮（2026-11-03 手动布设改版，v0.1.20 真机修）：
+## 机关按钮（2026-11-03 手动布设改版，v0.1.20 真机修；2026-11-04 键面简化）：
 ##   不在机关旁 + 有编制 → 「布设 ×N」：点按在脚下空地落一座机关；
 ##   靠近机关 + 需维修   → 「维修」：长按连续回填耐久，键面走针环 = 回填进度；
 ##   靠近机关 + 满耐久 + 有编制（落点为空） → 「布设 ×N」；
 ##   靠近机关 + 满耐久 + 有编制（落点被占） → 「太近」：抖动 + 报错音 + 文案提示，不再静默；
 ##   靠近机关 + 满耐久 + 无编制             → 「完好」：暗面键，按下给一句提示；
-##   场上已有机关但走远了 + 无编制           → 「在场」：键不收起，只报状态，不写收回提示；
-##   收回后的 2 秒整备倒数                   → 「整备」：显示剩余秒数。
+##   场上有机关走远了 + 无编制 + 有机关待修 → 键面「维修」+「走近修」：按下提示走近再修；
+##   场上有机关走远了 + 无编制 + 全部完好   → 主键收起（用户口径「在场」看不懂；
+##     收回键与待修芯片照常，信息不丢）；
+##   收回后的整备倒数（当前 RECALL_COOLDOWN_SEC=0，链路保留） → 「整备」：显示剩余秒数。
 ##   状态都对却出不了机关（链路内部失败）     → 按 TurretCommand.last_error 说清是哪一环
 ## （机关模型没加载出来 / 编制已满 / 请再试一次），不再统一报「现在不能布设机关」。
 ##
@@ -19,6 +21,8 @@ extends Control
 ##
 ## 外观/摆位/进度环全部复用现成设施：SkillButtonView.style_circle_action + CircleProgressOverlay
 ## + HudButtonLayout，键径与其他浮动键钉死同一个 SKILL_BTN_SIZE。
+## 布设/维修两态键面在文字上方加程序化小图标（落点钉标 / 扳手，同 RecallIcon 画法），
+## 与收回键的图标语言一致：一眼读动作，不靠认字。
 
 const BTN_SIZE := Vector2(SkillButtonView.SKILL_BTN_SIZE, SkillButtonView.SKILL_BTN_SIZE)
 ## 键面主文案字号：与祭坛键同口径（两字 18 号收得进圆面，见 UnitRunner 的键面适配判据）
@@ -30,6 +34,10 @@ const SUB_FONT := 10
 const SUB_TOP := 54.0
 ## 「N 座待修」芯片相对键面底缘的间距
 const CHIP_GAP := 6.0
+## 键面动作小图标（布设/维修）：尺寸与顶边 —— 主文案垂直居中约 35..53，
+## 图标条占 8..30，压在走针环内缘（39.5）之上，不与文字叠字
+const GLYPH_SIZE := 22.0
+const GLYPH_TOP := 8.0
 
 ## 独立「收回」键：直径 / 与主键的间距 / 字号
 const RECALL_SIZE := 56.0
@@ -47,7 +55,9 @@ const FACE_DEPLOY := "布设"
 const FACE_REPAIR := "维修"
 const FACE_OK := "完好"
 const FACE_TOO_CLOSE := "太近"
-const FACE_SPENT := "在场"
+## 编制用尽 + 人在交互半径外 + 场上有缺耐久的机关：键面沿用「维修」二字引导走回去修
+## （旧文案「在场」用户看不懂，2026-11-04 下线；机关全部完好时这颗键直接收起）
+const FACE_SPENT_SUB := "走近修"
 const FACE_COOLDOWN := "整备"
 ## 调整模式下的占位文案（与祭坛键的「激活」同款：先说这是什么东西）
 const FACE_EDIT := "机关"
@@ -90,10 +100,52 @@ class RecallIcon extends Control:
 		draw_circle(c + Vector2(0.0, 17.2), 2.1, chalk)
 		draw_arc(c + Vector2(0.0, 19.8), 5.1, PI * 0.12, PI * 0.88, 14, chalk, 1.6, true)
 
+## 主键键面动作图标（文字上方一条）：只画「这一下会做什么」，颜色跟键面主色走。
+## 布设 = 落点钉标（向下箭头扎进目标环，与地面落点虚影同一个意义来源）；
+## 维修 = 开口扳手（斜柄 + 右上开口的环头），一眼读作「修东西」。
+class GlyphIcon extends Control:
+	## kind: 0 = 落点钉标（布设），1 = 扳手（维修）
+	var kind: int = 0
+	var glyph_color: Color = GameStyle.GOLD
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	## 只在读数变化时重绘（10Hz 轮询不许每帧 queue_redraw）
+	func set_state(next_kind: int, color: Color) -> void:
+		if next_kind == kind and color == glyph_color:
+			return
+		kind = next_kind
+		glyph_color = color
+		queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		if kind == 0:
+			# 落点钉标：目标环 + 中心点 + 上方下插箭头
+			var ring_c := Vector2(w * 0.5, w * 0.6)
+			draw_arc(ring_c, w * 0.28, 0.0, TAU, 18, glyph_color, 1.8, true)
+			draw_circle(ring_c, w * 0.09, glyph_color)
+			draw_line(Vector2(w * 0.5, w * 0.05), Vector2(w * 0.5, w * 0.2), glyph_color, 1.9)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(w * 0.5, w * 0.34),
+				Vector2(w * 0.34, w * 0.14),
+				Vector2(w * 0.66, w * 0.14)]), glyph_color)
+		else:
+			# 扳手：斜柄从左下上伸，环头在右上开口（开口朝向右上 = 拧那颗螺母）
+			var head := Vector2(w * 0.64, w * 0.34)
+			draw_line(Vector2(w * 0.28, w * 0.74), head, glyph_color, 3.2)
+			draw_circle(Vector2(w * 0.28, w * 0.74), w * 0.085, glyph_color)
+			var gap := -PI * 0.25
+			draw_arc(head, w * 0.2, gap + 0.95, gap + TAU - 0.95, 16, glyph_color, 2.3, true)
+
 var _btn: Button = null
 var _ring: SkillButtonView.CircleProgressOverlay = null
 var _sub: Label = null
 var _badge: Label = null
+## 键面动作小图标（布设=落点钉标 / 维修=扳手）；-1 = 当前隐藏
+var _glyph: GlyphIcon = null
+var _glyph_key: int = -1
 ## 独立收回键（不再用主键顶部的 22px 小角标）：图标 + 单行「可收回」
 var _recall_btn: Button = null
 var _recall_icon: Control = null
@@ -130,7 +182,7 @@ var _last_deploy_time: int = -10000
 var _last_recall_frame: int = -1
 var _last_recall_time: int = -10000
 ## 动作后的短静默：触屏原生事件与模拟鼠标可能跨帧各来一发，
-## 上一发已经布设/收回成功时，下一发不许再弹「完好/在场」之类的提示。
+## 上一发已经布设/收回成功时，下一发不许再弹「完好/走近修」之类的提示。
 var _suppress_until: int = 0
 var _preview: Node2D = null
 
@@ -201,6 +253,14 @@ func _build() -> void:
 	_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_badge.visible = false
 	_btn.add_child(_badge)
+
+	# 键面动作图标：压在文字上方一条（只布设/维修两态亮，颜色跟键面主色走）
+	_glyph = GlyphIcon.new()
+	_glyph.name = "GlyphIcon"
+	_glyph.size = Vector2(GLYPH_SIZE, GLYPH_SIZE)
+	_glyph.position = Vector2((BTN_SIZE.x - GLYPH_SIZE) * 0.5, GLYPH_TOP)
+	_glyph.visible = false
+	_btn.add_child(_glyph)
 
 	# 独立「收回」键：挂根节点（不随圆键收起），只在靠近机关时出现
 	_recall_btn = Button.new()
@@ -336,9 +396,10 @@ func key_release() -> void:
 func can_key_act() -> bool:
 	return visible and not _edit_mode and _is_gameplay_active() and _mode != Mode.HIDDEN
 
-## 键盘 G：收回（与独立收回键同一动作；不靠近机关时给提示）
+## 键盘 G：收回（与独立收回键同一动作）—— 判据口径与收回键显隐同源：
+## 场上有自己的机关就能收（收回不限距离），不要求主键此刻可见
 func recall_by_key() -> void:
-	if _edit_mode or _mode == Mode.HIDDEN or not _is_gameplay_active():
+	if _edit_mode or not _has_turret or not _is_gameplay_active():
 		return
 	_do_recall()
 
@@ -386,7 +447,7 @@ func _press_primary(touch_index: int = -1) -> void:
 				_style_btn(true)
 		Mode.SPENT:
 			if Time.get_ticks_msec() >= _suppress_until:
-				_hint("机关已在场上")
+				_hint("走近机关再维修")
 		Mode.COOLDOWN:
 			if Time.get_ticks_msec() >= _suppress_until:
 				_hint("机关整备中，稍等片刻")
@@ -453,7 +514,7 @@ func _do_deploy() -> void:
 func _hint_deploy_denied(reason: String) -> void:
 	match reason:
 		"no_charge":
-			_hint("机关已在场上")
+			_hint("先收回机关，才能再布设")
 		"occupied":
 			_hint("离机关太近，走远一点")
 		"no_player":
@@ -562,8 +623,19 @@ func _poll_state() -> void:
 		has_weapon = not weapons.is_empty()
 		ready = TurretCommand.ready_count(player)
 		service = TurretCommand.service_count(player)
-		next_target = TurretCommand.nearest_turret(player, player.global_position,
+		# 维修目标优先「最需要修」（耐久最低，停摆最优先），再按距离；
+		# 没有待修机关时才退回最近一座，供「完好 / 太近」读数用。
+		var repair_target := TurretCommand.repair_candidate(player, player.global_position,
 			BalanceTurret.INTERACT_RADIUS)
+		var near_target := TurretCommand.nearest_turret(player, player.global_position,
+			BalanceTurret.INTERACT_RADIUS)
+		next_target = repair_target if repair_target != null else near_target
+		# 按住维修时锁定当前目标：另一座更破也不许中途换手（换手等于白丢这次按压）。
+		# 目标修满后本身就不再是 repair_candidate，下一次轮询自然会切到下一座待修的。
+		if _holding and _target != null and is_instance_valid(_target) \
+				and _target.durability < BalanceTurret.MAX_DURABILITY - 0.001 \
+				and _target.global_position.distance_to(player.global_position) <= BalanceTurret.INTERACT_RADIUS:
+			next_target = _target
 		var turrets: Array[TurretUnit] = TurretCommand.deployed_turrets(player)
 		has_turret = not turrets.is_empty()
 		# 收回不限距离（BalanceTurret.RECALL_RADIUS <= 0）：场上有机关就随时能收最近那座，
@@ -571,7 +643,7 @@ func _poll_state() -> void:
 		recall_near = has_turret and TurretCommand.recall_candidate(player, player.global_position) != null
 
 		if next_target != null and next_target.durability_ratio() < 0.999:
-			# 1) 交互半径内最近机关 durability_ratio() < 0.999 → Mode.REPAIR（维修优先）
+			# 1) 交互半径内「最需要修」的机关 → Mode.REPAIR（维修优先）
 			next_mode = Mode.REPAIR
 			accent = GameStyle.JADE
 			sub_text = "%d%%" % roundi(next_target.durability_ratio() * 100.0)
@@ -601,9 +673,13 @@ func _poll_state() -> void:
 			accent = GameStyle.GOLD
 			badge_text = "×%d" % ready
 		elif has_turret:
-			# 5) 编制用尽、场上还有机关 → 键不收起，只报「在场」状态（收回键靠近才出现）
-			next_mode = Mode.SPENT
-			accent = GameStyle.GREY
+			# 5) 编制用尽、人在交互半径外、场上还有机关：「在场」下线（用户看不懂）。
+			#    有机关缺耐久 → 键面「维修」+「走近修」引导走回去修；
+			#    机关都完好 → 主键收起，信息交给独立收回键（收回不限距离）与待修芯片。
+			if service > 0:
+				next_mode = Mode.SPENT
+				accent = GameStyle.JADE
+				sub_text = FACE_SPENT_SUB
 		elif has_weapon:
 			# 6) 有机关武器、无编制、场上无机关 = 收回后的 2 秒整备倒数
 			next_mode = Mode.COOLDOWN
@@ -640,6 +716,21 @@ func _apply_face(accent: Color, sub_text: String, badge_text: String, service: i
 	if accent != _accent:
 		_accent = accent
 		_style_btn(_holding)
+	# 键面动作图标：只在布设（0）/ 维修与远距维修引导（1）亮；颜色跟键面主色走
+	# （主题换色回调会带着新 accent 再进来，图标跟得上）
+	var glyph_kind := -1
+	if not _edit_mode:
+		match _mode:
+			Mode.DEPLOY:
+				glyph_kind = 0
+			Mode.REPAIR, Mode.SPENT:
+				glyph_kind = 1
+	if _glyph != null:
+		if glyph_kind != _glyph_key:
+			_glyph_key = glyph_kind
+			_glyph.visible = glyph_kind >= 0
+		if glyph_kind >= 0:
+			_glyph.set_state(glyph_kind, accent)
 	if sub_text != _sub_key:
 		_sub_key = sub_text
 		if _sub != null:
@@ -695,7 +786,8 @@ func _face_for_mode(m: int) -> String:
 		Mode.TOO_CLOSE:
 			return FACE_TOO_CLOSE
 		Mode.SPENT:
-			return FACE_SPENT
+			# 远距维修引导：与贴脸的维修同一句话，玩家只需认「维修」这一个动词
+			return FACE_REPAIR
 		Mode.COOLDOWN:
 			return FACE_COOLDOWN
 	return FACE_EDIT
@@ -822,6 +914,10 @@ func set_edit_mode(on: bool) -> void:
 		_badge_key = ""
 		if _badge != null:
 			_badge.visible = false
+		# 调整模式键面是占位的「机关」，不配动作图标；退出后由下一拍轮询重新点亮
+		_glyph_key = -1
+		if _glyph != null:
+			_glyph.visible = false
 		if _recall_btn != null:
 			_recall_btn.visible = false
 		if _chip != null:
@@ -864,8 +960,16 @@ func get_recall_sub() -> Label:
 func get_recall_icon() -> Control:
 	return _recall_icon
 
+## 判据用：当前主键指向的机关（维修时就是正在修的那座）
+func get_target() -> TurretUnit:
+	return _target
+
 func get_badge() -> Label:
 	return _badge
+
+## 键面动作图标（判据用：可见性 + kind）
+func get_glyph() -> Control:
+	return _glyph
 
 func get_chip() -> Label:
 	return _chip

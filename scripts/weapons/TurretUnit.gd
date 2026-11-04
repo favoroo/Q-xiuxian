@@ -164,12 +164,9 @@ var _shot_count: int = 0
 var _wave_active: bool = true
 
 ## 维修态：HUD 按住时 begin_repair，松开/离开范围 end_repair；回填在 _process 里连续推进。
+## 2026-11-04 起允许「在维修圈内边走边修」：只要求玩家还在 INTERACT_RADIUS 内，不要求站定。
 var _is_repairing: bool = false
 var _repair_from: float = BalanceTurret.MAX_DURABILITY
-## 起修点：玩家移动超过 REPAIR_MOVE_TOLERANCE 就中断（不是最短按住时长，只禁「边跑边修」）
-var _repair_anchor: Vector2 = Vector2.ZERO
-## 中断提示「维修需站定」的剩余显示秒数（头顶状态牌短暂压过别的读数）
-var _repair_cancel_t: float = 0.0
 
 ## 索敌节流（与 FloatingWeapon 同款）：intersect_shape 最多 15Hz
 const TARGET_SEARCH_INTERVAL := 0.066
@@ -276,7 +273,6 @@ func begin_life(keep_durability: float = -1.0, from_pos: Vector2 = Vector2.INF) 
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
 	_repair_done_t = -1.0
-	_repair_cancel_t = 0.0
 	_player_in_repair_range = false
 	_stop_repair_fx()
 	_wave_active = true
@@ -406,12 +402,6 @@ func begin_repair() -> void:
 	_is_repairing = true
 	_repair_phase = 0.0
 	_repair_spark_timer = 0.0
-	_repair_cancel_t = 0.0
-	var p = GameManager.player
-	if p != null and is_instance_valid(p) and p is Node2D:
-		_repair_anchor = (p as Node2D).global_position
-	else:
-		_repair_anchor = Vector2.ZERO
 	_spawn_repair_fx()
 
 ## 结束维修（松手/离开范围/波末）：保留已修部分
@@ -426,7 +416,8 @@ func end_repair() -> void:
 func is_repairing() -> bool:
 	return _is_repairing
 
-## 键面走针环的读数：从开始维修那一刻的耐久量到满，正好 1.0
+## 本次维修**进度**（不是当前耐久）：从开始维修那一刻的耐久量到满，正好 1.0。
+## 只给 HUD 走针环与机关盘缘进度弧用；头顶「维修中 N%」必须读 durability_ratio()。
 func repair_ratio() -> float:
 	if not _is_repairing:
 		return 0.0
@@ -440,7 +431,6 @@ func on_wave_end() -> void:
 	_wave_active = false
 	_is_repairing = false
 	_repair_from = BalanceTurret.MAX_DURABILITY
-	_repair_cancel_t = 0.0
 	_stop_repair_fx()
 	_targets.clear()
 	current_target = null
@@ -455,7 +445,6 @@ func set_wave_active(on: bool) -> void:
 	_wave_active = on
 	if not on:
 		_is_repairing = false
-		_repair_cancel_t = 0.0
 		_stop_repair_fx()
 		_targets.clear()
 		current_target = null
@@ -490,11 +479,7 @@ func _refresh_readout() -> void:
 		return
 	var text := ""
 	var col: Color = GameStyle.CHALK
-	if _repair_cancel_t > 0.0:
-		# 维修被走位打断：短暂压过常规读数，告诉玩家「要站定」
-		text = "维修需站定"
-		col = GameStyle.GOLD_EDGE
-	elif _is_repairing:
+	if _is_repairing:
 		text = "维修中 %d%%" % roundi(durability_ratio() * 100.0)
 		col = GameStyle.JADE
 	elif is_broken():
@@ -697,13 +682,6 @@ func _process(delta: float) -> void:
 		if _repair_done_t >= 1.0:
 			_repair_done_t = -1.0
 		queue_redraw()
-	# 「维修需站定」提示：到点把头顶读数还原成正常状态
-	if _repair_cancel_t > 0.0:
-		_repair_cancel_t -= delta
-		if _repair_cancel_t <= 0.0:
-			_repair_cancel_t = 0.0
-			_readout_key = ""
-			_refresh_readout()
 	if GameManager.is_game_over:
 		return
 	if not _wave_active:
@@ -714,21 +692,9 @@ func _process(delta: float) -> void:
 	_warn_phase += delta
 	_update_repair_range_hint()
 
-	# 维修：连续回填（松手保留已修部分）；满了收工
+	# 维修：连续回填（松手保留已修部分）；满了收工。
+	# 2026-11-04 取消站定限制：只要 HUD 还按住、人还在维修圈内，就可以边走边修。
 	if _is_repairing:
-		# 维修必须站定：玩家离开起修点超过容差就中断（已修部分保留）。
-		# 走位/被击退都会断，维修得挑安全窗口做 —— 这不是最短按住时长，只禁「边跑边修」。
-		var p = GameManager.player
-		if p != null and is_instance_valid(p) and p is Node2D \
-				and (p as Node2D).global_position.distance_to(_repair_anchor) > BalanceTurret.REPAIR_MOVE_TOLERANCE:
-			_is_repairing = false
-			_repair_from = BalanceTurret.MAX_DURABILITY
-			_stop_repair_fx()
-			_repair_cancel_t = 0.9
-			_readout_key = ""
-			_refresh_readout()
-			queue_redraw()
-			return
 		durability = minf(BalanceTurret.MAX_DURABILITY,
 			durability + BalanceTurret.repair_per_sec(GameManager.turret_repair_haste_mul) * delta)
 		# 盘缘维护环的旋转相位 + 间隔碎屑（纯表现层，不参与耐久判定）
@@ -739,9 +705,12 @@ func _process(delta: float) -> void:
 			var ang := randf() * TAU
 			var spark_pos := global_position + Vector2(cos(ang), sin(ang)) * randf_range(15.0, 26.0)
 			FxParticlePool.burst(FxParticlePool.HIT_SPARK, spark_pos, GameStyle.JADE_EDGE, 0.3, true)
-		var ratio := repair_ratio()
+		# 头顶数字写「当前耐久」，不是本次维修进度：
+		# 进度（repair_ratio）从按下那一刻的耐久算 0% → 100%，只该给盘缘进度弧和 HUD 走针环用；
+		# 数字也跟着从 0% 涨会让玩家以为「一点维修耐久就归零了」（2026-11-04 真机反馈）。
+		var shown := durability_ratio()
 		if _readout_label != null:
-			_readout_key = "维修中 %d%%" % roundi(ratio * 100.0)
+			_readout_key = "维修中 %d%%" % roundi(shown * 100.0)
 			_readout.visible = true
 			_readout_label.text = _readout_key
 			_readout_label.label_settings.font_color = GameStyle.JADE
@@ -1025,7 +994,6 @@ func dismiss(fold: bool = false) -> void:
 		return
 	_is_dying = true
 	_is_repairing = false
-	_repair_cancel_t = 0.0
 	_stop_repair_fx()
 	_had_target = false
 	if _life_tween != null and _life_tween.is_valid():

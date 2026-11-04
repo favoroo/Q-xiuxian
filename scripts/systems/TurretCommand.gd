@@ -78,6 +78,29 @@ static func nearest_turret(player, pos: Vector2, radius: float) -> TurretUnit:
 			best = t
 	return best
 
+## 维修目标（2026-11-04）：交互半径内「最需要修」的一座 —— 先按耐久比例升序
+## （停摆 = 0% 最优先），同比例再按离玩家距离升序。
+## 旧写法 HUD 只拿 nearest_turret：站在两座机关中间时永远修最近那座，
+## 哪怕另一座已经停摆；最近那座满耐久时更会把旁边坏掉的整座忽略。
+## 只收 radius 内的（维修仍要求人贴过去按住），与入圈提示同一条半径。
+static func repair_candidate(player, pos: Vector2, radius: float) -> TurretUnit:
+	var best: TurretUnit = null
+	var best_ratio := 2.0
+	var best_dist := 1.0e9
+	for t in deployed_turrets(player):
+		if t.durability >= BalanceTurret.MAX_DURABILITY - 0.001:
+			continue
+		var d := t.global_position.distance_to(pos)
+		if d > radius:
+			continue
+		var ratio := t.durability_ratio()
+		if best == null or ratio < best_ratio - 0.0001 \
+				or (absf(ratio - best_ratio) <= 0.0001 and d < best_dist):
+			best = t
+			best_ratio = ratio
+			best_dist = d
+	return best
+
 ## 到最近一座自己的机关的距离（没有则返回一个大数）
 static func nearest_turret_dist(player, pos: Vector2) -> float:
 	var best := 1.0e9
