@@ -205,6 +205,11 @@ def export_item(item: dict, tmp_dir: Path) -> dict:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="pixelfx 精灵表导出与 Godot 资源构建管线")
+    parser.add_argument("--only", type=str, default="", help="仅导出指定的 out_name（逗号分隔），例如 --only flame_pillar,meteor_fall")
+    args = parser.parse_args()
+
     if not MANIFEST_PATH.exists():
         print(f"Error: manifest not found at {MANIFEST_PATH}")
         sys.exit(1)
@@ -213,6 +218,13 @@ def main():
         manifest = json.load(f)
 
     effects = manifest.get("effects", [])
+    if args.only:
+        targets = set(k.strip() for k in args.only.split(",") if k.strip())
+        effects = [e for e in effects if e.get("out_name") in targets]
+        if not effects:
+            print(f"Warning: --only specified {targets}, but no matching effect found in manifest.")
+            sys.exit(0)
+
     print(f"=== 开始导出 pixelfx 特效 ({len(effects)} 项) ===")
 
     tmp_dir = Path("/tmp/pixelfx_export_tmp")

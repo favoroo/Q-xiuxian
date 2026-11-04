@@ -180,19 +180,29 @@ func _test_floating_btn_defaults() -> void:
 	#     三颗浮动键的文案进同一张表，用同一把尺子（额外技能键的占位字面也走这里，
 	#     用户 2026-10-11：原先写英文 "extra"，改中文四字后必须证明它收得进圆面不漏字）
 	var f := GameStyle.display_font()
-	var inner_r := d * 0.5 - 2.0
+	# 每行：[名字, 文案, 字号, 键径]。2026-11-04 机关拆三键后，布设 / 收回是 56 小键、
+	# 12 号字；主键（维修）仍是 88 圆 18 号，两者各用自己那圈的内缘量。
 	var faces: Array[Array] = [
-		["祭坛键", HudObeliskButton.BTN_TEXT, HudObeliskButton.BTN_FONT],
-		["祭坛键·血祭", "血祭", HudObeliskButton.BTN_FONT],
-		["角色技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT],
-		["机关键·布设", HudMechanismButton.FACE_DEPLOY, HudMechanismButton.BTN_FONT],
-		["机关键·维修", HudMechanismButton.FACE_REPAIR, HudMechanismButton.BTN_FONT],
-		["机关键·完好", HudMechanismButton.FACE_OK, HudMechanismButton.BTN_FONT],
-		["机关键·占位", HudMechanismButton.FACE_EDIT, HudMechanismButton.BTN_FONT],
+		["祭坛键", HudObeliskButton.BTN_TEXT, HudObeliskButton.BTN_FONT, d],
+		["祭坛键·血祭", "血祭", HudObeliskButton.BTN_FONT, d],
+		["角色技能键", HudSkillButton.EXTRA_BTN_TEXT, HudSkillButton.EXTRA_BTN_FONT, d],
+		["机关键·维修", HudMechanismButton.FACE_REPAIR, HudMechanismButton.BTN_FONT, d],
+		["机关键·完好", HudMechanismButton.FACE_OK, HudMechanismButton.BTN_FONT, d],
+		["机关键·占位", HudMechanismButton.FACE_EDIT, HudMechanismButton.BTN_FONT, d],
+		["机关小键·布设", HudMechanismButton.FACE_DEPLOY, HudMechanismButton.ACTION_FONT,
+				HudMechanismButton.ACTION_SIZE],
+		["机关小键·太近", HudMechanismButton.FACE_TOO_CLOSE, HudMechanismButton.ACTION_FONT,
+				HudMechanismButton.ACTION_SIZE],
+		["机关小键·整备", HudMechanismButton.FACE_COOLDOWN, HudMechanismButton.ACTION_FONT,
+				HudMechanismButton.ACTION_SIZE],
+		["机关小键·收回", HudMechanismButton.FACE_RECALL, HudMechanismButton.ACTION_FONT,
+				HudMechanismButton.ACTION_SIZE],
 	]
 	for face in faces:
 		var label: String = String(face[1])
 		var font_px: int = int(face[2])
+		var face_d: float = float(face[3])
+		var inner_r := face_d * 0.5 - 2.0
 		var box: Vector2 = f.get_multiline_string_size(label,
 				HORIZONTAL_ALIGNMENT_CENTER, -1.0, font_px)
 		var corner := box.length() * 0.5
@@ -206,9 +216,14 @@ func _test_floating_btn_defaults() -> void:
 						face[0], box.x, box.y, corner, inner_r])
 		# 四、也不许压在走针那一圈上：按住充能时那一圈正是拇指盯着的读数
 		var ov := SkillButtonView.CircleProgressOverlay.new()
-		ov.size = Vector2(d, d)   # 三颗键同径（外观基准钉在 SKILL_BTN_SIZE 一个数上）
+		ov.size = Vector2(face_d, face_d)
 		var arc_r := ov.arc_radius()
 		ov.free()
+		_c.check(corner <= arc_r,
+				"%s：文案不压走针环（角半径 %.1f <= 环内缘 %.1f）" % [face[0], corner, arc_r])
+		# 四·五～四·七只对 88 主键（祭坛价格小字 / 机关副读数）有意义，56 小键跳过
+		if not is_equal_approx(face_d, d):
+			continue
 		# 四·五、祭坛键价格小字（2026-10-26 从碑顶悬浮字收进键面）：三位数价「888金币」是最宽真实
 		#     样张（启动价 W20=102，无尽后期也就三位数），它要和主文案一样收在走针环内缘之内 ——
 		#     价格行压到走针环上，充能读数就被字盖住了
@@ -229,14 +244,14 @@ func _test_floating_btn_defaults() -> void:
 				HudObeliskButton.PRICE_TOP + HudObeliskButton.PRICE_FONT - d * 0.5).length()
 		_c.check(blood_corner <= price_arc_r,
 				"祭坛键血祭价格「耗18%%」收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [blood_corner, price_arc_r])
-		# 四·七、机关键副读数（2026-11-03）：最长机关名四字「藤萝机关」用 SUB_FONT，
+		# 四·七、机关键副读数（2026-11-03）：维修主键最宽副读数「走近修」用 SUB_FONT，
 		#     行顶 SUB_TOP、行高 14，必须和主文案一样收在走针环内缘之内
-		var sub_w: float = f.get_string_size("藤萝机关", HORIZONTAL_ALIGNMENT_CENTER, -1.0,
+		var sub_w: float = f.get_string_size("走近修", HORIZONTAL_ALIGNMENT_CENTER, -1.0,
 				HudMechanismButton.SUB_FONT).x
 		var sub_corner := Vector2(sub_w * 0.5,
 				HudMechanismButton.SUB_TOP + 14.0 - d * 0.5).length()
 		_c.check(sub_corner <= price_arc_r,
-				"机关键副读数（最长机关名四字）收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [sub_corner, price_arc_r])
+				"机关键副读数（「走近修」三字）收在走针环之内（角半径 %.1f <= 环内缘 %.1f）" % [sub_corner, price_arc_r])
 
 	# 五、祭坛激活键补间竞态与缩放漂移契约（2026-10-16 修复：快速出入阵法旧淡出回调误灭按钮）
 		var ob_btn := HudObeliskButton.new()

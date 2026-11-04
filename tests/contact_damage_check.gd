@@ -8,6 +8,7 @@ extends Node
 ## 整段接触结算被跳过 ⇒ 玩家推着敌人走完全不掉血（回归存活了 3 个版本无人发现，
 ## 因为此前接触伤害零测试覆盖）。本判据钉住真实物理链路：
 ## 史莱姆（无冲刺、contact_damage=12）自己 move_and_slide 追撞玩家，玩家必须扣血。
+## 2026-11-04 追加：咬中后敌人自身要有远离玩家的接触反冲（防贴脸粘着连咬）。
 ##
 ## 运行: godot --headless --path . res://tests/ContactDamageCheck.tscn
 ## 退出码 0 且末行 CONTACT_DAMAGE_CHECK_RESULT: ALL PASS
@@ -79,6 +80,31 @@ func _case_slime_contact() -> void:
 		var expected: float = GameBalance.incoming_damage(contact_damage, GameManager.get_effective_armor())
 		var actual: float = hp_before - _player.current_health
 		_c.near(actual, expected, 0.01, "首次咬中扣血量与 GameBalance.incoming_damage 同源")
+		# 接触反冲（2026-11-04）：首次咬中可能落在扑咬 DASH 的承诺段里（状态机逐帧写死速度，
+		# 反冲按设计不夺段），所以等无敌帧过去后的第二次咬中再断言 —— 那正是「贴脸粘着连咬」的场景。
+		var hp_after_first: float = _player.current_health
+		var second_hit := false
+		for i in range(MAX_WAIT_FRAMES):
+			await get_tree().physics_frame
+			if _player.current_health < hp_after_first:
+				second_hit = true
+				break
+			if not is_instance_valid(e) or e.dying:
+				break
+		_c.check(second_hit, "无敌帧结束后贴身敌人仍会再次咬中（前置：反冲未破坏伤害节奏）")
+		if second_hit:
+			var away: Vector2 = (e.global_position - _player.global_position).normalized()
+			_c.check(e.knockback_velocity.dot(away) > 0.0,
+				"咬中后敌人自身获得远离玩家的反冲（防贴脸连咬）")
+			var dist_at_hit: float = e.global_position.distance_to(_player.global_position)
+			var max_sep: float = dist_at_hit
+			for i in range(12):
+				await get_tree().physics_frame
+				if not is_instance_valid(e) or e.dying:
+					break
+				max_sep = maxf(max_sep, e.global_position.distance_to(_player.global_position))
+			_c.check(max_sep > dist_at_hit + 4.0,
+				"反冲把敌人推离玩家（距离 +%.1fpx）" % (max_sep - dist_at_hit))
 	_c.check(is_instance_valid(e), "判据结束时敌人仍存活（反震/意外击杀会污染读数）")
 	e.queue_free()
 	await get_tree().process_frame

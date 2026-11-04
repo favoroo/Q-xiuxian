@@ -484,11 +484,22 @@ const BOSS_HP_BASE := 6200.0             ## Boss 基础生命（2026-10-15 反�
                                          ## 成型 ~46s、极端 6 剑 ~13s）
 const BOSS_CONTACT_BASE := 24.0          ## Boss 基础接触伤害
 const BOSS_ATTACK_INTERVAL := 3.8        ## 特殊攻击循环间隔（秒）
+## Boss 出招最小间隔（秒，二阶段倍率之后仍生效）：深层 20 波后 `enemy_attack_cd_mult`
+## 压到 0.5，剑魄尊 2.8×0.5×0.7=0.98s、千机尊 2.9×0.5×0.8×0.7=0.81s 就出一招，
+## 而螺旋/环弹单招本身要 1~1.3s 才铺完 ——
+## 上一招弹幕还在屏上、下一招已经起手，密度叠到玩家没有走位空档。2.0s 保证「铺完 → 收招 →
+## 下一招起手」之间至少留半秒读招/走位窗口，深层仍比 W20（2.58s）快。
+const BOSS_MIN_ATTACK_INTERVAL := 2.0
 const BOSS_RING_COUNT := 16              ## 环弹齐射数量
 const BOSS_RING_COUNT_P2 := 8            ## 二阶段环弹增量
 const BOSS_RING_DMG_MULT := 0.55         ## 环弹伤害 = 接触伤害 × 系数
 const BOSS_RING_CURVE_ANG := 0.85        ## 双层交错环弹弧线偏转角速度（rad/s）
 const BOSS_RING_LAYER_DELAY := 0.28      ## 双层环弹第 2 层发射间隔（秒）
+## 环弹起手亮色预警（秒）。几何账：二阶段 24 弹的「能站人缝隙」要到半径 199px 才张开
+## （相邻弹心距 2πR/24 ≥ 弹径 24 + 玩家直径 28），而 Boss 常用距离 170~260px。
+## 0.35s 只够走 74px，贴脸起手会卡在无缝隙区；0.5s 给 105px 后撤窗口，让「看到亮色→退到
+## 缝隙张开」成为可执行的躲法，而不是赌起手距离。
+const BOSS_RING_WINDUP := 0.5
 const BOSS_BOLT_SPEED := 235.0           ## 环弹飞行速度
 const BOSS_BOLT_SCALE := 1.5             ## 环弹视觉/碰撞放大
 const BOSS_FAN_WAVES := 3                ## 扇形连射狙击波数
@@ -496,13 +507,25 @@ const BOSS_FAN_WAVES_P2 := 4             ## 二阶段扇形连射波数
 const BOSS_FAN_COUNT := 5                ## 每波扇形火球数
 const BOSS_FAN_SPREAD := 0.18            ## 扇形相邻弹夹角（rad）
 const BOSS_FAN_WAVE_INTERVAL := 0.22     ## 扇形连射波间间隔（秒）
-const BOSS_FAN_BASE_SPEED := 250.0       ## 扇形首波弹速（逐波 +45）
+## 扇形起手前摇（秒）：旧版首波在起手当帧出膛、且每波重新瞄准，贴脸时 5 弹夹角只有
+## 20~40px（< 玩家直径），等于零预警的实心墙。0.32s 让玩家先开始横移再吃第一波。
+const BOSS_FAN_WINDUP := 0.32
+const BOSS_FAN_BASE_SPEED := 250.0       ## 扇形首波弹速
+## 逐波加速步长（px/s）。旧 45：深层 1.65× 弹速下第 4 波到 635px/s，脱出扇面需要
+## 635×sin(半角 0.36)≈224px/s > 玩家基础 210 —— 末波变成必吃。30 把末波压到 ~561，
+## 脱锥速度 197px/s < 210，横移仍能走出去。
+const BOSS_FAN_SPEED_STEP := 30.0
 const BOSS_FAN_DMG_MULT := 0.50          ## 扇形弹伤害 = 接触伤害 × 系数
 const BOSS_SPIRAL_DURATION := 1.2        ## 螺旋风暴持续时长（秒）
-const BOSS_SPIRAL_INTERVAL := 0.09       ## 螺旋风暴喷射步进间隔（秒）
+## 螺旋臂上的弹距 = 弹速 × 步进间隔。旧 0.09s 在 W20 只有 26px、深层 35px，都小于
+## 「弹径 19 + 玩家直径 28 = 47px」的穿越带宽 ⇒ 每条臂都是实心墙，玩家只能待在眼里或挨打。
+## 0.20s 把弹距拉到 W10 53 / W20 58 / 深层 79px，臂变成可穿越的虚线，绕旋/切臂两种躲法都成立。
+const BOSS_SPIRAL_INTERVAL := 0.20       ## 螺旋风暴喷射步进间隔（秒）
+## 起手前摇（秒）：旧版起手当帧就喷第一发，贴脸时没有反应窗；与环弹/扇形统一给 0.3s 读招。
+const BOSS_SPIRAL_WINDUP := 0.3
 const BOSS_SPIRAL_ARMS := 2              ## 基础螺旋臂数
 const BOSS_SPIRAL_ARMS_FINAL := 4        ## 魔尊/狂暴螺旋臂数
-const BOSS_SPIRAL_ROT_SPEED := 3.6       ## 螺旋旋转角速度（rad/s）
+const BOSS_SPIRAL_ROT_SPEED := 3.0       ## 螺旋旋转角速度（rad/s；3.6 时臂扫过半径 200px 的线速度 720px/s，远快于玩家，读招跟不上）
 const BOSS_SPIRAL_BOLT_SPEED := 240.0    ## 螺旋弹飞行速度
 const BOSS_SPIRAL_ANGULAR := 0.48        ## 螺旋弹自身微弧偏转（rad/s）
 const BOSS_SPIRAL_DMG_MULT := 0.45       ## 螺旋弹伤害 = 接触伤害 × 系数
@@ -564,9 +587,14 @@ const BOSS_HAZARD_FIELD_RADIUS := 105.0     ## 禁区半径（视觉与判定同
 const BOSS_HAZARD_FIELD_DURATION := 4.0     ## 禁区持续时长（秒）
 const BOSS_HAZARD_FIELD_WINDUP := 0.75      ## 禁区预警时长（秒）
 const BOSS_HAZARD_FIELD_DMG_MULT := 0.65    ## 禁区每跳伤害系数
-const BOSS_BLINK_SLASH_DIST := 115.0        ## 瞬步贴脸斩闪现至玩家身侧距离
-const BOSS_BLINK_SLASH_BOLTS := 7           ## 瞬步回斩扇形飞剑数（二阶段 9）
-const BOSS_BLINK_SLASH_BOLTS_P2 := 9
+## 瞬步贴脸斩的落点距离（px）。旧 115px：9 弹 × 0.20rad 的扇面在 115px 处相邻弹心距只有 23px
+## （< 弹径 20 + 玩家直径 28），且奇数弹的中央一发正对玩家＝实心墙；向前跑 0.62s 也只到 245px，
+## 刚好卡在「缝隙张开」的 240px 线上，等于要求 1px 级完美走位。190px + 偶数弹数后：
+## 落点本身就在缝隙边缘，冲刺/前进 0.62s 到 ~320px（Tianmo 0.44s 到 ~280px），有明确生存解。
+const BOSS_BLINK_SLASH_DIST := 190.0
+## 偶数弹数：瞄准线落在两发中间，玩家沿「远离落点」方向直退时天然处在缝里，不用赌奇数弹的空隙。
+const BOSS_BLINK_SLASH_BOLTS := 6           ## 瞬步回斩扇形飞剑数（二阶段 8）
+const BOSS_BLINK_SLASH_BOLTS_P2 := 8
 const BOSS_BLINK_SLASH_SPREAD := 0.20       ## 瞬步回斩扇形夹角（rad）
 const BOSS_BLINK_SLASH_SPEED := 320.0       ## 瞬步回斩飞剑速度
 const BOSS_BLINK_SLASH_DMG_MULT := 0.65     ## 瞬步回斩伤害系数
@@ -958,3 +986,33 @@ static func danger_dmg_mult(danger: int) -> float:
 
 static func danger_count_mult(danger: int) -> float:
 	return DANGER_COUNT_BASE + float(clampi(danger, 0, DANGER_MAX)) * DANGER_COUNT_PER
+
+# ---------------- Boss 激光/烈焰/陨火（2026-11-04） ----------------
+const BOSS_LASER_CHARGE := 0.95
+const BOSS_LASER_FIRE := 0.42
+const BOSS_LASER_FADE := 0.12
+const BOSS_LASER_WIDTH := 26.0        ## 伤害走廊宽 == 视觉束宽
+const BOSS_LASER_LENGTH := 720.0
+const BOSS_LASER_DMG_MULT := 0.5      ## 单跳 = 接触伤 × 此值；无敌帧下最多 1 跳
+const BOSS_LASER_SWEEP_ANG := 0.55    ## P2 扫掠角速度 rad/s
+const BOSS_LASER_FAN_STEP := 0.16     ## 束间夹角 rad ≈ 9°：300px 处两束缝隙 48px > 玩家直径 28px（能穿，但只有一条走位线）
+const BOSS_LASER_BEAMS := 2           ## 齐射束数（P1）
+const BOSS_LASER_BEAMS_P2 := 3
+const BOSS_FLAME_WINDUP := 0.7
+const BOSS_FLAME_BREATH := 0.75
+const BOSS_FLAME_HALF_ANGLE := 0.5585 ## rad ≈ 32°
+const BOSS_FLAME_LENGTH := 300.0
+const BOSS_FLAME_DMG_MULT := 0.35
+const BOSS_FLAME_TICK := 0.12
+const BOSS_FLAME_PATCHES := 3         ## 收势沿吐息轴留几片火池（首片在脚下，末片贴 300px 边缘）
+const BOSS_FIRE_POOL_RADIUS := 55.0
+const BOSS_FIRE_POOL_DURATION := 2.5
+const BOSS_FIRE_POOL_DMG_MULT := 0.10
+const BOSS_METEOR_COUNT := 3          ## 单次陨火颗数（P1）：首颗压玩家脚下，其余在环带内错落
+const BOSS_METEOR_COUNT_P2 := 5       ## 二阶段只加颗数不加半径：铺满靠数量，不靠把圈放大到无处可躲
+const BOSS_METEOR_INTERVAL := 0.22    ## 颗间错时（秒）：看得见「一颗一颗砸」才有走位节奏
+const BOSS_METEOR_FALL := 1.15
+const BOSS_METEOR_RADIUS := 130.0
+const BOSS_METEOR_DMG_MULT := 0.6
+const BOSS_METEOR_FIRE_PATCHES := 3
+

@@ -107,17 +107,35 @@ static func create_card(dialog: LevelUpDialog, data: Dictionary, index: int,
 	for w in GameManager.get_weapons_summary():
 		if GameBalance.upgrade_benefits_weapon(data.get("apply", {}), String(w.get("id", ""))):
 			benefited.append(w)
+	# 2026-10-21 用户指令：「这个受益装备要放在卡片底部显示」。
+	# 一屏五张卡被 HBoxContainer 拉成同高，内容各自只到自身最小高 ⇒ 不加这一格弹性留白，
+	# 底部说明/图标就贴着最后一条加成行，高矮不一的卡上位置乱跳。留白本身最小高 0，
+	# 不吃卡高、不影响「这一屏不许竖滑」那条尺子（BenefitIconTapCheck ⑧）。
+	var spring := Control.new()
+	spring.name = "BenefitSpring"
+	spring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spring.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spring)
 	if not benefited.is_empty():
-		# 2026-10-21 用户指令：「这个受益装备要放在卡片底部显示」。
-		# 一屏五张卡被 HBoxContainer 拉成同高，内容各自只到自身最小高 ⇒ 不加这一格弹性留白，
-		# 这排图标就贴着最后一条加成行，高矮不一的卡上位置乱跳。留白本身最小高 0，
-		# 不吃卡高、不影响「这一屏不许竖滑」那条尺子（BenefitIconTapCheck ⑧）。
-		var spring := Control.new()
-		spring.name = "BenefitSpring"
-		spring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		spring.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		vbox.add_child(spring)
 		_append_benefit_row(dialog, vbox, benefited, inner_w, data)
+
+	# 「适用」小字（2026-11-04）：悟道卡的生效范围只写在 desc 里时，玩家得先知道
+	# 「弹丸/机关/近战」到底指哪些武器才读得懂。payload 带 scope 就在卡底补一行灰字，
+	# 与 BenefitSpring 一起贴底（无受益图标时也不会浮在卡中间）。
+	# scope 只写「哪些武器吃」，机制数值仍归 apply/desc；文案口径以武器详情卡的
+	# 攻击方式签（远程/机关/环绕/范围/近战/横扫）为准。
+	var scope_text := String(data.get("scope", ""))
+	if not scope_text.is_empty():
+		var scope_lbl := Label.new()
+		scope_lbl.name = "ScopeNote"
+		scope_lbl.text = GameStyle.wrap_cjk("适用：%s" % scope_text,
+			GameStyle.body_font(), 11, inner_w)
+		scope_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		scope_lbl.custom_minimum_size = Vector2(inner_w, 0)
+		scope_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		scope_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		GameStyle.label(scope_lbl, 11, GameStyle.PAPER_DIM)
+		vbox.add_child(scope_lbl)
 
 	card.add_child(vbox)
 

@@ -18,6 +18,20 @@ func _test_upgrade_table() -> void:
 	_c.check(missing.is_empty(), "每个升级项都带 apply 幅度表（缺: %s）" % str(missing))
 	_c.check(unknown.is_empty(), "apply 字段名都在白名单内（非法: %s）" % str(unknown))
 
+	# 卡底「适用：」小字（2026-11-04）：范围锁在武器类别上的加点项必须带 scope，
+	# 否则玩家只能靠猜「近战/远程/机关」到底包含哪些武器。新增此类加点时同一条钉。
+	var scoped_keys: Array[String] = ["melee_damage", "ranged_damage", "elemental_damage",
+		"engineering_damage", "contraption_damage", "bonus_pierce",
+		"turret_stamina_mul", "turret_repair_haste_mul", "turret_volley_bonus"]
+	var no_scope: Array = []
+	for u in UpgradeData.UPGRADES:
+		for key in (u.get("apply", {}) as Dictionary).keys():
+			if String(key) in scoped_keys and String(u.get("scope", "")).is_empty():
+				no_scope.append(String(u.get("id", "?")))
+				break
+	_c.check(no_scope.is_empty(),
+		"按武器类别生效的加点项都写了「适用」小字（缺: %s）" % str(no_scope))
+
 	# 逐项落地：加点确实改到了对应属性，且幅度就是表里的数
 	var deltas := {
 		"atk_up": 0.08, "armor_up": 4.0, "speed_up": 0.08, "temper": 3.0,

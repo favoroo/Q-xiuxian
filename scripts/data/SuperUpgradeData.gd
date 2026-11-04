@@ -343,6 +343,8 @@ static func card_payload(card: Dictionary) -> Dictionary:
 		"lane_chip": lane_chip(card),
 		"title": String(idef.get("name", card.get("id", ""))),
 		"desc": String(idef.get("desc", "")),
+		# 卡底「适用：」小字（2026-11-04）：只解释生效范围，数值仍归 apply/desc。
+		"scope": String(idef.get("scope", "")),
 		"icon": String(idef.get("icon", "")),
 		"apply": idef.get("apply", {}),
 		"rarity": RARITY,

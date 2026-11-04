@@ -45,6 +45,21 @@ func _test_super_table() -> void:
 	_c.check(bad_apply.is_empty(), "神通 apply 字段都在白名单内（非法: %s）" % str(bad_apply))
 	_c.check(bad_lane.is_empty(), "道途/共鸣卡元数据完整（问题: %s）" % str(bad_lane))
 
+	# 卡底「适用：」小字（2026-11-04）：范围锁在武器类别上的机制字段必须带 scope，
+	# 否则玩家只能靠猜「弹丸/剑系/机关」到底包含哪些武器。新增此类机制卡时同一条钉。
+	var scoped_hooks: Array[String] = ["sword_qi", "melee_range_mult", "projectile_count_bonus",
+		"projectile_damage_mult", "projectile_bounce_bonus", "arrow_rain_every",
+		"projectile_chain_lightning", "turret_charges_bonus"]
+	var missing_scope: Array = []
+	for card in SuperUpgradeData.CARDS:
+		var idef := ItemData.get_def(String(card.get("grant_item", "")))
+		for k in scoped_hooks:
+			if idef.has(k) and String(idef.get("scope", "")).is_empty():
+				missing_scope.append(String(card.get("id", "")))
+				break
+	_c.check(missing_scope.is_empty(),
+		"按武器类别生效的神通都写了「适用」小字（缺: %s）" % str(missing_scope))
+
 	# 去阶段门控（2026-10-26）：卡表里不该再残留 stage 字段；每条道途要有卡（否则道途签是死签）
 	var stale_stage: Array = []
 	for card in SuperUpgradeData.CARDS:

@@ -167,7 +167,7 @@ const BRIEF: Dictionary = {
 	"harvest": "每回合结束白得金币与经验，且有复利增长。",
 	"xp_gain": "每颗经验光球提供的经验倍率。",
 	"shop_price": "商店商品的物价折算。",
-	"bonus_pierce": "远程弹丸类武器的额外穿透次数。",
+	"bonus_pierce": "远程与机关武器的额外穿透次数。",
 	"thorns": "受到近身攻击时，按比例反弹伤害给敌方。",
 	"elite_dmg": "对精英与Boss的额外伤害。",
 	"free_rerolls": "每回合商店开始时免费重掷的次数。",
@@ -282,7 +282,7 @@ static func rules(id: String) -> Array[String]:
 			out.append("全店价格的折算比例。")
 			out.append("角色八折、道具「折扣券」可再叠。")
 		"bonus_pierce":
-			out.append("飞剑飞符等弹丸的额外穿透。")
+			out.append("飞剑飞符等远程弹丸与机关的额外穿透。")
 			out.append("弹射羁绊核心收益，可叠「穿透强化」「破虚符」。")
 		"thorns":
 			out.append("近身碰撞掉血时，按比例反弹伤害。")

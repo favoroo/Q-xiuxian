@@ -1,0 +1,20 @@
+{
+  "id": "shadow/hex-sigil",
+  "out_name": "hex_sigil",
+  "frame_size": [
+    168,
+    128
+  ],
+  "pivot": [
+    84,
+    112
+  ],
+  "anchor": "center",
+  "scale": 0.65,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "shadow",
+  "png_bytes": 139423,
+  "vram_kb": 2520
+}

@@ -153,6 +153,105 @@
       "palette_key": "gold",
       "anchor": "center",
       "desc": "祭坛水晶灵光日轮：垫在水晶背后，阶数越高越大越亮"
+    },
+    {
+      "id": "fire/flame-pillar",
+      "out_name": "flame_pillar",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.60,
+      "palette_key": "fire",
+      "anchor": "bottom",
+      "desc": "炉君地火柱、赤炎起手"
+    },
+    {
+      "id": "fire/meteor",
+      "out_name": "meteor_fall",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "fire",
+      "anchor": "bottom",
+      "desc": "陨火落地"
+    },
+    {
+      "id": "fire/fire-ring",
+      "out_name": "fire_ring",
+      "fps": 24,
+      "max_frames": 28,
+      "loop": false,
+      "scale": 0.70,
+      "palette_key": "fire",
+      "anchor": "center",
+      "desc": "炉爆、凤皇涅槃"
+    },
+    {
+      "id": "lightning/thunderclap",
+      "out_name": "thunderclap",
+      "fps": 24,
+      "max_frames": 28,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "volt",
+      "anchor": "bottom",
+      "desc": "雷劫震地"
+    },
+    {
+      "id": "arcane/magic-circle-cast",
+      "out_name": "summon_circle",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "arcane",
+      "anchor": "center",
+      "desc": "召唤、换桩、镜影"
+    },
+    {
+      "id": "shadow/hex-sigil",
+      "out_name": "hex_sigil",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "shadow",
+      "anchor": "center",
+      "desc": "心魔/天魔起手"
+    },
+    {
+      "id": "explosions/implosion",
+      "out_name": "void_implosion",
+      "fps": 24,
+      "max_frames": 26,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "arcane",
+      "anchor": "center",
+      "desc": "子母弹内爆"
+    },
+    {
+      "id": "impacts/ground-slam",
+      "out_name": "ground_slam",
+      "fps": 20,
+      "max_frames": 30,
+      "loop": false,
+      "scale": 0.65,
+      "palette_key": "earth",
+      "anchor": "bottom",
+      "desc": "震地/俯冲落地"
+    },
+    {
+      "id": "arcane/spell-charge",
+      "out_name": "cast_charge",
+      "fps": 24,
+      "max_frames": 24,
+      "loop": false,
+      "scale": 0.70,
+      "palette_key": "arcane",
+      "anchor": "bottom",
+      "desc": "激光充能（会被 follow 到 Boss 身上）"
     }
   ]
 }

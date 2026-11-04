@@ -15,13 +15,37 @@ extends Area2D
 ## 层级：地面贴花类 —— 宿主 Y 排序键钉在 GROUND_SORT_Y，在开 Y 排序的战层里
 ## 恒排在所有角色之前 ⇒ 永远渲染在角色脚下（与 GroundDecalHost 同一条修复）。
 
+enum Kind { POISON, FIRE }
+
 const RADIUS := 60.0                ## 基准包络半径（不含 scale_factor）：预警圈与 scale_factor 的同源锚
 const MAX_BLOBS := 10               ## 液面子圆上限：碰撞形状槽按此数预建，激活时按下标复用
 const GROUND_SQUASH := 0.62         ## 俯视透视压扁比（同 GroundDecal.FADE_GLOW 与实体软阴影，营造贴地感）
+
+# 毒池调色板
 const POOL_BODY := Color(0.18, 0.42, 0.26, 0.78)   ## 毒液本色：降饱和与亮度，偏深青苔绿，融入冷调地砖
 const POOL_SHEEN := Color(0.40, 0.72, 0.48, 0.20)  ## 液面流动内光：低反差暗流感
 const POOL_EDGE := Color(0.48, 0.85, 0.54, 0.65)   ## 冒泡亮沿：保留腐蚀动态读数，收敛泛光
 const POOL_DARK := Color(0.04, 0.08, 0.07, 0.40)   ## 腐蚀浸润底晕：近黑深青，读「毒气浸透石砖」
+
+# 火池调色板（Boss 烈焰吐息留在地面的余火）
+const FIRE_BODY := Color(0.42, 0.15, 0.05, 0.80)   ## 暗红岩浆
+const FIRE_SHEEN := Color(0.95, 0.55, 0.16, 0.22)  ## 流动橙光
+const FIRE_EDGE := Color(1.00, 0.72, 0.28, 0.70)   ## 亮橙冒泡
+const FIRE_DARK := Color(0.10, 0.03, 0.02, 0.42)   ## 焦黑浸润
+
+const PALETTE_POISON := {
+	"body": POOL_BODY,
+	"sheen": POOL_SHEEN,
+	"edge": POOL_EDGE,
+	"dark": POOL_DARK,
+}
+const PALETTE_FIRE := {
+	"body": FIRE_BODY,
+	"sheen": FIRE_SHEEN,
+	"edge": FIRE_EDGE,
+	"dark": FIRE_DARK,
+}
+
 const FADE_TIME := 0.6              ## 末期渐隐时长（秒）：替代到点硬消失
 const GROW_TIME := 0.22             ## 落地摊开生长时长（秒）：毒液从中心摊开，替代凭空满形态出现
 const REDRAW_INTERVAL := 0.05       ## 冒泡/渐隐重绘节流（20Hz，照 ArenaVisualLayer 口径）
@@ -62,6 +86,18 @@ var damage: float = 4.0             ## 每跳伤害（跳的节奏由玩家受�
 var duration: float = 5.0           ## 持续时长（秒）
 var scale_factor: float = 1.0       ## 整体缩放（外观与碰撞一起缩，同 EnemyBolt 口径）
 var radius: float = RADIUS          ## 最大包络半径 = RADIUS × scale_factor（预警圈同源；摊形与碰撞都收在其内）
+var pool_kind: int = Kind.POISON
+
+## 只改调色板与视觉参数，可随时调用；activate 前调最稳
+func set_kind(k: int) -> void:
+	if pool_kind == k:
+		return
+	pool_kind = k
+	queue_redraw()
+
+func _palette(k: int = -1) -> Dictionary:
+	var target_kind := pool_kind if k < 0 else k
+	return PALETTE_FIRE if target_kind == Kind.FIRE else PALETTE_POISON
 
 var _pooled: bool = false
 var _shape_nodes: Array[CollisionShape2D] = []  ## 每块液面子圆一块碰撞圆（同源，激活时按下标覆写）
@@ -74,6 +110,7 @@ var _bubbles: Array[Vector3] = []   ## 冒泡点：x/y = 偏移，z = 基准半�
 var _specks: Array[Vector3] = []    ## 液内暗斑：x/y = 偏移，z = 半径（静态质感，纯视觉无判定）
 
 func _reset_defaults() -> void:
+	pool_kind = Kind.POISON
 	damage = 4.0
 	duration = 5.0
 	scale_factor = 1.0
@@ -163,9 +200,9 @@ func _generate_shape() -> void:
 		var sub_r: float = minf(rng.randf_range(0.26, 0.46) * radius, radius * 0.86 - off.length())
 		if sub_r > 3.0:
 			_blobs.append(Vector3(off.x, off.y, sub_r))
-	# 冒泡点 3~5 个，落在锚圆内的液面里层（保证「泡冒在毒液上」而不是悬空在地面）
-	var bubble_count := rng.randi_range(3, 5)
-	for _i in range(bubble_count):
+	# 冒泡点：火池略少（2~4 个），毒池 3~5 个，落在锚圆内的液面里层（保证「泡冒在液面上」而不是悬空在地面）
+	var bubble_count := rng.randi_range(2, 4) if pool_kind == Kind.FIRE else rng.randi_range(3, 5)
+	for _b in range(bubble_count):
 		var off := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * rng.randf_range(0.0, radius * 0.28)
 		_bubbles.append(Vector3(off.x, off.y, rng.randf_range(1.8, 3.2)))
 	# 暗斑质感 3~5 点：液面层次更足，纯视觉无判定
@@ -199,34 +236,41 @@ func _draw() -> void:
 	BatchDraw.flush(self)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, GROUND_SQUASH))
 
-	# 多阶羽化湿迹浸润底晕：从外到内梯级衰减，使毒液轮廓柔和融进地砖纹理，消除硬边贴纸感
+	var pal := _palette()
+	var c_dark: Color = pal["dark"]
+	var c_body: Color = pal["body"]
+	var c_sheen: Color = pal["sheen"]
+	var c_edge: Color = pal["edge"]
+
+	# 多阶羽化湿迹浸润底晕：从外到内梯级衰减，使液面轮廓柔和融进地砖纹理，消除硬边贴纸感
 	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.16 * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.22 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.16 * fade))
 	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.30 * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.12 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.30 * fade))
 	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
-	# 毒液本体
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * 1.04 * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
+	# 液面本体
 	for b in _blobs:
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * g, Color(POOL_BODY.r, POOL_BODY.g, POOL_BODY.b, POOL_BODY.a * fade))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, b.z * g, Color(c_body.r, c_body.g, c_body.b, c_body.a * fade))
 	# 液面暗流亮芯：向中心收缩的微光，读「液体还在流动」
 	for b in _blobs:
 		if b.z >= radius * 0.30:
-			BatchDraw.native_circle(self, Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(POOL_SHEEN.r, POOL_SHEEN.g, POOL_SHEEN.b, POOL_SHEEN.a * fade))
+			BatchDraw.native_circle(self, Vector2(b.x, b.y) * 0.45 * g, b.z * 0.52 * g, Color(c_sheen.r, c_sheen.g, c_sheen.b, c_sheen.a * fade))
 	# 暗斑质感
 	for s in _specks:
-		BatchDraw.native_circle(self, Vector2(s.x, s.y) * g, s.z * g, Color(POOL_DARK.r, POOL_DARK.g, POOL_DARK.b, 0.45 * fade))
-	# 冒泡：逐泡独立相位「胀大→破掉」，破时挑一帧细亮环，读「这滩毒还活着」
+		BatchDraw.native_circle(self, Vector2(s.x, s.y) * g, s.z * g, Color(c_dark.r, c_dark.g, c_dark.b, 0.45 * fade))
+	# 冒泡：逐泡独立相位「胀大→破掉」，破时挑一帧细亮环，读「这滩液面还活着」
+	var clk: float = _clock * (1.6 if pool_kind == Kind.FIRE else 1.0)
 	for i in range(_bubbles.size()):
 		var b := _bubbles[i]
-		var cycle := fposmod(_clock * 0.9 + float(i) * 0.37, 1.0)
+		var cycle := fposmod(clk * 0.9 + float(i) * 0.37, 1.0)
 		var pulse := sin(cycle * PI)
 		var br := b.z * pulse * g
 		if br <= 0.2:
 			continue
-		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, br, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, POOL_EDGE.a * fade * pulse))
+		BatchDraw.native_circle(self, Vector2(b.x, b.y) * g, br, Color(c_edge.r, c_edge.g, c_edge.b, c_edge.a * fade * pulse))
 		if cycle > 0.8:
-			BatchDraw.native_arc(self, Vector2(b.x, b.y) * g, br + 1.2, 0.0, TAU, 10, Color(POOL_EDGE.r, POOL_EDGE.g, POOL_EDGE.b, (1.0 - cycle) * 2.0 * fade), 1.0, true)
+			BatchDraw.native_arc(self, Vector2(b.x, b.y) * g, br + 1.2, 0.0, TAU, 10, Color(c_edge.r, c_edge.g, c_edge.b, (1.0 - cycle) * 2.0 * fade), 1.0, true)
 
 	# 恢复变换
 	BatchDraw.flush(self)

@@ -1,0 +1,20 @@
+{
+  "id": "lightning/thunderclap",
+  "out_name": "thunderclap",
+  "frame_size": [
+    288,
+    156
+  ],
+  "pivot": [
+    144,
+    124
+  ],
+  "anchor": "bottom",
+  "scale": 0.65,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 28,
+  "palette_key": "volt",
+  "png_bytes": 213555,
+  "vram_kb": 4914
+}

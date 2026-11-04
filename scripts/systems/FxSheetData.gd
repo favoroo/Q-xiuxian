@@ -165,18 +165,126 @@ const CONFIGS: Dictionary = {
 		"z_ground": false,
 		"element": "gold"
 	},
-	&"zap_hit": {
-		"tres": "res://assets/art/fx_pixelfx/zap_hit.tres",
-		"scale": 0.55,
-		"anchor": "center",
-		"pivot": Vector2(76, 56),
-		"frame_size": Vector2(144, 112),
-		"loop": false,
-		"hdr": true,
-		"z_ground": false,
-		"element": "lightning"
+		&"zap_hit": {
+			"tres": "res://assets/art/fx_pixelfx/zap_hit.tres",
+			"scale": 0.55,
+			"anchor": "center",
+			"pivot": Vector2(76, 56),
+			"frame_size": Vector2(144, 112),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "lightning"
+		},
+		## Boss 招式：炉君地火柱、赤炎起手
+		&"flame_pillar": {
+			"tres": "res://assets/art/fx_pixelfx/flame_pillar.tres",
+			"scale": 0.60,
+			"anchor": "bottom",
+			"pivot": Vector2(92, 232),
+			"frame_size": Vector2(184, 256),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "fire"
+		},
+		## Boss 招式：陨火落地
+		&"meteor_fall": {
+			"tres": "res://assets/art/fx_pixelfx/meteor_fall.tres",
+			"scale": 0.65,
+			"anchor": "bottom",
+			"pivot": Vector2(150, 208),
+			"frame_size": Vector2(272, 232),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "fire"
+		},
+		## Boss 招式：炉爆、凤皇涅槃
+		&"fire_ring": {
+			"tres": "res://assets/art/fx_pixelfx/fire_ring.tres",
+			"scale": 0.70,
+			"anchor": "center",
+			"pivot": Vector2(112, 92),
+			"frame_size": Vector2(224, 128),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "fire"
+		},
+		## Boss 招式：雷劫震地
+		&"thunderclap": {
+			"tres": "res://assets/art/fx_pixelfx/thunderclap.tres",
+			"scale": 0.65,
+			"anchor": "bottom",
+			"pivot": Vector2(144, 124),
+			"frame_size": Vector2(288, 156),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "lightning"
+		},
+		## Boss 招式：召唤、换桩、镜影
+		&"summon_circle": {
+			"tres": "res://assets/art/fx_pixelfx/summon_circle.tres",
+			"scale": 0.65,
+			"anchor": "center",
+			"pivot": Vector2(100, 192),
+			"frame_size": Vector2(200, 220),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "shadow"
+		},
+		## Boss 招式：心魔/天魔起手
+		&"hex_sigil": {
+			"tres": "res://assets/art/fx_pixelfx/hex_sigil.tres",
+			"scale": 0.65,
+			"anchor": "center",
+			"pivot": Vector2(84, 112),
+			"frame_size": Vector2(168, 128),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "shadow"
+		},
+		## Boss 招式：子母弹内爆
+		&"void_implosion": {
+			"tres": "res://assets/art/fx_pixelfx/void_implosion.tres",
+			"scale": 0.65,
+			"anchor": "center",
+			"pivot": Vector2(104, 92),
+			"frame_size": Vector2(208, 184),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "shadow"
+		},
+		## Boss 招式：震地/俯冲落地
+		&"ground_slam": {
+			"tres": "res://assets/art/fx_pixelfx/ground_slam.tres",
+			"scale": 0.65,
+			"anchor": "bottom",
+			"pivot": Vector2(144, 164),
+			"frame_size": Vector2(288, 208),
+			"loop": false,
+			"hdr": false,
+			"z_ground": false,
+			"element": "earth"
+		},
+		## Boss 招式：激光充能（会被 follow 到 Boss 身上）
+		&"cast_charge": {
+			"tres": "res://assets/art/fx_pixelfx/cast_charge.tres",
+			"scale": 0.70,
+			"anchor": "bottom",
+			"pivot": Vector2(44, 80),
+			"frame_size": Vector2(120, 86),
+			"loop": false,
+			"hdr": true,
+			"z_ground": false,
+			"element": "shadow"
+		}
 	}
-}
 
 ## 缓存已加载的 SpriteFrames 资源，避免重复磁盘 I/O
 static var _frames_cache: Dictionary = {}

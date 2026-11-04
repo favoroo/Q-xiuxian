@@ -19,7 +19,7 @@ const SAMPLE_INTERVAL := 0.033      ## 低档采样节流
 const SAMPLE_INTERVAL_HIGH := 0.014 ## 流畅档采样节流
 const MAX_POINTS_LOW := 7           ## 低档历史点数
 const MAX_POINTS_HIGH := 12         ## 流畅档历史点数
-const RING_CAP := MAX_POINTS_HIGH   ## 环形容量按高档取
+const RING_CAP := 32                ## 环形容量上限（支持 points_scale 缩放）
 const MIN_STEP_SQ := 20.0           ## 相邻点平方距下限（≈4.5px），防贴脸零长线段
 
 const GLOW_WIDTH := 4.6
@@ -40,6 +40,10 @@ var _color := Color(1.0, 1.0, 1.0)
 var _grad_glow: Gradient = null
 var _grad_core: Gradient = null
 
+var _glow_scale: float = 1.0
+var _points_scale: float = 1.0
+var _max_pts: int = MAX_POINTS_LOW
+
 func _ready() -> void:
 	top_level = true
 	position = Vector2.ZERO
@@ -48,14 +52,30 @@ func _ready() -> void:
 	visible = false
 	_ring.resize(RING_CAP)
 	_draw_buf.resize(RING_CAP)
+	_update_max_pts()
 	_build_lines()
 
-## 配色下发（弹体 rim 色）：颜色未变短路，变了只就地覆写常驻 Gradient
-func configure(color: Color) -> void:
-	if color == _color:
+## 配色与规格下发（弹体 accent/rim 色）：颜色未变短路，变了就地覆写 Gradient / 线宽 / 采样点上限
+func configure(color: Color, glow_scale: float = 1.0, points_scale: float = 1.0) -> void:
+	var color_changed := (color != _color)
+	var glow_changed := not is_equal_approx(glow_scale, _glow_scale)
+	var points_changed := not is_equal_approx(points_scale, _points_scale)
+	if not color_changed and not glow_changed and not points_changed:
 		return
 	_color = color
-	_apply_gradients()
+	_glow_scale = glow_scale
+	_points_scale = points_scale
+	_update_max_pts()
+	if _line_glow != null and _line_core != null:
+		if glow_changed:
+			_line_glow.width = GLOW_WIDTH * _glow_scale
+			_line_core.width = CORE_WIDTH * _glow_scale
+		if color_changed:
+			_apply_gradients()
+
+func _update_max_pts() -> void:
+	var base_pts := MAX_POINTS_HIGH if VisualRate.high_fps else MAX_POINTS_LOW
+	_max_pts = clampi(int(round(float(base_pts) * _points_scale)), 2, RING_CAP)
 
 func _apply_gradients() -> void:
 	if _grad_glow == null:
@@ -80,6 +100,7 @@ func set_active(on: bool) -> void:
 ## 出膛起笔：清空上一发历史后从枪口位置落第一个点
 func seed(pos: Vector2) -> void:
 	reset()
+	_update_max_pts()
 	_ring[0] = pos
 	_head = 1 % RING_CAP
 	_count = 1
@@ -90,7 +111,7 @@ func _sample_interval() -> float:
 	return SAMPLE_INTERVAL_HIGH if VisualRate.high_fps else SAMPLE_INTERVAL
 
 func _max_points() -> int:
-	return MAX_POINTS_HIGH if VisualRate.high_fps else MAX_POINTS_LOW
+	return _max_pts
 
 ## 宿主物理帧调用（弹丸休眠时宿主 _physics_process 停发，本节点无需自计时）
 func sample(pos: Vector2, delta: float) -> void:
@@ -106,7 +127,7 @@ func sample(pos: Vector2, delta: float) -> void:
 			return
 	_ring[_head] = pos
 	_head = (_head + 1) % RING_CAP
-	if _count < _max_points():
+	if _count < _max_pts:
 		_count += 1
 	_redraw()
 
@@ -121,8 +142,8 @@ func reset() -> void:
 func _build_lines() -> void:
 	_grad_glow = Gradient.new()
 	_grad_core = Gradient.new()
-	_line_glow = _make_line(GLOW_WIDTH, _grad_glow)
-	_line_core = _make_line(CORE_WIDTH, _grad_core)
+	_line_glow = _make_line(GLOW_WIDTH * _glow_scale, _grad_glow)
+	_line_core = _make_line(CORE_WIDTH * _glow_scale, _grad_core)
 	_apply_gradients()
 
 func _make_line(width: float, grad: Gradient) -> Line2D:

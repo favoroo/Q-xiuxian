@@ -160,6 +160,12 @@ const KNOCKBACK_MAX_SPEED_CRIT := 780.0   ## 暴击受击初速上限（px/s）�
 const KNOCKBACK_HEAVY_SPEED := 240.0     ## 重击判定阈值（px/s）：触发重击音效与地面摩擦扬尘
 const KNOCKBACK_HEAVY_DECAY_MULT := 1.0  ## 取消重击衰减打折（杜绝把敌人甩出半屏）
 
+## 接触反冲（2026-11-04 用户反馈）：近战怪咬中玩家后向后弹开一点点，杜绝贴脸粘着连咬的读感。
+## 走受击硬直同一条滑行衰减（KNOCKBACK_DECAY_STUN）：约 0.18s 滑出 ~19px 后刹停 ——
+## 只求「咬一口就松口」，不是武器击退。不把玩家无敌帧算进去：伤害节奏不动，只改表现与身位。
+const CONTACT_RECOIL_SPEED := 260.0      ## 接触反冲初速（px/s）
+const CONTACT_RECOIL_STUN := 0.18        ## 接触反冲定身（秒）：期间主动追击归零，给玩家脱身窗口
+
 ## 定向受击挤压（Squash & Stretch）：按击退轴选形变，玩家/敌人同一把尺子（2026-10-15 从
 ## EnemyBase 上移为共用纯函数）。无击退向量时给默认水平压扁；有击退时沿冲击轴压扁、垂直轴拉长。
 static func hit_squash_target(knockback: Vector2, is_crit: bool) -> Vector2:

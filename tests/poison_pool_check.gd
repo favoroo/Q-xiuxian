@@ -54,6 +54,7 @@ func _run() -> void:
 	await _case_invuln_throttle()
 	await _case_pool_reuse()
 	await _case_duyao_windup()
+	await _case_fire_pool()
 
 	print("POISON_POOL 判据跑完")
 	Engine.time_scale = 1.0
@@ -298,3 +299,22 @@ func _case_duyao_windup() -> void:
 	duyao.queue_free()
 	_player.current_health = 99999.0
 	await get_tree().process_frame
+
+## ⑨ 火池形态判据：set_kind(FIRE) 后 activate，pool_kind 与包络半径同源，recycle 后复位 POISON
+func _case_fire_pool() -> void:
+	await _clear_all_pools()
+	var p := PoisonPool.acquire(_world)
+	p.global_position = Vector2(400, 200)
+	p.damage = 6.0
+	p.duration = 4.0
+	p.scale_factor = 1.25
+	p.set_kind(PoisonPool.Kind.FIRE)
+	p.activate()
+	await get_tree().process_frame
+
+	_c.equals(p.pool_kind, PoisonPool.Kind.FIRE, "set_kind(FIRE) 后 activate，pool_kind 为 Kind.FIRE")
+	_c.near(p.radius, PoisonPool.RADIUS * p.scale_factor, 0.001, "火池包络半径维持 RADIUS * scale_factor 不变")
+
+	p.recycle()
+	await get_tree().process_frame
+	_c.equals(p.pool_kind, PoisonPool.Kind.POISON, "recycle 回收后 pool_kind 回到 Kind.POISON")

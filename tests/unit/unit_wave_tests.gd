@@ -184,6 +184,38 @@ func _test_boss_waves() -> void:
 	_c.check(GameBalance.boss_hp(20) > GameBalance.boss_hp(10), "第 20 波魔尊血更厚")
 	_c.check(GameBalance.boss_contact_damage(20) > GameBalance.boss_contact_damage(1), "Boss 接触伤害随波次成长")
 
+## Boss 弹幕「可躲几何」不变量（2026-11-04）：密度不是拍脑袋，按玩家判定半径与基础移速反推
+## 每种弹型的最小生存窗。这些断言钉的是「以后调数值别把某种弹型改回实心墙」：
+##   1. 螺旋臂上相邻弹的径向间距必须容得下玩家穿过（臂是虚线，不是实心墙）。
+##   2. 瞬步回斩落点 + 最短前摇的直线后撤，必须够走到扇形缝隙张开的半径。
+##   3. 扇形连射末波的「脱锥速度」必须低于玩家基础移速（末波不能是必吃）。
+##   4. 深层出招下限必须覆盖单招铺完的时长（弹幕不许连播叠屏）。
+func _test_boss_bolt_fairness() -> void:
+	const P_R := 14.0      # Player.tscn 躯体 CircleShape2D 半径
+	const P_SPD := 210.0   # Player.BASE_SPEED（未计加点/道具，作为最保守基准）
+	# 1) 螺旋：弹距 = 弹速 × 喷射间隔；BossEnemy 里螺旋弹 scale 1.2。
+	var spiral_band := 2.0 * EnemyBolt.RADIUS * 1.2 + 2.0 * P_R
+	for w in [10, 20, 45, 100]:
+		var spacing: float = GameBalance.BOSS_SPIRAL_BOLT_SPEED * GameBalance.enemy_bolt_speed_mult(w) * GameBalance.BOSS_SPIRAL_INTERVAL
+		_c.check(spacing >= spiral_band,
+			"W%d 螺旋臂弹距 %.1f ≥ 穿越带宽 %.1f（臂不能是实心墙）" % [w, spacing, spiral_band])
+	# 2) 瞬步回斩：缝隙张开半径 = (弹径 + 玩家直径) / 相邻弹夹角；瞬斩弹 scale 1.25。
+	var blink_band := 2.0 * EnemyBolt.RADIUS * 1.25 + 2.0 * P_R
+	var blink_gap_r := blink_band / GameBalance.BOSS_BLINK_SLASH_SPREAD
+	var blink_escape := GameBalance.BOSS_BLINK_SLASH_DIST + GameBalance.BOSS_VOID_STEP_WINDUP * P_SPD
+	_c.check(blink_escape >= blink_gap_r,
+		"瞬步回斩：落点 %.0f + 最短前摇后撤 %.0f ≥ 缝隙张开半径 %.0f" % [GameBalance.BOSS_BLINK_SLASH_DIST, GameBalance.BOSS_VOID_STEP_WINDUP * P_SPD, blink_gap_r])
+	# 3) 扇形末波（W45 深层速度 1.65×；D1 噩梦另 ×1.08，留给加点/闪避兑现，不在本基线断言）。
+	var fan_half := float(GameBalance.BOSS_FAN_COUNT - 1) * GameBalance.BOSS_FAN_SPREAD * 0.5
+	var fan_last: float = (GameBalance.BOSS_FAN_BASE_SPEED + float(GameBalance.BOSS_FAN_WAVES_P2 - 1) * GameBalance.BOSS_FAN_SPEED_STEP) * GameBalance.enemy_bolt_speed_mult(45)
+	_c.check(fan_last * sin(fan_half) < P_SPD,
+		"扇形末波脱锥速度 %.0f < 玩家移速 %.0f（末波不能必吃）" % [fan_last * sin(fan_half), P_SPD])
+	# 4) 出招下限：螺旋/环弹整套铺完之前不许起下一招。
+	_c.check(GameBalance.BOSS_MIN_ATTACK_INTERVAL >= GameBalance.BOSS_SPIRAL_DURATION,
+		"出招下限 %.1fs ≥ 螺旋时长 %.1fs" % [GameBalance.BOSS_MIN_ATTACK_INTERVAL, GameBalance.BOSS_SPIRAL_DURATION])
+	_c.check(GameBalance.BOSS_MIN_ATTACK_INTERVAL >= GameBalance.BOSS_RING_WINDUP + 2.0 * GameBalance.BOSS_RING_LAYER_DELAY,
+		"出招下限 %.1fs ≥ 环弹起手 + 双层间隔 %.1fs" % [GameBalance.BOSS_MIN_ATTACK_INTERVAL, GameBalance.BOSS_RING_WINDUP + 2.0 * GameBalance.BOSS_RING_LAYER_DELAY])
+
 func _test_spawn_shape() -> void:
 	_c.equals(GameBalance.spawn_batch(1, 0.0), 5, "第 1 波分批清剿 + 触发追加 → 5 只")
 	_c.equals(GameBalance.spawn_batch(1, 0.9), 4, "第 1 波分批未触发追加 → 4 只")

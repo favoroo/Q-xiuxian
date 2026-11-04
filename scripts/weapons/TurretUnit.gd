@@ -869,17 +869,22 @@ func _fire() -> void:
 	var primary: Node2D = valid[0]
 	var aim_dir := (primary.global_position - muzzle_point.global_position).normalized()
 	var final_dmg := _final_damage()
+	# 弹幕回响（2026-11-04）：机关炮台出的也是弹丸，出膛时同样叠加弹射次数。
+	# 只补「弹丸命中」类 hook；「远程多 N 发弹丸」「每 N 次出手落箭雨」仍归远程武器的
+	# 出手节奏（机关有独立的齐射管数体系，见 WeaponData.turret_volley / BalanceTurret）。
+	var bounce_bonus: int = int(round(GameManager.item_hook_sum("projectile_bounce_bonus")))
 	for i in volley:
 		# 一管一个目标（不足 N 个则余下全部打最近的那个）——对应旧版 N 座各自锁最近敌人
 		var target: Node2D = valid[i] if i < valid.size() else primary
 		_fire_one(target, final_dmg,
-			(target.global_position - muzzle_point.global_position).normalized())
+			(target.global_position - muzzle_point.global_position).normalized(), bounce_bonus)
 	_refresh_readout()
 	queue_redraw()
 	_fire_feedback(aim_dir)
 
-## 单管出膛：弹丸参数照旧，独立取池（与旧版每座炮台各发一枚完全等价）
-func _fire_one(target: Node2D, final_dmg: float, aim_dir: Vector2) -> void:
+## 单管出膛：弹丸参数照旧，独立取池（与旧版每座炮台各发一枚完全等价）。
+## bounce_bonus 由 _fire() 每次齐射只取一次（弹幕回响对机关弹丸同样生效）。
+func _fire_one(target: Node2D, final_dmg: float, aim_dir: Vector2, bounce_bonus: int = 0) -> void:
 	var p := BladeProjectile.acquire_or_new(projectile_scene, get_tree().current_scene)
 	p.global_position = muzzle_point.global_position
 	p.direction = aim_dir
@@ -887,7 +892,7 @@ func _fire_one(target: Node2D, final_dmg: float, aim_dir: Vector2) -> void:
 	p.damage = final_dmg
 	p.knockback_base = WeaponData.knockback_for(weapon_def_id, 120.0)
 	p.pierce_left = WeaponData.capped_pierce(int(_def.get("pierce", 1)) + GameManager.bonus_pierce)
-	p.bounce_left = int(_def.get("bounce_count", 0))
+	p.bounce_left = int(_def.get("bounce_count", 0)) + maxi(0, bounce_bonus)
 	p.bullet_texture = _bullet_tex
 	p.bullet_scale = _bullet_scale
 	p.spin = _bullet_spins

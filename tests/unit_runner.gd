@@ -40,6 +40,7 @@ func _ready() -> void:
 		[combat, "_test_armor"],
 		[wave, "_test_wave_scaling"],
 		[wave, "_test_boss_waves"],
+		[wave, "_test_boss_bolt_fairness"],
 		[wave, "_test_spawn_shape"],
 		[wave, "_test_enemy_mix"],
 		[wave, "_test_wave_theme"],

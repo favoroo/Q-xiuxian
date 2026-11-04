@@ -95,8 +95,31 @@ var split_speed: float = 275.0   ## 子火球飞行速度
 var split_scale: float = 1.0     ## 子火球缩放系数
 var split_damage: float = 0.0    ## 子火球伤害（≤0 时按母弹 65% 折算）
 var purple_style: bool = false   ## 幽紫魔焰配色（第 20 波最终 Boss 及子母弹专属）
-var sword_style: bool = false    ## 幽冥剑气形态（御剑邪修专属：冷冽幽蓝梭形剑芒）
+var sword_style: bool = false    ## 幽冥剑气形态（兼容开关：true 等价于 style == Style.SWORD）
 var tint_color: Color = Color(0, 0, 0, 0) ## 主题色（alpha == 0 表示不启用主题色；>0 时优先级高于 purple_style，Boss 专属弹幕辨识用）
+
+enum Style { ORB, SWORD, NEEDLE, TALISMAN, FLAME, VOID }
+var style: int = Style.ORB
+var accent_color: Color = Color(0, 0, 0, 0)   ## 强调色/主轮廓（alpha==0 表示按现有 tint_color 派生）
+var core_color: Color = Color(0, 0, 0, 0)     ## 核心高光色（alpha==0 表示按 accent 派生）
+
+## 样式配置入口（主编统一调用接口）
+func set_style(s: int, accent: Color = Color(0, 0, 0, 0), core: Color = Color(0, 0, 0, 0)) -> void:
+	style = s
+	accent_color = accent
+	core_color = core
+	sword_style = (s == Style.SWORD)
+	if is_inside_tree():
+		queue_redraw()
+
+## 统一形态判定（兼容 sword_style 旧开关）
+func _effective_style() -> int:
+	return Style.SWORD if sword_style else style
+
+## 是否为方向性弹体（出膛对齐飞行速度角）
+func _is_directional_style() -> bool:
+	var s := _effective_style()
+	return s == Style.SWORD or s == Style.NEEDLE or s == Style.TALISMAN
 
 ## 池状态与 _ready 建好的节点引用（复用时 activate 重铺要用）
 var _pooled: bool = false
@@ -121,14 +144,17 @@ func _reset_defaults() -> void:
 	split_damage = 0.0
 	purple_style = false
 	sword_style = false
+	style = Style.ORB
+	accent_color = Color(0, 0, 0, 0)
+	core_color = Color(0, 0, 0, 0)
 	tint_color = Color(0, 0, 0, 0)
 
 func _ready() -> void:
 	add_to_group("enemy_bolts")
 	collision_layer = 0
 	collision_mask = 2  # player
-	# 火球不旋转，剑气沿发射方向定向
-	rotation = direction.angle() if sword_style else 0.0
+	# 方向型弹体沿发射方向定向，球型/全向弹体保持 rotation = 0
+	rotation = direction.angle() if _is_directional_style() else 0.0
 	# scale_factor 由发射方在 add_child 之前写入，所以这里算一次就是终值
 	radius = RADIUS * maxf(scale_factor, 0.05)
 
@@ -142,11 +168,11 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 
-## 当前弹体是否值得挂拖尾：拥挤档一律不挂；剑气/Boss 大弹才挂
+## 当前弹体是否值得挂拖尾：拥挤档一律不挂；非 ORB 形态或 Boss 大弹才挂
 func _trail_enabled() -> bool:
 	if FxBudget.crowded:
 		return false
-	return sword_style or scale_factor > 1.2
+	return (_effective_style() != Style.ORB) or scale_factor > 1.2
 
 ## 拖尾按需懒建（只在需要时挂一次，池化复用不再重建）。
 ## 不在 _ready 建：普通火球（占绝大多数）永不创建，既守「画多大判多大」的子节点铁律
@@ -157,11 +183,46 @@ func _ensure_trail() -> EnemyBoltTrail:
 		add_child(_trail)
 	return _trail
 
-## 弹体描边色（拖尾同源取色，读得出「这是什么弹」）
+## 色彩派生规则（守 AGENTS 视觉层铁律）：
+## accent = accent_color.a > 0 ? accent_color : tint_color.lightened(0.15)（或 purple/body 派生）
+## core = core_color.a > 0 ? core_color : accent.lightened(0.55)
+## 暗部 = accent.darkened(0.55)
+func _resolve_colors() -> Dictionary:
+	var base_c: Color
+	if tint_color.a > 0.0:
+		base_c = tint_color
+	elif purple_style:
+		base_c = BODY_COLOR_PURPLE
+	else:
+		base_c = BODY_COLOR
+
+	var accent: Color = accent_color if accent_color.a > 0.0 else base_c.lightened(0.15)
+	var core: Color = core_color if core_color.a > 0.0 else accent.lightened(0.55)
+	var dark: Color = accent.darkened(0.55)
+	return {
+		"accent": accent,
+		"core": core,
+		"dark": dark,
+	}
+
+func _get_accent_color() -> Color:
+	if accent_color.a > 0.0:
+		return accent_color
+	if tint_color.a > 0.0:
+		return tint_color.lightened(0.15)
+	if _effective_style() == Style.SWORD:
+		return RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
+	if purple_style:
+		return BODY_COLOR_PURPLE.lightened(0.15)
+	return BODY_COLOR.lightened(0.15)
+
+## 弹体描边色（受击火花/湮灭效果同源取色）
 func _rim_color() -> Color:
+	if accent_color.a > 0.0:
+		return accent_color
 	if tint_color.a > 0.0:
 		return tint_color
-	if sword_style:
+	if _effective_style() == Style.SWORD:
 		return RIM_COLOR_JIANSHA if purple_style else RIM_COLOR_SWORD
 	if purple_style:
 		return RIM_COLOR_PURPLE
@@ -169,9 +230,11 @@ func _rim_color() -> Color:
 
 ## 浅色细描边色（外沿高光反差轮廓）
 func _outline_color() -> Color:
+	if accent_color.a > 0.0:
+		return accent_color.lightened(0.35)
 	if tint_color.a > 0.0:
 		return tint_color.lightened(0.35)
-	if sword_style:
+	if _effective_style() == Style.SWORD:
 		return OUTLINE_COLOR_JIANSHA if purple_style else OUTLINE_COLOR_SWORD
 	if purple_style:
 		return OUTLINE_COLOR_PURPLE
@@ -187,7 +250,7 @@ func activate() -> void:
 	reset_physics_interpolation()
 	interp_reset_count += 1
 	visible = true
-	rotation = direction.angle() if sword_style else 0.0
+	rotation = direction.angle() if _is_directional_style() else 0.0
 	radius = RADIUS * maxf(scale_factor, 0.05)
 	if _circle != null:
 		_circle.radius = radius
@@ -202,7 +265,7 @@ func activate() -> void:
 	# 拖尾按当前形态决定挂不挂；挂上则清史从出膛点起笔
 	if _trail_enabled():
 		var tr := _ensure_trail()
-		tr.configure(_rim_color())
+		tr.configure(_get_accent_color())
 		tr.set_active(true)
 		tr.seed(global_position)
 	elif _trail != null:
@@ -228,6 +291,10 @@ func _explode_split() -> void:
 	var child_scl := split_scale
 	var child_dmg := split_damage if split_damage > 0.0 else maxf(1.0, damage * 0.65)
 	var is_purple := purple_style
+	var cur_style := style
+	var cur_sword := sword_style
+	var cur_accent := accent_color
+	var cur_core := core_color
 	var cur_tint := tint_color
 	var rim_c := _rim_color()
 	if is_inside_tree() and host_parent != null:
@@ -245,6 +312,10 @@ func _explode_split() -> void:
 		child_bolt.damage = child_dmg
 		child_bolt.scale_factor = child_scl
 		child_bolt.purple_style = is_purple
+		child_bolt.style = cur_style
+		child_bolt.sword_style = cur_sword
+		child_bolt.accent_color = cur_accent
+		child_bolt.core_color = cur_core
 		child_bolt.tint_color = cur_tint
 		child_bolt.activate()
 
@@ -269,15 +340,32 @@ func _recycle() -> void:
 func _draw() -> void:
 	# 单发敌弹 3~8 条矢量原语合成 1 个 draw call（2026-11-03 绘制专项）
 	BatchDraw.flush(self)
-	if sword_style:
-		_draw_sword_bolt()
-		BatchDraw.flush(self)
-		return
+	match _effective_style():
+		Style.SWORD:
+			_draw_sword_bolt()
+		Style.NEEDLE:
+			_draw_needle_bolt()
+		Style.TALISMAN:
+			_draw_talisman_bolt()
+		Style.FLAME:
+			_draw_flame_bolt()
+		Style.VOID:
+			_draw_void_bolt()
+		Style.ORB, _:
+			_draw_orb_bolt()
+	BatchDraw.flush(self)
+
+func _draw_orb_bolt() -> void:
 	var body_c: Color
 	var rim_c: Color
 	var outline_c: Color
 	var core_c: Color
-	if tint_color.a > 0.0:
+	if accent_color.a > 0.0:
+		rim_c = accent_color
+		body_c = accent_color.darkened(0.35)
+		outline_c = accent_color.lightened(0.35)
+		core_c = core_color if core_color.a > 0.0 else accent_color.lightened(0.65)
+	elif tint_color.a > 0.0:
 		rim_c = tint_color
 		body_c = tint_color.darkened(0.35)
 		outline_c = tint_color.lightened(0.35)
@@ -301,7 +389,6 @@ func _draw() -> void:
 	BatchDraw.arc(self, Vector2.ZERO, maxf(radius - 0.5, 0.5), 0.0, TAU, outline_c, 1.0)
 	# 4. 高光芯
 	BatchDraw.circle(self, Vector2.ZERO, radius * 0.45, core_c, 3.2)
-	BatchDraw.flush(self)
 
 ## 幽冥剑气视觉绘制（紧凑破空掠翼三角剑芒，尺寸严格内切判定圆 radius，铁律 7：画多大判多大）
 func _draw_sword_bolt() -> void:
@@ -309,7 +396,12 @@ func _draw_sword_bolt() -> void:
 	var rim_c: Color
 	var outline_c: Color
 	var core_c: Color
-	if tint_color.a > 0.0:
+	if accent_color.a > 0.0:
+		rim_c = accent_color
+		body_c = accent_color.darkened(0.35)
+		outline_c = accent_color.lightened(0.35)
+		core_c = core_color if core_color.a > 0.0 else accent_color.lightened(0.65)
+	elif tint_color.a > 0.0:
 		rim_c = tint_color
 		body_c = tint_color.darkened(0.35)
 		outline_c = tint_color.lightened(0.35)
@@ -350,10 +442,172 @@ func _draw_sword_bolt() -> void:
 	BatchDraw.native_line(self, Vector2(-r * 0.25, 0.0), Vector2(r * 0.75, 0.0), core_c, 1.6, true)
 	BatchDraw.circle(self, Vector2(r * 0.05, 0.0), r * 0.20, core_c, 3.2)
 
+## 雷芒/镜棱/枪刺视觉绘制（细长菱形，尖端 +0.98r，尾端 -0.90r，半宽 0.32r，三层层次）
+func _draw_needle_bolt() -> void:
+	var cols := _resolve_colors()
+	var accent_c: Color = cols["accent"]
+	var core_c: Color = cols["core"]
+	var dark_c: Color = cols["dark"]
+
+	var r := radius
+	# 细长菱形顶点：尖端 +0.98r，尾端 -0.90r，横向半宽 0.32r
+	var pts := PackedVector2Array([
+		Vector2(r * 0.98, 0.0),
+		Vector2(0.0, -r * 0.32),
+		Vector2(-r * 0.90, 0.0),
+		Vector2(0.0, r * 0.32)
+	])
+	# 1. 暗色填充
+	BatchDraw.poly(self, pts, dark_c)
+
+	# 2. accent 描边
+	var stroke_pts := PackedVector2Array([
+		Vector2(r * 0.98, 0.0),
+		Vector2(0.0, -r * 0.32),
+		Vector2(-r * 0.90, 0.0),
+		Vector2(0.0, r * 0.32),
+		Vector2(r * 0.98, 0.0)
+	])
+	BatchDraw.native_polyline(self, stroke_pts, accent_c, maxf(1.0, r * 0.12), true)
+
+	# 3. core 中轴亮线
+	BatchDraw.native_line(self, Vector2(-r * 0.70, 0.0), Vector2(r * 0.85, 0.0), core_c, maxf(1.0, r * 0.12), true)
+
+## 符箓视觉绘制（矩形符纸 宽 1.25r × 高 1.55r，半对角线 ≈ 0.968r 严格内切判定圆）
+func _draw_talisman_bolt() -> void:
+	var cols := _resolve_colors()
+	var accent_c: Color = cols["accent"]
+	var core_c: Color = cols["core"]
+	var dark_c: Color = cols["dark"]
+
+	var r := radius
+	var hx := r * 0.76   # 符纸半长（沿飞行方向，全长约 1.52r）
+	var hy := r * 0.60   # 符纸半宽（全宽约 1.20r，半对角线 ≈ 0.968r 严格内切）
+
+	# 1. 深色纸面填充
+	var paper_pts := PackedVector2Array([
+		Vector2(hx, -hy),
+		Vector2(hx, hy),
+		Vector2(-hx, hy),
+		Vector2(-hx, -hy)
+	])
+	BatchDraw.poly(self, paper_pts, dark_c)
+
+	# 2. accent 细边框
+	var border_pts := PackedVector2Array([
+		Vector2(hx, -hy),
+		Vector2(hx, hy),
+		Vector2(-hx, hy),
+		Vector2(-hx, -hy),
+		Vector2(hx, -hy)
+	])
+	BatchDraw.native_polyline(self, border_pts, accent_c, maxf(1.0, r * 0.10), true)
+
+	# 3. 顶部小三角符头（指向 +X 前端）
+	var head_pts := PackedVector2Array([
+		Vector2(hx * 0.92, 0.0),
+		Vector2(hx * 0.50, -hy * 0.45),
+		Vector2(hx * 0.50, hy * 0.45)
+	])
+	BatchDraw.poly(self, head_pts, accent_c)
+
+	# 4. 纸面中央 2~3 笔朱墨符文（core 色细线）
+	var line_w := maxf(1.0, r * 0.10)
+	BatchDraw.native_line(self, Vector2(-hx * 0.65, 0.0), Vector2(hx * 0.35, 0.0), core_c, line_w, true)
+	BatchDraw.native_line(self, Vector2(hx * 0.15, -hy * 0.45), Vector2(hx * 0.15, hy * 0.45), core_c, line_w, true)
+	BatchDraw.native_line(self, Vector2(-hx * 0.35, -hy * 0.35), Vector2(-hx * 0.20, hy * 0.35), core_c, line_w, true)
+
+## 火球/龙息视觉绘制（主球 0.92r + 尾部多边形火舌 ≤ -0.95r，暖白 core 球 0.42r，尾部朝 -X）
+func _draw_flame_bolt() -> void:
+	var cols := _resolve_colors()
+	var accent_c: Color = cols["accent"]
+	var core_c: Color = cols["core"]
+	var dark_c: Color = cols["dark"]
+
+	var r := radius
+
+	# 1. 尾部 3 片火舌（多边形，尾端朝向 -X，不超出 -0.95r）
+	# 主中火舌（尖端 -0.95r）
+	var tail_center := PackedVector2Array([
+		Vector2(-r * 0.25, -r * 0.28),
+		Vector2(-r * 0.95, 0.0),
+		Vector2(-r * 0.25, r * 0.28)
+	])
+	BatchDraw.poly(self, tail_center, dark_c)
+
+	# 上火舌（尖端 -0.85r, -0.36r，距心 ≈ 0.923r）
+	var tail_upper := PackedVector2Array([
+		Vector2(-r * 0.15, -r * 0.20),
+		Vector2(-r * 0.85, -r * 0.36),
+		Vector2(-r * 0.40, -r * 0.52)
+	])
+	BatchDraw.poly(self, tail_upper, dark_c)
+
+	# 下火舌（尖端 -0.85r, 0.36r，距心 ≈ 0.923r）
+	var tail_lower := PackedVector2Array([
+		Vector2(-r * 0.15, r * 0.20),
+		Vector2(-r * 0.85, r * 0.36),
+		Vector2(-r * 0.40, r * 0.52)
+	])
+	BatchDraw.poly(self, tail_lower, dark_c)
+
+	# 内层亮火舌（尖端 -0.75r）
+	var tail_inner := PackedVector2Array([
+		Vector2(-r * 0.20, -r * 0.16),
+		Vector2(-r * 0.75, 0.0),
+		Vector2(-r * 0.20, r * 0.16)
+	])
+	BatchDraw.poly(self, tail_inner, accent_c)
+
+	# 2. 主球 0.92r
+	BatchDraw.circle(self, Vector2.ZERO, r * 0.92, accent_c, 3.2)
+	BatchDraw.arc(self, Vector2.ZERO, maxf(r * 0.92 - 0.5, 0.5), 0.0, TAU, dark_c, 1.0)
+
+	# 3. 暖白 core 球 0.42r
+	var warm_white := Color(1.0, 0.96, 0.88)
+	var flame_core := core_c.lerp(warm_white, 0.55)
+	BatchDraw.circle(self, Vector2(r * 0.05, 0.0), r * 0.42, flame_core, 3.2)
+	BatchDraw.circle(self, Vector2(r * 0.10, 0.0), r * 0.20, Color.WHITE, 3.2)
+
+## 虚空/魔弹视觉绘制（内核 0.55r + accent 外环 0.86r + 环上 3 枚菱形碎晶 0.16r）
+func _draw_void_bolt() -> void:
+	var cols := _resolve_colors()
+	var accent_c: Color = cols["accent"]
+	var core_c: Color = cols["core"]
+	var dark_c: Color = cols["dark"]
+
+	var r := radius
+	var void_black := dark_c.darkened(0.75)
+	void_black.a = 1.0
+
+	# 1. 近乎黑色的内核 0.55r
+	BatchDraw.circle(self, Vector2.ZERO, r * 0.55, void_black, 3.2)
+	BatchDraw.arc(self, Vector2.ZERO, maxf(r * 0.55 - 0.5, 0.5), 0.0, TAU, dark_c, 1.0)
+
+	# 2. accent 外环（线宽 0.14r，半径 0.86r）
+	var ring_w := maxf(1.0, r * 0.14)
+	BatchDraw.arc(self, Vector2.ZERO, r * 0.86, 0.0, TAU, accent_c, ring_w)
+
+	# 3. 环上 3 枚小菱形碎晶（距心 0.86r，尺寸 0.16r，沿圆周对称分布）
+	var shard_r := r * 0.86
+	var half_s := r * 0.08  # 半尺寸 0.08r（全尺寸 0.16r）
+	for i in range(3):
+		var ang := float(i) * (TAU / 3.0)
+		var c := Vector2(cos(ang), sin(ang)) * shard_r
+		var u_rad := Vector2(cos(ang), sin(ang))
+		var u_tan := Vector2(-sin(ang), cos(ang))
+		var shard_pts := PackedVector2Array([
+			c + u_rad * half_s,
+			c + u_tan * half_s,
+			c - u_rad * half_s,
+			c - u_tan * half_s
+		])
+		BatchDraw.poly(self, shard_pts, core_c)
+
 func _physics_process(delta: float) -> void:
 	if angular_speed != 0.0:
 		direction = direction.rotated(angular_speed * delta)
-		if sword_style:
+		if _is_directional_style():
 			rotation = direction.angle()
 	if accel != 0.0:
 		speed = maxf(min_speed, speed + accel * delta)

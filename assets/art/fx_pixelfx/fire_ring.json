@@ -1,0 +1,20 @@
+{
+  "id": "fire/fire-ring",
+  "out_name": "fire_ring",
+  "frame_size": [
+    224,
+    128
+  ],
+  "pivot": [
+    112,
+    92
+  ],
+  "anchor": "center",
+  "scale": 0.7,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 28,
+  "palette_key": "fire",
+  "png_bytes": 312887,
+  "vram_kb": 3136
+}

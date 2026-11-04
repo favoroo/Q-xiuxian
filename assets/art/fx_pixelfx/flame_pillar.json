@@ -1,0 +1,20 @@
+{
+  "id": "fire/flame-pillar",
+  "out_name": "flame_pillar",
+  "frame_size": [
+    184,
+    256
+  ],
+  "pivot": [
+    92,
+    232
+  ],
+  "anchor": "bottom",
+  "scale": 0.6,
+  "fps": 20,
+  "loop": false,
+  "frames_count": 30,
+  "palette_key": "fire",
+  "png_bytes": 410651,
+  "vram_kb": 6440
+}

@@ -4,7 +4,7 @@ extends EnemyBase
 ## 关卡 Boss：固定 Boss 回合（第 10/20 波、无尽每 5 波）登场，参考土豆兄弟的大 Boss 与弹幕射击设计。
 ## 特征：
 ##   1. 超厚血条，HUD 底部贴边专设 Boss 血条（boss_hp_changed / boss_defeated 信号驱动，带节流防掉帧）
-##   2. 17 种攻击模式轮换（通用 12 招 + 深层签名 5 招 + 数据驱动 SIGNATURE 八变体）：
+##   2. 20 种攻击模式轮换（通用 12 招 + 深层签名 5 招 + 数据驱动 SIGNATURE 八变体 + 身份新招 3 种）：
 ##      - RING: 双层交错弧线环弹（顺/逆时针交错弧线，二阶段追加直穿环）
 ##      - BURST_FAN: 扇形连射狙击（逐波加速压迫横向走位）
 ##      - SPIRAL: 螺旋风暴弹幕（持续原地旋转喷吐弹幕走廊）
@@ -16,9 +16,14 @@ extends EnemyBase
 ##      - TURRET_SHIFT / HAZARD_FIELD / BLINK_SLASH: 换桩震爆 / 禁区封锁 / 瞬步回斩
 ##      - DIVE / MIRROR_FLANK / SOUL_TIDE / FURNACE_BLAST: 四尊专属签名（龙君/照影/引魂/炉君）
 ##      - SIGNATURE: 八尊深层魔君的数据驱动签名招（EnemyData.BOSS_SIGNATURES）
+##      - LASER_SWEEP / FLAME_CONE / METEOR_STRIKE（2026-11-04 身份新招）: 多束蓄力激光扫掠 /
+##        扇形烈焰吐息留火 / 错时陨火轰炸；三者都把「预警 → 出招 → 余波」拆成三段给反应窗
 ##   3. 分波次递进 + 半血二阶段狂暴：
 ##      - 第 10 波火焰Boss：初战常态 5 招，半血狂暴解锁天火与螺旋
 ##      - 第 20 波极煞魔尊：全套高压招式、紫焰魔弹、四螺旋风暴与多子母弹
+##   4. 攻击身份表（2026-11-04）：弹体形态/主色/预警样式/起手特效收敛在 BossAttackProfile，
+##      19 尊 Boss 的 (形态, 主色, 预警) 三元组两两不重复，本文件只读表不再按 boss_id 写颜色。
+
 ## 数值由 WaveSpawner 按 GameBalance 公式注入。
 
 enum Pattern {
@@ -39,6 +44,9 @@ enum Pattern {
 	SOUL_TIDE,    ## 魂潮收网（引魂使专属：以玩家为圆心的包围弹环向内收拢）
 	FURNACE_BLAST,## 炉压崩天（焚天炉君专属：站桩蓄力 → 大圆炉爆 + 三环弹幕）
 	SIGNATURE,    ## 深层魔君签名招（按 boss_id 从 EnemyData.BOSS_SIGNATURES 取 kind 派发）
+	LASER_SWEEP,  ## 玄光贯日（2026-11-04）：多束蓄力激光扇形瞄准 → 出束扫掠，站桩惩罚窗口
+	FLAME_CONE,   ## 烈焰吐息（2026-11-04）：扇形预警跟随瞄准 → 持续灼烧 → 地面留火池
+	METEOR_STRIKE,## 陨火天降（2026-11-04）：多颗陨石错时坠落，落点圈 == 爆炸判定
 }
 
 @export var boss_id: String = ""
@@ -53,6 +61,33 @@ var _phase2: bool = false
 var _tint: Color = Color.WHITE    ## 常态染色（二阶段转红/紫，演出后回染）
 var _purple_bolts: bool = false        ## 幽紫魔弹口径：仅旧最终Boss与九幽心魔尊使用
 var _fx_color: Color = Color(1.0, 0.45, 0.3)  ## 本尊主题特效色（取 EnemyVisualConfig.col_accent，弹幕/冲击环/预警圈同源）
+
+# ---------------- 攻击身份（2026-11-04 弹幕身份化） ----------------
+## 弹体形态 / 主色 / 预警样式 / 起手-命中特效 id 全在 BossAttackProfile，本文件只读。
+## 未登记的新 Boss 退 FALLBACK（ORB/FILL/无序列帧），视觉退化但行为不崩。
+var _profile: Dictionary = BossAttackProfile.FALLBACK
+
+# 玄光贯日状态机（多束蓄力激光）：光束实体（BossBeam）自带充能/出束/淡出计时，
+# 本体只守互斥锁与站桩姿态 —— 别在这里再写一套计时，否则两边漂移会漏锁。
+var _laser_pending: bool = false
+var _laser_timer: float = 0.0
+var _laser_total: float = 0.0          ## 本次激光总时长（充能+出束+淡出），只用于读招姿态进度
+var _laser_fired: bool = false         ## 出束音效只发一次（三束同一帧进 FIRE，不能各响一遍）
+var _laser_beams: Array[BossBeam] = []
+
+# 烈焰吐息状态机：前摇期瞄准跟随 → 出火瞬间锁向 → 持续灼烧 → 收势留火
+var _flame_pending: bool = false
+var _flame_timer: float = 0.0          ## 剩余总时长（前摇 + 出火）
+var _flame_windup_total: float = 0.0
+var _flame_windup_left: float = 0.0    ## 前摇剩余（归零当帧锁向并起火）
+var _flame_breath_left: float = 0.0    ## 出火剩余（>0 才结算伤害）
+var _flame_tick: float = 0.0
+var _flame_dir: float = 0.0            ## 出火锁定的世界角度（rad）
+var _flame_cone: ConeTelegraph = null
+var _flame_fx: AnimatedSprite2D = null   ## 吐息火柱序列帧（loop 型，收势必须 stop 回池）
+
+# 陨火天降状态机：每颗独立错时落地，落点阴影半径 == 爆炸判定（SkyMeteor 只画不判）
+var _active_meteors: Array[Dictionary] = []
 
 # 血条信号节流
 var _hp_emit_acc: float = 0.0
@@ -92,12 +127,19 @@ func _sync_cast_pose() -> void:
 		pose = clampf(1.0 - _mirror_timer / maxf(_mirror_windup_total, 0.001), 0.0, 1.0)
 	elif _soul_pending:
 		pose = clampf(1.0 - _soul_timer / maxf(_soul_windup_total, 0.001), 0.0, 1.0)
+	elif _laser_pending:
+		# 激光：充能与出束共用一个读数（出束阶段法轮仍保持收束指向态）
+		pose = clampf(1.0 - _laser_timer / maxf(_laser_total, 0.001), 0.0, 1.0)
+	elif _flame_pending:
+		# 吐息：前摇+出火全程给进度，出火归零瞬间由 recoil 收势
+		pose = clampf(1.0 - _flame_timer / maxf(_flame_windup_total + GameBalance.BOSS_FLAME_BREATH, 0.001), 0.0, 1.0)
 	elif _charge_windup > 0.0:
 		pose = clampf(1.0 - _charge_windup / maxf(GameBalance.BOSS_CHARGE_WINDUP, 0.001), 0.0, 1.0)
 	elif _spiral_active:
 		pose = 0.5   # 引导喷吐：恒定收束指向态
-	elif _fan_waves_left > 0 or _sky_fire_strikes_left > 0 or _hazard_fields_left > 0:
-		pose = 0.35  # 连射/天火/禁区后台推进：轻收束读数
+	elif _fan_waves_left > 0 or _sky_fire_strikes_left > 0 or _hazard_fields_left > 0 \
+			or not _active_meteors.is_empty():
+		pose = 0.35  # 连射/天火/禁区/陨火后台推进：轻收束读数
 	procedural_view.special_state = pose
 	var casting := pose > 0.001
 	if _pose_casting and not casting:
@@ -248,6 +290,13 @@ func _ready() -> void:
 	if procedural_view != null and procedural_view.config != null:
 		_fx_color = procedural_view.config.col_accent
 		_fx_color.a = 1.0
+	# 攻击身份表（2026-11-04）：主色以表为准（程序化外观色只是兜底），
+	# 同一尊 Boss 的弹体/预警/冲击环由此锁死成一套色，不再出现「绿 Boss 打紫弹」。
+	_profile = BossAttackProfile.for_boss(boss_id, final_boss)
+	var prof_accent: Color = _profile.get("accent", Color(0, 0, 0, 0))
+	if prof_accent.a > 0.0:
+		_fx_color = prof_accent
+		_fx_color.a = 1.0
 	# 登场即上屏：HUD 血条由此信号点亮
 	GameManager.boss_hp_changed.emit(current_hp, max_hp, boss_title)
 	# Boss 战 BGM 压闷制造紧张感（伏诛/转阶段由 _die 与 play_bgm_key 负责解除）
@@ -373,7 +422,8 @@ func _apply_boss_visuals() -> void:
 func _setup_patterns() -> void:
 	if boss_id == "":
 		if final_boss:
-			# 第 20 波魔尊：全招式全面施展
+			# 第 20 波魔尊：全招式全面施展（2026-11-04 补「魔光贯日」，
+			# 破境波给一招只有长线走廊能读的新威胁）
 			_patterns = [
 				Pattern.RING,
 				Pattern.BURST_FAN,
@@ -382,6 +432,7 @@ func _setup_patterns() -> void:
 				Pattern.SPIRAL,
 				Pattern.SPLIT_BOMB,
 				Pattern.SLAM,
+				Pattern.LASER_SWEEP,
 				Pattern.SUMMON,
 			]
 		elif _phase2:
@@ -409,19 +460,22 @@ func _setup_patterns() -> void:
 	match boss_id:
 		"chiyan":
 			if _phase2:
-				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.SKY_FIRE, Pattern.CHARGE, Pattern.SPIRAL, Pattern.SLAM, Pattern.SUMMON]
+				# 半血起开「陨火天降」：火 Boss 的狂暴标志之一，和 SKY_FIRE 的天火区分开
+				# （天火是脚下圈、陨火是错时落石 + 地面余火，走位读法不同）
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.SKY_FIRE, Pattern.FLAME_CONE, Pattern.CHARGE, Pattern.SPIRAL, Pattern.METEOR_STRIKE, Pattern.SLAM, Pattern.SUMMON]
 			else:
-				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.CHARGE, Pattern.SLAM, Pattern.SUMMON]
+				_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.FLAME_CONE, Pattern.CHARGE, Pattern.SLAM, Pattern.SUMMON]
 		"xiuluo":
 			if _phase2:
 				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SLAM, Pattern.BLINK_SLASH, Pattern.CHAIN_CHARGE, Pattern.RING, Pattern.SLAM]
 			else:
 				_patterns = [Pattern.CHAIN_CHARGE, Pattern.SLAM, Pattern.CHARGE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.SLAM]
 		"qianji":
+			# 玄天千机尊：阵眼炮台，激光是它的本职（站桩换高伤走廊，与「完全不动」的设定同源）
 			if _phase2:
-				_patterns = [Pattern.SPIRAL, Pattern.SPLIT_BOMB, Pattern.SKY_FIRE, Pattern.TURRET_SHIFT, Pattern.RING, Pattern.SPIRAL, Pattern.SPLIT_BOMB]
+				_patterns = [Pattern.SPIRAL, Pattern.SPLIT_BOMB, Pattern.SKY_FIRE, Pattern.LASER_SWEEP, Pattern.TURRET_SHIFT, Pattern.RING, Pattern.SPIRAL, Pattern.LASER_SWEEP]
 			else:
-				_patterns = [Pattern.SPIRAL, Pattern.RING, Pattern.SPLIT_BOMB, Pattern.TURRET_SHIFT, Pattern.BURST_FAN, Pattern.RING]
+				_patterns = [Pattern.LASER_SWEEP, Pattern.SPIRAL, Pattern.RING, Pattern.SPLIT_BOMB, Pattern.TURRET_SHIFT, Pattern.BURST_FAN]
 		"wangu":
 			if _phase2:
 				_patterns = [Pattern.HAZARD_FIELD, Pattern.SUMMON, Pattern.SKY_FIRE, Pattern.SPLIT_BOMB, Pattern.HAZARD_FIELD, Pattern.SPIRAL]
@@ -452,16 +506,18 @@ func _setup_patterns() -> void:
 				_patterns = [Pattern.SOUL_TIDE, Pattern.SUMMON, Pattern.RING, Pattern.SOUL_TIDE, Pattern.SPIRAL]
 		"luding":
 			# 焚天炉君（丹炉，W55 过渡档）：签名炉压崩天 —— 站桩蓄力大圆炉爆，慢速重甲攻城锤
+			# 2026-11-04 加吐息：炉口喷火是丹炉的本职动作，近身惩罚（远距离靠炉爆）
 			if _phase2:
-				_patterns = [Pattern.FURNACE_BLAST, Pattern.SLAM, Pattern.SPIRAL, Pattern.RING, Pattern.FURNACE_BLAST, Pattern.SPLIT_BOMB]
+				_patterns = [Pattern.FURNACE_BLAST, Pattern.FLAME_CONE, Pattern.SLAM, Pattern.SPIRAL, Pattern.RING, Pattern.FURNACE_BLAST, Pattern.SPLIT_BOMB, Pattern.FLAME_CONE]
 			else:
-				_patterns = [Pattern.FURNACE_BLAST, Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN, Pattern.FURNACE_BLAST]
+				_patterns = [Pattern.FURNACE_BLAST, Pattern.FLAME_CONE, Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN, Pattern.FURNACE_BLAST]
 		"canglong":
 			# 太苍龙君（飞龙）：盘旋拉升 → 全场俯冲是签名招；龙息螺旋 + 落鳞天火惩罚站桩
+			# 2026-11-04 加扇形龙息：正对龙首的短距火锥，与俯冲的「贯穿长线」互补
 			if _phase2:
-				_patterns = [Pattern.DIVE, Pattern.SPIRAL, Pattern.SKY_FIRE, Pattern.DIVE, Pattern.BURST_FAN, Pattern.SPIRAL]
+				_patterns = [Pattern.DIVE, Pattern.FLAME_CONE, Pattern.SPIRAL, Pattern.SKY_FIRE, Pattern.DIVE, Pattern.BURST_FAN, Pattern.FLAME_CONE, Pattern.SPIRAL]
 			else:
-				_patterns = [Pattern.DIVE, Pattern.SPIRAL, Pattern.SKY_FIRE, Pattern.RING, Pattern.DIVE]
+				_patterns = [Pattern.DIVE, Pattern.FLAME_CONE, Pattern.SPIRAL, Pattern.SKY_FIRE, Pattern.RING, Pattern.DIVE]
 		"jianzhong":
 			# 葬剑仙（剑冢）：万剑归宗（SIGNATURE）+ 御剑瞬斩，换桩留剑阵
 			if _phase2:
@@ -470,10 +526,11 @@ func _setup_patterns() -> void:
 				_patterns = [Pattern.SIGNATURE, Pattern.BLINK_SLASH, Pattern.BURST_FAN, Pattern.TURRET_SHIFT, Pattern.RING]
 		"leijie":
 			# 雷劫神君（雷劫）：连环天劫（SIGNATURE）+ 落雷轰炸，雷光折返冲阵穿插
+			# 2026-11-04 加雷光贯日：雷劫不以「天火陨石」立身份，它的长线惩罚是雷柱激光
 			if _phase2:
-				_patterns = [Pattern.SIGNATURE, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.SLAM, Pattern.RING]
+				_patterns = [Pattern.SIGNATURE, Pattern.LASER_SWEEP, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.LASER_SWEEP, Pattern.SLAM, Pattern.RING]
 			else:
-				_patterns = [Pattern.SIGNATURE, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.RING, Pattern.BURST_FAN]
+				_patterns = [Pattern.SIGNATURE, Pattern.LASER_SWEEP, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.RING, Pattern.BURST_FAN]
 		"kunwang":
 			# 覆海鲲王（深海巨兽）：冥海潮汐（SIGNATURE）+ 冥水领域封锁 + 潮汐震地
 			if _phase2:
@@ -488,8 +545,9 @@ func _setup_patterns() -> void:
 				_patterns = [Pattern.SIGNATURE, Pattern.SUMMON, Pattern.BURST_FAN, Pattern.TURRET_SHIFT, Pattern.SLAM]
 		"fenghuang":
 			# 离火凤皇（火凤）：离火涅槃（SIGNATURE）+ 天火陨落；狂暴瞬间涅槃全屏火环
+			# 2026-11-04 狂暴起开陨火：凤凰的「天降火陨」比天火圈更贴身份，也把 P2 的走位压力顶上去
 			if _phase2:
-				_patterns = [Pattern.SIGNATURE, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.SPLIT_BOMB, Pattern.RING]
+				_patterns = [Pattern.SIGNATURE, Pattern.METEOR_STRIKE, Pattern.SKY_FIRE, Pattern.CHAIN_CHARGE, Pattern.SPIRAL, Pattern.SPLIT_BOMB, Pattern.METEOR_STRIKE, Pattern.RING]
 			else:
 				_patterns = [Pattern.SIGNATURE, Pattern.SKY_FIRE, Pattern.CHARGE, Pattern.SPLIT_BOMB, Pattern.BURST_FAN]
 		"tianmo":
@@ -500,15 +558,17 @@ func _setup_patterns() -> void:
 				_patterns = [Pattern.SIGNATURE, Pattern.BLINK_SLASH, Pattern.HAZARD_FIELD, Pattern.SPIRAL, Pattern.CHARGE]
 		"hundun":
 			# 元初兽（混沌）：混沌星散（SIGNATURE）+ 出招表每次重组，永远是下一招未知
+			# 2026-11-04 加陨火：混沌的「天外坠星」是该隐一切招式的具象化
 			_patterns = [Pattern.RING, Pattern.BURST_FAN, Pattern.SPIRAL, Pattern.SPLIT_BOMB,
-				Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.SLAM, Pattern.SUMMON,
+				Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.METEOR_STRIKE, Pattern.SLAM, Pattern.SUMMON,
 				Pattern.CHAIN_CHARGE, Pattern.TURRET_SHIFT, Pattern.HAZARD_FIELD, Pattern.BLINK_SLASH,
 				Pattern.SIGNATURE]
 			_shuffle_patterns()
 		"wanjie":
 			# 道劫化身（天劫压轴）：万劫加身（SIGNATURE）+ 十二招高压轮换
+			# 2026-11-04 P2 加劫光贯日：道劫的「劫光」是三束扫掠激光，压轴档的专属压迫
 			if _phase2:
-				_patterns = [Pattern.SIGNATURE, Pattern.RING, Pattern.BURST_FAN, Pattern.SPIRAL, Pattern.SPLIT_BOMB,
+				_patterns = [Pattern.SIGNATURE, Pattern.LASER_SWEEP, Pattern.RING, Pattern.BURST_FAN, Pattern.SPIRAL, Pattern.SPLIT_BOMB,
 					Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.SLAM, Pattern.SUMMON,
 					Pattern.CHAIN_CHARGE, Pattern.TURRET_SHIFT, Pattern.HAZARD_FIELD, Pattern.BLINK_SLASH]
 			else:
@@ -544,6 +604,13 @@ func _process(delta: float) -> void:
 	var player = GameManager.player
 	if player == null:
 		return
+
+	# 0a. 已承诺的落点先结算（2026-11-04 前置）：天火/禁区/陨火/连射一旦亮出预警圈，
+	# 就算 Boss 这期间进了互斥锁（震地/激光/吐息/瞬移前摇）也必须照原计时落地 ——
+	# 旧版这几个 tick 排在互斥锁 return 之后，一进锁预警圈就「定住」，玩家读的是假倒计时。
+	_tick_sky_fires(delta, player)
+	_tick_hazard_fields(delta, player)
+	_tick_meteors(delta, player)
 
 	# 0. 瞬移前摇：落点符环填满才换位（推进在 EnemyBase._tick_blink_windup）。
 	# 这里只冻结出招循环与后台招式，避免前摇期又插一发别的招。
@@ -594,6 +661,29 @@ func _process(delta: float) -> void:
 			_resolve_furnace(player)
 		return
 
+	# 1c. 玄光贯日：充能 + 出束全程站桩（光束实体自带计时，这里只守互斥锁；
+	# 出束阶段允许玩家绕背，Boss 不追人 —— 这就是这招的公平线：站桩换高伤走廊）
+	if _laser_pending:
+		_laser_timer -= delta
+		# 出束瞬间一声；三束同一帧进 FIRE，只发一次（音量 0.7，别盖过 Boss 本体音）
+		if not _laser_fired and _laser_timer <= GameBalance.BOSS_LASER_FIRE + GameBalance.BOSS_LASER_FADE:
+			_laser_fired = true
+			# 敌族音族（WeaponAudioCheck 禁 Boss 借玩家武器音：玩家要靠音色分「谁在出手」）
+			AudioManager.play_sfx("enemy_slam", 0.55, 1.35)
+		_pp_target_vel = Vector2.ZERO
+		velocity = Vector2.ZERO
+		if _laser_timer <= 0.0:
+			_laser_pending = false
+			_laser_beams.clear()
+		return
+
+	# 1d. 烈焰吐息：前摇期缓慢跟随瞄准（锁定在出火当帧），出火期站桩扫尾
+	if _flame_pending:
+		_tick_flame_cone(delta, player)
+		_pp_target_vel = Vector2.ZERO
+		velocity = Vector2.ZERO
+		return
+
 	# 2. 破阵冲锋锁定段：预警或冲刺中不插新技能
 	if _charge_windup > 0.0 or _charge_active > 0.0 or _charge_brake > 0.0:
 		# 飞龙俯冲实冲段：沿路径两侧洒鳞弹（判定随机不涉及，固定夹角；轨迹读数与位移同源）
@@ -610,8 +700,7 @@ func _process(delta: float) -> void:
 					bolt.speed = 190.0 * bolt_speed_mult
 					bolt.damage = dmg
 					bolt.scale_factor = 1.15
-					bolt.purple_style = _purple_bolts
-					bolt.tint_color = _fx_color
+					_style_bolt(bolt)
 					bolt.activate()
 				AudioManager.play_sfx("enemy_bolt", 0.35, 1.2)
 		return
@@ -621,16 +710,16 @@ func _process(delta: float) -> void:
 		_tick_spiral(delta)
 		return
 
-	# 4. 后台招式推进（扇形连射、天火定点与禁区封锁）
+	# 4. 后台连射推进（扇形波次仍在「不被互斥锁占用」的帧推进；
+	# 天火/禁区/陨火的计时已前置到 0a 段，不再受互斥锁影响）
 	_tick_burst_fan(delta, player)
-	_tick_sky_fires(delta, player)
-	_tick_hazard_fields(delta, player)
 
 	# 5. 主技能循环定时器
 	_attack_timer -= delta
 	if _attack_timer <= 0.0:
 		var mult := GameBalance.BOSS_PHASE2_INTERVAL_MULT if _phase2 else 1.0
-		_attack_timer = attack_interval * mult
+		# 低于下限就按最小值重排：深层 cd 倍率 0.5 会把单招时长 1~1.3s 的弹幕压成连播
+		_attack_timer = maxf(attack_interval * mult, GameBalance.BOSS_MIN_ATTACK_INTERVAL)
 		_cast_next(player)
 
 ## Boss 选招权重（AI 行为，不改伤害）：远距离偏突进/远程，贴脸偏震地/环弹；上一招降权防连发；
@@ -648,13 +737,17 @@ const PICK_STALENESS_CAP := 4.0     ## 陈旧度增益上限（1+4.0=5.0 倍）
 const PICK_MOBILITY_HINT_MULT := 3.0 ## 超提示线后机动招额外倍率
 const PICK_FAR_RANGE := 320.0
 const PICK_NEAR_RANGE := 140.0
-const PICK_FAR_PATTERNS := [Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.BLINK_SLASH, Pattern.DIVE, Pattern.MIRROR_FLANK, Pattern.SOUL_TIDE]
-const PICK_NEAR_PATTERNS := [Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN]
+const PICK_FAR_PATTERNS := [Pattern.CHARGE, Pattern.SKY_FIRE, Pattern.BURST_FAN, Pattern.CHAIN_CHARGE, Pattern.BLINK_SLASH, Pattern.DIVE, Pattern.MIRROR_FLANK, Pattern.SOUL_TIDE, Pattern.LASER_SWEEP, Pattern.METEOR_STRIKE]
+const PICK_NEAR_PATTERNS := [Pattern.SLAM, Pattern.RING, Pattern.BURST_FAN, Pattern.FLAME_CONE]
 ## 全距离中性招：以玩家为锚 / 自身位移后再打，贴脸时不该按「远距离错位」降权。
 ## 天火落点跟着玩家、俯冲先拉升换位、镜影/魂潮以玩家为圆心 —— 这些招与 Boss 站位无关。
-const PICK_NEAR_NEUTRAL := [Pattern.BURST_FAN, Pattern.BLINK_SLASH, Pattern.MIRROR_FLANK, Pattern.SOUL_TIDE, Pattern.SKY_FIRE, Pattern.DIVE]
-## 签名招身份底权：独立于距离偏好，保证每尊魔君的招牌动作稳定出场（不再被通用扇射/环弹挤掉）。
+## 激光/陨火/吐息同理：激光是长走廊（远贴都能打）、陨火追落点、吐息锁定方向后原地扫。
+const PICK_NEAR_NEUTRAL := [Pattern.BURST_FAN, Pattern.BLINK_SLASH, Pattern.MIRROR_FLANK, Pattern.SOUL_TIDE, Pattern.SKY_FIRE, Pattern.DIVE, Pattern.LASER_SWEEP, Pattern.FLAME_CONE, Pattern.METEOR_STRIKE]
+## 身份招底权：独立于距离偏好，保证每尊魔君的招牌动作稳定出场（不再被通用扇射/环弹挤掉）。
 ## 2.2 与远距离偏好同档，但不受贴脸降权；陈旧度/防连发仍在其上叠乘。
+## 注意：2026-11-04 的激光/吐息/陨火**不**进这张表 —— 它们靠 FAR/NEAR/NEUTRAL 正常轮换，
+## 进了这张表就会拿 2.2 底权，把同表 1.0 的通用招压成背景（首尊 Boss 半屏都在吐息）。
+## 身份感由外观（BossAttackProfile）+ 出招表占位来立，不靠权重霸权。
 const PICK_SIGNATURE_BASE := 2.2
 const PICK_SIGNATURE_PATTERNS := [Pattern.MIRROR_FLANK, Pattern.SOUL_TIDE, Pattern.FURNACE_BLAST, Pattern.DIVE, Pattern.SIGNATURE]
 ## 机动招（位移类）：决策超时保底的候选集，按优先级取第一个在轮换表里的
@@ -745,6 +838,12 @@ func _cast_next(player: Node2D) -> void:
 			_cast_soul_tide(player)
 		Pattern.FURNACE_BLAST:
 			_cast_furnace_blast(player)
+		Pattern.LASER_SWEEP:
+			_cast_laser_sweep(player)
+		Pattern.FLAME_CONE:
+			_cast_flame_cone(player)
+		Pattern.METEOR_STRIKE:
+			_cast_meteor_strike(player)
 		Pattern.SIGNATURE:
 			_cast_signature(player)
 
@@ -761,8 +860,9 @@ func _shuffle_patterns() -> void:
 func _cast_ring() -> void:
 	play_squash(Vector2(1.25, 0.78), 0.5)
 	_pose_burst()  # 瞬发爆发读数（渲染器后坐一态）
+	# 起手亮色就是环弹预警：时长与 BOSS_RING_WINDUP 同源（要后撤多远才能站进缝隙，见 BalanceWave）
 	var tw := create_tween()
-	tw.tween_property(anim_sprite, "modulate", _fx_color.lightened(0.35), 0.35)
+	tw.tween_property(anim_sprite, "modulate", _fx_color.lightened(0.35), GameBalance.BOSS_RING_WINDUP)
 	tw.tween_callback(func(): _fire_ring_layer(1))
 	tw.tween_interval(GameBalance.BOSS_RING_LAYER_DELAY)
 	tw.tween_callback(func(): _fire_ring_layer(2))
@@ -800,8 +900,7 @@ func _fire_ring_layer(layer: int) -> void:
 		bolt.damage = dmg
 		bolt.scale_factor = GameBalance.BOSS_BOLT_SCALE
 		bolt.angular_speed = ang_spd
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.65)
 	GameManager.add_trauma(0.12)
@@ -810,8 +909,12 @@ func _fire_ring_layer(layer: int) -> void:
 
 func _cast_burst_fan(player: Node2D) -> void:
 	_fan_waves_left = GameBalance.BOSS_FAN_WAVES_P2 if _phase2 else GameBalance.BOSS_FAN_WAVES
-	_fan_wave_timer = 0.0
+	# 首波不再当帧出膛：给 BOSS_FAN_WINDUP 的亮色起手，玩家先开始横移再吃扇面（旧版零预警）
+	_fan_wave_timer = GameBalance.BOSS_FAN_WINDUP
 	play_squash(Vector2(1.2, 0.82), 0.3)
+	var tw := create_tween()
+	tw.tween_property(anim_sprite, "modulate", _fx_color.lightened(0.25), GameBalance.BOSS_FAN_WINDUP)
+	tw.tween_property(anim_sprite, "modulate", _tint, 0.2)
 
 func _tick_burst_fan(delta: float, player: Node2D) -> void:
 	if _fan_waves_left <= 0:
@@ -826,7 +929,7 @@ func _tick_burst_fan(delta: float, player: Node2D) -> void:
 		var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
 		var count := GameBalance.BOSS_FAN_COUNT
 		var spread := GameBalance.BOSS_FAN_SPREAD
-		var spd := (GameBalance.BOSS_FAN_BASE_SPEED + float(wave_idx - 1) * 45.0) * bolt_speed_mult
+		var spd := (GameBalance.BOSS_FAN_BASE_SPEED + float(wave_idx - 1) * GameBalance.BOSS_FAN_SPEED_STEP) * bolt_speed_mult
 		var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_FAN_DMG_MULT)
 		for i in range(count):
 			var ang_offset := (float(i) - float(count - 1) * 0.5) * spread
@@ -836,8 +939,7 @@ func _tick_burst_fan(delta: float, player: Node2D) -> void:
 			bolt.speed = spd
 			bolt.damage = dmg
 			bolt.scale_factor = 1.3
-			bolt.purple_style = _purple_bolts
-			bolt.tint_color = _fx_color
+			_style_bolt(bolt)
 			bolt.activate()
 		AudioManager.play_sfx("enemy_bolt", 0.6, 1.0 + float(wave_idx) * 0.08)
 
@@ -846,7 +948,8 @@ func _tick_burst_fan(delta: float, player: Node2D) -> void:
 func _cast_spiral() -> void:
 	_spiral_active = true
 	_spiral_timer = GameBalance.BOSS_SPIRAL_DURATION
-	_spiral_step_timer = 0.0
+	# 首喷延迟：旧版当帧就出第一发，贴脸时没有反应窗；亮色起手与 BOSS_SPIRAL_WINDUP 同源
+	_spiral_step_timer = GameBalance.BOSS_SPIRAL_WINDUP
 	_spiral_angle = 0.0
 	play_squash(Vector2(0.85, 1.25), 0.4)
 	var tw := create_tween()
@@ -874,8 +977,7 @@ func _tick_spiral(delta: float) -> void:
 			bolt.angular_speed = GameBalance.BOSS_SPIRAL_ANGULAR
 			bolt.damage = dmg
 			bolt.scale_factor = 1.2
-			bolt.purple_style = _purple_bolts
-			bolt.tint_color = _fx_color
+			_style_bolt(bolt)
 			bolt.activate()
 		AudioManager.play_sfx("enemy_bolt", 0.45)
 	if _spiral_timer <= 0.0:
@@ -905,8 +1007,7 @@ func _cast_split_bomb(player: Node2D) -> void:
 		bolt.split_speed = GameBalance.BOSS_SPLIT_BOMB_CHILD_SPEED * bolt_speed_mult
 		bolt.split_scale = GameBalance.BOSS_SPLIT_BOMB_CHILD_SCALE
 		bolt.split_damage = maxf(1.0, contact_damage * GameBalance.BOSS_SPLIT_CHILD_DMG_MULT)
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 	# 齐射瞬间给一圈主题色冲击环：读出「这一波要散成子母弹」，与分裂时子弹出膛呼应
 	JuiceEffect.spawn_shockwave(get_parent(), global_position, 44.0, _fx_color, 0.24)
@@ -952,8 +1053,7 @@ func _start_charge(dir: Vector2) -> void:
 				bolt.direction = Vector2.from_angle(base_ang + side * PI * 0.5 + side * float(i) * 0.22)
 				bolt.damage = dmg
 				bolt.scale_factor = 1.2
-				bolt.purple_style = _purple_bolts
-				bolt.tint_color = _fx_color
+				_style_bolt(bolt)
 				bolt.activate()
 	AudioManager.play_sfx("enemy_slam", 0.85)
 	GameManager.add_trauma(0.12)
@@ -986,6 +1086,11 @@ func _settle_charge_recovery() -> void:
 		charge_whiff_stagger = 0.25
 	if _chain_charges_left <= 0:
 		collision_mask |= 2  # 冲锋全程结束才恢复对玩家的物理碰撞（连环冲段间保持穿透）
+
+## 冲锋/俯冲预警胶囊线取本尊主题色：旧版 19 尊 Boss 拉的都是同一条橙线，
+## 现在线与本体弹幕/预警圈同色，玩家余光就能认「是谁在冲我」。
+func _update_charge_warning(player: Node2D) -> void:
+	EnemyAiCharge.update_charge_warning(self, player, _fx_color)
 
 ## 罡风定身打断俯冲前摇：super 只清预警线，这里补回冲锋口径与 _dive_pending，
 ## 否则下一次普通冲锋会被 _start_charge 当成俯冲（7.2 倍速 + 路径洒鳞）。
@@ -1061,7 +1166,7 @@ func _tick_sky_fires(delta: float, player: Node2D) -> void:
 			var strike_pos: Vector2 = player.global_position + lead
 			var tg := AoeTelegraph.new()
 			tg.radius = GameBalance.BOSS_SKY_FIRE_RADIUS
-			tg.color = _fx_color
+			_style_telegraph(tg)
 			tg.progress = 0.0
 			get_parent().add_child(tg)
 			tg.global_position = strike_pos
@@ -1111,7 +1216,7 @@ func _cast_slam() -> void:
 		_slam_ring = AoeTelegraph.new()
 		_slam_ring.radius = GameBalance.BOSS_SLAM_RADIUS
 		add_child(_slam_ring)
-	_slam_ring.color = _fx_color
+	_style_telegraph(_slam_ring)
 	_slam_ring.progress = 0.0
 	_slam_ring.visible = true
 	AudioManager.play_sfx("enemy_fuse", 0.7)
@@ -1184,8 +1289,7 @@ func _fire_mini_ring_at(at: Vector2, count: int, spd: float, scl: float) -> void
 		bolt.speed = spd * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.scale_factor = scl
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 
 func _fire_cover_spread(player: Node2D) -> void:
@@ -1200,8 +1304,7 @@ func _fire_cover_spread(player: Node2D) -> void:
 		bolt.speed = 260.0 * bolt_speed_mult
 		bolt.damage = dmg
 		bolt.scale_factor = 1.2
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 
 # ---------------- 招式 11：连环禁区封锁 ----------------
@@ -1239,7 +1342,7 @@ func _tick_hazard_fields(delta: float, player: Node2D) -> void:
 
 			var tg := AoeTelegraph.new()
 			tg.radius = GameBalance.BOSS_HAZARD_FIELD_RADIUS
-			tg.color = _fx_color
+			_style_telegraph(tg)
 			tg.progress = 0.0
 			get_parent().add_child(tg)
 			tg.global_position = target_pos
@@ -1299,7 +1402,7 @@ func _cast_blink_slash(player: Node2D, windup: float = -1.0) -> void:
 	target_pos = target_pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
 
 	# 起手：落点锁定 + 符环；扇形挪到落地回调里出，玩家先看见「要落到这」再看见「从这打来」。
-	# 无相三连传入更短的前摇，保持连击密度；单发瞬步用 0.40s 给足反应窗。
+	# 无相三连传入更短的前摇，保持连击密度；单发瞬步用 0.62s 给足反应窗。
 	var w: float = windup if windup > 0.0 else GameBalance.BOSS_BLINK_SLASH_WINDUP
 	_blink_kind = BLINK_KIND_BOSS
 	_blink_on_arrive = func():
@@ -1307,7 +1410,8 @@ func _cast_blink_slash(player: Node2D, windup: float = -1.0) -> void:
 		_pose_burst()
 	_begin_blink_telegraph(target_pos, w, _fx_color, BlinkRift.RADIUS_BOSS)
 
-## 瞬步落地后的扇形回斩：从新位置朝玩家方向扇开。伤害/弹数口径与旧版完全一致。
+## 瞬步落地后的扇形回斩：从新位置朝玩家方向扇开。弹数取偶数（瞄准线落在两发中间），
+## 玩家沿「远离落点」方向直退时天然处在缝里；伤害口径不变。
 func _fire_blink_slash_fan(player: Node2D) -> void:
 	if dying or get_parent() == null or player == null or not is_instance_valid(player):
 		return
@@ -1326,8 +1430,7 @@ func _fire_blink_slash_fan(player: Node2D) -> void:
 		bolt.damage = dmg
 		bolt.scale_factor = 1.25
 		bolt.sword_style = true
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.7, 1.1)
 
@@ -1436,7 +1539,7 @@ func _cast_mirror_flank(player: Node2D) -> void:
 		_mirror_telegraph = AoeTelegraph.new()
 		_mirror_telegraph.radius = 72.0
 		get_parent().add_child(_mirror_telegraph)
-	_mirror_telegraph.color = _fx_color
+	_style_telegraph(_mirror_telegraph)
 	_mirror_telegraph.global_position = phantom
 	_mirror_telegraph.progress = 0.0
 	_mirror_telegraph.visible = true
@@ -1484,7 +1587,7 @@ func _cast_soul_tide(player: Node2D) -> void:
 		_soul_telegraph = AoeTelegraph.new()
 		_soul_telegraph.radius = 80.0
 		get_parent().add_child(_soul_telegraph)
-	_soul_telegraph.color = _fx_color
+	_style_telegraph(_soul_telegraph)
 	_soul_telegraph.global_position = _soul_center
 	_soul_telegraph.progress = 0.0
 	_soul_telegraph.visible = true
@@ -1529,7 +1632,7 @@ func _cast_furnace_blast(player: Node2D) -> void:
 		_furnace_ring = AoeTelegraph.new()
 		_furnace_ring.radius = GameBalance.BOSS_FURNACE_RADIUS
 		add_child(_furnace_ring)
-	_furnace_ring.color = _fx_color
+	_style_telegraph(_furnace_ring)
 	_furnace_ring.progress = 0.0
 	_furnace_ring.visible = true
 	AudioManager.play_sfx("enemy_fuse", 0.9, 0.7)
@@ -1572,12 +1675,291 @@ func _fire_furnace_ring(spd: float, dmg: float, layer: int) -> void:
 		bolt.speed = spd
 		bolt.damage = dmg
 		bolt.scale_factor = 1.25
-		bolt.purple_style = _purple_bolts
-		bolt.tint_color = _fx_color
+		_style_bolt(bolt)
 		bolt.activate()
 	AudioManager.play_sfx("enemy_bolt", 0.55)
 
-# ---------------- 招式 17：深层魔君签名招（数据驱动） ----------------
+# ---------------- 招式 17：玄光贯日（多束蓄力激光 / 2026-11-04） ----------------
+
+## 充能 → 出束走高伤走廊 → 淡出，Boss 全程站桩（互斥锁在 _process 的 1c 段）。
+## 公平线：充能 0.95s 里走廊是「细描边」不是实伤，玩家要么绕背、要么把这段当输出窗口。
+## P2 起三束 + 交替扫掠：走廊本身在交叉，逼玩家提前往扫掠反方向跑，而不是站着数弹。
+func _cast_laser_sweep(player: Node2D) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+		return
+	var count: int = GameBalance.BOSS_LASER_BEAMS_P2 if (_phase2 or final_boss) else GameBalance.BOSS_LASER_BEAMS
+	var sweep: float = GameBalance.BOSS_LASER_SWEEP_ANG if (_phase2 or final_boss) else 0.0
+	var to_p: Vector2 = player.global_position - global_position
+	var base_dir: Vector2 = to_p.normalized() if to_p.length_squared() > 1.0 else Vector2.RIGHT
+	var dmg := maxf(1.0, contact_damage * GameBalance.BOSS_LASER_DMG_MULT)
+	play_squash(Vector2(0.82, 1.22), 0.4)
+	_laser_pending = true
+	_laser_fired = false
+	_laser_total = GameBalance.BOSS_LASER_CHARGE + GameBalance.BOSS_LASER_FIRE + GameBalance.BOSS_LASER_FADE
+	_laser_timer = _laser_total
+	_laser_beams.clear()
+	AudioManager.play_sfx("enemy_fuse", 0.9, 0.8)
+	# 扇心正对玩家、束间等角张开：中间那条能贴身穿缝，两侧是墙
+	for i in range(count):
+		var offset := (float(i) - float(count - 1) * 0.5) * GameBalance.BOSS_LASER_FAN_STEP
+		var beam := BossBeam.acquire(get_parent())
+		if beam == null:
+			continue
+		# 左右交替：同向同时扫会变成一整片推墙，交替才有「走廊在交叉」的读法
+		var dir_sign := 1.0 if i % 2 == 0 else -1.0
+		beam.activate(global_position, base_dir.rotated(offset), {
+			"length": GameBalance.BOSS_LASER_LENGTH,
+			"width": GameBalance.BOSS_LASER_WIDTH,
+			"charge_time": GameBalance.BOSS_LASER_CHARGE,
+			"fire_time": GameBalance.BOSS_LASER_FIRE,
+			"damage": dmg,
+			"tint": _fx_color,
+			"sweep_speed": sweep * dir_sign,
+			"follow": self,
+		})
+		_laser_beams.append(beam)
+	_play_cast_fx()
+	_pose_burst()
+
+# ---------------- 招式 18：烈焰吐息（扇形持续灼烧 + 余火 / 2026-11-04） ----------------
+
+## 前摇 0.7s：扇形预警跟着玩家转（「绕侧面」是有解的读法）；出火当帧锁向，
+## 出火 0.75s 内每 0.12s 跳一次伤害（与毒池的伤害扫描同档，不是逐帧结算）。
+## 收势沿吐息轴留 3 片火池：把「刚才那条走廊」变成后续 2.5s 的禁区。
+func _cast_flame_cone(player: Node2D) -> void:
+	if dying or get_parent() == null or player == null or not is_instance_valid(player):
+		return
+	if _flame_cone == null:
+		_flame_cone = ConeTelegraph.new()
+		add_child(_flame_cone)
+	_flame_cone.set_shape(GameBalance.BOSS_FLAME_LENGTH, GameBalance.BOSS_FLAME_HALF_ANGLE)
+	_flame_cone.color = _fx_color
+	_flame_cone.progress = 0.0
+	_flame_cone.visible = true
+	_flame_windup_total = GameBalance.BOSS_FLAME_WINDUP
+	_flame_windup_left = _flame_windup_total
+	_flame_breath_left = 0.0
+	_flame_timer = _flame_windup_total + GameBalance.BOSS_FLAME_BREATH
+	_flame_tick = 0.0
+	_flame_dir = (player.global_position - global_position).normalized().angle()
+	_flame_cone.rotation = _flame_dir
+	_flame_pending = true
+	play_squash(Vector2(0.9, 1.15), 0.35)
+	AudioManager.play_sfx("enemy_fuse", 0.8, 0.9)
+	_play_cast_fx()
+
+func _tick_flame_cone(delta: float, player: Node2D) -> void:
+	_flame_timer -= delta
+	if _flame_breath_left <= 0.0:
+		_flame_windup_left -= delta
+		# 前摇：瞄准缓跟（1.6 rad/s 上限 —— 玩家全速绕圈能转出扇形，站桩必被喷中）
+		if player != null and is_instance_valid(player):
+			var to_p: Vector2 = player.global_position - global_position
+			if to_p.length_squared() > 1.0:
+				_flame_dir = rotate_toward(_flame_dir, to_p.angle(), 1.6 * delta)
+		if _flame_cone != null and is_instance_valid(_flame_cone):
+			_flame_cone.rotation = _flame_dir
+			_flame_cone.progress = 1.0 - _flame_windup_left / maxf(_flame_windup_total, 0.001)
+		if _flame_windup_left <= 0.0:
+			# 出火当帧：锁向 + 满扇形 + 火柱起手（锁向之后玩家可以安全绕背）
+			_flame_breath_left = GameBalance.BOSS_FLAME_BREATH
+			_flame_tick = 0.0
+			if _flame_cone != null and is_instance_valid(_flame_cone):
+				_flame_cone.progress = 1.0
+			# 火柱序列帧：素材是朝右的 loop 喷吐，按锁定角旋转到扇形轴；
+			# 只染一点本尊主题色（保留火色，不让碧火 Boss 的吐息变成一坨绿光）
+			_flame_fx = FxFlipbookPool.play(&"fire_breath", global_position, {
+				"follow": self,
+				"rotation": _flame_dir,
+				"scale_mult": 1.6,
+				"modulate": _fx_color.lerp(Color.WHITE, 0.6),
+			})
+			AudioManager.play_sfx("enemy_slam", 0.6, 1.25)
+			AudioManager.play_sfx("enemy_fuse", 0.5, 1.3)
+			GameManager.add_trauma(0.08)
+		return
+
+	_flame_breath_left -= delta
+	_flame_tick -= delta
+	if _flame_tick <= 0.0:
+		_flame_tick = GameBalance.BOSS_FLAME_TICK
+		_apply_flame_cone_damage(player)
+	# 火焰法阵抖动留给渲染器：这里只补一层极轻的创伤（每 0.12s 一跳，别叠成持续抖屏）
+	if _flame_breath_left <= 0.0:
+		_resolve_flame_cone()
+
+## 扇形判定：距离与夹角都取「预警扇形」同源的 length / half_angle，别另立系数。
+func _apply_flame_cone_damage(player: Node2D) -> void:
+	if player == null or not is_instance_valid(player) or not player.has_method("take_damage"):
+		return
+	var to_p: Vector2 = player.global_position - global_position
+	if to_p.length() > GameBalance.BOSS_FLAME_LENGTH:
+		return
+	if absf(angle_difference(_flame_dir, to_p.angle())) > GameBalance.BOSS_FLAME_HALF_ANGLE:
+		return
+	player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_FLAME_DMG_MULT), global_position)
+
+func _resolve_flame_cone() -> void:
+	_flame_pending = false
+	if _flame_cone != null and is_instance_valid(_flame_cone):
+		_flame_cone.visible = false
+		_flame_cone.progress = 0.0
+	# loop 型序列帧不会自己结束：不 stop 会一直占着 flipbook 池位（收势/伏诛两处都要停）
+	if _flame_fx != null and is_instance_valid(_flame_fx):
+		FxFlipbookPool.stop(_flame_fx)
+	_flame_fx = null
+	if dying or get_parent() == null:
+		return
+	_pose_burst()
+	# 沿吐息轴留火池：0.55 / 0.8 / 1.0 倍程，距离越远火池越稀（近身才是主威胁）
+	var dir := Vector2.from_angle(_flame_dir)
+	var patch_fx := _impact_fx_id()
+	for i in range(GameBalance.BOSS_FLAME_PATCHES):
+		var t := 0.55 + 0.225 * float(i)
+		var at: Vector2 = global_position + dir * (GameBalance.BOSS_FLAME_LENGTH * t)
+		var pool := PoisonPool.acquire(get_parent())
+		if pool == null:
+			continue
+		pool.global_position = at
+		pool.damage = maxf(1.0, contact_damage * GameBalance.BOSS_FIRE_POOL_DMG_MULT)
+		pool.duration = GameBalance.BOSS_FIRE_POOL_DURATION
+		pool.scale_factor = GameBalance.BOSS_FIRE_POOL_RADIUS / PoisonPool.RADIUS
+		pool.set_kind(PoisonPool.Kind.FIRE)
+		pool.activate()
+		pool.modulate = _fx_color.lightened(0.3)
+		if patch_fx != &"":
+			FxFlipbookPool.play(patch_fx, at, {"scale_mult": 0.6, "z_ground": true, "modulate": _fx_color})
+
+# ---------------- 招式 19：陨火天降（错时陨石 + 火池 / 2026-11-04） ----------------
+
+## 首颗压「玩家 + 速度预判」，后续沿跑向逐步前压 + 侧向交替错开：站桩必吃、
+## 直线跑也得拐一次。落点阴影半径 == 爆炸判定（SkyMeteor 只画不判，结算在这里）。
+func _cast_meteor_strike(player: Node2D) -> void:
+	if dying or get_parent() == null:
+		return
+	var count: int = GameBalance.BOSS_METEOR_COUNT_P2 if (_phase2 or final_boss) else GameBalance.BOSS_METEOR_COUNT
+	var anchor: Vector2 = global_position
+	var run_dir := Vector2.RIGHT
+	var p_vel := Vector2.ZERO
+	if player != null and is_instance_valid(player):
+		anchor = player.global_position
+		if player is CharacterBody2D:
+			p_vel = player.velocity
+		anchor += p_vel * 0.35
+		if p_vel.length_squared() > 100.0:
+			run_dir = p_vel.normalized()
+	var lim := _arena_lim()
+	var radius := GameBalance.BOSS_METEOR_RADIUS
+	# 上一轮的陨石若还在坠落，先收掉：不然 clear 后它们变成「没人结算的哑弹」，
+	# 视觉在掉、判定不在，玩家会读到「明明砸中却没掉血」。
+	for mt in _active_meteors:
+		var old = mt.get("node")
+		if old != null and is_instance_valid(old):
+			old.recycle()
+	_active_meteors.clear()
+	play_squash(Vector2(0.95, 1.15), 0.3)
+	AudioManager.play_sfx("enemy_fuse", 0.85, 0.75)
+	for i in range(count):
+		var pos: Vector2
+		if i == 0:
+			pos = anchor
+		else:
+			var side := 1.0 if i % 2 == 1 else -1.0
+			pos = anchor + run_dir * (radius * 0.85 * float(i)) \
+				+ run_dir.orthogonal() * (side * radius * 0.5)
+		pos = pos.clamp(Vector2(-lim, -lim), Vector2(lim, lim))
+		var fall: float = GameBalance.BOSS_METEOR_FALL + GameBalance.BOSS_METEOR_INTERVAL * float(i)
+		var meteor := SkyMeteor.acquire(get_parent())
+		var fx_id := _impact_fx_id()
+		if meteor != null:
+			meteor.activate(pos, fall, {
+				"radius": radius,
+				"tint": _fx_color,
+				"fx_id": fx_id if fx_id != &"" else &"meteor_fall",
+			})
+		_active_meteors.append({
+			"pos": pos,
+			"timer": fall,
+			"radius": radius,
+			# 只有首颗留火池：五颗全留会瞬间把场地铺满，首颗才是「站桩的代价」
+			"leave_fire": i == 0,
+			"node": meteor,
+		})
+	_play_cast_fx()
+	_pose_burst()
+
+func _tick_meteors(delta: float, player: Node2D) -> void:
+	if _active_meteors.is_empty():
+		return
+	var i := 0
+	while i < _active_meteors.size():
+		var mt: Dictionary = _active_meteors[i]
+		mt.timer -= delta
+		if mt.timer <= 0.0:
+			_resolve_meteor(mt.pos, float(mt.radius), bool(mt.leave_fire), player)
+			_active_meteors.remove_at(i)
+		else:
+			i += 1
+
+func _resolve_meteor(pos: Vector2, radius: float, leave_fire: bool, player: Node2D) -> void:
+	if dying or get_parent() == null:
+		return
+	JuiceEffect.spawn_shockwave(get_parent(), pos, radius, _fx_color, 0.3)
+	GroundDecal.spawn(get_parent(), pos, GroundDecal.Kind.SCORCH, radius * 0.5)
+	AudioManager.play_sfx("enemy_slam", 0.85, 0.9)
+	GameManager.add_trauma(0.1)
+	if player != null and is_instance_valid(player) and player.global_position.distance_to(pos) <= radius:
+		player.take_damage(maxf(1.0, contact_damage * GameBalance.BOSS_METEOR_DMG_MULT), pos)
+		GameManager.trigger_screen_shockwave(player.global_position)
+	if leave_fire:
+		var pool := PoisonPool.acquire(get_parent())
+		if pool != null:
+			pool.global_position = pos
+			pool.damage = maxf(1.0, contact_damage * GameBalance.BOSS_FIRE_POOL_DMG_MULT)
+			pool.duration = GameBalance.BOSS_FIRE_POOL_DURATION
+			pool.scale_factor = GameBalance.BOSS_FIRE_POOL_RADIUS / PoisonPool.RADIUS
+			pool.set_kind(PoisonPool.Kind.FIRE)
+			pool.activate()
+			pool.modulate = _fx_color.lightened(0.3)
+
+# ---------------- 身份接线辅助（2026-11-04） ----------------
+
+## 弹体身份接线：形态 / 双色 / 紫焰口径 / 主题色一次挂齐。
+## 所有 Boss 弹幕出口都必须过这里，否则又会出现「火 Boss 打圆弹」的老问题。
+func _style_bolt(bolt: EnemyBolt) -> void:
+	if bolt == null:
+		return
+	var accent: Color = _profile.get("accent", Color(0, 0, 0, 0))
+	if accent.a <= 0.0:
+		accent = _fx_color
+	bolt.set_style(int(_profile.get("bolt", EnemyBolt.Style.ORB)), accent, _profile.get("core", Color(0, 0, 0, 0)))
+	bolt.purple_style = _purple_bolts
+	bolt.tint_color = _fx_color
+
+## 预警圈身份接线：在本尊的样式（FILL/RUNE/FIRE/THUNDER/VOID）上铺主题色。
+## 样式只加「圈内装饰」，判定边界仍是 radius —— 画多大判多大。
+func _style_telegraph(tg: AoeTelegraph) -> void:
+	if tg == null or not is_instance_valid(tg):
+		return
+	tg.color = _fx_color
+	tg.set_style(int(_profile.get("telegraph", AoeTelegraph.Style.FILL)), _fx_color.lightened(0.25))
+
+## 起手序列帧：本尊身份招出手时在脚下/身上播一次（缺 id 时 FxFlipbookPool 静默返回 null）
+func _play_cast_fx() -> void:
+	var id: StringName = _profile.get("cast_fx", &"")
+	if id == &"" or get_parent() == null:
+		return
+	FxFlipbookPool.play(id, global_position, {
+		"scale_mult": 0.9,
+		"follow": self,
+		"modulate": _fx_color.lightened(0.15),
+	})
+
+## 命中序列帧 id：表里没配就返回空（调用方自决兜底，别在这里塞死一个默认图）
+func _impact_fx_id() -> StringName:
+	return _profile.get("impact_fx", &"")
+
+# ---------------- 招式 20：深层魔君签名招（数据驱动） ----------------
 ## 八尊原本只靠旧招表组合的深层魔君，各给一个身份招；kind 与参数全在 EnemyData.BOSS_SIGNATURES，
 ## 这里只做行为派发。所有弹幕统一挂 _fx_color，不再出现「绿 Boss 打紫弹」。
 func _cast_signature(player: Node2D) -> void:
@@ -1619,8 +2001,7 @@ func _spawn_boss_bolt(pos: Vector2, dir: Vector2, spd: float, dmg: float, scl: f
 	bolt.scale_factor = scl
 	bolt.angular_speed = angular
 	bolt.sword_style = sword
-	bolt.purple_style = _purple_bolts
-	bolt.tint_color = _fx_color
+	_style_bolt(bolt)
 	bolt.activate()
 	return bolt
 
@@ -1631,7 +2012,7 @@ func _spawn_windup_telegraph(pos: Vector2, radius: float, duration: float, on_fi
 		return null
 	var tg := AoeTelegraph.new()
 	tg.radius = radius
-	tg.color = _fx_color
+	_style_telegraph(tg)
 	tg.progress = 0.0
 	get_parent().add_child(tg)
 	tg.global_position = pos
@@ -1934,6 +2315,27 @@ func _die() -> void:
 	_furnace_pending = false
 	if _furnace_ring != null:
 		_furnace_ring.visible = false
+	# 身份新招（激光/吐息/陨火）伏诛清理：光束与陨石是池化实体，必须归还，
+	# 否则下一尊 Boss 复用池时会拿到「还挂在前一场」的残影。
+	_laser_pending = false
+	for beam in _laser_beams:
+		if beam != null and is_instance_valid(beam):
+			beam.recycle()
+	_laser_beams.clear()
+	_flame_pending = false
+	_flame_windup_left = 0.0
+	_flame_breath_left = 0.0
+	if _flame_fx != null and is_instance_valid(_flame_fx):
+		FxFlipbookPool.stop(_flame_fx)
+	_flame_fx = null
+	if _flame_cone != null and is_instance_valid(_flame_cone):
+		_flame_cone.visible = false
+		_flame_cone.progress = 0.0
+	for mt in _active_meteors:
+		var meteor = mt.get("node")
+		if meteor != null and is_instance_valid(meteor):
+			meteor.recycle()
+	_active_meteors.clear()
 	_mirror_pending = false
 	_soul_pending = false
 	if _mirror_telegraph != null and is_instance_valid(_mirror_telegraph):

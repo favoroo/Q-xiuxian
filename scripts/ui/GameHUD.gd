@@ -322,7 +322,7 @@ func _build_widgets() -> void:
 	add_child(_obelisk_widget)
 	_obelisk_btn = _obelisk_widget.get_btn()
 	_obelisk_ring = _obelisk_widget.get_ring()
-	# 机关键：布设 / 维修（长按）/ 收回 三态同键，情境键（无待办整颗收起）
+	# 机关键（2026-11-04 三键拆分）：维修主键常驻，布设 / 收回是旁边两颗小键
 	_mechanism_widget = HudMechanismButton.new()
 	add_child(_mechanism_widget)
 	_skill_widget = HudSkillButton.new()
@@ -551,12 +551,16 @@ func _unhandled_input(event: InputEvent) -> void:
 				_obelisk_widget.key_press()
 				get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_F:
-			# F 专职机关主键动作（点按布设 / 长按维修），键亮着才吃
+			# F 专职机关维修（长按回填耐久），键亮着才吃
 			if _mechanism_widget.can_key_act():
 				_mechanism_widget.key_press()
 				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_R:
+			# R 专职布设（键内自判：没编制 / 太近会自己给提示）
+			_mechanism_widget.deploy_by_key()
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_G:
-			# G 专职收回（靠近机关时才有意义，键内自判为空操作）
+			# G 专职收回（场上有机关才响，键内自判为空操作）
 			_mechanism_widget.recall_by_key()
 			get_viewport().set_input_as_handled()
 

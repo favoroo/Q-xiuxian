@@ -1689,12 +1689,36 @@ func _resolve_contact_damage(target: Node2D, pos_before_move: Vector2) -> void:
 				collider.take_damage(contact_damage, global_position)
 				# 石岳/玄武反震：实际被打中才反弹（闪避/无敌帧不触发）
 				if collider.current_health < hp_before:
+					# 咬中即自身反冲（2026-11-04 用户反馈）：贴脸粘着连咬读感差，
+					# 真造成伤害这一拍把怪弹开一点；无伤（闪避/无敌）不推，免得白白送脱身。
+					_apply_contact_recoil(collider)
 					if thorns_cache < 0.0:
 						thorns_cache = GameManager.get_effective_thorns()
 					if thorns_cache > 0.0:
 						take_damage(contact_damage * thorns_cache, Vector2.ZERO, false)
 			elif collider != null and collider.is_in_group("allies") and collider.has_method("take_damage"):
 				collider.take_damage(contact_damage)
+
+## 咬中玩家后的自身反冲（2026-11-04 用户反馈）：贴脸粘着连咬读感差，真造成伤害这一拍把自己弹开一点。
+## 只写位移与短暂定身，不发闪白/音效/跳字，也不推进集火保护计数 —— 那套反馈属于「玩家砍中它的一刀」，
+## 所以不走 take_damage(0.0, 击退)：那会把 0 伤害跳字/闪白/集火计数一并带上（同一次挨打只许一处发反馈）。
+## 位移复用受击硬直的同一段滑行衰减（velocity = knockback_velocity → 指数急刹），
+## 定身期间主动追击归零，给玩家一个脱身窗口；已在受击硬直/卡肉中的怪不覆盖武器的强击退。
+func _apply_contact_recoil(player_ref: Node2D) -> void:
+	if dying or move_speed <= 0.0:
+		return  # 站桩炮台/固定单位不动如山（与 take_damage 的击退闸同口径）
+	if _hit_freeze_timer > 0.0 or hit_stun_timer > 0.0:
+		return  # 正在吃武器那一刀：别把强击退/长硬直覆盖成小反冲
+	# 冲刺/扑咬的承诺段由状态机逐帧写死 velocity，反冲写了也会被覆盖，直接跳过
+	if _charge_active > 0.0 or _charge_brake > 0.0 \
+			or (lunge != null and (lunge.is_dashing() or lunge.is_rooted())):
+		return
+	var away: Vector2 = global_position - player_ref.global_position
+	if away.length_squared() < 0.0001:
+		return  # 完全重合没有方向可言，下一帧追击速度会自然分开
+	var scale_k: float = HIT_KB_ELITE_SCALE if is_elite else 1.0
+	knockback_velocity = away.normalized() * (GameBalance.CONTACT_RECOIL_SPEED * scale_k)
+	hit_stun_timer = GameBalance.CONTACT_RECOIL_STUN * scale_k * hit_stun_resist
 
 # ---------------- 受击结算 / 硬直 / 击退 / 掉落 ----------------
 ## chain_tint：链电身份色（alpha>0 时，本次伤害跳字走「独立条 + 该色」通道 ——

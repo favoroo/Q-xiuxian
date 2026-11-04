@@ -151,13 +151,14 @@ static func settle_charge_recovery(e) -> void:
 		e.knockback_velocity = Vector2.ZERO
 
 ## 更新冲刺预警线（预警期间每帧调用）
-static func update_charge_warning(e, player: Node2D) -> void:
+static func update_charge_warning(e, player: Node2D, color: Color = Color(0, 0, 0, 0)) -> void:
 	if e._charge_warning_line == null:
 		e._charge_warning_line = Line2D.new()
 		# 带宽 = 判定走廊直径。Line2D 默认圆头端帽，所以画出来那颗胶囊就是
 		# 「玩家中心到本帧扫掠线段 ≤ charge_hit_radius」的点集本身 ⇒ 画多大 == 判多大
 		e._charge_warning_line.width = e.charge_hit_radius * 2.0
-		e._charge_warning_line.default_color = Color(1.0, 0.4, 0.2, 0.2)
+		var base_col: Color = color if color.a > 0.0 else Color(1.0, 0.4, 0.2, 1.0)
+		e._charge_warning_line.default_color = Color(base_col.r, base_col.g, base_col.b, 0.2)
 		e.add_child(e._charge_warning_line)
 
 	# 更新端点：画「真撞得到的那一段」，不是画到玩家身上。

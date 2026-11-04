@@ -127,6 +127,7 @@ func _sync_config() -> void:
 	col_bone_shadow = config.bone_shadow
 	col_void = config.void_black
 	col_slash_glow = col_cloak_edge
+	character_id = config.character_id
 
 	# 协调衍生细节色
 	if cloak_style == "royal_shawl":
@@ -192,6 +193,18 @@ var _run_blend: float = 0.0
 ## 斗篷行波相位（连续积分，不直接取 _time/gait_phase）：动作切换时相位不跳变，
 ## 频率随 _run_blend 从待机慢呼吸平滑过渡到步频，布料不会瞬移
 var _cloak_phase: float = 0.0
+
+# ==================== 皮肤挂件：身份件 + 微动状态（2026-11-04） ====================
+## 每个角色一件身份挂件（data 表在 skin_accent/SkinAccentData.gd），按皮肤系列取形制。
+## 动画状态全部在这里按 delta 积分/平滑，绘制端只读；帧率变化不会让挂件跳相位。
+const AccentLibrary = preload("res://scripts/entities/procedural_cultivator/skin_accent/SkinAccentLibrary.gd")
+var character_id: String = ""
+var _accent_phase: float = 0.0          ## 连续相位（不 fmod，避免非整数倍副频抖动）
+var _accent_sway: Vector2 = Vector2.ZERO ## 平滑后的风压摆动（px，宿主局部系）
+var _accent_flutter: float = 0.0        ## 偶发抖动包络 0~1
+var _accent_flutter_t: float = 0.0
+var _accent_flutter_wait: float = 0.0
+var _accent_rng := RandomNumberGenerator.new()
 ## 悬浮漂移相位（连续积分，2026-10-24）：身体上下起伏的唯一时基。
 ## 不取 gait_phase —— 那是脚步的节拍；身体要「飘」，就不能踩着落地点起跳。
 ## 连续积分保证变速时相位不跳变（改频率只改推进速率）。
@@ -229,6 +242,34 @@ func _process(delta: float) -> void:
 	_float_phase += glide_rate * delta
 
 	_tick_blink(delta)
+	_tick_accent(delta)
+
+## 挂件微动推进：风压（指数平滑，帧率无关）+ 恒定钟摆相位 + 偶发抖动包络。
+## 待机只有 ~0.45Hz 的轻摆；奔跑时风压与幅度按 _run_blend 平滑加大，停步不瞬间回正。
+func _tick_accent(delta: float) -> void:
+	var rate := TAU * lerpf(0.45, 0.92, _run_blend) * (1.0 + 0.10 * minf(_speed_smooth, 1.0))
+	_accent_phase += rate * delta
+	var wind_x := _wind_local.x * (-1.0 if flip_h else 1.0)
+	var target := Vector2(
+		(-wind_x - _lean_smooth * 1.6) * lerpf(0.55, 1.9, _run_blend),
+		-_wind_local.y * lerpf(0.20, 0.75, _run_blend) + sin(_accent_phase * 0.5) * 0.18)
+	_accent_sway = _accent_sway.lerp(target, 1.0 - exp(-delta * 6.0))
+	# 偶发抖动：3.2~7s 一次、0.34s 的平滑包络（sin(pi*p) 两端导数为 0，不会抽一下）
+	_accent_flutter_wait -= delta
+	if _accent_flutter_wait <= 0.0 and _accent_flutter_t <= 0.0:
+		_accent_flutter_t = 0.34
+		_accent_flutter_wait = _accent_rng.randf_range(3.2, 7.0)
+	if _accent_flutter_t > 0.0:
+		_accent_flutter_t -= delta
+		_accent_flutter = sin(clampf(1.0 - _accent_flutter_t / 0.34, 0.0, 1.0) * PI)
+	else:
+		_accent_flutter = 0.0
+
+## 挂件 + 胸饰绘制入口（胸饰只在正面/侧面出现；背面由斗篷挡住）
+func _draw_skin_accent(float_y: float, angle: Angle, include_ornament: bool = true) -> void:
+	if not _layer_on(Layer.CLOAK):
+		return
+	AccentLibrary.draw(self, float_y, angle, include_ornament and angle != Angle.BACK)
 
 ## 待机呼吸浮沉（px）：体型越大越沉缓，相位按 instance_id 错开
 func _idle_float_y() -> float:
@@ -292,6 +333,10 @@ func _ready() -> void:
 	# instance_id 播种：同屏角色各自错开，且判据可复现（不碰玩法随机）
 	_blink_rng.seed = int(get_instance_id()) * 7919 + 13
 	_blink_wait = _blink_rng.randf_range(0.8, 3.0)
+	# 挂件相位也从实例错开：起摆时刻/偶发抖动节奏不撞车
+	_accent_rng.seed = int(get_instance_id()) * 104729 + 37
+	_accent_phase = _idle_phase
+	_accent_flutter_wait = _accent_rng.randf_range(3.2, 7.0)
 
 ## 眨眼调度推进：等待 → 起眨 → 包络推进 → 收尾/连眨
 func _tick_blink(delta: float) -> void:
@@ -437,15 +482,18 @@ func _draw_idle(angle: Angle) -> void:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.FRONT)
 			_draw_head_front_gaze(float_y, eye_pulse, gaze_off)
+			_draw_skin_accent(float_y, Angle.FRONT)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.SIDE)
 			_draw_head_side(float_y, eye_pulse)
+			_draw_skin_accent(float_y, Angle.SIDE)
 		Angle.BACK:
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, 0.0, Angle.BACK)
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
+			_draw_skin_accent(float_y, Angle.BACK)
 
 ## 待机专用：正面头部带偶发环视偏移（环视只在前视角有意义——实机恒为正面）
 func _draw_head_front_gaze(float_y: float, eye_pulse: float, gaze_off: float) -> void:
@@ -485,16 +533,19 @@ func _draw_run(angle: Angle, _phase: float, _air_val: float) -> void:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y * 0.85), deg_to_rad(carry_front_rot + bob * 2.5), Angle.FRONT)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.FRONT)
 			_draw_head_front(float_y, 0.06)
+			_draw_skin_accent(float_y, Angle.FRONT)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, float_y), deg_to_rad(carry_side_rot + 1.0), Angle.SIDE)
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.SIDE)
 			_draw_head_side(float_y, 0.05)
 			_draw_eye_trail(float_y)
+			_draw_skin_accent(float_y, Angle.SIDE)
 		Angle.BACK:
 			_draw_modular_cloak(float_y, cloak_amp, cloak_t, cloak_drag, Angle.BACK)
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
+			_draw_skin_accent(float_y, Angle.BACK)
 
 # ==================== 3. 冲刺 (DASH) ====================
 
@@ -520,16 +571,19 @@ func _draw_dash(angle: Angle, progress: float) -> void:
 			_draw_modular_weapon(carry_front_pos + Vector2(1.5, dash_y + 1.0), deg_to_rad(carry_front_rot + 12.0), Angle.FRONT)
 			_draw_modular_cloak(dash_y, dash_amp, dash_t, dash_drag, Angle.FRONT)
 			_draw_head_front(dash_y + 1, 0.3)
+			_draw_skin_accent(dash_y, Angle.FRONT)
 		Angle.SIDE:
 			_draw_modular_weapon(Vector2(8, 7 + dash_y), deg_to_rad(65.0), Angle.SIDE)
 			_draw_cloak_dash_side(dash_y, dash_progress)
 			_draw_head_side(dash_y + 2, 0.45)
 			BatchDraw.native_line(self, Vector2(8, -5 + dash_y), Vector2(-22, -5 + dash_y), col_eye_glow, 1.8)
+			_draw_skin_accent(dash_y, Angle.SIDE)
 		Angle.BACK:
 			_draw_modular_cloak(dash_y, dash_amp, dash_t, dash_drag, Angle.BACK)
 			_draw_modular_strap(dash_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(2.0, dash_y), deg_to_rad(carry_back_rot - 8.0), Angle.BACK)
 			_draw_head_back(dash_y + 1)
+			_draw_skin_accent(dash_y, Angle.BACK)
 
 # ==================== 4. 攻击挥剑 (ATTACK) ====================
 
@@ -546,10 +600,12 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 			_draw_modular_weapon(carry_front_pos + Vector2(0, float_y), deg_to_rad(carry_front_rot), Angle.FRONT)
 			_draw_modular_cloak(float_y, 2.2, _time * 5.2, 0.0, Angle.FRONT)
 			_draw_head_front(float_y, 0.25)
+			_draw_skin_accent(float_y, Angle.FRONT)
 			_draw_slash_crescent(Vector2(0, 12 + float_y), deg_to_rad(90.0), 38.0, progress)
 		Angle.SIDE:
 			_draw_modular_cloak(float_y, 2.4, _time * 5.2, 2.0, Angle.SIDE)
 			_draw_head_side(float_y, 0.25)
+			_draw_skin_accent(float_y, Angle.SIDE)
 			var slash_rot := lerpf(deg_to_rad(-40.0), deg_to_rad(50.0), progress)
 			_draw_modular_weapon(Vector2(14, 3 + float_y), slash_rot, Angle.SIDE)
 			_draw_slash_crescent(Vector2(18, 2 + float_y), deg_to_rad(15.0), 42.0, progress)
@@ -558,6 +614,7 @@ func _draw_attack(angle: Angle, progress: float) -> void:
 			_draw_modular_strap(float_y)
 			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, float_y), deg_to_rad(carry_back_rot), Angle.BACK)
 			_draw_head_back(float_y)
+			_draw_skin_accent(float_y, Angle.BACK)
 			_draw_slash_crescent(Vector2(0, -8 + float_y), deg_to_rad(-90.0), 38.0, progress)
 
 # ==================== 5. 受击硬直 (HIT) ====================
@@ -575,15 +632,18 @@ func _draw_hit(angle: Angle, progress: float) -> void:
 			_draw_modular_weapon(carry_front_pos + Vector2(0.5, -1.0), deg_to_rad(carry_front_rot - 6.0), Angle.FRONT)
 			_draw_modular_cloak(0.0, -1.2, _time * 7.0, 0.0, Angle.FRONT)
 			_draw_head_front(0.0, 0.35)
+			_draw_skin_accent(0.0, Angle.FRONT)
 		Angle.SIDE:
 			_draw_modular_weapon(carry_side_pos + Vector2(0, 3.0), deg_to_rad(carry_side_rot), Angle.SIDE)
 			_draw_modular_cloak(0.0, -1.2, _time * 7.0, -1.0, Angle.SIDE)
 			_draw_head_side(0.0, 0.35)
+			_draw_skin_accent(0.0, Angle.SIDE)
 		Angle.BACK:
 			_draw_modular_cloak(0.0, -1.2, _time * 7.0, 0.0, Angle.BACK)
 			_draw_modular_strap(0.0)
 			_draw_modular_weapon(carry_back_pos + Vector2(-2.0, 4.0), deg_to_rad(carry_back_rot + 12.0), Angle.BACK)
 			_draw_head_back(0.0)
+			_draw_skin_accent(0.0, Angle.BACK)
 
 	if hit_flash > 0.05 and _layer_on(Layer.FX):
 		draw_soft_glow(Vector2(0, 0), 22.0, Color(1.0, 1.0, 1.0, hit_flash * 0.4), 2)

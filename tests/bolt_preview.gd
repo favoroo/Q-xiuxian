@@ -50,6 +50,48 @@ func _ready() -> void:
 	jiansha_bolt.direction = Vector2(-1, 0.2).normalized()
 	jiansha_bolt.position = Vector2(720, 340)
 	add_child(jiansha_bolt)
+
+	# 六形态对比画廊（标准尺寸 r=8 与 Boss 放大尺寸）
+	var gallery_styles := [
+		EnemyBolt.Style.ORB,
+		EnemyBolt.Style.SWORD,
+		EnemyBolt.Style.NEEDLE,
+		EnemyBolt.Style.TALISMAN,
+		EnemyBolt.Style.FLAME,
+		EnemyBolt.Style.VOID
+	]
+	# 每种形态取一尊真实 Boss 的身份色（表里挑代表；颜色维度也要肉眼验收，
+	# 不然六个形态全画成默认橙，看不出「19 尊各长一张脸」）
+	var gallery_rep := {
+		EnemyBolt.Style.ORB: "kunwang",
+		EnemyBolt.Style.SWORD: "jianpo",
+		EnemyBolt.Style.NEEDLE: "leijie",
+		EnemyBolt.Style.TALISMAN: "qianji",
+		EnemyBolt.Style.FLAME: "chiyan",
+		EnemyBolt.Style.VOID: "xinmo",
+	}
+	for i in range(gallery_styles.size()):
+		var s: int = gallery_styles[i]
+		var rep: Dictionary = BossAttackProfile.for_boss(String(gallery_rep[s]))
+		var accent: Color = rep.get("accent", Color(0, 0, 0, 0))
+		var core: Color = rep.get("core", Color(0, 0, 0, 0))
+		var gx := 180.0 + float(i) * 110.0
+		# 标准尺寸
+		var gb := EnemyBolt.new()
+		gb.speed = 0.0
+		gb.direction = Vector2(1, -0.2).normalized()
+		gb.set_style(s, accent, core)
+		gb.position = Vector2(gx, 80)
+		add_child(gb)
+
+		# Boss 放大尺寸（展示大弹与细节）
+		var gb_big := EnemyBolt.new()
+		gb_big.speed = 0.0
+		gb_big.scale_factor = GameBalance.BOSS_BOLT_SCALE
+		gb_big.direction = Vector2(1, -0.2).normalized()
+		gb_big.set_style(s, accent, core)
+		gb_big.position = Vector2(gx, 490)
+		add_child(gb_big)
 	for i in range(4):
 		await get_tree().process_frame
 	if DisplayServer.get_name() != "headless":

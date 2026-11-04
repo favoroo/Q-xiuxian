@@ -1,0 +1,20 @@
+{
+  "id": "arcane/spell-charge",
+  "out_name": "cast_charge",
+  "frame_size": [
+    120,
+    86
+  ],
+  "pivot": [
+    44,
+    80
+  ],
+  "anchor": "bottom",
+  "scale": 0.7,
+  "fps": 24,
+  "loop": false,
+  "frames_count": 24,
+  "palette_key": "arcane",
+  "png_bytes": 182522,
+  "vram_kb": 1007
+}

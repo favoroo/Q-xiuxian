@@ -63,6 +63,10 @@ extends Resource
 ## 渲染器经 SkinFxLibrary.params() 合并族默认值后，只读消费各效果族模块。
 @export var fx: Dictionary = {}
 
+## 角色 id（由 get_config 统一回填；皮肤挂件表按它查身份挂件。
+## 直接调 make_* 工厂的旧路径拿不到，挂件会静默跳过，不影响绘制）
+@export var character_id: String = ""
+
 ## 向后兼容色盘字典
 @export var palette: Dictionary = {}
 
@@ -97,6 +101,7 @@ static func get_config(character_id: String) -> CultivatorVisualConfig:
 	if cached != null:
 		return cached
 	var cfg := _build_config(character_id)
+	cfg.character_id = character_id
 	_cache[character_id] = cfg
 	return cfg
 

@@ -586,6 +586,26 @@ func _check_proc_wiring() -> void:
 		e.queue_free()
 		await get_tree().physics_frame
 
+	# 弹幕回响（2026-11-04）：机关炮台出的也是弹丸，出膛时同样叠加弹射次数。
+	# 卡面 scope 已写「所有弹丸武器（含机关炮台）」，这条钉住运行时真接上了。
+	GameManager.items.append("shen_tanmu")
+	var bounce_target := FakeEnemy.new(Vector2(760, 700))
+	_world.add_child(bounce_target)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	_turret._refresh_targets()
+	_turret._cooldown_timer = 0.0
+	_turret._had_target = true
+	_turret._process(0.016)
+	await get_tree().process_frame
+	var latest_bounce := _latest_projectile()
+	_c.check(latest_bounce != null and latest_bounce.bounce_left >= 2,
+		"弹幕回响对机关弹丸生效（bounce_left=%d）" % (
+			latest_bounce.bounce_left if latest_bounce != null else -1))
+	GameManager.items.erase("shen_tanmu")
+	bounce_target.queue_free()
+	await get_tree().physics_frame
+
 func _latest_projectile() -> BladeProjectile:
 	# 判据读「最近一次出膛」的那一发：池化复用不会把节点移到宿主末尾（复用弹丸留在原
 	# 子节点下标上），所以拼「最后一个孩子」会读上一发的残值。activate() 每次出膛把

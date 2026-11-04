@@ -181,6 +181,10 @@ func _spawn(id: StringName, pos: Vector2, conf: Dictionary, opts: Dictionary) ->
 	var scale_mult: float = opts.get("scale_mult", 1.0)
 	anim.scale = Vector2.ONE * (base_scale * scale_mult)
 
+	# 朝向角（2026-11-04 Boss 吐息/激光这类非水平演出用；默认 0 = 保持素材原始朝右，
+	# 旧调用点全都不传，行为不变）。翻转仍只服务左右镜像，旋转与 flip_h 可叠加。
+	anim.rotation = float(opts.get("rotation", 0.0))
+
 	# 颜色与发光
 	anim.modulate = opts.get("modulate", Color.WHITE)
 	var use_hdr: bool = opts.get("hdr", conf.get("hdr", true))
