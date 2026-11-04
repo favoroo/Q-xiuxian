@@ -455,10 +455,11 @@ func _refresh_top_readouts() -> void:
 		# 不许按下去什么也没发生（原先 buy 之外的这条路径静默 return false，连个反馈都没有）
 		reroll_btn.disabled = GameManager.spirit_stones < GameManager.reroll_cost
 
-## 只重建陈列行（上阵/御灵/背包/道具/灵兽）：三合一只动武器库存，货架 5 张大卡与报价键
-## 都还是原账，整屏重铺纯属白做功。2026-10-25 用户反馈「合成动画还有点卡顿」——
-## 迸发帧正好压在这次刷新上，几十个节点的重建（5 张货架卡 + 30 格 + StatForecast 影子）
-## 吃掉一帧预算，肉眼就是爆点那一顿。合成改走这条轻量通道，别改回 refresh(false)。
+## 合成专用轻量通道：重建陈列行（上阵/御灵/背包/道具/灵兽），货架 5 张大卡**不重建节点**
+## —— 2026-10-25 用户反馈「合成动画还有点卡顿」：迸发帧正好压在这次刷新上，几十个节点的
+## 重建（5 张货架卡 + 30 格 + StatForecast 影子）吃掉一帧预算，肉眼就是爆点那一顿。
+## 但「不重建」不等于「不更新」：报价键/持有量/进度签/角标全是按库存算的，合成腾格后
+## 必须就地回填（2026-11-04 用户：满仓合成后仍写「装备背包已满」）。别改回 refresh(false)。
 func refresh_owned() -> void:
 	DetailTip.close_all(self)
 	if drag_ctl != null:
@@ -466,6 +467,9 @@ func refresh_owned() -> void:
 	_refresh_top_readouts()
 	_refresh_synergy_bar()
 	_refresh_inventory()
+	# 合成腾出上阵/背包格后，货架卡的报价键（「装备背包已满」）、持有量、流派进度签与
+	# 「合」角标都得按新库存回填。货架卡节点不重建（爆点预算），只就地改文案与样式。
+	ShopOfferCardFactory.refresh_row_states(offers_container, self)
 
 ## 作者面板改金币/生命后由 Main 调用：顶栏金币、货架价格键（买得起/差 N）、重掷键、
 ## 生命徽记与回复药卡「这一口回多少」都要按新读数重画。走 refresh(false) 这条既有的

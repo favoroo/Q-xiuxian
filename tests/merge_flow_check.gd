@@ -209,6 +209,68 @@ func _run() -> void:
 	_c.check(_shop.get_node_or_null("MergeFx") == null, "★3 演出按时自毁")
 	_c.check(_shop.visible, "★3 演完商店还开着")
 
+	# —— ⑤ 满仓合成腾格后，货架报价键必须当场重算（2026-11-04 用户 bug）——
+	# 复现口径：上阵 6/6 + 背包 5/5 时货架报价键写「装备背包已满」；在背包里合成掉 3 把后
+	# 两处都腾出空位。合成走 refresh_owned 轻量通道、货架卡不重建，旧实现只重铺陈列行 ⇒
+	# 灰键不改，玩家以为买不了；拖一下武器（全量 refresh 重建卡）才恢复。
+	# 这里钉住**同一张卡实例**的报价键与持有量都在合成后当场变成新账（角标/进度签/读数
+	# 同走这条回填，见 ShopOfferCardFactory.refresh_card_state）。
+	for _i in range(5):
+		GameManager.add_weapon(W, 1)
+	for _i in range(WeaponData.MAX_STASH_SLOTS):
+		GameManager.add_weapon(W, 1)
+	_c.equals(GameManager.slots_used(), GameManager.max_weapon_slots(), "上阵栏填满")
+	_c.equals(GameManager.stash.size(), WeaponData.MAX_STASH_SLOTS, "背包填满")
+	GameManager.spirit_stones = 500
+	GameManager.shop_offers[0] = {"kind": "weapon", "id": W, "price": 100, "star": 1, "sold": false}
+	_shop.refresh(false)
+	await get_tree().create_timer(0.3).timeout
+	await _frame(2)
+	var full_card := _shop.offers_container.get_child(0) as Control
+	var price_btn := full_card.find_child("PriceButton", true, false) as Button
+	_c.check(price_btn != null, "货架首卡有报价键")
+	if price_btn == null:
+		_done()
+		return
+	_c.equals(price_btn.text, "装备背包已满", "满仓时报价键给出满仓口径")
+	_c.check(price_btn.disabled, "满仓报价键不可按")
+	var owned_lbl := full_card.find_child("OwnedLabel", true, false) as Label
+	_c.check(owned_lbl != null, "货架首卡带着持有量行")
+	var owned_before: String = owned_lbl.text if owned_lbl != null else ""
+
+	var stash_slot := _slot_node("stash", 0)
+	_c.check(stash_slot != null, "背包首格在位")
+	if stash_slot == null:
+		_done()
+		return
+	_shop.selected = {"pool": "stash", "index": 0}
+	ShopWeaponTip.open(_shop, GameManager.stash[0], "stash", 0, stash_slot)
+	var tip2 := DetailTip.live(_shop)
+	var merge2 := Callable()
+	if tip2 != null:
+		for row in (tip2.payload.get("actions", []) as Array):
+			for act in (row as Array):
+				var d: Dictionary = act
+				if String(d.get("text", "")).contains("三合一"):
+					merge2 = d.get("callback", Callable())
+	_c.check(merge2.is_valid(), "满仓时详情卡里仍有三合一回调")
+	if not merge2.is_valid():
+		_done()
+		return
+	DetailTip.close_all(_shop)
+	merge2.call()
+	await get_tree().create_timer(0.35).timeout
+
+	_c.check(is_instance_valid(full_card) and _shop.offers_container.get_child(0) == full_card,
+			"合成只回填状态，货架首卡仍是原实例")
+	_c.equals(GameManager.slots_used(), GameManager.max_weapon_slots(), "keeper 留在背包：上阵仍 6/6")
+	_c.check(GameManager.stash.size() < WeaponData.MAX_STASH_SLOTS, "合成为背包腾出空位")
+	_c.equals(price_btn.text, "100 金币 · 入背包", "报价键当场改成「入背包」")
+	_c.check(not price_btn.disabled, "腾出空位后报价键恢复可按")
+	var owned_after: String = owned_lbl.text if owned_lbl != null and is_instance_valid(owned_lbl) else ""
+	_c.equals(GameManager.count_copies(W, 1), 7, "背包合成后同名 ★1 剩 7 件（10 − 3）")
+	_c.equals(owned_after, "★1×7  ★2×1  ★3×1", "持有量行按新库存重算（原 %s）" % owned_before)
+
 	_shop.visible = false
 	get_tree().paused = false
 	await _frame(2)

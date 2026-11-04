@@ -245,7 +245,7 @@ func refresh_inventory() -> void:
 func refresh_readouts() -> void:
 	refresh(false)
 
-## 合成本演的迸发帧专用：三合一只动陈列行，货架卡与报价都是原账（同 WaveShop.refresh_owned）
+## 合成本演的迸发帧专用：只重建陈列行、货架卡不重建节点，但状态就地回填（同 WaveShop.refresh_owned）
 func refresh_owned() -> void:
 	var vp := get_viewport_rect().size
 	if vp.x > 0.0 and vp.y > 0.0:
@@ -253,6 +253,8 @@ func refresh_owned() -> void:
 	_refresh_readouts()
 	_refresh_synergy_bar()
 	_refresh_inventory()
+	# 同 WaveShop.refresh_owned：合成腾格后货架卡的报价键/持有量/进度签要就地回填
+	ShopOfferCardFactory.refresh_row_states(offers_container, self)
 
 func _update_reroll_button() -> void:
 	if reroll_btn == null:

@@ -18,6 +18,7 @@ static func create_card(shop, offer: Dictionary, index: int, total_count: int = 
 	var card := _create_card_chrome(card_w, data.edge_color)
 
 	var vbox := VBoxContainer.new()
+	vbox.name = "CardBody"
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", int(WaveShop.CARD_SEP))
 	vbox.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -58,7 +59,7 @@ static func create_card(shop, offer: Dictionary, index: int, total_count: int = 
 	stretch.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(stretch)
 	# 行④：价格/购买按钮
-	vbox.add_child(_create_card_price_btn(shop, offer, index, sold, price, data.is_item, data.def, data.kind))
+	vbox.add_child(_create_card_price_btn(shop, offer, index, price, data.is_item, data.def, data.kind))
 
 	card.add_child(vbox)
 	if data.merge_ready:
@@ -302,13 +303,18 @@ static func _mark_chip_tappable(node: Control, tip: Dictionary) -> void:
 static func _create_card_chrome(card_w: float, edge_color: Color) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(card_w, 0)
+	_apply_card_style(card, edge_color)
+	return card
+
+## 卡体样式（底色/斜切/硬影/内容边距）统一在这一处落地：建卡与就地回填边色共用，
+## 回填时先比边色，没变不重建 StyleBox（GameStyle.card 每次都会登记一份主题色映射）。
+static func _apply_card_style(card: PanelContainer, edge_color: Color) -> void:
 	var style := GameStyle.card(edge_color, 3.0, Vector2(5, 5))
 	style.content_margin_left = WaveShop.OFFER_PAD_X
 	style.content_margin_top = WaveShop.CARD_PAD_Y
 	style.content_margin_right = WaveShop.OFFER_PAD_X
 	style.content_margin_bottom = WaveShop.CARD_PAD_Y
 	card.add_theme_stylebox_override("panel", style)
-	return card
 
 ## 行①：图标框（五行外框 + 元素特性下边框）与名号同行（右侧上下排列名号与持有信息），名号按 card_name_w 切硬换行
 static func _create_card_head(shop, offer: Dictionary, card_w: float, kind: String, title: String, icon_path: String, owned_text: String = "", w_id: String = "", star: int = 1) -> HBoxContainer:
@@ -394,19 +400,23 @@ static func _create_card_head(shop, offer: Dictionary, card_w: float, kind: Stri
 	GameStyle.label(title_lbl, 16, GameStyle.PAPER, 0, GameStyle.INK, true)
 
 	if not owned_text.is_empty():
-		var owned_lbl := Label.new()
-		owned_lbl.name = "OwnedLabel"
-		owned_lbl.text = owned_text
-		owned_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		owned_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		owned_lbl.custom_minimum_size = Vector2(name_w, 0)
-		owned_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		owned_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		title_box.add_child(owned_lbl)
-		GameStyle.label(owned_lbl, 10, GameStyle.JADE_DK, 0, GameStyle.INK, true)
+		title_box.add_child(_make_owned_label(owned_text, name_w))
 
 	head.add_child(title_box)
 	return head
+
+## 名号下方那行「拥有 ★1×3  ★2×2」：建卡与就地回填（合成吃掉两件后持有量变了）共用同一份样式
+static func _make_owned_label(owned_text: String, name_w: float) -> Label:
+	var owned_lbl := Label.new()
+	owned_lbl.name = "OwnedLabel"
+	owned_lbl.text = owned_text
+	owned_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	owned_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	owned_lbl.custom_minimum_size = Vector2(name_w, 0)
+	owned_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	owned_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	GameStyle.label(owned_lbl, 10, GameStyle.JADE_DK, 0, GameStyle.INK, true)
+	return owned_lbl
 
 ## 行②：流派色签流（临门一档亮绿）+「可合成」角标 + 未售出时的锁定开关
 ## behavior_chip 非空时插队在最前（[近战/远程/范围/环绕/机关, 面, 字]，仅武器卡有）；
@@ -505,15 +515,28 @@ static func _create_card_tag_row(shop, offer: Dictionary, index: int, sold: bool
 	return tag_row
 
 ## 行④：价格/购买按钮（已售出、缺钱、道具已持有、装备背包全满四类禁用口径）
-static func _create_card_price_btn(shop, offer: Dictionary, index: int, sold: bool, price: int, is_item: bool, def: Dictionary, kind: String) -> Button:
+static func _create_card_price_btn(shop, offer: Dictionary, index: int, price: int, is_item: bool, def: Dictionary, kind: String) -> Button:
 	var btn := Button.new()
+	btn.name = "PriceButton"	# 就地回填按名找（代码建节点默认名会被引擎改名）
 	btn.custom_minimum_size = Vector2(0, WaveShop.CARD_PRICE_H)
 	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	GameStyle.button(btn, GameStyle.JADE, GameStyle.JADE_EDGE, 14, GameStyle.INK_TEXT, 6.0)
+	_apply_price_btn_state(btn, offer, price, is_item, def, kind)
+	btn.pressed.connect(func():
+		if GameManager.buy_offer(index):
+			shop.refresh(false)
+	)
+	return btn
+
+## 报价键文案/可用态的唯一口径（建卡与就地回填共用）。合成腾出上阵/背包格后，
+## 「装备背包已满」必须当场变回「N 金币 · 入背包」，否则玩家会以为买不了（2026-11-04 用户 bug）。
+## sold 从 offer 现读，不另传：回填时没有建卡那一刻的局部变量。
+static func _apply_price_btn_state(btn: Button, offer: Dictionary, price: int, is_item: bool, def: Dictionary, kind: String) -> void:
 	btn.text = "%d 金币" % price
-	if sold:
-		btn.text = "已 售 出"
+	btn.disabled = false
+	if bool(offer.get("sold", false)):
 		btn.disabled = true
+		btn.text = "已 售 出"
 	elif GameManager.spirit_stones < price:
 		btn.disabled = true
 		# 买不起要留着那颗灰键、并且把差额写在脸上：上一版只把键置灰，
@@ -535,11 +558,6 @@ static func _create_card_price_btn(shop, offer: Dictionary, index: int, sold: bo
 		btn.text = "装备背包已满"
 	elif kind == "weapon" and GameManager.slots_used() >= GameManager.max_weapon_slots():
 		btn.text = "%d 金币 · 入背包" % price
-	btn.pressed.connect(func():
-		if GameManager.buy_offer(index):
-			shop.refresh(false)
-	)
-	return btn
 
 ## 商品右上角圆形合成标记：按「商品自身星级」数，手里同名同星差 1 件即可凑齐三合一时
 ## （如已有 2 件 ★1 而货架卖 ★1；或已有 2 件 ★2 而货架卖 ★2），
@@ -593,4 +611,126 @@ static func _create_merge_corner_badge(shop, w_id: String, star: int = 1) -> Con
 
 	overlay.add_child(badge)
 	return overlay
+
+# ---------------- 就地状态回填（不重建节点） ----------------
+
+## 整排货架卡按当前库存回填一遍。合成走 WaveShop.refresh_owned 轻量通道时，陈列行重建了、
+## 货架卡却还是建卡那一刻的旧账：报价键「装备背包已满」、持有量、流派进度签、
+## 「合」角标、武器伤害读数全都依赖 slots_used()/stash.size()/tag 计数。
+## 2026-11-04 用户 bug：满仓（上阵 6/6 + 背包 5/5）合成掉 3 把后两处都腾出空位，
+## 货架仍写着「装备背包已满」不能买；拖一下武器走 refresh(false) 重建卡才恢复。
+static func refresh_row_states(container: Node, shop) -> void:
+	if container == null or not is_instance_valid(container):
+		return
+	var offers: Array = GameManager.shop_offers
+	var count: int = mini(container.get_child_count(), offers.size())
+	for i in range(count):
+		var card := container.get_child(i) as Control
+		if card == null or card.is_queued_for_deletion():
+			continue
+		refresh_card_state(card, shop, offers[i], i)
+
+## 单张卡的状态回填：文案/样式就地改，节点实例不变（MergeFlowCheck 钉着合成时货架卡不重建）。
+## 药水/道具/灵兽卡只有报价键需要重算（金币/持有量/栏位），武器卡另有持有量、流派进度、
+## 合成角标与伤害读数——它们全都随合成后的槽位/羁绊计数变化。
+static func refresh_card_state(card: Control, shop, offer: Dictionary, index: int) -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	var kind := String(offer.get("kind", "weapon"))
+	var is_item := kind == "item"
+	var def: Dictionary = ItemData.get_def(String(offer.get("id", ""))) if is_item else {}
+	var btn := card.find_child("PriceButton", true, false) as Button
+	if btn != null:
+		_apply_price_btn_state(btn, offer, int(offer.get("price", 0)), is_item, def, kind)
+	if kind != "weapon":
+		return
+	var card_w: float = card.custom_minimum_size.x
+	var inner_w: float = WaveShop.card_inner_w(card_w)
+	var data := resolve_offer_data(offer, null, inner_w)
+	_apply_owned_label(card, String(data.owned_text), card_w)
+	_apply_tag_row(card, shop, offer, index, data)
+	_apply_stat_rows(card, data.stat_rows, inner_w)
+	_apply_card_edge(card, data.edge_color)
+	_apply_merge_badge(card, shop, String(data.w_id), int(data.star), bool(data.merge_ready))
+
+## 名号下的持有量行：空 → 删、非空 → 改文本、原先没有 → 建（合成只减少件数，一般不跨空/非空）
+static func _apply_owned_label(card: Control, owned_text: String, card_w: float) -> void:
+	var lbl := card.find_child("OwnedLabel", true, false) as Label
+	if owned_text.is_empty():
+		if lbl != null:
+			lbl.get_parent().remove_child(lbl)
+			lbl.queue_free()
+		return
+	if lbl != null:
+		lbl.text = owned_text
+		return
+	var title_box := card.find_child("TitleBox", true, false)
+	if title_box == null:
+		return
+	title_box.add_child(_make_owned_label(owned_text, WaveShop.card_name_w(card_w)))
+
+## 色签行整行换新：签上的「木系 5/6」进度、临门一档的绿面、锁定态与「合」标记全在这一行，
+## 逐颗改文本/样式比重建更绕，而这一行只有几颗 Label（不进 MergeFx 的爆点预算）。
+static func _apply_tag_row(card: Control, shop, offer: Dictionary, index: int, data: Dictionary) -> void:
+	var body := card.get_node_or_null("CardBody") as VBoxContainer
+	if body == null:
+		return
+	var old := body.get_node_or_null("TagRow")
+	var row := _create_card_tag_row(shop, offer, index, bool(offer.get("sold", false)),
+		String(data.tag), data.chip_color, data.chip_text_color, data.tag_parts, data.part_hot,
+		bool(data.merge_ready), data.behavior_chip, data.tag_keys, String(data.w_id))
+	_replace_child(body, old, row)
+
+## 武器加成读数（伤害/每秒伤害/范围）随买下后的槽位数与羁绊乘区变化，合成腾格后必须重算。
+## BonusRows 的块自带名字，先摘旧块再挂新块（同一次调用里完成，不会出现两块同占竖向预算）。
+static func _apply_stat_rows(card: Control, stat_rows: Array, inner_w: float) -> void:
+	var body := card.get_node_or_null("CardBody") as VBoxContainer
+	if body == null:
+		return
+	var old := body.get_node_or_null("BonusRowsBlock")
+	if stat_rows.is_empty():
+		if old != null:
+			body.remove_child(old)
+			old.queue_free()
+		return
+	var block := BonusRows.build_rows_block(stat_rows, 12, inner_w)
+	if old == null:
+		var tag_row := body.get_node_or_null("TagRow")
+		var at: int = tag_row.get_index() + 1 if tag_row != null else 0
+		body.add_child(block)
+		body.move_child(block, at)
+		return
+	_replace_child(body, old, block)
+
+## 卡片描边：JADE＝有流派临门一档（合成会改变 tag 计数，绿边可能亮起或熄灭）。
+## 边色没变就不重建 StyleBox，省掉每次合成都登记一份主题色映射。
+static func _apply_card_edge(card: Control, edge_color: Color) -> void:
+	var panel := card as PanelContainer
+	if panel == null:
+		return
+	var cur := panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if cur != null and cur.border_color.is_equal_approx(edge_color):
+		return
+	_apply_card_style(panel, edge_color)
+
+## 右上角「合」角标：买下即凑齐三合一才亮；合成后手里的同名同星件数变了，亮灭跟着变。
+static func _apply_merge_badge(card: Control, shop, w_id: String, star: int, ready: bool) -> void:
+	var old := card.get_node_or_null("MergeCornerOverlay")
+	if ready:
+		if old == null:
+			card.add_child(_create_merge_corner_badge(shop, w_id, star))
+	elif old != null:
+		card.remove_child(old)
+		old.queue_free()
+
+## 同位置换子节点：先摘旧再挂新（都在同一帧完成），避免新旧两块同时参与布局
+static func _replace_child(parent: Node, old: Node, fresh: Node) -> void:
+	if old == null or not is_instance_valid(old):
+		parent.add_child(fresh)
+		return
+	var at := old.get_index()
+	parent.remove_child(old)
+	old.queue_free()
+	parent.add_child(fresh)
+	parent.move_child(fresh, at)
 

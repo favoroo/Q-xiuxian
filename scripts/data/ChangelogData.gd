@@ -8,6 +8,15 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.24",
+			"date": "2026-11-04",
+			"title": "商店购买修复",
+			"items": [
+				"修复合成腾出空位后商店仍显示背包已满。",
+				"修复合成后商店卡上的数量与流派进度不刷新。",
+			],
+		},
+		{
 			"version": "v0.1.23",
 			"date": "2026-11-04",
 			"title": "魔君弹幕身份化与弹幕可躲性",
