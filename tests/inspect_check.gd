@@ -9,12 +9,26 @@ extends Node
 ## 4. 妖魔配置完整度：EnemyVisualConfig 能够完整提供全量 17 种怪物的视觉配置。
 ## 5. 武器攻击特效完整度：WeaponArcRenderer 6 元素、BurstKindFx 6 爆发形态、光束与喷火渲染器正常配置。
 ## 6. 飞行物纯矢量弹道完整度：21 种武器 bullet 路径 100% 精确映射到对应矢量种类，无静默 fallback。
-## 7. UI 设计系统规范完整度：GameStyle 核心调色盘与 StyleBox 构件函数正常工作。
+## 6b. 机关专属器形（2026-11-07）：10 把机关的 `bullet_art` 全部可解析、互不撞形、也不与手武器同图。
+## 7. 弹丸绘制预算：每种器形单次 _draw 只提交 1 个 draw call，批顶点不超分档上限。
+## 8. UI 设计系统规范完整度：GameStyle 核心调色盘与 StyleBox 构件函数正常工作。
 ##
 ## 运行方式:
 ##   $G --headless --path . res://tests/InspectCheck.tscn
 
 var _c := TestCheck.new()
+
+## 逐器形的批顶点预算（2026-11-07）。红线：单发弹体恒 1 个 draw call（非空 flush 次数 = 1），
+## 顶点数按器形分档 —— 小弹（针/矢/符文）必须廉价，重件（手里剑/金钱镖）已存在上限。
+## 数值取「实测 + 约 25% 裕量」，改器形画法后先看测试打印的实测表再调。
+const PROJECTILE_VERTEX_CAP := {
+	"NEEDLE_SILVER": 48, "NEEDLE_GOLD": 72, "NEEDLE_ICE": 64,
+	"SHURIKEN": 700, "GOLD_COIN": 520,
+	"BOLT_CROSSBOW": 64, "BLADE_ARRAY": 108, "EMBER_SHOT": 88, "ICE_SHARD": 64,
+	"VINE_THORN": 64, "STONE_BOLT": 96, "PUPPET_ORB": 104, "WOOD_SHELL": 64,
+	"FROST_BOLT": 64, "BEACON_FLARE": 64,
+}
+const PROJECTILE_VERTEX_CAP_DEFAULT := 128
 
 func _ready() -> void:
 	call_deferred("_run")
@@ -27,6 +41,7 @@ func _run() -> void:
 	_test_enemy_visual_configs()
 	_test_vfx_integrity()
 	_test_projectile_integrity()
+	_test_projectile_draw_budget()
 	_test_ui_style_integrity()
 	
 	if _c.report("INSPECTCHECK_RESULT"):
@@ -226,6 +241,77 @@ func _test_projectile_integrity() -> void:
 		if kind == ProceduralProjectileRenderer.ProjectileKind.GENERIC_BLADE:
 			fallback_count += 1
 	_c.equals(fallback_count, 0, "所有飞行物贴图均被精确识别，无静默降级 fallback")
+
+	# —— 2026-11-07 机关专属器形 ——
+	# 背景：机关 10 把原先只有 6 种弹丸图，5 种与手武器逐字节同图。现在每把机关必须写
+	# "bullet_art" 且能解析；并且解析结果不许与任何手武器撞、也不许互相撞。
+	var art_missing: Array = []
+	var art_bad: Array = []
+	var turret_kinds := {}
+	for w_id in WeaponData.SHOP_POOL:
+		var tdef := WeaponData.get_def(w_id)
+		if int(tdef.get("behavior", -1)) != WeaponData.Behavior.TURRET:
+			continue
+		var art_key := String(tdef.get("bullet_art", ""))
+		if art_key.is_empty():
+			art_missing.append(w_id)
+			continue
+		var ak := ProceduralProjectileRenderer.art_from_key(art_key)
+		if ak < 0:
+			art_bad.append("%s:%s" % [w_id, art_key])
+			continue
+		turret_kinds[w_id] = ak
+	_c.check(art_missing.is_empty(), "10 把机关都写了 bullet_art 器形键（缺: %s）" % str(art_missing))
+	_c.check(art_bad.is_empty(), "机关 bullet_art 键全部解析到 ProjectileKind（坏: %s）" % str(art_bad))
+	_c.equals(turret_kinds.size(), 10, "机关器形解析覆盖 10 把")
+
+	var hand_kinds := {}
+	for w_id in WeaponData.SHOP_POOL:
+		var hdef := WeaponData.get_def(w_id)
+		if int(hdef.get("behavior", -1)) != WeaponData.Behavior.PROJECTILE:
+			continue
+		hand_kinds[ProceduralProjectileRenderer.detect_kind_from_path(String(hdef.get("bullet", "")))] = w_id
+	var dup_with_hand: Array = []
+	var seen_kind := {}
+	var dup_among_turrets: Array = []
+	for w_id in turret_kinds:
+		var tk: int = int(turret_kinds[w_id])
+		if hand_kinds.has(tk):
+			dup_with_hand.append("%s==%s" % [w_id, hand_kinds[tk]])
+		if seen_kind.has(tk):
+			dup_among_turrets.append("%s==%s" % [w_id, seen_kind[tk]])
+		else:
+			seen_kind[tk] = w_id
+	_c.check(dup_with_hand.is_empty(), "机关弹丸不再与手武器同图（撞图: %s）" % str(dup_with_hand))
+	_c.check(dup_among_turrets.is_empty(), "10 把机关各自不同图（撞图: %s）" % str(dup_among_turrets))
+
+## 逐器形量一次批顶点与提交次数：红线是「单发弹体恒 1 个 draw call」，顶点数按器形分档。
+## 手法：本渲染器的所有原语都只进 BatchDraw 静态数组，flush 直调 RenderingServer，
+## 不依赖引擎的绘制通知 —— 所以 headless 下可以直接调 _draw() 读计数（无需真实出图）。
+func _test_projectile_draw_budget() -> void:
+	var multi_submit: Array = []
+	var over: Array = []
+	var rows: Array = []
+	for kind_name in ProceduralProjectileRenderer.ProjectileKind.keys():
+		var k: int = int(ProceduralProjectileRenderer.ProjectileKind[kind_name])
+		var r := ProceduralProjectileRenderer.new()
+		r.kind = k
+		add_child(r)
+		BatchDraw.reset_draw_stats()
+		r._draw()
+		var verts: int = BatchDraw.last_flush_vertices
+		var submits: int = BatchDraw.flush_submits
+		remove_child(r)
+		r.free()
+		rows.append("%s=%d" % [String(kind_name), verts])
+		if submits != 1:
+			multi_submit.append("%s:%d" % [String(kind_name), submits])
+		var cap: int = int(PROJECTILE_VERTEX_CAP.get(kind_name, PROJECTILE_VERTEX_CAP_DEFAULT))
+		if verts > cap:
+			over.append("%s %d>%d" % [String(kind_name), verts, cap])
+	print("[INSPECT] 弹丸器形批顶点: ", ", ".join(rows))
+	_c.check(multi_submit.is_empty(), "每种弹丸器形仍只提交 1 个 draw call（超: %s）" % str(multi_submit))
+	_c.check(over.is_empty(), "弹丸器形批顶点均在预算内（超: %s）" % str(over))
 
 func _test_ui_style_integrity() -> void:
 	_c.check(GameStyle.INK != Color.TRANSPARENT, "GameStyle.INK 色阶有效")

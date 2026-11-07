@@ -8,6 +8,17 @@ extends RefCounted
 static func get_logs() -> Array[Dictionary]:
 	return [
 		{
+			"version": "v0.1.25",
+			"date": "2026-11-07",
+			"title": "弹丸身份化",
+			"items": [
+				"十座机关各出专属弹丸，不再和手用法器撞图。",
+				"符纸按五行分色分形，混战里一眼分得出。",
+				"银针、金针、冰针各有各的模样，不再是三根线。",
+				"命中特效与拖尾按五行配色，冰针不再带着暖光。",
+			],
+		},
+		{
 			"version": "v0.1.24",
 			"date": "2026-11-04",
 			"title": "商店购买修复",

@@ -195,6 +195,11 @@ static func perform(w) -> void:
 		p.bullet_texture = w._bullet_tex
 		p.bullet_scale = w._bullet_scale
 		p.spin = w._bullet_spins
+		# 器形键 + 五行色温（2026-11-07）：机关靠 bullet_art 各自出图；
+		# 元素色温让无 proc 的武器（癸水符/庚金符…）拖尾与爆点也带属性色
+		p.bullet_art = w._bullet_art
+		p.element_name = w._element_name
+		p.element_tint = w._element_tint
 		# 吸血分档：弹丸按远程系数（机关炮台在 TurretUnit 里另填 TURRET）
 		p.source_behavior = WeaponData.Behavior.PROJECTILE
 		if w.def.get("proc_burn", false):
@@ -248,6 +253,9 @@ static func _spawn_phantom(w, locked: Node2D, dir: Vector2, dmg: float, bounce: 
 	ph.bullet_texture = w._bullet_tex
 	ph.bullet_scale = w._bullet_scale * 0.92
 	ph.spin = w._bullet_spins
+	ph.bullet_art = w._bullet_art
+	ph.element_name = w._element_name
+	ph.element_tint = w._element_tint
 	ph.source_behavior = WeaponData.Behavior.PROJECTILE
 	if w.def.get("proc_burn", false):
 		ph.proc_burn = true

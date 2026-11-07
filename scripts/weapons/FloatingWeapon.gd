@@ -43,6 +43,13 @@ var muzzle_len: float = 11.0           # 出膛点离本体中心的屏上距离
 var _bullet_tex: Texture2D = null
 var _bullet_scale: float = 1.0
 var _bullet_spins: bool = false
+## 显式器形键（WeaponData 的 "bullet_art"，空 = 按 _bullet_tex 路径推断）。
+## 机关 10 把靠它摆脱「与手武器同一张弹丸图」，手武器留空即可。
+var _bullet_art: String = ""
+## 五行色温：proc 只表示"打上去之后持续掉血/减速"，元素色温是另一条线 ——
+## 不带 proc 的癸水符/庚金符也要让拖尾与命中爆点读出属性。
+var _element_name: String = ""
+var _element_tint: Color = Color.WHITE
 
 var cooldown_timer: float = 0.0
 ## 翻滚/冲刺期间压住起手（闪避技能）：落地由 Player 解除并清间隔，保证「滚动完落地才 A」。
@@ -222,6 +229,9 @@ func setup(def_id: String, star_level: int) -> void:
 		_bullet_tex = load(bullet_path) as Texture2D
 	_bullet_scale = float(def.get("bullet_scale", 1.0))
 	_bullet_spins = bool(def.get("bullet_spin", false))
+	_bullet_art = String(def.get("bullet_art", ""))
+	_element_name = WeaponData.element_of(def_id)
+	_element_tint = GameStyle.ELEMENT_COLORS.get(_element_name, Color.WHITE)
 	_resolve_feel_weights()
 	# 升星重调 setup：把新星数下发矢量本体（结构强化：★2 器尖冷光点、★3 刃脊流光）
 	if _proc_renderer != null:

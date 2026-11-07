@@ -13,6 +13,11 @@ extends RefCounted
 ## 归属唯一真话是各武器的 "tags"（"tag" 只是展示文案），器类签/图鉴/商店/羁绊结算全从 tags 取，改归属两处一起改。
 ## 弹丸类（PROJECTILE）另带 bullet / bullet_scale / bullet_spin 三个外观字段：打出去的东西按武器各自不同
 ## （火符掷火符、飞剑出飞剑、冰针出针），画布尺寸 × bullet_scale == 屏上像素；缺 bullet 时回退 blade.png。
+## 2026-11-07 起 bullet 那张 PNG 运行时其实被隐掉（BladeProjectile 把 Sprite2D 的 alpha 置 0），
+## 只剩「路径当查表键」的作用。机关要各自出图又没有对应 PNG，于是新增可选字段：
+##   "bullet_art"：显式器形键 = ProceduralProjectileRenderer.ProjectileKind 枚举名小写
+##                 （例 "bolt_crossbow" / "ice_shard" / "beacon_flare"）。写了优先，没写仍按 bullet 路径推断。
+## 目前只有 10 把机关写这个字段（它们原先与手武器同图）；手武器继续走路径推断，无需改动。
 ## bullet_scale 那把尺子（2026-10-09，用户口径：「飞行物太大了，其他几个也挺大」）：
 ## 弹丸屏上长轴不许大过发射它的武器本体（本体 = 48×48 画布 × FloatingWeapon 的 0.55 ⇒ 26.4px）。
 ## 符箓是块面状贴图、细长兵器是 40px 长条，按 1.0 出图全都在本体的 1.5 倍 ⇒ 满屏飞招牌。
@@ -598,6 +603,7 @@ const DEFS: Dictionary = {
 						"price": 38, "icon": "res://assets/art/weapon_jiguan_nu.png",
 						"tip": Vector2(22, -20), "turret_shape": "crossbow", "upright": true,
 						"desc": "布设自动索敌的机关弩台", "tag": "机关·金",
+						"bullet_art": "bolt_crossbow",
 						"bullet": "res://assets/art/bullet_gold_needle.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1,
 						"tags": ["contraption", "metal"],
@@ -613,6 +619,7 @@ const DEFS: Dictionary = {
 						"price": 42, "icon": "res://assets/art/weapon_jianzhen_pan.png",
 						"tip": Vector2(22, 0), "turret_shape": "array_disc", "upright": true,
 						"desc": "布设御剑阵盘疾射飞剑", "tag": "机关·剑系·金",
+						"bullet_art": "blade_array",
 						"bullet": "res://assets/art/bullet_gold_sword.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1,
 						"tags": ["contraption", "sword", "metal"],
@@ -629,6 +636,7 @@ const DEFS: Dictionary = {
 						"price": 40, "icon": "res://assets/art/weapon_penhuo_jiguanshou.png",
 						"tip": Vector2(22, -10), "turret_shape": "beast", "upright": true,
 						"desc": "布设喷火机关兽持续灼烧敌群", "tag": "机关·火",
+						"bullet_art": "ember_shot",
 						"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
 						"pierce": 1, "proc_burn": true, "burn_ratio": 0.40, "burn_dur": 2.5,
 						"tags": ["contraption", "fire"],
@@ -727,6 +735,7 @@ const DEFS: Dictionary = {
 						"price": 40, "icon": "res://assets/art/weapon_hanquan_shou.png",
 						"tip": Vector2(20, -6), "turret_shape": "beast", "upright": true,
 						"desc": "布设寒泉机关兽连吐冰针冻缓敌群", "tag": "机关·水",
+						"bullet_art": "ice_shard",
 						"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 						"pierce": 1, "proc_chill": 0.30, "chill_dur": 1.5,
 						"tags": ["contraption", "water"],
@@ -757,6 +766,7 @@ const DEFS: Dictionary = {
 						"price": 38, "icon": "res://assets/art/weapon_tengluo_jiguan.png",
 						"tip": Vector2(22, -16), "turret_shape": "trebuchet", "upright": true,
 						"desc": "布设藤萝弹射器毒镖叠毒", "tag": "机关·木",
+						"bullet_art": "vine_thorn",
 						"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
 						"pierce": 1, "proc_poison": true, "poison_ratio": 0.30, "poison_dur": 2.5,
 						"tags": ["contraption", "wood"],
@@ -785,6 +795,7 @@ const DEFS: Dictionary = {
 						"price": 42, "icon": "res://assets/art/weapon_leishi_jiguan.png",
 						"tip": Vector2(22, 16), "turret_shape": "trebuchet", "upright": true,
 						"desc": "布设垒石投掷机抛石砸退敌群", "tag": "机关·土",
+						"bullet_art": "stone_bolt",
 						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.6, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["contraption", "earth"],
@@ -882,6 +893,7 @@ const DEFS: Dictionary = {
 						"price": 42, "icon": "res://assets/art/weapon_kuilei_shou.png",
 						"tip": Vector2(22, -2), "turret_shape": "beast", "upright": true,
 						"desc": "布设符灯傀儡兽掷石守御", "tag": "机关·召唤·土",
+						"bullet_art": "puppet_orb",
 						"bullet": "res://assets/art/bullet_earth_talisman.png", "bullet_scale": 0.55, "bullet_spin": true,
 						"pierce": 1,
 						"tags": ["contraption", "spirit", "earth"],
@@ -1058,6 +1070,7 @@ const DEFS: Dictionary = {
 								"price": 38, "icon": "res://assets/art/weapon_qingmu_pao.png",
 								"tip": Vector2(22, -12), "turret_shape": "cannon", "upright": true,
 								"desc": "布设青木灵炮贯穿敌阵", "tag": "机关·木",
+								"bullet_art": "wood_shell",
 								"bullet": "res://assets/art/bullet_leaf_dagger.png", "bullet_scale": 0.55, "bullet_spin": false,
 								"pierce": 1,
 								"tags": ["contraption", "wood"],
@@ -1073,6 +1086,7 @@ const DEFS: Dictionary = {
 								"price": 40, "icon": "res://assets/art/weapon_ningbing_nu.png",
 								"tip": Vector2(22, -10), "turret_shape": "crossbow", "upright": true,
 									"desc": "布设凝冰机弩远程点杀冻缓敌人", "tag": "机关·水",
+								"bullet_art": "frost_bolt",
 								"bullet": "res://assets/art/bullet_ice_needle.png", "bullet_scale": 0.50, "bullet_spin": false,
 								"pierce": 1, "proc_chill": 0.25, "chill_dur": 1.5,
 								"tags": ["contraption", "water"],
@@ -1088,6 +1102,7 @@ const DEFS: Dictionary = {
 								"price": 40, "icon": "res://assets/art/weapon_fenghuo_tai.png",
 								"tip": Vector2(20, 0), "turret_shape": "tower", "upright": true,
 								"desc": "布设烽火台持续喷焰引燃敌群", "tag": "机关·火",
+								"bullet_art": "beacon_flare",
 								"bullet": "res://assets/art/bullet_fire_flame.png", "bullet_scale": 0.50, "bullet_spin": true,
 								"pierce": 1, "proc_burn": true, "burn_ratio": 0.35, "burn_dur": 2.5,
 								"tags": ["contraption", "fire"],

@@ -12,6 +12,7 @@ func _test_five_elements_system() -> void:
 	var missing_dual_tags: Array = []
 	var no_bullet: Array = []        ## 弹丸类法器没配外观（会退回公共的 blade.png ⇒ 五把法器打出同一张火符）
 	var bad_bullet: Array = []       ## 配了路径但文件不在
+	var turret_art_bad: Array = []   ## 机关没写 bullet_art 或键解析不了（会退回手武器同图）
 	var elem_counts: Dictionary = {"metal": 0, "wood": 0, "water": 0, "fire": 0, "earth": 0}
 	for w_id in WeaponData.SHOP_POOL:
 		var def := WeaponData.get_def(w_id)
@@ -24,6 +25,12 @@ func _test_five_elements_system() -> void:
 				no_bullet.append(w_id)
 			elif not ResourceLoader.exists(bullet_path):
 				bad_bullet.append(w_id)
+		# 2026-11-07：机关 10 把曾与手武器逐字节同图（机关弩==金针符、剑阵盘==庚金飞剑…），
+		# 现在各自写 bullet_art 键走独立器形；键缺失或拼错都在这条快闸上先红。
+		if int(def.get("behavior", -1)) == WeaponData.Behavior.TURRET:
+			var art_key := String(def.get("bullet_art", ""))
+			if art_key.is_empty() or ProceduralProjectileRenderer.art_from_key(art_key) < 0:
+				turret_art_bad.append(w_id)
 		var c_tag := WeaponData.class_of(w_id)
 		var e_tag := WeaponData.element_of(w_id)
 		if c_tag.is_empty() or e_tag.is_empty():
@@ -34,6 +41,7 @@ func _test_five_elements_system() -> void:
 	_c.check(missing_dual_tags.is_empty(), "每把法器均具备「器类+五行」双标签（缺: %s）" % str(missing_dual_tags))
 	_c.check(no_bullet.is_empty(), "每把弹丸法器都配了自己的弹丸外观（缺: %s）" % str(no_bullet))
 	_c.check(bad_bullet.is_empty(), "弹丸外观文件全部存在（缺文件: %s）" % str(bad_bullet))
+	_c.check(turret_art_bad.is_empty(), "10 把机关都配了可解析的专属弹丸器形（缺/坏: %s）" % str(turret_art_bad))
 	# 扩容后各系把数：金17/木13/水13/火13/土14（2026-10-19 手里剑入金系）
 	var elem_expect := {"metal": 17, "wood": 13, "water": 13, "fire": 13, "earth": 14}
 	for e_key in elem_counts.keys():

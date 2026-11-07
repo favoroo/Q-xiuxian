@@ -28,6 +28,17 @@ static var _pts := PackedVector2Array()
 static var _cols := PackedColorArray()
 static var _idx := PackedInt32Array()
 
+## —— 调试计数（2026-11-07，正式路径成本 = flush 里两次整数自增/赋值）——
+## 「弹丸不许加 draw call、批顶点别失控」这条红线原先只能靠人肉看代码：
+## 单发弹体的 draw call 数 = 非空 flush 次数，顶点数 = _pts.size()。
+## tests/inspect_check.gd 按器形逐个 _draw() 后读这两个数做预算断言。
+static var last_flush_vertices: int = 0
+static var flush_submits: int = 0
+
+static func reset_draw_stats() -> void:
+	last_flush_vertices = 0
+	flush_submits = 0
+
 ## 收集一个凸填充多边形
 static func poly(item: CanvasItem, points: PackedVector2Array, col: Color) -> void:
 	var n := points.size()
@@ -221,6 +232,8 @@ static func flush(item: CanvasItem) -> void:
 	if _idx.is_empty():
 		return
 	RenderingServer.canvas_item_add_triangle_array(item.get_canvas_item(), _idx, _pts, _cols)
+	last_flush_vertices = _pts.size()
+	flush_submits += 1
 	_clear()
 
 ## 丢弃未提交的批次（异常路径兜底，正常只走 flush）

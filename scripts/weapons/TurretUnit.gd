@@ -152,6 +152,12 @@ var _def: Dictionary = {}
 var _bullet_tex: Texture2D = null
 var _bullet_scale: float = 0.55
 var _bullet_spins: bool = false
+## 显式器形键（WeaponData 的 "bullet_art"）：机关 10 把各自出图靠它，
+## 缺省仍按 _bullet_tex 路径推断（与手武器同一条兜底，见 ProceduralProjectileRenderer.art_from_key）
+var _bullet_art: String = ""
+## 五行色温：proc 是"打上去之后持续掉血/减速"，元素色温是另一条线
+var _element_name: String = ""
+var _element_tint: Color = Color.WHITE
 
 var _cooldown_timer: float = 0.0
 var _had_target: bool = false
@@ -223,6 +229,9 @@ func setup(def_id: String, star_level: int) -> void:
 		_bullet_tex = load(bullet_path) as Texture2D
 	_bullet_scale = float(_def.get("bullet_scale", 0.55))
 	_bullet_spins = bool(_def.get("bullet_spin", false))
+	_bullet_art = String(_def.get("bullet_art", ""))
+	_element_name = WeaponData.element_of(def_id)
+	_element_tint = GameStyle.ELEMENT_COLORS.get(_element_name, Color.WHITE)
 	if _proc_renderer != null:
 		_proc_renderer.star = star
 		_proc_renderer.queue_redraw()
@@ -896,6 +905,10 @@ func _fire_one(target: Node2D, final_dmg: float, aim_dir: Vector2, bounce_bonus:
 	p.bullet_texture = _bullet_tex
 	p.bullet_scale = _bullet_scale
 	p.spin = _bullet_spins
+	# 机关专属器形 + 五行色温（2026-11-07）：10 把机关不再复用手武器的弹丸图
+	p.bullet_art = _bullet_art
+	p.element_name = _element_name
+	p.element_tint = _element_tint
 	# 吸血分档：机关炮台出的弹按高频接触档
 	p.source_behavior = WeaponData.Behavior.TURRET
 

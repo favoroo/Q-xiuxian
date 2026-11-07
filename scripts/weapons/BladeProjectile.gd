@@ -89,6 +89,16 @@ var homing_target: Node2D = null
 ## 画布尺寸 == 屏上像素（Nearest、不缩放），贴图一律朝右，飞行时随 direction 转向。
 var bullet_texture: Texture2D = null
 var bullet_scale: float = 1.0
+## 显式器形键（WeaponData 的 "bullet_art"）：空 = 按 bullet_texture 路径推断。
+## 2026-11-07 之前器形只能由那张被隐藏的 PNG 路径决定，机关想各自出图就得新造 10 张
+## 永远不会被看到的 PNG。现在数据表可以直写键（= ProjectileKind 枚举名小写）。
+var bullet_art: String = ""
+## 出膛武器的五行（metal/wood/water/fire/earth；空 = 未知）。
+## 与 proc 三态分开：proc 决定"打上去之后持续掉血/减速"，五行只决定色温与命中反馈配色 ——
+## 癸水符这类不带 proc 的冰系武器也得看得出是水，不能一律纸金。
+var element_name: String = ""
+## 元素色温（GameStyle.ELEMENT_COLORS；WHITE = 不染）。只喂拖尾与命中爆点，不改判定。
+var element_tint: Color = Color.WHITE
 ## 还能"另找目标"几次：命中过一次就归零 —— 穿透的语义是"一条线穿过去"，不是"拐回来再穿一遍"
 var acquire_left: int = 1
 
@@ -119,9 +129,9 @@ var source_behavior: int = WeaponData.Behavior.PROJECTILE
 var _vector_renderer: ProceduralProjectileRenderer = null
 ## 世界坐标历史拖尾：追踪弹拐弯时留弧线（局部彗尾只会跟着本体转），池化复用零重建
 var _trail: ProjectileTrail = null
-## 上一次 kind 推断用的纹理路径：同一武器连发时路径恒定，跳过逐发的
-## detect_kind_from_path 字符串子串匹配（activate 热路径）
-var _last_kind_path: String = ""
+## 上一次器形解析用的键（bullet_art + "|" + 贴图路径）：同一武器连发时键恒定，
+## 跳过逐发的 art_from_key / detect_kind_from_path（activate 热路径）
+var _last_art_key: String = ""
 
 func _ready() -> void:
 	rotation = direction.angle()
@@ -139,16 +149,30 @@ func _ready() -> void:
 	move_child(_trail, 0)
 
 func _setup_vector_visual() -> void:
-	var path_str := bullet_texture.resource_path if bullet_texture != null else ""
 	_vector_renderer = ProceduralProjectileRenderer.new()
-	_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+	_vector_renderer.kind = _resolve_kind()
 	sprite.add_child(_vector_renderer)
 	# 隐蔽旧像素贴图，保留子节点矢量渲染
 	sprite.self_modulate.a = 0.0
 
+## 器形解析：显式键优先，缺省落回贴图路径推断（SpiritBeast/SpiritPet/预览台没有键）。
+func _resolve_kind() -> int:
+	var by_key := ProceduralProjectileRenderer.art_from_key(bullet_art)
+	if by_key >= 0:
+		return by_key
+	var path_str := bullet_texture.resource_path if bullet_texture != null else ""
+	return ProceduralProjectileRenderer.detect_kind_from_path(path_str)
+
+## activate 热路径的复用判据（两个输入任一变化都必须重解析）
+func _kind_key() -> String:
+	return bullet_art + "|" + (bullet_texture.resource_path if bullet_texture != null else "")
+
 ## 异常色温：弹丸本体与它自带的那盏 PointLight2D 一起染色（场景里默认是暖橙，
 ## 冰针顶着一盏暖灯看着就像打歪了）。只改色相，不改判定、不改尺寸。
 func _apply_elemental_tint() -> void:
+	# 元素色温下发矢量渲染器：拖尾取色与命中爆点都从它读（原来是声明后从未写入的死字段）
+	if _vector_renderer != null:
+		_vector_renderer.elemental_tint = element_tint
 	var tint := Color.WHITE
 	if proc_burn:
 		tint = Color(1.3, 0.75, 0.45)
@@ -300,11 +324,13 @@ func _get_impact_element() -> Variant:
 		return "water"
 	elif proc_poison:
 		return "wood"
+	# 2026-11-07：元素名必须回字符串。旧写法在 elemental_tint 不等于 WHITE 时把 Color 当元素
+	# 返回给 FxParticlePool.weapon_hit_spark —— 一旦色温被点亮，火花取色就会拿到 Color 而查不到色表。
+	if not element_name.is_empty():
+		return element_name
 	if _vector_renderer != null:
 		if _vector_renderer.kind == ProceduralProjectileRenderer.ProjectileKind.GOLD_COIN:
 			return "metal"
-		if _vector_renderer.elemental_tint != Color.WHITE:
-			return _vector_renderer.elemental_tint
 	return "none"
 
 ## 拖尾取色：同一把尺子先用异常色温（modulate），退而矢量渲染器的元素色，最后回默认纸金。
@@ -402,7 +428,7 @@ static func acquire_or_new(scene: PackedScene, parent: Node) -> BladeProjectile:
 ## 必须在这里按当前字段值重铺。重置清单（改字段签名时对照这里）：
 ##   direction/speed/damage/knockback_base/lifetime/pierce_left/bounce_left/
 ##   homing_target/acquire_left/_hit_index/proc_burn/burn_dps/burn_dur/proc_chill/chill_dur/
-##   proc_poison/poison_dur/bullet_texture/bullet_scale/spin
+##   proc_poison/poison_dur/bullet_texture/bullet_scale/bullet_art/element_name/element_tint/spin
 ## 注：source_behavior 由出膛方在 activate() 之前写好，回收时在 _recycle 归零，activate 不覆盖它。
 func activate() -> void:
 	_pooled = false
@@ -429,11 +455,11 @@ func activate() -> void:
 	sprite.scale = Vector2.ONE * bullet_scale
 	sprite.rotation = 0.0
 	if _vector_renderer != null:
-		var path_str := bullet_texture.resource_path if bullet_texture != null else ""
-		# 同路径复用上一发的推断结果：detect 是纯路径子串匹配，换武器才需要重跑
-		if path_str != _last_kind_path:
-			_vector_renderer.kind = ProceduralProjectileRenderer.detect_kind_from_path(path_str)
-			_last_kind_path = path_str
+		var kind_key := _kind_key()
+		# 同键复用上一发的解析结果：键是「显式器形键 + 贴图路径」的拼接，换武器才需要重跑
+		if kind_key != _last_art_key:
+			_vector_renderer.kind = _resolve_kind()
+			_last_art_key = kind_key
 		_vector_renderer.set_process(true)   ## 唤醒子渲染器（回收时显式休眠的）
 		_vector_renderer.queue_redraw()
 	_apply_elemental_tint()
@@ -483,6 +509,11 @@ func _recycle() -> void:
 	source_behavior = WeaponData.Behavior.PROJECTILE
 	bounce_left = 0
 	pierce_left = 0
+	# 器形键与元素色温残值清零（2026-11-07）：bullet_art 只有武器出膛会写，灵兽/宠物弹不写；
+	# 不清的话，上一发机关的器形会跟着复用给御灵弹，element_tint 也会顶着一身不属于它的颜色。
+	bullet_art = ""
+	element_name = ""
+	element_tint = Color.WHITE
 	if _host == null or not is_instance_valid(_host) or _pool.size() >= POOL_CAP:
 		queue_free()
 		return
