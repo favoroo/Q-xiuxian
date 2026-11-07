@@ -58,6 +58,38 @@ curl -s --noproxy '*' http://127.0.0.1:8317/v1/chat/completions \
    官方文档示例不符（报 `Cannot find field`），未继续攻坚——chat 路径已覆盖全部需求。
 4. `/v1/images/generations`、`/v1/audio/speech`、`/v1/interactions` 对本技能模型均 404/不支持。
 
+## 备用通道：magpie 网关的 images 端点（2026-11-06 实测）
+
+`config/api.env` 的 `IMAGE_API_*` 指向 `http://127.0.0.1:3425`（key `magpie`），
+`gen_image.sh` 会改用 OpenAI 风格的 images 端点：
+
+```bash
+# 纯文生图
+curl -s --noproxy '*' http://127.0.0.1:3425/v1/images/generations \
+  -H "Authorization: Bearer $IMAGE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"gemini-3.1-flash-image","prompt":"红色药水图标","size":"1024x1024"}'
+# → {"created":...,"data":[{"b64_json":"...","mime_type":"image/jpeg"}]}
+
+# 参考图（风格锁定）：multipart，可多个 image 字段
+curl -s --noproxy '*' http://127.0.0.1:3425/v1/images/edits \
+  -H "Authorization: Bearer $IMAGE_API_KEY" \
+  -F "model=gemini-3.1-flash-image" -F "prompt=以参考图一致画风，生成蓝色药水" \
+  -F "image=@assets_raw/style/ref_pawn_red.png"
+```
+
+实测结论：
+
+- **`/v1/models` 里没有任何图像模型**（65 个全是文本），别用列表判断；能画图的只有
+  `gemini-3.1-flash-image`（也可写全名 `antigravity/gemini-3.1-flash-image`）。
+  逐个探测 404 的：`gemini-3.1-flash-lite-image`（上游 `Requested entity was not found`）、
+  `gemini-3.1-flash-image-mix`、`gpt-image-1.5/2/2.5`、`agnes-image-2.5-flash`、
+  `ai-studio/*`、`auto/*`；`gemini-web/*` 在 magpie 里是关闭状态。
+- **`/v1/chat/completions` 会吞图**：HTTP 200 但 `message.content=null`、无 `images` 字段，
+  usage 却记满 completion tokens。生图必须走 images 两个端点。
+- 尺寸：`size` 参数生效（`1024x1024` → 1024²，`1408x768` → 1376×768，模型取最接近的合法比例）。
+- 参考图风格延续正常（像素风锚图 → 同画风蓝药水），`--keyout` 品红管线和 `--grid` 切表均验证通过。
+- 响应里的 `b64_json` 由 `lib_extract.py` 统一提取（已支持该形状）。
+
 ## 官方参考文档
 
 - 生图：<https://aistudio.google.com/docs/image-generation>

@@ -3,12 +3,18 @@
 #
 # 用法:
 #   gen_image.sh -p "提示词" [-o 输出前缀] [-m 模型] [-r 参考图.png]... [--keyout [最长边]] [--timeout 秒]
+#                [--style chat|images] [--size 宽x高]
 #
 # 参数:
 #   -p          提示词（必填，中文可用）
 #   -o          输出文件前缀（默认 assets_raw/images/img_时间戳）
 #   -m          模型：gemini-3.1-flash-image（质量默认）/ gemini-3.1-flash-lite-image（快速，~5s）
 #   -r          参考图路径（可多次出现，风格锁定用；相对路径按项目根解析）
+#   --style     请求通道：chat = /v1/chat/completions（默认，media-gen 原通道）；
+#               images = /v1/images/generations（纯文生图）/ /v1/images/edits（带 -r 时）
+#               默认值取 config/api.env 的 IMAGE_API_STYLE，未配置则为 chat。
+#               注意：直连生图网关（如 magpie 3425）只有 images 端点出图，chat 会返回空内容。
+#   --size      仅 images 通道生效：输出尺寸，如 1024x1024 / 1408x768（默认由模型决定）
 #   --keyout    品红底生成 + 自动抠成透明 PNG（可选跟最长边像素，如 --keyout 256）
 #               原始品红底图保留为 <前缀>.raw.jpg 便于重新抠图
 #   --grid      网格切表：生成一张 列x行 宫格素材表后自动切为单张 PNG（如 3x1），
@@ -26,14 +32,16 @@
 set -eo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib_common.sh"
 
-MODEL="gemini-3.1-flash-image"; PROMPT=""; OUT=""; TIMEOUT=180
-KEYOUT=0; SIZE=0; GRID=""; REFS=()
+MODEL="gemini-3.1-flash-image"; MODEL_SET=0; PROMPT=""; OUT=""; TIMEOUT=180
+KEYOUT=0; SIZE=0; GRID=""; REFS=(); API_STYLE=""; IMG_SIZE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -p) PROMPT="$2"; shift 2 ;;
     -o) OUT="$2"; shift 2 ;;
-    -m) MODEL="$2"; shift 2 ;;
+    -m) MODEL="$2"; MODEL_SET=1; shift 2 ;;
     -r) REFS+=("$2"); shift 2 ;;
+    --style) API_STYLE="$2"; shift 2 ;;
+    --size) IMG_SIZE="$2"; shift 2 ;;
     --keyout)
       KEYOUT=1; shift
       case "${1:-}" in ''|*[!0-9]*) ;; *) SIZE="$1"; shift ;; esac
@@ -45,6 +53,19 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$PROMPT" ] || { echo "缺少 -p 提示词" >&2; exit 2; }
 [ -z "$GRID" ] || echo "$GRID" | grep -Eq '^[0-9]+x[0-9]+$' || { echo "--grid 格式应为 列x行，如 3x1" >&2; exit 2; }
+
+# 通道与默认模型：命令行 > config/api.env 的 IMAGE_API_* > 脚本默认
+[ -n "$API_STYLE" ] || API_STYLE="$IMG_STYLE"
+case "$API_STYLE" in
+  chat|images) ;;
+  *) echo "--style 只能是 chat 或 images（当前: $API_STYLE）" >&2; exit 2 ;;
+esac
+if [ "$MODEL_SET" = 0 ] && [ -n "${IMAGE_MODEL:-}" ]; then MODEL="$IMAGE_MODEL"; fi
+[ -n "$IMG_SIZE" ] || IMG_SIZE="${IMAGE_SIZE:-}"
+if [ -n "$IMG_SIZE" ]; then
+  echo "$IMG_SIZE" | grep -Eq '^[0-9]+x[0-9]+$' || { echo "--size 格式应为 宽x高，如 1024x1024" >&2; exit 2; }
+fi
+
 [ -n "$OUT" ] || OUT="$RAW/images/img_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$(dirname "$OUT")"
 
@@ -62,8 +83,17 @@ fi
 
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
-MODEL="$MODEL" PROMPT="$PROMPT" ROOT="$ROOT" REFS="$(printf '%s\n' "${REFS[@]:-}")" \
-python3 - > "$T/payload.json" <<'PY'
+if [ "$API_STYLE" = images ] && [ ${#REFS[@]} -eq 0 ]; then
+  MODEL="$MODEL" PROMPT="$PROMPT" IMG_SIZE="$IMG_SIZE" python3 - > "$T/payload.json" <<'PY'
+import json, os
+p = {"model": os.environ["MODEL"], "prompt": os.environ["PROMPT"]}
+if os.environ.get("IMG_SIZE"):
+    p["size"] = os.environ["IMG_SIZE"]
+print(json.dumps(p))
+PY
+elif [ "$API_STYLE" = chat ]; then
+  MODEL="$MODEL" PROMPT="$PROMPT" ROOT="$ROOT" REFS="$(printf '%s\n' "${REFS[@]:-}")" \
+  python3 - > "$T/payload.json" <<'PY'
 import json, os, sys, base64
 model, prompt = os.environ["MODEL"], os.environ["PROMPT"]
 content = []
@@ -77,12 +107,34 @@ for r in [r for r in os.environ.get("REFS", "").split("\n") if r.strip()]:
 content.append({"type": "text", "text": prompt})
 print(json.dumps({"model": model, "messages": [{"role": "user", "content": content}]}))
 PY
+fi
+
+# 按通道发请求：带参考图走 edits（multipart），否则走 generations / chat completions
+request_media() {
+  if [ "$API_STYLE" = images ] && [ ${#REFS[@]} -gt 0 ]; then
+    set -- -F "model=$MODEL" -F "prompt=$PROMPT"
+    if [ -n "$IMG_SIZE" ]; then set -- "$@" -F "size=$IMG_SIZE"; fi
+    for r in "${REFS[@]}"; do
+      [ -f "$r" ] || r="$ROOT/$r"
+      if [ ! -f "$r" ]; then echo "参考图不存在: $r" >&2; return 2; fi
+      set -- "$@" -F "image=@$r"
+    done
+    curl -s -m "$TIMEOUT" --noproxy '*' "$IMG_BASE/v1/images/edits" \
+      -H "Authorization: Bearer $IMG_KEY" "$@" -o "$T/resp.json" || true
+  elif [ "$API_STYLE" = images ]; then
+    curl -s -m "$TIMEOUT" --noproxy '*' "$IMG_BASE/v1/images/generations" \
+      -H "Authorization: Bearer $IMG_KEY" -H "Content-Type: application/json" \
+      -d @"$T/payload.json" -o "$T/resp.json" || true
+  else
+    curl -s -m "$TIMEOUT" --noproxy '*' "$MEDIA_API_BASE/v1/chat/completions" \
+      -H "Authorization: Bearer $MEDIA_API_KEY" -H "Content-Type: application/json" \
+      -d @"$T/payload.json" -o "$T/resp.json" || true
+  fi
+}
 
 GOT=""
 for ATTEMPT in 1 2; do
-  curl -s -m "$TIMEOUT" --noproxy '*' "$MEDIA_API_BASE/v1/chat/completions" \
-    -H "Authorization: Bearer $MEDIA_API_KEY" -H "Content-Type: application/json" \
-    -d @"$T/payload.json" -o "$T/resp.json" || true
+  request_media
   GOT="$(python3 "$SCRIPT_DIR/lib_extract.py" "$T/resp.json" "$T/media" image 2>/dev/null | head -1 || true)"
   [ -n "$GOT" ] && break
   echo "第 $ATTEMPT 次尝试未返回图片，重试中..." >&2

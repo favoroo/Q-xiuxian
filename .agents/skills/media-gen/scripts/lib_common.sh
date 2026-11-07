@@ -21,6 +21,13 @@ source "$API_ENV"
   echo "config/api.env 中缺少 MEDIA_API_BASE / MEDIA_API_KEY" >&2; exit 1
 }
 
+# 生图通道（gen_image.sh 用）：IMAGE_API_* 优先，未配置则整体沿用 MEDIA_API_*
+# IMG_STYLE=chat  → /v1/chat/completions（media-gen 原通道）
+# IMG_STYLE=images→ /v1/images/generations（纯文生图）/ /v1/images/edits（带参考图）
+IMG_BASE="${IMAGE_API_BASE:-$MEDIA_API_BASE}"
+IMG_KEY="${IMAGE_API_KEY:-$MEDIA_API_KEY}"
+IMG_STYLE="${IMAGE_API_STYLE:-chat}"
+
 # manifest_append <kind> <model> <prompt> <refs用|分隔> <最终文件路径>
 # 逐行追加 JSON 到 assets_raw/manifest.jsonl，供后续 agent 检索复用、避免重复生成
 manifest_append() {

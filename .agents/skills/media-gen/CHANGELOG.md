@@ -3,6 +3,25 @@
 > 规则：任何 agent 修改本技能（脚本/参考文档/配置格式），必须在此追加一行：
 > `## 日期 摘要 (agent名)` + 要点列表。
 
+## 2026-11-06 生图接入 magpie 的 images 通道 (ZCode)
+
+- `config/api.env` 新增可选 `IMAGE_API_BASE / IMAGE_API_KEY / IMAGE_API_STYLE / IMAGE_MODEL`，
+  现指向 magpie `http://127.0.0.1:3425`（`IMAGE_API_STYLE="images"`、
+  `IMAGE_MODEL="gemini-3.1-flash-image"`）。这组不配置时整体回退 `MEDIA_API_*` + chat 通道，
+  旧行为不变。
+- `gen_image.sh` 新增 `--style chat|images` 与 `--size 宽x高`：带 `-r` 且有参考图走
+  `/v1/images/edits`（multipart），无参考图走 `/v1/images/generations`；`--keyout`、
+  `--grid`、两次重试、台账登记逻辑均不变。
+- `lib_extract.py` 新增 OpenAI images 形状 `data[].b64_json`（此前只认 `data` 字段与
+  markdown 内嵌 data URI）。
+- 全链路实测通过：纯文生图（1024²）、`--keyout 256`（透明 PNG 154×256）、
+  参考图锁画风（`ref_pawn_red.png` → 同风格蓝药水）、`--grid 3x1` 切三格。
+- 采用原因：8317 网关的 AI-studio 上游自 2026-10-28 14:18 起被 Google 侧
+  `PROXY_GENERATION_DISABLED: generateContent is not supported` 全面关停（生图/TTS/音乐
+  同时失效，日志 166 次、此后零成功）。magpie 只补上生图一条；语音与音乐仍无可用通道。
+- 注意：magpie 只认 `gemini-3.1-flash-image` 一个生图模型，`-m gemini-3.1-flash-lite-image`
+  在该网关会 404；`/v1/chat/completions` 打它返回空 content（图被吞），必须走 images 端点。
+
 ## 2026-10-29 gen_music.sh 增加备用模型回退链；实测音乐通道整体故障 (Qoder)
 
 - 按用户要求把网关新出现的 `lyria-3-pro-preview` 注册为音乐备用模型：

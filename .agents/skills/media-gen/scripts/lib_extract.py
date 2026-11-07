@@ -25,6 +25,10 @@ def walk(o, path=''):
         d = o.get('data')
         if isinstance(d, str) and isinstance(m, str) and len(d) > 200:
             found.append((m, d, path))
+        # images API 的 data[].b64_json（magpie / OpenAI 兼容网关），mime 为同级字段
+        b = o.get('b64_json')
+        if isinstance(b, str) and len(b) > 200:
+            found.append((m or 'image/png', b, path))
         for k, v in o.items():
             walk(v, path + '.' + k)
     elif isinstance(o, list):

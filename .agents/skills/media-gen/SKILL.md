@@ -7,6 +7,7 @@ description: 为本项目（T1 吸血鬼幸存者类游戏）生成分媒体素�
 
 本机媒体网关（`http://127.0.0.1:8317/v1`）的封装：生图（Gemini）、中文语音（Gemini TTS）、
 BGM（Lyria）。所有调用走脚本，脚本自动处理鉴权、重试、媒体提取、抠透明底和台账登记。
+生图通道可独立指向别的网关（见「模型选择 → 生图通道」，现默认走 magpie 的 images 端点）。
 
 ## 铁律（违反会浪费配额或产出废料）
 
@@ -59,11 +60,20 @@ $S/gen_music.sh -p "<STYLE.md 音乐风格> dungeon crawler loop, instrumental o
 
 ## 模型选择
 
+### 生图通道（2026-11-06 起可独立配置）
+
+生图默认走 `config/api.env` 里的 `IMAGE_API_*`（现指向 magpie 网关 `http://127.0.0.1:3425`，
+`IMAGE_API_STYLE="images"`、`IMAGE_MODEL="gemini-3.1-flash-image"`）；这组不配置时，
+整体回退到 `MEDIA_API_*` 的 chat 通道。原因：magpie 只有 `/v1/images/generations`
+（纯文生图）和 `/v1/images/edits`（带 `-r` 参考图）出图，走 `/v1/chat/completions`
+会返回 `content:null`（图被吞，只计 token），脚本按 `IMAGE_API_STYLE` 自动选端点。
+`--style chat|images` 可单次覆盖，`--size 1024x1024` 指定尺寸（images 通道生效）。
+
 | 用途 | 模型 | 备注 |
 |---|---|---|
-| 生图（默认） | `gemini-3.1-flash-image` | 支持参考图锁定风格，11~45s |
-| 生图（批量草稿/图标） | `gemini-3.1-flash-lite-image` | ~5s，1024² |
-| 语音（默认） | `gemini-3.8-flash-tts` | WAV 24kHz |
+| 生图（默认） | `gemini-3.1-flash-image` | 支持参考图锁定风格，11~45s；magpie 网关唯一可用生图模型 |
+| 生图（批量草稿/图标） | `gemini-3.1-flash-lite-image` | ~5s，1024²。⚠️ magpie 网关无此模型（上游 404），需切回 `IMAGE_API_STYLE="chat"` 的旧网关 |
+| 语音（默认） | `gemini-3.8-flash-tts` | WAV 24kHz，走 `MEDIA_API_*` |
 | 语音（批量草稿） | `gemini-3.8-flash-lite-tts` | 更便宜 |
 | 音乐（主） | `lyria-3.5` | MP3 44.1kHz，单段约 2 分钟。**只能写整段音乐，做不了短音效**：实测索要「0.15 秒点击音」仍返回 56 秒素材。音效请改用本项目的 `tools/bake_sfx.py`（离线合成，见 usage-guide.md 能力边界表） |
 | 音乐（备） | `lyria-3-pro-preview` | `gen_music.sh` 主模型两次未出音频时自动回退到它（`--fallback` 可改，传 `none` 关闭）。⚠️ 2026-10-29 实测：网关对**两个音乐模型**均回 400 `PROXY_GENERATION_DISABLED`，音乐通道整体待网关上游修复，见 api-music.md |
